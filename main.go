@@ -1,8 +1,8 @@
 package main
 
 import (
-	node "github.com/UnrulyOS/go-unruly/node"
-	app "github.com/UnrulyOS/go-unruly/app"
+	"github.com/UnrulyOS/go-unruly/node"
+	"github.com/UnrulyOS/go-unruly/app"
 )
 
 func main() {

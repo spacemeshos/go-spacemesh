@@ -1,11 +1,11 @@
-package node
+package app
 
 // Provide Config struct with default values - only 1 not several
 
 // Implement logic to override Configs from command line
 var DefaultConfig = Config{
-	SecurityParam: 20,
-	FastSync: true,
+	AppIntParam: 20,
+	AppBoolParam: true,
 }
 
 func init () {
@@ -13,6 +13,7 @@ func init () {
 }
 
 type Config struct {
-	SecurityParam uint64 `toml:"-"`
-	FastSync bool `toml:"-"`
+	ConfigFilePath string `toml:"-"`
+	AppIntParam int `toml:"-"`
+	AppBoolParam bool `toml:"-"`
 }
