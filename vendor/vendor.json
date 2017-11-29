@@ -3,30 +3,6 @@
 	"ignore": "test",
 	"package": [
 		{
-			"checksumSHA1": "USkefO0g1U9mr+8hagv3fpSkrxg=",
-			"path": "github.com/aristanetworks/goarista/monotime",
-			"revision": "ea17b1a17847fb6e4c0a91de0b674704693469b0",
-			"revisionTime": "2017-02-10T01:56:32Z"
-		},
-		{
-			"checksumSHA1": "pQVGObmmsfuob9pzGYCSy3ZxM88=",
-			"path": "github.com/btcsuite/btcd/btcec",
-			"revision": "d06c0bb181529331be8f8d9350288c420d9e60e4",
-			"revisionTime": "2017-02-01T21:25:25Z"
-		},
-		{
-			"checksumSHA1": "zYnPsNAVm1/ViwCkN++dX2JQhBo=",
-			"path": "github.com/edsrzf/mmap-go",
-			"revision": "935e0e8a636ca4ba70b713f3e38a19e1b77739e8",
-			"revisionTime": "2016-05-12T03:30:02Z"
-		},
-		{
-			"checksumSHA1": "KZ3QD2QgUS4RcoKiA3mn5pSlJxQ=",
-			"path": "github.com/go-stack/stack",
-			"revision": "54be5f394ed2c3e19dac9134a40a95ba5a017f7b",
-			"revisionTime": "2017-07-10T16:04:46Z"
-		},
-		{
 			"checksumSHA1": "yqF125xVSkmfLpIVGrLlfE05IUk=",
 			"path": "github.com/golang/protobuf/proto",
 			"revision": "748d386b5c1ea99658fd69fe9f03991ce86a90c1",

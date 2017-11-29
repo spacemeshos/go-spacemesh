@@ -39,6 +39,6 @@ go build
 ## tasks
 
 
-- Get rid of libp2p GX deps (asap)
+- Get rid of libp2p GX deps (asap) and them to vendor folder
 - Support command line args in a robust way 
 - Support basic account and keys ops
