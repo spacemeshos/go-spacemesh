@@ -15,4 +15,3 @@ At the top level, it contains a key/ folder which includes all keystore files.
 A folder is created for each node instance and is named by its id.
 
 - All ids are base58 encoded strings of id binary data
-
