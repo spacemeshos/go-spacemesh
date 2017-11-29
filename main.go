@@ -5,10 +5,7 @@ import (
 	app "github.com/UnrulyOS/go-unruly/app"
 )
 
-
-
 func main() {
-
 	// test p2p protocols
 	node.TestP2pProtocols()
 
