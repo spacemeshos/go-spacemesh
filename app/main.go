@@ -1,21 +1,21 @@
 package app
 
 import (
-	"path/filepath"
-	"os"
-	"gopkg.in/urfave/cli.v1"
 	"fmt"
-	"sort"
+	"gopkg.in/urfave/cli.v1"
+	"os"
+	"path/filepath"
 	"runtime"
+	"sort"
 
 	"github.com/UnrulyOS/go-unruly/app/config"
 	nodeparams "github.com/UnrulyOS/go-unruly/node/params"
 )
 
 var (
-	appVersion = "0.0.1"
+	appVersion    = "0.0.1"
 	gitCommitHash = ""
-	app = NewApp(gitCommitHash,"- the go-unruly node")
+	app           = NewApp(gitCommitHash, "- the go-unruly node")
 
 	appFlags = []cli.Flag{
 		config.LoadConfigFileFlag,
@@ -35,20 +35,8 @@ func init() {
 	app.HideVersion = true
 	app.Copyright = "Copyright 2017 The go-unruly Authors"
 	app.Commands = []cli.Command{
-		{
-			Name:    "version",
-			Aliases: []string{"v"},
-			Usage:   "print versions",
-			ArgsUsage: " ",
-			Category:  "General commands",
-			Action:  func(c *cli.Context) error {
-				fmt.Println("App Version:", appVersion)
-				fmt.Println("Go Version:", runtime.Version())
-				fmt.Println("OS:", runtime.GOOS)
-				fmt.Println("Arch:", runtime.GOARCH)
-				return nil
-				},
-		},
+		VersionCommand(appVersion),
+		// add all commands here
 	}
 
 	app.Flags = append(app.Flags, appFlags...)

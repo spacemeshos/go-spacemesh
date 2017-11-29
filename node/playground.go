@@ -12,6 +12,8 @@ import (
 	ma "gx/ipfs/QmXY77cVe7rVRQXZZQRioukUM7aRW3BTcAgJe12MCtb3Ji/go-multiaddr"
 	peer "gx/ipfs/QmXYjuNuxVzXKJCfWasQk1RqkhVLDM9jtUKhqc2WPQmFSB/go-libp2p-peer"
 	crypto "gx/ipfs/QmaPbCnUMBohSGo3KnxEa2bHqyJVVeEEcwtqJAYxerieBo/go-libp2p-crypto"
+
+	b58 "gx/ipfs/QmT8rehPR3F6bmwL6zjUN8XpiDBFFpMP2myPdC6ApsWfJf/go-base58"
 )
 
 // helper method - create a lib-p2p host to listen on a port
@@ -27,9 +29,18 @@ func makeRandomNode(port int, done chan bool) *Node {
 	n, _ := swarm.NewNetwork(context.Background(), []ma.Multiaddr{listen}, pid, peerStore, nil)
 	host := bhost.New(n)
 
+	// log some info on public keys and ids
+	pubKeyBytes, _ := pub.Bytes()
+	log.Printf("Public key bytes: %d", len(pubKeyBytes))
+	pubKeyStr := b58.Encode(pubKeyBytes)
+	log.Printf("Public key (base58): %s, length:%d", pubKeyStr, len(pubKeyStr))
+	nodeId, _ := peer.IDFromPublicKey(pub)
+	log.Printf("Node id bytes: %d", len(nodeId))
+	nodeIdStr := peer.IDB58Encode(nodeId)
+	log.Printf("Node id (base58): %s, length: %d", nodeIdStr, len(nodeIdStr))
+
 	return NewNode(host, done)
 }
-
 
 func TestP2pProtocols() {
 

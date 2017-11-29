@@ -13,19 +13,18 @@ import (
 	uuid "github.com/google/uuid"
 	protobufCodec "github.com/multiformats/go-multicodec/protobuf"
 
-	"gx/ipfs/QmRS46AyqtpJBsf1zmQdeizSDEzo1qkWR7rdEuPFAv8237/go-libp2p-host"
 	"github.com/UnrulyOS/go-unruly/node/pb"
+	"gx/ipfs/QmRS46AyqtpJBsf1zmQdeizSDEzo1qkWR7rdEuPFAv8237/go-libp2p-host"
 )
-
 
 // pattern: /protocol-name/request-or-response-message/version
 const echoRequest = "/echo/echoreq/0.0.1"
 const echoResponse = "/echo/echoresp/0.0.1"
 
 type EchoProtocol struct {
-	node     *Node                       // local host
+	node     *Node                      // local host
 	requests map[string]*pb.EchoRequest // used to access request data from response handlers
-	done     chan bool                   // only for demo purposes to hold main from terminating
+	done     chan bool                  // only for demo purposes to hold main from terminating
 }
 
 func NewEchoProtocol(node *Node, done chan bool) *EchoProtocol {

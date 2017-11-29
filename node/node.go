@@ -14,8 +14,6 @@ import (
 	inet "gx/ipfs/QmbD5yKbXahNvoMqzeuNyKQA9vAs9fUvJg2GXeWU1fVqY5/go-libp2p-net"
 
 	"github.com/UnrulyOS/go-unruly/node/pb"
-
-
 )
 
 // node client version
@@ -96,16 +94,8 @@ func (n *Node) verifyData(data []byte, signature []byte, peerId peer.ID, pubKeyD
 		return false
 	}
 
-	// extract node id from the provided public key
-	idFromKey, err := peer.IDFromPublicKey(key)
-
-	if err != nil {
-		log.Println(err, "Failed to extract peer id from public key")
-		return false
-	}
-
 	// verify that message author node id matches the provided node public key
-	if idFromKey != peerId {
+	if !peerId.MatchesPublicKey(key) {
 		log.Println(err, "Node id and provided public key mismatch")
 		return false
 	}

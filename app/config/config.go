@@ -4,16 +4,16 @@ package config
 
 // Implement logic to override Configs from command line
 var DefaultConfig = Config{
-	AppIntParam: 20,
+	AppIntParam:  20,
 	AppBoolParam: true,
 }
 
-func init () {
+func init() {
 	// set default config params based on runtim here
 }
 
 type Config struct {
 	ConfigFilePath string `toml:"-"`
-	AppIntParam int `toml:"-"`
-	AppBoolParam bool `toml:"-"`
+	AppIntParam    int    `toml:"-"`
+	AppBoolParam   bool   `toml:"-"`
 }

@@ -5,10 +5,10 @@ package params
 // Implement logic to override Configs from command line
 var DefaultConfig = Config{
 	SecurityParam: 20,
-	FastSync: true,
+	FastSync:      true,
 }
 
-func init () {
+func init() {
 	// set default config params based on runtim here
 }
 

@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/UnrulyOS/go-unruly/node/pb"
 	uuid "github.com/google/uuid"
 	protobufCodec "github.com/multiformats/go-multicodec/protobuf"
 	"gx/ipfs/QmRS46AyqtpJBsf1zmQdeizSDEzo1qkWR7rdEuPFAv8237/go-libp2p-host"
 	inet "gx/ipfs/QmbD5yKbXahNvoMqzeuNyKQA9vAs9fUvJg2GXeWU1fVqY5/go-libp2p-net"
-	"github.com/UnrulyOS/go-unruly/node/pb"
 )
 
 // pattern: /protocol-name/request-or-response-message/version
@@ -19,9 +19,9 @@ const pingResponse = "/ping/pingresp/0.0.1"
 
 // PingProtocol type
 type PingProtocol struct {
-	node     *Node                       // local host
+	node     *Node                      // local host
 	requests map[string]*pb.PingRequest // used to access request data from response handlers
-	done     chan bool                   // only for demo purposes to stop main from terminating
+	done     chan bool                  // only for demo purposes to stop main from terminating
 }
 
 func NewPingProtocol(node *Node, done chan bool) *PingProtocol {
