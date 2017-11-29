@@ -1,4 +1,4 @@
-package params
+package config
 
 // config are params with default values that are modifiable via config file or cli flags
 

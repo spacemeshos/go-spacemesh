@@ -7,7 +7,7 @@ import (
 )
 
 var (
-	// add all command vars here
+	// todo: add all command vars here
 )
 
 func VersionCommand(appVersion string) cli.Command {

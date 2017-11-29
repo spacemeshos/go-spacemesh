@@ -1,4 +1,4 @@
-package params
+package config
 
 import (
 	"gopkg.in/urfave/cli.v1"

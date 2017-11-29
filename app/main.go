@@ -9,7 +9,7 @@ import (
 	"sort"
 
 	"github.com/UnrulyOS/go-unruly/app/config"
-	nodeparams "github.com/UnrulyOS/go-unruly/node/params"
+	nodeparams "github.com/UnrulyOS/go-unruly/node/config"
 )
 
 var (
@@ -33,10 +33,10 @@ var (
 func init() {
 	app.Action = startUnrulyNode
 	app.HideVersion = true
-	app.Copyright = "Copyright 2017 The go-unruly Authors"
+	app.Copyright = "(c) 2017 The go-unruly Authors"
 	app.Commands = []cli.Command{
 		VersionCommand(appVersion),
-		// add all commands here
+		// add all other commands here
 	}
 
 	app.Flags = append(app.Flags, appFlags...)

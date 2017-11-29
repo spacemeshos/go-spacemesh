@@ -4,3 +4,5 @@
 - Node uses default config values, unless provided with a .toml config file via command line arg or has custom command line config values.
 - We might provide an example toml config file.
 - App shell supports flags and commands. Flags override default config values. Commands execute any code module that might modify config values.
+- Params are non-configurable hard-coded consts. Ideally all params should become configurable configs.
+- Commands are specified as app args

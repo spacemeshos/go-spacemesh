@@ -34,9 +34,8 @@ func makeRandomNode(port int, done chan bool) *Node {
 	log.Printf("Public key bytes: %d", len(pubKeyBytes))
 	pubKeyStr := b58.Encode(pubKeyBytes)
 	log.Printf("Public key (base58): %s, length:%d", pubKeyStr, len(pubKeyStr))
-	nodeId, _ := peer.IDFromPublicKey(pub)
-	log.Printf("Node id bytes: %d", len(nodeId))
-	nodeIdStr := peer.IDB58Encode(nodeId)
+	log.Printf("Node id bytes: %d", len(pid))
+	nodeIdStr := peer.IDB58Encode(pid)
 	log.Printf("Node id (base58): %s, length: %d", nodeIdStr, len(nodeIdStr))
 
 	return NewNode(host, done)
