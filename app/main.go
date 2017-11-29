@@ -58,12 +58,13 @@ func NewApp(gitCommit, usage string) *cli.App {
 }
 
 // start the unruly node
-func startUnrulyNode() {
-	// todo: implement me
+func startUnrulyNode(ctx *cli.Context) error {
+	// todo: implement me - run the node here
+	return nil
 }
 
 // The Unruly console application - responsible for parsing and routing cli flags and commands
-func main() {
+func Main() {
 	if err := app.Run(os.Args); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
