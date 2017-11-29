@@ -1,4 +1,4 @@
-package app
+package config
 
 // Provide Config struct with default values - only 1 not several
 

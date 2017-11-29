@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"sort"
 	"runtime"
+
+	"github.com/UnrulyOS/go-unruly/app/config"
 	"github.com/UnrulyOS/go-unruly/node"
 )
 
@@ -16,19 +18,13 @@ var (
 	app = NewApp(gitCommitHash,"- the go-unruly node")
 
 	appFlags = []cli.Flag{
-		cli.StringFlag{
-			Name: "config, c",
-			Usage: "Load configuration from `FILE`",
-			Value: DefaultConfig.ConfigFilePath,
-		},
+		config.LoadConfigFileFlag,
+		// add all app flags here
 	}
 
 	nodeFlags = []cli.Flag{
-		cli.Uint64Flag {
-			Name: "k",
-			Usage: "Consensus protocol k security param",
-			Value: node.DefaultConfig.SecurityParam,
-		},
+		node.KSecurityFlag,
+		// add all node flags here
 	}
 )
 
@@ -46,7 +42,7 @@ func init() {
 			ArgsUsage: " ",
 			Category:  "General commands",
 			Action:  func(c *cli.Context) error {
-				fmt.Println("Version:", appVersion)
+				fmt.Println("App Version:", appVersion)
 				fmt.Println("Go Version:", runtime.Version())
 				fmt.Println("OS:", runtime.GOOS)
 				fmt.Println("Arch:", runtime.GOARCH)

@@ -1,5 +1,7 @@
 package node
 
+
+
 // Provide Config struct with default values - only 1 not several
 
 // Implement logic to override Configs from command line
@@ -13,6 +15,6 @@ func init () {
 }
 
 type Config struct {
-	SecurityParam uint64 `toml:"-"`
-	FastSync bool `toml:"-"`
+	SecurityParam uint `toml:"-"`
+	FastSync      bool `toml:"-"`
 }
