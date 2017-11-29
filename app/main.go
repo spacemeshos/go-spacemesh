@@ -9,7 +9,7 @@ import (
 	"runtime"
 
 	"github.com/UnrulyOS/go-unruly/app/config"
-	"github.com/UnrulyOS/go-unruly/node"
+	nodeparams "github.com/UnrulyOS/go-unruly/node/params"
 )
 
 var (
@@ -23,7 +23,7 @@ var (
 	}
 
 	nodeFlags = []cli.Flag{
-		node.KSecurityFlag,
+		nodeparams.KSecurityFlag,
 		// add all node flags here
 	}
 )

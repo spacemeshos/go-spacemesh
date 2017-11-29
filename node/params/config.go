@@ -1,8 +1,6 @@
-package node
+package params
 
-
-
-// Provide Config struct with default values - only 1 not several
+// config are params with default values that are modifiable via config file or cli flags
 
 // Implement logic to override Configs from command line
 var DefaultConfig = Config{

@@ -15,6 +15,12 @@ message MessageData {
     string sign = 7;         // signature of message data + method specific data by message authoring node. format: string([]bytes)
 }
 
+// minimal remote node info - sufficient to connect to the node
+message NodeInfo {
+    string id = 1;           // unruly node id (base58)
+    bytes address = 2;       // multi-address bytes
+}
+
 //// ping protocol
 
 // a protocol define a set of reuqest and responses
