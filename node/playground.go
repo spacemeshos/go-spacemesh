@@ -17,7 +17,7 @@ import (
 )
 
 // helper method - create a lib-p2p host to listen on a port
-func makeRandomNode(port int, done chan bool) *Node {
+func createLocalNode(port int, done chan bool) *Node {
 	// Ignoring most errors for brevity
 	// See echo example for more details and better implementation
 	priv, pub, _ := crypto.GenerateKeyPair(crypto.Secp256k1, 256)
@@ -50,9 +50,9 @@ func TestP2pProtocols() {
 
 	done := make(chan bool, 1)
 
-	// Make 2 hosts
-	h1 := makeRandomNode(port1, done)
-	h2 := makeRandomNode(port2, done)
+	// Make 2 nodes
+	h1 := createLocalNode(port1, done)
+	h2 := createLocalNode(port2, done)
 	h1.Peerstore().AddAddrs(h2.ID(), h2.Addrs(), ps.PermanentAddrTTL)
 	h2.Peerstore().AddAddrs(h1.ID(), h1.Addrs(), ps.PermanentAddrTTL)
 
