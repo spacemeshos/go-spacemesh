@@ -13,9 +13,11 @@ import (
 )
 
 var (
-	appVersion    = "0.0.1"
+	appVersion = "0.0.1"
+
 	gitCommitHash = ""
-	app           = NewApp(gitCommitHash, "- the go-unruly node")
+
+	app = NewApp(gitCommitHash, "- the go-unruly node")
 
 	appFlags = []cli.Flag{
 		config.LoadConfigFileFlag,
@@ -26,6 +28,8 @@ var (
 		nodeparams.KSecurityFlag,
 		// add all node flags here
 	}
+
+	exitApp = make(chan bool, 1)
 )
 
 // todo: implement app commands, flags, metrics and debug here!!!!
@@ -62,9 +66,7 @@ func init() {
 }
 
 func NewApp(gitCommitHash, usage string) *cli.App {
-
 	app := cli.NewApp()
-
 	app.Name = filepath.Base(os.Args[0])
 	app.Author = "The go-unruly authors"
 	app.Email = "app@unrulyos.io"
@@ -74,15 +76,15 @@ func NewApp(gitCommitHash, usage string) *cli.App {
 		app.Version += "-" + gitCommitHash[:8]
 	}
 	app.Usage = usage
-
 	return app
 }
 
 // start the unruly node
 func startUnrulyNode(ctx *cli.Context) error {
-	// todo: implement me - run the node here
+	// todo: implement me - run the node here - pass it the exitApp chan
 
 	// wait until node exists here
+	<-exitApp
 	return nil
 }
 

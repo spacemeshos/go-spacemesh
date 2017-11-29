@@ -30,6 +30,8 @@ func createLocalNode(port int, done chan bool) *Node {
 	host := bhost.New(n)
 
 	// log some info on public keys and ids
+
+	// this is implemented as the protobuf serielized key data
 	pubKeyBytes, _ := pub.Bytes()
 	log.Printf("Public key bytes: %d", len(pubKeyBytes))
 	pubKeyStr := b58.Encode(pubKeyBytes)

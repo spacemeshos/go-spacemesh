@@ -1,5 +1,5 @@
 ## go-unruly
-The go implementation of the UnrulyOS p2p node.
+The go implementation of the [UnrulyOS](https://unruly.io) p2p node.
 
 ### Build
 

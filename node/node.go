@@ -78,6 +78,8 @@ func (n *Node) SignProtoMessage(message proto.Message) ([]byte, error) {
 // sign binary data using the local node's private key
 func (n *Node) signData(data []byte) ([]byte, error) {
 	key := n.Peerstore().PrivKey(n.ID())
+
+	// this is implemented by signing a sha256 of the data
 	res, err := key.Sign(data)
 	return res, err
 }
@@ -86,7 +88,7 @@ func (n *Node) signData(data []byte) ([]byte, error) {
 // data: data to verify
 // signature: author signature provided in the message payload
 // peerId: author peer id from the message payload
-// pubKeyData: author public key from the message payload
+// pubKeyData: author public key from the message payload (protobufs encoded)
 func (n *Node) verifyData(data []byte, signature []byte, peerId peer.ID, pubKeyData []byte) bool {
 	key, err := crypto.UnmarshalPublicKey(pubKeyData)
 	if err != nil {
@@ -100,6 +102,7 @@ func (n *Node) verifyData(data []byte, signature []byte, peerId peer.ID, pubKeyD
 		return false
 	}
 
+	// this is implemented by veryfing signature of a sha256 of the data
 	res, err := key.Verify(data, signature)
 	if err != nil {
 		log.Println(err, "Error authenticating data")
