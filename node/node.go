@@ -5,15 +5,15 @@ import (
 	"log"
 	"time"
 
-	p2p "github.com/UnrulyOS/go-unruly/p2p"
-	pb "github.com/UnrulyOS/go-unruly/p2p/pb"
-
 	"github.com/gogo/protobuf/proto"
+
 	protobufCodec "github.com/multiformats/go-multicodec/protobuf"
 	host "gx/ipfs/QmRS46AyqtpJBsf1zmQdeizSDEzo1qkWR7rdEuPFAv8237/go-libp2p-host"
 	peer "gx/ipfs/QmXYjuNuxVzXKJCfWasQk1RqkhVLDM9jtUKhqc2WPQmFSB/go-libp2p-peer"
 	crypto "gx/ipfs/QmaPbCnUMBohSGo3KnxEa2bHqyJVVeEEcwtqJAYxerieBo/go-libp2p-crypto"
 	inet "gx/ipfs/QmbD5yKbXahNvoMqzeuNyKQA9vAs9fUvJg2GXeWU1fVqY5/go-libp2p-net"
+
+	"github.com/UnrulyOS/go-unruly/node/pb"
 )
 
 // node client version
@@ -22,23 +22,23 @@ const clientVersion = "go-p2p-node/0.0.1"
 // Node type - a p2p host implementing one or more p2p protocols
 type Node struct {
 	host.Host     // lib-p2p host
-	*p2p.PingProtocol // ping protocol impl
-	*p2p.EchoProtocol // echo protocol impl
+	*PingProtocol // ping protocol impl
+	*EchoProtocol // echo protocol impl
 	// add other protocols here...
 }
 
 // Create a new node with its implemented protocols
 func NewNode(host host.Host, done chan bool) *Node {
 	n := &Node{Host: host}
-	n.PingProtocol = p2p.NewPingProtocol(n, done)
-	n.EchoProtocol = p2p.NewEchoProtocol(n, done)
+	n.PingProtocol = NewPingProtocol(n, done)
+	n.EchoProtocol = NewEchoProtocol(n, done)
 	return n
 }
 
 // Authenticate incoming p2p message
 // message: a protobufs go data object
 // data: common p2p message data
-func (n *Node) authenticateMessage(message proto.Message, data *pb.MessageData) bool {
+func (n *Node) AuthenticateMessage(message proto.Message, data *pb.MessageData) bool {
 	// store a temp ref to signature and remove it from message data
 	// sign is a string to allow easy reset to zero-value (empty string)
 	sign := data.Sign
@@ -67,7 +67,7 @@ func (n *Node) authenticateMessage(message proto.Message, data *pb.MessageData) 
 }
 
 // sign an outgoing p2p message payload
-func (n *Node) signProtoMessage(message proto.Message) ([]byte, error) {
+func (n *Node) SignProtoMessage(message proto.Message) ([]byte, error) {
 	data, err := proto.Marshal(message)
 	if err != nil {
 		return nil, err
@@ -139,7 +139,7 @@ func (n *Node) NewMessageData(messageId string, gossip bool) *pb.MessageData {
 // helper method - writes a protobuf go data object to a network stream
 // data: reference of protobuf go data object to send (not the object itself)
 // s: network stream to write the data to
-func (n *Node) sendProtoMessage(data proto.Message, s inet.Stream) bool {
+func (n *Node) SendProtoMessage(data proto.Message, s inet.Stream) bool {
 	writer := bufio.NewWriter(s)
 	enc := protobufCodec.Multicodec(nil).Encoder(writer)
 	err := enc.Encode(data)

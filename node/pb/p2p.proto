@@ -1,6 +1,7 @@
 syntax = "proto3";
 
-package p2p;
+package pb;
+option go_package = "pb";
 
 // designed to be shared between all app protocols
 message MessageData {

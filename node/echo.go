@@ -1,4 +1,4 @@
-package p2p
+package node
 
 import (
 	"bufio"
@@ -8,14 +8,15 @@ import (
 
 	inet "gx/ipfs/QmbD5yKbXahNvoMqzeuNyKQA9vAs9fUvJg2GXeWU1fVqY5/go-libp2p-net"
 
-	pb "github.com/UnrulyOS/go-unruly/p2p/pb"
+	"github.com/ipfs/go-ipfs/thirdparty/assert"
 
 	uuid "github.com/google/uuid"
-	assert "github.com/ipfs/go-ipfs/thirdparty/assert"
 	protobufCodec "github.com/multiformats/go-multicodec/protobuf"
 
 	"gx/ipfs/QmRS46AyqtpJBsf1zmQdeizSDEzo1qkWR7rdEuPFAv8237/go-libp2p-host"
+	"github.com/UnrulyOS/go-unruly/node/pb"
 )
+
 
 // pattern: /protocol-name/request-or-response-message/version
 const echoRequest = "/echo/echoreq/0.0.1"
@@ -51,7 +52,7 @@ func (e *EchoProtocol) onEchoRequest(s inet.Stream) {
 
 	log.Printf("%s: Received echo request from %s. Message: %s", s.Conn().LocalPeer(), s.Conn().RemotePeer(), data.Message)
 
-	valid := e.node.authenticateMessage(data, data.MessageData)
+	valid := e.node.AuthenticateMessage(data, data.MessageData)
 
 	if !valid {
 		log.Println("Failed to authenticate message")
@@ -67,7 +68,7 @@ func (e *EchoProtocol) onEchoRequest(s inet.Stream) {
 		Message:     data.Message}
 
 	// sign the data
-	signature, err := e.node.signProtoMessage(resp)
+	signature, err := e.node.SignProtoMessage(resp)
 	if err != nil {
 		log.Println("failed to sign response")
 		return
@@ -82,7 +83,7 @@ func (e *EchoProtocol) onEchoRequest(s inet.Stream) {
 		return
 	}
 
-	ok := e.node.sendProtoMessage(resp, s)
+	ok := e.node.SendProtoMessage(resp, s)
 
 	if ok {
 		log.Printf("%s: Echo response to %s sent.", s.Conn().LocalPeer().String(), s.Conn().RemotePeer().String())
@@ -99,7 +100,7 @@ func (e *EchoProtocol) onEchoResponse(s inet.Stream) {
 	}
 
 	// authenticate message content
-	valid := e.node.authenticateMessage(data, data.MessageData)
+	valid := e.node.AuthenticateMessage(data, data.MessageData)
 
 	if !valid {
 		log.Println("Failed to authenticate message")
@@ -130,7 +131,7 @@ func (e *EchoProtocol) Echo(host host.Host) bool {
 		MessageData: e.node.NewMessageData(uuid.New().String(), false),
 		Message:     fmt.Sprintf("Echo from %s", e.node.ID())}
 
-	signature, err := e.node.signProtoMessage(req)
+	signature, err := e.node.SignProtoMessage(req)
 	if err != nil {
 		log.Println("failed to sign message")
 		return false
@@ -145,7 +146,7 @@ func (e *EchoProtocol) Echo(host host.Host) bool {
 		return false
 	}
 
-	ok := e.node.sendProtoMessage(req, s)
+	ok := e.node.SendProtoMessage(req, s)
 
 	if !ok {
 		return false

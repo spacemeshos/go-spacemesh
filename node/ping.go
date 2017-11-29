@@ -1,4 +1,4 @@
-package p2p
+package node
 
 import (
 	"bufio"
@@ -6,12 +6,11 @@ import (
 	"fmt"
 	"log"
 
-	pb "github.com/UnrulyOS/go-unruly/p2p/pb"
-
 	uuid "github.com/google/uuid"
 	protobufCodec "github.com/multiformats/go-multicodec/protobuf"
 	"gx/ipfs/QmRS46AyqtpJBsf1zmQdeizSDEzo1qkWR7rdEuPFAv8237/go-libp2p-host"
 	inet "gx/ipfs/QmbD5yKbXahNvoMqzeuNyKQA9vAs9fUvJg2GXeWU1fVqY5/go-libp2p-net"
+	"github.com/UnrulyOS/go-unruly/node/pb"
 )
 
 // pattern: /protocol-name/request-or-response-message/version
@@ -46,7 +45,7 @@ func (p *PingProtocol) onPingRequest(s inet.Stream) {
 
 	log.Printf("%s: Received ping request from %s. Message: %s", s.Conn().LocalPeer(), s.Conn().RemotePeer(), data.Message)
 
-	valid := p.node.authenticateMessage(data, data.MessageData)
+	valid := p.node.AuthenticateMessage(data, data.MessageData)
 
 	if !valid {
 		log.Println("Failed to authenticate message")
@@ -60,7 +59,7 @@ func (p *PingProtocol) onPingRequest(s inet.Stream) {
 		Message: fmt.Sprintf("Ping response from %s", p.node.ID())}
 
 	// sign the data
-	signature, err := p.node.signProtoMessage(resp)
+	signature, err := p.node.SignProtoMessage(resp)
 	if err != nil {
 		log.Println("failed to sign response")
 		return
@@ -76,7 +75,7 @@ func (p *PingProtocol) onPingRequest(s inet.Stream) {
 		return
 	}
 
-	ok := p.node.sendProtoMessage(resp, s)
+	ok := p.node.SendProtoMessage(resp, s)
 
 	if ok {
 		log.Printf("%s: Ping response to %s sent.", s.Conn().LocalPeer().String(), s.Conn().RemotePeer().String())
@@ -92,7 +91,7 @@ func (p *PingProtocol) onPingResponse(s inet.Stream) {
 		return
 	}
 
-	valid := p.node.authenticateMessage(data, data.MessageData)
+	valid := p.node.AuthenticateMessage(data, data.MessageData)
 
 	if !valid {
 		log.Println("Failed to authenticate message")
@@ -121,7 +120,7 @@ func (p *PingProtocol) Ping(host host.Host) bool {
 		Message: fmt.Sprintf("Ping from %s", p.node.ID())}
 
 	// sign the data
-	signature, err := p.node.signProtoMessage(req)
+	signature, err := p.node.SignProtoMessage(req)
 	if err != nil {
 		log.Println("failed to sign pb data")
 		return false
@@ -136,7 +135,7 @@ func (p *PingProtocol) Ping(host host.Host) bool {
 		return false
 	}
 
-	ok := p.node.sendProtoMessage(req, s)
+	ok := p.node.SendProtoMessage(req, s)
 
 	if !ok {
 		return false

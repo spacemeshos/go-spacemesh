@@ -6,7 +6,7 @@ import (
 	"log"
 	"math/rand"
 
-	Node "github.com/UnrulyOS/go-unruly/node"
+	node "github.com/UnrulyOS/go-unruly/node"
 
 	bhost "github.com/libp2p/go-libp2p/p2p/host/basic"
 	ps "gx/ipfs/QmPgDWmTmuzvP7QE5zwo1TmjbJme9pmZHNujB2453jkCTr/go-libp2p-peerstore"
@@ -17,7 +17,7 @@ import (
 )
 
 // helper method - create a lib-p2p host to listen on a port
-func makeRandomNode(port int, done chan bool) *Node.Node {
+func makeRandomNode(port int, done chan bool) *node.Node {
 	// Ignoring most errors for brevity
 	// See echo example for more details and better implementation
 	priv, pub, _ := crypto.GenerateKeyPair(crypto.Secp256k1, 256)
@@ -29,7 +29,7 @@ func makeRandomNode(port int, done chan bool) *Node.Node {
 	n, _ := swarm.NewNetwork(context.Background(), []ma.Multiaddr{listen}, pid, peerStore, nil)
 	host := bhost.New(n)
 
-	return Node.NewNode(host, done)
+	return node.NewNode(host, done)
 }
 
 func main() {
