@@ -2,12 +2,14 @@
   <a href="https://unruly.io"><img width="400" src="https://firebasestorage.googleapis.com/v0/b/fifth-jigsaw-167200.appspot.com/o/logo%403x.png?alt=media&token=cdcacbe4-aa56-4111-b719-15b2ade60069" alt="Unruly logo" /></a>
 </h1>
 
+<p align="center">
 
-[![Packagist](https://img.shields.io/packagist/l/doctrine/orm.svg)]()
-[![Maintainer](https://img.shields.io/badge/maintainer-%40avive-green.svg)]()
-[![Goversion](https://img.shields.io/badge/golang-%3E%3D%201.9.2-orange.svg)]()
-
-
+<img src="https://img.shields.io/packagist/l/doctrine/orm.svg"/>
+<a href=""><img src="https://img.shields.io/badge/maintainer-%40avive-green.svg"/></a>
+<img src="https://img.shields.io/badge/golang-%3E%3D%201.9.2-orange.svg"/>
+<a href="https://gitter.im/unruly-os/Lobby"><img src="https://img.shields.io/badge/gitter-%23unruly--os-blue.svg"/></a>
+<a href="https://unruly.io"><img src="https://img.shields.io/badge/madeby-unrulyOS-blue.svg"/></a>
+</p>
 
 ## go-unruly
 The go implementation of the [UnrulyOS](https://unruly.io) p2p node.
