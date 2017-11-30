@@ -31,9 +31,10 @@ func createLocalNode(port int, done chan bool) *Node {
 
 	// log some info on public keys and ids
 
-	// this is implemented as the protobuf serielized key data
+	// this is implemented as the protobuf serialized key data
 	pubKeyBytes, _ := pub.Bytes()
 	log.Printf("Public key bytes: %d", len(pubKeyBytes))
+
 	pubKeyStr := b58.Encode(pubKeyBytes)
 	log.Printf("Public key (base58): %s, length:%d", pubKeyStr, len(pubKeyStr))
 	log.Printf("Node id bytes: %d", len(pid))

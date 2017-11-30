@@ -48,9 +48,12 @@ go build
 #### Guidelines:
 
 - Read the UnrulyOS project white paper
-- Please make branches + pull-request, even if working on the main repository
 - Ask questions or talk about things in [Issues](https://github.com/UnrulyOS/go-unruly/issues) or #unruly on freenode.
 - Ensure you are able to contribute (no legal issues please)
+- For code contributions, fork the master branch, apply your changes and submit a pull request.
+- Check for 3rd-party packages in the vendor folder before adding a new 3rd party dependency.
+- Add new 3rd-party packages required by your code to vendor.json
+- Squash your changes down to a single commit before submitting a PR and rebase on master so we can keep the commit timeline linear.
 - Run `go fmt` before pushing any code
 - Get in touch with @avive about how best to contribute
 - Have fun hacking away our blockchain future!
@@ -59,6 +62,7 @@ There's a few things you can do right now to help out:
  - **check out existing issues**. This would be especially useful for modules in active development.
  - **Perform code reviews**.
  - **Add tests**. There can never be enough tests.
+
 
 
 ### Tests

@@ -34,6 +34,10 @@ var (
 
 // todo: implement app commands, flags, metrics and debug here!!!!
 
+// todo: add leveldb support and sample read / write
+
+// add toml config file support and sample toml file
+
 func init() {
 	app.Action = startUnrulyNode
 	app.HideVersion = true
@@ -83,7 +87,7 @@ func NewApp(gitCommitHash, usage string) *cli.App {
 func startUnrulyNode(ctx *cli.Context) error {
 	// todo: implement me - run the node here - pass it the exitApp chan
 
-	// wait until node exists here
+	// wait until node exists here and exit properly
 	<-exitApp
 	return nil
 }
