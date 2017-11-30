@@ -8,12 +8,12 @@
 For sake of saving development time we are considering to reuse most of eth key store file format and private key encryption using scrypt, a password and a salt.
 
 ```json
-{"accountPublicKey":"base58-encoded-account-pub-key(Scep256k1 256 bits)",
-  "accountId":"account-id--is-a-base-58-encoded-sha256-of-public-key-raw-binary-format",
+{"accountPublicKey":"base58-encoded-account-pub-key(Scep256k1)",
+  "accountId":"account-id--is-a-base-58-encoded-multi-hash256-of-public-key-raw-binary-format",
   "version":1,
   "crypto":{
     "cipher":"aes-128-ctr",
-    "ciphertext":"0f6d343b2a34fe571639235fc16250823c6fe3bc30525d98c41dfdf21a97aedb",
+    "ciphertext":"AES(salt||encrypted-private-key-data-only-non-multi-hash)",
     "cipherparams":{
       "iv":"cabce7fb34e4881870a2419b93f6c796"
     },
@@ -31,8 +31,8 @@ For sake of saving development time we are considering to reuse most of eth key 
 ```
 
 Refs
-https://github.com/ethereum/go-ethereum/wiki/Passphrase-protected-key-store-spec
-https://github.com/Gustav-Simonsson/go-ethereum/blob/improve_key_store_crypto/crypto/key_store_passphrase.go#L29
+- https://github.com/ethereum/go-ethereum/wiki/Passphrase-protected-key-store-spec
+- https://github.com/Gustav-Simonsson/go-ethereum/blob/improve_key_store_crypto/crypto/key_store_passphrase.go#L29
 
 - We need to do more research to figure out if we really need to use `scrypt` here or we can just make the cipher private key a sha256(salt||user-password).
 

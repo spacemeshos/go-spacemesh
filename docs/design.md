@@ -13,13 +13,13 @@ We are using https://github.com/rcrowley/go-metrics for system metrics
 
 ### Local DB
 
-We are using goleveldb for local key-value db
-
+We are using goleveldb for a key-value db
 
 ### Debugging
 
 #### GoLand IDEA interactive debugging
-- Add info here
+
+- Should be working 
 
 
 #### Logging
