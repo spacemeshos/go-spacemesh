@@ -1,4 +1,4 @@
-package common
+package crypto
 
 import (
 	crypto "gx/ipfs/QmaPbCnUMBohSGo3KnxEa2bHqyJVVeEEcwtqJAYxerieBo/go-libp2p-crypto"
@@ -39,9 +39,9 @@ func (pubKey *PublicKey) String () (string, error) {
 	return b58.Encode(bytes), nil
 }
 
-func (pubKey *PublicKey) IdFromPubKey () (NodeId, error) {
+func (pubKey *PublicKey) IdFromPubKey () (Id, error) {
 	id, err := peer.IDFromPublicKey(pubKey)
-	return NodeId{id},err
+	return Id{id},err
 }
 
 type PrivateKey struct {
@@ -66,15 +66,3 @@ func NewPrivateKey(data []byte) (*PrivateKey, error) {
 	return &PrivateKey{(key)}, err
 }
 
-type NodeId struct {
-	peer.ID
-}
-
-func (nodeId *NodeId) String () (string) {
-	return peer.IDB58Encode(nodeId.ID)
-}
-
-func NewNodeId(b58 string) (*NodeId, error) {
-	id, err := peer.IDB58Decode(b58)
-	return &NodeId{id}, err
-}

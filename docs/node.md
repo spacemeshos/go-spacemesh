@@ -78,3 +78,4 @@ A smart contract template is a deployed smart contract code without singleton st
 
 
 
+

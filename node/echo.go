@@ -4,17 +4,17 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"github.com/UnrulyOS/go-unruly/assert"
 	"log"
 
-	inet "gx/ipfs/QmbD5yKbXahNvoMqzeuNyKQA9vAs9fUvJg2GXeWU1fVqY5/go-libp2p-net"
-
-	"github.com/ipfs/go-ipfs/thirdparty/assert"
+	"github.com/UnrulyOS/go-unruly/node/pb"
 
 	uuid "github.com/google/uuid"
-	protobufCodec "github.com/multiformats/go-multicodec/protobuf"
+	inet "gx/ipfs/QmbD5yKbXahNvoMqzeuNyKQA9vAs9fUvJg2GXeWU1fVqY5/go-libp2p-net"
 
-	"github.com/UnrulyOS/go-unruly/node/pb"
+	protobufCodec "github.com/multiformats/go-multicodec/protobuf"
 	"gx/ipfs/QmRS46AyqtpJBsf1zmQdeizSDEzo1qkWR7rdEuPFAv8237/go-libp2p-host"
+
 )
 
 // pattern: /protocol-name/request-or-response-message/version

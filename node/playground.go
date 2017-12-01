@@ -3,15 +3,17 @@ package node
 import (
 	"context"
 	"fmt"
-	"github.com/UnrulyOS/go-unruly/common"
 	"log"
 	"math/rand"
+
+	crypto "github.com/UnrulyOS/go-unruly/crypto"
 
 	bhost "github.com/libp2p/go-libp2p/p2p/host/basic"
 	ps "gx/ipfs/QmPgDWmTmuzvP7QE5zwo1TmjbJme9pmZHNujB2453jkCTr/go-libp2p-peerstore"
 	swarm "gx/ipfs/QmU219N3jn7QadVCeBUqGnAkwoXoUomrCwDuVQVuL7PB5W/go-libp2p-swarm"
 	ma "gx/ipfs/QmXY77cVe7rVRQXZZQRioukUM7aRW3BTcAgJe12MCtb3Ji/go-multiaddr"
-	crypto "gx/ipfs/QmaPbCnUMBohSGo3KnxEa2bHqyJVVeEEcwtqJAYxerieBo/go-libp2p-crypto"
+
+	libp2pcrypto "gx/ipfs/QmaPbCnUMBohSGo3KnxEa2bHqyJVVeEEcwtqJAYxerieBo/go-libp2p-crypto"
 
 )
 
@@ -19,7 +21,7 @@ import (
 func createLocalNode(port int, done chan bool) *Node {
 	// Ignoring most errors for brevity
 	// See echo example for more details and better implementation
-	priv, pub, _ := common.GenerateKeyPair(crypto.Secp256k1, 256)
+	priv, pub, _ := crypto.GenerateKeyPair(libp2pcrypto.Secp256k1, 256)
 	pid, _ := pub.IdFromPubKey()
 
 	listen, _ := ma.NewMultiaddr(fmt.Sprintf("/ip4/127.0.0.1/tcp/%d", port))
