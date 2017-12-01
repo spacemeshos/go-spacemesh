@@ -1,19 +1,19 @@
 ## App Design
 
 ### p2p, accounts, keys and nodes
-Please refer to [the Unruly MVP wiki](https://github.com/UnrulyOS/overview/wiki/UnrulyOS-MVP).
+- Please refer to p2p.md
 
 ### App Shell
 
-We are using https://gopkg.in/urfave/cli.v1 for the CLI app shell
+- We are using https://gopkg.in/urfave/cli.v1 for the CLI app shell
 
 ### Runtime Metrics
 
-We are using https://github.com/rcrowley/go-metrics for system metrics
+- We are using https://github.com/rcrowley/go-metrics for system metrics
 
 ### Local DB
 
-We are using goleveldb for a key-value db
+- We are using goleveldb for a key-value db
 
 ### Debugging
 
@@ -27,11 +27,11 @@ We are using goleveldb for a key-value db
 
 #### Config
 
-We are using TOML files for config file and cli.v1 flags to modify any configurable param via the CLI.
+- We are using TOML files for config file and cli.v1 flags to modify any configurable param via the CLI.
 
 
 #### Interactive Console
 
-TBD - Javascript console ???? do more research
+- TBD - Javascript console ???? do more research
 
 
