@@ -1,20 +1,21 @@
 package accounts
 
 import (
-	crypto "gx/ipfs/QmaPbCnUMBohSGo3KnxEa2bHqyJVVeEEcwtqJAYxerieBo/go-libp2p-crypto"
+	crypto "github.com/UnrulyOS/go-unruly/crypto"
+	libp2pcrypto "gx/ipfs/QmaPbCnUMBohSGo3KnxEa2bHqyJVVeEEcwtqJAYxerieBo/go-libp2p-crypto"
 	peer "gx/ipfs/QmXYjuNuxVzXKJCfWasQk1RqkhVLDM9jtUKhqc2WPQmFSB/go-libp2p-peer"
 
 )
 
 type Account struct {
 	peer.ID
-	priKey *PrivateKey
-	pubKey *PublicKey
+	priKey *crypto.PrivateKey
+	pubKey *crypto.PublicKey
 }
 
 func NewAccount () (*Account, error) {
 
-	priv, pub, err := GenerateKeyPair(crypto.Secp256k1, 256)
+	priv, pub, err := crypto.GenerateKeyPair(libp2pcrypto.Secp256k1, 256)
 
 	if err != nil {
 		return nil, err
