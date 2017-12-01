@@ -78,5 +78,3 @@ func NewNodeId(b58 string) (*NodeId, error) {
 	id, err := peer.IDB58Decode(b58)
 	return &NodeId{id}, err
 }
-
-
