@@ -1,7 +1,6 @@
 package crypto
 
 import (
-
 	peer "gx/ipfs/QmXYjuNuxVzXKJCfWasQk1RqkhVLDM9jtUKhqc2WPQmFSB/go-libp2p-peer"
 )
 
@@ -15,7 +14,7 @@ func (id *Id) String () (string) {
 	return peer.IDB58Encode(id.ID)
 }
 
-// create a new ID from a b58 econded string
+// create a new ID from a b58 encoded string
 func NewID(b58 string) (*Id, error) {
 	id, err := peer.IDB58Decode(b58)
 	return &Id{id}, err

@@ -39,6 +39,8 @@ func (pubKey *PublicKey) String () (string, error) {
 	return b58.Encode(bytes), nil
 }
 
+// create an Id which is derived from a public key
+// used for both accounts and nodes
 func (pubKey *PublicKey) IdFromPubKey () (Id, error) {
 	id, err := peer.IDFromPublicKey(pubKey)
 	return Id{id},err

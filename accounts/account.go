@@ -4,7 +4,6 @@ import (
 	crypto "github.com/UnrulyOS/go-unruly/crypto"
 	libp2pcrypto "gx/ipfs/QmaPbCnUMBohSGo3KnxEa2bHqyJVVeEEcwtqJAYxerieBo/go-libp2p-crypto"
 	peer "gx/ipfs/QmXYjuNuxVzXKJCfWasQk1RqkhVLDM9jtUKhqc2WPQmFSB/go-libp2p-peer"
-
 )
 
 type Account struct {
@@ -14,7 +13,6 @@ type Account struct {
 }
 
 func NewAccount () (*Account, error) {
-
 	priv, pub, err := crypto.GenerateKeyPair(libp2pcrypto.Secp256k1, 256)
 
 	if err != nil {
@@ -32,6 +30,6 @@ func (acct *Account) String () (string) {
 
 
 func (acct *Account) Bytes () []byte {
-// IDs are stored as raw binary data (in an ascii string) so just convert to bytes
-return []byte (acct.ID)
+	// IDs are stored as raw binary data (in an ascii string) so just convert to bytes
+	return []byte (acct.ID)
 }
