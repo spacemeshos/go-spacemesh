@@ -90,6 +90,7 @@ func (n *Node) signData(data []byte) ([]byte, error) {
 // peerId: author peer id from the message payload
 // pubKeyData: author public key from the message payload (protobufs encoded)
 func (n *Node) verifyData(data []byte, signature []byte, peerId peer.ID, pubKeyData []byte) bool {
+
 	key, err := crypto.UnmarshalPublicKey(pubKeyData)
 	if err != nil {
 		log.Println(err, "Failed to extract key from message key data")

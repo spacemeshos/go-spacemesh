@@ -22,16 +22,16 @@
 - Should be working 
 
 
-#### Logging
+### Logging
 - Add info here
 
-#### Config
+### Config
 
 - We are using TOML files for config file and cli.v1 flags to modify any configurable param via the CLI.
 
 
-#### Interactive Console
+### Interactive Console
 
 - TBD - Javascript console ???? do more research
 
-
+#### App Shell Tasks

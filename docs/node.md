@@ -77,3 +77,4 @@ In addition to user account data, a smart contract account includes:
 A smart contract template is a deployed smart contract code without singleton state. The state of template instances are managed under user accounts. In other words, the template provides the deployed code and the state differs per user. This is useful for scenarios where the same smart contract is used by millions of users. Using template, 1 million copies of the code don't need to be deployed on the blockchain - only 1. The state is maintained for each smart code user.
 
 
+
