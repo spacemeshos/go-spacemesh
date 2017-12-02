@@ -4,7 +4,7 @@ import (
 	peer "gx/ipfs/QmXYjuNuxVzXKJCfWasQk1RqkhVLDM9jtUKhqc2WPQmFSB/go-libp2p-peer"
 )
 
-type Identifiable interface {
+type Identifier interface {
 	String() string
 	Bytes() []byte
 	PeerId() peer.ID
@@ -29,7 +29,7 @@ func (id *Id) PeerId() peer.ID {
 }
 
 // create a new ID from a b58 encoded string
-func NewId(b58 string) (Identifiable, error) {
+func NewId(b58 string) (Identifier, error) {
 	id, err := peer.IDB58Decode(b58)
 	return &Id{id}, err
 }

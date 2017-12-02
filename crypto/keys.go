@@ -18,11 +18,10 @@ type PrivateKeylike interface {
 
 type PublicKeylike interface {
 	Keylike
-	IdFromPubKey() (Identifiable, error)
+	IdFromPubKey() (Identifier, error)
 	Verify(data []byte, sig []byte) (bool, error)
 	PublicPeerKey() libp2pcrypto.PubKey
 }
-
 
 // Fundamental common data types
 // Wrap as many 3rd party types as possible with our own extendable types such as PublicKey, PrivateKey, NodeId, etc...
@@ -44,7 +43,6 @@ func NewPublicKey(data []byte) (PublicKeylike, error) {
 	return &PublicKey{(key)}, err
 }
 
-
 func (p *PublicKey) Bytes() ([]byte, error) {
 	return p.PubKey.Bytes()
 }
@@ -60,12 +58,12 @@ func (p *PublicKey) String() (string, error) {
 
 // create an Id which is derived from a public key
 // used for both accounts and nodes
-func (p *PublicKey) IdFromPubKey() (Identifiable, error) {
+func (p *PublicKey) IdFromPubKey() (Identifier, error) {
 	id, err := peer.IDFromPublicKey(p)
 	return &Id{id}, err
 }
 
-func (p *PublicKey) PublicPeerKey() (libp2pcrypto.PubKey) {
+func (p *PublicKey) PublicPeerKey() libp2pcrypto.PubKey {
 	return p.PubKey
 }
 
@@ -93,7 +91,6 @@ func (p *PrivateKey) String() (string, error) {
 	return b58.Encode(bytes), nil
 }
 
-func (p *PrivateKey) PrivatePeerKey() (libp2pcrypto.PrivKey) {
+func (p *PrivateKey) PrivatePeerKey() libp2pcrypto.PrivKey {
 	return p.PrivKey
 }
-
