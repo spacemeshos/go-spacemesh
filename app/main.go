@@ -8,6 +8,8 @@ import (
 	"runtime"
 	"sort"
 
+	"github.com/UnrulyOS/go-unruly/log"
+
 	"github.com/UnrulyOS/go-unruly/app/config"
 	nodeparams "github.com/UnrulyOS/go-unruly/node/config"
 
@@ -66,6 +68,7 @@ func init() {
 	}
 
 	app.After = func(ctx *cli.Context) error {
+
 		// post app cleanup goes here
 		return nil
 	}
@@ -97,7 +100,7 @@ func startUnrulyNode(ctx *cli.Context) error {
 // The Unruly console application - responsible for parsing and routing cli flags and commands
 // this is the root of all evil, called from Main.main()
 func Main() {
-	
+
 	if err := app.Run(os.Args); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
