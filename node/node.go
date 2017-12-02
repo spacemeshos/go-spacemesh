@@ -44,6 +44,7 @@ func newNode(host host.Host, done chan bool) *Node {
 
 // helper method - create a local node
 func NewLocalNode(port int, done chan bool) *Node {
+
 	// Ignoring most errors for brevity
 	// See echo example for more details and better implementation
 	priv, pub, _ := crypto.GenerateKeyPair(libp2pcrypto.Secp256k1, 256)
@@ -59,6 +60,8 @@ func NewLocalNode(port int, done chan bool) *Node {
 	host := bhost.New(n)
 
 	//peerStore.AddAddrs(pid.ID, host.Addrs(), ps.PermanentAddrTTL)
+
+	log.Info("Local node created")
 
 	return newNode(host, done)
 }

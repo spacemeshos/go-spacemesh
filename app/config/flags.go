@@ -16,4 +16,5 @@ var (
 		Usage: "Set root data folder`",
 		Value: DefaultConfig.DataFilePath,
 	}
+
 )

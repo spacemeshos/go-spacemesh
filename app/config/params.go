@@ -8,4 +8,6 @@ var (
 	// should be auto injected by the CI system
 	GitCommitHash = ""
 
+	AppUsage = "the go-unruly node"
+
 )
