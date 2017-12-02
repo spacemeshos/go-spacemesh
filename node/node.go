@@ -2,8 +2,7 @@ package node
 
 import (
 	"bufio"
-	"github.com/UnrulyOS/go-unruly/logger"
-	"log"
+	"github.com/UnrulyOS/go-unruly/log"
 	"time"
 
 	"github.com/gogo/protobuf/proto"
@@ -48,7 +47,7 @@ func (n *Node) AuthenticateMessage(message proto.Message, data *pb.MessageData) 
 	// marshall data without the signature to protobufs3 binary format
 	bin, err := proto.Marshal(message)
 	if err != nil {
-		log.Println(err, "failed to marshal pb message")
+		log.Error("failed to marshal pb message. %s", err)
 		return false
 	}
 
@@ -58,7 +57,7 @@ func (n *Node) AuthenticateMessage(message proto.Message, data *pb.MessageData) 
 	// restore peer id binary format from base58 encoded node id data
 	peerId, err := peer.IDB58Decode(data.NodeId)
 	if err != nil {
-		log.Println(err, "Failed to decode node id from base58")
+		log.Error( "Failed to decode node id from base58. %s", err)
 		return false
 	}
 
@@ -95,20 +94,20 @@ func (n *Node) verifyData(data []byte, signature []byte, peerId peer.ID, pubKeyD
 	key, err := crypto.UnmarshalPublicKey(pubKeyData)
 	if err != nil {
 
-		logger.Log.Error("Failed to extract key from message key data", err)
+		log.Error("Failed to extract key from message key data", err)
 		return false
 	}
 
 	// verify that message author node id matches the provided node public key
 	if !peerId.MatchesPublicKey(key) {
-		log.Println(err, "Node id and provided public key mismatch")
+		log.Info("Node id and provided public key mismatch. %s", err)
 		return false
 	}
 
 	// this is implemented by veryfing signature of a sha256 of the data
 	res, err := key.Verify(data, signature)
 	if err != nil {
-		log.Println(err, "Error authenticating data")
+		log.Info("Error authenticating data. %s", err)
 		return false
 	}
 
@@ -142,7 +141,7 @@ func (n *Node) SendProtoMessage(data proto.Message, s inet.Stream) bool {
 	enc := protobufCodec.Multicodec(nil).Encoder(writer)
 	err := enc.Encode(data)
 	if err != nil {
-		log.Println(err)
+		log.Error("Failed to send proto message. %s", err)
 		return false
 	}
 	writer.Flush()

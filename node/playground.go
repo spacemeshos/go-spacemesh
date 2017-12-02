@@ -3,7 +3,7 @@ package node
 import (
 	"context"
 	"fmt"
-	logger "github.com/UnrulyOS/go-unruly/logger"
+	"github.com/UnrulyOS/go-unruly/log"
 	"math/rand"
 
 	crypto "github.com/UnrulyOS/go-unruly/crypto"
@@ -52,7 +52,7 @@ func TestP2pProtocols() {
 	h1.Peerstore().AddAddrs(h2.ID(), h2.Addrs(), ps.PermanentAddrTTL)
 	h2.Peerstore().AddAddrs(h1.ID(), h1.Addrs(), ps.PermanentAddrTTL)
 
-	logger.Log.Info("This is a conversation between %s and %s\n", h1.ID(), h2.ID())
+	log.Info("This is a conversation between %s and %s\n", h1.ID(), h2.ID())
 
 	// send messages using the protocols
 	h1.Ping(h2.Host)

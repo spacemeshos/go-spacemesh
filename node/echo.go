@@ -5,8 +5,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/UnrulyOS/go-unruly/assert"
-	"log"
-
+	"github.com/UnrulyOS/go-unruly/log"
 	"github.com/UnrulyOS/go-unruly/node/pb"
 
 	uuid "github.com/google/uuid"
@@ -45,20 +44,20 @@ func (e *EchoProtocol) onEchoRequest(s inet.Stream) {
 	decoder := protobufCodec.Multicodec(nil).Decoder(bufio.NewReader(s))
 	err := decoder.Decode(data)
 	if err != nil {
-		log.Println(err)
+		log.Error("Failed to send request. %s", err)
 		return
 	}
 
-	log.Printf("%s: Received echo request from %s. Message: %s", s.Conn().LocalPeer(), s.Conn().RemotePeer(), data.Message)
+	log.Info("%s: Received echo request from %s. Message: %s", s.Conn().LocalPeer(), s.Conn().RemotePeer(), data.Message)
 
 	valid := e.node.AuthenticateMessage(data, data.MessageData)
 
 	if !valid {
-		log.Println("Failed to authenticate message")
+		log.Error("Failed to authenticate message")
 		return
 	}
 
-	log.Printf("%s: Sending echo response to %s. Message id: %s...", s.Conn().LocalPeer(), s.Conn().RemotePeer(), data.MessageData.Id)
+	log.Info("%s: Sending echo response to %s. Message id: %s...", s.Conn().LocalPeer(), s.Conn().RemotePeer(), data.MessageData.Id)
 
 	// send response to the request using the message string he provided
 
@@ -69,7 +68,7 @@ func (e *EchoProtocol) onEchoRequest(s inet.Stream) {
 	// sign the data
 	signature, err := e.node.SignProtoMessage(resp)
 	if err != nil {
-		log.Println("failed to sign response")
+		log.Error("failed to sign response. %err", err)
 		return
 	}
 
@@ -78,14 +77,14 @@ func (e *EchoProtocol) onEchoRequest(s inet.Stream) {
 
 	s, respErr := e.node.NewStream(context.Background(), s.Conn().RemotePeer(), echoResponse)
 	if respErr != nil {
-		log.Println(respErr)
+		log.Error("Failed to create strem to node. %s", respErr)
 		return
 	}
 
 	ok := e.node.SendProtoMessage(resp, s)
 
 	if ok {
-		log.Printf("%s: Echo response to %s sent.", s.Conn().LocalPeer().String(), s.Conn().RemotePeer().String())
+		log.Info("%s: Echo response to %s sent.", s.Conn().LocalPeer().String(), s.Conn().RemotePeer().String())
 	}
 }
 
@@ -102,7 +101,7 @@ func (e *EchoProtocol) onEchoResponse(s inet.Stream) {
 	valid := e.node.AuthenticateMessage(data, data.MessageData)
 
 	if !valid {
-		log.Println("Failed to authenticate message")
+		log.Error("Failed to authenticate message")
 		return
 	}
 
@@ -112,18 +111,18 @@ func (e *EchoProtocol) onEchoResponse(s inet.Stream) {
 		// remove request from map as we have processed it here
 		delete(e.requests, data.MessageData.Id)
 	} else {
-		log.Println("Failed to locate request data boject for response")
+		log.Error("Failed to locate request data boject for response")
 		return
 	}
 
 	assert.True(req.Message == data.Message, nil, "Expected echo to respond with request message")
 
-	log.Printf("%s: Received echo response from %s. Message id:%s. Message: %s.", s.Conn().LocalPeer(), s.Conn().RemotePeer(), data.MessageData.Id, data.Message)
+	log.Info("%s: Received echo response from %s. Message id:%s. Message: %s.", s.Conn().LocalPeer(), s.Conn().RemotePeer(), data.MessageData.Id, data.Message)
 	e.done <- true
 }
 
 func (e *EchoProtocol) Echo(host host.Host) bool {
-	log.Printf("%s: Sending echo to: %s....", e.node.ID(), host.ID())
+	log.Info("%s: Sending echo to: %s....", e.node.ID(), host.ID())
 
 	// create message data
 	req := &pb.EchoRequest{
@@ -132,7 +131,7 @@ func (e *EchoProtocol) Echo(host host.Host) bool {
 
 	signature, err := e.node.SignProtoMessage(req)
 	if err != nil {
-		log.Println("failed to sign message")
+		log.Error("failed to sign message. %s", err)
 		return false
 	}
 
@@ -141,7 +140,7 @@ func (e *EchoProtocol) Echo(host host.Host) bool {
 
 	s, err := e.node.NewStream(context.Background(), host.ID(), echoRequest)
 	if err != nil {
-		log.Println(err)
+		log.Error("Failed to create stream. %s", err)
 		return false
 	}
 
@@ -153,6 +152,6 @@ func (e *EchoProtocol) Echo(host host.Host) bool {
 
 	// store request so response handler has access to it
 	e.requests[req.MessageData.Id] = req
-	log.Printf("%s: Echo to: %s was sent. Message Id: %s, Message: %s", e.node.ID(), host.ID(), req.MessageData.Id, req.Message)
+	log.Info("%s: Echo to: %s was sent. Message Id: %s, Message: %s", e.node.ID(), host.ID(), req.MessageData.Id, req.Message)
 	return true
 }

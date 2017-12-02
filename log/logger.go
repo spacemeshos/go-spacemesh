@@ -1,4 +1,4 @@
-package logger
+package log
 
 import (
 	"gopkg.in/op/go-logging.v1"
@@ -8,7 +8,9 @@ import (
 var (
 
 	// default app-level logger
-	Log = logging.MustGetLogger("app")
+	log = logging.MustGetLogger("app")
+
+
 
 	// Example format string. Everything except the message has a custom color
 	// which is dependent on the log level. Many fields have a custom output
@@ -17,6 +19,9 @@ var (
 )
 
 func init() {
+
+	// we wrap all log calls
+	log.ExtraCalldepth = 1
 
 	// For demo purposes, create two backend for os.Stderr.
 	backend := logging.NewLogBackend(os.Stderr, "", 0)
@@ -28,11 +33,14 @@ func init() {
 
 	// Set the backends to be used.
 	logging.SetBackend(backendFormatter)
+}
 
-	Log.Debugf("debug %s", "todo: fix me")
-	Log.Info("info")
-	Log.Notice("notice")
-	Log.Warning("warning")
-	Log.Error("err")
-	Log.Critical("crit")
+// wrappers
+
+func Info(format string, args ...interface{}) {
+	log.Info(format, args...)
+}
+
+func Error(format string, args ...interface{}) {
+	log.Error(format, args...)
 }
