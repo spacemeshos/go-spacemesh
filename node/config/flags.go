@@ -8,12 +8,13 @@ var (
 	KSecurityFlag = cli.UintFlag{
 		Name:  "k",
 		Usage: "Consensus protocol k security param",
-		Value: DefaultConfig.SecurityParam,
+		// use Destination and not value so the app will automaically update the default values
+		Destination: &DefaultConfig.SecurityParam,
 	}
 
 	LocalTcpPort = cli.UintFlag{
-		Name:  "tcp-port, tcp-p",
+		Name:  "tcp-port, p",
 		Usage: "tcp port to listen on",
-		Value: DefaultConfig.TcpPort,
+		Destination: &DefaultConfig.TcpPort,
 	}
 )

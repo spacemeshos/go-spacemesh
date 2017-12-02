@@ -8,13 +8,13 @@ var (
 	LoadConfigFileFlag = cli.StringFlag{
 		Name:  "config, c",
 		Usage: "Load configuration from `FILE`",
-		Value: DefaultConfig.ConfigFilePath,
+		Destination: &DefaultConfig.ConfigFilePath,
 	}
 
 	DataFolderPathFlag = cli.StringFlag{
 		Name:  "dataFolder, df",
 		Usage: "Set root data folder`",
-		Value: DefaultConfig.DataFilePath,
+		Destination: &DefaultConfig.DataFilePath,
 	}
 
 )

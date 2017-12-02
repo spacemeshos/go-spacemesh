@@ -12,7 +12,7 @@ import (
 	"github.com/gogo/protobuf/proto"
 
 	protobufCodec "github.com/multiformats/go-multicodec/protobuf"
-	host "gx/ipfs/QmRS46AyqtpJBsf1zmQdeizSDEzo1qkWR7rdEuPFAv8237/go-libp2p-host"
+	"gx/ipfs/QmRS46AyqtpJBsf1zmQdeizSDEzo1qkWR7rdEuPFAv8237/go-libp2p-host"
 	peer "gx/ipfs/QmXYjuNuxVzXKJCfWasQk1RqkhVLDM9jtUKhqc2WPQmFSB/go-libp2p-peer"
 	inet "gx/ipfs/QmbD5yKbXahNvoMqzeuNyKQA9vAs9fUvJg2GXeWU1fVqY5/go-libp2p-net"
 
@@ -43,7 +43,8 @@ func newNode(host host.Host, done chan bool) *Node {
 }
 
 // helper method - create a local node
-func NewLocalNode(port int, done chan bool) *Node {
+// note: access node config values via config.DefaultConfig.*
+func NewLocalNode(port uint, done chan bool) *Node {
 
 	// Ignoring most errors for brevity
 	// See echo example for more details and better implementation
@@ -57,13 +58,13 @@ func NewLocalNode(port int, done chan bool) *Node {
 	peerStore.AddPubKey(pid.ID, pub.PubKey)
 
 	n, _ := swarm.NewNetwork(context.Background(), []ma.Multiaddr{listen}, pid.ID, peerStore, nil)
-	host := bhost.New(n)
+	aHost := bhost.New(n)
 
 	//peerStore.AddAddrs(pid.ID, host.Addrs(), ps.PermanentAddrTTL)
 
-	log.Info("Local node created")
+	log.Info("Local node created. tcp port: %d", port)
 
-	return newNode(host, done)
+	return newNode(aHost, done)
 }
 
 // Authenticate incoming p2p message

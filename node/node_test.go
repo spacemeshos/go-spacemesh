@@ -11,8 +11,8 @@ func TestP2pProtocols(t *testing.T) {
 
 	// Choose random ports between 10000-10100
 	rand.Seed(666)
-	port1 := rand.Intn(100) + 10000
-	port2 := port1 + 1
+	port1 := uint(rand.Intn(100) + 10000)
+	port2 := uint(port1 + 1)
 
 	done := make(chan bool, 1)
 

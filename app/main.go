@@ -23,7 +23,6 @@ type UnrulyApp struct {
 
 
 var (
-
 	app = NewApp()
 
 	appFlags = []cli.Flag{
@@ -112,7 +111,10 @@ func NewApp() *UnrulyApp {
 // start the unruly node
 func startUnrulyNode(ctx *cli.Context) error {
 
-	app.node = node.NewLocalNode(int(nodeparams.LocalTcpPort.Value), exitApp)
+	// todo: how to read current value?
+	port := nodeparams.LocalTcpPort.Destination
+
+	app.node = node.NewLocalNode(*port, exitApp)
 
 	// wait until node signaled app to exit
 	<-exitApp
