@@ -3,7 +3,7 @@ package config
 // config are params with default values that are modifiable via config file or cli flags
 
 // Implement logic to override Configs from command line
-var DefaultConfig = Config{
+var ConfigValues = Config{
 	SecurityParam: 20,
 	FastSync:      true,
 	TcpPort:	   7513,
