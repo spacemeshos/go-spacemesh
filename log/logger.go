@@ -10,17 +10,15 @@ var (
 	// default app-level logger
 	log = logging.MustGetLogger("app")
 
-
-
 	// Example format string. Everything except the message has a custom color
 	// which is dependent on the log level. Many fields have a custom output
 	// formatting too, eg. the time returns the hour down to the milli second.
-	logFormat = logging.MustStringFormatter(`%{color}%{time:15:04:05.000} %{shortfunc} ▶ %{level:.4s} %{id:03x}%{color:reset} %{message}`, )
+	logFormat = logging.MustStringFormatter(`%{color}%{time:15:04:05.000} %{shortpkg} %{shortfunc} ▶ %{level:.4s} %{id:03x}%{color:reset} %{message}`, )
 )
 
 func init() {
 
-	// we wrap all log calls
+	// we wrap all log calls so we need to add 1 to call depth
 	log.ExtraCalldepth = 1
 
 	// For demo purposes, create two backend for os.Stderr.
