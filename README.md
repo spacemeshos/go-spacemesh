@@ -66,7 +66,7 @@ We welcome contributions large and small!
 - Read all docs in the `docs/` folder
 - Ask questions or talk about things in [Issues](https://github.com/UnrulyOS/go-unruly/issues) or on [unrily gitter](https://gitter.im/unruly-os/Lobby).
 - Ensure you are able to contribute (no legal issues please)
-- For any code contribution, please **fork the `develop branch`** (and not `master`), apply your changes and submit a pull request. Why develop and not master? We follow this [git workflow](http://nvie.com/posts/a-successful-git-branching-model/)
+- For any code contribution, please **fork from the `develop branch` and not from `master`), apply your changes and submit a pull request. We follow this [git workflow](http://nvie.com/posts/a-successful-git-branching-model/)
 - Before starting to work on large contributions please chat with the core dev team on our [gitter channel](https://gitter.im/unruly-os/Lobby) to get some initial feedback prior to doing lots of work.
 - Check for 3rd-party packages in the vendor folder before adding a new 3rd party dependency.
 - Add new 3rd-party packages required by your code to vendor.json - don't use any other kind of deps importing.
