@@ -24,7 +24,7 @@ func init() {
 	logging.SetBackend(backendFormatter)
 }
 
-// public wrappers
+// public wrappers abstracting away logging lib impl
 
 func Info(format string, args ...interface{}) {
 	log.Info(format, args...)
@@ -36,4 +36,8 @@ func Debug(format string, args ...interface{}) {
 
 func Error(format string, args ...interface{}) {
 	log.Error(format, args...)
+}
+
+func Warning(format string, args ...interface{}) {
+	log.Warning(format, args...)
 }

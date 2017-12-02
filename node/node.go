@@ -2,16 +2,26 @@ package node
 
 import (
 	"bufio"
+	"fmt"
+	"github.com/UnrulyOS/go-unruly/crypto"
 	"github.com/UnrulyOS/go-unruly/log"
 	"time"
+	"context"
 
 	"github.com/gogo/protobuf/proto"
 
 	protobufCodec "github.com/multiformats/go-multicodec/protobuf"
 	host "gx/ipfs/QmRS46AyqtpJBsf1zmQdeizSDEzo1qkWR7rdEuPFAv8237/go-libp2p-host"
 	peer "gx/ipfs/QmXYjuNuxVzXKJCfWasQk1RqkhVLDM9jtUKhqc2WPQmFSB/go-libp2p-peer"
-	crypto "gx/ipfs/QmaPbCnUMBohSGo3KnxEa2bHqyJVVeEEcwtqJAYxerieBo/go-libp2p-crypto"
 	inet "gx/ipfs/QmbD5yKbXahNvoMqzeuNyKQA9vAs9fUvJg2GXeWU1fVqY5/go-libp2p-net"
+
+	bhost "github.com/libp2p/go-libp2p/p2p/host/basic"
+	ps "gx/ipfs/QmPgDWmTmuzvP7QE5zwo1TmjbJme9pmZHNujB2453jkCTr/go-libp2p-peerstore"
+	swarm "gx/ipfs/QmU219N3jn7QadVCeBUqGnAkwoXoUomrCwDuVQVuL7PB5W/go-libp2p-swarm"
+	ma "gx/ipfs/QmXY77cVe7rVRQXZZQRioukUM7aRW3BTcAgJe12MCtb3Ji/go-multiaddr"
+
+	libp2pcrypto "gx/ipfs/QmaPbCnUMBohSGo3KnxEa2bHqyJVVeEEcwtqJAYxerieBo/go-libp2p-crypto"
+
 
 	"github.com/UnrulyOS/go-unruly/node/pb"
 )
@@ -33,6 +43,27 @@ func NewNode(host host.Host, done chan bool) *Node {
 	n.PingProtocol = NewPingProtocol(n, done)
 	n.EchoProtocol = NewEchoProtocol(n, done)
 	return n
+}
+
+// helper method - create a local node
+func NewLocalNode(port int, done chan bool) *Node {
+	// Ignoring most errors for brevity
+	// See echo example for more details and better implementation
+	priv, pub, _ := crypto.GenerateKeyPair(libp2pcrypto.Secp256k1, 256)
+	pid, _ := pub.IdFromPubKey()
+
+	listen, _ := ma.NewMultiaddr(fmt.Sprintf("/ip4/127.0.0.1/tcp/%d", port))
+	peerStore := ps.NewPeerstore()
+
+	peerStore.AddPrivKey(pid.ID, priv.PrivKey)
+	peerStore.AddPubKey(pid.ID, pub.PubKey)
+
+	n, _ := swarm.NewNetwork(context.Background(), []ma.Multiaddr{listen}, pid.ID, peerStore, nil)
+	host := bhost.New(n)
+
+	//peerStore.AddAddrs(pid.ID, host.Addrs(), ps.PermanentAddrTTL)
+
+	return NewNode(host, done)
 }
 
 // Authenticate incoming p2p message
@@ -91,7 +122,7 @@ func (n *Node) signData(data []byte) ([]byte, error) {
 // pubKeyData: author public key from the message payload (protobufs encoded)
 func (n *Node) verifyData(data []byte, signature []byte, peerId peer.ID, pubKeyData []byte) bool {
 
-	key, err := crypto.UnmarshalPublicKey(pubKeyData)
+	key, err := libp2pcrypto.UnmarshalPublicKey(pubKeyData)
 	if err != nil {
 
 		log.Error("Failed to extract key from message key data", err)

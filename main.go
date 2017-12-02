@@ -3,16 +3,14 @@ package main
 import (
 	"github.com/UnrulyOS/go-unruly/app"
 	"github.com/UnrulyOS/go-unruly/log"
-	"github.com/UnrulyOS/go-unruly/node"
 )
-
 
 func main() {
 
-	log.Info("Starting up....")
+	log.Info("App starting...")
 
 	// test p2p protocols
-	node.TestP2pProtocols()
+	// node.TestP2pProtocols(nil)
 
 	// run the app
 	app.Main()

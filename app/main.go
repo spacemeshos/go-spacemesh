@@ -8,8 +8,6 @@ import (
 	"runtime"
 	"sort"
 
-	"github.com/UnrulyOS/go-unruly/log"
-
 	"github.com/UnrulyOS/go-unruly/app/config"
 	nodeparams "github.com/UnrulyOS/go-unruly/node/config"
 
