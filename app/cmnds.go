@@ -7,10 +7,11 @@ import (
 )
 
 var (
-// todo: add all command vars here
+	// todo: add all command vars here (commands w no need for factory
 )
 
-func VersionCommand(appVersion string) cli.Command {
+// command factory command
+func NewVersionCommand(appVersion string) cli.Command {
 	return cli.Command{
 		Name:      "version",
 		Aliases:   []string{"v"},

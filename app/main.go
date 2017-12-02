@@ -44,7 +44,7 @@ func init() {
 	app.HideVersion = true
 	app.Copyright = "(c) 2017 The go-unruly Authors"
 	app.Commands = []cli.Command{
-		VersionCommand(config.AppVersion),
+		NewVersionCommand(config.AppVersion),
 		// add all other commands here
 	}
 

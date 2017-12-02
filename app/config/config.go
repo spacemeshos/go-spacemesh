@@ -1,8 +1,8 @@
 package config
 
-// Provide Config struct with default values - only 1 not several
+// Provide Config struct with default values
 
-// Implement logic to override Configs from command line
+// Default config values
 var DefaultConfig = Config{
 	AppIntParam:  20,
 	AppBoolParam: true,
@@ -10,7 +10,7 @@ var DefaultConfig = Config{
 }
 
 func init() {
-	// set default config params based on runtim here
+	// todo: update default config params based on runtime env here
 }
 
 type Config struct {
