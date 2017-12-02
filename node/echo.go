@@ -32,7 +32,6 @@ func NewEchoProtocol(node *Node, done chan bool) *EchoProtocol {
 
 	// design note: to implement fire-and-forget style messages you may just skip specifying a response callback.
 	// a fire-and-forget message will just include a request and not specify a response object
-
 	return &e
 }
 
@@ -48,9 +47,7 @@ func (e *EchoProtocol) onEchoRequest(s inet.Stream) {
 	}
 
 	log.Info("%s: Received echo request from %s. Message: %s", s.Conn().LocalPeer(), s.Conn().RemotePeer(), data.Message)
-
 	valid := e.node.AuthenticateMessage(data, data.MessageData)
-
 	if !valid {
 		log.Error("Failed to authenticate message")
 		return
@@ -59,7 +56,6 @@ func (e *EchoProtocol) onEchoRequest(s inet.Stream) {
 	log.Info("%s: Sending echo response to %s. Message id: %s...", s.Conn().LocalPeer(), s.Conn().RemotePeer(), data.MessageData.Id)
 
 	// send response to the request using the message string he provided
-
 	resp := &pb.EchoResponse{
 		MessageData: e.node.NewMessageData(data.MessageData.Id, false),
 		Message:     data.Message}
@@ -73,7 +69,6 @@ func (e *EchoProtocol) onEchoRequest(s inet.Stream) {
 
 	// add the signature to the message
 	resp.MessageData.Sign = string(signature)
-
 	s, respErr := e.node.NewStream(context.Background(), s.Conn().RemotePeer(), echoResponse)
 	if respErr != nil {
 		log.Error("Failed to create strem to node. %s", respErr)
@@ -81,7 +76,6 @@ func (e *EchoProtocol) onEchoRequest(s inet.Stream) {
 	}
 
 	ok := e.node.SendProtoMessage(resp, s)
-
 	if ok {
 		log.Info("%s: Echo response to %s sent.", s.Conn().LocalPeer().String(), s.Conn().RemotePeer().String())
 	}
@@ -115,7 +109,6 @@ func (e *EchoProtocol) onEchoResponse(s inet.Stream) {
 	}
 
 	assert.True(req.Message == data.Message, nil, "Expected echo to respond with request message")
-
 	log.Info("%s: Received echo response from %s. Message id:%s. Message: %s.", s.Conn().LocalPeer(), s.Conn().RemotePeer(), data.MessageData.Id, data.Message)
 	e.done <- true
 }
@@ -144,7 +137,6 @@ func (e *EchoProtocol) Echo(host host.Host) bool {
 	}
 
 	ok := e.node.SendProtoMessage(req, s)
-
 	if !ok {
 		return false
 	}

@@ -22,22 +22,18 @@ type UnrulyApp struct {
 }
 
 var (
-	app = NewApp()
-
+	app      = NewApp()
 	appFlags = []cli.Flag{
 		config.LoadConfigFileFlag,
 		config.DataFolderPathFlag,
 		// add all app flags here ...
 	}
-
 	nodeFlags = []cli.Flag{
 		nodeparams.KSecurityFlag,
 		nodeparams.LocalTcpPort,
 		// add all node flags here ...
 	}
-
 	// add flags for other new modules here....
-
 	exitApp = make(chan bool, 1)
 )
 
@@ -57,30 +53,23 @@ func NewApp() *UnrulyApp {
 	app.Name = filepath.Base(os.Args[0])
 	app.Author = "The go-unruly authors"
 	app.Email = "app@unrulyos.io"
-
 	app.Version = "0.0.1"
 	if len(config.GitCommitHash) > 8 {
 		app.Version += " - " + config.GitCommitHash[:8]
 	}
-
 	app.Usage = config.AppUsage
-
 	app.HideVersion = true
 	app.Copyright = "(c) 2017 The go-unruly Authors"
 	app.Commands = []cli.Command{
 		NewVersionCommand(config.AppVersion),
 		// add all other commands here
 	}
-
 	app.Flags = append(app.Flags, appFlags...)
 	app.Flags = append(app.Flags, nodeFlags...)
 	sort.Sort(cli.FlagsByName(app.Flags))
-
 	app.Before = func(ctx *cli.Context) error {
-
 		// max out box for now
 		runtime.GOMAXPROCS(runtime.NumCPU())
-
 		// exit gracefully - e.g. with app cleanup on sig abort (ctrl-c)
 		signalChan := make(chan os.Signal, 1)
 		signal.Notify(signalChan, os.Interrupt)
@@ -90,9 +79,7 @@ func NewApp() *UnrulyApp {
 				exitApp <- true
 			}
 		}()
-
 		// todo: add misc app setup here (metrics, debug, etc....)
-
 		return nil
 	}
 
@@ -107,10 +94,8 @@ func NewApp() *UnrulyApp {
 
 // start the unruly node
 func startUnrulyNode(ctx *cli.Context) error {
-
 	// todo: how to read current value?
 	port := nodeparams.LocalTcpPort.Destination
-
 	app.node = node.NewLocalNode(*port, exitApp)
 
 	// wait until node signaled app to exit

@@ -45,23 +45,18 @@ func newNode(host host.Host, done chan bool) *Node {
 // helper method - create a local node
 // note: access node config values via config.DefaultConfig.*
 func NewLocalNode(port uint, done chan bool) *Node {
-
 	// Ignoring most errors for brevity
 	// See echo example for more details and better implementation
 	priv, pub, _ := crypto.GenerateKeyPair(libp2pcrypto.Secp256k1, 256)
 	pid, _ := pub.IdFromPubKey()
-
 	listen, _ := ma.NewMultiaddr(fmt.Sprintf("/ip4/127.0.0.1/tcp/%d", port))
 	peerStore := ps.NewPeerstore()
-
 	peerStore.AddPrivKey(pid.ID, priv.PrivKey)
 	peerStore.AddPubKey(pid.ID, pub.PubKey)
-
 	n, _ := swarm.NewNetwork(context.Background(), []ma.Multiaddr{listen}, pid.ID, peerStore, nil)
 	aHost := bhost.New(n)
 
 	//peerStore.AddAddrs(pid.ID, host.Addrs(), ps.PermanentAddrTTL)
-
 	log.Info("Local node created. tcp port: %d", port)
 
 	return newNode(aHost, done)
@@ -122,7 +117,6 @@ func (n *Node) signData(data []byte) ([]byte, error) {
 // peerId: author peer id from the message payload
 // pubKeyData: author public key from the message payload (protobufs encoded)
 func (n *Node) verifyData(data []byte, signature []byte, peerId peer.ID, pubKeyData []byte) bool {
-
 	key, err := libp2pcrypto.UnmarshalPublicKey(pubKeyData)
 	if err != nil {
 
