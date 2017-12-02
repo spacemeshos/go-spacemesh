@@ -2,11 +2,11 @@ package node
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"github.com/UnrulyOS/go-unruly/crypto"
 	"github.com/UnrulyOS/go-unruly/log"
 	"time"
-	"context"
 
 	"github.com/gogo/protobuf/proto"
 
@@ -21,7 +21,6 @@ import (
 	ma "gx/ipfs/QmXY77cVe7rVRQXZZQRioukUM7aRW3BTcAgJe12MCtb3Ji/go-multiaddr"
 
 	libp2pcrypto "gx/ipfs/QmaPbCnUMBohSGo3KnxEa2bHqyJVVeEEcwtqJAYxerieBo/go-libp2p-crypto"
-
 
 	"github.com/UnrulyOS/go-unruly/node/pb"
 )
@@ -88,7 +87,7 @@ func (n *Node) AuthenticateMessage(message proto.Message, data *pb.MessageData) 
 	// restore peer id binary format from base58 encoded node id data
 	peerId, err := peer.IDB58Decode(data.NodeId)
 	if err != nil {
-		log.Error( "Failed to decode node id from base58. %s", err)
+		log.Error("Failed to decode node id from base58. %s", err)
 		return false
 	}
 

@@ -2,11 +2,9 @@ package node
 
 import (
 	"github.com/UnrulyOS/go-unruly/log"
+	ps "gx/ipfs/QmPgDWmTmuzvP7QE5zwo1TmjbJme9pmZHNujB2453jkCTr/go-libp2p-peerstore"
 	"math/rand"
 	"testing"
-
-	ps "gx/ipfs/QmPgDWmTmuzvP7QE5zwo1TmjbJme9pmZHNujB2453jkCTr/go-libp2p-peerstore"
-
 )
 
 func TestP2pProtocols(t *testing.T) {

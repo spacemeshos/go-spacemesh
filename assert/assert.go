@@ -23,4 +23,3 @@ func Err(err error, t *testing.T, msgs ...string) {
 		t.Fatal(msgs, "error:", err)
 	}
 }
-

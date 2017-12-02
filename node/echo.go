@@ -13,7 +13,6 @@ import (
 
 	protobufCodec "github.com/multiformats/go-multicodec/protobuf"
 	"gx/ipfs/QmRS46AyqtpJBsf1zmQdeizSDEzo1qkWR7rdEuPFAv8237/go-libp2p-host"
-
 )
 
 // pattern: /protocol-name/request-or-response-message/version

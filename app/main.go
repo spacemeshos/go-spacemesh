@@ -10,7 +10,6 @@ import (
 
 	"github.com/UnrulyOS/go-unruly/app/config"
 	nodeparams "github.com/UnrulyOS/go-unruly/node/config"
-
 )
 
 var (
@@ -31,7 +30,6 @@ var (
 	}
 
 	exitApp = make(chan bool, 1)
-
 )
 
 // todo: implement app commands, flags, metrics and debug here!!!!

@@ -1,9 +1,9 @@
 package crypto
 
 import (
-	crypto "gx/ipfs/QmaPbCnUMBohSGo3KnxEa2bHqyJVVeEEcwtqJAYxerieBo/go-libp2p-crypto"
-	peer "gx/ipfs/QmXYjuNuxVzXKJCfWasQk1RqkhVLDM9jtUKhqc2WPQmFSB/go-libp2p-peer"
 	b58 "gx/ipfs/QmT8rehPR3F6bmwL6zjUN8XpiDBFFpMP2myPdC6ApsWfJf/go-base58"
+	peer "gx/ipfs/QmXYjuNuxVzXKJCfWasQk1RqkhVLDM9jtUKhqc2WPQmFSB/go-libp2p-peer"
+	crypto "gx/ipfs/QmaPbCnUMBohSGo3KnxEa2bHqyJVVeEEcwtqJAYxerieBo/go-libp2p-crypto"
 )
 
 // Fundamental common data types
@@ -14,14 +14,14 @@ type Key struct {
 
 func GenerateKeyPair(typ, bits int) (PrivateKey, PublicKey, error) {
 	priv, pub, err := crypto.GenerateKeyPair(typ, bits)
-	return PrivateKey{priv}, PublicKey{ pub}, err
+	return PrivateKey{priv}, PublicKey{pub}, err
 }
 
 type PublicKey struct {
 	crypto.PubKey
 }
 
-func (pubKey *PublicKey) Bytes () ([]byte, error) {
+func (pubKey *PublicKey) Bytes() ([]byte, error) {
 	return pubKey.PubKey.Bytes()
 }
 
@@ -30,7 +30,7 @@ func NewPublicKey(data []byte) (*PublicKey, error) {
 	return &PublicKey{(key)}, err
 }
 
-func (pubKey *PublicKey) String () (string, error) {
+func (pubKey *PublicKey) String() (string, error) {
 	bytes, err := pubKey.Bytes()
 	if err != nil {
 		return "", err
@@ -41,20 +41,20 @@ func (pubKey *PublicKey) String () (string, error) {
 
 // create an Id which is derived from a public key
 // used for both accounts and nodes
-func (pubKey *PublicKey) IdFromPubKey () (Id, error) {
+func (pubKey *PublicKey) IdFromPubKey() (Id, error) {
 	id, err := peer.IDFromPublicKey(pubKey)
-	return Id{id},err
+	return Id{id}, err
 }
 
 type PrivateKey struct {
 	crypto.PrivKey
 }
 
-func (privKey *PrivateKey) Bytes () ([]byte, error) {
+func (privKey *PrivateKey) Bytes() ([]byte, error) {
 	return privKey.PrivKey.Bytes()
 }
 
-func (privKey *PrivateKey) String () (string, error) {
+func (privKey *PrivateKey) String() (string, error) {
 	bytes, err := privKey.Bytes()
 	if err != nil {
 		return "", err
@@ -67,4 +67,3 @@ func NewPrivateKey(data []byte) (*PrivateKey, error) {
 	key, err := crypto.UnmarshalPrivateKey(data)
 	return &PrivateKey{(key)}, err
 }
-

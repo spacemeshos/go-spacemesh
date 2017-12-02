@@ -10,7 +10,7 @@ type Id struct {
 	peer.ID
 }
 
-func (id *Id) String () (string) {
+func (id *Id) String() string {
 	return peer.IDB58Encode(id.ID)
 }
 
@@ -19,4 +19,3 @@ func NewID(b58 string) (*Id, error) {
 	id, err := peer.IDB58Decode(b58)
 	return &Id{id}, err
 }
-
