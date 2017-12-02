@@ -6,6 +6,7 @@ package config
 var DefaultConfig = Config{
 	AppIntParam:  20,
 	AppBoolParam: true,
+	DataFilePath: "~/.unruly",
 }
 
 func init() {
@@ -16,4 +17,5 @@ type Config struct {
 	ConfigFilePath string `toml:"-"`
 	AppIntParam    int    `toml:"-"`
 	AppBoolParam   bool   `toml:"-"`
+	DataFilePath   string `toml:"-"`
 }

@@ -21,6 +21,7 @@ var (
 
 	appFlags = []cli.Flag{
 		config.LoadConfigFileFlag,
+		config.DataFolderPath,
 		// add all app flags here
 	}
 
