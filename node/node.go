@@ -2,6 +2,7 @@ package node
 
 import (
 	"bufio"
+	"github.com/UnrulyOS/go-unruly/logger"
 	"log"
 	"time"
 
@@ -93,7 +94,8 @@ func (n *Node) verifyData(data []byte, signature []byte, peerId peer.ID, pubKeyD
 
 	key, err := crypto.UnmarshalPublicKey(pubKeyData)
 	if err != nil {
-		log.Println(err, "Failed to extract key from message key data")
+
+		logger.Log.Error("Failed to extract key from message key data", err)
 		return false
 	}
 

@@ -10,6 +10,7 @@ import (
 
 	"github.com/UnrulyOS/go-unruly/app/config"
 	nodeparams "github.com/UnrulyOS/go-unruly/node/config"
+
 )
 
 var (
@@ -30,6 +31,7 @@ var (
 	}
 
 	exitApp = make(chan bool, 1)
+
 )
 
 // todo: implement app commands, flags, metrics and debug here!!!!
@@ -95,6 +97,7 @@ func startUnrulyNode(ctx *cli.Context) error {
 // The Unruly console application - responsible for parsing and routing cli flags and commands
 // this is the root of all evil, called from Main.main()
 func Main() {
+	
 	if err := app.Run(os.Args); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
