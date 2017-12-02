@@ -15,6 +15,10 @@
 ## Versioning
 - This project uses [semantic versioning](http://semver.org/).
 
+## Git workflow
+- We follow the [git workflow](http://nvie.com/posts/a-successful-git-branching-model/)
+- Contributors should fork branch **develop** and **not master**
+
 ### Dependencies
 - We are using govendor for versioned deps
 - We add all vendored libs to git
