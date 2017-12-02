@@ -52,8 +52,10 @@ go build
 
 ### Contributing
 
+Thank you for considering to contribute to the go-unruly open source project. 
+We welcome contributions large and small!
+
 - go-unruly is part of [The UnrulyOS open source Project](https://unruly.io), and is MIT licensed open source software.
-- We welcome contributions big and small! 
 - We welcome major contributors to the unruly core dev team.
 - Please make sure to scan the [issues](https://github.com/UnrulyOS/go-unruly/issues). 
 - Search the closed ones before reporting things, and help us with the open ones.
@@ -61,21 +63,24 @@ go build
 #### Guidelines:
 
 - Read the UnrulyOS project white paper
-- Ask questions or talk about things in [Issues](https://github.com/UnrulyOS/go-unruly/issues) or #unruly on freenode.
+- Read all docs in the `docs/` folder
+- Ask questions or talk about things in [Issues](https://github.com/UnrulyOS/go-unruly/issues) or on [unrily gitter](https://gitter.im/unruly-os/Lobby).
 - Ensure you are able to contribute (no legal issues please)
-- For code contributions, fork the master branch, apply your changes and submit a pull request.
+- For any code contribution, fork the `master branch`, apply your changes and submit a pull request.
+- Before starting to work on large contributions please chat with the core dev team on our [gitter channel](https://gitter.im/unruly-os/Lobby) to get some initial feedback prior to doing lots of work.
 - Check for 3rd-party packages in the vendor folder before adding a new 3rd party dependency.
-- Add new 3rd-party packages required by your code to vendor.json
+- Add new 3rd-party packages required by your code to vendor.json - don't use any other kind of deps importing.
+- Add the package name to your commit comment. e.g. `node: added additional tests.`
 - Squash your changes down to a single commit before submitting a PR and rebase on master so we can keep the commit timeline linear.
-- Run `go fmt` before pushing any code
+- We adhere to the go standard formatting. Run `go fmt` before pushing any code
 - Get in touch with @avive about how best to contribute
-- Have fun hacking away our blockchain future!
+- Your code must be commented using [go commentary](https://golang.org/doc/effective_go.html#commentary)
+- **Have fun hacking away our blockchain future!**
 
 There's a few things you can do right now to help out:
- - **check out existing issues**. This would be especially useful for modules in active development.
- - **Perform code reviews**.
- - **Add tests**. There can never be enough tests.
-
+ - Check out existing [open issues](https://github.com/UnrulyOS/go-unruly/issues). This would be especially useful for modules in active development.
+ - Add tests. There can never be enough tests.
+ 
 #### Toolschain
 
 - Compiler - Please use go release 1.9.2. 

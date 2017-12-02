@@ -12,6 +12,10 @@ cd node
 go test
 ```
 
+- Run all tests from proj root folder:
+```
+go test ./...
+```
 ### CI
 - TBD - travis builds and tests
 

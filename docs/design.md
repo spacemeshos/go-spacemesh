@@ -12,6 +12,9 @@
 ### Local DB
 - We are using goleveldb for a key-value db
 
+## Versioning
+- This project uses [semantic versioning](http://semver.org/).
+
 ### Dependencies
 - We are using govendor for versioned deps
 - We add all vendored libs to git

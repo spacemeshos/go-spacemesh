@@ -1,3 +1,4 @@
+// Package app provides the cli app shell of an unrily p2p node
 package app
 
 import (
