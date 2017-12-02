@@ -2,6 +2,8 @@ package assert
 
 import "testing"
 
+// basic assertion support
+
 func Nil(err error, t *testing.T, msgs ...string) {
 	if err != nil {
 		t.Fatal(msgs, "error:", err)

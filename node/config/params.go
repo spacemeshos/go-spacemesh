@@ -1,9 +1,15 @@
 package config
 
 import (
+	"github.com/UnrulyOS/go-unruly/log"
 	ma "gx/ipfs/QmXY77cVe7rVRQXZZQRioukUM7aRW3BTcAgJe12MCtb3Ji/go-multiaddr"
-	"log"
 	"strings"
+)
+
+var (
+	// add all node params here (non-configurable consts)
+
+	ClientVersion = "go-p2p-node/0.0.1"
 )
 
 // params are non-configurable (hard-coded) consts. To create a configurable param use Config
@@ -11,7 +17,7 @@ import (
 // barebones node info
 type NodeInfo struct {
 	Id      string       // base58 node id
-	Address ma.Multiaddr // e.g. /ip4/127.0.0.1/tcp/3571
+	Addresses []ma.Multiaddr // e.g. ['/ip4/127.0.0.1/tcp/3571']
 }
 
 // Create a node info from a node multi-address url
@@ -20,17 +26,18 @@ func NewNodeInfo(murl string) *NodeInfo {
 
 	idx := strings.LastIndex(murl, "/")
 	if idx == -1 {
-		log.Println("Error parsing node url")
+		log.Error("Error parsing node url %s", murl)
 		return nil
 	}
 	address := murl[0 : idx-1]
 	nodeId := murl[:idx+1]
 	maddr, err := ma.NewMultiaddr(address)
 	if err != nil {
-		log.Println(err, "Failed to create multi-address from provided murl string")
+		log.Error("Failed to create multi-address from provided murl string. %s.", err)
 		return nil
 	}
-	return &NodeInfo{Id: nodeId, Address: maddr}
+
+	return &NodeInfo{Id: nodeId, Addresses:[]ma.Multiaddr{maddr}}
 }
 
 var (

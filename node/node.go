@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/UnrulyOS/go-unruly/crypto"
 	"github.com/UnrulyOS/go-unruly/log"
+	"github.com/UnrulyOS/go-unruly/node/config"
 	"time"
 
 	"github.com/gogo/protobuf/proto"
@@ -25,9 +26,6 @@ import (
 	"github.com/UnrulyOS/go-unruly/node/pb"
 )
 
-// node client version
-const clientVersion = "go-p2p-node/0.0.1"
-
 // Node type - a p2p host implementing one or more p2p protocols
 type Node struct {
 	host.Host     // lib-p2p host
@@ -36,8 +34,8 @@ type Node struct {
 	// add other protocols here...
 }
 
-// Create a new node with its implemented protocols
-func NewNode(host host.Host, done chan bool) *Node {
+// Create a new local node with its implemented protocols
+func newNode(host host.Host, done chan bool) *Node {
 	n := &Node{Host: host}
 	n.PingProtocol = NewPingProtocol(n, done)
 	n.EchoProtocol = NewEchoProtocol(n, done)
@@ -62,7 +60,7 @@ func NewLocalNode(port int, done chan bool) *Node {
 
 	//peerStore.AddAddrs(pid.ID, host.Addrs(), ps.PermanentAddrTTL)
 
-	return NewNode(host, done)
+	return newNode(host, done)
 }
 
 // Authenticate incoming p2p message
@@ -155,7 +153,7 @@ func (n *Node) NewMessageData(messageId string, gossip bool) *pb.MessageData {
 		panic("Failed to get public key for sender from local peer store.")
 	}
 
-	return &pb.MessageData{ClientVersion: clientVersion,
+	return &pb.MessageData{ClientVersion: config.ClientVersion,
 		NodeId:     peer.IDB58Encode(n.ID()),
 		NodePubKey: nodePubKey,
 		Timestamp:  time.Now().Unix(),
