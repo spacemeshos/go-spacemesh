@@ -8,3 +8,4 @@
 - Commands are specified as app args
 - It is important to separate modiles flags, params and commands
 - Each major new module should implement its own flags, params, and cli commands - see node for a ref impl.
+
