@@ -16,7 +16,7 @@ var (
 
 // barebones node info
 type NodeInfo struct {
-	Id      string       // base58 node id
+	Id        string         // base58 node id
 	Addresses []ma.Multiaddr // e.g. ['/ip4/127.0.0.1/tcp/3571']
 }
 
@@ -37,7 +37,7 @@ func NewNodeInfo(murl string) *NodeInfo {
 		return nil
 	}
 
-	return &NodeInfo{Id: nodeId, Addresses:[]ma.Multiaddr{maddr}}
+	return &NodeInfo{Id: nodeId, Addresses: []ma.Multiaddr{maddr}}
 }
 
 var (

@@ -1,4 +1,4 @@
-package  config
+package config
 
 import (
 	"os"
@@ -9,7 +9,7 @@ import (
 
 // Directory and paths helpers
 
-func GetUserHomeDirectory () string {
+func GetUserHomeDirectory() string {
 	if home := os.Getenv("HOME"); home != "" {
 		return home
 	}

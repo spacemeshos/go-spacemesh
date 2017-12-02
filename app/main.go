@@ -18,9 +18,8 @@ import (
 
 type UnrulyApp struct {
 	*cli.App
-	node *node.Node;
+	node *node.Node
 }
-
 
 var (
 	app = NewApp()
@@ -66,7 +65,6 @@ func NewApp() *UnrulyApp {
 
 	app.Usage = config.AppUsage
 
-
 	app.HideVersion = true
 	app.Copyright = "(c) 2017 The go-unruly Authors"
 	app.Commands = []cli.Command{
@@ -104,7 +102,6 @@ func NewApp() *UnrulyApp {
 		return nil
 	}
 
-
 	return &UnrulyApp{app, nil}
 }
 
@@ -129,4 +126,3 @@ func Main() {
 		os.Exit(1)
 	}
 }
-

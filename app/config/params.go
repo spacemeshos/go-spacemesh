@@ -9,5 +9,4 @@ var (
 	GitCommitHash = ""
 
 	AppUsage = "the go-unruly node"
-
 )
