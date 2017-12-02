@@ -51,9 +51,9 @@ func NewLocalNode(port uint, done chan bool) *Node {
 	pid, _ := pub.IdFromPubKey()
 	listen, _ := ma.NewMultiaddr(fmt.Sprintf("/ip4/127.0.0.1/tcp/%d", port))
 	peerStore := ps.NewPeerstore()
-	peerStore.AddPrivKey(pid.ID, priv.PrivKey)
-	peerStore.AddPubKey(pid.ID, pub.PubKey)
-	n, _ := swarm.NewNetwork(context.Background(), []ma.Multiaddr{listen}, pid.ID, peerStore, nil)
+	peerStore.AddPrivKey(pid.PeerId(), priv.PrivatePeerKey())
+	peerStore.AddPubKey(pid.PeerId(), pub.PublicPeerKey())
+	n, _ := swarm.NewNetwork(context.Background(), []ma.Multiaddr{listen}, pid.PeerId(), peerStore, nil)
 	aHost := bhost.New(n)
 
 	//peerStore.AddAddrs(pid.ID, host.Addrs(), ps.PermanentAddrTTL)
@@ -73,6 +73,7 @@ func (n *Node) AuthenticateMessage(message proto.Message, data *pb.MessageData) 
 
 	// marshall data without the signature to protobufs3 binary format
 	bin, err := proto.Marshal(message)
+
 	if err != nil {
 		log.Error("failed to marshal pb message. %s", err)
 		return false
