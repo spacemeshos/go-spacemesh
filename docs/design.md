@@ -20,10 +20,11 @@
 
 ### Logging
 - We are using []go-logging](https://github.com/op/go-logging)
+- For app-level logging use /logger.Log.*()
+- For complex modules - you may add your own loggers (output + file)
 
 ### Config
 - We are using TOML files for config file and cli.v1 flags to modify any configurable param via the CLI.
-
 
 ### Interactive Console
 - TBD - Javascript console ???? do more research

@@ -1,3 +1,12 @@
+## p2p Routing
+- Each node has hard-coded list of at least one but most likely up to 5 bootstrap nodes. One bootstrap node must be available for new nodes.
+- when a node starts up, it uses khd routing protocol to add itself to the bootstrap node. 
+- This will return a list of nodes that are 'close' (under xor arithmetic) to the node.
+These are effectively random nodes as node ids are random.
+- A node should most likely only keep up to n=5 online neighbors from the close peers list at any time and have additional peers on stand-by in case it fails to connect to one of the neighbors.
+- Similar ideas found in libp2p and eth peer routing algos.
+
+
 ## p2p Networking requirements
 
 - Node Identity - Node id is deri
