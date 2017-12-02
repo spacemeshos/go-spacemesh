@@ -14,22 +14,21 @@ import (
 )
 
 var (
-	appVersion = "0.0.1"
 
-	gitCommitHash = ""
-
-	app = NewApp(gitCommitHash, "- the go-unruly node")
+	app = NewApp(config.GitCommitHash, "- the go-unruly node")
 
 	appFlags = []cli.Flag{
 		config.LoadConfigFileFlag,
-		config.DataFolderPath,
-		// add all app flags here
+		config.DataFolderPathFlag,
+		// add all app flags here ...
 	}
 
 	nodeFlags = []cli.Flag{
 		nodeparams.KSecurityFlag,
-		// add all node flags here
+		// add all node flags here ...
 	}
+
+	// add flags for other new modules here....
 
 	exitApp = make(chan bool, 1)
 )
@@ -45,7 +44,7 @@ func init() {
 	app.HideVersion = true
 	app.Copyright = "(c) 2017 The go-unruly Authors"
 	app.Commands = []cli.Command{
-		VersionCommand(appVersion),
+		VersionCommand(config.AppVersion),
 		// add all other commands here
 	}
 

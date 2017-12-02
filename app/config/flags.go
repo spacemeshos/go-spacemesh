@@ -11,7 +11,7 @@ var (
 		Value: DefaultConfig.ConfigFilePath,
 	}
 
-	DataFolderPath = cli.StringFlag{
+	DataFolderPathFlag = cli.StringFlag{
 		Name:  "dataFolder, df",
 		Usage: "Set root data folder`",
 		Value: DefaultConfig.DataFilePath,

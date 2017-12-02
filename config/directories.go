@@ -7,10 +7,9 @@ import (
 	"strings"
 )
 
-// private helpers
+// Directory and paths helpers
 
 func GetUserHomeDirectory () string {
-
 	if home := os.Getenv("HOME"); home != "" {
 		return home
 	}
@@ -21,11 +20,11 @@ func GetUserHomeDirectory () string {
 	return ""
 }
 
-// Given a path:
+// Retursn an os-specific full path:
 // - replace ~ with user's home dir path
 // - expand any ${vars} or $vars
 // - resolve relative paths /.../
-
+// p: source path name
 func GetCanonicalPath(p string) string {
 	if strings.HasPrefix(p, "~/") || strings.HasPrefix(p, "~\\") {
 		if home := GetUserHomeDirectory(); home != "" {
