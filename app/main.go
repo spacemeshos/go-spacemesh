@@ -51,7 +51,6 @@ func init() {
 	app.Flags = append(app.Flags, appFlags...)
 	app.Flags = append(app.Flags, nodeFlags...)
 
-	sort.Sort(cli.CommandsByName(app.Commands))
 	sort.Sort(cli.FlagsByName(app.Flags))
 
 	app.Before = func(ctx *cli.Context) error {

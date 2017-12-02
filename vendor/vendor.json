@@ -357,10 +357,10 @@
 			"revisionTime": "2017-08-11T01:42:03Z"
 		},
 		{
-			"checksumSHA1": "Yx1MU40fyGe7hhqW9+dkv8kXa60=",
+			"checksumSHA1": "brhONOPp4CSdTZf5uEtcH+FpFUI=",
 			"path": "gopkg.in/urfave/cli.v1",
-			"revision": "cfb38830724cc34fedffe9a2a29fb54fa9169cd1",
-			"revisionTime": "2017-08-11T01:42:03Z"
+			"revision": "0bdeddeeb0f650497d603c4ad7b20cfe685682f6",
+			"revisionTime": "2016-11-21T01:42:03Z"
 		}
 	],
 	"rootPath": "github.com/UnrulyOS/go-unruly"
