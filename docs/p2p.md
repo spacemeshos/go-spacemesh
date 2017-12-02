@@ -5,6 +5,8 @@
 These are effectively random nodes as node ids are random.
 - A node should most likely only keep up to n=5 online neighbors from the close peers list at any time and have additional peers on stand-by in case it fails to connect to one of the neighbors.
 - Similar ideas found in libp2p and eth peer routing algos.
+- As the bootstrap node will add the new node to its routing table, other nodes will try to connect to the new node as it will be close to them at random.
+- So joining the network requires only 1 call searchPeer(self) and 1 online bootstrap node.
 
 
 ## p2p Networking requirements
