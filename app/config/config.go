@@ -3,7 +3,7 @@ package config
 // Provide Config struct with default values
 
 // Config values with defaults
-var ConfigValues = Config{
+var ConfigValues = Config {
 	AppIntParam:  20,
 	AppBoolParam: true,
 	DataFilePath: "~/.unruly",
