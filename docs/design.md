@@ -7,7 +7,7 @@
 - We are using https://gopkg.in/urfave/cli.v1 for the CLI app shell
 
 ### Runtime Metrics
-- We are using https://github.com/rcrowley/go-metrics for system metrics
+- We plan using [go-merics](https://github.com/rcrowley/go-metrics) for system metrics
 
 ### Local DB
 - We are using goleveldb for a key-value db
@@ -21,9 +21,9 @@
 
 ### Dependencies
 - We are using govendor for versioned deps
-- We add all vendored libs to git
+- We add all vendored libs to git (no reliance on external repos)
 - Always add a dep using govendor
-- For a major dep we use wrappers. See logging.
+- For major deps we use wrappers. See logging.
 - Danger: Do not add a dep from github directly using `go get` without using vendoring.
 
 ### Debugging
