@@ -3,10 +3,10 @@ package api
 import (
 	"flag"
 	"github.com/UnrulyOS/go-unruly/log"
-	"net/http"
-	"golang.org/x/net/context"
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
+	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	"net/http"
 
 	gw "github.com/UnrulyOS/go-unruly/api/pb"
 )
