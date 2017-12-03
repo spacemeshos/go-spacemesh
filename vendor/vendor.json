@@ -3,6 +3,12 @@
 	"ignore": "test",
 	"package": [
 		{
+			"checksumSHA1": "iVfdaLxIDjfk2KLP8dCMIbsxZZM=",
+			"path": "github.com/golang/protobuf/jsonpb",
+			"revision": "1e59b77b52bf8e4b449a57e6f79f21226d571845",
+			"revisionTime": "2017-11-13T18:07:20Z"
+		},
+		{
 			"checksumSHA1": "yqF125xVSkmfLpIVGrLlfE05IUk=",
 			"path": "github.com/golang/protobuf/proto",
 			"revision": "1e59b77b52bf8e4b449a57e6f79f21226d571845",
@@ -33,6 +39,12 @@
 			"revisionTime": "2017-11-13T18:07:20Z"
 		},
 		{
+			"checksumSHA1": "Ylq6kq3KWBy6mu68oyEwenhNMdg=",
+			"path": "github.com/golang/protobuf/ptypes/struct",
+			"revision": "1e59b77b52bf8e4b449a57e6f79f21226d571845",
+			"revisionTime": "2017-11-13T18:07:20Z"
+		},
+		{
 			"checksumSHA1": "O2ItP5rmfrgxPufhjJXbFlXuyL8=",
 			"path": "github.com/golang/protobuf/ptypes/timestamp",
 			"revision": "1e59b77b52bf8e4b449a57e6f79f21226d571845",
@@ -43,6 +55,24 @@
 			"path": "github.com/golang/snappy",
 			"revision": "553a641470496b2327abcac10b36396bd98e45c9",
 			"revisionTime": "2017-02-15T23:32:05Z"
+		},
+		{
+			"checksumSHA1": "DCgYY4AJZ2rJV2XpZ/Y00CDl+Jo=",
+			"path": "github.com/grpc-ecosystem/grpc-gateway/runtime",
+			"revision": "e4b8a938efae14de11fd97311e873e989896348c",
+			"revisionTime": "2017-11-26T19:57:40Z"
+		},
+		{
+			"checksumSHA1": "V1qChZAWS+xzlEBSyz2r8JlzmM8=",
+			"path": "github.com/grpc-ecosystem/grpc-gateway/runtime/internal",
+			"revision": "e4b8a938efae14de11fd97311e873e989896348c",
+			"revisionTime": "2017-11-26T19:57:40Z"
+		},
+		{
+			"checksumSHA1": "vqiK5r5dntV7JNZ+ZsGlD0Samos=",
+			"path": "github.com/grpc-ecosystem/grpc-gateway/utilities",
+			"revision": "e4b8a938efae14de11fd97311e873e989896348c",
+			"revisionTime": "2017-11-26T19:57:40Z"
 		},
 		{
 			"checksumSHA1": "d9PxF1XQGLMJZRct2R8qVM/eYlE=",

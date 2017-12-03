@@ -14,6 +14,8 @@ const (
 	port = ":50051"
 )
 
+// A grpc server implementing the Unruly API
+
 // server is used to implement UnrulyService.Echo.
 type server struct{}
 
@@ -21,7 +23,7 @@ func (s *server) Echo(ctx context.Context, in *pb.SimpleMessage) (*pb.SimpleMess
 	return &pb.SimpleMessage{in.Value}, nil
 }
 
-func startGrpcServer() {
+func StartGrpcServer() {
 	lis, err := net.Listen("tcp", port)
 	if err != nil {
 		log.Error("failed to listen: %v", err)
@@ -29,12 +31,12 @@ func startGrpcServer() {
 	}
 
 	s := grpc.NewServer()
+
 	pb.RegisterUnrulyServiceServer(s, &server{})
-	// Register reflection service on gRPC server.
+
+	// Register reflection service on gRPC server
 	reflection.Register(s)
 	if err := s.Serve(lis); err != nil {
-		log.Error("failed to serve: %v", err)
+		log.Error("failed to serve grpc: %v", err)
 	}
 }
-
-// todo: implement http-rest endpoint here
