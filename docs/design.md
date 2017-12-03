@@ -41,5 +41,8 @@
 ### Config
 - We are using TOML files for config file and cli.v1 flags to modify any configurable param via the CLI.
 
-### Interactive Console
-- TBD - Javascript console ???? do more research
+### RPC
+- Use gRPC and grpc rest-json gateway so we'll have both a gRPC and a json-rpc apis.
+- Setup app config to start the rpc server for a node
+- Make sure no private keys are exposed via rpc
+- Setup app config to unlock account(s) via passphrase for session 

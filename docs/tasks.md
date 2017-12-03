@@ -7,7 +7,7 @@
 - Basic working Makefile
 - Impl cli.v1 TOML support and write test with TOML file (a bit of a pain with cli via vendoring)
 
-#### Hard(er) Misc. Tasks
+#### Misc. Tasks
 - Implement an optimized Merkle tree data structure with backing storage in leveldb (kv storage). Support Merkle proofs.
 - Write tests to validate the plan to use libp2p-kad-dht for peer discovery (simulated network)
 - add support for uTp (over udp) in lib-p2p - it only supports tcp right now.

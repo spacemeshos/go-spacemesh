@@ -1,0 +1,18 @@
+syntax = "proto3";
+package api;
+
+import "google/api/annotations.proto";
+
+message SimpleMessage {
+    string value = 1;
+}
+
+service UnrulyService {
+    rpc Echo(SimpleMessage) returns (SimpleMessage) {
+        option (google.api.http) = {
+          post: "/v1/example/echo"
+          body: "*"
+        };
+    }
+}
+
