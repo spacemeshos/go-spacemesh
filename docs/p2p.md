@@ -11,8 +11,7 @@ These are effectively random nodes as node ids are random.
 
 ## p2p Networking requirements
 
-- Node Identity - Node id is deri
-ved from its public key.
+- Node Identity - Node id is derived from its public key.
 - Encryption - end-to-end with forward-security (sym enc keys negotiated per session between nodes)
 - Authentication - Receiver node should be able to auth sender node id
 - Node Discovery - DHT: random discovery of neighbors for gossip protocol. Node should be able to dial any online node and connect to it.

@@ -8,7 +8,7 @@
 - To test a package such as node:
 
 ```
-cd node
+cd node/tests
 go test
 ```
 

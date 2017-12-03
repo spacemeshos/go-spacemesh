@@ -30,14 +30,14 @@ func NewNodeInfo(murl string) *NodeInfo {
 		return nil
 	}
 	address := murl[0 : idx-1]
-	nodeId := murl[:idx+1]
+	nodeID := murl[:idx+1]
 	maddr, err := ma.NewMultiaddr(address)
 	if err != nil {
 		log.Error("Failed to create multi-address from provided murl string. %s.", err)
 		return nil
 	}
 
-	return &NodeInfo{Id: nodeId, Addresses: []ma.Multiaddr{maddr}}
+	return &NodeInfo{Id: nodeID, Addresses: []ma.Multiaddr{maddr}}
 }
 
 var (

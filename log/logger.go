@@ -26,18 +26,22 @@ func init() {
 
 // public wrappers abstracting away logging lib impl
 
+// Standard info level logging
 func Info(format string, args ...interface{}) {
 	log.Info(format, args...)
 }
 
+// Standard debug level logging
 func Debug(format string, args ...interface{}) {
 	log.Debug(format, args...)
 }
 
+// Standard error level logging
 func Error(format string, args ...interface{}) {
 	log.Error(format, args...)
 }
 
+// Standard warning level logging
 func Warning(format string, args ...interface{}) {
 	log.Warning(format, args...)
 }

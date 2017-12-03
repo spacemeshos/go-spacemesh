@@ -7,3 +7,5 @@
 - Implement accounts and keystore files
 - Implement node dbs in node data folders
 - Basic working Makefile (current one not working)
+- Optimized generic Markle Petricia Trie data structure
+
