@@ -8,8 +8,8 @@ import (
 
 type Account struct {
 	peer.ID
-	priKey *crypto.PrivateKey
-	pubKey *crypto.PublicKey
+	priKey *crypto.PrivateKeylike
+	pubKey *crypto.PublicKeylike
 }
 
 func NewAccount() (*Account, error) {
@@ -20,7 +20,7 @@ func NewAccount() (*Account, error) {
 	}
 
 	id, err := pub.IdFromPubKey()
-	acct := &Account{id.ID, &priv, &pub}
+	acct := &Account{id.PeerId(), &priv, &pub}
 	return acct, nil
 }
 
