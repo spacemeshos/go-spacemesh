@@ -24,7 +24,7 @@ func run(config *config.Config) error {
 	mux := runtime.NewServeMux()
 	opts := []grpc.DialOption{grpc.WithInsecure()}
 
-	echoEndpoint := flag.String("api_endpoint", "localhost:" + string(config.GrpcServerPort), "endpoint of api grpc service")
+	echoEndpoint := flag.String("api_endpoint", "localhost:"+string(config.GrpcServerPort), "endpoint of api grpc service")
 
 	err := gw.RegisterUnrulyServiceHandlerFromEndpoint(ctx, mux, *echoEndpoint, opts)
 	if err != nil {

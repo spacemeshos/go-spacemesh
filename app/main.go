@@ -3,6 +3,7 @@ package app
 
 import (
 	"fmt"
+	"github.com/UnrulyOS/go-unruly/api"
 	"github.com/UnrulyOS/go-unruly/log"
 	"github.com/UnrulyOS/go-unruly/node"
 	"gopkg.in/urfave/cli.v1"
@@ -97,6 +98,17 @@ func startUnrulyNode(ctx *cli.Context) error {
 	// todo: how to read current value?
 	port := nodeparams.LocalTcpPort.Destination
 	app.node = node.NewLocalNode(*port, exitApp)
+
+	conf := &config.ConfigValues
+
+	// start api servers
+	if conf.StartGrpcServer || conf.StartJsonServer {
+		api.StartGrpcServer(conf)
+	}
+
+	if conf.StartJsonServer {
+		api.StartJsonServer(conf)
+	}
 
 	// wait until node signaled app to exit
 	<-exitApp
