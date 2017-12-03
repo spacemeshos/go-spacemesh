@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-var (
+const (
 	// add all node params here (non-configurable consts) - ideally nost node params should be configurable
 
 	ClientVersion = "go-p2p-node/0.0.1"

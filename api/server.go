@@ -15,7 +15,7 @@ const (
 )
 
 // server is used to implement UnrulyService.Echo.
-type server struct {}
+type server struct{}
 
 func (s *server) Echo(ctx context.Context, in *pb.SimpleMessage) (*pb.SimpleMessage, error) {
 	return &pb.SimpleMessage{in.Value}, nil
@@ -25,7 +25,9 @@ func startGrpcServer() {
 	lis, err := net.Listen("tcp", port)
 	if err != nil {
 		log.Error("failed to listen: %v", err)
+		return
 	}
+
 	s := grpc.NewServer()
 	pb.RegisterUnrulyServiceServer(s, &server{})
 	// Register reflection service on gRPC server.
