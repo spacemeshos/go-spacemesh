@@ -46,3 +46,9 @@
 - Setup app config to start the rpc server for a node
 - Make sure no private keys are exposed via rpc
 - Setup app config to unlock account(s) via passphrase for session 
+
+## Concurrency 
+- We need a robust design for concurrent blockchain rw ops.
+- gRPC callbacks are called via go routines by the system and may try to read data while it is being updated.
+https://stackoverflow.com/questions/36112445/golang-blocking-and-non-blocking 
+

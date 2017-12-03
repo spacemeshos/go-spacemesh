@@ -1,5 +1,5 @@
 syntax = "proto3";
-package api;
+package pb;
 
 import "google/api/annotations.proto";
 

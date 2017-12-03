@@ -429,6 +429,12 @@
 			"revisionTime": "2016-11-04T18:56:24Z"
 		},
 		{
+			"checksumSHA1": "B22iMMY2vi1Q9kseWb/ZznpW8lQ=",
+			"path": "google.golang.org/genproto/googleapis/api/annotations",
+			"revision": "7f0da29060c682909f650ad8ed4e515bd74fa12a",
+			"revisionTime": "2017-11-23T00:06:38Z"
+		},
+		{
 			"checksumSHA1": "XXaSTyePAF9i5g6vro48JBaSrNM=",
 			"path": "google.golang.org/grpc",
 			"revision": "cd563b81ec334abe62cda34a33b8640ea67ef5ba",
@@ -509,6 +515,18 @@
 		{
 			"checksumSHA1": "n5EgDdBqFMa2KQFhtl+FF/4gIFo=",
 			"path": "google.golang.org/grpc/peer",
+			"revision": "cd563b81ec334abe62cda34a33b8640ea67ef5ba",
+			"revisionTime": "2017-12-01T23:32:05Z"
+		},
+		{
+			"checksumSHA1": "JF/KBFCo5JwVtXfrZ2kJnFRC6W8=",
+			"path": "google.golang.org/grpc/reflection",
+			"revision": "cd563b81ec334abe62cda34a33b8640ea67ef5ba",
+			"revisionTime": "2017-12-01T23:32:05Z"
+		},
+		{
+			"checksumSHA1": "7Ax2K0St9CIi1rkA9Ju+2ERfe9E=",
+			"path": "google.golang.org/grpc/reflection/grpc_reflection_v1alpha",
 			"revision": "cd563b81ec334abe62cda34a33b8640ea67ef5ba",
 			"revisionTime": "2017-12-01T23:32:05Z"
 		},

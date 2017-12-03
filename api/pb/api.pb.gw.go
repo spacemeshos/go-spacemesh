@@ -2,11 +2,11 @@
 // source: api.proto
 
 /*
-Package api is a reverse proxy.
+Package pb is a reverse proxy.
 
 It translates gRPC into RESTful JSON APIs.
 */
-package api
+package pb
 
 import (
 	"io"

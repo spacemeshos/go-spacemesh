@@ -22,7 +22,7 @@
           "200": {
             "description": "",
             "schema": {
-              "$ref": "#/definitions/apiSimpleMessage"
+              "$ref": "#/definitions/pbSimpleMessage"
             }
           }
         },
@@ -32,7 +32,7 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/apiSimpleMessage"
+              "$ref": "#/definitions/pbSimpleMessage"
             }
           }
         ],
@@ -43,7 +43,7 @@
     }
   },
   "definitions": {
-    "apiSimpleMessage": {
+    "pbSimpleMessage": {
       "type": "object",
       "properties": {
         "value": {
