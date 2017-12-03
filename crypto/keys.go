@@ -6,16 +6,19 @@ import (
 	libp2pcrypto "gx/ipfs/QmaPbCnUMBohSGo3KnxEa2bHqyJVVeEEcwtqJAYxerieBo/go-libp2p-crypto"
 )
 
+// todo: is Keyer better?
 type Keylike interface {
 	String() (string, error)
 	Bytes() ([]byte, error)
 }
 
+// todo: is there a better name for this interface? PrivateKeyer?
 type PrivateKeylike interface {
 	Keylike
 	PrivatePeerKey() libp2pcrypto.PrivKey
 }
 
+// todo: find a better name for this interface
 type PublicKeylike interface {
 	Keylike
 	IdFromPubKey() (Identifier, error)
