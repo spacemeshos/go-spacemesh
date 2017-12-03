@@ -102,6 +102,7 @@ func startUnrulyNode(ctx *cli.Context) error {
 	conf := &config.ConfigValues
 
 	// start api servers
+
 	if conf.StartGrpcServer || conf.StartJsonServer {
 		api.StartGrpcServer(conf)
 	}

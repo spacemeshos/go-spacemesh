@@ -26,13 +26,18 @@ func run(config *config.Config) error {
 
 	echoEndpoint := flag.String("api_endpoint", "localhost:"+string(config.GrpcServerPort), "endpoint of api grpc service")
 
-	err := gw.RegisterUnrulyServiceHandlerFromEndpoint(ctx, mux, *echoEndpoint, opts)
-	if err != nil {
-		return err
+	if err := gw.RegisterUnrulyServiceHandlerFromEndpoint(ctx, mux, *echoEndpoint, opts); err != nil {
+		log.Error("Failed to register http endpoint with grpc: %v", err)
 	}
 
 	addr := ":" + string(config.JsonServerPort)
-	return http.ListenAndServe(addr, mux)
+
+	err := http.ListenAndServe(addr, mux)
+	if err != nil {
+		log.Error("Failed to listen and serve: v%", err)
+	}
+
+	return err
 }
 
 func StartJsonServer(config *config.Config) {

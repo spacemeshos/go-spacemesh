@@ -22,13 +22,13 @@ func (s *server) Echo(ctx context.Context, in *pb.SimpleMessage) (*pb.SimpleMess
 	return &pb.SimpleMessage{in.Value}, nil
 }
 
-func StartGrpcServer(config *config.Config) {
+func StartGrpcServer(config *config.Config) error {
 	addr := ":" + string(config.GrpcServerPort)
 
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		log.Error("failed to listen: %v", err)
-		return
+		return err
 	}
 
 	s := grpc.NewServer()
@@ -39,4 +39,6 @@ func StartGrpcServer(config *config.Config) {
 	if err := s.Serve(lis); err != nil {
 		log.Error("failed to serve grpc: %v", err)
 	}
+
+	return err
 }
