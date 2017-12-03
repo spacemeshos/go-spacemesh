@@ -27,7 +27,9 @@ var (
 		config.LoadConfigFileFlag,
 		config.DataFolderPathFlag,
 		config.StartGrpcApiServer,
+		config.GrpcServerPort,
 		config.StartJsonApiServer,
+		config.JsonServerPort,
 		// add all app flags here ...
 	}
 	nodeFlags = []cli.Flag{

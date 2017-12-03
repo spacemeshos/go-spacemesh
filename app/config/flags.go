@@ -25,10 +25,23 @@ var (
 		Destination: &ConfigValues.StartJsonServer,
 	}
 
+	JsonServerPort = cli.UintFlag{
+		Name:        "jsonPort, jport",
+		Usage:       "Json api server port",
+		Value:       ConfigValues.JsonServerPort,
+		Destination: &ConfigValues.JsonServerPort,
+	}
+
 	StartGrpcApiServer = cli.BoolFlag{
 		Name:        "grpcApiServer, grpc",
 		Usage:       "Start the grpc server",
 		Destination: &ConfigValues.StartGrpcServer,
 	}
 
+	GrpcServerPort = cli.UintFlag{
+		Name:        "grpcPort, gport",
+		Usage:       "Grpc api server port",
+		Value:       ConfigValues.GrpcServerPort,
+		Destination: &ConfigValues.GrpcServerPort,
+	}
 )
