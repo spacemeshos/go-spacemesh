@@ -41,10 +41,6 @@ var (
 	exitApp = make(chan bool, 1)
 )
 
-// todo: implement app commands, flags, metrics and debug here!!!!
-
-// todo: add leveldb support and sample read / write
-
 // add toml config file support and sample toml file
 
 func init() {

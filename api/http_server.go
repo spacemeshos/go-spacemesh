@@ -8,32 +8,35 @@ import (
 	"google.golang.org/grpc"
 	"net/http"
 
+	config "github.com/UnrulyOS/go-unruly/app/config"
+
 	gw "github.com/UnrulyOS/go-unruly/api/pb"
 )
 
-var (
-	echoEndpoint = flag.String("echo_endpoint", "localhost:9090", "endpoint of YourService")
-)
+// A json http server providing the Unruly API.
+// Implemented as a grpc gateway. See https://github.com/grpc-ecosystem/grpc-gateway
 
-func run() error {
+func run(config *config.Config) error {
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	mux := runtime.NewServeMux()
 	opts := []grpc.DialOption{grpc.WithInsecure()}
+
+	echoEndpoint := flag.String("api_endpoint", "localhost:" + string(config.GrpcServerPort), "endpoint of api grpc service")
+
 	err := gw.RegisterUnrulyServiceHandlerFromEndpoint(ctx, mux, *echoEndpoint, opts)
 	if err != nil {
 		return err
 	}
 
-	return http.ListenAndServe(":8080", mux)
+	addr := ":" + string(config.JsonServerPort)
+	return http.ListenAndServe(addr, mux)
 }
 
-func StartJsonServer() {
-	//flag.Parse()
-
-	if err := run(); err != nil {
+func StartJsonServer(config *config.Config) {
+	if err := run(config); err != nil {
 		log.Error("Json serving error: %v", err)
 	}
 }

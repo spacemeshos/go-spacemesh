@@ -3,15 +3,14 @@ package api
 import (
 	"github.com/UnrulyOS/go-unruly/api/pb"
 	"github.com/UnrulyOS/go-unruly/log"
+
+	config "github.com/UnrulyOS/go-unruly/app/config"
+
 	"net"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
-)
-
-const (
-	port = ":50051"
 )
 
 // A grpc server implementing the Unruly API
@@ -23,15 +22,16 @@ func (s *server) Echo(ctx context.Context, in *pb.SimpleMessage) (*pb.SimpleMess
 	return &pb.SimpleMessage{in.Value}, nil
 }
 
-func StartGrpcServer() {
-	lis, err := net.Listen("tcp", port)
+func StartGrpcServer(config *config.Config) {
+	addr := ":" + string(config.GrpcServerPort)
+
+	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		log.Error("failed to listen: %v", err)
 		return
 	}
 
 	s := grpc.NewServer()
-
 	pb.RegisterUnrulyServiceServer(s, &server{})
 
 	// Register reflection service on gRPC server
