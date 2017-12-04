@@ -16,15 +16,15 @@ type Id struct {
 	peer.ID
 }
 
-func (id *Id) String() string {
+func (id Id) String() string {
 	return peer.IDB58Encode(id.ID)
 }
 
-func (id *Id) Bytes() []byte {
+func (id Id) Bytes() []byte {
 	return []byte(id.ID)
 }
 
-func (id *Id) PeerId() peer.ID {
+func (id Id) PeerId() peer.ID {
 	return id.ID
 }
 

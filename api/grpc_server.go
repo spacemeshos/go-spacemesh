@@ -35,8 +35,7 @@ func NewGrpcService() *UnrulyGrpcService {
 	return &UnrulyGrpcService{Server: server, Port: port}
 }
 
-// This is a blocking method
-// Call with a go routine
+// This is a blocking method designed to be called using a go routine
 func (s UnrulyGrpcService) StartService() {
 
 	port := config.ConfigValues.GrpcServerPort
