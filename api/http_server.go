@@ -43,17 +43,17 @@ func (s JsonHttpServer) Start() {
 	echoEndpoint := flag.String("api_endpoint", "localhost:"+portStr, "endpoint of api grpc service")
 
 	if err := gw.RegisterUnrulyServiceHandlerFromEndpoint(ctx, mux, *echoEndpoint, opts); err != nil {
-		log.Error("Failed to register http endpoint with grpc: %v", err)
+		log.Error("failed to register http endpoint with grpc: %v", err)
 	}
 
 	addr := ":" + strconv.Itoa(int(s.Port))
 
-	log.Info("Json API listening on port %d", s.Port)
+	log.Info("json API listening on port %d", s.Port)
 
 	// this blocks until stops
 	err := http.ListenAndServe(addr, mux)
 
 	if err != nil {
-		log.Error("Failed to listen and serve: v%", err)
+		log.Error("failed to listen and serve: v%", err)
 	}
 }

@@ -57,7 +57,7 @@ func NewLocalNode(port uint, done chan bool) *Node {
 	aHost := bhost.New(n)
 
 	//peerStore.AddAddrs(pid.ID, host.Addrs(), ps.PermanentAddrTTL)
-	log.Info("Local node created. tcp port: %d", port)
+	log.Info("local node created. tcp port: %d", port)
 
 	return newNode(aHost, done)
 }
@@ -85,7 +85,7 @@ func (n *Node) AuthenticateMessage(message proto.Message, data *pb.MessageData) 
 	// restore peer id binary format from base58 encoded node id data
 	peerId, err := peer.IDB58Decode(data.NodeId)
 	if err != nil {
-		log.Error("Failed to decode node id from base58. %s", err)
+		log.Error("failed to decode node id from base58. %s", err)
 		return false
 	}
 
@@ -121,20 +121,20 @@ func (n *Node) verifyData(data []byte, signature []byte, peerId peer.ID, pubKeyD
 	key, err := libp2pcrypto.UnmarshalPublicKey(pubKeyData)
 	if err != nil {
 
-		log.Error("Failed to extract key from message key data", err)
+		log.Error("failed to extract key from message key data", err)
 		return false
 	}
 
 	// verify that message author node id matches the provided node public key
 	if !peerId.MatchesPublicKey(key) {
-		log.Info("Node id and provided public key mismatch. %s", err)
+		log.Info("node id and provided public key mismatch. %s", err)
 		return false
 	}
 
 	// this is implemented by veryfing signature of a sha256 of the data
 	res, err := key.Verify(data, signature)
 	if err != nil {
-		log.Info("Error authenticating data. %s", err)
+		log.Info("error authenticating data. %s", err)
 		return false
 	}
 
@@ -149,7 +149,7 @@ func (n *Node) NewMessageData(messageId string, gossip bool) *pb.MessageData {
 	nodePubKey, err := n.Peerstore().PubKey(n.ID()).Bytes()
 
 	if err != nil {
-		panic("Failed to get public key for sender from local peer store.")
+		panic("failed to get public key for sender from local peer store.")
 	}
 
 	return &pb.MessageData{ClientVersion: config.ClientVersion,
@@ -168,7 +168,7 @@ func (n *Node) SendProtoMessage(data proto.Message, s inet.Stream) bool {
 	enc := protobufCodec.Multicodec(nil).Encoder(writer)
 	err := enc.Encode(data)
 	if err != nil {
-		log.Error("Failed to send proto message. %s", err)
+		log.Error("failed to send proto message. %s", err)
 		return false
 	}
 	writer.Flush()

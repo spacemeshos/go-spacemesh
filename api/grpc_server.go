@@ -53,7 +53,7 @@ func (s UnrulyGrpcService) StartService() {
 	// Register reflection service on gRPC server
 	reflection.Register(s.Server)
 
-	log.Info("Grpc API listening on port %d", port)
+	log.Info("grpc API listening on port %d", port)
 
 	// start serving - this blocks
 	if err := s.Server.Serve(lis); err != nil {

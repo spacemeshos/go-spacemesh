@@ -46,11 +46,11 @@ func NewPublicKey(data []byte) (PublicKeylike, error) {
 	return &PublicKey{(key)}, err
 }
 
-func (p *PublicKey) Bytes() ([]byte, error) {
+func (p PublicKey) Bytes() ([]byte, error) {
 	return p.PubKey.Bytes()
 }
 
-func (p *PublicKey) String() (string, error) {
+func (p PublicKey) String() (string, error) {
 	bytes, err := p.Bytes()
 	if err != nil {
 		return "", err
@@ -61,12 +61,12 @@ func (p *PublicKey) String() (string, error) {
 
 // create an Id which is derived from a public key
 // used for both accounts and nodes
-func (p *PublicKey) IdFromPubKey() (Identifier, error) {
+func (p PublicKey) IdFromPubKey() (Identifier, error) {
 	id, err := peer.IDFromPublicKey(p)
 	return &Id{id}, err
 }
 
-func (p *PublicKey) PublicPeerKey() libp2pcrypto.PubKey {
+func (p PublicKey) PublicPeerKey() libp2pcrypto.PubKey {
 	return p.PubKey
 }
 
@@ -81,11 +81,11 @@ func NewPrivateKey(data []byte) (PrivateKeylike, error) {
 	return &PrivateKey{(key)}, err
 }
 
-func (p *PrivateKey) Bytes() ([]byte, error) {
+func (p PrivateKey) Bytes() ([]byte, error) {
 	return p.PrivKey.Bytes()
 }
 
-func (p *PrivateKey) String() (string, error) {
+func (p PrivateKey) String() (string, error) {
 	bytes, err := p.Bytes()
 	if err != nil {
 		return "", err
@@ -94,6 +94,6 @@ func (p *PrivateKey) String() (string, error) {
 	return b58.Encode(bytes), nil
 }
 
-func (p *PrivateKey) PrivatePeerKey() libp2pcrypto.PrivKey {
+func (p PrivateKey) PrivatePeerKey() libp2pcrypto.PrivKey {
 	return p.PrivKey
 }

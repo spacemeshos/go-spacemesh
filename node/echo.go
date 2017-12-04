@@ -42,18 +42,18 @@ func (e EchoProtocol) onEchoRequest(s inet.Stream) {
 	decoder := protobufCodec.Multicodec(nil).Decoder(bufio.NewReader(s))
 	err := decoder.Decode(data)
 	if err != nil {
-		log.Error("Failed to send request. %s", err)
+		log.Error("failed to send request. %s", err)
 		return
 	}
 
-	log.Info("%s: Received echo request from %s. Message: %s", s.Conn().LocalPeer(), s.Conn().RemotePeer(), data.Message)
+	log.Info("%s: received echo request from %s. Message: %s", s.Conn().LocalPeer(), s.Conn().RemotePeer(), data.Message)
 	valid := e.node.AuthenticateMessage(data, data.MessageData)
 	if !valid {
-		log.Error("Failed to authenticate message")
+		log.Error("failed to authenticate message")
 		return
 	}
 
-	log.Info("%s: Sending echo response to %s. Message id: %s...", s.Conn().LocalPeer(), s.Conn().RemotePeer(), data.MessageData.Id)
+	log.Info("%s: sending echo response to %s. Message id: %s...", s.Conn().LocalPeer(), s.Conn().RemotePeer(), data.MessageData.Id)
 
 	// send response to the request using the message string he provided
 	resp := &pb.EchoResponse{
@@ -71,13 +71,13 @@ func (e EchoProtocol) onEchoRequest(s inet.Stream) {
 	resp.MessageData.Sign = string(signature)
 	s, respErr := e.node.NewStream(context.Background(), s.Conn().RemotePeer(), echoResponse)
 	if respErr != nil {
-		log.Error("Failed to create strem to node. %s", respErr)
+		log.Error("failed to create strem to node. %s", respErr)
 		return
 	}
 
 	ok := e.node.SendProtoMessage(resp, s)
 	if ok {
-		log.Info("%s: Echo response to %s sent.", s.Conn().LocalPeer().String(), s.Conn().RemotePeer().String())
+		log.Info("%s: echo response to %s sent.", s.Conn().LocalPeer().String(), s.Conn().RemotePeer().String())
 	}
 }
 
@@ -94,7 +94,7 @@ func (e EchoProtocol) onEchoResponse(s inet.Stream) {
 	valid := e.node.AuthenticateMessage(data, data.MessageData)
 
 	if !valid {
-		log.Error("Failed to authenticate message")
+		log.Error("failed to authenticate message")
 		return
 	}
 
@@ -104,17 +104,17 @@ func (e EchoProtocol) onEchoResponse(s inet.Stream) {
 		// remove request from map as we have processed it here
 		delete(e.requests, data.MessageData.Id)
 	} else {
-		log.Error("Failed to locate request data boject for response")
+		log.Error("failed to locate request data boject for response")
 		return
 	}
 
 	assert.True(req.Message == data.Message, nil, "Expected echo to respond with request message")
-	log.Info("%s: Received echo response from %s. Message id:%s. Message: %s.", s.Conn().LocalPeer(), s.Conn().RemotePeer(), data.MessageData.Id, data.Message)
+	log.Info("%s: received echo response from %s. Message id:%s. Message: %s.", s.Conn().LocalPeer(), s.Conn().RemotePeer(), data.MessageData.Id, data.Message)
 	e.done <- true
 }
 
 func (e EchoProtocol) Echo(host host.Host) bool {
-	log.Info("%s: Sending echo to: %s....", e.node.ID(), host.ID())
+	log.Info("%s: sending echo to: %s....", e.node.ID(), host.ID())
 
 	// create message data
 	req := &pb.EchoRequest{
@@ -132,7 +132,7 @@ func (e EchoProtocol) Echo(host host.Host) bool {
 
 	s, err := e.node.NewStream(context.Background(), host.ID(), echoRequest)
 	if err != nil {
-		log.Error("Failed to create stream. %s", err)
+		log.Error("failed to create stream. %s", err)
 		return false
 	}
 
@@ -143,6 +143,6 @@ func (e EchoProtocol) Echo(host host.Host) bool {
 
 	// store request so response handler has access to it
 	e.requests[req.MessageData.Id] = req
-	log.Info("%s: Echo to: %s was sent. Message Id: %s, Message: %s", e.node.ID(), host.ID(), req.MessageData.Id, req.Message)
+	log.Info("%s: echo to: %s was sent. Message Id: %s, Message: %s", e.node.ID(), host.ID(), req.MessageData.Id, req.Message)
 	return true
 }

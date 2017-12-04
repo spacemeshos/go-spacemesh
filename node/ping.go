@@ -38,19 +38,19 @@ func (p PingProtocol) onPingRequest(s inet.Stream) {
 	decoder := protobufCodec.Multicodec(nil).Decoder(bufio.NewReader(s))
 	err := decoder.Decode(data)
 	if err != nil {
-		log.Error("Error decoding request data. %s", err)
+		log.Error("error decoding request data. %s", err)
 		return
 	}
 
-	log.Info("%s: Received ping request from %s. Message: %s", s.Conn().LocalPeer(), s.Conn().RemotePeer(), data.Message)
+	log.Info("%s: received ping request from %s. Message: %s", s.Conn().LocalPeer(), s.Conn().RemotePeer(), data.Message)
 	valid := p.node.AuthenticateMessage(data, data.MessageData)
 	if !valid {
-		log.Error("Failed to authenticate message")
+		log.Error("failed to authenticate message")
 		return
 	}
 
 	// generate response message
-	log.Info("%s: Sending ping response to %s. Message id: %s...", s.Conn().LocalPeer(), s.Conn().RemotePeer(), data.MessageData.Id)
+	log.Info("%s: sending ping response to %s. Message id: %s...", s.Conn().LocalPeer(), s.Conn().RemotePeer(), data.MessageData.Id)
 
 	resp := &pb.PingResponse{MessageData: p.node.NewMessageData(data.MessageData.Id, false),
 		Message: fmt.Sprintf("Ping response from %s", p.node.ID())}
@@ -68,13 +68,13 @@ func (p PingProtocol) onPingRequest(s inet.Stream) {
 	// send the response
 	s, respErr := p.node.NewStream(context.Background(), s.Conn().RemotePeer(), pingResponse)
 	if respErr != nil {
-		log.Error("Error sending response: %s", respErr)
+		log.Error("error sending response: %s", respErr)
 		return
 	}
 
 	ok := p.node.SendProtoMessage(resp, s)
 	if ok {
-		log.Info("%s: Ping response to %s sent.", s.Conn().LocalPeer().String(), s.Conn().RemotePeer().String())
+		log.Info("%s: ping response to %s sent.", s.Conn().LocalPeer().String(), s.Conn().RemotePeer().String())
 	}
 }
 
@@ -89,7 +89,7 @@ func (p PingProtocol) onPingResponse(s inet.Stream) {
 
 	valid := p.node.AuthenticateMessage(data, data.MessageData)
 	if !valid {
-		log.Error("Failed to authenticate message.")
+		log.Error("failed to authenticate message.")
 		return
 	}
 
@@ -99,20 +99,20 @@ func (p PingProtocol) onPingResponse(s inet.Stream) {
 		// remove request from map as we have processed it here
 		delete(p.requests, data.MessageData.Id)
 	} else {
-		log.Error("Failed to locate request data boject for response")
+		log.Error("failed to locate request data boject for response")
 		return
 	}
 
-	log.Info("%s: Received ping response from %s. Message id:%s. Message: %s.", s.Conn().LocalPeer(), s.Conn().RemotePeer(), data.MessageData.Id, data.Message)
+	log.Info("%s: received ping response from %s. Message id:%s. Message: %s.", s.Conn().LocalPeer(), s.Conn().RemotePeer(), data.MessageData.Id, data.Message)
 	p.done <- true
 }
 
 func (p PingProtocol) Ping(host host.Host) bool {
-	log.Info("%s: Sending ping to: %s....", p.node.ID(), host.ID())
+	log.Info("%s: sending ping to: %s....", p.node.ID(), host.ID())
 
 	// create message data
 	req := &pb.PingRequest{MessageData: p.node.NewMessageData(uuid.New().String(), false),
-		Message: fmt.Sprintf("Ping from %s", p.node.ID())}
+		Message: fmt.Sprintf("ping from %s", p.node.ID())}
 
 	// sign the data
 	signature, err := p.node.SignProtoMessage(req)
@@ -125,7 +125,7 @@ func (p PingProtocol) Ping(host host.Host) bool {
 	req.MessageData.Sign = string(signature)
 	s, err := p.node.NewStream(context.Background(), host.ID(), pingRequest)
 	if err != nil {
-		log.Error("Failed to send request. %s", err)
+		log.Error("failed to send request. %s", err)
 		return false
 	}
 
@@ -137,6 +137,6 @@ func (p PingProtocol) Ping(host host.Host) bool {
 
 	// store ref request so response handler has access to it
 	p.requests[req.MessageData.Id] = req
-	log.Info("%s: Ping to: %s was sent. Message Id: %s, Message: %s", p.node.ID(), host.ID(), req.MessageData.Id, req.Message)
+	log.Info("%s: ping to: %s was sent. Message Id: %s, Message: %s", p.node.ID(), host.ID(), req.MessageData.Id, req.Message)
 	return true
 }

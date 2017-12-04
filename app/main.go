@@ -86,6 +86,7 @@ func NewApp() *UnrulyApp {
 
 	sort.Sort(cli.FlagsByName(app.Flags))
 	app.Before = func(ctx *cli.Context) error {
+
 		// max out box for now
 		runtime.GOMAXPROCS(runtime.NumCPU())
 		// exit gracefully - e.g. with app cleanup on sig abort (ctrl-c)
