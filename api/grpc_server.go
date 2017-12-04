@@ -1,10 +1,9 @@
 package api
 
 import (
+	"github.com/UnrulyOS/go-unruly/api/config"
 	"github.com/UnrulyOS/go-unruly/api/pb"
 	"github.com/UnrulyOS/go-unruly/log"
-
-	config "github.com/UnrulyOS/go-unruly/app/config"
 
 	"net"
 
@@ -22,8 +21,8 @@ func (s *server) Echo(ctx context.Context, in *pb.SimpleMessage) (*pb.SimpleMess
 	return &pb.SimpleMessage{in.Value}, nil
 }
 
-func StartGrpcServer(config *config.Config) error {
-	addr := ":" + string(config.GrpcServerPort)
+func StartGrpcServer() error {
+	addr := ":" + string(config.ConfigValues.GrpcServerPort)
 
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {

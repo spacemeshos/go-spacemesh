@@ -13,7 +13,7 @@ var (
 		Destination: &ConfigValues.SecurityParam,
 	}
 
-	LocalTcpPort = cli.UintFlag{
+	LocalTcpPortFlag = cli.UintFlag{
 		Name:        "tcp-port, p",
 		Usage:       "tcp port to listen on",
 		Value:       ConfigValues.TcpPort,

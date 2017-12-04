@@ -3,7 +3,8 @@ package app
 
 import (
 	"fmt"
-	"github.com/UnrulyOS/go-unruly/api"
+	api "github.com/UnrulyOS/go-unruly/api"
+	apiconf "github.com/UnrulyOS/go-unruly/api/config"
 	"github.com/UnrulyOS/go-unruly/log"
 	"github.com/UnrulyOS/go-unruly/node"
 	"gopkg.in/urfave/cli.v1"
@@ -27,16 +28,18 @@ var (
 	appFlags = []cli.Flag{
 		config.LoadConfigFileFlag,
 		config.DataFolderPathFlag,
-		config.StartGrpcApiServer,
-		config.GrpcServerPort,
-		config.StartJsonApiServer,
-		config.JsonServerPort,
 		// add all app flags here ...
 	}
 	nodeFlags = []cli.Flag{
 		nodeparams.KSecurityFlag,
-		nodeparams.LocalTcpPort,
+		nodeparams.LocalTcpPortFlag,
 		// add all node flags here ...
+	}
+	apiFlags = []cli.Flag{
+		apiconf.StartGrpcApiServerFlag,
+		apiconf.GrpcServerPortFlag,
+		apiconf.StartJsonApiServerFlag,
+		apiconf.JsonServerPortFlag,
 	}
 	// add flags for other new modules here....
 	exitApp = make(chan bool, 1)
@@ -65,8 +68,11 @@ func NewApp() *UnrulyApp {
 		NewVersionCommand(config.AppVersion),
 		// add all other commands here
 	}
+
 	app.Flags = append(app.Flags, appFlags...)
 	app.Flags = append(app.Flags, nodeFlags...)
+	app.Flags = append(app.Flags, apiFlags...)
+
 	sort.Sort(cli.FlagsByName(app.Flags))
 	app.Before = func(ctx *cli.Context) error {
 		// max out box for now
@@ -95,20 +101,20 @@ func NewApp() *UnrulyApp {
 
 // start the unruly node
 func startUnrulyNode(ctx *cli.Context) error {
-	// todo: how to read current value?
-	port := nodeparams.LocalTcpPort.Destination
+
+	port := nodeparams.LocalTcpPortFlag.Destination
 	app.node = node.NewLocalNode(*port, exitApp)
 
-	conf := &config.ConfigValues
+	conf := &apiconf.ConfigValues
 
 	// start api servers
 
 	if conf.StartGrpcServer || conf.StartJsonServer {
-		api.StartGrpcServer(conf)
+		api.StartGrpcServer()
 	}
 
 	if conf.StartJsonServer {
-		api.StartJsonServer(conf)
+		api.StartJsonServer()
 	}
 
 	// wait until node signaled app to exit
