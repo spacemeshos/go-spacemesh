@@ -28,7 +28,7 @@ func TestServersConfig(t *testing.T) {
 	assert.Equal(t, jsonService.Port, config.ConfigValues.JsonServerPort, "Expected same port")
 }
 
-func TestGrpcService(t *testing.T) {
+func TestGrpcApi(t *testing.T) {
 
 	const port = 9092
 	const message = "Hello World"
@@ -62,7 +62,7 @@ func TestGrpcService(t *testing.T) {
 	grpcService.StopService()
 }
 
-func TestJsonService(t *testing.T) {
+func TestJsonApi(t *testing.T) {
 
 	grpcService := api.NewGrpcService()
 	jsonService := api.NewJsonHttpServer()
