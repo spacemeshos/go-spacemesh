@@ -19,13 +19,6 @@
 - We follow [git workflow](http://nvie.com/posts/a-successful-git-branching-model/). 
 - Feature branches should be created from `develop` and not from `master`.
 
-### Dependencies
-- We are using govendor for versioned deps
-- We add all vendored libs to git (no reliance on external repos)
-- Always add a dep using govendor
-- For major deps we use wrappers. See logging.
-- Danger: Do not add a dep from github directly using `go get` without using vendoring.
-
 ### Debugging
 
 #### GoLand IDEA interactive debugging

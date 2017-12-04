@@ -1,3 +1,16 @@
+## Building
+
+Build `go-unruly` in project root folder in your current arch:
+```
+make
+```
+
+Build a specific arch in the `/build` folder:
+
+```
+make linux | windows | darwin
+```
+
 ## Build deps
 
 - go 1.9.2 or later

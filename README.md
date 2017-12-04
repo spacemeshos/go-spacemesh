@@ -15,7 +15,24 @@
 ## go-unruly
 The go implementation of the [UnrulyOS](https://unruly.io) p2p node.
 
-### Build
+### Building
+
+To build `go-unruly` for your current system architecture use:
+
+```
+make
+```
+
+The binary `go-unruly` will be saved in the project root directory.
+
+
+To build a binary for a specific architecture directory use:
+```
+make darwin | linux | windows
+```
+
+Platform-specific binaries are saved to the `/build` directory.
+
 
 Compile the .proto files using the protobufs go compiler:
 
@@ -23,7 +40,8 @@ Compile the .proto files using the protobufs go compiler:
 cd pb
 protoc --go_out=. ./*.proto
 ```
-#### Vendoring 3rd party GO packages
+#### Getting dependencies
+
 We use [govendor](https://github.com/kardianos/govendor) for all 3rd party packages.
 We commit to git all 3rd party packages in the vendor folder so we have our own copy of versioned releases.
 To update a 3rd party package use vendor.json and govendor commands.
@@ -37,12 +55,6 @@ To get the vendor packages use:
 ```
 govendor init
 govendor sync
-```
-
-To build the node use:
-
-```
-go build
 ```
 
 ### Running
