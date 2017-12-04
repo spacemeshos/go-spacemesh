@@ -15,7 +15,14 @@ import (
 // A json http server providing the Unruly API.
 // Implemented as a grpc gateway. See https://github.com/grpc-ecosystem/grpc-gateway
 
-func run() error {
+type JsonHttpServer struct {
+	Port uint
+}
+
+var Server *JsonHttpServer
+
+func (s *JsonHttpServer) run() error {
+
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -29,9 +36,10 @@ func run() error {
 		log.Error("Failed to register http endpoint with grpc: %v", err)
 	}
 
-	addr := ":" + string(config.ConfigValues.JsonServerPort)
+	addr := ":" + string(s.Port)
 
 	err := http.ListenAndServe(addr, mux)
+
 	if err != nil {
 		log.Error("Failed to listen and serve: v%", err)
 	}
@@ -40,5 +48,6 @@ func run() error {
 }
 
 func StartJsonServer() error {
-	return run()
+	Server = &JsonHttpServer{Port: config.ConfigValues.JsonServerPort}
+	return Server.run()
 }

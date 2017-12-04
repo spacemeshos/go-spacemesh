@@ -15,14 +15,21 @@ import (
 // A grpc server implementing the Unruly API
 
 // server is used to implement UnrulyService.Echo.
-type server struct{}
+type UnrulyGrpcService struct{
+	Server *grpc.Server
+	Port uint
+}
 
-func (s *server) Echo(ctx context.Context, in *pb.SimpleMessage) (*pb.SimpleMessage, error) {
+var Service *UnrulyGrpcService
+
+func (s *UnrulyGrpcService) Echo(ctx context.Context, in *pb.SimpleMessage) (*pb.SimpleMessage, error) {
 	return &pb.SimpleMessage{in.Value}, nil
 }
 
 func StartGrpcServer() error {
-	addr := ":" + string(config.ConfigValues.GrpcServerPort)
+
+	port := config.ConfigValues.GrpcServerPort
+	addr := ":" + string(port)
 
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -30,12 +37,15 @@ func StartGrpcServer() error {
 		return err
 	}
 
-	s := grpc.NewServer()
-	pb.RegisterUnrulyServiceServer(s, &server{})
+	server := grpc.NewServer()
+
+	Service = &UnrulyGrpcService{Server:server, Port:port}
+
+	pb.RegisterUnrulyServiceServer(server, Service)
 
 	// Register reflection service on gRPC server
-	reflection.Register(s)
-	if err := s.Serve(lis); err != nil {
+	reflection.Register(server)
+	if err := server.Serve(lis); err != nil {
 		log.Error("failed to serve grpc: %v", err)
 	}
 
