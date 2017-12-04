@@ -14,12 +14,10 @@ import (
 	pb "github.com/UnrulyOS/go-unruly/api/pb"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
-	"time"
 )
 
-// write basic api test here using json-http client
-
 func TestServersConfig(t *testing.T) {
+
 	config.ConfigValues.GrpcServerPort = 9092
 	config.ConfigValues.JsonServerPort = 9031
 
@@ -73,9 +71,8 @@ func TestJsonService(t *testing.T) {
 	go grpcService.StartService()
 	go jsonService.Start()
 
-	time.Sleep(3 * time.Second)
-
 	const message = "hello world!"
+	const contentType = "application/json"
 
 	// generate request payload (api input params)
 	reqParams := pb.SimpleMessage{Value: message}
@@ -87,7 +84,7 @@ func TestJsonService(t *testing.T) {
 	}
 
 	url := fmt.Sprintf("http://localhost:%d/v1/example/echo", config.ConfigValues.JsonServerPort)
-	resp, err := http.Post(url, "application/json", strings.NewReader(payload))
+	resp, err := http.Post(url, contentType, strings.NewReader(payload))
 
 	if err != nil {
 		t.Errorf("http.Post(%q) failed with %v; want success", url, err)
@@ -112,11 +109,11 @@ func TestJsonService(t *testing.T) {
 		return
 	}
 	if got, want := msg.Value, message; got != want {
-		t.Errorf("msg.Id = %q; want %q", got, want)
+		t.Errorf("msg.Value = %q; want %q", got, want)
 	}
 
-	if value := resp.Header.Get("Content-Type"); value != "application/json" {
-		t.Errorf("Content-Type was %s, wanted %s", value, "application/json")
+	if value := resp.Header.Get("Content-Type"); value != contentType {
+		t.Errorf("Content-Type was %s, wanted %s", value, contentType)
 	}
 	// stop the services
 	jsonService.Stop()
