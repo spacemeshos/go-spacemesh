@@ -21,5 +21,11 @@ go test
 ```
 go test ./...
 ```
+
+- Test via govendor
+```
+govendor test +local
+```
+
 ### CI
 - TBD - travis builds and tests

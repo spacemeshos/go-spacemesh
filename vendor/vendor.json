@@ -3,6 +3,30 @@
 	"ignore": "test",
 	"package": [
 		{
+			"checksumSHA1": "6mvxrksR9Gjw77T63175N9Z9a0U=",
+			"path": "github.com/gogo/protobuf/jsonpb",
+			"revision": "2adc21fd136931e0388e278825291678e1d98309",
+			"revisionTime": "2017-08-31T18:35:40Z"
+		},
+		{
+			"checksumSHA1": "wn2shNJMwRZpvuvkf1s7h0wvqHI=",
+			"path": "github.com/gogo/protobuf/proto",
+			"revision": "2adc21fd136931e0388e278825291678e1d98309",
+			"revisionTime": "2017-08-31T18:35:40Z"
+		},
+		{
+			"checksumSHA1": "HPVQZu059/Rfw2bAWM538bVTcUc=",
+			"path": "github.com/gogo/protobuf/sortkeys",
+			"revision": "2adc21fd136931e0388e278825291678e1d98309",
+			"revisionTime": "2017-08-31T18:35:40Z"
+		},
+		{
+			"checksumSHA1": "h3VcwPFxzaaxcAxYjKlWPqLYsTE=",
+			"path": "github.com/gogo/protobuf/types",
+			"revision": "2adc21fd136931e0388e278825291678e1d98309",
+			"revisionTime": "2017-08-31T18:35:40Z"
+		},
+		{
 			"checksumSHA1": "iVfdaLxIDjfk2KLP8dCMIbsxZZM=",
 			"path": "github.com/golang/protobuf/jsonpb",
 			"revision": "1e59b77b52bf8e4b449a57e6f79f21226d571845",
@@ -57,6 +81,12 @@
 			"revisionTime": "2017-02-15T23:32:05Z"
 		},
 		{
+			"checksumSHA1": "rDeuX1vGZNBqtCCHJn0AH385Rrs=",
+			"path": "github.com/google/uuid",
+			"revision": "4ebdd04351c754ab14fd5295c91fb901e07dfbcc",
+			"revisionTime": "2017-11-22T16:26:18Z"
+		},
+		{
 			"checksumSHA1": "DCgYY4AJZ2rJV2XpZ/Y00CDl+Jo=",
 			"path": "github.com/grpc-ecosystem/grpc-gateway/runtime",
 			"revision": "e4b8a938efae14de11fd97311e873e989896348c",
@@ -87,6 +117,36 @@
 			"revisionTime": "2016-08-13T22:13:03Z"
 		},
 		{
+			"checksumSHA1": "c9eRSKuvxfoMNUMy52ln5uEU8M0=",
+			"path": "github.com/jbenet/go-msgio",
+			"revision": "242a3f4ed2d0098bff2f25b1bd32f4254e803b23",
+			"revisionTime": "2016-03-22T12:30:21Z"
+		},
+		{
+			"checksumSHA1": "17HeUwhDeV9PZo3GYsDP3UY2Qe8=",
+			"path": "github.com/jbenet/go-msgio/mpool",
+			"revision": "242a3f4ed2d0098bff2f25b1bd32f4254e803b23",
+			"revisionTime": "2016-03-22T12:30:21Z"
+		},
+		{
+			"checksumSHA1": "Y2kn9EVRu8dOsdsmTi34Yr0Vm7k=",
+			"path": "github.com/libp2p/go-libp2p/p2p/host/basic",
+			"revision": "38ed2982a030c7f2958ef5755d1c733f4295006e",
+			"revisionTime": "2017-11-27T17:21:41Z"
+		},
+		{
+			"checksumSHA1": "X77Te7JF+xPPs7ot2z/lMTOv4dw=",
+			"path": "github.com/libp2p/go-libp2p/p2p/protocol/identify",
+			"revision": "38ed2982a030c7f2958ef5755d1c733f4295006e",
+			"revisionTime": "2017-11-27T17:21:41Z"
+		},
+		{
+			"checksumSHA1": "RLKGPYqd0NaOhh4B4dPbCJEKSVQ=",
+			"path": "github.com/libp2p/go-libp2p/p2p/protocol/identify/pb",
+			"revision": "38ed2982a030c7f2958ef5755d1c733f4295006e",
+			"revisionTime": "2017-11-27T17:21:41Z"
+		},
+		{
 			"checksumSHA1": "7hln62oZPZmyqEmgXaybf9WxQ7A=",
 			"path": "github.com/maruel/panicparse/stack",
 			"revision": "ad661195ed0e88491e0f14be6613304e3b1141d6",
@@ -97,6 +157,18 @@
 			"path": "github.com/mitchellh/go-wordwrap",
 			"revision": "ad45545899c7b13c020ea92b2072220eefad42b8",
 			"revisionTime": "2015-03-14T17:03:34Z"
+		},
+		{
+			"checksumSHA1": "kJsUsgfrb0drcXnSHrJvdTxPA5w=",
+			"path": "github.com/multiformats/go-multicodec",
+			"revision": "5e2f2923465fed1fd86110f37ca1a64ba1c0e55d",
+			"revisionTime": "2017-04-26T02:58:10Z"
+		},
+		{
+			"checksumSHA1": "NzQCcVKo6frJAzgoDZGKXhWLEOc=",
+			"path": "github.com/multiformats/go-multicodec/protobuf",
+			"revision": "5e2f2923465fed1fd86110f37ca1a64ba1c0e55d",
+			"revisionTime": "2017-04-26T02:58:10Z"
 		},
 		{
 			"checksumSHA1": "2gmvVTDCks8cPhpmyDlvm0sbrXE=",
@@ -625,6 +697,511 @@
 			"path": "gopkg.in/urfave/cli.v1",
 			"revision": "0bdeddeeb0f650497d603c4ad7b20cfe685682f6",
 			"revisionTime": "2016-11-21T01:42:03Z"
+		},
+		{
+			"checksumSHA1": "2TR0fTrrbWmuQrvkPlF/KpOM4W0=",
+			"path": "gx/ipfs/QmNWCEvi7bPRcvqAV8AKLGVNoQdArWi7NJayka2SM4XtRe/go-smux-yamux",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "54GCnlA21YT0ApiOgeqV1pFSDo0=",
+			"path": "gx/ipfs/QmNhVCV7kgAqW6oh6n8m9myxT2ksGPhVZnHkzkBvR5qg2d/go-multicodec-packed",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "7kVIsfG3YUxuMgNvEpZ7sBRSoUk=",
+			"path": "gx/ipfs/QmPgDWmTmuzvP7QE5zwo1TmjbJme9pmZHNujB2453jkCTr/go-libp2p-peerstore",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "LFHSGVlMcfm1+iSC24h2SC9TaRg=",
+			"path": "gx/ipfs/QmPgDWmTmuzvP7QE5zwo1TmjbJme9pmZHNujB2453jkCTr/go-libp2p-peerstore/addr",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "7nD2LWdYeBCo6tx71HHDF9vaR1s=",
+			"path": "gx/ipfs/QmQ51pHe6u7CWodkUGDLqaCEMchkbMt7VEZnECF5mp6tVb/ed25519",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "KPgcZSPSpKNwGGjmJOvJDhXX2bk=",
+			"path": "gx/ipfs/QmQ51pHe6u7CWodkUGDLqaCEMchkbMt7VEZnECF5mp6tVb/ed25519/edwards25519",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "yHt/5bJbFg3Kaja2n8D6CGMbA2w=",
+			"path": "gx/ipfs/QmQ51pHe6u7CWodkUGDLqaCEMchkbMt7VEZnECF5mp6tVb/ed25519/extra25519",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "8nBFXQzqOBY5FyuToJfR/p6blnI=",
+			"path": "gx/ipfs/QmQ8t8yZJv6bTgnDcHMPMgpUcSTnpNMGPjFxmGwZ2MWak9/go-nat",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "7lLvsLDGynobWbQnMSFG0/she28=",
+			"path": "gx/ipfs/QmQBB2dQLmQHJgs2gqZ3iqL2XiuCtUCvXzWt5kMXDf5Zcr/go-maddr-filter",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "22db29L6e2xdUnSa7wqkjeRCMD0=",
+			"path": "gx/ipfs/QmQFhPsJCp82az4SXbziP9QcVSqggEELnV9wGZqMR1EfMB/go-smux-spdystream",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "Bq++7318SOF5mgNKWaE5oHSEXQE=",
+			"path": "gx/ipfs/QmQPWTeQJnJE7MYu6dJTiNTQRNuqBr41dis6UgY6Uekmgd/keccakpg",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "/nwXPv0VRN0wcSVBYl3IBHo4aGI=",
+			"path": "gx/ipfs/QmQtBcHtRy9BxjawZjWJBn8aSKbqraBnQiVsc3wt9w9TTn/goupnp",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "YOCRtiDmB/ywvjncgyO/+Yc0MHw=",
+			"path": "gx/ipfs/QmQtBcHtRy9BxjawZjWJBn8aSKbqraBnQiVsc3wt9w9TTn/goupnp/dcps/internetgateway1",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "VXa8wQAoUc2OJGaam2AphwLbo1M=",
+			"path": "gx/ipfs/QmQtBcHtRy9BxjawZjWJBn8aSKbqraBnQiVsc3wt9w9TTn/goupnp/dcps/internetgateway2",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "x4zdh9Ax4lC2v7udiu9BCM6ETmc=",
+			"path": "gx/ipfs/QmQtBcHtRy9BxjawZjWJBn8aSKbqraBnQiVsc3wt9w9TTn/goupnp/httpu",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "VtoIpFEL/8lnAI56KIxghpWSPXg=",
+			"path": "gx/ipfs/QmQtBcHtRy9BxjawZjWJBn8aSKbqraBnQiVsc3wt9w9TTn/goupnp/scpd",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "HxA1fhJIOz4TGJMzZ/6m/3r77jY=",
+			"path": "gx/ipfs/QmQtBcHtRy9BxjawZjWJBn8aSKbqraBnQiVsc3wt9w9TTn/goupnp/soap",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "szm7UvUnE3Uy799NufOTSvtjvO0=",
+			"path": "gx/ipfs/QmQtBcHtRy9BxjawZjWJBn8aSKbqraBnQiVsc3wt9w9TTn/goupnp/ssdp",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "w3F8QgSo5tRWZDnWU8em6O0V36A=",
+			"path": "gx/ipfs/QmQvJiADDe7JR4m968MwXobTCCzUqQkP87aRHe29MEBGHV/go-logging",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "dP1QeiHuuwy8lsWoTDmKum7R7lE=",
+			"path": "gx/ipfs/QmRS46AyqtpJBsf1zmQdeizSDEzo1qkWR7rdEuPFAv8237/go-libp2p-host",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "Q2JK01sDqk9VCjDTUZqxnL1126M=",
+			"path": "gx/ipfs/QmS4L8WB9RLZLu9YbS19cHJVjQnuvTyGaGKs75DtmX4Jyo/go-reuseport",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "2OJF8Q5/BJRPSLWGrY3DB3voKAA=",
+			"path": "gx/ipfs/QmS4L8WB9RLZLu9YbS19cHJVjQnuvTyGaGKs75DtmX4Jyo/go-reuseport/poll",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "KZufC2oTUyXA9aG5KIr7YRVD/oU=",
+			"path": "gx/ipfs/QmS4L8WB9RLZLu9YbS19cHJVjQnuvTyGaGKs75DtmX4Jyo/go-reuseport/singlepoll",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "72Y+p4ub4AYbiSjtROGeoC1GQlU=",
+			"path": "gx/ipfs/QmS7xUmsTdVNU2t1bPV6o9aXuXfufAjNGYgh2bcN2z9DAs/go-multiaddr-dns",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "92kMrZtrU4VWXpNCvTBI1yJKFo0=",
+			"path": "gx/ipfs/QmSF8fPo3jgVBAy8fpdjjYqgG87dkJgUprRBHRd2tmfgpP/goprocess",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "gT4fjIHi6n+vy5MTHD8ahuG8aKU=",
+			"path": "gx/ipfs/QmSF8fPo3jgVBAy8fpdjjYqgG87dkJgUprRBHRd2tmfgpP/goprocess/context",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "Fl0xSNbcgnLzlKDaGTT6Ku1lNzo=",
+			"path": "gx/ipfs/QmSF8fPo3jgVBAy8fpdjjYqgG87dkJgUprRBHRd2tmfgpP/goprocess/periodic",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "ccaa1N+9EqvZjRnvsLO5nb9L0f4=",
+			"path": "gx/ipfs/QmSGRM5Udmy1jsFBr1Cawez7Lt7LZ3ZKA23GGVEsiEW6F3/eventfd",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "vt5MoBpcs2CfAOj1Hbk9roB+6ZE=",
+			"path": "gx/ipfs/QmSMZwvs3n4GBikZ7hKzT17c3bk65FmyZo2JqtJ16swqCv/multiaddr-filter",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "0G9RtC8SAxab3LqADfnsjcIze3k=",
+			"path": "gx/ipfs/QmSU6eubNdhXjFBJBSksTp8kv8YRub8mGAPv8tVJHmL2EU/go-ipfs-util",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "7zltuJpO07pJ6Zl5Zi47cFCBjtA=",
+			"path": "gx/ipfs/QmSpJByNKFX1sCsHBEp3R73FL4NF6FnQTEGyNAXHm2GS52/go-log",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "zGhXMfueNj2HMO+oyDJss2Shj64=",
+			"path": "gx/ipfs/QmT4PgCNdv73hnFAqzHqwW44q7M9PWpykSswHDxndquZbc/go-libp2p-loggables",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "XEoBQw0pNcffR6EA/0BqbYc8e9k=",
+			"path": "gx/ipfs/QmT8rehPR3F6bmwL6zjUN8XpiDBFFpMP2myPdC6ApsWfJf/go-base58",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "RpavTS8Vvk8k+y7hS2crDuhL+tY=",
+			"path": "gx/ipfs/QmTEmsyNnckEq8rEfALfdhLHjrEHGoSGFDrAYReuetn7MC/go-net/html",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "OV3pPLAJSZ4gPyEJgCbyXQPoqR4=",
+			"path": "gx/ipfs/QmTEmsyNnckEq8rEfALfdhLHjrEHGoSGFDrAYReuetn7MC/go-net/html/atom",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "Ck7lOB/evGB/dxIEVa8kQ/e1mJA=",
+			"path": "gx/ipfs/QmTEmsyNnckEq8rEfALfdhLHjrEHGoSGFDrAYReuetn7MC/go-net/html/charset",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "YkaEsJ+lWxAhUjEOcLcVvKqLKEM=",
+			"path": "gx/ipfs/QmTnsezaB1wWNRHeHnYrm8K4d5i9wtyj3GsqjC3Rt5b5v5/go-multistream",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "S+EUXNxZFWe07Lmnvp/FObpttRU=",
+			"path": "gx/ipfs/QmTvzVdANd5UWYxEqV9czC9gPZX6k7BCSVYcz91Gwz6J7A/go-tcp-transport",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "MNSt+Lktfw/tamLleAmX3hNy5fc=",
+			"path": "gx/ipfs/QmU219N3jn7QadVCeBUqGnAkwoXoUomrCwDuVQVuL7PB5W/go-libp2p-swarm",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "XBDxDI2Hz4s26A9s32Ugjbt+6Ak=",
+			"path": "gx/ipfs/QmU9a9NV9RdPNwZQDYd5uKsm6N6LJLSvLbywDDYFbaaC6P/go-multihash",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "JGM6a9SepznplfGYXi5rokXL4nI=",
+			"path": "gx/ipfs/QmUE6HHybkvTDUkP6gHx41XNHsyZDwxCmxiD2fJABsg9eZ/go-ws-transport",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "bfpFQ90RBV6yy/tiTtR2tTzsLdI=",
+			"path": "gx/ipfs/QmUZJUk816s2aWLqWKYKAJWADdfftzUEtBA32mrz1EyjpT/go-libp2p-circuit",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "LLsBd+GnaWcjG6Tve+qXKuZgOzo=",
+			"path": "gx/ipfs/QmUZJUk816s2aWLqWKYKAJWADdfftzUEtBA32mrz1EyjpT/go-libp2p-circuit/pb",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "jRLOTa6oeQ2nSWlUnIyAOPXj2AA=",
+			"path": "gx/ipfs/QmVniQJkdzLZaZwzwMdd3dJTvWiJ1DQEkreVy6hs6h7Vk5/go-smux-multistream",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "QgPzgdN/GjvltsQNU3kmN1nzjEk=",
+			"path": "gx/ipfs/QmVxf27kucSvCLiCq6dAXjDU2WG3xZN9ae7Ny6osroP28u/yamux",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "BYxUK1BYNRB5ymMZsbaMGmru+28=",
+			"path": "gx/ipfs/QmWBug6eBS7AxRdCDVuSY5CnSit7cS2XnPFYJWqWDumhCG/go-msgio",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "ueBrOQ8nTxOhhKMfyntxY2BCqB0=",
+			"path": "gx/ipfs/QmWBug6eBS7AxRdCDVuSY5CnSit7cS2XnPFYJWqWDumhCG/go-msgio/mpool",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "YMlmW6rhc8Ehtt8C43qW+RQjx7Y=",
+			"path": "gx/ipfs/QmWHgLqrghM9zw77nF6gdvT9ExQ2RB9pLxkd8sDHZf1rWb/go-temp-err-catcher",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "nZAZkNGxGzpsn/YdqqYnk5mz1p8=",
+			"path": "gx/ipfs/QmWUMfzE2RikVCwAtUCiZu7KijhnqRXKxriad9g6WaKgby/go-libp2p-conn",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "/HDZ6l/z3xGs6ZDfr+rdNDUkwzo=",
+			"path": "gx/ipfs/QmWfkNorhirGE1Qp3VwBWcnGaj4adv4hNqCYwabMrEYc21/go-libp2p-interface-connmgr",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "bHceYWJCYZytw/KJw7g/SKaRBfE=",
+			"path": "gx/ipfs/QmWjNfGgm61ABELTxPDwvNDm18j1EmQiPt9zXkCSEYgMDm/spdystream",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "S752h/6GpW45ERz+9N6UOKmDNqg=",
+			"path": "gx/ipfs/QmWjNfGgm61ABELTxPDwvNDm18j1EmQiPt9zXkCSEYgMDm/spdystream/spdy",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "onCjjpQpw4iVI+P53wQLzUMSEaU=",
+			"path": "gx/ipfs/QmWq5PJgAQKDWQerAijYUVKW8mN5MDatK5j7VMp8rizKQd/btcec",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "IjReXLJkLpBRWHRK3DPYdGnPO3M=",
+			"path": "gx/ipfs/QmX3U3YXCQ6UYBxq2LVWF8dARS1hPUTEYLrSx654Qyxyw6/go-multiaddr-net",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "8/1ElFmnloyA/eNmEw7FMFCTv7w=",
+			"path": "gx/ipfs/QmXY77cVe7rVRQXZZQRioukUM7aRW3BTcAgJe12MCtb3Ji/go-multiaddr",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "DiTSfyAnUbEb34f8B6sGh4OGQ+k=",
+			"path": "gx/ipfs/QmXYjuNuxVzXKJCfWasQk1RqkhVLDM9jtUKhqc2WPQmFSB/go-libp2p-peer",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "qVVjTQg6ziB13mBWgtzamqbgZqw=",
+			"path": "gx/ipfs/QmY9JXR3FupnYAYJWK9aMr9bCpqWKcToQ1tz8DVGTrHpHw/go-stream-muxer",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "tjnoFb2FuhMd2VBCHPbdCijKII4=",
+			"path": "gx/ipfs/QmYsYNh6saxUYHajdj49uiRzdxQgiFTtymrjf3d1f2Cer4/go-nat-pmp",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "8CClMLuhfRW7L1heMDL5EB81NjA=",
+			"path": "gx/ipfs/QmZ4Qi3GaRbjcx28Sme5eMH7RQjGkt8wHxt2a65oLaeFEV/gogo-protobuf/io",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "KBokI/L75pFOBUrPiM4JNnWHaQk=",
+			"path": "gx/ipfs/QmZ4Qi3GaRbjcx28Sme5eMH7RQjGkt8wHxt2a65oLaeFEV/gogo-protobuf/proto",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "A1X9OBN3CiHPOpk/EVewRXGuVNo=",
+			"path": "gx/ipfs/QmZD7kdgd6eiBCvNbyvsFQ11h3ainoCJpJRbecDx3CPcbZ/go-libp2p-interface-conn",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "LVNV2d8zx19UCBXdOpg/+Bu6Zr8=",
+			"path": "gx/ipfs/QmZH5VXfAJouGMyCCHTRPGCT3e5MG9Lu78Ln3YAYW1XTts/websocket",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "+PuXSPy4EiktXHg42ffF3zv5LW0=",
+			"path": "gx/ipfs/QmZNkThpqfVXs9GNbexPrfBbXSLNYeKrE7jwFM2oqHbyqN/go-libp2p-protocol",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "sBuY9FFl0G3SeOzLSTnbbnbiu64=",
+			"path": "gx/ipfs/QmZQa5J7j7kd44GGC4aKX8J9JGGzCMqwGzcEFqGV1YD57A/mafmt",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "rT25kGYsA4toipDqKrDA4t0kIOs=",
+			"path": "gx/ipfs/QmaPHkZLbQQbvcyavn8q1GFHg6o6yeceyHFSJ3Pjf3p3TQ/go-crypto/blake2b",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "THPHGzFZMV+aXm+DDuEsqKZP7q4=",
+			"path": "gx/ipfs/QmaPHkZLbQQbvcyavn8q1GFHg6o6yeceyHFSJ3Pjf3p3TQ/go-crypto/blake2s",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "BJ7dcgbKZl4I4ZtUnw1PyIku7FM=",
+			"path": "gx/ipfs/QmaPHkZLbQQbvcyavn8q1GFHg6o6yeceyHFSJ3Pjf3p3TQ/go-crypto/blowfish",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "js8qkiUHQrUOjvv2OxImrYrE7TA=",
+			"path": "gx/ipfs/QmaPHkZLbQQbvcyavn8q1GFHg6o6yeceyHFSJ3Pjf3p3TQ/go-crypto/sha3",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "8YN1StfmlL6pGKaP/nOKYdu8nVw=",
+			"path": "gx/ipfs/QmaPbCnUMBohSGo3KnxEa2bHqyJVVeEEcwtqJAYxerieBo/go-libp2p-crypto",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "iUuTLydorhVK2l3zl9Po80pUNxU=",
+			"path": "gx/ipfs/QmaPbCnUMBohSGo3KnxEa2bHqyJVVeEEcwtqJAYxerieBo/go-libp2p-crypto/pb",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "B2/3mT1NY5RofUIx5yt5Id98lCo=",
+			"path": "gx/ipfs/Qmaau1d1WjnQdTYfRYfFVsCS97cgD8ATyrKuNoEfexL7JZ/go-text/encoding",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "laQW5nSpf2e5cE2QpSrOiIAAtRE=",
+			"path": "gx/ipfs/Qmaau1d1WjnQdTYfRYfFVsCS97cgD8ATyrKuNoEfexL7JZ/go-text/encoding/charmap",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "qZ09j5v/+D+puNxOTzLgETqPe5U=",
+			"path": "gx/ipfs/Qmaau1d1WjnQdTYfRYfFVsCS97cgD8ATyrKuNoEfexL7JZ/go-text/encoding/internal",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "1/jLhunWG0k8goJdC1uJya0yTj8=",
+			"path": "gx/ipfs/Qmaau1d1WjnQdTYfRYfFVsCS97cgD8ATyrKuNoEfexL7JZ/go-text/encoding/internal/identifier",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "HjZmo+J1vSWRCH1T71zuqxiHi6s=",
+			"path": "gx/ipfs/Qmaau1d1WjnQdTYfRYfFVsCS97cgD8ATyrKuNoEfexL7JZ/go-text/encoding/japanese",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "v2QKgHez6316G8TW85OYfr3PTng=",
+			"path": "gx/ipfs/Qmaau1d1WjnQdTYfRYfFVsCS97cgD8ATyrKuNoEfexL7JZ/go-text/encoding/korean",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "q0dW4Z4w/b4rAGont/HSipWiE6Y=",
+			"path": "gx/ipfs/Qmaau1d1WjnQdTYfRYfFVsCS97cgD8ATyrKuNoEfexL7JZ/go-text/encoding/simplifiedchinese",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "ki6qxhIPKeEXV2vYoKdx1CJvIo4=",
+			"path": "gx/ipfs/Qmaau1d1WjnQdTYfRYfFVsCS97cgD8ATyrKuNoEfexL7JZ/go-text/encoding/traditionalchinese",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "vp0PqZzreRlNj2svNttvaBEBkAA=",
+			"path": "gx/ipfs/Qmaau1d1WjnQdTYfRYfFVsCS97cgD8ATyrKuNoEfexL7JZ/go-text/encoding/unicode",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "jU9Lu9SxEidwR6nGWLYkxtXkS9w=",
+			"path": "gx/ipfs/Qmaau1d1WjnQdTYfRYfFVsCS97cgD8ATyrKuNoEfexL7JZ/go-text/transform",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "S7PdQ7gYBe7s0yNixtGwUY6TNiY=",
+			"path": "gx/ipfs/QmauYrW3kDcfZwUuqjyDCSTyaicL8tvo3a7VkAVgAEes96/go-libp2p-interface-pnet",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "DrZdQ2uRJvPU0KfzcYj40V8x1VY=",
+			"path": "gx/ipfs/QmbD5yKbXahNvoMqzeuNyKQA9vAs9fUvJg2GXeWU1fVqY5/go-libp2p-net",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "wehH788b7EypfZCh/OrBx8Mxx88=",
+			"path": "gx/ipfs/QmbSkjJvDuxaZYtR46sF9ust7XY1hcg7DrA6Mxu4UiSWqs/go-libp2p-secio",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "RuJfUpkBsghYFq4ViMgn+f/M3BM=",
+			"path": "gx/ipfs/QmbSkjJvDuxaZYtR46sF9ust7XY1hcg7DrA6Mxu4UiSWqs/go-libp2p-secio/pb",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "dORQdycGzTOGHVBdF425Z3Y/raY=",
+			"path": "gx/ipfs/QmbXmeK6KgUAkbyVGRxXknupmWAHnt6ryghT8BFSsEh2sB/go-libp2p-metrics",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "qBZow681OVq6Xmf+43Osk1sbbeo=",
+			"path": "gx/ipfs/QmbXmeK6KgUAkbyVGRxXknupmWAHnt6ryghT8BFSsEh2sB/go-libp2p-metrics/conn",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "hqRvL+Auis+sAwnr+u1ons6oak4=",
+			"path": "gx/ipfs/QmbXmeK6KgUAkbyVGRxXknupmWAHnt6ryghT8BFSsEh2sB/go-libp2p-metrics/stream",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "YdKojaytmwX2vP2W7Md5xWI0skc=",
+			"path": "gx/ipfs/QmcLqWSFsaQ8Ujh8Ys8i9JPHVy1CcdPoqV23M9S3ufdVbn/go-sockaddr/net",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "htgk++hm8rZf+0yU0hRdXgu5NLY=",
+			"path": "gx/ipfs/QmcNdF325V5LjhHowoZJvby7Y3xB7kNUMPj6Ve7VPzdQ9Z/go-addr-util",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "ffsUn58vPnGiy3ATOAOkyaoiXc4=",
+			"path": "gx/ipfs/QmcrrEpx3VMUbrbgVroH3YiYyUS5c4YAykzyPJWKspUYLa/go-semver/semver",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "xJFNk7B/LU0ZDlZCO1JgFKJrErE=",
+			"path": "gx/ipfs/QmcyaFHbyiZfoX5GTpcqqCPYmbjYNAhRDekXSJPFHdYNSV/go.uuid",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "7RI0R9RYvW6veE/xTxCr+/9ad0w=",
+			"path": "gx/ipfs/Qme2XMfKbWzzYd92YvA1qnFMe3pGDR86j5BcFtx4PwdRvr/go-libp2p-transport",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "ixC4+hkQfEfIydFgRzwf3AjF33g=",
+			"path": "gx/ipfs/QmeFPvhFJGXGiXAc9zunNxZjCaWgYQpcsdwip2NWLcccyw/GoEndian",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "kW4QuYORZ9i2JY+C4wC+LeV9cA8=",
+			"path": "gx/ipfs/QmeQW4ayVqi7Jjay1SrP2wYydsH9KwSrzQBnqyC25gPFnG/go-notifier",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "JNrAJbo+b2XDIIkg6AoB8rzRET4=",
+			"path": "gx/ipfs/QmeQW4ayVqi7Jjay1SrP2wYydsH9KwSrzQBnqyC25gPFnG/go-notifier/Godeps/_workspace/src/github.com/jbenet/goprocess",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "DxhRg6ggNUoeSG+RjCKab8Nsuhk=",
+			"path": "gx/ipfs/QmeQW4ayVqi7Jjay1SrP2wYydsH9KwSrzQBnqyC25gPFnG/go-notifier/Godeps/_workspace/src/github.com/jbenet/goprocess/ratelimit",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "ORHxw0yjTRAOGxFnMO7JQUdttqM=",
+			"path": "gx/ipfs/QmeXm9iwA4cURNmexpuBucDWcV38jNHdqpGcb7yoyP6e4G/go-libp2p-nat",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "cfiT6CScmNy/HLTcvz/JgIlmvtg=",
+			"path": "gx/ipfs/QmeYJHEk8UjVVZ4XCRTZe6dFQrb8pGWD81LYCgeLp8CvMB/go-metrics",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "lI6XVaYMSm7no5Yez4NyOfl3Wag=",
+			"path": "gx/ipfs/Qmf2fBLzCvFxs3vvZaoQyKSTv2rjApek4F1kzRxAfK6P4P/gateway",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "JpxOnVBh44yYaAas+h02u5a/g1s=",
+			"path": "gx/ipfs/QmfJHywXQu98UeZtGJBQrPAR6AtmDjjbe3qjTo9piXHPnx/murmur3",
+			"revision": ""
+		},
+		{
+			"checksumSHA1": "1rmRHrWEKYeSARG+IzOJvS9E5V4=",
+			"path": "gx/ipfs/QmfT8oJ8o8AY417RNu1bUYsnDPipPHSCdVcWjYRsDNFL4M/go-peerstream",
+			"revision": ""
 		}
 	],
 	"rootPath": "github.com/UnrulyOS/go-unruly"
