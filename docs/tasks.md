@@ -1,8 +1,9 @@
 #### App Tasks / Issues
 
 ### Build tasks
-- Dockerfile fo a completely isolated docker dev env
-- Makefile that builds node packaged binary without relying on packages outside of /vendor
+- Dockerfile to setup a completely isolated docker dev env
+- Makefile that builds node packaged binary without relying on packages outside of /vendor - e.g. GOPATH as proj root
+- Script to install required build tools: e.g. proto-c (with grpc gateway support). govendor, etc....
 
 ### App Shell Tasks
 - Write tests for app flags, commands and config file
