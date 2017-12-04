@@ -59,5 +59,4 @@ func (s *UnrulyGrpcService) StartService() {
 	if err := s.Server.Serve(lis); err != nil {
 		log.Error("failed to serve grpc: %v", err)
 	}
-
 }

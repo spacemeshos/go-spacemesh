@@ -11,12 +11,17 @@ Build a specific arch in the `/build` folder:
 make linux | windows | darwin
 ```
 
-## Build deps
-
+## Build Requirements
 - go 1.9.2 or later
-- [govendor](https://github.com/kardianos/govendor)
-- [protoc](https://github.com/golang/protobuf)
-- go-protobufs and [grpc-gateway plugin](https://github.com/grpc-ecosystem/grpc-gateway) for `protoc-gen`:
+
+
+## Build tools
+You need to install these when making code changes
+
+- [govendor](https://github.com/kardianos/govendor) - for adding a 3rd party dep
+- [protoc](https://github.com/golang/protobuf) - for working with `protobufs`
+- [grpc-gateway plugin](https://github.com/grpc-ecosystem/grpc-gateway) for `protoc` - when working on the api servers.
+
 
 
 ```
