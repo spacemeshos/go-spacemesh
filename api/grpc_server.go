@@ -21,11 +21,11 @@ type UnrulyGrpcService struct {
 	Port   uint
 }
 
-func (s *UnrulyGrpcService) Echo(ctx context.Context, in *pb.SimpleMessage) (*pb.SimpleMessage, error) {
+func (s UnrulyGrpcService) Echo(ctx context.Context, in *pb.SimpleMessage) (*pb.SimpleMessage, error) {
 	return &pb.SimpleMessage{in.Value}, nil
 }
 
-func (s *UnrulyGrpcService) StopService() {
+func (s UnrulyGrpcService) StopService() {
 	s.Server.Stop()
 }
 
@@ -37,7 +37,7 @@ func NewGrpcService() *UnrulyGrpcService {
 
 // This is a blocking method
 // Call with a go routine
-func (s *UnrulyGrpcService) StartService() {
+func (s UnrulyGrpcService) StartService() {
 
 	port := config.ConfigValues.GrpcServerPort
 	addr := ":" + strconv.Itoa(int(port))

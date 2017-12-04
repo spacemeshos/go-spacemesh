@@ -24,12 +24,12 @@ func NewJsonHttpServer() *JsonHttpServer {
 	return &JsonHttpServer{Port: config.ConfigValues.JsonServerPort}
 }
 
-func (s *JsonHttpServer) Stop() {
+func (s JsonHttpServer) Stop() {
 	// todo: how to stop http from listening on the address?
 }
 
 // This blocks - call using a go routine
-func (s *JsonHttpServer) Start() {
+func (s JsonHttpServer) Start() {
 
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
