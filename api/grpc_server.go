@@ -42,8 +42,6 @@ func (s *UnrulyGrpcService) StartService() {
 	port := config.ConfigValues.GrpcServerPort
 	addr := ":" + strconv.Itoa(int(port))
 
-	log.Info(addr)
-
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		log.Error("failed to listen: %v", err)
@@ -54,6 +52,8 @@ func (s *UnrulyGrpcService) StartService() {
 
 	// Register reflection service on gRPC server
 	reflection.Register(s.Server)
+
+	log.Info("Grpc API listening on port %d", port)
 
 	// start serving - this blocks
 	if err := s.Server.Serve(lis); err != nil {

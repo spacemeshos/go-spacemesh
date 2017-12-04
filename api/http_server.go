@@ -28,6 +28,7 @@ func (s *JsonHttpServer) Stop() {
 	// todo: how to stop http from listening on the address?
 }
 
+// This blocks - call using a go routine
 func (s *JsonHttpServer) Start() {
 
 	ctx := context.Background()
@@ -37,15 +38,17 @@ func (s *JsonHttpServer) Start() {
 	mux := runtime.NewServeMux()
 	opts := []grpc.DialOption{grpc.WithInsecure()}
 
-	portStr := strconv.Itoa(int(s.Port))
+	portStr := strconv.Itoa(int(config.ConfigValues.GrpcServerPort))
 
-	echoEndpoint := flag.String("api_endpoint", "localhost:"+ portStr, "endpoint of api grpc service")
+	echoEndpoint := flag.String("api_endpoint", "localhost:"+portStr, "endpoint of api grpc service")
 
 	if err := gw.RegisterUnrulyServiceHandlerFromEndpoint(ctx, mux, *echoEndpoint, opts); err != nil {
 		log.Error("Failed to register http endpoint with grpc: %v", err)
 	}
 
 	addr := ":" + strconv.Itoa(int(s.Port))
+
+	log.Info("Json API listening on port %d", s.Port)
 
 	// this blocks until stops
 	err := http.ListenAndServe(addr, mux)

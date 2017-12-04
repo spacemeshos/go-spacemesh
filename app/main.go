@@ -20,7 +20,7 @@ import (
 
 type UnrulyApp struct {
 	*cli.App
-	node *node.Node
+	node           *node.Node
 	grpcApiService *api.UnrulyGrpcService
 	jsonApiService *api.JsonHttpServer
 }
@@ -92,13 +92,15 @@ func NewApp() *UnrulyApp {
 		return nil
 	}
 
+	unrulyApp := &UnrulyApp{app, nil, nil, nil}
+
 	app.After = func(ctx *cli.Context) error {
 		log.Info("App cleanup goes here...")
-		// post app cleanup goes here
+		unrulyApp.cleanup()
 		return nil
 	}
 
-	return &UnrulyApp{app, nil, nil, nil}
+	return unrulyApp
 }
 
 // start the unruly node
@@ -112,7 +114,6 @@ func startUnrulyNode(ctx *cli.Context) error {
 	// start api servers
 
 	if conf.StartGrpcServer || conf.StartJsonServer {
-
 		app.grpcApiService = api.NewGrpcService()
 		app.grpcApiService.StartService()
 	}
@@ -125,6 +126,19 @@ func startUnrulyNode(ctx *cli.Context) error {
 	// wait until node signaled app to exit
 	<-exitApp
 	return nil
+}
+
+// Unruly app cleanup tasks
+func (app *UnrulyApp) cleanup () {
+	if app.jsonApiService != nil {
+		app.jsonApiService.Stop()
+	}
+
+	if app.grpcApiService != nil {
+		app.grpcApiService.StopService()
+	}
+
+	// add any other cleanup tasks here....
 }
 
 // The Unruly console application - responsible for parsing and routing cli flags and commands
