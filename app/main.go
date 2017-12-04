@@ -43,8 +43,17 @@ var (
 		apiconf.StartJsonApiServerFlag,
 		apiconf.JsonServerPortFlag,
 	}
-	// add flags for other new modules here....
+
 	exitApp = make(chan bool, 1)
+
+	// App semantic version. Can be over-written by build tool
+	AppVersion = "0.0.1"
+
+	// build git branch. Can be over-written by build tool
+	Branch = "master"
+
+	// build git commit. Can be over-written by build tool
+	Commit = ""
 )
 
 // add toml config file support and sample toml file
@@ -67,7 +76,7 @@ func NewApp() *UnrulyApp {
 	app.HideVersion = true
 	app.Copyright = "(c) 2017 The go-unruly Authors"
 	app.Commands = []cli.Command{
-		NewVersionCommand(config.AppVersion),
+		NewVersionCommand(AppVersion, Branch, Commit),
 		// add all other commands here
 	}
 
@@ -106,8 +115,8 @@ func NewApp() *UnrulyApp {
 // start the unruly node
 func startUnrulyNode(ctx *cli.Context) error {
 
-	port := nodeparams.LocalTcpPortFlag.Destination
-	app.node = node.NewLocalNode(*port, exitApp)
+	port := *nodeparams.LocalTcpPortFlag.Destination
+	app.node = node.NewLocalNode(port, exitApp)
 
 	conf := &apiconf.ConfigValues
 

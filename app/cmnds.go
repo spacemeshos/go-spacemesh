@@ -12,7 +12,7 @@ var (
 
 // Command factory function - this is an example for an app cli command
 // to test try `go-unruly version`
-func NewVersionCommand(appVersion string) cli.Command {
+func NewVersionCommand(appVersion string, branch string, commit string) cli.Command {
 	return cli.Command{
 		Name:      "version",
 		Aliases:   []string{"v"},
@@ -21,6 +21,7 @@ func NewVersionCommand(appVersion string) cli.Command {
 		Category:  "General commands",
 		Action: func(c *cli.Context) error {
 			fmt.Println("App Version:", appVersion)
+			fmt.Printf("Git branch: %s. Commit: %s\n", branch, commit)
 			fmt.Println("Go Version:", runtime.Version())
 			fmt.Println("OS:", runtime.GOOS)
 			fmt.Println("Arch:", runtime.GOARCH)

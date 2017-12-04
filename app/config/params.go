@@ -8,6 +8,5 @@ var (
 )
 
 const (
-	AppVersion = "0.0.1"
 	AppUsage   = "the go-unruly node"
 )

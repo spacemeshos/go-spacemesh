@@ -3,7 +3,7 @@
 ### Build tasks
 - Dockerfile to setup a completely isolated docker dev env
 - Makefile that builds node packaged binary without relying on packages outside of /vendor - e.g. GOPATH as proj root
-- Script to install required build tools: e.g. proto-c (with grpc gateway support). govendor, etc....
+- Script to install all required dev tools: e.g. proto-c (with grpc-gateway support). govendor, etc....
 - Integrate travis CI with the repo and setup full CI system (hold until repo is public for Travis integration)
 
 ### App Shell Tasks
