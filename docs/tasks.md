@@ -22,7 +22,7 @@
 
 ### App Shell Implemented Features
 
-Stuff we have a basic first implementation for
+Stuff we have a basic first implementation for:
 
 - Initial project packages strcuture and entry points (app, node, grpcApi, etc...)
 - A cli app shell with flags and commands
