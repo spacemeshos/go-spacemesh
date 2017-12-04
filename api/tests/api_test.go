@@ -118,5 +118,4 @@ func TestJsonApi(t *testing.T) {
 	// stop the services
 	jsonService.Stop()
 	grpcService.StopService()
-
 }

@@ -18,11 +18,14 @@
 - Write tests to validate the plan to use libp2p-kad-dht for peer discovery (simulated network)
 - add support for uTp (over udp) in lib-p2p - it only supports tcp right now.
 - Implement gossip support for each protocol (gossip flag) and write tests for gossiping a p2p message (20 nodes, 1 bootstrap)
-- Local Javscript console for interactive RPC calls (wrap json http api).
+- Local Javsscript console for interactive RPC calls (wrap json http api).
 - Tests for all implement functionality - the more the better.
 
-
-#### In development
-- REST-JSON [generated gateway](https://github.com/grpc-ecosystem/grpc-gateway). 
-
- 
+### App Shell Implemented Features
+Stuff we have a basic first implementation for
+- Initial project package strcuture
+- cli app shell with flags and commands
+- Grpc and json-http api servers with config and decent tests
+- Basic node with 2 implemented example p2p protocols and basic tests
+- Basic keys and id type system (wrapping lib-p2p keys and ids types)
+- A buildable go-unruly cross-platform exe with full cli features (flags, commands)

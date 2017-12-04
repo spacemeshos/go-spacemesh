@@ -9,6 +9,7 @@ import (
 
 // Directory and paths helpers
 
+// Returns the user home directory if one is set
 func GetUserHomeDirectory() string {
 	if home := os.Getenv("HOME"); home != "" {
 		return home
@@ -19,7 +20,7 @@ func GetUserHomeDirectory() string {
 	return ""
 }
 
-// Retursn an os-specific full path:
+// Returns an os-specific full path:
 // - replace ~ with user's home dir path
 // - expand any ${vars} or $vars
 // - resolve relative paths /.../

@@ -38,8 +38,8 @@ func (s *JsonHttpServer) Start() {
 	mux := runtime.NewServeMux()
 	opts := []grpc.DialOption{grpc.WithInsecure()}
 
+	// register the http server on the local grpc server
 	portStr := strconv.Itoa(int(config.ConfigValues.GrpcServerPort))
-
 	echoEndpoint := flag.String("api_endpoint", "localhost:"+portStr, "endpoint of api grpc service")
 
 	if err := gw.RegisterUnrulyServiceHandlerFromEndpoint(ctx, mux, *echoEndpoint, opts); err != nil {
