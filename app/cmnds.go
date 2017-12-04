@@ -10,7 +10,8 @@ var (
 // todo: add all command vars here (commands w no need for factory
 )
 
-// command factory command
+// Command factory function - this is an example for an app cli command
+// to test try `go-unruly version`
 func NewVersionCommand(appVersion string) cli.Command {
 	return cli.Command{
 		Name:      "version",
