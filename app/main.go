@@ -21,6 +21,8 @@ import (
 type UnrulyApp struct {
 	*cli.App
 	node *node.Node
+	grpcApiService *api.UnrulyGrpcService
+	jsonApiService *api.JsonHttpServer
 }
 
 var (
@@ -96,7 +98,7 @@ func NewApp() *UnrulyApp {
 		return nil
 	}
 
-	return &UnrulyApp{app, nil}
+	return &UnrulyApp{app, nil, nil, nil}
 }
 
 // start the unruly node
@@ -110,11 +112,14 @@ func startUnrulyNode(ctx *cli.Context) error {
 	// start api servers
 
 	if conf.StartGrpcServer || conf.StartJsonServer {
-		api.StartGrpcServer()
+
+		app.grpcApiService = api.NewGrpcService()
+		app.grpcApiService.StartService()
 	}
 
 	if conf.StartJsonServer {
-		api.StartJsonServer()
+		app.jsonApiService = api.NewJsonHttpServer()
+		app.jsonApiService.Start()
 	}
 
 	// wait until node signaled app to exit

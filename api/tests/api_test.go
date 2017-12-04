@@ -1,54 +1,58 @@
-package api_tests
+package tests
 
 import (
-	"github.com/UnrulyOS/go-unruly/api"
+	api "github.com/UnrulyOS/go-unruly/api"
 	config "github.com/UnrulyOS/go-unruly/api/config"
+	//"time"
+
+	//"google.golang.org/grpc/grpclb/grpc_lb_v1/service"
+
+	"strconv"
+
+
 	"github.com/UnrulyOS/go-unruly/assert"
 
 	"testing"
 
-	"log"
-	"os"
+	pb "github.com/UnrulyOS/go-unruly/api/pb"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
-	pb "github.com/UnrulyOS/go-unruly/api/pb"
-
 )
 
 // write basic api test here using json-http client
-
 
 func TestServersConfig(t *testing.T) {
 
 	config.ConfigValues.GrpcServerPort = 9092
 	config.ConfigValues.JsonServerPort = 9031
 
-	if err := api.StartGrpcServer(); err != nil {
-		t.Fatalf("Failed to start grpc server", err)
-	}
+	grpcService := api.NewGrpcService()
+	jsonService := api.NewJsonHttpServer()
 
-	if err := api.StartJsonServer(); err != nil {
-		t.Fatalf("Failed to start json server", err)
-	}
-
-	assert.Equal(t, api.Service.Port, config.ConfigValues.GrpcServerPort, "Expected same port")
-	assert.Equal(t, api.JsonHttpServer.Port, config.ConfigValues.JsonServerPort, "Expected same port")
+	assert.Equal(t, grpcService.Port, config.ConfigValues.GrpcServerPort, "Expected same port")
+	assert.Equal(t, jsonService.Port, config.ConfigValues.JsonServerPort, "Expected same port")
 
 }
+
 
 func TestGrpcService(t *testing.T) {
 
 	const port = 9092
 	const message = "Hello World"
-
 	config.ConfigValues.GrpcServerPort = port
 
-	if err := api.StartGrpcServer(); err != nil {
-		t.FailNow()
-	}
+	grpcService := api.NewGrpcService()
 
-	addr := "localhost:" + string(port)
+	// start the server
+	go grpcService.StartService()
+
+	// give some time to start
+	// time.Sleep(1 * time.Second)
+
+	// start client
+
+	addr := "localhost:" + strconv.Itoa(port)
 
 	// Set up a connection to the server.
 	conn, err := grpc.Dial(addr, grpc.WithInsecure())
@@ -64,5 +68,7 @@ func TestGrpcService(t *testing.T) {
 	}
 
 	assert.Equal(t, message, r.Value, "Expected message to be echoed")
+
+	grpcService.StopService()
 
 }

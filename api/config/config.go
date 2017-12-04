@@ -15,8 +15,8 @@ func init() {
 }
 
 type Config struct {
-	StartGrpcServer bool   `toml:"-"`
-	GrpcServerPort  uint   `toml:"-"`
-	StartJsonServer bool   `toml:"-"`
-	JsonServerPort  uint   `toml:"-"`
+	StartGrpcServer bool `toml:"-"`
+	GrpcServerPort  uint `toml:"-"`
+	StartJsonServer bool `toml:"-"`
+	JsonServerPort  uint `toml:"-"`
 }

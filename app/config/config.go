@@ -4,9 +4,9 @@ package config
 
 // Config values with defaults
 var ConfigValues = Config{
-	AppIntParam:     20,
-	AppBoolParam:    true,
-	DataFilePath:    "~/.unruly",
+	AppIntParam:  20,
+	AppBoolParam: true,
+	DataFilePath: "~/.unruly",
 }
 
 func init() {
@@ -14,8 +14,8 @@ func init() {
 }
 
 type Config struct {
-	ConfigFilePath  string `toml:"-"`
-	AppIntParam     int    `toml:"-"`
-	AppBoolParam    bool   `toml:"-"`
-	DataFilePath    string `toml:"-"`
+	ConfigFilePath string `toml:"-"`
+	AppIntParam    int    `toml:"-"`
+	AppBoolParam   bool   `toml:"-"`
+	DataFilePath   string `toml:"-"`
 }

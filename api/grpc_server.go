@@ -4,6 +4,7 @@ import (
 	"github.com/UnrulyOS/go-unruly/api/config"
 	"github.com/UnrulyOS/go-unruly/api/pb"
 	"github.com/UnrulyOS/go-unruly/log"
+	"strconv"
 
 	"net"
 
@@ -15,39 +16,48 @@ import (
 // A grpc server implementing the Unruly API
 
 // server is used to implement UnrulyService.Echo.
-type UnrulyGrpcService struct{
+type UnrulyGrpcService struct {
 	Server *grpc.Server
-	Port uint
+	Port   uint
 }
-
-var Service *UnrulyGrpcService
 
 func (s *UnrulyGrpcService) Echo(ctx context.Context, in *pb.SimpleMessage) (*pb.SimpleMessage, error) {
 	return &pb.SimpleMessage{in.Value}, nil
 }
 
-func StartGrpcServer() error {
+func (s *UnrulyGrpcService) StopService() {
+	s.Server.Stop()
+}
+
+func NewGrpcService() *UnrulyGrpcService {
+	port := config.ConfigValues.GrpcServerPort
+	server := grpc.NewServer()
+	return &UnrulyGrpcService{Server: server, Port: port}
+}
+
+// This is a blocking method
+// Call with a go routine
+func (s *UnrulyGrpcService) StartService() {
 
 	port := config.ConfigValues.GrpcServerPort
-	addr := ":" + string(port)
+	addr := ":" + strconv.Itoa(int(port))
+
+	log.Info(addr)
 
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		log.Error("failed to listen: %v", err)
-		return err
+		return
 	}
 
-	server := grpc.NewServer()
-
-	Service = &UnrulyGrpcService{Server:server, Port:port}
-
-	pb.RegisterUnrulyServiceServer(server, Service)
+	pb.RegisterUnrulyServiceServer(s.Server, s)
 
 	// Register reflection service on gRPC server
-	reflection.Register(server)
-	if err := server.Serve(lis); err != nil {
+	reflection.Register(s.Server)
+
+	// start serving - this blocks
+	if err := s.Server.Serve(lis); err != nil {
 		log.Error("failed to serve grpc: %v", err)
 	}
 
-	return err
 }

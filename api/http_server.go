@@ -8,6 +8,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"net/http"
+	"strconv"
 
 	gw "github.com/UnrulyOS/go-unruly/api/pb"
 )
@@ -19,9 +20,15 @@ type JsonHttpServer struct {
 	Port uint
 }
 
-var Server *JsonHttpServer
+func NewJsonHttpServer() *JsonHttpServer {
+	return &JsonHttpServer{Port: config.ConfigValues.JsonServerPort}
+}
 
-func (s *JsonHttpServer) run() error {
+func (s *JsonHttpServer) Stop() {
+	// todo: how to stop http from listening on the address?
+}
+
+func (s *JsonHttpServer) Start() {
 
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
@@ -30,24 +37,20 @@ func (s *JsonHttpServer) run() error {
 	mux := runtime.NewServeMux()
 	opts := []grpc.DialOption{grpc.WithInsecure()}
 
-	echoEndpoint := flag.String("api_endpoint", "localhost:"+string(config.ConfigValues.GrpcServerPort), "endpoint of api grpc service")
+	portStr := strconv.Itoa(int(s.Port))
+
+	echoEndpoint := flag.String("api_endpoint", "localhost:"+ portStr, "endpoint of api grpc service")
 
 	if err := gw.RegisterUnrulyServiceHandlerFromEndpoint(ctx, mux, *echoEndpoint, opts); err != nil {
 		log.Error("Failed to register http endpoint with grpc: %v", err)
 	}
 
-	addr := ":" + string(s.Port)
+	addr := ":" + strconv.Itoa(int(s.Port))
 
+	// this blocks until stops
 	err := http.ListenAndServe(addr, mux)
 
 	if err != nil {
 		log.Error("Failed to listen and serve: v%", err)
 	}
-
-	return err
-}
-
-func StartJsonServer() error {
-	Server = &JsonHttpServer{Port: config.ConfigValues.JsonServerPort}
-	return Server.run()
 }

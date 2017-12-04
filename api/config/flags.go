@@ -5,7 +5,6 @@ import (
 )
 
 var (
-
 	StartJsonApiServerFlag = cli.BoolFlag{
 		Name:        "jsonApiServer, jrpc",
 		Usage:       "Start the json http server. Note that starting the Json server also starts the grpc server.",
