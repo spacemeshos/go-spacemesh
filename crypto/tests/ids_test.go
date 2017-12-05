@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	libp2pcrypto "gx/ipfs/QmaPbCnUMBohSGo3KnxEa2bHqyJVVeEEcwtqJAYxerieBo/go-libp2p-crypto"
-
 )
 
 func testIds(t *testing.T) {
@@ -23,7 +22,5 @@ func testIds(t *testing.T) {
 
 	assert.Equal(t, id.String(), id1.String(), "expected same id")
 	assert.Equal(t, string(id.Bytes()), string(id1.Bytes()), "expected same id")
-
-	id.PeerId().ExtractPublicKey()
 
 }

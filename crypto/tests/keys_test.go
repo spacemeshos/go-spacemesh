@@ -3,16 +3,15 @@ package tests
 import (
 	"github.com/UnrulyOS/go-unruly/assert"
 	"github.com/UnrulyOS/go-unruly/crypto"
-	"github.com/UnrulyOS/go-unruly/log"
 	"testing"
 
 	libp2pcrypto "gx/ipfs/QmaPbCnUMBohSGo3KnxEa2bHqyJVVeEEcwtqJAYxerieBo/go-libp2p-crypto"
-
 )
 
 const (
-	privKey = "4XZF1RZfBYUjL11MqsmRkRBqGqFneFHNzCS9mx9rgWq7vCbhQ"
-	pubKey =  "GZsJqUpJQ73b9SwZtSUFypCeNNiPRV71tJ5rj9Cj9twNyH69tc"
+	privKey = "4XZF1YWXhkigALWMZHGuiHdEKrQPi4z5Eu4TETFJh56Aoygt1"
+	pubKey  = "GZsJqUSGnMiXvZ66DAABJGisocqj4gmkn3PmcB4XSRNurwNqya"
+	id1     = "Qma8AuFNHETeTNx9xYsdSU99HnW6QGvjG8JcobYsxtHWsr"
 )
 
 func TestSerialization(t *testing.T) {
@@ -40,7 +39,6 @@ func TestSerialization(t *testing.T) {
 	assert.Equal(t, privStr, privKey, "expected same string rep for pub key")
 	assert.Equal(t, pubStr, pubKey, "expected same string rep for pub key")
 
-
 	pubKeyFromPrivate, err := priv.GetPublicKey()
 	if err != nil {
 		t.Fatalf("failed to create pub key from priv: %v", err)
@@ -48,6 +46,11 @@ func TestSerialization(t *testing.T) {
 
 	pubFromPrivStr, _ := pubKeyFromPrivate.String()
 	assert.Equal(t, pubFromPrivStr, pubStr, "expected same public key")
+
+	id, _ := pub.IdFromPubKey()
+	idStr := id.String()
+
+	assert.Equal(t, id1, idStr, "expected same id")
 
 }
 
@@ -64,8 +67,6 @@ func TestKeys(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get string rep of pub key: %v", err)
 	}
-
-	log.Info("%s %s", privStr, pubStr)
 
 	pubKeyData, err := pub.Bytes()
 	if err != nil {
@@ -95,8 +96,7 @@ func TestKeys(t *testing.T) {
 		t.Fatalf("failed to create get priv key string: %v", err)
 	}
 
-	assert.Equal(t, privStr, priv1Str, "expected same publick key")
-
+	assert.Equal(t, privStr, priv1Str, "expected same public key")
 
 	pub1, err := crypto.NewPublicKey(pubKeyData)
 	if err != nil {

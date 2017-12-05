@@ -8,5 +8,5 @@ var (
 )
 
 const (
-	AppUsage   = "the go-unruly node"
+	AppUsage = "the go-unruly node"
 )

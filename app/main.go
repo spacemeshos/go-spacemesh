@@ -139,7 +139,7 @@ func startUnrulyNode(ctx *cli.Context) error {
 }
 
 // Unruly app cleanup tasks
-func (app *UnrulyApp) cleanup () {
+func (app *UnrulyApp) cleanup() {
 	if app.jsonApiService != nil {
 		app.jsonApiService.Stop()
 	}

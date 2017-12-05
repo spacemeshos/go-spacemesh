@@ -4,16 +4,16 @@ import (
 	"fmt"
 	api "github.com/UnrulyOS/go-unruly/api"
 	config "github.com/UnrulyOS/go-unruly/api/config"
+	pb "github.com/UnrulyOS/go-unruly/api/pb"
+	"github.com/UnrulyOS/go-unruly/assert"
 	"github.com/gogo/protobuf/jsonpb"
+	"golang.org/x/net/context"
+	"google.golang.org/grpc"
 	"io/ioutil"
 	"net/http"
 	"strconv"
-	"github.com/UnrulyOS/go-unruly/assert"
 	"strings"
 	"testing"
-	pb "github.com/UnrulyOS/go-unruly/api/pb"
-	"golang.org/x/net/context"
-	"google.golang.org/grpc"
 )
 
 func TestServersConfig(t *testing.T) {
