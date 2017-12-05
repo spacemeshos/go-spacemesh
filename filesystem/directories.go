@@ -13,7 +13,6 @@ import (
 
 const OwnerReadWriteExec = 0700
 
-
 // Returns the user home directory if one is set
 func GetUserHomeDirectory() string {
 

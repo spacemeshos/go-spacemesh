@@ -25,6 +25,7 @@ type PingProtocol struct {
 }
 
 func NewPingProtocol(node *Node, done chan bool) *PingProtocol {
+
 	p := &PingProtocol{node: node, requests: make(map[string]*pb.PingRequest), done: done}
 	node.SetStreamHandler(pingRequest, p.onPingRequest)
 	node.SetStreamHandler(pingResponse, p.onPingResponse)
@@ -33,6 +34,7 @@ func NewPingProtocol(node *Node, done chan bool) *PingProtocol {
 
 // remote peer requests handler
 func (p PingProtocol) onPingRequest(s inet.Stream) {
+
 	// get request data
 	data := &pb.PingRequest{}
 	decoder := protobufCodec.Multicodec(nil).Decoder(bufio.NewReader(s))
@@ -80,6 +82,7 @@ func (p PingProtocol) onPingRequest(s inet.Stream) {
 
 // remote ping response handler
 func (p PingProtocol) onPingResponse(s inet.Stream) {
+
 	data := &pb.PingResponse{}
 	decoder := protobufCodec.Multicodec(nil).Decoder(bufio.NewReader(s))
 	err := decoder.Decode(data)
@@ -108,6 +111,7 @@ func (p PingProtocol) onPingResponse(s inet.Stream) {
 }
 
 func (p PingProtocol) Ping(host host.Host) bool {
+
 	log.Info("%s: sending ping to: %s....", p.node.ID(), host.ID())
 
 	// create message data

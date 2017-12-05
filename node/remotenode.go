@@ -21,7 +21,7 @@ func newRemoteNodeData(murl string) *RemoteNodeData {
 		log.Error("Error parsing node url %s", murl)
 		return nil
 	}
-	address := murl[0 : idx]
+	address := murl[0:idx]
 	nodeID := murl[idx+1:]
 	maddr, err := ma.NewMultiaddr(address)
 
@@ -40,7 +40,7 @@ func RemoteNodesFromMurls(murls []string) []RemoteNodeData {
 	for _, murl := range murls {
 		node := newRemoteNodeData(murl)
 		if node != nil {
-			nodes = append(nodes,*node)
+			nodes = append(nodes, *node)
 		}
 	}
 	return nodes

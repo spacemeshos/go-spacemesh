@@ -20,6 +20,7 @@ import (
 // Node p2p methods
 
 func (n *Node) loadBootstrapNodes() {
+
 	data := RemoteNodesFromMurls(config.BootstrapNodes)
 	for _, node := range data {
 		log.Info("Loaded bootstrap node: %s, %s", node.Id, node.Addresses[0].String())
@@ -30,6 +31,7 @@ func (n *Node) loadBootstrapNodes() {
 // message: a protobufs go data object
 // data: common p2p message data
 func (n *Node) AuthenticateMessage(message proto.Message, data *pb.MessageData) bool {
+
 	// store a temp ref to signature and remove it from message data
 	// sign is a string to allow easy reset to zero-value (empty string)
 	sign := data.Sign
@@ -82,6 +84,7 @@ func (n *Node) signData(data []byte) ([]byte, error) {
 // peerId: author peer id from the message payload
 // pubKeyData: author public key from the message payload (protobufs encoded)
 func (n *Node) verifyData(data []byte, signature []byte, peerId peer.ID, pubKeyData []byte) bool {
+
 	key, err := libp2pcrypto.UnmarshalPublicKey(pubKeyData)
 	if err != nil {
 
@@ -108,6 +111,7 @@ func (n *Node) verifyData(data []byte, signature []byte, peerId peer.ID, pubKeyD
 // helper method - generate message data shared between all node's p2p protocols
 // messageId: unique for requests, copied from request for responses
 func (n *Node) NewMessageData(messageId string, gossip bool) *pb.MessageData {
+
 	// Add protobufs bin data for message author public key
 	// this is useful for authenticating  messages forwarded by a node authored by another node
 	nodePubKey, err := n.Peerstore().PubKey(n.ID()).Bytes()
@@ -128,11 +132,12 @@ func (n *Node) NewMessageData(messageId string, gossip bool) *pb.MessageData {
 // data: reference of protobuf go data object to send (not the object itself)
 // s: network stream to write the data to
 func (n *Node) sendProtoMessage(data proto.Message, s inet.Stream) bool {
+
 	writer := bufio.NewWriter(s)
 	enc := protobufCodec.Multicodec(nil).Encoder(writer)
 	err := enc.Encode(data)
 	if err != nil {
-		log.Error("ailed to send proto message. %s", err)
+		log.Error("Failed to send proto message. %s", err)
 		return false
 	}
 	writer.Flush()

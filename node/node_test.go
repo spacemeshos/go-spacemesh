@@ -24,5 +24,4 @@ func TestNodeCreation(t *testing.T) {
 
 	// start node using new id
 
-
 }
