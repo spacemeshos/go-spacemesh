@@ -19,4 +19,11 @@ var (
 		Value:       ConfigValues.TcpPort,
 		Destination: &ConfigValues.TcpPort,
 	}
+
+	NodeIdFlag = cli.StringFlag{
+		Name:        "nodeId, n",
+		Usage:       "Load node data by id from local store",
+		Value:       ConfigValues.NodeId,
+		Destination: &ConfigValues.NodeId,
+	}
 )

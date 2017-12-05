@@ -12,6 +12,7 @@ import (
 
 // Returns the user home directory if one is set
 func GetUserHomeDirectory() string {
+
 	if home := os.Getenv("HOME"); home != "" {
 		return home
 	}
@@ -27,6 +28,7 @@ func GetUserHomeDirectory() string {
 // - resolve relative paths /.../
 // p: source path name
 func GetCanonicalPath(p string) string {
+
 	if strings.HasPrefix(p, "~/") || strings.HasPrefix(p, "~\\") {
 		if home := GetUserHomeDirectory(); home != "" {
 			p = home + p[1:]
@@ -49,5 +51,6 @@ func GetFullDirectoryPath(name string) (string, error) {
 
 // get full os-specific path to the unruly top-level data directory
 func GetUnrulyDataDirectoryPath() (string, error) {
+
 	return GetFullDirectoryPath(config.ConfigValues.DataFilePath)
 }

@@ -17,6 +17,8 @@ import (
 	"github.com/UnrulyOS/go-unruly/node/pb"
 )
 
+// Node p2p methods
+
 // Authenticate incoming p2p message
 // message: a protobufs go data object
 // data: common p2p message data

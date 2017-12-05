@@ -7,6 +7,7 @@ var ConfigValues = Config{
 	SecurityParam: 20,
 	FastSync:      true,
 	TcpPort:       7513,
+	NodeId:        "",
 }
 
 func init() {
@@ -14,7 +15,8 @@ func init() {
 }
 
 type Config struct {
-	SecurityParam uint `toml:"-"`
-	FastSync      bool `toml:"-"`
-	TcpPort       uint `toml:"-"`
+	SecurityParam uint   `toml:"-"`
+	FastSync      bool   `toml:"-"`
+	TcpPort       uint   `toml:"-"`
+	NodeId        string `toml:"-"`
 }

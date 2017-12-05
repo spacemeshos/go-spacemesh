@@ -10,6 +10,8 @@ import (
 	"strings"
 )
 
+// Node store - node data persistence functionality
+
 // Get the os-specific full path to the nodes master data directory
 // Attempts to create the directory on-demand
 func ensureNodeDataDirectory() string {
@@ -38,10 +40,10 @@ func (n *Node) ensureNodeDataDirectory() string {
 // Returns the os-specific full path to the node's data file
 func getDataFilePath(nodeId string) string {
 	nodesDataDir := ensureNodeDataDirectory()
-	return filepath.Join(nodesDataDir, nodeId, "id.json")
+	return filepath.Join(nodesDataDir, nodeId, config.NodeDataFileName)
 }
 
-// persist node's data
+// Persist node's data to local store
 func (n *Node) persistData() error {
 
 	pubKeyStr, err := n.publicKey.String()
@@ -95,7 +97,8 @@ func readNodeData(nodeId string) *NodeData {
 }
 
 // Read node data from the data folder.
-// When few nodes data folders exist this method will read from the first one
+// Reads a random node from the data folder if more than one node data file is persisted
+// To load a specific node on startup - pass the node id using the node cli arg
 func readFirstNodeData() *NodeData {
 
 	path := ensureNodeDataDirectory()

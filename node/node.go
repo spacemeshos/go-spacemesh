@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/UnrulyOS/go-unruly/crypto"
 	"github.com/UnrulyOS/go-unruly/log"
+	"github.com/UnrulyOS/go-unruly/node/config"
 	"gx/ipfs/QmRS46AyqtpJBsf1zmQdeizSDEzo1qkWR7rdEuPFAv8237/go-libp2p-host"
 
 	bhost "github.com/libp2p/go-libp2p/p2p/host/basic"
@@ -55,13 +56,23 @@ func newNode(host host.Host, done chan bool, pubKey crypto.PublicKeylike, privKe
 // Create a new node using persisted node data
 // Generates a new node (new id, pub, priv keys) if needed
 func NewNode(port uint, done chan bool) *Node {
+
+	// user provided node id via cli - attempt to start node
+	// using persisted data for this node id
+	if len(config.ConfigValues.NodeId) > 0 {
+		data := readNodeData( config.ConfigValues.NodeId)
+		return newNodeFromData(port, done, data)
+	}
+
+	// look for node data in the nodes directory
+	// load the node with the data of the first node found
 	nodeData := readFirstNodeData()
 	if nodeData != nil {
 		// crete node using persisted node data
 		return newNodeFromData(port, done, nodeData)
 	}
 
-	// generate a new node
+	// We have no persistent node data - generate a new node
 	return NewNodeIdentity(port, done)
 }
 

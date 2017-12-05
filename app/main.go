@@ -38,6 +38,7 @@ var (
 	nodeFlags = []cli.Flag{
 		nodeparams.KSecurityFlag,
 		nodeparams.LocalTcpPortFlag,
+		nodeparams.NodeIdFlag,
 		// add all node flags here ...
 	}
 	apiFlags = []cli.Flag{
