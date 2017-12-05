@@ -1,6 +1,7 @@
 package crypto
 
 import (
+	"fmt"
 	b58 "gx/ipfs/QmT8rehPR3F6bmwL6zjUN8XpiDBFFpMP2myPdC6ApsWfJf/go-base58"
 	peer "gx/ipfs/QmXYjuNuxVzXKJCfWasQk1RqkhVLDM9jtUKhqc2WPQmFSB/go-libp2p-peer"
 	libp2pcrypto "gx/ipfs/QmaPbCnUMBohSGo3KnxEa2bHqyJVVeEEcwtqJAYxerieBo/go-libp2p-crypto"
@@ -10,6 +11,7 @@ import (
 type Keylike interface {
 	String() (string, error)
 	Bytes() ([]byte, error)
+	Pretty() string
 }
 
 // todo: is there a better name for this interface? PrivateKeyer?
@@ -63,6 +65,21 @@ func (p PublicKey) String() (string, error) {
 	return b58.Encode(bytes), nil
 }
 
+func (p PublicKey) Pretty() string {
+
+	pstr, err := p.String()
+	if err != nil {
+		return fmt.Sprintf("Invalid public key: %v", err)
+	}
+
+	maxRunes := 6
+	if len(pstr) < maxRunes {
+		maxRunes = len(pstr)
+	}
+
+	return fmt.Sprintf("<PubKey %s>", pstr[:maxRunes])
+}
+
 // create an Id which is derived from a public key
 // used for both accounts and nodes
 func (p PublicKey) IdFromPubKey() (Identifier, error) {
@@ -111,4 +128,19 @@ func (p PrivateKey) GetPublicKey() (PublicKeylike, error) {
 
 func (p PrivateKey) PrivatePeerKey() libp2pcrypto.PrivKey {
 	return p.PrivKey
+}
+
+func (p PrivateKey) Pretty() string {
+
+	pstr, err := p.String()
+	if err != nil {
+		return fmt.Sprintf("Invalid private key: %v", err)
+	}
+
+	maxRunes := 6
+	if len(pstr) < maxRunes {
+		maxRunes = len(pstr)
+	}
+
+	return fmt.Sprintf("<PrivKey %s>", pstr[:maxRunes])
 }

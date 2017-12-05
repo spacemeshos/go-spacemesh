@@ -1,13 +1,16 @@
 package crypto
 
 import (
+	"fmt"
 	peer "gx/ipfs/QmXYjuNuxVzXKJCfWasQk1RqkhVLDM9jtUKhqc2WPQmFSB/go-libp2p-peer"
+	"strings"
 )
 
 type Identifier interface {
 	String() string
 	Bytes() []byte
 	PeerId() peer.ID
+	Pretty() string
 }
 
 // An Id derived from any string
@@ -26,6 +29,19 @@ func (id Id) Bytes() []byte {
 
 func (id Id) PeerId() peer.ID {
 	return id.ID
+}
+
+func (id Id) Pretty() string {
+	pid := id.String()
+	if strings.HasPrefix(pid, "Qm") {
+		pid = pid[2:]
+	}
+
+	maxRunes := 6
+	if len(pid) < maxRunes {
+		maxRunes = len(pid)
+	}
+	return fmt.Sprintf("<ID %s>", pid[:maxRunes])
 }
 
 // create a new ID from a b58 encoded string
