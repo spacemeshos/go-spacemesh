@@ -72,7 +72,7 @@ func (p PingProtocol) onPingRequest(s inet.Stream) {
 		return
 	}
 
-	ok := p.node.SendProtoMessage(resp, s)
+	ok := p.node.sendProtoMessage(resp, s)
 	if ok {
 		log.Info("%s: ping response to %s sent.", s.Conn().LocalPeer().String(), s.Conn().RemotePeer().String())
 	}
@@ -129,7 +129,7 @@ func (p PingProtocol) Ping(host host.Host) bool {
 		return false
 	}
 
-	ok := p.node.SendProtoMessage(req, s)
+	ok := p.node.sendProtoMessage(req, s)
 
 	if !ok {
 		return false

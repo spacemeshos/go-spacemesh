@@ -127,7 +127,7 @@ func (n *Node) NewMessageData(messageId string, gossip bool) *pb.MessageData {
 // helper method - writes a protobuf go data object to a network stream
 // data: reference of protobuf go data object to send (not the object itself)
 // s: network stream to write the data to
-func (n *Node) SendProtoMessage(data proto.Message, s inet.Stream) bool {
+func (n *Node) sendProtoMessage(data proto.Message, s inet.Stream) bool {
 	writer := bufio.NewWriter(s)
 	enc := protobufCodec.Multicodec(nil).Encoder(writer)
 	err := enc.Encode(data)

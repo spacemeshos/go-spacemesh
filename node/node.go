@@ -21,7 +21,8 @@ type Node struct {
 	host.Host     // lib-p2p host (interface)
 	*PingProtocol // ping protocol impl
 	*EchoProtocol // echo protocol impl
-	// add other protocols here...
+
+	// add other implemented protocols here...
 
 	// Node crypto ids and keys (interfaces)
 	publicKey  crypto.PublicKeylike
@@ -31,9 +32,9 @@ type Node struct {
 
 // Persisted node data
 type NodeData struct {
-	Id      string
-	PubKey  string
-	PrivKey string
+	Id      string `json:"id"`
+	PubKey  string `json:"pubKey"`
+	PrivKey string `json:"priKey"`
 }
 
 // Create a new local node with its implemented protocols and persist its data to store
@@ -107,6 +108,7 @@ func newNodeFromData(port uint, done chan bool, nodeData *NodeData) *Node {
 
 // Create a new node with new crypto keys and id
 func NewNodeIdentity(port uint, done chan bool) *Node {
+
 	priv, pub, _ := crypto.GenerateKeyPair(libp2pcrypto.Secp256k1, 256)
 	id, _ := pub.IdFromPubKey()
 	log.Info("Creating new node with id: %s", id.String())
@@ -124,7 +126,7 @@ func initNode(port uint, done chan bool, priv crypto.PrivateKeylike, pub crypto.
 	aHost := bhost.New(n)
 
 	//peerStore.AddAddrs(pid.ID, host.Addrs(), ps.PermanentAddrTTL)
-	log.Info("local node started on tcp port: %d", port)
+	log.Info("Local node started on tcp port: %d", port)
 
 	node := newNode(aHost, done, pub, priv, id)
 

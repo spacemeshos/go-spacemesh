@@ -14,6 +14,9 @@
 
 ## go-unruly
 The go implementation of the [UnrulyOS](https://unruly.io) p2p node.
+Unruly is a decentralized blockchain computer using a new race-free consensus protocol that doesn't involve `proof of work`.
+Unruly is designed to build a secure decentralized networking formed a large number of desktop PCs at home.
+To learn more about Unruly read our wiki pages.
 
 ### Building
 
@@ -63,6 +66,11 @@ govendor sync
 ./go-unruly
 ```
 
+### Testing
+```
+./go test ./...
+```
+
 ### Contributing
 
 Thank you for considering to contribute to the go-unruly open source project. 
@@ -73,7 +81,7 @@ We welcome contributions large and small!
 - Please make sure to scan the [issues](https://github.com/UnrulyOS/go-unruly/issues). 
 - Search the closed ones before reporting things, and help us with the open ones.
 
-#### Guidelines:
+#### Guidelines
 
 - Read the UnrulyOS project white paper
 - Read all docs in the `docs/` folder
@@ -94,20 +102,6 @@ There's a few things you can do right now to help out:
  - Check out existing [open issues](https://github.com/UnrulyOS/go-unruly/issues). This would be especially useful for modules in active development.
  - Add tests. There can never be enough tests.
  
-#### Toolschain
-
-- Compiler - Please use go release 1.9.2. 
-- Idea - We recommend GoLand but you can use your fave IDEA / text editor
-- Debugger - We recommend delve and GoLand
-- Testing - tbd
-- Profiling - tbd
-
-
-### Tests
-
-### tasks
-
-- Get rid of libp2p GX deps (asap) and them to vendor folder
-- Support command line args in a robust way 
-- Support basic account and keys ops
+#### Jump in
+- Please read all the docs in `/docs`
 
