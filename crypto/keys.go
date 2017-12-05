@@ -16,6 +16,7 @@ type Keylike interface {
 type PrivateKeylike interface {
 	Keylike
 	PrivatePeerKey() libp2pcrypto.PrivKey
+	GetPublicKey() (PublicKeylike, error)
 }
 
 // todo: find a better name for this interface
@@ -26,8 +27,6 @@ type PublicKeylike interface {
 	PublicPeerKey() libp2pcrypto.PubKey
 }
 
-// Fundamental common data types
-// Wrap as many 3rd party types as possible with our own extendable types such as PublicKey, PrivateKey, NodeId, etc...
 type Key struct {
 	libp2pcrypto.Key
 }
@@ -44,6 +43,11 @@ type PublicKey struct {
 func NewPublicKey(data []byte) (PublicKeylike, error) {
 	key, err := libp2pcrypto.UnmarshalPublicKey(data)
 	return &PublicKey{(key)}, err
+}
+
+func NewPublicKeyFromString(s string) (PublicKeylike, error) {
+	data := b58.Decode(s)
+	return NewPublicKey(data)
 }
 
 func (p PublicKey) Bytes() ([]byte, error) {
@@ -81,6 +85,11 @@ func NewPrivateKey(data []byte) (PrivateKeylike, error) {
 	return &PrivateKey{(key)}, err
 }
 
+func NewPrivateKeyFromString(s string) (PrivateKeylike, error) {
+	data := b58.Decode(s)
+	return NewPrivateKey(data)
+}
+
 func (p PrivateKey) Bytes() ([]byte, error) {
 	return p.PrivKey.Bytes()
 }
@@ -92,6 +101,12 @@ func (p PrivateKey) String() (string, error) {
 	}
 
 	return b58.Encode(bytes), nil
+}
+
+func (p PrivateKey) GetPublicKey() (PublicKeylike, error) {
+	pubFromPrivData, _ := p.PrivatePeerKey().GetPublic().Bytes()
+	pubFromPriv, err := NewPublicKey(pubFromPrivData)
+	return pubFromPriv, err
 }
 
 func (p PrivateKey) PrivatePeerKey() libp2pcrypto.PrivKey {

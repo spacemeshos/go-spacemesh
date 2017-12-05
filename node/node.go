@@ -168,7 +168,7 @@ func (n *Node) SendProtoMessage(data proto.Message, s inet.Stream) bool {
 	enc := protobufCodec.Multicodec(nil).Encoder(writer)
 	err := enc.Encode(data)
 	if err != nil {
-		log.Error("failed to send proto message. %s", err)
+		log.Error("ailed to send proto message. %s", err)
 		return false
 	}
 	writer.Flush()

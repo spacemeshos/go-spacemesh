@@ -54,7 +54,7 @@ func (s UnrulyGrpcService) StartService() {
 
 	log.Info("grpc API listening on port %d", port)
 
-	// start serving - this blocks
+	// start serving - this blocks until err or server is stopped
 	if err := s.Server.Serve(lis); err != nil {
 		log.Error("failed to serve grpc: %v", err)
 	}
