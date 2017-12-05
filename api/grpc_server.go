@@ -26,6 +26,7 @@ func (s UnrulyGrpcService) Echo(ctx context.Context, in *pb.SimpleMessage) (*pb.
 }
 
 func (s UnrulyGrpcService) StopService() {
+	log.Info("Stopping grpc service...")
 	s.Server.Stop()
 }
 

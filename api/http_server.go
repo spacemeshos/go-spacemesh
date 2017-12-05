@@ -26,6 +26,7 @@ func NewJsonHttpServer() *JsonHttpServer {
 
 func (s JsonHttpServer) Stop() {
 	// todo: how to stop http from listening on the address?
+	log.Info("Stopping json-http service...")
 }
 
 // This blocks - call using a go routine

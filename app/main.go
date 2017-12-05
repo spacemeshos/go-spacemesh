@@ -116,6 +116,7 @@ func startUnrulyNode(ctx *cli.Context) error {
 
 // Unruly app cleanup tasks
 func (app *UnrulyApp) cleanup(ctx *cli.Context) error {
+	log.Info("Starting app cleanup...")
 	if app.jsonApiService != nil {
 		app.jsonApiService.Stop()
 	}
@@ -129,6 +130,8 @@ func (app *UnrulyApp) cleanup(ctx *cli.Context) error {
 }
 
 func (app *UnrulyApp) startUnrulyNode(ctx *cli.Context) error {
+
+	log.Info("Starting local node...")
 	port := *nodeparams.LocalTcpPortFlag.Destination
 	app.Node = node.NewLocalNode(port, ExitApp)
 
@@ -138,12 +141,12 @@ func (app *UnrulyApp) startUnrulyNode(ctx *cli.Context) error {
 
 	if conf.StartGrpcServer || conf.StartJsonServer {
 		app.grpcApiService = api.NewGrpcService()
-		app.grpcApiService.StartService()
+		go app.grpcApiService.StartService()
 	}
 
 	if conf.StartJsonServer {
 		app.jsonApiService = api.NewJsonHttpServer()
-		app.jsonApiService.Start()
+		go app.jsonApiService.Start()
 	}
 
 	// wait until node signaled app to exit
