@@ -69,7 +69,7 @@ func TestJsonApi(t *testing.T) {
 
 	// start grp and json server
 	go grpcService.StartService()
-	go jsonService.Start()
+	go jsonService.StartService()
 
 	const message = "hello world!"
 	const contentType = "application/json"

@@ -16,6 +16,7 @@ import (
 // A json http server providing the Unruly API.
 // Implemented as a grpc gateway. See https://github.com/grpc-ecosystem/grpc-gateway
 
+// todo: add http.server and support graceful shutdown
 type JsonHttpServer struct {
 	Port uint
 }
@@ -30,8 +31,7 @@ func (s JsonHttpServer) Stop() {
 }
 
 // This blocks - call using a go routine
-func (s JsonHttpServer) Start() {
-
+func (s JsonHttpServer) StartService() {
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()

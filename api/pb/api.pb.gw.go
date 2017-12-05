@@ -43,7 +43,7 @@ func request_UnrulyService_Echo_0(ctx context.Context, marshaler runtime.Marshal
 
 // RegisterUnrulyServiceHandlerFromEndpoint is same as RegisterUnrulyServiceHandler but
 // automatically dials to "endpoint" and closes the connection when "ctx" gets done.
-func RegisterUnrulyServiceHandlerFromEndpoint(ctx context.Context, mux *runtime.ServeMux, endpoint string, opts []grpc.DialOption) (err error) {
+	func RegisterUnrulyServiceHandlerFromEndpoint(ctx context.Context, mux *runtime.ServeMux, endpoint string, opts []grpc.DialOption) (err error) {
 	conn, err := grpc.Dial(endpoint, opts...)
 	if err != nil {
 		return err

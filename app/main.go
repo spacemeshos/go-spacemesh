@@ -83,26 +83,11 @@ func newUnrulyApp() *UnrulyApp {
 	app.Flags = append(app.Flags, apiFlags...)
 
 	sort.Sort(cli.FlagsByName(app.Flags))
-	app.Before = func(ctx *cli.Context) error {
-
-		// max out box for now
-		runtime.GOMAXPROCS(runtime.NumCPU())
-		// exit gracefully - e.g. with app cleanup on sig abort (ctrl-c)
-		signalChan := make(chan os.Signal, 1)
-		signal.Notify(signalChan, os.Interrupt)
-		go func() {
-			for _ = range signalChan {
-				log.Info("Received an interrupt, stopping services...\n")
-				ExitApp <- true
-			}
-		}()
-		// todo: add misc app setup here (metrics, debug, etc....)
-		return nil
-	}
 
 	unrulyApp := &UnrulyApp{app, nil, nil, nil}
 
 	// setup callbacks
+	app.Before = unrulyApp.before
 	app.Action = unrulyApp.startUnrulyNode
 	app.After = unrulyApp.cleanup
 
@@ -112,6 +97,26 @@ func newUnrulyApp() *UnrulyApp {
 // start the unruly node
 func startUnrulyNode(ctx *cli.Context) error {
 	return App.startUnrulyNode(ctx)
+}
+
+func (app *UnrulyApp) before(ctx *cli.Context) error {
+
+	// max out box for now
+	runtime.GOMAXPROCS(runtime.NumCPU())
+
+	// exit gracefully - e.g. with app cleanup on sig abort (ctrl-c)
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, os.Interrupt)
+	go func() {
+		for _ = range signalChan {
+			log.Info("Received an interrupt, stopping services...\n")
+			ExitApp <- true
+		}
+	}()
+
+	// todo: add misc app setup here (metrics, debug, etc....)
+
+	return nil
 }
 
 // Unruly app cleanup tasks
@@ -126,6 +131,8 @@ func (app *UnrulyApp) cleanup(ctx *cli.Context) error {
 	}
 
 	// add any other cleanup tasks here....
+	log.Info("App cleanup completed")
+
 	return nil
 }
 
@@ -138,7 +145,6 @@ func (app *UnrulyApp) startUnrulyNode(ctx *cli.Context) error {
 	conf := &apiconf.ConfigValues
 
 	// start api servers
-
 	if conf.StartGrpcServer || conf.StartJsonServer {
 		app.grpcApiService = api.NewGrpcService()
 		go app.grpcApiService.StartService()
@@ -146,10 +152,11 @@ func (app *UnrulyApp) startUnrulyNode(ctx *cli.Context) error {
 
 	if conf.StartJsonServer {
 		app.jsonApiService = api.NewJsonHttpServer()
-		go app.jsonApiService.Start()
+		go app.jsonApiService.StartService()
 	}
 
-	// wait until node signaled app to exit
+	// app blocks until it receives a signal to exit
+	// this signal may come from the node or from sig-abort (ctrl-c)
 	<-ExitApp
 	return nil
 }
