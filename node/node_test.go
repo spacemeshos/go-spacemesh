@@ -16,5 +16,13 @@ func TestNodeCreation(t *testing.T) {
 
 	assert.NotNil(t, node, "expected non-nil node")
 
-	// todo: check that node info was persisted to /nodes/node-id/id.json
+	// todo: verify that node info was persisted to /nodes/node-id/id.json
+
+	// test all of these cases:
+
+	// start node where id.json exists
+
+	// start node using new id
+
+
 }

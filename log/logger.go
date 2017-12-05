@@ -22,7 +22,9 @@ func init() {
 	backend := logging.NewLogBackend(os.Stderr, "", 0)
 	backendFormatter := logging.NewBackendFormatter(backend, logFormat)
 	logging.SetBackend(backendFormatter)
-	
+
+	//todo: figure out how to integrate rolling-log-files into the logging system
+	// e.g. go-lumberjack
 }
 
 // public wrappers abstracting away logging lib impl
