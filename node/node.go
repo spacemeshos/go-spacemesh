@@ -48,15 +48,16 @@ func newNode(host host.Host, done chan bool, pubKey crypto.PublicKeylike, privKe
 	err := n.persistData()
 
 	if err != nil {
-		log.Error("Failed to persist node data for node id: %s. %v", n.identity.String(), err)
+		log.Error("!DRAGONS! Failed to persist node data for node id: %s. %v", n.identity.String(), err)
 		panic(err)
 	}
 
 	return n
 }
 
-// Create a new node using persisted node data
-// Generates a new node (new id, pub, priv keys) if needed
+// Create a new node
+// Method will try to load the node using persisted data in the store
+// A new node id will be created if no node data is available in the store
 func NewNode(port uint, done chan bool) *Node {
 
 	// user provided node id via cli - attempt to start node
@@ -101,7 +102,7 @@ func newNodeFromData(port uint, done chan bool, nodeData *NodeData) *Node {
 
 	log.Info("Creating node from persisted data for node id: %s", nodeData.Id)
 
-	return newLocalNodeWithKeys(port, done, priv, pub, id)
+	return initNode(port, done, priv, pub, id)
 }
 
 // Create a new node with new crypto keys and id
@@ -109,11 +110,12 @@ func NewNodeIdentity(port uint, done chan bool) *Node {
 	priv, pub, _ := crypto.GenerateKeyPair(libp2pcrypto.Secp256k1, 256)
 	id, _ := pub.IdFromPubKey()
 	log.Info("Creating new node with id: %s", id.String())
-	return newLocalNodeWithKeys(port, done, priv, pub, id)
+	return initNode(port, done, priv, pub, id)
 }
 
 // Create a new local node
-func newLocalNodeWithKeys(port uint, done chan bool, priv crypto.PrivateKeylike, pub crypto.PublicKeylike, id crypto.Identifier) *Node {
+func initNode(port uint, done chan bool, priv crypto.PrivateKeylike, pub crypto.PublicKeylike, id crypto.Identifier) *Node {
+
 	listen, _ := ma.NewMultiaddr(fmt.Sprintf("/ip4/127.0.0.1/tcp/%d", port))
 	peerStore := ps.NewPeerstore()
 	peerStore.AddPrivKey(id.PeerId(), priv.PrivatePeerKey())

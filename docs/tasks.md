@@ -23,7 +23,7 @@
 
 Stuff we have a basic 1st pass implementation for:
 
-- Initial project packages strcuture and entry points (app, node, grpcApi, etc...)
+- Initial project packages structure and entry points (app, node, grpcApi, etc...)
 - A cli app shell with flags and commands
 - Grpc and json-http api servers with config and decent tests
 - Basic node with 2 implemented example p2p protocols and basic tests
@@ -33,3 +33,4 @@ Stuff we have a basic 1st pass implementation for:
 - App persistent store with support for multiple nodes data
 - Restore node data from store on session start or create new id automatically
 - Auto persist node data to store
+- Load data about bootstrap nodes on node startup
