@@ -25,7 +25,8 @@ type UnrulyApp struct {
 	jsonApiService *api.JsonHttpServer
 }
 
-// the main unruly app
+// the main unruly app - main entry point
+// Access the node and the other top-level modules from the app
 var App *UnrulyApp
 
 var (
@@ -60,9 +61,7 @@ var (
 
 // add toml config file support and sample toml file
 
-
 func newUnrulyApp() *UnrulyApp {
-
 	app := cli.NewApp()
 	app.Name = filepath.Base(os.Args[0])
 	app.Author = config.AppAuthor
@@ -103,12 +102,9 @@ func newUnrulyApp() *UnrulyApp {
 
 	unrulyApp := &UnrulyApp{app, nil, nil, nil}
 
+	// setup callbacks
 	app.Action = unrulyApp.startUnrulyNode
-
-	app.After = func(ctx *cli.Context) error {
-		unrulyApp.cleanup()
-		return nil
-	}
+	app.After = unrulyApp.cleanup
 
 	return unrulyApp
 }
@@ -119,7 +115,7 @@ func startUnrulyNode(ctx *cli.Context) error {
 }
 
 // Unruly app cleanup tasks
-func (app *UnrulyApp) cleanup() {
+func (app *UnrulyApp) cleanup(ctx *cli.Context) error {
 	if app.jsonApiService != nil {
 		app.jsonApiService.Stop()
 	}
@@ -129,10 +125,10 @@ func (app *UnrulyApp) cleanup() {
 	}
 
 	// add any other cleanup tasks here....
+	return nil
 }
 
 func (app *UnrulyApp) startUnrulyNode(ctx *cli.Context) error {
-
 	port := *nodeparams.LocalTcpPortFlag.Destination
 	app.Node = node.NewLocalNode(port, exitApp)
 
@@ -159,7 +155,7 @@ func (app *UnrulyApp) startUnrulyNode(ctx *cli.Context) error {
 // this is the root of all evil, called from Main.main()
 func Main(commit, branch, version string) {
 
-	// setup vars before creating the app
+	// setup vars before creating the app - ugly but works
 	Version = version
 	Branch = branch
 	Commit = commit
