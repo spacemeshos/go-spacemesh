@@ -62,7 +62,7 @@ func NewNode(port uint, done chan bool) *Node {
 	// user provided node id via cli - attempt to start node
 	// using persisted data for this node id
 	if len(config.ConfigValues.NodeId) > 0 {
-		data := readNodeData( config.ConfigValues.NodeId)
+		data := readNodeData(config.ConfigValues.NodeId)
 		return newNodeFromData(port, done, data)
 	}
 
@@ -124,5 +124,10 @@ func newLocalNodeWithKeys(port uint, done chan bool, priv crypto.PrivateKeylike,
 	//peerStore.AddAddrs(pid.ID, host.Addrs(), ps.PermanentAddrTTL)
 	log.Info("local node started on tcp port: %d", port)
 
-	return newNode(aHost, done, pub, priv, id)
+	node := newNode(aHost, done, pub, priv, id)
+
+	// node startup tasks....
+	node.loadBootstrapNodes()
+
+	return node
 }

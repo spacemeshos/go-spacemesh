@@ -19,6 +19,13 @@ import (
 
 // Node p2p methods
 
+func (n *Node) loadBootstrapNodes() {
+	data := RemoteNodesFromMurls(config.BootstrapNodes)
+	for _, node := range data {
+		log.Info("Loaded bootstrap node: %s, %s", node.Id, node.Addresses[0].String())
+	}
+}
+
 // Authenticate incoming p2p message
 // message: a protobufs go data object
 // data: common p2p message data
