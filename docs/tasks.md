@@ -9,7 +9,6 @@
 ### App Shell Tasks
 - Write tests for app flags, commands and config file
 - Implement accounts and keystore files
-- Implement node db in node data folders
 - Impl cli.v1 TOML support and write test with TOML file (a bit of a pain with cli via vendoring) - alt use YAML
 
 ### Misc. Tasks
@@ -31,3 +30,6 @@ Stuff we have a basic 1st pass implementation for:
 - Basic keys and id type system (wrapping lib-p2p keys and ids types)
 - A buildable go-unruly cross-platform exe with full cli features (flags, commands)
 - Basic working makefile (not fully isolated from $GOPATH although make should use vendored versions)
+- App persistent store with support for multiple nodes data
+- Restore node data from store on session start or create new id automatically
+- Auto persist node data to store

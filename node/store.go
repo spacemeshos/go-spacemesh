@@ -64,7 +64,7 @@ func (n *Node) persistData() error {
 		PrivKey: privateKeyStr,
 	}
 
-	bytes, err := json.Marshal(data)
+	bytes, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
 		log.Error("Failed to marshal node data to json: %v", err)
 		return err
