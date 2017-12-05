@@ -15,10 +15,13 @@
 ### Misc. Tasks
 - Implement an optimized Merkle tree data structure with backing storage in leveldb (kv storage). Implement Merkle proofs.
 - Write tests to validate the plan to use libp2p-kad-dht for peer discovery (simulated network)
+- Tests for all implemented functionality - the more the better.
+
+### Hard Stuff
+- Integrate a V8 instance for javascript execution into the node. See: https://github.com/augustoroman/v8 
 - add support for uTp (reliable connection over udp) in lib-p2p - it only supports tcp right now - this is a hard task. We might contrib this to lib-p2p.
 - Implement gossip support for each protocol (gossip flag) and write tests for gossiping a p2p message (20 nodes, 1 bootstrap)
-- Local Javascript console for interactive RPC calls (wrapping the json-http api).
-- Tests for all implemented functionality - the more the better.
+- Local Javascript console for interactive RPC calls (wrapping the json-http api) - possible via V8 engine?
 
 ### App Shell Implemented Features
 
