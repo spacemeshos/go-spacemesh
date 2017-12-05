@@ -26,7 +26,12 @@ To build `go-unruly` for your current system architecture use:
 make
 ```
 
-The binary `go-unruly` will be saved in the project root directory.
+or
+```
+go build
+```
+
+from the project root directory. The binary `go-unruly` will be saved in the project root directory.
 
 
 To build a binary for a specific architecture directory use:
