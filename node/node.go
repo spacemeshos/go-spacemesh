@@ -36,8 +36,9 @@ type NodeData struct {
 	PrivKey string
 }
 
-// Create a new local node with its implemented protocols
+// Create a new local node with its implemented protocols and persist its data to store
 func newNode(host host.Host, done chan bool, pubKey crypto.PublicKeylike, privKey crypto.PrivateKeylike, id crypto.Identifier) *Node {
+
 	n := &Node{Host: host, publicKey: pubKey, privateKey: privKey, identity: id}
 	n.PingProtocol = NewPingProtocol(n, done)
 	n.EchoProtocol = NewEchoProtocol(n, done)
@@ -45,8 +46,9 @@ func newNode(host host.Host, done chan bool, pubKey crypto.PublicKeylike, privKe
 	// persist node data to store and panic otherwise
 	// there's little use of running a node without being able to restore it in future app sessions
 	err := n.persistData()
+
 	if err != nil {
-		log.Error("Aborting app - failed to persist node data for node id: %s. %v", n.identity.String(), err)
+		log.Error("Failed to persist node data for node id: %s. %v", n.identity.String(), err)
 		panic(err)
 	}
 
