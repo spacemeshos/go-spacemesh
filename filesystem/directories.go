@@ -6,6 +6,7 @@ import (
 	"os/user"
 	"path"
 	"strings"
+	"testing"
 )
 
 // Directory and paths helpers
@@ -53,4 +54,22 @@ func GetFullDirectoryPath(name string) (string, error) {
 func GetUnrulyDataDirectoryPath() (string, error) {
 
 	return GetFullDirectoryPath(config.ConfigValues.DataFilePath)
+}
+
+// Delete all subfolders and files in the unruly root data folder
+func DeleteUnrulyDataFolders(t *testing.T) {
+
+	path, err := GetUnrulyDataDirectoryPath()
+	if err != nil {
+		t.Fatalf("Failed to get unruly data dir: %v", err)
+	}
+
+	// remove
+	err = os.RemoveAll(path)
+	if err != nil {
+		t.Fatalf("Failed to delete unruly data dir: %v", err)
+	}
+
+	// create the dir again
+	GetUnrulyDataDirectoryPath()
 }

@@ -15,7 +15,7 @@ func testIds(t *testing.T) {
 
 	idStr := id.String()
 
-	id1, err := crypto.NewId(idStr)
+	id1, err := crypto.NewIdentifier(idStr)
 	if err != nil {
 		t.Fatalf("failed to create id from id str: %v", err)
 	}

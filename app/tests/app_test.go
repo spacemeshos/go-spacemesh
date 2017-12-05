@@ -3,7 +3,6 @@ package tests
 import (
 	"github.com/UnrulyOS/go-unruly/app"
 	"github.com/UnrulyOS/go-unruly/assert"
-	"os"
 	"testing"
 	"time"
 )
