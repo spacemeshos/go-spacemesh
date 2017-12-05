@@ -20,8 +20,8 @@ func TestP2pProtocols(t *testing.T) {
 	done := make(chan bool, 1)
 
 	// Make 2 nodes
-	h1 := node.NewLocalNode(port1, done)
-	h2 := node.NewLocalNode(port2, done)
+	h1 := node.NewNodeIdentity(port1, done)
+	h2 := node.NewNodeIdentity(port2, done)
 
 	// let the nodes know about each other
 	h1.Peerstore().AddAddrs(h2.ID(), h2.Addrs(), ps.PermanentAddrTTL)

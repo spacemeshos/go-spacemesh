@@ -9,7 +9,8 @@ import (
 const (
 	// add all node params here (non-configurable consts) - ideally nost node params should be configurable
 
-	ClientVersion = "go-p2p-node/0.0.1"
+	ClientVersion      = "go-p2p-node/0.0.1"
+	NodesDirectoryName = "nodes"
 )
 
 // params are non-configurable (hard-coded) consts. To create a configurable param use Config

@@ -1,6 +1,7 @@
 package filesystem
 
 import (
+	"github.com/UnrulyOS/go-unruly/app/config"
 	"os"
 	"os/user"
 	"path"
@@ -32,4 +33,21 @@ func GetCanonicalPath(p string) string {
 		}
 	}
 	return path.Clean(os.ExpandEnv(p))
+}
+
+// Gets the OS specific full path for a named directory.
+// The directory is created if it doesn't exist
+func GetFullDirectoryPath(name string) (string, error) {
+
+	path := GetCanonicalPath(name)
+
+	// create dir if it doesn't exist
+	err := os.MkdirAll(path, 0700)
+
+	return path, err
+}
+
+// get full os-specific path to the unruly top-level data directory
+func GetUnrulyDataDirectoryPath() (string, error) {
+	return GetFullDirectoryPath(config.ConfigValues.DataFilePath)
 }

@@ -116,11 +116,15 @@ func (app *UnrulyApp) before(ctx *cli.Context) error {
 
 	// todo: add misc app setup here (metrics, debug, etc....)
 
+	// ensure all data folders exist
+	app.ensureUnrulyDataDirectory()
+
 	return nil
 }
 
 // Unruly app cleanup tasks
 func (app *UnrulyApp) cleanup(ctx *cli.Context) error {
+
 	log.Info("Starting app cleanup...")
 	if app.jsonApiService != nil {
 		app.jsonApiService.Stop()
@@ -140,8 +144,7 @@ func (app *UnrulyApp) startUnrulyNode(ctx *cli.Context) error {
 
 	log.Info("Starting local node...")
 	port := *nodeparams.LocalTcpPortFlag.Destination
-	app.Node = node.NewLocalNode(port, ExitApp)
-
+	app.Node = node.NewNode(port, ExitApp)
 	conf := &apiconf.ConfigValues
 
 	// start api servers

@@ -35,7 +35,7 @@ func Equal(t *testing.T, a interface{}, b interface{}, msg string) {
 	t.Fatal(msg)
 }
 
-func False(t *testing.T, v bool,  msgs ...string) {
+func False(t *testing.T, v bool, msgs ...string) {
 	True(t, !v, msgs...)
 }
 

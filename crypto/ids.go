@@ -48,7 +48,7 @@ func (id Id) Pretty() string {
 }
 
 // create a new ID from a b58 encoded string
-func NewId(b58 string) (Identifier, error) {
+func NewIdentifier(b58 string) (Identifier, error) {
 	id, err := peer.IDB58Decode(b58)
 	return &Id{id}, err
 }
