@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"github.com/UnrulyOS/go-unruly/assert"
 	"github.com/UnrulyOS/go-unruly/log"
 	"github.com/UnrulyOS/go-unruly/node/pb"
 
@@ -108,7 +107,10 @@ func (e EchoProtocol) onEchoResponse(s inet.Stream) {
 		return
 	}
 
-	assert.True(req.Message == data.Message, nil, "Expected echo to respond with request message")
+	if req.Message != data.Message {
+		log.Error("Unexpected echo response: %s", data.Message)
+	}
+
 	log.Info("%s: received echo response from %s. Message id:%s. Message: %s.", s.Conn().LocalPeer(), s.Conn().RemotePeer(), data.MessageData.Id, data.Message)
 	e.done <- true
 }

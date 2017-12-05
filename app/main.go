@@ -47,7 +47,7 @@ var (
 		apiconf.JsonServerPortFlag,
 	}
 
-	exitApp = make(chan bool, 1)
+	ExitApp = make(chan bool, 1)
 
 	// App semantic version. Can be over-written by build tool
 	Version = "0.0.1"
@@ -93,7 +93,7 @@ func newUnrulyApp() *UnrulyApp {
 		go func() {
 			for _ = range signalChan {
 				log.Info("Received an interrupt, stopping services...\n")
-				exitApp <- true
+				ExitApp <- true
 			}
 		}()
 		// todo: add misc app setup here (metrics, debug, etc....)
@@ -130,7 +130,7 @@ func (app *UnrulyApp) cleanup(ctx *cli.Context) error {
 
 func (app *UnrulyApp) startUnrulyNode(ctx *cli.Context) error {
 	port := *nodeparams.LocalTcpPortFlag.Destination
-	app.Node = node.NewLocalNode(port, exitApp)
+	app.Node = node.NewLocalNode(port, ExitApp)
 
 	conf := &apiconf.ConfigValues
 
@@ -147,7 +147,7 @@ func (app *UnrulyApp) startUnrulyNode(ctx *cli.Context) error {
 	}
 
 	// wait until node signaled app to exit
-	<-exitApp
+	<-ExitApp
 	return nil
 }
 

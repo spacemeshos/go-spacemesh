@@ -7,13 +7,19 @@ import (
 
 // basic assertion support
 
-func Nil(err error, t *testing.T, msgs ...string) {
+func Nil(t *testing.T, err error, msgs ...string) {
 	if err != nil {
 		t.Fatal(msgs, "error:", err)
 	}
 }
 
-func True(v bool, t *testing.T, msgs ...string) {
+func NotNil(t *testing.T, obj interface{}, msgs ...string) {
+	if obj == nil {
+		t.Fatal(msgs, "epxected a non-nil object")
+	}
+}
+
+func True(t *testing.T, v bool, msgs ...string) {
 	if !v {
 		t.Fatal(msgs)
 	}
@@ -29,11 +35,11 @@ func Equal(t *testing.T, a interface{}, b interface{}, msg string) {
 	t.Fatal(msg)
 }
 
-func False(v bool, t *testing.T, msgs ...string) {
-	True(!v, t, msgs...)
+func False(t *testing.T, v bool,  msgs ...string) {
+	True(t, !v, msgs...)
 }
 
-func Err(err error, t *testing.T, msgs ...string) {
+func Err(t *testing.T, err error, msgs ...string) {
 	if err == nil {
 		t.Fatal(msgs, "error:", err)
 	}
