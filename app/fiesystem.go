@@ -16,7 +16,7 @@ func (app *UnrulyApp) GetUnrulyDataDirectoryPath() (string, error) {
 // Return the os-specific path to the Unruly data folder
 // Creates it and all subfolders on demand
 
-func (app *UnrulyApp) ensureUnrulyDataDirectory() string {
+func (app *UnrulyApp) ensureUnrulyDataDirectories() string {
 	dataPath, err := app.GetUnrulyDataDirectoryPath()
 	if err != nil {
 		log.Error("Can't get or create unruly data folder")
@@ -28,9 +28,9 @@ func (app *UnrulyApp) ensureUnrulyDataDirectory() string {
 	accountsPath := app.GetAccountsDataDirectoryPath()
 	logsPath := app.GetLogsDataDirectoryPath()
 
-	log.Info("Data directory: %s", dataPath)
-	log.Info("Accounts data directory: %s", accountsPath)
-	log.Info("Logs data directory: %s", logsPath)
+	log.Info("Data dir: %s", dataPath)
+	log.Info("Accounts data dir: %s", accountsPath)
+	log.Info("Logs data dir: %s", logsPath)
 
 	return dataPath
 }

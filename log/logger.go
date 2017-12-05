@@ -22,6 +22,7 @@ func init() {
 	backend := logging.NewLogBackend(os.Stderr, "", 0)
 	backendFormatter := logging.NewBackendFormatter(backend, logFormat)
 	logging.SetBackend(backendFormatter)
+	
 }
 
 // public wrappers abstracting away logging lib impl

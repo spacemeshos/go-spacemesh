@@ -10,6 +10,7 @@
 - Write tests for app flags, commands and config file
 - Implement accounts and keystore files
 - Impl cli.v1 TOML support and write test with TOML file (a bit of a pain with cli via vendoring) - alt use YAML
+- Integrate https://github.com/natefinch/lumberjack with go-logging so we get proper rolling files logging - needed for long-running simulations.
 
 ### Misc. Tasks
 - Implement an optimized Merkle tree data structure with backing storage in leveldb (kv storage). Implement Merkle proofs.

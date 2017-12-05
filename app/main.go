@@ -118,7 +118,7 @@ func (app *UnrulyApp) before(ctx *cli.Context) error {
 	// todo: add misc app setup here (metrics, debug, etc....)
 
 	// ensure all data folders exist
-	app.ensureUnrulyDataDirectory()
+	app.ensureUnrulyDataDirectories()
 
 	return nil
 }
