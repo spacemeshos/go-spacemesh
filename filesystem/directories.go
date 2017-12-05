@@ -11,6 +11,9 @@ import (
 
 // Directory and paths helpers
 
+const OwnerReadWriteExec = 0700
+
+
 // Returns the user home directory if one is set
 func GetUserHomeDirectory() string {
 
@@ -45,7 +48,7 @@ func GetFullDirectoryPath(name string) (string, error) {
 	path := GetCanonicalPath(name)
 
 	// create dir if it doesn't exist
-	err := os.MkdirAll(path, 0700)
+	err := os.MkdirAll(path, OwnerReadWriteExec)
 
 	return path, err
 }

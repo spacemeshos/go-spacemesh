@@ -10,7 +10,6 @@ import (
 
 // UnrulyApp data-related features
 
-
 // Return true iff file exists and is accessible
 func PathExists(path string) bool {
 	_, err := os.Stat(path)
@@ -56,7 +55,7 @@ func (app *UnrulyApp) ensureDataSubDirectory(dirName string) (string, error) {
 	pathName := filepath.Join(dataPath, dirName)
 	path, err := filesystem.GetFullDirectoryPath(pathName)
 	if err != nil {
-		log.Error("Can't access unruly keys folder")
+		log.Error("Can't access unruly folder: %v", pathName)
 		return "", err
 	}
 	return path, nil
