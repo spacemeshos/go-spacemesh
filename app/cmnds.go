@@ -12,7 +12,7 @@ var (
 
 // Command factory function - this is an example for an app cli command
 // to test try `go-unruly version`
-func NewVersionCommand(appVersion string, branch string, commit string) cli.Command {
+func NewVersionCommand(appVersion, branch, commit string) cli.Command {
 	return cli.Command{
 		Name:      "version",
 		Aliases:   []string{"v"},

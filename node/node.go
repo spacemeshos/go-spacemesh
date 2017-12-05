@@ -57,7 +57,7 @@ func NewLocalNode(port uint, done chan bool) *Node {
 	aHost := bhost.New(n)
 
 	//peerStore.AddAddrs(pid.ID, host.Addrs(), ps.PermanentAddrTTL)
-	log.Info("local node created. tcp port: %d", port)
+	log.Info("local node started on tcp port: %d", port)
 
 	return newNode(aHost, done)
 }

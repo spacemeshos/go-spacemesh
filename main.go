@@ -5,15 +5,15 @@ import (
 	"github.com/UnrulyOS/go-unruly/log"
 )
 
+// set by build too
+var commit, branch, version string
+
 func main() {
 
-	log.Info("App starting...")
-
-	// test p2p protocols
-	// node.TestP2pProtocols(nil)
+	log.Info("App Starting... %s %s %s", commit, branch, version)
 
 	// run the app
-	app.Main()
+	app.Main(commit, branch, version)
 
 	// add any playground tests here....
 }

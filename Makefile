@@ -6,7 +6,7 @@ BIN_DIR := $(shell pwd)/build
 CURR_DIR :=$(shell pwd)
 
 # Setup the -ldflags option for go build here, interpolate the variable values
-LDFLAGS = -ldflags "-X app.Version=${VERSION} -X app.Commit=${COMMIT} -X app.Branch=${BRANCH}"
+LDFLAGS = -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.branch=${BRANCH}"
 
 PKGS := $(shell go list ./... | grep -v /vendor)
 

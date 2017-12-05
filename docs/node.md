@@ -55,18 +55,18 @@ Node may be command-line started with a list of account ids to unlock and to set
 
 Node API methods will have versions that accept account signature on input data - this allows node to execute a method on behalf of an account without access to the account private key. e.g. send a transaction to the network on behalf of the user. (This is how Infura works together with MetaMask and other eth wallets).
 
-#### On Using self describing formats
+#### On using self describing formats
 Node Ids and account Ids are self-describing `multi-hashes` (see microformat multihash) - they can be upgraded in the future to other type of hashes.
 The hash type is included in the Id.
 Node and account keys are not multi-hashes.
 However their binary and string representation also include a type and so will support forward-compatible changes and key type and data size.
 
-| Entity     | bytes (bin)| bytes (b58str)| binary format | source
-| -----------|-----------| ----------|---------------|
+| Entity     | bytes (bin)| bytes (b58str)| binary format | source |
+| -----------|-----------| ----------|---------------|-----|
 | Node Id    | 34 | 46 | multi-hash          | node public key hash
 | Account Id | 34 | 46 | multi-hash          | node public key hash
 | Public Key | 37 | 50 | protobuf marshalled | Scep256k1 keypair gen
-| Private Key| 37 | 50 | protobuf marshalled | Scep256k1 keypair gen
+| Private Key| 36 | 49 | protobuf marshalled | Scep256k1 keypair gen
 
 
 #### Smart Contract Accounts

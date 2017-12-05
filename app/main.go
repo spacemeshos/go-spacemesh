@@ -20,13 +20,15 @@ import (
 
 type UnrulyApp struct {
 	*cli.App
-	node           *node.Node
+	Node           *node.Node
 	grpcApiService *api.UnrulyGrpcService
 	jsonApiService *api.JsonHttpServer
 }
 
+// the main unruly app
+var App *UnrulyApp
+
 var (
-	app      = NewApp()
 	appFlags = []cli.Flag{
 		config.LoadConfigFileFlag,
 		config.DataFolderPathFlag,
@@ -47,10 +49,10 @@ var (
 	exitApp = make(chan bool, 1)
 
 	// App semantic version. Can be over-written by build tool
-	AppVersion = "0.0.1"
+	Version = "0.0.1"
 
 	// build git branch. Can be over-written by build tool
-	Branch = "master"
+	Branch = ""
 
 	// build git commit. Can be over-written by build tool
 	Commit = ""
@@ -58,25 +60,22 @@ var (
 
 // add toml config file support and sample toml file
 
-func init() {
-	// define main app action
-	app.Action = startUnrulyNode
-}
 
-func NewApp() *UnrulyApp {
+func newUnrulyApp() *UnrulyApp {
+
 	app := cli.NewApp()
 	app.Name = filepath.Base(os.Args[0])
-	app.Author = "The go-unruly authors"
-	app.Email = "app@unrulyos.io"
-	app.Version = "0.0.1"
-	if len(config.GitCommitHash) > 8 {
-		app.Version += " - " + config.GitCommitHash[:8]
+	app.Author = config.AppAuthor
+	app.Email = config.AppAuthorEmail
+	app.Version = Version
+	if len(Commit) > 8 {
+		app.Version += " " + Commit[:8]
 	}
 	app.Usage = config.AppUsage
 	app.HideVersion = true
-	app.Copyright = "(c) 2017 The go-unruly Authors"
+	app.Copyright = config.AppCopyrightNotice
 	app.Commands = []cli.Command{
-		NewVersionCommand(AppVersion, Branch, Commit),
+		NewVersionCommand(Version, Branch, Commit),
 		// add all other commands here
 	}
 
@@ -104,8 +103,9 @@ func NewApp() *UnrulyApp {
 
 	unrulyApp := &UnrulyApp{app, nil, nil, nil}
 
+	app.Action = unrulyApp.startUnrulyNode
+
 	app.After = func(ctx *cli.Context) error {
-		log.Info("App cleanup goes here...")
 		unrulyApp.cleanup()
 		return nil
 	}
@@ -115,9 +115,26 @@ func NewApp() *UnrulyApp {
 
 // start the unruly node
 func startUnrulyNode(ctx *cli.Context) error {
+	return App.startUnrulyNode(ctx)
+}
+
+// Unruly app cleanup tasks
+func (app *UnrulyApp) cleanup() {
+	if app.jsonApiService != nil {
+		app.jsonApiService.Stop()
+	}
+
+	if app.grpcApiService != nil {
+		app.grpcApiService.StopService()
+	}
+
+	// add any other cleanup tasks here....
+}
+
+func (app *UnrulyApp) startUnrulyNode(ctx *cli.Context) error {
 
 	port := *nodeparams.LocalTcpPortFlag.Destination
-	app.node = node.NewLocalNode(port, exitApp)
+	app.Node = node.NewLocalNode(port, exitApp)
 
 	conf := &apiconf.ConfigValues
 
@@ -138,23 +155,18 @@ func startUnrulyNode(ctx *cli.Context) error {
 	return nil
 }
 
-// Unruly app cleanup tasks
-func (app *UnrulyApp) cleanup() {
-	if app.jsonApiService != nil {
-		app.jsonApiService.Stop()
-	}
-
-	if app.grpcApiService != nil {
-		app.grpcApiService.StopService()
-	}
-
-	// add any other cleanup tasks here....
-}
-
 // The Unruly console application - responsible for parsing and routing cli flags and commands
 // this is the root of all evil, called from Main.main()
-func Main() {
-	if err := app.Run(os.Args); err != nil {
+func Main(commit, branch, version string) {
+
+	// setup vars before creating the app
+	Version = version
+	Branch = branch
+	Commit = commit
+
+	App = newUnrulyApp()
+
+	if err := App.Run(os.Args); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

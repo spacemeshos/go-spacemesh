@@ -3,6 +3,7 @@ package tests
 import (
 	"github.com/UnrulyOS/go-unruly/assert"
 	"github.com/UnrulyOS/go-unruly/crypto"
+	"github.com/UnrulyOS/go-unruly/log"
 	"testing"
 
 	libp2pcrypto "gx/ipfs/QmaPbCnUMBohSGo3KnxEa2bHqyJVVeEEcwtqJAYxerieBo/go-libp2p-crypto"
@@ -30,6 +31,8 @@ func TestSerialization(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get string rep of priv key: %v", err)
 	}
+
+	log.Info("%d", len(privStr))
 
 	pubStr, err := pub.String()
 	if err != nil {

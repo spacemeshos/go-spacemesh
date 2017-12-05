@@ -2,11 +2,9 @@ package config
 
 // app params are non-configured consts
 
-var (
-	// should be auto injected by the CI system
-	GitCommitHash = ""
-)
-
 const (
-	AppUsage = "the go-unruly node"
+	AppUsage           = "the go-unruly node"
+	AppAuthor          = "The go-unruly authors"
+	AppAuthorEmail     = "app@unrulyos.io"
+	AppCopyrightNotice = "(c) 2017 The go-unruly Authors"
 )

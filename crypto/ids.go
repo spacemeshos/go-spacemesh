@@ -32,7 +32,10 @@ func (id Id) PeerId() peer.ID {
 }
 
 func (id Id) Pretty() string {
+
 	pid := id.String()
+
+	// get rid of mh first 2 chars which are always Qm
 	if strings.HasPrefix(pid, "Qm") {
 		pid = pid[2:]
 	}
