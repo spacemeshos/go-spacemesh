@@ -75,7 +75,10 @@ govendor sync
 ```
 ./go test ./...
 ```
-
+or
+```
+make test
+```
 ### Contributing
 
 Thank you for considering to contribute to the go-unruly open source project. 
@@ -107,6 +110,6 @@ There's a few things you can do right now to help out:
  - Check out existing [open issues](https://github.com/UnrulyOS/go-unruly/issues). This would be especially useful for modules in active development.
  - Add tests. There can never be enough tests.
  
-#### Jump in
+#### Next Steps...
 - Please read all the docs in `/docs`
 

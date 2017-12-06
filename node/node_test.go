@@ -6,6 +6,8 @@ import (
 	"testing"
 )
 
+// this is here so test code can access package internal methods and functions
+
 func TestNodeCreation(t *testing.T) {
 
 	// start fresh

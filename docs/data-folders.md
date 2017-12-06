@@ -2,14 +2,15 @@
 
 - unruly-data/   
     - `nondes/`  
-       - `[nodeId1]`
+       - `[node-Id1]`
 	        - id.json   
 	        - logs/
 	        - ...
-        - `[nodeId2]`
+        - `[node-Id2]`
 	        - id.json
 	        - logs/
 	        - ...
+	    - ....
     - accounts/
         - `[user1-id-base58].josn`
 	    - // key files go here and shared between all nodes
@@ -21,7 +22,7 @@
 At the top level, it contains a key/ folder which includes all keystore files.
 A folder is created for each node instance and is named by its id.
 
-- All ids are base58 encoded strings of id binary data
+- All ids are base58 encoded strings of id binary data (multi-hash)
 
 
 

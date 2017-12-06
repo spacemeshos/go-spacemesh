@@ -29,3 +29,7 @@ govendor test +local
 
 ### CI
 - TBD - travis builds and tests
+
+### Custom node tests
+- Node is independant of app so you should be able to create custom p2p tests.
+See p2p_test.go

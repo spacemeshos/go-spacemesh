@@ -12,8 +12,6 @@ import (
 	ps "gx/ipfs/QmPgDWmTmuzvP7QE5zwo1TmjbJme9pmZHNujB2453jkCTr/go-libp2p-peerstore"
 	swarm "gx/ipfs/QmU219N3jn7QadVCeBUqGnAkwoXoUomrCwDuVQVuL7PB5W/go-libp2p-swarm"
 	ma "gx/ipfs/QmXY77cVe7rVRQXZZQRioukUM7aRW3BTcAgJe12MCtb3Ji/go-multiaddr"
-
-	libp2pcrypto "gx/ipfs/QmaPbCnUMBohSGo3KnxEa2bHqyJVVeEEcwtqJAYxerieBo/go-libp2p-crypto"
 )
 
 // Node type - a local p2p host implementing one or more p2p protocols
@@ -109,7 +107,7 @@ func newNodeFromData(port uint, done chan bool, nodeData *NodeData) *Node {
 // Create a new node with new crypto keys and id
 func NewNodeIdentity(port uint, done chan bool) *Node {
 
-	priv, pub, _ := crypto.GenerateKeyPair(libp2pcrypto.Secp256k1, 256)
+	priv, pub, _ := crypto.GenerateKeyPair()
 	id, _ := pub.IdFromPubKey()
 	log.Info("Creating new node with id: %s", id.String())
 	return initNode(port, done, priv, pub, id)

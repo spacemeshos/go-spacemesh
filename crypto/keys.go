@@ -33,8 +33,8 @@ type Key struct {
 	libp2pcrypto.Key
 }
 
-func GenerateKeyPair(typ, bits int) (PrivateKeylike, PublicKeylike, error) {
-	priv, pub, err := libp2pcrypto.GenerateKeyPair(typ, bits)
+func GenerateKeyPair() (PrivateKeylike, PublicKeylike, error) {
+	priv, pub, err := libp2pcrypto.GenerateKeyPair(libp2pcrypto.Secp256k1, 256)
 	return &PrivateKey{priv}, &PublicKey{pub}, err
 }
 

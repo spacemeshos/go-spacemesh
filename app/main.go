@@ -5,6 +5,7 @@ import (
 	"fmt"
 	api "github.com/UnrulyOS/go-unruly/api"
 	apiconf "github.com/UnrulyOS/go-unruly/api/config"
+	"github.com/UnrulyOS/go-unruly/filesystem"
 	"github.com/UnrulyOS/go-unruly/log"
 	"github.com/UnrulyOS/go-unruly/node"
 	"gopkg.in/urfave/cli.v1"
@@ -92,12 +93,28 @@ func newUnrulyApp() *UnrulyApp {
 	app.Action = unrulyApp.startUnrulyNode
 	app.After = unrulyApp.cleanup
 
+	unrulyApp.setupLogging()
+
 	return unrulyApp
 }
 
 // start the unruly node
 func startUnrulyNode(ctx *cli.Context) error {
 	return App.startUnrulyNode(ctx)
+}
+
+// setup app logging system
+func (app *UnrulyApp) setupLogging() {
+
+	// setup logging early
+	dataDir, err := filesystem.GetUnrulyDataDirectoryPath()
+	if err != nil {
+		log.Error("Failed to setup unruly data dir")
+		panic(err)
+	}
+
+	// todo: support configurable log file name (low priority)
+	log.InitUnrulyLoggingSystem(dataDir, "unruly.log")
 }
 
 func (app *UnrulyApp) before(ctx *cli.Context) error {

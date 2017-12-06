@@ -8,7 +8,8 @@
 For sake of saving development time we are considering to reuse most of eth key store file format and private key encryption using scrypt, a password and a salt.
 
 ```json
-{"accountPublicKey":"base58-encoded-account-pub-key(Scep256k1)",
+{
+  "accountPublicKey":"base58-encoded-account-pub-key(Scep256k1)",
   "accountId":"account-id--is-a-base-58-encoded-multi-hash256-of-public-key-raw-binary-format",
   "version":1,
   "crypto":{

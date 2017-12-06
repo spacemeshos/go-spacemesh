@@ -4,13 +4,11 @@ import (
 	"github.com/UnrulyOS/go-unruly/assert"
 	"github.com/UnrulyOS/go-unruly/crypto"
 	"testing"
-
-	libp2pcrypto "gx/ipfs/QmaPbCnUMBohSGo3KnxEa2bHqyJVVeEEcwtqJAYxerieBo/go-libp2p-crypto"
 )
 
 func testIds(t *testing.T) {
 
-	_, pub, _ := crypto.GenerateKeyPair(libp2pcrypto.Secp256k1, 256)
+	_, pub, _ := crypto.GenerateKeyPair()
 	id, _ := pub.IdFromPubKey()
 
 	idStr := id.String()

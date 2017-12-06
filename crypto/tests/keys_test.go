@@ -5,8 +5,6 @@ import (
 	"github.com/UnrulyOS/go-unruly/crypto"
 	"github.com/UnrulyOS/go-unruly/log"
 	"testing"
-
-	libp2pcrypto "gx/ipfs/QmaPbCnUMBohSGo3KnxEa2bHqyJVVeEEcwtqJAYxerieBo/go-libp2p-crypto"
 )
 
 const (
@@ -59,7 +57,7 @@ func TestSerialization(t *testing.T) {
 
 func TestKeys(t *testing.T) {
 
-	priv, pub, _ := crypto.GenerateKeyPair(libp2pcrypto.Secp256k1, 256)
+	priv, pub, _ := crypto.GenerateKeyPair()
 
 	privStr, err := priv.String()
 	if err != nil {

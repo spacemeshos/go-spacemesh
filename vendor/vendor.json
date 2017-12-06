@@ -687,6 +687,12 @@
 			"revisionTime": "2014-12-10T08:48:24Z"
 		},
 		{
+			"checksumSHA1": "TM3Neoy1xRAKyZYMGzKc41sDFW4=",
+			"path": "gopkg.in/natefinch/lumberjack.v2",
+			"revision": "a96e63847dc3c67d17befa69c303767e2f84e54f",
+			"revisionTime": "2017-05-31T16:03:50Z"
+		},
+		{
 			"checksumSHA1": "rL5r44ASTGubGW88gqQwlvVQshw=",
 			"path": "gopkg.in/op/go-logging.v1",
 			"revision": "b2cb9fa56473e98db8caba80237377e83fe44db5",
