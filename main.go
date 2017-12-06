@@ -5,7 +5,11 @@ import (
 )
 
 // set by build too
-var commit, branch, version string
+var (
+	commit =""
+	branch =""
+	version = "0.0.1"
+)
 
 func main() {
 

@@ -76,7 +76,7 @@ func newUnrulyApp() *UnrulyApp {
 	app.HideVersion = true
 	app.Copyright = config.AppCopyrightNotice
 	app.Commands = []cli.Command{
-		NewVersionCommand(Version, Branch, Commit),
+		config.NewVersionCommand(Version, Branch, Commit),
 		// add all other commands here
 	}
 
@@ -93,6 +93,7 @@ func newUnrulyApp() *UnrulyApp {
 	app.Action = unrulyApp.startUnrulyNode
 	app.After = unrulyApp.cleanup
 
+	// must be done here so we won't lose any log entries
 	unrulyApp.setupLogging()
 
 	return unrulyApp
@@ -116,7 +117,12 @@ func (app *UnrulyApp) setupLogging() {
 	// todo: support configurable log file name (low priority)
 	log.InitUnrulyLoggingSystem(dataDir, "unruly.log")
 
-	log.Info("Unruly app starting...")
+	log.Info("\n\nUnruly app session starting... %s", app.getAppInfo())
+}
+
+func (app *UnrulyApp) getAppInfo () string {
+	return fmt.Sprintf("App version: %s. Git: %s - %s . Go Version: %s. OS: %s-%s ",
+		Version, Branch, Commit, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 }
 
 func (app *UnrulyApp) before(ctx *cli.Context) error {
@@ -145,7 +151,7 @@ func (app *UnrulyApp) before(ctx *cli.Context) error {
 // Unruly app cleanup tasks
 func (app *UnrulyApp) cleanup(ctx *cli.Context) error {
 
-	log.Info("Starting app cleanup...")
+	log.Info("App cleanup starting...")
 	if app.jsonApiService != nil {
 		app.jsonApiService.Stop()
 	}
@@ -155,7 +161,7 @@ func (app *UnrulyApp) cleanup(ctx *cli.Context) error {
 	}
 
 	// add any other cleanup tasks here....
-	log.Info("App cleanup completed")
+	log.Info("App cleanup completed\n\n")
 
 	return nil
 }

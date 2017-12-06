@@ -35,7 +35,7 @@ func InitUnrulyLoggingSystem(dataFolderPath string, logFileName string) {
 	}
 
 	fileLoggerBackend := logging.NewLogBackend(fileLogger, "", 0)
-	logFileFormat := logging.MustStringFormatter(`%{time:15:04:05.000} %{shortpkg}.%{shortfunc} ▶ %{level:.4s} %{id:03x} %{message}`)
+	logFileFormat := logging.MustStringFormatter(`%{time:15:04:05.000} %{level:.4s}-%{id:03x} %{shortpkg}.%{shortfunc} ▶ %{message}`)
 	fileBackendFormatter := logging.NewBackendFormatter(fileLoggerBackend, logFileFormat)
 
 	logging.SetBackend(backendFormatter, fileBackendFormatter)
