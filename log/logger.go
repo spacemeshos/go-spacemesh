@@ -1,9 +1,9 @@
 package log
 
 import (
+	"gopkg.in/natefinch/lumberjack.v2"
 	"gopkg.in/op/go-logging.v1"
 	"os"
-	"gopkg.in/natefinch/lumberjack.v2"
 	"path/filepath"
 )
 

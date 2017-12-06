@@ -7,8 +7,8 @@ import (
 
 type Account struct {
 	crypto.Identifier
-	privKey crypto.PrivateKeylike
-	pubKey crypto.PublicKeylike
+	privKey    crypto.PrivateKeylike
+	pubKey     crypto.PublicKeylike
 	Passphrase string
 }
 
