@@ -13,6 +13,22 @@ type UnrulyLogger struct {
 
 var ulogger *UnrulyLogger
 
+func init() {
+	// create a basic temp os.Stdout logger - useful for testing without an app
+	// this logger is replaced by the unruly logger on app startup
+	log := logging.MustGetLogger("app")
+
+	// we wrap all log calls so we need to add 1 to call depth
+	log.ExtraCalldepth = 1
+	logFormat := logging.MustStringFormatter(`%{color}%{time:15:04:05.000} %{shortpkg} %{shortfunc} ▶ %{level:.4s} %{id:03x}%{color:reset} %{message}`)
+	backend := logging.NewLogBackend(os.Stdout, "", 0)
+	backendFormatter := logging.NewBackendFormatter(backend, logFormat)
+	logging.SetBackend(backendFormatter)
+	ulogger = &UnrulyLogger{Logger: log}
+}
+
+
+
 func InitUnrulyLoggingSystem(dataFolderPath string, logFileName string) {
 
 	log := logging.MustGetLogger("app")

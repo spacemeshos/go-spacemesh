@@ -22,7 +22,7 @@ func AesCTREncrypt(key, clearText, nonce []byte) ([]byte, error) {
 	cipherText := make([]byte, len(clearText))
 	stream.XORKeyStream(cipherText, clearText)
 
-	return cipherText, err
+	return cipherText, nil
 }
 
 func AesCBCDecrypt(key, cipherText, iv []byte) ([]byte, error) {
@@ -35,13 +35,12 @@ func AesCBCDecrypt(key, cipherText, iv []byte) ([]byte, error) {
 	d := cipher.NewCBCDecrypter(aesBlock, iv)
 	paddedPlainText := make([]byte, len(cipherText))
 	d.CryptBlocks(paddedPlainText, cipherText)
-
 	plaintext := unpad(paddedPlainText)
 	if plaintext == nil {
 		return nil, aesDecryptionError
 	}
 
-	return plaintext, err
+	return plaintext, nil
 }
 
 // pkcs7 padding
