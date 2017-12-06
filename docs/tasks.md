@@ -11,18 +11,17 @@ Current makefile is using a global go path.
 - Write tests for app flags, commands and config file
 - Implement accounts and keystore files
 - Impl cli.v1 TOML support and write test with TOML file (a bit of a pain with cli via vendoring) - alt use YAML
-- Integrate https://github.com/natefinch/lumberjack with go-logging so we get proper rolling files logging - needed for long-running simulations.
 
 ### Misc. Tasks
 - Implement an optimized Merkle tree data structure with backing storage in leveldb (kv storage). Implement Merkle proofs.
 - Write tests to validate the plan to use libp2p-kad-dht for peer discovery (simulated network)
 - Tests for all implemented functionality - the more the better.
 
-### Hard Stuff
-- Integrate a V8 instance for javascript execution into the node. See: https://github.com/augustoroman/v8 
+### Hard Tasks
 - add support for uTp (reliable connection over udp) in lib-p2p - it only supports tcp right now - this is a hard task. We might contrib this to lib-p2p.
 - Implement gossip support for each protocol (gossip flag) and write tests for gossiping a p2p message (20 nodes, 1 bootstrap)
 - Local Javascript console for interactive RPC calls (wrapping the json-http api) - possible via V8 engine?
+- Integrate a V8 instance for javascript execution into the node. See: https://github.com/augustoroman/v8 
 
 ### App Shell Implemented Features
 
@@ -38,3 +37,5 @@ Stuff we have a basic 1st pass implementation for:
 - Restore node data from store on session start or create new id automatically
 - Auto persist node data to store
 - Load data about bootstrap nodes on node startup
+- Integrated rolling file logging https://github.com/natefinch/lumberjack with go-logging so we get proper rolling files logging - needed for long-running simulations.
+

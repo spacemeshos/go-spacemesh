@@ -21,7 +21,6 @@ func InitUnrulyLoggingSystem(dataFolderPath string, logFileName string) {
 	log.ExtraCalldepth = 1
 
 	logFormat := logging.MustStringFormatter(`%{color}%{time:15:04:05.000} %{shortpkg} %{shortfunc} ▶ %{level:.4s} %{id:03x}%{color:reset} %{message}`)
-
 	backend := logging.NewLogBackend(os.Stderr, "", 0)
 	backendFormatter := logging.NewBackendFormatter(backend, logFormat)
 
@@ -32,11 +31,12 @@ func InitUnrulyLoggingSystem(dataFolderPath string, logFileName string) {
 		MaxSize:    500, // megabytes
 		MaxBackups: 3,
 		MaxAge:     28, // days
-		Compress:   false, // disabled by default
+		Compress:   false,
 	}
 
 	fileLoggerBackend := logging.NewLogBackend(fileLogger, "", 0)
-	fileBackendFormatter := logging.NewBackendFormatter(fileLoggerBackend, logFormat)
+	logFileFormat := logging.MustStringFormatter(`%{time:15:04:05.000} %{shortpkg}.%{shortfunc} ▶ %{level:.4s} %{id:03x} %{message}`)
+	fileBackendFormatter := logging.NewBackendFormatter(fileLoggerBackend, logFileFormat)
 
 	logging.SetBackend(backendFormatter, fileBackendFormatter)
 

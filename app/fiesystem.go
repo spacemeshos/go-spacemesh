@@ -33,13 +33,8 @@ func (app *UnrulyApp) ensureUnrulyDataDirectories() string {
 	}
 
 	// ensure sub folders exist - create them on demand
-
-	accountsPath := app.GetAccountsDataDirectoryPath()
-	logsPath := app.GetLogsDataDirectoryPath()
-
-	log.Info("Data dir: %s", dataPath)
-	log.Info("Accounts data dir: %s", accountsPath)
-	log.Info("Logs data dir: %s", logsPath)
+	app.GetAccountsDataDirectoryPath()
+	app.GetLogsDataDirectoryPath()
 
 	return dataPath
 }

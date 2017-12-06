@@ -115,6 +115,8 @@ func (app *UnrulyApp) setupLogging() {
 
 	// todo: support configurable log file name (low priority)
 	log.InitUnrulyLoggingSystem(dataDir, "unruly.log")
+
+	log.Info("Unruly app starting...")
 }
 
 func (app *UnrulyApp) before(ctx *cli.Context) error {
