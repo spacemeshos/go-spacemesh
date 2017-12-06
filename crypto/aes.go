@@ -25,7 +25,8 @@ func AesCTREncrypt(key, clearText, nonce []byte) ([]byte, error) {
 	return cipherText, err
 }
 
-func AesDecrypt(key, cipherText, iv []byte) ([]byte, error) {
+func AesCBCDecrypt(key, cipherText, iv []byte) ([]byte, error) {
+
 	aesBlock, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, err
@@ -34,7 +35,8 @@ func AesDecrypt(key, cipherText, iv []byte) ([]byte, error) {
 	d := cipher.NewCBCDecrypter(aesBlock, iv)
 	paddedPlainText := make([]byte, len(cipherText))
 	d.CryptBlocks(paddedPlainText, cipherText)
-	plaintext := pkcs7unpad(paddedPlainText)
+
+	plaintext := unpad(paddedPlainText)
 	if plaintext == nil {
 		return nil, aesDecryptionError
 	}
@@ -42,7 +44,8 @@ func AesDecrypt(key, cipherText, iv []byte) ([]byte, error) {
 	return plaintext, err
 }
 
-func pkcs7pad(in []byte) []byte {
+// pkcs7 padding
+func pkcs7Pad(in []byte) []byte {
 	padding := 16 - (len(in) % 16)
 	for i := 0; i < padding; i++ {
 		in = append(in, byte(padding))
@@ -50,7 +53,8 @@ func pkcs7pad(in []byte) []byte {
 	return in
 }
 
-func pkcs7unpad(in []byte) []byte {
+// pkcs7 unpadding
+func unpad(in []byte) []byte {
 	if len(in) == 0 {
 		return nil
 	}
