@@ -3,6 +3,12 @@
 	"ignore": "test",
 	"package": [
 		{
+			"checksumSHA1": "PhyuD3dAyeZ/1dGlezZUNVFqYmI=",
+			"path": "github.com/elithrar/simple-scrypt",
+			"revision": "2325946f714c95de4a6088202c402fbdfa64163b",
+			"revisionTime": "2016-11-19T15:54:10Z"
+		},
+		{
 			"checksumSHA1": "6mvxrksR9Gjw77T63175N9Z9a0U=",
 			"path": "github.com/gogo/protobuf/jsonpb",
 			"revision": "2adc21fd136931e0388e278825291678e1d98309",
@@ -329,8 +335,8 @@
 		{
 			"checksumSHA1": "1MGpGDQqnUoRpv7VEcQrXOBydXE=",
 			"path": "golang.org/x/crypto/pbkdf2",
-			"revision": "faadfbdc035307d901e69eea569f5dda451a3ee3",
-			"revisionTime": "2017-09-12T19:17:24Z"
+			"revision": "94eea52f7b742c7cbe0b03b22f0c4c8631ece122",
+			"revisionTime": "2017-11-28T01:43:40Z"
 		},
 		{
 			"checksumSHA1": "y/oIaxq2d3WPizRZfVjo8RCRYTU=",
@@ -339,10 +345,16 @@
 			"revisionTime": "2017-09-12T19:17:24Z"
 		},
 		{
-			"checksumSHA1": "0NcipKj1ECwxiIrEHQ0wdoL54Sc=",
+			"checksumSHA1": "dHh6VeHcbNg11miGjGEl8LbPe7w=",
 			"path": "golang.org/x/crypto/scrypt",
-			"revision": "faadfbdc035307d901e69eea569f5dda451a3ee3",
-			"revisionTime": "2017-09-12T19:17:24Z"
+			"revision": "94eea52f7b742c7cbe0b03b22f0c4c8631ece122",
+			"revisionTime": "2017-11-28T01:43:40Z"
+		},
+		{
+			"checksumSHA1": "iNE2KX9BQzCptlQC2DdQEVmn4R4=",
+			"path": "golang.org/x/crypto/sha3",
+			"revision": "94eea52f7b742c7cbe0b03b22f0c4c8631ece122",
+			"revisionTime": "2017-11-28T01:43:40Z"
 		},
 		{
 			"checksumSHA1": "U8Hfwou4jfW3wHPoIuz8Oi4KxTc=",

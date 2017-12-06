@@ -15,6 +15,9 @@ For authenticating senders, we rely on `lib-p2p` transport authentication. For a
 - A key `string representation` is a `base58` encoding of the key `binary representation`.
 e.g `GZsJqUUbMHHEY8zMnJDkbuitZf3nvW91otcKvrA5jVoa31XcAH` (50 bytes)
 
+- Keys are `forward-compatible` in the sense that we'll be able to support feature key types if/when libp2p implements them.
+The key binary format is self-describing using protobufs.
+
 #### Ids
 
 - `Node id` uniquely identifies a p2p node. It is derived from the node's `public key`.

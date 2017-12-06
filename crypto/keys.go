@@ -9,16 +9,16 @@ import (
 
 // todo: is Keyer better?
 type Keylike interface {
-	String() (string, error)
-	Bytes() ([]byte, error)
-	Pretty() string
+	String() (string, error) // this is a base58 encoded of Bytes()
+	Bytes() ([]byte, error)  // get marshaled key data - this is currently using protobufs (type+date)
+	Pretty() string          // pretty print key id
 }
 
 // todo: is there a better name for this interface? PrivateKeyer?
 type PrivateKeylike interface {
 	Keylike
-	PrivatePeerKey() libp2pcrypto.PrivKey
-	GetPublicKey() (PublicKeylike, error)
+	PrivatePeerKey() libp2pcrypto.PrivKey // get the libp2p rep of this key
+	GetPublicKey() (PublicKeylike, error) // get the pub key corresponding to this priv key
 }
 
 // todo: find a better name for this interface
@@ -26,15 +26,22 @@ type PublicKeylike interface {
 	Keylike
 	IdFromPubKey() (Identifier, error)
 	Verify(data []byte, sig []byte) (bool, error)
-	PublicPeerKey() libp2pcrypto.PubKey
+	PublicPeerKey() libp2pcrypto.PubKey // get the libp2p pub key rep of this key
 }
 
+// node Bytes() is implemented by libp2p using protobufs witch includes the type of the key
+// as well as its data
+
 type Key struct {
-	libp2pcrypto.Key
+	libp2pcrypto.Key // our keys are backed by libp2p keys
 }
 
 func GenerateKeyPair() (PrivateKeylike, PublicKeylike, error) {
+
+	// we may change to a different algo in the future without breaking clients as
+	// keys are forward-compatible using a self-described format (protobufs based)
 	priv, pub, err := libp2pcrypto.GenerateKeyPair(libp2pcrypto.Secp256k1, 256)
+
 	return &PrivateKey{priv}, &PublicKey{pub}, err
 }
 

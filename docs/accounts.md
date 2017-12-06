@@ -32,6 +32,7 @@ For sake of saving development time we are considering to reuse most of eth key 
 ```
 
 Refs
+- https://www.tarsnap.com/scrypt/scrypt.pdf 
 - https://github.com/ethereum/go-ethereum/wiki/Passphrase-protected-key-store-spec
 - https://github.com/Gustav-Simonsson/go-ethereum/blob/improve_key_store_crypto/crypto/key_store_passphrase.go#L29
 

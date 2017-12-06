@@ -12,7 +12,7 @@
 	        - ...
 	    - ....
     - accounts/
-        - `[user1-id-base58].josn`
+        - `[user1-id-base58].json`
 	    - // key files go here and shared between all nodes
 	- logs/
 	    - Any non-node specific log files go here

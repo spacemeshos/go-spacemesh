@@ -6,8 +6,8 @@ import (
 
 // set by build too
 var (
-	commit =""
-	branch =""
+	commit  = ""
+	branch  = ""
 	version = "0.0.1"
 )
 

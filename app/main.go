@@ -120,7 +120,7 @@ func (app *UnrulyApp) setupLogging() {
 	log.Info("\n\nUnruly app session starting... %s", app.getAppInfo())
 }
 
-func (app *UnrulyApp) getAppInfo () string {
+func (app *UnrulyApp) getAppInfo() string {
 	return fmt.Sprintf("App version: %s. Git: %s - %s . Go Version: %s. OS: %s-%s ",
 		Version, Branch, Commit, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 }
