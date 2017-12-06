@@ -3,6 +3,7 @@ package app
 
 import (
 	"fmt"
+	"github.com/UnrulyOS/go-unruly/accounts"
 	api "github.com/UnrulyOS/go-unruly/api"
 	apiconf "github.com/UnrulyOS/go-unruly/api/config"
 	"github.com/UnrulyOS/go-unruly/filesystem"
@@ -93,7 +94,7 @@ func newUnrulyApp() *UnrulyApp {
 	app.Action = unrulyApp.startUnrulyNode
 	app.After = unrulyApp.cleanup
 
-	// must be done here so we won't lose any log entries
+	// must be done here and not in app.before() so we won't lose any log entries
 	unrulyApp.setupLogging()
 
 	return unrulyApp
@@ -144,6 +145,8 @@ func (app *UnrulyApp) before(ctx *cli.Context) error {
 
 	// ensure all data folders exist
 	app.ensureUnrulyDataDirectories()
+
+	accounts.LoadAllAccounts(app.GetAccountsDataDirectoryPath())
 
 	return nil
 }

@@ -17,27 +17,22 @@ type CryptoData struct {
 	Mac        string `json:"mac"`
 }
 
-type KDParams struct {
-	N       int    `json:"n"`
-	R       int    `json:"r"`
-	P       int    `json:"p"`
-	SaltLen int    `json:"saltLen"`
-	DKLen   int    `json:"dkLen"`
-	Salt    string `json:"salt"`
-}
 
 // Create a new account by id and stored data
 // Account will be locked after creation as there's no persisted passphrase
-func NewAccountFromDataFile(accountId string, dataFilePath string) (*Account, error) {
+// accountsDataPath: os-specific full path to accounts data folder
+func NewAccountFromStore(accountId string, accountsDataPath string) (*Account, error) {
 	return nil, nil
 }
 
 // Persist all account data to store
 // Passphrases are never persisted to store
-func (a *Account) Persist() error {
+// accountsDataPath: os-specific full path to accounts data folder
+// Returns full path of persisted file (useful for testing)
+func (a *Account) Persist(accountsDataPath string) (string, error) {
 	if a.IsAccountLocked() {
-		return errors.New("Can't persist a locked account")
+		return "", errors.New("Can't persist a locked account")
 	}
 
-	return nil
+	return "", nil
 }

@@ -3,16 +3,44 @@ package accounts
 import (
 	"crypto/aes"
 	"encoding/hex"
+	"errors"
 	"github.com/UnrulyOS/go-unruly/crypto"
 	"github.com/UnrulyOS/go-unruly/log"
 )
 
+type AccountsRegistry struct {
+	All map[string] *Account
+	Unlocked map[string] *Account
+	Coinbase *Account
+}
+
 type Account struct {
 	crypto.Identifier
-	privKey    crypto.PrivateKeylike
-	pubKey     crypto.PublicKeylike
+	PrivKey    crypto.PrivateKeylike
+	PubKey     crypto.PublicKeylike
 	cryptoData CryptoData
-	kdParams   KDParams
+	kdParams   crypto.KDParams
+}
+
+var (
+	Accounts *AccountsRegistry
+)
+
+func init() {
+	Accounts = &AccountsRegistry{
+		make(map[string]*Account),
+		make(map[string]*Account),
+		nil,
+	}
+}
+
+// Load all accounts from store
+func LoadAllAccounts(accountsDataPath string) error {
+
+	// todo: go over each folder in the accounts folder and create a locked account for each
+	// store loaded accounts in accounts.Accounts
+
+	return nil
 }
 
 // Create a new account using passphrase
@@ -28,14 +56,22 @@ func NewAccount(passphrase string) (*Account, error) {
 	// derive key from passphrase
 	id, err := pub.IdFromPubKey()
 	kdfParams := crypto.DefaultCypherParams
-	kdfData, err := crypto.DeriveKeyFromPassword(passphrase, kdfParams)
+
+	saltData, err := crypto.GetRandomBytes(kdfParams.SaltLen)
+	if err != nil {
+		return nil, errors.New("Failed to generate random salt")
+	}
+
+	kdfParams.Salt = hex.EncodeToString(saltData)
+
+	dk, err := crypto.DeriveKeyFromPassword(passphrase, kdfParams)
 	if err != nil {
 		log.Error("kdf failure: %v", err)
 		return nil, err
 	}
 
 	// extract 16 bytes aes-128-ctr key from the derived key
-	aesKey := kdfData.DK[:16]
+	aesKey := dk[:16]
 
 	// date to encrypt
 	privKeyBytes, err := priv.Bytes()
@@ -57,7 +93,7 @@ func NewAccount(passphrase string) (*Account, error) {
 	}
 
 	// use last 16 bytes from derived key and cipher text to create a mac
-	mac := crypto.Sha256(kdfData.DK[16:32], cipherText)
+	mac := crypto.Sha256(dk[16:32], cipherText)
 
 	// store aes cipher data
 	cryptoData := CryptoData{
@@ -68,13 +104,13 @@ func NewAccount(passphrase string) (*Account, error) {
 	}
 
 	// store kd data
-	kdParams := KDParams{
+	kdParams := crypto.KDParams{
 		kdfParams.N,
 		kdfParams.R,
 		kdfParams.P,
 		kdfParams.SaltLen,
 		kdfParams.DKLen,
-		hex.EncodeToString(kdfData.Salt),
+		kdfParams.Salt,
 	}
 
 	// save all date in newly created account obj
@@ -83,6 +119,9 @@ func NewAccount(passphrase string) (*Account, error) {
 		pub,
 		cryptoData,
 		kdParams}
+
+	Accounts.All[acct.String()] = acct
+	Accounts.Unlocked[acct.String()] = acct
 
 	return acct, nil
 }
