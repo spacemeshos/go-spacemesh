@@ -9,8 +9,8 @@ import (
 )
 
 type AccountsRegistry struct {
-	All map[string] *Account
-	Unlocked map[string] *Account
+	All      map[string]*Account
+	Unlocked map[string]*Account
 	Coinbase *Account
 }
 

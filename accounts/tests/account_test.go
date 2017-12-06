@@ -14,7 +14,7 @@ func BasicAccountTest(t *testing.T) {
 
 	account, err := accounts.NewAccount(passphrase)
 	if err != nil {
-		t.Fatalf("Failed to create an account",)
+		t.Fatalf("Failed to create an account")
 	}
 
 	assert.True(t, account.IsAccountUnlocked(), "expected account to be unlocked")
@@ -25,7 +25,7 @@ func BasicAccountTest(t *testing.T) {
 		t.Fatalf("Failed to persist account", err)
 	}
 
-	defer os.Remove (accountDataFile)
+	defer os.Remove(accountDataFile)
 
 	account1, err := accounts.NewAccountFromStore(account.String(), accountsDataFolder)
 	if err != nil {

@@ -1,13 +1,16 @@
 package accounts
 
-import "errors"
+import (
+	"errors"
+	"github.com/UnrulyOS/go-unruly/crypto"
+)
 
 // Persisted node data
 type AccountData struct {
-	Id         string     `json:"id"`
-	PublicKey  string     `json:"publicKey"`
-	CryptoData CryptoData `json:"crypto"`
-	KDParams   KDParams   `json:"kd"`
+	Id         string          `json:"id"`
+	PublicKey  string          `json:"publicKey"`
+	CryptoData CryptoData      `json:"crypto"`
+	KDParams   crypto.KDParams `json:"kd"`
 }
 
 type CryptoData struct {
@@ -16,7 +19,6 @@ type CryptoData struct {
 	CipherIv   string `json:"cipherIv"`
 	Mac        string `json:"mac"`
 }
-
 
 // Create a new account by id and stored data
 // Account will be locked after creation as there's no persisted passphrase

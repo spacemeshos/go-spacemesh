@@ -12,7 +12,7 @@ type KDParams struct {
 	P       int    `json:"p"`
 	SaltLen int    `json:"saltLen"`
 	DKLen   int    `json:"dkLen"`
-	Salt    string `json:"salt"`	// hex encoded
+	Salt    string `json:"salt"` // hex encoded
 }
 
 var DefaultCypherParams = KDParams{N: 262144, R: 8, P: 1, SaltLen: 16, DKLen: 32}
