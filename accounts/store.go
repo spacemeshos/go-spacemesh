@@ -112,7 +112,6 @@ func (a *Account) Persist(accountsDataPath string) (string, error) {
 	fileName := a.Identifier.String() + ".json"
 	dataFilePath := filepath.Join(accountsDataPath, fileName)
 	err = ioutil.WriteFile(dataFilePath, bytes, filesystem.OwnerReadWrite)
-
 	if err != nil {
 		log.Error("Failed to write account to file: %v", err)
 		return "", err

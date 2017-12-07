@@ -34,6 +34,7 @@ func init() {
 	}
 }
 
+// Log account info
 func (a *Account) ToLog() {
 
 	pubKey, _ := a.PubKey.String()
@@ -42,29 +43,30 @@ func (a *Account) ToLog() {
 
 	if a.PrivKey != nil {
 		privKey, _ := a.PrivKey.String()
-		log.Info("Private key: %s", privKey)
+		log.Info(" Private key: %s", privKey)
 	}
 
-	log.Info("Public key: %s", pubKey)
-	log.Info("IsUnlocked: %t ", a.IsAccountUnlocked())
-	log.Info("Crypto params: %+v", a.cryptoData)
-	log.Info("kdParams: %+v", a.kdParams)
+	log.Info(" Public key: %s", pubKey)
+	log.Info(" IsUnlocked: %t ", a.IsAccountUnlocked())
+	log.Info(" Crypto params: %+v", a.cryptoData)
+	log.Info(" kdParams: %+v", a.kdParams)
 }
 
 // Load all accounts from store
 func LoadAllAccounts(accountsDataPath string) error {
 
-	// todo: go over each file in the accounts folder and create a locked account for each
+	// todo: go over each .json file in the accounts folder and create a locked account for each
 	// store loaded accounts in accounts.Accounts
 
 	return nil
 }
 
-// Create a new account using passphrase
-// Clients should persist account in accounts store to save the data - without this store account
-// won't be accessible in future app sessions
+// Create a new account using provided passphrase
+// Clients should persist newly created accounts - without this the account only last for one app session
+
 func NewAccount(passphrase string) (*Account, error) {
 
+	// account crypto data
 	priv, pub, err := crypto.GenerateKeyPair()
 	if err != nil {
 		return nil, err
@@ -73,7 +75,6 @@ func NewAccount(passphrase string) (*Account, error) {
 	// derive key from passphrase
 
 	id, err := pub.IdFromPubKey()
-
 	kdfParams := crypto.DefaultCypherParams
 
 	// add new salt to params
@@ -89,12 +90,8 @@ func NewAccount(passphrase string) (*Account, error) {
 		return nil, err
 	}
 
-	log.Info("*** Derived key value (32 bytes) (insecure): %s", hex.EncodeToString(dk))
-
 	// extract 16 bytes aes-128-ctr key from the derived key
 	aesKey := dk[:16]
-
-	log.Info("*** AES ency-key (16 bytes): %s", hex.EncodeToString(aesKey))
 
 	// date to encrypt
 	privKeyBytes, err := priv.Bytes()
@@ -146,6 +143,8 @@ func NewAccount(passphrase string) (*Account, error) {
 		kdParams}
 
 	Accounts.All[acct.String()] = acct
+
+	// newly created account are unlocked in the current app session
 	Accounts.Unlocked[acct.String()] = acct
 
 	return acct, nil

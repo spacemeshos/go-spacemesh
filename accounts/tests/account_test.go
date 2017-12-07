@@ -77,9 +77,9 @@ func TestAccountOps(t *testing.T) {
 
 func TestPassphrase(t *testing.T) {
 
-	const passphrase = "a-weak-passphrase-123"
+	const passphrase = "a-weak-passphrase-1234"
 
-	const wrongPassphrase = "a-weak-passphrase-124"
+	const wrongPassphrase = "a-weak-passphrase-1245"
 
 	accountsDataFolder, err := filesystem.GetAccountsDataDirectoryPath()
 	if err != nil {

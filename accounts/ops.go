@@ -24,7 +24,7 @@ func (a *Account) IsAccountUnlocked() bool {
 
 func (a *Account) LockAccount(passphrase string) {
 	a.PrivKey = nil
-	delete(Accounts.All, a.String())
+	delete(Accounts.Unlocked, a.String())
 }
 
 // Unlock account using the provided passphrase and account data
