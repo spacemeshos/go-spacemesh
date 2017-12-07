@@ -2,9 +2,11 @@ package filesystem
 
 import (
 	"github.com/UnrulyOS/go-unruly/app/config"
+	"github.com/UnrulyOS/go-unruly/log"
 	"os"
 	"os/user"
 	"path"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -12,6 +14,92 @@ import (
 // Directory and paths helpers
 
 const OwnerReadWriteExec = 0700
+const OwnerReadWrite = 0600
+
+// Return true iff file exists and is accessible
+func PathExists(path string) bool {
+	_, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		return false
+	}
+	return err != nil
+}
+
+// Get the full os-specific path to the unruly top-level data directory
+func GetUnrulyDataDirectoryPath() (string, error) {
+	return GetFullDirectoryPath(config.ConfigValues.DataFilePath)
+}
+
+// Get the unruly temp files dir so we don't have to work with convoluted os specific temp folders
+func GetUnrulyTempDirectoryPath() (string, error) {
+
+	dataDir, err := GetFullDirectoryPath(config.ConfigValues.DataFilePath)
+	if err != nil {
+		log.Error("Failed to get data directory: %v", err)
+		return "", err
+	}
+
+	pathName := filepath.Join(dataDir, "temp")
+	return GetFullDirectoryPath(pathName)
+}
+
+// Return the os-specific path to the Unruly data folder
+// Creates it and all subdirs on demand
+func ensureUnrulyDataDirectories() (string, error) {
+	dataPath, err := GetUnrulyDataDirectoryPath()
+	if err != nil {
+		log.Error("Can't get or create unruly data folder")
+		return "", err
+	}
+
+	// ensure sub folders exist - create them on demand
+	_, err = GetAccountsDataDirectoryPath()
+	if err != nil {
+		return "", err
+	}
+
+	_, err = GetLogsDataDirectoryPath()
+	if err != nil {
+		return "", err
+	}
+
+	return dataPath, nil
+}
+
+// Ensure a sub-directory exists
+func ensureDataSubDirectory(dirName string) (string, error) {
+	dataPath, err := GetUnrulyDataDirectoryPath()
+	if err != nil {
+		log.Error("Failed to ensure data dir: %v", err)
+		return "", err
+	}
+
+	pathName := filepath.Join(dataPath, dirName)
+	aPath, err := GetFullDirectoryPath(pathName)
+	if err != nil {
+		log.Error("Can't access unruly folder: %v", pathName)
+		return "", err
+	}
+	return aPath, nil
+}
+
+func GetAccountsDataDirectoryPath() (string, error) {
+	aPath, err := ensureDataSubDirectory(config.AccountsDirectoryName)
+	if err != nil {
+		log.Error("Can't access unruly accounts folder. %v", err)
+		return "", err
+	}
+	return aPath, nil
+}
+
+func GetLogsDataDirectoryPath() (string, error) {
+	aPath, err := ensureDataSubDirectory(config.LogDirectoryName)
+	if err != nil {
+		log.Error("Can't access unruly logs folder. %v", err)
+		return "", err
+	}
+	return aPath, nil
+}
 
 // Returns the user home directory if one is set
 func GetUserHomeDirectory() string {
@@ -44,30 +132,24 @@ func GetCanonicalPath(p string) string {
 // The directory is created if it doesn't exist
 func GetFullDirectoryPath(name string) (string, error) {
 
-	path := GetCanonicalPath(name)
+	aPath := GetCanonicalPath(name)
 
 	// create dir if it doesn't exist
-	err := os.MkdirAll(path, OwnerReadWriteExec)
+	err := os.MkdirAll(aPath, OwnerReadWriteExec)
 
-	return path, err
-}
-
-// get full os-specific path to the unruly top-level data directory
-func GetUnrulyDataDirectoryPath() (string, error) {
-
-	return GetFullDirectoryPath(config.ConfigValues.DataFilePath)
+	return aPath, err
 }
 
 // Delete all subfolders and files in the unruly root data folder
 func DeleteUnrulyDataFolders(t *testing.T) {
 
-	path, err := GetUnrulyDataDirectoryPath()
+	aPath, err := GetUnrulyDataDirectoryPath()
 	if err != nil {
 		t.Fatalf("Failed to get unruly data dir: %v", err)
 	}
 
 	// remove
-	err = os.RemoveAll(path)
+	err = os.RemoveAll(aPath)
 	if err != nil {
 		t.Fatalf("Failed to delete unruly data dir: %v", err)
 	}

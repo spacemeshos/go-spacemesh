@@ -12,19 +12,20 @@ var (
 
 // AES cipher following https://leanpub.com/gocrypto/read#leanpub-auto-aes-cbc
 
-func AesCTREncrypt(key, clearText, nonce []byte) ([]byte, error) {
+func AesCTRXOR(key, input, nonce []byte) ([]byte, error) {
 	aesBlock, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, err
 	}
 
 	stream := cipher.NewCTR(aesBlock, nonce)
-	cipherText := make([]byte, len(clearText))
-	stream.XORKeyStream(cipherText, clearText)
-
-	return cipherText, nil
+	output := make([]byte, len(input))
+	stream.XORKeyStream(output, input)
+	return output, nil
 }
 
+
+// note: untested
 func AesCBCDecrypt(key, cipherText, iv []byte) ([]byte, error) {
 
 	aesBlock, err := aes.NewCipher(key)

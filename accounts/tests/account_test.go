@@ -3,14 +3,20 @@ package tests
 import (
 	"github.com/UnrulyOS/go-unruly/accounts"
 	"github.com/UnrulyOS/go-unruly/assert"
-	"os"
+	"github.com/UnrulyOS/go-unruly/filesystem"
+	"github.com/UnrulyOS/go-unruly/log"
 	"testing"
 )
 
-func BasicAccountTest(t *testing.T) {
+func TestAccountCreation(t *testing.T) {
 
 	const passphrase = "a-weak-passphrase123"
-	accountsDataFolder := os.TempDir()
+
+	accountsDataFolder, err := filesystem.GetAccountsDataDirectoryPath()
+
+	if err != nil {
+		t.Fatalf("Failed to get temp dir: %v", err)
+	}
 
 	account, err := accounts.NewAccount(passphrase)
 	if err != nil {
@@ -20,17 +26,23 @@ func BasicAccountTest(t *testing.T) {
 	assert.True(t, account.IsAccountUnlocked(), "expected account to be unlocked")
 
 	// get os temp dir here
-	accountDataFile, err := account.Persist(accountsDataFolder)
+	accountDataFilePath, err := account.Persist(accountsDataFolder)
 	if err != nil {
 		t.Fatalf("Failed to persist account", err)
 	}
 
-	defer os.Remove(accountDataFile)
+	log.Info("Persisted account to: %s", accountDataFilePath)
+	//defer os.Remove(accountDataFile)
 
+	account.ToLog()
+
+	// read the account back from store
 	account1, err := accounts.NewAccountFromStore(account.String(), accountsDataFolder)
 	if err != nil {
 		t.Fatalf("Failed to load account", err)
 	}
+
+	account1.ToLog()
 
 	assert.Equal(t, account.String(), account1.String(), "Expected same id")
 	assert.True(t, account1.IsAccountLocked(), "Expected locked")

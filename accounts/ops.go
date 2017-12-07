@@ -2,6 +2,7 @@ package accounts
 
 import (
 	"crypto/subtle"
+	//"crypto/subtle"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -33,40 +34,57 @@ func (a *Account) UnlockAccount(passphrase string) error {
 		return nil
 	}
 
+	// get derived key from params and passphrase
 	dk, err := crypto.DeriveKeyFromPassword(passphrase, a.kdParams)
 	if err != nil {
 		log.Error("kdf failure: %v", err)
 		return err
 	}
 
+	log.Info("Derived dk key: %s", hex.EncodeToString(dk))
+
 	// extract 16 bytes aes-128-ctr key from the derived key
 	aesKey := dk[:16]
 
+	log.Info("aes key: %s", hex.EncodeToString(aesKey))
+
 	cipherText, err := hex.DecodeString(a.cryptoData.CipherText)
+
+	log.Info("cipherText: %s", a.cryptoData.CipherText)
+
 	nonce, err := hex.DecodeString(a.cryptoData.CipherIv)
 
+	log.Info("nonce: %s", a.cryptoData.CipherIv)
+
 	// authenticate
+
 	expectedMac := crypto.Sha256(dk[16:32], cipherText)
 
-	mac, err := hex.DecodeString(a.cryptoData.CipherText)
+	mac, err := hex.DecodeString(a.cryptoData.Mac)
 	if err != nil {
 		return err
 	}
 
 	if subtle.ConstantTimeCompare(mac, expectedMac) != 1 {
+		log.Info("Mac: %s, ExpectedMac: %s", hex.EncodeToString(mac),
+			hex.EncodeToString(expectedMac))
 		return errors.New("mac auth error")
 	}
 
 	// aes encrypt data
-	clearText, err := crypto.AesCBCDecrypt(aesKey, cipherText, nonce)
+	privKeyData, err := crypto.AesCTRXOR(aesKey, cipherText, nonce)
+
 	if err != nil {
 		return err
 	}
 
-	privateKey, err := crypto.NewPrivateKey(clearText)
+	privateKey, err := crypto.NewPrivateKey(privKeyData)
 	if err != nil {
 		return err
 	}
+
+	privKeyStr, err := privateKey.String()
+	log.Info("Reconstructed private key: %s", privKeyStr)
 
 	publicKey, err := privateKey.GetPublicKey()
 	if err != nil {
@@ -89,6 +107,8 @@ func (a *Account) UnlockAccount(passphrase string) error {
 
 	// store decrypted key and update accounts
 	a.PrivKey = privateKey
+
+	Accounts.All[a.String()] = a
 	Accounts.Unlocked[a.String()] = a
 
 	return nil

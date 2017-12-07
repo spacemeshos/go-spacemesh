@@ -34,10 +34,27 @@ func init() {
 	}
 }
 
+func (a *Account) ToLog() {
+
+	pubKey, _ := a.PubKey.String()
+
+	log.Info("Account id: %s", a.Identifier.String())
+
+	if a.PrivKey != nil {
+		privKey, _ := a.PrivKey.String()
+		log.Info("Private key: %s", privKey)
+	}
+
+	log.Info("Public key: %s", pubKey)
+	log.Info("IsUnlocked: %t ", a.IsAccountUnlocked())
+	log.Info("Crypto params: %+v", a.cryptoData)
+	log.Info("kdParams: %+v", a.kdParams)
+}
+
 // Load all accounts from store
 func LoadAllAccounts(accountsDataPath string) error {
 
-	// todo: go over each folder in the accounts folder and create a locked account for each
+	// todo: go over each file in the accounts folder and create a locked account for each
 	// store loaded accounts in accounts.Accounts
 
 	return nil
@@ -54,14 +71,16 @@ func NewAccount(passphrase string) (*Account, error) {
 	}
 
 	// derive key from passphrase
+
 	id, err := pub.IdFromPubKey()
+
 	kdfParams := crypto.DefaultCypherParams
 
+	// add new salt to params
 	saltData, err := crypto.GetRandomBytes(kdfParams.SaltLen)
 	if err != nil {
 		return nil, errors.New("Failed to generate random salt")
 	}
-
 	kdfParams.Salt = hex.EncodeToString(saltData)
 
 	dk, err := crypto.DeriveKeyFromPassword(passphrase, kdfParams)
@@ -70,8 +89,13 @@ func NewAccount(passphrase string) (*Account, error) {
 		return nil, err
 	}
 
+	log.Info("*** Derived key value (32 bytes) (insecure): %s", hex.EncodeToString(dk))
+
+
 	// extract 16 bytes aes-128-ctr key from the derived key
 	aesKey := dk[:16]
+
+	log.Info("*** AES ency-key (16 bytes): %s", hex.EncodeToString(aesKey))
 
 	// date to encrypt
 	privKeyBytes, err := priv.Bytes()
@@ -87,8 +111,10 @@ func NewAccount(passphrase string) (*Account, error) {
 	}
 
 	// aes encrypt data
-	cipherText, err := crypto.AesCTREncrypt(aesKey, privKeyBytes, nonce)
+	cipherText, err := crypto.AesCTRXOR(aesKey, privKeyBytes, nonce)
+
 	if err != nil {
+		log.Error("Failed to encrypt private key: %v", err)
 		return nil, err
 	}
 

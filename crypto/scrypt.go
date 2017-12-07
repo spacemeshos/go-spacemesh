@@ -2,7 +2,6 @@ package crypto
 
 import (
 	"encoding/hex"
-	"errors"
 	"golang.org/x/crypto/scrypt"
 )
 
@@ -22,7 +21,7 @@ func DeriveKeyFromPassword(password string, p KDParams) ([]byte, error) {
 
 	salt, err := hex.DecodeString(p.Salt)
 	if err != nil {
-		return nil, errors.New("Invalid provided salt")
+		return nil, err
 	}
 
 	dkData, err := scrypt.Key([]byte(password), salt, p.N, p.R, p.P, p.DKLen)

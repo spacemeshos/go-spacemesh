@@ -2,6 +2,7 @@ package crypto
 
 import (
 	"fmt"
+	"github.com/UnrulyOS/go-unruly/log"
 	b58 "gx/ipfs/QmT8rehPR3F6bmwL6zjUN8XpiDBFFpMP2myPdC6ApsWfJf/go-base58"
 	peer "gx/ipfs/QmXYjuNuxVzXKJCfWasQk1RqkhVLDM9jtUKhqc2WPQmFSB/go-libp2p-peer"
 	libp2pcrypto "gx/ipfs/QmaPbCnUMBohSGo3KnxEa2bHqyJVVeEEcwtqJAYxerieBo/go-libp2p-crypto"
@@ -27,6 +28,7 @@ type PublicKeylike interface {
 	IdFromPubKey() (Identifier, error)
 	Verify(data []byte, sig []byte) (bool, error)
 	PublicPeerKey() libp2pcrypto.PubKey // get the libp2p pub key rep of this key
+	VerifyId(identifier Identifier) bool
 }
 
 // node Bytes() is implemented by libp2p using protobufs witch includes the type of the key
@@ -85,6 +87,19 @@ func (p PublicKey) Pretty() string {
 	}
 
 	return fmt.Sprintf("<PubKey %s>", pstr[:maxRunes])
+}
+
+func (p PublicKey) VerifyId(identifier Identifier) bool {
+
+	id, err := p.IdFromPubKey()
+	if err != nil {
+		log.Error("Failed to extract id from public key: %v", err)
+		return false
+	}
+
+	//log.Info("%s %s", id.String(), identifier.String())
+
+	return id.String() == identifier.String()
 }
 
 // create an Id which is derived from a public key

@@ -12,8 +12,6 @@ import (
 
 // Node store - node data persistence functionality
 
-const OwnerReadWrite = 0600
-
 // Get the os-specific full path to the nodes master data directory
 // Attempts to create the directory on-demand
 func ensureNodeDataDirectory() string {
@@ -74,7 +72,7 @@ func (n *Node) persistData() error {
 
 	n.ensureNodeDataDirectory()
 	path := getDataFilePath(n.identity.String())
-	return ioutil.WriteFile(path, bytes, OwnerReadWrite)
+	return ioutil.WriteFile(path, bytes, filesystem.OwnerReadWrite)
 }
 
 // Read node persisted data based on node id

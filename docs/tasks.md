@@ -6,6 +6,8 @@
 Current makefile is using a global go path.
 - Script to install all required dev tools: e.g. proto-c (with grpc-gateway support). govendor, etc....
 - Integrate travis CI with the repo and setup full CI system (hold until repo is public for Travis integration)
+- Remove all unused vendored deps
+- Cleanup messy p2p-lib refs (some GXed, some not....)
 
 ### App Shell Tasks
 - Write tests for app flags, commands and config file
@@ -38,4 +40,4 @@ Stuff we have a basic 1st pass implementation for:
 - Auto persist node data to store
 - Load data about bootstrap nodes on node startup
 - Integrated rolling file logging https://github.com/natefinch/lumberjack with go-logging so we get proper rolling files logging - needed for long-running simulations.
-
+- Accounts support with persistence and passpharse kdf
