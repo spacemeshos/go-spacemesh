@@ -91,7 +91,6 @@ func NewAccount(passphrase string) (*Account, error) {
 
 	log.Info("*** Derived key value (32 bytes) (insecure): %s", hex.EncodeToString(dk))
 
-
 	// extract 16 bytes aes-128-ctr key from the derived key
 	aesKey := dk[:16]
 

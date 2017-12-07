@@ -108,7 +108,6 @@ func (a *Account) UnlockAccount(passphrase string) error {
 	// store decrypted key and update accounts
 	a.PrivKey = privateKey
 
-	Accounts.All[a.String()] = a
 	Accounts.Unlocked[a.String()] = a
 
 	return nil

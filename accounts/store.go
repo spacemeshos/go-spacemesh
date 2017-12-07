@@ -30,7 +30,7 @@ type CryptoData struct {
 // accountsDataPath: os-specific full path to accounts data folder
 func NewAccountFromStore(accountId string, accountsDataPath string) (*Account, error) {
 
-	log.Info("Loading persistent node data for account id: %s", accountId)
+	log.Info("Loading account from store. Id: %s ...", accountId)
 
 	fileName := accountId + ".json"
 	dataFilePath := filepath.Join(accountsDataPath, fileName)
@@ -54,8 +54,6 @@ func NewAccountFromStore(accountId string, accountsDataPath string) (*Account, e
 		return nil, err
 	}
 
-	log.Info("Loaded id: %s", Id.String())
-
 	if Id.String() != accountId {
 		log.Error("Account ids mismatch")
 		return nil, errors.New("Account ids mismtach")
@@ -66,8 +64,6 @@ func NewAccountFromStore(accountId string, accountsDataPath string) (*Account, e
 		log.Error("Invalid account public key: %v", err)
 		return nil, err
 	}
-
-	log.Info("Account public key data from file: %s", accountData.PublicKey)
 
 	if !pubKey.VerifyId(Id) {
 		err := errors.New("Public key and id mismtach")
@@ -80,6 +76,8 @@ func NewAccountFromStore(accountId string, accountsDataPath string) (*Account, e
 		pubKey,
 		accountData.CryptoData,
 		accountData.KDParams}
+
+	log.Info("Loaded account from store: %s", Id.String())
 
 	Accounts.All[acct.String()] = acct
 
@@ -119,6 +117,8 @@ func (a *Account) Persist(accountsDataPath string) (string, error) {
 		log.Error("Failed to write account to file: %v", err)
 		return "", err
 	}
+
+	log.Info("Persisted account to store. Id: %s", a.Identifier.String())
 
 	return dataFilePath, nil
 }

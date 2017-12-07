@@ -45,7 +45,7 @@ func GetUnrulyTempDirectoryPath() (string, error) {
 
 // Return the os-specific path to the Unruly data folder
 // Creates it and all subdirs on demand
-func ensureUnrulyDataDirectories() (string, error) {
+func EnsureUnrulyDataDirectories() (string, error) {
 	dataPath, err := GetUnrulyDataDirectoryPath()
 	if err != nil {
 		log.Error("Can't get or create unruly data folder")

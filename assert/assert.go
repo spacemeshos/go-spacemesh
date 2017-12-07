@@ -1,15 +1,16 @@
 package assert
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 )
 
 // basic assertion support
 
-func Nil(t *testing.T, err error, msgs ...string) {
-	if err != nil {
-		t.Fatal(msgs, "error:", err)
+func Nil(t *testing.T, obj interface{}, msgs ...string) {
+	if obj != nil {
+		t.Fatal(msgs, "error:", errors.New("Expected object to be nil"))
 	}
 }
 

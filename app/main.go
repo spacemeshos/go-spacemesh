@@ -144,10 +144,15 @@ func (app *UnrulyApp) before(ctx *cli.Context) error {
 	// todo: add misc app setup here (metrics, debug, etc....)
 
 	// ensure all data folders exist
-	app.ensureUnrulyDataDirectories()
+	filesystem.EnsureUnrulyDataDirectories()
 
-	accounts.LoadAllAccounts(app.GetAccountsDataDirectoryPath())
+	accountsDir, err := filesystem.GetAccountsDataDirectoryPath()
+	if err != nil {
+		log.Error("Failed to get accounts dir: %v", err)
+		return err
+	}
 
+	accounts.LoadAllAccounts(accountsDir)
 	return nil
 }
 

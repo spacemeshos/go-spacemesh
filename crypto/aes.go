@@ -24,7 +24,6 @@ func AesCTRXOR(key, input, nonce []byte) ([]byte, error) {
 	return output, nil
 }
 
-
 // note: untested
 func AesCBCDecrypt(key, cipherText, iv []byte) ([]byte, error) {
 
