@@ -5,6 +5,7 @@ import (
 	"github.com/UnrulyOS/go-unruly/assert"
 	"github.com/UnrulyOS/go-unruly/filesystem"
 	"github.com/UnrulyOS/go-unruly/log"
+	//"os"
 	"testing"
 )
 
@@ -27,6 +28,8 @@ func TestAccountCreation(t *testing.T) {
 
 	// get os temp dir here
 	accountDataFilePath, err := account.Persist(accountsDataFolder)
+	//defer os.Remove(accountDataFilePath)
+
 	if err != nil {
 		t.Fatalf("Failed to persist account", err)
 	}
