@@ -1,0 +1,30 @@
+{
+  "author": "whyrusleeping",
+  "bugs": {
+    "url": "https://github.com/libp2p/go-maddr-filter"
+  },
+  "gx": {
+    "dvcsimport": "github.com/libp2p/go-maddr-filter"
+  },
+  "gxDependencies": [
+    {
+      "author": "jbenet",
+      "hash": "QmSGL5Uoa6gKHgBBwQG8u1CWKUC8ZnwaZiLgFVTFBR2bxr",
+      "name": "go-multiaddr-net",
+      "version": "1.5.6"
+    },
+    {
+      "author": "multiformats",
+      "hash": "QmW8s4zTsUoX1Q6CeYxVKPyqSKbF7H1YDUyTostBtZ8DaG",
+      "name": "go-multiaddr",
+      "version": "1.2.5"
+    }
+  ],
+  "gxVersion": "0.9.1",
+  "language": "go",
+  "license": "",
+  "name": "go-maddr-filter",
+  "releaseCmd": "git commit -a -m \"gx publish $VERSION\"",
+  "version": "1.1.5"
+}
+

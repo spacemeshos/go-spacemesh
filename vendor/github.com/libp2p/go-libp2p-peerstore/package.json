@@ -1,0 +1,66 @@
+{
+  "author": "whyrusleeping",
+  "bugs": {
+    "url": "https://github.com/libp2p/go-libp2p-peerstore"
+  },
+  "gx": {
+    "dvcsimport": "github.com/libp2p/go-libp2p-peerstore"
+  },
+  "gxDependencies": [
+    {
+      "author": "whyrusleeping",
+      "hash": "QmSpJByNKFX1sCsHBEp3R73FL4NF6FnQTEGyNAXHm2GS52",
+      "name": "go-log",
+      "version": "1.2.0"
+    },
+    {
+      "author": "whyrusleeping",
+      "hash": "QmW8s4zTsUoX1Q6CeYxVKPyqSKbF7H1YDUyTostBtZ8DaG",
+      "name": "go-multiaddr",
+      "version": "1.2.5"
+    },
+    {
+      "author": "whyrusleeping",
+      "hash": "QmUusaX99BZoELh7dmPgirqRQ1FAmMnmnBn3oiqDFGBUSc",
+      "name": "go-keyspace",
+      "version": "1.0.0"
+    },
+    {
+      "author": "whyrusleeping",
+      "hash": "QmaPbCnUMBohSGo3KnxEa2bHqyJVVeEEcwtqJAYxerieBo",
+      "name": "go-libp2p-crypto",
+      "version": "1.5.0"
+    },
+    {
+      "author": "jbenet",
+      "hash": "QmSGL5Uoa6gKHgBBwQG8u1CWKUC8ZnwaZiLgFVTFBR2bxr",
+      "name": "go-multiaddr-net",
+      "version": "1.5.6"
+    },
+    {
+      "author": "whyrusleeping",
+      "hash": "QmUfnfCzL17Lfft4NtZZGGU34PP72xgecFVfusYt6WNwYx",
+      "name": "mafmt",
+      "version": "1.2.4"
+    },
+    {
+      "author": "whyrusleeping",
+      "hash": "QmWNY7dV54ZDYmTA1ykVdwNCqC11mpU4zSUp6XDpLTH9eG",
+      "name": "go-libp2p-peer",
+      "version": "2.2.1"
+    },
+    {
+      "author": "multiformats",
+      "hash": "QmYeKnKpubCMRiq3PGZcTREErthbb5Q9cXsCoSkD9bjEBd",
+      "name": "go-multihash",
+      "version": "1.0.6"
+    }
+  ],
+  "gxVersion": "0.4.0",
+  "language": "go",
+  "license": "MIT",
+  "name": "go-libp2p-peerstore",
+  "releaseCmd": "git commit -a -m \"gx publish $VERSION\"",
+  "version": "1.4.10"
+}
+
