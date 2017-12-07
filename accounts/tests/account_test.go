@@ -6,10 +6,12 @@ import (
 	"github.com/UnrulyOS/go-unruly/filesystem"
 	"github.com/UnrulyOS/go-unruly/log"
 	"os"
-
-	//"os"
 	"testing"
 )
+
+func TestAccountLoading(t *testing.T) {
+	accounts.LoadAllAccounts()
+}
 
 func TestAccountOps(t *testing.T) {
 

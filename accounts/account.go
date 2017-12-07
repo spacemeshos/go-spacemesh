@@ -11,7 +11,6 @@ import (
 type AccountsRegistry struct {
 	All      map[string]*Account
 	Unlocked map[string]*Account
-	Coinbase *Account
 }
 
 type Account struct {
@@ -30,40 +29,11 @@ func init() {
 	Accounts = &AccountsRegistry{
 		make(map[string]*Account),
 		make(map[string]*Account),
-		nil,
 	}
-}
-
-// Log account info
-func (a *Account) ToLog() {
-
-	pubKey, _ := a.PubKey.String()
-
-	log.Info("Account id: %s", a.Identifier.String())
-
-	if a.PrivKey != nil {
-		privKey, _ := a.PrivKey.String()
-		log.Info(" Private key: %s", privKey)
-	}
-
-	log.Info(" Public key: %s", pubKey)
-	log.Info(" IsUnlocked: %t ", a.IsAccountUnlocked())
-	log.Info(" Crypto params: %+v", a.cryptoData)
-	log.Info(" kdParams: %+v", a.kdParams)
-}
-
-// Load all accounts from store
-func LoadAllAccounts(accountsDataPath string) error {
-
-	// todo: go over each .json file in the accounts folder and create a locked account for each
-	// store loaded accounts in accounts.Accounts
-
-	return nil
 }
 
 // Create a new account using provided passphrase
 // Clients should persist newly created accounts - without this the account only last for one app session
-
 func NewAccount(passphrase string) (*Account, error) {
 
 	// account crypto data

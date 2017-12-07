@@ -146,13 +146,11 @@ func (app *UnrulyApp) before(ctx *cli.Context) error {
 	// ensure all data folders exist
 	filesystem.EnsureUnrulyDataDirectories()
 
-	accountsDir, err := filesystem.GetAccountsDataDirectoryPath()
-	if err != nil {
-		log.Error("Failed to get accounts dir: %v", err)
-		return err
-	}
+	// load all accounts from store
+	accounts.LoadAllAccounts()
 
-	accounts.LoadAllAccounts(accountsDir)
+	// todo: set coinbase account (and unlock it) based on flags
+
 	return nil
 }
 
@@ -178,8 +176,19 @@ func (app *UnrulyApp) startUnrulyNode(ctx *cli.Context) error {
 
 	log.Info("Starting local node...")
 	port := *nodeparams.LocalTcpPortFlag.Destination
+
 	app.Node = node.NewNode(port, ExitApp)
 	conf := &apiconf.ConfigValues
+
+	// todo: if there's no loaded account - do the new account interactive flow here
+
+	// todo: if node has no loaded coin-base account then set the node coinbase to first account
+
+	// todo: if node has a locked coinbase account then prompt for account passphrase to unlock it
+
+	// todo: if node has no POS then start POS creation flow here unless user doesn't want to be a validator via cli
+
+	// todo: start node consensus protocol here only after we have a locked
 
 	// start api servers
 	if conf.StartGrpcServer || conf.StartJsonServer {

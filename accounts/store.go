@@ -8,6 +8,7 @@ import (
 	"github.com/UnrulyOS/go-unruly/log"
 	"io/ioutil"
 	"path/filepath"
+	"strings"
 )
 
 // Persisted node data
@@ -23,6 +24,33 @@ type CryptoData struct {
 	CipherText string `json:"cipherText"` // encrypted private key
 	CipherIv   string `json:"cipherIv"`
 	Mac        string `json:"mac"`
+}
+
+// Load all accounts from store
+
+func LoadAllAccounts() error {
+
+	accountsDataFolder, err := filesystem.GetAccountsDataDirectoryPath()
+	if err != nil {
+		return err
+	}
+
+	files, err := ioutil.ReadDir(accountsDataFolder)
+	if err != nil {
+		log.Error("Failed to read account directory files. %v", err)
+		return nil
+	}
+
+	for _, f := range files {
+		fileName := f.Name()
+		if !f.IsDir() && strings.HasSuffix(fileName, ".json") {
+			accountId := fileName[:strings.LastIndex(fileName, ".")]
+			NewAccountFromStore(accountId, accountsDataFolder)
+		}
+	}
+
+	return nil
+
 }
 
 // Create a new account by id and stored data

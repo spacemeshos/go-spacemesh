@@ -18,7 +18,10 @@ Current makefile is using a global go path.
 - Implement an optimized Merkle tree data structure with backing storage in leveldb (kv storage). Implement Merkle proofs.
 - Write tests to validate the plan to use libp2p-kad-dht for peer discovery (simulated network)
 - Tests for all implemented functionality - the more the better.
-
+- Fully support coinbase account:
+    - when new account is created - if it is only account - set it as coinbase on the running node
+    - restore node coinbase account when loading a node from storage
+    
 ### Hard Tasks
 - add support for uTp (reliable connection over udp) in lib-p2p - it only supports tcp right now - this is a hard task. We might contrib this to lib-p2p.
 - Implement gossip support for each protocol (gossip flag) and write tests for gossiping a p2p message (20 nodes, 1 bootstrap)
@@ -40,4 +43,4 @@ Stuff we have a basic 1st pass implementation for:
 - Auto persist node data to store
 - Load data about bootstrap nodes on node startup
 - Integrated rolling file logging https://github.com/natefinch/lumberjack with go-logging so we get proper rolling files logging - needed for long-running simulations.
-- Accounts support with persistence and passpharse kdf
+- Accounts support with locking/unlocking, persistence and passpharse kdf

@@ -3,6 +3,7 @@ package node
 import (
 	"context"
 	"fmt"
+	"github.com/UnrulyOS/go-unruly/accounts"
 	"github.com/UnrulyOS/go-unruly/crypto"
 	"github.com/UnrulyOS/go-unruly/log"
 	"github.com/UnrulyOS/go-unruly/node/config"
@@ -26,32 +27,25 @@ type Node struct {
 	publicKey  crypto.PublicKeylike
 	privateKey crypto.PrivateKeylike
 	identity   crypto.Identifier
+
+	coinbase *accounts.Account // coinbase account
 }
 
 // Persisted node data
 type NodeData struct {
-	Id      string `json:"id"`
-	PubKey  string `json:"pubKey"`
-	PrivKey string `json:"priKey"`
+	Id         string `json:"id"`
+	PubKey     string `json:"pubKey"`
+	PrivKey    string `json:"priKey"`
+	CoinBaseId string `json:"coinbase"` // coinbase account id
 }
 
-// Create a new local node with its implemented protocols and persist its data to store
-func newNode(host host.Host, done chan bool, pubKey crypto.PublicKeylike, privKey crypto.PrivateKeylike, id crypto.Identifier) *Node {
+// Create a new node with new crypto keys and id
+func NewNodeIdentity(port uint, done chan bool) *Node {
 
-	n := &Node{Host: host, publicKey: pubKey, privateKey: privKey, identity: id}
-	n.PingProtocol = NewPingProtocol(n, done)
-	n.EchoProtocol = NewEchoProtocol(n, done)
-
-	// persist node data to store and panic otherwise
-	// there's little use of running a node without being able to restore it in future app sessions
-	err := n.persistData()
-
-	if err != nil {
-		log.Error("!DRAGONS! Failed to persist node data for node id: %s. %v", n.identity.String(), err)
-		panic(err)
-	}
-
-	return n
+	priv, pub, _ := crypto.GenerateKeyPair()
+	id, _ := pub.IdFromPubKey()
+	log.Info("Creating new node with id: %s", id.String())
+	return initNode(port, done, priv, pub, id)
 }
 
 // Create a new node
@@ -76,6 +70,25 @@ func NewNode(port uint, done chan bool) *Node {
 
 	// We have no persistent node data - generate a new node
 	return NewNodeIdentity(port, done)
+}
+
+// Create a new local node with its implemented protocols and persist its data to store
+func newNode(host host.Host, done chan bool, pubKey crypto.PublicKeylike, privKey crypto.PrivateKeylike, id crypto.Identifier) *Node {
+
+	n := &Node{Host: host, publicKey: pubKey, privateKey: privKey, identity: id}
+	n.PingProtocol = NewPingProtocol(n, done)
+	n.EchoProtocol = NewEchoProtocol(n, done)
+
+	// persist node data to store and panic otherwise
+	// there's little use of running a node without being able to restore it in future app sessions
+	err := n.persistData()
+
+	if err != nil {
+		log.Error("!DRAGONS! Failed to persist node data for node id: %s. %v", n.identity.String(), err)
+		panic(err)
+	}
+
+	return n
 }
 
 // Create a new node from node data
@@ -104,15 +117,6 @@ func newNodeFromData(port uint, done chan bool, nodeData *NodeData) *Node {
 	return initNode(port, done, priv, pub, id)
 }
 
-// Create a new node with new crypto keys and id
-func NewNodeIdentity(port uint, done chan bool) *Node {
-
-	priv, pub, _ := crypto.GenerateKeyPair()
-	id, _ := pub.IdFromPubKey()
-	log.Info("Creating new node with id: %s", id.String())
-	return initNode(port, done, priv, pub, id)
-}
-
 // Create a new local node
 func initNode(port uint, done chan bool, priv crypto.PrivateKeylike, pub crypto.PublicKeylike, id crypto.Identifier) *Node {
 
@@ -129,6 +133,7 @@ func initNode(port uint, done chan bool, priv crypto.PrivateKeylike, pub crypto.
 	node := newNode(aHost, done, pub, priv, id)
 
 	// node startup tasks....
+
 	node.loadBootstrapNodes()
 
 	return node
