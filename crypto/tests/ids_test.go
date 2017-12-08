@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func testIds(t *testing.T) {
+func TestIds(t *testing.T) {
 
 	_, pub, _ := crypto.GenerateKeyPair()
 	id, _ := pub.IdFromPubKey()

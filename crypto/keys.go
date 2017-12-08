@@ -42,7 +42,7 @@ func GenerateKeyPair() (PrivateKeylike, PublicKeylike, error) {
 
 	// we may change to a different algo in the future without breaking clients as
 	// keys are forward-compatible using a self-described format (protobufs based)
-	priv, pub, err := libp2pcrypto.GenerateKeyPair(libp2pcrypto.Secp256k1, 256)
+	priv, pub, err := libp2pcrypto.GenerateKeyPair(libp2pcrypto.Ed25519, 256)
 
 	return &PrivateKey{priv}, &PublicKey{pub}, err
 }
@@ -104,8 +104,14 @@ func (p PublicKey) VerifyId(identifier Identifier) bool {
 
 // create an Id which is derived from a public key
 // used for both accounts and nodes
+// we assume here that public keys are Ed25519 keys
 func (p PublicKey) IdFromPubKey() (Identifier, error) {
+
+	// this breaks peer store
+	//id, err := peer.IDFromEd25519PublicKey(p)
+
 	id, err := peer.IDFromPublicKey(p)
+
 	return &Id{id}, err
 }
 

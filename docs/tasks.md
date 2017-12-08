@@ -1,5 +1,7 @@
 #### App Tasks / Issues
 
+todo: move tasks to github issues
+
 ### Build tasks
 - Dockerfile to setup a completely isolated docker dev env
 - Makefile that builds node packaged binary without relying on packages outside of /vendor - e.g. GOPATH as proj root.
@@ -21,6 +23,8 @@ Current makefile is using a global go path.
 - Fully support coinbase account:
     - when new account is created - if it is only account - set it as coinbase on the running node
     - restore node coinbase account when loading a node from storage
+- NTP client with time-drift detection (SNTP protocol)
+- Move to ed25519 keys but make it work with libp2p (it breaks when doing so IDFromEd25519PublicKey() bad)
     
 ### Hard Tasks
 - add support for uTp (reliable connection over udp) in lib-p2p - it only supports tcp right now - this is a hard task. We might contrib this to lib-p2p.

@@ -71,10 +71,7 @@ func (n *Node) SignProtoMessage(message proto.Message) ([]byte, error) {
 
 // sign binary data using the local node's private key
 func (n *Node) signData(data []byte) ([]byte, error) {
-	key := n.Peerstore().PrivKey(n.ID())
-
-	// this is implemented by signing a sha256 of the data
-	res, err := key.Sign(data)
+	res, err := n.privateKey.PrivatePeerKey().Sign(data)
 	return res, err
 }
 
@@ -112,9 +109,7 @@ func (n *Node) verifyData(data []byte, signature []byte, peerId peer.ID, pubKeyD
 // messageId: unique for requests, copied from request for responses
 func (n *Node) NewMessageData(messageId string, gossip bool) *pb.MessageData {
 
-	// Add protobufs bin data for message author public key
-	// this is useful for authenticating  messages forwarded by a node authored by another node
-	nodePubKey, err := n.Peerstore().PubKey(n.ID()).Bytes()
+	nodePubKey, err := n.publicKey.Bytes()
 
 	if err != nil {
 		panic("failed to get public key for sender from local peer store.")

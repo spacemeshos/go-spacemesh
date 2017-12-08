@@ -26,6 +26,8 @@ func TestAccountOps(t *testing.T) {
 		t.Fatalf("Failed to create an account")
 	}
 
+	account.Log()
+
 	assert.True(t, account.IsAccountUnlocked(), "expected account to be unlocked")
 
 	// get os temp dir here

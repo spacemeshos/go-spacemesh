@@ -11,9 +11,10 @@ type Identifier interface {
 	Bytes() []byte
 	PeerId() peer.ID
 	Pretty() string
+	PublicKey() (PublicKeylike, error)
 }
 
-// An Id derived from any string
+// An Id is derived from a public key
 // Used to for node ids and account ids and may be used by other types
 type Id struct {
 	peer.ID
@@ -29,6 +30,16 @@ func (id Id) Bytes() []byte {
 
 func (id Id) PeerId() peer.ID {
 	return id.ID
+}
+
+// get public key from key
+// untested - dragons!!
+func (id Id) PublicKey() (PublicKeylike, error) {
+	pubKey, err := id.ID.ExtractEd25519PublicKey()
+	if err != nil {
+		return nil, err
+	}
+	return &PublicKey{pubKey}, nil
 }
 
 func (id Id) Pretty() string {
