@@ -3,6 +3,12 @@
 	"ignore": "test",
 	"package": [
 		{
+			"checksumSHA1": "gZQ6HheWahvZzIc3phBnOwoWHjE=",
+			"path": "github.com/btcsuite/btcd/btcec",
+			"revision": "2e60448ffcc6bf78332d1fe590260095f554dd78",
+			"revisionTime": "2017-11-28T15:02:46Z"
+		},
+		{
 			"checksumSHA1": "PhyuD3dAyeZ/1dGlezZUNVFqYmI=",
 			"path": "github.com/elithrar/simple-scrypt",
 			"revision": "2325946f714c95de4a6088202c402fbdfa64163b",

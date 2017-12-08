@@ -42,7 +42,7 @@ func GenerateKeyPair() (PrivateKeylike, PublicKeylike, error) {
 
 	// we may change to a different algo in the future without breaking clients as
 	// keys are forward-compatible using a self-described format (protobufs based)
-	priv, pub, err := libp2pcrypto.GenerateKeyPair(libp2pcrypto.Ed25519, 256)
+	priv, pub, err := libp2pcrypto.GenerateKeyPair(libp2pcrypto.Secp256k1, 256)
 
 	return &PrivateKey{priv}, &PublicKey{pub}, err
 }
