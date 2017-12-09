@@ -141,6 +141,16 @@
 			"revisionTime": "2016-03-22T12:30:21Z"
 		},
 		{
+			"checksumSHA1": "+fOMIVtq40FG7lM9/wKcm9QA9bY=",
+			"path": "github.com/jbenet/go-randbuf",
+			"revision": "674640a50e6a1331d97d8efcfc43977ffe64897c",
+			"revisionTime": "2016-03-22T12:57:20Z"
+		},
+		{
+			"path": "github.com/jbenet/msgio",
+			"revision": ""
+		},
+		{
 			"checksumSHA1": "Y2kn9EVRu8dOsdsmTi34Yr0Vm7k=",
 			"path": "github.com/libp2p/go-libp2p/p2p/host/basic",
 			"revision": "38ed2982a030c7f2958ef5755d1c733f4295006e",
@@ -1225,6 +1235,10 @@
 		{
 			"checksumSHA1": "1rmRHrWEKYeSARG+IzOJvS9E5V4=",
 			"path": "gx/ipfs/QmfT8oJ8o8AY417RNu1bUYsnDPipPHSCdVcWjYRsDNFL4M/go-peerstream",
+			"revision": ""
+		},
+		{
+			"path": "https://github.com/jbenet/go-msgio",
 			"revision": ""
 		}
 	],

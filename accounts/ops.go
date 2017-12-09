@@ -111,7 +111,7 @@ func (a *Account) UnlockAccount(passphrase string) error {
 }
 
 // Validate that the account's private key matches provided private key
-func (a* Account) validatePublickKey(privateKey crypto.PrivateKeylike) error {
+func (a *Account) validatePublickKey(privateKey crypto.PrivateKeylike) error {
 
 	publicKey, err := privateKey.GetPublicKey()
 	if err != nil {
