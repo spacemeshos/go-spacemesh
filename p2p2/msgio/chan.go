@@ -23,19 +23,6 @@ func NewChan(chanSize int) *Chan {
 	}
 }
 
-// NewChan constructs a Chan with a given buffer size.
-func NewChanWithRWC(chanSize int, r io.Reader, w io.WriteCloser) *Chan {
-	c := &Chan{
-		MsgChan:   make(chan []byte, chanSize),
-		ErrChan:   make(chan error, 1),
-		CloseChan: make(chan bool, 2),
-	}
-
-	go c.ReadFrom(r)
-	go c.WriteTo(w)
-	return c
-}
-
 // ReadFrom wraps the given io.Reader with a msgio.Reader, reads all
 // messages, ands sends them down the channel.
 func (s *Chan) ReadFrom(r io.Reader) {

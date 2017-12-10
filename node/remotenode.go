@@ -9,7 +9,7 @@ import (
 // Barebones remote node data. Used for bootstrap node
 type RemoteNodeData struct {
 	Id        string         // base58 encoded node id str
-	Addresses []ma.Multiaddr // e.g. ['/ip4/127.0.0.1/tcp/3571']
+	Addresses []ma.Multiaddr // e.g. ['/ip4/127.0.0.1/tcp/3571'] - advertised by the node
 }
 
 // Create a node info from a node multi-address url

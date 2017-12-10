@@ -16,6 +16,11 @@ const (
 	defaultMaxSize = 8 * 1024 * 1024 // 8mb
 )
 
+// not go safe - use chan for safety
+// todo: get rid of all locks
+
+// todo: investigate mpool buffers usage
+
 // Writer is the msgio Writer interface. It writes len-framed messages.
 type Writer interface {
 

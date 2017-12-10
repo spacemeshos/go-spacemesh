@@ -13,37 +13,38 @@ import (
 // It provides full duplex messaging functionality over the same tcp/ip connection
 type Network interface {
 
-	DialTCP(address string, timeOut time.Duration) (Connection, error)	   // Connect to a remote node
+	// todo: change async callbacks to us channels for comm!!!!!!
+	DialTCP(address string, timeOut time.Duration) (Connection, error) // Connect to a remote node. Can send when no error.
 
 	OnRemoteClientConnected(callBack func(c Connection))               // remote tcp client connected to us
 	OnConnectionClosed(callBack func(c Connection))                    // a connection is closing
 	OnRemoteClientMessage(callBack func(c Connection, message []byte)) // new remote tcp client message
 	OnConnectionError(callBack func(c Connection, err error))          // connection error
+	OnMessageSendError(callBack func(c Connection, err error))
+
+	// todo: add msg sending to remote node over the connection callbacks here
 }
 
 // impl internal tpye
 type network struct {
-	tcpListener              net.Listener
-	tcpListenAddress         string // Address to open connection: localhost:9999
+	tcpListener      net.Listener
+	tcpListenAddress string // Address to open connection: localhost:9999
 
 	remoteClientConnected func(c Connection)
 	connectionClosed      func(c Connection)
 	remoteClientMessage   func(c Connection, message []byte)
 	connectionError       func(c Connection, err error)
+	messageSendError      func(c Connection, err error)
 }
 
 // Creates a new network
 // Attempts to tcp listen on address. e.g. localhost:1234
 func NewNetwork(tcpListenAddress string) (Network, error) {
+
 	log.Info("Creating server with tcp address: %s", tcpListenAddress)
+
 	n := &network{
 		tcpListenAddress: tcpListenAddress,
-	}
-
-	err := n.listen()
-
-	if err != nil {
-		return nil, err
 	}
 
 	// set empty callbacks to avoid panics
@@ -51,6 +52,12 @@ func NewNetwork(tcpListenAddress string) (Network, error) {
 	n.connectionClosed = func(c Connection) {}
 	n.remoteClientMessage = func(c Connection, message []byte) {}
 	n.connectionError = func(c Connection, err error) {}
+
+	err := n.listen()
+
+	if err != nil {
+		return nil, err
+	}
 
 	return n, nil
 }
@@ -71,48 +78,59 @@ func (cm *network) OnConnectionError(callBack func(c Connection, err error)) {
 	cm.connectionError = callBack
 }
 
+func (cm *network) OnMessageSendError(callBack func(c Connection, err error)) {
+	cm.messageSendError = callBack
+}
+
 // Dial a remote server with provided time out
 // address:: ip:port
-// Returns established connection or error
+// Returns established connection that local clients can send messages to or error if failed
+// to establish a connection
 func (cm *network) DialTCP(address string, timeOut time.Duration) (Connection, error) {
 
-	// connect via dialer so we can set its params
+	// connect via dialer so we can set tcp network params
 	dialer := &net.Dialer{}
-	dialer.KeepAlive = time.Duration(48 * time.Hour)	// drop connections after a period of inactivity
+	dialer.KeepAlive = time.Duration(48 * time.Hour) // drop connections after a period of inactivity
 	dialer.Timeout = time.Duration(1 * time.Minute)
+
+	log.Info("TCP dialing %s ...", address)
 
 	netConn, err := dialer.Dial("tcp", address)
 
 	if err != nil {
-		log.Error("Failed to tcp connect to: %s", address)
+		log.Error("Failed to tcp connect to: %s. %v", address, err)
 		return nil, err
 	}
 
-	c := newConnection(netConn, cm)
+	log.Info("Connected to %s...", address)
+	c := newConnection(netConn, cm, Local)
 	return c, nil
 }
 
 // Start network server
 func (cm *network) listen() error {
-	listener, err := net.Listen("tcp", cm.tcpListenAddress)
+	log.Info("Starting to listen...")
+	tcpListener, err := net.Listen("tcp", cm.tcpListenAddress)
 	if err != nil {
 		log.Error("Error starting TCP server: %v", err)
 		return err
 	}
-	defer listener.Close()
+	cm.tcpListener = tcpListener
 	go cm.acceptTcp()
 	return nil
 }
 
 func (cm *network) acceptTcp() {
 	for {
+		log.Info("Waiting for incoming connections...")
 		netConn, err := cm.tcpListener.Accept()
 		if err != nil {
 			log.Warning("Failed to accept connection request: %v", err)
 			return
 		}
 
-		c := newConnection(netConn, cm)
+		log.Info("Got new connection...")
+		c := newConnection(netConn, cm, Remote)
 		cm.remoteClientConnected(c)
 	}
 }
