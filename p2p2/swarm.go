@@ -21,21 +21,40 @@ package p2p2
 type Swarm interface {
 
 	// attempt to establish a session with a remote node
-	ConnectTo(node RemoteNode)
+	ConnectTo(req NodeReq)
 
 	// forcefully disconnect form a node
-	DisconnectFrom(node RemoteNode)
+	DisconnectFrom(req NodeReq)
 
 	// high level API - used by muxer - sends a messge and gets a callback with data or error (async)
 	// Should only be called by muxer
-	SendMessage(SendMessageParams)
+	SendMessage(SendMessageReqParams)
 
 	// todo: Register muxer to handle incoming messages to higher level protocols and handshake protocol
 }
 
-type SendMessageParams struct {
+type SendMessgeResp struct {
+	responder RemoteNode
+	reqId string
+	msg	[]byte
+	err error
+}
+
+type SendMessageReqParams struct {
+	dest RemoteNode
+	reqId string
 	msg      []byte
-	callback func(msg []byte, err error)
+	callback chan SendMessgeResp
+}
+
+type NodeReq struct {
+	node RemoteNode
+	callback chan NodeResp
+}
+
+type NodeResp struct {
+	node RemoteNode
+	err error
 }
 
 type swarmImpl struct {
@@ -54,10 +73,10 @@ type swarmImpl struct {
 	// add registered callbacks in a sync.map to return to the muxer responses to outgoing messages
 
 	// comm channels
-	connectionRequests chan RemoteNode	// request to establish a session w a remote node
-	disconnectRequests chan RemoteNode	// kill session and disconnect from node
-	sendMsgRequests    chan SendMessageParams // send a message to a node and callback on error or data
-	kill chan bool // used to kill the swamp from outside. e.g when local node is shutting down
+	connectionRequests chan NodeReq        // request to establish a session w a remote node
+	disconnectRequests chan NodeReq        // kill session and disconnect from node
+	sendMsgRequests    chan SendMessageReqParams // send a message to a node and callback on error or data
+	kill               chan bool              // used to kill the swamp from outside. e.g when local node is shutting down
 
 }
 
@@ -75,9 +94,9 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 		peersByConnection:  make(map[string]RemoteNode),
 		peers:              make(map[string]RemoteNode),
 		connections:        make(map[string]Connection),
-		connectionRequests: make(chan RemoteNode, 10),
-		disconnectRequests: make(chan RemoteNode, 10),
-		sendMsgRequests:    make(chan SendMessageParams, 20),
+		connectionRequests: make(chan NodeReq, 10),
+		disconnectRequests: make(chan NodeReq, 10),
+		sendMsgRequests:    make(chan SendMessageReqParams, 20),
 	}
 
 	go s.beginProcessingEvents()
@@ -85,18 +104,18 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 	return s, err
 }
 
-func (s *swarmImpl) ConnectTo(node RemoteNode) {
-	s.connectionRequests <- node
+func (s *swarmImpl) ConnectTo(req NodeReq) {
+	s.connectionRequests <- req
 }
 
-func (s *swarmImpl) DisconnectFrom(node RemoteNode) {
-	s.disconnectRequests <- node
+func (s *swarmImpl) DisconnectFrom(req NodeReq) {
+	s.disconnectRequests <- req
 }
 
 // Send a message to a remote node
 // Impl will establish session if needed or use an existing session and open connection
 // This should be called by the muxer
-func (s *swarmImpl) SendMessage(req SendMessageParams) {
+func (s *swarmImpl) SendMessage(req SendMessageReqParams) {
 	s.sendMsgRequests <- req
 }
 
@@ -139,15 +158,15 @@ Loop:
 	}
 }
 
-func (s *swarmImpl) onConnectionRequest(n RemoteNode) {
+func (s *swarmImpl) onConnectionRequest(req NodeReq) {
 	// connect to node...
 }
 
-func (s *swarmImpl) onDisconnectionRequest(n RemoteNode) {
+func (s *swarmImpl) onDisconnectionRequest(req NodeReq) {
 	// disconnect from node...
 }
 
-func (s *swarmImpl) onMessgeSenderRequest(p SendMessageParams) {
+func (s *swarmImpl) onMessgeSenderRequest(p SendMessageReqParams) {
 	// todo: send message here - establish a connection and session on-demand as needed
 	// todo: auto support for retries
 }
