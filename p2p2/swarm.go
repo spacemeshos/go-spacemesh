@@ -6,7 +6,7 @@ package p2p2
 // p2p2 Stack:
 // -----------
 // Local Node
-// -- Protocols: impls with req/resp support (match id resp w request id)
+// -- Implements p2p protocols: impls with req/resp support (match id resp w request id)
 // Muxer (node aspect) - routes remote requests (and responses) back to protocols. Protocols register on muxer
 // Swarm forward messages to muxer
 // Swarm - managed all remote nodes, sessions and connections
@@ -28,33 +28,33 @@ type Swarm interface {
 
 	// high level API - used by muxer - sends a messge and gets a callback with data or error (async)
 	// Should only be called by muxer
-	SendMessage(SendMessageReqParams)
+	SendMessage(SendMessageReq)
 
 	// todo: Register muxer to handle incoming messages to higher level protocols and handshake protocol
 }
 
 type SendMessgeResp struct {
 	responder RemoteNode
-	reqId string
-	msg	[]byte
-	err error
+	reqId     string
+	msg       []byte
+	err       error
 }
 
-type SendMessageReqParams struct {
-	dest RemoteNode
-	reqId string
+type SendMessageReq struct {
+	dest     RemoteNode
+	reqId    string
 	msg      []byte
 	callback chan SendMessgeResp
 }
 
 type NodeReq struct {
-	node RemoteNode
+	node     RemoteNode
 	callback chan NodeResp
 }
 
 type NodeResp struct {
 	node RemoteNode
-	err error
+	err  error
 }
 
 type swarmImpl struct {
@@ -70,13 +70,15 @@ type swarmImpl struct {
 	connections       map[string]Connection // all open connections to nodes by conn id. ConnId -> Con.
 	peersByConnection map[string]RemoteNode // remote nodes indexed by their connections. ConnId -> RemoteNode
 
+	pendingOutgoingMessages map[string]SendMessageReq // all messages we don't have a response for yet. k - reqId
+
 	// add registered callbacks in a sync.map to return to the muxer responses to outgoing messages
 
 	// comm channels
 	connectionRequests chan NodeReq        // request to establish a session w a remote node
 	disconnectRequests chan NodeReq        // kill session and disconnect from node
-	sendMsgRequests    chan SendMessageReqParams // send a message to a node and callback on error or data
-	kill               chan bool              // used to kill the swamp from outside. e.g when local node is shutting down
+	sendMsgRequests    chan SendMessageReq // send a message to a node and callback on error or data
+	kill               chan bool           // used to kill the swamp from outside. e.g when local node is shutting down
 
 }
 
@@ -94,9 +96,10 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 		peersByConnection:  make(map[string]RemoteNode),
 		peers:              make(map[string]RemoteNode),
 		connections:        make(map[string]Connection),
+		pendingOutgoingMessages: make(map[string]SendMessageReq),
 		connectionRequests: make(chan NodeReq, 10),
 		disconnectRequests: make(chan NodeReq, 10),
-		sendMsgRequests:    make(chan SendMessageReqParams, 20),
+		sendMsgRequests:    make(chan SendMessageReq, 20),
 	}
 
 	go s.beginProcessingEvents()
@@ -115,7 +118,7 @@ func (s *swarmImpl) DisconnectFrom(req NodeReq) {
 // Send a message to a remote node
 // Impl will establish session if needed or use an existing session and open connection
 // This should be called by the muxer
-func (s *swarmImpl) SendMessage(req SendMessageReqParams) {
+func (s *swarmImpl) SendMessage(req SendMessageReq) {
 	s.sendMsgRequests <- req
 }
 
@@ -147,7 +150,7 @@ Loop:
 			s.onConnectionClosed(c)
 
 		case r := <-s.sendMsgRequests:
-			s.onMessgeSenderRequest(r)
+			s.onSendMessageRequest(r)
 
 		case n := <-s.connectionRequests:
 			s.onConnectionRequest(n)
@@ -159,27 +162,29 @@ Loop:
 }
 
 func (s *swarmImpl) onConnectionRequest(req NodeReq) {
-	// connect to node...
+	// connect to node or ensure we are connected
+	// start a session on demand if needed
 }
 
 func (s *swarmImpl) onDisconnectionRequest(req NodeReq) {
 	// disconnect from node...
 }
 
-func (s *swarmImpl) onMessgeSenderRequest(p SendMessageReqParams) {
+func (s *swarmImpl) onSendMessageRequest(r SendMessageReq) {
 	// todo: send message here - establish a connection and session on-demand as needed
 	// todo: auto support for retries
+
+	// req ids are unique - store as pending until we get a response, error or timeout
+	s.pendingOutgoingMessages[r.reqId] = r
 }
 
-// not go safe - called from event processing main loop
 func (s *swarmImpl) onConnectionClosed(c Connection) {
 	delete(s.connections, c.Id())
+	delete(s.peersByConnection, c.Id())
 }
 
-// not go safe - called from event processing main loop
 func (s *swarmImpl) onRemoteClientConnected(c Connection) {
-	// nop - a remote client connected
-
+	// nop - a remote client connected - this is handled w message
 }
 
 // Main network messages handler
@@ -188,18 +193,22 @@ func (s *swarmImpl) onRemoteClientConnected(c Connection) {
 // not go safe - called from event processing main loop
 func (s *swarmImpl) onRemoteClientMessage(msg ConnectionMessage) {
 
-	// got a message from a remote client - process it here
+	// Processing a remote incoming message:
 
-	// decyrpt protobuf - all messages are protobufs
+	// 1. decyrpt protobuf to a generic protobuf obj - all messages are protobufs but we don't know struct type just yet
 
-	// auth message sent by remote node id and close connection otherwise
+	// 2. if session key is included in message and connection has this key then use it to decrypt payload - other reject and close conn
 
-	// create remote node if needed
+	// 3. if req is a handshake request or response then handle it to establish a session - use code here or use handshake protocol handler
 
-	// create session with remote node if needed - handle here - implement handshake protocol
+	// 4. if req is from a remote node we don't know about so create it
 
-	// if session exists and this is a session message - multiplexing back to calling protocol handler with remoteNode
-	// just send to muxer
+	// 5. save connection for this remote node - one connection per node for now
+
+	// 6. auth message sent by remote node pub key close connection otherwise
+
+	// Locate callback a pendingOutgoingMessages for the req id then push the resp over the embedded channel callback to notify caller
+	// of the response data - muxer will forward it to handlers and handler can create struct from buff based on expected typed data
 }
 
 // not go safe - called from event processing main loop

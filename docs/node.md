@@ -28,7 +28,6 @@ The key binary format is self-describing using protobufs.
 Crypto question: Unless we decide not to rely on `FIPS 180-4` (like Eth with their non-standard sha-256-like `Keccak256` due to NSA backdoor concerns) we plan to use `Go/Crypto` lib for crypto and `Go/crypto/sha256` for sha-256 implementations.
 
 
-
 ### `Accounts`
 
 #### Users Accounts

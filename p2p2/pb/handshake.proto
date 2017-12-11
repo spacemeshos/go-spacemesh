@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package pb;
+option go_package = "pb";
+
+// Handshake protocol message format
+
+// used for both request and response
+message HandshakeData {
+    bytes nodePubKey = 1; // 65 bytes uncompressed
+    bytes iv = 2; // 16 bytes - AES-256-CBC IV
+    bytes empheralPubKey = 3; // 65 bytes (uncompressed)
+    bytes hmac = 4; // HMAC-SHA-256 32 bytes
+    bytes sign = 5; // 32 bytes sign of all above data by node public key (verifies he has the priv key and he wrote the data
+}
+
+
