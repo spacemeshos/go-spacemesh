@@ -11,7 +11,6 @@ import (
 	"time"
 )
 
-
 // A closeable network connection, that can send and receive messages from a remote instance
 // Connection is an io.Writer and an  io.Closer
 type Connection interface {
@@ -21,7 +20,7 @@ type Connection interface {
 	Close() error
 	LastOpTime() time.Time // last rw op time for this connection
 
-	GetSession(callback func (session NetworkSession))
+	GetSession(callback func(session NetworkSession))
 	SetSession(s NetworkSession)
 	HasSession() bool
 }
@@ -77,7 +76,6 @@ type connectionImpl struct {
 	expireSessionChannel chan bool
 
 	getSessionChannel chan func(s NetworkSession)
-
 }
 
 // Create a new connection wrapping a net.Conn with a provided connection manager
@@ -97,7 +95,7 @@ func newConnection(conn net.Conn, n Network, s ConnectionSource) Connection {
 		conn:                 conn,
 		attachSessoinChannel: make(chan NetworkSession, 1),
 		expireSessionChannel: make(chan bool),
-		getSessionChannel:    make(chan func(s NetworkSession) ,1),
+		getSessionChannel:    make(chan func(s NetworkSession), 1),
 		network:              n,
 	}
 
@@ -120,7 +118,7 @@ func (c *connectionImpl) HasSession() bool {
 }
 
 // go safe - use a channel of func to implement concurent safe callbacks
-func (c *connectionImpl) GetSession(callback func (n NetworkSession)) {
+func (c *connectionImpl) GetSession(callback func(n NetworkSession)) {
 	c.getSessionChannel <- callback
 }
 

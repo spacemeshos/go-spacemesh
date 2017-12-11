@@ -11,7 +11,6 @@ type RemoteNode interface {
 	TcpAddress() string // tcp address advertised by node e.g. 127.0.0.1:3058 - todo consider multiaddress here
 
 	PublicKey() PublicKey
-
 }
 
 type RemoteNodeImpl struct {

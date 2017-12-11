@@ -4,7 +4,7 @@ package p2p2
 // Hold ref to peers and manage connections to peers
 
 // p2p2 Stack:
-// ----------------
+// -----------
 // Local Node
 // -- Protocols: impls with req/resp support (match id resp w request id)
 // Muxer (node aspect) - routes remote requests (and responses) back to protocols. Protocols register on muxer
@@ -16,43 +16,49 @@ package p2p2
 // -- msgio (prefix length encoding)
 // Network
 //	- tcp ip
+//  ....
 
 type Swarm interface {
 
 	// attempt to establish a session with a remote node
 	ConnectTo(node RemoteNode)
+
+	// forcefully disconnect form a node
 	DisconnectFrom(node RemoteNode)
 
-	// high level API - used by protocols - send a message to remote node
-	// this is below the protocol level - used by protocol muxer
+	// high level API - used by muxer - sends a messge and gets a callback with data or error (async)
+	// Should only be called by muxer
 	SendMessage(SendMessageParams)
 
-	// Register muxer to handle incoming messages to higher level protocols
+	// todo: Register muxer to handle incoming messages to higher level protocols and handshake protocol
 }
 
 type SendMessageParams struct {
-	msg []byte
+	msg      []byte
 	callback func(msg []byte, err error)
 }
 
 type swarmImpl struct {
+
+	// set in construction and immutable state
 	network   Network
 	localNode LocalNode
 
-	kill chan bool // used to kill the swamp from outside in
-
 	// all data should only be accessed from methods executed by the main swarm event loop
 
-	// not thread safe state - must be access only from methods dispatched from the internal event handler
-	peers            map[string]RemoteNode // remote known nodes mapped by their ids (keys) - Swarm is a peer store. NodeId -> RemoteNode
-	connections      map[string]Connection // all open connections to nodes by conn id. ConnId -> Con.
+	// Internal state not thread safe state - must be access only from methods dispatched from the internal event handler
+	peers             map[string]RemoteNode // remote known nodes mapped by their ids (keys) - Swarm is a peer store. NodeId -> RemoteNode
+	connections       map[string]Connection // all open connections to nodes by conn id. ConnId -> Con.
 	peersByConnection map[string]RemoteNode // remote nodes indexed by their connections. ConnId -> RemoteNode
 
 	// add registered callbacks in a sync.map to return to the muxer responses to outgoing messages
 
-	connectionRequests chan RemoteNode
-	disconnectRequests chan RemoteNode
-	sendMsgRequests chan SendMessageParams
+	// comm channels
+	connectionRequests chan RemoteNode	// request to establish a session w a remote node
+	disconnectRequests chan RemoteNode	// kill session and disconnect from node
+	sendMsgRequests    chan SendMessageParams // send a message to a node and callback on error or data
+	kill chan bool // used to kill the swamp from outside. e.g when local node is shutting down
+
 }
 
 func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
@@ -63,15 +69,15 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 	}
 
 	s := &swarmImpl{
-		localNode:        l,
-		network:          n,
-		kill:             make(chan bool),
-		peersByConnection: make(map[string]RemoteNode),
-		peers:            make(map[string]RemoteNode),
-		connections:      make(map[string]Connection),
+		localNode:          l,
+		network:            n,
+		kill:               make(chan bool),
+		peersByConnection:  make(map[string]RemoteNode),
+		peers:              make(map[string]RemoteNode),
+		connections:        make(map[string]Connection),
 		connectionRequests: make(chan RemoteNode, 10),
-		disconnectRequests: make (chan RemoteNode, 10),
-		sendMsgRequests: make(chan SendMessageParams, 20),
+		disconnectRequests: make(chan RemoteNode, 10),
+		sendMsgRequests:    make(chan SendMessageParams, 20),
 	}
 
 	go s.beginProcessingEvents()
@@ -121,14 +127,11 @@ Loop:
 		case c := <-s.network.GetClosingConnections():
 			s.onConnectionClosed(c)
 
-
 		case r := <-s.sendMsgRequests:
 			s.onMessgeSenderRequest(r)
 
-
 		case n := <-s.connectionRequests:
 			s.onConnectionRequest(n)
-
 
 		case n := <-s.disconnectRequests:
 			s.onDisconnectionRequest(n)
@@ -145,7 +148,8 @@ func (s *swarmImpl) onDisconnectionRequest(n RemoteNode) {
 }
 
 func (s *swarmImpl) onMessgeSenderRequest(p SendMessageParams) {
-	// todo: send message here
+	// todo: send message here - establish a connection and session on-demand as needed
+	// todo: auto support for retries
 }
 
 // not go safe - called from event processing main loop
