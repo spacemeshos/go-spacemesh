@@ -21,8 +21,8 @@ func TestReadWrite(t *testing.T) {
 	n, err := NewNetwork(address)
 	assert.Nil(t, err, "failed to create tcp server")
 
-	// a simple network events processor
-	process := func () {
+	// run a simple network events processor go routine
+	go func() {
 	Loop:
 		for {
 			select {
@@ -48,9 +48,7 @@ func TestReadWrite(t *testing.T) {
 				log.Info("Connection closed. %v", c)
 			}
 		}
-	}
-
-	go process ()
+	}()
 
 	c, err := n.DialTCP(address, time.Duration(10*time.Second))
 	assert.Nil(t, err, "failed to connect to tcp server")

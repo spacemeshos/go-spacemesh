@@ -11,6 +11,20 @@ import (
 	"time"
 )
 
+// A closeable network connection, that can send and receive messages from a remote instance
+// Connection is an io.Writer and an  io.Closer
+type Connection interface {
+	Id() string
+
+	Send(message []byte)
+	Close() error
+	LastOpTime() time.Time // last rw op time for this connection
+
+	// optional established session
+	GetSession() NetworkSession
+	SetSession(s NetworkSession)
+}
+
 // Session info with a remote node - wraps connection
 type NetworkSession interface {
 	key() []byte        // session key
@@ -33,20 +47,6 @@ type MessageSendError struct {
 	err        error
 }
 
-// A closeable network connection, that can send and receive messages from a remote instance
-// Connection is an io.Writer and an  io.Closer
-type Connection interface {
-	Id() string
-
-	Send(message []byte)
-	Close() error
-	LastOpTime() time.Time // last rw op time for this connection
-
-	// optional established session
-	GetSession() NetworkSession
-	SetSession(s NetworkSession)
-}
-
 type ConnectionSource int
 
 const (
@@ -55,7 +55,7 @@ const (
 )
 
 // A network connection supporting full-duplex messaging
-type connection struct {
+type connectionImpl struct {
 
 	// metadata for logging / debugging
 	id         string           // uuid for logging
@@ -63,7 +63,7 @@ type connection struct {
 	created    time.Time
 	lastOpTime time.Time
 
-	ioChannel *msgio.Chan // implemented using msgio.Chan - incoming messages
+	incomingMsgs *msgio.Chan // implemented using msgio.Chan - incoming messages
 
 	outgoingMsgs chan []byte // outgoing message queue
 
@@ -71,6 +71,9 @@ type connection struct {
 	network Network  // network context
 
 	session NetworkSession
+
+	attachSessoinChannel chan NetworkSession
+	expireSessionChannel chan bool
 
 	//msgWriter msgio.WriteCloser
 	//msgReader msgio.ReadCloser
@@ -82,62 +85,69 @@ func newConnection(conn net.Conn, n Network, s ConnectionSource) Connection {
 	// todo parametrize incoming msgs chan buffer size - hard-coded for now
 
 	// msgio channel used for incoming message
-	msgioChan := msgio.NewChan(10)
+	incomingMsgs := msgio.NewChan(10)
 
-	connection := &connection{
-		id:           uuid.New().String(),
-		created:      time.Now(),
-		source:       s,
-		ioChannel:    msgioChan,
-		outgoingMsgs: make(chan []byte, 10),
-		conn:         conn,
-		network:      n,
+	connection := &connectionImpl{
+		id:                   uuid.New().String(),
+		created:              time.Now(),
+		source:               s,
+		incomingMsgs:         incomingMsgs,
+		outgoingMsgs:         make(chan []byte, 10),
+		conn:                 conn,
+		attachSessoinChannel: make(chan NetworkSession, 1),
+		expireSessionChannel: make(chan bool),
+		network:              n,
 	}
 
 	// start processing channel-based message
-	go connection.begingEventProcessing()
+	go connection.beginEventProcessing()
 
 	// start reading incoming message from the connection and into the channel
-	go msgioChan.ReadFrom(conn)
+	go incomingMsgs.ReadFrom(conn)
 
 	return connection
 }
 
-// not concurrency safe - attach a session to the connection
-func (c *connection) SetSession(s NetworkSession) {
-	c.session = s
+// go safe - attach a session to the connection
+func (c *connectionImpl) SetSession(s NetworkSession) {
+	c.attachSessoinChannel <- s
 }
 
-func (c *connection) GetSession() NetworkSession {
+// go safe
+func (c *connectionImpl) GetSession() NetworkSession {
 	return c.session
 }
 
-func (c *connection) Id() string {
+// go safe
+func (c *connectionImpl) ExpireSession() {
+	c.expireSessionChannel <- true
+}
+
+func (c *connectionImpl) Id() string {
 	return c.id
 }
 
-func (c *connection) String() string {
+func (c *connectionImpl) String() string {
 	return c.id
 }
 
 // Send binary data to a connection
 // data is copied over so caller can get rid of the data
 // Concurrency: can be called from any go routine
-func (c *connection) Send(message []byte) {
+func (c *connectionImpl) Send(message []byte) {
 	// queue messages for sending
 	c.outgoingMsgs <- message
 }
 
 // Write a message to the network connection
-// Concurrency: this message is not go safe it is designed as an internal helper to
+// Concurrency: this message is not go safe it is designed as an internal helper to be
 // called from the event processing loop
-func (c *connection) writeMessageToConnection(msg []byte) {
+func (c *connectionImpl) writeMessageToConnection(msg []byte) {
 
 	// note: using msgio Reader and Writer failed here so this is a temp hack:
 	ul := uint32(len(msg))
 	err := binary.Write(c.conn, binary.BigEndian, &ul)
 	if err != nil {
-
 		c.network.GetMessageSendErrors() <- MessageSendError{c, msg, err}
 		return
 	}
@@ -154,31 +164,30 @@ func (c *connection) writeMessageToConnection(msg []byte) {
 // Send a binary message to the connection remote endpoint
 // message - any binary data
 // Concurrency: Not go safe - designed to be used from a the event processing loop
-func (c *connection) write(message []byte) (int, error) {
-
+func (c *connectionImpl) write(message []byte) (int, error) {
 	ul := uint32(len(message))
 	err := binary.Write(c.conn, binary.BigEndian, &ul)
 	n, err := c.conn.Write(message)
-
 	return n + 4, err
 }
 
 // Close the connection (implements io.Closer)
-func (c *connection) Close() error {
-	c.ioChannel.Close()
+// go safe
+func (c *connectionImpl) Close() error {
+	c.incomingMsgs.Close()
 	return nil
 }
 
-func (c *connection) LastOpTime() time.Time {
+// go safe
+func (c *connectionImpl) LastOpTime() time.Time {
 	return c.lastOpTime
 }
 
 // Push outgoing message to the connections
-// Read from the icnoming new messages and send down the connection
+// Read from the incoming new messages and send down the connection
+func (c *connectionImpl) beginEventProcessing() {
 
-func (c *connection) begingEventProcessing() {
-
-	log.Info("Connection processing channel....")
+	log.Info("Connection main event loop....")
 
 Loop:
 	for {
@@ -189,7 +198,7 @@ Loop:
 				c.writeMessageToConnection(msg)
 			}
 
-		case msg, ok := <-c.ioChannel.MsgChan:
+		case msg, ok := <-c.incomingMsgs.MsgChan:
 
 			if !ok { // chan closed
 				break Loop
@@ -201,12 +210,18 @@ Loop:
 			// pump the message to the network
 			c.network.GetIncomingMessage() <- ConnectionMessage{c, msg}
 
-		case <-c.ioChannel.CloseChan:
+		case <-c.incomingMsgs.CloseChan:
 			c.network.GetClosingConnections() <- c
 			break Loop
 
-		case err := <-c.ioChannel.ErrChan:
+		case err := <-c.incomingMsgs.ErrChan:
 			c.network.GetConnectionErrors() <- ConnectionError{c, err}
+
+		case s := <-c.attachSessoinChannel:
+			c.session = s
+
+		case <-c.expireSessionChannel:
+			c.session = nil
 		}
 	}
 }
