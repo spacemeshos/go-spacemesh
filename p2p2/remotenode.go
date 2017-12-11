@@ -1,6 +1,17 @@
 package p2p2
 
-import ()
+import (
+	"time"
+)
+
+// Session info with a remote node - wraps connection
+type NetworkSession interface {
+	Iv() []byte         // session iv
+	Key() PublicKey  	// session shared key
+	Created() time.Time // time when session was established
+
+	// this might include an AES cypher instance for fast enc/dec of data to/from a remote node
+}
 
 // Remote node data
 // Node connections are maintained by swarm
@@ -11,11 +22,28 @@ type RemoteNode interface {
 	TcpAddress() string // tcp address advertised by node e.g. 127.0.0.1:3058 - todo consider multiaddress here
 
 	PublicKey() PublicKey
+
+	// session suuport
+	GetSession(callback func(session NetworkSession))
+	SetSession(s NetworkSession)
+	HasSession() bool
+
+	Kill()
 }
 
 type RemoteNodeImpl struct {
+
 	publicKey  PublicKey
 	tcpAddress string
+
+	session NetworkSession
+
+	attachSessoinChannel chan NetworkSession
+	expireSessionChannel chan bool
+
+	getSessionChannel chan func(s NetworkSession)
+
+	kill chan bool
 }
 
 // Create a new remote node using provided id and tcp address
@@ -29,9 +57,62 @@ func NewRemoteNode(id string, tcpAddress string) (RemoteNode, error) {
 	node := &RemoteNodeImpl{
 		publicKey:  key,
 		tcpAddress: tcpAddress,
+		attachSessoinChannel: make(chan NetworkSession, 1),
+		expireSessionChannel: make(chan bool),
+		getSessionChannel:    make(chan func(s NetworkSession), 1),
+		kill : make(chan bool),
+
 	}
 
+	go node.processEvents()
+
 	return node, nil
+}
+
+func (n *RemoteNodeImpl) Kill() {
+	// stop processing events
+	n.kill <- true
+}
+
+func (n *RemoteNodeImpl) processEvents() {
+
+Loop:
+	for {
+		select {
+
+		case <- n.kill:
+			break Loop
+
+		case s := <-n.attachSessoinChannel:
+			n.session = s
+
+		case <-n.expireSessionChannel:
+			n.session = nil
+
+		case getSession := <-n.getSessionChannel:
+			getSession(n.session)
+
+		}
+	}
+}
+
+// go safe - attach a session to the connection
+func (n *RemoteNodeImpl) SetSession(s NetworkSession) {
+	n.attachSessoinChannel <- s
+}
+
+func (n *RemoteNodeImpl) HasSession() bool {
+	return n.session != nil
+}
+
+// go safe - use a channel of func to implement concurent safe callbacks
+func (n *RemoteNodeImpl) GetSession(callback func(n NetworkSession)) {
+	n.getSessionChannel <- callback
+}
+
+// go safe
+func (n *RemoteNodeImpl) ExpireSession() {
+	n.expireSessionChannel <- true
 }
 
 func (n *RemoteNodeImpl) Id() []byte {

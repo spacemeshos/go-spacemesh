@@ -11,8 +11,8 @@ package p2p2
 // Swarm forward messages to muxer
 // Swarm - managed all remote nodes, sessions and connections
 // Remote Node - maintains sessions and connections
-// Connection
 // -- NetworkSession (optional)
+// Connection
 // -- msgio (prefix length encoding)
 // Network
 //	- tcp ip
@@ -90,16 +90,16 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 	}
 
 	s := &swarmImpl{
-		localNode:          l,
-		network:            n,
-		kill:               make(chan bool),
-		peersByConnection:  make(map[string]RemoteNode),
-		peers:              make(map[string]RemoteNode),
-		connections:        make(map[string]Connection),
+		localNode:               l,
+		network:                 n,
+		kill:                    make(chan bool),
+		peersByConnection:       make(map[string]RemoteNode),
+		peers:                   make(map[string]RemoteNode),
+		connections:             make(map[string]Connection),
 		pendingOutgoingMessages: make(map[string]SendMessageReq),
-		connectionRequests: make(chan NodeReq, 10),
-		disconnectRequests: make(chan NodeReq, 10),
-		sendMsgRequests:    make(chan SendMessageReq, 20),
+		connectionRequests:      make(chan NodeReq, 10),
+		disconnectRequests:      make(chan NodeReq, 10),
+		sendMsgRequests:         make(chan SendMessageReq, 20),
 	}
 
 	go s.beginProcessingEvents()

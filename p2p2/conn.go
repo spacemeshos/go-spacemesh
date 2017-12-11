@@ -19,16 +19,6 @@ type Connection interface {
 	Send(message []byte)
 	Close() error
 	LastOpTime() time.Time // last rw op time for this connection
-
-	GetSession(callback func(session NetworkSession))
-	SetSession(s NetworkSession)
-	HasSession() bool
-}
-
-// Session info with a remote node - wraps connection
-type NetworkSession interface {
-	key() []byte        // session key
-	Created() time.Time // time when session was established
 }
 
 type ConnectionMessage struct {
@@ -70,12 +60,6 @@ type connectionImpl struct {
 	conn    net.Conn // wrapped network connection
 	network Network  // network context
 
-	session NetworkSession
-
-	attachSessoinChannel chan NetworkSession
-	expireSessionChannel chan bool
-
-	getSessionChannel chan func(s NetworkSession)
 }
 
 // Create a new connection wrapping a net.Conn with a provided connection manager
@@ -93,9 +77,6 @@ func newConnection(conn net.Conn, n Network, s ConnectionSource) Connection {
 		incomingMsgs:         incomingMsgs,
 		outgoingMsgs:         make(chan []byte, 10),
 		conn:                 conn,
-		attachSessoinChannel: make(chan NetworkSession, 1),
-		expireSessionChannel: make(chan bool),
-		getSessionChannel:    make(chan func(s NetworkSession), 1),
 		network:              n,
 	}
 
@@ -106,25 +87,6 @@ func newConnection(conn net.Conn, n Network, s ConnectionSource) Connection {
 	go incomingMsgs.ReadFrom(conn)
 
 	return connection
-}
-
-// go safe - attach a session to the connection
-func (c *connectionImpl) SetSession(s NetworkSession) {
-	c.attachSessoinChannel <- s
-}
-
-func (c *connectionImpl) HasSession() bool {
-	return c.session != nil
-}
-
-// go safe - use a channel of func to implement concurent safe callbacks
-func (c *connectionImpl) GetSession(callback func(n NetworkSession)) {
-	c.getSessionChannel <- callback
-}
-
-// go safe
-func (c *connectionImpl) ExpireSession() {
-	c.expireSessionChannel <- true
 }
 
 func (c *connectionImpl) Id() string {
@@ -220,15 +182,6 @@ Loop:
 
 		case err := <-c.incomingMsgs.ErrChan:
 			c.network.GetConnectionErrors() <- ConnectionError{c, err}
-
-		case s := <-c.attachSessoinChannel:
-			c.session = s
-
-		case <-c.expireSessionChannel:
-			c.session = nil
-
-		case getSession := <-c.getSessionChannel:
-			getSession(c.session)
 
 		}
 	}
