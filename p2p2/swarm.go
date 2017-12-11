@@ -21,12 +21,18 @@ type Swarm interface {
 
 	// attempt to establish a session with a remote node
 	ConnectTo(node RemoteNode)
+	DisconnectFrom(node RemoteNode)
 
 	// high level API - used by protocols - send a message to remote node
 	// this is below the protocol level - used by protocol muxer
-	SendMessage(node RemoteNode, callback func(msg []byte, err error))
+	SendMessage(SendMessageParams)
 
 	// Register muxer to handle incoming messages to higher level protocols
+}
+
+type SendMessageParams struct {
+	msg []byte
+	callback func(msg []byte, err error)
 }
 
 type swarmImpl struct {
@@ -37,11 +43,16 @@ type swarmImpl struct {
 
 	// all data should only be accessed from methods executed by the main swarm event loop
 
+	// not thread safe state - must be access only from methods dispatched from the internal event handler
 	peers            map[string]RemoteNode // remote known nodes mapped by their ids (keys) - Swarm is a peer store. NodeId -> RemoteNode
 	connections      map[string]Connection // all open connections to nodes by conn id. ConnId -> Con.
-	nodesByConection map[string]RemoteNode // remote nodes indexed by their connections. ConnId -> RemoteNode
+	peersByConnection map[string]RemoteNode // remote nodes indexed by their connections. ConnId -> RemoteNode
 
 	// add registered callbacks in a sync.map to return to the muxer responses to outgoing messages
+
+	connectionRequests chan RemoteNode
+	disconnectRequests chan RemoteNode
+	sendMsgRequests chan SendMessageParams
 }
 
 func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
@@ -55,26 +66,32 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 		localNode:        l,
 		network:          n,
 		kill:             make(chan bool),
-		nodesByConection: make(map[string]RemoteNode),
+		peersByConnection: make(map[string]RemoteNode),
 		peers:            make(map[string]RemoteNode),
 		connections:      make(map[string]Connection),
+		connectionRequests: make(chan RemoteNode, 10),
+		disconnectRequests: make (chan RemoteNode, 10),
+		sendMsgRequests: make(chan SendMessageParams, 20),
 	}
 
 	go s.beginProcessingEvents()
 
 	return s, err
 }
-func (s *swarmImpl) ConnectTo(node RemoteNode) {
 
+func (s *swarmImpl) ConnectTo(node RemoteNode) {
+	s.connectionRequests <- node
+}
+
+func (s *swarmImpl) DisconnectFrom(node RemoteNode) {
+	s.disconnectRequests <- node
 }
 
 // Send a message to a remote node
 // Impl will establish session if needed or use an existing session and open connection
 // This should be called by the muxer
-func (s *swarmImpl) SendMessage(node RemoteNode, callback func(msg []byte, err error)) {
-
-	// hold message until send error, response, or timeout
-	// auto retry n times here (n=3)
+func (s *swarmImpl) SendMessage(req SendMessageParams) {
+	s.sendMsgRequests <- req
 }
 
 // Swarm serial event processing
@@ -103,13 +120,36 @@ Loop:
 
 		case c := <-s.network.GetClosingConnections():
 			s.onConnectionClosed(c)
+
+
+		case r := <-s.sendMsgRequests:
+			s.onMessgeSenderRequest(r)
+
+
+		case n := <-s.connectionRequests:
+			s.onConnectionRequest(n)
+
+
+		case n := <-s.disconnectRequests:
+			s.onDisconnectionRequest(n)
 		}
 	}
 }
 
+func (s *swarmImpl) onConnectionRequest(n RemoteNode) {
+	// connect to node...
+}
+
+func (s *swarmImpl) onDisconnectionRequest(n RemoteNode) {
+	// disconnect from node...
+}
+
+func (s *swarmImpl) onMessgeSenderRequest(p SendMessageParams) {
+	// todo: send message here
+}
+
 // not go safe - called from event processing main loop
 func (s *swarmImpl) onConnectionClosed(c Connection) {
-
 	delete(s.connections, c.Id())
 }
 
@@ -124,8 +164,6 @@ func (s *swarmImpl) onRemoteClientConnected(c Connection) {
 // msg: binary protobufs encoded data
 // not go safe - called from event processing main loop
 func (s *swarmImpl) onRemoteClientMessage(msg ConnectionMessage) {
-
-	// this needs to be thread safe - use a channel?
 
 	// got a message from a remote client - process it here
 

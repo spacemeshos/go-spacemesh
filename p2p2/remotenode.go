@@ -2,9 +2,8 @@ package p2p2
 
 import ()
 
-// Bare-bones remote node data. Used for bootstrap node
-// Implements handshake protocol?
-// Should be internal type to p2p2 - used by Swarm
+// Remote node data
+// Node connections are maintained by swarm
 type RemoteNode interface {
 	Id() []byte     // node id is public key bytes
 	String() string // node public key string
@@ -13,8 +12,6 @@ type RemoteNode interface {
 
 	PublicKey() PublicKey
 
-	// send a message to the remote node with optional callback
-	//SendMessage(data []byte, callback func(node RemoteNode, data []byte))
 }
 
 type RemoteNodeImpl struct {

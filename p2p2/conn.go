@@ -78,8 +78,6 @@ type connectionImpl struct {
 
 	getSessionChannel chan func(s NetworkSession)
 
-	//msgWriter msgio.WriteCloser
-	//msgReader msgio.ReadCloser
 }
 
 // Create a new connection wrapping a net.Conn with a provided connection manager
@@ -121,7 +119,7 @@ func (c *connectionImpl) HasSession() bool {
 	return c.session != nil
 }
 
-// go safe
+// go safe - use a channel of func to implement concurent safe callbacks
 func (c *connectionImpl) GetSession(callback func (n NetworkSession)) {
 	c.getSessionChannel <- callback
 }
