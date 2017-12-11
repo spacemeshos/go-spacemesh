@@ -11,6 +11,7 @@ import (
 	"time"
 )
 
+
 // A closeable network connection, that can send and receive messages from a remote instance
 // Connection is an io.Writer and an  io.Closer
 type Connection interface {
@@ -20,9 +21,9 @@ type Connection interface {
 	Close() error
 	LastOpTime() time.Time // last rw op time for this connection
 
-	// optional established session
-	GetSession() NetworkSession
+	GetSession(callback func (session NetworkSession))
 	SetSession(s NetworkSession)
+	HasSession() bool
 }
 
 // Session info with a remote node - wraps connection
@@ -75,6 +76,8 @@ type connectionImpl struct {
 	attachSessoinChannel chan NetworkSession
 	expireSessionChannel chan bool
 
+	getSessionChannel chan func(s NetworkSession)
+
 	//msgWriter msgio.WriteCloser
 	//msgReader msgio.ReadCloser
 }
@@ -96,6 +99,7 @@ func newConnection(conn net.Conn, n Network, s ConnectionSource) Connection {
 		conn:                 conn,
 		attachSessoinChannel: make(chan NetworkSession, 1),
 		expireSessionChannel: make(chan bool),
+		getSessionChannel:    make(chan func(s NetworkSession) ,1),
 		network:              n,
 	}
 
@@ -113,9 +117,13 @@ func (c *connectionImpl) SetSession(s NetworkSession) {
 	c.attachSessoinChannel <- s
 }
 
+func (c *connectionImpl) HasSession() bool {
+	return c.session != nil
+}
+
 // go safe
-func (c *connectionImpl) GetSession() NetworkSession {
-	return c.session
+func (c *connectionImpl) GetSession(callback func (n NetworkSession)) {
+	c.getSessionChannel <- callback
 }
 
 // go safe
@@ -222,6 +230,10 @@ Loop:
 
 		case <-c.expireSessionChannel:
 			c.session = nil
+
+		case getSession := <-c.getSessionChannel:
+			getSession(c.session)
+
 		}
 	}
 }

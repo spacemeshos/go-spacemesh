@@ -19,6 +19,9 @@ package p2p2
 
 type Swarm interface {
 
+	// attempt to establish a session with a remote node
+	ConnectTo(node RemoteNode)
+
 	// high level API - used by protocols - send a message to remote node
 	// this is below the protocol level - used by protocol muxer
 	SendMessage(nodeId string, tcpAddress string, callback func(msg []byte, err error))
@@ -106,7 +109,7 @@ func (s *swarmImpl) onConnectionClosed(c Connection) {
 
 	node := s.nodesByConection[c.Id()]
 	if node != nil {
-		node.RemoveConnection(c.Id())
+		node.CloseConnection()
 	}
 
 	delete(s.connections, c.Id())
