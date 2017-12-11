@@ -24,7 +24,7 @@ type Swarm interface {
 
 	// high level API - used by protocols - send a message to remote node
 	// this is below the protocol level - used by protocol muxer
-	SendMessage(nodeId string, tcpAddress string, callback func(msg []byte, err error))
+	SendMessage(node RemoteNode, callback func(msg []byte, err error))
 
 	// Register muxer to handle incoming messages to higher level protocols
 }
@@ -64,11 +64,14 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 
 	return s, err
 }
+func (s *swarmImpl) ConnectTo(node RemoteNode) {
+
+}
 
 // Send a message to a remote node
 // Impl will establish session if needed or use an existing session and open connection
 // This should be called by the muxer
-func (s *swarmImpl) SendMessage(nodeId string, tcpAddress string, callback func(msg []byte, err error)) {
+func (s *swarmImpl) SendMessage(node RemoteNode, callback func(msg []byte, err error)) {
 
 	// hold message until send error, response, or timeout
 	// auto retry n times here (n=3)
@@ -106,11 +109,6 @@ Loop:
 
 // not go safe - called from event processing main loop
 func (s *swarmImpl) onConnectionClosed(c Connection) {
-
-	node := s.nodesByConection[c.Id()]
-	if node != nil {
-		node.CloseConnection()
-	}
 
 	delete(s.connections, c.Id())
 }
