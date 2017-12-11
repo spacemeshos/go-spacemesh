@@ -5,29 +5,18 @@ import (
 	"sync"
 )
 
-type LocalNode interface {
-	Id() []byte
-	String() string
-	Pretty() string
-
-	PrivateKey() PrivateKey
-	PublicKey() PublicKey
-}
-
 // Bare-bones remote node data. Used for bootstrap node
 // Implements handshake protocol?
+// Should be internal type to p2p2 - used by Swarm
 type RemoteNode interface {
 	Id() []byte     // node id is public key bytes
 	String() string // node public key string
 	Pretty() string
 	TcpAddress() string // tcp address advertised by node e.g. 127.0.0.1:3058 - todo consider multiaddress here
 
-	GetSessions() []NetworkSession // 0 or more active sessions of local node with the remote node
-	GetConnections() []Connection  // 0 or more network non-authenticated connections that we don't have an established session for yet
+	GetConnections() []Connection // 0 or more network non-authenticated connections that we don't have an established session for yet
 
 	AddConnection(c Connection)
-	AddSession(s NetworkSession)
-
 	RemoveConnection(connId string)
 
 	PublicKey() PublicKey
@@ -37,10 +26,8 @@ type RemoteNode interface {
 }
 
 type RemoteNodeImpl struct {
-	publicKey  PublicKey
-	tcpAddress string
-
-	sessions    sync.Map // zero value is empty map
+	publicKey   PublicKey
+	tcpAddress  string
 	connections sync.Map // zero value is empty map
 }
 
@@ -79,31 +66,11 @@ func (n *RemoteNodeImpl) GetConnections() []Connection {
 	return cons
 }
 
-func (n *RemoteNodeImpl) GetSessions() []NetworkSession {
-	s := make([]NetworkSession, 1)
-	n.sessions.Range(func(key, value interface{}) bool {
-		session, ok := value.(NetworkSession)
-		if !ok {
-			log.Error("Expected map to hold only NeworkSessions")
-			return true
-		}
-
-		s = append(s, session)
-		return true
-	})
-	return s
-}
-
-func (n *RemoteNodeImpl) AddSession(s NetworkSession) {
-	n.sessions.Store(s.Id(), s)
-}
-
 func (n *RemoteNodeImpl) AddConnection(c Connection) {
 	n.connections.Store(c.Id(), c)
 }
 
 func (n *RemoteNodeImpl) RemoveConnection(connId string) {
-	n.sessions.Delete(connId)
 	n.connections.Delete(connId)
 }
 

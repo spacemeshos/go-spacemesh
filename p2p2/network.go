@@ -16,25 +16,42 @@ type Network interface {
 	// todo: change async callbacks to us channels for comm!!!!!!
 	DialTCP(address string, timeOut time.Duration) (Connection, error) // Connect to a remote node. Can send when no error.
 
-	OnRemoteClientConnected(callBack func(c Connection))               // remote tcp client connected to us
-	OnConnectionClosed(callBack func(c Connection))                    // a connection is closing
-	OnRemoteClientMessage(callBack func(c Connection, message []byte)) // new remote tcp client message
-	OnConnectionError(callBack func(c Connection, err error))          // connection error
-	OnMessageSendError(callBack func(c Connection, err error))
+	GetNewConnections() chan Connection
+	GetClosingConnections() chan Connection
+	GetConnectionErrors() chan ConnectionError
+	GetIncomingMessage() chan ConnectionMessage
+	GetMessageSendErrors() chan MessageSendError
 
 	// todo: add msg sending to remote node over the connection callbacks here
 }
 
 // impl internal tpye
-type network struct {
+type networkImpl struct {
 	tcpListener      net.Listener
 	tcpListenAddress string // Address to open connection: localhost:9999
 
-	remoteClientConnected func(c Connection)
-	connectionClosed      func(c Connection)
-	remoteClientMessage   func(c Connection, message []byte)
-	connectionError       func(c Connection, err error)
-	messageSendError      func(c Connection, err error)
+	newConnections     chan Connection
+	closingConnections chan Connection
+	connectionErrors   chan ConnectionError
+	incomingMessages   chan ConnectionMessage
+	messageSendErrors  chan MessageSendError
+}
+
+// Implement Network interface public channel accessors
+func (n *networkImpl) GetNewConnections() chan Connection {
+	return n.newConnections
+}
+func (n *networkImpl) GetClosingConnections() chan Connection {
+	return n.closingConnections
+}
+func (n *networkImpl) GetConnectionErrors() chan ConnectionError {
+	return n.connectionErrors
+}
+func (n *networkImpl) GetIncomingMessage() chan ConnectionMessage {
+	return n.incomingMessages
+}
+func (n *networkImpl) GetMessageSendErrors() chan MessageSendError {
+	return n.messageSendErrors
 }
 
 // Creates a new network
@@ -43,15 +60,14 @@ func NewNetwork(tcpListenAddress string) (Network, error) {
 
 	log.Info("Creating server with tcp address: %s", tcpListenAddress)
 
-	n := &network{
-		tcpListenAddress: tcpListenAddress,
+	n := &networkImpl{
+		tcpListenAddress:   tcpListenAddress,
+		newConnections:     make(chan Connection, 20),
+		closingConnections: make(chan Connection, 20),
+		connectionErrors:   make(chan ConnectionError, 20),
+		incomingMessages:   make(chan ConnectionMessage, 20),
+		messageSendErrors:  make(chan MessageSendError, 20),
 	}
-
-	// set empty callbacks to avoid panics
-	n.remoteClientConnected = func(c Connection) {}
-	n.connectionClosed = func(c Connection) {}
-	n.remoteClientMessage = func(c Connection, message []byte) {}
-	n.connectionError = func(c Connection, err error) {}
 
 	err := n.listen()
 
@@ -62,31 +78,11 @@ func NewNetwork(tcpListenAddress string) (Network, error) {
 	return n, nil
 }
 
-func (cm *network) OnRemoteClientConnected(callBack func(c Connection)) {
-	cm.remoteClientConnected = callBack
-}
-
-func (cm *network) OnConnectionClosed(callBack func(c Connection)) {
-	cm.connectionClosed = callBack
-}
-
-func (cm *network) OnRemoteClientMessage(callBack func(c Connection, message []byte)) {
-	cm.remoteClientMessage = callBack
-}
-
-func (cm *network) OnConnectionError(callBack func(c Connection, err error)) {
-	cm.connectionError = callBack
-}
-
-func (cm *network) OnMessageSendError(callBack func(c Connection, err error)) {
-	cm.messageSendError = callBack
-}
-
 // Dial a remote server with provided time out
 // address:: ip:port
 // Returns established connection that local clients can send messages to or error if failed
 // to establish a connection
-func (cm *network) DialTCP(address string, timeOut time.Duration) (Connection, error) {
+func (n *networkImpl) DialTCP(address string, timeOut time.Duration) (Connection, error) {
 
 	// connect via dialer so we can set tcp network params
 	dialer := &net.Dialer{}
@@ -103,34 +99,36 @@ func (cm *network) DialTCP(address string, timeOut time.Duration) (Connection, e
 	}
 
 	log.Info("Connected to %s...", address)
-	c := newConnection(netConn, cm, Local)
+	c := newConnection(netConn, n, Local)
 	return c, nil
 }
 
 // Start network server
-func (cm *network) listen() error {
+func (n *networkImpl) listen() error {
 	log.Info("Starting to listen...")
-	tcpListener, err := net.Listen("tcp", cm.tcpListenAddress)
+	tcpListener, err := net.Listen("tcp", n.tcpListenAddress)
 	if err != nil {
 		log.Error("Error starting TCP server: %v", err)
 		return err
 	}
-	cm.tcpListener = tcpListener
-	go cm.acceptTcp()
+	n.tcpListener = tcpListener
+	go n.acceptTcp()
 	return nil
 }
 
-func (cm *network) acceptTcp() {
+func (n *networkImpl) acceptTcp() {
 	for {
 		log.Info("Waiting for incoming connections...")
-		netConn, err := cm.tcpListener.Accept()
+		netConn, err := n.tcpListener.Accept()
 		if err != nil {
 			log.Warning("Failed to accept connection request: %v", err)
 			return
 		}
 
 		log.Info("Got new connection...")
-		c := newConnection(netConn, cm, Remote)
-		cm.remoteClientConnected(c)
+		c := newConnection(netConn, n, Remote)
+
+		n.newConnections <- c
+
 	}
 }

@@ -21,32 +21,36 @@ func TestReadWrite(t *testing.T) {
 	n, err := NewNetwork(address)
 	assert.Nil(t, err, "failed to create tcp server")
 
-	n.OnConnectionClosed(func(c Connection) {
-		log.Info("Connection closed")
-	})
+	// a simple network events processor
+	process := func () {
+	Loop:
+		for {
+			select {
+			case <-done:
+				// todo: gracefully stop the swarm - close all connections to remote nodes
+				break Loop
 
-	n.OnConnectionError(func(c Connection, err error) {
-		t.Fatalf("Connection error: %v", err)
-	})
+			case c := <-n.GetNewConnections():
+				log.Info("Remote client connected. %v", c)
 
-	n.OnMessageSendError(func(c Connection, err error) {
-		t.Fatalf("Failed to send message to connection: %v", err)
-	})
+			case m := <-n.GetIncomingMessage():
+				log.Info("Got remote message: %s", string(m.Message))
+				m.Connection.Close()
+				done <- true
 
-	var remoteConn Connection
+			case err := <-n.GetConnectionErrors():
+				t.Fatalf("Connection error: %v", err)
 
-	n.OnRemoteClientConnected(func(c Connection) {
-		log.Info("Remote client connected.")
-		remoteConn = c
-	})
+			case err := <-n.GetMessageSendErrors():
+				t.Fatalf("Failed to send message to connection: %v", err)
 
-	n.OnRemoteClientMessage(func(c Connection, m []byte) {
-		log.Info("Got remote message: %s", string(m))
+			case c := <-n.GetClosingConnections():
+				log.Info("Connection closed. %v", c)
+			}
+		}
+	}
 
-		// close the connection
-		c.Close()
-		done <- true
-	})
+	go process ()
 
 	c, err := n.DialTCP(address, time.Duration(10*time.Second))
 	assert.Nil(t, err, "failed to connect to tcp server")

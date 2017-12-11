@@ -11,13 +11,40 @@ import (
 	"time"
 )
 
+// Session info with a remote node - wraps connection
+type NetworkSession interface {
+	key() []byte        // session key
+	Created() time.Time // time when session was established
+}
+
+type ConnectionMessage struct {
+	Connection Connection
+	Message    []byte
+}
+
+type ConnectionError struct {
+	Connection Connection
+	err        error
+}
+
+type MessageSendError struct {
+	Connection Connection
+	Message    []byte
+	err        error
+}
+
 // A closeable network connection, that can send and receive messages from a remote instance
 // Connection is an io.Writer and an  io.Closer
 type Connection interface {
 	Id() string
+
 	Send(message []byte)
 	Close() error
 	LastOpTime() time.Time // last rw op time for this connection
+
+	// optional established session
+	GetSession() NetworkSession
+	SetSession(s NetworkSession)
 }
 
 type ConnectionSource int
@@ -38,21 +65,21 @@ type connection struct {
 
 	ioChannel *msgio.Chan // implemented using msgio.Chan - incoming messages
 
-	// todo: add channel for outgoing messages - clients just push messages to this channel
-
-	outgoingMsgs chan []byte
+	outgoingMsgs chan []byte // outgoing message queue
 
 	conn    net.Conn // wrapped network connection
-	network *network // network context
+	network Network  // network context
+
+	session NetworkSession
 
 	//msgWriter msgio.WriteCloser
 	//msgReader msgio.ReadCloser
 }
 
 // Create a new connection wrapping a net.Conn with a provided connection manager
-func newConnection(conn net.Conn, n *network, s ConnectionSource) Connection {
+func newConnection(conn net.Conn, n Network, s ConnectionSource) Connection {
 
-	// todo parametize incoming msgs chan buffer size - hard-coded for now
+	// todo parametrize incoming msgs chan buffer size - hard-coded for now
 
 	// msgio channel used for incoming message
 	msgioChan := msgio.NewChan(10)
@@ -67,13 +94,22 @@ func newConnection(conn net.Conn, n *network, s ConnectionSource) Connection {
 		network:      n,
 	}
 
-	// process incoming messages from the channel
-	go connection.listen()
+	// start processing channel-based message
+	go connection.begingEventProcessing()
 
 	// start reading incoming message from the connection and into the channel
 	go msgioChan.ReadFrom(conn)
 
 	return connection
+}
+
+// not concurrency safe - attach a session to the connection
+func (c *connection) SetSession(s NetworkSession) {
+	c.session = s
+}
+
+func (c *connection) GetSession() NetworkSession {
+	return c.session
 }
 
 func (c *connection) Id() string {
@@ -86,31 +122,38 @@ func (c *connection) String() string {
 
 // Send binary data to a connection
 // data is copied over so caller can get rid of the data
+// Concurrency: can be called from any go routine
 func (c *connection) Send(message []byte) {
 	// queue messages for sending
 	c.outgoingMsgs <- message
 }
 
 // Write a message to the network connection
-// note: this message is not go safe it is designed as a helper to
-// a channel select statement -
-func (c *connection) writeMessageToConnection(message *[]byte) {
-	ul := uint32(len(*message))
-	binary.Write(c.conn, binary.BigEndian, &ul)
-	_, err := c.conn.Write(*message)
+// Concurrency: this message is not go safe it is designed as an internal helper to
+// called from the event processing loop
+func (c *connection) writeMessageToConnection(msg []byte) {
 
+	// note: using msgio Reader and Writer failed here so this is a temp hack:
+	ul := uint32(len(msg))
+	err := binary.Write(c.conn, binary.BigEndian, &ul)
 	if err != nil {
-		c.network.messageSendError(c, err)
+
+		c.network.GetMessageSendErrors() <- MessageSendError{c, msg, err}
+		return
+	}
+
+	_, err = c.conn.Write(msg)
+	if err != nil {
+		c.network.GetMessageSendErrors() <- MessageSendError{c, msg, err}
 		return
 	}
 
 	c.lastOpTime = time.Now()
-
 }
 
 // Send a binary message to the connection remote endpoint
 // message - any binary data
-// Not go safe - designed to be used from a sync channel
+// Concurrency: Not go safe - designed to be used from a the event processing loop
 func (c *connection) write(message []byte) (int, error) {
 
 	ul := uint32(len(message))
@@ -130,8 +173,10 @@ func (c *connection) LastOpTime() time.Time {
 	return c.lastOpTime
 }
 
-// Read client data from channel
-func (c *connection) listen() {
+// Push outgoing message to the connections
+// Read from the icnoming new messages and send down the connection
+
+func (c *connection) begingEventProcessing() {
 
 	log.Info("Connection processing channel....")
 
@@ -141,24 +186,27 @@ Loop:
 
 		case msg, ok := <-c.outgoingMsgs:
 			if ok { // new outgoing message
-				c.writeMessageToConnection(&msg)
+				c.writeMessageToConnection(msg)
 			}
 
 		case msg, ok := <-c.ioChannel.MsgChan:
+
 			if !ok { // chan closed
 				break Loop
 			}
 
 			log.Info("New message from remote node: %s", string(msg))
 			c.lastOpTime = time.Now()
-			c.network.remoteClientMessage(c, msg)
+
+			// pump the message to the network
+			c.network.GetIncomingMessage() <- ConnectionMessage{c, msg}
 
 		case <-c.ioChannel.CloseChan:
-			c.network.connectionClosed(c)
+			c.network.GetClosingConnections() <- c
 			break Loop
 
 		case err := <-c.ioChannel.ErrChan:
-			c.network.connectionError(c, err)
+			c.network.GetConnectionErrors() <- ConnectionError{c, err}
 		}
 	}
 }

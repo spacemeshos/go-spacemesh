@@ -8,7 +8,7 @@ import (
 
 type Key interface {
 	String() string // this is a base58 encoded of Bytes()
-	Bytes() []byte  // raw key binary data
+	Bytes() []byte  // raw key binary data - 32 bytes, big endian
 	Pretty() string // pretty print key id
 }
 
@@ -22,13 +22,15 @@ type PrivateKey interface {
 	Decrypt(in []byte) ([]byte, error)
 }
 
-type PublicKey interface {
+type PublicKey interface { // 33 bytes
 	Key
 	Verify(data []byte, sig []byte) (bool, error)
 
 	// encrypt data so it is only decryptable w the private key of this key
 	Encrypt(in []byte) ([]byte, error)
 }
+
+////////////////////////////////////////////////////////
 
 type publicKeyImpl struct {
 	k *btcec.PublicKey
@@ -67,8 +69,8 @@ func (p *privateKeyImpl) String() string {
 }
 
 func (p *privateKeyImpl) GetPublicKey() PublicKey {
-	pkeyData := p.k.PubKey()
-	return &publicKeyImpl{k: pkeyData}
+	pubKey := p.k.PubKey()
+	return &publicKeyImpl{k: pubKey}
 }
 
 func (p *privateKeyImpl) Pretty() string {

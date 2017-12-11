@@ -17,7 +17,7 @@ const (
 )
 
 // not go safe - use chan for safety
-// todo: get rid of all locks
+// todo: get rid of all locks - msgio is only used via chan
 
 // todo: investigate mpool buffers usage
 
@@ -100,6 +100,11 @@ func (s *writer) Write(msg []byte) (int, error) {
 }
 
 func (s *writer) WriteMsg(msg []byte) (err error) {
+
+	// todo: since we always use chan to serilize writting / reading of messages
+	// there's no really need for the locking in msgio  - we should remove them once
+	// we have more tests in-place
+
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	if err := WriteLen(s.W, len(msg)); err != nil {
