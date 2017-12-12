@@ -8,6 +8,7 @@ import (
 	"crypto/sha512"
 	"encoding/hex"
 	"errors"
+	"github.com/UnrulyOS/go-unruly/log"
 	"github.com/UnrulyOS/go-unruly/p2p2/pb"
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/golang/protobuf/proto"
@@ -17,6 +18,144 @@ import (
 // pattern: [protocol][version][method-name]
 const HandshakeReq = "/handshake/1.0/handshake-req/"
 const HandshakeResp = "/handshake/1.0/handshake-resp/"
+
+// todo: interface this
+type NewSessoinData struct {
+	localNode  LocalNode
+	remoteNode RemoteNode
+	session    NetworkSession
+	err        error
+}
+
+type HandshakeProtocol interface {
+	CreateSession(node LocalNode, remoteNode RemoteNode)
+	RegisterNewSessionCallback(callback chan *NewSessoinData)
+}
+
+type handshakeProtocolImpl struct {
+
+	// state
+	swarm               Swarm
+	newSessionCallbacks []chan *NewSessoinData // a list of callback channels for new sessions
+
+	pendingSessions map[string]*NewSessoinData // sessions pending authentication
+
+	// ops
+	incomingHandshakeRequests  MessagesChan
+	incomingHandsakeResponses  MessagesChan
+	newSessoinCallbackRequests chan chan *NewSessoinData
+	addPendingSession		   chan *NewSessoinData
+	deletePendingSessionById   chan string
+	sessionStateChanged		   chan *NewSessoinData
+}
+
+func NewHandshakeProtocol(s Swarm) HandshakeProtocol {
+
+	h := &handshakeProtocolImpl{
+		swarm: s,
+		pendingSessions: make(map[string]*NewSessoinData),
+		incomingHandshakeRequests:  make(MessagesChan, 20),
+		incomingHandsakeResponses:  make(chan IncomingMessage, 20),
+		newSessoinCallbackRequests: make(chan chan *NewSessoinData, 2),
+		newSessionCallbacks:        make([]chan *NewSessoinData, 1),
+		deletePendingSessionById:   make(chan string, 5),
+		sessionStateChanged: make(chan *NewSessoinData, 3),
+	}
+
+	go h.processEvents()
+
+	// protocol demuxer registration
+
+	s.GetDemuxer().RegisterProtocolHandler(
+		ProtocolRegistration{protocol: HandshakeReq, handler: h.incomingHandshakeRequests})
+
+	s.GetDemuxer().RegisterProtocolHandler(
+		ProtocolRegistration{protocol: HandshakeResp, handler: h.incomingHandsakeResponses})
+
+	return h
+}
+
+func (h *handshakeProtocolImpl) RegisterNewSessionCallback(callback chan *NewSessoinData) {
+	h.newSessoinCallbackRequests <- callback
+}
+
+func (h *handshakeProtocolImpl) CreateSession(localNode LocalNode, remoteNode RemoteNode) {
+
+	data, session, err := GenereateHandshakeRequestData(localNode, remoteNode)
+
+	newSessionData := &NewSessoinData{
+		localNode: localNode,
+		remoteNode: remoteNode,
+		session : session,
+		err : err,
+	}
+
+	if err != nil {
+		h.sessionStateChanged <- newSessionData
+		return
+	}
+
+	payload, err := proto.Marshal(data)
+	if err != nil {
+		h.sessionStateChanged <- newSessionData
+		return
+	}
+
+	h.swarm.SendMessage(SendMessageReq{
+		reqId: session.String(),
+		dest: remoteNode,
+		msg: payload,
+	})
+
+	h.addPendingSession <- newSessionData
+}
+
+func (h *handshakeProtocolImpl) processEvents() {
+	for {
+		select {
+		case m := <-h.incomingHandshakeRequests:
+			h.onHandleIncomingHandshakeRequest(m)
+
+		case m := <-h.incomingHandsakeResponses:
+			h.onHandleIncomingHandshakeResponse(m)
+
+		case r := <-h.newSessoinCallbackRequests:
+			h.newSessionCallbacks = append(h.newSessionCallbacks, r)
+
+		case s := <-h.addPendingSession:
+			h.pendingSessions[s.session.String()] = s
+
+		case k := <-h.deletePendingSessionById:
+			delete(h.pendingSessions, k)
+
+		case s := <-h.sessionStateChanged:
+			for _, c := range h.newSessionCallbacks {
+				c <- s
+			}
+		}
+	}
+}
+
+func (h *handshakeProtocolImpl) onHandleIncomingHandshakeRequest(msg IncomingMessage) {
+
+	data := &pb.HandshakeData{}
+	err := proto.Unmarshal(msg.msg, data)
+	if err != nil {
+		log.Warning("Invalid incoming handshake request bin data: %v", err)
+		return
+	}
+
+}
+
+func (h *handshakeProtocolImpl) onHandleIncomingHandshakeResponse(msg IncomingMessage) {
+
+	data := &pb.HandshakeData{}
+	err := proto.Unmarshal(msg.msg, data)
+	if err != nil {
+		log.Warning("Invalid incoming handshake resp bin data: %v", err)
+		return
+	}
+}
 
 // Handshake protocol:
 // Node1 -> Node 2: Req(HandshakeData)

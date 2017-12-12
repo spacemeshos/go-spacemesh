@@ -32,7 +32,7 @@ type Swarm interface {
 	// forcefully disconnect form a node
 	DisconnectFrom(req NodeReq)
 
-	// high level API - used by muxer - sends a messge and gets a callback with data or error (async)
+	// high level API - used by demuxer - sends a message
 	// Should only be called by muxer
 	SendMessage(SendMessageReq)
 
@@ -41,18 +41,10 @@ type Swarm interface {
 	GetDemuxer() Demuxer
 }
 
-type SendMessgeResp struct {
-	responder RemoteNode
-	reqId     string
-	msg       []byte
-	err       error
-}
-
 type SendMessageReq struct {
-	dest     RemoteNode
-	reqId    string
-	msg      []byte
-	callback chan SendMessgeResp
+	dest  RemoteNode
+	reqId string
+	msg   []byte
 }
 
 type NodeReq struct {
