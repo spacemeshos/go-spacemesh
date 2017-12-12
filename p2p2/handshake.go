@@ -144,7 +144,7 @@ func ProcessHandshakeRequest(node LocalNode, r RemoteNode, req *pb.HandshakeData
 
 	resp := &pb.HandshakeData{
 		NodePubKey: node.PublicKey().InternalKey().SerializeUncompressed(),
-		PubKey:  req.PubKey,
+		PubKey:     req.PubKey,
 		Iv:         iv,
 		Hmac:       hmac1,
 		Sign:       "",
@@ -214,4 +214,3 @@ func ProcessHandshakeResponse(node LocalNode, r RemoteNode, s NetworkSession, re
 
 	return nil
 }
-

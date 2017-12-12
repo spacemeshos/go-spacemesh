@@ -13,7 +13,7 @@ func TestHnadshake(t *testing.T) {
 	// node 1
 	priv, pub, _ := p2p2.GenerateKeyPair()
 	node1Local := p2p2.NewLocalNode(pub, priv, "127.0.0.1:3030")
-	node1Remote, _ := p2p2.NewRemoteNode(pub.String() ,"127.0.0.1:3030")
+	node1Remote, _ := p2p2.NewRemoteNode(pub.String(), "127.0.0.1:3030")
 
 	// node 2
 	priv1, pub1, _ := p2p2.GenerateKeyPair()

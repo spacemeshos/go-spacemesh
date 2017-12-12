@@ -9,12 +9,12 @@ import (
 // Sessions may be used between 'connections' until they expire
 // Session provides the encryptor/decryptor for all messages sent between peers
 type NetworkSession interface {
-	String() string  	   // unique session id
-	Iv() []byte            // session iv (initiator generated)
-	KeyE() []byte          // session shared sym key for enc - 32 bytes
-	KeyM() []byte          // session shared sym key for mac - 32 bytes
-	PubKey() []byte  	   // 65 bytes session-only pub key uncompressed
-	Created() time.Time    // time when session was established
+	String() string     // unique session id
+	Iv() []byte         // session iv (initiator generated)
+	KeyE() []byte       // session shared sym key for enc - 32 bytes
+	KeyM() []byte       // session shared sym key for mac - 32 bytes
+	PubKey() []byte     // 65 bytes session-only pub key uncompressed
+	Created() time.Time // time when session was established
 
 	// TODO: add expiration support
 
@@ -26,7 +26,7 @@ type NetworkSessionImpl struct {
 	iv            []byte
 	keyE          []byte
 	keyM          []byte
-	pubKey		  []byte
+	pubKey        []byte
 	created       time.Time
 	authenticated bool
 
@@ -71,8 +71,8 @@ func NewNetworkSession(iv []byte, keyE []byte, keyM []byte, pubKey []byte) Netwo
 	s := &NetworkSessionImpl{
 		iv:            iv,
 		keyE:          keyE,
-		keyM:		   keyM,
-		pubKey:  		pubKey,
+		keyM:          keyM,
+		pubKey:        pubKey,
 		created:       time.Now(),
 		authenticated: false,
 	}
