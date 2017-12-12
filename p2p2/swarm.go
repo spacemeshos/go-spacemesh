@@ -209,22 +209,22 @@ func (s *swarmImpl) onRemoteClientMessage(msg ConnectionMessage) {
 		return
 	}
 
-	if c.Payload == nil {
-		// a handshake protocol message
-		// send to muxer (protocol, msg, etc....)
+	if len(c.Payload) == 0 {
+		// this a handshake protocol message
+		// send to muxer (protocol, msg, etc....) - protocol handler will create remote node, session, etc...
 	} else {
 
-		// a session encrypted protocol message
+		// A session encrypted protocol message is in payload
 
-		// handle protocol message
+		// 1. find remote node - bail if we can't find it - it should be created on session start
 
-		// find remote node
+		// 2. get session from remote node - if session not found close the connection
 
-		// find active session with it
+		// attempt to decrypt message (c.payload) with active session key
 
-		// attempt to decrypt message with active session key
+		// create pb.ProtocolMessage from the decrypted message
 
-		// send to muxer (protocol, msg, etc...)
+		// send to muxer pb.protocolMessage to the muxer for handling - it has protocol, reqId, sessionId, etc....
 	}
 
 	//data := proto.Unmarshal(msg.Message, proto.Message)

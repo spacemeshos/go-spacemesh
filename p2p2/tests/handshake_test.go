@@ -11,7 +11,7 @@ import (
 )
 
 // Basic handshake protocol data test
-func TestHandshake(t *testing.T) {
+func TestHandshakeCoreData(t *testing.T) {
 
 	// node 1
 	priv, pub, _ := p2p2.GenerateKeyPair()
@@ -55,10 +55,9 @@ func TestHandshake(t *testing.T) {
 
 	assert.True(t, session.IsAuthenticated(), "expected session to be authenticated")
 	assert.NoErr(t, err, "failed to authenticate or process response")
-
 }
 
-func TestProtocolHandling(t *testing.T) {
+func TestHandshakeProtocol(t *testing.T) {
 
 	// node 1
 	priv, pub, _ := p2p2.GenerateKeyPair()
@@ -70,7 +69,7 @@ func TestProtocolHandling(t *testing.T) {
 	node2Remote, _ := p2p2.NewRemoteNode(pub1.String(), "127.0.0.1:3033")
 	node2Local := p2p2.NewLocalNode(pub1, priv1, "127.0.0.1:3033")
 
-	// STEP 1: Node1 generates handshake data and sends it to node2 ....
+	// STEP 1: Node 1 generates handshake data and sends it to node2 ....
 	data, session, err := p2p2.GenereateHandshakeRequestData(node1Local, node2Remote)
 
 	assert.NoErr(t, err, "expected no error")
@@ -140,6 +139,7 @@ func TestProtocolHandling(t *testing.T) {
 
 
 	// STEP 5: Node 1 validates the data and sets its network session to authenticated
+
 	err = p2p2.ProcessHandshakeResponse(node1Local, node2Remote, session, data2)
 
 	assert.True(t, session.IsAuthenticated(), "expected session to be authenticated")
