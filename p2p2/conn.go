@@ -70,13 +70,13 @@ func newConnection(conn net.Conn, n Network, s ConnectionSource) Connection {
 	incomingMsgs := msgio.NewChan(10)
 
 	connection := &connectionImpl{
-		id:                   uuid.New().String(),
-		created:              time.Now(),
-		source:               s,
-		incomingMsgs:         incomingMsgs,
-		outgoingMsgs:         make(chan []byte, 10),
-		conn:                 conn,
-		network:              n,
+		id:           uuid.New().String(),
+		created:      time.Now(),
+		source:       s,
+		incomingMsgs: incomingMsgs,
+		outgoingMsgs: make(chan []byte, 10),
+		conn:         conn,
+		network:      n,
 	}
 
 	// start processing channel-based message

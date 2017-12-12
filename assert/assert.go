@@ -40,6 +40,11 @@ func False(t *testing.T, v bool, msgs ...string) {
 	True(t, !v, msgs...)
 }
 
+func NoErr(t *testing.T, err error, msgs ...string) {
+	if err != nil {
+		t.Fatal(msgs, "error:", err)
+	}
+}
 func Err(t *testing.T, err error, msgs ...string) {
 	if err == nil {
 		t.Fatal(msgs, "error:", err)

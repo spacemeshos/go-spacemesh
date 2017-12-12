@@ -1,9 +1,5 @@
 package p2p2
 
-import (
-	"time"
-)
-
 // Remote node data
 // Node connections are maintained by swarm
 type RemoteNode interface {
@@ -22,8 +18,7 @@ type RemoteNode interface {
 	Kill()
 }
 
-type RemoteNodeImpl struct {
-
+type remoteNodeImpl struct {
 	publicKey  PublicKey
 	tcpAddress string
 
@@ -45,14 +40,13 @@ func NewRemoteNode(id string, tcpAddress string) (RemoteNode, error) {
 		return nil, err
 	}
 
-	node := &RemoteNodeImpl{
-		publicKey:  key,
-		tcpAddress: tcpAddress,
+	node := &remoteNodeImpl{
+		publicKey:            key,
+		tcpAddress:           tcpAddress,
 		attachSessoinChannel: make(chan NetworkSession, 1),
 		expireSessionChannel: make(chan bool),
 		getSessionChannel:    make(chan func(s NetworkSession), 1),
-		kill : make(chan bool),
-
+		kill:                 make(chan bool),
 	}
 
 	go node.processEvents()
@@ -60,18 +54,18 @@ func NewRemoteNode(id string, tcpAddress string) (RemoteNode, error) {
 	return node, nil
 }
 
-func (n *RemoteNodeImpl) Kill() {
+func (n *remoteNodeImpl) Kill() {
 	// stop processing events
 	n.kill <- true
 }
 
-func (n *RemoteNodeImpl) processEvents() {
+func (n *remoteNodeImpl) processEvents() {
 
 Loop:
 	for {
 		select {
 
-		case <- n.kill:
+		case <-n.kill:
 			break Loop
 
 		case s := <-n.attachSessoinChannel:
@@ -88,40 +82,40 @@ Loop:
 }
 
 // go safe - attach a session to the connection
-func (n *RemoteNodeImpl) SetSession(s NetworkSession) {
+func (n *remoteNodeImpl) SetSession(s NetworkSession) {
 	n.attachSessoinChannel <- s
 }
 
-func (n *RemoteNodeImpl) HasSession() bool {
+func (n *remoteNodeImpl) HasSession() bool {
 	return n.session != nil
 }
 
 // go safe - use a channel of func to implement concurent safe callbacks
-func (n *RemoteNodeImpl) GetSession(callback func(n NetworkSession)) {
+func (n *remoteNodeImpl) GetSession(callback func(n NetworkSession)) {
 	n.getSessionChannel <- callback
 }
 
 // go safe
-func (n *RemoteNodeImpl) ExpireSession() {
+func (n *remoteNodeImpl) ExpireSession() {
 	n.expireSessionChannel <- true
 }
 
-func (n *RemoteNodeImpl) Id() []byte {
+func (n *remoteNodeImpl) Id() []byte {
 	return n.publicKey.Bytes()
 }
 
-func (n *RemoteNodeImpl) String() string {
+func (n *remoteNodeImpl) String() string {
 	return n.publicKey.String()
 }
 
-func (n *RemoteNodeImpl) Pretty() string {
+func (n *remoteNodeImpl) Pretty() string {
 	return n.publicKey.Pretty()
 }
 
-func (n *RemoteNodeImpl) PublicKey() PublicKey {
+func (n *remoteNodeImpl) PublicKey() PublicKey {
 	return n.publicKey
 }
 
-func (n *RemoteNodeImpl) TcpAddress() string {
+func (n *remoteNodeImpl) TcpAddress() string {
 	return n.tcpAddress
 }

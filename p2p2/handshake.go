@@ -28,7 +28,7 @@ func GenereateHandshakeRequestData(node LocalNode, remoteNode RemoteNode) (*pb.H
 
 	data := &pb.HandshakeData{}
 
-	iv := make([]byte,16)
+	iv := make([]byte, 16)
 	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
 		return nil, nil, err
 	}
@@ -45,14 +45,14 @@ func GenereateHandshakeRequestData(node LocalNode, remoteNode RemoteNode) (*pb.H
 	// start shared key generation
 	ecdhKey := btcec.GenerateSharedSecret(ephemeral, remoteNode.PublicKey().InternalKey())
 	derivedKey := sha512.Sum512(ecdhKey)
-	keyE := derivedKey[:32]	// used for aes enc/dec
+	keyE := derivedKey[:32] // used for aes enc/dec
 	keyM := derivedKey[32:] // used for hmac
 
 	data.SharedKey = ephemeral.PubKey().SerializeUncompressed()
 
 	// start HMAC-SHA-256
 	hm := hmac.New(sha256.New, keyM)
-	hm.Write(iv)      	    			// iv is hashed
+	hm.Write(iv) // iv is hashed
 	data.Hmac = hm.Sum(nil)
 	data.Sign = ""
 
@@ -102,12 +102,8 @@ func ProcessHandshakeRequest(node LocalNode, r RemoteNode, req *pb.HandshakeData
 	}
 
 	// verify signature
-	l := len(req.Sign)
-	if l > 32 {
-		return nil, nil, errors.New("invalid sig")
-	}
+	sigData, err := hex.DecodeString(req.Sign)
 
-	sig, err := hex.DecodeString(req.Sign)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -118,7 +114,8 @@ func ProcessHandshakeRequest(node LocalNode, r RemoteNode, req *pb.HandshakeData
 		return nil, nil, err
 	}
 
-	v, err := node.PublicKey().Verify(bin, sig)
+	// we verify against the remote node public key
+	v, err := r.PublicKey().Verify(bin, sigData)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -128,25 +125,25 @@ func ProcessHandshakeRequest(node LocalNode, r RemoteNode, req *pb.HandshakeData
 	}
 
 	// generate resp data
-	iv := make([]byte,16)
+	iv := make([]byte, 16)
 	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
 		return nil, nil, err
 	}
 
 	// auth resp
 	hm.Reset()
-	hm.Write(iv)      	    			// iv is hashed
+	hm.Write(iv) // iv is hashed
 	hmac1 := hm.Sum(nil)
 
 	s := NewNetworkSession(req.Iv, keyE)
 	s.SetAuthenticated(true)
 
 	resp := &pb.HandshakeData{
-		 NodePubKey:node.PublicKey().InternalKey().SerializeUncompressed(),
-		 SharedKey: req.SharedKey,
-		 Iv: iv,
-		 Hmac: hmac1,
-		 Sign: "",
+		NodePubKey: node.PublicKey().InternalKey().SerializeUncompressed(),
+		SharedKey:  req.SharedKey,
+		Iv:         iv,
+		Hmac:       hmac1,
+		Sign:       "",
 	}
 
 	// sign corpus - marshall data without the signature to protobufs3 binary format
@@ -165,4 +162,3 @@ func ProcessHandshakeRequest(node LocalNode, r RemoteNode, req *pb.HandshakeData
 
 	return resp, s, nil
 }
-

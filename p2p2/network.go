@@ -12,7 +12,6 @@ import (
 // ConnManager includes a TCP server, and a TCP client
 // It provides full duplex messaging functionality over the same tcp/ip connection
 type Network interface {
-
 	DialTCP(address string, timeOut time.Duration) (Connection, error) // Connect to a remote node. Can send when no error.
 
 	GetNewConnections() chan Connection

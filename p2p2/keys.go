@@ -98,6 +98,7 @@ func (p *privateKeyImpl) Sign(in []byte) ([]byte, error) {
 	return signature.Serialize(), nil
 }
 
+// Decrypt using a one time ephemeral key
 func (p *privateKeyImpl) Decrypt(in []byte) ([]byte, error) {
 	return btcec.Decrypt(p.k, in)
 }
@@ -122,7 +123,6 @@ func NewPublicKeyFromString(s string) (PublicKey, error) {
 func (p *publicKeyImpl) InternalKey() *btcec.PublicKey {
 	return p.k
 }
-
 
 func (p *publicKeyImpl) Bytes() []byte {
 	return p.k.SerializeCompressed()
