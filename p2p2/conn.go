@@ -58,7 +58,6 @@ type connectionImpl struct {
 
 	conn    net.Conn // wrapped network connection
 	network Network  // network context
-
 }
 
 // Create a new connection wrapping a net.Conn with a provided connection manager

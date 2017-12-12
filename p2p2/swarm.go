@@ -1,5 +1,11 @@
 package p2p2
 
+import (
+	"github.com/UnrulyOS/go-unruly/log"
+	"github.com/UnrulyOS/go-unruly/p2p2/pb"
+	"github.com/gogo/protobuf/proto"
+)
+
 // Swarm
 // Hold ref to peers and manage connections to peers
 
@@ -194,6 +200,34 @@ func (s *swarmImpl) onRemoteClientConnected(c Connection) {
 func (s *swarmImpl) onRemoteClientMessage(msg ConnectionMessage) {
 
 	// Processing a remote incoming message:
+
+	c := &pb.CommonMessageData{}
+	err := proto.Unmarshal(msg.Message, c)
+	if err != nil {
+		log.Warning("Bad request - closing connection...")
+		msg.Connection.Close()
+		return
+	}
+
+	if c.Payload == nil {
+		// a handshake protocol message
+		// send to muxer (protocol, msg, etc....)
+	} else {
+
+		// a session encrypted protocol message
+
+		// handle protocol message
+
+		// find remote node
+
+		// find active session with it
+
+		// attempt to decrypt message with active session key
+
+		// send to muxer (protocol, msg, etc...)
+	}
+
+	//data := proto.Unmarshal(msg.Message, proto.Message)
 
 	// 1. decyrpt protobuf to a generic protobuf obj - all messages are protobufs but we don't know struct type just yet
 

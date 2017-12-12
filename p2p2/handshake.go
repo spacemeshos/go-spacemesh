@@ -14,6 +14,9 @@ import (
 	"io"
 )
 
+const HandshakeReq = "/handshake/req"
+const HandshakeResp = "/handshake/resp"
+
 // Handshake protocol:
 // Node1 -> Node 2: Req(HandshakeData)
 // Node2 -> Node 1: Resp(HandshakeData)
@@ -28,12 +31,16 @@ func GenereateHandshakeRequestData(node LocalNode, remoteNode RemoteNode) (*pb.H
 	// we use the Elliptic Curve Encryption Scheme
 	// https://en.wikipedia.org/wiki/Integrated_Encryption_Scheme
 
-	data := &pb.HandshakeData{}
+	data := &pb.HandshakeData{
+		Protocol: HandshakeReq,
+	}
 
 	iv := make([]byte, 16)
 	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
 		return nil, nil, err
 	}
+
+	data.SessionId = iv
 	data.Iv = iv
 
 	ephemeral, err := btcec.NewPrivateKey(btcec.S256())
@@ -143,10 +150,12 @@ func ProcessHandshakeRequest(node LocalNode, r RemoteNode, req *pb.HandshakeData
 	hmac1 := hm1.Sum(nil)
 
 	resp := &pb.HandshakeData{
+		SessionId:  req.SessionId,
 		NodePubKey: node.PublicKey().InternalKey().SerializeUncompressed(),
 		PubKey:     req.PubKey,
 		Iv:         iv,
 		Hmac:       hmac1,
+		Protocol:   HandshakeResp,
 		Sign:       "",
 	}
 
@@ -174,7 +183,12 @@ func ProcessHandshakeResponse(node LocalNode, r RemoteNode, s NetworkSession, re
 
 	// verified shared public secret
 	if !bytes.Equal(resp.PubKey, s.PubKey()) {
-		return errors.New("Shared secret mismatch")
+		return errors.New("shared secret mismatch")
+	}
+
+	// verify response is for the expected session id
+	if !bytes.Equal(s.Id(), resp.SessionId) {
+		return errors.New("expected same session id")
 	}
 
 	// verify mac

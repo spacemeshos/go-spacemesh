@@ -9,8 +9,8 @@ import (
 // Sessions may be used between 'connections' until they expire
 // Session provides the encryptor/decryptor for all messages sent between peers
 type NetworkSession interface {
-	String() string     // unique session id
-	Iv() []byte         // session iv (initiator generated)
+	Id() []byte         // Unique session id
+	String() string     // globally unique session id for p2p debugging and key store purposes
 	KeyE() []byte       // session shared sym key for enc - 32 bytes
 	KeyM() []byte       // session shared sym key for mac - 32 bytes
 	PubKey() []byte     // 65 bytes session-only pub key uncompressed
@@ -23,7 +23,7 @@ type NetworkSession interface {
 }
 
 type NetworkSessionImpl struct {
-	iv            []byte
+	id            []byte
 	keyE          []byte
 	keyM          []byte
 	pubKey        []byte
@@ -36,11 +36,10 @@ type NetworkSessionImpl struct {
 }
 
 func (n *NetworkSessionImpl) String() string {
-	return hex.EncodeToString(n.iv)
+	return hex.EncodeToString(n.id)
 }
-
-func (n *NetworkSessionImpl) Iv() []byte {
-	return n.iv
+func (n *NetworkSessionImpl) Id() []byte {
+	return n.id
 }
 
 func (n *NetworkSessionImpl) KeyE() []byte {
@@ -67,9 +66,9 @@ func (n *NetworkSessionImpl) Created() time.Time {
 	return n.created
 }
 
-func NewNetworkSession(iv []byte, keyE []byte, keyM []byte, pubKey []byte) NetworkSession {
+func NewNetworkSession(id []byte, keyE []byte, keyM []byte, pubKey []byte) NetworkSession {
 	s := &NetworkSessionImpl{
-		iv:            iv,
+		id:            id,
 		keyE:          keyE,
 		keyM:          keyM,
 		pubKey:        pubKey,

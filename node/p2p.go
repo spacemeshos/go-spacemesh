@@ -95,7 +95,7 @@ func (n *Node) verifyData(data []byte, signature []byte, peerId peer.ID, pubKeyD
 		return false
 	}
 
-	// this is implemented by veryfing signature of a sha256 of the data
+	// this is implemented by verifying signature of a sha256 of the data
 	res, err := key.Verify(data, signature)
 	if err != nil {
 		log.Info("error authenticating data. %s", err)
@@ -132,7 +132,7 @@ func (n *Node) sendProtoMessage(data proto.Message, s inet.Stream) bool {
 	enc := protobufCodec.Multicodec(nil).Encoder(writer)
 	err := enc.Encode(data)
 	if err != nil {
-		log.Error("Failed to send proto message. %s", err)
+		log.Error("failed to send proto message. %s", err)
 		return false
 	}
 	writer.Flush()
