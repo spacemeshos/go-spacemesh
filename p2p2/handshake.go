@@ -27,8 +27,6 @@ func GenereateHandshakeRequestData(node LocalNode, remoteNode RemoteNode) (*pb.H
 	// https://en.wikipedia.org/wiki/Integrated_Encryption_Scheme
 
 	data := &pb.HandshakeData{}
-	data.NodePubKey = node.PublicKey().InternalKey().SerializeUncompressed()
-
 
 	iv := make([]byte,16)
 	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
@@ -41,15 +39,15 @@ func GenereateHandshakeRequestData(node LocalNode, remoteNode RemoteNode) (*pb.H
 		return nil, nil, err
 	}
 
+	// new ephemeral private key
+	data.NodePubKey = node.PublicKey().InternalKey().SerializeUncompressed()
+
+	// start shared key generation
 	ecdhKey := btcec.GenerateSharedSecret(ephemeral, remoteNode.PublicKey().InternalKey())
 	derivedKey := sha512.Sum512(ecdhKey)
+	keyE := derivedKey[:32]	// used for aes enc/dec
+	keyM := derivedKey[32:] // used for hmac
 
-	keyE := derivedKey[:32]
-	keyM := derivedKey[32:]
-
-	// save session info for local use
-
-	// start writing public key
 	data.SharedKey = ephemeral.PubKey().SerializeUncompressed()
 
 	// start HMAC-SHA-256
@@ -64,7 +62,6 @@ func GenereateHandshakeRequestData(node LocalNode, remoteNode RemoteNode) (*pb.H
 		return nil, nil, err
 	}
 
-	// sign it
 	sign, err := node.PrivateKey().Sign(bin)
 	if err != nil {
 		return nil, nil, err
@@ -73,6 +70,7 @@ func GenereateHandshakeRequestData(node LocalNode, remoteNode RemoteNode) (*pb.H
 	// place signature - hex encoded string
 	data.Sign = hex.EncodeToString(sign)
 
+	// create local session data - iv and key
 	session := NewNetworkSession(iv, keyE)
 
 	return data, session, nil
@@ -100,13 +98,13 @@ func ProcessHandshakeRequest(node LocalNode, r RemoteNode, req *pb.HandshakeData
 	hm.Write(req.Iv)
 	expectedMAC := hm.Sum(nil)
 	if !hmac.Equal(req.Hmac, expectedMAC) {
-		return nil, nil, errors.New("Invalid hmac")
+		return nil, nil, errors.New("invalid hmac")
 	}
 
 	// verify signature
 	l := len(req.Sign)
 	if l > 32 {
-		return nil, nil, errors.New("Invalid sig")
+		return nil, nil, errors.New("invalid sig")
 	}
 
 	sig, err := hex.DecodeString(req.Sign)
@@ -126,7 +124,7 @@ func ProcessHandshakeRequest(node LocalNode, r RemoteNode, req *pb.HandshakeData
 	}
 
 	if !v {
-		return nil, nil, errors.New("Invalid signature")
+		return nil, nil, errors.New("invalid signature")
 	}
 
 	// generate resp data
@@ -151,14 +149,12 @@ func ProcessHandshakeRequest(node LocalNode, r RemoteNode, req *pb.HandshakeData
 		 Sign: "",
 	}
 
-
-	// sign corupus - marshall data without the signature to protobufs3 binary format
+	// sign corpus - marshall data without the signature to protobufs3 binary format
 	bin, err = proto.Marshal(resp)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	// sign it
 	sign, err := node.PrivateKey().Sign(bin)
 	if err != nil {
 		return nil, nil, err
@@ -167,8 +163,6 @@ func ProcessHandshakeRequest(node LocalNode, r RemoteNode, req *pb.HandshakeData
 	// place signature in response - hex encoded string
 	resp.Sign = hex.EncodeToString(sign)
 
-
 	return resp, s, nil
 }
 
-///////////////////////////////

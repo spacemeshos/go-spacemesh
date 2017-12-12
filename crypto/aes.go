@@ -11,7 +11,6 @@ var (
 )
 
 // AES cipher following https://leanpub.com/gocrypto/read#leanpub-auto-aes-cbc
-
 func AesCTRXOR(key, input, nonce []byte) ([]byte, error) {
 	aesBlock, err := aes.NewCipher(key)
 	if err != nil {
@@ -25,6 +24,7 @@ func AesCTRXOR(key, input, nonce []byte) ([]byte, error) {
 }
 
 // note: untested
+/*
 func AesCBCDecrypt(key, cipherText, iv []byte) ([]byte, error) {
 
 	aesBlock, err := aes.NewCipher(key)
@@ -35,16 +35,16 @@ func AesCBCDecrypt(key, cipherText, iv []byte) ([]byte, error) {
 	d := cipher.NewCBCDecrypter(aesBlock, iv)
 	paddedPlainText := make([]byte, len(cipherText))
 	d.CryptBlocks(paddedPlainText, cipherText)
-	plaintext := unpad(paddedPlainText)
+	plaintext := Pkcs7Unpad(paddedPlainText)
 	if plaintext == nil {
 		return nil, aesDecryptionError
 	}
 
 	return plaintext, nil
-}
+}*/
 
 // pkcs7 padding
-func pkcs7Pad(in []byte) []byte {
+func Pkcs7Pad(in []byte) []byte {
 	padding := 16 - (len(in) % 16)
 	for i := 0; i < padding; i++ {
 		in = append(in, byte(padding))
@@ -53,7 +53,7 @@ func pkcs7Pad(in []byte) []byte {
 }
 
 // pkcs7 unpadding
-func unpad(in []byte) []byte {
+func Pkcs7Unpad(in []byte) []byte {
 	if len(in) == 0 {
 		return nil
 	}
