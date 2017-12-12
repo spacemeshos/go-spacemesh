@@ -9,9 +9,8 @@ option go_package = "pb";
 message HandshakeData {
     bytes nodePubKey = 1; // 65 bytes uncompressed
     bytes iv = 2; // 16 bytes - AES-256-CBC IV
-    bytes sharedKey = 3; // 65 bytes (uncompressed) emphemeral
+    bytes sharedKey = 3; // 65 bytes (uncompressed) ephemeral public
     bytes hmac = 4; // HMAC-SHA-256 32 bytes
-    bytes sign = 5; // 32 bytes sign of all above data by node public key (verifies he has the priv key and he wrote the data
+    string sign = 5; // hex encoded string 32 bytes sign of all above data by node public key (verifies he has the priv key and he wrote the data
 }
-
 

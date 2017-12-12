@@ -197,7 +197,10 @@ func (s *swarmImpl) onRemoteClientMessage(msg ConnectionMessage) {
 
 	// 1. decyrpt protobuf to a generic protobuf obj - all messages are protobufs but we don't know struct type just yet
 
-	// 2. if session key is included in message and connection has this key then use it to decrypt payload - other reject and close conn
+	// there are 2 types of high-level payloads: session establishment handshake (req or resp)
+	// and messages encrypted using session id
+
+	// 2. if session id is included in message and connection has this key then use it to decrypt payload - other reject and close conn
 
 	// 3. if req is a handshake request or response then handle it to establish a session - use code here or use handshake protocol handler
 

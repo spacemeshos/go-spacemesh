@@ -15,7 +15,6 @@ import (
 // Connection is an io.Writer and an  io.Closer
 type Connection interface {
 	Id() string
-
 	Send(message []byte)
 	Close() error
 	LastOpTime() time.Time // last rw op time for this connection

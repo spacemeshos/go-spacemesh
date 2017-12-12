@@ -20,6 +20,8 @@ type PrivateKey interface {
 
 	// Decrypt binary data encrypted with the public key of this private key
 	Decrypt(in []byte) ([]byte, error)
+
+	InternalKey() *btcec.PrivateKey
 }
 
 type PublicKey interface { // 33 bytes
@@ -28,6 +30,8 @@ type PublicKey interface { // 33 bytes
 
 	// encrypt data so it is only decryptable w the private key of this key
 	Encrypt(in []byte) ([]byte, error)
+
+	InternalKey() *btcec.PublicKey
 }
 
 ////////////////////////////////////////////////////////
@@ -57,6 +61,10 @@ func NewPrivateKey(data []byte) PrivateKey {
 func NewPrivateKeyFromString(s string) PrivateKey {
 	data := b58.Decode(s)
 	return NewPrivateKey(data)
+}
+
+func (p *privateKeyImpl) InternalKey() *btcec.PrivateKey {
+	return p.k
 }
 
 func (p *privateKeyImpl) Bytes() []byte {
@@ -110,6 +118,11 @@ func NewPublicKeyFromString(s string) (PublicKey, error) {
 	data := b58.Decode(s)
 	return NewPublicKey(data)
 }
+
+func (p *publicKeyImpl) InternalKey() *btcec.PublicKey {
+	return p.k
+}
+
 
 func (p *publicKeyImpl) Bytes() []byte {
 	return p.k.SerializeCompressed()

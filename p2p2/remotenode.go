@@ -6,12 +6,55 @@ import (
 
 // Session info with a remote node - wraps connection
 type NetworkSession interface {
-	Iv() []byte         // session iv
-	Key() PublicKey  	// session shared key
+	Iv() []byte // session iv
+	Key() []byte // session shared sym key
 	Created() time.Time // time when session was established
 
-	// this might include an AES cypher instance for fast enc/dec of data to/from a remote node
+	// TODO: add expiration support
+
+	IsAuthenticated() bool
+	SetAuthenticated(val bool)
+
+	// todo: this might include an AES cypher instance for fast enc/dec of data to/from a remote node
+	// when we have an active session
 }
+
+type NetworkSessionImpl struct {
+	iv []byte
+	key []byte
+	created time.Time
+	authenticated bool
+}
+
+func (n* NetworkSessionImpl) Iv() []byte {
+	return n.iv
+}
+
+func (n* NetworkSessionImpl) Key() []byte {
+	return n.Key()
+}
+
+func (n* NetworkSessionImpl) IsAuthenticated() bool {
+	return n.authenticated
+}
+
+func (n* NetworkSessionImpl) SetAuthenticated(val bool) {
+	n.authenticated = val
+}
+
+func (n* NetworkSessionImpl) Created() time.Time {
+	return n.created
+}
+
+func NewNetworkSession(iv []byte, key []byte) NetworkSession {
+	return &NetworkSessionImpl{
+		iv: iv,
+		key: key,
+		created: time.Now(),
+		authenticated: false,
+	}
+}
+
 
 // Remote node data
 // Node connections are maintained by swarm
@@ -23,7 +66,7 @@ type RemoteNode interface {
 
 	PublicKey() PublicKey
 
-	// session suuport
+	// session support
 	GetSession(callback func(session NetworkSession))
 	SetSession(s NetworkSession)
 	HasSession() bool

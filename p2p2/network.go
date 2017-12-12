@@ -13,7 +13,6 @@ import (
 // It provides full duplex messaging functionality over the same tcp/ip connection
 type Network interface {
 
-	// todo: change async callbacks to us channels for comm!!!!!!
 	DialTCP(address string, timeOut time.Duration) (Connection, error) // Connect to a remote node. Can send when no error.
 
 	GetNewConnections() chan Connection
