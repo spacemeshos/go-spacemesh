@@ -37,6 +37,8 @@ type Swarm interface {
 	SendMessage(SendMessageReq)
 
 	// todo: Register muxer to handle incoming messages to higher level protocols and handshake protocol
+
+	GetDemuxer() Demuxer
 }
 
 type SendMessgeResp struct {
@@ -68,6 +70,7 @@ type swarmImpl struct {
 	// set in construction and immutable state
 	network   Network
 	localNode LocalNode
+	demuxer   Demuxer
 
 	// all data should only be accessed from methods executed by the main swarm event loop
 
@@ -106,6 +109,7 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 		connectionRequests:      make(chan NodeReq, 10),
 		disconnectRequests:      make(chan NodeReq, 10),
 		sendMsgRequests:         make(chan SendMessageReq, 20),
+		demuxer:                 NewDemuxer(),
 	}
 
 	go s.beginProcessingEvents()
@@ -119,6 +123,10 @@ func (s *swarmImpl) ConnectTo(req NodeReq) {
 
 func (s *swarmImpl) DisconnectFrom(req NodeReq) {
 	s.disconnectRequests <- req
+}
+
+func (s *swarmImpl) GetDemuxer() Demuxer {
+	return s.demuxer
 }
 
 // Send a message to a remote node

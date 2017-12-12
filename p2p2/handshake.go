@@ -14,8 +14,9 @@ import (
 	"io"
 )
 
-const HandshakeReq = "/handshake/1.0/req/"
-const HandshakeResp = "/handshake/1.0/resp/"
+// pattern: [protocol][version][method-name]
+const HandshakeReq = "/handshake/1.0/handshake-req/"
+const HandshakeResp = "/handshake/1.0/handshake-resp/"
 
 // Handshake protocol:
 // Node1 -> Node 2: Req(HandshakeData)

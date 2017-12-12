@@ -98,7 +98,6 @@ func TestHandshakeProtocol(t *testing.T) {
 	assert.NoErr(t, err, "failed to unmarshal wire formatted data to handshake data")
 	assert.Equal(t, p2p2.HandshakeReq, data1.Protocol, "expected this message to be a handshake req")
 
-
 	// STEP 3: local node 2 handles req data and generates response
 
 	resp, session1, err := p2p2.ProcessHandshakeRequest(node2Local, node1Remote, data1)
@@ -121,7 +120,6 @@ func TestHandshakeProtocol(t *testing.T) {
 
 	// wireFormat data sent from node 2 to node 1....
 
-
 	// STEP 4: node 1 - figure out if incoming message is a handshake response
 
 	m = &pb.CommonMessageData{}
@@ -136,7 +134,6 @@ func TestHandshakeProtocol(t *testing.T) {
 	err = proto.Unmarshal(wireFormat, data2)
 	assert.NoErr(t, err, "failed to unmarshal wire formatted data to handshake data")
 	assert.Equal(t, p2p2.HandshakeResp, data2.Protocol, "expected this message to be a handshake req")
-
 
 	// STEP 5: Node 1 validates the data and sets its network session to authenticated
 
