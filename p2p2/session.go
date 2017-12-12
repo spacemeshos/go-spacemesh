@@ -1,14 +1,19 @@
 package p2p2
 
-import "time"
+import (
+	"encoding/hex"
+	"time"
+)
 
-// Session auth between 2 peers
+// A runtime network session auth between 2 peers
 // Sessions may be used between 'connections' until they expire
+// Session provides the encryptor/decryptor for all messages sent between peers
 type NetworkSession interface {
-	Iv() []byte            // session iv is its id
+	String() string  	   // unique session id
+	Iv() []byte            // session iv (initiator generated)
 	KeyE() []byte          // session shared sym key for enc - 32 bytes
 	KeyM() []byte          // session shared sym key for mac - 32 bytes
-	PubKey() []byte  	   // 65 bytes pub key uncompressed
+	PubKey() []byte  	   // 65 bytes session-only pub key uncompressed
 	Created() time.Time    // time when session was established
 
 	// TODO: add expiration support
@@ -28,6 +33,10 @@ type NetworkSessionImpl struct {
 	// todo: this type might include a decryptor and an encryptor for fast enc/dec of data to/from a remote node
 	// when we have an active session - it might be expensive to create these for each outgoing / incoming message
 	// there should only be 1 session per remote node
+}
+
+func (n *NetworkSessionImpl) String() string {
+	return hex.EncodeToString(n.iv)
 }
 
 func (n *NetworkSessionImpl) Iv() []byte {

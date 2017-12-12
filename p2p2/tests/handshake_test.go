@@ -48,7 +48,6 @@ func TestHnadshake(t *testing.T) {
 	assert.True(t, session1.IsAuthenticated(), "Expected session1 to be authenticated")
 
 	// STEP 3: Node2 sends data1 back to node1.... Node 1 validates the data and sets its network session to authenticated
-
 	err = p2p2.ProcessHandshakeResponse(node1Local, node2Remote, session, resp)
 
 	assert.True(t, session.IsAuthenticated(), "Expected session to be authenticated")

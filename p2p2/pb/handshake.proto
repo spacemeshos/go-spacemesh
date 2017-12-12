@@ -5,7 +5,7 @@ option go_package = "pb";
 
 // Handshake protocol message format
 
-// used for both request and response
+// used for both request and response - sent unencrypted on the wire
 message HandshakeData {
     bytes nodePubKey = 1; // 65 bytes uncompressed
     bytes iv = 2; // 16 bytes - AES-256-CBC IV
