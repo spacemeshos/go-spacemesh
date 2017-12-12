@@ -29,6 +29,8 @@ func TestHnadshake(t *testing.T) {
 
 	log.Info("Node 1 session data: IV:%s, AES-KEY:%s", hex.EncodeToString(session.Iv()), hex.EncodeToString(session.KeyE()))
 
+	assert.False(t, session.IsAuthenticated(), "Expected session to be not authenticated yet")
+
 	// STEP 2: Node2 gets handshake data from node 1 and processes it to establish a session with a shared AES key
 	resp, session1, err := p2p2.ProcessHandshakeRequest(node2Local, node1Remote, data)
 
@@ -41,12 +43,15 @@ func TestHnadshake(t *testing.T) {
 	assert.Equal(t, string(session.Iv()), string(session1.Iv()), "epxected agreed IV")
 	assert.Equal(t, string(session.KeyE()), string(session1.KeyE()), "epxected same shared AES enc key")
 	assert.Equal(t, string(session.KeyM()), string(session1.KeyM()), "epxected same shared AES mac key")
-	assert.Equal(t, string(session.SharedSecret()), string(session1.SharedSecret()), "epxected same shared secret")
+	assert.Equal(t, string(session.PubKey()), string(session1.PubKey()), "epxected same shared secret")
+
+	assert.True(t, session1.IsAuthenticated(), "Expected session1 to be authenticated")
 
 	// STEP 3: Node2 sends data1 back to node1.... Node 1 validates the data and sets its network session to authenticated
 
 	err = p2p2.ProcessHandshakeResponse(node1Local, node2Remote, session, resp)
 
+	assert.True(t, session.IsAuthenticated(), "Expected session to be authenticated")
 	assert.NoErr(t, err, "failed to authenticate or process response")
 
 }

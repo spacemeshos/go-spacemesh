@@ -5,11 +5,11 @@ import "time"
 // Session auth between 2 peers
 // Sessions may be used between 'connections' until they expire
 type NetworkSession interface {
-	Iv() []byte           // session iv is its id
+	Iv() []byte            // session iv is its id
 	KeyE() []byte          // session shared sym key for enc - 32 bytes
 	KeyM() []byte          // session shared sym key for mac - 32 bytes
-	SharedSecret() []byte // 65 bytes pub key uncompressed (KeyE ad KeyM are derived from it)
-	Created() time.Time   // time when session was established
+	PubKey() []byte  	   // 65 bytes pub key uncompressed
+	Created() time.Time    // time when session was established
 
 	// TODO: add expiration support
 
@@ -21,7 +21,7 @@ type NetworkSessionImpl struct {
 	iv            []byte
 	keyE          []byte
 	keyM          []byte
-	sharedSecret  []byte
+	pubKey		  []byte
 	created       time.Time
 	authenticated bool
 
@@ -42,8 +42,8 @@ func (n *NetworkSessionImpl) KeyM() []byte {
 	return n.keyM
 }
 
-func (n *NetworkSessionImpl) SharedSecret() []byte {
-	return n.sharedSecret
+func (n *NetworkSessionImpl) PubKey() []byte {
+	return n.pubKey
 }
 
 func (n *NetworkSessionImpl) IsAuthenticated() bool {
@@ -58,12 +58,12 @@ func (n *NetworkSessionImpl) Created() time.Time {
 	return n.created
 }
 
-func NewNetworkSession(iv []byte, keyE []byte, keyM []byte, sharedSecret []byte) NetworkSession {
+func NewNetworkSession(iv []byte, keyE []byte, keyM []byte, pubKey []byte) NetworkSession {
 	s := &NetworkSessionImpl{
 		iv:            iv,
 		keyE:          keyE,
 		keyM:		   keyM,
-		sharedSecret:  sharedSecret,
+		pubKey:  		pubKey,
 		created:       time.Now(),
 		authenticated: false,
 	}

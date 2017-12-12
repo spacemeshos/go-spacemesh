@@ -50,7 +50,7 @@ func GenereateHandshakeRequestData(node LocalNode, remoteNode RemoteNode) (*pb.H
 	keyE := derivedKey[:32] // used for aes enc/dec
 	keyM := derivedKey[32:] // used for hmac
 
-	data.SharedSecret = ephemeral.PubKey().SerializeUncompressed()
+	data.PubKey = ephemeral.PubKey().SerializeUncompressed()
 
 	// start HMAC-SHA-256
 	hm := hmac.New(sha256.New, keyM)
@@ -73,7 +73,7 @@ func GenereateHandshakeRequestData(node LocalNode, remoteNode RemoteNode) (*pb.H
 	data.Sign = hex.EncodeToString(sign)
 
 	// create local session data - iv and key
-	session := NewNetworkSession(iv, keyE, keyM, data.SharedSecret)
+	session := NewNetworkSession(iv, keyE, keyM, data.PubKey)
 
 	return data, session, nil
 }
@@ -84,7 +84,7 @@ func GenereateHandshakeRequestData(node LocalNode, remoteNode RemoteNode) (*pb.H
 func ProcessHandshakeRequest(node LocalNode, r RemoteNode, req *pb.HandshakeData) (*pb.HandshakeData, NetworkSession, error) {
 
 	// ephemeral public key
-	pubkey, err := btcec.ParsePubKey(req.SharedSecret, btcec.S256())
+	pubkey, err := btcec.ParsePubKey(req.PubKey, btcec.S256())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -126,31 +126,31 @@ func ProcessHandshakeRequest(node LocalNode, r RemoteNode, req *pb.HandshakeData
 		return nil, nil, errors.New("invalid signature")
 	}
 
-	// set session data
-	s := NewNetworkSession(req.Iv, keyE, keyM, req.SharedSecret)
+	// set session data - it is authenticated as far as local node is concerned
+	// we might consider waiting with auth until node1 repsponded to the ack message but it might be an overkill
+	s := NewNetworkSession(req.Iv, keyE, keyM, req.PubKey)
 	s.SetAuthenticated(true)
 
-	// start generation of resp data
+	// generate ack resp data
 
 	iv := make([]byte, 16)
 	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
 		return nil, nil, err
 	}
 
-	// auth resp
 	hm1 := hmac.New(sha256.New, keyM)
 	hm1.Write(iv)
 	hmac1 := hm1.Sum(nil)
 
 	resp := &pb.HandshakeData{
 		NodePubKey: node.PublicKey().InternalKey().SerializeUncompressed(),
-		SharedSecret:  req.SharedSecret,
+		PubKey:  req.PubKey,
 		Iv:         iv,
 		Hmac:       hmac1,
 		Sign:       "",
 	}
 
-	// sign corpus - marshall data without the signature to protobufs3 binary format
+	// sign corpus - marshall data without the signature to protobufs3 binary format and sign it
 	bin, err = proto.Marshal(resp)
 	if err != nil {
 		return nil, nil, err
@@ -161,7 +161,7 @@ func ProcessHandshakeRequest(node LocalNode, r RemoteNode, req *pb.HandshakeData
 		return nil, nil, err
 	}
 
-	// place signature in response - hex encoded string
+	// place signature in response
 	resp.Sign = hex.EncodeToString(sign)
 
 	return resp, s, nil
@@ -173,7 +173,7 @@ func ProcessHandshakeRequest(node LocalNode, r RemoteNode, req *pb.HandshakeData
 func ProcessHandshakeResponse(node LocalNode, r RemoteNode, s NetworkSession, resp *pb.HandshakeData) error {
 
 	// verified shared public secret
-	if !bytes.Equal(resp.SharedSecret, s.SharedSecret()) {
+	if !bytes.Equal(resp.PubKey, s.PubKey()) {
 		return errors.New("Shared secret mismatch")
 	}
 
@@ -208,7 +208,6 @@ func ProcessHandshakeResponse(node LocalNode, r RemoteNode, s NetworkSession, re
 	if !v {
 		return errors.New("invalid signature")
 	}
-
 
 	// Session is now authenticated
 	s.SetAuthenticated(true)
