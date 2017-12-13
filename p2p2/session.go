@@ -1,7 +1,12 @@
 package p2p2
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
 	"encoding/hex"
+	"errors"
+	"github.com/UnrulyOS/go-unruly/crypto"
+	"github.com/UnrulyOS/go-unruly/log"
 	"time"
 )
 
@@ -25,6 +30,9 @@ type NetworkSession interface {
 	SetAuthenticated(val bool)
 
 	// TODO: ENCRYPT / DECRYPT FEATURES HERE
+
+	Decrypt(in []byte) ([]byte, error)
+	Encrypt(in []byte) ([]byte, error)
 }
 
 type NetworkSessionImpl struct {
@@ -37,6 +45,9 @@ type NetworkSessionImpl struct {
 
 	localNodeId  string
 	remoteNodeId string
+
+	blockEncrypter cipher.BlockMode
+	blockDecrypter cipher.BlockMode
 
 	////////////////
 	// todo: this type might include a decryptor and an encryptor for fast enc/dec of data to/from a remote node
@@ -84,7 +95,33 @@ func (n *NetworkSessionImpl) Created() time.Time {
 	return n.created
 }
 
-func NewNetworkSession(id, keyE, keyM, pubKey []byte, localNodeId, remoteNodeId string) NetworkSession {
+func (n *NetworkSessionImpl) Encrypt(in []byte) ([]byte, error) {
+	l := len(in)
+	if l == 0 {
+		return nil, errors.New("Invalid input buffer - 0 len")
+	}
+	paddedIn := crypto.AddPKCSPadding(in)
+	out := make([]byte, len(paddedIn))
+	n.blockEncrypter.CryptBlocks(out, paddedIn)
+	return out, nil
+}
+
+func (n *NetworkSessionImpl) Decrypt(in []byte) ([]byte, error) {
+	l := len(in)
+	if l == 0 {
+		return nil, errors.New("Invalid input buffer - 0 len")
+	}
+	//out := make([]byte, l)
+	n.blockDecrypter.CryptBlocks(in, in)
+	clearText, err := crypto.RemovePKCSPadding(in)
+	if err != nil {
+		return nil, err
+	}
+
+	return clearText, nil
+}
+
+func NewNetworkSession(id, keyE, keyM, pubKey []byte, localNodeId, remoteNodeId string) (NetworkSession, error) {
 	s := &NetworkSessionImpl{
 		id:            id,
 		keyE:          keyE,
@@ -96,6 +133,20 @@ func NewNetworkSession(id, keyE, keyM, pubKey []byte, localNodeId, remoteNodeId 
 		remoteNodeId:  remoteNodeId,
 	}
 
-	// todo: create dec/enc here
-	return s
+	// start encryption
+
+	log.Info("KeyE for cypher: %s", hex.EncodeToString(keyE))
+
+	blockCipher, err := aes.NewCipher(keyE)
+	if err != nil {
+		log.Error("Failed to create block cipher")
+		return nil, err
+	}
+
+	log.Info("Iv for cypher: %s", hex.EncodeToString(s.id))
+
+	s.blockEncrypter = cipher.NewCBCEncrypter(blockCipher, s.id)
+	s.blockDecrypter = cipher.NewCBCDecrypter(blockCipher, s.id)
+
+	return s, nil
 }

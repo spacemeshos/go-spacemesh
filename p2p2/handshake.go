@@ -283,7 +283,11 @@ func GenereateHandshakeRequestData(node LocalNode, remoteNode RemoteNode) (*pb.H
 	data.Sign = hex.EncodeToString(sign)
 
 	// create local session data - iv and key
-	session := NewNetworkSession(iv, keyE, keyM, data.PubKey, node.String(), remoteNode.String())
+	session, err := NewNetworkSession(iv, keyE, keyM, data.PubKey, node.String(), remoteNode.String())
+
+	if err != nil {
+		return nil, nil, err
+	}
 
 	return data, session, nil
 }
@@ -375,7 +379,11 @@ func ProcessHandshakeRequest(node LocalNode, r RemoteNode, req *pb.HandshakeData
 
 	// set session data - it is authenticated as far as local node is concerned
 	// we might consider waiting with auth until node1 responded to the ack message but it might be an overkill
-	s := NewNetworkSession(req.Iv, keyE, keyM, req.PubKey, node.String(), r.String())
+	s, err := NewNetworkSession(req.Iv, keyE, keyM, req.PubKey, node.String(), r.String())
+	if err != nil {
+		return nil, nil, err
+
+	}
 	s.SetAuthenticated(true)
 
 	// update remote node session here

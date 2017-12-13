@@ -1,6 +1,7 @@
 package crypto
 
 import (
+	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
 	"errors"
@@ -71,4 +72,23 @@ func Pkcs7Unpad(in []byte) []byte {
 		}
 	}
 	return in[:len(in)-int(padding)]
+}
+
+
+// addPKCSPadding adds padding to a block of data
+func AddPKCSPadding(src []byte) []byte {
+	padding := aes.BlockSize - len(src)%aes.BlockSize
+	padtext := bytes.Repeat([]byte{byte(padding)}, padding)
+	return append(src, padtext...)
+}
+
+// removePKCSPadding removes padding from data that was added with addPKCSPadding
+func RemovePKCSPadding(src []byte) ([]byte, error) {
+	length := len(src)
+	padLength := int(src[length-1])
+	if padLength > aes.BlockSize || length < aes.BlockSize {
+		return nil, errors.New("invalid PKCS#7 padding")
+	}
+
+	return src[:length-padLength], nil
 }

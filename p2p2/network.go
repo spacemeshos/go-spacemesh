@@ -23,6 +23,7 @@ type Network interface {
 	GetMessageSendErrors() chan MessageSendError
 
 	// todo: add msg sending to remote node over the connection callbacks here
+
 }
 
 // impl internal tpye

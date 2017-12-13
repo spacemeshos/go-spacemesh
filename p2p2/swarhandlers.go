@@ -197,7 +197,7 @@ func (s *swarmImpl) onRemoteClientProtocolMessage(msg ConnectionMessage, c *pb.C
 
 	remoteNode := s.peers[session.RemoteNodeId()]
 	if remoteNode == nil {
-		log.Warning("expected to have data about this node")
+		log.Warning("expected to have data about this node for an established session")
 		return
 	}
 
