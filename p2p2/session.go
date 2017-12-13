@@ -16,13 +16,15 @@ type NetworkSession interface {
 	PubKey() []byte     // 65 bytes session-only pub key uncompressed
 	Created() time.Time // time when session was established
 
-	// TODO: add expiration support
+	// TODO: add session expiration support
 
-	LocalNodeId() string
-	RemoteNodeId() string
+	LocalNodeId() string  // string encoded session local node id
+	RemoteNodeId() string // string encoded session remote node id
 
 	IsAuthenticated() bool
 	SetAuthenticated(val bool)
+
+	// TODO: ENCRYPT / DECRYPT FEATURES HERE
 }
 
 type NetworkSessionImpl struct {
@@ -33,9 +35,10 @@ type NetworkSessionImpl struct {
 	created       time.Time
 	authenticated bool
 
-	localNodeId   string
-	remoteNodeId  string
+	localNodeId  string
+	remoteNodeId string
 
+	////////////////
 	// todo: this type might include a decryptor and an encryptor for fast enc/dec of data to/from a remote node
 	// when we have an active session - it might be expensive to create these for each outgoing / incoming message
 	// there should only be 1 session per remote node
@@ -81,7 +84,7 @@ func (n *NetworkSessionImpl) Created() time.Time {
 	return n.created
 }
 
-func NewNetworkSession(id []byte, keyE []byte, keyM []byte, pubKey []byte, localNodeId, remoteNodeId string) NetworkSession {
+func NewNetworkSession(id, keyE, keyM, pubKey []byte, localNodeId, remoteNodeId string) NetworkSession {
 	s := &NetworkSessionImpl{
 		id:            id,
 		keyE:          keyE,
@@ -89,8 +92,8 @@ func NewNetworkSession(id []byte, keyE []byte, keyM []byte, pubKey []byte, local
 		pubKey:        pubKey,
 		created:       time.Now(),
 		authenticated: false,
-		localNodeId:	localNodeId,
-		remoteNodeId:	remoteNodeId,
+		localNodeId:   localNodeId,
+		remoteNodeId:  remoteNodeId,
 	}
 
 	// todo: create dec/enc here

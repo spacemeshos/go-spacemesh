@@ -25,7 +25,6 @@ type RemoteNode interface {
 	// returns an active connection with the node if we have one
 	GetActiveConnection() Connection
 
-
 	// add a queue of pending messages to send to the node - can be picked once a session is created
 }
 

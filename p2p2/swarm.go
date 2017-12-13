@@ -11,7 +11,7 @@ import (
 // Swarm
 // Hold ref to peers and manage connections to peers
 
-// p2p2 Stack:
+// unruly p2p2 Stack:
 // -----------
 // Local Node
 // -- Implements p2p protocols: impls with req/resp support (match id resp w request id)
@@ -88,7 +88,7 @@ type swarmImpl struct {
 	peersByConnection map[string]RemoteNode // ConnId -> RemoteNode remote nodes indexed by their connections.
 
 	// todo: remove unused sessions every 24 hours
-	allSessions	     map[string]NetworkSession // SessionId -> Session data. all authenticated session
+	allSessions map[string]NetworkSession // SessionId -> Session data. all authenticated session
 
 	// remote nodes maintain their connections and sessions
 
@@ -119,20 +119,22 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 	}
 
 	s := &swarmImpl{
-		localNode:              l,
-		network:                n,
-		kill:                   make(chan bool),
+		localNode: l,
+		network:   n,
+		kill:      make(chan bool),
+
 		peersByConnection:      make(map[string]RemoteNode),
 		peers:                  make(map[string]RemoteNode),
 		connections:            make(map[string]Connection),
 		messagesPendingSession: make(map[string]SendMessageReq),
-		connectionRequests:     make(chan RemoteNodeData, 10),
-		disconnectRequests:     make(chan RemoteNodeData, 10),
-		sendMsgRequests:        make(chan SendMessageReq, 20),
-		demuxer:                NewDemuxer(),
-		newSessions:            make(chan *NewSessoinData, 10),
-		registerNodeReq:        make(chan RemoteNodeData, 10),
 		allSessions:            make(map[string]NetworkSession),
+
+		connectionRequests: make(chan RemoteNodeData, 10),
+		disconnectRequests: make(chan RemoteNodeData, 10),
+		sendMsgRequests:    make(chan SendMessageReq, 20),
+		demuxer:            NewDemuxer(),
+		newSessions:        make(chan *NewSessoinData, 10),
+		registerNodeReq:    make(chan RemoteNodeData, 10),
 	}
 
 	log.Info("Created swarm %s for local node %s", tcpAddress, l.String())
@@ -338,7 +340,7 @@ func (s *swarmImpl) onSendMessageRequest(r SendMessageReq) {
 	data, err := proto.Marshal(msg)
 
 	if err != nil {
-		log.Error("Aborting send - invalid msg format %v", err)
+		log.Error("aborting send - invalid msg format %v", err)
 		return
 	}
 
@@ -396,50 +398,26 @@ func (s *swarmImpl) onRemoteClientHandshakeMessage(msg ConnectionMessage) {
 	s.demuxer.RouteIncomingMessage(IncomingMessage{sender: sender, msg: msg.Message, protocol: data.Protocol})
 }
 
-// Main network messages handler
-// c: connection we got this message on
-// msg: binary protobufs encoded data
-// not go safe - called from event processing main loop
-func (s *swarmImpl) onRemoteClientMessage(msg ConnectionMessage) {
+func (s *swarmImpl) onRemoteClientProtocolMessage(msg ConnectionMessage, c *pb.CommonMessageData) {
+	// just find the session here
+	session := s.allSessions[hex.EncodeToString(c.SessionId)]
 
-	c := &pb.CommonMessageData{}
-	err := proto.Unmarshal(msg.Message, c)
-	if err != nil {
-		log.Warning("Bad request - closing connection...")
-		msg.Connection.Close()
+	if session == nil {
+		log.Warning("expected to have an authenticated session with this node")
 		return
 	}
 
-	if len(c.Payload) == 0 {
-		s.onRemoteClientHandshakeMessage(msg)
-
-	} else {
-
-		// get remote node from connection
-		//remoteNode := s.peersByConnection[msg.Connection.Id()]
-		//sessionId := hex.EncodeToString(c.SessionId)
-		//session := remoteNode.GetSessions()[sessionId]
-
-		// just find the session here
-		session := s.allSessions[hex.EncodeToString(c.SessionId)]
-
-		if session == nil {
-			log.Warning("expected to have an authenticated session with this node")
-			return
-		}
-
-		remoteNode := s.peers[session.RemoteNodeId()]
-		if remoteNode == nil {
-			log.Warning("expected to have data about this node")
-			return
-		}
-
-		// todo: attempt to decrypt message (c.payload) with active session key
-
-		// todo: create pb.ProtocolMessage from the decrypted message
-
-		// todo: end to muxer pb.protocolMessage to the muxer for handling - it has protocol, reqId, sessionId, etc....
+	remoteNode := s.peers[session.RemoteNodeId()]
+	if remoteNode == nil {
+		log.Warning("expected to have data about this node")
+		return
 	}
+
+	// todo: attempt to decrypt message (c.payload) with active session key
+
+	// todo: create pb.ProtocolMessage from the decrypted message
+
+	// todo: end to muxer pb.protocolMessage to the muxer for handling - it has protocol, reqId, sessionId, etc....
 
 	//data := proto.Unmarshal(msg.Message, proto.Message)
 
@@ -459,6 +437,29 @@ func (s *swarmImpl) onRemoteClientMessage(msg ConnectionMessage) {
 	// 6. auth message sent by remote node pub key close connection otherwise
 
 	// use Demux.RouteIncomingMessage ()
+
+}
+
+// Main network messages handler
+// c: connection we got this message on
+// msg: binary protobufs encoded data
+// not go safe - called from event processing main loop
+func (s *swarmImpl) onRemoteClientMessage(msg ConnectionMessage) {
+
+	c := &pb.CommonMessageData{}
+	err := proto.Unmarshal(msg.Message, c)
+	if err != nil {
+		log.Warning("Bad request - closing connection...")
+		msg.Connection.Close()
+		return
+	}
+
+	if len(c.Payload) == 0 {
+		s.onRemoteClientHandshakeMessage(msg)
+
+	} else {
+		s.onRemoteClientProtocolMessage(msg, c)
+	}
 }
 
 // not go safe - called from event processing main loop
