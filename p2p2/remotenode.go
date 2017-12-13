@@ -25,6 +25,7 @@ type RemoteNode interface {
 	// returns an active connection with the node if we have one
 	GetActiveConnection() Connection
 
+
 	// add a queue of pending messages to send to the node - can be picked once a session is created
 }
 
@@ -55,7 +56,7 @@ func NewRemoteNode(id string, tcpAddress string) (RemoteNode, error) {
 	return node, nil
 }
 
-func (n *remoteNodeImpl) GetAuthenticatedSession() NetworkSession  {
+func (n *remoteNodeImpl) GetAuthenticatedSession() NetworkSession {
 	for _, v := range n.sessions {
 		if v.IsAuthenticated() {
 			return v
@@ -64,7 +65,7 @@ func (n *remoteNodeImpl) GetAuthenticatedSession() NetworkSession  {
 	return nil
 }
 
-func (n *remoteNodeImpl) GetActiveConnection() Connection  {
+func (n *remoteNodeImpl) GetActiveConnection() Connection {
 
 	// todo: sort by last data transfer time to pick the best connection
 
@@ -75,7 +76,6 @@ func (n *remoteNodeImpl) GetActiveConnection() Connection  {
 
 	return nil
 }
-
 
 func (n *remoteNodeImpl) GetConnections() map[string]Connection {
 	return n.connections

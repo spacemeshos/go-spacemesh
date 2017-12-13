@@ -13,7 +13,7 @@ type LocalNode interface {
 	PrivateKey() PrivateKey
 	PublicKey() PublicKey
 
-
+	TcpAddress() string
 }
 
 func NewLocalNode(pubKey PublicKey, privKey PrivateKey, tcpAddress string) (LocalNode, error) {
@@ -29,6 +29,8 @@ func NewLocalNode(pubKey PublicKey, privKey PrivateKey, tcpAddress string) (Loca
 		log.Error("can't create a local node without a swarm. %v", err)
 		return nil, err
 	}
+
+	n.swarm = s
 
 	// create all implemented local node protocols here
 
@@ -50,6 +52,10 @@ type localNodeImp struct {
 
 func (n *localNodeImp) HandshakeProtocol() HandshakeProtocol {
 	return n.handshake
+}
+
+func (n *localNodeImp) TcpAddress() string {
+	return n.tcpAddress
 }
 
 func (n *localNodeImp) Id() []byte {

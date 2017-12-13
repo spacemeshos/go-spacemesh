@@ -37,9 +37,8 @@ type handshakeProtocolImpl struct {
 
 	// state
 	swarm               Swarm
-	newSessionCallbacks []chan *NewSessoinData // a list of callback channels for new sessions
-
-	pendingSessions map[string]*NewSessoinData // sessions pending authentication
+	newSessionCallbacks []chan *NewSessoinData     // a list of callback channels for new sessions
+	pendingSessions     map[string]*NewSessoinData // sessions pending authentication
 
 	// ops
 	incomingHandshakeRequests MessagesChan
@@ -108,7 +107,7 @@ func (h *handshakeProtocolImpl) CreateSession(remoteNode RemoteNode) {
 	h.swarm.SendMessage(SendMessageReq{
 		reqId:        session.String(),
 		remoteNodeId: remoteNode.String(),
-		msg:          payload,
+		payload:      payload,
 	})
 
 	h.sessionStateChanged <- newSessionData
@@ -142,11 +141,17 @@ func (h *handshakeProtocolImpl) processEvents() {
 }
 
 func (h *handshakeProtocolImpl) onHandleIncomingHandshakeRequest(msg IncomingMessage) {
+
 	data := &pb.HandshakeData{}
 	err := proto.Unmarshal(msg.msg, data)
 	if err != nil {
 		log.Warning("Invalid incoming handshake request bin data: %v", err)
 		return
+	}
+
+	if msg.sender == nil {
+		// we don't know about this remote node - create a new one for it using the info it sent
+		// and add it to the swarm
 	}
 
 	respData, session, err := ProcessHandshakeRequest(h.swarm.LocalNode(), msg.sender, data)
@@ -177,7 +182,7 @@ func (h *handshakeProtocolImpl) onHandleIncomingHandshakeRequest(msg IncomingMes
 	h.swarm.SendMessage(SendMessageReq{
 		reqId:        session.String(),
 		remoteNodeId: msg.sender.String(),
-		msg:          payload,
+		payload:      payload,
 	})
 
 	// we have an active session initiated by a remote node
@@ -240,13 +245,13 @@ func GenereateHandshakeRequestData(node LocalNode, remoteNode RemoteNode) (*pb.H
 
 	data.SessionId = iv
 	data.Iv = iv
+	data.TcpAddress = node.TcpAddress()
 
 	ephemeral, err := btcec.NewPrivateKey(btcec.S256())
 	if err != nil {
 		return nil, nil, err
 	}
 
-	// new ephemeral private key
 	data.NodePubKey = node.PublicKey().InternalKey().SerializeUncompressed()
 
 	// start shared key generation
@@ -278,9 +283,46 @@ func GenereateHandshakeRequestData(node LocalNode, remoteNode RemoteNode) (*pb.H
 	data.Sign = hex.EncodeToString(sign)
 
 	// create local session data - iv and key
-	session := NewNetworkSession(iv, keyE, keyM, data.PubKey)
+	session := NewNetworkSession(iv, keyE, keyM, data.PubKey, node.String(), remoteNode.String())
 
 	return data, session, nil
+}
+
+// Authenticate the sender node generated the signed data
+func AuthenticateSenderNode(req *pb.HandshakeData) error {
+
+	snderPubKey, err := NewPublicKey(req.NodePubKey)
+	if err != nil {
+		return err
+	}
+
+	// verify signature
+	sigData, err := hex.DecodeString(req.Sign)
+	if err != nil {
+		return err
+	}
+
+	req.Sign = ""
+	bin, err := proto.Marshal(req)
+	if err != nil {
+		return err
+	}
+
+	// restore back signature
+	req.Sign = hex.EncodeToString(sigData)
+
+	// we verify against the remote node public key
+	v, err := snderPubKey.Verify(bin, sigData)
+	if err != nil {
+		return err
+	}
+
+	if !v {
+		return errors.New("invalid data")
+	}
+
+	return nil
+
 }
 
 // Process a session handshake request data from remoteNode r
@@ -332,9 +374,12 @@ func ProcessHandshakeRequest(node LocalNode, r RemoteNode, req *pb.HandshakeData
 	}
 
 	// set session data - it is authenticated as far as local node is concerned
-	// we might consider waiting with auth until node1 repsponded to the ack message but it might be an overkill
-	s := NewNetworkSession(req.Iv, keyE, keyM, req.PubKey)
+	// we might consider waiting with auth until node1 responded to the ack message but it might be an overkill
+	s := NewNetworkSession(req.Iv, keyE, keyM, req.PubKey, node.String(), r.String())
 	s.SetAuthenticated(true)
+
+	// update remote node session here
+	r.GetSessions()[s.String()] = s
 
 	// generate ack resp data
 
@@ -353,6 +398,7 @@ func ProcessHandshakeRequest(node LocalNode, r RemoteNode, req *pb.HandshakeData
 		PubKey:     req.PubKey,
 		Iv:         iv,
 		Hmac:       hmac1,
+		TcpAddress: node.TcpAddress(),
 		Protocol:   HandshakeResp,
 		Sign:       "",
 	}
@@ -423,6 +469,9 @@ func ProcessHandshakeResponse(node LocalNode, r RemoteNode, s NetworkSession, re
 
 	// Session is now authenticated
 	s.SetAuthenticated(true)
+
+	// update remote node session here
+	r.GetSessions()[s.String()] = s
 
 	return nil
 }

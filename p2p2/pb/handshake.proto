@@ -5,7 +5,7 @@ option go_package = "pb";
 
 // Handshake protocol message format
 
-// data common to all messages
+// data common to all messages - Top level msg format
 message CommonMessageData {
     bytes sessionId = 1;  // always set (handshake or other protocol messages)
     bytes payload = 2;    // encrypted payload with session aes key - binary protobufs. empty for handshake methods
@@ -21,9 +21,9 @@ message HandshakeData {
     bytes iv = 5; // 16 bytes - AES-256-CBC IV
     bytes pubKey = 6; // 65 bytes (uncompressed) ephemeral public key
     bytes hmac = 7; // HMAC-SHA-256 32 bytes
-    string sign = 8; // hex encoded string 32 bytes sign of all above data by node public key (verifies he has the priv key and he wrote the data
+    string tcpAddress = 8; // remote node tcp address and port e.g. x.x.x.x:2424
+    string sign = 9; // hex encoded string 32 bytes sign of all above data by node public key (verifies he has the priv key and he wrote the data
 }
-
 
 // just here for now
 

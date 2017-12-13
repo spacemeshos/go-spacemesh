@@ -1,6 +1,7 @@
 package p2p2
 
 import (
+	"encoding/hex"
 	"github.com/UnrulyOS/go-unruly/log"
 	"github.com/UnrulyOS/go-unruly/p2p2/pb"
 	"github.com/gogo/protobuf/proto"
@@ -46,10 +47,9 @@ type Swarm interface {
 
 	// Send a message to a remote node - ideally we want to enable sending to any node
 	// without knowing his ip address - in this case we will try to locate the node via dht node search
-	// and send the message if we obtained node ip addresss and were able to connect to it
-
+	// and send the message if we obtained node ip address and were able to connect to it
+	// req.msg should be marshaled protocol message. e.g. something like pb.PingReqData
 	SendMessage(req SendMessageReq)
-
 
 	GetDemuxer() Demuxer
 
@@ -65,7 +65,7 @@ type RemoteNodeData struct {
 type SendMessageReq struct {
 	remoteNodeId string // string encoded key
 	reqId        string
-	msg          []byte
+	payload      []byte // this should be marshaled protocol msg e.g. PingReqData
 }
 
 type NodeResp struct {
@@ -83,31 +83,30 @@ type swarmImpl struct {
 	// all data should only be accessed from methods executed by the main swarm event loop
 
 	// Internal state not thread safe state - must be access only from methods dispatched from the internal event handler
-	peers               map[string]RemoteNode // NodeId -> RemoteNode. known remote nodes. Swarm is a peer store.
-	connections         map[string]Connection // ConnId -> Connection - all open connections for tracking and mngmnt
-	peersByConnection   map[string]RemoteNode // ConnId -> RemoteNode remote nodes indexed by their connections.
+	peers             map[string]RemoteNode // NodeId -> RemoteNode. known remote nodes. Swarm is a peer store.
+	connections       map[string]Connection // ConnId -> Connection - all open connections for tracking and mngmnt
+	peersByConnection map[string]RemoteNode // ConnId -> RemoteNode remote nodes indexed by their connections.
 
+	// todo: remove unused sessions every 24 hours
+	allSessions	     map[string]NetworkSession // SessionId -> Session data. all authenticated session
 
 	// remote nodes maintain their connections and sessions
-
-	// todo: move these to remote node ???
-	pendingOutgoingMessages map[string]SendMessageReq // all messages sent out we don't have a response for yet. k - reqId
 
 	messagesPendingSession map[string]SendMessageReq // k - unique req id. outgoing messages which pend an auth session with remote node to be sent out
 
 	// comm channels
-	connectionRequests chan RemoteNodeData        // local requests to establish a session w a remote node
-	disconnectRequests chan RemoteNodeData        // local requests to kill session and disconnect from node
+	connectionRequests chan RemoteNodeData // local requests to establish a session w a remote node
+	disconnectRequests chan RemoteNodeData // local requests to kill session and disconnect from node
 	sendMsgRequests    chan SendMessageReq // local request to send a message to a node and callback on error or data
 	kill               chan bool           // local request to kill the swamp from outside. e.g when local node is shutting down
 
-	registerNodeReq	   chan RemoteNodeData // local request to register a node based on minimal data
+	registerNodeReq chan RemoteNodeData // local request to register a node based on minimal data
 
 	// handshake protocol implementation
 	handshakeProtocol HandshakeProtocol
 
 	// handshake protocol callback - sessions updates are pushd here
-	newSessions 	  chan *NewSessoinData // gets callback from handshake protocol when new session are created and/or auth
+	newSessions chan *NewSessoinData // gets callback from handshake protocol when new session are created and/or auth
 
 }
 
@@ -120,20 +119,20 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 	}
 
 	s := &swarmImpl{
-		localNode:               l,
-		network:                 n,
-		kill:                    make(chan bool),
-		peersByConnection:       make(map[string]RemoteNode),
-		peers:                   make(map[string]RemoteNode),
-		connections:             make(map[string]Connection),
-		pendingOutgoingMessages: make(map[string]SendMessageReq),
-		messagesPendingSession:  make(map[string]SendMessageReq),
-		connectionRequests:      make(chan RemoteNodeData, 10),
-		disconnectRequests:      make(chan RemoteNodeData, 10),
-		sendMsgRequests:         make(chan SendMessageReq, 20),
-		demuxer:                 NewDemuxer(),
-		newSessions: 		     make(chan *NewSessoinData, 10),
-		registerNodeReq:		 make(chan RemoteNodeData, 10),
+		localNode:              l,
+		network:                n,
+		kill:                   make(chan bool),
+		peersByConnection:      make(map[string]RemoteNode),
+		peers:                  make(map[string]RemoteNode),
+		connections:            make(map[string]Connection),
+		messagesPendingSession: make(map[string]SendMessageReq),
+		connectionRequests:     make(chan RemoteNodeData, 10),
+		disconnectRequests:     make(chan RemoteNodeData, 10),
+		sendMsgRequests:        make(chan SendMessageReq, 20),
+		demuxer:                NewDemuxer(),
+		newSessions:            make(chan *NewSessoinData, 10),
+		registerNodeReq:        make(chan RemoteNodeData, 10),
+		allSessions:            make(map[string]NetworkSession),
 	}
 
 	log.Info("Created swarm %s for local node %s", tcpAddress, l.String())
@@ -217,7 +216,7 @@ Loop:
 		case session := <-s.newSessions:
 			s.onNewSession(session)
 
-		case d := <- s.registerNodeReq :
+		case d := <-s.registerNodeReq:
 			s.onRegisterNodeRequest(d)
 		}
 	}
@@ -263,7 +262,7 @@ func (s *swarmImpl) onConnectionRequest(req RemoteNodeData) {
 	}
 
 	if conn == nil {
-		conn, err := s.network.DialTCP(req.ip,  time.Duration(10*time.Second))
+		conn, err := s.network.DialTCP(req.ip, time.Duration(10*time.Second))
 		if err != nil {
 			// log it here
 			log.Error("failed to connect to remote node on advertised ip %s", req.ip)
@@ -283,17 +282,20 @@ func (s *swarmImpl) onConnectionRequest(req RemoteNodeData) {
 	// todo: we need to handle the case that there's a non-authenticated session with the remote node
 	// we need to decide if to wait for it to auth, kill it, etc....
 	if session == nil {
-		// start handshake protocol
+
+		// start handshake
 		s.handshakeProtocol.CreateSession(remoteNode)
 	}
 }
 
 // callback from handshake protocol when session state changes
 func (s *swarmImpl) onNewSession(session *NewSessoinData) {
-	// todo: handle new session here
 
-	// if a session authenticated send out all pending messages to this node from its queue
+	if session.session.IsAuthenticated() {
+		s.allSessions[session.session.String()] = session.session
+		// todo: if a session authenticated send out all pending messages to this node from its queue
 
+	}
 }
 
 // local request to disconnect from a node
@@ -303,7 +305,6 @@ func (s *swarmImpl) onDisconnectionRequest(req RemoteNodeData) {
 
 // a local request to send a message to a node
 func (s *swarmImpl) onSendMessageRequest(r SendMessageReq) {
-
 
 	// check for existing remote node and session
 	remoteNode := s.peers[r.remoteNodeId]
@@ -319,28 +320,27 @@ func (s *swarmImpl) onSendMessageRequest(r SendMessageReq) {
 	if session == nil || conn == nil {
 		// save the message for later sending and try to connect to the node
 		s.messagesPendingSession[r.reqId] = r
+
+		// try to connect to remote node and send the message once connceted
 		s.onConnectionRequest(RemoteNodeData{remoteNode.String(), remoteNode.TcpAddress()})
 		return
 	}
 
-
 	// todo: generate payload - encrypt r.msg with session aes enc key using session + hmac
 	// we need to keep an AES dec/enc with the session and use it
+	var encPayload = r.payload
 
 	msg := &pb.CommonMessageData{
 		SessionId: session.Id(),
-		Payload: nil,
+		Payload:   encPayload,
 	}
 
 	data, err := proto.Marshal(msg)
 
 	if err != nil {
-		log.Error("Invalid msg format %v", err)
+		log.Error("Aborting send - invalid msg format %v", err)
 		return
 	}
-
-	// req ids are unique - store as pending until we get a response, error or timeout
-	s.pendingOutgoingMessages[r.reqId] = r
 
 	// finally - send it away!
 	conn.Send(data)
@@ -355,13 +355,52 @@ func (s *swarmImpl) onRemoteClientConnected(c Connection) {
 	// nop - a remote client connected - this is handled w message
 }
 
+// Handles an incoming handshake protocol message (pre-processing)
+func (s *swarmImpl) onRemoteClientHandshakeMessage(msg ConnectionMessage) {
+
+	data := &pb.HandshakeData{}
+	err := proto.Unmarshal(msg.Message, data)
+	if err != nil {
+		log.Warning("unexpected handshake message format: %v", err)
+		return
+	}
+
+	// check if we already know about the remote node of this connection
+	sender := s.peersByConnection[msg.Connection.Id()]
+
+	if sender == nil {
+		// authenticate sender before registration
+		err := AuthenticateSenderNode(data)
+		if err != nil {
+			log.Error("failed to authenticate message sender %v", err)
+			return
+		}
+
+		nodeKey, err := NewPublicKey(data.NodePubKey)
+		if err != nil {
+			return
+		}
+
+		sender, err = NewRemoteNode(nodeKey.String(), data.TcpAddress)
+		if err != nil {
+			return
+		}
+
+		// register this remote node and its connection
+		s.peers[sender.String()] = sender
+		s.peersByConnection[msg.Connection.Id()] = sender
+
+	}
+
+	// node that we always have a proper remote node sender data, let the demuxer route to the handshake protocol handler
+	s.demuxer.RouteIncomingMessage(IncomingMessage{sender: sender, msg: msg.Message, protocol: data.Protocol})
+}
+
 // Main network messages handler
 // c: connection we got this message on
 // msg: binary protobufs encoded data
 // not go safe - called from event processing main loop
 func (s *swarmImpl) onRemoteClientMessage(msg ConnectionMessage) {
-
-	// Processing a remote incoming message:
 
 	c := &pb.CommonMessageData{}
 	err := proto.Unmarshal(msg.Message, c)
@@ -372,21 +411,34 @@ func (s *swarmImpl) onRemoteClientMessage(msg ConnectionMessage) {
 	}
 
 	if len(c.Payload) == 0 {
-		// this a handshake protocol message
-		// send to muxer (protocol, msg, etc....) - protocol handler will create remote node, session, etc...
+		s.onRemoteClientHandshakeMessage(msg)
+
 	} else {
 
-		// A session encrypted protocol message is in payload
+		// get remote node from connection
+		//remoteNode := s.peersByConnection[msg.Connection.Id()]
+		//sessionId := hex.EncodeToString(c.SessionId)
+		//session := remoteNode.GetSessions()[sessionId]
 
-		// 1. find remote node - bail if we can't find it - it should be created on session start
+		// just find the session here
+		session := s.allSessions[hex.EncodeToString(c.SessionId)]
 
-		// 2. get session from remote node - if session not found close the connection
+		if session == nil {
+			log.Warning("expected to have an authenticated session with this node")
+			return
+		}
 
-		// attempt to decrypt message (c.payload) with active session key
+		remoteNode := s.peers[session.RemoteNodeId()]
+		if remoteNode == nil {
+			log.Warning("expected to have data about this node")
+			return
+		}
 
-		// create pb.ProtocolMessage from the decrypted message
+		// todo: attempt to decrypt message (c.payload) with active session key
 
-		// send to muxer pb.protocolMessage to the muxer for handling - it has protocol, reqId, sessionId, etc....
+		// todo: create pb.ProtocolMessage from the decrypted message
+
+		// todo: end to muxer pb.protocolMessage to the muxer for handling - it has protocol, reqId, sessionId, etc....
 	}
 
 	//data := proto.Unmarshal(msg.Message, proto.Message)
@@ -406,8 +458,7 @@ func (s *swarmImpl) onRemoteClientMessage(msg ConnectionMessage) {
 
 	// 6. auth message sent by remote node pub key close connection otherwise
 
-	// Locate callback a pendingOutgoingMessages for the req id then push the resp over the embedded channel callback to notify caller
-	// of the response data - muxer will forward it to handlers and handler can create struct from buff based on expected typed data
+	// use Demux.RouteIncomingMessage ()
 }
 
 // not go safe - called from event processing main loop

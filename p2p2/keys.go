@@ -2,6 +2,7 @@ package p2p2
 
 import (
 	"fmt"
+	"github.com/UnrulyOS/go-unruly/log"
 	"github.com/btcsuite/btcd/btcec"
 	b58 "gx/ipfs/QmT8rehPR3F6bmwL6zjUN8XpiDBFFpMP2myPdC6ApsWfJf/go-base58"
 )
@@ -109,6 +110,7 @@ func (p *privateKeyImpl) Decrypt(in []byte) ([]byte, error) {
 func NewPublicKey(data []byte) (PublicKey, error) {
 	k, err := btcec.ParsePubKey(data, btcec.S256())
 	if err != nil {
+		log.Error("failed to parse public key from binay data: %v", err)
 		return nil, err
 	}
 
