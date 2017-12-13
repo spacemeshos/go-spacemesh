@@ -22,9 +22,12 @@ type remoteNodeImpl struct {
 	publicKey  PublicKey
 	tcpAddress string
 
+	// todo: we might need to support multiple sessions per node to handle the case where 2 nodes try to establish a session
+	// with each other over a short time span - we need to properly handle this case
+
 	session NetworkSession
 
-	attachSessoinChannel chan NetworkSession
+	attachSessionChannel chan NetworkSession
 	expireSessionChannel chan bool
 
 	getSessionChannel chan func(s NetworkSession)
@@ -43,7 +46,7 @@ func NewRemoteNode(id string, tcpAddress string) (RemoteNode, error) {
 	node := &remoteNodeImpl{
 		publicKey:            key,
 		tcpAddress:           tcpAddress,
-		attachSessoinChannel: make(chan NetworkSession, 1),
+		attachSessionChannel: make(chan NetworkSession, 1),
 		expireSessionChannel: make(chan bool),
 		getSessionChannel:    make(chan func(s NetworkSession), 1),
 		kill:                 make(chan bool),
@@ -68,7 +71,7 @@ Loop:
 		case <-n.kill:
 			break Loop
 
-		case s := <-n.attachSessoinChannel:
+		case s := <-n.attachSessionChannel:
 			n.session = s
 
 		case <-n.expireSessionChannel:
@@ -83,7 +86,7 @@ Loop:
 
 // go safe - attach a session to the connection
 func (n *remoteNodeImpl) SetSession(s NetworkSession) {
-	n.attachSessoinChannel <- s
+	n.attachSessionChannel <- s
 }
 
 func (n *remoteNodeImpl) HasSession() bool {

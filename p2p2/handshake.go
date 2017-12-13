@@ -19,7 +19,7 @@ import (
 const HandshakeReq = "/handshake/1.0/handshake-req/"
 const HandshakeResp = "/handshake/1.0/handshake-resp/"
 
-// todo: interface this
+// todo: interface this proeprly
 type NewSessoinData struct {
 	localNode  LocalNode
 	remoteNode RemoteNode
@@ -29,7 +29,7 @@ type NewSessoinData struct {
 
 type HandshakeProtocol interface {
 	CreateSession(node LocalNode, remoteNode RemoteNode)
-	RegisterNewSessionCallback(callback chan *NewSessoinData)
+	RegisterNewSessionCallback(callback chan *NewSessoinData) // register a channel to receive session state changes
 }
 
 type handshakeProtocolImpl struct {
@@ -41,25 +41,25 @@ type handshakeProtocolImpl struct {
 	pendingSessions map[string]*NewSessoinData // sessions pending authentication
 
 	// ops
-	incomingHandshakeRequests  MessagesChan
-	incomingHandsakeResponses  MessagesChan
-	newSessoinCallbackRequests chan chan *NewSessoinData
-	addPendingSession		   chan *NewSessoinData
-	deletePendingSessionById   chan string
-	sessionStateChanged		   chan *NewSessoinData
+	incomingHandshakeRequests MessagesChan
+	incomingHandsakeResponses MessagesChan
+	registerSessionCallback   chan chan *NewSessoinData
+	addPendingSession         chan *NewSessoinData
+	deletePendingSessionById  chan string
+	sessionStateChanged       chan *NewSessoinData
 }
 
 func NewHandshakeProtocol(s Swarm) HandshakeProtocol {
 
 	h := &handshakeProtocolImpl{
-		swarm: s,
-		pendingSessions: make(map[string]*NewSessoinData),
-		incomingHandshakeRequests:  make(MessagesChan, 20),
-		incomingHandsakeResponses:  make(chan IncomingMessage, 20),
-		newSessoinCallbackRequests: make(chan chan *NewSessoinData, 2),
-		newSessionCallbacks:        make([]chan *NewSessoinData, 1),
-		deletePendingSessionById:   make(chan string, 5),
-		sessionStateChanged: make(chan *NewSessoinData, 3),
+		swarm:                     s,
+		pendingSessions:           make(map[string]*NewSessoinData),
+		incomingHandshakeRequests: make(MessagesChan, 20),
+		incomingHandsakeResponses: make(chan IncomingMessage, 20),
+		registerSessionCallback:   make(chan chan *NewSessoinData, 2),
+		newSessionCallbacks:       make([]chan *NewSessoinData, 1),
+		deletePendingSessionById:  make(chan string, 5),
+		sessionStateChanged:       make(chan *NewSessoinData, 3),
 	}
 
 	go h.processEvents()
@@ -76,7 +76,7 @@ func NewHandshakeProtocol(s Swarm) HandshakeProtocol {
 }
 
 func (h *handshakeProtocolImpl) RegisterNewSessionCallback(callback chan *NewSessoinData) {
-	h.newSessoinCallbackRequests <- callback
+	h.registerSessionCallback <- callback
 }
 
 func (h *handshakeProtocolImpl) CreateSession(localNode LocalNode, remoteNode RemoteNode) {
@@ -101,13 +101,17 @@ func (h *handshakeProtocolImpl) CreateSession(localNode LocalNode, remoteNode Re
 		return
 	}
 
+	// so we can match handshake responses with the session
+	h.addPendingSession <- newSessionData
+
 	h.swarm.SendMessage(SendMessageReq{
 		reqId: session.String(),
 		dest: remoteNode,
 		msg: payload,
 	})
 
-	h.addPendingSession <- newSessionData
+	h.sessionStateChanged <- newSessionData
+
 }
 
 func (h *handshakeProtocolImpl) processEvents() {
@@ -119,7 +123,7 @@ func (h *handshakeProtocolImpl) processEvents() {
 		case m := <-h.incomingHandsakeResponses:
 			h.onHandleIncomingHandshakeResponse(m)
 
-		case r := <-h.newSessoinCallbackRequests:
+		case r := <-h.registerSessionCallback:
 			h.newSessionCallbacks = append(h.newSessionCallbacks, r)
 
 		case s := <-h.addPendingSession:
@@ -137,7 +141,6 @@ func (h *handshakeProtocolImpl) processEvents() {
 }
 
 func (h *handshakeProtocolImpl) onHandleIncomingHandshakeRequest(msg IncomingMessage) {
-
 	data := &pb.HandshakeData{}
 	err := proto.Unmarshal(msg.msg, data)
 	if err != nil {
@@ -145,16 +148,70 @@ func (h *handshakeProtocolImpl) onHandleIncomingHandshakeRequest(msg IncomingMes
 		return
 	}
 
+	respData, session, err := ProcessHandshakeRequest(h.swarm.LocalNode(), msg.sender, data)
+
+	// we have a new session started by a remote node
+	newSessionData := &NewSessoinData{
+		localNode: h.swarm.LocalNode(),
+		remoteNode: msg.sender,
+		session : session,
+		err : err,
+	}
+
+	if err != nil {
+		// failed to process request
+		newSessionData.err = err
+		h.sessionStateChanged <- newSessionData
+		return;
+	}
+
+	payload, err := proto.Marshal(respData)
+	if err != nil {
+		newSessionData.err = err
+		h.sessionStateChanged <- newSessionData
+		return
+	}
+
+	// send response back to sender
+	h.swarm.SendMessage(SendMessageReq{
+		reqId: session.String(),
+		dest: msg.sender,
+		msg: payload,
+	})
+
+	// we have an active session intitated by a remote node
+	h.sessionStateChanged <- newSessionData
 }
 
 func (h *handshakeProtocolImpl) onHandleIncomingHandshakeResponse(msg IncomingMessage) {
-
-	data := &pb.HandshakeData{}
-	err := proto.Unmarshal(msg.msg, data)
+	respData := &pb.HandshakeData{}
+	err := proto.Unmarshal(msg.msg, respData)
 	if err != nil {
-		log.Warning("Invalid incoming handshake resp bin data: %v", err)
+		log.Warning("invalid incoming handshake resp bin data: %v", err)
 		return
 	}
+
+	sessionId := hex.EncodeToString(respData.Iv)
+
+	// this is the session data we sent to the node
+	sessionRequestData := h.pendingSessions[sessionId]
+
+	if sessionRequestData == nil {
+		log.Warning("can't match this response with a handshake request - aborting")
+		return
+	}
+
+	err = ProcessHandshakeResponse(sessionRequestData.localNode, sessionRequestData.remoteNode, sessionRequestData.session , respData)
+	if err != nil {
+		// can't establish session - set error
+		sessionRequestData.err = err
+	}
+
+	// no longer pending if error or if sesssion created
+	h.deletePendingSessionById <- sessionId
+
+	h.sessionStateChanged <- sessionRequestData
+	log.Info("Session established")
 }
 
 // Handshake protocol:

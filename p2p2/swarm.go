@@ -39,6 +39,8 @@ type Swarm interface {
 	// todo: Register muxer to handle incoming messages to higher level protocols and handshake protocol
 
 	GetDemuxer() Demuxer
+
+	LocalNode() LocalNode
 }
 
 type SendMessageReq struct {
@@ -121,6 +123,10 @@ func (s *swarmImpl) GetDemuxer() Demuxer {
 	return s.demuxer
 }
 
+
+func (s *swarmImpl) LocalNode() LocalNode {
+	return s.localNode
+}
 // Send a message to a remote node
 // Impl will establish session if needed or use an existing session and open connection
 // This should be called by the muxer
