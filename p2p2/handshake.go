@@ -175,12 +175,12 @@ func (h *handshakeProtocolImpl) onHandleIncomingHandshakeRequest(msg IncomingMes
 
 	// send response back to sender
 	h.swarm.SendMessage(SendMessageReq{
-		reqId: session.String(),
-		remoteNodeId:  msg.sender.String(),
-		msg:   payload,
+		reqId:        session.String(),
+		remoteNodeId: msg.sender.String(),
+		msg:          payload,
 	})
 
-	// we have an active session intitated by a remote node
+	// we have an active session initiated by a remote node
 	h.sessionStateChanged <- newSessionData
 }
 

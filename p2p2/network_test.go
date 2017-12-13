@@ -2,10 +2,11 @@ package p2p2
 
 import (
 	"fmt"
+	"github.com/UnrulyOS/go-unruly/crypto"
+
 	//"math/rand"
 	"github.com/UnrulyOS/go-unruly/assert"
 	"github.com/UnrulyOS/go-unruly/log"
-	"math/rand"
 	"testing"
 	"time"
 )
@@ -13,7 +14,7 @@ import (
 func TestReadWrite(t *testing.T) {
 
 	var msg = []byte("hello world")
-	port := uint(rand.Intn(100) + 10000)
+	port := crypto.GetRandomUInt32(1000) + 10000
 	address := fmt.Sprintf("localhost:%d", port)
 
 	done := make(chan bool, 1)

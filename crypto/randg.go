@@ -2,6 +2,7 @@ package crypto
 
 import (
 	"crypto/rand"
+	"encoding/binary"
 	"errors"
 	"github.com/UnrulyOS/go-unruly/log"
 )
@@ -11,16 +12,46 @@ import (
 func GetRandomBytes(n int) ([]byte, error) {
 
 	if n == 0 {
-		return nil, errors.New("Invalid input param - n must be > 0")
+		return nil, errors.New("invalid input param - n must be > 0")
 	}
 
 	b := make([]byte, n)
 	_, err := rand.Read(b)
 
 	if err != nil {
-		log.Error("Failed to get entropy from system: %v", err)
+		log.Error("failed to get entropy from system: %v", err)
 		return nil, err
 	}
 
 	return b, nil
+}
+
+// Return a uint64 in range [0 - max)
+func GetRandomUInt64(max uint64) uint64 {
+
+	b := make([]byte, 8)
+	_, err := rand.Read(b)
+
+	if err != nil {
+		log.Error("failed to get entropy from system: %v", err)
+		panic(err)
+	}
+
+	data := binary.BigEndian.Uint64(b)
+	return data % max
+}
+
+// Return a uint32 in range [0 - max)
+func GetRandomUInt32(max uint32) uint32 {
+
+	b := make([]byte, 4)
+	_, err := rand.Read(b)
+
+	if err != nil {
+		log.Error("failed to get entropy from system: %v", err)
+		panic(err)
+	}
+
+	data := binary.BigEndian.Uint32(b)
+	return data % max
 }

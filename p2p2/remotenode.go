@@ -3,37 +3,37 @@ package p2p2
 import "github.com/UnrulyOS/go-unruly/log"
 
 // Remote node data
-// Node connections are maintained by swarm
+// Remote nodes are maintained by the swarm and are not visible to higher-level types on the network stack
+// All remote node methods are NOT thread-safe - they are designed to be used only from a singleton swarm object
+
+// Remode node is designed to handle remote node specific ops by the swarm
 type RemoteNode interface {
 	Id() []byte     // node id is public key bytes
 	String() string // node public key string
 	Pretty() string
-	TcpAddress() string // tcp address advertised by node e.g. 127.0.0.1:3058 - todo consider multiaddress here
+
+	TcpAddress() string // tcp address advertised by node e.g. 127.0.0.1:3058
 
 	PublicKey() PublicKey
 
-	// todo: we might need to support multiple sessions per node to handle the case where 2 nodes try to establish a session
-	// with each other over a short time span - we need to properly handle this case
+	GetConnections() map[string]Connection
+	GetSessions() map[string]NetworkSession
 
-	GetSession(callback func(session NetworkSession))
-	SetSession(s NetworkSession)
-	HasSession() bool
+	// returns an authenticated session with the node if one exists
+	GetAuthenticatedSession() NetworkSession
 
-	Kill()
+	// returns an active connection with the node if we have one
+	GetActiveConnection() Connection
+
+	// add a queue of pending messages to send to the node - can be picked once a session is created
 }
 
 type remoteNodeImpl struct {
 	publicKey  PublicKey
 	tcpAddress string
 
-	session NetworkSession
-
-	attachSessionChannel chan NetworkSession
-	expireSessionChannel chan bool
-
-	getSessionChannel chan func(s NetworkSession)
-
-	kill chan bool
+	connections map[string]Connection
+	sessions    map[string]NetworkSession
 }
 
 // Create a new remote node using provided id and tcp address
@@ -46,71 +46,51 @@ func NewRemoteNode(id string, tcpAddress string) (RemoteNode, error) {
 	}
 
 	node := &remoteNodeImpl{
-		publicKey:            key,
-		tcpAddress:           tcpAddress,
-		attachSessionChannel: make(chan NetworkSession, 1),
-		expireSessionChannel: make(chan bool),
-		getSessionChannel:    make(chan func(s NetworkSession), 1),
-		kill:                 make(chan bool),
+		publicKey:   key,
+		tcpAddress:  tcpAddress,
+		connections: make(map[string]Connection),
+		sessions:    make(map[string]NetworkSession),
 	}
-
-	go node.processEvents()
 
 	return node, nil
 }
 
-func (n *remoteNodeImpl) Kill() {
-	// stop processing events
-	n.kill <- true
-}
-
-func (n *remoteNodeImpl) processEvents() {
-
-Loop:
-	for {
-		select {
-
-		case <-n.kill:
-			break Loop
-
-		case s := <-n.attachSessionChannel:
-			n.session = s
-
-		case <-n.expireSessionChannel:
-			n.session = nil
-
-		case getSession := <-n.getSessionChannel:
-			getSession(n.session)
-
+func (n *remoteNodeImpl) GetAuthenticatedSession() NetworkSession  {
+	for _, v := range n.sessions {
+		if v.IsAuthenticated() {
+			return v
 		}
 	}
+	return nil
 }
 
-// go safe - attach a session to the connection
-func (n *remoteNodeImpl) SetSession(s NetworkSession) {
-	n.attachSessionChannel <- s
+func (n *remoteNodeImpl) GetActiveConnection() Connection  {
+
+	// todo: sort by last data transfer time to pick the best connection
+
+	// just return a random connection for now
+	for _, v := range n.connections {
+		return v
+	}
+
+	return nil
 }
 
-func (n *remoteNodeImpl) HasSession() bool {
-	return n.session != nil
+
+func (n *remoteNodeImpl) GetConnections() map[string]Connection {
+	return n.connections
 }
 
-// go safe - use a channel of func to implement concurent safe callbacks
-func (n *remoteNodeImpl) GetSession(callback func(n NetworkSession)) {
-	n.getSessionChannel <- callback
-}
-
-// go safe
-func (n *remoteNodeImpl) ExpireSession() {
-	n.expireSessionChannel <- true
-}
-
-func (n *remoteNodeImpl) Id() []byte {
-	return n.publicKey.Bytes()
+func (n *remoteNodeImpl) GetSessions() map[string]NetworkSession {
+	return n.sessions
 }
 
 func (n *remoteNodeImpl) String() string {
 	return n.publicKey.String()
+}
+
+func (n *remoteNodeImpl) Id() []byte {
+	return n.publicKey.Bytes()
 }
 
 func (n *remoteNodeImpl) Pretty() string {

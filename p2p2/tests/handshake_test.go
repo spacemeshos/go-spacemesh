@@ -2,7 +2,9 @@ package tests
 
 import (
 	"encoding/hex"
+	"fmt"
 	"github.com/UnrulyOS/go-unruly/assert"
+	"github.com/UnrulyOS/go-unruly/crypto"
 	"github.com/UnrulyOS/go-unruly/log"
 	"github.com/UnrulyOS/go-unruly/p2p2"
 	"github.com/UnrulyOS/go-unruly/p2p2/pb"
@@ -14,14 +16,34 @@ import (
 func TestHandshakeCoreData(t *testing.T) {
 
 	// node 1
+
+	port := crypto.GetRandomUInt32(1000) + 10000
+	address := fmt.Sprintf("localhost:%d", port)
+
 	priv, pub, _ := p2p2.GenerateKeyPair()
-	node1Local := p2p2.NewLocalNode(pub, priv, "127.0.0.1:3030")
-	node1Remote, _ := p2p2.NewRemoteNode(pub.String(), "127.0.0.1:3030")
+	node1Local, err := p2p2.NewLocalNode(pub, priv, address)
+
+	if err != nil {
+		t.Error("failed to create local node1", err)
+	}
+
+	// this will be node 2 view of node 1
+	node1Remote, _ := p2p2.NewRemoteNode(pub.String(), address)
 
 	// node 2
+
+	port1 := crypto.GetRandomUInt32(1000) + 10000
+	address1 := fmt.Sprintf("localhost:%d", port1)
+
 	priv1, pub1, _ := p2p2.GenerateKeyPair()
-	node2Remote, _ := p2p2.NewRemoteNode(pub1.String(), "127.0.0.1:3033")
-	node2Local := p2p2.NewLocalNode(pub1, priv1, "127.0.0.1:3033")
+	node2Local, err := p2p2.NewLocalNode(pub1, priv1, address1)
+
+	if err != nil {
+		t.Error("failed to create local node2", err)
+	}
+
+	// this will be node1 view of node 2
+	node2Remote, _ := p2p2.NewRemoteNode(pub1.String(), address1)
 
 	// STEP 1: Node1 generates handshake data and sends it to node2 ....
 	data, session, err := p2p2.GenereateHandshakeRequestData(node1Local, node2Remote)
@@ -60,14 +82,22 @@ func TestHandshakeCoreData(t *testing.T) {
 func TestHandshakeProtocol(t *testing.T) {
 
 	// node 1
+
+	port := crypto.GetRandomUInt32(1000) + 10000
+	address := fmt.Sprintf("localhost:%d", port)
+
 	priv, pub, _ := p2p2.GenerateKeyPair()
-	node1Local := p2p2.NewLocalNode(pub, priv, "127.0.0.1:3030")
-	node1Remote, _ := p2p2.NewRemoteNode(pub.String(), "127.0.0.1:3030")
+	node1Local, _ := p2p2.NewLocalNode(pub, priv, address)
+	node1Remote, _ := p2p2.NewRemoteNode(pub.String(), address)
 
 	// node 2
+
+	port1 := crypto.GetRandomUInt32(1000) + 10000
+	address1 := fmt.Sprintf("localhost:%d", port1)
+
 	priv1, pub1, _ := p2p2.GenerateKeyPair()
-	node2Remote, _ := p2p2.NewRemoteNode(pub1.String(), "127.0.0.1:3033")
-	node2Local := p2p2.NewLocalNode(pub1, priv1, "127.0.0.1:3033")
+	node2Remote, _ := p2p2.NewRemoteNode(pub1.String(), address1)
+	node2Local, _ := p2p2.NewLocalNode(pub1, priv1, address1)
 
 	// STEP 1: Node 1 generates handshake data and sends it to node2 ....
 	data, session, err := p2p2.GenereateHandshakeRequestData(node1Local, node2Remote)
