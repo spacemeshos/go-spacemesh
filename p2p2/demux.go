@@ -2,6 +2,7 @@ package p2p2
 
 import "github.com/UnrulyOS/go-unruly/log"
 
+// a protocol message
 type IncomingMessage struct {
 	sender   RemoteNode
 	protocol string
@@ -15,7 +16,7 @@ type ProtocolRegistration struct {
 	handler  MessagesChan
 }
 
-// a Demuxer is responsible to route incoming messages back to protocol handlers based on the message protocol
+// a Demuxer is responsible for routing incoming network messages back to protocol handlers based on message protocols
 // Limitations: only supports 1 handler per protocol.
 type Demuxer interface {
 	RegisterProtocolHandler(handler ProtocolRegistration)

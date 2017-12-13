@@ -1,5 +1,7 @@
 package p2p2
 
+import "github.com/UnrulyOS/go-unruly/log"
+
 // Remote node data
 // Node connections are maintained by swarm
 type RemoteNode interface {
@@ -10,7 +12,9 @@ type RemoteNode interface {
 
 	PublicKey() PublicKey
 
-	// session support
+	// todo: we might need to support multiple sessions per node to handle the case where 2 nodes try to establish a session
+	// with each other over a short time span - we need to properly handle this case
+
 	GetSession(callback func(session NetworkSession))
 	SetSession(s NetworkSession)
 	HasSession() bool
@@ -21,9 +25,6 @@ type RemoteNode interface {
 type remoteNodeImpl struct {
 	publicKey  PublicKey
 	tcpAddress string
-
-	// todo: we might need to support multiple sessions per node to handle the case where 2 nodes try to establish a session
-	// with each other over a short time span - we need to properly handle this case
 
 	session NetworkSession
 
@@ -40,6 +41,7 @@ func NewRemoteNode(id string, tcpAddress string) (RemoteNode, error) {
 
 	key, err := NewPublicKeyFromString(id)
 	if err != nil {
+		log.Error("invalid node id format: %v", err)
 		return nil, err
 	}
 

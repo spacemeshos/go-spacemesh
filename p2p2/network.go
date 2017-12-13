@@ -11,6 +11,7 @@ import (
 // Connections may be initiated by Dial() or by remote clients connecting to the listen address
 // ConnManager includes a TCP server, and a TCP client
 // It provides full duplex messaging functionality over the same tcp/ip connection
+// Network should not know about higher-level networking types such as remoteNode, swarm and networkSession
 type Network interface {
 	DialTCP(address string, timeOut time.Duration) (Connection, error) // Connect to a remote node. Can send when no error.
 
@@ -56,7 +57,7 @@ func (n *networkImpl) GetMessageSendErrors() chan MessageSendError {
 // Attempts to tcp listen on address. e.g. localhost:1234
 func NewNetwork(tcpListenAddress string) (Network, error) {
 
-	log.Info("Creating server with tcp address: %s", tcpListenAddress)
+	log.Info("creating server with tcp address: %s", tcpListenAddress)
 
 	n := &networkImpl{
 		tcpListenAddress:   tcpListenAddress,
@@ -70,6 +71,7 @@ func NewNetwork(tcpListenAddress string) (Network, error) {
 	err := n.listen()
 
 	if err != nil {
+		log.Error("failed to create network on %s", tcpListenAddress)
 		return nil, err
 	}
 

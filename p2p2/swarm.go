@@ -13,28 +13,32 @@ import (
 // -----------
 // Local Node
 // -- Implements p2p protocols: impls with req/resp support (match id resp w request id)
-// Muxer (node aspect) - routes remote requests (and responses) back to protocols. Protocols register on muxer
-// Swarm forward messages to muxer
+//	 -- ping protocol
+//   -- echo protocol
+//   -- all other protocols...
+// DeMuxer (node aspect) - routes remote requests (and responses) back to protocols. Protocols register on muxer
+// Swarm forward incoming messages to muxer. Let protocol send message to a remote node. Connects to random nodes.
 // Swarm - managed all remote nodes, sessions and connections
-// Remote Node - maintains sessions and connections
+// Remote Node - maintains sessions - should be internal to swarm only. Remote node id str only above this
 // -- NetworkSession (optional)
 // Connection
-// -- msgio (prefix length encoding)
+// -- msgio (prefix length encoding). shared buffers.
 // Network
-//	- tcp ip
-//  ....
+//	- tcp for now
+//  - utp / upd soon
 
 type Swarm interface {
 
-	// attempt to establish a session with a remote node
+	// Attempt to establish a session with a remote node - useful for bootstraping
 	ConnectTo(req NodeReq)
+
+	// ConnectToNodes(maxNodes int) Get random nodes (max int) get up to max random nodes from the swarm
 
 	// forcefully disconnect form a node
 	DisconnectFrom(req NodeReq)
 
-	// high level API - used by demuxer - sends a message
-	// Should only be called by muxer
-	SendMessage(SendMessageReq)
+	// Send a message to a remote node
+	SendMessage(req SendMessageReq)
 
 	// todo: Register muxer to handle incoming messages to higher level protocols and handshake protocol
 
@@ -44,19 +48,21 @@ type Swarm interface {
 }
 
 type SendMessageReq struct {
-	dest  RemoteNode
-	reqId string
-	msg   []byte
+	remoteNodeId string // string encoded key
+	reqId        string
+	msg          []byte
 }
 
+// client node conn req data
 type NodeReq struct {
-	node     RemoteNode
-	callback chan NodeResp
+	remoteNodeId string
+	remoteNodeIp string
+	callback     chan NodeResp
 }
 
 type NodeResp struct {
-	node RemoteNode
-	err  error
+	remoteNodeId string
+	err          error
 }
 
 type swarmImpl struct {
@@ -89,6 +95,7 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 
 	n, err := NewNetwork(tcpAddress)
 	if err != nil {
+		log.Error("can't create swarm without a network: %v", err)
 		return nil, err
 	}
 
@@ -123,13 +130,17 @@ func (s *swarmImpl) GetDemuxer() Demuxer {
 	return s.demuxer
 }
 
-
 func (s *swarmImpl) LocalNode() LocalNode {
 	return s.localNode
 }
+
 // Send a message to a remote node
-// Impl will establish session if needed or use an existing session and open connection
-// This should be called by the muxer
+// Swarm will establish session if needed or use an existing session and open connection
+// Designed to be used by any high level protocol
+// req.reqId: globally unique id string - used for tracking messages we didn't get a response for yet
+// req.msg: marshaled message data
+// req.destId: receiver remote node public key/id
+
 func (s *swarmImpl) SendMessage(req SendMessageReq) {
 	s.sendMsgRequests <- req
 }
@@ -173,16 +184,49 @@ Loop:
 	}
 }
 
+// connect to node or ensure we are connected
+// start a session on demand if needed
 func (s *swarmImpl) onConnectionRequest(req NodeReq) {
-	// connect to node or ensure we are connected
-	// start a session on demand if needed
+
+	// check for existing session
+	remoteNode := s.peers[req.remoteNodeId]
+
+	if remoteNode == nil {
+
+		remoteNode, err := NewRemoteNode(req.remoteNodeId, req.remoteNodeIp)
+		if err != nil {
+			return
+		}
+
+		// store new remote node by id
+		s.peers[req.remoteNodeId] = remoteNode
+	}
+
+	if remoteNode != nil && remoteNode.HasSession() {
+		log.Info("We have a session with this node")
+
+		remoteNode.GetSession(func(s NetworkSession) {
+			log.Info("Session info: %s", s.IsAuthenticated())
+		})
+
+		return
+	}
+
+	// start handshake protocol
+	s.localNode.HandshakeProtocol().CreateSession(remoteNode)
 }
 
 func (s *swarmImpl) onDisconnectionRequest(req NodeReq) {
 	// disconnect from node...
 }
 
+
 func (s *swarmImpl) onSendMessageRequest(r SendMessageReq) {
+
+	// check for existing session
+	//remoteNode := s.peers[r.remoteNodeId]
+
+
 	// todo: send message here - establish a connection and session on-demand as needed
 	// todo: auto support for retries
 
