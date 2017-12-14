@@ -8,18 +8,19 @@ import (
 	"github.com/gogo/protobuf/proto"
 )
 
-// pattern: [protocol][version][method-name]
 const pingReq = "/ping/1.0/ping-req/"
 const pingResp = "/ping/1.0/ping-resp/"
 
-// Ping protocol - example simple app-level p2p protocol
+// Ping protocol
+// An example of a simple app-level p2p protocol
+
 type Ping interface {
 
 	// send a ping request to a remoteNode
 	// reqId: allows the client to match responses with requests by id
 	SendPing(msg string, reqId []byte, remoteNodeId string) error
 
-	// app logic registers incoming ping response
+	// app logic registers her for typed incoming ping responses
 	RegisterCallback(callback chan *pb.PingRespData)
 }
 
@@ -59,29 +60,11 @@ func NewPingProtocol(s swarm.Swarm) Ping {
 
 func (p *pingProtocolImpl) SendPing(msg string, reqId []byte, remoteNodeId string) error {
 
-	// todo: send a ping message to the remote node
-
 	metadata := p.swarm.GetLocalNode().NewProtocolMessageMetadata(pingReq, reqId, false)
-
 	data := &pb.PingReqData{metadata, msg}
 
-	// Sign, Pack and Send :-)
-
-	// TODO: factor this out to local node so it can sign any protocol message
-	// and so we don't need to have this boilerplate code in every protocol impl
-	/////////////////////////////////////////////
-
-	bin, err := proto.Marshal(data)
-	if err != nil {
-		return err
-	}
-
-	sign, err := p.swarm.GetLocalNode().PrivateKey().Sign(bin)
-	if err != nil {
-		return err
-	}
-
-	// place signature - hex encoded string
+	// sign data
+	sign, err := p.swarm.GetLocalNode().SignMessage(data)
 	data.Metadata.AuthorSign = hex.EncodeToString(sign)
 
 	// marshal the signed data
@@ -90,15 +73,18 @@ func (p *pingProtocolImpl) SendPing(msg string, reqId []byte, remoteNodeId strin
 		return err
 	}
 
+	// send the message
 	req := swarm.SendMessageReq{remoteNodeId, reqId, payload}
 	p.swarm.SendMessage(req)
 
 	return nil
 }
 
+
 func (p *pingProtocolImpl) RegisterCallback(callback chan *pb.PingRespData) {
 	p.callbacksRegReq <- callback
 }
+
 
 func (p *pingProtocolImpl) handleIncomingRequest(msg swarm.IncomingMessage) {
 
@@ -120,18 +106,7 @@ func (p *pingProtocolImpl) handleIncomingRequest(msg swarm.IncomingMessage) {
 	respData := &pb.PingRespData{metadata, pingText}
 
 	// sign response
-
-	bin, err := proto.Marshal(respData)
-	if err != nil {
-		return
-	}
-
-	sign, err := p.swarm.GetLocalNode().PrivateKey().Sign(bin)
-	if err != nil {
-		return
-	}
-
-	// place signature - hex encoded string
+	sign, err := p.swarm.GetLocalNode().SignMessage(respData)
 	respData.Metadata.AuthorSign = hex.EncodeToString(sign)
 
 	// marshal the signed data
@@ -164,7 +139,7 @@ func (p *pingProtocolImpl) handleIncomingResponse(msg swarm.IncomingMessage) {
 
 	log.Info("Got pong response from %s. Ping req id: %", msg.Sender().Pretty(), resp.Pong, reqId)
 
-	// notify clients
+	// notify clients of th enew pong
 	for _, c := range p.callbacks {
 		// todo: verify that this style of closure is kosher
 		go func() { c <- resp }()

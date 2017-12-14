@@ -76,6 +76,10 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 	return s, err
 }
 
+func (s *swarmImpl) getHandshakeProtocol() HandshakeProtocol {
+	return s.handshakeProtocol
+}
+
 // register a node with the swarm
 func (s *swarmImpl) RegisterNode(data RemoteNodeData) {
 	s.registerNodeReq <- data

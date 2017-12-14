@@ -4,6 +4,7 @@ import (
 	"github.com/UnrulyOS/go-unruly/log"
 	"github.com/UnrulyOS/go-unruly/p2p2/keys"
 	"github.com/UnrulyOS/go-unruly/p2p2/swarm/pb"
+	"github.com/golang/protobuf/proto"
 	"time"
 )
 
@@ -21,6 +22,10 @@ type LocalNode interface {
 	TcpAddress() string
 
 	NewProtocolMessageMetadata(protocol string, reqId []byte, gossip bool) *pb.Metadata
+
+	SignMessage(data proto.Message) ([]byte, error)
+
+	GetSwarm() Swarm
 }
 
 func NewLocalNode(pubKey keys.PublicKey, privKey keys.PrivateKey, tcpAddress string) (LocalNode, error) {
@@ -59,7 +64,7 @@ type localNodeImp struct {
 
 // Create meta-data for an outgoing protocol message authored by this node
 func (n *localNodeImp) NewProtocolMessageMetadata(protocol string, reqId []byte, gossip bool) *pb.Metadata {
-	m := &pb.Metadata{
+	return &pb.Metadata{
 		Protocol:      protocol,
 		ReqId:         reqId,
 		ClientVersion: clientVersion,
@@ -67,8 +72,12 @@ func (n *localNodeImp) NewProtocolMessageMetadata(protocol string, reqId []byte,
 		Gossip:        gossip,
 		AuthPubKey:    n.PublicKey().Bytes(),
 	}
-	return m
 }
+
+func (n *localNodeImp) GetSwarm() Swarm {
+	return n.swarm
+}
+
 
 func (n *localNodeImp) TcpAddress() string {
 	return n.tcpAddress
@@ -92,4 +101,19 @@ func (n *localNodeImp) PrivateKey() keys.PrivateKey {
 
 func (n *localNodeImp) PublicKey() keys.PublicKey {
 	return n.pubKey
+}
+
+// Sign protobufs data
+func (n *localNodeImp) SignMessage(data proto.Message) ([]byte, error) {
+	bin, err := proto.Marshal(data)
+	if err != nil {
+		return nil, err
+	}
+
+	sign, err := n.PrivateKey().Sign(bin)
+	if err != nil {
+		return nil, err
+	}
+
+	return sign, nil
 }

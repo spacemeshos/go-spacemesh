@@ -172,7 +172,7 @@ func (s *swarmImpl) onRemoteClientHandshakeMessage(msg net.ConnectionMessage) {
 
 	if sender == nil {
 		// authenticate sender before registration
-		err := AuthenticateSenderNode(data)
+		err := s.handshakeProtocol.authenticateSenderNode(data)
 		if err != nil {
 			log.Error("failed to authenticate message sender %v", err)
 			return

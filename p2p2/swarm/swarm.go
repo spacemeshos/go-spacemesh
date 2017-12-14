@@ -46,6 +46,8 @@ type Swarm interface {
 	GetDemuxer() Demuxer
 
 	GetLocalNode() LocalNode
+
+	getHandshakeProtocol() HandshakeProtocol
 }
 
 // outside of swarm - types only know about this and not about RemoteNode

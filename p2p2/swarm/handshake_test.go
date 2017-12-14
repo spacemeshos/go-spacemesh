@@ -1,4 +1,4 @@
-package tests
+package swarm
 
 import (
 	"bytes"
@@ -8,7 +8,6 @@ import (
 	"github.com/UnrulyOS/go-unruly/crypto"
 	"github.com/UnrulyOS/go-unruly/log"
 	"github.com/UnrulyOS/go-unruly/p2p2/keys"
-	"github.com/UnrulyOS/go-unruly/p2p2/swarm"
 	"github.com/UnrulyOS/go-unruly/p2p2/swarm/pb"
 	"github.com/gogo/protobuf/proto"
 	"testing"
@@ -23,14 +22,14 @@ func TestHandshakeCoreData(t *testing.T) {
 	address := fmt.Sprintf("localhost:%d", port)
 
 	priv, pub, _ := keys.GenerateKeyPair()
-	node1Local, err := swarm.NewLocalNode(pub, priv, address)
+	node1Local, err := NewLocalNode(pub, priv, address)
 
 	if err != nil {
 		t.Error("failed to create local node1", err)
 	}
 
 	// this will be node 2 view of node 1
-	node1Remote, _ := swarm.NewRemoteNode(pub.String(), address)
+	node1Remote, _ := NewRemoteNode(pub.String(), address)
 
 	// node 2
 
@@ -38,17 +37,19 @@ func TestHandshakeCoreData(t *testing.T) {
 	address1 := fmt.Sprintf("localhost:%d", port1)
 
 	priv1, pub1, _ := keys.GenerateKeyPair()
-	node2Local, err := swarm.NewLocalNode(pub1, priv1, address1)
+	node2Local, err := NewLocalNode(pub1, priv1, address1)
 
 	if err != nil {
 		t.Error("failed to create local node2", err)
 	}
 
 	// this will be node1 view of node 2
-	node2Remote, _ := swarm.NewRemoteNode(pub1.String(), address1)
+	node2Remote, _ := NewRemoteNode(pub1.String(), address1)
+
+	handshakeProtocol1 := node1Local.GetSwarm().getHandshakeProtocol()
 
 	// STEP 1: Node1 generates handshake data and sends it to node2 ....
-	data, session, err := swarm.GenereateHandshakeRequestData(node1Local, node2Remote)
+	data, session, err := handshakeProtocol1.genereateHandshakeRequestData(node1Local, node2Remote)
 
 	assert.NoErr(t, err, "expected no error")
 	assert.NotNil(t, session, "expected session")
@@ -59,7 +60,10 @@ func TestHandshakeCoreData(t *testing.T) {
 	assert.False(t, session.IsAuthenticated(), "Expected session to be not authenticated yet")
 
 	// STEP 2: Node2 gets handshake data from node 1 and processes it to establish a session with a shared AES key
-	resp, session1, err := swarm.ProcessHandshakeRequest(node2Local, node1Remote, data)
+
+	handshakeProtocol2 := node2Local.GetSwarm().getHandshakeProtocol()
+
+	resp, session1, err := handshakeProtocol2.processHandshakeRequest(node2Local, node1Remote, data)
 
 	assert.NoErr(t, err, "expected no error")
 	assert.NotNil(t, session1, "expected session")
@@ -75,7 +79,7 @@ func TestHandshakeCoreData(t *testing.T) {
 	assert.True(t, session1.IsAuthenticated(), "expected session1 to be authenticated")
 
 	// STEP 3: Node2 sends data1 back to node1.... Node 1 validates the data and sets its network session to authenticated
-	err = swarm.ProcessHandshakeResponse(node1Local, node2Remote, session, resp)
+	err = handshakeProtocol1.processHandshakeResponse(node1Local, node2Remote, session, resp)
 
 	assert.True(t, session.IsAuthenticated(), "expected session to be authenticated")
 	assert.NoErr(t, err, "failed to authenticate or process response")
@@ -100,8 +104,8 @@ func TestHandshakeProtocol(t *testing.T) {
 	address := fmt.Sprintf("localhost:%d", port)
 
 	priv, pub, _ := keys.GenerateKeyPair()
-	node1Local, _ := swarm.NewLocalNode(pub, priv, address)
-	node1Remote, _ := swarm.NewRemoteNode(pub.String(), address)
+	node1Local, _ := NewLocalNode(pub, priv, address)
+	node1Remote, _ := NewRemoteNode(pub.String(), address)
 
 	// node 2
 
@@ -109,11 +113,13 @@ func TestHandshakeProtocol(t *testing.T) {
 	address1 := fmt.Sprintf("localhost:%d", port1)
 
 	priv1, pub1, _ := keys.GenerateKeyPair()
-	node2Remote, _ := swarm.NewRemoteNode(pub1.String(), address1)
-	node2Local, _ := swarm.NewLocalNode(pub1, priv1, address1)
+	node2Remote, _ := NewRemoteNode(pub1.String(), address1)
+	node2Local, _ := NewLocalNode(pub1, priv1, address1)
 
 	// STEP 1: Node 1 generates handshake data and sends it to node2 ....
-	data, session, err := swarm.GenereateHandshakeRequestData(node1Local, node2Remote)
+	handshakeProtocol1 := node1Local.GetSwarm().getHandshakeProtocol()
+
+	data, session, err := handshakeProtocol1.genereateHandshakeRequestData(node1Local, node2Remote)
 
 	assert.NoErr(t, err, "expected no error")
 	assert.NotNil(t, session, "expected session")
@@ -139,11 +145,13 @@ func TestHandshakeProtocol(t *testing.T) {
 	data1 := &pb.HandshakeData{}
 	err = proto.Unmarshal(wireFormat, data1)
 	assert.NoErr(t, err, "failed to unmarshal wire formatted data to handshake data")
-	assert.Equal(t, swarm.HandshakeReq, data1.Protocol, "expected this message to be a handshake req")
+	assert.Equal(t, HandshakeReq, data1.Protocol, "expected this message to be a handshake req")
 
 	// STEP 3: local node 2 handles req data and generates response
 
-	resp, session1, err := swarm.ProcessHandshakeRequest(node2Local, node1Remote, data1)
+	handshakeProtocol2 := node2Local.GetSwarm().getHandshakeProtocol()
+
+	resp, session1, err := handshakeProtocol2.processHandshakeRequest(node2Local, node1Remote, data1)
 
 	assert.NoErr(t, err, "expected no error")
 	assert.NotNil(t, session1, "expected session")
@@ -176,11 +184,11 @@ func TestHandshakeProtocol(t *testing.T) {
 	data2 := &pb.HandshakeData{}
 	err = proto.Unmarshal(wireFormat, data2)
 	assert.NoErr(t, err, "failed to unmarshal wire formatted data to handshake data")
-	assert.Equal(t, swarm.HandshakeResp, data2.Protocol, "expected this message to be a handshake req")
+	assert.Equal(t, HandshakeResp, data2.Protocol, "expected this message to be a handshake req")
 
 	// STEP 5: Node 1 validates the data and sets its network session to authenticated
 
-	err = swarm.ProcessHandshakeResponse(node1Local, node2Remote, session, data2)
+	err = handshakeProtocol1.processHandshakeResponse(node1Local, node2Remote, session, data2)
 
 	assert.True(t, session.IsAuthenticated(), "expected session to be authenticated")
 	assert.NoErr(t, err, "failed to authenticate or process response")

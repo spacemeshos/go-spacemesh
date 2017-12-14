@@ -26,6 +26,7 @@ type HandshakeData interface {
 	Session() NetworkSession
 	GetError() error
 	SetError(err error)
+
 }
 
 func NewHandshakeData(localNode LocalNode, remoteNode RemoteNode, session NetworkSession, err error) HandshakeData {
@@ -68,6 +69,11 @@ func (n *handshakeDataImp) SetError(err error) {
 type HandshakeProtocol interface {
 	CreateSession(remoteNode RemoteNode)
 	RegisterNewSessionCallback(callback chan HandshakeData) // register a channel to receive session state changes
+
+	genereateHandshakeRequestData(node LocalNode, remoteNode RemoteNode) (*pb.HandshakeData, NetworkSession, error)
+	processHandshakeResponse(node LocalNode, r RemoteNode, s NetworkSession, resp *pb.HandshakeData) error
+	processHandshakeRequest(node LocalNode, r RemoteNode, req *pb.HandshakeData) (*pb.HandshakeData, NetworkSession, error)
+ 	authenticateSenderNode(req *pb.HandshakeData) error
 }
 
 type handshakeProtocolImpl struct {
@@ -118,7 +124,7 @@ func (h *handshakeProtocolImpl) RegisterNewSessionCallback(callback chan Handsha
 
 func (h *handshakeProtocolImpl) CreateSession(remoteNode RemoteNode) {
 
-	data, session, err := GenereateHandshakeRequestData(h.swarm.GetLocalNode(), remoteNode)
+	data, session, err := h.genereateHandshakeRequestData(h.swarm.GetLocalNode(), remoteNode)
 
 	handshakeData := NewHandshakeData(h.swarm.GetLocalNode(), remoteNode, session, err)
 
@@ -187,7 +193,7 @@ func (h *handshakeProtocolImpl) onHandleIncomingHandshakeRequest(msg IncomingMes
 		// and add it to the swarm
 	}
 
-	respData, session, err := ProcessHandshakeRequest(h.swarm.GetLocalNode(), msg.Sender(), data)
+	respData, session, err := h.processHandshakeRequest(h.swarm.GetLocalNode(), msg.Sender(), data)
 
 	// we have a new session started by a remote node
 	handshakeData := NewHandshakeData(h.swarm.GetLocalNode(), msg.Sender(), session, err)
@@ -235,7 +241,7 @@ func (h *handshakeProtocolImpl) onHandleIncomingHandshakeResponse(msg IncomingMe
 		return
 	}
 
-	err = ProcessHandshakeResponse(sessionRequestData.LocalNode(), sessionRequestData.RemoteNode(),
+	err = h.processHandshakeResponse(sessionRequestData.LocalNode(), sessionRequestData.RemoteNode(),
 		sessionRequestData.Session(), respData)
 	if err != nil {
 		// can't establish session - set error
@@ -258,7 +264,7 @@ func (h *handshakeProtocolImpl) onHandleIncomingHandshakeResponse(msg IncomingMe
 // Returns handshake data to send to removeNode and a network session data object that includes the session enc/dec sym key and iv
 // Node that NetworkSession is not yet authenticated - this happens only when the handshake response is processed and authenticated
 // This is called by node1 (initiator)
-func GenereateHandshakeRequestData(node LocalNode, remoteNode RemoteNode) (*pb.HandshakeData, NetworkSession, error) {
+func  (h *handshakeProtocolImpl) genereateHandshakeRequestData(node LocalNode, remoteNode RemoteNode) (*pb.HandshakeData, NetworkSession, error) {
 
 	// we use the Elliptic Curve Encryption Scheme
 	// https://en.wikipedia.org/wiki/Integrated_Encryption_Scheme
@@ -322,7 +328,7 @@ func GenereateHandshakeRequestData(node LocalNode, remoteNode RemoteNode) (*pb.H
 }
 
 // Authenticate the sender node generated the signed data
-func AuthenticateSenderNode(req *pb.HandshakeData) error {
+func (h *handshakeProtocolImpl) authenticateSenderNode(req *pb.HandshakeData) error {
 
 	snderPubKey, err := keys.NewPublicKey(req.NodePubKey)
 	if err != nil {
@@ -361,7 +367,7 @@ func AuthenticateSenderNode(req *pb.HandshakeData) error {
 // Process a session handshake request data from remoteNode r
 // Returns Handshake data to send to r and a network session data object that includes the session sym  enc/dec key
 // This is called by responder in the handshake protocol (node2)
-func ProcessHandshakeRequest(node LocalNode, r RemoteNode, req *pb.HandshakeData) (*pb.HandshakeData, NetworkSession, error) {
+func (h *handshakeProtocolImpl) processHandshakeRequest(node LocalNode, r RemoteNode, req *pb.HandshakeData) (*pb.HandshakeData, NetworkSession, error) {
 
 	// ephemeral public key
 	pubkey, err := btcec.ParsePubKey(req.PubKey, btcec.S256())
@@ -460,7 +466,7 @@ func ProcessHandshakeRequest(node LocalNode, r RemoteNode, req *pb.HandshakeData
 // Process handshake protocol response. This is called by initiator (node1) to handle response from node2
 // and to establish the session
 // Side-effect - passed network session is set to authenticated
-func ProcessHandshakeResponse(node LocalNode, r RemoteNode, s NetworkSession, resp *pb.HandshakeData) error {
+func (h *handshakeProtocolImpl) processHandshakeResponse(node LocalNode, r RemoteNode, s NetworkSession, resp *pb.HandshakeData) error {
 
 	// verified shared public secret
 	if !bytes.Equal(resp.PubKey, s.PubKey()) {
