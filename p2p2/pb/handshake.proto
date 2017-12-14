@@ -31,32 +31,28 @@ message HandshakeData {
 // it allows multiplexing back to higher level protocol
 // data is here and not in CommonMessageData to limit leaked data on unencrypted connections
 message ProtocolMessage {
-    string protocol = 1;    // protocol id
-    bytes reqId = 2;
+    Metadata metadata = 1;
 }
 
 message Metadata {
-    string clientVersion = 1; // author client version
-    int64 timestamp = 2;      // unix time - authoring time
-    bool gossip = 3;          // true to have receiver peer gossip the message to its neighbors
-    string author = 4;        // key of node that created the message (not the peer that may have sent it). =base58(mh(sha256(nodePubKey)))
-    bytes nodePubKey = 5;     // Authoring node Secp256k1 public key (32bytes) - protobufs serielized
-    string authorSign = 6;    // signature of message data by author + method specific data by message creator node. format: string([]bytes)
+    string protocol = 1;    // protocol id
+    bytes reqId = 2;
+    string clientVersion = 3; // author client version
+    int64 timestamp = 4;      // unix time - authoring time (not sending time)
+    bool gossip = 5;          // true to have receiver peer gossip the message to its neighbors
+    bytes authPubKey = 6;     // Authoring node Secp256k1 public key (32bytes) - may not be snder
+    string authorSign = 7;    // signature of message data by author + method specific data by message creator node. format: hexEncode([]bytes)
 }
 
 // example protocol
 message PingReqData {
-    string protocol = 1; // protocol must be first field
-    bytes reqId = 2;     // required field - none for requests. protocol req id for respones
-    Metadata data = 3;
+    Metadata metadata = 1;
 
-    string ping = 4; // the echo message itself - protocol specific - starts at #3
+    string ping = 2; // the echo message itself - protocol specific - starts at #2
 }
 
 message PongRespData {
-    string protocol = 1; // protocol must be first field
-    bytes reqId = 2;     // required field - empty for requests. req message id for respones
-    Metadata data = 3;  // all protocol messages have the same metadata
+    Metadata metadata = 1;
 
-    string pong = 4; // the echo message itself - protocol specific - starts at #3
+    string pong = 2; // the echo message itself - protocol specific - starts at #2
 }

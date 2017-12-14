@@ -143,23 +143,23 @@ func (h *handshakeProtocolImpl) processEvents() {
 func (h *handshakeProtocolImpl) onHandleIncomingHandshakeRequest(msg IncomingMessage) {
 
 	data := &pb.HandshakeData{}
-	err := proto.Unmarshal(msg.msg, data)
+	err := proto.Unmarshal(msg.Payload(), data)
 	if err != nil {
 		log.Warning("Invalid incoming handshake request bin data: %v", err)
 		return
 	}
 
-	if msg.sender == nil {
+	if msg.Sender() == nil {
 		// we don't know about this remote node - create a new one for it using the info it sent
 		// and add it to the swarm
 	}
 
-	respData, session, err := ProcessHandshakeRequest(h.swarm.LocalNode(), msg.sender, data)
+	respData, session, err := ProcessHandshakeRequest(h.swarm.LocalNode(), msg.Sender(), data)
 
 	// we have a new session started by a remote node
 	newSessionData := &NewSessoinData{
 		localNode:  h.swarm.LocalNode(),
-		remoteNode: msg.sender,
+		remoteNode: msg.Sender(),
 		session:    session,
 		err:        err,
 	}
@@ -181,7 +181,7 @@ func (h *handshakeProtocolImpl) onHandleIncomingHandshakeRequest(msg IncomingMes
 	// send response back to sender
 	h.swarm.SendMessage(SendMessageReq{
 		reqId:        session.String(),
-		remoteNodeId: msg.sender.String(),
+		remoteNodeId: msg.Sender().String(),
 		payload:      payload,
 	})
 
@@ -191,7 +191,7 @@ func (h *handshakeProtocolImpl) onHandleIncomingHandshakeRequest(msg IncomingMes
 
 func (h *handshakeProtocolImpl) onHandleIncomingHandshakeResponse(msg IncomingMessage) {
 	respData := &pb.HandshakeData{}
-	err := proto.Unmarshal(msg.msg, respData)
+	err := proto.Unmarshal(msg.Payload(), respData)
 	if err != nil {
 		log.Warning("invalid incoming handshake resp bin data: %v", err)
 		return

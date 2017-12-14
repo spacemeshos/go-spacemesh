@@ -133,17 +133,13 @@ func NewNetworkSession(id, keyE, keyM, pubKey []byte, localNodeId, remoteNodeId 
 		remoteNodeId:  remoteNodeId,
 	}
 
-	// start encryption
-
-	log.Info("KeyE for cypher: %s", hex.EncodeToString(keyE))
+	// create and store block enc/dec
 
 	blockCipher, err := aes.NewCipher(keyE)
 	if err != nil {
 		log.Error("Failed to create block cipher")
 		return nil, err
 	}
-
-	log.Info("Iv for cypher: %s", hex.EncodeToString(s.id))
 
 	s.blockEncrypter = cipher.NewCBCEncrypter(blockCipher, s.id)
 	s.blockDecrypter = cipher.NewCBCDecrypter(blockCipher, s.id)

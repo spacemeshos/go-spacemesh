@@ -79,9 +79,9 @@ func TestHandshakeCoreData(t *testing.T) {
 	assert.True(t, session.IsAuthenticated(), "expected session to be authenticated")
 	assert.NoErr(t, err, "failed to authenticate or process response")
 
-	// test session enc / dec
+	// test session sym enc / dec
 
-	const msg = "hello unruly"
+	const msg = "hello unruly - hello unruly - hello unruly :-)"
 	cipherText, err := session.Encrypt([]byte(msg))
 	assert.NoErr(t, err, "expected no error")
 

@@ -15,8 +15,18 @@
 ## go-unruly
 The go implementation of the [UnrulyOS](https://unruly.io) p2p node.
 Unruly is a decentralized blockchain computer using a new race-free consensus protocol that doesn't involve `proof of work`.
-Unruly is designed to build a secure decentralized networking formed a large number of desktop PCs at home.
+Unruly is designed to build a secure decentralized networking formed by a large number of desktop PCs at home.
 To learn more about Unruly read our wiki pages.
+
+### Getting
+```
+go get https://github.com/UnrulyOS/go-unruly
+```
+or create this directory `GOPATH$/src/UnrulyOS/` and clone the repo into it using:
+
+```
+git clone https://github.com/UnrulyOS/go-unruly
+```
 
 ### Building
 

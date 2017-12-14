@@ -1,12 +1,40 @@
 package p2p2
 
-import "github.com/UnrulyOS/go-unruly/log"
+import (
+	"github.com/UnrulyOS/go-unruly/log"
+)
+
+type IncomingMessage interface {
+	Sender() RemoteNode
+	Protocol() string
+	Payload() []byte
+}
+
+func NewIncomingMessage(sender RemoteNode, protocol string, payload []byte) IncomingMessage {
+	return &IncomingMessageImpl{
+		sender:  sender,
+		protocol:  protocol,
+		payload: payload,
+	}
+}
 
 // a protocol message
-type IncomingMessage struct {
+type IncomingMessageImpl struct {
 	sender   RemoteNode
 	protocol string
-	msg      []byte
+	payload  []byte
+}
+
+func (i *IncomingMessageImpl) Sender() RemoteNode {
+	return i.sender
+}
+
+func (i *IncomingMessageImpl) Protocol() string {
+	return i.protocol
+}
+
+func (i *IncomingMessageImpl) Payload() []byte {
+	return i.payload
 }
 
 type MessagesChan chan IncomingMessage
@@ -58,9 +86,9 @@ func (d *demuxImpl) processEvents() {
 	for {
 		select {
 		case msg := <-d.incomingMessages:
-			handler := d.handlers[msg.protocol]
+			handler := d.handlers[msg.Protocol()]
 			if handler == nil {
-				log.Warning("failed to route incoming message - no registered handler for protocol %s", msg.protocol)
+				log.Warning("failed to route incoming message - no registered handler for protocol %s", msg.Protocol())
 			} else {
 				// todo: verify this is safe in terms of go closure usage - is msg immutable ?
 				go func() { // async send to handler so we can keep processing message
