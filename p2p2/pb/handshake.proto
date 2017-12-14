@@ -47,12 +47,10 @@ message Metadata {
 // example protocol
 message PingReqData {
     Metadata metadata = 1;
-
     string ping = 2; // the echo message itself - protocol specific - starts at #2
 }
 
 message PongRespData {
     Metadata metadata = 1;
-
     string pong = 2; // the echo message itself - protocol specific - starts at #2
 }

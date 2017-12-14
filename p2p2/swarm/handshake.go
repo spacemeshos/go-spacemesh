@@ -1,4 +1,4 @@
-package p2p2
+package swarm
 
 import (
 	"bytes"
@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"github.com/UnrulyOS/go-unruly/log"
+	"github.com/UnrulyOS/go-unruly/p2p2/keys"
 	"github.com/UnrulyOS/go-unruly/p2p2/pb"
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/golang/protobuf/proto"
@@ -19,47 +20,83 @@ import (
 const HandshakeReq = "/handshake/1.0/handshake-req/"
 const HandshakeResp = "/handshake/1.0/handshake-resp/"
 
-// todo: interface this proeprly
-type NewSessoinData struct {
+type SessionData interface {
+	LocalNode() LocalNode
+	RemoteNode() RemoteNode
+	Session() NetworkSession
+	GetError() error
+	SetError(err error)
+}
+
+func NewSessionData(localNode LocalNode, remoteNode RemoteNode, session NetworkSession, err error) SessionData {
+	return &sessoinDataImp{
+		localNode:  localNode,
+		remoteNode: remoteNode,
+		session:    session,
+		err:        err,
+	}
+}
+
+type sessoinDataImp struct {
 	localNode  LocalNode
 	remoteNode RemoteNode
 	session    NetworkSession
 	err        error
 }
 
+func (n *sessoinDataImp) LocalNode() LocalNode {
+	return n.localNode
+}
+
+func (n *sessoinDataImp) RemoteNode() RemoteNode {
+	return n.remoteNode
+}
+
+func (n *sessoinDataImp) Session() NetworkSession {
+	return n.session
+}
+
+func (n *sessoinDataImp) GetError() error {
+	return n.err
+}
+
+func (n *sessoinDataImp) SetError(err error) {
+	n.err = err
+}
+
 // Handshake protocol
 type HandshakeProtocol interface {
 	CreateSession(remoteNode RemoteNode)
-	RegisterNewSessionCallback(callback chan *NewSessoinData) // register a channel to receive session state changes
+	RegisterNewSessionCallback(callback chan SessionData) // register a channel to receive session state changes
 }
 
 type handshakeProtocolImpl struct {
 
 	// state
 	swarm               Swarm
-	newSessionCallbacks []chan *NewSessoinData     // a list of callback channels for new sessions
-	pendingSessions     map[string]*NewSessoinData // sessions pending authentication
+	newSessionCallbacks []chan SessionData     // a list of callback channels for new sessions
+	pendingSessions     map[string]SessionData // sessions pending authentication
 
 	// ops
 	incomingHandshakeRequests MessagesChan
 	incomingHandsakeResponses MessagesChan
-	registerSessionCallback   chan chan *NewSessoinData
-	addPendingSession         chan *NewSessoinData
+	registerSessionCallback   chan chan SessionData
+	addPendingSession         chan SessionData
 	deletePendingSessionById  chan string
-	sessionStateChanged       chan *NewSessoinData
+	sessionStateChanged       chan SessionData
 }
 
 func NewHandshakeProtocol(s Swarm) HandshakeProtocol {
 
 	h := &handshakeProtocolImpl{
 		swarm:                     s,
-		pendingSessions:           make(map[string]*NewSessoinData),
+		pendingSessions:           make(map[string]SessionData),
 		incomingHandshakeRequests: make(MessagesChan, 20),
 		incomingHandsakeResponses: make(chan IncomingMessage, 20),
-		registerSessionCallback:   make(chan chan *NewSessoinData, 2),
-		newSessionCallbacks:       make([]chan *NewSessoinData, 1),
+		registerSessionCallback:   make(chan chan SessionData, 2),
+		newSessionCallbacks:       make([]chan SessionData, 1),
 		deletePendingSessionById:  make(chan string, 5),
-		sessionStateChanged:       make(chan *NewSessoinData, 3),
+		sessionStateChanged:       make(chan SessionData, 3),
 	}
 
 	go h.processEvents()
@@ -75,7 +112,7 @@ func NewHandshakeProtocol(s Swarm) HandshakeProtocol {
 	return h
 }
 
-func (h *handshakeProtocolImpl) RegisterNewSessionCallback(callback chan *NewSessoinData) {
+func (h *handshakeProtocolImpl) RegisterNewSessionCallback(callback chan SessionData) {
 	h.registerSessionCallback <- callback
 }
 
@@ -83,12 +120,7 @@ func (h *handshakeProtocolImpl) CreateSession(remoteNode RemoteNode) {
 
 	data, session, err := GenereateHandshakeRequestData(h.swarm.LocalNode(), remoteNode)
 
-	newSessionData := &NewSessoinData{
-		localNode:  h.swarm.LocalNode(),
-		remoteNode: remoteNode,
-		session:    session,
-		err:        err,
-	}
+	newSessionData := NewSessionData(h.swarm.LocalNode(), remoteNode, session, err)
 
 	if err != nil {
 		h.sessionStateChanged <- newSessionData
@@ -127,7 +159,7 @@ func (h *handshakeProtocolImpl) processEvents() {
 			h.newSessionCallbacks = append(h.newSessionCallbacks, r)
 
 		case s := <-h.addPendingSession:
-			h.pendingSessions[s.session.String()] = s
+			h.pendingSessions[s.Session().String()] = s
 
 		case k := <-h.deletePendingSessionById:
 			delete(h.pendingSessions, k)
@@ -157,23 +189,18 @@ func (h *handshakeProtocolImpl) onHandleIncomingHandshakeRequest(msg IncomingMes
 	respData, session, err := ProcessHandshakeRequest(h.swarm.LocalNode(), msg.Sender(), data)
 
 	// we have a new session started by a remote node
-	newSessionData := &NewSessoinData{
-		localNode:  h.swarm.LocalNode(),
-		remoteNode: msg.Sender(),
-		session:    session,
-		err:        err,
-	}
+	newSessionData := NewSessionData(h.swarm.LocalNode(), msg.Sender(), session, err)
 
 	if err != nil {
 		// failed to process request
-		newSessionData.err = err
+		newSessionData.SetError(err)
 		h.sessionStateChanged <- newSessionData
 		return
 	}
 
 	payload, err := proto.Marshal(respData)
 	if err != nil {
-		newSessionData.err = err
+		newSessionData.SetError(err)
 		h.sessionStateChanged <- newSessionData
 		return
 	}
@@ -207,10 +234,11 @@ func (h *handshakeProtocolImpl) onHandleIncomingHandshakeResponse(msg IncomingMe
 		return
 	}
 
-	err = ProcessHandshakeResponse(sessionRequestData.localNode, sessionRequestData.remoteNode, sessionRequestData.session, respData)
+	err = ProcessHandshakeResponse(sessionRequestData.LocalNode(), sessionRequestData.RemoteNode(),
+		sessionRequestData.Session(), respData)
 	if err != nil {
 		// can't establish session - set error
-		sessionRequestData.err = err
+		sessionRequestData.SetError(err)
 	}
 
 	// no longer pending if error or if sesssion created
@@ -295,7 +323,7 @@ func GenereateHandshakeRequestData(node LocalNode, remoteNode RemoteNode) (*pb.H
 // Authenticate the sender node generated the signed data
 func AuthenticateSenderNode(req *pb.HandshakeData) error {
 
-	snderPubKey, err := NewPublicKey(req.NodePubKey)
+	snderPubKey, err := keys.NewPublicKey(req.NodePubKey)
 	if err != nil {
 		return err
 	}

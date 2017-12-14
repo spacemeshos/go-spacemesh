@@ -1,8 +1,10 @@
-package p2p2
+package swarm
 
 import (
 	"encoding/hex"
 	"github.com/UnrulyOS/go-unruly/log"
+	"github.com/UnrulyOS/go-unruly/p2p2/keys"
+	"github.com/UnrulyOS/go-unruly/p2p2/net"
 	"github.com/UnrulyOS/go-unruly/p2p2/pb"
 	"github.com/golang/protobuf/proto"
 	"time"
@@ -79,10 +81,9 @@ func (s *swarmImpl) onConnectionRequest(req RemoteNodeData) {
 }
 
 // callback from handshake protocol when session state changes
-func (s *swarmImpl) onNewSession(session *NewSessoinData) {
-
-	if session.session.IsAuthenticated() {
-		s.allSessions[session.session.String()] = session.session
+func (s *swarmImpl) onNewSession(data SessionData) {
+	if data.Session().IsAuthenticated() {
+		s.allSessions[data.Session().String()] = data.Session()
 		// todo: if a session authenticated send out all pending messages to this node from its queue
 
 	}
@@ -139,7 +140,7 @@ func (s *swarmImpl) onSendMessageRequest(r SendMessageReq) {
 	conn.Send(data)
 }
 
-func (s *swarmImpl) onConnectionClosed(c Connection) {
+func (s *swarmImpl) onConnectionClosed(c net.Connection) {
 
 	// forget about this connection
 	id := c.Id()
@@ -151,13 +152,13 @@ func (s *swarmImpl) onConnectionClosed(c Connection) {
 	delete(s.peersByConnection, id)
 }
 
-func (s *swarmImpl) onRemoteClientConnected(c Connection) {
+func (s *swarmImpl) onRemoteClientConnected(c net.Connection) {
 	// nop - a remote client connected - this is handled w message
 	log.Info("Remote client connected. %s", c.Id())
 }
 
 // Preprocess an incoming handshake protocol message
-func (s *swarmImpl) onRemoteClientHandshakeMessage(msg ConnectionMessage) {
+func (s *swarmImpl) onRemoteClientHandshakeMessage(msg net.ConnectionMessage) {
 
 	data := &pb.HandshakeData{}
 	err := proto.Unmarshal(msg.Message, data)
@@ -177,7 +178,7 @@ func (s *swarmImpl) onRemoteClientHandshakeMessage(msg ConnectionMessage) {
 			return
 		}
 
-		nodeKey, err := NewPublicKey(data.NodePubKey)
+		nodeKey, err := keys.NewPublicKey(data.NodePubKey)
 		if err != nil {
 			return
 		}
@@ -197,7 +198,7 @@ func (s *swarmImpl) onRemoteClientHandshakeMessage(msg ConnectionMessage) {
 	s.demuxer.RouteIncomingMessage(NewIncomingMessage(sender, data.Protocol, msg.Message))
 }
 
-func (s *swarmImpl) onRemoteClientProtocolMessage(msg ConnectionMessage, c *pb.CommonMessageData) {
+func (s *swarmImpl) onRemoteClientProtocolMessage(msg net.ConnectionMessage, c *pb.CommonMessageData) {
 	// just find the session here
 	session := s.allSessions[hex.EncodeToString(c.SessionId)]
 
@@ -226,6 +227,7 @@ func (s *swarmImpl) onRemoteClientProtocolMessage(msg ConnectionMessage, c *pb.C
 	}
 
 	// todo: validate protocol message before demuxing to higher level handler
+	// Use pm.Metadata .....
 	// 1. authenticate author (all payload data is signed by him)
 	// 2. Reject if auth timestamp is too much aparat from current local time
 
@@ -237,7 +239,7 @@ func (s *swarmImpl) onRemoteClientProtocolMessage(msg ConnectionMessage, c *pb.C
 // c: connection we got this message on
 // msg: binary protobufs encoded data
 // not go safe - called from event processing main loop
-func (s *swarmImpl) onRemoteClientMessage(msg ConnectionMessage) {
+func (s *swarmImpl) onRemoteClientMessage(msg net.ConnectionMessage) {
 
 	c := &pb.CommonMessageData{}
 	err := proto.Unmarshal(msg.Message, c)
@@ -256,7 +258,7 @@ func (s *swarmImpl) onRemoteClientMessage(msg ConnectionMessage) {
 }
 
 // not go safe - called from event processing main loop
-func (s *swarmImpl) onConnectionError(err ConnectionError) {
+func (s *swarmImpl) onConnectionError(err net.ConnectionError) {
 	// close the connection?
 	// who to notify?
 	// update remote node?
@@ -264,6 +266,6 @@ func (s *swarmImpl) onConnectionError(err ConnectionError) {
 }
 
 // not go safe - called from event processing main loop
-func (s *swarmImpl) onMessageSendError(err MessageSendError) {
+func (s *swarmImpl) onMessageSendError(err net.MessageSendError) {
 	// what to do here - retry ?
 }

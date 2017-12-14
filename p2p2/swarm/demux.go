@@ -1,4 +1,4 @@
-package p2p2
+package swarm
 
 import (
 	"github.com/UnrulyOS/go-unruly/log"
@@ -12,9 +12,9 @@ type IncomingMessage interface {
 
 func NewIncomingMessage(sender RemoteNode, protocol string, payload []byte) IncomingMessage {
 	return &IncomingMessageImpl{
-		sender:  sender,
-		protocol:  protocol,
-		payload: payload,
+		sender:   sender,
+		protocol: protocol,
+		payload:  payload,
 	}
 }
 
@@ -45,7 +45,7 @@ type ProtocolRegistration struct {
 }
 
 // a Demuxer is responsible for routing incoming network messages back to protocol handlers based on message protocols
-// Limitations: only supports 1 handler per protocol.
+// Limitations: only supports 1 handler per protocol for now.
 type Demuxer interface {
 	RegisterProtocolHandler(handler ProtocolRegistration)
 	RouteIncomingMessage(msg IncomingMessage)

@@ -1,4 +1,4 @@
-package p2p2
+package net
 
 import (
 	"github.com/UnrulyOS/go-unruly/log"
@@ -13,7 +13,7 @@ import (
 // It provides full duplex messaging functionality over the same tcp/ip connection
 // Network should not know about higher-level networking types such as remoteNode, swarm and networkSession
 // Network main client is the swarm
-type Network interface {
+type Net interface {
 	DialTCP(address string, timeOut time.Duration) (Connection, error) // Connect to a remote node. Can send when no error.
 
 	GetNewConnections() chan Connection
@@ -27,7 +27,7 @@ type Network interface {
 }
 
 // impl internal tpye
-type networkImpl struct {
+type netImpl struct {
 	tcpListener      net.Listener
 	tcpListenAddress string // Address to open connection: localhost:9999
 
@@ -39,27 +39,27 @@ type networkImpl struct {
 }
 
 // Implement Network interface public channel accessors
-func (n *networkImpl) GetNewConnections() chan Connection {
+func (n *netImpl) GetNewConnections() chan Connection {
 	return n.newConnections
 }
-func (n *networkImpl) GetClosingConnections() chan Connection {
+func (n *netImpl) GetClosingConnections() chan Connection {
 	return n.closingConnections
 }
-func (n *networkImpl) GetConnectionErrors() chan ConnectionError {
+func (n *netImpl) GetConnectionErrors() chan ConnectionError {
 	return n.connectionErrors
 }
-func (n *networkImpl) GetIncomingMessage() chan ConnectionMessage {
+func (n *netImpl) GetIncomingMessage() chan ConnectionMessage {
 	return n.incomingMessages
 }
-func (n *networkImpl) GetMessageSendErrors() chan MessageSendError {
+func (n *netImpl) GetMessageSendErrors() chan MessageSendError {
 	return n.messageSendErrors
 }
 
 // Creates a new network
 // Attempts to tcp listen on address. e.g. localhost:1234
-func NewNetwork(tcpListenAddress string) (Network, error) {
+func NewNet(tcpListenAddress string) (Net, error) {
 
-	n := &networkImpl{
+	n := &netImpl{
 		tcpListenAddress:   tcpListenAddress,
 		newConnections:     make(chan Connection, 20),
 		closingConnections: make(chan Connection, 20),
@@ -84,7 +84,7 @@ func NewNetwork(tcpListenAddress string) (Network, error) {
 // address:: ip:port
 // Returns established connection that local clients can send messages to or error if failed
 // to establish a connection
-func (n *networkImpl) DialTCP(address string, timeOut time.Duration) (Connection, error) {
+func (n *netImpl) DialTCP(address string, timeOut time.Duration) (Connection, error) {
 
 	// connect via dialer so we can set tcp network params
 	dialer := &net.Dialer{}
@@ -106,7 +106,7 @@ func (n *networkImpl) DialTCP(address string, timeOut time.Duration) (Connection
 }
 
 // Start network server
-func (n *networkImpl) listen() error {
+func (n *netImpl) listen() error {
 	log.Info("Starting to listen...")
 	tcpListener, err := net.Listen("tcp", n.tcpListenAddress)
 	if err != nil {
@@ -118,7 +118,7 @@ func (n *networkImpl) listen() error {
 	return nil
 }
 
-func (n *networkImpl) acceptTcp() {
+func (n *netImpl) acceptTcp() {
 	for {
 		log.Info("Waiting for incoming connections...")
 		netConn, err := n.tcpListener.Accept()

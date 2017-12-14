@@ -1,25 +1,25 @@
-package p2p2
+package swarm
 
-import "github.com/UnrulyOS/go-unruly/log"
+import (
+	"github.com/UnrulyOS/go-unruly/log"
+	"github.com/UnrulyOS/go-unruly/p2p2/net"
+)
 
 type swarmImpl struct {
 
 	// set in construction and immutable state
-	network   Network
+	network   net.Net
 	localNode LocalNode
 	demuxer   Demuxer
 
-	// all data should only be accessed from methods executed by the main swarm event loop
-
 	// Internal state not thread safe state - must be access only from methods dispatched from the internal event handler
-	peers             map[string]RemoteNode // NodeId -> RemoteNode. known remote nodes. Swarm is a peer store.
-	connections       map[string]Connection // ConnId -> Connection - all open connections for tracking and mngmnt
-	peersByConnection map[string]RemoteNode // ConnId -> RemoteNode remote nodes indexed by their connections.
 
-	// todo: remove unused sessions every 24 hours
+	peers             map[string]RemoteNode     // NodeId -> RemoteNode. known remote nodes. Swarm is a peer store.
+	connections       map[string]net.Connection // ConnId -> Connection - all open connections for tracking and mngmnt
+	peersByConnection map[string]RemoteNode     // ConnId -> RemoteNode remote nodes indexed by their connections.
+
+	// todo: remove all idle sessions every n hours
 	allSessions map[string]NetworkSession // SessionId -> Session data. all authenticated session
-
-	// remote nodes maintain their connections and sessions
 
 	messagesPendingSession map[string]SendMessageReq // k - unique req id. outgoing messages which pend an auth session with remote node to be sent out
 
@@ -31,17 +31,17 @@ type swarmImpl struct {
 
 	registerNodeReq chan RemoteNodeData // local request to register a node based on minimal data
 
-	// handshake protocol implementation
+	// swarm provides handshake protocol
 	handshakeProtocol HandshakeProtocol
 
-	// handshake protocol callback - sessions updates are pushd here
-	newSessions chan *NewSessoinData // gets callback from handshake protocol when new session are created and/or auth
+	// handshake protocol callback - sessions updates are pushed here
+	newSessions chan SessionData // gets callback from handshake protocol when new session are created and/or auth
 
 }
 
 func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 
-	n, err := NewNetwork(tcpAddress)
+	n, err := net.NewNet(tcpAddress)
 	if err != nil {
 		log.Error("can't create swarm without a network: %v", err)
 		return nil, err
@@ -54,7 +54,7 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 
 		peersByConnection:      make(map[string]RemoteNode),
 		peers:                  make(map[string]RemoteNode),
-		connections:            make(map[string]Connection),
+		connections:            make(map[string]net.Connection),
 		messagesPendingSession: make(map[string]SendMessageReq),
 		allSessions:            make(map[string]NetworkSession),
 
@@ -62,7 +62,7 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 		disconnectRequests: make(chan RemoteNodeData, 10),
 		sendMsgRequests:    make(chan SendMessageReq, 20),
 		demuxer:            NewDemuxer(),
-		newSessions:        make(chan *NewSessoinData, 10),
+		newSessions:        make(chan SessionData, 10),
 		registerNodeReq:    make(chan RemoteNodeData, 10),
 	}
 

@@ -1,4 +1,4 @@
-package p2p2
+package swarm
 
 // Swarm
 // Hold ref to peers and manage connections to peers

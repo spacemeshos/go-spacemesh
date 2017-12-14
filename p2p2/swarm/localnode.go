@@ -1,8 +1,10 @@
-package p2p2
+package swarm
 
 import (
 	"github.com/UnrulyOS/go-unruly/log"
+	"github.com/UnrulyOS/go-unruly/p2p2/keys"
 )
+
 
 // The local unruly node is the root of all evil
 type LocalNode interface {
@@ -10,13 +12,13 @@ type LocalNode interface {
 	String() string
 	Pretty() string
 
-	PrivateKey() PrivateKey
-	PublicKey() PublicKey
+	PrivateKey() keys.PrivateKey
+	PublicKey() keys.PublicKey
 
 	TcpAddress() string
 }
 
-func NewLocalNode(pubKey PublicKey, privKey PrivateKey, tcpAddress string) (LocalNode, error) {
+func NewLocalNode(pubKey keys.PublicKey, privKey keys.PrivateKey, tcpAddress string) (LocalNode, error) {
 
 	n := &localNodeImp{
 		pubKey:     pubKey,
@@ -39,19 +41,15 @@ func NewLocalNode(pubKey PublicKey, privKey PrivateKey, tcpAddress string) (Loca
 
 // Node implementation type
 type localNodeImp struct {
-	pubKey     PublicKey
-	privKey    PrivateKey
+	pubKey     keys.PublicKey
+	privKey    keys.PrivateKey
 	tcpAddress string
 
 	// local owns a swarm
 	swarm Swarm
 
 	// add all other protocols here
-	handshake HandshakeProtocol
-}
 
-func (n *localNodeImp) HandshakeProtocol() HandshakeProtocol {
-	return n.handshake
 }
 
 func (n *localNodeImp) TcpAddress() string {
@@ -70,10 +68,10 @@ func (n *localNodeImp) Pretty() string {
 	return n.pubKey.Pretty()
 }
 
-func (n *localNodeImp) PrivateKey() PrivateKey {
+func (n *localNodeImp) PrivateKey() keys.PrivateKey {
 	return n.privKey
 }
 
-func (n *localNodeImp) PublicKey() PublicKey {
+func (n *localNodeImp) PublicKey() keys.PublicKey {
 	return n.pubKey
 }

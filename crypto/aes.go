@@ -74,7 +74,6 @@ func Pkcs7Unpad(in []byte) []byte {
 	return in[:len(in)-int(padding)]
 }
 
-
 // addPKCSPadding adds padding to a block of data
 func AddPKCSPadding(src []byte) []byte {
 	padding := aes.BlockSize - len(src)%aes.BlockSize

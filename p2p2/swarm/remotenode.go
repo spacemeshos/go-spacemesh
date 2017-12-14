@@ -1,6 +1,10 @@
-package p2p2
+package swarm
 
-import "github.com/UnrulyOS/go-unruly/log"
+import (
+	"github.com/UnrulyOS/go-unruly/log"
+	"github.com/UnrulyOS/go-unruly/p2p2/keys"
+	"github.com/UnrulyOS/go-unruly/p2p2/net"
+)
 
 // Remote node data
 // Remote nodes are maintained by the swarm and are not visible to higher-level types on the network stack
@@ -14,33 +18,30 @@ type RemoteNode interface {
 
 	TcpAddress() string // tcp address advertised by node e.g. 127.0.0.1:3058
 
-	PublicKey() PublicKey
+	PublicKey() keys.PublicKey
 
-	GetConnections() map[string]Connection
+	GetConnections() map[string]net.Connection
 	GetSessions() map[string]NetworkSession
 
 	// returns an authenticated session with the node if one exists
 	GetAuthenticatedSession() NetworkSession
 
 	// returns an active connection with the node if we have one
-	GetActiveConnection() Connection
-
-	// add a queue of pending messages to send to the node - can be picked once a session is created
-
+	GetActiveConnection() net.Connection
 }
 
 type remoteNodeImpl struct {
-	publicKey  PublicKey
+	publicKey  keys.PublicKey
 	tcpAddress string
 
-	connections map[string]Connection
+	connections map[string]net.Connection
 	sessions    map[string]NetworkSession
 }
 
 // Create a new remote node using provided id and tcp address
 func NewRemoteNode(id string, tcpAddress string) (RemoteNode, error) {
 
-	key, err := NewPublicKeyFromString(id)
+	key, err := keys.NewPublicKeyFromString(id)
 	if err != nil {
 		log.Error("invalid node id format: %v", err)
 		return nil, err
@@ -49,7 +50,7 @@ func NewRemoteNode(id string, tcpAddress string) (RemoteNode, error) {
 	node := &remoteNodeImpl{
 		publicKey:   key,
 		tcpAddress:  tcpAddress,
-		connections: make(map[string]Connection),
+		connections: make(map[string]net.Connection),
 		sessions:    make(map[string]NetworkSession),
 	}
 
@@ -65,7 +66,7 @@ func (n *remoteNodeImpl) GetAuthenticatedSession() NetworkSession {
 	return nil
 }
 
-func (n *remoteNodeImpl) GetActiveConnection() Connection {
+func (n *remoteNodeImpl) GetActiveConnection() net.Connection {
 
 	// todo: sort by last data transfer time to pick the best connection
 
@@ -77,7 +78,7 @@ func (n *remoteNodeImpl) GetActiveConnection() Connection {
 	return nil
 }
 
-func (n *remoteNodeImpl) GetConnections() map[string]Connection {
+func (n *remoteNodeImpl) GetConnections() map[string]net.Connection {
 	return n.connections
 }
 
@@ -97,7 +98,7 @@ func (n *remoteNodeImpl) Pretty() string {
 	return n.publicKey.Pretty()
 }
 
-func (n *remoteNodeImpl) PublicKey() PublicKey {
+func (n *remoteNodeImpl) PublicKey() keys.PublicKey {
 	return n.publicKey
 }
 

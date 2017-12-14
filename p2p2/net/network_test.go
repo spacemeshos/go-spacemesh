@@ -1,4 +1,4 @@
-package p2p2
+package net
 
 import (
 	"fmt"
@@ -19,7 +19,7 @@ func TestReadWrite(t *testing.T) {
 
 	done := make(chan bool, 1)
 
-	n, err := NewNetwork(address)
+	n, err := NewNet(address)
 	assert.Nil(t, err, "failed to create tcp server")
 
 	// run a simple network events processor go routine

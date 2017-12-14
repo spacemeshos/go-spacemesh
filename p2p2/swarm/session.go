@@ -1,4 +1,4 @@
-package p2p2
+package swarm
 
 import (
 	"crypto/aes"

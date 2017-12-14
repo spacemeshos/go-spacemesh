@@ -1,4 +1,4 @@
-package p2p2
+package net
 
 import (
 	"encoding/binary"
@@ -56,12 +56,12 @@ type connectionImpl struct {
 
 	outgoingMsgs chan []byte // outgoing message queue
 
-	conn    net.Conn // wrapped network connection
-	network Network  // network context
+	conn net.Conn // wrapped network connection
+	net  Net      // network context
 }
 
 // Create a new connection wrapping a net.Conn with a provided connection manager
-func newConnection(conn net.Conn, n Network, s ConnectionSource) Connection {
+func newConnection(conn net.Conn, n Net, s ConnectionSource) Connection {
 
 	// todo parametrize incoming msgs chan buffer size - hard-coded for now
 
@@ -75,7 +75,7 @@ func newConnection(conn net.Conn, n Network, s ConnectionSource) Connection {
 		incomingMsgs: incomingMsgs,
 		outgoingMsgs: make(chan []byte, 10),
 		conn:         conn,
-		network:      n,
+		net:          n,
 	}
 
 	// start processing channel-based message
@@ -112,13 +112,13 @@ func (c *connectionImpl) writeMessageToConnection(msg []byte) {
 	ul := uint32(len(msg))
 	err := binary.Write(c.conn, binary.BigEndian, &ul)
 	if err != nil {
-		c.network.GetMessageSendErrors() <- MessageSendError{c, msg, err}
+		c.net.GetMessageSendErrors() <- MessageSendError{c, msg, err}
 		return
 	}
 
 	_, err = c.conn.Write(msg)
 	if err != nil {
-		c.network.GetMessageSendErrors() <- MessageSendError{c, msg, err}
+		c.net.GetMessageSendErrors() <- MessageSendError{c, msg, err}
 		return
 	}
 
@@ -172,14 +172,14 @@ Loop:
 			c.lastOpTime = time.Now()
 
 			// pump the message to the network
-			c.network.GetIncomingMessage() <- ConnectionMessage{c, msg}
+			c.net.GetIncomingMessage() <- ConnectionMessage{c, msg}
 
 		case <-c.incomingMsgs.CloseChan:
-			c.network.GetClosingConnections() <- c
+			c.net.GetClosingConnections() <- c
 			break Loop
 
 		case err := <-c.incomingMsgs.ErrChan:
-			c.network.GetConnectionErrors() <- ConnectionError{c, err}
+			c.net.GetConnectionErrors() <- ConnectionError{c, err}
 
 		}
 	}
