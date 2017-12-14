@@ -17,32 +17,34 @@ import (
 // Handle local request to register a remote node in swarm
 func (s *swarmImpl) onRegisterNodeRequest(req RemoteNodeData) {
 
-	if s.peers[req.id] == nil {
-		node, err := NewRemoteNode(req.id, req.ip)
+	if s.peers[req.Id] == nil {
+		node, err := NewRemoteNode(req.Id, req.Ip)
 		if err != nil {
 			// invalid id
 			return
 		}
 
-		s.peers[req.id] = node
+		s.peers[req.Id] = node
 	}
 }
 
 // Handle local request to connect to a remote node
 func (s *swarmImpl) onConnectionRequest(req RemoteNodeData) {
 
+	var err error
+
 	// check for existing session
-	remoteNode := s.peers[req.id]
+	remoteNode := s.peers[req.Id]
 
 	if remoteNode == nil {
 
-		remoteNode, err := NewRemoteNode(req.id, req.ip)
+		remoteNode, err = NewRemoteNode(req.Id, req.Ip)
 		if err != nil {
 			return
 		}
 
 		// store new remote node by id
-		s.peers[req.id] = remoteNode
+		s.peers[req.Id] = remoteNode
 	}
 
 	conn := remoteNode.GetActiveConnection()
@@ -54,10 +56,10 @@ func (s *swarmImpl) onConnectionRequest(req RemoteNodeData) {
 	}
 
 	if conn == nil {
-		conn, err := s.network.DialTCP(req.ip, time.Duration(10*time.Second))
+		conn, err = s.network.DialTCP(req.Ip, time.Duration(10*time.Second))
 		if err != nil {
 			// log it here
-			log.Error("failed to connect to remote node on advertised ip %s", req.ip)
+			log.Error("failed to connect to remote node on advertised ip %s", req.Ip)
 			return
 		}
 
@@ -92,6 +94,28 @@ func (s *swarmImpl) onNewSession(data HandshakeData) {
 // Local request to disconnect from a node
 func (s *swarmImpl) onDisconnectionRequest(req RemoteNodeData) {
 	// disconnect from node...
+}
+
+// Local request to send a message to a remote node
+func (s *swarmImpl) onSendHandshakeMessage(r SendMessageReq) {
+
+	// check for existing remote node and session
+	remoteNode := s.peers[r.RemoteNodeId]
+
+	if remoteNode == nil {
+		// for now we assume messages are sent only to nodes we already know their ip address
+		return
+	}
+
+	conn := remoteNode.GetActiveConnection()
+
+	if conn == nil {
+		log.Error("Expected to have a connection with remote node")
+		return
+	}
+
+	conn.Send(r.Payload)
+
 }
 
 // Local request to send a message to a remote node
@@ -157,7 +181,7 @@ func (s *swarmImpl) onRemoteClientConnected(c net.Connection) {
 	log.Info("Remote client connected. %s", c.Id())
 }
 
-// Preprocess an incoming handshake protocol message
+// Processes an incoming handshake protocol message
 func (s *swarmImpl) onRemoteClientHandshakeMessage(msg net.ConnectionMessage) {
 
 	data := &pb.HandshakeData{}
@@ -167,8 +191,10 @@ func (s *swarmImpl) onRemoteClientHandshakeMessage(msg net.ConnectionMessage) {
 		return
 	}
 
+	connId := msg.Connection.Id()
+
 	// check if we already know about the remote node of this connection
-	sender := s.peersByConnection[msg.Connection.Id()]
+	sender := s.peersByConnection[connId]
 
 	if sender == nil {
 		// authenticate sender before registration
@@ -189,8 +215,10 @@ func (s *swarmImpl) onRemoteClientHandshakeMessage(msg net.ConnectionMessage) {
 		}
 
 		// register this remote node and its connection
+
+		sender.GetConnections()[connId] = msg.Connection
 		s.peers[sender.String()] = sender
-		s.peersByConnection[msg.Connection.Id()] = sender
+		s.peersByConnection[connId] = sender
 
 	}
 
@@ -249,10 +277,11 @@ func (s *swarmImpl) onRemoteClientMessage(msg net.ConnectionMessage) {
 		return
 	}
 
-	if len(c.Payload) == 0 {
+	// route messages based on msg payload lenght
+	if len(c.Payload) == 0 { // handshake messages have no enc payload
 		s.onRemoteClientHandshakeMessage(msg)
 
-	} else {
+	} else { // protocol messages are encrypted in payload
 		s.onRemoteClientProtocolMessage(msg, c)
 	}
 }

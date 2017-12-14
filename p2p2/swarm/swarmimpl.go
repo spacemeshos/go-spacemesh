@@ -26,8 +26,12 @@ type swarmImpl struct {
 	// comm channels
 	connectionRequests chan RemoteNodeData // local requests to establish a session w a remote node
 	disconnectRequests chan RemoteNodeData // local requests to kill session and disconnect from node
-	sendMsgRequests    chan SendMessageReq // local request to send a message to a node and callback on error or data
-	kill               chan bool           // local request to kill the swamp from outside. e.g when local node is shutting down
+
+	sendMsgRequests chan SendMessageReq // local request to send a session message to a node and callback on error or data
+
+	sendHandshakeMsg chan SendMessageReq // local request to send a handshake protocol message
+
+	kill chan bool // local request to kill the swamp from outside. e.g when local node is shutting down
 
 	registerNodeReq chan RemoteNodeData // local request to register a node based on minimal data
 
@@ -60,10 +64,12 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 
 		connectionRequests: make(chan RemoteNodeData, 10),
 		disconnectRequests: make(chan RemoteNodeData, 10),
-		sendMsgRequests:    make(chan SendMessageReq, 20),
-		demuxer:            NewDemuxer(),
-		newSessions:        make(chan HandshakeData, 10),
-		registerNodeReq:    make(chan RemoteNodeData, 10),
+
+		sendMsgRequests:  make(chan SendMessageReq, 20),
+		sendHandshakeMsg: make(chan SendMessageReq, 20),
+		demuxer:          NewDemuxer(),
+		newSessions:      make(chan HandshakeData, 10),
+		registerNodeReq:  make(chan RemoteNodeData, 10),
 	}
 
 	log.Info("Created swarm %s for local node %s", tcpAddress, l.String())
@@ -112,6 +118,10 @@ func (s *swarmImpl) SendMessage(req SendMessageReq) {
 	s.sendMsgRequests <- req
 }
 
+func (s *swarmImpl) SendHandshakeMessage(req SendMessageReq) {
+	s.sendHandshakeMsg <- req
+}
+
 // Swarm serial event processing
 // provides concurrency safety as only one callback is executed at a time
 // so there's no need for sync internal data structures
@@ -141,6 +151,9 @@ Loop:
 
 		case r := <-s.sendMsgRequests:
 			s.onSendMessageRequest(r)
+
+		case r := <-s.sendHandshakeMsg:
+			s.onSendHandshakeMessage(r)
 
 		case n := <-s.connectionRequests:
 			s.onConnectionRequest(n)

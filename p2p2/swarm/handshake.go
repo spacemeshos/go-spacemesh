@@ -26,7 +26,6 @@ type HandshakeData interface {
 	Session() NetworkSession
 	GetError() error
 	SetError(err error)
-
 }
 
 func NewHandshakeData(localNode LocalNode, remoteNode RemoteNode, session NetworkSession, err error) HandshakeData {
@@ -73,7 +72,7 @@ type HandshakeProtocol interface {
 	genereateHandshakeRequestData(node LocalNode, remoteNode RemoteNode) (*pb.HandshakeData, NetworkSession, error)
 	processHandshakeResponse(node LocalNode, r RemoteNode, s NetworkSession, resp *pb.HandshakeData) error
 	processHandshakeRequest(node LocalNode, r RemoteNode, req *pb.HandshakeData) (*pb.HandshakeData, NetworkSession, error)
- 	authenticateSenderNode(req *pb.HandshakeData) error
+	authenticateSenderNode(req *pb.HandshakeData) error
 }
 
 type handshakeProtocolImpl struct {
@@ -95,14 +94,16 @@ type handshakeProtocolImpl struct {
 func NewHandshakeProtocol(s Swarm) HandshakeProtocol {
 
 	h := &handshakeProtocolImpl{
-		swarm:                     s,
-		pendingSessions:           make(map[string]HandshakeData),
+		swarm:           s,
+		pendingSessions: make(map[string]HandshakeData),
+
 		incomingHandshakeRequests: make(MessagesChan, 20),
 		incomingHandsakeResponses: make(chan IncomingMessage, 20),
 		registerSessionCallback:   make(chan chan HandshakeData, 2),
 		newSessionCallbacks:       make([]chan HandshakeData, 1),
 		deletePendingSessionById:  make(chan string, 5),
 		sessionStateChanged:       make(chan HandshakeData, 3),
+		addPendingSession:         make(chan HandshakeData, 3),
 	}
 
 	go h.processEvents()
@@ -142,7 +143,9 @@ func (h *handshakeProtocolImpl) CreateSession(remoteNode RemoteNode) {
 	// so we can match handshake responses with the session
 	h.addPendingSession <- handshakeData
 
-	h.swarm.SendMessage(SendMessageReq{
+	log.Info("Creating session handshake request session id: %s", session.String())
+
+	h.swarm.SendHandshakeMessage(SendMessageReq{
 		ReqId:        session.Id(),
 		RemoteNodeId: remoteNode.String(),
 		Payload:      payload,
@@ -164,8 +167,10 @@ func (h *handshakeProtocolImpl) processEvents() {
 		case r := <-h.registerSessionCallback:
 			h.newSessionCallbacks = append(h.newSessionCallbacks, r)
 
-		case s := <-h.addPendingSession:
-			h.pendingSessions[s.Session().String()] = s
+		case d := <-h.addPendingSession:
+			sessionKey := d.Session().String()
+			log.Info("Storing pending session w key: %s", sessionKey)
+			h.pendingSessions[sessionKey] = d
 
 		case k := <-h.deletePendingSessionById:
 			delete(h.pendingSessions, k)
@@ -213,7 +218,7 @@ func (h *handshakeProtocolImpl) onHandleIncomingHandshakeRequest(msg IncomingMes
 	}
 
 	// send response back to sender
-	h.swarm.SendMessage(SendMessageReq{
+	h.swarm.SendHandshakeMessage(SendMessageReq{
 		ReqId:        session.Id(),
 		RemoteNodeId: msg.Sender().String(),
 		Payload:      payload,
@@ -221,6 +226,9 @@ func (h *handshakeProtocolImpl) onHandleIncomingHandshakeRequest(msg IncomingMes
 
 	// we have an active session initiated by a remote node
 	h.sessionStateChanged <- handshakeData
+
+	log.Info("Remotely initiated session established. Session id: %s :-)", session.String())
+
 }
 
 func (h *handshakeProtocolImpl) onHandleIncomingHandshakeResponse(msg IncomingMessage) {
@@ -231,13 +239,16 @@ func (h *handshakeProtocolImpl) onHandleIncomingHandshakeResponse(msg IncomingMe
 		return
 	}
 
-	sessionId := hex.EncodeToString(respData.Iv)
+	sessionId := hex.EncodeToString(respData.SessionId)
+
+
+	log.Info("Incoming handshake response for session id %s", sessionId)
 
 	// this is the session data we sent to the node
 	sessionRequestData := h.pendingSessions[sessionId]
 
 	if sessionRequestData == nil {
-		log.Warning("can't match this response with a handshake request - aborting")
+		log.Error("Expected to have data about this session - aborting")
 		return
 	}
 
@@ -252,7 +263,7 @@ func (h *handshakeProtocolImpl) onHandleIncomingHandshakeResponse(msg IncomingMe
 	h.deletePendingSessionById <- sessionId
 
 	h.sessionStateChanged <- sessionRequestData
-	log.Info("Session established")
+	log.Info("Locally initiated session established! Session id: %s :-)", sessionId)
 }
 
 // Handshake protocol:
@@ -264,7 +275,7 @@ func (h *handshakeProtocolImpl) onHandleIncomingHandshakeResponse(msg IncomingMe
 // Returns handshake data to send to removeNode and a network session data object that includes the session enc/dec sym key and iv
 // Node that NetworkSession is not yet authenticated - this happens only when the handshake response is processed and authenticated
 // This is called by node1 (initiator)
-func  (h *handshakeProtocolImpl) genereateHandshakeRequestData(node LocalNode, remoteNode RemoteNode) (*pb.HandshakeData, NetworkSession, error) {
+func (h *handshakeProtocolImpl) genereateHandshakeRequestData(node LocalNode, remoteNode RemoteNode) (*pb.HandshakeData, NetworkSession, error) {
 
 	// we use the Elliptic Curve Encryption Scheme
 	// https://en.wikipedia.org/wiki/Integrated_Encryption_Scheme

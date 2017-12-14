@@ -151,7 +151,7 @@ func (c *connectionImpl) LastOpTime() time.Time {
 // Read from the incoming new messages and send down the connection
 func (c *connectionImpl) beginEventProcessing() {
 
-	log.Info("Connection main event loop....")
+	//log.Info("Connection main event loop....")
 
 Loop:
 	for {
@@ -168,7 +168,7 @@ Loop:
 				break Loop
 			}
 
-			log.Info("New message from remote node: %s", string(msg))
+			log.Info("Incoming message from: %s to: %s.", c.conn.RemoteAddr().String(), c.conn.LocalAddr().String())
 			c.lastOpTime = time.Now()
 
 			// pump the message to the network

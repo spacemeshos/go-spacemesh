@@ -78,7 +78,6 @@ func (n *localNodeImp) GetSwarm() Swarm {
 	return n.swarm
 }
 
-
 func (n *localNodeImp) TcpAddress() string {
 	return n.tcpAddress
 }

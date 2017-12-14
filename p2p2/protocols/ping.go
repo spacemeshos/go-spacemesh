@@ -80,11 +80,9 @@ func (p *pingProtocolImpl) SendPing(msg string, reqId []byte, remoteNodeId strin
 	return nil
 }
 
-
 func (p *pingProtocolImpl) RegisterCallback(callback chan *pb.PingRespData) {
 	p.callbacksRegReq <- callback
 }
-
 
 func (p *pingProtocolImpl) handleIncomingRequest(msg swarm.IncomingMessage) {
 

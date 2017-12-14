@@ -23,6 +23,7 @@ func init() {
 	backendFormatter := logging.NewBackendFormatter(backend, logFormat)
 	logging.SetBackend(backendFormatter)
 	ulogger = &UnrulyLogger{Logger: log}
+
 }
 
 // Init app logging system

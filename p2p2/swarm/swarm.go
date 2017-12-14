@@ -38,10 +38,14 @@ type Swarm interface {
 	DisconnectFrom(req RemoteNodeData)
 
 	// Send a message to a remote node - ideally we want to enable sending to any node
-	// without knowing his ip address - in this case we will try to locate the node via dht node search
+	// without knowing its ip address - in this case we will try to locate the node via dht node search
 	// and send the message if we obtained node ip address and were able to connect to it
 	// req.msg should be marshaled protocol message. e.g. something like pb.PingReqData
+	// This is design for standard messages that require a session
 	SendMessage(req SendMessageReq)
+
+	// Send a handshake protocol message that is used to establish a session
+	SendHandshakeMessage(req SendMessageReq)
 
 	GetDemuxer() Demuxer
 
@@ -52,8 +56,8 @@ type Swarm interface {
 
 // outside of swarm - types only know about this and not about RemoteNode
 type RemoteNodeData struct {
-	id string
-	ip string
+	Id string
+	Ip string
 }
 
 type SendMessageReq struct {
