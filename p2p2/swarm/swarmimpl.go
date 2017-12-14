@@ -93,7 +93,7 @@ func (s *swarmImpl) GetDemuxer() Demuxer {
 	return s.demuxer
 }
 
-func (s *swarmImpl) LocalNode() LocalNode {
+func (s *swarmImpl) GetLocalNode() LocalNode {
 	return s.localNode
 }
 

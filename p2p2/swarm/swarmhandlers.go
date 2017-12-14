@@ -98,7 +98,7 @@ func (s *swarmImpl) onDisconnectionRequest(req RemoteNodeData) {
 func (s *swarmImpl) onSendMessageRequest(r SendMessageReq) {
 
 	// check for existing remote node and session
-	remoteNode := s.peers[r.remoteNodeId]
+	remoteNode := s.peers[r.RemoteNodeId]
 
 	if remoteNode == nil {
 		// for now we assume messages are sent only to nodes we already know their ip address
@@ -110,7 +110,7 @@ func (s *swarmImpl) onSendMessageRequest(r SendMessageReq) {
 
 	if session == nil || conn == nil {
 		// save the message for later sending and try to connect to the node
-		s.messagesPendingSession[r.reqId] = r
+		s.messagesPendingSession[hex.EncodeToString(r.ReqId)] = r
 
 		// try to connect to remote node and send the message once connceted
 		s.onConnectionRequest(RemoteNodeData{remoteNode.String(), remoteNode.TcpAddress()})
@@ -119,7 +119,7 @@ func (s *swarmImpl) onSendMessageRequest(r SendMessageReq) {
 
 	// todo: generate payload - encrypt r.msg with session aes enc key using session + hmac
 	// we need to keep an AES dec/enc with the session and use it
-	encPayload, err := session.Encrypt(r.payload)
+	encPayload, err := session.Encrypt(r.Payload)
 	if err != nil {
 		log.Error("aborting send - failed to encrypt payload: %v", err)
 		return

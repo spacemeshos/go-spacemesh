@@ -40,8 +40,8 @@ func (i *IncomingMessageImpl) Payload() []byte {
 type MessagesChan chan IncomingMessage
 
 type ProtocolRegistration struct {
-	protocol string
-	handler  MessagesChan
+	Protocol string
+	Handler  MessagesChan
 }
 
 // a Demuxer is responsible for routing incoming network messages back to protocol handlers based on message protocols
@@ -97,7 +97,7 @@ func (d *demuxImpl) processEvents() {
 			}
 
 		case reg := <-d.registrationRequests:
-			d.handlers[reg.protocol] = reg.handler
+			d.handlers[reg.Protocol] = reg.Handler
 		}
 	}
 }

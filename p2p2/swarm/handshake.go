@@ -104,10 +104,10 @@ func NewHandshakeProtocol(s Swarm) HandshakeProtocol {
 	// protocol demuxer registration
 
 	s.GetDemuxer().RegisterProtocolHandler(
-		ProtocolRegistration{protocol: HandshakeReq, handler: h.incomingHandshakeRequests})
+		ProtocolRegistration{Protocol: HandshakeReq, Handler: h.incomingHandshakeRequests})
 
 	s.GetDemuxer().RegisterProtocolHandler(
-		ProtocolRegistration{protocol: HandshakeResp, handler: h.incomingHandsakeResponses})
+		ProtocolRegistration{Protocol: HandshakeResp, Handler: h.incomingHandsakeResponses})
 
 	return h
 }
@@ -118,9 +118,9 @@ func (h *handshakeProtocolImpl) RegisterNewSessionCallback(callback chan Handsha
 
 func (h *handshakeProtocolImpl) CreateSession(remoteNode RemoteNode) {
 
-	data, session, err := GenereateHandshakeRequestData(h.swarm.LocalNode(), remoteNode)
+	data, session, err := GenereateHandshakeRequestData(h.swarm.GetLocalNode(), remoteNode)
 
-	handshakeData := NewHandshakeData(h.swarm.LocalNode(), remoteNode, session, err)
+	handshakeData := NewHandshakeData(h.swarm.GetLocalNode(), remoteNode, session, err)
 
 	if err != nil {
 		h.sessionStateChanged <- handshakeData
@@ -137,9 +137,9 @@ func (h *handshakeProtocolImpl) CreateSession(remoteNode RemoteNode) {
 	h.addPendingSession <- handshakeData
 
 	h.swarm.SendMessage(SendMessageReq{
-		reqId:        session.String(),
-		remoteNodeId: remoteNode.String(),
-		payload:      payload,
+		ReqId:        session.Id(),
+		RemoteNodeId: remoteNode.String(),
+		Payload:      payload,
 	})
 
 	h.sessionStateChanged <- handshakeData
@@ -166,7 +166,8 @@ func (h *handshakeProtocolImpl) processEvents() {
 
 		case s := <-h.sessionStateChanged:
 			for _, c := range h.newSessionCallbacks {
-				c <- s
+				// todo: verify this is legit in go - e.g. async usage of closures like this:
+				go func() { c <- s }()
 			}
 		}
 	}
@@ -186,10 +187,10 @@ func (h *handshakeProtocolImpl) onHandleIncomingHandshakeRequest(msg IncomingMes
 		// and add it to the swarm
 	}
 
-	respData, session, err := ProcessHandshakeRequest(h.swarm.LocalNode(), msg.Sender(), data)
+	respData, session, err := ProcessHandshakeRequest(h.swarm.GetLocalNode(), msg.Sender(), data)
 
 	// we have a new session started by a remote node
-	handshakeData := NewHandshakeData(h.swarm.LocalNode(), msg.Sender(), session, err)
+	handshakeData := NewHandshakeData(h.swarm.GetLocalNode(), msg.Sender(), session, err)
 
 	if err != nil {
 		// failed to process request
@@ -207,9 +208,9 @@ func (h *handshakeProtocolImpl) onHandleIncomingHandshakeRequest(msg IncomingMes
 
 	// send response back to sender
 	h.swarm.SendMessage(SendMessageReq{
-		reqId:        session.String(),
-		remoteNodeId: msg.Sender().String(),
-		payload:      payload,
+		ReqId:        session.Id(),
+		RemoteNodeId: msg.Sender().String(),
+		Payload:      payload,
 	})
 
 	// we have an active session initiated by a remote node

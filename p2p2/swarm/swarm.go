@@ -45,7 +45,7 @@ type Swarm interface {
 
 	GetDemuxer() Demuxer
 
-	LocalNode() LocalNode
+	GetLocalNode() LocalNode
 }
 
 // outside of swarm - types only know about this and not about RemoteNode
@@ -55,9 +55,9 @@ type RemoteNodeData struct {
 }
 
 type SendMessageReq struct {
-	remoteNodeId string // string encoded key
-	reqId        string
-	payload      []byte // this should be marshaled protocol msg e.g. PingReqData
+	RemoteNodeId string // string encoded key
+	ReqId        []byte
+	Payload      []byte // this should be marshaled protocol msg e.g. PingReqData
 }
 
 type NodeResp struct {

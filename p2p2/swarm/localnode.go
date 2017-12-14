@@ -3,8 +3,11 @@ package swarm
 import (
 	"github.com/UnrulyOS/go-unruly/log"
 	"github.com/UnrulyOS/go-unruly/p2p2/keys"
+	"github.com/UnrulyOS/go-unruly/p2p2/swarm/pb"
+	"time"
 )
 
+const clientVersion = "og-unruly-0.0.1"
 
 // The local unruly node is the root of all evil
 type LocalNode interface {
@@ -16,6 +19,8 @@ type LocalNode interface {
 	PublicKey() keys.PublicKey
 
 	TcpAddress() string
+
+	NewProtocolMessageMetadata(protocol string, reqId []byte, gossip bool) *pb.Metadata
 }
 
 func NewLocalNode(pubKey keys.PublicKey, privKey keys.PrivateKey, tcpAddress string) (LocalNode, error) {
@@ -50,6 +55,19 @@ type localNodeImp struct {
 
 	// add all other protocols here
 
+}
+
+// Create meta-data for an outgoing protocol message authored by this node
+func (n *localNodeImp) NewProtocolMessageMetadata(protocol string, reqId []byte, gossip bool) *pb.Metadata {
+	m := &pb.Metadata{
+		Protocol:      protocol,
+		ReqId:         reqId,
+		ClientVersion: clientVersion,
+		Timestamp:     time.Now().Unix(),
+		Gossip:        gossip,
+		AuthPubKey:    n.PublicKey().Bytes(),
+	}
+	return m
 }
 
 func (n *localNodeImp) TcpAddress() string {

@@ -50,7 +50,7 @@ message PingReqData {
     string ping = 2; // the echo message itself - protocol specific - starts at #2
 }
 
-message PongRespData {
+message PingRespData {
     Metadata metadata = 1;
     string pong = 2; // the echo message itself - protocol specific - starts at #2
 }
