@@ -84,10 +84,20 @@ func (s *swarmImpl) onConnectionRequest(req RemoteNodeData) {
 
 // callback from handshake protocol when session state changes
 func (s *swarmImpl) onNewSession(data HandshakeData) {
-	if data.Session().IsAuthenticated() {
-		s.allSessions[data.Session().String()] = data.Session()
-		// todo: if a session authenticated send out all pending messages to this node from its queue
 
+	if data.Session().IsAuthenticated() {
+		log.Info("Established new session with %s", data.RemoteNode().TcpAddress())
+
+		// store the session
+		s.allSessions[data.Session().String()] = data.Session()
+
+		// send all messages queued for the remote node we now have a session with
+		for _, msg := range s.messagesPendingSession {
+			if msg.RemoteNodeId == data.RemoteNode().String() {
+				// SendMessage (like any other swarm public method) is go safe
+				go s.SendMessage(msg)
+			}
+		}
 	}
 }
 
@@ -141,8 +151,6 @@ func (s *swarmImpl) onSendMessageRequest(r SendMessageReq) {
 		return
 	}
 
-	// todo: generate payload - encrypt r.msg with session aes enc key using session + hmac
-	// we need to keep an AES dec/enc with the session and use it
 	encPayload, err := session.Encrypt(r.Payload)
 	if err != nil {
 		log.Error("aborting send - failed to encrypt payload: %v", err)

@@ -3,7 +3,6 @@ package swarm
 import (
 	"encoding/hex"
 	"github.com/UnrulyOS/go-unruly/log"
-	"github.com/UnrulyOS/go-unruly/p2p2/swarm"
 	"github.com/UnrulyOS/go-unruly/p2p2/swarm/pb"
 	"github.com/gogo/protobuf/proto"
 )
@@ -27,24 +26,24 @@ type Ping interface {
 type Callbacks chan chan *pb.PingRespData
 
 type pingProtocolImpl struct {
-	swarm swarm.Swarm
+	swarm Swarm
 
 	callbacks []chan *pb.PingRespData
 
 	// ops
-	incomingRequests  swarm.MessagesChan
-	incomingResponses swarm.MessagesChan
+	incomingRequests  MessagesChan
+	incomingResponses MessagesChan
 
 	// a channel of channels that receive callbacks
 	callbacksRegReq Callbacks
 }
 
-func NewPingProtocol(s swarm.Swarm) Ping {
+func NewPingProtocol(s Swarm) Ping {
 
 	p := &pingProtocolImpl{
 		swarm:             s,
-		incomingRequests:  make(swarm.MessagesChan, 10),
-		incomingResponses: make(swarm.MessagesChan, 10),
+		incomingRequests:  make(MessagesChan, 10),
+		incomingResponses: make(MessagesChan, 10),
 		callbacksRegReq:   make(Callbacks, 10),
 		callbacks:         make([]chan *pb.PingRespData, 1),
 	}
@@ -52,8 +51,8 @@ func NewPingProtocol(s swarm.Swarm) Ping {
 	go p.processEvents()
 
 	// protocol demuxer registration
-	s.GetDemuxer().RegisterProtocolHandler(swarm.ProtocolRegistration{pingReq, p.incomingRequests})
-	s.GetDemuxer().RegisterProtocolHandler(swarm.ProtocolRegistration{pingResp, p.incomingResponses})
+	s.GetDemuxer().RegisterProtocolHandler(ProtocolRegistration{pingReq, p.incomingRequests})
+	s.GetDemuxer().RegisterProtocolHandler(ProtocolRegistration{pingResp, p.incomingResponses})
 
 	return p
 }
@@ -74,7 +73,7 @@ func (p *pingProtocolImpl) SendPing(msg string, reqId []byte, remoteNodeId strin
 	}
 
 	// send the message
-	req := swarm.SendMessageReq{remoteNodeId, reqId, payload}
+	req := SendMessageReq{remoteNodeId, reqId, payload}
 	p.swarm.SendMessage(req)
 
 	return nil
@@ -84,7 +83,7 @@ func (p *pingProtocolImpl) RegisterCallback(callback chan *pb.PingRespData) {
 	p.callbacksRegReq <- callback
 }
 
-func (p *pingProtocolImpl) handleIncomingRequest(msg swarm.IncomingMessage) {
+func (p *pingProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 
 	// process request
 	req := &pb.PingReqData{}
@@ -115,7 +114,7 @@ func (p *pingProtocolImpl) handleIncomingRequest(msg swarm.IncomingMessage) {
 
 	// send signed data payload
 
-	resp := swarm.SendMessageReq{msg.Sender().String(),
+	resp := SendMessageReq{msg.Sender().String(),
 		req.Metadata.ReqId,
 		signedPayload}
 
@@ -123,7 +122,7 @@ func (p *pingProtocolImpl) handleIncomingRequest(msg swarm.IncomingMessage) {
 
 }
 
-func (p *pingProtocolImpl) handleIncomingResponse(msg swarm.IncomingMessage) {
+func (p *pingProtocolImpl) handleIncomingResponse(msg IncomingMessage) {
 
 	// process request
 	resp := &pb.PingRespData{}
