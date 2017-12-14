@@ -8,7 +8,7 @@ import (
 	"github.com/UnrulyOS/go-unruly/crypto"
 	"github.com/UnrulyOS/go-unruly/log"
 	"github.com/UnrulyOS/go-unruly/p2p2/keys"
-	"github.com/UnrulyOS/go-unruly/p2p2/pb"
+	"github.com/UnrulyOS/go-unruly/p2p2/swarm/pb"
 	"github.com/UnrulyOS/go-unruly/p2p2/swarm"
 	"github.com/gogo/protobuf/proto"
 	"testing"

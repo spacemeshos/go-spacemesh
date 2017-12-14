@@ -35,7 +35,7 @@ type swarmImpl struct {
 	handshakeProtocol HandshakeProtocol
 
 	// handshake protocol callback - sessions updates are pushed here
-	newSessions chan SessionData // gets callback from handshake protocol when new session are created and/or auth
+	newSessions chan HandshakeData // gets callback from handshake protocol when new session are created and/or auth
 
 }
 
@@ -62,7 +62,7 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 		disconnectRequests: make(chan RemoteNodeData, 10),
 		sendMsgRequests:    make(chan SendMessageReq, 20),
 		demuxer:            NewDemuxer(),
-		newSessions:        make(chan SessionData, 10),
+		newSessions:        make(chan HandshakeData, 10),
 		registerNodeReq:    make(chan RemoteNodeData, 10),
 	}
 

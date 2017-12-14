@@ -5,7 +5,7 @@ import (
 	"github.com/UnrulyOS/go-unruly/log"
 	"github.com/UnrulyOS/go-unruly/p2p2/keys"
 	"github.com/UnrulyOS/go-unruly/p2p2/net"
-	"github.com/UnrulyOS/go-unruly/p2p2/pb"
+	"github.com/UnrulyOS/go-unruly/p2p2/swarm/pb"
 	"github.com/golang/protobuf/proto"
 	"time"
 )
@@ -81,7 +81,7 @@ func (s *swarmImpl) onConnectionRequest(req RemoteNodeData) {
 }
 
 // callback from handshake protocol when session state changes
-func (s *swarmImpl) onNewSession(data SessionData) {
+func (s *swarmImpl) onNewSession(data HandshakeData) {
 	if data.Session().IsAuthenticated() {
 		s.allSessions[data.Session().String()] = data.Session()
 		// todo: if a session authenticated send out all pending messages to this node from its queue

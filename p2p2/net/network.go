@@ -6,9 +6,9 @@ import (
 	"time"
 )
 
-// Connection manager able to dial remote endpoints
-// To use this manager client  should register all callbacks
-// Connections may be initiated by Dial() or by remote clients connecting to the listen address
+// Net is a connection manager able to dial remote endpoints
+// Net clients should register all callbacks
+// Connections may be initiated by DialTCP() or by remote clients connecting to the listen address
 // ConnManager includes a TCP server, and a TCP client
 // It provides full duplex messaging functionality over the same tcp/ip connection
 // Network should not know about higher-level networking types such as remoteNode, swarm and networkSession
@@ -21,9 +21,6 @@ type Net interface {
 	GetConnectionErrors() chan ConnectionError
 	GetIncomingMessage() chan ConnectionMessage
 	GetMessageSendErrors() chan MessageSendError
-
-	// todo: add msg sending to remote node over the connection callbacks here
-
 }
 
 // impl internal tpye
