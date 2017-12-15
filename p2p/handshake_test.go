@@ -41,10 +41,8 @@ func TestHandshakeCoreData(t *testing.T) {
 	// this will be node1 view of node 2
 	node2Remote, _ := NewRemoteNode(node2Local.String(), address1)
 
-	handshakeProtocol1 := node1Local.GetSwarm().getHandshakeProtocol()
-
 	// STEP 1: Node1 generates handshake data and sends it to node2 ....
-	data, session, err := handshakeProtocol1.genereateHandshakeRequestData(node1Local, node2Remote)
+	data, session, err := genereateHandshakeRequestData(node1Local, node2Remote)
 
 	assert.NoErr(t, err, "expected no error")
 	assert.NotNil(t, session, "expected session")
@@ -56,9 +54,7 @@ func TestHandshakeCoreData(t *testing.T) {
 
 	// STEP 2: Node2 gets handshake data from node 1 and processes it to establish a session with a shared AES key
 
-	handshakeProtocol2 := node2Local.GetSwarm().getHandshakeProtocol()
-
-	resp, session1, err := handshakeProtocol2.processHandshakeRequest(node2Local, node1Remote, data)
+	resp, session1, err := processHandshakeRequest(node2Local, node1Remote, data)
 
 	assert.NoErr(t, err, "expected no error")
 	assert.NotNil(t, session1, "expected session")
@@ -74,7 +70,7 @@ func TestHandshakeCoreData(t *testing.T) {
 	assert.True(t, session1.IsAuthenticated(), "expected session1 to be authenticated")
 
 	// STEP 3: Node2 sends data1 back to node1.... Node 1 validates the data and sets its network session to authenticated
-	err = handshakeProtocol1.processHandshakeResponse(node1Local, node2Remote, session, resp)
+	err = processHandshakeResponse(node1Local, node2Remote, session, resp)
 
 	assert.True(t, session.IsAuthenticated(), "expected session to be authenticated")
 	assert.NoErr(t, err, "failed to authenticate or process response")
@@ -110,9 +106,8 @@ func TestHandshakeProtocol(t *testing.T) {
 	node2Remote, _ := NewRemoteNode(node2Local.String(), address1)
 
 	// STEP 1: Node 1 generates handshake data and sends it to node2 ....
-	handshakeProtocol1 := node1Local.GetSwarm().getHandshakeProtocol()
 
-	data, session, err := handshakeProtocol1.genereateHandshakeRequestData(node1Local, node2Remote)
+	data, session, err := genereateHandshakeRequestData(node1Local, node2Remote)
 
 	assert.NoErr(t, err, "expected no error")
 	assert.NotNil(t, session, "expected session")
@@ -142,9 +137,9 @@ func TestHandshakeProtocol(t *testing.T) {
 
 	// STEP 3: local node 2 handles req data and generates response
 
-	handshakeProtocol2 := node2Local.GetSwarm().getHandshakeProtocol()
+	//handshakeProtocol2 := node2Local.GetSwarm().getHandshakeProtocol()
 
-	resp, session1, err := handshakeProtocol2.processHandshakeRequest(node2Local, node1Remote, data1)
+	resp, session1, err := processHandshakeRequest(node2Local, node1Remote, data1)
 
 	assert.NoErr(t, err, "expected no error")
 	assert.NotNil(t, session1, "expected session")
@@ -181,7 +176,7 @@ func TestHandshakeProtocol(t *testing.T) {
 
 	// STEP 5: Node 1 validates the data and sets its network session to authenticated
 
-	err = handshakeProtocol1.processHandshakeResponse(node1Local, node2Remote, session, data2)
+	err = processHandshakeResponse(node1Local, node2Remote, session, data2)
 
 	assert.True(t, session.IsAuthenticated(), "expected session to be authenticated")
 	assert.NoErr(t, err, "failed to authenticate or process response")

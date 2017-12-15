@@ -34,6 +34,13 @@ go test ./...
 govendor test +local
 ```
 
+- Race detection:
+
+```
+go run -race main.go
+```
+
+
 ### CI
 - TBD - travis builds and tests
 

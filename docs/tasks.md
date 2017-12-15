@@ -19,6 +19,8 @@ Current makefile is using the global system go path.
     - when new account is created - if it is only account - set it as coinbase on the running node
     - restore node coinbase account when loading a node from storage
 - NTP client with time-drift detection (SNTP protocol)
+- Properly factor /p2p/ types into packages with shared interfaces
+- Make sure all types are defined using interface+struct and not just a struct
 
 ### Hard(er) Tasks
 - Implement an optimized Merkle tree data structure with backing storage in leveldb (kv storage). Implement Merkle proofs.

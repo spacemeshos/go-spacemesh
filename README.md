@@ -121,5 +121,5 @@ There's a few things you can do right now to help out:
  - Add tests. There can never be enough tests.
  
 #### Next Steps...
-- Please read all the docs in `/docs`
+- Please read everything in `/docs`
 

@@ -44,4 +44,4 @@
 - We use channels for all concurrent flows. Please see p2p types.
 - We use channels for all callbacks and select based event loops of channel messages processing.
 - We do not use any thread-safe data structures beyond channels - all state is updated by callbacks from event processing loops.
-
+- [watch me](https://www.youtube.com/watch?v=QDDwwePbDtw)
