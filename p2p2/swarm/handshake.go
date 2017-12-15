@@ -241,7 +241,6 @@ func (h *handshakeProtocolImpl) onHandleIncomingHandshakeResponse(msg IncomingMe
 
 	sessionId := hex.EncodeToString(respData.SessionId)
 
-
 	log.Info("Incoming handshake response for session id %s", sessionId)
 
 	// this is the session data we sent to the node

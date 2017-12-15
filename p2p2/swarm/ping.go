@@ -19,7 +19,7 @@ type Ping interface {
 	// reqId: allows the client to match responses with requests by id
 	SendPing(msg string, reqId []byte, remoteNodeId string) error
 
-	// app logic registers her for typed incoming ping responses
+	// App logic registers her for typed incoming ping responses
 	RegisterCallback(callback chan *pb.PingRespData)
 }
 
@@ -97,8 +97,7 @@ func (p *pingProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 	pingText := req.Ping
 	log.Info("Incoming peer request from %s. Message: %", peer.Pretty(), pingText)
 
-	// generate pong response
-
+	// generate response
 	metadata := p.swarm.GetLocalNode().NewProtocolMessageMetadata(pingResp, req.Metadata.ReqId, false)
 	respData := &pb.PingRespData{metadata, pingText}
 

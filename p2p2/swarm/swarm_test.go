@@ -33,7 +33,6 @@ func generateTestNode(t *testing.T) (LocalNode, RemoteNode) {
 	return localNode, remoteNode
 }
 
-
 // Basic handshake protocol data test
 func TestSessionCreation(t *testing.T) {
 
@@ -65,8 +64,8 @@ func TestPingProtocol(t *testing.T) {
 	node1Local.GetSwarm().RegisterNode(RemoteNodeData{node2Remote.String(), node2Remote.TcpAddress()})
 
 	// 4 lines and a callback on a channel
-	pingReqId := []byte (uuid.New().String())
-	callback := make(chan * pb.PingRespData)
+	pingReqId := []byte(uuid.New().String())
+	callback := make(chan *pb.PingRespData)
 	node1Local.GetPing().RegisterCallback(callback)
 	node1Local.GetPing().SendPing("hello unruly", pingReqId, node2Remote.String())
 
@@ -81,6 +80,3 @@ Loop:
 		}
 	}
 }
-
-
-

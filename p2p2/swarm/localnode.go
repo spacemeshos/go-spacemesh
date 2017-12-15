@@ -110,7 +110,7 @@ func (n *localNodeImp) PublicKey() keys.PublicKey {
 	return n.pubKey
 }
 
-// Sign protobufs data
+// Sign a protobufs message
 func (n *localNodeImp) SignMessage(data proto.Message) ([]byte, error) {
 	bin, err := proto.Marshal(data)
 	if err != nil {
