@@ -87,18 +87,6 @@
 			"revisionTime": "2017-11-26T19:57:40Z"
 		},
 		{
-			"checksumSHA1": "17HeUwhDeV9PZo3GYsDP3UY2Qe8=",
-			"path": "github.com/jbenet/go-msgio/mpool",
-			"revision": "242a3f4ed2d0098bff2f25b1bd32f4254e803b23",
-			"revisionTime": "2016-03-22T12:30:21Z"
-		},
-		{
-			"checksumSHA1": "+fOMIVtq40FG7lM9/wKcm9QA9bY=",
-			"path": "github.com/jbenet/go-randbuf",
-			"revision": "674640a50e6a1331d97d8efcfc43977ffe64897c",
-			"revisionTime": "2016-03-22T12:57:20Z"
-		},
-		{
 			"checksumSHA1": "1MGpGDQqnUoRpv7VEcQrXOBydXE=",
 			"path": "golang.org/x/crypto/pbkdf2",
 			"revision": "94eea52f7b742c7cbe0b03b22f0c4c8631ece122",

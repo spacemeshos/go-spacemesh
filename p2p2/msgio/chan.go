@@ -1,9 +1,8 @@
 package msgio
 
 import (
+	"github.com/UnrulyOS/go-unruly/p2p2/msgio/mpool"
 	"io"
-
-	mpool "github.com/jbenet/go-msgio/mpool"
 )
 
 // Chan is a msgio duplex channel. It is used to have a channel interface
