@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/UnrulyOS/go-unruly/log"
 	"github.com/btcsuite/btcd/btcec"
-	"github.com/jbenet/go-base58"
+	"github.com/btcsuite/btcutil/base58"
 )
 
 type Key interface {

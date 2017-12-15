@@ -9,6 +9,12 @@
 			"revisionTime": "2017-11-28T15:02:46Z"
 		},
 		{
+			"checksumSHA1": "oQgLy8KmIOVov04WXH7KgU1bszc=",
+			"path": "github.com/btcsuite/btcutil/base58",
+			"revision": "501929d3d046174c3d39f0ea54ece471aa17238c",
+			"revisionTime": "2017-07-02T00:39:31Z"
+		},
+		{
 			"checksumSHA1": "iVfdaLxIDjfk2KLP8dCMIbsxZZM=",
 			"path": "github.com/golang/protobuf/jsonpb",
 			"revision": "1e59b77b52bf8e4b449a57e6f79f21226d571845",
@@ -79,12 +85,6 @@
 			"path": "github.com/grpc-ecosystem/grpc-gateway/utilities",
 			"revision": "e4b8a938efae14de11fd97311e873e989896348c",
 			"revisionTime": "2017-11-26T19:57:40Z"
-		},
-		{
-			"checksumSHA1": "5NJ0D29BrSO9yfr6jb2PxfbIfNQ=",
-			"path": "github.com/jbenet/go-base58",
-			"revision": "6237cf65f3a6f7111cd8a42be3590df99a66bc7d",
-			"revisionTime": "2015-03-17T08:51:56Z"
 		},
 		{
 			"checksumSHA1": "17HeUwhDeV9PZo3GYsDP3UY2Qe8=",
