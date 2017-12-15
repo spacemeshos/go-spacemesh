@@ -30,7 +30,7 @@ Json is used as the file format instead of a binary opaque format to make the ac
 ```
 
 ###### Strings encoding
-We use base58 for account id and public key as the canonical encodding but other data is hex encoded.
+We use base58 for account public key as the canonical encodding but other data is hex encoded.
 
 - publicKey - base58 - also the account id
 - cipherText - hex
@@ -43,7 +43,7 @@ Refs
 - https://github.com/ethereum/go-ethereum/wiki/Passphrase-protected-key-store-spec
 - https://github.com/Gustav-Simonsson/go-ethereum/blob/improve_key_store_crypto/crypto/key_store_passphrase.go#L29
 
-- Technically, both account id and public key can be derived from the private key but it is useful to store them in the key store file so users can see to which accounts they have private keys for by looking at the content of the file. The file name will also be `{account-id-str}.json` to make it easy to backup keys for each account.
+- Technically, public key can be derived from the private key but it is useful to store them in the key store file so users can see to which accounts they have private keys for by looking at the content of the file. The file name will also be `{account-id-str}.json` to make it easy to backup keys for each account.
 
 - Users must maintain both their passphrase as well as a backup of the account data file. Without both they lose access to their account. They are encouraged to backup both to a secure password vault on at least 2 devices.
 

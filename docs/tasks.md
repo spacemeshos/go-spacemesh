@@ -8,32 +8,26 @@ todo: move tasks to github issues
 Current makefile is using a global go path.
 - Script to install all required dev tools: e.g. proto-c (with grpc-gateway support). govendor, etc....
 - Integrate travis CI with the repo and setup full CI system (hold until repo is public for Travis integration)
-- Remove all unused vendored deps
-- Cleanup messy p2p-lib refs (some GXed, some not....)
 
 ### App Shell Tasks
 - Write tests for app flags, commands and config file
-- Implement accounts and keystore files
 - Impl cli.v1 TOML support and write test with TOML file (a bit of a pain with cli via vendoring) - alt use YAML
 
 ### Misc. Tasks
 - Implement an optimized Merkle tree data structure with backing storage in leveldb (kv storage). Implement Merkle proofs.
-- Write tests to validate the plan to use libp2p-kad-dht for peer discovery (simulated network)
 - Tests for all implemented functionality - the more the better.
 - Fully support coinbase account:
     - when new account is created - if it is only account - set it as coinbase on the running node
     - restore node coinbase account when loading a node from storage
 - NTP client with time-drift detection (SNTP protocol)
-- Move to ed25519 keys but make it work with libp2p (it breaks when doing so IDFromEd25519PublicKey() bad)
-    
+
 ### Hard Tasks
-- add support for uTp (reliable connection over udp) in lib-p2p - it only supports tcp right now - this is a hard task. We might contrib this to lib-p2p.
+- Implement KAD/DHT node discovery protocol
 - Implement gossip support for each protocol (gossip flag) and write tests for gossiping a p2p message (20 nodes, 1 bootstrap)
 - Local Javascript console for interactive RPC calls (wrapping the json-http api) - possible via V8 engine?
 - Integrate a V8 instance for javascript execution into the node. See: https://github.com/augustoroman/v8 
 
 ### App Shell Implemented Features
-
 Stuff we have a basic 1st pass implementation for:
 - Initial project packages structure and entry points (app, node, grpcApi, etc...)
 - A cli app shell with flags and commands
@@ -48,3 +42,9 @@ Stuff we have a basic 1st pass implementation for:
 - Load data about bootstrap nodes on node startup
 - Integrated rolling file logging https://github.com/natefinch/lumberjack with go-logging so we get proper rolling files logging - needed for long-running simulations.
 - Accounts support with locking/unlocking, persistence and passpharse kdf
+- Implement accounts and keystore files
+
+## p2p implemented features
+- Handshake protocol for secure and authenticated comm
+- App-level p2p protocols support with full encryption authorship auth - see ping
+- Get rid of libp2p :-)

@@ -1,7 +1,7 @@
 ## App Design
 
 ### p2p, accounts, keys and nodes
-- Refer to p2p.md
+- Refer to p2p2.md
 
 ### App Shell
 - We are using https://gopkg.in/urfave/cli.v1 for the CLI app shell
@@ -41,8 +41,7 @@
 - Setup app config to unlock account(s) via passphrase for session 
 
 ## Concurrency 
-- We need a robust design for concurrent blockchain rw ops.
-
-- gRPC callbacks are called via go routines by the system and may try to read data while it is being updated.
-https://stackoverflow.com/questions/36112445/golang-blocking-and-non-blocking 
+- We use channels for all concurrent flows. Please see p2p types.
+- We use channels for all callbacks and select based event loops of channel messages processing.
+- We do not use any thread-safe data structures beyond channels - all state is updated by callbacks from event processing loops.
 

@@ -1,4 +1,7 @@
+**Warning - this file is outdated - skip it for now**
+
 ## p2p Routing
+
 - Each node has hard-coded list of at least one but most likely up to 5 bootstrap nodes. One bootstrap node must be available for new nodes.
 - when a node starts up, it uses khd routing protocol to add itself to the bootstrap node. 
 - This will return a list of nodes that are 'close' (under xor arithmetic) to the node.

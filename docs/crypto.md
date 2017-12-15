@@ -10,4 +10,4 @@ The idea is to have a memory-hard stop for each brute-force password guess.
 So even an attacker with access to the keystore file but not to the password
 won't be able to brute-force the private key from the key store.
 
-3. We use the golang built-in crypto lib and btcsuite
+3. We use the golang built-in crypto lib and go-btcsuite
