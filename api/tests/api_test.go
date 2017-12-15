@@ -6,6 +6,7 @@ import (
 	config "github.com/UnrulyOS/go-unruly/api/config"
 	pb "github.com/UnrulyOS/go-unruly/api/pb"
 	"github.com/UnrulyOS/go-unruly/assert"
+	"github.com/golang/protobuf/jsonpb"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"io/ioutil"

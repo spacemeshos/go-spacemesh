@@ -128,6 +128,7 @@ func (p *publicKeyImpl) InternalKey() *btcec.PublicKey {
 	return p.k
 }
 
+// we use the 33 bytes compressed format for serielization
 func (p *publicKeyImpl) Bytes() []byte {
 	return p.k.SerializeCompressed()
 }
