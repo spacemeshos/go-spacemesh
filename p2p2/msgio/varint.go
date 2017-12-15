@@ -5,7 +5,7 @@ import (
 	"github.com/UnrulyOS/go-unruly/p2p2/msgio/mpool"
 	"io"
 	"sync"
-	)
+)
 
 // varintWriter is the underlying type that implements the Writer interface.
 type varintWriter struct {

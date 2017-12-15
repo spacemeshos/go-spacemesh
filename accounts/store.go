@@ -5,7 +5,6 @@ import (
 	"github.com/UnrulyOS/go-unruly/crypto"
 	"github.com/UnrulyOS/go-unruly/filesystem"
 	"github.com/UnrulyOS/go-unruly/log"
-	"github.com/UnrulyOS/go-unruly/p2p2/keys"
 	"io/ioutil"
 	"path/filepath"
 	"strings"
@@ -76,7 +75,7 @@ func NewAccountFromStore(accountId string, accountsDataPath string) (*Account, e
 		return nil, err
 	}
 
-	pubKey, err := keys.NewPublicKeyFromString(accountData.PublicKey)
+	pubKey, err := crypto.NewPublicKeyFromString(accountData.PublicKey)
 	if err != nil {
 		log.Error("Invalid account public key: %v", err)
 		return nil, err

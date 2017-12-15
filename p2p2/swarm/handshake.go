@@ -8,8 +8,8 @@ import (
 	"crypto/sha512"
 	"encoding/hex"
 	"errors"
+	"github.com/UnrulyOS/go-unruly/crypto"
 	"github.com/UnrulyOS/go-unruly/log"
-	"github.com/UnrulyOS/go-unruly/p2p2/keys"
 	"github.com/UnrulyOS/go-unruly/p2p2/swarm/pb"
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/golang/protobuf/proto"
@@ -343,7 +343,7 @@ func (h *handshakeProtocolImpl) genereateHandshakeRequestData(node LocalNode, re
 func (h *handshakeProtocolImpl) authenticateSenderNode(req *pb.HandshakeData) error {
 
 	// get public key from data
-	snderPubKey, err := keys.NewPublicKey(req.NodePubKey)
+	snderPubKey, err := crypto.NewPublicKey(req.NodePubKey)
 	if err != nil {
 		return err
 	}

@@ -2,7 +2,7 @@ package swarm
 
 import (
 	"encoding/hex"
-	"github.com/UnrulyOS/go-unruly/p2p2/keys"
+	"github.com/UnrulyOS/go-unruly/crypto"
 	"github.com/UnrulyOS/go-unruly/p2p2/swarm/pb"
 	"github.com/golang/protobuf/proto"
 	"time"
@@ -10,8 +10,8 @@ import (
 
 // Node implementation type
 type localNodeImp struct {
-	pubKey     keys.PublicKey
-	privKey    keys.PrivateKey
+	pubKey     crypto.PublicKey
+	privKey    crypto.PrivateKey
 	tcpAddress string
 
 	// local owns a swarm
@@ -65,11 +65,11 @@ func (n *localNodeImp) Pretty() string {
 	return n.pubKey.Pretty()
 }
 
-func (n *localNodeImp) PrivateKey() keys.PrivateKey {
+func (n *localNodeImp) PrivateKey() crypto.PrivateKey {
 	return n.privKey
 }
 
-func (n *localNodeImp) PublicKey() keys.PublicKey {
+func (n *localNodeImp) PublicKey() crypto.PublicKey {
 	return n.pubKey
 }
 

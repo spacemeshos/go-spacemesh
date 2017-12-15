@@ -8,7 +8,6 @@ import (
 	"time"
 )
 
-
 func RandBuf(r *rand.Rand, length int) []byte {
 	buf := make([]byte, length)
 	for i := range buf {

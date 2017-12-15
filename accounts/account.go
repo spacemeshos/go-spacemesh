@@ -6,7 +6,6 @@ import (
 	"errors"
 	"github.com/UnrulyOS/go-unruly/crypto"
 	"github.com/UnrulyOS/go-unruly/log"
-	"github.com/UnrulyOS/go-unruly/p2p2/keys"
 )
 
 type AccountsRegistry struct {
@@ -15,8 +14,8 @@ type AccountsRegistry struct {
 }
 
 type Account struct {
-	PrivKey    keys.PrivateKey
-	PubKey     keys.PublicKey
+	PrivKey    crypto.PrivateKey
+	PubKey     crypto.PublicKey
 	cryptoData CryptoData
 	kdParams   crypto.KDParams
 }
@@ -37,7 +36,7 @@ func init() {
 func NewAccount(passphrase string) (*Account, error) {
 
 	// account crypto data
-	priv, pub, err := keys.GenerateKeyPair()
+	priv, pub, err := crypto.GenerateKeyPair()
 	if err != nil {
 		return nil, err
 	}

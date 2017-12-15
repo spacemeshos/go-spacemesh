@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"github.com/UnrulyOS/go-unruly/crypto"
 	"github.com/UnrulyOS/go-unruly/log"
-	"github.com/UnrulyOS/go-unruly/p2p2/keys"
 )
 
 func (a *Account) Pretty() string {
@@ -97,7 +96,7 @@ func (a *Account) UnlockAccount(passphrase string) error {
 		return err
 	}
 
-	privateKey := keys.NewPrivateKey(privKeyData)
+	privateKey := crypto.NewPrivateKey(privKeyData)
 
 	err = a.validatePublickKey(privateKey)
 	if err != nil {
@@ -112,7 +111,7 @@ func (a *Account) UnlockAccount(passphrase string) error {
 }
 
 // Validate that the account's private key matches provided private key
-func (a *Account) validatePublickKey(privateKey keys.PrivateKey) error {
+func (a *Account) validatePublickKey(privateKey crypto.PrivateKey) error {
 	publicKey := privateKey.GetPublicKey()
 	publicKeyStr := publicKey.String()
 	accountPubKeyStr := a.PubKey.String()

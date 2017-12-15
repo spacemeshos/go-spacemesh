@@ -2,13 +2,13 @@ package pb
 
 import (
 	"errors"
-	"github.com/UnrulyOS/go-unruly/p2p2/keys"
+	"github.com/UnrulyOS/go-unruly/crypto"
 	"github.com/golang/protobuf/proto"
 )
 
 func (msg *ProtocolMessage) AuthenticateAuthor() error {
 
-	authPubKey, err := keys.NewPublicKey(msg.GetMetadata().AuthPubKey)
+	authPubKey, err := crypto.NewPublicKey(msg.GetMetadata().AuthPubKey)
 	sig := msg.GetMetadata().AuthorSign
 	msg.GetMetadata().AuthorSign = ""
 

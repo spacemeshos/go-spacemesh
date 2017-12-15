@@ -2,8 +2,8 @@ package swarm
 
 import (
 	"encoding/hex"
+	"github.com/UnrulyOS/go-unruly/crypto"
 	"github.com/UnrulyOS/go-unruly/log"
-	"github.com/UnrulyOS/go-unruly/p2p2/keys"
 	"github.com/UnrulyOS/go-unruly/p2p2/net"
 	"github.com/UnrulyOS/go-unruly/p2p2/swarm/pb"
 	"github.com/golang/protobuf/proto"
@@ -212,7 +212,7 @@ func (s *swarmImpl) onRemoteClientHandshakeMessage(msg net.ConnectionMessage) {
 			return
 		}
 
-		nodeKey, err := keys.NewPublicKey(data.NodePubKey)
+		nodeKey, err := crypto.NewPublicKey(data.NodePubKey)
 		if err != nil {
 			return
 		}

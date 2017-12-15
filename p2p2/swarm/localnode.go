@@ -1,8 +1,8 @@
 package swarm
 
 import (
+	"github.com/UnrulyOS/go-unruly/crypto"
 	"github.com/UnrulyOS/go-unruly/log"
-	"github.com/UnrulyOS/go-unruly/p2p2/keys"
 	"github.com/UnrulyOS/go-unruly/p2p2/swarm/pb"
 	"github.com/golang/protobuf/proto"
 )
@@ -15,8 +15,8 @@ type LocalNode interface {
 	String() string
 	Pretty() string
 
-	PrivateKey() keys.PrivateKey
-	PublicKey() keys.PublicKey
+	PrivateKey() crypto.PrivateKey
+	PublicKey() crypto.PublicKey
 
 	TcpAddress() string
 	NewProtocolMessageMetadata(protocol string, reqId []byte, gossip bool) *pb.Metadata
@@ -55,11 +55,11 @@ func NewLocalNode(tcpAddress string) (LocalNode, error) {
 }
 
 func newNodeIdentity(tcpAddress string) (LocalNode, error) {
-	priv, pub, _ := keys.GenerateKeyPair()
+	priv, pub, _ := crypto.GenerateKeyPair()
 	return NewLocalNodeWithKeys(pub, priv, tcpAddress)
 }
 
-func NewLocalNodeWithKeys(pubKey keys.PublicKey, privKey keys.PrivateKey, tcpAddress string) (LocalNode, error) {
+func NewLocalNodeWithKeys(pubKey crypto.PublicKey, privKey crypto.PrivateKey, tcpAddress string) (LocalNode, error) {
 
 	n := &localNodeImp{
 		pubKey:     pubKey,
@@ -89,8 +89,8 @@ func NewLocalNodeWithKeys(pubKey keys.PublicKey, privKey keys.PrivateKey, tcpAdd
 }
 
 func newNodeFromData(tcpAddress string, d *NodeData) (LocalNode, error) {
-	priv := keys.NewPrivateKeyFromString(d.PrivKey)
-	pub, err := keys.NewPublicKeyFromString(d.PubKey)
+	priv := crypto.NewPrivateKeyFromString(d.PrivKey)
+	pub, err := crypto.NewPublicKeyFromString(d.PubKey)
 	if err != nil {
 		log.Error("Failded to create public key from string: %v", err)
 		return nil, err
