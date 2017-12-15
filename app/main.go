@@ -176,7 +176,6 @@ func (app *UnrulyApp) startUnrulyNode(ctx *cli.Context) error {
 
 	log.Info("Starting local node...")
 	port := *nodeparams.LocalTcpPortFlag.Destination
-
 	address := fmt.Sprintf("localhost:%d", port)
 
 	node, err := p2p.NewLocalNode(address)

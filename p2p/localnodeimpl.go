@@ -3,6 +3,7 @@ package p2p
 import (
 	"encoding/hex"
 	"github.com/UnrulyOS/go-unruly/crypto"
+	"github.com/UnrulyOS/go-unruly/p2p/nodeconfig"
 	"github.com/UnrulyOS/go-unruly/p2p/pb"
 	"github.com/golang/protobuf/proto"
 	"time"
@@ -26,7 +27,7 @@ func (n *localNodeImp) NewProtocolMessageMetadata(protocol string, reqId []byte,
 	return &pb.Metadata{
 		Protocol:      protocol,
 		ReqId:         reqId,
-		ClientVersion: clientVersion,
+		ClientVersion: nodeconfig.ClientVersion,
 		Timestamp:     time.Now().Unix(),
 		Gossip:        gossip,
 		AuthPubKey:    n.PublicKey().Bytes(),

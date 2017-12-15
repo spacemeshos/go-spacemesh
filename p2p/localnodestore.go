@@ -21,7 +21,7 @@ type NodeData struct {
 
 // Get the os-specific full path to the nodes master data directory
 // Attempts to create the directory on-demand
-func ensureNodeDataDirectory() string {
+func ensureNodesDataDirectory() string {
 	dataPath, err := filesystem.GetUnrulyDataDirectoryPath()
 	nodesDir := filepath.Join(dataPath, nodeconfig.NodesDirectoryName)
 	nodesPath, err := filesystem.GetFullDirectoryPath(nodesDir)
@@ -35,7 +35,7 @@ func ensureNodeDataDirectory() string {
 // Get the path to the node's data directory, e.g. /nodes/[node-id]/
 // Directory will be created on demand if it doesn't exist
 func (n *localNodeImp) ensureNodeDataDirectory() string {
-	nodesDataDir := ensureNodeDataDirectory()
+	nodesDataDir := ensureNodesDataDirectory()
 	nodeDirectoryName := filepath.Join(nodesDataDir, n.String())
 	path, err := filesystem.GetFullDirectoryPath(nodeDirectoryName)
 	if err != nil {
@@ -46,7 +46,7 @@ func (n *localNodeImp) ensureNodeDataDirectory() string {
 
 // Returns the os-specific full path to the node's data file
 func getDataFilePath(nodeId string) string {
-	nodesDataDir := ensureNodeDataDirectory()
+	nodesDataDir := ensureNodesDataDirectory()
 	return filepath.Join(nodesDataDir, nodeId, nodeconfig.NodeDataFileName)
 }
 
@@ -64,10 +64,13 @@ func (n *localNodeImp) persistData() error {
 		return err
 	}
 
-	ensureNodeDataDirectory()
+	n.ensureNodeDataDirectory()
 	path := getDataFilePath(n.String())
-	log.Info("%s", path)
-	return ioutil.WriteFile(path, bytes, filesystem.OwnerReadWrite)
+	err = ioutil.WriteFile(path, bytes, filesystem.OwnerReadWrite)
+	if err != nil {
+		log.Error("Failed to persist node data. %v", err)
+	}
+	return err
 }
 
 // Read node persisted data based on node id
@@ -87,7 +90,7 @@ func readNodeData(nodeId string) *NodeData {
 		return nil
 	}
 
-	log.Info("Loading persistent node data for node id: %s", nodeId)
+	log.Info("Loaded peristed node data for node id: %s", nodeId)
 	return &nodeData
 }
 
@@ -96,7 +99,7 @@ func readNodeData(nodeId string) *NodeData {
 // To load a specific node on startup - pass the node id using the node cli arg
 func readFirstNodeData() *NodeData {
 
-	path := ensureNodeDataDirectory()
+	path := ensureNodesDataDirectory()
 	files, err := ioutil.ReadDir(path)
 	if err != nil {
 		log.Error("Failed to read node directory files. %v", err)
