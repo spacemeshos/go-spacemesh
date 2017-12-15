@@ -10,7 +10,7 @@ import (
 
 func TestApp(t *testing.T) {
 
-	// remove all inkected test flags for now
+	// remove all injected test flags for now
 	os.Args = []string{"go-unruly", "-jrpc"}
 
 	go app.Main("", "master", "")
