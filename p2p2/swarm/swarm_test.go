@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/UnrulyOS/go-unruly/crypto"
 	"github.com/UnrulyOS/go-unruly/log"
-	"github.com/UnrulyOS/go-unruly/p2p2/keys"
 	"github.com/UnrulyOS/go-unruly/p2p2/swarm/pb"
 	"github.com/google/uuid"
 	"testing"
@@ -16,14 +15,13 @@ func generateTestNode(t *testing.T) (LocalNode, RemoteNode) {
 	port := crypto.GetRandomUInt32(1000) + 10000
 	address := fmt.Sprintf("localhost:%d", port)
 
-	priv, pub, _ := keys.GenerateKeyPair()
-	localNode, err := NewLocalNode(pub, priv, address)
+	localNode, err := NewLocalNode(address)
 	if err != nil {
 		t.Error("failed to create local node1", err)
 	}
 
 	// this will be node 2 view of node 1
-	remoteNode, err := NewRemoteNode(pub.String(), address)
+	remoteNode, err := NewRemoteNode(localNode.String(), address)
 	if err != nil {
 		t.Error("failed to create remote node1", err)
 	}

@@ -1,12 +1,10 @@
 package swarm
 
 import (
-	"encoding/hex"
 	"github.com/UnrulyOS/go-unruly/log"
 	"github.com/UnrulyOS/go-unruly/p2p2/keys"
 	"github.com/UnrulyOS/go-unruly/p2p2/swarm/pb"
 	"github.com/golang/protobuf/proto"
-	"time"
 )
 
 const clientVersion = "og-unruly-0.0.1"
@@ -27,9 +25,41 @@ type LocalNode interface {
 
 	GetSwarm() Swarm
 	GetPing() Ping
+
+	SendMessage(req SendMessageReq)
+
+	Shutdown()
 }
 
-func NewLocalNode(pubKey keys.PublicKey, privKey keys.PrivateKey, tcpAddress string) (LocalNode, error) {
+// Create a local node with a provided ip address
+func NewLocalNode(tcpAddress string) (LocalNode, error) {
+
+	// todo: fix this
+	/*
+	if len(nodeconfig.ConfigValues.NodeId) > 0 {
+		// user provided node id/pubkey via cli - attempt to start that node w persisted data
+		data := readNodeData(nodeconfig.ConfigValues.NodeId)
+		return newNodeFromData(tcpAddress, data)
+	}
+
+	// look for persisted node data in the nodes directory
+	// load the node with the data of the first node found
+	nodeData := readFirstNodeData()
+	if nodeData != nil {
+		// crete node using persisted node data
+		return newNodeFromData(tcpAddress, nodeData)
+	}*/
+
+	// generate new node
+	return newNodeIdentity(tcpAddress)
+}
+
+func newNodeIdentity(tcpAddress string) (LocalNode, error) {
+	priv, pub, _ := keys.GenerateKeyPair()
+	return NewLocalNodeWithKeys(pub, priv, tcpAddress)
+}
+
+func NewLocalNodeWithKeys(pubKey keys.PublicKey, privKey keys.PrivateKey, tcpAddress string) (LocalNode, error) {
 
 	n := &localNodeImp{
 		pubKey:     pubKey,
@@ -37,6 +67,7 @@ func NewLocalNode(pubKey keys.PublicKey, privKey keys.PrivateKey, tcpAddress str
 		tcpAddress: tcpAddress,
 	}
 
+	// swarm owned by node
 	s, err := NewSwarm(tcpAddress, n)
 	if err != nil {
 		log.Error("can't create a local node without a swarm. %v", err)
@@ -46,86 +77,24 @@ func NewLocalNode(pubKey keys.PublicKey, privKey keys.PrivateKey, tcpAddress str
 	n.swarm = s
 	n.ping = NewPingProtocol(s)
 
-	// create all implemented local node protocols here
+	// todo: fix this - file access issues
+	/*
+		err = n.persistData()
+		if err != nil { // no much use of starting if we can't store node private key in store
+			log.Error("Failed to persist node data to local store: %v", err)
+			return nil, err
+		}*/
+
 	return n, nil
 }
 
-// Node implementation type
-type localNodeImp struct {
-	pubKey     keys.PublicKey
-	privKey    keys.PrivateKey
-	tcpAddress string
-
-	// local owns a swarm
-	swarm Swarm
-
-	// add all other protocols here
-	ping Ping
-}
-
-// Create meta-data for an outgoing protocol message authored by this node
-func (n *localNodeImp) NewProtocolMessageMetadata(protocol string, reqId []byte, gossip bool) *pb.Metadata {
-	return &pb.Metadata{
-		Protocol:      protocol,
-		ReqId:         reqId,
-		ClientVersion: clientVersion,
-		Timestamp:     time.Now().Unix(),
-		Gossip:        gossip,
-		AuthPubKey:    n.PublicKey().Bytes(),
-	}
-}
-
-func (n *localNodeImp) GetPing() Ping {
-	return n.ping
-}
-
-func (n *localNodeImp) GetSwarm() Swarm {
-	return n.swarm
-}
-
-func (n *localNodeImp) TcpAddress() string {
-	return n.tcpAddress
-}
-
-func (n *localNodeImp) Id() []byte {
-	return n.pubKey.Bytes()
-}
-
-func (n *localNodeImp) String() string {
-	return n.pubKey.String()
-}
-
-func (n *localNodeImp) Pretty() string {
-	return n.pubKey.Pretty()
-}
-
-func (n *localNodeImp) PrivateKey() keys.PrivateKey {
-	return n.privKey
-}
-
-func (n *localNodeImp) PublicKey() keys.PublicKey {
-	return n.pubKey
-}
-
-func (n *localNodeImp) SignToString(data proto.Message) (string, error) {
-	sign, err := n.Sign(data)
+func newNodeFromData(tcpAddress string, d *NodeData) (LocalNode, error) {
+	priv := keys.NewPrivateKeyFromString(d.PrivKey)
+	pub, err := keys.NewPublicKeyFromString(d.PubKey)
 	if err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(sign), nil
-}
-
-// Sign a protobufs message
-func (n *localNodeImp) Sign(data proto.Message) ([]byte, error) {
-	bin, err := proto.Marshal(data)
-	if err != nil {
+		log.Error("Failded to create public key from string: %v", err)
 		return nil, err
 	}
 
-	sign, err := n.PrivateKey().Sign(bin)
-	if err != nil {
-		return nil, err
-	}
-
-	return sign, nil
+	return NewLocalNodeWithKeys(pub, priv, tcpAddress)
 }
