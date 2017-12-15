@@ -81,6 +81,12 @@
 			"revisionTime": "2017-11-26T19:57:40Z"
 		},
 		{
+			"checksumSHA1": "5NJ0D29BrSO9yfr6jb2PxfbIfNQ=",
+			"path": "github.com/jbenet/go-base58",
+			"revision": "6237cf65f3a6f7111cd8a42be3590df99a66bc7d",
+			"revisionTime": "2015-03-17T08:51:56Z"
+		},
+		{
 			"checksumSHA1": "17HeUwhDeV9PZo3GYsDP3UY2Qe8=",
 			"path": "github.com/jbenet/go-msgio/mpool",
 			"revision": "242a3f4ed2d0098bff2f25b1bd32f4254e803b23",
