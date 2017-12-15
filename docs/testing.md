@@ -12,8 +12,15 @@
 - You may use GoLang GO TEST configs for testing.
 - To test a package such as node:
 
+Run all test:
 ```
-cd node/tests
+make test
+```
+
+Run tests in a test folder
+
+```
+cd app/tests
 go test
 ```
 
@@ -22,7 +29,7 @@ go test
 go test ./...
 ```
 
-- Test via govendor
+- Run all tests via govendor
 ```
 govendor test +local
 ```
@@ -31,5 +38,5 @@ govendor test +local
 - TBD - travis builds and tests
 
 ### Custom node tests
-- Node is independant of app so you should be able to create custom p2p tests.
-See p2p_test.go
+- Node is designed to be independant of app so you should be able to create custom p2p tests.
+See swarm_test.go

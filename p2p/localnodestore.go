@@ -96,7 +96,7 @@ func readNodeData(nodeId string) *NodeData {
 
 // Read node data from the data folder.
 // Reads a random node from the data folder if more than one node data file is persisted
-// To load a specific node on startup - pass the node id using the node cli arg
+// To load a specific node on startup - users need to pass the node id using a cli arg
 func readFirstNodeData() *NodeData {
 
 	path := ensureNodesDataDirectory()

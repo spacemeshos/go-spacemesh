@@ -11,7 +11,6 @@ Json is used as the file format instead of a binary opaque format to make the ac
  
 ```json
 {
-  "id": "QmYvV9V1RuwzXjiX5DhesR8PVoA6EATpa1Qp4W96Mr7zDQ",
   "publicKey": "GZsJqUXaEPs35S1HRZehp45eiKRJ3YJfdAH63wkiZYiYyhLanf",
   "crypto": {
     "cipher": "AES-128-CTR",
@@ -33,14 +32,11 @@ Json is used as the file format instead of a binary opaque format to make the ac
 ###### Strings encoding
 We use base58 for account id and public key as the canonical encodding but other data is hex encoded.
 
-- id - base58
-- publicKey - base58
+- publicKey - base58 - also the account id
 - cipherText - hex
 - cipherV - hex
 - mac - hex
 - salt: hex
-
-
 
 Refs
 - https://www.tarsnap.com/scrypt/scrypt.pdf 

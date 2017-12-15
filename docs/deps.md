@@ -1,4 +1,3 @@
-
 ## Dependencies Management
 
 - We are using govendor for versioned deps
@@ -17,8 +16,11 @@ Add all external deps to /vendor:
 govendor add +external
 ```
 
+Check that all deps are vendored. e.g. do not come from a local go path:
+```
+govendor list
+```
 
-
-- [refs](https://github.com/kardianos/govendor/wiki/Govendor-CheatSheet)
+Please read the [cheat-sheet](https://github.com/kardianos/govendor/wiki/Govendor-CheatSheet)
 
 

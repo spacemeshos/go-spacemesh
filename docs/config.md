@@ -1,5 +1,5 @@
-
 ## Unruly Config
+
 - We are using [toml files](https://github.com/toml-lang/toml), [here](https://github.com/urfave/cli#values-from-alternate-input-sources-yaml-toml-and-others) and [here](https://github.com/pelletier/go-toml) for config file syntax.
 - Use of a config file is optional.
 - Node uses default config values, unless provided with a .toml config file via command line arg or has custom command line config values.
