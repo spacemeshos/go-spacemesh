@@ -20,13 +20,10 @@ type LocalNode interface {
 	PublicKey() keys.PublicKey
 
 	TcpAddress() string
-
 	NewProtocolMessageMetadata(protocol string, reqId []byte, gossip bool) *pb.Metadata
-
 	SignMessage(data proto.Message) ([]byte, error)
 
 	GetSwarm() Swarm
-
 	GetPing() Ping
 }
 
@@ -48,7 +45,6 @@ func NewLocalNode(pubKey keys.PublicKey, privKey keys.PrivateKey, tcpAddress str
 	n.ping = NewPingProtocol(s)
 
 	// create all implemented local node protocols here
-
 	return n, nil
 }
 
@@ -62,7 +58,6 @@ type localNodeImp struct {
 	swarm Swarm
 
 	// add all other protocols here
-
 	ping Ping
 }
 

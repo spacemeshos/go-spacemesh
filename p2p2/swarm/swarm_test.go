@@ -18,14 +18,12 @@ func generateTestNode(t *testing.T) (LocalNode, RemoteNode) {
 
 	priv, pub, _ := keys.GenerateKeyPair()
 	localNode, err := NewLocalNode(pub, priv, address)
-
 	if err != nil {
 		t.Error("failed to create local node1", err)
 	}
 
 	// this will be node 2 view of node 1
 	remoteNode, err := NewRemoteNode(pub.String(), address)
-
 	if err != nil {
 		t.Error("failed to create remote node1", err)
 	}
@@ -60,14 +58,18 @@ func TestPingProtocol(t *testing.T) {
 	node1Local, _ := generateTestNode(t)
 	_, node2Remote := generateTestNode(t)
 
-	// tell node 1 about node 2
+	// let node 1 know about node 2
 	node1Local.GetSwarm().RegisterNode(RemoteNodeData{node2Remote.String(), node2Remote.TcpAddress()})
 
-	// 4 lines and a callback on a channel
+	// 4 lines of code and a callback on a channel !
 	pingReqId := []byte(uuid.New().String())
 	callback := make(chan *pb.PingRespData)
-	node1Local.GetPing().RegisterCallback(callback)
-	node1Local.GetPing().SendPing("hello unruly", pingReqId, node2Remote.String())
+	node1Local.GetPing().Register(callback)
+	node1Local.GetPing().Send("hello unruly", pingReqId, node2Remote.String())
+
+	// internally, node 1 creates an encrypted authenticated session with node 2 and sends the ping request
+	// over that session once it is established. Node 1 registers an app-level callback to get the ping response from node 2.
+	// The response includes the request id so it can match it with one or more tracked requests it sent.
 
 Loop:
 	for {

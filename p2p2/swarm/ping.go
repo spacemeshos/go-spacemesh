@@ -17,10 +17,10 @@ type Ping interface {
 
 	// send a ping request to a remoteNode
 	// reqId: allows the client to match responses with requests by id
-	SendPing(msg string, reqId []byte, remoteNodeId string) error
+	Send(msg string, reqId []byte, remoteNodeId string) error
 
 	// App logic registers her for typed incoming ping responses
-	RegisterCallback(callback chan *pb.PingRespData)
+	Register(callback chan *pb.PingRespData)
 }
 
 type Callbacks chan chan *pb.PingRespData
@@ -45,7 +45,7 @@ func NewPingProtocol(s Swarm) Ping {
 		incomingRequests:  make(MessagesChan, 10),
 		incomingResponses: make(MessagesChan, 10),
 		callbacksRegReq:   make(Callbacks, 10),
-		callbacks:         make([]chan *pb.PingRespData, 1),
+		callbacks:         make([]chan *pb.PingRespData, 0), // start with empty slice
 	}
 
 	go p.processEvents()
@@ -57,7 +57,7 @@ func NewPingProtocol(s Swarm) Ping {
 	return p
 }
 
-func (p *pingProtocolImpl) SendPing(msg string, reqId []byte, remoteNodeId string) error {
+func (p *pingProtocolImpl) Send(msg string, reqId []byte, remoteNodeId string) error {
 
 	metadata := p.swarm.GetLocalNode().NewProtocolMessageMetadata(pingReq, reqId, false)
 	data := &pb.PingReqData{metadata, msg}
@@ -79,7 +79,7 @@ func (p *pingProtocolImpl) SendPing(msg string, reqId []byte, remoteNodeId strin
 	return nil
 }
 
-func (p *pingProtocolImpl) RegisterCallback(callback chan *pb.PingRespData) {
+func (p *pingProtocolImpl) Register(callback chan *pb.PingRespData) {
 	p.callbacksRegReq <- callback
 }
 
@@ -95,7 +95,7 @@ func (p *pingProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 
 	peer := msg.Sender()
 	pingText := req.Ping
-	log.Info("Incoming peer request from %s. Message: %", peer.Pretty(), pingText)
+	log.Info("Incoming ping peer request from %s. Message: %", peer.Pretty(), pingText)
 
 	// generate response
 	metadata := p.swarm.GetLocalNode().NewProtocolMessageMetadata(pingResp, req.Metadata.ReqId, false)
@@ -118,7 +118,6 @@ func (p *pingProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 		signedPayload}
 
 	p.swarm.SendMessage(resp)
-
 }
 
 func (p *pingProtocolImpl) handleIncomingResponse(msg IncomingMessage) {

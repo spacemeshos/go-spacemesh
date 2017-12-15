@@ -92,9 +92,10 @@ func (s *swarmImpl) onNewSession(data HandshakeData) {
 		s.allSessions[data.Session().String()] = data.Session()
 
 		// send all messages queued for the remote node we now have a session with
-		for _, msg := range s.messagesPendingSession {
+		for key, msg := range s.messagesPendingSession {
 			if msg.RemoteNodeId == data.RemoteNode().String() {
-				// SendMessage (like any other swarm public method) is go safe
+				log.Info("Sending queued message %s to remote node", hex.EncodeToString(msg.ReqId))
+				delete(s.messagesPendingSession, key)
 				go s.SendMessage(msg)
 			}
 		}
@@ -205,10 +206,11 @@ func (s *swarmImpl) onRemoteClientHandshakeMessage(msg net.ConnectionMessage) {
 	sender := s.peersByConnection[connId]
 
 	if sender == nil {
+
 		// authenticate sender before registration
 		err := s.handshakeProtocol.authenticateSenderNode(data)
 		if err != nil {
-			log.Error("failed to authenticate message sender %v", err)
+			log.Error("Dropping incoming message - failed to authenticate message sender: %v", err)
 			return
 		}
 
@@ -222,7 +224,7 @@ func (s *swarmImpl) onRemoteClientHandshakeMessage(msg net.ConnectionMessage) {
 			return
 		}
 
-		// register this remote node and its connection
+		// register this remote node and the new connection
 
 		sender.GetConnections()[connId] = msg.Connection
 		s.peers[sender.String()] = sender
@@ -230,45 +232,52 @@ func (s *swarmImpl) onRemoteClientHandshakeMessage(msg net.ConnectionMessage) {
 
 	}
 
-	// demux the message to the handshake protocol handler
+	// Let the demuxer route the message to its registered protocol handler
 	s.demuxer.RouteIncomingMessage(NewIncomingMessage(sender, data.Protocol, msg.Message))
 }
 
 func (s *swarmImpl) onRemoteClientProtocolMessage(msg net.ConnectionMessage, c *pb.CommonMessageData) {
-	// just find the session here
+
+	// Locate the session
 	session := s.allSessions[hex.EncodeToString(c.SessionId)]
 
 	if session == nil || !session.IsAuthenticated() {
-		log.Warning("expected to have an authenticated session with this node")
+		log.Warning("Dropping incoming protocol message - expected to have an authenticated session with this node")
 		return
 	}
 
 	remoteNode := s.peers[session.RemoteNodeId()]
 	if remoteNode == nil {
-		log.Warning("expected to have data about this node for an established session")
+		log.Warning("Dropping incoming protocol message - expected to have data about this node for an established session")
 		return
 	}
 
 	decPayload, err := session.Decrypt(c.Payload)
 	if err != nil {
-		log.Warning("Invalid message payload. %v", err)
+		log.Warning("Droping incoming protocol message - can't decrypt message payload with session key. %v", err)
 		return
 	}
 
 	pm := &pb.ProtocolMessage{}
 	err = proto.Unmarshal(decPayload, pm)
 	if err != nil {
-		log.Warning("Failed to get protocol message from payload. %v", err)
+		log.Warning("Droping incoming protocol message - Failed to get protocol message from payload. %v", err)
 		return
 	}
 
-	// todo: validate protocol message before demuxing to higher level handler
-	// Use pm.Metadata .....
-	// 1. authenticate author (all payload data is signed by him)
-	// 2. Reject if auth timestamp is too much aparat from current local time
+	// authenticate message author - we already authenticated the sender via the shared session key secret
+	err = pm.AuthenticateAuthor()
+	if err != nil {
+		log.Warning("Droping incoming protocol message - Failed to verify author. %v", err)
+		return
+	}
 
+	log.Info("Message %s author authenticated ok. %s", hex.EncodeToString(pm.GetMetadata().ReqId), pm.GetMetadata().Protocol)
+
+	// todo: check send time and reject if too much aparat from local clock
+
+	// route authenticated message to the reigstered protocol
 	s.demuxer.RouteIncomingMessage(NewIncomingMessage(remoteNode, pm.Metadata.Protocol, decPayload))
-
 }
 
 // Main network messages handler

@@ -29,10 +29,8 @@ type NetworkSession interface {
 	IsAuthenticated() bool
 	SetAuthenticated(val bool)
 
-	// TODO: ENCRYPT / DECRYPT FEATURES HERE
-
-	Decrypt(in []byte) ([]byte, error)
-	Encrypt(in []byte) ([]byte, error)
+	Decrypt(in []byte) ([]byte, error) // decrypt data using session dec key
+	Encrypt(in []byte) ([]byte, error) // encrypt data using session enc key
 }
 
 type NetworkSessionImpl struct {
@@ -48,11 +46,6 @@ type NetworkSessionImpl struct {
 
 	blockEncrypter cipher.BlockMode
 	blockDecrypter cipher.BlockMode
-
-	////////////////
-	// todo: this type might include a decryptor and an encryptor for fast enc/dec of data to/from a remote node
-	// when we have an active session - it might be expensive to create these for each outgoing / incoming message
-	// there should only be 1 session per remote node
 }
 
 func (n *NetworkSessionImpl) LocalNodeId() string {
@@ -134,7 +127,6 @@ func NewNetworkSession(id, keyE, keyM, pubKey []byte, localNodeId, remoteNodeId 
 	}
 
 	// create and store block enc/dec
-
 	blockCipher, err := aes.NewCipher(keyE)
 	if err != nil {
 		log.Error("Failed to create block cipher")

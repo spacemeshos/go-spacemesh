@@ -100,7 +100,7 @@ func NewHandshakeProtocol(s Swarm) HandshakeProtocol {
 		incomingHandshakeRequests: make(MessagesChan, 20),
 		incomingHandsakeResponses: make(chan IncomingMessage, 20),
 		registerSessionCallback:   make(chan chan HandshakeData, 2),
-		newSessionCallbacks:       make([]chan HandshakeData, 1),
+		newSessionCallbacks:       make([]chan HandshakeData, 0), // start with empty slice
 		deletePendingSessionById:  make(chan string, 5),
 		sessionStateChanged:       make(chan HandshakeData, 3),
 		addPendingSession:         make(chan HandshakeData, 3),
@@ -120,6 +120,7 @@ func NewHandshakeProtocol(s Swarm) HandshakeProtocol {
 }
 
 func (h *handshakeProtocolImpl) RegisterNewSessionCallback(callback chan HandshakeData) {
+	log.Info("New session callback registered.")
 	h.registerSessionCallback <- callback
 }
 
@@ -164,8 +165,8 @@ func (h *handshakeProtocolImpl) processEvents() {
 		case m := <-h.incomingHandsakeResponses:
 			h.onHandleIncomingHandshakeResponse(m)
 
-		case r := <-h.registerSessionCallback:
-			h.newSessionCallbacks = append(h.newSessionCallbacks, r)
+		case c := <-h.registerSessionCallback:
+			h.newSessionCallbacks = append(h.newSessionCallbacks, c)
 
 		case d := <-h.addPendingSession:
 			sessionKey := d.Session().String()
@@ -184,6 +185,7 @@ func (h *handshakeProtocolImpl) processEvents() {
 	}
 }
 
+// Handle a remote handshake request
 func (h *handshakeProtocolImpl) onHandleIncomingHandshakeRequest(msg IncomingMessage) {
 
 	data := &pb.HandshakeData{}
@@ -337,20 +339,22 @@ func (h *handshakeProtocolImpl) genereateHandshakeRequestData(node LocalNode, re
 	return data, session, nil
 }
 
-// Authenticate the sender node generated the signed data
+// Authenticate that the sender node generated the signed data
 func (h *handshakeProtocolImpl) authenticateSenderNode(req *pb.HandshakeData) error {
 
+	// get public key from data
 	snderPubKey, err := keys.NewPublicKey(req.NodePubKey)
 	if err != nil {
 		return err
 	}
 
-	// verify signature
+	// get the signature
 	sigData, err := hex.DecodeString(req.Sign)
 	if err != nil {
 		return err
 	}
 
+	// recreate the signed binary corups - all data without the signature
 	req.Sign = ""
 	bin, err := proto.Marshal(req)
 	if err != nil {
@@ -360,14 +364,14 @@ func (h *handshakeProtocolImpl) authenticateSenderNode(req *pb.HandshakeData) er
 	// restore back signature
 	req.Sign = hex.EncodeToString(sigData)
 
-	// we verify against the remote node public key
+	// Verify that the signed data was signed by the public key
 	v, err := snderPubKey.Verify(bin, sigData)
 	if err != nil {
 		return err
 	}
 
 	if !v {
-		return errors.New("invalid data")
+		return errors.New("Failed to verify data is from claimed sender node.")
 	}
 
 	return nil

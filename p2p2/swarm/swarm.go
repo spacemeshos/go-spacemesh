@@ -1,29 +1,12 @@
 package swarm
 
 // Swarm
-// Hold ref to peers and manage connections to peers
-
-// unruly p2p2 Stack:
-// -----------
-// Local Node
-// -- Implements p2p protocols: impls with req/resp support (match id resp w request id)
-//	 -- ping protocol
-//   -- echo protocol
-//   -- all other protocols...
-// DeMuxer (node aspect) - routes remote requests (and responses) back to protocols. Protocols register on muxer
-// Swarm forward incoming messages to muxer. Let protocol send message to a remote node. Connects to random nodes.
-// Swarm - managed all remote nodes, sessions and connections
-// Remote Node - maintains sessions - should be internal to swarm only. Remote node id str only above this
-// -- NetworkSession (optional)
-// Connection
-// -- msgio (prefix length encoding). shared buffers.
-// Network
-//	- tcp for now
-//  - utp / upd soon
+// A p2p network of unruly nodes
 
 type Swarm interface {
 
-	// register a node with the swarm based on id and ip address
+	// Register a node with the swarm based on id and ip address - bootstrap nodes should be registered using
+	// this method
 	RegisterNode(data RemoteNodeData)
 
 	// Attempt to establish a session with a remote node with a known ip address - useful for bootstrapping
