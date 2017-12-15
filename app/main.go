@@ -8,7 +8,7 @@ import (
 	apiconf "github.com/UnrulyOS/go-unruly/api/config"
 	"github.com/UnrulyOS/go-unruly/filesystem"
 	"github.com/UnrulyOS/go-unruly/log"
-	"github.com/UnrulyOS/go-unruly/node"
+	"github.com/UnrulyOS/go-unruly/p2p2/swarm"
 	"gopkg.in/urfave/cli.v1"
 	"os"
 	"os/signal"
@@ -17,12 +17,12 @@ import (
 	"sort"
 
 	"github.com/UnrulyOS/go-unruly/app/config"
-	nodeparams "github.com/UnrulyOS/go-unruly/node/config"
+	nodeparams "github.com/UnrulyOS/go-unruly/p2p2/swarm/nodeconfig"
 )
 
 type UnrulyApp struct {
 	*cli.App
-	Node           *node.Node
+	Node           swarm.LocalNode
 	grpcApiService *api.UnrulyGrpcService
 	jsonApiService *api.JsonHttpServer
 }
@@ -177,7 +177,15 @@ func (app *UnrulyApp) startUnrulyNode(ctx *cli.Context) error {
 	log.Info("Starting local node...")
 	port := *nodeparams.LocalTcpPortFlag.Destination
 
-	app.Node = node.NewNode(port, ExitApp)
+	address := fmt.Sprintf("localhost:%d", port)
+
+	node, err := swarm.NewLocalNode(address)
+	if err != nil {
+		return err
+	}
+
+	app.Node = node
+
 	conf := &apiconf.ConfigValues
 
 	// todo: if there's no loaded account - do the new account interactive flow here
