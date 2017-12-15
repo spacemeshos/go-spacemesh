@@ -24,26 +24,6 @@ func AesCTRXOR(key, input, nonce []byte) ([]byte, error) {
 	return output, nil
 }
 
-// note: untested
-/*
-func AesCBCDecrypt(key, cipherText, iv []byte) ([]byte, error) {
-
-	aesBlock, err := aes.NewCipher(key)
-	if err != nil {
-		return nil, err
-	}
-
-	d := cipher.NewCBCDecrypter(aesBlock, iv)
-	paddedPlainText := make([]byte, len(cipherText))
-	d.CryptBlocks(paddedPlainText, cipherText)
-	plaintext := Pkcs7Unpad(paddedPlainText)
-	if plaintext == nil {
-		return nil, aesDecryptionError
-	}
-
-	return plaintext, nil
-}*/
-
 // pkcs7 padding
 func Pkcs7Pad(in []byte) []byte {
 	padding := 16 - (len(in) % 16)

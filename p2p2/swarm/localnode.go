@@ -36,19 +36,19 @@ func NewLocalNode(tcpAddress string) (LocalNode, error) {
 
 	// todo: fix this
 	/*
-	if len(nodeconfig.ConfigValues.NodeId) > 0 {
-		// user provided node id/pubkey via cli - attempt to start that node w persisted data
-		data := readNodeData(nodeconfig.ConfigValues.NodeId)
-		return newNodeFromData(tcpAddress, data)
-	}
+		if len(nodeconfig.ConfigValues.NodeId) > 0 {
+			// user provided node id/pubkey via cli - attempt to start that node w persisted data
+			data := readNodeData(nodeconfig.ConfigValues.NodeId)
+			return newNodeFromData(tcpAddress, data)
+		}
 
-	// look for persisted node data in the nodes directory
-	// load the node with the data of the first node found
-	nodeData := readFirstNodeData()
-	if nodeData != nil {
-		// crete node using persisted node data
-		return newNodeFromData(tcpAddress, nodeData)
-	}*/
+		// look for persisted node data in the nodes directory
+		// load the node with the data of the first node found
+		nodeData := readFirstNodeData()
+		if nodeData != nil {
+			// crete node using persisted node data
+			return newNodeFromData(tcpAddress, nodeData)
+		}*/
 
 	// generate new node
 	return newNodeIdentity(tcpAddress)

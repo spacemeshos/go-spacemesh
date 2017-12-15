@@ -66,7 +66,6 @@ func TestAccountOps(t *testing.T) {
 	account1PrivKey := account1.PrivKey.String()
 
 	assert.Equal(t, accountPrivKey, account1PrivKey, "Expected same private key after unlocking")
-
 }
 
 func TestPassphrase(t *testing.T) {
@@ -110,9 +109,7 @@ func TestPassphrase(t *testing.T) {
 	err = account1.UnlockAccount(wrongPassphrase)
 
 	assert.Err(t, err, "Expected unlock with wrong password op error")
-
 	assert.True(t, account1.IsAccountLocked(), "Expected account to be locked")
-
 	assert.Nil(t, account1.PrivKey, "expected nil private key for locked account")
 
 }
