@@ -1,6 +1,7 @@
 package keys
 
 import (
+	"encoding/hex"
 	"fmt"
 	"github.com/UnrulyOS/go-unruly/log"
 	"github.com/btcsuite/btcd/btcec"
@@ -28,6 +29,7 @@ type PrivateKey interface {
 type PublicKey interface { // 33 bytes
 	Key
 	Verify(data []byte, sig []byte) (bool, error)
+	VerifyString(data []byte, sig string) (bool, error)
 
 	// encrypt data so it is only decryptable w the private key of this key
 	Encrypt(in []byte) ([]byte, error)
@@ -141,6 +143,14 @@ func (p *publicKeyImpl) Pretty() string {
 		maxRunes = len(pstr)
 	}
 	return fmt.Sprintf("<PubKey %s>", pstr[:maxRunes])
+}
+
+func (p *publicKeyImpl) VerifyString(data []byte, sig string) (bool, error) {
+	bin, err := hex.DecodeString(sig)
+	if err != nil {
+		return false, err
+	}
+	return p.Verify(data, bin)
 }
 
 func (p *publicKeyImpl) Verify(data []byte, sig []byte) (bool, error) {

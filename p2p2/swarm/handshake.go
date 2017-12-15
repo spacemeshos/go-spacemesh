@@ -348,11 +348,8 @@ func (h *handshakeProtocolImpl) authenticateSenderNode(req *pb.HandshakeData) er
 		return err
 	}
 
-	// get the signature
-	sigData, err := hex.DecodeString(req.Sign)
-	if err != nil {
-		return err
-	}
+	// copy the signature
+	sig := req.Sign
 
 	// recreate the signed binary corups - all data without the signature
 	req.Sign = ""
@@ -361,11 +358,8 @@ func (h *handshakeProtocolImpl) authenticateSenderNode(req *pb.HandshakeData) er
 		return err
 	}
 
-	// restore back signature
-	req.Sign = hex.EncodeToString(sigData)
-
 	// Verify that the signed data was signed by the public key
-	v, err := snderPubKey.Verify(bin, sigData)
+	v, err := snderPubKey.VerifyString(bin, sig)
 	if err != nil {
 		return err
 	}
@@ -404,12 +398,8 @@ func (h *handshakeProtocolImpl) processHandshakeRequest(node LocalNode, r Remote
 	}
 
 	// verify signature
-	sigData, err := hex.DecodeString(req.Sign)
 
-	if err != nil {
-		return nil, nil, err
-	}
-
+	sig := req.Sign
 	req.Sign = ""
 	bin, err := proto.Marshal(req)
 	if err != nil {
@@ -417,7 +407,7 @@ func (h *handshakeProtocolImpl) processHandshakeRequest(node LocalNode, r Remote
 	}
 
 	// we verify against the remote node public key
-	v, err := r.PublicKey().Verify(bin, sigData)
+	v, err := r.PublicKey().VerifyString(bin, sig)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -502,12 +492,7 @@ func (h *handshakeProtocolImpl) processHandshakeResponse(node LocalNode, r Remot
 	}
 
 	// verify signature
-	sigData, err := hex.DecodeString(resp.Sign)
-
-	if err != nil {
-		return err
-	}
-
+	sig := resp.Sign
 	resp.Sign = ""
 	bin, err := proto.Marshal(resp)
 	if err != nil {
@@ -515,7 +500,7 @@ func (h *handshakeProtocolImpl) processHandshakeResponse(node LocalNode, r Remot
 	}
 
 	// we verify against the remote node public key
-	v, err := r.PublicKey().Verify(bin, sigData)
+	v, err := r.PublicKey().VerifyString(bin, sig)
 	if err != nil {
 		return err
 	}

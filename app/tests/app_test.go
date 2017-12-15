@@ -3,14 +3,15 @@ package tests
 import (
 	"github.com/UnrulyOS/go-unruly/app"
 	"github.com/UnrulyOS/go-unruly/assert"
+	"os"
 	"testing"
 	"time"
 )
 
 func TestApp(t *testing.T) {
 
-	//you can add any flag for testing
-	//os.Args = append(os.Args,"-jrpc")
+	// remove all inkected test flags for now
+	os.Args = []string{"go-unruly", "-jrpc"}
 
 	go app.Main("", "master", "")
 

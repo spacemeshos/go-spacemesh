@@ -12,30 +12,23 @@ const pingResp = "/ping/1.0/ping-resp/"
 
 // Ping protocol
 // An example of a simple app-level p2p protocol
-
 type Ping interface {
-
 	// send a ping request to a remoteNode
 	// reqId: allows the client to match responses with requests by id
 	Send(msg string, reqId []byte, remoteNodeId string) error
 
-	// App logic registers her for typed incoming ping responses
+	// App logic registers her for typed incoming ping responses (pongs)
 	Register(callback chan *pb.PingRespData)
 }
 
 type Callbacks chan chan *pb.PingRespData
 
 type pingProtocolImpl struct {
-	swarm Swarm
-
-	callbacks []chan *pb.PingRespData
-
-	// ops
+	swarm             Swarm
+	callbacks         []chan *pb.PingRespData
 	incomingRequests  MessagesChan
 	incomingResponses MessagesChan
-
-	// a channel of channels that receive callbacks
-	callbacksRegReq Callbacks
+	callbacksRegReq   Callbacks // a channel of channels that receive callbacks
 }
 
 func NewPingProtocol(s Swarm) Ping {
@@ -50,20 +43,21 @@ func NewPingProtocol(s Swarm) Ping {
 
 	go p.processEvents()
 
-	// protocol demuxer registration
+	// demuxer registration
 	s.GetDemuxer().RegisterProtocolHandler(ProtocolRegistration{pingReq, p.incomingRequests})
 	s.GetDemuxer().RegisterProtocolHandler(ProtocolRegistration{pingResp, p.incomingResponses})
 
 	return p
 }
 
+// Send a ping to a remote node
 func (p *pingProtocolImpl) Send(msg string, reqId []byte, remoteNodeId string) error {
 
 	metadata := p.swarm.GetLocalNode().NewProtocolMessageMetadata(pingReq, reqId, false)
 	data := &pb.PingReqData{metadata, msg}
 
 	// sign data
-	sign, err := p.swarm.GetLocalNode().SignMessage(data)
+	sign, err := p.swarm.GetLocalNode().Sign(data)
 	data.Metadata.AuthorSign = hex.EncodeToString(sign)
 
 	// marshal the signed data
@@ -79,10 +73,13 @@ func (p *pingProtocolImpl) Send(msg string, reqId []byte, remoteNodeId string) e
 	return nil
 }
 
+// Register callback on remotely received pings
 func (p *pingProtocolImpl) Register(callback chan *pb.PingRespData) {
 	p.callbacksRegReq <- callback
 }
 
+// Handles a ping request from a remote node
+// Process the request and send back a ping response (pong) to the remote node
 func (p *pingProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 
 	// process request
@@ -94,25 +91,29 @@ func (p *pingProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 	}
 
 	peer := msg.Sender()
-	pingText := req.Ping
-	log.Info("Incoming ping peer request from %s. Message: %", peer.Pretty(), pingText)
+	log.Info("Incoming ping peer request from %s. Message: %", peer.Pretty(), req.Ping)
 
 	// generate response
 	metadata := p.swarm.GetLocalNode().NewProtocolMessageMetadata(pingResp, req.Metadata.ReqId, false)
-	respData := &pb.PingRespData{metadata, pingText}
+	respData := &pb.PingRespData{metadata, req.Ping}
 
 	// sign response
-	sign, err := p.swarm.GetLocalNode().SignMessage(respData)
-	respData.Metadata.AuthorSign = hex.EncodeToString(sign)
+	sign, err := p.swarm.GetLocalNode().SignToString(respData)
+	if err != nil {
+		log.Info("Failed to sign response")
+		return
+	}
+
+	respData.Metadata.AuthorSign = sign
 
 	// marshal the signed data
 	signedPayload, err := proto.Marshal(respData)
 	if err != nil {
+		log.Info("Failed to generate response data")
 		return
 	}
 
 	// send signed data payload
-
 	resp := SendMessageReq{msg.Sender().String(),
 		req.Metadata.ReqId,
 		signedPayload}
@@ -120,6 +121,7 @@ func (p *pingProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 	p.swarm.SendMessage(resp)
 }
 
+// Handle an incoming pong message from a remote node
 func (p *pingProtocolImpl) handleIncomingResponse(msg IncomingMessage) {
 
 	// process request
@@ -130,18 +132,16 @@ func (p *pingProtocolImpl) handleIncomingResponse(msg IncomingMessage) {
 		return
 	}
 
-	reqId := hex.EncodeToString(resp.Metadata.ReqId)
+	log.Info("Got pong response from %s. Ping req id: %", msg.Sender().Pretty(), resp.Pong, resp.Metadata.ReqId)
 
-	log.Info("Got pong response from %s. Ping req id: %", msg.Sender().Pretty(), resp.Pong, reqId)
-
-	// notify clients of th enew pong
+	// notify clients of th new pong
 	for _, c := range p.callbacks {
 		// todo: verify that this style of closure is kosher
 		go func() { c <- resp }()
 	}
-
 }
 
+// Internal event processing loop
 func (p *pingProtocolImpl) processEvents() {
 	for {
 		select {

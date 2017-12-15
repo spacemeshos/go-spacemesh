@@ -19,8 +19,7 @@ func (s *swarmImpl) onRegisterNodeRequest(req RemoteNodeData) {
 
 	if s.peers[req.Id] == nil {
 		node, err := NewRemoteNode(req.Id, req.Ip)
-		if err != nil {
-			// invalid id
+		if err != nil { // invalid id
 			return
 		}
 
@@ -126,7 +125,6 @@ func (s *swarmImpl) onSendHandshakeMessage(r SendMessageReq) {
 	}
 
 	conn.Send(r.Payload)
-
 }
 
 // Local request to send a message to a remote node

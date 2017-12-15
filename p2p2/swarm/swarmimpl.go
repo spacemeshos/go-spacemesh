@@ -27,8 +27,7 @@ type swarmImpl struct {
 	connectionRequests chan RemoteNodeData // local requests to establish a session w a remote node
 	disconnectRequests chan RemoteNodeData // local requests to kill session and disconnect from node
 
-	sendMsgRequests chan SendMessageReq // local request to send a session message to a node and callback on error or data
-
+	sendMsgRequests  chan SendMessageReq // local request to send a session message to a node and callback on error or data
 	sendHandshakeMsg chan SendMessageReq // local request to send a handshake protocol message
 
 	kill chan bool // local request to kill the swamp from outside. e.g when local node is shutting down

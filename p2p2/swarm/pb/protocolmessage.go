@@ -1,7 +1,6 @@
 package pb
 
 import (
-	"encoding/hex"
 	"errors"
 	"github.com/UnrulyOS/go-unruly/p2p2/keys"
 	"github.com/golang/protobuf/proto"
@@ -10,8 +9,7 @@ import (
 func (msg *ProtocolMessage) AuthenticateAuthor() error {
 
 	authPubKey, err := keys.NewPublicKey(msg.GetMetadata().AuthPubKey)
-	signature, err := hex.DecodeString(msg.GetMetadata().AuthorSign)
-
+	sig := msg.GetMetadata().AuthorSign
 	msg.GetMetadata().AuthorSign = ""
 
 	bin, err := proto.Marshal(msg)
@@ -20,10 +18,10 @@ func (msg *ProtocolMessage) AuthenticateAuthor() error {
 	}
 
 	// restore signature
-	msg.GetMetadata().AuthorSign = hex.EncodeToString(signature)
+	msg.GetMetadata().AuthorSign = sig
 
 	// Verify that the signed data was signed by the public key
-	v, err := authPubKey.Verify(bin, signature)
+	v, err := authPubKey.VerifyString(bin, sig)
 	if err != nil {
 		return err
 	}

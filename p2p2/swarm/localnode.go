@@ -1,6 +1,7 @@
 package swarm
 
 import (
+	"encoding/hex"
 	"github.com/UnrulyOS/go-unruly/log"
 	"github.com/UnrulyOS/go-unruly/p2p2/keys"
 	"github.com/UnrulyOS/go-unruly/p2p2/swarm/pb"
@@ -21,7 +22,8 @@ type LocalNode interface {
 
 	TcpAddress() string
 	NewProtocolMessageMetadata(protocol string, reqId []byte, gossip bool) *pb.Metadata
-	SignMessage(data proto.Message) ([]byte, error)
+	Sign(data proto.Message) ([]byte, error)
+	SignToString(data proto.Message) (string, error)
 
 	GetSwarm() Swarm
 	GetPing() Ping
@@ -105,8 +107,16 @@ func (n *localNodeImp) PublicKey() keys.PublicKey {
 	return n.pubKey
 }
 
+func (n *localNodeImp) SignToString(data proto.Message) (string, error) {
+	sign, err := n.Sign(data)
+	if err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(sign), nil
+}
+
 // Sign a protobufs message
-func (n *localNodeImp) SignMessage(data proto.Message) ([]byte, error) {
+func (n *localNodeImp) Sign(data proto.Message) ([]byte, error) {
 	bin, err := proto.Marshal(data)
 	if err != nil {
 		return nil, err
