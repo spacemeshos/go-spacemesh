@@ -3,10 +3,10 @@
 todo: move tasks to github issues
 
 ### Build tasks
-- Dockerfile to setup a completely isolated docker dev env
+- Dockerfile to setup a completely isolated docker dev env with no deps installed in the go path - only in /vendor.
 - Makefile that builds node packaged binary without relying on packages outside of /vendor - e.g. GOPATH as proj root.
-Current makefile is using a global go path.
-- Script to install all required dev tools: e.g. proto-c (with grpc-gateway support). govendor, etc....
+Current makefile is using the global system go path.
+- A script to install all required dev tools: e.g. proto-c (with grpc-gateway support). govendor, etc....
 - Integrate travis CI with the repo and setup full CI system (hold until repo is public for Travis integration)
 
 ### App Shell Tasks
@@ -14,17 +14,16 @@ Current makefile is using a global go path.
 - Impl cli.v1 TOML support and write test with TOML file (a bit of a pain with cli via vendoring) - alt use YAML
 
 ### Misc. Tasks
-- Implement an optimized Merkle tree data structure with backing storage in leveldb (kv storage). Implement Merkle proofs.
 - Tests for all implemented functionality - the more the better.
 - Fully support coinbase account:
     - when new account is created - if it is only account - set it as coinbase on the running node
     - restore node coinbase account when loading a node from storage
 - NTP client with time-drift detection (SNTP protocol)
 
-### Hard Tasks
-- Implement KAD/DHT node discovery protocol
-- Implement gossip support for each protocol (gossip flag) and write tests for gossiping a p2p message (20 nodes, 1 bootstrap)
-- Local Javascript console for interactive RPC calls (wrapping the json-http api) - possible via V8 engine?
+### Hard(er) Tasks
+- Implement an optimized Merkle tree data structure with backing storage in leveldb (kv storage). Implement Merkle proofs.
+- Implement peer discovery using the KAD/DHT node discovery protocol.
+- Implement gossip support (gossip flag) and write tests for gossiping a p2p message (e.g. 20 nodes, 1 bootstrap)
 - Integrate a V8 instance for javascript execution into the node. See: https://github.com/augustoroman/v8 
 
 ### App Shell Implemented Features
@@ -45,6 +44,11 @@ Stuff we have a basic 1st pass implementation for:
 - Implement accounts and keystore files
 
 ## p2p implemented features
-- Handshake protocol for secure and authenticated comm
-- App-level p2p protocols support with full encryption authorship auth - see ping
-- Get rid of libp2p :-)
+- Swarm - peer management, low-level tcp network and connections
+- Handshake protocol for secure and authenticated comm using a ECDH key exchange scheme
+- App-level p2p protocols support with full encryption and authorship auth - see ping
+- Pattern for app-level protocols using callback channels for processing responses to requests
+- Design for an extendable protobufs based message format - see message.proto
+- Demuxer (router) - routes incoming messages to app-level protocols handlers
+- 100% mutex-free (mutexes in msgio should be removed as well) - all concurent flows are using channels
+- 100% lib-p2p free :-)
