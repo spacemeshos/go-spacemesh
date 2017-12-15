@@ -2,10 +2,10 @@ package accounts
 
 import (
 	"encoding/json"
-	"errors"
 	"github.com/UnrulyOS/go-unruly/crypto"
 	"github.com/UnrulyOS/go-unruly/filesystem"
 	"github.com/UnrulyOS/go-unruly/log"
+	"github.com/UnrulyOS/go-unruly/p2p2/keys"
 	"io/ioutil"
 	"path/filepath"
 	"strings"
@@ -13,7 +13,6 @@ import (
 
 // Persisted node data
 type AccountData struct {
-	Id         string          `json:"id"`
 	PublicKey  string          `json:"publicKey"`
 	CryptoData CryptoData      `json:"crypto"`
 	KDParams   crypto.KDParams `json:"kd"`
@@ -44,6 +43,7 @@ func LoadAllAccounts() error {
 	for _, f := range files {
 		fileName := f.Name()
 		if !f.IsDir() && strings.HasSuffix(fileName, ".json") {
+
 			accountId := fileName[:strings.LastIndex(fileName, ".")]
 			NewAccountFromStore(accountId, accountsDataFolder)
 		}
@@ -76,36 +76,18 @@ func NewAccountFromStore(accountId string, accountsDataPath string) (*Account, e
 		return nil, err
 	}
 
-	Id, err := crypto.NewIdentifier(accountData.Id)
-	if err != nil {
-		log.Error("Invalid account id: %v", err)
-		return nil, err
-	}
-
-	if Id.String() != accountId {
-		log.Error("Account ids mismatch")
-		return nil, errors.New("Account ids mismtach")
-	}
-
-	pubKey, err := crypto.NewPublicKeyFromString(accountData.PublicKey)
+	pubKey, err := keys.NewPublicKeyFromString(accountData.PublicKey)
 	if err != nil {
 		log.Error("Invalid account public key: %v", err)
 		return nil, err
 	}
 
-	if !pubKey.VerifyId(Id) {
-		err := errors.New("Public key and id mismtach")
-		log.Error("%v", err)
-		return nil, err
-	}
-
-	acct := &Account{Id,
-		nil,
+	acct := &Account{nil,
 		pubKey,
 		accountData.CryptoData,
 		accountData.KDParams}
 
-	log.Info("Loaded account from store: %s", Id.String())
+	log.Info("Loaded account from store: %s", pubKey.String())
 
 	Accounts.All[acct.String()] = acct
 
@@ -118,14 +100,9 @@ func NewAccountFromStore(accountId string, accountsDataPath string) (*Account, e
 // Returns full path of persisted file (useful for testing)
 func (a *Account) Persist(accountsDataPath string) (string, error) {
 
-	pubKeyStr, err := a.PubKey.String()
-	if err != nil {
-		log.Error("Invalid public key: %v", err)
-		return "", err
-	}
+	pubKeyStr := a.PubKey.String()
 
 	data := &AccountData{
-		a.Identifier.String(),
 		pubKeyStr,
 		a.cryptoData,
 		a.kdParams,
@@ -137,7 +114,7 @@ func (a *Account) Persist(accountsDataPath string) (string, error) {
 		return "", err
 	}
 
-	fileName := a.Identifier.String() + ".json"
+	fileName := a.String() + ".json"
 	dataFilePath := filepath.Join(accountsDataPath, fileName)
 	err = ioutil.WriteFile(dataFilePath, bytes, filesystem.OwnerReadWrite)
 	if err != nil {
@@ -145,7 +122,7 @@ func (a *Account) Persist(accountsDataPath string) (string, error) {
 		return "", err
 	}
 
-	log.Info("Persisted account to store. Id: %s", a.Identifier.String())
+	log.Info("Persisted account to store. Id: %s", a.String())
 
 	return dataFilePath, nil
 }

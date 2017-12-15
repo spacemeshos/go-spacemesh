@@ -47,15 +47,8 @@ func TestAccountOps(t *testing.T) {
 		t.Fatalf("Failed to load account", err)
 	}
 
-	accountPubKey, err := account.PubKey.String()
-	if err != nil {
-		t.Fatalf("Failed to get account private key", err)
-	}
-
-	account1PubKey, err := account1.PubKey.String()
-	if err != nil {
-		t.Fatalf("Failed to get account private key", err)
-	}
+	accountPubKey := account.PubKey.String()
+	account1PubKey := account1.PubKey.String()
 
 	assert.Equal(t, accountPubKey, account1PubKey, "Expected same public id")
 	assert.Equal(t, account.String(), account1.String(), "Expected same id")
@@ -69,13 +62,10 @@ func TestAccountOps(t *testing.T) {
 	assert.True(t, account1.IsAccountUnlocked(), "Expected account to be unlocked")
 
 	// verify private keys are the same
-	accountPrivKey, err := account.PrivKey.String()
-	assert.Nil(t, err, "expected nil error")
+	accountPrivKey := account.PrivKey.String()
+	account1PrivKey := account1.PrivKey.String()
 
-	account1PrivKe, err := account1.PrivKey.String()
-	assert.Nil(t, err, "expected nil error")
-
-	assert.Equal(t, accountPrivKey, account1PrivKe, "Expected same private key after unlocking")
+	assert.Equal(t, accountPrivKey, account1PrivKey, "Expected same private key after unlocking")
 
 }
 
@@ -109,15 +99,8 @@ func TestPassphrase(t *testing.T) {
 		t.Fatalf("Failed to load account", err)
 	}
 
-	accountPubKey, err := account.PubKey.String()
-	if err != nil {
-		t.Fatalf("Failed to get account private key", err)
-	}
-
-	account1PubKey, err := account1.PubKey.String()
-	if err != nil {
-		t.Fatalf("Failed to get account private key", err)
-	}
+	accountPubKey := account.PubKey.String()
+	account1PubKey := account1.PubKey.String()
 
 	assert.Equal(t, accountPubKey, account1PubKey, "Expected same public id")
 	assert.Equal(t, account.String(), account1.String(), "Expected same id")

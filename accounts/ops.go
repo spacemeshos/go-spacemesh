@@ -7,20 +7,25 @@ import (
 	"fmt"
 	"github.com/UnrulyOS/go-unruly/crypto"
 	"github.com/UnrulyOS/go-unruly/log"
+	"github.com/UnrulyOS/go-unruly/p2p2/keys"
 )
 
 func (a *Account) Pretty() string {
-	return fmt.Sprintf("Account %s", a.Identifier.Pretty())
+	return fmt.Sprintf("Account %s", a.PubKey.Pretty())
+}
+
+func (a *Account) String() string {
+	return a.PubKey.String()
 }
 
 // Log account info
 func (a *Account) Log() {
 
-	pubKey, _ := a.PubKey.String()
-	log.Info("Account id: %s", a.Identifier.String())
+	pubKey := a.PubKey.String()
+	log.Info("Account id: %s", a.String())
 
 	if a.PrivKey != nil {
-		privKey, _ := a.PrivKey.String()
+		privKey := a.PrivKey.String()
 		log.Info(" Private key: %s", privKey)
 	}
 
@@ -92,11 +97,7 @@ func (a *Account) UnlockAccount(passphrase string) error {
 		return err
 	}
 
-	privateKey, err := crypto.NewPrivateKey(privKeyData)
-	if err != nil {
-		log.Error("Failed to create private key from data: %v", err)
-		return err
-	}
+	privateKey:= keys.NewPrivateKey(privKeyData)
 
 	err = a.validatePublickKey(privateKey)
 	if err != nil {
@@ -111,25 +112,10 @@ func (a *Account) UnlockAccount(passphrase string) error {
 }
 
 // Validate that the account's private key matches provided private key
-func (a *Account) validatePublickKey(privateKey crypto.PrivateKeylike) error {
-
-	publicKey, err := privateKey.GetPublicKey()
-	if err != nil {
-		log.Error("Failed to extract public key from private key: %v", err)
-		return err
-	}
-
-	publicKeyStr, err := publicKey.String()
-	if err != nil {
-		log.Error("Invalid public key format: %v", err)
-		return err
-	}
-
-	accountPubKeyStr, err := a.PubKey.String()
-	if err != nil {
-		log.Error("Invalid public key format: %v", err)
-		return err
-	}
+func (a *Account) validatePublickKey(privateKey keys.PrivateKey) error {
+	publicKey := privateKey.GetPublicKey()
+	publicKeyStr := publicKey.String()
+	accountPubKeyStr := a.PubKey.String()
 
 	if accountPubKeyStr != publicKeyStr {
 		return errors.New("Invalid extracted public key %s %s")

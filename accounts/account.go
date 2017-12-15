@@ -6,6 +6,7 @@ import (
 	"errors"
 	"github.com/UnrulyOS/go-unruly/crypto"
 	"github.com/UnrulyOS/go-unruly/log"
+	"github.com/UnrulyOS/go-unruly/p2p2/keys"
 )
 
 type AccountsRegistry struct {
@@ -14,9 +15,8 @@ type AccountsRegistry struct {
 }
 
 type Account struct {
-	crypto.Identifier
-	PrivKey    crypto.PrivateKeylike
-	PubKey     crypto.PublicKeylike
+	PrivKey    keys.PrivateKey
+	PubKey     keys.PublicKey
 	cryptoData CryptoData
 	kdParams   crypto.KDParams
 }
@@ -37,14 +37,12 @@ func init() {
 func NewAccount(passphrase string) (*Account, error) {
 
 	// account crypto data
-	priv, pub, err := crypto.GenerateKeyPair()
+	priv, pub, err := keys.GenerateKeyPair()
 	if err != nil {
 		return nil, err
 	}
 
 	// derive key from passphrase
-
-	id, err := pub.IdFromPubKey()
 	kdfParams := crypto.DefaultCypherParams
 
 	// add new salt to params
@@ -64,11 +62,7 @@ func NewAccount(passphrase string) (*Account, error) {
 	aesKey := dk[:16]
 
 	// date to encrypt
-	privKeyBytes, err := priv.Bytes()
-	if err != nil {
-		log.Error("Failed to get priv key bytes: %v", err)
-		return nil, err
-	}
+	privKeyBytes := priv.Bytes()
 
 	// compute nonce
 	nonce, err := crypto.GetRandomBytes(aes.BlockSize)
@@ -106,8 +100,7 @@ func NewAccount(passphrase string) (*Account, error) {
 	}
 
 	// save all date in newly created account obj
-	acct := &Account{id,
-		priv,
+	acct := &Account{priv,
 		pub,
 		cryptoData,
 		kdParams}
