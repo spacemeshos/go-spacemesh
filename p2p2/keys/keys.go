@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/UnrulyOS/go-unruly/log"
 	"github.com/btcsuite/btcd/btcec"
-	b58 "gx/ipfs/QmT8rehPR3F6bmwL6zjUN8XpiDBFFpMP2myPdC6ApsWfJf/go-base58"
+	"github.com/jbenet/go-base58"
 )
 
 type Key interface {
@@ -62,7 +62,7 @@ func NewPrivateKey(data []byte) PrivateKey {
 }
 
 func NewPrivateKeyFromString(s string) PrivateKey {
-	data := b58.Decode(s)
+	data := base58.Decode(s)
 	return NewPrivateKey(data)
 }
 
@@ -76,7 +76,7 @@ func (p *privateKeyImpl) Bytes() []byte {
 
 func (p *privateKeyImpl) String() string {
 	bytes := p.Bytes()
-	return b58.Encode(bytes)
+	return base58.Encode(bytes)
 }
 
 func (p *privateKeyImpl) GetPublicKey() PublicKey {
@@ -120,7 +120,7 @@ func NewPublicKey(data []byte) (PublicKey, error) {
 }
 
 func NewPublicKeyFromString(s string) (PublicKey, error) {
-	data := b58.Decode(s)
+	data := base58.Decode(s)
 	return NewPublicKey(data)
 }
 
@@ -133,7 +133,7 @@ func (p *publicKeyImpl) Bytes() []byte {
 }
 
 func (p *publicKeyImpl) String() string {
-	return b58.Encode(p.Bytes())
+	return base58.Encode(p.Bytes())
 }
 
 func (p *publicKeyImpl) Pretty() string {

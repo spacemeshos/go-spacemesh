@@ -93,10 +93,6 @@
 			"revisionTime": "2016-03-22T12:57:20Z"
 		},
 		{
-			"path": "github.com/jbenet/msgio",
-			"revision": ""
-		},
-		{
 			"checksumSHA1": "1MGpGDQqnUoRpv7VEcQrXOBydXE=",
 			"path": "golang.org/x/crypto/pbkdf2",
 			"revision": "94eea52f7b742c7cbe0b03b22f0c4c8631ece122",
@@ -183,6 +179,12 @@
 		{
 			"checksumSHA1": "B22iMMY2vi1Q9kseWb/ZznpW8lQ=",
 			"path": "google.golang.org/genproto/googleapis/api/annotations",
+			"revision": "7f0da29060c682909f650ad8ed4e515bd74fa12a",
+			"revisionTime": "2017-11-23T00:06:38Z"
+		},
+		{
+			"checksumSHA1": "Tc3BU26zThLzcyqbVtiSEp7EpU8=",
+			"path": "google.golang.org/genproto/googleapis/rpc/status",
 			"revision": "7f0da29060c682909f650ad8ed4e515bd74fa12a",
 			"revisionTime": "2017-11-23T00:06:38Z"
 		},
@@ -347,10 +349,6 @@
 			"path": "gopkg.in/urfave/cli.v1",
 			"revision": "0bdeddeeb0f650497d603c4ad7b20cfe685682f6",
 			"revisionTime": "2016-11-21T01:42:03Z"
-		},
-		{
-			"path": "https://github.com/jbenet/go-msgio",
-			"revision": ""
 		}
 	],
 	"rootPath": "github.com/UnrulyOS/go-unruly"
