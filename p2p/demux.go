@@ -1,4 +1,4 @@
-package swarm
+package p2p
 
 import (
 	"github.com/UnrulyOS/go-unruly/log"

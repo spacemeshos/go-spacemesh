@@ -1,10 +1,10 @@
-package swarm
+package p2p
 
 import (
 	"encoding/json"
 	"github.com/UnrulyOS/go-unruly/filesystem"
 	"github.com/UnrulyOS/go-unruly/log"
-	"github.com/UnrulyOS/go-unruly/p2p2/swarm/nodeconfig"
+	"github.com/UnrulyOS/go-unruly/p2p/nodeconfig"
 	"io/ioutil"
 	"path/filepath"
 	"strings"

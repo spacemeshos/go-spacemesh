@@ -1,4 +1,4 @@
-package swarm
+package p2p
 
 import (
 	"bytes"
@@ -10,7 +10,7 @@ import (
 	"errors"
 	"github.com/UnrulyOS/go-unruly/crypto"
 	"github.com/UnrulyOS/go-unruly/log"
-	"github.com/UnrulyOS/go-unruly/p2p2/swarm/pb"
+	"github.com/UnrulyOS/go-unruly/p2p/pb"
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/golang/protobuf/proto"
 	"io"

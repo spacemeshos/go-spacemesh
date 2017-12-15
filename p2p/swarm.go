@@ -1,4 +1,4 @@
-package swarm
+package p2p
 
 // Swarm
 // A p2p network of unruly nodes

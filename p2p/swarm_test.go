@@ -1,11 +1,11 @@
-package swarm
+package p2p
 
 import (
 	"bytes"
 	"fmt"
 	"github.com/UnrulyOS/go-unruly/crypto"
 	"github.com/UnrulyOS/go-unruly/log"
-	"github.com/UnrulyOS/go-unruly/p2p2/swarm/pb"
+	"github.com/UnrulyOS/go-unruly/p2p/pb"
 	"github.com/google/uuid"
 	"testing"
 )

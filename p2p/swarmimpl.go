@@ -1,8 +1,8 @@
-package swarm
+package p2p
 
 import (
 	"github.com/UnrulyOS/go-unruly/log"
-	"github.com/UnrulyOS/go-unruly/p2p2/net"
+	"github.com/UnrulyOS/go-unruly/p2p/net"
 )
 
 type swarmImpl struct {

@@ -2,11 +2,9 @@ package net
 
 import (
 	"encoding/binary"
-	"github.com/google/uuid"
-
-	//"bytes"
 	"github.com/UnrulyOS/go-unruly/log"
-	"github.com/UnrulyOS/go-unruly/p2p2/msgio"
+	"github.com/UnrulyOS/go-unruly/p2p/msgio"
+	"github.com/google/uuid"
 	"net"
 	"time"
 )

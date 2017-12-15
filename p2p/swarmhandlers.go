@@ -1,11 +1,11 @@
-package swarm
+package p2p
 
 import (
 	"encoding/hex"
 	"github.com/UnrulyOS/go-unruly/crypto"
 	"github.com/UnrulyOS/go-unruly/log"
-	"github.com/UnrulyOS/go-unruly/p2p2/net"
-	"github.com/UnrulyOS/go-unruly/p2p2/swarm/pb"
+	"github.com/UnrulyOS/go-unruly/p2p/net"
+	"github.com/UnrulyOS/go-unruly/p2p/pb"
 	"github.com/golang/protobuf/proto"
 	"time"
 )
