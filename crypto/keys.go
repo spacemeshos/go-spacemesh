@@ -10,7 +10,7 @@ import (
 
 type Key interface {
 	String() string // this is a base58 encoded of Bytes()
-	Bytes() []byte  // raw key binary data - 32 bytes, big endian
+	Bytes() []byte  // raw key binary data
 	Pretty() string // pretty print key id
 }
 

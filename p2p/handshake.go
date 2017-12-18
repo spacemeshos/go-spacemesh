@@ -22,16 +22,16 @@ const HandshakeResp = "/handshake/1.0/handshake-resp/"
 
 type HandshakeData interface {
 	LocalNode() LocalNode
-	RemoteNode() RemoteNode
+	Peer() Peer
 	Session() NetworkSession
 	GetError() error
 	SetError(err error)
 }
 
-func NewHandshakeData(localNode LocalNode, remoteNode RemoteNode, session NetworkSession, err error) HandshakeData {
+func NewHandshakeData(localNode LocalNode, peer Peer, session NetworkSession, err error) HandshakeData {
 	return &handshakeDataImp{
 		localNode:  localNode,
-		remoteNode: remoteNode,
+		peer: peer,
 		session:    session,
 		err:        err,
 	}
@@ -39,7 +39,7 @@ func NewHandshakeData(localNode LocalNode, remoteNode RemoteNode, session Networ
 
 type handshakeDataImp struct {
 	localNode  LocalNode
-	remoteNode RemoteNode
+	peer Peer
 	session    NetworkSession
 	err        error
 }
@@ -48,8 +48,8 @@ func (n *handshakeDataImp) LocalNode() LocalNode {
 	return n.localNode
 }
 
-func (n *handshakeDataImp) RemoteNode() RemoteNode {
-	return n.remoteNode
+func (n *handshakeDataImp) Peer() Peer {
+	return n.peer
 }
 
 func (n *handshakeDataImp) Session() NetworkSession {
@@ -72,7 +72,7 @@ func (n *handshakeDataImp) SetError(err error) {
 // todo: move to p2p/protocols
 
 type HandshakeProtocol interface {
-	CreateSession(remoteNode RemoteNode)
+	CreateSession(peer Peer)
 	RegisterNewSessionCallback(callback chan HandshakeData) // register a channel to receive session state changes
 }
 
@@ -125,11 +125,11 @@ func (h *handshakeProtocolImpl) RegisterNewSessionCallback(callback chan Handsha
 	h.registerSessionCallback <- callback
 }
 
-func (h *handshakeProtocolImpl) CreateSession(remoteNode RemoteNode) {
+func (h *handshakeProtocolImpl) CreateSession(peer Peer) {
 
-	data, session, err := genereateHandshakeRequestData(h.swarm.GetLocalNode(), remoteNode)
+	data, session, err := genereateHandshakeRequestData(h.swarm.GetLocalNode(), peer)
 
-	handshakeData := NewHandshakeData(h.swarm.GetLocalNode(), remoteNode, session, err)
+	handshakeData := NewHandshakeData(h.swarm.GetLocalNode(), peer, session, err)
 
 	if err != nil {
 		h.sessionStateChanged <- handshakeData
@@ -149,7 +149,7 @@ func (h *handshakeProtocolImpl) CreateSession(remoteNode RemoteNode) {
 
 	h.swarm.SendHandshakeMessage(SendMessageReq{
 		ReqId:        session.Id(),
-		RemoteNodeId: remoteNode.String(),
+		PeerId: peer.String(),
 		Payload:      payload,
 	})
 
@@ -223,7 +223,7 @@ func (h *handshakeProtocolImpl) onHandleIncomingHandshakeRequest(msg IncomingMes
 	// send response back to sender
 	h.swarm.SendHandshakeMessage(SendMessageReq{
 		ReqId:        session.Id(),
-		RemoteNodeId: msg.Sender().String(),
+		PeerId: msg.Sender().String(),
 		Payload:      payload,
 	})
 
@@ -254,7 +254,7 @@ func (h *handshakeProtocolImpl) onHandleIncomingHandshakeResponse(msg IncomingMe
 		return
 	}
 
-	err = processHandshakeResponse(sessionRequestData.LocalNode(), sessionRequestData.RemoteNode(),
+	err = processHandshakeResponse(sessionRequestData.LocalNode(), sessionRequestData.Peer(),
 		sessionRequestData.Session(), respData)
 	if err != nil {
 		// can't establish session - set error
@@ -274,7 +274,7 @@ func (h *handshakeProtocolImpl) onHandleIncomingHandshakeResponse(msg IncomingMe
 // Returns handshake data to send to removeNode and a network session data object that includes the session enc/dec sym key and iv
 // Node that NetworkSession is not yet authenticated - this happens only when the handshake response is processed and authenticated
 // This is called by node1 (initiator)
-func genereateHandshakeRequestData(node LocalNode, remoteNode RemoteNode) (*pb.HandshakeData, NetworkSession, error) {
+func genereateHandshakeRequestData(node LocalNode, remoteNode Peer) (*pb.HandshakeData, NetworkSession, error) {
 
 	// we use the Elliptic Curve Encryption Scheme
 	// https://en.wikipedia.org/wiki/Integrated_Encryption_Scheme
@@ -373,7 +373,7 @@ func authenticateSenderNode(req *pb.HandshakeData) error {
 // Process a session handshake request data from remoteNode r
 // Returns Handshake data to send to r and a network session data object that includes the session sym  enc/dec key
 // This is called by responder in the handshake protocol (node2)
-func processHandshakeRequest(node LocalNode, r RemoteNode, req *pb.HandshakeData) (*pb.HandshakeData, NetworkSession, error) {
+func processHandshakeRequest(node LocalNode, r Peer, req *pb.HandshakeData) (*pb.HandshakeData, NetworkSession, error) {
 
 	// ephemeral public key
 	pubkey, err := btcec.ParsePubKey(req.PubKey, btcec.S256())
@@ -468,7 +468,7 @@ func processHandshakeRequest(node LocalNode, r RemoteNode, req *pb.HandshakeData
 // Process handshake protocol response. This is called by initiator (node1) to handle response from node2
 // and to establish the session
 // Side-effect - passed network session is set to authenticated
-func processHandshakeResponse(node LocalNode, r RemoteNode, s NetworkSession, resp *pb.HandshakeData) error {
+func processHandshakeResponse(node LocalNode, r Peer, s NetworkSession, resp *pb.HandshakeData) error {
 
 	// verified shared public secret
 	if !bytes.Equal(resp.PubKey, s.PubKey()) {

@@ -16,13 +16,13 @@ import (
 // Handle local request to register a remote node in swarm
 func (s *swarmImpl) onRegisterNodeRequest(req RemoteNodeData) {
 
-	if s.peers[req.Id] == nil {
-		node, err := NewRemoteNode(req.Id, req.Ip)
+	if s.peers[req.Id()] == nil {
+		node, err := NewRemoteNode(req.Id(), req.Ip())
 		if err != nil { // invalid id
 			return
 		}
 
-		s.peers[req.Id] = node
+		s.peers[req.Id()] = node
 	}
 }
 
@@ -32,21 +32,21 @@ func (s *swarmImpl) onConnectionRequest(req RemoteNodeData) {
 	var err error
 
 	// check for existing session
-	remoteNode := s.peers[req.Id]
+	peer := s.peers[req.Id()]
 
-	if remoteNode == nil {
+	if peer == nil {
 
-		remoteNode, err = NewRemoteNode(req.Id, req.Ip)
+		peer, err = NewRemoteNode(req.Id(), req.Ip())
 		if err != nil {
 			return
 		}
 
 		// store new remote node by id
-		s.peers[req.Id] = remoteNode
+		s.peers[req.Id()] = peer
 	}
 
-	conn := remoteNode.GetActiveConnection()
-	session := remoteNode.GetAuthenticatedSession()
+	conn := peer.GetActiveConnection()
+	session := peer.GetAuthenticatedSession()
 
 	if conn != nil && session != nil {
 		// we have a connection with the node and an active session
@@ -56,7 +56,7 @@ func (s *swarmImpl) onConnectionRequest(req RemoteNodeData) {
 	if conn == nil {
 
 		// Dial the other node using the node's network config values
-		conn, err = s.network.DialTCP(req.Ip, s.localNode.Config().DialTimeout, s.localNode.Config().ConnKeepAlive)
+		conn, err = s.network.DialTCP(req.Ip(), s.localNode.Config().DialTimeout, s.localNode.Config().ConnKeepAlive)
 		if err != nil {
 			// log it here
 			log.Error("failed to connect to remote node on advertised ip %s", req.Ip)
@@ -66,11 +66,11 @@ func (s *swarmImpl) onConnectionRequest(req RemoteNodeData) {
 		id := conn.Id()
 
 		// update state with new connection
-		s.peersByConnection[id] = remoteNode
+		s.peersByConnection[id] = peer
 		s.connections[id] = conn
 
 		// update remote node connections
-		remoteNode.GetConnections()[id] = conn
+		peer.GetConnections()[id] = conn
 	}
 
 	// todo: we need to handle the case that there's a non-authenticated session with the remote node
@@ -78,7 +78,7 @@ func (s *swarmImpl) onConnectionRequest(req RemoteNodeData) {
 	if session == nil || !session.IsAuthenticated() {
 
 		// start handshake protocol
-		s.handshakeProtocol.CreateSession(remoteNode)
+		s.handshakeProtocol.CreateSession(peer)
 	}
 }
 
@@ -86,14 +86,14 @@ func (s *swarmImpl) onConnectionRequest(req RemoteNodeData) {
 func (s *swarmImpl) onNewSession(data HandshakeData) {
 
 	if data.Session().IsAuthenticated() {
-		log.Info("Established new session with %s", data.RemoteNode().TcpAddress())
+		log.Info("Established new session with %s", data.Peer().TcpAddress())
 
 		// store the session
 		s.allSessions[data.Session().String()] = data.Session()
 
 		// send all messages queued for the remote node we now have a session with
 		for key, msg := range s.messagesPendingSession {
-			if msg.RemoteNodeId == data.RemoteNode().String() {
+			if msg.PeerId == data.Peer().String() {
 				log.Info("Sending queued message %s to remote node", hex.EncodeToString(msg.ReqId))
 				delete(s.messagesPendingSession, key)
 				go s.SendMessage(msg)
@@ -111,7 +111,7 @@ func (s *swarmImpl) onDisconnectionRequest(req RemoteNodeData) {
 func (s *swarmImpl) onSendHandshakeMessage(r SendMessageReq) {
 
 	// check for existing remote node and session
-	remoteNode := s.peers[r.RemoteNodeId]
+	remoteNode := s.peers[r.PeerId]
 
 	if remoteNode == nil {
 		// for now we assume messages are sent only to nodes we already know their ip address
@@ -132,15 +132,15 @@ func (s *swarmImpl) onSendHandshakeMessage(r SendMessageReq) {
 func (s *swarmImpl) onSendMessageRequest(r SendMessageReq) {
 
 	// check for existing remote node and session
-	remoteNode := s.peers[r.RemoteNodeId]
+	peer := s.peers[r.PeerId]
 
-	if remoteNode == nil {
+	if peer == nil {
 		// for now we assume messages are sent only to nodes we already know their ip address
 		return
 	}
 
-	session := remoteNode.GetAuthenticatedSession()
-	conn := remoteNode.GetActiveConnection()
+	session := peer.GetAuthenticatedSession()
+	conn := peer.GetActiveConnection()
 
 	if session == nil || conn == nil {
 
@@ -150,7 +150,7 @@ func (s *swarmImpl) onSendMessageRequest(r SendMessageReq) {
 		s.messagesPendingSession[hex.EncodeToString(r.ReqId)] = r
 
 		// try to connect to remote node and send the message once connceted
-		s.onConnectionRequest(RemoteNodeData{remoteNode.String(), remoteNode.TcpAddress()})
+		s.onConnectionRequest(NewRemoteNodeData(peer.String(), peer.TcpAddress()))
 		return
 	}
 

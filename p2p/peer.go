@@ -6,12 +6,12 @@ import (
 	"github.com/UnrulyOS/go-unruly/p2p/net"
 )
 
-// Remote node data
+// A remote node
 // Remote nodes are maintained by the swarm and are not visible to higher-level types on the network stack
 // All remote node methods are NOT thread-safe - they are designed to be used only from a singleton swarm object
 
-// Remode node is designed to handle remote node specific ops by the swarm
-type RemoteNode interface {
+// Peer maintains swarm sessions and connections with a remote node
+type Peer interface {
 	Id() []byte     // node id is public key bytes
 	String() string // node public key string
 	Pretty() string
@@ -30,7 +30,7 @@ type RemoteNode interface {
 	GetActiveConnection() net.Connection
 }
 
-type remoteNodeImpl struct {
+type peerImpl struct {
 	publicKey  crypto.PublicKey
 	tcpAddress string
 
@@ -39,7 +39,7 @@ type remoteNodeImpl struct {
 }
 
 // Create a new remote node using provided id and tcp address
-func NewRemoteNode(id string, tcpAddress string) (RemoteNode, error) {
+func NewRemoteNode(id string, tcpAddress string) (Peer, error) {
 
 	key, err := crypto.NewPublicKeyFromString(id)
 	if err != nil {
@@ -47,7 +47,7 @@ func NewRemoteNode(id string, tcpAddress string) (RemoteNode, error) {
 		return nil, err
 	}
 
-	node := &remoteNodeImpl{
+	node := &peerImpl{
 		publicKey:   key,
 		tcpAddress:  tcpAddress,
 		connections: make(map[string]net.Connection),
@@ -57,7 +57,7 @@ func NewRemoteNode(id string, tcpAddress string) (RemoteNode, error) {
 	return node, nil
 }
 
-func (n *remoteNodeImpl) GetAuthenticatedSession() NetworkSession {
+func (n *peerImpl) GetAuthenticatedSession() NetworkSession {
 	for _, v := range n.sessions {
 		if v.IsAuthenticated() {
 			return v
@@ -66,7 +66,7 @@ func (n *remoteNodeImpl) GetAuthenticatedSession() NetworkSession {
 	return nil
 }
 
-func (n *remoteNodeImpl) GetActiveConnection() net.Connection {
+func (n *peerImpl) GetActiveConnection() net.Connection {
 
 	// todo: sort by last data transfer time to pick the best connection
 
@@ -78,30 +78,30 @@ func (n *remoteNodeImpl) GetActiveConnection() net.Connection {
 	return nil
 }
 
-func (n *remoteNodeImpl) GetConnections() map[string]net.Connection {
+func (n *peerImpl) GetConnections() map[string]net.Connection {
 	return n.connections
 }
 
-func (n *remoteNodeImpl) GetSessions() map[string]NetworkSession {
+func (n *peerImpl) GetSessions() map[string]NetworkSession {
 	return n.sessions
 }
 
-func (n *remoteNodeImpl) String() string {
+func (n *peerImpl) String() string {
 	return n.publicKey.String()
 }
 
-func (n *remoteNodeImpl) Id() []byte {
+func (n *peerImpl) Id() []byte {
 	return n.publicKey.Bytes()
 }
 
-func (n *remoteNodeImpl) Pretty() string {
+func (n *peerImpl) Pretty() string {
 	return n.publicKey.Pretty()
 }
 
-func (n *remoteNodeImpl) PublicKey() crypto.PublicKey {
+func (n *peerImpl) PublicKey() crypto.PublicKey {
 	return n.publicKey
 }
 
-func (n *remoteNodeImpl) TcpAddress() string {
+func (n *peerImpl) TcpAddress() string {
 	return n.tcpAddress
 }

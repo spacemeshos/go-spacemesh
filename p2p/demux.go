@@ -5,12 +5,12 @@ import (
 )
 
 type IncomingMessage interface {
-	Sender() RemoteNode
+	Sender() Peer
 	Protocol() string
 	Payload() []byte
 }
 
-func NewIncomingMessage(sender RemoteNode, protocol string, payload []byte) IncomingMessage {
+func NewIncomingMessage(sender Peer, protocol string, payload []byte) IncomingMessage {
 	return &IncomingMessageImpl{
 		sender:   sender,
 		protocol: protocol,
@@ -20,12 +20,12 @@ func NewIncomingMessage(sender RemoteNode, protocol string, payload []byte) Inco
 
 // a protocol message
 type IncomingMessageImpl struct {
-	sender   RemoteNode
+	sender   Peer
 	protocol string
 	payload  []byte
 }
 
-func (i *IncomingMessageImpl) Sender() RemoteNode {
+func (i *IncomingMessageImpl) Sender() Peer {
 	return i.sender
 }
 

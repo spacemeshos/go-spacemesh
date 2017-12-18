@@ -13,7 +13,7 @@ func TestSessionCreation(t *testing.T) {
 	_, node2Remote := GenerateTestNode(t)
 
 	node1Local.GetSwarm().getHandshakeProtocol().RegisterNewSessionCallback(callback)
-	node1Local.GetSwarm().ConnectTo(RemoteNodeData{node2Remote.String(), node2Remote.TcpAddress()})
+	node1Local.GetSwarm().ConnectTo(NewRemoteNodeData(node2Remote.String(), node2Remote.TcpAddress()))
 
 Loop:
 	for {

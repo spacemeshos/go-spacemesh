@@ -37,19 +37,15 @@ type Swarm interface {
 	getHandshakeProtocol() HandshakeProtocol
 }
 
-// Outside of swarm - types only know about this and not about RemoteNode
-type RemoteNodeData struct {
-	Id string
-	Ip string
-}
+
 
 type SendMessageReq struct {
-	RemoteNodeId string // string encoded key
+	PeerId string // string encoded key
 	ReqId        []byte
 	Payload      []byte // this should be a marshaled protocol msg e.g. PingReqData
 }
 
 type NodeResp struct {
-	remoteNodeId string
+	peerId string
 	err          error
 }

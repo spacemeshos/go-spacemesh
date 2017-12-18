@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func GenerateTestNode(t *testing.T) (LocalNode, RemoteNode) {
+func GenerateTestNode(t *testing.T) (LocalNode, Peer) {
 
 	port := crypto.GetRandomUInt32(1000) + 10000
 	address := fmt.Sprintf("localhost:%d", port)

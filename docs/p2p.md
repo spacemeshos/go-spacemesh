@@ -1,5 +1,6 @@
 **Warning - this file is outdated - skip it for now**
 
+
 ## p2p Routing
 
 - Each node has hard-coded list of at least one but most likely up to 5 bootstrap nodes. One bootstrap node must be available for new nodes.
