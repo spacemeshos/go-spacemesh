@@ -54,6 +54,8 @@ func (s *swarmImpl) onConnectionRequest(req RemoteNodeData) {
 	}
 
 	if conn == nil {
+
+		// Dial the other node using the node's network config values
 		conn, err = s.network.DialTCP(req.Ip, s.localNode.Config().DialTimeout, s.localNode.Config().ConnKeepAlive)
 		if err != nil {
 			// log it here

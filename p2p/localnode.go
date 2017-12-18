@@ -64,7 +64,7 @@ func NewLocalNodeWithKeys(pubKey crypto.PublicKey, privKey crypto.PrivateKey, tc
 		pubKey:     pubKey,
 		privKey:    privKey,
 		tcpAddress: tcpAddress,
-		config: config,
+		config:     config, // store this node passed-in config values and use them later
 	}
 
 	// swarm owned by node
@@ -74,12 +74,10 @@ func NewLocalNodeWithKeys(pubKey crypto.PublicKey, privKey crypto.PrivateKey, tc
 		return nil, err
 	}
 
-
 	n.swarm = s
 	n.ping = NewPingProtocol(s)
 
-	// todo: fix this - file access issues
-
+	// persist store data so we can start it on future app sessions
 	err = n.persistData()
 	if err != nil { // no much use of starting if we can't store node private key in store
 		log.Error("Failed to persist node data to local store: %v", err)

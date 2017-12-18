@@ -27,7 +27,6 @@ var (
 		Destination: &ConfigValues.DialTimeout,
 	}
 
-
 	NetworkConnKeepAlive = cli.DurationFlag{
 		Name:        "conn-keepalive, ka",
 		Usage:       "Network connection keep alive",

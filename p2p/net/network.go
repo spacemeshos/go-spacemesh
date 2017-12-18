@@ -15,7 +15,6 @@ import (
 // Network should not know about higher-level networking types such as remoteNode, swarm and networkSession
 // Network main client is the swarm
 type Net interface {
-
 	DialTCP(address string, timeOut time.Duration, keepAlive time.Duration) (Connection, error) // Connect to a remote node. Can send when no error.
 
 	GetNewConnections() chan Connection
@@ -88,7 +87,7 @@ func (n *netImpl) DialTCP(address string, timeOut time.Duration, keepAlive time.
 	// connect via dialer so we can set tcp network params
 	dialer := &net.Dialer{}
 	dialer.KeepAlive = keepAlive // drop connections after a period of inactivity
-	dialer.Timeout = timeOut // max time bef
+	dialer.Timeout = timeOut     // max time bef
 
 	log.Info("TCP dialing %s ...", address)
 

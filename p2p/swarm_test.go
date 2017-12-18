@@ -4,7 +4,6 @@ import (
 	"testing"
 )
 
-
 // Basic handshake protocol data test
 func TestSessionCreation(t *testing.T) {
 
@@ -26,4 +25,3 @@ Loop:
 		}
 	}
 }
-

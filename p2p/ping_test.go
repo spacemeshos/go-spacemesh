@@ -37,7 +37,7 @@ Loop:
 		case c := <-callback:
 			if bytes.Equal(c.GetMetadata().ReqId, ping1ReqId) {
 				log.Info("Got 2nd pong: `%s`. Total RTT: %s", c.GetPong(), time.Now().Sub(t0).String())
-				break Loop;
+				break Loop
 			} else if bytes.Equal(c.GetMetadata().ReqId, pingReqId) {
 				log.Info("Got pong: `%s`. Total RTT: %s", c.GetPong(), time.Now().Sub(t0))
 				t0 = time.Now()
