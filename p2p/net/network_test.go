@@ -3,6 +3,7 @@ package net
 import (
 	"fmt"
 	"github.com/UnrulyOS/go-unruly/crypto"
+	"github.com/UnrulyOS/go-unruly/p2p/nodeconfig"
 
 	//"math/rand"
 	"github.com/UnrulyOS/go-unruly/assert"
@@ -19,7 +20,7 @@ func TestReadWrite(t *testing.T) {
 
 	done := make(chan bool, 1)
 
-	n, err := NewNet(address)
+	n, err := NewNet(address, nodeconfig.ConfigValues)
 	assert.Nil(t, err, "failed to create tcp server")
 
 	// run a simple network events processor go routine

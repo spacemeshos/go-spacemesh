@@ -7,6 +7,7 @@ import (
 	"github.com/UnrulyOS/go-unruly/assert"
 	"github.com/UnrulyOS/go-unruly/crypto"
 	"github.com/UnrulyOS/go-unruly/log"
+	"github.com/UnrulyOS/go-unruly/p2p/nodeconfig"
 	"github.com/UnrulyOS/go-unruly/p2p/pb"
 	"github.com/gogo/protobuf/proto"
 	"testing"
@@ -19,7 +20,7 @@ func TestHandshakeCoreData(t *testing.T) {
 	port := crypto.GetRandomUInt32(1000) + 10000
 	address := fmt.Sprintf("localhost:%d", port)
 
-	node1Local, err := NewLocalNode(address)
+	node1Local, err := NewLocalNode(address, nodeconfig.ConfigValues)
 
 	if err != nil {
 		t.Error("failed to create local node1", err)
@@ -32,7 +33,7 @@ func TestHandshakeCoreData(t *testing.T) {
 	port1 := crypto.GetRandomUInt32(1000) + 10000
 	address1 := fmt.Sprintf("localhost:%d", port1)
 
-	node2Local, err := NewLocalNode(address1)
+	node2Local, err := NewLocalNode(address1, nodeconfig.ConfigValues)
 
 	if err != nil {
 		t.Error("failed to create local node2", err)
@@ -94,7 +95,7 @@ func TestHandshakeProtocol(t *testing.T) {
 	port := crypto.GetRandomUInt32(1000) + 10000
 	address := fmt.Sprintf("localhost:%d", port)
 
-	node1Local, _ := NewLocalNode(address)
+	node1Local, _ := NewLocalNode(address, nodeconfig.ConfigValues)
 	node1Remote, _ := NewRemoteNode(node1Local.String(), address)
 
 	// node 2
@@ -102,7 +103,7 @@ func TestHandshakeProtocol(t *testing.T) {
 	port1 := crypto.GetRandomUInt32(1000) + 10000
 	address1 := fmt.Sprintf("localhost:%d", port1)
 
-	node2Local, _ := NewLocalNode(address1)
+	node2Local, _ := NewLocalNode(address1, nodeconfig.ConfigValues)
 	node2Remote, _ := NewRemoteNode(node2Local.String(), address1)
 
 	// STEP 1: Node 1 generates handshake data and sends it to node2 ....

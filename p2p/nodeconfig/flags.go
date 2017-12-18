@@ -29,7 +29,7 @@ var (
 
 
 	NetworkConnKeepAlive = cli.DurationFlag{
-		Name:        "conn-keepalive, k",
+		Name:        "conn-keepalive, ka",
 		Usage:       "Network connection keep alive",
 		Value:       ConfigValues.ConnKeepAlive,
 		Destination: &ConfigValues.ConnKeepAlive,
