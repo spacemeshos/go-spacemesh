@@ -83,6 +83,7 @@ func (b *Bucket) Len() int {
 // Split splits a buckets peers into two buckets, the methods receiver will have
 // peers with CPL equal to cpl, the returned bucket will have peers with CPL
 // greater than cpl (returned bucket has closer peers)
+/*
 func (b *Bucket) Split(cpl int, target p2p.RemoteNodeData) *Bucket {
 	b.lk.Lock()
 	defer b.lk.Unlock()
@@ -105,3 +106,4 @@ func (b *Bucket) Split(cpl int, target p2p.RemoteNodeData) *Bucket {
 	}
 	return newbuck
 }
+*/

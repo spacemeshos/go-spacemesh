@@ -30,18 +30,18 @@ type HandshakeData interface {
 
 func NewHandshakeData(localNode LocalNode, peer Peer, session NetworkSession, err error) HandshakeData {
 	return &handshakeDataImp{
-		localNode:  localNode,
-		peer: peer,
-		session:    session,
-		err:        err,
+		localNode: localNode,
+		peer:      peer,
+		session:   session,
+		err:       err,
 	}
 }
 
 type handshakeDataImp struct {
-	localNode  LocalNode
-	peer Peer
-	session    NetworkSession
-	err        error
+	localNode LocalNode
+	peer      Peer
+	session   NetworkSession
+	err       error
 }
 
 func (n *handshakeDataImp) LocalNode() LocalNode {
@@ -148,9 +148,9 @@ func (h *handshakeProtocolImpl) CreateSession(peer Peer) {
 	log.Info("Creating session handshake request session id: %s", session.String())
 
 	h.swarm.SendHandshakeMessage(SendMessageReq{
-		ReqId:        session.Id(),
-		PeerId: peer.String(),
-		Payload:      payload,
+		ReqId:   session.Id(),
+		PeerId:  peer.String(),
+		Payload: payload,
 	})
 
 	h.sessionStateChanged <- handshakeData
@@ -222,9 +222,9 @@ func (h *handshakeProtocolImpl) onHandleIncomingHandshakeRequest(msg IncomingMes
 
 	// send response back to sender
 	h.swarm.SendHandshakeMessage(SendMessageReq{
-		ReqId:        session.Id(),
-		PeerId: msg.Sender().String(),
-		Payload:      payload,
+		ReqId:   session.Id(),
+		PeerId:  msg.Sender().String(),
+		Payload: payload,
 	})
 
 	// we have an active session initiated by a remote node

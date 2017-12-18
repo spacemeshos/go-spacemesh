@@ -37,15 +37,13 @@ type Swarm interface {
 	getHandshakeProtocol() HandshakeProtocol
 }
 
-
-
 type SendMessageReq struct {
-	PeerId string // string encoded key
-	ReqId        []byte
-	Payload      []byte // this should be a marshaled protocol msg e.g. PingReqData
+	PeerId  string // string encoded key
+	ReqId   []byte
+	Payload []byte // this should be a marshaled protocol msg e.g. PingReqData
 }
 
 type NodeResp struct {
 	peerId string
-	err          error
+	err    error
 }

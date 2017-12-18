@@ -14,9 +14,9 @@ type swarmImpl struct {
 
 	// Internal state not thread safe state - must be access only from methods dispatched from the internal event handler
 
-	peers             map[string]Peer     // NodeId -> Peer. known remote nodes. Swarm is a peer store.
+	peers             map[string]Peer           // NodeId -> Peer. known remote nodes. Swarm is a peer store.
 	connections       map[string]net.Connection // ConnId -> Connection - all open connections for tracking and mngmnt
-	peersByConnection map[string]Peer     // ConnId -> Peer remote nodes indexed by their connections.
+	peersByConnection map[string]Peer           // ConnId -> Peer remote nodes indexed by their connections.
 
 	// todo: remove all idle sessions every n hours
 	allSessions map[string]NetworkSession // SessionId -> Session data. all authenticated session
