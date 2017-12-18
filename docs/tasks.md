@@ -19,12 +19,14 @@ Current makefile is using the global system go path.
     - when new account is created - if it is only account - set it as coinbase on the running node
     - restore node coinbase account when loading a node from storage
 - NTP client with time-drift detection (SNTP protocol)
-- Properly factor /p2p/ types into packages with shared interfaces
+- Properly 
+factor /p2p/ types into packages with shared interfaces
 - Make sure all types are defined using interface+struct and not just a struct
 
 ### Hard(er) Tasks
 - Implement an optimized Merkle tree data structure with backing storage in leveldb (kv storage). Implement Merkle proofs.
 - Implement peer discovery using the KAD/DHT node discovery protocol.
+Start by forking https://github.com/libp2p/go-libp2p-kad-dht 
 - Implement gossip support (gossip flag) and write tests for gossiping a p2p message (e.g. 20 nodes, 1 bootstrap)
 - Integrate a V8 instance for javascript execution into the node. See: https://github.com/augustoroman/v8 
 

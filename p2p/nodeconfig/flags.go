@@ -20,6 +20,21 @@ var (
 		Destination: &ConfigValues.TcpPort,
 	}
 
+	NetworkDialTimeout = cli.DurationFlag{
+		Name:        "dial-timeout, d",
+		Usage:       "network dial timeout duration",
+		Value:       ConfigValues.DialTimeout,
+		Destination: &ConfigValues.DialTimeout,
+	}
+
+
+	NetworkConnKeepAlive = cli.DurationFlag{
+		Name:        "conn-keepalive, k",
+		Usage:       "Network connection keep alive",
+		Value:       ConfigValues.ConnKeepAlive,
+		Destination: &ConfigValues.ConnKeepAlive,
+	}
+
 	NodeIdFlag = cli.StringFlag{
 		Name:        "nodeId, n",
 		Usage:       "Load node data by id (pub key) from local store",

@@ -15,6 +15,12 @@
 			"revisionTime": "2017-07-02T00:39:31Z"
 		},
 		{
+			"checksumSHA1": "wn2shNJMwRZpvuvkf1s7h0wvqHI=",
+			"path": "github.com/gogo/protobuf/proto",
+			"revision": "41168f6614b7bb144818ec8967b8c702705df564",
+			"revisionTime": "2017-12-04T08:42:57Z"
+		},
+		{
 			"checksumSHA1": "iVfdaLxIDjfk2KLP8dCMIbsxZZM=",
 			"path": "github.com/golang/protobuf/jsonpb",
 			"revision": "1e59b77b52bf8e4b449a57e6f79f21226d571845",
@@ -85,6 +91,12 @@
 			"path": "github.com/grpc-ecosystem/grpc-gateway/utilities",
 			"revision": "e4b8a938efae14de11fd97311e873e989896348c",
 			"revisionTime": "2017-11-26T19:57:40Z"
+		},
+		{
+			"checksumSHA1": "J+tQOwjlRB69SZaY488XqjYxNqk=",
+			"path": "github.com/libp2p/go-libp2p-kad-dht",
+			"revision": "c40d21ef3807ae5bb8315a942750b21ace7154fb",
+			"revisionTime": "2017-11-20T22:23:12Z"
 		},
 		{
 			"checksumSHA1": "1MGpGDQqnUoRpv7VEcQrXOBydXE=",

@@ -2,6 +2,7 @@ package net
 
 import (
 	"github.com/UnrulyOS/go-unruly/log"
+	"github.com/UnrulyOS/go-unruly/p2p/nodeconfig"
 	"net"
 	"time"
 )
@@ -14,7 +15,8 @@ import (
 // Network should not know about higher-level networking types such as remoteNode, swarm and networkSession
 // Network main client is the swarm
 type Net interface {
-	DialTCP(address string, timeOut time.Duration) (Connection, error) // Connect to a remote node. Can send when no error.
+
+	DialTCP(address string, timeOut time.Duration, keepAlive time.Duration) (Connection, error) // Connect to a remote node. Can send when no error.
 
 	GetNewConnections() chan Connection
 	GetClosingConnections() chan Connection
@@ -54,7 +56,7 @@ func (n *netImpl) GetMessageSendErrors() chan MessageSendError {
 
 // Creates a new network
 // Attempts to tcp listen on address. e.g. localhost:1234
-func NewNet(tcpListenAddress string) (Net, error) {
+func NewNet(tcpListenAddress string, config nodeconfig.Config) (Net, error) {
 
 	n := &netImpl{
 		tcpListenAddress:   tcpListenAddress,
@@ -81,12 +83,12 @@ func NewNet(tcpListenAddress string) (Net, error) {
 // address:: ip:port
 // Returns established connection that local clients can send messages to or error if failed
 // to establish a connection
-func (n *netImpl) DialTCP(address string, timeOut time.Duration) (Connection, error) {
+func (n *netImpl) DialTCP(address string, timeOut time.Duration, keepAlive time.Duration) (Connection, error) {
 
 	// connect via dialer so we can set tcp network params
 	dialer := &net.Dialer{}
-	dialer.KeepAlive = time.Duration(48 * time.Hour) // drop connections after a period of inactivity
-	dialer.Timeout = time.Duration(1 * time.Minute)
+	dialer.KeepAlive = keepAlive // drop connections after a period of inactivity
+	dialer.Timeout = timeOut // max time bef
 
 	log.Info("TCP dialing %s ...", address)
 

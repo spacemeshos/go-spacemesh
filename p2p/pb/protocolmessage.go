@@ -3,7 +3,7 @@ package pb
 import (
 	"errors"
 	"github.com/UnrulyOS/go-unruly/crypto"
-	"github.com/golang/protobuf/proto"
+	"github.com/gogo/protobuf/proto"
 )
 
 func (msg *ProtocolMessage) AuthenticateAuthor() error {

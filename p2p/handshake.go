@@ -12,7 +12,7 @@ import (
 	"github.com/UnrulyOS/go-unruly/log"
 	"github.com/UnrulyOS/go-unruly/p2p/pb"
 	"github.com/btcsuite/btcd/btcec"
-	"github.com/golang/protobuf/proto"
+	"github.com/gogo/protobuf/proto"
 	"io"
 )
 
@@ -68,6 +68,9 @@ func (n *handshakeDataImp) SetError(err error) {
 // Node1 -> Node 2: Req(HandshakeData)
 // Node2 -> Node 1: Resp(HandshakeData)
 // After response is processed by node1 both sides have an auth session with a secret ephemeral aes sym key
+
+// todo: move to p2p/protocols
+
 type HandshakeProtocol interface {
 	CreateSession(remoteNode RemoteNode)
 	RegisterNewSessionCallback(callback chan HandshakeData) // register a channel to receive session state changes

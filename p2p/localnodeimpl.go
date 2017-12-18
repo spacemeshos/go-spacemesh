@@ -5,7 +5,7 @@ import (
 	"github.com/UnrulyOS/go-unruly/crypto"
 	"github.com/UnrulyOS/go-unruly/p2p/nodeconfig"
 	"github.com/UnrulyOS/go-unruly/p2p/pb"
-	"github.com/golang/protobuf/proto"
+	"github.com/gogo/protobuf/proto"
 	"time"
 )
 
@@ -14,6 +14,8 @@ type localNodeImp struct {
 	pubKey     crypto.PublicKey
 	privKey    crypto.PrivateKey
 	tcpAddress string
+
+	config nodeconfig.Config
 
 	// local owns a swarm
 	swarm Swarm
@@ -36,6 +38,10 @@ func (n *localNodeImp) NewProtocolMessageMetadata(protocol string, reqId []byte,
 
 func (n *localNodeImp) SendMessage(req SendMessageReq) {
 	n.swarm.SendMessage(req)
+}
+
+func (n *localNodeImp) Config() nodeconfig.Config {
+	return n.config
 }
 
 func (n *localNodeImp) Shutdown() {

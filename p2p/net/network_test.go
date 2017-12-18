@@ -51,7 +51,7 @@ func TestReadWrite(t *testing.T) {
 		}
 	}()
 
-	c, err := n.DialTCP(address, time.Duration(10*time.Second))
+	c, err := n.DialTCP(address, time.Duration(10*time.Second), time.Duration(48* time.Hour))
 	assert.Nil(t, err, "failed to connect to tcp server")
 
 	log.Info("Sending message...")

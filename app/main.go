@@ -8,6 +8,7 @@ import (
 	apiconf "github.com/UnrulyOS/go-unruly/api/config"
 	"github.com/UnrulyOS/go-unruly/filesystem"
 	"github.com/UnrulyOS/go-unruly/log"
+	"github.com/UnrulyOS/go-unruly/p2p/nodeconfig"
 	"github.com/UnrulyOS/go-unruly/p2p"
 	"gopkg.in/urfave/cli.v1"
 	"os"
@@ -35,13 +36,17 @@ var (
 	appFlags = []cli.Flag{
 		config.LoadConfigFileFlag,
 		config.DataFolderPathFlag,
-		// add all app flags here ...
+
+		// add all additional app flags here ...
 	}
 	nodeFlags = []cli.Flag{
 		nodeparams.KSecurityFlag,
 		nodeparams.LocalTcpPortFlag,
 		nodeparams.NodeIdFlag,
-		// add all node flags here ...
+		nodeparams.NetworkDialTimeout,
+		nodeparams.NetworkConnKeepAlive,
+
+		// add all additional node flags here ...
 	}
 	apiFlags = []cli.Flag{
 		apiconf.StartGrpcApiServerFlag,
@@ -178,7 +183,8 @@ func (app *UnrulyApp) startUnrulyNode(ctx *cli.Context) error {
 	port := *nodeparams.LocalTcpPortFlag.Destination
 	address := fmt.Sprintf("localhost:%d", port)
 
-	node, err := p2p.NewLocalNode(address)
+	// start a new node passing config file from the app-wide nodeconfig values
+	node, err := p2p.NewLocalNode(address, nodeconfig.ConfigValues)
 	if err != nil {
 		return err
 	}

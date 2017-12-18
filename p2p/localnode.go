@@ -5,7 +5,7 @@ import (
 	"github.com/UnrulyOS/go-unruly/log"
 	"github.com/UnrulyOS/go-unruly/p2p/nodeconfig"
 	"github.com/UnrulyOS/go-unruly/p2p/pb"
-	"github.com/golang/protobuf/proto"
+	"github.com/gogo/protobuf/proto"
 )
 
 // The local unruly node is the root of all evil
@@ -28,17 +28,17 @@ type LocalNode interface {
 	SendMessage(req SendMessageReq)
 
 	Shutdown()
+
+	Config() nodeconfig.Config
 }
 
 // Create a local node with a provided ip address
-func NewLocalNode(tcpAddress string) (LocalNode, error) {
-
-	// todo: fix this
+func NewLocalNode(tcpAddress string, config nodeconfig.Config) (LocalNode, error) {
 
 	if len(nodeconfig.ConfigValues.NodeId) > 0 {
 		// user provided node id/pubkey via cli - attempt to start that node w persisted data
 		data := readNodeData(nodeconfig.ConfigValues.NodeId)
-		return newNodeFromData(tcpAddress, data)
+		return newNodeFromData(tcpAddress, data, config)
 	}
 
 	// look for persisted node data in the nodes directory
@@ -46,24 +46,25 @@ func NewLocalNode(tcpAddress string) (LocalNode, error) {
 	nodeData := readFirstNodeData()
 	if nodeData != nil {
 		// crete node using persisted node data
-		return newNodeFromData(tcpAddress, nodeData)
+		return newNodeFromData(tcpAddress, nodeData, config)
 	}
 
 	// generate new node
-	return newNodeIdentity(tcpAddress)
+	return newNodeIdentity(tcpAddress, config)
 }
 
-func newNodeIdentity(tcpAddress string) (LocalNode, error) {
+func newNodeIdentity(tcpAddress string, config nodeconfig.Config) (LocalNode, error) {
 	priv, pub, _ := crypto.GenerateKeyPair()
-	return NewLocalNodeWithKeys(pub, priv, tcpAddress)
+	return NewLocalNodeWithKeys(pub, priv, tcpAddress, config)
 }
 
-func NewLocalNodeWithKeys(pubKey crypto.PublicKey, privKey crypto.PrivateKey, tcpAddress string) (LocalNode, error) {
+func NewLocalNodeWithKeys(pubKey crypto.PublicKey, privKey crypto.PrivateKey, tcpAddress string, config nodeconfig.Config) (LocalNode, error) {
 
 	n := &localNodeImp{
 		pubKey:     pubKey,
 		privKey:    privKey,
 		tcpAddress: tcpAddress,
+		config: config,
 	}
 
 	// swarm owned by node
@@ -72,6 +73,7 @@ func NewLocalNodeWithKeys(pubKey crypto.PublicKey, privKey crypto.PrivateKey, tc
 		log.Error("can't create a local node without a swarm. %v", err)
 		return nil, err
 	}
+
 
 	n.swarm = s
 	n.ping = NewPingProtocol(s)
@@ -87,7 +89,7 @@ func NewLocalNodeWithKeys(pubKey crypto.PublicKey, privKey crypto.PrivateKey, tc
 	return n, nil
 }
 
-func newNodeFromData(tcpAddress string, d *NodeData) (LocalNode, error) {
+func newNodeFromData(tcpAddress string, d *NodeData, config nodeconfig.Config) (LocalNode, error) {
 	priv := crypto.NewPrivateKeyFromString(d.PrivKey)
 	pub, err := crypto.NewPublicKeyFromString(d.PubKey)
 	if err != nil {
@@ -95,5 +97,5 @@ func newNodeFromData(tcpAddress string, d *NodeData) (LocalNode, error) {
 		return nil, err
 	}
 
-	return NewLocalNodeWithKeys(pub, priv, tcpAddress)
+	return NewLocalNodeWithKeys(pub, priv, tcpAddress, config)
 }

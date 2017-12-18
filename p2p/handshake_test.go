@@ -8,7 +8,7 @@ import (
 	"github.com/UnrulyOS/go-unruly/crypto"
 	"github.com/UnrulyOS/go-unruly/log"
 	"github.com/UnrulyOS/go-unruly/p2p/pb"
-	"github.com/golang/protobuf/proto"
+	"github.com/gogo/protobuf/proto"
 	"testing"
 )
 

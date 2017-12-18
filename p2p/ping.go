@@ -4,7 +4,7 @@ import (
 	"encoding/hex"
 	"github.com/UnrulyOS/go-unruly/log"
 	"github.com/UnrulyOS/go-unruly/p2p/pb"
-	"github.com/golang/protobuf/proto"
+	"github.com/gogo/protobuf/proto"
 )
 
 const pingReq = "/ping/1.0/ping-req/"

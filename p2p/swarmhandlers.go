@@ -6,8 +6,7 @@ import (
 	"github.com/UnrulyOS/go-unruly/log"
 	"github.com/UnrulyOS/go-unruly/p2p/net"
 	"github.com/UnrulyOS/go-unruly/p2p/pb"
-	"github.com/golang/protobuf/proto"
-	"time"
+	"github.com/gogo/protobuf/proto"
 )
 
 // This file contain swarm internal handlers
@@ -55,7 +54,7 @@ func (s *swarmImpl) onConnectionRequest(req RemoteNodeData) {
 	}
 
 	if conn == nil {
-		conn, err = s.network.DialTCP(req.Ip, time.Duration(10*time.Second))
+		conn, err = s.network.DialTCP(req.Ip, s.localNode.Config().DialTimeout, s.localNode.Config().ConnKeepAlive)
 		if err != nil {
 			// log it here
 			log.Error("failed to connect to remote node on advertised ip %s", req.Ip)
@@ -142,6 +141,9 @@ func (s *swarmImpl) onSendMessageRequest(r SendMessageReq) {
 	conn := remoteNode.GetActiveConnection()
 
 	if session == nil || conn == nil {
+
+		log.Warning("queing protocol request until session is established...")
+
 		// save the message for later sending and try to connect to the node
 		s.messagesPendingSession[hex.EncodeToString(r.ReqId)] = r
 
@@ -168,6 +170,8 @@ func (s *swarmImpl) onSendMessageRequest(r SendMessageReq) {
 	}
 
 	// finally - send it away!
+	log.Info("Sending protocol message down the connection...")
+
 	conn.Send(data)
 }
 
