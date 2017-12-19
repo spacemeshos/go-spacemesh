@@ -3,6 +3,7 @@ package p2p
 import (
 	"github.com/UnrulyOS/go-unruly/crypto"
 	"github.com/UnrulyOS/go-unruly/log"
+	"github.com/UnrulyOS/go-unruly/p2p/dht"
 	"github.com/UnrulyOS/go-unruly/p2p/nodeconfig"
 	"github.com/UnrulyOS/go-unruly/p2p/pb"
 	"github.com/gogo/protobuf/proto"
@@ -30,6 +31,8 @@ type LocalNode interface {
 	Shutdown()
 
 	Config() nodeconfig.Config
+
+	DhtId() dht.ID
 }
 
 // Create a local node with a provided ip address
@@ -65,6 +68,7 @@ func NewLocalNodeWithKeys(pubKey crypto.PublicKey, privKey crypto.PrivateKey, tc
 		privKey:    privKey,
 		tcpAddress: tcpAddress,
 		config:     config, // store this node passed-in config values and use them later
+		dhtId:      dht.NewIdFromNodeKey(pubKey.Bytes()),
 	}
 
 	// swarm owned by node

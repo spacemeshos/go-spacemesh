@@ -1,4 +1,4 @@
-package kbucket
+package table
 
 import (
 	"container/list"

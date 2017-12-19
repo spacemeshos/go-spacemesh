@@ -3,6 +3,7 @@ package p2p
 import (
 	"encoding/hex"
 	"github.com/UnrulyOS/go-unruly/crypto"
+	"github.com/UnrulyOS/go-unruly/p2p/dht"
 	"github.com/UnrulyOS/go-unruly/p2p/nodeconfig"
 	"github.com/UnrulyOS/go-unruly/p2p/pb"
 	"github.com/gogo/protobuf/proto"
@@ -22,6 +23,8 @@ type localNodeImp struct {
 
 	// add all other protocols here
 	ping Ping
+
+	dhtId dht.ID
 }
 
 // Create meta-data for an outgoing protocol message authored by this node
@@ -38,6 +41,10 @@ func (n *localNodeImp) NewProtocolMessageMetadata(protocol string, reqId []byte,
 
 func (n *localNodeImp) SendMessage(req SendMessageReq) {
 	n.swarm.SendMessage(req)
+}
+
+func (n *localNodeImp) DhtId() dht.ID {
+	return n.dhtId
 }
 
 func (n *localNodeImp) Config() nodeconfig.Config {

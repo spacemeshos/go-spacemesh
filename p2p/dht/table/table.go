@@ -1,4 +1,4 @@
-package kbucket
+package table
 
 import (
 	"fmt"
@@ -15,6 +15,7 @@ type RoutingTable interface {
 
 	// table ops
 	Update(p p2p.RemoteNodeData)       // adds a peer to the table
+	Remove(p p2p.RemoteNodeData)       // remove a peer from the table
 	Find(req PeerByIdRequest)          // find a peer by dht.ID
 	NearestPeer(req PeerByIdRequest)   // nearest peer to a dht.ID
 	NearestPeers(req NearestPeersReq)  // ip to n nearest peers to a dht.ID
@@ -69,6 +70,7 @@ type routingTableImpl struct {
 	sizeReqs         chan chan int
 
 	updateReqs chan p2p.RemoteNodeData
+	removeReqs chan p2p.RemoteNodeData
 
 	// latency metrics
 	//metrics pstore.Metrics
@@ -95,6 +97,7 @@ type routingTableImpl struct {
 // NewRoutingTable creates a new routing table with a given bucketsize, local ID, and latency tolerance.
 func NewRoutingTable(bucketsize int, localID dht.ID) RoutingTable {
 	rt := &routingTableImpl{
+
 		Buckets:     []Bucket{newBucket()},
 		bucketsize:  bucketsize,
 		local:       localID,
@@ -108,6 +111,7 @@ func NewRoutingTable(bucketsize int, localID dht.ID) RoutingTable {
 		sizeReqs:         make(chan chan int, 3),
 
 		updateReqs: make(chan p2p.RemoteNodeData, 3),
+		removeReqs: make(chan p2p.RemoteNodeData, 3),
 
 		registerPeerAddedReq:     make(ChannelOfPeerChannel, 3),
 		registerPeerRemovedReq:   make(ChannelOfPeerChannel, 3),
@@ -169,12 +173,22 @@ func (rt *routingTableImpl) Update(peer p2p.RemoteNodeData) {
 	rt.updateReqs <- peer
 }
 
+func (rt *routingTableImpl) Remove(peer p2p.RemoteNodeData) {
+	rt.removeReqs <- peer
+}
+
+//// below - non-ts private impl details (should only be called by processEvents() and not directly
+
+// main event processing loop
 func (rt *routingTableImpl) processEvents() {
 	for {
 		select {
 
 		case p := <-rt.updateReqs:
 			rt.update(p)
+
+		case p := <-rt.removeReqs:
+			rt.remove(p)
 
 		case r := <-rt.sizeReqs:
 			var tot int
@@ -197,8 +211,9 @@ func (rt *routingTableImpl) processEvents() {
 			peers := rt.nearestPeers(r.id, 1)
 			if len(peers) > 0 {
 				r.callback <- &PeerOpResult{peers[0]}
+			} else {
+				r.callback <- &PeerOpResult{}
 			}
-			r.callback <- &PeerOpResult{}
 
 		case r := <-rt.findReqs:
 			peers := rt.nearestPeers(r.id, 1)
@@ -209,36 +224,35 @@ func (rt *routingTableImpl) processEvents() {
 
 		case p := <-rt.peerAdded:
 			for _, c := range rt.peerAddedCallbacks {
-				func() { c <- p }()
+				go func() { c <- p }()
 			}
 
 		case p := <-rt.peerRemoved:
 			for _, c := range rt.peerRemovedCallbacks {
-				func() { c <- p }()
+				go func() { c <- p }()
 			}
 
 		case c := <-rt.registerPeerAddedReq:
-			key := pointerToString(c)
+			key := getMemoryAddress(c)
 			rt.peerAddedCallbacks[key] = c
 
 		case c := <-rt.registerPeerRemovedReq:
-			key := pointerToString(c)
+			key := getMemoryAddress(c)
 			rt.peerRemovedCallbacks[key] = c
 
 		case c := <-rt.unregisterPeerAddedReq:
-			key := pointerToString(c)
+			key := getMemoryAddress(c)
 			delete(rt.peerAddedCallbacks, key)
 
 		case c := <-rt.unregisterPeerRemovedReq:
-			key := pointerToString(c)
+			key := getMemoryAddress(c)
 			delete(rt.peerRemovedCallbacks, key)
 		}
 	}
 }
 
-//// non-ts private impl details below (should only be called by processEvents() and not directly
-
-func pointerToString(p interface{}) string {
+// String representation of a pointer
+func getMemoryAddress(p interface{}) string {
 	return fmt.Sprintf("%p", p)
 }
 
@@ -269,18 +283,23 @@ func (rt *routingTableImpl) update(p p2p.RemoteNodeData) {
 
 	// New peer, add to bucket
 	bucket.PushFront(p)
-	rt.peerAdded <- p
+
+	// must do this as go so we don't block
+	go func() { rt.peerAdded <- p }()
 
 	// Are we past the max bucket size?
 	if bucket.Len() > rt.bucketsize {
 		// If this bucket is the rightmost bucket, and its full
 		// we need to split it and create a new bucket
 		if bucketID == len(rt.Buckets)-1 {
-			rt.peerRemoved <- rt.nextBucket()
+			removed := rt.nextBucket()
+			go func() { rt.peerRemoved <- removed }()
 			return
 		} else {
 			// If the bucket cant split kick out least active node
-			rt.peerRemoved <- bucket.PopBack()
+
+			last := bucket.PopBack()
+			go func() { rt.peerRemoved <- last }()
 			return
 		}
 	}
@@ -300,7 +319,7 @@ func (rt *routingTableImpl) remove(p p2p.RemoteNodeData) {
 	bucket := rt.Buckets[bucketID]
 	bucket.Remove(p)
 
-	rt.peerRemoved <- p
+	go func() { rt.peerRemoved <- p }()
 }
 
 func (rt *routingTableImpl) nextBucket() p2p.RemoteNodeData {
