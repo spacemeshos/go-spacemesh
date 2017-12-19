@@ -1,7 +1,6 @@
 package table
 
 import (
-	"encoding/hex"
 	"github.com/UnrulyOS/go-unruly/p2p"
 	"math/rand"
 	"testing"
@@ -152,16 +151,15 @@ func TestTableFind(t *testing.T) {
 
 	nodes := p2p.GenerateRandomNodesData(t, n)
 
-	for i := 0; i < n; i++ {
+	for i := 0; i < 5; i++ {
 		rt.Update(nodes[i])
 	}
 
-	for i := 0; i < n; i++ {
+	for i := 0; i < 5; i++ {
 
 		node := nodes[i]
 
-
-		t.Logf("Searching for peer: %s...", hex.EncodeToString(node.DhtId()))
+		//t.Logf("Searching for peer: %s...", hex.EncodeToString(node.DhtId()))
 
 		callback := make(PeerOpChannel, 2)
 		rt.NearestPeer(PeerByIdRequest{node.DhtId(), callback})

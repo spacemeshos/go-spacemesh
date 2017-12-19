@@ -6,9 +6,9 @@ import (
 	"github.com/UnrulyOS/go-unruly/p2p/dht"
 )
 
-// Buket is a dht kbucket type
-// This type is NOT thread safe. It is desinged as an internal data structure
-// for RoutingTable. RoutingTable is responsible for thread safety
+// Bucket is a dht kbucket type
+// Bucket NOT thread safe.
+// RoutingTable (or other clients) are responsible for serializing access to a Bucket
 
 type Bucket interface {
 	Peers() []p2p.RemoteNodeData
@@ -17,7 +17,6 @@ type Bucket interface {
 	MoveToFront(node p2p.RemoteNodeData)
 	PushFront(n p2p.RemoteNodeData)
 	PushBack(n p2p.RemoteNodeData)
-
 	PopBack() p2p.RemoteNodeData
 	Len() int
 	Split(cpl int, target dht.ID) Bucket
@@ -95,19 +94,22 @@ func (b *bucketimpl) Len() int {
 // greater than cpl (returned bucket has closer peers)
 
 func (b *bucketimpl) Split(cpl int, target dht.ID) Bucket {
-	newbuck := newBucket()
+
+	newbucket := newBucket()
+
 	e := b.list.Front()
+
 	for e != nil {
-		node := (e.Value.(p2p.RemoteNodeData))
+		node := e.Value.(p2p.RemoteNodeData)
 		peerCPL := node.DhtId().CommonPrefixLen(target)
 		if peerCPL > cpl {
-			cur := e
-			newbuck.PushBack(node)
+			newbucket.PushBack(node)
+			curr := e
 			e = e.Next()
-			b.Remove(cur.Value.(p2p.RemoteNodeData))
-			continue
+			b.list.Remove(curr)
+		} else {
+			e = e.Next()
 		}
-		e = e.Next()
 	}
-	return newbuck
+	return newbucket
 }

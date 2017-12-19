@@ -59,7 +59,7 @@ type NearestPeersReq struct { // NearestPeer method req params
 // RoutingTable defines the routing table.
 type routingTableImpl struct {
 
-	// ID of the local peer
+	// local peer ID
 	local dht.ID
 
 	// ops impls
@@ -79,7 +79,7 @@ type routingTableImpl struct {
 	//maxLatency time.Duration
 
 	// kBuckets define all the fingers to other nodes.
-	Buckets    []Bucket
+	buckets    []Bucket
 	bucketsize int
 
 	peerRemoved PeerChannel
@@ -98,7 +98,7 @@ type routingTableImpl struct {
 func NewRoutingTable(bucketsize int, localID dht.ID) RoutingTable {
 	rt := &routingTableImpl{
 
-		Buckets:     []Bucket{newBucket()},
+		buckets:     []Bucket{newBucket()},
 		bucketsize:  bucketsize,
 		local:       localID,
 		peerRemoved: make(PeerChannel, 3),
@@ -191,36 +191,39 @@ func (rt *routingTableImpl) processEvents() {
 			rt.remove(p)
 
 		case r := <-rt.sizeReqs:
-			var tot int
-			for _, buck := range rt.Buckets {
+			tot := 0
+			for _, buck := range rt.buckets {
 				tot += buck.Len()
 			}
-			r <- tot
+			go func(){r <- tot}()
+
 		case r := <-rt.listPeersReqs:
 			var peers []p2p.RemoteNodeData
-			for _, buck := range rt.Buckets {
+			for _, buck := range rt.buckets {
 				peers = append(peers, buck.Peers()...)
 			}
-			r <- &PeersOpResult{peers: peers}
+
+			go func() { r <- &PeersOpResult{peers: peers} }()
 
 		case r := <-rt.nearestPeersReqs:
 			peers := rt.nearestPeers(r.id, r.count)
-			r.callback <- &PeersOpResult{peers: peers}
+			go func() { r.callback <- &PeersOpResult{peers: peers} }()
 
 		case r := <-rt.nearestPeerReqs:
 			peers := rt.nearestPeers(r.id, 1)
 			if len(peers) > 0 {
-				r.callback <- &PeerOpResult{peers[0]}
+				go func() { r.callback <- &PeerOpResult{peers[0]} }()
 			} else {
-				r.callback <- &PeerOpResult{}
+				go func() { r.callback <- &PeerOpResult{} }()
 			}
 
 		case r := <-rt.findReqs:
 			peers := rt.nearestPeers(r.id, 1)
 			if len(peers) == 0 || !peers[0].DhtId().Equals(r.id) {
-				r.callback <- &PeerOpResult{}
+				go func() { r.callback <- &PeerOpResult{} }()
+			} else {
+				go func() { r.callback <- &PeerOpResult{peers[0]} }()
 			}
-			r.callback <- &PeerOpResult{peers[0]}
 
 		case p := <-rt.peerAdded:
 			for _, c := range rt.peerAddedCallbacks {
@@ -261,12 +264,12 @@ func (rt *routingTableImpl) update(p p2p.RemoteNodeData) {
 
 	cpl := p.DhtId().CommonPrefixLen(rt.local)
 
-	bucketID := cpl
-	if bucketID >= len(rt.Buckets) {
-		bucketID = len(rt.Buckets) - 1
+	bucketId := cpl
+	if bucketId >= len(rt.buckets) {
+		bucketId = len(rt.buckets) - 1
 	}
 
-	bucket := rt.Buckets[bucketID]
+	bucket := rt.buckets[bucketId]
 	if bucket.Has(p) {
 		// If the peer is already in the table, move it to the front.
 		// This signifies that it it "more active" and the less active nodes
@@ -291,7 +294,7 @@ func (rt *routingTableImpl) update(p p2p.RemoteNodeData) {
 	if bucket.Len() > rt.bucketsize {
 		// If this bucket is the rightmost bucket, and its full
 		// we need to split it and create a new bucket
-		if bucketID == len(rt.Buckets)-1 {
+		if bucketId == len(rt.buckets)-1 {
 			removed := rt.nextBucket()
 			go func() { rt.peerRemoved <- removed }()
 			return
@@ -312,20 +315,24 @@ func (rt *routingTableImpl) remove(p p2p.RemoteNodeData) {
 	cpl := p.DhtId().CommonPrefixLen(rt.local)
 
 	bucketID := cpl
-	if bucketID >= len(rt.Buckets) {
-		bucketID = len(rt.Buckets) - 1
+	if bucketID >= len(rt.buckets) {
+		bucketID = len(rt.buckets) - 1
 	}
 
-	bucket := rt.Buckets[bucketID]
+	bucket := rt.buckets[bucketID]
 	bucket.Remove(p)
 
 	go func() { rt.peerRemoved <- p }()
 }
 
 func (rt *routingTableImpl) nextBucket() p2p.RemoteNodeData {
-	bucket := rt.Buckets[len(rt.Buckets)-1]
-	newBucket := bucket.Split(len(rt.Buckets)-1, rt.local)
-	rt.Buckets = append(rt.Buckets, newBucket)
+
+	bucket := rt.buckets[len(rt.buckets)-1]
+
+	newBucket := bucket.Split(len(rt.buckets)-1, rt.local)
+
+	rt.buckets = append(rt.buckets, newBucket)
+
 	if newBucket.Len() > rt.bucketsize {
 		return rt.nextBucket()
 	}
@@ -343,11 +350,11 @@ func (rt *routingTableImpl) nearestPeers(id dht.ID, count int) []p2p.RemoteNodeD
 	cpl := id.CommonPrefixLen(rt.local)
 
 	// Get bucket at cpl index or last bucket
-	if cpl >= len(rt.Buckets) {
-		cpl = len(rt.Buckets) - 1
+	if cpl >= len(rt.buckets) {
+		cpl = len(rt.buckets) - 1
 	}
 
-	bucket := rt.Buckets[cpl]
+	bucket := rt.buckets[cpl]
 
 	var peerArr peerSorterArr
 	peerArr = copyPeersFromList(id, peerArr, bucket.List())
@@ -355,12 +362,12 @@ func (rt *routingTableImpl) nearestPeers(id dht.ID, count int) []p2p.RemoteNodeD
 		// In the case of an unusual split, one bucket may be short or empty.
 		// if this happens, search both surrounding buckets for nearby peers
 		if cpl > 0 {
-			plist := rt.Buckets[cpl-1].List()
+			plist := rt.buckets[cpl-1].List()
 			peerArr = copyPeersFromList(id, peerArr, plist)
 		}
 
-		if cpl < len(rt.Buckets)-1 {
-			plist := rt.Buckets[cpl+1].List()
+		if cpl < len(rt.buckets)-1 {
+			plist := rt.buckets[cpl+1].List()
 			peerArr = copyPeersFromList(id, peerArr, plist)
 		}
 	}
