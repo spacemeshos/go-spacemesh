@@ -1,7 +1,7 @@
 package kbucket
 
 import (
-	//"container/list"
+	"container/list"
 	"github.com/UnrulyOS/go-unruly/p2p"
 	"github.com/UnrulyOS/go-unruly/p2p/dht"
 	"sort"
@@ -22,19 +22,17 @@ func (p peerSorterArr) Less(a, b int) bool {
 	return p[a].distance.Less(p[b].distance)
 }
 
-/*
-func copyPeersFromList(target ID, peerArr peerSorterArr, peerList *list.List) peerSorterArr {
+func copyPeersFromList(target dht.ID, peerArr peerSorterArr, peerList *list.List) peerSorterArr {
 	for e := peerList.Front(); e != nil; e = e.Next() {
-		p := e.Value.(peer.ID)
-		pID := ConvertPeerID(p)
+		p := e.Value.(p2p.RemoteNodeData)
 		pd := peerDistance{
-			p:        p,
-			distance: xor(target, pID),
+			node:     p,
+			distance: p.DhtId().Xor(target),
 		}
 		peerArr = append(peerArr, &pd)
 	}
 	return peerArr
-}*/
+}
 
 func SortClosestPeers(peers []p2p.RemoteNodeData, target dht.ID) []p2p.RemoteNodeData {
 	var psarr peerSorterArr

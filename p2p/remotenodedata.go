@@ -19,10 +19,10 @@ type RemoteNodeData interface {
 
 // Outside of swarm - types only know about this and not about RemoteNode
 type remoteNodeDataImpl struct {
-	id     string // node Id is a base58 encoded bits of the node public key
-	ip     string // node tcp address. e.g. 127.0.0.1:3030
-	bytes  []byte // bytes
-	dhtId 	dht.ID
+	id    string // node Id is a base58 encoded bits of the node public key
+	ip    string // node tcp address. e.g. 127.0.0.1:3030
+	bytes []byte // bytes
+	dhtId dht.ID
 }
 
 func NewRemoteNodeData(id string, ip string) RemoteNodeData {

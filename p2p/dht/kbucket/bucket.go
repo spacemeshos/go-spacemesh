@@ -3,22 +3,37 @@ package kbucket
 import (
 	"container/list"
 	"github.com/UnrulyOS/go-unruly/p2p"
+	"github.com/UnrulyOS/go-unruly/p2p/dht"
 	"sync"
 )
 
-// Bucket holds a list of peers.
-type Bucket struct {
+// A dht kbucket
+type Bucket interface {
+	Peers() []p2p.RemoteNodeData
+	Has(node p2p.RemoteNodeData) bool
+	Remove(node p2p.RemoteNodeData)
+	MoveToFront(node p2p.RemoteNodeData)
+	PushFront(n p2p.RemoteNodeData)
+	PushBack(n p2p.RemoteNodeData)
+
+	PopBack() p2p.RemoteNodeData
+	Len() int
+	Split(cpl int, target dht.ID) Bucket
+	List() *list.List
+}
+
+type bucketimpl struct {
 	lk   sync.RWMutex
 	list *list.List
 }
 
-func newBucket() *Bucket {
-	b := new(Bucket)
-	b.list = list.New()
-	return b
+func newBucket() Bucket {
+	return &bucketimpl{
+		list: list.New(),
+	}
 }
 
-func (b *Bucket) Peers() []p2p.RemoteNodeData {
+func (b *bucketimpl) Peers() []p2p.RemoteNodeData {
 	b.lk.RLock()
 	defer b.lk.RUnlock()
 	ps := make([]p2p.RemoteNodeData, 0, b.list.Len())
@@ -29,7 +44,11 @@ func (b *Bucket) Peers() []p2p.RemoteNodeData {
 	return ps
 }
 
-func (b *Bucket) Has(node p2p.RemoteNodeData) bool {
+func (b *bucketimpl) List() *list.List {
+	return b.list
+}
+
+func (b *bucketimpl) Has(node p2p.RemoteNodeData) bool {
 	b.lk.RLock()
 	defer b.lk.RUnlock()
 	for e := b.list.Front(); e != nil; e = e.Next() {
@@ -40,7 +59,7 @@ func (b *Bucket) Has(node p2p.RemoteNodeData) bool {
 	return false
 }
 
-func (b *Bucket) Remove(node p2p.RemoteNodeData) {
+func (b *bucketimpl) Remove(node p2p.RemoteNodeData) {
 	b.lk.Lock()
 	defer b.lk.Unlock()
 	for e := b.list.Front(); e != nil; e = e.Next() {
@@ -50,7 +69,7 @@ func (b *Bucket) Remove(node p2p.RemoteNodeData) {
 	}
 }
 
-func (b *Bucket) MoveToFront(node p2p.RemoteNodeData) {
+func (b *bucketimpl) MoveToFront(node p2p.RemoteNodeData) {
 	b.lk.Lock()
 	defer b.lk.Unlock()
 	for e := b.list.Front(); e != nil; e = e.Next() {
@@ -60,13 +79,19 @@ func (b *Bucket) MoveToFront(node p2p.RemoteNodeData) {
 	}
 }
 
-func (b *Bucket) PushFront(n p2p.RemoteNodeData) {
+func (b *bucketimpl) PushFront(n p2p.RemoteNodeData) {
 	b.lk.Lock()
 	b.list.PushFront(n)
 	b.lk.Unlock()
 }
 
-func (b *Bucket) PopBack() p2p.RemoteNodeData {
+func (b *bucketimpl) PushBack(n p2p.RemoteNodeData) {
+	b.lk.Lock()
+	b.list.PushBack(n)
+	b.lk.Unlock()
+}
+
+func (b *bucketimpl) PopBack() p2p.RemoteNodeData {
 	b.lk.Lock()
 	defer b.lk.Unlock()
 	last := b.list.Back()
@@ -74,7 +99,7 @@ func (b *Bucket) PopBack() p2p.RemoteNodeData {
 	return last.Value.(p2p.RemoteNodeData)
 }
 
-func (b *Bucket) Len() int {
+func (b *bucketimpl) Len() int {
 	b.lk.RLock()
 	defer b.lk.RUnlock()
 	return b.list.Len()
@@ -83,27 +108,24 @@ func (b *Bucket) Len() int {
 // Split splits a buckets peers into two buckets, the methods receiver will have
 // peers with CPL equal to cpl, the returned bucket will have peers with CPL
 // greater than cpl (returned bucket has closer peers)
-/*
-func (b *Bucket) Split(cpl int, target p2p.RemoteNodeData) *Bucket {
+
+func (b *bucketimpl) Split(cpl int, target dht.ID) Bucket {
 	b.lk.Lock()
 	defer b.lk.Unlock()
 
-	out := list.New()
 	newbuck := newBucket()
-	newbuck.list = out
 	e := b.list.Front()
 	for e != nil {
 		node := (e.Value.(p2p.RemoteNodeData))
-		peerCPL := node.CommonPrefixLength(target)
+		peerCPL := node.DhtId().CommonPrefixLen(target)
 		if peerCPL > cpl {
 			cur := e
-			out.PushBack(e.Value)
+			newbuck.PushBack(node)
 			e = e.Next()
-			b.list.Remove(cur)
+			b.Remove(cur.Value.(p2p.RemoteNodeData))
 			continue
 		}
 		e = e.Next()
 	}
 	return newbuck
 }
-*/
