@@ -26,13 +26,13 @@ type remoteNodeDataImpl struct {
 	dhtId dht.ID
 }
 
-// Return serializable (pb) node infos slice
+// Return serializable (pb) node infos slice from a slice of RemoteNodeData
 func ToNodeInfo(nodes []RemoteNodeData) []*pb.NodeInfo {
 	// init empty slice
 	res := []*pb.NodeInfo{}
 	for _, n := range nodes {
 		res = append(res, &pb.NodeInfo{
-			NodeId: n.Bytes(),
+			NodeId:     n.Bytes(),
 			TcpAddress: n.Ip(),
 		})
 	}

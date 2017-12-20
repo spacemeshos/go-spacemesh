@@ -22,14 +22,12 @@ func minInt(x, y int) int {
 	return y
 }
 
-
 func minInt64(x, y int64) int64 {
 	if x < y {
 		return x
 	}
 	return y
 }
-
 
 func GenerateTestNode(t *testing.T) (LocalNode, Peer) {
 

@@ -58,6 +58,7 @@ func NewFindNodeProtocol(s Swarm) FindNodeProtocol {
 
 // todo: should be a kad param and configurable
 const maxNearestNodesResults = 20
+const tableQueryTimeout = time.Duration(time.Minute * 1)
 
 // Send a single find node request to a remote node
 // remoteNodeId - base58 encoded
@@ -92,8 +93,6 @@ func (p *findNodeProtocolImpl) Register(callback chan *pb.FindNodeResp) {
 // Handles a find node request from a remote node
 // Process the request and send back the response to the remote node
 func (p *findNodeProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
-
-	// process request
 	req := &pb.FindNodeReq{}
 	err := proto.Unmarshal(msg.Payload(), req)
 	if err != nil {
@@ -116,11 +115,11 @@ func (p *findNodeProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 
 	var results []*pb.NodeInfo
 
-	select { // block until we got results from the table or timeout
+	select { // block until we got results from the  routing table or timeout
 	case c := <-callback:
 		log.Info("Results length: %d", len(c.Peers))
 		results = node.ToNodeInfo(c.Peers)
-	case <-time.After(time.Minute):
+	case <-time.After(tableQueryTimeout):
 		results = []*pb.NodeInfo{} // empty slice
 	}
 
@@ -165,7 +164,8 @@ func (p *findNodeProtocolImpl) handleIncomingResponse(msg IncomingMessage) {
 		return
 	}
 
-	log.Info("Got find-node response from %s. Results: %d, Find-node req id: %", msg.Sender().Pretty(), resp.NodeInfos, resp.Metadata.ReqId)
+	log.Info("Got find-node response from %s. Results: %d, Find-node req id: %", msg.Sender().Pretty(),
+		resp.NodeInfos, resp.Metadata.ReqId)
 
 	for _, n := range resp.NodeInfos {
 		log.Info("Node response: %s, %s", base58.Encode(n.NodeId), n.TcpAddress)
