@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package pb;
+option go_package = "pb";
+
+import "message.proto";
+
+// example protocol
+message FindNodeReq {
+    Metadata metadata = 1;
+    string ping = 2; // the echo message itself - protocol specific - starts at #2
+}
+
+message FindNodeResp {
+    Metadata metadata = 1;
+    string pong = 2; // the echo message itself - protocol specific - starts at #2
+}
