@@ -14,8 +14,7 @@ type Swarm interface {
 	// id - base58 encoded node id
 	FindNode(id string, callback chan node.RemoteNodeData)
 
-	// Register a node with the swarm based on id and ip address - bootstrap nodes should be registered using
-	// this method
+	// Register a node with the swarm based on its id and ip address but don't attempt to connect to it
 	RegisterNode(data node.RemoteNodeData)
 
 	// Attempt to establish a session with a remote node with a known ip address - useful for bootstrapping
@@ -44,6 +43,8 @@ type Swarm interface {
 	getHandshakeProtocol() HandshakeProtocol
 
 	getRoutingTable() table.RoutingTable
+
+	getFindNodeProtocol() FindNodeProtocol
 }
 
 type SendMessageReq struct {

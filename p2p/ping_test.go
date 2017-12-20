@@ -44,6 +44,8 @@ Loop:
 				t0 = time.Now()
 				go node1Local.GetPing().Send("hello unruly", ping1ReqId, node2Remote.String())
 			}
+		case <-time.After(time.Second * 30):
+			t.Fatalf("Expected callback")
 		}
 	}
 }

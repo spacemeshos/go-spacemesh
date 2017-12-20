@@ -94,6 +94,10 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 	return s, err
 }
 
+func (s *swarmImpl) getFindNodeProtocol() FindNodeProtocol {
+	return s.findNodeProtocol
+}
+
 func (s *swarmImpl) getHandshakeProtocol() HandshakeProtocol {
 	return s.handshakeProtocol
 }
@@ -124,13 +128,20 @@ func (s *swarmImpl) GetLocalNode() LocalNode {
 }
 
 // Find a node based on its id
+// id: base58 encoded node id
 func (s *swarmImpl) FindNode(id string, callback chan node.RemoteNodeData) {
 	// todo: implement me
+
+	// todo: check if in routing table and return
+
+	// todo: if not in routing table - use dht to find it using the kad algo
 }
 
 // Connect up to count random nodes
 func (s *swarmImpl) ConnectToRandomNodes(count int, callback chan node.RemoteNodeData) {
 	// todo: implement me
+
+	// todo: used the routing table to find count near nodes to local node and attempt to connect with them
 }
 
 // Send a message to a remote node

@@ -21,7 +21,9 @@ type FindNodeProtocol interface {
 
 	// send a find_node request to a remoteNode
 	// reqId: allows the client to match responses with requests by id
-	FindNode(msg string, reqId []byte, remoteNodeId string) error
+	// sendToNodeId - node to send find request to
+	// findNodeIdd - node id to find
+	FindNode(reqId []byte, sendToNodeId string, findNodeId string) error
 
 	// App logic registers her for typed incoming find-node responses
 	Register(callback chan *pb.FindNodeResp)
@@ -62,9 +64,9 @@ const tableQueryTimeout = time.Duration(time.Minute * 1)
 
 // Send a single find node request to a remote node
 // remoteNodeId - base58 encoded
-func (p *findNodeProtocolImpl) FindNode(msg string, reqId []byte, remoteNodeId string) error {
+func (p *findNodeProtocolImpl) FindNode(reqId []byte, sendToNodeId string, findNodeId string) error {
 
-	nodeId := base58.Decode(remoteNodeId)
+	nodeId := base58.Decode(findNodeId)
 	metadata := p.swarm.GetLocalNode().NewProtocolMessageMetadata(findNodeReq, reqId, false)
 	data := &pb.FindNodeReq{metadata, nodeId, maxNearestNodesResults}
 
@@ -79,7 +81,7 @@ func (p *findNodeProtocolImpl) FindNode(msg string, reqId []byte, remoteNodeId s
 	}
 
 	// send the message
-	req := SendMessageReq{remoteNodeId, reqId, payload}
+	req := SendMessageReq{sendToNodeId, reqId, payload}
 	p.swarm.SendMessage(req)
 
 	return nil

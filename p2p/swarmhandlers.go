@@ -11,20 +11,29 @@ import (
 )
 
 // This file contain swarm internal handlers
-// These should only be called from the swarms eventprocessing main loop
+// These should only be called from the swarms event processing main loop
 // or by ohter internal handlers but not from a random type or go routine
 
-// Handle local request to register a remote node in swarm
-func (s *swarmImpl) onRegisterNodeRequest(req node.RemoteNodeData) {
+// Handle local request to register a remote node in the swarm
+// Register adds info about this node but doesn't attempt to connect to i
+func (s *swarmImpl) onRegisterNodeRequest(n node.RemoteNodeData) {
 
-	if s.peers[req.Id()] == nil {
-		node, err := NewRemoteNode(req.Id(), req.Ip())
-		if err != nil { // invalid id
-			return
-		}
-
-		s.peers[req.Id()] = node
+	if s.peers[n.Id()] != nil {
+		log.Info("Already connected to %s", n.Id())
+		return
 	}
+
+	node, err := NewRemoteNode(n.Id(), n.Ip())
+	if err != nil { // invalid id
+		return
+	}
+
+	// for now - add to maintained peer although peers should only include peers we connect with
+	s.peers[n.Id()] = node
+
+	// update the routing table with the nde node info
+	s.routingTable.Update(n)
+
 }
 
 // Handle local request to connect to a remote node
@@ -32,10 +41,13 @@ func (s *swarmImpl) onConnectionRequest(req node.RemoteNodeData) {
 
 	var err error
 
-	// check for existing session
+	// check for existing session with that node
 	peer := s.peers[req.Id()]
 
 	if peer == nil {
+
+		// update the routing table
+		s.routingTable.Update(req)
 
 		peer, err = NewRemoteNode(req.Id(), req.Ip())
 		if err != nil {
