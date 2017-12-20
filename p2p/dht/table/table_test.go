@@ -109,7 +109,7 @@ func TestTableUpdate(t *testing.T) {
 	local := p2p.GenerateRandomNodeData(t)
 	localId := local.DhtId()
 
-	rt := NewRoutingTable(10, localId)
+	rt := NewRoutingTable(20, localId)
 
 	nodes := p2p.GenerateRandomNodesData(t, n)
 
@@ -147,7 +147,7 @@ func TestTableFind(t *testing.T) {
 	local := p2p.GenerateRandomNodeData(t)
 	localId := local.DhtId()
 
-	rt := NewRoutingTable(10, localId)
+	rt := NewRoutingTable(20, localId)
 
 	nodes := p2p.GenerateRandomNodesData(t, n)
 

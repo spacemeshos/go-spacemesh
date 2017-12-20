@@ -69,38 +69,33 @@ func XOR(a, b []byte) []byte {
 	return c
 }
 
-// byDistanceToCenter is a type used to sort ids by proximity to a center.
 type byDistanceToCenter struct {
 	Center ID
-	Keys   []ID
+	Ids   []ID
 }
 
 func (s byDistanceToCenter) Len() int {
-	return len(s.Keys)
+	return len(s.Ids)
 }
 
 func (s byDistanceToCenter) Swap(i, j int) {
-	s.Keys[i], s.Keys[j] = s.Keys[j], s.Keys[i]
+	s.Ids[i], s.Ids[j] = s.Ids[j], s.Ids[i]
 }
 
 func (s byDistanceToCenter) Less(i, j int) bool {
-	a := s.Center.Distance(s.Keys[i])
-	b := s.Center.Distance(s.Keys[j])
+	a := s.Center.Distance(s.Ids[i])
+	b := s.Center.Distance(s.Ids[j])
 	return a.Cmp(b) == -1
 }
 
-// SortByDistance takes a KeySpace, a center id, and a list of ids toSort.
-// It returns a new list, where the ids toSort sorted by their
-// distance to the center id.
-func SortByDistance(center ID, toSort []ID) []ID {
-
-	toSortCopy := make([]ID, len(toSort))
-	copy(toSortCopy, toSort)
-
+// Sort a list of ids by thier distance from a center
+func SortByDistance(center ID, ids []ID) []ID {
+	idsCopy := make([]ID, len(ids))
+	copy(idsCopy, ids)
 	bdtc := &byDistanceToCenter{
 		Center: center,
-		Keys:   toSortCopy,
+		Ids:   idsCopy,
 	}
 	sort.Sort(bdtc)
-	return bdtc.Keys
+	return bdtc.Ids
 }

@@ -9,7 +9,6 @@ import (
 // Bucket is a dht kbucket type
 // Bucket NOT thread safe.
 // RoutingTable (or other clients) are responsible for serializing access to a Bucket
-
 type Bucket interface {
 	Peers() []p2p.RemoteNodeData
 	Has(node p2p.RemoteNodeData) bool
@@ -81,6 +80,9 @@ func (b *bucketimpl) PushBack(n p2p.RemoteNodeData) {
 
 func (b *bucketimpl) PopBack() p2p.RemoteNodeData {
 	last := b.list.Back()
+	if last == nil {
+		return nil
+	}
 	b.list.Remove(last)
 	return last.Value.(p2p.RemoteNodeData)
 }
@@ -89,9 +91,9 @@ func (b *bucketimpl) Len() int {
 	return b.list.Len()
 }
 
-// Split splits a buckets peers into two buckets, the methods receiver will have
-// peers with CPL equal to cpl, the returned bucket will have peers with CPL
-// greater than cpl (returned bucket has closer peers)
+// Split bucket's nodes into two buckets.
+// The receiver bucket will have peers with CPL equal to cpl.
+// The returned bucket will have peers with CPL greater than cpl (returned bucket has closer peers)
 
 func (b *bucketimpl) Split(cpl int, target dht.ID) Bucket {
 
