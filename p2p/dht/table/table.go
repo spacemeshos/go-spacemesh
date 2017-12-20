@@ -8,9 +8,9 @@ import (
 )
 
 // RoutingTable manages routing to peers
-// All methods visible to other packages are thread safe
-// Don't call package level methods (lower-case) they are private not thread-safe
-// Design spec: 'Kademlia: A Design Specification'
+// All methods visible to externals packages are thread-safe
+// Don't call package-level methods (lower-case) - they are private not thread-safe
+// Design spec: 'Kademlia: A Design Specification' with most recently active nodes at the top of each bucket
 type RoutingTable interface {
 
 	// table ops
@@ -57,7 +57,7 @@ type NearestPeersReq struct { // NearestPeer method req params
 }
 
 // RoutingTable defines the routing table.
-// Most recently network active nodes are placed in begnining of buckets.
+// Most recently network active nodes are placed in beginning of buckets.
 // Least active nodes are the back of each bucket.
 // Bucket index is the size of the common prefix of nodes in that buckets and the local node
 // l:  0 1 0 0 1 1

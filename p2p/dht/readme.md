@@ -8,7 +8,5 @@ Implemented in libp2p-kad-dht and bittorent clients
 libp2p open-issues list is somewhat scray and libp2p-kad-dht is tightly coupled with its main client - ipfs.
 4. Have as little external deps as possible - e.g. multi-address, specific key-id schemes, etc...
 
+This package contains heavily modified code inspired by `libp2p-kad-dht` and from `libp2p-kbucket` - the license file for both of these packages is included as required by the MIT licensing terms.
 
-### Design notes
-
-- The keyspace package adapted from libp2p-kad-dht. We like all libp2p-* packages that don't assume peer id and key format and don't have external deps.

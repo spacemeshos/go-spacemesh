@@ -12,14 +12,30 @@ import (
 // A dht-compatible ID using the XOR keyspace
 type ID []byte
 
-func NewIdFromHexString(s string) ID {
+func NewIdFromNodeKey(key []byte) ID {
+	hash := sha256.Sum256([]byte(key))
+	return hash[:]
+}
+
+func NewIdFromHexString(s string) (ID, error) {
 	data, err := hex.DecodeString(s)
 	if err != nil {
-		log.Error("invalid input hex string %s", s)
-		return nil
+		log.Error("Invalid input hex string %s", s)
+		return nil, err
 	}
+	return ID(data), nil
+}
 
-	return ID(data)
+// Sort ids based on distance from id
+func (id ID) SortByDistance(ids []ID) []ID {
+	idsCopy := make([]ID, len(ids))
+	copy(idsCopy, ids)
+	bdtc := &byDistanceToCenter{
+		Center: id,
+		Ids:    idsCopy,
+	}
+	sort.Sort(bdtc)
+	return bdtc.Ids
 }
 
 func (id ID) Equals(other ID) bool {
@@ -60,16 +76,10 @@ func (id ID) ZeroPrefixLen() int {
 	return len(id) * 8
 }
 
-// Creates a new DHT ID by hashing a node key/id
-func NewIdFromNodeKey(key []byte) ID {
-	hash := sha256.Sum256([]byte(key))
-	return hash[:]
-}
-
 // Returns true if id1 is closer to id3 than id2 is
-func Closer(id1 ID, id2 ID, id3 ID) bool {
-	dist1 := id1.Xor(id3)
-	dist2 := id2.Xor(id3)
+func (id ID) Closer(id1 ID, id2 ID) bool {
+	dist1 := id.Xor(id1)
+	dist2 := id.Xor(id2)
 	return dist1.Less(dist2)
 }
 
@@ -98,16 +108,4 @@ func (s byDistanceToCenter) Less(i, j int) bool {
 	a := s.Center.Distance(s.Ids[i])
 	b := s.Center.Distance(s.Ids[j])
 	return a.Cmp(b) == -1
-}
-
-// Sort a list of ids by thier distance from a center
-func SortByDistance(center ID, ids []ID) []ID {
-	idsCopy := make([]ID, len(ids))
-	copy(idsCopy, ids)
-	bdtc := &byDistanceToCenter{
-		Center: center,
-		Ids:    idsCopy,
-	}
-	sort.Sort(bdtc)
-	return bdtc.Ids
 }

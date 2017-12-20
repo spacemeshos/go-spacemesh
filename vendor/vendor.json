@@ -93,12 +93,6 @@
 			"revisionTime": "2017-11-26T19:57:40Z"
 		},
 		{
-			"checksumSHA1": "J+tQOwjlRB69SZaY488XqjYxNqk=",
-			"path": "github.com/libp2p/go-libp2p-kad-dht",
-			"revision": "c40d21ef3807ae5bb8315a942750b21ace7154fb",
-			"revisionTime": "2017-11-20T22:23:12Z"
-		},
-		{
 			"checksumSHA1": "1MGpGDQqnUoRpv7VEcQrXOBydXE=",
 			"path": "golang.org/x/crypto/pbkdf2",
 			"revision": "94eea52f7b742c7cbe0b03b22f0c4c8631ece122",

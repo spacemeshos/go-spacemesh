@@ -74,7 +74,7 @@ Loop:
 				break Loop
 			}
 
-		case <-time.After(time.Second * 5):
+		case <-time.After(time.Second * 10):
 			t.Fatalf("Failed to get expected update callbacks on time")
 			break Loop
 		}
@@ -188,7 +188,6 @@ func TestTableFind(t *testing.T) {
 	}
 }
 
-
 func TestTableFindCount(t *testing.T) {
 
 	const n = 100
@@ -234,15 +233,14 @@ func TestTableMultithreaded(t *testing.T) {
 	rt := NewRoutingTable(20, localId)
 	nodes := p2p.GenerateRandomNodesData(n)
 
-
-	go func () {
+	go func() {
 		for i := 0; i < 1000; i++ {
 			n := rand.Intn(len(nodes))
 			rt.Update(nodes[n])
 		}
 	}()
 
-	go func () {
+	go func() {
 		for i := 0; i < 1000; i++ {
 			n := rand.Intn(len(nodes))
 			rt.Update(nodes[n])
@@ -256,7 +254,6 @@ func TestTableMultithreaded(t *testing.T) {
 		}
 	}()
 }
-
 
 func BenchmarkUpdates(b *testing.B) {
 	b.StopTimer()
