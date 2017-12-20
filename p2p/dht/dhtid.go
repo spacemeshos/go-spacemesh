@@ -3,12 +3,24 @@ package dht
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/hex"
+	"github.com/UnrulyOS/go-unruly/log"
 	"math/big"
 	"sort"
 )
 
 // A dht-compatible ID using the XOR keyspace
 type ID []byte
+
+func NewIdFromHexString(s string) ID {
+	data, err := hex.DecodeString(s)
+	if err != nil {
+		log.Error("invalid input hex string %s", s)
+		return nil
+	}
+
+	return ID(data)
+}
 
 func (id ID) Equals(other ID) bool {
 	return bytes.Equal(id, other)
