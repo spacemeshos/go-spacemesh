@@ -164,7 +164,7 @@ func (p *findNodeProtocolImpl) handleIncomingResponse(msg IncomingMessage) {
 		return
 	}
 
-	log.Info("Got find-node response from %s. Find-node req id: %", msg.Sender().Pretty(), resp.Pong, resp.Metadata.ReqId)
+	log.Info("Got find-node response from %s. Results: %d, Find-node req id: %", msg.Sender().Pretty(), resp.NodeInfos, resp.Metadata.ReqId)
 
 	// notify clients of th new pong
 	for _, c := range p.callbacks {
