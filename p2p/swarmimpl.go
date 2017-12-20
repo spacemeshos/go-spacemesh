@@ -44,6 +44,8 @@ type swarmImpl struct {
 	// handshake protocol callback - sessions updates are pushed here
 	newSessions chan HandshakeData // gets callback from handshake protocol when new session are created and/or auth
 
+	findNodeProtocol FindNodeProtocol
+
 	routingTable table.RoutingTable
 }
 
@@ -76,7 +78,11 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 		registerNodeReq:  make(chan node.RemoteNodeData, 10),
 	}
 
+	// nodes routing table
 	s.routingTable = table.NewRoutingTable(20, l.DhtId())
+
+	// findNode dht protocol
+	s.findNodeProtocol = NewFindNodeProtocol(s)
 
 	log.Info("Created swarm %s for local node %s", tcpAddress, l.String())
 

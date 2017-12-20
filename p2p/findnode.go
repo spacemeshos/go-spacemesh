@@ -56,8 +56,8 @@ func NewFindNodeProtocol(s Swarm) FindNodeProtocol {
 	return p
 }
 
-// should be a kad param and configurable
-const maxNearestNodesResults = 10
+// todo: should be a kad param and configurable
+const maxNearestNodesResults = 20
 
 // Send a single find node request to a remote node
 // remoteNodeId - base58 encoded
@@ -107,10 +107,11 @@ func (p *findNodeProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 	// use the dht table to generate the response
 
 	rt := p.swarm.getRoutingTable()
-
 	nodeDhtId := dht.NewIdFromNodeKey(req.NodeId)
 	callback := make(table.PeersOpChannel)
-	count := int(req.MaxResults) //Int.MinInt(int(req.MaxResults),maxNearestNodesResults)
+	count := int(minInt32(req.MaxResults, maxNearestNodesResults))
+
+	// get up to count nearest peers to nodeDhtId
 	rt.NearestPeers(table.NearestPeersReq{nodeDhtId, count, callback})
 
 	var results []*pb.NodeInfo
@@ -165,6 +166,10 @@ func (p *findNodeProtocolImpl) handleIncomingResponse(msg IncomingMessage) {
 	}
 
 	log.Info("Got find-node response from %s. Results: %d, Find-node req id: %", msg.Sender().Pretty(), resp.NodeInfos, resp.Metadata.ReqId)
+
+	for _, n := range resp.NodeInfos {
+		log.Info("Node response: %s, %s", base58.Encode(n.NodeId), n.TcpAddress)
+	}
 
 	// notify clients of th new pong
 	for _, c := range p.callbacks {
