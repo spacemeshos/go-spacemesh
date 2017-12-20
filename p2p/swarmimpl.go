@@ -2,6 +2,10 @@ package p2p
 
 import (
 	"github.com/UnrulyOS/go-unruly/log"
+	"github.com/UnrulyOS/go-unruly/p2p/dht/table"
+	"github.com/UnrulyOS/go-unruly/p2p/node"
+
+	//"github.com/UnrulyOS/go-unruly/p2p/dht/table"
 	"github.com/UnrulyOS/go-unruly/p2p/net"
 )
 
@@ -24,15 +28,15 @@ type swarmImpl struct {
 	messagesPendingSession map[string]SendMessageReq // k - unique req id. outgoing messages which pend an auth session with remote node to be sent out
 
 	// comm channels
-	connectionRequests chan RemoteNodeData // local requests to establish a session w a remote node
-	disconnectRequests chan RemoteNodeData // local requests to kill session and disconnect from node
+	connectionRequests chan node.RemoteNodeData // local requests to establish a session w a remote node
+	disconnectRequests chan node.RemoteNodeData // local requests to kill session and disconnect from node
 
 	sendMsgRequests  chan SendMessageReq // local request to send a session message to a node and callback on error or data
 	sendHandshakeMsg chan SendMessageReq // local request to send a handshake protocol message
 
 	kill chan bool // local request to kill the swamp from outside. e.g when local node is shutting down
 
-	registerNodeReq chan RemoteNodeData // local request to register a node based on minimal data
+	registerNodeReq chan node.RemoteNodeData // local request to register a node based on minimal data
 
 	// swarm provides handshake protocol
 	handshakeProtocol HandshakeProtocol
@@ -40,6 +44,7 @@ type swarmImpl struct {
 	// handshake protocol callback - sessions updates are pushed here
 	newSessions chan HandshakeData // gets callback from handshake protocol when new session are created and/or auth
 
+	routingTable table.RoutingTable
 }
 
 func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
@@ -61,15 +66,17 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 		messagesPendingSession: make(map[string]SendMessageReq),
 		allSessions:            make(map[string]NetworkSession),
 
-		connectionRequests: make(chan RemoteNodeData, 10),
-		disconnectRequests: make(chan RemoteNodeData, 10),
+		connectionRequests: make(chan node.RemoteNodeData, 10),
+		disconnectRequests: make(chan node.RemoteNodeData, 10),
 
 		sendMsgRequests:  make(chan SendMessageReq, 20),
 		sendHandshakeMsg: make(chan SendMessageReq, 20),
 		demuxer:          NewDemuxer(),
 		newSessions:      make(chan HandshakeData, 10),
-		registerNodeReq:  make(chan RemoteNodeData, 10),
+		registerNodeReq:  make(chan node.RemoteNodeData, 10),
 	}
+
+	s.routingTable = table.NewRoutingTable(20, l.DhtId())
 
 	log.Info("Created swarm %s for local node %s", tcpAddress, l.String())
 
@@ -85,16 +92,20 @@ func (s *swarmImpl) getHandshakeProtocol() HandshakeProtocol {
 	return s.handshakeProtocol
 }
 
+func (s *swarmImpl) getRoutingTable() table.RoutingTable {
+	return s.routingTable
+}
+
 // register a node with the swarm
-func (s *swarmImpl) RegisterNode(data RemoteNodeData) {
+func (s *swarmImpl) RegisterNode(data node.RemoteNodeData) {
 	s.registerNodeReq <- data
 }
 
-func (s *swarmImpl) ConnectTo(req RemoteNodeData) {
+func (s *swarmImpl) ConnectTo(req node.RemoteNodeData) {
 	s.connectionRequests <- req
 }
 
-func (s *swarmImpl) DisconnectFrom(req RemoteNodeData) {
+func (s *swarmImpl) DisconnectFrom(req node.RemoteNodeData) {
 	s.disconnectRequests <- req
 }
 

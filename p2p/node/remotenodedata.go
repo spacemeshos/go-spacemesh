@@ -1,4 +1,4 @@
-package p2p
+package node
 
 import (
 	"github.com/UnrulyOS/go-unruly/p2p/dht"
@@ -46,9 +46,3 @@ func (rn *remoteNodeDataImpl) Bytes() []byte {
 func (rn *remoteNodeDataImpl) DhtId() dht.ID {
 	return rn.dhtId
 }
-
-/*
-func (rn *remoteNodeDataImpl) CommonPrefixLength(other RemoteNodeData) int {
-	xor := rn.DhtId().Xor(other.DhtId())
-	return xor.ZeroPrefixLen()
-}*/

@@ -3,6 +3,7 @@ package p2p
 import (
 	"fmt"
 	"github.com/UnrulyOS/go-unruly/crypto"
+	"github.com/UnrulyOS/go-unruly/p2p/node"
 	"github.com/UnrulyOS/go-unruly/p2p/nodeconfig"
 	"testing"
 )
@@ -26,15 +27,15 @@ func GenerateTestNode(t *testing.T) (LocalNode, Peer) {
 	return localNode, remoteNode
 }
 
-func GenerateRandomNodeData() RemoteNodeData {
+func GenerateRandomNodeData() node.RemoteNodeData {
 	port := crypto.GetRandomUInt32(1000) + 10000
 	address := fmt.Sprintf("localhost:%d", port)
 	_, pub, _ := crypto.GenerateKeyPair()
-	return NewRemoteNodeData(pub.String(), address)
+	return node.NewRemoteNodeData(pub.String(), address)
 }
 
-func GenerateRandomNodesData(n int) []RemoteNodeData {
-	res := make([]RemoteNodeData, n)
+func GenerateRandomNodesData(n int) []node.RemoteNodeData {
+	res := make([]node.RemoteNodeData, n)
 	for i := 0; i < n; i++ {
 		res[i] = GenerateRandomNodeData()
 	}

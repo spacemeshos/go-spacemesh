@@ -3,6 +3,7 @@ syntax = "proto3";
 package pb;
 option go_package = "pb";
 
+// ignore this error - protoc knows how to import a .proto file from the same folder as this proto file
 import "message.proto";
 
 // example protocol

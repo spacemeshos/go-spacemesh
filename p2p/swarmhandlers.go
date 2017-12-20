@@ -5,6 +5,7 @@ import (
 	"github.com/UnrulyOS/go-unruly/crypto"
 	"github.com/UnrulyOS/go-unruly/log"
 	"github.com/UnrulyOS/go-unruly/p2p/net"
+	"github.com/UnrulyOS/go-unruly/p2p/node"
 	"github.com/UnrulyOS/go-unruly/p2p/pb"
 	"github.com/gogo/protobuf/proto"
 )
@@ -14,7 +15,7 @@ import (
 // or by ohter internal handlers but not from a random type or go routine
 
 // Handle local request to register a remote node in swarm
-func (s *swarmImpl) onRegisterNodeRequest(req RemoteNodeData) {
+func (s *swarmImpl) onRegisterNodeRequest(req node.RemoteNodeData) {
 
 	if s.peers[req.Id()] == nil {
 		node, err := NewRemoteNode(req.Id(), req.Ip())
@@ -27,7 +28,7 @@ func (s *swarmImpl) onRegisterNodeRequest(req RemoteNodeData) {
 }
 
 // Handle local request to connect to a remote node
-func (s *swarmImpl) onConnectionRequest(req RemoteNodeData) {
+func (s *swarmImpl) onConnectionRequest(req node.RemoteNodeData) {
 
 	var err error
 
@@ -103,7 +104,7 @@ func (s *swarmImpl) onNewSession(data HandshakeData) {
 }
 
 // Local request to disconnect from a node
-func (s *swarmImpl) onDisconnectionRequest(req RemoteNodeData) {
+func (s *swarmImpl) onDisconnectionRequest(req node.RemoteNodeData) {
 	// disconnect from node...
 }
 
@@ -150,7 +151,7 @@ func (s *swarmImpl) onSendMessageRequest(r SendMessageReq) {
 		s.messagesPendingSession[hex.EncodeToString(r.ReqId)] = r
 
 		// try to connect to remote node and send the message once connceted
-		s.onConnectionRequest(NewRemoteNodeData(peer.String(), peer.TcpAddress()))
+		s.onConnectionRequest(node.NewRemoteNodeData(peer.String(), peer.TcpAddress()))
 		return
 	}
 

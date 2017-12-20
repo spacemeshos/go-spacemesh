@@ -1,5 +1,10 @@
 package p2p
 
+import (
+	"github.com/UnrulyOS/go-unruly/p2p/dht/table"
+	"github.com/UnrulyOS/go-unruly/p2p/node"
+)
+
 // Swarm
 // A p2p network of unruly nodes
 
@@ -7,10 +12,10 @@ type Swarm interface {
 
 	// Register a node with the swarm based on id and ip address - bootstrap nodes should be registered using
 	// this method
-	RegisterNode(data RemoteNodeData)
+	RegisterNode(data node.RemoteNodeData)
 
 	// Attempt to establish a session with a remote node with a known ip address - useful for bootstrapping
-	ConnectTo(req RemoteNodeData)
+	ConnectTo(req node.RemoteNodeData)
 
 	// ConnectToRandomNodes(maxNodes int) Get random nodes (max int) get up to max random nodes from the swarm
 
@@ -18,7 +23,7 @@ type Swarm interface {
 	// LocateRemoteNode(nodeId string)
 
 	// forcefully disconnect form a node - close any connections and sessions with it
-	DisconnectFrom(req RemoteNodeData)
+	DisconnectFrom(req node.RemoteNodeData)
 
 	// Send a message to a remote node - ideally we want to enable sending to any node
 	// without knowing its ip address - in this case we will try to locate the node via dht node search
@@ -35,6 +40,8 @@ type Swarm interface {
 	GetLocalNode() LocalNode
 
 	getHandshakeProtocol() HandshakeProtocol
+
+	getRoutingTable() table.RoutingTable
 }
 
 type SendMessageReq struct {

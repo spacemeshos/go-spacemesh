@@ -2,13 +2,13 @@ package table
 
 import (
 	"container/list"
-	"github.com/UnrulyOS/go-unruly/p2p"
 	"github.com/UnrulyOS/go-unruly/p2p/dht"
+	"github.com/UnrulyOS/go-unruly/p2p/node"
 	"sort"
 )
 
 type peerDistance struct {
-	node     p2p.RemoteNodeData
+	node     node.RemoteNodeData
 	distance dht.ID
 }
 
@@ -23,7 +23,7 @@ func (p peerSorter) Less(a, b int) bool {
 
 func copyPeersFromList(target dht.ID, dest peerSorter, src *list.List) peerSorter {
 	for e := src.Front(); e != nil; e = e.Next() {
-		p := e.Value.(p2p.RemoteNodeData)
+		p := e.Value.(node.RemoteNodeData)
 		pd := peerDistance{
 			node:     p,
 			distance: p.DhtId().Xor(target),
@@ -33,7 +33,7 @@ func copyPeersFromList(target dht.ID, dest peerSorter, src *list.List) peerSorte
 	return dest
 }
 
-func SortClosestPeers(peers []p2p.RemoteNodeData, target dht.ID) []p2p.RemoteNodeData {
+func SortClosestPeers(peers []node.RemoteNodeData, target dht.ID) []node.RemoteNodeData {
 	var psarr peerSorter
 	for _, p := range peers {
 		pd := &peerDistance{
@@ -43,7 +43,7 @@ func SortClosestPeers(peers []p2p.RemoteNodeData, target dht.ID) []p2p.RemoteNod
 		psarr = append(psarr, pd)
 	}
 	sort.Sort(psarr)
-	var out []p2p.RemoteNodeData
+	var out []node.RemoteNodeData
 	for _, p := range psarr {
 		out = append(out, p.node)
 	}

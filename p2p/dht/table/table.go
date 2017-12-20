@@ -2,8 +2,8 @@ package table
 
 import (
 	"fmt"
-	"github.com/UnrulyOS/go-unruly/p2p"
 	"github.com/UnrulyOS/go-unruly/p2p/dht"
+	"github.com/UnrulyOS/go-unruly/p2p/node"
 	"sort"
 )
 
@@ -14,8 +14,8 @@ import (
 type RoutingTable interface {
 
 	// table ops
-	Update(p p2p.RemoteNodeData)       // adds a peer to the table
-	Remove(p p2p.RemoteNodeData)       // remove a peer from the table
+	Update(p node.RemoteNodeData)      // adds a peer to the table
+	Remove(p node.RemoteNodeData)      // remove a peer from the table
 	Find(req PeerByIdRequest)          // find a peer by dht.ID
 	NearestPeer(req PeerByIdRequest)   // nearest peer to a dht.ID
 	NearestPeers(req NearestPeersReq)  // ip to n nearest peers to a dht.ID
@@ -32,28 +32,28 @@ type RoutingTable interface {
 // exported helper types
 
 type PeerOpResult struct { // result of a method that returns nil or one peer
-	Peer p2p.RemoteNodeData
+	Peer node.RemoteNodeData
 }
 type PeerOpChannel chan *PeerOpResult // a channel that accept a peer op result
 
 type PeersOpResult struct { // result of a method that returns 0 or more peers
-	peers []p2p.RemoteNodeData
+	Peers []node.RemoteNodeData
 }
 
 type PeersOpChannel chan *PeersOpResult // a channel of peers op result
 
-type PeerChannel chan p2p.RemoteNodeData // a channel that accepts a peer
+type PeerChannel chan node.RemoteNodeData // a channel that accepts a peer
 
 type ChannelOfPeerChannel chan PeerChannel // a channel of peer channels
 
 type PeerByIdRequest struct { // a request by peer id that returns 0 or 1 peer
-	id       dht.ID
-	callback PeerOpChannel
+	Id       dht.ID
+	Callback PeerOpChannel
 }
 type NearestPeersReq struct { // NearestPeer method req params
-	id       dht.ID
-	count    int
-	callback PeersOpChannel
+	Id       dht.ID
+	Count    int
+	Callback PeersOpChannel
 }
 
 // RoutingTable defines the routing table.
@@ -80,8 +80,8 @@ type routingTableImpl struct {
 	listPeersReqs    chan PeersOpChannel
 	sizeReqs         chan chan int
 
-	updateReqs chan p2p.RemoteNodeData
-	removeReqs chan p2p.RemoteNodeData
+	updateReqs chan node.RemoteNodeData
+	removeReqs chan node.RemoteNodeData
 
 	// latency metrics
 	//metrics pstore.Metrics
@@ -108,7 +108,7 @@ type routingTableImpl struct {
 func NewRoutingTable(bucketsize int, localID dht.ID) RoutingTable {
 	rt := &routingTableImpl{
 
-		buckets:     []Bucket{newBucket()},
+		buckets:     []Bucket{NewBucket()},
 		bucketsize:  bucketsize,
 		local:       localID,
 		peerRemoved: make(PeerChannel, 3),
@@ -120,8 +120,8 @@ func NewRoutingTable(bucketsize int, localID dht.ID) RoutingTable {
 		listPeersReqs:    make(chan PeersOpChannel, 3),
 		sizeReqs:         make(chan chan int, 3),
 
-		updateReqs: make(chan p2p.RemoteNodeData, 3),
-		removeReqs: make(chan p2p.RemoteNodeData, 3),
+		updateReqs: make(chan node.RemoteNodeData, 3),
+		removeReqs: make(chan node.RemoteNodeData, 3),
 
 		registerPeerAddedReq:     make(ChannelOfPeerChannel, 3),
 		registerPeerRemovedReq:   make(ChannelOfPeerChannel, 3),
@@ -179,11 +179,11 @@ func (rt *routingTableImpl) NearestPeers(req NearestPeersReq) {
 	rt.nearestPeersReqs <- req
 }
 
-func (rt *routingTableImpl) Update(peer p2p.RemoteNodeData) {
+func (rt *routingTableImpl) Update(peer node.RemoteNodeData) {
 	rt.updateReqs <- peer
 }
 
-func (rt *routingTableImpl) Remove(peer p2p.RemoteNodeData) {
+func (rt *routingTableImpl) Remove(peer node.RemoteNodeData) {
 	rt.removeReqs <- peer
 }
 
@@ -209,37 +209,37 @@ func (rt *routingTableImpl) processEvents() {
 
 		case r := <-rt.listPeersReqs:
 
-			var peers []p2p.RemoteNodeData
+			var peers []node.RemoteNodeData
 			for _, buck := range rt.buckets {
 				peers = append(peers, buck.Peers()...)
 			}
-			go func() { r <- &PeersOpResult{peers: peers} }()
+			go func() { r <- &PeersOpResult{Peers: peers} }()
 
 		case r := <-rt.nearestPeersReqs:
-			peers := rt.nearestPeers(r.id, r.count)
-			if r.callback != nil {
-				go func() { r.callback <- &PeersOpResult{peers: peers} }()
+			peers := rt.nearestPeers(r.Id, r.Count)
+			if r.Callback != nil {
+				go func() { r.Callback <- &PeersOpResult{Peers: peers} }()
 			}
 
 		case r := <-rt.nearestPeerReqs:
 
-			peers := rt.nearestPeers(r.id, 1)
-			if r.callback != nil {
+			peers := rt.nearestPeers(r.Id, 1)
+			if r.Callback != nil {
 				switch len(peers) {
 				case 0:
-					go func() { r.callback <- &PeerOpResult{} }()
+					go func() { r.Callback <- &PeerOpResult{} }()
 				default:
-					go func() { r.callback <- &PeerOpResult{peers[0]} }()
+					go func() { r.Callback <- &PeerOpResult{peers[0]} }()
 				}
 			}
 
 		case r := <-rt.findReqs:
-			peers := rt.nearestPeers(r.id, 1)
-			if r.callback != nil {
-				if len(peers) == 0 || !peers[0].DhtId().Equals(r.id) {
-					go func() { r.callback <- &PeerOpResult{} }()
+			peers := rt.nearestPeers(r.Id, 1)
+			if r.Callback != nil {
+				if len(peers) == 0 || !peers[0].DhtId().Equals(r.Id) {
+					go func() { r.Callback <- &PeerOpResult{} }()
 				} else {
-					go func() { r.callback <- &PeerOpResult{peers[0]} }()
+					go func() { r.Callback <- &PeerOpResult{peers[0]} }()
 				}
 			}
 
@@ -280,7 +280,7 @@ func getMemoryAddress(p interface{}) string {
 }
 
 // Add or move a peer to the front of its designated bucket
-func (rt *routingTableImpl) update(p p2p.RemoteNodeData) {
+func (rt *routingTableImpl) update(p node.RemoteNodeData) {
 
 	// determine node bucket ide
 	cpl := p.DhtId().CommonPrefixLen(rt.local)
@@ -335,7 +335,7 @@ func (rt *routingTableImpl) update(p p2p.RemoteNodeData) {
 
 // Remove a node from the routing table.
 // This is to be used when we are sure a node has disconnected completely.
-func (rt *routingTableImpl) remove(p p2p.RemoteNodeData) {
+func (rt *routingTableImpl) remove(p node.RemoteNodeData) {
 
 	cpl := p.DhtId().CommonPrefixLen(rt.local)
 	bucketId := cpl
@@ -351,7 +351,7 @@ func (rt *routingTableImpl) remove(p p2p.RemoteNodeData) {
 
 // Add a new bucket to the table
 // Returns a node that was removed from the table in case of an overflow
-func (rt *routingTableImpl) addNewBucket() p2p.RemoteNodeData {
+func (rt *routingTableImpl) addNewBucket() node.RemoteNodeData {
 
 	// last bucket
 	lastBucket := rt.buckets[len(rt.buckets)-1]
@@ -377,7 +377,7 @@ func (rt *routingTableImpl) addNewBucket() p2p.RemoteNodeData {
 }
 
 // NearestPeers returns a list of the 'count' closest peers to the given ID
-func (rt *routingTableImpl) nearestPeers(id dht.ID, count int) []p2p.RemoteNodeData {
+func (rt *routingTableImpl) nearestPeers(id dht.ID, count int) []node.RemoteNodeData {
 
 	cpl := id.CommonPrefixLen(rt.local)
 
@@ -407,7 +407,7 @@ func (rt *routingTableImpl) nearestPeers(id dht.ID, count int) []p2p.RemoteNodeD
 	// Sort by distance to local peer
 	sort.Sort(peerArr)
 
-	var out []p2p.RemoteNodeData
+	var out []node.RemoteNodeData
 	for i := 0; i < count && i < peerArr.Len(); i++ {
 		out = append(out, peerArr[i].node)
 	}

@@ -3,6 +3,7 @@ package p2p
 import (
 	"bytes"
 	"github.com/UnrulyOS/go-unruly/log"
+	"github.com/UnrulyOS/go-unruly/p2p/node"
 	"github.com/UnrulyOS/go-unruly/p2p/pb"
 	"github.com/google/uuid"
 	"testing"
@@ -15,7 +16,7 @@ func TestPingProtocol(t *testing.T) {
 	_, node2Remote := GenerateTestNode(t)
 
 	// let node 1 know about node 2
-	node1Local.GetSwarm().RegisterNode(NewRemoteNodeData(node2Remote.String(), node2Remote.TcpAddress()))
+	node1Local.GetSwarm().RegisterNode(node.NewRemoteNodeData(node2Remote.String(), node2Remote.TcpAddress()))
 
 	// 4 lines of code and a callback on a channel !
 	pingReqId := []byte(uuid.New().String())
