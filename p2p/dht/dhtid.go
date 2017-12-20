@@ -71,7 +71,7 @@ func XOR(a, b []byte) []byte {
 
 type byDistanceToCenter struct {
 	Center ID
-	Ids   []ID
+	Ids    []ID
 }
 
 func (s byDistanceToCenter) Len() int {
@@ -94,7 +94,7 @@ func SortByDistance(center ID, ids []ID) []ID {
 	copy(idsCopy, ids)
 	bdtc := &byDistanceToCenter{
 		Center: center,
-		Ids:   idsCopy,
+		Ids:    idsCopy,
 	}
 	sort.Sort(bdtc)
 	return bdtc.Ids

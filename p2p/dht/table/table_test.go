@@ -3,6 +3,7 @@ package table
 import (
 	"github.com/UnrulyOS/go-unruly/p2p"
 	"math/rand"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -11,11 +12,11 @@ import (
 func TestBucket(t *testing.T) {
 	const n = 100
 
-	local := p2p.GenerateRandomNodeData(t)
+	local := p2p.GenerateRandomNodeData()
 	localId := local.DhtId()
 
 	b := newBucket()
-	nodes := p2p.GenerateRandomNodesData(t, n)
+	nodes := p2p.GenerateRandomNodesData(n)
 	for i := 0; i < n; i++ {
 		b.PushFront(nodes[i])
 	}
@@ -49,10 +50,10 @@ func TestBucket(t *testing.T) {
 
 func TestTableCallbacks(t *testing.T) {
 	const n = 100
-	local := p2p.GenerateRandomNodeData(t)
+	local := p2p.GenerateRandomNodeData()
 	localId := local.DhtId()
 
-	nodes := p2p.GenerateRandomNodesData(t, n)
+	nodes := p2p.GenerateRandomNodesData(n)
 
 	rt := NewRoutingTable(10, localId)
 
@@ -106,12 +107,12 @@ Loop1:
 func TestTableUpdate(t *testing.T) {
 
 	const n = 100
-	local := p2p.GenerateRandomNodeData(t)
+	local := p2p.GenerateRandomNodeData()
 	localId := local.DhtId()
 
 	rt := NewRoutingTable(20, localId)
 
-	nodes := p2p.GenerateRandomNodesData(t, n)
+	nodes := p2p.GenerateRandomNodesData(n)
 
 	// Testing Update
 	for i := 0; i < 10000; i++ {
@@ -121,7 +122,7 @@ func TestTableUpdate(t *testing.T) {
 	for i := 0; i < n; i++ {
 
 		// create a new random node
-		node := p2p.GenerateRandomNodeData(t)
+		node := p2p.GenerateRandomNodeData()
 
 		// create callback to receive result
 		callback := make(PeersOpChannel, 2)
@@ -144,12 +145,12 @@ func TestTableFind(t *testing.T) {
 
 	const n = 100
 
-	local := p2p.GenerateRandomNodeData(t)
+	local := p2p.GenerateRandomNodeData()
 	localId := local.DhtId()
 
 	rt := NewRoutingTable(20, localId)
 
-	nodes := p2p.GenerateRandomNodesData(t, n)
+	nodes := p2p.GenerateRandomNodesData(n)
 
 	for i := 0; i < 5; i++ {
 		rt.Update(nodes[i])
@@ -187,97 +188,103 @@ func TestTableFind(t *testing.T) {
 	}
 }
 
-/*
-func TestTableFindMultiple(t *testing.T) {
-	local := tu.RandPeerIDFatal(t)
-	m := pstore.NewMetrics()
-	rt := NewRoutingTable(20, ConvertPeerID(local), time.Hour, m)
 
-	peers := make([]peer.ID, 100)
-	for i := 0; i < 18; i++ {
-		peers[i] = tu.RandPeerIDFatal(t)
-		rt.Update(peers[i])
+func TestTableFindCount(t *testing.T) {
+
+	const n = 100
+	const i = 15
+
+	local := p2p.GenerateRandomNodeData()
+	localId := local.DhtId()
+	rt := NewRoutingTable(20, localId)
+	nodes := p2p.GenerateRandomNodesData(n)
+
+	for i := 0; i < n; i++ {
+		rt.Update(nodes[i])
 	}
 
-	t.Logf("Searching for peer: '%s'", peers[2])
-	found := rt.NearestPeers(ConvertPeerID(peers[2]), 15)
-	if len(found) != 15 {
-		t.Fatalf("Got back different number of peers than we expected.")
+	//t.Logf("Searching for peer: '%s'", nodes[2].Id())
+
+	// create callback to receive result
+	callback := make(PeersOpChannel, 2)
+
+	// find nearest peers
+	rt.NearestPeers(NearestPeersReq{nodes[2].DhtId(), i, callback})
+
+	select {
+	case c := <-callback:
+		if len(c.peers) != i {
+			t.Fatal("Got unexpected number of results", len(c.peers))
+		}
+	case <-time.After(time.Second * 5):
+		t.Fatalf("Failed to get expected callback on time")
 	}
+
 }
 
-// Looks for race conditions in table operations. For a more 'certain'
-// test, increase the loop counter from 1000 to a much higher number
-// and set GOMAXPROCS above 1
 func TestTableMultithreaded(t *testing.T) {
-	local := peer.ID("localPeer")
-	m := pstore.NewMetrics()
-	tab := NewRoutingTable(20, ConvertPeerID(local), time.Hour, m)
-	var peers []peer.ID
-	for i := 0; i < 500; i++ {
-		peers = append(peers, tu.RandPeerIDFatal(t))
-	}
 
-	done := make(chan struct{})
-	go func() {
+	runtime.GOMAXPROCS(runtime.NumCPU())
+
+	const n = 5000
+	const i = 15
+
+	local := p2p.GenerateRandomNodeData()
+	localId := local.DhtId()
+	rt := NewRoutingTable(20, localId)
+	nodes := p2p.GenerateRandomNodesData(n)
+
+
+	go func () {
 		for i := 0; i < 1000; i++ {
-			n := rand.Intn(len(peers))
-			tab.Update(peers[n])
+			n := rand.Intn(len(nodes))
+			rt.Update(nodes[n])
 		}
-		done <- struct{}{}
+	}()
+
+	go func () {
+		for i := 0; i < 1000; i++ {
+			n := rand.Intn(len(nodes))
+			rt.Update(nodes[n])
+		}
 	}()
 
 	go func() {
 		for i := 0; i < 1000; i++ {
-			n := rand.Intn(len(peers))
-			tab.Update(peers[n])
+			n := rand.Intn(len(nodes))
+			rt.Find(PeerByIdRequest{nodes[n].DhtId(), nil})
 		}
-		done <- struct{}{}
 	}()
-
-	go func() {
-		for i := 0; i < 1000; i++ {
-			n := rand.Intn(len(peers))
-			tab.Find(peers[n])
-		}
-		done <- struct{}{}
-	}()
-	<-done
-	<-done
-	<-done
 }
+
 
 func BenchmarkUpdates(b *testing.B) {
 	b.StopTimer()
-	local := ConvertKey("localKey")
-	m := pstore.NewMetrics()
-	tab := NewRoutingTable(20, local, time.Hour, m)
-
-	var peers []peer.ID
-	for i := 0; i < b.N; i++ {
-		peers = append(peers, tu.RandPeerIDFatal(b))
-	}
+	local := p2p.GenerateRandomNodeData()
+	localId := local.DhtId()
+	rt := NewRoutingTable(20, localId)
+	nodes := p2p.GenerateRandomNodesData(b.N)
 
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		tab.Update(peers[i])
+		rt.Update(nodes[i])
 	}
 }
 
 func BenchmarkFinds(b *testing.B) {
 	b.StopTimer()
-	local := ConvertKey("localKey")
-	m := pstore.NewMetrics()
-	tab := NewRoutingTable(20, local, time.Hour, m)
 
-	var peers []peer.ID
+	local := p2p.GenerateRandomNodeData()
+	localId := local.DhtId()
+	rt := NewRoutingTable(20, localId)
+	nodes := p2p.GenerateRandomNodesData(b.N)
+
 	for i := 0; i < b.N; i++ {
-		peers = append(peers, tu.RandPeerIDFatal(b))
-		tab.Update(peers[i])
+		rt.Update(nodes[i])
 	}
 
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		tab.Find(peers[i])
+		rt.Find(PeerByIdRequest{nodes[i].DhtId(), nil})
 	}
-}*/
+}

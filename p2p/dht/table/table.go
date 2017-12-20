@@ -90,7 +90,7 @@ type routingTableImpl struct {
 	//maxLatency time.Duration
 
 	buckets    []Bucket
-	bucketsize int			// max number of nodes per bucket. typically 10 or 20.
+	bucketsize int // max number of nodes per bucket. typically 10 or 20.
 
 	peerRemoved PeerChannel
 	peerAdded   PeerChannel
@@ -216,28 +216,31 @@ func (rt *routingTableImpl) processEvents() {
 			go func() { r <- &PeersOpResult{peers: peers} }()
 
 		case r := <-rt.nearestPeersReqs:
-
 			peers := rt.nearestPeers(r.id, r.count)
-			go func() { r.callback <- &PeersOpResult{peers: peers} }()
+			if r.callback != nil {
+				go func() { r.callback <- &PeersOpResult{peers: peers} }()
+			}
 
 		case r := <-rt.nearestPeerReqs:
 
 			peers := rt.nearestPeers(r.id, 1)
-
-			switch len(peers) {
-			case 0:
-				go func() { r.callback <- &PeerOpResult{} }()
-			default:
-				go func() { r.callback <- &PeerOpResult{peers[0]} }()
+			if r.callback != nil {
+				switch len(peers) {
+				case 0:
+					go func() { r.callback <- &PeerOpResult{} }()
+				default:
+					go func() { r.callback <- &PeerOpResult{peers[0]} }()
+				}
 			}
 
 		case r := <-rt.findReqs:
-
 			peers := rt.nearestPeers(r.id, 1)
-			if len(peers) == 0 || !peers[0].DhtId().Equals(r.id) {
-				go func() { r.callback <- &PeerOpResult{} }()
-			} else {
-				go func() { r.callback <- &PeerOpResult{peers[0]} }()
+			if r.callback != nil {
+				if len(peers) == 0 || !peers[0].DhtId().Equals(r.id) {
+					go func() { r.callback <- &PeerOpResult{} }()
+				} else {
+					go func() { r.callback <- &PeerOpResult{peers[0]} }()
+				}
 			}
 
 		case p := <-rt.peerAdded:
@@ -385,7 +388,7 @@ func (rt *routingTableImpl) nearestPeers(id dht.ID, count int) []p2p.RemoteNodeD
 
 	bucket := rt.buckets[cpl]
 
-	var peerArr peerSorterArr
+	var peerArr peerSorter
 	peerArr = copyPeersFromList(id, peerArr, bucket.List())
 	if len(peerArr) < count {
 		// In the case of an unusual split, one bucket may be short or empty.

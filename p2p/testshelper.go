@@ -26,17 +26,17 @@ func GenerateTestNode(t *testing.T) (LocalNode, Peer) {
 	return localNode, remoteNode
 }
 
-func GenerateRandomNodeData(t *testing.T) RemoteNodeData {
+func GenerateRandomNodeData() RemoteNodeData {
 	port := crypto.GetRandomUInt32(1000) + 10000
 	address := fmt.Sprintf("localhost:%d", port)
 	_, pub, _ := crypto.GenerateKeyPair()
 	return NewRemoteNodeData(pub.String(), address)
 }
 
-func GenerateRandomNodesData(t *testing.T, n int) []RemoteNodeData {
+func GenerateRandomNodesData(n int) []RemoteNodeData {
 	res := make([]RemoteNodeData, n)
 	for i := 0; i < n; i++ {
-		res[i] = GenerateRandomNodeData(t)
+		res[i] = GenerateRandomNodeData()
 	}
 	return res
 }
