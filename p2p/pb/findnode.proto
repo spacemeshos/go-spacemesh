@@ -5,14 +5,16 @@ option go_package = "pb";
 
 // ignore this error - protoc knows how to import a .proto file from the same folder as this proto file
 import "message.proto";
+import "nodeinfo.proto";
 
 // example protocol
 message FindNodeReq {
     Metadata metadata = 1;
-    string ping = 2; // the echo message itself - protocol specific - starts at #2
+    bytes nodeId =2;
+    int32 maxResults = 3;
 }
 
 message FindNodeResp {
     Metadata metadata = 1;
-    string pong = 2; // the echo message itself - protocol specific - starts at #2
+    repeated NodeInfo nodeInfos = 2;
 }

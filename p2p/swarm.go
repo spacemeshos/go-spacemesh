@@ -10,6 +10,10 @@ import (
 
 type Swarm interface {
 
+	// find a specific node based its id
+	// id - base58 encoded node id
+	FindNode(id string, callback chan node.RemoteNodeData)
+
 	// Register a node with the swarm based on id and ip address - bootstrap nodes should be registered using
 	// this method
 	RegisterNode(data node.RemoteNodeData)
@@ -17,10 +21,8 @@ type Swarm interface {
 	// Attempt to establish a session with a remote node with a known ip address - useful for bootstrapping
 	ConnectTo(req node.RemoteNodeData)
 
-	// ConnectToRandomNodes(maxNodes int) Get random nodes (max int) get up to max random nodes from the swarm
-
-	// todo: add find node data using dht to obtain the ip address of a remote node with only known id
-	// LocateRemoteNode(nodeId string)
+	//Get random nodes (max int) get up to max random nodes from the swarm
+	ConnectToRandomNodes(count int, callback chan node.RemoteNodeData)
 
 	// forcefully disconnect form a node - close any connections and sessions with it
 	DisconnectFrom(req node.RemoteNodeData)

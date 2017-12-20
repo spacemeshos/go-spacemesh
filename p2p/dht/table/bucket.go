@@ -6,7 +6,6 @@ import (
 	node "github.com/UnrulyOS/go-unruly/p2p/node"
 )
 
-
 // Bucket is a dht kbucket type
 // Bucket NOT thread safe.
 // RoutingTable (or other clients) are responsible for serializing access to a Bucket

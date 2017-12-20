@@ -3,8 +3,13 @@ package p2p
 import (
 	"encoding/hex"
 	"github.com/UnrulyOS/go-unruly/log"
+	"github.com/UnrulyOS/go-unruly/p2p/dht"
+	"github.com/UnrulyOS/go-unruly/p2p/dht/table"
+	"github.com/UnrulyOS/go-unruly/p2p/node"
 	"github.com/UnrulyOS/go-unruly/p2p/pb"
+	"github.com/btcsuite/btcutil/base58"
 	"github.com/gogo/protobuf/proto"
+	"time"
 )
 
 const findNodeReq = "/dht/1.0/find-node-req/"
@@ -13,6 +18,7 @@ const findNodeResp = "/dht/1.0/find-node-resp/"
 // FindNode dht protocol
 // Protocol implementing dht FIND_NODE message
 type FindNodeProtocol interface {
+
 	// send a find_node request to a remoteNode
 	// reqId: allows the client to match responses with requests by id
 	FindNode(msg string, reqId []byte, remoteNodeId string) error
@@ -50,11 +56,16 @@ func NewFindNodeProtocol(s Swarm) FindNodeProtocol {
 	return p
 }
 
-// Send a find node request to a remote node
+// should be a kad param and configurable
+const maxNearestNodesResults = 10
+
+// Send a single find node request to a remote node
+// remoteNodeId - base58 encoded
 func (p *findNodeProtocolImpl) FindNode(msg string, reqId []byte, remoteNodeId string) error {
 
+	nodeId := base58.Decode(remoteNodeId)
 	metadata := p.swarm.GetLocalNode().NewProtocolMessageMetadata(findNodeReq, reqId, false)
-	data := &pb.FindNodeReq{metadata, msg}
+	data := &pb.FindNodeReq{metadata, nodeId, maxNearestNodesResults}
 
 	// sign data
 	sign, err := p.swarm.GetLocalNode().Sign(data)
@@ -91,11 +102,32 @@ func (p *findNodeProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 	}
 
 	peer := msg.Sender()
-	log.Info("Incoming find-node request from %s. Message: %", peer.Pretty(), req.Ping)
+	log.Info("Incoming find-node request from %s. Requested node id: s%", peer.Pretty(), hex.EncodeToString(req.NodeId))
 
-	// generate response
+	// use the dht table to generate the response
+
+	rt := p.swarm.getRoutingTable()
+
+	nodeDhtId := dht.NewIdFromNodeKey(req.NodeId)
+	callback := make(table.PeersOpChannel)
+	count := int(req.MaxResults) //Int.MinInt(int(req.MaxResults),maxNearestNodesResults)
+	rt.NearestPeers(table.NearestPeersReq{nodeDhtId, count, callback})
+
+	var results []*pb.NodeInfo
+
+	select { // block until we got results from the table or timeout
+	case c := <-callback:
+		log.Info("Results length: %d", len(c.Peers))
+		results = node.ToNodeInfo(c.Peers)
+	case <-time.After(time.Minute):
+		results = []*pb.NodeInfo{} // empty slice
+	}
+
+	// generate response using results
 	metadata := p.swarm.GetLocalNode().NewProtocolMessageMetadata(findNodeResp, req.Metadata.ReqId, false)
-	respData := &pb.FindNodeResp{metadata, req.Ping}
+
+	// generate response data
+	respData := &pb.FindNodeResp{metadata, results}
 
 	// sign response
 	sign, err := p.swarm.GetLocalNode().SignToString(respData)
@@ -145,10 +177,10 @@ func (p *findNodeProtocolImpl) processEvents() {
 	for {
 		select {
 		case r := <-p.incomingRequests:
-			p.handleIncomingRequest(r)
+			go p.handleIncomingRequest(r)
 
 		case r := <-p.incomingResponses:
-			p.handleIncomingResponse(r)
+			go p.handleIncomingResponse(r)
 
 		case c := <-p.callbacksRegReq:
 			p.callbacks = append(p.callbacks, c)

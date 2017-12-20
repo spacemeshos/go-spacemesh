@@ -117,6 +117,16 @@ func (s *swarmImpl) GetLocalNode() LocalNode {
 	return s.localNode
 }
 
+// Find a node based on its id
+func (s *swarmImpl) FindNode(id string, callback chan node.RemoteNodeData) {
+	// todo: implement me
+}
+
+// Connect up to count random nodes
+func (s *swarmImpl) ConnectToRandomNodes(count int, callback chan node.RemoteNodeData) {
+	// todo: implement me
+}
+
 // Send a message to a remote node
 // Swarm will establish session if needed or use an existing session and open connection
 // Designed to be used by any high level protocol

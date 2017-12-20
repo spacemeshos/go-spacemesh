@@ -2,6 +2,7 @@ package node
 
 import (
 	"github.com/UnrulyOS/go-unruly/p2p/dht"
+	"github.com/UnrulyOS/go-unruly/p2p/pb"
 	"github.com/btcsuite/btcutil/base58"
 )
 
@@ -23,6 +24,19 @@ type remoteNodeDataImpl struct {
 	ip    string // node tcp address. e.g. 127.0.0.1:3030
 	bytes []byte // bytes
 	dhtId dht.ID
+}
+
+// Return serializable (pb) node infos slice
+func ToNodeInfo(nodes []RemoteNodeData) []*pb.NodeInfo {
+	// init empty slice
+	res := []*pb.NodeInfo{}
+	for _, n := range nodes {
+		res = append(res, &pb.NodeInfo{
+			NodeId: n.Bytes(),
+			TcpAddress: n.Ip(),
+		})
+	}
+	return res
 }
 
 func NewRemoteNodeData(id string, ip string) RemoteNodeData {
