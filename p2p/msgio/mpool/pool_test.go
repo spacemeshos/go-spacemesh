@@ -236,6 +236,7 @@ func BenchmarkPoolOverlflow(b *testing.B) {
 	})
 }
 
+// todo: figure out why this test occasionally fails
 /*
 func ExamplePool() {
 	var p Pool

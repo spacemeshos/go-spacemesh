@@ -5,7 +5,6 @@ import (
 	"github.com/UnrulyOS/go-unruly/assert"
 	"github.com/UnrulyOS/go-unruly/log"
 	"github.com/UnrulyOS/go-unruly/p2p/node"
-	"github.com/UnrulyOS/go-unruly/p2p/pb"
 	"github.com/google/uuid"
 	"testing"
 	"time"
@@ -27,7 +26,7 @@ func TestFindNodeProtocolCore(t *testing.T) {
 
 	// node 2 doesn't know about node 3 and asks node 1 to find it
 	reqId := []byte(uuid.New().String())
-	callback := make(chan *pb.FindNodeResp)
+	callback := make(chan FindNodeResp)
 	node2Local.GetSwarm().getFindNodeProtocol().Register(callback)
 	node2Local.GetSwarm().getFindNodeProtocol().FindNode(reqId, node1Remote.String(), node3Remote.String())
 
@@ -35,6 +34,7 @@ Loop:
 	for {
 		select {
 		case c := <-callback:
+			assert.Nil(t, c.err, "Expected no error")
 			if bytes.Equal(c.GetMetadata().ReqId, reqId) {
 				assert.NotNil(t, "expected response slice")
 				assert.True(t, len(c.NodeInfos) >= 1, "expected at least 1 node")
@@ -70,7 +70,7 @@ func TestFindNodeProtocolEmptyRes(t *testing.T) {
 
 	// node 2 doesn't know about node 3 and asks node 1 to find it
 	reqId := []byte(uuid.New().String())
-	callback := make(chan *pb.FindNodeResp)
+	callback := make(chan FindNodeResp)
 	node2Local.GetSwarm().getFindNodeProtocol().Register(callback)
 	node2Local.GetSwarm().getFindNodeProtocol().FindNode(reqId, node1Remote.String(), node3Remote.String())
 
@@ -78,6 +78,7 @@ Loop:
 	for {
 		select {
 		case c := <-callback:
+			assert.Nil(t, c.err, "Expected no error")
 			if bytes.Equal(c.GetMetadata().ReqId, reqId) {
 				assert.NotNil(t, "expected non nil response slice w 0 or more items")
 				for _, d := range c.NodeInfos {

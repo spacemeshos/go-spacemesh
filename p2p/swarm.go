@@ -15,8 +15,8 @@ type Swarm interface {
 	// and send the message if we obtained node ip address and were able to connect to it
 	// req.msg should be marshaled protocol message. e.g. something like pb.PingReqData
 	// This is designed for standard messages that require a session
-	// This is used by protocol to send message to any destination
-	// todo: support registrating on message send failure and getting notified when failed to send (optional)
+	// This method is designed to be used by protocols implementations to send message to any destination
+	// todo: support registration on message send failure and getting notified when failed to send (optional)
 	SendMessage(req SendMessageReq)
 
 	// TODO: support sending a message to all connected peers without any dest id provided by caller
@@ -42,6 +42,7 @@ type Swarm interface {
 	GetDemuxer() Demuxer
 	GetLocalNode() LocalNode
 
+	// used by protocols and for testing
 	getHandshakeProtocol() HandshakeProtocol
 	getRoutingTable() table.RoutingTable
 	getFindNodeProtocol() FindNodeProtocol

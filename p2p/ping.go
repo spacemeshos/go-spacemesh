@@ -15,17 +15,23 @@ const pingResp = "/ping/1.0/ping-resp/"
 type Ping interface {
 	// send a ping request to a remoteNode
 	// reqId: allows the client to match responses with requests by id
-	Send(msg string, reqId []byte, remoteNodeId string) error
+	Send(msg string, reqId []byte, remoteNodeId string)
 
 	// App logic registers her for typed incoming ping responses (pongs)
-	Register(callback chan *pb.PingRespData)
+	Register(callback chan SendPingResp)
 }
 
-type Callbacks chan chan *pb.PingRespData
+// Send ping op response - contains response data or error
+type SendPingResp struct {
+	*pb.PingRespData
+	err error
+}
+
+type Callbacks chan chan SendPingResp
 
 type pingProtocolImpl struct {
 	swarm             Swarm
-	callbacks         []chan *pb.PingRespData
+	callbacks         []chan SendPingResp
 	incomingRequests  MessagesChan
 	incomingResponses MessagesChan
 	callbacksRegReq   Callbacks // a channel of channels that receive callbacks
@@ -38,7 +44,7 @@ func NewPingProtocol(s Swarm) Ping {
 		incomingRequests:  make(MessagesChan, 10),
 		incomingResponses: make(MessagesChan, 10),
 		callbacksRegReq:   make(Callbacks, 10),
-		callbacks:         make([]chan *pb.PingRespData, 0), // start with empty slice
+		callbacks:         make([]chan SendPingResp, 0), // start with empty slice
 	}
 
 	go p.processEvents()
@@ -51,7 +57,7 @@ func NewPingProtocol(s Swarm) Ping {
 }
 
 // Send a ping to a remote node
-func (p *pingProtocolImpl) Send(msg string, reqId []byte, remoteNodeId string) error {
+func (p *pingProtocolImpl) Send(msg string, reqId []byte, remoteNodeId string) {
 
 	metadata := p.swarm.GetLocalNode().NewProtocolMessageMetadata(pingReq, reqId, false)
 	data := &pb.PingReqData{metadata, msg}
@@ -63,18 +69,20 @@ func (p *pingProtocolImpl) Send(msg string, reqId []byte, remoteNodeId string) e
 	// marshal the signed data
 	payload, err := proto.Marshal(data)
 	if err != nil {
-		return err
+		return
 	}
 
 	// send the message
+
+	// todo: register send failure callback and send SendPingResp on error !!!!
+
 	req := SendMessageReq{remoteNodeId, reqId, payload}
 	p.swarm.SendMessage(req)
 
-	return nil
 }
 
 // Register callback on remotely received pings
-func (p *pingProtocolImpl) Register(callback chan *pb.PingRespData) {
+func (p *pingProtocolImpl) Register(callback chan SendPingResp) {
 	p.callbacksRegReq <- callback
 }
 
@@ -125,16 +133,17 @@ func (p *pingProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 func (p *pingProtocolImpl) handleIncomingResponse(msg IncomingMessage) {
 
 	// process request
-	resp := &pb.PingRespData{}
-	err := proto.Unmarshal(msg.Payload(), resp)
+	data := &pb.PingRespData{}
+	err := proto.Unmarshal(msg.Payload(), data)
 	if err != nil {
 		log.Warning("Invalid ping request data: %v", err)
-		return
 	}
 
-	log.Info("Got pong response from %s. Ping req id: %", msg.Sender().Pretty(), resp.Pong, resp.Metadata.ReqId)
+	log.Info("Got pong response from %s. Ping req id: %", msg.Sender().Pretty(), data.Pong, data.Metadata.ReqId)
 
-	// notify clients of th new pong
+	resp := SendPingResp{ data,err }
+
+	// notify clients of the new pong or error
 	for _, c := range p.callbacks {
 		// todo: verify that this style of closure is kosher
 		go func() { c <- resp }()

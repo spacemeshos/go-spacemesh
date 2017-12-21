@@ -2,9 +2,9 @@ package p2p
 
 import (
 	"bytes"
+	"github.com/UnrulyOS/go-unruly/assert"
 	"github.com/UnrulyOS/go-unruly/log"
 	"github.com/UnrulyOS/go-unruly/p2p/node"
-	"github.com/UnrulyOS/go-unruly/p2p/pb"
 	"github.com/google/uuid"
 	"testing"
 	"time"
@@ -20,7 +20,7 @@ func TestPingProtocol(t *testing.T) {
 
 	// 4 lines of code and a callback on a channel !
 	pingReqId := []byte(uuid.New().String())
-	callback := make(chan *pb.PingRespData)
+	callback := make(chan SendPingResp)
 	node1Local.GetPing().Register(callback)
 
 	ping1ReqId := []byte(uuid.New().String())
@@ -36,6 +36,8 @@ Loop:
 	for {
 		select {
 		case c := <-callback:
+			assert.Nil(t, c.err, "expected no err in response")
+
 			if bytes.Equal(c.GetMetadata().ReqId, ping1ReqId) {
 				log.Info("Got 2nd pong: `%s`. Total RTT: %s", c.GetPong(), time.Now().Sub(t0).String())
 				break Loop
