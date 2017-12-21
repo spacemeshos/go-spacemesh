@@ -205,7 +205,6 @@ func (s *swarmImpl) onSendMessageRequest(r SendMessageReq) {
 		s.outgoingSendsCallbacks[conn.Id()][hex.EncodeToString(r.ReqId)] = r.Callback
 	}
 
-
 	// finally - send it away!
 	log.Info("Sending protocol message down the connection...")
 
@@ -356,17 +355,37 @@ func (s *swarmImpl) onRemoteClientMessage(msg net.IncomingMessage) {
 }
 
 // not go safe - called from event processing main loop
+func (s *swarmImpl) onMessageSentEvent(evt net.MessageSentEvent) {
+
+	// message was written to a connection without an error
+	callbacks := s.outgoingSendsCallbacks[evt.Connection.Id()]
+	if callbacks == nil {
+		return
+	}
+
+	reqId := hex.EncodeToString(evt.Id)
+	callback := callbacks[reqId]
+	if callback == nil {
+		return
+	}
+
+	// stop tracking this outgoing message - it was sent
+	delete(callbacks, reqId)
+}
+
+// not go safe - called from event processing main loop
 func (s *swarmImpl) onConnectionError(ce net.ConnectionError) {
 	s.sendMessageSendError(ce)
 }
 
 // not go safe - called from event processing main loop
 func (s *swarmImpl) onMessageSendError(mse net.MessageSendError) {
-	s.sendMessageSendError(net.ConnectionError{ mse.Connection, mse.Err, mse.Id})
+	s.sendMessageSendError(net.ConnectionError{mse.Connection, mse.Err, mse.Id})
 }
 
 // send a msg send error back to the callback registered by reqId
 func (s *swarmImpl) sendMessageSendError(cr net.ConnectionError) {
+
 	c := cr.Connection
 	callbacks := s.outgoingSendsCallbacks[c.Id()]
 
@@ -381,6 +400,11 @@ func (s *swarmImpl) sendMessageSendError(cr net.ConnectionError) {
 		return
 	}
 
+	// there will be no more callbacks for this reqId
 	delete(callbacks, reqId)
 
+	go func() {
+		// send the error to the callback channel
+		callback <- SendError{cr.Id, cr.Err}
+	}()
 }

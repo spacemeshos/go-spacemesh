@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-// Directory and paths helpers
+// Directory and paths funcs
 
 const OwnerReadWriteExec = 0700
 const OwnerReadWrite = 0600

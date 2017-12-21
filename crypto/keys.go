@@ -37,8 +37,6 @@ type PublicKey interface { // 33 bytes
 	InternalKey() *btcec.PublicKey
 }
 
-////////////////////////////////////////////////////////
-
 type publicKeyImpl struct {
 	k *btcec.PublicKey
 }
@@ -46,6 +44,8 @@ type publicKeyImpl struct {
 type privateKeyImpl struct {
 	k *btcec.PrivateKey
 }
+
+////////////////////////////////////////////////////////
 
 func GenerateKeyPair() (PrivateKey, PublicKey, error) {
 	privKey, err := btcec.NewPrivateKey(btcec.S256())

@@ -22,6 +22,7 @@ type Net interface {
 	GetConnectionErrors() chan ConnectionError
 	GetIncomingMessage() chan IncomingMessage
 	GetMessageSendErrors() chan MessageSendError
+	GetMessageSentCallback() chan MessageSentEvent
 }
 
 // impl internal tpye
@@ -34,21 +35,31 @@ type netImpl struct {
 	connectionErrors   chan ConnectionError
 	incomingMessages   chan IncomingMessage
 	messageSendErrors  chan MessageSendError
+
+	messageSentEvents chan MessageSentEvent
+}
+
+func (n *netImpl) GetMessageSentCallback() chan MessageSentEvent {
+	return n.messageSentEvents
 }
 
 // Implement Network interface public channel accessors
 func (n *netImpl) GetNewConnections() chan Connection {
 	return n.newConnections
 }
+
 func (n *netImpl) GetClosingConnections() chan Connection {
 	return n.closingConnections
 }
+
 func (n *netImpl) GetConnectionErrors() chan ConnectionError {
 	return n.connectionErrors
 }
+
 func (n *netImpl) GetIncomingMessage() chan IncomingMessage {
 	return n.incomingMessages
 }
+
 func (n *netImpl) GetMessageSendErrors() chan MessageSendError {
 	return n.messageSendErrors
 }
@@ -64,6 +75,7 @@ func NewNet(tcpListenAddress string, config nodeconfig.Config) (Net, error) {
 		connectionErrors:   make(chan ConnectionError, 20),
 		incomingMessages:   make(chan IncomingMessage, 20),
 		messageSendErrors:  make(chan MessageSendError, 20),
+		messageSentEvents:  make(chan MessageSentEvent, 20),
 	}
 
 	err := n.listen()

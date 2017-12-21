@@ -16,7 +16,7 @@ import (
 func TestReadWrite(t *testing.T) {
 
 	msg := []byte("hello world")
-	msgId :=[]byte(uuid.New().String())
+	msgId := []byte(uuid.New().String())
 	port := crypto.GetRandomUInt32(1000) + 10000
 	address := fmt.Sprintf("localhost:%d", port)
 	done := make(chan bool, 1)

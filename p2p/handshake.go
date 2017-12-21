@@ -145,9 +145,9 @@ func (h *handshakeProtocolImpl) CreateSession(peer Peer) {
 	log.Info("Creating session handshake request session id: %s", session.String())
 
 	h.swarm.sendHandshakeMessage(SendMessageReq{
-		ReqId:   session.Id(),
-		PeerId:  peer.String(),
-		Payload: payload,
+		ReqId:    session.Id(),
+		PeerId:   peer.String(),
+		Payload:  payload,
 		Callback: nil,
 	})
 
@@ -222,9 +222,9 @@ func (h *handshakeProtocolImpl) onHandleIncomingHandshakeRequest(msg IncomingMes
 
 	// send response back to sender
 	h.swarm.sendHandshakeMessage(SendMessageReq{
-		ReqId:   session.Id(),
-		PeerId:  msg.Sender().String(),
-		Payload: payload,
+		ReqId:    session.Id(),
+		PeerId:   msg.Sender().String(),
+		Payload:  payload,
 		Callback: nil,
 	})
 

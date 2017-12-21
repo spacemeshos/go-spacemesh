@@ -12,7 +12,7 @@ import (
 func GetRandomBytes(n int) ([]byte, error) {
 
 	if n == 0 {
-		return nil, errors.New("invalid input param - n must be > 0")
+		return nil, errors.New("invalid input param - n must be positive")
 	}
 
 	b := make([]byte, n)

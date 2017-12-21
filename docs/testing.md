@@ -41,6 +41,10 @@ govendor test +local
 go run -race main.go
 ```
 
+- Code Coverage
+```
+go test ./... -cover
+```
 
 ### CI
 - TBD - travis builds and tests

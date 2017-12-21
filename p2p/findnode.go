@@ -33,7 +33,7 @@ type FindNodeProtocol interface {
 
 type FindNodeResp struct {
 	*pb.FindNodeResp
-	err error
+	err   error
 	reqId []byte
 }
 

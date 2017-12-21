@@ -71,7 +71,7 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 		messagesPendingSession: make(map[string]SendMessageReq),
 		allSessions:            make(map[string]NetworkSession),
 
-		outgoingSendsCallbacks: make(map[string]map[string] chan SendError),
+		outgoingSendsCallbacks: make(map[string]map[string]chan SendError),
 
 		connectionRequests: make(chan node.RemoteNodeData, 10),
 		disconnectRequests: make(chan node.RemoteNodeData, 10),
@@ -184,6 +184,9 @@ Loop:
 
 		case err := <-s.network.GetConnectionErrors():
 			s.onConnectionError(err)
+
+		case evt := <-s.network.GetMessageSentCallback():
+			s.onMessageSentEvent(evt)
 
 		case err := <-s.network.GetMessageSendErrors():
 			s.onMessageSendError(err)
