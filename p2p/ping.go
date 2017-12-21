@@ -141,7 +141,7 @@ func (p *pingProtocolImpl) handleIncomingResponse(msg IncomingMessage) {
 
 	log.Info("Got pong response from %s. Ping req id: %", msg.Sender().Pretty(), data.Pong, data.Metadata.ReqId)
 
-	resp := SendPingResp{ data,err }
+	resp := SendPingResp{data, err}
 
 	// notify clients of the new pong or error
 	for _, c := range p.callbacks {

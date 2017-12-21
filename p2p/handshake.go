@@ -68,9 +68,6 @@ func (n *handshakeDataImp) SetError(err error) {
 // Node1 -> Node 2: Req(HandshakeData)
 // Node2 -> Node 1: Resp(HandshakeData)
 // After response is processed by node1 both sides have an auth session with a secret ephemeral aes sym key
-
-// todo: move to p2p/protocols
-
 type HandshakeProtocol interface {
 	CreateSession(peer Peer)
 	RegisterNewSessionCallback(callback chan HandshakeData) // register a channel to receive session state changes

@@ -100,7 +100,7 @@ func (s *writer) Write(msg []byte) (int, error) {
 
 func (s *writer) WriteMsg(msg []byte) (err error) {
 
-	// todo: since we always use chan to serilize writting / reading of messages
+	// todo: since we always use chan to serialize messages R/W
 	// there's no really need for the locking in msgio  - we should remove them once
 	// we have more tests in-place
 

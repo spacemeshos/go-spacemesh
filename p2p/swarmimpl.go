@@ -128,17 +128,13 @@ func (s *swarmImpl) GetLocalNode() LocalNode {
 	return s.localNode
 }
 
-// Find a node based on its id
+// Find a node based on its id - internal method
 // id: base58 encoded node id
-// returns remote node data or nill if find fails
+// returns remote node data or nil if find fails
 func (s *swarmImpl) findNode(id string, callback chan node.RemoteNodeData) {
-
 	// todo: implement me
-
 	// todo: check if in the local routing table and return if it is
-
 	// otherwise use dht to find it using the kad find-node algo (might involve multiple queries that will update the table
-
 	// implement that kad find-node algo using s.findNodeProtocol (request a specific node from a specific node)
 }
 

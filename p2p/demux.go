@@ -44,8 +44,11 @@ type ProtocolRegistration struct {
 	Handler  MessagesChan
 }
 
-// a Demuxer is responsible for routing incoming network messages back to protocol handlers based on message protocols
+// Demuxer is responsible for routing incoming network messages back to protocol handlers based on message protocols
 // Limitations: only supports 1 handler per protocol for now.
+
+// todo: add unit tests
+
 type Demuxer interface {
 	RegisterProtocolHandler(handler ProtocolRegistration)
 	RouteIncomingMessage(msg IncomingMessage)
@@ -88,9 +91,8 @@ func (d *demuxImpl) processEvents() {
 		case msg := <-d.incomingMessages:
 			handler := d.handlers[msg.Protocol()]
 			if handler == nil {
-				log.Warning("failed to route incoming message - no registered handler for protocol %s", msg.Protocol())
+				log.Error("failed to route incoming message - no registered handler for protocol %s", msg.Protocol())
 			} else {
-				// todo: verify this is safe in terms of go closure usage - is msg immutable ?
 				go func() { // async send to handler so we can keep processing message
 					handler <- msg
 				}()

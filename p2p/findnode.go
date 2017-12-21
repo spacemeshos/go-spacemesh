@@ -27,7 +27,7 @@ type FindNodeProtocol interface {
 	// id - node id to find
 	FindNode(reqId []byte, serverNodeId string, id string) error
 
-	// App logic registers her for typed incoming find-node responses
+	// App logic registers here for typed incoming find-node responses
 	Register(callback chan FindNodeResp)
 }
 
