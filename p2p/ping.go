@@ -17,24 +17,28 @@ type Ping interface {
 	// reqId: allows the client to match responses with requests by id
 	Send(msg string, reqId []byte, remoteNodeId string)
 
-	// App logic registers her for typed incoming ping responses (pongs)
+	// App logic registers her for typed incoming ping responses (pongs) or errors
 	Register(callback chan SendPingResp)
 }
 
 // Send ping op response - contains response data or error
 type SendPingResp struct {
 	*pb.PingRespData
-	err error
+	err   error
+	reqId []byte
 }
 
 type Callbacks chan chan SendPingResp
 
 type pingProtocolImpl struct {
-	swarm             Swarm
-	callbacks         []chan SendPingResp
+	swarm Swarm
+
+	callbacks []chan SendPingResp
+
 	incomingRequests  MessagesChan
 	incomingResponses MessagesChan
-	callbacksRegReq   Callbacks // a channel of channels that receive callbacks
+	sendErrors        chan SendError
+	callbacksRegReq   Callbacks // a channel of channels that receive callbacks to send ping
 }
 
 func NewPingProtocol(s Swarm) Ping {
@@ -44,6 +48,7 @@ func NewPingProtocol(s Swarm) Ping {
 		incomingRequests:  make(MessagesChan, 10),
 		incomingResponses: make(MessagesChan, 10),
 		callbacksRegReq:   make(Callbacks, 10),
+		sendErrors:        make(chan SendError, 3),
 		callbacks:         make([]chan SendPingResp, 0), // start with empty slice
 	}
 
@@ -72,13 +77,9 @@ func (p *pingProtocolImpl) Send(msg string, reqId []byte, remoteNodeId string) {
 		return
 	}
 
-	// send the message
+	req := SendMessageReq{remoteNodeId, reqId, payload, p.sendErrors}
 
-	// todo: register send failure callback and send SendPingResp on error !!!!
-
-	req := SendMessageReq{remoteNodeId, reqId, payload}
 	p.swarm.SendMessage(req)
-
 }
 
 // Register callback on remotely received pings
@@ -124,7 +125,8 @@ func (p *pingProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 	// send signed data payload
 	resp := SendMessageReq{msg.Sender().String(),
 		req.Metadata.ReqId,
-		signedPayload}
+		signedPayload,
+		nil}
 
 	p.swarm.SendMessage(resp)
 }
@@ -136,12 +138,15 @@ func (p *pingProtocolImpl) handleIncomingResponse(msg IncomingMessage) {
 	data := &pb.PingRespData{}
 	err := proto.Unmarshal(msg.Payload(), data)
 	if err != nil {
-		log.Warning("Invalid ping request data: %v", err)
+		// we can't extract the request id from the response so we just terminate
+		// without sending a callback - this case should be handeled as a timeout
+		log.Error("Invalid ping request data: %v", err)
+		return
 	}
 
 	log.Info("Got pong response from %s. Ping req id: %", msg.Sender().Pretty(), data.Pong, data.Metadata.ReqId)
 
-	resp := SendPingResp{data, err}
+	resp := SendPingResp{data, err, data.Metadata.ReqId}
 
 	// notify clients of the new pong or error
 	for _, c := range p.callbacks {
@@ -162,6 +167,12 @@ func (p *pingProtocolImpl) processEvents() {
 
 		case c := <-p.callbacksRegReq:
 			p.callbacks = append(p.callbacks, c)
+
+		case r := <-p.sendErrors:
+			resp := SendPingResp{nil, r.err, r.ReqId}
+			for _, c := range p.callbacks {
+				go func() { c <- resp }()
+			}
 		}
 	}
 }

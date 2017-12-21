@@ -6,8 +6,7 @@ import (
 )
 
 // Swarm
-// A p2p network of unruly nodes
-
+// p2p virtual network of unruly nodes
 type Swarm interface {
 
 	// Send a message to a specific remote node based just on its id without knowing its ip address
@@ -49,9 +48,15 @@ type Swarm interface {
 }
 
 type SendMessageReq struct {
-	PeerId  string // base58 message destination peer id
-	ReqId   []byte // unique request id
-	Payload []byte // this should be a marshaled protocol msg e.g. PingReqData
+	PeerId   string         // base58 message destination peer id
+	ReqId    []byte         // unique request id
+	Payload  []byte         // this should be a marshaled protocol msg e.g. PingReqData
+	Callback chan SendError // callback to receive send errors
+}
+
+type SendError struct {
+	ReqId []byte // unique request id
+	err   error  // error - nil if message was sent
 }
 
 type NodeResp struct {

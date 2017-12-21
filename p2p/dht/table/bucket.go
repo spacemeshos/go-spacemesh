@@ -103,10 +103,10 @@ func (b *bucketimpl) Split(cpl int, target dht.ID) Bucket {
 	e := b.list.Front()
 
 	for e != nil {
-		node := e.Value.(node.RemoteNodeData)
-		peerCPL := node.DhtId().CommonPrefixLen(target)
+		n := e.Value.(node.RemoteNodeData)
+		peerCPL := n.DhtId().CommonPrefixLen(target)
 		if peerCPL > cpl {
-			newbucket.PushBack(node)
+			newbucket.PushBack(n)
 			curr := e
 			e = e.Next()
 			b.list.Remove(curr)

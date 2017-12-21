@@ -42,7 +42,7 @@ func (n *localNodeImp) NewProtocolMessageMetadata(protocol string, reqId []byte,
 
 func (n *localNodeImp) SendMessage(req SendMessageReq) {
 	// let the swarm handle
-	n.swarm.SendMessage(req)
+	//n.swarm.SendMessage(req)
 }
 
 // helper - return remote node data of this node

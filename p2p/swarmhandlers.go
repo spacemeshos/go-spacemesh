@@ -2,6 +2,8 @@ package p2p
 
 import (
 	"encoding/hex"
+	"errors"
+	"fmt"
 	"github.com/UnrulyOS/go-unruly/crypto"
 	"github.com/UnrulyOS/go-unruly/log"
 	"github.com/UnrulyOS/go-unruly/p2p/net"
@@ -168,7 +170,10 @@ func (s *swarmImpl) onSendMessageRequest(r SendMessageReq) {
 
 	encPayload, err := session.Encrypt(r.Payload)
 	if err != nil {
-		log.Error("aborting send - failed to encrypt payload: %v", err)
+		e := errors.New(fmt.Sprintf("aborting send - failed to encrypt payload: %v", err))
+		go func() {
+			r.Callback <- SendError{r.ReqId, e}
+		}()
 		return
 	}
 
@@ -179,9 +184,15 @@ func (s *swarmImpl) onSendMessageRequest(r SendMessageReq) {
 
 	data, err := proto.Marshal(msg)
 	if err != nil {
-		log.Error("aborting send - invalid msg format %v", err)
+		e := errors.New(fmt.Sprintf("aborting send - invalid msg format %v", err))
+		go func() {
+			r.Callback <- SendError{r.ReqId, e}
+		}()
 		return
 	}
+
+	// store callback by reqId so we can call back in case of msg timout or other send failure
+	s.sendMsgErrorCallbacks[hex.EncodeToString(r.ReqId)] = r.Callback
 
 	// finally - send it away!
 	log.Info("Sending protocol message down the connection...")

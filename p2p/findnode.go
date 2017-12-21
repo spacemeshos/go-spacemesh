@@ -90,7 +90,7 @@ func (p *findNodeProtocolImpl) FindNode(reqId []byte, serverNodeId string, id st
 	// send the message
 
 	// todo: reg for errors and return to client FindNodeResp w err
-	req := SendMessageReq{serverNodeId, reqId, payload}
+	req := SendMessageReq{serverNodeId, reqId, payload, nil}
 	p.swarm.SendMessage(req)
 
 	return nil
@@ -159,7 +159,8 @@ func (p *findNodeProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 	// send signed data payload
 	resp := SendMessageReq{msg.Sender().String(),
 		req.Metadata.ReqId,
-		signedPayload}
+		signedPayload,
+		nil}
 
 	p.swarm.SendMessage(resp)
 }
