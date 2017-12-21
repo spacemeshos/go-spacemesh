@@ -25,9 +25,9 @@ type swarmImpl struct {
 	// todo: remove all idle sessions every n hours
 	allSessions map[string]NetworkSession // SessionId -> Session data. all authenticated session
 
-	messagesPendingSession map[string]SendMessageReq // k - unique req id. outgoing messages which pend an auth session with remote node to be sent out
+	outgoingSendsCallbacks map[string]map[string]chan SendError // k - conn id v-  reqId -> chan SendError
 
-	sendMsgErrorCallbacks map[string]chan SendError
+	messagesPendingSession map[string]SendMessageReq // k - unique req id. outgoing messages which pend an auth session with remote node to be sent out
 
 	// comm channels
 	connectionRequests chan node.RemoteNodeData // local requests to establish a session w a remote node
@@ -70,9 +70,11 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 		connections:            make(map[string]net.Connection),
 		messagesPendingSession: make(map[string]SendMessageReq),
 		allSessions:            make(map[string]NetworkSession),
-		sendMsgErrorCallbacks:   make(map[string]chan SendError),
-		connectionRequests:     make(chan node.RemoteNodeData, 10),
-		disconnectRequests:     make(chan node.RemoteNodeData, 10),
+
+		outgoingSendsCallbacks: make(map[string]map[string] chan SendError),
+
+		connectionRequests: make(chan node.RemoteNodeData, 10),
+		disconnectRequests: make(chan node.RemoteNodeData, 10),
 
 		sendMsgRequests:  make(chan SendMessageReq, 20),
 		sendHandshakeMsg: make(chan SendMessageReq, 20),

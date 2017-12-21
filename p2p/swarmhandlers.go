@@ -138,7 +138,7 @@ func (s *swarmImpl) onSendHandshakeMessage(r SendMessageReq) {
 		return
 	}
 
-	conn.Send(r.Payload)
+	conn.Send(r.Payload, r.ReqId)
 }
 
 // Local request to send a message to a remote node
@@ -172,7 +172,9 @@ func (s *swarmImpl) onSendMessageRequest(r SendMessageReq) {
 	if err != nil {
 		e := errors.New(fmt.Sprintf("aborting send - failed to encrypt payload: %v", err))
 		go func() {
-			r.Callback <- SendError{r.ReqId, e}
+			if r.Callback != nil {
+				r.Callback <- SendError{r.ReqId, e}
+			}
 		}()
 		return
 	}
@@ -186,18 +188,28 @@ func (s *swarmImpl) onSendMessageRequest(r SendMessageReq) {
 	if err != nil {
 		e := errors.New(fmt.Sprintf("aborting send - invalid msg format %v", err))
 		go func() {
-			r.Callback <- SendError{r.ReqId, e}
+			if r.Callback != nil {
+				r.Callback <- SendError{r.ReqId, e}
+			}
 		}()
 		return
 	}
 
-	// store callback by reqId so we can call back in case of msg timout or other send failure
-	s.sendMsgErrorCallbacks[hex.EncodeToString(r.ReqId)] = r.Callback
+	// store callback by reqId for this connection so we can call back in case of msg timout or other send failure
+	if r.Callback != nil {
+		callbacks := s.outgoingSendsCallbacks[conn.Id()]
+		if callbacks == nil {
+			s.outgoingSendsCallbacks[conn.Id()] = make(map[string]chan SendError)
+		}
+
+		s.outgoingSendsCallbacks[conn.Id()][hex.EncodeToString(r.ReqId)] = r.Callback
+	}
+
 
 	// finally - send it away!
 	log.Info("Sending protocol message down the connection...")
 
-	conn.Send(data)
+	conn.Send(data, r.ReqId)
 }
 
 func (s *swarmImpl) onConnectionClosed(c net.Connection) {
@@ -218,7 +230,7 @@ func (s *swarmImpl) onRemoteClientConnected(c net.Connection) {
 }
 
 // Processes an incoming handshake protocol message
-func (s *swarmImpl) onRemoteClientHandshakeMessage(msg net.ConnectionMessage) {
+func (s *swarmImpl) onRemoteClientHandshakeMessage(msg net.IncomingMessage) {
 
 	data := &pb.HandshakeData{}
 	err := proto.Unmarshal(msg.Message, data)
@@ -268,7 +280,7 @@ func (s *swarmImpl) onRemoteClientHandshakeMessage(msg net.ConnectionMessage) {
 
 // Pre-process a protocol message from a remote client handling decryption and authentication
 // Authenticated messages are forwarded to the demuxer for demuxing to protocol handlers
-func (s *swarmImpl) onRemoteClientProtocolMessage(msg net.ConnectionMessage, c *pb.CommonMessageData) {
+func (s *swarmImpl) onRemoteClientProtocolMessage(msg net.IncomingMessage, c *pb.CommonMessageData) {
 
 	// Locate the session
 	session := s.allSessions[hex.EncodeToString(c.SessionId)]
@@ -311,15 +323,18 @@ func (s *swarmImpl) onRemoteClientProtocolMessage(msg net.ConnectionMessage, c *
 	// update the routing table
 	s.routingTable.Update(remoteNode.GetRemoteNodeData())
 
+	// todo: remove send error channels for this connection if this is a response to a locally sent request
+
 	// route authenticated message to the reigstered protocol
 	s.demuxer.RouteIncomingMessage(NewIncomingMessage(remoteNode, pm.Metadata.Protocol, decPayload))
+
 }
 
 // Main network messages handler
 // c: connection we got this message on
 // msg: binary protobufs encoded data
 // not go safe - called from event processing main loop
-func (s *swarmImpl) onRemoteClientMessage(msg net.ConnectionMessage) {
+func (s *swarmImpl) onRemoteClientMessage(msg net.IncomingMessage) {
 
 	c := &pb.CommonMessageData{}
 	err := proto.Unmarshal(msg.Message, c)
@@ -341,16 +356,31 @@ func (s *swarmImpl) onRemoteClientMessage(msg net.ConnectionMessage) {
 }
 
 // not go safe - called from event processing main loop
-func (s *swarmImpl) onConnectionError(err net.ConnectionError) {
-	// close the connection?
-	// who to notify?
-	// update remote node?
-	// retry to connect to node?
-
-	// todo: if there's any pending messages to send over this connection - retry or report to listeners on errors
+func (s *swarmImpl) onConnectionError(ce net.ConnectionError) {
+	s.sendMessageSendError(ce)
 }
 
 // not go safe - called from event processing main loop
-func (s *swarmImpl) onMessageSendError(err net.MessageSendError) {
-	// todo: callback any listeneres on this message
+func (s *swarmImpl) onMessageSendError(mse net.MessageSendError) {
+	s.sendMessageSendError(net.ConnectionError{ mse.Connection, mse.Err, mse.Id})
+}
+
+// send a msg send error back to the callback registered by reqId
+func (s *swarmImpl) sendMessageSendError(cr net.ConnectionError) {
+	c := cr.Connection
+	callbacks := s.outgoingSendsCallbacks[c.Id()]
+
+	if callbacks == nil {
+		return
+	}
+
+	reqId := hex.EncodeToString(cr.Id)
+	callback := callbacks[reqId]
+
+	if callback == nil {
+		return
+	}
+
+	delete(callbacks, reqId)
+
 }

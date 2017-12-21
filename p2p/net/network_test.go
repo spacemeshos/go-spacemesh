@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/UnrulyOS/go-unruly/crypto"
 	"github.com/UnrulyOS/go-unruly/p2p/nodeconfig"
+	"github.com/google/uuid"
 
 	//"math/rand"
 	"github.com/UnrulyOS/go-unruly/assert"
@@ -14,10 +15,10 @@ import (
 
 func TestReadWrite(t *testing.T) {
 
-	var msg = []byte("hello world")
+	msg := []byte("hello world")
+	msgId :=[]byte(uuid.New().String())
 	port := crypto.GetRandomUInt32(1000) + 10000
 	address := fmt.Sprintf("localhost:%d", port)
-
 	done := make(chan bool, 1)
 
 	n, err := NewNet(address, nodeconfig.ConfigValues)
@@ -56,7 +57,7 @@ func TestReadWrite(t *testing.T) {
 	assert.Nil(t, err, "failed to connect to tcp server")
 
 	log.Info("Sending message...")
-	c.Send(msg)
+	c.Send(msg, msgId)
 	//assert.Nil(t, err, "Failed to send message to server")
 	//assert.Equal(t, l, len(msg) + 4, "Expected message to be written to stream")
 	log.Info("Message sent.")

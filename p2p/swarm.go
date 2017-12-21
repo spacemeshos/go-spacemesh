@@ -15,7 +15,6 @@ type Swarm interface {
 	// req.msg should be marshaled protocol message. e.g. something like pb.PingReqData
 	// This is designed for standard messages that require a session
 	// This method is designed to be used by protocols implementations to send message to any destination
-	// todo: support registration on message send failure and getting notified when failed to send (optional)
 	SendMessage(req SendMessageReq)
 
 	// TODO: support sending a message to all connected peers without any dest id provided by caller
@@ -51,7 +50,7 @@ type SendMessageReq struct {
 	PeerId   string         // base58 message destination peer id
 	ReqId    []byte         // unique request id
 	Payload  []byte         // this should be a marshaled protocol msg e.g. PingReqData
-	Callback chan SendError // callback to receive send errors
+	Callback chan SendError // optional callback to receive send errors or timeout
 }
 
 type SendError struct {

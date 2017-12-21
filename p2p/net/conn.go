@@ -13,25 +13,32 @@ import (
 // Connection is an io.Writer and an  io.Closer
 type Connection interface {
 	Id() string
-	Send(message []byte)
+	Send(message []byte, id []byte)
 	Close() error
 	LastOpTime() time.Time // last rw op time for this connection
 }
 
-type ConnectionMessage struct {
+type IncomingMessage struct {
 	Connection Connection
 	Message    []byte
 }
 
 type ConnectionError struct {
 	Connection Connection
-	err        error
+	Err        error
+	Id         []byte
 }
 
 type MessageSendError struct {
 	Connection Connection
 	Message    []byte
-	err        error
+	Err        error
+	Id 		   []byte
+}
+
+type OutgoingMessage struct {
+	Message []byte
+	Id	    []byte
 }
 
 type ConnectionSource int
@@ -51,8 +58,7 @@ type connectionImpl struct {
 	lastOpTime time.Time
 
 	incomingMsgs *msgio.Chan // implemented using msgio.Chan - incoming messages
-
-	outgoingMsgs chan []byte // outgoing message queue
+	outgoingMsgs chan OutgoingMessage // outgoing message queue
 
 	conn net.Conn // wrapped network connection
 	net  Net      // network context
@@ -71,7 +77,7 @@ func newConnection(conn net.Conn, n Net, s ConnectionSource) Connection {
 		created:      time.Now(),
 		source:       s,
 		incomingMsgs: incomingMsgs,
-		outgoingMsgs: make(chan []byte, 10),
+		outgoingMsgs: make(chan OutgoingMessage, 10),
 		conn:         conn,
 		net:          n,
 	}
@@ -96,27 +102,27 @@ func (c *connectionImpl) String() string {
 // Send binary data to a connection
 // data is copied over so caller can get rid of the data
 // Concurrency: can be called from any go routine
-func (c *connectionImpl) Send(message []byte) {
+func (c *connectionImpl) Send(message []byte, id []byte) {
 	// queue messages for sending
-	c.outgoingMsgs <- message
+	c.outgoingMsgs <- OutgoingMessage{message,id}
 }
 
 // Write a message to the network connection
 // Concurrency: this message is not go safe it is designed as an internal helper to be
 // called from the event processing loop
-func (c *connectionImpl) writeMessageToConnection(msg []byte) {
-
+func (c *connectionImpl) writeMessageToConnection(om OutgoingMessage) {
+	msg := om.Message
 	// note: using msgio Reader and Writer failed here so this is a temp hack:
 	ul := uint32(len(msg))
 	err := binary.Write(c.conn, binary.BigEndian, &ul)
 	if err != nil {
-		c.net.GetMessageSendErrors() <- MessageSendError{c, msg, err}
+		c.net.GetMessageSendErrors() <- MessageSendError{c, msg, err, om.Id}
 		return
 	}
 
 	_, err = c.conn.Write(msg)
 	if err != nil {
-		c.net.GetMessageSendErrors() <- MessageSendError{c, msg, err}
+		c.net.GetMessageSendErrors() <- MessageSendError{c, msg, err, om.Id}
 		return
 	}
 
@@ -170,14 +176,14 @@ Loop:
 			c.lastOpTime = time.Now()
 
 			// pump the message to the network
-			c.net.GetIncomingMessage() <- ConnectionMessage{c, msg}
+			c.net.GetIncomingMessage() <- IncomingMessage{c, msg}
 
 		case <-c.incomingMsgs.CloseChan:
 			c.net.GetClosingConnections() <- c
 			break Loop
 
 		case err := <-c.incomingMsgs.ErrChan:
-			c.net.GetConnectionErrors() <- ConnectionError{c, err}
+			c.net.GetConnectionErrors() <- ConnectionError{c, err, nil}
 
 		}
 	}

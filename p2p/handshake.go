@@ -148,6 +148,7 @@ func (h *handshakeProtocolImpl) CreateSession(peer Peer) {
 		ReqId:   session.Id(),
 		PeerId:  peer.String(),
 		Payload: payload,
+		Callback: nil,
 	})
 
 	h.sessionStateChanged <- handshakeData
@@ -217,11 +218,14 @@ func (h *handshakeProtocolImpl) onHandleIncomingHandshakeRequest(msg IncomingMes
 		return
 	}
 
+	// todo: support callback errors
+
 	// send response back to sender
 	h.swarm.sendHandshakeMessage(SendMessageReq{
 		ReqId:   session.Id(),
 		PeerId:  msg.Sender().String(),
 		Payload: payload,
+		Callback: nil,
 	})
 
 	// we have an active session initiated by a remote node

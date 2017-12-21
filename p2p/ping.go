@@ -17,7 +17,7 @@ type Ping interface {
 	// reqId: allows the client to match responses with requests by id
 	Send(msg string, reqId []byte, remoteNodeId string)
 
-	// App logic registers her for typed incoming ping responses (pongs) or errors
+	// App logic registers her for typed incoming ping responses (pongs) or send errors
 	Register(callback chan SendPingResp)
 }
 

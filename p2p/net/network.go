@@ -20,7 +20,7 @@ type Net interface {
 	GetNewConnections() chan Connection
 	GetClosingConnections() chan Connection
 	GetConnectionErrors() chan ConnectionError
-	GetIncomingMessage() chan ConnectionMessage
+	GetIncomingMessage() chan IncomingMessage
 	GetMessageSendErrors() chan MessageSendError
 }
 
@@ -32,7 +32,7 @@ type netImpl struct {
 	newConnections     chan Connection
 	closingConnections chan Connection
 	connectionErrors   chan ConnectionError
-	incomingMessages   chan ConnectionMessage
+	incomingMessages   chan IncomingMessage
 	messageSendErrors  chan MessageSendError
 }
 
@@ -46,7 +46,7 @@ func (n *netImpl) GetClosingConnections() chan Connection {
 func (n *netImpl) GetConnectionErrors() chan ConnectionError {
 	return n.connectionErrors
 }
-func (n *netImpl) GetIncomingMessage() chan ConnectionMessage {
+func (n *netImpl) GetIncomingMessage() chan IncomingMessage {
 	return n.incomingMessages
 }
 func (n *netImpl) GetMessageSendErrors() chan MessageSendError {
@@ -62,7 +62,7 @@ func NewNet(tcpListenAddress string, config nodeconfig.Config) (Net, error) {
 		newConnections:     make(chan Connection, 20),
 		closingConnections: make(chan Connection, 20),
 		connectionErrors:   make(chan ConnectionError, 20),
-		incomingMessages:   make(chan ConnectionMessage, 20),
+		incomingMessages:   make(chan IncomingMessage, 20),
 		messageSendErrors:  make(chan MessageSendError, 20),
 	}
 

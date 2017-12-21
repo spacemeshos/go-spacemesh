@@ -34,6 +34,7 @@ type FindNodeProtocol interface {
 type FindNodeResp struct {
 	*pb.FindNodeResp
 	err error
+	reqId []byte
 }
 
 type FindNodeCallbacks chan chan FindNodeResp
@@ -43,6 +44,7 @@ type findNodeProtocolImpl struct {
 	callbacks         []chan FindNodeResp
 	incomingRequests  MessagesChan
 	incomingResponses MessagesChan
+	sendErrors        chan SendError
 	callbacksRegReq   FindNodeCallbacks // a channel of channels that receive callbacks
 }
 
@@ -52,6 +54,7 @@ func NewFindNodeProtocol(s Swarm) FindNodeProtocol {
 		swarm:             s,
 		incomingRequests:  make(MessagesChan, 10),
 		incomingResponses: make(MessagesChan, 10),
+		sendErrors:        make(chan SendError),
 		callbacksRegReq:   make(FindNodeCallbacks, 10),
 		callbacks:         make([]chan FindNodeResp, 0), // start with empty slice
 	}
@@ -90,7 +93,7 @@ func (p *findNodeProtocolImpl) FindNode(reqId []byte, serverNodeId string, id st
 	// send the message
 
 	// todo: reg for errors and return to client FindNodeResp w err
-	req := SendMessageReq{serverNodeId, reqId, payload, nil}
+	req := SendMessageReq{serverNodeId, reqId, payload, p.sendErrors}
 	p.swarm.SendMessage(req)
 
 	return nil
@@ -168,29 +171,29 @@ func (p *findNodeProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 // Handle an incoming pong message from a remote node
 func (p *findNodeProtocolImpl) handleIncomingResponse(msg IncomingMessage) {
 
-	var resp FindNodeResp
-
 	// process request
 	data := &pb.FindNodeResp{}
 	err := proto.Unmarshal(msg.Payload(), data)
 	if err != nil {
-		log.Warning("Invalid find-node request data: %v", err)
-		resp = FindNodeResp{nil, err}
-	} else {
+		log.Error("invalid find-node response data: %v", err)
+		// we don't know the request id for this bad response so we can't callback clients with the error
+		// just drop the bad response - clients should be notified when their outgoing requests times out
+		return
+	}
 
-		resp = FindNodeResp{data, nil}
+	resp := FindNodeResp{data, nil, data.Metadata.ReqId}
 
-		log.Info("Got find-node response from %s. Results: %d, Find-node req id: %", msg.Sender().Pretty(),
-			data.NodeInfos, data.Metadata.ReqId)
+	log.Info("Got find-node response from %s. Results: %d, Find-node req id: %", msg.Sender().Pretty(),
+		data.NodeInfos, data.Metadata.ReqId)
 
-		for _, n := range data.NodeInfos {
-			log.Info("Node response: %s, %s", base58.Encode(n.NodeId), n.TcpAddress)
-		}
+	for _, n := range data.NodeInfos {
+		log.Info("Node response: %s, %s", base58.Encode(n.NodeId), n.TcpAddress)
 	}
 
 	// notify clients of the response
 	for _, c := range p.callbacks {
 		go func() { c <- resp }()
+
 	}
 }
 
@@ -206,6 +209,13 @@ func (p *findNodeProtocolImpl) processEvents() {
 
 		case c := <-p.callbacksRegReq:
 			p.callbacks = append(p.callbacks, c)
+
+		case r := <-p.sendErrors:
+			// failed to send a message - send a callback to all clients
+			resp := FindNodeResp{nil, r.err, r.ReqId}
+			for _, c := range p.callbacks {
+				go func() { c <- resp }()
+			}
 		}
 	}
 }

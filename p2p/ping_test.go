@@ -18,19 +18,22 @@ func TestPingProtocol(t *testing.T) {
 	// let node 1 know about node 2
 	node1Local.GetSwarm().RegisterNode(node.NewRemoteNodeData(node2Remote.String(), node2Remote.TcpAddress()))
 
-	// 4 lines of code and a callback on a channel !
+	// generate unique request id
 	pingReqId := []byte(uuid.New().String())
+
+	// specify callback for results or errors
 	callback := make(chan SendPingResp)
 	node1Local.GetPing().Register(callback)
 
-	ping1ReqId := []byte(uuid.New().String())
-
+	// send the ping
 	t0 := time.Now()
 	node1Local.GetPing().Send("hello unruly", pingReqId, node2Remote.String())
 
 	// internally, node 1 creates an encrypted authenticated session with node 2 and sends the ping request
 	// over that session once it is established. Node 1 registers an app-level callback to get the ping response from node 2.
 	// The response includes the request id so it can match it with one or more tracked requests it sent.
+
+	ping1ReqId := []byte(uuid.New().String())
 
 Loop:
 	for {
