@@ -279,7 +279,7 @@ func getMemoryAddress(p interface{}) string {
 	return fmt.Sprintf("%p", p)
 }
 
-// Add or move a peer to the front of its designated bucket
+// Add or move a node to the front of its designated bucket
 func (rt *routingTableImpl) update(p node.RemoteNodeData) {
 
 	// determine node bucket ide

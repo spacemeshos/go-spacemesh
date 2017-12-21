@@ -27,10 +27,16 @@ type remoteNodeDataImpl struct {
 }
 
 // Return serializable (pb) node infos slice from a slice of RemoteNodeData
-func ToNodeInfo(nodes []RemoteNodeData) []*pb.NodeInfo {
+// filterId: node id to exclude from the result
+func ToNodeInfo(nodes []RemoteNodeData, filterId string) []*pb.NodeInfo {
 	// init empty slice
 	res := []*pb.NodeInfo{}
 	for _, n := range nodes {
+
+		if n.Id() == filterId {
+			continue
+		}
+
 		res = append(res, &pb.NodeInfo{
 			NodeId:     n.Bytes(),
 			TcpAddress: n.Ip(),

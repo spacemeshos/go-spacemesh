@@ -22,6 +22,7 @@ Current makefile is using the global system go path.
 - Properly 
 factor /p2p/ types into packages with shared interfaces
 - Make sure all types are defined using interface+struct and not just a struct
+- Peers latency matrices. 
 
 ### Hard(er) Tasks
 - Implement an optimized Merkle tree data structure with backing storage in leveldb (kv storage). Implement Merkle proofs.
@@ -56,3 +57,4 @@ Stuff we have a basic 1st pass implementation for:
 - Demuxer (router) - routes incoming messages to app-level protocols handlers
 - 100% mutex-free (mutexes in msgio should be removed as well) - all concurent flows are using channels
 - 100% lib-p2p free :-)
+- Basic DHT and findPeer protocol

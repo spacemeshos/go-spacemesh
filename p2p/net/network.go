@@ -14,6 +14,9 @@ import (
 // It provides full duplex messaging functionality over the same tcp/ip connection
 // Network should not know about higher-level networking types such as remoteNode, swarm and networkSession
 // Network main client is the swarm
+
+// Net has not channel events processing loops - clients are responsible for polling these channels and popping events from them
+
 type Net interface {
 	DialTCP(address string, timeOut time.Duration, keepAlive time.Duration) (Connection, error) // Connect to a remote node. Can send when no error.
 
@@ -37,31 +40,6 @@ type netImpl struct {
 	messageSendErrors  chan MessageSendError
 
 	messageSentEvents chan MessageSentEvent
-}
-
-func (n *netImpl) GetMessageSentCallback() chan MessageSentEvent {
-	return n.messageSentEvents
-}
-
-// Implement Network interface public channel accessors
-func (n *netImpl) GetNewConnections() chan Connection {
-	return n.newConnections
-}
-
-func (n *netImpl) GetClosingConnections() chan Connection {
-	return n.closingConnections
-}
-
-func (n *netImpl) GetConnectionErrors() chan ConnectionError {
-	return n.connectionErrors
-}
-
-func (n *netImpl) GetIncomingMessage() chan IncomingMessage {
-	return n.incomingMessages
-}
-
-func (n *netImpl) GetMessageSendErrors() chan MessageSendError {
-	return n.messageSendErrors
 }
 
 // Creates a new network
@@ -88,6 +66,31 @@ func NewNet(tcpListenAddress string, config nodeconfig.Config) (Net, error) {
 	log.Info("created network with tcp address: %s", tcpListenAddress)
 
 	return n, nil
+}
+
+func (n *netImpl) GetMessageSentCallback() chan MessageSentEvent {
+	return n.messageSentEvents
+}
+
+// Implement Network interface public channel accessors
+func (n *netImpl) GetNewConnections() chan Connection {
+	return n.newConnections
+}
+
+func (n *netImpl) GetClosingConnections() chan Connection {
+	return n.closingConnections
+}
+
+func (n *netImpl) GetConnectionErrors() chan ConnectionError {
+	return n.connectionErrors
+}
+
+func (n *netImpl) GetIncomingMessage() chan IncomingMessage {
+	return n.incomingMessages
+}
+
+func (n *netImpl) GetMessageSendErrors() chan MessageSendError {
+	return n.messageSendErrors
 }
 
 // Dial a remote server with provided time out

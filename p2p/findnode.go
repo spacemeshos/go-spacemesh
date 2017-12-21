@@ -25,6 +25,8 @@ type FindNodeProtocol interface {
 	// reqId: allows the client to match responses with requests by id
 	// serverNodeId - node to send the find request to
 	// id - node id to find
+
+	// this should really be named FindClosestNodes
 	FindNode(reqId []byte, serverNodeId string, id string) error
 
 	// App logic registers here for typed incoming find-node responses
@@ -122,9 +124,11 @@ func (p *findNodeProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 	rt := p.swarm.getRoutingTable()
 	nodeDhtId := dht.NewIdFromNodeKey(req.NodeId)
 	callback := make(table.PeersOpChannel)
+
 	count := int(minInt32(req.MaxResults, maxNearestNodesResults))
 
 	// get up to count nearest peers to nodeDhtId
+	// todo: pick up this value from the swarm (k const)
 	rt.NearestPeers(table.NearestPeersReq{nodeDhtId, count, callback})
 
 	var results []*pb.NodeInfo
@@ -132,7 +136,8 @@ func (p *findNodeProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 	select { // block until we got results from the  routing table or timeout
 	case c := <-callback:
 		log.Info("Results length: %d", len(c.Peers))
-		results = node.ToNodeInfo(c.Peers)
+		// get results and filter the requesting node from the result
+		results = node.ToNodeInfo(c.Peers, msg.Sender().String())
 	case <-time.After(tableQueryTimeout):
 		results = []*pb.NodeInfo{} // an empty slice
 	}

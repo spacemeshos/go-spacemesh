@@ -84,6 +84,7 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 	}
 
 	// nodes routing table
+	// todo: parametize bucketSize k - it is used in other places
 	s.routingTable = table.NewRoutingTable(20, l.DhtId())
 
 	// findNode dht protocol
@@ -137,6 +138,7 @@ func (s *swarmImpl) GetLocalNode() LocalNode {
 // returns remote node data or nil if find fails
 func (s *swarmImpl) findNode(id string, callback chan node.RemoteNodeData) {
 	// todo: implement me
+	// todo: check if a known peer and return it if known
 	// todo: check if in the local routing table and return if it is
 	// otherwise use dht to find it using the kad find-node algo (might involve multiple queries that will update the table
 	// implement that kad find-node algo using s.findNodeProtocol (request a specific node from a specific node)
