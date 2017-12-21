@@ -28,7 +28,6 @@ func (s *swarmImpl) onRegisterNodeRequest(n node.RemoteNodeData) {
 		return
 	}
 
-	// for now - add to maintained peer although peers should only include peers we connect with
 	s.peers[n.Id()] = node
 
 	// update the routing table with the nde node info
@@ -45,8 +44,6 @@ func (s *swarmImpl) onConnectionRequest(req node.RemoteNodeData) {
 	peer := s.peers[req.Id()]
 
 	if peer == nil {
-
-
 		peer, err = NewRemoteNode(req.Id(), req.Ip())
 		if err != nil {
 			return
@@ -69,9 +66,7 @@ func (s *swarmImpl) onConnectionRequest(req node.RemoteNodeData) {
 		// Dial the other node using the node's network config values
 		conn, err = s.network.DialTCP(req.Ip(), s.localNode.Config().DialTimeout, s.localNode.Config().ConnKeepAlive)
 		if err != nil {
-
-			// we need to fire an event so app-level code knows about failure to connect
-
+			// todo: we need to fire an event so app-level code knows about failure to connect
 			log.Error("failed to connect to remote node on advertised ip %s", req.Ip)
 			return
 		}
@@ -166,6 +161,7 @@ func (s *swarmImpl) onSendMessageRequest(r SendMessageReq) {
 		s.messagesPendingSession[hex.EncodeToString(r.ReqId)] = r
 
 		// try to connect to remote node and send the message once connected
+		// todo: callback listener if connection fails (possibly after retries)
 		s.onConnectionRequest(node.NewRemoteNodeData(peer.String(), peer.TcpAddress()))
 		return
 	}
@@ -259,6 +255,8 @@ func (s *swarmImpl) onRemoteClientHandshakeMessage(msg net.ConnectionMessage) {
 	s.demuxer.RouteIncomingMessage(NewIncomingMessage(sender, data.Protocol, msg.Message))
 }
 
+// Pre-process a protocol message from a remote client handling decryption and authentication
+// Authenticated messages are forwarded to the demuxer for demuxing to protocol handlers
 func (s *swarmImpl) onRemoteClientProtocolMessage(msg net.ConnectionMessage, c *pb.CommonMessageData) {
 
 	// Locate the session
@@ -302,7 +300,6 @@ func (s *swarmImpl) onRemoteClientProtocolMessage(msg net.ConnectionMessage, c *
 	// update the routing table
 	s.routingTable.Update(remoteNode.GetRemoteNodeData())
 
-
 	// route authenticated message to the reigstered protocol
 	s.demuxer.RouteIncomingMessage(NewIncomingMessage(remoteNode, pm.Metadata.Protocol, decPayload))
 }
@@ -321,11 +318,13 @@ func (s *swarmImpl) onRemoteClientMessage(msg net.ConnectionMessage) {
 		return
 	}
 
-	// route messages based on msg payload lenght
-	if len(c.Payload) == 0 { // handshake messages have no enc payload
+	// route messages based on msg payload length
+	if len(c.Payload) == 0 {
+		// handshake messages have no enc payload
 		s.onRemoteClientHandshakeMessage(msg)
 
-	} else { // protocol messages are encrypted in payload
+	} else {
+		// protocol messages are encrypted in payload
 		s.onRemoteClientProtocolMessage(msg, c)
 	}
 }
@@ -336,9 +335,11 @@ func (s *swarmImpl) onConnectionError(err net.ConnectionError) {
 	// who to notify?
 	// update remote node?
 	// retry to connect to node?
+
+	// todo: if there's any pending messages to send over this connection - retry or report to listeners on errors
 }
 
 // not go safe - called from event processing main loop
 func (s *swarmImpl) onMessageSendError(err net.MessageSendError) {
-	// what to do here - retry ?
+	// todo: callback any listeneres on this message
 }

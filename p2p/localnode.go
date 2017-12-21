@@ -19,27 +19,28 @@ type LocalNode interface {
 	PrivateKey() crypto.PrivateKey
 	PublicKey() crypto.PublicKey
 
+	DhtId() dht.ID
 	TcpAddress() string
-	NewProtocolMessageMetadata(protocol string, reqId []byte, gossip bool) *pb.Metadata
+
+	SendMessage(req SendMessageReq)
+
 	Sign(data proto.Message) ([]byte, error)
 	SignToString(data proto.Message) (string, error)
+	NewProtocolMessageMetadata(protocol string, reqId []byte, gossip bool) *pb.Metadata
 
 	GetSwarm() Swarm
 	GetPing() Ping
 
-	SendMessage(req SendMessageReq)
-
-	Shutdown()
-
 	Config() nodeconfig.Config
 
-	DhtId() dht.ID
-
 	GetRemoteNodeData() node.RemoteNodeData
+
+	Shutdown()
 }
 
-// Create a local node with a provided ip address
-// Attempts to restore node identity from local store
+// Creates a local node with a provided tcp address
+// Attempts to set node identity from persisted data in local store
+// Creates a new identity if none was loads
 func NewLocalNode(tcpAddress string, config nodeconfig.Config) (LocalNode, error) {
 
 	if len(nodeconfig.ConfigValues.NodeId) > 0 {
@@ -60,13 +61,13 @@ func NewLocalNode(tcpAddress string, config nodeconfig.Config) (LocalNode, error
 	return NewNodeIdentity(tcpAddress, config)
 }
 
-// New local node without attempting to restore identity from local store
+// Creates a new local node without attempting to restore identity from local store
 func NewNodeIdentity(tcpAddress string, config nodeconfig.Config) (LocalNode, error) {
 	priv, pub, _ := crypto.GenerateKeyPair()
-	return NewLocalNodeWithKeys(pub, priv, tcpAddress, config)
+	return newLocalNodeWithKeys(pub, priv, tcpAddress, config)
 }
 
-func NewLocalNodeWithKeys(pubKey crypto.PublicKey, privKey crypto.PrivateKey, tcpAddress string, config nodeconfig.Config) (LocalNode, error) {
+func newLocalNodeWithKeys(pubKey crypto.PublicKey, privKey crypto.PrivateKey, tcpAddress string, config nodeconfig.Config) (LocalNode, error) {
 
 	n := &localNodeImp{
 		pubKey:     pubKey,
@@ -104,6 +105,5 @@ func newNodeFromData(tcpAddress string, d *NodeData, config nodeconfig.Config) (
 		return nil, err
 	}
 
-	return NewLocalNodeWithKeys(pub, priv, tcpAddress, config)
+	return newLocalNodeWithKeys(pub, priv, tcpAddress, config)
 }
-

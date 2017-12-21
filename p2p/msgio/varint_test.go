@@ -50,7 +50,7 @@ func SubtestVarintWrite(t *testing.T, msg []byte) {
 		t.Fatal(err)
 	}
 
-	t.Logf("checking varint is %d", len(msg))
+	//t.Logf("checking varint is %d", len(msg))
 	if int(length) != len(msg) {
 		t.Fatalf("incorrect varint: %d != %d", length, len(msg))
 	}
@@ -59,7 +59,7 @@ func SubtestVarintWrite(t *testing.T, msg []byte) {
 	n := binary.PutUvarint(lbuf, length)
 
 	bblen := int(length) + n
-	t.Logf("checking wrote (%d + %d) bytes", length, n)
+	//t.Logf("checking wrote (%d + %d) bytes", length, n)
 	if len(bb) != bblen {
 		t.Fatalf("wrote incorrect number of bytes: %d != %d", len(bb), bblen)
 	}

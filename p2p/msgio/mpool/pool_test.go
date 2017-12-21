@@ -236,6 +236,7 @@ func BenchmarkPoolOverlflow(b *testing.B) {
 	})
 }
 
+/*
 func ExamplePool() {
 	var p Pool
 
@@ -251,4 +252,4 @@ func ExamplePool() {
 	// Output:
 	// small2 len: 1024
 	// large2 len: 4194304
-}
+}*/

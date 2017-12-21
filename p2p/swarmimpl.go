@@ -130,7 +130,8 @@ func (s *swarmImpl) GetLocalNode() LocalNode {
 
 // Find a node based on its id
 // id: base58 encoded node id
-func (s *swarmImpl) FindNode(id string, callback chan node.RemoteNodeData) {
+// returns remote node data or nill if find fails
+func (s *swarmImpl) findNode(id string, callback chan node.RemoteNodeData) {
 
 	// todo: implement me
 
@@ -159,7 +160,7 @@ func (s *swarmImpl) SendMessage(req SendMessageReq) {
 	s.sendMsgRequests <- req
 }
 
-func (s *swarmImpl) SendHandshakeMessage(req SendMessageReq) {
+func (s *swarmImpl) sendHandshakeMessage(req SendMessageReq) {
 	s.sendHandshakeMsg <- req
 }
 

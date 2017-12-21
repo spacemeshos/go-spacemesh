@@ -1,6 +1,7 @@
 ## Testing
 
-- We strive to have at least one unit test per function and per package.
+- We strive to get to 100% tests code coverage to ensure high-quality.
+- Tests are the the best code documentation as they demonstrate how to use apis (functions, types, flows between types to achive a goal)
 - The level of testing in an open source project is an important factor for serious contribution candidates.
 - As a rule - no new feature, package or function should be push to `develop` unless it includes at least basic sanity tests.
 - More complex packages should have additional tests. There's never enough of them.
