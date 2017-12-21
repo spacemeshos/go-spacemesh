@@ -44,6 +44,7 @@ type swarmImpl struct {
 	// handshake protocol callback - sessions updates are pushed here
 	newSessions chan HandshakeData // gets callback from handshake protocol when new session are created and/or auth
 
+	// dht find-node protocol
 	findNodeProtocol FindNodeProtocol
 
 	routingTable table.RoutingTable
@@ -130,11 +131,14 @@ func (s *swarmImpl) GetLocalNode() LocalNode {
 // Find a node based on its id
 // id: base58 encoded node id
 func (s *swarmImpl) FindNode(id string, callback chan node.RemoteNodeData) {
+
 	// todo: implement me
 
-	// todo: check if in routing table and return
+	// todo: check if in the local routing table and return if it is
 
-	// todo: if not in routing table - use dht to find it using the kad algo
+	// otherwise use dht to find it using the kad find-node algo (might involve multiple queries that will update the table
+
+	// implement that kad find-node algo using s.findNodeProtocol (request a specific node from a specific node)
 }
 
 // Connect up to count random nodes

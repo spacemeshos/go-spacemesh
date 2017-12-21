@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"github.com/UnrulyOS/go-unruly/crypto"
 	"github.com/UnrulyOS/go-unruly/p2p/dht"
+	"github.com/UnrulyOS/go-unruly/p2p/node"
 	"github.com/UnrulyOS/go-unruly/p2p/nodeconfig"
 	"github.com/UnrulyOS/go-unruly/p2p/pb"
 	"github.com/gogo/protobuf/proto"
@@ -41,6 +42,10 @@ func (n *localNodeImp) NewProtocolMessageMetadata(protocol string, reqId []byte,
 
 func (n *localNodeImp) SendMessage(req SendMessageReq) {
 	n.swarm.SendMessage(req)
+}
+
+func (n *localNodeImp) GetRemoteNodeData() node.RemoteNodeData {
+	return node.NewRemoteNodeData(n.String(), n.TcpAddress())
 }
 
 func (n *localNodeImp) DhtId() dht.ID {

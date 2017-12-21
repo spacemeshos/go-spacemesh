@@ -12,9 +12,9 @@ import (
 
 // This file contain swarm internal handlers
 // These should only be called from the swarms event processing main loop
-// or by ohter internal handlers but not from a random type or go routine
+// or by other internal handlers but not from a random type or go routine
 
-// Handle local request to register a remote node in the swarm
+// Handles local request to register a remote node in the swarm
 // Register adds info about this node but doesn't attempt to connect to i
 func (s *swarmImpl) onRegisterNodeRequest(n node.RemoteNodeData) {
 
@@ -46,8 +46,6 @@ func (s *swarmImpl) onConnectionRequest(req node.RemoteNodeData) {
 
 	if peer == nil {
 
-		// update the routing table
-		s.routingTable.Update(req)
 
 		peer, err = NewRemoteNode(req.Id(), req.Ip())
 		if err != nil {
@@ -71,10 +69,15 @@ func (s *swarmImpl) onConnectionRequest(req node.RemoteNodeData) {
 		// Dial the other node using the node's network config values
 		conn, err = s.network.DialTCP(req.Ip(), s.localNode.Config().DialTimeout, s.localNode.Config().ConnKeepAlive)
 		if err != nil {
-			// log it here
+
+			// we need to fire an event so app-level code knows about failure to connect
+
 			log.Error("failed to connect to remote node on advertised ip %s", req.Ip)
 			return
 		}
+
+		// update the routing table
+		s.routingTable.Update(req)
 
 		id := conn.Id()
 
@@ -157,12 +160,12 @@ func (s *swarmImpl) onSendMessageRequest(r SendMessageReq) {
 
 	if session == nil || conn == nil {
 
-		log.Warning("queing protocol request until session is established...")
+		log.Warning("queuing protocol request until session is established...")
 
 		// save the message for later sending and try to connect to the node
 		s.messagesPendingSession[hex.EncodeToString(r.ReqId)] = r
 
-		// try to connect to remote node and send the message once connceted
+		// try to connect to remote node and send the message once connected
 		s.onConnectionRequest(node.NewRemoteNodeData(peer.String(), peer.TcpAddress()))
 		return
 	}
@@ -249,6 +252,9 @@ func (s *swarmImpl) onRemoteClientHandshakeMessage(msg net.ConnectionMessage) {
 
 	}
 
+	// update the routing table
+	s.routingTable.Update(sender.GetRemoteNodeData())
+
 	// Let the demuxer route the message to its registered protocol handler
 	s.demuxer.RouteIncomingMessage(NewIncomingMessage(sender, data.Protocol, msg.Message))
 }
@@ -292,6 +298,10 @@ func (s *swarmImpl) onRemoteClientProtocolMessage(msg net.ConnectionMessage, c *
 	log.Info("Message %s author authenticated ok. %s", hex.EncodeToString(pm.GetMetadata().ReqId), pm.GetMetadata().Protocol)
 
 	// todo: check send time and reject if too much aparat from local clock
+
+	// update the routing table
+	s.routingTable.Update(remoteNode.GetRemoteNodeData())
+
 
 	// route authenticated message to the reigstered protocol
 	s.demuxer.RouteIncomingMessage(NewIncomingMessage(remoteNode, pm.Metadata.Protocol, decPayload))

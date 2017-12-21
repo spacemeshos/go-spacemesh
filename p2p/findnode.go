@@ -19,13 +19,13 @@ const findNodeResp = "/dht/1.0/find-node-resp/"
 // Protocol implementing dht FIND_NODE message
 type FindNodeProtocol interface {
 
-	// Send a find_node request to a specific remote node
+	// Send a find_node request for data about a remote node, known only by id, to a specific known remote node
 	// Results will include 0 or more nodes and up to count nodes which may or may not
-	// Include data about findNodeId (as sendToNode may not know about it)
+	// Include data about id (as serverNodeId may not know about it)
 	// reqId: allows the client to match responses with requests by id
-	// sendToNodeId - node to send find request to
-	// findNodeIdd - node id to find
-	FindNode(reqId []byte, sendToNodeId string, findNodeId string) error
+	// serverNodeId - node to send the find request to
+	// id - node id to find
+	FindNode(reqId []byte, serverNodeId string, id string) error
 
 	// App logic registers her for typed incoming find-node responses
 	Register(callback chan *pb.FindNodeResp)
@@ -66,9 +66,9 @@ const tableQueryTimeout = time.Duration(time.Minute * 1)
 
 // Send a single find node request to a remote node
 // remoteNodeId - base58 encoded
-func (p *findNodeProtocolImpl) FindNode(reqId []byte, sendToNodeId string, findNodeId string) error {
+func (p *findNodeProtocolImpl) FindNode(reqId []byte, serverNodeId string, id string) error {
 
-	nodeId := base58.Decode(findNodeId)
+	nodeId := base58.Decode(id)
 	metadata := p.swarm.GetLocalNode().NewProtocolMessageMetadata(findNodeReq, reqId, false)
 	data := &pb.FindNodeReq{metadata, nodeId, maxNearestNodesResults}
 
@@ -83,7 +83,7 @@ func (p *findNodeProtocolImpl) FindNode(reqId []byte, sendToNodeId string, findN
 	}
 
 	// send the message
-	req := SendMessageReq{sendToNodeId, reqId, payload}
+	req := SendMessageReq{serverNodeId, reqId, payload}
 	p.swarm.SendMessage(req)
 
 	return nil
@@ -124,7 +124,7 @@ func (p *findNodeProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 		log.Info("Results length: %d", len(c.Peers))
 		results = node.ToNodeInfo(c.Peers)
 	case <-time.After(tableQueryTimeout):
-		results = []*pb.NodeInfo{} // empty slice
+		results = []*pb.NodeInfo{} // an empty slice
 	}
 
 	// generate response using results

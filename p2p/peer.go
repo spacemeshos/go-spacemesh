@@ -4,6 +4,7 @@ import (
 	"github.com/UnrulyOS/go-unruly/crypto"
 	"github.com/UnrulyOS/go-unruly/log"
 	"github.com/UnrulyOS/go-unruly/p2p/net"
+	"github.com/UnrulyOS/go-unruly/p2p/node"
 )
 
 // A remote node
@@ -28,6 +29,8 @@ type Peer interface {
 
 	// returns an active connection with the node if we have one
 	GetActiveConnection() net.Connection
+
+	GetRemoteNodeData() node.RemoteNodeData
 }
 
 type peerImpl struct {
@@ -64,6 +67,10 @@ func (n *peerImpl) GetAuthenticatedSession() NetworkSession {
 		}
 	}
 	return nil
+}
+
+func (n *peerImpl) GetRemoteNodeData() node.RemoteNodeData {
+	return node.NewRemoteNodeData(n.String(), n.TcpAddress())
 }
 
 func (n *peerImpl) GetActiveConnection() net.Connection {

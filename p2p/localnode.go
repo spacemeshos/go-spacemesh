@@ -4,6 +4,7 @@ import (
 	"github.com/UnrulyOS/go-unruly/crypto"
 	"github.com/UnrulyOS/go-unruly/log"
 	"github.com/UnrulyOS/go-unruly/p2p/dht"
+	"github.com/UnrulyOS/go-unruly/p2p/node"
 	"github.com/UnrulyOS/go-unruly/p2p/nodeconfig"
 	"github.com/UnrulyOS/go-unruly/p2p/pb"
 	"github.com/gogo/protobuf/proto"
@@ -33,9 +34,12 @@ type LocalNode interface {
 	Config() nodeconfig.Config
 
 	DhtId() dht.ID
+
+	GetRemoteNodeData() node.RemoteNodeData
 }
 
 // Create a local node with a provided ip address
+// Attempts to restore node identity from local store
 func NewLocalNode(tcpAddress string, config nodeconfig.Config) (LocalNode, error) {
 
 	if len(nodeconfig.ConfigValues.NodeId) > 0 {
@@ -53,10 +57,11 @@ func NewLocalNode(tcpAddress string, config nodeconfig.Config) (LocalNode, error
 	}
 
 	// generate new node
-	return newNodeIdentity(tcpAddress, config)
+	return NewNodeIdentity(tcpAddress, config)
 }
 
-func newNodeIdentity(tcpAddress string, config nodeconfig.Config) (LocalNode, error) {
+// New local node without attempting to restore identity from local store
+func NewNodeIdentity(tcpAddress string, config nodeconfig.Config) (LocalNode, error) {
 	priv, pub, _ := crypto.GenerateKeyPair()
 	return NewLocalNodeWithKeys(pub, priv, tcpAddress, config)
 }
@@ -101,3 +106,4 @@ func newNodeFromData(tcpAddress string, d *NodeData, config nodeconfig.Config) (
 
 	return NewLocalNodeWithKeys(pub, priv, tcpAddress, config)
 }
+

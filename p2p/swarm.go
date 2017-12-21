@@ -20,13 +20,13 @@ type Swarm interface {
 	// Attempt to establish a session with a remote node with a known ip address - useful for bootstrapping
 	ConnectTo(req node.RemoteNodeData)
 
-	//Get random nodes (max int) get up to max random nodes from the swarm
+	//Connect to count random nodde
 	ConnectToRandomNodes(count int, callback chan node.RemoteNodeData)
 
 	// forcefully disconnect form a node - close any connections and sessions with it
 	DisconnectFrom(req node.RemoteNodeData)
 
-	// Send a message to a remote node - ideally we want to enable sending to any node
+	// Send a message to a specific remote node - ideally we want to enable sending to any node
 	// without knowing its ip address - in this case we will try to locate the node via dht node search
 	// and send the message if we obtained node ip address and were able to connect to it
 	// req.msg should be marshaled protocol message. e.g. something like pb.PingReqData
