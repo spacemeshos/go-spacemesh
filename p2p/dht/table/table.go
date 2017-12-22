@@ -278,6 +278,11 @@ func getMemoryAddress(p interface{}) string {
 // Add or move a node to the front of its designated bucket
 func (rt *routingTableImpl) update(p node.RemoteNodeData) {
 
+	if rt.local.Equals(p.DhtId()) {
+		// local node should never get inserted into the table
+		return
+	}
+
 	// determine node bucket ide
 	cpl := p.DhtId().CommonPrefixLen(rt.local)
 
@@ -372,7 +377,8 @@ func (rt *routingTableImpl) addNewBucket() node.RemoteNodeData {
 	return nil
 }
 
-// NearestPeers returns a list of the 'count' closest peers to the given ID
+// NearestPeers returns a list of up to count closest peers to the given ID
+// Result is sorted by distance from id
 func (rt *routingTableImpl) nearestPeers(id dht.ID, count int) []node.RemoteNodeData {
 
 	cpl := id.CommonPrefixLen(rt.local)
@@ -386,9 +392,12 @@ func (rt *routingTableImpl) nearestPeers(id dht.ID, count int) []node.RemoteNode
 
 	var peerArr peerSorter
 	peerArr = copyPeersFromList(id, peerArr, bucket.List())
+
+	// todo: this MUST continue until count are returned even if we need to go to additional buckets
+
 	if len(peerArr) < count {
 		// In the case of an unusual split, one bucket may be short or empty.
-		// if this happens, search both surrounding buckets for nearby peers
+		// Search both surrounding buckets for nearby peers
 		if cpl > 0 {
 			plist := rt.buckets[cpl-1].List()
 			peerArr = copyPeersFromList(id, peerArr, plist)
@@ -400,9 +409,10 @@ func (rt *routingTableImpl) nearestPeers(id dht.ID, count int) []node.RemoteNode
 		}
 	}
 
-	// Sort by distance to local peer
+	// Sort by distance from id
 	sort.Sort(peerArr)
 
+	// return up to count nearest nodes
 	var out []node.RemoteNodeData
 	for i := 0; i < count && i < peerArr.Len(); i++ {
 		out = append(out, peerArr[i].node)

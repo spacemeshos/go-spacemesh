@@ -26,25 +26,27 @@ func TestFindNodeProtocolCore(t *testing.T) {
 	// node 2 doesn't know about node 3 and asks node 1 to find it
 	reqId := crypto.UUID()
 	callback := make(chan FindNodeResp)
-	node2Local.GetSwarm().getFindNodeProtocol().Register(callback)
-	node2Local.GetSwarm().getFindNodeProtocol().FindNode(reqId, node1Remote.String(), node3Remote.String())
+	node2Local.GetSwarm().getFindNodeProtocol().FindNode(reqId, node1Remote.String(), node3Remote.String(), callback)
 
 Loop:
 	for {
 		select {
 		case c := <-callback:
+			assert.NotNil(t, c, "expected response slice")
 			assert.Nil(t, c.err, "Expected no error")
-			if bytes.Equal(c.GetMetadata().ReqId, reqId) {
-				assert.NotNil(t, "expected response slice")
-				assert.True(t, len(c.NodeInfos) >= 1, "expected at least 1 node")
-				for _, d := range c.NodeInfos {
-					if bytes.Equal(d.NodeId, node3Remote.Id()) {
-						log.Info("Found node 3 :-)")
-						break Loop
-					}
-				}
-				t.Fatalf("didn't find node 3")
+
+			if !bytes.Equal(c.GetMetadata().ReqId, reqId) {
+				t.Fatalf("Didn't expect callback on another reqID")
 			}
+			assert.True(t, len(c.NodeInfos) >= 1, "expected at least 1 node")
+
+			for _, d := range c.NodeInfos {
+				if bytes.Equal(d.NodeId, node3Remote.Id()) {
+					log.Info("Found node 3 :-)")
+					break Loop
+				}
+			}
+			t.Fatalf("didn't find node 3")
 
 		case <-time.After(time.Second * 10):
 			t.Fatalf("Test timed out")
@@ -70,23 +72,25 @@ func TestFindNodeProtocolEmptyRes(t *testing.T) {
 	// node 2 doesn't know about node 3 and asks node 1 to find it
 	reqId := crypto.UUID()
 	callback := make(chan FindNodeResp)
-	node2Local.GetSwarm().getFindNodeProtocol().Register(callback)
-	node2Local.GetSwarm().getFindNodeProtocol().FindNode(reqId, node1Remote.String(), node3Remote.String())
+	node2Local.GetSwarm().getFindNodeProtocol().FindNode(reqId, node1Remote.String(), node3Remote.String(), callback)
 
 Loop:
 	for {
 		select {
 		case c := <-callback:
+			assert.NotNil(t, c, "expected non nil response slice w 0 or more items")
 			assert.Nil(t, c.err, "Expected no error")
-			if bytes.Equal(c.GetMetadata().ReqId, reqId) {
-				assert.NotNil(t, "expected non nil response slice w 0 or more items")
-				for _, d := range c.NodeInfos {
-					if bytes.Equal(d.NodeId, node3Remote.Id()) {
-						t.Fatalf("didn't expect result to include node 3")
-					}
-				}
-				break Loop
+
+			if !bytes.Equal(c.GetMetadata().ReqId, reqId) {
+				t.Fatalf("Didn't expect callback on another reqID")
 			}
+
+			for _, d := range c.NodeInfos {
+				if bytes.Equal(d.NodeId, node3Remote.Id()) {
+					t.Fatalf("didn't expect result to include node 3")
+				}
+			}
+			break Loop
 
 		case <-time.After(time.Second * 10):
 			t.Fatalf("Test timed out")

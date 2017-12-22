@@ -27,10 +27,7 @@ type FindNodeProtocol interface {
 	// id - node id to find
 
 	// this should really be named FindClosestNodes
-	FindNode(reqId []byte, serverNodeId string, id string) error
-
-	// App logic registers here for typed incoming find-node responses
-	Register(callback chan FindNodeResp)
+	FindNode(reqId []byte, serverNodeId string, id string, callback chan FindNodeResp) error
 }
 
 type FindNodeResp struct {
@@ -39,15 +36,20 @@ type FindNodeResp struct {
 	reqId []byte
 }
 
-type FindNodeCallbacks chan chan FindNodeResp
+type RespCallbackRequest struct {
+	callback chan FindNodeResp
+	reqId    []byte
+}
+
+type FindNodeCallbacks chan RespCallbackRequest
 
 type findNodeProtocolImpl struct {
 	swarm             Swarm
-	callbacks         []chan FindNodeResp
+	callbacks         map[string]chan FindNodeResp
 	incomingRequests  MessagesChan
 	incomingResponses MessagesChan
 	sendErrors        chan SendError
-	callbacksRegReq   FindNodeCallbacks // a channel of channels that receive callbacks
+	callbacksRegReq   FindNodeCallbacks // a channel of channels that receives callbacks
 }
 
 func NewFindNodeProtocol(s Swarm) FindNodeProtocol {
@@ -58,7 +60,7 @@ func NewFindNodeProtocol(s Swarm) FindNodeProtocol {
 		incomingResponses: make(MessagesChan, 10),
 		sendErrors:        make(chan SendError),
 		callbacksRegReq:   make(FindNodeCallbacks, 10),
-		callbacks:         make([]chan FindNodeResp, 0), // start with empty slice
+		callbacks:         make(map[string]chan FindNodeResp),
 	}
 
 	go p.processEvents()
@@ -75,8 +77,11 @@ const maxNearestNodesResults = 20
 const tableQueryTimeout = time.Duration(time.Minute * 1)
 
 // Send a single find node request to a remote node
-// remoteNodeId - base58 encoded
-func (p *findNodeProtocolImpl) FindNode(reqId []byte, serverNodeId string, id string) error {
+// id: base58 encoded remote node id
+func (p *findNodeProtocolImpl) FindNode(reqId []byte, serverNodeId string, id string, callback chan FindNodeResp) error {
+
+
+	p.callbacksRegReq <- RespCallbackRequest{callback, reqId}
 
 	nodeId := base58.Decode(id)
 	metadata := p.swarm.GetLocalNode().NewProtocolMessageMetadata(findNodeReq, reqId, false)
@@ -99,11 +104,6 @@ func (p *findNodeProtocolImpl) FindNode(reqId []byte, serverNodeId string, id st
 	p.swarm.SendMessage(req)
 
 	return nil
-}
-
-// Register callback on remotely received found nodes
-func (p *findNodeProtocolImpl) Register(callback chan FindNodeResp) {
-	p.callbacksRegReq <- callback
 }
 
 // Handles a find node request from a remote node
@@ -195,11 +195,21 @@ func (p *findNodeProtocolImpl) handleIncomingResponse(msg IncomingMessage) {
 		log.Info("Node response: %s, %s", base58.Encode(n.NodeId), n.TcpAddress)
 	}
 
-	// notify clients of the response
-	for _, c := range p.callbacks {
-		go func() { c <- resp }()
+	p.sendResponseCallback(resp)
+}
 
+// send a response callback to client and remove callback registration
+func (p *findNodeProtocolImpl) sendResponseCallback(resp FindNodeResp) {
+	key := hex.EncodeToString(resp.reqId)
+	callback := p.callbacks[key]
+	if callback == nil {
+		return
 	}
+
+	delete(p.callbacks, key)
+	go func() {
+		callback <- resp
+	}()
 }
 
 // Internal event processing loop
@@ -212,15 +222,13 @@ func (p *findNodeProtocolImpl) processEvents() {
 		case r := <-p.incomingResponses:
 			go p.handleIncomingResponse(r)
 
-		case c := <-p.callbacksRegReq:
-			p.callbacks = append(p.callbacks, c)
+		case c := <-p.callbacksRegReq: // register a new callback
+			p.callbacks[hex.EncodeToString(c.reqId)] = c.callback
 
 		case r := <-p.sendErrors:
 			// failed to send a message - send a callback to all clients
 			resp := FindNodeResp{nil, r.err, r.ReqId}
-			for _, c := range p.callbacks {
-				go func() { c <- resp }()
-			}
+			p.sendResponseCallback(resp)
 		}
 	}
 }

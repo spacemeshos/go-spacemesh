@@ -2,7 +2,6 @@ package p2p
 
 import (
 	"github.com/UnrulyOS/go-unruly/log"
-	"github.com/UnrulyOS/go-unruly/p2p/dht"
 	"github.com/UnrulyOS/go-unruly/p2p/dht/table"
 	"github.com/UnrulyOS/go-unruly/p2p/node"
 
@@ -99,42 +98,6 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 	go s.beginProcessingEvents()
 
 	return s, err
-}
-
-// Find a node based on its id - internal method
-// id: base58 encoded node id
-// returns remote node data or nil if find fails
-func (s *swarmImpl) findNode(id string, callback chan node.RemoteNodeData) {
-
-	// special case - local node
-	if s.localNode.String() == id {
-		go func() { callback <- s.localNode.GetRemoteNodeData() }()
-		return
-	}
-
-	// look at peer store
-	n := s.peers[id]
-	if n != nil {
-		go func() { callback <- s.localNode.GetRemoteNodeData() }()
-		return
-	}
-
-	// look at local dht table
-	poc := make(table.PeerOpChannel, 1)
-	s.routingTable.Find(table.PeerByIdRequest{dht.NewIdFromBase58String(id), poc})
-	select {
-	case c := <-poc:
-		res := c.Peer
-		if res != nil {
-			go func() { callback <- res }()
-			return
-		}
-	}
-
-	// dht algo to find a node
-
-	// otherwise use dht to find it using the kad find-node algo (might involve multiple queries that will update the table
-	// implement that kad find-node algo using s.findNodeProtocol (request a specific node from a specific node)
 }
 
 func (s *swarmImpl) getFindNodeProtocol() FindNodeProtocol {

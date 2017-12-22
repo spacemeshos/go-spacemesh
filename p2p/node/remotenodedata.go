@@ -4,6 +4,7 @@ import (
 	"github.com/UnrulyOS/go-unruly/p2p/dht"
 	"github.com/UnrulyOS/go-unruly/p2p/pb"
 	"github.com/btcsuite/btcutil/base58"
+	"time"
 )
 
 // Basic remote node data
@@ -15,7 +16,8 @@ type RemoteNodeData interface {
 	Bytes() []byte // node raw id bytes
 
 	DhtId() dht.ID
-	//CommonPrefixLength(other RemoteNodeData) int
+
+	LastFindNodeCall() time.Time // time of last find node call sent to node
 }
 
 // Outside of swarm - types only know about this and not about RemoteNode
@@ -24,6 +26,8 @@ type remoteNodeDataImpl struct {
 	ip    string // node tcp address. e.g. 127.0.0.1:3030
 	bytes []byte // bytes
 	dhtId dht.ID
+
+	lastFindNodeCall time.Time
 }
 
 // Return serializable (pb) node infos slice from a slice of RemoteNodeData
@@ -48,7 +52,14 @@ func ToNodeInfo(nodes []RemoteNodeData, filterId string) []*pb.NodeInfo {
 func NewRemoteNodeData(id string, ip string) RemoteNodeData {
 	bytes := base58.Decode(id)
 	dhtId := dht.NewIdFromNodeKey(bytes)
-	return &remoteNodeDataImpl{id, ip, bytes, dhtId}
+	return &remoteNodeDataImpl{id: id,
+		ip:    ip,
+		bytes: bytes,
+		dhtId: dhtId}
+}
+
+func (rn *remoteNodeDataImpl) LastFindNodeCall() time.Time {
+	return rn.lastFindNodeCall
 }
 
 func (rn *remoteNodeDataImpl) Id() string {
