@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"github.com/UnrulyOS/go-unruly/log"
+	"github.com/jbenet/go-base58"
 	"math/big"
 	"sort"
 )
@@ -15,6 +16,11 @@ type ID []byte
 func NewIdFromNodeKey(key []byte) ID {
 	hash := sha256.Sum256([]byte(key))
 	return hash[:]
+}
+
+func NewIdFromBase58String(s string) ID {
+	data := base58.Decode(s)
+	return ID(data)
 }
 
 func NewIdFromHexString(s string) (ID, error) {

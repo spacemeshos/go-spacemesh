@@ -16,7 +16,7 @@ type RoutingTable interface {
 	// table ops
 	Update(p node.RemoteNodeData)      // adds a peer to the table
 	Remove(p node.RemoteNodeData)      // remove a peer from the table
-	Find(req PeerByIdRequest)          // find a peer by dht.ID
+	Find(req PeerByIdRequest)          // find a specific peer by dht.ID
 	NearestPeer(req PeerByIdRequest)   // nearest peer to a dht.ID
 	NearestPeers(req NearestPeersReq)  // ip to n nearest peers to a dht.ID
 	ListPeers(callback PeersOpChannel) // list all peers
@@ -208,7 +208,6 @@ func (rt *routingTableImpl) processEvents() {
 			go func() { r <- tot }()
 
 		case r := <-rt.listPeersReqs:
-
 			var peers []node.RemoteNodeData
 			for _, buck := range rt.buckets {
 				peers = append(peers, buck.Peers()...)
@@ -222,7 +221,6 @@ func (rt *routingTableImpl) processEvents() {
 			}
 
 		case r := <-rt.nearestPeerReqs:
-
 			peers := rt.nearestPeers(r.Id, 1)
 			if r.Callback != nil {
 				switch len(peers) {
@@ -244,13 +242,11 @@ func (rt *routingTableImpl) processEvents() {
 			}
 
 		case p := <-rt.peerAdded:
-
 			for _, c := range rt.peerAddedCallbacks {
 				go func() { c <- p }()
 			}
 
 		case p := <-rt.peerRemoved:
-
 			for _, c := range rt.peerRemovedCallbacks {
 				go func() { c <- p }()
 			}

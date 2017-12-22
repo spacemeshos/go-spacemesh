@@ -25,12 +25,12 @@ func (s *swarmImpl) onRegisterNodeRequest(n node.RemoteNodeData) {
 		return
 	}
 
-	node, err := NewRemoteNode(n.Id(), n.Ip())
+	rn, err := NewRemoteNode(n.Id(), n.Ip())
 	if err != nil { // invalid id
 		return
 	}
 
-	s.peers[n.Id()] = node
+	s.peers[n.Id()] = rn
 
 	// update the routing table with the nde node info
 	s.routingTable.Update(n)
@@ -329,9 +329,10 @@ func (s *swarmImpl) onRemoteClientProtocolMessage(msg net.IncomingMessage, c *pb
 
 }
 
-// Main network messages handler
+// Main incoming network messages handler
 // c: connection we got this message on
 // msg: binary protobufs encoded data
+//
 // not go safe - called from event processing main loop
 func (s *swarmImpl) onRemoteClientMessage(msg net.IncomingMessage) {
 

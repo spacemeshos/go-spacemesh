@@ -2,10 +2,10 @@ package net
 
 import (
 	"fmt"
-	"github.com/UnrulyOS/go-unruly/crypto"
-	"github.com/UnrulyOS/go-unruly/p2p/nodeconfig"
 	"github.com/UnrulyOS/go-unruly/assert"
+	"github.com/UnrulyOS/go-unruly/crypto"
 	"github.com/UnrulyOS/go-unruly/log"
+	"github.com/UnrulyOS/go-unruly/p2p/nodeconfig"
 	"testing"
 	"time"
 )
