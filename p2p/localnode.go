@@ -41,12 +41,12 @@ type LocalNode interface {
 // Creates a local node with a provided tcp address
 // Attempts to set node identity from persisted data in local store
 // Creates a new identity if none was loads
-func NewLocalNode(tcpAddress string, config nodeconfig.Config) (LocalNode, error) {
+func NewLocalNode(tcpAddress string, config nodeconfig.Config, persist bool) (LocalNode, error) {
 
 	if len(nodeconfig.ConfigValues.NodeId) > 0 {
 		// user provided node id/pubkey via cli - attempt to start that node w persisted data
 		data := readNodeData(nodeconfig.ConfigValues.NodeId)
-		return newNodeFromData(tcpAddress, data, config)
+		return newNodeFromData(tcpAddress, data, config, persist)
 	}
 
 	// look for persisted node data in the nodes directory
@@ -54,20 +54,20 @@ func NewLocalNode(tcpAddress string, config nodeconfig.Config) (LocalNode, error
 	nodeData := readFirstNodeData()
 	if nodeData != nil {
 		// crete node using persisted node data
-		return newNodeFromData(tcpAddress, nodeData, config)
+		return newNodeFromData(tcpAddress, nodeData, config, persist)
 	}
 
 	// generate new node
-	return NewNodeIdentity(tcpAddress, config)
+	return NewNodeIdentity(tcpAddress, config, persist)
 }
 
 // Creates a new local node without attempting to restore identity from local store
-func NewNodeIdentity(tcpAddress string, config nodeconfig.Config) (LocalNode, error) {
+func NewNodeIdentity(tcpAddress string, config nodeconfig.Config, persist bool) (LocalNode, error) {
 	priv, pub, _ := crypto.GenerateKeyPair()
-	return newLocalNodeWithKeys(pub, priv, tcpAddress, config)
+	return newLocalNodeWithKeys(pub, priv, tcpAddress, config, persist)
 }
 
-func newLocalNodeWithKeys(pubKey crypto.PublicKey, privKey crypto.PrivateKey, tcpAddress string, config nodeconfig.Config) (LocalNode, error) {
+func newLocalNodeWithKeys(pubKey crypto.PublicKey, privKey crypto.PrivateKey, tcpAddress string, config nodeconfig.Config, persist bool) (LocalNode, error) {
 
 	n := &localNodeImp{
 		pubKey:     pubKey,
@@ -87,17 +87,19 @@ func newLocalNodeWithKeys(pubKey crypto.PublicKey, privKey crypto.PrivateKey, tc
 	n.swarm = s
 	n.ping = NewPingProtocol(s)
 
-	// persist store data so we can start it on future app sessions
-	err = n.persistData()
-	if err != nil { // no much use of starting if we can't store node private key in store
-		log.Error("Failed to persist node data to local store: %v", err)
-		return nil, err
+	if persist {
+		// persist store data so we can start it on future app sessions
+		err = n.persistData()
+		if err != nil { // no much use of starting if we can't store node private key in store
+			log.Error("Failed to persist node data to local store: %v", err)
+			return nil, err
+		}
 	}
 
 	return n, nil
 }
 
-func newNodeFromData(tcpAddress string, d *NodeData, config nodeconfig.Config) (LocalNode, error) {
+func newNodeFromData(tcpAddress string, d *NodeData, config nodeconfig.Config, persist bool) (LocalNode, error) {
 	priv := crypto.NewPrivateKeyFromString(d.PrivKey)
 	pub, err := crypto.NewPublicKeyFromString(d.PubKey)
 	if err != nil {
@@ -105,5 +107,5 @@ func newNodeFromData(tcpAddress string, d *NodeData, config nodeconfig.Config) (
 		return nil, err
 	}
 
-	return newLocalNodeWithKeys(pub, priv, tcpAddress, config)
+	return newLocalNodeWithKeys(pub, priv, tcpAddress, config, persist)
 }

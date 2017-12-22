@@ -3,9 +3,8 @@ package p2p
 import (
 	"bytes"
 	"github.com/UnrulyOS/go-unruly/assert"
+	"github.com/UnrulyOS/go-unruly/crypto"
 	"github.com/UnrulyOS/go-unruly/log"
-	"github.com/UnrulyOS/go-unruly/p2p/node"
-	"github.com/google/uuid"
 	"testing"
 	"time"
 )
@@ -14,18 +13,18 @@ func TestFindNodeProtocolCore(t *testing.T) {
 
 	// let there be 3 nodes - node1, node2 and node 3
 	node1Local, node1Remote := GenerateTestNode(t)
-	node2Local, node2Remote := GenerateTestNode(t)
-	_, node3Remote := GenerateTestNode(t)
+	node2Local, _ := GenerateTestNode(t)
+	node3Local, node3Remote := GenerateTestNode(t)
 
 	// node 1 know about node 2 and node 3
-	node1Local.GetSwarm().RegisterNode(node.NewRemoteNodeData(node2Remote.String(), node2Remote.TcpAddress()))
-	node1Local.GetSwarm().RegisterNode(node.NewRemoteNodeData(node3Remote.String(), node3Remote.TcpAddress()))
+	node1Local.GetSwarm().RegisterNode(node2Local.GetRemoteNodeData())
+	node1Local.GetSwarm().RegisterNode(node3Local.GetRemoteNodeData())
 
 	// node 2 knows node 1
-	node2Local.GetSwarm().RegisterNode(node.NewRemoteNodeData(node1Remote.String(), node1Remote.TcpAddress()))
+	node2Local.GetSwarm().RegisterNode(node1Local.GetRemoteNodeData())
 
 	// node 2 doesn't know about node 3 and asks node 1 to find it
-	reqId := []byte(uuid.New().String())
+	reqId := crypto.UUID()
 	callback := make(chan FindNodeResp)
 	node2Local.GetSwarm().getFindNodeProtocol().Register(callback)
 	node2Local.GetSwarm().getFindNodeProtocol().FindNode(reqId, node1Remote.String(), node3Remote.String())
@@ -69,7 +68,7 @@ func TestFindNodeProtocolEmptyRes(t *testing.T) {
 	node2Local.GetSwarm().RegisterNode(node1Local.GetRemoteNodeData())
 
 	// node 2 doesn't know about node 3 and asks node 1 to find it
-	reqId := []byte(uuid.New().String())
+	reqId := crypto.UUID()
 	callback := make(chan FindNodeResp)
 	node2Local.GetSwarm().getFindNodeProtocol().Register(callback)
 	node2Local.GetSwarm().getFindNodeProtocol().FindNode(reqId, node1Remote.String(), node3Remote.String())

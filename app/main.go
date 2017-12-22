@@ -183,7 +183,7 @@ func (app *UnrulyApp) startUnrulyNode(ctx *cli.Context) error {
 	address := fmt.Sprintf("localhost:%d", port)
 
 	// start a new node passing the app-wide node config values
-	node, err := p2p.NewLocalNode(address, nodeparams.ConfigValues)
+	node, err := p2p.NewLocalNode(address, nodeparams.ConfigValues, true)
 	if err != nil {
 		return err
 	}

@@ -3,9 +3,9 @@ package p2p
 import (
 	"bytes"
 	"github.com/UnrulyOS/go-unruly/assert"
+	"github.com/UnrulyOS/go-unruly/crypto"
 	"github.com/UnrulyOS/go-unruly/log"
 	"github.com/UnrulyOS/go-unruly/p2p/node"
-	"github.com/google/uuid"
 	"testing"
 	"time"
 )
@@ -19,7 +19,7 @@ func TestPingProtocol(t *testing.T) {
 	node1Local.GetSwarm().RegisterNode(node.NewRemoteNodeData(node2Remote.String(), node2Remote.TcpAddress()))
 
 	// generate unique request id
-	pingReqId := []byte(uuid.New().String())
+	pingReqId := crypto.UUID()
 
 	// specify callback for results or errors
 	callback := make(chan SendPingResp)
@@ -33,7 +33,7 @@ func TestPingProtocol(t *testing.T) {
 	// over that session once it is established. Node 1 registers an app-level callback to get the ping response from node 2.
 	// The response includes the request id so it can match it with one or more tracked requests it sent.
 
-	ping1ReqId := []byte(uuid.New().String())
+	ping1ReqId := crypto.UUID()
 
 Loop:
 	for {

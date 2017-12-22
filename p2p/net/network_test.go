@@ -4,9 +4,6 @@ import (
 	"fmt"
 	"github.com/UnrulyOS/go-unruly/crypto"
 	"github.com/UnrulyOS/go-unruly/p2p/nodeconfig"
-	"github.com/google/uuid"
-
-	//"math/rand"
 	"github.com/UnrulyOS/go-unruly/assert"
 	"github.com/UnrulyOS/go-unruly/log"
 	"testing"
@@ -16,7 +13,7 @@ import (
 func TestReadWrite(t *testing.T) {
 
 	msg := []byte("hello world")
-	msgId := []byte(uuid.New().String())
+	msgId := crypto.UUID()
 	port := crypto.GetRandomUInt32(1000) + 10000
 	address := fmt.Sprintf("localhost:%d", port)
 	done := make(chan bool, 1)

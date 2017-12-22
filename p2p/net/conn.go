@@ -2,9 +2,9 @@ package net
 
 import (
 	"encoding/binary"
+	"github.com/UnrulyOS/go-unruly/crypto"
 	"github.com/UnrulyOS/go-unruly/log"
 	"github.com/UnrulyOS/go-unruly/p2p/msgio"
-	"github.com/google/uuid"
 	"net"
 	"time"
 )
@@ -78,7 +78,7 @@ func newConnection(conn net.Conn, n Net, s ConnectionSource) Connection {
 	incomingMsgs := msgio.NewChan(10)
 
 	connection := &connectionImpl{
-		id:           uuid.New().String(),
+		id:           crypto.UUIDString(),
 		created:      time.Now(),
 		source:       s,
 		incomingMsgs: incomingMsgs,
