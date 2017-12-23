@@ -270,7 +270,7 @@ func (s *swarmImpl) onRemoteClientHandshakeMessage(msg net.IncomingMessage) {
 
 	}
 
-	// update the routing table
+	// update the routing table - we just heard from this node
 	s.routingTable.Update(sender.GetRemoteNodeData())
 
 	// Let the demuxer route the message to its registered protocol handler
@@ -319,7 +319,7 @@ func (s *swarmImpl) onRemoteClientProtocolMessage(msg net.IncomingMessage, c *pb
 
 	// todo: check send time and reject if too much aparat from local clock
 
-	// update the routing table
+	// update the routing table - we just heard from this authenticated node
 	s.routingTable.Update(remoteNode.GetRemoteNodeData())
 
 	// todo: remove send error channels for this connection if this is a response to a locally sent request

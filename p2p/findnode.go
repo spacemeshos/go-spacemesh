@@ -59,7 +59,7 @@ func NewFindNodeProtocol(s Swarm) FindNodeProtocol {
 		incomingRequests:  make(MessagesChan, 10),
 		incomingResponses: make(MessagesChan, 10),
 		sendErrors:        make(chan SendError),
-		callbacksRegReq:   make(FindNodeCallbacks, 10),
+		callbacksRegReq:   make(FindNodeCallbacks), // not buffered so it is blocked until callback is registered
 		callbacks:         make(map[string]chan FindNodeResp),
 	}
 
@@ -79,7 +79,6 @@ const tableQueryTimeout = time.Duration(time.Minute * 1)
 // Send a single find node request to a remote node
 // id: base58 encoded remote node id
 func (p *findNodeProtocolImpl) FindNode(reqId []byte, serverNodeId string, id string, callback chan FindNodeResp) error {
-
 
 	p.callbacksRegReq <- RespCallbackRequest{callback, reqId}
 

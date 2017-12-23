@@ -5,11 +5,12 @@ import (
 	"github.com/UnrulyOS/go-unruly/p2p/dht"
 	"github.com/UnrulyOS/go-unruly/p2p/dht/table"
 	"github.com/UnrulyOS/go-unruly/p2p/node"
+	"time"
 )
 
 // Find a node based on its id - internal method
-// id: base58 encoded node id
-// returns remote node data or nil if find fails
+// id: base58 node id
+// returns remote node or nil when not found
 func (s *swarmImpl) findNode(id string, callback chan node.RemoteNodeData) {
 
 	// special case - local node
@@ -41,36 +42,139 @@ func (s *swarmImpl) findNode(id string, callback chan node.RemoteNodeData) {
 	s.kadFindNode(id, callback)
 }
 
+// pick up to count server who haven't been quried to find a node recently
+// nodeId - the target node id of this find node operation
+func pickFindNodeServers(nodes []node.RemoteNodeData, nodeId string, count int) []node.RemoteNodeData {
+
+	res := []node.RemoteNodeData{}
+
+	added := 0
+
+	for _, v := range nodes {
+
+		if time.Now().Sub(v.GetLastFindNodeCall(nodeId)) > time.Duration(time.Minute*10) {
+			res = append(res, v)
+			added += 1
+		}
+		if added == count {
+			break
+		}
+	}
+
+	return res
+}
+
 // Implements the kad algo for locating a remote node
 // Precondition - node is not in local routing table
 // id - base58 node id string
 // Returns requested node or nil if not found
-func (s *swarmImpl) kadFindNode(id string, callback chan node.RemoteNodeData) {
+func (s *swarmImpl) kadFindNode(nodeId string, callback chan node.RemoteNodeData) {
 
-	// dht algo for locating a node
+	// kad node location algo
 	const alpha = 3
-	dhtId := dht.NewIdFromBase58String(id)
+	const k = 20 // todo: take from swarm
+
+	dhtId := dht.NewIdFromBase58String(nodeId)
 
 	// step 1 - get up to alpha closest nodes to the target in the local routing table
-	searchList := s.getNearestPeers(dhtId, alpha)
-	if searchList == nil || len(searchList) == 0 {
-		go func() { callback <- nil }()
-		return
+	searchList := s.getNearestPeers(dhtId, k)
+
+	// step 2 - iterative lookups for nodeId using searchList
+
+Loop:
+	for {
+
+		if searchList == nil || len(searchList) == 0 {
+			go func() { callback <- nil }()
+			break Loop
+		}
+
+		closestNode := searchList[0]
+
+		if closestNode.Id() == nodeId {
+			go func() { callback <- closestNode }()
+			break Loop
+		}
+
+		// pick up to alpha server to query from the search list
+		// servers that have been recently queried will not be returend
+		servers := pickFindNodeServers(searchList, nodeId, alpha)
+
+		if len(servers) == 0 {
+			// no more server to query
+			go func() { callback <- nil }()
+			break Loop
+		}
+
+		// lookup nodeId using the target servers
+		res := s.lookupNode(servers, nodeId, closestNode)
+
+		if len(res) >= 0 {
+
+			// merge newly found nodes
+			searchList = node.Union(searchList, res)
+
+			// sort by distance from target
+			searchList = table.SortClosestPeers(res, dhtId)
+		}
+
+		// keep iterating using new servers that were not queried yet from searchlist (if any)
+	}
+}
+
+// Lookup a target node on one or more servers
+// Returns closest nodes which are closers than closestNode to targetId
+// If node found it will be in top of results list
+func (s *swarmImpl) lookupNode(servers []node.RemoteNodeData, targetId string, closestNode node.RemoteNodeData) []node.RemoteNodeData {
+
+	l := len(servers)
+
+	if l == 0 {
+		return []node.RemoteNodeData{}
 	}
 
-	//closestNode := searchList[0]
+	// results channel
+	callback := make(chan FindNodeResp, l)
 
-	// pick alpha nodes from the list
+	// queries are run in par and results are collected
+	for i := 0; i < l; i++ {
+		servers[i].SetLastFindNodeCall(targetId, time.Now())
+		go s.getFindNodeProtocol().FindNode(crypto.UUID(), servers[i].Id(), targetId, callback)
+	}
 
-	// query the picked nodes in parallel for nearest nodes
+	done := 0
+	idSet := make(map[string]node.RemoteNodeData)
 
-	// closestNode is picked from the top of each results based on previous closedNode
+Loop:
+	for {
+		select {
+		case res := <-callback:
+			nodes := node.FromNodeInfos(res.NodeInfos)
+			for _, n := range nodes {
+				idSet[n.Id()] = n
+			}
 
-	// when queering a node - update last nearest query time
+			done += 1
+			if done == l {
+				break Loop
+			}
+		}
+	}
 
-	// stop if node found, otherwise if alpha queries returned closer nodes then what we know about - query these nodes
+	// add unique node ids that are closer to target id than closest node
+	res := []node.RemoteNodeData{}
 
-	// update the search list with the results from queries
+	targetDhtId := dht.NewIdFromBase58String(targetId)
+	for _, n := range idSet {
+		if n.DhtId().Closer(targetDhtId, closestNode.DhtId()) {
+			res = append(res, n)
+		}
+	}
+
+	// sort results by distance from target dht id
+	res = table.SortClosestPeers(res, targetDhtId)
+
+	return res
 }
 
 // helper method - sync wrapper to routingTable.NearestPeers
@@ -81,22 +185,4 @@ func (s *swarmImpl) getNearestPeers(dhtId dht.ID, count int) []node.RemoteNodeDa
 	case c := <-psoc:
 		return c.Peers
 	}
-}
-
-// helper - sync findNodeReq
-func (s *swarmImpl) findNodeReq(serverId string, nodeId string) []node.RemoteNodeData {
-	reqId := crypto.UUID()
-
-	fcallback := make(chan FindNodeResp, 1)
-	s.getFindNodeProtocol().FindNode(reqId, serverId, nodeId, fcallback)
-
-	/*
-		select {
-			c := <- fcallback:
-				if !bytes.Equal(c.reqId, reqId) {
-					continue
-				}
-
-		}*/
-	return nil
 }

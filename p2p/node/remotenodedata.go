@@ -17,7 +17,8 @@ type RemoteNodeData interface {
 
 	DhtId() dht.ID
 
-	LastFindNodeCall() time.Time // time of last find node call sent to node
+	GetLastFindNodeCall(nodeId string) time.Time // time of last find node call sent to node
+	SetLastFindNodeCall(nodeId string, t time.Time)
 }
 
 // Outside of swarm - types only know about this and not about RemoteNode
@@ -27,7 +28,7 @@ type remoteNodeDataImpl struct {
 	bytes []byte // bytes
 	dhtId dht.ID
 
-	lastFindNodeCall time.Time
+	lastFindNodeCall map[string]time.Time
 }
 
 // Return serializable (pb) node infos slice from a slice of RemoteNodeData
@@ -49,17 +50,56 @@ func ToNodeInfo(nodes []RemoteNodeData, filterId string) []*pb.NodeInfo {
 	return res
 }
 
+// return a union of 2 lists of nods
+func Union(list1 []RemoteNodeData, list2 []RemoteNodeData) []RemoteNodeData {
+
+	idSet := map[string]RemoteNodeData{}
+
+	for _, n := range list1 {
+		idSet[n.Id()] = n
+	}
+	for _, n := range list2 {
+		if idSet[n.Id()] == nil {
+			idSet[n.Id()] = n
+		}
+	}
+
+	res := []RemoteNodeData{}
+
+	for _, n := range idSet {
+		res = append(res, n)
+	}
+
+	return res
+}
+
+func FromNodeInfos(nodes []*pb.NodeInfo) []RemoteNodeData {
+	res := []RemoteNodeData{}
+	for _, n := range nodes {
+		id := base58.Encode(n.NodeId)
+		node := NewRemoteNodeData(id, n.TcpAddress)
+		res = append(res, node)
+	}
+	return res
+}
+
 func NewRemoteNodeData(id string, ip string) RemoteNodeData {
 	bytes := base58.Decode(id)
 	dhtId := dht.NewIdFromNodeKey(bytes)
 	return &remoteNodeDataImpl{id: id,
-		ip:    ip,
-		bytes: bytes,
-		dhtId: dhtId}
+		ip:               ip,
+		bytes:            bytes,
+		dhtId:            dhtId,
+		lastFindNodeCall: map[string]time.Time{},
+	}
 }
 
-func (rn *remoteNodeDataImpl) LastFindNodeCall() time.Time {
-	return rn.lastFindNodeCall
+func (rn *remoteNodeDataImpl) GetLastFindNodeCall(nodeId string) time.Time {
+	return rn.lastFindNodeCall[nodeId]
+}
+
+func (rn *remoteNodeDataImpl) SetLastFindNodeCall(nodeId string, t time.Time) {
+	rn.lastFindNodeCall[nodeId] = t
 }
 
 func (rn *remoteNodeDataImpl) Id() string {
