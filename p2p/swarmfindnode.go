@@ -11,13 +11,8 @@ import (
 // Find a node based on its id - internal method
 // id: base58 node id
 // returns remote node or nil when not found
+// not go safe - should be called from swarm event dispatcher
 func (s *swarmImpl) findNode(id string, callback chan node.RemoteNodeData) {
-
-	// special case - local node
-	if s.localNode.String() == id {
-		go func() { callback <- s.localNode.GetRemoteNodeData() }()
-		return
-	}
 
 	// look at peer store
 	n := s.peers[id]
@@ -40,28 +35,6 @@ func (s *swarmImpl) findNode(id string, callback chan node.RemoteNodeData) {
 
 	// used kad to locate the node
 	s.kadFindNode(id, callback)
-}
-
-// pick up to count server who haven't been quried to find a node recently
-// nodeId - the target node id of this find node operation
-func pickFindNodeServers(nodes []node.RemoteNodeData, nodeId string, count int) []node.RemoteNodeData {
-
-	res := []node.RemoteNodeData{}
-
-	added := 0
-
-	for _, v := range nodes {
-
-		if time.Now().Sub(v.GetLastFindNodeCall(nodeId)) > time.Duration(time.Minute*10) {
-			res = append(res, v)
-			added += 1
-		}
-		if added == count {
-			break
-		}
-	}
-
-	return res
 }
 
 // Implements the kad algo for locating a remote node
@@ -98,7 +71,7 @@ Loop:
 
 		// pick up to alpha server to query from the search list
 		// servers that have been recently queried will not be returend
-		servers := pickFindNodeServers(searchList, nodeId, alpha)
+		servers := node.PickFindNodeServers(searchList, nodeId, alpha)
 
 		if len(servers) == 0 {
 			// no more server to query
@@ -115,7 +88,7 @@ Loop:
 			searchList = node.Union(searchList, res)
 
 			// sort by distance from target
-			searchList = table.SortClosestPeers(res, dhtId)
+			searchList = node.SortClosestPeers(res, dhtId)
 		}
 
 		// keep iterating using new servers that were not queried yet from searchlist (if any)
@@ -139,6 +112,8 @@ func (s *swarmImpl) lookupNode(servers []node.RemoteNodeData, targetId string, c
 	// queries are run in par and results are collected
 	for i := 0; i < l; i++ {
 		servers[i].SetLastFindNodeCall(targetId, time.Now())
+
+		// find node protocol adds found nodes to the local routing table
 		go s.getFindNodeProtocol().FindNode(crypto.UUID(), servers[i].Id(), targetId, callback)
 	}
 
@@ -172,7 +147,7 @@ Loop:
 	}
 
 	// sort results by distance from target dht id
-	res = table.SortClosestPeers(res, targetDhtId)
+	res = node.SortClosestPeers(res, targetDhtId)
 
 	return res
 }

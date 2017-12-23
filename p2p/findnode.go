@@ -97,8 +97,6 @@ func (p *findNodeProtocolImpl) FindNode(reqId []byte, serverNodeId string, id st
 	}
 
 	// send the message
-
-	// todo: reg for errors and return to client FindNodeResp w err
 	req := SendMessageReq{serverNodeId, reqId, payload, p.sendErrors}
 	p.swarm.SendMessage(req)
 
@@ -190,8 +188,11 @@ func (p *findNodeProtocolImpl) handleIncomingResponse(msg IncomingMessage) {
 	log.Info("Got find-node response from %s. Results: %d, Find-node req id: %", msg.Sender().Pretty(),
 		data.NodeInfos, data.Metadata.ReqId)
 
-	for _, n := range data.NodeInfos {
-		log.Info("Node response: %s, %s", base58.Encode(n.NodeId), n.TcpAddress)
+	// update routing table with newly found nodes
+	nodes := node.FromNodeInfos(data.NodeInfos)
+	for _, n := range nodes {
+		log.Info("Node response: %s, %s", n.Id(), n.Ip())
+		p.swarm.getRoutingTable().Update(n)
 	}
 
 	p.sendResponseCallback(resp)

@@ -50,6 +50,27 @@ func ToNodeInfo(nodes []RemoteNodeData, filterId string) []*pb.NodeInfo {
 	return res
 }
 
+// pick up to count server who haven't been queried to find a node recently
+// nodeId - the target node id of this find node operation
+func PickFindNodeServers(nodes []RemoteNodeData, nodeId string, count int) []RemoteNodeData {
+
+	res := []RemoteNodeData{}
+	added := 0
+
+	for _, v := range nodes {
+		if time.Now().Sub(v.GetLastFindNodeCall(nodeId)) > time.Duration(time.Minute*10) {
+			res = append(res, v)
+			added += 1
+
+			if added == count {
+				break
+			}
+		}
+	}
+
+	return res
+}
+
 // return a union of 2 lists of nods
 func Union(list1 []RemoteNodeData, list2 []RemoteNodeData) []RemoteNodeData {
 

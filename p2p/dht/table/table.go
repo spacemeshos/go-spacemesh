@@ -390,8 +390,8 @@ func (rt *routingTableImpl) nearestPeers(id dht.ID, count int) []node.RemoteNode
 
 	bucket := rt.buckets[cpl]
 
-	var peerArr peerSorter
-	peerArr = copyPeersFromList(id, peerArr, bucket.List())
+	var peerArr node.PeerSorter
+	peerArr = node.CopyPeersFromList(id, peerArr, bucket.List())
 
 	// todo: this MUST continue until count are returned even if we need to go to additional buckets
 
@@ -400,12 +400,12 @@ func (rt *routingTableImpl) nearestPeers(id dht.ID, count int) []node.RemoteNode
 		// Search both surrounding buckets for nearby peers
 		if cpl > 0 {
 			plist := rt.buckets[cpl-1].List()
-			peerArr = copyPeersFromList(id, peerArr, plist)
+			peerArr = node.CopyPeersFromList(id, peerArr, plist)
 		}
 
 		if cpl < len(rt.buckets)-1 {
 			plist := rt.buckets[cpl+1].List()
-			peerArr = copyPeersFromList(id, peerArr, plist)
+			peerArr = node.CopyPeersFromList(id, peerArr, plist)
 		}
 	}
 
@@ -415,7 +415,7 @@ func (rt *routingTableImpl) nearestPeers(id dht.ID, count int) []node.RemoteNode
 	// return up to count nearest nodes
 	var out []node.RemoteNodeData
 	for i := 0; i < count && i < peerArr.Len(); i++ {
-		out = append(out, peerArr[i].node)
+		out = append(out, peerArr[i].Node)
 	}
 
 	return out

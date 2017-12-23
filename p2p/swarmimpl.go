@@ -84,7 +84,7 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 	}
 
 	// nodes routing table
-	// todo: parametize bucketSize k - it is used in other places
+	// todo: parametrize bucketSize k - it is used in other places
 	s.routingTable = table.NewRoutingTable(20, l.DhtId())
 
 	// findNode dht protocol
@@ -135,9 +135,15 @@ func (s *swarmImpl) GetLocalNode() LocalNode {
 
 // Connect up to count random nodes
 func (s *swarmImpl) ConnectToRandomNodes(count int, callback chan node.RemoteNodeData) {
-	// todo: implement me
-
-	// todo: used the routing table to find count near nodes to local node and attempt to connect with them
+	c := make(chan node.RemoteNodeData, count)
+	s.findNode(s.localNode.String(), callback)
+	select {
+	case n := <-c:
+		if n != nil {
+			s.ConnectTo(n)
+			go func() { callback <- n }()
+		}
+	}
 }
 
 // Send a message to a remote node
