@@ -14,8 +14,8 @@ const (
 )
 
 var (
-	BootstrapNodes = []string{
-		"126.0.0.1:3572/QmcjTLy94HGFo4JoYibudGeBV2DSBb6E4apBjFsBGnMsWa",
-		"125.0.0.1:3763/QmRtrUMB3rfmRZE6yn8yLRvik6a5Pprvc5HnB1HT8MnoPy",
+	BootstrapNodes = []string{ // these are the unruly foundation bootstrap nodes
+		"125.0.0.1:3572/iaMujEYTByKcjMZWMqg79eJBGMDm8ADsWZFdouhpfeKj",
+		"125.0.0.1:3763/x34UDdiCBAsXmLyMMpPQzs313B9UDeHNqFpYsLGfaFvm",
 	}
 )

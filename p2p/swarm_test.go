@@ -1,6 +1,7 @@
 package p2p
 
 import (
+	"github.com/UnrulyOS/go-unruly/p2p/nodeconfig"
 	"testing"
 )
 
@@ -24,4 +25,15 @@ Loop:
 			}
 		}
 	}
+}
+
+func TestBootstrap(t *testing.T) {
+
+	// this should attempt to connect with bootstrap nodes and 2 random nodes
+	c := nodeconfig.ConfigValues
+	c.SwarmConfig.Bootstrap = true
+	c.SwarmConfig.RandomConnections = 2
+	GenerateTestNodeWithConfig(t, c)
+
+	// todo: test bootstrap nodes are in the routing table
 }

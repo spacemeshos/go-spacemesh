@@ -19,8 +19,8 @@ func NewIdFromNodeKey(key []byte) ID {
 }
 
 func NewIdFromBase58String(s string) ID {
-	data := base58.Decode(s)
-	return ID(data)
+	key := base58.Decode(s)
+	return NewIdFromNodeKey(key)
 }
 
 func NewIdFromHexString(s string) (ID, error) {

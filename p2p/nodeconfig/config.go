@@ -13,11 +13,12 @@ var ConfigValues = Config{
 	SwarmConfig:   SwarmConfigValues,
 }
 
+// todo: make all swamr config values command-line and config file modifiable
 var SwarmConfigValues = SwarmConfig{
 	Bootstrap:              false,
 	RoutingTableBucketSize: 20,
 	RoutingTableAlpha:      3,
-	RandomConnections: 		5,
+	RandomConnections:      5,
 }
 
 func init() {

@@ -156,13 +156,12 @@ func (s *swarmImpl) bootstrap() {
 
 }
 
-
 // Connect up to count random nodes
 func (s *swarmImpl) ConnectToRandomNodes(count int, callback chan node.RemoteNodeData) {
 	c := make(chan node.RemoteNodeData, count)
 	s.findNode(s.localNode.String(), callback)
 	select {
-	case n := <- c:
+	case n := <-c:
 		if n != nil {
 			s.ConnectTo(n)
 			if callback != nil {
@@ -178,7 +177,6 @@ func (s *swarmImpl) ConnectToRandomNodes(count int, callback chan node.RemoteNod
 // req.reqId: globally unique id string - used for tracking messages we didn't get a response for yet
 // req.msg: marshaled message data
 // req.destId: receiver remote node public key/id
-
 func (s *swarmImpl) SendMessage(req SendMessageReq) {
 	s.sendMsgRequests <- req
 }
