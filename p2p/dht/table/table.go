@@ -301,11 +301,7 @@ func (rt *routingTableImpl) update(p node.RemoteNodeData) {
 		return
 	}
 
-	/*
-		if rt.metrics.LatencyEWMA(p) > rt.maxLatency {
-			// Connection doesnt meet requirements, skip!
-			return
-		}*/
+	// todo: consider connection metrics
 
 	// New peer, add to bucket - we add newly seen nodes to the front of their designated bucket
 	bucket.PushFront(p)

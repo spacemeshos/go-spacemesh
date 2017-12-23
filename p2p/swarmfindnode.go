@@ -44,9 +44,8 @@ func (s *swarmImpl) findNode(id string, callback chan node.RemoteNodeData) {
 func (s *swarmImpl) kadFindNode(nodeId string, callback chan node.RemoteNodeData) {
 
 	// kad node location algo
-	const alpha = 3
-	const k = 20 // todo: take from swarm
-
+	alpha := int(s.config.RoutingTableAlpha)
+	k := int(s.config.RoutingTableBucketSize)
 	dhtId := dht.NewIdFromBase58String(nodeId)
 
 	// step 1 - get up to alpha closest nodes to the target in the local routing table

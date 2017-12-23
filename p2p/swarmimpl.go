@@ -4,6 +4,7 @@ import (
 	"github.com/UnrulyOS/go-unruly/log"
 	"github.com/UnrulyOS/go-unruly/p2p/dht/table"
 	"github.com/UnrulyOS/go-unruly/p2p/node"
+	"github.com/UnrulyOS/go-unruly/p2p/nodeconfig"
 
 	//"github.com/UnrulyOS/go-unruly/p2p/dht/table"
 	"github.com/UnrulyOS/go-unruly/p2p/net"
@@ -15,6 +16,8 @@ type swarmImpl struct {
 	network   net.Net
 	localNode LocalNode
 	demuxer   Demuxer
+
+	config nodeconfig.SwarmConfig
 
 	// Internal state not thread safe state - must be access only from methods dispatched from the internal event handler
 
@@ -81,11 +84,12 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 		demuxer:          NewDemuxer(),
 		newSessions:      make(chan HandshakeData, 10),
 		registerNodeReq:  make(chan node.RemoteNodeData, 10),
+
+		config: l.Config().SwarmConfig,
 	}
 
 	// nodes routing table
-	// todo: parametrize bucketSize k - it is used in other places
-	s.routingTable = table.NewRoutingTable(20, l.DhtId())
+	s.routingTable = table.NewRoutingTable(int(s.config.RoutingTableBucketSize), l.DhtId())
 
 	// findNode dht protocol
 	s.findNodeProtocol = NewFindNodeProtocol(s)
@@ -96,6 +100,10 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 	s.handshakeProtocol.RegisterNewSessionCallback(s.newSessions)
 
 	go s.beginProcessingEvents()
+
+	if s.config.Bootstrap {
+		s.bootstrap()
+	}
 
 	return s, err
 }
@@ -133,15 +141,33 @@ func (s *swarmImpl) GetLocalNode() LocalNode {
 	return s.localNode
 }
 
+func (s *swarmImpl) bootstrap() {
+	// register bootstrap nodes
+	for _, n := range nodeconfig.BootstrapNodes {
+		rn := node.NewRemoteNodeDataFromString(n)
+		s.RegisterNode(rn)
+	}
+	c := int(s.config.RandomConnections)
+	if c == 0 {
+		return
+	}
+
+	s.ConnectToRandomNodes(c, nil)
+
+}
+
+
 // Connect up to count random nodes
 func (s *swarmImpl) ConnectToRandomNodes(count int, callback chan node.RemoteNodeData) {
 	c := make(chan node.RemoteNodeData, count)
 	s.findNode(s.localNode.String(), callback)
 	select {
-	case n := <-c:
+	case n := <- c:
 		if n != nil {
 			s.ConnectTo(n)
-			go func() { callback <- n }()
+			if callback != nil {
+				go func() { callback <- n }()
+			}
 		}
 	}
 }

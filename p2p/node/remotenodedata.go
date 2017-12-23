@@ -4,6 +4,7 @@ import (
 	"github.com/UnrulyOS/go-unruly/p2p/dht"
 	"github.com/UnrulyOS/go-unruly/p2p/pb"
 	"github.com/btcsuite/btcutil/base58"
+	"strings"
 	"time"
 )
 
@@ -113,6 +114,16 @@ func NewRemoteNodeData(id string, ip string) RemoteNodeData {
 		dhtId:            dhtId,
 		lastFindNodeCall: map[string]time.Time{},
 	}
+}
+
+// Create a remote node from a string in the format: 126.0.0.1:3572/QmcjTLy94HGFo4JoYibudGeBV2DSBb6E4apBjFsBGnMsWa
+
+func NewRemoteNodeDataFromString(data string) RemoteNodeData {
+	items := strings.Split(data, "/")
+	if len(items) != 2 {
+		return nil
+	}
+	return NewRemoteNodeData(items[1], items[0])
 }
 
 func (rn *remoteNodeDataImpl) GetLastFindNodeCall(nodeId string) time.Time {

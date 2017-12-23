@@ -10,6 +10,14 @@ var ConfigValues = Config{
 	NodeId:        "",
 	DialTimeout:   time.Duration(1 * time.Minute),
 	ConnKeepAlive: time.Duration(48 * time.Hour),
+	SwarmConfig:   SwarmConfigValues,
+}
+
+var SwarmConfigValues = SwarmConfig{
+	Bootstrap:              false,
+	RoutingTableBucketSize: 20,
+	RoutingTableAlpha:      3,
+	RandomConnections: 		5,
 }
 
 func init() {
@@ -23,4 +31,12 @@ type Config struct {
 	NodeId        string        `toml:"-"`
 	DialTimeout   time.Duration `toml:"-"`
 	ConnKeepAlive time.Duration `toml:"-"`
+	SwarmConfig   SwarmConfig   `toml:"-"`
+}
+
+type SwarmConfig struct {
+	Bootstrap              bool `toml:"-"`
+	RoutingTableBucketSize uint `toml:"-"`
+	RoutingTableAlpha      uint `toml:"-"`
+	RandomConnections      uint `toml:"-"`
 }

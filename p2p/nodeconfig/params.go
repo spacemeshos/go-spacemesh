@@ -14,10 +14,8 @@ const (
 )
 
 var (
-	// murl format - see RemoteNodeData type
 	BootstrapNodes = []string{
-		"/ip4/127.0.0.1/tcp/3571/QmcjTLy94HGFo4JoYibudGeBV2DSBb6E4apBjFsBGnYaNo",
-		"/ip4/126.0.0.1/tcp/3572/QmcjTLy94HGFo4JoYibudGeBV2DSBb6E4apBjFsBGnMsWa",
-		"/ip4/125.0.0.1/tcp/3763/QmRtrUMB3rfmRZE6yn8yLRvik6a5Pprvc5HnB1HT8MnoPy",
+		"126.0.0.1:3572/QmcjTLy94HGFo4JoYibudGeBV2DSBb6E4apBjFsBGnMsWa",
+		"125.0.0.1:3763/QmRtrUMB3rfmRZE6yn8yLRvik6a5Pprvc5HnB1HT8MnoPy",
 	}
 )

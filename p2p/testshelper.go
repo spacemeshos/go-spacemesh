@@ -29,12 +29,18 @@ func minInt64(x, y int64) int64 {
 	return y
 }
 
+// Generate a local test node without persisting data to local store and with default config value
 func GenerateTestNode(t *testing.T) (LocalNode, Peer) {
+	return GenerateTestNodeWithConfig(t, nodeconfig.ConfigValues)
+}
+
+// Generate a local test node without persisting data to local store
+func GenerateTestNodeWithConfig(t *testing.T, config nodeconfig.Config) (LocalNode, Peer) {
 
 	port := crypto.GetRandomUInt32(1000) + 10000
 	address := fmt.Sprintf("localhost:%d", port)
 
-	localNode, err := NewNodeIdentity(address, nodeconfig.ConfigValues, false)
+	localNode, err := NewNodeIdentity(address, config, false)
 	if err != nil {
 		t.Error("failed to create local node1", err)
 	}
@@ -48,6 +54,7 @@ func GenerateTestNode(t *testing.T) (LocalNode, Peer) {
 	return localNode, remoteNode
 }
 
+// Generate a remote random node data for testing
 func GenerateRandomNodeData() node.RemoteNodeData {
 	port := crypto.GetRandomUInt32(1000) + 10000
 	address := fmt.Sprintf("localhost:%d", port)
@@ -55,6 +62,7 @@ func GenerateRandomNodeData() node.RemoteNodeData {
 	return node.NewRemoteNodeData(pub.String(), address)
 }
 
+// Generate remote nodes data for testing
 func GenerateRandomNodesData(n int) []node.RemoteNodeData {
 	res := make([]node.RemoteNodeData, n)
 	for i := 0; i < n; i++ {
