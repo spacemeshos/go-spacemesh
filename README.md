@@ -12,7 +12,7 @@
 <a href="https://spacemesh.io"><img src="https://img.shields.io/badge/madeby-spacemeshos-blue.svg"/></a>
 </p>
 
-## /go-spacemesh
+## go-spacemesh
 The go implementation of the [spacemeshos](https://spacemesh.io) p2p node.
 SpaceMesh is a decentralized blockchain computer using a new race-free consensus protocol that doesn't involve `proof of work`.
 SpaceMesh is designed to build a secure decentralized networking formed by a large number of desktop PCs at home.
@@ -30,7 +30,7 @@ git clone https://github.com/spacemeshos/go-spacemesh
 
 ### Building
 
-To build `/go-spacemesh` for your current system architecture use:
+To build `go-spacemesh` for your current system architecture use:
 
 ```
 make
@@ -41,7 +41,7 @@ or
 go build
 ```
 
-from the project root directory. The binary `/go-spacemesh` will be saved in the project root directory.
+from the project root directory. The binary `go-spacemesh` will be saved in the project root directory.
 
 
 To build a binary for a specific architecture directory use:
@@ -91,10 +91,10 @@ make test
 ```
 ### Contributing
 
-Thank you for considering to contribute to the /go-spacemesh open source project. 
+Thank you for considering to contribute to the go-spacemesh open source project. 
 We welcome contributions large and small!
 
-- /go-spacemesh is part of [The spacemeshos open source Project](https://spacemesh.io), and is MIT licensed open source software.
+- go-spacemesh is part of [The spacemeshos open source Project](https://spacemesh.io), and is MIT licensed open source software.
 - We welcome major contributors to the spacemesh core dev team.
 - Please make sure to scan the [issues](https://github.com/spacemeshos/go-spacemesh/issues). 
 - Search the closed ones before reporting things, and help us with the open ones.

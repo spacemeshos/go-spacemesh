@@ -38,7 +38,7 @@ Stuff we have a basic 1st pass implementation for:
 - Grpc and json-http api servers with config and decent tests
 - Basic node with 2 implemented example p2p protocols and basic tests
 - Basic keys and id type system (wrapping lib-p2p keys and ids types)
-- A buildable /go-spacemesh cross-platform exe with full cli features (flags, commands)
+- A buildable go-spacemesh cross-platform exe with full cli features (flags, commands)
 - Basic working makefile (not fully isolated from $GOPATH although make should use vendored versions)
 - App persistent store with support for multiple nodes data
 - Restore node data from store on session start or create new id automatically

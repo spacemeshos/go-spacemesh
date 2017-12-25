@@ -50,5 +50,5 @@ go test ./... -cover
 - TBD - travis builds and tests
 
 ### Custom node tests
-- Node is designed to be independant of app so you should be able to create custom p2p tests.
+- Node is designed to be independent of app so you should be able to create custom p2p tests.
 See swarm_test.go

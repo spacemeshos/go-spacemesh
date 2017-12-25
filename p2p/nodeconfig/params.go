@@ -8,7 +8,7 @@ const (
 
 	// add all node params here (non-configurable consts) - ideally most node params should be configurable
 
-	ClientVersion      = "go-p2p-node/0.0.1"
+	ClientVersion      = "go-spacemesh-node/0.0.1"
 	NodesDirectoryName = "nodes"
 	NodeDataFileName   = "id.json"
 )
