@@ -145,7 +145,7 @@ Callback is called by the p2p-lib host impls for the response protocol. The resp
 - Nodes register the protocols they support by registering a `multi-protocol` on the `lib-p2p` `host` and implementing protocol message handlers for processing RPC method calls.
 - Nodes implement type to send messages using the protocol to one or more peers.
 
-#### unruly p2p protocol over lib-p2p prototype:
+#### spacemesh p2p protocol over lib-p2p prototype:
 
 Checkout /node/playground.go
 

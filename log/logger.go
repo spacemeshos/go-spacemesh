@@ -8,11 +8,11 @@ import (
 	"path/filepath"
 )
 
-type UnrulyLogger struct {
+type SpaceMeshLogger struct {
 	Logger *logging.Logger
 }
 
-var ulogger *UnrulyLogger
+var ulogger *SpaceMeshLogger
 
 func init() {
 	// create a basic temp os.Stdout logger
@@ -23,12 +23,12 @@ func init() {
 	backend := logging.NewLogBackend(os.Stdout, "", 0)
 	backendFormatter := logging.NewBackendFormatter(backend, logFormat)
 	logging.SetBackend(backendFormatter)
-	ulogger = &UnrulyLogger{Logger: log}
+	ulogger = &SpaceMeshLogger{Logger: log}
 
 }
 
 // Init app logging system
-func InitUnrulyLoggingSystem(dataFolderPath string, logFileName string) {
+func InitSpaceMeshLoggingSystem(dataFolderPath string, logFileName string) {
 
 	log := logging.MustGetLogger("app")
 
@@ -55,7 +55,7 @@ func InitUnrulyLoggingSystem(dataFolderPath string, logFileName string) {
 
 	logging.SetBackend(backendFormatter, fileBackendFormatter)
 
-	ulogger = &UnrulyLogger{Logger: log}
+	ulogger = &SpaceMeshLogger{Logger: log}
 }
 
 // public wrappers abstracting away logging lib impl

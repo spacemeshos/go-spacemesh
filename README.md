@@ -1,6 +1,6 @@
 
 <h1 align="center">
-  <a href="https://unruly.io"><img width="400" src="https://firebasestorage.googleapis.com/v0/b/fifth-jigsaw-167200.appspot.com/o/logo%403x.png?alt=media&token=cdcacbe4-aa56-4111-b719-15b2ade60069" alt="Unruly logo" /></a>
+  <a href="https://spacemesh.io"><img width="400" src="https://firebasestorage.googleapis.com/v0/b/fifth-jigsaw-167200.appspot.com/o/logo%403x.png?alt=media&token=cdcacbe4-aa56-4111-b719-15b2ade60069" alt="SpaceMesh logo" /></a>
 </h1>
 
 <p align="center">
@@ -8,15 +8,15 @@
 <img src="https://img.shields.io/packagist/l/doctrine/orm.svg"/>
 <a href=""><img src="https://img.shields.io/badge/maintainer-%40avive-green.svg"/></a>
 <img src="https://img.shields.io/badge/golang-%3E%3D%201.9.2-orange.svg"/>
-<a href="https://gitter.im/unruly-os/Lobby"><img src="https://img.shields.io/badge/gitter-%23unruly--os-blue.svg"/></a>
-<a href="https://unruly.io"><img src="https://img.shields.io/badge/madeby-spacemeshos-blue.svg"/></a>
+<a href="https://gitter.im/spacemesh-os/Lobby"><img src="https://img.shields.io/badge/gitter-%23spacemesh--os-blue.svg"/></a>
+<a href="https://spacemesh.io"><img src="https://img.shields.io/badge/madeby-spacemeshos-blue.svg"/></a>
 </p>
 
-## go-unruly
-The go implementation of the [spacemeshos](https://unruly.io) p2p node.
-Unruly is a decentralized blockchain computer using a new race-free consensus protocol that doesn't involve `proof of work`.
-Unruly is designed to build a secure decentralized networking formed by a large number of desktop PCs at home.
-To learn more about Unruly read our wiki pages.
+## /go-spacemesh
+The go implementation of the [spacemeshos](https://spacemesh.io) p2p node.
+SpaceMesh is a decentralized blockchain computer using a new race-free consensus protocol that doesn't involve `proof of work`.
+SpaceMesh is designed to build a secure decentralized networking formed by a large number of desktop PCs at home.
+To learn more about SpaceMesh read our wiki pages.
 
 ### Getting
 ```
@@ -30,7 +30,7 @@ git clone https://github.com/spacemeshos/go-spacemesh
 
 ### Building
 
-To build `go-unruly` for your current system architecture use:
+To build `/go-spacemesh` for your current system architecture use:
 
 ```
 make
@@ -41,7 +41,7 @@ or
 go build
 ```
 
-from the project root directory. The binary `go-unruly` will be saved in the project root directory.
+from the project root directory. The binary `/go-spacemesh` will be saved in the project root directory.
 
 
 To build a binary for a specific architecture directory use:
@@ -91,11 +91,11 @@ make test
 ```
 ### Contributing
 
-Thank you for considering to contribute to the go-unruly open source project. 
+Thank you for considering to contribute to the /go-spacemesh open source project. 
 We welcome contributions large and small!
 
-- go-unruly is part of [The spacemeshos open source Project](https://unruly.io), and is MIT licensed open source software.
-- We welcome major contributors to the unruly core dev team.
+- /go-spacemesh is part of [The spacemeshos open source Project](https://spacemesh.io), and is MIT licensed open source software.
+- We welcome major contributors to the spacemesh core dev team.
 - Please make sure to scan the [issues](https://github.com/spacemeshos/go-spacemesh/issues). 
 - Search the closed ones before reporting things, and help us with the open ones.
 
@@ -103,10 +103,10 @@ We welcome contributions large and small!
 
 - Read the spacemeshos project white paper
 - Read all docs in the `docs/` folder
-- Ask questions or talk about things in [Issues](https://github.com/spacemeshos/go-spacemesh/issues) or on [unrily gitter](https://gitter.im/unruly-os/Lobby).
+- Ask questions or talk about things in [Issues](https://github.com/spacemeshos/go-spacemesh/issues) or on [unrily gitter](https://gitter.im/spacemesh-os/Lobby).
 - Ensure you are able to contribute (no legal issues please)
 - For any code contribution, please **fork from the `develop branch` and not from `master`), apply your changes and submit a pull request. We follow this [git workflow](http://nvie.com/posts/a-successful-git-branching-model/)
-- Before starting to work on large contributions please chat with the core dev team on our [gitter channel](https://gitter.im/unruly-os/Lobby) to get some initial feedback prior to doing lots of work.
+- Before starting to work on large contributions please chat with the core dev team on our [gitter channel](https://gitter.im/spacemesh-os/Lobby) to get some initial feedback prior to doing lots of work.
 - Check for 3rd-party packages in the vendor folder before adding a new 3rd party dependency.
 - Add new 3rd-party packages required by your code to vendor.json - don't use any other kind of deps importing.
 - Add the package name to your commit comment. e.g. `node: added additional tests.`

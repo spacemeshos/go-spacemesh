@@ -48,7 +48,7 @@ func TestGrpcApi(t *testing.T) {
 		t.Fatalf("did not connect: %v", err)
 	}
 	defer conn.Close()
-	c := pb.NewUnrulyServiceClient(conn)
+	c := pb.NewSpaceMeshServiceClient(conn)
 
 	// call echo and validate result
 	r, err := c.Echo(context.Background(), &pb.SimpleMessage{message})

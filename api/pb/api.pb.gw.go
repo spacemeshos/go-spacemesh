@@ -12,7 +12,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/gogo/protobuf/proto"
+	"github.com/golang/protobuf/proto"
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"github.com/grpc-ecosystem/grpc-gateway/utilities"
 	"golang.org/x/net/context"
@@ -28,7 +28,7 @@ var _ status.Status
 var _ = runtime.String
 var _ = utilities.NewDoubleArray
 
-func request_UnrulyService_Echo_0(ctx context.Context, marshaler runtime.Marshaler, client UnrulyServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+func request_SpaceMeshService_Echo_0(ctx context.Context, marshaler runtime.Marshaler, client SpaceMeshServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var protoReq SimpleMessage
 	var metadata runtime.ServerMetadata
 
@@ -41,9 +41,9 @@ func request_UnrulyService_Echo_0(ctx context.Context, marshaler runtime.Marshal
 
 }
 
-// RegisterUnrulyServiceHandlerFromEndpoint is same as RegisterUnrulyServiceHandler but
+// RegisterSpaceMeshServiceHandlerFromEndpoint is same as RegisterSpaceMeshServiceHandler but
 // automatically dials to "endpoint" and closes the connection when "ctx" gets done.
-func RegisterUnrulyServiceHandlerFromEndpoint(ctx context.Context, mux *runtime.ServeMux, endpoint string, opts []grpc.DialOption) (err error) {
+func RegisterSpaceMeshServiceHandlerFromEndpoint(ctx context.Context, mux *runtime.ServeMux, endpoint string, opts []grpc.DialOption) (err error) {
 	conn, err := grpc.Dial(endpoint, opts...)
 	if err != nil {
 		return err
@@ -63,23 +63,23 @@ func RegisterUnrulyServiceHandlerFromEndpoint(ctx context.Context, mux *runtime.
 		}()
 	}()
 
-	return RegisterUnrulyServiceHandler(ctx, mux, conn)
+	return RegisterSpaceMeshServiceHandler(ctx, mux, conn)
 }
 
-// RegisterUnrulyServiceHandler registers the http handlers for service UnrulyService to "mux".
+// RegisterSpaceMeshServiceHandler registers the http handlers for service SpaceMeshService to "mux".
 // The handlers forward requests to the grpc endpoint over "conn".
-func RegisterUnrulyServiceHandler(ctx context.Context, mux *runtime.ServeMux, conn *grpc.ClientConn) error {
-	return RegisterUnrulyServiceHandlerClient(ctx, mux, NewUnrulyServiceClient(conn))
+func RegisterSpaceMeshServiceHandler(ctx context.Context, mux *runtime.ServeMux, conn *grpc.ClientConn) error {
+	return RegisterSpaceMeshServiceHandlerClient(ctx, mux, NewSpaceMeshServiceClient(conn))
 }
 
-// RegisterUnrulyServiceHandler registers the http handlers for service UnrulyService to "mux".
-// The handlers forward requests to the grpc endpoint over the given implementation of "UnrulyServiceClient".
-// Note: the gRPC framework executes interceptors within the gRPC handler. If the passed in "UnrulyServiceClient"
+// RegisterSpaceMeshServiceHandler registers the http handlers for service SpaceMeshService to "mux".
+// The handlers forward requests to the grpc endpoint over the given implementation of "SpaceMeshServiceClient".
+// Note: the gRPC framework executes interceptors within the gRPC handler. If the passed in "SpaceMeshServiceClient"
 // doesn't go through the normal gRPC flow (creating a gRPC client etc.) then it will be up to the passed in
-// "UnrulyServiceClient" to call the correct interceptors.
-func RegisterUnrulyServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux, client UnrulyServiceClient) error {
+// "SpaceMeshServiceClient" to call the correct interceptors.
+func RegisterSpaceMeshServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux, client SpaceMeshServiceClient) error {
 
-	mux.Handle("POST", pattern_UnrulyService_Echo_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle("POST", pattern_SpaceMeshService_Echo_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		if cn, ok := w.(http.CloseNotifier); ok {
@@ -97,14 +97,14 @@ func RegisterUnrulyServiceHandlerClient(ctx context.Context, mux *runtime.ServeM
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		resp, md, err := request_UnrulyService_Echo_0(rctx, inboundMarshaler, client, req, pathParams)
+		resp, md, err := request_SpaceMeshService_Echo_0(rctx, inboundMarshaler, client, req, pathParams)
 		ctx = runtime.NewServerMetadataContext(ctx, md)
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
 
-		forward_UnrulyService_Echo_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+		forward_SpaceMeshService_Echo_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 
 	})
 
@@ -112,9 +112,9 @@ func RegisterUnrulyServiceHandlerClient(ctx context.Context, mux *runtime.ServeM
 }
 
 var (
-	pattern_UnrulyService_Echo_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "example", "echo"}, ""))
+	pattern_SpaceMeshService_Echo_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "example", "echo"}, ""))
 )
 
 var (
-	forward_UnrulyService_Echo_0 = runtime.ForwardResponseMessage
+	forward_SpaceMeshService_Echo_0 = runtime.ForwardResponseMessage
 )

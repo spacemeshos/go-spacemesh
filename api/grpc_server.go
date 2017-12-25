@@ -13,31 +13,31 @@ import (
 	"google.golang.org/grpc/reflection"
 )
 
-// A grpc server implementing the Unruly API
+// A grpc server implementing the SpaceMesh API
 
-// server is used to implement UnrulyService.Echo.
-type UnrulyGrpcService struct {
+// server is used to implement SpaceMeshService.Echo.
+type SpaceMeshGrpcService struct {
 	Server *grpc.Server
 	Port   uint
 }
 
-func (s UnrulyGrpcService) Echo(ctx context.Context, in *pb.SimpleMessage) (*pb.SimpleMessage, error) {
+func (s SpaceMeshGrpcService) Echo(ctx context.Context, in *pb.SimpleMessage) (*pb.SimpleMessage, error) {
 	return &pb.SimpleMessage{in.Value}, nil
 }
 
-func (s UnrulyGrpcService) StopService() {
+func (s SpaceMeshGrpcService) StopService() {
 	log.Info("Stopping grpc service...")
 	s.Server.Stop()
 }
 
-func NewGrpcService() *UnrulyGrpcService {
+func NewGrpcService() *SpaceMeshGrpcService {
 	port := config.ConfigValues.GrpcServerPort
 	server := grpc.NewServer()
-	return &UnrulyGrpcService{Server: server, Port: port}
+	return &SpaceMeshGrpcService{Server: server, Port: port}
 }
 
 // This is a blocking method designed to be called using a go routine
-func (s UnrulyGrpcService) StartService() {
+func (s SpaceMeshGrpcService) StartService() {
 
 	port := config.ConfigValues.GrpcServerPort
 	addr := ":" + strconv.Itoa(int(port))
@@ -48,7 +48,7 @@ func (s UnrulyGrpcService) StartService() {
 		return
 	}
 
-	pb.RegisterUnrulyServiceServer(s.Server, s)
+	pb.RegisterSpaceMeshServiceServer(s.Server, s)
 
 	// Register reflection service on gRPC server
 	reflection.Register(s.Server)

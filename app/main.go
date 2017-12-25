@@ -20,16 +20,16 @@ import (
 	nodeparams "github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 )
 
-type UnrulyApp struct {
+type SpaceMeshApp struct {
 	*cli.App
 	Node           p2p.LocalNode
-	grpcApiService *api.UnrulyGrpcService
+	grpcApiService *api.SpaceMeshGrpcService
 	jsonApiService *api.JsonHttpServer
 }
 
-// the main unruly app - main entry point
+// the main spacemesh app - main entry point
 // Access the node and the other top-level modules from the app
-var App *UnrulyApp
+var App *SpaceMeshApp
 
 var (
 	appFlags = []cli.Flag{
@@ -68,7 +68,7 @@ var (
 
 // add toml config file support and sample toml file
 
-func newUnrulyApp() *UnrulyApp {
+func newSpaceMeshApp() *SpaceMeshApp {
 	app := cli.NewApp()
 	app.Name = filepath.Base(os.Args[0])
 	app.Author = config.AppAuthor
@@ -91,46 +91,46 @@ func newUnrulyApp() *UnrulyApp {
 
 	sort.Sort(cli.FlagsByName(app.Flags))
 
-	unrulyApp := &UnrulyApp{app, nil, nil, nil}
+	sma := &SpaceMeshApp{app, nil, nil, nil}
 
 	// setup callbacks
-	app.Before = unrulyApp.before
-	app.Action = unrulyApp.startUnrulyNode
-	app.After = unrulyApp.cleanup
+	app.Before = sma.before
+	app.Action = sma.startSpaceMeshNode
+	app.After = sma.cleanup
 
 	// must be done here and not in app.before() so we won't lose any log entries
-	unrulyApp.setupLogging()
+	sma.setupLogging()
 
-	return unrulyApp
+	return sma
 }
 
-// start the unruly node
-func startUnrulyNode(ctx *cli.Context) error {
-	return App.startUnrulyNode(ctx)
+// start the spacemesh node
+func startSpaceMeshNode(ctx *cli.Context) error {
+	return App.startSpaceMeshNode(ctx)
 }
 
 // setup app logging system
-func (app *UnrulyApp) setupLogging() {
+func (app *SpaceMeshApp) setupLogging() {
 
 	// setup logging early
-	dataDir, err := filesystem.GetUnrulyDataDirectoryPath()
+	dataDir, err := filesystem.GetSpaceMeshDataDirectoryPath()
 	if err != nil {
-		log.Error("Failed to setup unruly data dir")
+		log.Error("Failed to setup spacemesh data dir")
 		panic(err)
 	}
 
 	// todo: support configurable log file name (low priority)
-	log.InitUnrulyLoggingSystem(dataDir, "unruly.log")
+	log.InitSpaceMeshLoggingSystem(dataDir, "spacemesh.log")
 
-	log.Info("\n\nUnruly app session starting... %s", app.getAppInfo())
+	log.Info("\n\nSpaceMesh app session starting... %s", app.getAppInfo())
 }
 
-func (app *UnrulyApp) getAppInfo() string {
+func (app *SpaceMeshApp) getAppInfo() string {
 	return fmt.Sprintf("App version: %s. Git: %s - %s . Go Version: %s. OS: %s-%s ",
 		Version, Branch, Commit, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 }
 
-func (app *UnrulyApp) before(ctx *cli.Context) error {
+func (app *SpaceMeshApp) before(ctx *cli.Context) error {
 
 	// max out box for now
 	runtime.GOMAXPROCS(runtime.NumCPU())
@@ -148,7 +148,7 @@ func (app *UnrulyApp) before(ctx *cli.Context) error {
 	// todo: add misc app setup here (metrics, debug, etc....)
 
 	// ensure all data folders exist
-	filesystem.EnsureUnrulyDataDirectories()
+	filesystem.EnsureSpaceMeshDataDirectories()
 
 	// load all accounts from store
 	accounts.LoadAllAccounts()
@@ -158,8 +158,8 @@ func (app *UnrulyApp) before(ctx *cli.Context) error {
 	return nil
 }
 
-// Unruly app cleanup tasks
-func (app *UnrulyApp) cleanup(ctx *cli.Context) error {
+// SpaceMesh app cleanup tasks
+func (app *SpaceMeshApp) cleanup(ctx *cli.Context) error {
 
 	log.Info("App cleanup starting...")
 	if app.jsonApiService != nil {
@@ -176,7 +176,7 @@ func (app *UnrulyApp) cleanup(ctx *cli.Context) error {
 	return nil
 }
 
-func (app *UnrulyApp) startUnrulyNode(ctx *cli.Context) error {
+func (app *SpaceMeshApp) startSpaceMeshNode(ctx *cli.Context) error {
 
 	log.Info("Starting local node...")
 	port := *nodeparams.LocalTcpPortFlag.Destination
@@ -219,7 +219,7 @@ func (app *UnrulyApp) startUnrulyNode(ctx *cli.Context) error {
 	return nil
 }
 
-// The Unruly console application - responsible for parsing and routing cli flags and commands
+// The SpaceMesh console application - responsible for parsing and routing cli flags and commands
 // this is the root of all evil, called from Main.main()
 func Main(commit, branch, version string) {
 
@@ -228,7 +228,7 @@ func Main(commit, branch, version string) {
 	Branch = branch
 	Commit = commit
 
-	App = newUnrulyApp()
+	App = newSpaceMeshApp()
 
 	if err := App.Run(os.Args); err != nil {
 		fmt.Fprintln(os.Stderr, err)

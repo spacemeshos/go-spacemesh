@@ -25,13 +25,13 @@ func PathExists(path string) bool {
 	return err != nil
 }
 
-// Get the full os-specific path to the unruly top-level data directory
-func GetUnrulyDataDirectoryPath() (string, error) {
+// Get the full os-specific path to the spacemesh top-level data directory
+func GetSpaceMeshDataDirectoryPath() (string, error) {
 	return GetFullDirectoryPath(config.ConfigValues.DataFilePath)
 }
 
-// Get the unruly temp files dir so we don't have to work with convoluted os specific temp folders
-func GetUnrulyTempDirectoryPath() (string, error) {
+// Get the spacemesh temp files dir so we don't have to work with convoluted os specific temp folders
+func GetSpaceMeshTempDirectoryPath() (string, error) {
 
 	dataDir, err := GetFullDirectoryPath(config.ConfigValues.DataFilePath)
 	if err != nil {
@@ -43,12 +43,12 @@ func GetUnrulyTempDirectoryPath() (string, error) {
 	return GetFullDirectoryPath(pathName)
 }
 
-// Return the os-specific path to the Unruly data folder
+// Return the os-specific path to the SpaceMesh data folder
 // Creates it and all subdirs on demand
-func EnsureUnrulyDataDirectories() (string, error) {
-	dataPath, err := GetUnrulyDataDirectoryPath()
+func EnsureSpaceMeshDataDirectories() (string, error) {
+	dataPath, err := GetSpaceMeshDataDirectoryPath()
 	if err != nil {
-		log.Error("Can't get or create unruly data folder")
+		log.Error("Can't get or create spacemesh data folder")
 		return "", err
 	}
 
@@ -68,7 +68,7 @@ func EnsureUnrulyDataDirectories() (string, error) {
 
 // Ensure a sub-directory exists
 func ensureDataSubDirectory(dirName string) (string, error) {
-	dataPath, err := GetUnrulyDataDirectoryPath()
+	dataPath, err := GetSpaceMeshDataDirectoryPath()
 	if err != nil {
 		log.Error("Failed to ensure data dir: %v", err)
 		return "", err
@@ -77,7 +77,7 @@ func ensureDataSubDirectory(dirName string) (string, error) {
 	pathName := filepath.Join(dataPath, dirName)
 	aPath, err := GetFullDirectoryPath(pathName)
 	if err != nil {
-		log.Error("Can't access unruly folder: %v", pathName)
+		log.Error("Can't access spacemesh folder: %v", pathName)
 		return "", err
 	}
 	return aPath, nil
@@ -86,7 +86,7 @@ func ensureDataSubDirectory(dirName string) (string, error) {
 func GetAccountsDataDirectoryPath() (string, error) {
 	aPath, err := ensureDataSubDirectory(config.AccountsDirectoryName)
 	if err != nil {
-		log.Error("Can't access unruly accounts folder. %v", err)
+		log.Error("Can't access spacemesh accounts folder. %v", err)
 		return "", err
 	}
 	return aPath, nil
@@ -95,7 +95,7 @@ func GetAccountsDataDirectoryPath() (string, error) {
 func GetLogsDataDirectoryPath() (string, error) {
 	aPath, err := ensureDataSubDirectory(config.LogDirectoryName)
 	if err != nil {
-		log.Error("Can't access unruly logs folder. %v", err)
+		log.Error("Can't access spacemesh logs folder. %v", err)
 		return "", err
 	}
 	return aPath, nil
@@ -140,20 +140,20 @@ func GetFullDirectoryPath(name string) (string, error) {
 	return aPath, err
 }
 
-// Delete all subfolders and files in the unruly root data folder
-func DeleteUnrulyDataFolders(t *testing.T) {
+// Delete all subfolders and files in the spacemesh root data folder
+func DeleteSpaceMeshDataFolders(t *testing.T) {
 
-	aPath, err := GetUnrulyDataDirectoryPath()
+	aPath, err := GetSpaceMeshDataDirectoryPath()
 	if err != nil {
-		t.Fatalf("Failed to get unruly data dir: %v", err)
+		t.Fatalf("Failed to get spacemesh data dir: %v", err)
 	}
 
 	// remove
 	err = os.RemoveAll(aPath)
 	if err != nil {
-		t.Fatalf("Failed to delete unruly data dir: %v", err)
+		t.Fatalf("Failed to delete spacemesh data dir: %v", err)
 	}
 
 	// create the dir again
-	GetUnrulyDataDirectoryPath()
+	GetSpaceMeshDataDirectoryPath()
 }

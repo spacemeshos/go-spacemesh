@@ -15,6 +15,6 @@
 .settings
 .idea
 
-go-unruly
+/go-spacemesh
 go-spacemesh
 cp.out

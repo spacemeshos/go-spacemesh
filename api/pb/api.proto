@@ -7,7 +7,7 @@ message SimpleMessage {
     string value = 1;
 }
 
-service UnrulyService {
+service SpaceMeshService {
     rpc Echo(SimpleMessage) returns (SimpleMessage) {
         option (google.api.http) = {
           post: "/v1/example/echo"

@@ -11,7 +11,7 @@ import (
 func TestApp(t *testing.T) {
 
 	// remove all injected test flags for now
-	os.Args = []string{"go-unruly", "-jrpc"}
+	os.Args = []string{"/go-spacemesh", "-jrpc"}
 
 	go app.Main("", "master", "")
 

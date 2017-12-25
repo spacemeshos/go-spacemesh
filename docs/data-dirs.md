@@ -1,6 +1,6 @@
-## Unruly data folders structure
+## SpaceMesh data folders structure
 
-- unruly-data/   
+- spacemesh-data/   
     - `nondes/`  
        - `[node-Id1]`
 	        - id.json   
@@ -18,7 +18,7 @@
 	    - Any non-node specific log files go here
 
 
-- `unruly-data` is the master folder were all data is persisted. It has a default location per OS and can be configured in the config file.
+- `spacemesh-data` is the master folder were all data is persisted. It has a default location per OS and can be configured in the config file.
 At the top level, it contains a key/ folder which includes all keystore files.
 A folder is created for each node instance and is named by its id.
 

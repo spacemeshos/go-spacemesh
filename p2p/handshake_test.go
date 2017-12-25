@@ -78,7 +78,7 @@ func TestHandshakeCoreData(t *testing.T) {
 
 	// test session sym enc / dec
 
-	const msg = "hello unruly - hello unruly - hello unruly :-)"
+	const msg = "hello spacemesh - hello spacemesh - hello spacemesh :-)"
 	cipherText, err := session.Encrypt([]byte(msg))
 	assert.NoErr(t, err, "expected no error")
 

@@ -6,7 +6,7 @@ import (
 )
 
 // Swarm
-// p2p virtual network of unruly nodes
+// p2p virtual network of spacemesh nodes
 type Swarm interface {
 
 	// Send a message to a specific remote node based just on its id without knowing its ip address

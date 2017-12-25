@@ -1,6 +1,6 @@
 ## Building
 
-Build `go-unruly` in project root folder in your current arch:
+Build `/go-spacemesh` in project root folder in your current arch:
 ```
 make
 ```

@@ -10,7 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 )
 
-// The local unruly node is the root of all evil
+// The local spacemesh node is the root of all evil
 type LocalNode interface {
 	Id() []byte
 	String() string

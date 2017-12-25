@@ -11,7 +11,7 @@ var (
 )
 
 // Command factory function - this is an example for an app cli command
-// to test try `go-unruly version`
+// to test try `/go-spacemesh version`
 func NewVersionCommand(appVersion, branch, commit string) cli.Command {
 	return cli.Command{
 		Name:      "version",

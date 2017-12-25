@@ -1,4 +1,4 @@
-BINARY := go-unruly
+BINARY := /go-spacemesh
 VERSION := 0.0.1
 COMMIT :=$(shell git rev-parse HEAD)
 BRANCH :=$(shell git rev-parse --abbrev-ref HEAD)

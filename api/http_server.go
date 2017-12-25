@@ -13,7 +13,7 @@ import (
 	gw "github.com/spacemeshos/go-spacemesh/api/pb"
 )
 
-// A json http server providing the Unruly API.
+// A json http server providing the SpaceMesh API.
 // Implemented as a grpc gateway. See https://github.com/grpc-ecosystem/grpc-gateway
 
 // todo: add http.server and support graceful shutdown
@@ -43,7 +43,7 @@ func (s JsonHttpServer) StartService() {
 	portStr := strconv.Itoa(int(config.ConfigValues.GrpcServerPort))
 	echoEndpoint := flag.String("api_endpoint", "localhost:"+portStr, "endpoint of api grpc service")
 
-	if err := gw.RegisterUnrulyServiceHandlerFromEndpoint(ctx, mux, *echoEndpoint, opts); err != nil {
+	if err := gw.RegisterSpaceMeshServiceHandlerFromEndpoint(ctx, mux, *echoEndpoint, opts); err != nil {
 		log.Error("failed to register http endpoint with grpc: %v", err)
 	}
 

@@ -6,7 +6,7 @@ package config
 var ConfigValues = Config{
 	AppIntParam:  20,
 	AppBoolParam: true,
-	DataFilePath: "~/.unruly",
+	DataFilePath: "~/.spacemesh",
 }
 
 func init() {

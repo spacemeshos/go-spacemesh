@@ -22,11 +22,11 @@ type NodeData struct {
 // Get the os-specific full path to the nodes master data directory
 // Attempts to create the directory on-demand
 func ensureNodesDataDirectory() string {
-	dataPath, err := filesystem.GetUnrulyDataDirectoryPath()
+	dataPath, err := filesystem.GetSpaceMeshDataDirectoryPath()
 	nodesDir := filepath.Join(dataPath, nodeconfig.NodesDirectoryName)
 	nodesPath, err := filesystem.GetFullDirectoryPath(nodesDir)
 	if err != nil {
-		log.Error("Can't access unruly nodes folder")
+		log.Error("Can't access spacemesh nodes folder")
 
 	}
 	return nodesPath
