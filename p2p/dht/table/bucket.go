@@ -2,8 +2,8 @@ package table
 
 import (
 	"container/list"
-	"github.com/UnrulyOS/go-unruly/p2p/dht"
-	node "github.com/UnrulyOS/go-unruly/p2p/node"
+	"github.com/spacemeshos/go-spacemesh/p2p/dht"
+	node "github.com/spacemeshos/go-spacemesh/p2p/node"
 )
 
 // Bucket is a dht kbucket type

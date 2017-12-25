@@ -2,7 +2,7 @@ package msgio
 
 import (
 	"encoding/binary"
-	"github.com/UnrulyOS/go-unruly/p2p/msgio/mpool"
+	"github.com/spacemeshos/go-spacemesh/p2p/msgio/mpool"
 	"io"
 	"sync"
 )

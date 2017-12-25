@@ -1,9 +1,9 @@
 package api
 
 import (
-	"github.com/UnrulyOS/go-unruly/api/config"
-	"github.com/UnrulyOS/go-unruly/api/pb"
-	"github.com/UnrulyOS/go-unruly/log"
+	"github.com/spacemeshos/go-spacemesh/api/config"
+	"github.com/spacemeshos/go-spacemesh/api/pb"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"strconv"
 
 	"net"

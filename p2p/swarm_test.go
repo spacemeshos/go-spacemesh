@@ -3,9 +3,9 @@ package p2p
 import (
 	"bytes"
 	"fmt"
-	"github.com/UnrulyOS/go-unruly/assert"
-	"github.com/UnrulyOS/go-unruly/crypto"
-	"github.com/UnrulyOS/go-unruly/p2p/nodeconfig"
+	"github.com/spacemeshos/go-spacemesh/assert"
+	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 	"testing"
 	"time"
 )
@@ -59,7 +59,6 @@ func TestBootstrap(t *testing.T) {
 	callback := make(chan SendPingResp)
 	node2Local.GetPing().Register(callback)
 	node2Local.GetPing().Send("hello unruly", reqId, node3Remote.String())
-
 
 Loop:
 	for {

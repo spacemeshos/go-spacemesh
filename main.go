@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/UnrulyOS/go-unruly/app"
+	"github.com/spacemeshos/go-spacemesh/app"
 )
 
 // vars set by make

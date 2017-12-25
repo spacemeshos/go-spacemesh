@@ -2,9 +2,9 @@ package p2p
 
 import (
 	"encoding/hex"
-	"github.com/UnrulyOS/go-unruly/log"
-	"github.com/UnrulyOS/go-unruly/p2p/pb"
 	"github.com/gogo/protobuf/proto"
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 )
 
 const pingReq = "/ping/1.0/ping-req/"

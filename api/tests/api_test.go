@@ -2,11 +2,11 @@ package tests
 
 import (
 	"fmt"
-	api "github.com/UnrulyOS/go-unruly/api"
-	config "github.com/UnrulyOS/go-unruly/api/config"
-	pb "github.com/UnrulyOS/go-unruly/api/pb"
-	"github.com/UnrulyOS/go-unruly/assert"
 	"github.com/golang/protobuf/jsonpb"
+	api "github.com/spacemeshos/go-spacemesh/api"
+	config "github.com/spacemeshos/go-spacemesh/api/config"
+	pb "github.com/spacemeshos/go-spacemesh/api/pb"
+	"github.com/spacemeshos/go-spacemesh/assert"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"io/ioutil"

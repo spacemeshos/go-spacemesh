@@ -1,10 +1,10 @@
 package tests
 
 import (
-	"github.com/UnrulyOS/go-unruly/accounts"
-	"github.com/UnrulyOS/go-unruly/assert"
-	"github.com/UnrulyOS/go-unruly/filesystem"
-	"github.com/UnrulyOS/go-unruly/log"
+	"github.com/spacemeshos/go-spacemesh/accounts"
+	"github.com/spacemeshos/go-spacemesh/assert"
+	"github.com/spacemeshos/go-spacemesh/filesystem"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"os"
 	"testing"
 )

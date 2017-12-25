@@ -3,8 +3,8 @@ package crypto
 import (
 	"bytes"
 	"fmt"
-	"github.com/UnrulyOS/go-unruly/assert"
-	"github.com/UnrulyOS/go-unruly/log"
+	"github.com/spacemeshos/go-spacemesh/assert"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"testing"
 )
 

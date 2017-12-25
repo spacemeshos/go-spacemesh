@@ -2,9 +2,9 @@ package tests
 
 import (
 	"encoding/hex"
-	"github.com/UnrulyOS/go-unruly/assert"
-	//"github.com/UnrulyOS/go-unruly/p2p"
-	"github.com/UnrulyOS/go-unruly/p2p/dht"
+	"github.com/spacemeshos/go-spacemesh/assert"
+	//"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/dht"
 	"math/big"
 	"testing"
 )

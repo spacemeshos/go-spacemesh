@@ -5,8 +5,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"github.com/UnrulyOS/go-unruly/log"
 	"github.com/jbenet/go-base58"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"math/big"
 	"sort"
 )

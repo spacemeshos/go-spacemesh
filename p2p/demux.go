@@ -1,7 +1,7 @@
 package p2p
 
 import (
-	"github.com/UnrulyOS/go-unruly/log"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 type IncomingMessage interface {

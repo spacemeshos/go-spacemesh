@@ -2,9 +2,9 @@ package p2p
 
 import (
 	"fmt"
-	"github.com/UnrulyOS/go-unruly/crypto"
-	"github.com/UnrulyOS/go-unruly/p2p/node"
-	"github.com/UnrulyOS/go-unruly/p2p/nodeconfig"
+	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 	"testing"
 )
 

@@ -5,8 +5,8 @@ import (
 	"crypto/cipher"
 	"encoding/hex"
 	"errors"
-	"github.com/UnrulyOS/go-unruly/crypto"
-	"github.com/UnrulyOS/go-unruly/log"
+	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"time"
 )
 

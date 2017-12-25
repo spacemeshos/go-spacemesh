@@ -3,9 +3,9 @@ package crypto
 import (
 	"encoding/hex"
 	"fmt"
-	"github.com/UnrulyOS/go-unruly/log"
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcutil/base58"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 type Key interface {

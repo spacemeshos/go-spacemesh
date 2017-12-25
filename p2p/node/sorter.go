@@ -2,7 +2,7 @@ package node
 
 import (
 	"container/list"
-	"github.com/UnrulyOS/go-unruly/p2p/dht"
+	"github.com/spacemeshos/go-spacemesh/p2p/dht"
 	"sort"
 )
 

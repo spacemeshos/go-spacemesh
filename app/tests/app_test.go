@@ -1,8 +1,8 @@
 package tests
 
 import (
-	"github.com/UnrulyOS/go-unruly/app"
-	"github.com/UnrulyOS/go-unruly/assert"
+	"github.com/spacemeshos/go-spacemesh/app"
+	"github.com/spacemeshos/go-spacemesh/assert"
 	"os"
 	"testing"
 	"time"

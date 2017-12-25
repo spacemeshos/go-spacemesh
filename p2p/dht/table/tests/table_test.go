@@ -1,9 +1,9 @@
 package tests
 
 import (
-	"github.com/UnrulyOS/go-unruly/p2p"
-	"github.com/UnrulyOS/go-unruly/p2p/dht/table"
-	"github.com/UnrulyOS/go-unruly/p2p/node"
+	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/dht/table"
+	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"math/rand"
 	"runtime"
 	"testing"

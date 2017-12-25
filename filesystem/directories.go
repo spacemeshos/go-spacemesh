@@ -1,8 +1,8 @@
 package filesystem
 
 import (
-	"github.com/UnrulyOS/go-unruly/app/config"
-	"github.com/UnrulyOS/go-unruly/log"
+	"github.com/spacemeshos/go-spacemesh/app/config"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"os"
 	"os/user"
 	"path"

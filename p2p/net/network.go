@@ -1,8 +1,8 @@
 package net
 
 import (
-	"github.com/UnrulyOS/go-unruly/log"
-	"github.com/UnrulyOS/go-unruly/p2p/nodeconfig"
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 	"net"
 	"time"
 )

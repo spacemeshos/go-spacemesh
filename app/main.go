@@ -3,12 +3,12 @@ package app
 
 import (
 	"fmt"
-	"github.com/UnrulyOS/go-unruly/accounts"
-	api "github.com/UnrulyOS/go-unruly/api"
-	apiconf "github.com/UnrulyOS/go-unruly/api/config"
-	"github.com/UnrulyOS/go-unruly/filesystem"
-	"github.com/UnrulyOS/go-unruly/log"
-	"github.com/UnrulyOS/go-unruly/p2p"
+	"github.com/spacemeshos/go-spacemesh/accounts"
+	api "github.com/spacemeshos/go-spacemesh/api"
+	apiconf "github.com/spacemeshos/go-spacemesh/api/config"
+	"github.com/spacemeshos/go-spacemesh/filesystem"
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"gopkg.in/urfave/cli.v1"
 	"os"
 	"os/signal"
@@ -16,8 +16,8 @@ import (
 	"runtime"
 	"sort"
 
-	"github.com/UnrulyOS/go-unruly/app/config"
-	nodeparams "github.com/UnrulyOS/go-unruly/p2p/nodeconfig"
+	"github.com/spacemeshos/go-spacemesh/app/config"
+	nodeparams "github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 )
 
 type UnrulyApp struct {

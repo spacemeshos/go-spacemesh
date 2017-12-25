@@ -2,8 +2,8 @@ package pb
 
 import (
 	"errors"
-	"github.com/UnrulyOS/go-unruly/crypto"
 	"github.com/gogo/protobuf/proto"
+	"github.com/spacemeshos/go-spacemesh/crypto"
 )
 
 func (msg *ProtocolMessage) AuthenticateAuthor() error {

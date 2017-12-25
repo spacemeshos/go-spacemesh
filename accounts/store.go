@@ -2,9 +2,9 @@ package accounts
 
 import (
 	"encoding/json"
-	"github.com/UnrulyOS/go-unruly/crypto"
-	"github.com/UnrulyOS/go-unruly/filesystem"
-	"github.com/UnrulyOS/go-unruly/log"
+	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/filesystem"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"io/ioutil"
 	"path/filepath"
 	"strings"

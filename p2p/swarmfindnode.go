@@ -1,11 +1,11 @@
 package p2p
 
 import (
-	"github.com/UnrulyOS/go-unruly/crypto"
-	"github.com/UnrulyOS/go-unruly/log"
-	"github.com/UnrulyOS/go-unruly/p2p/dht"
-	"github.com/UnrulyOS/go-unruly/p2p/dht/table"
-	"github.com/UnrulyOS/go-unruly/p2p/node"
+	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/dht"
+	"github.com/spacemeshos/go-spacemesh/p2p/dht/table"
+	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"time"
 )
 

@@ -2,9 +2,9 @@ package p2p
 
 import (
 	"encoding/json"
-	"github.com/UnrulyOS/go-unruly/filesystem"
-	"github.com/UnrulyOS/go-unruly/log"
-	"github.com/UnrulyOS/go-unruly/p2p/nodeconfig"
+	"github.com/spacemeshos/go-spacemesh/filesystem"
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 	"io/ioutil"
 	"path/filepath"
 	"strings"

@@ -2,9 +2,9 @@ package table
 
 import (
 	"fmt"
-	"github.com/UnrulyOS/go-unruly/log"
-	"github.com/UnrulyOS/go-unruly/p2p/dht"
-	"github.com/UnrulyOS/go-unruly/p2p/node"
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/dht"
+	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"sort"
 )
 
@@ -82,7 +82,7 @@ type routingTableImpl struct {
 	nearestPeersReqs chan NearestPeersReq
 	listPeersReqs    chan PeersOpChannel
 	sizeReqs         chan chan int
-	printReq		 chan bool
+	printReq         chan bool
 
 	updateReqs chan node.RemoteNodeData
 	removeReqs chan node.RemoteNodeData

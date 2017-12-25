@@ -2,15 +2,15 @@ package api
 
 import (
 	"flag"
-	"github.com/UnrulyOS/go-unruly/api/config"
-	"github.com/UnrulyOS/go-unruly/log"
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
+	"github.com/spacemeshos/go-spacemesh/api/config"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"net/http"
 	"strconv"
 
-	gw "github.com/UnrulyOS/go-unruly/api/pb"
+	gw "github.com/spacemeshos/go-spacemesh/api/pb"
 )
 
 // A json http server providing the Unruly API.

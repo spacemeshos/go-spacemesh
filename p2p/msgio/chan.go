@@ -1,7 +1,7 @@
 package msgio
 
 import (
-	"github.com/UnrulyOS/go-unruly/p2p/msgio/mpool"
+	"github.com/spacemeshos/go-spacemesh/p2p/msgio/mpool"
 	"io"
 )
 
