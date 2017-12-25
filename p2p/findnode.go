@@ -114,7 +114,7 @@ func (p *findNodeProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 	}
 
 	peer := msg.Sender()
-	log.Info("Incoming find-node request from %s. Requested node id: s%", peer.Pretty(), hex.EncodeToString(req.NodeId))
+	log.Info("Incoming find-node request from %s. Requested node id: %s", peer.Pretty(), hex.EncodeToString(req.NodeId))
 
 	// use the dht table to generate the response
 
@@ -125,15 +125,13 @@ func (p *findNodeProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 	count := int(minInt32(req.MaxResults, maxNearestNodesResults))
 
 	// get up to count nearest peers to nodeDhtId
-	// todo: pick up this value from the swarm (k const)
 	rt.NearestPeers(table.NearestPeersReq{nodeDhtId, count, callback})
 
 	var results []*pb.NodeInfo
 
 	select { // block until we got results from the  routing table or timeout
 	case c := <-callback:
-		log.Info("Results length: %d", len(c.Peers))
-		// get results and filter the requesting node from the result
+		log.Info("find-node results length: %d", len(c.Peers))
 		results = node.ToNodeInfo(c.Peers, msg.Sender().String())
 	case <-time.After(tableQueryTimeout):
 		results = []*pb.NodeInfo{} // an empty slice
@@ -185,8 +183,8 @@ func (p *findNodeProtocolImpl) handleIncomingResponse(msg IncomingMessage) {
 
 	resp := FindNodeResp{data, nil, data.Metadata.ReqId}
 
-	log.Info("Got find-node response from %s. Results: %d, Find-node req id: %", msg.Sender().Pretty(),
-		data.NodeInfos, data.Metadata.ReqId)
+	log.Info("Got find-node response from %s. Results: %v, Find-node req id: %s", msg.Sender().Pretty(),
+		data.NodeInfos, hex.EncodeToString(data.Metadata.ReqId))
 
 	// update routing table with newly found nodes
 	nodes := node.FromNodeInfos(data.NodeInfos)

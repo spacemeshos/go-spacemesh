@@ -100,7 +100,7 @@ func (p *pingProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 	}
 
 	peer := msg.Sender()
-	log.Info("Incoming ping peer request from %s. Message: %", peer.Pretty(), req.Ping)
+	log.Info("Incoming ping peer request from %s. Message: s%", peer.Pretty(), req.Ping)
 
 	// add/update local dht table
 	p.swarm.getRoutingTable().Update(peer.GetRemoteNodeData())
@@ -147,7 +147,8 @@ func (p *pingProtocolImpl) handleIncomingResponse(msg IncomingMessage) {
 		return
 	}
 
-	log.Info("Got pong response from %s. Ping req id: %", msg.Sender().Pretty(), data.Pong, data.Metadata.ReqId)
+	log.Info("Got pong response `%s` from %s. Ping req id: %s", data.Pong, msg.Sender().Pretty(),
+		hex.EncodeToString(data.Metadata.ReqId))
 
 	// according to kad receiving a ping response should update sender in local dht table
 	p.swarm.getRoutingTable().Update(msg.Sender().GetRemoteNodeData())

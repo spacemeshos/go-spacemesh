@@ -1,6 +1,7 @@
 package log
 
 import (
+	"fmt"
 	"gopkg.in/natefinch/lumberjack.v2"
 	"gopkg.in/op/go-logging.v1"
 	"os"
@@ -77,4 +78,12 @@ func Error(format string, args ...interface{}) {
 // Standard warning level logging
 func Warning(format string, args ...interface{}) {
 	ulogger.Logger.Warning(format, args...)
+}
+
+func PrettyId(id string) string {
+	m := 6
+	if len(id) < m {
+		m = len(id)
+	}
+	return fmt.Sprintf("<Id %s>", id[:m])
 }

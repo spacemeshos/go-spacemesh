@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"github.com/UnrulyOS/go-unruly/log"
 	"github.com/jbenet/go-base58"
 	"math/big"
@@ -12,6 +13,11 @@ import (
 
 // A dht-compatible ID using the XOR keyspace
 type ID []byte
+
+func (id ID) Pretty() string {
+	v := hex.EncodeToString(id)
+	return fmt.Sprintf("DhtId: %s", v[:8])
+}
 
 func NewIdFromNodeKey(key []byte) ID {
 	hash := sha256.Sum256([]byte(key))

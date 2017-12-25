@@ -2,6 +2,7 @@ package p2p
 
 import (
 	"github.com/UnrulyOS/go-unruly/crypto"
+	"github.com/UnrulyOS/go-unruly/log"
 	"github.com/UnrulyOS/go-unruly/p2p/dht"
 	"github.com/UnrulyOS/go-unruly/p2p/dht/table"
 	"github.com/UnrulyOS/go-unruly/p2p/node"
@@ -14,9 +15,13 @@ import (
 // not go safe - should be called from swarm event dispatcher
 func (s *swarmImpl) findNode(id string, callback chan node.RemoteNodeData) {
 
+	log.Info("finding node: %s ...", log.PrettyId(id))
+
 	// look at peer store
 	n := s.peers[id]
 	if n != nil {
+		log.Info(" known peer")
+
 		go func() { callback <- s.localNode.GetRemoteNodeData() }()
 		return
 	}
@@ -81,7 +86,7 @@ Loop:
 		// lookup nodeId using the target servers
 		res := s.lookupNode(servers, nodeId, closestNode)
 
-		if len(res) >= 0 {
+		if len(res) > 0 {
 
 			// merge newly found nodes
 			searchList = node.Union(searchList, res)
@@ -132,6 +137,10 @@ Loop:
 			if done == l {
 				break Loop
 			}
+
+		case <-time.After(time.Second * 60):
+			// we expected nodes to return results within a reasonable time frames
+			break Loop
 		}
 	}
 

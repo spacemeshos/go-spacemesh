@@ -141,19 +141,28 @@ func (s *swarmImpl) GetLocalNode() LocalNode {
 	return s.localNode
 }
 
+// start the boostrap process
 func (s *swarmImpl) bootstrap() {
+
 	// register bootstrap nodes
-	for _, n := range nodeconfig.BootstrapNodes {
+	bn := 0
+	for _, n := range s.config.BootstrapNodes {
 		rn := node.NewRemoteNodeDataFromString(n)
-		s.RegisterNode(rn)
+		if s.localNode.String() != rn.Id() {
+			s.onRegisterNodeRequest(rn)
+			bn += 1
+		}
 	}
+
 	c := int(s.config.RandomConnections)
 	if c == 0 {
 		return
 	}
 
-	s.ConnectToRandomNodes(c, nil)
-
+	if bn > 0 {
+		// if we know about at least one bootstrap node then attempt to connect to c random nodes
+		go s.ConnectToRandomNodes(c, nil)
+	}
 }
 
 // Connect up to count random nodes

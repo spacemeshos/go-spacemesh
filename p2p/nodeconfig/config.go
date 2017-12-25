@@ -19,6 +19,10 @@ var SwarmConfigValues = SwarmConfig{
 	RoutingTableBucketSize: 20,
 	RoutingTableAlpha:      3,
 	RandomConnections:      5,
+	BootstrapNodes: []string{ // these shoul be the unruly foundation bootstrap nodes
+		"125.0.0.1:3572/iaMujEYTByKcjMZWMqg79eJBGMDm8ADsWZFdouhpfeKj",
+		"125.0.0.1:3763/x34UDdiCBAsXmLyMMpPQzs313B9UDeHNqFpYsLGfaFvm",
+	},
 }
 
 func init() {
@@ -36,8 +40,9 @@ type Config struct {
 }
 
 type SwarmConfig struct {
-	Bootstrap              bool `toml:"-"`
-	RoutingTableBucketSize uint `toml:"-"`
-	RoutingTableAlpha      uint `toml:"-"`
-	RandomConnections      uint `toml:"-"`
+	Bootstrap              bool     `toml:"-"`
+	RoutingTableBucketSize uint     `toml:"-"`
+	RoutingTableAlpha      uint     `toml:"-"`
+	RandomConnections      uint     `toml:"-"`
+	BootstrapNodes         []string `toml:"-"`
 }

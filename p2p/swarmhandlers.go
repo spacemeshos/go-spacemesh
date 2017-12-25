@@ -148,7 +148,24 @@ func (s *swarmImpl) onSendMessageRequest(r SendMessageReq) {
 	peer := s.peers[r.PeerId]
 
 	if peer == nil {
-		// for now we assume messages are sent only to nodes we already know their ip address
+
+		log.Info("No contact info to target peer - attempting to find it on the network...")
+		callback := make(chan node.RemoteNodeData)
+
+		// attempt to find the peer
+		s.findNode(r.PeerId, callback)
+		go func() {
+			select {
+			case n := <-callback:
+				if n != nil { // we found it - now we can send the message to it
+					log.Info("Peer %s found.... - sending message", r.PeerId)
+					s.onSendMessageRequest(r)
+				} else {
+					log.Info("Peer %s not found.... - can't send message", r.PeerId)
+				}
+			}
+		}()
+
 		return
 	}
 

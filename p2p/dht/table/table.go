@@ -2,6 +2,7 @@ package table
 
 import (
 	"fmt"
+	"github.com/UnrulyOS/go-unruly/log"
 	"github.com/UnrulyOS/go-unruly/p2p/dht"
 	"github.com/UnrulyOS/go-unruly/p2p/node"
 	"sort"
@@ -27,6 +28,8 @@ type RoutingTable interface {
 	RegisterPeerAddedCallback(c PeerChannel)     // get called when a peer is added
 	UnregisterPeerRemovedCallback(c PeerChannel) // remove addition reg
 	UnregisterPeerAddedCallback(c PeerChannel)   // remove removal reg
+
+	Print()
 }
 
 // exported helper types
@@ -79,6 +82,7 @@ type routingTableImpl struct {
 	nearestPeersReqs chan NearestPeersReq
 	listPeersReqs    chan PeersOpChannel
 	sizeReqs         chan chan int
+	printReq		 chan bool
 
 	updateReqs chan node.RemoteNodeData
 	removeReqs chan node.RemoteNodeData
@@ -130,6 +134,8 @@ func NewRoutingTable(bucketsize int, localID dht.ID) RoutingTable {
 
 		peerRemovedCallbacks: make(map[string]PeerChannel),
 		peerAddedCallbacks:   make(map[string]PeerChannel),
+
+		printReq: make(chan bool),
 	}
 
 	go rt.processEvents()
@@ -165,7 +171,7 @@ func (rt *routingTableImpl) UnregisterPeerAddedCallback(c PeerChannel) {
 	rt.unregisterPeerAddedReq <- c
 }
 
-// Find a specific peer by ID or return nil
+// Find a specific peer by ID/ Returns nil in the callback when not found
 func (rt *routingTableImpl) Find(req PeerByIdRequest) {
 	rt.findReqs <- req
 }
@@ -221,25 +227,10 @@ func (rt *routingTableImpl) processEvents() {
 			}
 
 		case r := <-rt.nearestPeerReqs:
-			peers := rt.nearestPeers(r.Id, 1)
-			if r.Callback != nil {
-				switch len(peers) {
-				case 0:
-					go func() { r.Callback <- &PeerOpResult{} }()
-				default:
-					go func() { r.Callback <- &PeerOpResult{peers[0]} }()
-				}
-			}
+			rt.onNearestPeerReq(r)
 
 		case r := <-rt.findReqs:
-			peers := rt.nearestPeers(r.Id, 1)
-			if r.Callback != nil {
-				if len(peers) == 0 || !peers[0].DhtId().Equals(r.Id) {
-					go func() { r.Callback <- &PeerOpResult{} }()
-				} else {
-					go func() { r.Callback <- &PeerOpResult{peers[0]} }()
-				}
-			}
+			rt.onFindReq(r)
 
 		case p := <-rt.peerAdded:
 			for _, c := range rt.peerAddedCallbacks {
@@ -266,6 +257,9 @@ func (rt *routingTableImpl) processEvents() {
 		case c := <-rt.unregisterPeerRemovedReq:
 			key := getMemoryAddress(c)
 			delete(rt.peerRemovedCallbacks, key)
+
+		case <-rt.printReq:
+			rt.onPrintReq()
 		}
 	}
 }
@@ -373,6 +367,36 @@ func (rt *routingTableImpl) addNewBucket() node.RemoteNodeData {
 	return nil
 }
 
+// Internal find peer request handler
+func (rt *routingTableImpl) onFindReq(r PeerByIdRequest) {
+
+	peers := rt.nearestPeers(r.Id, 1)
+	if r.Callback == nil {
+		return
+	}
+
+	if len(peers) == 0 || !peers[0].DhtId().Equals(r.Id) {
+		log.Info("Did not find %s in the routing table", r.Id.Pretty())
+		go func() { r.Callback <- &PeerOpResult{} }()
+	} else {
+		p := peers[0]
+		log.Info("Found %s in the routing table", p.Pretty())
+		go func() { r.Callback <- &PeerOpResult{peers[0]} }()
+	}
+}
+
+func (rt *routingTableImpl) onNearestPeerReq(r PeerByIdRequest) {
+	peers := rt.nearestPeers(r.Id, 1)
+	if r.Callback != nil {
+		switch len(peers) {
+		case 0:
+			go func() { r.Callback <- &PeerOpResult{} }()
+		default:
+			go func() { r.Callback <- &PeerOpResult{peers[0]} }()
+		}
+	}
+}
+
 // NearestPeers returns a list of up to count closest peers to the given ID
 // Result is sorted by distance from id
 func (rt *routingTableImpl) nearestPeers(id dht.ID, count int) []node.RemoteNodeData {
@@ -417,21 +441,20 @@ func (rt *routingTableImpl) nearestPeers(id dht.ID, count int) []node.RemoteNode
 	return out
 }
 
-// Print prints a descriptive statement about the provided RoutingTable
-/*
+// Print a descriptive statement about the provided RoutingTable
+// Only call from external clients not from internal event handlers
 func (rt *routingTableImpl) Print() {
-	fmt.Printf("Routing Table, bs = %d, Max latency = %d\n", rt.bucketsize, rt.maxLatency)
-	rt.tabLock.RLock()
+	rt.printReq <- true
+}
 
-	for i, b := range rt.Buckets {
-		fmt.Printf("\tbucket: %d\n", i)
-
-		b.lk.RLock()
-		for e := b.list.Front(); e != nil; e = e.Next() {
-			p := e.Value.(peer.ID)
-			fmt.Printf("\t\t- %s %s\n", p.Pretty(), rt.metrics.LatencyEWMA(p).String())
+// should only be called form internal event handlers to print table contents
+func (rt *routingTableImpl) onPrintReq() {
+	log.Info("Routing Table, bs = %d, buckets;", rt.bucketsize, len(rt.buckets))
+	for i, b := range rt.buckets {
+		log.Info("\tBucket: %d. Items: %d\n", i, b.List().Len())
+		for e := b.List().Front(); e != nil; e = e.Next() {
+			p := e.Value.(node.RemoteNodeData)
+			log.Info("\t\t%s\n", p.Pretty())
 		}
-		b.lk.RUnlock()
 	}
-	rt.tabLock.RUnlock()
-}*/
+}

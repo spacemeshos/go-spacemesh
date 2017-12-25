@@ -12,10 +12,3 @@ const (
 	NodesDirectoryName = "nodes"
 	NodeDataFileName   = "id.json"
 )
-
-var (
-	BootstrapNodes = []string{ // these are the unruly foundation bootstrap nodes
-		"125.0.0.1:3572/iaMujEYTByKcjMZWMqg79eJBGMDm8ADsWZFdouhpfeKj",
-		"125.0.0.1:3763/x34UDdiCBAsXmLyMMpPQzs313B9UDeHNqFpYsLGfaFvm",
-	}
-)

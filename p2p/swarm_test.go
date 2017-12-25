@@ -1,8 +1,13 @@
 package p2p
 
 import (
+	"bytes"
+	"fmt"
+	"github.com/UnrulyOS/go-unruly/assert"
+	"github.com/UnrulyOS/go-unruly/crypto"
 	"github.com/UnrulyOS/go-unruly/p2p/nodeconfig"
 	"testing"
+	"time"
 )
 
 // Basic session test
@@ -29,11 +34,43 @@ Loop:
 
 func TestBootstrap(t *testing.T) {
 
-	// this should attempt to connect with bootstrap nodes and 2 random nodes
+	// setup:
+	// node1 - bootstrap node
+	// node2 - connects to node1 on startup (bootstrap)
+	// node3 - connects to node1 on startup (bootstrap)
+	// node2 - sends a ping to node3 knowing only its id but not dial info
+
+	node1Local, _ := GenerateTestNode(t)
+
+	pd := node1Local.GetRemoteNodeData()
+	bs := fmt.Sprintf("%s/%s", pd.Ip(), pd.Id())
+
+	// node1 and node 2 config
 	c := nodeconfig.ConfigValues
 	c.SwarmConfig.Bootstrap = true
 	c.SwarmConfig.RandomConnections = 2
-	GenerateTestNodeWithConfig(t, c)
+	c.SwarmConfig.BootstrapNodes = []string{bs}
 
-	// todo: test bootstrap nodes are in the routing table
+	node2Local, _ := GenerateTestNodeWithConfig(t, c)
+	_, node3Remote := GenerateTestNodeWithConfig(t, c)
+
+	// ping node2 -> node 3
+	reqId := crypto.UUID()
+	callback := make(chan SendPingResp)
+	node2Local.GetPing().Register(callback)
+	node2Local.GetPing().Send("hello unruly", reqId, node3Remote.String())
+
+
+Loop:
+	for {
+		select {
+		case c := <-callback:
+			assert.Nil(t, c.err, "expected no err in response")
+			if bytes.Equal(c.GetMetadata().ReqId, reqId) {
+				break Loop
+			}
+		case <-time.After(time.Second * 30):
+			t.Fatalf("Timeout error - expected callback")
+		}
+	}
 }

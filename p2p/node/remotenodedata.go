@@ -1,6 +1,7 @@
 package node
 
 import (
+	"fmt"
 	"github.com/UnrulyOS/go-unruly/p2p/dht"
 	"github.com/UnrulyOS/go-unruly/p2p/pb"
 	"github.com/btcsuite/btcutil/base58"
@@ -20,6 +21,8 @@ type RemoteNodeData interface {
 
 	GetLastFindNodeCall(nodeId string) time.Time // time of last find node call sent to node
 	SetLastFindNodeCall(nodeId string, t time.Time)
+
+	Pretty() string
 }
 
 // Outside of swarm - types only know about this and not about RemoteNode
@@ -148,4 +151,8 @@ func (rn *remoteNodeDataImpl) Bytes() []byte {
 
 func (rn *remoteNodeDataImpl) DhtId() dht.ID {
 	return rn.dhtId
+}
+
+func (rn *remoteNodeDataImpl) Pretty() string {
+	return fmt.Sprintf("<RN Id: %s. Ip:%s %s>", rn.id[:8], rn.ip, rn.dhtId.Pretty())
 }
