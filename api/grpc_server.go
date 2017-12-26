@@ -36,9 +36,12 @@ func NewGrpcService() *SpaceMeshGrpcService {
 	return &SpaceMeshGrpcService{Server: server, Port: port}
 }
 
-// This is a blocking method designed to be called using a go routine
 func (s SpaceMeshGrpcService) StartService() {
+	go s.startServiceInternal()
+}
 
+// This is a blocking method designed to be called using a go routine
+func (s SpaceMeshGrpcService) startServiceInternal() {
 	port := config.ConfigValues.GrpcServerPort
 	addr := ":" + strconv.Itoa(int(port))
 

@@ -29,10 +29,11 @@ func TestPingProtocol(t *testing.T) {
 	t0 := time.Now()
 	node1Local.GetPing().Send("hello spacemesh", pingReqId, node2Remote.String())
 
-	// internally, node 1 creates an encrypted authenticated session with node 2 and sends the ping request
+	// Under the hood node 1 establishes an encrypted authenticated session with node 2 and sends the ping request
 	// over that session once it is established. Node 1 registers an app-level callback to get the ping response from node 2.
-	// The response includes the request id so it can match it with one or more tracked requests it sent.
+	// The response includes the request id so node1 can match it with one or more tracked requests it has sent.
 
+	// req1 id
 	ping1ReqId := crypto.UUID()
 
 Loop:
@@ -40,17 +41,18 @@ Loop:
 		select {
 		case c := <-callback:
 			assert.Nil(t, c.err, "expected no err in response")
-
-			if bytes.Equal(c.GetMetadata().ReqId, ping1ReqId) {
-				log.Info("Got 2nd pong: `%s`. Total RTT: %s", c.GetPong(), time.Now().Sub(t0).String())
+			if bytes.Equal(c.GetMetadata().ReqId, ping1ReqId) { //2nd ping
+				node1Local.Info("Got 2nd ping response: `%s`. Total RTT: %s", c.GetPong(), time.Now().Sub(t0).String())
 				break Loop
 			} else if bytes.Equal(c.GetMetadata().ReqId, pingReqId) {
-				log.Info("Got pong: `%s`. Total RTT: %s", c.GetPong(), time.Now().Sub(t0))
+				node1Local.Info("Got ping response: `%s`. Total RTT: %s", c.GetPong(), time.Now().Sub(t0))
 				t0 = time.Now()
+
+				// 2nd ping from node1 to node 2
 				go node1Local.GetPing().Send("hello spacemesh", ping1ReqId, node2Remote.String())
 			}
 		case <-time.After(time.Second * 30):
-			t.Fatalf("Expected callback")
+			t.Fatalf("Timeout eroror - expected callback")
 		}
 	}
 }

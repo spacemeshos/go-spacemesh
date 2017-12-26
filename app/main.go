@@ -205,12 +205,12 @@ func (app *SpaceMeshApp) startSpaceMeshNode(ctx *cli.Context) error {
 	// start api servers
 	if conf.StartGrpcServer || conf.StartJsonServer {
 		app.grpcApiService = api.NewGrpcService()
-		go app.grpcApiService.StartService()
+		app.grpcApiService.StartService()
 	}
 
 	if conf.StartJsonServer {
 		app.jsonApiService = api.NewJsonHttpServer()
-		go app.jsonApiService.StartService()
+		app.jsonApiService.StartService()
 	}
 
 	// app blocks until it receives a signal to exit

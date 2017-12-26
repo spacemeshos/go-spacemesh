@@ -14,7 +14,8 @@ import (
 )
 
 // A json http server providing the SpaceMesh API.
-// Implemented as a grpc gateway. See https://github.com/grpc-ecosystem/grpc-gateway
+// Implemented as a grpc gateway.
+// See https://github.com/grpc-ecosystem/grpc-gateway
 
 // todo: add http.server and support graceful shutdown
 type JsonHttpServer struct {
@@ -30,8 +31,12 @@ func (s JsonHttpServer) Stop() {
 	log.Info("Stopping json-http service...")
 }
 
-// This blocks - call using a go routine
+// Start the grpc server
 func (s JsonHttpServer) StartService() {
+	go s.startInternal()
+}
+
+func (s JsonHttpServer) startInternal() {
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()

@@ -4,7 +4,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/app"
 )
 
-// vars set by make
+// vars set by make from outside
 var (
 	commit  = ""
 	branch  = ""
