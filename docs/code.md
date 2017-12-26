@@ -4,9 +4,3 @@
 - Please read [go code review](https://github.com/golang/go/wiki/CodeReviewComments), and [effective go](https://golang.org/doc/effective_go.html)
 - We strive to only use channels for all concurrent patterns and not mutexes or locks.
 
-## Code Shaping
-
-### GO VET
-```
-go tool vet .
-```

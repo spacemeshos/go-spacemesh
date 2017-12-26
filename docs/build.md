@@ -16,7 +16,7 @@ make linux | windows | darwin
 
 
 ## Build tools
-You need to install these when making code changes
+Install these when making code changes
 
 - [govendor](https://github.com/kardianos/govendor) - for adding a 3rd party dep
 - [protoc](https://github.com/golang/protobuf) - for working with `protobufs`
