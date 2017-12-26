@@ -50,3 +50,11 @@ go test ./... -cover
 
 ### Custom node tests
 - `LocalNode` is designed to be independent of `App` so you should be able to create custom p2p tests. See swarm_test.go
+
+
+## Logging System
+- Pre app init log entries go to console
+- App-level logging goes to console and to  `/data-dir/spacemesh.log`
+- Local-node logging goes to console and to `/data-dir/log-id/node.log`
+- To log local-node specific entries use LocalNode.Info(),Debug(),etc....
+- Ti log app-level non local-node related entires use logger.Info(),etc....
