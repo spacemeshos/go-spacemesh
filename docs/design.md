@@ -30,6 +30,7 @@
 - We are using [go-logging](https://github.com/op/go-logging)
 - Use /log/logger wrapper funcs for app-level logging
 - You may add custom loggers (per package, to a file, etc...)
+- For logging in tests use t.log() and not log.Info()
 
 ### Config
 - We are using TOML files for config file and cli.v1 flags to modify any configurable param via the CLI.
@@ -41,7 +42,7 @@
 - Setup app config to unlock account(s) via passphrase for session 
 
 ## Concurrency 
-- We use channels for all concurrent flows. Please see p2p types.
+- We use channels for all concurrent flows.
 - We use channels for all callbacks and select based event loops of channel messages processing.
-- We do not use any thread-safe data structures beyond channels - all state is updated by callbacks from event processing loops.
+- We do not use any thread-safe data structures beyond channels - all state is updated by internal serialized callbacks from event processing loops.
 - [watch me](https://www.youtube.com/watch?v=QDDwwePbDtw)

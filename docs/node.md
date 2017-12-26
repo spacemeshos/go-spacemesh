@@ -15,9 +15,9 @@ So each `p2p message` is coming from a peer but may be authored by another node 
 - A key `binary representation` is the key raw binary value. For public keys, this is the 33 bytes compressed format.
 - A key `string representation` is a `base58` encoding of the key `binary representation`
 - Private keys are 32 bytes long
-- Public key may be created from a 65 bytes uncompressed format
+- Public key may be created from a 65 bytes uncompressed format of from 33 compressed format
 - A public key is used for accounts and nodes ids. There is no separate id derived from the public key.
-- A Public key may be dervied from a private key.
+- A Public key may be derived from a private key.
 
 ### `Accounts`
 
