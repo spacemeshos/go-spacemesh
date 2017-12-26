@@ -1,7 +1,6 @@
 
 <h1 align="center">
-  <a href="https://spacemesh.io"><img width="400" src="https://firebasestorage.googleapis.com/v0/b/dromo-os.appspot.com/o/spacemesh-logo.png?alt=media&token=dcd60c71-8522-4e02-9bc2-e439f89577f2
-" alt="SpaceMesh logo" /></a>
+  <a href="https://spacemesh.io"><img width="400" src="https://firebasestorage.googleapis.com/v0/b/dromo-os.appspot.com/o/spacemesh-logo.png?alt=media&token=dcd60c71-8522-4e02-9bc2-e439f89577f2" alt="SpaceMesh logo" /></a>
 </h1>
 
 <p align="center">
