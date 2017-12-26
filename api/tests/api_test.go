@@ -37,7 +37,7 @@ func TestGrpcApi(t *testing.T) {
 	grpcService := api.NewGrpcService()
 
 	// start a server
-	go grpcService.StartService()
+	grpcService.StartService()
 
 	// start a client
 	addr := "localhost:" + strconv.Itoa(port)
@@ -68,8 +68,8 @@ func TestJsonApi(t *testing.T) {
 	jsonService := api.NewJsonHttpServer()
 
 	// start grp and json server
-	go grpcService.StartService()
-	go jsonService.StartService()
+	grpcService.StartService()
+	jsonService.StartService()
 
 	const message = "hello world!"
 	const contentType = "application/json"
