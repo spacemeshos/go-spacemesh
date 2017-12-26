@@ -12,11 +12,15 @@ type SpaceMeshLogger struct {
 	Logger *logging.Logger
 }
 
+// general purpose logger
+
+// per local node logger
+
 var ulogger *SpaceMeshLogger
 
 func init() {
 	// create a basic temp os.Stdout logger
-	// this logger is going to be used by tests when an app was not created
+	// This logger is going to be used by tests when an app was is created
 	log := logging.MustGetLogger("app")
 	log.ExtraCalldepth = 1
 	logFormat := logging.MustStringFormatter(`%{color}%{time:15:04:05.000} %{shortpkg} %{shortfunc} ▶ %{level:.4s} %{id:03x}%{color:reset} %{message}`)
@@ -25,6 +29,34 @@ func init() {
 	logging.SetBackend(backendFormatter)
 	ulogger = &SpaceMeshLogger{Logger: log}
 
+}
+
+// create a logger for a module
+func CreateLogger(module string, dataFolderPath string, logFileName string) *logging.Logger {
+
+	log := logging.MustGetLogger(module)
+	log.ExtraCalldepth = 1
+	logFormat := logging.MustStringFormatter(` %{color}%{time:15:04:05.000} %{shortpkg} %{shortfunc} ▶ %{level:.4s} %{id:03x}%{color:reset} %{message}`)
+	backend := logging.NewLogBackend(os.Stderr, module, 0)
+	backendFormatter := logging.NewBackendFormatter(backend, logFormat)
+
+	fileName := filepath.Join(dataFolderPath, logFileName)
+
+	fileLogger := &lumberjack.Logger{
+		Filename:   fileName,
+		MaxSize:    500, // megabytes
+		MaxBackups: 3,
+		MaxAge:     28, // days
+		Compress:   false,
+	}
+
+	fileLoggerBackend := logging.NewLogBackend(fileLogger, "", 0)
+	logFileFormat := logging.MustStringFormatter(` %{time:15:04:05.000} %{level:.4s}-%{id:03x} %{shortpkg}.%{shortfunc} ▶ %{message}`)
+	fileBackendFormatter := logging.NewBackendFormatter(fileLoggerBackend, logFileFormat)
+
+	logging.SetBackend(backendFormatter, fileBackendFormatter)
+
+	return log
 }
 
 // Init app logging system

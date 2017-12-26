@@ -36,6 +36,13 @@ type LocalNode interface {
 	GetRemoteNodeData() node.RemoteNodeData
 
 	Shutdown()
+
+	// log wrappers - log node id and args
+
+	Info(format string, args ...interface{})
+	Debug(format string, args ...interface{})
+	Error(format string, args ...interface{})
+	Warning(format string, args ...interface{})
 }
 
 // Creates a local node with a provided tcp address
@@ -76,6 +83,9 @@ func newLocalNodeWithKeys(pubKey crypto.PublicKey, privKey crypto.PrivateKey, tc
 		config:     config, // store this node passed-in config values and use them later
 		dhtId:      dht.NewIdFromNodeKey(pubKey.Bytes()),
 	}
+
+	// setup logging
+	n.logger = log.CreateLogger(n.pubKey.Pretty(), n.ensureNodeDataDirectory(), "node.log")
 
 	// swarm owned by node
 	s, err := NewSwarm(tcpAddress, n)

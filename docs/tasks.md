@@ -23,6 +23,7 @@ Current makefile is using the global system go path.
 factor /p2p/ types into packages with shared interfaces
 - Make sure all types are defined using interface+struct and not just a struct
 - Peers latency matrices. 
+- Color logging output per local node id to aid p2p debugging
 
 ### Hard(er) Tasks
 - Implement an optimized Merkle tree data structure with backing storage in leveldb (kv storage). Implement Merkle proofs.

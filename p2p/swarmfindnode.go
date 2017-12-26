@@ -15,12 +15,12 @@ import (
 // not go safe - should be called from swarm event dispatcher
 func (s *swarmImpl) findNode(id string, callback chan node.RemoteNodeData) {
 
-	log.Info("finding node: %s ...", log.PrettyId(id))
+	s.localNode.Info("finding node: %s ...", log.PrettyId(id))
 
 	// look at peer store
 	n := s.peers[id]
 	if n != nil {
-		log.Info(" known peer")
+		s.localNode.Info(" known peer")
 
 		go func() { callback <- s.localNode.GetRemoteNodeData() }()
 		return

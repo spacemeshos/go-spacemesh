@@ -8,6 +8,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
+	"gopkg.in/op/go-logging.v1"
 	"time"
 )
 
@@ -18,6 +19,7 @@ type localNodeImp struct {
 	tcpAddress string
 	dhtId      dht.ID
 
+	logger *logging.Logger
 	config nodeconfig.Config
 
 	swarm Swarm // local owns a swarm
@@ -116,4 +118,22 @@ func (n *localNodeImp) Sign(data proto.Message) ([]byte, error) {
 	}
 
 	return sign, nil
+}
+
+// log wrappers - log node id and args
+
+func (n *localNodeImp) Info(format string, args ...interface{}) {
+	n.logger.Info(format, args)
+}
+
+func (n *localNodeImp) Debug(format string, args ...interface{}) {
+	n.logger.Debug(format, args)
+}
+
+func (n *localNodeImp) Error(format string, args ...interface{}) {
+	n.logger.Error(format, args)
+}
+
+func (n *localNodeImp) Warning(format string, args ...interface{}) {
+	n.logger.Warning(format, args)
 }

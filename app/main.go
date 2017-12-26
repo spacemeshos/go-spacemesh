@@ -119,7 +119,7 @@ func (app *SpaceMeshApp) setupLogging() {
 		panic(err)
 	}
 
-	// todo: support configurable log file name (low priority)
+	// app-level logging
 	log.InitSpaceMeshLoggingSystem(dataDir, "spacemesh.log")
 
 	log.Info("\n\nSpaceMesh app session starting... %s", app.getAppInfo())

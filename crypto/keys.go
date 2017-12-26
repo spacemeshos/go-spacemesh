@@ -143,7 +143,7 @@ func (p *publicKeyImpl) Pretty() string {
 	if len(pstr) < maxRunes {
 		maxRunes = len(pstr)
 	}
-	return fmt.Sprintf("<PubKey %s>", pstr[:maxRunes])
+	return fmt.Sprintf("<PUBK %s>", pstr[:maxRunes])
 }
 
 func (p *publicKeyImpl) VerifyString(data []byte, sig string) (bool, error) {

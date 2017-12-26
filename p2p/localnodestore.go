@@ -50,6 +50,7 @@ func getDataFilePath(nodeId string) string {
 	return filepath.Join(nodesDataDir, nodeId, nodeconfig.NodeDataFileName)
 }
 
+
 // Persist node's data to local store
 func (n *localNodeImp) persistData() error {
 

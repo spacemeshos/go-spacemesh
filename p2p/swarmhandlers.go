@@ -21,7 +21,7 @@ import (
 func (s *swarmImpl) onRegisterNodeRequest(n node.RemoteNodeData) {
 
 	if s.peers[n.Id()] != nil {
-		log.Info("Already connected to %s", n.Id())
+		s.localNode.Info("Already connected to %s", n.Id())
 		return
 	}
 
@@ -69,7 +69,7 @@ func (s *swarmImpl) onConnectionRequest(req node.RemoteNodeData) {
 		conn, err = s.network.DialTCP(req.Ip(), s.localNode.Config().DialTimeout, s.localNode.Config().ConnKeepAlive)
 		if err != nil {
 			// todo: we need to fire an event so app-level code knows about failure to connect
-			log.Error("failed to connect to remote node on advertised ip %s", req.Ip)
+			s.localNode.Error("failed to connect to remote node on advertised ip %s", req.Ip)
 			return
 		}
 
@@ -99,7 +99,7 @@ func (s *swarmImpl) onConnectionRequest(req node.RemoteNodeData) {
 func (s *swarmImpl) onNewSession(data HandshakeData) {
 
 	if data.Session().IsAuthenticated() {
-		log.Info("Established new session with %s", data.Peer().TcpAddress())
+		s.localNode.Info("Established new session with %s", data.Peer().TcpAddress())
 
 		// store the session
 		s.allSessions[data.Session().String()] = data.Session()
@@ -107,7 +107,7 @@ func (s *swarmImpl) onNewSession(data HandshakeData) {
 		// send all messages queued for the remote node we now have a session with
 		for key, msg := range s.messagesPendingSession {
 			if msg.PeerId == data.Peer().String() {
-				log.Info("Sending queued message %s to remote node", hex.EncodeToString(msg.ReqId))
+				s.localNode.Info("Sending queued message %s to remote node", hex.EncodeToString(msg.ReqId))
 				delete(s.messagesPendingSession, key)
 				go s.SendMessage(msg)
 			}
@@ -134,7 +134,7 @@ func (s *swarmImpl) onSendHandshakeMessage(r SendMessageReq) {
 	conn := remoteNode.GetActiveConnection()
 
 	if conn == nil {
-		log.Error("Expected to have a connection with remote node")
+		s.localNode.Error("Expected to have a connection with remote node")
 		return
 	}
 
@@ -149,7 +149,7 @@ func (s *swarmImpl) onSendMessageRequest(r SendMessageReq) {
 
 	if peer == nil {
 
-		log.Info("No contact info to target peer - attempting to find it on the network...")
+		s.localNode.Info("No contact info to target peer - attempting to find it on the network...")
 		callback := make(chan node.RemoteNodeData)
 
 		// attempt to find the peer
@@ -174,7 +174,7 @@ func (s *swarmImpl) onSendMessageRequest(r SendMessageReq) {
 
 	if session == nil || conn == nil {
 
-		log.Warning("queuing protocol request until session is established...")
+		s.localNode.Warning("queuing protocol request until session is established...")
 
 		// save the message for later sending and try to connect to the node
 		s.messagesPendingSession[hex.EncodeToString(r.ReqId)] = r
@@ -223,7 +223,7 @@ func (s *swarmImpl) onSendMessageRequest(r SendMessageReq) {
 	}
 
 	// finally - send it away!
-	log.Info("Sending protocol message down the connection...")
+	s.localNode.Info("Sending protocol message down the connection...")
 
 	conn.Send(data, r.ReqId)
 }
@@ -242,7 +242,7 @@ func (s *swarmImpl) onConnectionClosed(c net.Connection) {
 
 func (s *swarmImpl) onRemoteClientConnected(c net.Connection) {
 	// nop - a remote client connected - this is handled w message
-	log.Info("Remote client connected. %s", c.Id())
+	s.localNode.Info("Remote client connected. %s", c.Id())
 }
 
 // Processes an incoming handshake protocol message
@@ -251,7 +251,7 @@ func (s *swarmImpl) onRemoteClientHandshakeMessage(msg net.IncomingMessage) {
 	data := &pb.HandshakeData{}
 	err := proto.Unmarshal(msg.Message, data)
 	if err != nil {
-		log.Warning("unexpected handshake message format: %v", err)
+		s.localNode.Warning("unexpected handshake message format: %v", err)
 		return
 	}
 
@@ -265,7 +265,7 @@ func (s *swarmImpl) onRemoteClientHandshakeMessage(msg net.IncomingMessage) {
 		// authenticate sender before registration
 		err := authenticateSenderNode(data)
 		if err != nil {
-			log.Error("Dropping incoming message - failed to authenticate message sender: %v", err)
+			s.localNode.Error("Dropping incoming message - failed to authenticate message sender: %v", err)
 			return
 		}
 
@@ -302,37 +302,37 @@ func (s *swarmImpl) onRemoteClientProtocolMessage(msg net.IncomingMessage, c *pb
 	session := s.allSessions[hex.EncodeToString(c.SessionId)]
 
 	if session == nil || !session.IsAuthenticated() {
-		log.Warning("Dropping incoming protocol message - expected to have an authenticated session with this node")
+		s.localNode.Warning("Dropping incoming protocol message - expected to have an authenticated session with this node")
 		return
 	}
 
 	remoteNode := s.peers[session.RemoteNodeId()]
 	if remoteNode == nil {
-		log.Warning("Dropping incoming protocol message - expected to have data about this node for an established session")
+		s.localNode.Warning("Dropping incoming protocol message - expected to have data about this node for an established session")
 		return
 	}
 
 	decPayload, err := session.Decrypt(c.Payload)
 	if err != nil {
-		log.Warning("Droping incoming protocol message - can't decrypt message payload with session key. %v", err)
+		s.localNode.Warning("Droping incoming protocol message - can't decrypt message payload with session key. %v", err)
 		return
 	}
 
 	pm := &pb.ProtocolMessage{}
 	err = proto.Unmarshal(decPayload, pm)
 	if err != nil {
-		log.Warning("Droping incoming protocol message - Failed to get protocol message from payload. %v", err)
+		s.localNode.Warning("Droping incoming protocol message - Failed to get protocol message from payload. %v", err)
 		return
 	}
 
 	// authenticate message author - we already authenticated the sender via the shared session key secret
 	err = pm.AuthenticateAuthor()
 	if err != nil {
-		log.Warning("Droping incoming protocol message - Failed to verify author. %v", err)
+		s.localNode.Warning("Droping incoming protocol message - Failed to verify author. %v", err)
 		return
 	}
 
-	log.Info("Message %s author authenticated ok. %s", hex.EncodeToString(pm.GetMetadata().ReqId), pm.GetMetadata().Protocol)
+	s.localNode.Info("Message %s author authenticated ok. %s", hex.EncodeToString(pm.GetMetadata().ReqId), pm.GetMetadata().Protocol)
 
 	// todo: check send time and reject if too much aparat from local clock
 
@@ -356,7 +356,7 @@ func (s *swarmImpl) onRemoteClientMessage(msg net.IncomingMessage) {
 	c := &pb.CommonMessageData{}
 	err := proto.Unmarshal(msg.Message, c)
 	if err != nil {
-		log.Warning("Bad request - closing connection...")
+		s.localNode.Warning("Bad request - closing connection...")
 		msg.Connection.Close()
 		return
 	}
