@@ -1,4 +1,8 @@
-## go-spacemesh
+
+<h1 align="center">
+  <a href="https://spacemesh.io"><img width="400" src="https://firebasestorage.googleapis.com/v0/b/dromo-os.appspot.com/o/spacemesh-logo.png?alt=media&token=dcd60c71-8522-4e02-9bc2-e439f89577f2
+" alt="SpaceMesh logo" /></a>
+</h1>
 
 <p align="center">
 
@@ -8,6 +12,8 @@
 <a href="https://gitter.im/spacemesh-os/Lobby"><img src="https://img.shields.io/badge/gitter-%23spacemesh--os-blue.svg"/></a>
 <a href="https://spacemesh.io"><img src="https://img.shields.io/badge/madeby-spacemeshos-blue.svg"/></a>
 </p>
+
+## go-spacemesh
 
 The go implementation of the [spacemeshos](https://spacemesh.io) p2p node.
 SpaceMesh is a decentralized blockchain computer using a new race-free consensus protocol that doesn't involve `proof of work`.
