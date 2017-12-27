@@ -6,7 +6,7 @@
 <p align="center">
 
 <img src="https://img.shields.io/packagist/l/doctrine/orm.svg"/>
-<a href=""><img src="https://img.shields.io/badge/maintainer-%40avive-green.svg"/></a>
+<a href="https://github.com/avive"><img src="https://img.shields.io/badge/maintainer-%40avive-green.svg"/></a>
 <img src="https://img.shields.io/badge/golang-%3E%3D%201.9.2-orange.svg"/>
 <a href="https://gitter.im/spacemesh-os/Lobby"><img src="https://img.shields.io/badge/gitter-%23spacemesh--os-blue.svg"/></a>
 <a href="https://spacemesh.io"><img src="https://img.shields.io/badge/madeby-spacemeshos-blue.svg"/></a>
@@ -112,9 +112,9 @@ We welcome contributions large and small!
 
 #### Guidelines
 
-- Read the spacemeshos project white paper
+- Read the spacemeshos project white paper (coming soon)
 - Read all docs in the `docs/` folder
-- Ask questions or talk about things in [Issues](https://github.com/spacemeshos/go-spacemesh/issues) or on [unrily gitter](https://gitter.im/spacemesh-os/Lobby).
+- Ask questions or talk about things in [Issues](https://github.com/spacemeshos/go-spacemesh/issues) or on [spacemash gitter](https://gitter.im/spacemesh-os/Lobby).
 - Ensure you are able to contribute (no legal issues please)
 - For any code contribution, please **fork from the `develop branch` and not from `master`), apply your changes and submit a pull request. We follow this [git workflow](http://nvie.com/posts/a-successful-git-branching-model/)
 - Before starting to work on large contributions please chat with the core dev team on our [gitter channel](https://gitter.im/spacemesh-os/Lobby) to get some initial feedback prior to doing lots of work.
