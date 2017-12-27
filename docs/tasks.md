@@ -1,13 +1,13 @@
 #### App Tasks / Issues
 
-todo: move tasks to github issues
+Todo: move tasks to github issues
 
 ### Build tasks
 - Dockerfile to setup a completely isolated docker dev env with no deps installed in the go path - only in /vendor.
 - Makefile that builds node packaged binary without relying on packages outside of /vendor - e.g. GOPATH as proj root.
 Current makefile is using the global system go path.
 - A script to install all required dev tools: e.g. proto-c (with grpc-gateway support). govendor, etc....
-- Integrate travis CI with the repo and setup full CI system (hold until repo is public for Travis integration)
+- CI - Integrate travis CI with the repo and setup full CI system (on hold until repo is public for Travis integration)
 
 ### App Shell Tasks
 - Write more tests for app flags, commands and config file
@@ -29,7 +29,7 @@ Current makefile is using the global system go path.
 - Implement gossip support (gossip flag) and write tests for gossiping a p2p message (e.g. 20 nodes, 1 bootstrap)
 
 ### App Shell Implemented Features
-Stuff we have a basic 1st pass implementation for:
+Features we have a basic 1st pass implementation for:
 - Initial project packages structure and entry points (app, node, grpcApi, etc...)
 - A cli app shell with flags and commands
 - Grpc and json-http api servers with config and decent tests

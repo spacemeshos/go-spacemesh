@@ -19,7 +19,6 @@ import (
 
 type Net interface {
 	DialTCP(address string, timeOut time.Duration, keepAlive time.Duration) (Connection, error) // Connect to a remote node. Can send when no error.
-
 	GetNewConnections() chan Connection
 	GetClosingConnections() chan Connection
 	GetConnectionErrors() chan ConnectionError

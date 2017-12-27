@@ -91,7 +91,6 @@ func TestHandshakeCoreData(t *testing.T) {
 func TestHandshakeProtocol(t *testing.T) {
 
 	// node 1
-
 	port := crypto.GetRandomUInt32(1000) + 10000
 	address := fmt.Sprintf("localhost:%d", port)
 
@@ -99,7 +98,6 @@ func TestHandshakeProtocol(t *testing.T) {
 	node1Remote, _ := NewRemoteNode(node1Local.String(), address)
 
 	// node 2
-
 	port1 := crypto.GetRandomUInt32(1000) + 10000
 	address1 := fmt.Sprintf("localhost:%d", port1)
 

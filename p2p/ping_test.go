@@ -13,6 +13,7 @@ func TestPingProtocol(t *testing.T) {
 
 	const msg = "hello spacemash"
 
+	// create 2 nodes
 	node1Local, _ := GenerateTestNode(t)
 	_, node2Remote := GenerateTestNode(t)
 

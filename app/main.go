@@ -182,7 +182,8 @@ func (app *SpaceMeshApp) startSpaceMeshNode(ctx *cli.Context) error {
 	port := *nodeparams.LocalTcpPortFlag.Destination
 	address := fmt.Sprintf("localhost:%d", port)
 
-	// start a new node passing the app-wide node config values
+	// start a new node passing the app-wide node config values and persist it to store
+	// so future sessions use the same local node id
 	node, err := p2p.NewLocalNode(address, nodeparams.ConfigValues, true)
 	if err != nil {
 		return err
@@ -220,8 +221,8 @@ func (app *SpaceMeshApp) startSpaceMeshNode(ctx *cli.Context) error {
 	return nil
 }
 
-// The SpaceMesh console application - responsible for parsing and routing cli flags and commands
-// this is the root of all evil, called from Main.main()
+// The Spacemesh console app - responsible for parsing and routing cli flags and commands
+// This is the root of all evil, called from Main.main()
 func Main(commit, branch, version string) {
 
 	// setup vars before creating the app - ugly but works
