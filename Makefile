@@ -26,3 +26,12 @@ test:
 	go test ./...
 
 .PHONY: build test
+
+devtools:
+	# Install the build tools
+	go get -u github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway
+	go get -u github.com/grpc-ecosystem/grpc-gateway/protoc-gen-swagger
+	go get -u github.com/golang/protobuf/protoc-gen-go
+	# Get the dependencies
+	go get -u github.com/kardianos/govendor
+	govendor sync
