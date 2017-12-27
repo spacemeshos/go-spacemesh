@@ -5,7 +5,7 @@ New issue template
 
 #### Actual behavior
 
-#### Step to reproduce the actual behavior
+#### Steps to reproduce the actual behavior
 
 
 Feature request template
