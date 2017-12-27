@@ -1,15 +1,17 @@
-## New issue template
+New issue template
+-
 
-### Expected behavior
+#### Expected behavior
 
-### Actual behavior
+#### Actual behavior
 
-### Step to reproduce the actual behavior
+#### Step to reproduce the actual behavior
 
 
-## Feature request template
+Feature request template
+-
 
-### Feature description
+#### Feature description
 
-### Reasons for adding this feature
+#### Reasons for adding this feature
 
