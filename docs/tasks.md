@@ -19,16 +19,13 @@ Current makefile is using the global system go path.
     - when new account is created - if it is only account - set it as coinbase on the running node
     - restore node coinbase account when loading a node from storage
 - NTP client with time-drift detection (SNTP protocol)
-- Properly 
-factor /p2p/ types into packages with shared interfaces
-- Make sure all types are defined using interface+struct and not just a struct
-- Peers latency matrices. 
-- Color logging output per local node id to aid p2p debugging
+- Refactor p2p/ types into sub-packages with shared public interfaces
+- Make sure all types are defined using interface+struct combo and not just a struct
+- Peers latency matrices and usage in dht/kad 
 
 ### Hard(er) Tasks
 - Implement an optimized Merkle tree data structure with backing storage in leveldb (kv storage). Implement Merkle proofs.
-- Implement peer discovery using the KAD/DHT node discovery protocol.
-Start by forking https://github.com/libp2p/go-libp2p-kad-dht 
+- Write comperhansive tests for the dht/kad protocol and swarm nodes discovery.
 - Implement gossip support (gossip flag) and write tests for gossiping a p2p message (e.g. 20 nodes, 1 bootstrap)
 - Integrate a V8 instance for javascript execution into the node. See: https://github.com/augustoroman/v8 
 
@@ -48,9 +45,11 @@ Stuff we have a basic 1st pass implementation for:
 - Integrated rolling file logging https://github.com/natefinch/lumberjack with go-logging so we get proper rolling files logging - needed for long-running simulations.
 - Accounts support with locking/unlocking, persistence and passpharse kdf
 - Implement accounts and keystore files
+- Per node logging to console and to node-specific log files
 
 ## p2p implemented features
 - Swarm - peer management, low-level tcp network and connections
+- Partly done: node discovery protocol - connect to bootstrap node and to 5 random nodes on startup
 - Handshake protocol for secure and authenticated comm using a ECDH key exchange scheme
 - App-level p2p protocols support with full encryption and authorship auth - see ping
 - Pattern for app-level protocols using callback channels for processing responses to requests
