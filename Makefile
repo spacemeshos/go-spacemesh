@@ -22,6 +22,7 @@ $(PLATFORMS):
 	GOOS=$(os) GOARCH=amd64 go build ${LDFLAGS} -o $(BIN_DIR)/$(BINARY)-$(VERSION)-$(os)-amd64
 
 test:
-	govendor test +local
+	#govendor test +local
+	go test ./...
 
 .PHONY: build test
