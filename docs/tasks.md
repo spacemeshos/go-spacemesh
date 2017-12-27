@@ -25,7 +25,7 @@ Current makefile is using the global system go path.
 
 ### Hard(er) Tasks
 - Implement an optimized Merkle tree data structure with backing storage in leveldb (kv storage). Implement Merkle proofs.
-- Write comperhansive tests for the dht/kad protocol and swarm nodes discovery.
+- Write comprehensive tests for the dht/kad protocol and swarm nodes discovery.
 - Implement gossip support (gossip flag) and write tests for gossiping a p2p message (e.g. 20 nodes, 1 bootstrap)
 - Integrate a V8 instance for javascript execution into the node. See: https://github.com/augustoroman/v8 
 
