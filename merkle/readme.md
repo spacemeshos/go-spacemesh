@@ -24,6 +24,7 @@ The goals of this data structure is to have o(log(n)) lookup, insert, update and
 - The values of branch nodes in the internal table are keys (k) to data-domain values if len(bin_encode(v))<256 bits or bin_encode(v) otherwise. 
 To find a value we can treat it as k and do an external table lookup. If the value is not there then k is the value. Otherwise use the value from the table.
 - First key in the internal table is the tree the root (hash)
+- Persistence should be implemented using go leveldb
 
 ## Working with nibbles
 - Data is stored in bytes but represented as hex chars - each hex char represents a nibble (4 bits of data with 16 possible values)
