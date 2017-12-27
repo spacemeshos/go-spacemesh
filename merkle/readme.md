@@ -62,7 +62,9 @@ To find a value we can treat it as k and do an external table lookup. If the val
 
 ### Additional Explainers
 
-The optimization ideas for Merkle trees are from `ethereum tries`. More info here:
+The optimization ideas for Merkle trees are from `ethereum tries`. 
+As described above, we use our own different optimizations in some cases. for example, we do not use path prefixed metadata.
+More info here:
 
 - https://easythereentropy.wordpress.com/2014/06/04/understanding-the-ethereum-trie/
 - https://blog.ethereum.org/2015/11/15/merkling-in-ethereum/

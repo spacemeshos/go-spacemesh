@@ -16,15 +16,15 @@ type NodeContainer interface {
 	getBranchNode() branchNode
 	marshal() ([]byte, error) // get binary encoded marshaled node data
 	getNodeHash() []byte
-	loadedChildren() bool	// returns true iff child nodes loaded to memory
+	loadedChildren() bool              // returns true iff child nodes loaded to memory
 	loadChildren(db *leveldb.DB) error // load all children from db
 }
 
 type nodeContainerImp struct {
-	nodeType pb.NodeType
-	leaf     shortNode
-	branch   branchNode
-	ext      shortNode
+	nodeType       pb.NodeType
+	leaf           shortNode
+	branch         branchNode
+	ext            shortNode
 	childrenLoaded bool
 
 	children map[string]NodeContainer // k -pointer to child node. v- child

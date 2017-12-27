@@ -59,10 +59,10 @@ type branchNodeImpl struct {
 }
 
 func (b *branchNodeImpl) getAllChildNodePointers() [][]byte {
-	res := make([][]byte,0)
+	res := make([][]byte, 0)
 	for _, val := range b.entries {
 		if len(val) > 0 {
-			res = append(res,val)
+			res = append(res, val)
 		}
 	}
 	return res
@@ -80,7 +80,6 @@ func (b *branchNodeImpl) getPath(idx byte) []byte {
 func (b *branchNodeImpl) marshal() ([]byte, error) {
 
 	entries := make([][]byte, 16)
-
 	for idx, val := range b.entries {
 		entries[idx] = val
 	}

@@ -3,7 +3,6 @@ syntax = "proto3";
 package pb;
 option go_package = "pb";
 
-// node type
 enum NodeType {
     branch = 0;
     extension = 1;

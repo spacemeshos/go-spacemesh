@@ -1,9 +1,9 @@
 package merkle
 
 import (
+	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/merkle/pb"
-	"gx/ipfs/QmZ4Qi3GaRbjcx28Sme5eMH7RQjGkt8wHxt2a65oLaeFEV/gogo-protobuf/proto"
 )
 
 // shortNode is an immutable leaf or an extension node
@@ -13,9 +13,7 @@ type shortNode interface {
 	getPath() []byte          // path to this node from parent
 	getParity() bool          // path parity
 	marshal() ([]byte, error) // to binary data
-	getNodeHash() []byte // node hash - value of pointer to node
-
-
+	getNodeHash() []byte      // node hash - value of pointer to node
 }
 
 func newShortNode(nodeType pb.NodeType, path []byte, parity bool, value []byte) (shortNode, error) {

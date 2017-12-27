@@ -10,7 +10,6 @@ type MerkleTree interface {
 	Delete(k, v []byte)
 	Has(k []byte) bool
 	Get(k []byte) ([]byte, bool)
-
 	GetRootHash() []byte
 	GetRootNode() NodeContainer
 }
@@ -21,7 +20,10 @@ type merkleTreeImp struct {
 	root     NodeContainer
 }
 
-// Create a new empty merkle tree
+// Create a new empty merkle tree with the provided paths to user and tree data dbs
+// The dbs will be created on these pathes if they don't already exist
+// userDataFileName: full local os path and file name for the user data db for this tree
+// treeDataFileName: full local os path and file name for the internal tree db store for this tree
 func NewEmptyTree(userDataFileName string, treeDataFileName string) (MerkleTree, error) {
 	userData, err := leveldb.OpenFile(userDataFileName, nil)
 	if err != nil {
@@ -45,8 +47,10 @@ func NewEmptyTree(userDataFileName string, treeDataFileName string) (MerkleTree,
 
 // Creates a new tree from provided dbs
 // rootHash: tree root hash - used to pull the root from the db
+// userDataFileName: full local os path and file name for user data db for this tree
+// treeDataFileName: full local os path and file name for the internal tree db store for this tree
 // loadChilds: set to true to load all the tree to memory. Set to false for lazy loading of nodes from the db
-func NewTreeFromStore(rootHash []byte, userDataFileName string, treeDataFileName string, loadChilds bool) (MerkleTree, error) {
+func NewTreeFromDb(rootHash []byte, userDataFileName string, treeDataFileName string, loadChilds bool) (MerkleTree, error) {
 
 	userData, err := leveldb.OpenFile(userDataFileName, nil)
 	if err != nil {
@@ -66,7 +70,6 @@ func NewTreeFromStore(rootHash []byte, userDataFileName string, treeDataFileName
 	}
 
 	// load the tree from the db
-
 	data, err := treeData.Get(rootHash, nil)
 	if err != nil {
 		return nil, err
