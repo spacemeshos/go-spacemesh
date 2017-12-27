@@ -1,6 +1,6 @@
 ## Testing
 
-- We strive to get to **100% code coverage** to ensure high-quality but this is hard to achieve in practice.
+- We strive to get to **100% code coverage** to ensure high-quality but this is hard to achieve in practice - yes, this is not a typo :-)
 - Tests are the the best code documentation as they demonstrate how to use apis (functions, types, flows between types to achive a goal)
 - The level of testing in an open source project is an important factor for serious contribution candidates.
 - As a rule - no new feature, package or function should be pushed to the repo unless it includes at least basic unit and integration tests.

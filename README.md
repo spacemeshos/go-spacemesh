@@ -122,5 +122,5 @@ There's a few things you can do right now to help out:
  - Add tests. There can never be enough tests.
  
 #### Next Steps...
-- Please read everything in `/docs`
+- Please read everything in [`/docs`](https://github.com/spacemeshos/go-spacemesh/tree/master/docs)
 

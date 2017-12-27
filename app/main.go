@@ -200,10 +200,11 @@ func (app *SpaceMeshApp) startSpaceMeshNode(ctx *cli.Context) error {
 
 	// todo: if node has no POS then start POS creation flow here unless user doesn't want to be a validator via cli
 
-	// todo: start node consensus protocol here only after we have a locked
+	// todo: start node consensus protocol here only after we have an unlocked account
 
 	// start api servers
 	if conf.StartGrpcServer || conf.StartJsonServer {
+		// start grpc if specified or if json rpc specfied
 		app.grpcApiService = api.NewGrpcService()
 		app.grpcApiService.StartService()
 	}
