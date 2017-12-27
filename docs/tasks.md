@@ -1,32 +1,8 @@
 #### App Tasks / Issues
 
-Todo: move tasks to github issues
-
-### Build tasks
-- Dockerfile to setup a completely isolated docker dev env with no deps installed in the go path - only in /vendor.
-- Makefile that builds node packaged binary without relying on packages outside of /vendor - e.g. GOPATH as proj root.
-Current makefile is using the global system go path.
-- A script to install all required dev tools: e.g. proto-c (with grpc-gateway support). govendor, etc....
-- CI - Integrate travis CI with the repo and setup full CI system (on hold until repo is public for Travis integration)
-
-### App Shell Tasks
-- Write more tests for app flags, commands and config file
-- Impl cli.v1 TOML support and write test with TOML file (a bit of a pain with cli via vendoring) - alt use YAML
-
-### Misc. Tasks
-- Tests for all implemented functionality - the more the better.
-- Fully support a coinbase account:
-    - when new account is created - if it is only account - set it as coinbase on the running node
-    - restore node coinbase account when loading a node from storage
-- NTP client with time-drift detection (SNTP protocol)
-- Refactor swarm and friends into sub-packages with shared public interfaces
-- Make sure all types are defined using interface+struct combo and not just structs
-- Peers latency matrices and usage in dht/kad 
-
-### Hard(er) Tasks
-- Implement an optimized Merkle tree data structure with backing storage in leveldb (kv storage). Implement Merkle proofs.
-- Write comprehensive tests for the dht/kad protocol and swarm nodes discovery.
-- Implement gossip support (gossip flag) and write tests for gossiping a p2p message (e.g. 20 nodes, 1 bootstrap)
+- All tasks moved to [Github Issues](https://github.com/spacemeshos/go-spacemesh/issues)
+- All new tasks should be added to github as issues.
+- This is a list of partly or fully implemented features.
 
 ### App Shell Implemented Features
 Features we have a basic 1st pass implementation for:
