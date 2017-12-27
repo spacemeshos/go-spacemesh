@@ -21,6 +21,8 @@ type merkleTreeImp struct {
 	root     NodeContainer
 }
 
+// Creates a new tree from provided dbs
+// Currently this method will load the whole tree to memory
 func NewTree(userDataFileName string, treeDataFileName string) (MerkleTree, error) {
 
 	userData, err := leveldb.OpenFile(userDataFileName, nil)
@@ -40,7 +42,7 @@ func NewTree(userDataFileName string, treeDataFileName string) (MerkleTree, erro
 		treeData: treeData,
 	}
 
-	// todo: restore merkle root from store
+	// todo: load merkle root from store
 
 	return mt, nil
 }

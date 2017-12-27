@@ -1,7 +1,6 @@
 package merkle
 
 import (
-	"encoding/hex"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/merkle/pb"
 	"gx/ipfs/QmZ4Qi3GaRbjcx28Sme5eMH7RQjGkt8wHxt2a65oLaeFEV/gogo-protobuf/proto"
@@ -9,13 +8,15 @@ import (
 
 // shortNode is an immutable leaf or an extension node
 type shortNode interface {
-	IsLeaf() bool
-	GetValue() []byte
-	GetPath() string // hex encoded string
-	GetParity() bool
-	Marshal() ([]byte, error)
+	IsLeaf() bool             // extension node when false
+	GetValue() []byte         // value for leaf node. Pointer to child node for an extension node
+	GetPath() []byte          // path to this node from parent
+	GetParity() bool          // path parity
+	Marshal() ([]byte, error) // to binary data
 
-	GetNodeHash() []byte
+	GetNodeHash() []byte // node hash - value of pointer to node
+
+
 }
 
 func newShortNode(nodeType pb.NodeType, path []byte, parity bool, value []byte) (shortNode, error) {
@@ -27,16 +28,16 @@ func newShortNode(nodeType pb.NodeType, path []byte, parity bool, value []byte) 
 		value:    value,
 	}
 
+	// calc hash of marshaled node data and store
 	data, err := node.Marshal()
 	if err != nil {
 		return nil, err
 	}
-
 	node.nodeHash = crypto.Sha256(data)
 	return node, nil
 }
 
-func newShortNodeFromPersistedData(data []byte, n *pb.Node) shortNode {
+func newShortNodeFromData(data []byte, n *pb.Node) shortNode {
 
 	node := &shortNodeImpl{
 		nodeType: n.NodeType,
@@ -54,7 +55,6 @@ type shortNodeImpl struct {
 	parity   bool        // path parity - when odd, truncate first nibble prefix to return path
 	path     []byte
 	value    []byte
-
 	nodeHash []byte
 }
 
@@ -63,9 +63,9 @@ func (s *shortNodeImpl) GetValue() []byte    { return s.value }
 func (s *shortNodeImpl) GetParity() bool     { return s.parity }
 func (s *shortNodeImpl) IsLeaf() bool        { return s.nodeType == pb.NodeType_leaf }
 
-func (s *shortNodeImpl) GetPath() string {
+func (s *shortNodeImpl) GetPath() []byte {
 	// todo: consider parity
-	return hex.EncodeToString(s.path)
+	return s.path
 }
 
 func (s *shortNodeImpl) Marshal() ([]byte, error) {

@@ -8,17 +8,19 @@ import (
 
 // An immutable branch (full) node
 type branchNode interface {
-	GetValue() []byte
-	GetPath(entry byte) []byte
-	Marshal() ([]byte, error)
-	GetNodeHash() []byte
+	GetValue() []byte          // value terminated in this path or nil
+	GetPath(entry byte) []byte // return pointer to child node for hex char entry or nil
+	Marshal() ([]byte, error)  // to binary data
+	GetNodeHash() []byte       // data hash (pointer to this node)
+
+	GetAllChildNodePointers() [][]byte // get all pointers to child nodes
 }
 
 // creates a new branchNode from provided data
 func newBranchNode(entries map[byte][]byte, value []byte) (branchNode, error) {
 
 	node := &branchNodeImpl{
-		value:    value,
+		value:   value,
 		entries: entries,
 	}
 
@@ -54,6 +56,16 @@ type branchNodeImpl struct {
 	entries  map[byte][]byte
 	value    []byte
 	nodeHash []byte
+}
+
+func (b *branchNodeImpl) GetAllChildNodePointers() [][]byte {
+	res := make([][]byte,0)
+	for _, val := range b.entries {
+		if len(val) > 0 {
+			res = append(res,val)
+		}
+	}
+	return res
 }
 
 func (b *branchNodeImpl) GetNodeHash() []byte {
