@@ -43,7 +43,7 @@ func TestHandshakeCoreData(t *testing.T) {
 	node2Remote, _ := NewRemoteNode(node2Local.String(), address1)
 
 	// STEP 1: Node1 generates handshake data and sends it to node2 ....
-	data, session, err := genereateHandshakeRequestData(node1Local, node2Remote)
+	data, session, err := generateHandshakeRequestData(node1Local, node2Remote)
 
 	assert.NoErr(t, err, "expected no error")
 	assert.NotNil(t, session, "expected session")
@@ -108,7 +108,7 @@ func TestHandshakeProtocol(t *testing.T) {
 
 	// STEP 1: Node 1 generates handshake data and sends it to node2 ....
 
-	data, session, err := genereateHandshakeRequestData(node1Local, node2Remote)
+	data, session, err := generateHandshakeRequestData(node1Local, node2Remote)
 
 	assert.NoErr(t, err, "expected no error")
 	assert.NotNil(t, session, "expected session")

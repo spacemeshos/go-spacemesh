@@ -124,7 +124,7 @@ func (h *handshakeProtocolImpl) RegisterNewSessionCallback(callback chan Handsha
 
 func (h *handshakeProtocolImpl) CreateSession(peer Peer) {
 
-	data, session, err := genereateHandshakeRequestData(h.swarm.GetLocalNode(), peer)
+	data, session, err := generateHandshakeRequestData(h.swarm.GetLocalNode(), peer)
 
 	handshakeData := NewHandshakeData(h.swarm.GetLocalNode(), peer, session, err)
 
@@ -275,7 +275,7 @@ func (h *handshakeProtocolImpl) onHandleIncomingHandshakeResponse(msg IncomingMe
 // Returns handshake data to send to removeNode and a network session data object that includes the session enc/dec sym key and iv
 // Node that NetworkSession is not yet authenticated - this happens only when the handshake response is processed and authenticated
 // This is called by node1 (initiator)
-func genereateHandshakeRequestData(node LocalNode, remoteNode Peer) (*pb.HandshakeData, NetworkSession, error) {
+func generateHandshakeRequestData(node LocalNode, remoteNode Peer) (*pb.HandshakeData, NetworkSession, error) {
 
 	// we use the Elliptic Curve Encryption Scheme
 	// https://en.wikipedia.org/wiki/Integrated_Encryption_Scheme

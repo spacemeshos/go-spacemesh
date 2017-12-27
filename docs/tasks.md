@@ -20,14 +20,13 @@ Current makefile is using the global system go path.
     - restore node coinbase account when loading a node from storage
 - NTP client with time-drift detection (SNTP protocol)
 - Refactor swarm and friends into sub-packages with shared public interfaces
-- Make sure all types are defined using interface+struct combo and not just a struct
+- Make sure all types are defined using interface+struct combo and not just structs
 - Peers latency matrices and usage in dht/kad 
 
 ### Hard(er) Tasks
 - Implement an optimized Merkle tree data structure with backing storage in leveldb (kv storage). Implement Merkle proofs.
 - Write comprehensive tests for the dht/kad protocol and swarm nodes discovery.
 - Implement gossip support (gossip flag) and write tests for gossiping a p2p message (e.g. 20 nodes, 1 bootstrap)
-- Integrate a V8 instance for javascript execution into the node. See: https://github.com/augustoroman/v8 
 
 ### App Shell Implemented Features
 Stuff we have a basic 1st pass implementation for:
@@ -55,6 +54,6 @@ Stuff we have a basic 1st pass implementation for:
 - Pattern for app-level protocols using callback channels for processing responses to requests
 - Design for an extendable protobufs based message format - see message.proto
 - Demuxer (router) - routes incoming messages to app-level protocols handlers
-- 100% mutex-free (mutexes in msgio should be removed as well) - all concurent flows are using channels
+- 100% mutex-free (mutexes in msgio should be removed as well) - all concurrent flows are using channels
 - 100% lib-p2p free :-)
 - Basic DHT and findPeer protocol

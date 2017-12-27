@@ -19,7 +19,7 @@ var SwarmConfigValues = SwarmConfig{
 	RoutingTableBucketSize: 20,
 	RoutingTableAlpha:      3,
 	RandomConnections:      5,
-	BootstrapNodes: []string{ // these shoul be the spacemesh foundation bootstrap nodes
+	BootstrapNodes: []string{ // these should be the spacemesh foundation bootstrap nodes
 		"125.0.0.1:3572/iaMujEYTByKcjMZWMqg79eJBGMDm8ADsWZFdouhpfeKj",
 		"125.0.0.1:3763/x34UDdiCBAsXmLyMMpPQzs313B9UDeHNqFpYsLGfaFvm",
 	},

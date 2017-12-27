@@ -11,6 +11,8 @@ import (
 
 func TestPingProtocol(t *testing.T) {
 
+	const msg = "hello spacemash"
+
 	node1Local, _ := GenerateTestNode(t)
 	_, node2Remote := GenerateTestNode(t)
 
@@ -26,7 +28,7 @@ func TestPingProtocol(t *testing.T) {
 
 	// send the ping
 	t0 := time.Now()
-	node1Local.GetPing().Send("hello spacemesh", pingReqId, node2Remote.String())
+	node1Local.GetPing().Send(msg, pingReqId, node2Remote.String())
 
 	// Under the hood node 1 establishes an encrypted authenticated session with node 2 and sends the ping request
 	// over that session once it is established. Node 1 registers an app-level callback to get the ping response from node 2.
@@ -48,7 +50,7 @@ Loop:
 				t0 = time.Now()
 
 				// 2nd ping from node1 to node 2
-				go node1Local.GetPing().Send("hello spacemesh", ping1ReqId, node2Remote.String())
+				go node1Local.GetPing().Send(msg, ping1ReqId, node2Remote.String())
 			}
 		case <-time.After(time.Second * 30):
 			t.Fatalf("Timeout eroror - expected callback")
