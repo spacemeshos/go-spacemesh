@@ -3,17 +3,19 @@ package merkle
 import (
 	"errors"
 	"github.com/gogo/protobuf/proto"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/merkle/pb"
 )
 
 type NodeContainer interface {
-
 	GetNodeType() pb.NodeType
 	GetLeafNode() shortNode
 	GetExtNode() shortNode
 	GetBranchNode() branchNode
 
 	Marshal() ([]byte, error) // get binary encoded marshaled node data
+
+	GetNodeHash() []byte
 }
 
 type nodeContainerImp struct {
@@ -37,6 +39,19 @@ func (n *nodeContainerImp) GetExtNode() shortNode {
 
 func (n *nodeContainerImp) GetBranchNode() branchNode {
 	return n.branch
+}
+
+func (n *nodeContainerImp) GetNodeHash() []byte {
+	switch n.nodeType {
+	case pb.NodeType_branch:
+		return n.branch.GetNodeHash()
+	case pb.NodeType_leaf:
+		return n.leaf.GetNodeHash()
+	case pb.NodeType_extension:
+		return n.ext.GetNodeHash()
+	default:
+		return nil
+	}
 }
 
 func (n *nodeContainerImp) Marshal() ([]byte, error) {
@@ -70,13 +85,13 @@ func NodeFromData(data []byte) (NodeContainer, error) {
 	switch n.NodeType {
 	case pb.NodeType_branch:
 		c.nodeType = pb.NodeType_branch
-		c.branch = newBranchNode(n)
+		c.branch = newBranchNode(data, n)
 	case pb.NodeType_extension:
 		c.nodeType = pb.NodeType_extension
-		c.ext = newShortNode(n)
+		c.ext = newShortNode(data, n)
 	case pb.NodeType_leaf:
 		c.nodeType = pb.NodeType_leaf
-		c.leaf = newShortNode(n)
+		c.leaf = newShortNode(data, n)
 	default:
 		return nil, errors.New("unexpected node type")
 	}

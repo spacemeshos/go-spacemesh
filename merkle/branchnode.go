@@ -1,20 +1,24 @@
 package merkle
 
 import (
+	"github.com/gogo/protobuf/test/data"
+	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/merkle/pb"
 )
 
-// Am immutable branch (full) node
+// An immutable branch (full) node
 type branchNode interface {
 	GetValue() []byte
 	GetPath(entry byte) []byte
 	Marshal() pb.Node
+	GetNodeHash() []byte
 }
 
-func newBranchNode(data *pb.Node) branchNode {
+func newBranchNode(rawData []byte, data *pb.Node) branchNode {
 	n := &branchNodeImpl{
-		entries: make(map[byte][]byte),
-		value:   data.Value,
+		nodeHash: crypto.Sha256(rawData),
+		entries:  make(map[byte][]byte),
+		value:    data.Value,
 	}
 
 	// populate entries table
@@ -28,8 +32,13 @@ func newBranchNode(data *pb.Node) branchNode {
 }
 
 type branchNodeImpl struct {
-	entries map[byte][]byte
-	value   []byte
+	entries  map[byte][]byte
+	value    []byte
+	nodeHash []byte
+}
+
+func (b *branchNodeImpl) GetNodeHash() []byte {
+	return b.nodeHash
 }
 
 func (b *branchNodeImpl) GetValue() []byte { return b.value }

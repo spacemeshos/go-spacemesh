@@ -2,6 +2,7 @@ package merkle
 
 import (
 	"encoding/hex"
+	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/merkle/pb"
 )
 
@@ -12,17 +13,21 @@ type shortNode interface {
 	GetPath() string // hex encoded string
 	GetParity() bool
 	Marshal() pb.Node
+
+	GetNodeHash() []byte
 }
 
-func newShortNode(data *pb.Node) shortNode {
+func newShortNode(data []byte, n *pb.Node) shortNode {
 
-	n := &shortNodeImpl{
-		nodeType: data.NodeType,
-		parity:   data.Parity,
-		path:     data.Path,
-		value:    data.Value,
+	node := &shortNodeImpl{
+		nodeType: n.NodeType,
+		parity:   n.Parity,
+		path:     n.Path,
+		value:    n.Value,
+		nodeHash: crypto.Sha256(data),
 	}
-	return n
+
+	return node
 }
 
 type shortNodeImpl struct {
@@ -30,11 +35,14 @@ type shortNodeImpl struct {
 	parity   bool        // path parity - when odd, truncate first nibble prefix to return path
 	path     []byte
 	value    []byte
+
+	nodeHash []byte
 }
 
-func (s *shortNodeImpl) GetValue() []byte { return s.value }
-func (s *shortNodeImpl) GetParity() bool  { return s.parity }
-func (s *shortNodeImpl) IsLeaf() bool     { return s.nodeType == pb.NodeType_leaf }
+func (s *shortNodeImpl) GetNodeHash() []byte { return s.nodeHash }
+func (s *shortNodeImpl) GetValue() []byte    { return s.value }
+func (s *shortNodeImpl) GetParity() bool     { return s.parity }
+func (s *shortNodeImpl) IsLeaf() bool        { return s.nodeType == pb.NodeType_leaf }
 
 func (s *shortNodeImpl) GetPath() string {
 	// todo: consider parity
