@@ -6,7 +6,7 @@ import (
 	node "github.com/spacemeshos/go-spacemesh/p2p/node"
 )
 
-// Bucket is a dht kbucket type
+// Bucket is a dht k-bucket type
 // Bucket NOT thread safe.
 // RoutingTable (or other clients) are responsible for serializing access to a Bucket
 type Bucket interface {
@@ -22,6 +22,7 @@ type Bucket interface {
 	List() *list.List
 }
 
+// Internal bucket implementation type
 type bucketimpl struct {
 	list *list.List
 }
@@ -95,13 +96,9 @@ func (b *bucketimpl) Len() int {
 // Split bucket's nodes into two buckets.
 // The receiver bucket will have peers with CPL equal to cpl.
 // The returned bucket will have peers with CPL greater than cpl (returned bucket has closer peers)
-
 func (b *bucketimpl) Split(cpl int, target dht.ID) Bucket {
-
 	newbucket := NewBucket()
-
 	e := b.list.Front()
-
 	for e != nil {
 		n := e.Value.(node.RemoteNodeData)
 		peerCPL := n.DhtId().CommonPrefixLen(target)
