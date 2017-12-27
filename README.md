@@ -80,8 +80,8 @@ make darwin | linux | windows
 
 Platform-specific binaries are saved to the `/build` directory.
 
-
-Compile the .proto files using the protobufs go compiler:
+To compile .proto files you need to install the [protobufs go support](https://github.com/golang/protobuf)
+After installing. You can compile a .proto file using:
 
 ```
 cd pb
