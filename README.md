@@ -107,14 +107,14 @@ make test
 Thank you for considering to contribute to the go-spacemesh open source project. 
 We welcome contributions large and small!
 
-- go-spacemesh is part of [The spacemeshos open source Project](https://spacemesh.io), and is MIT licensed open source software.
+- go-spacemesh is part of [The Spacemesh open source project](https://spacemesh.io), and is MIT licensed open source software.
 - We welcome major contributors to the spacemesh core dev team.
 - Please make sure to scan the [issues](https://github.com/spacemeshos/go-spacemesh/issues). 
 - Search the closed ones before reporting things, and help us with the open ones.
 
 #### Guidelines
 
-- Read the spacemeshos project white paper (coming soon)
+- Read the Spacemesh project white paper (coming soon)
 - Read all docs in the `docs/` folder
 - Ask questions or talk about things in [Issues](https://github.com/spacemeshos/go-spacemesh/issues) or on [spacemash gitter](https://gitter.im/spacemesh-os/Lobby).
 - Ensure you are able to contribute (no legal issues please)
