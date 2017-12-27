@@ -14,7 +14,7 @@
 
 ## go-spacemesh
 
-The go implementation of the [spacemeshos](https://spacemesh.io) p2p node.
+The go implementation of the [Spacemesh os](https://spacemesh.io) p2p node.
 Spacemesh is a decentralized blockchain computer using a new race-free consensus protocol that doesn't involve `proof of work`.
 Spacemesh is designed to build a secure decentralized network formed by a large number of desktop PCs at home.
 To learn more about SpaceMesh read our wiki pages.
@@ -30,6 +30,32 @@ git clone https://github.com/spacemeshos/go-spacemesh
 ```
 
 ### Building
+
+#### Step 1 - Get the dependencies
+
+We use [govendor](https://github.com/kardianos/govendor) for all 3rd party packages.
+We commit to git all 3rd party packages in the vendor folder so we have our own copy of versioned releases.
+To update a 3rd party package use vendor.json and govendor commands.
+
+Installing govendor:
+```
+go get -u github.com/kardianos/govendor
+```
+
+To get the vendor packages use:
+```
+govendor init
+govendor sync
+```
+
+#### Step 2 - Install the build tools
+
+Install these:
+- [govendor](https://github.com/kardianos/govendor) - for managing 3rd party deps
+- [protoc](https://github.com/golang/protobuf) - for compiling `protobufs`
+- [grpc-gateway plugin](https://github.com/grpc-ecosystem/grpc-gateway) - `protoc` support for grpc json-httpproxy 
+
+#### Step 3 - Build
 
 To build `go-spacemesh` for your current system architecture use:
 
@@ -58,22 +84,6 @@ Compile the .proto files using the protobufs go compiler:
 ```
 cd pb
 protoc --go_out=. ./*.proto
-```
-#### Getting dependencies
-
-We use [govendor](https://github.com/kardianos/govendor) for all 3rd party packages.
-We commit to git all 3rd party packages in the vendor folder so we have our own copy of versioned releases.
-To update a 3rd party package use vendor.json and govendor commands.
-
-Installing govendor:
-```
-go get -u github.com/kardianos/govendor
-```
-
-To get the vendor packages use:
-```
-govendor init
-govendor sync
 ```
 
 ### Running
