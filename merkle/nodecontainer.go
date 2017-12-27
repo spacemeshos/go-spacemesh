@@ -1,6 +1,7 @@
 package merkle
 
 import (
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"github.com/gogo/protobuf/proto"
@@ -16,7 +17,7 @@ type NodeContainer interface {
 	marshal() ([]byte, error) // get binary encoded marshaled node data
 	getNodeHash() []byte
 	loadedChildren() bool	// returns true iff child nodes loaded to memory
-	loadChildren(*leveldb.DB) error // load all children from db
+	loadChildren(db *leveldb.DB) error // load all children from db
 }
 
 type nodeContainerImp struct {
@@ -26,7 +27,7 @@ type nodeContainerImp struct {
 	ext      shortNode
 	childrenLoaded bool
 
-	children map[byte]NodeContainer // k -pointer to child node. v- child
+	children map[string]NodeContainer // k -pointer to child node. v- child
 }
 
 func (n *nodeContainerImp) getNodeType() pb.NodeType {
@@ -52,39 +53,48 @@ func (n *nodeContainerImp) loadedChildren() bool {
 // loads all node childrens to memory from the db
 // calling this on a root will load the entire tree to memory
 
-func (n *nodeContainerImp) loadChildren(/*db*/) error {
+func (n *nodeContainerImp) loadChildren(db *leveldb.DB) error {
 
 	// mark this node as child loaded when done
 	defer func() { n.childrenLoaded = true }()
 
 	if n.nodeType == pb.NodeType_leaf {
-		// lead has no children
+		// leaves are childless
 		return nil
 	}
 
 	if n.nodeType == pb.NodeType_extension {
 
-		// value in an extension node is a pointer to child
+		// value in an extension node is a pointer to child - load it
+		key := n.ext.getValue()
+		data, err := db.Get(key, nil)
+		if err != nil {
+			return err
+		}
 
-		// key := n.ext.GetValue()
+		node, err := newNodeFromData(data)
+		if err != nil {
+			return err
+		}
 
-		// todo: load child node from db by this key
-
-		// call LoadChildren(/*db*/) on that node
-
-		// todo: save child in childs map
-
+		n.children[hex.EncodeToString(key)] = node
+		return node.loadChildren(db)
 	}
 
 	if n.nodeType == pb.NodeType_branch {
 
-		// keys := n.branch.GetAllChildNodePointers()
-
-		// todo: load all childs from db here
-
-		//  call LoadChildren(/*db*/) on each node
-
-		// save each loaded child in childs map
+		keys := n.branch.getAllChildNodePointers()
+		for _, key := range keys {
+			data, err := db.Get(key, nil)
+			if err != nil {
+				return err
+			}
+			node, err := newNodeFromData(data)
+			if err != nil {
+				return err
+			}
+			n.children[hex.EncodeToString(key)] = node
+		}
 
 	}
 
@@ -94,11 +104,11 @@ func (n *nodeContainerImp) loadChildren(/*db*/) error {
 func (n *nodeContainerImp) getNodeHash() []byte {
 	switch n.nodeType {
 	case pb.NodeType_branch:
-		return n.branch.GetNodeHash()
+		return n.branch.getNodeHash()
 	case pb.NodeType_leaf:
-		return n.leaf.GetNodeHash()
+		return n.leaf.getNodeHash()
 	case pb.NodeType_extension:
-		return n.ext.GetNodeHash()
+		return n.ext.getNodeHash()
 	default:
 		return nil
 	}
@@ -107,17 +117,17 @@ func (n *nodeContainerImp) getNodeHash() []byte {
 func (n *nodeContainerImp) marshal() ([]byte, error) {
 	switch n.nodeType {
 	case pb.NodeType_branch:
-		return n.branch.Marshal()
+		return n.branch.marshal()
 	case pb.NodeType_leaf:
-		return n.leaf.Marshal()
+		return n.leaf.marshal()
 	case pb.NodeType_extension:
-		return n.ext.Marshal()
+		return n.ext.marshal()
 	default:
 		return nil, errors.New(fmt.Sprintf("unexpcted node type %d", n.nodeType))
 	}
 }
 
-func nodeFromData(data []byte) (NodeContainer, error) {
+func newNodeFromData(data []byte) (NodeContainer, error) {
 
 	n := &pb.Node{}
 	err := proto.Unmarshal(data, n)
@@ -126,7 +136,7 @@ func nodeFromData(data []byte) (NodeContainer, error) {
 	}
 
 	c := &nodeContainerImp{
-		children: make(map[byte]NodeContainer),
+		children: make(map[string]NodeContainer),
 	}
 
 	switch n.NodeType {

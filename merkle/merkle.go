@@ -72,7 +72,7 @@ func NewTreeFromStore(rootHash []byte, userDataFileName string, treeDataFileName
 		return nil, err
 	}
 
-	root, err := nodeFromData(data)
+	root, err := newNodeFromData(data)
 	if err != nil {
 		return nil, err
 	}
