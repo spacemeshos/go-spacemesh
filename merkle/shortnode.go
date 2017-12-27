@@ -8,13 +8,12 @@ import (
 
 // shortNode is an immutable leaf or an extension node
 type shortNode interface {
-	IsLeaf() bool             // extension node when false
-	GetValue() []byte         // value for leaf node. Pointer to child node for an extension node
-	GetPath() []byte          // path to this node from parent
-	GetParity() bool          // path parity
-	Marshal() ([]byte, error) // to binary data
-
-	GetNodeHash() []byte // node hash - value of pointer to node
+	isLeaf() bool             // extension node when false
+	getValue() []byte         // value for leaf node. Pointer to child node for an extension node
+	getPath() []byte          // path to this node from parent
+	getParity() bool          // path parity
+	marshal() ([]byte, error) // to binary data
+	getNodeHash() []byte // node hash - value of pointer to node
 
 
 }
@@ -29,7 +28,7 @@ func newShortNode(nodeType pb.NodeType, path []byte, parity bool, value []byte) 
 	}
 
 	// calc hash of marshaled node data and store
-	data, err := node.Marshal()
+	data, err := node.marshal()
 	if err != nil {
 		return nil, err
 	}
@@ -58,17 +57,17 @@ type shortNodeImpl struct {
 	nodeHash []byte
 }
 
-func (s *shortNodeImpl) GetNodeHash() []byte { return s.nodeHash }
-func (s *shortNodeImpl) GetValue() []byte    { return s.value }
-func (s *shortNodeImpl) GetParity() bool     { return s.parity }
-func (s *shortNodeImpl) IsLeaf() bool        { return s.nodeType == pb.NodeType_leaf }
+func (s *shortNodeImpl) getNodeHash() []byte { return s.nodeHash }
+func (s *shortNodeImpl) getValue() []byte    { return s.value }
+func (s *shortNodeImpl) getParity() bool     { return s.parity }
+func (s *shortNodeImpl) isLeaf() bool        { return s.nodeType == pb.NodeType_leaf }
 
-func (s *shortNodeImpl) GetPath() []byte {
+func (s *shortNodeImpl) getPath() []byte {
 	// todo: consider parity
 	return s.path
 }
 
-func (s *shortNodeImpl) Marshal() ([]byte, error) {
+func (s *shortNodeImpl) marshal() ([]byte, error) {
 
 	res := &pb.Node{
 		NodeType: s.nodeType,

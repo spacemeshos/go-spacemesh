@@ -21,9 +21,32 @@ type merkleTreeImp struct {
 	root     NodeContainer
 }
 
+// Create a new empty merkle tree
+func NewEmptyTree(userDataFileName string, treeDataFileName string) (MerkleTree, error) {
+	userData, err := leveldb.OpenFile(userDataFileName, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer userData.Close()
+
+	treeData, err := leveldb.OpenFile(treeDataFileName, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer treeData.Close()
+
+	mt := &merkleTreeImp{
+		userData: userData,
+		treeData: treeData,
+	}
+
+	return mt, nil
+}
+
 // Creates a new tree from provided dbs
-// Currently this method will load the whole tree to memory
-func NewTree(userDataFileName string, treeDataFileName string) (MerkleTree, error) {
+// rootHash: tree root hash - used to pull the root from the db
+// loadChilds: set to true to load all the tree to memory. Set to false for lazy loading of nodes from the db
+func NewTreeFromStore(rootHash []byte, userDataFileName string, treeDataFileName string, loadChilds bool) (MerkleTree, error) {
 
 	userData, err := leveldb.OpenFile(userDataFileName, nil)
 	if err != nil {
@@ -42,8 +65,26 @@ func NewTree(userDataFileName string, treeDataFileName string) (MerkleTree, erro
 		treeData: treeData,
 	}
 
-	// todo: load merkle root from store
+	// load the tree from the db
 
+	data, err := treeData.Get(rootHash, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	root, err := nodeFromData(data)
+	if err != nil {
+		return nil, err
+	}
+
+	if loadChilds {
+		err = root.loadChildren(treeData)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	mt.root = root
 	return mt, nil
 }
 
@@ -52,7 +93,7 @@ func (mt *merkleTreeImp) GetRootHash() []byte {
 		// special case - empty tree with no data
 		return crypto.Sha256([]byte(""))
 	} else {
-		return mt.root.GetNodeHash()
+		return mt.root.getNodeHash()
 	}
 }
 

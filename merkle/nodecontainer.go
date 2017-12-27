@@ -5,17 +5,18 @@ import (
 	"fmt"
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/merkle/pb"
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 type NodeContainer interface {
-	GetNodeType() pb.NodeType
-	GetLeafNode() shortNode
-	GetExtNode() shortNode
-	GetBranchNode() branchNode
-	Marshal() ([]byte, error) // get binary encoded marshaled node data
-	GetNodeHash() []byte
-	LoadedChildren() bool	// returns true iff child nodes loaded to memory
-	LoadChildren(/* tree-db-here*/) error // load all children from db
+	getNodeType() pb.NodeType
+	getLeafNode() shortNode
+	getExtNode() shortNode
+	getBranchNode() branchNode
+	marshal() ([]byte, error) // get binary encoded marshaled node data
+	getNodeHash() []byte
+	loadedChildren() bool	// returns true iff child nodes loaded to memory
+	loadChildren(*leveldb.DB) error // load all children from db
 }
 
 type nodeContainerImp struct {
@@ -23,38 +24,38 @@ type nodeContainerImp struct {
 	leaf     shortNode
 	branch   branchNode
 	ext      shortNode
-	loadedChildren bool
+	childrenLoaded bool
 
 	children map[byte]NodeContainer // k -pointer to child node. v- child
 }
 
-func (n *nodeContainerImp) GetNodeType() pb.NodeType {
+func (n *nodeContainerImp) getNodeType() pb.NodeType {
 	return n.nodeType
 }
 
-func (n *nodeContainerImp) GetLeafNode() shortNode {
+func (n *nodeContainerImp) getLeafNode() shortNode {
 	return n.leaf
 }
 
-func (n *nodeContainerImp) GetExtNode() shortNode {
+func (n *nodeContainerImp) getExtNode() shortNode {
 	return n.ext
 }
 
-func (n *nodeContainerImp) GetBranchNode() branchNode {
+func (n *nodeContainerImp) getBranchNode() branchNode {
 	return n.branch
 }
 
-func (n *nodeContainerImp) LoadedChildren() bool {
-	return n.loadedChildren
+func (n *nodeContainerImp) loadedChildren() bool {
+	return n.childrenLoaded
 }
 
 // loads all node childrens to memory from the db
 // calling this on a root will load the entire tree to memory
 
-func (n *nodeContainerImp) LoadChildren(/*db*/) error {
+func (n *nodeContainerImp) loadChildren(/*db*/) error {
 
 	// mark this node as child loaded when done
-	defer func() { n.loadedChildren = true }()
+	defer func() { n.childrenLoaded = true }()
 
 	if n.nodeType == pb.NodeType_leaf {
 		// lead has no children
@@ -90,7 +91,7 @@ func (n *nodeContainerImp) LoadChildren(/*db*/) error {
 	return nil
 }
 
-func (n *nodeContainerImp) GetNodeHash() []byte {
+func (n *nodeContainerImp) getNodeHash() []byte {
 	switch n.nodeType {
 	case pb.NodeType_branch:
 		return n.branch.GetNodeHash()
@@ -103,7 +104,7 @@ func (n *nodeContainerImp) GetNodeHash() []byte {
 	}
 }
 
-func (n *nodeContainerImp) Marshal() ([]byte, error) {
+func (n *nodeContainerImp) marshal() ([]byte, error) {
 	switch n.nodeType {
 	case pb.NodeType_branch:
 		return n.branch.Marshal()
@@ -116,7 +117,7 @@ func (n *nodeContainerImp) Marshal() ([]byte, error) {
 	}
 }
 
-func NodeFromData(data []byte) (NodeContainer, error) {
+func nodeFromData(data []byte) (NodeContainer, error) {
 
 	n := &pb.Node{}
 	err := proto.Unmarshal(data, n)

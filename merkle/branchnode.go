@@ -8,12 +8,12 @@ import (
 
 // An immutable branch (full) node
 type branchNode interface {
-	GetValue() []byte          // value terminated in this path or nil
-	GetPath(entry byte) []byte // return pointer to child node for hex char entry or nil
-	Marshal() ([]byte, error)  // to binary data
-	GetNodeHash() []byte       // data hash (pointer to this node)
+	getValue() []byte          // value terminated in this path or nil
+	getPath(entry byte) []byte // return pointer to child node for hex char entry or nil
+	marshal() ([]byte, error)  // to binary data
+	getNodeHash() []byte       // data hash (pointer to this node)
 
-	GetAllChildNodePointers() [][]byte // get all pointers to child nodes
+	getAllChildNodePointers() [][]byte // get all pointers to child nodes
 }
 
 // creates a new branchNode from provided data
@@ -24,7 +24,7 @@ func newBranchNode(entries map[byte][]byte, value []byte) (branchNode, error) {
 		entries: entries,
 	}
 
-	d, err := node.Marshal()
+	d, err := node.marshal()
 	if err != nil {
 		return nil, err
 	}
@@ -58,7 +58,7 @@ type branchNodeImpl struct {
 	nodeHash []byte
 }
 
-func (b *branchNodeImpl) GetAllChildNodePointers() [][]byte {
+func (b *branchNodeImpl) getAllChildNodePointers() [][]byte {
 	res := make([][]byte,0)
 	for _, val := range b.entries {
 		if len(val) > 0 {
@@ -68,16 +68,16 @@ func (b *branchNodeImpl) GetAllChildNodePointers() [][]byte {
 	return res
 }
 
-func (b *branchNodeImpl) GetNodeHash() []byte {
+func (b *branchNodeImpl) getNodeHash() []byte {
 	return b.nodeHash
 }
 
-func (b *branchNodeImpl) GetValue() []byte { return b.value }
-func (b *branchNodeImpl) GetPath(idx byte) []byte {
+func (b *branchNodeImpl) getValue() []byte { return b.value }
+func (b *branchNodeImpl) getPath(idx byte) []byte {
 	return b.entries[idx]
 }
 
-func (b *branchNodeImpl) Marshal() ([]byte, error) {
+func (b *branchNodeImpl) marshal() ([]byte, error) {
 
 	entries := make([][]byte, 16)
 
