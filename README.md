@@ -35,10 +35,10 @@ git clone https://github.com/spacemeshos/go-spacemesh
 #### Step 1 - Install the build tools
 
 Install these go tools:
-- [govendor](https://github.com/kardianos/govendor) - for managing 3rd party deps
-- [protoc](https://github.com/golang/protobuf) - for compiling `protobufs`
-- [grpc-gateway plugin](https://github.com/grpc-ecosystem/grpc-gateway) - `protoc` support for grpc json-httpproxy 
-
+- [Govendor](https://github.com/kardianos/govendor) - for managing 3rd party deps
+- [Protoc](https://github.com/golang/protobuf) - for compiling `protobufs`
+- [Grpc-gateway plugin](https://github.com/grpc-ecosystem/grpc-gateway) - `protoc` support for grpc json-httpproxy 
+- [Go 1.9.2 or later](https://golang.org/dl/)
 ```
 go get -u github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway
 go get -u github.com/grpc-ecosystem/grpc-gateway/protoc-gen-swagger
