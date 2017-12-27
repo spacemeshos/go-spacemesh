@@ -1,7 +1,7 @@
 package merkle
 
 import (
-	"github.com/gogo/protobuf/test/data"
+	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/merkle/pb"
 )
@@ -10,11 +10,30 @@ import (
 type branchNode interface {
 	GetValue() []byte
 	GetPath(entry byte) []byte
-	Marshal() pb.Node
+	Marshal() ([]byte, error)
 	GetNodeHash() []byte
 }
 
-func newBranchNode(rawData []byte, data *pb.Node) branchNode {
+// creates a new branchNode from provided data
+func newBranchNode(entries map[byte][]byte, value []byte) (branchNode, error) {
+
+	node := &branchNodeImpl{
+		value:    value,
+		entries: entries,
+	}
+
+	d, err := node.Marshal()
+	if err != nil {
+		return nil, err
+	}
+
+	node.nodeHash = crypto.Sha256(d)
+	return node, nil
+}
+
+// creates a new branch node from persisted branch node
+func newBranchNodeFromPersistedData(rawData []byte, data *pb.Node) branchNode {
+
 	n := &branchNodeImpl{
 		nodeHash: crypto.Sha256(rawData),
 		entries:  make(map[byte][]byte),
@@ -46,7 +65,7 @@ func (b *branchNodeImpl) GetPath(idx byte) []byte {
 	return b.entries[idx]
 }
 
-func (b *branchNodeImpl) Marshal() pb.Node {
+func (b *branchNodeImpl) Marshal() ([]byte, error) {
 
 	entries := make([][]byte, 16)
 
@@ -54,11 +73,11 @@ func (b *branchNodeImpl) Marshal() pb.Node {
 		entries[idx] = val
 	}
 
-	res := pb.Node{
+	res := &pb.Node{
 		NodeType: pb.NodeType_branch,
 		Value:    b.value,
 		Entries:  entries,
 	}
 
-	return res
+	return proto.Marshal(res)
 }

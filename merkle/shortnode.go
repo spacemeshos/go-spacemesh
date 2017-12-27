@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/merkle/pb"
+	"gx/ipfs/QmZ4Qi3GaRbjcx28Sme5eMH7RQjGkt8wHxt2a65oLaeFEV/gogo-protobuf/proto"
 )
 
 // shortNode is an immutable leaf or an extension node
@@ -12,12 +13,30 @@ type shortNode interface {
 	GetValue() []byte
 	GetPath() string // hex encoded string
 	GetParity() bool
-	Marshal() pb.Node
+	Marshal() ([]byte, error)
 
 	GetNodeHash() []byte
 }
 
-func newShortNode(data []byte, n *pb.Node) shortNode {
+func newShortNode(nodeType pb.NodeType, path []byte, parity bool, value []byte) (shortNode, error) {
+
+	node := &shortNodeImpl{
+		nodeType: nodeType,
+		parity:   parity,
+		path:     path,
+		value:    value,
+	}
+
+	data, err := node.Marshal()
+	if err != nil {
+		return nil, err
+	}
+
+	node.nodeHash = crypto.Sha256(data)
+	return node, nil
+}
+
+func newShortNodeFromPersistedData(data []byte, n *pb.Node) shortNode {
 
 	node := &shortNodeImpl{
 		nodeType: n.NodeType,
@@ -49,14 +68,14 @@ func (s *shortNodeImpl) GetPath() string {
 	return hex.EncodeToString(s.path)
 }
 
-func (s *shortNodeImpl) Marshal() pb.Node {
+func (s *shortNodeImpl) Marshal() ([]byte, error) {
 
-	res := pb.Node{
+	res := &pb.Node{
 		NodeType: s.nodeType,
 		Value:    s.value,
 		Parity:   s.parity,
 		Path:     s.path,
 	}
 
-	return res
+	return proto.Marshal(res)
 }

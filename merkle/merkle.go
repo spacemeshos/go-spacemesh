@@ -21,7 +21,7 @@ type merkleTreeImp struct {
 	root     NodeContainer
 }
 
-func NewMerkleTree(userDataFileName string, trieDataFileName string) (MerkleTree, error) {
+func NewTree(userDataFileName string, treeDataFileName string) (MerkleTree, error) {
 
 	userData, err := leveldb.OpenFile(userDataFileName, nil)
 	if err != nil {
@@ -29,7 +29,7 @@ func NewMerkleTree(userDataFileName string, trieDataFileName string) (MerkleTree
 	}
 	defer userData.Close()
 
-	treeData, err := leveldb.OpenFile(userDataFileName, nil)
+	treeData, err := leveldb.OpenFile(treeDataFileName, nil)
 	if err != nil {
 		return nil, err
 	}

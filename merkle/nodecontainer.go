@@ -2,6 +2,7 @@ package merkle
 
 import (
 	"errors"
+	"fmt"
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/merkle/pb"
@@ -55,21 +56,16 @@ func (n *nodeContainerImp) GetNodeHash() []byte {
 }
 
 func (n *nodeContainerImp) Marshal() ([]byte, error) {
-
-	var data pb.Node
-
 	switch n.nodeType {
 	case pb.NodeType_branch:
-		data = n.branch.Marshal()
+		return n.branch.Marshal()
 	case pb.NodeType_leaf:
-		data = n.leaf.Marshal()
+		return n.leaf.Marshal()
 	case pb.NodeType_extension:
-		data = n.ext.Marshal()
+		return n.ext.Marshal()
 	default:
-		return nil, errors.New("unexpcted node type")
+		return nil, errors.New(fmt.Sprintf("unexpcted node type %d", n.nodeType))
 	}
-
-	return proto.Marshal(&data)
 }
 
 func NodeFromData(data []byte) (NodeContainer, error) {
@@ -85,13 +81,13 @@ func NodeFromData(data []byte) (NodeContainer, error) {
 	switch n.NodeType {
 	case pb.NodeType_branch:
 		c.nodeType = pb.NodeType_branch
-		c.branch = newBranchNode(data, n)
+		c.branch = newBranchNodeFromPersistedData(data, n)
 	case pb.NodeType_extension:
 		c.nodeType = pb.NodeType_extension
-		c.ext = newShortNode(data, n)
+		c.ext = newShortNodeFromPersistedData(data, n)
 	case pb.NodeType_leaf:
 		c.nodeType = pb.NodeType_leaf
-		c.leaf = newShortNode(data, n)
+		c.leaf = newShortNodeFromPersistedData(data, n)
 	default:
 		return nil, errors.New("unexpected node type")
 	}
