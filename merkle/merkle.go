@@ -37,8 +37,6 @@ func NewMerkleTree(userDataFileName string, trieDataFileName string) (MerkleTree
 
 	// todo: restore merkle root from store
 
-	// load
-
 	return mt, nil
 }
 

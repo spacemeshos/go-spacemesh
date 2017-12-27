@@ -27,7 +27,7 @@ To find a value we can treat it as k and do an external table lookup. If the val
 - Persistence should be implemented using go [leveldb](https://github.com/syndtr/goleveldb)
 
 ## Working with nibbles
-- Data is stored in bytes but represented as hex chars - each hex char represents a nibble (4 bits of data with 16 possible values)
+- Data is stored in bytes but is represented as hex chars - each hex char represents a nibble (4 bits of data with 16 possible values)
 - There's some ambiguity when decoding bytes to nibbles - Byte <01> is an encoding of both one nibble with the value of 0001 and the 2 nibbles with values 0000 and 0001.
 - A path may have an odd or an even number of nibbles
 - We avoid this ambiguity by encoding path's parity (odd or even) in the path binary format by prefixing a path with metadata.
@@ -51,27 +51,14 @@ To find a value we can treat it as k and do an external table lookup. If the val
 - Empty node
     - Encoded as hexStringEncode(empty-string)
       
-- Short node: An Extension or Leaf node
-- Full node: A branch node.
+- Short node: an Extension or a Leaf node.
+- Full node: a branch node.
    
-## Encoded path format
-- Encoded paths have a 1 or 2 nibbles prefix that describe which type of node they are part of.
-- Based on the prefix, the node's type is determined and we can know how to treat the data in the pointer/value part of the node.
-e.g. a pointer to another node in an extension node or a 'value' in leaf nodes (which may be a key to a large value or a small value).
-
-### First Nibble
-
-| hex char |  bits   |    node type partial    |  path length |
-|------|-------------|-------------------------|--------------|
-|  0   |     0000    |       Extension         |    even      |   
-|  1   |     0001    |       Extension         |     odd      |    
-|  2   |     0010    |          Leaf           |    even      |  
-|  3   |     0011    |          Leaf           |     odd      |
-  
-### Second Nibble
-- For even paths, add another 0 padding nibble <0000> is added after the first nibble:
-- Odd path: <meta-data-nible><path-data-nibbles>
-- Event path: <meta-data-nible><0000><path-data-nibbles>
+## Serialization and implementation nodes
+- As we use protobufs for serialization we don't need to prefix a path with the node type or the path parity as we can store these in protobuf messages.
+- This greatly simplify the implementation
+- We use a `shortNode` type to represent both leaf and extension node and 'branchNode' for branch nodes.
+- We use a `nodeContainer` type to provide a type-safe access to nodes.
 
 ### Additional Explainers
 
