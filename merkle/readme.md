@@ -50,6 +50,9 @@ To find a value we can treat it as k and do an external table lookup. If the val
     - Value is k of v if bin-encode(v) > 256 bits or the bin value itself v otherwise.
 - Empty node
     - Encoded as hexStringEncode(empty-string)
+      
+- Short node: An Extension or Leaf node
+- Full node: A branch node.
    
 ## Encoded path format
 - Encoded paths have a 1 or 2 nibbles prefix that describe which type of node they are part of.

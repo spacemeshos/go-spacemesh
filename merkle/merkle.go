@@ -35,9 +35,12 @@ func NewMerkleTree(userDataFileName string, trieDataFileName string) (MerkleTree
 		treeData: treeData,
 	}
 
+	// todo: restore merkle root from store
+
+	// load
+
 	return mt, nil
 }
-
 
 func (mt *merkleTreeImp) Put(k, v []byte) {
 
@@ -54,5 +57,3 @@ func (mt *merkleTreeImp) Has(k []byte) bool {
 func (mt *merkleTreeImp) Get(k []byte) ([]byte, bool) {
 	return nil, false
 }
-
-

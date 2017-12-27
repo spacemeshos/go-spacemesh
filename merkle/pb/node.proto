@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package pb;
+option go_package = "pb";
+
+// node type
+enum NodeType {
+    branch = 0;
+    extension = 1;
+    leaf = 2;
+}
+
+message Node {
+    NodeType nodeType = 1;
+    repeated bytes entries = 2; // only for branch node. 16 repated enties - one for each hex char, an entry can be an empty []byte slice
+    bool  parity = 3;   // path parity. n/a for branch node.
+    bytes path = 4;     // nibbles serielized as bytes. empty for branch node.
+    bytes value = 5;    // value is based on node type type
+}
+
+
