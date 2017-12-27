@@ -24,7 +24,7 @@ The goals of this data structure is to have o(log(n)) lookup, insert, update and
 - The values of branch nodes in the internal table are keys (k) to data-domain values if len(bin_encode(v))<256 bits or bin_encode(v) otherwise. 
 To find a value we can treat it as k and do an external table lookup. If the value is not there then k is the value. Otherwise use the value from the table.
 - First key in the internal table is the tree the root (hash)
-- Persistence should be implemented using go leveldb
+- Persistence should be implemented using go [leveldb](https://github.com/syndtr/goleveldb)
 
 ## Working with nibbles
 - Data is stored in bytes but represented as hex chars - each hex char represents a nibble (4 bits of data with 16 possible values)
@@ -36,20 +36,25 @@ To find a value we can treat it as k and do an external table lookup. If the val
 - Branch node
     - A 17-items node [ v0 ... v15, value ]
     - First 16 items: A Nibbles array with one entry for each nibble (hex char). Each array index is either nil or a pointer P to a child node.
+    - Each possible hex char in a path hex representation is represented in the array.
     - value (last item): a value the terminates in the path to this node or nil.
     - value is nil or k of v if bin-encode(v) > 256 bits or the bin value itself v otherwise.
 - Extension node
     - Optimization of a branch consisting of many branch nodes, each with only 1 pointer to a child.
     - A 2-item node [ encodedPath, pointer ]
-    - encodedPath - partial path from node
+    - encodedPath - partial path from parent
     - pointer - pointer to a child node
 - Leaf node
     - A 2-item node [ encodedPath, value ]
-    - encodedPath - partial path from node to value. Optimization.
+    - encodedPath - partial path from parent to value. Optimization.
     - Value is k of v if bin-encode(v) > 256 bits or the bin value itself v otherwise.
-
+- Empty node
+    - Encoded as hexStringEncode(empty-string)
+   
 ## Encoded path format
-Paths have 1 or 2 meta-data nibbles prefix.
+- Encoded paths have a 1 or 2 nibbles prefix that describe which type of node they are part of.
+- Based on the prefix, the node's type is determined and we can know how to treat the data in the pointer/value part of the node.
+e.g. a pointer to another node in an extension node or a 'value' in leaf nodes (which may be a key to a large value or a small value).
 
 ### First Nibble
 

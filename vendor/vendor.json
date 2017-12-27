@@ -69,6 +69,12 @@
 			"revisionTime": "2017-11-13T18:07:20Z"
 		},
 		{
+			"checksumSHA1": "p/8vSviYF91gFflhrt5vkyksroo=",
+			"path": "github.com/golang/snappy",
+			"revision": "553a641470496b2327abcac10b36396bd98e45c9",
+			"revisionTime": "2017-02-15T23:32:05Z"
+		},
+		{
 			"checksumSHA1": "rDeuX1vGZNBqtCCHJn0AH385Rrs=",
 			"path": "github.com/google/uuid",
 			"revision": "4ebdd04351c754ab14fd5295c91fb901e07dfbcc",
@@ -91,6 +97,78 @@
 			"path": "github.com/grpc-ecosystem/grpc-gateway/utilities",
 			"revision": "e4b8a938efae14de11fd97311e873e989896348c",
 			"revisionTime": "2017-11-26T19:57:40Z"
+		},
+		{
+			"checksumSHA1": "l9hsW4atYllqlNjJUwHb6lyLn+I=",
+			"path": "github.com/syndtr/goleveldb/leveldb",
+			"revision": "34011bf325bce385408353a30b101fe5e923eb6e",
+			"revisionTime": "2017-12-14T12:08:11Z"
+		},
+		{
+			"checksumSHA1": "EKIow7XkgNdWvR/982ffIZxKG8Y=",
+			"path": "github.com/syndtr/goleveldb/leveldb/cache",
+			"revision": "34011bf325bce385408353a30b101fe5e923eb6e",
+			"revisionTime": "2017-12-14T12:08:11Z"
+		},
+		{
+			"checksumSHA1": "5KPgnvCPlR0ysDAqo6jApzRQ3tw=",
+			"path": "github.com/syndtr/goleveldb/leveldb/comparer",
+			"revision": "34011bf325bce385408353a30b101fe5e923eb6e",
+			"revisionTime": "2017-12-14T12:08:11Z"
+		},
+		{
+			"checksumSHA1": "1DRAxdlWzS4U0xKN/yQ/fdNN7f0=",
+			"path": "github.com/syndtr/goleveldb/leveldb/errors",
+			"revision": "34011bf325bce385408353a30b101fe5e923eb6e",
+			"revisionTime": "2017-12-14T12:08:11Z"
+		},
+		{
+			"checksumSHA1": "eqKeD6DS7eNCtxVYZEHHRKkyZrw=",
+			"path": "github.com/syndtr/goleveldb/leveldb/filter",
+			"revision": "34011bf325bce385408353a30b101fe5e923eb6e",
+			"revisionTime": "2017-12-14T12:08:11Z"
+		},
+		{
+			"checksumSHA1": "weSsccMav4BCerDpSLzh3mMxAYo=",
+			"path": "github.com/syndtr/goleveldb/leveldb/iterator",
+			"revision": "34011bf325bce385408353a30b101fe5e923eb6e",
+			"revisionTime": "2017-12-14T12:08:11Z"
+		},
+		{
+			"checksumSHA1": "gJY7bRpELtO0PJpZXgPQ2BYFJ88=",
+			"path": "github.com/syndtr/goleveldb/leveldb/journal",
+			"revision": "34011bf325bce385408353a30b101fe5e923eb6e",
+			"revisionTime": "2017-12-14T12:08:11Z"
+		},
+		{
+			"checksumSHA1": "MtYY1b2234y/MlS+djL8tXVAcQs=",
+			"path": "github.com/syndtr/goleveldb/leveldb/memdb",
+			"revision": "34011bf325bce385408353a30b101fe5e923eb6e",
+			"revisionTime": "2017-12-14T12:08:11Z"
+		},
+		{
+			"checksumSHA1": "UmQeotV+m8/FduKEfLOhjdp18rs=",
+			"path": "github.com/syndtr/goleveldb/leveldb/opt",
+			"revision": "34011bf325bce385408353a30b101fe5e923eb6e",
+			"revisionTime": "2017-12-14T12:08:11Z"
+		},
+		{
+			"checksumSHA1": "tQ2AqXXAEy9icbZI9dLVdZGvWMw=",
+			"path": "github.com/syndtr/goleveldb/leveldb/storage",
+			"revision": "34011bf325bce385408353a30b101fe5e923eb6e",
+			"revisionTime": "2017-12-14T12:08:11Z"
+		},
+		{
+			"checksumSHA1": "gWFPMz8OQeul0t54RM66yMTX49g=",
+			"path": "github.com/syndtr/goleveldb/leveldb/table",
+			"revision": "34011bf325bce385408353a30b101fe5e923eb6e",
+			"revisionTime": "2017-12-14T12:08:11Z"
+		},
+		{
+			"checksumSHA1": "V/Dh7NV0/fy/5jX1KaAjmGcNbzI=",
+			"path": "github.com/syndtr/goleveldb/leveldb/util",
+			"revision": "34011bf325bce385408353a30b101fe5e923eb6e",
+			"revisionTime": "2017-12-14T12:08:11Z"
 		},
 		{
 			"checksumSHA1": "1MGpGDQqnUoRpv7VEcQrXOBydXE=",
