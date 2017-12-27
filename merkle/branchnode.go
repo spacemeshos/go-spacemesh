@@ -24,16 +24,16 @@ func newBranchNode(entries map[byte][]byte, value []byte) (branchNode, error) {
 		entries: entries,
 	}
 
+	// Marshal the data to generate the node's hash
 	d, err := node.marshal()
 	if err != nil {
 		return nil, err
 	}
-
 	node.nodeHash = crypto.Sha256(d)
 	return node, nil
 }
 
-// creates a new branch node from persisted branch node
+// Createss a new branch node from persisted branch node data
 func newBranchNodeFromPersistedData(rawData []byte, data *pb.Node) branchNode {
 
 	n := &branchNodeImpl{

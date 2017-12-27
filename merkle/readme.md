@@ -24,13 +24,13 @@ The goals of this data structure is to have o(log(n)) lookup, insert, update and
 - The values of branch nodes in the internal table are keys (k) to data-domain values if len(bin_encode(v))<256 bits or bin_encode(v) otherwise. 
 To find a value we can treat it as k and do an external table lookup. If the value is not there then k is the value. Otherwise use the value from the table.
 - First key in the internal table is the tree the root (hash)
-- Persistence should be implemented using go [leveldb](https://github.com/syndtr/goleveldb)
+- Persistence should be implemented using [go-leveldb](https://github.com/syndtr/goleveldb)
 
 ## Working with nibbles
 - Data is stored in bytes but is represented as hex chars - each hex char represents a nibble (4 bits of data with 16 possible values)
 - There's some ambiguity when decoding bytes to nibbles - Byte <01> is an encoding of both one nibble with the value of 0001 and the 2 nibbles with values 0000 and 0001.
 - A path may have an odd or an even number of nibbles
-- We avoid this ambiguity by encoding path's parity (odd or even) in the path binary format by prefixing a path with metadata.
+- We avoid this ambiguity by storing the path's parity in store and reconstruct the nibbles path based on parity.
 
 ## main Node Types
 - Branch node
@@ -49,7 +49,7 @@ To find a value we can treat it as k and do an external table lookup. If the val
     - encodedPath - partial path from parent to value. Optimization.
     - Value is k of v if bin-encode(v) > 256 bits or the bin value itself v otherwise.
 - Empty node
-    - Encoded as hexStringEncode(empty-string)
+    - Hash is a sha3(hexStringEncode(empty-string))
       
 - Short node: an Extension or a Leaf node.
 - Full node: a branch node.

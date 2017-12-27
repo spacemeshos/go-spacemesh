@@ -5,6 +5,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
+// A general-purpose merkle tree backed by (k,v) stores
 type MerkleTree interface {
 	Put(k, v []byte)
 	Delete(k, v []byte)
@@ -20,8 +21,8 @@ type merkleTreeImp struct {
 	root     NodeContainer
 }
 
-// Create a new empty merkle tree with the provided paths to user and tree data dbs
-// The dbs will be created on these pathes if they don't already exist
+// Creates a new empty merkle tree with the provided paths to user and tree data db files.
+// The db files will be created on these pathes if they don't already exist.
 // userDataFileName: full local os path and file name for the user data db for this tree
 // treeDataFileName: full local os path and file name for the internal tree db store for this tree
 func NewEmptyTree(userDataFileName string, treeDataFileName string) (MerkleTree, error) {
@@ -45,7 +46,7 @@ func NewEmptyTree(userDataFileName string, treeDataFileName string) (MerkleTree,
 	return mt, nil
 }
 
-// Creates a new tree from provided dbs
+// Creates a new tree from provided dbs file paths.
 // rootHash: tree root hash - used to pull the root from the db
 // userDataFileName: full local os path and file name for user data db for this tree
 // treeDataFileName: full local os path and file name for the internal tree db store for this tree
@@ -80,6 +81,7 @@ func NewTreeFromDb(rootHash []byte, userDataFileName string, treeDataFileName st
 		return nil, err
 	}
 
+	// load all tree nodes to memory if requested
 	if loadChilds {
 		err = root.loadChildren(treeData)
 		if err != nil {
@@ -100,27 +102,3 @@ func (mt *merkleTreeImp) GetRootHash() []byte {
 	}
 }
 
-func (mt *merkleTreeImp) GetRootNode() NodeContainer {
-	return mt.root
-}
-
-// store (k,v)
-func (mt *merkleTreeImp) Put(k, v []byte) {
-
-}
-
-// remove (k,v)
-func (mt *merkleTreeImp) Delete(k, v []byte) {
-
-}
-
-// returns true if tree contains key k
-func (mt *merkleTreeImp) Has(k []byte) bool {
-	return false
-}
-
-// get value associated with key
-// returns false if value not found for key k
-func (mt *merkleTreeImp) Get(k []byte) ([]byte, bool) {
-	return nil, false
-}
