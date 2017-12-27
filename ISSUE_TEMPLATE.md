@@ -2,7 +2,7 @@
 
 ### Expected behavior
 
-### Actuall behavior
+### Actual behavior
 
 ### Step to reproduce the actual behavior
 
