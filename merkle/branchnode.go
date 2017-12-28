@@ -16,7 +16,8 @@ type branchNode interface {
 	getAllChildNodePointers() [][]byte // get all pointers to child nodes
 }
 
-// creates a new branchNode from provided data
+// Creates a new branchNode from provided data
+
 func newBranchNode(entries map[byte][]byte, value []byte) (branchNode, error) {
 
 	node := &branchNodeImpl{
@@ -53,7 +54,7 @@ func newBranchNodeFromPersistedData(rawData []byte, data *pb.Node) branchNode {
 }
 
 type branchNodeImpl struct {
-	entries  map[byte][]byte
+	entries  map[byte][]byte // k- 0-15, value - pointer to child
 	value    []byte
 	nodeHash []byte
 }

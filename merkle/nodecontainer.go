@@ -21,13 +21,13 @@ type NodeContainer interface {
 }
 
 type nodeContainerImp struct {
-	nodeType       pb.NodeType
-	leaf           shortNode
-	branch         branchNode
-	ext            shortNode
-	childrenLoaded bool
+	nodeType       pb.NodeType // contained node type
+	leaf           shortNode   // lead node data or nil
+	branch         branchNode  // branch node data or nil
+	ext            shortNode   // ext node data or nil
+	childrenLoaded bool        // indicates if children loaded from db
 
-	children map[string]NodeContainer // k -pointer to child node. v- child
+	children map[string]NodeContainer // k -pointer to child node (hex encoded). v- child
 }
 
 func (n *nodeContainerImp) getNodeType() pb.NodeType {

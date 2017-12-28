@@ -11,7 +11,6 @@ func (mt *merkleTreeImp) GetRootHash() []byte {
 	}
 }
 
-
 // Returns nil when the tree is empty
 func (mt *merkleTreeImp) GetRootNode() NodeContainer {
 	return mt.root

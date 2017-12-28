@@ -15,7 +15,7 @@ type shortNode interface {
 	getNodeHash() []byte      // node hash - value of pointer to node
 }
 
-func newShortNode(nodeType pb.NodeType, path string, parity bool, value []byte) (shortNode, error) {
+func newShortNode(nodeType pb.NodeType, path string, value []byte) (shortNode, error) {
 
 	node := &shortNodeImpl{
 		nodeType: nodeType,
