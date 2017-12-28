@@ -6,9 +6,9 @@ import (
 
 // A general-purpose merkle tree backed by (k,v) stores
 type MerkleTree interface {
-	Put(k, v []byte)
-	Delete(k, v []byte)
-	Has(k []byte) bool
+	Put(k, v []byte) error
+	Delete(k []byte) error
+	Has(k []byte) (bool, error)
 	Get(k []byte) ([]byte, bool)
 	GetRootHash() []byte
 	GetRootNode() NodeContainer

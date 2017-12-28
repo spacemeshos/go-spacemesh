@@ -127,6 +127,50 @@ func (n *nodeContainerImp) marshal() ([]byte, error) {
 	}
 }
 
+func newLeftNodeContainer(path string, value []byte) (NodeContainer, error) {
+	n, err := newShortNode(pb.NodeType_leaf, path, value)
+	if err != nil {
+		return nil, err
+	}
+
+	c := &nodeContainerImp{
+		nodeType: pb.NodeType_leaf,
+		leaf: n,
+		children: make(map[string]NodeContainer),
+	}
+	return c, nil
+}
+
+func newExtNodeContainer(path string, value []byte) (NodeContainer, error) {
+	n, err := newShortNode(pb.NodeType_extension, path, value)
+	if err != nil {
+		return nil, err
+	}
+
+	c := &nodeContainerImp{
+		nodeType: pb.NodeType_extension,
+		ext: n,
+		children: make(map[string]NodeContainer),
+	}
+	return c, nil
+}
+
+func newBranchNodeContainer(entries map[byte][]byte, value []byte) (NodeContainer, error) {
+	n, err := newBranchNode(entries, value)
+	if err != nil {
+		return nil, err
+	}
+
+	c := &nodeContainerImp{
+		nodeType: pb.NodeType_branch,
+		branch: n,
+		children: make(map[string]NodeContainer),
+	}
+
+	return c, nil
+}
+
+
 func newNodeFromData(data []byte) (NodeContainer, error) {
 
 	n := &pb.Node{}

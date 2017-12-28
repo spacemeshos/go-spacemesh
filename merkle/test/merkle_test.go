@@ -26,4 +26,3 @@ func TestTreeCreation(t *testing.T) {
 	hash := m.GetRootHash()
 	assert.True(t, bytes.Equal(merkle.EmptyTreeRootHash, hash), "unexpected empty tree root hash")
 }
-
