@@ -3,4 +3,3 @@ go:
 - 1.9.2
 script:
   - make
-  - make test
