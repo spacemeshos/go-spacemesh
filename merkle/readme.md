@@ -19,7 +19,7 @@ The goals of this data structure is to have o(log(n)) lookup, insert, update and
     - An external table with (k,v) pairs - this is the data domain. 
     - Another internal to hold the tree structure (p,v) - the tree can be reconstructed from this table.
 - The external table is used to get values based on their keys.
-- The internal table completely represents a Merkle tree and is used to load it to memmory and persist it.
+- The internal table completely represents a Merkle tree and is used to load it to memory and persist it.
 - The internal table keys are pointers and the values are a binary representation of a table node.
 - The values of branch nodes in the internal table are keys (k) to data-domain values if len(bin_encode(v))<256 bits or bin_encode(v) otherwise. 
 To find a value we can treat it as k and do an external table lookup. If the value is not there then k is the value. Otherwise use the value from the table.
@@ -27,10 +27,10 @@ To find a value we can treat it as k and do an external table lookup. If the val
 - Persistence should be implemented using [go-leveldb](https://github.com/syndtr/goleveldb)
 
 ## Working with nibbles
-- A path in the tree may have an odd or an even number of nibbles
-- We avoid dealing with parity by using hex encoded strings to represent for paths. 
-- Hex encoded strings can represent nibbles paths with odd number of nibbles. Each hex char represents one nibble (4 bits of data with 16 possible values)
-- We avoid working with []byte as it can't represent a path with an odd number of nibbles without padding.
+- A path in the tree may have an odd or an even number of nibbles.
+- We avoid having to deal with parity issues by using hex encoded strings to represent paths. 
+- Hex encoded strings can represent paths with odd number of nibbles as each hex char represents one nibble (4 bits of data with 16 possible values)
+- We avoid working with []byte for paths as it can't represent a path with an odd number of nibbles without padding and special handling.
 
 ## main Node Types
 - Branch node
@@ -59,9 +59,9 @@ To find a value we can treat it as k and do an external table lookup. If the val
 - We use a `nodeContainer` type to provide a type-safe access to nodes.
 
 ### Additional Explainers
+Some of the optimization ideas we use for Merkle trees are from `ethereum tries`. 
+As described above, we use our own different optimizations in some cases. For example, we do not use path prefixed metadata.
 
-The optimization ideas for Merkle trees are from `ethereum tries`. 
-As described above, we use our own different optimizations in some cases. for example, we do not use path prefixed metadata.
 More info here:
 
 - https://easythereentropy.wordpress.com/2014/06/04/understanding-the-ethereum-trie/

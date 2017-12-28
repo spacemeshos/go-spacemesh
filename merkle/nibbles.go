@@ -40,5 +40,5 @@ func charToHex(s string) (byte, error) {
 		return 15, nil
 	}
 
-	return 0, errors.New("Input out of range. Expected 1 hex char string")
+	return 0, errors.New("input out of range. Expected 1 hex char string")
 }

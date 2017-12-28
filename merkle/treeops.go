@@ -2,10 +2,12 @@ package merkle
 
 import "github.com/spacemeshos/go-spacemesh/crypto"
 
+var EmptyTreeRootHash = crypto.Sha256([]byte(""))
+
 func (mt *merkleTreeImp) GetRootHash() []byte {
 	if mt.root == nil {
 		// special case - empty tree with no data
-		return crypto.Sha256([]byte(""))
+		return EmptyTreeRootHash
 	} else {
 		return mt.root.getNodeHash()
 	}
