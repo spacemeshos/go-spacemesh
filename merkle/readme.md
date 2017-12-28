@@ -27,10 +27,10 @@ To find a value we can treat it as k and do an external table lookup. If the val
 - Persistence should be implemented using [go-leveldb](https://github.com/syndtr/goleveldb)
 
 ## Working with nibbles
-- Data is stored in bytes but is represented as hex chars - each hex char represents a nibble (4 bits of data with 16 possible values)
-- There's some ambiguity when decoding bytes to nibbles - Byte <01> is an encoding of both one nibble with the value of 0001 and the 2 nibbles with values 0000 and 0001.
-- A path may have an odd or an even number of nibbles
-- We avoid this ambiguity by storing the path's parity in store and reconstruct the nibbles path based on parity.
+- A path in the tree may have an odd or an even number of nibbles
+- We avoid dealing with parity by using hex encoded strings to represent for paths. 
+- Hex encoded strings can represent nibbles paths with odd number of nibbles. Each hex char represents one nibble (4 bits of data with 16 possible values)
+- We avoid working with []byte as it can't represent a path with an odd number of nibbles without padding.
 
 ## main Node Types
 - Branch node
@@ -55,8 +55,6 @@ To find a value we can treat it as k and do an external table lookup. If the val
 - Full node: a branch node.
    
 ## Serialization and implementation nodes
-- As we use protobufs for serialization we don't need to prefix a path with the node type or the path parity as we can store these in protobuf messages.
-- This greatly simplify the implementation
 - We use a `shortNode` type to represent both leaf and extension node and 'branchNode' for branch nodes.
 - We use a `nodeContainer` type to provide a type-safe access to nodes.
 
@@ -69,9 +67,6 @@ More info here:
 - https://easythereentropy.wordpress.com/2014/06/04/understanding-the-ethereum-trie/
 - https://blog.ethereum.org/2015/11/15/merkling-in-ethereum/
 - https://github.com/ethereum/wiki/wiki/Patricia-Tree
-
-
-
 
 
 

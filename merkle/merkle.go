@@ -1,7 +1,6 @@
 package merkle
 
 import (
-	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -92,13 +91,3 @@ func NewTreeFromDb(rootHash []byte, userDataFileName string, treeDataFileName st
 	mt.root = root
 	return mt, nil
 }
-
-func (mt *merkleTreeImp) GetRootHash() []byte {
-	if mt.root == nil {
-		// special case - empty tree with no data
-		return crypto.Sha256([]byte(""))
-	} else {
-		return mt.root.getNodeHash()
-	}
-}
-
