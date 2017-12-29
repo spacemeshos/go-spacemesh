@@ -83,8 +83,7 @@ func TestLeafNodeContainer(t *testing.T) {
 	l1 := crypto.Sha256(l)
 	l1Hex := hex.EncodeToString(l1)
 
-	leaf, err := newShortNode(pb.NodeType_leaf, l1Hex, l1)
-	assert.NoErr(t, err, "failed to create leaf node")
+	leaf := newShortNode(pb.NodeType_leaf, l1Hex, l1)
 
 	data, err := leaf.marshal()
 	assert.NoErr(t, err, "failed to marshal leaf node")
@@ -133,8 +132,7 @@ func TestExtNodeContainer(t *testing.T) {
 	e1 := crypto.Sha256(e)
 	e1Hex := hex.EncodeToString(e1)
 
-	ext, err := newShortNode(pb.NodeType_extension, e1Hex, e1)
-	assert.NoErr(t, err, "failed to create ext node")
+	ext := newShortNode(pb.NodeType_extension, e1Hex, e1)
 
 	data, err := ext.marshal()
 	assert.NoErr(t, err, "failed to marshal ext node")

@@ -146,11 +146,8 @@ func (n *nodeContainerImp) marshal() ([]byte, error) {
 }
 
 func newLeftNodeContainer(path string, value []byte) (NodeContainer, error) {
-	n, err := newShortNode(pb.NodeType_leaf, path, value)
-	if err != nil {
-		return nil, err
-	}
 
+	n := newShortNode(pb.NodeType_leaf, path, value)
 	c := &nodeContainerImp{
 		nodeType: pb.NodeType_leaf,
 		leaf:     n,
@@ -160,10 +157,7 @@ func newLeftNodeContainer(path string, value []byte) (NodeContainer, error) {
 }
 
 func newExtNodeContainer(path string, value []byte) (NodeContainer, error) {
-	n, err := newShortNode(pb.NodeType_extension, path, value)
-	if err != nil {
-		return nil, err
-	}
+	n := newShortNode(pb.NodeType_extension, path, value)
 
 	c := &nodeContainerImp{
 		nodeType: pb.NodeType_extension,

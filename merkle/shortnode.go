@@ -15,21 +15,14 @@ type shortNode interface {
 	getNodeHash() []byte      // node hash - value of pointer to node
 }
 
-func newShortNode(nodeType pb.NodeType, path string, value []byte) (shortNode, error) {
+func newShortNode(nodeType pb.NodeType, path string, value []byte) shortNode {
 
-	node := &shortNodeImpl{
+	return &shortNodeImpl{
 		nodeType: nodeType,
 		path:     path,
 		value:    value,
 	}
 
-	// calc hash of marshaled node data and store
-	data, err := node.marshal()
-	if err != nil {
-		return nil, err
-	}
-	node.nodeHash = crypto.Sha256(data)
-	return node, nil
 }
 
 func newShortNodeFromData(data []byte, n *pb.Node) shortNode {
@@ -51,9 +44,22 @@ type shortNodeImpl struct {
 	nodeHash []byte
 }
 
-func (s *shortNodeImpl) getNodeHash() []byte { return s.nodeHash }
-func (s *shortNodeImpl) getValue() []byte    { return s.value }
-func (s *shortNodeImpl) isLeaf() bool        { return s.nodeType == pb.NodeType_leaf }
+func (s *shortNodeImpl) getNodeHash() []byte {
+
+	if s.nodeHash == nil || len(s.nodeHash) == 0 {
+		// calc hash based on current marshaled node data and store it
+		data, err := s.marshal()
+		if err != nil {
+			return []byte{}
+		}
+		s.nodeHash = crypto.Sha256(data)
+	}
+
+	return s.nodeHash
+}
+
+func (s *shortNodeImpl) getValue() []byte { return s.value }
+func (s *shortNodeImpl) isLeaf() bool     { return s.nodeType == pb.NodeType_leaf }
 
 func (s *shortNodeImpl) getPath() string {
 	// todo: consider parity

@@ -15,8 +15,7 @@ func TestLeafNode(t *testing.T) {
 	p1 := crypto.Sha256(v1)
 	p1Hex := hex.EncodeToString(p1)
 
-	node, err := newShortNode(pb.NodeType_leaf, p1Hex, p1)
-	assert.NoErr(t, err, "failed to create leaf node")
+	node := newShortNode(pb.NodeType_leaf, p1Hex, p1)
 
 	p := node.getPath()
 	assert.Equal(t, p1Hex, p, "expected same path")
@@ -39,8 +38,7 @@ func TestExtNode(t *testing.T) {
 	p1 := crypto.Sha256(v1)
 	p1Hex := hex.EncodeToString(p1)
 
-	node, err := newShortNode(pb.NodeType_extension, p1Hex, p1)
-	assert.NoErr(t, err, "failed to create leaf node")
+	node := newShortNode(pb.NodeType_extension, p1Hex, p1)
 
 	p := node.getPath()
 	assert.Equal(t, p1Hex, p, "expected same path")
