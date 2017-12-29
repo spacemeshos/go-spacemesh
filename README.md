@@ -14,13 +14,16 @@
 </p>
 
 ## go-spacemesh
-
-The go implementation of the [Spacemesh os](https://spacemesh.io) p2p node.
+Thanks for your interest in this open source project.
+This is the go implementation of the [Spacemesh](https://spacemesh.io) p2p node.
 Spacemesh is a decentralized blockchain computer using a new race-free consensus protocol that doesn't involve `proof of work`.
 Spacemesh is designed to build a secure decentralized network formed by a large number of desktop PCs at home.
-To learn more about SpaceMesh read our wiki pages.
+To learn more about SpaceMesh head over to our [wiki](https://github.com/spacemeshos/go-spacemesh/wiki).
 
 ### Getting
+
+install [Go 1.9.2 or later](https://golang.org/dl/) for your platform
+
 ```
 go get https://github.com/spacemeshos/go-spacemesh
 ```
@@ -30,34 +33,14 @@ or create this directory `GOPATH$/src/spacemeshos/` and clone the repo into it u
 git clone https://github.com/spacemeshos/go-spacemesh
 ```
 
-### Building
-
-
-#### Step 1 - Install the build tools
-
-Install these go tools:
-- [Govendor](https://github.com/kardianos/govendor) - for managing 3rd party deps
-- [Protoc](https://github.com/golang/protobuf) - for compiling `protobufs`
-- [Grpc-gateway plugin](https://github.com/grpc-ecosystem/grpc-gateway) - `protoc` support for grpc json-httpproxy 
-- [Go 1.9.2 or later](https://golang.org/dl/)
-```
-go get -u github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway
-go get -u github.com/grpc-ecosystem/grpc-gateway/protoc-gen-swagger
-go get -u github.com/golang/protobuf/protoc-gen-go
-```
-
-#### Step 2 - Get the dependencies
-
-We use [govendor](https://github.com/kardianos/govendor) for all 3rd party packages.
-We commit to git all 3rd party packages in the `vendor` folder so we have our own copy of versioned releases.
-To update a 3rd party package use vendor.json and govendor commands.
+Next, get the dependencies using [govendor](https://github.com/kardianos/govendor). Run this from the project root directory:
 
 ```
 go get -u github.com/kardianos/govendor
 govendor sync
 ```
 
-#### Step 3 - Build
+### Building
 
 To build `go-spacemesh` for your current system architecture use:
 
@@ -80,13 +63,6 @@ make darwin | linux | windows
 
 Platform-specific binaries are saved to the `/build` directory.
 
-To compile .proto files you need to install the [protobufs go support](https://github.com/golang/protobuf)
-After installing. You can compile a .proto file using:
-
-```
-cd pb
-protoc --go_out=. ./*.proto
-```
 
 ### Running
 
@@ -96,7 +72,7 @@ protoc --go_out=. ./*.proto
 
 ### Testing
 ```
-./go test ./...
+go test ./...
 ```
 or
 ```
@@ -129,10 +105,41 @@ We welcome contributions large and small!
 - Your code must be commented using [go commentary](https://golang.org/doc/effective_go.html#commentary)
 - **Have fun hacking away our blockchain future!**
 
-There's a few things you can do right now to help out:
+Few things you can do right now to help out:
  - Check out existing [open issues](https://github.com/spacemeshos/go-spacemesh/issues). This would be especially useful for modules in active development.
  - Add tests. There can never be enough tests.
  
 #### Next Steps...
 - Please read everything in [`/docs`](https://github.com/spacemeshos/go-spacemesh/tree/master/docs)
 
+### Got Questions? 
+- Introduce yourself and ask anything on the [spacemesh gitter channel](https://gitter.im/spacemesh-os/Lobby).
+- DM [@spacemeshhq](https://twitter.com/teamspacemesh)
+
+### Additional info
+
+#### Working with protobufs
+
+Install:
+- [Protoc with Go support](https://github.com/golang/protobuf) - for compiling `protobufs`
+- [Grpc-gateway plugin](https://github.com/grpc-ecosystem/grpc-gateway) - `protoc` support for grpc json-httpproxy 
+
+```
+go get -u github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway
+go get -u github.com/grpc-ecosystem/grpc-gateway/protoc-gen-swagger
+go get -u github.com/golang/protobuf/protoc-gen-go
+```
+
+To compile .proto files you need to install the [protobufs go support](https://github.com/golang/protobuf)
+After installing. You can compile a .proto file using:
+
+```
+cd pb
+protoc --go_out=. ./*.proto
+```
+
+#### Working with Dependencies
+
+We use [govendor](https://github.com/kardianos/govendor) for all 3rd party packages.
+We commit to git all 3rd party packages in the `vendor` folder so we have our own copy of versioned releases.
+To update a 3rd party package use vendor.json and govendor commands.

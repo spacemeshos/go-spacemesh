@@ -11,4 +11,5 @@ const (
 	ClientVersion      = "go-spacemesh-node/0.0.1"
 	NodesDirectoryName = "nodes"
 	NodeDataFileName   = "id.json"
+	NodeDbFileName     = "node.db"
 )

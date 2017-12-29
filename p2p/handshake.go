@@ -177,7 +177,6 @@ func (h *handshakeProtocolImpl) processEvents() {
 
 		case s := <-h.sessionStateChanged:
 			for _, c := range h.newSessionCallbacks {
-				// todo: verify this is legit in go - e.g. async usage of closures like this:
 				go func() { c <- s }()
 			}
 		}

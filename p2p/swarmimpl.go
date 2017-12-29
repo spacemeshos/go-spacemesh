@@ -76,6 +76,9 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 
 		outgoingSendsCallbacks: make(map[string]map[string]chan SendError),
 
+		// todo: figure optimal buffer size for chans
+		// ref: https://www.goinggo.net/2017/10/the-behavior-of-channels.html
+
 		connectionRequests: make(chan node.RemoteNodeData, 10),
 		disconnectRequests: make(chan node.RemoteNodeData, 10),
 

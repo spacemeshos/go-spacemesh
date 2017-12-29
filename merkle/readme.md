@@ -19,61 +19,56 @@ The goals of this data structure is to have o(log(n)) lookup, insert, update and
     - An external table with (k,v) pairs - this is the data domain. 
     - Another internal to hold the tree structure (p,v) - the tree can be reconstructed from this table.
 - The external table is used to get values based on their keys.
-- The internal table completely represents a Merkle tree and is used to load it to memmory and persist it.
+- The internal table completely represents a Merkle tree and is used to load it to memory and persist it.
 - The internal table keys are pointers and the values are a binary representation of a table node.
 - The values of branch nodes in the internal table are keys (k) to data-domain values if len(bin_encode(v))<256 bits or bin_encode(v) otherwise. 
 To find a value we can treat it as k and do an external table lookup. If the value is not there then k is the value. Otherwise use the value from the table.
 - First key in the internal table is the tree the root (hash)
+- Persistence should be implemented using [go-leveldb](https://github.com/syndtr/goleveldb)
 
 ## Working with nibbles
-- Data is stored in bytes but represented as hex chars - each hex char represents a nibble (4 bits of data with 16 possible values)
-- There's some ambiguity when decoding bytes to nibbles - Byte <01> is an encoding of both one nibble with the value of 0001 and the 2 nibbles with values 0000 and 0001.
-- A path may have an odd or an even number of nibbles
-- We avoid this ambiguity by encoding path's parity (odd or even) in the path binary format by prefixing a path with metadata.
+- A path in the tree may have an odd or an even number of nibbles.
+- We avoid having to deal with parity issues by using hex encoded strings to represent paths. 
+- Hex encoded strings can represent paths with odd number of nibbles as each hex char represents one nibble (4 bits of data with 16 possible values)
+- We avoid working with []byte for paths as it can't represent a path with an odd number of nibbles without padding and special handling.
 
 ## main Node Types
 - Branch node
     - A 17-items node [ v0 ... v15, value ]
     - First 16 items: A Nibbles array with one entry for each nibble (hex char). Each array index is either nil or a pointer P to a child node.
-    - value (last item): a value the terminates in the path to this node or nil.
+    - Each possible hex char in a path hex representation is represented in the array.
+    - value: a value the terminates in the path to this node or nil.
     - value is nil or k of v if bin-encode(v) > 256 bits or the bin value itself v otherwise.
 - Extension node
     - Optimization of a branch consisting of many branch nodes, each with only 1 pointer to a child.
     - A 2-item node [ encodedPath, pointer ]
-    - encodedPath - partial path from node
-    - pointer - pointer to a child node
+    - encodedPath - partial path from parent's path
+    - pointer - pointer to a child node - always an hex-encoded 256 bits hash
 - Leaf node
     - A 2-item node [ encodedPath, value ]
-    - encodedPath - partial path from node to value. Optimization.
+    - encodedPath - partial path from parent to value. Optimization.
     - Value is k of v if bin-encode(v) > 256 bits or the bin value itself v otherwise.
+- Empty node
+    - Hash is a sha3(hexStringEncode(empty-string))
+      
+- Short node: an Extension or a Leaf node.
+- Full node: a branch node.
+   
+## Serialization and implementation nodes
+- We use a `shortNode` type to represent both leaf and extension node and `branchNode` for branch nodes.
+- We use a `nodeContainer` type to provide a type-safe access to nodes.
+- We do not need to add a termination flag to value of a short node (as done in eth) as we have a notion of distinct extension and leaf nodes types.
 
-## Encoded path format
-Paths have 1 or 2 meta-data nibbles prefix.
 
-### First Nibble
+### Additional Info
+Some of the optimization ideas we use for Merkle trees are from `ethereum tries`. 
+As described above, we use our own different optimizations in some cases. For example, we do not use path prefixed metadata.
 
-| hex char |  bits   |    node type partial    |  path length |
-|------|-------------|-------------------------|--------------|
-|  0   |     0000    |       Extension         |    even      |   
-|  1   |     0001    |       Extension         |     odd      |    
-|  2   |     0010    |          Leaf           |    even      |  
-|  3   |     0011    |          Leaf           |     odd      |
-  
-### Second Nibble
-- For even paths, add another 0 padding nibble <0000> is added after the first nibble:
-- Odd path: <meta-data-nible><path-data-nibbles>
-- Event path: <meta-data-nible><0000><path-data-nibbles>
-
-### Additional Explainers
-
-The optimization ideas for Merkle trees are from `ethereum tries`. More info here:
-
+More info here:
+- js implementation of the eth Merkle tries: https://github.com/ethereumjs/merkle-patricia-tree
 - https://easythereentropy.wordpress.com/2014/06/04/understanding-the-ethereum-trie/
 - https://blog.ethereum.org/2015/11/15/merkling-in-ethereum/
 - https://github.com/ethereum/wiki/wiki/Patricia-Tree
-
-
-
 
 
 
