@@ -1,6 +1,8 @@
 package merkle
 
 import (
+	"bytes"
+	"fmt"
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/merkle/pb"
@@ -8,17 +10,17 @@ import (
 
 // An mutable branch (full) node
 type branchNode interface {
-	getValue() []byte           // value terminated in this path or nil
-	getPath(prefix byte) []byte // return pointer to child node for hex char entry or nil
-	marshal() ([]byte, error)   // to binary data
-	getNodeHash() []byte        // data hash (pointer to this node)
-
-	getAllChildNodePointers() [][]byte // get all pointers to child nodes
-	addChild(prefix string, pointer []byte) error
-	removeChild(prefix string) error
+	getValue() []byte                             // value terminated in the path to this node or nil if none exists. Value is key to use-space data
+	getPath(prefix byte) []byte                   // return pointer to child node for hex char entry or nil
+	marshal() ([]byte, error)                     // to binary data
+	getNodeHash() []byte                          // data hash (determines the pointer to this node)
+	getAllChildNodePointers() [][]byte            // get all pointers to child nodes
+	addChild(prefix string, pointer []byte) error // add a child to this node
+	removeChild(prefix string) error              // remove a child from this node
+	print() string                                // returns debug info
 }
 
-// Add a child to the node
+// Adds a child to the node
 func (b *branchNodeImpl) addChild(prefix string, pointer []byte) error {
 
 	idx, err := charToHex(string(prefix[0]))
@@ -28,13 +30,13 @@ func (b *branchNodeImpl) addChild(prefix string, pointer []byte) error {
 
 	b.entries[idx] = pointer
 
-	// reset hash
+	// reset hash so it is lazy-computed once it is needed again
 	b.nodeHash = []byte{}
 
 	return nil
 }
 
-// Remove a child to the node
+// Removes a child from the node
 func (b *branchNodeImpl) removeChild(prefix string) error {
 
 	idx, err := charToHex(string(prefix[0]))
@@ -82,6 +84,18 @@ type branchNodeImpl struct {
 	nodeHash []byte
 }
 
+func (b *branchNodeImpl) print() string {
+	buffer := bytes.Buffer{}
+	buffer.WriteString(fmt.Sprintf("Branch value: %x\n", b.value))
+	for k, v := range b.entries {
+		if len(v) > 0 {
+			buffer.WriteString(fmt.Sprintf(" [%x] = %s\n", k, v))
+		}
+	}
+
+	return buffer.String()
+}
+
 func (b *branchNodeImpl) getAllChildNodePointers() [][]byte {
 	res := make([][]byte, 0)
 	for _, val := range b.entries {
@@ -94,8 +108,7 @@ func (b *branchNodeImpl) getAllChildNodePointers() [][]byte {
 
 func (b *branchNodeImpl) getNodeHash() []byte {
 
-	if b.nodeHash == nil || len(b.nodeHash) == 0 {
-		// generate hash on dmenad
+	if b.nodeHash == nil || len(b.nodeHash) == 0 { // lazy eval
 		d, err := b.marshal()
 		if err != nil {
 			return []byte{}
@@ -106,7 +119,10 @@ func (b *branchNodeImpl) getNodeHash() []byte {
 	return b.nodeHash
 }
 
-func (b *branchNodeImpl) getValue() []byte { return b.value }
+func (b *branchNodeImpl) getValue() []byte {
+	return b.value
+}
+
 func (b *branchNodeImpl) getPath(idx byte) []byte {
 	return b.entries[idx]
 }

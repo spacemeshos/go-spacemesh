@@ -20,7 +20,6 @@ func (mt *merkleTreeImp) GetRootHash() []byte {
 
 // Returns nil when the tree is empty
 func (mt *merkleTreeImp) GetRootNode() NodeContainer {
-
 	return mt.root
 }
 
@@ -67,7 +66,7 @@ func (mt *merkleTreeImp) insert(root NodeContainer, prefix string, k string, v [
 
 	// non-empty tree
 
-	// load root direct children if they are not already loaded
+	// loaf root direct children if they are not already loaded
 	err := root.loadChildren(mt.treeData)
 	if err != nil {
 		return nil, err
@@ -79,11 +78,21 @@ func (mt *merkleTreeImp) insert(root NodeContainer, prefix string, k string, v [
 
 		// todo: implement me
 
+		// step 1: find common prefix
+
+		// step 2: create extension node with common prefix pointing to a new branch node
+
+		// step 3: create new leaf node from branch to new value and add it to branch
+
+		// step 4: add old leaf node to branch
+
+		// step 5: return branch
+
 	case pb.NodeType_branch:
 
 		// get child node for first prefix hex char - child may be null
 		k0 := string(k[0])
-		childNode := root.getChildren()[k0]
+		childNode := root.getChild(k0)
 
 		// insert value to tree rooted w childNode or to an empty tree
 		node, err := mt.insert(childNode, prefix+k0, k[1:], v)
@@ -143,16 +152,55 @@ func (mt *merkleTreeImp) persistData(userKey string, userValue []byte, node Node
 
 // remove v keyed by k from the tree
 func (mt *merkleTreeImp) Delete(k []byte) error {
-	return mt.Put(k, nil)
-}
-
-// returns true if tree contains key k
-func (mt *merkleTreeImp) Has(k []byte) (bool, error) {
-	return false, nil
+	return nil
 }
 
 // get value associated with key
-// returns false if value not found for key k
-func (mt *merkleTreeImp) Get(k []byte) ([]byte, bool) {
-	return nil, false
+// returns error on internal error. flase if not found
+func (mt *merkleTreeImp) Get(k []byte) ([]byte, bool, error) {
+	value, found, _, err := mt.get(mt.root, hex.EncodeToString(k), 0)
+	return value, found, err
+}
+
+// (origNode node, key []byte, pos int) (value []byte, newnode node, didResolve bool, err error)
+// pos - number of key hex chars already matched and the index in key to start matching from
+func (mt *merkleTreeImp) get(root NodeContainer, k string, pos int) ([]byte, bool, NodeContainer, error) {
+
+	if root == nil {
+		return nil, false, nil, nil
+	}
+
+	root.loadChildren(mt.treeData)
+
+	switch root.getNodeType() {
+
+	case pb.NodeType_branch:
+
+		childNode := root.getChild(string(k[0]))
+		return mt.get(childNode, k, pos+1)
+
+	case pb.NodeType_extension:
+
+		// extension node partial path
+		path := root.getExtNode().getPath()
+		if len(k)-pos < len(path) || path != k[pos:pos+len(path)] {
+			return nil, false, nil, nil
+		}
+
+		pointer := hex.EncodeToString(root.getExtNode().getValue())
+		child := root.getChild(pointer)
+		return mt.get(child, k, pos+len(path))
+
+	case pb.NodeType_leaf:
+
+		p := root.getLeafNode().getPath()
+		if len(k)-pos < len(p) || p != k[pos:pos+len(p)] {
+			return nil, false, nil, nil
+		}
+
+		// found
+		return root.getLeafNode().getValue(), true, root, nil
+	}
+
+	return nil, false, nil, nil
 }

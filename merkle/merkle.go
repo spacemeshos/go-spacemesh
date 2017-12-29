@@ -5,11 +5,12 @@ import (
 )
 
 // A general-purpose merkle tree backed by (k,v) stores
+// All (k,v) methods are in user data space and not in tree space.
+// Tree space pointers and paths are internal only.
 type MerkleTree interface {
 	Put(k, v []byte) error
 	Delete(k []byte) error
-	Has(k []byte) (bool, error)
-	Get(k []byte) ([]byte, bool)
+	Get(k []byte) ([]byte, bool, error)
 	GetRootHash() []byte
 	GetRootNode() NodeContainer
 }
@@ -49,8 +50,7 @@ func NewEmptyTree(userDataFileName string, treeDataFileName string) (MerkleTree,
 // rootHash: tree root hash - used to pull the root from the db
 // userDataFileName: full local os path and file name for user data db for this tree
 // treeDataFileName: full local os path and file name for the internal tree db store for this tree
-// loadChilds: set to true to load all the tree to memory. Set to false for lazy loading of nodes from the db
-func NewTreeFromDb(rootHash []byte, userDataFileName string, treeDataFileName string, loadChilds bool) (MerkleTree, error) {
+func NewTreeFromDb(rootHash []byte, userDataFileName string, treeDataFileName string) (MerkleTree, error) {
 
 	userData, err := leveldb.OpenFile(userDataFileName, nil)
 	if err != nil {
@@ -78,14 +78,6 @@ func NewTreeFromDb(rootHash []byte, userDataFileName string, treeDataFileName st
 	root, err := newNodeFromData(data)
 	if err != nil {
 		return nil, err
-	}
-
-	// load all tree nodes to memory if requested
-	if loadChilds {
-		err = root.loadChildren(treeData)
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	mt.root = root

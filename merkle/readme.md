@@ -42,8 +42,8 @@ To find a value we can treat it as k and do an external table lookup. If the val
 - Extension node
     - Optimization of a branch consisting of many branch nodes, each with only 1 pointer to a child.
     - A 2-item node [ encodedPath, pointer ]
-    - encodedPath - partial path from parent
-    - pointer - pointer to a child node
+    - encodedPath - partial path from parent's path
+    - pointer - pointer to a child node - always an hex-encoded 256 bits hash
 - Leaf node
     - A 2-item node [ encodedPath, value ]
     - encodedPath - partial path from parent to value. Optimization.
@@ -55,15 +55,17 @@ To find a value we can treat it as k and do an external table lookup. If the val
 - Full node: a branch node.
    
 ## Serialization and implementation nodes
-- We use a `shortNode` type to represent both leaf and extension node and 'branchNode' for branch nodes.
+- We use a `shortNode` type to represent both leaf and extension node and `branchNode` for branch nodes.
 - We use a `nodeContainer` type to provide a type-safe access to nodes.
+- We do not need to add a termination flag to value of a short node (as done in eth) as we have a notion of distinct extension and leaf nodes types.
 
-### Additional Explainers
+
+### Additional Info
 Some of the optimization ideas we use for Merkle trees are from `ethereum tries`. 
 As described above, we use our own different optimizations in some cases. For example, we do not use path prefixed metadata.
 
 More info here:
-
+- js implementation of the eth Merkle tries: https://github.com/ethereumjs/merkle-patricia-tree
 - https://easythereentropy.wordpress.com/2014/06/04/understanding-the-ethereum-trie/
 - https://blog.ethereum.org/2015/11/15/merkling-in-ethereum/
 - https://github.com/ethereum/wiki/wiki/Patricia-Tree

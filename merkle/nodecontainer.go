@@ -16,9 +16,10 @@ type NodeContainer interface {
 	getBranchNode() branchNode
 	marshal() ([]byte, error) // get binary encoded marshaled node data
 	getNodeHash() []byte
-	loadChildren(db *leveldb.DB) error // load all children from db
 
-	getChildren() map[string]NodeContainer
+	loadChildren(db *leveldb.DB) error // load all direct children from store
+
+	getChild(key string) NodeContainer
 
 	addBranchChild(prefix string, child NodeContainer) error
 	removeBranchChild(prefix string) error
@@ -30,6 +31,7 @@ type nodeContainerImp struct {
 	branch   branchNode  // branch node data or nil
 	ext      shortNode   // ext node data or nil
 
+	// note that this hold child of branch node or of an extension node
 	children map[string]NodeContainer // k -pointer to child node (hex encoded). v- child
 }
 
@@ -41,8 +43,8 @@ func (n *nodeContainerImp) removeBranchChild(prefix string) error {
 	return n.getBranchNode().removeChild(prefix)
 }
 
-func (n *nodeContainerImp) getChildren() map[string]NodeContainer {
-	return n.children
+func (n *nodeContainerImp) getChild(key string) NodeContainer {
+	return n.children[key]
 }
 
 func (n *nodeContainerImp) getNodeType() pb.NodeType {
@@ -113,7 +115,6 @@ func (n *nodeContainerImp) loadChildren(db *leveldb.DB) error {
 			}
 			n.children[hex.EncodeToString(key)] = node
 		}
-
 	}
 
 	return nil

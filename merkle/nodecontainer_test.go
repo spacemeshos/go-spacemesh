@@ -9,6 +9,13 @@ import (
 	"testing"
 )
 
+func TestChildren(t *testing.T) {
+
+	// test adding a child to a branch node
+
+	// test getting child of extension of branch node
+}
+
 func TestBranchNodeContainer(t *testing.T) {
 
 	// create a branch node
