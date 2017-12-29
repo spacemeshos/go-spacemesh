@@ -27,7 +27,7 @@ func (mt *merkleTreeImp) GetRootNode() NodeContainer {
 func (mt *merkleTreeImp) Put(k, v []byte) error {
 
 	if len(v) == 0 || len(k) == 0 {
-		return errors.New("Expected non-empty k,v")
+		return errors.New("expected non-empty k,v")
 	}
 
 	keyStr := hex.EncodeToString(k)
@@ -50,7 +50,7 @@ func (mt *merkleTreeImp) Put(k, v []byte) error {
 func (mt *merkleTreeImp) insert(root NodeContainer, prefix string, k string, v []byte) (NodeContainer, error) {
 
 	if root == nil {
-		node, err := newLeftNodeContainer(k, v)
+		node, err := newLeftNodeContainer(k, v, nil)
 		if err != nil {
 			return nil, err
 		}

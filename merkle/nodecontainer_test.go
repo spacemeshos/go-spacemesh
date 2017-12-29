@@ -46,7 +46,7 @@ func TestBranchNodeContainer(t *testing.T) {
 	bData, err := b.marshal()
 	assert.NoErr(t, err, "failed to marshal branch node")
 
-	node, err := newNodeFromData(bData)
+	node, err := newNodeFromData(bData, nil)
 	assert.NoErr(t, err, "failed to create node container from branch node")
 
 	assert.True(t, node.getNodeType() == pb.NodeType_branch, "expected branch")
@@ -64,7 +64,7 @@ func TestBranchNodeContainer(t *testing.T) {
 	hash := node.getNodeHash()
 	assert.True(t, bytes.Equal(crypto.Sha256(data), hash), "hash mismatch")
 
-	node1, err := newBranchNodeContainer(entries, k3)
+	node1, err := newBranchNodeContainer(entries, k3, nil)
 	assert.NoErr(t, err, "failed to create branch node")
 
 	assert.True(t, node1.getNodeType() == pb.NodeType_branch, "expected branch")
@@ -95,7 +95,7 @@ func TestLeafNodeContainer(t *testing.T) {
 	data, err := leaf.marshal()
 	assert.NoErr(t, err, "failed to marshal leaf node")
 
-	node, err := newNodeFromData(data)
+	node, err := newNodeFromData(data, nil)
 	assert.NoErr(t, err, "failed to create node container from leaf node")
 
 	assert.True(t, node.getNodeType() == pb.NodeType_leaf, "expected leaf")
@@ -112,7 +112,7 @@ func TestLeafNodeContainer(t *testing.T) {
 	hash := node.getNodeHash()
 	assert.True(t, bytes.Equal(crypto.Sha256(data1), hash), "hash mismatch")
 
-	node1, err := newLeftNodeContainer(l1Hex, l1)
+	node1, err := newLeftNodeContainer(l1Hex, l1, nil)
 	assert.NoErr(t, err, "failed to create node container from leaf node")
 
 	assert.True(t, node1.getNodeType() == pb.NodeType_leaf, "expected leaf")
@@ -144,7 +144,7 @@ func TestExtNodeContainer(t *testing.T) {
 	data, err := ext.marshal()
 	assert.NoErr(t, err, "failed to marshal ext node")
 
-	node, err := newNodeFromData(data)
+	node, err := newNodeFromData(data, nil)
 	assert.NoErr(t, err, "failed to create node container from ext node")
 
 	assert.True(t, node.getNodeType() == pb.NodeType_extension, "expected ext")
@@ -161,7 +161,7 @@ func TestExtNodeContainer(t *testing.T) {
 	hash := node.getNodeHash()
 	assert.True(t, bytes.Equal(crypto.Sha256(data1), hash), "hash mismatch")
 
-	node1, err := newExtNodeContainer(e1Hex, e1)
+	node1, err := newExtNodeContainer(e1Hex, e1, nil)
 	assert.NoErr(t, err, "failed to create node container from ext node")
 
 	assert.True(t, node1.getNodeType() == pb.NodeType_extension, "expected ext")

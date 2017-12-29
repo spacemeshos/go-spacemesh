@@ -7,7 +7,7 @@ import (
 )
 
 var (
-// todo: add all command vars here (commands w no need for factory
+// todo: add all command vars here (commands w no need for factory)
 )
 
 // Command factory function - this is an example for an app cli command

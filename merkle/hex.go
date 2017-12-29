@@ -1,7 +1,5 @@
 package merkle
 
-import "errors"
-
 // fromHexChar converts a hex character into its value and a success flag.
 // Adapted from https://golang.org/src/encoding/hex/hex.go - too bad it is private
 func fromHexChar(c byte) (byte, bool) {

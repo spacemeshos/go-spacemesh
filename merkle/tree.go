@@ -8,13 +8,14 @@ import (
 // All (k,v) methods are in user data space and not in tree space.
 // Tree space pointers and paths are internal only.
 type MerkleTree interface {
-	Put(k, v []byte) error
-	Delete(k []byte) error
-	Get(k []byte) ([]byte, bool, error)
-	GetRootHash() []byte
-	GetRootNode() NodeContainer
+	Put(k, v []byte) error              // store user value
+	Delete(k []byte) error              // delete value indexed by key
+	Get(k []byte) ([]byte, bool, error) // get value indexed by key
+	GetRootHash() []byte                // get tree root hash
+	GetRootNode() NodeContainer         // get root node
 }
 
+// internal implementation
 type merkleTreeImp struct {
 	userData *leveldb.DB
 	treeData *leveldb.DB
@@ -75,7 +76,7 @@ func NewTreeFromDb(rootHash []byte, userDataFileName string, treeDataFileName st
 		return nil, err
 	}
 
-	root, err := newNodeFromData(data)
+	root, err := newNodeFromData(data, nil)
 	if err != nil {
 		return nil, err
 	}
