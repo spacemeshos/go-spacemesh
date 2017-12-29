@@ -16,18 +16,33 @@ type NodeContainer interface {
 	getBranchNode() branchNode
 	marshal() ([]byte, error) // get binary encoded marshaled node data
 	getNodeHash() []byte
-	loadedChildren() bool              // returns true iff child nodes loaded to memory
 	loadChildren(db *leveldb.DB) error // load all children from db
+
+	getChildren() map[string]NodeContainer
+
+	addBranchChild(prefix string, child NodeContainer) error
+	removeBranchChild(prefix string) error
 }
 
 type nodeContainerImp struct {
-	nodeType       pb.NodeType // contained node type
-	leaf           shortNode   // lead node data or nil
-	branch         branchNode  // branch node data or nil
-	ext            shortNode   // ext node data or nil
-	childrenLoaded bool        // indicates if children loaded from db
+	nodeType pb.NodeType // contained node type
+	leaf     shortNode   // lead node data or nil
+	branch   branchNode  // branch node data or nil
+	ext      shortNode   // ext node data or nil
 
 	children map[string]NodeContainer // k -pointer to child node (hex encoded). v- child
+}
+
+func (n *nodeContainerImp) addBranchChild(prefix string, child NodeContainer) error {
+	return n.getBranchNode().addChild(prefix, child.getNodeHash())
+}
+
+func (n *nodeContainerImp) removeBranchChild(prefix string) error {
+	return n.getBranchNode().removeChild(prefix)
+}
+
+func (n *nodeContainerImp) getChildren() map[string]NodeContainer {
+	return n.children
 }
 
 func (n *nodeContainerImp) getNodeType() pb.NodeType {
@@ -46,17 +61,8 @@ func (n *nodeContainerImp) getBranchNode() branchNode {
 	return n.branch
 }
 
-func (n *nodeContainerImp) loadedChildren() bool {
-	return n.childrenLoaded
-}
-
-// loads all node childrens to memory from the db
-// calling this on a root will load the entire tree to memory
-
+// load node's direct child node(s)
 func (n *nodeContainerImp) loadChildren(db *leveldb.DB) error {
-
-	// mark this node as child loaded when done
-	defer func() { n.childrenLoaded = true }()
 
 	if n.nodeType == pb.NodeType_leaf {
 		// leaves are childless
@@ -67,24 +73,36 @@ func (n *nodeContainerImp) loadChildren(db *leveldb.DB) error {
 
 		// value in an extension node is a pointer to child - load it
 		key := n.ext.getValue()
+
+		if n.children[hex.EncodeToString(key)] != nil {
+			// already loaded this child
+			return nil
+		}
+
 		data, err := db.Get(key, nil)
 		if err != nil {
 			return err
 		}
 
-		node, err := newNodeFromData(data)
+		child, err := newNodeFromData(data)
 		if err != nil {
 			return err
 		}
 
-		n.children[hex.EncodeToString(key)] = node
-		return node.loadChildren(db)
+		n.children[hex.EncodeToString(key)] = child
+		return nil
 	}
 
 	if n.nodeType == pb.NodeType_branch {
 
 		keys := n.branch.getAllChildNodePointers()
 		for _, key := range keys {
+
+			if n.children[hex.EncodeToString(key)] != nil {
+				// already loaded this child
+				continue
+			}
+
 			data, err := db.Get(key, nil)
 			if err != nil {
 				return err
@@ -135,7 +153,7 @@ func newLeftNodeContainer(path string, value []byte) (NodeContainer, error) {
 
 	c := &nodeContainerImp{
 		nodeType: pb.NodeType_leaf,
-		leaf: n,
+		leaf:     n,
 		children: make(map[string]NodeContainer),
 	}
 	return c, nil
@@ -149,27 +167,24 @@ func newExtNodeContainer(path string, value []byte) (NodeContainer, error) {
 
 	c := &nodeContainerImp{
 		nodeType: pb.NodeType_extension,
-		ext: n,
+		ext:      n,
 		children: make(map[string]NodeContainer),
 	}
 	return c, nil
 }
 
 func newBranchNodeContainer(entries map[byte][]byte, value []byte) (NodeContainer, error) {
-	n, err := newBranchNode(entries, value)
-	if err != nil {
-		return nil, err
-	}
+
+	n := newBranchNode(entries, value)
 
 	c := &nodeContainerImp{
 		nodeType: pb.NodeType_branch,
-		branch: n,
+		branch:   n,
 		children: make(map[string]NodeContainer),
 	}
 
 	return c, nil
 }
-
 
 func newNodeFromData(data []byte) (NodeContainer, error) {
 

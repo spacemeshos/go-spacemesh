@@ -31,8 +31,7 @@ func TestBranchNodeCreation(t *testing.T) {
 	entries[p1Val] = p1
 	entries[p2Val] = p2
 
-	node, err := newBranchNode(entries, k3)
-	assert.NoErr(t, err, "failed to create branch node")
+	node := newBranchNode(entries, k3)
 
 	value := node.getValue()
 	assert.True(t, bytes.Equal(k3, value), "unexpected node value")

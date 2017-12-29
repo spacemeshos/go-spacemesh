@@ -6,35 +6,58 @@ import (
 	"github.com/spacemeshos/go-spacemesh/merkle/pb"
 )
 
-// An immutable branch (full) node
+// An mutable branch (full) node
 type branchNode interface {
-	getValue() []byte          // value terminated in this path or nil
-	getPath(entry byte) []byte // return pointer to child node for hex char entry or nil
-	marshal() ([]byte, error)  // to binary data
-	getNodeHash() []byte       // data hash (pointer to this node)
+	getValue() []byte           // value terminated in this path or nil
+	getPath(prefix byte) []byte // return pointer to child node for hex char entry or nil
+	marshal() ([]byte, error)   // to binary data
+	getNodeHash() []byte        // data hash (pointer to this node)
 
 	getAllChildNodePointers() [][]byte // get all pointers to child nodes
+	addChild(prefix string, pointer []byte) error
+	removeChild(prefix string) error
 }
 
-// Creates a new branchNode from provided data
+// Add a child to the node
+func (b *branchNodeImpl) addChild(prefix string, pointer []byte) error {
 
-func newBranchNode(entries map[byte][]byte, value []byte) (branchNode, error) {
+	idx, err := charToHex(string(prefix[0]))
+	if err != nil {
+		return err
+	}
 
-	node := &branchNodeImpl{
+	b.entries[idx] = pointer
+
+	// reset hash
+	b.nodeHash = []byte{}
+
+	return nil
+}
+
+// Remove a child to the node
+func (b *branchNodeImpl) removeChild(prefix string) error {
+
+	idx, err := charToHex(string(prefix[0]))
+	if err != nil {
+		return err
+	}
+
+	delete(b.entries, idx)
+
+	// reset hash
+	b.nodeHash = []byte{}
+
+	return nil
+}
+
+func newBranchNode(entries map[byte][]byte, value []byte) branchNode {
+	return &branchNodeImpl{
 		value:   value,
 		entries: entries,
 	}
-
-	// Marshal the data to generate the node's hash
-	d, err := node.marshal()
-	if err != nil {
-		return nil, err
-	}
-	node.nodeHash = crypto.Sha256(d)
-	return node, nil
 }
 
-// Createss a new branch node from persisted branch node data
+// Creates a new branch node from persisted branch node data
 func newBranchNodeFromPersistedData(rawData []byte, data *pb.Node) branchNode {
 
 	n := &branchNodeImpl{
@@ -70,6 +93,16 @@ func (b *branchNodeImpl) getAllChildNodePointers() [][]byte {
 }
 
 func (b *branchNodeImpl) getNodeHash() []byte {
+
+	if b.nodeHash == nil || len(b.nodeHash) == 0 {
+		// generate hash on dmenad
+		d, err := b.marshal()
+		if err != nil {
+			return []byte{}
+		}
+		b.nodeHash = crypto.Sha256(d)
+	}
+
 	return b.nodeHash
 }
 

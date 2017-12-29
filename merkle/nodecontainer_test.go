@@ -33,8 +33,7 @@ func TestBranchNodeContainer(t *testing.T) {
 	entries[p1Val] = p1
 	entries[p2Val] = p2
 
-	b, err := newBranchNode(entries, k3)
-	assert.NoErr(t, err, "failed to create branch node")
+	b := newBranchNode(entries, k3)
 
 	// branch node container
 	bData, err := b.marshal()
@@ -156,7 +155,6 @@ func TestExtNodeContainer(t *testing.T) {
 
 	hash := node.getNodeHash()
 	assert.True(t, bytes.Equal(crypto.Sha256(data1), hash), "hash mismatch")
-
 
 	node1, err := newExtNodeContainer(e1Hex, e1)
 	assert.NoErr(t, err, "failed to create node container from ext node")
