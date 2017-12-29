@@ -54,9 +54,15 @@ func (b *branchNodeImpl) removeChild(prefix string) error {
 }
 
 func newBranchNode(entries map[byte][]byte, value []byte) branchNode {
+
+	e := entries
+	if e == nil {
+		e = make(map[byte][]byte)
+	}
+
 	return &branchNodeImpl{
 		value:   value,
-		entries: entries,
+		entries: e,
 	}
 }
 

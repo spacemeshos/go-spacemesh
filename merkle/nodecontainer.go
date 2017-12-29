@@ -28,7 +28,6 @@ type NodeContainer interface {
 
 	getParent() NodeContainer
 	setParent(p NodeContainer)
-
 }
 
 type nodeContainerImp struct {
