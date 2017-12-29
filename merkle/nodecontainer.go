@@ -36,10 +36,18 @@ type nodeContainerImp struct {
 }
 
 func (n *nodeContainerImp) addBranchChild(prefix string, child NodeContainer) error {
+	if n.getNodeType() != pb.NodeType_branch {
+		return errors.New("node is not a branch node")
+	}
+
 	return n.getBranchNode().addChild(prefix, child.getNodeHash())
 }
 
 func (n *nodeContainerImp) removeBranchChild(prefix string) error {
+	if n.getNodeType() != pb.NodeType_branch {
+		return errors.New("node is not a branch node")
+	}
+
 	return n.getBranchNode().removeChild(prefix)
 }
 
@@ -63,7 +71,7 @@ func (n *nodeContainerImp) getBranchNode() branchNode {
 	return n.branch
 }
 
-// load node's direct child node(s)
+// Loads node's direct child node(s) to memory from store
 func (n *nodeContainerImp) loadChildren(db *leveldb.DB) error {
 
 	if n.nodeType == pb.NodeType_leaf {

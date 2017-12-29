@@ -37,7 +37,7 @@ To find a value we can treat it as k and do an external table lookup. If the val
     - A 17-items node [ v0 ... v15, value ]
     - First 16 items: A Nibbles array with one entry for each nibble (hex char). Each array index is either nil or a pointer P to a child node.
     - Each possible hex char in a path hex representation is represented in the array.
-    - value (last item): a value the terminates in the path to this node or nil.
+    - value: a value the terminates in the path to this node or nil.
     - value is nil or k of v if bin-encode(v) > 256 bits or the bin value itself v otherwise.
 - Extension node
     - Optimization of a branch consisting of many branch nodes, each with only 1 pointer to a child.

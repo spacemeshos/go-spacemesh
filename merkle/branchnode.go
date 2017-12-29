@@ -123,6 +123,8 @@ func (b *branchNodeImpl) getValue() []byte {
 	return b.value
 }
 
+
+
 func (b *branchNodeImpl) getPath(idx byte) []byte {
 	return b.entries[idx]
 }

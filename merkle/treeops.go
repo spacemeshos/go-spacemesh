@@ -44,8 +44,9 @@ func (mt *merkleTreeImp) Put(k, v []byte) error {
 
 // Inserts (k,v) to the tree
 // root: current tree (or subtree) root or nil if tree is empty
-// k: hex-encoded key to value from root
+// k: hex-encoded value's key
 // prefix: path to root
+
 // returns new root if inserted or error otherwise
 func (mt *merkleTreeImp) insert(root NodeContainer, prefix string, k string, v []byte) (NodeContainer, error) {
 
@@ -65,8 +66,7 @@ func (mt *merkleTreeImp) insert(root NodeContainer, prefix string, k string, v [
 	}
 
 	// non-empty tree
-
-	// loaf root direct children if they are not already loaded
+	// load root direct children if they are not already loaded
 	err := root.loadChildren(mt.treeData)
 	if err != nil {
 		return nil, err
@@ -90,26 +90,41 @@ func (mt *merkleTreeImp) insert(root NodeContainer, prefix string, k string, v [
 
 	case pb.NodeType_branch:
 
+		if len(prefix) == len(k) {
+			// we matched the whole key - save value at branch value field
+		}
+
 		// get child node for first prefix hex char - child may be null
-		k0 := string(k[0])
+		k0 := string(k[len(prefix)])
 		childNode := root.getChild(k0)
 
 		// insert value to tree rooted w childNode or to an empty tree
-		node, err := mt.insert(childNode, prefix+k0, k[1:], v)
+		node, err := mt.insert(childNode, prefix + k0, k, v)
 		if err != nil {
 			return nil, err
 		}
+
+		// save the key as hash is about to change
+		oldKey := root.getNodeHash()
+
+		// as it is about to change
 
 		err = root.addBranchChild(k0, node)
 		if err != nil {
 			return nil, err
 		}
 
+		// todo: when a branch node changes, all the pointers from it up to the root change
+		// and needs to get updated to keep the trie correct - is this post-processing or recursive?
+
 		// branch node changed so persist it
 		err = mt.persistData(k, v, root)
 		if err != nil {
 			return nil, err
 		}
+
+		// remove root from keystore indexed by its older hash - it is now saved with the new hash
+		mt.treeData.Delete(oldKey, nil)
 
 		return root, nil
 
@@ -121,8 +136,10 @@ func (mt *merkleTreeImp) insert(root NodeContainer, prefix string, k string, v [
 	return nil, nil
 }
 
-// Persist user and tree data for given (userKey, userValue) and NodeContainer
-// string - hex encoded key
+// Persists user and tree data for given (userKey, userValue) and a NodeContainer (tree-space node)
+// userKey: hex encoded user-space key
+// userValue: value to store in the user db
+// node: tree node to store in the tree db
 func (mt *merkleTreeImp) persistData(userKey string, userValue []byte, node NodeContainer) error {
 
 	nodeKey := node.getNodeHash()
@@ -158,8 +175,24 @@ func (mt *merkleTreeImp) Delete(k []byte) error {
 // get value associated with key
 // returns error on internal error. flase if not found
 func (mt *merkleTreeImp) Get(k []byte) ([]byte, bool, error) {
-	value, found, _, err := mt.get(mt.root, hex.EncodeToString(k), 0)
-	return value, found, err
+
+	// get the tree stored user data key to the value
+	key, found, _, err := mt.get(mt.root, hex.EncodeToString(k), 0)
+	if err != nil {
+		return nil, false, err
+	}
+
+	if !found {
+		return nil, false, nil
+	}
+
+	// pull the data from the user data store
+	value, err := mt.userData.Get(key, nil)
+	if err != nil {
+		return nil, false, err
+	}
+
+	return value, true, err
 }
 
 // (origNode node, key []byte, pos int) (value []byte, newnode node, didResolve bool, err error)
@@ -175,6 +208,11 @@ func (mt *merkleTreeImp) get(root NodeContainer, k string, pos int) ([]byte, boo
 	switch root.getNodeType() {
 
 	case pb.NodeType_branch:
+
+		if pos == len(k) -1 {
+			// return branch node value terminated at this path
+			return root.getBranchNode().getValue(), true, root, nil
+		}
 
 		childNode := root.getChild(string(k[0]))
 		return mt.get(childNode, k, pos+1)
