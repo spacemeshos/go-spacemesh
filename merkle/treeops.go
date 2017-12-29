@@ -38,7 +38,6 @@ func (mt *merkleTreeImp) Put(k, v []byte) error {
 	}
 
 	mt.root = newRoot
-
 	return nil
 }
 
@@ -50,14 +49,11 @@ func (mt *merkleTreeImp) Put(k, v []byte) error {
 // returns new root if inserted or error otherwise
 func (mt *merkleTreeImp) insert(root NodeContainer, prefix string, k string, v []byte) (NodeContainer, error) {
 
-	if root == nil { // empty tree case
-
-		// new root is a leaf node
+	if root == nil {
 		node, err := newLeftNodeContainer(k, v)
 		if err != nil {
 			return nil, err
 		}
-
 		err = mt.persistData(k, v, node)
 		if err != nil {
 			return nil, err
@@ -65,8 +61,7 @@ func (mt *merkleTreeImp) insert(root NodeContainer, prefix string, k string, v [
 		return node, nil
 	}
 
-	// non-empty tree
-	// load root direct children if they are not already loaded
+	// non-empty tree  - load root direct children if they are not already loaded
 	err := root.loadChildren(mt.treeData)
 	if err != nil {
 		return nil, err
@@ -90,28 +85,27 @@ func (mt *merkleTreeImp) insert(root NodeContainer, prefix string, k string, v [
 
 	case pb.NodeType_branch:
 
-		if len(prefix) == len(k) {
-			// we matched the whole key - save value at branch value field
-		}
-
-		// get child node for first prefix hex char - child may be null
-		k0 := string(k[len(prefix)])
-		childNode := root.getChild(k0)
-
-		// insert value to tree rooted w childNode or to an empty tree
-		node, err := mt.insert(childNode, prefix + k0, k, v)
-		if err != nil {
-			return nil, err
-		}
-
 		// save the key as hash is about to change
 		oldKey := root.getNodeHash()
 
-		// as it is about to change
+		if len(prefix) == len(k) {
+			// we matched the whole key and got to a branch node - save value in the value field
+			root.getBranchNode().setValue(v)
+		} else {
+			// get child node for first prefix hex char - child may be nil
+			idx := string(k[len(prefix)])
+			childNode := root.getChild(idx)
 
-		err = root.addBranchChild(k0, node)
-		if err != nil {
-			return nil, err
+			// insert value to tree rooted w childNode or to an empty tree
+			node, err := mt.insert(childNode, prefix+idx, k, v)
+			if err != nil {
+				return nil, err
+			}
+
+			err = root.addBranchChild(idx, node)
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		// todo: when a branch node changes, all the pointers from it up to the root change
@@ -124,7 +118,10 @@ func (mt *merkleTreeImp) insert(root NodeContainer, prefix string, k string, v [
 		}
 
 		// remove root from keystore indexed by its older hash - it is now saved with the new hash
-		mt.treeData.Delete(oldKey, nil)
+		err = mt.treeData.Delete(oldKey, nil)
+		if err != nil {
+			return nil, err
+		}
 
 		return root, nil
 
@@ -209,7 +206,7 @@ func (mt *merkleTreeImp) get(root NodeContainer, k string, pos int) ([]byte, boo
 
 	case pb.NodeType_branch:
 
-		if pos == len(k) -1 {
+		if pos == len(k)-1 {
 			// return branch node value terminated at this path
 			return root.getBranchNode().getValue(), true, root, nil
 		}

@@ -22,15 +22,15 @@ func TestBranchNodeContainer(t *testing.T) {
 	v1 := []byte("fake node 1")
 	p1 := crypto.Sha256(v1)
 	p1Hex := hex.EncodeToString(p1)
-	p1Val, err := charToHex(string(p1Hex[0]))
-	assert.NoErr(t, err, "failed to get first hex char")
+	p1Val, ok := fromHexChar(p1Hex[0])
+	assert.True(t, ok, "failed to get first hex char")
 	assert.Equal(t, p1Val, byte(8), "unexpected value")
 
 	v2 := []byte("fake node 2")
 	p2 := crypto.Sha256(v2)
 	p2Hex := hex.EncodeToString(p2)
-	p2Val, err := charToHex(string(p2Hex[0]))
-	assert.NoErr(t, err, "failed to get first hex char")
+	p2Val, ok := fromHexChar(p2Hex[0])
+	assert.True(t, ok, "failed to get first hex char")
 	assert.Equal(t, p2Val, byte(2), "unexpected value")
 
 	v3 := []byte("some user data") // user data

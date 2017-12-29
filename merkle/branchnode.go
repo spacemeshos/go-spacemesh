@@ -11,6 +11,7 @@ import (
 // An mutable branch (full) node
 type branchNode interface {
 	getValue() []byte                             // value terminated in the path to this node or nil if none exists. Value is key to use-space data
+	setValue(v []byte)                            // set the branch value
 	getPath(prefix byte) []byte                   // return pointer to child node for hex char entry or nil
 	marshal() ([]byte, error)                     // to binary data
 	getNodeHash() []byte                          // data hash (determines the pointer to this node)
@@ -23,9 +24,9 @@ type branchNode interface {
 // Adds a child to the node
 func (b *branchNodeImpl) addChild(prefix string, pointer []byte) error {
 
-	idx, err := charToHex(string(prefix[0]))
-	if err != nil {
-		return err
+	idx, ok := fromHexChar(prefix[0])
+	if !ok {
+		return ErrorInvalidHexChar
 	}
 
 	b.entries[idx] = pointer
@@ -39,9 +40,9 @@ func (b *branchNodeImpl) addChild(prefix string, pointer []byte) error {
 // Removes a child from the node
 func (b *branchNodeImpl) removeChild(prefix string) error {
 
-	idx, err := charToHex(string(prefix[0]))
-	if err != nil {
-		return err
+	idx, ok := fromHexChar(prefix[0])
+	if !ok {
+		return ErrorInvalidHexChar
 	}
 
 	delete(b.entries, idx)
@@ -123,7 +124,12 @@ func (b *branchNodeImpl) getValue() []byte {
 	return b.value
 }
 
+func (b *branchNodeImpl) setValue(v []byte) {
+	b.value = v
 
+	// invalidate node hash as its content just changed
+	b.nodeHash = []byte{}
+}
 
 func (b *branchNodeImpl) getPath(idx byte) []byte {
 	return b.entries[idx]

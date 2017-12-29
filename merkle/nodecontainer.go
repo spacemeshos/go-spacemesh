@@ -9,6 +9,8 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
+var ErrorInvalidHexChar = errors.New("Invalid hex char")
+
 type NodeContainer interface {
 	getNodeType() pb.NodeType
 	getLeafNode() shortNode
