@@ -180,7 +180,7 @@ func (app *SpaceMeshApp) startSpaceMeshNode(ctx *cli.Context) error {
 
 	log.Info("Starting local node...")
 	port := *nodeparams.LocalTcpPortFlag.Destination
-	address := fmt.Sprintf("localhost:%d", port)
+	address := fmt.Sprintf("0.0.0.0:%d", port)
 
 	// start a new node passing the app-wide node config values and persist it to store
 	// so future sessions use the same local node id
@@ -205,7 +205,7 @@ func (app *SpaceMeshApp) startSpaceMeshNode(ctx *cli.Context) error {
 
 	// start api servers
 	if conf.StartGrpcServer || conf.StartJsonServer {
-		// start grpc if specified or if json rpc specfied
+		// start grpc if specified or if json rpc specified
 		app.grpcApiService = api.NewGrpcService()
 		app.grpcApiService.StartService()
 	}

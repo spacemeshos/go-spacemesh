@@ -9,9 +9,10 @@ import (
 )
 
 // RoutingTable manages routing to peers
-// All methods visible to externals packages are thread-safe
+// All uppercase methods visible to externals packages are thread-safe
 // Don't call package-level methods (lower-case) - they are private not thread-safe
-// Design spec: 'Kademlia: A Design Specification' with most recently active nodes at the top of each bucket
+// Design spec: 'Kademlia: A Design Specification' with most-recently active nodes at the front of each bucket and not the back.
+// http://xlattice.sourceforge.net/components/protocol/kademlia/specs.html
 type RoutingTable interface {
 
 	// table ops
@@ -264,7 +265,8 @@ func (rt *routingTableImpl) processEvents() {
 	}
 }
 
-// String representation of a pointer
+// String representation of a go pointer
+// Used to create string keys of unique objects
 func getMemoryAddress(p interface{}) string {
 	return fmt.Sprintf("%p", p)
 }
@@ -290,7 +292,7 @@ func (rt *routingTableImpl) update(p node.RemoteNodeData) {
 
 	if bucket.Has(p) {
 		// Move this node to the front as it is the most recently active
-		// Active nodes shiuld be in the front of their buckets and least active one at the back
+		// Active nodes should be in the front of their buckets and least active one at the back
 		bucket.MoveToFront(p)
 		return
 	}
