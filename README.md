@@ -112,6 +112,10 @@ Few things you can do right now to help out:
 #### Next Steps...
 - Please read everything in [`/docs`](https://github.com/spacemeshos/go-spacemesh/tree/master/docs)
 
+### Got Questions? 
+- Introduce yourself and ask anything on the [spacemesh gitter channel](https://gitter.im/spacemesh-os/Lobby).
+- DM [@spacemeshhq](https://twitter.com/teamspacemesh)
+
 ### Additional info
 
 #### Working with protobufs
