@@ -65,6 +65,9 @@ func TestAccountOps(t *testing.T) {
 	account1PrivKey := account1.PrivKey.String()
 
 	assert.Equal(t, accountPrivKey, account1PrivKey, "Expected same private key after unlocking")
+
+	account1.LockAccount(passphrase)
+	assert.True(t, account1.IsAccountLocked(), "Expected account to be locked")
 }
 
 func TestPassphrase(t *testing.T) {
