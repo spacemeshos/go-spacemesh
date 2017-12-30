@@ -1,7 +1,6 @@
-package tests
+package accounts
 
 import (
-	"github.com/spacemeshos/go-spacemesh/accounts"
 	"github.com/spacemeshos/go-spacemesh/assert"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -10,7 +9,7 @@ import (
 )
 
 func TestAccountLoading(t *testing.T) {
-	accounts.LoadAllAccounts()
+	LoadAllAccounts()
 }
 
 func TestAccountOps(t *testing.T) {
@@ -21,7 +20,7 @@ func TestAccountOps(t *testing.T) {
 		t.Fatalf("Failed to get temp dir: %v", err)
 	}
 
-	account, err := accounts.NewAccount(passphrase)
+	account, err := NewAccount(passphrase)
 	if err != nil {
 		t.Fatalf("Failed to create an account")
 	}
@@ -33,7 +32,7 @@ func TestAccountOps(t *testing.T) {
 	// get os temp dir here
 	accountDataFilePath, err := account.Persist(accountsDataFolder)
 	if err != nil {
-		t.Fatalf("Failed to persist account", err)
+		t.Fatalf("Failed to persist account: %v", err)
 	}
 
 	// uncomment to cleanup the account data file from store
@@ -42,9 +41,9 @@ func TestAccountOps(t *testing.T) {
 	log.Info("Persisted account to: %s", accountDataFilePath)
 
 	// read the account back from store
-	account1, err := accounts.NewAccountFromStore(account.String(), accountsDataFolder)
+	account1, err := NewAccountFromStore(account.String(), accountsDataFolder)
 	if err != nil {
-		t.Fatalf("Failed to load account", err)
+		t.Fatalf("Failed to load account: %v", err)
 	}
 
 	accountPubKey := account.PubKey.String()
@@ -56,7 +55,7 @@ func TestAccountOps(t *testing.T) {
 
 	err = account1.UnlockAccount(passphrase)
 	if err != nil {
-		t.Fatalf("Failed to unlock account", err)
+		t.Fatalf("Failed to unlock account: %v", err)
 	}
 
 	assert.True(t, account1.IsAccountUnlocked(), "Expected account to be unlocked")
@@ -66,6 +65,9 @@ func TestAccountOps(t *testing.T) {
 	account1PrivKey := account1.PrivKey.String()
 
 	assert.Equal(t, accountPrivKey, account1PrivKey, "Expected same private key after unlocking")
+
+	account1.LockAccount(passphrase)
+	assert.True(t, account1.IsAccountLocked(), "Expected account to be locked")
 }
 
 func TestPassphrase(t *testing.T) {
@@ -79,23 +81,23 @@ func TestPassphrase(t *testing.T) {
 		t.Fatalf("Failed to get temp dir: %v", err)
 	}
 
-	account, err := accounts.NewAccount(passphrase)
+	account, err := NewAccount(passphrase)
 	if err != nil {
 		t.Fatalf("Failed to create an account")
 	}
 
 	accountDataFilePath, err := account.Persist(accountsDataFolder)
 	if err != nil {
-		t.Fatalf("Failed to persist account", err)
+		t.Fatalf("Failed to persist account: %v", err)
 	}
 
 	// uncomment to cleanup the account data file from store
 	defer os.Remove(accountDataFilePath)
 
 	// read the account back from store
-	account1, err := accounts.NewAccountFromStore(account.String(), accountsDataFolder)
+	account1, err := NewAccountFromStore(account.String(), accountsDataFolder)
 	if err != nil {
-		t.Fatalf("Failed to load account", err)
+		t.Fatalf("Failed to load account: %v", err)
 	}
 
 	accountPubKey := account.PubKey.String()
