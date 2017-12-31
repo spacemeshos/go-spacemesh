@@ -44,8 +44,9 @@ func TestSimpleTreeOps(t *testing.T) {
 	m, err := merkle.NewEmptyTree(userDb, treeDb)
 	assert.NoErr(t, err, "failed to create new merkle tree")
 
+	// k,v can be any bytes
 	v := []byte("this is some user data bytes")
-	k := []byte("this is a user-space provided key bytes")
+	k := []byte("this is a user-space provided key to the value")
 
 	log.Info("User key hex: %s", hex.EncodeToString(k))
 
@@ -56,8 +57,7 @@ func TestSimpleTreeOps(t *testing.T) {
 	assert.NotNil(t, root, "expected non-empty tree")
 
 	data, ok, err := m.Get(k)
-	assert.True(t, ok, "expected data from m tree for this key" +
-		"")
+	assert.True(t, ok, "expected data from m tree for this key")
 	assert.NoErr(t, err, "failed to get data")
 
 	assert.True(t, bytes.Equal(data, v), "unexpected data")
@@ -83,13 +83,6 @@ func TestSimpleTreeOps(t *testing.T) {
 	assert.True(t, ok, "expected data from tree")
 	assert.NoErr(t, err, "failed to get data")
 	assert.True(t, bytes.Equal(data, v), "unexpected data")
-
-	// test deletion
-	err = m.Delete(k)
-	assert.NoErr(t, err, "failed to get data")
-
-	root = m.GetRootNode()
-	assert.Nil(t, root, "expected empty tree")
 
 	err = m.CloseDataStores()
 	assert.NoErr(t, err, "failed to close data stores")

@@ -346,5 +346,5 @@ func (mt *merkleTreeImp) persistUserValue(v []byte) error {
 
 // remove v keyed by k from the tree
 func (mt *merkleTreeImp) Delete(k []byte) error {
-	return nil
+	return errors.New("not implemented yet")
 }

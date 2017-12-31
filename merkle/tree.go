@@ -60,13 +60,11 @@ func NewTreeFromDb(rootHash []byte, userDataFileName string, treeDataFileName st
 	if err != nil {
 		return nil, err
 	}
-	defer userData.Close()
 
 	treeData, err := leveldb.OpenFile(treeDataFileName, nil)
 	if err != nil {
 		return nil, err
 	}
-	defer treeData.Close()
 
 	mt := &merkleTreeImp{
 		userData: userData,
@@ -89,13 +87,18 @@ func NewTreeFromDb(rootHash []byte, userDataFileName string, treeDataFileName st
 }
 
 func (mt *merkleTreeImp) CloseDataStores() error {
+
 	err := mt.treeData.Close()
-	if err != nil {
+	if err != nil && err != leveldb.ErrClosed {
 		log.Error("Failed to close tree db %v", err)
+		return err
 	}
+
 	err = mt.userData.Close()
-	if err != nil {
+	if err != nil && err != leveldb.ErrClosed {
 		log.Error("Failed to close user db %v", err)
+		return err
 	}
-	return err
+
+	return nil
 }
