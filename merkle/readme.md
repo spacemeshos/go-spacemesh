@@ -5,9 +5,9 @@
 - `User data domain`: client stored data (k,v).
 - `Tree data domain`: data use internally in the tree without client awareness.
 - `v`: user data domain value. a bin_encode(of any data)
-- `k`: pointer to value in the user data domain. k==sha3(v)
-- `Path`: the user data domain key to a value (not hash or tree pointer to node)
-- `Partial path`: a partial segment of the path.
+- `k`: pointer to value in the user data domain. User provided. Can be any binary encoded data. Doesn't need to be hash(v). 
+- `Path`: the user data domain key to a value (not hash or tree pointer to node). Hex encoded binary data.
+- `Partial path`: a partial segment of the path. Hex encoded binary data. Note that bath can be nibbles.
 - `P`: a pointer from a tree node to another node - in the data tree domain. The tree must be acyclic so each pointer is from a node to a lower level node.
 A Pointer value is always a hash of the linked node binary encoding. e.g. p==sha3(linked-node-binary-value). The value of a node is its content (see below).
 . Pointers are only used internally to maintain the tree structure and are not user inserted keys. Keys are use set. e.g. Add(k,v)

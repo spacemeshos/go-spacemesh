@@ -1,6 +1,9 @@
 package merkle
 
 import (
+	"bytes"
+	"encoding/hex"
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/syndtr/goleveldb/leveldb"
 )
@@ -103,4 +106,19 @@ func (mt *merkleTreeImp) CloseDataStores() error {
 	}
 
 	return nil
+}
+
+// Print the tree to a string
+func (mt *merkleTreeImp) Print() string {
+	buffer := bytes.Buffer{}
+	buffer.WriteString("\n------------\n")
+	if mt.root == nil {
+		buffer.WriteString( "Merkle Tree: Empty tree.\n")
+	} else {
+
+		buffer.WriteString(fmt.Sprintf("Merkle tree: root hash %s\n", hex.EncodeToString(mt.GetRootHash())[:6]))
+		buffer.WriteString(mt.root.print(mt.userData, mt.treeData))
+	}
+	buffer.WriteString("------------\n")
+	return buffer.String()
 }

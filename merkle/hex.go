@@ -24,7 +24,6 @@ func commonPrefix(s string, s1 string) string {
 
 // Returns the length of the common prefix of 2 hex encoded strings
 func lenPrefix(a, b string) int {
-
 	var i, length = 0, len(a)
 	if len(b) < length {
 		length = len(b)

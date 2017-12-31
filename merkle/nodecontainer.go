@@ -335,19 +335,24 @@ func (n *nodeContainerImp) print(userDb *leveldb.DB, treeDb *leveldb.DB) string 
 
 	switch n.nodeType {
 	case pb.NodeType_branch:
+
+		buffer.WriteString(n.getBranchNode().print())
+
 		for _, v := range n.children {
 			buffer.WriteString(v.print(userDb, treeDb))
 		}
-		buffer.WriteString(n.getBranchNode().print())
 
 	case pb.NodeType_leaf:
 		buffer.WriteString(n.getLeafNode().print())
 
 	case pb.NodeType_extension:
+
+		buffer.WriteString(n.getExtNode().print())
+
 		for _, v := range n.children {
 			buffer.WriteString(v.print(userDb, treeDb))
 		}
-		buffer.WriteString(n.getExtNode().print())
+
 	}
 
 	return buffer.String()

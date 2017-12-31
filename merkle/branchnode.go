@@ -2,6 +2,7 @@ package merkle
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
@@ -23,6 +24,10 @@ type branchNode interface {
 
 // Adds a child to the node
 func (b *branchNodeImpl) addChild(prefix string, pointer []byte) error {
+
+	if len(prefix) != 1 {
+		return ErrorInvalidHexChar
+	}
 
 	idx, ok := fromHexChar(prefix[0])
 	if !ok {
@@ -93,10 +98,26 @@ type branchNodeImpl struct {
 
 func (b *branchNodeImpl) print() string {
 	buffer := bytes.Buffer{}
-	buffer.WriteString(fmt.Sprintf("Branch value: %x\n", b.value))
+
+	buffer.WriteString("Branch:\n")
+
+	buffer.WriteString(fmt.Sprintf(" Pointer to node: %s. \n", hex.EncodeToString(b.getNodeHash())[:6]))
+
+	val := hex.EncodeToString(b.value)
+	if len(val) > 0 {
+		buffer.WriteString(fmt.Sprintf(" Stored value: %s. \n", val[:6]))
+	} else {
+		buffer.WriteString(" No stored value.\n")
+
+	}
+	if len(b.entries) == 0 {
+		buffer.WriteString(" No children.\n")
+	} else {
+		buffer.WriteString(" Children:\n")
+	}
 	for k, v := range b.entries {
 		if len(v) > 0 {
-			buffer.WriteString(fmt.Sprintf(" [%x] = %s\n", k, v))
+			buffer.WriteString(fmt.Sprintf(" [%x] = %s\n", string(k), hex.EncodeToString(v)[:6]))
 		}
 	}
 

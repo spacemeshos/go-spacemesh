@@ -63,12 +63,3 @@ func (mt *merkleTreeImp) Delete(k []byte) error {
 }
 
 
-// Print the tree to a string
-func (mt *merkleTreeImp) Print() string {
-	if mt.root == nil {
-		return "Empty merkle tree"
-	}
-
-	return mt.root.print(mt.userData, mt.treeData)
-
-}

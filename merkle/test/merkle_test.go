@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/hex"
 	"github.com/spacemeshos/go-spacemesh/assert"
-	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/merkle"
 	"testing"
@@ -82,15 +81,15 @@ func TestComplexTreeOps(t *testing.T) {
 	assert.NoErr(t, err, "invalid hex str")
 	v2 := []byte("tantalus")
 
-	k3, err := hex.DecodeString("112457000001")
-	assert.NoErr(t, err, "invalid hex str")
-	v3, err := crypto.GetRandomBytes(100)
-	assert.NoErr(t, err, "failed to get random data")
+	//k3, err := hex.DecodeString("112457000001")
+	//assert.NoErr(t, err, "invalid hex str")
+	//v3, err := crypto.GetRandomBytes(100)
+	//assert.NoErr(t, err, "failed to get random data")
 
 
-	k4 := crypto.Sha256([]byte("key-to-tanalus"))
-	v4,err  := crypto.GetRandomBytes(100)
-	assert.NoErr(t, err, "failed to get random data")
+	//k4 := crypto.Sha256([]byte("key-to-tanalus"))
+	//v4,err  := crypto.GetRandomBytes(100)
+	//assert.NoErr(t, err, "failed to get random data")
 
 	userDb, treeDb := getDbPaths(t)
 	m, err := merkle.NewEmptyTree(userDb, treeDb)
@@ -99,8 +98,8 @@ func TestComplexTreeOps(t *testing.T) {
 
 	tryPut(t,m,k1,v1)
 	tryPut(t,m,k2,v2)
-	tryPut(t,m,k3,v3)
-	tryPut(t,m,k4,v4)
+	//tryPut(t,m,k3,v3)
+	//tryPut(t,m,k4,v4)
 
 	t.Log(m.Print())
 

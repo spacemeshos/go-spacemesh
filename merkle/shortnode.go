@@ -91,6 +91,8 @@ func (s *shortNodeImpl) print() string {
 		buffer.WriteString("Ext: ")
 	}
 
-	buffer.WriteString(fmt.Sprintf("path: %s, value: %s", s.path, hex.EncodeToString(s.value)))
+	buffer.WriteString(fmt.Sprintf(" path: %s, value: %s\n", s.path, hex.EncodeToString(s.value)[:6]))
+	buffer.WriteString(fmt.Sprintf(" Pointer to node: %s. \n", hex.EncodeToString(s.getNodeHash())[:6]))
+
 	return buffer.String()
 }

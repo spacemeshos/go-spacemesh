@@ -9,17 +9,20 @@ import (
 	"github.com/spacemeshos/go-spacemesh/merkle/pb"
 )
 
+
+var InvalidUserDataError = errors.New("expected non-empty k,v for user data")
+
 // store user data (k,v)
 func (mt *merkleTreeImp) Put(k, v []byte) error {
 
 	if len(v) == 0 || len(k) == 0 {
-		return errors.New("expected non-empty k,v for user data")
+		return InvalidUserDataError
 	}
 
 	// calc the user value to store in the merkle tree
 	var userValue []byte
 	if len(v) > 32 {
-		// if v is long we persist in the user db and store a hash to it (its user-db key) in the merkle tree
+		// if v is long we persist it in the user db and store a hash to it (its user-db key) in the merkle tree
 		err := mt.persistUserValue(v)
 		if err != nil {
 			return err
@@ -32,16 +35,14 @@ func (mt *merkleTreeImp) Put(k, v []byte) error {
 
 	keyStr := hex.EncodeToString(k)
 
-	log.Info("m put user data for key: %s", keyStr)
+	log.Info("m inserting user data for key: %s...", keyStr)
 
 	newRoot, err := mt.insert(mt.root, 0, keyStr, userValue)
 	if err != nil {
 		return err
 	}
 
-	if mt.root == nil {
-		mt.root = newRoot
-	}
+	mt.root = newRoot
 
 	return nil
 }
@@ -93,7 +94,7 @@ func (mt *merkleTreeImp) insert(root NodeContainer, pos int, k string, v []byte)
 		/// l1 6 -> 789 (new path leaf), v. branch insert: pos: 6, k
 		/// l2 5 -> 789, old leaf val. v branch insert: pos 6, shared prefix + old-leaf k
 
-		if bytes.Equal(root.getLeafNode().getValue(), v) { // value already in this leaf
+		if bytes.Equal(root.getShortNode().getValue(), v) { // value already in this leaf
 			return root, nil
 		}
 
@@ -161,7 +162,7 @@ func (mt *merkleTreeImp) insert(root NodeContainer, pos int, k string, v []byte)
 	case pb.NodeType_branch:
 
 		// save the root key as hash is about to change
-		oldKey := root.getNodeHash()
+		oldPointer := root.getNodeHash()
 
 		// k: 01234
 		if pos == len(k) {
@@ -187,7 +188,7 @@ func (mt *merkleTreeImp) insert(root NodeContainer, pos int, k string, v []byte)
 		// update pointers all the way to the root of the tree
 		//parent := root.getParent()
 		//if (parent != nil) {
-		//	parent.updateChildPointer(oldKey, root)
+		//	parent.updateChildPointer(oldPointer, , root)
 		//}
 
 		// todo: when a branch node changes, all the pointers from it up to the root change
@@ -200,7 +201,7 @@ func (mt *merkleTreeImp) insert(root NodeContainer, pos int, k string, v []byte)
 		}
 
 		// remove root from keystore indexed by its older hash - it is now saved with the new hash
-		err = mt.treeData.Delete(oldKey, nil)
+		err = mt.treeData.Delete(oldPointer, nil)
 		if err != nil {
 			return nil, err
 		}
