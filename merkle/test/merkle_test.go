@@ -74,18 +74,22 @@ func TestSimpleTreeOps(t *testing.T) {
 // Test a simple 1-node merkle tree
 func TestComplexTreeOps(t *testing.T) {
 
-	k1, err := hex.DecodeString("123456")
+	k1, err := hex.DecodeString("123456000001")
 	assert.NoErr(t, err, "invalid hex str")
-
 	v1 := []byte("zifton")
-	k2, err := hex.DecodeString("112456")
-	assert.NoErr(t, err, "invalid hex str")
 
+	k2, err := hex.DecodeString("112456000001")
+	assert.NoErr(t, err, "invalid hex str")
 	v2 := []byte("tantalus")
 
-	k3 := crypto.Sha256([]byte("key-to-tanalus"))
+	k3, err := hex.DecodeString("112457000001")
+	assert.NoErr(t, err, "invalid hex str")
+	v3, err := crypto.GetRandomBytes(100)
+	assert.NoErr(t, err, "failed to get random data")
 
-	v3,err  := crypto.GetRandomBytes(100)
+
+	k4 := crypto.Sha256([]byte("key-to-tanalus"))
+	v4,err  := crypto.GetRandomBytes(100)
 	assert.NoErr(t, err, "failed to get random data")
 
 	userDb, treeDb := getDbPaths(t)
@@ -96,8 +100,13 @@ func TestComplexTreeOps(t *testing.T) {
 	tryPut(t,m,k1,v1)
 	tryPut(t,m,k2,v2)
 	tryPut(t,m,k3,v3)
+	tryPut(t,m,k4,v4)
+
+	t.Log(m.Print())
 
 	//validateGet(t,m,k1,v1)
 	//validateGet(t,m,k2,v2)
 	//validateGet(t,m,k3,v3)
+	//validateGet(t,m,k4,v4)
+
 }

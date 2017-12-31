@@ -16,6 +16,8 @@ type MerkleTree interface {
 	GetRootNode() NodeContainer         // get root node
 
 	CloseDataStores() error // call when done w the tree
+
+	Print() string
 }
 
 // internal implementation
