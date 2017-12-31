@@ -1,6 +1,7 @@
 package merkle
 
 import (
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -13,6 +14,8 @@ type MerkleTree interface {
 	Get(k []byte) ([]byte, bool, error) // get value indexed by key
 	GetRootHash() []byte                // get tree root hash
 	GetRootNode() NodeContainer         // get root node
+
+	CloseDataStores() error
 }
 
 // internal implementation
@@ -29,15 +32,15 @@ type merkleTreeImp struct {
 func NewEmptyTree(userDataFileName string, treeDataFileName string) (MerkleTree, error) {
 	userData, err := leveldb.OpenFile(userDataFileName, nil)
 	if err != nil {
+		log.Error("Failed to open user db %v", err)
 		return nil, err
 	}
-	defer userData.Close()
 
 	treeData, err := leveldb.OpenFile(treeDataFileName, nil)
 	if err != nil {
+		log.Error("Failed to open tree db %v", err)
 		return nil, err
 	}
-	defer treeData.Close()
 
 	mt := &merkleTreeImp{
 		userData: userData,
@@ -83,4 +86,16 @@ func NewTreeFromDb(rootHash []byte, userDataFileName string, treeDataFileName st
 
 	mt.root = root
 	return mt, nil
+}
+
+func (mt *merkleTreeImp) CloseDataStores() error {
+	err := mt.treeData.Close()
+	if err != nil {
+		log.Error("Failed to close tree db %v", err)
+	}
+	err = mt.userData.Close()
+	if err != nil {
+		log.Error("Failed to close user db %v", err)
+	}
+	return err
 }

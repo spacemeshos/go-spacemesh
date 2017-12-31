@@ -20,6 +20,7 @@ type shortNode interface {
 	marshal() ([]byte, error) // to binary data
 	getNodeHash() []byte      // node binary data hash - determines the value of pointer to this node
 	print() string            // returns debug info
+
 }
 
 func newShortNode(nodeType pb.NodeType, path string, value []byte) shortNode {

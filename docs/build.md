@@ -29,3 +29,7 @@ go get -u github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway
 go get -u github.com/grpc-ecosystem/grpc-gateway/protoc-gen-swagger
 go get -u github.com/golang/protobuf/protoc-gen-go
 ```
+
+## Releases
+- We use [gitflow](http://nvie.com/posts/a-successful-git-branching-model/) for releases
+- We use [Semantic versioning](https://semver.org/) for release versions.
