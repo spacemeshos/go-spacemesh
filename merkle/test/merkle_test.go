@@ -4,21 +4,15 @@ import (
 	"bytes"
 	"encoding/hex"
 	"github.com/spacemeshos/go-spacemesh/assert"
-	"github.com/spacemeshos/go-spacemesh/filesystem"
+	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/merkle"
-	"path/filepath"
 	"testing"
 )
 
 func TestEmptyTreeCreation(t *testing.T) {
 
-	tempDir, err := filesystem.GetSpaceMeshTempDirectoryPath()
-	assert.NoErr(t, err, "failed to get temp dir")
-
-	userDb := filepath.Join(tempDir, "userdata.db")
-	treeDb := filepath.Join(tempDir, "tree.db")
-
+	userDb, treeDb := getDbPaths(t)
 	m, err := merkle.NewEmptyTree(userDb, treeDb)
 	assert.NoErr(t, err, "failed to create new merkle tree")
 
@@ -30,37 +24,29 @@ func TestEmptyTreeCreation(t *testing.T) {
 
 	err = m.CloseDataStores()
 	assert.NoErr(t, err, "failed to close data stores")
-
 }
 
+// Test a simple 1-node merkle tree
 func TestSimpleTreeOps(t *testing.T) {
 
-	tempDir, err := filesystem.GetSpaceMeshTempDirectoryPath()
-	assert.NoErr(t, err, "failed to get temp dir")
-
-	userDb := filepath.Join(tempDir, "userdata.db")
-	treeDb := filepath.Join(tempDir, "tree.db")
-
+	userDb, treeDb := getDbPaths(t)
 	m, err := merkle.NewEmptyTree(userDb, treeDb)
+	defer m.CloseDataStores() // we need to close the data stores when done w m - they are owned by m
+
 	assert.NoErr(t, err, "failed to create new merkle tree")
 
-	// k,v can be any bytes
-	v := []byte("this is some user data bytes")
-	k := []byte("this is a user-space provided key to the value")
+	// user data k,v can be any bytes
+	v := []byte("zifton-the-immortal")
+	k := []byte("the-name-of-my-cat")
 
 	log.Info("User key hex: %s", hex.EncodeToString(k))
 
-	err = m.Put(k, v)
-	assert.NoErr(t, err, "failed to put data")
+	tryPut(t,m,k,v)
 
 	root := m.GetRootNode()
 	assert.NotNil(t, root, "expected non-empty tree")
 
-	data, ok, err := m.Get(k)
-	assert.True(t, ok, "expected data from m tree for this key")
-	assert.NoErr(t, err, "failed to get data")
-
-	assert.True(t, bytes.Equal(data, v), "unexpected data")
+	validateGet(t,m,k,v)
 
 	err = m.CloseDataStores()
 	assert.NoErr(t, err, "failed to close m data stores")
@@ -70,6 +56,7 @@ func TestSimpleTreeOps(t *testing.T) {
 	// restore tree to a new instance based on root hash
 	rootHash := m.GetRootHash()
 	m1, err := merkle.NewTreeFromDb(rootHash, userDb, treeDb)
+	defer m1.CloseDataStores() // tell m1 to close data stores when we are done w it
 
 	root = m1.GetRootNode()
 	assert.NotNil(t, root, "expected non-empty tree")
@@ -79,15 +66,38 @@ func TestSimpleTreeOps(t *testing.T) {
 	assert.True(t, bytes.Equal(rootHash, rootHash1), "expected same root hash")
 
 	// test getting the data from the new tree instance
-	data, ok, err = m1.Get(k)
-	assert.True(t, ok, "expected data from tree")
-	assert.NoErr(t, err, "failed to get data")
-	assert.True(t, bytes.Equal(data, v), "unexpected data")
 
-	err = m.CloseDataStores()
-	assert.NoErr(t, err, "failed to close data stores")
+	validateGet(t, m1, k, v)
 
-	err = m1.CloseDataStores()
-	assert.NoErr(t, err, "failed to close data stores")
+}
 
+// Test a simple 1-node merkle tree
+func TestComplexTreeOps(t *testing.T) {
+
+	k1, err := hex.DecodeString("123456")
+	assert.NoErr(t, err, "invalid hex str")
+
+	v1 := []byte("zifton")
+	k2, err := hex.DecodeString("112456")
+	assert.NoErr(t, err, "invalid hex str")
+
+	v2 := []byte("tantalus")
+
+	k3 := crypto.Sha256([]byte("key-to-tanalus"))
+
+	v3,err  := crypto.GetRandomBytes(100)
+	assert.NoErr(t, err, "failed to get random data")
+
+	userDb, treeDb := getDbPaths(t)
+	m, err := merkle.NewEmptyTree(userDb, treeDb)
+	defer m.CloseDataStores() // we need to close the data stores when done w m - they are owned by m
+	assert.NoErr(t, err, "failed to create new Merkle tree")
+
+	tryPut(t,m,k1,v1)
+	tryPut(t,m,k2,v2)
+	tryPut(t,m,k3,v3)
+
+	//validateGet(t,m,k1,v1)
+	//validateGet(t,m,k2,v2)
+	//validateGet(t,m,k3,v3)
 }

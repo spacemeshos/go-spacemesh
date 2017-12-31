@@ -50,7 +50,7 @@ func (mt *merkleTreeImp) Put(k, v []byte) error {
 
 	keyStr := hex.EncodeToString(k)
 
-	log.Info("m put user data for key: %s", keyStr )
+	log.Info("m put user data for key: %s", keyStr)
 
 	newRoot, err := mt.insert(nil, 0, keyStr, userValue)
 	if err != nil {
@@ -329,7 +329,6 @@ func (mt *merkleTreeImp) persistNode(node NodeContainer) error {
 
 	return err
 }
-
 
 func (mt *merkleTreeImp) persistUserValue(v []byte) error {
 	if len(v) <= 32 {
