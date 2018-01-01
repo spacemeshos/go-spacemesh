@@ -105,7 +105,7 @@ func (b *branchNodeImpl) print() string {
 
 	buffer.WriteString("Branch:\n")
 
-	buffer.WriteString(fmt.Sprintf(" Pointer to node: %s. \n", hex.EncodeToString(b.getNodeHash())[:6]))
+	buffer.WriteString(fmt.Sprintf(" Pointer to node: <%s>. \n", hex.EncodeToString(b.getNodeHash())[:6]))
 
 	val := hex.EncodeToString(b.value)
 	if len(val) > 0 {
@@ -122,7 +122,7 @@ func (b *branchNodeImpl) print() string {
 	for k, v := range b.entries {
 		if len(v) > 0 {
 			ks, _ := toHexChar(k)
-			buffer.WriteString(fmt.Sprintf(" %s => %s\n", ks, hex.EncodeToString(v)[:6]))
+			buffer.WriteString(fmt.Sprintf(" [%s] => <%s>\n", ks, hex.EncodeToString(v)[:6]))
 		}
 	}
 

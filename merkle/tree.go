@@ -116,7 +116,7 @@ func (mt *merkleTreeImp) Print() string {
 		buffer.WriteString("Merkle Tree: Empty tree.\n")
 	} else {
 
-		buffer.WriteString(fmt.Sprintf("Merkle tree: root hash %s\n", hex.EncodeToString(mt.GetRootHash())[:6]))
+		buffer.WriteString(fmt.Sprintf("Merkle tree: root hash <%s>\n", hex.EncodeToString(mt.GetRootHash())[:6]))
 		buffer.WriteString(mt.root.print(mt.userData, mt.treeData))
 	}
 	buffer.WriteString("------------\n")

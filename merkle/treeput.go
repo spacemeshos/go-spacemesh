@@ -78,9 +78,30 @@ func (mt *merkleTreeImp) insert(root NodeContainer, pos int, k string, v []byte)
 
 	switch root.getNodeType() {
 
-	case pb.NodeType_leaf:
-		fallthrough
 	case pb.NodeType_extension:
+
+		// find matched prefix
+		cp := commonPrefix(root.getNodeEmbeddedPath(), k[pos:])
+		lcp := len(cp)
+
+		if lcp == len(k[pos:]) {
+			// todo: matched the whole key - value should be set here
+			// should this be replaced with branch + value ?
+		}
+
+		// pointer to ext node child
+		pointer := root.getExtNode().getValue()
+
+		// ext node child node
+		child := root.getChild(pointer)
+
+		if child == nil {
+			return nil, errors.New("Expected non-nil ext node child")
+		}
+
+		return mt.insert(child, pos+lcp, k, v)
+
+	case pb.NodeType_leaf:
 
 		/// example w leaf:
 		/// K: 0123456789
@@ -94,9 +115,7 @@ func (mt *merkleTreeImp) insert(root NodeContainer, pos int, k string, v []byte)
 		/// l1 6 -> 789 (new path leaf), v. branch insert: pos: 6, k
 		/// l2 5 -> 789, old leaf val. v branch insert: pos 6, shared prefix + old-leaf k
 
-		/// example w ext:
-
-		if bytes.Equal(root.getShortNode().getValue(), v) { // value already in this leaf
+		if bytes.Equal(root.getLeafNode().getValue(), v) { // value already in this leaf
 			return root, nil
 		}
 
@@ -106,9 +125,7 @@ func (mt *merkleTreeImp) insert(root NodeContainer, pos int, k string, v []byte)
 		if lcp == len(k[pos:]) {
 			// todo: matched the whole key - value should be set here
 
-
 		}
-
 
 		// create a branch + 1 existing updated node (ext or leaf) + new leaf node
 
@@ -119,26 +136,10 @@ func (mt *merkleTreeImp) insert(root NodeContainer, pos int, k string, v []byte)
 
 		// ext 1 ->  branch -> 2 -> .... 3 -> .....
 
-		if root.getNodeType() == pb.NodeType_extension {
-
-			extPath := root.getNodeEmbeddedPath() // e.g. "1"
-
-			prefixChar := string(extPath[lcp])      // first hex char for path e.g 5
-			p := extPath[lcp+1:]                    // remaining path - e.g. 789
-			pointer := root.getExtNode().getValue() // ext node pointer to child
-
-			newExtNode, err := newExtNodeContainer(p, pointer, b)
-			if err != nil {
-				return nil, err
-			}
-			b.addBranchChild(prefixChar, newExtNode)
-
-		} else {
-			// existing leaf inserted into branch
-			_, err = mt.insert(b, pos+lcp, k[:pos]+root.getNodeEmbeddedPath(), root.getLeafNode().getValue())
-			if err != nil {
-				return nil, err
-			}
+		// existing leaf inserted into branch
+		_, err = mt.insert(b, pos+lcp, k[:pos]+root.getNodeEmbeddedPath(), root.getLeafNode().getValue())
+		if err != nil {
+			return nil, err
 		}
 
 		// insert the value into the branch
