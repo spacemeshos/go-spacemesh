@@ -85,8 +85,8 @@ func TestComplexTreeOps(t *testing.T) {
 	//assert.NoErr(t, err, "invalid hex str")
 	//v3, err := crypto.GetRandomBytes(100)
 	//assert.NoErr(t, err, "failed to get random data")
-
-
+	//
+	//
 	//k4 := crypto.Sha256([]byte("key-to-tanalus"))
 	//v4,err  := crypto.GetRandomBytes(100)
 	//assert.NoErr(t, err, "failed to get random data")
@@ -103,8 +103,8 @@ func TestComplexTreeOps(t *testing.T) {
 
 	t.Log(m.Print())
 
-	//validateGet(t,m,k1,v1)
-	//validateGet(t,m,k2,v2)
+	validateGet(t,m,k1,v1)
+	validateGet(t,m,k2,v2)
 	//validateGet(t,m,k3,v3)
 	//validateGet(t,m,k4,v4)
 

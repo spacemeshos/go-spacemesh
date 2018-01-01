@@ -2,6 +2,8 @@ package merkle
 
 import (
 	"encoding/hex"
+	"errors"
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/merkle/pb"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -64,8 +66,18 @@ func (mt *merkleTreeImp) get(root NodeContainer, k string, pos int) ([]byte, boo
 			return root.getBranchNode().getValue(), true, root, nil
 		}
 
-		childNode := root.getChild(string(k[0]))
-		return mt.get(childNode, k, pos+1)
+		idx, ok := fromHexChar(k[pos])
+		if !ok {
+			return nil, false, nil, errors.New(fmt.Sprintf("Invalid hex char at index %d of %s", pos, k))
+		}
+
+		p := root.getBranchNode().getPointer(idx)
+		if p != nil {
+			n := root.getChild(p)
+			return mt.get(n, k, pos+1)
+		}
+
+		return nil, false, nil, nil
 
 	case pb.NodeType_extension:
 
@@ -75,8 +87,8 @@ func (mt *merkleTreeImp) get(root NodeContainer, k string, pos int) ([]byte, boo
 			return nil, false, nil, nil
 		}
 
-		pointer := hex.EncodeToString(root.getExtNode().getValue())
-		child := root.getChild(pointer)
+		p := root.getExtNode().getValue()
+		child := root.getChild(p)
 		return mt.get(child, k, pos+len(path))
 
 	case pb.NodeType_leaf:

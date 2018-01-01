@@ -41,19 +41,19 @@ func TestBranchNodeCreation(t *testing.T) {
 	assert.NoErr(t, err, "failed to marshal node")
 	assert.True(t, bytes.Equal(crypto.Sha256(binData), nodeHash), "unexpected node hash")
 
-	res := node.getPath(p1Val)
+	res := node.getPointer(p1Val)
 	assert.NotNil(t, res, "expected to get a slice")
 	assert.True(t, len(res) > 0, "expected a non-empty slice")
 	assert.True(t, bytes.Equal(res, p1), "unexpected pointer value")
 
-	res = node.getPath(p2Val)
+	res = node.getPointer(p2Val)
 	assert.NotNil(t, res, "expected to get a slice")
 	assert.True(t, len(res) > 0, "expected a non-empty slice")
 	assert.True(t, bytes.Equal(res, p2), "unexpected pointer value")
 
 	idx, ok := fromHexChar('a')
 	assert.True(t, ok, "failed to get hex value")
-	res = node.getPath(idx)
+	res = node.getPointer(idx)
 	assert.NotNil(t, res, "expected []byte slice")
 	assert.True(t, len(res) == 0, "expected empty []byte slice")
 

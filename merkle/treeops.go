@@ -30,6 +30,7 @@ func (mt *merkleTreeImp) persistNode(node NodeContainer) error {
 	nodeKey := node.getNodeHash()
 	nodeData, err := node.marshal()
 	if err != nil {
+		log.Error("failed to persist node - invalid data")
 		return err
 	}
 
@@ -38,7 +39,9 @@ func (mt *merkleTreeImp) persistNode(node NodeContainer) error {
 		log.Error("Failed to write tree data to db. %v", err)
 	}
 
-	return err
+	log.Info("Node persisted to tree db. type: %s. key: %s", node.getNodeType(), hex.EncodeToString(nodeKey)[:6])
+
+	return nil
 }
 
 func (mt *merkleTreeImp) persistUserValue(v []byte) error {
@@ -50,6 +53,7 @@ func (mt *merkleTreeImp) persistUserValue(v []byte) error {
 	err := mt.userData.Put(k, v, nil)
 	if err != nil {
 		log.Error("Failed to write user data to db. %v", err)
+		return err
 	}
 
 	log.Info("Persisted %s %s to user db.", hex.EncodeToString(k), hex.EncodeToString(v))

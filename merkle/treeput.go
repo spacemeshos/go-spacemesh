@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/merkle/pb"
@@ -57,7 +58,7 @@ func (mt *merkleTreeImp) insert(root NodeContainer, pos int, k string, v []byte)
 
 	if root == nil {
 
-		node, err := newLeftNodeContainer(k, v, nil)
+		node, err := newLeftNodeContainer(k[pos:], v, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -170,8 +171,15 @@ func (mt *merkleTreeImp) insert(root NodeContainer, pos int, k string, v []byte)
 			root.getBranchNode().setValue(v)
 		} else {
 			// get child node for first prefix hex char - child may be nil
-			idx := string(k[pos])
-			childNode := root.getChild(idx)
+
+
+			idx, ok := fromHexChar(k[pos])
+			if !ok {
+				return nil, errors.New(fmt.Sprintf("invalid hex char at %d path %s", pos, k))
+			}
+
+			p := root.getBranchNode().getPointer(idx)
+			childNode := root.getChild(p)
 
 			// insert value to tree rooted w childNode or to an empty tree
 			node, err := mt.insert(childNode, pos+1, k, v)
@@ -179,8 +187,10 @@ func (mt *merkleTreeImp) insert(root NodeContainer, pos int, k string, v []byte)
 				return nil, err
 			}
 
-			err = root.addBranchChild(idx, node)
+			err = root.addBranchChild(string(k[pos]), node)
+
 			if err != nil {
+				log.Error("Failed to add child to branch")
 				return nil, err
 			}
 		}
@@ -205,6 +215,8 @@ func (mt *merkleTreeImp) insert(root NodeContainer, pos int, k string, v []byte)
 		if err != nil {
 			return nil, err
 		}
+
+		log.Info("Removed node from tree db for key: %s", hex.EncodeToString(oldPointer)[:6])
 
 		return root, nil
 

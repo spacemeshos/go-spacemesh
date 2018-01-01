@@ -15,6 +15,17 @@ func fromHexChar(c byte) (byte, bool) {
 	return 0, false
 }
 
+func toHexChar(c byte) (string, bool) {
+	switch {
+	case c <= 9:
+		return string(c + '0'), true
+	case 10 <= c && c <= 15:
+		return string(c + 'a'), true
+	default:
+		return "", false
+	}
+}
+
 // Returns the common prefix of 2 hex encoded strings
 // Empty string is return if there's no common suffix of len >= 1
 func commonPrefix(s string, s1 string) string {

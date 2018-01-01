@@ -25,9 +25,10 @@ type NodeContainer interface {
 	didLoadChildren() bool
 	loadChildren(db *leveldb.DB) error // load all direct children from store
 
-	getChild(key string) NodeContainer
+	getChild(pointer []byte) NodeContainer
 
 	addBranchChild(prefix string, child NodeContainer) error
+
 	removeBranchChild(prefix string) error
 
 	getParent() NodeContainer // loaded nodes have a ref to their parent
@@ -174,8 +175,8 @@ func (n *nodeContainerImp) setParent(p NodeContainer) {
 	n.parent = p
 }
 
-func (n *nodeContainerImp) getChild(key string) NodeContainer {
-	return n.children[key]
+func (n *nodeContainerImp) getChild(pointer []byte) NodeContainer {
+	return n.children[hex.EncodeToString(pointer)]
 }
 
 func (n *nodeContainerImp) getNodeType() pb.NodeType {
@@ -241,14 +242,14 @@ func (n *nodeContainerImp) loadChildren(db *leveldb.DB) error {
 	if n.nodeType == pb.NodeType_extension {
 
 		// value in an extension node is a pointer to child - load it
-		key := n.ext.getValue()
+		p := n.ext.getValue()
 
-		if n.children[hex.EncodeToString(key)] != nil {
+		if n.children[hex.EncodeToString(p)] != nil {
 			// already loaded this child
 			return nil
 		}
 
-		data, err := db.Get(key, nil)
+		data, err := db.Get(p, nil)
 		if err != nil {
 			return err
 		}
@@ -258,29 +259,30 @@ func (n *nodeContainerImp) loadChildren(db *leveldb.DB) error {
 			return err
 		}
 
-		n.children[hex.EncodeToString(key)] = child
+		n.children[hex.EncodeToString(p)] = child
 		return nil
 	}
 
 	if n.nodeType == pb.NodeType_branch {
 
-		keys := n.branch.getAllChildNodePointers()
-		for _, key := range keys {
+		pointers := n.branch.getAllChildNodePointers()
+		for _, p := range pointers {
 
-			if n.children[hex.EncodeToString(key)] != nil {
+			if n.children[hex.EncodeToString(p)] != nil {
 				// already loaded this child
 				continue
 			}
 
-			data, err := db.Get(key, nil)
+			data, err := db.Get(p, nil)
 			if err != nil {
 				return err
 			}
+
 			node, err := newNodeFromData(data, n)
 			if err != nil {
 				return err
 			}
-			n.children[hex.EncodeToString(key)] = node
+			n.children[hex.EncodeToString(p)] = node
 		}
 	}
 

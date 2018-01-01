@@ -13,7 +13,7 @@ import (
 type branchNode interface {
 	getValue() []byte                             // value terminated in the path to this node or nil if none exists. Value is key to use-space data
 	setValue(v []byte)                            // set the branch value
-	getPath(prefix byte) []byte                   // return pointer to child node for hex char entry or nil
+	getPointer(prefix byte) []byte                // return pointer to child node for hex char entry or nil
 	marshal() ([]byte, error)                     // to binary data
 	getNodeHash() []byte                          // data hash (determines the pointer to this node)
 	getAllChildNodePointers() [][]byte            // get all pointers to child nodes
@@ -117,7 +117,8 @@ func (b *branchNodeImpl) print() string {
 	}
 	for k, v := range b.entries {
 		if len(v) > 0 {
-			buffer.WriteString(fmt.Sprintf(" [%x] = %s\n", string(k), hex.EncodeToString(v)[:6]))
+			ks, _ := toHexChar(k)
+			buffer.WriteString(fmt.Sprintf(" %s => %s\n", ks, hex.EncodeToString(v)[:6]))
 		}
 	}
 
@@ -158,7 +159,7 @@ func (b *branchNodeImpl) setValue(v []byte) {
 	b.nodeHash = []byte{}
 }
 
-func (b *branchNodeImpl) getPath(idx byte) []byte {
+func (b *branchNodeImpl) getPointer(idx byte) []byte {
 	return b.entries[idx]
 }
 
