@@ -44,6 +44,10 @@ go run -race main.go
 ```
 go test ./... -cover
 ```
+generate a report
+```
+make pkg=<NAME OF PACKAGE> cover
+```
 
 ### CI
 - TBD - travis builds and tests
