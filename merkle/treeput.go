@@ -82,7 +82,7 @@ func (mt *merkleTreeImp) insert(root NodeContainer, pos int, k string, v []byte)
 		fallthrough
 	case pb.NodeType_extension:
 
-		/// example:
+		/// example w leaf:
 		/// K: 0123456789
 		/// pos: 2 (01 matched)
 		/// leaf-path: 23455789
@@ -94,12 +94,21 @@ func (mt *merkleTreeImp) insert(root NodeContainer, pos int, k string, v []byte)
 		/// l1 6 -> 789 (new path leaf), v. branch insert: pos: 6, k
 		/// l2 5 -> 789, old leaf val. v branch insert: pos 6, shared prefix + old-leaf k
 
+		/// example w ext:
+
 		if bytes.Equal(root.getShortNode().getValue(), v) { // value already in this leaf
 			return root, nil
 		}
 
 		cp := commonPrefix(root.getNodeEmbeddedPath(), k[pos:])
 		lcp := len(cp)
+
+		if lcp == len(k[pos:]) {
+			// todo: matched the whole key - value should be set here
+
+
+		}
+
 
 		// create a branch + 1 existing updated node (ext or leaf) + new leaf node
 
@@ -108,9 +117,11 @@ func (mt *merkleTreeImp) insert(root NodeContainer, pos int, k string, v []byte)
 			return nil, err
 		}
 
+		// ext 1 ->  branch -> 2 -> .... 3 -> .....
+
 		if root.getNodeType() == pb.NodeType_extension {
 
-			extPath := root.getNodeEmbeddedPath() // e.g. 23455789
+			extPath := root.getNodeEmbeddedPath() // e.g. "1"
 
 			prefixChar := string(extPath[lcp])      // first hex char for path e.g 5
 			p := extPath[lcp+1:]                    // remaining path - e.g. 789
@@ -123,7 +134,6 @@ func (mt *merkleTreeImp) insert(root NodeContainer, pos int, k string, v []byte)
 			b.addBranchChild(prefixChar, newExtNode)
 
 		} else {
-			// 	_, branch.Children[n.Key[matchlen]], err = t.insert(nil, append(prefix, n.Key[:matchlen+1]...), n.Key[matchlen+1:], n.Val)
 			// existing leaf inserted into branch
 			_, err = mt.insert(b, pos+lcp, k[:pos]+root.getNodeEmbeddedPath(), root.getLeafNode().getValue())
 			if err != nil {
@@ -131,7 +141,7 @@ func (mt *merkleTreeImp) insert(root NodeContainer, pos int, k string, v []byte)
 			}
 		}
 
-		// 	_, branch.Children[key[matchlen]], err = t.insert(nil, append(prefix, key[:matchlen+1]...), key[matchlen+1:], value)
+		// insert the value into the branch
 		_, err = mt.insert(b, pos+lcp, k, v)
 		if err != nil {
 			return nil, err

@@ -11,15 +11,15 @@ import (
 
 // An mutable branch (full) node
 type branchNode interface {
-	getValue() []byte                             // value terminated in the path to this node or nil if none exists. Value is key to use-space data
-	setValue(v []byte)                            // set the branch value
+	getValue() []byte                          // value terminated in the path to this node or nil if none exists. Value is key to use-space data
+	setValue(v []byte)                         // set the branch value
 	getPointer(idx byte) []byte                // return pointer to child node for hex char entry or nil. idx - 0x0 - 0xf
-	marshal() ([]byte, error)                     // to binary data
-	getNodeHash() []byte                          // data hash (determines the pointer to this node)
-	getAllChildNodePointers() [][]byte            // get all pointers to child nodes
+	marshal() ([]byte, error)                  // to binary data
+	getNodeHash() []byte                       // data hash (determines the pointer to this node)
+	getAllChildNodePointers() [][]byte         // get all pointers to child nodes
 	addChild(idx string, pointer []byte) error // add a child to this node
 	removeChild(idx string) error              // remove a child from this node
-	print() string                                // returns debug info
+	print() string                             // returns debug info
 }
 
 // Adds a child to the node
