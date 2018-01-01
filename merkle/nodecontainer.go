@@ -27,16 +27,15 @@ type NodeContainer interface {
 
 	getChild(pointer []byte) NodeContainer
 
-	addBranchChild(prefix string, child NodeContainer) error
+	addBranchChild(idx string, child NodeContainer) error
 
-	removeBranchChild(prefix string) error
+	removeBranchChild(idx string) error
 
 	getParent() NodeContainer // loaded nodes have a ref to their parent
 	setParent(p NodeContainer)
 
 	getNodeEmbeddedPath() string
 
-	//updateChildPointer(prefix string, child NodeContainer)
 	print(userDb *leveldb.DB, treeDb *leveldb.DB) string
 }
 
@@ -143,13 +142,17 @@ func (n *nodeContainerImp) updateChildPointer(prefix string, child NodeContainer
 
 }*/
 
-func (n *nodeContainerImp) addBranchChild(prefix string, child NodeContainer) error {
+func (n *nodeContainerImp) addBranchChild(idx string, child NodeContainer) error {
 
 	if n.getNodeType() != pb.NodeType_branch {
 		return errors.New("node is not a branch node")
 	}
 
-	err := n.getBranchNode().addChild(prefix, child.getNodeHash())
+	if len(idx) != 1 {
+		return ErrorInvalidHexChar
+	}
+
+	err := n.getBranchNode().addChild(idx, child.getNodeHash())
 	if err != nil {
 		return err
 	}
@@ -159,12 +162,16 @@ func (n *nodeContainerImp) addBranchChild(prefix string, child NodeContainer) er
 	return nil
 }
 
-func (n *nodeContainerImp) removeBranchChild(prefix string) error {
+func (n *nodeContainerImp) removeBranchChild(idx string) error {
 	if n.getNodeType() != pb.NodeType_branch {
 		return errors.New("node is not a branch node")
 	}
 
-	return n.getBranchNode().removeChild(prefix)
+	if len(idx) != 1 {
+		return ErrorInvalidHexChar
+	}
+
+	return n.getBranchNode().removeChild(idx)
 }
 
 func (n *nodeContainerImp) getParent() NodeContainer {

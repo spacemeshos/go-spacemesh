@@ -1,7 +1,9 @@
 package merkle
 
-// fromHexChar converts a hex character into its value and a success flag.
+// Converts a hex ascii character into its binary value and a success flag.
 // Adapted from https://golang.org/src/encoding/hex/hex.go - too bad it is private
+// Examples: '0' -> 0
+// Examples: 'f' -> 15
 func fromHexChar(c byte) (byte, bool) {
 	switch {
 	case '0' <= c && c <= '9':

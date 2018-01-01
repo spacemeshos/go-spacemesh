@@ -104,4 +104,3 @@ func (mt *merkleTreeImp) get(root NodeContainer, k string, pos int) ([]byte, boo
 
 	return nil, false, nil, nil
 }
-

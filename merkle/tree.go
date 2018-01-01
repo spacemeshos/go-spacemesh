@@ -113,7 +113,7 @@ func (mt *merkleTreeImp) Print() string {
 	buffer := bytes.Buffer{}
 	buffer.WriteString("\n------------\n")
 	if mt.root == nil {
-		buffer.WriteString( "Merkle Tree: Empty tree.\n")
+		buffer.WriteString("Merkle Tree: Empty tree.\n")
 	} else {
 
 		buffer.WriteString(fmt.Sprintf("Merkle tree: root hash %s\n", hex.EncodeToString(mt.GetRootHash())[:6]))

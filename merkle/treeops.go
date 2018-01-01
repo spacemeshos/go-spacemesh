@@ -5,7 +5,6 @@ import (
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
-
 )
 
 var EmptyTreeRootHash = crypto.Sha256([]byte(""))
@@ -65,5 +64,3 @@ func (mt *merkleTreeImp) persistUserValue(v []byte) error {
 func (mt *merkleTreeImp) Delete(k []byte) error {
 	return errors.New("not implemented yet")
 }
-
-

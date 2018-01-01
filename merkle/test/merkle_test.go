@@ -40,12 +40,12 @@ func TestSimpleTreeOps(t *testing.T) {
 
 	log.Info("User key hex: %s", hex.EncodeToString(k))
 
-	tryPut(t,m,k,v)
+	tryPut(t, m, k, v)
 
 	root := m.GetRootNode()
 	assert.NotNil(t, root, "expected non-empty tree")
 
-	validateGet(t,m,k,v)
+	validateGet(t, m, k, v)
 
 	err = m.CloseDataStores()
 	assert.NoErr(t, err, "failed to close m data stores")
@@ -96,15 +96,15 @@ func TestComplexTreeOps(t *testing.T) {
 	defer m.CloseDataStores() // we need to close the data stores when done w m - they are owned by m
 	assert.NoErr(t, err, "failed to create new Merkle tree")
 
-	tryPut(t,m,k1,v1)
-	tryPut(t,m,k2,v2)
+	tryPut(t, m, k1, v1)
+	tryPut(t, m, k2, v2)
 	//tryPut(t,m,k3,v3)
 	//tryPut(t,m,k4,v4)
 
 	t.Log(m.Print())
 
-	validateGet(t,m,k1,v1)
-	validateGet(t,m,k2,v2)
+	validateGet(t, m, k1, v1)
+	validateGet(t, m, k2, v2)
 	//validateGet(t,m,k3,v3)
 	//validateGet(t,m,k4,v4)
 

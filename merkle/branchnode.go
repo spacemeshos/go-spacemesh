@@ -13,28 +13,28 @@ import (
 type branchNode interface {
 	getValue() []byte                             // value terminated in the path to this node or nil if none exists. Value is key to use-space data
 	setValue(v []byte)                            // set the branch value
-	getPointer(prefix byte) []byte                // return pointer to child node for hex char entry or nil
+	getPointer(idx byte) []byte                // return pointer to child node for hex char entry or nil. idx - 0x0 - 0xf
 	marshal() ([]byte, error)                     // to binary data
 	getNodeHash() []byte                          // data hash (determines the pointer to this node)
 	getAllChildNodePointers() [][]byte            // get all pointers to child nodes
-	addChild(prefix string, pointer []byte) error // add a child to this node
-	removeChild(prefix string) error              // remove a child from this node
+	addChild(idx string, pointer []byte) error // add a child to this node
+	removeChild(idx string) error              // remove a child from this node
 	print() string                                // returns debug info
 }
 
 // Adds a child to the node
-func (b *branchNodeImpl) addChild(prefix string, pointer []byte) error {
+func (b *branchNodeImpl) addChild(idx string, pointer []byte) error {
 
-	if len(prefix) != 1 {
+	if len(idx) != 1 {
 		return ErrorInvalidHexChar
 	}
 
-	idx, ok := fromHexChar(prefix[0])
+	i, ok := fromHexChar(idx[0])
 	if !ok {
 		return ErrorInvalidHexChar
 	}
 
-	b.entries[idx] = pointer
+	b.entries[i] = pointer
 
 	// reset hash so it is lazy-computed once it is needed again
 	b.nodeHash = []byte{}
@@ -43,14 +43,18 @@ func (b *branchNodeImpl) addChild(prefix string, pointer []byte) error {
 }
 
 // Removes a child from the node
-func (b *branchNodeImpl) removeChild(prefix string) error {
+func (b *branchNodeImpl) removeChild(idx string) error {
 
-	idx, ok := fromHexChar(prefix[0])
+	if len(idx) != 1 {
+		return ErrorInvalidHexChar
+	}
+
+	i, ok := fromHexChar(idx[0])
 	if !ok {
 		return ErrorInvalidHexChar
 	}
 
-	delete(b.entries, idx)
+	delete(b.entries, i)
 
 	// reset hash
 	b.nodeHash = []byte{}

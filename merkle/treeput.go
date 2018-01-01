@@ -10,7 +10,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/merkle/pb"
 )
 
-
 var InvalidUserDataError = errors.New("expected non-empty k,v for user data")
 
 // store user data (k,v)
@@ -171,7 +170,6 @@ func (mt *merkleTreeImp) insert(root NodeContainer, pos int, k string, v []byte)
 			root.getBranchNode().setValue(v)
 		} else {
 			// get child node for first prefix hex char - child may be nil
-
 
 			idx, ok := fromHexChar(k[pos])
 			if !ok {
