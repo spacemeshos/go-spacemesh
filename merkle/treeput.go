@@ -6,6 +6,7 @@ import (
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/merkle/pb"
 )
 
 var InvalidUserDataError = errors.New("expected non-empty k,v for user data")
@@ -34,9 +35,9 @@ func (mt *merkleTreeImp) Put(k, v []byte) error {
 
 	// first, attempt to find the value in the tree and return path to where value should be added
 	// in the case it is not already in the tree
-	res, stack , err := mt.Get(k)
+	res, stack, err := mt.Get(k)
 
-	if res != nil && bytes.Equal(res,v) {
+	if res != nil && bytes.Equal(res, v) {
 		// value already stored in db
 		log.Info("Value already stored in tree")
 		return nil
@@ -58,6 +59,44 @@ func (mt *merkleTreeImp) Put(k, v []byte) error {
 	return nil
 }
 
+// Persists a branch of nodes
+// s: stack of nodes from root leading to the value of the key
+// k: key to value following the stack
+func (mt *merkleTreeImp) saveStack(k string, s *stack) error {
+
+	var lastRoot NodeContainer
+
+	for s.len() > 0 {
+		n := s.pop()
+
+		switch n.getNodeType() {
+		case pb.NodeType_branch:
+			if lastRoot != nil {
+				idx := string(k[0])
+				k = k[1:]
+				n.addBranchChild(idx, lastRoot)
+			}
+		case pb.NodeType_extension:
+
+			k = k[len(n.getShortNode().getPath()):]
+			if lastRoot != nil {
+				n.getShortNode().setValue(lastRoot.getNodeHash())
+			}
+
+		case pb.NodeType_leaf:
+			k = k[len(n.getShortNode().getPath()):]
+
+		default:
+			return errors.New("unexpected node type")
+		}
+
+		lastRoot = n
+		mt.persistNode(n)
+
+	}
+
+}
+
 // Upserts (updates or inserts) (k,v) to the tree
 // k: hex-encoded value's key (always abs full path)
 // pos: number of nibbles already matched on k to node on top of the stack
@@ -66,20 +105,20 @@ func (mt *merkleTreeImp) Put(k, v []byte) error {
 func (mt *merkleTreeImp) upsert(pos int, k string, v []byte, s *stack) error {
 
 	// empty tree - add k,v as leaf
-	if s.Len() == 0 {
+	if s.len() == 0 {
 		newLeaf, err := newLeafNodeContainer(k, v)
 		if err != nil {
 			return err
 		}
 		s.push(newLeaf)
-
-		// todo: save sll nodes on stack
+		mt.persistNode(newLeaf)
 		return nil
 	}
 
 	lastNode := s.pop()
 
 	if lastNode.isLeaf() {
+
 		l := 0
 		items := s.toSlice()
 		for _, n := range items {
@@ -94,11 +133,10 @@ func (mt *merkleTreeImp) upsert(pos int, k string, v []byte, s *stack) error {
 		cp := commonPrefix(lastNodePath, k[:l])
 
 		if len(cp) == len(lastNodePath) && pos == len(k) {
-
+			// update leaf value to this value
 			lastNode.getShortNode().setValue(v)
 			s.push(lastNode)
-
-			// todo: save all modified nodes in the stack
+			mt.saveStack(k, s)
 			return nil
 		}
 	}
@@ -113,11 +151,11 @@ func (mt *merkleTreeImp) upsert(pos int, k string, v []byte, s *stack) error {
 			}
 			s.push(newLeaf)
 
-		} else {
-			// todo: set branch node value to v here !!!
+		} else { // path matched - value should be stored at branch
+			lastNode.getBranchNode().setValue(v)
 		}
 
-		// todo: save all modified nodes in the stack
+		mt.saveStack(k, s)
 		return nil
 	}
 
@@ -175,7 +213,7 @@ func (mt *merkleTreeImp) upsert(pos int, k string, v []byte, s *stack) error {
 		s.push(newLeaf)
 	}
 
-	// todo: save stack
+	mt.saveStack(k, s)
 
 	return nil
 }

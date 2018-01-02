@@ -52,6 +52,7 @@ type shortNodeImpl struct {
 }
 
 func (s *shortNodeImpl) getNodeHash() []byte {
+
 	if s.nodeHash == nil || len(s.nodeHash) == 0 { // lazy eval
 
 		// calc hash based on current marshaled node data and store it
@@ -68,12 +69,17 @@ func (s *shortNodeImpl) getNodeHash() []byte {
 func (s *shortNodeImpl) setValue(v []byte) {
 	s.value = v
 
-	// reset hash
+	// invalidate hash
 	s.nodeHash = []byte{}
 }
 
-func (s *shortNodeImpl) getValue() []byte { return s.value }
-func (s *shortNodeImpl) isLeaf() bool     { return s.nodeType == pb.NodeType_leaf }
+func (s *shortNodeImpl) getValue() []byte {
+	return s.value
+}
+
+func (s *shortNodeImpl) isLeaf() bool {
+	return s.nodeType == pb.NodeType_leaf
+}
 
 func (s *shortNodeImpl) getPath() string {
 	return s.path

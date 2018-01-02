@@ -30,7 +30,7 @@ type NodeContainer interface {
 	loadChildren(db *leveldb.DB) error // load all direct children from store
 	getChild(pointer []byte) NodeContainer
 
-	addBranchChild(idx string, child NodeContainer) error
+	addBranchChild(idx string, child NodeContainer) error // idx - hex char
 	removeBranchChild(idx string) error
 
 	getNodeEmbeddedPath() string // hex-encoded nibbles

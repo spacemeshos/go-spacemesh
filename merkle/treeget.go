@@ -7,10 +7,9 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
-// gets value associated with user key
-// returns error on internal error
-// returns value if found of nil if not found
-// returns stack with the path to the value
+// Gets user value associated with user key
+// returns value if found and nil otherwise
+// returns stack with the path closest to the value
 func (mt *merkleTreeImp) Get(k []byte) ([]byte, *stack, error) {
 
 	keyHexStr := hex.EncodeToString(k)

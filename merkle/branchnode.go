@@ -10,7 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/merkle/pb"
 )
 
-// An mutable branch (full) node
+// An mutable branch node
 type branchNode interface {
 	getValue() []byte                          // value terminated in the path to this node or nil if none exists. Value is key to use-space data
 	setValue(v []byte)                         // set the branch value
@@ -37,7 +37,7 @@ func (b *branchNodeImpl) addChild(idx string, pointer []byte) error {
 
 	b.entries[i] = pointer
 
-	// reset hash so it is lazy-computed once it is needed again
+	// reset hash
 	b.nodeHash = []byte{}
 
 	return nil

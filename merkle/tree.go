@@ -12,11 +12,11 @@ import (
 // All (k,v) methods are in user data space and not in tree space.
 // Tree space pointers and paths are internal only.
 type MerkleTree interface {
-	Put(k, v []byte) error              // store user key, value
-	Delete(k []byte) error              // delete user value indexed by key
+	Put(k, v []byte) error                // store user key, value
+	Delete(k []byte) error                // delete user value indexed by key
 	Get(k []byte) ([]byte, *stack, error) // get user value indexed by key
-	GetRootHash() []byte                // get tree root hash
-	GetRootNode() NodeContainer         // get root node
+	GetRootHash() []byte                  // get tree root hash
+	GetRootNode() NodeContainer           // get root node
 
 	CloseDataStores() error // call when done w the tree
 

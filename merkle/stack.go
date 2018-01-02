@@ -16,7 +16,7 @@ func newStack() *stack {
 	return &stack{nil, 0}
 }
 
-func (s *stack) Len() int {
+func (s *stack) len() int {
 	return s.length
 }
 
