@@ -104,8 +104,8 @@ func (mt *merkleTreeImp) saveStack(k string, s *stack) error {
 // Returns error if failed to upset the v, nil otherwise
 func (mt *merkleTreeImp) upsert(pos int, k string, v []byte, s *stack) error {
 
-	// empty tree - add k,v as leaf
 	if s.len() == 0 {
+		// empty tree - insert k,v as leaf and return
 		newLeaf, err := newLeafNodeContainer(k, v)
 		if err != nil {
 			return err
@@ -119,7 +119,7 @@ func (mt *merkleTreeImp) upsert(pos int, k string, v []byte, s *stack) error {
 
 	if lastNode.isLeaf() {
 
-		l := 0
+		l := 0 // # of nibbles match on stack to leaf (excluding)
 		items := s.toSlice()
 		for _, n := range items {
 			if n.isBranch() {
@@ -129,11 +129,11 @@ func (mt *merkleTreeImp) upsert(pos int, k string, v []byte, s *stack) error {
 			}
 		}
 
-		lastNodePath := lastNode.getShortNode().getPath()
-		cp := commonPrefix(lastNodePath, k[:l])
+		leafPath := lastNode.getShortNode().getPath()
+		cp := commonPrefix(leafPath, k[l:])
 
-		if len(cp) == len(lastNodePath) && pos == len(k) {
-			// update leaf value to this value
+		if len(cp) == len(leafPath) && pos == len(k) {
+			// update leaf value to this value and return
 			lastNode.getShortNode().setValue(v)
 			s.push(lastNode)
 			mt.saveStack(k, s)
@@ -188,13 +188,13 @@ func (mt *merkleTreeImp) upsert(pos int, k string, v []byte, s *stack) error {
 	s.push(newBranch)
 
 	if len(lastNodePath) > 0 {
-		branchKey := string(lastNodePath[0])
+		branchChildKey := string(lastNodePath[0])
 		lastNodePath = lastNodePath[1:]
 
 		if len(lastNodePath) > 0 || lastNode.isLeaf() {
 			// shrink ext or leaf
 			lastNode.getShortNode().setPath(lastNodePath)
-			newBranch.addBranchChild(branchKey, lastNode)
+			newBranch.addBranchChild(branchChildKey, lastNode)
 		} else {
 			// remove ext
 			newBranch.getBranchNode().setValue(lastNode.getShortNode().getValue())

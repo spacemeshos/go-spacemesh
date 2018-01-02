@@ -96,6 +96,11 @@ func TestComplexTreeOps(t *testing.T) {
 	assert.NoErr(t, err, "failed to create new Merkle tree")
 
 	tryPut(t, m, k1, v1)
+
+	t.Log(m.Print())
+
+	//validateGet(t, m, k1, v1)
+
 	tryPut(t, m, k2, v2)
 	//tryPut(t, m, k3, v3)
 	//tryPut(t, m, k4, v4)
