@@ -32,7 +32,7 @@ To find a value we can treat it as k and do an external table lookup. If the val
 - Hex encoded strings can represent paths with odd number of nibbles as each hex char represents one nibble (4 bits of data with 16 possible values)
 - We avoid working with []byte for paths as it can't represent a path with an odd number of nibbles without padding and special handling.
 
-## main Node Types
+## Node Types
 - Branch node
     - A 17-items node [ v0 ... v15, value ]
     - First 16 items: A Nibbles array with one entry for each nibble (hex char). Each array index is either nil or a pointer P to a child node.

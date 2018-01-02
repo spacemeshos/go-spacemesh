@@ -9,7 +9,7 @@ import (
 
 // Gets user value associated with user key
 // returns value if found and nil otherwise
-// returns stack with the path closest to the value
+// Returned stack - The tree path path closest to the value
 func (mt *merkleTreeImp) Get(k []byte) ([]byte, *stack, error) {
 
 	keyHexStr := hex.EncodeToString(k)

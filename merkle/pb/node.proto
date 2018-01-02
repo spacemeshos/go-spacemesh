@@ -11,7 +11,7 @@ enum NodeType {
 
 message Node {
     NodeType nodeType = 1;
-    repeated bytes entries = 2; // only for branch node. 16 repated enties - one for each hex char, an entry can be an empty []byte slice
+    repeated bytes entries = 2; // only for branch node. 16 repated enties - one for each hex char (nibble), an entry can be an empty []byte slice
     string path = 3;            // hex encoded path
     bytes value = 4;            // value is based on node type type
 }
