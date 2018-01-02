@@ -1,10 +1,13 @@
 package merkle
 
 import (
+	"bytes"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 var EmptyTreeRootHash = crypto.Sha256([]byte(""))
@@ -35,7 +38,7 @@ func (mt *merkleTreeImp) persistNode(node NodeContainer) error {
 
 	err = mt.treeData.Put(nodeKey, nodeData, nil)
 	if err != nil {
-		log.Error("Failed to write tree data to db. %v", err)
+		log.Error("failed to write tree data to db. %v", err)
 	}
 
 	log.Info("Node persisted to tree db. type: %s. key: %s", node.getNodeType(), hex.EncodeToString(nodeKey)[:6])
@@ -45,18 +48,17 @@ func (mt *merkleTreeImp) persistNode(node NodeContainer) error {
 
 func (mt *merkleTreeImp) persistUserValue(v []byte) error {
 	if len(v) <= 32 {
-		return errors.New("Value too small. Epxected len(v) > 32")
+		return errors.New("value too small. Epxected len(v) > 32")
 	}
 
 	k := crypto.Sha256(v)
 	err := mt.userData.Put(k, v, nil)
 	if err != nil {
-		log.Error("Failed to write user data to db. %v", err)
+		log.Error("failed to write user data to db. %v", err)
 		return err
 	}
 
 	log.Info("Persisted %s %s to user db.", hex.EncodeToString(k), hex.EncodeToString(v))
-
 	return nil
 }
 
@@ -64,3 +66,36 @@ func (mt *merkleTreeImp) persistUserValue(v []byte) error {
 func (mt *merkleTreeImp) Delete(k []byte) error {
 	return errors.New("not implemented yet")
 }
+
+func (mt *merkleTreeImp) CloseDataStores() error {
+
+	err := mt.treeData.Close()
+	if err != nil && err != leveldb.ErrClosed {
+		log.Error("Failed to close tree db %v", err)
+		return err
+	}
+
+	err = mt.userData.Close()
+	if err != nil && err != leveldb.ErrClosed {
+		log.Error("Failed to close user db %v", err)
+		return err
+	}
+
+	return nil
+}
+
+// Print the tree to a string
+func (mt *merkleTreeImp) Print() string {
+	buffer := bytes.Buffer{}
+	buffer.WriteString("\n------------\n")
+	if mt.root == nil {
+		buffer.WriteString("Merkle Tree: Empty tree.\n")
+	} else {
+
+		buffer.WriteString(fmt.Sprintf("Merkle tree: root hash <%s>\n", hex.EncodeToString(mt.GetRootHash())[:6]))
+		buffer.WriteString(mt.root.print(mt.userData, mt.treeData))
+	}
+	buffer.WriteString("------------\n")
+	return buffer.String()
+}
+
