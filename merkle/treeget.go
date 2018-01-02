@@ -2,31 +2,33 @@ package merkle
 
 import (
 	"encoding/hex"
-	"errors"
-	"fmt"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/merkle/pb"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
-// get value associated with key
-// returns error on internal error. flase if not found
-func (mt *merkleTreeImp) Get(k []byte) ([]byte, bool, error) {
+// gets value associated with user key
+// returns error on internal error
+// returns value if found of nil if not found
+// returns stack with the path to the value
+func (mt *merkleTreeImp) Get(k []byte) ([]byte, *stack, error) {
 
 	keyHexStr := hex.EncodeToString(k)
 
 	log.Info("m get %s ...", keyHexStr)
 
+	s := newStack()
+
 	// get the tree stored user data key to the value
-	userValue, found, _, err := mt.get(mt.root, keyHexStr, 0)
+	userValue, err := mt.get(mt.root, keyHexStr, 0, s)
 	if err != nil {
 		log.Error("Error getting user data from m. %v", err)
-		return nil, false, err
+		return nil, s, err
 	}
 
-	if !found {
+	if userValue == nil {
 		log.Info("No data in m for %s", keyHexStr)
-		return nil, false, nil
+		return nil, s, nil
 	}
 
 	log.Info("Found %s value in merkle tree for key: %s", hex.EncodeToString(userValue), keyHexStr)
@@ -36,71 +38,68 @@ func (mt *merkleTreeImp) Get(k []byte) ([]byte, bool, error) {
 
 	if err == leveldb.ErrNotFound {
 		// the value from the merkle tree is the short user valuevalue
-		return userValue, true, nil
+		return userValue, s, nil
 	}
 
 	if err != nil {
-		return nil, false, err
+		return nil, s, err
 	}
 
-	return value, true, err
+	return value, s, err
 }
 
 // Get user value v keyed by k v from the tree
-// (origNode node, key []byte, pos int) (value []byte, newnode node, didResolve bool, err error)
+// root: tree root to start looking from
 // pos: number of key hex chars (nibbles) already matched and the index in key to start matching from
-// k: hex encoded key
-func (mt *merkleTreeImp) get(root NodeContainer, k string, pos int) ([]byte, bool, NodeContainer, error) {
+// k: hex-encoded path (always abs full path)
+// s: stack of nodes from root to where value should be in the tree
+func (mt *merkleTreeImp) get(root NodeContainer, k string, pos int, s *stack) ([]byte, error) {
 
 	if root == nil {
-		return nil, false, nil, nil
+		return nil, nil
 	}
 
 	root.loadChildren(mt.treeData)
+	s.push(root)
 
 	switch root.getNodeType() {
 	case pb.NodeType_branch:
 
 		if pos == len(k)-1 {
 			// return branch node stored value terminated at this path
-			return root.getBranchNode().getValue(), true, root, nil
+			return root.getBranchNode().getValue(), nil
 		}
 
-		idx, ok := fromHexChar(k[pos])
-		if !ok {
-			return nil, false, nil, errors.New(fmt.Sprintf("Invalid hex char at index %d of %s", pos, k))
-		}
-
-		p := root.getBranchNode().getPointer(idx)
+		p := root.getBranchNode().getPointer(string(k[pos]))
 		if p != nil {
 			n := root.getChild(p)
-			return mt.get(n, k, pos+1)
+			return mt.get(n, k, pos+1, s)
 		}
 
-		return nil, false, nil, nil
+		return nil, nil
 
 	case pb.NodeType_extension:
 
 		// extension node partial path
 		path := root.getExtNode().getPath()
 		if len(k)-pos < len(path) || path != k[pos:pos+len(path)] {
-			return nil, false, nil, nil
+			return nil, nil
 		}
 
 		p := root.getExtNode().getValue()
 		child := root.getChild(p)
-		return mt.get(child, k, pos+len(path))
+		return mt.get(child, k, pos+len(path), s)
 
 	case pb.NodeType_leaf:
 
 		p := root.getLeafNode().getPath()
 		if len(k)-pos < len(p) || p != k[pos:pos+len(p)] {
-			return nil, false, nil, nil
+			return nil, nil
 		}
 
 		// found
-		return root.getLeafNode().getValue(), true, root, nil
+		return root.getLeafNode().getValue(), nil
 	}
 
-	return nil, false, nil, nil
+	return nil, nil
 }

@@ -9,7 +9,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/merkle/pb"
 )
 
-// shortNode is an immutable leaf or an extension node
+// shortNode is an mutable leaf or an extension node
 // For a leaf node, value is a key of a value in user-space data store
 // For an ext node, value is a pointer to another node in tree-space data store
 // In both cases values are sha3s
@@ -20,7 +20,8 @@ type shortNode interface {
 	marshal() ([]byte, error) // to binary data
 	getNodeHash() []byte      // node binary data hash - determines the value of pointer to this node
 	print() string            // returns debug info
-
+	setValue(v []byte)        // update the node value
+	setPath(p string)         // set the path
 }
 
 func newShortNode(nodeType pb.NodeType, path string, value []byte) shortNode {
@@ -64,12 +65,23 @@ func (s *shortNodeImpl) getNodeHash() []byte {
 	return s.nodeHash
 }
 
+func (s *shortNodeImpl) setValue(v []byte) {
+	s.value = v
+
+	// reset hash
+	s.nodeHash = []byte{}
+}
+
 func (s *shortNodeImpl) getValue() []byte { return s.value }
 func (s *shortNodeImpl) isLeaf() bool     { return s.nodeType == pb.NodeType_leaf }
 
 func (s *shortNodeImpl) getPath() string {
-	// todo: consider parity
 	return s.path
+}
+
+func (s *shortNodeImpl) setPath(p string) {
+	s.path = p
+	s.nodeHash = []byte{}
 }
 
 func (s *shortNodeImpl) marshal() ([]byte, error) {

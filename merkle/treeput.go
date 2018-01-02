@@ -1,18 +1,16 @@
 package merkle
 
 import (
-	"bytes"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/merkle/pb"
 )
 
 var InvalidUserDataError = errors.New("expected non-empty k,v for user data")
 
 // store user data (k,v)
+
 func (mt *merkleTreeImp) Put(k, v []byte) error {
 
 	if len(v) == 0 || len(k) == 0 {
@@ -37,198 +35,144 @@ func (mt *merkleTreeImp) Put(k, v []byte) error {
 
 	log.Info("m inserting user data for key: %s...", keyStr)
 
-	newRoot, err := mt.insert(mt.root, 0, keyStr, userValue)
+	s := newStack()
+	if mt.root != nil {
+		s.push(mt.root)
+	}
+
+	// todo: find value - return path where value should be set / inserted
+
+	err := mt.upsert(0, keyStr, userValue, s)
 	if err != nil {
 		return err
 	}
 
-	mt.root = newRoot
+	if mt.root == nil {
+		nodes := s.toSlice()
+		mt.root = nodes[0]
+	}
 
 	return nil
 }
 
-// Inserts (k,v) to the tree
-// root: current tree (or subtree) root or nil if tree is empty
+// Upserts (updates or inserts) (k,v) to the tree
 // k: hex-encoded value's key (always abs full path)
-// pos: number of nibbles already matched on k to root
-// returns root of newly inserted node branch on insert (more than one node may be inserted in 1 iteration)
-// returns new root if inserted and nil error, or error otherwise
-func (mt *merkleTreeImp) insert(root NodeContainer, pos int, k string, v []byte) (NodeContainer, error) {
+// pos: number of nibbles already matched on k to node on top of the stack
+// s: tree path from root to where the value should be updated in the tree
+// Returns error if failed to upset the v, nil otherwise
+func (mt *merkleTreeImp) upsert(pos int, k string, v []byte, s *stack) error {
 
-	if root == nil {
-
-		node, err := newLeftNodeContainer(k[pos:], v, nil)
+	// empty tree - add k,v as leaf
+	if s.Len() == 0 {
+		newLeaf, err := newLeaftNodeContainer(k, v)
 		if err != nil {
-			return nil, err
+			return err
 		}
+		s.push(newLeaf)
 
-		err = mt.persistNode(node)
-		if err != nil {
-			return nil, err
-		}
-
-		return node, nil
+		// todo: save sll nodes on stack
+		return nil
 	}
 
-	// non-empty tree at root  - load root direct children if they are not already loaded
-	err := root.loadChildren(mt.treeData)
-	if err != nil {
-		return nil, err
+	lastNode := s.pop()
+
+	if lastNode.isLeaf() {
+		l := 0
+		items := s.toSlice()
+		for _, n := range items {
+			if n.isBranch() {
+				l++
+			} else {
+				l += len(n.getShortNode().getPath())
+			}
+		}
+
+		lastNodePath := lastNode.getShortNode().getPath()
+		cp := commonPrefix(lastNodePath, k[:l])
+
+		if len(cp) == len(lastNodePath) && pos == len(k) {
+
+			lastNode.getShortNode().setValue(v)
+			s.push(lastNode)
+
+			// todo: save all modified nodes in the stack
+			return nil
+		}
 	}
 
-	switch root.getNodeType() {
+	if lastNode.isBranch() {
+		s.push(lastNode)
+		if pos < len(k) {
+			pos++
+			newLeaf, err := newLeaftNodeContainer(k[pos:], v)
+			if err != nil {
+				return err
+			}
+			s.push(newLeaf)
 
-	case pb.NodeType_extension:
-
-		// find matched prefix
-		cp := commonPrefix(root.getNodeEmbeddedPath(), k[pos:])
-		lcp := len(cp)
-
-		if lcp == len(k[pos:]) {
-			// todo: matched the whole key - value should be set here
-			// should this be replaced with branch + value ?
-		}
-
-		// pointer to ext node child
-		pointer := root.getExtNode().getValue()
-
-		// ext node child node
-		child := root.getChild(pointer)
-
-		if child == nil {
-			return nil, errors.New("Expected non-nil ext node child")
-		}
-
-		return mt.insert(child, pos+lcp, k, v)
-
-	case pb.NodeType_leaf:
-
-		/// example w leaf:
-		/// K: 0123456789
-		/// pos: 2 (01 matched)
-		/// leaf-path: 23455789
-		/// cp: 2345
-		/// lcp: 4
-
-		/// ext: key: 2345 -> branch
-		/// branch childs:
-		/// l1 6 -> 789 (new path leaf), v. branch insert: pos: 6, k
-		/// l2 5 -> 789, old leaf val. v branch insert: pos 6, shared prefix + old-leaf k
-
-		if bytes.Equal(root.getLeafNode().getValue(), v) { // value already in this leaf
-			return root, nil
-		}
-
-		cp := commonPrefix(root.getNodeEmbeddedPath(), k[pos:])
-		lcp := len(cp)
-
-		if lcp == len(k[pos:]) {
-			// todo: matched the whole key - value should be set here
-
-		}
-
-		// create a branch + 1 existing updated node (ext or leaf) + new leaf node
-
-		b, err := newBranchNodeContainer(nil, nil, root)
-		if err != nil {
-			return nil, err
-		}
-
-		// ext 1 ->  branch -> 2 -> .... 3 -> .....
-
-		// existing leaf inserted into branch
-		_, err = mt.insert(b, pos+lcp, k[:pos]+root.getNodeEmbeddedPath(), root.getLeafNode().getValue())
-		if err != nil {
-			return nil, err
-		}
-
-		// insert the value into the branch
-		_, err = mt.insert(b, pos+lcp, k, v)
-		if err != nil {
-			return nil, err
-		}
-
-		if len(cp) == 0 { // no need to return extension node as there's no shared prefix
-			return b, nil
-		}
-
-		// add ext node child of root with common prefix w branch as child
-		ext, err := newExtNodeContainer(k[pos:pos+lcp], b.getNodeHash(), root)
-
-		// persist k,v and ext node
-		err = mt.persistNode(ext)
-		if err != nil {
-			return nil, err
-		}
-
-		// remove replaced leaf or ext node
-		err = mt.treeData.Delete(root.getNodeHash(), nil)
-		if err != nil {
-			return nil, err
-		}
-
-		// return newly added ext node
-		return ext, nil
-
-	case pb.NodeType_branch:
-
-		// save the root key as hash is about to change
-		oldPointer := root.getNodeHash()
-
-		// k: 01234
-		if pos == len(k) {
-			// we matched the whole key and got to a branch node - save value in the value field
-			root.getBranchNode().setValue(v)
 		} else {
-			// get child node for first prefix hex char - child may be nil
-
-			idx, ok := fromHexChar(k[pos])
-			if !ok {
-				return nil, errors.New(fmt.Sprintf("invalid hex char at %d path %s", pos, k))
-			}
-
-			p := root.getBranchNode().getPointer(idx)
-			childNode := root.getChild(p)
-
-			// insert value to tree rooted w childNode or to an empty tree
-			node, err := mt.insert(childNode, pos+1, k, v)
-			if err != nil {
-				return nil, err
-			}
-
-			err = root.addBranchChild(string(k[pos]), node)
-
-			if err != nil {
-				log.Error("Failed to add child to branch")
-				return nil, err
-			}
+			// todo: set branch node value to v here !!!
 		}
 
-		// update pointers all the way to the root of the tree
-		//parent := root.getParent()
-		//if (parent != nil) {
-		//	parent.updateChildPointer(oldPointer, , root)
-		//}
-
-		// todo: when a branch node changes, all the pointers from it up to the root change
-		// and needs to get updated to keep the trie correct - is this post-processing or recursive?
-
-		// branch node changed so persist it
-		err = mt.persistNode(root)
-		if err != nil {
-			return nil, err
-		}
-
-		// remove root from keystore indexed by its older hash - it is now saved with the new hash
-		err = mt.treeData.Delete(oldPointer, nil)
-		if err != nil {
-			return nil, err
-		}
-
-		log.Info("Removed node from tree db for key: %s", hex.EncodeToString(oldPointer)[:6])
-
-		return root, nil
-
+		// todo: save all modified nodes in the stack
+		return nil
 	}
-	return nil, nil
+
+	// lastNode is ext or leaf
+
+	lastNodePath := lastNode.getShortNode().getPath()
+	cp := commonPrefix(lastNodePath, k[pos:])
+	cpl := len(cp)
+
+	if cpl > 0 {
+		key := lastNodePath[:cpl]
+		newExtNode, err := newExtNodeContainer(key, []byte{})
+		if err != nil {
+			return err
+		}
+		s.push(newExtNode)
+
+		if cpl < len(lastNodePath) {
+			lastNodePath = lastNodePath[cpl:]
+		} else {
+			lastNodePath = ""
+		}
+		pos += cpl
+	}
+
+	newBranch, err := newBranchNodeContainer(nil, nil)
+	if err != nil {
+		return err
+	}
+	s.push(newBranch)
+
+	if len(lastNodePath) > 0 {
+		branchKey := string(lastNodePath[0])
+		lastNodePath = lastNodePath[1:]
+
+		if len(lastNodePath) > 0 || lastNode.isLeaf() {
+			// shrink ext or leaf
+			lastNode.getShortNode().setPath(lastNodePath)
+			newBranch.addBranchChild(branchKey, lastNode)
+		} else {
+			// remove ext
+			newBranch.getBranchNode().setValue(lastNode.getShortNode().getValue())
+		}
+	} else {
+		newBranch.getBranchNode().setValue(lastNode.getShortNode().getValue())
+	}
+
+	if pos < len(k) {
+		pos++
+		// add new leaf to branch node
+		newLeaf, err := newLeaftNodeContainer(k[pos:], v)
+		if err != nil {
+			return err
+		}
+		s.push(newLeaf)
+	}
+
+	// todo: save stack
+
+	return nil
 }

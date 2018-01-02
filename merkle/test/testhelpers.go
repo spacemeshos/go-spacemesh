@@ -13,8 +13,7 @@ import (
 
 // helper method - validate we can get value from tree and that result matches expected value v
 func validateGet(t *testing.T, tree merkle.MerkleTree, k, v []byte) {
-	res, ok, err := tree.Get(k)
-	assert.True(t, ok, "expected data from tree")
+	res, _, err := tree.Get(k)
 	assert.NoErr(t, err, "failed to get data")
 	assert.True(t, bytes.Equal(res, v), "unexpected data")
 }

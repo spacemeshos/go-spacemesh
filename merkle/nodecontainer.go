@@ -19,22 +19,21 @@ type NodeContainer interface {
 	getBranchNode() branchNode
 	getShortNode() shortNode
 	isShortNode() bool
+	isLeaf() bool
+	isExt() bool
+	isBranch() bool
 	marshal() ([]byte, error) // get binary encoded marshaled node data
 	getNodeHash() []byte
 
+	// child care
 	didLoadChildren() bool
 	loadChildren(db *leveldb.DB) error // load all direct children from store
-
 	getChild(pointer []byte) NodeContainer
 
 	addBranchChild(idx string, child NodeContainer) error
-
 	removeBranchChild(idx string) error
 
-	getParent() NodeContainer // loaded nodes have a ref to their parent
-	setParent(p NodeContainer)
-
-	getNodeEmbeddedPath() string
+	getNodeEmbeddedPath() string // hex-encoded nibbles
 
 	print(userDb *leveldb.DB, treeDb *leveldb.DB) string
 }
@@ -48,35 +47,32 @@ type nodeContainerImp struct {
 	// the only state maintained by nodeContainer is a the runtime parent and node children
 	// this info is not db persisted but is computed at runtime and held in nodes loaded to memory
 	childrenLoaded bool
-	parent         NodeContainer
 	children       map[string]NodeContainer // k -pointer to child node (hex encoded). v- child
 }
 
-func newLeftNodeContainer(path string, value []byte, parent NodeContainer) (NodeContainer, error) {
+func newLeaftNodeContainer(path string, value []byte) (NodeContainer, error) {
 
 	n := newShortNode(pb.NodeType_leaf, path, value)
 	c := &nodeContainerImp{
 		nodeType: pb.NodeType_leaf,
 		leaf:     n,
 		children: make(map[string]NodeContainer),
-		parent:   parent,
 	}
 	return c, nil
 }
 
-func newExtNodeContainer(path string, value []byte, parent NodeContainer) (NodeContainer, error) {
+func newExtNodeContainer(path string, value []byte) (NodeContainer, error) {
 	n := newShortNode(pb.NodeType_extension, path, value)
 
 	c := &nodeContainerImp{
 		nodeType: pb.NodeType_extension,
 		ext:      n,
 		children: make(map[string]NodeContainer),
-		parent:   parent,
 	}
 	return c, nil
 }
 
-func newBranchNodeContainer(entries map[byte][]byte, value []byte, parent NodeContainer) (NodeContainer, error) {
+func newBranchNodeContainer(entries map[byte][]byte, value []byte) (NodeContainer, error) {
 
 	n := newBranchNode(entries, value)
 
@@ -84,13 +80,12 @@ func newBranchNodeContainer(entries map[byte][]byte, value []byte, parent NodeCo
 		nodeType: pb.NodeType_branch,
 		branch:   n,
 		children: make(map[string]NodeContainer),
-		parent:   parent,
 	}
 
 	return c, nil
 }
 
-func newNodeFromData(data []byte, parent NodeContainer) (NodeContainer, error) {
+func newNodeFromData(data []byte) (NodeContainer, error) {
 
 	n := &pb.Node{}
 	err := proto.Unmarshal(data, n)
@@ -100,7 +95,6 @@ func newNodeFromData(data []byte, parent NodeContainer) (NodeContainer, error) {
 
 	c := &nodeContainerImp{
 		children: make(map[string]NodeContainer),
-		parent:   parent,
 	}
 
 	switch n.NodeType {
@@ -121,26 +115,6 @@ func newNodeFromData(data []byte, parent NodeContainer) (NodeContainer, error) {
 }
 
 ////////////////////
-
-/*
-func (n *nodeContainerImp) updateChildPointer(prefix string, child NodeContainer) {
-
-	parent := n.getParent()
-
-	switch n.nodeType {
-	case pb.NodeType_branch:
-		n.addBranchChild(prefix, child)
-	case pb.NodeType_extension:
-		// replace the ext node with new ext node
-		n := newShortNode(pb.NodeType_extension, n.getExtNode().getPath(), child.getNodeHash())
-
-	}
-
-	if parent != nil {
-		parent.updateChildPointer()
-	}
-
-}*/
 
 func (n *nodeContainerImp) addBranchChild(idx string, child NodeContainer) error {
 
@@ -174,14 +148,6 @@ func (n *nodeContainerImp) removeBranchChild(idx string) error {
 	return n.getBranchNode().removeChild(idx)
 }
 
-func (n *nodeContainerImp) getParent() NodeContainer {
-	return n.parent
-}
-
-func (n *nodeContainerImp) setParent(p NodeContainer) {
-	n.parent = p
-}
-
 func (n *nodeContainerImp) getChild(pointer []byte) NodeContainer {
 	return n.children[hex.EncodeToString(pointer)]
 }
@@ -211,6 +177,18 @@ func (n *nodeContainerImp) getShortNode() shortNode {
 	default:
 		return nil
 	}
+}
+
+func (n *nodeContainerImp) isLeaf() bool {
+	return n.nodeType == pb.NodeType_leaf
+}
+
+func (n *nodeContainerImp) isExt() bool {
+	return n.nodeType == pb.NodeType_extension
+}
+
+func (n *nodeContainerImp) isBranch() bool {
+	return n.nodeType == pb.NodeType_branch
 }
 
 func (n *nodeContainerImp) isShortNode() bool {
@@ -261,7 +239,7 @@ func (n *nodeContainerImp) loadChildren(db *leveldb.DB) error {
 			return err
 		}
 
-		child, err := newNodeFromData(data, n)
+		child, err := newNodeFromData(data)
 		if err != nil {
 			return err
 		}
@@ -285,7 +263,7 @@ func (n *nodeContainerImp) loadChildren(db *leveldb.DB) error {
 				return err
 			}
 
-			node, err := newNodeFromData(data, n)
+			node, err := newNodeFromData(data)
 			if err != nil {
 				return err
 			}

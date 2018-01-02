@@ -102,8 +102,8 @@ func TestComplexTreeOps(t *testing.T) {
 
 	t.Log(m.Print())
 
-	validateGet(t, m, k1, v1)
-	validateGet(t, m, k2, v2)
+	//validateGet(t, m, k1, v1)
+	//validateGet(t, m, k2, v2)
 	//validateGet(t, m, k3, v3)
 	//validateGet(t, m, k4, v4)
 

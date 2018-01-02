@@ -14,7 +14,7 @@ import (
 type MerkleTree interface {
 	Put(k, v []byte) error              // store user key, value
 	Delete(k []byte) error              // delete user value indexed by key
-	Get(k []byte) ([]byte, bool, error) // get user value indexed by key
+	Get(k []byte) ([]byte, *stack, error) // get user value indexed by key
 	GetRootHash() []byte                // get tree root hash
 	GetRootNode() NodeContainer         // get root node
 
@@ -82,7 +82,7 @@ func NewTreeFromDb(rootHash []byte, userDataFileName string, treeDataFileName st
 		return nil, err
 	}
 
-	root, err := newNodeFromData(data, nil)
+	root, err := newNodeFromData(data)
 	if err != nil {
 		return nil, err
 	}
