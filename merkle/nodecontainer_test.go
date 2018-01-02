@@ -112,7 +112,7 @@ func TestLeafNodeContainer(t *testing.T) {
 	hash := node.getNodeHash()
 	assert.True(t, bytes.Equal(crypto.Sha256(data1), hash), "hash mismatch")
 
-	node1, err := newLeaftNodeContainer(l1Hex, l1)
+	node1, err := newLeafNodeContainer(l1Hex, l1)
 	assert.NoErr(t, err, "failed to create node container from leaf node")
 
 	assert.True(t, node1.getNodeType() == pb.NodeType_leaf, "expected leaf")

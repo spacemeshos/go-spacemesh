@@ -50,13 +50,13 @@ type nodeContainerImp struct {
 	children       map[string]NodeContainer // k -pointer to child node (hex encoded). v- child
 }
 
-func newLeaftNodeContainer(path string, value []byte) (NodeContainer, error) {
+func newLeafNodeContainer(path string, value []byte) (NodeContainer, error) {
 
 	n := newShortNode(pb.NodeType_leaf, path, value)
 	c := &nodeContainerImp{
 		nodeType: pb.NodeType_leaf,
 		leaf:     n,
-		children: make(map[string]NodeContainer),
+		children: nil,
 	}
 	return c, nil
 }
@@ -149,6 +149,10 @@ func (n *nodeContainerImp) removeBranchChild(idx string) error {
 }
 
 func (n *nodeContainerImp) getChild(pointer []byte) NodeContainer {
+	if n.children == nil {
+		return nil
+	}
+
 	return n.children[hex.EncodeToString(pointer)]
 }
 

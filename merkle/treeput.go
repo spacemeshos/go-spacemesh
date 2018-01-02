@@ -1,6 +1,7 @@
 package merkle
 
 import (
+	"bytes"
 	"encoding/hex"
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/crypto"
@@ -31,24 +32,26 @@ func (mt *merkleTreeImp) Put(k, v []byte) error {
 		userValue = v
 	}
 
-	keyStr := hex.EncodeToString(k)
+	// first, attempt to find the value in the tree and return path to where value should be added
+	// in the case it is not already in the tree
+	res, stack , err := mt.Get(k)
 
-	log.Info("m inserting user data for key: %s...", keyStr)
-
-	s := newStack()
-	if mt.root != nil {
-		s.push(mt.root)
+	if res != nil && bytes.Equal(res,v) {
+		// value already stored in db
+		log.Info("Value already stored in tree")
+		return nil
 	}
 
-	// todo: find value - return path where value should be set / inserted
+	hexKey := hex.EncodeToString(k)
+	log.Info("m Inserting user data for key: %s...", hexKey)
 
-	err := mt.upsert(0, keyStr, userValue, s)
+	err = mt.upsert(0, hexKey, userValue, stack)
 	if err != nil {
 		return err
 	}
 
 	if mt.root == nil {
-		nodes := s.toSlice()
+		nodes := stack.toSlice()
 		mt.root = nodes[0]
 	}
 
@@ -64,7 +67,7 @@ func (mt *merkleTreeImp) upsert(pos int, k string, v []byte, s *stack) error {
 
 	// empty tree - add k,v as leaf
 	if s.Len() == 0 {
-		newLeaf, err := newLeaftNodeContainer(k, v)
+		newLeaf, err := newLeafNodeContainer(k, v)
 		if err != nil {
 			return err
 		}
@@ -104,7 +107,7 @@ func (mt *merkleTreeImp) upsert(pos int, k string, v []byte, s *stack) error {
 		s.push(lastNode)
 		if pos < len(k) {
 			pos++
-			newLeaf, err := newLeaftNodeContainer(k[pos:], v)
+			newLeaf, err := newLeafNodeContainer(k[pos:], v)
 			if err != nil {
 				return err
 			}
@@ -165,7 +168,7 @@ func (mt *merkleTreeImp) upsert(pos int, k string, v []byte, s *stack) error {
 	if pos < len(k) {
 		pos++
 		// add new leaf to branch node
-		newLeaf, err := newLeaftNodeContainer(k[pos:], v)
+		newLeaf, err := newLeafNodeContainer(k[pos:], v)
 		if err != nil {
 			return err
 		}

@@ -20,7 +20,7 @@ func (mt *merkleTreeImp) Get(k []byte) ([]byte, *stack, error) {
 	s := newStack()
 
 	// get the tree stored user data key to the value
-	userValue, err := mt.get(mt.root, keyHexStr, 0, s)
+	userValue, err := mt.findValue(mt.root, keyHexStr, 0, s)
 	if err != nil {
 		log.Error("Error getting user data from m. %v", err)
 		return nil, s, err
@@ -37,7 +37,7 @@ func (mt *merkleTreeImp) Get(k []byte) ([]byte, *stack, error) {
 	value, err := mt.userData.Get(userValue, nil)
 
 	if err == leveldb.ErrNotFound {
-		// the value from the merkle tree is the short user valuevalue
+		// the value from the merkle tree is the short user value - return it
 		return userValue, s, nil
 	}
 
@@ -45,6 +45,7 @@ func (mt *merkleTreeImp) Get(k []byte) ([]byte, *stack, error) {
 		return nil, s, err
 	}
 
+	// return actual user value
 	return value, s, err
 }
 
@@ -53,7 +54,7 @@ func (mt *merkleTreeImp) Get(k []byte) ([]byte, *stack, error) {
 // pos: number of key hex chars (nibbles) already matched and the index in key to start matching from
 // k: hex-encoded path (always abs full path)
 // s: stack of nodes from root to where value should be in the tree
-func (mt *merkleTreeImp) get(root NodeContainer, k string, pos int, s *stack) ([]byte, error) {
+func (mt *merkleTreeImp) findValue(root NodeContainer, k string, pos int, s *stack) ([]byte, error) {
 
 	if root == nil {
 		return nil, nil
@@ -73,7 +74,7 @@ func (mt *merkleTreeImp) get(root NodeContainer, k string, pos int, s *stack) ([
 		p := root.getBranchNode().getPointer(string(k[pos]))
 		if p != nil {
 			n := root.getChild(p)
-			return mt.get(n, k, pos+1, s)
+			return mt.findValue(n, k, pos+1, s)
 		}
 
 		return nil, nil
@@ -88,7 +89,7 @@ func (mt *merkleTreeImp) get(root NodeContainer, k string, pos int, s *stack) ([
 
 		p := root.getExtNode().getValue()
 		child := root.getChild(p)
-		return mt.get(child, k, pos+len(path), s)
+		return mt.findValue(child, k, pos+len(path), s)
 
 	case pb.NodeType_leaf:
 
