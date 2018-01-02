@@ -93,7 +93,7 @@ func (mt *merkleTreeImp) findValue(root NodeContainer, k string, pos int, s *sta
 	case pb.NodeType_leaf:
 
 		p := root.getLeafNode().getPath()
-		if len(k)-pos < len(p) || p != k[pos:pos+len(p)] {
+		if len(k) - pos < len(p) || p != k[pos:pos+len(p)] {
 			return nil, nil
 		}
 

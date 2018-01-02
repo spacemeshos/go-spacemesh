@@ -12,7 +12,6 @@ import (
 var InvalidUserDataError = errors.New("expected non-empty k,v for user data")
 
 // store user data (k,v)
-
 func (mt *merkleTreeImp) Put(k, v []byte) error {
 
 	if len(v) == 0 || len(k) == 0 {
@@ -95,6 +94,7 @@ func (mt *merkleTreeImp) saveStack(k string, s *stack) error {
 
 	}
 
+	return nil
 }
 
 // Upserts (updates or inserts) (k,v) to the tree
