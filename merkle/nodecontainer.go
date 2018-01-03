@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/gogo/protobuf/proto"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/merkle/pb"
 	"github.com/syndtr/goleveldb/leveldb"
 )
@@ -150,6 +151,7 @@ func (n *nodeContainerImp) removeBranchChild(idx string) error {
 
 func (n *nodeContainerImp) getChild(pointer []byte) NodeContainer {
 	if n.children == nil {
+		log.Warning("Child not found for pointer: %s", hex.EncodeToString(pointer))
 		return nil
 	}
 
@@ -264,6 +266,7 @@ func (n *nodeContainerImp) loadChildren(db *leveldb.DB) error {
 
 			data, err := db.Get(p, nil)
 			if err != nil {
+				log.Error("Failed to load child data from db. %v", err)
 				return err
 			}
 
@@ -322,7 +325,11 @@ func (n *nodeContainerImp) print(userDb *leveldb.DB, treeDb *leveldb.DB) string 
 
 	buffer := bytes.Buffer{}
 
-	n.loadChildren(treeDb)
+	err := n.loadChildren(treeDb)
+	if err != nil {
+		buffer.WriteString(fmt.Sprintf("Failed to load children. %v", err))
+		return buffer.String()
+	}
 
 	switch n.nodeType {
 	case pb.NodeType_branch:

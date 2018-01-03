@@ -73,13 +73,19 @@ func TestSimpleTreeOps(t *testing.T) {
 // Test a simple 1-node merkle tree
 func TestComplexTreeOps(t *testing.T) {
 
-	k1, err := hex.DecodeString("123456000001")
+	k1, err := hex.DecodeString("123456")
 	assert.NoErr(t, err, "invalid hex str")
 	v1 := []byte("zifton")
 
-	k2, err := hex.DecodeString("112456000001")
+	k2, err := hex.DecodeString("112456")
 	assert.NoErr(t, err, "invalid hex str")
 	v2 := []byte("tantalus")
+
+	// ext, path: 1, key: branch
+	// branch
+	//  [1] -> leaf (2456,v)
+	//	[2] -> leaf (3456,v)
+	//
 
 	//k3, err := hex.DecodeString("112457000001")
 	//assert.NoErr(t, err, "invalid hex str")
@@ -92,22 +98,23 @@ func TestComplexTreeOps(t *testing.T) {
 
 	userDb, treeDb := getDbPaths(t)
 	m, err := merkle.NewEmptyTree(userDb, treeDb)
-	defer m.CloseDataStores() // we need to close the data stores when done w m - they are owned by m
 	assert.NoErr(t, err, "failed to create new Merkle tree")
+	defer m.CloseDataStores() // we need to close the data stores when done w m - they are owned by m
 
 	tryPut(t, m, k1, v1)
 
-	t.Log(m.Print())
+	log.Info(m.Print())
 
-	//validateGet(t, m, k1, v1)
+	validateGet(t, m, k1, v1)
 
 	tryPut(t, m, k2, v2)
+
 	//tryPut(t, m, k3, v3)
 	//tryPut(t, m, k4, v4)
 
-	t.Log(m.Print())
+	log.Info(m.Print())
 
-	//validateGet(t, m, k1, v1)
+	validateGet(t, m, k1, v1)
 	//validateGet(t, m, k2, v2)
 	//validateGet(t, m, k3, v3)
 	//validateGet(t, m, k4, v4)

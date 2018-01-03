@@ -2,6 +2,7 @@ package merkle
 
 import (
 	"encoding/hex"
+	"errors"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/merkle/pb"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -52,14 +53,18 @@ func (mt *merkleTreeImp) Get(k []byte) ([]byte, *stack, error) {
 // root: tree root to start looking from
 // pos: number of key hex chars (nibbles) already matched and the index in key to start matching from
 // k: hex-encoded path (always abs full path)
-// s: stack of nodes from root to where value should be in the tree
+// s: on return stack of nodes from root to where value should be in the tree
 func (mt *merkleTreeImp) findValue(root NodeContainer, k string, pos int, s *stack) ([]byte, error) {
 
 	if root == nil {
 		return nil, nil
 	}
 
-	root.loadChildren(mt.treeData)
+	err := root.loadChildren(mt.treeData)
+	if err != nil {
+		return nil, err
+	}
+
 	s.push(root)
 
 	switch root.getNodeType() {
@@ -73,6 +78,11 @@ func (mt *merkleTreeImp) findValue(root NodeContainer, k string, pos int, s *sta
 		p := root.getBranchNode().getPointer(string(k[pos]))
 		if p != nil {
 			n := root.getChild(p)
+
+			if n == nil {
+				return nil, errors.New("Failed to find child")
+			}
+
 			return mt.findValue(n, k, pos+1, s)
 		}
 

@@ -87,4 +87,3 @@ func NewTreeFromDb(rootHash []byte, userDataFileName string, treeDataFileName st
 	mt.root = root
 	return mt, nil
 }
-

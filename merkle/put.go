@@ -51,11 +51,8 @@ func (mt *merkleTreeImp) Put(k, v []byte) error {
 		return err
 	}
 
-	if mt.root == nil {
-		// save tree root
-		nodes := stack.toSlice()
-		mt.root = nodes[0]
-	}
+	nodes := stack.toSlice()
+	mt.root = nodes[stack.len()-1]
 
 	return nil
 }
@@ -63,31 +60,41 @@ func (mt *merkleTreeImp) Put(k, v []byte) error {
 // Persists a branch of nodes
 // s: stack of nodes from root leading to the value of the key
 // k: key to value following the stack
-func (mt *merkleTreeImp) saveStack(k string, s *stack) error {
+func (mt *merkleTreeImp) persistNodes(k string, s *stack) error {
+
+	log.Info("persisting nodes for path %s", k)
 
 	var lastRoot NodeContainer
 
-	for s.len() > 0 {
-		n := s.pop()
+	var pos = len(k) - 1 // point to last hex char in k
 
+	if s.len() == 0 {
+		return nil
+	}
+
+	items := s.toSlice()
+	for i := 0; i < len(items); i++ {
+		n := items[i]
 		switch n.getNodeType() {
 
 		case pb.NodeType_branch:
 
 			if lastRoot != nil {
-				idx := string(k[0])
-				k = k[1:]
+				idx := string(k[pos])
+				pos--
 				n.addBranchChild(idx, lastRoot)
 			}
 		case pb.NodeType_extension:
 
-			k = k[len(n.getShortNode().getPath()):]
+			pos -= len(n.getShortNode().getPath())
+
 			if lastRoot != nil {
 				n.getShortNode().setValue(lastRoot.getNodeHash())
 			}
 
 		case pb.NodeType_leaf:
-			k = k[len(n.getShortNode().getPath()):]
+
+			pos -= len(n.getShortNode().getPath())
 
 		default:
 			return errors.New("unexpected node type")
@@ -140,7 +147,7 @@ func (mt *merkleTreeImp) upsert(pos int, k string, v []byte, s *stack) error {
 			// update leaf value to this value and return
 			lastNode.getShortNode().setValue(v)
 			s.push(lastNode)
-			mt.saveStack(k, s)
+			mt.persistNodes(k, s)
 			return nil
 		}
 	}
@@ -159,7 +166,7 @@ func (mt *merkleTreeImp) upsert(pos int, k string, v []byte, s *stack) error {
 			lastNode.getBranchNode().setValue(v)
 		}
 
-		mt.saveStack(k, s)
+		mt.persistNodes(k, s)
 		return nil
 	}
 
@@ -189,6 +196,7 @@ func (mt *merkleTreeImp) upsert(pos int, k string, v []byte, s *stack) error {
 	if err != nil {
 		return err
 	}
+
 	s.push(newBranch)
 
 	if len(lastNodePath) > 0 {
@@ -199,11 +207,17 @@ func (mt *merkleTreeImp) upsert(pos int, k string, v []byte, s *stack) error {
 			// shrink ext or leaf
 			lastNode.getShortNode().setPath(lastNodePath)
 			newBranch.addBranchChild(branchChildKey, lastNode)
+			err := mt.persistNode(lastNode) // last node changed
+			if err != nil {
+				return err
+			}
 		} else {
-			// remove ext
+			// remove ext and set as branch's value
+			// todo: delete lastNode from store
 			newBranch.getBranchNode().setValue(lastNode.getShortNode().getValue())
 		}
 	} else {
+		// todo: delete lastNode from store
 		newBranch.getBranchNode().setValue(lastNode.getShortNode().getValue())
 	}
 
@@ -217,7 +231,7 @@ func (mt *merkleTreeImp) upsert(pos int, k string, v []byte, s *stack) error {
 		s.push(newLeaf)
 	}
 
-	mt.saveStack(k, s)
+	mt.persistNodes(k, s)
 
 	return nil
 }

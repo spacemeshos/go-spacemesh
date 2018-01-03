@@ -87,6 +87,8 @@ func (s *shortNodeImpl) getPath() string {
 
 func (s *shortNodeImpl) setPath(p string) {
 	s.path = p
+
+	// rest hash
 	s.nodeHash = []byte{}
 }
 
@@ -109,7 +111,10 @@ func (s *shortNodeImpl) print() string {
 		buffer.WriteString("Ext: ")
 	}
 
-	buffer.WriteString(fmt.Sprintf(" <%s> path: `%s`, value: `%s`\n", hex.EncodeToString(s.getNodeHash())[:6], s.path, hex.EncodeToString(s.value)[:6]))
+	buffer.WriteString(fmt.Sprintf(" <%s> path: `%s`, value: <%s>\n",
+		hex.EncodeToString(s.getNodeHash())[:6],
+		s.path,
+		hex.EncodeToString(s.value)[:6]))
 
 	return buffer.String()
 }
