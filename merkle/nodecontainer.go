@@ -30,6 +30,7 @@ type NodeContainer interface {
 	didLoadChildren() bool
 	loadChildren(db *leveldb.DB) error // load all direct children from store
 	getChild(pointer []byte) NodeContainer
+	getAllChildren() []NodeContainer
 
 	addBranchChild(idx string, child NodeContainer) error // idx - hex char
 	removeBranchChild(idx string) error
@@ -156,6 +157,14 @@ func (n *nodeContainerImp) getChild(pointer []byte) NodeContainer {
 	}
 
 	return n.children[hex.EncodeToString(pointer)]
+}
+
+func (n *nodeContainerImp) getAllChildren() []NodeContainer {
+	children := []NodeContainer{}
+	for _, c := range n.children {
+		children = append(children, c)
+	}
+	return children
 }
 
 func (n *nodeContainerImp) getNodeType() pb.NodeType {

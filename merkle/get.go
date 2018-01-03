@@ -11,6 +11,7 @@ import (
 // Gets user value associated with user key
 // returns value if found and nil otherwise
 // Returned stack - The tree path path closest to the value
+// Returned int - count of matched hex chars on the path
 func (mt *merkleTreeImp) Get(k []byte) ([]byte, *stack, error) {
 
 	keyHexStr := hex.EncodeToString(k)
@@ -54,6 +55,8 @@ func (mt *merkleTreeImp) Get(k []byte) ([]byte, *stack, error) {
 // pos: number of key hex chars (nibbles) already matched and the index in key to start matching from
 // k: hex-encoded path (always abs full path)
 // s: on return stack of nodes from root to where value should be in the tree
+
+// todo: return # of chars matched on path to last node on stack
 func (mt *merkleTreeImp) findValue(root NodeContainer, k string, pos int, s *stack) ([]byte, error) {
 
 	if root == nil {
@@ -80,7 +83,7 @@ func (mt *merkleTreeImp) findValue(root NodeContainer, k string, pos int, s *sta
 			n := root.getChild(p)
 
 			if n == nil {
-				return nil, errors.New("Failed to find child")
+				return nil, errors.New("failed to find child")
 			}
 
 			return mt.findValue(n, k, pos+1, s)
@@ -112,4 +115,37 @@ func (mt *merkleTreeImp) findValue(root NodeContainer, k string, pos int, s *sta
 	}
 
 	return nil, nil
+}
+
+func (mt *merkleTreeImp) ValidateStructure(root NodeContainer) error {
+
+	if root == nil {
+		return errors.New("expected non-empty root")
+	}
+
+	err := root.loadChildren(mt.treeData)
+	if err != nil {
+		return err
+	}
+
+	switch root.getNodeType() {
+	case pb.NodeType_branch:
+		for _, c := range root.getAllChildren() {
+			err := mt.ValidateStructure(c)
+			if err != nil {
+				return err
+			}
+		}
+
+	case pb.NodeType_extension:
+		children := root.getAllChildren()
+		if len(children) != 1 {
+			return errors.New("expected 1 child for extension node")
+		}
+		return mt.ValidateStructure(children[0])
+
+	case pb.NodeType_leaf:
+		return nil
+	}
+	return nil
 }

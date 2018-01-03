@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"github.com/spacemeshos/go-spacemesh/assert"
+	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/merkle"
 	"testing"
@@ -87,10 +88,10 @@ func TestComplexTreeOps(t *testing.T) {
 	//	[2] -> leaf (3456,v)
 	//
 
-	//k3, err := hex.DecodeString("112457000001")
-	//assert.NoErr(t, err, "invalid hex str")
-	//v3, err := crypto.GetRandomBytes(100)
-	//assert.NoErr(t, err, "failed to get random data")
+	k3, err := hex.DecodeString("112457")
+	assert.NoErr(t, err, "invalid hex str")
+	v3, err := crypto.GetRandomBytes(100)
+	assert.NoErr(t, err, "failed to get random data")
 
 	//v4, err := crypto.GetRandomBytes(100)
 	//k4 := crypto.Sha256([]byte("key-to-tanalus"))
@@ -103,20 +104,48 @@ func TestComplexTreeOps(t *testing.T) {
 
 	tryPut(t, m, k1, v1)
 
-	log.Info(m.Print())
+	err = m.ValidateStructure(m.GetRootNode())
+	assert.NoErr(t, err, "invalid tree structure")
 
+	log.Info(m.Print())
 	validateGet(t, m, k1, v1)
 
 	tryPut(t, m, k2, v2)
 
-	//tryPut(t, m, k3, v3)
-	//tryPut(t, m, k4, v4)
+	err = m.ValidateStructure(m.GetRootNode())
+	assert.NoErr(t, err, "invalid tree structure")
 
 	log.Info(m.Print())
-
 	validateGet(t, m, k1, v1)
+	validateGet(t, m, k2, v2)
+
+	data, _, err := m.Get(k3)
+	assert.True(t, len(data) == 0, "expected empty result")
+	assert.NoErr(t, err, "expected no error")
+
+	tryPut(t, m, k3, v3)
+
+	// expected structure:
+	//
+	// ext, path: 1
+	//  branch
+	//   [1] -> -> ext(245) -> branch
+	// 								[6] -> (<>,v)
+	//								[7] -> (<>,v)
+	//	 [2] -> leaf (3456,v)
+	//
+
+	//1 12457
+	//1 12456
+
+	log.Info(m.Print())
+	err = m.ValidateStructure(m.GetRootNode())
+	assert.NoErr(t, err, "invalid tree structure")
+
+	//validateGet(t, m, k1, v1)
 	//validateGet(t, m, k2, v2)
 	//validateGet(t, m, k3, v3)
+
 	//validateGet(t, m, k4, v4)
 
 }

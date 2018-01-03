@@ -25,6 +25,16 @@ func (mt *merkleTreeImp) GetRootNode() NodeContainer {
 	return mt.root
 }
 
+func (mt *merkleTreeImp) removeNodeFromStore(node NodeContainer) error {
+	nodeKey := node.getNodeHash()
+	err := mt.treeData.Delete(nodeKey, nil)
+	if err != nil {
+		log.Error("failed to delete node from db. %v", err)
+		return err
+	}
+	return nil
+}
+
 // Persists user and tree data for given (userKey, userValue) and a NodeContainer (tree-space node)
 // node: tree node to store in the tree db
 func (mt *merkleTreeImp) persistNode(node NodeContainer) error {

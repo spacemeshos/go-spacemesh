@@ -18,6 +18,8 @@ type MerkleTree interface {
 	CloseDataStores() error // call when done w the tree
 
 	Print() string
+
+	ValidateStructure(root NodeContainer) error
 }
 
 // internal implementation
