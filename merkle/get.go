@@ -3,6 +3,7 @@ package merkle
 import (
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/merkle/pb"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -130,7 +131,15 @@ func (mt *merkleTreeImp) ValidateStructure(root NodeContainer) error {
 
 	switch root.getNodeType() {
 	case pb.NodeType_branch:
-		for _, c := range root.getAllChildren() {
+
+		entries := root.getBranchNode().getAllChildNodePointers()
+		children := root.getAllChildren()
+
+		if len(entries) != len(children) {
+			return errors.New(fmt.Sprintf("Mismatch. entries: %d, children: %d", len(entries), len(children)))
+		}
+
+		for _, c := range children {
 			err := mt.ValidateStructure(c)
 			if err != nil {
 				return err

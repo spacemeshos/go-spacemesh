@@ -128,6 +128,12 @@ func (n *nodeContainerImp) addBranchChild(idx string, child NodeContainer) error
 		return ErrorInvalidHexChar
 	}
 
+	// remove child being replaced by this new child
+	p := n.getBranchNode().getPointer(idx)
+	if len(p) > 0 {
+		n.removeBranchChild(idx)
+	}
+
 	err := n.getBranchNode().addChild(idx, child.getNodeHash())
 	if err != nil {
 		return err
@@ -139,6 +145,7 @@ func (n *nodeContainerImp) addBranchChild(idx string, child NodeContainer) error
 }
 
 func (n *nodeContainerImp) removeBranchChild(idx string) error {
+
 	if n.getNodeType() != pb.NodeType_branch {
 		return errors.New("node is not a branch node")
 	}
@@ -147,7 +154,13 @@ func (n *nodeContainerImp) removeBranchChild(idx string) error {
 		return ErrorInvalidHexChar
 	}
 
-	return n.getBranchNode().removeChild(idx)
+	p := n.getBranchNode().getPointer(idx)
+
+	if len(p) > 0 {
+		delete(n.children, hex.EncodeToString(p))
+	}
+
+	return nil
 }
 
 func (n *nodeContainerImp) getChild(pointer []byte) NodeContainer {
