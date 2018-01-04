@@ -24,7 +24,7 @@ func (mt *merkleTreeImp) Get(k []byte) ([]byte, *stack, error) {
 	// get the tree stored user data key to the value
 	userValue, err := mt.findValue(mt.root, keyHexStr, 0, s)
 	if err != nil {
-		log.Error("Error getting user data from m. %v", err)
+		log.Error("error getting user data from m. %v", err)
 		return nil, s, err
 	}
 
@@ -33,7 +33,7 @@ func (mt *merkleTreeImp) Get(k []byte) ([]byte, *stack, error) {
 		return nil, s, nil
 	}
 
-	log.Info("Found %s value in merkle tree for key: %s", hex.EncodeToString(userValue), keyHexStr)
+	log.Info("Found %s value in Merkle tree for key: %s", hex.EncodeToString(userValue), keyHexStr)
 
 	// pull the data from the user data store
 	value, err := mt.userData.Get(userValue, nil)
@@ -115,7 +115,7 @@ func (mt *merkleTreeImp) findValue(root NodeContainer, k string, pos int, s *sta
 			return nil, nil
 		}
 
-		// found
+		// found leaf for key
 		return root.getLeafNode().getValue(), nil
 	}
 
@@ -140,7 +140,7 @@ func (mt *merkleTreeImp) ValidateStructure(root NodeContainer) error {
 		children := root.getAllChildren()
 
 		if len(entries) != len(children) {
-			return errors.New(fmt.Sprintf("Mismatch. entries: %d, children: %d", len(entries), len(children)))
+			return errors.New(fmt.Sprintf("mismatch. entries: %d, children: %d", len(entries), len(children)))
 		}
 
 		for _, c := range children {

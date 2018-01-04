@@ -93,9 +93,10 @@ func TestComplexTreeOps(t *testing.T) {
 	v3, err := crypto.GetRandomBytes(100)
 	assert.NoErr(t, err, "failed to get random data")
 
-	//v4, err := crypto.GetRandomBytes(100)
-	//k4 := crypto.Sha256([]byte("key-to-tanalus"))
-	//assert.NoErr(t, err, "failed to get random data")
+	k4, err := hex.DecodeString("123457")
+	assert.NoErr(t, err, "invalid hex str")
+	v4, err := crypto.GetRandomBytes(100)
+	assert.NoErr(t, err, "failed to get random data")
 
 	userDb, treeDb := getDbPaths(t)
 	m, err := merkle.NewEmptyTree(userDb, treeDb)
@@ -127,9 +128,9 @@ func TestComplexTreeOps(t *testing.T) {
 
 	// expected structure:
 	//
-	// ext, path: 1
-	//  branch
-	//   [1] -> -> ext(245) -> branch
+	// root: ext, 1
+	//   branch
+	//     [1] -> -> ext(245) -> branch
 	// 								[6] -> (<>,v)
 	//								[7] -> (<>,v)
 	//	 [2] -> leaf (3456,v)
@@ -145,6 +146,34 @@ func TestComplexTreeOps(t *testing.T) {
 	validateGet(t, m, k1, v1)
 	validateGet(t, m, k2, v2)
 	validateGet(t, m, k3, v3)
+
+	// key 123457
+
+	tryPut(t, m, k4, v4)
+	log.Info(m.Print())
+	err = m.ValidateStructure(m.GetRootNode())
+	assert.NoErr(t, err, "invalid tree structure")
+
+	validateGet(t, m, k1, v1)
+	validateGet(t, m, k2, v2)
+	validateGet(t, m, k3, v3)
+	validateGet(t, m, k4, v4)
+
+
+	// expected structure:
+	//
+	// root: ext, 1
+	//   branch
+	//     [1] -> -> ext(245) -> branch
+	// 								[6] -> (<>,v)
+	//								[7] -> (<>,v)
+	//	   [2] -> ext(345) -> branch
+	// 								[6] leaf (<>,v)
+	//								[7] leaf (<>,v)
+
+
+	//err = m.ValidateStructure(m.GetRootNode())
+	//assert.NoErr(t, err, "invalid tree structure")
 
 	//validateGet(t, m, k4, v4)
 

@@ -25,19 +25,18 @@ type NodeContainer interface {
 	isBranch() bool
 	marshal() ([]byte, error) // get binary encoded marshaled node data
 	getNodeHash() []byte
+	getNodeEmbeddedPath() string // hex-encoded nibbles
 
 	// child care
 	didLoadChildren() bool
 	loadChildren(db *treeDb) error // load all direct children from store
 	getChild(pointer []byte) NodeContainer
 	getAllChildren() []NodeContainer
-
 	addBranchChild(idx string, child NodeContainer) error // idx - hex char
 	removeBranchChild(idx string) error
-
 	setExtChild(pointer []byte) error
 
-	getNodeEmbeddedPath() string // hex-encoded nibbles
+
 
 	print(treeDb *treeDb, userDb *userDb) string
 }
