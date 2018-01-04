@@ -19,9 +19,10 @@ type shortNode interface {
 	getPath() string          // hex encoded path to this node from parent
 	marshal() ([]byte, error) // to binary data
 	getNodeHash() []byte      // node binary data hash - determines the value of pointer to this node
-	print() string            // returns debug info
 	setValue(v []byte)        // update the node value
 	setPath(p string)         // set the path
+
+	print(userDb *userDb, getUserValue func(userDb *userDb, v []byte) string) string // returns debug info
 }
 
 func newShortNode(nodeType pb.NodeType, path string, value []byte) shortNode {
@@ -103,18 +104,22 @@ func (s *shortNodeImpl) marshal() ([]byte, error) {
 	return proto.Marshal(res)
 }
 
-func (s *shortNodeImpl) print() string {
+func (s *shortNodeImpl) print(userDb *userDb, getUserValue func(userDb *userDb, v []byte) string) string {
+
 	buffer := bytes.Buffer{}
 	if s.isLeaf() {
-		buffer.WriteString("Leaf: ")
-	} else {
-		buffer.WriteString("Ext: ")
-	}
+		userValue := getUserValue(userDb, s.value)
+		buffer.WriteString(fmt.Sprintf("Leaf: <%s> path: `%s`, value: `%s`\n",
+			hex.EncodeToString(s.getNodeHash())[:6],
+			s.path,
+			userValue))
 
-	buffer.WriteString(fmt.Sprintf(" <%s> path: `%s`, value: <%s>\n",
-		hex.EncodeToString(s.getNodeHash())[:6],
-		s.path,
-		hex.EncodeToString(s.value)[:6]))
+	} else {
+		buffer.WriteString(fmt.Sprintf("Ext: <%s> path: `%s`, value: <%s>\n",
+			hex.EncodeToString(s.getNodeHash())[:6],
+			s.path,
+			hex.EncodeToString(s.value)[:6]))
+	}
 
 	return buffer.String()
 }

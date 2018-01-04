@@ -20,7 +20,10 @@ type branchNode interface {
 	getAllChildNodePointers() [][]byte         // get all pointers to child nodes
 	addChild(idx string, pointer []byte) error // add a child to this node
 	removeChild(idx string) error              // remove a child from this node
-	print() string                             // returns debug info
+
+	print(userDb *userDb,
+		getUserValue func(userDb *userDb,
+			v []byte) string) string // returns debug info
 }
 
 // Adds a child to the node
@@ -118,19 +121,20 @@ type branchNodeImpl struct {
 	nodeHash []byte
 }
 
-func (b *branchNodeImpl) print() string {
+func (b *branchNodeImpl) print(userDb *userDb, getUserValue func(userDb *userDb, v []byte) string) string {
 	buffer := bytes.Buffer{}
 	buffer.WriteString(fmt.Sprintf("Branch <%s>.", hex.EncodeToString(b.getNodeHash())[:6]))
-	val := hex.EncodeToString(b.value)
-	if len(val) > 0 {
-		buffer.WriteString(fmt.Sprintf(" Stored value: %s. \n", val[:6]))
+	if len(b.value) > 0 {
+		userValue := getUserValue(userDb, b.value)
+		buffer.WriteString(fmt.Sprintf(" Stored value: %s. \n", userValue))
 	} else {
 		buffer.WriteString(" No stored value.\n")
-
 	}
+
 	if len(b.entries) == 0 {
 		buffer.WriteString(" No children.\n")
 	}
+
 	for k, v := range b.entries {
 		if len(v) > 0 {
 			ks, _ := toHexChar(k)

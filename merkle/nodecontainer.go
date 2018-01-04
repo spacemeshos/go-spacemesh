@@ -28,7 +28,7 @@ type NodeContainer interface {
 
 	// child care
 	didLoadChildren() bool
-	loadChildren(db *leveldb.DB) error // load all direct children from store
+	loadChildren(db *treeDb) error // load all direct children from store
 	getChild(pointer []byte) NodeContainer
 	getAllChildren() []NodeContainer
 
@@ -37,7 +37,7 @@ type NodeContainer interface {
 
 	getNodeEmbeddedPath() string // hex-encoded nibbles
 
-	print(userDb *leveldb.DB, treeDb *leveldb.DB) string
+	print(treeDb *treeDb, userDb *userDb) string
 }
 
 type nodeContainerImp struct {
@@ -226,7 +226,7 @@ func (n *nodeContainerImp) didLoadChildren() bool {
 }
 
 // Loads node's direct child node(s) to memory from store
-func (n *nodeContainerImp) loadChildren(db *leveldb.DB) error {
+func (n *nodeContainerImp) loadChildren(db *treeDb) error {
 
 	if n.nodeType == pb.NodeType_leaf {
 		// leaves are childless
@@ -327,10 +327,26 @@ func (n *nodeContainerImp) marshal() ([]byte, error) {
 	}
 }
 
+func (n *nodeContainerImp) getUserStringValue(userDb *userDb, v []byte) string {
+	// pull the data from the user data store
+	value, err := userDb.Get(v, nil)
+	if err == leveldb.ErrNotFound {
+		// the value from the merkle tree is the short user value - return it
+		return string(v)
+	}
+
+	if err != nil {
+		return "error"
+	}
+
+	// long value
+	return hex.EncodeToString(value)[:6] + "..."
+}
+
 // depth-first-search print tree rooted at node n
 // note - this will load the whole tree into memory
 
-func (n *nodeContainerImp) print(userDb *leveldb.DB, treeDb *leveldb.DB) string {
+func (n *nodeContainerImp) print(treeDb *treeDb, userDb *userDb) string {
 
 	buffer := bytes.Buffer{}
 
@@ -343,21 +359,21 @@ func (n *nodeContainerImp) print(userDb *leveldb.DB, treeDb *leveldb.DB) string 
 	switch n.nodeType {
 	case pb.NodeType_branch:
 
-		buffer.WriteString(n.getBranchNode().print())
+		buffer.WriteString(n.getBranchNode().print(userDb, n.getUserStringValue))
 
 		for _, v := range n.children {
-			buffer.WriteString(v.print(userDb, treeDb))
+			buffer.WriteString(v.print(treeDb, userDb))
 		}
 
 	case pb.NodeType_leaf:
-		buffer.WriteString(n.getLeafNode().print())
+		buffer.WriteString(n.getLeafNode().print(userDb, n.getUserStringValue))
 
 	case pb.NodeType_extension:
 
-		buffer.WriteString(n.getExtNode().print())
+		buffer.WriteString(n.getExtNode().print(userDb, n.getUserStringValue))
 
 		for _, v := range n.children {
-			buffer.WriteString(v.print(userDb, treeDb))
+			buffer.WriteString(v.print(treeDb, userDb))
 		}
 
 	}

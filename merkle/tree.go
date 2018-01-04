@@ -22,10 +22,18 @@ type MerkleTree interface {
 	ValidateStructure(root NodeContainer) error
 }
 
+type userDb struct {
+	*leveldb.DB
+}
+
+type treeDb struct {
+	*leveldb.DB
+}
+
 // internal implementation
 type merkleTreeImp struct {
-	userData *leveldb.DB
-	treeData *leveldb.DB
+	userData *userDb
+	treeData *treeDb
 	root     NodeContainer
 }
 
@@ -47,8 +55,8 @@ func NewEmptyTree(userDataFileName string, treeDataFileName string) (MerkleTree,
 	}
 
 	mt := &merkleTreeImp{
-		userData: userData,
-		treeData: treeData,
+		userData: &userDb{userData},
+		treeData: &treeDb{treeData},
 	}
 
 	return mt, nil
@@ -71,8 +79,8 @@ func NewTreeFromDb(rootHash []byte, userDataFileName string, treeDataFileName st
 	}
 
 	mt := &merkleTreeImp{
-		userData: userData,
-		treeData: treeData,
+		userData: &userDb{userData},
+		treeData: &treeDb{treeData},
 	}
 
 	// load the tree from the db

@@ -51,7 +51,7 @@ func (mt *merkleTreeImp) persistNode(node NodeContainer) error {
 		log.Error("failed to write tree data to db. %v", err)
 	}
 
-	log.Info("Persisted node data: %s", node.print(mt.userData, mt.treeData))
+	log.Info("Persisted node data: %s", node.print(mt.treeData, mt.userData))
 
 	log.Info("Node persisted to tree db. type: %s. db key(node hash): %s", node.getNodeType(), hex.EncodeToString(nodeKey)[:6])
 
@@ -105,7 +105,7 @@ func (mt *merkleTreeImp) Print() string {
 	} else {
 
 		buffer.WriteString(fmt.Sprintf("Merkle tree: root hash <%s>\n", hex.EncodeToString(mt.GetRootHash())[:6]))
-		buffer.WriteString(mt.root.print(mt.userData, mt.treeData))
+		buffer.WriteString(mt.root.print(mt.treeData, mt.userData))
 	}
 	buffer.WriteString("------------\n")
 	return buffer.String()
