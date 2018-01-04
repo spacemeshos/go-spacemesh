@@ -143,8 +143,8 @@ func TestComplexTreeOps(t *testing.T) {
 	assert.NoErr(t, err, "invalid tree structure")
 
 	validateGet(t, m, k1, v1)
-	//validateGet(t, m, k2, v2)
-	//validateGet(t, m, k3, v3)
+	validateGet(t, m, k2, v2)
+	validateGet(t, m, k3, v3)
 
 	//validateGet(t, m, k4, v4)
 

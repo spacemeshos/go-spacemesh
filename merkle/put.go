@@ -97,7 +97,7 @@ func (mt *merkleTreeImp) persistNodes(k string, s *stack) error {
 			pos -= len(n.getShortNode().getPath())
 
 			if lastRoot != nil {
-				n.getShortNode().setValue(lastRoot.getNodeHash())
+				n.setExtChild(lastRoot.getNodeHash())
 			}
 
 		case pb.NodeType_leaf:
@@ -160,7 +160,7 @@ func (mt *merkleTreeImp) upsert(pos int, k string, v []byte, s *stack) error {
 		if len(cp) == len(leafPath) && pos == len(k) {
 			// update leaf value to this value and return
 			mt.removeNodeFromStore(lastNode)
-			lastNode.getShortNode().setValue(v)
+			lastNode.setExtChild(v)
 			s.push(lastNode)
 			mt.persistNodes(k, s)
 			return nil

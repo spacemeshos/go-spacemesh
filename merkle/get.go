@@ -74,7 +74,7 @@ func (mt *merkleTreeImp) findValue(root NodeContainer, k string, pos int, s *sta
 	switch root.getNodeType() {
 	case pb.NodeType_branch:
 
-		if pos == len(k)-1 {
+		if pos == len(k) { // matched all chars on k
 			// return branch node stored value terminated at this path
 			return root.getBranchNode().getValue(), nil
 		}
@@ -84,7 +84,7 @@ func (mt *merkleTreeImp) findValue(root NodeContainer, k string, pos int, s *sta
 			n := root.getChild(p)
 
 			if n == nil {
-				return nil, errors.New("failed to find child")
+				return nil, errors.New("expected to find child")
 			}
 
 			return mt.findValue(n, k, pos+1, s)
@@ -102,6 +102,10 @@ func (mt *merkleTreeImp) findValue(root NodeContainer, k string, pos int, s *sta
 
 		p := root.getExtNode().getValue()
 		child := root.getChild(p)
+		if child == nil {
+			return nil, errors.New("Expected to find ext node child")
+		}
+
 		return mt.findValue(child, k, pos+len(path), s)
 
 	case pb.NodeType_leaf:

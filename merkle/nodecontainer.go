@@ -35,6 +35,8 @@ type NodeContainer interface {
 	addBranchChild(idx string, child NodeContainer) error // idx - hex char
 	removeBranchChild(idx string) error
 
+	setExtChild(pointer []byte) error
+
 	getNodeEmbeddedPath() string // hex-encoded nibbles
 
 	print(treeDb *treeDb, userDb *userDb) string
@@ -116,7 +118,19 @@ func newNodeFromData(data []byte) (NodeContainer, error) {
 	return c, nil
 }
 
-////////////////////
+
+func (n *nodeContainerImp) setExtChild(pointer []byte) error {
+
+	if n.getNodeType() != pb.NodeType_extension {
+		return errors.New("node is not a branch node")
+	}
+
+	n.children = make(map[string]NodeContainer)
+	n.getExtNode().setValue(pointer)
+	n.childrenLoaded = false
+	return nil
+}
+
 
 func (n *nodeContainerImp) addBranchChild(idx string, child NodeContainer) error {
 
@@ -169,7 +183,9 @@ func (n *nodeContainerImp) getChild(pointer []byte) NodeContainer {
 		return nil
 	}
 
-	return n.children[hex.EncodeToString(pointer)]
+	key := hex.EncodeToString(pointer)
+
+	return n.children[key]
 }
 
 func (n *nodeContainerImp) getAllChildren() []NodeContainer {
