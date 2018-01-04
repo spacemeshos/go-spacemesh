@@ -105,16 +105,18 @@ func TestComplexTreeOps(t *testing.T) {
 
 	tryPut(t, m, k1, v1)
 
-	err = m.ValidateStructure(m.GetRootNode())
+	r, err := m.ValidateStructure(m.GetRootNode())
 	assert.NoErr(t, err, "invalid tree structure")
+	assert.True(t, bytes.Equal(r, m.GetRootHash()), "unexpected root hash")
 
 	log.Info(m.Print())
 	validateGet(t, m, k1, v1)
 
 	tryPut(t, m, k2, v2)
 
-	err = m.ValidateStructure(m.GetRootNode())
+	r, err = m.ValidateStructure(m.GetRootNode())
 	assert.NoErr(t, err, "invalid tree structure")
+	assert.True(t, bytes.Equal(r, m.GetRootHash()), "unexpected root hash")
 
 	log.Info(m.Print())
 	validateGet(t, m, k1, v1)
@@ -140,8 +142,9 @@ func TestComplexTreeOps(t *testing.T) {
 	//1 12456
 
 	log.Info(m.Print())
-	err = m.ValidateStructure(m.GetRootNode())
+	r, err = m.ValidateStructure(m.GetRootNode())
 	assert.NoErr(t, err, "invalid tree structure")
+	assert.True(t, bytes.Equal(r, m.GetRootHash()), "unexpected root hash")
 
 	validateGet(t, m, k1, v1)
 	validateGet(t, m, k2, v2)
@@ -151,8 +154,9 @@ func TestComplexTreeOps(t *testing.T) {
 
 	tryPut(t, m, k4, v4)
 	log.Info(m.Print())
-	err = m.ValidateStructure(m.GetRootNode())
+	r, err = m.ValidateStructure(m.GetRootNode())
 	assert.NoErr(t, err, "invalid tree structure")
+	assert.True(t, bytes.Equal(r, m.GetRootHash()), "unexpected root hash")
 
 	validateGet(t, m, k1, v1)
 	validateGet(t, m, k2, v2)
@@ -161,6 +165,10 @@ func TestComplexTreeOps(t *testing.T) {
 
 
 	// expected structure:
+	// 123456
+	// 112456
+	// 112457
+	// 123457
 	//
 	// root: ext, 1
 	//   branch

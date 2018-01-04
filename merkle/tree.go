@@ -19,7 +19,7 @@ type MerkleTree interface {
 
 	Print() string
 
-	ValidateStructure(root NodeContainer) error
+	ValidateStructure(root NodeContainer) ([]byte, error)
 }
 
 type userDb struct {

@@ -3,7 +3,6 @@ package merkle
 import (
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/merkle/pb"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -122,43 +121,3 @@ func (mt *merkleTreeImp) findValue(root NodeContainer, k string, pos int, s *sta
 	return nil, nil
 }
 
-func (mt *merkleTreeImp) ValidateStructure(root NodeContainer) error {
-
-	if root == nil {
-		return errors.New("expected non-empty root")
-	}
-
-	err := root.loadChildren(mt.treeData)
-	if err != nil {
-		return err
-	}
-
-	switch root.getNodeType() {
-	case pb.NodeType_branch:
-
-		entries := root.getBranchNode().getAllChildNodePointers()
-		children := root.getAllChildren()
-
-		if len(entries) != len(children) {
-			return errors.New(fmt.Sprintf("mismatch. entries: %d, children: %d", len(entries), len(children)))
-		}
-
-		for _, c := range children {
-			err := mt.ValidateStructure(c)
-			if err != nil {
-				return err
-			}
-		}
-
-	case pb.NodeType_extension:
-		children := root.getAllChildren()
-		if len(children) != 1 {
-			return errors.New("expected 1 child for extension node")
-		}
-		return mt.ValidateStructure(children[0])
-
-	case pb.NodeType_leaf:
-		return nil
-	}
-	return nil
-}
