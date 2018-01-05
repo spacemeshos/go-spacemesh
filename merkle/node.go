@@ -130,6 +130,11 @@ func (n *nodeContainerImp) setExtChild(pointer []byte) error {
 		return errors.New("node is not a branch node")
 	}
 
+	old := n.getExtNode().getValue()
+	if old != nil && len(old) > 0 {
+		// remove old node from storage here
+	}
+
 	n.children = make(map[string]Node)
 	n.getExtNode().setValue(pointer)
 	n.childrenLoaded = false

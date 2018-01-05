@@ -90,7 +90,8 @@ func (mt *merkleTreeImp) persistNodes(k string, s *stack) error {
 
 				idx := string(k[pos])
 				pos--
-				n.addBranchChild(idx, lastRoot)
+
+				n.addBranchChild(idx, lastRoot) // this may replace old child which needs to be deleted from the db
 			}
 		case pb.NodeType_extension:
 
@@ -232,7 +233,7 @@ func (mt *merkleTreeImp) upsert(pos int, k string, v []byte, s *stack) error {
 			newBranch.getBranchNode().setValue(lastNode.getShortNode().getValue())
 		}
 	} else {
-		// todo: delete lastNode from store
+		mt.removeNodeFromStore(lastNode)
 		newBranch.getBranchNode().setValue(lastNode.getShortNode().getValue())
 	}
 
