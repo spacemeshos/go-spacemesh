@@ -23,6 +23,7 @@ type shortNode interface {
 	setPath(p string)         // set the path
 
 	print(userDb *userDb, getUserValue func(userDb *userDb, v []byte) string) string // returns debug info
+
 }
 
 func newShortNode(nodeType pb.NodeType, path string, value []byte) shortNode {
@@ -51,6 +52,8 @@ type shortNodeImpl struct {
 	value    []byte
 	nodeHash []byte
 }
+
+
 
 func (s *shortNodeImpl) getNodeHash() []byte {
 

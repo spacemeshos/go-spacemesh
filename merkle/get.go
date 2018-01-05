@@ -120,4 +120,3 @@ func (mt *merkleTreeImp) findValue(root NodeContainer, k string, pos int, s *sta
 
 	return nil, nil
 }
-

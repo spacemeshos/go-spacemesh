@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/gogo/protobuf/proto"
+	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/merkle/pb"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -13,8 +14,24 @@ import (
 
 var ErrorInvalidHexChar = errors.New("Invalid hex char")
 
+type parent interface {
+	// child care
+	didLoadChildren() bool
+	loadChildren(db *treeDb) error // load all direct children from store
+	getChild(pointer []byte) NodeContainer
+	getAllChildren() []NodeContainer
+	addBranchChild(idx string, child NodeContainer) error // idx - hex char
+	removeBranchChild(idx string) error
+	setExtChild(pointer []byte) error
+}
+
+// consider making all nodes immutable and copy on creation
+
 type NodeContainer interface {
+	parent
+
 	getNodeType() pb.NodeType
+
 	getLeafNode() shortNode
 	getExtNode() shortNode
 	getBranchNode() branchNode
@@ -25,20 +42,11 @@ type NodeContainer interface {
 	isBranch() bool
 	marshal() ([]byte, error) // get binary encoded marshaled node data
 	getNodeHash() []byte
-	getNodeEmbeddedPath() string // hex-encoded nibbles
-
-	// child care
-	didLoadChildren() bool
-	loadChildren(db *treeDb) error // load all direct children from store
-	getChild(pointer []byte) NodeContainer
-	getAllChildren() []NodeContainer
-	addBranchChild(idx string, child NodeContainer) error // idx - hex char
-	removeBranchChild(idx string) error
-	setExtChild(pointer []byte) error
-
-
+	getNodeEmbeddedPath() string // hex-encoded nibbles or empty
 
 	print(treeDb *treeDb, userDb *userDb) string
+
+	validateHash() error
 }
 
 type nodeContainerImp struct {
@@ -87,7 +95,6 @@ func newBranchNodeContainer(entries map[byte][]byte, value []byte) (NodeContaine
 
 	return c, nil
 }
-
 func newNodeFromData(data []byte) (NodeContainer, error) {
 
 	n := &pb.Node{}
@@ -117,7 +124,6 @@ func newNodeFromData(data []byte) (NodeContainer, error) {
 	return c, nil
 }
 
-
 func (n *nodeContainerImp) setExtChild(pointer []byte) error {
 
 	if n.getNodeType() != pb.NodeType_extension {
@@ -129,7 +135,6 @@ func (n *nodeContainerImp) setExtChild(pointer []byte) error {
 	n.childrenLoaded = false
 	return nil
 }
-
 
 func (n *nodeContainerImp) addBranchChild(idx string, child NodeContainer) error {
 
@@ -243,6 +248,23 @@ func (n *nodeContainerImp) isShortNode() bool {
 	default:
 		return false
 	}
+}
+
+// validate node hash without any side effects
+func (n *nodeContainerImp) validateHash() error {
+
+	data, err := n.marshal()
+	if err != nil {
+		return errors.New("failed to marshal data")
+	}
+
+	h := crypto.Sha256(data)
+
+	if !bytes.Equal(h, n.getNodeHash()) {
+		return errors.New("hash mismatch")
+	}
+
+	return nil
 }
 
 func (n *nodeContainerImp) getBranchNode() branchNode {

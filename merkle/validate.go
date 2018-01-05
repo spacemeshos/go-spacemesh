@@ -2,11 +2,12 @@ package merkle
 
 import (
 	"bytes"
-	"fmt"
 	"errors"
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/merkle/pb"
 )
 
+// returns hash of root node
 func (mt *merkleTreeImp) ValidateStructure(root NodeContainer) ([]byte, error) {
 
 	if root == nil {
@@ -14,6 +15,11 @@ func (mt *merkleTreeImp) ValidateStructure(root NodeContainer) ([]byte, error) {
 	}
 
 	err := root.loadChildren(mt.treeData)
+	if err != nil {
+		return nil, err
+	}
+
+	err = root.validateHash()
 	if err != nil {
 		return nil, err
 	}
@@ -53,7 +59,7 @@ func (mt *merkleTreeImp) ValidateStructure(root NodeContainer) ([]byte, error) {
 			return nil, errors.New("hash mismatch")
 		}
 
-		return childHash, nil
+		return root.getNodeHash(), nil
 
 	case pb.NodeType_leaf:
 

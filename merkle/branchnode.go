@@ -24,6 +24,7 @@ type branchNode interface {
 	print(userDb *userDb,
 		getUserValue func(userDb *userDb,
 			v []byte) string) string // returns debug info
+
 }
 
 // Adds a child to the node
@@ -167,6 +168,8 @@ func (b *branchNodeImpl) getNodeHash() []byte {
 
 	return b.nodeHash
 }
+
+
 
 func (b *branchNodeImpl) getValue() []byte {
 	return b.value
