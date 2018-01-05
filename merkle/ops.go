@@ -58,6 +58,23 @@ func (mt *merkleTreeImp) persistNode(node Node) error {
 	return nil
 }
 
+func (mt *merkleTreeImp) deleteUserValueFromStorge(v []byte) error {
+	if len(v) <= 32 {
+		return errors.New("value too small. Epxected len(v) > 32")
+	}
+
+	k := crypto.Sha256(v)
+	err := mt.userData.Delete(k, nil)
+	if err != nil {
+		log.Error("failed to delete from user data to db. %v", err)
+		return err
+	}
+
+	log.Info("Removed %s %s from user db.", hex.EncodeToString(k), hex.EncodeToString(v))
+	return nil
+}
+
+
 func (mt *merkleTreeImp) persistUserValue(v []byte) error {
 	if len(v) <= 32 {
 		return errors.New("value too small. Epxected len(v) > 32")
@@ -74,10 +91,6 @@ func (mt *merkleTreeImp) persistUserValue(v []byte) error {
 	return nil
 }
 
-// remove v keyed by k from the tree
-func (mt *merkleTreeImp) Delete(k []byte) error {
-	return errors.New("not implemented yet")
-}
 
 func (mt *merkleTreeImp) CloseDataStores() error {
 

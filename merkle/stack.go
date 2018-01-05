@@ -1,6 +1,6 @@
 package merkle
 
-// a stack of NodeContainers
+// a stack of Nodes
 type (
 	stack struct {
 		top    *node

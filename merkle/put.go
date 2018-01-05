@@ -139,8 +139,8 @@ func (mt *merkleTreeImp) getPathLength(s *stack) int {
 // Returns error if failed to upset the v, nil otherwise
 func (mt *merkleTreeImp) upsert(pos int, k string, v []byte, s *stack) error {
 
+	// case 1 - empty tree - create leaf and return
 	if s.len() == 0 {
-		// empty tree - insert k,v as leaf and return
 		newLeaf, err := newLeafNodeContainer(k, v)
 		if err != nil {
 			return err
@@ -152,6 +152,7 @@ func (mt *merkleTreeImp) upsert(pos int, k string, v []byte, s *stack) error {
 
 	lastNode := s.pop()
 
+	// case 2 - we matched the whole path and got to a leaf - set its value and return
 	if lastNode.isLeaf() {
 
 		l := mt.getPathLength(s)
@@ -168,9 +169,12 @@ func (mt *merkleTreeImp) upsert(pos int, k string, v []byte, s *stack) error {
 		}
 	}
 
+	// case 3 - matched a branch on the path
 	if lastNode.isBranch() {
 		s.push(lastNode)
 		if pos < len(k) {
+			// we have more to match from k - create a leaf node with the reminder
+			// store value and it to the branch
 			pos++
 			newLeaf, err := newLeafNodeContainer(k[pos:], v)
 			if err != nil {
@@ -178,7 +182,8 @@ func (mt *merkleTreeImp) upsert(pos int, k string, v []byte, s *stack) error {
 			}
 			s.push(newLeaf)
 
-		} else { // path matched - value should be stored at branch
+		} else {
+			// whole path matched - value should be stored at branch
 			lastNode.getBranchNode().setValue(v)
 			mt.removeNodeFromStore(lastNode)
 		}
@@ -187,13 +192,14 @@ func (mt *merkleTreeImp) upsert(pos int, k string, v []byte, s *stack) error {
 		return nil
 	}
 
-	// lastNode is ext or leaf
-
+	// case 4 - matched a leaf or ext node
 	lastNodePath := lastNode.getShortNode().getPath()
 	cp := commonPrefix(lastNodePath, k[pos:])
 	cpl := len(cp)
 
 	if cpl > 0 {
+		// there's a common path between new key and existing ext or leaf
+		// add ext node with the shared path instead of the ext or leaf
 		key := lastNodePath[:cpl]
 		newExtNode, err := newExtNodeContainer(key, []byte{})
 		if err != nil {
@@ -208,6 +214,7 @@ func (mt *merkleTreeImp) upsert(pos int, k string, v []byte, s *stack) error {
 		pos += cpl
 	}
 
+	// add new ext+branch or just branch to accomodate existing and new key
 	newBranch, err := newBranchNodeContainer(nil, nil)
 	if err != nil {
 		return err
@@ -233,13 +240,18 @@ func (mt *merkleTreeImp) upsert(pos int, k string, v []byte, s *stack) error {
 			newBranch.getBranchNode().setValue(lastNode.getShortNode().getValue())
 		}
 	} else {
+		// removed ext or leaf node
 		mt.removeNodeFromStore(lastNode)
-		newBranch.getBranchNode().setValue(lastNode.getShortNode().getValue())
+		// we removed a lead node and need to store its value in the branch
+		if lastNode.isLeaf() {
+			newBranch.getBranchNode().setValue(lastNode.getShortNode().getValue())
+		}
 	}
 
-	if pos < len(k) {
+	if pos < len(k) { // we have more to match from the path
 		pos++
-		// add new leaf to branch node
+
+		// add new leaf to branch node with the new value
 		newLeaf, err := newLeafNodeContainer(k[pos:], v)
 		if err != nil {
 			return err
