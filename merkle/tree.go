@@ -13,13 +13,13 @@ type MerkleTree interface {
 	Delete(k []byte) error                // delete user value indexed by key
 	Get(k []byte) ([]byte, *stack, error) // get user value indexed by key
 	GetRootHash() []byte                  // get tree root hash
-	GetRootNode() NodeContainer           // get root node
+	GetRootNode() Node                    // get root node
 
 	CloseDataStores() error // call when done w the tree
 
 	Print() string
 
-	ValidateStructure(root NodeContainer) ([]byte, error)
+	ValidateStructure(root Node) ([]byte, error)
 }
 
 type userDb struct {
@@ -34,7 +34,7 @@ type treeDb struct {
 type merkleTreeImp struct {
 	userData *userDb
 	treeData *treeDb
-	root     NodeContainer
+	root     Node
 }
 
 // Creates a new empty merkle tree with the provided paths to user and tree data db files.

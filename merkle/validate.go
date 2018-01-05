@@ -7,8 +7,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/merkle/pb"
 )
 
-// returns hash of root node
-func (mt *merkleTreeImp) ValidateStructure(root NodeContainer) ([]byte, error) {
+// Validates integrity of tree rooted at root
+// returns hash of root node or error if tree is invalid
+func (mt *merkleTreeImp) ValidateStructure(root Node) ([]byte, error) {
 
 	if root == nil {
 		return nil, errors.New("expected non-empty root")

@@ -7,7 +7,7 @@ type (
 		length int
 	}
 	node struct {
-		value NodeContainer
+		value Node
 		prev  *node
 	}
 )
@@ -21,14 +21,14 @@ func (s *stack) len() int {
 }
 
 // top item
-func (s *stack) peek() NodeContainer {
+func (s *stack) peek() Node {
 	if s.length == 0 {
 		return nil
 	}
 	return s.top.value
 }
 
-func (s *stack) pop() NodeContainer {
+func (s *stack) pop() Node {
 	if s.length == 0 {
 		return nil
 	}
@@ -38,14 +38,14 @@ func (s *stack) pop() NodeContainer {
 	return n.value
 }
 
-func (s *stack) push(v NodeContainer) {
+func (s *stack) push(v Node) {
 	n := &node{v, s.top}
 	s.top = n
 	s.length++
 }
 
-func (s *stack) toSlice() []NodeContainer {
-	l := []NodeContainer{}
+func (s *stack) toSlice() []Node {
+	l := []Node{}
 	for i := s.top; i != nil; i = i.prev {
 		l = append(l, i.value)
 	}

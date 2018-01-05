@@ -18,16 +18,16 @@ type parent interface {
 	// child care
 	didLoadChildren() bool
 	loadChildren(db *treeDb) error // load all direct children from store
-	getChild(pointer []byte) NodeContainer
-	getAllChildren() []NodeContainer
-	addBranchChild(idx string, child NodeContainer) error // idx - hex char
+	getChild(pointer []byte) Node
+	getAllChildren() []Node
+	addBranchChild(idx string, child Node) error // idx - hex char
 	removeBranchChild(idx string) error
 	setExtChild(pointer []byte) error
 }
 
 // consider making all nodes immutable and copy on creation
 
-type NodeContainer interface {
+type Node interface {
 	parent
 
 	getNodeType() pb.NodeType
@@ -58,10 +58,10 @@ type nodeContainerImp struct {
 	// the only state maintained by nodeContainer is a the runtime parent and node children
 	// this info is not db persisted but is computed at runtime and held in nodes loaded to memory
 	childrenLoaded bool
-	children       map[string]NodeContainer // k -pointer to child node (hex encoded). v- child
+	children       map[string]Node // k -pointer to child node (hex encoded). v- child
 }
 
-func newLeafNodeContainer(path string, value []byte) (NodeContainer, error) {
+func newLeafNodeContainer(path string, value []byte) (Node, error) {
 
 	n := newShortNode(pb.NodeType_leaf, path, value)
 	c := &nodeContainerImp{
@@ -72,30 +72,30 @@ func newLeafNodeContainer(path string, value []byte) (NodeContainer, error) {
 	return c, nil
 }
 
-func newExtNodeContainer(path string, value []byte) (NodeContainer, error) {
+func newExtNodeContainer(path string, value []byte) (Node, error) {
 	n := newShortNode(pb.NodeType_extension, path, value)
 
 	c := &nodeContainerImp{
 		nodeType: pb.NodeType_extension,
 		ext:      n,
-		children: make(map[string]NodeContainer),
+		children: make(map[string]Node),
 	}
 	return c, nil
 }
 
-func newBranchNodeContainer(entries map[byte][]byte, value []byte) (NodeContainer, error) {
+func newBranchNodeContainer(entries map[byte][]byte, value []byte) (Node, error) {
 
 	n := newBranchNode(entries, value)
 
 	c := &nodeContainerImp{
 		nodeType: pb.NodeType_branch,
 		branch:   n,
-		children: make(map[string]NodeContainer),
+		children: make(map[string]Node),
 	}
 
 	return c, nil
 }
-func newNodeFromData(data []byte) (NodeContainer, error) {
+func newNodeFromData(data []byte) (Node, error) {
 
 	n := &pb.Node{}
 	err := proto.Unmarshal(data, n)
@@ -104,7 +104,7 @@ func newNodeFromData(data []byte) (NodeContainer, error) {
 	}
 
 	c := &nodeContainerImp{
-		children: make(map[string]NodeContainer),
+		children: make(map[string]Node),
 	}
 
 	switch n.NodeType {
@@ -130,13 +130,13 @@ func (n *nodeContainerImp) setExtChild(pointer []byte) error {
 		return errors.New("node is not a branch node")
 	}
 
-	n.children = make(map[string]NodeContainer)
+	n.children = make(map[string]Node)
 	n.getExtNode().setValue(pointer)
 	n.childrenLoaded = false
 	return nil
 }
 
-func (n *nodeContainerImp) addBranchChild(idx string, child NodeContainer) error {
+func (n *nodeContainerImp) addBranchChild(idx string, child Node) error {
 
 	if n.getNodeType() != pb.NodeType_branch {
 		return errors.New("node is not a branch node")
@@ -181,7 +181,7 @@ func (n *nodeContainerImp) removeBranchChild(idx string) error {
 	return nil
 }
 
-func (n *nodeContainerImp) getChild(pointer []byte) NodeContainer {
+func (n *nodeContainerImp) getChild(pointer []byte) Node {
 	if n.children == nil {
 		log.Warning("Child not found for pointer: %s", hex.EncodeToString(pointer))
 		return nil
@@ -192,8 +192,8 @@ func (n *nodeContainerImp) getChild(pointer []byte) NodeContainer {
 	return n.children[key]
 }
 
-func (n *nodeContainerImp) getAllChildren() []NodeContainer {
-	children := []NodeContainer{}
+func (n *nodeContainerImp) getAllChildren() []Node {
+	children := []Node{}
 	for _, c := range n.children {
 		children = append(children, c)
 	}

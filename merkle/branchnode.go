@@ -169,8 +169,6 @@ func (b *branchNodeImpl) getNodeHash() []byte {
 	return b.nodeHash
 }
 
-
-
 func (b *branchNodeImpl) getValue() []byte {
 	return b.value
 }

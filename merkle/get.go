@@ -57,7 +57,7 @@ func (mt *merkleTreeImp) Get(k []byte) ([]byte, *stack, error) {
 // s: on return stack of nodes from root to where value should be in the tree
 
 // todo: return # of chars matched on path to last node on stack
-func (mt *merkleTreeImp) findValue(root NodeContainer, k string, pos int, s *stack) ([]byte, error) {
+func (mt *merkleTreeImp) findValue(root Node, k string, pos int, s *stack) ([]byte, error) {
 
 	if root == nil {
 		return nil, nil

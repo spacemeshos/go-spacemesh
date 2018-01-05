@@ -67,7 +67,7 @@ func (mt *merkleTreeImp) persistNodes(k string, s *stack) error {
 
 	log.Info("persisting nodes for path %s", k)
 
-	var lastRoot NodeContainer
+	var lastRoot Node
 
 	var pos = len(k) - 1 // point to last hex char in k
 

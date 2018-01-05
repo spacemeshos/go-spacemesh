@@ -21,11 +21,11 @@ func (mt *merkleTreeImp) GetRootHash() []byte {
 }
 
 // Returns nil when the tree is empty
-func (mt *merkleTreeImp) GetRootNode() NodeContainer {
+func (mt *merkleTreeImp) GetRootNode() Node {
 	return mt.root
 }
 
-func (mt *merkleTreeImp) removeNodeFromStore(node NodeContainer) error {
+func (mt *merkleTreeImp) removeNodeFromStore(node Node) error {
 	nodeKey := node.getNodeHash()
 	err := mt.treeData.Delete(nodeKey, nil)
 	if err != nil {
@@ -35,9 +35,9 @@ func (mt *merkleTreeImp) removeNodeFromStore(node NodeContainer) error {
 	return nil
 }
 
-// Persists user and tree data for given (userKey, userValue) and a NodeContainer (tree-space node)
+// Persists user and tree data for given (userKey, userValue) and a Node (tree-space node)
 // node: tree node to store in the tree db
-func (mt *merkleTreeImp) persistNode(node NodeContainer) error {
+func (mt *merkleTreeImp) persistNode(node Node) error {
 
 	nodeKey := node.getNodeHash()
 	nodeData, err := node.marshal()
