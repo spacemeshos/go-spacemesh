@@ -74,7 +74,6 @@ func (mt *merkleTreeImp) deleteUserValueFromStorge(v []byte) error {
 	return nil
 }
 
-
 func (mt *merkleTreeImp) persistUserValue(v []byte) error {
 	if len(v) <= 32 {
 		return errors.New("value too small. Epxected len(v) > 32")
@@ -90,7 +89,6 @@ func (mt *merkleTreeImp) persistUserValue(v []byte) error {
 	log.Info("Persisted %s %s to user db.", hex.EncodeToString(k), hex.EncodeToString(v))
 	return nil
 }
-
 
 func (mt *merkleTreeImp) CloseDataStores() error {
 

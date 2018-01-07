@@ -60,10 +60,10 @@ func (mt *merkleTreeImp) Put(k, v []byte) error {
 	return nil
 }
 
-// Persists a branch of nodes
-// s: stack of nodes from root leading to the value of the key
+// Update structure on the path specified by stack
+// s: stack of nodes from root leading to the value of the key. leaf as at head
 // k: key to value following the stack
-func (mt *merkleTreeImp) persistNodes(k string, s *stack) error {
+func (mt *merkleTreeImp) update(k string, s *stack) error {
 
 	log.Info("persisting nodes for path %s", k)
 
@@ -164,7 +164,7 @@ func (mt *merkleTreeImp) upsert(pos int, k string, v []byte, s *stack) error {
 			mt.removeNodeFromStore(lastNode)
 			lastNode.setExtChild(v)
 			s.push(lastNode)
-			mt.persistNodes(k, s)
+			mt.update(k, s)
 			return nil
 		}
 	}
@@ -188,7 +188,7 @@ func (mt *merkleTreeImp) upsert(pos int, k string, v []byte, s *stack) error {
 			mt.removeNodeFromStore(lastNode)
 		}
 
-		mt.persistNodes(k, s)
+		mt.update(k, s)
 		return nil
 	}
 
@@ -259,7 +259,7 @@ func (mt *merkleTreeImp) upsert(pos int, k string, v []byte, s *stack) error {
 		s.push(newLeaf)
 	}
 
-	mt.persistNodes(k, s)
+	mt.update(k, s)
 
 	return nil
 }

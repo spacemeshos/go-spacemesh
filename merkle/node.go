@@ -20,6 +20,7 @@ type parent interface {
 	loadChildren(db *treeDb) error // load all direct children from store
 	getChild(pointer []byte) Node
 	getAllChildren() []Node
+	getChildrenCount() int
 	addBranchChild(idx string, child Node) error // idx - hex char
 	removeBranchChild(idx string) error
 	setExtChild(pointer []byte) error
@@ -49,7 +50,7 @@ type Node interface {
 	validateHash() error
 }
 
-type nodeContainerImp struct {
+type nodeImp struct {
 	nodeType pb.NodeType // contained node type
 	leaf     shortNode   // lead node data or nil
 	branch   branchNode  // branch node data or nil
@@ -64,7 +65,7 @@ type nodeContainerImp struct {
 func newLeafNodeContainer(path string, value []byte) (Node, error) {
 
 	n := newShortNode(pb.NodeType_leaf, path, value)
-	c := &nodeContainerImp{
+	c := &nodeImp{
 		nodeType: pb.NodeType_leaf,
 		leaf:     n,
 		children: nil,
@@ -75,7 +76,7 @@ func newLeafNodeContainer(path string, value []byte) (Node, error) {
 func newExtNodeContainer(path string, value []byte) (Node, error) {
 	n := newShortNode(pb.NodeType_extension, path, value)
 
-	c := &nodeContainerImp{
+	c := &nodeImp{
 		nodeType: pb.NodeType_extension,
 		ext:      n,
 		children: make(map[string]Node),
@@ -87,7 +88,7 @@ func newBranchNodeContainer(entries map[byte][]byte, value []byte) (Node, error)
 
 	n := newBranchNode(entries, value)
 
-	c := &nodeContainerImp{
+	c := &nodeImp{
 		nodeType: pb.NodeType_branch,
 		branch:   n,
 		children: make(map[string]Node),
@@ -103,7 +104,7 @@ func newNodeFromData(data []byte) (Node, error) {
 		return nil, err
 	}
 
-	c := &nodeContainerImp{
+	c := &nodeImp{
 		children: make(map[string]Node),
 	}
 
@@ -124,7 +125,7 @@ func newNodeFromData(data []byte) (Node, error) {
 	return c, nil
 }
 
-func (n *nodeContainerImp) setExtChild(pointer []byte) error {
+func (n *nodeImp) setExtChild(pointer []byte) error {
 
 	if n.getNodeType() != pb.NodeType_extension {
 		return errors.New("node is not a branch node")
@@ -141,7 +142,7 @@ func (n *nodeContainerImp) setExtChild(pointer []byte) error {
 	return nil
 }
 
-func (n *nodeContainerImp) addBranchChild(idx string, child Node) error {
+func (n *nodeImp) addBranchChild(idx string, child Node) error {
 
 	if n.getNodeType() != pb.NodeType_branch {
 		return errors.New("node is not a branch node")
@@ -167,7 +168,7 @@ func (n *nodeContainerImp) addBranchChild(idx string, child Node) error {
 	return nil
 }
 
-func (n *nodeContainerImp) removeBranchChild(idx string) error {
+func (n *nodeImp) removeBranchChild(idx string) error {
 
 	if n.getNodeType() != pb.NodeType_branch {
 		return errors.New("node is not a branch node")
@@ -186,7 +187,7 @@ func (n *nodeContainerImp) removeBranchChild(idx string) error {
 	return nil
 }
 
-func (n *nodeContainerImp) getChild(pointer []byte) Node {
+func (n *nodeImp) getChild(pointer []byte) Node {
 	if n.children == nil {
 		log.Warning("Child not found for pointer: %s", hex.EncodeToString(pointer))
 		return nil
@@ -196,8 +197,11 @@ func (n *nodeContainerImp) getChild(pointer []byte) Node {
 
 	return n.children[key]
 }
+func (n *nodeImp) getAllChildrenCount() int {
+	return len(n.children)
+}
 
-func (n *nodeContainerImp) getAllChildren() []Node {
+func (n *nodeImp) getAllChildren() []Node {
 	children := []Node{}
 	for _, c := range n.children {
 		children = append(children, c)
@@ -205,21 +209,21 @@ func (n *nodeContainerImp) getAllChildren() []Node {
 	return children
 }
 
-func (n *nodeContainerImp) getNodeType() pb.NodeType {
+func (n *nodeImp) getNodeType() pb.NodeType {
 	return n.nodeType
 }
 
-func (n *nodeContainerImp) getLeafNode() shortNode {
+func (n *nodeImp) getLeafNode() shortNode {
 	return n.leaf
 }
 
-func (n *nodeContainerImp) getExtNode() shortNode {
+func (n *nodeImp) getExtNode() shortNode {
 	return n.ext
 }
 
 // Returns shortnode type of this node.
 // Returns nil for a branch node
-func (n *nodeContainerImp) getShortNode() shortNode {
+func (n *nodeImp) getShortNode() shortNode {
 	switch n.nodeType {
 	case pb.NodeType_branch:
 		return nil
@@ -232,19 +236,23 @@ func (n *nodeContainerImp) getShortNode() shortNode {
 	}
 }
 
-func (n *nodeContainerImp) isLeaf() bool {
+func (n *nodeImp) isLeaf() bool {
 	return n.nodeType == pb.NodeType_leaf
 }
 
-func (n *nodeContainerImp) isExt() bool {
+func (n *nodeImp) isExt() bool {
 	return n.nodeType == pb.NodeType_extension
 }
 
-func (n *nodeContainerImp) isBranch() bool {
+func (n *nodeImp) isBranch() bool {
 	return n.nodeType == pb.NodeType_branch
 }
 
-func (n *nodeContainerImp) isShortNode() bool {
+func (n *nodeImp) getChildrenCount() int {
+	return len(n.children)
+}
+
+func (n *nodeImp) isShortNode() bool {
 	switch n.nodeType {
 	case pb.NodeType_leaf:
 		return true
@@ -256,7 +264,7 @@ func (n *nodeContainerImp) isShortNode() bool {
 }
 
 // validate node hash without any side effects
-func (n *nodeContainerImp) validateHash() error {
+func (n *nodeImp) validateHash() error {
 
 	data, err := n.marshal()
 	if err != nil {
@@ -272,16 +280,16 @@ func (n *nodeContainerImp) validateHash() error {
 	return nil
 }
 
-func (n *nodeContainerImp) getBranchNode() branchNode {
+func (n *nodeImp) getBranchNode() branchNode {
 	return n.branch
 }
 
-func (n *nodeContainerImp) didLoadChildren() bool {
+func (n *nodeImp) didLoadChildren() bool {
 	return n.childrenLoaded
 }
 
 // Loads node's direct child node(s) to memory from store
-func (n *nodeContainerImp) loadChildren(db *treeDb) error {
+func (n *nodeImp) loadChildren(db *treeDb) error {
 
 	if n.nodeType == pb.NodeType_leaf {
 		// leaves are childless
@@ -345,7 +353,7 @@ func (n *nodeContainerImp) loadChildren(db *treeDb) error {
 	return nil
 }
 
-func (n *nodeContainerImp) getNodeEmbeddedPath() string {
+func (n *nodeImp) getNodeEmbeddedPath() string {
 	switch n.nodeType {
 	case pb.NodeType_leaf:
 		return n.leaf.getPath()
@@ -356,7 +364,7 @@ func (n *nodeContainerImp) getNodeEmbeddedPath() string {
 	}
 }
 
-func (n *nodeContainerImp) getNodeHash() []byte {
+func (n *nodeImp) getNodeHash() []byte {
 	switch n.nodeType {
 	case pb.NodeType_branch:
 		return n.branch.getNodeHash()
@@ -369,7 +377,7 @@ func (n *nodeContainerImp) getNodeHash() []byte {
 	}
 }
 
-func (n *nodeContainerImp) marshal() ([]byte, error) {
+func (n *nodeImp) marshal() ([]byte, error) {
 	switch n.nodeType {
 	case pb.NodeType_branch:
 		return n.branch.marshal()
@@ -382,7 +390,7 @@ func (n *nodeContainerImp) marshal() ([]byte, error) {
 	}
 }
 
-func (n *nodeContainerImp) getUserStringValue(userDb *userDb, v []byte) string {
+func (n *nodeImp) getUserStringValue(userDb *userDb, v []byte) string {
 	// pull the data from the user data store
 	value, err := userDb.Get(v, nil)
 	if err == leveldb.ErrNotFound {
@@ -401,7 +409,7 @@ func (n *nodeContainerImp) getUserStringValue(userDb *userDb, v []byte) string {
 // depth-first-search print tree rooted at node n
 // note - this will load the whole tree into memory
 
-func (n *nodeContainerImp) print(treeDb *treeDb, userDb *userDb) string {
+func (n *nodeImp) print(treeDb *treeDb, userDb *userDb) string {
 
 	buffer := bytes.Buffer{}
 
