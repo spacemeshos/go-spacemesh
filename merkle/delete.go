@@ -17,7 +17,7 @@ func (mt *merkleTreeImp) Delete(k []byte) error {
 	// in the case it is not already in the tree
 	res, stack, err := mt.Get(k)
 
-	if res == nil || len(res) == 0 || err != nil {
+	if len(res) == 0 || err != nil {
 		return nil
 	}
 

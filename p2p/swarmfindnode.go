@@ -61,7 +61,7 @@ func (s *swarmImpl) kadFindNode(nodeId string, callback chan node.RemoteNodeData
 Loop:
 	for {
 
-		if searchList == nil || len(searchList) == 0 {
+		if len(searchList) == 0 {
 			go func() { callback <- nil }()
 			break Loop
 		}
