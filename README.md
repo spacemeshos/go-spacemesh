@@ -5,7 +5,7 @@
 
 <p align="center">
 
-<img src="https://img.shields.io/packagist/l/doctrine/orm.svg"/>
+<a href="https://github.com/spacemeshos/go-spacemesh/blob/master/LICENSE"><img src="https://img.shields.io/packagist/l/doctrine/orm.svg"/></a>
 <a href="https://github.com/avive"><img src="https://img.shields.io/badge/maintainer-%40avive-green.svg"/></a>
 <img src="https://img.shields.io/badge/golang-%3E%3D%201.9.2-orange.svg"/>
 <a href="https://gitter.im/spacemesh-os/Lobby"><img src="https://img.shields.io/badge/gitter-%23spacemesh--os-blue.svg"/></a>
@@ -110,7 +110,7 @@ Few things you can do right now to help out:
  - Add tests. There can never be enough tests.
  
 #### Next Steps...
-- Please read everything in [`/docs`](https://github.com/spacemeshos/go-spacemesh/tree/master/docs)
+- Please read everything in [`wiki`](https://github.com/spacemeshos/go-spacemesh/wiki)
 
 ### Got Questions? 
 - Introduce yourself and ask anything on the [spacemesh gitter channel](https://gitter.im/spacemesh-os/Lobby).
