@@ -41,7 +41,7 @@ func (mt *merkleTreeImp) Delete(k []byte) error {
 func (mt *merkleTreeImp) delete(k string, s *stack) error {
 
 	lastNode := s.pop()
-	parentNode := s.pop ()
+	parentNode := s.pop()
 
 	if lastNode == nil {
 		return nil
@@ -61,6 +61,7 @@ func (mt *merkleTreeImp) delete(k string, s *stack) error {
 	} else {
 		// last node is a leaf and leaf parent must be a branch
 		path := lastNode.getNodeEmbeddedPath()
+
 		k = k[:len(k)-len(path)]
 		mt.removeNodeFromStore(lastNode)
 
@@ -79,9 +80,8 @@ func (mt *merkleTreeImp) delete(k string, s *stack) error {
 	// last node is a branch. if there's only 1 child we need
 	// to collapse it to an ext node
 
-
 	if lastNode.getChildrenCount() == 1 {
-		// we need to add node below current branch node
+		// we need to add the node below current branch node
 		// to the node above it
 	} else {
 		s.push(parentNode)

@@ -32,7 +32,6 @@ type Node interface {
 	parent
 
 	getNodeType() pb.NodeType
-
 	getLeafNode() shortNode
 	getExtNode() shortNode
 	getBranchNode() branchNode
@@ -46,7 +45,6 @@ type Node interface {
 	getNodeEmbeddedPath() string // hex-encoded nibbles or empty
 
 	print(treeDb *treeDb, userDb *userDb) string
-
 	validateHash() error
 }
 

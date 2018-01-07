@@ -34,7 +34,6 @@ func newShortNode(nodeType pb.NodeType, path string, value []byte) shortNode {
 }
 
 func newShortNodeFromData(data []byte, n *pb.Node) shortNode {
-
 	node := &shortNodeImpl{
 		nodeType: n.NodeType,
 		path:     n.Path,
@@ -53,9 +52,7 @@ type shortNodeImpl struct {
 }
 
 func (s *shortNodeImpl) getNodeHash() []byte {
-
 	if s.nodeHash == nil || len(s.nodeHash) == 0 { // lazy eval
-
 		// calc hash based on current marshaled node data and store it
 		data, err := s.marshal()
 		if err != nil {
@@ -94,7 +91,6 @@ func (s *shortNodeImpl) setPath(p string) {
 }
 
 func (s *shortNodeImpl) marshal() ([]byte, error) {
-
 	res := &pb.Node{
 		NodeType: s.nodeType,
 		Value:    s.value,
@@ -105,7 +101,6 @@ func (s *shortNodeImpl) marshal() ([]byte, error) {
 }
 
 func (s *shortNodeImpl) print(userDb *userDb, getUserValue func(userDb *userDb, v []byte) string) string {
-
 	buffer := bytes.Buffer{}
 	if s.isLeaf() {
 		userValue := getUserValue(userDb, s.value)

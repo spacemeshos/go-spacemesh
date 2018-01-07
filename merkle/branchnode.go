@@ -146,6 +146,7 @@ func (b *branchNodeImpl) print(userDb *userDb, getUserValue func(userDb *userDb,
 	return buffer.String()
 }
 
+// Returns a slice containing all pointers to child nodes
 func (b *branchNodeImpl) getAllChildNodePointers() [][]byte {
 	res := make([][]byte, 0)
 	for _, val := range b.entries {

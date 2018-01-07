@@ -3,6 +3,7 @@
 /tmp
 */**/*un~
 */**/*.test
+*/**/temp.js
 .DS_Store
 */**/.DS_Store
 /build
