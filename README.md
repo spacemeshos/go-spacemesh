@@ -31,7 +31,6 @@ Provide dapp and app developers with a robust way to add value exchange and valu
 ### Diggin' Deeper
 Please read the Spacemesh full FAQ on [our wiki](https://github.com/spacemeshos/go-spacemesh/wiki).
 
-
 ### Getting
 
 install [Go 1.9.2 or later](https://golang.org/dl/) for your platform
