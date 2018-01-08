@@ -28,7 +28,7 @@ SpacemeshOS is designed to create a decentralized blockchain smart contracts com
 Provide dapp and app developers with a robust way to add value exchange and value related features to their apps at scale. Our goal is to create a truly decentralized cryptocoin that fulfills the original vision behind bitcoin to become a secure trustless store of value as well as a transactional currency with extremely low transaction fees.
 
 ### Diggin' Deeper
-Please read the Spacemesh full FAQ on [our wiki](https://github.com/spacemeshos/go-spacemesh/wiki).
+Please read the Spacemesh [full FAQ] (https://github.com/spacemeshos/go-spacemesh/wiki/faq).
 
 
 ### Getting
