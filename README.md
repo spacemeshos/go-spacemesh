@@ -1,6 +1,7 @@
 
 <h1 align="center">
   <a href="https://spacemesh.io"><img width="400" src="https://firebasestorage.googleapis.com/v0/b/dromo-os.appspot.com/o/spacemesh-logo.png?alt=media&token=dcd60c71-8522-4e02-9bc2-e439f89577f2" alt="Spacemesh logo" /></a>
+  <p>Make blockchain decentralized again™</p>
 </h1>
 
 <p align="center">
@@ -16,9 +17,20 @@
 ## go-spacemesh
 Thanks for your interest in this open source project.
 This is the go implementation of the [Spacemesh](https://spacemesh.io) p2p node.
-Spacemesh is a decentralized blockchain computer using a new race-free consensus protocol that doesn't involve `proof of work`.
+Spacemesh is a decentralized blockchain computer using a new race-free consensus protocol that doesn't involve energy-wasteful `proof of work`.
 Spacemesh is designed to build a secure decentralized network formed by a large number of desktop PCs at home.
+
 To learn more about SpaceMesh head over to our [wiki](https://github.com/spacemeshos/go-spacemesh/wiki).
+
+### Motivation
+SpacemeshOS is designed to create a decentralized blockchain smart contracts computer and a cryptocurrency that is formed by connecting the home PCs of people from around the world into one virtual computer without incurring massive energy waste and mining pools issues that are inherent in other blockchain computers, and provide a provably-secure and incentive-compatible smart contracts execution environment. Spacemesh OS is designed to be ASIC-resistant and in a way that doesn’t give an unfair advantage to rich parties who can afford setting up dedicated computers on the network. We achieve this by using a novel consensus protocol and optimize the software to be most effectively be used on home PCs that are also used for interactive apps. 
+
+### What is this good for?
+Provide dapp and app developers with a robust way to add value exchange and value related features to their apps at scale. Our goal is to create a truly decentralized cryptocoin that fulfills the original vision behind bitcoin to become a secure trustless store of value as well as a transactional currency with extremely low transaction fees.
+
+### Diggin' Deeper
+Please read the Spacemesh full FAQ on [our wiki](https://github.com/spacemeshos/go-spacemesh/wiki).
+
 
 ### Getting
 
