@@ -13,5 +13,5 @@ Feature request template
 
 #### Feature description
 
-#### Reasons for adding this feature
+#### Main Reason for adding this feature
 
