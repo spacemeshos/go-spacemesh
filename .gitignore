@@ -15,6 +15,7 @@
 .project
 .settings
 .idea
+.vagrant
 
 go-spacemesh
 cp.out
