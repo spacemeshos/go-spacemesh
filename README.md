@@ -1,10 +1,6 @@
 <h1 align="center">
   <a href="https://spacemesh.io"><img width="400" src="https://firebasestorage.googleapis.com/v0/b/dromo-os.appspot.com/o/spacemesh-logo.png?alt=media&token=dcd60c71-8522-4e02-9bc2-e439f89577f2" alt="Spacemesh logo" /></a>
-<<<<<<< HEAD
-  <p>Make blockchain decentralized again™</p>
-=======
   <p align="center">Make blockchain decentralized again™</p>
->>>>>>> 1f1183f33a42451e271e51a1c9564bb6b3c5c38c
 </h1>
 
 <p align="center">
@@ -32,12 +28,7 @@ SpacemeshOS is designed to create a decentralized blockchain smart contracts com
 Provide dapp and app developers with a robust way to add value exchange and value related features to their apps at scale. Our goal is to create a truly decentralized cryptocoin that fulfills the original vision behind bitcoin to become a secure trustless store of value as well as a transactional currency with extremely low transaction fees.
 
 ### Diggin' Deeper
-<<<<<<< HEAD
-Please read the Spacemesh full FAQ on [our wiki](https://github.com/spacemeshos/go-spacemesh/wiki).
-=======
 Please read the Spacemesh [full FAQ](https://github.com/spacemeshos/go-spacemesh/wiki/faq).
-
->>>>>>> 1f1183f33a42451e271e51a1c9564bb6b3c5c38c
 
 ### Getting
 
