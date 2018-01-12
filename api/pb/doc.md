@@ -1,4 +1,3 @@
-
 // run these from ./api/pb to generate files from api.proto defs
 ```
 protoc -I/usr/local/include -I. \
