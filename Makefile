@@ -35,3 +35,7 @@ devtools:
 	# Get the dependencies
 	go get -u github.com/kardianos/govendor
 	govendor sync
+
+cover:
+	# Check for cover :
+	go test ./$(pkg) -coverprofile=cover.out -covermode=count; go tool cover -html=cover.out

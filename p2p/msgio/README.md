@@ -1,6 +1,6 @@
 # go-msgio - Message IO
 
-We import the code for this library as we'd like to get rid of the mutexes and only use it rhough chan.
+We import the code for this library as we'd like to get rid of the mutexes and only use it through chan.
 
 This is a simple package that helps read and write length-delimited slices. It's helpful for building wire protocols.
 
