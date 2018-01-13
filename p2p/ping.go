@@ -157,7 +157,6 @@ func (p *pingProtocolImpl) handleIncomingResponse(msg IncomingMessage) {
 
 	// notify clients of the new pong or error
 	for _, c := range p.callbacks {
-		// todo: verify that this style of closure is kosher
 		go func() { c <- resp }()
 	}
 }

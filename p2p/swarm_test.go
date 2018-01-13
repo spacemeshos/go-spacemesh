@@ -31,7 +31,7 @@ Loop:
 	}
 }
 
-// todo: fix me this test is broken
+// todo: fix me - this test is broken
 func _estBootstrap(t *testing.T) {
 
 	// setup:

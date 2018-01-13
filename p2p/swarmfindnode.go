@@ -44,7 +44,7 @@ func (s *swarmImpl) findNode(id string, callback chan node.RemoteNodeData) {
 
 // Implements the kad algo for locating a remote node
 // Precondition - node is not in local routing table
-// id - base58 node id string
+// nodeId: - base58 node id string
 // Returns requested node or nil if not found
 func (s *swarmImpl) kadFindNode(nodeId string, callback chan node.RemoteNodeData) {
 
