@@ -12,7 +12,6 @@ import (
 )
 
 // Directory and paths funcs
-
 const OwnerReadWriteExec = 0700
 const OwnerReadWrite = 0600
 

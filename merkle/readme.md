@@ -71,6 +71,73 @@ More info here:
 - https://github.com/ethereum/wiki/wiki/Patricia-Tree
 
 
+### Find node algorithm
 
+func findNode(r,k,pos,s) (v,err)
+- input r: tree root node
+- input k: path to value (hex encoded nibbles)
+- input pos: number of nibbles matched in path to value
+- in/out s: path to node with value if found or of nodes to where node with value should have been if not found
+- output value: nil if not found, []byte otherwise
 
+Implementation:
+- if r is nil return nil
+- load r children from store to memory
+- push r to s
+- if r is branch then...
+    - if the whole path k matched then return value stored in r
+    - if r has a child for last nibble of k then return findNode(child,k,pos+1,s) else return nil
+- else if r is ext node then...
+    - let p be partial path encoded in r
+    - if len(k)-pos < len(p) || path != k[pos:pos+len(path)] return nil
+    - let c be the child node pointed by p
+    - return findValue(c,k,pos+len(p),s)
+- else if r is a leaf node then...
+    - let p be the partial path encoded in r
+    - if len(k)-pos < len(p) || path != k[pos:pos+len(path)] return nil
+    - found - return value(p)    
+    
+### Delete node algorithm
 
+func delete(k)
+- input k: path to value - hex encoded value
+Implementation:
+- let s be a new nodes tack and r the tree's root node
+- call findNode(r,k, 0, s)
+    - if result not found return err
+- s now has the path to the node which is holding that value
+- the node in s.top is the node to delete or to update
+- call deleteNode(k,s)
+
+func deleteNode(k,s)
+- k: path to node to delete
+- s: nodes path from root to node to be deleted/updated
+- s.root - node to delete or update
+Implementation:
+- let lastnode = s.pop()
+- if lastnode is nil return nil
+- let parentnode = s.pop()
+- if parentnode is nil then lastnode is a root leaf node - remove it from tree and return nil
+- if lastnode is a branch node then it is holding the value to be removed from the tree
+    - set value to nil and return
+- else lastnode is a leaf node and its parent is a branch...
+    - let p be the path embedded in lastnode
+    - k = k[:len(k)-len(path)]
+    - remove lastnode from the tree
+    - idx = k(len(k)01) - branch node idx of lastnode
+    - remove child at idx from branch node
+    - k = k[:len(k)-2] - remove last nibble from k
+    - lastnode <- parentnode
+    - parentnode = s.pop ()
+ - lastnode is a branch...
+    - if it has only 1 child then collapse it to ext node
+        - tood: document processBranchNode() here
+    - else s.push(parentNode)
+ - update all node pointers on the path specified by s 
+ - return
+  
+  
+ func processBranchNode()
+ 
+ Impl:
+ - 

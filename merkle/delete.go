@@ -37,16 +37,17 @@ func (mt *merkleTreeImp) Delete(k []byte) error {
 // Deletes value from node at top of the stack from the tree
 // Stack contains a path to a node to be deleted
 // eg. ext -> branch -> ext -> branch
-// k: path to path last node (top)
+// k: path to path last node (top of stack)
+// s: path to node to be deleted from tree root
 func (mt *merkleTreeImp) delete(k string, s *stack) error {
 
 	lastNode := s.pop()
-	parentNode := s.pop()
 
 	if lastNode == nil {
 		return nil
 	}
 
+	parentNode := s.pop()
 	if parentNode == nil {
 		// tree with 1 leaf - remove leaf and set to empty tree
 		mt.removeNodeFromStore(lastNode)
@@ -55,6 +56,7 @@ func (mt *merkleTreeImp) delete(k string, s *stack) error {
 	}
 
 	if lastNode.isBranch() {
+		// last node is a branch - clear its value
 		mt.removeNodeFromStore(lastNode)
 		lastNode.getBranchNode().setValue(nil)
 		mt.persistNode(lastNode)
@@ -86,8 +88,10 @@ func (mt *merkleTreeImp) delete(k string, s *stack) error {
 	} else {
 		s.push(parentNode)
 	}
+
 	s.push(lastNode)
 
+	// update all pointers in the path specified by stack
 	mt.update(k, s)
 
 	return nil

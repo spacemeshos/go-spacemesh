@@ -54,9 +54,7 @@ func (mt *merkleTreeImp) Get(k []byte) ([]byte, *stack, error) {
 // root: tree root to start looking from
 // pos: number of key hex chars (nibbles) already matched and the index in key to start matching from
 // k: hex-encoded path (always abs full path)
-// s: on return stack of nodes from root to where value should be in the tree
-
-// todo: return # of chars matched on path to last node on stack
+// s: on return stack of nodes from root to where value should be or is in the tree
 func (mt *merkleTreeImp) findValue(root Node, k string, pos int, s *stack) ([]byte, error) {
 
 	if root == nil {
