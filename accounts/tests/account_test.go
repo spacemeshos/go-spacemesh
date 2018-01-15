@@ -33,7 +33,7 @@ func TestAccountOps(t *testing.T) {
 	// get os temp dir here
 	accountDataFilePath, err := account.Persist(accountsDataFolder)
 	if err != nil {
-		t.Fatalf("Failed to persist account", err)
+		t.Fatalf("Failed to persist account %v", err)
 	}
 
 	// uncomment to cleanup the account data file from store
@@ -44,7 +44,7 @@ func TestAccountOps(t *testing.T) {
 	// read the account back from store
 	account1, err := accounts.NewAccountFromStore(account.String(), accountsDataFolder)
 	if err != nil {
-		t.Fatalf("Failed to load account", err)
+		t.Fatalf("Failed to load account %v", err)
 	}
 
 	accountPubKey := account.PubKey.String()
@@ -56,7 +56,7 @@ func TestAccountOps(t *testing.T) {
 
 	err = account1.UnlockAccount(passphrase)
 	if err != nil {
-		t.Fatalf("Failed to unlock account", err)
+		t.Fatalf("Failed to unlock account %v", err)
 	}
 
 	assert.True(t, account1.IsAccountUnlocked(), "Expected account to be unlocked")
@@ -86,7 +86,7 @@ func TestPassphrase(t *testing.T) {
 
 	accountDataFilePath, err := account.Persist(accountsDataFolder)
 	if err != nil {
-		t.Fatalf("Failed to persist account", err)
+		t.Fatalf("Failed to persist account %v", err)
 	}
 
 	// uncomment to cleanup the account data file from store
@@ -95,7 +95,7 @@ func TestPassphrase(t *testing.T) {
 	// read the account back from store
 	account1, err := accounts.NewAccountFromStore(account.String(), accountsDataFolder)
 	if err != nil {
-		t.Fatalf("Failed to load account", err)
+		t.Fatalf("Failed to load account %v", err)
 	}
 
 	accountPubKey := account.PubKey.String()

@@ -235,12 +235,12 @@ func (rt *routingTableImpl) processEvents() {
 
 		case p := <-rt.peerAdded:
 			for _, c := range rt.peerAddedCallbacks {
-				go func() { c <- p }()
+				go func(c PeerChannel) { c <- p }(c)
 			}
 
 		case p := <-rt.peerRemoved:
 			for _, c := range rt.peerRemovedCallbacks {
-				go func() { c <- p }()
+				go func(c PeerChannel) { c <- p }(c)
 			}
 
 		case c := <-rt.registerPeerAddedReq:
