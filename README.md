@@ -25,9 +25,9 @@ To learn more about SpaceMesh head over to our [wiki](https://github.com/spaceme
 install [Go 1.9.2 or later](https://golang.org/dl/) for your platform
 
 ```
-go get https://github.com/spacemeshos/go-spacemesh
+go get github.com/spacemeshos/go-spacemesh
 ```
-or create this directory `GOPATH$/src/spacemeshos/` and clone the repo into it using:
+or create this directory `GOPATH$/src/github.com/spacemeshos/` and clone the repo into it using:
 
 ```
 git clone https://github.com/spacemeshos/go-spacemesh
