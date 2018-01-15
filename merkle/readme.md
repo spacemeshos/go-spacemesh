@@ -1,7 +1,8 @@
 # Design Notes
+A merkle tree supporting CRUD ops for user (k,v) data backed by a (k,v) data store.
+Note that this is actually more accrurely named trie which is different form the classic definition of a markle tree - a complete binary tree with values at leaves where each pointer from parent to child is a hash of the child's value  and a non-leaf value is a hash of the union of is pointers to children.
 
 ## Terms
-
 - `User data domain`: client stored data (k,v).
 - `Tree data domain`: data use internally in the tree without client awareness.
 - `v`: user data domain value. a bin_encode(of any data)
@@ -75,7 +76,7 @@ More info here:
 
 func findNode(r,k,pos,s) (v,err)
 - input r: tree root node
-- input k: path to value (hex encoded nibbles)
+- input k: path to value/ (hex encoded nibbles)
 - input pos: number of nibbles matched in path to value
 - in/out s: path to node with value if found or of nodes to where node with value should have been if not found
 - output value: nil if not found, []byte otherwise
