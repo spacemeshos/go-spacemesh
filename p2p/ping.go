@@ -157,7 +157,7 @@ func (p *pingProtocolImpl) handleIncomingResponse(msg IncomingMessage) {
 
 	// notify clients of the new pong or error
 	for _, c := range p.callbacks {
-		go func(c chan SendPingResp) { c <- resp }(c)
+		go func() { c <- resp }()
 	}
 }
 

@@ -2,50 +2,64 @@ package merkle
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/merkle/pb"
 )
 
-// An mutable branch (full) node
+// An mutable branch node
 type branchNode interface {
-	getValue() []byte                             // value terminated in the path to this node or nil if none exists. Value is key to use-space data
-	setValue(v []byte)                            // set the branch value
-	getPath(prefix byte) []byte                   // return pointer to child node for hex char entry or nil
-	marshal() ([]byte, error)                     // to binary data
-	getNodeHash() []byte                          // data hash (determines the pointer to this node)
-	getAllChildNodePointers() [][]byte            // get all pointers to child nodes
-	addChild(prefix string, pointer []byte) error // add a child to this node
-	removeChild(prefix string) error              // remove a child from this node
-	print() string                                // returns debug info
+	getValue() []byte                          // value terminated in the path to this node or nil if none exists. Value is key to use-space data
+	setValue(v []byte)                         // set the branch value
+	getPointer(idx string) []byte              // return pointer to child node for hex char entry or nil. idx - hex char, eg "0", "f"
+	marshal() ([]byte, error)                  // to binary data
+	getNodeHash() []byte                       // data hash (determines the pointer to this node)
+	getAllChildNodePointers() [][]byte         // get all pointers to child nodes
+	addChild(idx string, pointer []byte) error // add a child to this node
+	removeChild(idx string) error              // remove a child from this node
+
+	print(userDb *userDb,
+		getUserValue func(userDb *userDb,
+			v []byte) string) string // returns debug info
+
 }
 
 // Adds a child to the node
-func (b *branchNodeImpl) addChild(prefix string, pointer []byte) error {
+func (b *branchNodeImpl) addChild(idx string, pointer []byte) error {
 
-	idx, ok := fromHexChar(prefix[0])
+	if len(idx) != 1 {
+		return ErrorInvalidHexChar
+	}
+
+	i, ok := fromHexChar(idx[0])
 	if !ok {
 		return ErrorInvalidHexChar
 	}
 
-	b.entries[idx] = pointer
+	b.entries[i] = pointer
 
-	// reset hash so it is lazy-computed once it is needed again
+	// reset hash
 	b.nodeHash = []byte{}
 
 	return nil
 }
 
 // Removes a child from the node
-func (b *branchNodeImpl) removeChild(prefix string) error {
+func (b *branchNodeImpl) removeChild(idx string) error {
 
-	idx, ok := fromHexChar(prefix[0])
+	if len(idx) != 1 {
+		return ErrorInvalidHexChar
+	}
+
+	i, ok := fromHexChar(idx[0])
 	if !ok {
 		return ErrorInvalidHexChar
 	}
 
-	delete(b.entries, idx)
+	delete(b.entries, i)
 
 	// reset hash
 	b.nodeHash = []byte{}
@@ -58,6 +72,23 @@ func newBranchNode(entries map[byte][]byte, value []byte) branchNode {
 	e := entries
 	if e == nil {
 		e = make(map[byte][]byte)
+	}
+
+	return &branchNodeImpl{
+		value:   value,
+		entries: e,
+	}
+}
+
+func newBranchNodeEx(entries map[string][]byte, value []byte) branchNode {
+
+	e := make(map[byte][]byte)
+
+	for k, v := range entries {
+		idx, ok := fromHexChar(k[0])
+		if ok {
+			e[idx] = v
+		}
 	}
 
 	return &branchNodeImpl{
@@ -91,18 +122,31 @@ type branchNodeImpl struct {
 	nodeHash []byte
 }
 
-func (b *branchNodeImpl) print() string {
+func (b *branchNodeImpl) print(userDb *userDb, getUserValue func(userDb *userDb, v []byte) string) string {
 	buffer := bytes.Buffer{}
-	buffer.WriteString(fmt.Sprintf("Branch value: %x\n", b.value))
+	buffer.WriteString(fmt.Sprintf("Branch <%s>.", hex.EncodeToString(b.getNodeHash())[:6]))
+	if len(b.value) > 0 {
+		userValue := getUserValue(userDb, b.value)
+		buffer.WriteString(fmt.Sprintf(" Stored value: %s. \n", userValue))
+	} else {
+		buffer.WriteString(" No stored value.\n")
+	}
+
+	if len(b.entries) == 0 {
+		buffer.WriteString(" No children.\n")
+	}
+
 	for k, v := range b.entries {
 		if len(v) > 0 {
-			buffer.WriteString(fmt.Sprintf(" [%x] = %s\n", k, v))
+			ks, _ := toHexChar(k)
+			buffer.WriteString(fmt.Sprintf(" [%s] -> <%s>\n", ks, hex.EncodeToString(v)[:6]))
 		}
 	}
 
 	return buffer.String()
 }
 
+// Returns a slice containing all pointers to child nodes
 func (b *branchNodeImpl) getAllChildNodePointers() [][]byte {
 	res := make([][]byte, 0)
 	for _, val := range b.entries {
@@ -137,8 +181,21 @@ func (b *branchNodeImpl) setValue(v []byte) {
 	b.nodeHash = []byte{}
 }
 
-func (b *branchNodeImpl) getPath(idx byte) []byte {
-	return b.entries[idx]
+func (b *branchNodeImpl) getPointer(idx string) []byte {
+
+	if len(idx) != 1 {
+		log.Error("Invalid hex char: %s", idx)
+		return []byte{}
+	}
+
+	i, ok := fromHexChar(idx[0])
+
+	if !ok {
+		log.Error("Invalid hex char: %s", idx)
+		return []byte{}
+	}
+
+	return b.entries[i]
 }
 
 func (b *branchNodeImpl) marshal() ([]byte, error) {

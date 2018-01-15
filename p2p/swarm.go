@@ -1,3 +1,5 @@
+// Package p2p implement the core spacemesh p2p protocol and provide types for higher-level protcols such as handshake.
+// See Ping for an example higher-level protocol
 package p2p
 
 import (
@@ -5,8 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 )
 
-// Swarm
-// p2p virtual network of spacemesh nodes
+// Swarm is p2p virtual network of spacemesh nodes as viewed by a local node
 type Swarm interface {
 
 	// Send a message to a specific remote node based just on its id without knowing its ip address

@@ -19,8 +19,7 @@ type swarmImpl struct {
 
 	config nodeconfig.SwarmConfig
 
-	// Internal state not thread safe state - must be access only from methods dispatched from the internal event handler
-
+	// Internal state is not thread safe - must be accessed only from methods dispatched from the internal event handler
 	peers             map[string]Peer           // NodeId -> Peer. known remote nodes. Swarm is a peer store.
 	connections       map[string]net.Connection // ConnId -> Connection - all open connections for tracking and mngmnt
 	peersByConnection map[string]Peer           // ConnId -> Peer remote nodes indexed by their connections.

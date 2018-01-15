@@ -467,7 +467,7 @@ func processHandshakeRequest(node LocalNode, r Peer, req *pb.HandshakeData) (*pb
 
 // Process handshake protocol response. This is called by initiator (node1) to handle response from node2
 // and to establish the session
-// Side-effect - passed network session is set to authenticated
+// Side effect - passed network session is set to authenticated
 func processHandshakeResponse(node LocalNode, r Peer, s NetworkSession, resp *pb.HandshakeData) error {
 
 	// verified shared public secret

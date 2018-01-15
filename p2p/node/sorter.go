@@ -11,7 +11,7 @@ type PeerDistance struct {
 	Distance dht.ID
 }
 
-// peerSorter is a sort.Interface of RemoteNodeData by distance
+// PeerSorter is a sort.Interface of RemoteNodeData by XOR distance
 type PeerSorter []*PeerDistance
 
 func (p PeerSorter) Len() int      { return len(p) }

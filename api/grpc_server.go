@@ -1,3 +1,4 @@
+// Package api provides the local go-spacemesh API endpoints. e.g. json-http and grpc-http2
 package api
 
 import (

@@ -30,13 +30,15 @@ func TestBasicApi(t *testing.T) {
 		priv2.String(), priv.String()))
 
 	pub2, err := NewPublicKey(pub.Bytes())
-	assert.Nil(t, err, fmt.Sprintf("New pub key from bin error %v", err))
+
+	assert.Nil(t, err, fmt.Sprintf("New pub key from bin error: %v", err))
 
 	assert.True(t, bytes.Equal(pub2.Bytes(), pub.Bytes()), fmt.Sprintf("expected same public key, %s, %s",
 		pub2.String(), pub.String()))
 
 	pub3, err := NewPublicKeyFromString(pub.String())
-	assert.Nil(t, err, fmt.Sprintf("New pub key from bin error %v", err))
+
+	assert.Nil(t, err, fmt.Sprintf("New pub key from bin error: %v", err))
 
 	assert.True(t, bytes.Equal(pub3.Bytes(), pub.Bytes()), fmt.Sprintf("expected same public key, %s, %s",
 		pub3.String(), pub.String()))
@@ -53,18 +55,23 @@ func TestCryptoApi(t *testing.T) {
 
 	// test signatures
 	signature, err := priv.Sign(msgData)
-	assert.Nil(t, err, fmt.Sprintf("Signing error %v", err))
+
+	assert.Nil(t, err, fmt.Sprintf("Signing error", err))
 	ok, err := pub.Verify(msgData, signature)
-	assert.Nil(t, err, fmt.Sprintf("Sign verification error %v", err))
+	assert.Nil(t, err, fmt.Sprintf("Sign verification error.", err))
+
 	assert.True(t, ok, "Failed to verify signature")
 
 	// test encrypting a message for pub by pub - anyone w pub can do that
 	cypherText, err := pub.Encrypt(msgData)
-	assert.Nil(t, err, fmt.Sprintf("Enc error %v", err))
+
+	assert.Nil(t, err, fmt.Sprintf("Enc error.", err))
 
 	// test decryption
 	clearText, err := priv.Decrypt(cypherText)
-	assert.Nil(t, err, fmt.Sprintf("Dec error %v", err))
+	assert.Nil(t, err, fmt.Sprintf("Dec error.", err))
+
+
 	assert.True(t, bytes.Equal(msgData, clearText), "expected same dec message")
 
 }

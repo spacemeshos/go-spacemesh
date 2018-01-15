@@ -3,6 +3,7 @@
 /tmp
 */**/*un~
 */**/*.test
+*/**/temp.js
 .DS_Store
 */**/.DS_Store
 /build
@@ -18,3 +19,4 @@
 
 go-spacemesh
 cp.out
+cover.out

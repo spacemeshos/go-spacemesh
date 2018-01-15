@@ -1,6 +1,9 @@
+//Package merkle provides a merkle tree which supports CRUD ops for user (k,v) data. It is backed by a (k,v) data store.
+//Note that the tree is actually more accurately named trie which is different form the classic definition of a Markle tree - a complete binary tree with values at leaves where each pointer from parent to child is a hash of the child's value  and a non-leaf value is a hash of the union of is pointers to children.
 package merkle
 
 import (
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -8,18 +11,32 @@ import (
 // All (k,v) methods are in user data space and not in tree space.
 // Tree space pointers and paths are internal only.
 type MerkleTree interface {
-	Put(k, v []byte) error              // store user value
-	Delete(k []byte) error              // delete value indexed by key
-	Get(k []byte) ([]byte, bool, error) // get value indexed by key
-	GetRootHash() []byte                // get tree root hash
-	GetRootNode() NodeContainer         // get root node
+	Put(k, v []byte) error                // store user key, value
+	Delete(k []byte) error                // delete user value indexed by key
+	Get(k []byte) ([]byte, *stack, error) // get user value indexed by key
+	GetRootHash() []byte                  // get tree root hash
+	GetRootNode() Node                    // get root node
+
+	CloseDataStores() error // call when done w the tree
+
+	Print() string
+
+	ValidateStructure(root Node) ([]byte, error)
+}
+
+type userDb struct {
+	*leveldb.DB
+}
+
+type treeDb struct {
+	*leveldb.DB
 }
 
 // internal implementation
 type merkleTreeImp struct {
-	userData *leveldb.DB
-	treeData *leveldb.DB
-	root     NodeContainer
+	userData *userDb
+	treeData *treeDb
+	root     Node
 }
 
 // Creates a new empty merkle tree with the provided paths to user and tree data db files.
@@ -29,19 +46,19 @@ type merkleTreeImp struct {
 func NewEmptyTree(userDataFileName string, treeDataFileName string) (MerkleTree, error) {
 	userData, err := leveldb.OpenFile(userDataFileName, nil)
 	if err != nil {
+		log.Error("Failed to open user db %v", err)
 		return nil, err
 	}
-	defer userData.Close()
 
 	treeData, err := leveldb.OpenFile(treeDataFileName, nil)
 	if err != nil {
+		log.Error("Failed to open tree db %v", err)
 		return nil, err
 	}
-	defer treeData.Close()
 
 	mt := &merkleTreeImp{
-		userData: userData,
-		treeData: treeData,
+		userData: &userDb{userData},
+		treeData: &treeDb{treeData},
 	}
 
 	return mt, nil
@@ -57,17 +74,15 @@ func NewTreeFromDb(rootHash []byte, userDataFileName string, treeDataFileName st
 	if err != nil {
 		return nil, err
 	}
-	defer userData.Close()
 
 	treeData, err := leveldb.OpenFile(treeDataFileName, nil)
 	if err != nil {
 		return nil, err
 	}
-	defer treeData.Close()
 
 	mt := &merkleTreeImp{
-		userData: userData,
-		treeData: treeData,
+		userData: &userDb{userData},
+		treeData: &treeDb{treeData},
 	}
 
 	// load the tree from the db
@@ -76,7 +91,7 @@ func NewTreeFromDb(rootHash []byte, userDataFileName string, treeDataFileName st
 		return nil, err
 	}
 
-	root, err := newNodeFromData(data, nil)
+	root, err := newNodeFromData(data)
 	if err != nil {
 		return nil, err
 	}

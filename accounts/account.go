@@ -1,3 +1,4 @@
+// Package account provide types for working with blockchain accounts
 package accounts
 
 import (
