@@ -1,3 +1,5 @@
+//Package merkle provides a merkle tree which supports CRUD ops for user (k,v) data. It is backed by a (k,v) data store.
+// Note that the tree is actually more accurately named trie which is different form the classic definition of a Markle tree - a complete binary tree with values at leaves where each pointer from parent to child is a hash of the child's value  and a non-leaf value is a hash of the union of is pointers to children.
 package merkle
 
 import (

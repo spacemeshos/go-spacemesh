@@ -1,3 +1,4 @@
+// Package filesystem provides functionality for interacting with directories and files in a cross-platform manner.
 package filesystem
 
 import (

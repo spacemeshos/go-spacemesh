@@ -1,6 +1,6 @@
 # Design Notes
-A merkle tree supporting CRUD ops for user (k,v) data backed by a (k,v) data store.
-Note that this is actually more accrurely named trie which is different form the classic definition of a markle tree - a complete binary tree with values at leaves where each pointer from parent to child is a hash of the child's value  and a non-leaf value is a hash of the union of is pointers to children.
+A Merkle tree supporting CRUD ops for user (k,v) data backed by a (k,v) data store.
+Note that this is actually more accurately named trie which is different form the classic definition of a markle tree - a complete binary tree with values at leaves where each pointer from parent to child is a hash of the child's value  and a non-leaf value is a hash of the union of is pointers to children.
 
 ## Terms
 - `User data domain`: client stored data (k,v).
