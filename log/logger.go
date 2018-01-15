@@ -1,3 +1,4 @@
+// Package log provides the both file and console logging capabilities to spacemesh modeules such as app and node.
 package log
 
 import (

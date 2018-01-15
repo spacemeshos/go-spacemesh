@@ -1,3 +1,4 @@
+// Package filesystem provides functionality for interacting with directories and files in a cross-platform manner.
 package filesystem
 
 import (
@@ -12,7 +13,6 @@ import (
 )
 
 // Directory and paths funcs
-
 const OwnerReadWriteExec = 0700
 const OwnerReadWrite = 0600
 

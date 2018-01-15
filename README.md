@@ -5,7 +5,7 @@
 
 <p align="center">
 
-<img src="https://img.shields.io/packagist/l/doctrine/orm.svg"/>
+<a href="https://github.com/spacemeshos/go-spacemesh/blob/master/LICENSE"><img src="https://img.shields.io/packagist/l/doctrine/orm.svg"/></a>
 <a href="https://github.com/avive"><img src="https://img.shields.io/badge/maintainer-%40avive-green.svg"/></a>
 <img src="https://img.shields.io/badge/golang-%3E%3D%201.9.2-orange.svg"/>
 <a href="https://gitter.im/spacemesh-os/Lobby"><img src="https://img.shields.io/badge/gitter-%23spacemesh--os-blue.svg"/></a>
@@ -30,15 +30,14 @@ Provide dapp and app developers with a robust way to add value exchange and valu
 ### Diggin' Deeper
 Please read the Spacemesh [full FAQ](https://github.com/spacemeshos/go-spacemesh/wiki/faq).
 
-
 ### Getting
 
 install [Go 1.9.2 or later](https://golang.org/dl/) for your platform
 
 ```
-go get https://github.com/spacemeshos/go-spacemesh
+go get github.com/spacemeshos/go-spacemesh
 ```
-or create this directory `GOPATH$/src/spacemeshos/` and clone the repo into it using:
+or create this directory `GOPATH$/src/github.com/spacemeshos/` and clone the repo into it using:
 
 ```
 git clone https://github.com/spacemeshos/go-spacemesh
@@ -92,12 +91,12 @@ make test
 ### Contributing
 
 Thank you for considering to contribute to the go-spacemesh open source project. 
-We welcome contributions large and small!
-
+We welcome contributions large and small and we actively accept contributions.
 - go-spacemesh is part of [The Spacemesh open source project](https://spacemesh.io), and is MIT licensed open source software.
 - We welcome major contributors to the spacemesh core dev team.
 - Please make sure to scan the [issues](https://github.com/spacemeshos/go-spacemesh/issues). 
 - Search the closed ones before reporting things, and help us with the open ones.
+- You don’t have to contribute code! Many important types of contributions are important for our project. See: [How to Contribute to Open Source?](https://opensource.guide/how-to-contribute/#what-it-means-to-contribute)?
 
 #### Guidelines
 
@@ -121,13 +120,17 @@ Few things you can do right now to help out:
  - Add tests. There can never be enough tests.
  
 #### Next Steps...
-- Please read everything in [`/docs`](https://github.com/spacemeshos/go-spacemesh/tree/master/docs)
+- Please scan our [`wiki`](https://github.com/spacemeshos/go-spacemesh/wiki)
+- Browse project [go docs](https://godoc.org/github.com/spacemeshos/go-spacemesh)
+
 
 ### Got Questions? 
 - Introduce yourself and ask anything on the [spacemesh gitter channel](https://gitter.im/spacemesh-os/Lobby).
 - DM [@spacemeshhq](https://twitter.com/teamspacemesh)
 
 ### Additional info
+
+
 
 #### Working with protobufs
 

@@ -9,7 +9,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/merkle/pb"
 )
 
-// shortNode is an immutable leaf or an extension node
+// shortNode is an mutable leaf or an extension node
 // For a leaf node, value is a key of a value in user-space data store
 // For an ext node, value is a pointer to another node in tree-space data store
 // In both cases values are sha3s
@@ -19,7 +19,10 @@ type shortNode interface {
 	getPath() string          // hex encoded path to this node from parent
 	marshal() ([]byte, error) // to binary data
 	getNodeHash() []byte      // node binary data hash - determines the value of pointer to this node
-	print() string            // returns debug info
+	setValue(v []byte)        // update the node value
+	setPath(p string)         // set the path
+
+	print(userDb *userDb, getUserValue func(userDb *userDb, v []byte) string) string // returns debug info
 }
 
 func newShortNode(nodeType pb.NodeType, path string, value []byte) shortNode {
@@ -31,7 +34,6 @@ func newShortNode(nodeType pb.NodeType, path string, value []byte) shortNode {
 }
 
 func newShortNodeFromData(data []byte, n *pb.Node) shortNode {
-
 	node := &shortNodeImpl{
 		nodeType: n.NodeType,
 		path:     n.Path,
@@ -51,7 +53,6 @@ type shortNodeImpl struct {
 
 func (s *shortNodeImpl) getNodeHash() []byte {
 	if s.nodeHash == nil || len(s.nodeHash) == 0 { // lazy eval
-
 		// calc hash based on current marshaled node data and store it
 		data, err := s.marshal()
 		if err != nil {
@@ -63,16 +64,33 @@ func (s *shortNodeImpl) getNodeHash() []byte {
 	return s.nodeHash
 }
 
-func (s *shortNodeImpl) getValue() []byte { return s.value }
-func (s *shortNodeImpl) isLeaf() bool     { return s.nodeType == pb.NodeType_leaf }
+func (s *shortNodeImpl) setValue(v []byte) {
+	s.value = v
+
+	// invalidate hash
+	s.nodeHash = []byte{}
+}
+
+func (s *shortNodeImpl) getValue() []byte {
+	return s.value
+}
+
+func (s *shortNodeImpl) isLeaf() bool {
+	return s.nodeType == pb.NodeType_leaf
+}
 
 func (s *shortNodeImpl) getPath() string {
-	// todo: consider parity
 	return s.path
 }
 
-func (s *shortNodeImpl) marshal() ([]byte, error) {
+func (s *shortNodeImpl) setPath(p string) {
+	s.path = p
 
+	// rest hash
+	s.nodeHash = []byte{}
+}
+
+func (s *shortNodeImpl) marshal() ([]byte, error) {
 	res := &pb.Node{
 		NodeType: s.nodeType,
 		Value:    s.value,
@@ -82,14 +100,21 @@ func (s *shortNodeImpl) marshal() ([]byte, error) {
 	return proto.Marshal(res)
 }
 
-func (s *shortNodeImpl) print() string {
+func (s *shortNodeImpl) print(userDb *userDb, getUserValue func(userDb *userDb, v []byte) string) string {
 	buffer := bytes.Buffer{}
 	if s.isLeaf() {
-		buffer.WriteString("Leaf: ")
+		userValue := getUserValue(userDb, s.value)
+		buffer.WriteString(fmt.Sprintf("Leaf: <%s> path: `%s`, value: `%s`\n",
+			hex.EncodeToString(s.getNodeHash())[:6],
+			s.path,
+			userValue))
+
 	} else {
-		buffer.WriteString("Ext: ")
+		buffer.WriteString(fmt.Sprintf("Ext: <%s> path: `%s`, value: <%s>\n",
+			hex.EncodeToString(s.getNodeHash())[:6],
+			s.path,
+			hex.EncodeToString(s.value)[:6]))
 	}
 
-	buffer.WriteString(fmt.Sprintf("path: %s, value: %s", s.path, hex.EncodeToString(s.value)))
 	return buffer.String()
 }

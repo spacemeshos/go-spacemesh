@@ -14,9 +14,7 @@ import (
 // It provides full duplex messaging functionality over the same tcp/ip connection
 // Network should not know about higher-level networking types such as remoteNode, swarm and networkSession
 // Network main client is the swarm
-
-// Net has not channel events processing loops - clients are responsible for polling these channels and popping events from them
-
+// Net has no channel events processing loops - clients are responsible for polling these channels and popping events from them
 type Net interface {
 	DialTCP(address string, timeOut time.Duration, keepAlive time.Duration) (Connection, error) // Connect to a remote node. Can send when no error.
 	GetNewConnections() chan Connection

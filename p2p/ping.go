@@ -157,7 +157,6 @@ func (p *pingProtocolImpl) handleIncomingResponse(msg IncomingMessage) {
 
 	// notify clients of the new pong or error
 	for _, c := range p.callbacks {
-		// todo: verify that this style of closure is kosher
 		go func() { c <- resp }()
 	}
 }
@@ -178,7 +177,7 @@ func (p *pingProtocolImpl) processEvents() {
 		case r := <-p.sendErrors:
 			resp := SendPingResp{nil, r.err, r.ReqId}
 			for _, c := range p.callbacks {
-				go func() { c <- resp }()
+				go func(c chan SendPingResp) { c <- resp }(c)
 			}
 		}
 	}

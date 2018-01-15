@@ -1,4 +1,4 @@
-// Package app provides the cli app shell of an unrily p2p node
+// Package app provides the cli app shell of a Spacemesh p2p node
 package app
 
 import (
@@ -27,7 +27,7 @@ type SpaceMeshApp struct {
 	jsonApiService *api.JsonHttpServer
 }
 
-// the main spacemesh app - main entry point
+// the main Spacemesh app - main entry point
 // Access the node and the other top-level modules from the app
 var App *SpaceMeshApp
 

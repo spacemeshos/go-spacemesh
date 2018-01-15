@@ -10,9 +10,11 @@ import (
 	"time"
 )
 
-// A runtime network session auth between 2 peers
+// An authenticated network session between 2 peers
 // Sessions may be used between 'connections' until they expire
-// Session provides the encryptor/decryptor for all messages sent between peers
+// Session provides the encryptor/decryptor for all messages exchanged between 2 peers
+// enc/dec is using an ephemeral sym key exchanged securely between the peers via the handshake protocol
+// The handshake protocol goal is to create an authenticated network session.
 type NetworkSession interface {
 	Id() []byte         // Unique session id
 	String() string     // globally unique session id for p2p debugging and key store purposes
@@ -104,7 +106,7 @@ func (n *NetworkSessionImpl) Decrypt(in []byte) ([]byte, error) {
 	if l == 0 {
 		return nil, errors.New("Invalid input buffer - 0 len")
 	}
-	//out := make([]byte, l)
+
 	n.blockDecrypter.CryptBlocks(in, in)
 	clearText, err := crypto.RemovePKCSPadding(in)
 	if err != nil {

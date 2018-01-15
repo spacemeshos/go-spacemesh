@@ -37,7 +37,7 @@ type LocalNode interface {
 
 	Shutdown()
 
-	// log wrappers - log node id and args
+	// logging wrappers - log node id and args
 
 	Info(format string, args ...interface{})
 	Debug(format string, args ...interface{})
@@ -101,7 +101,7 @@ func newLocalNodeWithKeys(pubKey crypto.PublicKey, privKey crypto.PrivateKey, tc
 		// persist store data so we can start it on future app sessions
 		err = n.persistData()
 		if err != nil { // no much use of starting if we can't store node private key in store
-			log.Error("Failed to persist node data to local store: %v", err)
+			log.Error("failed to persist node data to local store: %v", err)
 			return nil, err
 		}
 	}
@@ -113,7 +113,7 @@ func newNodeFromData(tcpAddress string, d *NodeData, config nodeconfig.Config, p
 	priv := crypto.NewPrivateKeyFromString(d.PrivKey)
 	pub, err := crypto.NewPublicKeyFromString(d.PubKey)
 	if err != nil {
-		log.Error("Failded to create public key from string: %v", err)
+		log.Error("failed to create public key from string: %v", err)
 		return nil, err
 	}
 

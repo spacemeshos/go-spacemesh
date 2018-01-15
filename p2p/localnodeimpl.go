@@ -23,8 +23,7 @@ type localNodeImp struct {
 	config nodeconfig.Config
 
 	swarm Swarm // local owns a swarm
-
-	ping Ping
+	ping  Ping
 
 	// add all other implemented protocols here....
 

@@ -1,3 +1,4 @@
+// Package crypto provides funcs and types used by other packages to perform crypto related ops
 package crypto
 
 import (

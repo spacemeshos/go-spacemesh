@@ -7,20 +7,16 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 )
 
-// A remote node
-// Remote nodes are maintained by the swarm and are not visible to higher-level types on the network stack
-// All remote node methods are NOT thread-safe - they are designed to be used only from a singleton swarm object
-
-// Peer maintains swarm sessions and connections with a remote node
+// A network peer
+// Peers are maintained by the swarm and are not visible to higher-level types on the network stack
+// All Peer methods are NOT thread-safe - they are designed to be used only from a singleton swarm object
+// Peer handles swarm sessions and net connections with a remote node
 type Peer interface {
 	Id() []byte     // node id is public key bytes
 	String() string // node public key string
 	Pretty() string
-
 	TcpAddress() string // tcp address advertised by node e.g. 127.0.0.1:3058
-
 	PublicKey() crypto.PublicKey
-
 	GetConnections() map[string]net.Connection
 	GetSessions() map[string]NetworkSession
 
@@ -50,14 +46,14 @@ func NewRemoteNode(id string, tcpAddress string) (Peer, error) {
 		return nil, err
 	}
 
-	node := &peerImpl{
+	n := &peerImpl{
 		publicKey:   key,
 		tcpAddress:  tcpAddress,
 		connections: make(map[string]net.Connection),
 		sessions:    make(map[string]NetworkSession),
 	}
 
-	return node, nil
+	return n, nil
 }
 
 func (n *peerImpl) GetAuthenticatedSession() NetworkSession {
