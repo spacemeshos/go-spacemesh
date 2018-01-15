@@ -19,7 +19,7 @@ This is the go implementation of the [Spacemesh](https://spacemesh.io) p2p node.
 Spacemesh is a decentralized blockchain computer using a new race-free consensus protocol that doesn't involve energy-wasteful `proof of work`.
 Spacemesh is designed to build a secure decentralized network formed by a large number of desktop PCs at home.
 
-To learn more about SpaceMesh head over to our [wiki](https://github.com/spacemeshos/go-spacemesh/wiki).
+To learn more about Spacemesh head over to our [wiki](https://github.com/spacemeshos/go-spacemesh/wiki).
 
 ### Motivation
 SpacemeshOS is designed to create a decentralized blockchain smart contracts computer and a cryptocurrency that is formed by connecting the home PCs of people from around the world into one virtual computer without incurring massive energy waste and mining pools issues that are inherent in other blockchain computers, and provide a provably-secure and incentive-compatible smart contracts execution environment. Spacemesh OS is designed to be ASIC-resistant and in a way that doesn’t give an unfair advantage to rich parties who can afford setting up dedicated computers on the network. We achieve this by using a novel consensus protocol and optimize the software to be most effectively be used on home PCs that are also used for interactive apps. 
