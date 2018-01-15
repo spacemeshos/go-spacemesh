@@ -37,7 +37,11 @@ install [Go 1.9.2 or later](https://golang.org/dl/) for your platform
 ```
 go get github.com/spacemeshos/go-spacemesh
 ```
-or create this directory `GOPATH$/src/github.com/spacemeshos/` and clone the repo into it using:
+or
+- Fork https://github.com/spacemeshos/go-spacemesh project
+- Checkout your fork from GitHub
+- Move your fork from $GOPATH/src/github.com/YOURACCOUNT/go-spacemesh to $GOPATH/src/github.com/spacemeshos/go-spacemesh
+This allows Go tools to work as expected.
 
 ```
 git clone https://github.com/spacemeshos/go-spacemesh
