@@ -10,9 +10,9 @@ import (
 )
 
 // Finds a node based on its id - internal method
-// id: base58 node id
+// id: base58 node id string
 // returns remote node or nil when not found
-// not go safe - should be called from swarm event dispatcher
+// not go safe - should only be called from swarm event dispatcher
 func (s *swarmImpl) findNode(id string, callback chan node.RemoteNodeData) {
 
 	s.localNode.Info("finding node: %s ...", log.PrettyId(id))
@@ -26,7 +26,7 @@ func (s *swarmImpl) findNode(id string, callback chan node.RemoteNodeData) {
 		return
 	}
 
-	// look at local dht table
+	// look for the node at local dht table
 	poc := make(table.PeerOpChannel, 1)
 	s.routingTable.Find(table.PeerByIdRequest{dht.NewIdFromBase58String(id), poc})
 	select {
