@@ -135,7 +135,7 @@ func TestTableUpdate(t *testing.T) {
 		select {
 		case c := <-callback:
 			if len(c.Peers) == 0 {
-				t.Fatal("Failed to find node near %s.", node.DhtId())
+				t.Fatalf("Failed to find node near %s.", node.DhtId())
 			}
 		case <-time.After(time.Second * 5):
 			t.Fatalf("Failed to get expected update callbacks on time")

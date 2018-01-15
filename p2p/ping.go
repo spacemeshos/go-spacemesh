@@ -177,7 +177,7 @@ func (p *pingProtocolImpl) processEvents() {
 		case r := <-p.sendErrors:
 			resp := SendPingResp{nil, r.err, r.ReqId}
 			for _, c := range p.callbacks {
-				go func() { c <- resp }()
+				go func(c chan SendPingResp) { c <- resp }(c)
 			}
 		}
 	}

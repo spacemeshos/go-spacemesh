@@ -177,7 +177,7 @@ func (h *handshakeProtocolImpl) processEvents() {
 
 		case s := <-h.sessionStateChanged:
 			for _, c := range h.newSessionCallbacks {
-				go func() { c <- s }()
+				go func(c chan HandshakeData) { c <- s }(c)
 			}
 		}
 	}
