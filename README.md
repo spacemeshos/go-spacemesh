@@ -120,13 +120,17 @@ Few things you can do right now to help out:
  - Add tests. There can never be enough tests.
  
 #### Next Steps...
-- Please read everything in [`wiki`](https://github.com/spacemeshos/go-spacemesh/wiki)
+- Please scan our [`wiki`](https://github.com/spacemeshos/go-spacemesh/wiki)
+- Browse project [go docs](https://godoc.org/github.com/spacemeshos/go-spacemesh)
+
 
 ### Got Questions? 
 - Introduce yourself and ask anything on the [spacemesh gitter channel](https://gitter.im/spacemesh-os/Lobby).
 - DM [@spacemeshhq](https://twitter.com/teamspacemesh)
 
 ### Additional info
+
+
 
 #### Working with protobufs
 

@@ -100,7 +100,7 @@ Implementation:
     
 ### Delete node algorithm
 
-func delete(k)
+Algo 1 - func delete(k)
 - input k: path to value - hex encoded value
 Implementation:
 - let s be a new nodes tack and r the tree's root node
@@ -142,3 +142,21 @@ Implementation:
  
  Impl:
  - 
+ 
+ -------
+ 
+ Algo 2 - func delete(r, k, pos) (bool, root)
+ r: tree root
+ k: path to value to delete
+ pos: nibbles matched on path
+ 
+ root: returns new tree root
+ bool: true if deleted
+ 
+ execution: call delete(root, k, 0) to delete value keyed by k
+ 
+ implementation:
+ - if r is ext or leaf then...
+    - len := commonPrefix(k[pos:],r.path)
+    - if len < len(r.path) return (false, r)
+    - if len == len(r.path) remove r from trie, return (true,nil)
