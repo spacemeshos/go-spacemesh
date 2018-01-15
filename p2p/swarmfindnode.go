@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// Find a node based on its id - internal method
+// Finds a node based on its id - internal method
 // id: base58 node id
 // returns remote node or nil when not found
 // not go safe - should be called from swarm event dispatcher

@@ -27,7 +27,7 @@ type SpaceMeshApp struct {
 	jsonApiService *api.JsonHttpServer
 }
 
-// the main spacemesh app - main entry point
+// the main Spacemesh app - main entry point
 // Access the node and the other top-level modules from the app
 var App *SpaceMeshApp
 

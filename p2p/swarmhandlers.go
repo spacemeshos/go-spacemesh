@@ -12,7 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 )
 
-// This file contain swarm internal handlers
+// This source file contain swarm internal handlers
 // These should only be called from the swarms event processing main loop
 // or by other internal handlers but not from a random type or go routine
 

@@ -406,7 +406,6 @@ func (n *nodeImp) getUserStringValue(userDb *userDb, v []byte) string {
 
 // depth-first-search print tree rooted at node n
 // note - this will load the whole tree into memory
-
 func (n *nodeImp) print(treeDb *treeDb, userDb *userDb) string {
 
 	buffer := bytes.Buffer{}
