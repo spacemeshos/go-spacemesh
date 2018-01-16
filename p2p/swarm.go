@@ -36,8 +36,11 @@ type Swarm interface {
 	// Send a handshake protocol message that is used to establish a session
 	sendHandshakeMessage(req SendMessageReq)
 
-	// services getters
+	// Register a callback channel for state changes related to remote nodes
+	// Currently used for testing network bootstrapping
+	RegisterNodeEventsCallback(callback NodeEventCallback)
 
+	// services getters
 	GetDemuxer() Demuxer
 	GetLocalNode() LocalNode
 
@@ -63,3 +66,21 @@ type NodeResp struct {
 	peerId string
 	err    error
 }
+
+type NodeEvent struct {
+	PeerId string
+	State  NodeState
+}
+
+type NodeEventCallback chan NodeEvent
+type NodeState int32
+
+const (
+	UNKNOWN NodeState = iota
+	REGISTERED
+	CONNECTING
+	CONNECTED
+	HNADSHAKE_STARTED
+	SESSION_ESTABLISHED
+	DISCONNECTED
+)

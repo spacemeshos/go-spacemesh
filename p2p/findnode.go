@@ -20,8 +20,7 @@ const findNodeResp = "/dht/1.0/find-node-resp/"
 type FindNodeProtocol interface {
 
 	// Send a find_node request for data about a remote node, known only by id, to a specific known remote node
-	// Results will include 0 or more nodes and up to count nodes which may or may not
-	// Include data about id (as serverNodeId may not know about it)
+	// Results will include 0 or more nodes and up to count nodes which may or may not include data about id (as serverNodeId may not know about it)
 	// reqId: allows the client to match responses with requests by id
 	// serverNodeId - node to send the find request to
 	// id - node id to find

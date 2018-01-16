@@ -11,6 +11,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 )
 
+type nodeEventCallbacks []NodeEventCallback
+
 type swarmImpl struct {
 
 	// set in construction and immutable state
@@ -19,6 +21,9 @@ type swarmImpl struct {
 	demuxer   Demuxer
 
 	config nodeconfig.SwarmConfig
+
+	// node state callbacks
+	nec nodeEventCallbacks
 
 	// Internal state is not thread safe - must be accessed only from methods dispatched from the internal event handler
 	peers             map[string]Peer           // NodeId -> Peer. known remote nodes. Swarm is a peer store.
@@ -68,6 +73,8 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 		network:   n,
 		kill:      make(chan bool),
 
+		nec: make(nodeEventCallbacks, 0),
+
 		peersByConnection:      make(map[string]Peer),
 		peers:                  make(map[string]Peer),
 		connections:            make(map[string]net.Connection),
@@ -97,7 +104,7 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 	// findNode dht protocol
 	s.findNodeProtocol = NewFindNodeProtocol(s)
 
-	log.Info("Created swarm %s for local node %s", tcpAddress, l.Pretty())
+	s.localNode.Info("Created swarm %s for local node %s", tcpAddress, l.Pretty())
 
 	s.handshakeProtocol = NewHandshakeProtocol(s)
 	s.handshakeProtocol.RegisterNewSessionCallback(s.newSessions)
@@ -109,6 +116,22 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 	}
 
 	return s, err
+}
+
+// Register an event handler callback for connection state events
+func (s *swarmImpl) RegisterNodeEventsCallback(callback NodeEventCallback) {
+	s.nec = append(s.nec, callback)
+}
+
+// Sends a connection event to all registered clients
+func (s *swarmImpl) sendNodeEvent(peerId string, state NodeState) {
+
+	s.localNode.Info(">> Node event for <%s>. State: %s", peerId[:6], state)
+
+	evt := NodeEvent{peerId, state}
+	for _, c := range s.nec {
+		go func() { c <- evt }()
+	}
 }
 
 func (s *swarmImpl) getFindNodeProtocol() FindNodeProtocol {
@@ -147,7 +170,7 @@ func (s *swarmImpl) GetLocalNode() LocalNode {
 // Starts the bootsrap process
 func (s *swarmImpl) bootstrap() {
 
-	log.Info("Starting bootstrap...")
+	s.localNode.Info("Starting bootstrap...")
 
 	// register bootstrap nodes
 	bn := 0
@@ -174,7 +197,12 @@ func (s *swarmImpl) bootstrap() {
 // Connect up to count random nodes
 func (s *swarmImpl) ConnectToRandomNodes(count int) {
 
-	log.Info("Attempting to connect to %d random nodes...", count)
+	if count <= 0 {
+		s.localNode.Error("Expected positive count param")
+		return
+	}
+
+	s.localNode.Info("Attempting to connect to %d random nodes...", count)
 
 	// issue a request to find self to the swarm to populate the local routing table with random nodes
 
@@ -188,7 +216,7 @@ func (s *swarmImpl) ConnectToRandomNodes(count int) {
 		c1 := make(table.PeersOpChannel, 2)
 
 		// find nearest peers
-		s.routingTable.NearestPeers(table.NearestPeersReq{s.localNode.DhtId(), 5, c1})
+		s.routingTable.NearestPeers(table.NearestPeersReq{s.localNode.DhtId(), count, c1})
 
 		select {
 		case c := <-c1:
@@ -202,7 +230,7 @@ func (s *swarmImpl) ConnectToRandomNodes(count int) {
 			}
 
 		case <-time.After(time.Second * 30):
-			log.Error("Failed to get random close nodes - timeout")
+			s.localNode.Error("Failed to get random close nodes - timeout")
 		}
 
 	}

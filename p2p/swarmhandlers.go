@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
@@ -27,7 +26,7 @@ func (s *swarmImpl) onRegisterNodeRequest(n node.RemoteNodeData) {
 
 	rn, err := NewRemoteNode(n.Id(), n.Ip())
 	if err != nil { // invalid id
-		log.Error("invalid remote node id: %s", n.Id())
+		s.localNode.Error("invalid remote node id: %s", n.Id())
 		return
 	}
 
@@ -36,7 +35,8 @@ func (s *swarmImpl) onRegisterNodeRequest(n node.RemoteNodeData) {
 	// update the routing table with the nde node info
 	s.routingTable.Update(n)
 
-	s.localNode.Info("Registered remote node %s", n.Pretty())
+	s.sendNodeEvent(n.Id(), REGISTERED)
+
 }
 
 // Handles a local request to connect to a remote node
@@ -50,14 +50,13 @@ func (s *swarmImpl) onConnectionRequest(req node.RemoteNodeData) {
 	peer := s.peers[req.Id()]
 
 	if peer == nil {
-		peer, err = NewRemoteNode(req.Id(), req.Ip())
-		if err != nil {
-			s.localNode.Error("invalid node id", req.Id())
-			return
-		}
+		s.onRegisterNodeRequest(req)
+	}
 
-		// store new remote node by id
-		s.peers[req.Id()] = peer
+	peer = s.peers[req.Id()]
+	if peer == nil {
+		s.localNode.Error("unexpected null peer")
+		return
 	}
 
 	conn := peer.GetActiveConnection()
@@ -70,13 +69,17 @@ func (s *swarmImpl) onConnectionRequest(req node.RemoteNodeData) {
 
 	if conn == nil {
 
+		s.sendNodeEvent(req.Id(), CONNECTING)
+
 		// Dial the other node using the node's network config values
 		conn, err = s.network.DialTCP(req.Ip(), s.localNode.Config().DialTimeout, s.localNode.Config().ConnKeepAlive)
 		if err != nil {
-			// todo: we need to fire an event so app-level code knows about failure to connect
+			s.sendNodeEvent(req.Id(), DISCONNECTED)
 			s.localNode.Error("failed to connect to remote node %s on advertised ip %s", req.Pretty(), req.Ip)
 			return
 		}
+
+		s.sendNodeEvent(req.Id(), CONNECTED)
 
 		// update the routing table
 		s.routingTable.Update(req)
@@ -96,6 +99,7 @@ func (s *swarmImpl) onConnectionRequest(req node.RemoteNodeData) {
 	if session == nil || !session.IsAuthenticated() {
 
 		// start handshake protocol
+		s.sendNodeEvent(req.Id(), HNADSHAKE_STARTED)
 		s.handshakeProtocol.CreateSession(peer)
 	}
 }
@@ -104,7 +108,10 @@ func (s *swarmImpl) onConnectionRequest(req node.RemoteNodeData) {
 func (s *swarmImpl) onNewSession(data HandshakeData) {
 
 	if data.Session().IsAuthenticated() {
+
 		s.localNode.Info("Established new session with %s", data.Peer().TcpAddress())
+
+		s.sendNodeEvent(data.Peer().String(), SESSION_ESTABLISHED)
 
 		// store the session
 		s.allSessions[data.Session().String()] = data.Session()
@@ -122,7 +129,10 @@ func (s *swarmImpl) onNewSession(data HandshakeData) {
 
 // Local request to disconnect from a node
 func (s *swarmImpl) onDisconnectionRequest(req node.RemoteNodeData) {
-	// disconnect from node...
+
+	// todo: disconnect all connections with node
+
+	s.sendNodeEvent(req.Id(), DISCONNECTED)
 }
 
 // Local request to send a message to a remote node
@@ -163,10 +173,10 @@ func (s *swarmImpl) onSendMessageRequest(r SendMessageReq) {
 			select {
 			case n := <-callback:
 				if n != nil { // we found it - now we can send the message to it
-					log.Info("Peer %s found.... - sending message", r.PeerId)
+					s.localNode.Info("Peer %s found.... - sending message", r.PeerId)
 					s.onSendMessageRequest(r)
 				} else {
-					log.Info("Peer %s not found.... - can't send message", r.PeerId)
+					s.localNode.Info("Peer %s not found.... - can't send message", r.PeerId)
 				}
 			}
 		}()
@@ -243,11 +253,18 @@ func (s *swarmImpl) onConnectionClosed(c net.Connection) {
 	}
 	delete(s.connections, id)
 	delete(s.peersByConnection, id)
+
+	s.sendNodeEvent(peer.String(), DISCONNECTED)
+
 }
 
 func (s *swarmImpl) onRemoteClientConnected(c net.Connection) {
 	// nop - a remote client connected - this is handled w message
 	s.localNode.Info("Remote client connected. %s", c.Id())
+	peer := s.peersByConnection[c.Id()]
+	if peer != nil {
+		s.sendNodeEvent(peer.String(), CONNECTED)
+	}
 }
 
 // Processes an incoming handshake protocol message
