@@ -58,7 +58,7 @@ func (mt *merkleTreeImp) persistNode(node Node) error {
 	return nil
 }
 
-func (mt *merkleTreeImp) deleteUserValueFromStorge(v []byte) error {
+func (mt *merkleTreeImp) deleteUserValueFromStore(v []byte) error {
 	if len(v) <= 32 {
 		return errors.New("value too small. Epxected len(v) > 32")
 	}

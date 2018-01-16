@@ -71,7 +71,6 @@ func TestCryptoApi(t *testing.T) {
 	clearText, err := priv.Decrypt(cypherText)
 	assert.Nil(t, err, fmt.Sprintf("Dec error.", err))
 
-
 	assert.True(t, bytes.Equal(msgData, clearText), "expected same dec message")
 
 }

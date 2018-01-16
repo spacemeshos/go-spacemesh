@@ -21,7 +21,7 @@ func (mt *merkleTreeImp) Delete(k []byte) error {
 		return nil
 	}
 
-	mt.deleteUserValueFromStorge(res)
+	mt.deleteUserValueFromStore(res)
 
 	hexKey := hex.EncodeToString(k)
 	log.Info("m Deleting user data for key: %s...", hexKey)
