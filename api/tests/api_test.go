@@ -45,7 +45,7 @@ func TestGrpcApi(t *testing.T) {
 	// Set up a connection to the server.
 	conn, err := grpc.Dial(addr, grpc.WithInsecure())
 	if err != nil {
-		t.Fatalf("did not connect: %v", err)
+		t.Fatalf("did not connect", err)
 	}
 	defer conn.Close()
 	c := pb.NewSpaceMeshServiceClient(conn)
@@ -53,7 +53,7 @@ func TestGrpcApi(t *testing.T) {
 	// call echo and validate result
 	r, err := c.Echo(context.Background(), &pb.SimpleMessage{message})
 	if err != nil {
-		t.Fatalf("could not greet: %v", err)
+		t.Fatalf("could not greet", err)
 	}
 
 	assert.Equal(t, message, r.Value, "Expected message to be echoed")

@@ -95,7 +95,7 @@ func (p *pingProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 	req := &pb.PingReqData{}
 	err := proto.Unmarshal(msg.Payload(), req)
 	if err != nil {
-		log.Warning("Invalid ping request data: %v", err)
+		log.Warning("Invalid ping request data", err)
 		return
 	}
 
@@ -143,7 +143,7 @@ func (p *pingProtocolImpl) handleIncomingResponse(msg IncomingMessage) {
 	if err != nil {
 		// we can't extract the request id from the response so we just terminate
 		// without sending a callback - this case should be handeled as a timeout
-		log.Error("Invalid ping request data: %v", err)
+		log.Error("Invalid ping request data", err)
 		return
 	}
 
