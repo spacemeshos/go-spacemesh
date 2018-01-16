@@ -5,6 +5,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/dht/table"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
+	"time"
 
 	//"github.com/spacemeshos/go-spacemesh/p2p/dht/table"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
@@ -96,7 +97,7 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 	// findNode dht protocol
 	s.findNodeProtocol = NewFindNodeProtocol(s)
 
-	log.Info("Created swarm %s for local node %s", tcpAddress, l.String())
+	log.Info("Created swarm %s for local node %s", tcpAddress, l.Pretty())
 
 	s.handshakeProtocol = NewHandshakeProtocol(s)
 	s.handshakeProtocol.RegisterNewSessionCallback(s.newSessions)
@@ -143,8 +144,10 @@ func (s *swarmImpl) GetLocalNode() LocalNode {
 	return s.localNode
 }
 
-// start the boostrap process
+// Starts the bootsrap process
 func (s *swarmImpl) bootstrap() {
+
+	log.Info("Starting bootstrap...")
 
 	// register bootstrap nodes
 	bn := 0
@@ -158,27 +161,50 @@ func (s *swarmImpl) bootstrap() {
 
 	c := int(s.config.RandomConnections)
 	if c == 0 {
+		log.Warning("0 random connections - aborting bootstrap")
 		return
 	}
 
 	if bn > 0 {
 		// if we know about at least one bootstrap node then attempt to connect to c random nodes
-		go s.ConnectToRandomNodes(c, nil)
+		go s.ConnectToRandomNodes(c)
 	}
 }
 
 // Connect up to count random nodes
-func (s *swarmImpl) ConnectToRandomNodes(count int, callback chan node.RemoteNodeData) {
+func (s *swarmImpl) ConnectToRandomNodes(count int) {
+
+	log.Info("Attempting to connect to %d random nodes...", count)
+
+	// issue a request to find self to the swarm to populate the local routing table with random nodes
+
 	c := make(chan node.RemoteNodeData, count)
-	s.findNode(s.localNode.String(), callback)
+	s.findNode(s.localNode.String(), c)
+
 	select {
-	case n := <-c:
-		if n != nil {
-			s.ConnectTo(n)
-			if callback != nil {
-				go func() { callback <- n }()
+	case <-c:
+
+		// create callback to receive result
+		c1 := make(table.PeersOpChannel, 2)
+
+		// find nearest peers
+		s.routingTable.NearestPeers(table.NearestPeersReq{s.localNode.DhtId(), 5, c1})
+
+		select {
+		case c := <-c1:
+			if len(c.Peers) == 0 {
+				log.Warning("Did not find any random nodes close to self")
 			}
+
+			for _, p := range c.Peers {
+				// queue up connection requests to found peers
+				go s.ConnectTo(p)
+			}
+
+		case <-time.After(time.Second * 30):
+			log.Error("Failed to get random close nodes - timeout")
 		}
+
 	}
 }
 

@@ -16,17 +16,18 @@ import (
 // These should only be called from the swarms event processing main loop
 // or by other internal handlers but not from a random type or go routine
 
-// Handles local request to register a remote node in the swarm
+// Handles a local request to register a remote node in the swarm
 // Register adds info about this node but doesn't attempt to connect to i
 func (s *swarmImpl) onRegisterNodeRequest(n node.RemoteNodeData) {
 
 	if s.peers[n.Id()] != nil {
-		s.localNode.Info("Already connected to %s", n.Id())
+		s.localNode.Info("Already connected to %s", n.Pretty())
 		return
 	}
 
 	rn, err := NewRemoteNode(n.Id(), n.Ip())
 	if err != nil { // invalid id
+		log.Error("invalid remote node id: %s", n.Id())
 		return
 	}
 
@@ -35,10 +36,13 @@ func (s *swarmImpl) onRegisterNodeRequest(n node.RemoteNodeData) {
 	// update the routing table with the nde node info
 	s.routingTable.Update(n)
 
+	s.localNode.Info("Registered remote node %s", n.Pretty())
 }
 
-// Handle local request to connect to a remote node
+// Handles a local request to connect to a remote node
 func (s *swarmImpl) onConnectionRequest(req node.RemoteNodeData) {
+
+	s.localNode.Info("Local request to connect to node %s", req.Pretty())
 
 	var err error
 
@@ -48,6 +52,7 @@ func (s *swarmImpl) onConnectionRequest(req node.RemoteNodeData) {
 	if peer == nil {
 		peer, err = NewRemoteNode(req.Id(), req.Ip())
 		if err != nil {
+			s.localNode.Error("invalid node id", req.Id())
 			return
 		}
 
@@ -59,7 +64,7 @@ func (s *swarmImpl) onConnectionRequest(req node.RemoteNodeData) {
 	session := peer.GetAuthenticatedSession()
 
 	if conn != nil && session != nil {
-		// we have a connection with the node and an active session
+		s.localNode.Info("Already got an active session and connection with: %s", req.Pretty())
 		return
 	}
 
@@ -69,7 +74,7 @@ func (s *swarmImpl) onConnectionRequest(req node.RemoteNodeData) {
 		conn, err = s.network.DialTCP(req.Ip(), s.localNode.Config().DialTimeout, s.localNode.Config().ConnKeepAlive)
 		if err != nil {
 			// todo: we need to fire an event so app-level code knows about failure to connect
-			s.localNode.Error("failed to connect to remote node on advertised ip %s", req.Ip)
+			s.localNode.Error("failed to connect to remote node %s on advertised ip %s", req.Pretty(), req.Ip)
 			return
 		}
 
@@ -314,25 +319,25 @@ func (s *swarmImpl) onRemoteClientProtocolMessage(msg net.IncomingMessage, c *pb
 
 	decPayload, err := session.Decrypt(c.Payload)
 	if err != nil {
-		s.localNode.Warning("Droping incoming protocol message - can't decrypt message payload with session key. %v", err)
+		s.localNode.Warning("Dropping incoming protocol message - can't decrypt message payload with session key. %v", err)
 		return
 	}
 
 	pm := &pb.ProtocolMessage{}
 	err = proto.Unmarshal(decPayload, pm)
 	if err != nil {
-		s.localNode.Warning("Droping incoming protocol message - Failed to get protocol message from payload. %v", err)
+		s.localNode.Warning("Dropping incoming protocol message - Failed to get protocol message from payload. %v", err)
 		return
 	}
 
 	// authenticate message author - we already authenticated the sender via the shared session key secret
 	err = pm.AuthenticateAuthor()
 	if err != nil {
-		s.localNode.Warning("Droping incoming protocol message - Failed to verify author. %v", err)
+		s.localNode.Warning("Dropping incoming protocol message - Failed to verify author. %v", err)
 		return
 	}
 
-	s.localNode.Info("Message %s author authenticated ok. %s", hex.EncodeToString(pm.GetMetadata().ReqId), pm.GetMetadata().Protocol)
+	s.localNode.Info("Message %s author authenticated.", hex.EncodeToString(pm.GetMetadata().ReqId), pm.GetMetadata().Protocol)
 
 	// todo: check send time and reject if too much aparat from local clock
 

@@ -223,7 +223,7 @@ func TestTableFindCount(t *testing.T) {
 
 }
 
-func TestTableMultithreaded(t *testing.T) {
+func TestTableMultiThreaded(t *testing.T) {
 
 	runtime.GOMAXPROCS(runtime.NumCPU())
 

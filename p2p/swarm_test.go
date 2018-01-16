@@ -32,6 +32,47 @@ Loop:
 }
 
 // todo: fix me - this test is broken
+func TestSimpleBootstrap(t *testing.T) {
+
+	// setup:
+	// node1 - bootstrap node
+	// node2 - connects to node1 on startup (bootstrap)
+	// node2 - sends a ping to node1
+
+	node1Local, node1Remote := GenerateTestNode(t)
+
+	pd := node1Local.GetRemoteNodeData()
+	bs := fmt.Sprintf("%s/%s", pd.Ip(), pd.Id())
+
+	// node1 is a bootstrap node to node2
+	c := nodeconfig.ConfigValues
+	c.SwarmConfig.Bootstrap = true
+	c.SwarmConfig.RandomConnections = 2
+	c.SwarmConfig.BootstrapNodes = []string{bs}
+
+	node2Local, _ := GenerateTestNodeWithConfig(t, c)
+
+	// ping node2 -> node 1
+	reqId := crypto.UUID()
+	callback := make(chan SendPingResp)
+	node2Local.GetPing().Register(callback)
+	node2Local.GetPing().Send("hello spacemesh", reqId, node1Remote.String())
+
+Loop:
+	for {
+		select {
+		case c := <-callback:
+			assert.Nil(t, c.err, "expected no err in response")
+			if bytes.Equal(c.GetMetadata().ReqId, reqId) {
+				break Loop
+			}
+		case <-time.After(time.Second * 15):
+			t.Fatal("Timeout error - expected callback")
+		}
+	}
+}
+
+// todo: fix me - this test is broken
 func _estBootstrap(t *testing.T) {
 
 	// setup:
@@ -68,8 +109,8 @@ Loop:
 			if bytes.Equal(c.GetMetadata().ReqId, reqId) {
 				break Loop
 			}
-		case <-time.After(time.Second * 30):
-			t.Fatalf("Timeout error - expected callback")
+		case <-time.After(time.Second * 15):
+			t.Fatal("Timeout error - expected callback")
 		}
 	}
 }

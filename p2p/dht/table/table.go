@@ -271,11 +271,11 @@ func getMemoryAddress(p interface{}) string {
 	return fmt.Sprintf("%p", p)
 }
 
-// Add or move a node to the front of its designated bucket
+// Adds or move a node to the front of its designated k-bucket
 func (rt *routingTableImpl) update(p node.RemoteNodeData) {
 
 	if rt.local.Equals(p.DhtId()) {
-		// local node should never get inserted into the table
+		log.Warning("Ignoring attempt to add local node to the routing table")
 		return
 	}
 
@@ -324,6 +324,8 @@ func (rt *routingTableImpl) update(p node.RemoteNodeData) {
 			return
 		}
 	}
+
+	return
 }
 
 // Remove a node from the routing table.

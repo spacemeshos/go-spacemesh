@@ -28,7 +28,7 @@ type Swarm interface {
 	ConnectTo(req node.RemoteNodeData)
 
 	// Connect to count random nodes - used for bootstrapping the swarm
-	ConnectToRandomNodes(count int, callback chan node.RemoteNodeData)
+	ConnectToRandomNodes(count int)
 
 	// Forcefully disconnect form a node - close any connections and sessions with it
 	DisconnectFrom(req node.RemoteNodeData)

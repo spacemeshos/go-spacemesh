@@ -45,7 +45,6 @@ func GenerateTestNodeWithConfig(t *testing.T, config nodeconfig.Config) (LocalNo
 		t.Error("failed to create local node1", err)
 	}
 
-	// this will be node 2 view of node 1
 	remoteNode, err := NewRemoteNode(localNode.String(), address)
 	if err != nil {
 		t.Error("failed to create remote node1", err)
