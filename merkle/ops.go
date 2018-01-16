@@ -107,7 +107,7 @@ func (mt *merkleTreeImp) CloseDataStores() error {
 	return nil
 }
 
-// Print the tree to a string
+// Prints the tree to a string
 func (mt *merkleTreeImp) Print() string {
 	buffer := bytes.Buffer{}
 	buffer.WriteString("\n------------\n")

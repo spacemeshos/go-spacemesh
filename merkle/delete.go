@@ -24,7 +24,7 @@ func (mt *merkleTreeImp) Delete(k []byte) error {
 	mt.deleteUserValueFromStore(res)
 
 	hexKey := hex.EncodeToString(k)
-	log.Info("m Deleting user data for key: %s...", hexKey)
+	log.Info("Deleting user data for key: %s...", hexKey)
 
 	err = mt.delete(hexKey, stack)
 	if err != nil {
