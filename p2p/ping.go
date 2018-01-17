@@ -101,6 +101,7 @@ func (p *pingProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 	}
 
 	peer := msg.Sender()
+
 	log.Info("Incoming ping peer request from %s. Message: s%", peer.Pretty(), req.Ping)
 
 	// add/update local dht table
