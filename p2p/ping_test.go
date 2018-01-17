@@ -11,7 +11,7 @@ import (
 
 func TestPingProtocol(t *testing.T) {
 
-	const msg = "hello spacemash"
+	const msg = "Hello Spacemash!"
 
 	// create 2 nodes
 	node1Local, _ := GenerateTestNode(t)
