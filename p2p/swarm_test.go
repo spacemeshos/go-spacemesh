@@ -32,7 +32,6 @@ Loop:
 	}
 }
 
-// todo: fix me - this test is broken
 func TestSimpleBootstrap(t *testing.T) {
 
 	// setup:
@@ -57,7 +56,7 @@ func TestSimpleBootstrap(t *testing.T) {
 	reqId := crypto.UUID()
 	callback := make(chan SendPingResp)
 	node2Local.GetPing().Register(callback)
-	node2Local.GetPing().Send("hello spacemesh", reqId, node1Remote.String())
+	node2Local.GetPing().Send("hello Spacemesh!", reqId, node1Remote.String())
 
 Loop:
 	for {
