@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"github.com/btcsuite/btcutil/base58"
 	"github.com/gogo/protobuf/proto"
+	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht/table"
@@ -121,7 +122,7 @@ func (p *findNodeProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 	nodeDhtId := dht.NewIdFromNodeKey(req.NodeId)
 	callback := make(table.PeersOpChannel)
 
-	count := int(minInt32(req.MaxResults, maxNearestNodesResults))
+	count := int(crypto.MinInt32(req.MaxResults, maxNearestNodesResults))
 
 	// get up to count nearest peers to nodeDhtId
 	rt.NearestPeers(table.NearestPeersReq{nodeDhtId, count, callback})
