@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -12,9 +13,9 @@ import (
 
 var EmptyTreeRootHash = crypto.Sha256([]byte(""))
 
-func (mt *merkleTreeImp) GetRootHash() []byte {
+func (mt *merkleTreeImp) GetRootHash() ([]byte, error) {
 	if mt.root == nil {
-		return EmptyTreeRootHash
+		return EmptyTreeRootHash, nil
 	} else {
 		return mt.root.getNodeHash()
 	}
@@ -26,7 +27,11 @@ func (mt *merkleTreeImp) GetRootNode() Node {
 }
 
 func (mt *merkleTreeImp) removeNodeFromStore(node Node) error {
-	nodeKey := node.getNodeHash()
+	nodeKey, hashError := node.getNodeHash()
+	if hashError != nil {
+		return hashError
+	}
+
 	err := mt.treeData.Delete(nodeKey, nil)
 	if err != nil {
 		log.Error("failed to delete node from db. %v", err)
@@ -39,7 +44,11 @@ func (mt *merkleTreeImp) removeNodeFromStore(node Node) error {
 // node: tree node to store in the tree db
 func (mt *merkleTreeImp) persistNode(node Node) error {
 
-	nodeKey := node.getNodeHash()
+	nodeKey, hashError := node.getNodeHash()
+	if hashError != nil {
+		return hashError
+	}
+
 	nodeData, err := node.marshal()
 	if err != nil {
 		log.Error("failed to persist node - invalid data")
@@ -114,9 +123,13 @@ func (mt *merkleTreeImp) Print() string {
 	if mt.root == nil {
 		buffer.WriteString("Merkle Tree: Empty tree.\n")
 	} else {
-
-		buffer.WriteString(fmt.Sprintf("Merkle tree: root hash <%s>\n", hex.EncodeToString(mt.GetRootHash())[:6]))
-		buffer.WriteString(mt.root.print(mt.treeData, mt.userData))
+		rootHash, err := mt.GetRootHash()
+		if err == nil {
+			buffer.WriteString(fmt.Sprintf("Merkle tree: root hash <%s>\n", hex.EncodeToString(rootHash)[:6]))
+			buffer.WriteString(mt.root.print(mt.treeData, mt.userData))
+		} else {
+			buffer.WriteString(fmt.Sprintf("Merkle tree: error calculating root hash <%s>", err.Error()))
+		}
 	}
 	buffer.WriteString("------------\n")
 	return buffer.String()

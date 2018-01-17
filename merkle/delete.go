@@ -3,6 +3,7 @@ package merkle
 import (
 	"encoding/hex"
 	"errors"
+
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+
 	"github.com/spacemeshos/go-spacemesh/merkle/pb"
 )
 
@@ -43,7 +44,7 @@ func (mt *merkleTreeImp) ValidateStructure(root Node) ([]byte, error) {
 			}
 		}
 
-		return root.getNodeHash(), nil
+		return root.getNodeHash()
 
 	case pb.NodeType_extension:
 		children := root.getAllChildren()
@@ -60,11 +61,11 @@ func (mt *merkleTreeImp) ValidateStructure(root Node) ([]byte, error) {
 			return nil, errors.New("hash mismatch")
 		}
 
-		return root.getNodeHash(), nil
+		return root.getNodeHash()
 
 	case pb.NodeType_leaf:
 
-		return root.getNodeHash(), nil
+		return root.getNodeHash()
 	}
 
 	return nil, errors.New("unexpected node type")
