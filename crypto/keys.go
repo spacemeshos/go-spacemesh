@@ -112,7 +112,7 @@ func (p *privateKeyImpl) Decrypt(in []byte) ([]byte, error) {
 func NewPublicKey(data []byte) (PublicKey, error) {
 	k, err := btcec.ParsePubKey(data, btcec.S256())
 	if err != nil {
-		log.Error("failed to parse public key from binay data: %v", err)
+		log.Error("Failed to parse public key from binay data", err)
 		return nil, err
 	}
 

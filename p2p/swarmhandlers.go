@@ -273,7 +273,7 @@ func (s *swarmImpl) onRemoteClientHandshakeMessage(msg net.IncomingMessage) {
 	data := &pb.HandshakeData{}
 	err := proto.Unmarshal(msg.Message, data)
 	if err != nil {
-		s.localNode.Warning("unexpected handshake message format: %v", err)
+		s.localNode.Warning("Unexpected handshake message format: %v", err)
 		return
 	}
 

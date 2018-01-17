@@ -35,7 +35,7 @@ func GetSpaceMeshTempDirectoryPath() (string, error) {
 
 	dataDir, err := GetFullDirectoryPath(config.ConfigValues.DataFilePath)
 	if err != nil {
-		log.Error("Failed to get data directory: %v", err)
+		log.Error("Failed to get data directory", err)
 		return "", err
 	}
 
@@ -70,14 +70,14 @@ func EnsureSpaceMeshDataDirectories() (string, error) {
 func ensureDataSubDirectory(dirName string) (string, error) {
 	dataPath, err := GetSpaceMeshDataDirectoryPath()
 	if err != nil {
-		log.Error("Failed to ensure data dir: %v", err)
+		log.Error("Failed to ensure data dir", err)
 		return "", err
 	}
 
 	pathName := filepath.Join(dataPath, dirName)
 	aPath, err := GetFullDirectoryPath(pathName)
 	if err != nil {
-		log.Error("Can't access spacemesh folder: %v", pathName)
+		log.Error("Can't access spacemesh folder", pathName)
 		return "", err
 	}
 	return aPath, nil
@@ -86,7 +86,7 @@ func ensureDataSubDirectory(dirName string) (string, error) {
 func GetAccountsDataDirectoryPath() (string, error) {
 	aPath, err := ensureDataSubDirectory(config.AccountsDirectoryName)
 	if err != nil {
-		log.Error("Can't access spacemesh accounts folder. %v", err)
+		log.Error("Can't access spacemesh accounts folder", err)
 		return "", err
 	}
 	return aPath, nil
@@ -95,7 +95,7 @@ func GetAccountsDataDirectoryPath() (string, error) {
 func GetLogsDataDirectoryPath() (string, error) {
 	aPath, err := ensureDataSubDirectory(config.LogDirectoryName)
 	if err != nil {
-		log.Error("Can't access spacemesh logs folder. %v", err)
+		log.Error("Can't access spacemesh logs folder", err)
 		return "", err
 	}
 	return aPath, nil
@@ -145,13 +145,13 @@ func DeleteSpaceMeshDataFolders(t *testing.T) {
 
 	aPath, err := GetSpaceMeshDataDirectoryPath()
 	if err != nil {
-		t.Fatalf("Failed to get spacemesh data dir: %v", err)
+		t.Fatalf("Failed to get spacemesh data dir", err)
 	}
 
 	// remove
 	err = os.RemoveAll(aPath)
 	if err != nil {
-		t.Fatalf("Failed to delete spacemesh data dir: %v", err)
+		t.Fatalf("Failed to delete spacemesh data dir", err)
 	}
 
 	// create the dir again

@@ -35,7 +35,7 @@ func LoadAllAccounts() error {
 
 	files, err := ioutil.ReadDir(accountsDataFolder)
 	if err != nil {
-		log.Error("Failed to read account directory files. %v", err)
+		log.Error("Failed to read account directory files", err)
 		return nil
 	}
 
@@ -64,20 +64,20 @@ func NewAccountFromStore(accountId string, accountsDataPath string) (*Account, e
 
 	data, err := ioutil.ReadFile(dataFilePath)
 	if err != nil {
-		log.Error("Failed to read node data from file: %v", err)
+		log.Error("Failed to read node data from file", err)
 		return nil, err
 	}
 
 	var accountData AccountData
 	err = json.Unmarshal(data, &accountData)
 	if err != nil {
-		log.Error("Failed to unmarshal account data. %v", err)
+		log.Error("Failed to unmarshal account data", err)
 		return nil, err
 	}
 
 	pubKey, err := crypto.NewPublicKeyFromString(accountData.PublicKey)
 	if err != nil {
-		log.Error("Invalid account public key: %v", err)
+		log.Error("Invalid account public key", err)
 		return nil, err
 	}
 
@@ -109,7 +109,7 @@ func (a *Account) Persist(accountsDataPath string) (string, error) {
 
 	bytes, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
-		log.Error("Failed to marshal node data to json: %v", err)
+		log.Error("Failed to marshal node data to json", err)
 		return "", err
 	}
 
@@ -117,7 +117,7 @@ func (a *Account) Persist(accountsDataPath string) (string, error) {
 	dataFilePath := filepath.Join(accountsDataPath, fileName)
 	err = ioutil.WriteFile(dataFilePath, bytes, filesystem.OwnerReadWrite)
 	if err != nil {
-		log.Error("Failed to write account to file: %v", err)
+		log.Error("Failed to write account to file", err)
 		return "", err
 	}
 

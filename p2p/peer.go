@@ -42,7 +42,7 @@ func NewRemoteNode(id string, tcpAddress string) (Peer, error) {
 
 	key, err := crypto.NewPublicKeyFromString(id)
 	if err != nil {
-		log.Error("invalid node id format: %v", err)
+		log.Error("invalid node id format", err)
 		return nil, err
 	}
 

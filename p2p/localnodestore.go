@@ -39,7 +39,7 @@ func (n *localNodeImp) ensureNodeDataDirectory() string {
 	nodeDirectoryName := filepath.Join(nodesDataDir, n.String())
 	path, err := filesystem.GetFullDirectoryPath(nodeDirectoryName)
 	if err != nil {
-		log.Error("can't access node %s folder", n.Pretty())
+		log.Error("can't access node folder", n.Pretty())
 	}
 	return path
 }
@@ -60,7 +60,7 @@ func (n *localNodeImp) persistData() error {
 
 	bytes, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
-		log.Error("failed to marshal node data to json: %v", err)
+		log.Error("failed to marshal node data to json.", err)
 		return err
 	}
 
@@ -68,7 +68,7 @@ func (n *localNodeImp) persistData() error {
 	path := getDataFilePath(n.String())
 	err = ioutil.WriteFile(path, bytes, filesystem.OwnerReadWrite)
 	if err != nil {
-		log.Error("failed to persist node data. %v", err)
+		log.Error("failed to persist node data.", err)
 	}
 	return err
 }
@@ -79,18 +79,18 @@ func readNodeData(nodeId string) *NodeData {
 	path := getDataFilePath(nodeId)
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
-		log.Error("failed to read node data from file: %v", err)
+		log.Error("failed to read node data from file", err)
 		return nil
 	}
 
 	var nodeData NodeData
 	err = json.Unmarshal(data, &nodeData)
 	if err != nil {
-		log.Error("failed to unmarshal nodeData. %v", err)
+		log.Error("failed to unmarshal nodeData", err)
 		return nil
 	}
 
-	log.Info("loaded peristed node data for node id: %s", nodeId)
+	log.Info("loaded persisted node data for node id: %s", nodeId)
 	return &nodeData
 }
 
@@ -102,7 +102,7 @@ func readFirstNodeData() *NodeData {
 	path := ensureNodesDataDirectory()
 	files, err := ioutil.ReadDir(path)
 	if err != nil {
-		log.Error("failed to read node directory files. %v", err)
+		log.Error("failed to read node directory files", err)
 		return nil
 	}
 

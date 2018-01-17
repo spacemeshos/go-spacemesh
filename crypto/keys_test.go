@@ -40,7 +40,7 @@ func TestBasicApi(t *testing.T) {
 
 	assert.Nil(t, err, fmt.Sprintf("New pub key from bin error: %v", err))
 
-	assert.True(t, bytes.Equal(pub3.Bytes(), pub.Bytes()), fmt.Sprintf("expected same public key, %s, %s",
+	assert.True(t, bytes.Equal(pub3.Bytes(), pub.Bytes()), fmt.Sprintf("Expected same public key, %s, %s",
 		pub3.String(), pub.String()))
 }
 
@@ -48,7 +48,7 @@ func TestCryptoApi(t *testing.T) {
 
 	priv, pub, err := GenerateKeyPair()
 
-	assert.Nil(t, err, "failed to generate keys")
+	assert.Nil(t, err, "Failed to generate keys")
 
 	const msg = "hello world"
 	msgData := []byte(msg)

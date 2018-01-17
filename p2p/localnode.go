@@ -90,7 +90,7 @@ func newLocalNodeWithKeys(pubKey crypto.PublicKey, privKey crypto.PrivateKey, tc
 	// swarm owned by node
 	s, err := NewSwarm(tcpAddress, n)
 	if err != nil {
-		log.Error("can't create a local node without a swarm. %v", err)
+		log.Error("can't create a local node without a swarm", err)
 		return nil, err
 	}
 
@@ -101,7 +101,7 @@ func newLocalNodeWithKeys(pubKey crypto.PublicKey, privKey crypto.PrivateKey, tc
 		// persist store data so we can start it on future app sessions
 		err = n.persistData()
 		if err != nil { // no much use of starting if we can't store node private key in store
-			log.Error("failed to persist node data to local store: %v", err)
+			log.Error("failed to persist node data to local store", err)
 			return nil, err
 		}
 	}
@@ -113,7 +113,7 @@ func newNodeFromData(tcpAddress string, d *NodeData, config nodeconfig.Config, p
 	priv := crypto.NewPrivateKeyFromString(d.PrivKey)
 	pub, err := crypto.NewPublicKeyFromString(d.PubKey)
 	if err != nil {
-		log.Error("failed to create public key from string: %v", err)
+		log.Error("failed to create public key from string", err)
 		return nil, err
 	}
 

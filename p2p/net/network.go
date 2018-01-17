@@ -1,6 +1,7 @@
 package net
 
 import (
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 	"net"
@@ -106,7 +107,7 @@ func (n *netImpl) DialTCP(address string, timeOut time.Duration, keepAlive time.
 	netConn, err := dialer.Dial("tcp", address)
 
 	if err != nil {
-		log.Error("Failed to tcp connect to: %s. %v", address, err)
+		log.Error(fmt.Sprintf("Failed to tcp connect to %s. %v", address, err))
 		return nil, err
 	}
 
@@ -120,7 +121,7 @@ func (n *netImpl) listen() error {
 	log.Info("Starting to listen...")
 	tcpListener, err := net.Listen("tcp", n.tcpListenAddress)
 	if err != nil {
-		log.Error("Error starting TCP server: %v", err)
+		log.Error("Error starting TCP server", err)
 		return err
 	}
 	n.tcpListener = tcpListener

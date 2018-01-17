@@ -336,7 +336,7 @@ func (n *nodeImp) loadChildren(db *treeDb) error {
 
 			data, err := db.Get(p, nil)
 			if err != nil {
-				log.Error("Failed to load child data from db. %v", err)
+				log.Error("Failed to load child data from db", err)
 				return err
 			}
 

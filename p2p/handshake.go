@@ -189,7 +189,7 @@ func (h *handshakeProtocolImpl) onHandleIncomingHandshakeRequest(msg IncomingMes
 	data := &pb.HandshakeData{}
 	err := proto.Unmarshal(msg.Payload(), data)
 	if err != nil {
-		log.Warning("Invalid incoming handshake request bin data: %v", err)
+		log.Warning("invalid incoming handshake request bin data", err)
 		return
 	}
 
@@ -238,7 +238,7 @@ func (h *handshakeProtocolImpl) onHandleIncomingHandshakeResponse(msg IncomingMe
 	respData := &pb.HandshakeData{}
 	err := proto.Unmarshal(msg.Payload(), respData)
 	if err != nil {
-		log.Warning("invalid incoming handshake resp bin data: %v", err)
+		log.Warning("invalid incoming handshake resp bin data", err)
 		return
 	}
 

@@ -64,7 +64,7 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 
 	n, err := net.NewNet(tcpAddress, l.Config())
 	if err != nil {
-		log.Error("can't create swarm without a network: %v", err)
+		log.Error("can't create swarm without a network", err)
 		return nil, err
 	}
 

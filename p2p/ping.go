@@ -74,6 +74,7 @@ func (p *pingProtocolImpl) Send(msg string, reqId []byte, remoteNodeId string) {
 	// marshal the signed data
 	payload, err := proto.Marshal(data)
 	if err != nil {
+		log.Error("failed to marshal data", err)
 		return
 	}
 

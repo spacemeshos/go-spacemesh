@@ -109,7 +109,7 @@ func (p *findNodeProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 	req := &pb.FindNodeReq{}
 	err := proto.Unmarshal(msg.Payload(), req)
 	if err != nil {
-		log.Warning("Invalid find node request data: %v", err)
+		log.Warning("Invalid find node request data", err)
 		return
 	}
 
@@ -175,7 +175,7 @@ func (p *findNodeProtocolImpl) handleIncomingResponse(msg IncomingMessage) {
 	data := &pb.FindNodeResp{}
 	err := proto.Unmarshal(msg.Payload(), data)
 	if err != nil {
-		log.Error("invalid find-node response data: %v", err)
+		log.Error("Invalid find-node response data", err)
 		// we don't know the request id for this bad response so we can't callback clients with the error
 		// just drop the bad response - clients should be notified when their outgoing requests times out
 		return
