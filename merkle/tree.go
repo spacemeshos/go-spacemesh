@@ -14,7 +14,7 @@ type MerkleTree interface {
 	Put(k, v []byte) error                // store user key, value
 	Delete(k []byte) error                // delete user value indexed by key
 	Get(k []byte) ([]byte, *stack, error) // get user value indexed by key
-	GetRootHash() []byte                  // get tree root hash
+	GetRootHash() ([]byte, error)         // get tree root hash
 	GetRootNode() Node                    // get root node
 
 	CloseDataStores() error // call when done w the tree

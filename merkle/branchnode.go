@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
+
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -16,7 +17,7 @@ type branchNode interface {
 	setValue(v []byte)                         // set the branch value
 	getPointer(idx string) []byte              // return pointer to child node for hex char entry or nil. idx - hex char, eg "0", "f"
 	marshal() ([]byte, error)                  // to binary data
-	getNodeHash() []byte                       // data hash (determines the pointer to this node)
+	getNodeHash() ([]byte, error)              // data hash (determines the pointer to this node)
 	getAllChildNodePointers() [][]byte         // get all pointers to child nodes
 	addChild(idx string, pointer []byte) error // add a child to this node
 	removeChild(idx string) error              // remove a child from this node
@@ -124,22 +125,27 @@ type branchNodeImpl struct {
 
 func (b *branchNodeImpl) print(userDb *userDb, getUserValue func(userDb *userDb, v []byte) string) string {
 	buffer := bytes.Buffer{}
-	buffer.WriteString(fmt.Sprintf("Branch <%s>.", hex.EncodeToString(b.getNodeHash())[:6]))
-	if len(b.value) > 0 {
-		userValue := getUserValue(userDb, b.value)
-		buffer.WriteString(fmt.Sprintf(" Stored value: %s. \n", userValue))
+	hashed, err := b.getNodeHash()
+	if err != nil {
+		buffer.WriteString(fmt.Sprintf("Error printing node with value %s", b.value))
 	} else {
-		buffer.WriteString(" No stored value.\n")
-	}
+		buffer.WriteString(fmt.Sprintf("Branch <%s>.", hex.EncodeToString(hashed)[:6]))
+		if len(b.value) > 0 {
+			userValue := getUserValue(userDb, b.value)
+			buffer.WriteString(fmt.Sprintf(" Stored value: %s. \n", userValue))
+		} else {
+			buffer.WriteString(" No stored value.\n")
+		}
 
-	if len(b.entries) == 0 {
-		buffer.WriteString(" No children.\n")
-	}
+		if len(b.entries) == 0 {
+			buffer.WriteString(" No children.\n")
+		}
 
-	for k, v := range b.entries {
-		if len(v) > 0 {
-			ks, _ := toHexChar(k)
-			buffer.WriteString(fmt.Sprintf(" [%s] -> <%s>\n", ks, hex.EncodeToString(v)[:6]))
+		for k, v := range b.entries {
+			if len(v) > 0 {
+				ks, _ := toHexChar(k)
+				buffer.WriteString(fmt.Sprintf(" [%s] -> <%s>\n", ks, hex.EncodeToString(v)[:6]))
+			}
 		}
 	}
 
@@ -157,17 +163,17 @@ func (b *branchNodeImpl) getAllChildNodePointers() [][]byte {
 	return res
 }
 
-func (b *branchNodeImpl) getNodeHash() []byte {
+func (b *branchNodeImpl) getNodeHash() ([]byte, error) {
 
 	if b.nodeHash == nil || len(b.nodeHash) == 0 { // lazy eval
 		d, err := b.marshal()
 		if err != nil {
-			return []byte{}
+			return nil, err
 		}
 		b.nodeHash = crypto.Sha256(d)
 	}
 
-	return b.nodeHash
+	return b.nodeHash, nil
 }
 
 func (b *branchNodeImpl) getValue() []byte {

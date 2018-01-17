@@ -3,10 +3,11 @@ package merkle
 import (
 	"bytes"
 	"encoding/hex"
+	"testing"
+
 	"github.com/spacemeshos/go-spacemesh/assert"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/merkle/pb"
-	"testing"
 )
 
 func TestChildren(t *testing.T) {
@@ -52,8 +53,9 @@ func TestBranchNodeContainer(t *testing.T) {
 	assert.True(t, node.getNodeType() == pb.NodeType_branch, "expected branch")
 	bn := node.getBranchNode()
 	assert.NotNil(t, bn, "expected branch node")
-
-	assert.True(t, bytes.Equal(bn.getNodeHash(), b.getNodeHash()), "hash mismatch")
+	bHash, _ := b.getNodeHash()
+	bnHash, _ := bn.getNodeHash()
+	assert.True(t, bytes.Equal(bnHash, bHash), "hash mismatch")
 
 	assert.Nil(t, node.getExtNode(), "expected branch node")
 	assert.Nil(t, node.getLeafNode(), "expected branch node")
@@ -61,7 +63,7 @@ func TestBranchNodeContainer(t *testing.T) {
 	data, err := node.marshal()
 	assert.NoErr(t, err, "failed to marshal branch node")
 
-	hash := node.getNodeHash()
+	hash, _ := node.getNodeHash()
 	assert.True(t, bytes.Equal(crypto.Sha256(data), hash), "hash mismatch")
 
 	node1, err := newBranchNodeContainer(entries, k3)
@@ -70,7 +72,9 @@ func TestBranchNodeContainer(t *testing.T) {
 	assert.True(t, node1.getNodeType() == pb.NodeType_branch, "expected branch")
 	bn = node.getBranchNode()
 	assert.NotNil(t, bn, "expected branch node")
-	assert.True(t, bytes.Equal(bn.getNodeHash(), b.getNodeHash()), "hash mismatch")
+	hash, _ = b.getNodeHash()
+	bnHash, _ = bn.getNodeHash()
+	assert.True(t, bytes.Equal(bnHash, hash), "hash mismatch")
 
 	assert.Nil(t, node1.getExtNode(), "expected branch node")
 	assert.Nil(t, node1.getLeafNode(), "expected branch node")
@@ -78,7 +82,7 @@ func TestBranchNodeContainer(t *testing.T) {
 	data, err = node1.marshal()
 	assert.NoErr(t, err, "failed to marshal branch node")
 
-	hash = node1.getNodeHash()
+	hash, _ = node1.getNodeHash()
 	assert.True(t, bytes.Equal(crypto.Sha256(data), hash), "hash mismatch")
 
 }
@@ -101,7 +105,10 @@ func TestLeafNodeContainer(t *testing.T) {
 	assert.True(t, node.getNodeType() == pb.NodeType_leaf, "expected leaf")
 	ln := node.getLeafNode()
 	assert.NotNil(t, ln, "expected leaf node")
-	assert.True(t, bytes.Equal(ln.getNodeHash(), leaf.getNodeHash()), "hash mismatch")
+
+	leafHash, _ := leaf.getNodeHash()
+	lnHash, _ := ln.getNodeHash()
+	assert.True(t, bytes.Equal(lnHash, leafHash), "hash mismatch")
 
 	assert.Nil(t, node.getExtNode(), "expected leaf node")
 	assert.Nil(t, node.getBranchNode(), "expected leaf node")
@@ -109,7 +116,7 @@ func TestLeafNodeContainer(t *testing.T) {
 	data1, err := node.marshal()
 	assert.NoErr(t, err, "failed to marshal leaf node")
 
-	hash := node.getNodeHash()
+	hash, _ := node.getNodeHash()
 	assert.True(t, bytes.Equal(crypto.Sha256(data1), hash), "hash mismatch")
 
 	node1, err := newLeafNodeContainer(l1Hex, l1)
@@ -120,7 +127,9 @@ func TestLeafNodeContainer(t *testing.T) {
 	ln = node1.getLeafNode()
 
 	assert.NotNil(t, ln, "expected leaf node")
-	assert.True(t, bytes.Equal(ln.getNodeHash(), leaf.getNodeHash()), "hash mismatch")
+	lnHash, _ = ln.getNodeHash()
+	leafHash, _ = leaf.getNodeHash()
+	assert.True(t, bytes.Equal(lnHash, leafHash), "hash mismatch")
 
 	assert.Nil(t, node1.getExtNode(), "expected leaf node")
 	assert.Nil(t, node1.getBranchNode(), "expected leaf node")
@@ -128,7 +137,7 @@ func TestLeafNodeContainer(t *testing.T) {
 	data1, err = node1.marshal()
 	assert.NoErr(t, err, "failed to marshal leaf node")
 
-	hash = node1.getNodeHash()
+	hash, _ = node1.getNodeHash()
 	assert.True(t, bytes.Equal(crypto.Sha256(data1), hash), "hash mismatch")
 }
 
@@ -150,7 +159,10 @@ func TestExtNodeContainer(t *testing.T) {
 	assert.True(t, node.getNodeType() == pb.NodeType_extension, "expected ext")
 	en := node.getExtNode()
 	assert.NotNil(t, en, "expected ext node")
-	assert.True(t, bytes.Equal(en.getNodeHash(), ext.getNodeHash()), "hash mismatch")
+
+	extHash, _ := ext.getNodeHash()
+	enHash, _ := en.getNodeHash()
+	assert.True(t, bytes.Equal(enHash, extHash), "hash mismatch")
 
 	assert.Nil(t, node.getLeafNode(), "expected ext node")
 	assert.Nil(t, node.getBranchNode(), "expected ext node")
@@ -158,7 +170,7 @@ func TestExtNodeContainer(t *testing.T) {
 	data1, err := node.marshal()
 	assert.NoErr(t, err, "failed to marshal ext node")
 
-	hash := node.getNodeHash()
+	hash, _ := node.getNodeHash()
 	assert.True(t, bytes.Equal(crypto.Sha256(data1), hash), "hash mismatch")
 
 	node1, err := newExtNodeContainer(e1Hex, e1)
@@ -169,7 +181,9 @@ func TestExtNodeContainer(t *testing.T) {
 	en = node1.getExtNode()
 
 	assert.NotNil(t, en, "expected leaf node")
-	assert.True(t, bytes.Equal(en.getNodeHash(), ext.getNodeHash()), "hash mismatch")
+	extHash, _ = ext.getNodeHash()
+	enHash, _ = en.getNodeHash()
+	assert.True(t, bytes.Equal(enHash, extHash), "hash mismatch")
 
 	assert.Nil(t, node1.getLeafNode(), "expected ext node")
 	assert.Nil(t, node1.getBranchNode(), "expected ext node")
@@ -177,7 +191,7 @@ func TestExtNodeContainer(t *testing.T) {
 	data1, err = node1.marshal()
 	assert.NoErr(t, err, "failed to marshal ext node")
 
-	hash = node1.getNodeHash()
+	hash, _ = node1.getNodeHash()
 	assert.True(t, bytes.Equal(crypto.Sha256(data1), hash), "hash mismatch")
 
 }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"errors"
+
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/merkle/pb"
@@ -98,7 +99,11 @@ func (mt *merkleTreeImp) update(k string, s *stack) error {
 			pos -= len(n.getShortNode().getPath())
 
 			if lastRoot != nil {
-				n.setExtChild(lastRoot.getNodeHash())
+				hash, err := lastRoot.getNodeHash()
+				if err != nil {
+					return err
+				}
+				n.setExtChild(hash)
 			}
 
 		case pb.NodeType_leaf:

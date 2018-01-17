@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -41,7 +42,7 @@ type Node interface {
 	isExt() bool
 	isBranch() bool
 	marshal() ([]byte, error) // get binary encoded marshaled node data
-	getNodeHash() []byte
+	getNodeHash() ([]byte, error)
 	getNodeEmbeddedPath() string // hex-encoded nibbles or empty
 
 	print(treeDb *treeDb, userDb *userDb) string
@@ -155,13 +156,16 @@ func (n *nodeImp) addBranchChild(idx string, child Node) error {
 	if len(p) > 0 {
 		n.removeBranchChild(idx)
 	}
-
-	err := n.getBranchNode().addChild(idx, child.getNodeHash())
+	hash, hashError := child.getNodeHash()
+	if hashError != nil {
+		return hashError
+	}
+	err := n.getBranchNode().addChild(idx, hash)
 	if err != nil {
 		return err
 	}
 
-	n.children[hex.EncodeToString(child.getNodeHash())] = child
+	n.children[hex.EncodeToString(hash)] = child
 
 	return nil
 }
@@ -271,7 +275,12 @@ func (n *nodeImp) validateHash() error {
 
 	h := crypto.Sha256(data)
 
-	if !bytes.Equal(h, n.getNodeHash()) {
+	hash, err := n.getNodeHash()
+	if err != nil {
+		return err
+	}
+
+	if !bytes.Equal(h, hash) {
 		return errors.New("hash mismatch")
 	}
 
@@ -362,17 +371,21 @@ func (n *nodeImp) getNodeEmbeddedPath() string {
 	}
 }
 
-func (n *nodeImp) getNodeHash() []byte {
+func (n *nodeImp) getNodeHash() ([]byte, error) {
+	var hash []byte
+	var err error
 	switch n.nodeType {
 	case pb.NodeType_branch:
-		return n.branch.getNodeHash()
+		hash, err = n.branch.getNodeHash()
 	case pb.NodeType_leaf:
-		return n.leaf.getNodeHash()
+		hash, err = n.leaf.getNodeHash()
 	case pb.NodeType_extension:
-		return n.ext.getNodeHash()
+		hash, err = n.ext.getNodeHash()
 	default:
-		return nil
+		err = errors.New("Unknown node type")
 	}
+
+	return hash, err
 }
 
 func (n *nodeImp) marshal() ([]byte, error) {
