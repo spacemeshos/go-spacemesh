@@ -31,7 +31,8 @@ func TestBranchNodeCreation(t *testing.T) {
 	value := node.getValue()
 	assert.True(t, bytes.Equal(k3, value), "unexpected node value")
 
-	nodeHash, _ := node.getNodeHash()
+	nodeHash, err := node.getNodeHash()
+	assert.NoErr(t, err, "failed getting node hash")
 	binData, err := node.marshal()
 	assert.NoErr(t, err, "failed to marshal node")
 	assert.True(t, bytes.Equal(crypto.Sha256(binData), nodeHash), "unexpected node hash")

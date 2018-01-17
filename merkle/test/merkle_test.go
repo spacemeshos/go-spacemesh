@@ -20,7 +20,8 @@ func TestEmptyTreeCreation(t *testing.T) {
 	root := m.GetRootNode()
 	assert.Nil(t, root, "expected empty tree")
 
-	hash, _ := m.GetRootHash()
+	hash, err := m.GetRootHash()
+	assert.NoErr(t, err, "error getting node hash")
 	assert.True(t, bytes.Equal(merkle.EmptyTreeRootHash, hash), "unexpected empty tree root hash")
 
 	err = m.CloseDataStores()
@@ -55,14 +56,16 @@ func TestSimpleTreeOps(t *testing.T) {
 	/////////////////////////
 
 	// restore tree to a new instance based on root hash
-	rootHash, _ := m.GetRootHash()
+	rootHash, err := m.GetRootHash()
+	assert.NoErr(t, err, "error getting node hash")
 	m1, _ := merkle.NewTreeFromDb(rootHash, userDb, treeDb)
 	defer m1.CloseDataStores() // tell m1 to close data stores when we are done w it
 
 	root = m1.GetRootNode()
 	assert.NotNil(t, root, "expected non-empty tree")
 
-	rootHash1, _ := m1.GetRootHash()
+	rootHash1, err := m1.GetRootHash()
+	assert.NoErr(t, err, "error getting node hash")
 
 	assert.True(t, bytes.Equal(rootHash, rootHash1), "expected same root hash")
 
@@ -108,7 +111,8 @@ func TestComplexTreeOps(t *testing.T) {
 
 	r, err := m.ValidateStructure(m.GetRootNode())
 	assert.NoErr(t, err, "invalid tree structure")
-	mHash, _ := m.GetRootHash()
+	mHash, err := m.GetRootHash()
+	assert.NoErr(t, err, "invalid tree structure")
 	assert.True(t, bytes.Equal(r, mHash), "unexpected root hash")
 
 	log.Info(m.Print())
@@ -122,7 +126,8 @@ func TestComplexTreeOps(t *testing.T) {
 
 	r, err = m.ValidateStructure(m.GetRootNode())
 	assert.NoErr(t, err, "invalid tree structure")
-	mHash, _ = m.GetRootHash()
+	mHash, err = m.GetRootHash()
+	assert.NoErr(t, err, "error getting node hash")
 	assert.True(t, bytes.Equal(r, mHash), "unexpected root hash")
 
 	data, _, err := m.Get(k3)
@@ -147,7 +152,8 @@ func TestComplexTreeOps(t *testing.T) {
 	log.Info(m.Print())
 	r, err = m.ValidateStructure(m.GetRootNode())
 	assert.NoErr(t, err, "invalid tree structure")
-	mHash, _ = m.GetRootHash()
+	mHash, err = m.GetRootHash()
+	assert.NoErr(t, err, "error getting node hash")
 	assert.True(t, bytes.Equal(r, mHash), "unexpected root hash")
 
 	validateGet(t, m, k1, v1)
@@ -160,7 +166,8 @@ func TestComplexTreeOps(t *testing.T) {
 	log.Info(m.Print())
 	r, err = m.ValidateStructure(m.GetRootNode())
 	assert.NoErr(t, err, "invalid tree structure")
-	mHash, _ = m.GetRootHash()
+	mHash, err = m.GetRootHash()
+	assert.NoErr(t, err, "error getting node hash")
 	assert.True(t, bytes.Equal(r, mHash), "unexpected root hash")
 
 	validateGet(t, m, k1, v1)
