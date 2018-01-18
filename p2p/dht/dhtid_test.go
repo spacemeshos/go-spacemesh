@@ -1,10 +1,9 @@
-package tests
+package dht
 
 import (
 	"encoding/hex"
 	"github.com/spacemeshos/go-spacemesh/assert"
 	//"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/p2p/dht"
 	"math/big"
 	"testing"
 )
@@ -14,17 +13,17 @@ func TestDhtIds(t *testing.T) {
 	// 256 bits hexa number
 	hexData := "b726a40a408ff9fbdf627373cab566742114e2fd909eb4af4b6cbec67d6c6040"
 
-	id1, _ := dht.NewIdFromHexString(hexData)
-	id2, _ := dht.NewIdFromHexString(hexData)
-	id3, _ := dht.NewIdFromHexString("a726a40a408ff9fbdf627373cab566742114e2fd909eb4af4b6cbec67d6c6040")
-	id4, _ := dht.NewIdFromHexString("b626a40a408ff9fbdf627373cab566742114e2fd909eb4af4b6cbec67d6c6040")
-	id5, _ := dht.NewIdFromHexString("1000000000000000000000000000000000000000000000000000000000000000")
+	id1, _ := NewIdFromHexString(hexData)
+	id2, _ := NewIdFromHexString(hexData)
+	id3, _ := NewIdFromHexString("a726a40a408ff9fbdf627373cab566742114e2fd909eb4af4b6cbec67d6c6040")
+	id4, _ := NewIdFromHexString("b626a40a408ff9fbdf627373cab566742114e2fd909eb4af4b6cbec67d6c6040")
+	id5, _ := NewIdFromHexString("1000000000000000000000000000000000000000000000000000000000000000")
 
 	assert.Equal(t, len(id1), 32, "Expectd 256 bits / 32 bytes id")
 	assert.Equal(t, hex.EncodeToString(id1), hexData, "Unexpected id data")
 
-	assert.True(t, id1.Equals(id2), "exepected equal ids")
-	assert.False(t, id1.Equals(id3), "exepected not equal ids")
+	assert.True(t, id1.Equals(id2), "expected equal ids")
+	assert.False(t, id1.Equals(id3), "expected non-equal ids")
 
 	d := id1.Distance(id1)
 	assert.True(t, d.Cmp(big.NewInt(0)) == 0, "expected 0 distance from same id")

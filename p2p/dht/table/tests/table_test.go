@@ -124,18 +124,18 @@ func TestTableUpdate(t *testing.T) {
 	for i := 0; i < n; i++ {
 
 		// create a new random node
-		node := p2p.GenerateRandomNodeData()
+		n := p2p.GenerateRandomNodeData()
 
 		// create callback to receive result
 		callback := make(table.PeersOpChannel, 2)
 
 		// find nearest peers
-		rt.NearestPeers(table.NearestPeersReq{node.DhtId(), 5, callback})
+		rt.NearestPeers(table.NearestPeersReq{n.DhtId(), 5, callback})
 
 		select {
 		case c := <-callback:
 			if len(c.Peers) == 0 {
-				t.Fatalf("Failed to find node near %s.", node.DhtId())
+				t.Fatalf("Failed to find node near %s.", n.DhtId())
 			}
 		case <-time.After(time.Second * 5):
 			t.Fatalf("Failed to get expected update callbacks on time")
@@ -160,16 +160,16 @@ func TestTableFind(t *testing.T) {
 
 	for i := 0; i < 5; i++ {
 
-		node := nodes[i]
+		n := nodes[i]
 
 		//t.Logf("Searching for peer: %s...", hex.EncodeToString(node.DhtId()))
 
 		callback := make(table.PeerOpChannel, 2)
-		rt.NearestPeer(table.PeerByIdRequest{node.DhtId(), callback})
+		rt.NearestPeer(table.PeerByIdRequest{n.DhtId(), callback})
 
 		select {
 		case c := <-callback:
-			if c.Peer == nil || c.Peer != node {
+			if c.Peer == nil || c.Peer != n {
 				t.Fatalf("Failed to lookup known node...")
 			}
 		case <-time.After(time.Second * 5):
@@ -177,11 +177,11 @@ func TestTableFind(t *testing.T) {
 		}
 
 		callback1 := make(table.PeerOpChannel, 2)
-		rt.Find(table.PeerByIdRequest{node.DhtId(), callback1})
+		rt.Find(table.PeerByIdRequest{n.DhtId(), callback1})
 
 		select {
 		case c := <-callback1:
-			if c.Peer == nil || c.Peer != node {
+			if c.Peer == nil || c.Peer != n {
 				t.Fatalf("Failed to find node...")
 			}
 		case <-time.After(time.Second * 5):
