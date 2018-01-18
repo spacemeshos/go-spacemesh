@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestServersConfig(t *testing.T) {
@@ -81,7 +82,7 @@ func TestJsonApi(t *testing.T) {
 		t.Fatalf("m.MarshalToString(%#v) failed with %v; want success", payload, err)
 		return
 	}
-	
+
 	// Without this running this on Travis CI might generate a connection refused error
 	time.Sleep(10 * time.Second)
 
