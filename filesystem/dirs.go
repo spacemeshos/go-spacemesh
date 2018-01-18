@@ -138,4 +138,3 @@ func GetFullDirectoryPath(name string) (string, error) {
 
 	return aPath, err
 }
-

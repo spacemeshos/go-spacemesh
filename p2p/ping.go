@@ -104,7 +104,7 @@ func (p *pingProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 
 	log.Info("Incoming ping peer request from %s. Message: s%", peer.Pretty(), req.Ping)
 
-	// add/update local dht table
+	// add/update local dht table as we just heard from a peer
 	p.swarm.getRoutingTable().Update(peer.GetRemoteNodeData())
 
 	// generate response
@@ -114,7 +114,7 @@ func (p *pingProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 	// sign response
 	sign, err := p.swarm.GetLocalNode().SignToString(respData)
 	if err != nil {
-		log.Info("Failed to sign response")
+		log.Error("Failed to sign response", err)
 		return
 	}
 
@@ -123,7 +123,7 @@ func (p *pingProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 	// marshal the signed data
 	signedPayload, err := proto.Marshal(respData)
 	if err != nil {
-		log.Info("Failed to generate response data")
+		log.Error("Failed to generate response data", err)
 		return
 	}
 
