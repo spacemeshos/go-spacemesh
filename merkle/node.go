@@ -349,7 +349,6 @@ func (n *nodeImp) loadChildren(db *treeDb) error {
 
 			data, err := db.Get(p, nil)
 			if err != nil {
-				log.Error("Failed to load child data from db", err)
 				return err
 			}
 
@@ -402,6 +401,7 @@ func (n *nodeImp) marshal() ([]byte, error) {
 }
 
 func (n *nodeImp) getUserStringValue(userDb *userDb, v []byte) string {
+
 	// pull the data from the user data store
 	value, err := userDb.Get(v, nil)
 	if err == leveldb.ErrNotFound {
@@ -410,7 +410,8 @@ func (n *nodeImp) getUserStringValue(userDb *userDb, v []byte) string {
 	}
 
 	if err != nil {
-		return "error"
+		log.Error("Error getting value from db.", err)
+		return "<<error>>"
 	}
 
 	// long value
@@ -431,9 +432,7 @@ func (n *nodeImp) print(treeDb *treeDb, userDb *userDb) string {
 
 	switch n.nodeType {
 	case pb.NodeType_branch:
-
 		buffer.WriteString(n.getBranchNode().print(userDb, n.getUserStringValue))
-
 		for _, v := range n.children {
 			buffer.WriteString(v.print(treeDb, userDb))
 		}
@@ -442,13 +441,10 @@ func (n *nodeImp) print(treeDb *treeDb, userDb *userDb) string {
 		buffer.WriteString(n.getLeafNode().print(userDb, n.getUserStringValue))
 
 	case pb.NodeType_extension:
-
 		buffer.WriteString(n.getExtNode().print(userDb, n.getUserStringValue))
-
 		for _, v := range n.children {
 			buffer.WriteString(v.print(treeDb, userDb))
 		}
-
 	}
 
 	return buffer.String()
