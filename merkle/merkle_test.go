@@ -13,7 +13,7 @@ func TestEmptyTreeCreation(t *testing.T) {
 
 	userDb, treeDb := getDbPaths(t)
 	m, err := NewEmptyTree(userDb, treeDb)
-	assert.NoErr(t, err, "failed to create new merkle tree")
+	assert.NoErr(t, err, "failed to create new Merkle tree")
 
 	root := m.GetRootNode()
 	assert.Nil(t, root, "expected empty tree")
@@ -32,7 +32,7 @@ func TestSimpleTreeOps(t *testing.T) {
 	m, err := NewEmptyTree(userDb, treeDb)
 	defer m.CloseDataStores() // we need to close the data stores when done w m - they are owned by m
 
-	assert.NoErr(t, err, "failed to create new merkle tree")
+	assert.NoErr(t, err, "failed to create new Merkle tree")
 
 	// user data k,v can be any bytes
 	v := []byte("zifton-the-immortal")
@@ -48,7 +48,7 @@ func TestSimpleTreeOps(t *testing.T) {
 	validateGet(t, m, k, v)
 
 	err = m.CloseDataStores()
-	assert.NoErr(t, err, "failed to close m data stores")
+	assert.NoErr(t, err, "failed to close tree data stores")
 
 	/////////////////////////
 

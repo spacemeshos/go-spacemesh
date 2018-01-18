@@ -99,6 +99,7 @@ func Union(list1 []RemoteNodeData, list2 []RemoteNodeData) []RemoteNodeData {
 	return res
 }
 
+// Converts a list of NodeInfo to a list of RemoteNodeData
 func FromNodeInfos(nodes []*pb.NodeInfo) []RemoteNodeData {
 	res := []RemoteNodeData{}
 	for _, n := range nodes {
@@ -120,8 +121,7 @@ func NewRemoteNodeData(id string, ip string) RemoteNodeData {
 	}
 }
 
-// Create a remote node from a string in the format: 126.0.0.1:3572/QmcjTLy94HGFo4JoYibudGeBV2DSBb6E4apBjFsBGnMsWa
-
+// Creates a remote node from a string in the following format: 126.0.0.1:3572/QmcjTLy94HGFo4JoYibudGeBV2DSBb6E4apBjFsBGnMsWa
 func NewRemoteNodeDataFromString(data string) RemoteNodeData {
 	items := strings.Split(data, "/")
 	if len(items) != 2 {
