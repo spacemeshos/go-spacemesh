@@ -43,6 +43,10 @@ type LocalNode interface {
 	Debug(format string, args ...interface{})
 	Error(format string, args ...interface{})
 	Warning(format string, args ...interface{})
+
+	// local store persistence
+	ensureNodeDataDirectory() (string, error)
+	persistData() error
 }
 
 // Creates a local node with a provided tcp address
@@ -52,13 +56,21 @@ func NewLocalNode(tcpAddress string, config nodeconfig.Config, persist bool) (Lo
 
 	if len(nodeconfig.ConfigValues.NodeId) > 0 {
 		// user provided node id/pubkey via cli - attempt to start that node w persisted data
-		data := readNodeData(nodeconfig.ConfigValues.NodeId)
+		data, err := readNodeData(nodeconfig.ConfigValues.NodeId)
+		if err != nil {
+			return nil, err
+		}
+
 		return newNodeFromData(tcpAddress, data, config, persist)
 	}
 
 	// look for persisted node data in the nodes directory
 	// load the node with the data of the first node found
-	nodeData := readFirstNodeData()
+	nodeData, err := readFirstNodeData()
+	if err != nil {
+		return nil, err
+	}
+
 	if nodeData != nil {
 		// crete node using persisted node data
 		return newNodeFromData(tcpAddress, nodeData, config, persist)
@@ -74,7 +86,8 @@ func NewNodeIdentity(tcpAddress string, config nodeconfig.Config, persist bool) 
 	return newLocalNodeWithKeys(pub, priv, tcpAddress, config, persist)
 }
 
-func newLocalNodeWithKeys(pubKey crypto.PublicKey, privKey crypto.PrivateKey, tcpAddress string, config nodeconfig.Config, persist bool) (LocalNode, error) {
+func newLocalNodeWithKeys(pubKey crypto.PublicKey, privKey crypto.PrivateKey, tcpAddress string,
+	config nodeconfig.Config, persist bool) (LocalNode, error) {
 
 	n := &localNodeImp{
 		pubKey:     pubKey,
@@ -84,8 +97,12 @@ func newLocalNodeWithKeys(pubKey crypto.PublicKey, privKey crypto.PrivateKey, tc
 		dhtId:      dht.NewIdFromNodeKey(pubKey.Bytes()),
 	}
 
+	dataDir, err := n.ensureNodeDataDirectory()
+	if err != nil {
+		return nil, err
+	}
 	// setup logging
-	n.logger = log.CreateLogger(n.pubKey.Pretty(), n.ensureNodeDataDirectory(), "node.log")
+	n.logger = log.CreateLogger(n.pubKey.Pretty(), dataDir, "node.log")
 
 	// swarm owned by node
 	s, err := NewSwarm(tcpAddress, n)
@@ -109,6 +126,7 @@ func newLocalNodeWithKeys(pubKey crypto.PublicKey, privKey crypto.PrivateKey, tc
 	return n, nil
 }
 
+// Creates a new node from peristed NodeData
 func newNodeFromData(tcpAddress string, d *NodeData, config nodeconfig.Config, persist bool) (LocalNode, error) {
 	priv := crypto.NewPrivateKeyFromString(d.PrivKey)
 	pub, err := crypto.NewPublicKeyFromString(d.PubKey)

@@ -91,9 +91,9 @@ func (d *demuxImpl) processEvents() {
 		case msg := <-d.incomingMessages:
 			handler := d.handlers[msg.Protocol()]
 			if handler == nil {
-				log.Error("failed to route incoming message - no registered handler for protocol", msg.Protocol())
+				log.Warning("failed to route an incoming message - no registered handler for protocol", msg.Protocol())
 			} else {
-				go func() { // async send to handler so we can keep processing message
+				go func() { // async send to handler so we can keep processing messages
 					handler <- msg
 				}()
 			}

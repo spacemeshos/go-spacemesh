@@ -40,6 +40,8 @@ type Swarm interface {
 	// Currently used for testing network bootstrapping
 	RegisterNodeEventsCallback(callback NodeEventCallback)
 
+	Shutdown()
+
 	// services getters
 	GetDemuxer() Demuxer
 	GetLocalNode() LocalNode

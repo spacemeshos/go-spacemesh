@@ -17,7 +17,7 @@ type RemoteNodeData interface {
 	Ip() string    // node tcp listener e.g. 127.0.0.1:3038
 	Bytes() []byte // node raw id bytes
 
-	DhtId() dht.ID
+	DhtId() dht.ID // dht id must be uniformly distributed for XOR distance to work, hence we hash the node key/id to create it
 
 	GetLastFindNodeCall(nodeId string) time.Time // time of last find node call sent to node
 	SetLastFindNodeCall(nodeId string, t time.Time)
@@ -35,7 +35,7 @@ type remoteNodeDataImpl struct {
 	lastFindNodeCall map[string]time.Time
 }
 
-// Return serializable (pb) node infos slice from a slice of RemoteNodeData
+// Returns serializable (pb) node infos slice from a slice of RemoteNodeData
 // filterId: node id to exclude from the result
 func ToNodeInfo(nodes []RemoteNodeData, filterId string) []*pb.NodeInfo {
 	// init empty slice
@@ -54,7 +54,7 @@ func ToNodeInfo(nodes []RemoteNodeData, filterId string) []*pb.NodeInfo {
 	return res
 }
 
-// pick up to count server who haven't been queried to find a node recently
+// Picks up to count server who haven't been queried to find a node recently
 // nodeId - the target node id of this find node operation
 func PickFindNodeServers(nodes []RemoteNodeData, nodeId string, count int) []RemoteNodeData {
 
@@ -75,7 +75,7 @@ func PickFindNodeServers(nodes []RemoteNodeData, nodeId string, count int) []Rem
 	return res
 }
 
-// return a union of 2 lists of nods
+// Returns a union of 2 lists of nods
 func Union(list1 []RemoteNodeData, list2 []RemoteNodeData) []RemoteNodeData {
 
 	idSet := map[string]RemoteNodeData{}

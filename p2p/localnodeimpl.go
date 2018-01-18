@@ -56,7 +56,11 @@ func (n *localNodeImp) Config() nodeconfig.Config {
 }
 
 func (n *localNodeImp) Shutdown() {
-	// todo - kill swarm and stop all services
+
+	// todo - kill swarm and stop all services grpc, http-json, etc...
+
+	// shutdown swarm
+	n.swarm.Shutdown()
 }
 
 func (n *localNodeImp) GetPing() Ping {

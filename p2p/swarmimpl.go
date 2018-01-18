@@ -44,7 +44,7 @@ type swarmImpl struct {
 	sendMsgRequests  chan SendMessageReq // local request to send a session message to a node and callback on error or data
 	sendHandshakeMsg chan SendMessageReq // local request to send a handshake protocol message
 
-	kill chan bool // local request to kill the swamp from outside. e.g when local node is shutting down
+	shutdown chan bool // local request to kill the swamp from outside. e.g when local node is shutting down
 
 	registerNodeReq chan node.RemoteNodeData // local request to register a node based on minimal data
 
@@ -71,7 +71,7 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 	s := &swarmImpl{
 		localNode: l,
 		network:   n,
-		kill:      make(chan bool),
+		shutdown:      make(chan bool), // non-buffered so requests to shutdown block until swarm is shut down
 
 		nec: make(nodeEventCallbacks, 0),
 
@@ -250,6 +250,10 @@ func (s *swarmImpl) sendHandshakeMessage(req SendMessageReq) {
 	s.sendHandshakeMsg <- req
 }
 
+func (s *swarmImpl) Shutdown() {
+	s.shutdown <- true
+}
+
 // Swarm serial event processing
 // provides concurrency safety as only one callback is executed at a time
 // so there's no need for sync internal data structures
@@ -258,8 +262,9 @@ func (s *swarmImpl) beginProcessingEvents() {
 Loop:
 	for {
 		select {
-		case <-s.kill:
-			// todo: gracefully stop the swarm - close all connections to remote nodes
+		case <-s.shutdown:
+			// todo: gracefully shut down all connections here
+			s.network.Shutdown()
 			break Loop
 
 		case c := <-s.network.GetNewConnections():

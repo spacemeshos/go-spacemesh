@@ -24,6 +24,7 @@ type Net interface {
 	GetIncomingMessage() chan IncomingMessage
 	GetMessageSendErrors() chan MessageSendError
 	GetMessageSentCallback() chan MessageSentEvent
+	Shutdown()
 }
 
 // impl internal tpye
@@ -116,6 +117,10 @@ func (n *netImpl) DialTCP(address string, timeOut time.Duration, keepAlive time.
 	return c, nil
 }
 
+func (n *netImpl) Shutdown() {
+	n.tcpListener.Close()
+}
+
 // Start network server
 func (n *netImpl) listen() error {
 	log.Info("Starting to listen...")
@@ -134,6 +139,7 @@ func (n *netImpl) acceptTcp() {
 		log.Info("Waiting for incoming connections...")
 		netConn, err := n.tcpListener.Accept()
 		if err != nil {
+			// this is triggered when network is closed
 			log.Warning("Failed to accept connection request: %v", err)
 			return
 		}
