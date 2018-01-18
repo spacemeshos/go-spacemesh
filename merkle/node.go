@@ -171,6 +171,7 @@ func (n *nodeImp) addBranchChild(idx string, child Node) error {
 
 	return nil
 }
+
 // Removes a child indexed with idx from a branch node
 // todo: figure out if we should always remove the node from backing store. Otherwise, the removed child may never be removed from the local db.
 func (n *nodeImp) removeBranchChild(idx string) error {

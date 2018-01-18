@@ -11,7 +11,7 @@ import (
 
 var InvalidUserDataError = errors.New("expected non-empty k,v for user data")
 
-// store user data (k,v)
+// Stores user data (k,v) in the tree
 func (mt *merkleTreeImp) Put(k, v []byte) error {
 
 	if len(v) == 0 || len(k) == 0 {
@@ -38,12 +38,12 @@ func (mt *merkleTreeImp) Put(k, v []byte) error {
 
 	if res != nil && bytes.Equal(res, v) {
 		// value already stored in db
-		log.Info("Value already stored in tree")
+		log.Info("Value already stored in the tree")
 		return nil
 	}
 
 	hexKey := hex.EncodeToString(k)
-	log.Info("m Inserting user data for key: %s...", hexKey)
+	log.Info("Merkle inserting user data for key: %s...", hexKey)
 
 	// todo - optimize this to avoid iteration over path
 	pos := mt.getPathLength(stack)
@@ -65,7 +65,7 @@ func (mt *merkleTreeImp) Put(k, v []byte) error {
 // k: key to value following the stack
 func (mt *merkleTreeImp) update(k string, s *stack) error {
 
-	log.Info("persisting nodes for path %s", k)
+	log.Info("Persisting nodes for path %s", k)
 
 	var lastRoot Node
 
@@ -214,7 +214,7 @@ func (mt *merkleTreeImp) upsert(pos int, k string, v []byte, s *stack) error {
 		pos += cpl
 	}
 
-	// add new ext+branch or just branch to accomodate existing and new key
+	// add new ext+branch or just branch to accommodate existing and new key
 	newBranch, err := newBranchNodeContainer(nil, nil)
 	if err != nil {
 		return err
