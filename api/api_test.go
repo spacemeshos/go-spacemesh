@@ -82,7 +82,7 @@ func TestJsonApi(t *testing.T) {
 		return
 	}
 
-	url := fmt.Sprintf("http://localhost:%d/v1/example/echo", config.ConfigValues.JsonServerPort)
+	url := fmt.Sprintf("http://0.0.0.0:%d/v1/example/echo", config.ConfigValues.JsonServerPort)
 	resp, err := http.Post(url, contentType, strings.NewReader(payload))
 
 	if err != nil {

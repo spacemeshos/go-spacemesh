@@ -18,7 +18,7 @@ func TestHandshakeCoreData(t *testing.T) {
 
 	// node 1
 	port := crypto.GetRandomUInt32(1000) + 10000
-	address := fmt.Sprintf("localhost:%d", port)
+	address := fmt.Sprintf("0.0.0.0:%d", port)
 
 	node1Local, err := NewNodeIdentity(address, nodeconfig.ConfigValues, false)
 
@@ -31,7 +31,7 @@ func TestHandshakeCoreData(t *testing.T) {
 
 	// node 2
 	port1 := crypto.GetRandomUInt32(1000) + 10000
-	address1 := fmt.Sprintf("localhost:%d", port1)
+	address1 := fmt.Sprintf("0.0.0.0:%d", port1)
 
 	node2Local, err := NewNodeIdentity(address1, nodeconfig.ConfigValues, false)
 
@@ -92,14 +92,14 @@ func TestHandshakeProtocol(t *testing.T) {
 
 	// node 1
 	port := crypto.GetRandomUInt32(1000) + 10000
-	address := fmt.Sprintf("localhost:%d", port)
+	address := fmt.Sprintf("0.0.0.0:%d", port)
 
 	node1Local, _ := NewNodeIdentity(address, nodeconfig.ConfigValues, false)
 	node1Remote, _ := NewRemoteNode(node1Local.String(), address)
 
 	// node 2
 	port1 := crypto.GetRandomUInt32(1000) + 10000
-	address1 := fmt.Sprintf("localhost:%d", port1)
+	address1 := fmt.Sprintf("0.0.0.0:%d", port1)
 
 	node2Local, _ := NewNodeIdentity(address1, nodeconfig.ConfigValues, false)
 	node2Remote, _ := NewRemoteNode(node2Local.String(), address1)

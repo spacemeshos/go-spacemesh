@@ -46,13 +46,12 @@ type ProtocolRegistration struct {
 
 // Demuxer is responsible for routing incoming network messages back to protocol handlers based on message protocols
 // Limitations: only supports 1 handler per protocol for now.
-
-// todo: add unit tests
-
 type Demuxer interface {
 	RegisterProtocolHandler(handler ProtocolRegistration)
 	RouteIncomingMessage(msg IncomingMessage)
 }
+
+// todo: add unit tests
 
 type demuxImpl struct {
 

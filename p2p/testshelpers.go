@@ -17,7 +17,7 @@ func GenerateTestNode(t *testing.T) (LocalNode, Peer) {
 func GenerateTestNodeWithConfig(t *testing.T, config nodeconfig.Config) (LocalNode, Peer) {
 
 	port := crypto.GetRandomUInt32(10000) + 1000
-	address := fmt.Sprintf("localhost:%d", port)
+	address := fmt.Sprintf("0.0.0.0:%d", port)
 
 	localNode, err := NewNodeIdentity(address, config, false)
 	if err != nil {
@@ -35,7 +35,7 @@ func GenerateTestNodeWithConfig(t *testing.T, config nodeconfig.Config) (LocalNo
 // Generates a remote random node data for testing
 func GenerateRandomNodeData() node.RemoteNodeData {
 	port := crypto.GetRandomUInt32(1000) + 10000
-	address := fmt.Sprintf("localhost:%d", port)
+	address := fmt.Sprintf("0.0.0.0:%d", port)
 	_, pub, _ := crypto.GenerateKeyPair()
 	return node.NewRemoteNodeData(pub.String(), address)
 }

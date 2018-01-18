@@ -172,7 +172,7 @@ func (rt *routingTableImpl) UnregisterPeerAddedCallback(c PeerChannel) {
 	rt.unregisterPeerAddedReq <- c
 }
 
-// Find a specific peer by ID/ Returns nil in the callback when not found
+// Finds a specific peer by ID/ Returns nil in the callback when not found
 func (rt *routingTableImpl) Find(req PeerByIdRequest) {
 	rt.findReqs <- req
 }

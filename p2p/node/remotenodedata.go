@@ -56,6 +56,7 @@ func ToNodeInfo(nodes []RemoteNodeData, filterId string) []*pb.NodeInfo {
 
 // Picks up to count server who haven't been queried to find a node recently
 // nodeId - the target node id of this find node operation
+// Used in KAD nodes discovery
 func PickFindNodeServers(nodes []RemoteNodeData, nodeId string, count int) []RemoteNodeData {
 
 	res := []RemoteNodeData{}

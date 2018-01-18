@@ -18,7 +18,7 @@ func TestNodeLocalStore(t *testing.T) {
 	assert.NoErr(t, err, "failed to create or verify nodes data dir")
 
 	port1 := crypto.GetRandomUInt32(1000) + 10000
-	address := fmt.Sprintf("localhost:%d", port1)
+	address := fmt.Sprintf("0.0.0.0:%d", port1)
 
 	node, err := NewNodeIdentity(address, nodeconfig.ConfigValues, false)
 	assert.NoErr(t, err, "failed to create new local node")
