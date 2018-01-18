@@ -136,7 +136,7 @@ func (app *SpaceMeshApp) before(ctx *cli.Context) error {
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, os.Interrupt)
 	go func() {
-		for _ = range signalChan {
+		for range signalChan {
 			log.Info("Received an interrupt, stopping services...\n")
 			ExitApp <- true
 		}
