@@ -91,7 +91,7 @@ func newConnection(conn net.Conn, n Net, s ConnectionSource) Connection {
 	go connection.beginEventProcessing()
 
 	// start reading incoming message from the connection and into the channel
-	go incomingMsgs.ReadFrom(conn)
+	go incomingMsgs.ReadFromReader(conn)
 
 	return connection
 }

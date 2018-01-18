@@ -35,7 +35,7 @@ func TestReadChan(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	go rchan.ReadFrom(buf)
+	go rchan.ReadFromReader(buf)
 	defer rchan.Close()
 
 Loop:
@@ -68,7 +68,7 @@ func TestWriteChan(t *testing.T) {
 	wchan := NewChan(10)
 	msgs := [1000][]byte{}
 
-	go wchan.WriteTo(buf)
+	go wchan.WriteToWriter(buf)
 
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	for i := range msgs {
