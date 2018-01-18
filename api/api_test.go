@@ -50,7 +50,7 @@ func TestGrpcApi(t *testing.T) {
 	c := pb.NewSpaceMeshServiceClient(conn)
 
 	// call echo and validate result
-	r, err := c.Echo(context.Background(), &pb.SimpleMessage{message})
+	r, err := c.Echo(context.Background(), &pb.SimpleMessage{Value: message})
 	if err != nil {
 		t.Fatalf("could not greet", err)
 	}

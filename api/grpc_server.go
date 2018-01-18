@@ -23,7 +23,7 @@ type SpaceMeshGrpcService struct {
 }
 
 func (s SpaceMeshGrpcService) Echo(ctx context.Context, in *pb.SimpleMessage) (*pb.SimpleMessage, error) {
-	return &pb.SimpleMessage{in.Value}, nil
+	return &pb.SimpleMessage{Value: in.Value}, nil
 }
 
 func (s SpaceMeshGrpcService) StopService() {

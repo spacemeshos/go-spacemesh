@@ -9,29 +9,30 @@ import (
 // remove v keyed by k from the tree
 func (mt *merkleTreeImp) Delete(k []byte) error {
 	return errors.New("not implemented yet")
-	if len(k) == 0 {
-		return InvalidUserDataError
-	}
 
-	// first, attempt to find the value in the tree and return path to where value should be added
-	// in the case it is not already in the tree
-	res, stack, err := mt.Get(k)
-
-	if len(res) == 0 || err != nil {
-		return nil
-	}
-
-	mt.deleteUserValueFromStore(res)
-
-	hexKey := hex.EncodeToString(k)
-	log.Info("Deleting user data for key: %s...", hexKey)
-
-	err = mt.delete(hexKey, stack)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	//	if len(k) == 0 {
+	//		return InvalidUserDataError
+	//	}
+	//
+	//	// first, attempt to find the value in the tree and return path to where value should be added
+	//	// in the case it is not already in the tree
+	//	res, stack, err := mt.Get(k)
+	//
+	//	if len(res) == 0 || err != nil {
+	//		return nil
+	//	}
+	//
+	//	mt.deleteUserValueFromStorge(res)
+	//
+	//	hexKey := hex.EncodeToString(k)
+	//	log.Info("m Deleting user data for key: %s...", hexKey)
+	//
+	//	err = mt.delete(hexKey, stack)
+	//	if err != nil {
+	//		return err
+	//	}
+	//
+	//	return nil
 }
 
 // Deletes value from node at top of the stack from the tree

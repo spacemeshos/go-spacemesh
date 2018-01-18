@@ -56,20 +56,21 @@ func TestCryptoApi(t *testing.T) {
 	// test signatures
 	signature, err := priv.Sign(msgData)
 
-	assert.Nil(t, err, fmt.Sprintf("Signing error %v", err))
+	assert.Nil(t, err, fmt.Sprintf("signing error: %v", err))
 	ok, err := pub.Verify(msgData, signature)
-	assert.Nil(t, err, fmt.Sprintf("Sign verification error %v", err))
+	assert.Nil(t, err, fmt.Sprintf("sign verification error: %v", err))
+
 
 	assert.True(t, ok, "Failed to verify signature")
 
 	// test encrypting a message for pub by pub - anyone w pub can do that
 	cypherText, err := pub.Encrypt(msgData)
 
-	assert.Nil(t, err, fmt.Sprintf("Enc error %v", err))
+	assert.Nil(t, err, fmt.Sprintf("enc error: %v", err))
 
 	// test decryption
 	clearText, err := priv.Decrypt(cypherText)
-	assert.Nil(t, err, fmt.Sprintf("Dec error %v", err))
+	assert.Nil(t, err, fmt.Sprintf("dec error: %v", err))
 
 	assert.True(t, bytes.Equal(msgData, clearText), "expected same dec message")
 
