@@ -1,4 +1,4 @@
-package test
+package merkle
 
 import (
 	"bytes"
@@ -6,21 +6,20 @@ import (
 	"github.com/spacemeshos/go-spacemesh/assert"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/merkle"
 	"testing"
 )
 
 func TestEmptyTreeCreation(t *testing.T) {
 
 	userDb, treeDb := getDbPaths(t)
-	m, err := merkle.NewEmptyTree(userDb, treeDb)
+	m, err := NewEmptyTree(userDb, treeDb)
 	assert.NoErr(t, err, "failed to create new merkle tree")
 
 	root := m.GetRootNode()
 	assert.Nil(t, root, "expected empty tree")
 
 	hash := m.GetRootHash()
-	assert.True(t, bytes.Equal(merkle.EmptyTreeRootHash, hash), "unexpected empty tree root hash")
+	assert.True(t, bytes.Equal(EmptyTreeRootHash, hash), "unexpected empty tree root hash")
 
 	err = m.CloseDataStores()
 	assert.NoErr(t, err, "failed to close data stores")
@@ -30,7 +29,7 @@ func TestEmptyTreeCreation(t *testing.T) {
 func TestSimpleTreeOps(t *testing.T) {
 
 	userDb, treeDb := getDbPaths(t)
-	m, err := merkle.NewEmptyTree(userDb, treeDb)
+	m, err := NewEmptyTree(userDb, treeDb)
 	defer m.CloseDataStores() // we need to close the data stores when done w m - they are owned by m
 
 	assert.NoErr(t, err, "failed to create new merkle tree")
@@ -55,7 +54,7 @@ func TestSimpleTreeOps(t *testing.T) {
 
 	// restore tree to a new instance based on root hash
 	rootHash := m.GetRootHash()
-	m1, err := merkle.NewTreeFromDb(rootHash, userDb, treeDb)
+	m1, err := NewTreeFromDb(rootHash, userDb, treeDb)
 	defer m1.CloseDataStores() // tell m1 to close data stores when we are done w it
 
 	root = m1.GetRootNode()
@@ -99,7 +98,7 @@ func TestComplexTreeOps(t *testing.T) {
 	assert.NoErr(t, err, "failed to get random data")
 
 	userDb, treeDb := getDbPaths(t)
-	m, err := merkle.NewEmptyTree(userDb, treeDb)
+	m, err := NewEmptyTree(userDb, treeDb)
 	assert.NoErr(t, err, "failed to create new Merkle tree")
 	defer m.CloseDataStores() // we need to close the data stores when done w m - they are owned by m
 

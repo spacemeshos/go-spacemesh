@@ -8,10 +8,6 @@ import (
 	"errors"
 )
 
-var (
-	aesDecryptionError = errors.New("Aes decryption error")
-)
-
 // AES cipher following https://leanpub.com/gocrypto/read#leanpub-auto-aes-cbc
 func AesCTRXOR(key, input, nonce []byte) ([]byte, error) {
 	aesBlock, err := aes.NewCipher(key)
