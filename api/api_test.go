@@ -84,6 +84,7 @@ func TestJsonApi(t *testing.T) {
 	}
 
 	// Without this running this on Travis CI might generate a connection refused error
+	// because the server may not be ready to accept connections just yet.
 	time.Sleep(10 * time.Second)
 
 	url := fmt.Sprintf("http://127.0.0.1:%d/v1/example/echo", config.ConfigValues.JsonServerPort)

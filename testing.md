@@ -1,12 +1,10 @@
 ## Testing Notes
 
-### Code Coverage
-Follow these steps to view tests code coverage for a package:
-- cd to a package directory
-- `go test ./.... -coverprofile=cover.out`
-- `go tool cover -html=cover.out`
-
+### Generating a Code Coverage Report
+`make cover`
 
 ## Travis CI for cloud building & testing
-- Travis ci builds run all tests
+- Travis builds run all tests
+- A travis build is triggered for each PR
+- CI will fail if code is not proparly go formatted or one or more go vet check is failing.
 - https://travis-ci.org/spacemeshos/go-spacemesh
