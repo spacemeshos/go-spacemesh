@@ -167,7 +167,7 @@ func (s *swarmImpl) GetLocalNode() LocalNode {
 	return s.localNode
 }
 
-// Starts the bootsrap process
+// Starts the bootstrap process
 func (s *swarmImpl) bootstrap() {
 
 	s.localNode.Info("Starting bootstrap...")
@@ -261,7 +261,11 @@ func (s *swarmImpl) shutDownInternal() {
 		c.Close()
 	}
 
-	// shutdown netowk
+	for _, p := range s.peers {
+		p.DeleteAllConnections()
+	}
+
+	// shutdown network
 	s.network.Shutdown()
 }
 

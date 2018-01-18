@@ -71,8 +71,45 @@ Loop:
 	}
 }
 
+func TestBootstrap(t *testing.T) {
+
+	// setup:
+	//
+	// 1 boostrap node
+	//
+	// 10 nodes using bootsrap node
+	//
+	// each node asks for 5 random nodes and connects to them
+	// verify each node has an established session with 5 other nodes
+
+	bnode, _ := GenerateTestNode(t)
+	pd := bnode.GetRemoteNodeData()
+	bs := fmt.Sprintf("%s/%s", pd.Ip(), pd.Id())
+
+	// nodes bootstrap config
+	c := nodeconfig.ConfigValues
+	c.SwarmConfig.Bootstrap = true
+	c.SwarmConfig.RandomConnections = 5
+	c.SwarmConfig.BootstrapNodes = []string{bs}
+
+	nodes := make([]LocalNode, 0)
+
+	callbacks := make([]chan NodeEvent, 0)
+
+	for i := 0; i < 10; i++ {
+		n, _ := GenerateTestNodeWithConfig(t, c)
+		nodes = append(nodes, n)
+
+		callback := make(chan NodeEvent)
+		callbacks = append(callbacks, callback)
+		n.GetSwarm().RegisterNodeEventsCallback(callback)
+	}
+
+	// todo: use callbcack channels to verify that each node has established sessions with 5 remote random peers
+}
+
 // todo: fix me - this test is broken
-func testBootstrap(t *testing.T) {
+func TestBasicBootstrap(t *testing.T) {
 
 	// setup:
 	// node1 - bootstrap node
@@ -81,7 +118,6 @@ func testBootstrap(t *testing.T) {
 	// node2 - sends a ping to node3 knowing only its id but not dial info
 
 	node1Local, _ := GenerateTestNode(t)
-
 	pd := node1Local.GetRemoteNodeData()
 	bs := fmt.Sprintf("%s/%s", pd.Ip(), pd.Id())
 
