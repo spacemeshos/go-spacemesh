@@ -39,6 +39,8 @@ type netImpl struct {
 	messageSendErrors  chan MessageSendError
 
 	messageSentEvents chan MessageSentEvent
+
+	isShuttingDown bool
 }
 
 // Creates a new network
@@ -118,6 +120,7 @@ func (n *netImpl) DialTCP(address string, timeOut time.Duration, keepAlive time.
 }
 
 func (n *netImpl) Shutdown() {
+	n.isShuttingDown = true
 	n.tcpListener.Close()
 }
 
@@ -139,8 +142,10 @@ func (n *netImpl) acceptTcp() {
 		log.Info("Waiting for incoming connections...")
 		netConn, err := n.tcpListener.Accept()
 		if err != nil {
-			// this is triggered when network is closed
-			log.Warning("Failed to accept connection request: %v", err)
+
+			if !n.isShuttingDown {
+				log.Error("Failed to accept connection request: %v", err)
+			}
 			return
 		}
 

@@ -16,7 +16,7 @@ func GenerateTestNode(t *testing.T) (LocalNode, Peer) {
 // Generates a local test node without persisting data to local store
 func GenerateTestNodeWithConfig(t *testing.T, config nodeconfig.Config) (LocalNode, Peer) {
 
-	port := crypto.GetRandomUInt32(1000) + 10000
+	port := crypto.GetRandomUInt32(10000) + 1000
 	address := fmt.Sprintf("localhost:%d", port)
 
 	localNode, err := NewNodeIdentity(address, config, false)

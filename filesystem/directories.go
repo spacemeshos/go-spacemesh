@@ -140,20 +140,18 @@ func GetFullDirectoryPath(name string) (string, error) {
 	return aPath, err
 }
 
-// Deletes all subfolders and files in the spacemesh root data folder
+// Deletes all sub directories and files in the Spacemesh root data folder
 func DeleteSpaceMeshDataFolders(t *testing.T) {
 
 	aPath, err := GetSpaceMeshDataDirectoryPath()
 	if err != nil {
-		t.Fatalf("Failed to get spacemesh data dir", err)
+		t.Fatalf("Failed to get spacemesh data dir: %s", err)
 	}
 
 	// remove
 	err = os.RemoveAll(aPath)
 	if err != nil {
-		t.Fatalf("Failed to delete spacemesh data dir", err)
+		t.Fatalf("Failed to delete spacemesh data dir: %s", err)
 	}
 
-	// create the dir again
-	GetSpaceMeshDataDirectoryPath()
 }

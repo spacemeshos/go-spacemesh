@@ -53,7 +53,7 @@ type LocalNode interface {
 func NewLocalNode(tcpAddress string, config nodeconfig.Config, persist bool) (LocalNode, error) {
 
 	if len(nodeconfig.ConfigValues.NodeId) > 0 {
-		// user provided node id/pubkey via cli - attempt to start that node w persisted data
+		// user provided node id/pubkey via the cli - attempt to start that node w persisted data
 		data, err := readNodeData(nodeconfig.ConfigValues.NodeId)
 		if err != nil {
 			return nil, err
