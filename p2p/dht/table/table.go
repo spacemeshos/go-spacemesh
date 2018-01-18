@@ -24,7 +24,7 @@ type RoutingTable interface {
 	ListPeers(callback PeersOpChannel) // list all peers
 	Size(callback chan int)            // total # of peers in the table
 
-	// add/remove peers callbacks management - thread sfe
+	// add/remove peers callbacks management - thread safe
 	RegisterPeerRemovedCallback(c PeerChannel)   // get called when a  peer is removed
 	RegisterPeerAddedCallback(c PeerChannel)     // get called when a peer is added
 	UnregisterPeerRemovedCallback(c PeerChannel) // remove addition reg
@@ -69,9 +69,10 @@ type NearestPeersReq struct { // NearestPeer method req params
 // n2: 0 1 0 1 1 1
 // dist(l,n1) = xor(l,n1) = 0 1 1 1 1 0
 // dist(l,n2) = xor(l,n2) = 0 0 0 1 0 0
-// clp(l,n1) = 1 -> n1 => bucket[1]
-// clp(l,n2) = 3 -> n2 => bucket[3]
+// cpl(l,n1) = 1 -> n1 => bucket[1]
+// cpl(l,n2) = 3 -> n2 => bucket[3]
 // Closer nodes will appear in buckets with a higher index
+// Most recently-seen nodes appear in the top of their buckets while least-often seen nodes at the bottom
 type routingTableImpl struct {
 
 	// local peer ID
@@ -109,7 +110,7 @@ type routingTableImpl struct {
 	peerAddedCallbacks   map[string]PeerChannel
 }
 
-// NewRoutingTable creates a new routing table with a given bucketsize, local ID, and latency tolerance.
+// NewRoutingTable creates a new routing table with a given bucket=size and local node dht.ID
 func NewRoutingTable(bucketsize int, localID dht.ID) RoutingTable {
 	rt := &routingTableImpl{
 
@@ -308,16 +309,16 @@ func (rt *routingTableImpl) update(p node.RemoteNodeData) {
 
 		if id == len(rt.buckets)-1 { // last bucket
 
-			// We added the node to the last bucket and this bucket is overflowing
-			// Add a new bucket and possibly remove least active node from the table
+			// We added the node to the last bucket and this bucket is over-flowing
+			// Add a new bucket and possibly remove least-active node from the table
 			n := rt.addNewBucket()
 			if n != nil { // only notify if a node was removed
 				go func() { rt.peerRemoved <- n }()
 			}
 			return
 		} else {
-			// This is not the last bucket but it is overflowing - we remove the least active
-			// node from it to keep the number of nodes within the bucket size
+			// This is not the last bucket but it is overflowing
+			// We remove the least active node from it to keep the number of nodes within the bucket size
 			n := bucket.PopBack()
 			go func() { rt.peerRemoved <- n }()
 			return
@@ -343,7 +344,7 @@ func (rt *routingTableImpl) remove(p node.RemoteNodeData) {
 }
 
 // Adds a new bucket to the table
-// Returns a node that was removed from the table in case of an overflow
+// Returns a node that was removed from the table in case of an overflow, nil otherwise
 func (rt *routingTableImpl) addNewBucket() node.RemoteNodeData {
 
 	// the last bucket
