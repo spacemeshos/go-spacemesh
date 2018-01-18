@@ -132,9 +132,6 @@ func (app *SpaceMeshApp) getAppInfo() string {
 
 func (app *SpaceMeshApp) before(ctx *cli.Context) error {
 
-	// max out box for now
-	runtime.GOMAXPROCS(runtime.NumCPU())
-
 	// exit gracefully - e.g. with app cleanup on sig abort (ctrl-c)
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, os.Interrupt)
