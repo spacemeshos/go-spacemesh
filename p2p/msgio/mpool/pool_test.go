@@ -162,7 +162,7 @@ func TestPoolStressByteSlicePool(t *testing.T) {
 	if testing.Short() {
 		N /= 100
 	}
-	p := ByteSlicePool
+	p := &ByteSlicePool
 	done := make(chan bool)
 	errs := make(chan error)
 	for i := 0; i < P; i++ {
