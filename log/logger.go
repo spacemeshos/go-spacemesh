@@ -13,10 +13,7 @@ type SpaceMeshLogger struct {
 	Logger *logging.Logger
 }
 
-// general purpose logger
-
-// per local node logger
-
+// general-purpose logger
 var ulogger *SpaceMeshLogger
 
 func init() {

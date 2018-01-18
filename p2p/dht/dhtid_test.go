@@ -3,10 +3,38 @@ package dht
 import (
 	"encoding/hex"
 	"github.com/spacemeshos/go-spacemesh/assert"
-	//"github.com/spacemeshos/go-spacemesh/p2p"
 	"math/big"
 	"testing"
 )
+
+func TestIds(t *testing.T) {
+	id1 := NewIdFromBase58String("28Ru2rajv7ZQZ63mHLAcGrZgtG2kEAhKYP53Fp6fFs3At")
+	s := id1.Pretty()
+	assert.True(t, len(s)>0, "expected dht id")
+
+	_, err := NewIdFromHexString("xxxx")
+	assert.Err(t, err, "expected error")
+}
+
+func TestSorting(t *testing.T) {
+	id1, _ := NewIdFromHexString("aa726a40a408ff9fbdf627373cab566742114e2fd909eb4af4b6cbec67d6c604")
+	id2, _ := NewIdFromHexString("aa726a40a408ff9fbdf627373cab566742114e2fd909eb4af4b6cbec67d6c604")
+	id3, _ := NewIdFromHexString("aa826a40a408ff9fbdf627373cab566742114e2fd909eb4af4b6cbec67d6c604")
+	id4, _ := NewIdFromHexString("bb826a40a408ff9fbdf627373cab566742114e2fd909eb4af4b6cbec67d6c604")
+	id5, _ := NewIdFromHexString("1000000000000000000000000000000000000000000000000000000000000000")
+
+	ids := []ID {id5, id4, id3, id2}
+
+	sorted := id1.SortByDistance(ids)
+	assert.Equal(t, len(sorted), len(ids), "expected equal length")
+	for i:=0; i < len(sorted)-1;i++ {
+		item1 := sorted[i]
+		item2 := sorted[i+1]
+		assert.True(t, id1.Closer(item1, item2), "unexpected soring order")
+	}
+
+	assert.False(t, id1.Less(id1), "unexpected less")
+}
 
 func TestDhtIds(t *testing.T) {
 
