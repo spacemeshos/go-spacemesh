@@ -75,7 +75,7 @@ func (s *swarmImpl) onConnectionRequest(req node.RemoteNodeData) {
 		conn, err = s.network.DialTCP(req.Ip(), s.localNode.Config().DialTimeout, s.localNode.Config().ConnKeepAlive)
 		if err != nil {
 			s.sendNodeEvent(req.Id(), DISCONNECTED)
-			s.localNode.Error("failed to connect to remote node %s on advertised ip %s", req.Pretty(), req.Ip)
+			s.localNode.Error("failed to connect to remote node %s on advertised ip %s", req.Pretty(), req.Ip())
 			return
 		}
 
