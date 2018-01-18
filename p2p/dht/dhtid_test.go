@@ -60,14 +60,14 @@ func TestDhtIds(t *testing.T) {
 	assert.Equal(t, l, 256, "expected 256 cpl for id with itself")
 
 	l = id1.CommonPrefixLen(id3)
-	assert.Equal(t, l, 3, "expected cpl == 3")
+	assert.Equal(t, l, 3, "expected cpl == 3 bits")
 
 	// cpl(b7... ,b6...) == 7
 	l = id1.CommonPrefixLen(id4)
-	assert.Equal(t, l, 7, "expected cpl == 7")
+	assert.Equal(t, l, 7, "expected cpl == 7 bits")
 
 	l = id4.CommonPrefixLen(id1)
-	assert.Equal(t, l, 7, "expected cpl == 7")
+	assert.Equal(t, l, 7, "expected cpl == 7 bits")
 
 	// test less
 	assert.True(t, id3.Less(id1), "expected id3 less than id1")

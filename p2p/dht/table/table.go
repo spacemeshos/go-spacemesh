@@ -265,8 +265,7 @@ func (rt *routingTableImpl) processEvents() {
 	}
 }
 
-// String representation of a go pointer
-// Used to create string keys of unique objects
+// A string representation of a go pointer - Used to create string keys of runtime objects
 func getMemoryAddress(p interface{}) string {
 	return fmt.Sprintf("%p", p)
 }
@@ -279,20 +278,20 @@ func (rt *routingTableImpl) update(p node.RemoteNodeData) {
 		return
 	}
 
-	// determine node bucket ide
+	// determine node bucket based on cpl
 	cpl := p.DhtId().CommonPrefixLen(rt.local)
 
-	bucketId := cpl
-	if bucketId >= len(rt.buckets) {
-		// choose last bucket
-		bucketId = len(rt.buckets) - 1
+	id := cpl
+	if id >= len(rt.buckets) {
+		// choose the last bucket
+		id = len(rt.buckets) - 1
 	}
 
-	bucket := rt.buckets[bucketId]
+	bucket := rt.buckets[id]
 
 	if bucket.Has(p) {
-		// Move this node to the front as it is the most recently active
-		// Active nodes should be in the front of their buckets and least active one at the back
+		// Move this node to the front as it is the most-recently active node
+		// Active nodes should be in the front of their buckets and least-active one at the back
 		bucket.MoveToFront(p)
 		return
 	}
@@ -307,7 +306,7 @@ func (rt *routingTableImpl) update(p node.RemoteNodeData) {
 
 	if bucket.Len() > rt.bucketsize { // bucket overflows
 
-		if bucketId == len(rt.buckets)-1 { // last bucket
+		if id == len(rt.buckets) - 1 { // last bucket
 
 			// We added the node to the last bucket and this bucket is overflowing
 			// Add a new bucket and possibly remove least active node from the table
@@ -329,7 +328,6 @@ func (rt *routingTableImpl) update(p node.RemoteNodeData) {
 }
 
 // Remove a node from the routing table.
-// This is to be used when we are sure a node has disconnected completely.
 func (rt *routingTableImpl) remove(p node.RemoteNodeData) {
 
 	cpl := p.DhtId().CommonPrefixLen(rt.local)
@@ -344,14 +342,14 @@ func (rt *routingTableImpl) remove(p node.RemoteNodeData) {
 	go func() { rt.peerRemoved <- p }()
 }
 
-// Add a new bucket to the table
+// Adds a new bucket to the table
 // Returns a node that was removed from the table in case of an overflow
 func (rt *routingTableImpl) addNewBucket() node.RemoteNodeData {
 
-	// last bucket
+	// the last bucket
 	lastBucket := rt.buckets[len(rt.buckets)-1]
 
-	// new bucket
+	// the new bucket
 	newBucket := lastBucket.Split(len(rt.buckets)-1, rt.local)
 
 	rt.buckets = append(rt.buckets, newBucket)
@@ -361,8 +359,8 @@ func (rt *routingTableImpl) addNewBucket() node.RemoteNodeData {
 		return rt.addNewBucket()
 	}
 
-	// If all elements were on left side of the split and last bucket is full
 	if lastBucket.Len() > rt.bucketsize {
+		// If all elements were on left side of the split and last bucket is full
 		// We remove the least active node in the last bucket and return it
 		return lastBucket.PopBack()
 	}

@@ -93,9 +93,9 @@ func (b *bucketimpl) Len() int {
 	return b.list.Len()
 }
 
-// Split bucket's nodes into two buckets.
-// The receiver bucket will have peers with CPL equal to cpl.
-// The returned bucket will have peers with CPL greater than cpl (returned bucket has closer peers)
+// Splits bucket b nodes into two buckets.
+// The receiver bucket will have peers with CPL equal to cpl with target
+// The returned bucket will have peers with CPL greater than cpl with target (closer peers)
 func (b *bucketimpl) Split(cpl int, target dht.ID) Bucket {
 	newbucket := NewBucket()
 	e := b.list.Front()
