@@ -4,11 +4,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht/table"
 	"math/rand"
-	"runtime"
 	"testing"
 	"time"
 )
-
 
 func TestTableCallbacks(t *testing.T) {
 	const n = 100
@@ -162,8 +160,6 @@ func TestTableFindCount(t *testing.T) {
 		rt.Update(nodes[i])
 	}
 
-	//t.Logf("Searching for peer: '%s'", nodes[2].Id())
-
 	// create callback to receive result
 	callback := make(table.PeersOpChannel, 2)
 
@@ -182,8 +178,6 @@ func TestTableFindCount(t *testing.T) {
 }
 
 func TestTableMultiThreaded(t *testing.T) {
-
-	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	const n = 5000
 	const i = 15

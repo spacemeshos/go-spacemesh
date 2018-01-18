@@ -306,7 +306,7 @@ func (rt *routingTableImpl) update(p node.RemoteNodeData) {
 
 	if bucket.Len() > rt.bucketsize { // bucket overflows
 
-		if id == len(rt.buckets) - 1 { // last bucket
+		if id == len(rt.buckets)-1 { // last bucket
 
 			// We added the node to the last bucket and this bucket is overflowing
 			// Add a new bucket and possibly remove least active node from the table

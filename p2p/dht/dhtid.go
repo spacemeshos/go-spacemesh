@@ -88,7 +88,7 @@ func (id ID) ZeroPrefixLen() int {
 	return len(id) * 8
 }
 
-// Returns true if id1 is closer to id3 than id2 is
+// Returns true if id1 is closer to id3 than id2
 func (id ID) Closer(id1 ID, id2 ID) bool {
 	dist1 := id.Xor(id1)
 	dist2 := id.Xor(id2)
