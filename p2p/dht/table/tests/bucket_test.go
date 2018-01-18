@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"github.com/spacemeshos/go-spacemesh/assert"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht/table"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
@@ -37,7 +38,9 @@ func TestBucket(t *testing.T) {
 
 	// remove random nodes
 	i = rand.Intn(len(nodes))
-	b.Remove(nodes[i])
+	removed := b.Remove(nodes[i])
+	assert.True(t, removed, "expected node to be removed")
+
 	if b.Has(nodes[i]) {
 		t.Errorf("expected node to be removed: %v", nodes[i])
 	}

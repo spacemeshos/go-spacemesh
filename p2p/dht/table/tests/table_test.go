@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht/table"
 	"math/rand"
@@ -40,6 +41,18 @@ Loop:
 		}
 	}
 
+	sizeChan := make(chan int)
+	size := 0
+
+	rt.Size(sizeChan)
+
+	select {
+		case s := <- sizeChan:
+			size = s
+			log.Info("%d nodes in table", size)
+			//assert.True(t, s == n, fmt.Sprintf("unexpected nubmer of items %d, %d", s, n))
+	}
+
 	callback = make(table.PeerChannel, 3)
 	callbackIdx = 0
 	rt.RegisterPeerRemovedCallback(callback)
@@ -53,10 +66,10 @@ Loop1:
 		select {
 		case <-callback:
 			callbackIdx++
-			if callbackIdx == n {
+			if callbackIdx == size {
 				break Loop1
 			}
-		case <-time.After(time.Second * 5):
+		case <-time.After(time.Second * 10):
 			t.Fatalf("Failed to get expected remove callbacks on time")
 			break Loop1
 		}

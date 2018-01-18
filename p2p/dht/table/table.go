@@ -329,6 +329,8 @@ func (rt *routingTableImpl) update(p node.RemoteNodeData) {
 }
 
 // Remove a node from the routing table.
+// Callback to peerRemoved will be called if node was in table and was removed
+// If node wasn't in the table then remove doesn't have any side effects on the table
 func (rt *routingTableImpl) remove(p node.RemoteNodeData) {
 
 	cpl := p.DhtId().CommonPrefixLen(rt.local)
@@ -338,9 +340,11 @@ func (rt *routingTableImpl) remove(p node.RemoteNodeData) {
 	}
 
 	bucket := rt.buckets[bucketId]
-	bucket.Remove(p)
+	removed := bucket.Remove(p)
 
-	go func() { rt.peerRemoved <- p }()
+	if removed {
+		go func() { rt.peerRemoved <- p }()
+	}
 }
 
 // Adds a new bucket to the table
