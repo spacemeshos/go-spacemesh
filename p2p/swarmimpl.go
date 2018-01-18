@@ -130,7 +130,7 @@ func (s *swarmImpl) sendNodeEvent(peerId string, state NodeState) {
 
 	evt := NodeEvent{peerId, state}
 	for _, c := range s.nec {
-		go func() { c <- evt }()
+		go func(c NodeEventCallback) { c <- evt }(c)
 	}
 }
 
