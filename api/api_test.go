@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestServersConfig(t *testing.T) {
@@ -81,6 +82,8 @@ func TestJsonApi(t *testing.T) {
 		t.Fatalf("m.MarshalToString(%#v) failed with %v; want success", payload, err)
 		return
 	}
+
+	time.Sleep(3 * time.Second)
 
 	url := fmt.Sprintf("http://127.0.0.1:%d/v1/example/echo", config.ConfigValues.JsonServerPort)
 	resp, err := http.Post(url, contentType, strings.NewReader(payload))
