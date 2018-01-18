@@ -1,6 +1,24 @@
 package nodeconfig
 
-import "time"
+import (
+	"time"
+	"gopkg.in/urfave/cli.v1"
+)
+
+var NodeConfigUints = map[string]*uint {
+	"tcp-port": &ConfigValues.TcpPort,
+	"security-param" : &ConfigValues.SecurityParam,
+	"swarm-rtbs": &SwarmConfigValues.RoutingTableBucketSize,
+	"swarm-rtalpha": &SwarmConfigValues.RoutingTableAlpha,
+	"swarm-randcon": &SwarmConfigValues.RandomConnections,
+
+}
+
+var NodeConfigDurations = map[string]*time.Duration {
+	"dial-timeout": &ConfigValues.DialTimeout,
+	"conn-keepalive": &ConfigValues.ConnKeepAlive,
+}
+
 
 // Default node config values
 var ConfigValues = Config{
@@ -19,7 +37,7 @@ var SwarmConfigValues = SwarmConfig{
 	RoutingTableBucketSize: 20,
 	RoutingTableAlpha:      3,
 	RandomConnections:      5,
-	BootstrapNodes: []string{ // these should be the spacemesh foundation bootstrap nodes
+	BootstrapNodes: cli.StringSlice{ // these should be the spacemesh foundation bootstrap nodes
 		"125.0.0.1:3572/iaMujEYTByKcjMZWMqg79eJBGMDm8ADsWZFdouhpfeKj",
 		"125.0.0.1:3763/x34UDdiCBAsXmLyMMpPQzs313B9UDeHNqFpYsLGfaFvm",
 	},
@@ -30,19 +48,19 @@ func init() {
 }
 
 type Config struct {
-	SecurityParam uint          `toml:"-"`
-	FastSync      bool          `toml:"-"`
-	TcpPort       uint          `toml:"-"`
-	NodeId        string        `toml:"-"`
-	DialTimeout   time.Duration `toml:"-"`
-	ConnKeepAlive time.Duration `toml:"-"`
-	SwarmConfig   SwarmConfig   `toml:"-"`
+	SecurityParam uint
+	FastSync      bool
+	TcpPort       uint
+	NodeId        string
+	DialTimeout   time.Duration
+	ConnKeepAlive time.Duration
+	SwarmConfig   SwarmConfig
 }
 
 type SwarmConfig struct {
-	Bootstrap              bool     `toml:"-"`
-	RoutingTableBucketSize uint     `toml:"-"`
-	RoutingTableAlpha      uint     `toml:"-"`
-	RandomConnections      uint     `toml:"-"`
-	BootstrapNodes         []string `toml:"-"`
+	Bootstrap              bool
+	RoutingTableBucketSize uint
+	RoutingTableAlpha      uint
+	RandomConnections      uint
+	BootstrapNodes         cli.StringSlice
 }

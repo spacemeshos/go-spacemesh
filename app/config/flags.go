@@ -2,6 +2,7 @@ package config
 
 import (
 	"gopkg.in/urfave/cli.v1"
+	"gopkg.in/urfave/cli.v1/altsrc"
 )
 
 var (
@@ -10,12 +11,14 @@ var (
 		Usage:       "Load configuration from `FILE`",
 		Value:       ConfigValues.ConfigFilePath,
 		Destination: &ConfigValues.ConfigFilePath,
+		EnvVar: "CONFIG_FILE",
 	}
 
-	DataFolderPathFlag = cli.StringFlag{
-		Name:        "dataFolder, df",
+	DataFolderPathFlag = altsrc.NewStringFlag(cli.StringFlag{
+		Name:        "data-folder",
 		Usage:       "Set root data folder`",
 		Value:       ConfigValues.DataFilePath,
 		Destination: &ConfigValues.DataFilePath,
-	}
+		EnvVar:"DATA_FOLDER",
+	})
 )

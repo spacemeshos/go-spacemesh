@@ -16,13 +16,12 @@ import (
 const OwnerReadWriteExec = 0700
 const OwnerReadWrite = 0600
 
-// Return true iff file exists and is accessible
+// Return true if file exists and is accessible
 func PathExists(path string) bool {
-	_, err := os.Stat(path)
-	if os.IsNotExist(err) {
+	if _, err := os.Stat(path); os.IsNotExist(err) || os.IsPermission(err) {
 		return false
 	}
-	return err != nil
+	return true
 }
 
 // Get the full os-specific path to the spacemesh top-level data directory

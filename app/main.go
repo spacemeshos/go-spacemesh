@@ -10,6 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"gopkg.in/urfave/cli.v1"
+	"gopkg.in/urfave/cli.v1/altsrc"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -44,7 +45,11 @@ var (
 		nodeparams.NodeIdFlag,
 		nodeparams.NetworkDialTimeout,
 		nodeparams.NetworkConnKeepAlive,
-
+		nodeparams.SwarmBootstrap,
+		nodeparams.RoutingTableBucketSizdFlag,
+		nodeparams.RoutingTableAlphaFlag,
+		nodeparams.RandomConnectionsFlag,
+		nodeparams.BootstrapNodesFlag,
 		// add all additional node flags here ...
 	}
 	apiFlags = []cli.Flag{
@@ -145,6 +150,25 @@ func (app *SpaceMeshApp) before(ctx *cli.Context) error {
 		}
 	}()
 
+	if configPath := filesystem.GetCanonicalPath(config.ConfigValues.ConfigFilePath); len(configPath) > 1 {
+		if (filesystem.PathExists(configPath)) {
+			log.Info("Loading config file (path): %v", configPath)
+			err := altsrc.InitInputSourceWithContext(ctx.App.Flags, func(context *cli.Context) (altsrc.InputSourceContext, error) {
+				toml, err := altsrc.NewTomlSourceFromFile(configPath);
+				config.CastConfigUints(toml, []map[string]*uint{nodeparams.NodeConfigUints, apiconf.ApiConfigUints})
+				//config.CastConfigDurations(toml, []map[string]*time.Duration{nodeparams.NodeConfigDurations})
+				return toml, err
+			})(ctx)
+			if err != nil {
+				log.Warning("Config file had an error: %v", err)
+			}
+		} else {
+			log.Warning("Coun'nt find config file %v", configPath)
+		}
+	} else {
+		log.Warning("No config file defined using default config")
+	}
+
 	// todo: add misc app setup here (metrics, debug, etc....)
 
 	// ensure all data folders exist
@@ -177,8 +201,8 @@ func (app *SpaceMeshApp) cleanup(ctx *cli.Context) error {
 }
 
 func (app *SpaceMeshApp) startSpaceMeshNode(ctx *cli.Context) error {
-
-	log.Info("Starting local node...")
+	fmt.Println("#$@!#@!#!@#!@#!@# %v", apiconf.ConfigValues)
+	fmt.Println("#$@!#@!#!@#!@#!@# %v", nodeparams.ConfigValues)
 	port := *nodeparams.LocalTcpPortFlag.Destination
 	address := fmt.Sprintf("0.0.0.0:%d", port)
 

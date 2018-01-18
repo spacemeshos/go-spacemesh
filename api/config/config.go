@@ -2,6 +2,11 @@ package config
 
 // Provide Config struct with default values
 
+var ApiConfigUints = map[string]*uint{
+	"grpc-port": &ConfigValues.GrpcServerPort,
+	"json-port": &ConfigValues.JsonServerPort,
+}
+
 // Config values with defaults
 var ConfigValues = Config{
 	StartGrpcServer: false, // note: all bool flags default to false so don't set one of these to true here
@@ -15,8 +20,8 @@ func init() {
 }
 
 type Config struct {
-	StartGrpcServer bool `toml:"-"`
-	GrpcServerPort  uint `toml:"-"`
-	StartJsonServer bool `toml:"-"`
-	JsonServerPort  uint `toml:"-"`
+	StartGrpcServer bool
+	GrpcServerPort  uint
+	StartJsonServer bool
+	JsonServerPort  uint
 }
