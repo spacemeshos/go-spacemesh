@@ -47,10 +47,10 @@ Loop:
 	rt.Size(sizeChan)
 
 	select {
-		case s := <- sizeChan:
-			size = s
-			log.Info("%d nodes in table", size)
-			//assert.True(t, s == n, fmt.Sprintf("unexpected nubmer of items %d, %d", s, n))
+	case s := <-sizeChan:
+		size = s
+		log.Info("%d nodes in table", size)
+		//assert.True(t, s == n, fmt.Sprintf("unexpected nubmer of items %d, %d", s, n))
 	}
 
 	callback = make(table.PeerChannel, 3)

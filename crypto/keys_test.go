@@ -60,7 +60,6 @@ func TestCryptoApi(t *testing.T) {
 	ok, err := pub.Verify(msgData, signature)
 	assert.Nil(t, err, fmt.Sprintf("sign verification error: %v", err))
 
-
 	assert.True(t, ok, "Failed to verify signature")
 
 	// test encrypting a message for pub by pub - anyone w pub can do that
