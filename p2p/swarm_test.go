@@ -75,9 +75,9 @@ func TestBootstrap(t *testing.T) {
 
 	// setup:
 	//
-	// 1 boostrap node
+	// 1 bootstrap node
 	//
-	// 10 nodes using bootsrap node
+	// 10 nodes using bootstrap node
 	//
 	// each node asks for 5 random nodes and connects to them
 	// verify each node has an established session with 5 other nodes
@@ -105,7 +105,26 @@ func TestBootstrap(t *testing.T) {
 		n.GetSwarm().RegisterNodeEventsCallback(callback)
 	}
 
-	// todo: use callbcack channels to verify that each node has established sessions with 5 remote random peers
+	// todo: use callback channels to verify that each node has established sessions with 5 remote random peers
+
+	/*
+	var sessions uint64 = 0
+	for i := 0; i < 10; i++ {
+		for {
+			select {
+				case c := <- callbacks[i] :
+					if c.State == SESSION_ESTABLISHED {
+						atomic.AddUint64(&sessions, 1)
+					}
+
+					s := atomic.LoadUint64(&sessions)
+					if s >= 100 {
+						return
+					}
+
+			}
+		}
+	}*/
 }
 
 // todo: fix me - this test is broken
