@@ -91,12 +91,12 @@ func NewAccount(passphrase string) (*Account, error) {
 
 	// store kd data
 	kdParams := crypto.KDParams{
-		N:kdfParams.N,
-		R: kdfParams.R,
-		P: kdfParams.P,
+		N:       kdfParams.N,
+		R:       kdfParams.R,
+		P:       kdfParams.P,
 		SaltLen: kdfParams.SaltLen,
-		DKLen: kdfParams.DKLen,
-		Salt: kdfParams.Salt,
+		DKLen:   kdfParams.DKLen,
+		Salt:    kdfParams.Salt,
 	}
 
 	// save all date in newly created account obj
