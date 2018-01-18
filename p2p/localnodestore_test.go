@@ -29,9 +29,26 @@ func TestNodeLocalStore(t *testing.T) {
 	_, err = node.ensureNodeDataDirectory()
 	assert.NoErr(t, err, "failed to ensure node data directory")
 
+	// shutdown node as we'd like to start a new one with same ip:port on local host
 	node.Shutdown()
 
+	data, err := readNodeData(node.String())
+	assert.NoErr(t, err, "failed to ensure node data directory")
+	assert.NotNil(t, data, "expected node data")
+	assert.Equal(t, data.PubKey, node.String(), "expected same node id")
+
+	// as we deleted all dirs - first node data in nodes fodler should be this
+	// node's data
+	data1, err := readFirstNodeData()
+	assert.NoErr(t, err, "failed to ensure node data directory")
+	assert.NotNil(t, data1, "expected node data")
+	assert.Equal(t, data1.PubKey, node.String(), "expected same node id")
+
+	// create a new local node from persisted node data
 	node1, err := NewLocalNode(address, nodeconfig.ConfigValues, true)
-	assert.Equal(t, node.String(),node1.String(), "expected restored node")
+	assert.Equal(t, node.String(), node1.String(), "expected restored node")
+
+	// cleanup
+	filesystem.DeleteSpaceMeshDataFolders(t)
 
 }

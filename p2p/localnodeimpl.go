@@ -41,12 +41,7 @@ func (n *localNodeImp) NewProtocolMessageMetadata(protocol string, reqId []byte,
 	}
 }
 
-func (n *localNodeImp) SendMessage(req SendMessageReq) {
-	// let the swarm handle
-	//n.swarm.SendMessage(req)
-}
-
-// helper - return remote node data of this node
+// Returns remote node data for this node
 func (n *localNodeImp) GetRemoteNodeData() node.RemoteNodeData {
 	return node.NewRemoteNodeData(n.String(), n.TcpAddress())
 }
@@ -55,9 +50,8 @@ func (n *localNodeImp) Config() nodeconfig.Config {
 	return n.config
 }
 
+// Shuts down local node
 func (n *localNodeImp) Shutdown() {
-
-	// todo - kill swarm and stop all services grpc, http-json, etc...
 
 	// shutdown swarm
 	n.swarm.Shutdown()

@@ -10,7 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 )
 
-// The local spacemesh node is the root of all evil
+// The local Spacemesh node is the root of all evil
 type LocalNode interface {
 	Id() []byte
 	String() string
@@ -21,8 +21,6 @@ type LocalNode interface {
 
 	DhtId() dht.ID
 	TcpAddress() string
-
-	SendMessage(req SendMessageReq)
 
 	Sign(data proto.Message) ([]byte, error)
 	SignToString(data proto.Message) (string, error)
@@ -101,13 +99,14 @@ func newLocalNodeWithKeys(pubKey crypto.PublicKey, privKey crypto.PrivateKey, tc
 	if err != nil {
 		return nil, err
 	}
+
 	// setup logging
 	n.logger = log.CreateLogger(n.pubKey.Pretty(), dataDir, "node.log")
 
 	// swarm owned by node
 	s, err := NewSwarm(tcpAddress, n)
 	if err != nil {
-		log.Error("can't create a local node without a swarm", err)
+		n.Error("can't create a local node without a swarm", err)
 		return nil, err
 	}
 
@@ -118,7 +117,7 @@ func newLocalNodeWithKeys(pubKey crypto.PublicKey, privKey crypto.PrivateKey, tc
 		// persist store data so we can start it on future app sessions
 		err = n.persistData()
 		if err != nil { // no much use of starting if we can't store node private key in store
-			log.Error("failed to persist node data to local store", err)
+			n.Error("failed to persist node data to local store", err)
 			return nil, err
 		}
 	}

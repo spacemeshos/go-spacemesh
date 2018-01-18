@@ -71,7 +71,7 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 	s := &swarmImpl{
 		localNode: l,
 		network:   n,
-		shutdown:      make(chan bool), // non-buffered so requests to shutdown block until swarm is shut down
+		shutdown:  make(chan bool), // non-buffered so requests to shutdown block until swarm is shut down
 
 		nec: make(nodeEventCallbacks, 0),
 
@@ -104,7 +104,7 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 	// findNode dht protocol
 	s.findNodeProtocol = NewFindNodeProtocol(s)
 
-	s.localNode.Info("Created swarm %s for local node %s", tcpAddress, l.Pretty())
+	s.localNode.Info("Created swarm for local node %s", tcpAddress, l.Pretty())
 
 	s.handshakeProtocol = NewHandshakeProtocol(s)
 	s.handshakeProtocol.RegisterNewSessionCallback(s.newSessions)
@@ -236,7 +236,7 @@ func (s *swarmImpl) ConnectToRandomNodes(count int) {
 	}
 }
 
-// Send a message to a remote node
+// Sends a message to a remote node
 // Swarm will establish session if needed or use an existing session and open connection
 // Designed to be used by any high level protocol
 // req.reqId: globally unique id string - used for tracking messages we didn't get a response for yet
@@ -254,6 +254,17 @@ func (s *swarmImpl) Shutdown() {
 	s.shutdown <- true
 }
 
+func (s *swarmImpl) shutDownInternal() {
+
+	// close all open connections
+	for _, c := range s.connections {
+		c.Close()
+	}
+
+	// shutdown netowk
+	s.network.Shutdown()
+}
+
 // Swarm serial event processing
 // provides concurrency safety as only one callback is executed at a time
 // so there's no need for sync internal data structures
@@ -263,8 +274,7 @@ Loop:
 	for {
 		select {
 		case <-s.shutdown:
-			// todo: gracefully shut down all connections here
-			s.network.Shutdown()
+			s.shutDownInternal()
 			break Loop
 
 		case c := <-s.network.GetNewConnections():
