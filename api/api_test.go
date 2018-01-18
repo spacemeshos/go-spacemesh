@@ -1,9 +1,8 @@
-package tests
+package api
 
 import (
 	"fmt"
 	"github.com/golang/protobuf/jsonpb"
-	api "github.com/spacemeshos/go-spacemesh/api"
 	config "github.com/spacemeshos/go-spacemesh/api/config"
 	pb "github.com/spacemeshos/go-spacemesh/api/pb"
 	"github.com/spacemeshos/go-spacemesh/assert"
@@ -21,8 +20,8 @@ func TestServersConfig(t *testing.T) {
 	config.ConfigValues.GrpcServerPort = 9092
 	config.ConfigValues.JsonServerPort = 9031
 
-	grpcService := api.NewGrpcService()
-	jsonService := api.NewJsonHttpServer()
+	grpcService := NewGrpcService()
+	jsonService := NewJsonHttpServer()
 
 	assert.Equal(t, grpcService.Port, config.ConfigValues.GrpcServerPort, "Expected same port")
 	assert.Equal(t, jsonService.Port, config.ConfigValues.JsonServerPort, "Expected same port")
@@ -34,7 +33,7 @@ func TestGrpcApi(t *testing.T) {
 	const message = "Hello World"
 	config.ConfigValues.GrpcServerPort = port
 
-	grpcService := api.NewGrpcService()
+	grpcService := NewGrpcService()
 
 	// start a server
 	grpcService.StartService()
@@ -64,8 +63,8 @@ func TestGrpcApi(t *testing.T) {
 
 func TestJsonApi(t *testing.T) {
 
-	grpcService := api.NewGrpcService()
-	jsonService := api.NewJsonHttpServer()
+	grpcService := NewGrpcService()
+	jsonService := NewJsonHttpServer()
 
 	// start grp and json server
 	grpcService.StartService()
