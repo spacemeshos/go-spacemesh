@@ -46,13 +46,13 @@ type merkleTreeImp struct {
 func NewEmptyTree(userDataFileName string, treeDataFileName string) (MerkleTree, error) {
 	userData, err := leveldb.OpenFile(userDataFileName, nil)
 	if err != nil {
-		log.Error("Failed to open user db %v", err)
+		log.Error("Failed to open user db", err)
 		return nil, err
 	}
 
 	treeData, err := leveldb.OpenFile(treeDataFileName, nil)
 	if err != nil {
-		log.Error("Failed to open tree db %v", err)
+		log.Error("Failed to open tree db", err)
 		return nil, err
 	}
 

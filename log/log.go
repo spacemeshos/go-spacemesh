@@ -15,7 +15,7 @@ type SpaceMeshLogger struct {
 	Logger *logging.Logger
 }
 
-// uLogger is per local node logger.
+// uLogger is per local app singleton logger.
 var ulogger *SpaceMeshLogger
 
 func init() {
@@ -23,7 +23,7 @@ func init() {
 	// This logger is going to be used by tests when an app was is created
 	log := logging.MustGetLogger("app")
 	log.ExtraCalldepth = 1
-	logFormat := logging.MustStringFormatter(`%{color}%{time:15:04:05.000} %{shortpkg} %{shortfunc} ▶ %{level:.4s} %{id:03x}%{color:reset} %{message}`)
+	logFormat := logging.MustStringFormatter(`%{color}%{level:.4s} %{id:03x} %{time:15:04:05.000} %{shortpkg}.%{shortfunc} ▶%{color:reset} %{message}`)
 	backend := logging.NewLogBackend(os.Stdout, "", 0)
 	backendFormatter := logging.NewBackendFormatter(backend, logFormat)
 	logging.SetBackend(backendFormatter)
@@ -31,12 +31,12 @@ func init() {
 
 }
 
-// CreateLogger creates a logger for a module.
+// CreateLogger creates a logger for a module. e.g. a node-specific logger
 func CreateLogger(module string, dataFolderPath string, logFileName string) *logging.Logger {
 
 	log := logging.MustGetLogger(module)
 	log.ExtraCalldepth = 1
-	logFormat := logging.MustStringFormatter(` %{color}%{time:15:04:05.000} %{shortpkg} %{shortfunc} ▶ %{level:.4s} %{id:03x}%{color:reset} %{message}`)
+	logFormat := logging.MustStringFormatter(` %{color}%{level:.4s} %{id:03x} %{time:15:04:05.000} %{shortpkg}.%{shortfunc} ▶%{color:reset} %{message}`)
 	backend := logging.NewLogBackend(os.Stderr, module, 0)
 	backendFormatter := logging.NewBackendFormatter(backend, logFormat)
 
@@ -51,7 +51,7 @@ func CreateLogger(module string, dataFolderPath string, logFileName string) *log
 	}
 
 	fileLoggerBackend := logging.NewLogBackend(fileLogger, "", 0)
-	logFileFormat := logging.MustStringFormatter(` %{time:15:04:05.000} %{level:.4s}-%{id:03x} %{shortpkg}.%{shortfunc} ▶ %{message}`)
+	logFileFormat := logging.MustStringFormatter(` %{time:15:04:05.000} %{level:.4s} %{id:03x} %{shortpkg}.%{shortfunc} ▶ %{message}`)
 	fileBackendFormatter := logging.NewBackendFormatter(fileLoggerBackend, logFileFormat)
 
 	logging.SetBackend(backendFormatter, fileBackendFormatter)
@@ -67,7 +67,7 @@ func InitSpaceMeshLoggingSystem(dataFolderPath string, logFileName string) {
 	// we wrap all log calls so we need to add 1 to call depth
 	log.ExtraCalldepth = 1
 
-	logFormat := logging.MustStringFormatter(`%{color}%{time:15:04:05.000} %{shortpkg} %{shortfunc} ▶ %{level:.4s} %{id:03x}%{color:reset} %{message}`)
+	logFormat := logging.MustStringFormatter(`%{color}%{level:.4s} %{id:03x} %{time:15:04:05.000} %{shortpkg}.%{shortfunc}%{color:reset} ▶ %{message}`)
 	backend := logging.NewLogBackend(os.Stderr, "", 0)
 	backendFormatter := logging.NewBackendFormatter(backend, logFormat)
 

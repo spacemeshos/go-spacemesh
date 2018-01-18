@@ -74,6 +74,7 @@ func (p *pingProtocolImpl) Send(msg string, reqId []byte, remoteNodeId string) {
 	// marshal the signed data
 	payload, err := proto.Marshal(data)
 	if err != nil {
+		log.Error("failed to marshal data", err)
 		return
 	}
 
@@ -95,11 +96,12 @@ func (p *pingProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 	req := &pb.PingReqData{}
 	err := proto.Unmarshal(msg.Payload(), req)
 	if err != nil {
-		log.Warning("Invalid ping request data: %v", err)
+		log.Warning("Invalid ping request data", err)
 		return
 	}
 
 	peer := msg.Sender()
+
 	log.Info("Incoming ping peer request from %s. Message: s%", peer.Pretty(), req.Ping)
 
 	// add/update local dht table
@@ -143,7 +145,7 @@ func (p *pingProtocolImpl) handleIncomingResponse(msg IncomingMessage) {
 	if err != nil {
 		// we can't extract the request id from the response so we just terminate
 		// without sending a callback - this case should be handeled as a timeout
-		log.Error("Invalid ping request data: %v", err)
+		log.Error("Invalid ping request data", err)
 		return
 	}
 

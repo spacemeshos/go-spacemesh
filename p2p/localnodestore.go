@@ -19,35 +19,37 @@ type NodeData struct {
 
 // Node store - local node data persistence functionality
 
-// Get the os-specific full path to the nodes master data directory
+// Gets the os-specific full path to the nodes master data directory
 // Attempts to create the directory on-demand
-func ensureNodesDataDirectory() string {
+func ensureNodesDataDirectory() (string, error) {
 	dataPath, err := filesystem.GetSpaceMeshDataDirectoryPath()
-	nodesDir := filepath.Join(dataPath, nodeconfig.NodesDirectoryName)
-	nodesPath, err := filesystem.GetFullDirectoryPath(nodesDir)
 	if err != nil {
-		log.Error("can't access spacemesh nodes folder")
-
+		return "", err
 	}
-	return nodesPath
+
+	nodesDir := filepath.Join(dataPath, nodeconfig.NodesDirectoryName)
+	return filesystem.GetFullDirectoryPath(nodesDir)
 }
 
-// Get the path to the node's data directory, e.g. /nodes/[node-id]/
+// Gets the path to the node's data directory, e.g. /nodes/[node-id]/
 // Directory will be created on demand if it doesn't exist
-func (n *localNodeImp) ensureNodeDataDirectory() string {
-	nodesDataDir := ensureNodesDataDirectory()
-	nodeDirectoryName := filepath.Join(nodesDataDir, n.String())
-	path, err := filesystem.GetFullDirectoryPath(nodeDirectoryName)
+func (n *localNodeImp) ensureNodeDataDirectory() (string, error) {
+	nodesDataDir, err := ensureNodesDataDirectory()
 	if err != nil {
-		log.Error("can't access node %s folder", n.Pretty())
+		return "", err
 	}
-	return path
+	nodeDirectoryName := filepath.Join(nodesDataDir, n.String())
+	return filesystem.GetFullDirectoryPath(nodeDirectoryName)
 }
 
 // Returns the os-specific full path to the node's data file
-func getDataFilePath(nodeId string) string {
-	nodesDataDir := ensureNodesDataDirectory()
-	return filepath.Join(nodesDataDir, nodeId, nodeconfig.NodeDataFileName)
+func getDataFilePath(nodeId string) (string, error) {
+	nodesDataDir, err := ensureNodesDataDirectory()
+	if err != nil {
+		return "", err
+	}
+
+	return filepath.Join(nodesDataDir, nodeId, nodeconfig.NodeDataFileName), nil
 }
 
 // Persist node's data to local store
@@ -60,50 +62,54 @@ func (n *localNodeImp) persistData() error {
 
 	bytes, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
-		log.Error("failed to marshal node data to json: %v", err)
 		return err
 	}
 
-	n.ensureNodeDataDirectory()
-	path := getDataFilePath(n.String())
-	err = ioutil.WriteFile(path, bytes, filesystem.OwnerReadWrite)
+	_, err = n.ensureNodeDataDirectory()
 	if err != nil {
-		log.Error("failed to persist node data. %v", err)
+		return err
 	}
-	return err
+
+	path, err := getDataFilePath(n.String())
+	if err != nil {
+		return err
+	}
+
+	return ioutil.WriteFile(path, bytes, filesystem.OwnerReadWrite)
 }
 
 // Read node persisted data based on node id
-func readNodeData(nodeId string) *NodeData {
+func readNodeData(nodeId string) (*NodeData, error) {
 
-	path := getDataFilePath(nodeId)
+	path, err := getDataFilePath(nodeId)
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
-		log.Error("failed to read node data from file: %v", err)
-		return nil
+		return nil, err
 	}
 
 	var nodeData NodeData
 	err = json.Unmarshal(data, &nodeData)
 	if err != nil {
-		log.Error("failed to unmarshal nodeData. %v", err)
-		return nil
+		return nil, err
 	}
 
-	log.Info("loaded peristed node data for node id: %s", nodeId)
-	return &nodeData
+	log.Info("loaded persisted node data for node id: %s", nodeId)
+	return &nodeData, nil
 }
 
 // Read node data from the data folder.
 // Reads a random node from the data folder if more than one node data file is persisted
 // To load a specific node on startup - users need to pass the node id using a cli arg
-func readFirstNodeData() *NodeData {
+func readFirstNodeData() (*NodeData, error) {
 
-	path := ensureNodesDataDirectory()
+	path, err := ensureNodesDataDirectory()
+	if err != nil {
+		return nil, err
+	}
+
 	files, err := ioutil.ReadDir(path)
 	if err != nil {
-		log.Error("failed to read node directory files. %v", err)
-		return nil
+		return nil, err
 	}
 
 	// only consider json files
@@ -113,5 +119,5 @@ func readFirstNodeData() *NodeData {
 		}
 	}
 
-	return nil
+	return nil, nil
 }

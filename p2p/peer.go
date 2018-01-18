@@ -18,6 +18,9 @@ type Peer interface {
 	TcpAddress() string // tcp address advertised by node e.g. 127.0.0.1:3058
 	PublicKey() crypto.PublicKey
 	GetConnections() map[string]net.Connection
+
+	DeleteAllConnections()
+
 	GetSessions() map[string]NetworkSession
 
 	// returns an authenticated session with the node if one exists
@@ -42,7 +45,7 @@ func NewRemoteNode(id string, tcpAddress string) (Peer, error) {
 
 	key, err := crypto.NewPublicKeyFromString(id)
 	if err != nil {
-		log.Error("invalid node id format: %v", err)
+		log.Error("invalid node id format", err)
 		return nil, err
 	}
 
@@ -83,6 +86,10 @@ func (n *peerImpl) GetActiveConnection() net.Connection {
 
 func (n *peerImpl) GetConnections() map[string]net.Connection {
 	return n.connections
+}
+
+func (n *peerImpl) DeleteAllConnections() {
+	n.connections = make(map[string]net.Connection)
 }
 
 func (n *peerImpl) GetSessions() map[string]NetworkSession {

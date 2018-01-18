@@ -58,7 +58,7 @@ func (a *Account) UnlockAccount(passphrase string) error {
 	// get derived key from params and pass-phrase
 	dk, err := crypto.DeriveKeyFromPassword(passphrase, a.kdParams)
 	if err != nil {
-		log.Error("kdf failure: %v", err)
+		log.Error("kdf failure", err)
 		return err
 	}
 
@@ -66,19 +66,19 @@ func (a *Account) UnlockAccount(passphrase string) error {
 	aesKey := dk[:16]
 	cipherText, err := hex.DecodeString(a.cryptoData.CipherText)
 	if err != nil {
-		log.Error("Failed to decode cipherText: %v", err)
+		log.Error("failed to decode cipherText", err)
 		return err
 	}
 
 	nonce, err := hex.DecodeString(a.cryptoData.CipherIv)
 	if err != nil {
-		log.Error("Failed to decode iv: %v", err)
+		log.Error("failed to decode iv", err)
 		return err
 	}
 
 	mac, err := hex.DecodeString(a.cryptoData.Mac)
 	if err != nil {
-		log.Error("Failed to decode mac: %v", err)
+		log.Error("failed to decode mac", err)
 		return err
 	}
 
@@ -92,7 +92,7 @@ func (a *Account) UnlockAccount(passphrase string) error {
 	// aes decrypt private key
 	privKeyData, err := crypto.AesCTRXOR(aesKey, cipherText, nonce)
 	if err != nil {
-		log.Error("Failed to aes decode private key: %v", err)
+		log.Error("failed to aes decode private key", err)
 		return err
 	}
 
@@ -117,7 +117,7 @@ func (a *Account) validatePublickKey(privateKey crypto.PrivateKey) error {
 	accountPubKeyStr := a.PubKey.String()
 
 	if accountPubKeyStr != publicKeyStr {
-		return errors.New("Invalid extracted public key %s %s")
+		return errors.New(fmt.Sprintf("invalid extracted public key %s %s", accountPubKeyStr, publicKeyStr))
 	}
 
 	return nil

@@ -19,7 +19,7 @@ func GetRandomBytes(n int) ([]byte, error) {
 	_, err := rand.Read(b)
 
 	if err != nil {
-		log.Error("failed to get entropy from system: %v", err)
+		log.Error("Failed to get entropy from system", err)
 		return nil, err
 	}
 
@@ -33,7 +33,7 @@ func GetRandomUInt64(max uint64) uint64 {
 	_, err := rand.Read(b)
 
 	if err != nil {
-		log.Error("failed to get entropy from system: %v", err)
+		log.Error("Failed to get entropy from system", err)
 		panic(err)
 	}
 
@@ -48,7 +48,7 @@ func GetRandomUInt32(max uint32) uint32 {
 	_, err := rand.Read(b)
 
 	if err != nil {
-		log.Error("failed to get entropy from system: %v", err)
+		log.Error("Failed to get entropy from system", err)
 		panic(err)
 	}
 

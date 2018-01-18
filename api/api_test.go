@@ -1,9 +1,8 @@
-package tests
+package api
 
 import (
 	"fmt"
 	"github.com/golang/protobuf/jsonpb"
-	api "github.com/spacemeshos/go-spacemesh/api"
 	config "github.com/spacemeshos/go-spacemesh/api/config"
 	pb "github.com/spacemeshos/go-spacemesh/api/pb"
 	"github.com/spacemeshos/go-spacemesh/assert"
@@ -21,8 +20,8 @@ func TestServersConfig(t *testing.T) {
 	config.ConfigValues.GrpcServerPort = 9092
 	config.ConfigValues.JsonServerPort = 9031
 
-	grpcService := api.NewGrpcService()
-	jsonService := api.NewJsonHttpServer()
+	grpcService := NewGrpcService()
+	jsonService := NewJsonHttpServer()
 
 	assert.Equal(t, grpcService.Port, config.ConfigValues.GrpcServerPort, "Expected same port")
 	assert.Equal(t, jsonService.Port, config.ConfigValues.JsonServerPort, "Expected same port")
@@ -34,7 +33,7 @@ func TestGrpcApi(t *testing.T) {
 	const message = "Hello World"
 	config.ConfigValues.GrpcServerPort = port
 
-	grpcService := api.NewGrpcService()
+	grpcService := NewGrpcService()
 
 	// start a server
 	grpcService.StartService()
@@ -45,7 +44,7 @@ func TestGrpcApi(t *testing.T) {
 	// Set up a connection to the server.
 	conn, err := grpc.Dial(addr, grpc.WithInsecure())
 	if err != nil {
-		t.Fatalf("did not connect: %v", err)
+		t.Fatalf("did not connect", err)
 	}
 	defer conn.Close()
 	c := pb.NewSpaceMeshServiceClient(conn)
@@ -53,7 +52,7 @@ func TestGrpcApi(t *testing.T) {
 	// call echo and validate result
 	r, err := c.Echo(context.Background(), &pb.SimpleMessage{Value: message})
 	if err != nil {
-		t.Fatalf("could not greet: %v", err)
+		t.Fatalf("could not greet", err)
 	}
 
 	assert.Equal(t, message, r.Value, "Expected message to be echoed")
@@ -64,8 +63,8 @@ func TestGrpcApi(t *testing.T) {
 
 func TestJsonApi(t *testing.T) {
 
-	grpcService := api.NewGrpcService()
-	jsonService := api.NewJsonHttpServer()
+	grpcService := NewGrpcService()
+	jsonService := NewJsonHttpServer()
 
 	// start grp and json server
 	grpcService.StartService()
@@ -83,7 +82,7 @@ func TestJsonApi(t *testing.T) {
 		return
 	}
 
-	url := fmt.Sprintf("http://localhost:%d/v1/example/echo", config.ConfigValues.JsonServerPort)
+	url := fmt.Sprintf("http://0.0.0.0:%d/v1/example/echo", config.ConfigValues.JsonServerPort)
 	resp, err := http.Post(url, contentType, strings.NewReader(payload))
 
 	if err != nil {

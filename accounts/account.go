@@ -54,7 +54,7 @@ func NewAccount(passphrase string) (*Account, error) {
 
 	dk, err := crypto.DeriveKeyFromPassword(passphrase, kdfParams)
 	if err != nil {
-		log.Error("kdf failure: %v", err)
+		log.Error("kdf failure", err)
 		return nil, err
 	}
 
@@ -74,7 +74,7 @@ func NewAccount(passphrase string) (*Account, error) {
 	cipherText, err := crypto.AesCTRXOR(aesKey, privKeyBytes, nonce)
 
 	if err != nil {
-		log.Error("Failed to encrypt private key: %v", err)
+		log.Error("Failed to encrypt private key", err)
 		return nil, err
 	}
 

@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"github.com/btcsuite/btcutil/base58"
 	"github.com/gogo/protobuf/proto"
+	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht/table"
@@ -20,8 +21,7 @@ const findNodeResp = "/dht/1.0/find-node-resp/"
 type FindNodeProtocol interface {
 
 	// Send a find_node request for data about a remote node, known only by id, to a specific known remote node
-	// Results will include 0 or more nodes and up to count nodes which may or may not
-	// Include data about id (as serverNodeId may not know about it)
+	// Results will include 0 or more nodes and up to count nodes which may or may not include data about id (as serverNodeId may not know about it)
 	// reqId: allows the client to match responses with requests by id
 	// serverNodeId - node to send the find request to
 	// id - node id to find
@@ -109,7 +109,7 @@ func (p *findNodeProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 	req := &pb.FindNodeReq{}
 	err := proto.Unmarshal(msg.Payload(), req)
 	if err != nil {
-		log.Warning("Invalid find node request data: %v", err)
+		log.Warning("Invalid find node request data", err)
 		return
 	}
 
@@ -122,7 +122,7 @@ func (p *findNodeProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 	nodeDhtId := dht.NewIdFromNodeKey(req.NodeId)
 	callback := make(table.PeersOpChannel)
 
-	count := int(minInt32(req.MaxResults, maxNearestNodesResults))
+	count := int(crypto.MinInt32(req.MaxResults, maxNearestNodesResults))
 
 	// get up to count nearest peers to nodeDhtId
 	rt.NearestPeers(table.NearestPeersReq{nodeDhtId, count, callback})
@@ -175,7 +175,7 @@ func (p *findNodeProtocolImpl) handleIncomingResponse(msg IncomingMessage) {
 	data := &pb.FindNodeResp{}
 	err := proto.Unmarshal(msg.Payload(), data)
 	if err != nil {
-		log.Error("invalid find-node response data: %v", err)
+		log.Error("Invalid find-node response data", err)
 		// we don't know the request id for this bad response so we can't callback clients with the error
 		// just drop the bad response - clients should be notified when their outgoing requests times out
 		return

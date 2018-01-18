@@ -5,10 +5,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/dht/table"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
+	"time"
 
 	//"github.com/spacemeshos/go-spacemesh/p2p/dht/table"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 )
+
+type nodeEventCallbacks []NodeEventCallback
 
 type swarmImpl struct {
 
@@ -18,6 +21,9 @@ type swarmImpl struct {
 	demuxer   Demuxer
 
 	config nodeconfig.SwarmConfig
+
+	// node state callbacks
+	nec nodeEventCallbacks
 
 	// Internal state is not thread safe - must be accessed only from methods dispatched from the internal event handler
 	peers             map[string]Peer           // NodeId -> Peer. known remote nodes. Swarm is a peer store.
@@ -38,7 +44,7 @@ type swarmImpl struct {
 	sendMsgRequests  chan SendMessageReq // local request to send a session message to a node and callback on error or data
 	sendHandshakeMsg chan SendMessageReq // local request to send a handshake protocol message
 
-	kill chan bool // local request to kill the swamp from outside. e.g when local node is shutting down
+	shutdown chan bool // local request to kill the swamp from outside. e.g when local node is shutting down
 
 	registerNodeReq chan node.RemoteNodeData // local request to register a node based on minimal data
 
@@ -58,14 +64,16 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 
 	n, err := net.NewNet(tcpAddress, l.Config())
 	if err != nil {
-		log.Error("can't create swarm without a network: %v", err)
+		log.Error("can't create swarm without a network", err)
 		return nil, err
 	}
 
 	s := &swarmImpl{
 		localNode: l,
 		network:   n,
-		kill:      make(chan bool),
+		shutdown:  make(chan bool), // non-buffered so requests to shutdown block until swarm is shut down
+
+		nec: make(nodeEventCallbacks, 0),
 
 		peersByConnection:      make(map[string]Peer),
 		peers:                  make(map[string]Peer),
@@ -96,7 +104,7 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 	// findNode dht protocol
 	s.findNodeProtocol = NewFindNodeProtocol(s)
 
-	log.Info("Created swarm %s for local node %s", tcpAddress, l.String())
+	s.localNode.Info("Created swarm for local node %s", tcpAddress, l.Pretty())
 
 	s.handshakeProtocol = NewHandshakeProtocol(s)
 	s.handshakeProtocol.RegisterNewSessionCallback(s.newSessions)
@@ -108,6 +116,22 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 	}
 
 	return s, err
+}
+
+// Register an event handler callback for connection state events
+func (s *swarmImpl) RegisterNodeEventsCallback(callback NodeEventCallback) {
+	s.nec = append(s.nec, callback)
+}
+
+// Sends a connection event to all registered clients
+func (s *swarmImpl) sendNodeEvent(peerId string, state NodeState) {
+
+	s.localNode.Info(">> Node event for <%s>. State: %s", peerId[:6], state)
+
+	evt := NodeEvent{peerId, state}
+	for _, c := range s.nec {
+		go func() { c <- evt }()
+	}
 }
 
 func (s *swarmImpl) getFindNodeProtocol() FindNodeProtocol {
@@ -143,8 +167,10 @@ func (s *swarmImpl) GetLocalNode() LocalNode {
 	return s.localNode
 }
 
-// start the boostrap process
+// Starts the bootstrap process
 func (s *swarmImpl) bootstrap() {
+
+	s.localNode.Info("Starting bootstrap...")
 
 	// register bootstrap nodes
 	bn := 0
@@ -158,31 +184,59 @@ func (s *swarmImpl) bootstrap() {
 
 	c := int(s.config.RandomConnections)
 	if c == 0 {
+		log.Warning("0 random connections - aborting bootstrap")
 		return
 	}
 
 	if bn > 0 {
 		// if we know about at least one bootstrap node then attempt to connect to c random nodes
-		go s.ConnectToRandomNodes(c, nil)
+		go s.ConnectToRandomNodes(c)
 	}
 }
 
 // Connect up to count random nodes
-func (s *swarmImpl) ConnectToRandomNodes(count int, callback chan node.RemoteNodeData) {
+func (s *swarmImpl) ConnectToRandomNodes(count int) {
+
+	if count <= 0 {
+		s.localNode.Error("Expected positive count param")
+		return
+	}
+
+	s.localNode.Info("Attempting to connect to %d random nodes...", count)
+
+	// issue a request to find self to the swarm to populate the local routing table with random nodes
+
 	c := make(chan node.RemoteNodeData, count)
-	s.findNode(s.localNode.String(), callback)
+	s.findNode(s.localNode.String(), c)
+
 	select {
-	case n := <-c:
-		if n != nil {
-			s.ConnectTo(n)
-			if callback != nil {
-				go func() { callback <- n }()
+	case <-c:
+
+		// create callback to receive result
+		c1 := make(table.PeersOpChannel, 2)
+
+		// find nearest peers
+		s.routingTable.NearestPeers(table.NearestPeersReq{s.localNode.DhtId(), count, c1})
+
+		select {
+		case c := <-c1:
+			if len(c.Peers) == 0 {
+				log.Warning("Did not find any random nodes close to self")
 			}
+
+			for _, p := range c.Peers {
+				// queue up connection requests to found peers
+				go s.ConnectTo(p)
+			}
+
+		case <-time.After(time.Second * 30):
+			s.localNode.Error("Failed to get random close nodes - timeout")
 		}
+
 	}
 }
 
-// Send a message to a remote node
+// Sends a message to a remote node
 // Swarm will establish session if needed or use an existing session and open connection
 // Designed to be used by any high level protocol
 // req.reqId: globally unique id string - used for tracking messages we didn't get a response for yet
@@ -196,6 +250,25 @@ func (s *swarmImpl) sendHandshakeMessage(req SendMessageReq) {
 	s.sendHandshakeMsg <- req
 }
 
+func (s *swarmImpl) Shutdown() {
+	s.shutdown <- true
+}
+
+func (s *swarmImpl) shutDownInternal() {
+
+	// close all open connections
+	for _, c := range s.connections {
+		c.Close()
+	}
+
+	for _, p := range s.peers {
+		p.DeleteAllConnections()
+	}
+
+	// shutdown network
+	s.network.Shutdown()
+}
+
 // Swarm serial event processing
 // provides concurrency safety as only one callback is executed at a time
 // so there's no need for sync internal data structures
@@ -204,8 +277,8 @@ func (s *swarmImpl) beginProcessingEvents() {
 Loop:
 	for {
 		select {
-		case <-s.kill:
-			// todo: gracefully stop the swarm - close all connections to remote nodes
+		case <-s.shutdown:
+			s.shutDownInternal()
 			break Loop
 
 		case c := <-s.network.GetNewConnections():

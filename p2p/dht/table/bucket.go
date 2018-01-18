@@ -12,7 +12,7 @@ import (
 type Bucket interface {
 	Peers() []node.RemoteNodeData
 	Has(n node.RemoteNodeData) bool
-	Remove(n node.RemoteNodeData)
+	Remove(n node.RemoteNodeData) bool
 	MoveToFront(n node.RemoteNodeData)
 	PushFront(n node.RemoteNodeData)
 	PushBack(n node.RemoteNodeData)
@@ -56,12 +56,14 @@ func (b *bucketimpl) Has(n node.RemoteNodeData) bool {
 	return false
 }
 
-func (b *bucketimpl) Remove(n node.RemoteNodeData) {
+func (b *bucketimpl) Remove(n node.RemoteNodeData) bool {
 	for e := b.list.Front(); e != nil; e = e.Next() {
 		if e.Value.(node.RemoteNodeData).Id() == n.Id() {
 			b.list.Remove(e)
+			return true
 		}
 	}
+	return false
 }
 
 func (b *bucketimpl) MoveToFront(n node.RemoteNodeData) {
@@ -93,9 +95,9 @@ func (b *bucketimpl) Len() int {
 	return b.list.Len()
 }
 
-// Split bucket's nodes into two buckets.
-// The receiver bucket will have peers with CPL equal to cpl.
-// The returned bucket will have peers with CPL greater than cpl (returned bucket has closer peers)
+// Splits bucket b nodes into two buckets.
+// The receiver bucket will have peers with CPL equal to cpl with target
+// The returned bucket will have peers with CPL greater than cpl with target (closer peers)
 func (b *bucketimpl) Split(cpl int, target dht.ID) Bucket {
 	newbucket := NewBucket()
 	e := b.list.Front()
