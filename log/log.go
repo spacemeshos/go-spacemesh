@@ -1,4 +1,5 @@
-// Package log provides the both file and console logging capabilities to spacemesh modeules such as app and node.
+// Package log provides the both file and console (general) logging capabilities
+// to spacemesh modules such as app and node.
 package log
 
 import (
@@ -9,14 +10,12 @@ import (
 	"path/filepath"
 )
 
+// SpaceMeshLogger is a custom logger for Spacemesh project.
 type SpaceMeshLogger struct {
 	Logger *logging.Logger
 }
 
-// general purpose logger
-
-// per local node logger
-
+// uLogger is per local node logger.
 var ulogger *SpaceMeshLogger
 
 func init() {
@@ -32,7 +31,7 @@ func init() {
 
 }
 
-// create a logger for a module
+// CreateLogger creates a logger for a module.
 func CreateLogger(module string, dataFolderPath string, logFileName string) *logging.Logger {
 
 	log := logging.MustGetLogger(module)
@@ -60,7 +59,7 @@ func CreateLogger(module string, dataFolderPath string, logFileName string) *log
 	return log
 }
 
-// Init app logging system
+// InitSpaceMeshLoggingSystem initializes app logging system.
 func InitSpaceMeshLoggingSystem(dataFolderPath string, logFileName string) {
 
 	log := logging.MustGetLogger("app")
@@ -93,30 +92,31 @@ func InitSpaceMeshLoggingSystem(dataFolderPath string, logFileName string) {
 
 // public wrappers abstracting away logging lib impl
 
-// Standard info level logging
+// Info prints formatted info level log message.
 func Info(format string, args ...interface{}) {
 	ulogger.Logger.Info(format, args...)
 }
 
-// Standard debug level logging
+// Debug prints formatted debug level log message.
 func Debug(format string, args ...interface{}) {
 	ulogger.Logger.Debug(format, args...)
 }
 
-// Standard error level logging
+// Error prints formatted error level log message.
 func Error(format string, args ...interface{}) {
 	ulogger.Logger.Error(format, args...)
 }
 
-// Standard warning level logging
+// Warning prints formatted warning level log message.
 func Warning(format string, args ...interface{}) {
 	ulogger.Logger.Warning(format, args...)
 }
 
-func PrettyId(id string) string {
+// PrettyID formats ID.
+func PrettyID(id string) string {
 	m := 6
 	if len(id) < m {
 		m = len(id)
 	}
-	return fmt.Sprintf("<Id %s>", id[:m])
+	return fmt.Sprintf("<ID %s>", id[:m])
 }
