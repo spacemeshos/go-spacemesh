@@ -60,7 +60,7 @@ func NewNet(tcpListenAddress string, config nodeconfig.Config) (Net, error) {
 	err := n.listen()
 
 	if err != nil {
-		log.Error("failed to create network on %s", tcpListenAddress)
+		log.Error("failed to create network", tcpListenAddress, err)
 		return nil, err
 	}
 
@@ -144,7 +144,7 @@ func (n *netImpl) acceptTcp() {
 		if err != nil {
 
 			if !n.isShuttingDown {
-				log.Error("Failed to accept connection request: %v", err)
+				log.Error("Failed to accept connection request", err)
 			}
 			return
 		}

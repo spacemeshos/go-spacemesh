@@ -30,7 +30,7 @@ type swarmImpl struct {
 	connections       map[string]net.Connection // ConnId -> Connection - all open connections for tracking and mngmnt
 	peersByConnection map[string]Peer           // ConnId -> Peer remote nodes indexed by their connections.
 
-	// todo: remove all idle sessions every n hours
+	// todo: remove all idle sessions every n hours (configurable)
 	allSessions map[string]NetworkSession // SessionId -> Session data. all authenticated session
 
 	outgoingSendsCallbacks map[string]map[string]chan SendError // k - conn id v-  reqId -> chan SendError
@@ -216,7 +216,7 @@ func (s *swarmImpl) ConnectToRandomNodes(count int) {
 		c1 := make(table.PeersOpChannel, 2)
 
 		// find nearest peers
-		s.routingTable.NearestPeers(table.NearestPeersReq{s.localNode.DhtId(), count, c1})
+		s.routingTable.NearestPeers(table.NearestPeersReq{Id: s.localNode.DhtId(), Count: count, Callback: c1})
 
 		select {
 		case c := <-c1:

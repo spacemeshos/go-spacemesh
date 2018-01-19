@@ -10,3 +10,8 @@ libp2p open-issues list is somewhat scary and libp2p-kad-dht is tightly coupled 
 
 This package contains heavily-modified code inspired by `libp2p-kad-dht` and `libp2p-kbucket`. The license file for both of these packages is included in this package as required by the MIT licensing terms.
 
+## DHT k-buckets fun facts
+- About 50% of peers observed by local node should be stored in the table.
+- The lower the bucket, the closer the peers are to the local node
+- The first bucket contains nodes that share 1 msb bit with the local node
+- Nodes may be dropped from the table if their buckets are getting full based on how far ago the local node communicated with them or learned about them.

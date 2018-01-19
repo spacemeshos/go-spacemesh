@@ -65,7 +65,7 @@ func NewPingProtocol(s Swarm) Ping {
 func (p *pingProtocolImpl) Send(msg string, reqId []byte, remoteNodeId string) {
 
 	metadata := p.swarm.GetLocalNode().NewProtocolMessageMetadata(pingReq, reqId, false)
-	data := &pb.PingReqData{metadata, msg}
+	data := &pb.PingReqData{Metadata: metadata, Ping: msg}
 
 	// sign data
 	sign, err := p.swarm.GetLocalNode().Sign(data)
@@ -109,7 +109,7 @@ func (p *pingProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 
 	// generate response
 	metadata := p.swarm.GetLocalNode().NewProtocolMessageMetadata(pingResp, req.Metadata.ReqId, false)
-	respData := &pb.PingRespData{metadata, req.Ping}
+	respData := &pb.PingRespData{Metadata: metadata, Pong: req.Ping}
 
 	// sign response
 	sign, err := p.swarm.GetLocalNode().SignToString(respData)

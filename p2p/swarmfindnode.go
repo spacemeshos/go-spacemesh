@@ -28,7 +28,7 @@ func (s *swarmImpl) findNode(id string, callback chan node.RemoteNodeData) {
 
 	// look for the node at local dht table
 	poc := make(table.PeerOpChannel, 1)
-	s.routingTable.Find(table.PeerByIdRequest{dht.NewIdFromBase58String(id), poc})
+	s.routingTable.Find(table.PeerByIdRequest{Id: dht.NewIdFromBase58String(id), Callback: poc})
 	select {
 	case c := <-poc:
 		res := c.Peer
@@ -163,7 +163,7 @@ Loop:
 // helper method - a sync wrapper over routingTable.NearestPeers
 func (s *swarmImpl) getNearestPeers(dhtId dht.ID, count int) []node.RemoteNodeData {
 	psoc := make(table.PeersOpChannel, 1)
-	s.routingTable.NearestPeers(table.NearestPeersReq{dhtId, count, psoc})
+	s.routingTable.NearestPeers(table.NearestPeersReq{Id: dhtId, Count: count, Callback: psoc})
 	select {
 	case c := <-psoc:
 		return c.Peers
