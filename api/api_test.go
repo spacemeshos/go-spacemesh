@@ -37,7 +37,7 @@ func TestGrpcApi(t *testing.T) {
 	grpcService := NewGrpcService()
 
 	// start a server
-	grpcService.StartService()
+	grpcService.StartService(nil)
 
 	// start a client
 	addr := "localhost:" + strconv.Itoa(port)
@@ -67,9 +67,14 @@ func TestJsonApi(t *testing.T) {
 	grpcService := NewGrpcService()
 	jsonService := NewJsonHttpServer()
 
+	started := make(chan bool, 2)
+
 	// start grp and json server
-	grpcService.StartService()
-	jsonService.StartService()
+	grpcService.StartService(started)
+	<-started
+
+	jsonService.StartService(started)
+	<-started
 
 	const message = "hello world!"
 	const contentType = "application/json"
@@ -85,7 +90,7 @@ func TestJsonApi(t *testing.T) {
 
 	// Without this running this on Travis CI might generate a connection refused error
 	// because the server may not be ready to accept connections just yet.
-	time.Sleep(10 * time.Second)
+	time.Sleep(3 * time.Second)
 
 	url := fmt.Sprintf("http://127.0.0.1:%d/v1/example/echo", config.ConfigValues.JsonServerPort)
 	resp, err := http.Post(url, contentType, strings.NewReader(payload))

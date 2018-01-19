@@ -13,7 +13,7 @@ import (
 	gw "github.com/spacemeshos/go-spacemesh/api/pb"
 )
 
-// A json http server providing the SpaceMesh API.
+// A json http server providing the Spacemesh API.
 // Implemented as a grpc gateway.
 // See https://github.com/grpc-ecosystem/grpc-gateway
 
@@ -32,11 +32,11 @@ func (s JsonHttpServer) Stop() {
 }
 
 // Start the grpc server
-func (s JsonHttpServer) StartService() {
-	go s.startInternal()
+func (s JsonHttpServer) StartService(callback chan bool) {
+	go s.startInternal(callback)
 }
 
-func (s JsonHttpServer) startInternal() {
+func (s JsonHttpServer) startInternal(callback chan bool) {
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -56,10 +56,13 @@ func (s JsonHttpServer) startInternal() {
 
 	log.Info("json API listening on port %d", s.Port)
 
-	// this blocks until stops
+	if callback != nil {
+		callback <- true
+	}
+	// this blocks until stopped or error
 	err := http.ListenAndServe(addr, mux)
 
 	if err != nil {
-		log.Error("failed to listen and serve: v%", err)
+		log.Error("listen and serve stopped with error", err)
 	}
 }
