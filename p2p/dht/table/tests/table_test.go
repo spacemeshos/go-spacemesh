@@ -100,7 +100,7 @@ func TestTableUpdate(t *testing.T) {
 		callback := make(table.PeersOpChannel, 2)
 
 		// find nearest peers to new node
-		rt.NearestPeers(table.NearestPeersReq{n.DhtId(), 5, callback})
+		rt.NearestPeers(table.NearestPeersReq{Id: n.DhtId(), Count: 5, Callback: callback})
 
 		select {
 		case c := <-callback:
@@ -134,7 +134,7 @@ func TestTableFind(t *testing.T) {
 
 		// try to find nearest peer to n - it should be n
 		callback := make(table.PeerOpChannel, 2)
-		rt.NearestPeer(table.PeerByIdRequest{n.DhtId(), callback})
+		rt.NearestPeer(table.PeerByIdRequest{Id: n.DhtId(), Callback: callback})
 
 		select {
 		case c := <-callback:
@@ -146,7 +146,7 @@ func TestTableFind(t *testing.T) {
 		}
 
 		callback1 := make(table.PeerOpChannel, 2)
-		rt.Find(table.PeerByIdRequest{n.DhtId(), callback1})
+		rt.Find(table.PeerByIdRequest{Id: n.DhtId(), Callback: callback1})
 
 		select {
 		case c := <-callback1:
@@ -177,7 +177,7 @@ func TestTableFindCount(t *testing.T) {
 	callback := make(table.PeersOpChannel, 2)
 
 	// find nearest peers
-	rt.NearestPeers(table.NearestPeersReq{nodes[2].DhtId(), i, callback})
+	rt.NearestPeers(table.NearestPeersReq{Id: nodes[2].DhtId(), Count: i, Callback: callback})
 
 	select {
 	case c := <-callback:
@@ -217,7 +217,7 @@ func TestTableMultiThreaded(t *testing.T) {
 	go func() {
 		for i := 0; i < 1000; i++ {
 			n := rand.Intn(len(nodes))
-			rt.Find(table.PeerByIdRequest{nodes[n].DhtId(), nil})
+			rt.Find(table.PeerByIdRequest{Id: nodes[n].DhtId(), Callback: nil})
 		}
 	}()
 }
@@ -249,6 +249,6 @@ func BenchmarkFinds(b *testing.B) {
 
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		rt.Find(table.PeerByIdRequest{nodes[i].DhtId(), nil})
+		rt.Find(table.PeerByIdRequest{Id: nodes[i].DhtId(), Callback: nil})
 	}
 }

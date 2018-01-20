@@ -420,7 +420,7 @@ func (s *swarmImpl) onConnectionError(ce net.ConnectionError) {
 
 // not go safe - called from event processing main loop
 func (s *swarmImpl) onMessageSendError(mse net.MessageSendError) {
-	s.sendMessageSendError(net.ConnectionError{mse.Connection, mse.Err, mse.Id})
+	s.sendMessageSendError(net.ConnectionError{Connection: mse.Connection, Err: mse.Err, Id: mse.Id})
 }
 
 // send a msg send error back to the callback registered by reqId

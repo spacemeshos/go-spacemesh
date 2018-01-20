@@ -9,10 +9,11 @@ option go_package = "pb";
 message CommonMessageData {
     bytes sessionId = 1;  // always set (handshake or other protocol messages)
     bytes payload = 2;    // encrypted payload with session aes key - binary protobufs. empty for handshake methods
+
     // we don't want to add anything here even protocol names as it goes unencrypted over the wire
 }
 
-// Handshake protocol data used for both request and response - sent unencrypted on the wire
+// Handshake protocol data used for both request and response - sent unencrypted over the wire
 message HandshakeData {
     bytes sessionId = 1;    // for req - same as iv. for response - set to req id
     bytes payload = 2; // empty for now
@@ -28,8 +29,8 @@ message HandshakeData {
 // just here for now
 
 // used for protocol messages (non-handshake) - this is the decrypted CommonMessageData.payload
-// it allows multiplexing back to higher level protocol
-// data is here and not in CommonMessageData to limit leaked data on unencrypted connections
+// it allows multiplexing back to higher level protocols
+// data is here and not in CommonMessageData to avoid leaked data on unencrypted connections
 message ProtocolMessage {
     Metadata metadata = 1;
 }
@@ -44,7 +45,7 @@ message Metadata {
     string authorSign = 7;    // signature of message data by author + method specific data by message creator node. format: hexEncode([]bytes)
 }
 
-// example protocol
+// ping is our example protocol
 message PingReqData {
     Metadata metadata = 1;
     string ping = 2; // the echo message itself - protocol specific - starts at #2

@@ -84,7 +84,10 @@ func (p *findNodeProtocolImpl) FindNode(reqId []byte, serverNodeId string, id st
 
 	nodeId := base58.Decode(id)
 	metadata := p.swarm.GetLocalNode().NewProtocolMessageMetadata(findNodeReq, reqId, false)
-	data := &pb.FindNodeReq{metadata, nodeId, maxNearestNodesResults}
+	data := &pb.FindNodeReq{
+		Metadata:   metadata,
+		NodeId:     nodeId,
+		MaxResults: maxNearestNodesResults}
 
 	// sign data
 	sign, err := p.swarm.GetLocalNode().Sign(data)
@@ -125,7 +128,7 @@ func (p *findNodeProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 	count := int(crypto.MinInt32(req.MaxResults, maxNearestNodesResults))
 
 	// get up to count nearest peers to nodeDhtId
-	rt.NearestPeers(table.NearestPeersReq{nodeDhtId, count, callback})
+	rt.NearestPeers(table.NearestPeersReq{Id: nodeDhtId, Count: count, Callback: callback})
 
 	var results []*pb.NodeInfo
 
@@ -141,7 +144,7 @@ func (p *findNodeProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 	metadata := p.swarm.GetLocalNode().NewProtocolMessageMetadata(findNodeResp, req.Metadata.ReqId, false)
 
 	// generate response data
-	respData := &pb.FindNodeResp{metadata, results}
+	respData := &pb.FindNodeResp{Metadata: metadata, NodeInfos: results}
 
 	// sign response
 	sign, err := p.swarm.GetLocalNode().SignToString(respData)

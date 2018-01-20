@@ -9,10 +9,10 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-	"testing"
 )
 
 // Directory and paths funcs
+
 const OwnerReadWriteExec = 0700
 const OwnerReadWrite = 0600
 
@@ -138,20 +138,4 @@ func GetFullDirectoryPath(name string) (string, error) {
 	err := os.MkdirAll(aPath, OwnerReadWriteExec)
 
 	return aPath, err
-}
-
-// Deletes all sub directories and files in the Spacemesh root data folder
-func DeleteSpaceMeshDataFolders(t *testing.T) {
-
-	aPath, err := GetSpaceMeshDataDirectoryPath()
-	if err != nil {
-		t.Fatalf("Failed to get spacemesh data dir: %s", err)
-	}
-
-	// remove
-	err = os.RemoveAll(aPath)
-	if err != nil {
-		t.Fatalf("Failed to delete spacemesh data dir: %s", err)
-	}
-
 }

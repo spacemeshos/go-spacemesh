@@ -52,9 +52,7 @@ func (mt *merkleTreeImp) persistNode(node Node) error {
 	}
 
 	log.Info("Persisted node data: %s", node.print(mt.treeData, mt.userData))
-
 	log.Info("Node persisted to tree db. type: %s. db key(node hash): %s", node.getNodeType(), hex.EncodeToString(nodeKey)[:6])
-
 	return nil
 }
 

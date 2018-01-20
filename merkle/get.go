@@ -16,7 +16,7 @@ func (mt *merkleTreeImp) Get(k []byte) ([]byte, *stack, error) {
 
 	keyHexStr := hex.EncodeToString(k)
 
-	log.Info("m get %s ...", keyHexStr)
+	log.Info("Merkle get %s ...", keyHexStr)
 
 	s := newStack()
 
@@ -28,7 +28,7 @@ func (mt *merkleTreeImp) Get(k []byte) ([]byte, *stack, error) {
 	}
 
 	if userValue == nil {
-		log.Info("No data in m for %s", keyHexStr)
+		log.Info("No data in Merkle tree for %s", keyHexStr)
 		return nil, s, nil
 	}
 
@@ -100,7 +100,7 @@ func (mt *merkleTreeImp) findValue(root Node, k string, pos int, s *stack) ([]by
 		p := root.getExtNode().getValue()
 		child := root.getChild(p)
 		if child == nil {
-			return nil, errors.New("Expected to find ext node child")
+			return nil, errors.New("expected to find ext node child")
 		}
 
 		return mt.findValue(child, k, pos+len(path), s)

@@ -2,7 +2,7 @@
 
 pkgs=`go list ./... | grep -vF /vendor/`
 
-go vet -composites=false $pkgs
+go vet $pkgs
 if [ $? -eq 1 ]; then
 	exit 1
 fi

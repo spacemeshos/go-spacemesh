@@ -313,7 +313,7 @@ func generateHandshakeRequestData(node LocalNode, remoteNode Peer) (*pb.Handshak
 	data.Hmac = hm.Sum(nil)
 	data.Sign = ""
 
-	// sign corupus - marshall data without the signature to protobufs3 binary format
+	// sign corpus - marshall data without the signature to protobufs3 binary format
 	bin, err := proto.Marshal(data)
 	if err != nil {
 		return nil, nil, err
@@ -349,7 +349,7 @@ func authenticateSenderNode(req *pb.HandshakeData) error {
 	// copy the signature
 	sig := req.Sign
 
-	// recreate the signed binary corups - all data without the signature
+	// recreate the signed binary corpus - all data without the signature
 	req.Sign = ""
 	bin, err := proto.Marshal(req)
 	if err != nil {
@@ -396,7 +396,6 @@ func processHandshakeRequest(node LocalNode, r Peer, req *pb.HandshakeData) (*pb
 	}
 
 	// verify signature
-
 	sig := req.Sign
 	req.Sign = ""
 	bin, err := proto.Marshal(req)
@@ -404,7 +403,7 @@ func processHandshakeRequest(node LocalNode, r Peer, req *pb.HandshakeData) (*pb
 		return nil, nil, err
 	}
 
-	// we verify against the remote node public key
+	// verify against remote node public key
 	v, err := r.PublicKey().VerifyString(bin, sig)
 	if err != nil {
 		return nil, nil, err
@@ -427,7 +426,6 @@ func processHandshakeRequest(node LocalNode, r Peer, req *pb.HandshakeData) (*pb
 	r.GetSessions()[s.String()] = s
 
 	// generate ack resp data
-
 	iv := make([]byte, 16)
 	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
 		return nil, nil, err
@@ -497,7 +495,7 @@ func processHandshakeResponse(node LocalNode, r Peer, s NetworkSession, resp *pb
 		return err
 	}
 
-	// we verify against the remote node public key
+	// we verify against remote node public key
 	v, err := r.PublicKey().VerifyString(bin, sig)
 	if err != nil {
 		return err

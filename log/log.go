@@ -15,7 +15,7 @@ type SpaceMeshLogger struct {
 	Logger *logging.Logger
 }
 
-// uLogger is per local app singleton logger.
+// uLogger is the local app singleton logger.
 var ulogger *SpaceMeshLogger
 
 func init() {
@@ -31,7 +31,7 @@ func init() {
 
 }
 
-// CreateLogger creates a logger for a module. e.g. a node-specific logger
+// CreateLogger creates a logger for a module. e.g. local node logger
 func CreateLogger(module string, dataFolderPath string, logFileName string) *logging.Logger {
 
 	log := logging.MustGetLogger(module)

@@ -7,8 +7,8 @@ import (
 )
 
 // Bucket is a dht k-bucket type
-// Bucket NOT thread safe.
-// RoutingTable (or other clients) are responsible for serializing access to a Bucket
+// Bucket methods are NOT thread safe.
+// RoutingTable (or other clients) is responsible for serializing access to Bucket's methods.
 type Bucket interface {
 	Peers() []node.RemoteNodeData
 	Has(n node.RemoteNodeData) bool
