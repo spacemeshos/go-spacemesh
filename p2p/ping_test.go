@@ -15,7 +15,7 @@ func TestPingProtocol(t *testing.T) {
 
 	// create 2 nodes
 	node1Local, _ := GenerateTestNode(t)
-	_, node2Remote := GenerateTestNode(t)
+	node2Local, node2Remote := GenerateTestNode(t)
 
 	// let node 1 know about node 2
 	node1Local.GetSwarm().RegisterNode(node.NewRemoteNodeData(node2Remote.String(), node2Remote.TcpAddress()))
@@ -57,4 +57,7 @@ Loop:
 			t.Fatalf("Timeout eroror - expected callback")
 		}
 	}
+
+	node1Local.Shutdown()
+	node2Local.Shutdown()
 }

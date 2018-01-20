@@ -29,6 +29,9 @@ Loop:
 			t.Fatalf("Timeout error - failed to create session")
 		}
 	}
+
+	node1Local.Shutdown()
+	node2Local.Shutdown()
 }
 
 func _estSimpleBootstrap(t *testing.T) {
@@ -69,6 +72,9 @@ Loop:
 			t.Fatal("Timeout error - expected callback")
 		}
 	}
+
+	node1Local.Shutdown()
+	node2Local.Shutdown()
 }
 
 func TestBootstrap(t *testing.T) {
@@ -125,6 +131,10 @@ func TestBootstrap(t *testing.T) {
 				}
 			}
 		}*/
+
+	for _, node := range nodes {
+		node.Shutdown()
+	}
 }
 
 // todo: fix me - this test is broken
