@@ -22,7 +22,7 @@ type NodeData struct {
 // Gets the os-specific full path to the nodes master data directory
 // Attempts to create the directory on-demand
 func ensureNodesDataDirectory() (string, error) {
-	dataPath, err := filesystem.GetSpaceMeshDataDirectoryPath()
+	dataPath, err := filesystem.GetSpacemeshDataDirectoryPath()
 	if err != nil {
 		return "", err
 	}

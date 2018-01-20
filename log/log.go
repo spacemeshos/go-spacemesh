@@ -10,13 +10,13 @@ import (
 	"path/filepath"
 )
 
-// SpaceMeshLogger is a custom logger for Spacemesh project.
-type SpaceMeshLogger struct {
+// SpacemeshLogger is a custom logger for Spacemesh project.
+type SpacemeshLogger struct {
 	Logger *logging.Logger
 }
 
 // uLogger is the local app singleton logger.
-var ulogger *SpaceMeshLogger
+var ulogger *SpacemeshLogger
 
 func init() {
 	// create a basic temp os.Stdout logger
@@ -27,7 +27,7 @@ func init() {
 	backend := logging.NewLogBackend(os.Stdout, "", 0)
 	backendFormatter := logging.NewBackendFormatter(backend, logFormat)
 	logging.SetBackend(backendFormatter)
-	ulogger = &SpaceMeshLogger{Logger: log}
+	ulogger = &SpacemeshLogger{Logger: log}
 
 }
 
@@ -59,8 +59,8 @@ func CreateLogger(module string, dataFolderPath string, logFileName string) *log
 	return log
 }
 
-// InitSpaceMeshLoggingSystem initializes app logging system.
-func InitSpaceMeshLoggingSystem(dataFolderPath string, logFileName string) {
+// InitSpacemeshLoggingSystem initializes app logging system.
+func InitSpacemeshLoggingSystem(dataFolderPath string, logFileName string) {
 
 	log := logging.MustGetLogger("app")
 
@@ -87,7 +87,7 @@ func InitSpaceMeshLoggingSystem(dataFolderPath string, logFileName string) {
 
 	logging.SetBackend(backendFormatter, fileBackendFormatter)
 
-	ulogger = &SpaceMeshLogger{Logger: log}
+	ulogger = &SpacemeshLogger{Logger: log}
 }
 
 // public wrappers abstracting away logging lib impl

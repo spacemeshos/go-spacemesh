@@ -20,7 +20,7 @@ import (
 	nodeparams "github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 )
 
-type SpaceMeshApp struct {
+type SpacemeshApp struct {
 	*cli.App
 	Node           p2p.LocalNode
 	grpcApiService *api.SpaceMeshGrpcService
@@ -29,7 +29,7 @@ type SpaceMeshApp struct {
 
 // the main Spacemesh app - main entry point
 // Access the node and the other top-level modules from the app
-var App *SpaceMeshApp
+var App *SpacemeshApp
 
 var (
 	appFlags = []cli.Flag{
@@ -68,7 +68,7 @@ var (
 
 // add toml config file support and sample toml file
 
-func newSpaceMeshApp() *SpaceMeshApp {
+func newSpacemeshApp() *SpacemeshApp {
 	app := cli.NewApp()
 	app.Name = filepath.Base(os.Args[0])
 	app.Author = config.AppAuthor
@@ -91,11 +91,11 @@ func newSpaceMeshApp() *SpaceMeshApp {
 
 	sort.Sort(cli.FlagsByName(app.Flags))
 
-	sma := &SpaceMeshApp{app, nil, nil, nil}
+	sma := &SpacemeshApp{app, nil, nil, nil}
 
 	// setup callbacks
 	app.Before = sma.before
-	app.Action = sma.startSpaceMeshNode
+	app.Action = sma.startSpacemeshNode
 	app.After = sma.cleanup
 
 	// must be done here and not in app.before() so we won't lose any log entries
@@ -105,32 +105,32 @@ func newSpaceMeshApp() *SpaceMeshApp {
 }
 
 // start the spacemesh node
-func startSpaceMeshNode(ctx *cli.Context) error {
-	return App.startSpaceMeshNode(ctx)
+func startSpacemeshNode(ctx *cli.Context) error {
+	return App.startSpacemeshNode(ctx)
 }
 
 // setup app logging system
-func (app *SpaceMeshApp) setupLogging() {
+func (app *SpacemeshApp) setupLogging() {
 
 	// setup logging early
-	dataDir, err := filesystem.GetSpaceMeshDataDirectoryPath()
+	dataDir, err := filesystem.GetSpacemeshDataDirectoryPath()
 	if err != nil {
 		log.Error("Failed to setup spacemesh data dir")
 		panic(err)
 	}
 
 	// app-level logging
-	log.InitSpaceMeshLoggingSystem(dataDir, "spacemesh.log")
+	log.InitSpacemeshLoggingSystem(dataDir, "spacemesh.log")
 
-	log.Info("\n\nSpaceMesh app session starting... %s", app.getAppInfo())
+	log.Info("\n\nSpacemesh app session starting... %s", app.getAppInfo())
 }
 
-func (app *SpaceMeshApp) getAppInfo() string {
+func (app *SpacemeshApp) getAppInfo() string {
 	return fmt.Sprintf("App version: %s. Git: %s - %s . Go Version: %s. OS: %s-%s ",
 		Version, Branch, Commit, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 }
 
-func (app *SpaceMeshApp) before(ctx *cli.Context) error {
+func (app *SpacemeshApp) before(ctx *cli.Context) error {
 
 	// exit gracefully - e.g. with app cleanup on sig abort (ctrl-c)
 	signalChan := make(chan os.Signal, 1)
@@ -145,7 +145,7 @@ func (app *SpaceMeshApp) before(ctx *cli.Context) error {
 	// todo: add misc app setup here (metrics, debug, etc....)
 
 	// ensure all data folders exist
-	filesystem.EnsureSpaceMeshDataDirectories()
+	filesystem.EnsureSpacemeshDataDirectories()
 
 	// load all accounts from store
 	accounts.LoadAllAccounts()
@@ -156,7 +156,7 @@ func (app *SpaceMeshApp) before(ctx *cli.Context) error {
 }
 
 // SpaceMesh app cleanup tasks
-func (app *SpaceMeshApp) cleanup(ctx *cli.Context) error {
+func (app *SpacemeshApp) cleanup(ctx *cli.Context) error {
 
 	log.Info("App cleanup starting...")
 	if app.jsonApiService != nil {
@@ -173,7 +173,7 @@ func (app *SpaceMeshApp) cleanup(ctx *cli.Context) error {
 	return nil
 }
 
-func (app *SpaceMeshApp) startSpaceMeshNode(ctx *cli.Context) error {
+func (app *SpacemeshApp) startSpacemeshNode(ctx *cli.Context) error {
 
 	log.Info("Starting local node...")
 	port := *nodeparams.LocalTcpPortFlag.Destination
@@ -227,7 +227,7 @@ func Main(commit, branch, version string) {
 	Branch = branch
 	Commit = commit
 
-	App = newSpaceMeshApp()
+	App = newSpacemeshApp()
 
 	if err := App.Run(os.Args); err != nil {
 		fmt.Fprintln(os.Stderr, err)

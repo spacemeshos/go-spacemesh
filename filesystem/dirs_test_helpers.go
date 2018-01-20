@@ -6,9 +6,9 @@ import (
 )
 
 // Deletes all sub directories and files in the Spacemesh root data folder
-func DeleteSpaceMeshDataFolders(t *testing.T) {
+func DeleteSpacemeshDataFolders(t *testing.T) {
 
-	aPath, err := GetSpaceMeshDataDirectoryPath()
+	aPath, err := GetSpacemeshDataDirectoryPath()
 	if err != nil {
 		t.Fatalf("Failed to get spacemesh data dir: %s", err)
 	}
