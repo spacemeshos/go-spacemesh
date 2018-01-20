@@ -20,17 +20,15 @@ func TestPingProtocol(t *testing.T) {
 	err = table.deleteAllData()
 	assert.NoErr(t, err, "failed to delete table data")
 
-	//data := make([]byte, 1)
+	data := make([]byte, 1)
 
-	for i := 0; i < 65536; i++ {
-		data, _ := crypto.GetRandomBytes(1)
+	for i := 0; i < 2*65536; i++ {
+		err := crypto.GetRandomBytesToBuffer(1, data)
+		assert.NoErr(t,err, "failed get random data")
 		table.write(data)
 	}
-
 	table.sync()
-
-	table.deleteAllData()
-
+	//table.deleteAllData()
 	node.Shutdown()
 
 }

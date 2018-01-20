@@ -8,7 +8,7 @@ const (
 type Table interface {
 	read(off int64, out []byte) error // read len(out) bytes at offset off from the table
 	seek(off int64) error
-	write(data []byte) error // write data at current offset
+	write(data []byte) error // write data at current offset and increases offset
 	sync() error
 	deleteAllData() error // delete all existing data from the table
 }

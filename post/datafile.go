@@ -27,7 +27,7 @@ type dataFileImpl struct {
 }
 
 func newDataFile(dir string, id string) dataFile {
-	fileName := path.Join(dir, id+".post")
+	fileName := path.Join(dir, "post.dat")
 	f := &dataFileImpl{name: fileName}
 	return f
 }
@@ -38,7 +38,7 @@ func (d *dataFileImpl) seek(off int64) error {
 		return nil
 	}
 
-	// flish any existing buffered data
+	// flush any existing buffered data
 	err := d.writer.Flush()
 	if err != nil {
 		return err
