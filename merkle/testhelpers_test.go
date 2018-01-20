@@ -26,7 +26,7 @@ func tryPut(t *testing.T, tree MerkleTree, k, v []byte) {
 
 func getDbPaths(t *testing.T) (string, string) {
 	t.Helper()
-	tempDir, err := filesystem.GetSpaceMeshTempDirectoryPath()
+	tempDir, err := filesystem.GetSpacemeshTempDirectoryPath()
 	assert.NoErr(t, err, "failed to get temp dir")
 	userDb := filepath.Join(tempDir, "userdata.db")
 	treeDb := filepath.Join(tempDir, "tree.db")

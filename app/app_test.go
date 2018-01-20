@@ -10,7 +10,7 @@ import (
 
 func TestApp(t *testing.T) {
 
-	filesystem.DeleteSpaceMeshDataFolders(t)
+	filesystem.DeleteSpacemeshDataFolders(t)
 
 	// remove all injected test flags for now
 	os.Args = []string{"/go-spacemesh", "-jrpc"}
@@ -28,6 +28,6 @@ func TestApp(t *testing.T) {
 	// app should exit based on this signal
 	ExitApp <- true
 
-	filesystem.DeleteSpaceMeshDataFolders(t)
+	filesystem.DeleteSpacemeshDataFolders(t)
 
 }

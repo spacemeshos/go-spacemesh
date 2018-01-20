@@ -12,7 +12,7 @@ import (
 func TestNodeLocalStore(t *testing.T) {
 
 	// start clean
-	filesystem.DeleteSpaceMeshDataFolders(t)
+	filesystem.DeleteSpacemeshDataFolders(t)
 
 	_, err := ensureNodesDataDirectory()
 	assert.NoErr(t, err, "failed to create or verify nodes data dir")
@@ -49,6 +49,6 @@ func TestNodeLocalStore(t *testing.T) {
 	assert.Equal(t, node.String(), node1.String(), "expected restored node")
 
 	// cleanup
-	filesystem.DeleteSpaceMeshDataFolders(t)
+	filesystem.DeleteSpacemeshDataFolders(t)
 
 }

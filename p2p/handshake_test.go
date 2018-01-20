@@ -86,6 +86,8 @@ func TestHandshakeCoreData(t *testing.T) {
 	assert.NoErr(t, err, "expected no error")
 	assert.True(t, bytes.Equal(clearText, []byte(msg)), "Expected enc/dec to work")
 
+	node1Local.Shutdown()
+	node2Local.Shutdown()
 }
 
 func TestHandshakeProtocol(t *testing.T) {
@@ -179,4 +181,7 @@ func TestHandshakeProtocol(t *testing.T) {
 
 	assert.True(t, session.IsAuthenticated(), "expected session to be authenticated")
 	assert.NoErr(t, err, "failed to authenticate or process response")
+
+	node1Local.Shutdown()
+	node2Local.Shutdown()
 }

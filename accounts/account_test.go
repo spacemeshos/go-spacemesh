@@ -14,7 +14,7 @@ func TestAccountLoading(t *testing.T) {
 
 func TestAccountOps(t *testing.T) {
 
-	filesystem.DeleteSpaceMeshDataFolders(t)
+	filesystem.DeleteSpacemeshDataFolders(t)
 
 	const passphrase = "a-weak-passphrase-123"
 	accountsDataFolder, err := filesystem.GetAccountsDataDirectoryPath()
@@ -68,13 +68,13 @@ func TestAccountOps(t *testing.T) {
 
 	assert.Equal(t, accountPrivKey, account1PrivKey, "Expected same private key after unlocking")
 
-	filesystem.DeleteSpaceMeshDataFolders(t)
+	filesystem.DeleteSpacemeshDataFolders(t)
 
 }
 
 func TestPassphrase(t *testing.T) {
 
-	filesystem.DeleteSpaceMeshDataFolders(t)
+	filesystem.DeleteSpacemeshDataFolders(t)
 
 	const passphrase = "a-weak-passphrase-1234"
 
@@ -118,6 +118,6 @@ func TestPassphrase(t *testing.T) {
 	assert.True(t, account1.IsAccountLocked(), "Expected account to be locked")
 	assert.Nil(t, account1.PrivKey, "expected nil private key for locked account")
 
-	filesystem.DeleteSpaceMeshDataFolders(t)
+	filesystem.DeleteSpacemeshDataFolders(t)
 
 }
