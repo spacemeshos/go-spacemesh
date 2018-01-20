@@ -14,16 +14,16 @@ type dataFile interface {
 	create() error
 	close() error
 	read(off int64, out []byte) error // read len(out) bytes at offset off from the file
-	write(data []byte) error          // write data at offset off
+	write(data []byte) error          // write data at current offset and advanced offset
 	seek(off int64) error
 	sync() error
 }
 
 type dataFileImpl struct {
-	name    string
-	file    *os.File
+	name   string
+	file   *os.File
 	writer *bufio.Writer
-	offset  int64
+	offset int64
 }
 
 func newDataFile(dir string, id string) dataFile {
@@ -49,6 +49,8 @@ func (d *dataFileImpl) seek(off int64) error {
 	if err != nil {
 		return err
 	}
+
+	d.offset = off
 
 	// create buffered writer at current offset
 	d.writer = bufio.NewWriter(d.file)

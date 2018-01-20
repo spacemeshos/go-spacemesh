@@ -29,4 +29,8 @@ func TestPingProtocol(t *testing.T) {
 
 	table.sync()
 
+	table.deleteAllData()
+
+	node.Shutdown()
+
 }
