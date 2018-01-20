@@ -11,9 +11,9 @@ type dataFile interface {
 	delete() error
 	create() error
 	close() error
-	read(off int64, out []byte) error // read len(out) bytes at offset off from the file
+	read(off int64, out []byte) error   // read len(out) bytes at offset off from the file
 	write(off int64, data []byte) error // write data at offset off
-	sync () error
+	sync() error
 }
 
 type dataFileImpl struct {
@@ -27,7 +27,7 @@ func newDataFile(dir string, id string) dataFile {
 	return f
 }
 
-func (d *dataFileImpl) write (off int64, data []byte) error {
+func (d *dataFileImpl) write(off int64, data []byte) error {
 	_, err := d.file.WriteAt(data, off)
 	if err != nil {
 		return err
@@ -37,11 +37,11 @@ func (d *dataFileImpl) write (off int64, data []byte) error {
 	return d.file.Sync()
 }
 
-func (d *dataFileImpl) sync () error {
+func (d *dataFileImpl) sync() error {
 	return d.file.Sync()
 }
 
-func (d *dataFileImpl) read (off int64, out []byte) error {
+func (d *dataFileImpl) read(off int64, out []byte) error {
 	_, err := d.file.ReadAt(out, off)
 	return err
 }

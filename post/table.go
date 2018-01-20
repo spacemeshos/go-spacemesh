@@ -2,13 +2,13 @@ package post
 
 const (
 	S = 65536 // 137438953472 // number of entries (factor 1) - must be 2^n for some n
-	E = 8           // bits - entry size
+	E = 8     // bits - entry size
 )
 
 type Table interface {
-	read(off int64, out []byte) error // read len(out) bytes at offset off from the table
+	read(off int64, out []byte) error   // read len(out) bytes at offset off from the table
 	write(off int64, data []byte) error // write data at offset off
-	deleteAllData() error // delete all existing data from the table
+	deleteAllData() error               // delete all existing data from the table
 }
 
 type tableImpl struct {
@@ -55,10 +55,10 @@ func (d *tableImpl) deleteAllData() error {
 	return d.dataFile.create()
 }
 
-func (d *tableImpl) write (off int64, data []byte) error {
-	return d.write(off,data)
+func (d *tableImpl) write(off int64, data []byte) error {
+	return d.write(off, data)
 }
 
-func (d *tableImpl) read (off int64, out []byte) error {
-	return d.read(off,out)
+func (d *tableImpl) read(off int64, out []byte) error {
+	return d.read(off, out)
 }
