@@ -1,16 +1,17 @@
 package post
 
 const (
-	s = 65536 // 137438953472 // number of entries (factor 1) - must be 2^n for some n
+	s = 65536 // 137438953472 // number of entries (factor 1) - must be 2^H for some H
 	e = 8     // bits - entry size
 )
 
+// A simple binary data table backed by a data file
 type Table interface {
 	read(off int64, out []byte) error // read len(out) bytes at offset off from the table
 	seek(off int64) error
 	write(data []byte) error // write data at current offset and increases offset
-	sync() error
-	deleteAllData() error // delete all existing data from the table
+	sync() error             // syncs all writes to disk
+	deleteAllData() error    // delete all existing data from the table
 }
 
 type tableImpl struct {
@@ -49,6 +50,8 @@ func NewTable(mul int, id string, dir string) (Table, error) {
 
 	return t, nil
 }
+
+// Deletes all data
 func (d *tableImpl) deleteAllData() error {
 	err := d.dataFile.delete()
 	if err != nil {
