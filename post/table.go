@@ -28,7 +28,7 @@ type tableImpl struct {
 func NewTable(mul int, id string, dir string) (Table, error) {
 	size := s * int64(mul)
 	entries := size / e
-	dataFile := newDataFile(dir, id)
+	dataFile := newDataFile(dir)
 
 	// for now always delete the file if it exists and create a new one
 	if dataFile.exists() {

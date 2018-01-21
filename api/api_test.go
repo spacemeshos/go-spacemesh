@@ -6,6 +6,7 @@ import (
 	config "github.com/spacemeshos/go-spacemesh/api/config"
 	pb "github.com/spacemeshos/go-spacemesh/api/pb"
 	"github.com/spacemeshos/go-spacemesh/assert"
+	"github.com/spacemeshos/go-spacemesh/crypto"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"io/ioutil"
@@ -30,9 +31,10 @@ func TestServersConfig(t *testing.T) {
 
 func TestGrpcApi(t *testing.T) {
 
-	const port = 9092
+	var port = int(crypto.GetRandomUInt32(10000) + 1000)
+
 	const message = "Hello World"
-	config.ConfigValues.GrpcServerPort = port
+	config.ConfigValues.GrpcServerPort = uint(port)
 
 	grpcService := NewGrpcService()
 

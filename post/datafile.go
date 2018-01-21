@@ -26,7 +26,7 @@ type dataFileImpl struct {
 	offset int64
 }
 
-func newDataFile(dir string, id string) dataFile {
+func newDataFile(dir string) dataFile {
 	fileName := path.Join(dir, "post.dat")
 	f := &dataFileImpl{name: fileName}
 	return f
