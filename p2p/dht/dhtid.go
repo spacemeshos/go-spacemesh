@@ -70,13 +70,12 @@ func (id ID) Xor(o ID) ID {
 	return XOR(id, o)
 }
 
-// common shared prefix length in bits
+// Common shared prefix length in bits
 func (id ID) CommonPrefixLen(o ID) int {
-	c := id.Xor(o)
-	return c.ZeroPrefixLen()
+	return id.Xor(o).ZeroPrefixLen()
 }
 
-// zero prefix length in bits
+// Zero prefix length in bits
 func (id ID) ZeroPrefixLen() int {
 	for i := 0; i < len(id); i++ {
 		for j := 0; j < 8; j++ {

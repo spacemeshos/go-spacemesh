@@ -11,4 +11,6 @@
 - `table.go` provides the table data strcuture `table_test.go` shows how to populate a table with binary data backed by a binary data file.
 - This functionality is required for our proof of space time protocol.
 - The main goal is to benchmark an efficient traversal implementation to be able to better model space and time parameters. In other words, how long does it take on a modern CPU to traverse a table with a large number of entries?
+for example, given n=36 and entry size of 1 byte - what is the space / time used on a modern intel core to compute the merkle proof for the last (rightmost) item in the table?
+
 

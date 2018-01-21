@@ -22,7 +22,7 @@ type tableImpl struct {
 	dataFile dataFile
 }
 
-// Creates a new post table
+// Creates a new post data table
 // id: node id - base58 encoded key
 // dir: node data dir directory
 // mul: table size factor, e.g. 2 for x2 of min table size of S*E
@@ -60,18 +60,22 @@ func (d *tableImpl) deleteAllData() error {
 	return d.dataFile.create()
 }
 
+// Writes data at current table offset
 func (d *tableImpl) write(data []byte) error {
 	return d.dataFile.write(data)
 }
 
+// Seeks to a new offset relative to 0
 func (d *tableImpl) seek(off int64) error {
 	return d.dataFile.seek(off)
 }
 
+// Saves all writes to data file on disk
 func (d *tableImpl) sync() error {
 	return d.dataFile.sync()
 }
 
+// Reads len(out) bytes at offset
 func (d *tableImpl) read(off int64, out []byte) error {
 	return d.dataFile.read(off, out)
 }
