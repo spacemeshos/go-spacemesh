@@ -27,7 +27,10 @@ func TestPingProtocol(t *testing.T) {
 		assert.NoErr(t, err, "failed to generate random data")
 		table.write(data)
 	}
+
+	// sync all writes to disk
 	table.sync()
+
 	//table.deleteAllData()
 	node.Shutdown()
 
