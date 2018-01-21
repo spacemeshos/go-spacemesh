@@ -19,8 +19,8 @@ import (
 
 func TestServersConfig(t *testing.T) {
 
-	config.ConfigValues.GrpcServerPort = 9092
-	config.ConfigValues.JsonServerPort = 9031
+	config.ConfigValues.GrpcServerPort = uint(crypto.GetRandomUInt32(10000) + 1000)
+	config.ConfigValues.JsonServerPort = uint(crypto.GetRandomUInt32(10000) + 1000)
 
 	grpcService := NewGrpcService()
 	jsonService := NewJsonHttpServer()
@@ -31,10 +31,10 @@ func TestServersConfig(t *testing.T) {
 
 func TestGrpcApi(t *testing.T) {
 
-	var port = int(crypto.GetRandomUInt32(10000) + 1000)
+	config.ConfigValues.GrpcServerPort = uint(crypto.GetRandomUInt32(10000) + 1000)
+	config.ConfigValues.JsonServerPort = uint(crypto.GetRandomUInt32(10000) + 1000)
 
 	const message = "Hello World"
-	config.ConfigValues.GrpcServerPort = uint(port)
 
 	grpcService := NewGrpcService()
 
@@ -42,7 +42,7 @@ func TestGrpcApi(t *testing.T) {
 	grpcService.StartService(nil)
 
 	// start a client
-	addr := "localhost:" + strconv.Itoa(port)
+	addr := "localhost:" + strconv.Itoa(int(config.ConfigValues.GrpcServerPort))
 
 	// Set up a connection to the server.
 	conn, err := grpc.Dial(addr, grpc.WithInsecure())
@@ -65,6 +65,9 @@ func TestGrpcApi(t *testing.T) {
 }
 
 func TestJsonApi(t *testing.T) {
+
+	config.ConfigValues.GrpcServerPort = uint(crypto.GetRandomUInt32(10000) + 1000)
+	config.ConfigValues.JsonServerPort = uint(crypto.GetRandomUInt32(10000) + 1000)
 
 	grpcService := NewGrpcService()
 	jsonService := NewJsonHttpServer()

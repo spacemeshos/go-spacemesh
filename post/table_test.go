@@ -24,7 +24,7 @@ func TestPingProtocol(t *testing.T) {
 
 	for i := 0; i < 2*65536; i++ {
 		err := crypto.GetRandomBytesToBuffer(1, data)
-		assert.NoErr(t,err, "failed generate random data")
+		assert.NoErr(t,err, "failed to generate random data")
 		table.write(data)
 	}
 	table.sync()
