@@ -43,7 +43,7 @@ type LocalNode interface {
 	Warning(format string, args ...interface{})
 
 	// local store persistence
-	ensureNodeDataDirectory() (string, error)
+	EnsureNodeDataDirectory() (string, error)
 	persistData() error
 }
 
@@ -95,7 +95,7 @@ func newLocalNodeWithKeys(pubKey crypto.PublicKey, privKey crypto.PrivateKey, tc
 		dhtId:      dht.NewIdFromNodeKey(pubKey.Bytes()),
 	}
 
-	dataDir, err := n.ensureNodeDataDirectory()
+	dataDir, err := n.EnsureNodeDataDirectory()
 	if err != nil {
 		return nil, err
 	}
