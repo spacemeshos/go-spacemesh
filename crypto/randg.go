@@ -7,6 +7,23 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
+// Put n random bytes using go crypto.rand into buff
+// Buff must be allocated to hold n bytes by caller
+func GetRandomBytesToBuffer(n int, buff []byte) error {
+
+	if n == 0 {
+		return errors.New("invalid input param - n must be positive")
+	}
+
+	_, err := rand.Read(buff)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // Get n random bytes using go crypto.rand
 // returns an error when the system pgn malfunctions
 func GetRandomBytes(n int) ([]byte, error) {
@@ -19,7 +36,6 @@ func GetRandomBytes(n int) ([]byte, error) {
 	_, err := rand.Read(b)
 
 	if err != nil {
-		log.Error("Failed to get entropy from system", err)
 		return nil, err
 	}
 

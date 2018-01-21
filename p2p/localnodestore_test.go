@@ -26,7 +26,7 @@ func TestNodeLocalStore(t *testing.T) {
 	err = node.persistData()
 	assert.NoErr(t, err, "failed to persist node data")
 
-	_, err = node.ensureNodeDataDirectory()
+	_, err = node.EnsureNodeDataDirectory()
 	assert.NoErr(t, err, "failed to ensure node data directory")
 
 	// shutdown node as we'd like to start a new one with same ip:port on local host

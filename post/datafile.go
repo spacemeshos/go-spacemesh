@@ -1,6 +1,8 @@
 package post
 
 import (
+	"bufio"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"os"
 	"path"
 )
@@ -11,34 +13,58 @@ type dataFile interface {
 	delete() error
 	create() error
 	close() error
-	read(off int64, out []byte) error   // read len(out) bytes at offset off from the file
-	write(off int64, data []byte) error // write data at offset off
+	read(off int64, out []byte) error // read len(out) bytes at offset off from the file
+	write(data []byte) error          // write data at current offset and advanced offset
+	seek(off int64) error
 	sync() error
 }
 
 type dataFileImpl struct {
-	name string
-	file *os.File
+	name   string
+	file   *os.File
+	writer *bufio.Writer
+	offset int64
 }
 
-func newDataFile(dir string, id string) dataFile {
-	fileName := path.Join(dir, id+".post")
+func newDataFile(dir string) dataFile {
+	fileName := path.Join(dir, "post.dat")
 	f := &dataFileImpl{name: fileName}
 	return f
 }
 
-func (d *dataFileImpl) write(off int64, data []byte) error {
-	_, err := d.file.WriteAt(data, off)
+func (d *dataFileImpl) seek(off int64) error {
+
+	if off == d.offset { // we are already here
+		return nil
+	}
+
+	// flush any existing buffered data
+	err := d.writer.Flush()
 	if err != nil {
 		return err
 	}
 
-	// todo: for now sync on every write - soon: use buffered writers for sequential writes
-	return d.file.Sync()
+	// seek to new offset
+	_, err = d.file.Seek(off, 0)
+	if err != nil {
+		return err
+	}
+
+	d.offset = off
+
+	// create buffered writer at current offset
+	d.writer = bufio.NewWriter(d.file)
+	return nil
+}
+
+func (d *dataFileImpl) write(data []byte) error {
+	_, err := d.writer.Write(data)
+	d.offset = d.offset + int64(len(data))
+	return err
 }
 
 func (d *dataFileImpl) sync() error {
-	return d.file.Sync()
+	return d.writer.Flush()
 }
 
 func (d *dataFileImpl) read(off int64, out []byte) error {
@@ -73,6 +99,8 @@ func (d *dataFileImpl) create() error {
 	file, err := os.Create(d.name)
 	if err == nil {
 		d.file = file
+		d.writer = bufio.NewWriter(file)
 	}
+	log.Info("Create table %s", d.name)
 	return err
 }
