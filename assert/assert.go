@@ -17,6 +17,7 @@ func Nil(t *testing.T, obj interface{}, msgs ...string) {
 }
 
 func NotNil(t *testing.T, obj interface{}, msgs ...string) {
+	t.Helper()
 	if obj == nil {
 		t.Fatal(msgs, "epxected a non-nil object")
 	}
