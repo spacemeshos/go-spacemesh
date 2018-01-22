@@ -13,4 +13,8 @@
 - The main goal is to benchmark an efficient traversal implementation to be able to better model space and time parameters. In other words, how long does it take on a modern CPU to traverse a table with a large number of entries?
 for example, given n=36 and entry size of 1 byte - what is the space / time used on a modern intel core to compute the merkle proof for the last (rightmost) item in the table?
 
+### Details
+- Let G be a table with 2^n fixed-sized binary data entries, say 1 byte per entry.
+- Input: index i in range [0,2^n-1]
+- Output: The set of the values/labels of the siblings of nodes on the path from leaf i to the entrie's Merkle root and the root node value (Merkle proof)
 
