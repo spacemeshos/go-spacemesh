@@ -30,7 +30,7 @@ func NewJsonHttpServer() *JsonHttpServer {
 func (s JsonHttpServer) Stop() {
 	log.Info("Stopping json-http service...")
 
-	// todo: fixme - this is panicing
+	// todo: fixme - this is panicking
 	//s.server.Shutdown(s.ctx)
 }
 
