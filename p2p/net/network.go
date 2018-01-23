@@ -26,7 +26,7 @@ type Net interface {
 	Shutdown()
 }
 
-// impl internal tpye
+// impl internal type
 type netImpl struct {
 	tcpListener      net.Listener
 	tcpListenAddress string // Address to open connection: localhost:9999
@@ -147,8 +147,6 @@ func (n *netImpl) acceptTcp() {
 
 		log.Info("Got new connection...")
 		c := newConnection(netConn, n, Remote)
-
 		n.newConnections <- c
-
 	}
 }
