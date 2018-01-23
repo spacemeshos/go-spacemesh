@@ -1,16 +1,17 @@
 package post
 
 const (
-	s = 65536 // 137438953472 // number of entries (factor 1) - must be 2^n for some n
+	s = 65536 // 137438953472 // number of entries (factor 1) - must be 2^H for some H
 	e = 8     // bits - entry size
 )
 
+// A simple binary data table backed by a data file
 type Table interface {
 	read(off int64, out []byte) error // read len(out) bytes at offset off from the table
 	seek(off int64) error
 	write(data []byte) error // write data at current offset and increases offset
-	sync() error
-	deleteAllData() error // delete all existing data from the table
+	sync() error             // syncs all writes to disk
+	deleteAllData() error    // delete all existing data from the table
 }
 
 type tableImpl struct {
@@ -21,7 +22,7 @@ type tableImpl struct {
 	dataFile dataFile
 }
 
-// Creates a new post table
+// Creates a new post data table
 // id: node id - base58 encoded key
 // dir: node data dir directory
 // mul: table size factor, e.g. 2 for x2 of min table size of S*E
@@ -49,6 +50,8 @@ func NewTable(mul int, id string, dir string) (Table, error) {
 
 	return t, nil
 }
+
+// Deletes all data
 func (d *tableImpl) deleteAllData() error {
 	err := d.dataFile.delete()
 	if err != nil {
@@ -57,18 +60,22 @@ func (d *tableImpl) deleteAllData() error {
 	return d.dataFile.create()
 }
 
+// Writes data at current table offset
 func (d *tableImpl) write(data []byte) error {
 	return d.dataFile.write(data)
 }
 
+// Seeks to a new offset relative to 0
 func (d *tableImpl) seek(off int64) error {
 	return d.dataFile.seek(off)
 }
 
+// Saves all writes to data file on disk
 func (d *tableImpl) sync() error {
 	return d.dataFile.sync()
 }
 
+// Reads len(out) bytes at offset
 func (d *tableImpl) read(off int64, out []byte) error {
 	return d.dataFile.read(off, out)
 }

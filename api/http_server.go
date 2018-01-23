@@ -17,9 +17,10 @@ import (
 // Implemented as a grpc gateway.
 // See https://github.com/grpc-ecosystem/grpc-gateway
 
-// todo: add http.server and support graceful shutdown
 type JsonHttpServer struct {
 	Port uint
+	server *http.Server
+	ctx context.Context
 }
 
 func NewJsonHttpServer() *JsonHttpServer {
@@ -27,8 +28,10 @@ func NewJsonHttpServer() *JsonHttpServer {
 }
 
 func (s JsonHttpServer) Stop() {
-	// todo: how to stop http from listening on the address?
 	log.Info("Stopping json-http service...")
+
+	// todo: fixme - this is panicking
+	//s.server.Shutdown(s.ctx)
 }
 
 // Start the grpc server
@@ -40,6 +43,7 @@ func (s JsonHttpServer) startInternal(callback chan bool) {
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	s.ctx = ctx
 
 	mux := runtime.NewServeMux()
 	opts := []grpc.DialOption{grpc.WithInsecure()}
@@ -59,10 +63,11 @@ func (s JsonHttpServer) startInternal(callback chan bool) {
 	if callback != nil {
 		callback <- true
 	}
-	// this blocks until stopped or error
-	err := http.ListenAndServe(addr, mux)
+
+	s.server = &http.Server{Addr: addr, Handler: mux}
+	err := s.server.ListenAndServe()
 
 	if err != nil {
-		log.Error("listen and serve stopped with error", err)
+		log.Info("listen and serve stopped with status. %v", err)
 	}
 }

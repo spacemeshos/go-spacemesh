@@ -2,6 +2,7 @@ package crypto
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/assert"
 	"testing"
@@ -27,6 +28,14 @@ func TestDeriveKey(t *testing.T) {
 	data, err = DeriveKeyFromPassword(pass, dead)
 	assert.True(t, bytes.Equal(data, []byte("")), fmt.Sprintf("scrypt.Key error should give [] but gave %v", data))
 	assert.Err(t, err, fmt.Sprint("scrypt.Key should give error"))
+
+	// test derivation without a valid set salt
+	data, err = DeriveKeyFromPassword(pass, good)
+	assert.Err(t, err, "expected no salt error")
+
+	s, err := GetRandomBytes(good.SaltLen)
+	assert.NoErr(t, err, "failed to generate salt")
+	good.Salt = hex.EncodeToString(s)
 
 	// try good parameters and get valid result
 	data, err = DeriveKeyFromPassword(pass, good)

@@ -7,7 +7,7 @@ import (
 	"path"
 )
 
-// todo: support buffered writing
+// dataFile is a simple binary data file
 type dataFile interface {
 	exists() bool
 	delete() error
@@ -15,8 +15,8 @@ type dataFile interface {
 	close() error
 	read(off int64, out []byte) error // read len(out) bytes at offset off from the file
 	write(data []byte) error          // write data at current offset and advanced offset
-	seek(off int64) error
-	sync() error
+	seek(off int64) error             // set new write offset from 0
+	sync() error                      // sync all changes to store
 }
 
 type dataFileImpl struct {
@@ -101,6 +101,6 @@ func (d *dataFileImpl) create() error {
 		d.file = file
 		d.writer = bufio.NewWriter(file)
 	}
-	log.Info("Create table %s", d.name)
+	log.Info("Created table file at: %s", d.name)
 	return err
 }

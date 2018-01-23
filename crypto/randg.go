@@ -7,12 +7,16 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-// Put n random bytes using go crypto.rand into buff
+// Put n random bytes using go crypto.rand into provided buff slice
 // Buff must be allocated to hold n bytes by caller
 func GetRandomBytesToBuffer(n int, buff []byte) error {
 
 	if n == 0 {
 		return errors.New("invalid input param - n must be positive")
+	}
+
+	if len(buff) < n {
+		return errors.New("invalid input param - buff must be allocated to hold n items")
 	}
 
 	_, err := rand.Read(buff)

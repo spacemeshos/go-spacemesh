@@ -72,12 +72,11 @@ func TestAccountOps(t *testing.T) {
 
 }
 
-func TestPassphrase(t *testing.T) {
+func TestPersistence(t *testing.T) {
 
 	filesystem.DeleteSpacemeshDataFolders(t)
 
 	const passphrase = "a-weak-passphrase-1234"
-
 	const wrongPassphrase = "a-weak-passphrase-1245"
 
 	accountsDataFolder, err := filesystem.GetAccountsDataDirectoryPath()
@@ -95,7 +94,7 @@ func TestPassphrase(t *testing.T) {
 		t.Fatalf("Failed to persist account %v", err)
 	}
 
-	// uncomment to cleanup the account data file from store
+	// cleanup the account data file from store
 	defer os.Remove(accountDataFilePath)
 
 	// read the account back from store
