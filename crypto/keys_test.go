@@ -13,13 +13,13 @@ func TestBasicApi(t *testing.T) {
 
 	badData, _ := hex.DecodeString("1234")
 	_, err := NewPublicKey(badData)
-	assert.Err(t,err, "expected error for bad key data")
+	assert.Err(t, err, "expected error for bad key data")
 
 	_, err = NewPrivateKey(badData)
-	assert.Err(t,err, "expected error for bad key data")
+	assert.Err(t, err, "expected error for bad key data")
 
 	_, err = NewPrivateKeyFromString("1234")
-	assert.Err(t,err, "expected error for bad key data")
+	assert.Err(t, err, "expected error for bad key data")
 
 	priv, pub, err := GenerateKeyPair()
 
@@ -32,7 +32,7 @@ func TestBasicApi(t *testing.T) {
 		pub.String(), pub1.String()))
 
 	// serialization tests
-	priv1,err := NewPrivateKey(priv.Bytes())
+	priv1, err := NewPrivateKey(priv.Bytes())
 	assert.NoErr(t, err, "unexpected error")
 	assert.True(t, bytes.Equal(priv1.Bytes(), priv.Bytes()), fmt.Sprintf("expected same private key, %s, %s",
 		priv1.String(), priv.String()))

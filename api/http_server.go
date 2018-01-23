@@ -18,9 +18,9 @@ import (
 // See https://github.com/grpc-ecosystem/grpc-gateway
 
 type JsonHttpServer struct {
-	Port uint
+	Port   uint
 	server *http.Server
-	ctx context.Context
+	ctx    context.Context
 }
 
 func NewJsonHttpServer() *JsonHttpServer {
