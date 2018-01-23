@@ -32,8 +32,8 @@ func init() {
 	}
 }
 
-// Create a new account using provided passphrase
-// Clients should persist newly created accounts - without this the account only last for one app session
+// Creates a new account using the provided passphrase
+// Clients should persist newly created accounts - without this the account only lasts for one app session
 func NewAccount(passphrase string) (*Account, error) {
 
 	// account crypto data
@@ -54,14 +54,13 @@ func NewAccount(passphrase string) (*Account, error) {
 
 	dk, err := crypto.DeriveKeyFromPassword(passphrase, kdfParams)
 	if err != nil {
-		log.Error("kdf failure", err)
 		return nil, err
 	}
 
 	// extract 16 bytes aes-128-ctr key from the derived key
 	aesKey := dk[:16]
 
-	// date to encrypt
+	// data to encrypt
 	privKeyBytes := priv.Bytes()
 
 	// compute nonce
@@ -99,7 +98,7 @@ func NewAccount(passphrase string) (*Account, error) {
 		Salt:    kdfParams.Salt,
 	}
 
-	// save all date in newly created account obj
+	// save all data in newly created account obj
 	acct := &Account{priv,
 		pub,
 		cryptoData,
