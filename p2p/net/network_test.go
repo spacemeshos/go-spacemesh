@@ -74,7 +74,7 @@ func TestReadWrite(t *testing.T) {
 
 	n.Shutdown()
 	_ ,err = n.DialTCP(address, time.Duration(10*time.Second), time.Duration(48*time.Hour))
-	assert.Err(t, err, "expected to fial dialing after calling shutdown")
+	assert.Err(t, err, "expected to fail dialing after calling shutdown")
 
 	t2 := c.LastOpTime()
 
