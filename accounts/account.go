@@ -48,7 +48,7 @@ func NewAccount(passphrase string) (*Account, error) {
 	// add new salt to params
 	saltData, err := crypto.GetRandomBytes(kdfParams.SaltLen)
 	if err != nil {
-		return nil, errors.New("Failed to generate random salt")
+		return nil, errors.New("failed to generate random salt")
 	}
 	kdfParams.Salt = hex.EncodeToString(saltData)
 
