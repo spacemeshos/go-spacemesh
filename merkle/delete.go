@@ -2,14 +2,12 @@ package merkle
 
 import (
 	"encoding/hex"
-	"errors"
 
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 // remove v keyed by k from the tree
 func (mt *merkleTreeImp) Delete(k []byte) error {
-	return errors.New("not implemented yet")
 	if len(k) == 0 {
 		return InvalidUserDataError
 	}
