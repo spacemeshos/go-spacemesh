@@ -58,7 +58,6 @@ func (a *Account) UnlockAccount(passphrase string) error {
 	// get derived key from params and pass-phrase
 	dk, err := crypto.DeriveKeyFromPassword(passphrase, a.kdParams)
 	if err != nil {
-		log.Error("kdf failure", err)
 		return err
 	}
 
@@ -66,23 +65,20 @@ func (a *Account) UnlockAccount(passphrase string) error {
 	aesKey := dk[:16]
 	cipherText, err := hex.DecodeString(a.cryptoData.CipherText)
 	if err != nil {
-		log.Error("failed to decode cipherText", err)
 		return err
 	}
 
 	nonce, err := hex.DecodeString(a.cryptoData.CipherIv)
 	if err != nil {
-		log.Error("failed to decode iv", err)
 		return err
 	}
 
 	mac, err := hex.DecodeString(a.cryptoData.Mac)
 	if err != nil {
-		log.Error("failed to decode mac", err)
 		return err
 	}
 
-	// authenticate cipherText using macs
+	// authenticate cipherText using mac
 	expectedMac := crypto.Sha256(dk[16:32], cipherText)
 
 	if subtle.ConstantTimeCompare(mac, expectedMac) != 1 {
@@ -110,8 +106,9 @@ func (a *Account) UnlockAccount(passphrase string) error {
 	return nil
 }
 
-// Validate that the account's private key matches provided private key
+// Validate that the account's private key matches the provided private key
 func (a *Account) validatePublickKey(privateKey crypto.PrivateKey) error {
+
 	publicKey := privateKey.GetPublicKey()
 	publicKeyStr := publicKey.String()
 	accountPubKeyStr := a.PubKey.String()

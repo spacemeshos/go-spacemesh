@@ -27,8 +27,8 @@ var (
 
 func init() {
 	Accounts = &AccountsRegistry{
-		make(map[string]*Account),
-		make(map[string]*Account),
+		All:      make(map[string]*Account),
+		Unlocked: make(map[string]*Account),
 	}
 }
 

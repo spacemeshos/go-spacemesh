@@ -24,8 +24,7 @@ type CryptoData struct {
 	Mac        string `json:"mac"`
 }
 
-// Load all accounts from store
-
+// Loads all accounts from store
 func LoadAllAccounts() error {
 
 	accountsDataFolder, err := filesystem.GetAccountsDataDirectoryPath()
@@ -52,7 +51,7 @@ func LoadAllAccounts() error {
 
 }
 
-// Create a new account by id and stored data
+// Creates a new account by id and stored data
 // Account will be locked after creation as there's no persisted passphrase
 // accountsDataPath: os-specific full path to accounts data folder
 func NewAccountFromStore(accountId string, accountsDataPath string) (*Account, error) {
