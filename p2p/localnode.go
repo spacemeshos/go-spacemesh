@@ -128,7 +128,7 @@ func newLocalNodeWithKeys(pubKey crypto.PublicKey, privKey crypto.PrivateKey, tc
 // Creates a new node from peristed NodeData
 func newNodeFromData(tcpAddress string, d *NodeData, config nodeconfig.Config, persist bool) (LocalNode, error) {
 
-	priv,err  := crypto.NewPrivateKeyFromString(d.PrivKey)
+	priv, err := crypto.NewPrivateKeyFromString(d.PrivKey)
 	if err != nil {
 		return nil, err
 	}

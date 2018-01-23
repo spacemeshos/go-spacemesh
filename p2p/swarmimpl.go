@@ -205,7 +205,6 @@ func (s *swarmImpl) ConnectToRandomNodes(count int) {
 	s.localNode.Info("Attempting to connect to %d random nodes...", count)
 
 	// issue a request to find self to the swarm to populate the local routing table with random nodes
-
 	c := make(chan node.RemoteNodeData, count)
 	s.findNode(s.localNode.String(), c)
 
@@ -229,8 +228,8 @@ func (s *swarmImpl) ConnectToRandomNodes(count int) {
 				go s.ConnectTo(p)
 			}
 
-		case <-time.After(time.Second * 30):
-			s.localNode.Error("Failed to get random close nodes - timeout")
+		case <-time.After(time.Second * 90):
+			s.localNode.Error("timeout getting random nearby nodes")
 		}
 
 	}
