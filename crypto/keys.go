@@ -2,6 +2,7 @@ package crypto
 
 import (
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcutil/base58"
@@ -56,12 +57,17 @@ func GenerateKeyPair() (PrivateKey, PublicKey, error) {
 	return &privateKeyImpl{privKey}, &publicKeyImpl{privKey.PubKey()}, nil
 }
 
-func NewPrivateKey(data []byte) PrivateKey {
+func NewPrivateKey(data []byte) (PrivateKey, error) {
+
+	if len(data) != 32 {
+		return nil, errors.New("expected 32 bytes input")
+	}
+
 	privk, _ := btcec.PrivKeyFromBytes(btcec.S256(), data)
-	return &privateKeyImpl{privk}
+	return &privateKeyImpl{privk}, nil
 }
 
-func NewPrivateKeyFromString(s string) PrivateKey {
+func NewPrivateKeyFromString(s string) (PrivateKey, error) {
 	data := base58.Decode(s)
 	return NewPrivateKey(data)
 }
@@ -105,8 +111,6 @@ func (p *privateKeyImpl) Sign(in []byte) ([]byte, error) {
 func (p *privateKeyImpl) Decrypt(in []byte) ([]byte, error) {
 	return btcec.Decrypt(p.k, in)
 }
-
-////////////////////////////////////////
 
 // Creates a new public key from provided binary key data
 func NewPublicKey(data []byte) (PublicKey, error) {
