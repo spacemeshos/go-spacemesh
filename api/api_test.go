@@ -90,7 +90,6 @@ func TestJsonApi(t *testing.T) {
 	payload, err := m.MarshalToString(&reqParams)
 	assert.NoErr(t, err, "failed to marshal to string")
 
-
 	// Without this running this on Travis CI might generate a connection refused error
 	// because the server may not be ready to accept connections just yet.
 	time.Sleep(3 * time.Second)

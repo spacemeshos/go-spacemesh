@@ -34,7 +34,7 @@ Loop:
 	node2Local.Shutdown()
 }
 
-func _estSimpleBootstrap(t *testing.T) {
+func TestSimpleBootstrap(t *testing.T) {
 
 	// setup:
 	// node1 - bootstrap node
