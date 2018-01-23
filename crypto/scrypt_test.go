@@ -34,7 +34,7 @@ func TestDeriveKey(t *testing.T) {
 	assert.Err(t, err, "expected no salt error")
 
 	s, err := GetRandomBytes(good.SaltLen)
-	assert.NoErr(t, err,  "failed to generate salt")
+	assert.NoErr(t, err, "failed to generate salt")
 	good.Salt = hex.EncodeToString(s)
 
 	// try good parameters and get valid result

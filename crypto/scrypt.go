@@ -21,7 +21,7 @@ var DefaultCypherParams = KDParams{N: 262144, R: 8, P: 1, SaltLen: 16, DKLen: 32
 func DeriveKeyFromPassword(password string, p KDParams) ([]byte, error) {
 
 	if len(p.Salt) == 0 {
-		return nil, errors.New("Invalid salt length param")
+		return nil, errors.New("invalid salt length param")
 	}
 
 	salt, err := hex.DecodeString(p.Salt)
