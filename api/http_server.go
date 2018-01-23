@@ -21,25 +21,31 @@ type JsonHttpServer struct {
 	Port   uint
 	server *http.Server
 	ctx    context.Context
+	stop chan bool
 }
 
 func NewJsonHttpServer() *JsonHttpServer {
-	return &JsonHttpServer{Port: config.ConfigValues.JsonServerPort}
+	return &JsonHttpServer{ Port: config.ConfigValues.JsonServerPort, stop: make(chan bool)}
 }
 
-func (s JsonHttpServer) Stop() {
-	log.Info("Stopping json-http service...")
-
-	// todo: fixme - this is panicking
-	//s.server.Shutdown(s.ctx)
+func (s JsonHttpServer) StopService() {
+	s.stop <- true
 }
 
-// Start the grpc server
-func (s JsonHttpServer) StartService(callback chan bool) {
-	go s.startInternal(callback)
+func (s JsonHttpServer) listenStop() {
+	<-s.stop
+	log.Info("Shutting down json API server...")
+	if err := s.server.Shutdown(s.ctx); err != nil {
+		log.Error("Error during shutdown json API server : %v", err)
+	}
 }
 
-func (s JsonHttpServer) startInternal(callback chan bool) {
+// Start the json http API server and listen for status (started, stopped)
+func (s JsonHttpServer) StartService(status chan bool) {
+	go s.startInternal(status)
+}
+
+func (s JsonHttpServer) startInternal(status chan bool) {
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -60,8 +66,10 @@ func (s JsonHttpServer) startInternal(callback chan bool) {
 
 	log.Info("json API listening on port %d", s.Port)
 
-	if callback != nil {
-		callback <- true
+	go func() { s.listenStop() }()
+
+	if status != nil {
+		status <- true
 	}
 
 	s.server = &http.Server{Addr: addr, Handler: mux}
@@ -69,5 +77,9 @@ func (s JsonHttpServer) startInternal(callback chan bool) {
 
 	if err != nil {
 		log.Info("listen and serve stopped with status. %v", err)
+	}
+
+	if status != nil {
+		status <- true
 	}
 }
