@@ -55,15 +55,28 @@ func TestReadWrite(t *testing.T) {
 	assert.Nil(t, err, "failed to connect to tcp server")
 
 	log.Info("Sending message...")
+
+	t1 := c.LastOpTime()
+
 	c.Send(msg, msgId)
 	//assert.Nil(t, err, "Failed to send message to server")
 	//assert.Equal(t, l, len(msg) + 4, "Expected message to be written to stream")
 	log.Info("Message sent.")
+
 
 	// todo: test callbacks for messages
 
 	log.Info("Waiting for incoming messages...")
 
 	<-done
+
+	t2 := c.LastOpTime()
+
+	// verify connection props
+	id := c.Id()
+	assert.True(t, len(id) >0, "failed to get connection id")
+	assert.True(t, t2.Sub(t1) > 0, "invalid last op time")
+	err = c.Close()
+	assert.NoErr(t,err,"error closing connection")
 
 }

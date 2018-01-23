@@ -77,7 +77,7 @@ Loop:
 	node2Local.Shutdown()
 }
 
-func TestBootstrap(t *testing.T) {
+func _estBootstrap(t *testing.T) {
 
 	// setup:
 	//
