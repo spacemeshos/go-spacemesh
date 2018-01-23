@@ -1,4 +1,4 @@
-// Package account provide types for working with blockchain accounts
+// Package accounts provides types for working with Spacemesh blockchain accounts
 package accounts
 
 import (
