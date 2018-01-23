@@ -23,7 +23,7 @@ type NetworkSession interface {
 	PubKey() []byte     // 65 bytes session-only pub key uncompressed
 	Created() time.Time // time when session was established
 
-	// TODO: add support for session expiration
+	// TODO: add support for idle session expiration
 
 	LocalNodeId() string  // string encoded session local node id
 	RemoteNodeId() string // string encoded session remote node id

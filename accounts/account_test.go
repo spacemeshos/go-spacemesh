@@ -1,7 +1,6 @@
-package tests
+package accounts
 
 import (
-	"github.com/spacemeshos/go-spacemesh/accounts"
 	"github.com/spacemeshos/go-spacemesh/assert"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -10,10 +9,12 @@ import (
 )
 
 func TestAccountLoading(t *testing.T) {
-	accounts.LoadAllAccounts()
+	LoadAllAccounts()
 }
 
 func TestAccountOps(t *testing.T) {
+
+	filesystem.DeleteSpacemeshDataFolders(t)
 
 	const passphrase = "a-weak-passphrase-123"
 	accountsDataFolder, err := filesystem.GetAccountsDataDirectoryPath()
@@ -21,7 +22,7 @@ func TestAccountOps(t *testing.T) {
 		t.Fatalf("Failed to get temp dir: %v", err)
 	}
 
-	account, err := accounts.NewAccount(passphrase)
+	account, err := NewAccount(passphrase)
 	if err != nil {
 		t.Fatalf("Failed to create an account")
 	}
@@ -42,7 +43,7 @@ func TestAccountOps(t *testing.T) {
 	log.Info("Persisted account to: %s", accountDataFilePath)
 
 	// read the account back from store
-	account1, err := accounts.NewAccountFromStore(account.String(), accountsDataFolder)
+	account1, err := NewAccountFromStore(account.String(), accountsDataFolder)
 	if err != nil {
 		t.Fatalf("Failed to load account %v", err)
 	}
@@ -66,12 +67,16 @@ func TestAccountOps(t *testing.T) {
 	account1PrivKey := account1.PrivKey.String()
 
 	assert.Equal(t, accountPrivKey, account1PrivKey, "Expected same private key after unlocking")
+
+	filesystem.DeleteSpacemeshDataFolders(t)
+
 }
 
-func TestPassphrase(t *testing.T) {
+func TestPersistence(t *testing.T) {
+
+	filesystem.DeleteSpacemeshDataFolders(t)
 
 	const passphrase = "a-weak-passphrase-1234"
-
 	const wrongPassphrase = "a-weak-passphrase-1245"
 
 	accountsDataFolder, err := filesystem.GetAccountsDataDirectoryPath()
@@ -79,7 +84,7 @@ func TestPassphrase(t *testing.T) {
 		t.Fatalf("Failed to get temp dir: %v", err)
 	}
 
-	account, err := accounts.NewAccount(passphrase)
+	account, err := NewAccount(passphrase)
 	if err != nil {
 		t.Fatalf("Failed to create an account")
 	}
@@ -89,11 +94,11 @@ func TestPassphrase(t *testing.T) {
 		t.Fatalf("Failed to persist account %v", err)
 	}
 
-	// uncomment to cleanup the account data file from store
+	// cleanup the account data file from store
 	defer os.Remove(accountDataFilePath)
 
 	// read the account back from store
-	account1, err := accounts.NewAccountFromStore(account.String(), accountsDataFolder)
+	account1, err := NewAccountFromStore(account.String(), accountsDataFolder)
 	if err != nil {
 		t.Fatalf("Failed to load account %v", err)
 	}
@@ -111,5 +116,7 @@ func TestPassphrase(t *testing.T) {
 	assert.Err(t, err, "Expected unlock with wrong password op error")
 	assert.True(t, account1.IsAccountLocked(), "Expected account to be locked")
 	assert.Nil(t, account1.PrivKey, "expected nil private key for locked account")
+
+	filesystem.DeleteSpacemeshDataFolders(t)
 
 }

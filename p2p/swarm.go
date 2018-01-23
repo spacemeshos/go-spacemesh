@@ -28,7 +28,7 @@ type Swarm interface {
 	ConnectTo(req node.RemoteNodeData)
 
 	// Connect to count random nodes - used for bootstrapping the swarm
-	ConnectToRandomNodes(count int, callback chan node.RemoteNodeData)
+	ConnectToRandomNodes(count int)
 
 	// Forcefully disconnect form a node - close any connections and sessions with it
 	DisconnectFrom(req node.RemoteNodeData)
@@ -36,8 +36,13 @@ type Swarm interface {
 	// Send a handshake protocol message that is used to establish a session
 	sendHandshakeMessage(req SendMessageReq)
 
-	// services getters
+	// Register a callback channel for state changes related to remote nodes
+	// Currently used for testing network bootstrapping
+	RegisterNodeEventsCallback(callback NodeEventCallback)
 
+	Shutdown()
+
+	// services getters
 	GetDemuxer() Demuxer
 	GetLocalNode() LocalNode
 
@@ -63,3 +68,21 @@ type NodeResp struct {
 	peerId string
 	err    error
 }
+
+type NodeEvent struct {
+	PeerId string
+	State  NodeState
+}
+
+type NodeEventCallback chan NodeEvent
+type NodeState int32
+
+const (
+	UNKNOWN NodeState = iota
+	REGISTERED
+	CONNECTING
+	CONNECTED
+	HNADSHAKE_STARTED
+	SESSION_ESTABLISHED
+	DISCONNECTED
+)

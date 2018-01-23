@@ -1,7 +1,5 @@
 package nodeconfig
 
-import ()
-
 // params are non-configurable (hard-coded) consts. To create a configurable param use Config
 
 const (

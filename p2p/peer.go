@@ -7,7 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 )
 
-// A network peer
+// A network peer known to the local node. At minimum local node knows its id (public key) and tcp address.
 // Peers are maintained by the swarm and are not visible to higher-level types on the network stack
 // All Peer methods are NOT thread-safe - they are designed to be used only from a singleton swarm object
 // Peer handles swarm sessions and net connections with a remote node
@@ -18,6 +18,9 @@ type Peer interface {
 	TcpAddress() string // tcp address advertised by node e.g. 127.0.0.1:3058
 	PublicKey() crypto.PublicKey
 	GetConnections() map[string]net.Connection
+
+	DeleteAllConnections()
+
 	GetSessions() map[string]NetworkSession
 
 	// returns an authenticated session with the node if one exists
@@ -26,6 +29,7 @@ type Peer interface {
 	// returns an active connection with the node if we have one
 	GetActiveConnection() net.Connection
 
+	// returns RemoteNodeData for this peer
 	GetRemoteNodeData() node.RemoteNodeData
 }
 
@@ -42,7 +46,7 @@ func NewRemoteNode(id string, tcpAddress string) (Peer, error) {
 
 	key, err := crypto.NewPublicKeyFromString(id)
 	if err != nil {
-		log.Error("invalid node id format: %v", err)
+		log.Error("invalid node id format", err)
 		return nil, err
 	}
 
@@ -83,6 +87,10 @@ func (n *peerImpl) GetActiveConnection() net.Connection {
 
 func (n *peerImpl) GetConnections() map[string]net.Connection {
 	return n.connections
+}
+
+func (n *peerImpl) DeleteAllConnections() {
+	n.connections = make(map[string]net.Connection)
 }
 
 func (n *peerImpl) GetSessions() map[string]NetworkSession {

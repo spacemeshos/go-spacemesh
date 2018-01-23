@@ -2,6 +2,7 @@ package accounts
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -24,8 +25,7 @@ type CryptoData struct {
 	Mac        string `json:"mac"`
 }
 
-// Load all accounts from store
-
+// Loads all accounts from store
 func LoadAllAccounts() error {
 
 	accountsDataFolder, err := filesystem.GetAccountsDataDirectoryPath()
@@ -35,16 +35,18 @@ func LoadAllAccounts() error {
 
 	files, err := ioutil.ReadDir(accountsDataFolder)
 	if err != nil {
-		log.Error("Failed to read account directory files. %v", err)
+		log.Error("Failed to read account directory files", err)
 		return nil
 	}
 
 	for _, f := range files {
 		fileName := f.Name()
 		if !f.IsDir() && strings.HasSuffix(fileName, ".json") {
-
 			accountId := fileName[:strings.LastIndex(fileName, ".")]
-			NewAccountFromStore(accountId, accountsDataFolder)
+			_, err := NewAccountFromStore(accountId, accountsDataFolder)
+			if err != nil {
+				log.Error(fmt.Sprintf("failed to load account %s", accountId), err)
+			}
 		}
 	}
 
@@ -52,7 +54,7 @@ func LoadAllAccounts() error {
 
 }
 
-// Create a new account by id and stored data
+// Creates a new account by id and stored data
 // Account will be locked after creation as there's no persisted passphrase
 // accountsDataPath: os-specific full path to accounts data folder
 func NewAccountFromStore(accountId string, accountsDataPath string) (*Account, error) {
@@ -64,20 +66,17 @@ func NewAccountFromStore(accountId string, accountsDataPath string) (*Account, e
 
 	data, err := ioutil.ReadFile(dataFilePath)
 	if err != nil {
-		log.Error("Failed to read node data from file: %v", err)
 		return nil, err
 	}
 
 	var accountData AccountData
 	err = json.Unmarshal(data, &accountData)
 	if err != nil {
-		log.Error("Failed to unmarshal account data. %v", err)
 		return nil, err
 	}
 
 	pubKey, err := crypto.NewPublicKeyFromString(accountData.PublicKey)
 	if err != nil {
-		log.Error("Invalid account public key: %v", err)
 		return nil, err
 	}
 
@@ -109,7 +108,7 @@ func (a *Account) Persist(accountsDataPath string) (string, error) {
 
 	bytes, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
-		log.Error("Failed to marshal node data to json: %v", err)
+		log.Error("Failed to marshal node data to json", err)
 		return "", err
 	}
 
@@ -117,7 +116,7 @@ func (a *Account) Persist(accountsDataPath string) (string, error) {
 	dataFilePath := filepath.Join(accountsDataPath, fileName)
 	err = ioutil.WriteFile(dataFilePath, bytes, filesystem.OwnerReadWrite)
 	if err != nil {
-		log.Error("Failed to write account to file: %v", err)
+		log.Error("Failed to write account to file", err)
 		return "", err
 	}
 

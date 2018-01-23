@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/btcsuite/btcutil/base58"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"math/big"
 	"sort"
 )
@@ -32,7 +31,6 @@ func NewIdFromBase58String(s string) ID {
 func NewIdFromHexString(s string) (ID, error) {
 	data, err := hex.DecodeString(s)
 	if err != nil {
-		log.Error("Invalid input hex string %s", s)
 		return nil, err
 	}
 	return ID(data), nil
@@ -65,18 +63,19 @@ func (id ID) Less(o ID) bool {
 			return id[i] < o[i]
 		}
 	}
-	return true
+	return false
 }
 
 func (id ID) Xor(o ID) ID {
 	return XOR(id, o)
 }
 
+// Common shared prefix length in bits
 func (id ID) CommonPrefixLen(o ID) int {
-	c := id.Xor(o)
-	return c.ZeroPrefixLen()
+	return id.Xor(o).ZeroPrefixLen()
 }
 
+// Zero prefix length in bits
 func (id ID) ZeroPrefixLen() int {
 	for i := 0; i < len(id); i++ {
 		for j := 0; j < 8; j++ {
@@ -88,7 +87,7 @@ func (id ID) ZeroPrefixLen() int {
 	return len(id) * 8
 }
 
-// Returns true if id1 is closer to id3 than id2 is
+// Returns true if id1 is closer to id3 than id2
 func (id ID) Closer(id1 ID, id2 ID) bool {
 	dist1 := id.Xor(id1)
 	dist2 := id.Xor(id2)

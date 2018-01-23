@@ -15,7 +15,7 @@ func TestReadWrite(t *testing.T) {
 	msg := []byte("hello world")
 	msgId := crypto.UUID()
 	port := crypto.GetRandomUInt32(1000) + 10000
-	address := fmt.Sprintf("localhost:%d", port)
+	address := fmt.Sprintf("0.0.0.0:%d", port)
 	done := make(chan bool, 1)
 
 	n, err := NewNet(address, nodeconfig.ConfigValues)
@@ -27,7 +27,7 @@ func TestReadWrite(t *testing.T) {
 		for {
 			select {
 			case <-done:
-				// todo: gracefully stop the swarm - close all connections to remote nodes
+				n.Shutdown()
 				break Loop
 
 			case c := <-n.GetNewConnections():
@@ -50,6 +50,7 @@ func TestReadWrite(t *testing.T) {
 		}
 	}()
 
+	// we use the network to dial to itself over the local loop
 	c, err := n.DialTCP(address, time.Duration(10*time.Second), time.Duration(48*time.Hour))
 	assert.Nil(t, err, "failed to connect to tcp server")
 

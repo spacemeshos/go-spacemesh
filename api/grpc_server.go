@@ -14,7 +14,7 @@ import (
 	"google.golang.org/grpc/reflection"
 )
 
-// A grpc server implementing the SpaceMesh API
+// A grpc server implementing the Spacemesh API
 
 // server is used to implement SpaceMeshService.Echo.
 type SpaceMeshGrpcService struct {
@@ -23,7 +23,7 @@ type SpaceMeshGrpcService struct {
 }
 
 func (s SpaceMeshGrpcService) Echo(ctx context.Context, in *pb.SimpleMessage) (*pb.SimpleMessage, error) {
-	return &pb.SimpleMessage{in.Value}, nil
+	return &pb.SimpleMessage{Value: in.Value}, nil
 }
 
 func (s SpaceMeshGrpcService) StopService() {
@@ -37,18 +37,18 @@ func NewGrpcService() *SpaceMeshGrpcService {
 	return &SpaceMeshGrpcService{Server: server, Port: port}
 }
 
-func (s SpaceMeshGrpcService) StartService() {
-	go s.startServiceInternal()
+func (s SpaceMeshGrpcService) StartService(started chan bool) {
+	go s.startServiceInternal(started)
 }
 
 // This is a blocking method designed to be called using a go routine
-func (s SpaceMeshGrpcService) startServiceInternal() {
+func (s SpaceMeshGrpcService) startServiceInternal(started chan bool) {
 	port := config.ConfigValues.GrpcServerPort
 	addr := ":" + strconv.Itoa(int(port))
 
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
-		log.Error("failed to listen: %v", err)
+		log.Error("failed to listen", err)
 		return
 	}
 
@@ -59,8 +59,12 @@ func (s SpaceMeshGrpcService) startServiceInternal() {
 
 	log.Info("grpc API listening on port %d", port)
 
+	if started != nil {
+		started <- true
+	}
+
 	// start serving - this blocks until err or server is stopped
 	if err := s.Server.Serve(lis); err != nil {
-		log.Error("failed to serve grpc: %v", err)
+		log.Error("grpc stopped serving", err)
 	}
 }

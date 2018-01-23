@@ -2,6 +2,7 @@ package crypto
 
 import (
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcutil/base58"
@@ -56,12 +57,17 @@ func GenerateKeyPair() (PrivateKey, PublicKey, error) {
 	return &privateKeyImpl{privKey}, &publicKeyImpl{privKey.PubKey()}, nil
 }
 
-func NewPrivateKey(data []byte) PrivateKey {
+func NewPrivateKey(data []byte) (PrivateKey, error) {
+
+	if len(data) != 32 {
+		return nil, errors.New("expected 32 bytes input")
+	}
+
 	privk, _ := btcec.PrivKeyFromBytes(btcec.S256(), data)
-	return &privateKeyImpl{privk}
+	return &privateKeyImpl{privk}, nil
 }
 
-func NewPrivateKeyFromString(s string) PrivateKey {
+func NewPrivateKeyFromString(s string) (PrivateKey, error) {
 	data := base58.Decode(s)
 	return NewPrivateKey(data)
 }
@@ -106,37 +112,39 @@ func (p *privateKeyImpl) Decrypt(in []byte) ([]byte, error) {
 	return btcec.Decrypt(p.k, in)
 }
 
-////////////////////////////////////////
-
-// data - binary key data
+// Creates a new public key from provided binary key data
 func NewPublicKey(data []byte) (PublicKey, error) {
 	k, err := btcec.ParsePubKey(data, btcec.S256())
 	if err != nil {
-		log.Error("failed to parse public key from binay data: %v", err)
+		log.Error("Failed to parse public key from binay data", err)
 		return nil, err
 	}
 
 	return &publicKeyImpl{k}, nil
 }
 
+// Creates a new public key from a base58 encoded string
 func NewPublicKeyFromString(s string) (PublicKey, error) {
 	data := base58.Decode(s)
 	return NewPublicKey(data)
 }
 
+// Returns the internal public key data
 func (p *publicKeyImpl) InternalKey() *btcec.PublicKey {
 	return p.k
 }
 
-// we use the 33 bytes compressed format for serielization
+// We use the 33 bytes compressed format for serialization
 func (p *publicKeyImpl) Bytes() []byte {
 	return p.k.SerializeCompressed()
 }
 
+// Returns key as a base58 encoded string
 func (p *publicKeyImpl) String() string {
 	return base58.Encode(p.Bytes())
 }
 
+// Returns public key as a short string
 func (p *publicKeyImpl) Pretty() string {
 	pstr := p.String()
 	maxRunes := 6
@@ -146,6 +154,8 @@ func (p *publicKeyImpl) Pretty() string {
 	return fmt.Sprintf("<PUBK %s>", pstr[:maxRunes])
 }
 
+// Verifies data was signed by provided signature
+// sig: hex encoded binary data string
 func (p *publicKeyImpl) VerifyString(data []byte, sig string) (bool, error) {
 	bin, err := hex.DecodeString(sig)
 	if err != nil {
@@ -154,6 +164,8 @@ func (p *publicKeyImpl) VerifyString(data []byte, sig string) (bool, error) {
 	return p.Verify(data, bin)
 }
 
+// Verifies data was signed by provided signature
+/// sig: signature binary data
 func (p *publicKeyImpl) Verify(data []byte, sig []byte) (bool, error) {
 	signature, err := btcec.ParseSignature(sig, btcec.S256())
 	if err != nil {

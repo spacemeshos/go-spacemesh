@@ -65,7 +65,7 @@ func NewPingProtocol(s Swarm) Ping {
 func (p *pingProtocolImpl) Send(msg string, reqId []byte, remoteNodeId string) {
 
 	metadata := p.swarm.GetLocalNode().NewProtocolMessageMetadata(pingReq, reqId, false)
-	data := &pb.PingReqData{metadata, msg}
+	data := &pb.PingReqData{Metadata: metadata, Ping: msg}
 
 	// sign data
 	sign, err := p.swarm.GetLocalNode().Sign(data)
@@ -74,6 +74,7 @@ func (p *pingProtocolImpl) Send(msg string, reqId []byte, remoteNodeId string) {
 	// marshal the signed data
 	payload, err := proto.Marshal(data)
 	if err != nil {
+		log.Error("failed to marshal data", err)
 		return
 	}
 
@@ -95,24 +96,25 @@ func (p *pingProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 	req := &pb.PingReqData{}
 	err := proto.Unmarshal(msg.Payload(), req)
 	if err != nil {
-		log.Warning("Invalid ping request data: %v", err)
+		log.Warning("Invalid ping request data", err)
 		return
 	}
 
 	peer := msg.Sender()
+
 	log.Info("Incoming ping peer request from %s. Message: s%", peer.Pretty(), req.Ping)
 
-	// add/update local dht table
+	// add/update local dht table as we just heard from a peer
 	p.swarm.getRoutingTable().Update(peer.GetRemoteNodeData())
 
 	// generate response
 	metadata := p.swarm.GetLocalNode().NewProtocolMessageMetadata(pingResp, req.Metadata.ReqId, false)
-	respData := &pb.PingRespData{metadata, req.Ping}
+	respData := &pb.PingRespData{Metadata: metadata, Pong: req.Ping}
 
 	// sign response
 	sign, err := p.swarm.GetLocalNode().SignToString(respData)
 	if err != nil {
-		log.Info("Failed to sign response")
+		log.Error("Failed to sign response", err)
 		return
 	}
 
@@ -121,7 +123,7 @@ func (p *pingProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 	// marshal the signed data
 	signedPayload, err := proto.Marshal(respData)
 	if err != nil {
-		log.Info("Failed to generate response data")
+		log.Error("Failed to generate response data", err)
 		return
 	}
 
@@ -143,7 +145,7 @@ func (p *pingProtocolImpl) handleIncomingResponse(msg IncomingMessage) {
 	if err != nil {
 		// we can't extract the request id from the response so we just terminate
 		// without sending a callback - this case should be handeled as a timeout
-		log.Error("Invalid ping request data: %v", err)
+		log.Error("Invalid ping request data", err)
 		return
 	}
 
@@ -157,7 +159,7 @@ func (p *pingProtocolImpl) handleIncomingResponse(msg IncomingMessage) {
 
 	// notify clients of the new pong or error
 	for _, c := range p.callbacks {
-		go func() { c <- resp }()
+		go func(c chan SendPingResp) { c <- resp }(c)
 	}
 }
 
