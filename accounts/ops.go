@@ -94,7 +94,7 @@ func (a *Account) UnlockAccount(passphrase string) error {
 
 	privateKey := crypto.NewPrivateKey(privKeyData)
 
-	err = a.validatePublickKey(privateKey)
+	err = a.validatePublicKey(privateKey)
 	if err != nil {
 		return err
 	}
@@ -107,7 +107,7 @@ func (a *Account) UnlockAccount(passphrase string) error {
 }
 
 // Validate that the account's private key matches the provided private key
-func (a *Account) validatePublickKey(privateKey crypto.PrivateKey) error {
+func (a *Account) validatePublicKey(privateKey crypto.PrivateKey) error {
 
 	publicKey := privateKey.GetPublicKey()
 	publicKeyStr := publicKey.String()
