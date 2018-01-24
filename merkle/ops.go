@@ -10,17 +10,19 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
+// EmptyTreeRootHash is the hash used to represent an empty Merkle tree.
 var EmptyTreeRootHash = crypto.Sha256([]byte(""))
 
+// GetRootHash gets the has of the Merkle tree root.
 func (mt *merkleTreeImp) GetRootHash() []byte {
 	if mt.root == nil {
 		return EmptyTreeRootHash
-	} else {
-		return mt.root.getNodeHash()
 	}
+	return mt.root.getNodeHash()
+
 }
 
-// Returns nil when the tree is empty
+// GetRootNode returns the Merkle tree root node or nil when the tree is empty.
 func (mt *merkleTreeImp) GetRootNode() Node {
 	return mt.root
 }

@@ -31,7 +31,7 @@ func init() {
 
 }
 
-// CreateLogger creates a logger for a module. e.g. local node logger
+// CreateLogger creates a logger for a module. e.g. local node logger.
 func CreateLogger(module string, dataFolderPath string, logFileName string) *logging.Logger {
 
 	log := logging.MustGetLogger(module)

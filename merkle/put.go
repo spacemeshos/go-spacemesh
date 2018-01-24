@@ -9,13 +9,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/merkle/pb"
 )
 
-var InvalidUserDataError = errors.New("expected non-empty k,v for user data")
+// ErrorInvalidUserData indicates invalid user provided k,v data.
+var ErrorInvalidUserData = errors.New("expected non-empty k,v for user data")
 
 // Stores user data (k,v) in the tree
 func (mt *merkleTreeImp) Put(k, v []byte) error {
 
 	if len(v) == 0 || len(k) == 0 {
-		return InvalidUserDataError
+		return ErrorInvalidUserData
 	}
 
 	// calc the user value to store in the merkle tree
