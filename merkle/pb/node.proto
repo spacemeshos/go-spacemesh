@@ -13,7 +13,7 @@ message Node {
     NodeType nodeType = 1;
     repeated bytes entries = 2; // only for branch node. 16 repated enties - one for each hex char (nibble), an entry can be an empty []byte slice
     string path = 3;            // hex encoded path
-    bytes value = 4;            // value is based on node type type
+    bytes value = 4;            // value is based on node's type. For ext it is a pointer to child node. For leaf, it is hash of user value or a small user value
 }
 
 

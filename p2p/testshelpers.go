@@ -8,27 +8,6 @@ import (
 	"testing"
 )
 
-func minInt32(x, y int32) int32 {
-	if x < y {
-		return x
-	}
-	return y
-}
-
-func minInt(x, y int) int {
-	if x < y {
-		return x
-	}
-	return y
-}
-
-func minInt64(x, y int64) int64 {
-	if x < y {
-		return x
-	}
-	return y
-}
-
 // Generates a local test node without persisting data to local store and with default config value
 func GenerateTestNode(t *testing.T) (LocalNode, Peer) {
 	return GenerateTestNodeWithConfig(t, nodeconfig.ConfigValues)
@@ -37,15 +16,14 @@ func GenerateTestNode(t *testing.T) (LocalNode, Peer) {
 // Generates a local test node without persisting data to local store
 func GenerateTestNodeWithConfig(t *testing.T, config nodeconfig.Config) (LocalNode, Peer) {
 
-	port := crypto.GetRandomUInt32(1000) + 10000
-	address := fmt.Sprintf("localhost:%d", port)
+	port := crypto.GetRandomUInt32(10000) + 1000
+	address := fmt.Sprintf("0.0.0.0:%d", port)
 
 	localNode, err := NewNodeIdentity(address, config, false)
 	if err != nil {
 		t.Error("failed to create local node1", err)
 	}
 
-	// this will be node 2 view of node 1
 	remoteNode, err := NewRemoteNode(localNode.String(), address)
 	if err != nil {
 		t.Error("failed to create remote node1", err)
@@ -57,7 +35,7 @@ func GenerateTestNodeWithConfig(t *testing.T, config nodeconfig.Config) (LocalNo
 // Generates a remote random node data for testing
 func GenerateRandomNodeData() node.RemoteNodeData {
 	port := crypto.GetRandomUInt32(1000) + 10000
-	address := fmt.Sprintf("localhost:%d", port)
+	address := fmt.Sprintf("0.0.0.0:%d", port)
 	_, pub, _ := crypto.GenerateKeyPair()
 	return node.NewRemoteNodeData(pub.String(), address)
 }

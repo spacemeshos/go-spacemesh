@@ -17,6 +17,8 @@
 .idea
 .vagrant
 
-go-spacemesh
-cp.out
-cover.out
+/go-spacemesh
+/cp.out
+/cover.out
+/cover-all.out
+*/**/cover.out

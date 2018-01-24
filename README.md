@@ -28,7 +28,7 @@ SpacemeshOS is designed to create a decentralized blockchain smart contracts com
 Provide dapp and app developers with a robust way to add value exchange and value related features to their apps at scale. Our goal is to create a truly decentralized cryptocoin that fulfills the original vision behind bitcoin to become a secure trustless store of value as well as a transactional currency with extremely low transaction fees.
 
 ### Diggin' Deeper
-Please read the Spacemesh [full FAQ](https://github.com/spacemeshos/go-spacemesh/wiki/faq).
+Please read the Spacemesh [full FAQ](https://github.com/spacemeshos/go-spacemesh/wiki/Spacemesh-FAQ).
 
 ### Getting
 
@@ -108,7 +108,7 @@ We welcome contributions large and small and we actively accept contributions.
 - Read all docs in the `docs/` folder
 - Ask questions or talk about things in [Issues](https://github.com/spacemeshos/go-spacemesh/issues) or on [spacemash gitter](https://gitter.im/spacemesh-os/Lobby).
 - Ensure you are able to contribute (no legal issues please)
-- For any code contribution, please **fork from the `develop branch` and not from `master`), apply your changes and submit a pull request. We follow this [git workflow](http://nvie.com/posts/a-successful-git-branching-model/)
+- For any code contribution, please fork from the `develop branch` and not from `master`), apply your changes and submit a pull request. We follow this [git workflow](http://nvie.com/posts/a-successful-git-branching-model/)
 - Before starting to work on large contributions please chat with the core dev team on our [gitter channel](https://gitter.im/spacemesh-os/Lobby) to get some initial feedback prior to doing lots of work.
 - Check for 3rd-party packages in the vendor folder before adding a new 3rd party dependency.
 - Add new 3rd-party packages required by your code to vendor.json - don't use any other kind of deps importing.
@@ -117,6 +117,8 @@ We welcome contributions large and small and we actively accept contributions.
 - We adhere to the go standard formatting. Run `go fmt` before pushing any code
 - Get in touch with @avive about how best to contribute
 - Your code must be commented using [go commentary](https://golang.org/doc/effective_go.html#commentary)
+- You can add your your name and email to AUTHORS when submitting a Pull Request.
+
 - **Have fun hacking away our blockchain future!**
 
 Few things you can do right now to help out:
@@ -134,7 +136,11 @@ Few things you can do right now to help out:
 
 ### Additional info
 
+#### Working with Dependencies
 
+We use [govendor](https://github.com/kardianos/govendor) for all 3rd party packages.
+We commit to git all 3rd party packages in the `vendor` folder so we have our own copy of versioned releases.
+To update a 3rd party package use vendor.json and govendor commands.
 
 #### Working with protobufs
 
@@ -155,9 +161,3 @@ After installing. You can compile a .proto file using:
 cd pb
 protoc --go_out=. ./*.proto
 ```
-
-#### Working with Dependencies
-
-We use [govendor](https://github.com/kardianos/govendor) for all 3rd party packages.
-We commit to git all 3rd party packages in the `vendor` folder so we have our own copy of versioned releases.
-To update a 3rd party package use vendor.json and govendor commands.

@@ -30,7 +30,7 @@ func toHexChar(c byte) (string, bool) {
 }
 
 // Returns the common prefix of 2 hex encoded strings
-// Empty string is return if there's no common suffix of len >= 1
+// Empty string is returned if there's no common suffix of len >= 1
 func commonPrefix(s string, s1 string) string {
 	l := lenPrefix(s, s1)
 	return s[:l]

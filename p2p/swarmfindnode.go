@@ -15,7 +15,7 @@ import (
 // not go safe - should only be called from swarm event dispatcher
 func (s *swarmImpl) findNode(id string, callback chan node.RemoteNodeData) {
 
-	s.localNode.Info("finding node: %s ...", log.PrettyId(id))
+	s.localNode.Info("finding node: %s ...", log.PrettyID(id))
 
 	// look at peer store
 	n := s.peers[id]
@@ -28,7 +28,7 @@ func (s *swarmImpl) findNode(id string, callback chan node.RemoteNodeData) {
 
 	// look for the node at local dht table
 	poc := make(table.PeerOpChannel, 1)
-	s.routingTable.Find(table.PeerByIdRequest{dht.NewIdFromBase58String(id), poc})
+	s.routingTable.Find(table.PeerByIdRequest{Id: dht.NewIdFromBase58String(id), Callback: poc})
 	select {
 	case c := <-poc:
 		res := c.Peer
@@ -38,15 +38,17 @@ func (s *swarmImpl) findNode(id string, callback chan node.RemoteNodeData) {
 		}
 	}
 
-	// used kad to locate the node
+	// use kad to locate the node
 	s.kadFindNode(id, callback)
 }
 
 // Implements the kad algo for locating a remote node
 // Precondition - node is not in local routing table
 // nodeId: - base58 node id string
-// Returns requested node or nil if not found
+// Returns requested node via the callback or nil if not found
 func (s *swarmImpl) kadFindNode(nodeId string, callback chan node.RemoteNodeData) {
+
+	s.localNode.Info("Kad find node: %s ...", nodeId)
 
 	// kad node location algo
 	alpha := int(s.config.RoutingTableAlpha)
@@ -78,7 +80,7 @@ Loop:
 		servers := node.PickFindNodeServers(searchList, nodeId, alpha)
 
 		if len(servers) == 0 {
-			// no more server to query
+			// no more servers to query
 			go func() { callback <- nil }()
 			break Loop
 		}
@@ -139,7 +141,7 @@ Loop:
 			}
 
 		case <-time.After(time.Second * 60):
-			// we expected nodes to return results within a reasonable time frames
+			// we expected nodes to return results within a reasonable time frame
 			break Loop
 		}
 	}
@@ -155,15 +157,13 @@ Loop:
 	}
 
 	// sort results by distance from target dht id
-	res = node.SortClosestPeers(res, targetDhtId)
-
-	return res
+	return node.SortClosestPeers(res, targetDhtId)
 }
 
-// helper method - sync wrapper to routingTable.NearestPeers
+// helper method - a sync wrapper over routingTable.NearestPeers
 func (s *swarmImpl) getNearestPeers(dhtId dht.ID, count int) []node.RemoteNodeData {
 	psoc := make(table.PeersOpChannel, 1)
-	s.routingTable.NearestPeers(table.NearestPeersReq{dhtId, count, psoc})
+	s.routingTable.NearestPeers(table.NearestPeersReq{Id: dhtId, Count: count, Callback: psoc})
 	select {
 	case c := <-psoc:
 		return c.Peers

@@ -22,9 +22,9 @@ func NewChan(chanSize int) *Chan {
 	}
 }
 
-// ReadFrom wraps the given io.Reader with a msgio.Reader, reads all
+// ReadFromReader wraps the given io.Reader with a msgio.Reader, reads all
 // messages, ands sends them down the channel.
-func (s *Chan) ReadFrom(r io.Reader) {
+func (s *Chan) ReadFromReader(r io.Reader) {
 	s.readFrom(NewReader(r))
 }
 
@@ -66,9 +66,9 @@ Loop:
 	s.CloseChan <- true
 }
 
-// WriteTo wraps the given io.Writer with a msgio.Writer, listens on the
+// WriteToWriter wraps the given io.Writer with a msgio.Writer, listens on the
 // channel and writes all messages to the writer.
-func (s *Chan) WriteTo(w io.Writer) {
+func (s *Chan) WriteToWriter(w io.Writer) {
 	// new buffer per message
 	// if bottleneck, cycle around a set of buffers
 	mw := NewWriter(w)

@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-// Node implementation type
+// Local node implementation type
 type localNodeImp struct {
 	pubKey     crypto.PublicKey
 	privKey    crypto.PrivateKey
@@ -29,7 +29,7 @@ type localNodeImp struct {
 
 }
 
-// Create meta-data for an outgoing protocol message authored by this node
+// Creates meta-data for an outgoing protocol message authored by this node
 func (n *localNodeImp) NewProtocolMessageMetadata(protocol string, reqId []byte, gossip bool) *pb.Metadata {
 	return &pb.Metadata{
 		Protocol:      protocol,
@@ -41,12 +41,7 @@ func (n *localNodeImp) NewProtocolMessageMetadata(protocol string, reqId []byte,
 	}
 }
 
-func (n *localNodeImp) SendMessage(req SendMessageReq) {
-	// let the swarm handle
-	//n.swarm.SendMessage(req)
-}
-
-// helper - return remote node data of this node
+// Returns remote node data for this node
 func (n *localNodeImp) GetRemoteNodeData() node.RemoteNodeData {
 	return node.NewRemoteNodeData(n.String(), n.TcpAddress())
 }
@@ -55,8 +50,11 @@ func (n *localNodeImp) Config() nodeconfig.Config {
 	return n.config
 }
 
+// Shuts down local node
 func (n *localNodeImp) Shutdown() {
-	// todo - kill swarm and stop all services
+
+	// shutdown swarm
+	n.swarm.Shutdown()
 }
 
 func (n *localNodeImp) GetPing() Ping {
@@ -95,7 +93,7 @@ func (n *localNodeImp) PublicKey() crypto.PublicKey {
 	return n.pubKey
 }
 
-// Sign a protobufs message and return a hex-encoded string signature
+// Signs a protobufs message and return a hex-encoded string signature
 func (n *localNodeImp) SignToString(data proto.Message) (string, error) {
 	sign, err := n.Sign(data)
 	if err != nil {
@@ -104,7 +102,7 @@ func (n *localNodeImp) SignToString(data proto.Message) (string, error) {
 	return hex.EncodeToString(sign), nil
 }
 
-// Sign a protobufs message and return raw signature bytes
+// Signs a protobufs message and return raw signature bytes
 func (n *localNodeImp) Sign(data proto.Message) ([]byte, error) {
 	bin, err := proto.Marshal(data)
 	if err != nil {

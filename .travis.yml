@@ -1,5 +1,16 @@
 language: go
-go:
-- 1.9.2
-script:
-  - make
+go: 1.9.x
+
+branches:
+    only:
+        - master
+        - develop
+jobs:
+    include:
+        - stage: lint
+          script:
+              - ./ci/validate-gofmt.sh
+              - go get -u github.com/golang/lint/golint
+              - ./ci/validate-lint.sh
+        - stage: test
+          script: go test github.com/spacemeshos/go-spacemesh/...

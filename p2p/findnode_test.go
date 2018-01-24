@@ -51,8 +51,11 @@ Loop:
 		case <-time.After(time.Second * 10):
 			t.Fatalf("Test timed out")
 		}
-
 	}
+
+	node1Local.Shutdown()
+	node2Local.Shutdown()
+	node3Local.Shutdown()
 }
 
 func TestFindNodeProtocolEmptyRes(t *testing.T) {
@@ -60,7 +63,7 @@ func TestFindNodeProtocolEmptyRes(t *testing.T) {
 	// let there be 3 nodes - node1, node2 and node3
 	node1Local, node1Remote := GenerateTestNode(t)
 	node2Local, _ := GenerateTestNode(t)
-	_, node3Remote := GenerateTestNode(t)
+	node3Local, node3Remote := GenerateTestNode(t)
 
 	t.Logf("Node 1: %s %s", node1Remote.String(), node1Remote.TcpAddress())
 	t.Logf("Node 2: %s %s", node2Local.String(), node2Local.TcpAddress())
@@ -97,4 +100,8 @@ Loop:
 		}
 
 	}
+
+	node1Local.Shutdown()
+	node2Local.Shutdown()
+	node3Local.Shutdown()
 }

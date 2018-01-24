@@ -13,13 +13,14 @@ import (
 	gw "github.com/spacemeshos/go-spacemesh/api/pb"
 )
 
-// A json http server providing the SpaceMesh API.
+// A json http server providing the Spacemesh API.
 // Implemented as a grpc gateway.
 // See https://github.com/grpc-ecosystem/grpc-gateway
 
-// todo: add http.server and support graceful shutdown
 type JsonHttpServer struct {
-	Port uint
+	Port   uint
+	server *http.Server
+	ctx    context.Context
 }
 
 func NewJsonHttpServer() *JsonHttpServer {
@@ -27,19 +28,22 @@ func NewJsonHttpServer() *JsonHttpServer {
 }
 
 func (s JsonHttpServer) Stop() {
-	// todo: how to stop http from listening on the address?
 	log.Info("Stopping json-http service...")
+
+	// todo: fixme - this is panicking
+	//s.server.Shutdown(s.ctx)
 }
 
 // Start the grpc server
-func (s JsonHttpServer) StartService() {
-	go s.startInternal()
+func (s JsonHttpServer) StartService(callback chan bool) {
+	go s.startInternal(callback)
 }
 
-func (s JsonHttpServer) startInternal() {
+func (s JsonHttpServer) startInternal(callback chan bool) {
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	s.ctx = ctx
 
 	mux := runtime.NewServeMux()
 	opts := []grpc.DialOption{grpc.WithInsecure()}
@@ -49,17 +53,21 @@ func (s JsonHttpServer) startInternal() {
 	echoEndpoint := flag.String("api_endpoint", "localhost:"+portStr, "endpoint of api grpc service")
 
 	if err := gw.RegisterSpaceMeshServiceHandlerFromEndpoint(ctx, mux, *echoEndpoint, opts); err != nil {
-		log.Error("failed to register http endpoint with grpc: %v", err)
+		log.Error("failed to register http endpoint with grpc", err)
 	}
 
 	addr := ":" + strconv.Itoa(int(s.Port))
 
 	log.Info("json API listening on port %d", s.Port)
 
-	// this blocks until stops
-	err := http.ListenAndServe(addr, mux)
+	if callback != nil {
+		callback <- true
+	}
+
+	s.server = &http.Server{Addr: addr, Handler: mux}
+	err := s.server.ListenAndServe()
 
 	if err != nil {
-		log.Error("failed to listen and serve: v%", err)
+		log.Info("listen and serve stopped with status. %v", err)
 	}
 }

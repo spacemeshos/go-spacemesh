@@ -22,10 +22,9 @@ $(PLATFORMS):
 	GOOS=$(os) GOARCH=amd64 go build ${LDFLAGS} -o $(BIN_DIR)/$(BINARY)-$(VERSION)-$(os)-amd64
 
 test:
-	#govendor test +local
 	go test ./...
 
-.PHONY: build test
+.PHONY: build test devtools cover
 
 devtools:
 	# Install the build tools
@@ -37,5 +36,8 @@ devtools:
 	govendor sync
 
 cover:
-	# Check for cover :
-	go test ./$(pkg) -coverprofile=cover.out -covermode=count; go tool cover -html=cover.out
+	@echo "mode: count" > cover-all.out
+	@$(foreach pkg,$(PKGS),\
+		go test -coverprofile=cover.out -covermode=count $(pkg);\
+		tail -n +2 cover.out >> cover-all.out;)
+	go tool cover -html=cover-all.out

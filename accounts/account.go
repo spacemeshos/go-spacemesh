@@ -1,4 +1,4 @@
-// Package account provide types for working with blockchain accounts
+// Package accounts provides types for working with Spacemesh blockchain accounts
 package accounts
 
 import (
@@ -27,13 +27,13 @@ var (
 
 func init() {
 	Accounts = &AccountsRegistry{
-		make(map[string]*Account),
-		make(map[string]*Account),
+		All:      make(map[string]*Account),
+		Unlocked: make(map[string]*Account),
 	}
 }
 
-// Create a new account using provided passphrase
-// Clients should persist newly created accounts - without this the account only last for one app session
+// Creates a new account using the provided passphrase
+// Clients should persist newly created accounts - without this the account only lasts for one app session
 func NewAccount(passphrase string) (*Account, error) {
 
 	// account crypto data
@@ -48,20 +48,19 @@ func NewAccount(passphrase string) (*Account, error) {
 	// add new salt to params
 	saltData, err := crypto.GetRandomBytes(kdfParams.SaltLen)
 	if err != nil {
-		return nil, errors.New("Failed to generate random salt")
+		return nil, errors.New("failed to generate random salt")
 	}
 	kdfParams.Salt = hex.EncodeToString(saltData)
 
 	dk, err := crypto.DeriveKeyFromPassword(passphrase, kdfParams)
 	if err != nil {
-		log.Error("kdf failure: %v", err)
 		return nil, err
 	}
 
 	// extract 16 bytes aes-128-ctr key from the derived key
 	aesKey := dk[:16]
 
-	// date to encrypt
+	// data to encrypt
 	privKeyBytes := priv.Bytes()
 
 	// compute nonce
@@ -74,7 +73,7 @@ func NewAccount(passphrase string) (*Account, error) {
 	cipherText, err := crypto.AesCTRXOR(aesKey, privKeyBytes, nonce)
 
 	if err != nil {
-		log.Error("Failed to encrypt private key: %v", err)
+		log.Error("Failed to encrypt private key", err)
 		return nil, err
 	}
 
@@ -91,15 +90,15 @@ func NewAccount(passphrase string) (*Account, error) {
 
 	// store kd data
 	kdParams := crypto.KDParams{
-		kdfParams.N,
-		kdfParams.R,
-		kdfParams.P,
-		kdfParams.SaltLen,
-		kdfParams.DKLen,
-		kdfParams.Salt,
+		N:       kdfParams.N,
+		R:       kdfParams.R,
+		P:       kdfParams.P,
+		SaltLen: kdfParams.SaltLen,
+		DKLen:   kdfParams.DKLen,
+		Salt:    kdfParams.Salt,
 	}
 
-	// save all date in newly created account obj
+	// save all data in newly created account obj
 	acct := &Account{priv,
 		pub,
 		cryptoData,

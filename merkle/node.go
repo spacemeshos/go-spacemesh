@@ -123,6 +123,8 @@ func newNodeFromData(data []byte) (Node, error) {
 	return c, nil
 }
 
+// Set extension node child node
+// Pointer: pointer to child (and hash of child's value)
 func (n *nodeImp) setExtChild(pointer []byte) error {
 
 	if n.getNodeType() != pb.NodeType_extension {
@@ -140,6 +142,10 @@ func (n *nodeImp) setExtChild(pointer []byte) error {
 	return nil
 }
 
+// Adds a child node to a branch node
+// idx: branch index (hex char representing a nibble) for the new child
+// child: child node
+// Side effect: if an existing child for index idx exists then it is removed from the tree
 func (n *nodeImp) addBranchChild(idx string, child Node) error {
 
 	if n.getNodeType() != pb.NodeType_branch {
@@ -150,7 +156,7 @@ func (n *nodeImp) addBranchChild(idx string, child Node) error {
 		return ErrorInvalidHexChar
 	}
 
-	// remove child being replaced by this new child
+	// remove node being replaced by this new node
 	p := n.getBranchNode().getPointer(idx)
 	if len(p) > 0 {
 		n.removeBranchChild(idx)
@@ -166,6 +172,8 @@ func (n *nodeImp) addBranchChild(idx string, child Node) error {
 	return nil
 }
 
+// Removes a child indexed with idx from a branch node
+// todo: figure out if we should always remove the node from backing store. Otherwise, the removed child may never be removed from the local db.
 func (n *nodeImp) removeBranchChild(idx string) error {
 
 	if n.getNodeType() != pb.NodeType_branch {
@@ -192,9 +200,9 @@ func (n *nodeImp) getChild(pointer []byte) Node {
 	}
 
 	key := hex.EncodeToString(pointer)
-
 	return n.children[key]
 }
+
 func (n *nodeImp) getAllChildrenCount() int {
 	return len(n.children)
 }
@@ -219,8 +227,8 @@ func (n *nodeImp) getExtNode() shortNode {
 	return n.ext
 }
 
-// Returns shortnode type of this node.
-// Returns nil for a branch node
+// Returns a shortnode type of this node.
+// Returns nil for a branch or unknown node
 func (n *nodeImp) getShortNode() shortNode {
 	switch n.nodeType {
 	case pb.NodeType_branch:
@@ -234,22 +242,28 @@ func (n *nodeImp) getShortNode() shortNode {
 	}
 }
 
+// Returns true iff node is a leaf node
 func (n *nodeImp) isLeaf() bool {
 	return n.nodeType == pb.NodeType_leaf
 }
 
+// Returns true iff node is an extension node
 func (n *nodeImp) isExt() bool {
 	return n.nodeType == pb.NodeType_extension
 }
 
+// Returns true iff node is a branch node
 func (n *nodeImp) isBranch() bool {
 	return n.nodeType == pb.NodeType_branch
 }
 
+// Returns number of current node children.
+// Leaf nodes always have 0 children, ext nodes have 1 and branch node can have up to 16 children.
 func (n *nodeImp) getChildrenCount() int {
 	return len(n.children)
 }
 
+// Returns true iff node is a leaf or an extension node
 func (n *nodeImp) isShortNode() bool {
 	switch n.nodeType {
 	case pb.NodeType_leaf:
@@ -261,7 +275,7 @@ func (n *nodeImp) isShortNode() bool {
 	}
 }
 
-// validate node hash without any side effects
+// Validates node hash without any side effects
 func (n *nodeImp) validateHash() error {
 
 	data, err := n.marshal()
@@ -336,7 +350,6 @@ func (n *nodeImp) loadChildren(db *treeDb) error {
 
 			data, err := db.Get(p, nil)
 			if err != nil {
-				log.Error("Failed to load child data from db. %v", err)
 				return err
 			}
 
@@ -389,6 +402,7 @@ func (n *nodeImp) marshal() ([]byte, error) {
 }
 
 func (n *nodeImp) getUserStringValue(userDb *userDb, v []byte) string {
+
 	// pull the data from the user data store
 	value, err := userDb.Get(v, nil)
 	if err == leveldb.ErrNotFound {
@@ -397,7 +411,8 @@ func (n *nodeImp) getUserStringValue(userDb *userDb, v []byte) string {
 	}
 
 	if err != nil {
-		return "error"
+		log.Error("Error getting value from db.", err)
+		return "<<error>>"
 	}
 
 	// long value
@@ -418,9 +433,7 @@ func (n *nodeImp) print(treeDb *treeDb, userDb *userDb) string {
 
 	switch n.nodeType {
 	case pb.NodeType_branch:
-
 		buffer.WriteString(n.getBranchNode().print(userDb, n.getUserStringValue))
-
 		for _, v := range n.children {
 			buffer.WriteString(v.print(treeDb, userDb))
 		}
@@ -429,13 +442,10 @@ func (n *nodeImp) print(treeDb *treeDb, userDb *userDb) string {
 		buffer.WriteString(n.getLeafNode().print(userDb, n.getUserStringValue))
 
 	case pb.NodeType_extension:
-
 		buffer.WriteString(n.getExtNode().print(userDb, n.getUserStringValue))
-
 		for _, v := range n.children {
 			buffer.WriteString(v.print(treeDb, userDb))
 		}
-
 	}
 
 	return buffer.String()

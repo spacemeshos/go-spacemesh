@@ -9,10 +9,10 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-	"testing"
 )
 
 // Directory and paths funcs
+
 const OwnerReadWriteExec = 0700
 const OwnerReadWrite = 0600
 
@@ -25,16 +25,16 @@ func PathExists(path string) bool {
 }
 
 // Get the full os-specific path to the spacemesh top-level data directory
-func GetSpaceMeshDataDirectoryPath() (string, error) {
+func GetSpacemeshDataDirectoryPath() (string, error) {
 	return GetFullDirectoryPath(config.ConfigValues.DataFilePath)
 }
 
 // Get the spacemesh temp files dir so we don't have to work with convoluted os specific temp folders
-func GetSpaceMeshTempDirectoryPath() (string, error) {
+func GetSpacemeshTempDirectoryPath() (string, error) {
 
 	dataDir, err := GetFullDirectoryPath(config.ConfigValues.DataFilePath)
 	if err != nil {
-		log.Error("Failed to get data directory: %v", err)
+		log.Error("Failed to get data directory", err)
 		return "", err
 	}
 
@@ -42,10 +42,10 @@ func GetSpaceMeshTempDirectoryPath() (string, error) {
 	return GetFullDirectoryPath(pathName)
 }
 
-// Return the os-specific path to the SpaceMesh data folder
+// Return the os-specific path to the Spacemesh data folder
 // Creates it and all subdirs on demand
-func EnsureSpaceMeshDataDirectories() (string, error) {
-	dataPath, err := GetSpaceMeshDataDirectoryPath()
+func EnsureSpacemeshDataDirectories() (string, error) {
+	dataPath, err := GetSpacemeshDataDirectoryPath()
 	if err != nil {
 		log.Error("Can't get or create spacemesh data folder")
 		return "", err
@@ -67,16 +67,16 @@ func EnsureSpaceMeshDataDirectories() (string, error) {
 
 // Ensure a sub-directory exists
 func ensureDataSubDirectory(dirName string) (string, error) {
-	dataPath, err := GetSpaceMeshDataDirectoryPath()
+	dataPath, err := GetSpacemeshDataDirectoryPath()
 	if err != nil {
-		log.Error("Failed to ensure data dir: %v", err)
+		log.Error("Failed to ensure data dir", err)
 		return "", err
 	}
 
 	pathName := filepath.Join(dataPath, dirName)
 	aPath, err := GetFullDirectoryPath(pathName)
 	if err != nil {
-		log.Error("Can't access spacemesh folder: %v", pathName)
+		log.Error("Can't access spacemesh folder", pathName)
 		return "", err
 	}
 	return aPath, nil
@@ -85,7 +85,7 @@ func ensureDataSubDirectory(dirName string) (string, error) {
 func GetAccountsDataDirectoryPath() (string, error) {
 	aPath, err := ensureDataSubDirectory(config.AccountsDirectoryName)
 	if err != nil {
-		log.Error("Can't access spacemesh accounts folder. %v", err)
+		log.Error("Can't access spacemesh accounts folder", err)
 		return "", err
 	}
 	return aPath, nil
@@ -94,7 +94,7 @@ func GetAccountsDataDirectoryPath() (string, error) {
 func GetLogsDataDirectoryPath() (string, error) {
 	aPath, err := ensureDataSubDirectory(config.LogDirectoryName)
 	if err != nil {
-		log.Error("Can't access spacemesh logs folder. %v", err)
+		log.Error("Can't access spacemesh logs folder", err)
 		return "", err
 	}
 	return aPath, nil
@@ -137,22 +137,4 @@ func GetFullDirectoryPath(name string) (string, error) {
 	err := os.MkdirAll(aPath, OwnerReadWriteExec)
 
 	return aPath, err
-}
-
-// Delete all subfolders and files in the spacemesh root data folder
-func DeleteSpaceMeshDataFolders(t *testing.T) {
-
-	aPath, err := GetSpaceMeshDataDirectoryPath()
-	if err != nil {
-		t.Fatalf("Failed to get spacemesh data dir: %v", err)
-	}
-
-	// remove
-	err = os.RemoveAll(aPath)
-	if err != nil {
-		t.Fatalf("Failed to delete spacemesh data dir: %v", err)
-	}
-
-	// create the dir again
-	GetSpaceMeshDataDirectoryPath()
 }

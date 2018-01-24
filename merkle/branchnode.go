@@ -21,9 +21,7 @@ type branchNode interface {
 	addChild(idx string, pointer []byte) error // add a child to this node
 	removeChild(idx string) error              // remove a child from this node
 
-	print(userDb *userDb,
-		getUserValue func(userDb *userDb,
-			v []byte) string) string // returns debug info
+	print(userDb *userDb, getUserValue func(userDb *userDb, v []byte) string) string // returns debug info
 
 }
 
