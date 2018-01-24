@@ -11,13 +11,14 @@ import (
 	"strings"
 )
 
-// Persisted node data
+// AccountData is used to persist an account.
 type AccountData struct {
 	PublicKey  string          `json:"publicKey"`
 	CryptoData CryptoData      `json:"crypto"`
 	KDParams   crypto.KDParams `json:"kd"`
 }
 
+// CryptoData is the data use to encrypt/decrypt locally stored account data.
 type CryptoData struct {
 	Cipher     string `json:"cipher"`
 	CipherText string `json:"cipherText"` // encrypted private key
@@ -25,7 +26,7 @@ type CryptoData struct {
 	Mac        string `json:"mac"`
 }
 
-// Loads all accounts from store
+// LoadAllAccounts loads all account persisted to store
 func LoadAllAccounts() error {
 
 	accountsDataFolder, err := filesystem.GetAccountsDataDirectoryPath()
@@ -42,10 +43,10 @@ func LoadAllAccounts() error {
 	for _, f := range files {
 		fileName := f.Name()
 		if !f.IsDir() && strings.HasSuffix(fileName, ".json") {
-			accountId := fileName[:strings.LastIndex(fileName, ".")]
-			_, err := NewAccountFromStore(accountId, accountsDataFolder)
+			accountID := fileName[:strings.LastIndex(fileName, ".")]
+			_, err := NewAccountFromStore(accountID, accountsDataFolder)
 			if err != nil {
-				log.Error(fmt.Sprintf("failed to load account %s", accountId), err)
+				log.Error(fmt.Sprintf("failed to load account %s", accountID), err)
 			}
 		}
 	}
@@ -54,14 +55,14 @@ func LoadAllAccounts() error {
 
 }
 
-// Creates a new account by id and stored data
-// Account will be locked after creation as there's no persisted passphrase
-// accountsDataPath: os-specific full path to accounts data folder
-func NewAccountFromStore(accountId string, accountsDataPath string) (*Account, error) {
+// NewAccountFromStore creates a new account by id and stored data.
+// Account will be locked after creation as there's no persisted passphrase.
+// accountsDataPath: os-specific full path to accounts data folder.
+func NewAccountFromStore(accountID string, accountsDataPath string) (*Account, error) {
 
-	log.Info("Loading account from store. Id: %s ...", accountId)
+	log.Info("Loading account from store. Id: %s ...", accountID)
 
-	fileName := accountId + ".json"
+	fileName := accountID + ".json"
 	dataFilePath := filepath.Join(accountsDataPath, fileName)
 
 	data, err := ioutil.ReadFile(dataFilePath)
