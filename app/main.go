@@ -148,10 +148,10 @@ func (app *SpacemeshApp) before(ctx *cli.Context) error {
 	}()
 
 	if configPath := filesystem.GetCanonicalPath(config.ConfigValues.ConfigFilePath); len(configPath) > 1 {
-		if (filesystem.PathExists(configPath)) {
+		if filesystem.PathExists(configPath) {
 			log.Info("Loading config file (path): %v", configPath)
 			err := altsrc.InitInputSourceWithContext(ctx.App.Flags, func(context *cli.Context) (altsrc.InputSourceContext, error) {
-				toml, err := altsrc.NewTomlSourceFromFile(configPath);
+				toml, err := altsrc.NewTomlSourceFromFile(configPath)
 				config.CastConfigUints(toml, []map[string]*uint{nodeparams.NodeConfigUints, apiconf.ApiConfigUints})
 				//config.CastConfigDurations(toml, []map[string]*time.Duration{nodeparams.NodeConfigDurations})
 				return toml, err

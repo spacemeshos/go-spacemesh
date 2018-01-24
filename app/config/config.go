@@ -1,8 +1,8 @@
 package config
 
 import (
-	"time"
 	"gopkg.in/urfave/cli.v1/altsrc"
+	"time"
 )
 
 // Provide Config struct with default values
@@ -24,7 +24,6 @@ type Config struct {
 	AppBoolParam   bool
 	DataFilePath   string
 }
-
 
 func CastConfigUints(context altsrc.InputSourceContext, flagstovalues []map[string]*uint) {
 	combinedMap := make(map[string]*uint)
@@ -57,4 +56,3 @@ func CastConfigDurations(context altsrc.InputSourceContext, flagstovalues []map[
 		}
 	}
 }
-

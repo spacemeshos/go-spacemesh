@@ -43,38 +43,35 @@ var (
 	})
 
 	SwarmBootstrap = altsrc.NewBoolFlag(cli.BoolFlag{
-		Name: "swarm-bootstrap",
-		Usage: "Bootstrap the swarm",
+		Name:        "swarm-bootstrap",
+		Usage:       "Bootstrap the swarm",
 		Destination: &SwarmConfigValues.Bootstrap,
 	})
 
 	RoutingTableBucketSizdFlag = altsrc.NewUintFlag(cli.UintFlag{
-		Name: "swarm-rtbs",
-		Usage: "The rounding table bucket size",
-		Value: SwarmConfigValues.RoutingTableBucketSize,
-		Destination:&SwarmConfigValues.RoutingTableBucketSize,
+		Name:        "swarm-rtbs",
+		Usage:       "The rounding table bucket size",
+		Value:       SwarmConfigValues.RoutingTableBucketSize,
+		Destination: &SwarmConfigValues.RoutingTableBucketSize,
 	})
 
 	RoutingTableAlphaFlag = altsrc.NewUintFlag(cli.UintFlag{
-		Name: "swarm-rtalpha",
-		Usage: "The rounding table Alpha",
-		Value: SwarmConfigValues.RoutingTableAlpha,
-		Destination:&SwarmConfigValues.RoutingTableAlpha,
+		Name:        "swarm-rtalpha",
+		Usage:       "The rounding table Alpha",
+		Value:       SwarmConfigValues.RoutingTableAlpha,
+		Destination: &SwarmConfigValues.RoutingTableAlpha,
 	})
 
 	RandomConnectionsFlag = altsrc.NewUintFlag(cli.UintFlag{
-		Name: "swarm-randcon",
-		Usage: "Number of random connections",
-		Value: SwarmConfigValues.RandomConnections,
-		Destination:&SwarmConfigValues.RandomConnections,
+		Name:        "swarm-randcon",
+		Usage:       "Number of random connections",
+		Value:       SwarmConfigValues.RandomConnections,
+		Destination: &SwarmConfigValues.RandomConnections,
 	})
 
 	BootstrapNodesFlag = altsrc.NewStringSliceFlag(cli.StringSliceFlag{
-		Name: "swarm-bootstrap-nodes",
+		Name:  "swarm-bootstrap-nodes",
 		Usage: "Foundation nodes to bootstrap spacemesh",
 		Value: &SwarmConfigValues.BootstrapNodes,
 	})
-
-
-
 )

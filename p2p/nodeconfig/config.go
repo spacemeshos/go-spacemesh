@@ -1,24 +1,22 @@
 package nodeconfig
 
 import (
-	"time"
 	"gopkg.in/urfave/cli.v1"
+	"time"
 )
 
-var NodeConfigUints = map[string]*uint {
-	"tcp-port": &ConfigValues.TcpPort,
-	"security-param" : &ConfigValues.SecurityParam,
-	"swarm-rtbs": &SwarmConfigValues.RoutingTableBucketSize,
-	"swarm-rtalpha": &SwarmConfigValues.RoutingTableAlpha,
-	"swarm-randcon": &SwarmConfigValues.RandomConnections,
-
+var NodeConfigUints = map[string]*uint{
+	"tcp-port":       &ConfigValues.TcpPort,
+	"security-param": &ConfigValues.SecurityParam,
+	"swarm-rtbs":     &SwarmConfigValues.RoutingTableBucketSize,
+	"swarm-rtalpha":  &SwarmConfigValues.RoutingTableAlpha,
+	"swarm-randcon":  &SwarmConfigValues.RandomConnections,
 }
 
-var NodeConfigDurations = map[string]*time.Duration {
-	"dial-timeout": &ConfigValues.DialTimeout,
+var NodeConfigDurations = map[string]*time.Duration{
+	"dial-timeout":   &ConfigValues.DialTimeout,
 	"conn-keepalive": &ConfigValues.ConnKeepAlive,
 }
-
 
 // Default node config values
 var ConfigValues = Config{

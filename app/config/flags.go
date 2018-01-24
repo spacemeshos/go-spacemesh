@@ -11,7 +11,7 @@ var (
 		Usage:       "Load configuration from `FILE`",
 		Value:       ConfigValues.ConfigFilePath,
 		Destination: &ConfigValues.ConfigFilePath,
-		EnvVar: "CONFIG_FILE",
+		EnvVar:      "CONFIG_FILE",
 	}
 
 	DataFolderPathFlag = altsrc.NewStringFlag(cli.StringFlag{
@@ -19,6 +19,6 @@ var (
 		Usage:       "Set root data folder`",
 		Value:       ConfigValues.DataFilePath,
 		Destination: &ConfigValues.DataFilePath,
-		EnvVar:"DATA_FOLDER",
+		EnvVar:      "DATA_FOLDER",
 	})
 )
