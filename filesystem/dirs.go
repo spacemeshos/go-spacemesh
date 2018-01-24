@@ -13,10 +13,13 @@ import (
 
 // Directory and paths funcs
 
+// OwnerReadWriteExec is a standard owner read / write / exec file permission.
 const OwnerReadWriteExec = 0700
+
+// OwnerReadWrite is a standard owner read / write file permission.
 const OwnerReadWrite = 0600
 
-// Return true iff file exists and is accessible
+// PathExists returns true iff file exists in local store and is accessible.
 func PathExists(path string) bool {
 	_, err := os.Stat(path)
 	if os.IsNotExist(err) {
@@ -25,12 +28,12 @@ func PathExists(path string) bool {
 	return err != nil
 }
 
-// Get the full os-specific path to the spacemesh top-level data directory
+// GetSpacemeshDataDirectoryPath gets the full os-specific path to the spacemesh top-level data directory.
 func GetSpacemeshDataDirectoryPath() (string, error) {
 	return GetFullDirectoryPath(config.ConfigValues.DataFilePath)
 }
 
-// Get the spacemesh temp files dir so we don't have to work with convoluted os specific temp folders
+// GetSpacemeshTempDirectoryPath gets the spacemesh temp files dir so we don't have to work with convoluted os specific temp folders.
 func GetSpacemeshTempDirectoryPath() (string, error) {
 
 	dataDir, err := GetFullDirectoryPath(config.ConfigValues.DataFilePath)
@@ -43,8 +46,8 @@ func GetSpacemeshTempDirectoryPath() (string, error) {
 	return GetFullDirectoryPath(pathName)
 }
 
-// Return the os-specific path to the Spacemesh data folder
-// Creates it and all subdirs on demand
+// EnsureSpacemeshDataDirectories return the os-specific path to the Spacemesh data directory.
+// It creates the directory and all predefined sub directories on demand.
 func EnsureSpacemeshDataDirectories() (string, error) {
 	dataPath, err := GetSpacemeshDataDirectoryPath()
 	if err != nil {
@@ -68,7 +71,7 @@ func EnsureSpacemeshDataDirectories() (string, error) {
 	return dataPath, nil
 }
 
-// Ensure a sub-directory exists
+// ensureDataSubDirectory ensure a sub-directory exists.
 func ensureDataSubDirectory(dirName string) (string, error) {
 	dataPath, err := GetSpacemeshDataDirectoryPath()
 	if err != nil {
@@ -85,6 +88,8 @@ func ensureDataSubDirectory(dirName string) (string, error) {
 	return aPath, nil
 }
 
+// GetAccountsDataDirectoryPath returns the path to the accounts data directory.
+// It will create the directory if it doesn't already exist.
 func GetAccountsDataDirectoryPath() (string, error) {
 	aPath, err := ensureDataSubDirectory(config.AccountsDirectoryName)
 	if err != nil {
@@ -94,6 +99,8 @@ func GetAccountsDataDirectoryPath() (string, error) {
 	return aPath, nil
 }
 
+// GetLogsDataDirectoryPath returns the path to the app logs data directory.
+// It will create the directory if it doesn't already exist.
 func GetLogsDataDirectoryPath() (string, error) {
 	aPath, err := ensureDataSubDirectory(config.LogDirectoryName)
 	if err != nil {
@@ -103,7 +110,7 @@ func GetLogsDataDirectoryPath() (string, error) {
 	return aPath, nil
 }
 
-// Returns the user home directory if one is set
+// GetUserHomeDirectory returns the current user's home directory if one is set by the system.
 func GetUserHomeDirectory() string {
 
 	if home := os.Getenv("HOME"); home != "" {
@@ -115,7 +122,7 @@ func GetUserHomeDirectory() string {
 	return ""
 }
 
-// Returns an os-specific full path:
+// GetCanonicalPath returns an os-specific full path following these rules:
 // - replace ~ with user's home dir path
 // - expand any ${vars} or $vars
 // - resolve relative paths /.../
@@ -130,8 +137,8 @@ func GetCanonicalPath(p string) string {
 	return path.Clean(os.ExpandEnv(p))
 }
 
-// Gets the OS specific full path for a named directory.
-// The directory is created if it doesn't exist
+// GetFullDirectoryPath gets the OS specific full path for a named directory.
+// The directory is created if it doesn't exist.
 func GetFullDirectoryPath(name string) (string, error) {
 
 	aPath := GetCanonicalPath(name)
