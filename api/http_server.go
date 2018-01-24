@@ -28,10 +28,12 @@ func NewJsonHttpServer() *JsonHttpServer {
 	return &JsonHttpServer{Port: config.ConfigValues.JsonServerPort, stop: make(chan bool)}
 }
 
+// Send a stop signal to the listener
 func (s JsonHttpServer) StopService() {
 	s.stop <- true
 }
 
+// Listens on gracefully stopping the server in the same routine
 func (s JsonHttpServer) listenStop() {
 	<-s.stop
 	log.Info("Shutting down json API server...")
