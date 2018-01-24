@@ -72,14 +72,15 @@ func TestJsonApi(t *testing.T) {
 	grpcService := NewGrpcService()
 	jsonService := NewJsonHttpServer()
 
-	started := make(chan bool, 2)
+	jsonStatus := make(chan bool, 2)
+	grpcStatus := make(chan bool, 2)
 
 	// start grp and json server
-	grpcService.StartService(started)
-	<-started
+	grpcService.StartService(grpcStatus)
+	<-grpcStatus
 
-	jsonService.StartService(started)
-	<-started
+	jsonService.StartService(jsonStatus)
+	<-jsonStatus
 
 	const message = "hello world!"
 	const contentType = "application/json"
@@ -121,6 +122,8 @@ func TestJsonApi(t *testing.T) {
 	}
 
 	// stop the services
-	jsonService.Stop()
+	jsonService.StopService()
+	<-jsonStatus
 	grpcService.StopService()
+	<-grpcStatus
 }

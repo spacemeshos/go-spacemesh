@@ -29,6 +29,8 @@ func (s SpaceMeshGrpcService) Echo(ctx context.Context, in *pb.SimpleMessage) (*
 func (s SpaceMeshGrpcService) StopService() {
 	log.Info("Stopping grpc service...")
 	s.Server.Stop()
+	log.Info("grpc service stopped...")
+
 }
 
 func NewGrpcService() *SpaceMeshGrpcService {
@@ -37,12 +39,12 @@ func NewGrpcService() *SpaceMeshGrpcService {
 	return &SpaceMeshGrpcService{Server: server, Port: port}
 }
 
-func (s SpaceMeshGrpcService) StartService(started chan bool) {
-	go s.startServiceInternal(started)
+func (s SpaceMeshGrpcService) StartService(status chan bool) {
+	go s.startServiceInternal(status)
 }
 
 // This is a blocking method designed to be called using a go routine
-func (s SpaceMeshGrpcService) startServiceInternal(started chan bool) {
+func (s SpaceMeshGrpcService) startServiceInternal(status chan bool) {
 	port := config.ConfigValues.GrpcServerPort
 	addr := ":" + strconv.Itoa(int(port))
 
@@ -59,12 +61,17 @@ func (s SpaceMeshGrpcService) startServiceInternal(started chan bool) {
 
 	log.Info("grpc API listening on port %d", port)
 
-	if started != nil {
-		started <- true
+	if status != nil {
+		status <- true
 	}
 
 	// start serving - this blocks until err or server is stopped
 	if err := s.Server.Serve(lis); err != nil {
 		log.Error("grpc stopped serving", err)
 	}
+
+	if status != nil {
+		status <- true
+	}
+
 }
