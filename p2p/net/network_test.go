@@ -21,7 +21,7 @@ func TestReadWrite(t *testing.T) {
 	n, err := NewNet(address, nodeconfig.ConfigValues)
 	assert.Nil(t, err, "failed to create tcp server")
 
-	_ , err = NewNet(address, nodeconfig.ConfigValues)
+	_, err = NewNet(address, nodeconfig.ConfigValues)
 	assert.Err(t, err, "Should not be able to create a new net on same address")
 
 	// run a simple network events processor go routine
@@ -52,7 +52,6 @@ func TestReadWrite(t *testing.T) {
 		}
 	}()
 
-
 	// we use the network to dial to itself over the local loop
 	c, err := n.DialTCP(address, time.Duration(10*time.Second), time.Duration(48*time.Hour))
 	assert.Nil(t, err, "failed to connect to tcp server")
@@ -73,7 +72,7 @@ func TestReadWrite(t *testing.T) {
 	<-done
 
 	n.Shutdown()
-	_ ,err = n.DialTCP(address, time.Duration(10*time.Second), time.Duration(48*time.Hour))
+	_, err = n.DialTCP(address, time.Duration(10*time.Second), time.Duration(48*time.Hour))
 	assert.Err(t, err, "expected to fail dialing after calling shutdown")
 
 	t2 := c.LastOpTime()

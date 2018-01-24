@@ -51,8 +51,6 @@ type Demuxer interface {
 	RouteIncomingMessage(msg IncomingMessage)
 }
 
-// todo: add unit tests
-
 type demuxImpl struct {
 
 	// internal state

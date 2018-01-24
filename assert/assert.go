@@ -12,7 +12,7 @@ import (
 func Nil(t *testing.T, obj interface{}, msgs ...string) {
 	t.Helper()
 	if obj != nil {
-		t.Fatal(msgs, "error:", errors.New("Expected object to be nil"))
+		t.Fatal(msgs, "error:", errors.New("expected object to be nil"))
 	}
 }
 
