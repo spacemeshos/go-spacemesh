@@ -7,10 +7,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 )
 
-// A network peer known to the local node. At minimum local node knows its id (public key) and tcp address.
+// A network peer.
+// At minimum local node knows its id (public key) and announced tcp address/port.
 // Peers are maintained by the swarm and are not visible to higher-level types on the network stack
-// All Peer methods are NOT thread-safe - they are designed to be used only from a singleton swarm object
+// All Peer methods are NOT thread-safe - they are designed to be used only from a singleton Swarm type
 // Peer handles swarm sessions and net connections with a remote node
+
 type Peer interface {
 	Id() []byte     // node id is public key bytes
 	String() string // node public key string
