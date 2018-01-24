@@ -20,19 +20,19 @@ import (
 func TestServersConfig(t *testing.T) {
 
 	config.ConfigValues.GrpcServerPort = uint(crypto.GetRandomUInt32(10000) + 1000)
-	config.ConfigValues.JsonServerPort = uint(crypto.GetRandomUInt32(10000) + 1000)
+	config.ConfigValues.JSONServerPort = uint(crypto.GetRandomUInt32(10000) + 1000)
 
 	grpcService := NewGrpcService()
-	jsonService := NewJsonHttpServer()
+	jsonService := NewJSONHTTPServer()
 
 	assert.Equal(t, grpcService.Port, config.ConfigValues.GrpcServerPort, "Expected same port")
-	assert.Equal(t, jsonService.Port, config.ConfigValues.JsonServerPort, "Expected same port")
+	assert.Equal(t, jsonService.Port, config.ConfigValues.JSONServerPort, "Expected same port")
 }
 
 func TestGrpcApi(t *testing.T) {
 
 	config.ConfigValues.GrpcServerPort = uint(crypto.GetRandomUInt32(10000) + 1000)
-	config.ConfigValues.JsonServerPort = uint(crypto.GetRandomUInt32(10000) + 1000)
+	config.ConfigValues.JSONServerPort = uint(crypto.GetRandomUInt32(10000) + 1000)
 
 	const message = "Hello World"
 
@@ -67,10 +67,10 @@ func TestGrpcApi(t *testing.T) {
 func TestJsonApi(t *testing.T) {
 
 	config.ConfigValues.GrpcServerPort = uint(crypto.GetRandomUInt32(10000) + 1000)
-	config.ConfigValues.JsonServerPort = uint(crypto.GetRandomUInt32(10000) + 1000)
+	config.ConfigValues.JSONServerPort = uint(crypto.GetRandomUInt32(10000) + 1000)
 
 	grpcService := NewGrpcService()
-	jsonService := NewJsonHttpServer()
+	jsonService := NewJSONHTTPServer()
 
 	started := make(chan bool, 2)
 
@@ -94,7 +94,7 @@ func TestJsonApi(t *testing.T) {
 	// because the server may not be ready to accept connections just yet.
 	time.Sleep(3 * time.Second)
 
-	url := fmt.Sprintf("http://127.0.0.1:%d/v1/example/echo", config.ConfigValues.JsonServerPort)
+	url := fmt.Sprintf("http://127.0.0.1:%d/v1/example/echo", config.ConfigValues.JSONServerPort)
 	resp, err := http.Post(url, contentType, strings.NewReader(payload))
 	assert.NoErr(t, err, "failed to http post to api endpoint")
 

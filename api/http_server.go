@@ -13,33 +13,33 @@ import (
 	gw "github.com/spacemeshos/go-spacemesh/api/pb"
 )
 
-// A json http server providing the Spacemesh API.
-// Implemented as a grpc gateway.
-// See https://github.com/grpc-ecosystem/grpc-gateway
-
-type JsonHttpServer struct {
+// JSONHTTPServer is a JSON http server providing the Spacemesh API.
+// It is implemented using a grpc-gateway. See https://github.com/grpc-ecosystem/grpc-gateway
+type JSONHTTPServer struct {
 	Port   uint
 	server *http.Server
 	ctx    context.Context
 }
 
-func NewJsonHttpServer() *JsonHttpServer {
-	return &JsonHttpServer{Port: config.ConfigValues.JsonServerPort}
+// NewJSONHTTPServer creates a new json http server
+func NewJSONHTTPServer() *JSONHTTPServer {
+	return &JSONHTTPServer{Port: config.ConfigValues.JSONServerPort}
 }
 
-func (s JsonHttpServer) Stop() {
+// Stop stops the server
+func (s JSONHTTPServer) Stop() {
 	log.Info("Stopping json-http service...")
 
 	// todo: fixme - this is panicking
 	//s.server.Shutdown(s.ctx)
 }
 
-// Start the grpc server
-func (s JsonHttpServer) StartService(callback chan bool) {
+// StartService starts the json server.
+func (s JSONHTTPServer) StartService(callback chan bool) {
 	go s.startInternal(callback)
 }
 
-func (s JsonHttpServer) startInternal(callback chan bool) {
+func (s JSONHTTPServer) startInternal(callback chan bool) {
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()

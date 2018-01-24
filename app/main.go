@@ -24,7 +24,7 @@ type SpacemeshApp struct {
 	*cli.App
 	Node           p2p.LocalNode
 	grpcApiService *api.SpaceMeshGrpcService
-	jsonApiService *api.JsonHttpServer
+	jsonApiService *api.JSONHTTPServer
 }
 
 // the main Spacemesh app - main entry point
@@ -48,10 +48,10 @@ var (
 		// add all additional node flags here ...
 	}
 	apiFlags = []cli.Flag{
-		apiconf.StartGrpcApiServerFlag,
+		apiconf.StartGrpcAPIServerFlag,
 		apiconf.GrpcServerPortFlag,
-		apiconf.StartJsonApiServerFlag,
-		apiconf.JsonServerPortFlag,
+		apiconf.StartJSONApiServerFlag,
+		apiconf.JSONServerPortFlag,
 	}
 
 	ExitApp = make(chan bool, 1)
@@ -201,14 +201,14 @@ func (app *SpacemeshApp) startSpacemeshNode(ctx *cli.Context) error {
 	// todo: start node consensus protocol here only after we have an unlocked account
 
 	// start api servers
-	if conf.StartGrpcServer || conf.StartJsonServer {
+	if conf.StartGrpcServer || conf.StartJSONServer {
 		// start grpc if specified or if json rpc specified
 		app.grpcApiService = api.NewGrpcService()
 		app.grpcApiService.StartService(nil)
 	}
 
-	if conf.StartJsonServer {
-		app.jsonApiService = api.NewJsonHttpServer()
+	if conf.StartJSONServer {
+		app.jsonApiService = api.NewJSONHTTPServer()
 		app.jsonApiService.StartService(nil)
 	}
 

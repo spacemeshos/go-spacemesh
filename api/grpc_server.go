@@ -14,29 +14,31 @@ import (
 	"google.golang.org/grpc/reflection"
 )
 
-// A grpc server implementing the Spacemesh API
-
-// server is used to implement SpaceMeshService.Echo.
+// SpaceMeshGrpcService is a grpc server providing the Spacemesh api
 type SpaceMeshGrpcService struct {
 	Server *grpc.Server
 	Port   uint
 }
 
+// Echo returns the response for an echo api request
 func (s SpaceMeshGrpcService) Echo(ctx context.Context, in *pb.SimpleMessage) (*pb.SimpleMessage, error) {
 	return &pb.SimpleMessage{Value: in.Value}, nil
 }
 
+// StopService stops the grpc service.
 func (s SpaceMeshGrpcService) StopService() {
 	log.Info("Stopping grpc service...")
 	s.Server.Stop()
 }
 
+// NewGrpcService create a new grpc service using config data.
 func NewGrpcService() *SpaceMeshGrpcService {
 	port := config.ConfigValues.GrpcServerPort
 	server := grpc.NewServer()
 	return &SpaceMeshGrpcService{Server: server, Port: port}
 }
 
+// StartService starts the grpc service.
 func (s SpaceMeshGrpcService) StartService(started chan bool) {
 	go s.startServiceInternal(started)
 }
