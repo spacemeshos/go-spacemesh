@@ -127,7 +127,7 @@ func (app *SpacemeshApp) setupLogging() {
 	// app-level logging
 	log.InitSpacemeshLoggingSystem(dataDir, "spacemesh.log")
 
-	log.Info("\n\nSpaceMesh app session starting... %s", app.getAppInfo())
+	log.Info("\n\nSpacemesh app session starting... %s", app.getAppInfo())
 }
 
 func (app *SpacemeshApp) getAppInfo() string {
@@ -179,7 +179,7 @@ func (app *SpacemeshApp) before(ctx *cli.Context) error {
 	return nil
 }
 
-// SpaceMesh app cleanup tasks
+// Spacemesh app cleanup tasks
 func (app *SpacemeshApp) cleanup(ctx *cli.Context) error {
 
 	log.Info("App cleanup starting...")
