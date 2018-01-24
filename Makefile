@@ -26,6 +26,9 @@ test:
 
 .PHONY: build test devtools cover
 
+lint:
+	go list ./... | grep -v /vendor/ | xargs -n 1 golint
+
 devtools:
 	# Install the build tools
 	go get -u github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway
