@@ -16,6 +16,6 @@ func TestAsserts(t *testing.T) {
 	var err error
 	NoErr(t, err, "expected no error")
 
-	err = errors.New("An error")
-	Err(t, err, "exected an error")
+	err = errors.New("an error")
+	Err(t, err, "epxected an error")
 }
