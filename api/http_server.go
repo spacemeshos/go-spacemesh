@@ -21,11 +21,11 @@ type JsonHttpServer struct {
 	Port   uint
 	server *http.Server
 	ctx    context.Context
-	stop chan bool
+	stop   chan bool
 }
 
 func NewJsonHttpServer() *JsonHttpServer {
-	return &JsonHttpServer{ Port: config.ConfigValues.JsonServerPort, stop: make(chan bool)}
+	return &JsonHttpServer{Port: config.ConfigValues.JsonServerPort, stop: make(chan bool)}
 }
 
 func (s JsonHttpServer) StopService() {

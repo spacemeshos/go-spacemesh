@@ -123,7 +123,7 @@ func TestJsonApi(t *testing.T) {
 
 	// stop the services
 	jsonService.StopService()
-	<- jsonStatus
+	<-jsonStatus
 	grpcService.StopService()
-	<- grpcStatus
+	<-grpcStatus
 }
