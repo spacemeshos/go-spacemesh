@@ -2,7 +2,7 @@
 
 import_path="github.com/spacemeshos/go-spacemesh"
 pkgs=`go list ./... | grep -vF vendor/`
-ignored_pkgs=""
+ignored_pkgs="."
 
 for pkg in $pkgs; do
 	relative_path="${pkg/$import_path/.}"
@@ -12,7 +12,7 @@ for pkg in $pkgs; do
 			i=1
 		fi
 		if [ $i -eq 1 ]; then
-			continue
+			continue 2
 		fi
 	done
 	output=`gofmt -s -l $relative_path`
