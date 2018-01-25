@@ -8,9 +8,9 @@ import (
 	"sort"
 )
 
-// RoutingTable manages routing to peers
-// All uppercase methods visible to externals packages are thread-safe
-// Don't call package-level methods (lower-case) - they are private not thread-safe
+// RoutingTable manages routing to peers.
+// All uppercase methods visible to externals packages are thread-safe.
+// Don't call package-level methods (lower-case) - they are private not thread-safe.
 // Design spec: 'Kademlia: A Design Specification' with most-recently active nodes at the front of each bucket and not the back.
 // http://xlattice.sourceforge.net/components/protocol/kademlia/specs.html
 type RoutingTable interface {
@@ -18,8 +18,8 @@ type RoutingTable interface {
 	// table ops
 	Update(p node.RemoteNodeData)      // adds a peer to the table
 	Remove(p node.RemoteNodeData)      // remove a peer from the table
-	Find(req PeerByIdRequest)          // find a specific peer by dht.ID
-	NearestPeer(req PeerByIdRequest)   // nearest peer to a dht.ID
+	Find(req PeerByIDRequest)          // find a specific peer by dht.ID
+	NearestPeer(req PeerByIDRequest)   // nearest peer to a dht.ID
 	NearestPeers(req NearestPeersReq)  // ip to n nearest peers to a dht.ID
 	ListPeers(callback PeersOpChannel) // list all peers
 	Size(callback chan int)            // total # of peers in the table
@@ -35,27 +35,37 @@ type RoutingTable interface {
 
 // exported helper types
 
-type PeerOpResult struct { // result of a method that returns nil or one peer
+// PeerOpResult is used as a result of a method that returns nil or one peer.
+type PeerOpResult struct {
 	Peer node.RemoteNodeData
 }
-type PeerOpChannel chan *PeerOpResult // a channel that accept a peer op result
 
-type PeersOpResult struct { // result of a method that returns 0 or more peers
+// PeerOpChannel is a  channel that accept a peer op result.
+type PeerOpChannel chan *PeerOpResult
+
+// PeersOpResult is a result of a method that returns zero or more peers.
+type PeersOpResult struct {
 	Peers []node.RemoteNodeData
 }
 
-type PeersOpChannel chan *PeersOpResult // a channel of peers op result
+// PeersOpChannel is a channel of PeerOpResult.
+type PeersOpChannel chan *PeersOpResult
 
-type PeerChannel chan node.RemoteNodeData // a channel that accepts a peer
+// PeerChannel is a channel of RemoteNodeData
+type PeerChannel chan node.RemoteNodeData
 
-type ChannelOfPeerChannel chan PeerChannel // a channel of peer channels
+// ChannelOfPeerChannel is a channel of PeerChannels
+type ChannelOfPeerChannel chan PeerChannel
 
-type PeerByIdRequest struct { // a request by peer id that returns 0 or 1 peer
-	Id       dht.ID
+// PeerByIDRequest includes one peer id and a callback PeerOpChannel
+type PeerByIDRequest struct {
+	ID       dht.ID
 	Callback PeerOpChannel
 }
-type NearestPeersReq struct { // NearestPeer method req params
-	Id       dht.ID
+
+// NearestPeersReq includes one peer id, a count param and a callback PEersOpChannel.
+type NearestPeersReq struct {
+	ID       dht.ID
 	Count    int
 	Callback PeersOpChannel
 }
@@ -79,8 +89,8 @@ type routingTableImpl struct {
 	local dht.ID
 
 	// ops impls
-	findReqs         chan PeerByIdRequest
-	nearestPeerReqs  chan PeerByIdRequest
+	findReqs         chan PeerByIDRequest
+	nearestPeerReqs  chan PeerByIDRequest
 	nearestPeersReqs chan NearestPeersReq
 	listPeersReqs    chan PeersOpChannel
 	sizeReqs         chan chan int
@@ -120,8 +130,8 @@ func NewRoutingTable(bucketsize int, localID dht.ID) RoutingTable {
 		peerRemoved: make(PeerChannel, 3),
 		peerAdded:   make(PeerChannel, 3),
 
-		findReqs:         make(chan PeerByIdRequest, 3),
-		nearestPeerReqs:  make(chan PeerByIdRequest, 3),
+		findReqs:         make(chan PeerByIDRequest, 3),
+		nearestPeerReqs:  make(chan PeerByIDRequest, 3),
 		nearestPeersReqs: make(chan NearestPeersReq, 3),
 		listPeersReqs:    make(chan PeersOpChannel, 3),
 		sizeReqs:         make(chan chan int, 3),
@@ -174,12 +184,12 @@ func (rt *routingTableImpl) UnregisterPeerAddedCallback(c PeerChannel) {
 }
 
 // Finds a specific peer by ID/ Returns nil in the callback when not found
-func (rt *routingTableImpl) Find(req PeerByIdRequest) {
+func (rt *routingTableImpl) Find(req PeerByIDRequest) {
 	rt.findReqs <- req
 }
 
 // NearestPeer returns a single peer that is nearest to the given ID
-func (rt *routingTableImpl) NearestPeer(req PeerByIdRequest) {
+func (rt *routingTableImpl) NearestPeer(req PeerByIDRequest) {
 	rt.nearestPeerReqs <- req
 }
 
@@ -223,7 +233,7 @@ func (rt *routingTableImpl) processEvents() {
 			go func() { r <- &PeersOpResult{Peers: peers} }()
 
 		case r := <-rt.nearestPeersReqs:
-			peers := rt.nearestPeers(r.Id, r.Count)
+			peers := rt.nearestPeers(r.ID, r.Count)
 			if r.Callback != nil {
 				go func() { r.Callback <- &PeersOpResult{Peers: peers} }()
 			}
@@ -306,7 +316,6 @@ func (rt *routingTableImpl) update(p node.RemoteNodeData) {
 	go func() { rt.peerAdded <- p }()
 
 	if bucket.Len() > rt.bucketsize { // bucket overflows
-
 		if id == len(rt.buckets)-1 { // last bucket
 
 			// We added the node to the last bucket and this bucket is over-flowing
@@ -316,16 +325,13 @@ func (rt *routingTableImpl) update(p node.RemoteNodeData) {
 				go func() { rt.peerRemoved <- n }()
 			}
 			return
-		} else {
-			// This is not the last bucket but it is overflowing
-			// We remove the least active node from it to keep the number of nodes within the bucket size
-			n := bucket.PopBack()
-			go func() { rt.peerRemoved <- n }()
-			return
 		}
-	}
 
-	return
+		// This is not the last bucket but it is overflowing
+		// We remove the least active node from it to keep the number of nodes within the bucket size
+		n := bucket.PopBack()
+		go func() { rt.peerRemoved <- n }()
+	}
 }
 
 // Remove a node from the routing table.
@@ -334,12 +340,12 @@ func (rt *routingTableImpl) update(p node.RemoteNodeData) {
 func (rt *routingTableImpl) remove(p node.RemoteNodeData) {
 
 	cpl := p.DhtId().CommonPrefixLen(rt.local)
-	bucketId := cpl
-	if bucketId >= len(rt.buckets) {
-		bucketId = len(rt.buckets) - 1
+	bucketID := cpl
+	if bucketID >= len(rt.buckets) {
+		bucketID = len(rt.buckets) - 1
 	}
 
-	bucket := rt.buckets[bucketId]
+	bucket := rt.buckets[bucketID]
 	removed := bucket.Remove(p)
 
 	if removed {
@@ -375,15 +381,15 @@ func (rt *routingTableImpl) addNewBucket() node.RemoteNodeData {
 }
 
 // Internal find peer request handler
-func (rt *routingTableImpl) onFindReq(r PeerByIdRequest) {
+func (rt *routingTableImpl) onFindReq(r PeerByIDRequest) {
 
-	peers := rt.nearestPeers(r.Id, 1)
+	peers := rt.nearestPeers(r.ID, 1)
 	if r.Callback == nil {
 		return
 	}
 
-	if len(peers) == 0 || !peers[0].DhtId().Equals(r.Id) {
-		log.Info("Did not find %s in the routing table", r.Id.Pretty())
+	if len(peers) == 0 || !peers[0].DhtId().Equals(r.ID) {
+		log.Info("Did not find %s in the routing table", r.ID.Pretty())
 		go func() { r.Callback <- &PeerOpResult{} }()
 	} else {
 		p := peers[0]
@@ -392,8 +398,8 @@ func (rt *routingTableImpl) onFindReq(r PeerByIdRequest) {
 	}
 }
 
-func (rt *routingTableImpl) onNearestPeerReq(r PeerByIdRequest) {
-	peers := rt.nearestPeers(r.Id, 1)
+func (rt *routingTableImpl) onNearestPeerReq(r PeerByIDRequest) {
+	peers := rt.nearestPeers(r.ID, 1)
 	if r.Callback != nil {
 		switch len(peers) {
 		case 0:

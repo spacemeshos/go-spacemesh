@@ -55,17 +55,17 @@ func TestSimpleBootstrap(t *testing.T) {
 	node2Local, _ := GenerateTestNodeWithConfig(t, c)
 
 	// ping node2 -> node 1
-	reqId := crypto.UUID()
+	reqID := crypto.UUID()
 	callback := make(chan SendPingResp)
 	node2Local.GetPing().Register(callback)
-	node2Local.GetPing().Send("hello Spacemesh!", reqId, node1Remote.String())
+	node2Local.GetPing().Send("hello Spacemesh!", reqID, node1Remote.String())
 
 Loop:
 	for {
 		select {
 		case c := <-callback:
 			assert.Nil(t, c.err, "expected no err in response")
-			if bytes.Equal(c.GetMetadata().ReqId, reqId) {
+			if bytes.Equal(c.GetMetadata().ReqId, reqID) {
 				break Loop
 			}
 		case <-time.After(time.Second * 30):
@@ -119,7 +119,7 @@ func _estBootstrap(t *testing.T) {
 			for {
 				select {
 					case c := <- callbacks[i] :
-						if c.State == SESSION_ESTABLISHED {
+						if c.State == SessionEstablished {
 							atomic.AddUint64(&sessions, 1)
 						}
 
@@ -160,17 +160,17 @@ func _estBasicBootstrap(t *testing.T) {
 	_, node3Remote := GenerateTestNodeWithConfig(t, c)
 
 	// ping node2 -> node 3
-	reqId := crypto.UUID()
+	reqID := crypto.UUID()
 	callback := make(chan SendPingResp)
 	node2Local.GetPing().Register(callback)
-	node2Local.GetPing().Send("hello spacemesh", reqId, node3Remote.String())
+	node2Local.GetPing().Send("hello spacemesh", reqID, node3Remote.String())
 
 Loop:
 	for {
 		select {
 		case c := <-callback:
 			assert.Nil(t, c.err, "expected no err in response")
-			if bytes.Equal(c.GetMetadata().ReqId, reqId) {
+			if bytes.Equal(c.GetMetadata().ReqId, reqID) {
 				break Loop
 			}
 		case <-time.After(time.Second * 30):

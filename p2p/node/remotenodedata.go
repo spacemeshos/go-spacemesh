@@ -112,7 +112,7 @@ func FromNodeInfos(nodes []*pb.NodeInfo) []RemoteNodeData {
 
 func NewRemoteNodeData(id string, ip string) RemoteNodeData {
 	bytes := base58.Decode(id)
-	dhtId := dht.NewIdFromNodeKey(bytes)
+	dhtId := dht.NewIDFromNodeKey(bytes)
 	return &remoteNodeDataImpl{id: id,
 		ip:               ip,
 		bytes:            bytes,

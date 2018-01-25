@@ -6,8 +6,7 @@ import (
 	node "github.com/spacemeshos/go-spacemesh/p2p/node"
 )
 
-// Bucket is a dht k-bucket type
-// Bucket methods are NOT thread safe.
+// Bucket is a dht k-bucket type. Bucket methods are NOT thread safe.
 // RoutingTable (or other clients) is responsible for serializing access to Bucket's methods.
 type Bucket interface {
 	Peers() []node.RemoteNodeData
@@ -27,12 +26,14 @@ type bucketimpl struct {
 	list *list.List
 }
 
+// NewBucket creates a new empty bucket.
 func NewBucket() Bucket {
 	return &bucketimpl{
 		list: list.New(),
 	}
 }
 
+// Peers returns a slice of RemoteNodeData for the peers stored in the bucket.
 func (b *bucketimpl) Peers() []node.RemoteNodeData {
 	ps := make([]node.RemoteNodeData, 0, b.list.Len())
 	for e := b.list.Front(); e != nil; e = e.Next() {
@@ -42,10 +43,12 @@ func (b *bucketimpl) Peers() []node.RemoteNodeData {
 	return ps
 }
 
+// List returns a list of RemoteNodeData stored in this bucket.
 func (b *bucketimpl) List() *list.List {
 	return b.list
 }
 
+// Has returns ture iff the bucket stores n.
 func (b *bucketimpl) Has(n node.RemoteNodeData) bool {
 	for e := b.list.Front(); e != nil; e = e.Next() {
 		n1 := e.Value.(node.RemoteNodeData)
@@ -56,6 +59,8 @@ func (b *bucketimpl) Has(n node.RemoteNodeData) bool {
 	return false
 }
 
+// Remove removes n from the bucket if it is stored in it.
+// It returns true if n was in the bucket and was removed and false otherwise.
 func (b *bucketimpl) Remove(n node.RemoteNodeData) bool {
 	for e := b.list.Front(); e != nil; e = e.Next() {
 		if e.Value.(node.RemoteNodeData).Id() == n.Id() {
@@ -66,6 +71,7 @@ func (b *bucketimpl) Remove(n node.RemoteNodeData) bool {
 	return false
 }
 
+// MoveToFront moves n to the front of the bucket.
 func (b *bucketimpl) MoveToFront(n node.RemoteNodeData) {
 	for e := b.list.Front(); e != nil; e = e.Next() {
 		if e.Value.(node.RemoteNodeData).Id() == n.Id() {
@@ -74,14 +80,17 @@ func (b *bucketimpl) MoveToFront(n node.RemoteNodeData) {
 	}
 }
 
+// PushFront adds a new node to the front of the bucket.
 func (b *bucketimpl) PushFront(n node.RemoteNodeData) {
 	b.list.PushFront(n)
 }
 
+// PushBack adds a new node to the back of the bucket.
 func (b *bucketimpl) PushBack(n node.RemoteNodeData) {
 	b.list.PushBack(n)
 }
 
+// PopBack removes the node at the back of the bucket from the bucket and returns it.
 func (b *bucketimpl) PopBack() node.RemoteNodeData {
 	last := b.list.Back()
 	if last == nil {
@@ -91,13 +100,14 @@ func (b *bucketimpl) PopBack() node.RemoteNodeData {
 	return last.Value.(node.RemoteNodeData)
 }
 
+// Len returns the number of nodes stored in the bucket.
 func (b *bucketimpl) Len() int {
 	return b.list.Len()
 }
 
-// Splits bucket b nodes into two buckets.
-// The receiver bucket will have peers with CPL equal to cpl with target
-// The returned bucket will have peers with CPL greater than cpl with target (closer peers)
+// Split splits bucket stored nodes into two buckets.
+// The receiver bucket will have peers with cpl equal to cpl with target.
+// The returned bucket will have peers with cpl greater than cpl with target (closer peers).
 func (b *bucketimpl) Split(cpl int, target dht.ID) Bucket {
 	newbucket := NewBucket()
 	e := b.list.Front()

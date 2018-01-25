@@ -12,12 +12,12 @@ import (
 	"time"
 )
 
-// Local node implementation type
+// LocalNode implementation
 type localNodeImp struct {
 	pubKey     crypto.PublicKey
 	privKey    crypto.PrivateKey
 	tcpAddress string
-	dhtId      dht.ID
+	dhtID      dht.ID
 
 	logger *logging.Logger
 	config nodeconfig.Config
@@ -29,11 +29,11 @@ type localNodeImp struct {
 
 }
 
-// Creates meta-data for an outgoing protocol message authored by this node
-func (n *localNodeImp) NewProtocolMessageMetadata(protocol string, reqId []byte, gossip bool) *pb.Metadata {
+// NewProtocolMessageMetadata creates meta-data for an outgoing protocol message authored by this node.
+func (n *localNodeImp) NewProtocolMessageMetadata(protocol string, reqID []byte, gossip bool) *pb.Metadata {
 	return &pb.Metadata{
 		Protocol:      protocol,
-		ReqId:         reqId,
+		ReqId:         reqID,
 		ClientVersion: nodeconfig.ClientVersion,
 		Timestamp:     time.Now().Unix(),
 		Gossip:        gossip,
@@ -41,59 +41,69 @@ func (n *localNodeImp) NewProtocolMessageMetadata(protocol string, reqId []byte,
 	}
 }
 
-// Returns remote node data for this node
+// GetRemoteNodeData returns the RemoteNodeData for this local node.
 func (n *localNodeImp) GetRemoteNodeData() node.RemoteNodeData {
-	return node.NewRemoteNodeData(n.String(), n.TcpAddress())
+	return node.NewRemoteNodeData(n.String(), n.TCPAddress())
 }
 
+// Config returns the local node config params.
 func (n *localNodeImp) Config() nodeconfig.Config {
 	return n.config
 }
 
-// Shuts down local node
+// Shutdown releases all resources open and owned by this local mode.
 func (n *localNodeImp) Shutdown() {
 
 	// shutdown swarm
 	n.swarm.Shutdown()
 }
 
+// GetPing returns this node's Ping protocol
 func (n *localNodeImp) GetPing() Ping {
 	return n.ping
 }
 
+// Swarm returns this node's swarm.
 func (n *localNodeImp) GetSwarm() Swarm {
 	return n.swarm
 }
 
-func (n *localNodeImp) Id() []byte {
+// ID() returns this node's ID.
+func (n *localNodeImp) ID() []byte {
 	return n.pubKey.Bytes()
 }
 
-func (n *localNodeImp) DhtId() dht.ID {
-	return n.dhtId
+// DhtID() reutrns this node's dht ID.
+func (n *localNodeImp) DhtID() dht.ID {
+	return n.dhtID
 }
 
+// String() returns a string identifier for this node.
 func (n *localNodeImp) String() string {
 	return n.pubKey.String()
 }
 
+// Pretty returns a readable short identifier for this node.
 func (n *localNodeImp) Pretty() string {
 	return n.pubKey.Pretty()
 }
 
-func (n *localNodeImp) TcpAddress() string {
+// TCPAddress returns this TCP address that this node is listening on for incoming network connections.
+func (n *localNodeImp) TCPAddress() string {
 	return n.tcpAddress
 }
 
+// PrivateKey returns this node's private key.
 func (n *localNodeImp) PrivateKey() crypto.PrivateKey {
 	return n.privKey
 }
 
+// PublicKey returns this node's public key.
 func (n *localNodeImp) PublicKey() crypto.PublicKey {
 	return n.pubKey
 }
 
-// Signs a protobufs message and return a hex-encoded string signature
+// SignToString signs a protobufs message with this node's private key, and returns a hex-encoded string signature.
 func (n *localNodeImp) SignToString(data proto.Message) (string, error) {
 	sign, err := n.Sign(data)
 	if err != nil {
@@ -102,7 +112,7 @@ func (n *localNodeImp) SignToString(data proto.Message) (string, error) {
 	return hex.EncodeToString(sign), nil
 }
 
-// Signs a protobufs message and return raw signature bytes
+// Sign signs a protobufs message with this node's private key and returns the raw signature bytes.
 func (n *localNodeImp) Sign(data proto.Message) ([]byte, error) {
 	bin, err := proto.Marshal(data)
 	if err != nil {
@@ -119,18 +129,22 @@ func (n *localNodeImp) Sign(data proto.Message) ([]byte, error) {
 
 // log wrappers - log node id and args
 
+// Info is used for info logging.
 func (n *localNodeImp) Info(format string, args ...interface{}) {
 	n.logger.Info(format, args)
 }
 
+// Debug is used to log debug data.
 func (n *localNodeImp) Debug(format string, args ...interface{}) {
 	n.logger.Debug(format, args)
 }
 
+// Error is used to log runtime errors.
 func (n *localNodeImp) Error(format string, args ...interface{}) {
 	n.logger.Error(format, args)
 }
 
+// Warning is used to log runtime warnings.
 func (n *localNodeImp) Warning(format string, args ...interface{}) {
 	n.logger.Warning(format, args)
 }

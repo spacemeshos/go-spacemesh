@@ -16,10 +16,13 @@ import (
 	"io"
 )
 
-// pattern: [protocol][version][method-name]
+// HandshakeReq specifies the handshake protocol request message identifier. pattern is [protocol][version][method-name].
 const HandshakeReq = "/handshake/1.0/handshake-req/"
+
+// HandshakeResp specifies the handshake protocol response message identifier.
 const HandshakeResp = "/handshake/1.0/handshake-resp/"
 
+// HandshakeData defines the handshake protocol capabilities.
 type HandshakeData interface {
 	LocalNode() LocalNode
 	Peer() Peer
@@ -28,6 +31,7 @@ type HandshakeData interface {
 	SetError(err error)
 }
 
+// NewHandshakeData creates new HandshakeData with the provided data.
 func NewHandshakeData(localNode LocalNode, peer Peer, session NetworkSession, err error) HandshakeData {
 	return &handshakeDataImp{
 		localNode: localNode,
@@ -44,30 +48,35 @@ type handshakeDataImp struct {
 	err       error
 }
 
+// LocalNode returns the protocol's local node.
 func (n *handshakeDataImp) LocalNode() LocalNode {
 	return n.localNode
 }
 
+// Peer returns the protocol's remote node.
 func (n *handshakeDataImp) Peer() Peer {
 	return n.peer
 }
 
+// Session returns the network session betwen the local and the remote nodes.
 func (n *handshakeDataImp) Session() NetworkSession {
 	return n.session
 }
 
+// GetError returns the last protocol error or nil otherwise.
 func (n *handshakeDataImp) GetError() error {
 	return n.err
 }
 
+// SetError sets protocol error. The last error set is returned by GetError().
 func (n *handshakeDataImp) SetError(err error) {
 	n.err = err
 }
 
-// Handshake protocol
+// HandshakeProtocol specifies the handshake protocol.
 // Node1 -> Node 2: Req(HandshakeData)
 // Node2 -> Node 1: Resp(HandshakeData)
-// After response is processed by node1 both sides have an auth session with a secret ephemeral aes sym key
+// After response is processed by node1 both sides have an auth session with a secret ephemeral aes sym key.
 type HandshakeProtocol interface {
 	CreateSession(peer Peer)
 	RegisterNewSessionCallback(callback chan HandshakeData) // register a channel to receive session state changes
@@ -85,10 +94,11 @@ type handshakeProtocolImpl struct {
 	incomingHandsakeResponses MessagesChan
 	registerSessionCallback   chan chan HandshakeData
 	addPendingSession         chan HandshakeData
-	deletePendingSessionById  chan string
+	deletePendingSessionByID  chan string
 	sessionStateChanged       chan HandshakeData
 }
 
+// NewHandshakeProtocol Creates a new Handshake protocol for the provided swarm.
 func NewHandshakeProtocol(s Swarm) HandshakeProtocol {
 
 	h := &handshakeProtocolImpl{
@@ -99,7 +109,7 @@ func NewHandshakeProtocol(s Swarm) HandshakeProtocol {
 		incomingHandsakeResponses: make(chan IncomingMessage, 20),
 		registerSessionCallback:   make(chan chan HandshakeData, 2),
 		newSessionCallbacks:       make([]chan HandshakeData, 0), // start with empty slice
-		deletePendingSessionById:  make(chan string, 5),
+		deletePendingSessionByID:  make(chan string, 5),
 		sessionStateChanged:       make(chan HandshakeData, 3),
 		addPendingSession:         make(chan HandshakeData, 3),
 	}
@@ -117,11 +127,13 @@ func NewHandshakeProtocol(s Swarm) HandshakeProtocol {
 	return h
 }
 
+// RegisterNewSessionCallback registers a callback to baclled when a new session is established by the protocol.
 func (h *handshakeProtocolImpl) RegisterNewSessionCallback(callback chan HandshakeData) {
 	log.Info("New session callback registered.")
 	h.registerSessionCallback <- callback
 }
 
+// CreateSession is called to initiate the handshake protocol between the local node and a remote peer.
 func (h *handshakeProtocolImpl) CreateSession(peer Peer) {
 
 	data, session, err := generateHandshakeRequestData(h.swarm.GetLocalNode(), peer)
@@ -145,16 +157,16 @@ func (h *handshakeProtocolImpl) CreateSession(peer Peer) {
 	log.Info("Creating session handshake request session id: %s", session.String())
 
 	h.swarm.sendHandshakeMessage(SendMessageReq{
-		ReqId:    session.Id(),
-		PeerId:   peer.String(),
+		ReqID:    session.ID(),
+		PeerID:   peer.String(),
 		Payload:  payload,
 		Callback: nil,
 	})
 
 	h.sessionStateChanged <- handshakeData
-
 }
 
+// internal event processing handler
 func (h *handshakeProtocolImpl) processEvents() {
 	for {
 		select {
@@ -172,7 +184,7 @@ func (h *handshakeProtocolImpl) processEvents() {
 			log.Info("Storing pending session w key: %s", sessionKey)
 			h.pendingSessions[sessionKey] = d
 
-		case k := <-h.deletePendingSessionById:
+		case k := <-h.deletePendingSessionByID:
 			delete(h.pendingSessions, k)
 
 		case s := <-h.sessionStateChanged:
@@ -183,7 +195,7 @@ func (h *handshakeProtocolImpl) processEvents() {
 	}
 }
 
-// Handle a remote handshake request
+// Handles a remote handshake request.
 func (h *handshakeProtocolImpl) onHandleIncomingHandshakeRequest(msg IncomingMessage) {
 
 	data := &pb.HandshakeData{}
@@ -221,8 +233,8 @@ func (h *handshakeProtocolImpl) onHandleIncomingHandshakeRequest(msg IncomingMes
 
 	// send response back to sender
 	h.swarm.sendHandshakeMessage(SendMessageReq{
-		ReqId:    session.Id(),
-		PeerId:   msg.Sender().String(),
+		ReqID:    session.ID(),
+		PeerID:   msg.Sender().String(),
 		Payload:  payload,
 		Callback: nil,
 	})
@@ -234,6 +246,7 @@ func (h *handshakeProtocolImpl) onHandleIncomingHandshakeRequest(msg IncomingMes
 
 }
 
+// Handles an incoming handshake response from a remote peer.
 func (h *handshakeProtocolImpl) onHandleIncomingHandshakeResponse(msg IncomingMessage) {
 	respData := &pb.HandshakeData{}
 	err := proto.Unmarshal(msg.Payload(), respData)
@@ -242,12 +255,12 @@ func (h *handshakeProtocolImpl) onHandleIncomingHandshakeResponse(msg IncomingMe
 		return
 	}
 
-	sessionId := hex.EncodeToString(respData.SessionId)
+	sessionID := hex.EncodeToString(respData.SessionId)
 
-	log.Info("Incoming handshake response for session id %s", sessionId)
+	log.Info("Incoming handshake response for session id %s", sessionID)
 
 	// this is the session data we sent to the node
-	sessionRequestData := h.pendingSessions[sessionId]
+	sessionRequestData := h.pendingSessions[sessionID]
 
 	if sessionRequestData == nil {
 		log.Error("Expected to have data about this session - aborting")
@@ -262,10 +275,10 @@ func (h *handshakeProtocolImpl) onHandleIncomingHandshakeResponse(msg IncomingMe
 	}
 
 	// no longer pending if error or if sesssion created
-	h.deletePendingSessionById <- sessionId
+	h.deletePendingSessionByID <- sessionID
 
 	h.sessionStateChanged <- sessionRequestData
-	log.Info("Locally initiated session established! Session id: %s :-)", sessionId)
+	log.Info("Locally initiated session established! Session id: %s :-)", sessionID)
 }
 
 /////////////////////////// functions below - they don't provide Handshake protocol state
@@ -290,7 +303,7 @@ func generateHandshakeRequestData(node LocalNode, remoteNode Peer) (*pb.Handshak
 
 	data.SessionId = iv
 	data.Iv = iv
-	data.TcpAddress = node.TcpAddress()
+	data.TcpAddress = node.TCPAddress()
 
 	ephemeral, err := btcec.NewPrivateKey(btcec.S256())
 	if err != nil {
@@ -363,7 +376,7 @@ func authenticateSenderNode(req *pb.HandshakeData) error {
 	}
 
 	if !v {
-		return errors.New("Failed to verify data is from claimed sender node.")
+		return errors.New("failed to verify data is from claimed sender node")
 	}
 
 	return nil
@@ -441,7 +454,7 @@ func processHandshakeRequest(node LocalNode, r Peer, req *pb.HandshakeData) (*pb
 		PubKey:     req.PubKey,
 		Iv:         iv,
 		Hmac:       hmac1,
-		TcpAddress: node.TcpAddress(),
+		TcpAddress: node.TCPAddress(),
 		Protocol:   HandshakeResp,
 		Sign:       "",
 	}
@@ -474,7 +487,7 @@ func processHandshakeResponse(node LocalNode, r Peer, s NetworkSession, resp *pb
 	}
 
 	// verify response is for the expected session id
-	if !bytes.Equal(s.Id(), resp.SessionId) {
+	if !bytes.Equal(s.ID(), resp.SessionId) {
 		return errors.New("expected same session id")
 	}
 

@@ -33,7 +33,7 @@ type swarmImpl struct {
 	// todo: remove all idle sessions every n hours (configurable)
 	allSessions map[string]NetworkSession // SessionId -> Session data. all authenticated session
 
-	outgoingSendsCallbacks map[string]map[string]chan SendError // k - conn id v-  reqId -> chan SendError
+	outgoingSendsCallbacks map[string]map[string]chan SendError // k - conn id v-  reqID -> chan SendError
 
 	messagesPendingSession map[string]SendMessageReq // k - unique req id. outgoing messages which pend an auth session with remote node to be sent out
 
@@ -60,6 +60,7 @@ type swarmImpl struct {
 	routingTable table.RoutingTable
 }
 
+// NewSwarm creates a new swarm for a local node.
 func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 
 	n, err := net.NewNet(tcpAddress, l.Config())
@@ -99,7 +100,7 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 	}
 
 	// nodes routing table
-	s.routingTable = table.NewRoutingTable(int(s.config.RoutingTableBucketSize), l.DhtId())
+	s.routingTable = table.NewRoutingTable(int(s.config.RoutingTableBucketSize), l.DhtID())
 
 	// findNode dht protocol
 	s.findNodeProtocol = NewFindNodeProtocol(s)
@@ -124,11 +125,11 @@ func (s *swarmImpl) RegisterNodeEventsCallback(callback NodeEventCallback) {
 }
 
 // Sends a connection event to all registered clients
-func (s *swarmImpl) sendNodeEvent(peerId string, state NodeState) {
+func (s *swarmImpl) sendNodeEvent(peerID string, state NodeState) {
 
-	s.localNode.Info(">> Node event for <%s>. State: %s", peerId[:6], state)
+	s.localNode.Info(">> Node event for <%s>. State: %s", peerID[:6], state)
 
-	evt := NodeEvent{peerId, state}
+	evt := NodeEvent{peerID, state}
 	for _, c := range s.nec {
 		go func(c NodeEventCallback) { c <- evt }(c)
 	}
@@ -178,7 +179,7 @@ func (s *swarmImpl) bootstrap() {
 		rn := node.NewRemoteNodeDataFromString(n)
 		if s.localNode.String() != rn.Id() {
 			s.onRegisterNodeRequest(rn)
-			bn += 1
+			bn++
 		}
 	}
 
@@ -215,7 +216,7 @@ func (s *swarmImpl) ConnectToRandomNodes(count int) {
 		c1 := make(table.PeersOpChannel, 2)
 
 		// find nearest peers
-		s.routingTable.NearestPeers(table.NearestPeersReq{Id: s.localNode.DhtId(), Count: count, Callback: c1})
+		s.routingTable.NearestPeers(table.NearestPeersReq{ID: s.localNode.DhtID(), Count: count, Callback: c1})
 
 		select {
 		case c := <-c1:
@@ -238,7 +239,7 @@ func (s *swarmImpl) ConnectToRandomNodes(count int) {
 // Sends a message to a remote node
 // Swarm will establish session if needed or use an existing session and open connection
 // Designed to be used by any high level protocol
-// req.reqId: globally unique id string - used for tracking messages we didn't get a response for yet
+// req.reqID: globally unique id string - used for tracking messages we didn't get a response for yet
 // req.msg: marshaled message data
 // req.destId: receiver remote node public key/id
 func (s *swarmImpl) SendMessage(req SendMessageReq) {
