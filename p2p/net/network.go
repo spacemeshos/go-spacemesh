@@ -42,8 +42,8 @@ type netImpl struct {
 	isShuttingDown bool
 }
 
-// Creates a new network
-// Attempts to tcp listen on address. e.g. localhost:1234
+// NewNet creates a new network.
+// It attempts to tcp listen on address. e.g. localhost:1234 .
 func NewNet(tcpListenAddress string, config nodeconfig.Config) (Net, error) {
 
 	n := &netImpl{
@@ -129,11 +129,11 @@ func (n *netImpl) listen() error {
 		return err
 	}
 	n.tcpListener = tcpListener
-	go n.acceptTcp()
+	go n.acceptTCP()
 	return nil
 }
 
-func (n *netImpl) acceptTcp() {
+func (n *netImpl) acceptTCP() {
 	for {
 		log.Info("Waiting for incoming connections...")
 		netConn, err := n.tcpListener.Accept()

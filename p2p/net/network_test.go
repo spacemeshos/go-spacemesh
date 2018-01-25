@@ -13,7 +13,7 @@ import (
 func TestReadWrite(t *testing.T) {
 
 	msg := []byte("hello world")
-	msgId := crypto.UUID()
+	msgID := crypto.UUID()
 	port := crypto.GetRandomUInt32(1000) + 10000
 	address := fmt.Sprintf("0.0.0.0:%d", port)
 	done := make(chan bool, 1)
@@ -60,7 +60,7 @@ func TestReadWrite(t *testing.T) {
 
 	t1 := c.LastOpTime()
 
-	c.Send(msg, msgId)
+	c.Send(msg, msgID)
 	//assert.Nil(t, err, "Failed to send message to server")
 	//assert.Equal(t, l, len(msg) + 4, "Expected message to be written to stream")
 	log.Info("Message sent.")

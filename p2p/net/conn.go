@@ -9,45 +9,52 @@ import (
 	"time"
 )
 
-// A closeable network connection, that can send and receive messages from a remote instance
-// Connection is an io.Writer and an  io.Closer
+// Connection is a closeable network connection, that can send and receive messages from a remote instance.
+// Connection is an io.Writer and an io.Closer.
 type Connection interface {
-	Id() string
+	ID() string
 	Send(message []byte, id []byte)
 	Close() error
 	LastOpTime() time.Time // last rw op time for this connection
 }
 
+// MessageSentEvent specifies a sent network message data.
 type MessageSentEvent struct {
 	Connection Connection
-	Id         []byte
+	ID         []byte
 }
 
+// IncomingMessage specifies incoming network message data.
 type IncomingMessage struct {
 	Connection Connection
 	Message    []byte
 }
 
+// ConnectionError specifies a connection error.
 type ConnectionError struct {
 	Connection Connection
 	Err        error
-	Id         []byte // optional outgoing message id
+	ID         []byte // optional outgoing message id
 }
 
+// MessageSendError defines an error condition for sending a message.
 type MessageSendError struct {
 	Connection Connection
 	Message    []byte
 	Err        error
-	Id         []byte
+	ID         []byte
 }
 
+// OutgoingMessage specifies an outgoing message data.
 type OutgoingMessage struct {
 	Message []byte
-	Id      []byte
+	ID      []byte
 }
 
+// ConnectionSource specifies the connection originator - local or remote node.
 type ConnectionSource int
 
+// ConnectionSource values
 const (
 	Local ConnectionSource = iota
 	Remote
@@ -96,7 +103,7 @@ func newConnection(conn net.Conn, n Net, s ConnectionSource) Connection {
 	return connection
 }
 
-func (c *connectionImpl) Id() string {
+func (c *connectionImpl) ID() string {
 	return c.id
 }
 
@@ -126,7 +133,7 @@ func (c *connectionImpl) writeMessageToConnection(om OutgoingMessage) {
 	err := binary.Write(c.conn, binary.BigEndian, &ul)
 	if err != nil {
 		go func() {
-			c.net.GetMessageSendErrors() <- MessageSendError{c, msg, err, om.Id}
+			c.net.GetMessageSendErrors() <- MessageSendError{c, msg, err, om.ID}
 		}()
 		return
 	}
@@ -134,7 +141,7 @@ func (c *connectionImpl) writeMessageToConnection(om OutgoingMessage) {
 	_, err = c.conn.Write(msg)
 	if err != nil { // error or conn timeout
 		go func() {
-			c.net.GetMessageSendErrors() <- MessageSendError{c, msg, err, om.Id}
+			c.net.GetMessageSendErrors() <- MessageSendError{c, msg, err, om.ID}
 		}()
 		return
 	}
@@ -142,7 +149,7 @@ func (c *connectionImpl) writeMessageToConnection(om OutgoingMessage) {
 	c.lastOpTime = time.Now()
 
 	go func() {
-		c.net.GetMessageSentCallback() <- MessageSentEvent{c, om.Id}
+		c.net.GetMessageSentCallback() <- MessageSentEvent{c, om.ID}
 	}()
 
 }

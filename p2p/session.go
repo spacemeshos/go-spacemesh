@@ -76,7 +76,6 @@ func (n *NetworkSessionImpl) KeyE() []byte {
 	return n.keyE
 }
 
-
 // KeyM returns the session's MAC encryption key.
 func (n *NetworkSessionImpl) KeyM() []byte {
 	return n.keyM

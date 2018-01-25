@@ -9,18 +9,18 @@ import (
 	"time"
 )
 
-// Basic remote node data
+// RemoteNodeData defines basic remote node data
 // Outside of swarm local node works with RemoteNodeData and note with Peers
 // Peers should only be used internally by swarm
 type RemoteNodeData interface {
-	Id() string    // base58 encoded node key/id
-	Ip() string    // node tcp listener e.g. 127.0.0.1:3038
+	ID() string    // base58 encoded node key/id
+	IP() string    // node tcp listener e.g. 127.0.0.1:3038
 	Bytes() []byte // node raw id bytes
 
-	DhtId() dht.ID // dht id must be uniformly distributed for XOR distance to work, hence we hash the node key/id to create it
+	DhtID() dht.ID // dht id must be uniformly distributed for XOR distance to work, hence we hash the node key/id to create it
 
-	GetLastFindNodeCall(nodeId string) time.Time // time of last find node call sent to node
-	SetLastFindNodeCall(nodeId string, t time.Time)
+	GetLastFindNodeCall(nodeID string) time.Time // time of last find node call sent to node
+	SetLastFindNodeCall(nodeID string, t time.Time)
 
 	Pretty() string
 }
@@ -30,42 +30,42 @@ type remoteNodeDataImpl struct {
 	id    string // node Id is a base58 encoded bits of the node public key
 	ip    string // node tcp address. e.g. 127.0.0.1:3030
 	bytes []byte // bytes
-	dhtId dht.ID
+	dhtID dht.ID
 
 	lastFindNodeCall map[string]time.Time
 }
 
-// Returns serializable (pb) node infos slice from a slice of RemoteNodeData
+// ToNodeInfo returns marshaled protobufs node infos slice from a slice of RemoteNodeData.
 // filterId: node id to exclude from the result
-func ToNodeInfo(nodes []RemoteNodeData, filterId string) []*pb.NodeInfo {
+func ToNodeInfo(nodes []RemoteNodeData, filterID string) []*pb.NodeInfo {
 	// init empty slice
 	res := []*pb.NodeInfo{}
 	for _, n := range nodes {
 
-		if n.Id() == filterId {
+		if n.ID() == filterID {
 			continue
 		}
 
 		res = append(res, &pb.NodeInfo{
 			NodeId:     n.Bytes(),
-			TcpAddress: n.Ip(),
+			TcpAddress: n.IP(),
 		})
 	}
 	return res
 }
 
-// Picks up to count server who haven't been queried recently
-// nodeId - the target node id of this find node operation
-// Used in KAD nodes discovery
-func PickFindNodeServers(nodes []RemoteNodeData, nodeId string, count int) []RemoteNodeData {
+// PickFindNodeServers picks up to count server who haven't been queried recently.
+// nodeId - the target node id of this find node operation.
+// Used in KAD node discovery.
+func PickFindNodeServers(nodes []RemoteNodeData, nodeID string, count int) []RemoteNodeData {
 
 	res := []RemoteNodeData{}
 	added := 0
 
 	for _, v := range nodes {
-		if time.Now().Sub(v.GetLastFindNodeCall(nodeId)) > time.Duration(time.Minute*10) {
+		if time.Now().Sub(v.GetLastFindNodeCall(nodeID)) > time.Duration(time.Minute*10) {
 			res = append(res, v)
-			added += 1
+			added++
 
 			if added == count {
 				break
@@ -76,17 +76,17 @@ func PickFindNodeServers(nodes []RemoteNodeData, nodeId string, count int) []Rem
 	return res
 }
 
-// Returns a union of 2 lists of nodes
+// Union returns a union of 2 lists of nodes.
 func Union(list1 []RemoteNodeData, list2 []RemoteNodeData) []RemoteNodeData {
 
 	idSet := map[string]RemoteNodeData{}
 
 	for _, n := range list1 {
-		idSet[n.Id()] = n
+		idSet[n.ID()] = n
 	}
 	for _, n := range list2 {
-		if idSet[n.Id()] == nil {
-			idSet[n.Id()] = n
+		if idSet[n.ID()] == nil {
+			idSet[n.ID()] = n
 		}
 	}
 
@@ -99,7 +99,7 @@ func Union(list1 []RemoteNodeData, list2 []RemoteNodeData) []RemoteNodeData {
 	return res
 }
 
-// Converts a list of NodeInfo to a list of RemoteNodeData
+// FromNodeInfos converts a list of NodeInfo to a list of RemoteNodeData.
 func FromNodeInfos(nodes []*pb.NodeInfo) []RemoteNodeData {
 	res := []RemoteNodeData{}
 	for _, n := range nodes {
@@ -110,18 +110,19 @@ func FromNodeInfos(nodes []*pb.NodeInfo) []RemoteNodeData {
 	return res
 }
 
+// NewRemoteNodeData creates a new RemoteNodeData
 func NewRemoteNodeData(id string, ip string) RemoteNodeData {
 	bytes := base58.Decode(id)
-	dhtId := dht.NewIDFromNodeKey(bytes)
+	dhtID := dht.NewIDFromNodeKey(bytes)
 	return &remoteNodeDataImpl{id: id,
 		ip:               ip,
 		bytes:            bytes,
-		dhtId:            dhtId,
+		dhtID:            dhtID,
 		lastFindNodeCall: map[string]time.Time{},
 	}
 }
 
-// Creates a remote node from a string in the following format: 126.0.0.1:3572/QmcjTLy94HGFo4JoYibudGeBV2DSBb6E4apBjFsBGnMsWa
+// NewRemoteNodeDataFromString creates a remote node from a string in the following format: 126.0.0.1:3572/QmcjTLy94HGFo4JoYibudGeBV2DSBb6E4apBjFsBGnMsWa .
 func NewRemoteNodeDataFromString(data string) RemoteNodeData {
 	items := strings.Split(data, "/")
 	if len(items) != 2 {
@@ -130,19 +131,21 @@ func NewRemoteNodeDataFromString(data string) RemoteNodeData {
 	return NewRemoteNodeData(items[1], items[0])
 }
 
-func (rn *remoteNodeDataImpl) GetLastFindNodeCall(nodeId string) time.Time {
-	return rn.lastFindNodeCall[nodeId]
+// GetLastFindNodeCall returns the time of the last find node call
+func (rn *remoteNodeDataImpl) GetLastFindNodeCall(nodeID string) time.Time {
+	return rn.lastFindNodeCall[nodeID]
 }
 
-func (rn *remoteNodeDataImpl) SetLastFindNodeCall(nodeId string, t time.Time) {
-	rn.lastFindNodeCall[nodeId] = t
+// SetLastFindNodeCall updates the time of the last find node call
+func (rn *remoteNodeDataImpl) SetLastFindNodeCall(nodeID string, t time.Time) {
+	rn.lastFindNodeCall[nodeID] = t
 }
 
-func (rn *remoteNodeDataImpl) Id() string {
+func (rn *remoteNodeDataImpl) ID() string {
 	return rn.id
 }
 
-func (rn *remoteNodeDataImpl) Ip() string {
+func (rn *remoteNodeDataImpl) IP() string {
 	return rn.ip
 }
 
@@ -150,10 +153,10 @@ func (rn *remoteNodeDataImpl) Bytes() []byte {
 	return rn.bytes
 }
 
-func (rn *remoteNodeDataImpl) DhtId() dht.ID {
-	return rn.dhtId
+func (rn *remoteNodeDataImpl) DhtID() dht.ID {
+	return rn.dhtID
 }
 
 func (rn *remoteNodeDataImpl) Pretty() string {
-	return fmt.Sprintf("<RN Id: %s. Ip:%s %s>", rn.id[:8], rn.ip, rn.dhtId.Pretty())
+	return fmt.Sprintf("<RN Id: %s. Ip:%s %s>", rn.id[:8], rn.ip, rn.dhtID.Pretty())
 }

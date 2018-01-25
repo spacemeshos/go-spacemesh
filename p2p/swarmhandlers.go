@@ -18,23 +18,23 @@ import (
 // Register adds info about this node but doesn't attempt to connect to i
 func (s *swarmImpl) onRegisterNodeRequest(n node.RemoteNodeData) {
 
-	if s.peers[n.Id()] != nil {
+	if s.peers[n.ID()] != nil {
 		s.localNode.Info("Already connected to %s", n.Pretty())
 		return
 	}
 
-	rn, err := NewRemoteNode(n.Id(), n.Ip())
+	rn, err := NewRemoteNode(n.ID(), n.IP())
 	if err != nil { // invalid id
-		s.localNode.Error("invalid remote node id: %s", n.Id())
+		s.localNode.Error("invalid remote node id: %s", n.ID())
 		return
 	}
 
-	s.peers[n.Id()] = rn
+	s.peers[n.ID()] = rn
 
 	// update the routing table with the nde node info
 	s.routingTable.Update(n)
 
-	s.sendNodeEvent(n.Id(), Registered)
+	s.sendNodeEvent(n.ID(), Registered)
 
 }
 
@@ -46,13 +46,13 @@ func (s *swarmImpl) onConnectionRequest(req node.RemoteNodeData) {
 	var err error
 
 	// check for existing session with that node
-	peer := s.peers[req.Id()]
+	peer := s.peers[req.ID()]
 
 	if peer == nil {
 		s.onRegisterNodeRequest(req)
 	}
 
-	peer = s.peers[req.Id()]
+	peer = s.peers[req.ID()]
 	if peer == nil {
 		s.localNode.Error("unexpected null peer")
 		return
@@ -68,22 +68,22 @@ func (s *swarmImpl) onConnectionRequest(req node.RemoteNodeData) {
 
 	if conn == nil {
 
-		s.sendNodeEvent(req.Id(), Connecting)
+		s.sendNodeEvent(req.ID(), Connecting)
 
 		// Dial the other node using the node's network config values
-		conn, err = s.network.DialTCP(req.Ip(), s.localNode.Config().DialTimeout, s.localNode.Config().ConnKeepAlive)
+		conn, err = s.network.DialTCP(req.IP(), s.localNode.Config().DialTimeout, s.localNode.Config().ConnKeepAlive)
 		if err != nil {
-			s.sendNodeEvent(req.Id(), Dissconected)
-			s.localNode.Error("failed to connect to remote node %s on advertised ip %s", req.Pretty(), req.Ip())
+			s.sendNodeEvent(req.ID(), Dissconected)
+			s.localNode.Error("failed to connect to remote node %s on advertised ip %s", req.Pretty(), req.IP())
 			return
 		}
 
-		s.sendNodeEvent(req.Id(), Connected)
+		s.sendNodeEvent(req.ID(), Connected)
 
 		// update the routing table
 		s.routingTable.Update(req)
 
-		id := conn.Id()
+		id := conn.ID()
 
 		// update state with new connection
 		s.peersByConnection[id] = peer
@@ -98,7 +98,7 @@ func (s *swarmImpl) onConnectionRequest(req node.RemoteNodeData) {
 	if session == nil || !session.IsAuthenticated() {
 
 		// start handshake protocol
-		s.sendNodeEvent(req.Id(), HandshakeStarted)
+		s.sendNodeEvent(req.ID(), HandshakeStarted)
 		s.handshakeProtocol.CreateSession(peer)
 	}
 }
@@ -131,7 +131,7 @@ func (s *swarmImpl) onDisconnectionRequest(req node.RemoteNodeData) {
 
 	// todo: disconnect all connections with node
 
-	s.sendNodeEvent(req.Id(), Dissconected)
+	s.sendNodeEvent(req.ID(), Dissconected)
 }
 
 // Local request to send a message to a remote node
@@ -228,12 +228,12 @@ func (s *swarmImpl) onSendMessageRequest(r SendMessageReq) {
 
 	// store callback by reqIdDfor this connection so we can call back in case of msg timout or other send failure
 	if r.Callback != nil {
-		callbacks := s.outgoingSendsCallbacks[conn.Id()]
+		callbacks := s.outgoingSendsCallbacks[conn.ID()]
 		if callbacks == nil {
-			s.outgoingSendsCallbacks[conn.Id()] = make(map[string]chan SendError)
+			s.outgoingSendsCallbacks[conn.ID()] = make(map[string]chan SendError)
 		}
 
-		s.outgoingSendsCallbacks[conn.Id()][hex.EncodeToString(r.ReqID)] = r.Callback
+		s.outgoingSendsCallbacks[conn.ID()][hex.EncodeToString(r.ReqID)] = r.Callback
 	}
 
 	// finally - send it away!
@@ -245,7 +245,7 @@ func (s *swarmImpl) onSendMessageRequest(r SendMessageReq) {
 func (s *swarmImpl) onConnectionClosed(c net.Connection) {
 
 	// forget about this connection
-	id := c.Id()
+	id := c.ID()
 	peer := s.peersByConnection[id]
 	if peer != nil {
 		peer.GetConnections()[id] = nil
@@ -259,8 +259,8 @@ func (s *swarmImpl) onConnectionClosed(c net.Connection) {
 
 func (s *swarmImpl) onRemoteClientConnected(c net.Connection) {
 	// nop - a remote client connected - this is handled w message
-	s.localNode.Info("Remote client connected. %s", c.Id())
-	peer := s.peersByConnection[c.Id()]
+	s.localNode.Info("Remote client connected. %s", c.ID())
+	peer := s.peersByConnection[c.ID()]
 	if peer != nil {
 		s.sendNodeEvent(peer.String(), Connected)
 	}
@@ -276,7 +276,7 @@ func (s *swarmImpl) onRemoteClientHandshakeMessage(msg net.IncomingMessage) {
 		return
 	}
 
-	connID := msg.Connection.Id()
+	connID := msg.Connection.ID()
 
 	// check if we already know about the remote node of this connection
 	sender := s.peersByConnection[connID]
@@ -397,12 +397,12 @@ func (s *swarmImpl) onRemoteClientMessage(msg net.IncomingMessage) {
 func (s *swarmImpl) onMessageSentEvent(evt net.MessageSentEvent) {
 
 	// message was written to a connection without an error
-	callbacks := s.outgoingSendsCallbacks[evt.Connection.Id()]
+	callbacks := s.outgoingSendsCallbacks[evt.Connection.ID()]
 	if callbacks == nil {
 		return
 	}
 
-	reqID := hex.EncodeToString(evt.Id)
+	reqID := hex.EncodeToString(evt.ID)
 	callback := callbacks[reqID]
 	if callback == nil {
 		return
@@ -419,20 +419,20 @@ func (s *swarmImpl) onConnectionError(ce net.ConnectionError) {
 
 // not go safe - called from event processing main loop
 func (s *swarmImpl) onMessageSendError(mse net.MessageSendError) {
-	s.sendMessageSendError(net.ConnectionError{Connection: mse.Connection, Err: mse.Err, Id: mse.Id})
+	s.sendMessageSendError(net.ConnectionError{Connection: mse.Connection, Err: mse.Err, ID: mse.ID})
 }
 
 // send a msg send error back to the callback registered by reqID
 func (s *swarmImpl) sendMessageSendError(cr net.ConnectionError) {
 
 	c := cr.Connection
-	callbacks := s.outgoingSendsCallbacks[c.Id()]
+	callbacks := s.outgoingSendsCallbacks[c.ID()]
 
 	if callbacks == nil {
 		return
 	}
 
-	reqID := hex.EncodeToString(cr.Id)
+	reqID := hex.EncodeToString(cr.ID)
 	callback := callbacks[reqID]
 
 	if callback == nil {
@@ -444,6 +444,6 @@ func (s *swarmImpl) sendMessageSendError(cr net.ConnectionError) {
 
 	go func() {
 		// send the error to the callback channel
-		callback <- SendError{cr.Id, cr.Err}
+		callback <- SendError{cr.ID, cr.Err}
 	}()
 }

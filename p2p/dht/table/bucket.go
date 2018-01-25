@@ -52,7 +52,7 @@ func (b *bucketimpl) List() *list.List {
 func (b *bucketimpl) Has(n node.RemoteNodeData) bool {
 	for e := b.list.Front(); e != nil; e = e.Next() {
 		n1 := e.Value.(node.RemoteNodeData)
-		if n1.Id() == n.Id() {
+		if n1.ID() == n.ID() {
 			return true
 		}
 	}
@@ -63,7 +63,7 @@ func (b *bucketimpl) Has(n node.RemoteNodeData) bool {
 // It returns true if n was in the bucket and was removed and false otherwise.
 func (b *bucketimpl) Remove(n node.RemoteNodeData) bool {
 	for e := b.list.Front(); e != nil; e = e.Next() {
-		if e.Value.(node.RemoteNodeData).Id() == n.Id() {
+		if e.Value.(node.RemoteNodeData).ID() == n.ID() {
 			b.list.Remove(e)
 			return true
 		}
@@ -74,7 +74,7 @@ func (b *bucketimpl) Remove(n node.RemoteNodeData) bool {
 // MoveToFront moves n to the front of the bucket.
 func (b *bucketimpl) MoveToFront(n node.RemoteNodeData) {
 	for e := b.list.Front(); e != nil; e = e.Next() {
-		if e.Value.(node.RemoteNodeData).Id() == n.Id() {
+		if e.Value.(node.RemoteNodeData).ID() == n.ID() {
 			b.list.MoveToFront(e)
 		}
 	}
@@ -113,7 +113,7 @@ func (b *bucketimpl) Split(cpl int, target dht.ID) Bucket {
 	e := b.list.Front()
 	for e != nil {
 		n := e.Value.(node.RemoteNodeData)
-		peerCPL := n.DhtId().CommonPrefixLen(target)
+		peerCPL := n.DhtID().CommonPrefixLen(target)
 		if peerCPL > cpl {
 			newbucket.PushBack(n)
 			curr := e

@@ -44,7 +44,7 @@ func TestSimpleBootstrap(t *testing.T) {
 	node1Local, node1Remote := GenerateTestNode(t)
 
 	pd := node1Local.GetRemoteNodeData()
-	bs := fmt.Sprintf("%s/%s", pd.Ip(), pd.Id())
+	bs := fmt.Sprintf("%s/%s", pd.IP(), pd.ID())
 
 	// node1 is a bootstrap node to node2
 	c := nodeconfig.ConfigValues
@@ -90,7 +90,7 @@ func _estBootstrap(t *testing.T) {
 
 	bnode, _ := GenerateTestNode(t)
 	pd := bnode.GetRemoteNodeData()
-	bs := fmt.Sprintf("%s/%s", pd.Ip(), pd.Id())
+	bs := fmt.Sprintf("%s/%s", pd.IP(), pd.ID())
 
 	// nodes bootstrap config
 	c := nodeconfig.ConfigValues
@@ -148,7 +148,7 @@ func _estBasicBootstrap(t *testing.T) {
 
 	node1Local, _ := GenerateTestNode(t)
 	pd := node1Local.GetRemoteNodeData()
-	bs := fmt.Sprintf("%s/%s", pd.Ip(), pd.Id())
+	bs := fmt.Sprintf("%s/%s", pd.IP(), pd.ID())
 
 	// node1 and node 2 config
 	c := nodeconfig.ConfigValues

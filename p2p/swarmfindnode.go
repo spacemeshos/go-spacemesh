@@ -70,7 +70,7 @@ Loop:
 
 		closestNode := searchList[0]
 
-		if closestNode.Id() == nodeID {
+		if closestNode.ID() == nodeID {
 			go func() { callback <- closestNode }()
 			break Loop
 		}
@@ -120,7 +120,7 @@ func (s *swarmImpl) lookupNode(servers []node.RemoteNodeData, targetID string, c
 		servers[i].SetLastFindNodeCall(targetID, time.Now())
 
 		// find node protocol adds found nodes to the local routing table
-		go s.getFindNodeProtocol().FindNode(crypto.UUID(), servers[i].Id(), targetID, callback)
+		go s.getFindNodeProtocol().FindNode(crypto.UUID(), servers[i].ID(), targetID, callback)
 	}
 
 	done := 0
@@ -132,7 +132,7 @@ Loop:
 		case res := <-callback:
 			nodes := node.FromNodeInfos(res.NodeInfos)
 			for _, n := range nodes {
-				idSet[n.Id()] = n
+				idSet[n.ID()] = n
 			}
 
 			done++
@@ -151,7 +151,7 @@ Loop:
 
 	targetDhtID := dht.NewIDFromBase58String(targetID)
 	for _, n := range idSet {
-		if n.DhtId().Closer(targetDhtID, closestNode.DhtId()) {
+		if n.DhtID().Closer(targetDhtID, closestNode.DhtID()) {
 			res = append(res, n)
 		}
 	}

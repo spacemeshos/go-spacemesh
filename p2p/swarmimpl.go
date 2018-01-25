@@ -177,7 +177,7 @@ func (s *swarmImpl) bootstrap() {
 	bn := 0
 	for _, n := range s.config.BootstrapNodes {
 		rn := node.NewRemoteNodeDataFromString(n)
-		if s.localNode.String() != rn.Id() {
+		if s.localNode.String() != rn.ID() {
 			s.onRegisterNodeRequest(rn)
 			bn++
 		}

@@ -195,7 +195,7 @@ func (p *findNodeProtocolImpl) handleIncomingResponse(msg IncomingMessage) {
 	// update routing table with newly found nodes
 	nodes := node.FromNodeInfos(data.NodeInfos)
 	for _, n := range nodes {
-		log.Info("Node response: %s, %s", n.Id(), n.Ip())
+		log.Info("Node response: %s, %s", n.ID(), n.IP())
 		p.swarm.getRoutingTable().Update(n)
 	}
 

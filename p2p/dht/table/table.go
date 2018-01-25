@@ -284,13 +284,13 @@ func getMemoryAddress(p interface{}) string {
 // Adds or move a node to the front of its designated k-bucket
 func (rt *routingTableImpl) update(p node.RemoteNodeData) {
 
-	if rt.local.Equals(p.DhtId()) {
+	if rt.local.Equals(p.DhtID()) {
 		log.Warning("Ignoring attempt to add local node to the routing table")
 		return
 	}
 
 	// determine node bucket based on cpl
-	cpl := p.DhtId().CommonPrefixLen(rt.local)
+	cpl := p.DhtID().CommonPrefixLen(rt.local)
 
 	id := cpl
 	if id >= len(rt.buckets) {
@@ -339,7 +339,7 @@ func (rt *routingTableImpl) update(p node.RemoteNodeData) {
 // If node wasn't in the table then remove doesn't have any side effects on the table
 func (rt *routingTableImpl) remove(p node.RemoteNodeData) {
 
-	cpl := p.DhtId().CommonPrefixLen(rt.local)
+	cpl := p.DhtID().CommonPrefixLen(rt.local)
 	bucketID := cpl
 	if bucketID >= len(rt.buckets) {
 		bucketID = len(rt.buckets) - 1
@@ -388,7 +388,7 @@ func (rt *routingTableImpl) onFindReq(r PeerByIDRequest) {
 		return
 	}
 
-	if len(peers) == 0 || !peers[0].DhtId().Equals(r.ID) {
+	if len(peers) == 0 || !peers[0].DhtID().Equals(r.ID) {
 		log.Info("Did not find %s in the routing table", r.ID.Pretty())
 		go func() { r.Callback <- &PeerOpResult{} }()
 	} else {
