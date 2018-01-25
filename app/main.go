@@ -161,8 +161,9 @@ func (app *SpacemeshApp) before(ctx *cli.Context) error {
 func (app *SpacemeshApp) cleanup(ctx *cli.Context) error {
 
 	log.Info("App cleanup starting...")
+
 	if app.jsonAPIService != nil {
-		app.jsonAPIService.Stop()
+		app.jsonAPIService.StopService()
 	}
 
 	if app.grpcAPIService != nil {
