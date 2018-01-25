@@ -1,9 +1,9 @@
 package nodeconfig
 
 import (
-	"time"
-	"gopkg.in/urfave/cli.v1"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"gopkg.in/urfave/cli.v1"
+	"time"
 )
 
 // ConfigValues specifies  default values for node config params
