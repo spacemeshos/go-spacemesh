@@ -1,23 +1,23 @@
 package nodeconfig
 
 import (
-	"gopkg.in/urfave/cli.v1"
-	"log"
 	"time"
+	"gopkg.in/urfave/cli.v1"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-// Default node config values
+// ConfigValues specifies  default values for node config params
 var ConfigValues = Config{
 	SecurityParam: 20,
 	FastSync:      true,
-	TcpPort:       7513,
-	NodeId:        "",
+	TCPPort:       7513,
+	NodeID:        "",
 	DialTimeout:   duration{"1m"},
 	ConnKeepAlive: duration{"48h"},
 	SwarmConfig:   SwarmConfigValues,
 }
 
-// todo: make all swarm config values command-line and config file modifiable
+// SwarmConfigValues defines default values for swarm config params
 var SwarmConfigValues = SwarmConfig{
 	Bootstrap:              false,
 	RoutingTableBucketSize: 20,
@@ -40,21 +40,23 @@ type duration struct {
 func (d *duration) Duration() (duration time.Duration) {
 	dur, err := time.ParseDuration(d.string)
 	if err != nil {
-		log.Fatal("Could'nt parse duration string returning 0, error: %v", err)
+		log.Error("Could'nt parse duration string returning 0, error: %v", err)
 	}
 	return dur
 }
 
+// Config specifies node config params
 type Config struct {
-	SecurityParam uint
+	SecurityParam int
 	FastSync      bool
-	TcpPort       int
-	NodeId        string
+	TCPPort       int
+	NodeID        string
 	DialTimeout   duration
 	ConnKeepAlive duration
 	SwarmConfig   SwarmConfig
 }
 
+// SwarmConfig specifies swarm config params
 type SwarmConfig struct {
 	Bootstrap              bool
 	RoutingTableBucketSize int

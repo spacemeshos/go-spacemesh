@@ -7,8 +7,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-// Put n random bytes using go crypto.rand into provided buff slice
-// Buff must be allocated to hold n bytes by caller
+// GetRandomBytesToBuffer puts n random bytes using go crypto.rand into provided buff slice.
+// buff: a slice allocated by called to hold n bytes.
 func GetRandomBytesToBuffer(n int, buff []byte) error {
 
 	if n == 0 {
@@ -28,8 +28,7 @@ func GetRandomBytesToBuffer(n int, buff []byte) error {
 	return nil
 }
 
-// Get n random bytes using go crypto.rand
-// returns an error when the system pgn malfunctions
+// GetRandomBytes returns n random bytes. It returns an error if the system's pgn fails.
 func GetRandomBytes(n int) ([]byte, error) {
 
 	if n == 0 {
@@ -46,22 +45,7 @@ func GetRandomBytes(n int) ([]byte, error) {
 	return b, nil
 }
 
-// Return a uint64 in range [0 - max)
-func GetRandomUInt64(max uint64) uint64 {
-
-	b := make([]byte, 8)
-	_, err := rand.Read(b)
-
-	if err != nil {
-		log.Error("Failed to get entropy from system", err)
-		panic(err)
-	}
-
-	data := binary.BigEndian.Uint64(b)
-	return data % max
-}
-
-// Return a uint32 in range [0 - max)
+// GetRandomUInt32 returns a uint32 in the range [0 - max).
 func GetRandomUInt32(max uint32) uint32 {
 
 	b := make([]byte, 4)

@@ -21,15 +21,16 @@ import (
 	nodeparams "github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 )
 
+// SpacemeshApp is the cli app singleton
 type SpacemeshApp struct {
 	*cli.App
 	Node           p2p.LocalNode
-	grpcApiService *api.SpaceMeshGrpcService
-	jsonApiService *api.JsonHttpServer
+	grpcAPIService *api.SpaceMeshGrpcService
+	jsonAPIService *api.JSONHTTPServer
 }
 
-// the main Spacemesh app - main entry point
-// Access the node and the other top-level modules from the app
+// App is main app entry point.
+// It provides access the local node and other top-level modules.
 var App *SpacemeshApp
 
 var (
@@ -41,8 +42,8 @@ var (
 	}
 	nodeFlags = []cli.Flag{
 		nodeparams.KSecurityFlag,
-		nodeparams.LocalTcpPortFlag,
-		nodeparams.NodeIdFlag,
+		nodeparams.LocalTCPPortFlag,
+		nodeparams.NodeIDFlag,
 		nodeparams.NetworkDialTimeout,
 		nodeparams.NetworkConnKeepAlive,
 		nodeparams.SwarmBootstrap,
@@ -53,21 +54,22 @@ var (
 		// add all additional node flags here ...
 	}
 	apiFlags = []cli.Flag{
-		apiconf.StartGrpcApiServerFlag,
+		apiconf.StartGrpcAPIServerFlag,
 		apiconf.GrpcServerPortFlag,
-		apiconf.StartJsonApiServerFlag,
-		apiconf.JsonServerPortFlag,
+		apiconf.StartJSONApiServerFlag,
+		apiconf.JSONServerPortFlag,
 	}
 
+	// ExitApp is a channel used to signal the app to gracefully exit.
 	ExitApp = make(chan bool, 1)
 
-	// App semantic version. Can be over-written by build tool
+	// Version is the app's semantic version. Designed to be overwritten by make.
 	Version = "0.0.1"
 
-	// build git branch. Can be over-written by build tool
+	// Branch is the git branch used to build the App. Designed to be overwritten by make.
 	Branch = ""
 
-	// build git commit. Can be over-written by build tool
+	// Commit is the git commit used to build the app. Designed to be overwritten by make.
 	Commit = ""
 )
 
@@ -181,12 +183,13 @@ func (app *SpacemeshApp) before(ctx *cli.Context) error {
 func (app *SpacemeshApp) cleanup(ctx *cli.Context) error {
 
 	log.Info("App cleanup starting...")
-	if app.jsonApiService != nil {
-		app.jsonApiService.Stop()
+
+	if app.jsonAPIService != nil {
+		app.jsonAPIService.StopService()
 	}
 
-	if app.grpcApiService != nil {
-		app.grpcApiService.StopService()
+	if app.grpcAPIService != nil {
+		app.grpcAPIService.StopService()
 	}
 
 	// add any other cleanup tasks here....
@@ -198,7 +201,7 @@ func (app *SpacemeshApp) cleanup(ctx *cli.Context) error {
 func (app *SpacemeshApp) startSpacemeshNode(ctx *cli.Context) error {
 
 	log.Info("Starting local node...")
-	port := *nodeparams.LocalTcpPortFlag.Destination
+	port := *nodeparams.LocalTCPPortFlag.Destination
 	address := fmt.Sprintf("0.0.0.0:%d", port)
 
 	// start a new node passing the app-wide node config values and persist it to store
@@ -223,15 +226,15 @@ func (app *SpacemeshApp) startSpacemeshNode(ctx *cli.Context) error {
 	// todo: start node consensus protocol here only after we have an unlocked account
 
 	// start api servers
-	if conf.StartGrpcServer || conf.StartJsonServer {
+	if conf.StartGrpcServer || conf.StartJSONServer {
 		// start grpc if specified or if json rpc specified
-		app.grpcApiService = api.NewGrpcService()
-		app.grpcApiService.StartService(nil)
+		app.grpcAPIService = api.NewGrpcService()
+		app.grpcAPIService.StartService(nil)
 	}
 
-	if conf.StartJsonServer {
-		app.jsonApiService = api.NewJsonHttpServer()
-		app.jsonApiService.StartService(nil)
+	if conf.StartJSONServer {
+		app.jsonAPIService = api.NewJSONHTTPServer()
+		app.jsonAPIService.StartService(nil)
 	}
 
 	// app blocks until it receives a signal to exit
@@ -240,8 +243,8 @@ func (app *SpacemeshApp) startSpacemeshNode(ctx *cli.Context) error {
 	return nil
 }
 
-// The Spacemesh console app - responsible for parsing and routing cli flags and commands
-// This is the root of all evil, called from Main.main()
+// Main is the entry point for the Spacemesh console app - responsible for parsing and routing cli flags and commands.
+// This is the root of all evil, called from Main.main().
 func Main(commit, branch, version string) {
 
 	// setup vars before creating the app - ugly but works

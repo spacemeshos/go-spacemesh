@@ -13,21 +13,23 @@ const pingResp = "/ping/1.0/ping-resp/"
 // Ping protocol
 // An example of a simple app-level p2p protocol
 type Ping interface {
-	// send a ping request to a remoteNode
-	// reqId: allows the client to match responses with requests by id
-	Send(msg string, reqId []byte, remoteNodeId string)
 
-	// App logic registers her for typed incoming ping responses (pongs) or send errors
+	// Send sends a ping request to a remote node.
+	// reqIdD: allows the client to match responses with requests by id.
+	Send(msg string, reqID []byte, remoteNodeID string)
+
+	// Register a callback for typed incoming ping responses (pongs) or send errors.
 	Register(callback chan SendPingResp)
 }
 
-// Send ping op response - contains response data or error
+// SendPingResp contains pong response data or error
 type SendPingResp struct {
 	*pb.PingRespData
 	err   error
-	reqId []byte
+	reqID []byte
 }
 
+// Callbacks is a channel of SendPingResp channels
 type Callbacks chan chan SendPingResp
 
 type pingProtocolImpl struct {
@@ -41,6 +43,7 @@ type pingProtocolImpl struct {
 	callbacksRegReq   Callbacks // a channel of channels that receive callbacks to send ping
 }
 
+// NewPingProtocol creates a new Ping protocol implementation
 func NewPingProtocol(s Swarm) Ping {
 
 	p := &pingProtocolImpl{
@@ -62,9 +65,9 @@ func NewPingProtocol(s Swarm) Ping {
 }
 
 // Send a ping to a remote node
-func (p *pingProtocolImpl) Send(msg string, reqId []byte, remoteNodeId string) {
+func (p *pingProtocolImpl) Send(msg string, reqID []byte, remoteNodeID string) {
 
-	metadata := p.swarm.GetLocalNode().NewProtocolMessageMetadata(pingReq, reqId, false)
+	metadata := p.swarm.GetLocalNode().NewProtocolMessageMetadata(pingReq, reqID, false)
 	data := &pb.PingReqData{Metadata: metadata, Ping: msg}
 
 	// sign data
@@ -78,7 +81,7 @@ func (p *pingProtocolImpl) Send(msg string, reqId []byte, remoteNodeId string) {
 		return
 	}
 
-	req := SendMessageReq{remoteNodeId, reqId, payload, p.sendErrors}
+	req := SendMessageReq{remoteNodeID, reqID, payload, p.sendErrors}
 
 	p.swarm.SendMessage(req)
 }
@@ -177,7 +180,7 @@ func (p *pingProtocolImpl) processEvents() {
 			p.callbacks = append(p.callbacks, c)
 
 		case r := <-p.sendErrors:
-			resp := SendPingResp{nil, r.err, r.ReqId}
+			resp := SendPingResp{nil, r.err, r.ReqID}
 			for _, c := range p.callbacks {
 				go func(c chan SendPingResp) { c <- resp }(c)
 			}

@@ -8,7 +8,7 @@ import (
 	"errors"
 )
 
-// AES cipher following https://leanpub.com/gocrypto/read#leanpub-auto-aes-cbc .
+// AesCTRXOR is an AES cipher following https://leanpub.com/gocrypto/read#leanpub-auto-aes-cbc .
 func AesCTRXOR(key, input, nonce []byte) ([]byte, error) {
 	aesBlock, err := aes.NewCipher(key)
 	if err != nil {
@@ -21,7 +21,7 @@ func AesCTRXOR(key, input, nonce []byte) ([]byte, error) {
 	return output, nil
 }
 
-// pkcs7 padding.
+// Pkcs7Pad returns input with padding using the pkcs7 padding spec.
 func Pkcs7Pad(in []byte) []byte {
 	padding := 16 - (len(in) % 16)
 	for i := 0; i < padding; i++ {
@@ -30,7 +30,7 @@ func Pkcs7Pad(in []byte) []byte {
 	return in
 }
 
-// pkcs7 unpadding.
+// Pkcs7Unpad returned in without padded data using pkcs7 padding spec.
 func Pkcs7Unpad(in []byte) []byte {
 	if len(in) == 0 {
 		return nil
@@ -51,14 +51,14 @@ func Pkcs7Unpad(in []byte) []byte {
 	return in[:len(in)-int(padding)]
 }
 
-// Adds padding to a block of data.
+// AddPKCSPadding Adds padding to a block of data.
 func AddPKCSPadding(src []byte) []byte {
 	padding := aes.BlockSize - len(src)%aes.BlockSize
 	padtext := bytes.Repeat([]byte{byte(padding)}, padding)
 	return append(src, padtext...)
 }
 
-// Removes padding from data that was added with addPKCSPadding.
+// RemovePKCSPadding Removes padding from data that was added using AddPKCSPadding.
 func RemovePKCSPadding(src []byte) ([]byte, error) {
 	length := len(src)
 	padLength := int(src[length-1])

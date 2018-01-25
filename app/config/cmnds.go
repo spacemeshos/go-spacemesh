@@ -10,8 +10,8 @@ var (
 // todo: add all command vars here (commands w no need for factory)
 )
 
-// Command factory function - this is an example for an app cli command
-// to test try `/go-spacemesh version`
+// NewVersionCommand is a command factory function to output the app's version.
+// This is an example of an app cli command. To test use `/go-spacemesh version`.
 func NewVersionCommand(appVersion, branch, commit string) cli.Command {
 	return cli.Command{
 		Name:      "version",

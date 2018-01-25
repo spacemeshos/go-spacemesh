@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// Deletes all sub directories and files in the Spacemesh root data folder
+// DeleteSpacemeshDataFolders deletes all sub directories and files in the Spacemesh root data folder.
 func DeleteSpacemeshDataFolders(t *testing.T) {
 
 	aPath, err := GetSpacemeshDataDirectoryPath()

@@ -6,7 +6,7 @@ import (
 )
 
 var (
-	KSecurityFlag = altsrc.NewUintFlag(cli.UintFlag{
+	KSecurityFlag = altsrc.NewIntFlag(cli.IntFlag{
 		Name:  "security-param",
 		Usage: "Consensus protocol k security param",
 		// use Destination and not value so the app will automaically update the default values
@@ -14,11 +14,11 @@ var (
 		Destination: &ConfigValues.SecurityParam,
 	})
 
-	LocalTcpPortFlag = altsrc.NewIntFlag(cli.IntFlag{
+	LocalTCPPortFlag = altsrc.NewIntFlag(cli.IntFlag{
 		Name:        "tcp-port",
 		Usage:       "tcp port to listen on",
-		Value:       ConfigValues.TcpPort,
-		Destination: &ConfigValues.TcpPort,
+		Value:       ConfigValues.TCPPort,
+		Destination: &ConfigValues.TCPPort,
 	})
 
 	NetworkDialTimeout = altsrc.NewStringFlag(cli.StringFlag{
@@ -35,11 +35,11 @@ var (
 		Destination: &ConfigValues.ConnKeepAlive.string,
 	})
 
-	NodeIdFlag = altsrc.NewStringFlag(cli.StringFlag{
+	NodeIDFlag = altsrc.NewStringFlag(cli.StringFlag{
 		Name:        "node-id",
 		Usage:       "Load node data by id (pub key) from local store",
-		Value:       ConfigValues.NodeId,
-		Destination: &ConfigValues.NodeId,
+		Value:       ConfigValues.NodeID,
+		Destination: &ConfigValues.NodeID,
 	})
 
 	SwarmBootstrap = altsrc.NewBoolFlag(cli.BoolFlag{

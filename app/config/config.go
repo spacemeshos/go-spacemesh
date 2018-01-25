@@ -2,7 +2,7 @@ package config
 
 // Provide Config struct with default values
 
-// Config values with defaults
+// ConfigValues defines default values for app config params.
 var ConfigValues = Config{
 	AppIntParam:    20,
 	AppBoolParam:   true,
@@ -14,6 +14,7 @@ func init() {
 	// todo: update default config params based on runtime env here
 }
 
+// Config defines app config params.
 type Config struct {
 	ConfigFilePath string
 	AppIntParam    int

@@ -2,7 +2,20 @@
 
 import_path="github.com/spacemeshos/go-spacemesh"
 pkgs=`go list ./... | grep -vF vendor/`
-ignored_pkgs=""
+rootdir_files=`ls *.go`
+ignored_pkgs="."
+
+function gofmt-path {
+   	output=`gofmt -s -l $1`
+   	if [ "$output" != "" ]; then
+   		echo "validate-gofmt.sh: error $output" 1>&2
+   		exit 1
+   	fi
+}
+
+for file in $rootdir_files; do
+    gofmt-path "./$file"
+done
 
 for pkg in $pkgs; do
 	relative_path="${pkg/$import_path/.}"
@@ -12,12 +25,8 @@ for pkg in $pkgs; do
 			i=1
 		fi
 		if [ $i -eq 1 ]; then
-			continue
+			continue 2
 		fi
 	done
-	output=`gofmt -s -l $relative_path`
-	if [ "$output" != "" ]; then
-		echo "validate-gofmt.sh: error $output" 1>&2
-		exit 1
-	fi
+	gofmt-path $relative_path
 done

@@ -13,7 +13,7 @@ import (
 func TestReadWrite(t *testing.T) {
 
 	msg := []byte("hello world")
-	msgId := crypto.UUID()
+	msgID := crypto.UUID()
 	port := crypto.GetRandomUInt32(1000) + 10000
 	address := fmt.Sprintf("0.0.0.0:%d", port)
 	done := make(chan bool, 1)
@@ -21,13 +21,15 @@ func TestReadWrite(t *testing.T) {
 	n, err := NewNet(address, nodeconfig.ConfigValues)
 	assert.Nil(t, err, "failed to create tcp server")
 
+	_, err = NewNet(address, nodeconfig.ConfigValues)
+	assert.Err(t, err, "Should not be able to create a new net on same address")
+
 	// run a simple network events processor go routine
 	go func() {
 	Loop:
 		for {
 			select {
 			case <-done:
-				n.Shutdown()
 				break Loop
 
 			case c := <-n.GetNewConnections():
@@ -55,7 +57,10 @@ func TestReadWrite(t *testing.T) {
 	assert.Nil(t, err, "failed to connect to tcp server")
 
 	log.Info("Sending message...")
-	c.Send(msg, msgId)
+
+	t1 := c.LastOpTime()
+
+	c.Send(msg, msgID)
 	//assert.Nil(t, err, "Failed to send message to server")
 	//assert.Equal(t, l, len(msg) + 4, "Expected message to be written to stream")
 	log.Info("Message sent.")
@@ -65,5 +70,18 @@ func TestReadWrite(t *testing.T) {
 	log.Info("Waiting for incoming messages...")
 
 	<-done
+
+	n.Shutdown()
+	_, err = n.DialTCP(address, time.Duration(10*time.Second), time.Duration(48*time.Hour))
+	assert.Err(t, err, "expected to fail dialing after calling shutdown")
+
+	t2 := c.LastOpTime()
+
+	// verify connection props
+	id := c.ID()
+	assert.True(t, len(id) > 0, "failed to get connection id")
+	assert.True(t, t2.Sub(t1) > 0, "invalid last op time")
+	err = c.Close()
+	assert.NoErr(t, err, "error closing connection")
 
 }

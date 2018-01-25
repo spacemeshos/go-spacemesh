@@ -6,6 +6,7 @@ import (
 	"golang.org/x/crypto/scrypt"
 )
 
+// KDParams defines key derivation scheme params.
 type KDParams struct {
 	N       int    `json:"n"`
 	R       int    `json:"r"`
@@ -15,9 +16,10 @@ type KDParams struct {
 	Salt    string `json:"salt"` // hex encoded
 }
 
+// DefaultCypherParams used for key derivation by the app.
 var DefaultCypherParams = KDParams{N: 262144, R: 8, P: 1, SaltLen: 16, DKLen: 32}
 
-// Derive a key from password using provided Cipher params
+// DeriveKeyFromPassword derives a key from password using the provided KDParams params.
 func DeriveKeyFromPassword(password string, p KDParams) ([]byte, error) {
 
 	if len(p.Salt) == 0 {

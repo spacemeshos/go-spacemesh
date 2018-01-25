@@ -9,11 +9,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-type AccountsRegistry struct {
+// Registry maintains a list of known locked and unlocked accounts.
+type Registry struct {
 	All      map[string]*Account
 	Unlocked map[string]*Account
 }
 
+// Account is an end user blockchain account
 type Account struct {
 	PrivKey    crypto.PrivateKey
 	PubKey     crypto.PublicKey
@@ -22,18 +24,19 @@ type Account struct {
 }
 
 var (
-	Accounts *AccountsRegistry
+	// Accounts Registry app singleton
+	Accounts *Registry
 )
 
 func init() {
-	Accounts = &AccountsRegistry{
+	Accounts = &Registry{
 		All:      make(map[string]*Account),
 		Unlocked: make(map[string]*Account),
 	}
 }
 
-// Creates a new account using the provided passphrase
-// Clients should persist newly created accounts - without this the account only lasts for one app session
+// NewAccount Creates a new account using the provided passphrase.
+// Clients should persist newly created accounts - without this the account only lasts for one app session.
 func NewAccount(passphrase string) (*Account, error) {
 
 	// account crypto data

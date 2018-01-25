@@ -9,6 +9,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
+// Pretty returns an account logging string
 func (a *Account) Pretty() string {
 	return fmt.Sprintf("Account %s", a.PubKey.Pretty())
 }
@@ -34,20 +35,23 @@ func (a *Account) Log() {
 	log.Info(" kdParams: %+v", a.kdParams)
 }
 
+// IsAccountLocked returns true iff account is locked.
 func (a *Account) IsAccountLocked() bool {
 	return a.PrivKey == nil
 }
 
+// IsAccountUnlocked returns true iff account is unlocked.
 func (a *Account) IsAccountUnlocked() bool {
 	return !a.IsAccountLocked()
 }
 
+// LockAccount locks an account with user provided passphrase.
 func (a *Account) LockAccount(passphrase string) {
 	a.PrivKey = nil
 	delete(Accounts.Unlocked, a.String())
 }
 
-// Unlock account using the provided passphrase and account data
+// UnlockAccount unlocks an account using the user provided passphrase
 func (a *Account) UnlockAccount(passphrase string) error {
 
 	if a.IsAccountUnlocked() {
@@ -117,7 +121,7 @@ func (a *Account) validatePublicKey(privateKey crypto.PrivateKey) error {
 	accountPubKeyStr := a.PubKey.String()
 
 	if accountPubKeyStr != publicKeyStr {
-		return errors.New(fmt.Sprintf("invalid extracted public key %s %s", accountPubKeyStr, publicKeyStr))
+		return fmt.Errorf("invalid extracted public key %s %s", accountPubKeyStr, publicKeyStr)
 	}
 
 	return nil
