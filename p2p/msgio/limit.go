@@ -13,14 +13,15 @@ func LimitedReader(r io.Reader) (io.Reader, error) {
 	return io.LimitReader(r, int64(l)), err
 }
 
-// LimitedWriter wraps an io.Writer with a msgio framed writer. It is the inverse
-// of LimitedReader: it will buffer all writes until "Flush" is called. When Flush
-// is called, it will write the size of the buffer first, flush the buffer, reset
-// the buffer, and begin accept more incoming writes.
+// NewLimitedWriter creates a new LimitedWriter.
 func NewLimitedWriter(w io.Writer) *LimitedWriter {
 	return &LimitedWriter{W: w}
 }
 
+// LimitedWriter wraps an io.Writer with a msgio framed writer. It is the inverse
+// of LimitedReader: it will buffer all writes until "Flush" is called. When Flush
+// is called, it will write the size of the buffer first, flush the buffer, reset
+// the buffer, and begin accept more incoming writes.
 type LimitedWriter struct {
 	W io.Writer
 	B bytes.Buffer
@@ -34,6 +35,7 @@ func (w *LimitedWriter) Write(buf []byte) (n int, err error) {
 	return n, err
 }
 
+// Flush flushes the writer
 func (w *LimitedWriter) Flush() error {
 	w.M.Lock()
 	defer w.M.Unlock()

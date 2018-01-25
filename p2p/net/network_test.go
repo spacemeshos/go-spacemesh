@@ -78,7 +78,7 @@ func TestReadWrite(t *testing.T) {
 	t2 := c.LastOpTime()
 
 	// verify connection props
-	id := c.Id()
+	id := c.ID()
 	assert.True(t, len(id) > 0, "failed to get connection id")
 	assert.True(t, t2.Sub(t1) > 0, "invalid last op time")
 	err = c.Close()

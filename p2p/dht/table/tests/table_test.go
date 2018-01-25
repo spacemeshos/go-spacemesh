@@ -12,7 +12,7 @@ import (
 func TestTableCallbacks(t *testing.T) {
 	const n = 100
 	local := p2p.GenerateRandomNodeData()
-	localID := local.DhtId()
+	localID := local.DhtID()
 
 	nodes := p2p.GenerateRandomNodesData(n)
 
@@ -80,7 +80,7 @@ func TestTableUpdate(t *testing.T) {
 
 	const n = 100
 	local := p2p.GenerateRandomNodeData()
-	localID := local.DhtId()
+	localID := local.DhtID()
 
 	rt := table.NewRoutingTable(20, localID)
 
@@ -100,12 +100,12 @@ func TestTableUpdate(t *testing.T) {
 		callback := make(table.PeersOpChannel, 2)
 
 		// find nearest peers to new node
-		rt.NearestPeers(table.NearestPeersReq{ID: n.DhtId(), Count: 5, Callback: callback})
+		rt.NearestPeers(table.NearestPeersReq{ID: n.DhtID(), Count: 5, Callback: callback})
 
 		select {
 		case c := <-callback:
 			if len(c.Peers) != 5 {
-				t.Fatalf("Expected to find 5 close nodes to %s.", n.DhtId())
+				t.Fatalf("Expected to find 5 close nodes to %s.", n.DhtID())
 			}
 		case <-time.After(time.Second * 5):
 			t.Fatalf("Failed to get expected update callbacks on time")
@@ -118,7 +118,7 @@ func TestTableFind(t *testing.T) {
 	const n = 100
 
 	local := p2p.GenerateRandomNodeData()
-	localID := local.DhtId()
+	localID := local.DhtID()
 
 	rt := table.NewRoutingTable(20, localID)
 
@@ -134,7 +134,7 @@ func TestTableFind(t *testing.T) {
 
 		// try to find nearest peer to n - it should be n
 		callback := make(table.PeerOpChannel, 2)
-		rt.NearestPeer(table.PeerByIDRequest{ID: n.DhtId(), Callback: callback})
+		rt.NearestPeer(table.PeerByIDRequest{ID: n.DhtID(), Callback: callback})
 
 		select {
 		case c := <-callback:
@@ -146,7 +146,7 @@ func TestTableFind(t *testing.T) {
 		}
 
 		callback1 := make(table.PeerOpChannel, 2)
-		rt.Find(table.PeerByIDRequest{ID: n.DhtId(), Callback: callback1})
+		rt.Find(table.PeerByIDRequest{ID: n.DhtID(), Callback: callback1})
 
 		select {
 		case c := <-callback1:
@@ -165,7 +165,7 @@ func TestTableFindCount(t *testing.T) {
 	const i = 15
 
 	local := p2p.GenerateRandomNodeData()
-	localID := local.DhtId()
+	localID := local.DhtID()
 	rt := table.NewRoutingTable(20, localID)
 	nodes := p2p.GenerateRandomNodesData(n)
 
@@ -177,7 +177,7 @@ func TestTableFindCount(t *testing.T) {
 	callback := make(table.PeersOpChannel, 2)
 
 	// find nearest peers
-	rt.NearestPeers(table.NearestPeersReq{ID: nodes[2].DhtId(), Count: i, Callback: callback})
+	rt.NearestPeers(table.NearestPeersReq{ID: nodes[2].DhtID(), Count: i, Callback: callback})
 
 	select {
 	case c := <-callback:
@@ -196,7 +196,7 @@ func TestTableMultiThreaded(t *testing.T) {
 	const i = 15
 
 	local := p2p.GenerateRandomNodeData()
-	localID := local.DhtId()
+	localID := local.DhtID()
 	rt := table.NewRoutingTable(20, localID)
 	nodes := p2p.GenerateRandomNodesData(n)
 
@@ -217,7 +217,7 @@ func TestTableMultiThreaded(t *testing.T) {
 	go func() {
 		for i := 0; i < 1000; i++ {
 			n := rand.Intn(len(nodes))
-			rt.Find(table.PeerByIDRequest{ID: nodes[n].DhtId(), Callback: nil})
+			rt.Find(table.PeerByIDRequest{ID: nodes[n].DhtID(), Callback: nil})
 		}
 	}()
 }
@@ -225,7 +225,7 @@ func TestTableMultiThreaded(t *testing.T) {
 func BenchmarkUpdates(b *testing.B) {
 	b.StopTimer()
 	local := p2p.GenerateRandomNodeData()
-	localID := local.DhtId()
+	localID := local.DhtID()
 	rt := table.NewRoutingTable(20, localID)
 	nodes := p2p.GenerateRandomNodesData(b.N)
 
@@ -239,7 +239,7 @@ func BenchmarkFinds(b *testing.B) {
 	b.StopTimer()
 
 	local := p2p.GenerateRandomNodeData()
-	localID := local.DhtId()
+	localID := local.DhtID()
 	rt := table.NewRoutingTable(20, localID)
 	nodes := p2p.GenerateRandomNodesData(b.N)
 
@@ -249,6 +249,6 @@ func BenchmarkFinds(b *testing.B) {
 
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		rt.Find(table.PeerByIDRequest{ID: nodes[i].DhtId(), Callback: nil})
+		rt.Find(table.PeerByIDRequest{ID: nodes[i].DhtID(), Callback: nil})
 	}
 }

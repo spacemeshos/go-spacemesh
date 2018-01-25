@@ -41,8 +41,8 @@ var (
 	}
 	nodeFlags = []cli.Flag{
 		nodeparams.KSecurityFlag,
-		nodeparams.LocalTcpPortFlag,
-		nodeparams.NodeIdFlag,
+		nodeparams.LocalTCPPortFlag,
+		nodeparams.NodeIDFlag,
 		nodeparams.NetworkDialTimeout,
 		nodeparams.NetworkConnKeepAlive,
 
@@ -178,7 +178,7 @@ func (app *SpacemeshApp) cleanup(ctx *cli.Context) error {
 func (app *SpacemeshApp) startSpacemeshNode(ctx *cli.Context) error {
 
 	log.Info("Starting local node...")
-	port := *nodeparams.LocalTcpPortFlag.Destination
+	port := *nodeparams.LocalTCPPortFlag.Destination
 	address := fmt.Sprintf("0.0.0.0:%d", port)
 
 	// start a new node passing the app-wide node config values and persist it to store

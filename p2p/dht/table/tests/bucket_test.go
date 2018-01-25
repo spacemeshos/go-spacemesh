@@ -14,7 +14,7 @@ func TestBucket(t *testing.T) {
 	const n = 100
 
 	local := p2p.GenerateRandomNodeData()
-	localID := local.DhtId()
+	localID := local.DhtID()
 
 	// add 100 nodes to the table
 	b := table.NewBucket()
@@ -50,7 +50,7 @@ func TestBucket(t *testing.T) {
 	items := b.List()
 
 	for e := items.Front(); e != nil; e = e.Next() {
-		id := e.Value.(node.RemoteNodeData).DhtId()
+		id := e.Value.(node.RemoteNodeData).DhtID()
 		cpl := id.CommonPrefixLen(localID)
 		if cpl > 0 {
 			t.Fatalf("Split failed. found id with cpl > 0 in bucket. Should all be with cpl of 0")
@@ -59,7 +59,7 @@ func TestBucket(t *testing.T) {
 
 	items = newBucket.List()
 	for e := items.Front(); e != nil; e = e.Next() {
-		id := e.Value.(node.RemoteNodeData).DhtId()
+		id := e.Value.(node.RemoteNodeData).DhtID()
 		cpl := id.CommonPrefixLen(localID)
 		if cpl == 0 {
 			t.Fatalf("Split failed. found id with cpl == 0 in non 0 bucket, should all be with cpl > 0")

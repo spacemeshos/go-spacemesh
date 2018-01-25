@@ -52,9 +52,9 @@ type LocalNode interface {
 // Creates a new identity if none was loaded.
 func NewLocalNode(tcpAddress string, config nodeconfig.Config, persist bool) (LocalNode, error) {
 
-	if len(nodeconfig.ConfigValues.NodeId) > 0 {
+	if len(nodeconfig.ConfigValues.NodeID) > 0 {
 		// user provided node id/pubkey via the cli - attempt to start that node w persisted data
-		data, err := readNodeData(nodeconfig.ConfigValues.NodeId)
+		data, err := readNodeData(nodeconfig.ConfigValues.NodeID)
 		if err != nil {
 			return nil, err
 		}

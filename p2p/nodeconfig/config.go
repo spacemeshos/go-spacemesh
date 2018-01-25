@@ -2,18 +2,18 @@ package nodeconfig
 
 import "time"
 
-// Default node config values
+// ConfigValues specifies  default values for node config params
 var ConfigValues = Config{
 	SecurityParam: 20,
 	FastSync:      true,
-	TcpPort:       7513,
-	NodeId:        "",
+	TCPPort:       7513,
+	NodeID:        "",
 	DialTimeout:   time.Duration(1 * time.Minute),
 	ConnKeepAlive: time.Duration(48 * time.Hour),
 	SwarmConfig:   SwarmConfigValues,
 }
 
-// todo: make all swarm config values command-line and config file modifiable
+// SwarmConfigValues defines default values for swarm config params
 var SwarmConfigValues = SwarmConfig{
 	Bootstrap:              false,
 	RoutingTableBucketSize: 20,
@@ -29,16 +29,18 @@ func init() {
 	// set default config params based on runtime here
 }
 
+// Config specifies node config params
 type Config struct {
 	SecurityParam uint          `toml:"-"`
 	FastSync      bool          `toml:"-"`
-	TcpPort       uint          `toml:"-"`
-	NodeId        string        `toml:"-"`
+	TCPPort       uint          `toml:"-"`
+	NodeID        string        `toml:"-"`
 	DialTimeout   time.Duration `toml:"-"`
 	ConnKeepAlive time.Duration `toml:"-"`
 	SwarmConfig   SwarmConfig   `toml:"-"`
 }
 
+// SwarmConfig specifies swarm config params
 type SwarmConfig struct {
 	Bootstrap              bool     `toml:"-"`
 	RoutingTableBucketSize uint     `toml:"-"`
