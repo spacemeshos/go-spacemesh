@@ -12,7 +12,6 @@ var (
 	version = "0.0.1"
 )
 
-func main() {
-	// run the app
+func main() { // run the app
 	app.Main(commit, branch, version)
 }
