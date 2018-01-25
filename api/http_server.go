@@ -24,7 +24,7 @@ type JsonHttpServer struct {
 }
 
 func NewJsonHttpServer() *JsonHttpServer {
-	return &JsonHttpServer{Port: config.ConfigValues.JsonServerPort}
+	return &JsonHttpServer{Port: uint(config.ConfigValues.JsonServerPort)}
 }
 
 func (s JsonHttpServer) Stop() {

@@ -14,25 +14,25 @@ var (
 		Destination: &ConfigValues.SecurityParam,
 	})
 
-	LocalTcpPortFlag = altsrc.NewUintFlag(cli.UintFlag{
+	LocalTcpPortFlag = altsrc.NewIntFlag(cli.IntFlag{
 		Name:        "tcp-port",
 		Usage:       "tcp port to listen on",
 		Value:       ConfigValues.TcpPort,
 		Destination: &ConfigValues.TcpPort,
 	})
 
-	NetworkDialTimeout = altsrc.NewDurationFlag(cli.DurationFlag{
+	NetworkDialTimeout = altsrc.NewStringFlag(cli.StringFlag{
 		Name:        "dial-timeout",
 		Usage:       "network dial timeout duration",
-		Value:       ConfigValues.DialTimeout,
-		Destination: &ConfigValues.DialTimeout,
+		Value:       ConfigValues.DialTimeout.string,
+		Destination: &ConfigValues.DialTimeout.string,
 	})
 
-	NetworkConnKeepAlive = altsrc.NewDurationFlag(cli.DurationFlag{
+	NetworkConnKeepAlive = altsrc.NewStringFlag(cli.StringFlag{
 		Name:        "conn-keepalive",
 		Usage:       "Network connection keep alive",
-		Value:       ConfigValues.ConnKeepAlive,
-		Destination: &ConfigValues.ConnKeepAlive,
+		Value:       ConfigValues.ConnKeepAlive.string,
+		Destination: &ConfigValues.ConnKeepAlive.string,
 	})
 
 	NodeIdFlag = altsrc.NewStringFlag(cli.StringFlag{
@@ -48,21 +48,21 @@ var (
 		Destination: &SwarmConfigValues.Bootstrap,
 	})
 
-	RoutingTableBucketSizdFlag = altsrc.NewUintFlag(cli.UintFlag{
+	RoutingTableBucketSizdFlag = altsrc.NewIntFlag(cli.IntFlag{
 		Name:        "swarm-rtbs",
 		Usage:       "The rounding table bucket size",
 		Value:       SwarmConfigValues.RoutingTableBucketSize,
 		Destination: &SwarmConfigValues.RoutingTableBucketSize,
 	})
 
-	RoutingTableAlphaFlag = altsrc.NewUintFlag(cli.UintFlag{
+	RoutingTableAlphaFlag = altsrc.NewIntFlag(cli.IntFlag{
 		Name:        "swarm-rtalpha",
 		Usage:       "The rounding table Alpha",
 		Value:       SwarmConfigValues.RoutingTableAlpha,
 		Destination: &SwarmConfigValues.RoutingTableAlpha,
 	})
 
-	RandomConnectionsFlag = altsrc.NewUintFlag(cli.UintFlag{
+	RandomConnectionsFlag = altsrc.NewIntFlag(cli.IntFlag{
 		Name:        "swarm-randcon",
 		Usage:       "Number of random connections",
 		Value:       SwarmConfigValues.RandomConnections,

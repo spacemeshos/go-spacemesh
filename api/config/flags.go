@@ -13,7 +13,7 @@ var (
 		EnvVar:      "JSON_API_SERVER",
 	})
 
-	JsonServerPortFlag = altsrc.NewUintFlag(cli.UintFlag{
+	JsonServerPortFlag = altsrc.NewIntFlag(cli.IntFlag{
 		Name:        "json-port",
 		Usage:       "JSON API server port",
 		Value:       ConfigValues.JsonServerPort,
@@ -28,7 +28,7 @@ var (
 		EnvVar:      "GRPC_API_SERVER",
 	})
 
-	GrpcServerPortFlag = altsrc.NewUintFlag(cli.UintFlag{
+	GrpcServerPortFlag = altsrc.NewIntFlag(cli.IntFlag{
 		Name:        "grpc-port",
 		Usage:       "The gRPC API server port",
 		Value:       ConfigValues.GrpcServerPort,

@@ -2,21 +2,9 @@ package nodeconfig
 
 import (
 	"gopkg.in/urfave/cli.v1"
+	"log"
 	"time"
 )
-
-var NodeConfigUints = map[string]*uint{
-	"tcp-port":       &ConfigValues.TcpPort,
-	"security-param": &ConfigValues.SecurityParam,
-	"swarm-rtbs":     &SwarmConfigValues.RoutingTableBucketSize,
-	"swarm-rtalpha":  &SwarmConfigValues.RoutingTableAlpha,
-	"swarm-randcon":  &SwarmConfigValues.RandomConnections,
-}
-
-var NodeConfigDurations = map[string]*time.Duration{
-	"dial-timeout":   &ConfigValues.DialTimeout,
-	"conn-keepalive": &ConfigValues.ConnKeepAlive,
-}
 
 // Default node config values
 var ConfigValues = Config{
@@ -24,8 +12,8 @@ var ConfigValues = Config{
 	FastSync:      true,
 	TcpPort:       7513,
 	NodeId:        "",
-	DialTimeout:   time.Duration(1 * time.Minute),
-	ConnKeepAlive: time.Duration(48 * time.Hour),
+	DialTimeout:   duration{"1m"},
+	ConnKeepAlive: duration{"48h"},
 	SwarmConfig:   SwarmConfigValues,
 }
 
@@ -45,20 +33,32 @@ func init() {
 	// set default config params based on runtime here
 }
 
+type duration struct {
+	string
+}
+
+func (d *duration) Duration() (duration time.Duration) {
+	dur, err := time.ParseDuration(d.string)
+	if err != nil {
+		log.Fatal("Could'nt parse duration string returning 0, error: %v", err)
+	}
+	return dur
+}
+
 type Config struct {
 	SecurityParam uint
 	FastSync      bool
-	TcpPort       uint
+	TcpPort       int
 	NodeId        string
-	DialTimeout   time.Duration
-	ConnKeepAlive time.Duration
+	DialTimeout   duration
+	ConnKeepAlive duration
 	SwarmConfig   SwarmConfig
 }
 
 type SwarmConfig struct {
 	Bootstrap              bool
-	RoutingTableBucketSize uint
-	RoutingTableAlpha      uint
-	RandomConnections      uint
+	RoutingTableBucketSize int
+	RoutingTableAlpha      int
+	RandomConnections      int
 	BootstrapNodes         cli.StringSlice
 }
