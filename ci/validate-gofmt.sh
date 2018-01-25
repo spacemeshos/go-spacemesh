@@ -13,8 +13,7 @@ function gofmt-path {
    	fi
 }
 
-for file in $rootdir_files;
-do
+for file in $rootdir_files; do
     gofmt-path "./$file"
 done
 
