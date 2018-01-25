@@ -40,7 +40,6 @@ func NewGrpcService() *SpaceMeshGrpcService {
 	return &SpaceMeshGrpcService{Server: server, Port: port}
 }
 
-
 // StartService starts the grpc service.
 func (s SpaceMeshGrpcService) StartService(status chan bool) {
 	go s.startServiceInternal(status)

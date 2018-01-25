@@ -14,7 +14,7 @@ import (
 )
 
 // JSONHTTPServer is a JSON http server providing the Spacemesh API.
-// It is implemented using a grpc-gateway. See https://github.com/grpc-ecosystem/grpc-gateway
+// It is implemented using a grpc-gateway. See https://github.com/grpc-ecosystem/grpc-gateway .
 type JSONHTTPServer struct {
 	Port   uint
 	server *http.Server
@@ -22,18 +22,18 @@ type JSONHTTPServer struct {
 	stop   chan bool
 }
 
-// NewJSONHTTPServer creates a new json http server
+// NewJSONHTTPServer creates a new json http server.
 func NewJSONHTTPServer() *JSONHTTPServer {
 	return &JSONHTTPServer{Port: config.ConfigValues.JSONServerPort, stop: make(chan bool)}
 }
 
-// Stop stops the server
+// StopService stops the server.
 func (s JSONHTTPServer) StopService() {
 	log.Info("Stopping json-http service...")
 	s.stop <- true
 }
 
-// Listens on gracefully stopping the server in the same routine
+// Listens on gracefully stopping the server in the same routine.
 func (s JSONHTTPServer) listenStop() {
 	<-s.stop
 	log.Info("Shutting down json API server...")
@@ -42,7 +42,7 @@ func (s JSONHTTPServer) listenStop() {
 	}
 }
 
-// StartService starts the json api server and listens for status (started, stopped)
+// StartService starts the json api server and listens for status (started, stopped).
 func (s JSONHTTPServer) StartService(status chan bool) {
 	go s.startInternal(status)
 }
