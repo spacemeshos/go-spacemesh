@@ -46,6 +46,7 @@ func TestNodeLocalStore(t *testing.T) {
 
 	// create a new local node from persisted node data
 	node1, err := NewLocalNode(address, nodeconfig.ConfigValues, true)
+	assert.NoErr(t, err, "local node creation error")
 	assert.Equal(t, node.String(), node1.String(), "expected restored node")
 
 	// cleanup
