@@ -134,7 +134,7 @@ func TestPoolStress(t *testing.T) {
 	done := make(chan bool)
 	for i := 0; i < P; i++ {
 		go func() {
-			var v interface{} = 0
+			var v interface{}
 			for j := 0; j < N; j++ {
 				if v == nil {
 					v = 0

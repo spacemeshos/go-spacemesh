@@ -7,10 +7,11 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
-// A general-purpose merkle tree backed by (k,v) stores
+// Tree is a general-purpose merkle tree used to store user (k,v) data.
+// It is backed by (k,v) data stores.
 // All (k,v) methods are in user data space and not in tree space.
 // Tree space pointers and paths are internal only.
-type MerkleTree interface {
+type Tree interface {
 	Put(k, v []byte) error                // store user key, value
 	Delete(k []byte) error                // delete user value indexed by key
 	Get(k []byte) ([]byte, *stack, error) // get user value indexed by key
@@ -39,11 +40,11 @@ type merkleTreeImp struct {
 	root     Node
 }
 
-// Creates a new empty merkle tree with the provided paths to user and tree data db files.
-// The db files will be created on these pathes if they don't already exist.
+// NewEmptyTree creates a new empty Merkle tree with the provided paths to user and tree data db files.
+// The db files will be created on these paths if they don't already exist.
 // userDataFileName: full local os path and file name for the user data db for this tree
 // treeDataFileName: full local os path and file name for the internal tree db store for this tree
-func NewEmptyTree(userDataFileName string, treeDataFileName string) (MerkleTree, error) {
+func NewEmptyTree(userDataFileName string, treeDataFileName string) (Tree, error) {
 	userData, err := leveldb.OpenFile(userDataFileName, nil)
 	if err != nil {
 		log.Error("Failed to open user db", err)
@@ -64,11 +65,11 @@ func NewEmptyTree(userDataFileName string, treeDataFileName string) (MerkleTree,
 	return mt, nil
 }
 
-// Creates a new tree from provided dbs file paths.
+// NewTreeFromDb creates a new tree from provided dbs file paths.
 // rootHash: tree root hash - used to pull the root from the db
 // userDataFileName: full local os path and file name for user data db for this tree
 // treeDataFileName: full local os path and file name for the internal tree db store for this tree
-func NewTreeFromDb(rootHash []byte, userDataFileName string, treeDataFileName string) (MerkleTree, error) {
+func NewTreeFromDb(rootHash []byte, userDataFileName string, treeDataFileName string) (Tree, error) {
 
 	userData, err := leveldb.OpenFile(userDataFileName, nil)
 	if err != nil {

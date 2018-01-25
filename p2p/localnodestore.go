@@ -10,11 +10,11 @@ import (
 	"strings"
 )
 
-// Persisted node data
+// NodeData defines persistent node data
 type NodeData struct {
 	PubKey     string `json:"pubKey"`
 	PrivKey    string `json:"priKey"`
-	CoinBaseId string `json:"coinbase"` // coinbase account id
+	CoinBaseID string `json:"coinbase"` // coinbase account id
 }
 
 // Node store - local node data persistence functionality
@@ -43,13 +43,13 @@ func (n *localNodeImp) EnsureNodeDataDirectory() (string, error) {
 }
 
 // Returns the os-specific full path to the node's data file
-func getDataFilePath(nodeId string) (string, error) {
+func getDataFilePath(nodeID string) (string, error) {
 	nodesDataDir, err := ensureNodesDataDirectory()
 	if err != nil {
 		return "", err
 	}
 
-	return filepath.Join(nodesDataDir, nodeId, nodeconfig.NodeDataFileName), nil
+	return filepath.Join(nodesDataDir, nodeID, nodeconfig.NodeDataFileName), nil
 }
 
 // Persist node's data to local store
@@ -79,9 +79,9 @@ func (n *localNodeImp) persistData() error {
 }
 
 // Read node persisted data based on node id
-func readNodeData(nodeId string) (*NodeData, error) {
+func readNodeData(nodeID string) (*NodeData, error) {
 
-	path, err := getDataFilePath(nodeId)
+	path, err := getDataFilePath(nodeID)
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -93,7 +93,7 @@ func readNodeData(nodeId string) (*NodeData, error) {
 		return nil, err
 	}
 
-	log.Info("loaded persisted node data for node id: %s", nodeId)
+	log.Info("loaded persisted node data for node id: %s", nodeID)
 	return &nodeData, nil
 }
 

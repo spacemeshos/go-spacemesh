@@ -24,9 +24,9 @@ func TestFindNodeProtocolCore(t *testing.T) {
 	node2Local.GetSwarm().RegisterNode(node1Local.GetRemoteNodeData())
 
 	// node 2 doesn't know about node 3 and asks node 1 to find it
-	reqId := crypto.UUID()
+	reqID := crypto.UUID()
 	callback := make(chan FindNodeResp)
-	node2Local.GetSwarm().getFindNodeProtocol().FindNode(reqId, node1Remote.String(), node3Remote.String(), callback)
+	node2Local.GetSwarm().getFindNodeProtocol().FindNode(reqID, node1Remote.String(), node3Remote.String(), callback)
 
 Loop:
 	for {
@@ -35,13 +35,13 @@ Loop:
 			assert.NotNil(t, c, "expected response slice")
 			assert.Nil(t, c.err, "Expected no error")
 
-			if !bytes.Equal(c.GetMetadata().ReqId, reqId) {
+			if !bytes.Equal(c.GetMetadata().ReqId, reqID) {
 				t.Fatalf("Didn't expect callback on another reqID")
 			}
 			assert.True(t, len(c.NodeInfos) >= 1, "expected at least 1 node")
 
 			for _, d := range c.NodeInfos {
-				if bytes.Equal(d.NodeId, node3Remote.Id()) {
+				if bytes.Equal(d.NodeId, node3Remote.ID()) {
 					log.Info("Found node 3 :-)")
 					break Loop
 				}
@@ -65,17 +65,17 @@ func TestFindNodeProtocolEmptyRes(t *testing.T) {
 	node2Local, _ := GenerateTestNode(t)
 	node3Local, node3Remote := GenerateTestNode(t)
 
-	t.Logf("Node 1: %s %s", node1Remote.String(), node1Remote.TcpAddress())
-	t.Logf("Node 2: %s %s", node2Local.String(), node2Local.TcpAddress())
-	t.Logf("Node 3: %s %s", node3Remote.String(), node3Remote.TcpAddress())
+	t.Logf("Node 1: %s %s", node1Remote.String(), node1Remote.TCPAddress())
+	t.Logf("Node 2: %s %s", node2Local.String(), node2Local.TCPAddress())
+	t.Logf("Node 3: %s %s", node3Remote.String(), node3Remote.TCPAddress())
 
 	// node 2 knows about node 1. Nobody knows about node 3
 	node2Local.GetSwarm().RegisterNode(node1Local.GetRemoteNodeData())
 
 	// node 2 doesn't know about node 3 and asks node 1 to find it
-	reqId := crypto.UUID()
+	reqID := crypto.UUID()
 	callback := make(chan FindNodeResp)
-	node2Local.GetSwarm().getFindNodeProtocol().FindNode(reqId, node1Remote.String(), node3Remote.String(), callback)
+	node2Local.GetSwarm().getFindNodeProtocol().FindNode(reqID, node1Remote.String(), node3Remote.String(), callback)
 
 Loop:
 	for {
@@ -84,12 +84,12 @@ Loop:
 			assert.NotNil(t, c, "expected non nil response slice w 0 or more items")
 			assert.Nil(t, c.err, "Expected no error")
 
-			if !bytes.Equal(c.GetMetadata().ReqId, reqId) {
+			if !bytes.Equal(c.GetMetadata().ReqId, reqID) {
 				t.Fatalf("Didn't expect callback on another reqID")
 			}
 
 			for _, d := range c.NodeInfos {
-				if bytes.Equal(d.NodeId, node3Remote.Id()) {
+				if bytes.Equal(d.NodeId, node3Remote.ID()) {
 					t.Fatalf("didn't expect result to include node 3")
 				}
 			}

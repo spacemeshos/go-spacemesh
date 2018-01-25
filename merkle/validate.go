@@ -33,7 +33,7 @@ func (mt *merkleTreeImp) ValidateStructure(root Node) ([]byte, error) {
 		children := root.getAllChildren()
 
 		if len(entries) != len(children) {
-			return nil, errors.New(fmt.Sprintf("mismatch. entries: %d, children: %d", len(entries), len(children)))
+			return nil, fmt.Errorf("mismatch. entries: %d, children: %d", len(entries), len(children))
 		}
 
 		for _, c := range children {

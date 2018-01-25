@@ -10,7 +10,7 @@ func (mt *merkleTreeImp) Delete(k []byte) error {
 	return errors.New("not implemented yet")
 
 	//	if len(k) == 0 {
-	//		return InvalidUserDataError
+	//		return ErrorInvalidUserData
 	//	}
 	//
 	//	// first, attempt to find the value in the tree and return path to where value should be added

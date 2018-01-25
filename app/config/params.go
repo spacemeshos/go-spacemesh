@@ -1,7 +1,6 @@
 package config
 
 // app params are non-configured consts
-
 const (
 	AppUsage              = "the go-spacemesh node"
 	AppAuthor             = "The go-spacemesh authors"

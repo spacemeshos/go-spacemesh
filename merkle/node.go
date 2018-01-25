@@ -12,7 +12,8 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
-var ErrorInvalidHexChar = errors.New("Invalid hex char")
+// ErrorInvalidHexChar is returned when a string is not a valid one hex encoded char.
+var ErrorInvalidHexChar = errors.New("invalid hex char")
 
 type parent interface {
 	// child care
@@ -26,8 +27,7 @@ type parent interface {
 	setExtChild(pointer []byte) error
 }
 
-// consider making all nodes immutable and copy on creation
-
+// Node defines the interface for a Merkle tree node.
 type Node interface {
 	parent
 
@@ -94,6 +94,7 @@ func newBranchNodeContainer(entries map[byte][]byte, value []byte) (Node, error)
 
 	return c, nil
 }
+
 func newNodeFromData(data []byte) (Node, error) {
 
 	n := &pb.Node{}
@@ -397,7 +398,7 @@ func (n *nodeImp) marshal() ([]byte, error) {
 	case pb.NodeType_extension:
 		return n.ext.marshal()
 	default:
-		return nil, errors.New(fmt.Sprintf("unexpcted node type %d", n.nodeType))
+		return nil, fmt.Errorf("unexpcted node type %d", n.nodeType)
 	}
 }
 

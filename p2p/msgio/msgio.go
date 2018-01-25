@@ -7,7 +7,7 @@ import (
 	"sync"
 )
 
-//  ErrMsgTooLarge is returned when the message length is exessive
+// ErrMsgTooLarge is returned when the message length is excessive
 var ErrMsgTooLarge = errors.New("message too large")
 
 const (

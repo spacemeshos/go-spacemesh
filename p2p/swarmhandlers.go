@@ -2,7 +2,6 @@ package p2p
 
 import (
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
@@ -19,23 +18,23 @@ import (
 // Register adds info about this node but doesn't attempt to connect to i
 func (s *swarmImpl) onRegisterNodeRequest(n node.RemoteNodeData) {
 
-	if s.peers[n.Id()] != nil {
+	if s.peers[n.ID()] != nil {
 		s.localNode.Info("Already connected to %s", n.Pretty())
 		return
 	}
 
-	rn, err := NewRemoteNode(n.Id(), n.Ip())
+	rn, err := NewRemoteNode(n.ID(), n.IP())
 	if err != nil { // invalid id
-		s.localNode.Error("invalid remote node id: %s", n.Id())
+		s.localNode.Error("invalid remote node id: %s", n.ID())
 		return
 	}
 
-	s.peers[n.Id()] = rn
+	s.peers[n.ID()] = rn
 
 	// update the routing table with the nde node info
 	s.routingTable.Update(n)
 
-	s.sendNodeEvent(n.Id(), REGISTERED)
+	s.sendNodeEvent(n.ID(), Registered)
 
 }
 
@@ -47,13 +46,13 @@ func (s *swarmImpl) onConnectionRequest(req node.RemoteNodeData) {
 	var err error
 
 	// check for existing session with that node
-	peer := s.peers[req.Id()]
+	peer := s.peers[req.ID()]
 
 	if peer == nil {
 		s.onRegisterNodeRequest(req)
 	}
 
-	peer = s.peers[req.Id()]
+	peer = s.peers[req.ID()]
 	if peer == nil {
 		s.localNode.Error("unexpected null peer")
 		return
@@ -69,22 +68,22 @@ func (s *swarmImpl) onConnectionRequest(req node.RemoteNodeData) {
 
 	if conn == nil {
 
-		s.sendNodeEvent(req.Id(), CONNECTING)
+		s.sendNodeEvent(req.ID(), Connecting)
 
 		// Dial the other node using the node's network config values
-		conn, err = s.network.DialTCP(req.Ip(), s.localNode.Config().DialTimeout, s.localNode.Config().ConnKeepAlive)
+		conn, err = s.network.DialTCP(req.IP(), s.localNode.Config().DialTimeout, s.localNode.Config().ConnKeepAlive)
 		if err != nil {
-			s.sendNodeEvent(req.Id(), DISCONNECTED)
-			s.localNode.Error("failed to connect to remote node %s on advertised ip %s", req.Pretty(), req.Ip())
+			s.sendNodeEvent(req.ID(), Dissconected)
+			s.localNode.Error("failed to connect to remote node %s on advertised ip %s", req.Pretty(), req.IP())
 			return
 		}
 
-		s.sendNodeEvent(req.Id(), CONNECTED)
+		s.sendNodeEvent(req.ID(), Connected)
 
 		// update the routing table
 		s.routingTable.Update(req)
 
-		id := conn.Id()
+		id := conn.ID()
 
 		// update state with new connection
 		s.peersByConnection[id] = peer
@@ -99,7 +98,7 @@ func (s *swarmImpl) onConnectionRequest(req node.RemoteNodeData) {
 	if session == nil || !session.IsAuthenticated() {
 
 		// start handshake protocol
-		s.sendNodeEvent(req.Id(), HNADSHAKE_STARTED)
+		s.sendNodeEvent(req.ID(), HandshakeStarted)
 		s.handshakeProtocol.CreateSession(peer)
 	}
 }
@@ -109,17 +108,17 @@ func (s *swarmImpl) onNewSession(data HandshakeData) {
 
 	if data.Session().IsAuthenticated() {
 
-		s.localNode.Info("Established new session with %s", data.Peer().TcpAddress())
+		s.localNode.Info("Established new session with %s", data.Peer().TCPAddress())
 
-		s.sendNodeEvent(data.Peer().String(), SESSION_ESTABLISHED)
+		s.sendNodeEvent(data.Peer().String(), SessionEstablished)
 
 		// store the session
 		s.allSessions[data.Session().String()] = data.Session()
 
 		// send all messages queued for the remote node we now have a session with
 		for key, msg := range s.messagesPendingSession {
-			if msg.PeerId == data.Peer().String() {
-				s.localNode.Info("Sending queued message %s to remote node", hex.EncodeToString(msg.ReqId))
+			if msg.PeerID == data.Peer().String() {
+				s.localNode.Info("Sending queued message %s to remote node", hex.EncodeToString(msg.ReqID))
 				delete(s.messagesPendingSession, key)
 				go s.SendMessage(msg)
 			}
@@ -132,14 +131,14 @@ func (s *swarmImpl) onDisconnectionRequest(req node.RemoteNodeData) {
 
 	// todo: disconnect all connections with node
 
-	s.sendNodeEvent(req.Id(), DISCONNECTED)
+	s.sendNodeEvent(req.ID(), Dissconected)
 }
 
 // Local request to send a message to a remote node
 func (s *swarmImpl) onSendHandshakeMessage(r SendMessageReq) {
 
 	// check for existing remote node and session
-	remoteNode := s.peers[r.PeerId]
+	remoteNode := s.peers[r.PeerID]
 
 	if remoteNode == nil {
 		// for now we assume messages are sent only to nodes we already know their ip address
@@ -153,14 +152,14 @@ func (s *swarmImpl) onSendHandshakeMessage(r SendMessageReq) {
 		return
 	}
 
-	conn.Send(r.Payload, r.ReqId)
+	conn.Send(r.Payload, r.ReqID)
 }
 
 // Local request to send a message to a remote node
 func (s *swarmImpl) onSendMessageRequest(r SendMessageReq) {
 
 	// check for existing remote node and session
-	peer := s.peers[r.PeerId]
+	peer := s.peers[r.PeerID]
 
 	if peer == nil {
 
@@ -168,15 +167,15 @@ func (s *swarmImpl) onSendMessageRequest(r SendMessageReq) {
 		callback := make(chan node.RemoteNodeData)
 
 		// attempt to find the peer
-		s.findNode(r.PeerId, callback)
+		s.findNode(r.PeerID, callback)
 		go func() {
 			select {
 			case n := <-callback:
 				if n != nil { // we found it - now we can send the message to it
-					s.localNode.Info("Peer %s found.... - sending message", r.PeerId)
+					s.localNode.Info("Peer %s found.... - sending message", r.PeerID)
 					s.onSendMessageRequest(r)
 				} else {
-					s.localNode.Info("Peer %s not found.... - can't send message", r.PeerId)
+					s.localNode.Info("Peer %s not found.... - can't send message", r.PeerID)
 				}
 			}
 		}()
@@ -192,61 +191,61 @@ func (s *swarmImpl) onSendMessageRequest(r SendMessageReq) {
 		s.localNode.Warning("queuing protocol request until session is established...")
 
 		// save the message for later sending and try to connect to the node
-		s.messagesPendingSession[hex.EncodeToString(r.ReqId)] = r
+		s.messagesPendingSession[hex.EncodeToString(r.ReqID)] = r
 
 		// try to connect to remote node and send the message once connected
 		// todo: callback listener if connection fails (possibly after retries)
-		s.onConnectionRequest(node.NewRemoteNodeData(peer.String(), peer.TcpAddress()))
+		s.onConnectionRequest(node.NewRemoteNodeData(peer.String(), peer.TCPAddress()))
 		return
 	}
 
 	encPayload, err := session.Encrypt(r.Payload)
 	if err != nil {
-		e := errors.New(fmt.Sprintf("aborting send - failed to encrypt payload: %v", err))
+		e := fmt.Errorf("aborting send - failed to encrypt payload: %v", err)
 		go func() {
 			if r.Callback != nil {
-				r.Callback <- SendError{r.ReqId, e}
+				r.Callback <- SendError{r.ReqID, e}
 			}
 		}()
 		return
 	}
 
 	msg := &pb.CommonMessageData{
-		SessionId: session.Id(),
+		SessionId: session.ID(),
 		Payload:   encPayload,
 	}
 
 	data, err := proto.Marshal(msg)
 	if err != nil {
-		e := errors.New(fmt.Sprintf("aborting send - invalid msg format %v", err))
+		e := fmt.Errorf("aborting send - invalid msg format %v", err)
 		go func() {
 			if r.Callback != nil {
-				r.Callback <- SendError{r.ReqId, e}
+				r.Callback <- SendError{r.ReqID, e}
 			}
 		}()
 		return
 	}
 
-	// store callback by reqId for this connection so we can call back in case of msg timout or other send failure
+	// store callback by reqIdDfor this connection so we can call back in case of msg timout or other send failure
 	if r.Callback != nil {
-		callbacks := s.outgoingSendsCallbacks[conn.Id()]
+		callbacks := s.outgoingSendsCallbacks[conn.ID()]
 		if callbacks == nil {
-			s.outgoingSendsCallbacks[conn.Id()] = make(map[string]chan SendError)
+			s.outgoingSendsCallbacks[conn.ID()] = make(map[string]chan SendError)
 		}
 
-		s.outgoingSendsCallbacks[conn.Id()][hex.EncodeToString(r.ReqId)] = r.Callback
+		s.outgoingSendsCallbacks[conn.ID()][hex.EncodeToString(r.ReqID)] = r.Callback
 	}
 
 	// finally - send it away!
 	s.localNode.Info("Sending protocol message down the connection...")
 
-	conn.Send(data, r.ReqId)
+	conn.Send(data, r.ReqID)
 }
 
 func (s *swarmImpl) onConnectionClosed(c net.Connection) {
 
 	// forget about this connection
-	id := c.Id()
+	id := c.ID()
 	peer := s.peersByConnection[id]
 	if peer != nil {
 		peer.GetConnections()[id] = nil
@@ -254,16 +253,16 @@ func (s *swarmImpl) onConnectionClosed(c net.Connection) {
 	delete(s.connections, id)
 	delete(s.peersByConnection, id)
 
-	s.sendNodeEvent(peer.String(), DISCONNECTED)
+	s.sendNodeEvent(peer.String(), Dissconected)
 
 }
 
 func (s *swarmImpl) onRemoteClientConnected(c net.Connection) {
 	// nop - a remote client connected - this is handled w message
-	s.localNode.Info("Remote client connected. %s", c.Id())
-	peer := s.peersByConnection[c.Id()]
+	s.localNode.Info("Remote client connected. %s", c.ID())
+	peer := s.peersByConnection[c.ID()]
 	if peer != nil {
-		s.sendNodeEvent(peer.String(), CONNECTED)
+		s.sendNodeEvent(peer.String(), Connected)
 	}
 }
 
@@ -277,10 +276,10 @@ func (s *swarmImpl) onRemoteClientHandshakeMessage(msg net.IncomingMessage) {
 		return
 	}
 
-	connId := msg.Connection.Id()
+	connID := msg.Connection.ID()
 
 	// check if we already know about the remote node of this connection
-	sender := s.peersByConnection[connId]
+	sender := s.peersByConnection[connID]
 
 	if sender == nil {
 
@@ -303,9 +302,9 @@ func (s *swarmImpl) onRemoteClientHandshakeMessage(msg net.IncomingMessage) {
 
 		// register this remote node and the new connection
 
-		sender.GetConnections()[connId] = msg.Connection
+		sender.GetConnections()[connID] = msg.Connection
 		s.peers[sender.String()] = sender
-		s.peersByConnection[connId] = sender
+		s.peersByConnection[connID] = sender
 
 	}
 
@@ -328,7 +327,7 @@ func (s *swarmImpl) onRemoteClientProtocolMessage(msg net.IncomingMessage, c *pb
 		return
 	}
 
-	remoteNode := s.peers[session.RemoteNodeId()]
+	remoteNode := s.peers[session.RemoteNodeID()]
 	if remoteNode == nil {
 		s.localNode.Warning("Dropping incoming protocol message - expected to have data about this node for an established session")
 		return
@@ -398,19 +397,19 @@ func (s *swarmImpl) onRemoteClientMessage(msg net.IncomingMessage) {
 func (s *swarmImpl) onMessageSentEvent(evt net.MessageSentEvent) {
 
 	// message was written to a connection without an error
-	callbacks := s.outgoingSendsCallbacks[evt.Connection.Id()]
+	callbacks := s.outgoingSendsCallbacks[evt.Connection.ID()]
 	if callbacks == nil {
 		return
 	}
 
-	reqId := hex.EncodeToString(evt.Id)
-	callback := callbacks[reqId]
+	reqID := hex.EncodeToString(evt.ID)
+	callback := callbacks[reqID]
 	if callback == nil {
 		return
 	}
 
 	// stop tracking this outgoing message - it was sent
-	delete(callbacks, reqId)
+	delete(callbacks, reqID)
 }
 
 // not go safe - called from event processing main loop
@@ -420,31 +419,31 @@ func (s *swarmImpl) onConnectionError(ce net.ConnectionError) {
 
 // not go safe - called from event processing main loop
 func (s *swarmImpl) onMessageSendError(mse net.MessageSendError) {
-	s.sendMessageSendError(net.ConnectionError{Connection: mse.Connection, Err: mse.Err, Id: mse.Id})
+	s.sendMessageSendError(net.ConnectionError{Connection: mse.Connection, Err: mse.Err, ID: mse.ID})
 }
 
-// send a msg send error back to the callback registered by reqId
+// send a msg send error back to the callback registered by reqID
 func (s *swarmImpl) sendMessageSendError(cr net.ConnectionError) {
 
 	c := cr.Connection
-	callbacks := s.outgoingSendsCallbacks[c.Id()]
+	callbacks := s.outgoingSendsCallbacks[c.ID()]
 
 	if callbacks == nil {
 		return
 	}
 
-	reqId := hex.EncodeToString(cr.Id)
-	callback := callbacks[reqId]
+	reqID := hex.EncodeToString(cr.ID)
+	callback := callbacks[reqID]
 
 	if callback == nil {
 		return
 	}
 
-	// there will be no more callbacks for this reqId
-	delete(callbacks, reqId)
+	// there will be no more callbacks for this reqID
+	delete(callbacks, reqID)
 
 	go func() {
 		// send the error to the callback channel
-		callback <- SendError{cr.Id, cr.Err}
+		callback <- SendError{cr.ID, cr.Err}
 	}()
 }

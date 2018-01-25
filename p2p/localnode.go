@@ -10,21 +10,21 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 )
 
-// The local Spacemesh node is the root of all evil
+// LocalNode specifies local spacemesh node capabilities and services.
 type LocalNode interface {
-	Id() []byte
+	ID() []byte
 	String() string
 	Pretty() string
 
 	PrivateKey() crypto.PrivateKey
 	PublicKey() crypto.PublicKey
 
-	DhtId() dht.ID
-	TcpAddress() string
+	DhtID() dht.ID
+	TCPAddress() string
 
 	Sign(data proto.Message) ([]byte, error)
 	SignToString(data proto.Message) (string, error)
-	NewProtocolMessageMetadata(protocol string, reqId []byte, gossip bool) *pb.Metadata
+	NewProtocolMessageMetadata(protocol string, reqID []byte, gossip bool) *pb.Metadata
 
 	GetSwarm() Swarm
 	GetPing() Ping
@@ -47,14 +47,14 @@ type LocalNode interface {
 	persistData() error
 }
 
-// Creates a local node with a provided tcp address
-// Attempts to set node identity from persisted data in local store
-// Creates a new identity if none was loads
+// NewLocalNode creates a local node with a provided tcp address.
+// Attempts to set node identity from persisted data in local store.
+// Creates a new identity if none was loaded.
 func NewLocalNode(tcpAddress string, config nodeconfig.Config, persist bool) (LocalNode, error) {
 
-	if len(nodeconfig.ConfigValues.NodeId) > 0 {
+	if len(nodeconfig.ConfigValues.NodeID) > 0 {
 		// user provided node id/pubkey via the cli - attempt to start that node w persisted data
-		data, err := readNodeData(nodeconfig.ConfigValues.NodeId)
+		data, err := readNodeData(nodeconfig.ConfigValues.NodeID)
 		if err != nil {
 			return nil, err
 		}
@@ -78,7 +78,7 @@ func NewLocalNode(tcpAddress string, config nodeconfig.Config, persist bool) (Lo
 	return NewNodeIdentity(tcpAddress, config, persist)
 }
 
-// Creates a new local node without attempting to restore identity from local store
+// NewNodeIdentity creates a new local node without attempting to restore identity from local store.
 func NewNodeIdentity(tcpAddress string, config nodeconfig.Config, persist bool) (LocalNode, error) {
 	priv, pub, _ := crypto.GenerateKeyPair()
 	return newLocalNodeWithKeys(pub, priv, tcpAddress, config, persist)
@@ -92,7 +92,7 @@ func newLocalNodeWithKeys(pubKey crypto.PublicKey, privKey crypto.PrivateKey, tc
 		privKey:    privKey,
 		tcpAddress: tcpAddress,
 		config:     config, // store this node passed-in config values and use them later
-		dhtId:      dht.NewIdFromNodeKey(pubKey.Bytes()),
+		dhtID:      dht.NewIDFromNodeKey(pubKey.Bytes()),
 	}
 
 	dataDir, err := n.EnsureNodeDataDirectory()
