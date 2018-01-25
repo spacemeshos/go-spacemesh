@@ -16,31 +16,33 @@ import (
 const findNodeReq = "/dht/1.0/find-node-req/"
 const findNodeResp = "/dht/1.0/find-node-resp/"
 
-// FindNode dht protocol
-// Protocol implementing dht FIND_NODE message
+// FindNodeProtocol provides the dht protocol FIND-NODE message.
 type FindNodeProtocol interface {
 
 	// Send a find_node request for data about a remote node, known only by id, to a specific known remote node
 	// Results will include 0 or more nodes and up to count nodes which may or may not include data about id (as serverNodeId may not know about it)
-	// reqId: allows the client to match responses with requests by id
+	// reqID: allows the client to match responses with requests by id
 	// serverNodeId - node to send the find request to
 	// id - node id to find
 
 	// this should really be named FindClosestNodes
-	FindNode(reqId []byte, serverNodeId string, id string, callback chan FindNodeResp) error
+	FindNode(reqID []byte, serverNodeID string, id string, callback chan FindNodeResp) error
 }
 
+// FindNodeResp specifies the data returned by FindNode.
 type FindNodeResp struct {
 	*pb.FindNodeResp
 	err   error
-	reqId []byte
+	reqID []byte
 }
 
+// RespCallbackRequest specifies callback for a request ID.
 type RespCallbackRequest struct {
 	callback chan FindNodeResp
-	reqId    []byte
+	reqID    []byte
 }
 
+// FindNodeCallbacks is a channel of RespCallbackRequests.
 type FindNodeCallbacks chan RespCallbackRequest
 
 type findNodeProtocolImpl struct {
@@ -52,6 +54,7 @@ type findNodeProtocolImpl struct {
 	callbacksRegReq   FindNodeCallbacks // a channel of channels that receives callbacks
 }
 
+// NewFindNodeProtocol creates a new FindNodeProtocol instance.
 func NewFindNodeProtocol(s Swarm) FindNodeProtocol {
 
 	p := &findNodeProtocolImpl{
@@ -78,15 +81,15 @@ const tableQueryTimeout = time.Duration(time.Minute * 1)
 
 // Send a single find node request to a remote node
 // id: base58 encoded remote node id
-func (p *findNodeProtocolImpl) FindNode(reqId []byte, serverNodeId string, id string, callback chan FindNodeResp) error {
+func (p *findNodeProtocolImpl) FindNode(reqID []byte, serverNodeID string, id string, callback chan FindNodeResp) error {
 
-	p.callbacksRegReq <- RespCallbackRequest{callback, reqId}
+	p.callbacksRegReq <- RespCallbackRequest{callback, reqID}
 
-	nodeId := base58.Decode(id)
-	metadata := p.swarm.GetLocalNode().NewProtocolMessageMetadata(findNodeReq, reqId, false)
+	nodeID := base58.Decode(id)
+	metadata := p.swarm.GetLocalNode().NewProtocolMessageMetadata(findNodeReq, reqID, false)
 	data := &pb.FindNodeReq{
 		Metadata:   metadata,
-		NodeId:     nodeId,
+		NodeId:     nodeID,
 		MaxResults: maxNearestNodesResults}
 
 	// sign data
@@ -100,7 +103,7 @@ func (p *findNodeProtocolImpl) FindNode(reqId []byte, serverNodeId string, id st
 	}
 
 	// send the message
-	req := SendMessageReq{serverNodeId, reqId, payload, p.sendErrors}
+	req := SendMessageReq{serverNodeID, reqID, payload, p.sendErrors}
 	p.swarm.SendMessage(req)
 
 	return nil
@@ -122,13 +125,13 @@ func (p *findNodeProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 	// use the dht table to generate the response
 
 	rt := p.swarm.getRoutingTable()
-	nodeDhtId := dht.NewIdFromNodeKey(req.NodeId)
+	nodeDhtID := dht.NewIDFromNodeKey(req.NodeId)
 	callback := make(table.PeersOpChannel)
 
 	count := int(crypto.MinInt32(req.MaxResults, maxNearestNodesResults))
 
 	// get up to count nearest peers to nodeDhtId
-	rt.NearestPeers(table.NearestPeersReq{Id: nodeDhtId, Count: count, Callback: callback})
+	rt.NearestPeers(table.NearestPeersReq{ID: nodeDhtID, Count: count, Callback: callback})
 
 	var results []*pb.NodeInfo
 
@@ -192,7 +195,7 @@ func (p *findNodeProtocolImpl) handleIncomingResponse(msg IncomingMessage) {
 	// update routing table with newly found nodes
 	nodes := node.FromNodeInfos(data.NodeInfos)
 	for _, n := range nodes {
-		log.Info("Node response: %s, %s", n.Id(), n.Ip())
+		log.Info("Node response: %s, %s", n.ID(), n.IP())
 		p.swarm.getRoutingTable().Update(n)
 	}
 
@@ -201,7 +204,7 @@ func (p *findNodeProtocolImpl) handleIncomingResponse(msg IncomingMessage) {
 
 // send a response callback to client and remove callback registration
 func (p *findNodeProtocolImpl) sendResponseCallback(resp FindNodeResp) {
-	key := hex.EncodeToString(resp.reqId)
+	key := hex.EncodeToString(resp.reqID)
 	callback := p.callbacks[key]
 	if callback == nil {
 		return
@@ -224,11 +227,11 @@ func (p *findNodeProtocolImpl) processEvents() {
 			go p.handleIncomingResponse(r)
 
 		case c := <-p.callbacksRegReq: // register a new callback
-			p.callbacks[hex.EncodeToString(c.reqId)] = c.callback
+			p.callbacks[hex.EncodeToString(c.reqID)] = c.callback
 
 		case r := <-p.sendErrors:
 			// failed to send a message - send a callback to all clients
-			resp := FindNodeResp{nil, r.err, r.ReqId}
+			resp := FindNodeResp{nil, r.err, r.ReqID}
 			p.sendResponseCallback(resp)
 		}
 	}

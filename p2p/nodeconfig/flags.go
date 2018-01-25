@@ -4,6 +4,7 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
+// Node flags
 var (
 	KSecurityFlag = cli.UintFlag{
 		Name:  "k",
@@ -13,11 +14,11 @@ var (
 		Destination: &ConfigValues.SecurityParam,
 	}
 
-	LocalTcpPortFlag = cli.UintFlag{
+	LocalTCPPortFlag = cli.UintFlag{
 		Name:        "tcp-port, p",
 		Usage:       "tcp port to listen on",
-		Value:       ConfigValues.TcpPort,
-		Destination: &ConfigValues.TcpPort,
+		Value:       ConfigValues.TCPPort,
+		Destination: &ConfigValues.TCPPort,
 	}
 
 	NetworkDialTimeout = cli.DurationFlag{
@@ -34,10 +35,10 @@ var (
 		Destination: &ConfigValues.ConnKeepAlive,
 	}
 
-	NodeIdFlag = cli.StringFlag{
+	NodeIDFlag = cli.StringFlag{
 		Name:        "nodeId, n",
 		Usage:       "Load node data by id (pub key) from local store",
-		Value:       ConfigValues.NodeId,
-		Destination: &ConfigValues.NodeId,
+		Value:       ConfigValues.NodeID,
+		Destination: &ConfigValues.NodeID,
 	}
 )

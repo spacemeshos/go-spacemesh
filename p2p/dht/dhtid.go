@@ -10,25 +10,29 @@ import (
 	"sort"
 )
 
-// A dht-compatible ID using the XOR keyspace
+// ID is a dht-compatible ID using the XOR keyspace.
 type ID []byte
 
+// Pretty returns a readable string of the ID.
 func (id ID) Pretty() string {
 	v := hex.EncodeToString(id)
 	return fmt.Sprintf("DhtId: %s", v[:8])
 }
 
-func NewIdFromNodeKey(key []byte) ID {
+// NewIDFromNodeKey creates a new dht id from provided binary data.
+func NewIDFromNodeKey(key []byte) ID {
 	hash := sha256.Sum256([]byte(key))
 	return hash[:]
 }
 
-func NewIdFromBase58String(s string) ID {
+// NewIDFromBase58String creates a new dht ID from provided base58 encoded binary data.
+func NewIDFromBase58String(s string) ID {
 	key := base58.Decode(s)
-	return NewIdFromNodeKey(key)
+	return NewIDFromNodeKey(key)
 }
 
-func NewIdFromHexString(s string) (ID, error) {
+// NewIDFromHexString creates a new dht ID from provided hex-encoded string.
+func NewIDFromHexString(s string) (ID, error) {
 	data, err := hex.DecodeString(s)
 	if err != nil {
 		return nil, err
@@ -36,11 +40,11 @@ func NewIdFromHexString(s string) (ID, error) {
 	return ID(data), nil
 }
 
-// Sort ids based on distance from id
+// SortByDistance ids based on xor-distance from ID.
 func (id ID) SortByDistance(ids []ID) []ID {
 	idsCopy := make([]ID, len(ids))
 	copy(idsCopy, ids)
-	bdtc := &byDistanceToCenter{
+	bdtc := &idsByDistanceToCenter{
 		Center: id,
 		Ids:    idsCopy,
 	}
@@ -48,15 +52,18 @@ func (id ID) SortByDistance(ids []ID) []ID {
 	return bdtc.Ids
 }
 
+// Equals returns true iff other equals the ID.
 func (id ID) Equals(other ID) bool {
 	return bytes.Equal(id, other)
 }
 
+// Distance returns the distance between ID and id1 encoded as a big int.
 func (id ID) Distance(id1 ID) *big.Int {
 	id2 := id.Xor(id1)
 	return big.NewInt(0).SetBytes(id2)
 }
 
+// Less returns true iff the binary number represented by ID is less than the number represented by o.
 func (id ID) Less(o ID) bool {
 	for i := 0; i < len(id); i++ {
 		if id[i] != o[i] {
@@ -66,16 +73,17 @@ func (id ID) Less(o ID) bool {
 	return false
 }
 
+// Xor returns a XOR of the ID with o.
 func (id ID) Xor(o ID) ID {
 	return XOR(id, o)
 }
 
-// Common shared prefix length in bits
+// CommonPrefixLen returns the common shared prefix length in BITS of the binary numbers represented by the ids.
 func (id ID) CommonPrefixLen(o ID) int {
 	return id.Xor(o).ZeroPrefixLen()
 }
 
-// Zero prefix length in bits
+// ZeroPrefixLen returns the zero prefix length of the binary number represnted by ID in bits.
 func (id ID) ZeroPrefixLen() int {
 	for i := 0; i < len(id); i++ {
 		for j := 0; j < 8; j++ {
@@ -87,13 +95,14 @@ func (id ID) ZeroPrefixLen() int {
 	return len(id) * 8
 }
 
-// Returns true if id1 is closer to id3 than id2
+// Closer returns true if id1 is closer to id3 than id2 using XOR arithmetic.
 func (id ID) Closer(id1 ID, id2 ID) bool {
 	dist1 := id.Xor(id1)
 	dist2 := id.Xor(id2)
 	return dist1.Less(dist2)
 }
 
+// XOR is a helper method used to return a byte slice which is the XOR of 2 provided byte slices.
 func XOR(a, b []byte) []byte {
 	c := make([]byte, len(a))
 	for i := 0; i < len(a); i++ {
@@ -102,20 +111,24 @@ func XOR(a, b []byte) []byte {
 	return c
 }
 
-type byDistanceToCenter struct {
+// Help struct containing a list of ids sorted by the XOR distance from Center ID.
+type idsByDistanceToCenter struct {
 	Center ID
 	Ids    []ID
 }
 
-func (s byDistanceToCenter) Len() int {
+// Len returns the number of ids contained in s.
+func (s idsByDistanceToCenter) Len() int {
 	return len(s.Ids)
 }
 
-func (s byDistanceToCenter) Swap(i, j int) {
+// Swap swaps 2 ids in the structure
+func (s idsByDistanceToCenter) Swap(i, j int) {
 	s.Ids[i], s.Ids[j] = s.Ids[j], s.Ids[i]
 }
 
-func (s byDistanceToCenter) Less(i, j int) bool {
+// Less returns true if the ID indexed by i is closer to the center than the ID indexed by j.
+func (s idsByDistanceToCenter) Less(i, j int) bool {
 	a := s.Center.Distance(s.Ids[i])
 	b := s.Center.Distance(s.Ids[j])
 	return a.Cmp(b) == -1

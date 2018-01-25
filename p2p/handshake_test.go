@@ -49,7 +49,7 @@ func TestHandshakeCoreData(t *testing.T) {
 	assert.NotNil(t, session, "expected session")
 	assert.NotNil(t, data, "expected session")
 
-	log.Info("Node 1 session data: Id:%s, AES-KEY:%s", hex.EncodeToString(session.Id()), hex.EncodeToString(session.KeyE()))
+	log.Info("Node 1 session data: Id:%s, AES-KEY:%s", hex.EncodeToString(session.ID()), hex.EncodeToString(session.KeyE()))
 
 	assert.False(t, session.IsAuthenticated(), "Expected session to be not authenticated yet")
 
@@ -61,9 +61,9 @@ func TestHandshakeCoreData(t *testing.T) {
 	assert.NotNil(t, session1, "expected session")
 	assert.NotNil(t, resp, "expected resp data")
 
-	log.Info("Node 2 session data: Id:%s, AES-KEY:%s", hex.EncodeToString(session1.Id()), hex.EncodeToString(session1.KeyE()))
+	log.Info("Node 2 session data: Id:%s, AES-KEY:%s", hex.EncodeToString(session1.ID()), hex.EncodeToString(session1.KeyE()))
 
-	assert.Equal(t, string(session.Id()), string(session1.Id()), "expected agreed Id")
+	assert.Equal(t, string(session.ID()), string(session1.ID()), "expected agreed Id")
 	assert.Equal(t, string(session.KeyE()), string(session1.KeyE()), "expected same shared AES enc key")
 	assert.Equal(t, string(session.KeyM()), string(session1.KeyM()), "expected same shared AES mac key")
 	assert.Equal(t, string(session.PubKey()), string(session1.PubKey()), "expected same shared secret")
@@ -114,7 +114,7 @@ func TestHandshakeProtocol(t *testing.T) {
 	assert.NotNil(t, session, "expected session")
 	assert.NotNil(t, data, "expected session")
 
-	log.Info("Node 1 session data: Id:%s, AES-KEY:%s", hex.EncodeToString(session.Id()), hex.EncodeToString(session.KeyE()))
+	log.Info("Node 1 session data: Id:%s, AES-KEY:%s", hex.EncodeToString(session.ID()), hex.EncodeToString(session.KeyE()))
 
 	assert.False(t, session.IsAuthenticated(), "expected session to be not authenticated yet")
 
@@ -146,9 +146,9 @@ func TestHandshakeProtocol(t *testing.T) {
 	assert.NotNil(t, session1, "expected session")
 	assert.NotNil(t, resp, "expected resp data")
 
-	log.Info("Node 2 session data: Id:%s, AES-KEY:%s", hex.EncodeToString(session1.Id()), hex.EncodeToString(session1.KeyE()))
+	log.Info("Node 2 session data: Id:%s, AES-KEY:%s", hex.EncodeToString(session1.ID()), hex.EncodeToString(session1.KeyE()))
 
-	assert.Equal(t, string(session.Id()), string(session1.Id()), "expected agreed Id")
+	assert.Equal(t, string(session.ID()), string(session1.ID()), "expected agreed Id")
 	assert.Equal(t, string(session.KeyE()), string(session1.KeyE()), "expected same shared AES enc key")
 	assert.Equal(t, string(session.KeyM()), string(session1.KeyM()), "expected same shared AES mac key")
 	assert.Equal(t, string(session.PubKey()), string(session1.PubKey()), "expected same shared secret")

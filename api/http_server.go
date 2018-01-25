@@ -13,28 +13,28 @@ import (
 	gw "github.com/spacemeshos/go-spacemesh/api/pb"
 )
 
-// A json http server providing the Spacemesh API.
-// Implemented as a grpc gateway.
-// See https://github.com/grpc-ecosystem/grpc-gateway
-
-type JsonHttpServer struct {
+// JSONHTTPServer is a JSON http server providing the Spacemesh API.
+// It is implemented using a grpc-gateway. See https://github.com/grpc-ecosystem/grpc-gateway .
+type JSONHTTPServer struct {
 	Port   uint
 	server *http.Server
 	ctx    context.Context
 	stop   chan bool
 }
 
-func NewJsonHttpServer() *JsonHttpServer {
-	return &JsonHttpServer{Port: config.ConfigValues.JsonServerPort, stop: make(chan bool)}
+// NewJSONHTTPServer creates a new json http server.
+func NewJSONHTTPServer() *JSONHTTPServer {
+	return &JSONHTTPServer{Port: config.ConfigValues.JSONServerPort, stop: make(chan bool)}
 }
 
-// Send a stop signal to the listener
-func (s JsonHttpServer) StopService() {
+// StopService stops the server.
+func (s JSONHTTPServer) StopService() {
+	log.Info("Stopping json-http service...")
 	s.stop <- true
 }
 
-// Listens on gracefully stopping the server in the same routine
-func (s JsonHttpServer) listenStop() {
+// Listens on gracefully stopping the server in the same routine.
+func (s JSONHTTPServer) listenStop() {
 	<-s.stop
 	log.Info("Shutting down json API server...")
 	if err := s.server.Shutdown(s.ctx); err != nil {
@@ -42,12 +42,12 @@ func (s JsonHttpServer) listenStop() {
 	}
 }
 
-// Start the json http API server and listen for status (started, stopped)
-func (s JsonHttpServer) StartService(status chan bool) {
+// StartService starts the json api server and listens for status (started, stopped).
+func (s JSONHTTPServer) StartService(status chan bool) {
 	go s.startInternal(status)
 }
 
-func (s JsonHttpServer) startInternal(status chan bool) {
+func (s JSONHTTPServer) startInternal(status chan bool) {
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()

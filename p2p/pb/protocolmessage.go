@@ -6,6 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/crypto"
 )
 
+// AuthenticateAuthor authenticates message author and returns an error if auth fails and nil otherwise.
 func (msg *ProtocolMessage) AuthenticateAuthor() error {
 
 	authPubKey, err := crypto.NewPublicKey(msg.GetMetadata().AuthPubKey)

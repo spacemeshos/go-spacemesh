@@ -6,6 +6,7 @@ import (
 	"sort"
 )
 
+// PeerDistance defines a distance from a node expressed as a dht id.
 type PeerDistance struct {
 	Node     RemoteNodeData
 	Distance dht.ID
@@ -20,24 +21,26 @@ func (p PeerSorter) Less(a, b int) bool {
 	return p[a].Distance.Less(p[b].Distance)
 }
 
+// CopyPeersFromList copies peers from the list and returns a PeerSorter for the list
 func CopyPeersFromList(target dht.ID, dest PeerSorter, src *list.List) PeerSorter {
 	for e := src.Front(); e != nil; e = e.Next() {
 		p := e.Value.(RemoteNodeData)
 		pd := PeerDistance{
 			Node:     p,
-			Distance: p.DhtId().Xor(target),
+			Distance: p.DhtID().Xor(target),
 		}
 		dest = append(dest, &pd)
 	}
 	return dest
 }
 
+// SortClosestPeers sorts peers based on distance from target.
 func SortClosestPeers(peers []RemoteNodeData, target dht.ID) []RemoteNodeData {
 	var psarr PeerSorter
 	for _, p := range peers {
 		pd := &PeerDistance{
 			Node:     p,
-			Distance: p.DhtId().Xor(target),
+			Distance: p.DhtID().Xor(target),
 		}
 		psarr = append(psarr, pd)
 	}

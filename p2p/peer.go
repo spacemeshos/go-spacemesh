@@ -7,15 +7,16 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 )
 
-// A network peer known to the local node. At minimum local node knows its id (public key) and tcp address.
+// Peer is a remote network node.
+// At minimum local node knows its id (public key) and announced tcp address/port.
 // Peers are maintained by the swarm and are not visible to higher-level types on the network stack
-// All Peer methods are NOT thread-safe - they are designed to be used only from a singleton swarm object
+// All Peer methods are NOT thread-safe - they are designed to be used only from a singleton Swarm type
 // Peer handles swarm sessions and net connections with a remote node
 type Peer interface {
-	Id() []byte     // node id is public key bytes
+	ID() []byte     // node id is public key bytes
 	String() string // node public key string
 	Pretty() string
-	TcpAddress() string // tcp address advertised by node e.g. 127.0.0.1:3058
+	TCPAddress() string // tcp address advertised by node e.g. 127.0.0.1:3058
 	PublicKey() crypto.PublicKey
 	GetConnections() map[string]net.Connection
 
@@ -41,7 +42,7 @@ type peerImpl struct {
 	sessions    map[string]NetworkSession
 }
 
-// Create a new remote node using provided id and tcp address
+// NewRemoteNode creates a new remote node using provided id and tcp address.
 func NewRemoteNode(id string, tcpAddress string) (Peer, error) {
 
 	key, err := crypto.NewPublicKeyFromString(id)
@@ -70,7 +71,7 @@ func (n *peerImpl) GetAuthenticatedSession() NetworkSession {
 }
 
 func (n *peerImpl) GetRemoteNodeData() node.RemoteNodeData {
-	return node.NewRemoteNodeData(n.String(), n.TcpAddress())
+	return node.NewRemoteNodeData(n.String(), n.TCPAddress())
 }
 
 func (n *peerImpl) GetActiveConnection() net.Connection {
@@ -101,7 +102,7 @@ func (n *peerImpl) String() string {
 	return n.publicKey.String()
 }
 
-func (n *peerImpl) Id() []byte {
+func (n *peerImpl) ID() []byte {
 	return n.publicKey.Bytes()
 }
 
@@ -113,6 +114,6 @@ func (n *peerImpl) PublicKey() crypto.PublicKey {
 	return n.publicKey
 }
 
-func (n *peerImpl) TcpAddress() string {
+func (n *peerImpl) TCPAddress() string {
 	return n.tcpAddress
 }

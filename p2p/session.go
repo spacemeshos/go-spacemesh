@@ -10,13 +10,13 @@ import (
 	"time"
 )
 
-// An authenticated network session between 2 peers
-// Sessions may be used between 'connections' until they expire
-// Session provides the encryptor/decryptor for all messages exchanged between 2 peers
+// NetworkSession is an authenticated network session between 2 peers.
+// Sessions may be used between 'connections' until they expire.
+// Session provides the encryptor/decryptor for all messages exchanged between 2 peers.
 // enc/dec is using an ephemeral sym key exchanged securely between the peers via the handshake protocol
 // The handshake protocol goal is to create an authenticated network session.
 type NetworkSession interface {
-	Id() []byte         // Unique session id
+	ID() []byte         // Unique session id
 	String() string     // globally unique session id for p2p debugging and key store purposes
 	KeyE() []byte       // session shared sym key for enc - 32 bytes
 	KeyM() []byte       // session shared sym key for mac - 32 bytes
@@ -25,8 +25,8 @@ type NetworkSession interface {
 
 	// TODO: add support for idle session expiration
 
-	LocalNodeId() string  // string encoded session local node id
-	RemoteNodeId() string // string encoded session remote node id
+	LocalNodeID() string  // string encoded session local node id
+	RemoteNodeID() string // string encoded session remote node id
 
 	IsAuthenticated() bool
 	SetAuthenticated(val bool)
@@ -35,6 +35,7 @@ type NetworkSession interface {
 	Encrypt(in []byte) ([]byte, error) // encrypt data using session enc key
 }
 
+// NetworkSessionImpl implements NetworkSession.
 type NetworkSessionImpl struct {
 	id            []byte
 	keyE          []byte
@@ -43,53 +44,64 @@ type NetworkSessionImpl struct {
 	created       time.Time
 	authenticated bool
 
-	localNodeId  string
-	remoteNodeId string
+	localNodeID  string
+	remoteNodeID string
 
 	blockEncrypter cipher.BlockMode
 	blockDecrypter cipher.BlockMode
 }
 
-func (n *NetworkSessionImpl) LocalNodeId() string {
-	return n.localNodeId
+//LocalNodeID returns the session's local node id.
+func (n *NetworkSessionImpl) LocalNodeID() string {
+	return n.localNodeID
 }
 
-func (n *NetworkSessionImpl) RemoteNodeId() string {
-	return n.remoteNodeId
+//RemoteNodeID returns the session's remote node id.
+func (n *NetworkSessionImpl) RemoteNodeID() string {
+	return n.remoteNodeID
 }
 
+// String returns the session's identifier string.
 func (n *NetworkSessionImpl) String() string {
 	return hex.EncodeToString(n.id)
 }
 
-func (n *NetworkSessionImpl) Id() []byte {
+// ID returns the session's unique id
+func (n *NetworkSessionImpl) ID() []byte {
 	return n.id
 }
 
+// KeyE returns the sessions sym encryption key.
 func (n *NetworkSessionImpl) KeyE() []byte {
 	return n.keyE
 }
 
+// KeyM returns the session's MAC encryption key.
 func (n *NetworkSessionImpl) KeyM() []byte {
 	return n.keyM
 }
 
+// PubKey returns the session's public key.
 func (n *NetworkSessionImpl) PubKey() []byte {
 	return n.pubKey
 }
 
+// IsAuthenticated returns true iff the session is authenticated.
 func (n *NetworkSessionImpl) IsAuthenticated() bool {
 	return n.authenticated
 }
 
+// SetAuthenticated updates the session's authentication state.
 func (n *NetworkSessionImpl) SetAuthenticated(val bool) {
 	n.authenticated = val
 }
 
+// Created returns the session creation time.
 func (n *NetworkSessionImpl) Created() time.Time {
 	return n.created
 }
 
+// Encrypt encrypts in binary data with the session's sym enc key.
 func (n *NetworkSessionImpl) Encrypt(in []byte) ([]byte, error) {
 	l := len(in)
 	if l == 0 {
@@ -101,6 +113,7 @@ func (n *NetworkSessionImpl) Encrypt(in []byte) ([]byte, error) {
 	return out, nil
 }
 
+// Decrypt decrypts in binary data that was encrypted with the session's sym enc key.
 func (n *NetworkSessionImpl) Decrypt(in []byte) ([]byte, error) {
 	l := len(in)
 	if l == 0 {
@@ -116,7 +129,8 @@ func (n *NetworkSessionImpl) Decrypt(in []byte) ([]byte, error) {
 	return clearText, nil
 }
 
-func NewNetworkSession(id, keyE, keyM, pubKey []byte, localNodeId, remoteNodeId string) (NetworkSession, error) {
+// NewNetworkSession creates a new network session based on provided data
+func NewNetworkSession(id, keyE, keyM, pubKey []byte, localNodeID, remoteNodeID string) (NetworkSession, error) {
 	s := &NetworkSessionImpl{
 		id:            id,
 		keyE:          keyE,
@@ -124,8 +138,8 @@ func NewNetworkSession(id, keyE, keyM, pubKey []byte, localNodeId, remoteNodeId 
 		pubKey:        pubKey,
 		created:       time.Now(),
 		authenticated: false,
-		localNodeId:   localNodeId,
-		remoteNodeId:  remoteNodeId,
+		localNodeID:   localNodeID,
+		remoteNodeID:  remoteNodeID,
 	}
 
 	// create and store block enc/dec

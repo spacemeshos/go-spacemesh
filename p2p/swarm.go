@@ -52,37 +52,45 @@ type Swarm interface {
 	getFindNodeProtocol() FindNodeProtocol
 }
 
+// SendMessageReq specifies data required for sending a p2p message to a remote peer.
 type SendMessageReq struct {
-	PeerId   string         // base58 message destination peer id
-	ReqId    []byte         // unique request id
+	PeerID   string         // base58 message destination peer id
+	ReqID    []byte         // unique request id
 	Payload  []byte         // this should be a marshaled protocol msg e.g. PingReqData
 	Callback chan SendError // optional callback to receive send errors or timeout
 }
 
+// SendError specifies message sending error data.
 type SendError struct {
-	ReqId []byte // unique request id
+	ReqID []byte // unique request id
 	err   error  // error - nil if message was sent
 }
 
+// NodeResp defines node response data
 type NodeResp struct {
-	peerId string
+	peerID string
 	err    error
 }
 
+// NodeEvent specifies node state data
 type NodeEvent struct {
-	PeerId string
+	PeerID string
 	State  NodeState
 }
 
+// NodeEventCallback is a channel of NodeEvents
 type NodeEventCallback chan NodeEvent
+
+// NodeState specifies the node's connectivity state.
 type NodeState int32
 
+// NodeState
 const (
-	UNKNOWN NodeState = iota
-	REGISTERED
-	CONNECTING
-	CONNECTED
-	HNADSHAKE_STARTED
-	SESSION_ESTABLISHED
-	DISCONNECTED
+	Unknown NodeState = iota
+	Registered
+	Connecting
+	Connected
+	HandshakeStarted
+	SessionEstablished
+	Dissconected
 )

@@ -8,12 +8,12 @@ import (
 	"testing"
 )
 
-// Generates a local test node without persisting data to local store and with default config value
+// GenerateTestNode generates a local test node without persisting data to local store and with default config value.
 func GenerateTestNode(t *testing.T) (LocalNode, Peer) {
 	return GenerateTestNodeWithConfig(t, nodeconfig.ConfigValues)
 }
 
-// Generates a local test node without persisting data to local store
+// GenerateTestNodeWithConfig creates a local test node without persisting data to local store.
 func GenerateTestNodeWithConfig(t *testing.T, config nodeconfig.Config) (LocalNode, Peer) {
 
 	port := crypto.GetRandomUInt32(10000) + 1000
@@ -32,7 +32,7 @@ func GenerateTestNodeWithConfig(t *testing.T, config nodeconfig.Config) (LocalNo
 	return localNode, remoteNode
 }
 
-// Generates a remote random node data for testing
+// GenerateRandomNodeData generates a remote random node data for testing.
 func GenerateRandomNodeData() node.RemoteNodeData {
 	port := crypto.GetRandomUInt32(1000) + 10000
 	address := fmt.Sprintf("0.0.0.0:%d", port)
@@ -40,7 +40,7 @@ func GenerateRandomNodeData() node.RemoteNodeData {
 	return node.NewRemoteNodeData(pub.String(), address)
 }
 
-// Generates remote nodes data for testing
+// GenerateRandomNodesData generates remote nodes data for testing.
 func GenerateRandomNodesData(n int) []node.RemoteNodeData {
 	res := make([]node.RemoteNodeData, n)
 	for i := 0; i < n; i++ {

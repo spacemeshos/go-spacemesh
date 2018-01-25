@@ -5,7 +5,7 @@ const (
 	e = 8     // bits - entry size
 )
 
-// A simple binary data table backed by a data file
+// Table is a simple binary data table backed by a data file in local store.
 type Table interface {
 	read(off int64, out []byte) error // read len(out) bytes at offset off from the table
 	seek(off int64) error
@@ -22,7 +22,7 @@ type tableImpl struct {
 	dataFile dataFile
 }
 
-// Creates a new post data table
+// NewTable creates a new post data table.
 // id: node id - base58 encoded key
 // dir: node data dir directory
 // mul: table size factor, e.g. 2 for x2 of min table size of S*E
