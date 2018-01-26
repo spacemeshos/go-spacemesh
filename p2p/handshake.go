@@ -304,13 +304,11 @@ func generateHandshakeRequestData(node LocalNode, remoteNode Peer) (*pb.Handshak
 	data.SessionId = iv
 	data.Iv = iv
 
-	// publish the tcp address that local node is listening on
-	// todo: this needs to be the public IP of the local node
-	// node will need to set up his public ip address manually on startup
-	// or we'll need to provide a service for nodes to obtain and update their public ip address (which is better)
-	// note that ISPs may rotate a node public IP address so it is best to periodically check for changes and restart
-	// the node in case of IP change
-	data.TcpAddress = node.TCPAddress()
+	// attempt to refresh the node's public ip address
+	node.RefreshPubTCPAddress()
+
+	// announce the pub ip address of the node - not the private one
+	data.TcpAddress = node.PubTCPAddress()
 
 	ephemeral, err := btcec.NewPrivateKey(btcec.S256())
 	if err != nil {
@@ -455,13 +453,17 @@ func processHandshakeRequest(node LocalNode, r Peer, req *pb.HandshakeData) (*pb
 	hm1.Write(iv)
 	hmac1 := hm1.Sum(nil)
 
+	// attempt to refresh the node's public ip address
+	node.RefreshPubTCPAddress()
+
+
 	resp := &pb.HandshakeData{
 		SessionId:  req.SessionId,
 		NodePubKey: node.PublicKey().InternalKey().SerializeUncompressed(),
 		PubKey:     req.PubKey,
 		Iv:         iv,
 		Hmac:       hmac1,
-		TcpAddress: node.TCPAddress(),
+		TcpAddress: node.PubTCPAddress(),
 		Protocol:   HandshakeResp,
 		Sign:       "",
 	}

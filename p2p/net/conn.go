@@ -160,19 +160,7 @@ func (c *connectionImpl) writeMessageToConnection(om OutgoingMessage) {
 
 }
 
-// Send a binary message to the connection remote endpoint
-// message - any binary data
-// Concurrency: Not go safe - designed to be used from a the event processing loop
-/*
-func (c *connectionImpl) write(message []byte) (int, error) {
-	ul := uint32(len(message))
-	err := binary.Write(c.conn, binary.BigEndian, &ul)
-	n, err := c.conn.Write(message)
-	return n + 4, err
-}*/
-
-// Close the connection (implements io.Closer)
-// go safe
+// Close closes the connection (implements io.Closer). It is go safe.
 func (c *connectionImpl) Close() error {
 	c.incomingMsgs.Close()
 	return nil

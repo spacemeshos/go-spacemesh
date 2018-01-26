@@ -17,7 +17,7 @@ import (
 func TestHandshakeCoreData(t *testing.T) {
 
 	// node 1
-	port := crypto.GetRandomUInt32(1000) + 10000
+	port := crypto.GetRandomUInt32(10000) + 1000
 	address := fmt.Sprintf("0.0.0.0:%d", port)
 
 	node1Local, err := NewNodeIdentity(address, nodeconfig.ConfigValues, false)
@@ -30,7 +30,7 @@ func TestHandshakeCoreData(t *testing.T) {
 	node1Remote, _ := NewRemoteNode(node1Local.String(), address)
 
 	// node 2
-	port1 := crypto.GetRandomUInt32(1000) + 10000
+	port1 := crypto.GetRandomUInt32(10000) + 1000
 	address1 := fmt.Sprintf("0.0.0.0:%d", port1)
 
 	node2Local, err := NewNodeIdentity(address1, nodeconfig.ConfigValues, false)
@@ -93,14 +93,14 @@ func TestHandshakeCoreData(t *testing.T) {
 func TestHandshakeProtocol(t *testing.T) {
 
 	// node 1
-	port := crypto.GetRandomUInt32(1000) + 10000
+	port := crypto.GetRandomUInt32(10000) + 1000
 	address := fmt.Sprintf("0.0.0.0:%d", port)
 
 	node1Local, _ := NewNodeIdentity(address, nodeconfig.ConfigValues, false)
 	node1Remote, _ := NewRemoteNode(node1Local.String(), address)
 
 	// node 2
-	port1 := crypto.GetRandomUInt32(1000) + 10000
+	port1 := crypto.GetRandomUInt32(10000) + 1000
 	address1 := fmt.Sprintf("0.0.0.0:%d", port1)
 
 	node2Local, _ := NewNodeIdentity(address1, nodeconfig.ConfigValues, false)
@@ -133,12 +133,13 @@ func TestHandshakeProtocol(t *testing.T) {
 
 	data1 := &pb.HandshakeData{}
 	err = proto.Unmarshal(wireFormat, data1)
+
+	log.Info("Handshake request from %s", data1.TcpAddress)
+
 	assert.NoErr(t, err, "failed to unmarshal wire formatted data to handshake data")
 	assert.Equal(t, HandshakeReq, data1.Protocol, "expected this message to be a handshake req")
 
 	// STEP 3: local node 2 handles req data and generates response
-
-	//handshakeProtocol2 := node2Local.GetSwarm().getHandshakeProtocol()
 
 	resp, session1, err := processHandshakeRequest(node2Local, node1Remote, data1)
 
@@ -176,6 +177,8 @@ func TestHandshakeProtocol(t *testing.T) {
 	assert.Equal(t, HandshakeResp, data2.Protocol, "expected this message to be a handshake req")
 
 	// STEP 5: Node 1 validates the data and sets its network session to authenticated
+
+	log.Info("Handshake response from from %s", data2.TcpAddress)
 
 	err = processHandshakeResponse(node1Local, node2Remote, session, data2)
 
