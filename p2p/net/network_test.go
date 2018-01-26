@@ -12,9 +12,9 @@ import (
 
 func TestReadWrite(t *testing.T) {
 
-	msg := []byte("hello world")
+	msg := []byte("hello spacemesh")
 	msgID := crypto.UUID()
-	port := crypto.GetRandomUInt32(1000) + 10000
+	port := crypto.GetRandomUInt32(10000) + 1000
 	address := fmt.Sprintf("0.0.0.0:%d", port)
 	done := make(chan bool, 1)
 
@@ -48,6 +48,9 @@ func TestReadWrite(t *testing.T) {
 
 			case c := <-n.GetClosingConnections():
 				log.Info("Connection closed. %v", c)
+
+			case <-time.After(time.Second * 30):
+				t.Fatalf("Test timed out")
 			}
 		}
 	}()
@@ -61,8 +64,6 @@ func TestReadWrite(t *testing.T) {
 	t1 := c.LastOpTime()
 
 	c.Send(msg, msgID)
-	//assert.Nil(t, err, "Failed to send message to server")
-	//assert.Equal(t, l, len(msg) + 4, "Expected message to be written to stream")
 	log.Info("Message sent.")
 
 	// todo: test callbacks for messages
@@ -83,5 +84,4 @@ func TestReadWrite(t *testing.T) {
 	assert.True(t, t2.Sub(t1) > 0, "invalid last op time")
 	err = c.Close()
 	assert.NoErr(t, err, "error closing connection")
-
 }

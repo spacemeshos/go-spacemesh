@@ -303,6 +303,13 @@ func generateHandshakeRequestData(node LocalNode, remoteNode Peer) (*pb.Handshak
 
 	data.SessionId = iv
 	data.Iv = iv
+
+	// publish the tcp address that local node is listening on
+	// todo: this needs to be the public IP of the local node
+	// node will need to set up his public ip address manually on startup
+	// or we'll need to provide a service for nodes to obtain and update their public ip address (which is better)
+	// note that ISPs may rotate a node public IP address so it is best to periodically check for changes and restart
+	// the node in case of IP change
 	data.TcpAddress = node.TCPAddress()
 
 	ephemeral, err := btcec.NewPrivateKey(btcec.S256())

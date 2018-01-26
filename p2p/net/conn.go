@@ -16,6 +16,7 @@ type Connection interface {
 	Send(message []byte, id []byte)
 	Close() error
 	LastOpTime() time.Time // last rw op time for this connection
+	RemoteAddr() net.Addr
 }
 
 // MessageSentEvent specifies a sent network message data.
@@ -105,6 +106,11 @@ func newConnection(conn net.Conn, n Net, s ConnectionSource) Connection {
 
 func (c *connectionImpl) ID() string {
 	return c.id
+}
+
+// RemoteAddr returns the remote network address.
+func (c *connectionImpl) RemoteAddr() net.Addr {
+	return c.conn.RemoteAddr()
 }
 
 func (c *connectionImpl) String() string {

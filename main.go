@@ -1,4 +1,5 @@
-//Main app entry point
+//go-spacemesh is a golang implementation of the Spacemesh node.
+//See - https://spacemesh.io
 package main
 
 import (

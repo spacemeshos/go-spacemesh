@@ -20,7 +20,7 @@ type LocalNode interface {
 	PublicKey() crypto.PublicKey
 
 	DhtID() dht.ID
-	TCPAddress() string
+	TCPAddress() string // ipv4 tcp address that the node is listing on
 
 	Sign(data proto.Message) ([]byte, error)
 	SignToString(data proto.Message) (string, error)
