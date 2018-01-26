@@ -1,6 +1,7 @@
 package p2p
 
 import (
+	"errors"
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -20,7 +21,10 @@ type LocalNode interface {
 	PublicKey() crypto.PublicKey
 
 	DhtID() dht.ID
-	TCPAddress() string
+	TCPAddress() string    // ipv4 tcp address that the node is listing on
+	PubTCPAddress() string // node's public ip address - advertised by this node
+
+	RefreshPubTCPAddress() bool // attempt to refresh the node's public ip address
 
 	Sign(data proto.Message) ([]byte, error)
 	SignToString(data proto.Message) (string, error)
@@ -110,6 +114,13 @@ func newLocalNodeWithKeys(pubKey crypto.PublicKey, privKey crypto.PrivateKey, tc
 		return nil, err
 	}
 
+	ok := n.RefreshPubTCPAddress()
+	if !ok {
+		return nil, errors.New("critical error - failed to obtain node public ip address. Check your Internet connection and try again")
+	}
+
+	log.Info("Node public ip address is %s . Please make sure that your home router or access point accepts connections on this port and forwards incoming connection requests to this ip address to this computer.", n.pubTCPAddress)
+
 	n.swarm = s
 	n.ping = NewPingProtocol(s)
 
@@ -125,7 +136,7 @@ func newLocalNodeWithKeys(pubKey crypto.PublicKey, privKey crypto.PrivateKey, tc
 	return n, nil
 }
 
-// Creates a new node from peristed NodeData
+// Creates a new node from persisted NodeData.
 func newNodeFromData(tcpAddress string, d *NodeData, config nodeconfig.Config, persist bool) (LocalNode, error) {
 
 	priv, err := crypto.NewPrivateKeyFromString(d.PrivKey)

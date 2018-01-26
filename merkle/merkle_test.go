@@ -55,6 +55,7 @@ func TestSimpleTreeOps(t *testing.T) {
 	// restore tree to a new instance based on root hash
 	rootHash := m.GetRootHash()
 	m1, err := NewTreeFromDb(rootHash, userDb, treeDb)
+	assert.NoErr(t, err, "failed to create tree from db")
 	defer m1.CloseDataStores() // tell m1 to close data stores when we are done w it
 
 	root = m1.GetRootNode()

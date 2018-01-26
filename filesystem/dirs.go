@@ -25,7 +25,7 @@ func PathExists(path string) bool {
 	if os.IsNotExist(err) {
 		return false
 	}
-	return err != nil
+	return err == nil
 }
 
 // GetSpacemeshDataDirectoryPath gets the full os-specific path to the spacemesh top-level data directory.

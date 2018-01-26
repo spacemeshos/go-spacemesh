@@ -22,7 +22,7 @@ message HandshakeData {
     bytes iv = 5; // 16 bytes - AES-256-CBC IV
     bytes pubKey = 6; // 65 bytes (uncompressed) ephemeral public key
     bytes hmac = 7; // HMAC-SHA-256 32 bytes
-    string tcpAddress = 8; // remote node tcp address and port e.g. x.x.x.x:2424
+    string tcpAddress = 8; // ipv4 tcp address and port e.g. x.x.x.x:2424 that the remote node is accepting connections on
     string sign = 9; // hex encoded string 32 bytes sign of all above data by node public key (verifies he has the priv key and he wrote the data
 }
 
