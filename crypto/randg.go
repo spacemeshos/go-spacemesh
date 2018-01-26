@@ -45,7 +45,7 @@ func GetRandomBytes(n int) ([]byte, error) {
 	return b, nil
 }
 
-// GetRandomUserPort returns a random port number in the range of [1024-49151)
+// GetRandomUserPort returns a random port number in the range of [1024-49151).
 func GetRandomUserPort() uint32 {
 	return GetRandomUInt32(48127) + 1024
 }
