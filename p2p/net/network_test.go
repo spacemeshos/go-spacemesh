@@ -14,7 +14,7 @@ func TestReadWrite(t *testing.T) {
 
 	msg := []byte("hello spacemesh")
 	msgID := crypto.UUID()
-	port := crypto.GetRandomUInt32(10000) + 1000
+	port := crypto.GetRandomUserPort()
 	address := fmt.Sprintf("0.0.0.0:%d", port)
 	done := make(chan bool, 1)
 
