@@ -101,16 +101,21 @@ func (n *localNodeImp) PubTCPAddress() string {
 	return n.pubTCPAddress
 }
 
+// RefreshPubTCPAddress attempts to refresh the node public ip address and returns true if it was able to do so.
 func (n *localNodeImp) RefreshPubTCPAddress() bool {
 
 	// Figure out node public ip address
-	addr, err := GetPublicIpAddress()
+	addr, err := GetPublicIPAddress()
 	if err != nil {
 		log.Error("failed to obtain public ip address")
 		return false
 	}
 
-	port := GetPort(n.tcpAddress)
+	port, err := GetPort(n.tcpAddress)
+	if err != nil {
+		log.Error("Invalid tcp ip address", err)
+		return false
+	}
 
 	n.pubTCPAddress = fmt.Sprintf("%s:%s", addr, port)
 	return true

@@ -2,14 +2,15 @@ package p2p
 
 import (
 	"fmt"
+	"github.com/syndtr/goleveldb/leveldb/errors"
 	"io/ioutil"
 	"net/http"
 	"strings"
 )
 
-// GetPublicIpAddrtess returns this host public ip address.
+// GetPublicIPAddress returns this host public ip address.
 // Method is implemented using the ipify.org service.
-func GetPublicIpAddress() (string, error) {
+func GetPublicIPAddress() (string, error) {
 
 	// todo: make this more robust by adding additional fallback services so
 	// if ipify.org can't bring down our whole network
@@ -23,12 +24,18 @@ func GetPublicIpAddress() (string, error) {
 	return fmt.Sprintf("%s", ip), err
 }
 
+// GetHostName returns the host name part of an ip address.
 func GetHostName(address string) string {
 	parts := strings.Split(address, ":")
 	return parts[0]
 }
 
-func GetPort(address string) string {
+// GetPort returns the port name part of an ip address which includes a port number part.
+func GetPort(address string) (string, error) {
 	parts := strings.Split(address, ":")
-	return parts[1]
+	if len(parts) < 2 {
+		return "", errors.New("missing port part in source address")
+	}
+
+	return parts[1], nil
 }
