@@ -456,7 +456,6 @@ func processHandshakeRequest(node LocalNode, r Peer, req *pb.HandshakeData) (*pb
 	// attempt to refresh the node's public ip address
 	node.RefreshPubTCPAddress()
 
-
 	resp := &pb.HandshakeData{
 		SessionId:  req.SessionId,
 		NodePubKey: node.PublicKey().InternalKey().SerializeUncompressed(),

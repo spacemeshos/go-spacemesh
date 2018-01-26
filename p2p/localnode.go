@@ -24,7 +24,7 @@ type LocalNode interface {
 	TCPAddress() string    // ipv4 tcp address that the node is listing on
 	PubTCPAddress() string // node's public ip address - advertised by this node
 
-	RefreshPubTCPAddress() bool	// attempt to refresh the node's public ip address
+	RefreshPubTCPAddress() bool // attempt to refresh the node's public ip address
 
 	Sign(data proto.Message) ([]byte, error)
 	SignToString(data proto.Message) (string, error)

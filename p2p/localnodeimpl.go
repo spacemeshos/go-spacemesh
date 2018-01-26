@@ -112,10 +112,9 @@ func (n *localNodeImp) RefreshPubTCPAddress() bool {
 
 	port := GetPort(n.tcpAddress)
 
-	n.pubTCPAddress = fmt.Sprintf("%s:%s",addr,port)
+	n.pubTCPAddress = fmt.Sprintf("%s:%s", addr, port)
 	return true
 }
-
 
 // PrivateKey returns this node's private key.
 func (n *localNodeImp) PrivateKey() crypto.PrivateKey {

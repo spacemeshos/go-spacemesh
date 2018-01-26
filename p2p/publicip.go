@@ -28,7 +28,6 @@ func GetHostName(address string) string {
 	return parts[0]
 }
 
-
 func GetPort(address string) string {
 	parts := strings.Split(address, ":")
 	return parts[1]
