@@ -119,7 +119,7 @@ func newLocalNodeWithKeys(pubKey crypto.PublicKey, privKey crypto.PrivateKey, tc
 		return nil, errors.New("Critical error - failed to obtain node public ip address. Check your Internet connection and try again.")
 	}
 
-	log.Info("Node public ip address is %s . Please make sure that your home router or access points accepts connections on this port and forwards incoming connection requests to this ip address to this computer.", n.pubTCPAddress)
+	log.Info("Node public ip address is %s . Please make sure that your home router or access point accepts connections on this port and forwards incoming connection requests to this ip address to this computer.", n.pubTCPAddress)
 
 	n.swarm = s
 	n.ping = NewPingProtocol(s)
