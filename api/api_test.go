@@ -25,8 +25,8 @@ func TestServersConfig(t *testing.T) {
 	grpcService := NewGrpcService()
 	jsonService := NewJSONHTTPServer()
 
-	assert.Equal(t, grpcService.Port, config.ConfigValues.GrpcServerPort, "Expected same port")
-	assert.Equal(t, jsonService.Port, config.ConfigValues.JSONServerPort, "Expected same port")
+	assert.Equal(t, grpcService.Port, uint(config.ConfigValues.GrpcServerPort), "Expected same port")
+	assert.Equal(t, jsonService.Port, uint(config.ConfigValues.JSONServerPort), "Expected same port")
 }
 
 func TestGrpcApi(t *testing.T) {
