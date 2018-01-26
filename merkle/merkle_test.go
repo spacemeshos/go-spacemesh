@@ -5,11 +5,15 @@ import (
 	"encoding/hex"
 	"github.com/spacemeshos/go-spacemesh/assert"
 	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/filesystem"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"testing"
 )
 
 func TestEmptyTreeCreation(t *testing.T) {
+
+	err := filesystem.DeleteAllTempFiles()
+	assert.NoErr(t, err, "failed to clean temp folder")
 
 	userDb, treeDb := getDbPaths(t)
 	m, err := NewEmptyTree(userDb, treeDb)
@@ -27,6 +31,9 @@ func TestEmptyTreeCreation(t *testing.T) {
 
 // Test a simple 1-node merkle tree
 func TestSimpleTreeOps(t *testing.T) {
+
+	err := filesystem.DeleteAllTempFiles()
+	assert.NoErr(t, err, "failed to clean temp folder")
 
 	userDb, treeDb := getDbPaths(t)
 	m, err := NewEmptyTree(userDb, treeDb)
@@ -73,6 +80,9 @@ func TestSimpleTreeOps(t *testing.T) {
 
 // Test a simple 1-node merkle tree
 func TestComplexTreeOps(t *testing.T) {
+
+	err := filesystem.DeleteAllTempFiles()
+	assert.NoErr(t, err, "failed to clean temp folder")
 
 	k1, err := hex.DecodeString("123456")
 	assert.NoErr(t, err, "invalid hex str")

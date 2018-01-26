@@ -46,6 +46,23 @@ func GetSpacemeshTempDirectoryPath() (string, error) {
 	return GetFullDirectoryPath(pathName)
 }
 
+// DeleteAllTempFiles deletes all temp files from the temp dir and creates a new temp dir
+func DeleteAllTempFiles() error {
+	tempDir, err := GetSpacemeshTempDirectoryPath()
+	if err != nil {
+		return err
+	}
+
+	err = os.RemoveAll(tempDir)
+	if err != nil {
+		return err
+	}
+
+	// create temp dir again
+	_, err = GetSpacemeshTempDirectoryPath()
+	return err
+}
+
 // EnsureSpacemeshDataDirectories return the os-specific path to the Spacemesh data directory.
 // It creates the directory and all predefined sub directories on demand.
 func EnsureSpacemeshDataDirectories() (string, error) {
