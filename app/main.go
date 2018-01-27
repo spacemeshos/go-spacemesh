@@ -105,9 +105,6 @@ func newSpacemeshApp() *SpacemeshApp {
 	app.Action = sma.startSpacemeshNode
 	app.After = sma.cleanup
 
-	// must be done here and not in app.before() so we won't lose any log entries
-	sma.setupLogging()
-
 	return sma
 }
 
@@ -151,20 +148,23 @@ func (app *SpacemeshApp) before(ctx *cli.Context) error {
 
 	if configPath := filesystem.GetCanonicalPath(config.ConfigValues.ConfigFilePath); len(configPath) > 1 {
 		if filesystem.PathExists(configPath) {
-			log.Info("Loading config file (path): %v", configPath)
+			log.Info("Loading config file (path):", configPath)
 			err := altsrc.InitInputSourceWithContext(ctx.App.Flags, func(context *cli.Context) (altsrc.InputSourceContext, error) {
 				toml, err := altsrc.NewTomlSourceFromFile(configPath)
 				return toml, err
 			})(ctx)
 			if err != nil {
-				log.Warning("Config file had an error: %v", err)
+				log.Error("Config file had an error:", err)
+				return err
 			}
 		} else {
-			log.Warning("Coun'nt find config file %v", configPath)
+			log.Warning("Could not find config file using default values path:", configPath)
 		}
 	} else {
 		log.Warning("No config file defined using default config")
 	}
+
+	app.setupLogging()
 
 	// todo: add misc app setup here (metrics, debug, etc....)
 
@@ -199,7 +199,7 @@ func (app *SpacemeshApp) cleanup(ctx *cli.Context) error {
 }
 
 func (app *SpacemeshApp) startSpacemeshNode(ctx *cli.Context) error {
-
+	log.Error("Config :################### %v", nodeparams.SwarmConfigValues)
 	log.Info("Starting local node...")
 	port := *nodeparams.LocalTCPPortFlag.Destination
 	address := fmt.Sprintf("0.0.0.0:%d", port)

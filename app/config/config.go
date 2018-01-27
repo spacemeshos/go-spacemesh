@@ -4,10 +4,9 @@ package config
 
 // ConfigValues defines default values for app config params.
 var ConfigValues = Config{
-	AppIntParam:    20,
-	AppBoolParam:   true,
-	ConfigFilePath: "$GOPATH/src/github.com/spacemeshos/go-spacemesh/config.toml",
-	DataFilePath:   "~/.spacemesh",
+	AppIntParam:  20,
+	AppBoolParam: true,
+	DataFilePath: "~/.spacemesh",
 }
 
 func init() {

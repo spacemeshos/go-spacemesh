@@ -11,7 +11,6 @@ var (
 		Name:        "json-server",
 		Usage:       "StartService the json http server. Note that starting the Json server also starts the grpc server.",
 		Destination: &ConfigValues.StartJSONServer,
-		EnvVar:      "JSON_API_SERVER",
 	})
 
 	// JSONServerPortFlag determines the json api server local listening port
@@ -20,7 +19,6 @@ var (
 		Usage:       "Json api server port",
 		Value:       ConfigValues.JSONServerPort,
 		Destination: &ConfigValues.JSONServerPort,
-		EnvVar:      "JSON_API_PORT",
 	})
 
 	// StartGrpcAPIServerFlag determines if the grpc server should be started
@@ -28,7 +26,6 @@ var (
 		Name:        "grpc-server",
 		Usage:       "StartService the grpc server",
 		Destination: &ConfigValues.StartGrpcServer,
-		EnvVar:      "GRPC_API_SERVER",
 	})
 
 	// GrpcServerPortFlag determines the grpc server local listening port
@@ -37,6 +34,5 @@ var (
 		Usage:       "Grpc api server port",
 		Value:       ConfigValues.GrpcServerPort,
 		Destination: &ConfigValues.GrpcServerPort,
-		EnvVar:      "GRPC_API_PORT",
 	})
 )

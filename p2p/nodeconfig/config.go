@@ -40,7 +40,7 @@ type duration struct {
 func (d *duration) Duration() (duration time.Duration) {
 	dur, err := time.ParseDuration(d.string)
 	if err != nil {
-		log.Error("Could'nt parse duration string returning 0, error: %v", err)
+		log.Error("Could not parse duration string returning 0, error:", err)
 	}
 	return dur
 }

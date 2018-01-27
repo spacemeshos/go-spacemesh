@@ -12,7 +12,6 @@ var (
 		Usage:       "Load configuration from `FILE`",
 		Value:       ConfigValues.ConfigFilePath,
 		Destination: &ConfigValues.ConfigFilePath,
-		EnvVar:      "CONFIG_FILE",
 	}
 
 	//DataFolderPathFlag specifies app persisted data root directory.
@@ -21,6 +20,5 @@ var (
 		Usage:       "Set root data folder`",
 		Value:       ConfigValues.DataFilePath,
 		Destination: &ConfigValues.DataFilePath,
-		EnvVar:      "DATA_FOLDER",
 	})
 )
