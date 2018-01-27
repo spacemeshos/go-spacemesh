@@ -16,10 +16,7 @@
 </p>
 
 ## go-spacemesh
-Thanks for your interest in this open source project.
-This is the go implementation of the [Spacemesh](https://spacemesh.io) p2p node.
-Spacemesh is a decentralized blockchain computer using a new race-free consensus protocol that doesn't involve energy-wasteful `proof of work`.
-Spacemesh is designed to build a secure decentralized network formed by a large number of desktop PCs at home.
+Thanks for your interest in this open source project. This is the go implementation of the [Spacemesh](https://spacemesh.io) p2p node. Spacemesh is a decentralized blockchain computer using a new race-free consensus protocol that doesn't involve energy-wasteful `proof of work`. We aim to create a secure and scalable decentralized computer formed by a large number of desktop PCs at home. We are designing and coding a modern blockchain platform from the ground up for scale, security. and speed based on the learnings, achievements and mistakes of previous projects in this space. 
 
 To learn more about Spacemesh head over to our [wiki](https://github.com/spacemeshos/go-spacemesh/wiki).
 
