@@ -71,7 +71,7 @@ func (n *netImpl) GetMessageSentCallback() chan MessageSentEvent {
 	return n.messageSentEvents
 }
 
-// Implement Network interface public channel accessors
+// GetNewConnections Implement Network interface public channel accessors.
 func (n *netImpl) GetNewConnections() chan Connection {
 	return n.newConnections
 }
@@ -145,7 +145,7 @@ func (n *netImpl) acceptTCP() {
 			return
 		}
 
-		log.Info("Got new connection...")
+		log.Info("Got new connection... Remote Address: %s", netConn.RemoteAddr())
 		c := newConnection(netConn, n, Remote)
 		n.newConnections <- c
 	}

@@ -2,8 +2,10 @@ package p2p
 
 import (
 	"encoding/hex"
+	"fmt"
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
@@ -14,10 +16,11 @@ import (
 
 // LocalNode implementation
 type localNodeImp struct {
-	pubKey     crypto.PublicKey
-	privKey    crypto.PrivateKey
-	tcpAddress string
-	dhtID      dht.ID
+	pubKey        crypto.PublicKey
+	privKey       crypto.PrivateKey
+	tcpAddress    string
+	pubTCPAddress string
+	dhtID         dht.ID
 
 	logger *logging.Logger
 	config nodeconfig.Config
@@ -88,9 +91,34 @@ func (n *localNodeImp) Pretty() string {
 	return n.pubKey.Pretty()
 }
 
-// TCPAddress returns this TCP address that this node is listening on for incoming network connections.
+// TCPAddress returns the TCP address that this node is listening on for incoming network connections.
 func (n *localNodeImp) TCPAddress() string {
 	return n.tcpAddress
+}
+
+// PubTCPAddress returns the node's public tcp address.
+func (n *localNodeImp) PubTCPAddress() string {
+	return n.pubTCPAddress
+}
+
+// RefreshPubTCPAddress attempts to refresh the node public ip address and returns true if it was able to do so.
+func (n *localNodeImp) RefreshPubTCPAddress() bool {
+
+	// Figure out node public ip address
+	addr, err := GetPublicIPAddress()
+	if err != nil {
+		log.Error("failed to obtain public ip address")
+		return false
+	}
+
+	port, err := GetPort(n.tcpAddress)
+	if err != nil {
+		log.Error("Invalid tcp ip address", err)
+		return false
+	}
+
+	n.pubTCPAddress = fmt.Sprintf("%s:%s", addr, port)
+	return true
 }
 
 // PrivateKey returns this node's private key.
