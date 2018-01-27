@@ -86,34 +86,42 @@ func (n *peerImpl) GetActiveConnection() net.Connection {
 	return nil
 }
 
+// GetConnections gets all connections with this peer.
 func (n *peerImpl) GetConnections() map[string]net.Connection {
 	return n.connections
 }
 
+// DeleteAllConnections delete all connections with this peer.
 func (n *peerImpl) DeleteAllConnections() {
 	n.connections = make(map[string]net.Connection)
 }
 
+// GetSession returns all the network sessions with this peer.
 func (n *peerImpl) GetSessions() map[string]NetworkSession {
 	return n.sessions
 }
 
+// String returns a string identifier for this peer.
 func (n *peerImpl) String() string {
 	return n.publicKey.String()
 }
 
+// ID returns the binary identifier for this peer.
 func (n *peerImpl) ID() []byte {
 	return n.publicKey.Bytes()
 }
 
+// Pretty returns a readable identifier for this peer.
 func (n *peerImpl) Pretty() string {
 	return n.publicKey.Pretty()
 }
 
+// PublicKey returns the peer's public key.
 func (n *peerImpl) PublicKey() crypto.PublicKey {
 	return n.publicKey
 }
 
+// TCPAddress returns the public TCP address of this peer.
 func (n *peerImpl) TCPAddress() string {
 	return n.tcpAddress
 }

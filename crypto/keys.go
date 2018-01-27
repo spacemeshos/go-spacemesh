@@ -49,7 +49,7 @@ type privateKeyImpl struct {
 	k *btcec.PrivateKey
 }
 
-// GenerateKeyPair generats a private and public key pair.
+// GenerateKeyPair generates a private and public key pair.
 func GenerateKeyPair() (PrivateKey, PublicKey, error) {
 	privKey, err := btcec.NewPrivateKey(btcec.S256())
 	if err != nil {

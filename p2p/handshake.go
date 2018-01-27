@@ -58,7 +58,7 @@ func (n *handshakeDataImp) Peer() Peer {
 	return n.peer
 }
 
-// Session returns the network session betwen the local and the remote nodes.
+// Session returns the network session between the local and the remote nodes.
 func (n *handshakeDataImp) Session() NetworkSession {
 	return n.session
 }
@@ -303,7 +303,12 @@ func generateHandshakeRequestData(node LocalNode, remoteNode Peer) (*pb.Handshak
 
 	data.SessionId = iv
 	data.Iv = iv
-	data.TcpAddress = node.TCPAddress()
+
+	// attempt to refresh the node's public ip address
+	node.RefreshPubTCPAddress()
+
+	// announce the pub ip address of the node - not the private one
+	data.TcpAddress = node.PubTCPAddress()
 
 	ephemeral, err := btcec.NewPrivateKey(btcec.S256())
 	if err != nil {
@@ -448,13 +453,16 @@ func processHandshakeRequest(node LocalNode, r Peer, req *pb.HandshakeData) (*pb
 	hm1.Write(iv)
 	hmac1 := hm1.Sum(nil)
 
+	// attempt to refresh the node's public ip address
+	node.RefreshPubTCPAddress()
+
 	resp := &pb.HandshakeData{
 		SessionId:  req.SessionId,
 		NodePubKey: node.PublicKey().InternalKey().SerializeUncompressed(),
 		PubKey:     req.PubKey,
 		Iv:         iv,
 		Hmac:       hmac1,
-		TcpAddress: node.TCPAddress(),
+		TcpAddress: node.PubTCPAddress(),
 		Protocol:   HandshakeResp,
 		Sign:       "",
 	}

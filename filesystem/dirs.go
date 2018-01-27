@@ -25,7 +25,7 @@ func PathExists(path string) bool {
 	if os.IsNotExist(err) {
 		return false
 	}
-	return err != nil
+	return err == nil
 }
 
 // GetSpacemeshDataDirectoryPath gets the full os-specific path to the spacemesh top-level data directory.
@@ -44,6 +44,23 @@ func GetSpacemeshTempDirectoryPath() (string, error) {
 
 	pathName := filepath.Join(dataDir, "temp")
 	return GetFullDirectoryPath(pathName)
+}
+
+// DeleteAllTempFiles deletes all temp files from the temp dir and creates a new temp dir
+func DeleteAllTempFiles() error {
+	tempDir, err := GetSpacemeshTempDirectoryPath()
+	if err != nil {
+		return err
+	}
+
+	err = os.RemoveAll(tempDir)
+	if err != nil {
+		return err
+	}
+
+	// create temp dir again
+	_, err = GetSpacemeshTempDirectoryPath()
+	return err
 }
 
 // EnsureSpacemeshDataDirectories return the os-specific path to the Spacemesh data directory.

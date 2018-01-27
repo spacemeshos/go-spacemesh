@@ -40,6 +40,7 @@ type Swarm interface {
 	// Currently used for testing network bootstrapping
 	RegisterNodeEventsCallback(callback NodeEventCallback)
 
+	// todo: allow client to register callback to get notified when swarm has shut down
 	Shutdown()
 
 	// services getters

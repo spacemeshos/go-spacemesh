@@ -132,7 +132,7 @@ Implementation:
     - parentnode = s.pop ()
  - lastnode is a branch...
     - if it has only 1 child then collapse it to ext node
-        - tood: document processBranchNode() here
+        - todo: document processBranchNode() here
     - else s.push(parentNode)
  - update all node pointers on the path specified by s 
  - return

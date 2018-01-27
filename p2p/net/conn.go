@@ -16,6 +16,7 @@ type Connection interface {
 	Send(message []byte, id []byte)
 	Close() error
 	LastOpTime() time.Time // last rw op time for this connection
+	RemoteAddr() net.Addr
 }
 
 // MessageSentEvent specifies a sent network message data.
@@ -107,6 +108,11 @@ func (c *connectionImpl) ID() string {
 	return c.id
 }
 
+// RemoteAddr returns the remote network address.
+func (c *connectionImpl) RemoteAddr() net.Addr {
+	return c.conn.RemoteAddr()
+}
+
 func (c *connectionImpl) String() string {
 	return c.id
 }
@@ -154,19 +160,7 @@ func (c *connectionImpl) writeMessageToConnection(om OutgoingMessage) {
 
 }
 
-// Send a binary message to the connection remote endpoint
-// message - any binary data
-// Concurrency: Not go safe - designed to be used from a the event processing loop
-/*
-func (c *connectionImpl) write(message []byte) (int, error) {
-	ul := uint32(len(message))
-	err := binary.Write(c.conn, binary.BigEndian, &ul)
-	n, err := c.conn.Write(message)
-	return n + 4, err
-}*/
-
-// Close the connection (implements io.Closer)
-// go safe
+// Close closes the connection (implements io.Closer). It is go safe.
 func (c *connectionImpl) Close() error {
 	c.incomingMsgs.Close()
 	return nil
