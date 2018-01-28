@@ -58,7 +58,7 @@ func (n *handshakeDataImp) Peer() Peer {
 	return n.peer
 }
 
-// Session returns the network session betwen the local and the remote nodes.
+// Session returns the network session between the local and the remote nodes.
 func (n *handshakeDataImp) Session() NetworkSession {
 	return n.session
 }
