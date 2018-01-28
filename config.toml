@@ -1,7 +1,9 @@
 # sample spacemesh config file
+# use the config flag to start a node with a config file.
+# e.g $./go-spacemash -config ./config.toml
 
 # Main Config
-data-folder = "~/.spacemesh"
+data-folder = "~/.spacemesh-data"
 
 # Node Config
 security-param = 20
