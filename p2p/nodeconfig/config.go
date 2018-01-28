@@ -1,6 +1,10 @@
 package nodeconfig
 
-import "time"
+import (
+	"github.com/spacemeshos/go-spacemesh/log"
+	"gopkg.in/urfave/cli.v1"
+	"time"
+)
 
 // ConfigValues specifies  default values for node config params
 var ConfigValues = Config{
@@ -8,8 +12,8 @@ var ConfigValues = Config{
 	FastSync:      true,
 	TCPPort:       7513,
 	NodeID:        "",
-	DialTimeout:   time.Duration(1 * time.Minute),
-	ConnKeepAlive: time.Duration(48 * time.Hour),
+	DialTimeout:   duration{"1m"},
+	ConnKeepAlive: duration{"48h"},
 	SwarmConfig:   SwarmConfigValues,
 }
 
@@ -19,7 +23,7 @@ var SwarmConfigValues = SwarmConfig{
 	RoutingTableBucketSize: 20,
 	RoutingTableAlpha:      3,
 	RandomConnections:      5,
-	BootstrapNodes: []string{ // these should be the spacemesh foundation bootstrap nodes
+	BootstrapNodes: cli.StringSlice{ // these should be the spacemesh foundation bootstrap nodes
 		"125.0.0.1:3572/iaMujEYTByKcjMZWMqg79eJBGMDm8ADsWZFdouhpfeKj",
 		"125.0.0.1:3763/x34UDdiCBAsXmLyMMpPQzs313B9UDeHNqFpYsLGfaFvm",
 	},
@@ -29,22 +33,34 @@ func init() {
 	// set default config params based on runtime here
 }
 
+type duration struct {
+	string
+}
+
+func (d *duration) Duration() (duration time.Duration) {
+	dur, err := time.ParseDuration(d.string)
+	if err != nil {
+		log.Error("Could not parse duration string returning 0, error:", err)
+	}
+	return dur
+}
+
 // Config specifies node config params
 type Config struct {
-	SecurityParam uint          `toml:"-"`
-	FastSync      bool          `toml:"-"`
-	TCPPort       uint          `toml:"-"`
-	NodeID        string        `toml:"-"`
-	DialTimeout   time.Duration `toml:"-"`
-	ConnKeepAlive time.Duration `toml:"-"`
-	SwarmConfig   SwarmConfig   `toml:"-"`
+	SecurityParam int
+	FastSync      bool
+	TCPPort       int
+	NodeID        string
+	DialTimeout   duration
+	ConnKeepAlive duration
+	SwarmConfig   SwarmConfig
 }
 
 // SwarmConfig specifies swarm config params
 type SwarmConfig struct {
-	Bootstrap              bool     `toml:"-"`
-	RoutingTableBucketSize uint     `toml:"-"`
-	RoutingTableAlpha      uint     `toml:"-"`
-	RandomConnections      uint     `toml:"-"`
-	BootstrapNodes         []string `toml:"-"`
+	Bootstrap              bool
+	RoutingTableBucketSize int
+	RoutingTableAlpha      int
+	RandomConnections      int
+	BootstrapNodes         cli.StringSlice
 }

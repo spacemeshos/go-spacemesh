@@ -19,20 +19,20 @@ import (
 
 func TestServersConfig(t *testing.T) {
 
-	config.ConfigValues.GrpcServerPort = uint(crypto.GetRandomUserPort())
-	config.ConfigValues.JSONServerPort = uint(crypto.GetRandomUserPort())
+	config.ConfigValues.GrpcServerPort = int(crypto.GetRandomUserPort())
+	config.ConfigValues.JSONServerPort = int(crypto.GetRandomUserPort())
 
 	grpcService := NewGrpcService()
 	jsonService := NewJSONHTTPServer()
 
-	assert.Equal(t, grpcService.Port, config.ConfigValues.GrpcServerPort, "Expected same port")
-	assert.Equal(t, jsonService.Port, config.ConfigValues.JSONServerPort, "Expected same port")
+	assert.Equal(t, grpcService.Port, uint(config.ConfigValues.GrpcServerPort), "Expected same port")
+	assert.Equal(t, jsonService.Port, uint(config.ConfigValues.JSONServerPort), "Expected same port")
 }
 
 func TestGrpcApi(t *testing.T) {
 
-	config.ConfigValues.GrpcServerPort = uint(crypto.GetRandomUserPort())
-	config.ConfigValues.JSONServerPort = uint(crypto.GetRandomUserPort())
+	config.ConfigValues.GrpcServerPort = int(crypto.GetRandomUserPort())
+	config.ConfigValues.JSONServerPort = int(crypto.GetRandomUserPort())
 
 	const message = "Hello World"
 
@@ -66,8 +66,8 @@ func TestGrpcApi(t *testing.T) {
 
 func TestJsonApi(t *testing.T) {
 
-	config.ConfigValues.GrpcServerPort = uint(crypto.GetRandomUserPort())
-	config.ConfigValues.JSONServerPort = uint(crypto.GetRandomUserPort())
+	config.ConfigValues.GrpcServerPort = int(crypto.GetRandomUserPort())
+	config.ConfigValues.JSONServerPort = int(crypto.GetRandomUserPort())
 
 	grpcService := NewGrpcService()
 	jsonService := NewJSONHTTPServer()

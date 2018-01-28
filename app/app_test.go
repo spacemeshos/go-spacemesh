@@ -13,7 +13,7 @@ func TestApp(t *testing.T) {
 	filesystem.DeleteSpacemeshDataFolders(t)
 
 	// remove all injected test flags for now
-	os.Args = []string{"/go-spacemesh", "-jrpc"}
+	os.Args = []string{"/go-spacemesh", "-json-server"}
 
 	go Main("", "master", "")
 

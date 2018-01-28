@@ -15,8 +15,8 @@ func init() {
 
 // Config defines app config params.
 type Config struct {
-	ConfigFilePath string `toml:"-"`
-	AppIntParam    int    `toml:"-"`
-	AppBoolParam   bool   `toml:"-"`
-	DataFilePath   string `toml:"-"`
+	ConfigFilePath string
+	AppIntParam    int
+	AppBoolParam   bool
+	DataFilePath   string
 }

@@ -2,6 +2,7 @@ package config
 
 import (
 	"gopkg.in/urfave/cli.v1"
+	"gopkg.in/urfave/cli.v1/altsrc"
 )
 
 var (
@@ -14,10 +15,10 @@ var (
 	}
 
 	//DataFolderPathFlag specifies app persisted data root directory.
-	DataFolderPathFlag = cli.StringFlag{
-		Name:        "dataFolder, df",
+	DataFolderPathFlag = altsrc.NewStringFlag(cli.StringFlag{
+		Name:        "data-folder",
 		Usage:       "Set root data folder`",
 		Value:       ConfigValues.DataFilePath,
 		Destination: &ConfigValues.DataFilePath,
-	}
+	})
 )
