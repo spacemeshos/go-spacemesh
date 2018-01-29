@@ -37,7 +37,7 @@ func (s SpaceMeshGrpcService) StopService() {
 func NewGrpcService() *SpaceMeshGrpcService {
 	port := config.ConfigValues.GrpcServerPort
 	server := grpc.NewServer()
-	return &SpaceMeshGrpcService{Server: server, Port: port}
+	return &SpaceMeshGrpcService{Server: server, Port: uint(port)}
 }
 
 // StartService starts the grpc service.

@@ -14,8 +14,8 @@ func init() {
 
 // Config defines the api config params
 type Config struct {
-	StartGrpcServer bool `toml:"-"`
-	GrpcServerPort  uint `toml:"-"`
-	StartJSONServer bool `toml:"-"`
-	JSONServerPort  uint `toml:"-"`
+	StartGrpcServer bool
+	GrpcServerPort  int
+	StartJSONServer bool
+	JSONServerPort  int
 }

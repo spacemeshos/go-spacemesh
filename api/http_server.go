@@ -24,7 +24,7 @@ type JSONHTTPServer struct {
 
 // NewJSONHTTPServer creates a new json http server.
 func NewJSONHTTPServer() *JSONHTTPServer {
-	return &JSONHTTPServer{Port: config.ConfigValues.JSONServerPort, stop: make(chan bool)}
+	return &JSONHTTPServer{Port: uint(config.ConfigValues.JSONServerPort), stop: make(chan bool)}
 }
 
 // StopService stops the server.
