@@ -1,6 +1,7 @@
 package filesystem
 
 import (
+	"io/ioutil"
 	"os"
 	"testing"
 )
@@ -18,4 +19,22 @@ func DeleteSpacemeshDataFolders(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to delete spacemesh data dir: %s", err)
 	}
+}
+
+// CreateTmpDir creates a temp directory.
+func CreateTmpDir(prefix string) (string, error) {
+	tempDir, err := ioutil.TempDir("/tmp", prefix)
+	if err != nil {
+		return tempDir, err
+	}
+	return tempDir, nil
+}
+
+// RemoveTmpDir removes a temp directory.
+func RemoveTmpDir(tempDir string) error {
+	err := os.Remove(tempDir)
+	if err != nil {
+		return err
+	}
+	return nil
 }
