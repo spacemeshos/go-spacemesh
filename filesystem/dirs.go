@@ -11,6 +11,8 @@ import (
 	"strings"
 )
 
+var currentUser = user.Current
+
 // Directory and paths funcs
 
 // OwnerReadWriteExec is a standard owner read / write / exec file permission.
@@ -133,7 +135,7 @@ func GetUserHomeDirectory() string {
 	if home := os.Getenv("HOME"); home != "" {
 		return home
 	}
-	if usr, err := user.Current(); err == nil {
+	if usr, err := currentUser(); err == nil {
 		return usr.HomeDir
 	}
 	return ""
