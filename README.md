@@ -37,16 +37,12 @@ install [Go 1.9.2 or later](https://golang.org/dl/) for your platform
 go get github.com/spacemeshos/go-spacemesh
 ```
 or
-- Fork https://github.com/spacemeshos/go-spacemesh project
-- Checkout your fork from GitHub
+- Fork the project from https://github.com/spacemeshos/go-spacemesh 
+- Checkout the `develop` branch of your fork from GitHub
 - Move your fork from $GOPATH/src/github.com/YOURACCOUNT/go-spacemesh to $GOPATH/src/github.com/spacemeshos/go-spacemesh
 This allows Go tools to work as expected.
 
-```
-git clone https://github.com/spacemeshos/go-spacemesh
-```
-
-Next, get the dependencies using [govendor](https://github.com/kardianos/govendor). Run this from the project root directory:
+Next, you need to get the dependencies using [govendor](https://github.com/kardianos/govendor). Run this from the project root directory:
 
 ```
 go get -u github.com/kardianos/govendor
@@ -85,12 +81,13 @@ Platform-specific binaries are saved to the `/build` directory.
 
 ### Testing
 ```
-go test ./...
-```
-or
-```
 make test
+````
+or 
+````
+make cover
 ```
+
 ### Contributing
 
 Thank you for considering to contribute to the go-spacemesh open source project. 
