@@ -82,14 +82,14 @@ Platform-specific binaries are saved to the `/build` directory.
 ### Testing
 ```
 make test
-````
+```
 or 
-````
+
+```
 make cover
 ```
 
 ### Contributing
-
 Thank you for considering to contribute to the go-spacemesh open source project. 
 We welcome contributions large and small and we actively accept contributions.
 - go-spacemesh is part of [The Spacemesh open source project](https://spacemesh.io), and is MIT licensed open source software.
@@ -99,7 +99,6 @@ We welcome contributions large and small and we actively accept contributions.
 - You don’t have to contribute code! Many important types of contributions are important for our project. See: [How to Contribute to Open Source?](https://opensource.guide/how-to-contribute/#what-it-means-to-contribute)?
 
 #### Guidelines
-
 - Read the Spacemesh project white paper (coming soon)
 - Ask questions or talk about things in [Issues](https://github.com/spacemeshos/go-spacemesh/issues) or on [spacemash gitter](https://gitter.im/spacemesh-os/Lobby).
 - Ensure you are able to contribute (no legal issues please)
