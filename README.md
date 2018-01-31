@@ -89,6 +89,7 @@ or
 make cover
 ```
 
+
 ### Contributing
 Thank you for considering to contribute to the go-spacemesh open source project. 
 We welcome contributions large and small and we actively accept contributions.
