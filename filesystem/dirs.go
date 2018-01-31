@@ -11,6 +11,7 @@ import (
 	"strings"
 )
 
+// Using a function pointer to get the current user so we can more easily mock in tests
 var currentUser = user.Current
 
 // Directory and paths funcs

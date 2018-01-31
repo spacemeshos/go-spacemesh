@@ -86,3 +86,78 @@ func TestGetCanonicalPath(t *testing.T) {
 	}
 	TearDownTestHooks()
 }
+
+func TestGetSpacemeshDataDirectoryPath(t *testing.T) {
+	t.Parallel()
+	users := TestUsers()
+	SetupTestHooks(users)
+	usr, err := currentUser()
+	assert.NoErr(t, err, "getting current user failed")
+
+	testCases := []struct {
+		user     *user.User
+		expected string
+	}{
+		{usr, "~" + RootFolder + ".spacemesh"},
+		{users["bob"], users["bob"].HomeDir + RootFolder + ".spacemesh"},
+		{users["alice"], users["alice"].HomeDir + RootFolder + ".spacemesh"},
+	}
+
+	for _, testCase := range testCases {
+		os.Setenv("HOME", testCase.user.HomeDir)
+		actual, err := GetSpacemeshDataDirectoryPath()
+		assert.Equal(t, testCase.expected, actual, "")
+		assert.NoErr(t, err, "getting current user failed")
+	}
+	TearDownTestHooks()
+}
+
+func TestGetSpacemeshTempDirectoryPath(t *testing.T) {
+	t.Parallel()
+	users := TestUsers()
+	SetupTestHooks(users)
+	usr, err := currentUser()
+	assert.NoErr(t, err, "getting current user failed")
+
+	testCases := []struct {
+		user     *user.User
+		expected string
+	}{
+		{usr, "~" + RootFolder + ".spacemesh" + RootFolder + "temp"},
+		{users["bob"], users["bob"].HomeDir + RootFolder + ".spacemesh" + RootFolder + "temp"},
+		{users["alice"], users["alice"].HomeDir + RootFolder + ".spacemesh" + RootFolder + "temp"},
+	}
+
+	for _, testCase := range testCases {
+		os.Setenv("HOME", testCase.user.HomeDir)
+		actual, err := GetSpacemeshTempDirectoryPath()
+		assert.Equal(t, testCase.expected, actual, "")
+		assert.NoErr(t, err, "getting current user failed")
+	}
+	TearDownTestHooks()
+}
+
+func TestDeleteAllTempFiles(t *testing.T) {
+	t.Parallel()
+	users := TestUsers()
+	SetupTestHooks(users)
+	usr, err := currentUser()
+	assert.NoErr(t, err, "getting current user failed")
+
+	testCases := []struct {
+		user     *user.User
+		expected string
+	}{
+		{usr, "~" + RootFolder + ".spacemesh" + RootFolder + "temp"},
+		{users["bob"], users["bob"].HomeDir + RootFolder + ".spacemesh" + RootFolder + "temp"},
+		{users["alice"], users["alice"].HomeDir + RootFolder + ".spacemesh" + RootFolder + "temp"},
+	}
+
+	for _, testCase := range testCases {
+		os.Setenv("HOME", testCase.user.HomeDir)
+		err := DeleteAllTempFiles()
+		assert.True(t, PathExists(testCase.expected), "expecting existence of path")
+		assert.NoErr(t, err, "getting current user failed")
+	}
+	TearDownTestHooks()
+}
