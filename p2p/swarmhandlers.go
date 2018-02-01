@@ -75,7 +75,7 @@ func (s *swarmImpl) onConnectionRequest(req node.RemoteNodeData) {
 		addressableNodeConfig := &localNodeConfig
 		conn, err = s.network.DialTCP(req.IP(), addressableNodeConfig.DialTimeout.Duration(), addressableNodeConfig.ConnKeepAlive.Duration())
 		if err != nil {
-			s.sendNodeEvent(req.ID(), Dissconected)
+			s.sendNodeEvent(req.ID(), Disconnected)
 			s.localNode.Error("failed to connect to remote node %s on advertised ip %s", req.Pretty(), req.IP())
 			return
 		}
@@ -133,7 +133,7 @@ func (s *swarmImpl) onDisconnectionRequest(req node.RemoteNodeData) {
 
 	// todo: disconnect all connections with node
 
-	s.sendNodeEvent(req.ID(), Dissconected)
+	s.sendNodeEvent(req.ID(), Disconnected)
 }
 
 // Local request to send a message to a remote node
@@ -255,7 +255,7 @@ func (s *swarmImpl) onConnectionClosed(c net.Connection) {
 	delete(s.connections, id)
 	delete(s.peersByConnection, id)
 
-	s.sendNodeEvent(peer.String(), Dissconected)
+	s.sendNodeEvent(peer.String(), Disconnected)
 
 }
 
