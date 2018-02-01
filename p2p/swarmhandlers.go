@@ -15,7 +15,7 @@ import (
 // or by other internal handlers but not from a random type or go routine
 
 // Handles a local request to register a remote node in the swarm
-// Register adds info about this node but doesn't attempt to connect to i
+// Register adds info about this node but doesn't attempt to connect to it
 func (s *swarmImpl) onRegisterNodeRequest(n node.RemoteNodeData) {
 
 	if s.peers[n.ID()] != nil {
@@ -228,7 +228,7 @@ func (s *swarmImpl) onSendMessageRequest(r SendMessageReq) {
 		return
 	}
 
-	// store callback by reqIdDfor this connection so we can call back in case of msg timout or other send failure
+	// store callback by reqId for this connection so we can call back in case of msg timeout or other send failure
 	if r.Callback != nil {
 		callbacks := s.outgoingSendsCallbacks[conn.ID()]
 		if callbacks == nil {
