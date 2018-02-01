@@ -44,7 +44,7 @@ type swarmImpl struct {
 	sendMsgRequests  chan SendMessageReq // local request to send a session message to a node and callback on error or data
 	sendHandshakeMsg chan SendMessageReq // local request to send a handshake protocol message
 
-	shutdown chan bool // local request to kill the swamp from outside. e.g when local node is shutting down
+	shutdown chan bool // local request to kill the swarm from outside. e.g when local node is shutting down
 
 	registerNodeReq chan node.RemoteNodeData // local request to register a node based on minimal data
 
@@ -99,7 +99,7 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 		config: l.Config().SwarmConfig,
 	}
 
-	// nodes routing table
+	// node's routing table
 	s.routingTable = table.NewRoutingTable(int(s.config.RoutingTableBucketSize), l.DhtID())
 
 	// findNode dht protocol

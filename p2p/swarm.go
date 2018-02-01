@@ -93,5 +93,5 @@ const (
 	Connected
 	HandshakeStarted
 	SessionEstablished
-	Dissconected
+	Disconnected
 )
