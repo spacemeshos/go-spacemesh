@@ -48,7 +48,7 @@ func (b *bucketimpl) List() *list.List {
 	return b.list
 }
 
-// Has returns ture iff the bucket stores n.
+// Has returns true iff the bucket stores n.
 func (b *bucketimpl) Has(n node.RemoteNodeData) bool {
 	for e := b.list.Front(); e != nil; e = e.Next() {
 		n1 := e.Value.(node.RemoteNodeData)

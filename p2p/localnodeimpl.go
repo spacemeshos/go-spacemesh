@@ -54,7 +54,7 @@ func (n *localNodeImp) Config() nodeconfig.Config {
 	return n.config
 }
 
-// Shutdown releases all resources open and owned by this local mode.
+// Shutdown releases all resources open and owned by this local node.
 func (n *localNodeImp) Shutdown() {
 
 	// shutdown swarm
@@ -76,7 +76,7 @@ func (n *localNodeImp) ID() []byte {
 	return n.pubKey.Bytes()
 }
 
-// DhtID() reutrns this node's dht ID.
+// DhtID() returns this node's dht ID.
 func (n *localNodeImp) DhtID() dht.ID {
 	return n.dhtID
 }

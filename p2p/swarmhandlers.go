@@ -15,7 +15,7 @@ import (
 // or by other internal handlers but not from a random type or go routine
 
 // Handles a local request to register a remote node in the swarm
-// Register adds info about this node but doesn't attempt to connect to i
+// Register adds info about this node but doesn't attempt to connect to it
 func (s *swarmImpl) onRegisterNodeRequest(n node.RemoteNodeData) {
 
 	if s.peers[n.ID()] != nil {
@@ -75,7 +75,7 @@ func (s *swarmImpl) onConnectionRequest(req node.RemoteNodeData) {
 		addressableNodeConfig := &localNodeConfig
 		conn, err = s.network.DialTCP(req.IP(), addressableNodeConfig.DialTimeout.Duration(), addressableNodeConfig.ConnKeepAlive.Duration())
 		if err != nil {
-			s.sendNodeEvent(req.ID(), Dissconected)
+			s.sendNodeEvent(req.ID(), Disconnected)
 			s.localNode.Error("failed to connect to remote node %s on advertised ip %s", req.Pretty(), req.IP())
 			return
 		}
@@ -133,7 +133,7 @@ func (s *swarmImpl) onDisconnectionRequest(req node.RemoteNodeData) {
 
 	// todo: disconnect all connections with node
 
-	s.sendNodeEvent(req.ID(), Dissconected)
+	s.sendNodeEvent(req.ID(), Disconnected)
 }
 
 // Local request to send a message to a remote node
@@ -228,7 +228,7 @@ func (s *swarmImpl) onSendMessageRequest(r SendMessageReq) {
 		return
 	}
 
-	// store callback by reqIdDfor this connection so we can call back in case of msg timout or other send failure
+	// store callback by reqId for this connection so we can call back in case of msg timeout or other send failure
 	if r.Callback != nil {
 		callbacks := s.outgoingSendsCallbacks[conn.ID()]
 		if callbacks == nil {
@@ -255,7 +255,7 @@ func (s *swarmImpl) onConnectionClosed(c net.Connection) {
 	delete(s.connections, id)
 	delete(s.peersByConnection, id)
 
-	s.sendNodeEvent(peer.String(), Dissconected)
+	s.sendNodeEvent(peer.String(), Disconnected)
 
 }
 

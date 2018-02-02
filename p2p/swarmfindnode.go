@@ -75,8 +75,8 @@ Loop:
 			break Loop
 		}
 
-		// pick up to alpha server to query from the search list
-		// servers that have been recently queried will not be returend
+		// pick up to alpha servers to query from the search list
+		// servers that have been recently queried will not be returned
 		servers := node.PickFindNodeServers(searchList, nodeID, alpha)
 
 		if len(servers) == 0 {
