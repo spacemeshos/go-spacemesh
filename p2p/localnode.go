@@ -72,7 +72,7 @@ func NewLocalNode(tcpAddress string, config nodeconfig.Config, persist bool) (Lo
 	// load the node with the data of the first node found
 	nodeData, err := readFirstNodeData()
 	if err != nil {
-		return nil, err
+		log.Warning("failed to read node data from local store")
 	}
 
 	if nodeData != nil {
