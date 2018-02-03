@@ -10,17 +10,17 @@ import (
 	"strings"
 )
 
-// NodeData defines persistent node data
+// NodeData defines persistent node data.
 type NodeData struct {
 	PubKey     string `json:"pubKey"`
 	PrivKey    string `json:"priKey"`
 	CoinBaseID string `json:"coinbase"` // coinbase account id
 }
 
-// Node store - local node data persistence functionality
+// Node store - local node data persistence functionality.
 
-// Gets the os-specific full path to the nodes master data directory
-// Attempts to create the directory on-demand
+// Gets the os-specific full path to the nodes master data directory.
+// Attempts to create the directory on-demand.
 func ensureNodesDataDirectory() (string, error) {
 	dataPath, err := filesystem.GetSpacemeshDataDirectoryPath()
 	if err != nil {
@@ -42,7 +42,7 @@ func (n *localNodeImp) EnsureNodeDataDirectory() (string, error) {
 	return filesystem.GetFullDirectoryPath(nodeDirectoryName)
 }
 
-// Returns the os-specific full path to the node's data file
+// Returns the os-specific full path to the node's data file.
 func getDataFilePath(nodeID string) (string, error) {
 	nodesDataDir, err := ensureNodesDataDirectory()
 	if err != nil {
@@ -52,7 +52,7 @@ func getDataFilePath(nodeID string) (string, error) {
 	return filepath.Join(nodesDataDir, nodeID, nodeconfig.NodeDataFileName), nil
 }
 
-// Persist node's data to local store
+// Persist node's data to local store.
 func (n *localNodeImp) persistData() error {
 
 	data := &NodeData{
@@ -78,7 +78,7 @@ func (n *localNodeImp) persistData() error {
 	return ioutil.WriteFile(path, bytes, filesystem.OwnerReadWrite)
 }
 
-// Read node persisted data based on node id
+// Read node persisted data based on node id.
 func readNodeData(nodeID string) (*NodeData, error) {
 
 	path, err := getDataFilePath(nodeID)
@@ -98,8 +98,8 @@ func readNodeData(nodeID string) (*NodeData, error) {
 }
 
 // Read node data from the data folder.
-// Reads a random node from the data folder if more than one node data file is persisted
-// To load a specific node on startup - users need to pass the node id using a cli arg
+// Reads a random node from the data folder if more than one node data file is persisted.
+// To load a specific node on startup - users need to pass the node id using a cli arg.
 func readFirstNodeData() (*NodeData, error) {
 
 	path, err := ensureNodesDataDirectory()
