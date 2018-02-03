@@ -106,6 +106,8 @@ func newLocalNodeWithKeys(pubKey crypto.PublicKey, privKey crypto.PrivateKey, tc
 		return nil, err
 	}
 
+	log.Info("Node id: %s", n.String())
+
 	// setup logging
 	n.logger = log.CreateLogger(n.pubKey.Pretty(), dataDir, "node.log")
 
@@ -150,8 +152,6 @@ func newNodeFromData(tcpAddress string, d *NodeData, config nodeconfig.Config, p
 	if err != nil {
 		return nil, err
 	}
-
-	log.Info(">>>> %s", pub.String())
 
 	return newLocalNodeWithKeys(pub, priv, tcpAddress, config, persist)
 }
