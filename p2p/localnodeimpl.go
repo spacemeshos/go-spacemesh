@@ -159,20 +159,20 @@ func (n *localNodeImp) Sign(data proto.Message) ([]byte, error) {
 
 // Info is used for info logging.
 func (n *localNodeImp) Info(format string, args ...interface{}) {
-	n.logger.Info(format, args)
+	n.logger.Info(format, args...)
 }
 
 // Debug is used to log debug data.
 func (n *localNodeImp) Debug(format string, args ...interface{}) {
-	n.logger.Debug(format, args)
+	n.logger.Debug(format, args...)
 }
 
 // Error is used to log runtime errors.
 func (n *localNodeImp) Error(format string, args ...interface{}) {
-	n.logger.Error(format, args)
+	n.logger.Error(format, args...)
 }
 
 // Warning is used to log runtime warnings.
 func (n *localNodeImp) Warning(format string, args ...interface{}) {
-	n.logger.Warning(format, args)
+	n.logger.Warning(format, args...)
 }
