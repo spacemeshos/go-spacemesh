@@ -5,6 +5,7 @@ package p2p
 import (
 	"github.com/spacemeshos/go-spacemesh/p2p/dht/table"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"strconv"
 )
 
 // Swarm is p2p virtual network of spacemesh nodes as viewed by a local node
@@ -95,3 +96,15 @@ const (
 	SessionEstablished
 	Disconnected
 )
+
+// Created by stringer -type=NodeState
+const _NodeState_name = "UnknownRegisteredConnectingConnectedHandshakeStartedSessionEstablishedDisconnected"
+
+var _NodeState_index = [...]uint8{0, 7, 17, 27, 36, 52, 70, 82}
+
+func (i NodeState) String() string {
+	if i < 0 || i >= NodeState(len(_NodeState_index)-1) {
+		return "NodeState(" + strconv.FormatInt(int64(i), 10) + ")"
+	}
+	return _NodeState_name[_NodeState_index[i]:_NodeState_index[i+1]]
+}
