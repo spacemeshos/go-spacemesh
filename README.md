@@ -42,13 +42,6 @@ or
 - Move your fork from $GOPATH/src/github.com/YOURACCOUNT/go-spacemesh to $GOPATH/src/github.com/spacemeshos/go-spacemesh
 This allows Go tools to work as expected.
 
-Next, you need to get the dependencies using [govendor](https://github.com/kardianos/govendor). Run this from the project root directory:
-
-```
-go get -u github.com/kardianos/govendor
-govendor sync
-```
-
 ### Building
 
 To build `go-spacemesh` for your current system architecture use:
@@ -132,9 +125,15 @@ Few things you can do right now to help out:
 
 #### Working with Dependencies
 
-We use [govendor](https://github.com/kardianos/govendor) for all 3rd party packages.
-We commit to git all 3rd party packages in the `vendor` folder so we have our own copy of versioned releases.
+- We use [govendor](https://github.com/kardianos/govendor) for all 3rd party packages.
+- We commit to git all 3rd party packages in the `vendor` folder so we have our own copy of versioned releases.
 To update a 3rd party package use vendor.json and govendor commands.
+- To install `govendor` user:
+
+```
+go get -u github.com/kardianos/govendor
+govendor sync
+```
 
 #### Working with protobufs
 
