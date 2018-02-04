@@ -98,13 +98,13 @@ const (
 )
 
 // Created by stringer -type=NodeState
-const _NodeState_name = "UnknownRegisteredConnectingConnectedHandshakeStartedSessionEstablishedDisconnected"
+const nodeStateName = "UnknownRegisteredConnectingConnectedHandshakeStartedSessionEstablishedDisconnected"
 
-var _NodeState_index = [...]uint8{0, 7, 17, 27, 36, 52, 70, 82}
+var nodeStateIndex = [...]uint8{0, 7, 17, 27, 36, 52, 70, 82}
 
 func (i NodeState) String() string {
-	if i < 0 || i >= NodeState(len(_NodeState_index)-1) {
+	if i < 0 || i >= NodeState(len(nodeStateIndex)-1) {
 		return "NodeState(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return _NodeState_name[_NodeState_index[i]:_NodeState_index[i+1]]
+	return nodeStateName[nodeStateIndex[i]:nodeStateIndex[i+1]]
 }
