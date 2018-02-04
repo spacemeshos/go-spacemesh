@@ -57,7 +57,7 @@ func CreateLogger(module string, dataFolderPath string, logFileName string) *log
 
 	backendConsoleLevel := logging.AddModuleLevel(backendFormatter)
 	backendFileLevel := logging.AddModuleLevel(fileBackendFormatter)
-	log.SetBackend(logging.SetBackend(backendConsoleLevel, backendFileLevel))
+	log.SetBackend(logging.MultiLogger(backendConsoleLevel, backendFileLevel))
 
 	return log
 }
@@ -90,7 +90,7 @@ func InitSpacemeshLoggingSystem(dataFolderPath string, logFileName string) {
 
 	backendConsoleLevel := logging.AddModuleLevel(backendFormatter)
 	backendFileLevel := logging.AddModuleLevel(fileBackendFormatter)
-	log.SetBackend(logging.SetBackend(backendConsoleLevel, backendFileLevel))
+	log.SetBackend(logging.MultiLogger(backendConsoleLevel, backendFileLevel))
 
 	smLogger = &SpacemeshLogger{Logger: log}
 }
