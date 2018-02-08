@@ -10,6 +10,7 @@ import (
 	"time"
 )
 
+//TODO: config params for NTP_QUERIES, DEFAULT_TIMEOUT_LATENCY, NTP_QUERIES, REFRESH_NTP_INTERVAL
 const (
 	// 70 years in seconds since ntp counts from 1900 and unix from 1970
 	NTP_OFFSET              = 2208988800
@@ -17,6 +18,7 @@ const (
 	MAX_ALLOWED_DRIFT       = 10 * time.Second
 	NTP_QUERIES             = 4
 	DEFAULT_TIMEOUT_LATENCY = 30 * time.Second
+	REFRESH_NTP_INTERVAL    = 30 * time.Minute
 )
 
 // Relay on more than one server
@@ -106,16 +108,16 @@ func ntpTimeDrift() (time.Duration, error) {
 	req := &NtpPacket{Settings: 0x1B}
 
 	// Make 3 concurrent calls to different ntp servers
+	// TODO: possibly add retries when timeout
 	queriedServers := make(map[int]bool)
 	serverSeed := len(DEFAULT_SERVERS) - 1
 	for i := 0; i < NTP_QUERIES; i++ {
+		rndsrv := rand.Intn(serverSeed)
+		for queriedServers[rndsrv] {
+			rndsrv = rand.Intn(serverSeed)
+		}
+		queriedServers[rndsrv] = true
 		go func() {
-			rndsrv := rand.Intn(serverSeed)
-			for queriedServers[rndsrv] {
-				rndsrv = rand.Intn(serverSeed)
-			}
-			queriedServers[rndsrv] = true
-
 			rt, lat, rsp, err := ntpRequest(DEFAULT_SERVERS[rndsrv], req)
 			if err != nil {
 				errorChan <- err
