@@ -20,7 +20,7 @@ const (
 	RefreshNtpInterval    = 30 * time.Minute
 )
 
-// Relay on more than one server
+// DefaultServer is a list of relay on more than one server.
 var (
 	DefaultServers = []string{
 		"0.pool.ntp.org",
