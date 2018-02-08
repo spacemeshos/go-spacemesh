@@ -170,6 +170,7 @@ func (app *SpacemeshApp) before(ctx *cli.Context) error {
 	// todo: add misc app setup here (metrics, debug, etc....)
 
 	err := timesync.CheckSystemClockDrift()
+	// todo : check this every hour
 	if err != nil {
 		//todo: this shows the help output for some reason
 		return err

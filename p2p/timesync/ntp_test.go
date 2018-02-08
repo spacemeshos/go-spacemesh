@@ -1,9 +1,9 @@
 package timesync
 
 import (
-	"testing"
-	"github.com/spacemeshos/go-spacemesh/assert"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/assert"
+	"testing"
 )
 
 func TestCheckSystemClockDrift(t *testing.T) {
@@ -11,4 +11,4 @@ func TestCheckSystemClockDrift(t *testing.T) {
 	assert.Nil(t, err, fmt.Sprintf("Error checking clock drift with NTP %v", err))
 }
 
-// TODO : add more tests to rest of the functions
+// TODO : add more tests for rest of the functions

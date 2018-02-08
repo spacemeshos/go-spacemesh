@@ -2,10 +2,10 @@ package timesync
 
 import (
 	"encoding/binary"
+	"errors"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"net"
 	"time"
-	"errors"
 )
 
 const (
@@ -13,7 +13,7 @@ const (
 	NTP_OFFSET              = 2208988800
 	DEFAULT_NTP_PORT        = "123"
 	MAX_ALLOWED_DRIFT       = 10 * time.Second
-	NTP_QUERIES         = 4
+	NTP_QUERIES             = 4
 	DEFAULT_TIMEOUT_LATENCY = 30 * time.Second
 )
 
@@ -120,14 +120,14 @@ func ntpTimeDrift() (time.Duration, error) {
 
 	all := time.Duration(0)
 	select {
-		case err := <-errorChan:
-			close(errorChan)
-			return all, err
-		case result := <-resultsChan:
-			all += result
-			if len(results) == NTP_QUERIES {
-				close(resultsChan)
-			}
+	case err := <-errorChan:
+		close(errorChan)
+		return all, err
+	case result := <-resultsChan:
+		all += result
+		if len(results) == NTP_QUERIES {
+			close(resultsChan)
+		}
 	}
 
 	return time.Duration(int(all) / NTP_QUERIES), nil
@@ -139,7 +139,7 @@ func CheckSystemClockDrift() error {
 		return err
 	}
 
-	if (drift < -MAX_ALLOWED_DRIFT || drift > MAX_ALLOWED_DRIFT) {
+	if drift < -MAX_ALLOWED_DRIFT || drift > MAX_ALLOWED_DRIFT {
 		return errors.New("System clock is too far from NTP servers. please synchronize your OS")
 	}
 
