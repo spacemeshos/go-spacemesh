@@ -217,6 +217,7 @@ func (app *SpacemeshApp) startSpacemeshNode(ctx *cli.Context) error {
 		return err
 	}
 
+	node.NotifyOnShutdown(ExitApp)
 	app.Node = node
 
 	conf := &apiconf.ConfigValues

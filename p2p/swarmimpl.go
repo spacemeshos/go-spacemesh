@@ -9,6 +9,7 @@ import (
 
 	//"github.com/spacemeshos/go-spacemesh/p2p/dht/table"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
+	"github.com/spacemeshos/go-spacemesh/p2p/timesync"
 )
 
 type nodeEventCallbacks []NodeEventCallback
@@ -273,7 +274,7 @@ func (s *swarmImpl) shutDownInternal() {
 // provides concurrency safety as only one callback is executed at a time
 // so there's no need for sync internal data structures
 func (s *swarmImpl) beginProcessingEvents() {
-
+	checkTimeSync := time.NewTicker(timesync.REFRESH_NTP_INTERVAL)
 Loop:
 	for {
 		select {
@@ -316,6 +317,14 @@ Loop:
 
 		case d := <-s.registerNodeReq:
 			s.onRegisterNodeRequest(d)
+
+		case <-checkTimeSync.C:
+			_, err := timesync.CheckSystemClockDrift()
+			if err != nil {
+				checkTimeSync.Stop()
+				log.Error("System time could'nt synchronize %s", err)
+				go s.localNode.Shutdown()
+			}
 		}
 	}
 }

@@ -28,6 +28,7 @@ type localNodeImp struct {
 	swarm Swarm // local owns a swarm
 	ping  Ping
 
+	shutdownChan chan bool
 	// add all other implemented protocols here....
 
 }
@@ -54,11 +55,18 @@ func (n *localNodeImp) Config() nodeconfig.Config {
 	return n.config
 }
 
+// NotifyOnChannel gives the node a callback channel to notify when it shutsdown
+func (n *localNodeImp) NotifyOnShutdown(notify chan bool) {
+	n.shutdownChan = notify
+}
+
 // Shutdown releases all resources open and owned by this local node.
 func (n *localNodeImp) Shutdown() {
-
 	// shutdown swarm
 	n.swarm.Shutdown()
+	if n.shutdownChan != nil {
+		n.shutdownChan <- true
+	}
 }
 
 // GetPing returns this node's Ping protocol
