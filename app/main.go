@@ -169,12 +169,11 @@ func (app *SpacemeshApp) before(ctx *cli.Context) error {
 
 	// todo: add misc app setup here (metrics, debug, etc....)
 
-	err := timesync.CheckSystemClockDrift()
-	// todo : check this every hour
+	drift, err := timesync.CheckSystemClockDrift()
 	if err != nil {
-		//todo: this shows the help output for some reason
 		return err
 	}
+	log.Info("System clock synchronized with ntp. drift: %s", drift)
 
 	// ensure all data folders exist
 	filesystem.EnsureSpacemeshDataDirectories()
