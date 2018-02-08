@@ -22,7 +22,7 @@ const (
 
 // Relay on more than one server
 var (
-	DEFAULT_SERVERS = []string{
+	DefaultServers = []string{
 		"0.pool.ntp.org",
 		"1.pool.ntp.org",
 		"time1.google.com",
@@ -109,7 +109,7 @@ func ntpTimeDrift() (time.Duration, error) {
 	// Make 3 concurrent calls to different ntp servers
 	// TODO: possibly add retries when timeout
 	queriedServers := make(map[int]bool)
-	serverSeed := len(DEFAULT_SERVERS) - 1
+	serverSeed := len(DefaultServers) - 1
 	for i := 0; i < NtpQueries; i++ {
 		rndsrv := rand.Intn(serverSeed)
 		for queriedServers[rndsrv] {
@@ -117,7 +117,7 @@ func ntpTimeDrift() (time.Duration, error) {
 		}
 		queriedServers[rndsrv] = true
 		go func() {
-			rt, lat, rsp, err := ntpRequest(DEFAULT_SERVERS[rndsrv], req)
+			rt, lat, rsp, err := ntpRequest(DefaultServers[rndsrv], req)
 			if err != nil {
 				errorChan <- err
 				return
