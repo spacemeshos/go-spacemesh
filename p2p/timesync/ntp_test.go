@@ -10,8 +10,8 @@ import (
 func TestCheckSystemClockDrift(t *testing.T) {
 	drift, err := CheckSystemClockDrift()
 	t.Log("Checking system clock drift from NTP")
-	if drift < -MAX_ALLOWED_DRIFT || drift > MAX_ALLOWED_DRIFT {
-		assert.NotNil(t, err, fmt.Sprintf("Didn't get that drift exceedes", err))
+	if drift < -MaxAllowedDrift || drift > MaxAllowedDrift {
+		assert.NotNil(t, err, fmt.Sprintf("Didn't get that drift exceedes. %s", err))
 	} else {
 		assert.Nil(t, err, fmt.Sprintf("Drift is ok"))
 	}

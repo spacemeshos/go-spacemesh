@@ -2,7 +2,6 @@ package timesync
 
 import (
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"math/rand"
@@ -10,15 +9,15 @@ import (
 	"time"
 )
 
-//TODO: config params for NTP_QUERIES, DEFAULT_TIMEOUT_LATENCY, NTP_QUERIES, REFRESH_NTP_INTERVAL
+//TODO: config params for NtpQueries, DefaultTimeoutLatency, NtpQueries, refreshNtpInterval
 const (
 	// 70 years in seconds since ntp counts from 1900 and unix from 1970
-	NTP_OFFSET              = 2208988800
-	DEFAULT_NTP_PORT        = "123"
-	MAX_ALLOWED_DRIFT       = 10 * time.Second
-	NTP_QUERIES             = 4
-	DEFAULT_TIMEOUT_LATENCY = 30 * time.Second
-	REFRESH_NTP_INTERVAL    = 30 * time.Minute
+	NtpOffset             = 2208988800
+	DefaultNtpPort        = "123"
+	MaxAllowedDrift       = 10 * time.Second
+	NtpQueries            = 4
+	DefaultTimeoutLatency = 30 * time.Second
+	RefreshNtpInterval    = 30 * time.Minute
 )
 
 // Relay on more than one server
@@ -35,7 +34,7 @@ var (
 	zeroTime     = time.Time{}
 )
 
-// 48 bytes packet.
+// NtpPacket is a 48 bytes packet used for querying ntp information.
 type NtpPacket struct {
 	Settings       uint8  // leap yr indicator, ver number, and mode
 	Stratum        uint8  // stratum of local clock
@@ -57,14 +56,14 @@ type NtpPacket struct {
 
 // Time makes a Time struct from NtpPacket data
 func (n *NtpPacket) Time() time.Time {
-	secs := float64(n.TxTimeSec) - NTP_OFFSET
+	secs := float64(n.TxTimeSec) - NtpOffset
 	nanos := (int64(n.TxTimeFrac) * 1e9) >> 32
 	return time.Unix(int64(secs), nanos)
 }
 
 // ntpRequest requests a Ntp packet from a server and  request time, latency and a NtpPacket struct
 func ntpRequest(server string, rq *NtpPacket) (time.Time, time.Duration, *NtpPacket, error) {
-	addr, err := net.ResolveUDPAddr("udp", net.JoinHostPort(server, DEFAULT_NTP_PORT))
+	addr, err := net.ResolveUDPAddr("udp", net.JoinHostPort(server, DefaultNtpPort))
 	if err != nil {
 		return zeroTime, zeroDuration, nil, err
 	}
@@ -77,7 +76,7 @@ func ntpRequest(server string, rq *NtpPacket) (time.Time, time.Duration, *NtpPac
 	defer conn.Close()
 
 	if err := conn.SetDeadline(
-		time.Now().Add(DEFAULT_TIMEOUT_LATENCY)); err != nil {
+		time.Now().Add(DefaultTimeoutLatency)); err != nil {
 		log.Error("failed to set deadline: ", err)
 		return zeroTime, zeroDuration, nil, err
 	}
@@ -111,7 +110,7 @@ func ntpTimeDrift() (time.Duration, error) {
 	// TODO: possibly add retries when timeout
 	queriedServers := make(map[int]bool)
 	serverSeed := len(DEFAULT_SERVERS) - 1
-	for i := 0; i < NTP_QUERIES; i++ {
+	for i := 0; i < NtpQueries; i++ {
 		rndsrv := rand.Intn(serverSeed)
 		for queriedServers[rndsrv] {
 			rndsrv = rand.Intn(serverSeed)
@@ -130,7 +129,7 @@ func ntpTimeDrift() (time.Duration, error) {
 	}
 
 	all := time.Duration(0)
-	for i := 0; i < NTP_QUERIES; i++ {
+	for i := 0; i < NtpQueries; i++ {
 		select {
 		case err := <-errorChan:
 			close(errorChan)
@@ -141,11 +140,11 @@ func ntpTimeDrift() (time.Duration, error) {
 	}
 	// return an average of all collected drifts
 	// TODO: ignore extreme edge results
-	return time.Duration(all / NTP_QUERIES), nil
+	return time.Duration(all / NtpQueries), nil
 }
 
 // CheckSystemClockDrift is comparing our clock to the collected ntp data
-// return the drift and an error when drift reading failed or exceeds our preset MAX_ALLOWED_DRIFT
+// return the drift and an error when drift reading failed or exceeds our preset MaxAllowedDrift
 func CheckSystemClockDrift() (time.Duration, error) {
 	// Read average drift form ntpTimeDrift
 	drift, err := ntpTimeDrift()
@@ -153,8 +152,8 @@ func CheckSystemClockDrift() (time.Duration, error) {
 		return drift, err
 	}
 	// Check if drift exceeds our max allowed drift
-	if drift < -MAX_ALLOWED_DRIFT || drift > MAX_ALLOWED_DRIFT {
-		return drift, errors.New(fmt.Sprintf("System clock is %s away from NTP servers. please synchronize your OS", drift))
+	if drift < -MaxAllowedDrift || drift > MaxAllowedDrift {
+		return drift, fmt.Errorf("System clock is %s away from NTP servers. please synchronize your OS ", drift)
 	}
 
 	return drift, nil
