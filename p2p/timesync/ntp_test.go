@@ -18,17 +18,16 @@ func TestCheckSystemClockDrift(t *testing.T) {
 }
 
 func TestNtpPacket_Time(t *testing.T) {
-	ntpDate := time.Date(1900, 1, 1 ,0, 0 , 0, 0, time.UTC)
+	ntpDate := time.Date(1900, 1, 1, 0, 0, 0, 0, time.UTC)
 	since := time.Since(ntpDate)
 	sysTime := time.Now().UTC()
 	p := NtpPacket{
-		TxTimeSec: uint32(since.Seconds()),
+		TxTimeSec:  uint32(since.Seconds()),
 		TxTimeFrac: uint32(since.Nanoseconds()),
 	}
 
 	// This will fail when our conversion doesn't function right because ntp count 70 years more than unix
 	assert.True(t, p.Time().Year() == sysTime.Year(), "Converted and system time should be the same year")
 }
-
 
 // TODO : add more tests for rest of the functions
