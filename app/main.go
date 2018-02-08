@@ -19,6 +19,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/app/config"
 	nodeparams "github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
+	"github.com/spacemeshos/go-spacemesh/p2p/timesync"
 )
 
 // SpacemeshApp is the cli app singleton
@@ -167,6 +168,12 @@ func (app *SpacemeshApp) before(ctx *cli.Context) error {
 	app.setupLogging()
 
 	// todo: add misc app setup here (metrics, debug, etc....)
+
+	err := timesync.CheckSystemClockDrift()
+	if err != nil {
+		//todo: this shows the help output for some reason
+		return err
+	}
 
 	// ensure all data folders exist
 	filesystem.EnsureSpacemeshDataDirectories()
