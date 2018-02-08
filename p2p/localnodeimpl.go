@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-// LocalNode implementation
+// LocalNode implementation.
 type localNodeImp struct {
 	pubKey        crypto.PublicKey
 	privKey       crypto.PrivateKey
@@ -55,7 +55,7 @@ func (n *localNodeImp) Config() nodeconfig.Config {
 	return n.config
 }
 
-// NotifyOnChannel gives the node a callback channel to notify when it shutsdown
+// NotifyOnChannel gives the node a callback channel to notify when it shuts down.
 func (n *localNodeImp) NotifyOnShutdown(notify chan bool) {
 	n.shutdownChan = notify
 }
@@ -69,7 +69,7 @@ func (n *localNodeImp) Shutdown() {
 	}
 }
 
-// GetPing returns this node's Ping protocol
+// GetPing returns this node's Ping protocol.
 func (n *localNodeImp) GetPing() Ping {
 	return n.ping
 }

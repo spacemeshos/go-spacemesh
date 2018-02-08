@@ -1,9 +1,9 @@
+// Package timesync is used to check system time reliability by communicating with NTP time servers.
 package timesync
 
 import (
 	"encoding/binary"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"math/rand"
 	"net"
 	"time"
@@ -25,8 +25,8 @@ var (
 	DefaultServers = []string{
 		"0.pool.ntp.org",
 		"1.pool.ntp.org",
+		"time.google.com",
 		"time1.google.com",
-		"time2.google.com",
 		"time.asia.apple.com",
 		"time.americas.apple.com",
 	}
@@ -54,14 +54,14 @@ type NtpPacket struct {
 
 }
 
-// Time makes a Time struct from NtpPacket data
+// Time makes a Time struct from NtpPacket data.
 func (n *NtpPacket) Time() time.Time {
 	secs := float64(n.TxTimeSec) - NtpOffset
 	nanos := (int64(n.TxTimeFrac) * 1e9) >> 32
 	return time.Unix(int64(secs), nanos)
 }
 
-// ntpRequest requests a Ntp packet from a server and  request time, latency and a NtpPacket struct
+// ntpRequest requests a Ntp packet from a server and  request time, latency and a NtpPacket struct.
 func ntpRequest(server string, rq *NtpPacket) (time.Time, time.Duration, *NtpPacket, error) {
 	addr, err := net.ResolveUDPAddr("udp", net.JoinHostPort(server, DefaultNtpPort))
 	if err != nil {
@@ -70,32 +70,28 @@ func ntpRequest(server string, rq *NtpPacket) (time.Time, time.Duration, *NtpPac
 
 	conn, err := net.DialUDP("udp", nil, addr)
 	if err != nil {
-		log.Error("failed to connect:", err)
-		return zeroTime, zeroDuration, nil, err
+		return zeroTime, zeroDuration, nil, fmt.Errorf("failed to connect: %v", err)
 	}
 	defer conn.Close()
 
 	if err := conn.SetDeadline(
 		time.Now().Add(DefaultTimeoutLatency)); err != nil {
-		log.Error("failed to set deadline: ", err)
-		return zeroTime, zeroDuration, nil, err
+		return zeroTime, zeroDuration, nil, fmt.Errorf("failed to set deadline: %s", err)
 	}
 	before := time.Now()
 	if err := binary.Write(conn, binary.BigEndian, rq); err != nil {
-		log.Error("failed to send request: %v", err)
-		return zeroTime, zeroDuration, nil, err
+		return zeroTime, zeroDuration, nil, fmt.Errorf("failed to send request: %v", err)
 	}
 	latency := time.Since(before)
 	rsp := &NtpPacket{}
 	if err := binary.Read(conn, binary.BigEndian, rsp); err != nil {
-		log.Error("failed to read server response: %v", err)
-		return zeroTime, zeroDuration, nil, err
+		return zeroTime, zeroDuration, nil, fmt.Errorf("failed to read server response: %v", err)
 	}
 
 	return before, latency, rsp, nil
 }
 
-// ntpTimeDrift queries random servers from our list to calculate a drift average
+// ntpTimeDrift queries random servers from our list to calculate a drift average.
 func ntpTimeDrift() (time.Duration, error) {
 
 	// 00 011 011 = 0x1B
