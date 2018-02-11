@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/assert"
 	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 	"testing"
 	"time"
 )
@@ -11,7 +12,7 @@ import (
 func TestCheckSystemClockDrift(t *testing.T) {
 	drift, err := CheckSystemClockDrift()
 	t.Log("Checking system clock drift from NTP")
-	if drift < -MaxAllowedDrift || drift > MaxAllowedDrift {
+	if drift < -nodeconfig.TimeConfigValues.MaxAllowedDrift.Duration() || drift > nodeconfig.TimeConfigValues.MaxAllowedDrift.Duration() {
 		assert.NotNil(t, err, fmt.Sprintf("Didn't get that drift exceedes. %s", err))
 	} else {
 		assert.Nil(t, err, fmt.Sprintf("Drift is ok"))

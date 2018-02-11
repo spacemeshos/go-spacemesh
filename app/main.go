@@ -52,6 +52,11 @@ var (
 		nodeparams.RoutingTableAlphaFlag,
 		nodeparams.RandomConnectionsFlag,
 		nodeparams.BootstrapNodesFlag,
+		//timesync flags
+		nodeparams.MaxAllowedDriftFlag,
+		nodeparams.NtpQueriesFlag,
+		nodeparams.DefaultTimeoutLatencyFlag,
+		nodeparams.RefreshNtpIntervalFlag,
 		// add all additional node flags here ...
 	}
 	apiFlags = []cli.Flag{

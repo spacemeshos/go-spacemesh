@@ -4,21 +4,18 @@ package timesync
 import (
 	"encoding/binary"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 	"math/rand"
 	"net"
 	"sort"
 	"time"
 )
 
-//TODO: config params for NtpQueries, DefaultTimeoutLatency, NtpQueries, refreshNtpInterval
 const (
-	// 70 years in seconds since ntp counts from 1900 and unix from 1970
-	NtpOffset             = 2208988800
-	DefaultNtpPort        = "123"
-	MaxAllowedDrift       = 10 * time.Second
-	NtpQueries            = 4
-	DefaultTimeoutLatency = 30 * time.Second
-	RefreshNtpInterval    = 30 * time.Minute
+	// NtpOffset is 70 years in seconds since ntp counts from 1900 and unix from 1970
+	NtpOffset = 2208988800
+	// DefaultNtpPort is the ntp protocol port
+	DefaultNtpPort = "123"
 )
 
 // DefaultServer is a list of relay on more than one server.
@@ -102,7 +99,7 @@ func ntpRequest(server string, rq *NtpPacket) (time.Time, time.Duration, *NtpPac
 	defer conn.Close()
 
 	if err := conn.SetDeadline(
-		time.Now().Add(DefaultTimeoutLatency)); err != nil {
+		time.Now().Add(nodeconfig.TimeConfigValues.DefaultTimeoutLatency.Duration())); err != nil {
 		return zeroTime, zeroDuration, nil, fmt.Errorf("failed to set deadline: %s", err)
 	}
 	before := time.Now()
@@ -133,7 +130,7 @@ func ntpTimeDrift() (time.Duration, error) {
 	// TODO: possibly add retries when timeout
 	queriedServers := make(map[int]bool)
 	serverSeed := len(DefaultServers) - 1
-	for i := 0; i < NtpQueries; i++ {
+	for i := 0; i < nodeconfig.TimeConfigValues.NtpQueries; i++ {
 		rndsrv := rand.Intn(serverSeed)
 		for queriedServers[rndsrv] {
 			rndsrv = rand.Intn(serverSeed)
@@ -152,7 +149,7 @@ func ntpTimeDrift() (time.Duration, error) {
 	}
 
 	all := sortableDurations{}
-	for i := 0; i < NtpQueries; i++ {
+	for i := 0; i < nodeconfig.TimeConfigValues.NtpQueries; i++ {
 		select {
 		case err := <-errorChan:
 			close(errorChan)
@@ -176,7 +173,7 @@ func CheckSystemClockDrift() (time.Duration, error) {
 		return drift, err
 	}
 	// Check if drift exceeds our max allowed drift
-	if drift < -MaxAllowedDrift || drift > MaxAllowedDrift {
+	if drift < -nodeconfig.TimeConfigValues.MaxAllowedDrift.Duration() || drift > nodeconfig.TimeConfigValues.MaxAllowedDrift.Duration() {
 		return drift, fmt.Errorf("System clock is %s away from NTP servers. please synchronize your OS ", drift)
 	}
 
