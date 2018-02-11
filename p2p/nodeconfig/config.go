@@ -15,6 +15,15 @@ var ConfigValues = Config{
 	DialTimeout:   duration{"1m"},
 	ConnKeepAlive: duration{"48h"},
 	SwarmConfig:   SwarmConfigValues,
+	TimeConfig:    TimeConfigValues,
+}
+
+// TimeConfigValues defines default values for all time and ntp related params
+var TimeConfigValues = TimeConfig{
+	MaxAllowedDrift:       duration{"10s"},
+	NtpQueries:            5,
+	DefaultTimeoutLatency: duration{"30s"},
+	RefreshNtpInterval:    duration{"30m"},
 }
 
 // SwarmConfigValues defines default values for swarm config params
@@ -54,6 +63,7 @@ type Config struct {
 	DialTimeout   duration
 	ConnKeepAlive duration
 	SwarmConfig   SwarmConfig
+	TimeConfig    TimeConfig
 }
 
 // SwarmConfig specifies swarm config params
@@ -63,4 +73,12 @@ type SwarmConfig struct {
 	RoutingTableAlpha      int
 	RandomConnections      int
 	BootstrapNodes         cli.StringSlice
+}
+
+// TimeConfig specifies the timesync params for ntp
+type TimeConfig struct {
+	MaxAllowedDrift       duration
+	NtpQueries            int
+	DefaultTimeoutLatency duration
+	RefreshNtpInterval    duration
 }

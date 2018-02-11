@@ -84,4 +84,36 @@ var (
 		Usage: "Foundation nodes to bootstrap spacemesh",
 		Value: &SwarmConfigValues.BootstrapNodes,
 	})
+
+	// MaxAllowedDriftFlag holds the time to allow the node to be off sync with ntp clock before abortion
+	MaxAllowedDriftFlag = altsrc.NewStringFlag(cli.StringFlag{
+		Name:        "max-allowed-time-drift",
+		Usage:       "When to close the app until user resolves time sync problems",
+		Value:       TimeConfigValues.MaxAllowedDrift.string,
+		Destination: &TimeConfigValues.MaxAllowedDrift.string,
+	})
+
+	// NtpQueriesFlag holds the number of ntp servers to query for information
+	NtpQueriesFlag = altsrc.NewIntFlag(cli.IntFlag{
+		Name:        "ntp-queries",
+		Usage:       "How much ntp servers to query",
+		Value:       TimeConfigValues.NtpQueries,
+		Destination: &TimeConfigValues.NtpQueries,
+	})
+
+	// DefaultTimeoutLatencyFlag holds the timeout we allow to ntp requests
+	DefaultTimeoutLatencyFlag = altsrc.NewStringFlag(cli.StringFlag{
+		Name:        "default-timeout-latency",
+		Usage:       "Timeout to ntp requests",
+		Value:       TimeConfigValues.DefaultTimeoutLatency.string,
+		Destination: &TimeConfigValues.DefaultTimeoutLatency.string,
+	})
+
+	// RefreshNtpIntervalFlag holds a duration to wait before each time sync refresh
+	RefreshNtpIntervalFlag = altsrc.NewStringFlag(cli.StringFlag{
+		Name:        "refresh-ntp-interval",
+		Usage:       "How much time to wait between ntp sync requests",
+		Value:       TimeConfigValues.RefreshNtpInterval.string,
+		Destination: &TimeConfigValues.RefreshNtpInterval.string,
+	})
 )

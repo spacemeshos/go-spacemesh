@@ -37,8 +37,9 @@ type LocalNode interface {
 
 	GetRemoteNodeData() node.RemoteNodeData
 
-	// todo: add client callback when the node has shut down properly
 	Shutdown()
+
+	NotifyOnShutdown(chan bool)
 
 	// logging wrappers - log node id and args
 

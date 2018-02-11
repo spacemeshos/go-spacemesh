@@ -19,6 +19,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/app/config"
 	nodeparams "github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
+	"github.com/spacemeshos/go-spacemesh/p2p/timesync"
 )
 
 // SpacemeshApp is the cli app singleton
@@ -51,6 +52,11 @@ var (
 		nodeparams.RoutingTableAlphaFlag,
 		nodeparams.RandomConnectionsFlag,
 		nodeparams.BootstrapNodesFlag,
+		//timesync flags
+		nodeparams.MaxAllowedDriftFlag,
+		nodeparams.NtpQueriesFlag,
+		nodeparams.DefaultTimeoutLatencyFlag,
+		nodeparams.RefreshNtpIntervalFlag,
 		// add all additional node flags here ...
 	}
 	apiFlags = []cli.Flag{
@@ -168,6 +174,12 @@ func (app *SpacemeshApp) before(ctx *cli.Context) error {
 
 	// todo: add misc app setup here (metrics, debug, etc....)
 
+	drift, err := timesync.CheckSystemClockDrift()
+	if err != nil {
+		return err
+	}
+	log.Info("System clock synchronized with ntp. drift: %s", drift)
+
 	// ensure all data folders exist
 	filesystem.EnsureSpacemeshDataDirectories()
 
@@ -210,6 +222,7 @@ func (app *SpacemeshApp) startSpacemeshNode(ctx *cli.Context) error {
 		return err
 	}
 
+	node.NotifyOnShutdown(ExitApp)
 	app.Node = node
 
 	conf := &apiconf.ConfigValues
