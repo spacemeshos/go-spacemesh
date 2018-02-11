@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"sort"
 	"time"
 )
 
@@ -34,6 +35,30 @@ var (
 	zeroTime     = time.Time{}
 )
 
+type sortableDurations []time.Duration
+
+// implement sortable interface
+func (sd sortableDurations) Len() int           { return len(sd) }
+func (sd sortableDurations) Less(i, j int) bool { return sd[i] < sd[j] }
+func (sd sortableDurations) Swap(i, j int)      { sd[i], sd[j] = sd[j], sd[i] }
+
+// remove extreme cases from the slice
+func (sd *sortableDurations) RemoveExtremes() {
+	s := *sd
+	l := len(s)
+	sort.Sort(sd)
+	*sd = (*sd)[1 : l-1]
+}
+
+// Returns an average of all durations
+func (sd sortableDurations) Average() time.Duration {
+	all := time.Duration(0)
+	for _, d := range sd {
+		all += d
+	}
+	return time.Duration(all / time.Duration(len(sd)))
+}
+
 // NtpPacket is a 48 bytes packet used for querying ntp information.
 type NtpPacket struct {
 	Settings       uint8  // leap yr indicator, ver number, and mode
@@ -53,6 +78,8 @@ type NtpPacket struct {
 	TxTimeFrac     uint32 // transmit time frac
 
 }
+
+//TODO: implement ntp packet response validation. ( will require more verbose response obj)
 
 // Time makes a Time struct from NtpPacket data.
 func (n *NtpPacket) Time() time.Time {
@@ -124,19 +151,20 @@ func ntpTimeDrift() (time.Duration, error) {
 		}()
 	}
 
-	all := time.Duration(0)
+	all := sortableDurations{}
 	for i := 0; i < NtpQueries; i++ {
 		select {
 		case err := <-errorChan:
 			close(errorChan)
-			return all, err
+			return 0, err
 		case result := <-resultsChan:
-			all += result
+			all = append(all, result)
 		}
 	}
-	// return an average of all collected drifts
-	// TODO: ignore extreme edge results
-	return time.Duration(all / NtpQueries), nil
+	// remove edge cases from our results
+	all.RemoveExtremes()
+	// return an average of all values
+	return all.Average(), nil
 }
 
 // CheckSystemClockDrift is comparing our clock to the collected ntp data
