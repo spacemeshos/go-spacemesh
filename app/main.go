@@ -199,7 +199,6 @@ func (app *SpacemeshApp) cleanup(ctx *cli.Context) error {
 }
 
 func (app *SpacemeshApp) startSpacemeshNode(ctx *cli.Context) error {
-	log.Error("Config :################### %v", nodeparams.SwarmConfigValues)
 	log.Info("Starting local node...")
 	port := *nodeparams.LocalTCPPortFlag.Destination
 	address := fmt.Sprintf("0.0.0.0:%d", port)

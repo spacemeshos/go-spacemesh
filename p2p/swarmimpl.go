@@ -105,7 +105,7 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 	// findNode dht protocol
 	s.findNodeProtocol = NewFindNodeProtocol(s)
 
-	s.localNode.Info("Created swarm for local node %s", tcpAddress, l.Pretty())
+	s.localNode.Info("Created swarm for local node %s, %s", tcpAddress, l.Pretty())
 
 	s.handshakeProtocol = NewHandshakeProtocol(s)
 	s.handshakeProtocol.RegisterNewSessionCallback(s.newSessions)
@@ -127,7 +127,7 @@ func (s *swarmImpl) RegisterNodeEventsCallback(callback NodeEventCallback) {
 // Sends a connection event to all registered clients
 func (s *swarmImpl) sendNodeEvent(peerID string, state NodeState) {
 
-	s.localNode.Info(">> Node event for <%s>. State: %s", peerID[:6], state)
+	s.localNode.Info(">> Node event for <%s>. State: %+v", peerID[:6], state)
 
 	evt := NodeEvent{peerID, state}
 	for _, c := range s.nec {
