@@ -8,6 +8,7 @@ import (
 	"github.com/btcsuite/btcutil/base58"
 	"math/big"
 	"sort"
+	"math/bits"
 )
 
 // ID is a dht-compatible ID using the XOR keyspace.
@@ -85,11 +86,11 @@ func (id ID) CommonPrefixLen(o ID) int {
 
 // ZeroPrefixLen returns the zero prefix length of the binary number represnted by ID in bits.
 func (id ID) ZeroPrefixLen() int {
-	for i := 0; i < len(id); i++ {
-		for j := 0; j < 8; j++ {
-			if (id[i]>>uint8(7-j))&0x1 != 0 {
-				return i*8 + j
-			}
+	zpl := 0
+	for i, b := range id {
+		zpl = bits.LeadingZeros8(b)
+		if zpl != 8 {
+			return i*8 + zpl
 		}
 	}
 	return len(id) * 8
