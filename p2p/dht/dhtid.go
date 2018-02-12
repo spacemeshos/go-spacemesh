@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"github.com/btcsuite/btcutil/base58"
 	"math/big"
-	"sort"
 	"math/bits"
+	"sort"
 )
 
 // ID is a dht-compatible ID using the XOR keyspace.

@@ -50,7 +50,6 @@ func TestDhtIds(t *testing.T) {
 	id7, _ := NewIDFromHexString("000000000000000000000000000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
 	id8, _ := NewIDFromHexString("FF0000000000000000000000000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
 
-
 	assert.Equal(t, len(id1), 32, "Expectd 256 bits / 32 bytes id")
 	assert.Equal(t, hex.EncodeToString(id1), hexData, "Unexpected id data")
 
@@ -71,7 +70,6 @@ func TestDhtIds(t *testing.T) {
 	pl = id8.ZeroPrefixLen()
 	//FF is a full byte (11111111) so there should be no zeros prefix
 	assert.True(t, pl == 0, "excpected no prefix zeros when id string starts with FF")
-
 
 	l := id1.CommonPrefixLen(id1)
 	assert.Equal(t, l, 256, "expected 256 cpl for id with itself")
