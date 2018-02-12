@@ -42,8 +42,8 @@ go get github.com/spacemeshos/go-spacemesh
 or
 - Fork the project from https://github.com/spacemeshos/go-spacemesh 
 - Checkout the `develop` branch of your fork from GitHub
-- Move your fork from $GOPATH/src/github.com/YOURACCOUNT/go-spacemesh to $GOPATH/src/github.com/spacemeshos/go-spacemesh
-This allows Go tools to work as expected.
+- Move your fork from `$GOPATH/src/github.com/YOURACCOUNT/go-spacemesh` to `$GOPATH/src/github.com/spacemeshos/go-spacemesh`
+This allows GO tools to work as expected.
 
 ### Building
 
