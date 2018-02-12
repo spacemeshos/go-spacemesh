@@ -114,12 +114,12 @@ func newSpacemeshApp() *SpacemeshApp {
 	return sma
 }
 
-// start the spacemesh node
+// startSpacemeshNode starts the spacemesh local node.
 func startSpacemeshNode(ctx *cli.Context) error {
 	return App.startSpacemeshNode(ctx)
 }
 
-// setup app logging system
+// setupLogging configured the app logging system.
 func (app *SpacemeshApp) setupLogging() {
 
 	// setup logging early
@@ -248,6 +248,8 @@ func (app *SpacemeshApp) startSpacemeshNode(ctx *cli.Context) error {
 		app.jsonAPIService = api.NewJSONHTTPServer()
 		app.jsonAPIService.StartService(nil)
 	}
+
+	log.Info("App started.")
 
 	// app blocks until it receives a signal to exit
 	// this signal may come from the node or from sig-abort (ctrl-c)

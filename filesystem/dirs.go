@@ -49,7 +49,7 @@ func GetSpacemeshTempDirectoryPath() (string, error) {
 	return GetFullDirectoryPath(pathName)
 }
 
-// DeleteAllTempFiles deletes all temp files from the temp dir and creates a new temp dir
+// DeleteAllTempFiles deletes all temp files from the temp dir and creates a new temp dir.
 func DeleteAllTempFiles() error {
 	tempDir, err := GetSpacemeshTempDirectoryPath()
 	if err != nil {

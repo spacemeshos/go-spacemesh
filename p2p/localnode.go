@@ -72,7 +72,7 @@ func NewLocalNode(tcpAddress string, config nodeconfig.Config, persist bool) (Lo
 	// load the node with the data of the first node found
 	nodeData, err := readFirstNodeData()
 	if err != nil {
-		return nil, err
+		log.Warning("failed to read node data from local store")
 	}
 
 	if nodeData != nil {
@@ -106,6 +106,8 @@ func newLocalNodeWithKeys(pubKey crypto.PublicKey, privKey crypto.PrivateKey, tc
 		return nil, err
 	}
 
+	log.Info("Node id: %s", n.String())
+
 	// setup logging
 	n.logger = log.CreateLogger(n.pubKey.Pretty(), dataDir, "node.log")
 
@@ -121,7 +123,7 @@ func newLocalNodeWithKeys(pubKey crypto.PublicKey, privKey crypto.PrivateKey, tc
 		return nil, errors.New("critical error - failed to obtain node public ip address. Check your Internet connection and try again")
 	}
 
-	log.Info("Node public ip address is %s . Please make sure that your home router or access point accepts connections on this port and forwards incoming connection requests to this ip address to this computer.", n.pubTCPAddress)
+	log.Info("Node public ip address %s. Please make sure that your home router or access point accepts incoming connections on this port and forwards incoming such connection requests to this computer.", n.pubTCPAddress)
 
 	n.swarm = s
 	n.ping = NewPingProtocol(s)
