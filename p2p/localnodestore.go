@@ -32,7 +32,7 @@ func ensureNodesDataDirectory() (string, error) {
 }
 
 // Gets the path to the node's data directory, e.g. /nodes/[node-id]/
-// Directory will be created on demand if it doesn't exist
+// Directory will be created on demand if it doesn't exist.
 func (n *localNodeImp) EnsureNodeDataDirectory() (string, error) {
 	nodesDataDir, err := ensureNodesDataDirectory()
 	if err != nil {

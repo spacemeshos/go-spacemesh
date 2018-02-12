@@ -219,7 +219,6 @@ func (app *SpacemeshApp) startSpacemeshNode(ctx *cli.Context) error {
 	// so future sessions use the same local node id
 	node, err := p2p.NewLocalNode(address, nodeparams.ConfigValues, true)
 	if err != nil {
-		log.Error("failed to create local node", err)
 		return err
 	}
 

@@ -9,6 +9,7 @@ import (
 )
 
 func TestApp(t *testing.T) {
+
 	filesystem.DeleteSpacemeshDataFolders(t)
 
 	// remove all injected test flags for now
@@ -28,4 +29,5 @@ func TestApp(t *testing.T) {
 	ExitApp <- true
 
 	filesystem.DeleteSpacemeshDataFolders(t)
+
 }

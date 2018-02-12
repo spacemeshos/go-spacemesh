@@ -10,7 +10,7 @@ var (
 	KSecurityFlag = altsrc.NewIntFlag(cli.IntFlag{
 		Name:  "security-param",
 		Usage: "Consensus protocol k security param",
-		// use Destination and not value so the app will automatically update the default values
+		// use Destination and not value so the app will automatically update the default values.
 		Value:       ConfigValues.SecurityParam,
 		Destination: &ConfigValues.SecurityParam,
 	})
@@ -23,7 +23,7 @@ var (
 		Destination: &ConfigValues.TCPPort,
 	})
 
-	// NetworkDialTimeout is the dial timeout for the node
+	// NetworkDialTimeout is the dial timeout for the node.
 	NetworkDialTimeout = altsrc.NewStringFlag(cli.StringFlag{
 		Name:        "dial-timeout",
 		Usage:       "network dial timeout duration",
@@ -85,7 +85,7 @@ var (
 		Value: &SwarmConfigValues.BootstrapNodes,
 	})
 
-	// MaxAllowedDriftFlag holds the time to allow the node to be off sync with ntp clock before abortion
+	// MaxAllowedDriftFlag holds the time to allow the node to be off sync with ntp clock before abortion.
 	MaxAllowedDriftFlag = altsrc.NewStringFlag(cli.StringFlag{
 		Name:        "max-allowed-time-drift",
 		Usage:       "When to close the app until user resolves time sync problems",
@@ -93,7 +93,7 @@ var (
 		Destination: &TimeConfigValues.MaxAllowedDrift.string,
 	})
 
-	// NtpQueriesFlag holds the number of ntp servers to query for information
+	// NtpQueriesFlag holds the number of ntp servers to query for information.
 	NtpQueriesFlag = altsrc.NewIntFlag(cli.IntFlag{
 		Name:        "ntp-queries",
 		Usage:       "How much ntp servers to query",
@@ -101,7 +101,7 @@ var (
 		Destination: &TimeConfigValues.NtpQueries,
 	})
 
-	// DefaultTimeoutLatencyFlag holds the timeout we allow to ntp requests
+	// DefaultTimeoutLatencyFlag holds the timeout we allow to ntp requests.
 	DefaultTimeoutLatencyFlag = altsrc.NewStringFlag(cli.StringFlag{
 		Name:        "default-timeout-latency",
 		Usage:       "Timeout to ntp requests",
@@ -109,7 +109,7 @@ var (
 		Destination: &TimeConfigValues.DefaultTimeoutLatency.string,
 	})
 
-	// RefreshNtpIntervalFlag holds a duration to wait before each time sync refresh
+	// RefreshNtpIntervalFlag holds a duration to wait before each time sync refresh.
 	RefreshNtpIntervalFlag = altsrc.NewStringFlag(cli.StringFlag{
 		Name:        "refresh-ntp-interval",
 		Usage:       "How much time to wait between ntp sync requests",

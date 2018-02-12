@@ -18,7 +18,7 @@ var ConfigValues = Config{
 	TimeConfig:    TimeConfigValues,
 }
 
-// TimeConfigValues defines default values for all time and ntp related params
+// TimeConfigValues defines default values for all time and ntp related params.
 var TimeConfigValues = TimeConfig{
 	MaxAllowedDrift:       duration{"10s"},
 	NtpQueries:            5,
@@ -54,7 +54,7 @@ func (d *duration) Duration() (duration time.Duration) {
 	return dur
 }
 
-// Config specifies node config params
+// Config specifies node config params.
 type Config struct {
 	SecurityParam int
 	FastSync      bool
@@ -66,7 +66,7 @@ type Config struct {
 	TimeConfig    TimeConfig
 }
 
-// SwarmConfig specifies swarm config params
+// SwarmConfig specifies swarm config params.
 type SwarmConfig struct {
 	Bootstrap              bool
 	RoutingTableBucketSize int
@@ -75,7 +75,7 @@ type SwarmConfig struct {
 	BootstrapNodes         cli.StringSlice
 }
 
-// TimeConfig specifies the timesync params for ntp
+// TimeConfig specifies the timesync params for ntp.
 type TimeConfig struct {
 	MaxAllowedDrift       duration
 	NtpQueries            int
