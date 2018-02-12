@@ -46,6 +46,9 @@ func TestDhtIds(t *testing.T) {
 	id3, _ := NewIDFromHexString("a726a40a408ff9fbdf627373cab566742114e2fd909eb4af4b6cbec67d6c6040")
 	id4, _ := NewIDFromHexString("b626a40a408ff9fbdf627373cab566742114e2fd909eb4af4b6cbec67d6c6040")
 	id5, _ := NewIDFromHexString("1000000000000000000000000000000000000000000000000000000000000000")
+	id6, _ := NewIDFromHexString("00000000000000000000000000000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
+	id7, _ := NewIDFromHexString("000000000000000000000000000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
+	id8, _ := NewIDFromHexString("FF0000000000000000000000000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
 
 	assert.Equal(t, len(id1), 32, "Expectd 256 bits / 32 bytes id")
 	assert.Equal(t, hex.EncodeToString(id1), hexData, "Unexpected id data")
@@ -55,6 +58,18 @@ func TestDhtIds(t *testing.T) {
 
 	d := id1.Distance(id1)
 	assert.True(t, d.Cmp(big.NewInt(0)) == 0, "expected 0 distance from same id")
+
+	pl := id6.ZeroPrefixLen()
+	//16 nullbytes means 16*8 zeros ( rest of string is FF means no more zeros )
+	assert.True(t, pl == 128, "excpected 128 zeros prefix in half null string")
+
+	pl = id7.ZeroPrefixLen()
+	//14 nullbytes means 15*8 zeros ( rest of string is FF means no more zeros )
+	assert.True(t, pl == 120, "excpected 120 zeros prefix")
+
+	pl = id8.ZeroPrefixLen()
+	//FF is a full byte (11111111) so there should be no zeros prefix
+	assert.True(t, pl == 0, "excpected no prefix zeros when id string starts with FF")
 
 	l := id1.CommonPrefixLen(id1)
 	assert.Equal(t, l, 256, "expected 256 cpl for id with itself")

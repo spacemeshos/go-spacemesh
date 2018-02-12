@@ -27,3 +27,7 @@ Now you can fetch and checkout any pull request so that you can test them:
 
 - Checkout out a given pull request branch based on its number
 ```git checkout -b 999 pull/origin/999```
+
+
+### The Table-driven pattern for tests is good!
+- See page 13 and on => https://leanpub.com/productiongo
