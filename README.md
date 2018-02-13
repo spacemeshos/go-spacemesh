@@ -123,7 +123,7 @@ Few things you can do right now to help out:
 
 ### Got Questions? 
 - Introduce yourself and ask anything on the [spacemesh gitter channel](https://gitter.im/spacemesh-os/Lobby).
-- DM [@spacemeshhq](https://twitter.com/teamspacemesh)
+- DM [@teamspacemesh](https://twitter.com/teamspacemesh)
 
 ### Additional info
 
