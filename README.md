@@ -47,31 +47,23 @@ or
 This allows GO tools to work as expected.
 
 ### Building
-
 To build `go-spacemesh` for your current system architecture use:
-
 ```
 make
 ```
-
 or
 ```
 go build
 ```
-
 from the project root directory. The binary `go-spacemesh` will be saved in the project root directory.
-
 
 To build a binary for a specific architecture directory use:
 ```
 make darwin | linux | windows
 ```
-
 Platform-specific binaries are saved to the `/build` directory.
 
-
 ### Running
-
 ```
 ./go-spacemesh
 ```
@@ -81,11 +73,9 @@ Platform-specific binaries are saved to the `/build` directory.
 make test
 ```
 or 
-
 ```
 make cover
 ```
-
 
 ### Contributing
 Thank you for considering to contribute to the go-spacemesh open source project. 
