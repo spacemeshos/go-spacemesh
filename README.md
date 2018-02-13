@@ -118,7 +118,7 @@ Few things you can do right now to help out:
  - Add tests. There can never be enough tests.
  
 #### Next Steps...
-- Please scan our [`wiki`](https://github.com/spacemeshos/go-spacemesh/wiki)
+- Please visit our [wiki](https://github.com/spacemeshos/go-spacemesh/wiki)
 - Browse project [go docs](https://godoc.org/github.com/spacemeshos/go-spacemesh)
 
 ### Got Questions? 
