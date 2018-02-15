@@ -3,11 +3,16 @@ package p2p
 import (
 	"encoding/hex"
 	"fmt"
+	"strings"
+	"time"
+
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
+	"github.com/spacemeshos/go-spacemesh/p2p/timesync"
 )
 
 // This source file contain swarm internal handlers
@@ -215,6 +220,7 @@ func (s *swarmImpl) onSendMessageRequest(r SendMessageReq) {
 	msg := &pb.CommonMessageData{
 		SessionId: session.ID(),
 		Payload:   encPayload,
+		Timestamp: time.Now().Unix(),
 	}
 
 	data, err := proto.Marshal(msg)
@@ -276,6 +282,24 @@ func (s *swarmImpl) onRemoteClientHandshakeMessage(msg net.IncomingMessage) {
 	if err != nil {
 		s.localNode.Warning("Unexpected handshake message format: %v", err)
 		return
+	}
+
+	reqVersion := strings.Split(data.ClientVersion, "/")
+	if len(reqVersion) != 2 {
+		s.localNode.Warning("Dropping incoming message - invalid client version")
+		return
+	}
+
+	ok, err := CheckNodeVersion(reqVersion[1], nodeconfig.MinClientVersion)
+	if err != nil || !ok {
+		s.localNode.Warning("Dropping incoming message - invalid client version %v", reqVersion)
+		return
+	}
+
+	if int(data.NetworkID) != s.localNode.Config().NetworkID {
+		s.localNode.Error("Dropping incoming message - localnode network-id (%v) tried to intiate session with (%v). aborting", s.localNode.Config().NetworkID, data.NetworkID)
+		s.localNode.Error("Removing peer")
+		//TODO : drop and blacklist this sender
 	}
 
 	connID := msg.Connection.ID()
@@ -381,6 +405,11 @@ func (s *swarmImpl) onRemoteClientMessage(msg net.IncomingMessage) {
 	if err != nil {
 		s.localNode.Warning("Bad request - closing connection...")
 		msg.Connection.Close()
+		return
+	}
+
+	if ok := timesync.CheckMessageDrift(c.Timestamp); !ok {
+		s.localNode.Error("Received out of sync msg dropping .. ")
 		return
 	}
 
