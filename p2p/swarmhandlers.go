@@ -284,18 +284,21 @@ func (s *swarmImpl) onRemoteClientHandshakeMessage(msg net.IncomingMessage) {
 		return
 	}
 
+	// check that received clientversion is valid client string
 	reqVersion := strings.Split(data.ClientVersion, "/")
 	if len(reqVersion) != 2 {
 		s.localNode.Warning("Dropping incoming message - invalid client version")
 		return
 	}
 
+	// compare that version to the min client version in config
 	ok, err := CheckNodeVersion(reqVersion[1], nodeconfig.MinClientVersion)
 	if err != nil || !ok {
 		s.localNode.Warning("Dropping incoming message - invalid client version %v", reqVersion)
 		return
 	}
 
+	// make sure we're on the same network
 	if int(data.NetworkID) != s.localNode.Config().NetworkID {
 		s.localNode.Error("Dropping incoming message - localnode network-id (%v) tried to intiate session with (%v). aborting", s.localNode.Config().NetworkID, data.NetworkID)
 		s.localNode.Error("Removing peer")
@@ -408,6 +411,7 @@ func (s *swarmImpl) onRemoteClientMessage(msg net.IncomingMessage) {
 		return
 	}
 
+	// check that the message was send within a reasonable time
 	if ok := timesync.CheckMessageDrift(c.Timestamp); !ok {
 		s.localNode.Error("Received out of sync msg dropping .. ")
 		return
