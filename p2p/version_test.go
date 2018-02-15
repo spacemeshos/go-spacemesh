@@ -1,9 +1,10 @@
 package p2p
 
 import (
-	"github.com/spacemeshos/go-spacemesh/assert"
 	"strings"
 	"testing"
+
+	"github.com/spacemeshos/go-spacemesh/assert"
 )
 
 func TestCheckNodeVersion(t *testing.T) {
