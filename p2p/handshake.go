@@ -8,12 +8,15 @@ import (
 	"crypto/sha512"
 	"encoding/hex"
 	"errors"
+	"io"
+	"time"
+
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
-	"io"
 )
 
 // HandshakeReq specifies the handshake protocol request message identifier. pattern is [protocol][version][method-name].
@@ -296,6 +299,10 @@ func generateHandshakeRequestData(node LocalNode, remoteNode Peer) (*pb.Handshak
 		Protocol: HandshakeReq,
 	}
 
+	data.ClientVersion = nodeconfig.ClientVersion
+	data.NetworkID = int32(node.Config().NetworkID)
+	data.Timestamp = time.Now().Unix()
+
 	iv := make([]byte, 16)
 	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
 		return nil, nil, err
@@ -457,14 +464,17 @@ func processHandshakeRequest(node LocalNode, r Peer, req *pb.HandshakeData) (*pb
 	node.RefreshPubTCPAddress()
 
 	resp := &pb.HandshakeData{
-		SessionId:  req.SessionId,
-		NodePubKey: node.PublicKey().InternalKey().SerializeUncompressed(),
-		PubKey:     req.PubKey,
-		Iv:         iv,
-		Hmac:       hmac1,
-		TcpAddress: node.PubTCPAddress(),
-		Protocol:   HandshakeResp,
-		Sign:       "",
+		ClientVersion: nodeconfig.ClientVersion,
+		NetworkID:     int32(node.Config().NetworkID),
+		SessionId:     req.SessionId,
+		Timestamp:     time.Now().Unix(),
+		NodePubKey:    node.PublicKey().InternalKey().SerializeUncompressed(),
+		PubKey:        req.PubKey,
+		Iv:            iv,
+		Hmac:          hmac1,
+		TcpAddress:    node.PubTCPAddress(),
+		Protocol:      HandshakeResp,
+		Sign:          "",
 	}
 
 	// sign corpus - marshall data without the signature to protobufs3 binary format and sign it
