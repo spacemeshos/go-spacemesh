@@ -47,6 +47,7 @@ var (
 		nodeparams.NodeIDFlag,
 		nodeparams.NetworkDialTimeout,
 		nodeparams.NetworkConnKeepAlive,
+		nodeparams.NetworkIDFlag,
 		nodeparams.SwarmBootstrap,
 		nodeparams.RoutingTableBucketSizdFlag,
 		nodeparams.RoutingTableAlphaFlag,
