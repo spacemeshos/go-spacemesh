@@ -24,7 +24,7 @@ var ConfigValues = Config{
 var TimeConfigValues = TimeConfig{
 	MaxAllowedDrift:       duration{"10s"},
 	NtpQueries:            5,
-	DefaultTimeoutLatency: duration{"30s"},
+	DefaultTimeoutLatency: duration{"10s"},
 	RefreshNtpInterval:    duration{"30m"},
 }
 
