@@ -128,14 +128,16 @@ func ntpTimeDrift() (time.Duration, error) {
 	errorChan := make(chan error)
 	req := &NtpPacket{Settings: 0x1B}
 
-	// Make 3 concurrent calls to different ntp servers
+	// Make NtpQueries concurrent calls to different ntp servers
+	// if more servers fail than succeed in DefaultTimeoutLatency timeout the node.
 	// TODO: possibly add retries when timeout
 	queriedServers := make(map[int]bool)
-	serverSeed := len(DefaultServers) - 1
+	rand.Seed(time.Now().Unix()) // we don't need too special seed for that
+	sl := len(DefaultServers) - 1
 	for i := 0; i < nodeconfig.TimeConfigValues.NtpQueries; i++ {
-		rndsrv := rand.Intn(serverSeed)
+		rndsrv := rand.Intn(sl)
 		for queriedServers[rndsrv] {
-			rndsrv = rand.Intn(serverSeed)
+			rndsrv = rand.Intn(sl)
 		}
 		queriedServers[rndsrv] = true
 		go func() {
@@ -151,14 +153,17 @@ func ntpTimeDrift() (time.Duration, error) {
 	}
 
 	all := sortableDurations{}
+	errors := []error{}
 	for i := 0; i < nodeconfig.TimeConfigValues.NtpQueries; i++ {
 		select {
 		case err := <-errorChan:
-			close(errorChan)
-			return 0, err
+			errors = append(errors, err)
 		case result := <-resultsChan:
 			all = append(all, result)
 		}
+	}
+	if len(errors) > len(all) {
+		return zeroDuration, fmt.Errorf("NTP server errors ", errors)
 	}
 	// remove edge cases from our results
 	all.RemoveExtremes()
