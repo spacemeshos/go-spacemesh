@@ -163,7 +163,7 @@ func ntpTimeDrift() (time.Duration, error) {
 		}
 	}
 	if len(errors) > len(all) {
-		return zeroDuration, fmt.Errorf("NTP server errors ", errors)
+		return zeroDuration, fmt.Errorf("NTP server errors %v", errors)
 	}
 	// remove edge cases from our results
 	all.RemoveExtremes()

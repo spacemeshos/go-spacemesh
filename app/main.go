@@ -23,7 +23,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/timesync"
 )
 
-// EntryPointCreate channel is used to announce that the main App instance was created
+// EntryPointCreated channel is used to announce that the main App instance was created
 // mainly used for testing now.
 var EntryPointCreated = make(chan bool)
 
