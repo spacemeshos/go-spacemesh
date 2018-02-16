@@ -3,6 +3,12 @@ package app
 
 import (
 	"fmt"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"runtime"
+	"sort"
+
 	"github.com/spacemeshos/go-spacemesh/accounts"
 	api "github.com/spacemeshos/go-spacemesh/api"
 	apiconf "github.com/spacemeshos/go-spacemesh/api/config"
@@ -11,23 +17,23 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"gopkg.in/urfave/cli.v1"
 	"gopkg.in/urfave/cli.v1/altsrc"
-	"os"
-	"os/signal"
-	"path/filepath"
-	"runtime"
-	"sort"
 
 	"github.com/spacemeshos/go-spacemesh/app/config"
 	nodeparams "github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 	"github.com/spacemeshos/go-spacemesh/p2p/timesync"
 )
 
+// EntryPointCreate channel is used to announce that the main App instance was created
+// mainly used for testing now.
+var EntryPointCreated = make(chan bool)
+
 // SpacemeshApp is the cli app singleton
 type SpacemeshApp struct {
 	*cli.App
-	Node           p2p.LocalNode
-	grpcAPIService *api.SpaceMeshGrpcService
-	jsonAPIService *api.JSONHTTPServer
+	Node             p2p.LocalNode
+	NodeInitCallback chan bool
+	grpcAPIService   *api.SpaceMeshGrpcService
+	jsonAPIService   *api.JSONHTTPServer
 }
 
 // App is main app entry point.
@@ -104,7 +110,7 @@ func newSpacemeshApp() *SpacemeshApp {
 
 	sort.Sort(cli.FlagsByName(app.Flags))
 
-	sma := &SpacemeshApp{app, nil, nil, nil}
+	sma := &SpacemeshApp{app, nil, make(chan bool), nil, nil}
 
 	// setup callbacks
 	app.Before = sma.before
@@ -224,6 +230,7 @@ func (app *SpacemeshApp) startSpacemeshNode(ctx *cli.Context) error {
 
 	node.NotifyOnShutdown(ExitApp)
 	app.Node = node
+	app.NodeInitCallback <- true
 
 	conf := &apiconf.ConfigValues
 
@@ -267,6 +274,8 @@ func Main(commit, branch, version string) {
 	Commit = commit
 
 	App = newSpacemeshApp()
+
+	EntryPointCreated <- true
 
 	if err := App.Run(os.Args); err != nil {
 		fmt.Fprintln(os.Stderr, err)
