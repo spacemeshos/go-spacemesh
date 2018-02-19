@@ -12,7 +12,7 @@ tcp-port = 7512
 node-id = ""
 dial-timeout = "1m"
 conn-keepalive = "48h"
-network-id = 2
+network-id = 1 # 0 - MainNet, 1 - TestNet
 
 # Node Swarm Config
 swarm-bootstrap = false
