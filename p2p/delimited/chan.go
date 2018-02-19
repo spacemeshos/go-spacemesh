@@ -1,12 +1,11 @@
-package msgio
+package delimited
 
 import (
-	"github.com/spacemeshos/go-spacemesh/p2p/msgio/mpool"
 	"io"
 )
 
-// Chan is a msgio duplex channel. It is used to have a channel interface
-// around a msgio.Reader or Writer.
+// Chan is a delimited duplex channel. It is used to have a channel interface
+// around a delimited.Reader or Writer.
 type Chan struct {
 	MsgChan   chan []byte
 	ErrChan   chan error
@@ -22,27 +21,19 @@ func NewChan(chanSize int) *Chan {
 	}
 }
 
-// ReadFromReader wraps the given io.Reader with a msgio.Reader, reads all
+// ReadFromReader wraps the given io.Reader with a delimited.Reader, reads all
 // messages, ands sends them down the channel.
 func (s *Chan) ReadFromReader(r io.Reader) {
 	s.readFrom(NewReader(r))
 }
 
-// ReadFromWithPool wraps the given io.Reader with a msgio.Reader, reads all
-// messages, ands sends them down the channel. Uses given Pool
-func (s *Chan) ReadFromWithPool(r io.Reader, p *mpool.Pool) {
-	s.readFrom(NewReaderWithPool(r, p))
-}
-
-// ReadFrom wraps the given io.Reader with a msgio.Reader, reads all
+// ReadFrom wraps the given io.Reader with a delimited.Reader, reads all
 // messages, ands sends them down the channel.
-func (s *Chan) readFrom(mr Reader) {
+func (s *Chan) readFrom(mr *Reader) {
 	// single reader, no need for Mutex
-	mr.(*reader).lock = new(nullLocker)
-
 Loop:
 	for {
-		buf, err := mr.ReadMsg()
+		buf, err := mr.Next()
 		if err != nil {
 			if err == io.EOF {
 				break Loop // done
@@ -66,7 +57,7 @@ Loop:
 	s.CloseChan <- true
 }
 
-// WriteToWriter wraps the given io.Writer with a msgio.Writer, listens on the
+// WriteToWriter wraps the given io.Writer with a delimited.Writer, listens on the
 // channel and writes all messages to the writer.
 func (s *Chan) WriteToWriter(w io.Writer) {
 	// new buffer per message
@@ -74,7 +65,6 @@ func (s *Chan) WriteToWriter(w io.Writer) {
 	mw := NewWriter(w)
 
 	// single writer, no need for Mutex
-	mw.(*writer).lock = new(nullLocker)
 Loop:
 	for {
 		select {
@@ -86,7 +76,7 @@ Loop:
 				break Loop
 			}
 
-			if err := mw.WriteMsg(msg); err != nil {
+			if _, err := mw.WriteRecord(msg); err != nil {
 				if err != io.EOF {
 					// unexpected error. tell the client.
 					s.ErrChan <- err
@@ -105,9 +95,3 @@ Loop:
 func (s *Chan) Close() {
 	s.CloseChan <- true
 }
-
-// nullLocker conforms to the sync.Locker interface but does nothing.
-type nullLocker struct{}
-
-func (l *nullLocker) Lock()   {}
-func (l *nullLocker) Unlock() {}

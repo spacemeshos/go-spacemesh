@@ -9,6 +9,7 @@ import (
 
 	//"github.com/spacemeshos/go-spacemesh/p2p/dht/table"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
+	"github.com/spacemeshos/go-spacemesh/p2p/timesync"
 )
 
 type nodeEventCallbacks []NodeEventCallback
@@ -44,7 +45,7 @@ type swarmImpl struct {
 	sendMsgRequests  chan SendMessageReq // local request to send a session message to a node and callback on error or data
 	sendHandshakeMsg chan SendMessageReq // local request to send a handshake protocol message
 
-	shutdown chan bool // local request to kill the swamp from outside. e.g when local node is shutting down
+	shutdown chan bool // local request to kill the swarm from outside. e.g when local node is shutting down
 
 	registerNodeReq chan node.RemoteNodeData // local request to register a node based on minimal data
 
@@ -99,13 +100,13 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 		config: l.Config().SwarmConfig,
 	}
 
-	// nodes routing table
+	// node's routing table
 	s.routingTable = table.NewRoutingTable(int(s.config.RoutingTableBucketSize), l.DhtID())
 
 	// findNode dht protocol
 	s.findNodeProtocol = NewFindNodeProtocol(s)
 
-	s.localNode.Info("Created swarm for local node %s", tcpAddress, l.Pretty())
+	s.localNode.Info("Created swarm for local node %s, %s", tcpAddress, l.Pretty())
 
 	s.handshakeProtocol = NewHandshakeProtocol(s)
 	s.handshakeProtocol.RegisterNewSessionCallback(s.newSessions)
@@ -127,7 +128,7 @@ func (s *swarmImpl) RegisterNodeEventsCallback(callback NodeEventCallback) {
 // Sends a connection event to all registered clients
 func (s *swarmImpl) sendNodeEvent(peerID string, state NodeState) {
 
-	s.localNode.Info(">> Node event for <%s>. State: %s", peerID[:6], state)
+	s.localNode.Info(">> Node event for <%s>. State: %+v", peerID[:6], state)
 
 	evt := NodeEvent{peerID, state}
 	for _, c := range s.nec {
@@ -273,7 +274,7 @@ func (s *swarmImpl) shutDownInternal() {
 // provides concurrency safety as only one callback is executed at a time
 // so there's no need for sync internal data structures
 func (s *swarmImpl) beginProcessingEvents() {
-
+	checkTimeSync := time.NewTicker(nodeconfig.TimeConfigValues.RefreshNtpInterval.Duration())
 Loop:
 	for {
 		select {
@@ -316,6 +317,14 @@ Loop:
 
 		case d := <-s.registerNodeReq:
 			s.onRegisterNodeRequest(d)
+
+		case <-checkTimeSync.C:
+			_, err := timesync.CheckSystemClockDrift()
+			if err != nil {
+				checkTimeSync.Stop()
+				log.Error("System time could'nt synchronize %s", err)
+				go s.localNode.Shutdown()
+			}
 		}
 	}
 }

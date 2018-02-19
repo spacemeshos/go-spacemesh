@@ -1,11 +1,11 @@
 package app
 
 import (
-	"github.com/spacemeshos/go-spacemesh/assert"
-	"github.com/spacemeshos/go-spacemesh/filesystem"
 	"os"
 	"testing"
-	"time"
+
+	"github.com/spacemeshos/go-spacemesh/assert"
+	"github.com/spacemeshos/go-spacemesh/filesystem"
 )
 
 func TestApp(t *testing.T) {
@@ -17,10 +17,11 @@ func TestApp(t *testing.T) {
 
 	go Main("", "master", "")
 
+	<-EntryPointCreated
+
 	assert.NotNil(t, App)
 
-	// let node warmup
-	time.Sleep(3 * time.Second)
+	<-App.NodeInitCallback
 
 	assert.NotNil(t, App.Node)
 	assert.NotNil(t, App)

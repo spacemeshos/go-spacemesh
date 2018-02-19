@@ -10,7 +10,7 @@ import (
 )
 
 // RemoteNodeData defines basic remote node data
-// Outside of swarm local node works with RemoteNodeData and note with Peers
+// Outside of swarm local node works with RemoteNodeData and not with Peers
 // Peers should only be used internally by swarm
 type RemoteNodeData interface {
 	ID() string    // base58 encoded node key/id

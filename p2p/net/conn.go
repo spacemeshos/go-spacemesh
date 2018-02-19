@@ -1,10 +1,9 @@
 package net
 
 import (
-	"encoding/binary"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/msgio"
+	"github.com/spacemeshos/go-spacemesh/p2p/delimited"
 	"net"
 	"time"
 )
@@ -70,8 +69,8 @@ type connectionImpl struct {
 	created    time.Time
 	lastOpTime time.Time
 
-	incomingMsgs *msgio.Chan          // implemented using msgio.Chan - incoming messages
-	outgoingMsgs chan OutgoingMessage // outgoing message queue
+	incomingMsgs *delimited.Chan // implemented using delimited.Chan - incoming messages
+	outgoingMsgs *delimited.Chan // outgoing message queue
 
 	conn net.Conn // wrapped network connection
 	net  Net      // network context
@@ -83,23 +82,25 @@ func newConnection(conn net.Conn, n Net, s ConnectionSource) Connection {
 	// todo parametrize incoming msgs chan buffer size - hard-coded for now
 
 	// msgio channel used for incoming message
-	incomingMsgs := msgio.NewChan(10)
+	incomingMsgs := delimited.NewChan(10)
+	outgoingMsgs := delimited.NewChan(10)
 
 	connection := &connectionImpl{
 		id:           crypto.UUIDString(),
 		created:      time.Now(),
 		source:       s,
 		incomingMsgs: incomingMsgs,
-		outgoingMsgs: make(chan OutgoingMessage, 10),
+		outgoingMsgs: outgoingMsgs,
 		conn:         conn,
 		net:          n,
 	}
 
 	// start processing channel-based message
 	go connection.beginEventProcessing()
-
 	// start reading incoming message from the connection and into the channel
 	go incomingMsgs.ReadFromReader(conn)
+	// write to the connection through the delimited writer
+	go outgoingMsgs.WriteToWriter(conn)
 
 	return connection
 }
@@ -122,42 +123,8 @@ func (c *connectionImpl) String() string {
 // Concurrency: can be called from any go routine
 func (c *connectionImpl) Send(message []byte, id []byte) {
 	// queue messages for sending
-	c.outgoingMsgs <- OutgoingMessage{message, id}
-}
 
-// Write a message to the network connection
-// Concurrency: this message is not go safe it is designed as an internal helper to be
-// called from the event processing loop
-func (c *connectionImpl) writeMessageToConnection(om OutgoingMessage) {
-
-	// give the write a time window to complete - todo: parameterize this as part of node params
-
-	c.conn.SetWriteDeadline(time.Now().Add(time.Second * 45))
-
-	msg := om.Message
-	ul := uint32(len(msg))
-	err := binary.Write(c.conn, binary.BigEndian, &ul)
-	if err != nil {
-		go func() {
-			c.net.GetMessageSendErrors() <- MessageSendError{c, msg, err, om.ID}
-		}()
-		return
-	}
-
-	_, err = c.conn.Write(msg)
-	if err != nil { // error or conn timeout
-		go func() {
-			c.net.GetMessageSendErrors() <- MessageSendError{c, msg, err, om.ID}
-		}()
-		return
-	}
-
-	c.lastOpTime = time.Now()
-
-	go func() {
-		c.net.GetMessageSentCallback() <- MessageSentEvent{c, om.ID}
-	}()
-
+	c.outgoingMsgs.MsgChan <- message
 }
 
 // Close closes the connection (implements io.Closer). It is go safe.
@@ -179,11 +146,10 @@ Loop:
 	for {
 		select {
 
-		case msg, ok := <-c.outgoingMsgs:
-
-			if ok { // new outgoing message
-				c.writeMessageToConnection(msg)
-			}
+		case err := <-c.outgoingMsgs.ErrChan:
+			go func() {
+				c.net.GetConnectionErrors() <- ConnectionError{c, err, nil}
+			}()
 
 		case msg, ok := <-c.incomingMsgs.MsgChan:
 

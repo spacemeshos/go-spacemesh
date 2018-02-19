@@ -40,7 +40,7 @@ type PeerOpResult struct {
 	Peer node.RemoteNodeData
 }
 
-// PeerOpChannel is a  channel that accept a peer op result.
+// PeerOpChannel is a channel that accept a peer op result.
 type PeerOpChannel chan *PeerOpResult
 
 // PeersOpResult is a result of a method that returns zero or more peers.
@@ -48,7 +48,7 @@ type PeersOpResult struct {
 	Peers []node.RemoteNodeData
 }
 
-// PeersOpChannel is a channel of PeerOpResult.
+// PeersOpChannel is a channel of PeersOpResult.
 type PeersOpChannel chan *PeersOpResult
 
 // PeerChannel is a channel of RemoteNodeData
@@ -63,7 +63,7 @@ type PeerByIDRequest struct {
 	Callback PeerOpChannel
 }
 
-// NearestPeersReq includes one peer id, a count param and a callback PEersOpChannel.
+// NearestPeersReq includes one peer id, a count param and a callback PeersOpChannel.
 type NearestPeersReq struct {
 	ID       dht.ID
 	Count    int
