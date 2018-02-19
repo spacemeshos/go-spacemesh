@@ -7,7 +7,7 @@
 - The value of an internal node is the hash of its 2 children.
 - The Merkle proof is the set of the hashes of the siblings of the nodes on the path from the leaf to the root and the hash of the root. 
 - Reference Java implementation is available here: https://github.com/wjtoth/Hash-based-signatures/blob/master/src/main/java/wjtoth/MSS/MerkleSSLogarithmic.java
-- Use crypto.Sha256() for the has function.
+- Use crypto.Sha256() for the hash function.
 - `table.go` provides the table data strcuture `table_test.go` shows how to populate a table with binary data backed by a binary data file.
 - This functionality is required for our proof of space time protocol.
 - The main goal is to benchmark an efficient traversal implementation to be able to better model space and time parameters. In other words, how long does it take on a modern CPU to traverse a table with a large number of entries?
