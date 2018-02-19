@@ -25,7 +25,7 @@ import (
 
 // EntryPointCreated channel is used to announce that the main App instance was created
 // mainly used for testing now.
-var EntryPointCreated = make(chan bool)
+var EntryPointCreated = make(chan bool, 1)
 
 // SpacemeshApp is the cli app singleton
 type SpacemeshApp struct {
@@ -111,7 +111,7 @@ func newSpacemeshApp() *SpacemeshApp {
 
 	sort.Sort(cli.FlagsByName(app.Flags))
 
-	sma := &SpacemeshApp{app, nil, make(chan bool), nil, nil}
+	sma := &SpacemeshApp{app, nil, make(chan bool, 1), nil, nil}
 
 	// setup callbacks
 	app.Before = sma.before

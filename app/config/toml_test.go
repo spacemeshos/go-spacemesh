@@ -40,6 +40,7 @@ func (d *duration) Duration(t *testing.T) (duration time.Duration) {
 
 type TestConfig struct {
 	TestParam     bool
+	TestLogFile   string
 	IntParam      int
 	StringParam   string
 	DurationParam duration
@@ -59,6 +60,13 @@ var (
 		Name:        "test.run",
 		Usage:       "the test run param",
 		Destination: &TestConfigValues.TestParam,
+	}
+
+	TestLogFileFlag = cli.StringFlag{
+		Name:        "test.testlogfile",
+		Usage:       "The file to log to",
+		Value:       TestConfigValues.TestLogFile,
+		Destination: &TestConfigValues.TestLogFile,
 	}
 
 	IntParamFlag = altsrc.NewIntFlag(cli.IntFlag{
@@ -146,6 +154,7 @@ func TestConfigLoading(t *testing.T) {
 	var appFlags = []cli.Flag{
 		TestFlag,
 		TestRunFlag,
+		TestLogFileFlag,
 		IntParamFlag,
 		StringParamFlag,
 		DurationParamFlag,
