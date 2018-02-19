@@ -17,6 +17,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
+	"strings"
 )
 
 // HandshakeReq specifies the handshake protocol request message identifier. pattern is [protocol][version][method-name].
@@ -399,6 +400,25 @@ func authenticateSenderNode(req *pb.HandshakeData) error {
 // Returns Handshake data to send to r and a network session data object that includes the session sym  enc/dec key
 // This is called by responder in the handshake protocol (node2)
 func processHandshakeRequest(node LocalNode, r Peer, req *pb.HandshakeData) (*pb.HandshakeData, NetworkSession, error) {
+
+	// check that received clientversion is valid client string
+	reqVersion := strings.Split(req.ClientVersion, "/")
+	if len(reqVersion) != 2 {
+		//node.Warning("Dropping incoming message - invalid client version")
+		return nil, nil, errors.New("dropping incoming handshake - invalid client version")
+	}
+
+	// compare that version to the min client version in config
+	ok, err := CheckNodeVersion(reqVersion[1], nodeconfig.MinClientVersion)
+	if err != nil || !ok {
+		return nil, nil, errors.New("dropping incoming handshake - invalid client version")
+	}
+
+	// make sure we're on the same network
+	if int(req.NetworkID) != node.Config().NetworkID {
+		return nil, nil, errors.New("dropping incoming handshake - different networkID version")
+		//TODO : drop and blacklist this sender
+	}
 
 	// ephemeral public key
 	pubkey, err := btcec.ParsePubKey(req.PubKey, btcec.S256())

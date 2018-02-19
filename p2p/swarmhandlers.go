@@ -3,14 +3,12 @@ package p2p
 import (
 	"encoding/hex"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
-	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/timesync"
 )
@@ -112,6 +110,11 @@ func (s *swarmImpl) onConnectionRequest(req node.RemoteNodeData) {
 
 // callback from handshake protocol when session state changes
 func (s *swarmImpl) onNewSession(data HandshakeData) {
+
+	if err := data.GetError(); err != nil {
+		s.localNode.Error("Session creation error %s", err)
+		return
+	}
 
 	if data.Session().IsAuthenticated() {
 
@@ -284,27 +287,6 @@ func (s *swarmImpl) onRemoteClientHandshakeMessage(msg net.IncomingMessage) {
 		return
 	}
 
-	// check that received clientversion is valid client string
-	reqVersion := strings.Split(data.ClientVersion, "/")
-	if len(reqVersion) != 2 {
-		s.localNode.Warning("Dropping incoming message - invalid client version")
-		return
-	}
-
-	// compare that version to the min client version in config
-	ok, err := CheckNodeVersion(reqVersion[1], nodeconfig.MinClientVersion)
-	if err != nil || !ok {
-		s.localNode.Warning("Dropping incoming message - invalid client version %v", reqVersion)
-		return
-	}
-
-	// make sure we're on the same network
-	if int(data.NetworkID) != s.localNode.Config().NetworkID {
-		s.localNode.Error("Dropping incoming message - localnode network-id (%v) tried to intiate session with (%v). aborting", s.localNode.Config().NetworkID, data.NetworkID)
-		s.localNode.Error("Removing peer")
-		//TODO : drop and blacklist this sender
-	}
-
 	connID := msg.Connection.ID()
 
 	// check if we already know about the remote node of this connection
@@ -384,8 +366,6 @@ func (s *swarmImpl) onRemoteClientProtocolMessage(msg net.IncomingMessage, c *pb
 
 	s.localNode.Info("Message %s author authenticated.", hex.EncodeToString(pm.GetMetadata().ReqId), pm.GetMetadata().Protocol)
 
-	// todo: check send time and reject if too much aparat from local clock
-
 	// update the routing table - we just heard from this authenticated node
 	s.routingTable.Update(remoteNode.GetRemoteNodeData())
 
@@ -413,7 +393,7 @@ func (s *swarmImpl) onRemoteClientMessage(msg net.IncomingMessage) {
 
 	// check that the message was send within a reasonable time
 	if ok := timesync.CheckMessageDrift(c.Timestamp); !ok {
-		s.localNode.Error("Received out of sync msg dropping .. ")
+		s.localNode.Error("Received out of sync msg from %s dropping .. ", msg.Connection.RemoteAddr())
 		return
 	}
 
