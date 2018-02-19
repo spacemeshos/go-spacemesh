@@ -3,11 +3,14 @@ package p2p
 import (
 	"encoding/hex"
 	"fmt"
+	"time"
+
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
+	"github.com/spacemeshos/go-spacemesh/p2p/timesync"
 )
 
 // This source file contain swarm internal handlers
@@ -15,7 +18,7 @@ import (
 // or by other internal handlers but not from a random type or go routine
 
 // Handles a local request to register a remote node in the swarm
-// Register adds info about this node but doesn't attempt to connect to i
+// Register adds info about this node but doesn't attempt to connect to it
 func (s *swarmImpl) onRegisterNodeRequest(n node.RemoteNodeData) {
 
 	if s.peers[n.ID()] != nil {
@@ -75,7 +78,7 @@ func (s *swarmImpl) onConnectionRequest(req node.RemoteNodeData) {
 		addressableNodeConfig := &localNodeConfig
 		conn, err = s.network.DialTCP(req.IP(), addressableNodeConfig.DialTimeout.Duration(), addressableNodeConfig.ConnKeepAlive.Duration())
 		if err != nil {
-			s.sendNodeEvent(req.ID(), Dissconected)
+			s.sendNodeEvent(req.ID(), Disconnected)
 			s.localNode.Error("failed to connect to remote node %s on advertised ip %s", req.Pretty(), req.IP())
 			return
 		}
@@ -108,6 +111,11 @@ func (s *swarmImpl) onConnectionRequest(req node.RemoteNodeData) {
 // callback from handshake protocol when session state changes
 func (s *swarmImpl) onNewSession(data HandshakeData) {
 
+	if err := data.GetError(); err != nil {
+		s.localNode.Error("Session creation error %s", err)
+		return
+	}
+
 	if data.Session().IsAuthenticated() {
 
 		s.localNode.Info("Established new session with %s", data.Peer().TCPAddress())
@@ -133,7 +141,7 @@ func (s *swarmImpl) onDisconnectionRequest(req node.RemoteNodeData) {
 
 	// todo: disconnect all connections with node
 
-	s.sendNodeEvent(req.ID(), Dissconected)
+	s.sendNodeEvent(req.ID(), Disconnected)
 }
 
 // Local request to send a message to a remote node
@@ -215,6 +223,7 @@ func (s *swarmImpl) onSendMessageRequest(r SendMessageReq) {
 	msg := &pb.CommonMessageData{
 		SessionId: session.ID(),
 		Payload:   encPayload,
+		Timestamp: time.Now().Unix(),
 	}
 
 	data, err := proto.Marshal(msg)
@@ -228,7 +237,7 @@ func (s *swarmImpl) onSendMessageRequest(r SendMessageReq) {
 		return
 	}
 
-	// store callback by reqIdDfor this connection so we can call back in case of msg timout or other send failure
+	// store callback by reqId for this connection so we can call back in case of msg timeout or other send failure
 	if r.Callback != nil {
 		callbacks := s.outgoingSendsCallbacks[conn.ID()]
 		if callbacks == nil {
@@ -255,7 +264,7 @@ func (s *swarmImpl) onConnectionClosed(c net.Connection) {
 	delete(s.connections, id)
 	delete(s.peersByConnection, id)
 
-	s.sendNodeEvent(peer.String(), Dissconected)
+	s.sendNodeEvent(peer.String(), Disconnected)
 
 }
 
@@ -357,8 +366,6 @@ func (s *swarmImpl) onRemoteClientProtocolMessage(msg net.IncomingMessage, c *pb
 
 	s.localNode.Info("Message %s author authenticated.", hex.EncodeToString(pm.GetMetadata().ReqId), pm.GetMetadata().Protocol)
 
-	// todo: check send time and reject if too much aparat from local clock
-
 	// update the routing table - we just heard from this authenticated node
 	s.routingTable.Update(remoteNode.GetRemoteNodeData())
 
@@ -381,6 +388,12 @@ func (s *swarmImpl) onRemoteClientMessage(msg net.IncomingMessage) {
 	if err != nil {
 		s.localNode.Warning("Bad request - closing connection...")
 		msg.Connection.Close()
+		return
+	}
+
+	// check that the message was send within a reasonable time
+	if ok := timesync.CheckMessageDrift(c.Timestamp); !ok {
+		s.localNode.Error("Received out of sync msg from %s dropping .. ", msg.Connection.RemoteAddr())
 		return
 	}
 

@@ -3,6 +3,12 @@ package app
 
 import (
 	"fmt"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"runtime"
+	"sort"
+
 	"github.com/spacemeshos/go-spacemesh/accounts"
 	api "github.com/spacemeshos/go-spacemesh/api"
 	apiconf "github.com/spacemeshos/go-spacemesh/api/config"
@@ -11,22 +17,23 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"gopkg.in/urfave/cli.v1"
 	"gopkg.in/urfave/cli.v1/altsrc"
-	"os"
-	"os/signal"
-	"path/filepath"
-	"runtime"
-	"sort"
 
 	"github.com/spacemeshos/go-spacemesh/app/config"
 	nodeparams "github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
+	"github.com/spacemeshos/go-spacemesh/p2p/timesync"
 )
+
+// EntryPointCreated channel is used to announce that the main App instance was created
+// mainly used for testing now.
+var EntryPointCreated = make(chan bool, 1)
 
 // SpacemeshApp is the cli app singleton
 type SpacemeshApp struct {
 	*cli.App
-	Node           p2p.LocalNode
-	grpcAPIService *api.SpaceMeshGrpcService
-	jsonAPIService *api.JSONHTTPServer
+	Node             p2p.LocalNode
+	NodeInitCallback chan bool
+	grpcAPIService   *api.SpaceMeshGrpcService
+	jsonAPIService   *api.JSONHTTPServer
 }
 
 // App is main app entry point.
@@ -46,11 +53,17 @@ var (
 		nodeparams.NodeIDFlag,
 		nodeparams.NetworkDialTimeout,
 		nodeparams.NetworkConnKeepAlive,
+		nodeparams.NetworkIDFlag,
 		nodeparams.SwarmBootstrap,
 		nodeparams.RoutingTableBucketSizdFlag,
 		nodeparams.RoutingTableAlphaFlag,
 		nodeparams.RandomConnectionsFlag,
 		nodeparams.BootstrapNodesFlag,
+		//timesync flags
+		nodeparams.MaxAllowedDriftFlag,
+		nodeparams.NtpQueriesFlag,
+		nodeparams.DefaultTimeoutLatencyFlag,
+		nodeparams.RefreshNtpIntervalFlag,
 		// add all additional node flags here ...
 	}
 	apiFlags = []cli.Flag{
@@ -98,7 +111,7 @@ func newSpacemeshApp() *SpacemeshApp {
 
 	sort.Sort(cli.FlagsByName(app.Flags))
 
-	sma := &SpacemeshApp{app, nil, nil, nil}
+	sma := &SpacemeshApp{app, nil, make(chan bool, 1), nil, nil}
 
 	// setup callbacks
 	app.Before = sma.before
@@ -108,12 +121,12 @@ func newSpacemeshApp() *SpacemeshApp {
 	return sma
 }
 
-// start the spacemesh node
+// startSpacemeshNode starts the spacemesh local node.
 func startSpacemeshNode(ctx *cli.Context) error {
 	return App.startSpacemeshNode(ctx)
 }
 
-// setup app logging system
+// setupLogging configured the app logging system.
 func (app *SpacemeshApp) setupLogging() {
 
 	// setup logging early
@@ -168,6 +181,12 @@ func (app *SpacemeshApp) before(ctx *cli.Context) error {
 
 	// todo: add misc app setup here (metrics, debug, etc....)
 
+	drift, err := timesync.CheckSystemClockDrift()
+	if err != nil {
+		return err
+	}
+	log.Info("System clock synchronized with ntp. drift: %s", drift)
+
 	// ensure all data folders exist
 	filesystem.EnsureSpacemeshDataDirectories()
 
@@ -199,7 +218,6 @@ func (app *SpacemeshApp) cleanup(ctx *cli.Context) error {
 }
 
 func (app *SpacemeshApp) startSpacemeshNode(ctx *cli.Context) error {
-	log.Error("Config :################### %v", nodeparams.SwarmConfigValues)
 	log.Info("Starting local node...")
 	port := *nodeparams.LocalTCPPortFlag.Destination
 	address := fmt.Sprintf("0.0.0.0:%d", port)
@@ -211,7 +229,9 @@ func (app *SpacemeshApp) startSpacemeshNode(ctx *cli.Context) error {
 		return err
 	}
 
+	node.NotifyOnShutdown(ExitApp)
 	app.Node = node
+	app.NodeInitCallback <- true
 
 	conf := &apiconf.ConfigValues
 
@@ -237,6 +257,8 @@ func (app *SpacemeshApp) startSpacemeshNode(ctx *cli.Context) error {
 		app.jsonAPIService.StartService(nil)
 	}
 
+	log.Info("App started.")
+
 	// app blocks until it receives a signal to exit
 	// this signal may come from the node or from sig-abort (ctrl-c)
 	<-ExitApp
@@ -253,6 +275,8 @@ func Main(commit, branch, version string) {
 	Commit = commit
 
 	App = newSpacemeshApp()
+
+	EntryPointCreated <- true
 
 	if err := App.Run(os.Args); err != nil {
 		fmt.Fprintln(os.Stderr, err)

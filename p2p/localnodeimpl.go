@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-// LocalNode implementation
+// LocalNode implementation.
 type localNodeImp struct {
 	pubKey        crypto.PublicKey
 	privKey       crypto.PrivateKey
@@ -28,6 +28,7 @@ type localNodeImp struct {
 	swarm Swarm // local owns a swarm
 	ping  Ping
 
+	shutdownChan chan bool
 	// add all other implemented protocols here....
 
 }
@@ -54,14 +55,21 @@ func (n *localNodeImp) Config() nodeconfig.Config {
 	return n.config
 }
 
-// Shutdown releases all resources open and owned by this local mode.
-func (n *localNodeImp) Shutdown() {
-
-	// shutdown swarm
-	n.swarm.Shutdown()
+// NotifyOnChannel gives the node a callback channel to notify when it shuts down.
+func (n *localNodeImp) NotifyOnShutdown(notify chan bool) {
+	n.shutdownChan = notify
 }
 
-// GetPing returns this node's Ping protocol
+// Shutdown releases all resources open and owned by this local node.
+func (n *localNodeImp) Shutdown() {
+	// shutdown swarm
+	n.swarm.Shutdown()
+	if n.shutdownChan != nil {
+		n.shutdownChan <- true
+	}
+}
+
+// GetPing returns this node's Ping protocol.
 func (n *localNodeImp) GetPing() Ping {
 	return n.ping
 }
@@ -76,7 +84,7 @@ func (n *localNodeImp) ID() []byte {
 	return n.pubKey.Bytes()
 }
 
-// DhtID() reutrns this node's dht ID.
+// DhtID() returns this node's dht ID.
 func (n *localNodeImp) DhtID() dht.ID {
 	return n.dhtID
 }
@@ -159,20 +167,20 @@ func (n *localNodeImp) Sign(data proto.Message) ([]byte, error) {
 
 // Info is used for info logging.
 func (n *localNodeImp) Info(format string, args ...interface{}) {
-	n.logger.Info(format, args)
+	n.logger.Info(format, args...)
 }
 
 // Debug is used to log debug data.
 func (n *localNodeImp) Debug(format string, args ...interface{}) {
-	n.logger.Debug(format, args)
+	n.logger.Debug(format, args...)
 }
 
 // Error is used to log runtime errors.
 func (n *localNodeImp) Error(format string, args ...interface{}) {
-	n.logger.Error(format, args)
+	n.logger.Error(format, args...)
 }
 
 // Warning is used to log runtime warnings.
 func (n *localNodeImp) Warning(format string, args ...interface{}) {
-	n.logger.Warning(format, args)
+	n.logger.Warning(format, args...)
 }

@@ -11,6 +11,9 @@ import (
 	"strings"
 )
 
+// Using a function pointer to get the current user so we can more easily mock in tests
+var currentUser = user.Current
+
 // Directory and paths funcs
 
 // OwnerReadWriteExec is a standard owner read / write / exec file permission.
@@ -46,7 +49,7 @@ func GetSpacemeshTempDirectoryPath() (string, error) {
 	return GetFullDirectoryPath(pathName)
 }
 
-// DeleteAllTempFiles deletes all temp files from the temp dir and creates a new temp dir
+// DeleteAllTempFiles deletes all temp files from the temp dir and creates a new temp dir.
 func DeleteAllTempFiles() error {
 	tempDir, err := GetSpacemeshTempDirectoryPath()
 	if err != nil {
@@ -133,7 +136,7 @@ func GetUserHomeDirectory() string {
 	if home := os.Getenv("HOME"); home != "" {
 		return home
 	}
-	if usr, err := user.Current(); err == nil {
+	if usr, err := currentUser(); err == nil {
 		return usr.HomeDir
 	}
 	return ""

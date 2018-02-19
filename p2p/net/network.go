@@ -1,6 +1,7 @@
 package net
 
 import (
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 	"net"
@@ -97,7 +98,9 @@ func (n *netImpl) GetMessageSendErrors() chan MessageSendError {
 // Returns established connection that local clients can send messages to or error if failed
 // to establish a connection
 func (n *netImpl) DialTCP(address string, timeOut time.Duration, keepAlive time.Duration) (Connection, error) {
-
+	if n.isShuttingDown {
+		return nil, fmt.Errorf("can't dial because the connection is shutting down")
+	}
 	// connect via dialer so we can set tcp network params
 	dialer := &net.Dialer{}
 	dialer.KeepAlive = keepAlive // drop connections after a period of inactivity
