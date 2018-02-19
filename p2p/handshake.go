@@ -8,12 +8,16 @@ import (
 	"crypto/sha512"
 	"encoding/hex"
 	"errors"
+	"io"
+	"time"
+
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
-	"io"
+	"strings"
 )
 
 // HandshakeReq specifies the handshake protocol request message identifier. pattern is [protocol][version][method-name].
@@ -296,6 +300,10 @@ func generateHandshakeRequestData(node LocalNode, remoteNode Peer) (*pb.Handshak
 		Protocol: HandshakeReq,
 	}
 
+	data.ClientVersion = nodeconfig.ClientVersion
+	data.NetworkID = int32(node.Config().NetworkID)
+	data.Timestamp = time.Now().Unix()
+
 	iv := make([]byte, 16)
 	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
 		return nil, nil, err
@@ -393,6 +401,25 @@ func authenticateSenderNode(req *pb.HandshakeData) error {
 // This is called by responder in the handshake protocol (node2)
 func processHandshakeRequest(node LocalNode, r Peer, req *pb.HandshakeData) (*pb.HandshakeData, NetworkSession, error) {
 
+	// check that received clientversion is valid client string
+	reqVersion := strings.Split(req.ClientVersion, "/")
+	if len(reqVersion) != 2 {
+		//node.Warning("Dropping incoming message - invalid client version")
+		return nil, nil, errors.New("dropping incoming handshake - invalid client version")
+	}
+
+	// compare that version to the min client version in config
+	ok, err := CheckNodeVersion(reqVersion[1], nodeconfig.MinClientVersion)
+	if err != nil || !ok {
+		return nil, nil, errors.New("dropping incoming handshake - invalid client version")
+	}
+
+	// make sure we're on the same network
+	if int(req.NetworkID) != node.Config().NetworkID {
+		return nil, nil, errors.New("dropping incoming handshake - different networkID version")
+		//TODO : drop and blacklist this sender
+	}
+
 	// ephemeral public key
 	pubkey, err := btcec.ParsePubKey(req.PubKey, btcec.S256())
 	if err != nil {
@@ -457,14 +484,17 @@ func processHandshakeRequest(node LocalNode, r Peer, req *pb.HandshakeData) (*pb
 	node.RefreshPubTCPAddress()
 
 	resp := &pb.HandshakeData{
-		SessionId:  req.SessionId,
-		NodePubKey: node.PublicKey().InternalKey().SerializeUncompressed(),
-		PubKey:     req.PubKey,
-		Iv:         iv,
-		Hmac:       hmac1,
-		TcpAddress: node.PubTCPAddress(),
-		Protocol:   HandshakeResp,
-		Sign:       "",
+		ClientVersion: nodeconfig.ClientVersion,
+		NetworkID:     int32(node.Config().NetworkID),
+		SessionId:     req.SessionId,
+		Timestamp:     time.Now().Unix(),
+		NodePubKey:    node.PublicKey().InternalKey().SerializeUncompressed(),
+		PubKey:        req.PubKey,
+		Iv:            iv,
+		Hmac:          hmac1,
+		TcpAddress:    node.PubTCPAddress(),
+		Protocol:      HandshakeResp,
+		Sign:          "",
 	}
 
 	// sign corpus - marshall data without the signature to protobufs3 binary format and sign it

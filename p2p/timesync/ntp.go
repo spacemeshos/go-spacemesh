@@ -12,6 +12,8 @@ import (
 )
 
 const (
+	// MaxAllowedMessageDrift is the time we limit we receive and handle delivered messages within
+	MaxAllowedMessageDrift = 10 * time.Minute
 	// NtpOffset is 70 years in seconds since ntp counts from 1900 and unix from 1970
 	NtpOffset = 2208988800
 	// DefaultNtpPort is the ntp protocol port
@@ -183,4 +185,14 @@ func CheckSystemClockDrift() (time.Duration, error) {
 	}
 
 	return drift, nil
+}
+
+// CheckMessageDrift checks if a given message timestamp is too far from our local clock.
+func CheckMessageDrift(data int64) bool {
+	reqTime := time.Unix(data, 0)
+	drift := time.Now().Sub(reqTime)
+	if drift < -MaxAllowedMessageDrift || drift > MaxAllowedMessageDrift {
+		return false
+	}
+	return true
 }

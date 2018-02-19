@@ -53,6 +53,7 @@ var (
 		nodeparams.NodeIDFlag,
 		nodeparams.NetworkDialTimeout,
 		nodeparams.NetworkConnKeepAlive,
+		nodeparams.NetworkIDFlag,
 		nodeparams.SwarmBootstrap,
 		nodeparams.RoutingTableBucketSizdFlag,
 		nodeparams.RoutingTableAlphaFlag,
@@ -110,7 +111,7 @@ func newSpacemeshApp() *SpacemeshApp {
 
 	sort.Sort(cli.FlagsByName(app.Flags))
 
-	sma := &SpacemeshApp{app, nil, make(chan bool), nil, nil}
+	sma := &SpacemeshApp{app, nil, make(chan bool, 1), nil, nil}
 
 	// setup callbacks
 	app.Before = sma.before

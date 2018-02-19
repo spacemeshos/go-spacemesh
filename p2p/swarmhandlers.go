@@ -3,11 +3,14 @@ package p2p
 import (
 	"encoding/hex"
 	"fmt"
+	"time"
+
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
+	"github.com/spacemeshos/go-spacemesh/p2p/timesync"
 )
 
 // This source file contain swarm internal handlers
@@ -107,6 +110,11 @@ func (s *swarmImpl) onConnectionRequest(req node.RemoteNodeData) {
 
 // callback from handshake protocol when session state changes
 func (s *swarmImpl) onNewSession(data HandshakeData) {
+
+	if err := data.GetError(); err != nil {
+		s.localNode.Error("Session creation error %s", err)
+		return
+	}
 
 	if data.Session().IsAuthenticated() {
 
@@ -215,6 +223,7 @@ func (s *swarmImpl) onSendMessageRequest(r SendMessageReq) {
 	msg := &pb.CommonMessageData{
 		SessionId: session.ID(),
 		Payload:   encPayload,
+		Timestamp: time.Now().Unix(),
 	}
 
 	data, err := proto.Marshal(msg)
@@ -357,8 +366,6 @@ func (s *swarmImpl) onRemoteClientProtocolMessage(msg net.IncomingMessage, c *pb
 
 	s.localNode.Info("Message %s author authenticated.", hex.EncodeToString(pm.GetMetadata().ReqId), pm.GetMetadata().Protocol)
 
-	// todo: check send time and reject if too much aparat from local clock
-
 	// update the routing table - we just heard from this authenticated node
 	s.routingTable.Update(remoteNode.GetRemoteNodeData())
 
@@ -381,6 +388,12 @@ func (s *swarmImpl) onRemoteClientMessage(msg net.IncomingMessage) {
 	if err != nil {
 		s.localNode.Warning("Bad request - closing connection...")
 		msg.Connection.Close()
+		return
+	}
+
+	// check that the message was send within a reasonable time
+	if ok := timesync.CheckMessageDrift(c.Timestamp); !ok {
+		s.localNode.Error("Received out of sync msg from %s dropping .. ", msg.Connection.RemoteAddr())
 		return
 	}
 

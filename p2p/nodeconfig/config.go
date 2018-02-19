@@ -1,9 +1,10 @@
 package nodeconfig
 
 import (
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/log"
 	"gopkg.in/urfave/cli.v1"
-	"time"
 )
 
 // ConfigValues specifies  default values for node config params.
@@ -14,6 +15,7 @@ var ConfigValues = Config{
 	NodeID:        "",
 	DialTimeout:   duration{"1m"},
 	ConnKeepAlive: duration{"48h"},
+	NetworkID:     int(TestNet),
 	SwarmConfig:   SwarmConfigValues,
 	TimeConfig:    TimeConfigValues,
 }
@@ -62,6 +64,7 @@ type Config struct {
 	NodeID        string
 	DialTimeout   duration
 	ConnKeepAlive duration
+	NetworkID     int
 	SwarmConfig   SwarmConfig
 	TimeConfig    TimeConfig
 }
