@@ -16,7 +16,8 @@
 </p>
 
 ## go-spacemesh
-Thanks for your interest in this open source project. This is the go implementation of the [Spacemesh](https://spacemesh.io) p2p node. Spacemesh is a decentralized blockchain computer using a new race-free consensus protocol that doesn't involve energy-wasteful `proof of work`. We aim to create a secure and scalable decentralized computer formed by a large number of desktop PCs at home. We are designing and coding a modern blockchain platform from the ground up for scale, security. and speed based on the learnings, achievements and mistakes of previous projects in this space. 
+💾⏰💪
+Thanks for your interest in this open source project. This is the go implementation of the [Spacemesh](https://spacemesh.io) p2p node. Spacemesh is a decentralized blockchain computer using a new race-free consensus protocol that doesn't involve energy-wasteful `proof of work`. We aim to create a secure and scalable decentralized computer formed by a large number of desktop PCs at home. We are designing and coding a modern blockchain platform from the ground up for scale, security and speed based on the learnings of the achievements and mistakes of previous projects in this space. 
 
 To learn more about Spacemesh head over to our [wiki](https://github.com/spacemeshos/go-spacemesh/wiki).
 
@@ -24,7 +25,10 @@ To learn more about Spacemesh head over to our [wiki](https://github.com/spaceme
 SpacemeshOS is designed to create a decentralized blockchain smart contracts computer and a cryptocurrency that is formed by connecting the home PCs of people from around the world into one virtual computer without incurring massive energy waste and mining pools issues that are inherent in other blockchain computers, and provide a provably-secure and incentive-compatible smart contracts execution environment. Spacemesh OS is designed to be ASIC-resistant and in a way that doesn’t give an unfair advantage to rich parties who can afford setting up dedicated computers on the network. We achieve this by using a novel consensus protocol and optimize the software to be most effectively be used on home PCs that are also used for interactive apps. 
 
 ### What is this good for?
-Provide dapp and app developers with a robust way to add value exchange and value related features to their apps at scale. Our goal is to create a truly decentralized cryptocoin that fulfills the original vision behind bitcoin to become a secure trustless store of value as well as a transactional currency with extremely low transaction fees.
+Provide dapp and app developers with a robust way to add value exchange and other value related features to their apps at scale. Our goal is to create a truly decentralized cryptocoin that fulfills the original vision behind bitcoin to become a secure trustless store of value as well as a transactional currency with extremely low transaction fees.
+
+### Target Users
+go-spacemesh is designed to be installed and operated on users' home PCs to form one decentralized computer.
 
 ### Diggin' Deeper
 Please read the Spacemesh [full FAQ](https://github.com/spacemeshos/go-spacemesh/wiki/Spacemesh-FAQ).
@@ -37,55 +41,43 @@ install [Go 1.9.2 or later](https://golang.org/dl/) for your platform
 go get github.com/spacemeshos/go-spacemesh
 ```
 or
-- Fork https://github.com/spacemeshos/go-spacemesh project
-- Checkout your fork from GitHub
-- Move your fork from $GOPATH/src/github.com/YOURACCOUNT/go-spacemesh to $GOPATH/src/github.com/spacemeshos/go-spacemesh
-This allows Go tools to work as expected.
-
-```
-git clone https://github.com/spacemeshos/go-spacemesh
-```
+- Fork the project from https://github.com/spacemeshos/go-spacemesh 
+- Checkout the `develop` branch of your fork from GitHub
+- Move your fork from `$GOPATH/src/github.com/YOURACCOUNT/go-spacemesh` to `$GOPATH/src/github.com/spacemeshos/go-spacemesh`
+This allows GO tools to work as expected.
 
 ### Building
-
 To build `go-spacemesh` for your current system architecture use:
-
 ```
 make
 ```
-
 or
 ```
 go build
 ```
-
 from the project root directory. The binary `go-spacemesh` will be saved in the project root directory.
-
 
 To build a binary for a specific architecture directory use:
 ```
 make darwin | linux | windows
 ```
-
 Platform-specific binaries are saved to the `/build` directory.
 
-
 ### Running
-
 ```
 ./go-spacemesh
 ```
 
 ### Testing
 ```
-go test ./...
-```
-or
-```
 make test
 ```
-### Contributing
+or 
+```
+make cover
+```
 
+### Contributing
 Thank you for considering to contribute to the go-spacemesh open source project. 
 We welcome contributions large and small and we actively accept contributions.
 - go-spacemesh is part of [The Spacemesh open source project](https://spacemesh.io), and is MIT licensed open source software.
@@ -95,7 +87,6 @@ We welcome contributions large and small and we actively accept contributions.
 - You don’t have to contribute code! Many important types of contributions are important for our project. See: [How to Contribute to Open Source?](https://opensource.guide/how-to-contribute/#what-it-means-to-contribute)?
 
 #### Guidelines
-
 - Read the Spacemesh project white paper (coming soon)
 - Ask questions or talk about things in [Issues](https://github.com/spacemeshos/go-spacemesh/issues) or on [spacemash gitter](https://gitter.im/spacemesh-os/Lobby).
 - Ensure you are able to contribute (no legal issues please)
@@ -117,43 +108,9 @@ Few things you can do right now to help out:
  - Add tests. There can never be enough tests.
  
 #### Next Steps...
-- Please scan our [`wiki`](https://github.com/spacemeshos/go-spacemesh/wiki)
+- Please visit our [wiki](https://github.com/spacemeshos/go-spacemesh/wiki)
 - Browse project [go docs](https://godoc.org/github.com/spacemeshos/go-spacemesh)
 
 ### Got Questions? 
 - Introduce yourself and ask anything on the [spacemesh gitter channel](https://gitter.im/spacemesh-os/Lobby).
-- DM [@spacemeshhq](https://twitter.com/teamspacemesh)
-
-### Additional info
-
-#### Working with Dependencies
-
-- We use [govendor](https://github.com/kardianos/govendor) for all 3rd party packages.
-- We commit to git all 3rd party packages in the `vendor` folder so we have our own copy of versioned releases.
-- To update a 3rd party package use vendor.json and govendor commands.
-- To install `govendor` user:
-
-```
-go get -u github.com/kardianos/govendor
-govendor sync
-```
-
-#### Working with protobufs
-
-Install:
-- [Protoc with Go support](https://github.com/golang/protobuf) - for compiling `protobufs`
-- [Grpc-gateway plugin](https://github.com/grpc-ecosystem/grpc-gateway) - `protoc` support for grpc json-httpproxy 
-
-```
-go get -u github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway
-go get -u github.com/grpc-ecosystem/grpc-gateway/protoc-gen-swagger
-go get -u github.com/golang/protobuf/protoc-gen-go
-```
-
-To compile .proto files you need to install the [protobufs go support](https://github.com/golang/protobuf)
-After installing. You can compile a .proto file using:
-
-```
-cd pb
-protoc --go_out=. ./*.proto
-```
+- DM [@teamspacemesh](https://twitter.com/teamspacemesh)
