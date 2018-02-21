@@ -4,19 +4,20 @@ package log
 
 import (
 	"fmt"
-	"gopkg.in/natefinch/lumberjack.v2"
-	"gopkg.in/op/go-logging.v1"
+	"math/rand"
 	"os"
 	"path/filepath"
-	"math/rand"
-	"time"
-	"strings"
 	"strconv"
+	"strings"
+	"time"
+
+	"gopkg.in/natefinch/lumberjack.v2"
+	"gopkg.in/op/go-logging.v1"
 )
 
-const ColorString = "\x1b[38;2;{r};{g};{b}m"
-const ColorBgString = "\x1b[48;2;{r};{g};{b}m"
-const ResetColorString ="\x1b[0m"
+const colorString = "\x1b[38;2;{r};{g};{b}m"
+const colorBgString = "\x1b[48;2;{r};{g};{b}m"
+const resetColorString = "\x1b[0m"
 
 var usedColors = make(map[string]bool)
 
@@ -27,18 +28,17 @@ func createRandomColor(txt string) string {
 		r := strconv.Itoa(rand.Intn(255))
 		g := strconv.Itoa(rand.Intn(255))
 		b := strconv.Itoa(rand.Intn(255))
-		color := strings.Replace(ColorString, "{r}", r, 1)
+		color := strings.Replace(colorString, "{r}", r, 1)
 		color = strings.Replace(color, "{g}", g, 1)
 		color = strings.Replace(color, "{b}", b, 1)
 		return color
 	}
 	randColor := randomized()
 	for usedColors[randColor] {
-
 		randColor = randomized()
 	}
 
-	return randColor + txt + ResetColorString
+	return randColor + txt + resetColorString
 }
 
 // SpacemeshLogger is a custom logger.
@@ -48,8 +48,6 @@ type SpacemeshLogger struct {
 
 // smlogger is the local app singleton logger.
 var smLogger *SpacemeshLogger
-
-
 
 func init() {
 	// create a basic temp os.Stdout logger
