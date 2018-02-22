@@ -72,6 +72,7 @@ func (n *localNodeImp) persistData() error {
 	}
 
 	path, err := getDataFilePath(n.String())
+	log.Error("WRITING ", n.String())
 	if err != nil {
 		return err
 	}
