@@ -73,10 +73,12 @@ func (n *localNodeImp) persistData() error {
 	}
 
 	path, err := getDataFilePath(n.String())
-	log.Error("WRITING data", n.String())
+
 	if err != nil {
 		return err
 	}
+
+	// make sure our node file is written to the os filesystem.
 
 	err = ioutil.WriteFile(path, bytes, filesystem.OwnerReadWrite)
 
@@ -100,8 +102,6 @@ func (n *localNodeImp) persistData() error {
 
 // Read node persisted data based on node id.
 func readNodeData(nodeID string) (*NodeData, error) {
-
-	fmt.Println("READING ", nodeID)
 
 	path, err := getDataFilePath(nodeID)
 	if err != nil {
@@ -144,6 +144,7 @@ func readFirstNodeData() (*NodeData, error) {
 	// only consider json files
 	for _, f := range files {
 		n := f.Name()
+		// make sure we get only a real node file
 		if f.IsDir() && !strings.HasPrefix(n, ".") {
 			p, err := getDataFilePath(n)
 			if err != nil {
