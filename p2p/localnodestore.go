@@ -82,6 +82,9 @@ func (n *localNodeImp) persistData() error {
 func readNodeData(nodeID string) (*NodeData, error) {
 
 	path, err := getDataFilePath(nodeID)
+	if err != nil {
+		return nil, err
+	}
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
 		return nil, err
