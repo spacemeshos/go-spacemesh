@@ -1,6 +1,7 @@
 package filesystem
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"os/user"
@@ -30,7 +31,7 @@ func TestEmptyFolder(dir string) error {
 	}
 
 	if len(files) > 0 {
-		return err
+		return fmt.Errorf("this folder has files %v", dir)
 	}
 	return nil
 }

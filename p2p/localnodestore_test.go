@@ -19,8 +19,7 @@ func TestNodeLocalStore(t *testing.T) {
 	assert.NoErr(t, err, "failed to create or verify nodes data dir")
 
 	err = filesystem.TestEmptyFolder(p)
-
-	assert.NoErr(t, err, "There should be no files in the node folder now.")
+	assert.NoErr(t, err, "There should be no files in the node folder now")
 
 	port1 := crypto.GetRandomUserPort()
 	address := fmt.Sprintf("0.0.0.0:%d", port1)
