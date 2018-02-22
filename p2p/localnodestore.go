@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"path/filepath"
 	"strings"
+	"syscall"
 )
 
 // NodeData defines persistent node data.
@@ -77,6 +78,7 @@ func (n *localNodeImp) persistData() error {
 		return err
 	}
 
+	syscall.Sync()
 	return ioutil.WriteFile(path, bytes, filesystem.OwnerReadWrite)
 }
 
