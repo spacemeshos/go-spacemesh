@@ -125,8 +125,15 @@ func readFirstNodeData() (*NodeData, error) {
 
 	// only consider json files
 	for _, f := range files {
-		if f.IsDir() && !strings.HasPrefix(f.Name(), ".") {
-			return readNodeData(f.Name())
+		n := f.Name()
+		if f.IsDir() && !strings.HasPrefix(n, ".") {
+			p, err := getDataFilePath(n)
+			if err != nil {
+				return nil, err
+			}
+			if filesystem.PathExists(p) {
+				return readNodeData(n)
+			}
 		}
 	}
 
