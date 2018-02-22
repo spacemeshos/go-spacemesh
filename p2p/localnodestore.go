@@ -7,9 +7,11 @@ import (
 	"path/filepath"
 	"strings"
 
+	"bytes"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
+	"io"
 )
 
 // NodeData defines persistent node data.
@@ -110,13 +112,28 @@ func readNodeData(nodeID string) (*NodeData, error) {
 	if err != nil {
 		return nil, err
 	}
-	data, err := ioutil.ReadFile(path)
+
+	data := bytes.NewBuffer(nil)
+
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = io.Copy(data, f)
+
+	if err != nil {
+		return nil, err
+	}
+
+	err = f.Close()
+
 	if err != nil {
 		return nil, err
 	}
 
 	var nodeData NodeData
-	err = json.Unmarshal(data, &nodeData)
+	err = json.Unmarshal(data.Bytes(), &nodeData)
 	if err != nil {
 		return nil, err
 	}

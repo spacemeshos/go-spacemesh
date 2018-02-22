@@ -39,6 +39,14 @@ func TestNodeLocalStore(t *testing.T) {
 	// Wait until node shuts down and stops listening on the the node's port to make CI happy
 	time.Sleep(time.Second * 5)
 
+	file, err := getDataFilePath(node.String())
+
+	assert.NoErr(t, err, "could'nt get file path")
+
+	exists := filesystem.PathExists(file)
+
+	assert.True(t, exists, "File should exists after shutdown")
+
 	data, err := readNodeData(node.String())
 	assert.NoErr(t, err, "failed to ensure node data directory")
 	assert.NotNil(t, data, "expected node data")
