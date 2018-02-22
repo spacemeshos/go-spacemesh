@@ -1,6 +1,7 @@
 package filesystem
 
 import (
+	"io/ioutil"
 	"os"
 	"os/user"
 	"testing"
@@ -19,6 +20,19 @@ func DeleteSpacemeshDataFolders(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to delete spacemesh data dir: %s", err)
 	}
+}
+
+// TestEmptyFolder checks that the given folder has no contents
+func TestEmptyFolder(dir string) error {
+	files, err := ioutil.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+
+	if len(files) > 0 {
+		return err
+	}
+	return nil
 }
 
 // TestUsers returns a map of users for testing

@@ -15,8 +15,12 @@ func TestNodeLocalStore(t *testing.T) {
 	// start clean
 	filesystem.DeleteSpacemeshDataFolders(t)
 
-	_, err := ensureNodesDataDirectory()
+	p, err := ensureNodesDataDirectory()
 	assert.NoErr(t, err, "failed to create or verify nodes data dir")
+
+	err = filesystem.TestEmptyFolder(p)
+
+	assert.NoErr(t, err, "There should be no files in the node folder now.")
 
 	port1 := crypto.GetRandomUserPort()
 	address := fmt.Sprintf("0.0.0.0:%d", port1)
