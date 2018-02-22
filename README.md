@@ -15,6 +15,8 @@
 <a href="https://godoc.org/github.com/spacemeshos/go-spacemesh"><img src="https://img.shields.io/badge/godoc-LGTM-blue.svg"/></a>
 </p>
 
+[![throughput](https://graphs.waffle.io/spacemeshos/go-spacemesh/throughput.svg)]
+
 ## go-spacemesh
 💾⏰💪
 Thanks for your interest in this open source project. This is the go implementation of the [Spacemesh](https://spacemesh.io) p2p node. Spacemesh is a decentralized blockchain computer using a new race-free consensus protocol that doesn't involve energy-wasteful `proof of work`. We aim to create a secure and scalable decentralized computer formed by a large number of desktop PCs at home. We are designing and coding a modern blockchain platform from the ground up for scale, security and speed based on the learnings of the achievements and mistakes of previous projects in this space. 
