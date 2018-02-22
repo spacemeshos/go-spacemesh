@@ -72,15 +72,12 @@ func (n *localNodeImp) persistData() error {
 	}
 
 	path, err := getDataFilePath(n.String())
-
 	if err != nil {
 		return err
 	}
 
 	// make sure our node file is written to the os filesystem.
-
 	err = ioutil.WriteFile(path, bytes, filesystem.OwnerReadWrite)
-
 	if err != nil {
 		return err
 	}
@@ -91,7 +88,6 @@ func (n *localNodeImp) persistData() error {
 	}
 
 	err = f.Sync()
-
 	if err != nil {
 		return err
 	}
