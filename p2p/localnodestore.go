@@ -2,13 +2,14 @@ package p2p
 
 import (
 	"encoding/json"
-	"github.com/spacemeshos/go-spacemesh/filesystem"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/spacemeshos/go-spacemesh/filesystem"
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 )
 
 // NodeData defines persistent node data.
@@ -77,17 +78,22 @@ func (n *localNodeImp) persistData() error {
 	}
 
 	// make sure our node file is written to the os filesystem.
-	err = ioutil.WriteFile(path, bytes, filesystem.OwnerReadWrite)
+	f, err := os.Create(path)
 	if err != nil {
 		return err
 	}
 
-	f, err := os.Open(path)
+	_, err = f.Write(bytes)
 	if err != nil {
 		return err
 	}
 
 	err = f.Sync()
+	if err != nil {
+		return err
+	}
+
+	err = f.Close()
 	if err != nil {
 		return err
 	}
