@@ -92,6 +92,8 @@ func (n *localNodeImp) persistData() error {
 		return err
 	}
 
+	log.Info("Node data persisted and synced. NodeID ", n.String())
+
 	return nil
 }
 
