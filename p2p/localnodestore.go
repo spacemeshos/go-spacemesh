@@ -136,10 +136,6 @@ func readFirstNodeData() (*NodeData, error) {
 		return nil, err
 	}
 
-	for _, f := range files {
-		log.Error(f.Name())
-	}
-
 	// only consider json files
 	for _, f := range files {
 		n := f.Name()
