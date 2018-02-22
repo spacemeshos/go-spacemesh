@@ -2,6 +2,7 @@ package p2p
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
@@ -71,6 +72,7 @@ func (n *localNodeImp) persistData() error {
 	}
 
 	path, err := getDataFilePath(n.String())
+	log.Error("WRITING ", n.String())
 	if err != nil {
 		return err
 	}
@@ -81,7 +83,12 @@ func (n *localNodeImp) persistData() error {
 // Read node persisted data based on node id.
 func readNodeData(nodeID string) (*NodeData, error) {
 
+	fmt.Println("READING ", nodeID)
+
 	path, err := getDataFilePath(nodeID)
+	if err != nil {
+		return nil, err
+	}
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -110,6 +117,10 @@ func readFirstNodeData() (*NodeData, error) {
 	files, err := ioutil.ReadDir(path)
 	if err != nil {
 		return nil, err
+	}
+
+	for _, f := range files {
+		log.Error(f.Name())
 	}
 
 	// only consider json files
