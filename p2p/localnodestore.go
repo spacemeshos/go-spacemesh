@@ -7,9 +7,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 	"io/ioutil"
+	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 )
 
 // NodeData defines persistent node data.
@@ -78,8 +78,24 @@ func (n *localNodeImp) persistData() error {
 		return err
 	}
 
-	syscall.Sync()
-	return ioutil.WriteFile(path, bytes, filesystem.OwnerReadWrite)
+	err = ioutil.WriteFile(path, bytes, filesystem.OwnerReadWrite)
+
+	if err != nil {
+		return err
+	}
+
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+
+	err = f.Sync()
+
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // Read node persisted data based on node id.
