@@ -4,11 +4,42 @@ package log
 
 import (
 	"fmt"
-	"gopkg.in/natefinch/lumberjack.v2"
-	"gopkg.in/op/go-logging.v1"
+	"math/rand"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
+	"time"
+
+	"gopkg.in/natefinch/lumberjack.v2"
+	"gopkg.in/op/go-logging.v1"
 )
+
+const colorString = "\x1b[38;2;{r};{g};{b}m"
+const colorBgString = "\x1b[48;2;{r};{g};{b}m"
+const resetColorString = "\x1b[0m"
+
+var usedColors = make(map[string]bool)
+
+func createRandomColor(txt string) string {
+
+	randomized := func() string {
+		rand.Seed(time.Now().UnixNano())
+		r := strconv.Itoa(rand.Intn(255))
+		g := strconv.Itoa(rand.Intn(255))
+		b := strconv.Itoa(rand.Intn(255))
+		color := strings.Replace(colorString, "{r}", r, 1)
+		color = strings.Replace(color, "{g}", g, 1)
+		color = strings.Replace(color, "{b}", b, 1)
+		return color
+	}
+	randColor := randomized()
+	for usedColors[randColor] {
+		randColor = randomized()
+	}
+
+	return randColor + txt + resetColorString
+}
 
 // SpacemeshLogger is a custom logger.
 type SpacemeshLogger struct {
@@ -21,13 +52,18 @@ var smLogger *SpacemeshLogger
 func init() {
 	// create a basic temp os.Stdout logger
 	// This logger is used until the app calls InitSpacemeshLoggingSystem().
+
 	log := logging.MustGetLogger("app")
 	log.ExtraCalldepth = 1
-	logFormat := logging.MustStringFormatter(` %{color}%{level:.4s} %{id:03x} %{time:15:04:05.000} %{shortpkg}.%{shortfunc} ▶%{color:reset} %{message}`)
+	logFormat := logging.MustStringFormatter(` %{color}%{level:.4s} %{id:03x} %{time:15:04:05.000} ▶%{color:reset} %{message}`)
 	backend := logging.NewLogBackend(os.Stdout, "<APP>", 0)
 	backendFormatter := logging.NewBackendFormatter(backend, logFormat)
 	logging.SetBackend(backendFormatter)
 	smLogger = &SpacemeshLogger{Logger: log}
+
+	log.Info("Spacemesh uses 256 terminal colors. please make sure your terminal supports it")
+	log.Info(createRandomColor("T") + createRandomColor("E") + createRandomColor("S") + createRandomColor("T"))
+	usedColors = make(map[string]bool)
 }
 
 // CreateLogger creates a logger for a module. e.g. local node logger.
@@ -35,10 +71,9 @@ func CreateLogger(module string, dataFolderPath string, logFileName string) *log
 
 	log := logging.MustGetLogger(module)
 	log.ExtraCalldepth = 1
-	logFormat := logging.MustStringFormatter(` %{color}%{level:.4s} %{id:03x} %{time:15:04:05.000} %{shortpkg}.%{shortfunc} ▶%{color:reset} %{message}`)
-
+	logFormat := logging.MustStringFormatter(` %{color:reset}%{color}%{level:.4s} %{id:03x} %{time:15:04:05.000} %{shortpkg}.%{shortfunc} ▶%{color:reset} %{message}`)
 	// module name is set is message prefix
-	backend := logging.NewLogBackend(os.Stdout, module, 0)
+	backend := logging.NewLogBackend(os.Stdout, createRandomColor(module), 0)
 	backendFormatter := logging.NewBackendFormatter(backend, logFormat)
 
 	fileName := filepath.Join(dataFolderPath, logFileName)
