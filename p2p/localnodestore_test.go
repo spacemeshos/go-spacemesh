@@ -2,6 +2,7 @@ package p2p
 
 import (
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/app/config"
 	"github.com/spacemeshos/go-spacemesh/assert"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
@@ -11,7 +12,7 @@ import (
 )
 
 func TestNodeLocalStore(t *testing.T) {
-
+	config.ConfigValues.DataFilePath = "~/.spacemesh-localnode-test-data"
 	// start clean
 	filesystem.DeleteSpacemeshDataFolders(t)
 
