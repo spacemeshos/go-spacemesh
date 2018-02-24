@@ -2,12 +2,16 @@ package p2p
 
 import (
 	"encoding/json"
+	"io/ioutil"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"bytes"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
-	"io/ioutil"
-	"path/filepath"
-	"strings"
+	"io"
 )
 
 // NodeData defines persistent node data.
@@ -75,20 +79,61 @@ func (n *localNodeImp) persistData() error {
 		return err
 	}
 
-	return ioutil.WriteFile(path, bytes, filesystem.OwnerReadWrite)
+	// make sure our node file is written to the os filesystem.
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+
+	_, err = f.Write(bytes)
+	if err != nil {
+		return err
+	}
+
+	err = f.Sync()
+	if err != nil {
+		return err
+	}
+
+	err = f.Close()
+	if err != nil {
+		return err
+	}
+
+	log.Info("Node data persisted and synced. NodeID ", n.String())
+
+	return nil
 }
 
 // Read node persisted data based on node id.
 func readNodeData(nodeID string) (*NodeData, error) {
 
 	path, err := getDataFilePath(nodeID)
-	data, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	data := bytes.NewBuffer(nil)
+
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = io.Copy(data, f)
+
+	if err != nil {
+		return nil, err
+	}
+
+	err = f.Close()
+
 	if err != nil {
 		return nil, err
 	}
 
 	var nodeData NodeData
-	err = json.Unmarshal(data, &nodeData)
+	err = json.Unmarshal(data.Bytes(), &nodeData)
 	if err != nil {
 		return nil, err
 	}
@@ -114,8 +159,16 @@ func readFirstNodeData() (*NodeData, error) {
 
 	// only consider json files
 	for _, f := range files {
-		if f.IsDir() && !strings.HasPrefix(f.Name(), ".") {
-			return readNodeData(f.Name())
+		n := f.Name()
+		// make sure we get only a real node file
+		if f.IsDir() && !strings.HasPrefix(n, ".") {
+			p, err := getDataFilePath(n)
+			if err != nil {
+				return nil, err
+			}
+			if filesystem.PathExists(p) {
+				return readNodeData(n)
+			}
 		}
 	}
 

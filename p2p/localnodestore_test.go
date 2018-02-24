@@ -2,6 +2,7 @@ package p2p
 
 import (
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/app/config"
 	"github.com/spacemeshos/go-spacemesh/assert"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
@@ -11,12 +12,15 @@ import (
 )
 
 func TestNodeLocalStore(t *testing.T) {
-
+	config.ConfigValues.DataFilePath = "~/.spacemesh-localnode-test-data"
 	// start clean
 	filesystem.DeleteSpacemeshDataFolders(t)
 
-	_, err := ensureNodesDataDirectory()
+	p, err := ensureNodesDataDirectory()
 	assert.NoErr(t, err, "failed to create or verify nodes data dir")
+
+	err = filesystem.TestEmptyFolder(p)
+	assert.NoErr(t, err, "There should be no files in the node folder now")
 
 	port1 := crypto.GetRandomUserPort()
 	address := fmt.Sprintf("0.0.0.0:%d", port1)
@@ -35,6 +39,14 @@ func TestNodeLocalStore(t *testing.T) {
 
 	// Wait until node shuts down and stops listening on the the node's port to make CI happy
 	time.Sleep(time.Second * 5)
+
+	file, err := getDataFilePath(node.String())
+
+	assert.NoErr(t, err, "could'nt get file path")
+
+	exists := filesystem.PathExists(file)
+
+	assert.True(t, exists, "File should exists after shutdown")
 
 	data, err := readNodeData(node.String())
 	assert.NoErr(t, err, "failed to ensure node data directory")
