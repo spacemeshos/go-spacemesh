@@ -1,24 +1,29 @@
 package tests
 
 import (
+	"math/rand"
+	"testing"
+
 	"github.com/spacemeshos/go-spacemesh/assert"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht/table"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
-	"math/rand"
-	"testing"
 )
 
 // Tests basic bucket features
 func TestBucket(t *testing.T) {
 	const n = 100
 
-	local := p2p.GenerateRandomNodeData()
+	local, err := p2p.GenerateRandomNodeData()
+	assert.NoErr(t, err, "Should be able to create node")
+
 	localID := local.DhtID()
 
 	// add 100 nodes to the table
 	b := table.NewBucket()
-	nodes := p2p.GenerateRandomNodesData(n)
+	nodes, err := p2p.GenerateRandomNodesData(n)
+	assert.NoErr(t, err, "Should be able to create multiple nodes")
+
 	for i := 0; i < n; i++ {
 		b.PushFront(nodes[i])
 	}

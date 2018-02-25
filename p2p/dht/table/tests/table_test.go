@@ -1,20 +1,27 @@
 package tests
 
 import (
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/p2p/dht/table"
 	"math/rand"
 	"testing"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/assert"
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/dht/table"
 )
 
 func TestTableCallbacks(t *testing.T) {
 	const n = 100
-	local := p2p.GenerateRandomNodeData()
+	local, err := p2p.GenerateRandomNodeData()
+
+	assert.NoErr(t, err, "Should be able to create a node")
+
 	localID := local.DhtID()
 
-	nodes := p2p.GenerateRandomNodesData(n)
+	nodes, err := p2p.GenerateRandomNodesData(n)
+
+	assert.NoErr(t, err, "Should be able to create multiple nodes")
 
 	rt := table.NewRoutingTable(10, localID)
 
@@ -79,12 +86,15 @@ Loop1:
 func TestTableUpdate(t *testing.T) {
 
 	const n = 100
-	local := p2p.GenerateRandomNodeData()
+	local, err := p2p.GenerateRandomNodeData()
+	assert.NoErr(t, err, "Should be able to create a node")
+
 	localID := local.DhtID()
 
 	rt := table.NewRoutingTable(20, localID)
 
-	nodes := p2p.GenerateRandomNodesData(n)
+	nodes, err := p2p.GenerateRandomNodesData(n)
+	assert.NoErr(t, err, "Should be able to create multiple nodes")
 
 	// Testing Update
 	for i := 0; i < 10000; i++ {
@@ -94,7 +104,8 @@ func TestTableUpdate(t *testing.T) {
 	for i := 0; i < n; i++ {
 
 		// create a new random node
-		n := p2p.GenerateRandomNodeData()
+		n, err := p2p.GenerateRandomNodeData()
+		assert.NoErr(t, err, "Should be able to create a node")
 
 		// create callback to receive result
 		callback := make(table.PeersOpChannel, 2)
@@ -117,12 +128,15 @@ func TestTableFind(t *testing.T) {
 
 	const n = 100
 
-	local := p2p.GenerateRandomNodeData()
+	local, err := p2p.GenerateRandomNodeData()
+	assert.NoErr(t, err, "Should be able to create a node")
+
 	localID := local.DhtID()
 
 	rt := table.NewRoutingTable(20, localID)
 
-	nodes := p2p.GenerateRandomNodesData(n)
+	nodes, err := p2p.GenerateRandomNodesData(n)
+	assert.NoErr(t, err, "Should be able to create a node")
 
 	for i := 0; i < 5; i++ {
 		rt.Update(nodes[i])
@@ -164,10 +178,13 @@ func TestTableFindCount(t *testing.T) {
 	const n = 100
 	const i = 15
 
-	local := p2p.GenerateRandomNodeData()
+	local, err := p2p.GenerateRandomNodeData()
+	assert.NoErr(t, err, "Should be able to create a node")
+
 	localID := local.DhtID()
 	rt := table.NewRoutingTable(20, localID)
-	nodes := p2p.GenerateRandomNodesData(n)
+	nodes, err := p2p.GenerateRandomNodesData(n)
+	assert.NoErr(t, err, "Should be able to create a node")
 
 	for i := 0; i < n; i++ {
 		rt.Update(nodes[i])
@@ -195,10 +212,13 @@ func TestTableMultiThreaded(t *testing.T) {
 	const n = 5000
 	const i = 15
 
-	local := p2p.GenerateRandomNodeData()
+	local, err := p2p.GenerateRandomNodeData()
+	assert.NoErr(t, err, "Should be able to create a node")
+
 	localID := local.DhtID()
 	rt := table.NewRoutingTable(20, localID)
-	nodes := p2p.GenerateRandomNodesData(n)
+	nodes, err := p2p.GenerateRandomNodesData(n)
+	assert.NoErr(t, err, "Should be able to create multiple nodes")
 
 	go func() {
 		for i := 0; i < 1000; i++ {
@@ -224,10 +244,17 @@ func TestTableMultiThreaded(t *testing.T) {
 
 func BenchmarkUpdates(b *testing.B) {
 	b.StopTimer()
-	local := p2p.GenerateRandomNodeData()
+	local, err := p2p.GenerateRandomNodeData()
+	if err != nil {
+		b.Errorf("Should be able to create node error:%v", err)
+	}
+
 	localID := local.DhtID()
 	rt := table.NewRoutingTable(20, localID)
-	nodes := p2p.GenerateRandomNodesData(b.N)
+	nodes, err := p2p.GenerateRandomNodesData(b.N)
+	if err != nil {
+		b.Errorf("Should be able to create multiple error:%v", err)
+	}
 
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
@@ -238,10 +265,17 @@ func BenchmarkUpdates(b *testing.B) {
 func BenchmarkFinds(b *testing.B) {
 	b.StopTimer()
 
-	local := p2p.GenerateRandomNodeData()
+	local, err := p2p.GenerateRandomNodeData()
+	if err != nil {
+		b.Errorf("Should be able to create node error:%v", err)
+	}
+
 	localID := local.DhtID()
 	rt := table.NewRoutingTable(20, localID)
-	nodes := p2p.GenerateRandomNodesData(b.N)
+	nodes, err := p2p.GenerateRandomNodesData(b.N)
+	if err != nil {
+		b.Errorf("Should be able to create node error:%v", err)
+	}
 
 	for i := 0; i < b.N; i++ {
 		rt.Update(nodes[i])

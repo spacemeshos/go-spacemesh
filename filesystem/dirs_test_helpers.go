@@ -1,12 +1,40 @@
 package filesystem
 
 import (
+	"encoding/binary"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/app/config"
+	"github.com/spacemeshos/go-spacemesh/crypto"
 	"io/ioutil"
 	"os"
 	"os/user"
 	"testing"
 )
+
+// SetupTestSpacemeshDataFolders sets up a data folder to this specific test
+func SetupTestSpacemeshDataFolders(t *testing.T, n string) {
+	// just to make sure its isolated
+	r, err := crypto.GetRandomBytes(4)
+
+	if err != nil {
+		t.Error(err)
+	}
+
+	setupFolder := fmt.Sprintf("test%v_%v", n, binary.BigEndian.Uint32(r))
+	config.ConfigValues.DataFilePath = setupFolder
+
+	aPath, err := GetSpacemeshDataDirectoryPath()
+	if err != nil {
+		t.Fatalf("Failed to get spacemesh data dir: %s", err)
+	}
+
+	// remove
+	err = os.RemoveAll(aPath)
+	if err != nil {
+		t.Fatalf("Failed to delete spacemesh data dir: %s", err)
+	}
+
+}
 
 // DeleteSpacemeshDataFolders deletes all sub directories and files in the Spacemesh root data folder.
 func DeleteSpacemeshDataFolders(t *testing.T) {
@@ -21,6 +49,8 @@ func DeleteSpacemeshDataFolders(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to delete spacemesh data dir: %s", err)
 	}
+
+	config.ConfigValues.DataFilePath = "~/.spacemesh"
 }
 
 // TestEmptyFolder checks that the given folder has no contents

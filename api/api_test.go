@@ -6,7 +6,7 @@ import (
 	config "github.com/spacemeshos/go-spacemesh/api/config"
 	pb "github.com/spacemeshos/go-spacemesh/api/pb"
 	"github.com/spacemeshos/go-spacemesh/assert"
-	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"io/ioutil"
@@ -19,8 +19,12 @@ import (
 
 func TestServersConfig(t *testing.T) {
 
-	config.ConfigValues.GrpcServerPort = int(crypto.GetRandomUserPort())
-	config.ConfigValues.JSONServerPort = int(crypto.GetRandomUserPort())
+	port1, err := net.GetUnboundedPort()
+	port2, err := net.GetUnboundedPort()
+	assert.NoErr(t, err, "Should be able to establish a connection on a port")
+
+	config.ConfigValues.JSONServerPort = port1
+	config.ConfigValues.GrpcServerPort = port2
 
 	grpcService := NewGrpcService()
 	jsonService := NewJSONHTTPServer()
@@ -31,8 +35,12 @@ func TestServersConfig(t *testing.T) {
 
 func TestGrpcApi(t *testing.T) {
 
-	config.ConfigValues.GrpcServerPort = int(crypto.GetRandomUserPort())
-	config.ConfigValues.JSONServerPort = int(crypto.GetRandomUserPort())
+	port1, err := net.GetUnboundedPort()
+	port2, err := net.GetUnboundedPort()
+	assert.NoErr(t, err, "Should be able to establish a connection on a port")
+
+	config.ConfigValues.JSONServerPort = port1
+	config.ConfigValues.GrpcServerPort = port2
 
 	const message = "Hello World"
 
@@ -66,8 +74,12 @@ func TestGrpcApi(t *testing.T) {
 
 func TestJsonApi(t *testing.T) {
 
-	config.ConfigValues.GrpcServerPort = int(crypto.GetRandomUserPort())
-	config.ConfigValues.JSONServerPort = int(crypto.GetRandomUserPort())
+	port1, err := net.GetUnboundedPort()
+	port2, err := net.GetUnboundedPort()
+	assert.NoErr(t, err, "Should be able to establish a connection on a port")
+
+	config.ConfigValues.JSONServerPort = port1
+	config.ConfigValues.GrpcServerPort = port2
 
 	grpcService := NewGrpcService()
 	jsonService := NewJSONHTTPServer()

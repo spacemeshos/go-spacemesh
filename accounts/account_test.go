@@ -14,7 +14,7 @@ func TestAccountLoading(t *testing.T) {
 
 func TestAccountOps(t *testing.T) {
 
-	filesystem.DeleteSpacemeshDataFolders(t)
+	filesystem.SetupTestSpacemeshDataFolders(t, "account_ops")
 
 	const passphrase = "a-weak-passphrase-123"
 	accountsDataFolder, err := filesystem.GetAccountsDataDirectoryPath()
@@ -74,7 +74,7 @@ func TestAccountOps(t *testing.T) {
 
 func TestPersistence(t *testing.T) {
 
-	filesystem.DeleteSpacemeshDataFolders(t)
+	filesystem.SetupTestSpacemeshDataFolders(t, "account_persistence")
 
 	const passphrase = "a-weak-passphrase-1234"
 	const wrongPassphrase = "a-weak-passphrase-1245"

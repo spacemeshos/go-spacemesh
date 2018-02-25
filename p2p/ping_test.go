@@ -2,11 +2,12 @@ package p2p
 
 import (
 	"bytes"
+	"testing"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/assert"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
-	"testing"
-	"time"
 )
 
 func TestPingProtocol(t *testing.T) {
