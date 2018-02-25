@@ -89,3 +89,9 @@ func TestReadWrite(t *testing.T) {
 	err = c.Close()
 	assert.NoErr(t, err, "error closing connection")
 }
+
+func TestGetUnboundedPort(t *testing.T) {
+	port, err := GetUnboundedPort()
+	_ = port // to make lint pass
+	assert.NoErr(t, err, "Should be able to get an unbounded port")
+}
