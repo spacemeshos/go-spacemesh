@@ -2,19 +2,18 @@ package p2p
 
 import (
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/app/config"
-	"github.com/spacemeshos/go-spacemesh/assert"
-	"github.com/spacemeshos/go-spacemesh/crypto"
-	"github.com/spacemeshos/go-spacemesh/filesystem"
-	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 	"testing"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/assert"
+	"github.com/spacemeshos/go-spacemesh/filesystem"
+	"github.com/spacemeshos/go-spacemesh/p2p/net"
+	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 )
 
 func TestNodeLocalStore(t *testing.T) {
-	config.ConfigValues.DataFilePath = "~/.spacemesh-localnode-test-data"
 	// start clean
-	filesystem.DeleteSpacemeshDataFolders(t)
+	filesystem.SetupTestSpacemeshDataFolders(t, "localnode_store")
 
 	p, err := ensureNodesDataDirectory()
 	assert.NoErr(t, err, "failed to create or verify nodes data dir")
@@ -22,7 +21,9 @@ func TestNodeLocalStore(t *testing.T) {
 	err = filesystem.TestEmptyFolder(p)
 	assert.NoErr(t, err, "There should be no files in the node folder now")
 
-	port1 := crypto.GetRandomUserPort()
+	port1, err := net.GetUnboundedPort()
+	assert.NoErr(t, err, "Should be able to establish a connection on a port")
+
 	address := fmt.Sprintf("0.0.0.0:%d", port1)
 
 	node, err := NewNodeIdentity(address, nodeconfig.ConfigValues, false)

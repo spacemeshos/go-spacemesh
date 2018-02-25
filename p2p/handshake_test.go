@@ -5,20 +5,23 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"testing"
+
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/assert"
-	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
-	"testing"
 )
 
 // Basic handshake protocol data test
 func TestHandshakeCoreData(t *testing.T) {
 
 	// node 1
-	port := crypto.GetRandomUserPort()
+	port, err := net.GetUnboundedPort()
+	assert.NoErr(t, err, "Should be able to establish a connection on a port")
+
 	address := fmt.Sprintf("0.0.0.0:%d", port)
 
 	node1Local, err := NewNodeIdentity(address, nodeconfig.ConfigValues, false)
@@ -31,7 +34,9 @@ func TestHandshakeCoreData(t *testing.T) {
 	node1Remote, _ := NewRemoteNode(node1Local.String(), address)
 
 	// node 2
-	port1 := crypto.GetRandomUserPort()
+	port1, err := net.GetUnboundedPort()
+	assert.NoErr(t, err, "Should be able to establish a connection on a port")
+
 	address1 := fmt.Sprintf("0.0.0.0:%d", port1)
 
 	node2Local, err := NewNodeIdentity(address1, nodeconfig.ConfigValues, false)
@@ -94,14 +99,19 @@ func TestHandshakeCoreData(t *testing.T) {
 func TestHandshakeProtocol(t *testing.T) {
 
 	// node 1
-	port := crypto.GetRandomUserPort()
+	port, err := net.GetUnboundedPort()
+	assert.NoErr(t, err, "Should be able to establish a connection on a port")
+
 	address := fmt.Sprintf("0.0.0.0:%d", port)
 
 	node1Local, _ := NewNodeIdentity(address, nodeconfig.ConfigValues, false)
 	node1Remote, _ := NewRemoteNode(node1Local.String(), address)
 
 	// node 2
-	port1 := crypto.GetRandomUserPort()
+
+	port1, err := net.GetUnboundedPort()
+	assert.NoErr(t, err, "Should be able to establish a connection on a port")
+
 	address1 := fmt.Sprintf("0.0.0.0:%d", port1)
 
 	node2Local, _ := NewNodeIdentity(address1, nodeconfig.ConfigValues, false)
@@ -194,14 +204,19 @@ func TestBadHandshakes(t *testing.T) {
 
 	testProtocol := func(cfg nodeconfig.Config, cfg2 nodeconfig.Config) error {
 		// node 1
-		port := crypto.GetRandomUserPort()
+
+		port, err := net.GetUnboundedPort()
+		assert.NoErr(t, err, "Should be able to establish a connection on a port")
+
 		address := fmt.Sprintf("0.0.0.0:%d", port)
 
 		node1Local, _ := NewNodeIdentity(address, cfg, false)
 		node1Remote, _ := NewRemoteNode(node1Local.String(), address)
 
 		// node 2
-		port1 := crypto.GetRandomUserPort()
+		port1, err := net.GetUnboundedPort()
+		assert.NoErr(t, err, "Should be able to establish a connection on a port")
+
 		address1 := fmt.Sprintf("0.0.0.0:%d", port1)
 
 		node2Local, _ := NewNodeIdentity(address1, cfg2, false)

@@ -2,9 +2,10 @@ package dht
 
 import (
 	"encoding/hex"
-	"github.com/spacemeshos/go-spacemesh/assert"
 	"math/big"
 	"testing"
+
+	"github.com/spacemeshos/go-spacemesh/assert"
 )
 
 func TestIds(t *testing.T) {

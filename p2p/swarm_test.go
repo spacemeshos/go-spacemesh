@@ -3,11 +3,12 @@ package p2p
 import (
 	"bytes"
 	"fmt"
+	"testing"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/assert"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
-	"testing"
-	"time"
 )
 
 // Basic session test

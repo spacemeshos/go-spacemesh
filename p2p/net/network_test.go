@@ -2,19 +2,23 @@ package net
 
 import (
 	"fmt"
+	"testing"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/assert"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
-	"testing"
-	"time"
 )
 
 func TestReadWrite(t *testing.T) {
 
 	msg := []byte("hello spacemesh")
 	msgID := crypto.UUID()
-	port := crypto.GetRandomUserPort()
+
+	port, err := GetUnboundedPort()
+	assert.NoErr(t, err, "Should be able to establish a connection on a port")
+
 	address := fmt.Sprintf("0.0.0.0:%d", port)
 	done := make(chan bool, 1)
 
