@@ -12,10 +12,10 @@ import (
 func CheckUserPort(port uint32) bool {
 	address := fmt.Sprintf("0.0.0.0:%d", port)
 	l, e := net.Listen("tcp", address)
-	defer l.Close()
 	if e != nil {
 		return true
 	}
+	l.Close()
 	return false
 }
 
