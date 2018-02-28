@@ -95,12 +95,12 @@ func newConnection(conn net.Conn, n Net, s ConnectionSource) Connection {
 		net:          n,
 	}
 
-	// start processing channel-based message
-	go connection.beginEventProcessing()
 	// start reading incoming message from the connection and into the channel
 	go incomingMsgs.ReadFromReader(conn)
 	// write to the connection through the delimited writer
 	go outgoingMsgs.WriteToWriter(conn)
+	// start processing channel-based message
+	go connection.beginEventProcessing()
 
 	return connection
 }
