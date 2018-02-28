@@ -404,7 +404,6 @@ func processHandshakeRequest(node LocalNode, r Peer, req *pb.HandshakeData) (*pb
 	// check that received clientversion is valid client string
 	reqVersion := strings.Split(req.ClientVersion, "/")
 	if len(reqVersion) != 2 {
-		//node.Warning("Dropping incoming message - invalid client version")
 		return nil, nil, errors.New("dropping incoming handshake - invalid client version")
 	}
 
@@ -465,7 +464,6 @@ func processHandshakeRequest(node LocalNode, r Peer, req *pb.HandshakeData) (*pb
 		return nil, nil, err
 
 	}
-	s.SetAuthenticated(true)
 
 	// update remote node session here
 	r.GetSessions()[s.String()] = s
@@ -557,8 +555,6 @@ func processHandshakeResponse(node LocalNode, r Peer, s NetworkSession, resp *pb
 	}
 
 	// Session is now authenticated
-	s.SetAuthenticated(true)
-
 	// update remote node session here
 	r.GetSessions()[s.String()] = s
 
