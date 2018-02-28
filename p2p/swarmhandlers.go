@@ -62,7 +62,7 @@ func (s *swarmImpl) onConnectionRequest(req node.RemoteNodeData) {
 	}
 
 	conn := peer.GetActiveConnection()
-	session := peer.GetAuthenticatedSession()
+	session := peer.GetLastSession()
 
 	if conn != nil && session != nil {
 		s.localNode.Info("Already got an active session and connection with: %s", req.Pretty())
@@ -100,7 +100,7 @@ func (s *swarmImpl) onConnectionRequest(req node.RemoteNodeData) {
 
 	// todo: we need to handle the case that there's a non-authenticated session with the remote node
 	// we need to decide if to wait for it to auth, kill it, etc....
-	if session == nil || !session.IsAuthenticated() {
+	if session == nil {
 
 		// start handshake protocol
 		s.sendNodeEvent(req.ID(), HandshakeStarted)
@@ -116,7 +116,7 @@ func (s *swarmImpl) onNewSession(data HandshakeData) {
 		return
 	}
 
-	if data.Session().IsAuthenticated() {
+	if s.peers[data.Peer().String()].GetSessions()[data.Session().String()] != nil {
 
 		s.localNode.Info("Established new session with %s", data.Peer().TCPAddress())
 
@@ -193,19 +193,19 @@ func (s *swarmImpl) onSendMessageRequest(r SendMessageReq) {
 		return
 	}
 
-	session := peer.GetAuthenticatedSession()
 	conn := peer.GetActiveConnection()
 
-	if session == nil || conn == nil {
+	if conn == nil {
+		s.onConnectionRequest(node.NewRemoteNodeData(peer.String(), peer.TCPAddress()))
+	}
+
+	session := peer.GetLastSession()
+
+	if session == nil {
 
 		s.localNode.Warning("queuing protocol request until session is established...")
-
 		// save the message for later sending and try to connect to the node
 		s.messagesPendingSession[hex.EncodeToString(r.ReqID)] = r
-
-		// try to connect to remote node and send the message once connected
-		// todo: callback listener if connection fails (possibly after retries)
-		s.onConnectionRequest(node.NewRemoteNodeData(peer.String(), peer.TCPAddress()))
 		return
 	}
 
@@ -333,7 +333,7 @@ func (s *swarmImpl) onRemoteClientProtocolMessage(msg net.IncomingMessage, c *pb
 	// Locate the session
 	session := s.allSessions[hex.EncodeToString(c.SessionId)]
 
-	if session == nil || !session.IsAuthenticated() {
+	if session == nil {
 		s.localNode.Warning("Dropping incoming protocol message - expected to have an authenticated session with this node")
 		return
 	}
