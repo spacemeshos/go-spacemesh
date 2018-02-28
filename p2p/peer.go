@@ -25,7 +25,7 @@ type Peer interface {
 	GetSessions() map[string]NetworkSession
 
 	// returns an authenticated session with the node if one exists
-	GetAuthenticatedSession() NetworkSession
+	GetLastSession() NetworkSession
 
 	// returns an active connection with the node if we have one
 	GetActiveConnection() net.Connection
@@ -61,13 +61,14 @@ func NewRemoteNode(id string, tcpAddress string) (Peer, error) {
 	return n, nil
 }
 
-func (n *peerImpl) GetAuthenticatedSession() NetworkSession {
+func (n *peerImpl) GetLastSession() NetworkSession {
+	var lastCreated NetworkSession = nil
 	for _, v := range n.sessions {
-		if v.IsAuthenticated() {
-			return v
+		if lastCreated == nil || v.Created().After(lastCreated.Created()) {
+			lastCreated = v
 		}
 	}
-	return nil
+	return lastCreated
 }
 
 func (n *peerImpl) GetRemoteNodeData() node.RemoteNodeData {
