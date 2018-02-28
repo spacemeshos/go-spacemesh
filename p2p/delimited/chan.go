@@ -2,7 +2,6 @@ package delimited
 
 import (
 	"io"
-	//"fmt"
 )
 
 // Chan is a delimited duplex channel. It is used to have a channel interface
