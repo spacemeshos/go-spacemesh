@@ -28,9 +28,6 @@ type NetworkSession interface {
 	LocalNodeID() string  // string encoded session local node id
 	RemoteNodeID() string // string encoded session remote node id
 
-	IsAuthenticated() bool
-	SetAuthenticated(val bool)
-
 	Decrypt(in []byte) ([]byte, error) // decrypt data using session dec key
 	Encrypt(in []byte) ([]byte, error) // encrypt data using session enc key
 }
@@ -84,16 +81,6 @@ func (n *NetworkSessionImpl) KeyM() []byte {
 // PubKey returns the session's public key.
 func (n *NetworkSessionImpl) PubKey() []byte {
 	return n.pubKey
-}
-
-// IsAuthenticated returns true iff the session is authenticated.
-func (n *NetworkSessionImpl) IsAuthenticated() bool {
-	return n.authenticated
-}
-
-// SetAuthenticated updates the session's authentication state.
-func (n *NetworkSessionImpl) SetAuthenticated(val bool) {
-	n.authenticated = val
 }
 
 // Created returns the session creation time.
