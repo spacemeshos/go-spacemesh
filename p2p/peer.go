@@ -62,7 +62,7 @@ func NewRemoteNode(id string, tcpAddress string) (Peer, error) {
 }
 
 func (n *peerImpl) GetLastSession() NetworkSession {
-	var lastCreated NetworkSession = nil
+	var lastCreated NetworkSession
 	for _, v := range n.sessions {
 		if lastCreated == nil || v.Created().After(lastCreated.Created()) {
 			lastCreated = v

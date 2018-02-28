@@ -22,7 +22,7 @@ func TestSessionCreation(t *testing.T) {
 	node2Local.GetSwarm().RegisterNodeEventsCallback(callback2)
 	node1Local.GetSwarm().ConnectTo(node2Local.GetRemoteNodeData())
 
-	var establishedSessions int32 = 0
+	var establishedSessions int32
 
 Loop:
 	for {
