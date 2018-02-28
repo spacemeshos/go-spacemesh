@@ -2,6 +2,7 @@ package delimited
 
 import (
 	"io"
+	//"fmt"
 )
 
 // Chan is a delimited duplex channel. It is used to have a channel interface
@@ -27,28 +28,27 @@ func (s *Chan) ReadFromReader(r io.Reader) {
 	s.readFrom(NewReader(r))
 }
 
-// ReadFrom wraps the given io.Reader with a delimited.Reader, reads all
-// messages, ands sends them down the channel.
-func (s *Chan) readFrom(mr *Reader) {
+func (s *Chan) readFrom(dr *Reader) {
 	// single reader, no need for Mutex
 Loop:
 	for {
-		buf, err := mr.Next()
+		buf, err := dr.Next()
 		if err != nil {
-			if err == io.EOF {
+			if err != io.EOF {
+				// unexpected error. tell the client.
+				s.ErrChan <- err
 				break Loop // done
 			}
-
-			// unexpected error. tell the client.
-			s.ErrChan <- err
-			break Loop
 		}
 
 		select {
 		case <-s.CloseChan:
 			break Loop // told we're done
-		case s.MsgChan <- buf:
-			// ok seems fine. send it away
+		default:
+			//pass a copy of buf so we can keep reading to it
+			bufcpy := make([]byte, len(buf))
+			copy(bufcpy, buf)
+			s.MsgChan <- bufcpy
 		}
 	}
 
@@ -60,10 +60,12 @@ Loop:
 // WriteToWriter wraps the given io.Writer with a delimited.Writer, listens on the
 // channel and writes all messages to the writer.
 func (s *Chan) WriteToWriter(w io.Writer) {
+	s.writeTo(NewWriter(w))
+}
+
+func (s *Chan) writeTo(dw *Writer) {
 	// new buffer per message
 	// if bottleneck, cycle around a set of buffers
-	mw := NewWriter(w)
-
 	// single writer, no need for Mutex
 Loop:
 	for {
@@ -76,7 +78,7 @@ Loop:
 				break Loop
 			}
 
-			if _, err := mw.WriteRecord(msg); err != nil {
+			if _, err := dw.WriteRecord(msg); err != nil {
 				if err != io.EOF {
 					// unexpected error. tell the client.
 					s.ErrChan <- err
