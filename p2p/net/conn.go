@@ -6,6 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/delimited"
 	"net"
 	"time"
+	"sync"
 )
 
 // Connection is a closeable network connection, that can send and receive messages from a remote instance.
@@ -72,6 +73,8 @@ type connectionImpl struct {
 	incomingMsgs *delimited.Chan // implemented using delimited.Chan - incoming messages
 	outgoingMsgs *delimited.Chan // outgoing message queue
 
+	opsWaitGroup sync.WaitGroup
+
 	conn net.Conn // wrapped network connection
 	net  Net      // network context
 }
@@ -93,7 +96,11 @@ func newConnection(conn net.Conn, n Net, s ConnectionSource) Connection {
 		outgoingMsgs: outgoingMsgs,
 		conn:         conn,
 		net:          n,
+		opsWaitGroup: sync.WaitGroup{},
 	}
+
+	incomingMsgs.RegisterOpCallback(connection.RecordOpTime)
+	outgoingMsgs.RegisterOpCallback(connection.RecordOpTime)
 
 	// start reading incoming message from the connection and into the channel
 	go incomingMsgs.ReadFromReader(conn)
@@ -130,11 +137,21 @@ func (c *connectionImpl) Send(message []byte, id []byte) {
 // Close closes the connection (implements io.Closer). It is go safe.
 func (c *connectionImpl) Close() error {
 	c.incomingMsgs.Close()
+	c.outgoingMsgs.Close()
 	return nil
 }
 
-// go safe
+
+// RecordOpTime records now as the last op time
+func (c *connectionImpl) RecordOpTime() {
+	 c.opsWaitGroup.Add(1)
+	 c.lastOpTime = time.Now()
+	 c.opsWaitGroup.Done()
+}
+
+// LastOpTime returns the last optime that was recorded
 func (c *connectionImpl) LastOpTime() time.Time {
+	c.opsWaitGroup.Wait()
 	return c.lastOpTime
 }
 
@@ -158,7 +175,6 @@ Loop:
 			}
 
 			log.Info("Incoming message from: %s to: %s.", c.conn.RemoteAddr().String(), c.conn.LocalAddr().String())
-			c.lastOpTime = time.Now()
 
 			// pump the message to the network
 			go func() {

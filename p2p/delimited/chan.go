@@ -10,6 +10,7 @@ type Chan struct {
 	MsgChan   chan []byte
 	ErrChan   chan error
 	CloseChan chan bool
+	opCallbacks []func()
 }
 
 // NewChan constructs a Chan with a given buffer size.
@@ -18,6 +19,18 @@ func NewChan(chanSize int) *Chan {
 		MsgChan:   make(chan []byte, chanSize),
 		ErrChan:   make(chan error, 1),
 		CloseChan: make(chan bool, 2),
+	}
+}
+
+func (s *Chan) RegisterOpCallback(f func()) {
+	if f != nil {
+		s.opCallbacks = append(s.opCallbacks, f)
+	}
+}
+
+func (s *Chan) runOps() {
+	for _, f := range s.opCallbacks {
+		f()
 	}
 }
 
@@ -48,6 +61,7 @@ Loop:
 			bufcpy := make([]byte, len(buf))
 			copy(bufcpy, buf)
 			s.MsgChan <- bufcpy
+			s.runOps()
 		}
 	}
 
@@ -85,6 +99,7 @@ Loop:
 
 				break Loop
 			}
+			s.runOps()
 		}
 	}
 
