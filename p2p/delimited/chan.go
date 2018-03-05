@@ -22,12 +22,14 @@ func NewChan(chanSize int) *Chan {
 	}
 }
 
+// RegisterOpCallback is used to register a function that will run after a successful read/write operation
 func (s *Chan) RegisterOpCallback(f func()) {
 	if f != nil {
 		s.opCallbacks = append(s.opCallbacks, f)
 	}
 }
 
+// runOps runs all the operation callbacks that we're registered. it is not responsible for synchronization
 func (s *Chan) runOps() {
 	for _, f := range s.opCallbacks {
 		f()
