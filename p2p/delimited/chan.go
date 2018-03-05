@@ -7,9 +7,9 @@ import (
 // Chan is a delimited duplex channel. It is used to have a channel interface
 // around a delimited.Reader or Writer.
 type Chan struct {
-	MsgChan   chan []byte
-	ErrChan   chan error
-	CloseChan chan bool
+	MsgChan     chan []byte
+	ErrChan     chan error
+	CloseChan   chan bool
 	opCallbacks []func()
 }
 

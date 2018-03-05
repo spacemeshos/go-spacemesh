@@ -5,8 +5,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/delimited"
 	"net"
-	"time"
 	"sync"
+	"time"
 )
 
 // Connection is a closeable network connection, that can send and receive messages from a remote instance.
@@ -141,12 +141,11 @@ func (c *connectionImpl) Close() error {
 	return nil
 }
 
-
 // RecordOpTime records now as the last op time
 func (c *connectionImpl) RecordOpTime() {
-	 c.opsWaitGroup.Add(1)
-	 c.lastOpTime = time.Now()
-	 c.opsWaitGroup.Done()
+	c.opsWaitGroup.Add(1)
+	c.lastOpTime = time.Now()
+	c.opsWaitGroup.Done()
 }
 
 // LastOpTime returns the last optime that was recorded
