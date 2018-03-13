@@ -10,7 +10,7 @@ Thank you for considering to contribute to the go-spacemesh open source project.
 - Make sure that the issue is labled `Help Wanted` before starting to work on it.
 - Add a comment in the issue that you are starting to work on it.
 - Ask for any information that you feel is missing from the issue for you to be able to work on it.
-- Clone branch `Developer` and not `Master` - we follow gitflow (link).
+- Clone branch `Developer` and not `Master` - we follow [gitflow](https://datasift.github.io/gitflow/IntroducingGitFlow.html)
 - Create a PR (Pull Request) from your clone and reference the issue number in it.
 - Submit your PR for review when you beleive your code is ready to be merged.
 - Follow up on code review comments posted by a maintainer on your Pull Request (PR)
@@ -31,4 +31,8 @@ Please follow these guidelines in your code for your PR to be considered for bei
 3. You must provide at least one intergration test for each feature which invovled more than one function call. Your tests should reflect hte main ways that your code should be used.
 4. You should `gofmt` and `golint` your code.
 5. Before submitting your PR for review, make sure that all CI tasks pass. If a test fails, commit fixes and wait for the CI to run all build tasks.
+
+# Working with Gitcoin Bounties
+We beleive in compensating contributors and collaboratos for their effort. We are using [gitcoin.io](https://gitcoin.io) for compensating with Ethereum cryptocoins for some open issues. The list of open bounties is available [here](https://gitcoin.co/profile/spacemeshos).
+
 
