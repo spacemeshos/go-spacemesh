@@ -66,6 +66,6 @@ Please follow the following guidelines to have your PR considered for merging in
 - As you work on the issue, please update us on your progress using issue comments.
 - If you claim an issue and become irresponsive for about 7 days then we might encourage other contributors to claim it.
 
-## Step 3 - Getting paid
+## Step 3 - Get paid
 - When ready, submit your PR for review and go through the code review process with one of our maintainers.
 - You should receive your bounty as soon as your PR is approved and merged by one of our maintainers. 
