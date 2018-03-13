@@ -53,9 +53,11 @@ Please follow the following guidelines to have your PR considered for merging in
 # Working on a funded issue 
 - Browse [open funded issues](https://github.com/spacemeshos/go-spacemesh/labels/funded) on our github repo, or on our [gitcoin.io issues page](https://gitcoin.co/profile/spacemeshos) .
 - Skip issues that another contributor is already actively working on.
-- Click the `Start Work` button on the gitcoin.io issue page when you are ready to start working on it.
-- Follow the `working on an existing issue guidelines` and the `code contributions guidelines` outlined on this page.
-- Communicate with the maintainers in the issue github page comments section.
+- Find a funded issue you'd like to be working on.
+- Ask any questions you may have about the issue in the issue page comments section.
+- When you are ready to start working on the issue - click the `Start Work` button on the gitcoin.io issue page .
+- Follow the `working on an existing issue` and the `code contributions guidelines` outlined on this page.
+- Communicate with the maintainers in the issue's github page comments section.
 - Submit your PR and go through the code review process with one of our maintainers.
 - Once your PR is approved and merged, you should receive your bounty. 
 - Be nice! tell us if you decide to abandon an issue you have claimed via an issue comment so other people can claim it and start working on it.
