@@ -1,12 +1,19 @@
 # Overview
 Thank you for considering to contribute to the go-spacemesh open source project. We welcome contributions large and small and we actively accept contributions.
 
-- go-spacemesh is part of [The Spacemesh open source project](https://spacemesh.io), and is MIT licensed open source software.
-- We welcome major contributors to the spacemesh core dev team.
+- go-spacemesh is part of [The Spacemesh open source project](https://spacemesh.io), and is MIT licensed free open source software.
 - Please make sure to scan the [issues](https://github.com/spacemeshos/go-spacemesh/issues). 
 - Search the closed ones before reporting things, and help us with the open ones.
 - Ensure you are able to contribute to MIT licensed free open software (no legal issues please)
+- Ask questions or talk about things in [Issues](https://github.com/spacemeshos/go-spacemesh/issues) or on [spacemash 
+gitter](https://gitter.im/spacemesh-os/Lobby).
+- We welcome major contributors to the Spacemesh core dev team.
+- **Have fun hacking away our blockchain future!**
 
+# Not sure how to start?
+- Look for open issues labeled [Help Wanted](https://github.com/spacemeshos/go-spacemesh/issues)
+- Still not sure? Add tests. There can never be enough tests.
+ 
 # Working on an existing open issue
 - Make sure that the issue is labeled `Help Wanted` before starting to work on it.
 - Add a comment in the issue that you are starting to work on it.
@@ -28,7 +35,7 @@ Thank you for considering to contribute to the go-spacemesh open source project.
 # Code Contributions Guidelines
 Please follow the following guidelines to have your PR considered for merging into the project.
 
-1. You should document all methods and functions using `go commentary` syntax .
+1. You should document all methods and functions using [go commentary](https://golang.org/doc/effective_go.html#commentary).  
 2. You should provide at least one unit test for each function and method.
 3. You should provide at least one integration test for each feature which involves more than one function call. Your tests should reflect the main ways that your code should be used.
 4. You should `gofmt` and `golint` your code.
