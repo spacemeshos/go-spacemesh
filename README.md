@@ -40,10 +40,11 @@ Thank you for considering to contribute to the go-spacemesh open source project.
 
 - go-spacemesh is part of [The Spacemesh open source project](https://spacemesh.io), and is MIT licensed open source software.
 - We welcome collaborators to the Spacemesh core dev team.
-- You don’t have to contribute code! Many important types of contributions are important for our project. See: [How to Contribute to Open Source?](https://opensource.guide/how-to-contribute/#what-it-means-to-contribute)?
+- You don’t have to contribute code! Many important types of contributions are important for our project. See: [How to Contribute to Open Source?](https://opensource.guide/how-to-contribute/#what-it-means-to-contribute)
 
 - To get started, please read our [contributions guidelines](https://github.com/spacemeshos/go-spacemesh/blob/master/CONTRIBUTING.md)
 
+#### Get crypto awarded for your contribution by working on one of our [gitcoin funded issues](https://gitcoin.co/profile/spacemeshos).
 <a href="https://gitcoin.co/profile/spacemeshos" title="Push Open Source Forward">
     <img src="https://gitcoin.co/static/v2/images/promo_buttons/slice_02.png" width="267px" height="52px" alt="Browse Gitcoin Bounties"/>
 </a>
