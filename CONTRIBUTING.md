@@ -51,7 +51,7 @@ Please follow the following guidelines to have your PR considered for merging in
 - Add any new 3rd-party package required by your code to vendor.json - please don't use any other kind of deps importing.
 
 # Working on a funded issue 
-- Browse [open funded issues](https://github.com/spacemeshos/go-spacemesh/labels/funded) on our github repo, or on our [gitcoin.io issues page]((https://gitcoin.co/profile/spacemeshos) .
+- Browse [open funded issues](https://github.com/spacemeshos/go-spacemesh/labels/funded) on our github repo, or on our [gitcoin.io issues page](https://gitcoin.co/profile/spacemeshos) .
 - Skip issues that another contributor is already actively working on.
 - Click the `Start Work` button on the gitcoin.io issue page when you are ready to start working on it.
 - Follow the `working on an existing issue guidelines` and the `code contributions guidelines` outlined on this page.
