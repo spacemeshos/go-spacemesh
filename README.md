@@ -36,16 +36,13 @@ Provide dapp and app developers with a robust way to add value exchange and othe
 go-spacemesh is designed to be installed and operated on users' home PCs to form one decentralized computer.
 
 ### Contributing
-Thank you for considering to contribute to the go-spacemesh open source project. 
-We welcome contributions large and small and we actively accept contributions.
+Thank you for considering to contribute to the go-spacemesh open source project.  We welcome contributions large and small and we actively accept contributions.
 
 - go-spacemesh is part of [The Spacemesh open source project](https://spacemesh.io), and is MIT licensed open source software.
-- We welcome major contributors to the spacemesh core dev team.
-- Please make sure to scan the [issues](https://github.com/spacemeshos/go-spacemesh/issues). 
-- Search the closed ones before reporting things, and help us with the open ones.
+- We welcome collaborators to the Spacemesh core dev team.
 - You don’t have to contribute code! Many important types of contributions are important for our project. See: [How to Contribute to Open Source?](https://opensource.guide/how-to-contribute/#what-it-means-to-contribute)?
 
-- Please read our [contributions guidelines](https://github.com/spacemeshos/go-spacemesh/blob/master/CONTRIBUTING.md)
+- To get started, please read our [contributions guidelines](https://github.com/spacemeshos/go-spacemesh/blob/master/CONTRIBUTING.md)
 
 <a href="https://gitcoin.co/profile/spacemeshos" title="Push Open Source Forward">
     <img src="https://gitcoin.co/static/v2/images/promo_buttons/slice_02.png" width="267px" height="52px" alt="Browse Gitcoin Bounties"/>
