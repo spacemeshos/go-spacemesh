@@ -27,6 +27,8 @@ Thank you for considering to contribute to the go-spacemesh open source project.
 Please follow these guidelines in your code for your PR to be considered for being merged.
 
 1. You must document all methods and functions using the `GO DOC` style.
-2. You must provide at least one unit test for each function and method
+2. You must provide at least one unit test for each function and method.
 3. You must provide at least one intergration test for each feature which invovled more than one function call. Your tests should reflect hte main ways that your code should be used.
 4. You should `gofmt` and `golint` your code.
+5. Before submitting your PR for review, make sure that all CI tasks pass. If a test fails, commit fixes and wait for the CI to run all build tasks.
+
