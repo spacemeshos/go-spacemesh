@@ -36,8 +36,8 @@ Provide dapp and app developers with a robust way to add value exchange and othe
 go-spacemesh is designed to be installed and operated on users' home PCs to form one decentralized computer.
 
 
-<a href="https://gitcoin.co/profile/spacemeshos" title="Push Open Source Forward" width="267px" height="52px">
-    <img src='https://gitcoin.co/static/v2/images/promo_buttons/slice_02.png' alt="Browse Gitcoin Bounties"/>
+<a href="https://gitcoin.co/profile/spacemeshos" title="Push Open Source Forward">
+    <img src="https://gitcoin.co/static/v2/images/promo_buttons/slice_02.png" width="267px" height="52px" alt="Browse Gitcoin Bounties"/>
 </a>
 
 
