@@ -23,3 +23,10 @@ Thank you for considering to contribute to the go-spacemesh open source project.
 - If an existing closed or open issue not found then create a new repo issue. Describe your idea for new feature or for an improvement of an existing feature and the design of the code you'd like to contribute.
 - Wait for feedback from one of the mainteners before starting to work on the feature or the bug fix.
 
+# Code Contributions Guidelines
+Please follow these guidelines in your code for your PR to be considered for being merged.
+
+1. You must document all methods and functions using the `GO DOC` style.
+2. You must provide at least one unit test for each function and method
+3. You must provide at least one intergration test for each feature which invovled more than one function call. Your tests should reflect hte main ways that your code should be used.
+4. You should `gofmt` and `golint` your code.
