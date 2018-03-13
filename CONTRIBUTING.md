@@ -5,16 +5,21 @@ Thank you for considering to contribute to the go-spacemesh open source project.
 - Please make sure to scan the [issues](https://github.com/spacemeshos/go-spacemesh/issues). 
 - Search the closed ones before reporting things, and help us with the open ones.
 - Ensure you are able to contribute to MIT licensed free open software (no legal issues please)
-- Ask questions or talk about things in [Issues](https://github.com/spacemeshos/go-spacemesh/issues) or on [spacemash 
+- Ask questions or talk about things in [Issues](https://github.com/spacemeshos/go-spacemesh/issues) or on [Spacemash 
 gitter](https://gitter.im/spacemesh-os/Lobby).
 - We welcome major contributors to the Spacemesh core dev team.
 - **Have fun hacking away our blockchain future!**
 
 # Not sure how to start?
 - Look for open issues labeled [Help Wanted](https://github.com/spacemeshos/go-spacemesh/issues)
-- Still not sure? Add tests. There can never be enough tests.
- 
-# Working on an existing open issue
+- Still not sure? Add tests. One can never be enough of them.
+
+# Contributors Compensation
+- We believe in compensating contributors and collaborators for their contributions.
+- We are using [gitcoin.io](https://gitcoin.io) for compensating with Ethereum cryptocoins for some open issues. The list of open bounties is available [here](https://gitcoin.co/profile/spacemeshos).
+- We are experimenting with bounties and we plan to announce additional compensation plans in the near future.
+
+# Working on an existing issue
 - Make sure that the issue is labeled `Help Wanted` before starting to work on it.
 - Add a comment in the issue that you are starting to work on it.
 - Ask for any information that you feel is missing from the issue for you to be able to work on it.
@@ -41,13 +46,16 @@ Please follow the following guidelines to have your PR considered for merging in
 4. You should `gofmt` and `golint` your code.
 5. Before submitting your PR for review, make sure that all CI tasks pass. If a test fails, commit fixes and wait for the CI to run all build tasks.
 
-# Contributors Compensation
-- We believe in compensating contributors and collaborators for their contributions.
-- We are using [gitcoin.io](https://gitcoin.io) for compensating with Ethereum cryptocoins for some open issues. The list of open bounties is available [here](https://gitcoin.co/profile/spacemeshos).
-- We are going to announce additional compensation plans in the near future.
-
 # Adding new dependencies
 - Check for 3rd-party packages in the vendor folder before adding a new 3rd party dependency.
 - Add any new 3rd-party package required by your code to vendor.json - please don't use any other kind of deps importing.
 
-
+# Working on a funded issue 
+- Locate a gitcoin funded issue that you like to work on by browsing the [funded issues](https://github.com/spacemeshos/go-spacemesh/labels/funded) in our github repo, or browse the [list of our funded issues on gitcoin.io]((https://gitcoin.co/profile/spacemeshos) .
+- Skip issues that another contributor is already actively working on.
+- Click the `Start Work` button on the gitcoin.io issue page when you are ready to start working on the issue.
+- Follow the `working on an existing issue guidelines` and the `code contributions guidelines`.
+- Communicate with the maintainers using comments on the issue github page.
+- Submit your PR and go through the code review process with one of our maintainers.
+- Once your PR is approved you should receive your bounty. 
+- Be nice - tell us if you decided to abandon an issue you claimed via an issue comment so other people can claim it.
