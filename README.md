@@ -35,11 +35,21 @@ Provide dapp and app developers with a robust way to add value exchange and othe
 ### Target Users
 go-spacemesh is designed to be installed and operated on users' home PCs to form one decentralized computer.
 
+### Contributing
+Thank you for considering to contribute to the go-spacemesh open source project. 
+We welcome contributions large and small and we actively accept contributions.
+
+- go-spacemesh is part of [The Spacemesh open source project](https://spacemesh.io), and is MIT licensed open source software.
+- We welcome major contributors to the spacemesh core dev team.
+- Please make sure to scan the [issues](https://github.com/spacemeshos/go-spacemesh/issues). 
+- Search the closed ones before reporting things, and help us with the open ones.
+- You don’t have to contribute code! Many important types of contributions are important for our project. See: [How to Contribute to Open Source?](https://opensource.guide/how-to-contribute/#what-it-means-to-contribute)?
+
+- Please read our [contributions guidelines](https://github.com/spacemeshos/go-spacemesh/blob/master/CONTRIBUTING.md)
 
 <a href="https://gitcoin.co/profile/spacemeshos" title="Push Open Source Forward">
     <img src="https://gitcoin.co/static/v2/images/promo_buttons/slice_02.png" width="267px" height="52px" alt="Browse Gitcoin Bounties"/>
 </a>
-
 
 ### Diggin' Deeper
 Please read the Spacemesh [full FAQ](https://github.com/spacemeshos/go-spacemesh/wiki/Spacemesh-FAQ).
@@ -88,36 +98,6 @@ or
 make cover
 ```
 
-### Contributing
-Thank you for considering to contribute to the go-spacemesh open source project. 
-We welcome contributions large and small and we actively accept contributions.
-- go-spacemesh is part of [The Spacemesh open source project](https://spacemesh.io), and is MIT licensed open source software.
-- We welcome major contributors to the spacemesh core dev team.
-- Please make sure to scan the [issues](https://github.com/spacemeshos/go-spacemesh/issues). 
-- Search the closed ones before reporting things, and help us with the open ones.
-- You don’t have to contribute code! Many important types of contributions are important for our project. See: [How to Contribute to Open Source?](https://opensource.guide/how-to-contribute/#what-it-means-to-contribute)?
-
-#### Guidelines
-- Read the Spacemesh project white paper (coming soon)
-- Ask questions or talk about things in [Issues](https://github.com/spacemeshos/go-spacemesh/issues) or on [spacemash gitter](https://gitter.im/spacemesh-os/Lobby).
-- Ensure you are able to contribute (no legal issues please)
-- For any code contribution, please fork from the `develop branch` and not from `master`), apply your changes and submit a pull request. We follow this [git workflow](http://nvie.com/posts/a-successful-git-branching-model/)
-- Before starting to work on large contributions please chat with the core dev team on our [gitter channel](https://gitter.im/spacemesh-os/Lobby) to get some initial feedback prior to doing lots of work.
-- Check for 3rd-party packages in the vendor folder before adding a new 3rd party dependency.
-- Add new 3rd-party packages required by your code to vendor.json - don't use any other kind of deps importing.
-- Add the package name to your commit comment. e.g. `node: added additional tests.`
-- Squash your changes down to a single commit before submitting a PR and rebase on master so we can keep the commit timeline linear.
-- We adhere to the go standard formatting. Run `go fmt` before pushing any code
-- Get in touch with @avive about how best to contribute
-- Your code must be commented using [go commentary](https://golang.org/doc/effective_go.html#commentary)
-- You can add your your name and email to AUTHORS when submitting a Pull Request.
-
-- **Have fun hacking away our blockchain future!**
-
-Few things you can do right now to help out:
- - Check out existing [open issues](https://github.com/spacemeshos/go-spacemesh/issues). This would be especially useful for modules in active development.
- - Add tests. There can never be enough tests.
- 
 #### Next Steps...
 - Please visit our [wiki](https://github.com/spacemeshos/go-spacemesh/wiki)
 - Browse project [go docs](https://godoc.org/github.com/spacemeshos/go-spacemesh)
