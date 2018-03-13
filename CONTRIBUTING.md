@@ -32,7 +32,7 @@ Please follow these guidelines in your code for your PR to be considered for bei
 4. You should `gofmt` and `golint` your code.
 5. Before submitting your PR for review, make sure that all CI tasks pass. If a test fails, commit fixes and wait for the CI to run all build tasks.
 
-# Working with Gitcoin Bounties
+# Contributors Compensation
 We beleive in compensating contributors and collaboratos for their effort. We are using [gitcoin.io](https://gitcoin.io) for compensating with Ethereum cryptocoins for some open issues. The list of open bounties is available [here](https://gitcoin.co/profile/spacemeshos).
 
 
