@@ -51,13 +51,16 @@ Please follow the following guidelines to have your PR considered for merging in
 - Add any new 3rd-party package required by your code to vendor.json - please don't use any other kind of deps importing.
 
 # Working on a funded issue 
-- Browse [open funded issues](https://github.com/spacemeshos/go-spacemesh/labels/funded) on our github repo, or on our [gitcoin.io issues page](https://gitcoin.co/profile/spacemeshos) .
+- Browse [open funded issues](https://github.com/spacemeshos/go-spacemesh/labels/funded) on our github repo, or on our [gitcoin.io issues page](https://gitcoin.co/profile/spacemeshos).
 - Skip issues that another contributor is already actively working on.
 - Find a funded issue you'd like to be working on.
-- Ask any questions you may have about the issue in the issue page comments section.
-- When you are ready to start working on the issue - click the `Start Work` button on the gitcoin.io issue page .
+- Ask any questions you may have about the work involved in the issue github page comments section.
+- Click the `Start Work` button on the gitcoin.io issue page when you are ready to start working on the issue.
 - Follow the `working on an existing issue` and the `code contributions guidelines` outlined on this page.
 - Communicate with the maintainers in the issue's github page comments section.
 - Submit your PR and go through the code review process with one of our maintainers.
 - Once your PR is approved and merged, you should receive your bounty. 
-- Be nice! tell us if you decide to abandon an issue you have claimed via an issue comment so other people can claim it and start working on it.
+- Be nice! please tell us if you decide to abandon an issue you have claimed via an issue comment so other people can start working on it.
+- As you work on the issue, please update us on your progress using issue comments.
+- If you claim an issue and become irresponsive for about 7 days then we may encourage other contributors to claim it.
+
