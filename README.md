@@ -54,6 +54,12 @@ Thank you for considering to contribute to the go-spacemesh open source project.
 ### Diggin' Deeper
 Please read the Spacemesh [full FAQ](https://github.com/spacemeshos/go-spacemesh/wiki/Spacemesh-FAQ).
 
+### Software Architecture Diagram
+
+<p align="center">
+<img src="https://github.com/spacemeshos/go-spacemesh/blob/master/research/sm_arch_diagram.png"/>
+</p>
+
 ### Getting
 
 install [Go 1.9.2 or later](https://golang.org/dl/) for your platform
