@@ -4,11 +4,47 @@ package log
 
 import (
 	"fmt"
-	"gopkg.in/natefinch/lumberjack.v2"
-	"gopkg.in/op/go-logging.v1"
+	"math/rand"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
+	"time"
+
+	"gopkg.in/natefinch/lumberjack.v2"
+	"gopkg.in/op/go-logging.v1"
 )
+
+const colorString = "\x1b[38;2;{r};{g};{b}m"
+const colorBgString = "\x1b[48;2;{r};{g};{b}m"
+const resetColorString = "\x1b[0m"
+
+var usedColors = make(map[int]string)
+
+func createRandomColor(txt string) string {
+
+	randomized := func() (string, int) {
+		rand.Seed(time.Now().UnixNano())
+		r, g, b, sum := 0, 0, 0, 0
+		for sum < 300 { // make sure color is not too dark for console
+			r = rand.Intn(255)
+			g = rand.Intn(255)
+			b = rand.Intn(255)
+			sum = r + b + g
+		}
+		color := strings.Replace(colorString, "{r}", strconv.Itoa(r), 1)
+		color = strings.Replace(color, "{g}", strconv.Itoa(g), 1)
+		color = strings.Replace(color, "{b}", strconv.Itoa(b), 1)
+		return color, sum
+	}
+	randColor, sum := randomized()
+	for _, ok := usedColors[sum]; ok; {
+		// Take a new color. TODO : Make sure color are distinct. and human-distinguishable.
+		randColor, sum = randomized()
+	}
+	usedColors[sum] = txt // TODO(optional?) : use saved names to colorize node mentions inside logs
+	return randColor + txt + resetColorString
+}
 
 // SpacemeshLogger is a custom logger.
 type SpacemeshLogger struct {
@@ -23,11 +59,15 @@ func init() {
 	// This logger is used until the app calls InitSpacemeshLoggingSystem().
 	log := logging.MustGetLogger("app")
 	log.ExtraCalldepth = 1
-	logFormat := logging.MustStringFormatter(` %{color}%{level:.4s} %{id:03x} %{time:15:04:05.000} %{shortpkg}.%{shortfunc} ▶%{color:reset} %{message}`)
+	logFormat := logging.MustStringFormatter(` %{color}%{level:.4s} %{id:03x} %{time:15:04:05.000} ▶%{color:reset} %{message}`)
 	backend := logging.NewLogBackend(os.Stdout, "<APP>", 0)
 	backendFormatter := logging.NewBackendFormatter(backend, logFormat)
 	logging.SetBackend(backendFormatter)
 	smLogger = &SpacemeshLogger{Logger: log}
+
+	log.Info("Spacemesh uses 256 terminal colors. please make sure your terminal supports it")
+	log.Info(createRandomColor("T") + createRandomColor("E") + createRandomColor("S") + createRandomColor("T"))
+	usedColors = make(map[int]string) // reset colors
 }
 
 // CreateLogger creates a logger for a module. e.g. local node logger.
@@ -35,10 +75,9 @@ func CreateLogger(module string, dataFolderPath string, logFileName string) *log
 
 	log := logging.MustGetLogger(module)
 	log.ExtraCalldepth = 1
-	logFormat := logging.MustStringFormatter(` %{color}%{level:.4s} %{id:03x} %{time:15:04:05.000} %{shortpkg}.%{shortfunc} ▶%{color:reset} %{message}`)
-
+	logFormat := logging.MustStringFormatter(` %{color:reset}%{color}%{level:.4s} %{id:03x} %{time:15:04:05.000} %{shortpkg}.%{shortfunc} ▶%{color:reset} %{message}`)
 	// module name is set is message prefix
-	backend := logging.NewLogBackend(os.Stdout, module, 0)
+	backend := logging.NewLogBackend(os.Stdout, createRandomColor(module), 0)
 	backendFormatter := logging.NewBackendFormatter(backend, logFormat)
 
 	fileName := filepath.Join(dataFolderPath, logFileName)
