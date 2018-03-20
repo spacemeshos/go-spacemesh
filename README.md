@@ -1,5 +1,5 @@
 <h1 align="center">
-  <a href="https://spacemesh.io"><img width="400" src="https://firebasestorage.googleapis.com/v0/b/dromo-os.appspot.com/o/SpaceMesh_logo_on%20white.png?alt=media&token=ef4ed003-3222-4527-a494-ee2f756e6b74" alt="Spacemesh logo" /></a>
+  <a href="https://spacemesh.io"><img width="400" src="https://raw.githubusercontent.com/spacemeshos/go-spacemesh/master/research/SpaceMesh_logo_on%20white_trimmed1.png" alt="Spacemesh logo" /></a>
   <p align="center">Make blockchain decentralized again™</p>
 </h1>
 
