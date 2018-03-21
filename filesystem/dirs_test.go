@@ -1,10 +1,11 @@
 package filesystem
 
 import (
-	"github.com/spacemeshos/go-spacemesh/assert"
 	"os"
 	"os/user"
 	"testing"
+
+	"github.com/spacemeshos/go-spacemesh/assert"
 )
 
 var RootFolder = "/"
@@ -130,6 +131,31 @@ func TestGetSpacemeshTempDirectoryPath(t *testing.T) {
 	for _, testCase := range testCases {
 		os.Setenv("HOME", testCase.user.HomeDir)
 		actual, err := GetSpacemeshTempDirectoryPath()
+		assert.Equal(t, testCase.expected, actual, "")
+		assert.Equal(t, err != nil, testCase.error, "")
+	}
+	TearDownTestHooks()
+}
+
+func TestEnsureDataSubDirectory(t *testing.T) {
+	users := TestUsers()
+	SetupTestHooks(users)
+	usr, err := currentUser()
+	assert.NoErr(t, err, "getting current user failed")
+
+	testCases := []struct {
+		user     *user.User
+		expected string
+		error    bool
+	}{
+		{usr, "~" + RootFolder + ".spacemesh" + RootFolder + "temp", false},
+		{users["bob"], "", true},
+		{users["alice"], "", true},
+	}
+
+	for _, testCase := range testCases {
+		os.Setenv("HOME", testCase.user.HomeDir)
+		actual, err := ensureDataSubDirectory("temp")
 		assert.Equal(t, testCase.expected, actual, "")
 		assert.Equal(t, err != nil, testCase.error, "")
 	}
