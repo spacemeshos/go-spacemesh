@@ -16,7 +16,7 @@ Thank you for considering to contribute to the go-spacemesh open source project.
 # Contributors Compensation
 - We believe in compensating contributors and collaborators for their open source contributions.
 - We are experimenting with bounties and we plan to announce additional compensation plans in the near future.
-- We are using [gitcoin.io](https://gitcoin.io) for compensating contributors with Ethereum cryptocoins for some open issues.
+- We are using [gitcoin](https://gitcoin.co) for compensating contributors with Ethereum cryptocoins for some open issues.
 - Browse our open bounties [here](https://gitcoin.co/profile/spacemeshos).
 
 # Working on an existing issue
