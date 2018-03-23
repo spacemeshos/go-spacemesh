@@ -123,7 +123,7 @@ func TestGetSpacemeshTempDirectoryPath(t *testing.T) {
 		expected string
 		error    bool
 	}{
-		{usr, "~" + RootFolder + ".spacemesh" + RootFolder + "temp", false},
+		{usr, "~" + RootFolder + ".spacemesh/temp", false},
 		{users["bob"], "", true},
 		{users["alice"], "", true},
 	}
@@ -148,7 +148,7 @@ func TestEnsureDataSubDirectory(t *testing.T) {
 		expected string
 		error    bool
 	}{
-		{usr, "~" + RootFolder + ".spacemesh" + RootFolder + "temp", false},
+		{usr, "~" + RootFolder + ".spacemesh/temp", false},
 		{users["bob"], "", true},
 		{users["alice"], "", true},
 	}
@@ -174,9 +174,9 @@ func TestDeleteAllTempFiles(t *testing.T) {
 		error    bool
 		exist    bool
 	}{
-		{usr, "~" + RootFolder + ".spacemesh" + RootFolder + "temp", false, true},
-		{users["bob"], users["bob"].HomeDir + RootFolder + ".spacemesh" + RootFolder + "temp", true, false},
-		{users["alice"], users["alice"].HomeDir + RootFolder + ".spacemesh" + RootFolder + "temp", true, false},
+		{usr, "~" + RootFolder + ".spacemesh/temp", false, true},
+		{users["bob"], users["bob"].HomeDir + RootFolder + ".spacemesh/temp", true, false},
+		{users["alice"], users["alice"].HomeDir + RootFolder + ".spacemesh/temp", true, false},
 	}
 
 	for _, testCase := range testCases {
