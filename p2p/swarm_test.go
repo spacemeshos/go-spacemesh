@@ -9,25 +9,40 @@ import (
 	"github.com/spacemeshos/go-spacemesh/assert"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
+	"sync/atomic"
 )
 
 // Basic session test
 func TestSessionCreation(t *testing.T) {
-	callback := make(chan HandshakeData)
+	callback := make(NodeEventCallback)
+	callback2 := make(NodeEventCallback)
 	node1Local, _ := GenerateTestNode(t)
 	node2Local, _ := GenerateTestNode(t)
-	node1Local.GetSwarm().getHandshakeProtocol().RegisterNewSessionCallback(callback)
+	node1Local.GetSwarm().RegisterNodeEventsCallback(callback)
+	node2Local.GetSwarm().RegisterNodeEventsCallback(callback2)
 	node1Local.GetSwarm().ConnectTo(node2Local.GetRemoteNodeData())
+
+	var establishedSessions int32
 
 Loop:
 	for {
 		select {
 		case c := <-callback:
-			if c.Session().IsAuthenticated() {
-				break Loop
+			if c.PeerID == node2Local.String() && c.State == SessionEstablished {
+				atomic.AddInt32(&establishedSessions, 1)
+			}
+		case c := <-callback2:
+			if c.PeerID == node1Local.String() && c.State == SessionEstablished {
+				atomic.AddInt32(&establishedSessions, 1)
 			}
 		case <-time.After(time.Second * 10):
 			t.Fatalf("Timeout error - failed to create session")
+
+		default:
+			s := atomic.LoadInt32(&establishedSessions)
+			if s >= 2 {
+				break Loop
+			}
 		}
 	}
 
@@ -35,7 +50,7 @@ Loop:
 	node2Local.Shutdown()
 }
 
-func _estSimpleBootstrap(t *testing.T) {
+func TestSimpleBootstrap(t *testing.T) {
 
 	// setup:
 	// node1 - bootstrap node

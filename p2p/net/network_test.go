@@ -65,7 +65,7 @@ func TestReadWrite(t *testing.T) {
 
 	log.Info("Sending message...")
 
-	//t1 := c.LastOpTime()
+	t1 := c.LastOpTime()
 
 	c.Send(msg, msgID)
 	log.Info("Message sent.")
@@ -80,12 +80,12 @@ func TestReadWrite(t *testing.T) {
 	_, err = n.DialTCP(address, time.Duration(10*time.Second), time.Duration(48*time.Hour))
 	assert.Err(t, err, "expected to fail dialing after calling shutdown")
 	//
-	//t2 := c.LastOpTime()
+	t2 := c.LastOpTime()
 	//
 	//// verify connection props
 	id := c.ID()
 	assert.True(t, len(id) > 0, "failed to get connection id")
-	//assert.True(t, t2.Sub(t1) > 0, "invalid last op time")
+	assert.True(t, t2.Sub(t1) > 0, "invalid last op time")
 	err = c.Close()
 	assert.NoErr(t, err, "error closing connection")
 }

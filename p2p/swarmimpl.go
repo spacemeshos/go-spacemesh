@@ -227,7 +227,9 @@ func (s *swarmImpl) ConnectToRandomNodes(count int) {
 
 			for _, p := range c.Peers {
 				// queue up connection requests to found peers
-				go s.ConnectTo(p)
+				if s.peers[p.ID()] == nil { // dont connect if we already know it because its not random
+					go s.ConnectTo(p)
+				}
 			}
 
 		case <-time.After(time.Second * 90):
