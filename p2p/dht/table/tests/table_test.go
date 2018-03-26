@@ -46,7 +46,7 @@ func TestTableCallbacks(t *testing.T) {
 		// this test is kinda sketchy because we assump that the routing table will have at
 		// least 50% of nodes. though with random generated nodes we can't really know.
 		// theoretically this should never happen
-		t.Error("More than 50% of nodes lost")
+		t.Error("More than 50 precent of nodes lost")
 	}
 
 	callback := make(table.PeerChannel, 3)
