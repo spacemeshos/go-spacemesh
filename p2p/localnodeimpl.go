@@ -165,7 +165,7 @@ func (n *localNodeImp) Sign(data proto.Message) ([]byte, error) {
 
 // log wrappers - log node id and args
 
-func(n *localNodeImp) GetLogger() *logging.Logger {
+func (n *localNodeImp) GetLogger() *logging.Logger {
 	return n.logger
 }
 
