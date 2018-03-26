@@ -23,6 +23,7 @@ type swarmImpl struct {
 
 	config nodeconfig.SwarmConfig
 
+	nodeEventRegChannel chan NodeEventCallback
 	// node state callbacks
 	nec nodeEventCallbacks
 
@@ -75,6 +76,7 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 		network:   n,
 		shutdown:  make(chan bool), // non-buffered so requests to shutdown block until swarm is shut down
 
+		nodeEventRegChannel: make( chan NodeEventCallback, 1),
 		nec: make(nodeEventCallbacks, 0),
 
 		peersByConnection:      make(map[string]Peer),
@@ -101,7 +103,7 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 	}
 
 	// node's routing table
-	s.routingTable = table.NewRoutingTable(int(s.config.RoutingTableBucketSize), l.DhtID())
+	s.routingTable = table.NewRoutingTable(int(s.config.RoutingTableBucketSize), l.DhtID(), l.GetLogger())
 
 	// findNode dht protocol
 	s.findNodeProtocol = NewFindNodeProtocol(s)
@@ -122,6 +124,10 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 
 // Register an event handler callback for connection state events
 func (s *swarmImpl) RegisterNodeEventsCallback(callback NodeEventCallback) {
+	s.nodeEventRegChannel <- callback
+}
+
+func (s *swarmImpl) registerNodeEventsCallback(callback NodeEventCallback) {
 	s.nec = append(s.nec, callback)
 }
 
@@ -222,11 +228,15 @@ func (s *swarmImpl) ConnectToRandomNodes(count int) {
 		select {
 		case c := <-c1:
 			if len(c.Peers) == 0 {
-				log.Warning("Did not find any random nodes close to self")
+				s.GetLocalNode().Warning("Did not find any random nodes close to self")
 			}
 
-			for _, p := range c.Peers {
-				// queue up connection requests to found peers
+			for i, p := range c.Peers {
+				if s.peers[p.ID()] != nil  { // dont connect if we already know it because its not random
+					s.localNode.Info("%v, Aborting connetion to : %v we know it already", i, p.Pretty())
+					continue
+				}
+				s.localNode.Info("%v, Connecting: %v", i, p.Pretty())
 				go s.ConnectTo(p)
 			}
 
@@ -318,11 +328,14 @@ Loop:
 		case d := <-s.registerNodeReq:
 			s.onRegisterNodeRequest(d)
 
+		case c := <-s.nodeEventRegChannel:
+			s.registerNodeEventsCallback(c)
+
 		case <-checkTimeSync.C:
 			_, err := timesync.CheckSystemClockDrift()
 			if err != nil {
 				checkTimeSync.Stop()
-				log.Error("System time could'nt synchronize %s", err)
+				s.localNode.Error("System time could'nt synchronize %s", err)
 				go s.localNode.Shutdown()
 			}
 		}

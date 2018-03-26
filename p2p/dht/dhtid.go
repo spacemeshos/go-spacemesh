@@ -80,8 +80,15 @@ func (id ID) Xor(o ID) ID {
 }
 
 // CommonPrefixLen returns the common shared prefix length in BITS of the binary numbers represented by the ids.
+// tradeoff the pretty func we had with this more efficient one. (faster than libp2p and eth)
 func (id ID) CommonPrefixLen(o ID) int {
-	return id.Xor(o).ZeroPrefixLen()
+	for i := 0; i < len(id); i++ {
+		lz := bits.LeadingZeros8(id[i] ^ o[i])
+		if lz != 8 {
+			return i*8 + lz
+		}
+	}
+	return len(id) * 8
 }
 
 // ZeroPrefixLen returns the zero prefix length of the binary number represnted by ID in bits.
