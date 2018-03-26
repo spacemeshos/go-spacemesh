@@ -2,17 +2,20 @@ package table
 
 import (
 	"fmt"
-	"sort"
-	"gopkg.in/op/go-logging.v1"
-	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht"
+	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"gopkg.in/op/go-logging.v1"
+	"sort"
 )
 
 const (
-	IDLength = 256 // dht ids are 32 bytes
-	// Kademlia says we need a bucket to each bit but reality says half of node's network would be at bucket 0
+	// IDLength is the length of an ID,  dht ids are 32 bytes
+	IDLength = 256
+	// BucketCount is the amount of buckets we hold
+	// Kademlia says we need a bucket to each bit but reality says half of network would be at bucket 0
 	// half of remaining nodes will be in bucket 1 and so forth.
-	// So most important buckets are closest ones, so we can discard really far away buckets.
+	// that means that most of te buckets won't be even populated most of the time
+	// todo : optimize this?
 	BucketCount = IDLength / 10
 )
 
@@ -143,7 +146,7 @@ func NewRoutingTable(bucketsize int, localID dht.ID, log *logging.Logger) Routin
 
 		buckets:     buckets,
 		bucketsize:  bucketsize,
-		log: 			log,
+		log:         log,
 		local:       localID,
 		peerRemoved: make(PeerChannel, 3),
 		peerAdded:   make(PeerChannel, 3),
@@ -438,7 +441,6 @@ func (rt *routingTableImpl) size(callback chan int) {
 	}
 	go func() { callback <- tot }()
 }
-
 
 func (rt *routingTableImpl) listPeers(callback PeersOpChannel) {
 	var peers []node.RemoteNodeData

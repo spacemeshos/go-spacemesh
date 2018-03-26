@@ -32,7 +32,7 @@ func TestTableCallbacks(t *testing.T) {
 
 	log := GetTestLogger(localID.Pretty())
 
-	rt := table.NewRoutingTable(20, localID,  log)
+	rt := table.NewRoutingTable(20, localID, log)
 
 	for i := 0; i < n; i++ {
 		rt.Update(nodes[i])

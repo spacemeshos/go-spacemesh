@@ -76,8 +76,8 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 		network:   n,
 		shutdown:  make(chan bool), // non-buffered so requests to shutdown block until swarm is shut down
 
-		nodeEventRegChannel: make( chan NodeEventCallback, 1),
-		nec: make(nodeEventCallbacks, 0),
+		nodeEventRegChannel: make(chan NodeEventCallback, 1),
+		nec:                 make(nodeEventCallbacks, 0),
 
 		peersByConnection:      make(map[string]Peer),
 		peers:                  make(map[string]Peer),
@@ -232,7 +232,7 @@ func (s *swarmImpl) ConnectToRandomNodes(count int) {
 			}
 
 			for i, p := range c.Peers {
-				if s.peers[p.ID()] != nil  { // dont connect if we already know it because its not random
+				if s.peers[p.ID()] != nil { // dont connect if we already know it because its not random
 					s.localNode.Info("%v, Aborting connetion to : %v we know it already", i, p.Pretty())
 					continue
 				}
