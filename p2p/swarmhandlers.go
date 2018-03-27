@@ -100,11 +100,16 @@ func (s *swarmImpl) onConnectionRequest(req node.RemoteNodeData) {
 
 	// todo: we need to handle the case that there's a non-authenticated session with the remote node
 	// we need to decide if to wait for it to auth, kill it, etc....
-	if session == nil || !session.IsAuthenticated() {
-
+	if session == nil {
 		// start handshake protocol
 		s.sendNodeEvent(req.ID(), HandshakeStarted)
 		s.handshakeProtocol.CreateSession(peer)
+		return
+	}
+
+	if !session.IsAuthenticated() || <-s.handshakeProtocol.SessionIsPending(session.String()) {
+		// what can we do ?
+		s.localNode.Debug("Session is pending")
 	}
 }
 
@@ -193,19 +198,23 @@ func (s *swarmImpl) onSendMessageRequest(r SendMessageReq) {
 		return
 	}
 
-	session := peer.GetAuthenticatedSession()
 	conn := peer.GetActiveConnection()
 
-	if session == nil || conn == nil {
-
+	if conn == nil {
 		s.localNode.Warning("queuing protocol request until session is established...")
-
 		// save the message for later sending and try to connect to the node
 		s.messagesPendingSession[hex.EncodeToString(r.ReqID)] = r
-
 		// try to connect to remote node and send the message once connected
 		// todo: callback listener if connection fails (possibly after retries)
 		s.onConnectionRequest(node.NewRemoteNodeData(peer.String(), peer.TCPAddress()))
+		return
+	}
+
+	session := peer.GetAuthenticatedSession()
+	if session == nil || !session.IsAuthenticated() {
+		if _, exist := s.messagesPendingSession[hex.EncodeToString(r.ReqID)]; !exist {
+			s.messagesPendingSession[hex.EncodeToString(r.ReqID)] = r
+		}
 		return
 	}
 

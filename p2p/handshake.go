@@ -76,6 +76,11 @@ func (n *handshakeDataImp) SetError(err error) {
 	n.err = err
 }
 
+type pendingSessionRequest struct {
+	SessionID string
+	Callback chan bool
+}
+
 // HandshakeProtocol specifies the handshake protocol.
 // Node1 -> Node 2: Req(HandshakeData)
 // Node2 -> Node 1: Resp(HandshakeData)
@@ -83,6 +88,7 @@ func (n *handshakeDataImp) SetError(err error) {
 type HandshakeProtocol interface {
 	CreateSession(peer Peer)
 	RegisterNewSessionCallback(callback chan HandshakeData) // register a channel to receive session state changes
+	SessionIsPending(sessionID string) chan bool
 }
 
 type handshakeProtocolImpl struct {
@@ -99,6 +105,7 @@ type handshakeProtocolImpl struct {
 	addPendingSession         chan HandshakeData
 	deletePendingSessionByID  chan string
 	sessionStateChanged       chan HandshakeData
+	pendingCheckRequest 	  chan pendingSessionRequest
 }
 
 // NewHandshakeProtocol Creates a new Handshake protocol for the provided swarm.
@@ -115,6 +122,7 @@ func NewHandshakeProtocol(s Swarm) HandshakeProtocol {
 		deletePendingSessionByID:  make(chan string, 5),
 		sessionStateChanged:       make(chan HandshakeData, 3),
 		addPendingSession:         make(chan HandshakeData, 3),
+		pendingCheckRequest: make(chan pendingSessionRequest, 3),
 	}
 
 	go h.processEvents()
@@ -187,6 +195,9 @@ func (h *handshakeProtocolImpl) processEvents() {
 			h.swarm.GetLocalNode().Info("Storing pending session w key: %s", sessionKey)
 			h.pendingSessions[sessionKey] = d
 
+		case pcr := <-h.pendingCheckRequest:
+			pcr.Callback <- h.sessionIsPending(pcr.SessionID)
+
 		case k := <-h.deletePendingSessionByID:
 			delete(h.pendingSessions, k)
 
@@ -196,6 +207,22 @@ func (h *handshakeProtocolImpl) processEvents() {
 			}
 		}
 	}
+}
+
+
+func (h *handshakeProtocolImpl) sessionIsPending( sessionID string ) bool {
+	for sid, _ := range h.pendingSessions {
+		if sid == sessionID {
+			return true
+		}
+	}
+	return false
+}
+
+func(h *handshakeProtocolImpl) SessionIsPending(sessionID string) chan bool {
+	resp := make(chan bool)
+	go func() { h.pendingCheckRequest <- pendingSessionRequest{sessionID, resp} }()
+	return resp
 }
 
 // Handles a remote handshake request.
@@ -358,7 +385,7 @@ func generateHandshakeRequestData(node LocalNode, remoteNode Peer) (*pb.Handshak
 	if err != nil {
 		return nil, nil, err
 	}
-
+	
 	return data, session, nil
 }
 

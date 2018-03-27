@@ -67,6 +67,8 @@ type connectionImpl struct {
 	id         string           // uuid for logging
 	source     ConnectionSource // remote or local
 	created    time.Time
+
+	recordTimeChan chan struct{}
 	lastOpTime time.Time
 
 	incomingMsgs *delimited.Chan // implemented using delimited.Chan - incoming messages
@@ -89,6 +91,7 @@ func newConnection(conn net.Conn, n Net, s ConnectionSource) Connection {
 		logger:       n.GetLogger(),
 		id:           crypto.UUIDString(),
 		created:      time.Now(),
+		recordTimeChan: make(chan struct{}),
 		source:       s,
 		incomingMsgs: incomingMsgs,
 		outgoingMsgs: outgoingMsgs,
@@ -125,13 +128,17 @@ func (c *connectionImpl) String() string {
 func (c *connectionImpl) Send(message []byte, id []byte) {
 	// queue messages for sending
 	c.outgoingMsgs.MsgChan <- delimited.MsgAndID{ID: id, Msg: message}
-	c.lastOpTime = time.Now()
+	c.RecordOpTime()
 }
 
 // Close closes the connection (implements io.Closer). It is go safe.
 func (c *connectionImpl) Close() error {
 	c.incomingMsgs.Close()
 	return nil
+}
+
+func (c *connectionImpl) RecordOpTime() {
+	c.recordTimeChan <- struct{}{}
 }
 
 // go safe
@@ -146,6 +153,9 @@ func (c *connectionImpl) beginEventProcessing() {
 Loop:
 	for {
 		select {
+
+		case <-c.recordTimeChan:
+			c.lastOpTime = time.Now()
 
 		case err := <-c.outgoingMsgs.ErrChan:
 			go func() {
