@@ -64,7 +64,7 @@ Loop:
 			break Loop // told we're done
 		default:
 			if buf != nil {
-				var emptybuf []byte
+				emptybuf := make([]byte, len(buf))
 				copy(emptybuf, buf)
 				// ok seems fine. send it away
 				s.MsgChan <- MsgAndID{nil, emptybuf}
