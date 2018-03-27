@@ -77,26 +77,31 @@ func CreateLogger(module string, dataFolderPath string, logFileName string) *log
 	log.ExtraCalldepth = 1
 	logFormat := logging.MustStringFormatter(` %{color:reset}%{color}%{level:.4s} %{id:03x} %{time:15:04:05.000} %{shortpkg}.%{shortfunc} ▶%{color:reset} %{message}`)
 	// module name is set is message prefix
+
+	backends := []logging.Backend{}
+
 	backend := logging.NewLogBackend(os.Stdout, createRandomColor(module), 0)
 	backendFormatter := logging.NewBackendFormatter(backend, logFormat)
+	backends = append(backends, logging.AddModuleLevel(backendFormatter))
 
-	fileName := filepath.Join(dataFolderPath, logFileName)
+	if dataFolderPath != "" && logFileName != "" {
+		fileName := filepath.Join(dataFolderPath, logFileName)
 
-	fileLogger := &lumberjack.Logger{
-		Filename:   fileName,
-		MaxSize:    500, // megabytes
-		MaxBackups: 3,
-		MaxAge:     28, // days
-		Compress:   false,
+		fileLogger := &lumberjack.Logger{
+			Filename:   fileName,
+			MaxSize:    500, // megabytes
+			MaxBackups: 3,
+			MaxAge:     28, // days
+			Compress:   false,
+		}
+
+		fileLoggerBackend := logging.NewLogBackend(fileLogger, "", 0)
+		logFileFormat := logging.MustStringFormatter(`%{time:15:04:05.000} %{level:.4s} %{id:03x} %{shortpkg}.%{shortfunc} ▶ %{message}`)
+		fileBackendFormatter := logging.NewBackendFormatter(fileLoggerBackend, logFileFormat)
+		backends = append(backends, logging.AddModuleLevel(fileBackendFormatter))
 	}
 
-	fileLoggerBackend := logging.NewLogBackend(fileLogger, "", 0)
-	logFileFormat := logging.MustStringFormatter(`%{time:15:04:05.000} %{level:.4s} %{id:03x} %{shortpkg}.%{shortfunc} ▶ %{message}`)
-	fileBackendFormatter := logging.NewBackendFormatter(fileLoggerBackend, logFileFormat)
-
-	backendConsoleLevel := logging.AddModuleLevel(backendFormatter)
-	backendFileLevel := logging.AddModuleLevel(fileBackendFormatter)
-	log.SetBackend(logging.MultiLogger(backendConsoleLevel, backendFileLevel))
+	log.SetBackend(logging.MultiLogger(backends...))
 
 	return log
 }

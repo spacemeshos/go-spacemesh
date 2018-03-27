@@ -51,8 +51,21 @@ type NetworkSessionImpl struct {
 	localNodeID  string
 	remoteNodeID string
 
-	blockEncrypter cipher.BlockMode
-	blockDecrypter cipher.BlockMode
+	blockEncrypter cbcMode
+	blockDecrypter cbcMode
+}
+
+// cbcMode is an interface for block ciphers using cipher block chaining.
+// we use it to expose SetIV
+type cbcMode interface {
+	cipher.BlockMode
+	SetIV([]byte)
+}
+
+// resetIV sets the iv to the session ID. it is called after encrpyt decrypt.
+func (n *NetworkSessionImpl) resetIV() {
+	n.blockEncrypter.SetIV(n.id)
+	n.blockDecrypter.SetIV(n.id)
 }
 
 //LocalNodeID returns the session's local node id.
@@ -119,6 +132,7 @@ func (n *NetworkSessionImpl) Encrypt(in []byte) ([]byte, error) {
 	paddedIn := crypto.AddPKCSPadding(in)
 	out := make([]byte, len(paddedIn))
 	n.blockEncrypter.CryptBlocks(out, paddedIn)
+	n.resetIV()
 	return out, nil
 }
 
@@ -134,13 +148,13 @@ func (n *NetworkSessionImpl) Decrypt(in []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-
+	n.resetIV()
 	return clearText, nil
 }
 
 // NewNetworkSession creates a new network session based on provided data
 func NewNetworkSession(id, keyE, keyM, pubKey []byte, localNodeID, remoteNodeID string) (NetworkSession, error) {
-	s := &NetworkSessionImpl{
+	n := &NetworkSessionImpl{
 		id:            id,
 		keyE:          keyE,
 		keyM:          keyM,
@@ -159,8 +173,8 @@ func NewNetworkSession(id, keyE, keyM, pubKey []byte, localNodeID, remoteNodeID 
 		return nil, err
 	}
 
-	s.blockEncrypter = cipher.NewCBCEncrypter(blockCipher, s.id)
-	s.blockDecrypter = cipher.NewCBCDecrypter(blockCipher, s.id)
+	n.blockEncrypter = cipher.NewCBCEncrypter(blockCipher, n.id).(cbcMode)
+	n.blockDecrypter = cipher.NewCBCDecrypter(blockCipher, n.id).(cbcMode)
 
-	return s, nil
+	return n, nil
 }
