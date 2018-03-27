@@ -58,6 +58,8 @@ func (s *swarmImpl) kadFindNode(nodeID string, callback chan node.RemoteNodeData
 	// step 1 - get up to alpha closest nodes to the target in the local routing table
 	searchList := s.getNearestPeers(dhtID, k)
 
+	queried := map[string]struct{}{}
+
 	// step 2 - iterative lookups for nodeId using searchList
 
 Loop:
@@ -77,7 +79,7 @@ Loop:
 
 		// pick up to alpha servers to query from the search list
 		// servers that have been recently queried will not be returned
-		servers := node.PickFindNodeServers(searchList, nodeID, alpha)
+		servers := node.PickFindNodeServers(searchList, queried, nodeID, alpha)
 
 		if len(servers) == 0 {
 			// no more servers to query
@@ -86,7 +88,7 @@ Loop:
 		}
 
 		// lookup nodeId using the target servers
-		res := s.lookupNode(servers, nodeID, closestNode)
+		res := s.lookupNode(servers, queried, nodeID, closestNode)
 
 		if len(res) > 0 {
 
@@ -104,7 +106,7 @@ Loop:
 // Lookup a target node on one or more servers
 // Returns closest nodes which are closers than closestNode to targetId
 // If node found it will be in top of results list
-func (s *swarmImpl) lookupNode(servers []node.RemoteNodeData, targetID string, closestNode node.RemoteNodeData) []node.RemoteNodeData {
+func (s *swarmImpl) lookupNode(servers []node.RemoteNodeData, queried map[string]struct{}, targetID string, closestNode node.RemoteNodeData) []node.RemoteNodeData {
 
 	l := len(servers)
 
@@ -117,8 +119,7 @@ func (s *swarmImpl) lookupNode(servers []node.RemoteNodeData, targetID string, c
 
 	// queries are run in par and results are collected
 	for i := 0; i < l; i++ {
-		servers[i].SetLastFindNodeCall(targetID, time.Now())
-
+		queried[servers[i].ID()] = struct{}{}
 		// find node protocol adds found nodes to the local routing table
 		go s.getFindNodeProtocol().FindNode(crypto.UUID(), servers[i].ID(), targetID, callback)
 	}

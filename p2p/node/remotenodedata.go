@@ -6,7 +6,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/dht"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"strings"
-	"time"
 )
 
 // RemoteNodeData defines basic remote node data
@@ -19,9 +18,6 @@ type RemoteNodeData interface {
 
 	DhtID() dht.ID // dht id must be uniformly distributed for XOR distance to work, hence we hash the node key/id to create it
 
-	GetLastFindNodeCall(nodeID string) time.Time // time of last find node call sent to node
-	SetLastFindNodeCall(nodeID string, t time.Time)
-
 	Pretty() string
 }
 
@@ -31,8 +27,7 @@ type remoteNodeDataImpl struct {
 	ip    string // node tcp address. e.g. 127.0.0.1:3030
 	bytes []byte // bytes
 	dhtID dht.ID
-
-	lastFindNodeCall map[string]time.Time
+	// Todo : maybe implement metrics and last contact cache here
 }
 
 // ToNodeInfo returns marshaled protobufs node infos slice from a slice of RemoteNodeData.
@@ -57,13 +52,13 @@ func ToNodeInfo(nodes []RemoteNodeData, filterID string) []*pb.NodeInfo {
 // PickFindNodeServers picks up to count server who haven't been queried recently.
 // nodeId - the target node id of this find node operation.
 // Used in KAD node discovery.
-func PickFindNodeServers(nodes []RemoteNodeData, nodeID string, count int) []RemoteNodeData {
+func PickFindNodeServers(nodes []RemoteNodeData, queried map[string]struct{}, nodeID string, count int) []RemoteNodeData {
 
 	res := []RemoteNodeData{}
 	added := 0
 
 	for _, v := range nodes {
-		if time.Now().Sub(v.GetLastFindNodeCall(nodeID)) > time.Duration(time.Minute*10) {
+		if _, exist := queried[v.ID()]; !exist {
 			res = append(res, v)
 			added++
 
@@ -115,10 +110,9 @@ func NewRemoteNodeData(id string, ip string) RemoteNodeData {
 	bytes := base58.Decode(id)
 	dhtID := dht.NewIDFromNodeKey(bytes)
 	return &remoteNodeDataImpl{id: id,
-		ip:               ip,
-		bytes:            bytes,
-		dhtID:            dhtID,
-		lastFindNodeCall: map[string]time.Time{},
+		ip:    ip,
+		bytes: bytes,
+		dhtID: dhtID,
 	}
 }
 
@@ -129,16 +123,6 @@ func NewRemoteNodeDataFromString(data string) RemoteNodeData {
 		return nil
 	}
 	return NewRemoteNodeData(items[1], items[0])
-}
-
-// GetLastFindNodeCall returns the time of the last find node call
-func (rn *remoteNodeDataImpl) GetLastFindNodeCall(nodeID string) time.Time {
-	return rn.lastFindNodeCall[nodeID]
-}
-
-// SetLastFindNodeCall updates the time of the last find node call
-func (rn *remoteNodeDataImpl) SetLastFindNodeCall(nodeID string, t time.Time) {
-	rn.lastFindNodeCall[nodeID] = t
 }
 
 func (rn *remoteNodeDataImpl) ID() string {

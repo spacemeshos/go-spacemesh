@@ -165,6 +165,10 @@ func (n *localNodeImp) Sign(data proto.Message) ([]byte, error) {
 
 // log wrappers - log node id and args
 
+func (n *localNodeImp) GetLogger() *logging.Logger {
+	return n.logger
+}
+
 // Info is used for info logging.
 func (n *localNodeImp) Info(format string, args ...interface{}) {
 	n.logger.Info(format, args...)

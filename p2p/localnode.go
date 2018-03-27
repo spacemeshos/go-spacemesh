@@ -9,6 +9,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
+	"gopkg.in/op/go-logging.v1"
 )
 
 // LocalNode specifies local spacemesh node capabilities and services.
@@ -42,6 +43,7 @@ type LocalNode interface {
 	NotifyOnShutdown(chan bool)
 
 	// logging wrappers - log node id and args
+	GetLogger() *logging.Logger
 
 	Info(format string, args ...interface{})
 	Debug(format string, args ...interface{})
@@ -109,7 +111,7 @@ func newLocalNodeWithKeys(pubKey crypto.PublicKey, privKey crypto.PrivateKey, tc
 	// setup logging
 	n.logger = log.CreateLogger(n.pubKey.Pretty(), dataDir, "node.log")
 
-	n.Info("Creating Node with id: %s", n.String())
+	n.Info("Node id: %s", n.String())
 
 	// swarm owned by node
 	s, err := NewSwarm(tcpAddress, n)
