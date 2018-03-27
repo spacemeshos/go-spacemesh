@@ -2,8 +2,8 @@ package net
 
 import (
 	"github.com/spacemeshos/go-spacemesh/crypto"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/delimited"
+	"gopkg.in/op/go-logging.v1"
 	"net"
 	"time"
 )
@@ -62,7 +62,7 @@ const (
 
 // A network connection supporting full-duplex messaging
 type connectionImpl struct {
-
+	logger *logging.Logger
 	// metadata for logging / debugging
 	id         string           // uuid for logging
 	source     ConnectionSource // remote or local
@@ -86,6 +86,7 @@ func newConnection(conn net.Conn, n Net, s ConnectionSource) Connection {
 	outgoingMsgs := delimited.NewChan(10)
 
 	connection := &connectionImpl{
+		logger:       n.GetLogger(),
 		id:           crypto.UUIDString(),
 		created:      time.Now(),
 		source:       s,
@@ -95,13 +96,13 @@ func newConnection(conn net.Conn, n Net, s ConnectionSource) Connection {
 		net:          n,
 	}
 
-	// start processing channel-based message
-	go connection.beginEventProcessing()
 	// start reading incoming message from the connection and into the channel
 	go incomingMsgs.ReadFromReader(conn)
 	// write to the connection through the delimited writer
 	go outgoingMsgs.WriteToWriter(conn)
 
+	// start processing channel-based message
+	go connection.beginEventProcessing()
 	return connection
 }
 
@@ -123,8 +124,8 @@ func (c *connectionImpl) String() string {
 // Concurrency: can be called from any go routine
 func (c *connectionImpl) Send(message []byte, id []byte) {
 	// queue messages for sending
-
-	c.outgoingMsgs.MsgChan <- message
+	c.outgoingMsgs.MsgChan <- delimited.MsgAndID{ID: id, Msg: message}
+	c.lastOpTime = time.Now()
 }
 
 // Close closes the connection (implements io.Closer). It is go safe.
@@ -148,7 +149,7 @@ Loop:
 
 		case err := <-c.outgoingMsgs.ErrChan:
 			go func() {
-				c.net.GetConnectionErrors() <- ConnectionError{c, err, nil}
+				c.net.GetConnectionErrors() <- ConnectionError{c, err.Err, err.ID}
 			}()
 
 		case msg, ok := <-c.incomingMsgs.MsgChan:
@@ -157,12 +158,12 @@ Loop:
 				break Loop
 			}
 
-			log.Info("Incoming message from: %s to: %s.", c.conn.RemoteAddr().String(), c.conn.LocalAddr().String())
+			c.logger.Info("Incoming message from: %s to: %s.", c.conn.RemoteAddr().String(), c.conn.LocalAddr().String())
 			c.lastOpTime = time.Now()
 
 			// pump the message to the network
 			go func() {
-				c.net.GetIncomingMessage() <- IncomingMessage{c, msg}
+				c.net.GetIncomingMessage() <- IncomingMessage{c, msg.Msg}
 			}()
 
 		case <-c.incomingMsgs.CloseChan:
@@ -173,7 +174,7 @@ Loop:
 
 		case err := <-c.incomingMsgs.ErrChan:
 			go func() {
-				c.net.GetConnectionErrors() <- ConnectionError{c, err, nil}
+				c.net.GetConnectionErrors() <- ConnectionError{c, err.Err, err.ID}
 			}()
 		}
 	}

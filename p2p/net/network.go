@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
+	"gopkg.in/op/go-logging.v1"
 	"net"
 	"time"
 )
@@ -24,11 +25,14 @@ type Net interface {
 	GetIncomingMessage() chan IncomingMessage
 	GetMessageSendErrors() chan MessageSendError
 	GetMessageSentCallback() chan MessageSentEvent
+	GetLogger() *logging.Logger
 	Shutdown()
 }
 
 // impl internal type
 type netImpl struct {
+	logger *logging.Logger
+
 	tcpListener      net.Listener
 	tcpListenAddress string // Address to open connection: localhost:9999
 
@@ -45,9 +49,10 @@ type netImpl struct {
 
 // NewNet creates a new network.
 // It attempts to tcp listen on address. e.g. localhost:1234 .
-func NewNet(tcpListenAddress string, config nodeconfig.Config) (Net, error) {
+func NewNet(tcpListenAddress string, config nodeconfig.Config, logger *logging.Logger) (Net, error) {
 
 	n := &netImpl{
+		logger:             logger,
 		tcpListenAddress:   tcpListenAddress,
 		newConnections:     make(chan Connection, 20),
 		closingConnections: make(chan Connection, 20),
@@ -63,7 +68,7 @@ func NewNet(tcpListenAddress string, config nodeconfig.Config) (Net, error) {
 		return nil, err
 	}
 
-	log.Info("created network with tcp address: %s", tcpListenAddress)
+	n.logger.Info("created network with tcp address: %s", tcpListenAddress)
 
 	return n, nil
 }
@@ -93,6 +98,10 @@ func (n *netImpl) GetMessageSendErrors() chan MessageSendError {
 	return n.messageSendErrors
 }
 
+func (n *netImpl) GetLogger() *logging.Logger {
+	return n.logger
+}
+
 // Dial a remote server with provided time out
 // address:: ip:port
 // Returns established connection that local clients can send messages to or error if failed
@@ -106,7 +115,7 @@ func (n *netImpl) DialTCP(address string, timeOut time.Duration, keepAlive time.
 	dialer.KeepAlive = keepAlive // drop connections after a period of inactivity
 	dialer.Timeout = timeOut     // max time bef
 
-	log.Info("TCP dialing %s ...", address)
+	n.logger.Info("TCP dialing %s ...", address)
 
 	netConn, err := dialer.Dial("tcp", address)
 
@@ -114,7 +123,7 @@ func (n *netImpl) DialTCP(address string, timeOut time.Duration, keepAlive time.
 		return nil, err
 	}
 
-	log.Info("Connected to %s...", address)
+	n.logger.Info("Connected to %s...", address)
 	c := newConnection(netConn, n, Local)
 	return c, nil
 }
@@ -126,7 +135,7 @@ func (n *netImpl) Shutdown() {
 
 // Start network server
 func (n *netImpl) listen() error {
-	log.Info("Starting to listen...")
+	n.logger.Info("Starting to listen...")
 	tcpListener, err := net.Listen("tcp", n.tcpListenAddress)
 	if err != nil {
 		return err
@@ -138,7 +147,7 @@ func (n *netImpl) listen() error {
 
 func (n *netImpl) acceptTCP() {
 	for {
-		log.Info("Waiting for incoming connections...")
+		n.logger.Info("Waiting for incoming connections...")
 		netConn, err := n.tcpListener.Accept()
 		if err != nil {
 
@@ -148,7 +157,7 @@ func (n *netImpl) acceptTCP() {
 			return
 		}
 
-		log.Info("Got new connection... Remote Address: %s", netConn.RemoteAddr())
+		n.logger.Info("Got new connection... Remote Address: %s", netConn.RemoteAddr())
 		c := newConnection(netConn, n, Remote)
 		n.newConnections <- c
 	}

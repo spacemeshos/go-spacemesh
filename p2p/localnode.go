@@ -9,6 +9,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
+	"gopkg.in/op/go-logging.v1"
 )
 
 // LocalNode specifies local spacemesh node capabilities and services.
@@ -42,6 +43,7 @@ type LocalNode interface {
 	NotifyOnShutdown(chan bool)
 
 	// logging wrappers - log node id and args
+	GetLogger() *logging.Logger
 
 	Info(format string, args ...interface{})
 	Debug(format string, args ...interface{})

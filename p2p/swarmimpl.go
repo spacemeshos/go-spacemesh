@@ -64,7 +64,7 @@ type swarmImpl struct {
 // NewSwarm creates a new swarm for a local node.
 func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 
-	n, err := net.NewNet(tcpAddress, l.Config())
+	n, err := net.NewNet(tcpAddress, l.Config(), l.GetLogger())
 	if err != nil {
 		log.Error("can't create swarm without a network", err)
 		return nil, err

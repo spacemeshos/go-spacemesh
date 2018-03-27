@@ -64,10 +64,6 @@ func (n *NetworkSessionImpl) resetIV() {
 	n.blockDecrypter.SetIV(n.id)
 }
 
-func(n *NetworkSessionImpl) isAuth(node LocalNode) {
-
-}
-
 //LocalNodeID returns the session's local node id.
 func (n *NetworkSessionImpl) LocalNodeID() string {
 	return n.localNodeID

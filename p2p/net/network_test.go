@@ -9,7 +9,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
+	"gopkg.in/op/go-logging.v1"
 )
+
+func testLogger(id string) *logging.Logger {
+	// empty loggers so no files will be kept
+	return log.CreateLogger(id, "", "")
+}
 
 func TestReadWrite(t *testing.T) {
 
@@ -22,10 +28,10 @@ func TestReadWrite(t *testing.T) {
 	address := fmt.Sprintf("0.0.0.0:%d", port)
 	done := make(chan bool, 1)
 
-	n, err := NewNet(address, nodeconfig.ConfigValues)
+	n, err := NewNet(address, nodeconfig.ConfigValues, testLogger("TEST-net"))
 	assert.Nil(t, err, "failed to create tcp server")
 
-	_, err = NewNet(address, nodeconfig.ConfigValues)
+	_, err = NewNet(address, nodeconfig.ConfigValues, testLogger("TEST-net2"))
 	assert.Err(t, err, "Should not be able to create a new net on same address")
 
 	// run a simple network events processor go routine
@@ -65,7 +71,7 @@ func TestReadWrite(t *testing.T) {
 
 	log.Info("Sending message...")
 
-	//t1 := c.LastOpTime()
+	t1 := c.LastOpTime()
 
 	c.Send(msg, msgID)
 	log.Info("Message sent.")
@@ -80,12 +86,12 @@ func TestReadWrite(t *testing.T) {
 	_, err = n.DialTCP(address, time.Duration(10*time.Second), time.Duration(48*time.Hour))
 	assert.Err(t, err, "expected to fail dialing after calling shutdown")
 	//
-	//t2 := c.LastOpTime()
+	t2 := c.LastOpTime()
 	//
 	//// verify connection props
 	id := c.ID()
 	assert.True(t, len(id) > 0, "failed to get connection id")
-	//assert.True(t, t2.Sub(t1) > 0, "invalid last op time")
+	assert.True(t, t2.Sub(t1) > 0, "invalid last op time")
 	err = c.Close()
 	assert.NoErr(t, err, "error closing connection")
 }
