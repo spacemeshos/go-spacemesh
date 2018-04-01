@@ -78,7 +78,7 @@ func (n *handshakeDataImp) SetError(err error) {
 
 type pendingSessionRequest struct {
 	SessionID string
-	Callback chan bool
+	Callback  chan bool
 }
 
 // HandshakeProtocol specifies the handshake protocol.
@@ -105,7 +105,7 @@ type handshakeProtocolImpl struct {
 	addPendingSession         chan HandshakeData
 	deletePendingSessionByID  chan string
 	sessionStateChanged       chan HandshakeData
-	pendingCheckRequest 	  chan pendingSessionRequest
+	pendingCheckRequest       chan pendingSessionRequest
 }
 
 // NewHandshakeProtocol Creates a new Handshake protocol for the provided swarm.
@@ -122,7 +122,7 @@ func NewHandshakeProtocol(s Swarm) HandshakeProtocol {
 		deletePendingSessionByID:  make(chan string, 5),
 		sessionStateChanged:       make(chan HandshakeData, 3),
 		addPendingSession:         make(chan HandshakeData, 3),
-		pendingCheckRequest: make(chan pendingSessionRequest, 3),
+		pendingCheckRequest:       make(chan pendingSessionRequest, 3),
 	}
 
 	go h.processEvents()
@@ -209,9 +209,8 @@ func (h *handshakeProtocolImpl) processEvents() {
 	}
 }
 
-
-func (h *handshakeProtocolImpl) sessionIsPending( sessionID string ) bool {
-	for sid, _ := range h.pendingSessions {
+func (h *handshakeProtocolImpl) sessionIsPending(sessionID string) bool {
+	for sid := range h.pendingSessions {
 		if sid == sessionID {
 			return true
 		}
@@ -219,7 +218,7 @@ func (h *handshakeProtocolImpl) sessionIsPending( sessionID string ) bool {
 	return false
 }
 
-func(h *handshakeProtocolImpl) SessionIsPending(sessionID string) chan bool {
+func (h *handshakeProtocolImpl) SessionIsPending(sessionID string) chan bool {
 	resp := make(chan bool)
 	go func() { h.pendingCheckRequest <- pendingSessionRequest{sessionID, resp} }()
 	return resp
@@ -385,7 +384,7 @@ func generateHandshakeRequestData(node LocalNode, remoteNode Peer) (*pb.Handshak
 	if err != nil {
 		return nil, nil, err
 	}
-	
+
 	return data, session, nil
 }
 

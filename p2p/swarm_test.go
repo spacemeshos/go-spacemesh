@@ -32,11 +32,11 @@ Loop:
 		select {
 		case c := <-callback:
 			if c.Session().IsAuthenticated() {
-				atomic.AddUint32(&sessions,1)
+				atomic.AddUint32(&sessions, 1)
 			}
-		case c2 := <- callback2:
+		case c2 := <-callback2:
 			if c2.Session().IsAuthenticated() {
-				atomic.AddUint32(&sessions,1)
+				atomic.AddUint32(&sessions, 1)
 			}
 		case <-time.After(time.Second * 10):
 			t.Fatalf("Timeout error - failed to create session")

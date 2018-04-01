@@ -64,12 +64,12 @@ const (
 type connectionImpl struct {
 	logger *logging.Logger
 	// metadata for logging / debugging
-	id         string           // uuid for logging
-	source     ConnectionSource // remote or local
-	created    time.Time
+	id      string           // uuid for logging
+	source  ConnectionSource // remote or local
+	created time.Time
 
 	recordTimeChan chan struct{}
-	lastOpTime time.Time
+	lastOpTime     time.Time
 
 	incomingMsgs *delimited.Chan // implemented using delimited.Chan - incoming messages
 	outgoingMsgs *delimited.Chan // outgoing message queue
@@ -88,15 +88,15 @@ func newConnection(conn net.Conn, n Net, s ConnectionSource) Connection {
 	outgoingMsgs := delimited.NewChan(10)
 
 	connection := &connectionImpl{
-		logger:       n.GetLogger(),
-		id:           crypto.UUIDString(),
-		created:      time.Now(),
+		logger:         n.GetLogger(),
+		id:             crypto.UUIDString(),
+		created:        time.Now(),
 		recordTimeChan: make(chan struct{}),
-		source:       s,
-		incomingMsgs: incomingMsgs,
-		outgoingMsgs: outgoingMsgs,
-		conn:         conn,
-		net:          n,
+		source:         s,
+		incomingMsgs:   incomingMsgs,
+		outgoingMsgs:   outgoingMsgs,
+		conn:           conn,
+		net:            n,
 	}
 
 	// start reading incoming message from the connection and into the channel
