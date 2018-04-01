@@ -3,12 +3,13 @@ package filesystem
 import (
 	"encoding/binary"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/app/config"
-	"github.com/spacemeshos/go-spacemesh/crypto"
 	"io/ioutil"
 	"os"
 	"os/user"
 	"testing"
+
+	"github.com/spacemeshos/go-spacemesh/app/config"
+	"github.com/spacemeshos/go-spacemesh/crypto"
 )
 
 // SetupTestSpacemeshDataFolders sets up a data folder to this specific test
