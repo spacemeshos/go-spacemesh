@@ -1,4 +1,4 @@
-temp.jsNew issue template
+New issue template
 -
 
 #### Expected behavior
