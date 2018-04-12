@@ -69,3 +69,5 @@ Please follow these guidelines for your PR to be reviewed and be considered for 
 - When ready, submit your PR for review and go through the code review process with one of our maintainers.
 - Expect a review process that ensures that you have followed our code guidelines at that your design and implementation are solid. You are expected to revision your code based on reviewers comments.
 - You should receive your bounty as soon as your PR is approved and merged by one of our maintainers. 
+
+Please review our funded issues program [legal notes](https://github.com/spacemeshos/go-spacemesh/blob/master/legal.md).
