@@ -1,4 +1,4 @@
-# Funded Issues Program
+# Funded Issues Program Legal Notes
 
 By participating in the program, you agree to these terms and conditions.
 The funded issues program is an experimental and discretionary rewards program to encourage and reward those who are helping to improve the platform. 
