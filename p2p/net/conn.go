@@ -68,6 +68,8 @@ type connectionImpl struct {
 	source  ConnectionSource // remote or local
 	created time.Time
 
+	closeChan chan struct{}
+
 	recordTimeChan chan struct{}
 	lastOpTime     time.Time
 
@@ -97,6 +99,7 @@ func newConnection(conn net.Conn, n Net, s ConnectionSource) Connection {
 		outgoingMsgs:   outgoingMsgs,
 		conn:           conn,
 		net:            n,
+		closeChan:      make(chan struct{}),
 	}
 
 	// start reading incoming message from the connection and into the channel
@@ -134,6 +137,8 @@ func (c *connectionImpl) Send(message []byte, id []byte) {
 // Close closes the connection (implements io.Closer). It is go safe.
 func (c *connectionImpl) Close() error {
 	c.incomingMsgs.Close()
+	c.outgoingMsgs.Close()
+	go func() { c.closeChan <- struct{}{} }()
 	return nil
 }
 
@@ -168,7 +173,6 @@ Loop:
 				break Loop
 			}
 
-			c.logger.Info("Incoming message from: %s to: %s.", c.conn.RemoteAddr().String(), c.conn.LocalAddr().String())
 			c.lastOpTime = time.Now()
 
 			// pump the message to the network
@@ -176,7 +180,7 @@ Loop:
 				c.net.GetIncomingMessage() <- IncomingMessage{c, msg.Msg}
 			}()
 
-		case <-c.incomingMsgs.CloseChan:
+		case <-c.closeChan:
 			go func() {
 				c.net.GetClosingConnections() <- c
 			}()
