@@ -6,10 +6,11 @@ import (
 	"testing"
 	"time"
 
+	"sync/atomic"
+
 	"github.com/spacemeshos/go-spacemesh/assert"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
-	"sync/atomic"
 )
 
 // Basic session test
@@ -47,6 +48,53 @@ Loop:
 	node2Local.Shutdown()
 }
 
+func TestMultipleSessions(t *testing.T) {
+
+	finishChan := make(chan struct{})
+	const timeout = time.Second * 10
+	const count = 500
+
+	node1Local, rn := GenerateTestNode(t) // First node acts as bootstrap node.
+	event := make(NodeEventCallback)
+	node1Local.GetSwarm().RegisterNodeEventsCallback(event)
+
+	go func() { // wait for events before starting
+		i := 0
+		for {
+			ev := <-event
+			if ev.State == SessionEstablished {
+				i++
+			}
+			if i == count {
+				break
+			}
+		}
+		finishChan <- struct{}{}
+	}()
+
+	nodes := make([]LocalNode, count)
+
+	for i := 0; i < count; i++ {
+		n, _ := GenerateTestNode(t) // create a node
+		nodes[i] = n
+		n.GetSwarm().ConnectTo(rn.GetRemoteNodeData()) // connect to first node
+		//nodes = append(nodes, n)
+	}
+
+	limit := time.NewTimer(timeout)
+
+	select {
+	case <-finishChan: // all nodes established.
+		break
+	case <-limit.C:
+		t.Errorf("Could'nt establish %d sessions within a reasonable %v time", count, timeout.String())
+	}
+
+	for _, node := range nodes {
+		node.Shutdown()
+	}
+}
+
 func TestSimpleBootstrap(t *testing.T) {
 
 	// setup:
@@ -62,7 +110,7 @@ func TestSimpleBootstrap(t *testing.T) {
 	// node1 is a bootstrap node to node2
 	c := nodeconfig.ConfigValues
 	c.SwarmConfig.Bootstrap = true
-	c.SwarmConfig.RandomConnections = 2
+	c.SwarmConfig.RandomConnections = 1
 	c.SwarmConfig.BootstrapNodes = []string{bs}
 
 	node2Local, _ := GenerateTestNodeWithConfig(t, c)
@@ -81,8 +129,8 @@ Loop:
 			if bytes.Equal(c.GetMetadata().ReqId, reqID) {
 				break Loop
 			}
-		case <-time.After(time.Second * 30):
-			t.Fatal("Timeout error - expected callback")
+			case <-time.After(time.Second * 30):
+				t.Fatal("Timeout error - expected callback")
 		}
 	}
 
@@ -90,7 +138,11 @@ Loop:
 	node2Local.Shutdown()
 }
 
-func _estBootstrap(t *testing.T) {
+func TestSmallBootstrap(t *testing.T) {
+	const timeout = 10 * time.Second
+	const tick = 1 * time.Second
+	const randomConnections = 5
+	const totalNodes = 10
 
 	// setup:
 	//
@@ -104,46 +156,44 @@ func _estBootstrap(t *testing.T) {
 	bnode, _ := GenerateTestNode(t)
 	pd := bnode.GetRemoteNodeData()
 	bs := fmt.Sprintf("%s/%s", pd.IP(), pd.ID())
-
 	// nodes bootstrap config
 	c := nodeconfig.ConfigValues
 	c.SwarmConfig.Bootstrap = true
-	c.SwarmConfig.RandomConnections = 5
+	c.SwarmConfig.RandomConnections = randomConnections
 	c.SwarmConfig.BootstrapNodes = []string{bs}
 
 	nodes := make([]LocalNode, 0)
 
-	callbacks := make([]chan NodeEvent, 0)
-
-	for i := 0; i < 10; i++ {
+	for i := 0; i < totalNodes; i++ {
 		n, _ := GenerateTestNodeWithConfig(t, c)
 		nodes = append(nodes, n)
-
-		callback := make(chan NodeEvent)
-		callbacks = append(callbacks, callback)
-		n.GetSwarm().RegisterNodeEventsCallback(callback)
 	}
 
-	// todo: use callback channels to verify that each node has established sessions with 5 remote random peers
-
-	/*
-		var sessions uint64 = 0
-		for i := 0; i < 10; i++ {
-			for {
-				select {
-					case c := <- callbacks[i] :
-						if c.State == SessionEstablished {
-							atomic.AddUint64(&sessions, 1)
-						}
-
-						s := atomic.LoadUint64(&sessions)
-						if s >= 100 {
-							return
-						}
-
-				}
+	healthCheckNodes := func() bool {
+		for _, n := range nodes {
+			size := make(chan int)
+			n.GetSwarm().getRoutingTable().Size(size)
+			if <-size < randomConnections {
+				return false
 			}
-		}*/
+		}
+		return true
+	}
+
+	timer := time.NewTimer(timeout)
+	ticker := time.NewTicker(tick)
+
+HEALTH:
+	for {
+		select {
+		case <-timer.C:
+			t.Error("Failed to get healthy dht within 20 seconds")
+		case <-ticker.C:
+			if healthCheckNodes() {
+				break HEALTH
+			}
+		}
+	}
 
 	for _, node := range nodes {
 		node.Shutdown()
