@@ -12,7 +12,7 @@ import (
 	"gopkg.in/op/go-logging.v1"
 )
 
-// LocalNode specifies local spacemesh node capabilities and services.
+// LocalNode specifies local Spacemesh node capabilities and services.
 type LocalNode interface {
 	ID() []byte
 	String() string
