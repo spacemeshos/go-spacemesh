@@ -11,12 +11,13 @@ import (
 	"io"
 	"time"
 
+	"strings"
+
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
-	"strings"
 )
 
 // HandshakeReq specifies the handshake protocol request message identifier. pattern is [protocol][version][method-name].
@@ -88,7 +89,7 @@ type pendingSessionRequest struct {
 type HandshakeProtocol interface {
 	CreateSession(peer Peer)
 	RegisterNewSessionCallback(callback chan HandshakeData) // register a channel to receive session state changes
-	SessionIsPending(sessionID string) chan bool
+	SessionIsPending(sessionID string, callback chan bool)
 }
 
 type handshakeProtocolImpl struct {
@@ -144,6 +145,10 @@ func (h *handshakeProtocolImpl) RegisterNewSessionCallback(callback chan Handsha
 	h.registerSessionCallback <- callback
 }
 
+func (h *handshakeProtocolImpl) stateChanged(hd HandshakeData) {
+	go func() { h.sessionStateChanged <- hd }()
+}
+
 // CreateSession is called to initiate the handshake protocol between the local node and a remote peer.
 func (h *handshakeProtocolImpl) CreateSession(peer Peer) {
 
@@ -152,18 +157,18 @@ func (h *handshakeProtocolImpl) CreateSession(peer Peer) {
 	handshakeData := NewHandshakeData(h.swarm.GetLocalNode(), peer, session, err)
 
 	if err != nil {
-		h.sessionStateChanged <- handshakeData
+		h.stateChanged(handshakeData)
 		return
 	}
 
 	payload, err := proto.Marshal(data)
 	if err != nil {
-		h.sessionStateChanged <- handshakeData
+		h.stateChanged(handshakeData)
 		return
 	}
 
 	// so we can match handshake responses with the session
-	h.addPendingSession <- handshakeData
+	go func() { h.addPendingSession <- handshakeData }()
 
 	h.swarm.GetLocalNode().Info("Creating session handshake request session id: %s", session.String())
 
@@ -174,7 +179,7 @@ func (h *handshakeProtocolImpl) CreateSession(peer Peer) {
 		Callback: nil,
 	})
 
-	h.sessionStateChanged <- handshakeData
+	h.stateChanged(handshakeData)
 }
 
 // internal event processing handler
@@ -196,7 +201,8 @@ func (h *handshakeProtocolImpl) processEvents() {
 			h.pendingSessions[sessionKey] = d
 
 		case pcr := <-h.pendingCheckRequest:
-			pcr.Callback <- h.sessionIsPending(pcr.SessionID)
+			p := h.sessionIsPending(pcr.SessionID)
+			go func(pending bool) { pcr.Callback <- pending }(p)
 
 		case k := <-h.deletePendingSessionByID:
 			delete(h.pendingSessions, k)
@@ -210,18 +216,13 @@ func (h *handshakeProtocolImpl) processEvents() {
 }
 
 func (h *handshakeProtocolImpl) sessionIsPending(sessionID string) bool {
-	for sid := range h.pendingSessions {
-		if sid == sessionID {
-			return true
-		}
-	}
-	return false
+	_, ok := h.pendingSessions[sessionID]
+	return ok
 }
 
-func (h *handshakeProtocolImpl) SessionIsPending(sessionID string) chan bool {
-	resp := make(chan bool)
-	go func() { h.pendingCheckRequest <- pendingSessionRequest{sessionID, resp} }()
-	return resp
+// SessionIsPending checks if there's a pending session for this session ID
+func (h *handshakeProtocolImpl) SessionIsPending(sessionID string, callback chan bool) {
+	h.pendingCheckRequest <- pendingSessionRequest{sessionID, callback}
 }
 
 // Handles a remote handshake request.
@@ -247,14 +248,14 @@ func (h *handshakeProtocolImpl) onHandleIncomingHandshakeRequest(msg IncomingMes
 	if err != nil {
 		// failed to process request
 		handshakeData.SetError(err)
-		h.sessionStateChanged <- handshakeData
+		h.stateChanged(handshakeData)
 		return
 	}
 
 	payload, err := proto.Marshal(respData)
 	if err != nil {
 		handshakeData.SetError(err)
-		h.sessionStateChanged <- handshakeData
+		h.stateChanged(handshakeData)
 		return
 	}
 
@@ -269,7 +270,7 @@ func (h *handshakeProtocolImpl) onHandleIncomingHandshakeRequest(msg IncomingMes
 	})
 
 	// we have an active session initiated by a remote node
-	h.sessionStateChanged <- handshakeData
+	h.stateChanged(handshakeData)
 
 	h.swarm.GetLocalNode().Info("Remotely initiated session established. Session id: %s :-)", session.String())
 
@@ -306,7 +307,7 @@ func (h *handshakeProtocolImpl) onHandleIncomingHandshakeResponse(msg IncomingMe
 	// no longer pending if error or if sesssion created
 	h.deletePendingSessionByID <- sessionID
 
-	h.sessionStateChanged <- sessionRequestData
+	h.stateChanged(sessionRequestData)
 	h.swarm.GetLocalNode().Info("Locally initiated session established! Session id: %s :-)", sessionID)
 }
 
@@ -493,7 +494,7 @@ func processHandshakeRequest(node LocalNode, r Peer, req *pb.HandshakeData) (*pb
 	s.SetAuthenticated(true)
 
 	// update remote node session here
-	r.GetSessions()[s.String()] = s
+	r.UpdateSession(s.String(), s)
 
 	// generate ack resp data
 	iv := make([]byte, 16)
@@ -585,7 +586,7 @@ func processHandshakeResponse(node LocalNode, r Peer, s NetworkSession, resp *pb
 	s.SetAuthenticated(true)
 
 	// update remote node session here
-	r.GetSessions()[s.String()] = s
+	r.UpdateSession(s.String(), s)
 
 	return nil
 }
