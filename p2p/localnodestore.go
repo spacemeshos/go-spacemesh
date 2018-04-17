@@ -8,10 +8,11 @@ import (
 	"strings"
 
 	"bytes"
+	"io"
+
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
-	"io"
 )
 
 // NodeData defines persistent node data.
@@ -19,6 +20,7 @@ type NodeData struct {
 	PubKey     string `json:"pubKey"`
 	PrivKey    string `json:"priKey"`
 	CoinBaseID string `json:"coinbase"` // coinbase account id
+	NetworkID  int    `json:"network"`  // network that the node lives in
 }
 
 // Node store - local node data persistence functionality.
@@ -60,8 +62,9 @@ func getDataFilePath(nodeID string) (string, error) {
 func (n *localNodeImp) persistData() error {
 
 	data := &NodeData{
-		PubKey:  n.pubKey.String(),
-		PrivKey: n.privKey.String(),
+		PubKey:    n.pubKey.String(),
+		PrivKey:   n.privKey.String(),
+		NetworkID: n.config.NetworkID,
 	}
 
 	bytes, err := json.MarshalIndent(data, "", "  ")
