@@ -129,8 +129,8 @@ Loop:
 			if bytes.Equal(c.GetMetadata().ReqId, reqID) {
 				break Loop
 			}
-			case <-time.After(time.Second * 30):
-				t.Fatal("Timeout error - expected callback")
+		case <-time.After(time.Second * 30):
+			t.Fatal("Timeout error - expected callback")
 		}
 	}
 
