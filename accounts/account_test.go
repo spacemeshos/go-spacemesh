@@ -1,11 +1,12 @@
 package accounts
 
 import (
+	"os"
+	"testing"
+
 	"github.com/spacemeshos/go-spacemesh/assert"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"os"
-	"testing"
 )
 
 func TestAccountLoading(t *testing.T) {
@@ -106,8 +107,12 @@ func TestPersistence(t *testing.T) {
 	accountPubKey := account.PubKey.String()
 	account1PubKey := account1.PubKey.String()
 
+	accountNetworkID := account.NetworkID
+	account1NetworkID := account1.NetworkID
+
 	assert.Equal(t, accountPubKey, account1PubKey, "Expected same public id")
 	assert.Equal(t, account.String(), account1.String(), "Expected same id")
+	assert.Equal(t, accountNetworkID, account1NetworkID, "Expected same network id")
 	assert.True(t, account1.IsAccountLocked(), "Expected account1 to be locked")
 
 	// attempt to unlock
