@@ -9,6 +9,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
+	"gopkg.in/op/go-logging.v1"
 )
 
 // LocalNode specifies local spacemesh node capabilities and services.
@@ -42,6 +43,7 @@ type LocalNode interface {
 	NotifyOnShutdown(chan bool)
 
 	// logging wrappers - log node id and args
+	GetLogger() *logging.Logger
 
 	Info(format string, args ...interface{})
 	Debug(format string, args ...interface{})
@@ -106,10 +108,10 @@ func newLocalNodeWithKeys(pubKey crypto.PublicKey, privKey crypto.PrivateKey, tc
 		return nil, err
 	}
 
-	log.Info("Node id: %s", n.String())
-
 	// setup logging
 	n.logger = log.CreateLogger(n.pubKey.Pretty(), dataDir, "node.log")
+
+	n.Info("Node id: %s", n.String())
 
 	// swarm owned by node
 	s, err := NewSwarm(tcpAddress, n)
@@ -123,7 +125,7 @@ func newLocalNodeWithKeys(pubKey crypto.PublicKey, privKey crypto.PrivateKey, tc
 		return nil, errors.New("critical error - failed to obtain node public ip address. Check your Internet connection and try again")
 	}
 
-	log.Info("Node public ip address %s. Please make sure that your home router or access point accepts incoming connections on this port and forwards incoming such connection requests to this computer.", n.pubTCPAddress)
+	n.Info("Node public ip address %s. Please make sure that your home router or access point accepts incoming connections on this port and forwards incoming such connection requests to this computer.", n.pubTCPAddress)
 
 	n.swarm = s
 	n.ping = NewPingProtocol(s)
