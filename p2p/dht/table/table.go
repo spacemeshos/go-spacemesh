@@ -2,10 +2,21 @@ package table
 
 import (
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"gopkg.in/op/go-logging.v1"
 	"sort"
+)
+
+const (
+	// IDLength is the length of an ID,  dht ids are 32 bytes
+	IDLength = 256
+	// BucketCount is the amount of buckets we hold
+	// Kademlia says we need a bucket to each bit but reality says half of network would be at bucket 0
+	// half of remaining nodes will be in bucket 1 and so forth.
+	// that means that most of te buckets won't be even populated most of the time
+	// todo : optimize this?
+	BucketCount = IDLength / 10
 )
 
 // RoutingTable manages routing to peers.
@@ -84,11 +95,13 @@ type NearestPeersReq struct {
 // Closer nodes will appear in buckets with a higher index
 // Most recently-seen nodes appear in the top of their buckets while least-often seen nodes at the bottom
 type routingTableImpl struct {
+	//logger for this routing table usually the node logger
+	log *logging.Logger
 
-	// local peer ID
+	// Local peer ID that holds this routing table
 	local dht.ID
 
-	// ops impls
+	// Operations activation channels
 	findReqs         chan PeerByIDRequest
 	nearestPeerReqs  chan PeerByIDRequest
 	nearestPeersReqs chan NearestPeersReq
@@ -105,7 +118,7 @@ type routingTableImpl struct {
 	// Maximum acceptable latency for peers in this cluster
 	//maxLatency time.Duration
 
-	buckets    []Bucket
+	buckets    [BucketCount]Bucket
 	bucketsize int // max number of nodes per bucket. typically 10 or 20.
 
 	peerRemoved PeerChannel
@@ -121,11 +134,19 @@ type routingTableImpl struct {
 }
 
 // NewRoutingTable creates a new routing table with a given bucket=size and local node dht.ID
-func NewRoutingTable(bucketsize int, localID dht.ID) RoutingTable {
+func NewRoutingTable(bucketsize int, localID dht.ID, log *logging.Logger) RoutingTable {
+
+	// Create all our buckets.
+	buckets := [BucketCount]Bucket{}
+	for i := 0; i < BucketCount; i++ {
+		buckets[i] = NewBucket()
+	}
+
 	rt := &routingTableImpl{
 
-		buckets:     []Bucket{NewBucket()},
+		buckets:     buckets,
 		bucketsize:  bucketsize,
+		log:         log,
 		local:       localID,
 		peerRemoved: make(PeerChannel, 3),
 		peerAdded:   make(PeerChannel, 3),
@@ -205,6 +226,14 @@ func (rt *routingTableImpl) Remove(peer node.RemoteNodeData) {
 	rt.removeReqs <- peer
 }
 
+func (rt *routingTableImpl) PeerAdded(peer node.RemoteNodeData) {
+	rt.peerAdded <- peer
+}
+
+func (rt *routingTableImpl) PeerRemoved(peer node.RemoteNodeData) {
+	rt.peerRemoved <- peer
+}
+
 //// below - non-ts private impl details (should only be called by processEvents() and not directly
 
 // main event processing loop
@@ -219,18 +248,10 @@ func (rt *routingTableImpl) processEvents() {
 			rt.remove(p)
 
 		case r := <-rt.sizeReqs:
-			tot := 0
-			for _, buck := range rt.buckets {
-				tot += buck.Len()
-			}
-			go func() { r <- tot }()
+			rt.size(r)
 
 		case r := <-rt.listPeersReqs:
-			var peers []node.RemoteNodeData
-			for _, buck := range rt.buckets {
-				peers = append(peers, buck.Peers()...)
-			}
-			go func() { r <- &PeersOpResult{Peers: peers} }()
+			rt.listPeers(r)
 
 		case r := <-rt.nearestPeersReqs:
 			peers := rt.nearestPeers(r.ID, r.Count)
@@ -273,6 +294,7 @@ func (rt *routingTableImpl) processEvents() {
 		case <-rt.printReq:
 			rt.onPrintReq()
 		}
+
 	}
 }
 
@@ -281,24 +303,24 @@ func getMemoryAddress(p interface{}) string {
 	return fmt.Sprintf("%p", p)
 }
 
-// Adds or move a node to the front of its designated k-bucket
+// Update updates the routing table with the given contact. it will be added to the routing table if we have space
+// or if its better in terms of latency and recent contact than out oldest contact in the right bucket.
+// this keeps fresh nodes at the top of the bucket and make sure we won't lose contact with the network and keep most healthy nodes.
 func (rt *routingTableImpl) update(p node.RemoteNodeData) {
 
 	if rt.local.Equals(p.DhtID()) {
-		log.Warning("Ignoring attempt to add local node to the routing table")
+		rt.log.Warning("Ignoring attempt to add local node to the routing table")
 		return
 	}
 
 	// determine node bucket based on cpl
 	cpl := p.DhtID().CommonPrefixLen(rt.local)
-
-	id := cpl
-	if id >= len(rt.buckets) {
+	if cpl >= len(rt.buckets) {
 		// choose the last bucket
-		id = len(rt.buckets) - 1
+		cpl = len(rt.buckets) - 1
 	}
 
-	bucket := rt.buckets[id]
+	bucket := rt.buckets[cpl]
 
 	if bucket.Has(p) {
 		// Move this node to the front as it is the most-recently active node
@@ -308,30 +330,15 @@ func (rt *routingTableImpl) update(p node.RemoteNodeData) {
 	}
 
 	// todo: consider connection metrics
-
-	// New peer, add to bucket - we add newly seen nodes to the front of their designated bucket
-	bucket.PushFront(p)
-
-	// must do this as go so we don't get blocked when the chan is full
-	go func() { rt.peerAdded <- p }()
-
-	if bucket.Len() > rt.bucketsize { // bucket overflows
-		if id == len(rt.buckets)-1 { // last bucket
-
-			// We added the node to the last bucket and this bucket is over-flowing
-			// Add a new bucket and possibly remove least-active node from the table
-			n := rt.addNewBucket()
-			if n != nil { // only notify if a node was removed
-				go func() { rt.peerRemoved <- n }()
-			}
-			return
-		}
-
-		// This is not the last bucket but it is overflowing
-		// We remove the least active node from it to keep the number of nodes within the bucket size
-		n := bucket.PopBack()
-		go func() { rt.peerRemoved <- n }()
+	if bucket.Len() >= rt.bucketsize { // bucket overflows
+		// TODO: if bucket is full ping oldest node and replace if it fails to answer
+		// TODO: check latency metrics and replace if new node is better then oldest one.
+		// Fresh, recent contacted (alive), low latency nodes should be kept at top of the bucket.
+		return
 	}
+
+	bucket.PushFront(p)
+	go rt.PeerAdded(p)
 }
 
 // Remove a node from the routing table.
@@ -349,35 +356,8 @@ func (rt *routingTableImpl) remove(p node.RemoteNodeData) {
 	removed := bucket.Remove(p)
 
 	if removed {
-		go func() { rt.peerRemoved <- p }()
+		go rt.PeerRemoved(p)
 	}
-}
-
-// Adds a new bucket to the table
-// Returns a node that was removed from the table in case of an overflow, nil otherwise
-func (rt *routingTableImpl) addNewBucket() node.RemoteNodeData {
-
-	// the last bucket
-	lastBucket := rt.buckets[len(rt.buckets)-1]
-
-	// the new bucket
-	newBucket := lastBucket.Split(len(rt.buckets)-1, rt.local)
-
-	rt.buckets = append(rt.buckets, newBucket)
-
-	if newBucket.Len() > rt.bucketsize {
-		// new bucket is overflowing - we need to split it again
-		return rt.addNewBucket()
-	}
-
-	if lastBucket.Len() > rt.bucketsize {
-		// If all elements were on left side of the split and last bucket is full
-		// We remove the least active node in the last bucket and return it
-		return lastBucket.PopBack()
-	}
-
-	// no node was removed
-	return nil
 }
 
 // Internal find peer request handler
@@ -389,11 +369,11 @@ func (rt *routingTableImpl) onFindReq(r PeerByIDRequest) {
 	}
 
 	if len(peers) == 0 || !peers[0].DhtID().Equals(r.ID) {
-		log.Info("Did not find %s in the routing table", r.ID.Pretty())
+		rt.log.Info("Did not find %s in the routing table", r.ID.Pretty())
 		go func() { r.Callback <- &PeerOpResult{} }()
 	} else {
 		p := peers[0]
-		log.Info("Found %s in the routing table", p.Pretty())
+		rt.log.Info("Found %s in the routing table", p.Pretty())
 		go func() { r.Callback <- &PeerOpResult{peers[0]} }()
 	}
 }
@@ -426,32 +406,48 @@ func (rt *routingTableImpl) nearestPeers(id dht.ID, count int) []node.RemoteNode
 	var peerArr node.PeerSorter
 	peerArr = node.CopyPeersFromList(id, peerArr, bucket.List())
 
-	// todo: this MUST continue until count are returned even if we need to go to additional buckets
-
-	if len(peerArr) < count {
-		// In the case of an unusual split, one bucket may be short or empty.
-		// Search both surrounding buckets for nearby peers
-		if cpl > 0 {
-			plist := rt.buckets[cpl-1].List()
+	// If the closest bucket didn't have enough contacts,
+	// go into additional buckets until we have enough or run out of buckets.
+	i := 0
+	for len(peerArr) < count {
+		if cpl-i < 0 && cpl+i > len(rt.buckets)-1 {
+			break
+		}
+		if cpl-i >= 0 {
+			plist := rt.buckets[cpl-i].List()
 			peerArr = node.CopyPeersFromList(id, peerArr, plist)
 		}
-
-		if cpl < len(rt.buckets)-1 {
-			plist := rt.buckets[cpl+1].List()
+		if cpl+i <= len(rt.buckets)-1 {
+			plist := rt.buckets[cpl+i].List()
 			peerArr = node.CopyPeersFromList(id, peerArr, plist)
 		}
+		i++
 	}
 
 	// Sort by distance from id
 	sort.Sort(peerArr)
-
 	// return up to count nearest nodes
 	var out []node.RemoteNodeData
 	for i := 0; i < count && i < peerArr.Len(); i++ {
-		out = append(out, peerArr[i].Node)
+		out = append(out, peerArr[i].Node.(node.RemoteNodeData))
 	}
-
 	return out
+}
+
+func (rt *routingTableImpl) size(callback chan int) {
+	tot := 0
+	for _, buck := range rt.buckets {
+		tot += buck.Len()
+	}
+	go func() { callback <- tot }()
+}
+
+func (rt *routingTableImpl) listPeers(callback PeersOpChannel) {
+	var peers []node.RemoteNodeData
+	for _, buck := range rt.buckets {
+		peers = append(peers, buck.Peers()...)
+	}
+	go func() { callback <- &PeersOpResult{Peers: peers} }()
 }
 
 // Print a descriptive statement about the provided RoutingTable
@@ -462,12 +458,12 @@ func (rt *routingTableImpl) Print() {
 
 // should only be called form internal event handlers to print table contents
 func (rt *routingTableImpl) onPrintReq() {
-	log.Info("Routing Table, bs = %d, buckets;", rt.bucketsize, len(rt.buckets))
+	rt.log.Info("Routing Table, bs = %d, buckets;", rt.bucketsize, len(rt.buckets))
 	for i, b := range rt.buckets {
-		log.Info("\tBucket: %d. Items: %d\n", i, b.List().Len())
+		rt.log.Info("\tBucket: %d. Items: %d\n", i, b.List().Len())
 		for e := b.List().Front(); e != nil; e = e.Next() {
 			p := e.Value.(node.RemoteNodeData)
-			log.Info("\t\t%s\n", p.Pretty())
+			rt.log.Info("\t\t%s cpl:%v\n", p.Pretty(), rt.local.CommonPrefixLen(p.DhtID()))
 		}
 	}
 }

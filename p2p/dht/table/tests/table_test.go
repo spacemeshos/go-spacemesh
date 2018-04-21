@@ -9,9 +9,16 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht/table"
+	"gopkg.in/op/go-logging.v1"
+	//"fmt"
 )
 
+func GetTestLogger(name string) *logging.Logger {
+	return log.CreateLogger(name, "", "")
+}
+
 func TestTableCallbacks(t *testing.T) {
+
 	const n = 100
 	local, err := p2p.GenerateRandomNodeData()
 
@@ -23,14 +30,31 @@ func TestTableCallbacks(t *testing.T) {
 
 	assert.NoErr(t, err, "Should be able to create multiple nodes")
 
-	rt := table.NewRoutingTable(10, localID)
+	log := GetTestLogger(localID.Pretty())
 
-	callback := make(table.PeerChannel, 3)
-	callbackIdx := 0
-	rt.RegisterPeerAddedCallback(callback)
+	rt := table.NewRoutingTable(20, localID, log)
 
 	for i := 0; i < n; i++ {
 		rt.Update(nodes[i])
+	}
+
+	sizeChan := make(chan int)
+	rt.Size(sizeChan)
+	size := <-sizeChan // block until we have result
+
+	if size < 50 {
+		// this test is kinda sketchy because we assump that the routing table will have at
+		// least 50% of nodes. though with random generated nodes we can't really know.
+		// theoretically this should never happen
+		t.Error("More than 50 precent of nodes lost")
+	}
+
+	callback := make(table.PeerChannel, 3)
+	callbackIdx := 0
+	rt.RegisterPeerRemovedCallback(callback)
+
+	for i := 0; i < n; i++ {
+		rt.Remove(nodes[i])
 	}
 
 Loop:
@@ -38,49 +62,15 @@ Loop:
 		select {
 		case <-callback:
 			callbackIdx++
-			if callbackIdx == n {
+			if callbackIdx == size {
 				break Loop
 			}
-
 		case <-time.After(time.Second * 10):
-			t.Fatalf("Failed to get expected update callbacks on time")
+			t.Fatalf("Failed to get expected remove callbacks on time")
 			break Loop
 		}
 	}
 
-	sizeChan := make(chan int)
-	size := 0
-
-	rt.Size(sizeChan)
-
-	select {
-	case s := <-sizeChan:
-		size = s
-		log.Info("%d nodes in table", size)
-		//assert.True(t, s == n, fmt.Sprintf("unexpected nubmer of items %d, %d", s, n))
-	}
-
-	callback = make(table.PeerChannel, 3)
-	callbackIdx = 0
-	rt.RegisterPeerRemovedCallback(callback)
-
-	for i := 0; i < n; i++ {
-		rt.Remove(nodes[i])
-	}
-
-Loop1:
-	for {
-		select {
-		case <-callback:
-			callbackIdx++
-			if callbackIdx == size {
-				break Loop1
-			}
-		case <-time.After(time.Second * 10):
-			t.Fatalf("Failed to get expected remove callbacks on time")
-			break Loop1
-		}
-	}
 }
 
 func TestTableUpdate(t *testing.T) {
@@ -91,7 +81,7 @@ func TestTableUpdate(t *testing.T) {
 
 	localID := local.DhtID()
 
-	rt := table.NewRoutingTable(20, localID)
+	rt := table.NewRoutingTable(10, localID, GetTestLogger(localID.Pretty()))
 
 	nodes, err := p2p.GenerateRandomNodesData(n)
 	assert.NoErr(t, err, "Should be able to create multiple nodes")
@@ -116,7 +106,7 @@ func TestTableUpdate(t *testing.T) {
 		select {
 		case c := <-callback:
 			if len(c.Peers) != 5 {
-				t.Fatalf("Expected to find 5 close nodes to %s.", n.DhtID())
+				t.Fatalf("Expected to find 5 close nodes to %s.", n.DhtID().Pretty())
 			}
 		case <-time.After(time.Second * 5):
 			t.Fatalf("Failed to get expected update callbacks on time")
@@ -133,7 +123,7 @@ func TestTableFind(t *testing.T) {
 
 	localID := local.DhtID()
 
-	rt := table.NewRoutingTable(20, localID)
+	rt := table.NewRoutingTable(10, localID, GetTestLogger(localID.Pretty()))
 
 	nodes, err := p2p.GenerateRandomNodesData(n)
 	assert.NoErr(t, err, "Should be able to create a node")
@@ -182,7 +172,7 @@ func TestTableFindCount(t *testing.T) {
 	assert.NoErr(t, err, "Should be able to create a node")
 
 	localID := local.DhtID()
-	rt := table.NewRoutingTable(20, localID)
+	rt := table.NewRoutingTable(10, localID, GetTestLogger(localID.Pretty()))
 	nodes, err := p2p.GenerateRandomNodesData(n)
 	assert.NoErr(t, err, "Should be able to create a node")
 
@@ -216,7 +206,7 @@ func TestTableMultiThreaded(t *testing.T) {
 	assert.NoErr(t, err, "Should be able to create a node")
 
 	localID := local.DhtID()
-	rt := table.NewRoutingTable(20, localID)
+	rt := table.NewRoutingTable(10, localID, GetTestLogger(localID.Pretty()))
 	nodes, err := p2p.GenerateRandomNodesData(n)
 	assert.NoErr(t, err, "Should be able to create multiple nodes")
 
@@ -250,7 +240,7 @@ func BenchmarkUpdates(b *testing.B) {
 	}
 
 	localID := local.DhtID()
-	rt := table.NewRoutingTable(20, localID)
+	rt := table.NewRoutingTable(10, localID, GetTestLogger(localID.Pretty()))
 	nodes, err := p2p.GenerateRandomNodesData(b.N)
 	if err != nil {
 		b.Errorf("Should be able to create multiple error:%v", err)
@@ -271,7 +261,7 @@ func BenchmarkFinds(b *testing.B) {
 	}
 
 	localID := local.DhtID()
-	rt := table.NewRoutingTable(20, localID)
+	rt := table.NewRoutingTable(10, localID, GetTestLogger(localID.Pretty()))
 	nodes, err := p2p.GenerateRandomNodesData(b.N)
 	if err != nil {
 		b.Errorf("Should be able to create node error:%v", err)
