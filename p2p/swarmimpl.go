@@ -25,7 +25,7 @@ type getPeerRequest struct {
 }
 
 type swarmImpl struct {
-
+	bootstrapSignal chan struct{}
 	// set in construction and immutable state
 	network   net.Net
 	localNode LocalNode
@@ -93,6 +93,8 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 		network:   n,
 		shutdown:  make(chan bool), // non-buffered so requests to shutdown block until swarm is shut down
 
+		bootstrapSignal: make(chan struct{}),
+
 		nodeEventRegChannel: make(chan NodeEventCallback, 1),
 		nec:                 make(nodeEventCallbacks, 0),
 
@@ -141,7 +143,7 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 	go s.beginProcessingEvents()
 
 	if s.config.Bootstrap {
-		go s.Bootstrap()
+		s.Bootstrap()
 	}
 
 	return s, err
@@ -210,7 +212,10 @@ func (s *swarmImpl) GetPeer(id string, callback chan Peer) {
 // Starts the bootstrap process
 // Query the bootstrap nodes we have with our own nodeID in order to fill our routing table with close nodes.
 func (s *swarmImpl) Bootstrap() {
+	s.bootstrapSignal <- struct{}{}
+}
 
+func (s *swarmImpl) bootstrap() {
 	s.localNode.Info("Starting bootstrap...")
 
 	// register bootstrap nodes
@@ -218,38 +223,41 @@ func (s *swarmImpl) Bootstrap() {
 	for _, n := range s.config.BootstrapNodes {
 		rn := node.NewRemoteNodeDataFromString(n)
 		if s.localNode.String() != rn.ID() {
-			go s.RegisterNode(rn)
+			s.onRegisterNodeRequest(rn)
 			bn++
 		}
 	}
 
 	c := int(s.config.RandomConnections)
-	if c == 0 {
+	if c <= 0 {
 		log.Warning("0 random connections - aborting bootstrap")
 		return
 	}
 
 	if bn > 0 {
+
 		// isseus findNode requests until DHT has at least c peers and start a periodic refresh func
-		err := s.routingTable.Bootstrap(s.findNode, s.localNode.String(), c)
+		errSignal := make(chan error)
+		go s.routingTable.Bootstrap(s.findNode, s.localNode.String(), c, errSignal)
 
-		if err != nil {
-			s.localNode.Error("Bootstraping the node failed ", err)
-			return
-		}
+		go func(errchan chan error) {
+			err := <-errchan
 
-		//TODO : Fix connecting to random connection
-		//s.ConnectToRandomNodes(c)
+			if err != nil {
+				s.localNode.Error("Bootstrapping the node failed ", err)
+				return
+			}
+
+			//TODO : Fix connecting to random connection
+			s.ConnectToRandomNodes(c)
+		}(errSignal)
+
+		return
 	}
 }
 
 // Connect up to count random nodes
 func (s *swarmImpl) ConnectToRandomNodes(count int) {
-
-	if count <= 0 {
-		s.localNode.Error("Expected positive count param")
-		return
-	}
 
 	s.localNode.Info("Attempting to connect to %d random nodes...", count)
 
@@ -267,11 +275,7 @@ func (s *swarmImpl) ConnectToRandomNodes(count int) {
 		}
 
 		for _, p := range c.Peers {
-			peer := make(chan Peer)
-			s.GetPeer(p.ID(), peer)
-			if <-peer == nil {
-				go s.ConnectTo(p)
-			}
+			s.ConnectTo(p)
 		}
 
 	case <-timeout.C:
@@ -321,6 +325,8 @@ func (s *swarmImpl) beginProcessingEvents() {
 Loop:
 	for {
 		select {
+		case <-s.bootstrapSignal:
+			s.bootstrap()
 		case <-s.shutdown:
 			s.shutDownInternal()
 			break Loop

@@ -36,7 +36,7 @@ type RoutingTable interface {
 	ListPeers(callback PeersOpChannel) // list all peers
 	Size(callback chan int)            // total # of peers in the table
 
-	Bootstrap(findnode func(id string, nodes chan node.RemoteNodeData), id string, minPeers int) error
+	Bootstrap(findnode func(id string, nodes chan node.RemoteNodeData), id string, minPeers int, errchan chan error)
 
 	// add/remove peers callbacks management - thread safe
 	RegisterPeerRemovedCallback(c PeerChannel)   // get called when a  peer is removed
@@ -207,7 +207,7 @@ func (rt *routingTableImpl) UnregisterPeerAddedCallback(c PeerChannel) {
 	rt.unregisterPeerAddedReq <- c
 }
 
-func (rt *routingTableImpl) Bootstrap(findnode func(id string, nodes chan node.RemoteNodeData), id string, minPeers int) error {
+func (rt *routingTableImpl) Bootstrap(findnode func(id string, nodes chan node.RemoteNodeData), id string, minPeers int, errchan chan error) {
 	timeout := time.NewTimer(90 * time.Second)
 	bootstrap := func() chan node.RemoteNodeData { c := make(chan node.RemoteNodeData); findnode(id, c); return c }
 	bs := bootstrap()
@@ -217,7 +217,8 @@ BSLOOP:
 		select {
 		case res := <-bs:
 			if res != nil {
-				return errors.New("Found ourselves in a bootstrap query")
+				errchan <- errors.New("Found ourselves in a bootstrap query")
+				return
 			}
 			size := make(chan int)
 			rt.Size(size)
@@ -230,7 +231,8 @@ BSLOOP:
 			bs = bootstrap()
 			continue
 		case <-timeout.C:
-			return errors.New("Didn't get response in timeout time")
+			errchan <- errors.New("Didn't get response in timeout time")
+			return
 		}
 	}
 
@@ -243,7 +245,7 @@ BSLOOP:
 		}
 	}()
 
-	return nil
+	errchan <- nil
 }
 
 // Finds a specific peer by ID/ Returns nil in the callback when not found
