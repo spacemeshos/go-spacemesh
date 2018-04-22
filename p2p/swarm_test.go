@@ -11,10 +11,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/assert"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
+	"github.com/spacemeshos/go-spacemesh/filesystem"
 )
 
 // Basic session test
 func TestSessionCreation(t *testing.T) {
+
+	filesystem.SetupTestSpacemeshDataFolders(t, "swarm_test")
+
 	callback := make(chan HandshakeData)
 	callback2 := make(chan HandshakeData)
 	node1Local, _ := GenerateTestNode(t)
@@ -46,9 +50,13 @@ Loop:
 
 	node1Local.Shutdown()
 	node2Local.Shutdown()
+
+	filesystem.DeleteSpacemeshDataFolders(t)
 }
 
 func TestMultipleSessions(t *testing.T) {
+
+	filesystem.SetupTestSpacemeshDataFolders(t, "swarm_test")
 
 	finishChan := make(chan struct{})
 	const timeout = time.Second * 10
@@ -93,10 +101,14 @@ func TestMultipleSessions(t *testing.T) {
 	for _, node := range nodes {
 		node.Shutdown()
 	}
+
+	filesystem.DeleteSpacemeshDataFolders(t)
 }
 
 func TestSimpleBootstrap(t *testing.T) {
 
+	filesystem.SetupTestSpacemeshDataFolders(t, "swarm_test")
+	defer filesystem.DeleteSpacemeshDataFolders(t)
 	// setup:
 	// node1 - bootstrap node
 	// node2 - connects to node1 on startup (bootstrap)
@@ -139,7 +151,11 @@ Loop:
 }
 
 func TestSmallBootstrap(t *testing.T) {
-	const timeout = 10 * time.Second
+
+	filesystem.SetupTestSpacemeshDataFolders(t, "swarm_test")
+	defer filesystem.DeleteSpacemeshDataFolders(t)
+
+	const timeout = 20 * time.Second
 	const tick = 1 * time.Second
 	const randomConnections = 5
 	const totalNodes = 10
