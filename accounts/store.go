@@ -3,12 +3,13 @@ package accounts
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/crypto"
-	"github.com/spacemeshos/go-spacemesh/filesystem"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"io/ioutil"
 	"path/filepath"
 	"strings"
+
+	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/filesystem"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 // AccountData is used to persist an account.
@@ -16,6 +17,7 @@ type AccountData struct {
 	PublicKey  string          `json:"publicKey"`
 	CryptoData CryptoData      `json:"crypto"`
 	KDParams   crypto.KDParams `json:"kd"`
+	NetworkID  int             `json:"networkId"`
 }
 
 // CryptoData is the data use to encrypt/decrypt locally stored account data.
@@ -84,7 +86,8 @@ func NewAccountFromStore(accountID string, accountsDataPath string) (*Account, e
 	acct := &Account{nil,
 		pubKey,
 		accountData.CryptoData,
-		accountData.KDParams}
+		accountData.KDParams,
+		accountData.NetworkID}
 
 	log.Info("Loaded account from store: %s", pubKey.String())
 
@@ -105,6 +108,7 @@ func (a *Account) Persist(accountsDataPath string) (string, error) {
 		pubKeyStr,
 		a.cryptoData,
 		a.kdParams,
+		a.NetworkID,
 	}
 
 	bytes, err := json.MarshalIndent(data, "", "  ")
