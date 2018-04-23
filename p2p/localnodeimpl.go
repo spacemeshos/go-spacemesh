@@ -3,6 +3,8 @@ package p2p
 import (
 	"encoding/hex"
 	"fmt"
+	"time"
+
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -11,7 +13,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"gopkg.in/op/go-logging.v1"
-	"time"
 )
 
 // LocalNode implementation.
@@ -106,7 +107,8 @@ func (n *localNodeImp) TCPAddress() string {
 
 // PubTCPAddress returns the node's public tcp address.
 func (n *localNodeImp) PubTCPAddress() string {
-	return n.pubTCPAddress
+	addr := n.pubTCPAddress
+	return addr
 }
 
 // RefreshPubTCPAddress attempts to refresh the node public ip address and returns true if it was able to do so.

@@ -2,6 +2,7 @@ package p2p
 
 import (
 	"github.com/spacemeshos/go-spacemesh/log"
+	"gopkg.in/op/go-logging.v1"
 )
 
 // IncomingMessage defines an incoming a p2p protocol message components
@@ -59,6 +60,7 @@ type Demuxer interface {
 }
 
 type demuxImpl struct {
+	log *logging.Logger
 
 	// internal state
 	handlers map[string]MessagesChan
@@ -69,9 +71,10 @@ type demuxImpl struct {
 }
 
 // NewDemuxer creates a new Demuxer
-func NewDemuxer() Demuxer {
+func NewDemuxer(log *logging.Logger) Demuxer {
 
 	d := &demuxImpl{
+		log:                  log,
 		handlers:             make(map[string]MessagesChan),
 		incomingMessages:     make(chan IncomingMessage, 20),
 		registrationRequests: make(chan ProtocolRegistration, 20),
@@ -90,18 +93,23 @@ func (d *demuxImpl) RouteIncomingMessage(msg IncomingMessage) {
 	d.incomingMessages <- msg
 }
 
+func (d *demuxImpl) routeMessage(msg IncomingMessage) {
+	d.log.Debug("Muxing %v message from %v ", msg.Protocol(), msg.Sender().Pretty())
+	handler := d.handlers[msg.Protocol()]
+	if handler == nil {
+		log.Warning("failed to route an incoming message - no registered handler for protocol", msg.Protocol())
+	} else {
+		go func() { // async send to handler so we can keep processing messages
+			handler <- msg
+		}()
+	}
+}
+
 func (d *demuxImpl) processEvents() {
 	for {
 		select {
 		case msg := <-d.incomingMessages:
-			handler := d.handlers[msg.Protocol()]
-			if handler == nil {
-				log.Warning("failed to route an incoming message - no registered handler for protocol", msg.Protocol())
-			} else {
-				go func() { // async send to handler so we can keep processing messages
-					handler <- msg
-				}()
-			}
+			d.routeMessage(msg)
 
 		case reg := <-d.registrationRequests:
 			d.handlers[reg.Protocol] = reg.Handler

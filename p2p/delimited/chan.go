@@ -9,7 +9,7 @@ import (
 type Chan struct {
 	MsgChan   chan MsgAndID
 	ErrChan   chan ErrAndID
-	CloseChan chan bool
+	CloseChan chan struct{}
 }
 
 // MsgAndID is a struct for passing a message paired with an id,
@@ -33,7 +33,7 @@ func NewChan(chanSize int) *Chan {
 	return &Chan{
 		MsgChan:   make(chan MsgAndID, chanSize),
 		ErrChan:   make(chan ErrAndID, 1),
-		CloseChan: make(chan bool, 2),
+		CloseChan: make(chan struct{}, 2),
 	}
 }
 
@@ -74,7 +74,7 @@ Loop:
 
 	close(s.MsgChan)
 	// signal we're done
-	s.CloseChan <- true
+	s.CloseChan <- struct{}{}
 }
 
 // WriteToWriter wraps the given io.Writer with a delimited.Writer, listens on the
@@ -108,10 +108,10 @@ Loop:
 	}
 
 	// signal we're done
-	s.CloseChan <- true
+	s.CloseChan <- struct{}{}
 }
 
 // Close the Chan
 func (s *Chan) Close() {
-	s.CloseChan <- true
+	s.CloseChan <- struct{}{}
 }

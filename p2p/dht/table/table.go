@@ -1,11 +1,12 @@
 package table
 
 import (
+	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"gopkg.in/op/go-logging.v1"
-	"sort"
+	"time"
 )
 
 const (
@@ -34,6 +35,8 @@ type RoutingTable interface {
 	NearestPeers(req NearestPeersReq)  // ip to n nearest peers to a dht.ID
 	ListPeers(callback PeersOpChannel) // list all peers
 	Size(callback chan int)            // total # of peers in the table
+
+	Bootstrap(findnode func(id string, nodes chan node.RemoteNodeData), id string, minPeers int) error
 
 	// add/remove peers callbacks management - thread safe
 	RegisterPeerRemovedCallback(c PeerChannel)   // get called when a  peer is removed
@@ -107,7 +110,7 @@ type routingTableImpl struct {
 	nearestPeersReqs chan NearestPeersReq
 	listPeersReqs    chan PeersOpChannel
 	sizeReqs         chan chan int
-	printReq         chan bool
+	printReq         chan struct{}
 
 	updateReqs chan node.RemoteNodeData
 	removeReqs chan node.RemoteNodeData
@@ -168,7 +171,7 @@ func NewRoutingTable(bucketsize int, localID dht.ID, log *logging.Logger) Routin
 		peerRemovedCallbacks: make(map[string]PeerChannel),
 		peerAddedCallbacks:   make(map[string]PeerChannel),
 
-		printReq: make(chan bool),
+		printReq: make(chan struct{}),
 	}
 
 	go rt.processEvents()
@@ -202,6 +205,45 @@ func (rt *routingTableImpl) UnregisterPeerRemovedCallback(c PeerChannel) {
 
 func (rt *routingTableImpl) UnregisterPeerAddedCallback(c PeerChannel) {
 	rt.unregisterPeerAddedReq <- c
+}
+
+func (rt *routingTableImpl) Bootstrap(findnode func(id string, nodes chan node.RemoteNodeData), id string, minPeers int) error {
+	timeout := time.NewTimer(90 * time.Second)
+	bootstrap := func() chan node.RemoteNodeData { c := make(chan node.RemoteNodeData); findnode(id, c); return c }
+	bs := bootstrap()
+
+BSLOOP:
+	for {
+		select {
+		case res := <-bs:
+			if res != nil {
+				return errors.New("Found ourselves in a bootstrap query")
+			}
+			size := make(chan int)
+			rt.Size(size)
+			s := <-size
+			if s >= minPeers {
+				break BSLOOP
+			}
+
+			rt.log.Warning("Bootstrap didn't feel Routing table, starting bootstrap op again")
+			bs = bootstrap()
+			continue
+		case <-timeout.C:
+			return errors.New("Didn't get response in timeout time")
+		}
+	}
+
+	// Start the bootstrap refresh loop
+	go func() {
+		bootSignal := time.NewTicker(2 * time.Minute)
+		for {
+			<-bootSignal.C
+			bootstrap()
+		}
+	}()
+
+	return nil
 }
 
 // Finds a specific peer by ID/ Returns nil in the callback when not found
@@ -403,35 +445,47 @@ func (rt *routingTableImpl) nearestPeers(id dht.ID, count int) []node.RemoteNode
 
 	bucket := rt.buckets[cpl]
 
-	var peerArr node.PeerSorter
-	peerArr = node.CopyPeersFromList(id, peerArr, bucket.List())
+	//var peerArr node.PeerSorter
+	//peerArr = node.CopyPeersFromList(id, peerArr, bucket.List())
+	var peerArr []node.RemoteNodeData
+	peerArr = append(peerArr, bucket.Peers()...)
 
 	// If the closest bucket didn't have enough contacts,
 	// go into additional buckets until we have enough or run out of buckets.
 	i := 0
 	for len(peerArr) < count {
+		i++
 		if cpl-i < 0 && cpl+i > len(rt.buckets)-1 {
 			break
 		}
+		var toAdd []node.RemoteNodeData
+
 		if cpl-i >= 0 {
-			plist := rt.buckets[cpl-i].List()
-			peerArr = node.CopyPeersFromList(id, peerArr, plist)
+			plist := rt.buckets[cpl-i]
+			toAdd = append(toAdd, plist.Peers()...)
+
 		}
+
 		if cpl+i <= len(rt.buckets)-1 {
-			plist := rt.buckets[cpl+i].List()
-			peerArr = node.CopyPeersFromList(id, peerArr, plist)
+			plist := rt.buckets[cpl+i]
+			toAdd = append(toAdd, plist.Peers()...)
 		}
-		i++
+
+		peerArr = append(peerArr, toAdd...)
 	}
 
 	// Sort by distance from id
-	sort.Sort(peerArr)
+	sorted := node.SortClosestPeers(peerArr, id)
 	// return up to count nearest nodes
-	var out []node.RemoteNodeData
-	for i := 0; i < count && i < peerArr.Len(); i++ {
-		out = append(out, peerArr[i].Node.(node.RemoteNodeData))
+	if len(sorted) > count {
+		sorted = sorted[:count]
 	}
-	return out
+	//var out []node.RemoteNodeData
+	//for i := 0; i < count && i < peerArr.Len(); i++ {
+	//	out = append(out, peerArr[i].Node.(node.RemoteNodeData))
+	//}
+	rt.log.Info("OUT ", sorted)
+	return sorted
 }
 
 func (rt *routingTableImpl) size(callback chan int) {
@@ -453,17 +507,19 @@ func (rt *routingTableImpl) listPeers(callback PeersOpChannel) {
 // Print a descriptive statement about the provided RoutingTable
 // Only call from external clients not from internal event handlers
 func (rt *routingTableImpl) Print() {
-	rt.printReq <- true
+	rt.printReq <- struct{}{}
 }
 
 // should only be called form internal event handlers to print table contents
 func (rt *routingTableImpl) onPrintReq() {
-	rt.log.Info("Routing Table, bs = %d, buckets;", rt.bucketsize, len(rt.buckets))
+	str := fmt.Sprintf("%v's Routing Table, bs = %d, buckets: %d", rt.local.Pretty(), rt.bucketsize, len(rt.buckets))
+	str += "\n\r"
 	for i, b := range rt.buckets {
-		rt.log.Info("\tBucket: %d. Items: %d\n", i, b.List().Len())
+		str += fmt.Sprintf("\tBucket: %d. Items: %d\n", i, b.List().Len())
 		for e := b.List().Front(); e != nil; e = e.Next() {
 			p := e.Value.(node.RemoteNodeData)
-			rt.log.Info("\t\t%s cpl:%v\n", p.Pretty(), rt.local.CommonPrefixLen(p.DhtID()))
+			str += fmt.Sprintf("\t\t%s cpl:%v\n", p.Pretty(), rt.local.CommonPrefixLen(p.DhtID()))
 		}
 	}
+	fmt.Println(str)
 }
