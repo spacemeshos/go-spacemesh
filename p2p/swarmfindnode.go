@@ -148,7 +148,7 @@ Loop:
 	}
 
 	// add unique node ids that are closer to target id than closest node
-	res := []node.RemoteNodeData{}
+	var res []node.RemoteNodeData
 
 	targetDhtID := dht.NewIDFromBase58String(targetID)
 	for _, n := range idSet {
