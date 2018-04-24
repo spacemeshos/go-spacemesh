@@ -217,7 +217,7 @@ HEALTH:
 }
 
 // todo: fix me - this test is broken
-func _estBasicBootstrap(t *testing.T) {
+func TestBasicBootstrap(t *testing.T) {
 
 	// setup:
 	// node1 - bootstrap node
@@ -238,6 +238,10 @@ func _estBasicBootstrap(t *testing.T) {
 	node2Local, _ := GenerateTestNodeWithConfig(t, c)
 	_, node3Remote := GenerateTestNodeWithConfig(t, c)
 
+
+//	if !node2Local.GetSwarm().getRoutingTable().IsHealthy() && !node3l.GetSwarm().getRoutingTable().IsHealthy() {
+//		t.Error("DHTs are not formed")
+//	}
 	// ping node2 -> node 3
 	reqID := crypto.UUID()
 	callback := make(chan SendPingResp)
