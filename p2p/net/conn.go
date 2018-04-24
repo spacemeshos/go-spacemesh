@@ -64,10 +64,14 @@ const (
 type connectionImpl struct {
 	logger *logging.Logger
 	// metadata for logging / debugging
-	id         string           // uuid for logging
-	source     ConnectionSource // remote or local
-	created    time.Time
-	lastOpTime time.Time
+	id      string           // uuid for logging
+	source  ConnectionSource // remote or local
+	created time.Time
+
+	closeChan chan struct{}
+
+	recordTimeChan chan struct{}
+	lastOpTime     time.Time
 
 	incomingMsgs *delimited.Chan // implemented using delimited.Chan - incoming messages
 	outgoingMsgs *delimited.Chan // outgoing message queue
@@ -86,14 +90,16 @@ func newConnection(conn net.Conn, n Net, s ConnectionSource) Connection {
 	outgoingMsgs := delimited.NewChan(10)
 
 	connection := &connectionImpl{
-		logger:       n.GetLogger(),
-		id:           crypto.UUIDString(),
-		created:      time.Now(),
-		source:       s,
-		incomingMsgs: incomingMsgs,
-		outgoingMsgs: outgoingMsgs,
-		conn:         conn,
-		net:          n,
+		logger:         n.GetLogger(),
+		id:             crypto.UUIDString(),
+		created:        time.Now(),
+		recordTimeChan: make(chan struct{}),
+		source:         s,
+		incomingMsgs:   incomingMsgs,
+		outgoingMsgs:   outgoingMsgs,
+		conn:           conn,
+		net:            n,
+		closeChan:      make(chan struct{}),
 	}
 
 	// start reading incoming message from the connection and into the channel
@@ -125,13 +131,19 @@ func (c *connectionImpl) String() string {
 func (c *connectionImpl) Send(message []byte, id []byte) {
 	// queue messages for sending
 	c.outgoingMsgs.MsgChan <- delimited.MsgAndID{ID: id, Msg: message}
-	c.lastOpTime = time.Now()
+	c.RecordOpTime()
 }
 
 // Close closes the connection (implements io.Closer). It is go safe.
 func (c *connectionImpl) Close() error {
 	c.incomingMsgs.Close()
+	c.outgoingMsgs.Close()
+	go func() { c.closeChan <- struct{}{} }()
 	return nil
+}
+
+func (c *connectionImpl) RecordOpTime() {
+	c.recordTimeChan <- struct{}{}
 }
 
 // go safe
@@ -147,6 +159,9 @@ Loop:
 	for {
 		select {
 
+		case <-c.recordTimeChan:
+			c.lastOpTime = time.Now()
+
 		case err := <-c.outgoingMsgs.ErrChan:
 			go func() {
 				c.net.GetConnectionErrors() <- ConnectionError{c, err.Err, err.ID}
@@ -158,7 +173,6 @@ Loop:
 				break Loop
 			}
 
-			c.logger.Info("Incoming message from: %s to: %s.", c.conn.RemoteAddr().String(), c.conn.LocalAddr().String())
 			c.lastOpTime = time.Now()
 
 			// pump the message to the network
@@ -166,7 +180,7 @@ Loop:
 				c.net.GetIncomingMessage() <- IncomingMessage{c, msg.Msg}
 			}()
 
-		case <-c.incomingMsgs.CloseChan:
+		case <-c.closeChan:
 			go func() {
 				c.net.GetClosingConnections() <- c
 			}()

@@ -28,6 +28,9 @@ type Swarm interface {
 	// Used for bootstrapping known bootstrap nodes
 	ConnectTo(req node.RemoteNodeData)
 
+	// Bootstrap the node by issuing a findnode operation for itself
+	Bootstrap()
+
 	// Connect to count random nodes - used for bootstrapping the swarm
 	ConnectToRandomNodes(count int)
 

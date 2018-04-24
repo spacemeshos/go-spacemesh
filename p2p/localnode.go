@@ -12,7 +12,7 @@ import (
 	"gopkg.in/op/go-logging.v1"
 )
 
-// LocalNode specifies local spacemesh node capabilities and services.
+// LocalNode specifies local Spacemesh node capabilities and services.
 type LocalNode interface {
 	ID() []byte
 	String() string
@@ -155,7 +155,7 @@ func newNodeFromData(tcpAddress string, d *NodeData, config nodeconfig.Config, p
 		return nil, err
 	}
 
-	log.Info(">>>> %s", pub.String())
+	log.Info(">>>> Creating node from existing key %s", pub.String())
 
 	return newLocalNodeWithKeys(pub, priv, tcpAddress, config, persist)
 }

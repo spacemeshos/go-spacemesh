@@ -1,6 +1,7 @@
 package p2p
 
 import (
+	"flag"
 	"fmt"
 	"github.com/syndtr/goleveldb/leveldb/errors"
 	"io/ioutil"
@@ -11,6 +12,11 @@ import (
 // GetPublicIPAddress returns this host public ip address.
 // Method is implemented using the ipify.org service.
 func GetPublicIPAddress() (string, error) {
+
+	// We don't want to query services and determine public IP addresses on a test.
+	if flag.Lookup("test.v") != nil {
+		return "0.0.0.0", nil
+	}
 
 	// todo: make this more robust by adding additional fallback services so
 	// if ipify.org can't bring down our whole network

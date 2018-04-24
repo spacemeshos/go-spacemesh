@@ -21,7 +21,7 @@ import (
 // Register adds info about this node but doesn't attempt to connect to it
 func (s *swarmImpl) onRegisterNodeRequest(n node.RemoteNodeData) {
 
-	if s.peers[n.ID()] != nil {
+	if _, ok := s.peers[n.ID()]; ok {
 		s.localNode.Info("Already connected to %s", n.Pretty())
 		return
 	}
@@ -39,6 +39,23 @@ func (s *swarmImpl) onRegisterNodeRequest(n node.RemoteNodeData) {
 
 	s.sendNodeEvent(n.ID(), Registered)
 
+	for reqid, msg := range s.messagesPendingRegistration {
+		if msg.PeerID == n.ID() {
+			go s.SendMessage(msg)
+			delete(s.messagesPendingRegistration, reqid)
+		}
+	}
+}
+
+func (s *swarmImpl) addMessagePendingRegistration(req SendMessageReq) {
+	s.messagesPendingRegistration[hex.EncodeToString(req.ReqID)] = req
+}
+
+func (s *swarmImpl) addIncomingPendingMessage(ipm incomingPendingMessage) {
+	if _, ok := s.incomingPendingSession[ipm.SessionID]; !ok {
+		s.incomingPendingSession[ipm.SessionID] = []net.IncomingMessage{}
+	}
+	s.incomingPendingSession[ipm.SessionID] = append(s.incomingPendingSession[ipm.SessionID], ipm.Message)
 }
 
 // Handles a local request to connect to a remote node
@@ -95,16 +112,21 @@ func (s *swarmImpl) onConnectionRequest(req node.RemoteNodeData) {
 		s.connections[id] = conn
 
 		// update remote node connections
-		peer.GetConnections()[id] = conn
+		peer.UpdateConnection(id, conn)
 	}
 
 	// todo: we need to handle the case that there's a non-authenticated session with the remote node
 	// we need to decide if to wait for it to auth, kill it, etc....
-	if session == nil || !session.IsAuthenticated() {
-
+	if session == nil {
 		// start handshake protocol
 		s.sendNodeEvent(req.ID(), HandshakeStarted)
 		s.handshakeProtocol.CreateSession(peer)
+		return
+	}
+
+	if !session.IsAuthenticated() {
+		// what can we do ?
+		s.localNode.Debug("Session is pending")
 	}
 }
 
@@ -116,22 +138,24 @@ func (s *swarmImpl) onNewSession(data HandshakeData) {
 		return
 	}
 
+	// store the session
 	if data.Session().IsAuthenticated() {
-
-		s.localNode.Info("Established new session with %s", data.Peer().TCPAddress())
-
-		s.sendNodeEvent(data.Peer().String(), SessionEstablished)
-
-		// store the session
 		s.allSessions[data.Session().String()] = data.Session()
-
+		s.sendNodeEvent(data.Peer().String(), SessionEstablished)
 		// send all messages queued for the remote node we now have a session with
 		for key, msg := range s.messagesPendingSession {
 			if msg.PeerID == data.Peer().String() {
 				s.localNode.Info("Sending queued message %s to remote node", hex.EncodeToString(msg.ReqID))
-				delete(s.messagesPendingSession, key)
 				go s.SendMessage(msg)
+				delete(s.messagesPendingSession, key)
 			}
+		}
+
+		if msgs, ok := s.incomingPendingSession[data.Session().String()]; ok {
+			for msg := range msgs {
+				go func(im net.IncomingMessage) { s.network.GetIncomingMessage() <- im }(msgs[msg])
+			}
+			delete(s.incomingPendingSession, data.Session().String())
 		}
 	}
 }
@@ -162,6 +186,8 @@ func (s *swarmImpl) onSendHandshakeMessage(r SendMessageReq) {
 		return
 	}
 
+	s.localNode.Debug("Sending Handshake to %v", remoteNode.Pretty())
+
 	conn.Send(r.Payload, r.ReqID)
 }
 
@@ -182,30 +208,34 @@ func (s *swarmImpl) onSendMessageRequest(r SendMessageReq) {
 			select {
 			case n := <-callback:
 				if n != nil { // we found it - now we can send the message to it
-					s.localNode.Info("Peer %s found.... - sending message", r.PeerID)
-					s.onSendMessageRequest(r)
+					s.localNode.Info("Peer %s found... - registering and sending", r.PeerID)
+					s.msgPendingRegister <- r
+					s.RegisterNode(n)
 				} else {
 					s.localNode.Info("Peer %s not found.... - can't send message", r.PeerID)
 				}
 			}
 		}()
+		return
+	}
 
+	conn := peer.GetActiveConnection()
+
+	if conn == nil {
+		s.localNode.Warning("queuing protocol request until session is established...")
+		// save the message for later sending and try to connect to the node
+		s.messagesPendingSession[hex.EncodeToString(r.ReqID)] = r
+		// try to connect to remote node and send the message once connected
+		// todo: callback listener if connection fails (possibly after retries)
+		s.onConnectionRequest(node.NewRemoteNodeData(peer.String(), peer.TCPAddress()))
 		return
 	}
 
 	session := peer.GetAuthenticatedSession()
-	conn := peer.GetActiveConnection()
-
-	if session == nil || conn == nil {
-
-		s.localNode.Warning("queuing protocol request until session is established...")
-
-		// save the message for later sending and try to connect to the node
-		s.messagesPendingSession[hex.EncodeToString(r.ReqID)] = r
-
-		// try to connect to remote node and send the message once connected
-		// todo: callback listener if connection fails (possibly after retries)
-		s.onConnectionRequest(node.NewRemoteNodeData(peer.String(), peer.TCPAddress()))
+	if session == nil {
+		if _, exist := s.messagesPendingSession[hex.EncodeToString(r.ReqID)]; !exist {
+			s.messagesPendingSession[hex.EncodeToString(r.ReqID)] = r
+		}
 		return
 	}
 
@@ -259,7 +289,7 @@ func (s *swarmImpl) onConnectionClosed(c net.Connection) {
 	id := c.ID()
 	peer := s.peersByConnection[id]
 	if peer != nil {
-		peer.GetConnections()[id] = nil
+		peer.UpdateConnection(id, nil)
 	}
 	delete(s.connections, id)
 	delete(s.peersByConnection, id)
@@ -313,7 +343,7 @@ func (s *swarmImpl) onRemoteClientHandshakeMessage(msg net.IncomingMessage) {
 
 		// register this remote node and the new connection
 
-		sender.GetConnections()[connID] = msg.Connection
+		sender.UpdateConnection(connID, msg.Connection)
 		s.peers[sender.String()] = sender
 		s.peersByConnection[connID] = sender
 
@@ -322,6 +352,7 @@ func (s *swarmImpl) onRemoteClientHandshakeMessage(msg net.IncomingMessage) {
 	// update the routing table - we just heard from this node
 	s.routingTable.Update(sender.GetRemoteNodeData())
 
+	s.localNode.Debug("Routing message from %v to handshake handler ", sender.Pretty())
 	// Let the demuxer route the message to its registered protocol handler
 	s.demuxer.RouteIncomingMessage(NewIncomingMessage(sender, data.Protocol, msg.Message))
 }
@@ -331,10 +362,15 @@ func (s *swarmImpl) onRemoteClientHandshakeMessage(msg net.IncomingMessage) {
 func (s *swarmImpl) onRemoteClientProtocolMessage(msg net.IncomingMessage, c *pb.CommonMessageData) {
 
 	// Locate the session
-	session := s.allSessions[hex.EncodeToString(c.SessionId)]
+	sid := hex.EncodeToString(c.SessionId)
+	session := s.allSessions[sid]
 
 	if session == nil || !session.IsAuthenticated() {
-		s.localNode.Warning("Dropping incoming protocol message - expected to have an authenticated session with this node")
+		s.localNode.Debug("Expected to have this session with this node")
+		go func() {
+			s.incomingPendingMessages <- incomingPendingMessage{sid, msg}
+			s.localNode.Debug("Stored incoming message as pending, try again when %s will establish", sid)
+		}()
 		return
 	}
 
@@ -397,12 +433,16 @@ func (s *swarmImpl) onRemoteClientMessage(msg net.IncomingMessage) {
 		return
 	}
 
+	str := fmt.Sprintf("Incoming message to %v // ", s.localNode.Pretty())
+
 	// route messages based on msg payload length
 	if len(c.Payload) == 0 {
 		// handshake messages have no enc payload
+		s.localNode.Info(fmt.Sprintf(str+"Type: Handshake, %v", hex.EncodeToString(c.SessionId)))
 		s.onRemoteClientHandshakeMessage(msg)
 
 	} else {
+		s.localNode.Info(fmt.Sprintf(str+"Type: ProtocolMessage, %v", s.peersByConnection[msg.Connection.ID()].Pretty()))
 		// protocol messages are encrypted in payload
 		s.onRemoteClientProtocolMessage(msg, c)
 	}
@@ -461,4 +501,15 @@ func (s *swarmImpl) sendMessageSendError(cr net.ConnectionError) {
 		// send the error to the callback channel
 		callback <- SendError{cr.ID, cr.Err}
 	}()
+}
+
+// TODO : move peer store management out of swarm
+func (s *swarmImpl) onGetPeerRequest(gpr getPeerRequest) {
+	p, ok := s.peers[gpr.peerID]
+	if !ok {
+		go func() { gpr.callback <- nil }()
+		return
+	}
+
+	go func() { gpr.callback <- p }()
 }

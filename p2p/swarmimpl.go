@@ -14,8 +14,18 @@ import (
 
 type nodeEventCallbacks []NodeEventCallback
 
-type swarmImpl struct {
+type incomingPendingMessage struct {
+	SessionID string
+	Message   net.IncomingMessage
+}
 
+type getPeerRequest struct {
+	peerID   string
+	callback chan Peer
+}
+
+type swarmImpl struct {
+	bootstrapSignal chan struct{}
 	// set in construction and immutable state
 	network   net.Net
 	localNode LocalNode
@@ -28,7 +38,8 @@ type swarmImpl struct {
 	nec nodeEventCallbacks
 
 	// Internal state is not thread safe - must be accessed only from methods dispatched from the internal event handler
-	peers             map[string]Peer           // NodeID -> Peer. known remote nodes. Swarm is a peer store.
+	peers             map[string]Peer // NodeID -> Peer. known remote nodes. Swarm is a peer store.
+	getPeerRequests   chan getPeerRequest
 	connections       map[string]net.Connection // ConnID -> Connection - all open connections for tracking and mngmnt
 	peersByConnection map[string]Peer           // ConnID -> Peer remote nodes indexed by their connections.
 
@@ -38,6 +49,12 @@ type swarmImpl struct {
 	outgoingSendsCallbacks map[string]map[string]chan SendError // k - conn id v-  reqID -> chan SendError
 
 	messagesPendingSession map[string]SendMessageReq // k - unique req id. outgoing messages which pend an auth session with remote node to be sent out
+
+	incomingPendingSession  map[string][]net.IncomingMessage
+	incomingPendingMessages chan incomingPendingMessage
+
+	msgPendingRegister          chan SendMessageReq
+	messagesPendingRegistration map[string]SendMessageReq // Messages waiting for peers to register.
 
 	// comm channels
 	connectionRequests chan node.RemoteNodeData // local requests to establish a session w a remote node
@@ -76,28 +93,38 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 		network:   n,
 		shutdown:  make(chan bool), // non-buffered so requests to shutdown block until swarm is shut down
 
+		bootstrapSignal: make(chan struct{}),
+
 		nodeEventRegChannel: make(chan NodeEventCallback, 1),
 		nec:                 make(nodeEventCallbacks, 0),
 
 		peersByConnection:      make(map[string]Peer),
 		peers:                  make(map[string]Peer),
+		getPeerRequests:        make(chan getPeerRequest),
 		connections:            make(map[string]net.Connection),
 		messagesPendingSession: make(map[string]SendMessageReq),
-		allSessions:            make(map[string]NetworkSession),
+
+		incomingPendingSession:  make(map[string][]net.IncomingMessage),
+		incomingPendingMessages: make(chan incomingPendingMessage),
+
+		messagesPendingRegistration: make(map[string]SendMessageReq),
+		msgPendingRegister:          make(chan SendMessageReq),
+
+		allSessions: make(map[string]NetworkSession),
 
 		outgoingSendsCallbacks: make(map[string]map[string]chan SendError),
 
 		// todo: figure optimal buffer size for chans
 		// ref: https://www.goinggo.net/2017/10/the-behavior-of-channels.html
 
-		connectionRequests: make(chan node.RemoteNodeData, 10),
-		disconnectRequests: make(chan node.RemoteNodeData, 10),
+		connectionRequests: make(chan node.RemoteNodeData, 20),
+		disconnectRequests: make(chan node.RemoteNodeData, 20),
 
 		sendMsgRequests:  make(chan SendMessageReq, 20),
 		sendHandshakeMsg: make(chan SendMessageReq, 20),
-		demuxer:          NewDemuxer(),
-		newSessions:      make(chan HandshakeData, 10),
-		registerNodeReq:  make(chan node.RemoteNodeData, 10),
+		demuxer:          NewDemuxer(l.GetLogger()),
+		newSessions:      make(chan HandshakeData, 20),
+		registerNodeReq:  make(chan node.RemoteNodeData, 20),
 
 		config: l.Config().SwarmConfig,
 	}
@@ -116,7 +143,7 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 	go s.beginProcessingEvents()
 
 	if s.config.Bootstrap {
-		s.bootstrap()
+		s.Bootstrap()
 	}
 
 	return s, err
@@ -134,8 +161,7 @@ func (s *swarmImpl) registerNodeEventsCallback(callback NodeEventCallback) {
 // Sends a connection event to all registered clients
 func (s *swarmImpl) sendNodeEvent(peerID string, state NodeState) {
 
-	s.localNode.Info(">> Node event for <%s>. State: %+v", peerID[:6], state)
-
+	s.localNode.GetLogger().Debug(">> Node event for <%s>. State: %+v Sending events to %d", peerID[:6], state, len(s.nec))
 	evt := NodeEvent{peerID, state}
 	for _, c := range s.nec {
 		go func(c NodeEventCallback) { c <- evt }(c)
@@ -175,9 +201,21 @@ func (s *swarmImpl) GetLocalNode() LocalNode {
 	return s.localNode
 }
 
-// Starts the bootstrap process
-func (s *swarmImpl) bootstrap() {
+func (s *swarmImpl) GetPeer(id string, callback chan Peer) {
+	gpr := getPeerRequest{
+		peerID:   id,
+		callback: callback,
+	}
+	s.getPeerRequests <- gpr
+}
 
+// Starts the bootstrap process
+// Query the bootstrap nodes we have with our own nodeID in order to fill our routing table with close nodes.
+func (s *swarmImpl) Bootstrap() {
+	s.bootstrapSignal <- struct{}{}
+}
+
+func (s *swarmImpl) bootstrap() {
 	s.localNode.Info("Starting bootstrap...")
 
 	// register bootstrap nodes
@@ -191,60 +229,59 @@ func (s *swarmImpl) bootstrap() {
 	}
 
 	c := int(s.config.RandomConnections)
-	if c == 0 {
+	if c <= 0 {
 		log.Warning("0 random connections - aborting bootstrap")
 		return
 	}
 
 	if bn > 0 {
-		// if we know about at least one bootstrap node then attempt to connect to c random nodes
-		go s.ConnectToRandomNodes(c)
+
+		// isseus findNode requests until DHT has at least c peers and start a periodic refresh func
+		errSignal := make(chan error)
+		go s.routingTable.Bootstrap(s.findNode, s.localNode.String(), c, errSignal)
+
+		go func(errchan chan error) {
+			err := <-errchan
+
+			if err != nil {
+				s.localNode.Error("Bootstrapping the node failed ", err)
+				return
+			}
+
+			//TODO : Fix connecting to random connection
+			s.ConnectToRandomNodes(c)
+		}(errSignal)
+
+		return
 	}
 }
 
 // Connect up to count random nodes
 func (s *swarmImpl) ConnectToRandomNodes(count int) {
 
-	if count <= 0 {
-		s.localNode.Error("Expected positive count param")
-		return
-	}
-
 	s.localNode.Info("Attempting to connect to %d random nodes...", count)
 
-	// issue a request to find self to the swarm to populate the local routing table with random nodes
-	c := make(chan node.RemoteNodeData, count)
-	s.findNode(s.localNode.String(), c)
+	// create callback to receive result
+	c1 := make(table.PeersOpChannel)
+
+	// find nearest peers
+	timeout := time.NewTimer(time.Second * 90)
+	s.routingTable.NearestPeers(table.NearestPeersReq{ID: s.localNode.DhtID(), Count: count, Callback: c1})
 
 	select {
-	case <-c:
-
-		// create callback to receive result
-		c1 := make(table.PeersOpChannel, 2)
-
-		// find nearest peers
-		s.routingTable.NearestPeers(table.NearestPeersReq{ID: s.localNode.DhtID(), Count: count, Callback: c1})
-
-		select {
-		case c := <-c1:
-			if len(c.Peers) == 0 {
-				s.GetLocalNode().Warning("Did not find any random nodes close to self")
-			}
-
-			for i, p := range c.Peers {
-				if s.peers[p.ID()] != nil { // dont connect if we already know it because its not random
-					s.localNode.Info("%v, Aborting connetion to : %v we know it already", i, p.Pretty())
-					continue
-				}
-				s.localNode.Info("%v, Connecting: %v", i, p.Pretty())
-				go s.ConnectTo(p)
-			}
-
-		case <-time.After(time.Second * 90):
-			s.localNode.Error("timeout getting random nearby nodes")
+	case c := <-c1:
+		if len(c.Peers) == 0 {
+			s.GetLocalNode().Warning("Did not find any random nodes close to self")
 		}
 
+		for _, p := range c.Peers {
+			s.ConnectTo(p)
+		}
+
+	case <-timeout.C:
+		s.localNode.Error("timeout getting random nearby nodes")
 	}
+
 }
 
 // Sends a message to a remote node
@@ -288,6 +325,8 @@ func (s *swarmImpl) beginProcessingEvents() {
 Loop:
 	for {
 		select {
+		case <-s.bootstrapSignal:
+			s.bootstrap()
 		case <-s.shutdown:
 			s.shutDownInternal()
 			break Loop
@@ -330,6 +369,15 @@ Loop:
 
 		case c := <-s.nodeEventRegChannel:
 			s.registerNodeEventsCallback(c)
+
+		case mpr := <-s.msgPendingRegister:
+			s.addMessagePendingRegistration(mpr)
+
+		case ipm := <-s.incomingPendingMessages:
+			s.addIncomingPendingMessage(ipm)
+
+		case gpr := <-s.getPeerRequests:
+			s.onGetPeerRequest(gpr)
 
 		case <-checkTimeSync.C:
 			_, err := timesync.CheckSystemClockDrift()

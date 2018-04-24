@@ -5,6 +5,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"sync"
 )
 
 // Peer is a remote network node.
@@ -24,6 +25,9 @@ type Peer interface {
 
 	GetSessions() map[string]NetworkSession
 
+	UpdateSession(id string, s NetworkSession)
+	UpdateConnection(id string, c net.Connection)
+
 	// returns an authenticated session with the node if one exists
 	GetAuthenticatedSession() NetworkSession
 
@@ -38,8 +42,10 @@ type peerImpl struct {
 	publicKey  crypto.PublicKey
 	tcpAddress string
 
-	connections map[string]net.Connection
-	sessions    map[string]NetworkSession
+	connMutex    sync.RWMutex
+	sessionMutex sync.RWMutex
+	connections  map[string]net.Connection
+	sessions     map[string]NetworkSession
 }
 
 // NewRemoteNode creates a new remote node using provided id and tcp address.
@@ -52,16 +58,20 @@ func NewRemoteNode(id string, tcpAddress string) (Peer, error) {
 	}
 
 	n := &peerImpl{
-		publicKey:   key,
-		tcpAddress:  tcpAddress,
-		connections: make(map[string]net.Connection),
-		sessions:    make(map[string]NetworkSession),
+		publicKey:    key,
+		tcpAddress:   tcpAddress,
+		connMutex:    sync.RWMutex{},
+		sessionMutex: sync.RWMutex{},
+		connections:  make(map[string]net.Connection),
+		sessions:     make(map[string]NetworkSession),
 	}
 
 	return n, nil
 }
 
 func (n *peerImpl) GetAuthenticatedSession() NetworkSession {
+	n.sessionMutex.RLock()
+	defer n.sessionMutex.RUnlock()
 	for _, v := range n.sessions {
 		if v.IsAuthenticated() {
 			return v
@@ -75,12 +85,14 @@ func (n *peerImpl) GetRemoteNodeData() node.RemoteNodeData {
 }
 
 func (n *peerImpl) GetActiveConnection() net.Connection {
-
+	n.connMutex.RLock()
+	defer n.connMutex.RUnlock()
 	// todo: sort by last data transfer time to pick the best connection
-
 	// just return a random connection for now
 	for _, v := range n.connections {
-		return v
+		if v != nil {
+			return v
+		}
 	}
 
 	return nil
@@ -88,17 +100,46 @@ func (n *peerImpl) GetActiveConnection() net.Connection {
 
 // GetConnections gets all connections with this peer.
 func (n *peerImpl) GetConnections() map[string]net.Connection {
+	n.connMutex.RLock()
+	defer n.connMutex.RUnlock()
 	return n.connections
 }
 
 // DeleteAllConnections delete all connections with this peer.
 func (n *peerImpl) DeleteAllConnections() {
+	n.connMutex.Lock()
 	n.connections = make(map[string]net.Connection)
+	n.connMutex.Unlock()
 }
 
 // GetSession returns all the network sessions with this peer.
 func (n *peerImpl) GetSessions() map[string]NetworkSession {
-	return n.sessions
+	n.sessionMutex.RLock()
+	sessions := n.sessions
+	n.sessionMutex.RUnlock()
+	return sessions
+}
+
+// AddConnection adds a session for the peer
+func (n *peerImpl) UpdateConnection(id string, c net.Connection) {
+	if c != nil && id != c.ID() {
+		// cancel on invalid action
+		return
+	}
+	n.connMutex.Lock()
+	n.connections[id] = c
+	n.connMutex.Unlock()
+}
+
+// AddSession adds a session for the peer
+func (n *peerImpl) UpdateSession(id string, s NetworkSession) {
+	if s != nil && id != s.String() {
+		// cancel on invalid action
+		return
+	}
+	n.sessionMutex.Lock()
+	n.sessions[id] = s
+	n.sessionMutex.Unlock()
 }
 
 // String returns a string identifier for this peer.

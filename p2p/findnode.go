@@ -5,7 +5,6 @@ import (
 	"github.com/btcsuite/btcutil/base58"
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht/table"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
@@ -52,6 +51,7 @@ type findNodeProtocolImpl struct {
 	incomingResponses MessagesChan
 	sendErrors        chan SendError
 	callbacksRegReq   FindNodeCallbacks // a channel of channels that receives callbacks
+	sendCallbackReq   chan FindNodeResp
 }
 
 // NewFindNodeProtocol creates a new FindNodeProtocol instance.
@@ -64,6 +64,7 @@ func NewFindNodeProtocol(s Swarm) FindNodeProtocol {
 		sendErrors:        make(chan SendError),
 		callbacksRegReq:   make(FindNodeCallbacks), // not buffered so it is blocked until callback is registered
 		callbacks:         make(map[string]chan FindNodeResp),
+		sendCallbackReq:   make(chan FindNodeResp),
 	}
 
 	go p.processEvents()
@@ -115,12 +116,12 @@ func (p *findNodeProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 	req := &pb.FindNodeReq{}
 	err := proto.Unmarshal(msg.Payload(), req)
 	if err != nil {
-		log.Warning("Invalid find node request data", err)
+		p.swarm.GetLocalNode().Warning("Invalid find node request data", err)
 		return
 	}
 
 	peer := msg.Sender()
-	log.Info("Incoming find-node request from %s. Requested node id: %s", peer.Pretty(), hex.EncodeToString(req.NodeId))
+	p.swarm.GetLocalNode().Info("Incoming find-node request from %s. Requested node id: %s", peer.Pretty(), hex.EncodeToString(req.NodeId))
 
 	// use the dht table to generate the response
 
@@ -137,7 +138,8 @@ func (p *findNodeProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 
 	select { // block until we got results from the  routing table or timeout
 	case c := <-callback:
-		log.Info("find-node results length: %d", len(c.Peers))
+		p.swarm.GetLocalNode().Info("find-node results length: %d", len(c.Peers))
+		p.swarm.GetLocalNode().Info("THE PEERS", c.Peers)
 		results = node.ToNodeInfo(c.Peers, msg.Sender().String())
 	case <-time.After(tableQueryTimeout):
 		results = []*pb.NodeInfo{} // an empty slice
@@ -152,7 +154,7 @@ func (p *findNodeProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 	// sign response
 	sign, err := p.swarm.GetLocalNode().SignToString(respData)
 	if err != nil {
-		log.Info("Failed to sign response")
+		p.swarm.GetLocalNode().Info("Failed to sign response")
 		return
 	}
 
@@ -161,7 +163,7 @@ func (p *findNodeProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 	// marshal the signed data
 	signedPayload, err := proto.Marshal(respData)
 	if err != nil {
-		log.Info("Failed to generate response data")
+		p.swarm.GetLocalNode().Info("Failed to generate response data")
 		return
 	}
 
@@ -181,7 +183,7 @@ func (p *findNodeProtocolImpl) handleIncomingResponse(msg IncomingMessage) {
 	data := &pb.FindNodeResp{}
 	err := proto.Unmarshal(msg.Payload(), data)
 	if err != nil {
-		log.Error("Invalid find-node response data", err)
+		p.swarm.GetLocalNode().Error("Invalid find-node response data", err)
 		// we don't know the request id for this bad response so we can't callback clients with the error
 		// just drop the bad response - clients should be notified when their outgoing requests times out
 		return
@@ -189,17 +191,22 @@ func (p *findNodeProtocolImpl) handleIncomingResponse(msg IncomingMessage) {
 
 	resp := FindNodeResp{data, nil, data.Metadata.ReqId}
 
-	log.Info("Got find-node response from %s. Results: %v, Find-node req id: %s", msg.Sender().Pretty(),
+	p.swarm.GetLocalNode().Info("Got find-node response from %s. Results: %v, Find-node req id: %s", msg.Sender().Pretty(),
 		data.NodeInfos, hex.EncodeToString(data.Metadata.ReqId))
 
 	// update routing table with newly found nodes
 	nodes := node.FromNodeInfos(data.NodeInfos)
 	for _, n := range nodes {
-		log.Info("Node response: %s, %s", n.ID(), n.IP())
+		p.swarm.GetLocalNode().Info("Node response: %s, %s", n.ID(), n.IP())
 		p.swarm.getRoutingTable().Update(n)
 	}
 
-	p.sendResponseCallback(resp)
+	go p.SendResponseCallback(resp)
+}
+
+// Sends the response callback for this response's request
+func (p *findNodeProtocolImpl) SendResponseCallback(resp FindNodeResp) {
+	p.sendCallbackReq <- resp
 }
 
 // send a response callback to client and remove callback registration
@@ -228,6 +235,9 @@ func (p *findNodeProtocolImpl) processEvents() {
 
 		case c := <-p.callbacksRegReq: // register a new callback
 			p.callbacks[hex.EncodeToString(c.reqID)] = c.callback
+
+		case fnr := <-p.sendCallbackReq:
+			p.sendResponseCallback(fnr)
 
 		case r := <-p.sendErrors:
 			// failed to send a message - send a callback to all clients
