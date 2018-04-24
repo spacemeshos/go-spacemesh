@@ -10,9 +10,9 @@ jobs:
         - stage: lint
           script:
               - ./ci/validate-gofmt.sh
-              - mkdir -p $GOPATH/src/golang.org/x \
-                  && git clone https://github.com/golang/lint.git $GOPATH/src/golang.org/x/lint \
-                  && go get -u golang.org/x/lint/golint
+              - mkdir -p $GOPATH/src/golang.org/x
+              - git clone https://github.com/golang/lint.git $GOPATH/src/golang.org/x/lint
+              - go get -u golang.org/x/lint/golint
               - ./ci/validate-lint.sh
         - stage: test
           script: go test github.com/spacemeshos/go-spacemesh/...
