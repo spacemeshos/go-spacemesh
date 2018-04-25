@@ -7,6 +7,7 @@ import (
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"sync"
 	"time"
 )
 
@@ -37,11 +38,14 @@ type NetworkSession interface {
 
 // NetworkSessionImpl implements NetworkSession.
 type NetworkSessionImpl struct {
-	id            []byte
-	keyE          []byte
-	keyM          []byte
-	pubKey        []byte
-	created       time.Time
+	id      []byte
+	keyE    []byte
+	keyM    []byte
+	pubKey  []byte
+	created time.Time
+
+	// We must protect authenticated somehow. we won't use event loop for one state variable
+	authMutex     sync.RWMutex
 	authenticated bool
 
 	localNodeID  string
@@ -101,12 +105,17 @@ func (n *NetworkSessionImpl) PubKey() []byte {
 
 // IsAuthenticated returns true iff the session is authenticated.
 func (n *NetworkSessionImpl) IsAuthenticated() bool {
-	return n.authenticated
+	n.authMutex.RLock()
+	auth := n.authenticated
+	n.authMutex.RUnlock()
+	return auth
 }
 
 // SetAuthenticated updates the session's authentication state.
 func (n *NetworkSessionImpl) SetAuthenticated(val bool) {
+	n.authMutex.Lock()
 	n.authenticated = val
+	n.authMutex.Unlock()
 }
 
 // Created returns the session creation time.
@@ -151,6 +160,7 @@ func NewNetworkSession(id, keyE, keyM, pubKey []byte, localNodeID, remoteNodeID 
 		keyM:          keyM,
 		pubKey:        pubKey,
 		created:       time.Now(),
+		authMutex:     sync.RWMutex{},
 		authenticated: false,
 		localNodeID:   localNodeID,
 		remoteNodeID:  remoteNodeID,

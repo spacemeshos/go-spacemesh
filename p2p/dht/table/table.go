@@ -497,10 +497,6 @@ func (rt *routingTableImpl) nearestPeers(id dht.ID, count int) []node.RemoteNode
 	if len(sorted) > count {
 		sorted = sorted[:count]
 	}
-	//var out []node.RemoteNodeData
-	//for i := 0; i < count && i < peerArr.Len(); i++ {
-	//	out = append(out, peerArr[i].Node.(node.RemoteNodeData))
-	//}
 	rt.log.Info("OUT ", sorted)
 	return sorted
 }
@@ -538,5 +534,5 @@ func (rt *routingTableImpl) onPrintReq() {
 			str += fmt.Sprintf("\t\t%s cpl:%v\n", p.Pretty(), rt.local.CommonPrefixLen(p.DhtID()))
 		}
 	}
-	fmt.Println(str)
+	rt.log.Info(str)
 }

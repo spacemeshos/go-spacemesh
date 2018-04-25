@@ -17,15 +17,6 @@ func (s *swarmImpl) findNode(id string, callback chan node.RemoteNodeData) {
 
 	s.localNode.Info("finding node: %s ...", log.PrettyID(id))
 
-	// look at peer store
-	n := s.peers[id]
-	if n != nil {
-		s.localNode.Info(" known peer")
-
-		go func() { callback <- s.localNode.GetRemoteNodeData() }()
-		return
-	}
-
 	// look for the node at local dht table
 	poc := make(table.PeerOpChannel, 1)
 	s.routingTable.Find(table.PeerByIDRequest{ID: dht.NewIDFromBase58String(id), Callback: poc})
@@ -52,11 +43,10 @@ func (s *swarmImpl) kadFindNode(nodeID string, callback chan node.RemoteNodeData
 
 	// kad node location algo
 	alpha := int(s.config.RoutingTableAlpha)
-	k := int(s.config.RoutingTableBucketSize)
 	dhtID := dht.NewIDFromBase58String(nodeID)
 
 	// step 1 - get up to alpha closest nodes to the target in the local routing table
-	searchList := s.getNearestPeers(dhtID, k)
+	searchList := s.getNearestPeers(dhtID, alpha)
 
 	queried := map[string]struct{}{}
 
@@ -165,8 +155,5 @@ Loop:
 func (s *swarmImpl) getNearestPeers(dhtID dht.ID, count int) []node.RemoteNodeData {
 	psoc := make(table.PeersOpChannel, 1)
 	s.routingTable.NearestPeers(table.NearestPeersReq{ID: dhtID, Count: count, Callback: psoc})
-	select {
-	case c := <-psoc:
-		return c.Peers
-	}
+	return (<-psoc).Peers
 }

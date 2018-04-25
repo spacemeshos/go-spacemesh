@@ -38,12 +38,15 @@ func TestTableCallbacks(t *testing.T) {
 		rt.Update(nodes[i])
 	}
 
+	// TODO : TEST node added callback
+	// test added + removed = 100
+
 	sizeChan := make(chan int)
 	rt.Size(sizeChan)
 	size := <-sizeChan // block until we have result
 
 	if size < 50 {
-		// this test is kinda sketchy because we assump that the routing table will have at
+		// this test is kinda sketchy because we assume that the routing table will have at
 		// least 50% of nodes. though with random generated nodes we can't really know.
 		// theoretically this should never happen
 		t.Error("More than 50 precent of nodes lost")
