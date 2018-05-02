@@ -40,6 +40,14 @@ Provide dapp and app developers with a robust way to add value exchange and othe
 ### Target Users
 go-spacemesh is designed to be installed and operated on users' home PCs to form one decentralized computer.
 
+### Project Status
+Development is currently focused on 3 main node core components:
+1. The p2p/networking - the project includes a modern and robust p2p protocol for use by components up the stack.
+2. The POST/blockmesh based consensus layer - Spacemesh protocol implementation, utilizing the p2p capabilities.  
+3. App scaffolding - supporting functionality such as config, repl, cli and cross platform packaging.
+
+Over the last few months, we had good progress on #1 and #3 and we are now starting to focus on #2.
+
 ### Contributing
 Thank you for considering to contribute to the go-spacemesh open source project.  We welcome contributions large and small and we actively accept contributions.
 
