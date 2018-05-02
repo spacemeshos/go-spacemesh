@@ -55,7 +55,9 @@ Thank you for considering to contribute to the go-spacemesh open source project.
 - We welcome collaborators to the Spacemesh core dev team.
 - You don’t have to contribute code! Many important types of contributions are important for our project. See: [How to Contribute to Open Source?](https://opensource.guide/how-to-contribute/#what-it-means-to-contribute)
 
-- To get started, please read our [contributions guidelines](https://github.com/spacemeshos/go-spacemesh/blob/master/CONTRIBUTING.md)
+- To get started, please read our [contributions guidelines](https://github.com/spacemeshos/go-spacemesh/blob/master/CONTRIBUTING.md).
+
+- Browse [Good First Issues](https://github.com/spacemeshos/go-spacemesh/labels/good%20first%20issue).
 
 #### NEW! Get crypto awarded for your contribution by working on one of our [gitcoin funded issues](https://gitcoin.co/profile/spacemeshos).
 
