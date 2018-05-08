@@ -1,6 +1,6 @@
 <h1 align="center">
   <a href="https://spacemesh.io"><img width="400" src="https://spacemesh.io/content/images/2018/05/logo-black-on-white-trimmed.png" alt="Spacemesh logo" /></a>
-  <p align="center">Make blockchain decentralized again™</p>
+  <p align="center">Blockmesh Operating System</p>
 </h1>
 
 <p align="center">
