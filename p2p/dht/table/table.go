@@ -122,8 +122,8 @@ type routingTableImpl struct {
 	// Maximum acceptable latency for peers in this cluster
 	//maxLatency time.Duration
 
-	buckets    [BucketCount]Bucket
-	bucketsize int // max number of nodes per bucket. typically 10 or 20.
+	buckets        [BucketCount]Bucket
+	bucketsize     int // max number of nodes per bucket. typically 10 or 20.
 	minPeersHealth int
 
 	peerRemoved PeerChannel
@@ -149,10 +149,10 @@ func NewRoutingTable(bucketsize int, localID dht.ID, log *logging.Logger) Routin
 
 	rt := &routingTableImpl{
 
-		buckets:     buckets,
-		bucketsize:  bucketsize,
-		log:         log,
-		local:       localID,
+		buckets:    buckets,
+		bucketsize: bucketsize,
+		log:        log,
+		local:      localID,
 
 		peerRemoved: make(PeerChannel, 3),
 		peerAdded:   make(PeerChannel, 3),
@@ -233,7 +233,7 @@ BSLOOP:
 		select {
 		case res := <-bs:
 			if res != nil {
-				errchan <- errors.New("Found ourselves in a bootstrap query")
+				errchan <- errors.New("found ourselves in a bootstrap query")
 				return
 			}
 
@@ -241,12 +241,12 @@ BSLOOP:
 				break BSLOOP
 			}
 
-			rt.log.Warning("Bootstrap didn't feel Routing table, starting bootstrap op again in 2 seconds")
+			rt.log.Warning("Bootstrap didn't fill routing table, starting bootstrap op again in 2 seconds.")
 			time.Sleep(2 * time.Second)
 			bs = bootstrap()
 			continue
 		case <-timeout.C:
-			errchan <- errors.New("Didn't get response in timeout time")
+			errchan <- errors.New("didn't get response in timeout time")
 			return
 		}
 	}
@@ -497,11 +497,6 @@ func (rt *routingTableImpl) nearestPeers(id dht.ID, count int) []node.RemoteNode
 	if len(sorted) > count {
 		sorted = sorted[:count]
 	}
-	//var out []node.RemoteNodeData
-	//for i := 0; i < count && i < peerArr.Len(); i++ {
-	//	out = append(out, peerArr[i].Node.(node.RemoteNodeData))
-	//}
-	rt.log.Info("OUT ", sorted)
 	return sorted
 }
 
@@ -538,5 +533,5 @@ func (rt *routingTableImpl) onPrintReq() {
 			str += fmt.Sprintf("\t\t%s cpl:%v\n", p.Pretty(), rt.local.CommonPrefixLen(p.DhtID()))
 		}
 	}
-	fmt.Println(str)
+	rt.log.Info(str)
 }
