@@ -25,7 +25,6 @@ type getPeerRequest struct {
 }
 
 type swarmImpl struct {
-	bootstrapSignal chan struct{}
 	// set in construction and immutable state
 	network   net.Net
 	localNode LocalNode
@@ -93,8 +92,6 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 		network:   n,
 		shutdown:  make(chan bool), // non-buffered so requests to shutdown block until swarm is shut down
 
-		bootstrapSignal: make(chan struct{}),
-
 		nodeEventRegChannel: make(chan NodeEventCallback, 1),
 		nec:                 make(nodeEventCallbacks, 0),
 
@@ -140,11 +137,7 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 	s.handshakeProtocol = NewHandshakeProtocol(s)
 	s.handshakeProtocol.RegisterNewSessionCallback(s.newSessions)
 
-	go s.beginProcessingEvents()
-
-	if s.config.Bootstrap {
-		s.Bootstrap()
-	}
+	go s.beginProcessingEvents(s.config.Bootstrap)
 
 	return s, err
 }
@@ -161,7 +154,8 @@ func (s *swarmImpl) registerNodeEventsCallback(callback NodeEventCallback) {
 // Sends a connection event to all registered clients
 func (s *swarmImpl) sendNodeEvent(peerID string, state NodeState) {
 
-	s.localNode.GetLogger().Debug(">> Node event for <%s>. State: %+v Sending events to %d", peerID[:6], state, len(s.nec))
+	s.localNode.Debug(">> Node event for <%s>. State: %+v", peerID[:6], state)
+
 	evt := NodeEvent{peerID, state}
 	for _, c := range s.nec {
 		go func(c NodeEventCallback) { c <- evt }(c)
@@ -209,11 +203,6 @@ func (s *swarmImpl) GetPeer(id string, callback chan Peer) {
 	s.getPeerRequests <- gpr
 }
 
-// Starts the bootstrap process
-// Query the bootstrap nodes we have with our own nodeID in order to fill our routing table with close nodes.
-func (s *swarmImpl) Bootstrap() {
-	s.bootstrapSignal <- struct{}{}
-}
 
 func (s *swarmImpl) bootstrap() {
 	s.localNode.Info("Starting bootstrap...")
@@ -238,7 +227,7 @@ func (s *swarmImpl) bootstrap() {
 
 		// isseus findNode requests until DHT has at least c peers and start a periodic refresh func
 		errSignal := make(chan error)
-		go s.routingTable.Bootstrap(s.findNode, s.localNode.String(), c, errSignal)
+		go s.routingTable.Bootstrap(s.kadFindNode, s.localNode.String(), c, errSignal)
 
 		go func(errchan chan error) {
 			err := <-errchan
@@ -247,7 +236,6 @@ func (s *swarmImpl) bootstrap() {
 				s.localNode.Error("Bootstrapping the node failed ", err)
 				return
 			}
-
 			//TODO : Fix connecting to random connection
 			s.ConnectToRandomNodes(c)
 		}(errSignal)
@@ -320,13 +308,16 @@ func (s *swarmImpl) shutDownInternal() {
 // Swarm serial event processing
 // provides concurrency safety as only one callback is executed at a time
 // so there's no need for sync internal data structures
-func (s *swarmImpl) beginProcessingEvents() {
+func (s *swarmImpl) beginProcessingEvents(bootstrap bool) {
 	checkTimeSync := time.NewTicker(nodeconfig.TimeConfigValues.RefreshNtpInterval.Duration())
+
+	if bootstrap {
+		s.bootstrap()
+	}
+
 Loop:
 	for {
 		select {
-		case <-s.bootstrapSignal:
-			s.bootstrap()
 		case <-s.shutdown:
 			s.shutDownInternal()
 			break Loop
