@@ -4,6 +4,7 @@ package p2p
 
 import (
 	"github.com/spacemeshos/go-spacemesh/p2p/dht/table"
+	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"strconv"
 )
@@ -26,10 +27,10 @@ type Swarm interface {
 
 	// Attempt to establish a session with a remote node with a known id and tcp address
 	// Used for bootstrapping known bootstrap nodes
-	ConnectTo(req node.RemoteNodeData)
+	ConnectTo(req node.RemoteNodeData, done chan error)
 
-	// Bootstrap the node by issuing a findnode operation for itself
-	Bootstrap()
+	// Bootstraped
+	AfterBootstrap(chan struct{})
 
 	// Connect to count random nodes - used for bootstrapping the swarm
 	ConnectToRandomNodes(count int)
@@ -51,9 +52,10 @@ type Swarm interface {
 	GetDemuxer() Demuxer
 	GetLocalNode() LocalNode
 
+	getRoutingTable() table.RoutingTable
+
 	// used by protocols and for testing
 	getHandshakeProtocol() HandshakeProtocol
-	getRoutingTable() table.RoutingTable
 	getFindNodeProtocol() FindNodeProtocol
 }
 
@@ -81,6 +83,16 @@ type NodeResp struct {
 type NodeEvent struct {
 	PeerID string
 	State  NodeState
+}
+
+type incomingPendingMessage struct {
+	SessionID string
+	Message   net.IncomingMessage
+}
+
+type getPeerRequest struct {
+	peerID   string
+	callback chan Peer
 }
 
 // NodeEventCallback is a channel of NodeEvents
