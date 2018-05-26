@@ -8,37 +8,11 @@ import (
 )
 
 // ConfigValues specifies  default values for node config params.
-var ConfigValues = Config{
-	SecurityParam: 20,
-	FastSync:      true,
-	TCPPort:       7513,
-	NodeID:        "",
-	DialTimeout:   duration{"1m"},
-	ConnKeepAlive: duration{"48h"},
-	NetworkID:     int(TestNet),
-	SwarmConfig:   SwarmConfigValues,
-	TimeConfig:    TimeConfigValues,
-}
-
-// TimeConfigValues defines default values for all time and ntp related params.
-var TimeConfigValues = TimeConfig{
-	MaxAllowedDrift:       duration{"10s"},
-	NtpQueries:            5,
-	DefaultTimeoutLatency: duration{"10s"},
-	RefreshNtpInterval:    duration{"30m"},
-}
-
-// SwarmConfigValues defines default values for swarm config params.
-var SwarmConfigValues = SwarmConfig{
-	Bootstrap:              false,
-	RoutingTableBucketSize: 20,
-	RoutingTableAlpha:      3,
-	RandomConnections:      5,
-	BootstrapNodes: cli.StringSlice{ // these should be the spacemesh foundation bootstrap nodes
-		"125.0.0.1:3572/iaMujEYTByKcjMZWMqg79eJBGMDm8ADsWZFdouhpfeKj",
-		"125.0.0.1:3763/x34UDdiCBAsXmLyMMpPQzs313B9UDeHNqFpYsLGfaFvm",
-	},
-}
+var (
+	ConfigValues      = DefaultConfig()
+	TimeConfigValues  = ConfigValues.TimeConfig
+	SwarmConfigValues = ConfigValues.SwarmConfig
+)
 
 func init() {
 	// set default config params based on runtime here
@@ -58,23 +32,23 @@ func (d *duration) Duration() (duration time.Duration) {
 
 // Config defines the configuration options for the Spacemesh peer-to-peer networking layer
 type Config struct {
-	SecurityParam int
-	FastSync      bool
-	TCPPort       int
-	NodeID        string
+	SecurityParam int    `mapstructure:"security-param"`
+	FastSync      bool   `mapstructure:"fast-sync"`
+	TCPPort       int    `mapstructure:"tcp-port"`
+	NodeID        string `mapstructure:"node-id"`
 	DialTimeout   duration
 	ConnKeepAlive duration
-	NetworkID     int
-	SwarmConfig   SwarmConfig
+	NetworkID     int         `mapstructure:"network-id"`
+	SwarmConfig   SwarmConfig `mapstructure:"swarm"`
 	TimeConfig    TimeConfig
 }
 
 // SwarmConfig specifies swarm config params.
 type SwarmConfig struct {
-	Bootstrap              bool
-	RoutingTableBucketSize int
-	RoutingTableAlpha      int
-	RandomConnections      int
+	Bootstrap              bool `mapstructure:"swarm-bootstrap"`
+	RoutingTableBucketSize int  `mapstructure:"swarm-rtbs"`
+	RoutingTableAlpha      int  `mapstructure:"swarm-rtalpha"`
+	RandomConnections      int  `mapstructure:"swarm-randcon"`
 	BootstrapNodes         cli.StringSlice
 }
 
@@ -87,7 +61,7 @@ type TimeConfig struct {
 }
 
 // DefaultConfig deines the default p2p configuration
-func DefaultConfig() *Config {
+func DefaultConfig() Config {
 
 	// TimeConfigValues defines default values for all time and ntp related params.
 	var TimeConfigValues = TimeConfig{
@@ -109,7 +83,7 @@ func DefaultConfig() *Config {
 		},
 	}
 
-	return &Config{
+	return Config{
 		SecurityParam: 20,
 		FastSync:      true,
 		TCPPort:       7513,

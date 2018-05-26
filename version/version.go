@@ -10,7 +10,8 @@ const (
 var (
 	// Version is the current version of Spacemesh
 	Version = "0.19.5"
-
+	// Branch is the current branch of Spacemesh
+	Branch = ""
 	// GitCommit is the current HEAD set using ldflags.
 	GitCommit string
 )
