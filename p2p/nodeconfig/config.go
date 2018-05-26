@@ -56,7 +56,7 @@ func (d *duration) Duration() (duration time.Duration) {
 	return dur
 }
 
-// Config specifies node config params.
+// Config defines the configuration options for the Spacemesh peer-to-peer networking layer
 type Config struct {
 	SecurityParam int
 	FastSync      bool
@@ -84,4 +84,40 @@ type TimeConfig struct {
 	NtpQueries            int
 	DefaultTimeoutLatency duration
 	RefreshNtpInterval    duration
+}
+
+// DefaultConfig deines the default p2p configuration
+func DefaultConfig() *Config {
+
+	// TimeConfigValues defines default values for all time and ntp related params.
+	var TimeConfigValues = TimeConfig{
+		MaxAllowedDrift:       duration{"10s"},
+		NtpQueries:            5,
+		DefaultTimeoutLatency: duration{"10s"},
+		RefreshNtpInterval:    duration{"30m"},
+	}
+
+	// SwarmConfigValues defines default values for swarm config params.
+	var SwarmConfigValues = SwarmConfig{
+		Bootstrap:              false,
+		RoutingTableBucketSize: 20,
+		RoutingTableAlpha:      3,
+		RandomConnections:      5,
+		BootstrapNodes: cli.StringSlice{ // these should be the spacemesh foundation bootstrap nodes
+			"125.0.0.1:3572/iaMujEYTByKcjMZWMqg79eJBGMDm8ADsWZFdouhpfeKj",
+			"125.0.0.1:3763/x34UDdiCBAsXmLyMMpPQzs313B9UDeHNqFpYsLGfaFvm",
+		},
+	}
+
+	return &Config{
+		SecurityParam: 20,
+		FastSync:      true,
+		TCPPort:       7513,
+		NodeID:        "",
+		DialTimeout:   duration{"1m"},
+		ConnKeepAlive: duration{"48h"},
+		NetworkID:     int(TestNet),
+		SwarmConfig:   SwarmConfigValues,
+		TimeConfig:    TimeConfigValues,
+	}
 }
