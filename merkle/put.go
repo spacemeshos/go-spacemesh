@@ -66,7 +66,7 @@ func (mt *merkleTreeImp) Put(k, v []byte) error {
 // k: key to value following the stack
 func (mt *merkleTreeImp) update(k string, s *stack) error {
 
-	log.Info("Persisting nodes for path %s", k)
+	log.Debug("Persisting nodes for path %s", k)
 
 	var lastRoot Node
 

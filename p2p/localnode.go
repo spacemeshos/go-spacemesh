@@ -155,7 +155,7 @@ func newNodeFromData(tcpAddress string, d *NodeData, config nodeconfig.Config, p
 		return nil, err
 	}
 
-	log.Info(">>>> Creating node from existing key %s", pub.String())
+	log.Debug(">>>> Creating node from existing key %s", pub.String())
 
 	return newLocalNodeWithKeys(pub, priv, tcpAddress, config, persist)
 }

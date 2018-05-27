@@ -45,7 +45,7 @@ func TestSimpleTreeOps(t *testing.T) {
 	v := []byte("zifton-the-immortal")
 	k := []byte("the-name-of-my-cat")
 
-	log.Info("User key hex: %s", hex.EncodeToString(k))
+	log.Debug("User key hex: %s", hex.EncodeToString(k))
 
 	tryPut(t, m, k, v)
 
@@ -119,12 +119,12 @@ func TestComplexTreeOps(t *testing.T) {
 	assert.NoErr(t, err, "invalid tree structure")
 	assert.True(t, bytes.Equal(r, m.GetRootHash()), "unexpected root hash")
 
-	log.Info(m.Print())
+	log.Debug(m.Print())
 	validateGet(t, m, k1, v1)
 
 	tryPut(t, m, k2, v2)
 
-	log.Info(m.Print())
+	log.Debug(m.Print())
 	validateGet(t, m, k1, v1)
 	validateGet(t, m, k2, v2)
 
@@ -151,7 +151,7 @@ func TestComplexTreeOps(t *testing.T) {
 	//1 12457
 	//1 12456
 
-	log.Info(m.Print())
+	log.Debug(m.Print())
 	r, err = m.ValidateStructure(m.GetRootNode())
 	assert.NoErr(t, err, "invalid tree structure")
 	assert.True(t, bytes.Equal(r, m.GetRootHash()), "unexpected root hash")
@@ -163,7 +163,7 @@ func TestComplexTreeOps(t *testing.T) {
 	// key 123457
 
 	tryPut(t, m, k4, v4)
-	log.Info(m.Print())
+	log.Debug(m.Print())
 	r, err = m.ValidateStructure(m.GetRootNode())
 	assert.NoErr(t, err, "invalid tree structure")
 	assert.True(t, bytes.Equal(r, m.GetRootHash()), "unexpected root hash")

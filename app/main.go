@@ -201,7 +201,7 @@ func (app *SpacemeshApp) before(ctx *cli.Context) error {
 // Spacemesh app cleanup tasks
 func (app *SpacemeshApp) cleanup(ctx *cli.Context) error {
 
-	log.Info("App cleanup starting...")
+	log.Debug("App cleanup starting...")
 
 	if app.jsonAPIService != nil {
 		app.jsonAPIService.StopService()
@@ -212,7 +212,7 @@ func (app *SpacemeshApp) cleanup(ctx *cli.Context) error {
 	}
 
 	// add any other cleanup tasks here....
-	log.Info("App cleanup completed\n\n")
+	log.Debug("App cleanup completed\n\n")
 
 	return nil
 }

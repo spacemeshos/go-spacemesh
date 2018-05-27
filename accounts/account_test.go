@@ -41,7 +41,7 @@ func TestAccountOps(t *testing.T) {
 	// uncomment to cleanup the account data file from store
 	//defer os.Remove(accountDataFilePath)
 
-	log.Info("Persisted account to: %s", accountDataFilePath)
+	log.Debug("Persisted account to: %s", accountDataFilePath)
 
 	// read the account back from store
 	account1, err := NewAccountFromStore(account.String(), accountsDataFolder)
