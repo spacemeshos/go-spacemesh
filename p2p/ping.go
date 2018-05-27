@@ -151,7 +151,7 @@ func (p *pingProtocolImpl) handleIncomingResponse(msg IncomingMessage) {
 		return
 	}
 
-	p.swarm.GetLocalNode().Info("Got pong response `%sv` from %s. Ping req id: %v", data.Pong, msg.Sender().Pretty(),
+	p.swarm.GetLocalNode().Info("Got pong response `%v` from %s. Ping req id: %v", data.Pong, msg.Sender().Pretty(),
 		hex.EncodeToString(data.Metadata.ReqId))
 
 	// according to kad receiving a ping response should update sender in local dht table
