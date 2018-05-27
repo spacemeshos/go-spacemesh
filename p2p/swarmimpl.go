@@ -195,7 +195,8 @@ func (s *swarmImpl) resendRetryMessages() {
 // Sends a connection event to all registered clients
 func (s *swarmImpl) sendNodeEvent(peerID string, state NodeState) {
 
-	s.localNode.GetLogger().Debug(">> Node event for <%s>. State: %+v Sending events to %d", peerID[:6], state, len(s.nec))
+	s.localNode.Debug(">> Node event for <%s>. State: %+v", peerID[:6], state)
+
 	evt := NodeEvent{peerID, state}
 	for _, c := range s.nec {
 		go func(c NodeEventCallback) { c <- evt }(c)
