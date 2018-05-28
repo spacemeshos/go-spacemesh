@@ -29,14 +29,14 @@ func NewJSONHTTPServer() *JSONHTTPServer {
 
 // StopService stops the server.
 func (s JSONHTTPServer) StopService() {
-	log.Info("Stopping json-http service...")
+	log.Debug("Stopping json-http service...")
 	s.stop <- true
 }
 
 // Listens on gracefully stopping the server in the same routine.
 func (s JSONHTTPServer) listenStop() {
 	<-s.stop
-	log.Info("Shutting down json API server...")
+	log.Debug("Shutting down json API server...")
 	if err := s.server.Shutdown(s.ctx); err != nil {
 		log.Error("Error during shutdown json API server : %v", err)
 	}
@@ -66,7 +66,7 @@ func (s JSONHTTPServer) startInternal(status chan bool) {
 
 	addr := ":" + strconv.Itoa(int(s.Port))
 
-	log.Info("json API listening on port %d", s.Port)
+	log.Debug("json API listening on port %d", s.Port)
 
 	go func() { s.listenStop() }()
 
@@ -78,7 +78,7 @@ func (s JSONHTTPServer) startInternal(status chan bool) {
 	err := s.server.ListenAndServe()
 
 	if err != nil {
-		log.Info("listen and serve stopped with status. %v", err)
+		log.Debug("listen and serve stopped with status. %v", err)
 	}
 
 	if status != nil {

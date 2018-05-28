@@ -111,7 +111,7 @@ func newLocalNodeWithKeys(pubKey crypto.PublicKey, privKey crypto.PrivateKey, tc
 	// setup logging
 	n.logger = log.CreateLogger(n.pubKey.Pretty(), dataDir, "node.log")
 
-	n.Info("Node id: %s", n.String())
+	n.Debug("Node id: %s", n.String())
 
 	// swarm owned by node
 	s, err := NewSwarm(tcpAddress, n)
@@ -125,7 +125,7 @@ func newLocalNodeWithKeys(pubKey crypto.PublicKey, privKey crypto.PrivateKey, tc
 		return nil, errors.New("critical error - failed to obtain node public ip address. Check your Internet connection and try again")
 	}
 
-	n.Info("Node public ip address %s. Please make sure that your home router or access point accepts incoming connections on this port and forwards incoming such connection requests to this computer.", n.pubTCPAddress)
+	n.Debug("Node public ip address %s. Please make sure that your home router or access point accepts incoming connections on this port and forwards incoming such connection requests to this computer.", n.pubTCPAddress)
 
 	n.swarm = s
 	n.ping = NewPingProtocol(s)
@@ -155,7 +155,7 @@ func newNodeFromData(tcpAddress string, d *NodeData, config nodeconfig.Config, p
 		return nil, err
 	}
 
-	log.Info(">>>> Creating node from existing key %s", pub.String())
+	log.Debug(">>>> Creating node from existing key %s", pub.String())
 
 	return newLocalNodeWithKeys(pub, priv, tcpAddress, config, persist)
 }

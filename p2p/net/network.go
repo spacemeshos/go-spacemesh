@@ -68,7 +68,7 @@ func NewNet(tcpListenAddress string, config nodeconfig.Config, logger *logging.L
 		return nil, err
 	}
 
-	n.logger.Info("created network with tcp address: %s", tcpListenAddress)
+	n.logger.Debug("created network with tcp address: %s", tcpListenAddress)
 
 	return n, nil
 }
@@ -115,7 +115,7 @@ func (n *netImpl) DialTCP(address string, timeOut time.Duration, keepAlive time.
 	dialer.KeepAlive = keepAlive // drop connections after a period of inactivity
 	dialer.Timeout = timeOut     // max time bef
 
-	n.logger.Info("TCP dialing %s ...", address)
+	n.logger.Debug("TCP dialing %s ...", address)
 
 	netConn, err := dialer.Dial("tcp", address)
 
@@ -123,7 +123,7 @@ func (n *netImpl) DialTCP(address string, timeOut time.Duration, keepAlive time.
 		return nil, err
 	}
 
-	n.logger.Info("Connected to %s...", address)
+	n.logger.Debug("Connected to %s...", address)
 	c := newConnection(netConn, n, Local)
 	return c, nil
 }
@@ -147,7 +147,7 @@ func (n *netImpl) listen() error {
 
 func (n *netImpl) acceptTCP() {
 	for {
-		n.logger.Info("Waiting for incoming connections...")
+		n.logger.Debug("Waiting for incoming connections...")
 		netConn, err := n.tcpListener.Accept()
 		if err != nil {
 
@@ -157,7 +157,7 @@ func (n *netImpl) acceptTCP() {
 			return
 		}
 
-		n.logger.Info("Got new connection... Remote Address: %s", netConn.RemoteAddr())
+		n.logger.Debug("Got new connection... Remote Address: %s", netConn.RemoteAddr())
 		c := newConnection(netConn, n, Remote)
 		n.newConnections <- c
 	}

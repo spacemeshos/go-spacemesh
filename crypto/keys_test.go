@@ -24,8 +24,8 @@ func TestBasicApi(t *testing.T) {
 	priv, pub, err := GenerateKeyPair()
 
 	assert.Nil(t, err, "failed to generate keys")
-	log.Info("priv: %s, pub: %s", priv.Pretty(), pub.Pretty())
-	log.Info("priv: %s, pub: %s", priv.String(), pub.String())
+	log.Debug("priv: %s, pub: %s", priv.Pretty(), pub.Pretty())
+	log.Debug("priv: %s, pub: %s", priv.String(), pub.String())
 
 	pub1 := priv.GetPublicKey()
 	assert.True(t, bytes.Equal(pub.Bytes(), pub1.Bytes()), fmt.Sprintf("expected same pub key, %s, %s",

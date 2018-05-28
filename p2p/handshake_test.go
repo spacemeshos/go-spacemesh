@@ -55,7 +55,7 @@ func TestHandshakeCoreData(t *testing.T) {
 	assert.NotNil(t, session, "expected session")
 	assert.NotNil(t, data, "expected session")
 
-	log.Info("Node 1 session data: Id:%s, AES-KEY:%s", hex.EncodeToString(session.ID()), hex.EncodeToString(session.KeyE()))
+	log.Debug("Node 1 session data: Id:%s, AES-KEY:%s", hex.EncodeToString(session.ID()), hex.EncodeToString(session.KeyE()))
 
 	assert.False(t, session.IsAuthenticated(), "Expected session to be not authenticated yet")
 
@@ -67,7 +67,7 @@ func TestHandshakeCoreData(t *testing.T) {
 	assert.NotNil(t, session1, "expected session")
 	assert.NotNil(t, resp, "expected resp data")
 
-	log.Info("Node 2 session data: Id:%s, AES-KEY:%s", hex.EncodeToString(session1.ID()), hex.EncodeToString(session1.KeyE()))
+	log.Debug("Node 2 session data: Id:%s, AES-KEY:%s", hex.EncodeToString(session1.ID()), hex.EncodeToString(session1.KeyE()))
 
 	assert.Equal(t, string(session.ID()), string(session1.ID()), "expected agreed Id")
 	assert.Equal(t, string(session.KeyE()), string(session1.KeyE()), "expected same shared AES enc key")
@@ -125,7 +125,7 @@ func TestHandshakeProtocol(t *testing.T) {
 	assert.NotNil(t, session, "expected session")
 	assert.NotNil(t, data, "expected session")
 
-	log.Info("Node 1 session data: Id:%s, AES-KEY:%s", hex.EncodeToString(session.ID()), hex.EncodeToString(session.KeyE()))
+	log.Debug("Node 1 session data: Id:%s, AES-KEY:%s", hex.EncodeToString(session.ID()), hex.EncodeToString(session.KeyE()))
 
 	assert.False(t, session.IsAuthenticated(), "expected session to be not authenticated yet")
 
@@ -145,7 +145,7 @@ func TestHandshakeProtocol(t *testing.T) {
 	data1 := &pb.HandshakeData{}
 	err = proto.Unmarshal(wireFormat, data1)
 
-	log.Info("Handshake request from %s", data1.TcpAddress)
+	log.Debug("Handshake request from %s", data1.TcpAddress)
 
 	assert.NoErr(t, err, "failed to unmarshal wire formatted data to handshake data")
 	assert.Equal(t, HandshakeReq, data1.Protocol, "expected this message to be a handshake req")
@@ -158,7 +158,7 @@ func TestHandshakeProtocol(t *testing.T) {
 	assert.NotNil(t, session1, "expected session")
 	assert.NotNil(t, resp, "expected resp data")
 
-	log.Info("Node 2 session data: Id:%s, AES-KEY:%s", hex.EncodeToString(session1.ID()), hex.EncodeToString(session1.KeyE()))
+	log.Debug("Node 2 session data: Id:%s, AES-KEY:%s", hex.EncodeToString(session1.ID()), hex.EncodeToString(session1.KeyE()))
 
 	assert.Equal(t, string(session.ID()), string(session1.ID()), "expected agreed Id")
 	assert.Equal(t, string(session.KeyE()), string(session1.KeyE()), "expected same shared AES enc key")
@@ -189,7 +189,7 @@ func TestHandshakeProtocol(t *testing.T) {
 
 	// STEP 5: Node 1 validates the data and sets its network session to authenticated
 
-	log.Info("Handshake response from from %s", data2.TcpAddress)
+	log.Debug("Handshake response from from %s", data2.TcpAddress)
 
 	err = processHandshakeResponse(node1Local, node2Remote, session, data2)
 
@@ -233,7 +233,7 @@ func TestBadHandshakes(t *testing.T) {
 			return errors.New("excpected session to not be nil")
 		}
 
-		log.Info("Node 1 session data: Id:%s, AES-KEY:%s", hex.EncodeToString(session.ID()), hex.EncodeToString(session.KeyE()))
+		log.Debug("Node 1 session data: Id:%s, AES-KEY:%s", hex.EncodeToString(session.ID()), hex.EncodeToString(session.KeyE()))
 
 		if session.IsAuthenticated() {
 			return errors.New("expected session to be not authenticated yet")
@@ -258,7 +258,7 @@ func TestBadHandshakes(t *testing.T) {
 		data1 := &pb.HandshakeData{}
 		err = proto.Unmarshal(wireFormat, data1)
 
-		log.Info("Handshake request from %s", data1.TcpAddress)
+		log.Debug("Handshake request from %s", data1.TcpAddress)
 
 		if err != nil {
 			return fmt.Errorf("failed to unmarshal wire formatted data to handshake data: %v", err)
@@ -280,7 +280,7 @@ func TestBadHandshakes(t *testing.T) {
 			return errors.New("session is nil")
 		}
 
-		log.Info("Node 2 session data: Id:%s, AES-KEY:%s", hex.EncodeToString(session1.ID()), hex.EncodeToString(session1.KeyE()))
+		log.Debug("Node 2 session data: Id:%s, AES-KEY:%s", hex.EncodeToString(session1.ID()), hex.EncodeToString(session1.KeyE()))
 
 		compareSlice1 := map[string][]byte{"session-id": session.ID(), "keyE": session.KeyE(), "keyM": session.KeyM(), "pubKey": session.PubKey()}
 		compareSlice2 := map[string][]byte{"session-id": session1.ID(), "keyE": session1.KeyE(), "keyM": session1.KeyM(), "pubKey": session1.PubKey()}
@@ -328,7 +328,7 @@ func TestBadHandshakes(t *testing.T) {
 
 		// STEP 5: Node 1 validates the data and sets its network session to authenticated
 
-		log.Info("Handshake response from from %s", data2.TcpAddress)
+		log.Debug("Handshake response from from %s", data2.TcpAddress)
 
 		err = processHandshakeResponse(node1Local, node2Remote, session, data2)
 

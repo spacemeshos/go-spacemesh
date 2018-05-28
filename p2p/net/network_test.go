@@ -43,10 +43,10 @@ func TestReadWrite(t *testing.T) {
 				break Loop
 
 			case c := <-n.GetNewConnections():
-				log.Info("Remote client connected. %v", c)
+				log.Debug("Remote client connected. %v", c)
 
 			case m := <-n.GetIncomingMessage():
-				log.Info("Got remote message: %s", string(m.Message))
+				log.Debug("Got remote message: %s", string(m.Message))
 				m.Connection.Close()
 				done <- true
 
@@ -57,7 +57,7 @@ func TestReadWrite(t *testing.T) {
 				t.Fatalf("Failed to send message to connection: %v", err)
 
 			case c := <-n.GetClosingConnections():
-				log.Info("Connection closed. %v", c)
+				log.Debug("Connection closed. %v", c)
 
 			case <-time.After(time.Second * 30):
 				t.Fatalf("Test timed out")
@@ -69,16 +69,16 @@ func TestReadWrite(t *testing.T) {
 	c, err := n.DialTCP(address, time.Duration(10*time.Second), time.Duration(48*time.Hour))
 	assert.Nil(t, err, "failed to connect to tcp server")
 
-	log.Info("Sending message...")
+	log.Debug("Sending message...")
 
 	t1 := c.LastOpTime()
 
 	c.Send(msg, msgID)
-	log.Info("Message sent.")
+	log.Debug("Message sent.")
 
 	// todo: test callbacks for messages
 
-	log.Info("Waiting for incoming messages...")
+	log.Debug("Waiting for incoming messages...")
 
 	<-done
 

@@ -141,7 +141,7 @@ func NewHandshakeProtocol(s Swarm) HandshakeProtocol {
 
 // RegisterNewSessionCallback registers a callback to baclled when a new session is established by the protocol.
 func (h *handshakeProtocolImpl) RegisterNewSessionCallback(callback chan HandshakeData) {
-	h.swarm.GetLocalNode().Info("New session callback registered.")
+	h.swarm.GetLocalNode().Debug("New session callback registered.")
 	h.registerSessionCallback <- callback
 }
 
@@ -170,7 +170,7 @@ func (h *handshakeProtocolImpl) CreateSession(peer Peer) {
 	// so we can match handshake responses with the session
 	go func() { h.addPendingSession <- handshakeData }()
 
-	h.swarm.GetLocalNode().Info("Creating session handshake request session id: %s", session.String())
+	h.swarm.GetLocalNode().Debug("Creating session handshake request session id: %s", session.String())
 
 	h.swarm.sendHandshakeMessage(SendMessageReq{
 		ReqID:    session.ID(),
@@ -197,7 +197,7 @@ func (h *handshakeProtocolImpl) processEvents() {
 
 		case d := <-h.addPendingSession:
 			sessionKey := d.Session().String()
-			h.swarm.GetLocalNode().Info("Storing pending session w key: %s", sessionKey)
+			h.swarm.GetLocalNode().Debug("Storing pending session w key: %s", sessionKey)
 			h.pendingSessions[sessionKey] = d
 
 		case pcr := <-h.pendingCheckRequest:
@@ -272,7 +272,7 @@ func (h *handshakeProtocolImpl) onHandleIncomingHandshakeRequest(msg IncomingMes
 	// we have an active session initiated by a remote node
 	h.stateChanged(handshakeData)
 
-	h.swarm.GetLocalNode().Info("Remotely initiated session established. Session id: %s :-)", session.String())
+	h.swarm.GetLocalNode().Debug("Remotely initiated session established. Session id: %s :-)", session.String())
 
 }
 
@@ -287,7 +287,7 @@ func (h *handshakeProtocolImpl) onHandleIncomingHandshakeResponse(msg IncomingMe
 
 	sessionID := hex.EncodeToString(respData.SessionId)
 
-	h.swarm.GetLocalNode().Info("Incoming handshake response for session id %s", sessionID)
+	h.swarm.GetLocalNode().Debug("Incoming handshake response for session id %s", sessionID)
 
 	// this is the session data we sent to the node
 	sessionRequestData := h.pendingSessions[sessionID]
@@ -308,7 +308,7 @@ func (h *handshakeProtocolImpl) onHandleIncomingHandshakeResponse(msg IncomingMe
 	h.deletePendingSessionByID <- sessionID
 
 	h.stateChanged(sessionRequestData)
-	h.swarm.GetLocalNode().Info("Locally initiated session established! Session id: %s :-)", sessionID)
+	h.swarm.GetLocalNode().Debug("Locally initiated session established! Session id: %s :-)", sessionID)
 }
 
 /////////////////////////// functions below - they don't provide Handshake protocol state

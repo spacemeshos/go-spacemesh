@@ -15,7 +15,7 @@ import (
 // not go safe - should only be called from swarm event dispatcher
 func (s *swarmImpl) findNode(id string, callback chan node.RemoteNodeData) {
 
-	s.localNode.Info("finding node: %s ...", log.PrettyID(id))
+	s.localNode.Debug("finding node: %s ...", log.PrettyID(id))
 
 	// look for the node at local dht table
 	poc := make(table.PeerOpChannel, 1)
@@ -39,7 +39,7 @@ func (s *swarmImpl) findNode(id string, callback chan node.RemoteNodeData) {
 // Returns requested node via the callback or nil if not found
 func (s *swarmImpl) kadFindNode(nodeID string, callback chan node.RemoteNodeData) {
 
-	s.localNode.Info("Kad find node: %s ...", nodeID)
+	s.localNode.Debug("Kad find node: %s ...", nodeID)
 
 	// kad node location algo
 	alpha := int(s.config.RoutingTableAlpha)

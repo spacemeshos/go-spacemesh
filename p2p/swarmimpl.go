@@ -135,7 +135,7 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 	// findNode dht protocol
 	s.findNodeProtocol = NewFindNodeProtocol(s)
 
-	s.localNode.Info("Created swarm for local node %s, %s", tcpAddress, l.Pretty())
+	s.localNode.Debug("Created swarm for local node %s, %s", tcpAddress, l.Pretty())
 
 	s.handshakeProtocol = NewHandshakeProtocol(s)
 	s.handshakeProtocol.RegisterNewSessionCallback(s.newSessions)
@@ -216,7 +216,7 @@ func (s *swarmImpl) Bootstrap() {
 }
 
 func (s *swarmImpl) bootstrap() {
-	s.localNode.Info("Starting bootstrap...")
+	s.localNode.Debug("Starting bootstrap...")
 
 	// register bootstrap nodes
 	bn := 0
@@ -259,7 +259,7 @@ func (s *swarmImpl) bootstrap() {
 // Connect up to count random nodes
 func (s *swarmImpl) ConnectToRandomNodes(count int) {
 
-	s.localNode.Info("Attempting to connect to %d random nodes...", count)
+	s.localNode.Debug("Attempting to connect to %d random nodes...", count)
 
 	// create callback to receive result
 	c1 := make(table.PeersOpChannel)

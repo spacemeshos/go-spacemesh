@@ -43,7 +43,7 @@ Loop:
 
 			for _, d := range c.NodeInfos {
 				if bytes.Equal(d.NodeId, node3Remote.ID()) {
-					log.Info("Found node 3 :-)")
+					log.Debug("Found node 3 :-)")
 					break Loop
 				}
 			}
