@@ -35,21 +35,16 @@ func init() {
 // getAllBackend returns level backends with an exception to Debug leve
 // which is only returned if the flag debug is set
 func getBackendLevel(module, prefix, format string) logging.LeveledBackend {
-	var leveledBackend logging.LeveledBackend
 	logFormat := logging.MustStringFormatter(format)
 
+	backend := logging.NewLogBackend(os.Stdout, module, 0)
+	backendFormatter := logging.NewBackendFormatter(backend, logFormat)
+	leveledBackend := logging.AddModuleLevel(backendFormatter)
+
 	if debugMode {
-		backendDebug := logging.NewLogBackend(os.Stdout, module, 0)
-		backendDebugFormatter := logging.NewBackendFormatter(backendDebug, logFormat)
-		backendDebugLeveled := logging.AddModuleLevel(backendDebugFormatter)
-		backendDebugLeveled.SetLevel(logging.DEBUG, module)
-		leveledBackend = backendDebugLeveled
+		leveledBackend.SetLevel(logging.DEBUG, module)
 	} else {
-		backendInfo := logging.NewLogBackend(os.Stdout, prefix, 0)
-		backendInfoFormatter := logging.NewBackendFormatter(backendInfo, logFormat)
-		backendInfoLeveled := logging.AddModuleLevel(backendInfoFormatter)
-		backendInfoLeveled.SetLevel(logging.INFO, module)
-		leveledBackend = backendInfoLeveled
+		leveledBackend.SetLevel(logging.INFO, module)
 	}
 
 	return leveledBackend
