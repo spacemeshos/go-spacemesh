@@ -154,7 +154,7 @@ func (p *findNodeProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 	// sign response
 	sign, err := p.swarm.GetLocalNode().SignToString(respData)
 	if err != nil {
-		p.swarm.GetLocalNode().Info("Failed to sign response")
+		p.swarm.GetLocalNode().Debug("Failed to sign response")
 		return
 	}
 
@@ -163,7 +163,7 @@ func (p *findNodeProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 	// marshal the signed data
 	signedPayload, err := proto.Marshal(respData)
 	if err != nil {
-		p.swarm.GetLocalNode().Info("Failed to generate response data")
+		p.swarm.GetLocalNode().Debug("Failed to generate response data")
 		return
 	}
 

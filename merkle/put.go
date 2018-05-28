@@ -39,7 +39,7 @@ func (mt *merkleTreeImp) Put(k, v []byte) error {
 
 	if res != nil && bytes.Equal(res, v) {
 		// value already stored in db
-		log.Info("Value already stored in the tree")
+		log.Debug("Value already stored in the tree")
 		return nil
 	}
 

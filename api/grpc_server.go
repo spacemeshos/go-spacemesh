@@ -27,9 +27,9 @@ func (s SpaceMeshGrpcService) Echo(ctx context.Context, in *pb.SimpleMessage) (*
 
 // StopService stops the grpc service.
 func (s SpaceMeshGrpcService) StopService() {
-	log.Info("Stopping grpc service...")
+	log.Debug("Stopping grpc service...")
 	s.Server.Stop()
-	log.Info("grpc service stopped...")
+	log.Debug("grpc service stopped...")
 
 }
 
@@ -61,7 +61,7 @@ func (s SpaceMeshGrpcService) startServiceInternal(status chan bool) {
 	// Register reflection service on gRPC server
 	reflection.Register(s.Server)
 
-	log.Info("grpc API listening on port %d", port)
+	log.Debug("grpc API listening on port %d", port)
 
 	if status != nil {
 		status <- true
