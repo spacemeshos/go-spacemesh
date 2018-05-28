@@ -37,7 +37,7 @@ func init() {
 func getBackendLevel(module, prefix, format string) logging.LeveledBackend {
 	logFormat := logging.MustStringFormatter(format)
 
-	backend := logging.NewLogBackend(os.Stdout, module, 0)
+	backend := logging.NewLogBackend(os.Stdout, prefix, 0)
 	backendFormatter := logging.NewBackendFormatter(backend, logFormat)
 	leveledBackend := logging.AddModuleLevel(backendFormatter)
 
