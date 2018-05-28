@@ -46,6 +46,7 @@ var (
 		config.DataFolderPathFlag,
 
 		// add all additional app flags here ...
+		config.DebugLevel,
 	}
 	nodeFlags = []cli.Flag{
 		nodeparams.KSecurityFlag,
@@ -127,7 +128,8 @@ func startSpacemeshNode(ctx *cli.Context) error {
 }
 
 // setupLogging configured the app logging system.
-func (app *SpacemeshApp) setupLogging() {
+func (app *SpacemeshApp) setupLogging(debugMode bool) {
+	log.DebugMode(debugMode)
 
 	// setup logging early
 	dataDir, err := filesystem.GetSpacemeshDataDirectoryPath()
@@ -177,7 +179,7 @@ func (app *SpacemeshApp) before(ctx *cli.Context) error {
 		log.Warning("No config file defined using default config")
 	}
 
-	app.setupLogging()
+	app.setupLogging(ctx.Bool("debug"))
 
 	// todo: add misc app setup here (metrics, debug, etc....)
 
@@ -218,6 +220,7 @@ func (app *SpacemeshApp) cleanup(ctx *cli.Context) error {
 }
 
 func (app *SpacemeshApp) startSpacemeshNode(ctx *cli.Context) error {
+
 	log.Info("Starting local node...")
 	port := *nodeparams.LocalTCPPortFlag.Destination
 	address := fmt.Sprintf("0.0.0.0:%d", port)

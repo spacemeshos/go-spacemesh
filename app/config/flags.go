@@ -21,4 +21,11 @@ var (
 		Value:       ConfigValues.DataFilePath,
 		Destination: &ConfigValues.DataFilePath,
 	})
+
+	// DebugLevel used to set log level to DEBUG
+	DebugLevel = cli.BoolFlag{
+		Name:        "debug",
+		Usage:       "Log in DEBUG level",
+		Destination: &ConfigValues.AppBoolParam,
+	}
 )

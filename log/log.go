@@ -18,70 +18,66 @@ type SpacemeshLogger struct {
 
 // smlogger is the local app singleton logger.
 var smLogger *SpacemeshLogger
+var debugMode bool
 
 func init() {
+
 	// create a basic temp os.Stdout logger
 	// This logger is used until the app calls InitSpacemeshLoggingSystem().
 	log := logging.MustGetLogger("app")
 	log.ExtraCalldepth = 1
-	logFormat := logging.MustStringFormatter(` %{color}%{level:.4s} %{id:03x} %{time:15:04:05.000} ▶%{color:reset} %{message}`)
-	backend := logging.NewLogBackend(os.Stdout, "<APP>", 0)
-	backendFormatter := logging.NewBackendFormatter(backend, logFormat)
-	logging.SetBackend(backendFormatter)
+	logFormat := ` %{color}%{level:.4s} %{id:03x} %{time:15:04:05.000} ▶%{color:reset} %{message}`
+	leveledBackend := getBackendLevel("app", "<APP>", logFormat)
+	log.SetBackend(leveledBackend)
 	smLogger = &SpacemeshLogger{Logger: log}
+}
+
+// getAllBackend returns level backends with an exception to Debug leve
+// which is only returned if the flag debug is set
+func getBackendLevel(module, prefix, format string) logging.LeveledBackend {
+	var leveledBackend logging.LeveledBackend
+	logFormat := logging.MustStringFormatter(format)
+
+	if debugMode {
+		backendDebug := logging.NewLogBackend(os.Stdout, module, 0)
+		backendDebugFormatter := logging.NewBackendFormatter(backendDebug, logFormat)
+		backendDebugLeveled := logging.AddModuleLevel(backendDebugFormatter)
+		backendDebugLeveled.SetLevel(logging.DEBUG, module)
+		leveledBackend = backendDebugLeveled
+	} else {
+		backendInfo := logging.NewLogBackend(os.Stdout, prefix, 0)
+		backendInfoFormatter := logging.NewBackendFormatter(backendInfo, logFormat)
+		backendInfoLeveled := logging.AddModuleLevel(backendInfoFormatter)
+		backendInfoLeveled.SetLevel(logging.INFO, module)
+		leveledBackend = backendInfoLeveled
+	}
+
+	return leveledBackend
+}
+
+// DebugMode sets log debug level
+func DebugMode(mode bool) {
+	debugMode = mode
 }
 
 // CreateLogger creates a logger for a module. e.g. local node logger.
 func CreateLogger(module string, dataFolderPath string, logFileName string) *logging.Logger {
-
 	log := logging.MustGetLogger(module)
 	log.ExtraCalldepth = 1
-	logFormat := logging.MustStringFormatter(` %{color:reset}%{color}%{level:.4s} %{id:03x} %{time:15:04:05.000} %{shortpkg}.%{shortfunc} ▶%{color:reset} %{message}`)
+	logFormat := ` %{color:reset}%{color}%{level:.4s} %{id:03x} %{time:15:04:05.000} %{shortpkg}.%{shortfunc} ▶%{color:reset} %{message}`
+	logFileFormat := `%{time:15:04:05.000} %{level:.4s} %{id:03x} %{shortpkg}.%{shortfunc} ▶ %{message}`
 	// module name is set is message prefix
 
-	backends := []logging.Backend{}
-
-	backend := logging.NewLogBackend(os.Stdout, module, 0)
-	backendFormatter := logging.NewBackendFormatter(backend, logFormat)
-	backends = append(backends, logging.AddModuleLevel(backendFormatter))
-
-	if dataFolderPath != "" && logFileName != "" {
-		fileName := filepath.Join(dataFolderPath, logFileName)
-
-		fileLogger := &lumberjack.Logger{
-			Filename:   fileName,
-			MaxSize:    500, // megabytes
-			MaxBackups: 3,
-			MaxAge:     28, // days
-			Compress:   false,
-		}
-
-		fileLoggerBackend := logging.NewLogBackend(fileLogger, "", 0)
-		logFileFormat := logging.MustStringFormatter(`%{time:15:04:05.000} %{level:.4s} %{id:03x} %{shortpkg}.%{shortfunc} ▶ %{message}`)
-		fileBackendFormatter := logging.NewBackendFormatter(fileLoggerBackend, logFileFormat)
-		backends = append(backends, logging.AddModuleLevel(fileBackendFormatter))
-	}
+	backends := getBackendLevelWithFileBackend(module, module, logFormat, logFileFormat, dataFolderPath, logFileName)
 
 	log.SetBackend(logging.MultiLogger(backends...))
 
 	return log
 }
 
-// InitSpacemeshLoggingSystem initializes app logging system.
-func InitSpacemeshLoggingSystem(dataFolderPath string, logFileName string) {
-
-	log := logging.MustGetLogger("app")
-
-	// we wrap all log calls so we need to add 1 to call depth
-	log.ExtraCalldepth = 1
-
-	logFormat := logging.MustStringFormatter(` %{color}%{level:.4s} %{id:03x} %{time:15:04:05.000} %{shortpkg}.%{shortfunc}%{color:reset} ▶ %{message}`)
-
-	backends := []logging.Backend{}
-
-	backend := logging.NewLogBackend(os.Stdout, "<APP>", 0)
-	backendFormatter := logging.NewBackendFormatter(backend, logFormat)
-	backends = append(backends, logging.AddModuleLevel(backendFormatter))
+// getBackendLevelWithFileBackend returns backends level including log file backend
+func getBackendLevelWithFileBackend(module, prefix, logFormat, fileFormat, dataFolderPath, logFileName string) []logging.Backend {
+	leveledBackends := []logging.Backend{getBackendLevel(module, prefix, logFormat)}
 
 	if dataFolderPath != "" && logFileName != "" {
 		fileName := filepath.Join(dataFolderPath, logFileName)
@@ -95,10 +91,25 @@ func InitSpacemeshLoggingSystem(dataFolderPath string, logFileName string) {
 		}
 
 		fileLoggerBackend := logging.NewLogBackend(fileLogger, "", 0)
-		logFileFormat := logging.MustStringFormatter(`%{time:15:04:05.000} %{level:.4s}-%{id:03x} %{shortpkg}.%{shortfunc} ▶ %{message}`)
+		logFileFormat := logging.MustStringFormatter(fileFormat)
 		fileBackendFormatter := logging.NewBackendFormatter(fileLoggerBackend, logFileFormat)
-		backends = append(backends, logging.AddModuleLevel(fileBackendFormatter))
+		leveledBackends = append(leveledBackends, logging.AddModuleLevel(fileBackendFormatter))
 	}
+
+	return leveledBackends
+}
+
+// InitSpacemeshLoggingSystem initializes app logging system.
+func InitSpacemeshLoggingSystem(dataFolderPath string, logFileName string) {
+	log := logging.MustGetLogger("app")
+
+	// we wrap all log calls so we need to add 1 to call depth
+	log.ExtraCalldepth = 1
+
+	logFormat := ` %{color}%{level:.4s} %{id:03x} %{time:15:04:05.000} %{shortpkg}.%{shortfunc}%{color:reset} ▶ %{message}`
+	logFileFormat := `%{time:15:04:05.000} %{level:.4s}-%{id:03x} %{shortpkg}.%{shortfunc} ▶ %{message}`
+
+	backends := getBackendLevelWithFileBackend("app", "<APP>", logFormat, logFileFormat, dataFolderPath, logFileName)
 
 	log.SetBackend(logging.MultiLogger(backends...))
 
