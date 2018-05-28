@@ -121,7 +121,7 @@ func (p *findNodeProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 	}
 
 	peer := msg.Sender()
-	p.swarm.GetLocalNode().Info("Incoming find-node request from %s. Requested node id: %s", peer.Pretty(), hex.EncodeToString(req.NodeId))
+	p.swarm.GetLocalNode().Debug("Incoming find-node request from %s. Requested node id: %s", peer.Pretty(), hex.EncodeToString(req.NodeId))
 
 	// use the dht table to generate the response
 
@@ -138,8 +138,8 @@ func (p *findNodeProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 
 	select { // block until we got results from the  routing table or timeout
 	case c := <-callback:
-		p.swarm.GetLocalNode().Info("find-node results length: %d", len(c.Peers))
-		p.swarm.GetLocalNode().Info("THE PEERS", c.Peers)
+		p.swarm.GetLocalNode().Debug("find-node results length: %d", len(c.Peers))
+		p.swarm.GetLocalNode().Debug("THE PEERS", c.Peers)
 		results = node.ToNodeInfo(c.Peers, msg.Sender().String())
 	case <-time.After(tableQueryTimeout):
 		results = []*pb.NodeInfo{} // an empty slice
@@ -191,13 +191,13 @@ func (p *findNodeProtocolImpl) handleIncomingResponse(msg IncomingMessage) {
 
 	resp := FindNodeResp{data, nil, data.Metadata.ReqId}
 
-	p.swarm.GetLocalNode().Info("Got find-node response from %s. Results: %v, Find-node req id: %s", msg.Sender().Pretty(),
+	p.swarm.GetLocalNode().Debug("Got find-node response from %s. Results: %v, Find-node req id: %s", msg.Sender().Pretty(),
 		data.NodeInfos, hex.EncodeToString(data.Metadata.ReqId))
 
 	// update routing table with newly found nodes
 	nodes := node.FromNodeInfos(data.NodeInfos)
 	for _, n := range nodes {
-		p.swarm.GetLocalNode().Info("Node response: %s, %s", n.ID(), n.IP())
+		p.swarm.GetLocalNode().Debug("Node response: %s, %s", n.ID(), n.IP())
 		p.swarm.getRoutingTable().Update(n)
 	}
 

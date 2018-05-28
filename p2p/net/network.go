@@ -68,7 +68,7 @@ func NewNet(tcpListenAddress string, config nodeconfig.Config, logger *logging.L
 		return nil, err
 	}
 
-	n.logger.Info("created network with tcp address: %s", tcpListenAddress)
+	n.logger.Debug("created network with tcp address: %s", tcpListenAddress)
 
 	return n, nil
 }

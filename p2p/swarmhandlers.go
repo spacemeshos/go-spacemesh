@@ -61,7 +61,7 @@ func (s *swarmImpl) addIncomingPendingMessage(ipm incomingPendingMessage) {
 // Handles a local request to connect to a remote node
 func (s *swarmImpl) onConnectionRequest(req node.RemoteNodeData) {
 
-	s.localNode.Info("Local request to connect to node %s", req.Pretty())
+	s.localNode.Debug("Local request to connect to node %s", req.Pretty())
 
 	var err error
 
@@ -300,7 +300,7 @@ func (s *swarmImpl) onConnectionClosed(c net.Connection) {
 
 func (s *swarmImpl) onRemoteClientConnected(c net.Connection) {
 	// nop - a remote client connected - this is handled w message
-	s.localNode.Info("Remote client connected. %s", c.ID())
+	s.localNode.Debug("Remote client connected. %s", c.ID())
 	peer := s.peersByConnection[c.ID()]
 	if peer != nil {
 		s.sendNodeEvent(peer.String(), Connected)
@@ -438,11 +438,11 @@ func (s *swarmImpl) onRemoteClientMessage(msg net.IncomingMessage) {
 	// route messages based on msg payload length
 	if len(c.Payload) == 0 {
 		// handshake messages have no enc payload
-		s.localNode.Info(fmt.Sprintf(str+"Type: Handshake, %v", hex.EncodeToString(c.SessionId)))
+		s.localNode.Debug(fmt.Sprintf(str+"Type: Handshake, %v", hex.EncodeToString(c.SessionId)))
 		s.onRemoteClientHandshakeMessage(msg)
 
 	} else {
-		s.localNode.Info(fmt.Sprintf(str+"Type: ProtocolMessage, %v", s.peersByConnection[msg.Connection.ID()].Pretty()))
+		s.localNode.Debug(fmt.Sprintf(str+"Type: ProtocolMessage, %v", s.peersByConnection[msg.Connection.ID()].Pretty()))
 		// protocol messages are encrypted in payload
 		s.onRemoteClientProtocolMessage(msg, c)
 	}

@@ -44,7 +44,7 @@ func (mt *merkleTreeImp) Put(k, v []byte) error {
 	}
 
 	hexKey := hex.EncodeToString(k)
-	log.Info("Merkle inserting user data for key: %s...", hexKey)
+	log.Debug("Merkle inserting user data for key: %s...", hexKey)
 
 	// todo - optimize this to avoid iteration over path
 	pos := mt.getPathLength(stack)
