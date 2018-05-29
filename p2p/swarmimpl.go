@@ -321,7 +321,7 @@ func (s *swarmImpl) shutDownInternal() {
 // provides concurrency safety as only one callback is executed at a time
 // so there's no need for sync internal data structures
 func (s *swarmImpl) beginProcessingEvents() {
-	checkTimeSync := time.NewTicker(nodeconfig.TimeConfigValues.RefreshNtpInterval.Duration())
+	checkTimeSync := time.NewTicker(nodeconfig.TimeConfigValues.RefreshNtpInterval)
 Loop:
 	for {
 		select {

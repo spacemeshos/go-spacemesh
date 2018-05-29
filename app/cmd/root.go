@@ -29,10 +29,10 @@ func init() {
 		config.P2P.SecurityParam, "Consensus protocol k security param")
 	RootCmd.PersistentFlags().IntVar(&config.P2P.TCPPort, "tcp-port",
 		config.P2P.SecurityParam, "TCP Port to listen on")
-	//RootCmd.PersistentFlags().StringVar(&config.P2P.DialTimeout.string, "dial-timeout",
-	//	config.P2P.DialTimeout.string, "Network dial timeout duration")
-	//RootCmd.PersistentFlags().StringVar(&config.P2P.ConnKeepAlive.string, "conn-keepalive",
-	//	config.P2P.ConnKeepAlive.string,"Network connection keep alive")
+	RootCmd.PersistentFlags().DurationVar(&config.P2P.DialTimeout, "dial-timeout",
+		config.P2P.DialTimeout, "Network dial timeout duration")
+	RootCmd.PersistentFlags().DurationVar(&config.P2P.ConnKeepAlive, "conn-keepalive",
+		config.P2P.ConnKeepAlive, "Network connection keep alive")
 	RootCmd.PersistentFlags().IntVar(&config.P2P.NetworkID, "network-id",
 		config.P2P.NetworkID, "NetworkID to run on (0 - mainnet, 1 - testnet)")
 	RootCmd.PersistentFlags().StringVar(&config.P2P.NodeID, "node-id",
@@ -45,10 +45,10 @@ func init() {
 		config.P2P.SwarmConfig.RoutingTableAlpha, "The rounding table Alpha")
 	RootCmd.PersistentFlags().IntVar(&config.P2P.SwarmConfig.RandomConnections, "swarm-randcon",
 		config.P2P.SwarmConfig.RoutingTableAlpha, "Number of random connections")
-	//RootCmd.PersistentFlags().StringSliceVar(&config.P2P.SwarmConfig.BootstrapNodes, "swarm-bootstrap-nodes",
-	//	config.P2P.SwarmConfig.BootstrapNodes, "Number of random connections")
-	//RootCmd.PersistentFlags().StringVar(&config.P2P.TimeConfig.MaxAllowedDrift, "max-allowed-time-drift",
-	//	config.P2P.TimeConfig.MaxAllowedDrift, "When to close the app until user resolves time sync problems")
+	RootCmd.PersistentFlags().StringSliceVar(&config.P2P.SwarmConfig.BootstrapNodes, "swarm-bootstrap-nodes",
+		config.P2P.SwarmConfig.BootstrapNodes, "Number of random connections")
+	RootCmd.PersistentFlags().DurationVar(&config.P2P.TimeConfig.MaxAllowedDrift, "max-allowed-time-drift",
+		config.P2P.TimeConfig.MaxAllowedDrift, "When to close the app until user resolves time sync problems")
 	RootCmd.PersistentFlags().IntVar(&config.P2P.TimeConfig.NtpQueries, "ntp-queries",
 		config.P2P.TimeConfig.NtpQueries, "Number of random connections")
 

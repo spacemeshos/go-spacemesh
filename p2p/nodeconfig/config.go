@@ -18,12 +18,8 @@ func init() {
 	// set default config params based on runtime here
 }
 
-type duration struct {
-	string
-}
-
-func (d *duration) Duration() (duration time.Duration) {
-	dur, err := time.ParseDuration(d.string)
+func duration(duration string) (dur time.Duration) {
+	dur, err := time.ParseDuration(duration)
 	if err != nil {
 		log.Error("Could not parse duration string returning 0, error:", err)
 	}
@@ -36,8 +32,8 @@ type Config struct {
 	FastSync      bool   `mapstructure:"fast-sync"`
 	TCPPort       int    `mapstructure:"tcp-port"`
 	NodeID        string `mapstructure:"node-id"`
-	DialTimeout   duration
-	ConnKeepAlive duration
+	DialTimeout   time.Duration
+	ConnKeepAlive time.Duration
 	NetworkID     int         `mapstructure:"network-id"`
 	SwarmConfig   SwarmConfig `mapstructure:"swarm"`
 	TimeConfig    TimeConfig
@@ -49,15 +45,15 @@ type SwarmConfig struct {
 	RoutingTableBucketSize int  `mapstructure:"swarm-rtbs"`
 	RoutingTableAlpha      int  `mapstructure:"swarm-rtalpha"`
 	RandomConnections      int  `mapstructure:"swarm-randcon"`
-	BootstrapNodes         cli.StringSlice
+	BootstrapNodes         []string
 }
 
 // TimeConfig specifies the timesync params for ntp.
 type TimeConfig struct {
-	MaxAllowedDrift       duration
+	MaxAllowedDrift       time.Duration
 	NtpQueries            int
-	DefaultTimeoutLatency duration
-	RefreshNtpInterval    duration
+	DefaultTimeoutLatency time.Duration
+	RefreshNtpInterval    time.Duration
 }
 
 // DefaultConfig deines the default p2p configuration
@@ -65,10 +61,10 @@ func DefaultConfig() Config {
 
 	// TimeConfigValues defines default values for all time and ntp related params.
 	var TimeConfigValues = TimeConfig{
-		MaxAllowedDrift:       duration{"10s"},
+		MaxAllowedDrift:       duration("10s"),
 		NtpQueries:            5,
-		DefaultTimeoutLatency: duration{"10s"},
-		RefreshNtpInterval:    duration{"30m"},
+		DefaultTimeoutLatency: duration("10s"),
+		RefreshNtpInterval:    duration("30m"),
 	}
 
 	// SwarmConfigValues defines default values for swarm config params.
@@ -88,8 +84,8 @@ func DefaultConfig() Config {
 		FastSync:      true,
 		TCPPort:       7513,
 		NodeID:        "",
-		DialTimeout:   duration{"1m"},
-		ConnKeepAlive: duration{"48h"},
+		DialTimeout:   duration("1m"),
+		ConnKeepAlive: duration("48h"),
 		NetworkID:     int(TestNet),
 		SwarmConfig:   SwarmConfigValues,
 		TimeConfig:    TimeConfigValues,

@@ -101,7 +101,7 @@ func ntpRequest(server string, rq *NtpPacket) (time.Time, time.Duration, *NtpPac
 	defer conn.Close()
 
 	if err := conn.SetDeadline(
-		time.Now().Add(nodeconfig.TimeConfigValues.DefaultTimeoutLatency.Duration())); err != nil {
+		time.Now().Add(nodeconfig.TimeConfigValues.DefaultTimeoutLatency)); err != nil {
 		return zeroTime, zeroDuration, nil, fmt.Errorf("failed to set deadline: %s", err)
 	}
 	before := time.Now()
@@ -180,7 +180,7 @@ func CheckSystemClockDrift() (time.Duration, error) {
 		return drift, err
 	}
 	// Check if drift exceeds our max allowed drift
-	if drift < -nodeconfig.TimeConfigValues.MaxAllowedDrift.Duration() || drift > nodeconfig.TimeConfigValues.MaxAllowedDrift.Duration() {
+	if drift < -nodeconfig.TimeConfigValues.MaxAllowedDrift || drift > nodeconfig.TimeConfigValues.MaxAllowedDrift {
 		return drift, fmt.Errorf("System clock is %s away from NTP servers. please synchronize your OS ", drift)
 	}
 

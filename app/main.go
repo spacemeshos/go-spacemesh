@@ -116,8 +116,6 @@ func (app *SpacemeshApp) before(cmd *cobra.Command, args []string) (err error) {
 
 	//app.setupLogging(ctx.Bool("debug"))
 
-	fmt.Printf("\n app loging checking config %v \n", app.Config)
-
 	app.setupLogging()
 
 	// todo: add misc app setup here (metrics, debug, etc....)
@@ -164,8 +162,7 @@ func (app *SpacemeshApp) getAppInfo() string {
 
 // Post Execute tasks
 func (app *SpacemeshApp) cleanup(cmd *cobra.Command, args []string) (err error) {
-
-	log.Debug("App cleanup starting...")
+	log.Info("App cleanup starting...")
 
 	if app.jsonAPIService != nil {
 		log.Info("Stopping JSON service api...")
@@ -173,11 +170,12 @@ func (app *SpacemeshApp) cleanup(cmd *cobra.Command, args []string) (err error) 
 	}
 
 	if app.grpcAPIService != nil {
+		log.Info("Stopping GRPC service ...")
 		app.grpcAPIService.StopService()
 	}
 
 	// add any other cleanup tasks here....
-	log.Debug("App cleanup completed\n\n")
+	log.Info("App cleanup completed\n\n")
 
 	return nil
 }
@@ -191,9 +189,9 @@ func (app *SpacemeshApp) startSpacemeshNode(cmd *cobra.Command, args []string) {
 	// start a new node passing the app-wide node config values and persist it to store
 	// so future sessions use the same local node id
 	node, err := p2p.NewLocalNode(address, app.Config.P2P, true)
+
 	if err != nil {
-		fmt.Printf("%v", err)
-		//return err
+		log.Error(fmt.Sprintf("%v", err))
 	}
 
 	node.NotifyOnShutdown(ExitApp)
