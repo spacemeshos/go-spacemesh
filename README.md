@@ -112,6 +112,7 @@ make cover
 #### Next Steps...
 - Please visit our [wiki](https://github.com/spacemeshos/go-spacemesh/wiki)
 - Browse project [go docs](https://godoc.org/github.com/spacemeshos/go-spacemesh)
+- Spacemesh Protocol [first AMA session](https://spacemesh.io/tal-m-deep-dive/)
 
 ### Got Questions? 
 - Introduce yourself and ask anything on the [spacemesh gitter channel](https://gitter.im/spacemesh-os/Lobby).
