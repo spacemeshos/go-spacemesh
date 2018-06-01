@@ -93,7 +93,7 @@ func (s *swarmImpl) onConnectionRequest(req node.RemoteNodeData) {
 		// Dial the other node using the node's network config values
 		localNodeConfig := s.localNode.Config()
 		addressableNodeConfig := &localNodeConfig
-		conn, err = s.network.DialTCP(req.IP(), addressableNodeConfig.DialTimeout.Duration(), addressableNodeConfig.ConnKeepAlive.Duration())
+		conn, err = s.network.DialTCP(req.IP(), addressableNodeConfig.DialTimeout, addressableNodeConfig.ConnKeepAlive)
 		if err != nil {
 			s.sendNodeEvent(req.ID(), Disconnected)
 			s.localNode.Error("failed to connect to remote node %s on advertised ip %s", req.Pretty(), req.IP())
