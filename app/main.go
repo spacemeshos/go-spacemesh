@@ -57,7 +57,7 @@ func ParseConfig() (*cfg.Config, error) {
 	err := viper.Unmarshal(&conf)
 
 	if err != nil {
-		fmt.Printf("Failed to parse config ")
+		log.Error("Failed to parse config\n")
 		return nil, err
 	}
 
@@ -102,7 +102,8 @@ func (app *SpacemeshApp) before(cmd *cobra.Command, args []string) (err error) {
 
 	// read in default config if passed as param using viper
 	if err := cfg.LoadConfig(fileLocation); err != nil {
-		fmt.Printf("%v", err)
+		log.Error(fmt.Sprintf("couldn't load config file at location: %s \n error: %v",
+			fileLocation, err))
 		return err
 	}
 
@@ -110,8 +111,7 @@ func (app *SpacemeshApp) before(cmd *cobra.Command, args []string) (err error) {
 	app.Config, err = ParseConfig()
 
 	if err != nil {
-		fmt.Printf("couldn't parse the config toml file %v", err)
-		return err
+		log.Error(fmt.Sprintf("couldn't parse the config toml file %v", err))
 	}
 
 	//app.setupLogging(ctx.Bool("debug"))
