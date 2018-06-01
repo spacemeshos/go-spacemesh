@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/log"
-	"gopkg.in/urfave/cli.v1"
 )
 
 // ConfigValues specifies  default values for node config params.
@@ -73,7 +72,7 @@ func DefaultConfig() Config {
 		RoutingTableBucketSize: 20,
 		RoutingTableAlpha:      3,
 		RandomConnections:      5,
-		BootstrapNodes: cli.StringSlice{ // these should be the spacemesh foundation bootstrap nodes
+		BootstrapNodes: []string{ // these should be the spacemesh foundation bootstrap nodes
 			"125.0.0.1:3572/iaMujEYTByKcjMZWMqg79eJBGMDm8ADsWZFdouhpfeKj",
 			"125.0.0.1:3763/x34UDdiCBAsXmLyMMpPQzs313B9UDeHNqFpYsLGfaFvm",
 		},
