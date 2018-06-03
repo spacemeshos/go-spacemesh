@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/timesync"
+	"github.com/spacemeshos/go-spacemesh/repl"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -223,6 +224,8 @@ func (app *SpacemeshApp) startSpacemeshNode(cmd *cobra.Command, args []string) {
 	}
 
 	log.Info("App started.")
+
+	repl.StartRepl(node)
 
 	// app blocks until it receives a signal to exit
 	// this signal may come from the node or from sig-abort (ctrl-c)

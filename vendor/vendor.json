@@ -15,6 +15,12 @@
 			"revisionTime": "2017-07-02T00:39:31Z"
 		},
 		{
+			"checksumSHA1": "QQgNik2GjRFQMHBQBBaT95vOegQ=",
+			"path": "github.com/c-bata/go-prompt",
+			"revision": "2f3ee57cf5d006ef778e5fab923ed0022eba2168",
+			"revisionTime": "2018-05-18T01:37:44Z"
+		},
+		{
 			"checksumSHA1": "7NP1qUMF8Kx1y0zANxx0e+oq9Oo=",
 			"path": "github.com/fsnotify/fsnotify",
 			"revision": "c2828203cd70a50dcccfb2761f8b1f8ceef9a8e9",
