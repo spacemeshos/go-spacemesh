@@ -3,9 +3,10 @@ package crypto
 import (
 	"bytes"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/assert"
 	"testing"
 	"unsafe"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestGetRandomBytesToBuffer(t *testing.T) {
@@ -14,10 +15,10 @@ func TestGetRandomBytesToBuffer(t *testing.T) {
 	eb := make([]byte, n)
 	// pass in a zero
 	err := GetRandomBytesToBuffer(0, tb)
-	assert.Err(t, err, "zero parameter should give error")
+	assert.Error(t, err, "zero parameter should give error")
 	// deliberately too large n parameter
 	err = GetRandomBytesToBuffer(n+1, tb)
-	assert.Err(t, err, "too large parameter should give error")
+	assert.Error(t, err, "too large parameter should give error")
 	// call with good parameters
 	err = GetRandomBytesToBuffer(n, tb)
 	assert.Equal(t, err, nil, fmt.Sprintf("unexpected error %v", err))
@@ -30,7 +31,7 @@ func TestGetRandomBytes(t *testing.T) {
 	eb := make([]byte, n)
 	// pass in a zero
 	tb, err := GetRandomBytes(0)
-	assert.Err(t, err, "zero parameter should give error")
+	assert.Error(t, err, "zero parameter should give error")
 	// call with good parameters
 	tb, err = GetRandomBytes(n)
 	assert.Equal(t, err, nil, fmt.Sprintf("unexpected error %v", err))

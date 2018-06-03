@@ -5,7 +5,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/spacemeshos/go-spacemesh/assert"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestIds(t *testing.T) {
@@ -14,7 +14,7 @@ func TestIds(t *testing.T) {
 	assert.True(t, len(s) > 0, "expected dht id")
 
 	_, err := NewIDFromHexString("xxxx")
-	assert.Err(t, err, "expected error")
+	assert.Error(t, err, "expected error")
 }
 
 func TestSorting(t *testing.T) {
