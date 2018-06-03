@@ -47,7 +47,7 @@ func TestBranchNodeCreation(t *testing.T) {
 	assert.True(t, bytes.Equal(res, p2), "unexpected pointer value")
 
 	res = node.getPointer("a")
-	assert.NotNil(t, res, "expected []byte slice")
+	assert.Equal(t, res, []byte(nil))
 	assert.True(t, len(res) == 0, "expected empty []byte slice")
 
 	pointers := node.getAllChildNodePointers()
