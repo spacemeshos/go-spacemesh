@@ -3,9 +3,10 @@ package merkle
 import (
 	"bytes"
 	"encoding/hex"
-	"github.com/spacemeshos/go-spacemesh/assert"
-	"github.com/spacemeshos/go-spacemesh/crypto"
 	"testing"
+	
+	"github.com/stretchr/testify/assert"
+	"github.com/spacemeshos/go-spacemesh/crypto"
 )
 
 func TestBranchNodeCreation(t *testing.T) {
@@ -32,7 +33,7 @@ func TestBranchNodeCreation(t *testing.T) {
 
 	nodeHash := node.getNodeHash()
 	binData, err := node.marshal()
-	assert.NoErr(t, err, "failed to marshal node")
+	assert.NoError(t, err, "failed to marshal node")
 	assert.True(t, bytes.Equal(crypto.Sha256(binData), nodeHash), "unexpected node hash")
 
 	res := node.getPointer(string(p1Hex[0]))

@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/assert"
+	"github.com/stretchr/testify/assert"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 )

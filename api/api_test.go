@@ -5,7 +5,7 @@ import (
 	"github.com/golang/protobuf/jsonpb"
 	config "github.com/spacemeshos/go-spacemesh/api/config"
 	pb "github.com/spacemeshos/go-spacemesh/api/pb"
-	"github.com/spacemeshos/go-spacemesh/assert"
+	"github.com/stretchr/testify/assert"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -21,7 +21,7 @@ func TestServersConfig(t *testing.T) {
 
 	port1, err := net.GetUnboundedPort()
 	port2, err := net.GetUnboundedPort()
-	assert.NoErr(t, err, "Should be able to establish a connection on a port")
+	assert.NoError(t, err, "Should be able to establish a connection on a port")
 
 	config.ConfigValues.JSONServerPort = port1
 	config.ConfigValues.GrpcServerPort = port2
@@ -37,7 +37,7 @@ func TestGrpcApi(t *testing.T) {
 
 	port1, err := net.GetUnboundedPort()
 	port2, err := net.GetUnboundedPort()
-	assert.NoErr(t, err, "Should be able to establish a connection on a port")
+	assert.NoError(t, err, "Should be able to establish a connection on a port")
 
 	config.ConfigValues.JSONServerPort = port1
 	config.ConfigValues.GrpcServerPort = port2
@@ -76,7 +76,7 @@ func TestJsonApi(t *testing.T) {
 
 	port1, err := net.GetUnboundedPort()
 	port2, err := net.GetUnboundedPort()
-	assert.NoErr(t, err, "Should be able to establish a connection on a port")
+	assert.NoError(t, err, "Should be able to establish a connection on a port")
 
 	config.ConfigValues.JSONServerPort = port1
 	config.ConfigValues.GrpcServerPort = port2
@@ -101,7 +101,7 @@ func TestJsonApi(t *testing.T) {
 	reqParams := pb.SimpleMessage{Value: message}
 	var m jsonpb.Marshaler
 	payload, err := m.MarshalToString(&reqParams)
-	assert.NoErr(t, err, "failed to marshal to string")
+	assert.NoError(t, err, "failed to marshal to string")
 
 	// Without this running this on Travis CI might generate a connection refused error
 	// because the server may not be ready to accept connections just yet.
@@ -109,11 +109,11 @@ func TestJsonApi(t *testing.T) {
 
 	url := fmt.Sprintf("http://127.0.0.1:%d/v1/example/echo", config.ConfigValues.JSONServerPort)
 	resp, err := http.Post(url, contentType, strings.NewReader(payload))
-	assert.NoErr(t, err, "failed to http post to api endpoint")
+	assert.NoError(t, err, "failed to http post to api endpoint")
 
 	defer resp.Body.Close()
 	buf, err := ioutil.ReadAll(resp.Body)
-	assert.NoErr(t, err, "failed to read response body")
+	assert.NoError(t, err, "failed to read response body")
 
 	if got, want := resp.StatusCode, http.StatusOK; got != want {
 		t.Errorf("resp.StatusCode = %d; want %d", got, want)

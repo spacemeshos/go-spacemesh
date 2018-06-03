@@ -5,32 +5,32 @@ import (
 	"os/user"
 	"testing"
 
-	"github.com/spacemeshos/go-spacemesh/assert"
+	"github.com/stretchr/testify/assert"
 )
 
 var RootFolder = "/"
 
 func TestPathExists(t *testing.T) {
 	tempDir, err := GetSpacemeshTempDirectoryPath()
-	assert.NoErr(t, err, "creating temp dir failed")
+	assert.NoError(t, err, "creating temp dir failed")
 	assert.True(t, PathExists(tempDir), "expecting existence of path")
-	assert.NoErr(t, DeleteAllTempFiles(), "removing dir failed")
+	assert.NoError(t, DeleteAllTempFiles(), "removing dir failed")
 }
 
 func TestGetFullDirectoryPath(t *testing.T) {
 	tempDir, err := GetSpacemeshTempDirectoryPath()
-	assert.NoErr(t, err, "creating temp dir failed")
+	assert.NoError(t, err, "creating temp dir failed")
 	aPath, err := GetFullDirectoryPath(tempDir)
 	assert.Equal(t, tempDir, aPath, "Path is different")
 	assert.Nil(t, err)
-	assert.NoErr(t, DeleteAllTempFiles(), "removing dir failed")
+	assert.NoError(t, DeleteAllTempFiles(), "removing dir failed")
 }
 
 func TestGetUserHomeDirectory(t *testing.T) {
 	users := TestUsers()
 	SetupTestHooks(users)
 	usr, err := currentUser()
-	assert.NoErr(t, err, "getting current user failed")
+	assert.NoError(t, err, "getting current user failed")
 	testCases := []struct {
 		user            *user.User
 		home            string
@@ -49,7 +49,7 @@ func TestGetUserHomeDirectory(t *testing.T) {
 
 	TearDownTestHooks()
 	usr, err = currentUser()
-	assert.NoErr(t, err, "getting current user failed")
+	assert.NoError(t, err, "getting current user failed")
 	assert.Equal(t, usr.HomeDir, GetUserHomeDirectory(), "HOME is different")
 }
 
@@ -57,7 +57,7 @@ func TestGetCanonicalPath(t *testing.T) {
 	users := TestUsers()
 	SetupTestHooks(users)
 	usr, err := currentUser()
-	assert.NoErr(t, err, "getting current user failed")
+	assert.NoError(t, err, "getting current user failed")
 
 	testCases := []struct {
 		user     *user.User
@@ -91,7 +91,7 @@ func TestGetSpacemeshDataDirectoryPath(t *testing.T) {
 	users := TestUsers()
 	SetupTestHooks(users)
 	usr, err := currentUser()
-	assert.NoErr(t, err, "getting current user failed")
+	assert.NoError(t, err, "getting current user failed")
 
 	testCases := []struct {
 		user     *user.User
@@ -116,7 +116,7 @@ func TestGetSpacemeshTempDirectoryPath(t *testing.T) {
 	users := TestUsers()
 	SetupTestHooks(users)
 	usr, err := currentUser()
-	assert.NoErr(t, err, "getting current user failed")
+	assert.NoError(t, err, "getting current user failed")
 
 	testCases := []struct {
 		user     *user.User
@@ -141,7 +141,7 @@ func TestEnsureDataSubDirectory(t *testing.T) {
 	users := TestUsers()
 	SetupTestHooks(users)
 	usr, err := currentUser()
-	assert.NoErr(t, err, "getting current user failed")
+	assert.NoError(t, err, "getting current user failed")
 
 	testCases := []struct {
 		user     *user.User
@@ -166,7 +166,7 @@ func TestDeleteAllTempFiles(t *testing.T) {
 	users := TestUsers()
 	SetupTestHooks(users)
 	usr, err := currentUser()
-	assert.NoErr(t, err, "getting current user failed")
+	assert.NoError(t, err, "getting current user failed")
 
 	testCases := []struct {
 		user     *user.User
@@ -192,7 +192,7 @@ func TestGetLogsDataDirectoryPath(t *testing.T) {
 	users := TestUsers()
 	SetupTestHooks(users)
 	usr, err := currentUser()
-	assert.NoErr(t, err, "getting current user failed")
+	assert.NoError(t, err, "getting current user failed")
 
 	testCases := []struct {
 		user  *user.User
@@ -209,17 +209,17 @@ func TestGetLogsDataDirectoryPath(t *testing.T) {
 		actual, err := GetLogsDataDirectoryPath()
 		assert.Equal(t, testCase.error, err != nil, "")
 		dir, err := GetFullDirectoryPath(actual)
-		assert.NoErr(t, err, "")
+		assert.NoError(t, err, "")
 		assert.Equal(t, actual, dir, "")
 	}
 
 	TearDownTestHooks()
 	usr, err = currentUser()
-	assert.NoErr(t, err, "getting current user failed")
+	assert.NoError(t, err, "getting current user failed")
 	aPath, err := GetLogsDataDirectoryPath()
-	assert.NoErr(t, err, "getting logs data directory failed")
+	assert.NoError(t, err, "getting logs data directory failed")
 	dir, err := GetFullDirectoryPath(aPath)
-	assert.NoErr(t, err, "Path is different")
+	assert.NoError(t, err, "Path is different")
 	assert.Equal(t, aPath, dir, "Logs directory is different")
 }
 
@@ -227,7 +227,7 @@ func TestGetAccountsDataDirectoryPath(t *testing.T) {
 	users := TestUsers()
 	SetupTestHooks(users)
 	usr, err := currentUser()
-	assert.NoErr(t, err, "getting current user failed")
+	assert.NoError(t, err, "getting current user failed")
 
 	testCases := []struct {
 		user  *user.User
@@ -244,17 +244,17 @@ func TestGetAccountsDataDirectoryPath(t *testing.T) {
 		actual, err := GetAccountsDataDirectoryPath()
 		assert.Equal(t, testCase.error, err != nil, "")
 		dir, err := GetFullDirectoryPath(actual)
-		assert.NoErr(t, err, "")
+		assert.NoError(t, err, "")
 		assert.Equal(t, actual, dir, "")
 	}
 
 	TearDownTestHooks()
 	usr, err = currentUser()
-	assert.NoErr(t, err, "getting current user failed")
+	assert.NoError(t, err, "getting current user failed")
 	aPath, err := GetAccountsDataDirectoryPath()
-	assert.NoErr(t, err, "getting accounts data directory failed")
+	assert.NoError(t, err, "getting accounts data directory failed")
 	dir, err := GetFullDirectoryPath(aPath)
-	assert.NoErr(t, err, "Path is different")
+	assert.NoError(t, err, "Path is different")
 	assert.Equal(t, aPath, dir, "Accounts directory is different")
 }
 
@@ -262,7 +262,7 @@ func TestEnsureSpacemeshDataDirectories(t *testing.T) {
 	users := TestUsers()
 	SetupTestHooks(users)
 	usr, err := currentUser()
-	assert.NoErr(t, err, "getting current user failed")
+	assert.NoError(t, err, "getting current user failed")
 
 	testCases := []struct {
 		user     *user.User
@@ -284,8 +284,8 @@ func TestEnsureSpacemeshDataDirectories(t *testing.T) {
 
 	TearDownTestHooks()
 	usr, err = currentUser()
-	assert.NoErr(t, err, "getting current user failed")
+	assert.NoError(t, err, "getting current user failed")
 	aPath, err := EnsureSpacemeshDataDirectories()
-	assert.NoErr(t, err, "")
+	assert.NoError(t, err, "")
 	assert.Equal(t, aPath, usr.HomeDir+RootFolder+".spacemesh", "")
 }

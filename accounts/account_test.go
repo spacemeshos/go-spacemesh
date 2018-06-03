@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/spacemeshos/go-spacemesh/assert"
+	"github.com/stretchr/testify/assert"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -118,7 +118,7 @@ func TestPersistence(t *testing.T) {
 	// attempt to unlock
 	err = account1.UnlockAccount(wrongPassphrase)
 
-	assert.Err(t, err, "Expected unlock with wrong password op error")
+	assert.Error(t, err, "Expected unlock with wrong password op error")
 	assert.True(t, account1.IsAccountLocked(), "Expected account to be locked")
 	assert.Nil(t, account1.PrivKey, "expected nil private key for locked account")
 

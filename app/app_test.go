@@ -4,7 +4,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/spacemeshos/go-spacemesh/assert"
+	"github.com/stretchr/testify/assert"
+
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 )

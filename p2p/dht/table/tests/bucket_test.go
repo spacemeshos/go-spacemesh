@@ -4,7 +4,7 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/spacemeshos/go-spacemesh/assert"
+	"github.com/stretchr/testify/assert"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht/table"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
@@ -15,14 +15,14 @@ func TestBucket(t *testing.T) {
 	const n = 100
 
 	local, err := p2p.GenerateRandomNodeData()
-	assert.NoErr(t, err, "Should be able to create node")
+	assert.NoError(t, err, "Should be able to create node")
 
 	localID := local.DhtID()
 
 	// add 100 nodes to the table
 	b := table.NewBucket()
 	nodes, err := p2p.GenerateRandomNodesData(n)
-	assert.NoErr(t, err, "Should be able to create multiple nodes")
+	assert.NoError(t, err, "Should be able to create multiple nodes")
 
 	for i := 0; i < n; i++ {
 		b.PushFront(nodes[i])
