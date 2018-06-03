@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"encoding/hex"
 	"testing"
-	
-	"github.com/stretchr/testify/assert"
+
 	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestBranchNodeCreation(t *testing.T) {

@@ -2,8 +2,8 @@ package merkle
 
 import (
 	"bytes"
-	"github.com/stretchr/testify/assert"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
+	"github.com/stretchr/testify/assert"
 	"path/filepath"
 	"testing"
 )

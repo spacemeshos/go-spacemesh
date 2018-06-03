@@ -3,9 +3,9 @@ package merkle
 import (
 	"bytes"
 	"encoding/hex"
-	"github.com/stretchr/testify/assert"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/merkle/pb"
+	"github.com/stretchr/testify/assert"
 	"testing"
 )
 

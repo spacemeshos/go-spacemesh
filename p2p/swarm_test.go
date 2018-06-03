@@ -8,10 +8,10 @@ import (
 
 	"sync/atomic"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
+	"github.com/stretchr/testify/assert"
 )
 
 // Basic session test

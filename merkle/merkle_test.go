@@ -3,10 +3,10 @@ package merkle
 import (
 	"bytes"
 	"encoding/hex"
-	"github.com/stretchr/testify/assert"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/stretchr/testify/assert"
 	"testing"
 )
 

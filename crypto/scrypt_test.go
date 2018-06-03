@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"testing"
-	
+
 	"github.com/stretchr/testify/assert"
 )
 

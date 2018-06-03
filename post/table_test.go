@@ -1,9 +1,9 @@
 package post
 
 import (
-	"github.com/stretchr/testify/assert"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
