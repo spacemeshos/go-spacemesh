@@ -22,16 +22,14 @@ type FindNodeProtocol interface {
 
 	// FindNode sends a find_node request for data about a remote node, known only by id,
 	// to a specific known remote node.
-	//
 	// Results will include 0 or more nodes and up to count nodes which may or may not include
 	// data about id (as serverNodeId may not know about it).
 	//
 	// reqID: allows the client to match responses with requests by id.
-	//
 	// serverNodeId - node to send the find request to.
-	//
 	// id - node id to find
-	// TODO(): this should really be named FindClosestNodes
+	//
+	// TODO(devs): this should really be named FindClosestNodes
 	FindNode(reqID []byte, serverNodeID string, id string, callback chan FindNodeResp) error
 }
 
