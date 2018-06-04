@@ -38,7 +38,8 @@ func (mt *merkleTreeImp) removeNodeFromStore(node Node) error {
 	return nil
 }
 
-// Persists user and tree data for given (userKey, userValue) and a Node (tree-space node).
+// Persists user and tree data for given (userKey, userValue) and
+// a Node (tree-space node).
 // node: tree node to store in the tree db.
 func (mt *merkleTreeImp) persistNode(node Node) error {
 
