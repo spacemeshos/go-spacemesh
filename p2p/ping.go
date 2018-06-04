@@ -2,6 +2,7 @@ package p2p
 
 import (
 	"encoding/hex"
+
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
@@ -10,11 +11,12 @@ import (
 const pingReq = "/ping/1.0/ping-req/"
 const pingResp = "/ping/1.0/ping-resp/"
 
-// Ping protocol
-// An example of a simple app-level p2p protocol
+// Ping protocol:
+// An example of a simple app-level p2p protocol.
 type Ping interface {
 
 	// Send sends a ping request to a remote node.
+	//
 	// reqIdD: allows the client to match responses with requests by id.
 	Send(msg string, reqID []byte, remoteNodeID string)
 
@@ -22,14 +24,14 @@ type Ping interface {
 	Register(callback chan SendPingResp)
 }
 
-// SendPingResp contains pong response data or error
+// SendPingResp contains pong response data or error.
 type SendPingResp struct {
 	*pb.PingRespData
 	err   error
 	reqID []byte
 }
 
-// Callbacks is a channel of SendPingResp channels
+// Callbacks is a channel of SendPingResp channels.
 type Callbacks chan chan SendPingResp
 
 type pingProtocolImpl struct {
@@ -43,7 +45,7 @@ type pingProtocolImpl struct {
 	callbacksRegReq   Callbacks // a channel of channels that receive callbacks to send ping
 }
 
-// NewPingProtocol creates a new Ping protocol implementation
+// NewPingProtocol creates a new Ping protocol implementation.
 func NewPingProtocol(s Swarm) Ping {
 
 	p := &pingProtocolImpl{

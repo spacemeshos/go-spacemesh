@@ -2,16 +2,17 @@ package node
 
 import (
 	"fmt"
+	"strings"
+	"time"
+
 	"github.com/btcsuite/btcutil/base58"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
-	"strings"
-	"time"
 )
 
-// RemoteNodeData defines basic remote node data
-// Outside of swarm local node works with RemoteNodeData and not with Peers
-// Peers should only be used internally by swarm
+// RemoteNodeData defines basic remote node data.
+// Outside of swarm local node works with RemoteNodeData and not with Peers.
+// Peers should only be used internally by swarm.
 type RemoteNodeData interface {
 	ID() string    // base58 encoded node key/id
 	IP() string    // node tcp listener e.g. 127.0.0.1:3038
@@ -36,7 +37,8 @@ type remoteNodeDataImpl struct {
 }
 
 // ToNodeInfo returns marshaled protobufs node infos slice from a slice of RemoteNodeData.
-// filterId: node id to exclude from the result
+//
+// filterId: node id to exclude from the result.
 func ToNodeInfo(nodes []RemoteNodeData, filterID string) []*pb.NodeInfo {
 	// init empty slice
 	res := []*pb.NodeInfo{}
@@ -55,7 +57,9 @@ func ToNodeInfo(nodes []RemoteNodeData, filterID string) []*pb.NodeInfo {
 }
 
 // PickFindNodeServers picks up to count server who haven't been queried recently.
+//
 // nodeId - the target node id of this find node operation.
+//
 // Used in KAD node discovery.
 func PickFindNodeServers(nodes []RemoteNodeData, nodeID string, count int) []RemoteNodeData {
 
@@ -110,7 +114,7 @@ func FromNodeInfos(nodes []*pb.NodeInfo) []RemoteNodeData {
 	return res
 }
 
-// NewRemoteNodeData creates a new RemoteNodeData
+// NewRemoteNodeData creates a new RemoteNodeData.
 func NewRemoteNodeData(id string, ip string) RemoteNodeData {
 	bytes := base58.Decode(id)
 	dhtID := dht.NewIDFromNodeKey(bytes)
@@ -122,7 +126,8 @@ func NewRemoteNodeData(id string, ip string) RemoteNodeData {
 	}
 }
 
-// NewRemoteNodeDataFromString creates a remote node from a string in the following format: 126.0.0.1:3572/QmcjTLy94HGFo4JoYibudGeBV2DSBb6E4apBjFsBGnMsWa .
+// NewRemoteNodeDataFromString creates a remote node from a string in the following format:
+// 126.0.0.1:3572/QmcjTLy94HGFo4JoYibudGeBV2DSBb6E4apBjFsBGnMsWa .
 func NewRemoteNodeDataFromString(data string) RemoteNodeData {
 	items := strings.Split(data, "/")
 	if len(items) != 2 {
@@ -131,12 +136,12 @@ func NewRemoteNodeDataFromString(data string) RemoteNodeData {
 	return NewRemoteNodeData(items[1], items[0])
 }
 
-// GetLastFindNodeCall returns the time of the last find node call
+// GetLastFindNodeCall returns the time of the last find node call.
 func (rn *remoteNodeDataImpl) GetLastFindNodeCall(nodeID string) time.Time {
 	return rn.lastFindNodeCall[nodeID]
 }
 
-// SetLastFindNodeCall updates the time of the last find node call
+// SetLastFindNodeCall updates the time of the last find node call.
 func (rn *remoteNodeDataImpl) SetLastFindNodeCall(nodeID string, t time.Time) {
 	rn.lastFindNodeCall[nodeID] = t
 }

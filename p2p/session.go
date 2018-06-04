@@ -5,15 +5,17 @@ import (
 	"crypto/cipher"
 	"encoding/hex"
 	"errors"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"time"
 )
 
 // NetworkSession is an authenticated network session between 2 peers.
 // Sessions may be used between 'connections' until they expire.
 // Session provides the encryptor/decryptor for all messages exchanged between 2 peers.
-// enc/dec is using an ephemeral sym key exchanged securely between the peers via the handshake protocol
+// enc/dec is using an ephemeral sym key exchanged securely between the peers via the
+// handshake protocol.
 // The handshake protocol goal is to create an authenticated network session.
 type NetworkSession interface {
 	ID() []byte         // Unique session id
@@ -51,12 +53,12 @@ type NetworkSessionImpl struct {
 	blockDecrypter cipher.BlockMode
 }
 
-//LocalNodeID returns the session's local node id.
+// LocalNodeID returns the session's local node id.
 func (n *NetworkSessionImpl) LocalNodeID() string {
 	return n.localNodeID
 }
 
-//RemoteNodeID returns the session's remote node id.
+// RemoteNodeID returns the session's remote node id.
 func (n *NetworkSessionImpl) RemoteNodeID() string {
 	return n.remoteNodeID
 }
@@ -129,7 +131,7 @@ func (n *NetworkSessionImpl) Decrypt(in []byte) ([]byte, error) {
 	return clearText, nil
 }
 
-// NewNetworkSession creates a new network session based on provided data
+// NewNetworkSession creates a new network session based on provided data.
 func NewNetworkSession(id, keyE, keyM, pubKey []byte, localNodeID, remoteNodeID string) (NetworkSession, error) {
 	s := &NetworkSessionImpl{
 		id:            id,

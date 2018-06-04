@@ -3,6 +3,8 @@ package p2p
 import (
 	"encoding/hex"
 	"fmt"
+	"time"
+
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -11,7 +13,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"gopkg.in/op/go-logging.v1"
-	"time"
 )
 
 // LocalNode implementation.
@@ -99,7 +100,8 @@ func (n *localNodeImp) Pretty() string {
 	return n.pubKey.Pretty()
 }
 
-// TCPAddress returns the TCP address that this node is listening on for incoming network connections.
+// TCPAddress returns the TCP address that this node is listening on
+// for incoming network connections.
 func (n *localNodeImp) TCPAddress() string {
 	return n.tcpAddress
 }
@@ -109,7 +111,8 @@ func (n *localNodeImp) PubTCPAddress() string {
 	return n.pubTCPAddress
 }
 
-// RefreshPubTCPAddress attempts to refresh the node public ip address and returns true if it was able to do so.
+// RefreshPubTCPAddress attempts to refresh the node public ip
+// address and returns true if it was able to do so.
 func (n *localNodeImp) RefreshPubTCPAddress() bool {
 
 	// Figure out node public ip address
@@ -139,7 +142,8 @@ func (n *localNodeImp) PublicKey() crypto.PublicKey {
 	return n.pubKey
 }
 
-// SignToString signs a protobufs message with this node's private key, and returns a hex-encoded string signature.
+// SignToString signs a protobufs message with this node's private key,
+// and returns a hex-encoded string signature.
 func (n *localNodeImp) SignToString(data proto.Message) (string, error) {
 	sign, err := n.Sign(data)
 	if err != nil {
@@ -148,7 +152,8 @@ func (n *localNodeImp) SignToString(data proto.Message) (string, error) {
 	return hex.EncodeToString(sign), nil
 }
 
-// Sign signs a protobufs message with this node's private key and returns the raw signature bytes.
+// Sign signs a protobufs message with this node's private key and returns
+// the raw signature bytes.
 func (n *localNodeImp) Sign(data proto.Message) ([]byte, error) {
 	bin, err := proto.Marshal(data)
 	if err != nil {

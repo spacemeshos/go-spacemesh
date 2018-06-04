@@ -2,8 +2,9 @@ package node
 
 import (
 	"container/list"
-	"github.com/spacemeshos/go-spacemesh/p2p/dht"
 	"sort"
+
+	"github.com/spacemeshos/go-spacemesh/p2p/dht"
 )
 
 // PeerDistance defines a distance from a node expressed as a dht id.
@@ -12,7 +13,7 @@ type PeerDistance struct {
 	Distance dht.ID
 }
 
-// PeerSorter is a sort.Interface of RemoteNodeData by XOR distance
+// PeerSorter is a sort.Interface of RemoteNodeData by XOR distance.
 type PeerSorter []*PeerDistance
 
 func (p PeerSorter) Len() int      { return len(p) }
@@ -21,7 +22,7 @@ func (p PeerSorter) Less(a, b int) bool {
 	return p[a].Distance.Less(p[b].Distance)
 }
 
-// CopyPeersFromList copies peers from the list and returns a PeerSorter for the list
+// CopyPeersFromList copies peers from the list and returns a PeerSorter for the list.
 func CopyPeersFromList(target dht.ID, dest PeerSorter, src *list.List) PeerSorter {
 	for e := src.Front(); e != nil; e = e.Next() {
 		p := e.Value.(RemoteNodeData)

@@ -1,14 +1,16 @@
 package net
 
 import (
+	"net"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/delimited"
-	"net"
-	"time"
 )
 
-// Connection is a closeable network connection, that can send and receive messages from a remote instance.
+// Connection is a closeable network connection, that can send and receive messages from
+// a remote instance.
 // Connection is an io.Writer and an io.Closer.
 type Connection interface {
 	ID() string
@@ -54,13 +56,13 @@ type OutgoingMessage struct {
 // ConnectionSource specifies the connection originator - local or remote node.
 type ConnectionSource int
 
-// ConnectionSource values
+// ConnectionSource values.
 const (
 	Local ConnectionSource = iota
 	Remote
 )
 
-// A network connection supporting full-duplex messaging
+// A network connection supporting full-duplex messaging.
 type connectionImpl struct {
 
 	// metadata for logging / debugging
@@ -76,7 +78,7 @@ type connectionImpl struct {
 	net  Net      // network context
 }
 
-// Create a new connection wrapping a net.Conn with a provided connection manager
+// Create a new connection wrapping a net.Conn with a provided connection manager.
 func newConnection(conn net.Conn, n Net, s ConnectionSource) Connection {
 
 	// todo parametrize incoming msgs chan buffer size - hard-coded for now
@@ -138,8 +140,8 @@ func (c *connectionImpl) LastOpTime() time.Time {
 	return c.lastOpTime
 }
 
-// Push outgoing message to the connections
-// Read from the incoming new messages and send down the connection
+// Push outgoing message to the connections.
+// Read from the incoming new messages and send down the connection.
 func (c *connectionImpl) beginEventProcessing() {
 
 Loop:

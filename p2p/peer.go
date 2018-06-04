@@ -9,9 +9,9 @@ import (
 
 // Peer is a remote network node.
 // At minimum local node knows its id (public key) and announced tcp address/port.
-// Peers are maintained by the swarm and are not visible to higher-level types on the network stack
-// All Peer methods are NOT thread-safe - they are designed to be used only from a singleton Swarm type
-// Peer handles swarm sessions and net connections with a remote node
+// Peers are maintained by the swarm and are not visible to higher-level types on the network stack.
+// All Peer methods are NOT thread-safe - they are designed to be used only from a singleton Swarm type.
+// Peer handles swarm sessions and net connections with a remote node.
 type Peer interface {
 	ID() []byte     // node id is public key bytes
 	String() string // node public key string
@@ -24,13 +24,13 @@ type Peer interface {
 
 	GetSessions() map[string]NetworkSession
 
-	// returns an authenticated session with the node if one exists
+	// GetAuthenticatedSession returns an authenticated session with the node if one exists
 	GetAuthenticatedSession() NetworkSession
 
-	// returns an active connection with the node if we have one
+	// GetActiveConnection returns an active connection with the node if we have one
 	GetActiveConnection() net.Connection
 
-	// returns RemoteNodeData for this peer
+	// GetRemoteNodeData returns RemoteNodeData for this peer
 	GetRemoteNodeData() node.RemoteNodeData
 }
 

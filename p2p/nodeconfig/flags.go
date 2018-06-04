@@ -39,7 +39,7 @@ var (
 		Destination: &ConfigValues.ConnKeepAlive.string,
 	})
 
-	// NetworkIDFlag is a flag that holds the network id the node will run on
+	// NetworkIDFlag is a flag that holds the network id the node will run on.
 	NetworkIDFlag = altsrc.NewIntFlag(cli.IntFlag{
 		Name:        "network-id",
 		Usage:       "NetworkID to run on (0 - mainnet, 1 - testnet)",

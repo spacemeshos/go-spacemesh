@@ -2,19 +2,23 @@ package net
 
 import (
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 	"net"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 )
 
-// Net is a connection manager able to dial remote endpoints
-// Net clients should register all callbacks
-// Connections may be initiated by DialTCP() or by remote clients connecting to the listen address
-// ConnManager includes a TCP server, and a TCP client
-// It provides full duplex messaging functionality over the same tcp/ip connection
-// Network should not know about higher-level networking types such as remoteNode, swarm and networkSession
-// Network main client is the swarm
+// Net is a connection manager able to dial remote endpoints.
+// Net clients should register all callbacks.
+//
+// Connections may be initiated by DialTCP() or by remote clients connecting to the listen address.
+// ConnManager includes a TCP server, and a TCP client.
+//
+// It provides full duplex messaging functionality over the same tcp/ip connection.
+// Network should not know about higher-level networking types such as remoteNode,
+// swarm and networkSession.
+// Network main client is the swarm.
 // Net has no channel events processing loops - clients are responsible for polling these channels and popping events from them
 type Net interface {
 	DialTCP(address string, timeOut time.Duration, keepAlive time.Duration) (Connection, error) // Connect to a remote node. Can send when no error.
@@ -44,7 +48,7 @@ type netImpl struct {
 }
 
 // NewNet creates a new network.
-// It attempts to tcp listen on address. e.g. localhost:1234 .
+// It attempts to tcp listen on address. e.g. localhost:1234.
 func NewNet(tcpListenAddress string, config nodeconfig.Config) (Net, error) {
 
 	n := &netImpl{
@@ -93,7 +97,7 @@ func (n *netImpl) GetMessageSendErrors() chan MessageSendError {
 	return n.messageSendErrors
 }
 
-// Dial a remote server with provided time out
+// Dial a remote server with provided time out.
 // address:: ip:port
 // Returns established connection that local clients can send messages to or error if failed
 // to establish a connection

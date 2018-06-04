@@ -69,11 +69,11 @@ func NewEmptyTree(userDataFileName string, treeDataFileName string) (Tree, error
 
 // NewTreeFromDb creates a new tree from provided dbs file paths.
 //
-// rootHash: tree root hash - used to pull the root from the db
+// rootHash: tree root hash - used to pull the root from the db.
 //
-// userDataFileName: full local os path and file name for user data db for this tree
+// userDataFileName: full local os path and file name for user data db for this tree.
 //
-// treeDataFileName: full local os path and file name for the internal tree db store for this tree
+// treeDataFileName: full local os path and file name for the internal tree db store for this tree.
 func NewTreeFromDb(rootHash []byte, userDataFileName string, treeDataFileName string) (Tree, error) {
 
 	userData, err := leveldb.OpenFile(userDataFileName, nil)

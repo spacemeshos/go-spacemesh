@@ -4,19 +4,20 @@ package timesync
 import (
 	"encoding/binary"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 	"math/rand"
 	"net"
 	"sort"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 )
 
 const (
-	// MaxAllowedMessageDrift is the time we limit we receive and handle delivered messages within
+	// MaxAllowedMessageDrift is the time we limit we receive and handle delivered messages within.
 	MaxAllowedMessageDrift = 10 * time.Minute
-	// NtpOffset is 70 years in seconds since ntp counts from 1900 and unix from 1970
+	// NtpOffset is 70 years in seconds since ntp counts from 1900 and unix from 1970.
 	NtpOffset = 2208988800
-	// DefaultNtpPort is the ntp protocol port
+	// DefaultNtpPort is the ntp protocol port.
 	DefaultNtpPort = "123"
 )
 
@@ -171,8 +172,8 @@ func ntpTimeDrift() (time.Duration, error) {
 	return all.Average(), nil
 }
 
-// CheckSystemClockDrift is comparing our clock to the collected ntp data
-// return the drift and an error when drift reading failed or exceeds our preset MaxAllowedDrift
+// CheckSystemClockDrift is comparing our clock to the collected ntp data, and
+// returns the drift and an error when drift reading failed or exceeds our preset MaxAllowedDrift
 func CheckSystemClockDrift() (time.Duration, error) {
 	// Read average drift form ntpTimeDrift
 	drift, err := ntpTimeDrift()

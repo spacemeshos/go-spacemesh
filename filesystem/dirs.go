@@ -144,10 +144,14 @@ func GetUserHomeDirectory() string {
 }
 
 // GetCanonicalPath returns an os-specific full path following these rules:
+//
 // - replace ~ with user's home dir path
+//
 // - expand any ${vars} or $vars
+//
 // - resolve relative paths /.../
-// p: source path name
+//
+// Where p: source path name
 func GetCanonicalPath(p string) string {
 
 	if strings.HasPrefix(p, "~/") || strings.HasPrefix(p, "~\\") {

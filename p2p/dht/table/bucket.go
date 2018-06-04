@@ -2,6 +2,7 @@ package table
 
 import (
 	"container/list"
+
 	"github.com/spacemeshos/go-spacemesh/p2p/dht"
 	node "github.com/spacemeshos/go-spacemesh/p2p/node"
 )
@@ -21,7 +22,7 @@ type Bucket interface {
 	List() *list.List
 }
 
-// Internal bucket implementation type
+// Internal bucket implementation type.
 type bucketimpl struct {
 	list *list.List
 }
