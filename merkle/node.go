@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -124,7 +125,7 @@ func newNodeFromData(data []byte) (Node, error) {
 	return c, nil
 }
 
-// Set extension node child node
+// setExtChild set's extension node child node
 // Pointer: pointer to child (and hash of child's value)
 func (n *nodeImp) setExtChild(pointer []byte) error {
 
@@ -143,7 +144,7 @@ func (n *nodeImp) setExtChild(pointer []byte) error {
 	return nil
 }
 
-// Adds a child node to a branch node
+// addBranchChild adds a child node to a branch node
 // idx: branch index (hex char representing a nibble) for the new child
 // child: child node
 // Side effect: if an existing child for index idx exists then it is removed from the tree
@@ -173,7 +174,7 @@ func (n *nodeImp) addBranchChild(idx string, child Node) error {
 	return nil
 }
 
-// Removes a child indexed with idx from a branch node
+// removeBranchChild removes a child indexed with idx from a branch node
 // todo: figure out if we should always remove the node from backing store. Otherwise, the removed child may never be removed from the local db.
 func (n *nodeImp) removeBranchChild(idx string) error {
 
@@ -228,7 +229,7 @@ func (n *nodeImp) getExtNode() shortNode {
 	return n.ext
 }
 
-// Returns a shortnode type of this node.
+// getShortNode returns a shortnode type of this node.
 // Returns nil for a branch or unknown node
 func (n *nodeImp) getShortNode() shortNode {
 	switch n.nodeType {
@@ -243,28 +244,28 @@ func (n *nodeImp) getShortNode() shortNode {
 	}
 }
 
-// Returns true iff node is a leaf node
+// isLeaf returns true iff node is a leaf node
 func (n *nodeImp) isLeaf() bool {
 	return n.nodeType == pb.NodeType_leaf
 }
 
-// Returns true iff node is an extension node
+// isExt returns true iff node is an extension node
 func (n *nodeImp) isExt() bool {
 	return n.nodeType == pb.NodeType_extension
 }
 
-// Returns true iff node is a branch node
+// isBranch returns true iff node is a branch node
 func (n *nodeImp) isBranch() bool {
 	return n.nodeType == pb.NodeType_branch
 }
 
-// Returns number of current node children.
+// getChildrenCount returns number of current node children.
 // Leaf nodes always have 0 children, ext nodes have 1 and branch node can have up to 16 children.
 func (n *nodeImp) getChildrenCount() int {
 	return len(n.children)
 }
 
-// Returns true iff node is a leaf or an extension node
+// isShortNode returns true iff node is a leaf or an extension node
 func (n *nodeImp) isShortNode() bool {
 	switch n.nodeType {
 	case pb.NodeType_leaf:
@@ -276,7 +277,7 @@ func (n *nodeImp) isShortNode() bool {
 	}
 }
 
-// Validates node hash without any side effects
+// validateHash validates node hash without any side effects
 func (n *nodeImp) validateHash() error {
 
 	data, err := n.marshal()
@@ -301,7 +302,7 @@ func (n *nodeImp) didLoadChildren() bool {
 	return n.childrenLoaded
 }
 
-// Loads node's direct child node(s) to memory from store
+// loadChildren loads node's direct child node(s) to memory from store
 func (n *nodeImp) loadChildren(db *treeDb) error {
 
 	if n.nodeType == pb.NodeType_leaf {

@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -37,8 +38,8 @@ func (mt *merkleTreeImp) removeNodeFromStore(node Node) error {
 	return nil
 }
 
-// Persists user and tree data for given (userKey, userValue) and a Node (tree-space node)
-// node: tree node to store in the tree db
+// Persists user and tree data for given (userKey, userValue) and a Node (tree-space node).
+// node: tree node to store in the tree db.
 func (mt *merkleTreeImp) persistNode(node Node) error {
 
 	nodeKey := node.getNodeHash()

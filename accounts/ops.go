@@ -5,20 +5,22 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-// Pretty returns an account logging string
+// Pretty returns an account logging string.
 func (a *Account) Pretty() string {
 	return fmt.Sprintf("Account %s", a.PubKey.Pretty())
 }
 
+// String returns the stringed data of the account public key.
 func (a *Account) String() string {
 	return a.PubKey.String()
 }
 
-// Log account info
+// Log account info.
 func (a *Account) Log() {
 
 	pubKey := a.PubKey.String()
@@ -35,12 +37,12 @@ func (a *Account) Log() {
 	log.Info(" kdParams: %+v", a.kdParams)
 }
 
-// IsAccountLocked returns true iff account is locked.
+// IsAccountLocked returns true if account is locked.
 func (a *Account) IsAccountLocked() bool {
 	return a.PrivKey == nil
 }
 
-// IsAccountUnlocked returns true iff account is unlocked.
+// IsAccountUnlocked returns true if account is unlocked.
 func (a *Account) IsAccountUnlocked() bool {
 	return !a.IsAccountLocked()
 }
@@ -51,7 +53,7 @@ func (a *Account) LockAccount(passphrase string) {
 	delete(Accounts.Unlocked, a.String())
 }
 
-// UnlockAccount unlocks an account using the user provided passphrase
+// UnlockAccount unlocks an account using the user provided passphrase.
 func (a *Account) UnlockAccount(passphrase string) error {
 
 	if a.IsAccountUnlocked() {
@@ -113,7 +115,7 @@ func (a *Account) UnlockAccount(passphrase string) error {
 	return nil
 }
 
-// Validate that the account's private key matches the provided private key
+// ValidatePublicKey that the account's private key matches the provided private key.
 func (a *Account) validatePublicKey(privateKey crypto.PrivateKey) error {
 
 	publicKey := privateKey.GetPublicKey()

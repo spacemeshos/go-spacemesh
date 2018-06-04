@@ -3,15 +3,16 @@ package merkle
 import (
 	"encoding/hex"
 	"errors"
+
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/merkle/pb"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
-// Gets user value associated with user key
-// returns value if found and nil otherwise
-// Returned stack - The tree path path closest to the value
-// Returned int - count of matched hex chars on the path
+// Get gets user value associated with user key
+// and returns value if found and nil otherwise.
+// Returned stack - The tree path path closest to the value.
+// Returned int - count of matched hex chars on the path.
 func (mt *merkleTreeImp) Get(k []byte) ([]byte, *stack, error) {
 
 	keyHexStr := hex.EncodeToString(k)
@@ -50,11 +51,11 @@ func (mt *merkleTreeImp) Get(k []byte) ([]byte, *stack, error) {
 	return value, s, err
 }
 
-// Get user value v keyed by k v from the tree
-// root: tree root to start looking from
-// pos: number of key hex chars (nibbles) already matched and the index in key to start matching from
-// k: hex-encoded path (always abs full path)
-// s: on return stack of nodes from root to where value should be or is in the tree
+// findValue get user value v keyed by k v from the tree.
+// root: tree root to start looking from.
+// pos: number of key hex chars (nibbles) already matched and the index in key to start matching from.
+// k: hex-encoded path (always abs full path).
+// s: on return stack of nodes from root to where value should be or is in the tree.
 func (mt *merkleTreeImp) findValue(root Node, k string, pos int, s *stack) ([]byte, error) {
 
 	if root == nil {

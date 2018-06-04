@@ -1,10 +1,11 @@
-// Package accounts provides types for working with Spacemesh blockchain accounts
+// Package accounts provides types for working with Spacemesh blockchain accounts.
 package accounts
 
 import (
 	"crypto/aes"
 	"encoding/hex"
 	"errors"
+
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -15,7 +16,7 @@ type Registry struct {
 	Unlocked map[string]*Account
 }
 
-// Account is an end user blockchain account
+// Account is an end user blockchain account.
 type Account struct {
 	PrivKey    crypto.PrivateKey
 	PubKey     crypto.PublicKey
@@ -24,7 +25,7 @@ type Account struct {
 }
 
 var (
-	// Accounts Registry app singleton
+	// Accounts Registry app singleton.
 	Accounts *Registry
 )
 
@@ -36,7 +37,8 @@ func init() {
 }
 
 // NewAccount Creates a new account using the provided passphrase.
-// Clients should persist newly created accounts - without this the account only lasts for one app session.
+// Clients should persist newly create accounts - without this the
+// account only lasts for one app session.
 func NewAccount(passphrase string) (*Account, error) {
 
 	// account crypto data
@@ -74,7 +76,6 @@ func NewAccount(passphrase string) (*Account, error) {
 
 	// aes encrypt data
 	cipherText, err := crypto.AesCTRXOR(aesKey, privKeyBytes, nonce)
-
 	if err != nil {
 		log.Error("Failed to encrypt private key", err)
 		return nil, err

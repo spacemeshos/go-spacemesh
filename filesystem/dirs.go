@@ -2,16 +2,17 @@
 package filesystem
 
 import (
-	"github.com/spacemeshos/go-spacemesh/app/config"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"os"
 	"os/user"
 	"path"
 	"path/filepath"
 	"strings"
+
+	"github.com/spacemeshos/go-spacemesh/app/config"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-// Using a function pointer to get the current user so we can more easily mock in tests
+// currentUsing is a function pointer to get the current user so we can more easily mock in tests.
 var currentUser = user.Current
 
 // Directory and paths funcs
@@ -22,7 +23,7 @@ const OwnerReadWriteExec = 0700
 // OwnerReadWrite is a standard owner read / write file permission.
 const OwnerReadWrite = 0600
 
-// PathExists returns true iff file exists in local store and is accessible.
+// PathExists returns true if file exists in local store and is accessible.
 func PathExists(path string) bool {
 	_, err := os.Stat(path)
 	if os.IsNotExist(err) {
