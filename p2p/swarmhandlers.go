@@ -17,8 +17,8 @@ import (
 // These should only be called from the swarms event processing main loop
 // or by other internal handlers but not from a random type or go routine
 
-// Handles a local request to register a remote node in the swarm
-// Register adds info about this node but doesn't attempt to connect to it
+// Handles a local request to register a remote node in the swarm.
+// Register adds info about this node but doesn't attempt to connect to it.
 func (s *swarmImpl) onRegisterNodeRequest(n node.RemoteNodeData) {
 
 	if s.peers[n.ID()] != nil {
@@ -41,7 +41,7 @@ func (s *swarmImpl) onRegisterNodeRequest(n node.RemoteNodeData) {
 
 }
 
-// Handles a local request to connect to a remote node
+// Handles a local request to connect to a remote node.
 func (s *swarmImpl) onConnectionRequest(req node.RemoteNodeData) {
 
 	s.localNode.Info("Local request to connect to node %s", req.Pretty())
@@ -108,7 +108,7 @@ func (s *swarmImpl) onConnectionRequest(req node.RemoteNodeData) {
 	}
 }
 
-// callback from handshake protocol when session state changes
+// callback from handshake protocol when session state changes.
 func (s *swarmImpl) onNewSession(data HandshakeData) {
 
 	if err := data.GetError(); err != nil {
@@ -277,7 +277,7 @@ func (s *swarmImpl) onRemoteClientConnected(c net.Connection) {
 	}
 }
 
-// Processes an incoming handshake protocol message
+// Processes an incoming handshake protocol message.
 func (s *swarmImpl) onRemoteClientHandshakeMessage(msg net.IncomingMessage) {
 
 	data := &pb.HandshakeData{}
@@ -326,8 +326,8 @@ func (s *swarmImpl) onRemoteClientHandshakeMessage(msg net.IncomingMessage) {
 	s.demuxer.RouteIncomingMessage(NewIncomingMessage(sender, data.Protocol, msg.Message))
 }
 
-// Pre-process a protocol message from a remote client handling decryption and authentication
-// Authenticated messages are forwarded to the demuxer for demuxing to protocol handlers
+// Pre-process a protocol message from a remote client handling decryption and authentication.
+// Authenticated messages are forwarded to the demuxer for demuxing to protocol handlers.
 func (s *swarmImpl) onRemoteClientProtocolMessage(msg net.IncomingMessage, c *pb.CommonMessageData) {
 
 	// Locate the session

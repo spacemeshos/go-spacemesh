@@ -2,16 +2,17 @@
 package filesystem
 
 import (
-	"github.com/spacemeshos/go-spacemesh/app/config"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"os"
 	"os/user"
 	"path"
 	"path/filepath"
 	"strings"
+
+	"github.com/spacemeshos/go-spacemesh/app/config"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-// Using a function pointer to get the current user so we can more easily mock in tests
+// currentUsing is a function pointer to get the current user so we can more easily mock in tests.
 var currentUser = user.Current
 
 // Directory and paths funcs
@@ -22,7 +23,7 @@ const OwnerReadWriteExec = 0700
 // OwnerReadWrite is a standard owner read / write file permission.
 const OwnerReadWrite = 0600
 
-// PathExists returns true iff file exists in local store and is accessible.
+// PathExists returns true if file exists in local store and is accessible.
 func PathExists(path string) bool {
 	_, err := os.Stat(path)
 	if os.IsNotExist(err) {
@@ -143,10 +144,14 @@ func GetUserHomeDirectory() string {
 }
 
 // GetCanonicalPath returns an os-specific full path following these rules:
+//
 // - replace ~ with user's home dir path
+//
 // - expand any ${vars} or $vars
+//
 // - resolve relative paths /.../
-// p: source path name
+//
+// Where p: source path name
 func GetCanonicalPath(p string) string {
 
 	if strings.HasPrefix(p, "~/") || strings.HasPrefix(p, "~\\") {

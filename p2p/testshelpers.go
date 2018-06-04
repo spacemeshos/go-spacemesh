@@ -2,18 +2,21 @@ package p2p
 
 import (
 	"fmt"
+	"testing"
+
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
-	"testing"
 )
 
-// GenerateTestNode generates a local test node without persisting data to local store and with default config value.
+// GenerateTestNode generates a local test node without persisting data to
+// local store and with default config value.
 func GenerateTestNode(t *testing.T) (LocalNode, Peer) {
 	return GenerateTestNodeWithConfig(t, nodeconfig.ConfigValues)
 }
 
-// GenerateTestNodeWithConfig creates a local test node without persisting data to local store.
+// GenerateTestNodeWithConfig creates a local test node without persisting
+// data to local store.
 func GenerateTestNodeWithConfig(t *testing.T, config nodeconfig.Config) (LocalNode, Peer) {
 
 	port := crypto.GetRandomUserPort()

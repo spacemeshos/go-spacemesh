@@ -198,7 +198,7 @@ func (app *SpacemeshApp) before(ctx *cli.Context) error {
 	return nil
 }
 
-// Spacemesh app cleanup tasks
+// Spacemesh app cleanup tasks.
 func (app *SpacemeshApp) cleanup(ctx *cli.Context) error {
 
 	log.Info("App cleanup starting...")

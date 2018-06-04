@@ -4,7 +4,7 @@ import (
 	"errors"
 )
 
-// remove v keyed by k from the tree
+// Delete remove v keyed by k from the tree
 func (mt *merkleTreeImp) Delete(k []byte) error {
 
 	return errors.New("not implemented yet")
@@ -34,7 +34,7 @@ func (mt *merkleTreeImp) Delete(k []byte) error {
 	//	return nil
 }
 
-// Deletes value from node at top of the stack from the tree
+// delete removes value from node at top of the stack from the tree
 // Stack contains a path to a node to be deleted
 // eg. ext -> branch -> ext -> branch
 // k: path to path last node (top of stack)

@@ -8,7 +8,7 @@ import (
 	"errors"
 )
 
-// AesCTRXOR is an AES cipher following https://leanpub.com/gocrypto/read#leanpub-auto-aes-cbc .
+// AesCTRXOR is an AES cipher following https://leanpub.com/gocrypto/read#leanpub-auto-aes-cbc.
 func AesCTRXOR(key, input, nonce []byte) ([]byte, error) {
 	aesBlock, err := aes.NewCipher(key)
 	if err != nil {

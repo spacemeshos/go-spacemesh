@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcutil/base58"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -59,7 +60,7 @@ func GenerateKeyPair() (PrivateKey, PublicKey, error) {
 	return &privateKeyImpl{privKey}, &publicKeyImpl{privKey.PubKey()}, nil
 }
 
-// NewPrivateKey creates a new private key from data
+// NewPrivateKey creates a new private key from data.
 func NewPrivateKey(data []byte) (PrivateKey, error) {
 
 	if len(data) != 32 {
@@ -76,23 +77,23 @@ func NewPrivateKeyFromString(s string) (PrivateKey, error) {
 	return NewPrivateKey(data)
 }
 
-// InternalKey gets the internal key associated with a private key
+// InternalKey gets the internal key associated with a private key.
 func (p *privateKeyImpl) InternalKey() *btcec.PrivateKey {
 	return p.k
 }
 
-// Bytes returns the private key binary data
+// Bytes returns the private key binary data.
 func (p *privateKeyImpl) Bytes() []byte {
 	return p.k.Serialize()
 }
 
-// String returns a base58 encoded string of the private key binary data
+// String returns a base58 encoded string of the private key binary data.
 func (p *privateKeyImpl) String() string {
 	bytes := p.Bytes()
 	return base58.Encode(bytes)
 }
 
-// GetPublicKey generates and returns the public key associated with a private key
+// GetPublicKey generates and returns the public key associated with a private key.
 func (p *privateKeyImpl) GetPublicKey() PublicKey {
 	pubKey := p.k.PubKey()
 	return &publicKeyImpl{k: pubKey}
@@ -117,7 +118,7 @@ func (p *privateKeyImpl) Sign(in []byte) ([]byte, error) {
 	return signature.Serialize(), nil
 }
 
-// Decrypt decrypts data encrypted with a public key using its matching private key
+// Decrypt decrypts data encrypted with a public key using its matching private key.
 func (p *privateKeyImpl) Decrypt(in []byte) ([]byte, error) {
 	return btcec.Decrypt(p.k, in)
 }

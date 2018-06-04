@@ -6,7 +6,8 @@ import (
 	"strings"
 )
 
-// CheckNodeVersion checks if a request version is more recent then the given min version. returns a bool and an error
+// CheckNodeVersion checks if a request version is more recent then the given min version.
+// Returns a bool and an error
 func CheckNodeVersion(reqVersion string, minVersion string) (bool, error) {
 	// TODO : semantic versioning comparison is a pain, refine this or use a lib
 

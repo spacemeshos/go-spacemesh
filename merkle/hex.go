@@ -1,6 +1,6 @@
 package merkle
 
-// Converts a hex ascii character into its binary value and a success flag.
+// fromHexChar converts a hex ascii character into its binary value and a success flag.
 // Adapted from https://golang.org/src/encoding/hex/hex.go - too bad it is private
 // Examples: '0' -> 0x0
 // Examples: 'f' -> 0xf
@@ -17,7 +17,7 @@ func fromHexChar(c byte) (byte, bool) {
 	return 0, false
 }
 
-// Returns hex-encoded string from binary value. e.g 0x0 -> '0', 0xf -> 'f'
+// toHexChar returns hex-encoded string from binary value. e.g 0x0 -> '0', 0xf -> 'f'
 func toHexChar(c byte) (string, bool) {
 	switch {
 	case c <= 9:
@@ -29,14 +29,14 @@ func toHexChar(c byte) (string, bool) {
 	}
 }
 
-// Returns the common prefix of 2 hex encoded strings
+// commonPrefix returns the common prefix of 2 hex encoded strings
 // Empty string is returned if there's no common suffix of len >= 1
 func commonPrefix(s string, s1 string) string {
 	l := lenPrefix(s, s1)
 	return s[:l]
 }
 
-// Returns the length of the common prefix of 2 hex encoded strings
+// lenPrefix returns the length of the common prefix of 2 hex encoded strings
 func lenPrefix(a, b string) int {
 	var i, length = 0, len(a)
 	if len(b) < length {

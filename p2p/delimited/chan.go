@@ -91,7 +91,7 @@ Loop:
 	s.CloseChan <- true
 }
 
-// Close the Chan
+// Close the Chan.
 func (s *Chan) Close() {
 	s.CloseChan <- true
 }

@@ -11,13 +11,14 @@ import (
 	"io"
 	"time"
 
+	"strings"
+
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
-	"strings"
 )
 
 // HandshakeReq specifies the handshake protocol request message identifier. pattern is [protocol][version][method-name].
@@ -78,12 +79,17 @@ func (n *handshakeDataImp) SetError(err error) {
 }
 
 // HandshakeProtocol specifies the handshake protocol.
+//
 // Node1 -> Node 2: Req(HandshakeData)
+//
 // Node2 -> Node 1: Resp(HandshakeData)
-// After response is processed by node1 both sides have an auth session with a secret ephemeral aes sym key.
+//
+// After response is processed by node1 both sides have an auth session with a secret ephemeral
+// aes sym key.
 type HandshakeProtocol interface {
 	CreateSession(peer Peer)
-	RegisterNewSessionCallback(callback chan HandshakeData) // register a channel to receive session state changes
+	// RegisterNewSessionCallback registers a channel to receive session state changes
+	RegisterNewSessionCallback(callback chan HandshakeData)
 }
 
 type handshakeProtocolImpl struct {

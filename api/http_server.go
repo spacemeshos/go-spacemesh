@@ -2,19 +2,20 @@ package api
 
 import (
 	"flag"
+	"net/http"
+	"strconv"
+
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
-	"net/http"
-	"strconv"
 
 	gw "github.com/spacemeshos/go-spacemesh/api/pb"
 )
 
 // JSONHTTPServer is a JSON http server providing the Spacemesh API.
-// It is implemented using a grpc-gateway. See https://github.com/grpc-ecosystem/grpc-gateway .
+// It is implemented using a grpc-gateway. See https://github.com/grpc-ecosystem/grpc-gateway.
 type JSONHTTPServer struct {
 	Port   uint
 	server *http.Server

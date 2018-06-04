@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
+
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -25,7 +26,7 @@ type branchNode interface {
 
 }
 
-// Adds a child to the node
+// Adds a child to the node.
 func (b *branchNodeImpl) addChild(idx string, pointer []byte) error {
 
 	if len(idx) != 1 {
@@ -45,7 +46,7 @@ func (b *branchNodeImpl) addChild(idx string, pointer []byte) error {
 	return nil
 }
 
-// Removes a child from the node
+// Removes a child from the node.
 func (b *branchNodeImpl) removeChild(idx string) error {
 
 	if len(idx) != 1 {
@@ -95,7 +96,7 @@ func newBranchNodeEx(entries map[string][]byte, value []byte) branchNode {
 	}
 }
 
-// Creates a new branch node from persisted branch node data
+// Creates a new branch node from persisted branch node data.
 func newBranchNodeFromPersistedData(rawData []byte, data *pb.Node) branchNode {
 
 	n := &branchNodeImpl{
@@ -144,7 +145,7 @@ func (b *branchNodeImpl) print(userDb *userDb, getUserValue func(userDb *userDb,
 	return buffer.String()
 }
 
-// Returns a slice containing all pointers to child nodes
+// getAllChildNodePointers returns a slice containing all pointers to child nodes.
 func (b *branchNodeImpl) getAllChildNodePointers() [][]byte {
 	res := make([][]byte, 0)
 	for _, val := range b.entries {

@@ -1,11 +1,12 @@
 package p2p
 
 import (
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht/table"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
-	"time"
 
 	//"github.com/spacemeshos/go-spacemesh/p2p/dht/table"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
@@ -120,12 +121,12 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 	return s, err
 }
 
-// Register an event handler callback for connection state events
+// Register an event handler callback for connection state events.
 func (s *swarmImpl) RegisterNodeEventsCallback(callback NodeEventCallback) {
 	s.nec = append(s.nec, callback)
 }
 
-// Sends a connection event to all registered clients
+// Sends a connection event to all registered clients.
 func (s *swarmImpl) sendNodeEvent(peerID string, state NodeState) {
 
 	s.localNode.Info(">> Node event for <%s>. State: %+v", peerID[:6], state)
@@ -169,7 +170,7 @@ func (s *swarmImpl) GetLocalNode() LocalNode {
 	return s.localNode
 }
 
-// Starts the bootstrap process
+// Starts the bootstrap process.
 func (s *swarmImpl) bootstrap() {
 
 	s.localNode.Info("Starting bootstrap...")
@@ -196,7 +197,7 @@ func (s *swarmImpl) bootstrap() {
 	}
 }
 
-// Connect up to count random nodes
+// Connect up to count random nodes.
 func (s *swarmImpl) ConnectToRandomNodes(count int) {
 
 	if count <= 0 {

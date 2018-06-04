@@ -2,10 +2,11 @@
 package api
 
 import (
+	"strconv"
+
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/api/pb"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"strconv"
 
 	"net"
 
@@ -45,7 +46,7 @@ func (s SpaceMeshGrpcService) StartService(status chan bool) {
 	go s.startServiceInternal(status)
 }
 
-// This is a blocking method designed to be called using a go routine
+// startServiceInternal is a blocking method designed to be called using a go routine.
 func (s SpaceMeshGrpcService) startServiceInternal(status chan bool) {
 	port := config.ConfigValues.GrpcServerPort
 	addr := ":" + strconv.Itoa(int(port))
