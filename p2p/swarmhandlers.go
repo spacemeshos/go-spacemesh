@@ -42,6 +42,7 @@ func (s *swarmImpl) onRegisterNodeRequest(n node.RemoteNodeData) {
 
 	s.sendNodeEvent(n.ID(), Registered)
 
+	// TODO : Take out to some routine that waits for the registered event and sends the messages
 	for reqid, msg := range s.messagesPendingRegistration {
 		if msg.PeerID == n.ID() {
 			go s.SendMessage(msg)
@@ -159,6 +160,7 @@ func (s *swarmImpl) onConnectionRequest(req node.RemoteNodeData, done chan error
 			s.localNode.Debug("Connection Request Finished")
 		}(nec)
 		// start handshake protocol
+		// TODO : We don't really need HandshakeStarted
 		s.sendNodeEvent(req.ID(), HandshakeStarted)
 		s.handshakeProtocol.CreateSession(peer)
 		return
@@ -505,7 +507,7 @@ func (s *swarmImpl) onMessageSentEvent(evt net.MessageSentEvent) {
 	if callback == nil {
 		return
 	}
-
+	// TODO : Actually send to callback that message was sent.
 	// stop tracking this outgoing message - it was sent
 	delete(callbacks, reqID)
 }
@@ -541,6 +543,8 @@ func (s *swarmImpl) sendMessageSendError(cr net.ConnectionError) {
 	delete(callbacks, reqID)
 
 	go func() {
+		// TODO : make sure that goroutine doesn't leak. ( Select on timeout? )
+		// TODO : Select on default. maybe genreic function to select and default.
 		// send the error to the callback channel
 		callback <- SendError{cr.ID, cr.Err}
 	}()

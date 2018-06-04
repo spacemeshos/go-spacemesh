@@ -67,6 +67,16 @@ type SendMessageReq struct {
 	Callback chan SendError // optional callback to receive send errors or timeout
 }
 
+//TODO : Replace  chan SendError  with a ad-hoc struct that enforces buffered channel
+// TODO : Consider doing this in other places that have callback created by the caller
+//type endMessageCallback struct {
+//	chan SendError
+//}
+//
+//func NewCallback() *SendMessageCallback {
+//
+//}
+
 // SendError specifies message sending error data.
 type SendError struct {
 	ReqID []byte // unique request id

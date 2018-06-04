@@ -179,6 +179,7 @@ func (h *handshakeProtocolImpl) CreateSession(peer Peer) {
 		Callback: nil,
 	})
 
+	//TODO: We don't really need to announce half state
 	h.stateChanged(handshakeData)
 }
 
@@ -195,6 +196,7 @@ func (h *handshakeProtocolImpl) processEvents() {
 		case c := <-h.registerSessionCallback:
 			h.newSessionCallbacks = append(h.newSessionCallbacks, c)
 
+			// TODO : Take out state to a mutex protected get/set
 		case d := <-h.addPendingSession:
 			sessionKey := d.Session().String()
 			h.swarm.GetLocalNode().Debug("Storing pending session w key: %s", sessionKey)
@@ -582,6 +584,7 @@ func processHandshakeResponse(node LocalNode, r Peer, s NetworkSession, resp *pb
 		return errors.New("invalid signature")
 	}
 
+	// TODO: Remove isAuthenticated - we announce state only when its authenticated
 	// Session is now authenticated
 	s.SetAuthenticated(true)
 

@@ -126,6 +126,7 @@ type routingTableImpl struct {
 	bucketsize     int // max number of nodes per bucket. typically 10 or 20.
 	minPeersHealth int
 
+	// /TODO: remove this pubsub no one uses it.
 	peerRemoved PeerChannel
 	peerAdded   PeerChannel
 
@@ -136,6 +137,8 @@ type routingTableImpl struct {
 
 	peerRemovedCallbacks map[string]PeerChannel
 	peerAddedCallbacks   map[string]PeerChannel
+
+	// /remove
 }
 
 // NewRoutingTable creates a new routing table with a given bucket=size and local node dht.ID

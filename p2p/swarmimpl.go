@@ -16,6 +16,7 @@ type nodeEventCallbacks []NodeEventCallback
 type swarmImpl struct {
 	bootstrapped chan struct{}      // Channel to notify bootstrap loop to break
 	afterBoot    chan chan struct{} // Channel to block outside and wait for node to bootstrap
+	//TODO : replace afterboot channel to a blocking function - Wait for boot
 	// set in construction and immutable state
 	network   net.Net
 	localNode LocalNode
@@ -23,31 +24,36 @@ type swarmImpl struct {
 
 	config nodeconfig.SwarmConfig
 
+	// TODO : Replace with an interlocked function Add/Remove
 	nodeEventRegChannel    chan NodeEventCallback
 	nodeEventRemoveChannel chan NodeEventCallback
 	// node state callbacks
 	nec nodeEventCallbacks
 
 	// Internal state is not thread safe - must be accessed only from methods dispatched from the internal event handler
+	getPeerRequests   chan getPeerRequest
 	peers map[string]Peer // NodeID -> Peer. known remote nodes. Swarm is a peer store.
 
-	getPeerRequests   chan getPeerRequest
 	connections       map[string]net.Connection // ConnID -> Connection - all open connections for tracking and mngmnt
 	peersByConnection map[string]Peer           // ConnID -> Peer remote nodes indexed by their connections.
 
 	// todo: remove all idle sessions every n hours (configurable)
 	allSessions map[string]NetworkSession // SessionId -> Session data. all authenticated session
 
+	// To catch callbacks when returned from network (Error or Sent)
 	outgoingSendsCallbacks map[string]map[string]chan SendError // k - conn id v-  reqID -> chan SendError
 
 	messagesPendingSession map[string]SendMessageReq // k - unique req id. outgoing messages which pend an auth session with remote node to be sent out
 
 	incomingPendingSession  map[string][]net.IncomingMessage
+	// ChangeState register pending messages to incomingPendingSession
 	incomingPendingMessages chan incomingPendingMessage
 
+	// ChangeState register pending messages messagesPendingRegistration
 	msgPendingRegister          chan SendMessageReq
 	messagesPendingRegistration map[string]SendMessageReq // Messages waiting for peers to register.
 
+	// TODO: Consider remove retry
 	retryMessage       chan SendMessageReq
 	messagesRetryQueue []SendMessageReq
 
@@ -55,17 +61,22 @@ type swarmImpl struct {
 	connectionRequests chan nodeAction          // local requests to establish a session w a remote node
 	disconnectRequests chan node.RemoteNodeData // local requests to kill session and disconnect from node
 
+	// Recv message reqs and send them
 	sendMsgRequests  chan SendMessageReq // local request to send a session message to a node and callback on error or data
+	// Recv handshake message reqs and send them
 	sendHandshakeMsg chan SendMessageReq // local request to send a handshake protocol message
 
+	// Shutdown the loop
 	shutdown chan struct{} // local request to kill the swarm from outside. e.g when local node is shutting down
 
+	// Request to register a node to swarm.peers
 	registerNodeReq chan node.RemoteNodeData // local request to register a node based on minimal data
 
 	// swarm provides handshake protocol
 	handshakeProtocol HandshakeProtocol
 
 	// handshake protocol callback - sessions updates are pushed here
+	// TODO : listen only to either new session or error.
 	newSessions chan HandshakeData // gets callback from handshake protocol when new session are created and/or auth
 
 	// dht find-node protocol
@@ -302,6 +313,8 @@ Loop:
 		case session := <-s.newSessions:
 			s.onNewSession(session)
 
+		// TODO : Start Network Events; Take out to a different goroutine
+		// TODO : inside swarm.
 		case c := <-s.network.GetNewConnections():
 			s.onRemoteClientConnected(c)
 
@@ -319,11 +332,13 @@ Loop:
 
 		case c := <-s.network.GetClosingConnections():
 			s.onConnectionClosed(c)
+		// TODO : End Network
 
 		case r := <-s.sendMsgRequests:
 			s.onSendMessageRequest(r)
 
 		case n := <-s.connectionRequests:
+			// TODO : done channel should be buffered
 			s.onConnectionRequest(n.req, n.done)
 
 		case n := <-s.disconnectRequests:
