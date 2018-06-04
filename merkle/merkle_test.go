@@ -3,21 +3,21 @@ package merkle
 import (
 	"bytes"
 	"encoding/hex"
-	"github.com/spacemeshos/go-spacemesh/assert"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
 func TestEmptyTreeCreation(t *testing.T) {
 
 	err := filesystem.DeleteAllTempFiles()
-	assert.NoErr(t, err, "failed to clean temp folder")
+	assert.NoError(t, err, "failed to clean temp folder")
 
 	userDb, treeDb := getDbPaths(t)
 	m, err := NewEmptyTree(userDb, treeDb)
-	assert.NoErr(t, err, "failed to create new Merkle tree")
+	assert.NoError(t, err, "failed to create new Merkle tree")
 
 	root := m.GetRootNode()
 	assert.Nil(t, root, "expected empty tree")
@@ -26,26 +26,26 @@ func TestEmptyTreeCreation(t *testing.T) {
 	assert.True(t, bytes.Equal(EmptyTreeRootHash, hash), "unexpected empty tree root hash")
 
 	err = m.CloseDataStores()
-	assert.NoErr(t, err, "failed to close data stores")
+	assert.NoError(t, err, "failed to close data stores")
 }
 
 // Test a simple 1-node merkle tree
 func TestSimpleTreeOps(t *testing.T) {
 
 	err := filesystem.DeleteAllTempFiles()
-	assert.NoErr(t, err, "failed to clean temp folder")
+	assert.NoError(t, err, "failed to clean temp folder")
 
 	userDb, treeDb := getDbPaths(t)
 	m, err := NewEmptyTree(userDb, treeDb)
 	defer m.CloseDataStores() // we need to close the data stores when done w m - they are owned by m
 
-	assert.NoErr(t, err, "failed to create new Merkle tree")
+	assert.NoError(t, err, "failed to create new Merkle tree")
 
 	// user data k,v can be any bytes
 	v := []byte("zifton-the-immortal")
 	k := []byte("the-name-of-my-cat")
 
-	log.Info("User key hex: %s", hex.EncodeToString(k))
+	log.Debug("User key hex: %s", hex.EncodeToString(k))
 
 	tryPut(t, m, k, v)
 
@@ -55,14 +55,14 @@ func TestSimpleTreeOps(t *testing.T) {
 	validateGet(t, m, k, v)
 
 	err = m.CloseDataStores()
-	assert.NoErr(t, err, "failed to close tree data stores")
+	assert.NoError(t, err, "failed to close tree data stores")
 
 	/////////////////////////
 
 	// restore tree to a new instance based on root hash
 	rootHash := m.GetRootHash()
 	m1, err := NewTreeFromDb(rootHash, userDb, treeDb)
-	assert.NoErr(t, err, "failed to create tree from db")
+	assert.NoError(t, err, "failed to create tree from db")
 	defer m1.CloseDataStores() // tell m1 to close data stores when we are done w it
 
 	root = m1.GetRootNode()
@@ -82,14 +82,14 @@ func TestSimpleTreeOps(t *testing.T) {
 func TestComplexTreeOps(t *testing.T) {
 
 	err := filesystem.DeleteAllTempFiles()
-	assert.NoErr(t, err, "failed to clean temp folder")
+	assert.NoError(t, err, "failed to clean temp folder")
 
 	k1, err := hex.DecodeString("123456")
-	assert.NoErr(t, err, "invalid hex str")
+	assert.NoError(t, err, "invalid hex str")
 	v1 := []byte("zifton")
 
 	k2, err := hex.DecodeString("112456")
-	assert.NoErr(t, err, "invalid hex str")
+	assert.NoError(t, err, "invalid hex str")
 	v2 := []byte("tantalus")
 
 	// ext, path: 1, key: branch
@@ -99,42 +99,42 @@ func TestComplexTreeOps(t *testing.T) {
 	//
 
 	k3, err := hex.DecodeString("112457")
-	assert.NoErr(t, err, "invalid hex str")
+	assert.NoError(t, err, "invalid hex str")
 	v3, err := crypto.GetRandomBytes(100)
-	assert.NoErr(t, err, "failed to get random data")
+	assert.NoError(t, err, "failed to get random data")
 
 	k4, err := hex.DecodeString("123457")
-	assert.NoErr(t, err, "invalid hex str")
+	assert.NoError(t, err, "invalid hex str")
 	v4, err := crypto.GetRandomBytes(100)
-	assert.NoErr(t, err, "failed to get random data")
+	assert.NoError(t, err, "failed to get random data")
 
 	userDb, treeDb := getDbPaths(t)
 	m, err := NewEmptyTree(userDb, treeDb)
-	assert.NoErr(t, err, "failed to create new Merkle tree")
+	assert.NoError(t, err, "failed to create new Merkle tree")
 	defer m.CloseDataStores() // we need to close the data stores when done w m - they are owned by m
 
 	tryPut(t, m, k1, v1)
 
 	r, err := m.ValidateStructure(m.GetRootNode())
-	assert.NoErr(t, err, "invalid tree structure")
+	assert.NoError(t, err, "invalid tree structure")
 	assert.True(t, bytes.Equal(r, m.GetRootHash()), "unexpected root hash")
 
-	log.Info(m.Print())
+	log.Debug(m.Print())
 	validateGet(t, m, k1, v1)
 
 	tryPut(t, m, k2, v2)
 
-	log.Info(m.Print())
+	log.Debug(m.Print())
 	validateGet(t, m, k1, v1)
 	validateGet(t, m, k2, v2)
 
 	r, err = m.ValidateStructure(m.GetRootNode())
-	assert.NoErr(t, err, "invalid tree structure")
+	assert.NoError(t, err, "invalid tree structure")
 	assert.True(t, bytes.Equal(r, m.GetRootHash()), "unexpected root hash")
 
 	data, _, err := m.Get(k3)
 	assert.True(t, len(data) == 0, "expected empty result")
-	assert.NoErr(t, err, "expected no error")
+	assert.NoError(t, err, "expected no error")
 
 	tryPut(t, m, k3, v3)
 
@@ -151,9 +151,9 @@ func TestComplexTreeOps(t *testing.T) {
 	//1 12457
 	//1 12456
 
-	log.Info(m.Print())
+	log.Debug(m.Print())
 	r, err = m.ValidateStructure(m.GetRootNode())
-	assert.NoErr(t, err, "invalid tree structure")
+	assert.NoError(t, err, "invalid tree structure")
 	assert.True(t, bytes.Equal(r, m.GetRootHash()), "unexpected root hash")
 
 	validateGet(t, m, k1, v1)
@@ -163,9 +163,9 @@ func TestComplexTreeOps(t *testing.T) {
 	// key 123457
 
 	tryPut(t, m, k4, v4)
-	log.Info(m.Print())
+	log.Debug(m.Print())
 	r, err = m.ValidateStructure(m.GetRootNode())
-	assert.NoErr(t, err, "invalid tree structure")
+	assert.NoError(t, err, "invalid tree structure")
 	assert.True(t, bytes.Equal(r, m.GetRootHash()), "unexpected root hash")
 
 	validateGet(t, m, k1, v1)

@@ -53,8 +53,8 @@ func (mt *merkleTreeImp) persistNode(node Node) error {
 		log.Error("Failed to write tree data to db", err)
 	}
 
-	log.Info("Persisted node data: %s", node.print(mt.treeData, mt.userData))
-	log.Info("Node persisted to tree db. type: %s. db key(node hash): %s", node.getNodeType(), hex.EncodeToString(nodeKey)[:6])
+	log.Debug("Persisted node data: %s", node.print(mt.treeData, mt.userData))
+	log.Debug("Node persisted to tree db. type: %s. db key(node hash): %s", node.getNodeType(), hex.EncodeToString(nodeKey)[:6])
 	return nil
 }
 
@@ -70,7 +70,7 @@ func (mt *merkleTreeImp) deleteUserValueFromStore(v []byte) error {
 		return err
 	}
 
-	log.Info("Removed %s %s from user db.", hex.EncodeToString(k), hex.EncodeToString(v))
+	log.Debug("Removed %s %s from user db.", hex.EncodeToString(k), hex.EncodeToString(v))
 	return nil
 }
 
@@ -86,7 +86,7 @@ func (mt *merkleTreeImp) persistUserValue(v []byte) error {
 		return err
 	}
 
-	log.Info("Persisted %s %s to user db.", hex.EncodeToString(k), hex.EncodeToString(v))
+	log.Debug("Persisted %s %s to user db.", hex.EncodeToString(k), hex.EncodeToString(v))
 	return nil
 }
 

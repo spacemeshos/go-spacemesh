@@ -2,8 +2,9 @@ package merkle
 
 import (
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestHexFuncs(t *testing.T) {

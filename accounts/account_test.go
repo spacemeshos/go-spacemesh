@@ -4,9 +4,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/spacemeshos/go-spacemesh/assert"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestAccountLoading(t *testing.T) {
@@ -41,7 +41,7 @@ func TestAccountOps(t *testing.T) {
 	// uncomment to cleanup the account data file from store
 	//defer os.Remove(accountDataFilePath)
 
-	log.Info("Persisted account to: %s", accountDataFilePath)
+	log.Debug("Persisted account to: %s", accountDataFilePath)
 
 	// read the account back from store
 	account1, err := NewAccountFromStore(account.String(), accountsDataFolder)
@@ -118,7 +118,7 @@ func TestPersistence(t *testing.T) {
 	// attempt to unlock
 	err = account1.UnlockAccount(wrongPassphrase)
 
-	assert.Err(t, err, "Expected unlock with wrong password op error")
+	assert.Error(t, err, "Expected unlock with wrong password op error")
 	assert.True(t, account1.IsAccountLocked(), "Expected account to be locked")
 	assert.Nil(t, account1.PrivKey, "expected nil private key for locked account")
 

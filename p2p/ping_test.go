@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/assert"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestPingProtocol(t *testing.T) {
@@ -45,10 +45,10 @@ Loop:
 		case c := <-callback:
 			assert.Nil(t, c.err, "expected no err in response")
 			if bytes.Equal(c.GetMetadata().ReqId, ping1ReqID) { //2nd ping
-				node1Local.Info("Got 2nd ping response: `%s`. Total RTT: %s", c.GetPong(), time.Now().Sub(t0).String())
+				node1Local.Debug("Got 2nd ping response: `%s`. Total RTT: %s", c.GetPong(), time.Now().Sub(t0).String())
 				break Loop
 			} else if bytes.Equal(c.GetMetadata().ReqId, pingReqID) {
-				node1Local.Info("Got ping response: `%s`. Total RTT: %s", c.GetPong(), time.Now().Sub(t0))
+				node1Local.Debug("Got ping response: `%s`. Total RTT: %s", c.GetPong(), time.Now().Sub(t0))
 				t0 = time.Now()
 
 				// 2nd ping from node1 to node 2

@@ -7,6 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 	"time"
 
+	//"github.com/spacemeshos/go-spacemesh/p2p/dht/table"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/timesync"
 )
@@ -133,7 +134,7 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 	// findNode dht protocol
 	s.findNodeProtocol = NewFindNodeProtocol(s)
 
-	s.localNode.Info("Created swarm for local node %s, %s", tcpAddress, l.Pretty())
+	s.localNode.Debug("Created swarm for local node %s, %s", tcpAddress, l.Pretty())
 
 	s.handshakeProtocol = NewHandshakeProtocol(s)
 	s.handshakeProtocol.RegisterNewSessionCallback(s.newSessions)
@@ -260,10 +261,6 @@ func (s *swarmImpl) sendHandshakeMessage(req SendMessageReq) {
 
 func (s *swarmImpl) Shutdown() {
 	s.shutdown <- struct{}{}
-}
-
-func (s *swarmImpl) Bootstrapped(signal chan struct{}) {
-
 }
 
 func (s *swarmImpl) shutDownInternal() {

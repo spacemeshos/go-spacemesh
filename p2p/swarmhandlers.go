@@ -24,7 +24,7 @@ import (
 func (s *swarmImpl) onRegisterNodeRequest(n node.RemoteNodeData) {
 
 	if _, ok := s.peers[n.ID()]; ok {
-		s.localNode.Info("Already connected to %s", n.Pretty())
+		s.localNode.Debug("Already connected to %s", n.Pretty())
 		return
 	}
 
@@ -68,7 +68,7 @@ type nodeAction struct {
 // Handles a local request to connect to a remote node
 func (s *swarmImpl) onConnectionRequest(req node.RemoteNodeData, done chan error) {
 
-	s.localNode.Info("Local request to connect to node %s", req.Pretty())
+	s.localNode.Debug("Local request to connect to node %s", req.Pretty())
 
 	var err error
 
@@ -91,7 +91,7 @@ func (s *swarmImpl) onConnectionRequest(req node.RemoteNodeData, done chan error
 	session := peer.GetAuthenticatedSession()
 
 	if conn != nil && session != nil {
-		s.localNode.Info("Already got an active session and connection with: %s", req.Pretty())
+		s.localNode.Debug("Already got an active session and connection with: %s", req.Pretty())
 		done <- nil
 		return
 	}
@@ -103,7 +103,7 @@ func (s *swarmImpl) onConnectionRequest(req node.RemoteNodeData, done chan error
 		// Dial the other node using the node's network config values
 		localNodeConfig := s.localNode.Config()
 		addressableNodeConfig := &localNodeConfig
-		conn, err = s.network.DialTCP(req.IP(), addressableNodeConfig.DialTimeout.Duration(), addressableNodeConfig.ConnKeepAlive.Duration())
+		conn, err = s.network.DialTCP(req.IP(), addressableNodeConfig.DialTimeout, addressableNodeConfig.ConnKeepAlive)
 		if err != nil {
 			s.sendNodeEvent(req.ID(), Disconnected)
 			conErr := fmt.Errorf("failed to connect to host %v of %v, ERROR: %v", req.Pretty(), req.IP(), err)
@@ -125,7 +125,6 @@ func (s *swarmImpl) onConnectionRequest(req node.RemoteNodeData, done chan error
 
 		// update remote node connections
 		peer.UpdateConnection(id, conn)
-
 	}
 
 	// todo: we need to handle the case that there's a non-authenticated session with the remote node
@@ -134,6 +133,7 @@ func (s *swarmImpl) onConnectionRequest(req node.RemoteNodeData, done chan error
 	if session == nil {
 		nec := make(NodeEventCallback)
 		s.registerNodeEventsCallback(nec)
+		// listen to session initiation and report while releasing context
 		go func(nec NodeEventCallback) {
 			sessionTimeout := time.NewTimer(30 * time.Second)
 		PEERLOOP:
@@ -165,7 +165,7 @@ func (s *swarmImpl) onConnectionRequest(req node.RemoteNodeData, done chan error
 
 	if !session.IsAuthenticated() {
 		// what can we do ?
-		s.localNode.Debug("Session is pending ######")
+		s.localNode.Debug("Session is pending")
 	}
 }
 
@@ -184,7 +184,7 @@ func (s *swarmImpl) onNewSession(data HandshakeData) {
 		// send all messages queued for the remote node we now have a session with
 		for key, msg := range s.messagesPendingSession {
 			if msg.PeerID == data.Peer().String() {
-				s.localNode.Info("Sending queued message %s to remote node", hex.EncodeToString(msg.ReqID))
+				s.localNode.Debug("Sending queued message %s to remote node", hex.EncodeToString(msg.ReqID))
 				go s.SendMessage(msg)
 				delete(s.messagesPendingSession, key)
 			}
@@ -239,7 +239,7 @@ func (s *swarmImpl) onSendMessageRequest(r SendMessageReq) {
 
 	if peer == nil {
 
-		s.localNode.Info("No contact info to target peer - attempting to find it on the network...")
+		s.localNode.Debug("No contact info to target peer - attempting to find it on the network...")
 		callback := make(chan node.RemoteNodeData)
 
 		// attempt to find the peer
@@ -249,11 +249,11 @@ func (s *swarmImpl) onSendMessageRequest(r SendMessageReq) {
 			select {
 			case n := <-callback:
 				if n != nil { // we found it - now we can send the message to it
-					s.localNode.Info("Peer %s found... - registering and sending", r.PeerID)
+					s.localNode.Debug("Peer %s found... - registering and sending", r.PeerID)
 					s.msgPendingRegister <- r
 					s.RegisterNode(n)
 				} else {
-					s.localNode.Info("Peer %s not found.... - can't send message, sending to queue", r.PeerID)
+					s.localNode.Debug("Peer %s not found.... - can't send message, sending to queue", r.PeerID)
 					s.retryMessage <- r
 				}
 			case <-t.C:
@@ -322,7 +322,7 @@ func (s *swarmImpl) onSendMessageRequest(r SendMessageReq) {
 	}
 
 	// finally - send it away!
-	s.localNode.Info(fmt.Sprintf("Sending protocol message to %v", log.PrettyID(r.PeerID)))
+	s.localNode.Debug("Sending protocol message down the connection to %v", log.PrettyID(r.PeerID))
 
 	conn.Send(data, r.ReqID)
 }
@@ -344,7 +344,7 @@ func (s *swarmImpl) onConnectionClosed(c net.Connection) {
 
 func (s *swarmImpl) onRemoteClientConnected(c net.Connection) {
 	// nop - a remote client connected - this is handled w message
-	s.localNode.Info("Remote client connected. %s (%v)", c.ID(), c.RemoteAddr())
+	s.localNode.Debug("Remote client connected. %s", c.ID())
 	peer := s.peersByConnection[c.ID()]
 	if peer != nil {
 		s.sendNodeEvent(peer.String(), Connected)
@@ -442,7 +442,7 @@ func (s *swarmImpl) onRemoteClientProtocolMessage(msg net.IncomingMessage, c *pb
 		return
 	}
 
-	s.localNode.Info("Message %s author authenticated.", hex.EncodeToString(pm.GetMetadata().ReqId), pm.GetMetadata().Protocol)
+	s.localNode.Debug("Message %s author authenticated.", hex.EncodeToString(pm.GetMetadata().ReqId), pm.GetMetadata().Protocol)
 
 	// update the routing table - we just heard from this authenticated node
 	s.routingTable.Update(remoteNode.GetRemoteNodeData())
@@ -480,11 +480,11 @@ func (s *swarmImpl) onRemoteClientMessage(msg net.IncomingMessage) {
 	// route messages based on msg payload length
 	if len(c.Payload) == 0 {
 		// handshake messages have no enc payload
-		s.localNode.Info(fmt.Sprintf(str+"Type: Handshake, %v", hex.EncodeToString(c.SessionId)))
+		s.localNode.Debug(fmt.Sprintf(str+"Type: Handshake, %v", hex.EncodeToString(c.SessionId)))
 		s.onRemoteClientHandshakeMessage(msg)
 
 	} else {
-		s.localNode.Info(fmt.Sprintf(str+"Type: ProtocolMessage, %v", s.peersByConnection[msg.Connection.ID()].Pretty()))
+		s.localNode.Debug(fmt.Sprintf(str+"Type: ProtocolMessage, %v", s.peersByConnection[msg.Connection.ID()].Pretty()))
 		// protocol messages are encrypted in payload
 		s.onRemoteClientProtocolMessage(msg, c)
 	}

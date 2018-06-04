@@ -102,6 +102,8 @@ func TestMultipleSessions(t *testing.T) {
 	for _, node := range nodes {
 		node.Shutdown()
 	}
+
+	filesystem.DeleteSpacemeshDataFolders(t)
 }
 
 func TestSimpleBootstrap(t *testing.T) {

@@ -428,11 +428,11 @@ func (rt *routingTableImpl) onFindReq(r PeerByIDRequest) {
 	}
 
 	if len(peers) == 0 || !peers[0].DhtID().Equals(r.ID) {
-		rt.log.Info("Did not find %s in the routing table", r.ID.Pretty())
+		rt.log.Debug("Did not find %s in the routing table", r.ID.Pretty())
 		go func() { r.Callback <- &PeerOpResult{} }()
 	} else {
 		p := peers[0]
-		rt.log.Info("Found %s in the routing table", p.Pretty())
+		rt.log.Debug("Found %s in the routing table", p.Pretty())
 		go func() { r.Callback <- &PeerOpResult{peers[0]} }()
 	}
 }
@@ -533,5 +533,5 @@ func (rt *routingTableImpl) onPrintReq() {
 			str += fmt.Sprintf("\t\t%s cpl:%v\n", p.Pretty(), rt.local.CommonPrefixLen(p.DhtID()))
 		}
 	}
-	rt.log.Info(str)
+	rt.log.Debug(str)
 }

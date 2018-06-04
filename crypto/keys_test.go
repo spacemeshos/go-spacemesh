@@ -4,28 +4,29 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/assert"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"testing"
+
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestBasicApi(t *testing.T) {
 
 	badData, _ := hex.DecodeString("1234")
 	_, err := NewPublicKey(badData)
-	assert.Err(t, err, "expected error for bad key data")
+	assert.Error(t, err, "expected error for bad key data")
 
 	_, err = NewPrivateKey(badData)
-	assert.Err(t, err, "expected error for bad key data")
+	assert.Error(t, err, "expected error for bad key data")
 
 	_, err = NewPrivateKeyFromString("1234")
-	assert.Err(t, err, "expected error for bad key data")
+	assert.Error(t, err, "expected error for bad key data")
 
 	priv, pub, err := GenerateKeyPair()
 
 	assert.Nil(t, err, "failed to generate keys")
-	log.Info("priv: %s, pub: %s", priv.Pretty(), pub.Pretty())
-	log.Info("priv: %s, pub: %s", priv.String(), pub.String())
+	log.Debug("priv: %s, pub: %s", priv.Pretty(), pub.Pretty())
+	log.Debug("priv: %s, pub: %s", priv.String(), pub.String())
 
 	pub1 := priv.GetPublicKey()
 	assert.True(t, bytes.Equal(pub.Bytes(), pub1.Bytes()), fmt.Sprintf("expected same pub key, %s, %s",
@@ -33,12 +34,12 @@ func TestBasicApi(t *testing.T) {
 
 	// serialization tests
 	priv1, err := NewPrivateKey(priv.Bytes())
-	assert.NoErr(t, err, "unexpected error")
+	assert.NoError(t, err, "unexpected error")
 	assert.True(t, bytes.Equal(priv1.Bytes(), priv.Bytes()), fmt.Sprintf("expected same private key, %s, %s",
 		priv1.String(), priv.String()))
 
 	priv2, err := NewPrivateKeyFromString(priv.String())
-	assert.NoErr(t, err, "unexpected error")
+	assert.NoError(t, err, "unexpected error")
 	assert.True(t, bytes.Equal(priv2.Bytes(), priv.Bytes()), fmt.Sprintf("expected same private key, %s, %s",
 		priv2.String(), priv.String()))
 

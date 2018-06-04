@@ -3,8 +3,9 @@ package crypto
 import (
 	"crypto/aes"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestAesCTRXORandPkcs7Pad(t *testing.T) {

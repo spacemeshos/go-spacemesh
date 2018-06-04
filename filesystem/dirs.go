@@ -68,7 +68,7 @@ func EnsureSpacemeshDataDirectories() (string, error) {
 		return "", err
 	}
 
-	log.Info("Data directory: %s", dataPath)
+	log.Debug("Data directory: %s", dataPath)
 
 	// ensure sub folders exist - create them on demand
 	_, err = GetAccountsDataDirectoryPath()

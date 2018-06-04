@@ -103,7 +103,7 @@ func (n *localNodeImp) persistData() error {
 		return err
 	}
 
-	log.Info("Node data persisted and synced. NodeID ", n.String())
+	log.Debug("Node data persisted and synced. NodeID ", n.String())
 
 	return nil
 }
@@ -141,7 +141,7 @@ func readNodeData(nodeID string) (*NodeData, error) {
 		return nil, err
 	}
 
-	log.Info("loaded persisted node data for node id: %s", nodeID)
+	log.Debug("loaded persisted node data for node id: %s", nodeID)
 	return &nodeData, nil
 }
 

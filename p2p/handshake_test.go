@@ -8,11 +8,11 @@ import (
 	"testing"
 
 	"github.com/gogo/protobuf/proto"
-	"github.com/spacemeshos/go-spacemesh/assert"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
+	"github.com/stretchr/testify/assert"
 )
 
 // Basic handshake protocol data test
@@ -20,7 +20,7 @@ func TestHandshakeCoreData(t *testing.T) {
 
 	// node 1
 	port, err := net.GetUnboundedPort()
-	assert.NoErr(t, err, "Should be able to establish a connection on a port")
+	assert.NoError(t, err, "Should be able to establish a connection on a port")
 
 	address := fmt.Sprintf("0.0.0.0:%d", port)
 
@@ -35,7 +35,7 @@ func TestHandshakeCoreData(t *testing.T) {
 
 	// node 2
 	port1, err := net.GetUnboundedPort()
-	assert.NoErr(t, err, "Should be able to establish a connection on a port")
+	assert.NoError(t, err, "Should be able to establish a connection on a port")
 
 	address1 := fmt.Sprintf("0.0.0.0:%d", port1)
 
@@ -51,11 +51,11 @@ func TestHandshakeCoreData(t *testing.T) {
 	// STEP 1: Node1 generates handshake data and sends it to node2 ....
 	data, session, err := generateHandshakeRequestData(node1Local, node2Remote)
 
-	assert.NoErr(t, err, "expected no error")
+	assert.NoError(t, err, "expected no error")
 	assert.NotNil(t, session, "expected session")
 	assert.NotNil(t, data, "expected session")
 
-	log.Info("Node 1 session data: Id:%s, AES-KEY:%s", hex.EncodeToString(session.ID()), hex.EncodeToString(session.KeyE()))
+	log.Debug("Node 1 session data: Id:%s, AES-KEY:%s", hex.EncodeToString(session.ID()), hex.EncodeToString(session.KeyE()))
 
 	assert.False(t, session.IsAuthenticated(), "Expected session to be not authenticated yet")
 
@@ -63,11 +63,11 @@ func TestHandshakeCoreData(t *testing.T) {
 
 	resp, session1, err := processHandshakeRequest(node2Local, node1Remote, data)
 
-	assert.NoErr(t, err, "expected no error")
+	assert.NoError(t, err, "expected no error")
 	assert.NotNil(t, session1, "expected session")
 	assert.NotNil(t, resp, "expected resp data")
 
-	log.Info("Node 2 session data: Id:%s, AES-KEY:%s", hex.EncodeToString(session1.ID()), hex.EncodeToString(session1.KeyE()))
+	log.Debug("Node 2 session data: Id:%s, AES-KEY:%s", hex.EncodeToString(session1.ID()), hex.EncodeToString(session1.KeyE()))
 
 	assert.Equal(t, string(session.ID()), string(session1.ID()), "expected agreed Id")
 	assert.Equal(t, string(session.KeyE()), string(session1.KeyE()), "expected same shared AES enc key")
@@ -80,16 +80,16 @@ func TestHandshakeCoreData(t *testing.T) {
 	err = processHandshakeResponse(node1Local, node2Remote, session, resp)
 
 	assert.True(t, session.IsAuthenticated(), "expected session to be authenticated")
-	assert.NoErr(t, err, "failed to authenticate or process response")
+	assert.NoError(t, err, "failed to authenticate or process response")
 
 	// test session sym enc / dec
 
 	const msg = "hello spacemesh - hello spacemesh - hello spacemesh :-)"
 	cipherText, err := session.Encrypt([]byte(msg))
-	assert.NoErr(t, err, "expected no error")
+	assert.NoError(t, err, "expected no error")
 
 	clearText, err := session1.Decrypt(cipherText)
-	assert.NoErr(t, err, "expected no error")
+	assert.NoError(t, err, "expected no error")
 	assert.True(t, bytes.Equal(clearText, []byte(msg)), "Expected enc/dec to work")
 
 	node1Local.Shutdown()
@@ -100,7 +100,7 @@ func TestHandshakeProtocol(t *testing.T) {
 
 	// node 1
 	port, err := net.GetUnboundedPort()
-	assert.NoErr(t, err, "Should be able to establish a connection on a port")
+	assert.NoError(t, err, "Should be able to establish a connection on a port")
 
 	address := fmt.Sprintf("0.0.0.0:%d", port)
 
@@ -110,7 +110,7 @@ func TestHandshakeProtocol(t *testing.T) {
 	// node 2
 
 	port1, err := net.GetUnboundedPort()
-	assert.NoErr(t, err, "Should be able to establish a connection on a port")
+	assert.NoError(t, err, "Should be able to establish a connection on a port")
 
 	address1 := fmt.Sprintf("0.0.0.0:%d", port1)
 
@@ -121,11 +121,11 @@ func TestHandshakeProtocol(t *testing.T) {
 
 	data, session, err := generateHandshakeRequestData(node1Local, node2Remote)
 
-	assert.NoErr(t, err, "expected no error")
+	assert.NoError(t, err, "expected no error")
 	assert.NotNil(t, session, "expected session")
 	assert.NotNil(t, data, "expected session")
 
-	log.Info("Node 1 session data: Id:%s, AES-KEY:%s", hex.EncodeToString(session.ID()), hex.EncodeToString(session.KeyE()))
+	log.Debug("Node 1 session data: Id:%s, AES-KEY:%s", hex.EncodeToString(session.ID()), hex.EncodeToString(session.KeyE()))
 
 	assert.False(t, session.IsAuthenticated(), "expected session to be not authenticated yet")
 
@@ -136,7 +136,7 @@ func TestHandshakeProtocol(t *testing.T) {
 
 	m := &pb.CommonMessageData{}
 	err = proto.Unmarshal(wireFormat, m)
-	assert.NoErr(t, err, "failed to unmarshal wire formatted data")
+	assert.NoError(t, err, "failed to unmarshal wire formatted data")
 
 	assert.Equal(t, len(m.Payload), 0, "expected an empty payload for handshake request")
 
@@ -145,20 +145,20 @@ func TestHandshakeProtocol(t *testing.T) {
 	data1 := &pb.HandshakeData{}
 	err = proto.Unmarshal(wireFormat, data1)
 
-	log.Info("Handshake request from %s", data1.TcpAddress)
+	log.Debug("Handshake request from %s", data1.TcpAddress)
 
-	assert.NoErr(t, err, "failed to unmarshal wire formatted data to handshake data")
+	assert.NoError(t, err, "failed to unmarshal wire formatted data to handshake data")
 	assert.Equal(t, HandshakeReq, data1.Protocol, "expected this message to be a handshake req")
 
 	// STEP 3: local node 2 handles req data and generates response
 
 	resp, session1, err := processHandshakeRequest(node2Local, node1Remote, data1)
 
-	assert.NoErr(t, err, "expected no error")
+	assert.NoError(t, err, "expected no error")
 	assert.NotNil(t, session1, "expected session")
 	assert.NotNil(t, resp, "expected resp data")
 
-	log.Info("Node 2 session data: Id:%s, AES-KEY:%s", hex.EncodeToString(session1.ID()), hex.EncodeToString(session1.KeyE()))
+	log.Debug("Node 2 session data: Id:%s, AES-KEY:%s", hex.EncodeToString(session1.ID()), hex.EncodeToString(session1.KeyE()))
 
 	assert.Equal(t, string(session.ID()), string(session1.ID()), "expected agreed Id")
 	assert.Equal(t, string(session.KeyE()), string(session1.KeyE()), "expected same shared AES enc key")
@@ -176,7 +176,7 @@ func TestHandshakeProtocol(t *testing.T) {
 
 	m = &pb.CommonMessageData{}
 	err = proto.Unmarshal(wireFormat, m)
-	assert.NoErr(t, err, "failed to unmarshal wire formatted data")
+	assert.NoError(t, err, "failed to unmarshal wire formatted data")
 
 	assert.Equal(t, len(m.Payload), 0, "expected an empty payload for handshake response")
 
@@ -184,17 +184,17 @@ func TestHandshakeProtocol(t *testing.T) {
 
 	data2 := &pb.HandshakeData{}
 	err = proto.Unmarshal(wireFormat, data2)
-	assert.NoErr(t, err, "failed to unmarshal wire formatted data to handshake data")
+	assert.NoError(t, err, "failed to unmarshal wire formatted data to handshake data")
 	assert.Equal(t, HandshakeResp, data2.Protocol, "expected this message to be a handshake req")
 
 	// STEP 5: Node 1 validates the data and sets its network session to authenticated
 
-	log.Info("Handshake response from from %s", data2.TcpAddress)
+	log.Debug("Handshake response from from %s", data2.TcpAddress)
 
 	err = processHandshakeResponse(node1Local, node2Remote, session, data2)
 
 	assert.True(t, session.IsAuthenticated(), "expected session to be authenticated")
-	assert.NoErr(t, err, "failed to authenticate or process response")
+	assert.NoError(t, err, "failed to authenticate or process response")
 
 	node1Local.Shutdown()
 	node2Local.Shutdown()
@@ -206,7 +206,7 @@ func TestBadHandshakes(t *testing.T) {
 		// node 1
 
 		port, err := net.GetUnboundedPort()
-		assert.NoErr(t, err, "Should be able to establish a connection on a port")
+		assert.NoError(t, err, "Should be able to establish a connection on a port")
 
 		address := fmt.Sprintf("0.0.0.0:%d", port)
 
@@ -215,7 +215,7 @@ func TestBadHandshakes(t *testing.T) {
 
 		// node 2
 		port1, err := net.GetUnboundedPort()
-		assert.NoErr(t, err, "Should be able to establish a connection on a port")
+		assert.NoError(t, err, "Should be able to establish a connection on a port")
 
 		address1 := fmt.Sprintf("0.0.0.0:%d", port1)
 
@@ -233,7 +233,7 @@ func TestBadHandshakes(t *testing.T) {
 			return errors.New("excpected session to not be nil")
 		}
 
-		log.Info("Node 1 session data: Id:%s, AES-KEY:%s", hex.EncodeToString(session.ID()), hex.EncodeToString(session.KeyE()))
+		log.Debug("Node 1 session data: Id:%s, AES-KEY:%s", hex.EncodeToString(session.ID()), hex.EncodeToString(session.KeyE()))
 
 		if session.IsAuthenticated() {
 			return errors.New("expected session to be not authenticated yet")
@@ -258,7 +258,7 @@ func TestBadHandshakes(t *testing.T) {
 		data1 := &pb.HandshakeData{}
 		err = proto.Unmarshal(wireFormat, data1)
 
-		log.Info("Handshake request from %s", data1.TcpAddress)
+		log.Debug("Handshake request from %s", data1.TcpAddress)
 
 		if err != nil {
 			return fmt.Errorf("failed to unmarshal wire formatted data to handshake data: %v", err)
@@ -280,7 +280,7 @@ func TestBadHandshakes(t *testing.T) {
 			return errors.New("session is nil")
 		}
 
-		log.Info("Node 2 session data: Id:%s, AES-KEY:%s", hex.EncodeToString(session1.ID()), hex.EncodeToString(session1.KeyE()))
+		log.Debug("Node 2 session data: Id:%s, AES-KEY:%s", hex.EncodeToString(session1.ID()), hex.EncodeToString(session1.KeyE()))
 
 		compareSlice1 := map[string][]byte{"session-id": session.ID(), "keyE": session.KeyE(), "keyM": session.KeyM(), "pubKey": session.PubKey()}
 		compareSlice2 := map[string][]byte{"session-id": session1.ID(), "keyE": session1.KeyE(), "keyM": session1.KeyM(), "pubKey": session1.PubKey()}
@@ -328,7 +328,7 @@ func TestBadHandshakes(t *testing.T) {
 
 		// STEP 5: Node 1 validates the data and sets its network session to authenticated
 
-		log.Info("Handshake response from from %s", data2.TcpAddress)
+		log.Debug("Handshake response from from %s", data2.TcpAddress)
 
 		err = processHandshakeResponse(node1Local, node2Remote, session, data2)
 

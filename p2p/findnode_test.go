@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/assert"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestFindNodeProtocolCore(t *testing.T) {
@@ -44,7 +44,7 @@ Loop:
 
 			for _, d := range c.NodeInfos {
 				if bytes.Equal(d.NodeId, node3Remote.ID()) {
-					log.Info("Found node 3 :-)")
+					log.Debug("Found node 3 :-)")
 					break Loop
 				}
 			}

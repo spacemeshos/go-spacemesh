@@ -122,7 +122,7 @@ func (p *findNodeProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 	}
 
 	peer := msg.Sender()
-	p.swarm.GetLocalNode().Info("Incoming find-node request from %s. Requested node id: %v (DhtId: %v)", peer.Pretty(), log.PrettyID(base58.Encode(req.NodeId)), hex.EncodeToString(req.NodeId))
+	p.swarm.GetLocalNode().Debug("Incoming find-node request from %s. Requested node id: %v (DhtId: %v)", peer.Pretty(), log.PrettyID(base58.Encode(req.NodeId)), hex.EncodeToString(req.NodeId))
 
 	// use the dht table to generate the response
 
@@ -162,7 +162,7 @@ func (p *findNodeProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 	// sign response
 	sign, err := p.swarm.GetLocalNode().SignToString(respData)
 	if err != nil {
-		p.swarm.GetLocalNode().Info("Failed to sign response")
+		p.swarm.GetLocalNode().Debug("Failed to sign response")
 		return
 	}
 
@@ -171,7 +171,7 @@ func (p *findNodeProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 	// marshal the signed data
 	signedPayload, err := proto.Marshal(respData)
 	if err != nil {
-		p.swarm.GetLocalNode().Info("Failed to generate response data")
+		p.swarm.GetLocalNode().Debug("Failed to generate response data")
 		return
 	}
 
@@ -199,13 +199,13 @@ func (p *findNodeProtocolImpl) handleIncomingResponse(msg IncomingMessage) {
 
 	resp := FindNodeResp{data, nil, data.Metadata.ReqId}
 
-	p.swarm.GetLocalNode().Info("Got find-node response from %s. Results: %v, Find-node req id: %s", msg.Sender().Pretty(),
+	p.swarm.GetLocalNode().Debug("Got find-node response from %s. Results: %v, Find-node req id: %s", msg.Sender().Pretty(),
 		data.NodeInfos, hex.EncodeToString(data.Metadata.ReqId))
 
 	// update routing table with newly found nodes
 	nodes := node.FromNodeInfos(data.NodeInfos)
 	for _, n := range nodes {
-		p.swarm.GetLocalNode().Info("Node response: %s, %s", n.ID(), n.IP())
+		p.swarm.GetLocalNode().Debug("Node response: %s, %s", n.ID(), n.IP())
 		p.swarm.getRoutingTable().Update(n)
 	}
 

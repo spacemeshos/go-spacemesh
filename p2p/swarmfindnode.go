@@ -18,7 +18,7 @@ const LookupTimeout = 60 * time.Second
 // not go safe - should only be called from swarm event dispatcher
 func (s *swarmImpl) findNode(id string, callback chan node.RemoteNodeData) {
 
-	s.localNode.Info("finding node: %s ...", log.PrettyID(id))
+	s.localNode.Debug("finding node: %s ...", log.PrettyID(id))
 
 	// look for the node at local dht table
 	poc := make(table.PeerOpChannel, 1)
@@ -69,7 +69,7 @@ func FilterFindNodeServers(nodes []node.RemoteNodeData, queried map[string]struc
 // Also used as a bootstrap function to populate the routing table with the results.
 func (s *swarmImpl) kadFindNode(nodeID string, callback chan node.RemoteNodeData) {
 
-	s.localNode.Debug("Starting Kad FindNode(%v)", nodeID)
+	s.localNode.Debug("Kad find node: %s ...", nodeID)
 
 	// kad node location algo
 	alpha := int(s.config.RoutingTableAlpha)

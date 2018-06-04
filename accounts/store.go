@@ -62,7 +62,7 @@ func LoadAllAccounts() error {
 // accountsDataPath: os-specific full path to accounts data folder.
 func NewAccountFromStore(accountID string, accountsDataPath string) (*Account, error) {
 
-	log.Info("Loading account from store. Id: %s ...", accountID)
+	log.Debug("Loading account from store. Id: %s ...", accountID)
 
 	fileName := accountID + ".json"
 	dataFilePath := filepath.Join(accountsDataPath, fileName)
@@ -89,7 +89,7 @@ func NewAccountFromStore(accountID string, accountsDataPath string) (*Account, e
 		accountData.KDParams,
 		accountData.NetworkID}
 
-	log.Info("Loaded account from store: %s", pubKey.String())
+	log.Debug("Loaded account from store: %s", pubKey.String())
 
 	Accounts.All[acct.String()] = acct
 
@@ -125,7 +125,7 @@ func (a *Account) Persist(accountsDataPath string) (string, error) {
 		return "", err
 	}
 
-	log.Info("Persisted account to store. Id: %s", a.String())
+	log.Debug("Persisted account to store. Id: %s", a.String())
 
 	return dataFilePath, nil
 }
