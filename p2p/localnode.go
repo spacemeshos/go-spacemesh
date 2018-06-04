@@ -10,6 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"gopkg.in/op/go-logging.v1"
+	"time"
 )
 
 // LocalNode specifies local Spacemesh node capabilities and services.
@@ -128,6 +129,20 @@ func newLocalNodeWithKeys(pubKey crypto.PublicKey, privKey crypto.PrivateKey, tc
 	n.Debug("Node public ip address %s. Please make sure that your home router or access point accepts incoming connections on this port and forwards incoming such connection requests to this computer.", n.pubTCPAddress)
 
 	n.swarm = s
+	if config.SwarmConfig.Bootstrap {
+		bstimeout := time.NewTimer(time.Second * 90)
+		bs := make(chan struct{})
+		go s.AfterBootstrap(bs)
+		n.Debug("Waiting for node to bootstrap")
+		select {
+		case <-bs:
+			n.Info("Bootstrap complete")
+			break
+		case <-bstimeout.C:
+			return nil, errors.New("could'nt bootstrap the node")
+		}
+	}
+	// TODO : dynamic load all protocols ( consider go plugins )
 	n.ping = NewPingProtocol(s)
 
 	if persist {

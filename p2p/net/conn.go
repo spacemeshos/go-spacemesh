@@ -1,11 +1,12 @@
 package net
 
 import (
+	"net"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/delimited"
 	"gopkg.in/op/go-logging.v1"
-	"net"
-	"time"
 )
 
 // Connection is a closeable network connection, that can send and receive messages from a remote instance.
@@ -14,7 +15,6 @@ type Connection interface {
 	ID() string
 	Send(message []byte, id []byte)
 	Close() error
-	LastOpTime() time.Time // last rw op time for this connection
 	RemoteAddr() net.Addr
 }
 
@@ -70,9 +70,6 @@ type connectionImpl struct {
 
 	closeChan chan struct{}
 
-	recordTimeChan chan struct{}
-	lastOpTime     time.Time
-
 	incomingMsgs *delimited.Chan // implemented using delimited.Chan - incoming messages
 	outgoingMsgs *delimited.Chan // outgoing message queue
 
@@ -90,16 +87,15 @@ func newConnection(conn net.Conn, n Net, s ConnectionSource) Connection {
 	outgoingMsgs := delimited.NewChan(10)
 
 	connection := &connectionImpl{
-		logger:         n.GetLogger(),
-		id:             crypto.UUIDString(),
-		created:        time.Now(),
-		recordTimeChan: make(chan struct{}),
-		source:         s,
-		incomingMsgs:   incomingMsgs,
-		outgoingMsgs:   outgoingMsgs,
-		conn:           conn,
-		net:            n,
-		closeChan:      make(chan struct{}),
+		logger:       n.GetLogger(),
+		id:           crypto.UUIDString(),
+		created:      time.Now(),
+		source:       s,
+		incomingMsgs: incomingMsgs,
+		outgoingMsgs: outgoingMsgs,
+		conn:         conn,
+		net:          n,
+		closeChan:    make(chan struct{}),
 	}
 
 	// start reading incoming message from the connection and into the channel
@@ -131,7 +127,6 @@ func (c *connectionImpl) String() string {
 func (c *connectionImpl) Send(message []byte, id []byte) {
 	// queue messages for sending
 	c.outgoingMsgs.MsgChan <- delimited.MsgAndID{ID: id, Msg: message}
-	c.RecordOpTime()
 }
 
 // Close closes the connection (implements io.Closer). It is go safe.
@@ -142,15 +137,6 @@ func (c *connectionImpl) Close() error {
 	return nil
 }
 
-func (c *connectionImpl) RecordOpTime() {
-	c.recordTimeChan <- struct{}{}
-}
-
-// go safe
-func (c *connectionImpl) LastOpTime() time.Time {
-	return c.lastOpTime
-}
-
 // Push outgoing message to the connections
 // Read from the incoming new messages and send down the connection
 func (c *connectionImpl) beginEventProcessing() {
@@ -158,9 +144,6 @@ func (c *connectionImpl) beginEventProcessing() {
 Loop:
 	for {
 		select {
-
-		case <-c.recordTimeChan:
-			c.lastOpTime = time.Now()
 
 		case err := <-c.outgoingMsgs.ErrChan:
 			go func() {
@@ -172,8 +155,6 @@ Loop:
 			if !ok { // chan closed
 				break Loop
 			}
-
-			c.lastOpTime = time.Now()
 
 			// pump the message to the network
 			go func() {

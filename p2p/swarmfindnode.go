@@ -9,6 +9,9 @@ import (
 	"time"
 )
 
+// LookupTimeout is the timeout we allow for a single FindNode operation
+const LookupTimeout = 60 * time.Second
+
 // Finds a node based on its id - internal method
 // id: base58 node id string
 // returns remote node or nil when not found
@@ -33,10 +36,37 @@ func (s *swarmImpl) findNode(id string, callback chan node.RemoteNodeData) {
 	s.kadFindNode(id, callback)
 }
 
+// FilterFindNodeServers picks up to count server who haven't been queried recently.
+func FilterFindNodeServers(nodes []node.RemoteNodeData, queried map[string]struct{}, alpha int) []node.RemoteNodeData {
+
+	// If no server have been queried already, just make sure the list len is alpha
+	if len(queried) == 0 {
+		if len(nodes) > alpha {
+			nodes = nodes[:alpha]
+		}
+		return nodes
+	}
+
+	// filter out queried servers.
+	i := 0
+	for _, v := range nodes {
+		if _, exist := queried[v.ID()]; !exist {
+			nodes[i] = v
+			i++
+		}
+		if i >= alpha {
+			break
+		}
+	}
+
+	return nodes[:i]
+}
+
 // Implements the kad algo for locating a remote node
 // Precondition - node is not in local routing table
 // nodeId: - base58 node id string
 // Returns requested node via the callback or nil if not found
+// Also used as a bootstrap function to populate the routing table with the results.
 func (s *swarmImpl) kadFindNode(nodeID string, callback chan node.RemoteNodeData) {
 
 	s.localNode.Debug("Kad find node: %s ...", nodeID)
@@ -48,20 +78,21 @@ func (s *swarmImpl) kadFindNode(nodeID string, callback chan node.RemoteNodeData
 	// step 1 - get up to alpha closest nodes to the target in the local routing table
 	searchList := s.getNearestPeers(dhtID, alpha)
 
+	// Every node is queried only once per operation.
 	queried := map[string]struct{}{}
 
 	// step 2 - iterative lookups for nodeId using searchList
 
 Loop:
 	for {
-
+		// if no new nodes found
 		if len(searchList) == 0 {
 			go func() { callback <- nil }()
 			break Loop
 		}
 
+		// is closestNode out target ?
 		closestNode := searchList[0]
-
 		if closestNode.ID() == nodeID {
 			go func() { callback <- closestNode }()
 			break Loop
@@ -69,17 +100,17 @@ Loop:
 
 		// pick up to alpha servers to query from the search list
 		// servers that have been recently queried will not be returned
-		servers := node.PickFindNodeServers(searchList, queried, nodeID, alpha)
+		servers := FilterFindNodeServers(searchList, queried, alpha)
 
 		if len(servers) == 0 {
 			// no more servers to query
+			// target node was not found.
 			go func() { callback <- nil }()
 			break Loop
 		}
 
 		// lookup nodeId using the target servers
 		res := s.lookupNode(servers, queried, nodeID, closestNode)
-
 		if len(res) > 0 {
 
 			// merge newly found nodes
@@ -91,6 +122,7 @@ Loop:
 
 		// keep iterating using new servers that were not queried yet from searchlist (if any)
 	}
+	s.localNode.Debug("FindNode(%v) finished", nodeID)
 }
 
 // Lookup a target node on one or more servers
@@ -107,16 +139,17 @@ func (s *swarmImpl) lookupNode(servers []node.RemoteNodeData, queried map[string
 	// results channel
 	callback := make(chan FindNodeResp, l)
 
-	// queries are run in par and results are collected
+	// Issue a parallel FindNode op to all servers on the list
 	for i := 0; i < l; i++ {
 		queried[servers[i].ID()] = struct{}{}
 		// find node protocol adds found nodes to the local routing table
+		// populates queried node's routing table with us and return.
 		go s.getFindNodeProtocol().FindNode(crypto.UUID(), servers[i].ID(), targetID, callback)
 	}
 
 	done := 0
 	idSet := make(map[string]node.RemoteNodeData)
-
+	timeout := time.NewTimer(LookupTimeout)
 Loop:
 	for {
 		select {
@@ -127,28 +160,28 @@ Loop:
 			}
 
 			done++
+			s.localNode.Debug("FindNode %d/%d queries returned.", done, l)
 			if done == l {
 				break Loop
 			}
 
-		case <-time.After(time.Second * 60):
+		case <-timeout.C:
 			// we expected nodes to return results within a reasonable time frame
+			s.localNode.Debug("FindNode was not returned within timelimit")
 			break Loop
 		}
 	}
 
 	// add unique node ids that are closer to target id than closest node
-	res := []node.RemoteNodeData{}
-
-	targetDhtID := dht.NewIDFromBase58String(targetID)
+	res := make([]node.RemoteNodeData, len(idSet))
+	i := 0
 	for _, n := range idSet {
-		if n.DhtID().Closer(targetDhtID, closestNode.DhtID()) {
-			res = append(res, n)
-		}
+		res[i] = n
+		i++
 	}
 
 	// sort results by distance from target dht id
-	return node.SortClosestPeers(res, targetDhtID)
+	return res
 }
 
 // helper method - a sync wrapper over routingTable.NearestPeers

@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"sync"
 	"sync/atomic"
 
 	"github.com/spacemeshos/go-spacemesh/crypto"
@@ -25,7 +26,7 @@ func TestSessionCreation(t *testing.T) {
 	node2Local, _ := GenerateTestNode(t)
 	node1Local.GetSwarm().getHandshakeProtocol().RegisterNewSessionCallback(callback)
 	node2Local.GetSwarm().getHandshakeProtocol().RegisterNewSessionCallback(callback2)
-	node1Local.GetSwarm().ConnectTo(node2Local.GetRemoteNodeData())
+	node1Local.GetSwarm().ConnectTo(node2Local.GetRemoteNodeData(), nil)
 
 	sessions := uint32(0)
 Loop:
@@ -57,6 +58,7 @@ Loop:
 func TestMultipleSessions(t *testing.T) {
 
 	filesystem.SetupTestSpacemeshDataFolders(t, "swarm_test")
+	defer filesystem.DeleteSpacemeshDataFolders(t)
 
 	finishChan := make(chan struct{})
 	const timeout = time.Second * 10
@@ -85,7 +87,7 @@ func TestMultipleSessions(t *testing.T) {
 	for i := 0; i < count; i++ {
 		n, _ := GenerateTestNode(t) // create a node
 		nodes[i] = n
-		n.GetSwarm().ConnectTo(rn.GetRemoteNodeData()) // connect to first node
+		n.GetSwarm().ConnectTo(rn.GetRemoteNodeData(), nil) // connect to first node
 		//nodes = append(nodes, n)
 	}
 
@@ -158,7 +160,7 @@ func TestSmallBootstrap(t *testing.T) {
 	const timeout = 20 * time.Second
 	const tick = 1 * time.Second
 	const randomConnections = 5
-	const totalNodes = 10
+	const totalNodes = 30
 
 	// setup:
 	//
@@ -178,21 +180,32 @@ func TestSmallBootstrap(t *testing.T) {
 	c.SwarmConfig.RandomConnections = randomConnections
 	c.SwarmConfig.BootstrapNodes = []string{bs}
 
+	nmutex := sync.Mutex{}
 	nodes := make([]LocalNode, 0)
 
 	for i := 0; i < totalNodes; i++ {
-		n, _ := GenerateTestNodeWithConfig(t, c)
-		nodes = append(nodes, n)
+		nodechan := make(chan LocalNode)
+		go func() { nmutex.Lock(); nodes = append(nodes, <-nodechan); nmutex.Unlock() }()
+		go func() { ln, _ := GenerateTestNodeWithConfig(t, c); nodechan <- ln }()
 	}
 
 	healthCheckNodes := func() bool {
+		nmutex.Lock()
+		defer nmutex.Unlock()
+		if len(nodes) < totalNodes {
+			return false
+		}
+
 		for _, n := range nodes {
 			size := make(chan int)
 			n.GetSwarm().getRoutingTable().Size(size)
-			if <-size < randomConnections {
+			s := <-size
+			if s < randomConnections {
+				t.Logf("############ ROUTING TANLE HAS ONLY %v NODES\n\r\n\r\n\r\n", s)
 				return false
 			}
 		}
+
 		return true
 	}
 
@@ -217,8 +230,9 @@ HEALTH:
 }
 
 // todo: fix me - this test is broken
-func _estBasicBootstrap(t *testing.T) {
-
+func TestBasicBootstrap(t *testing.T) {
+	filesystem.SetupTestSpacemeshDataFolders(t, "swarm_test")
+	defer filesystem.DeleteSpacemeshDataFolders(t)
 	// setup:
 	// node1 - bootstrap node
 	// node2 - connects to node1 on startup (bootstrap)
@@ -234,15 +248,24 @@ func _estBasicBootstrap(t *testing.T) {
 	c.SwarmConfig.Bootstrap = true
 	c.SwarmConfig.RandomConnections = 2
 	c.SwarmConfig.BootstrapNodes = []string{bs}
+	nchan := make(chan LocalNode)
+	nchan2 := make(chan LocalNode)
+	go func() {
+		n, _ := GenerateTestNodeWithConfig(t, c)
+		nchan <- n
+	}()
+	go func() {
+		n, _ := GenerateTestNodeWithConfig(t, c)
+		nchan2 <- n
+	}()
 
-	node2Local, _ := GenerateTestNodeWithConfig(t, c)
-	_, node3Remote := GenerateTestNodeWithConfig(t, c)
+	node2Local := <-nchan
+	node3Local := <-nchan2
 
-	// ping node2 -> node 3
 	reqID := crypto.UUID()
 	callback := make(chan SendPingResp)
 	node2Local.GetPing().Register(callback)
-	node2Local.GetPing().Send("hello spacemesh", reqID, node3Remote.String())
+	node2Local.GetPing().Send("hello Spacemesh", reqID, node3Local.GetRemoteNodeData().ID())
 
 Loop:
 	for {
@@ -256,4 +279,8 @@ Loop:
 			t.Fatal("Timeout error - expected callback")
 		}
 	}
+
+	node1Local.Shutdown()
+	node2Local.Shutdown()
+	node3Local.Shutdown()
 }
