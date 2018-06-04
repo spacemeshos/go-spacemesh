@@ -88,7 +88,8 @@ func (n *handshakeDataImp) SetError(err error) {
 // aes sym key.
 type HandshakeProtocol interface {
 	CreateSession(peer Peer)
-	RegisterNewSessionCallback(callback chan HandshakeData) // register a channel to receive session state changes
+	// RegisterNewSessionCallback registers a channel to receive session state changes
+	RegisterNewSessionCallback(callback chan HandshakeData)
 }
 
 type handshakeProtocolImpl struct {
