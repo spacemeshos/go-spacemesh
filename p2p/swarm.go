@@ -17,36 +17,36 @@ type Swarm interface {
 	// In this case we will try to locate the node via dht node search,
 	// and send the message if we obtained node ip address and were able to connect to it.
 	//
-	// req.msg should be marshaled protocol message. e.g. something like pb.PingReqData
+	// req.msg should be marshaled protocol message. e.g. something like pb.PingReqData;
 	//
-	// This is designed for standard messages that require a session
+	// This is designed for standard messages that require a session.
 	// This method is designed to be used by protocols implementations to send message
-	// to any destination
+	// to any destination.
 	SendMessage(req SendMessageReq)
 
 	// TODO(devs): support sending a message to all connected peers without any dest id provided by caller
 
 	// RegisterNode registers a node with the swarm based on its id and tcp address but don't
-	// attempt to connect to it
+	// attempt to connect to it.
 	RegisterNode(data node.RemoteNodeData)
 
 	// ConnectTo attempts to establish a session with a remote node with a known
 	// id and tcp address.
-	// Used for bootstrapping known bootstrap nodes
+	// Used for bootstrapping known bootstrap nodes.
 	ConnectTo(req node.RemoteNodeData)
 
 	// ConnectToRandomNodes connects to count random nodes - used for bootstrapping
-	// the swarm
+	// the swarm.
 	ConnectToRandomNodes(count int)
 
-	// Forcefully disconnect form a node - close any connections and sessions with it
+	// Forcefully disconnect form a node - close any connections and sessions with it.
 	DisconnectFrom(req node.RemoteNodeData)
 
-	// Send a handshake protocol message that is used to establish a session
+	// Send a handshake protocol message that is used to establish a session.
 	sendHandshakeMessage(req SendMessageReq)
 
 	// Register a callback channel for state changes related to remote nodes.
-	// Currently used for testing network bootstrapping
+	// Currently used for testing network bootstrapping.
 	RegisterNodeEventsCallback(callback NodeEventCallback)
 
 	// Todo(devs): allow client to register callback to get notified when swarm has shut down
@@ -56,7 +56,7 @@ type Swarm interface {
 	GetDemuxer() Demuxer
 	GetLocalNode() LocalNode
 
-	// used by protocols and for testing
+	// These used by protocols and for testing.
 	getHandshakeProtocol() HandshakeProtocol
 	getRoutingTable() table.RoutingTable
 	getFindNodeProtocol() FindNodeProtocol
