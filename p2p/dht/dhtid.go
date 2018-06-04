@@ -5,10 +5,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"github.com/btcsuite/btcutil/base58"
 	"math/big"
 	"math/bits"
 	"sort"
+
+	"github.com/btcsuite/btcutil/base58"
 )
 
 // ID is a dht-compatible ID using the XOR keyspace.
@@ -79,8 +80,10 @@ func (id ID) Xor(o ID) ID {
 	return XOR(id, o)
 }
 
-// CommonPrefixLen returns the common shared prefix length in BITS of the binary numbers represented by the ids.
-// tradeoff the pretty func we had with this more efficient one. (faster than libp2p and eth)
+// CommonPrefixLen returns the common shared prefix length in BITS
+// of the binary numbers represented by the ids.
+// Tradeoff the pretty func we had with this more
+// efficient one. (faster than libp2p and eth)
 func (id ID) CommonPrefixLen(o ID) int {
 	for i := 0; i < len(id); i++ {
 		lz := bits.LeadingZeros8(id[i] ^ o[i])
@@ -110,7 +113,8 @@ func (id ID) Closer(id1 ID, id2 ID) bool {
 	return dist1.Less(dist2)
 }
 
-// XOR is a helper method used to return a byte slice which is the XOR of 2 provided byte slices.
+// XOR is a helper method used to return a byte slice which is the
+// XOR of 2 provided byte slices.
 func XOR(a, b []byte) []byte {
 	c := make([]byte, len(a))
 	for i := 0; i < len(a); i++ {
@@ -119,7 +123,8 @@ func XOR(a, b []byte) []byte {
 	return c
 }
 
-// Help struct containing a list of ids sorted by the XOR distance from Center ID.
+// Help struct containing a list of ids sorted by the XOR distance
+// from Center ID.
 type idsByDistanceToCenter struct {
 	Center ID
 	Ids    []ID
@@ -135,7 +140,8 @@ func (s idsByDistanceToCenter) Swap(i, j int) {
 	s.Ids[i], s.Ids[j] = s.Ids[j], s.Ids[i]
 }
 
-// Less returns true if the ID indexed by i is closer to the center than the ID indexed by j.
+// Less returns true if the ID indexed by i is closer to the center
+// than the ID indexed by j.
 func (s idsByDistanceToCenter) Less(i, j int) bool {
 	a := s.Center.Distance(s.Ids[i])
 	b := s.Center.Distance(s.Ids[j])

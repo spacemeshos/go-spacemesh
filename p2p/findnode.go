@@ -2,6 +2,8 @@ package p2p
 
 import (
 	"encoding/hex"
+	"time"
+
 	"github.com/btcsuite/btcutil/base58"
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
@@ -10,7 +12,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/dht/table"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
-	"time"
 )
 
 const findNodeReq = "/dht/1.0/find-node-req/"
@@ -19,11 +20,14 @@ const findNodeResp = "/dht/1.0/find-node-resp/"
 // FindNodeProtocol provides the dht protocol FIND-NODE message.
 type FindNodeProtocol interface {
 
-	// Send a find_node request for data about a remote node, known only by id, to a specific known remote node
-	// Results will include 0 or more nodes and up to count nodes which may or may not include data about id (as serverNodeId may not know about it)
-	// reqID: allows the client to match responses with requests by id
-	// serverNodeId - node to send the find request to
-	// id - node id to find
+	// Send a find_node request for data about a remote node, known only by id,
+	// to a specific known remote node.
+	// Results will include 0 or more nodes and up to count nodes which may
+	// or may not include data about id (as serverNodeId may not know about it).
+	//
+	// - reqID: allows the client to match responses with requests by id
+	// - serverNodeId: node to send the find request to
+	// - id: node id to find
 
 	// this should really be named FindClosestNodes
 	FindNode(reqID []byte, serverNodeID string, id string, callback chan FindNodeResp) error

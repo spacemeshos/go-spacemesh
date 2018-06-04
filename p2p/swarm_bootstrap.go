@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	// BootstrapTimeout is the maximum time we allow bootstrap phase to run
+	// BootstrapTimeout is the maximum time we allow bootstrap phase to run.
 	BootstrapTimeout = 3 * time.Minute
 	// ConnectToNodeTimeout is the timeout we allow for a connection to a single random node.
 	ConnectToNodeTimeout = 30 * time.Second
@@ -79,7 +79,7 @@ func (s *swarmImpl) bootstrap() {
 	}()
 }
 
-// Connect up to count random nodes
+// Connect up to count random nodes.
 func (s *swarmImpl) ConnectToRandomNodes(count int) {
 
 	s.localNode.Info("Attempting to connect to %d random nodes...", count)

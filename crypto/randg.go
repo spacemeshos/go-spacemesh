@@ -4,10 +4,12 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"errors"
+
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-// GetRandomBytesToBuffer puts n random bytes using go crypto.rand into provided buff slice.
+// GetRandomBytesToBuffer puts n random bytes using
+// go crypto.rand into provided buff slice.
 // buff: a slice allocated by called to hold n bytes.
 func GetRandomBytesToBuffer(n int, buff []byte) error {
 
@@ -28,7 +30,8 @@ func GetRandomBytesToBuffer(n int, buff []byte) error {
 	return nil
 }
 
-// GetRandomBytes returns n random bytes. It returns an error if the system's pgn fails.
+// GetRandomBytes returns n random bytes. It returns an
+// error if the system's pgn fails.
 func GetRandomBytes(n int) ([]byte, error) {
 
 	if n == 0 {

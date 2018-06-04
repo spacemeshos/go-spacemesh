@@ -83,9 +83,13 @@ type pendingSessionRequest struct {
 }
 
 // HandshakeProtocol specifies the handshake protocol.
+//
 // Node1 -> Node 2: Req(HandshakeData)
+//
 // Node2 -> Node 1: Resp(HandshakeData)
-// After response is processed by node1 both sides have an auth session with a secret ephemeral aes sym key.
+//
+// After response is processed by node1 both sides have an auth session with a
+// secret ephemeral aes sym key.
 type HandshakeProtocol interface {
 	CreateSession(peer Peer)
 	RegisterNewSessionCallback(callback chan HandshakeData) // register a channel to receive session state changes
@@ -139,7 +143,8 @@ func NewHandshakeProtocol(s Swarm) HandshakeProtocol {
 	return h
 }
 
-// RegisterNewSessionCallback registers a callback to baclled when a new session is established by the protocol.
+// RegisterNewSessionCallback registers a callback to baclled when a new session
+// is established by the protocol.
 func (h *handshakeProtocolImpl) RegisterNewSessionCallback(callback chan HandshakeData) {
 	h.swarm.GetLocalNode().Debug("New session callback registered.")
 	h.registerSessionCallback <- callback
@@ -149,7 +154,8 @@ func (h *handshakeProtocolImpl) stateChanged(hd HandshakeData) {
 	go func() { h.sessionStateChanged <- hd }()
 }
 
-// CreateSession is called to initiate the handshake protocol between the local node and a remote peer.
+// CreateSession is called to initiate the handshake protocol between
+// the local node and a remote peer.
 func (h *handshakeProtocolImpl) CreateSession(peer Peer) {
 
 	data, session, err := generateHandshakeRequestData(h.swarm.GetLocalNode(), peer)
@@ -313,10 +319,12 @@ func (h *handshakeProtocolImpl) onHandleIncomingHandshakeResponse(msg IncomingMe
 
 /////////////////////////// functions below - they don't provide Handshake protocol state
 
-// Generate handshake and session data between node and remoteNode
-// Returns handshake data to send to removeNode and a network session data object that includes the session enc/dec sym key and iv
-// Node that NetworkSession is not yet authenticated - this happens only when the handshake response is processed and authenticated
-// This is called by node1 (initiator)
+// Generate handshake and session data between node and remoteNode.
+// Returns handshake data to send to removeNode and a network session
+// data object that includes the session enc/dec sym key and iv.
+// Node that NetworkSession is not yet authenticated - this happens only
+// when the handshake response is processed and authenticated.
+// This is called by node1 (initiator).
 func generateHandshakeRequestData(node LocalNode, remoteNode Peer) (*pb.HandshakeData, NetworkSession, error) {
 
 	// we use the Elliptic Curve Encryption Scheme

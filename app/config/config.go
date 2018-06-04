@@ -1,6 +1,6 @@
 package config
 
-// Provide Config struct with default values
+// Provide Config struct with default values.
 
 // ConfigValues defines default values for app config params.
 var ConfigValues = Config{

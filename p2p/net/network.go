@@ -2,23 +2,27 @@ package net
 
 import (
 	"fmt"
+	"net"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 	"gopkg.in/op/go-logging.v1"
-	"net"
-	"time"
 )
 
-// Net is a connection manager able to dial remote endpoints
-// Net clients should register all callbacks
-// Connections may be initiated by DialTCP() or by remote clients connecting to the listen address
-// ConnManager includes a TCP server, and a TCP client
-// It provides full duplex messaging functionality over the same tcp/ip connection
-// Network should not know about higher-level networking types such as remoteNode, swarm and networkSession
-// Network main client is the swarm
-// Net has no channel events processing loops - clients are responsible for polling these channels and popping events from them
+// Net is a connection manager able to dial remote endpoints.
+// Net clients should register all callbacks.
+// Connections may be initiated by DialTCP() or by remote clients connecting to the listen address.
+// ConnManager includes a TCP server, and a TCP client.
+// It provides full duplex messaging functionality over the same tcp/ip connection.
+// Network should not know about higher-level networking types such as remoteNode, swarm and networkSession.
+// Network main client is the swarm.
+// Net has no channel events processing loops - clients are responsible
+// for polling these channels and popping events from them.
 type Net interface {
-	DialTCP(address string, timeOut time.Duration, keepAlive time.Duration) (Connection, error) // Connect to a remote node. Can send when no error.
+	// DialTCP connects to a remote node. Can send when no error.
+	DialTCP(address string, timeOut time.Duration, keepAlive time.Duration) (Connection, error)
+
 	GetNewConnections() chan Connection
 	GetClosingConnections() chan Connection
 	GetConnectionErrors() chan ConnectionError

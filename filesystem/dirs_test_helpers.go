@@ -13,7 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/crypto"
 )
 
-// SetupTestSpacemeshDataFolders sets up a data folder to this specific test
+// SetupTestSpacemeshDataFolders sets up a data folder to this specific test.
 func SetupTestSpacemeshDataFolders(t *testing.T, n string) {
 	// just to make sure its isolated
 	r, err := crypto.GetRandomBytes(4)
@@ -44,7 +44,8 @@ func SetupTestSpacemeshDataFolders(t *testing.T, n string) {
 
 }
 
-// DeleteSpacemeshDataFolders deletes all sub directories and files in the Spacemesh root data folder.
+// DeleteSpacemeshDataFolders deletes all sub directories and files
+// in the Spacemesh root data folder.
 func DeleteSpacemeshDataFolders(t *testing.T) {
 
 	aPath, err := GetSpacemeshDataDirectoryPath()
@@ -74,7 +75,7 @@ func TestEmptyFolder(dir string) error {
 	return nil
 }
 
-// TestUsers returns a map of users for testing
+// TestUsers returns a map of users for testing.
 func TestUsers() map[string]*user.User {
 	return map[string]*user.User{
 		"alice": {
@@ -101,14 +102,14 @@ func TestUsers() map[string]*user.User {
 	}
 }
 
-// SetupTestHooks sets current user to mock user to test
+// SetupTestHooks sets current user to mock user to test.
 func SetupTestHooks(users map[string]*user.User) {
 	currentUser = func() (*user.User, error) {
 		return users["michael"], nil
 	}
 }
 
-// TearDownTestHooks sets current user back
+// TearDownTestHooks sets current user back.
 func TearDownTestHooks() {
 	currentUser = user.Current
 }

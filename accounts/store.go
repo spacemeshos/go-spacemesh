@@ -28,7 +28,7 @@ type CryptoData struct {
 	Mac        string `json:"mac"`
 }
 
-// LoadAllAccounts loads all account persisted to store
+// LoadAllAccounts loads all account persisted to store.
 func LoadAllAccounts() error {
 
 	accountsDataFolder, err := filesystem.GetAccountsDataDirectoryPath()
@@ -96,10 +96,10 @@ func NewAccountFromStore(accountID string, accountsDataPath string) (*Account, e
 	return acct, nil
 }
 
-// Persist all account data to store
-// Passphrases are never persisted to store
-// accountsDataPath: os-specific full path to accounts data folder
-// Returns full path of persisted file (useful for testing)
+// Persist all account data to store.
+// Passphrases are never persisted to store.
+// accountsDataPath: os-specific full path to accounts data folder.
+// Returns full path of persisted file (useful for testing).
 func (a *Account) Persist(accountsDataPath string) (string, error) {
 
 	pubKeyStr := a.PubKey.String()

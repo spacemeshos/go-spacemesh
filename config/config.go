@@ -28,14 +28,14 @@ var (
 	defaultAccountDir = filepath.Join(defaultHomeDir, defaultAccountFileName)
 )
 
-// Config defines the top level configuration for a spacemesh node
+// Config defines the top level configuration for a spacemesh node.
 type Config struct {
 	BaseConfig `mapstructure:"main"`
 	P2P        p2pConfig.Config `mapstructure:"p2p"`
 	API        apiConfig.Config `mapstructure:"api"`
 }
 
-// BaseConfig defines the default configuration options for spacemesh app
+// BaseConfig defines the default configuration options for spacemesh app.
 type BaseConfig struct {
 	HomeDir string
 
@@ -48,7 +48,7 @@ type BaseConfig struct {
 	AccountDir string `mapstructure:"account-dir"`
 }
 
-// DefaultConfig returns the default configuration for a spacemesh node
+// DefaultConfig returns the default configuration for a spacemesh node.
 func DefaultConfig() Config {
 	return Config{
 		BaseConfig: defaultBaseConfig(),
@@ -57,7 +57,7 @@ func DefaultConfig() Config {
 	}
 }
 
-// DefaultBaseConfig returns a default configuration for spacemesh
+// DefaultBaseConfig returns a default configuration for spacemesh.
 func defaultBaseConfig() BaseConfig {
 	return BaseConfig{
 		HomeDir:    defaultHomeDir,
@@ -68,7 +68,7 @@ func defaultBaseConfig() BaseConfig {
 	}
 }
 
-// LoadConfig load the config file
+// LoadConfig load the config file.
 func LoadConfig(fileLocation string) (err error) {
 	log.Info("Parsing config file at location: %s", fileLocation)
 
@@ -94,7 +94,7 @@ func LoadConfig(fileLocation string) (err error) {
 	return fmt.Errorf("failed to read config file")
 }
 
-// SetConfigFile overrides the default config file path
+// SetConfigFile overrides the default config file path.
 func (cfg *BaseConfig) SetConfigFile(file string) {
 	cfg.ConfigFile = file
 }

@@ -5,10 +5,11 @@ import (
 	"crypto/cipher"
 	"encoding/hex"
 	"errors"
-	"github.com/spacemeshos/go-spacemesh/crypto"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"sync"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 // NetworkSession is an authenticated network session between 2 peers.
@@ -152,7 +153,7 @@ func (n *NetworkSessionImpl) Decrypt(in []byte) ([]byte, error) {
 	return clearText, nil
 }
 
-// NewNetworkSession creates a new network session based on provided data
+// NewNetworkSession creates a new network session based on provided data.
 func NewNetworkSession(id, keyE, keyM, pubKey []byte, localNodeID, remoteNodeID string) (NetworkSession, error) {
 	n := &NetworkSessionImpl{
 		id:            id,

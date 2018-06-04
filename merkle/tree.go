@@ -40,9 +40,12 @@ type merkleTreeImp struct {
 	root     Node
 }
 
-// NewEmptyTree creates a new empty Merkle tree with the provided paths to user and tree data db files.
+// NewEmptyTree creates a new empty Merkle tree with the provided paths to user
+// and tree data db files.
 // The db files will be created on these paths if they don't already exist.
+//
 // userDataFileName: full local os path and file name for the user data db for this tree
+//
 // treeDataFileName: full local os path and file name for the internal tree db store for this tree
 func NewEmptyTree(userDataFileName string, treeDataFileName string) (Tree, error) {
 	userData, err := leveldb.OpenFile(userDataFileName, nil)

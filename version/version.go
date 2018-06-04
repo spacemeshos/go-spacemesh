@@ -1,6 +1,6 @@
 package version
 
-// Version components
+// Version components.
 const (
 	Maj = "0"
 	Min = "0"
@@ -8,9 +8,9 @@ const (
 )
 
 var (
-	// Version is the current version of Spacemesh
+	// Version is the current version of Spacemesh.
 	Version = "0.19.5"
-	// Branch is the current branch of Spacemesh
+	// Branch is the current branch of Spacemesh.
 	Branch = ""
 	// GitCommit is the current HEAD set using ldflags.
 	GitCommit string

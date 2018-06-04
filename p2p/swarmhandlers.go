@@ -20,8 +20,8 @@ import (
 // These should only be called from the swarms event processing main loop
 // or by other internal handlers but not from a random type or go routine
 
-// Handles a local request to register a remote node in the swarm
-// Register adds info about this node but doesn't attempt to connect to it
+// Handles a local request to register a remote node in the swarm.
+// Register adds info about this node but doesn't attempt to connect to it.
 func (s *swarmImpl) onRegisterNodeRequest(n node.RemoteNodeData) {
 
 	if _, ok := s.peers[n.ID()]; ok {

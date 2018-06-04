@@ -3,13 +3,14 @@
 package p2p
 
 import (
+	"strconv"
+
 	"github.com/spacemeshos/go-spacemesh/p2p/dht/table"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
-	"strconv"
 )
 
-// Swarm is p2p virtual network of spacemesh nodes as viewed by a local node
+// Swarm is p2p virtual network of spacemesh nodes as viewed by a local node.
 type Swarm interface {
 
 	// Send a message to a specific remote node based just on its id without knowing its ip address

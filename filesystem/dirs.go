@@ -12,7 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-// Using a function pointer to get the current user so we can more easily mock in tests
+// Using a function pointer to get the current user so we can more easily mock in tests.
 var currentUser = user.Current
 
 // Directory and paths funcs
@@ -32,12 +32,14 @@ func PathExists(path string) bool {
 	return err == nil
 }
 
-// GetSpacemeshDataDirectoryPath gets the full os-specific path to the spacemesh top-level data directory.
+// GetSpacemeshDataDirectoryPath gets the full os-specific path to the
+// spacemesh top-level data directory.
 func GetSpacemeshDataDirectoryPath() (string, error) {
 	return GetFullDirectoryPath(config.ConfigValues.DataFilePath)
 }
 
-// GetSpacemeshTempDirectoryPath gets the spacemesh temp files dir so we don't have to work with convoluted os specific temp folders.
+// GetSpacemeshTempDirectoryPath gets the spacemesh temp files dir
+// so we don't have to work with convoluted os specific temp folders.
 func GetSpacemeshTempDirectoryPath() (string, error) {
 	return ensureDataSubDirectory("temp")
 }
@@ -59,7 +61,8 @@ func DeleteAllTempFiles() error {
 	return err
 }
 
-// EnsureSpacemeshDataDirectories return the os-specific path to the Spacemesh data directory.
+// EnsureSpacemeshDataDirectories return the os-specific path to
+// the Spacemesh data directory.
 // It creates the directory and all predefined sub directories on demand.
 func EnsureSpacemeshDataDirectories() (string, error) {
 	dataPath, err := GetSpacemeshDataDirectoryPath()
@@ -113,7 +116,8 @@ func GetLogsDataDirectoryPath() (string, error) {
 	return ensureDataSubDirectory(config.LogDirectoryName)
 }
 
-// GetUserHomeDirectory returns the current user's home directory if one is set by the system.
+// GetUserHomeDirectory returns the current user's home directory
+// if one is set by the system.
 func GetUserHomeDirectory() string {
 
 	if home := os.Getenv("HOME"); home != "" {
@@ -126,9 +130,13 @@ func GetUserHomeDirectory() string {
 }
 
 // GetCanonicalPath returns an os-specific full path following these rules:
+//
 // - replace ~ with user's home dir path
+//
 // - expand any ${vars} or $vars
+//
 // - resolve relative paths /.../
+//
 // p: source path name
 func GetCanonicalPath(p string) string {
 

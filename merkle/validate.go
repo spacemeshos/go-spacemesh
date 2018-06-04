@@ -4,10 +4,11 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+
 	"github.com/spacemeshos/go-spacemesh/merkle/pb"
 )
 
-// Validates integrity of tree rooted at root
+// Validates integrity of tree rooted at root,
 // returns hash of root node or error if tree is invalid
 func (mt *merkleTreeImp) ValidateStructure(root Node) ([]byte, error) {
 

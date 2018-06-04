@@ -25,7 +25,7 @@ func duration(duration string) (dur time.Duration) {
 	return dur
 }
 
-// Config defines the configuration options for the Spacemesh peer-to-peer networking layer
+// Config defines the configuration options for the Spacemesh peer-to-peer networking layer.
 type Config struct {
 	SecurityParam int    `mapstructure:"security-param"`
 	FastSync      bool   `mapstructure:"fast-sync"`
@@ -55,7 +55,7 @@ type TimeConfig struct {
 	RefreshNtpInterval    time.Duration
 }
 
-// DefaultConfig deines the default p2p configuration
+// DefaultConfig deines the default p2p configuration.
 func DefaultConfig() Config {
 
 	// TimeConfigValues defines default values for all time and ntp related params.

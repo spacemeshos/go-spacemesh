@@ -33,7 +33,7 @@ func init() {
 }
 
 // getAllBackend returns level backends with an exception to Debug leve
-// which is only returned if the flag debug is set
+// which is only returned if the flag debug is set.
 func getBackendLevel(module, prefix, format string) logging.LeveledBackend {
 	logFormat := logging.MustStringFormatter(format)
 
@@ -50,7 +50,7 @@ func getBackendLevel(module, prefix, format string) logging.LeveledBackend {
 	return leveledBackend
 }
 
-// DebugMode sets log debug level
+// DebugMode sets log debug level.
 func DebugMode(mode bool) {
 	debugMode = mode
 }

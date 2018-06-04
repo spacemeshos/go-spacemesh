@@ -17,7 +17,7 @@ type Registry struct {
 	Unlocked map[string]*Account
 }
 
-// Account is an end user blockchain account
+// Account is an end user blockchain account.
 type Account struct {
 	PrivKey    crypto.PrivateKey
 	PubKey     crypto.PublicKey
@@ -27,7 +27,7 @@ type Account struct {
 }
 
 var (
-	// Accounts Registry app singleton
+	// Accounts Registry app singleton.
 	Accounts *Registry
 )
 
@@ -39,7 +39,8 @@ func init() {
 }
 
 // NewAccount Creates a new account using the provided passphrase.
-// Clients should persist newly created accounts - without this the account only lasts for one app session.
+// Clients should persist newly created accounts - without this the
+// account only lasts for one app session.
 func NewAccount(passphrase string) (*Account, error) {
 
 	// account crypto data

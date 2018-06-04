@@ -5,11 +5,12 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-// Pretty returns an account logging string
+// Pretty returns an account logging string.
 func (a *Account) Pretty() string {
 	return fmt.Sprintf("Account %s", a.PubKey.Pretty())
 }
@@ -18,7 +19,7 @@ func (a *Account) String() string {
 	return a.PubKey.String()
 }
 
-// Log account info
+// Log account info.
 func (a *Account) Log() {
 
 	pubKey := a.PubKey.String()
@@ -51,7 +52,7 @@ func (a *Account) LockAccount(passphrase string) {
 	delete(Accounts.Unlocked, a.String())
 }
 
-// UnlockAccount unlocks an account using the user provided passphrase
+// UnlockAccount unlocks an account using the user provided passphrase.
 func (a *Account) UnlockAccount(passphrase string) error {
 
 	if a.IsAccountUnlocked() {
@@ -113,7 +114,7 @@ func (a *Account) UnlockAccount(passphrase string) error {
 	return nil
 }
 
-// Validate that the account's private key matches the provided private key
+// Validate that the account's private key matches the provided private key.
 func (a *Account) validatePublicKey(privateKey crypto.PrivateKey) error {
 
 	publicKey := privateKey.GetPublicKey()

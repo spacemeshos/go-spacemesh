@@ -2,12 +2,14 @@ package table
 
 import (
 	"container/list"
+
 	"github.com/spacemeshos/go-spacemesh/p2p/dht"
 	node "github.com/spacemeshos/go-spacemesh/p2p/node"
 )
 
 // Bucket is a dht k-bucket type. Bucket methods are NOT thread safe.
-// RoutingTable (or other clients) is responsible for serializing access to Bucket's methods.
+// RoutingTable (or other clients) is responsible for serializing
+// access to Bucket's methods.
 type Bucket interface {
 	Peers() []node.RemoteNodeData
 	Has(n node.RemoteNodeData) bool
@@ -21,7 +23,7 @@ type Bucket interface {
 	List() *list.List
 }
 
-// Internal bucket implementation type
+// Internal bucket implementation type.
 type bucketimpl struct {
 	list *list.List
 }

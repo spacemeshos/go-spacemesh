@@ -1,18 +1,19 @@
 package p2p
 
 import (
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht/table"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
-	"time"
 )
 
-// LookupTimeout is the timeout we allow for a single FindNode operation
+// LookupTimeout is the timeout we allow for a single FindNode operation.
 const LookupTimeout = 60 * time.Second
 
-// Finds a node based on its id - internal method
+// Finds a node based on its id - internal method.
 // id: base58 node id string
 // returns remote node or nil when not found
 // not go safe - should only be called from swarm event dispatcher

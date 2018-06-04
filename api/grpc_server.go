@@ -2,10 +2,11 @@
 package api
 
 import (
+	"strconv"
+
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/api/pb"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"strconv"
 
 	"net"
 
@@ -14,13 +15,13 @@ import (
 	"google.golang.org/grpc/reflection"
 )
 
-// SpaceMeshGrpcService is a grpc server providing the Spacemesh api
+// SpaceMeshGrpcService is a grpc server providing the Spacemesh api.
 type SpaceMeshGrpcService struct {
 	Server *grpc.Server
 	Port   uint
 }
 
-// Echo returns the response for an echo api request
+// Echo returns the response for an echo api request.
 func (s SpaceMeshGrpcService) Echo(ctx context.Context, in *pb.SimpleMessage) (*pb.SimpleMessage, error) {
 	return &pb.SimpleMessage{Value: in.Value}, nil
 }
@@ -45,7 +46,7 @@ func (s SpaceMeshGrpcService) StartService(status chan bool) {
 	go s.startServiceInternal(status)
 }
 
-// This is a blocking method designed to be called using a go routine
+// This is a blocking method designed to be called using a go routine.
 func (s SpaceMeshGrpcService) startServiceInternal(status chan bool) {
 	port := config.ConfigValues.GrpcServerPort
 	addr := ":" + strconv.Itoa(int(port))

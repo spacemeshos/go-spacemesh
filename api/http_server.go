@@ -2,13 +2,14 @@ package api
 
 import (
 	"flag"
+	"net/http"
+	"strconv"
+
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
-	"net/http"
-	"strconv"
 
 	gw "github.com/spacemeshos/go-spacemesh/api/pb"
 )
@@ -42,7 +43,8 @@ func (s JSONHTTPServer) listenStop() {
 	}
 }
 
-// StartService starts the json api server and listens for status (started, stopped).
+// StartService starts the json api server and listens for
+// status (started, stopped).
 func (s JSONHTTPServer) StartService(status chan bool) {
 	go s.startInternal(status)
 }

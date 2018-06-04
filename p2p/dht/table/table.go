@@ -3,18 +3,21 @@ package table
 import (
 	"errors"
 	"fmt"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/p2p/dht"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"gopkg.in/op/go-logging.v1"
-	"time"
 )
 
 const (
-	// IDLength is the length of an ID,  dht ids are 32 bytes
+	// IDLength is the length of an ID,  dht ids are 32 bytes.
 	IDLength = 256
-	// BucketCount is the amount of buckets we hold
-	// Kademlia says we need a bucket to each bit but reality says half of network would be at bucket 0
-	// half of remaining nodes will be in bucket 1 and so forth.
+
+	// BucketCount is the amount of buckets we hold.
+	// Kademlia says we need a bucket to each bit but reality says:
+	// - half of network would be at bucket 0.
+	// - half of remaining nodes will be in bucket 1 and so forth.
 	// that means that most of te buckets won't be even populated most of the time
 	// todo : optimize this?
 	BucketCount = IDLength / 10
@@ -88,18 +91,29 @@ type NearestPeersReq struct {
 // RoutingTable defines the routing table.
 // Most recently network active nodes are placed in beginning of buckets.
 // Least active nodes are the back of each bucket.
+//
 // Bucket index is the size of the common prefix of nodes in that buckets and the local node
+//
 // l:  0 1 0 0 1 1
+//
 // n1: 0 0 1 1 0 1
+//
 // n2: 0 1 0 1 1 1
+//
 // dist(l,n1) = xor(l,n1) = 0 1 1 1 1 0
+//
 // dist(l,n2) = xor(l,n2) = 0 0 0 1 0 0
+//
 // cpl(l,n1) = 1 -> n1 => bucket[1]
+//
 // cpl(l,n2) = 3 -> n2 => bucket[3]
+//
 // Closer nodes will appear in buckets with a higher index
-// Most recently-seen nodes appear in the top of their buckets while least-often seen nodes at the bottom
+//
+// Most recently-seen nodes appear in the top of their buckets while
+// least-often seen nodes at the bottom.
 type routingTableImpl struct {
-	//logger for this routing table usually the node logger
+	// logger for this routing table usually the node logger
 	log *logging.Logger
 
 	// Local peer ID that holds this routing table
@@ -117,10 +131,10 @@ type routingTableImpl struct {
 	removeReqs chan node.RemoteNodeData
 
 	// latency metrics
-	//metrics pstore.Metrics
+	// metrics pstore.Metrics
 
 	// Maximum acceptable latency for peers in this cluster
-	//maxLatency time.Duration
+	// maxLatency time.Duration
 
 	buckets        [BucketCount]Bucket
 	bucketsize     int // max number of nodes per bucket. typically 10 or 20.
@@ -138,7 +152,7 @@ type routingTableImpl struct {
 	peerAddedCallbacks   map[string]PeerChannel
 }
 
-// NewRoutingTable creates a new routing table with a given bucket=size and local node dht.ID
+// NewRoutingTable creates a new routing table with a given bucket=size and local node dht.ID.
 func NewRoutingTable(bucketsize int, localID dht.ID, log *logging.Logger) RoutingTable {
 
 	// Create all our buckets.
@@ -184,7 +198,7 @@ func NewRoutingTable(bucketsize int, localID dht.ID, log *logging.Logger) Routin
 
 // thread safe public interface
 
-// Size returns the total number of peers in the routing table
+// Size returns the total number of peers in the routing table.
 func (rt *routingTableImpl) Size(callback chan int) {
 	rt.sizeReqs <- callback
 }

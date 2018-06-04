@@ -2,15 +2,16 @@ package node
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/btcsuite/btcutil/base58"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
-	"strings"
 )
 
-// RemoteNodeData defines basic remote node data
-// Outside of swarm local node works with RemoteNodeData and not with Peers
-// Peers should only be used internally by swarm
+// RemoteNodeData defines basic remote node data.
+// Outside of swarm local node works with RemoteNodeData and not with Peers.
+// Peers should only be used internally by swarm.
 type RemoteNodeData interface {
 	ID() string    // base58 encoded node key/id
 	IP() string    // node tcp listener e.g. 127.0.0.1:3038
@@ -31,7 +32,8 @@ type remoteNodeDataImpl struct {
 }
 
 // ToNodeInfo returns marshaled protobufs node infos slice from a slice of RemoteNodeData.
-// filterId: node id to exclude from the result
+//
+// filterId: node id to exclude from the result.
 func ToNodeInfo(nodes []RemoteNodeData, filterID string) []*pb.NodeInfo {
 	// init empty slice
 	res := []*pb.NodeInfo{}
@@ -94,7 +96,9 @@ func NewRemoteNodeData(id string, ip string) RemoteNodeData {
 	}
 }
 
-// NewRemoteNodeDataFromString creates a remote node from a string in the following format: 126.0.0.1:3572/QmcjTLy94HGFo4JoYibudGeBV2DSBb6E4apBjFsBGnMsWa .
+// NewRemoteNodeDataFromString creates a remote node from a string in the following format:
+//
+// 126.0.0.1:3572/QmcjTLy94HGFo4JoYibudGeBV2DSBb6E4apBjFsBGnMsWa .
 func NewRemoteNodeDataFromString(data string) RemoteNodeData {
 	items := strings.Split(data, "/")
 	if len(items) != 2 {

@@ -9,7 +9,8 @@ import (
 	"gopkg.in/op/go-logging.v1"
 )
 
-// Connection is a closeable network connection, that can send and receive messages from a remote instance.
+// Connection is a closeable network connection, that can send and
+// receive messages from a remote instance.
 // Connection is an io.Writer and an io.Closer.
 type Connection interface {
 	ID() string
@@ -77,7 +78,7 @@ type connectionImpl struct {
 	net  Net      // network context
 }
 
-// Create a new connection wrapping a net.Conn with a provided connection manager
+// Create a new connection wrapping a net.Conn with a provided connection manager.
 func newConnection(conn net.Conn, n Net, s ConnectionSource) Connection {
 
 	// todo parametrize incoming msgs chan buffer size - hard-coded for now
