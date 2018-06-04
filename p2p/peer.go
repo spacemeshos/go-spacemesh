@@ -24,13 +24,14 @@ type Peer interface {
 
 	GetSessions() map[string]NetworkSession
 
-	// GetAuthenticatedSession returns an authenticated session with the node if one exists
+	// GetAuthenticatedSession returns an authenticated session with
+	// the node if one exists.
 	GetAuthenticatedSession() NetworkSession
 
-	// GetActiveConnection returns an active connection with the node if we have one
+	// GetActiveConnection returns an active connection with the node if we have one.
 	GetActiveConnection() net.Connection
 
-	// GetRemoteNodeData returns RemoteNodeData for this peer
+	// GetRemoteNodeData returns RemoteNodeData for this peer.
 	GetRemoteNodeData() node.RemoteNodeData
 }
 
