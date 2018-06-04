@@ -1,14 +1,13 @@
 package p2p
 
 import (
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/dht/table"
-	"github.com/spacemeshos/go-spacemesh/p2p/node"
-	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 	"time"
 
-	//"github.com/spacemeshos/go-spacemesh/p2p/dht/table"
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/dht/table"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
+	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 	"github.com/spacemeshos/go-spacemesh/p2p/timesync"
 )
 
@@ -282,7 +281,7 @@ func (s *swarmImpl) shutDownInternal() {
 // provides concurrency safety as only one callback is executed at a time
 // so there's no need for sync internal data structures
 func (s *swarmImpl) beginProcessingEvents(bootstrap bool) {
-	checkTimeSync := time.NewTicker(nodeconfig.TimeConfigValues.RefreshNtpInterval.Duration())
+	checkTimeSync := time.NewTicker(nodeconfig.TimeConfigValues.RefreshNtpInterval)
 	retryMessage := time.NewTicker(time.Second * 5)
 
 	if bootstrap {

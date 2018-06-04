@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"errors"
+
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
