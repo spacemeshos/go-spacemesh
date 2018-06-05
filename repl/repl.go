@@ -1,6 +1,7 @@
 package repl
 
 import (
+	"flag"
 	"fmt"
 	"strings"
 
@@ -27,15 +28,21 @@ type repl struct {
 
 // StartRepl starts REPL.
 func StartRepl(node p2p.LocalNode, envPath string) {
-	err := setVariables(envPath)
-	if err != nil {
-		node.Debug(err.Error())
+	if flag.Lookup("test.v") == nil {
+		err := setVariables(envPath)
+		if err != nil {
+			node.Debug(err.Error())
+		}
+
+		r := &repl{node: node}
+		r.initializeCommands()
+
+		runPrompt(r.executor, r.completer, r.firstTime, uint16(len(r.commands)))
+	} else {
+		// holds for unit test purposes
+		hold := make(chan bool)
+		<-hold
 	}
-
-	r := &repl{node: node}
-	r.initializeCommands()
-
-	runPrompt(r.executor, r.completer, r.firstTime, uint16(len(r.commands)))
 }
 
 func (r *repl) initializeCommands() {
