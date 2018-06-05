@@ -3,7 +3,6 @@ package app
 import (
 	"fmt"
 	"os"
-	"os/signal"
 	"runtime"
 
 	"github.com/spacemeshos/go-spacemesh/accounts"
@@ -86,19 +85,6 @@ func newSpacemeshApp() *SpacemeshApp {
 // toml config file
 func (app *SpacemeshApp) before(cmd *cobra.Command, args []string) (err error) {
 
-	// exit gracefully - e.g. with app cleanup on sig abort (ctrl-c)
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, os.Interrupt)
-
-	// Goroutine that listens for Crtl ^ C command
-	// and triggers the quit app
-	go func() {
-		for range signalChan {
-			log.Info("Received an interrupt, stopping services...\n")
-			ExitApp <- true
-		}
-	}()
-
 	fileLocation := viper.GetString("config")
 
 	// read in default config if passed as param using viper
@@ -163,6 +149,7 @@ func (app *SpacemeshApp) getAppInfo() string {
 
 // Post Execute tasks
 func (app *SpacemeshApp) cleanup(cmd *cobra.Command, args []string) (err error) {
+
 	log.Info("App cleanup starting...")
 
 	if app.jsonAPIService != nil {
@@ -177,6 +164,10 @@ func (app *SpacemeshApp) cleanup(cmd *cobra.Command, args []string) (err error) 
 
 	// add any other cleanup tasks here....
 	log.Info("App cleanup completed\n\n")
+
+	// need to do this because the prompt lib doesn't have a way to
+	// stop the execution
+	os.Exit(0)
 
 	return nil
 }
@@ -225,11 +216,17 @@ func (app *SpacemeshApp) startSpacemeshNode(cmd *cobra.Command, args []string) {
 
 	log.Info("App started.")
 
+	// StartRepl blocks until it receives a signal to exit
+	// this signal may come from the node or from sig-abort (ctrl-d)
+	go func() {
+		<-ExitApp
+		app.cleanup(app.Command, []string{})
+	}()
+
 	repl.StartRepl(node, "./ENV")
 
-	// app blocks until it receives a signal to exit
-	// this signal may come from the node or from sig-abort (ctrl-c)
-	<-ExitApp
+	log.Info("Received an interrupt, stopping services...\n")
+
 	//return nil
 }
 
