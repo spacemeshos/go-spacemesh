@@ -2,7 +2,9 @@ package p2p
 
 import (
 	"errors"
+
 	"github.com/gogo/protobuf/proto"
+	"github.com/spacemeshos/go-spacemesh/accounts"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht"
@@ -53,6 +55,18 @@ type LocalNode interface {
 	// local store persistence
 	EnsureNodeDataDirectory() (string, error)
 	persistData() error
+
+	CreateAccount(generatePassphrase bool, accountInfo string) error
+	LocalAccount() *accounts.Account
+	Unlock(passphrase string) error
+	IsAccountUnLock(id string) bool
+	Lock(passphrase string) error
+	AccountInfo(id string)
+	Transfer(from, to, amount, passphrase string) error
+	SetVariables(params, flags []string) error
+	Restart(params, flags []string) error
+	NeedRestartNode(params, flags []string) bool
+	Setup(allocation string) error
 }
 
 // NewLocalNode creates a local node with a provided tcp address.

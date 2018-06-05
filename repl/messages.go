@@ -14,4 +14,7 @@ const (
 	confirmTransactionMsg       = "Confirm transaction (y/n): "
 	newFlagsAndParamsMsg        = "provide CLI flags and params or press ENTER for none: "
 	userExecutingCommandMsg     = "User executing command: %s"
+	requiresSetupMsg            = "Spacemesh requires a minimum of 300GB of free disk space. 250GB are used for POST and 50GB are reserved for the global computer state. You may allocate additional disk space for POST in 300GB increments. "
+	postAllocationMsg           = "POST allocation (GB): "
+	restartNodeMsg              = "Restart node?"
 )
