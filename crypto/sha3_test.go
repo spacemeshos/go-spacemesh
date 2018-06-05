@@ -3,8 +3,9 @@ package crypto
 import (
 	"bytes"
 	"encoding/hex"
-	"github.com/spacemeshos/go-spacemesh/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestSha256(t *testing.T) {
@@ -21,10 +22,10 @@ func TestSha256(t *testing.T) {
 
 	for k, v := range testVectors {
 		data, err := hex.DecodeString(k)
-		assert.NoErr(t, err, "invalid input data")
+		assert.NoError(t, err, "invalid input data")
 		result := Sha256(data)
 		expected, err := hex.DecodeString(v)
-		assert.NoErr(t, err, "invalid hex string %s", v)
+		assert.NoError(t, err, "invalid hex string %s", v)
 		assert.True(t, bytes.Equal(result, expected), "unexpected result")
 	}
 }

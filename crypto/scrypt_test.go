@@ -4,8 +4,9 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestDeriveKey(t *testing.T) {
@@ -18,7 +19,7 @@ func TestDeriveKey(t *testing.T) {
 	dead.Salt = "IJKL"
 	data, err := DeriveKeyFromPassword(pass, dead)
 	assert.True(t, bytes.Equal(data, []byte("")), fmt.Sprintf("hex decode error should give nil but gave %v", data))
-	assert.Err(t, err, fmt.Sprint("hex decode should give error"))
+	assert.Error(t, err, fmt.Sprint("hex decode should give error"))
 
 	dead.SaltLen = 4
 	dead.Salt = "ABCD"
@@ -27,14 +28,14 @@ func TestDeriveKey(t *testing.T) {
 	dead.N = 3
 	data, err = DeriveKeyFromPassword(pass, dead)
 	assert.True(t, bytes.Equal(data, []byte("")), fmt.Sprintf("scrypt.Key error should give [] but gave %v", data))
-	assert.Err(t, err, fmt.Sprint("scrypt.Key should give error"))
+	assert.Error(t, err, fmt.Sprint("scrypt.Key should give error"))
 
 	// test derivation without a valid set salt
 	data, err = DeriveKeyFromPassword(pass, good)
-	assert.Err(t, err, "expected no salt error")
+	assert.Error(t, err, "expected no salt error")
 
 	s, err := GetRandomBytes(good.SaltLen)
-	assert.NoErr(t, err, "failed to generate salt")
+	assert.NoError(t, err, "failed to generate salt")
 	good.Salt = hex.EncodeToString(s)
 
 	// try good parameters and get valid result

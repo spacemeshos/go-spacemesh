@@ -1,12 +1,13 @@
 package filesystem
 
 import (
-	"encoding/binary"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"os/user"
 	"testing"
+
+	"encoding/binary"
 
 	"github.com/spacemeshos/go-spacemesh/app/config"
 	"github.com/spacemeshos/go-spacemesh/crypto"
@@ -21,10 +22,16 @@ func SetupTestSpacemeshDataFolders(t *testing.T, n string) {
 		t.Error(err)
 	}
 
-	setupFolder := fmt.Sprintf("test%v_%v", n, binary.BigEndian.Uint32(r))
-	config.ConfigValues.DataFilePath = setupFolder
-
 	aPath, err := GetSpacemeshDataDirectoryPath()
+
+	if err != nil {
+		t.Error(err)
+	}
+
+	setupFolder := fmt.Sprintf("test%v_%v", n, binary.BigEndian.Uint32(r))
+	config.ConfigValues.DataFilePath = fmt.Sprintf("%v/%v", aPath, setupFolder)
+
+	aPath, err = GetSpacemeshDataDirectoryPath()
 	if err != nil {
 		t.Fatalf("Failed to get spacemesh data dir: %s", err)
 	}

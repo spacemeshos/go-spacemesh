@@ -2,8 +2,8 @@ package p2p
 
 import (
 	"encoding/hex"
+
 	"github.com/gogo/protobuf/proto"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 )
 
@@ -77,12 +77,12 @@ func (p *pingProtocolImpl) Send(msg string, reqID []byte, remoteNodeID string) {
 	// marshal the signed data
 	payload, err := proto.Marshal(data)
 	if err != nil {
-		log.Error("failed to marshal data", err)
+		p.swarm.GetLocalNode().Error("failed to marshal data", err)
 		return
 	}
 
+	p.swarm.GetLocalNode().Info("Sending Ping message to (%v)", remoteNodeID)
 	req := SendMessageReq{remoteNodeID, reqID, payload, p.sendErrors}
-
 	p.swarm.SendMessage(req)
 }
 
@@ -99,13 +99,13 @@ func (p *pingProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 	req := &pb.PingReqData{}
 	err := proto.Unmarshal(msg.Payload(), req)
 	if err != nil {
-		log.Warning("Invalid ping request data", err)
+		p.swarm.GetLocalNode().Warning("Invalid ping request data", err)
 		return
 	}
 
 	peer := msg.Sender()
 
-	log.Debug("Incoming ping peer request from %s. Message: s%", peer.Pretty(), req.Ping)
+	p.swarm.GetLocalNode().Info("Incoming ping peer request from %s. Message: %s", peer.Pretty(), req.Ping)
 
 	// add/update local dht table as we just heard from a peer
 	p.swarm.getRoutingTable().Update(peer.GetRemoteNodeData())
@@ -117,7 +117,7 @@ func (p *pingProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 	// sign response
 	sign, err := p.swarm.GetLocalNode().SignToString(respData)
 	if err != nil {
-		log.Error("Failed to sign response", err)
+		p.swarm.GetLocalNode().Error("Failed to sign response", err)
 		return
 	}
 
@@ -126,7 +126,7 @@ func (p *pingProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 	// marshal the signed data
 	signedPayload, err := proto.Marshal(respData)
 	if err != nil {
-		log.Error("Failed to generate response data", err)
+		p.swarm.GetLocalNode().Error("Failed to generate response data", err)
 		return
 	}
 
@@ -148,11 +148,11 @@ func (p *pingProtocolImpl) handleIncomingResponse(msg IncomingMessage) {
 	if err != nil {
 		// we can't extract the request id from the response so we just terminate
 		// without sending a callback - this case should be handeled as a timeout
-		log.Error("Invalid ping request data", err)
+		p.swarm.GetLocalNode().Error("Invalid ping request data", err)
 		return
 	}
 
-	log.Debug("Got pong response `%s` from %s. Ping req id: %s", data.Pong, msg.Sender().Pretty(),
+	p.swarm.GetLocalNode().Info("Got pong response `%v` from %s. Ping req id: %v", data.Pong, msg.Sender().Pretty(),
 		hex.EncodeToString(data.Metadata.ReqId))
 
 	// according to kad receiving a ping response should update sender in local dht table
