@@ -15,7 +15,7 @@
 			"revisionTime": "2017-07-02T00:39:31Z"
 		},
 		{
-			"checksumSHA1": "IvAeChkshQYNdvvA/d5VyGhtdIU=",
+			"checksumSHA1": "QQgNik2GjRFQMHBQBBaT95vOegQ=",
 			"path": "github.com/c-bata/go-prompt",
 			"revision": "2f3ee57cf5d006ef778e5fab923ed0022eba2168",
 			"revisionTime": "2018-05-18T01:37:44Z"
@@ -199,6 +199,12 @@
 			"path": "github.com/pelletier/go-toml",
 			"revision": "66540cf1fcd2c3aee6f6787dfa32a6ae9a870f12",
 			"revisionTime": "2018-03-23T18:52:43Z"
+		},
+		{
+			"checksumSHA1": "L7dFEYzHkAatKpLgN5g0zvcuPwo=",
+			"path": "github.com/pkg/term/termios",
+			"revision": "cda20d4ac917ad418d86e151eff439648b06185b",
+			"revisionTime": "2018-04-23T04:39:32Z"
 		},
 		{
 			"checksumSHA1": "LuFv4/jlrmFNnDb/5SCSEPAM9vU=",
