@@ -1,7 +1,7 @@
 package accounts
 
 import (
-	"github.com/spacemeshos/go-spacemesh/assert"
+	"github.com/stretchr/testify/assert"
 	"testing"
 )
 

@@ -5,10 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/assert"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
+	"github.com/stretchr/testify/assert"
 	"gopkg.in/op/go-logging.v1"
 )
 
@@ -23,7 +23,7 @@ func TestReadWrite(t *testing.T) {
 	msgID := crypto.UUID()
 
 	port, err := GetUnboundedPort()
-	assert.NoErr(t, err, "Should be able to establish a connection on a port")
+	assert.NoError(t, err, "Should be able to establish a connection on a port")
 
 	address := fmt.Sprintf("0.0.0.0:%d", port)
 	done := make(chan bool, 1)
@@ -32,7 +32,7 @@ func TestReadWrite(t *testing.T) {
 	assert.Nil(t, err, "failed to create tcp server")
 
 	_, err = NewNet(address, nodeconfig.ConfigValues, testLogger("TEST-net2"))
-	assert.Err(t, err, "Should not be able to create a new net on same address")
+	assert.Error(t, err, "Should not be able to create a new net on same address")
 
 	// run a simple network events processor go routine
 	go func() {
@@ -71,8 +71,6 @@ func TestReadWrite(t *testing.T) {
 
 	log.Debug("Sending message...")
 
-	t1 := c.LastOpTime()
-
 	c.Send(msg, msgID)
 	log.Debug("Message sent.")
 
@@ -84,20 +82,18 @@ func TestReadWrite(t *testing.T) {
 
 	n.Shutdown()
 	_, err = n.DialTCP(address, time.Duration(10*time.Second), time.Duration(48*time.Hour))
-	assert.Err(t, err, "expected to fail dialing after calling shutdown")
+	assert.Error(t, err, "expected to fail dialing after calling shutdown")
 	//
-	t2 := c.LastOpTime()
 	//
 	//// verify connection props
 	id := c.ID()
 	assert.True(t, len(id) > 0, "failed to get connection id")
-	assert.True(t, t2.Sub(t1) > 0, "invalid last op time")
 	err = c.Close()
-	assert.NoErr(t, err, "error closing connection")
+	assert.NoError(t, err, "error closing connection")
 }
 
 func TestGetUnboundedPort(t *testing.T) {
 	port, err := GetUnboundedPort()
 	_ = port // to make lint pass
-	assert.NoErr(t, err, "Should be able to get an unbounded port")
+	assert.NoError(t, err, "Should be able to get an unbounded port")
 }

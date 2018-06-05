@@ -5,6 +5,7 @@ import (
 	"github.com/btcsuite/btcutil/base58"
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht/table"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
@@ -83,7 +84,7 @@ const tableQueryTimeout = time.Duration(time.Minute * 1)
 // Send a single find node request to a remote node
 // id: base58 encoded remote node id
 func (p *findNodeProtocolImpl) FindNode(reqID []byte, serverNodeID string, id string, callback chan FindNodeResp) error {
-
+	p.swarm.GetLocalNode().Debug("Sending FindNode(%v) request to %v", id, serverNodeID)
 	p.callbacksRegReq <- RespCallbackRequest{callback, reqID}
 
 	nodeID := base58.Decode(id)
@@ -121,7 +122,7 @@ func (p *findNodeProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 	}
 
 	peer := msg.Sender()
-	p.swarm.GetLocalNode().Debug("Incoming find-node request from %s. Requested node id: %s", peer.Pretty(), hex.EncodeToString(req.NodeId))
+	p.swarm.GetLocalNode().Debug("Incoming find-node request from %s. Requested node id: %v (DhtId: %v)", peer.Pretty(), log.PrettyID(base58.Encode(req.NodeId)), hex.EncodeToString(req.NodeId))
 
 	// use the dht table to generate the response
 
@@ -138,9 +139,16 @@ func (p *findNodeProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 
 	select { // block until we got results from the  routing table or timeout
 	case c := <-callback:
-		p.swarm.GetLocalNode().Debug("find-node results length: %d", len(c.Peers))
-		p.swarm.GetLocalNode().Debug("THE PEERS", c.Peers)
-		results = node.ToNodeInfo(c.Peers, msg.Sender().String())
+		p.swarm.GetLocalNode().Debug("Preparing find-node (%v) results to send to %v", log.PrettyID(base58.Encode(req.NodeId)), peer.Pretty())
+		peers := []node.RemoteNodeData{}
+		for i := range c.Peers { // we don't want to send peer to itself
+			peer := c.Peers[i]
+			if peer.ID() != msg.Sender().String() {
+				peers = append(peers, c.Peers[i])
+				p.swarm.GetLocalNode().Debug("%d: %v", i, peer.Pretty(), peer.IP())
+			}
+		}
+		results = node.ToNodeInfo(peers, msg.Sender().String())
 	case <-time.After(tableQueryTimeout):
 		results = []*pb.NodeInfo{} // an empty slice
 	}

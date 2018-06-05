@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/spacemeshos/go-spacemesh/assert"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestCheckNodeVersion(t *testing.T) {
@@ -55,20 +55,20 @@ func TestCheckNodeVersion(t *testing.T) {
 
 	for _, te := range testNewClient {
 		ok, err := CheckNodeVersion(getSemver(te.version), te.minVersion)
-		assert.NoErr(t, err, "Should'nt return error")
+		assert.NoError(t, err, "Should'nt return error")
 		assert.True(t, ok, "Should return true on same or higher version")
 	}
 
 	for _, te := range testNotValid {
 		ok, err := CheckNodeVersion(getSemver(te.version), te.minVersion)
-		assert.Err(t, err, "not valid version should error")
+		assert.Error(t, err, "not valid version should error")
 		assert.False(t, ok, "should return false on non valid version")
 	}
 
 	for _, te := range testTooOld {
 		ok, err := CheckNodeVersion(getSemver(te.version), te.minVersion)
 		assert.False(t, ok, "Should return false when version is older than min version")
-		assert.NoErr(t, err, "Shuold'nt return error when client is older")
+		assert.NoError(t, err, "Shuold'nt return error when client is older")
 	}
 
 }

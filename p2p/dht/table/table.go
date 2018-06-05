@@ -37,6 +37,7 @@ type RoutingTable interface {
 	Size(callback chan int)            // total # of peers in the table
 
 	Bootstrap(findnode func(id string, nodes chan node.RemoteNodeData), id string, minPeers int, errchan chan error)
+	IsHealthy() bool
 
 	// add/remove peers callbacks management - thread safe
 	RegisterPeerRemovedCallback(c PeerChannel)   // get called when a  peer is removed
@@ -121,8 +122,9 @@ type routingTableImpl struct {
 	// Maximum acceptable latency for peers in this cluster
 	//maxLatency time.Duration
 
-	buckets    [BucketCount]Bucket
-	bucketsize int // max number of nodes per bucket. typically 10 or 20.
+	buckets        [BucketCount]Bucket
+	bucketsize     int // max number of nodes per bucket. typically 10 or 20.
+	minPeersHealth int
 
 	peerRemoved PeerChannel
 	peerAdded   PeerChannel
@@ -147,10 +149,11 @@ func NewRoutingTable(bucketsize int, localID dht.ID, log *logging.Logger) Routin
 
 	rt := &routingTableImpl{
 
-		buckets:     buckets,
-		bucketsize:  bucketsize,
-		log:         log,
-		local:       localID,
+		buckets:    buckets,
+		bucketsize: bucketsize,
+		log:        log,
+		local:      localID,
+
 		peerRemoved: make(PeerChannel, 3),
 		peerAdded:   make(PeerChannel, 3),
 
@@ -207,9 +210,22 @@ func (rt *routingTableImpl) UnregisterPeerAddedCallback(c PeerChannel) {
 	rt.unregisterPeerAddedReq <- c
 }
 
+func (rt *routingTableImpl) IsHealthy() bool {
+
+	if rt.minPeersHealth == 0 {
+		return false
+	}
+
+	size := make(chan int)
+	rt.Size(size)
+	s := <-size
+	return s >= rt.minPeersHealth
+}
+
 func (rt *routingTableImpl) Bootstrap(findnode func(id string, nodes chan node.RemoteNodeData), id string, minPeers int, errchan chan error) {
 	timeout := time.NewTimer(90 * time.Second)
 	bootstrap := func() chan node.RemoteNodeData { c := make(chan node.RemoteNodeData); findnode(id, c); return c }
+	rt.minPeersHealth = minPeers
 	bs := bootstrap()
 
 BSLOOP:
@@ -217,21 +233,20 @@ BSLOOP:
 		select {
 		case res := <-bs:
 			if res != nil {
-				errchan <- errors.New("Found ourselves in a bootstrap query")
+				errchan <- errors.New("found ourselves in a bootstrap query")
 				return
 			}
-			size := make(chan int)
-			rt.Size(size)
-			s := <-size
-			if s >= minPeers {
+
+			if rt.IsHealthy() {
 				break BSLOOP
 			}
 
-			rt.log.Warning("Bootstrap didn't feel Routing table, starting bootstrap op again")
+			rt.log.Warning("Bootstrap didn't fill routing table, starting bootstrap op again in 2 seconds.")
+			time.Sleep(2 * time.Second)
 			bs = bootstrap()
 			continue
 		case <-timeout.C:
-			errchan <- errors.New("Didn't get response in timeout time")
+			errchan <- errors.New("didn't get response in timeout time")
 			return
 		}
 	}
@@ -482,11 +497,6 @@ func (rt *routingTableImpl) nearestPeers(id dht.ID, count int) []node.RemoteNode
 	if len(sorted) > count {
 		sorted = sorted[:count]
 	}
-	//var out []node.RemoteNodeData
-	//for i := 0; i < count && i < peerArr.Len(); i++ {
-	//	out = append(out, peerArr[i].Node.(node.RemoteNodeData))
-	//}
-	rt.log.Debug("OUT ", sorted)
 	return sorted
 }
 
@@ -523,5 +533,5 @@ func (rt *routingTableImpl) onPrintReq() {
 			str += fmt.Sprintf("\t\t%s cpl:%v\n", p.Pretty(), rt.local.CommonPrefixLen(p.DhtID()))
 		}
 	}
-	fmt.Println(str)
+	rt.log.Debug(str)
 }

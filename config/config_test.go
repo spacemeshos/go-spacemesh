@@ -1,8 +1,9 @@
 package config
 
 import (
-	"github.com/spacemeshos/go-spacemesh/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestLoadConfig(t *testing.T) {

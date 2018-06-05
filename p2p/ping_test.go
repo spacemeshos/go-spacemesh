@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/assert"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestPingProtocol(t *testing.T) {

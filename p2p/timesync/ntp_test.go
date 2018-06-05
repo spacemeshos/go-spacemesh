@@ -2,9 +2,9 @@ package timesync
 
 import (
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/assert"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
+	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
 )
