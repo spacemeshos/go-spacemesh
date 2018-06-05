@@ -11,18 +11,6 @@ import (
 const (
 	prefix      = "$ "
 	printPrefix = "> "
-
-	welcomeMsg                  = "Welcome to Spacemesh. To get started you need a new local account. Create a new local user account now? (y/n)"
-	generateMsg                 = "Generate account passphrase? (y/n) "
-	accountInfoMsg              = "Add account info (enter text or ENTER):"
-	accountNotFoundoMsg         = "Local account not found. Create one? (y/n) "
-	transferFromLocalAccountMsg = "Transfer from local account %s ? (y/n) "
-	transferFromAccountMsg      = "Enter or paste account id: "
-	transferToAccountMsg        = "Enter or paste destination account id: "
-	amountToTransferMsg         = "Enter Meshcoins amount to transfer: "
-	accountPassphrase           = "Enter local account passphrase: "
-	confirmTransactionMsg       = "Confirm transaction (y/n): "
-	newFlagsAndParamsMsg        = "provide CLI flags and params or press ENTER for none: "
 )
 
 var emptyComplete = func(prompt.Document) []prompt.Suggest { return []prompt.Suggest{} }
@@ -176,14 +164,14 @@ func (r *repl) account() {
 
 func (r *repl) transferCoins() {
 	var accountId string
-	fmt.Println(printPrefix, "Transfer coin from local account to another account.")
+	fmt.Println(printPrefix, initialTransferMsg)
 	isTransferFromLocal := r.yesOrNoQuestion(transferFromLocalAccountMsg) == "y"
 
 	if !isTransferFromLocal {
 		accountId = r.inputNotBlank(transferFromAccountMsg)
 	} else {
 		// TODO: call function to get the address
-		accountId = "asdsdsds"
+		accountId = "bla bla bla"
 	}
 
 	destinationAccountId := r.inputNotBlank(transferToAccountMsg)
