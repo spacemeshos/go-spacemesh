@@ -62,7 +62,7 @@ Please read the Spacemesh [full FAQ](https://github.com/spacemeshos/go-spacemesh
 ### High Level Design
 ![](https://raw.githubusercontent.com/spacemeshos/go-spacemesh/master/research/sp_arch_3.png)
 
-### Node Software Architecture
+### Client Software Architecture
 ![](https://raw.githubusercontent.com/spacemeshos/go-spacemesh/master/research/sm_arch_4.png)
 
 ### Getting
