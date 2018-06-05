@@ -13,8 +13,6 @@ const (
 	printPrefix = ">"
 )
 
-var emptyComplete = func(prompt.Document) []prompt.Suggest { return []prompt.Suggest{} }
-
 type command struct {
 	text        string
 	description string
@@ -37,16 +35,7 @@ func StartRepl(node p2p.LocalNode, envPath string) {
 	r := &repl{node: node}
 	r.initializeCommands()
 
-	p := prompt.New(
-		r.executor,
-		r.completer,
-		prompt.OptionPrefix(prefix),
-		prompt.OptionPrefixTextColor(prompt.LightGray),
-		prompt.OptionMaxSuggestion(uint16(len(r.commands))),
-	)
-
-	r.firstTime()
-	p.Run()
+	runPrompt(r.executor, r.completer, r.firstTime, uint16(len(r.commands)))
 }
 
 func (r *repl) initializeCommands() {
@@ -91,32 +80,14 @@ func (r *repl) completer(in prompt.Document) []prompt.Suggest {
 }
 
 func (r *repl) firstTime() {
-	createNewAccount := r.yesOrNoQuestion(welcomeMsg) == "y"
+	createNewAccount := yesOrNoQuestion(welcomeMsg) == "y"
 	if createNewAccount {
 		r.createAccount()
 	}
 }
 
-// executes prompt waiting for an input with y or n
-func (*repl) yesOrNoQuestion(msg string) string {
-	var input string
-	for {
-		input = prompt.Input(prefix+msg,
-			emptyComplete,
-			prompt.OptionPrefixTextColor(prompt.LightGray))
-
-		if input == "y" || input == "n" {
-			break
-		}
-
-		fmt.Println(printPrefix, "invalid command.")
-	}
-
-	return input
-}
-
 func (r *repl) createAccount() {
-	generatePassphrase := r.yesOrNoQuestion(generateMsg) == "y"
+	generatePassphrase := yesOrNoQuestion(generateMsg) == "y"
 	accountInfo := prompt.Input(prefix+accountInfoMsg,
 		emptyComplete,
 		prompt.OptionPrefixTextColor(prompt.LightGray))
@@ -165,7 +136,7 @@ func (r *repl) account() {
 		r.node.AccountInfo(accountId)
 	} else {
 		if acct := r.node.LocalAccount(); acct == nil &&
-			r.yesOrNoQuestion(accountNotFoundoMsg) == "y" {
+			yesOrNoQuestion(accountNotFoundoMsg) == "y" {
 			r.createAccount()
 		} else {
 			r.node.AccountInfo(accountId)
@@ -190,17 +161,17 @@ func (r *repl) transferCoins() {
 
 	accountId = acct.PrivKey.String()
 	msg := fmt.Sprintf(transferFromLocalAccountMsg, accountId)
-	isTransferFromLocal := r.yesOrNoQuestion(msg) == "y"
+	isTransferFromLocal := yesOrNoQuestion(msg) == "y"
 
 	if !isTransferFromLocal {
-		accountId = r.inputNotBlank(transferFromAccountMsg)
+		accountId = inputNotBlank(transferFromAccountMsg)
 	}
 
-	destinationAccountId := r.inputNotBlank(transferToAccountMsg)
-	amount := r.inputNotBlank(amountToTransferMsg)
+	destinationAccountId := inputNotBlank(transferToAccountMsg)
+	amount := inputNotBlank(amountToTransferMsg)
 
 	if !r.node.IsAccountUnLock(accountId) {
-		passphrase = r.inputNotBlank(accountPassphrase)
+		passphrase = inputNotBlank(accountPassphrase)
 	}
 
 	fmt.Println(printPrefix, "Transaction summary:")
@@ -208,7 +179,7 @@ func (r *repl) transferCoins() {
 	fmt.Println(printPrefix, "To:", destinationAccountId)
 	fmt.Println(printPrefix, "Amount:", amount)
 
-	if r.yesOrNoQuestion(confirmTransactionMsg) == "y" {
+	if yesOrNoQuestion(confirmTransactionMsg) == "y" {
 		err := r.node.Transfer(accountId, destinationAccountId, amount, passphrase)
 		if err != nil {
 			r.node.Debug(err.Error())
@@ -216,30 +187,12 @@ func (r *repl) transferCoins() {
 	}
 }
 
-// executes prompt waiting an input not blank
-func (*repl) inputNotBlank(msg string) string {
-	var input string
-	for {
-		input = prompt.Input(prefix+msg,
-			emptyComplete,
-			prompt.OptionPrefixTextColor(prompt.LightGray))
-
-		if strings.TrimSpace(input) != "" {
-			break
-		}
-
-		fmt.Println(printPrefix, "please enter a value.")
-	}
-
-	return input
-}
-
 func (r *repl) setCLIFlagOrParam() {
 	var err error
 	params, flags := r.getParamsAndFlags(r.commandLineParams(5, r.input))
 
 	if r.node.NeedRestartNode(params, flags) {
-		if r.yesOrNoQuestion(restartNodeMsg) == "y" {
+		if yesOrNoQuestion(restartNodeMsg) == "y" {
 			err = r.node.Restart(params, flags)
 		}
 	} else {
@@ -293,7 +246,7 @@ func (r *repl) restartNode() {
 }
 
 func (r *repl) setup() {
-	allocation := r.inputNotBlank(postAllocationMsg)
+	allocation := inputNotBlank(postAllocationMsg)
 
 	err := r.node.Setup(allocation)
 	if err != nil {
