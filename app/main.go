@@ -225,7 +225,7 @@ func (app *SpacemeshApp) startSpacemeshNode(cmd *cobra.Command, args []string) {
 
 	log.Info("App started.")
 
-	repl.StartRepl(node)
+	repl.StartRepl(node, "./ENV")
 
 	// app blocks until it receives a signal to exit
 	// this signal may come from the node or from sig-abort (ctrl-c)

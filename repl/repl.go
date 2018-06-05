@@ -15,18 +15,6 @@ const (
 
 var emptyComplete = func(prompt.Document) []prompt.Suggest { return []prompt.Suggest{} }
 
-type ReplNode interface {
-	CreateAccount(generatePassphrase bool, accountInfo string) error
-	ExistsAccount() bool
-	Unlock() error
-	Lock() error
-	Info() error
-	Transfer(from, to, amount, passphrase string) error
-	Set(params, flags []string) error
-	Restart(params, flags []string) error
-	Setup() error
-}
-
 type command struct {
 	text        string
 	description string
@@ -39,7 +27,12 @@ type repl struct {
 	input    string
 }
 
-func StartRepl(node p2p.LocalNode) {
+func StartRepl(node p2p.LocalNode, envPath string) {
+	err := setVariables(envPath)
+	if err != nil {
+		node.Debug(err.Error())
+	}
+
 	r := &repl{node: node}
 	r.initializeCommands()
 
@@ -65,6 +58,7 @@ func (r *repl) initializeCommands() {
 		{"modify", "Modify any CLI flag or param.", r.modifyCLIFlagOrParam},
 		{"restart node", "Restart node.", r.restartNode},
 		{"setup", "Setup.", r.setup},
+		{"echo", "Echo runtime variable.", r.echoVariable},
 	}
 }
 
@@ -72,6 +66,7 @@ func (r *repl) executor(text string) {
 	for _, c := range r.commands {
 		if len(text) >= len(c.text) && text[:len(c.text)] == c.text {
 			r.input = text
+			r.node.Debug(userExecutingCommandMsg, c.text)
 			c.fn()
 			return
 		}
@@ -129,16 +124,21 @@ func (r *repl) createAccount() {
 }
 
 func (r *repl) unlockAccount() {
-	unlockCommand := r.commands[1]
-	passphrase := strings.Replace(r.input, unlockCommand.text, "", -1)
+	passphrase := r.commandLineParams(1, r.input)
 
 	// TODO: call function to unlock account
 	fmt.Println("unlockAccount", passphrase)
 }
 
+func (r *repl) commandLineParams(idx int, input string) string {
+	c := r.commands[idx]
+	params := strings.Replace(input, c.text, "", -1)
+
+	return strings.TrimSpace(params)
+}
+
 func (r *repl) lockAccount() {
-	lockCommand := r.commands[2]
-	passphrase := strings.Replace(r.input, lockCommand.text, "", -1)
+	passphrase := r.commandLineParams(2, r.input)
 
 	// TODO: call function to lock account
 	fmt.Println("lockAccount", passphrase)
@@ -224,4 +224,10 @@ func (r *repl) setup() {
 
 	// TODO: call setup function
 	fmt.Println(r.input)
+}
+
+func (r *repl) echoVariable() {
+	echoKey := r.commandLineParams(8, r.input)
+
+	echo(echoKey)
 }
