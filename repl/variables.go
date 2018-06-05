@@ -12,23 +12,22 @@ func setVariables(path string) error {
 
 	if err != nil {
 		return err
-	} else {
-		defer f.Close()
+	}
+	defer f.Close()
 
-		scanner := bufio.NewScanner(f)
-		for scanner.Scan() {
-			line := scanner.Text()
-			key, value := parseLine(line)
-			if key == "" {
-				continue
-			}
-
-			err := os.Setenv(key, value)
-			if err != nil {
-				return err
-			}
-
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := scanner.Text()
+		key, value := parseLine(line)
+		if key == "" {
+			continue
 		}
+
+		err := os.Setenv(key, value)
+		if err != nil {
+			return err
+		}
+
 	}
 
 	return nil

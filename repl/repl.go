@@ -130,22 +130,22 @@ func (r *repl) lockAccount() {
 }
 
 func (r *repl) account() {
-	accountId := r.commandLineParams(3, r.input)
+	accountID := r.commandLineParams(3, r.input)
 
-	if accountId != "" {
-		r.node.AccountInfo(accountId)
+	if accountID != "" {
+		r.node.AccountInfo(accountID)
 	} else {
 		if acct := r.node.LocalAccount(); acct == nil &&
 			yesOrNoQuestion(accountNotFoundoMsg) == "y" {
 			r.createAccount()
 		} else {
-			r.node.AccountInfo(accountId)
+			r.node.AccountInfo(accountID)
 		}
 	}
 }
 
 func (r *repl) transferCoins() {
-	accountId := ""
+	accountID := ""
 	passphrase := ""
 
 	fmt.Println(printPrefix, initialTransferMsg)
@@ -159,28 +159,28 @@ func (r *repl) transferCoins() {
 		return
 	}
 
-	accountId = acct.PrivKey.String()
-	msg := fmt.Sprintf(transferFromLocalAccountMsg, accountId)
+	accountID = acct.PrivKey.String()
+	msg := fmt.Sprintf(transferFromLocalAccountMsg, accountID)
 	isTransferFromLocal := yesOrNoQuestion(msg) == "y"
 
 	if !isTransferFromLocal {
-		accountId = inputNotBlank(transferFromAccountMsg)
+		accountID = inputNotBlank(transferFromAccountMsg)
 	}
 
-	destinationAccountId := inputNotBlank(transferToAccountMsg)
+	destinationAccountID := inputNotBlank(transferToAccountMsg)
 	amount := inputNotBlank(amountToTransferMsg)
 
-	if !r.node.IsAccountUnLock(accountId) {
+	if !r.node.IsAccountUnLock(accountID) {
 		passphrase = inputNotBlank(accountPassphrase)
 	}
 
 	fmt.Println(printPrefix, "Transaction summary:")
-	fmt.Println(printPrefix, "From:", accountId)
-	fmt.Println(printPrefix, "To:", destinationAccountId)
+	fmt.Println(printPrefix, "From:", accountID)
+	fmt.Println(printPrefix, "To:", destinationAccountID)
 	fmt.Println(printPrefix, "Amount:", amount)
 
 	if yesOrNoQuestion(confirmTransactionMsg) == "y" {
-		err := r.node.Transfer(accountId, destinationAccountId, amount, passphrase)
+		err := r.node.Transfer(accountID, destinationAccountID, amount, passphrase)
 		if err != nil {
 			r.node.Debug(err.Error())
 		}
