@@ -15,10 +15,16 @@
 			"revisionTime": "2017-07-02T00:39:31Z"
 		},
 		{
-			"checksumSHA1": "QQgNik2GjRFQMHBQBBaT95vOegQ=",
+			"checksumSHA1": "IvAeChkshQYNdvvA/d5VyGhtdIU=",
 			"path": "github.com/c-bata/go-prompt",
 			"revision": "2f3ee57cf5d006ef778e5fab923ed0022eba2168",
 			"revisionTime": "2018-05-18T01:37:44Z"
+		},
+		{
+			"checksumSHA1": "CSPbwbyzqA6sfORicn4HFtIhF/c=",
+			"path": "github.com/davecgh/go-spew/spew",
+			"revision": "8991bc29aa16c548c550c7ff78260e27b9ab7c73",
+			"revisionTime": "2018-02-21T22:46:20Z"
 		},
 		{
 			"checksumSHA1": "7NP1qUMF8Kx1y0zANxx0e+oq9Oo=",
@@ -195,6 +201,12 @@
 			"revisionTime": "2018-03-23T18:52:43Z"
 		},
 		{
+			"checksumSHA1": "LuFv4/jlrmFNnDb/5SCSEPAM9vU=",
+			"path": "github.com/pmezard/go-difflib/difflib",
+			"revision": "792786c7400a136282c1664665ae0a8db921c6c2",
+			"revisionTime": "2016-01-10T10:55:54Z"
+		},
+		{
 			"checksumSHA1": "wsfbX7YxbkeBp+xm9M9nBFzrCnA=",
 			"path": "github.com/spf13/afero",
 			"revision": "63644898a8da0bc22138abf860edaf5277b6102e",
@@ -235,6 +247,36 @@
 			"path": "github.com/spf13/viper",
 			"revision": "15738813a09db5c8e5b60a19d67d3f9bd38da3a4",
 			"revisionTime": "2018-05-06T01:38:06Z"
+		},
+		{
+			"checksumSHA1": "rfoEwlgJV3lGR1dnmFm/jSIBQv4=",
+			"path": "github.com/stretchr/objx",
+			"revision": "0ab728f62c7f6fcd754334f7931c2dd659dce1d1",
+			"revisionTime": "2018-05-31T20:07:25Z"
+		},
+		{
+			"checksumSHA1": "nj123dGxKPIF17B6y3VEK2pihRk=",
+			"path": "github.com/stretchr/testify",
+			"revision": "c679ae2cc0cb27ec3293fea7e254e47386f05d69",
+			"revisionTime": "2018-03-14T08:05:35Z"
+		},
+		{
+			"checksumSHA1": "6LwXZI7kXm1C0h4Ui0Y52p9uQhk=",
+			"path": "github.com/stretchr/testify/assert",
+			"revision": "c679ae2cc0cb27ec3293fea7e254e47386f05d69",
+			"revisionTime": "2018-03-14T08:05:35Z"
+		},
+		{
+			"checksumSHA1": "fg3TzS9/QK3wZbzei3Z6O8XPLHg=",
+			"path": "github.com/stretchr/testify/http",
+			"revision": "c679ae2cc0cb27ec3293fea7e254e47386f05d69",
+			"revisionTime": "2018-03-14T08:05:35Z"
+		},
+		{
+			"checksumSHA1": "Qloi2PTvZv+D9FDHXM/banCoaFY=",
+			"path": "github.com/stretchr/testify/mock",
+			"revision": "c679ae2cc0cb27ec3293fea7e254e47386f05d69",
+			"revisionTime": "2018-03-14T08:05:35Z"
 		},
 		{
 			"checksumSHA1": "l9hsW4atYllqlNjJUwHb6lyLn+I=",
