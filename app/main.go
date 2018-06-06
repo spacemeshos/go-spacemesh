@@ -223,7 +223,7 @@ func (app *SpacemeshApp) startSpacemeshNode(cmd *cobra.Command, args []string) {
 		app.cleanup(app.Command, []string{})
 	}()
 
-	repl.StartRepl(node, "./ENV")
+	repl.StartREPL(repl.Mock{}, "./ENV")
 
 	log.Info("Received an interrupt, stopping services...\n")
 

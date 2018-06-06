@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/gogo/protobuf/proto"
-	"github.com/spacemeshos/go-spacemesh/accounts"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht"
@@ -190,64 +189,4 @@ func (n *localNodeImp) Error(format string, args ...interface{}) {
 // Warning is used to log runtime warnings.
 func (n *localNodeImp) Warning(format string, args ...interface{}) {
 	n.logger.Warning(format, args...)
-}
-
-// CreateAccount creates account.
-func (n *localNodeImp) CreateAccount(generatePassphrase bool, accountInfo string) error {
-	return nil
-}
-
-// LocalAccount returns local account.
-func (n *localNodeImp) LocalAccount() *accounts.Account {
-	acct, err := accounts.NewAccount("")
-	if err != nil {
-		panic(err)
-	}
-
-	return acct
-}
-
-// Unlock unlock local account or the account by passphrase.
-func (n *localNodeImp) Unlock(passphrase string) error {
-	return nil
-}
-
-// IsAccountUnLock checks if the account with id is unlock.
-func (n *localNodeImp) IsAccountUnLock(id string) bool {
-	return false
-}
-
-// Unlock Lock local account or the account by passphrase.
-func (n *localNodeImp) Lock(passphrase string) error {
-	return nil
-}
-
-// AccountInfo prints account info.
-func (n *localNodeImp) AccountInfo(id string) {
-}
-
-// Transfer transfers the amount from an account to the other.
-func (n *localNodeImp) Transfer(from, to, amount, passphrase string) error {
-	return nil
-}
-
-// SetVariables sets params or CLI flags values.
-func (n *localNodeImp) SetVariables(params, flags []string) error {
-	return nil
-}
-
-// NeedRestartNode checks if the params and flags that will be set need
-// restart the node.
-func (n *localNodeImp) NeedRestartNode(params, flags []string) bool {
-	return false
-}
-
-// Restart restarts node.
-func (n *localNodeImp) Restart(params, flags []string) error {
-	return nil
-}
-
-// Setup setup POST.
-func (n *localNodeImp) Setup(allocation string) error {
-	return nil
 }

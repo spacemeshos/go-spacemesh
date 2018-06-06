@@ -6,7 +6,8 @@ import (
 	"strings"
 
 	"github.com/c-bata/go-prompt"
-	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/accounts"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 const (
@@ -22,19 +23,34 @@ type command struct {
 
 type repl struct {
 	commands []command
-	node     p2p.LocalNode
+	client   Client
 	input    string
 }
 
-// StartRepl starts REPL.
-func StartRepl(node p2p.LocalNode, envPath string) {
+// Client interface to REPL clients.
+type Client interface {
+	CreateAccount(generatePassphrase bool, accountInfo string) error
+	LocalAccount() *accounts.Account
+	Unlock(passphrase string) error
+	IsAccountUnLock(id string) bool
+	Lock(passphrase string) error
+	AccountInfo(id string)
+	Transfer(from, to, amount, passphrase string) error
+	SetVariables(params, flags []string) error
+	Restart(params, flags []string) error
+	NeedRestartNode(params, flags []string) bool
+	Setup(allocation string) error
+}
+
+// StartREPL starts REPL.
+func StartREPL(c Client, envPath string) {
 	if flag.Lookup("test.v") == nil {
 		err := setVariables(envPath)
 		if err != nil {
-			node.Debug(err.Error())
+			log.Debug(err.Error())
 		}
 
-		r := &repl{node: node}
+		r := &repl{client: c}
 		r.initializeCommands()
 
 		runPrompt(r.executor, r.completer, r.firstTime, uint16(len(r.commands)))
@@ -63,7 +79,7 @@ func (r *repl) executor(text string) {
 	for _, c := range r.commands {
 		if len(text) >= len(c.text) && text[:len(c.text)] == c.text {
 			r.input = text
-			r.node.Debug(userExecutingCommandMsg, c.text)
+			log.Debug(userExecutingCommandMsg, c.text)
 			c.fn()
 			return
 		}
@@ -99,9 +115,9 @@ func (r *repl) createAccount() {
 		emptyComplete,
 		prompt.OptionPrefixTextColor(prompt.LightGray))
 
-	err := r.node.CreateAccount(generatePassphrase, accountInfo)
+	err := r.client.CreateAccount(generatePassphrase, accountInfo)
 	if err != nil {
-		r.node.Debug(err.Error())
+		log.Debug(err.Error())
 	} else {
 		r.setup()
 	}
@@ -109,9 +125,9 @@ func (r *repl) createAccount() {
 
 func (r *repl) unlockAccount() {
 	passphrase := r.commandLineParams(1, r.input)
-	err := r.node.Unlock(passphrase)
+	err := r.client.Unlock(passphrase)
 	if err != nil {
-		r.node.Debug(err.Error())
+		log.Debug(err.Error())
 	} else {
 		acctCmd := r.commands[3]
 		r.executor(fmt.Sprintf("%s %s", acctCmd.text, passphrase))
@@ -127,9 +143,9 @@ func (r *repl) commandLineParams(idx int, input string) string {
 
 func (r *repl) lockAccount() {
 	passphrase := r.commandLineParams(2, r.input)
-	err := r.node.Lock(passphrase)
+	err := r.client.Lock(passphrase)
 	if err != nil {
-		r.node.Debug(err.Error())
+		log.Debug(err.Error())
 	} else {
 		acctCmd := r.commands[3]
 		r.executor(fmt.Sprintf("%s %s", acctCmd.text, passphrase))
@@ -140,13 +156,13 @@ func (r *repl) account() {
 	accountID := r.commandLineParams(3, r.input)
 
 	if accountID != "" {
-		r.node.AccountInfo(accountID)
+		r.client.AccountInfo(accountID)
 	} else {
-		if acct := r.node.LocalAccount(); acct == nil &&
+		if acct := r.client.LocalAccount(); acct == nil &&
 			yesOrNoQuestion(accountNotFoundoMsg) == "y" {
 			r.createAccount()
 		} else {
-			r.node.AccountInfo(accountID)
+			r.client.AccountInfo(accountID)
 		}
 	}
 }
@@ -157,7 +173,7 @@ func (r *repl) transferCoins() {
 
 	fmt.Println(printPrefix, initialTransferMsg)
 
-	acct := r.node.LocalAccount()
+	acct := r.client.LocalAccount()
 	if acct == nil {
 		accountCommand := r.commands[3]
 
@@ -177,7 +193,7 @@ func (r *repl) transferCoins() {
 	destinationAccountID := inputNotBlank(transferToAccountMsg)
 	amount := inputNotBlank(amountToTransferMsg)
 
-	if !r.node.IsAccountUnLock(accountID) {
+	if !r.client.IsAccountUnLock(accountID) {
 		passphrase = inputNotBlank(accountPassphrase)
 	}
 
@@ -187,9 +203,9 @@ func (r *repl) transferCoins() {
 	fmt.Println(printPrefix, "Amount:", amount)
 
 	if yesOrNoQuestion(confirmTransactionMsg) == "y" {
-		err := r.node.Transfer(accountID, destinationAccountID, amount, passphrase)
+		err := r.client.Transfer(accountID, destinationAccountID, amount, passphrase)
 		if err != nil {
-			r.node.Debug(err.Error())
+			log.Debug(err.Error())
 		}
 	}
 }
@@ -198,17 +214,17 @@ func (r *repl) setCLIFlagOrParam() {
 	var err error
 	params, flags := r.getParamsAndFlags(r.commandLineParams(5, r.input))
 
-	if r.node.NeedRestartNode(params, flags) {
+	if r.client.NeedRestartNode(params, flags) {
 		if yesOrNoQuestion(restartNodeMsg) == "y" {
-			err = r.node.Restart(params, flags)
+			err = r.client.Restart(params, flags)
 		}
 	} else {
-		err = r.node.SetVariables(params, flags)
+		err = r.client.SetVariables(params, flags)
 
 	}
 
 	if err != nil {
-		r.node.Debug(err.Error())
+		log.Debug(err.Error())
 	}
 }
 
@@ -246,18 +262,18 @@ func (r *repl) restartNode() {
 
 	params, flags := r.getParamsAndFlags(flagsAndParams)
 
-	err := r.node.Restart(params, flags)
+	err := r.client.Restart(params, flags)
 	if err != nil {
-		r.node.Debug(err.Error())
+		log.Debug(err.Error())
 	}
 }
 
 func (r *repl) setup() {
 	allocation := inputNotBlank(postAllocationMsg)
 
-	err := r.node.Setup(allocation)
+	err := r.client.Setup(allocation)
 	if err != nil {
-		r.node.Debug(err.Error())
+		log.Debug(err.Error())
 	}
 }
 
