@@ -29,9 +29,6 @@ type Swarm interface {
 	// Used for bootstrapping known bootstrap nodes
 	ConnectTo(req node.RemoteNodeData, done chan error)
 
-	// Bootstraped
-	AfterBootstrap(chan struct{})
-
 	// Connect to count random nodes - used for bootstrapping the swarm
 	ConnectToRandomNodes(count int)
 
@@ -57,6 +54,9 @@ type Swarm interface {
 	// used by protocols and for testing
 	getHandshakeProtocol() HandshakeProtocol
 	getFindNodeProtocol() FindNodeProtocol
+
+	// waits until boot is completed 
+	BlockUntilBoot()
 }
 
 // SendMessageReq specifies data required for sending a p2p message to a remote peer.
@@ -117,7 +117,6 @@ const (
 	Registered
 	Connecting
 	Connected
-	HandshakeStarted
 	SessionEstablished
 	Disconnected
 )
