@@ -8,10 +8,13 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
+	"github.com/spacemeshos/go-spacemesh/repl"
 )
 
 func TestApp(t *testing.T) {
 	filesystem.SetupTestSpacemeshDataFolders(t, "app_test")
+
+	repl.TestMode = true
 
 	// remove all injected test flags for now
 	os.Args = []string{"/go-spacemesh", "--json-server=true"}

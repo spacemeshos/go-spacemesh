@@ -1,7 +1,6 @@
 package repl
 
 import (
-	"flag"
 	"fmt"
 	"strings"
 
@@ -14,6 +13,9 @@ const (
 	prefix      = "$ "
 	printPrefix = ">"
 )
+
+// TestMode variable used for check if unit test is running
+var TestMode = false
 
 type command struct {
 	text        string
@@ -37,15 +39,16 @@ type Client interface {
 	AccountInfo(id string)
 	Transfer(from, to, amount, passphrase string) error
 	SetVariables(params, flags []string) error
+	GetVariables() map[string]string
 	Restart(params, flags []string) error
 	NeedRestartNode(params, flags []string) bool
 	Setup(allocation string) error
 }
 
-// StartREPL starts REPL.
-func StartREPL(c Client, envPath string) {
-	if flag.Lookup("test.v") == nil {
-		err := setVariables(envPath)
+// Start starts REPL.
+func Start(c Client) {
+	if !TestMode {
+		err := setVariables(c.GetVariables())
 		if err != nil {
 			log.Debug(err.Error())
 		}
@@ -278,7 +281,7 @@ func (r *repl) setup() {
 }
 
 func (r *repl) echoVariable() {
-	echoKey := r.commandLineParams(8, r.input)
+	echoInput := r.commandLineParams(8, r.input)
 
-	echo(echoKey)
+	echo(echoInput)
 }
