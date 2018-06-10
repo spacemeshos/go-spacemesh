@@ -51,29 +51,6 @@ func TestTableCallbacks(t *testing.T) {
 		// theoretically this should never happen
 		t.Error("More than 50 precent of nodes lost")
 	}
-
-	callback := make(table.PeerChannel, 3)
-	callbackIdx := 0
-	rt.RegisterPeerRemovedCallback(callback)
-
-	for i := 0; i < n; i++ {
-		rt.Remove(nodes[i])
-	}
-
-Loop:
-	for {
-		select {
-		case <-callback:
-			callbackIdx++
-			if callbackIdx == size {
-				break Loop
-			}
-		case <-time.After(time.Second * 10):
-			t.Fatalf("Failed to get expected remove callbacks on time")
-			break Loop
-		}
-	}
-
 }
 
 func TestTableUpdate(t *testing.T) {
