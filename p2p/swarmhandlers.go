@@ -219,7 +219,6 @@ func (s *swarmImpl) onDisconnectionRequest(req node.RemoteNodeData) {
 func (s *swarmImpl) onSendHandshakeMessage(r SendMessageReq) {
 
 	// check for existing remote node and session
-
 	s.peerMapMutex.Lock()
 	remoteNode := s.peers[r.PeerID]
 	s.peerMapMutex.Unlock()
