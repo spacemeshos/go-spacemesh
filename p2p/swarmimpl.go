@@ -16,8 +16,7 @@ type nodeEventCallbacks []NodeEventCallback
 
 type swarmImpl struct {
 	bootstrapped chan struct{} // Channel to notify bootstrap loop to break
-	//afterBoot    chan chan struct{} // Channel to block outside and wait for node to bootstrap
-	afterBoot bool
+	afterBoot bool //boolean used in blockUntilBoot func
 	// set in construction and immutable state
 	network   net.Net
 	localNode LocalNode
