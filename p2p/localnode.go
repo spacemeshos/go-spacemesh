@@ -130,7 +130,10 @@ func newLocalNodeWithKeys(pubKey crypto.PublicKey, privKey crypto.PrivateKey, tc
 	n.swarm = s
 	if config.SwarmConfig.Bootstrap {
 		n.Debug("Waiting for node to bootstrap")
-		s.BlockUntilBoot()
+		er := s.WaitForBootstrap()
+		if er != nil {
+			return nil, er
+		}
 	}
 	// TODO : dynamic load all protocols ( consider go plugins )
 	n.ping = NewPingProtocol(s)

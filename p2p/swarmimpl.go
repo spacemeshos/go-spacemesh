@@ -15,8 +15,11 @@ import (
 type nodeEventCallbacks []NodeEventCallback
 
 type swarmImpl struct {
-	bootstrapped chan struct{} // Channel to notify bootstrap loop to break
+	bootstrapped chan error // Channel to notify bootstrap loop to break
 	afterBoot bool //boolean used in blockUntilBoot func
+	bootError error
+	afterBootCallback chan error // notify boot finished externally
+
 	// set in construction and immutable state
 	network   net.Net
 	localNode LocalNode
@@ -34,11 +37,11 @@ type swarmImpl struct {
 
 	// Internal state is not thread safe - must be accessed only from methods dispatched from the internal event handler
 	getPeerRequests 	chan getPeerRequest
-	peerMapMutex		sync.RWMutex
+	peerMapMutex		sync.RWMutex	// Mutex for peer map
 	peers           	map[string]Peer // NodeID -> Peer. known remote nodes. Swarm is a peer store.
 
 	connections       	map[string]net.Connection // ConnID -> Connection - all open connections for tracking and mngmnt
-	peerByConMapMutex	sync.RWMutex
+	peerByConMapMutex	sync.RWMutex	//Mutex for peer by connection map
 	peersByConnection 	map[string]Peer           // ConnID -> Peer remote nodes indexed by their connections.
 
 	// todo: remove all idle sessions every n hours (configurable)
@@ -101,11 +104,14 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 	}
 
 	s := &swarmImpl{
-		bootstrapped: make(chan struct{}),
+		bootstrapped: make(chan error),
 		afterBoot:    false,
+		bootError:		nil,
 		localNode:    l,
 		network:      n,
 		shutdown:     make(chan struct{}), // non-buffered so requests to shutdown block until swarm is shut down
+
+		afterBootCallback: make(chan error, 1), // notify clients about
 
 		nodeEventRegChannel: make(chan NodeEventCallback, 1),
 		nec:                 make(nodeEventCallbacks, 0),
@@ -165,8 +171,9 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 	return s, err
 }
 
-func (s *swarmImpl) bootComplete() {
-	s.bootstrapped <- struct{}{}
+func (s *swarmImpl) bootComplete(successCode error) {
+	s.bootstrapped <- successCode
+	s.afterBootCallback <-successCode
 }
 
 // Register an event handler callback for connection state events
@@ -180,6 +187,14 @@ func (s *swarmImpl) RemoveNodeEventsCallback(callback NodeEventCallback) {
 
 func (s *swarmImpl) registerNodeEventsCallback(callback NodeEventCallback) {
 	s.nec = append(s.nec, callback)
+}
+
+func (s *swarmImpl) WaitForBootstrap() error{
+	if !s.afterBoot {
+		s.bootError = <- s.afterBootCallback
+		s.afterBoot = true
+	}
+	return s.bootError
 }
 
 func (s *swarmImpl) removeNodeEventsCallback(callback NodeEventCallback) {
@@ -304,12 +319,6 @@ func (s *swarmImpl) shutDownInternal() {
 	s.network.Shutdown()
 }
 
-func (s *swarmImpl) BlockUntilBoot() {
-	if !s.afterBoot {
-		<-s.bootstrapped
-		s.afterBoot = true
-	}
-}
 
 func (s *swarmImpl) listenToNetworkMessages() {
 Loop:

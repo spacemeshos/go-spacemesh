@@ -55,10 +55,9 @@ type Swarm interface {
 	getHandshakeProtocol() HandshakeProtocol
 	getFindNodeProtocol() FindNodeProtocol
 
-	// waits until boot is completed 
-	BlockUntilBoot()
-
 	getPeerByConnection(connID string) Peer
+
+	WaitForBootstrap() error
 
 }
 
