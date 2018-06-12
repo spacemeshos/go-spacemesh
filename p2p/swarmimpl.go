@@ -33,8 +33,6 @@ type swarmImpl struct {
 	// node state callbacks
 	nec nodeEventCallbacks
 
-
-
 	// Internal state is not thread safe - must be accessed only from methods dispatched from the internal event handler
 	getPeerRequests 	chan getPeerRequest
 	peerMapMutex		sync.RWMutex	// Mutex for peer map
