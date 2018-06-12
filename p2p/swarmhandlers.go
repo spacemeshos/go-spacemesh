@@ -25,12 +25,14 @@ import (
 func (s *swarmImpl) onRegisterNodeRequest(n node.RemoteNodeData) {
 	s.peerMapMutex.Lock()
 	if _, ok := s.peers[n.ID()]; ok {
+		s.peerMapMutex.Unlock()
 		s.localNode.Debug("Already connected to %s", n.Pretty())
 		return
 	}
 
 	rn, err := NewRemoteNode(n.ID(), n.IP())
 	if err != nil { // invalid id
+		s.peerMapMutex.Unlock()
 		s.localNode.Error("invalid remote node id: %s", n.ID())
 		return
 	}
@@ -74,17 +76,19 @@ func (s *swarmImpl) onConnectionRequest(req node.RemoteNodeData, done chan error
 
 	var err error
 
-	s.peerMapMutex.Lock()
+	s.peerMapMutex.RLock()
 
 	// check for existing session with that node
 	peer := s.peers[req.ID()]
-	s.peerMapMutex.Unlock()
+
 	if peer == nil {
+		s.peerMapMutex.RUnlock()
 		s.onRegisterNodeRequest(req)
+		s.peerMapMutex.RLock()
 	}
-	s.peerMapMutex.Lock()
+
 	peer = s.peers[req.ID()]
-	s.peerMapMutex.Unlock()
+	s.peerMapMutex.RUnlock()
 	if peer == nil {
 		nullErr := errors.New("peer not registered")
 		s.localNode.Error("Err: ", nullErr)
@@ -219,9 +223,9 @@ func (s *swarmImpl) onDisconnectionRequest(req node.RemoteNodeData) {
 func (s *swarmImpl) onSendHandshakeMessage(r SendMessageReq) {
 
 	// check for existing remote node and session
-	s.peerMapMutex.Lock()
+	s.peerMapMutex.RLock()
 	remoteNode := s.peers[r.PeerID]
-	s.peerMapMutex.Unlock()
+	s.peerMapMutex.RUnlock()
 
 	if remoteNode == nil {
 		// for now we assume messages are sent only to nodes we already know their ip address
@@ -244,11 +248,11 @@ func (s *swarmImpl) onSendHandshakeMessage(r SendMessageReq) {
 // Local request to send a message to a remote node
 func (s *swarmImpl) onSendMessageRequest(r SendMessageReq) {
 
-	s.peerMapMutex.Lock()
+	s.peerMapMutex.RLock()
 
 	// check for existing remote node and session
 	peer := s.peers[r.PeerID]
-	s.peerMapMutex.Unlock()
+	s.peerMapMutex.RUnlock()
 
 	if peer == nil {
 		s.localNode.Debug("No contact info to target peer - attempting to find it on the network...")
@@ -357,9 +361,7 @@ func (s *swarmImpl) onConnectionClosed(c net.Connection) {
 func (s *swarmImpl) onRemoteClientConnected(c net.Connection) {
 	// nop - a remote client connected - this is handled w message
 	s.localNode.Debug("Remote client connected. %s", c.ID())
-	s.peerByConMapMutex.Lock()
-	peer := s.peersByConnection[c.ID()]
-	s.peerByConMapMutex.Unlock()
+	peer := s.getPeerByConnection(c.ID())
 	if peer != nil {
 		s.sendNodeEvent(peer.String(), Connected)
 	}
@@ -378,11 +380,9 @@ func (s *swarmImpl) onRemoteClientHandshakeMessage(msg net.IncomingMessage) {
 	connID := msg.Connection.ID()
 
 	// check if we already know about the remote node of this connection
-	s.peerByConMapMutex.Lock()
-	sender := s.peersByConnection[connID]
-
+	sender := s.getPeerByConnection(connID)
 	if sender == nil {
-		s.peerByConMapMutex.Unlock()
+
 		// authenticate sender before registration
 		err := authenticateSenderNode(data)
 		if err != nil {
@@ -410,6 +410,7 @@ func (s *swarmImpl) onRemoteClientHandshakeMessage(msg net.IncomingMessage) {
 
 		s.peerByConMapMutex.Lock()
 		s.peersByConnection[connID] = sender
+		s.peerByConMapMutex.Unlock()
 
 	}
 
@@ -419,7 +420,6 @@ func (s *swarmImpl) onRemoteClientHandshakeMessage(msg net.IncomingMessage) {
 	s.localNode.Debug("Routing message from %v to handshake handler ", sender.Pretty())
 	// Let the demuxer route the message to its registered protocol handler
 	s.demuxer.RouteIncomingMessage(NewIncomingMessage(sender, data.Protocol, msg.Message))
-	s.peerByConMapMutex.Unlock()
 }
 
 // Pre-process a protocol message from a remote client handling decryption and authentication
@@ -570,10 +570,10 @@ func (s *swarmImpl) sendMessageSendError(cr net.ConnectionError) {
 
 // TODO : move peer store management out of swarm
 func (s *swarmImpl) onGetPeerRequest(gpr getPeerRequest) {
-	defer s.peerMapMutex.Unlock()
-	s.peerMapMutex.Lock()
 
+	s.peerMapMutex.RLock()
 	p, ok := s.peers[gpr.peerID]
+	s.peerMapMutex.RUnlock()
 	if !ok {
 		go func() { gpr.callback <- nil }()
 		return

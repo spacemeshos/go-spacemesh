@@ -57,6 +57,9 @@ type Swarm interface {
 
 	// waits until boot is completed 
 	BlockUntilBoot()
+
+	getPeerByConnection(connID string) Peer
+
 }
 
 // SendMessageReq specifies data required for sending a p2p message to a remote peer.

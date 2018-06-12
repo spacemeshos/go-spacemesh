@@ -30,11 +30,15 @@ type swarmImpl struct {
 	// node state callbacks
 	nec nodeEventCallbacks
 
+
+
 	// Internal state is not thread safe - must be accessed only from methods dispatched from the internal event handler
-	getPeerRequests chan getPeerRequest
-	peers           map[string]Peer // NodeID -> Peer. known remote nodes. Swarm is a peer store.
+	getPeerRequests 	chan getPeerRequest
+	peerMapMutex		sync.RWMutex
+	peers           	map[string]Peer // NodeID -> Peer. known remote nodes. Swarm is a peer store.
 
 	connections       	map[string]net.Connection // ConnID -> Connection - all open connections for tracking and mngmnt
+	peerByConMapMutex	sync.RWMutex
 	peersByConnection 	map[string]Peer           // ConnID -> Peer remote nodes indexed by their connections.
 
 	// todo: remove all idle sessions every n hours (configurable)
@@ -84,8 +88,7 @@ type swarmImpl struct {
 
 	routingTable table.RoutingTable
 
-	peerByConMapMutex	sync.Mutex
-	peerMapMutex		sync.Mutex
+
 }
 
 // NewSwarm creates a new swarm for a local node.
@@ -142,8 +145,8 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 
 		config: l.Config().SwarmConfig,
 
-		peerByConMapMutex:	sync.Mutex{},
-		peerMapMutex: 		sync.Mutex{},
+		peerByConMapMutex:	sync.RWMutex{},
+		peerMapMutex: 		sync.RWMutex{},
 	}
 
 	// node's routing table
@@ -186,6 +189,13 @@ func (s *swarmImpl) removeNodeEventsCallback(callback NodeEventCallback) {
 			return
 		}
 	}
+}
+
+func (s *swarmImpl) getPeerByConnection(connID string) Peer {
+	s.peerByConMapMutex.RLock()
+	sender := s.peersByConnection[connID]
+	s.peerByConMapMutex.RUnlock()
+	return sender
 }
 
 // Register an event handler callback for connection state events
@@ -284,12 +294,12 @@ func (s *swarmImpl) shutDownInternal() {
 		c.Close()
 	}
 
-	s.peerMapMutex.Lock()
+	s.peerMapMutex.RLock()
 	for _, p := range s.peers {
 		p.DeleteAllConnections()
 	}
 
-	s.peerMapMutex.Unlock()
+	s.peerMapMutex.RUnlock()
 	// shutdown network
 	s.network.Shutdown()
 }
