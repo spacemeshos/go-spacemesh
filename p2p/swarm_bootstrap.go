@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/dht/table"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
+	"errors"
 )
 
 const (
@@ -56,6 +57,7 @@ func (s *swarmImpl) bootstrap() {
 			select {
 			case <-timeout.C:
 				s.localNode.Error("Failed to bootstrap node")
+				s.bootComplete(errors.New("failed to bootstrap node"))
 				return
 			default:
 				if atomic.LoadUint32(&bn) > 0 {
@@ -70,7 +72,7 @@ func (s *swarmImpl) bootstrap() {
 					s.localNode.Debug("Bootstrap filled routing table, establishing k random connections")
 					if s.routingTable.IsHealthy() {
 						s.ConnectToRandomNodes(c)
-						s.bootComplete()
+						s.bootComplete(nil)
 					}
 					return
 				}
