@@ -39,7 +39,7 @@ type Client interface {
 	AccountInfo(id string)
 	Transfer(from, to, amount, passphrase string) error
 	SetVariables(params, flags []string) error
-	GetVariable(key string) string 
+	GetVariable(key string) string
 	Restart(params, flags []string) error
 	NeedRestartNode(params, flags []string) bool
 	Setup(allocation string) error
@@ -117,8 +117,8 @@ func (r *repl) createAccount() {
 	if err != nil {
 		log.Debug(err.Error())
 		return
-	} 
-	
+	}
+
 	r.setup()
 }
 
@@ -128,7 +128,7 @@ func (r *repl) unlockAccount() {
 	if err != nil {
 		log.Debug(err.Error())
 		return
-	} 
+	}
 
 	acctCmd := r.commands[3]
 	r.executor(fmt.Sprintf("%s %s", acctCmd.text, passphrase))
@@ -147,7 +147,7 @@ func (r *repl) lockAccount() {
 	if err != nil {
 		log.Debug(err.Error())
 		return
-	} 
+	}
 
 	acctCmd := r.commands[3]
 	r.executor(fmt.Sprintf("%s %s", acctCmd.text, passphrase))

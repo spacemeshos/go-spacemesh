@@ -52,7 +52,7 @@ func (Mock) SetVariables(params, flags []string) error {
 
 // GetVariable gets variable in node by key
 func (Mock) GetVariable(key string) string {
-	if key == "Mock"{
+	if key == "Mock" {
 		return "mock"
 	}
 
