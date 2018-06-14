@@ -50,11 +50,13 @@ func (Mock) SetVariables(params, flags []string) error {
 	return nil
 }
 
-// GetVariables gets variables
-func (Mock) GetVariables() map[string]string {
-	return map[string]string{
-		"mock": "mock",
+// GetVariable gets variable in node by key
+func (Mock) GetVariable(key string) string {
+	if key == "Mock"{
+		return "mock"
 	}
+
+	return ""
 }
 
 // NeedRestartNode checks if the params and flags that will be set need

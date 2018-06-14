@@ -39,7 +39,7 @@ type Client interface {
 	AccountInfo(id string)
 	Transfer(from, to, amount, passphrase string) error
 	SetVariables(params, flags []string) error
-	GetVariables() map[string]string
+	GetVariable(key string) string 
 	Restart(params, flags []string) error
 	NeedRestartNode(params, flags []string) bool
 	Setup(allocation string) error
@@ -48,11 +48,6 @@ type Client interface {
 // Start starts REPL.
 func Start(c Client) {
 	if !TestMode {
-		err := setVariables(c.GetVariables())
-		if err != nil {
-			log.Debug(err.Error())
-		}
-
 		r := &repl{client: c}
 		r.initializeCommands()
 
@@ -121,9 +116,10 @@ func (r *repl) createAccount() {
 	err := r.client.CreateAccount(generatePassphrase, accountInfo)
 	if err != nil {
 		log.Debug(err.Error())
-	} else {
-		r.setup()
-	}
+		return
+	} 
+	
+	r.setup()
 }
 
 func (r *repl) unlockAccount() {
@@ -131,10 +127,11 @@ func (r *repl) unlockAccount() {
 	err := r.client.Unlock(passphrase)
 	if err != nil {
 		log.Debug(err.Error())
-	} else {
-		acctCmd := r.commands[3]
-		r.executor(fmt.Sprintf("%s %s", acctCmd.text, passphrase))
-	}
+		return
+	} 
+
+	acctCmd := r.commands[3]
+	r.executor(fmt.Sprintf("%s %s", acctCmd.text, passphrase))
 }
 
 func (r *repl) commandLineParams(idx int, input string) string {
@@ -149,10 +146,11 @@ func (r *repl) lockAccount() {
 	err := r.client.Lock(passphrase)
 	if err != nil {
 		log.Debug(err.Error())
-	} else {
-		acctCmd := r.commands[3]
-		r.executor(fmt.Sprintf("%s %s", acctCmd.text, passphrase))
-	}
+		return
+	} 
+
+	acctCmd := r.commands[3]
+	r.executor(fmt.Sprintf("%s %s", acctCmd.text, passphrase))
 }
 
 func (r *repl) account() {
@@ -209,6 +207,7 @@ func (r *repl) transferCoins() {
 		err := r.client.Transfer(accountID, destinationAccountID, amount, passphrase)
 		if err != nil {
 			log.Debug(err.Error())
+			return
 		}
 	}
 }
@@ -228,6 +227,7 @@ func (r *repl) setCLIFlagOrParam() {
 
 	if err != nil {
 		log.Debug(err.Error())
+		return
 	}
 }
 
@@ -268,6 +268,7 @@ func (r *repl) restartNode() {
 	err := r.client.Restart(params, flags)
 	if err != nil {
 		log.Debug(err.Error())
+		return
 	}
 }
 
@@ -277,11 +278,17 @@ func (r *repl) setup() {
 	err := r.client.Setup(allocation)
 	if err != nil {
 		log.Debug(err.Error())
+		return
 	}
 }
 
 func (r *repl) echoVariable() {
 	echoInput := r.commandLineParams(8, r.input)
+	variables := strings.Split(echoInput, " ")
 
-	echo(echoInput)
+	for _, v := range variables {
+		key := strings.TrimPrefix(v, "$")
+		value := r.client.GetVariable(key)
+		fmt.Println(printPrefix, value)
+	}
 }
