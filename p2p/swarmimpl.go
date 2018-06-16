@@ -15,9 +15,9 @@ import (
 type nodeEventCallbacks []NodeEventCallback
 
 type swarmImpl struct {
-	bootstrapped chan error // Channel to notify bootstrap loop to break
-	afterBoot bool //boolean used in blockUntilBoot func
-	bootError error
+	bootstrapped      chan error // Channel to notify bootstrap loop to break
+	afterBoot         bool       //boolean used in blockUntilBoot func
+	bootError         error
 	afterBootCallback chan error // notify boot finished externally
 
 	// set in construction and immutable state
@@ -34,13 +34,13 @@ type swarmImpl struct {
 	nec nodeEventCallbacks
 
 	// Internal state is not thread safe - must be accessed only from methods dispatched from the internal event handler
-	getPeerRequests 	chan getPeerRequest
-	peerMapMutex		sync.RWMutex	// Mutex for peer map
-	peers           	map[string]Peer // NodeID -> Peer. known remote nodes. Swarm is a peer store.
+	getPeerRequests chan getPeerRequest
+	peerMapMutex    sync.RWMutex    // Mutex for peer map
+	peers           map[string]Peer // NodeID -> Peer. known remote nodes. Swarm is a peer store.
 
-	connections       	map[string]net.Connection // ConnID -> Connection - all open connections for tracking and mngmnt
-	peerByConMapMutex	sync.RWMutex	//Mutex for peer by connection map
-	peersByConnection 	map[string]Peer           // ConnID -> Peer remote nodes indexed by their connections.
+	connections       map[string]net.Connection // ConnID -> Connection - all open connections for tracking and mngmnt
+	peerByConMapMutex sync.RWMutex              //Mutex for peer by connection map
+	peersByConnection map[string]Peer           // ConnID -> Peer remote nodes indexed by their connections.
 
 	// todo: remove all idle sessions every n hours (configurable)
 	allSessions map[string]NetworkSession // SessionId -> Session data. all authenticated session
@@ -88,8 +88,6 @@ type swarmImpl struct {
 	findNodeProtocol FindNodeProtocol
 
 	routingTable table.RoutingTable
-
-
 }
 
 // NewSwarm creates a new swarm for a local node.
@@ -104,7 +102,7 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 	s := &swarmImpl{
 		bootstrapped: make(chan error),
 		afterBoot:    false,
-		bootError:		nil,
+		bootError:    nil,
 		localNode:    l,
 		network:      n,
 		shutdown:     make(chan struct{}), // non-buffered so requests to shutdown block until swarm is shut down
@@ -149,8 +147,8 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 
 		config: l.Config().SwarmConfig,
 
-		peerByConMapMutex:	sync.RWMutex{},
-		peerMapMutex: 		sync.RWMutex{},
+		peerByConMapMutex: sync.RWMutex{},
+		peerMapMutex:      sync.RWMutex{},
 	}
 
 	// node's routing table
@@ -171,7 +169,7 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 
 func (s *swarmImpl) bootComplete(successCode error) {
 	s.bootstrapped <- successCode
-	s.afterBootCallback <-successCode
+	s.afterBootCallback <- successCode
 }
 
 // Register an event handler callback for connection state events
@@ -187,9 +185,9 @@ func (s *swarmImpl) registerNodeEventsCallback(callback NodeEventCallback) {
 	s.nec = append(s.nec, callback)
 }
 
-func (s *swarmImpl) WaitForBootstrap() error{
+func (s *swarmImpl) WaitForBootstrap() error {
 	if !s.afterBoot {
-		s.bootError = <- s.afterBootCallback
+		s.bootError = <-s.afterBootCallback
 		s.afterBoot = true
 	}
 	return s.bootError
@@ -316,7 +314,6 @@ func (s *swarmImpl) shutDownInternal() {
 	// shutdown network
 	s.network.Shutdown()
 }
-
 
 func (s *swarmImpl) listenToNetworkMessages() {
 Loop:

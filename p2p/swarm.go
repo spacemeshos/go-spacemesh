@@ -58,7 +58,6 @@ type Swarm interface {
 	getPeerByConnection(connID string) Peer
 
 	WaitForBootstrap() error
-
 }
 
 // SendMessageReq specifies data required for sending a p2p message to a remote peer.
