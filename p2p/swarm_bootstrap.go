@@ -125,7 +125,10 @@ func (s *swarmImpl) ConnectToRandomNodes(count int) {
 
 func (s *swarmImpl) onSendInternalMessage(r SendMessageReq) {
 
+	s.peerMapMutex.RLock()
 	peer := s.peers[r.PeerID]
+	s.peerMapMutex.RUnlock()
+
 
 	if peer == nil {
 		prs := s.getNearestPeers(dht.NewIDFromBase58String(r.PeerID), 1)

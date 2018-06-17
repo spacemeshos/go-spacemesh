@@ -172,6 +172,7 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 }
 
 func (s *swarmImpl) bootComplete(successCode error) {
+	s.localNode.Info("%v finised boot", s.localNode.String())
 	s.bootstrapped <- successCode
 	s.afterBootCallback <- successCode
 }

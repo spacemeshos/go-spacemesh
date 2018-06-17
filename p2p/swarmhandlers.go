@@ -350,14 +350,13 @@ func (s *swarmImpl) onConnectionClosed(c net.Connection) {
 	id := c.ID()
 	s.peerByConMapMutex.Lock()
 	peer := s.peersByConnection[id]
+	delete(s.connections, id)
+	delete(s.peersByConnection, id)
+	s.peerByConMapMutex.Unlock()
 	if peer != nil {
 		peer.UpdateConnection(id, nil)
 	}
-	delete(s.connections, id)
-	delete(s.peersByConnection, id)
-
 	s.sendNodeEvent(peer.String(), Disconnected)
-	s.peerByConMapMutex.Unlock()
 }
 
 func (s *swarmImpl) onRemoteClientConnected(c net.Connection) {
@@ -440,8 +439,9 @@ func (s *swarmImpl) onRemoteClientProtocolMessage(msg net.IncomingMessage, c *pb
 		s.localNode.Debug("Stored incoming message as pending, try again when %s will establish", sid)
 		return
 	}
-
+	s.peerMapMutex.RLock()
 	remoteNode := s.peers[session.RemoteNodeID()]
+	s.peerMapMutex.RUnlock()
 	if remoteNode == nil {
 		s.localNode.Warning("Dropping incoming protocol message - expected to have data about this node for an established session")
 		return
@@ -509,7 +509,7 @@ func (s *swarmImpl) onRemoteClientMessage(msg net.IncomingMessage) {
 		s.onRemoteClientHandshakeMessage(msg)
 
 	} else {
-		s.localNode.Debug(fmt.Sprintf(str+"Type: ProtocolMessage, %v", s.peersByConnection[msg.Connection.ID()].Pretty()))
+		s.localNode.Debug(fmt.Sprintf(str+"Type: ProtocolMessage"))
 		// protocol messages are encrypted in payload
 		s.onRemoteClientProtocolMessage(msg, c)
 	}

@@ -123,7 +123,7 @@ const (
 )
 
 // Created by stringer -type=NodeState
-const nodeStateName = "UnknownRegisteredConnectingConnectedHandshakeStartedSessionEstablishedDisconnected"
+const nodeStateName = "UnknownRegisteredConnectingConnectedSessionEstablishedDisconnected"
 
 var nodeStateIndex = [...]uint8{0, 7, 17, 27, 36, 52, 70, 82}
 
