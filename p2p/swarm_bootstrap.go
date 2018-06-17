@@ -125,7 +125,9 @@ func (s *swarmImpl) ConnectToRandomNodes(count int) {
 
 func (s *swarmImpl) onSendInternalMessage(r SendMessageReq) {
 
+	s.peerMapMutex.RLock()
 	peer := s.peers[r.PeerID]
+	s.peerMapMutex.RUnlock()
 
 	if peer == nil {
 		prs := s.getNearestPeers(dht.NewIDFromBase58String(r.PeerID), 1)
@@ -220,8 +222,6 @@ BSLOOP:
 			s.onConnectionRequest(n.req, n.done)
 		case r := <-s.sendMsgRequests:
 			s.onSendInternalMessage(r)
-		case ipm := <-s.incomingPendingMessages:
-			s.addIncomingPendingMessage(ipm)
 		case nec := <-s.nodeEventRegChannel:
 			s.registerNodeEventsCallback(nec)
 		case rnec := <-s.nodeEventRemoveChannel:

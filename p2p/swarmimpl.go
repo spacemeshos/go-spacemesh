@@ -9,6 +9,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 	"github.com/spacemeshos/go-spacemesh/p2p/timesync"
+
+	//"github.com/sasha-s/go-deadlock"
 	"sync"
 )
 
@@ -43,7 +45,8 @@ type swarmImpl struct {
 	peersByConnection map[string]Peer           // ConnID -> Peer remote nodes indexed by their connections.
 
 	// todo: remove all idle sessions every n hours (configurable)
-	allSessions map[string]NetworkSession // SessionId -> Session data. all authenticated session
+	allSessions   map[string]NetworkSession // SessionId -> Session data. all authenticated session
+	sessionsMutex sync.RWMutex              // Mutex for peer map
 
 	// To catch callbacks when returned from network (Error or Sent)
 	outgoingSendsCallbacks map[string]map[string]chan SendError // k - conn id v-  reqID -> chan SendError
@@ -51,8 +54,9 @@ type swarmImpl struct {
 	messagesPendingSession map[string]SendMessageReq // k - unique req id. outgoing messages which pend an auth session with remote node to be sent out
 
 	incomingPendingSession map[string][]net.IncomingMessage
+	incomingPendingMutex sync.RWMutex
 	// ChangeState register pending messages to incomingPendingSession
-	incomingPendingMessages chan incomingPendingMessage
+	//incomingPendingMessages chan incomingPendingMessage
 
 	// ChangeState register pending messages messagesPendingRegistration
 	msgPendingRegister          chan SendMessageReq
@@ -119,7 +123,8 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 		messagesPendingSession: make(map[string]SendMessageReq),
 
 		incomingPendingSession:  make(map[string][]net.IncomingMessage),
-		incomingPendingMessages: make(chan incomingPendingMessage),
+
+		//incomingPendingMessages: make(chan incomingPendingMessage),
 
 		messagesPendingRegistration: make(map[string]SendMessageReq),
 		msgPendingRegister:          make(chan SendMessageReq, 10),
@@ -149,6 +154,7 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 
 		peerByConMapMutex: sync.RWMutex{},
 		peerMapMutex:      sync.RWMutex{},
+		sessionsMutex:     sync.RWMutex{},
 	}
 
 	// node's routing table
@@ -168,6 +174,7 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 }
 
 func (s *swarmImpl) bootComplete(successCode error) {
+	s.localNode.Info("%v finised boot", s.localNode.String())
 	s.bootstrapped <- successCode
 	s.afterBootCallback <- successCode
 }
@@ -301,9 +308,11 @@ func (s *swarmImpl) Shutdown() {
 func (s *swarmImpl) shutDownInternal() {
 
 	// close all open connections
+	s.peerByConMapMutex.Lock()
 	for _, c := range s.connections {
 		c.Close()
 	}
+	s.peerByConMapMutex.Unlock()
 
 	s.peerMapMutex.RLock()
 	for _, p := range s.peers {
@@ -389,9 +398,6 @@ Loop:
 
 		case mpr := <-s.msgPendingRegister:
 			s.addMessagePendingRegistration(mpr)
-
-		case ipm := <-s.incomingPendingMessages:
-			s.addIncomingPendingMessage(ipm)
 
 		case gpr := <-s.getPeerRequests:
 			s.onGetPeerRequest(gpr)
