@@ -54,9 +54,8 @@ type swarmImpl struct {
 	messagesPendingSession map[string]SendMessageReq // k - unique req id. outgoing messages which pend an auth session with remote node to be sent out
 
 	incomingPendingSession map[string][]net.IncomingMessage
-	incomingPendingMutex sync.RWMutex
+	incomingPendingMutex   sync.RWMutex
 	// ChangeState register pending messages to incomingPendingSession
-	//incomingPendingMessages chan incomingPendingMessage
 
 	// ChangeState register pending messages messagesPendingRegistration
 	msgPendingRegister          chan SendMessageReq
@@ -122,9 +121,7 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 		connections:            make(map[string]net.Connection),
 		messagesPendingSession: make(map[string]SendMessageReq),
 
-		incomingPendingSession:  make(map[string][]net.IncomingMessage),
-
-		//incomingPendingMessages: make(chan incomingPendingMessage),
+		incomingPendingSession: make(map[string][]net.IncomingMessage),
 
 		messagesPendingRegistration: make(map[string]SendMessageReq),
 		msgPendingRegister:          make(chan SendMessageReq, 10),
