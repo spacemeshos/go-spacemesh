@@ -191,7 +191,9 @@ func (s *swarmImpl) onNewSession(data HandshakeData) {
 
 	// store the session
 	if data.Session().IsAuthenticated() {
+		s.sessionsMutex.Lock()
 		s.allSessions[data.Session().String()] = data.Session()
+		s.sessionsMutex.Unlock()
 		s.sendNodeEvent(data.Peer().String(), SessionEstablished)
 		// send all messages queued for the remote node we now have a session with
 		for key, msg := range s.messagesPendingSession {
@@ -428,7 +430,9 @@ func (s *swarmImpl) onRemoteClientProtocolMessage(msg net.IncomingMessage, c *pb
 
 	// Locate the session
 	sid := hex.EncodeToString(c.SessionId)
+	s.sessionsMutex.RLock()
 	session := s.allSessions[sid]
+	s.sessionsMutex.RUnlock()
 
 	if session == nil || !session.IsAuthenticated() {
 		s.localNode.Debug("Expected to have this session with this node")

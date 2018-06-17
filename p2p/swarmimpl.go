@@ -9,7 +9,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 	"github.com/spacemeshos/go-spacemesh/p2p/timesync"
+
+	//"github.com/sasha-s/go-deadlock"
 	"sync"
+
 )
 
 type nodeEventCallbacks []NodeEventCallback
@@ -44,6 +47,7 @@ type swarmImpl struct {
 
 	// todo: remove all idle sessions every n hours (configurable)
 	allSessions map[string]NetworkSession // SessionId -> Session data. all authenticated session
+	sessionsMutex    sync.RWMutex    // Mutex for peer map
 
 	// To catch callbacks when returned from network (Error or Sent)
 	outgoingSendsCallbacks map[string]map[string]chan SendError // k - conn id v-  reqID -> chan SendError
@@ -147,8 +151,9 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 
 		config: l.Config().SwarmConfig,
 
-		peerByConMapMutex: sync.RWMutex{},
-		peerMapMutex:      sync.RWMutex{},
+		peerByConMapMutex:	sync.RWMutex{},
+		peerMapMutex:		sync.RWMutex{},
+		sessionsMutex:		sync.RWMutex{},
 	}
 
 	// node's routing table
