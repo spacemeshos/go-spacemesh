@@ -33,7 +33,8 @@ type swarmImpl struct {
 	nodeEventRegChannel    chan NodeEventCallback
 	nodeEventRemoveChannel chan NodeEventCallback
 	// node state callbacks
-	nec nodeEventCallbacks
+	nec      nodeEventCallbacks
+	necMutex sync.RWMutex
 
 	// Internal state is not thread safe - must be accessed only from methods dispatched from the internal event handler
 	getPeerRequests chan getPeerRequest
@@ -178,15 +179,21 @@ func (s *swarmImpl) bootComplete(successCode error) {
 
 // Register an event handler callback for connection state events
 func (s *swarmImpl) RegisterNodeEventsCallback(callback NodeEventCallback) {
-	s.nodeEventRegChannel <- callback
+	s.necMutex.Lock()
+	s.nec = append(s.nec, callback)
+	s.necMutex.Unlock()
 }
 
 func (s *swarmImpl) RemoveNodeEventsCallback(callback NodeEventCallback) {
-	s.nodeEventRemoveChannel <- callback
-}
-
-func (s *swarmImpl) registerNodeEventsCallback(callback NodeEventCallback) {
-	s.nec = append(s.nec, callback)
+	s.necMutex.Lock()
+	for i, c := range s.nec {
+		if c == callback {
+			s.nec = append(s.nec[:i], s.nec[i+1:]...)
+			s.necMutex.Unlock()
+			return
+		}
+	}
+	s.necMutex.Unlock()
 }
 
 func (s *swarmImpl) WaitForBootstrap() error {
@@ -195,15 +202,6 @@ func (s *swarmImpl) WaitForBootstrap() error {
 		s.afterBoot = true
 	}
 	return s.bootError
-}
-
-func (s *swarmImpl) removeNodeEventsCallback(callback NodeEventCallback) {
-	for i, c := range s.nec {
-		if c == callback {
-			s.nec = append(s.nec[:i], s.nec[i+1:]...)
-			return
-		}
-	}
 }
 
 func (s *swarmImpl) getPeerByConnection(connID string) Peer {
@@ -238,9 +236,11 @@ func (s *swarmImpl) sendNodeEvent(peerID string, state NodeState) {
 	s.localNode.Debug(">> Node event for <%s>. State: %+v", peerID[:6], state)
 
 	evt := NodeEvent{peerID, state}
+	s.necMutex.RLock()
 	for _, c := range s.nec {
 		go func(c NodeEventCallback) { c <- evt }(c)
 	}
+	s.necMutex.RUnlock()
 }
 
 func (s *swarmImpl) getFindNodeProtocol() FindNodeProtocol {
@@ -386,12 +386,6 @@ Loop:
 
 		case d := <-s.registerNodeReq:
 			s.onRegisterNodeRequest(d)
-
-		case c := <-s.nodeEventRegChannel:
-			s.registerNodeEventsCallback(c)
-
-		case c := <-s.nodeEventRemoveChannel:
-			s.removeNodeEventsCallback(c)
 
 		case mpr := <-s.msgPendingRegister:
 			s.addMessagePendingRegistration(mpr)

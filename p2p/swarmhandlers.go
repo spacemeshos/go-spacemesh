@@ -145,7 +145,7 @@ func (s *swarmImpl) onConnectionRequest(req node.RemoteNodeData, done chan error
 	// we need to decide if to wait for it to auth, kill it, etc....
 	if session == nil {
 		nec := make(NodeEventCallback)
-		s.registerNodeEventsCallback(nec)
+		s.RegisterNodeEventsCallback(nec)
 		// listen to session initiation and report while releasing context
 		go func(nec NodeEventCallback) {
 			sessionTimeout := time.NewTimer(30 * time.Second)

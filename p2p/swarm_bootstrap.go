@@ -222,10 +222,6 @@ BSLOOP:
 			s.onConnectionRequest(n.req, n.done)
 		case r := <-s.sendMsgRequests:
 			s.onSendInternalMessage(r)
-		case nec := <-s.nodeEventRegChannel:
-			s.registerNodeEventsCallback(nec)
-		case rnec := <-s.nodeEventRemoveChannel:
-			s.removeNodeEventsCallback(rnec)
 		case qmsg := <-s.retryMessage:
 			s.retryMessageLater(qmsg)
 		case <-retryTicker.C:
