@@ -99,7 +99,7 @@ type handshakeProtocolImpl struct {
 	swarm               Swarm
 	newSessionCallbacks []chan HandshakeData     // a list of callback channels for new sessions
 	pendingSessions     map[string]HandshakeData // sessions pending authentication
-	pendingMutex sync.RWMutex
+	pendingMutex        sync.RWMutex
 
 	// ops
 	incomingHandshakeRequests MessagesChan

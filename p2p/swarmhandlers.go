@@ -509,7 +509,7 @@ func (s *swarmImpl) onRemoteClientMessage(msg net.IncomingMessage) {
 		s.onRemoteClientHandshakeMessage(msg)
 
 	} else {
-		s.localNode.Debug(fmt.Sprintf(str+"Type: ProtocolMessage"))
+		s.localNode.Debug(fmt.Sprintf(str + "Type: ProtocolMessage"))
 		// protocol messages are encrypted in payload
 		s.onRemoteClientProtocolMessage(msg, c)
 	}
