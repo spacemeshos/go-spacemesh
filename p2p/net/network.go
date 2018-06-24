@@ -7,18 +7,43 @@ import (
 	"gopkg.in/op/go-logging.v1"
 	"net"
 	"time"
+	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/gogo/protobuf/proto"
+	"errors"
+	"github.com/spacemeshos/go-spacemesh/p2p/delimited"
+	"github.com/spacemeshos/go-spacemesh/p2p/pb"
+	"encoding/hex"
 )
+
+// There are two types of TCP connections
+// 	TcpSecured - A session was established, all messages are sent encrypted
+// 	TcpUnsecured - No session was established, messages are sent raw.
+type ConnectionType int
+const (
+	TcpSecured ConnectionType = iota
+	TcpUnsecured
+)
+
+type localNode interface {
+	PublicKey() crypto.PublicKey
+	PrivateKey() crypto.PrivateKey
+}
+
+type remoteNode interface {
+	PublicKey() crypto.PublicKey
+}
 
 // Net is a connection manager able to dial remote endpoints
 // Net clients should register all callbacks
-// Connections may be initiated by DialTCP() or by remote clients connecting to the listen address
+// Connections may be initiated by Dial() or by remote clients connecting to the listen address
 // ConnManager includes a TCP server, and a TCP client
 // It provides full duplex messaging functionality over the same tcp/ip connection
 // Network should not know about higher-level networking types such as remoteNode, swarm and networkSession
 // Network main client is the swarm
 // Net has no channel events processing loops - clients are responsible for polling these channels and popping events from them
 type Net interface {
-	DialTCP(address string, timeOut time.Duration, keepAlive time.Duration) (Connection, error) // Connect to a remote node. Can send when no error.
+	Dial(address string, timeOut time.Duration, keepAlive time.Duration) (Connection, error) // Connect to a remote node. Can send when no error.
 	GetNewConnections() chan Connection
 	GetClosingConnections() chan Connection
 	GetConnectionErrors() chan ConnectionError
@@ -31,7 +56,8 @@ type Net interface {
 
 // impl internal type
 type netImpl struct {
-	logger *logging.Logger
+	localNode localNode
+	logger    *logging.Logger
 
 	tcpListener      net.Listener
 	tcpListenAddress string // Address to open connection: localhost:9999
@@ -49,9 +75,10 @@ type netImpl struct {
 
 // NewNet creates a new network.
 // It attempts to tcp listen on address. e.g. localhost:1234 .
-func NewNet(tcpListenAddress string, config nodeconfig.Config, logger *logging.Logger) (Net, error) {
+func NewNet(tcpListenAddress string, config nodeconfig.Config, logger *logging.Logger, localEntity localNode) (Net, error) {
 
 	n := &netImpl{
+		localNode:			localEntity,
 		logger:             logger,
 		tcpListenAddress:   tcpListenAddress,
 		newConnections:     make(chan Connection, 20),
@@ -102,11 +129,7 @@ func (n *netImpl) GetLogger() *logging.Logger {
 	return n.logger
 }
 
-// Dial a remote server with provided time out
-// address:: ip:port
-// Returns established connection that local clients can send messages to or error if failed
-// to establish a connection
-func (n *netImpl) DialTCP(address string, timeOut time.Duration, keepAlive time.Duration) (Connection, error) {
+func (n *netImpl) createConnection(address string, timeOut time.Duration, keepAlive time.Duration) (*Connection, error) {
 	if n.isShuttingDown {
 		return nil, fmt.Errorf("can't dial because the connection is shutting down")
 	}
@@ -125,7 +148,89 @@ func (n *netImpl) DialTCP(address string, timeOut time.Duration, keepAlive time.
 
 	n.logger.Debug("Connected to %s...", address)
 	c := newConnection(netConn, n, Local)
+
+	// update on new connection
+	n.newConnections <- c
+
 	return c, nil
+}
+
+func (n *netImpl) createSecuredConnection(address string, remotePublicKey crypto.PublicKey, networkId int32, timeOut time.Duration, keepAlive time.Duration) (*Connection, error) {
+	errMsg := "failed to establish secured connection."
+	conn, err := n.createConnection(address, timeOut, keepAlive)
+	if err != nil {
+		return nil, err
+	}
+	data, session, err := p2p.GenerateHandshakeRequestData(n.localNode.PublicKey(), n.localNode.PrivateKey(), remotePublicKey, networkId)
+	if err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("%s err: %v", errMsg, err)
+	}
+	n.logger.Debug("Creating session handshake request session id: %s", session.String())
+	payload, err := proto.Marshal(data)
+	if err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("%s err: %v", errMsg, err)
+	}
+	conn.Send(payload, session.ID())
+
+	var msg delimited.MsgAndID
+	var ok bool
+	select {
+	case msg, ok = <-conn.incomingMsgs.MsgChan:
+		if !ok { // chan closed
+		conn.Close()
+		return nil, errors.New("%s err: incoming channel was closed unexpectedly")
+		}
+	case err := <-conn.incomingMsgs.ErrChan:
+		return nil, fmt.Errorf("%s err: %v", errMsg, err)
+	}
+
+	respData := &pb.HandshakeData{}
+	err = proto.Unmarshal(msg.Msg, respData)
+	if err != nil {
+		//n.logger.Warning("invalid incoming handshake resp bin data", err)
+		conn.Close()
+		return nil, fmt.Errorf("%s err: %v", errMsg, err)
+	}
+
+	err = p2p.ProcessHandshakeResponse(remotePublicKey, session, respData)
+	if err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("%s err: %v", errMsg, err)
+	}
+
+	// TODO: Remove isAuthenticated - we announce state only when its authenticated
+	// Session is now authenticated
+	session.SetAuthenticated(true)
+
+	conn.session = session
+	conn.beginEventProcessing()
+	return conn, nil
+}
+
+
+// Dial a remote server with provided time out
+// address:: ip:port
+// Returns established connection that local clients can send messages to or error if failed
+// to establish a connection
+func (n *netImpl) Dial(address string, remotePublicKey crypto.PublicKey, networkId int32, timeOut time.Duration, keepAlive time.Duration, secured bool) (*Connection, error) {
+	var conn *Connection
+	var err error
+	if secured {
+		conn, err = n.createSecuredConnection(address, remotePublicKey, networkId, timeOut, keepAlive)
+	} else {
+		conn, err = n.createConnection(address, timeOut, keepAlive)
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to Dail. err: %v", err)
+	}
+	conn.beginEventProcessing()
+	// update on new connection
+	n.newConnections <- *conn
+
+	return conn, nil
 }
 
 func (n *netImpl) Shutdown() {

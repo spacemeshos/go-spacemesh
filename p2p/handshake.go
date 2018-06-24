@@ -19,6 +19,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"sync"
+	"go-ethereum/node"
+	"gopkg.in/op/go-logging.v1"
 )
 
 // HandshakeReq specifies the handshake protocol request message identifier. pattern is [protocol][version][method-name].
@@ -317,7 +319,8 @@ func (h *handshakeProtocolImpl) onHandleIncomingHandshakeResponse(msg IncomingMe
 // Returns handshake data to send to removeNode and a network session data object that includes the session enc/dec sym key and iv
 // Node that NetworkSession is not yet authenticated - this happens only when the handshake response is processed and authenticated
 // This is called by node1 (initiator)
-func generateHandshakeRequestData(node LocalNode, remoteNode Peer) (*pb.HandshakeData, NetworkSession, error) {
+func GenerateHandshakeRequestData(localPublicKey crypto.PublicKey, localPrivateKey crypto.PrivateKey, remotePublicKey crypto.PublicKey,
+	networkId int32) (*pb.HandshakeData, *NetworkSessionImpl, error) {
 
 	// we use the Elliptic Curve Encryption Scheme
 	// https://en.wikipedia.org/wiki/Integrated_Encryption_Scheme
@@ -327,7 +330,7 @@ func generateHandshakeRequestData(node LocalNode, remoteNode Peer) (*pb.Handshak
 	}
 
 	data.ClientVersion = nodeconfig.ClientVersion
-	data.NetworkID = int32(node.Config().NetworkID)
+	data.NetworkID = networkId
 	data.Timestamp = time.Now().Unix()
 
 	iv := make([]byte, 16)
@@ -338,21 +341,22 @@ func generateHandshakeRequestData(node LocalNode, remoteNode Peer) (*pb.Handshak
 	data.SessionId = iv
 	data.Iv = iv
 
+	/*
 	// attempt to refresh the node's public ip address
 	node.RefreshPubTCPAddress()
 
 	// announce the pub ip address of the node - not the private one
 	data.TcpAddress = node.PubTCPAddress()
-
+*/
 	ephemeral, err := btcec.NewPrivateKey(btcec.S256())
 	if err != nil {
 		return nil, nil, err
 	}
 
-	data.NodePubKey = node.PublicKey().InternalKey().SerializeUncompressed()
+	data.NodePubKey = localPublicKey.InternalKey().SerializeUncompressed()
 
 	// start shared key generation
-	ecdhKey := btcec.GenerateSharedSecret(ephemeral, remoteNode.PublicKey().InternalKey())
+	ecdhKey := btcec.GenerateSharedSecret(ephemeral, remotePublicKey.InternalKey())
 	derivedKey := sha512.Sum512(ecdhKey)
 	keyE := derivedKey[:32] // used for aes enc/dec
 	keyM := derivedKey[32:] // used for hmac
@@ -371,7 +375,7 @@ func generateHandshakeRequestData(node LocalNode, remoteNode Peer) (*pb.Handshak
 		return nil, nil, err
 	}
 
-	sign, err := node.PrivateKey().Sign(bin)
+	sign, err := localPrivateKey.Sign(bin)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -380,13 +384,42 @@ func generateHandshakeRequestData(node LocalNode, remoteNode Peer) (*pb.Handshak
 	data.Sign = hex.EncodeToString(sign)
 
 	// create local session data - iv and key
-	session, err := NewNetworkSession(iv, keyE, keyM, data.PubKey, node.String(), remoteNode.String())
+	session, err := NewNetworkSession(iv, keyE, keyM, data.PubKey, localPublicKey.String(), remotePublicKey.String())
 
 	if err != nil {
 		return nil, nil, err
 	}
 
 	return data, session, nil
+}
+
+// Handles an incoming handshake response from a remote peer.
+func HandleHandshakeResponse(msg []byte, logger *logging.Logger ) {
+	respData := &pb.HandshakeData{}
+	err := proto.Unmarshal(msg.Payload(), respData)
+	if err != nil {
+		h.swarm.GetLocalNode().Warning("invalid incoming handshake resp bin data", err)
+		return
+	}
+
+	sessionID := hex.EncodeToString(respData.SessionId)
+
+	h.swarm.GetLocalNode().Debug("Incoming handshake response for session id %s", sessionID)
+
+	err = processHandshakeResponse(sessionRequestData.LocalNode(), sessionRequestData.Peer(),
+		sessionRequestData.Session(), respData)
+	if err != nil {
+		// can't establish session - set error
+		sessionRequestData.SetError(err)
+	}
+
+	// no longer pending if error or if sesssion created
+	h.pendingMutex.Lock()
+	delete(h.pendingSessions, sessionID)
+	h.pendingMutex.Unlock()
+
+	h.stateChanged(sessionRequestData)
+	h.swarm.GetLocalNode().Debug("Locally initiated session established! Session id: %s :-)", sessionID)
 }
 
 // Authenticate that the sender node generated the signed data
@@ -543,7 +576,7 @@ func processHandshakeRequest(node LocalNode, r Peer, req *pb.HandshakeData) (*pb
 // Process handshake protocol response. This is called by initiator (node1) to handle response from node2
 // and to establish the session
 // Side effect - passed network session is set to authenticated
-func processHandshakeResponse(node LocalNode, r Peer, s NetworkSession, resp *pb.HandshakeData) error {
+func ProcessHandshakeResponse(remotePub crypto.PublicKey, s NetworkSession, resp *pb.HandshakeData) error {
 
 	// verified shared public secret
 	if !bytes.Equal(resp.PubKey, s.PubKey()) {
@@ -573,7 +606,7 @@ func processHandshakeResponse(node LocalNode, r Peer, s NetworkSession, resp *pb
 	}
 
 	// we verify against remote node public key
-	v, err := r.PublicKey().VerifyString(bin, sig)
+	v, err := remotePub.VerifyString(bin, sig)
 	if err != nil {
 		return err
 	}
@@ -582,12 +615,9 @@ func processHandshakeResponse(node LocalNode, r Peer, s NetworkSession, resp *pb
 		return errors.New("invalid signature")
 	}
 
-	// TODO: Remove isAuthenticated - we announce state only when its authenticated
-	// Session is now authenticated
-	s.SetAuthenticated(true)
-
+	// TODO does peer need to hold all sessions?
 	// update remote node session here
-	r.UpdateSession(s.String(), s)
+	//r.UpdateSession(s.String(), s)
 
 	return nil
 }

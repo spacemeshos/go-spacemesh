@@ -66,7 +66,7 @@ func TestReadWrite(t *testing.T) {
 	}()
 
 	// we use the network to dial to itself over the local loop
-	c, err := n.DialTCP(address, time.Duration(10*time.Second), time.Duration(48*time.Hour))
+	c, err := n.Dial(address, time.Duration(10*time.Second), time.Duration(48*time.Hour))
 	assert.Nil(t, err, "failed to connect to tcp server")
 
 	log.Debug("Sending message...")
@@ -81,7 +81,7 @@ func TestReadWrite(t *testing.T) {
 	<-done
 
 	n.Shutdown()
-	_, err = n.DialTCP(address, time.Duration(10*time.Second), time.Duration(48*time.Hour))
+	_, err = n.Dial(address, time.Duration(10*time.Second), time.Duration(48*time.Hour))
 	assert.Error(t, err, "expected to fail dialing after calling shutdown")
 	//
 	//
