@@ -19,20 +19,20 @@ type Peer interface {
 	Pretty() string
 	TCPAddress() string // tcp address advertised by node e.g. 127.0.0.1:3058
 	PublicKey() crypto.PublicKey
-	GetConnections() map[string]net.Connection
+	//GetConnections() map[string]*net.Connection
 
 	DeleteAllConnections()
 
-	GetSessions() map[string]NetworkSession
+	GetSessions() map[string]net.NetworkSession
 
-	UpdateSession(id string, s NetworkSession)
-	UpdateConnection(id string, c net.Connection)
+	UpdateSession(id string, s net.NetworkSession)
+	UpdateConnection(id string, c *net.Connection)
 
 	// returns an authenticated session with the node if one exists
-	GetAuthenticatedSession() NetworkSession
+	//GetAuthenticatedSession() net.NetworkSession
 
 	// returns an active connection with the node if we have one
-	GetActiveConnection() net.Connection
+	//GetActiveConnection() *net.Connection
 
 	// returns RemoteNodeData for this peer
 	GetRemoteNodeData() node.Node
@@ -44,8 +44,8 @@ type peerImpl struct {
 
 	connMutex    sync.RWMutex
 	sessionMutex sync.RWMutex
-	connections  map[string]net.Connection
-	sessions     map[string]NetworkSession
+	connections  map[string]*net.Connection
+	sessions     map[string]net.NetworkSession
 }
 
 // TODO : refactor to newPeer
@@ -64,58 +64,58 @@ func NewRemoteNode(id string, tcpAddress string) (Peer, error) {
 		tcpAddress:   tcpAddress,
 		connMutex:    sync.RWMutex{},
 		sessionMutex: sync.RWMutex{},
-		connections:  make(map[string]net.Connection),
-		sessions:     make(map[string]NetworkSession),
+		connections:  make(map[string]*net.Connection),
+		sessions:     make(map[string]net.NetworkSession),
 	}
 
 	return n, nil
 }
 
-func (n *peerImpl) GetAuthenticatedSession() NetworkSession {
-	n.sessionMutex.RLock()
-	defer n.sessionMutex.RUnlock()
-	for _, v := range n.sessions {
-		if v.IsAuthenticated() {
-			return v
-		}
-	}
-	return nil
-}
+//func (n *peerImpl) GetAuthenticatedSession() net.NetworkSession {
+//	n.sessionMutex.RLock()
+//	defer n.sessionMutex.RUnlock()
+//	for _, v := range n.sessions {
+//		if v.IsAuthenticated() {
+//			return v
+//		}
+//	}
+//	return nil
+//}
 
 func (n *peerImpl) GetRemoteNodeData() node.Node {
 	return node.New(n.publicKey, n.TCPAddress())
 }
 
-func (n *peerImpl) GetActiveConnection() net.Connection {
-	n.connMutex.RLock()
-	defer n.connMutex.RUnlock()
-	// todo: sort by last data transfer time to pick the best connection
-	// just return a random connection for now
-	for _, v := range n.connections {
-		if v != nil {
-			return v
-		}
-	}
-
-	return nil
-}
-
-// GetConnections gets all connections with this peer.
-func (n *peerImpl) GetConnections() map[string]net.Connection {
-	n.connMutex.RLock()
-	defer n.connMutex.RUnlock()
-	return n.connections
-}
+//func (n *peerImpl) GetActiveConnection() *net.Connection {
+//	n.connMutex.RLock()
+//	defer n.connMutex.RUnlock()
+//	// todo: sort by last data transfer time to pick the best connection
+//	// just return a random connection for now
+//	for _, v := range n.connections {
+//		if v != nil {
+//			return v
+//		}
+//	}
+//
+//	return nil
+//}
+//
+//// GetConnections gets all connections with this peer.
+//func (n *peerImpl) GetConnections() map[string]*net.Connection {
+//	n.connMutex.RLock()
+//	defer n.connMutex.RUnlock()
+//	return n.connections
+//}
 
 // DeleteAllConnections delete all connections with this peer.
 func (n *peerImpl) DeleteAllConnections() {
 	n.connMutex.Lock()
-	n.connections = make(map[string]net.Connection)
+	n.connections = make(map[string]*net.Connection)
 	n.connMutex.Unlock()
 }
 
 // GetSession returns all the network sessions with this peer.
-func (n *peerImpl) GetSessions() map[string]NetworkSession {
+func (n *peerImpl) GetSessions() map[string]net.NetworkSession {
 	n.sessionMutex.RLock()
 	sessions := n.sessions
 	n.sessionMutex.RUnlock()
@@ -123,7 +123,7 @@ func (n *peerImpl) GetSessions() map[string]NetworkSession {
 }
 
 // AddConnection adds a session for the peer
-func (n *peerImpl) UpdateConnection(id string, c net.Connection) {
+func (n *peerImpl) UpdateConnection(id string, c *net.Connection) {
 	if c != nil && id != c.ID() {
 		// cancel on invalid action
 		return
@@ -134,7 +134,7 @@ func (n *peerImpl) UpdateConnection(id string, c net.Connection) {
 }
 
 // AddSession adds a session for the peer
-func (n *peerImpl) UpdateSession(id string, s NetworkSession) {
+func (n *peerImpl) UpdateSession(id string, s net.NetworkSession) {
 	if s != nil && id != s.String() {
 		// cancel on invalid action
 		return

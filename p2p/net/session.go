@@ -1,4 +1,4 @@
-package p2p
+package net
 
 import (
 	"crypto/aes"
@@ -28,9 +28,6 @@ type NetworkSession interface {
 
 	LocalNodeID() string  // string encoded session local node id
 	RemoteNodeID() string // string encoded session remote node id
-
-	IsAuthenticated() bool
-	SetAuthenticated(val bool)
 
 	Decrypt(in []byte) ([]byte, error) // decrypt data using session dec key
 	Encrypt(in []byte) ([]byte, error) // encrypt data using session enc key
@@ -103,21 +100,6 @@ func (n *NetworkSessionImpl) PubKey() []byte {
 	return n.pubKey
 }
 
-// IsAuthenticated returns true iff the session is authenticated.
-func (n *NetworkSessionImpl) IsAuthenticated() bool {
-	n.authMutex.RLock()
-	auth := n.authenticated
-	n.authMutex.RUnlock()
-	return auth
-}
-
-// SetAuthenticated updates the session's authentication state.
-func (n *NetworkSessionImpl) SetAuthenticated(val bool) {
-	n.authMutex.Lock()
-	n.authenticated = val
-	n.authMutex.Unlock()
-}
-
 // Created returns the session creation time.
 func (n *NetworkSessionImpl) Created() time.Time {
 	return n.created
@@ -153,7 +135,7 @@ func (n *NetworkSessionImpl) Decrypt(in []byte) ([]byte, error) {
 }
 
 // NewNetworkSession creates a new network session based on provided data
-func NewNetworkSession(id, keyE, keyM, pubKey []byte, localNodeID, remoteNodeID string) (NetworkSession, error) {
+func NewNetworkSession(id, keyE, keyM, pubKey []byte, localNodeID, remoteNodeID string) (*NetworkSessionImpl, error) {
 	n := &NetworkSessionImpl{
 		id:            id,
 		keyE:          keyE,

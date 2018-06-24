@@ -27,7 +27,7 @@ type Swarm interface {
 
 	// Attempt to establish a session with a remote node with a known id and tcp address
 	// Used for bootstrapping known bootstrap nodes
-	ConnectTo(req node.Node, done chan error)
+	//ConnectTo(req node.Node, done chan error)
 
 	// Connect to count random nodes - used for bootstrapping the swarm
 	ConnectToRandomNodes(count int)
@@ -36,7 +36,7 @@ type Swarm interface {
 	DisconnectFrom(req node.Node)
 
 	// Send a handshake protocol message that is used to establish a session
-	sendHandshakeMessage(req SendMessageReq)
+	//sendHandshakeMessage(req SendMessageReq)
 
 	// Register a callback channel for state changes related to remote nodes
 	// Currently used for testing network bootstrapping
@@ -48,11 +48,12 @@ type Swarm interface {
 	// services getters
 	GetDemuxer() Demuxer
 	LocalNode() *node.LocalNode
+	getConnectionPool() *ConnectionPool
 
 	RoutingTable() dht.RoutingTable
 
 	// used by protocols and for testing
-	getHandshakeProtocol() HandshakeProtocol
+	//getHandshakeProtocol() HandshakeProtocol
 	getFindNodeProtocol() FindNodeProtocol
 
 	getPeerByConnection(connID string) Peer

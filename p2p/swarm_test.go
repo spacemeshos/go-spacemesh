@@ -19,36 +19,25 @@ func TestSessionCreation(t *testing.T) {
 
 	filesystem.SetupTestSpacemeshDataFolders(t, "swarm_test")
 
-	callback := make(chan HandshakeData)
-	callback2 := make(chan HandshakeData)
-	node1Local := p2pTestInstance(t, defaultConfig())
-	node2Local := p2pTestInstance(t, defaultConfig())
-
-	node2Remote := node2Local.LocalNode().Node
-
-	node1Local.getHandshakeProtocol().RegisterNewSessionCallback(callback)
-	node2Local.getHandshakeProtocol().RegisterNewSessionCallback(callback2)
-	node1Local.ConnectTo(node2Remote, nil)
-
-	sessions := uint32(0)
-Loop:
-	for {
-		s := atomic.LoadUint32(&sessions)
-		if s == 2 {
-			break Loop
-		}
-		select {
-		case c := <-callback:
-			if c.Session().IsAuthenticated() {
-				atomic.AddUint32(&sessions, 1)
-			}
-		case c2 := <-callback2:
-			if c2.Session().IsAuthenticated() {
-				atomic.AddUint32(&sessions, 1)
-			}
-		case <-time.After(time.Second * 10):
-			t.Fatalf("Timeout error - failed to create session")
-		}
+	//callback := make(chan HandshakeData)
+	//callback2 := make(chan HandshakeData)
+	node1Local, _ := p2pTestInstance(t, defaultConfig())
+	node2Local, _ := p2pTestInstance(t, defaultConfig())
+	//node1Local.GetSwarm().getHandshakeProtocol().RegisterNewSessionCallback(callback)
+	//node2Local.GetSwarm().getHandshakeProtocol().RegisterNewSessionCallback(callback2)
+	c, e := node1Local.getConnectionPool().getConnection(node2Local.LocalNode().Address(), node2Local.LocalNode().PublicKey())//ConnectTo(node2Local.GetRemoteNodeData(), nil)
+	if e != nil {
+		t.Fatalf("failed to connect. err: %v", e)
+	}
+	if c.Session() == nil {
+		t.Fatalf("failed to establish session in node1")
+	}
+	c = node2Local.getConnectionPool().hasConnection(node1Local.LocalNode().PublicKey())
+	if c == nil {
+		t.Fatalf("node2 has no connection with node1")
+	}
+	if c.Session() == nil {
+		t.Fatalf("failed to establish session in node2")
 	}
 
 	node1Local.Shutdown()
@@ -90,7 +79,11 @@ func TestMultipleSessions(t *testing.T) {
 	for i := 0; i < count; i++ {
 		n := p2pTestInstance(t, defaultConfig()) // create a node
 		nodes[i] = n
-		n.ConnectTo(bootnode, nil) // connect to first node
+		remotePub, err := crypto.NewPublicKey(bootnode.PublicKey().Bytes())
+		if err != nil {
+			// TODO handle error (not really, @Yosher promised that req will have a crypto.PublicKey)
+		}
+		n.getConnectionPool().getConnection(bootnode.Address(), remotePub) // connect to first node
 		//nodes = append(nodes, n)
 	}
 

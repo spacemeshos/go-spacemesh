@@ -5,10 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"errors"
 
 	"github.com/gogo/protobuf/proto"
-	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
@@ -72,147 +70,153 @@ type nodeAction struct {
 }
 
 // Handles a local request to connect to a remote node
-func (s *swarmImpl) onConnectionRequest(req node.Node, done chan error) {
-
-	s.localNode.Debug("Local request to connect to node %s", req.Pretty())
-
-	var err error
-
-	s.peerMapMutex.RLock()
-
-	// check for existing session with that node
-	peer := s.peers[req.String()]
-
-	if peer == nil {
-		s.peerMapMutex.RUnlock()
-		s.onRegisterNodeRequest(req)
-		s.peerMapMutex.RLock()
-	}
-
-	peer = s.peers[req.String()]
-	s.peerMapMutex.RUnlock()
-	if peer == nil {
-		nullErr := errors.New("peer not registered")
-		s.localNode.Error("Err: ", nullErr)
-		done <- nullErr
-		return
-	}
-
-	conn := peer.GetActiveConnection()
-	session := peer.GetAuthenticatedSession()
-
-	if conn != nil && session != nil {
-		s.localNode.Debug("Already got an active session and connection with: %s", req.Pretty())
-		done <- nil
-		return
-	}
-
-	if conn == nil {
-
-		s.sendNodeEvent(req.String(), Connecting)
-
-		// Dial the other node using the node's network config values
-		conn, err = s.network.DialTCP(req.Address(), s.config.DialTimeout, s.config.ConnKeepAlive)
-		if err != nil {
-			s.sendNodeEvent(req.String(), Disconnected)
-			conErr := fmt.Errorf("failed to connect to host %v , err: %v", req.Pretty(), err)
-			s.localNode.Error("%v", conErr)
-			done <- conErr
-			return
-		}
-
-		s.sendNodeEvent(req.String(), Connected)
-
-		// update the routing table
-		s.routingTable.Update(req)
-
-		id := conn.ID()
-
-		// update state with new connection
-		s.peerByConMapMutex.Lock()
-		s.peersByConnection[id] = peer
-		s.connections[id] = conn
-		s.peerByConMapMutex.Unlock()
-
-		// update remote node connections
-		peer.UpdateConnection(id, conn)
-	}
-
-	// todo: we need to handle the case that there's a non-authenticated session with the remote node
-	// does this should really be here ? initiating a session isnt actually initiating a connection
-	// we need to decide if to wait for it to auth, kill it, etc....
-	if session == nil {
-		nec := make(NodeEventCallback)
-		s.RegisterNodeEventsCallback(nec)
-		// listen to session initiation and report while releasing context
-		go func(nec NodeEventCallback) {
-			sessionTimeout := time.NewTimer(30 * time.Second)
-		PEERLOOP:
-			for {
-				select {
-				case ev := <-nec:
-					if ev.PeerID == req.String() {
-						if ev.State == SessionEstablished {
-							done <- nil
-							break PEERLOOP
-						} else if ev.State == Disconnected {
-							done <- errors.New("session disconnected")
-							break PEERLOOP
-						}
-					}
-				case <-sessionTimeout.C:
-					done <- errors.New("failed to established within time limit")
-					break PEERLOOP
-				}
-			}
-			go s.RemoveNodeEventsCallback(nec)
-			s.localNode.Debug("Connection Request Finished")
-		}(nec)
-		// start handshake protocol
-		// TODO : We don't really need HandshakeStarted
-		//s.sendNodeEvent(req.DhtID(), HandshakeStarted)
-		s.handshakeProtocol.CreateSession(peer)
-		return
-	}
-
-	if !session.IsAuthenticated() {
-		// what can we do ?
-		s.localNode.Debug("Session is pending")
-	}
-}
+//func (s *swarmImpl) onConnectionRequest(req node.RemoteNodeData, done chan error) {
+//
+//	s.localNode.Debug("Local request to connect to node %s", req.Pretty())
+//
+//	var err error
+//
+//	s.peerMapMutex.RLock()
+//
+//	// check for existing session with that node
+//	peer := s.peers[req.ID()]
+//
+//	if peer == nil {
+//		s.peerMapMutex.RUnlock()
+//		s.onRegisterNodeRequest(req)
+//		s.peerMapMutex.RLock()
+//	}
+//
+//	peer = s.peers[req.ID()]
+//	s.peerMapMutex.RUnlock()
+//	if peer == nil {
+//		nullErr := errors.New("peer not registered")
+//		s.localNode.Error("Err: ", nullErr)
+//		done <- nullErr
+//		return
+//	}
+//
+//	conn := peer.GetActiveConnection()
+//	session := peer.GetAuthenticatedSession()
+//
+//	if conn != nil && session != nil {
+//		s.localNode.Debug("Already got an active session and connection with: %s", req.Pretty())
+//		done <- nil
+//		return
+//	}
+//
+//	if conn == nil {
+//
+//		s.sendNodeEvent(req.ID(), Connecting)
+//
+//		// Dial the other node using the node's network config values
+//		localNodeConfig := s.localNode.Config()
+//		addressableNodeConfig := &localNodeConfig
+//		remotePub, e := crypto.NewPublicKey(req.Bytes())
+//		if e != nil {
+//			// TODO handle error (not really, @Yosher promised that req will have a crypto.PublicKey)
+//		}
+//		conn, err = s.network.Dial(req.IP(), remotePub, int32(localNodeConfig.NetworkID), addressableNodeConfig.DialTimeout, addressableNodeConfig.ConnKeepAlive)
+//		if err != nil {
+//			s.sendNodeEvent(req.ID(), Disconnected)
+//			conErr := fmt.Errorf("failed to connect to host %v of %v, ERROR: %v", req.Pretty(), req.IP(), err)
+//			s.localNode.Error("%v", conErr)
+//			done <- conErr
+//			return
+//		}
+//
+//		s.sendNodeEvent(req.ID(), Connected)
+//
+//		// update the routing table
+//		s.routingTable.Update(req)
+//
+//		id := conn.ID()
+//
+//		// update state with new connection
+//		s.peerByConMapMutex.Lock()
+//		s.peersByConnection[id] = peer
+//		s.connections[id] = conn
+//		s.peerByConMapMutex.Unlock()
+//
+//		// update remote node connections
+//		peer.UpdateConnection(id, conn)
+//	}
+//
+//	// todo: we need to handle the case that there's a non-authenticated session with the remote node
+//	// does this should really be here ? initiating a session isnt actually initiating a connection
+//	// we need to decide if to wait for it to auth, kill it, etc....
+//	if session == nil {
+//		nec := make(NodeEventCallback)
+//		s.RegisterNodeEventsCallback(nec)
+//		// listen to session initiation and report while releasing context
+//		go func(nec NodeEventCallback) {
+//			sessionTimeout := time.NewTimer(30 * time.Second)
+//		PEERLOOP:
+//			for {
+//				select {
+//				case ev := <-nec:
+//					if ev.PeerID == req.ID() {
+//						if ev.State == SessionEstablished {
+//							done <- nil
+//							break PEERLOOP
+//						} else if ev.State == Disconnected {
+//							done <- errors.New("session disconnected")
+//							break PEERLOOP
+//						}
+//					}
+//				case <-sessionTimeout.C:
+//					done <- errors.New("failed to established within time limit")
+//					break PEERLOOP
+//				}
+//			}
+//			go s.RemoveNodeEventsCallback(nec)
+//			s.localNode.Debug("Connection Request Finished")
+//		}(nec)
+//		// start handshake protocol
+//		// TODO : We don't really need HandshakeStarted
+//		//s.sendNodeEvent(req.ID(), HandshakeStarted)
+//		s.handshakeProtocol.CreateSession(peer)
+//		return
+//	}
+//
+//	if !session.IsAuthenticated() {
+//		// what can we do ?
+//		s.localNode.Debug("Session is pending")
+//	}
+//}
 
 // callback from handshake protocol when session state changes
-func (s *swarmImpl) onNewSession(data HandshakeData) {
-
-	if err := data.GetError(); err != nil {
-		s.localNode.Error("Session creation error %s", err)
-		return
-	}
-
-	// store the session
-	if data.Session().IsAuthenticated() {
-		s.sessionsMutex.Lock()
-		s.allSessions[data.Session().String()] = data.Session()
-		s.sessionsMutex.Unlock()
-		s.sendNodeEvent(data.Peer().String(), SessionEstablished)
-		// send all messages queued for the remote node we now have a session with
-		for key, msg := range s.messagesPendingSession {
-			if msg.PeerID == data.Peer().String() {
-				s.localNode.Debug("Sending queued message %s to remote node", hex.EncodeToString(msg.ReqID))
-				go s.SendMessage(msg)
-				delete(s.messagesPendingSession, key)
-			}
-		}
-		s.incomingPendingMutex.Lock()
-		if msgs, ok := s.incomingPendingSession[data.Session().String()]; ok {
-			for msg := range msgs {
-				go func(im net.IncomingMessage) { s.network.GetIncomingMessage() <- im }(msgs[msg])
-			}
-			delete(s.incomingPendingSession, data.Session().String())
-		}
-		s.incomingPendingMutex.Unlock()
-	}
-}
+//func (s *swarmImpl) onNewSession(data HandshakeData) {
+//
+//	if err := data.GetError(); err != nil {
+//		s.localNode.Error("Session creation error %s", err)
+//		return
+//	}
+//
+//	// store the session
+//	if data.Session().IsAuthenticated() {
+//		s.sessionsMutex.Lock()
+//		s.allSessions[data.Session().String()] = data.Session()
+//		s.sessionsMutex.Unlock()
+//		s.sendNodeEvent(data.Peer().String(), SessionEstablished)
+//		// send all messages queued for the remote node we now have a session with
+//		for key, msg := range s.messagesPendingSession {
+//			if msg.PeerID == data.Peer().String() {
+//				s.localNode.Debug("Sending queued message %s to remote node", hex.EncodeToString(msg.ReqID))
+//				go s.SendMessage(msg)
+//				delete(s.messagesPendingSession, key)
+//			}
+//		}
+//		s.incomingPendingMutex.Lock()
+//		if msgs, ok := s.incomingPendingSession[data.Session().String()]; ok {
+//			for msg := range msgs {
+//				go func(im net.IncomingMessage) { s.network.GetIncomingMessage() <- im }(msgs[msg])
+//			}
+//			delete(s.incomingPendingSession, data.Session().String())
+//		}
+//		s.incomingPendingMutex.Unlock()
+//	}
+//}
 
 // Local request to disconnect from a node
 func (s *swarmImpl) onDisconnectionRequest(req node.Node) {
@@ -223,36 +227,34 @@ func (s *swarmImpl) onDisconnectionRequest(req node.Node) {
 }
 
 // Local request to send a message to a remote node
-func (s *swarmImpl) onSendHandshakeMessage(r SendMessageReq) {
-
-	// check for existing remote node and session
-	s.peerMapMutex.RLock()
-	remoteNode := s.peers[r.PeerID]
-	s.peerMapMutex.RUnlock()
-
-	if remoteNode == nil {
-		// for now we assume messages are sent only to nodes we already know their ip address
-		s.localNode.Error("Could'nt find %v, aborting handshake", log.PrettyID(r.PeerID))
-		return
-	}
-
-	conn := remoteNode.GetActiveConnection()
-
-	if conn == nil {
-		s.localNode.Error("Expected to have a connection with remote node")
-		return
-	}
-
-	s.localNode.Debug("Sending Handshake to %v", remoteNode.Pretty())
-
-	conn.Send(r.Payload, r.ReqID)
-}
+//func (s *swarmImpl) onSendHandshakeMessage(r SendMessageReq) {
+//
+//	// check for existing remote node and session
+//	s.peerMapMutex.RLock()
+//	remoteNode := s.peers[r.PeerID]
+//	s.peerMapMutex.RUnlock()
+//
+//	if remoteNode == nil {
+//		// for now we assume messages are sent only to nodes we already know their ip address
+//		s.localNode.Error("Could'nt find %v, aborting handshake", log.PrettyID(r.PeerID))
+//		return
+//	}
+//
+//	conn := remoteNode.GetActiveConnection()
+//
+//	if conn == nil {
+//		s.localNode.Error("Expected to have a connection with remote node")
+//		return
+//	}
+//
+//	s.localNode.Debug("Sending Handshake to %v", remoteNode.Pretty())
+//
+//	conn.Send(r.Payload, r.ReqID)
+//}
 
 // Local request to send a message to a remote node
 func (s *swarmImpl) onSendMessageRequest(r SendMessageReq) {
-
 	s.peerMapMutex.RLock()
-
 	// check for existing remote node and session
 	peer := s.peers[r.PeerID]
 	s.peerMapMutex.RUnlock()
@@ -282,24 +284,33 @@ func (s *swarmImpl) onSendMessageRequest(r SendMessageReq) {
 		return
 	}
 
-	conn := peer.GetActiveConnection()
+	// TODO get address from DHT instead from peer (peer should be removed eventually)
+	conn, err := s.cPool.getConnection(peer.TCPAddress(), peer.PublicKey()) // blocking, might take some time in case there is no connection
+	if err != nil {
+		s.localNode.Warning("failed to send message to %v, no valid connection. err: %v", peer.ID(), err)
+		return
+	}
 
-	if conn == nil {
-		s.localNode.Warning("queuing protocol request until session is established...")
-		// save the message for later sending and try to connect to the node
-		s.messagesPendingSession[hex.EncodeToString(r.ReqID)] = r
-		// try to connect to remote node and send the message once connected
-		// todo: callback listener if connection fails (possibly after retries)
-		s.onConnectionRequest(node.New(peer.PublicKey(), peer.TCPAddress()), nil)
-		return
-	}
-	session := peer.GetAuthenticatedSession()
+	//if conn == nil {
+	//	s.localNode.Warning("queuing protocol request until session is established...")
+	//	// save the message for later sending and try to connect to the node
+	//	s.messagesPendingSession[hex.EncodeToString(r.ReqID)] = r
+	//	// try to connect to remote node and send the message once connected
+	//	// todo: callback listener if connection fails (possibly after retries)
+	//	s.onConnectionRequest(node.NewRemoteNodeData(peer.String(), peer.TCPAddress()), nil)
+	//	return
+	//}
+	session := conn.Session()
 	if session == nil {
-		if _, exist := s.messagesPendingSession[hex.EncodeToString(r.ReqID)]; !exist {
-			s.messagesPendingSession[hex.EncodeToString(r.ReqID)] = r
-		}
+		s.localNode.Warning("failed to send message to %v, no valid session. err: %v", peer.ID(), err)
 		return
 	}
+	//if session == nil {
+	//	if _, exist := s.messagesPendingSession[hex.EncodeToString(r.ReqID)]; !exist {
+	//		s.messagesPendingSession[hex.EncodeToString(r.ReqID)] = r
+	//	}
+	//	return
+	//}
 
 	encPayload, err := session.Encrypt(r.Payload)
 	if err != nil {
@@ -345,7 +356,7 @@ func (s *swarmImpl) onSendMessageRequest(r SendMessageReq) {
 	conn.Send(data, r.ReqID)
 }
 
-func (s *swarmImpl) onConnectionClosed(c net.Connection) {
+func (s *swarmImpl) onConnectionClosed(c *net.Connection) {
 
 	// forget about this connection
 	id := c.ID()
@@ -360,7 +371,7 @@ func (s *swarmImpl) onConnectionClosed(c net.Connection) {
 	s.sendNodeEvent(peer.String(), Disconnected)
 }
 
-func (s *swarmImpl) onRemoteClientConnected(c net.Connection) {
+func (s *swarmImpl) onNewConnection(c *net.Connection) {
 	// nop - a remote client connected - this is handled w message
 	s.localNode.Debug("Remote client connected. %s", c.ID())
 	peer := s.getPeerByConnection(c.ID())
@@ -370,59 +381,59 @@ func (s *swarmImpl) onRemoteClientConnected(c net.Connection) {
 }
 
 // Processes an incoming handshake protocol message
-func (s *swarmImpl) onRemoteClientHandshakeMessage(msg net.IncomingMessage) {
-
-	data := &pb.HandshakeData{}
-	err := proto.Unmarshal(msg.Message, data)
-	if err != nil {
-		s.localNode.Warning("Unexpected handshake message format: %v", err)
-		return
-	}
-
-	connID := msg.Connection.ID()
-
-	// check if we already know about the remote node of this connection
-	sender := s.getPeerByConnection(connID)
-	if sender == nil {
-
-		// authenticate sender before registration
-		err := authenticateSenderNode(data)
-		if err != nil {
-			s.localNode.Error("Dropping incoming message - failed to authenticate message sender: %v", err)
-			return
-		}
-
-		nodeKey, err := crypto.NewPublicKey(data.NodePubKey)
-		if err != nil {
-			return
-		}
-
-		sender, err = NewRemoteNode(nodeKey.String(), data.TcpAddress)
-		if err != nil {
-			return
-		}
-
-		// register this remote node and the new connection
-
-		sender.UpdateConnection(connID, msg.Connection)
-
-		s.peerMapMutex.Lock()
-		s.peers[sender.String()] = sender
-		s.peerMapMutex.Unlock()
-
-		s.peerByConMapMutex.Lock()
-		s.peersByConnection[connID] = sender
-		s.peerByConMapMutex.Unlock()
-
-	}
-
-	// update the routing table - we just heard from this node
-	s.routingTable.Update(sender.GetRemoteNodeData())
-
-	s.localNode.Debug("Routing message from %v to handshake handler ", sender.Pretty())
-	// Let the demuxer route the message to its registered protocol handler
-	s.demuxer.RouteIncomingMessage(NewIncomingMessage(sender, data.Protocol, msg.Message))
-}
+//func (s *swarmImpl) onRemoteClientHandshakeMessage(msg net.IncomingMessage) {
+//
+//	data := &pb.HandshakeData{}
+//	err := proto.Unmarshal(msg.Message, data)
+//	if err != nil {
+//		s.localNode.Warning("Unexpected handshake message format: %v", err)
+//		return
+//	}
+//
+//	connID := msg.Connection.ID()
+//
+//	// check if we already know about the remote node of this connection
+//	sender := s.getPeerByConnection(connID)
+//	if sender == nil {
+//
+//		// authenticate sender before registration
+//		err := authenticateSenderNode(data)
+//		if err != nil {
+//			s.localNode.Error("Dropping incoming message - failed to authenticate message sender: %v", err)
+//			return
+//		}
+//
+//		nodeKey, err := crypto.NewPublicKey(data.NodePubKey)
+//		if err != nil {
+//			return
+//		}
+//
+//		sender, err = NewRemoteNode(nodeKey.String(), data.TcpAddress)
+//		if err != nil {
+//			return
+//		}
+//
+//		// register this remote node and the new connection
+//
+//		sender.UpdateConnection(connID, msg.Connection)
+//
+//		s.peerMapMutex.Lock()
+//		s.peers[sender.String()] = sender
+//		s.peerMapMutex.Unlock()
+//
+//		s.peerByConMapMutex.Lock()
+//		s.peersByConnection[connID] = sender
+//		s.peerByConMapMutex.Unlock()
+//
+//	}
+//
+//	// update the routing table - we just heard from this node
+//	s.routingTable.Update(sender.GetRemoteNodeData())
+//
+//	s.localNode.Debug("Routing message from %v to handshake handler ", sender.Pretty())
+//	// Let the demuxer route the message to its registered protocol handler
+//	s.demuxer.RouteIncomingMessage(NewIncomingMessage(sender, data.Protocol, msg.Message))
+//}
 
 // Pre-process a protocol message from a remote client handling decryption and authentication
 // Authenticated messages are forwarded to the demuxer for demuxing to protocol handlers
@@ -430,11 +441,11 @@ func (s *swarmImpl) onRemoteClientProtocolMessage(msg net.IncomingMessage, c *pb
 
 	// Locate the session
 	sid := hex.EncodeToString(c.SessionId)
-	s.sessionsMutex.RLock()
-	session := s.allSessions[sid]
-	s.sessionsMutex.RUnlock()
+	//s.sessionsMutex.RLock()
+	session :=  msg.Connection.Session()//s.allSessions[sid]
+	//s.sessionsMutex.RUnlock()
 
-	if session == nil || !session.IsAuthenticated() {
+	if session == nil {
 		s.localNode.Debug("Expected to have this session with this node")
 		s.addIncomingPendingMessage(incomingPendingMessage{sid, msg})
 		s.localNode.Debug("Stored incoming message as pending, try again when %s will establish", sid)
@@ -505,9 +516,10 @@ func (s *swarmImpl) onRemoteClientMessage(msg net.IncomingMessage) {
 
 	// route messages based on msg payload length
 	if len(c.Payload) == 0 {
+		s.localNode.Error(" this code path is deprecated!!!")
 		// handshake messages have no enc payload
-		s.localNode.Debug(fmt.Sprintf(str+"Type: Handshake, %v", hex.EncodeToString(c.SessionId)))
-		s.onRemoteClientHandshakeMessage(msg)
+		//s.localNode.Debug(fmt.Sprintf(str+"Type: Handshake, %v", hex.EncodeToString(c.SessionId)))
+		//s.onRemoteClientHandshakeMessage(msg)
 
 	} else {
 		s.localNode.Debug(fmt.Sprintf(str + "Type: ProtocolMessage"))
