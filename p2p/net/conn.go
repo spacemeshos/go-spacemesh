@@ -7,16 +7,17 @@ import (
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/delimited"
 	"gopkg.in/op/go-logging.v1"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 )
 
 // Connection is a closeable network connection, that can send and receive messages from a remote instance.
 // Connection is an io.Writer and an io.Closer.
-type Connection interface {
+/*type Connection interface {
 	ID() string
 	Send(message []byte, id []byte)
 	Close() error
 	RemoteAddr() net.Addr
-}
+}*/
 
 // MessageSentEvent specifies a sent network message data.
 type MessageSentEvent struct {
@@ -61,7 +62,7 @@ const (
 )
 
 // A network connection supporting full-duplex messaging
-type connectionImpl struct {
+type Connection struct {
 	logger *logging.Logger
 	// metadata for logging / debugging
 	id      string           // uuid for logging
@@ -75,10 +76,12 @@ type connectionImpl struct {
 
 	conn net.Conn // wrapped network connection
 	net  Net      // network context
+
+	session *p2p.NetworkSessionImpl
 }
 
 // Create a new connection wrapping a net.Conn with a provided connection manager
-func newConnection(conn net.Conn, n Net, s ConnectionSource) Connection {
+func newConnection(conn net.Conn, n Net, s ConnectionSource) *Connection {
 
 	// todo parametrize incoming msgs chan buffer size - hard-coded for now
 
@@ -86,7 +89,7 @@ func newConnection(conn net.Conn, n Net, s ConnectionSource) Connection {
 	incomingMsgs := delimited.NewChan(10)
 	outgoingMsgs := delimited.NewChan(10)
 
-	connection := &connectionImpl{
+	connection := &Connection{
 		logger:       n.GetLogger(),
 		id:           crypto.UUIDString(),
 		created:      time.Now(),
@@ -104,33 +107,34 @@ func newConnection(conn net.Conn, n Net, s ConnectionSource) Connection {
 	go outgoingMsgs.WriteToWriter(conn)
 
 	// start processing channel-based message
-	go connection.beginEventProcessing()
+	//TODO should be called explicitly by net
+	//go connection.beginEventProcessing()
 	return connection
 }
 
-func (c *connectionImpl) ID() string {
+func (c *Connection) ID() string {
 	return c.id
 }
 
 // RemoteAddr returns the remote network address.
-func (c *connectionImpl) RemoteAddr() net.Addr {
+func (c *Connection) RemoteAddr() net.Addr {
 	return c.conn.RemoteAddr()
 }
 
-func (c *connectionImpl) String() string {
+func (c *Connection) String() string {
 	return c.id
 }
 
 // Send binary data to a connection
 // data is copied over so caller can get rid of the data
 // Concurrency: can be called from any go routine
-func (c *connectionImpl) Send(message []byte, id []byte) {
+func (c *Connection) Send(message []byte, id []byte) {
 	// queue messages for sending
 	c.outgoingMsgs.MsgChan <- delimited.MsgAndID{ID: id, Msg: message}
 }
 
 // Close closes the connection (implements io.Closer). It is go safe.
-func (c *connectionImpl) Close() error {
+func (c *Connection) Close() error {
 	c.incomingMsgs.Close()
 	c.outgoingMsgs.Close()
 	go func() { c.closeChan <- struct{}{} }()
@@ -139,7 +143,7 @@ func (c *connectionImpl) Close() error {
 
 // Push outgoing message to the connections
 // Read from the incoming new messages and send down the connection
-func (c *connectionImpl) beginEventProcessing() {
+func (c *Connection) beginEventProcessing() {
 
 Loop:
 	for {

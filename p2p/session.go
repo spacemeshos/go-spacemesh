@@ -153,7 +153,7 @@ func (n *NetworkSessionImpl) Decrypt(in []byte) ([]byte, error) {
 }
 
 // NewNetworkSession creates a new network session based on provided data
-func NewNetworkSession(id, keyE, keyM, pubKey []byte, localNodeID, remoteNodeID string) (NetworkSession, error) {
+func NewNetworkSession(id, keyE, keyM, pubKey []byte, localNodeID, remoteNodeID string) (*NetworkSessionImpl, error) {
 	n := &NetworkSessionImpl{
 		id:            id,
 		keyE:          keyE,
