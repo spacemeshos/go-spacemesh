@@ -3,8 +3,8 @@ package p2p
 import (
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/identity"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
-	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"sync"
 )
 
@@ -35,7 +35,7 @@ type Peer interface {
 	GetActiveConnection() net.Connection
 
 	// returns RemoteNodeData for this peer
-	GetRemoteNodeData() node.RemoteNodeData
+	GetRemoteNodeData() identity.Node
 }
 
 type peerImpl struct {
@@ -82,8 +82,8 @@ func (n *peerImpl) GetAuthenticatedSession() NetworkSession {
 	return nil
 }
 
-func (n *peerImpl) GetRemoteNodeData() node.RemoteNodeData {
-	return node.NewRemoteNodeData(n.String(), n.TCPAddress())
+func (n *peerImpl) GetRemoteNodeData() identity.Node {
+	return identity.New(n.publicKey, n.TCPAddress())
 }
 
 func (n *peerImpl) GetActiveConnection() net.Connection {
@@ -149,7 +149,7 @@ func (n *peerImpl) String() string {
 	return n.publicKey.String()
 }
 
-// ID returns the binary identifier for this peer.
+// DhtID returns the binary identifier for this peer.
 func (n *peerImpl) ID() []byte {
 	return n.publicKey.Bytes()
 }

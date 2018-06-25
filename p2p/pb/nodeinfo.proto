@@ -5,5 +5,5 @@ option go_package = "pb";
 
 message NodeInfo {
     bytes nodeId = 1;
-    string tcpAddress = 2;
+    string address = 2;
 }

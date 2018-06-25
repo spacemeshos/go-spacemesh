@@ -9,6 +9,7 @@ import (
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/identity"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
@@ -18,13 +19,14 @@ import (
 // Basic handshake protocol data test
 func TestHandshakeCoreData(t *testing.T) {
 
+	config := nodeconfig.DefaultConfig()
 	// node 1
 	port, err := net.GetUnboundedPort()
 	assert.NoError(t, err, "Should be able to establish a connection on a port")
 
 	address := fmt.Sprintf("0.0.0.0:%d", port)
 
-	node1Local, err := NewNodeIdentity(address, nodeconfig.ConfigValues, false)
+	node1Local, err := identity.NewNodeIdentity(config, address, false)
 
 	if err != nil {
 		t.Error("failed to create local node1", err)
@@ -39,7 +41,7 @@ func TestHandshakeCoreData(t *testing.T) {
 
 	address1 := fmt.Sprintf("0.0.0.0:%d", port1)
 
-	node2Local, err := NewNodeIdentity(address1, nodeconfig.ConfigValues, false)
+	node2Local, err := identity.NewNodeIdentity(config, address1, false)
 
 	if err != nil {
 		t.Error("failed to create local node2", err)
@@ -92,19 +94,18 @@ func TestHandshakeCoreData(t *testing.T) {
 	assert.NoError(t, err, "expected no error")
 	assert.True(t, bytes.Equal(clearText, []byte(msg)), "Expected enc/dec to work")
 
-	node1Local.Shutdown()
-	node2Local.Shutdown()
 }
 
 func TestHandshakeProtocol(t *testing.T) {
 
+	config := nodeconfig.DefaultConfig()
 	// node 1
 	port, err := net.GetUnboundedPort()
 	assert.NoError(t, err, "Should be able to establish a connection on a port")
 
 	address := fmt.Sprintf("0.0.0.0:%d", port)
 
-	node1Local, _ := NewNodeIdentity(address, nodeconfig.ConfigValues, false)
+	node1Local, _ := identity.NewNodeIdentity(config, address, false)
 	node1Remote, _ := NewRemoteNode(node1Local.String(), address)
 
 	// node 2
@@ -114,7 +115,7 @@ func TestHandshakeProtocol(t *testing.T) {
 
 	address1 := fmt.Sprintf("0.0.0.0:%d", port1)
 
-	node2Local, _ := NewNodeIdentity(address1, nodeconfig.ConfigValues, false)
+	node2Local, _ := identity.NewNodeIdentity(config, address1, false)
 	node2Remote, _ := NewRemoteNode(node2Local.String(), address1)
 
 	// STEP 1: Node 1 generates handshake data and sends it to node2 ....
@@ -196,8 +197,6 @@ func TestHandshakeProtocol(t *testing.T) {
 	assert.True(t, session.IsAuthenticated(), "expected session to be authenticated")
 	assert.NoError(t, err, "failed to authenticate or process response")
 
-	node1Local.Shutdown()
-	node2Local.Shutdown()
 }
 
 func TestBadHandshakes(t *testing.T) {
@@ -210,7 +209,7 @@ func TestBadHandshakes(t *testing.T) {
 
 		address := fmt.Sprintf("0.0.0.0:%d", port)
 
-		node1Local, _ := NewNodeIdentity(address, cfg, false)
+		node1Local, _ := identity.NewNodeIdentity(cfg, address, false)
 		node1Remote, _ := NewRemoteNode(node1Local.String(), address)
 
 		// node 2
@@ -219,7 +218,7 @@ func TestBadHandshakes(t *testing.T) {
 
 		address1 := fmt.Sprintf("0.0.0.0:%d", port1)
 
-		node2Local, _ := NewNodeIdentity(address1, cfg2, false)
+		node2Local, _ := identity.NewNodeIdentity(cfg2, address1, false)
 		node2Remote, _ := NewRemoteNode(node2Local.String(), address1)
 
 		// STEP 1: Node 1 generates handshake data and sends it to node2 ....
@@ -340,16 +339,14 @@ func TestBadHandshakes(t *testing.T) {
 			return errors.New("expected session to be authenticated")
 		}
 
-		node1Local.Shutdown()
-		node2Local.Shutdown()
 		return nil
 	}
 
-	defaultConfig := nodeconfig.ConfigValues
+	defaultConfig := nodeconfig.DefaultConfig()
 	if err := testProtocol(defaultConfig, defaultConfig); err != nil {
 		t.Errorf("Default test failed %v", err)
 	}
-	networkIDCfg := nodeconfig.ConfigValues
+	networkIDCfg := nodeconfig.DefaultConfig()
 	networkIDCfg.NetworkID = nodeconfig.ConfigValues.NetworkID + 1
 	if err := testProtocol(defaultConfig, networkIDCfg); err == nil {
 		t.Error("Excpected diffrent network id to not work")

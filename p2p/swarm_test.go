@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"sync"
 	"sync/atomic"
 
 	"github.com/spacemeshos/go-spacemesh/crypto"
@@ -22,11 +21,14 @@ func TestSessionCreation(t *testing.T) {
 
 	callback := make(chan HandshakeData)
 	callback2 := make(chan HandshakeData)
-	node1Local, _ := GenerateTestNode(t)
-	node2Local, _ := GenerateTestNode(t)
-	node1Local.GetSwarm().getHandshakeProtocol().RegisterNewSessionCallback(callback)
-	node2Local.GetSwarm().getHandshakeProtocol().RegisterNewSessionCallback(callback2)
-	node1Local.GetSwarm().ConnectTo(node2Local.GetRemoteNodeData(), nil)
+	node1Local := p2pTestInstance(t, defaultConfig())
+	node2Local := p2pTestInstance(t, defaultConfig())
+
+	node2Remote := node2Local.LocalNode().Node
+
+	node1Local.getHandshakeProtocol().RegisterNewSessionCallback(callback)
+	node2Local.getHandshakeProtocol().RegisterNewSessionCallback(callback2)
+	node1Local.ConnectTo(node2Remote, nil)
 
 	sessions := uint32(0)
 Loop:
@@ -64,9 +66,10 @@ func TestMultipleSessions(t *testing.T) {
 	const timeout = time.Second * 10
 	const count = 500
 
-	node1Local, rn := GenerateTestNode(t) // First node acts as bootstrap node.
+	node1Local := p2pTestInstance(t, defaultConfig()) // First node acts as bootstrap node.
+	bootnode := node1Local.LocalNode().Node
 	event := make(NodeEventCallback)
-	node1Local.GetSwarm().RegisterNodeEventsCallback(event)
+	node1Local.RegisterNodeEventsCallback(event)
 
 	go func() { // wait for events before starting
 		i := 0
@@ -82,12 +85,12 @@ func TestMultipleSessions(t *testing.T) {
 		finishChan <- struct{}{}
 	}()
 
-	nodes := make([]LocalNode, count)
+	nodes := make([]Swarm, count)
 
 	for i := 0; i < count; i++ {
-		n, _ := GenerateTestNode(t) // create a node
+		n := p2pTestInstance(t, defaultConfig()) // create a node
 		nodes[i] = n
-		n.GetSwarm().ConnectTo(rn.GetRemoteNodeData(), nil) // connect to first node
+		n.ConnectTo(bootnode, nil) // connect to first node
 		//nodes = append(nodes, n)
 	}
 
@@ -116,24 +119,28 @@ func TestSimpleBootstrap(t *testing.T) {
 	// node2 - connects to node1 on startup (bootstrap)
 	// node2 - sends a ping to node1
 
-	node1Local, node1Remote := GenerateTestNode(t)
+	node1Local := p2pTestInstance(t, defaultConfig())
+	NewPingProtocol(node1Local)
 
-	pd := node1Local.GetRemoteNodeData()
-	bs := fmt.Sprintf("%s/%s", pd.IP(), pd.ID())
+	pd := node1Local.LocalNode().Node
+	bs := fmt.Sprintf("%s/%s", pd.Address(), pd.String())
 
 	// node1 is a bootstrap node to node2
-	c := nodeconfig.ConfigValues
+	c := defaultConfig()
 	c.SwarmConfig.Bootstrap = true
 	c.SwarmConfig.RandomConnections = 1
 	c.SwarmConfig.BootstrapNodes = []string{bs}
 
-	node2Local, _ := GenerateTestNodeWithConfig(t, c)
+	node2Local := p2pTestInstance(t, c)
 
 	// ping node2 -> node 1
 	reqID := crypto.UUID()
 	callback := make(chan SendPingResp)
-	node2Local.GetPing().Register(callback)
-	node2Local.GetPing().Send("hello Spacemesh!", reqID, node1Remote.String())
+
+	ping2 := NewPingProtocol(node2Local)
+	ping2.Register(callback)
+
+	ping2.Send("hello Spacemesh!", reqID, pd.String())
 
 Loop:
 	for {
@@ -157,8 +164,8 @@ func TestSmallBootstrap(t *testing.T) {
 	filesystem.SetupTestSpacemeshDataFolders(t, "swarm_test")
 	defer filesystem.DeleteSpacemeshDataFolders(t)
 
-	const timeout = 20 * time.Second
-	const tick = 1 * time.Second
+
+	const timeout = 25 * time.Second
 	const randomConnections = 5
 	const totalNodes = 30
 
@@ -171,56 +178,48 @@ func TestSmallBootstrap(t *testing.T) {
 	// each node asks for 5 random nodes and connects to them
 	// verify each node has an established session with 5 other nodes
 
-	bnode, _ := GenerateTestNode(t)
-	pd := bnode.GetRemoteNodeData()
-	bs := fmt.Sprintf("%s/%s", pd.IP(), pd.ID())
+	bnode := p2pTestInstance(t, defaultConfig())
+	pd := bnode.LocalNode().Node
+	bs := fmt.Sprintf("%s/%s", pd.Address(), pd.String())
 	// nodes bootstrap config
-	c := nodeconfig.ConfigValues
+	c := defaultConfig()
 	c.SwarmConfig.Bootstrap = true
 	c.SwarmConfig.RandomConnections = randomConnections
 	c.SwarmConfig.BootstrapNodes = []string{bs}
 
-	nmutex := sync.Mutex{}
-	nodes := make([]LocalNode, 0)
+	nodes := make([]Swarm, 0)
+
+	nodechan := make(chan Swarm)
 
 	for i := 0; i < totalNodes; i++ {
-		nodechan := make(chan LocalNode)
-		go func() { nmutex.Lock(); nodes = append(nodes, <-nodechan); nmutex.Unlock() }()
-		go func() { ln, _ := GenerateTestNodeWithConfig(t, c); nodechan <- ln }()
+		go func() { ln := p2pTestInstance(t, c); nodechan <- ln }()
 	}
 
-	healthCheckNodes := func() bool {
-		nmutex.Lock()
-		defer nmutex.Unlock()
-		if len(nodes) < totalNodes {
-			return false
+	for n := range nodechan {
+		nodes = append(nodes, n)
+		if len(nodes) == totalNodes {
+			close(nodechan)
 		}
-
-		for _, n := range nodes {
-			size := make(chan int)
-			n.GetSwarm().getRoutingTable().Size(size)
-			s := <-size
-			if s < randomConnections {
-				t.Logf("############ ROUTING TANLE HAS ONLY %v NODES\n\r\n\r\n\r\n", s)
-				return false
-			}
-		}
-
-		return true
 	}
 
-	timer := time.NewTimer(timeout)
-	ticker := time.NewTicker(tick)
+	bootChan := make(chan error)
 
-HEALTH:
-	for {
+	for _, n := range nodes {
+		go func(s Swarm) { bootChan <- s.WaitForBootstrap() }(n)
+	}
+	i := 0
+
+	ti := time.NewTimer(timeout)
+
+	for i < totalNodes-1 {
 		select {
-		case <-timer.C:
-			t.Error("Failed to get healthy dht within 20 seconds")
-		case <-ticker.C:
-			if healthCheckNodes() {
-				break HEALTH
+		case e := <-bootChan:
+			if e != nil {
+				t.Errorf("failed to boot, err:%v", e)
 			}
+			i++
+		case <-ti.C:
+			t.Errorf("Failed to bootstrap in timeout %v", timeout)
 		}
 	}
 
@@ -239,33 +238,37 @@ func TestBasicBootstrap(t *testing.T) {
 	// node3 - connects to node1 on startup (bootstrap)
 	// node2 - sends a ping to node3 knowing only its id but not dial info
 
-	node1Local, _ := GenerateTestNode(t)
-	pd := node1Local.GetRemoteNodeData()
-	bs := fmt.Sprintf("%s/%s", pd.IP(), pd.ID())
+	node1Local := p2pTestInstance(t, defaultConfig())
+	pd := node1Local.LocalNode().Node
+	bs := fmt.Sprintf("%s/%s", pd.Address(), pd.String())
 
 	// node1 and node 2 config
 	c := nodeconfig.ConfigValues
 	c.SwarmConfig.Bootstrap = true
 	c.SwarmConfig.RandomConnections = 2
 	c.SwarmConfig.BootstrapNodes = []string{bs}
-	nchan := make(chan LocalNode)
-	nchan2 := make(chan LocalNode)
+	nchan := make(chan Swarm)
+	nchan2 := make(chan Swarm)
 	go func() {
-		n, _ := GenerateTestNodeWithConfig(t, c)
-		nchan <- n
+		nchan <- p2pTestInstance(t, c)
 	}()
 	go func() {
-		n, _ := GenerateTestNodeWithConfig(t, c)
-		nchan2 <- n
+		nchan2 <- p2pTestInstance(t, c)
 	}()
 
 	node2Local := <-nchan
 	node3Local := <-nchan2
 
+	node2Local.WaitForBootstrap()
+	node3Local.WaitForBootstrap()
+
+	ping2 := NewPingProtocol(node2Local)
+	NewPingProtocol(node3Local)
+
 	reqID := crypto.UUID()
 	callback := make(chan SendPingResp)
-	node2Local.GetPing().Register(callback)
-	node2Local.GetPing().Send("hello Spacemesh", reqID, node3Local.GetRemoteNodeData().ID())
+	ping2.Register(callback)
+	ping2.Send("hello Spacemesh", reqID, node3Local.LocalNode().String())
 
 Loop:
 	for {

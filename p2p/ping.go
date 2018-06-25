@@ -67,21 +67,31 @@ func NewPingProtocol(s Swarm) Ping {
 // Send a ping to a remote node
 func (p *pingProtocolImpl) Send(msg string, reqID []byte, remoteNodeID string) {
 
-	metadata := p.swarm.GetLocalNode().NewProtocolMessageMetadata(pingReq, reqID, false)
+	metadata := NewProtocolMessageMetadata(p.swarm.LocalNode().PublicKey(), pingReq, reqID, false)
 	data := &pb.PingReqData{Metadata: metadata, Ping: msg}
 
+	tosign, err := proto.Marshal(data)
+	if err != nil {
+		p.swarm.LocalNode().Error("Encoding protobuf failed err:", err)
+		return
+	}
+
 	// sign data
-	sign, err := p.swarm.GetLocalNode().Sign(data)
+	sign, err := p.swarm.LocalNode().PrivateKey().Sign(tosign)
+	if err != nil {
+		p.swarm.LocalNode().Error("Signing payload failed err:", err)
+		return
+	}
 	data.Metadata.AuthorSign = hex.EncodeToString(sign)
 
 	// marshal the signed data
 	payload, err := proto.Marshal(data)
 	if err != nil {
-		p.swarm.GetLocalNode().Error("failed to marshal data", err)
+		p.swarm.LocalNode().Error("failed to marshal data", err)
 		return
 	}
 
-	p.swarm.GetLocalNode().Info("Sending Ping message to (%v)", remoteNodeID)
+	p.swarm.LocalNode().Info("Sending Ping message to (%v)", remoteNodeID)
 	req := SendMessageReq{remoteNodeID, reqID, payload, p.sendErrors}
 	p.swarm.SendMessage(req)
 }
@@ -99,34 +109,38 @@ func (p *pingProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 	req := &pb.PingReqData{}
 	err := proto.Unmarshal(msg.Payload(), req)
 	if err != nil {
-		p.swarm.GetLocalNode().Warning("Invalid ping request data", err)
+		p.swarm.LocalNode().Warning("Invalid ping request data", err)
 		return
 	}
 
 	peer := msg.Sender()
 
-	p.swarm.GetLocalNode().Info("Incoming ping peer request from %s. Message: %s", peer.Pretty(), req.Ping)
+	p.swarm.LocalNode().Info("Incoming ping peer request from %s. Message: %s", peer.Pretty(), req.Ping)
 
 	// add/update local dht table as we just heard from a peer
-	p.swarm.getRoutingTable().Update(peer.GetRemoteNodeData())
+	p.swarm.RoutingTable().Update(peer.GetRemoteNodeData())
 
 	// generate response
-	metadata := p.swarm.GetLocalNode().NewProtocolMessageMetadata(pingResp, req.Metadata.ReqId, false)
+	metadata := NewProtocolMessageMetadata(p.swarm.LocalNode().PublicKey(), pingResp, req.Metadata.ReqId, false)
 	respData := &pb.PingRespData{Metadata: metadata, Pong: req.Ping}
 
-	// sign response
-	sign, err := p.swarm.GetLocalNode().SignToString(respData)
+	tosign, err := proto.Marshal(respData)
 	if err != nil {
-		p.swarm.GetLocalNode().Error("Failed to sign response", err)
+		p.swarm.LocalNode().Error("Encoding proto failed, err:", err)
+	}
+	// sign response
+	sign, err := p.swarm.LocalNode().PrivateKey().Sign(tosign)
+	if err != nil {
+		p.swarm.LocalNode().Error("Failed to sign response", err)
 		return
 	}
 
-	respData.Metadata.AuthorSign = sign
+	respData.Metadata.AuthorSign = hex.EncodeToString(sign)
 
 	// marshal the signed data
 	signedPayload, err := proto.Marshal(respData)
 	if err != nil {
-		p.swarm.GetLocalNode().Error("Failed to generate response data", err)
+		p.swarm.LocalNode().Error("Failed to generate response data", err)
 		return
 	}
 
@@ -148,15 +162,15 @@ func (p *pingProtocolImpl) handleIncomingResponse(msg IncomingMessage) {
 	if err != nil {
 		// we can't extract the request id from the response so we just terminate
 		// without sending a callback - this case should be handeled as a timeout
-		p.swarm.GetLocalNode().Error("Invalid ping request data", err)
+		p.swarm.LocalNode().Error("Invalid ping request data", err)
 		return
 	}
 
-	p.swarm.GetLocalNode().Info("Got pong response `%v` from %s. Ping req id: %v", data.Pong, msg.Sender().Pretty(),
+	p.swarm.LocalNode().Info("Got pong response `%v` from %s. Ping req id: %v", data.Pong, msg.Sender().Pretty(),
 		hex.EncodeToString(data.Metadata.ReqId))
 
 	// according to kad receiving a ping response should update sender in local dht table
-	p.swarm.getRoutingTable().Update(msg.Sender().GetRemoteNodeData())
+	p.swarm.RoutingTable().Update(msg.Sender().GetRemoteNodeData())
 
 	resp := SendPingResp{data, err, data.Metadata.ReqId}
 

@@ -4,13 +4,16 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/dht/table"
+	"github.com/spacemeshos/go-spacemesh/p2p/dht"
+	"github.com/spacemeshos/go-spacemesh/p2p/identity"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
-	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 	"github.com/spacemeshos/go-spacemesh/p2p/timesync"
 
 	//"github.com/sasha-s/go-deadlock"
+	"fmt"
+	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"sync"
 )
 
@@ -24,10 +27,10 @@ type swarmImpl struct {
 
 	// set in construction and immutable state
 	network   net.Net
-	localNode LocalNode
+	localNode *identity.LocalNode
 	demuxer   Demuxer
 
-	config nodeconfig.SwarmConfig
+	config nodeconfig.Config
 
 	// TODO : Replace with an interlocked function Add/Remove
 	nodeEventRegChannel    chan NodeEventCallback
@@ -67,8 +70,8 @@ type swarmImpl struct {
 	messagesRetryQueue []SendMessageReq
 
 	// comm channels
-	connectionRequests chan nodeAction          // local requests to establish a session w a remote node
-	disconnectRequests chan node.RemoteNodeData // local requests to kill session and disconnect from node
+	connectionRequests chan nodeAction    // local requests to establish a session w a remote node
+	disconnectRequests chan identity.Node // local requests to kill session and disconnect from node
 
 	// Recv message reqs and send them
 	sendMsgRequests chan SendMessageReq // local request to send a session message to a node and callback on error or data
@@ -79,7 +82,7 @@ type swarmImpl struct {
 	shutdown chan struct{} // local request to kill the swarm from outside. e.g when local node is shutting down
 
 	// Request to register a node to swarm.peers
-	registerNodeReq chan node.RemoteNodeData // local request to register a node based on minimal data
+	registerNodeReq chan identity.Node // local request to register a node based on minimal data
 
 	// swarm provides handshake protocol
 	handshakeProtocol HandshakeProtocol
@@ -91,19 +94,39 @@ type swarmImpl struct {
 	// dht find-node protocol
 	findNodeProtocol FindNodeProtocol
 
-	routingTable table.RoutingTable
+	routingTable dht.RoutingTable
 }
 
-// NewSwarm creates a new swarm for a local node.
-func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
+// New creates a new P2P instance
+func New(config nodeconfig.Config, loadIdentity bool) (Swarm, error) {
 
-	n, err := net.NewNet(tcpAddress, l.Config(), l.GetLogger())
+	port := config.TCPPort
+	address := fmt.Sprintf("0.0.0.0:%d", port)
+
+	var l *identity.LocalNode
+	var err error
+	// Load an existing identity from file if exists.
+
+	if loadIdentity {
+		l, err = identity.NewLocalNode(config, address, true)
+	} else {
+		l, err = identity.NewNodeIdentity(config, address, true)
+	}
+
+	if err != nil {
+		log.Error("Failed to create a node, err: %v", err)
+	}
+
+	n, err := net.NewNet(l.Address(), config, l.Logger)
 	if err != nil {
 		log.Error("can't create swarm without a network", err)
 		return nil, err
 	}
 
 	s := &swarmImpl{
+
+		config: config,
+
 		bootstrapped: make(chan error),
 		afterBoot:    false,
 		bootError:    nil,
@@ -138,17 +161,15 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 		// ref: https://www.goinggo.net/2017/10/the-behavior-of-channels.html
 
 		connectionRequests: make(chan nodeAction, 20),
-		disconnectRequests: make(chan node.RemoteNodeData, 20),
+		disconnectRequests: make(chan identity.Node, 20),
 
 		sendMsgRequests:  make(chan SendMessageReq, 20),
 		sendHandshakeMsg: make(chan SendMessageReq, 20),
-		demuxer:          NewDemuxer(l.GetLogger()),
+		demuxer:          NewDemuxer(l.Logger),
 		newSessions:      make(chan HandshakeData, 20),
-		registerNodeReq:  make(chan node.RemoteNodeData, 20),
+		registerNodeReq:  make(chan identity.Node, 20),
 
 		nodeEventRemoveChannel: make(chan NodeEventCallback),
-
-		config: l.Config().SwarmConfig,
 
 		peerByConMapMutex: sync.RWMutex{},
 		peerMapMutex:      sync.RWMutex{},
@@ -156,23 +177,35 @@ func NewSwarm(tcpAddress string, l LocalNode) (Swarm, error) {
 	}
 
 	// node's routing table
-	s.routingTable = table.NewRoutingTable(int(s.config.RoutingTableBucketSize), l.DhtID(), l.GetLogger())
+	s.routingTable = dht.NewRoutingTable(int(s.config.SwarmConfig.RoutingTableBucketSize), l.DhtID(), l.Logger)
 
 	// findNode dht protocol
 	s.findNodeProtocol = NewFindNodeProtocol(s)
 
-	s.localNode.Debug("Created swarm for local node %s, %s", tcpAddress, l.Pretty())
+	s.localNode.Debug("Created swarm for local node %s, %s", l.Address(), l.Pretty())
 
 	s.handshakeProtocol = NewHandshakeProtocol(s)
 	s.handshakeProtocol.RegisterNewSessionCallback(s.newSessions)
 
-	go s.beginProcessingEvents(s.config.Bootstrap)
+	go s.beginProcessingEvents(s.config.SwarmConfig.Bootstrap)
 
 	return s, err
 }
 
+// NewProtocolMessageMetadata creates meta-data for an outgoing protocol message authored by this node.
+func NewProtocolMessageMetadata(author crypto.PublicKey, protocol string, reqID []byte, gossip bool) *pb.Metadata {
+	return &pb.Metadata{
+		Protocol:      protocol,
+		ReqId:         reqID,
+		ClientVersion: nodeconfig.ClientVersion,
+		Timestamp:     time.Now().Unix(),
+		Gossip:        gossip,
+		AuthPubKey:    author.Bytes(),
+	}
+}
+
 func (s *swarmImpl) bootComplete(successCode error) {
-	s.localNode.Info("%v finised boot", s.localNode.String())
+	s.localNode.Info("%v P2P Bootstrap success", s.localNode.String())
 	s.bootstrapped <- successCode
 	s.afterBootCallback <- successCode
 }
@@ -251,20 +284,20 @@ func (s *swarmImpl) getHandshakeProtocol() HandshakeProtocol {
 	return s.handshakeProtocol
 }
 
-func (s *swarmImpl) getRoutingTable() table.RoutingTable {
+func (s *swarmImpl) RoutingTable() dht.RoutingTable {
 	return s.routingTable
 }
 
 // register a node with the swarm
-func (s *swarmImpl) RegisterNode(data node.RemoteNodeData) {
+func (s *swarmImpl) RegisterNode(data identity.Node) {
 	s.registerNodeReq <- data
 }
 
-func (s *swarmImpl) ConnectTo(req node.RemoteNodeData, done chan error) {
+func (s *swarmImpl) ConnectTo(req identity.Node, done chan error) {
 	s.connectionRequests <- nodeAction{req, done}
 }
 
-func (s *swarmImpl) DisconnectFrom(req node.RemoteNodeData) {
+func (s *swarmImpl) DisconnectFrom(req identity.Node) {
 	s.disconnectRequests <- req
 }
 
@@ -272,7 +305,7 @@ func (s *swarmImpl) GetDemuxer() Demuxer {
 	return s.demuxer
 }
 
-func (s *swarmImpl) GetLocalNode() LocalNode {
+func (s *swarmImpl) LocalNode() *identity.LocalNode {
 	return s.localNode
 }
 
@@ -404,7 +437,7 @@ Loop:
 			if err != nil {
 				checkTimeSync.Stop()
 				s.localNode.Error("System time could'nt synchronize %s", err)
-				go s.localNode.Shutdown()
+				s.Shutdown()
 			}
 		}
 	}

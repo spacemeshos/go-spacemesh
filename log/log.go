@@ -1,5 +1,5 @@
 // Package log provides the both file and console (general) logging capabilities
-// to spacemesh modules such as app and node.
+// to spacemesh modules such as app and identity.
 package log
 
 import (
@@ -11,13 +11,14 @@ import (
 	"gopkg.in/op/go-logging.v1"
 )
 
-// SpacemeshLogger is a custom logger.
-type SpacemeshLogger struct {
-	Logger *logging.Logger
+// Log is an exported type that embeds our logger.
+// logging library can be replaced as long as it implements same functionality used across the project.
+type Log struct {
+	*logging.Logger
 }
 
 // smlogger is the local app singleton logger.
-var smLogger *SpacemeshLogger
+var smLogger Log
 var debugMode bool
 
 func init() {
@@ -29,7 +30,7 @@ func init() {
 	logFormat := ` %{color}%{level:.4s} %{id:03x} %{time:15:04:05.000} ▶%{color:reset} %{message}`
 	leveledBackend := getBackendLevel("app", "<APP>", logFormat)
 	log.SetBackend(leveledBackend)
-	smLogger = &SpacemeshLogger{Logger: log}
+	smLogger = Log{Logger: log}
 }
 
 // getAllBackend returns level backends with an exception to Debug leve
@@ -55,8 +56,8 @@ func DebugMode(mode bool) {
 	debugMode = mode
 }
 
-// CreateLogger creates a logger for a module. e.g. local node logger.
-func CreateLogger(module string, dataFolderPath string, logFileName string) *logging.Logger {
+// New creates a logger for a module. e.g. p2p instance logger.
+func New(module string, dataFolderPath string, logFileName string) Log {
 	log := logging.MustGetLogger(module)
 	log.ExtraCalldepth = 1
 	logFormat := ` %{color:reset}%{color}%{level:.4s} %{id:03x} %{time:15:04:05.000} %{shortpkg}.%{shortfunc} ▶%{color:reset} %{message}`
@@ -67,7 +68,7 @@ func CreateLogger(module string, dataFolderPath string, logFileName string) *log
 
 	log.SetBackend(logging.MultiLogger(backends...))
 
-	return log
+	return Log{log}
 }
 
 // getBackendLevelWithFileBackend returns backends level including log file backend
@@ -108,29 +109,29 @@ func InitSpacemeshLoggingSystem(dataFolderPath string, logFileName string) {
 
 	log.SetBackend(logging.MultiLogger(backends...))
 
-	smLogger = &SpacemeshLogger{Logger: log}
+	smLogger = Log{log}
 }
 
 // public wrappers abstracting away logging lib impl
 
 // Info prints formatted info level log message.
 func Info(format string, args ...interface{}) {
-	smLogger.Logger.Info(format, args...)
+	smLogger.Info(format, args...)
 }
 
 // Debug prints formatted debug level log message.
 func Debug(format string, args ...interface{}) {
-	smLogger.Logger.Debug(format, args...)
+	smLogger.Debug(format, args...)
 }
 
 // Error prints formatted error level log message.
 func Error(format string, args ...interface{}) {
-	smLogger.Logger.Error(format, args...)
+	smLogger.Error(format, args...)
 }
 
 // Warning prints formatted warning level log message.
 func Warning(format string, args ...interface{}) {
-	smLogger.Logger.Warning(format, args...)
+	smLogger.Warning(format, args...)
 }
 
 // PrettyID formats ID.

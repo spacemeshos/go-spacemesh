@@ -2,19 +2,23 @@ package p2p
 
 import (
 	"encoding/hex"
+	"fmt"
 	"github.com/btcsuite/btcutil/base58"
 	"github.com/gogo/protobuf/proto"
+	"github.com/pkg/errors"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht"
-	"github.com/spacemeshos/go-spacemesh/p2p/dht/table"
-	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"github.com/spacemeshos/go-spacemesh/p2p/identity"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"time"
 )
 
 const findNodeReq = "/dht/1.0/find-node-req/"
 const findNodeResp = "/dht/1.0/find-node-resp/"
+
+// ErrEncodeFailed is returned when we failed to encode data to byte array
+var ErrEncodeFailed = errors.New("failed to encode data")
 
 // FindNodeProtocol provides the dht protocol FIND-NODE message.
 type FindNodeProtocol interface {
@@ -36,7 +40,7 @@ type FindNodeResp struct {
 	reqID []byte
 }
 
-// RespCallbackRequest specifies callback for a request ID.
+// RespCallbackRequest specifies callback for a request DhtID.
 type RespCallbackRequest struct {
 	callback chan FindNodeResp
 	reqID    []byte
@@ -84,28 +88,29 @@ const tableQueryTimeout = time.Duration(time.Minute * 1)
 // Send a single find node request to a remote node
 // id: base58 encoded remote node id
 func (p *findNodeProtocolImpl) FindNode(reqID []byte, serverNodeID string, id string, callback chan FindNodeResp) error {
-	p.swarm.GetLocalNode().Debug("Sending FindNode(%v) request to %v", id, serverNodeID)
+	p.swarm.LocalNode().Debug("Sending FindNode(%v) request to %v", id, serverNodeID)
 	p.callbacksRegReq <- RespCallbackRequest{callback, reqID}
 
 	nodeID := base58.Decode(id)
-	metadata := p.swarm.GetLocalNode().NewProtocolMessageMetadata(findNodeReq, reqID, false)
+	metadata := NewProtocolMessageMetadata(p.swarm.LocalNode().PublicKey(), findNodeReq, reqID, false)
 	data := &pb.FindNodeReq{
 		Metadata:   metadata,
 		NodeId:     nodeID,
 		MaxResults: maxNearestNodesResults}
 
 	// sign data
-	sign, err := p.swarm.GetLocalNode().Sign(data)
-	data.Metadata.AuthorSign = hex.EncodeToString(sign)
-
-	// marshal the signed data
-	payload, err := proto.Marshal(data)
+	tosign, err := proto.Marshal(data)
 	if err != nil {
-		return err
+		return fmt.Errorf("%v, err: %v", ErrEncodeFailed, err)
 	}
-
+	sign, err := p.swarm.LocalNode().PrivateKey().Sign(tosign)
+	data.Metadata.AuthorSign = hex.EncodeToString(sign)
+	signedPayload, err := proto.Marshal(data)
+	if err != nil {
+		return fmt.Errorf("%v after signing, err: %v", ErrEncodeFailed, err)
+	}
 	// send the message
-	req := SendMessageReq{serverNodeID, reqID, payload, p.sendErrors}
+	req := SendMessageReq{serverNodeID, reqID, signedPayload, p.sendErrors}
 	p.swarm.SendMessage(req)
 
 	return nil
@@ -117,61 +122,66 @@ func (p *findNodeProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 	req := &pb.FindNodeReq{}
 	err := proto.Unmarshal(msg.Payload(), req)
 	if err != nil {
-		p.swarm.GetLocalNode().Warning("Invalid find node request data", err)
+		p.swarm.LocalNode().Warning("Invalid find node request data", err)
 		return
 	}
 
 	peer := msg.Sender()
-	p.swarm.GetLocalNode().Debug("Incoming find-node request from %s. Requested node id: %v (DhtId: %v)", peer.Pretty(), log.PrettyID(base58.Encode(req.NodeId)), hex.EncodeToString(req.NodeId))
+	p.swarm.LocalNode().Debug("Incoming find-node request from %s. Requested node id: %v (DhtId: %v)", peer.Pretty(), log.PrettyID(base58.Encode(req.NodeId)), hex.EncodeToString(req.NodeId))
 
 	// use the dht table to generate the response
 
-	rt := p.swarm.getRoutingTable()
-	nodeDhtID := dht.NewIDFromNodeKey(req.NodeId)
-	callback := make(table.PeersOpChannel)
+	rt := p.swarm.RoutingTable()
+	nodeDhtID := identity.NewDhtID(req.NodeId)
+	callback := make(dht.PeersOpChannel)
 
 	count := int(crypto.MinInt32(req.MaxResults, maxNearestNodesResults))
 
 	// get up to count nearest peers to nodeDhtId
-	rt.NearestPeers(table.NearestPeersReq{ID: nodeDhtID, Count: count, Callback: callback})
+	rt.NearestPeers(dht.NearestPeersReq{ID: nodeDhtID, Count: count, Callback: callback})
 
 	var results []*pb.NodeInfo
 
 	select { // block until we got results from the  routing table or timeout
 	case c := <-callback:
-		p.swarm.GetLocalNode().Debug("Preparing find-node (%v) results to send to %v", log.PrettyID(base58.Encode(req.NodeId)), peer.Pretty())
-		peers := []node.RemoteNodeData{}
+		p.swarm.LocalNode().Debug("Preparing find-node (%v) results to send to %v", log.PrettyID(base58.Encode(req.NodeId)), peer.Pretty())
+		peers := []identity.Node{}
 		for i := range c.Peers { // we don't want to send peer to itself
 			peer := c.Peers[i]
-			if peer.ID() != msg.Sender().String() {
+			if peer.String() != msg.Sender().String() {
 				peers = append(peers, c.Peers[i])
-				p.swarm.GetLocalNode().Debug("%d: %v", i, peer.Pretty(), peer.IP())
+				p.swarm.LocalNode().Debug("%d: %v", i, peer.Pretty(), peer.Address())
 			}
 		}
-		results = node.ToNodeInfo(peers, msg.Sender().String())
+		results = identity.ToNodeInfo(peers, msg.Sender().String())
 	case <-time.After(tableQueryTimeout):
 		results = []*pb.NodeInfo{} // an empty slice
 	}
 
 	// generate response using results
-	metadata := p.swarm.GetLocalNode().NewProtocolMessageMetadata(findNodeResp, req.Metadata.ReqId, false)
+	metadata := NewProtocolMessageMetadata(p.swarm.LocalNode().PublicKey(), findNodeResp, req.Metadata.ReqId, false)
 
 	// generate response data
 	respData := &pb.FindNodeResp{Metadata: metadata, NodeInfos: results}
 
-	// sign response
-	sign, err := p.swarm.GetLocalNode().SignToString(respData)
+	tosign, err := proto.Marshal(respData)
 	if err != nil {
-		p.swarm.GetLocalNode().Debug("Failed to sign response")
+		p.swarm.LocalNode().Error("", fmt.Errorf("%v for signing, %v", ErrEncodeFailed, err))
+		return
+	}
+	// sign response
+	sign, err := p.swarm.LocalNode().PrivateKey().Sign(tosign)
+	if err != nil {
+		p.swarm.LocalNode().Debug("Failed to sign response")
 		return
 	}
 
-	respData.Metadata.AuthorSign = sign
+	respData.Metadata.AuthorSign = hex.EncodeToString(sign)
 
 	// marshal the signed data
 	signedPayload, err := proto.Marshal(respData)
 	if err != nil {
-		p.swarm.GetLocalNode().Debug("Failed to generate response data")
+		p.swarm.LocalNode().Debug("Failed to generate response data")
 		return
 	}
 
@@ -191,7 +201,7 @@ func (p *findNodeProtocolImpl) handleIncomingResponse(msg IncomingMessage) {
 	data := &pb.FindNodeResp{}
 	err := proto.Unmarshal(msg.Payload(), data)
 	if err != nil {
-		p.swarm.GetLocalNode().Error("Invalid find-node response data", err)
+		p.swarm.LocalNode().Error("Invalid find-node response data", err)
 		// we don't know the request id for this bad response so we can't callback clients with the error
 		// just drop the bad response - clients should be notified when their outgoing requests times out
 		return
@@ -199,14 +209,14 @@ func (p *findNodeProtocolImpl) handleIncomingResponse(msg IncomingMessage) {
 
 	resp := FindNodeResp{data, nil, data.Metadata.ReqId}
 
-	p.swarm.GetLocalNode().Debug("Got find-node response from %s. Results: %v, Find-node req id: %s", msg.Sender().Pretty(),
+	p.swarm.LocalNode().Debug("Got find-node response from %s. Results: %v, Find-node req id: %s", msg.Sender().Pretty(),
 		data.NodeInfos, hex.EncodeToString(data.Metadata.ReqId))
 
 	// update routing table with newly found nodes
-	nodes := node.FromNodeInfos(data.NodeInfos)
+	nodes := identity.FromNodeInfos(data.NodeInfos)
 	for _, n := range nodes {
-		p.swarm.GetLocalNode().Debug("Node response: %s, %s", n.ID(), n.IP())
-		p.swarm.getRoutingTable().Update(n)
+		p.swarm.LocalNode().Debug("Node response: %s, %s", n.String(), n.Address())
+		p.swarm.RoutingTable().Update(n)
 	}
 
 	go p.SendResponseCallback(resp)

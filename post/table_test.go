@@ -1,20 +1,19 @@
 package post
 
 import (
+	config "github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/crypto"
-	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
-func TestPingProtocol(t *testing.T) {
+func TestNewTable(t *testing.T) {
 
-	node, _ := p2p.GenerateTestNode(t)
+	t.Skip() // should be more established before really running.
 
-	dir, err := node.EnsureNodeDataDirectory()
-	assert.NoError(t, err, "expected node data dir")
+	config := config.DefaultConfig()
 
-	table, err := NewTable(1, node.String(), dir)
+	table, err := NewTable(1, "test_post", config.DataDir)
 	assert.NoError(t, err, "expected no error")
 
 	err = table.deleteAllData()
@@ -31,7 +30,5 @@ func TestPingProtocol(t *testing.T) {
 	// sync all writes to disk
 	table.sync()
 
-	//table.deleteAllData()
-	node.Shutdown()
-
+	table.deleteAllData()
 }

@@ -1,49 +1,54 @@
-package dht
+package identity
 
 import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"github.com/btcsuite/btcutil/base58"
 	"math/big"
 	"math/bits"
 	"sort"
+
+	"github.com/btcsuite/btcutil/base58"
 )
 
-// ID is a dht-compatible ID using the XOR keyspace.
-type ID []byte
+// DhtID is a dht-compatible DhtID using the XOR keyspace.
+type DhtID []byte
 
-// Pretty returns a readable string of the ID.
-func (id ID) Pretty() string {
+// Pretty returns a readable string of the DhtID.
+func (id DhtID) Pretty() string {
 	v := hex.EncodeToString(id)
 	return fmt.Sprintf("DhtId: %s", v[:8])
 }
 
-// NewIDFromNodeKey creates a new dht id from provided binary data.
-func NewIDFromNodeKey(key []byte) ID {
+func (id DhtID) String() string {
+	return hex.EncodeToString(id)
+}
+
+// NewDhtID creates a new dht id from provided binary data.
+func NewDhtID(key []byte) DhtID {
 	hash := sha256.Sum256([]byte(key))
 	return hash[:]
 }
 
-// NewIDFromBase58String creates a new dht ID from provided base58 encoded binary data.
-func NewIDFromBase58String(s string) ID {
+// NewDhtIDFromBase58 creates a new dht DhtID from provided base58 encoded binary data.
+func NewDhtIDFromBase58(s string) DhtID {
 	key := base58.Decode(s)
-	return NewIDFromNodeKey(key)
+	return NewDhtID(key)
 }
 
-// NewIDFromHexString creates a new dht ID from provided hex-encoded string.
-func NewIDFromHexString(s string) (ID, error) {
+// NewDhtIDFromHex creates a new dht DhtID from provided hex-encoded string.
+func NewDhtIDFromHex(s string) (DhtID, error) {
 	data, err := hex.DecodeString(s)
 	if err != nil {
 		return nil, err
 	}
-	return ID(data), nil
+	return DhtID(data), nil
 }
 
-// SortByDistance ids based on xor-distance from ID.
-func (id ID) SortByDistance(ids []ID) []ID {
-	idsCopy := make([]ID, len(ids))
+// SortByDistance ids based on xor-distance from DhtID.
+func (id DhtID) SortByDistance(ids []DhtID) []DhtID {
+	idsCopy := make([]DhtID, len(ids))
 	copy(idsCopy, ids)
 	bdtc := &idsByDistanceToCenter{
 		Center: id,
@@ -53,19 +58,19 @@ func (id ID) SortByDistance(ids []ID) []ID {
 	return bdtc.Ids
 }
 
-// Equals returns true iff other equals the ID.
-func (id ID) Equals(other ID) bool {
+// Equals returns true iff other equals the DhtID.
+func (id DhtID) Equals(other DhtID) bool {
 	return bytes.Equal(id, other)
 }
 
-// Distance returns the distance between ID and id1 encoded as a big int.
-func (id ID) Distance(id1 ID) *big.Int {
+// Distance returns the distance between DhtID and id1 encoded as a big int.
+func (id DhtID) Distance(id1 DhtID) *big.Int {
 	id2 := id.Xor(id1)
 	return big.NewInt(0).SetBytes(id2)
 }
 
-// Less returns true iff the binary number represented by ID is less than the number represented by o.
-func (id ID) Less(o ID) bool {
+// Less returns true iff the binary number represented by DhtID is less than the number represented by o.
+func (id DhtID) Less(o DhtID) bool {
 	for i := 0; i < len(id); i++ {
 		if id[i] != o[i] {
 			return id[i] < o[i]
@@ -74,14 +79,14 @@ func (id ID) Less(o ID) bool {
 	return false
 }
 
-// Xor returns a XOR of the ID with o.
-func (id ID) Xor(o ID) ID {
+// Xor returns a XOR of the DhtID with o.
+func (id DhtID) Xor(o DhtID) DhtID {
 	return XOR(id, o)
 }
 
 // CommonPrefixLen returns the common shared prefix length in BITS of the binary numbers represented by the ids.
 // tradeoff the pretty func we had with this more efficient one. (faster than libp2p and eth)
-func (id ID) CommonPrefixLen(o ID) int {
+func (id DhtID) CommonPrefixLen(o DhtID) int {
 	for i := 0; i < len(id); i++ {
 		lz := bits.LeadingZeros8(id[i] ^ o[i])
 		if lz != 8 {
@@ -91,8 +96,8 @@ func (id ID) CommonPrefixLen(o ID) int {
 	return len(id) * 8
 }
 
-// ZeroPrefixLen returns the zero prefix length of the binary number represnted by ID in bits.
-func (id ID) ZeroPrefixLen() int {
+// ZeroPrefixLen returns the zero prefix length of the binary number represnted by DhtID in bits.
+func (id DhtID) ZeroPrefixLen() int {
 	zpl := 0
 	for i, b := range id {
 		zpl = bits.LeadingZeros8(b)
@@ -104,7 +109,7 @@ func (id ID) ZeroPrefixLen() int {
 }
 
 // Closer returns true if id1 is closer to id3 than id2 using XOR arithmetic.
-func (id ID) Closer(id1 ID, id2 ID) bool {
+func (id DhtID) Closer(id1 DhtID, id2 DhtID) bool {
 	dist1 := id.Xor(id1)
 	dist2 := id.Xor(id2)
 	return dist1.Less(dist2)
@@ -119,10 +124,10 @@ func XOR(a, b []byte) []byte {
 	return c
 }
 
-// Help struct containing a list of ids sorted by the XOR distance from Center ID.
+// Help struct containing a list of ids sorted by the XOR distance from Center DhtID.
 type idsByDistanceToCenter struct {
-	Center ID
-	Ids    []ID
+	Center DhtID
+	Ids    []DhtID
 }
 
 // Len returns the number of ids contained in s.
@@ -135,7 +140,7 @@ func (s idsByDistanceToCenter) Swap(i, j int) {
 	s.Ids[i], s.Ids[j] = s.Ids[j], s.Ids[i]
 }
 
-// Less returns true if the ID indexed by i is closer to the center than the ID indexed by j.
+// Less returns true if the DhtID indexed by i is closer to the center than the DhtID indexed by j.
 func (s idsByDistanceToCenter) Less(i, j int) bool {
 	a := s.Center.Distance(s.Ids[i])
 	b := s.Center.Distance(s.Ids[j])
