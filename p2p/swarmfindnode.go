@@ -4,8 +4,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht"
-	"github.com/spacemeshos/go-spacemesh/p2p/dht/table"
-	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"github.com/spacemeshos/go-spacemesh/p2p/identity"
 	"time"
 )
 
@@ -16,17 +15,17 @@ const LookupTimeout = 60 * time.Second
 // id: base58 node id string
 // returns remote node or nil when not found
 // not go safe - should only be called from swarm event dispatcher
-func (s *swarmImpl) findNode(id string, callback chan node.RemoteNodeData) {
+func (s *swarmImpl) findNode(id string, callback chan identity.Node) {
 
 	s.localNode.Debug("finding node: %s ...", log.PrettyID(id))
 
 	// look for the node at local dht table
-	poc := make(table.PeerOpChannel, 1)
-	s.routingTable.Find(table.PeerByIDRequest{ID: dht.NewIDFromBase58String(id), Callback: poc})
+	poc := make(dht.PeerOpChannel, 1)
+	s.routingTable.Find(dht.PeerByIDRequest{ID: identity.NewDhtIDFromBase58(id), Callback: poc})
 	select {
 	case c := <-poc:
 		res := c.Peer
-		if res != nil {
+		if res != identity.EmptyNode {
 			go func() { callback <- res }()
 			return
 		}
@@ -37,7 +36,7 @@ func (s *swarmImpl) findNode(id string, callback chan node.RemoteNodeData) {
 }
 
 // FilterFindNodeServers picks up to count server who haven't been queried recently.
-func FilterFindNodeServers(nodes []node.RemoteNodeData, queried map[string]struct{}, alpha int) []node.RemoteNodeData {
+func FilterFindNodeServers(nodes []identity.Node, queried map[string]struct{}, alpha int) []identity.Node {
 
 	// If no server have been queried already, just make sure the list len is alpha
 	if len(queried) == 0 {
@@ -50,7 +49,7 @@ func FilterFindNodeServers(nodes []node.RemoteNodeData, queried map[string]struc
 	// filter out queried servers.
 	i := 0
 	for _, v := range nodes {
-		if _, exist := queried[v.ID()]; !exist {
+		if _, exist := queried[v.String()]; !exist {
 			nodes[i] = v
 			i++
 		}
@@ -67,13 +66,13 @@ func FilterFindNodeServers(nodes []node.RemoteNodeData, queried map[string]struc
 // nodeId: - base58 node id string
 // Returns requested node via the callback or nil if not found
 // Also used as a bootstrap function to populate the routing table with the results.
-func (s *swarmImpl) kadFindNode(nodeID string, callback chan node.RemoteNodeData) {
+func (s *swarmImpl) kadFindNode(nodeID string, callback chan identity.Node) {
 
 	s.localNode.Debug("Kad find node: %s ...", nodeID)
 
 	// kad node location algo
-	alpha := int(s.config.RoutingTableAlpha)
-	dhtID := dht.NewIDFromBase58String(nodeID)
+	alpha := int(s.config.SwarmConfig.RoutingTableAlpha)
+	dhtID := identity.NewDhtIDFromBase58(nodeID)
 
 	// step 1 - get up to alpha closest nodes to the target in the local routing table
 	searchList := s.getNearestPeers(dhtID, alpha)
@@ -87,13 +86,13 @@ Loop:
 	for {
 		// if no new nodes found
 		if len(searchList) == 0 {
-			go func() { callback <- nil }()
+			go func() { callback <- identity.EmptyNode }()
 			break Loop
 		}
 
 		// is closestNode out target ?
 		closestNode := searchList[0]
-		if closestNode.ID() == nodeID {
+		if closestNode.String() == nodeID {
 			go func() { callback <- closestNode }()
 			break Loop
 		}
@@ -105,7 +104,7 @@ Loop:
 		if len(servers) == 0 {
 			// no more servers to query
 			// target node was not found.
-			go func() { callback <- nil }()
+			go func() { callback <- identity.EmptyNode }()
 			break Loop
 		}
 
@@ -114,10 +113,10 @@ Loop:
 		if len(res) > 0 {
 
 			// merge newly found nodes
-			searchList = node.Union(searchList, res)
+			searchList = identity.Union(searchList, res)
 
 			// sort by distance from target
-			searchList = node.SortClosestPeers(res, dhtID)
+			searchList = identity.SortByDhtID(res, dhtID)
 		}
 
 		// keep iterating using new servers that were not queried yet from searchlist (if any)
@@ -128,12 +127,12 @@ Loop:
 // Lookup a target node on one or more servers
 // Returns closest nodes which are closers than closestNode to targetId
 // If node found it will be in top of results list
-func (s *swarmImpl) lookupNode(servers []node.RemoteNodeData, queried map[string]struct{}, targetID string, closestNode node.RemoteNodeData) []node.RemoteNodeData {
+func (s *swarmImpl) lookupNode(servers []identity.Node, queried map[string]struct{}, targetID string, closestNode identity.Node) []identity.Node {
 
 	l := len(servers)
 
 	if l == 0 {
-		return []node.RemoteNodeData{}
+		return []identity.Node{}
 	}
 
 	// results channel
@@ -141,22 +140,22 @@ func (s *swarmImpl) lookupNode(servers []node.RemoteNodeData, queried map[string
 
 	// Issue a parallel FindNode op to all servers on the list
 	for i := 0; i < l; i++ {
-		queried[servers[i].ID()] = struct{}{}
+		queried[servers[i].String()] = struct{}{}
 		// find node protocol adds found nodes to the local routing table
 		// populates queried node's routing table with us and return.
-		go s.getFindNodeProtocol().FindNode(crypto.UUID(), servers[i].ID(), targetID, callback)
+		go s.getFindNodeProtocol().FindNode(crypto.UUID(), servers[i].String(), targetID, callback)
 	}
 
 	done := 0
-	idSet := make(map[string]node.RemoteNodeData)
+	idSet := make(map[string]identity.Node)
 	timeout := time.NewTimer(LookupTimeout)
 Loop:
 	for {
 		select {
 		case res := <-callback:
-			nodes := node.FromNodeInfos(res.NodeInfos)
+			nodes := identity.FromNodeInfos(res.NodeInfos)
 			for _, n := range nodes {
-				idSet[n.ID()] = n
+				idSet[n.String()] = n
 			}
 
 			done++
@@ -173,7 +172,7 @@ Loop:
 	}
 
 	// add unique node ids that are closer to target id than closest node
-	res := make([]node.RemoteNodeData, len(idSet))
+	res := make([]identity.Node, len(idSet))
 	i := 0
 	for _, n := range idSet {
 		res[i] = n
@@ -185,8 +184,13 @@ Loop:
 }
 
 // helper method - a sync wrapper over routingTable.NearestPeers
-func (s *swarmImpl) getNearestPeers(dhtID dht.ID, count int) []node.RemoteNodeData {
-	psoc := make(table.PeersOpChannel, 1)
-	s.routingTable.NearestPeers(table.NearestPeersReq{ID: dhtID, Count: count, Callback: psoc})
-	return (<-psoc).Peers
+func (s *swarmImpl) getNearestPeers(dhtID identity.DhtID, count int) []identity.Node {
+	psoc := make(dht.PeersOpChannel, 1)
+	s.routingTable.NearestPeers(dht.NearestPeersReq{ID: dhtID, Count: count, Callback: psoc})
+	res := <-psoc
+	set := make([]identity.Node, len(res.Peers))
+	for i := range res.Peers {
+		set[i] = res.Peers[i]
+	}
+	return set
 }

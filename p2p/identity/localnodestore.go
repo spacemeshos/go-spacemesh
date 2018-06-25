@@ -1,10 +1,9 @@
-package p2p
+package identity
 
 import (
 	"encoding/json"
 	"io/ioutil"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"bytes"
@@ -15,56 +14,23 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 )
 
-// NodeData defines persistent node data.
-type NodeData struct {
+// nodeFileData defines persistent node data.
+type nodeFileData struct {
 	PubKey     string `json:"pubKey"`
 	PrivKey    string `json:"priKey"`
 	CoinBaseID string `json:"coinbase"` // coinbase account id
 	NetworkID  int    `json:"network"`  // network that the node lives in
 }
 
-// Node store - local node data persistence functionality.
-
-// Gets the os-specific full path to the nodes master data directory.
-// Attempts to create the directory on-demand.
-func ensureNodesDataDirectory() (string, error) {
-	dataPath, err := filesystem.GetSpacemeshDataDirectoryPath()
-	if err != nil {
-		return "", err
-	}
-
-	nodesDir := filepath.Join(dataPath, nodeconfig.NodesDirectoryName)
-	return filesystem.GetFullDirectoryPath(nodesDir)
-}
-
-// Gets the path to the node's data directory, e.g. /nodes/[node-id]/
-// Directory will be created on demand if it doesn't exist.
-func (n *localNodeImp) EnsureNodeDataDirectory() (string, error) {
-	nodesDataDir, err := ensureNodesDataDirectory()
-	if err != nil {
-		return "", err
-	}
-	nodeDirectoryName := filepath.Join(nodesDataDir, n.String())
-	return filesystem.GetFullDirectoryPath(nodeDirectoryName)
-}
-
-// Returns the os-specific full path to the node's data file.
-func getDataFilePath(nodeID string) (string, error) {
-	nodesDataDir, err := ensureNodesDataDirectory()
-	if err != nil {
-		return "", err
-	}
-
-	return filepath.Join(nodesDataDir, nodeID, nodeconfig.NodeDataFileName), nil
-}
+// Node store - local node data persistence functionality
 
 // Persist node's data to local store.
-func (n *localNodeImp) persistData() error {
+func (n *LocalNode) persistData() error {
 
-	data := &NodeData{
+	data := nodeFileData{
 		PubKey:    n.pubKey.String(),
 		PrivKey:   n.privKey.String(),
-		NetworkID: n.config.NetworkID,
+		NetworkID: int(n.networkID),
 	}
 
 	bytes, err := json.MarshalIndent(data, "", "  ")
@@ -72,15 +38,12 @@ func (n *localNodeImp) persistData() error {
 		return err
 	}
 
-	_, err = n.EnsureNodeDataDirectory()
+	nodeDataPath, err := filesystem.EnsureNodesDataDirectory(nodeconfig.NodesDirectoryName)
 	if err != nil {
 		return err
 	}
 
-	path, err := getDataFilePath(n.String())
-	if err != nil {
-		return err
-	}
+	path := filesystem.NodeDataFile(nodeDataPath, nodeconfig.NodeDataFileName, n.String())
 
 	// make sure our node file is written to the os filesystem.
 	f, err := os.Create(path)
@@ -103,18 +66,20 @@ func (n *localNodeImp) persistData() error {
 		return err
 	}
 
-	log.Debug("Node data persisted and synced. NodeID ", n.String())
+	log.Info("Saved node information. NodeID %v", n.String())
 
 	return nil
 }
 
 // Read node persisted data based on node id.
-func readNodeData(nodeID string) (*NodeData, error) {
+func readNodeData(nodeID string) (*nodeFileData, error) {
 
-	path, err := getDataFilePath(nodeID)
+	nodeDataPath, err := filesystem.EnsureNodesDataDirectory(nodeconfig.NodesDirectoryName)
 	if err != nil {
 		return nil, err
 	}
+
+	path := filesystem.NodeDataFile(nodeDataPath, nodeconfig.NodeDataFileName, nodeID)
 
 	data := bytes.NewBuffer(nil)
 
@@ -135,7 +100,7 @@ func readNodeData(nodeID string) (*NodeData, error) {
 		return nil, err
 	}
 
-	var nodeData NodeData
+	var nodeData nodeFileData
 	err = json.Unmarshal(data.Bytes(), &nodeData)
 	if err != nil {
 		return nil, err
@@ -148,14 +113,14 @@ func readNodeData(nodeID string) (*NodeData, error) {
 // Read node data from the data folder.
 // Reads a random node from the data folder if more than one node data file is persisted.
 // To load a specific node on startup - users need to pass the node id using a cli arg.
-func readFirstNodeData() (*NodeData, error) {
+func readFirstNodeData() (*nodeFileData, error) {
 
-	path, err := ensureNodesDataDirectory()
+	nodeDataPath, err := filesystem.EnsureNodesDataDirectory(nodeconfig.NodesDirectoryName)
 	if err != nil {
 		return nil, err
 	}
 
-	files, err := ioutil.ReadDir(path)
+	files, err := ioutil.ReadDir(nodeDataPath)
 	if err != nil {
 		return nil, err
 	}
@@ -165,10 +130,7 @@ func readFirstNodeData() (*NodeData, error) {
 		n := f.Name()
 		// make sure we get only a real node file
 		if f.IsDir() && !strings.HasPrefix(n, ".") {
-			p, err := getDataFilePath(n)
-			if err != nil {
-				return nil, err
-			}
+			p := filesystem.NodeDataFile(nodeDataPath, nodeconfig.NodeDataFileName, n)
 			if filesystem.PathExists(p) {
 				return readNodeData(n)
 			}

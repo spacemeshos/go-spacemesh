@@ -1,4 +1,4 @@
-package dht
+package identity
 
 import (
 	"encoding/hex"
@@ -9,22 +9,22 @@ import (
 )
 
 func TestIds(t *testing.T) {
-	id1 := NewIDFromBase58String("28Ru2rajv7ZQZ63mHLAcGrZgtG2kEAhKYP53Fp6fFs3At")
+	id1 := NewDhtIDFromBase58("28Ru2rajv7ZQZ63mHLAcGrZgtG2kEAhKYP53Fp6fFs3At")
 	s := id1.Pretty()
 	assert.True(t, len(s) > 0, "expected dht id")
 
-	_, err := NewIDFromHexString("xxxx")
+	_, err := NewDhtIDFromHex("xxxx")
 	assert.Error(t, err, "expected error")
 }
 
 func TestSorting(t *testing.T) {
-	id1, _ := NewIDFromHexString("aa726a40a408ff9fbdf627373cab566742114e2fd909eb4af4b6cbec67d6c604")
-	id2, _ := NewIDFromHexString("aa726a40a408ff9fbdf627373cab566742114e2fd909eb4af4b6cbec67d6c604")
-	id3, _ := NewIDFromHexString("aa826a40a408ff9fbdf627373cab566742114e2fd909eb4af4b6cbec67d6c604")
-	id4, _ := NewIDFromHexString("bb826a40a408ff9fbdf627373cab566742114e2fd909eb4af4b6cbec67d6c604")
-	id5, _ := NewIDFromHexString("1000000000000000000000000000000000000000000000000000000000000000")
+	id1, _ := NewDhtIDFromHex("aa726a40a408ff9fbdf627373cab566742114e2fd909eb4af4b6cbec67d6c604")
+	id2, _ := NewDhtIDFromHex("aa726a40a408ff9fbdf627373cab566742114e2fd909eb4af4b6cbec67d6c604")
+	id3, _ := NewDhtIDFromHex("aa826a40a408ff9fbdf627373cab566742114e2fd909eb4af4b6cbec67d6c604")
+	id4, _ := NewDhtIDFromHex("bb826a40a408ff9fbdf627373cab566742114e2fd909eb4af4b6cbec67d6c604")
+	id5, _ := NewDhtIDFromHex("1000000000000000000000000000000000000000000000000000000000000000")
 
-	ids := []ID{id5, id4, id3, id2}
+	ids := []DhtID{id5, id4, id3, id2}
 
 	sorted := id1.SortByDistance(ids)
 	assert.Equal(t, len(sorted), len(ids), "expected equal length")
@@ -42,14 +42,14 @@ func TestDhtIds(t *testing.T) {
 	// 256 bits hexa number
 	hexData := "b726a40a408ff9fbdf627373cab566742114e2fd909eb4af4b6cbec67d6c6040"
 
-	id1, _ := NewIDFromHexString(hexData)
-	id2, _ := NewIDFromHexString(hexData)
-	id3, _ := NewIDFromHexString("a726a40a408ff9fbdf627373cab566742114e2fd909eb4af4b6cbec67d6c6040")
-	id4, _ := NewIDFromHexString("b626a40a408ff9fbdf627373cab566742114e2fd909eb4af4b6cbec67d6c6040")
-	id5, _ := NewIDFromHexString("1000000000000000000000000000000000000000000000000000000000000000")
-	id6, _ := NewIDFromHexString("00000000000000000000000000000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
-	id7, _ := NewIDFromHexString("000000000000000000000000000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
-	id8, _ := NewIDFromHexString("FF0000000000000000000000000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
+	id1, _ := NewDhtIDFromHex(hexData)
+	id2, _ := NewDhtIDFromHex(hexData)
+	id3, _ := NewDhtIDFromHex("a726a40a408ff9fbdf627373cab566742114e2fd909eb4af4b6cbec67d6c6040")
+	id4, _ := NewDhtIDFromHex("b626a40a408ff9fbdf627373cab566742114e2fd909eb4af4b6cbec67d6c6040")
+	id5, _ := NewDhtIDFromHex("1000000000000000000000000000000000000000000000000000000000000000")
+	id6, _ := NewDhtIDFromHex("00000000000000000000000000000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
+	id7, _ := NewDhtIDFromHex("000000000000000000000000000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
+	id8, _ := NewDhtIDFromHex("FF0000000000000000000000000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
 
 	assert.Equal(t, len(id1), 32, "Expectd 256 bits / 32 bytes id")
 	assert.Equal(t, hex.EncodeToString(id1), hexData, "Unexpected id data")
@@ -97,5 +97,5 @@ func TestDhtIds(t *testing.T) {
 	xorID := id1.Xor(id3)
 	assert.True(t, xorID.Equals(id5), "Unexpected xor result")
 
-	// todo: test ID.sortByDistance
+	// todo: test DhtID.sortByDistance
 }

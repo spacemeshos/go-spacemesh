@@ -11,8 +11,7 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht"
-	"github.com/spacemeshos/go-spacemesh/p2p/dht/table"
-	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"github.com/spacemeshos/go-spacemesh/p2p/identity"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 )
 
@@ -26,7 +25,7 @@ const (
 func (s *swarmImpl) bootstrap() {
 	s.localNode.Info("Starting bootstrap...")
 
-	c := int(s.config.RandomConnections)
+	c := int(s.config.SwarmConfig.RandomConnections)
 	if c <= 0 {
 		s.localNode.Error("0 random connections - aborting bootstrap")
 		return
@@ -34,7 +33,7 @@ func (s *swarmImpl) bootstrap() {
 
 	// register bootstrap nodes
 	bn := uint32(0)
-	for _, n := range s.config.BootstrapNodes {
+	for _, n := range s.config.SwarmConfig.BootstrapNodes {
 		connected := make(chan error)
 		go func(q chan error) {
 			c := <-q
@@ -42,9 +41,15 @@ func (s *swarmImpl) bootstrap() {
 				atomic.AddUint32(&bn, 1)
 			}
 		}(connected)
-		rn := node.NewRemoteNodeDataFromString(n)
-		if s.localNode.String() != rn.ID() {
-			s.onRegisterNodeRequest(rn) // this happens before any loop is running
+		rn, err := identity.NewNodeFromString(n)
+
+		if err != nil {
+			s.localNode.Errorf("Could'nt parse node from string, skipping (err:  %v)", err)
+			continue
+		}
+
+		if s.localNode.String() != rn.String() {
+			s.onRegisterNodeRequest(rn)
 			s.onConnectionRequest(rn, connected)
 		}
 	}
@@ -71,7 +76,7 @@ func (s *swarmImpl) bootstrap() {
 					}
 					s.localNode.Debug("Bootstrap filled routing table, establishing k random connections")
 					if s.routingTable.IsHealthy() {
-						s.ConnectToRandomNodes(c)
+						//s.ConnectToRandomNodes(c)
 						s.bootComplete(nil)
 					}
 					return
@@ -87,14 +92,14 @@ func (s *swarmImpl) ConnectToRandomNodes(count int) {
 	s.localNode.Info("Attempting to connect to %d random nodes...", count)
 
 	// create callback to receive result
-	c1 := make(table.PeersOpChannel)
+	c1 := make(dht.PeersOpChannel)
 
 	// find nearest peers
-	s.routingTable.NearestPeers(table.NearestPeersReq{ID: s.localNode.DhtID(), Count: count, Callback: c1})
+	s.routingTable.NearestPeers(dht.NearestPeersReq{ID: s.localNode.DhtID(), Count: count, Callback: c1})
 
 	c := <-c1
 	if len(c.Peers) == 0 {
-		s.GetLocalNode().Warning("Did not find any random nodes close to self")
+		s.LocalNode().Warning("Did not find any random nodes close to self")
 	}
 
 	wg := sync.WaitGroup{}
@@ -102,7 +107,7 @@ func (s *swarmImpl) ConnectToRandomNodes(count int) {
 	for _, p := range c.Peers {
 		wg.Add(1)
 		done := make(chan error)
-		go func(d chan error, p node.RemoteNodeData) {
+		go func(d chan error, p identity.Node) {
 			timeout := time.NewTimer(ConnectToNodeTimeout)
 			select {
 			case derr := <-d:
@@ -130,7 +135,7 @@ func (s *swarmImpl) onSendInternalMessage(r SendMessageReq) {
 	s.peerMapMutex.RUnlock()
 
 	if peer == nil {
-		prs := s.getNearestPeers(dht.NewIDFromBase58String(r.PeerID), 1)
+		prs := s.getNearestPeers(identity.NewDhtIDFromBase58(r.PeerID), 1)
 		if len(prs) == 0 {
 			//We're not sending to peers the routing table don't know about in bootstrap phase
 			return

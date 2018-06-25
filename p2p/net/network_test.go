@@ -9,12 +9,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 	"github.com/stretchr/testify/assert"
-	"gopkg.in/op/go-logging.v1"
 )
 
-func testLogger(id string) *logging.Logger {
+func testLogger(id string) log.Log {
 	// empty loggers so no files will be kept
-	return log.CreateLogger(id, "", "")
+	return log.New(id, "", "")
 }
 
 func TestReadWrite(t *testing.T) {
@@ -28,10 +27,10 @@ func TestReadWrite(t *testing.T) {
 	address := fmt.Sprintf("0.0.0.0:%d", port)
 	done := make(chan bool, 1)
 
-	n, err := NewNet(address, nodeconfig.ConfigValues, testLogger("TEST-net"))
+	n, err := NewNet(address, nodeconfig.ConfigValues, testLogger("TEST-net").Logger)
 	assert.Nil(t, err, "failed to create tcp server")
 
-	_, err = NewNet(address, nodeconfig.ConfigValues, testLogger("TEST-net2"))
+	_, err = NewNet(address, nodeconfig.ConfigValues, testLogger("TEST-net2").Logger)
 	assert.Error(t, err, "Should not be able to create a new net on same address")
 
 	// run a simple network events processor go routine

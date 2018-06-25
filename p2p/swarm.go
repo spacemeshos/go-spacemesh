@@ -3,9 +3,9 @@
 package p2p
 
 import (
-	"github.com/spacemeshos/go-spacemesh/p2p/dht/table"
+	"github.com/spacemeshos/go-spacemesh/p2p/dht"
+	"github.com/spacemeshos/go-spacemesh/p2p/identity"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
-	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"strconv"
 )
 
@@ -23,17 +23,17 @@ type Swarm interface {
 	// TODO: support sending a message to all connected peers without any dest id provided by caller
 
 	// Register a node with the swarm based on its id and tcp address but don't attempt to connect to it
-	RegisterNode(data node.RemoteNodeData)
+	RegisterNode(data identity.Node)
 
 	// Attempt to establish a session with a remote node with a known id and tcp address
 	// Used for bootstrapping known bootstrap nodes
-	ConnectTo(req node.RemoteNodeData, done chan error)
+	ConnectTo(req identity.Node, done chan error)
 
 	// Connect to count random nodes - used for bootstrapping the swarm
 	ConnectToRandomNodes(count int)
 
 	// Forcefully disconnect form a node - close any connections and sessions with it
-	DisconnectFrom(req node.RemoteNodeData)
+	DisconnectFrom(req identity.Node)
 
 	// Send a handshake protocol message that is used to establish a session
 	sendHandshakeMessage(req SendMessageReq)
@@ -47,9 +47,9 @@ type Swarm interface {
 
 	// services getters
 	GetDemuxer() Demuxer
-	GetLocalNode() LocalNode
+	LocalNode() *identity.LocalNode
 
-	getRoutingTable() table.RoutingTable
+	RoutingTable() dht.RoutingTable
 
 	// used by protocols and for testing
 	getHandshakeProtocol() HandshakeProtocol
