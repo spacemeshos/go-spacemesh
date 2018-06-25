@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/btcsuite/btcutil/base58"
 	"github.com/gogo/protobuf/proto"
-	"errors"
+	"github.com/pkg/errors"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht"

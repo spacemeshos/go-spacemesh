@@ -1,9 +1,0 @@
-syntax = "proto3";
-
-package pb;
-option go_package = "pb";
-
-message NodeInfo {
-    bytes nodeId = 1;
-    string address = 2;
-}

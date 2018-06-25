@@ -12,17 +12,45 @@ var _ = proto.Marshal
 var _ = fmt.Errorf
 var _ = math.Inf
 
+// This is a compile-time assertion to ensure that this generated file
+// is compatible with the proto package it is being compiled against.
+// A compilation error at this line likely means your copy of the
+// proto package needs to be updated.
+const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
+
 // data common to all messages - Top level msg format
 type CommonMessageData struct {
-	SessionId []byte `protobuf:"bytes,1,opt,name=sessionId,proto3" json:"sessionId,omitempty"`
-	Payload   []byte `protobuf:"bytes,2,opt,name=payload,proto3" json:"payload,omitempty"`
-	Timestamp int64  `protobuf:"varint,3,opt,name=timestamp" json:"timestamp,omitempty"`
+	SessionId            []byte   `protobuf:"bytes,1,opt,name=sessionId,proto3" json:"sessionId,omitempty"`
+	Payload              []byte   `protobuf:"bytes,2,opt,name=payload,proto3" json:"payload,omitempty"`
+	Timestamp            int64    `protobuf:"varint,3,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *CommonMessageData) Reset()                    { *m = CommonMessageData{} }
-func (m *CommonMessageData) String() string            { return proto.CompactTextString(m) }
-func (*CommonMessageData) ProtoMessage()               {}
-func (*CommonMessageData) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{0} }
+func (m *CommonMessageData) Reset()         { *m = CommonMessageData{} }
+func (m *CommonMessageData) String() string { return proto.CompactTextString(m) }
+func (*CommonMessageData) ProtoMessage()    {}
+func (*CommonMessageData) Descriptor() ([]byte, []int) {
+	return fileDescriptor_message_91de9518f1422dbe, []int{0}
+}
+func (m *CommonMessageData) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_CommonMessageData.Unmarshal(m, b)
+}
+func (m *CommonMessageData) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_CommonMessageData.Marshal(b, m, deterministic)
+}
+func (dst *CommonMessageData) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_CommonMessageData.Merge(dst, src)
+}
+func (m *CommonMessageData) XXX_Size() int {
+	return xxx_messageInfo_CommonMessageData.Size(m)
+}
+func (m *CommonMessageData) XXX_DiscardUnknown() {
+	xxx_messageInfo_CommonMessageData.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_CommonMessageData proto.InternalMessageInfo
 
 func (m *CommonMessageData) GetSessionId() []byte {
 	if m != nil {
@@ -47,24 +75,46 @@ func (m *CommonMessageData) GetTimestamp() int64 {
 
 // Handshake protocol data used for both request and response - sent unencrypted over the wire
 type HandshakeData struct {
-	SessionId     []byte `protobuf:"bytes,1,opt,name=sessionId,proto3" json:"sessionId,omitempty"`
-	Payload       []byte `protobuf:"bytes,2,opt,name=payload,proto3" json:"payload,omitempty"`
-	Timestamp     int64  `protobuf:"varint,3,opt,name=timestamp" json:"timestamp,omitempty"`
-	ClientVersion string `protobuf:"bytes,4,opt,name=clientVersion" json:"clientVersion,omitempty"`
-	NetworkID     int32  `protobuf:"varint,5,opt,name=networkID" json:"networkID,omitempty"`
-	Protocol      string `protobuf:"bytes,6,opt,name=protocol" json:"protocol,omitempty"`
-	NodePubKey    []byte `protobuf:"bytes,7,opt,name=nodePubKey,proto3" json:"nodePubKey,omitempty"`
-	Iv            []byte `protobuf:"bytes,8,opt,name=iv,proto3" json:"iv,omitempty"`
-	PubKey        []byte `protobuf:"bytes,9,opt,name=pubKey,proto3" json:"pubKey,omitempty"`
-	Hmac          []byte `protobuf:"bytes,10,opt,name=hmac,proto3" json:"hmac,omitempty"`
-	TcpAddress    string `protobuf:"bytes,11,opt,name=tcpAddress" json:"tcpAddress,omitempty"`
-	Sign          string `protobuf:"bytes,12,opt,name=sign" json:"sign,omitempty"`
+	SessionId            []byte   `protobuf:"bytes,1,opt,name=sessionId,proto3" json:"sessionId,omitempty"`
+	Payload              []byte   `protobuf:"bytes,2,opt,name=payload,proto3" json:"payload,omitempty"`
+	Timestamp            int64    `protobuf:"varint,3,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	ClientVersion        string   `protobuf:"bytes,4,opt,name=clientVersion,proto3" json:"clientVersion,omitempty"`
+	NetworkID            int32    `protobuf:"varint,5,opt,name=networkID,proto3" json:"networkID,omitempty"`
+	Protocol             string   `protobuf:"bytes,6,opt,name=protocol,proto3" json:"protocol,omitempty"`
+	NodePubKey           []byte   `protobuf:"bytes,7,opt,name=nodePubKey,proto3" json:"nodePubKey,omitempty"`
+	Iv                   []byte   `protobuf:"bytes,8,opt,name=iv,proto3" json:"iv,omitempty"`
+	PubKey               []byte   `protobuf:"bytes,9,opt,name=pubKey,proto3" json:"pubKey,omitempty"`
+	Hmac                 []byte   `protobuf:"bytes,10,opt,name=hmac,proto3" json:"hmac,omitempty"`
+	TcpAddress           string   `protobuf:"bytes,11,opt,name=tcpAddress,proto3" json:"tcpAddress,omitempty"`
+	Sign                 string   `protobuf:"bytes,12,opt,name=sign,proto3" json:"sign,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *HandshakeData) Reset()                    { *m = HandshakeData{} }
-func (m *HandshakeData) String() string            { return proto.CompactTextString(m) }
-func (*HandshakeData) ProtoMessage()               {}
-func (*HandshakeData) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{1} }
+func (m *HandshakeData) Reset()         { *m = HandshakeData{} }
+func (m *HandshakeData) String() string { return proto.CompactTextString(m) }
+func (*HandshakeData) ProtoMessage()    {}
+func (*HandshakeData) Descriptor() ([]byte, []int) {
+	return fileDescriptor_message_91de9518f1422dbe, []int{1}
+}
+func (m *HandshakeData) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_HandshakeData.Unmarshal(m, b)
+}
+func (m *HandshakeData) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_HandshakeData.Marshal(b, m, deterministic)
+}
+func (dst *HandshakeData) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_HandshakeData.Merge(dst, src)
+}
+func (m *HandshakeData) XXX_Size() int {
+	return xxx_messageInfo_HandshakeData.Size(m)
+}
+func (m *HandshakeData) XXX_DiscardUnknown() {
+	xxx_messageInfo_HandshakeData.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_HandshakeData proto.InternalMessageInfo
 
 func (m *HandshakeData) GetSessionId() []byte {
 	if m != nil {
@@ -154,13 +204,35 @@ func (m *HandshakeData) GetSign() string {
 // it allows multi310.445plexing back to higher level protocols
 // data is here and not in CommonMessageData to avoid leaked data on unencrypted connections
 type ProtocolMessage struct {
-	Metadata *Metadata `protobuf:"bytes,1,opt,name=metadata" json:"metadata,omitempty"`
+	Metadata             *Metadata `protobuf:"bytes,1,opt,name=metadata,proto3" json:"metadata,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}  `json:"-"`
+	XXX_unrecognized     []byte    `json:"-"`
+	XXX_sizecache        int32     `json:"-"`
 }
 
-func (m *ProtocolMessage) Reset()                    { *m = ProtocolMessage{} }
-func (m *ProtocolMessage) String() string            { return proto.CompactTextString(m) }
-func (*ProtocolMessage) ProtoMessage()               {}
-func (*ProtocolMessage) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{2} }
+func (m *ProtocolMessage) Reset()         { *m = ProtocolMessage{} }
+func (m *ProtocolMessage) String() string { return proto.CompactTextString(m) }
+func (*ProtocolMessage) ProtoMessage()    {}
+func (*ProtocolMessage) Descriptor() ([]byte, []int) {
+	return fileDescriptor_message_91de9518f1422dbe, []int{2}
+}
+func (m *ProtocolMessage) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_ProtocolMessage.Unmarshal(m, b)
+}
+func (m *ProtocolMessage) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_ProtocolMessage.Marshal(b, m, deterministic)
+}
+func (dst *ProtocolMessage) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ProtocolMessage.Merge(dst, src)
+}
+func (m *ProtocolMessage) XXX_Size() int {
+	return xxx_messageInfo_ProtocolMessage.Size(m)
+}
+func (m *ProtocolMessage) XXX_DiscardUnknown() {
+	xxx_messageInfo_ProtocolMessage.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ProtocolMessage proto.InternalMessageInfo
 
 func (m *ProtocolMessage) GetMetadata() *Metadata {
 	if m != nil {
@@ -170,19 +242,41 @@ func (m *ProtocolMessage) GetMetadata() *Metadata {
 }
 
 type Metadata struct {
-	Protocol      string `protobuf:"bytes,1,opt,name=protocol" json:"protocol,omitempty"`
-	ReqId         []byte `protobuf:"bytes,2,opt,name=reqId,proto3" json:"reqId,omitempty"`
-	ClientVersion string `protobuf:"bytes,3,opt,name=clientVersion" json:"clientVersion,omitempty"`
-	Timestamp     int64  `protobuf:"varint,4,opt,name=timestamp" json:"timestamp,omitempty"`
-	Gossip        bool   `protobuf:"varint,5,opt,name=gossip" json:"gossip,omitempty"`
-	AuthPubKey    []byte `protobuf:"bytes,6,opt,name=authPubKey,proto3" json:"authPubKey,omitempty"`
-	AuthorSign    string `protobuf:"bytes,7,opt,name=authorSign" json:"authorSign,omitempty"`
+	Protocol             string   `protobuf:"bytes,1,opt,name=protocol,proto3" json:"protocol,omitempty"`
+	ReqId                []byte   `protobuf:"bytes,2,opt,name=reqId,proto3" json:"reqId,omitempty"`
+	ClientVersion        string   `protobuf:"bytes,3,opt,name=clientVersion,proto3" json:"clientVersion,omitempty"`
+	Timestamp            int64    `protobuf:"varint,4,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	Gossip               bool     `protobuf:"varint,5,opt,name=gossip,proto3" json:"gossip,omitempty"`
+	AuthPubKey           []byte   `protobuf:"bytes,6,opt,name=authPubKey,proto3" json:"authPubKey,omitempty"`
+	AuthorSign           string   `protobuf:"bytes,7,opt,name=authorSign,proto3" json:"authorSign,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *Metadata) Reset()                    { *m = Metadata{} }
-func (m *Metadata) String() string            { return proto.CompactTextString(m) }
-func (*Metadata) ProtoMessage()               {}
-func (*Metadata) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{3} }
+func (m *Metadata) Reset()         { *m = Metadata{} }
+func (m *Metadata) String() string { return proto.CompactTextString(m) }
+func (*Metadata) ProtoMessage()    {}
+func (*Metadata) Descriptor() ([]byte, []int) {
+	return fileDescriptor_message_91de9518f1422dbe, []int{3}
+}
+func (m *Metadata) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_Metadata.Unmarshal(m, b)
+}
+func (m *Metadata) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_Metadata.Marshal(b, m, deterministic)
+}
+func (dst *Metadata) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Metadata.Merge(dst, src)
+}
+func (m *Metadata) XXX_Size() int {
+	return xxx_messageInfo_Metadata.Size(m)
+}
+func (m *Metadata) XXX_DiscardUnknown() {
+	xxx_messageInfo_Metadata.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_Metadata proto.InternalMessageInfo
 
 func (m *Metadata) GetProtocol() string {
 	if m != nil {
@@ -235,14 +329,36 @@ func (m *Metadata) GetAuthorSign() string {
 
 // ping is our example protocol
 type PingReqData struct {
-	Metadata *Metadata `protobuf:"bytes,1,opt,name=metadata" json:"metadata,omitempty"`
-	Ping     string    `protobuf:"bytes,2,opt,name=ping" json:"ping,omitempty"`
+	Metadata             *Metadata `protobuf:"bytes,1,opt,name=metadata,proto3" json:"metadata,omitempty"`
+	Ping                 string    `protobuf:"bytes,2,opt,name=ping,proto3" json:"ping,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}  `json:"-"`
+	XXX_unrecognized     []byte    `json:"-"`
+	XXX_sizecache        int32     `json:"-"`
 }
 
-func (m *PingReqData) Reset()                    { *m = PingReqData{} }
-func (m *PingReqData) String() string            { return proto.CompactTextString(m) }
-func (*PingReqData) ProtoMessage()               {}
-func (*PingReqData) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{4} }
+func (m *PingReqData) Reset()         { *m = PingReqData{} }
+func (m *PingReqData) String() string { return proto.CompactTextString(m) }
+func (*PingReqData) ProtoMessage()    {}
+func (*PingReqData) Descriptor() ([]byte, []int) {
+	return fileDescriptor_message_91de9518f1422dbe, []int{4}
+}
+func (m *PingReqData) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_PingReqData.Unmarshal(m, b)
+}
+func (m *PingReqData) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_PingReqData.Marshal(b, m, deterministic)
+}
+func (dst *PingReqData) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_PingReqData.Merge(dst, src)
+}
+func (m *PingReqData) XXX_Size() int {
+	return xxx_messageInfo_PingReqData.Size(m)
+}
+func (m *PingReqData) XXX_DiscardUnknown() {
+	xxx_messageInfo_PingReqData.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_PingReqData proto.InternalMessageInfo
 
 func (m *PingReqData) GetMetadata() *Metadata {
 	if m != nil {
@@ -259,14 +375,36 @@ func (m *PingReqData) GetPing() string {
 }
 
 type PingRespData struct {
-	Metadata *Metadata `protobuf:"bytes,1,opt,name=metadata" json:"metadata,omitempty"`
-	Pong     string    `protobuf:"bytes,2,opt,name=pong" json:"pong,omitempty"`
+	Metadata             *Metadata `protobuf:"bytes,1,opt,name=metadata,proto3" json:"metadata,omitempty"`
+	Pong                 string    `protobuf:"bytes,2,opt,name=pong,proto3" json:"pong,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}  `json:"-"`
+	XXX_unrecognized     []byte    `json:"-"`
+	XXX_sizecache        int32     `json:"-"`
 }
 
-func (m *PingRespData) Reset()                    { *m = PingRespData{} }
-func (m *PingRespData) String() string            { return proto.CompactTextString(m) }
-func (*PingRespData) ProtoMessage()               {}
-func (*PingRespData) Descriptor() ([]byte, []int) { return fileDescriptor1, []int{5} }
+func (m *PingRespData) Reset()         { *m = PingRespData{} }
+func (m *PingRespData) String() string { return proto.CompactTextString(m) }
+func (*PingRespData) ProtoMessage()    {}
+func (*PingRespData) Descriptor() ([]byte, []int) {
+	return fileDescriptor_message_91de9518f1422dbe, []int{5}
+}
+func (m *PingRespData) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_PingRespData.Unmarshal(m, b)
+}
+func (m *PingRespData) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_PingRespData.Marshal(b, m, deterministic)
+}
+func (dst *PingRespData) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_PingRespData.Merge(dst, src)
+}
+func (m *PingRespData) XXX_Size() int {
+	return xxx_messageInfo_PingRespData.Size(m)
+}
+func (m *PingRespData) XXX_DiscardUnknown() {
+	xxx_messageInfo_PingRespData.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_PingRespData proto.InternalMessageInfo
 
 func (m *PingRespData) GetMetadata() *Metadata {
 	if m != nil {
@@ -291,9 +429,9 @@ func init() {
 	proto.RegisterType((*PingRespData)(nil), "pb.PingRespData")
 }
 
-func init() { proto.RegisterFile("message.proto", fileDescriptor1) }
+func init() { proto.RegisterFile("message.proto", fileDescriptor_message_91de9518f1422dbe) }
 
-var fileDescriptor1 = []byte{
+var fileDescriptor_message_91de9518f1422dbe = []byte{
 	// 417 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xb4, 0x92, 0x41, 0x8b, 0xd4, 0x30,
 	0x14, 0xc7, 0x69, 0xa7, 0xd3, 0x69, 0xdf, 0x74, 0x14, 0x83, 0x2c, 0x41, 0x44, 0x4a, 0xf1, 0xd0,

@@ -3,7 +3,6 @@ package node
 import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/crypto"
-	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"strings"
 )
 
@@ -39,25 +38,6 @@ func (n Node) DhtID() DhtID {
 // Pretty returns a pretty string from the node's info
 func (n Node) Pretty() string {
 	return fmt.Sprintf("Node : %v , Address: %v, DhtID: %v", n.pubKey.Pretty(), n.address, n.DhtID().Pretty())
-}
-
-// ToNodeInfo returns marshaled protobufs identity infos slice from a slice of RemoteNodeData.
-// filterId: identity id to exclude from the result
-func ToNodeInfo(nodes []Node, filterID string) []*pb.NodeInfo {
-	// init empty slice
-	res := []*pb.NodeInfo{}
-	for _, n := range nodes {
-
-		if n.String() == filterID {
-			continue
-		}
-
-		res = append(res, &pb.NodeInfo{
-			NodeId:  n.pubKey.Bytes(),
-			Address: n.address,
-		})
-	}
-	return res
 }
 
 // Union returns a union of 2 lists of nodes.
@@ -98,22 +78,6 @@ func SortByDhtID(nodes []Node, id DhtID) []Node {
 	return nodes
 }
 
-// FromNodeInfos converts a list of NodeInfo to a list of Node.
-func FromNodeInfos(nodes []*pb.NodeInfo) []Node {
-	res := make([]Node, len(nodes))
-	for i, n := range nodes {
-		pubk, err := crypto.NewPublicKey(n.NodeId)
-		if err != nil {
-			// TODO Error handling
-			continue
-		}
-		node := Node{pubk, n.Address}
-		res[i] = node
-
-	}
-	return res
-}
-
 // New creates a new remotenode identity from a public key and an address
 func New(key crypto.PublicKey, address string) Node {
 	return Node{key, address}
@@ -130,4 +94,9 @@ func NewNodeFromString(data string) (Node, error) {
 		return EmptyNode, err
 	}
 	return Node{pubk, items[0]}, nil
+}
+
+// StringFromNode generates a string that represent a node in the network in following format: 126.0.0.1:3572/QmcjTLy94HGFo4JoYibudGeBV2DSBb6E4apBjFsBGnMsWa.
+func StringFromNode(n Node) string {
+	return strings.Join([]string{n.Address(), n.PublicKey().String()}, "/")
 }

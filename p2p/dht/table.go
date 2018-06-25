@@ -1,11 +1,9 @@
 package dht
 
 import (
-	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"gopkg.in/op/go-logging.v1"
-	"time"
 )
 
 const (
@@ -18,6 +16,8 @@ const (
 	// todo : optimize this?
 	BucketCount = IDLength / 10
 )
+
+// TODO: check the performance of a mutex based routing table
 
 // RoutingTable manages routing to peers.
 // All uppercase methods visible to externals packages are thread-safe.
@@ -34,9 +34,6 @@ type RoutingTable interface {
 	NearestPeers(req NearestPeersReq)  // ip to n nearest peers to a identity.DhtID
 	ListPeers(callback PeersOpChannel) // list all peers
 	Size(callback chan int)            // total # of peers in the table
-
-	Bootstrap(findnode func(id string, nodes chan node.Node), id string, minPeers int, errchan chan error)
-	IsHealthy() bool
 
 	Print()
 }
@@ -115,9 +112,8 @@ type routingTableImpl struct {
 	// Maximum acceptable latency for peers in this cluster
 	//maxLatency time.Duration
 
-	buckets        [BucketCount]Bucket
-	bucketsize     int // max number of nodes per bucket. typically 10 or 20.
-	minPeersHealth int
+	buckets    [BucketCount]Bucket
+	bucketsize int // max number of nodes per bucket. typically 10 or 20.
 
 	peerRemovedCallbacks map[string]PeerChannel
 	peerAddedCallbacks   map[string]PeerChannel
@@ -147,7 +143,7 @@ func NewRoutingTable(bucketsize int, localID node.DhtID, log *logging.Logger) Ro
 		listPeersReqs:    make(chan PeersOpChannel, 3),
 		sizeReqs:         make(chan chan int, 3),
 
-		updateReqs: make(chan node.Node, 3),
+		updateReqs: make(chan node.Node),
 		removeReqs: make(chan node.Node, 3),
 
 		peerRemovedCallbacks: make(map[string]PeerChannel),
@@ -171,59 +167,6 @@ func (rt *routingTableImpl) Size(callback chan int) {
 // ListPeers takes a RoutingTable and returns a list of all peers from all buckets in the table.
 func (rt *routingTableImpl) ListPeers(callback PeersOpChannel) {
 	rt.listPeersReqs <- callback
-}
-
-func (rt *routingTableImpl) IsHealthy() bool {
-
-	if rt.minPeersHealth == 0 {
-		return false
-	}
-
-	size := make(chan int)
-	rt.Size(size)
-	s := <-size
-	return s >= rt.minPeersHealth
-}
-
-func (rt *routingTableImpl) Bootstrap(findnode func(id string, nodes chan node.Node), id string, minPeers int, errchan chan error) {
-	timeout := time.NewTimer(90 * time.Second)
-	bootstrap := func() chan node.Node { c := make(chan node.Node); findnode(id, c); return c }
-	rt.minPeersHealth = minPeers
-	bs := bootstrap()
-
-BSLOOP:
-	for {
-		select {
-		case res := <-bs:
-			if res != node.EmptyNode {
-				errchan <- errors.New("found ourselves in a bootstrap query")
-				return
-			}
-
-			if rt.IsHealthy() {
-				break BSLOOP
-			}
-
-			rt.log.Warning("Bootstrap didn't fill routing table, starting bootstrap op again in 2 seconds.")
-			time.Sleep(2 * time.Second)
-			bs = bootstrap()
-			continue
-		case <-timeout.C:
-			errchan <- errors.New("didn't get response in timeout time")
-			return
-		}
-	}
-
-	// Start the bootstrap refresh loop
-	go func() {
-		bootSignal := time.NewTicker(2 * time.Minute)
-		for {
-			<-bootSignal.C
-			bootstrap()
-		}
-	}()
-
-	errchan <- nil
 }
 
 // Finds a specific peer by ID/ Returns nil in the callback when not found
@@ -284,11 +227,6 @@ func (rt *routingTableImpl) processEvents() {
 		}
 
 	}
-}
-
-// A string representation of a go pointer - Used to create string keys of runtime objects
-func getMemoryAddress(p interface{}) string {
-	return fmt.Sprintf("%p", p)
 }
 
 // Update updates the routing table with the given contact. it will be added to the routing table if we have space

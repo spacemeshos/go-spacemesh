@@ -165,7 +165,6 @@ func TestTableFindCount(t *testing.T) {
 func TestTableMultiThreaded(t *testing.T) {
 
 	const n = 5000
-	const i = 15
 
 	local := node.GenerateRandomNodeData()
 	localID := local.DhtID()
@@ -223,6 +222,8 @@ func BenchmarkFinds(b *testing.B) {
 
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		rt.Find(PeerByIDRequest{ID: nodes[i].DhtID(), Callback: nil})
+		findc := make(PeerOpChannel)
+		rt.Find(PeerByIDRequest{ID: nodes[i].DhtID(), Callback: findc})
+		<-findc
 	}
 }
