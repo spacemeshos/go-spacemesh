@@ -68,6 +68,9 @@ func init() {
 	RootCmd.PersistentFlags().IntVar(&config.API.GrpcServerPort, "grpc-port",
 		config.API.GrpcServerPort, "GRPC api server port")
 
+	/**========================Consensus Flags ========================== **/
+	//todo: add this here
+
 	RootCmd.AddCommand(VersionCmd)
 
 	// Bind Flags to config
