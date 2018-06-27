@@ -5,6 +5,7 @@ import (
 	"time"
 )
 
+// Config is the main configuration of the dolev strong parameters
 type Config struct {
 	NodesPerLayer    int32         `mapstructure:"nodes-per-layer"`
 	PhaseTime        time.Duration `mapstructure:"phase-time"`
@@ -22,6 +23,7 @@ func duration(duration string) (dur time.Duration) {
 	return dur
 }
 
+// DefaultConfig returns the default values of dolev strong configuration
 func DefaultConfig() Config {
 	return Config{
 		PhaseTime:        duration("1s"),

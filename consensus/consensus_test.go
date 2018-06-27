@@ -122,7 +122,7 @@ func TestSanity(t *testing.T) {
 	numOfNodes := 20
 	nodeIds := make([]string, numOfNodes)
 	nodes := make([]Node, numOfNodes)
-	var dsInstances []ConsensusAlgorithm
+	var dsInstances []Algorithm
 
 	cfg := config.DefaultConfig()
 	cfg.NodesPerLayer = int32(numOfNodes)
@@ -166,7 +166,7 @@ func TestSanity(t *testing.T) {
 
 }
 
-func validateDSC(t *testing.T, dsc ConsensusAlgorithm, expected []byte, node string, senderInstance string) {
+func validateDSC(t *testing.T, dsc Algorithm, expected []byte, node string, senderInstance string) {
 	outputs := dsc.GetOtherInstancesOutput()
 	for key, out := range outputs {
 		if key == senderInstance && node != senderInstance {
@@ -176,7 +176,7 @@ func validateDSC(t *testing.T, dsc ConsensusAlgorithm, expected []byte, node str
 
 }
 
-func initDSC(mockNetwork *MockNetwork, activeNodes []string, node Node, cfg config.Config, timer MyTimer) ConsensusAlgorithm {
+func initDSC(mockNetwork *MockNetwork, activeNodes []string, node Node, cfg config.Config, timer MyTimer) Algorithm {
 	nodeMock := mockNetwork.createNewNodeNetMock(node.publicKey.String())
 	ds, _ := NewDSC(cfg, timer, activeNodes, nodeMock, node.publicKey, node.privateKey)
 	return ds

@@ -11,6 +11,7 @@ import (
 	"time"
 )
 
+// DolevStrongConsensus is an implementation of a byzanteen agreement protocol
 type DolevStrongConsensus struct {
 	activeInstances map[string]CAInstance
 	ingressChannel  chan OpaqueMessage
@@ -24,6 +25,7 @@ type DolevStrongConsensus struct {
 	abortListening  chan struct{}
 }
 
+// DolevStrongInstance is a struct holding state for a single instance of a dolev strong agreement protocol as a receiver
 type DolevStrongInstance struct {
 	value              []byte
 	initiator          RemoteNodeData
@@ -31,13 +33,7 @@ type DolevStrongInstance struct {
 	finishedProcessing bool
 }
 
-type OutputMessage struct {
-	data            *[]byte
-	phase           int
-	foundValidators map[crypto.PublicKey]struct{}
-	//todo: include destination map
-}
-
+// StartInstance starts an agreement protocol instance
 func (impl *DolevStrongConsensus) StartInstance(msg OpaqueMessage) []byte {
 	impl.startTime = time.Now()
 	go impl.SendMessage(msg)
@@ -46,12 +42,13 @@ func (impl *DolevStrongConsensus) StartInstance(msg OpaqueMessage) []byte {
 	return msg.Data()
 }
 
+// NewDSC creates a new instance of dolev strong agreement protocol
 func NewDSC(conf dsCfg.Config,
 	timer Timer,
 	nodes []string,
 	network NetworkConnection,
 	pubKey crypto.PublicKey,
-	privKey crypto.PrivateKey) (ConsensusAlgorithm, error) {
+	privKey crypto.PrivateKey) (Algorithm, error) {
 
 	dsc := &DolevStrongConsensus{
 		activeInstances: make(map[string]CAInstance),
@@ -79,17 +76,18 @@ func (impl *DolevStrongConsensus) handleMessage(message OpaqueMessage) {
 	if ok != nil {
 		log.Error("cannot parse public key from message: ", msg.Msg.AuthPubKey)
 	}
-	nodeId := pk.String()
+	nodeID := pk.String()
 	var ci CAInstance
-	if val, ok := impl.activeInstances[nodeId]; !ok {
+	if val, ok := impl.activeInstances[nodeID]; !ok {
 		ci = NewCAInstance(impl)
-		impl.activeInstances[nodeId] = ci
+		impl.activeInstances[nodeID] = ci
 	} else {
 		ci = val
 	}
 	ci.ReceiveMessage(msg)
 }
 
+// StartListening starts listening for agreement protocol messages from other instances running in the network
 func (impl *DolevStrongConsensus) StartListening() error {
 	impl.ingressChannel = impl.net.RegisterProtocol("DolevStrong")
 	log.Info("started listening")
@@ -105,28 +103,26 @@ func (impl *DolevStrongConsensus) StartListening() error {
 		}
 
 	}
-	return nil
 }
 
-func (dsci *DolevStrongConsensus) waitForConsensus() {
-	numOfRounds := dsci.dsConfig.NumOfAdverseries + 1
-	ticker := time.NewTicker(time.Duration(time.Duration(numOfRounds) * dsci.dsConfig.PhaseTime))
+func (impl *DolevStrongConsensus) waitForConsensus() {
+	numOfRounds := impl.dsConfig.NumOfAdverseries + 1
+	ticker := time.NewTicker(time.Duration(time.Duration(numOfRounds) * impl.dsConfig.PhaseTime))
 
 	for {
 		select {
 		case <-ticker.C:
 			log.Info("finished all DS rounds")
-			dsci.Abort()
-		case <-dsci.abortInstance:
+			impl.Abort()
+		case <-impl.abortInstance:
 			ticker.Stop()
 			return
 		}
 	}
 }
 
-// Sends this message in order to reach consensus
+// SendMessage sends this message in order to reach consensus
 func (impl *DolevStrongConsensus) SendMessage(msg OpaqueMessage) error {
-
 	if len(msg.Data()) == 0 {
 		return nil
 	}
@@ -163,10 +159,11 @@ func (dsci *DolevStrongInstance) authenticateSignature(validator crypto.PublicKe
 	return out
 }
 
-func (impl *DolevStrongConsensus) GetRound() int32 {
+func (impl *DolevStrongConsensus) getRound() int32 {
 	return int32(time.Since(impl.startTime).Nanoseconds() / impl.dsConfig.PhaseTime.Nanoseconds())
 }
 
+//GetOutput Returns the message agreed upon in this instance of dolev string, returns nil if the message agreement failed
 func (dsci *DolevStrongInstance) GetOutput() []byte {
 	if dsci.finishedProcessing {
 		return nil
@@ -174,18 +171,19 @@ func (dsci *DolevStrongInstance) GetOutput() []byte {
 	return dsci.value
 }
 
-func (dsci *DolevStrongConsensus) signMessage(message []byte) []byte {
-	out, ok := dsci.privateKey.Sign(message)
+func (impl *DolevStrongConsensus) signMessage(message []byte) []byte {
+	out, ok := impl.privateKey.Sign(message)
 	if ok != nil {
 		log.Error("Failed to sign message", message, " error ", ok)
 	}
 	return out
 }
 
+// ReceiveMessage is the main receiver handler for a message received from a dolev strong instance running in the network
 func (dsci *DolevStrongInstance) ReceiveMessage(message *pb.ConsensusMessage) {
 	validSig := true
 	//calculates round according to local clock
-	round := dsci.ds.GetRound()
+	round := dsci.ds.getRound()
 	log.Info("received message in round %v num of signatures: %v", round, len(message.Validators))
 
 	if dsci.finishedProcessing {
@@ -220,7 +218,7 @@ func (dsci *DolevStrongInstance) ReceiveMessage(message *pb.ConsensusMessage) {
 		validSig = dsci.authenticateSignature(key, val.AuthorSign, message.Msg)
 		if !validSig {
 			log.Error("invalid signature of ", val.AuthorSign)
-			break //TODO: what should be done here?
+			//break //TODO: what should be done here?
 			return
 		}
 		publicKeys[key.String()] = struct{}{}
@@ -262,24 +260,25 @@ func (dsci *DolevStrongInstance) ReceiveMessage(message *pb.ConsensusMessage) {
 	dsci.ds.sendToRemainingNodes(message, publicKeys) // to be sent in round +1
 }
 
-func (dsci *DolevStrongConsensus) Abort() {
-	dsci.abortInstance <- struct{}{}
-	dsci.abortListening <- struct{}{}
+// Abort aborts the run of the current agreement protocol
+func (impl *DolevStrongConsensus) Abort() {
+	impl.abortInstance <- struct{}{}
+	impl.abortListening <- struct{}{}
 }
 
-func (dsci *DolevStrongConsensus) sendToRemainingNodes(message *pb.ConsensusMessage, foundValidators map[string]struct{}) error {
+func (impl *DolevStrongConsensus) sendToRemainingNodes(message *pb.ConsensusMessage, foundValidators map[string]struct{}) error {
 	// Sends this message in order to reach consensus
 	data, ok := proto.Marshal(message)
 	if ok != nil {
 		log.Error("could not marshal output message", message)
 		panic("Hi there")
 	}
-	for key := range dsci.activeInstances {
+	for key := range impl.activeInstances {
 		//don't send to signed validators
 		if _, ok := foundValidators[key]; ok {
 			continue
 		}
-		_, err := dsci.net.SendMessage(data, key)
+		_, err := impl.net.SendMessage(data, key)
 		if err != nil {
 			//todo: should we break the loop now?
 			//return err
@@ -288,6 +287,7 @@ func (dsci *DolevStrongConsensus) sendToRemainingNodes(message *pb.ConsensusMess
 	return nil
 }
 
+// GetOtherInstancesOutput returns all the outputs agreed in this layer from other instances that ran in the same time as this initiator
 func (impl *DolevStrongConsensus) GetOtherInstancesOutput() map[string][]byte {
 	output := make(map[string][]byte)
 	for key, ds := range impl.activeInstances {
@@ -296,15 +296,15 @@ func (impl *DolevStrongConsensus) GetOtherInstancesOutput() map[string][]byte {
 	return output
 }
 
-func (dsci *DolevStrongConsensus) signMessageAndAppend(message *pb.ConsensusMessage) error {
+func (impl *DolevStrongConsensus) signMessageAndAppend(message *pb.ConsensusMessage) error {
 	bytes, err := proto.Marshal(message.Msg)
 	if err != nil {
 		log.Error("cannot marshal message %v", message.Msg)
 		return err
 	}
-	mySignature := dsci.signMessage(bytes)
+	mySignature := impl.signMessage(bytes)
 	validator := pb.Validator{
-		AuthPubKey: dsci.publicKey.Bytes(),
+		AuthPubKey: impl.publicKey.Bytes(),
 		AuthorSign: mySignature,
 	}
 
@@ -312,6 +312,7 @@ func (dsci *DolevStrongConsensus) signMessageAndAppend(message *pb.ConsensusMess
 	return nil
 }
 
+//NewCAInstance return a new instance of a dolev strong receiver
 func NewCAInstance(ca *DolevStrongConsensus) CAInstance {
 	ds := &DolevStrongInstance{
 		value: nil,
