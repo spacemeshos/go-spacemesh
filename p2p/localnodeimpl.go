@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"gopkg.in/op/go-logging.v1"
+	"sync"
 )
 
 // LocalNode implementation.
@@ -21,6 +22,7 @@ type localNodeImp struct {
 	privKey       crypto.PrivateKey
 	tcpAddress    string
 	pubTCPAddress string
+	pubTCPMutex   sync.RWMutex
 	dhtID         dht.ID
 
 	logger *logging.Logger
@@ -107,7 +109,9 @@ func (n *localNodeImp) TCPAddress() string {
 
 // PubTCPAddress returns the node's public tcp address.
 func (n *localNodeImp) PubTCPAddress() string {
+	n.pubTCPMutex.RLock()
 	addr := n.pubTCPAddress
+	n.pubTCPMutex.RUnlock()
 	return addr
 }
 
@@ -126,8 +130,9 @@ func (n *localNodeImp) RefreshPubTCPAddress() bool {
 		log.Error("Invalid tcp ip address", err)
 		return false
 	}
-
+	n.pubTCPMutex.Lock()
 	n.pubTCPAddress = fmt.Sprintf("%s:%s", addr, port)
+	n.pubTCPMutex.Unlock()
 	return true
 }
 

@@ -15,7 +15,7 @@ func GetPublicIPAddress() (string, error) {
 
 	// We don't want to query services and determine public IP addresses on a test.
 	if flag.Lookup("test.v") != nil {
-		return "0.0.0.0", nil
+		return "127.0.0.1", nil
 	}
 
 	// todo: make this more robust by adding additional fallback services so

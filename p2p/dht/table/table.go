@@ -39,12 +39,6 @@ type RoutingTable interface {
 	Bootstrap(findnode func(id string, nodes chan node.RemoteNodeData), id string, minPeers int, errchan chan error)
 	IsHealthy() bool
 
-	// add/remove peers callbacks management - thread safe
-	RegisterPeerRemovedCallback(c PeerChannel)   // get called when a  peer is removed
-	RegisterPeerAddedCallback(c PeerChannel)     // get called when a peer is added
-	UnregisterPeerRemovedCallback(c PeerChannel) // remove addition reg
-	UnregisterPeerAddedCallback(c PeerChannel)   // remove removal reg
-
 	Print()
 }
 
@@ -126,16 +120,10 @@ type routingTableImpl struct {
 	bucketsize     int // max number of nodes per bucket. typically 10 or 20.
 	minPeersHealth int
 
-	peerRemoved PeerChannel
-	peerAdded   PeerChannel
-
-	registerPeerAddedReq     ChannelOfPeerChannel
-	registerPeerRemovedReq   ChannelOfPeerChannel
-	unregisterPeerAddedReq   ChannelOfPeerChannel
-	unregisterPeerRemovedReq ChannelOfPeerChannel
-
 	peerRemovedCallbacks map[string]PeerChannel
 	peerAddedCallbacks   map[string]PeerChannel
+
+	// /remove
 }
 
 // NewRoutingTable creates a new routing table with a given bucket=size and local node dht.ID
@@ -154,9 +142,6 @@ func NewRoutingTable(bucketsize int, localID dht.ID, log *logging.Logger) Routin
 		log:        log,
 		local:      localID,
 
-		peerRemoved: make(PeerChannel, 3),
-		peerAdded:   make(PeerChannel, 3),
-
 		findReqs:         make(chan PeerByIDRequest, 3),
 		nearestPeerReqs:  make(chan PeerByIDRequest, 3),
 		nearestPeersReqs: make(chan NearestPeersReq, 3),
@@ -165,11 +150,6 @@ func NewRoutingTable(bucketsize int, localID dht.ID, log *logging.Logger) Routin
 
 		updateReqs: make(chan node.RemoteNodeData, 3),
 		removeReqs: make(chan node.RemoteNodeData, 3),
-
-		registerPeerAddedReq:     make(ChannelOfPeerChannel, 3),
-		registerPeerRemovedReq:   make(ChannelOfPeerChannel, 3),
-		unregisterPeerAddedReq:   make(ChannelOfPeerChannel, 3),
-		unregisterPeerRemovedReq: make(ChannelOfPeerChannel, 3),
 
 		peerRemovedCallbacks: make(map[string]PeerChannel),
 		peerAddedCallbacks:   make(map[string]PeerChannel),
@@ -192,22 +172,6 @@ func (rt *routingTableImpl) Size(callback chan int) {
 // ListPeers takes a RoutingTable and returns a list of all peers from all buckets in the table.
 func (rt *routingTableImpl) ListPeers(callback PeersOpChannel) {
 	rt.listPeersReqs <- callback
-}
-
-func (rt *routingTableImpl) RegisterPeerRemovedCallback(c PeerChannel) {
-	rt.registerPeerRemovedReq <- c
-}
-
-func (rt *routingTableImpl) RegisterPeerAddedCallback(c PeerChannel) {
-	rt.registerPeerAddedReq <- c
-}
-
-func (rt *routingTableImpl) UnregisterPeerRemovedCallback(c PeerChannel) {
-	rt.unregisterPeerRemovedReq <- c
-}
-
-func (rt *routingTableImpl) UnregisterPeerAddedCallback(c PeerChannel) {
-	rt.unregisterPeerAddedReq <- c
 }
 
 func (rt *routingTableImpl) IsHealthy() bool {
@@ -285,14 +249,6 @@ func (rt *routingTableImpl) Remove(peer node.RemoteNodeData) {
 	rt.removeReqs <- peer
 }
 
-func (rt *routingTableImpl) PeerAdded(peer node.RemoteNodeData) {
-	rt.peerAdded <- peer
-}
-
-func (rt *routingTableImpl) PeerRemoved(peer node.RemoteNodeData) {
-	rt.peerRemoved <- peer
-}
-
 //// below - non-ts private impl details (should only be called by processEvents() and not directly
 
 // main event processing loop
@@ -323,32 +279,6 @@ func (rt *routingTableImpl) processEvents() {
 
 		case r := <-rt.findReqs:
 			rt.onFindReq(r)
-
-		case p := <-rt.peerAdded:
-			for _, c := range rt.peerAddedCallbacks {
-				go func(c PeerChannel) { c <- p }(c)
-			}
-
-		case p := <-rt.peerRemoved:
-			for _, c := range rt.peerRemovedCallbacks {
-				go func(c PeerChannel) { c <- p }(c)
-			}
-
-		case c := <-rt.registerPeerAddedReq:
-			key := getMemoryAddress(c)
-			rt.peerAddedCallbacks[key] = c
-
-		case c := <-rt.registerPeerRemovedReq:
-			key := getMemoryAddress(c)
-			rt.peerRemovedCallbacks[key] = c
-
-		case c := <-rt.unregisterPeerAddedReq:
-			key := getMemoryAddress(c)
-			delete(rt.peerAddedCallbacks, key)
-
-		case c := <-rt.unregisterPeerRemovedReq:
-			key := getMemoryAddress(c)
-			delete(rt.peerRemovedCallbacks, key)
 
 		case <-rt.printReq:
 			rt.onPrintReq()
@@ -397,7 +327,6 @@ func (rt *routingTableImpl) update(p node.RemoteNodeData) {
 	}
 
 	bucket.PushFront(p)
-	go rt.PeerAdded(p)
 }
 
 // Remove a node from the routing table.
@@ -412,11 +341,7 @@ func (rt *routingTableImpl) remove(p node.RemoteNodeData) {
 	}
 
 	bucket := rt.buckets[bucketID]
-	removed := bucket.Remove(p)
-
-	if removed {
-		go rt.PeerRemoved(p)
-	}
+	bucket.Remove(p)
 }
 
 // Internal find peer request handler

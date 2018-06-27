@@ -29,9 +29,6 @@ type Swarm interface {
 	// Used for bootstrapping known bootstrap nodes
 	ConnectTo(req node.RemoteNodeData, done chan error)
 
-	// Bootstraped
-	AfterBootstrap(chan struct{})
-
 	// Connect to count random nodes - used for bootstrapping the swarm
 	ConnectToRandomNodes(count int)
 
@@ -57,6 +54,10 @@ type Swarm interface {
 	// used by protocols and for testing
 	getHandshakeProtocol() HandshakeProtocol
 	getFindNodeProtocol() FindNodeProtocol
+
+	getPeerByConnection(connID string) Peer
+
+	WaitForBootstrap() error
 }
 
 // SendMessageReq specifies data required for sending a p2p message to a remote peer.
@@ -66,6 +67,16 @@ type SendMessageReq struct {
 	Payload  []byte         // this should be a marshaled protocol msg e.g. PingReqData
 	Callback chan SendError // optional callback to receive send errors or timeout
 }
+
+//TODO : Replace  chan SendError  with a ad-hoc struct that enforces buffered channel
+// TODO : Consider doing this in other places that have callback created by the caller
+//type endMessageCallback struct {
+//	chan SendError
+//}
+//
+//func NewCallback() *SendMessageCallback {
+//
+//}
 
 // SendError specifies message sending error data.
 type SendError struct {
@@ -107,13 +118,12 @@ const (
 	Registered
 	Connecting
 	Connected
-	HandshakeStarted
 	SessionEstablished
 	Disconnected
 )
 
 // Created by stringer -type=NodeState
-const nodeStateName = "UnknownRegisteredConnectingConnectedHandshakeStartedSessionEstablishedDisconnected"
+const nodeStateName = "UnknownRegisteredConnectingConnectedSessionEstablishedDisconnected"
 
 var nodeStateIndex = [...]uint8{0, 7, 17, 27, 36, 52, 70, 82}
 
