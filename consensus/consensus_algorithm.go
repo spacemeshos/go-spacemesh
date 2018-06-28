@@ -14,8 +14,8 @@ type OpaqueMessage interface {
 // Algorithm is the main API to run a consensus algorithm that coordinates messages between nodes
 type Algorithm interface {
 
-	//StartInstance starts an instance of the byzanteen agreement, trying to reach agreement for the given message while
-	//receiving other agreement attempts from other nodes
+	//StartInstance starts an instance of the byzantine agreement, trying to reach agreement for the given message while
+	//receiving other agreement attempts from other nodes. this method blocks until protocol has finished
 	StartInstance(msg OpaqueMessage) []byte
 
 	//Aborts the operation of the consensus protocol
@@ -45,7 +45,7 @@ type RemoteNodeData interface {
 
 // CAInstance is an instance of the consensus algorithm used to receive and participate in an consensus protocol attempt of one instance
 type CAInstance interface {
-	ReceiveMessage(msg *pb.ConsensusMessage)
+	ReceiveMessage(msg *pb.ConsensusMessage) error
 
 	GetOutput() []byte
 }
@@ -64,35 +64,6 @@ type NetworkConnection interface {
 // Timer is an interface to receive current time
 type Timer interface {
 	GetTime() time.Time
-}
 
-// MessageQueue is a basic message queue that allows to peek and pop
-//todo: make valiues to be interface for everybody to use
-type MessageQueue struct {
-	outputQueue chan interface{}
-	first       *interface{}
-}
-
-// Creating new message queue
-func newMessageQueue(size int) MessageQueue {
-	return MessageQueue{
-		outputQueue: make(chan interface{}, size),
-		first:       nil,
-	}
-}
-
-// Peek first message in queue without extracting it
-func (mq *MessageQueue) Peek() *interface{} {
-	if mq.first == nil {
-		val := <-mq.outputQueue
-		mq.first = &val
-	}
-	return mq.first
-}
-
-// Pop the next item in the message queue
-func (mq *MessageQueue) Pop() *interface{} {
-	msg := mq.Peek()
-	mq.first = nil
-	return msg
+	Since(t time.Time) time.Duration
 }

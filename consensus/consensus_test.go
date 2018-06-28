@@ -9,11 +9,9 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"github.com/spacemeshos/go-spacemesh/consensus/pb"
+	"github.com/gogo/protobuf/proto"
 )
-
-func TestDolevStrongConsensus_GetRound(t *testing.T) {
-
-}
 
 type messageData []byte
 
@@ -26,6 +24,19 @@ type MockNetwork struct {
 	connections  map[string]chan OpaqueMessage
 	inputChannel chan MockNetworkMessage
 	mutex        sync.Mutex
+}
+
+type MaliciousSender struct{
+	DolevStrongConsensus
+}
+
+func (mal *MaliciousSender) StartInstance(msg OpaqueMessage, msg2 OpaqueMessage) []byte {
+	mal.startTime = time.Now()
+	go mal.SendMessage(msg2)
+	go mal.SendMessage(msg)
+	go mal.StartListening()
+	mal.waitForConsensus()
+	return msg.Data()
 }
 
 func (msg messageData) Data() []byte {
@@ -105,6 +116,10 @@ func (tm MyTimer) GetTime() time.Time {
 	return time.Now()
 }
 
+func (tm MyTimer) Since(sincetime time.Time) time.Duration {
+	return time.Since(sincetime)
+}
+
 type Node struct {
 	publicKey  crypto.PublicKey
 	privateKey crypto.PrivateKey
@@ -118,10 +133,24 @@ func NewNode() Node {
 	return Node{pub, priv}
 }
 
-func TestSanity(t *testing.T) {
-	numOfNodes := 20
+func createNodesAndIds(numOfNodes int) ([]string, []Node){
 	nodeIds := make([]string, numOfNodes)
 	nodes := make([]Node, numOfNodes)
+
+	log.Info("creating new nodes")
+	for i := 0; i < numOfNodes; i++ {
+		node := NewNode()
+		nodes[i] = node
+		nodeIds[i] = node.publicKey.String()
+		log.Info("creating new node %v", node.publicKey.String())
+	}
+
+	return nodeIds,nodes
+}
+
+func TestSanity(t *testing.T) {
+	numOfNodes := 20
+	nodeIds, nodes := createNodesAndIds(numOfNodes)
 	var dsInstances []Algorithm
 
 	cfg := config.DefaultConfig()
@@ -133,13 +162,7 @@ func TestSanity(t *testing.T) {
 	quit := mockNetwork.routeMessages()
 	zeroBuf := make([]byte, 0)
 
-	log.Info("creating new nodes")
-	for i := 0; i < numOfNodes; i++ {
-		node := NewNode()
-		nodes[i] = node
-		nodeIds[i] = node.publicKey.String()
-		log.Info("creating new node %v", node.publicKey.String())
-	}
+
 
 	for i := 0; i < numOfNodes; i++ {
 		ds := initDSC(mockNetwork, nodeIds, nodes[i], cfg, timer)
@@ -160,24 +183,243 @@ func TestSanity(t *testing.T) {
 	quit <- struct{}{}
 	i := 0
 	for _, dsc := range dsInstances {
-		validateDSC(t, dsc, arr, nodeIds[i], nodeIds[numOfNodes-1])
+		validateDSC(t, dsc, arr, nodeIds[i], nodeIds[numOfNodes-1], true)
 		i++
 	}
 
 }
 
-func validateDSC(t *testing.T, dsc Algorithm, expected []byte, node string, senderInstance string) {
+func TestNodeNotInListJoins(t *testing.T) {
+	numOfNodes := 10
+	var dsInstances []Algorithm
+
+	cfg := config.DefaultConfig()
+	cfg.NodesPerLayer = int32(numOfNodes)
+	cfg.NumOfAdverseries = int32(numOfNodes / 2)
+	timer := MyTimer{}
+
+	mockNetwork := NewMockNetwork()
+	quit := mockNetwork.routeMessages()
+	zeroBuf := make([]byte, 0)
+
+	nodeIds, nodes := createNodesAndIds(numOfNodes)
+
+	for i := 0; i < numOfNodes; i++ {
+		ds := initDSC(mockNetwork, nodeIds[:numOfNodes-1], nodes[i], cfg, timer)
+		dsInstances = append(dsInstances, ds)
+	}
+
+	for i := 0; i < numOfNodes-1; i++ {
+		x := messageData(zeroBuf)
+		//start instance blocks until protocol is finished
+		go dsInstances[i].StartInstance(x)
+	}
+
+	arr := []byte{'l', 'o', 'l'}
+	msg := messageData(arr)
+	dsInstances[numOfNodes-1].StartInstance(msg)
+
+	log.Info("closing network")
+	quit <- struct{}{}
+	i := 0
+	for _, dsc := range dsInstances {
+		validateDSC(t, dsc, arr, nodeIds[i], nodeIds[numOfNodes-1], true)
+		i++
+	}
+
+}
+
+func TestSenderSendsTwoMessages(t *testing.T) {
+	numOfNodes := 8
+
+	var dsInstances []Algorithm
+
+	cfg := config.DefaultConfig()
+	cfg.NodesPerLayer = int32(numOfNodes)
+	cfg.NumOfAdverseries = int32(numOfNodes / 2)
+	timer := MyTimer{}
+
+	mockNetwork := NewMockNetwork()
+	quit := mockNetwork.routeMessages()
+	zeroBuf := make([]byte, 0)
+
+	nodeIds, nodes := createNodesAndIds(numOfNodes)
+
+	for i := 0; i < numOfNodes -1; i++ {
+		ds := initDSC(mockNetwork, nodeIds, nodes[i], cfg, timer)
+		dsInstances = append(dsInstances, ds)
+	}
+
+	for i := 0; i < numOfNodes-1; i++ {
+		x := messageData(zeroBuf)
+		//start instance blocks until protocol is finished
+		go dsInstances[i].StartInstance(x)
+	}
+
+	node := nodes[numOfNodes -1]
+	nodeMock := mockNetwork.createNewNodeNetMock(node.publicKey.String())
+	mal, _ := initMaliciousDSC(cfg, timer, nodeIds, nodeMock, node.publicKey, node.privateKey)
+
+	//mal, _ := initMaliciousDSC(mockNetwork, nodeIds, nodes[numOfNodes -1], cfg, timer)
+
+	arr := []byte{'l', 'o', 'l'}
+	msg := messageData(arr)
+	msg2 := messageData([]byte("lol2"))
+	mal.StartInstance(msg, msg2)
+
+	log.Info("closing network")
+	quit <- struct{}{}
+	i := 0
+	for _, dsc := range dsInstances {
+		validateDSC(t, dsc, arr, nodeIds[i], nodeIds[numOfNodes-1], false)
+		i++
+	}
+
+}
+
+func initDolevStrongConsensus(numOfNodes int) *DolevStrongConsensus{
+	cfg := config.DefaultConfig()
+	cfg.NodesPerLayer = int32(numOfNodes)
+	cfg.NumOfAdverseries = int32(numOfNodes / 2)
+	timer := MyTimer{}
+
+	mockNetwork := NewMockNetwork()
+	//quit := mockNetwork.routeMessages()
+	node := NewNode()
+
+	nodeMock := mockNetwork.createNewNodeNetMock(node.publicKey.String())
+	dolevStrong, _ := createDSC(cfg,timer,nil,nodeMock,node.publicKey,node.privateKey)
+	return dolevStrong
+}
+
+func TestInvalidPublicKeyOfInitiatorMessage(t *testing.T){
+	numOfNodes := 10
+	dolevStrong := initDolevStrongConsensus(numOfNodes)
+
+	arr := messageData([]byte("anton"))
+	msg := createMessage(arr ,dolevStrong)
+
+	// flip a byte in the pub key to fail
+	msg.Msg.AuthPubKey[0] = ^msg.Msg.AuthPubKey[0]
+
+	bt, _ := proto.Marshal(&msg)
+	ms := messageData(bt)
+	err := dolevStrong.handleMessage(ms)
+
+	assert.Error(t, err)
+}
+
+func TestInvalidSignature(t *testing.T){
+	numOfNodes := 10
+	dolevStrong := initDolevStrongConsensus(numOfNodes)
+	msg := createMessage(messageData([]byte("anton")), dolevStrong)
+	dolevStrong.signMessageAndAppend(&msg)
+	msg.Msg.Data[0] = ^msg.Msg.Data[0]
+	instance := DolevStrongInstance{
+		ds:dolevStrong,
+		initiator:nil,
+	}
+	_, err := instance.findAndValidateSignatures(&msg)
+	assert.Error(t,err)
+}
+
+func validateDSC(t *testing.T, dsc Algorithm, expected []byte, node string, senderInstance string, shouldExist bool) {
 	outputs := dsc.GetOtherInstancesOutput()
 	for key, out := range outputs {
 		if key == senderInstance && node != senderInstance {
-			assert.True(t, bytes.Equal(out, expected), "buffer not found in any instance ", node)
+			if shouldExist{
+				assert.True(t, bytes.Equal(out, expected), "buffer not found in any instance ", node)
+			} else {
+				assert.False(t, bytes.Equal(out, expected), "buffer found in instance ", node)
+			}
+
 		}
 	}
 
 }
 
+
+
 func initDSC(mockNetwork *MockNetwork, activeNodes []string, node Node, cfg config.Config, timer MyTimer) Algorithm {
 	nodeMock := mockNetwork.createNewNodeNetMock(node.publicKey.String())
 	ds, _ := NewDSC(cfg, timer, activeNodes, nodeMock, node.publicKey, node.privateKey)
 	return ds
+}
+
+// NewDSC creates a new instance of dolev strong agreement protocol
+func createDSC(conf config.Config,
+	timer Timer,
+	nodes []string,
+	network NetworkConnection,
+	pubKey crypto.PublicKey,
+	privKey crypto.PrivateKey) (*DolevStrongConsensus, error) {
+
+	dsc := &DolevStrongConsensus{
+		activeInstances: make(map[string]CAInstance),
+		ingressChannel:  make(chan OpaqueMessage),
+		publicKey:       pubKey,
+		privateKey:      privKey,
+		net:             network,
+		dsConfig:        conf,
+		timer:           timer,
+		startTime:       time.Now(),
+		abortInstance:   make(chan struct{}, 1),
+		abortListening:  make(chan struct{}, 1),
+	}
+	for _, node := range nodes {
+		dsc.activeInstances[node] = NewCAInstance(dsc)
+	}
+
+	return dsc, nil
+}
+
+func initMaliciousDSC(conf config.Config,
+	timer Timer,
+	nodes []string,
+	network NetworkConnection,
+	pubKey crypto.PublicKey,
+	privKey crypto.PrivateKey) (*MaliciousSender, error) {
+
+	dsc := DolevStrongConsensus{
+		activeInstances: make(map[string]CAInstance),
+		ingressChannel:  make(chan OpaqueMessage),
+		publicKey:       pubKey,
+		privateKey:      privKey,
+		net:             network,
+		dsConfig:        conf,
+		timer:           timer,
+		startTime:       time.Now(),
+		abortInstance:   make(chan struct{}, 1),
+		abortListening:  make(chan struct{}, 1),
+	}
+
+	mal := &MaliciousSender{
+		dsc,
+	}
+	for _, node := range nodes {
+		dsc.activeInstances[node] = NewCAInstance(&dsc)
+	}
+
+	return mal, nil
+}
+
+
+func createMessage(msg OpaqueMessage, impl *DolevStrongConsensus) pb.ConsensusMessage{
+	dataMsg := pb.MessageData{
+		Data:       msg.Data(),
+		AuthPubKey: impl.publicKey.Bytes(),
+	}
+	protocolMsg := pb.ConsensusMessage{
+		Msg:        &dataMsg,
+		Validators: []*pb.Validator{},
+	}
+	err := impl.signMessageAndAppend(&protocolMsg)
+	if err != nil {
+		log.Error("cannot sign message %v", protocolMsg)
+	}
+
+	return protocolMsg
+	//except := make(map[string]struct{})
+	//except[impl.publicKey.String()] = struct{}{}
+
 }
