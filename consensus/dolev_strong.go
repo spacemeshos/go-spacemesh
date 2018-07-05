@@ -30,7 +30,6 @@ type DolevStrongConsensus struct {
 // DolevStrongInstance is a struct holding state for a single instance of a dolev strong agreement protocol as a receiver
 type DolevStrongInstance struct {
 	value                   []byte
-	initiator               RemoteNodeData
 	ds                      *DolevStrongConsensus
 	abortProcessingInstance bool
 }
@@ -125,6 +124,7 @@ func (impl *DolevStrongConsensus) waitForConsensus() {
 	}
 }
 
+
 // SendMessage sends this message in order to reach consensus
 func (impl *DolevStrongConsensus) SendMessage(msg OpaqueMessage) error {
 	if len(msg.Data()) == 0 {
@@ -191,6 +191,9 @@ func (dsci *DolevStrongInstance) ReceiveMessage(message *pb.ConsensusMessage) er
 	}
 
 	publicKeys, err := dsci.findAndValidateSignatures(message)
+	if err != nil {
+		return err
+	}
 	initiatorPubKey, err := crypto.NewPublicKey(message.Msg.AuthPubKey)
 	if _, ok := publicKeys[initiatorPubKey.String()]; !ok || err != nil {
 		return fmt.Errorf("initiator did not sign the message - aborting")
@@ -200,7 +203,7 @@ func (dsci *DolevStrongInstance) ReceiveMessage(message *pb.ConsensusMessage) er
 	if len(publicKeys) < int(round) {
 		return fmt.Errorf("invalid number of signatures - not matching round number %v num of signatures %v", round, len(publicKeys))
 	}
-
+	//todo: what if the signatures are of nodes that are not in the layer?
 	if dsci.value != nil {
 		if res := bytes.Compare(dsci.value, message.Msg.Data); res != 0 {
 			dsci.abortProcessingInstance = true //with abort
@@ -209,8 +212,9 @@ func (dsci *DolevStrongInstance) ReceiveMessage(message *pb.ConsensusMessage) er
 		// no need to do anything
 		return nil
 	}
-		//set the message as the correct one
+	//set the message as the correct one
 	dsci.value = message.Msg.Data
+	log.Info("Message received on node : %v", dsci.ds.publicKey.String())
 	// add our signature on the message
 	err = dsci.ds.signMessageAndAppend(message)
 	if err != nil {
