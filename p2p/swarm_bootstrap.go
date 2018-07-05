@@ -11,7 +11,7 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht"
-	"github.com/spacemeshos/go-spacemesh/p2p/identity"
+	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 )
 
@@ -41,7 +41,7 @@ func (s *swarmImpl) bootstrap() {
 				atomic.AddUint32(&bn, 1)
 			}
 		}(connected)
-		rn, err := identity.NewNodeFromString(n)
+		rn, err := node.NewNodeFromString(n)
 
 		if err != nil {
 			s.localNode.Errorf("Could'nt parse node from string, skipping (err:  %v)", err)
@@ -107,7 +107,7 @@ func (s *swarmImpl) ConnectToRandomNodes(count int) {
 	for _, p := range c.Peers {
 		wg.Add(1)
 		done := make(chan error)
-		go func(d chan error, p identity.Node) {
+		go func(d chan error, p node.Node) {
 			timeout := time.NewTimer(ConnectToNodeTimeout)
 			select {
 			case derr := <-d:
@@ -135,7 +135,7 @@ func (s *swarmImpl) onSendInternalMessage(r SendMessageReq) {
 	s.peerMapMutex.RUnlock()
 
 	if peer == nil {
-		prs := s.getNearestPeers(identity.NewDhtIDFromBase58(r.PeerID), 1)
+		prs := s.getNearestPeers(node.NewDhtIDFromBase58(r.PeerID), 1)
 		if len(prs) == 0 {
 			//We're not sending to peers the routing table don't know about in bootstrap phase
 			return

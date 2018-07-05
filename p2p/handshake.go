@@ -16,7 +16,7 @@ import (
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
-	"github.com/spacemeshos/go-spacemesh/p2p/identity"
+	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"sync"
@@ -30,7 +30,7 @@ const HandshakeResp = "/handshake/1.0/handshake-resp/"
 
 // HandshakeData defines the handshake protocol capabilities.
 type HandshakeData interface {
-	LocalNode() *identity.LocalNode
+	LocalNode() *node.LocalNode
 	Peer() Peer
 	Session() NetworkSession
 	GetError() error
@@ -38,7 +38,7 @@ type HandshakeData interface {
 }
 
 // NewHandshakeData creates new HandshakeData with the provided data.
-func NewHandshakeData(localNode *identity.LocalNode, peer Peer, session NetworkSession, err error) HandshakeData {
+func NewHandshakeData(localNode *node.LocalNode, peer Peer, session NetworkSession, err error) HandshakeData {
 	return &handshakeDataImp{
 		localNode: localNode,
 		peer:      peer,
@@ -48,14 +48,14 @@ func NewHandshakeData(localNode *identity.LocalNode, peer Peer, session NetworkS
 }
 
 type handshakeDataImp struct {
-	localNode *identity.LocalNode
+	localNode *node.LocalNode
 	peer      Peer
 	session   NetworkSession
 	err       error
 }
 
 // LocalNode returns the protocol's local node.
-func (n *handshakeDataImp) LocalNode() *identity.LocalNode {
+func (n *handshakeDataImp) LocalNode() *node.LocalNode {
 	return n.localNode
 }
 
@@ -318,7 +318,7 @@ func (h *handshakeProtocolImpl) onHandleIncomingHandshakeResponse(msg IncomingMe
 // Returns handshake data to send to removeNode and a network session data object that includes the session enc/dec sym key and iv
 // Node that NetworkSession is not yet authenticated - this happens only when the handshake response is processed and authenticated
 // This is called by node1 (initiator)
-func generateHandshakeRequestData(node *identity.LocalNode, remoteNode Peer) (*pb.HandshakeData, NetworkSession, error) {
+func generateHandshakeRequestData(node *node.LocalNode, remoteNode Peer) (*pb.HandshakeData, NetworkSession, error) {
 
 	// we use the Elliptic Curve Encryption Scheme
 	// https://en.wikipedia.org/wiki/Integrated_Encryption_Scheme
@@ -426,7 +426,7 @@ func authenticateSenderNode(req *pb.HandshakeData) error {
 // Process a session handshake request data from remoteNode r
 // Returns Handshake data to send to r and a network session data object that includes the session sym  enc/dec key
 // This is called by responder in the handshake protocol (node2)
-func processHandshakeRequest(node *identity.LocalNode, r Peer, req *pb.HandshakeData) (*pb.HandshakeData, NetworkSession, error) {
+func processHandshakeRequest(node *node.LocalNode, r Peer, req *pb.HandshakeData) (*pb.HandshakeData, NetworkSession, error) {
 
 	// check that received clientversion is valid client string
 	reqVersion := strings.Split(req.ClientVersion, "/")
@@ -544,7 +544,7 @@ func processHandshakeRequest(node *identity.LocalNode, r Peer, req *pb.Handshake
 // Process handshake protocol response. This is called by initiator (node1) to handle response from node2
 // and to establish the session
 // Side effect - passed network session is set to authenticated
-func processHandshakeResponse(node *identity.LocalNode, r Peer, s NetworkSession, resp *pb.HandshakeData) error {
+func processHandshakeResponse(node *node.LocalNode, r Peer, s NetworkSession, resp *pb.HandshakeData) error {
 
 	// verified shared public secret
 	if !bytes.Equal(resp.PubKey, s.PubKey()) {

@@ -8,7 +8,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"gopkg.in/op/go-logging.v1"
 
-	"github.com/spacemeshos/go-spacemesh/p2p/identity"
+	"github.com/spacemeshos/go-spacemesh/p2p/node"
 )
 
 func GetTestLogger(name string) *logging.Logger {
@@ -18,10 +18,10 @@ func GetTestLogger(name string) *logging.Logger {
 func TestTableCallbacks(t *testing.T) {
 
 	const n = 100
-	local := identity.GenerateRandomNodeData()
+	local := node.GenerateRandomNodeData()
 	localID := local.DhtID()
 
-	nodes := identity.GenerateRandomNodesData(n)
+	nodes := node.GenerateRandomNodesData(n)
 
 	tlog := GetTestLogger(localID.Pretty())
 
@@ -49,13 +49,13 @@ func TestTableCallbacks(t *testing.T) {
 func TestTableUpdate(t *testing.T) {
 
 	const n = 100
-	local := identity.GenerateRandomNodeData()
+	local := node.GenerateRandomNodeData()
 
 	localID := local.DhtID()
 
 	rt := NewRoutingTable(10, localID, GetTestLogger(localID.Pretty()))
 
-	nodes := identity.GenerateRandomNodesData(n)
+	nodes := node.GenerateRandomNodesData(n)
 
 	// Testing Update
 	for i := 0; i < 10000; i++ {
@@ -65,7 +65,7 @@ func TestTableUpdate(t *testing.T) {
 	for i := 0; i < n; i++ {
 
 		// create a new random identity
-		n := identity.GenerateRandomNodeData()
+		n := node.GenerateRandomNodeData()
 
 		// create callback to receive result
 		callback := make(PeersOpChannel, 2)
@@ -88,13 +88,13 @@ func TestTableFind(t *testing.T) {
 
 	const n = 100
 
-	local := identity.GenerateRandomNodeData()
+	local := node.GenerateRandomNodeData()
 
 	localID := local.DhtID()
 
 	rt := NewRoutingTable(10, localID, GetTestLogger(localID.Pretty()))
 
-	nodes := identity.GenerateRandomNodesData(n)
+	nodes := node.GenerateRandomNodesData(n)
 
 	for i := 0; i < 5; i++ {
 		rt.Update(nodes[i])
@@ -110,7 +110,7 @@ func TestTableFind(t *testing.T) {
 
 		select {
 		case c := <-callback:
-			if c.Peer == identity.EmptyNode || c.Peer != n {
+			if c.Peer == node.EmptyNode || c.Peer != n {
 				t.Fatalf("Failed to lookup known identity...")
 			}
 		case <-time.After(time.Second * 5):
@@ -122,7 +122,7 @@ func TestTableFind(t *testing.T) {
 
 		select {
 		case c := <-callback1:
-			if c.Peer == identity.EmptyNode || c.Peer != n {
+			if c.Peer == node.EmptyNode || c.Peer != n {
 				t.Fatalf("Failed to find identity...")
 			}
 		case <-time.After(time.Second * 5):
@@ -136,11 +136,11 @@ func TestTableFindCount(t *testing.T) {
 	const n = 100
 	const i = 15
 
-	local := identity.GenerateRandomNodeData()
+	local := node.GenerateRandomNodeData()
 
 	localID := local.DhtID()
 	rt := NewRoutingTable(10, localID, GetTestLogger(localID.Pretty()))
-	nodes := identity.GenerateRandomNodesData(n)
+	nodes := node.GenerateRandomNodesData(n)
 	for i := 0; i < n; i++ {
 		rt.Update(nodes[i])
 	}
@@ -167,10 +167,10 @@ func TestTableMultiThreaded(t *testing.T) {
 	const n = 5000
 	const i = 15
 
-	local := identity.GenerateRandomNodeData()
+	local := node.GenerateRandomNodeData()
 	localID := local.DhtID()
 	rt := NewRoutingTable(10, localID, GetTestLogger(localID.Pretty()))
-	nodes := identity.GenerateRandomNodesData(n)
+	nodes := node.GenerateRandomNodesData(n)
 
 	go func() {
 		for i := 0; i < 1000; i++ {
@@ -196,11 +196,11 @@ func TestTableMultiThreaded(t *testing.T) {
 
 func BenchmarkUpdates(b *testing.B) {
 	b.StopTimer()
-	local := identity.GenerateRandomNodeData()
+	local := node.GenerateRandomNodeData()
 
 	localID := local.DhtID()
 	rt := NewRoutingTable(10, localID, GetTestLogger(localID.Pretty()))
-	nodes := identity.GenerateRandomNodesData(b.N)
+	nodes := node.GenerateRandomNodesData(b.N)
 
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
@@ -211,11 +211,11 @@ func BenchmarkUpdates(b *testing.B) {
 func BenchmarkFinds(b *testing.B) {
 	b.StopTimer()
 
-	local := identity.GenerateRandomNodeData()
+	local := node.GenerateRandomNodeData()
 
 	localID := local.DhtID()
 	rt := NewRoutingTable(10, localID, GetTestLogger(localID.Pretty()))
-	nodes := identity.GenerateRandomNodesData(b.N)
+	nodes := node.GenerateRandomNodesData(b.N)
 
 	for i := 0; i < b.N; i++ {
 		rt.Update(nodes[i])

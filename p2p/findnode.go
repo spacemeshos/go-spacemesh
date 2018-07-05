@@ -9,7 +9,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht"
-	"github.com/spacemeshos/go-spacemesh/p2p/identity"
+	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"time"
 )
@@ -132,7 +132,7 @@ func (p *findNodeProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 	// use the dht table to generate the response
 
 	rt := p.swarm.RoutingTable()
-	nodeDhtID := identity.NewDhtID(req.NodeId)
+	nodeDhtID := node.NewDhtID(req.NodeId)
 	callback := make(dht.PeersOpChannel)
 
 	count := int(crypto.MinInt32(req.MaxResults, maxNearestNodesResults))
@@ -145,7 +145,7 @@ func (p *findNodeProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 	select { // block until we got results from the  routing table or timeout
 	case c := <-callback:
 		p.swarm.LocalNode().Debug("Preparing find-node (%v) results to send to %v", log.PrettyID(base58.Encode(req.NodeId)), peer.Pretty())
-		peers := []identity.Node{}
+		peers := []node.Node{}
 		for i := range c.Peers { // we don't want to send peer to itself
 			peer := c.Peers[i]
 			if peer.String() != msg.Sender().String() {
@@ -153,7 +153,7 @@ func (p *findNodeProtocolImpl) handleIncomingRequest(msg IncomingMessage) {
 				p.swarm.LocalNode().Debug("%d: %v", i, peer.Pretty(), peer.Address())
 			}
 		}
-		results = identity.ToNodeInfo(peers, msg.Sender().String())
+		results = node.ToNodeInfo(peers, msg.Sender().String())
 	case <-time.After(tableQueryTimeout):
 		results = []*pb.NodeInfo{} // an empty slice
 	}
@@ -213,7 +213,7 @@ func (p *findNodeProtocolImpl) handleIncomingResponse(msg IncomingMessage) {
 		data.NodeInfos, hex.EncodeToString(data.Metadata.ReqId))
 
 	// update routing table with newly found nodes
-	nodes := identity.FromNodeInfos(data.NodeInfos)
+	nodes := node.FromNodeInfos(data.NodeInfos)
 	for _, n := range nodes {
 		p.swarm.LocalNode().Debug("Node response: %s, %s", n.String(), n.Address())
 		p.swarm.RoutingTable().Update(n)
