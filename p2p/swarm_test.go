@@ -164,7 +164,6 @@ func TestSmallBootstrap(t *testing.T) {
 	filesystem.SetupTestSpacemeshDataFolders(t, "swarm_test")
 	defer filesystem.DeleteSpacemeshDataFolders(t)
 
-
 	const timeout = 25 * time.Second
 	const randomConnections = 5
 	const totalNodes = 30

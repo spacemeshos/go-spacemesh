@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/crypto"
-	"github.com/spacemeshos/go-spacemesh/p2p/identity"
+	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 	"github.com/stretchr/testify/assert"
 )
@@ -22,7 +22,7 @@ func TestPingProtocol(t *testing.T) {
 	node2Local := p2pTestInstance(t, cfg)
 
 	// let node 1 know about node 2
-	node1Local.RegisterNode(identity.New(node2Local.LocalNode().PublicKey(), node2Local.LocalNode().Address()))
+	node1Local.RegisterNode(node.New(node2Local.LocalNode().PublicKey(), node2Local.LocalNode().Address()))
 
 	// generate unique request id
 	pingReqID := crypto.UUID()

@@ -5,7 +5,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht"
-	"github.com/spacemeshos/go-spacemesh/p2p/identity"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 	"github.com/spacemeshos/go-spacemesh/p2p/timesync"
@@ -15,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"sync"
+	"github.com/spacemeshos/go-spacemesh/p2p/node"
 )
 
 type nodeEventCallbacks []NodeEventCallback
@@ -27,7 +27,7 @@ type swarmImpl struct {
 
 	// set in construction and immutable state
 	network   net.Net
-	localNode *identity.LocalNode
+	localNode *node.LocalNode
 	demuxer   Demuxer
 
 	config nodeconfig.Config
@@ -70,8 +70,8 @@ type swarmImpl struct {
 	messagesRetryQueue []SendMessageReq
 
 	// comm channels
-	connectionRequests chan nodeAction    // local requests to establish a session w a remote node
-	disconnectRequests chan identity.Node // local requests to kill session and disconnect from node
+	connectionRequests chan nodeAction // local requests to establish a session w a remote node
+	disconnectRequests chan node.Node  // local requests to kill session and disconnect from node
 
 	// Recv message reqs and send them
 	sendMsgRequests chan SendMessageReq // local request to send a session message to a node and callback on error or data
@@ -82,7 +82,7 @@ type swarmImpl struct {
 	shutdown chan struct{} // local request to kill the swarm from outside. e.g when local node is shutting down
 
 	// Request to register a node to swarm.peers
-	registerNodeReq chan identity.Node // local request to register a node based on minimal data
+	registerNodeReq chan node.Node // local request to register a node based on minimal data
 
 	// swarm provides handshake protocol
 	handshakeProtocol HandshakeProtocol
@@ -103,14 +103,14 @@ func New(config nodeconfig.Config, loadIdentity bool) (Swarm, error) {
 	port := config.TCPPort
 	address := fmt.Sprintf("0.0.0.0:%d", port)
 
-	var l *identity.LocalNode
+	var l *node.LocalNode
 	var err error
 	// Load an existing identity from file if exists.
 
 	if loadIdentity {
-		l, err = identity.NewLocalNode(config, address, true)
+		l, err = node.NewLocalNode(config, address, true)
 	} else {
-		l, err = identity.NewNodeIdentity(config, address, true)
+		l, err = node.NewNodeIdentity(config, address, true)
 	}
 
 	if err != nil {
@@ -161,13 +161,13 @@ func New(config nodeconfig.Config, loadIdentity bool) (Swarm, error) {
 		// ref: https://www.goinggo.net/2017/10/the-behavior-of-channels.html
 
 		connectionRequests: make(chan nodeAction, 20),
-		disconnectRequests: make(chan identity.Node, 20),
+		disconnectRequests: make(chan node.Node, 20),
 
 		sendMsgRequests:  make(chan SendMessageReq, 20),
 		sendHandshakeMsg: make(chan SendMessageReq, 20),
 		demuxer:          NewDemuxer(l.Logger),
 		newSessions:      make(chan HandshakeData, 20),
-		registerNodeReq:  make(chan identity.Node, 20),
+		registerNodeReq:  make(chan node.Node, 20),
 
 		nodeEventRemoveChannel: make(chan NodeEventCallback),
 
@@ -289,15 +289,15 @@ func (s *swarmImpl) RoutingTable() dht.RoutingTable {
 }
 
 // register a node with the swarm
-func (s *swarmImpl) RegisterNode(data identity.Node) {
+func (s *swarmImpl) RegisterNode(data node.Node) {
 	s.registerNodeReq <- data
 }
 
-func (s *swarmImpl) ConnectTo(req identity.Node, done chan error) {
+func (s *swarmImpl) ConnectTo(req node.Node, done chan error) {
 	s.connectionRequests <- nodeAction{req, done}
 }
 
-func (s *swarmImpl) DisconnectFrom(req identity.Node) {
+func (s *swarmImpl) DisconnectFrom(req node.Node) {
 	s.disconnectRequests <- req
 }
 
@@ -305,7 +305,7 @@ func (s *swarmImpl) GetDemuxer() Demuxer {
 	return s.demuxer
 }
 
-func (s *swarmImpl) LocalNode() *identity.LocalNode {
+func (s *swarmImpl) LocalNode() *node.LocalNode {
 	return s.localNode
 }
 

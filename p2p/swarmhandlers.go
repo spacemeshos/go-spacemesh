@@ -10,7 +10,7 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/identity"
+	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/timesync"
@@ -22,7 +22,7 @@ import (
 
 // Handles a local request to register a remote node in the swarm
 // Register adds info about this node but doesn't attempt to connect to it
-func (s *swarmImpl) onRegisterNodeRequest(n identity.Node) {
+func (s *swarmImpl) onRegisterNodeRequest(n node.Node) {
 	s.peerMapMutex.Lock()
 	if _, ok := s.peers[n.String()]; ok {
 		s.peerMapMutex.Unlock()
@@ -67,12 +67,12 @@ func (s *swarmImpl) addIncomingPendingMessage(ipm incomingPendingMessage) {
 }
 
 type nodeAction struct {
-	req  identity.Node
+	req  node.Node
 	done chan error
 }
 
 // Handles a local request to connect to a remote node
-func (s *swarmImpl) onConnectionRequest(req identity.Node, done chan error) {
+func (s *swarmImpl) onConnectionRequest(req node.Node, done chan error) {
 
 	s.localNode.Debug("Local request to connect to node %s", req.Pretty())
 
@@ -215,7 +215,7 @@ func (s *swarmImpl) onNewSession(data HandshakeData) {
 }
 
 // Local request to disconnect from a node
-func (s *swarmImpl) onDisconnectionRequest(req identity.Node) {
+func (s *swarmImpl) onDisconnectionRequest(req node.Node) {
 
 	// todo: disconnect all connections with node
 
@@ -259,7 +259,7 @@ func (s *swarmImpl) onSendMessageRequest(r SendMessageReq) {
 
 	if peer == nil {
 		s.localNode.Debug("No contact info to target peer - attempting to find it on the network...")
-		callback := make(chan identity.Node)
+		callback := make(chan node.Node)
 
 		// attempt to find the peer
 		s.findNode(r.PeerID, callback)
@@ -267,7 +267,7 @@ func (s *swarmImpl) onSendMessageRequest(r SendMessageReq) {
 			t := time.NewTimer(time.Second * 5)
 			select {
 			case n := <-callback:
-				if n != identity.EmptyNode { // we found it - now we can send the message to it
+				if n != node.EmptyNode { // we found it - now we can send the message to it
 					s.localNode.Debug("Peer %s found... - registering and sending", r.PeerID)
 					s.msgPendingRegister <- r
 					s.RegisterNode(n)
@@ -290,7 +290,7 @@ func (s *swarmImpl) onSendMessageRequest(r SendMessageReq) {
 		s.messagesPendingSession[hex.EncodeToString(r.ReqID)] = r
 		// try to connect to remote node and send the message once connected
 		// todo: callback listener if connection fails (possibly after retries)
-		s.onConnectionRequest(identity.New(peer.PublicKey(), peer.TCPAddress()), nil)
+		s.onConnectionRequest(node.New(peer.PublicKey(), peer.TCPAddress()), nil)
 		return
 	}
 	session := peer.GetAuthenticatedSession()

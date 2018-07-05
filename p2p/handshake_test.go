@@ -9,7 +9,7 @@ import (
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/identity"
+	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
@@ -26,7 +26,7 @@ func TestHandshakeCoreData(t *testing.T) {
 
 	address := fmt.Sprintf("0.0.0.0:%d", port)
 
-	node1Local, err := identity.NewNodeIdentity(config, address, false)
+	node1Local, err := node.NewNodeIdentity(config, address, false)
 
 	if err != nil {
 		t.Error("failed to create local node1", err)
@@ -41,7 +41,7 @@ func TestHandshakeCoreData(t *testing.T) {
 
 	address1 := fmt.Sprintf("0.0.0.0:%d", port1)
 
-	node2Local, err := identity.NewNodeIdentity(config, address1, false)
+	node2Local, err := node.NewNodeIdentity(config, address1, false)
 
 	if err != nil {
 		t.Error("failed to create local node2", err)
@@ -105,7 +105,7 @@ func TestHandshakeProtocol(t *testing.T) {
 
 	address := fmt.Sprintf("0.0.0.0:%d", port)
 
-	node1Local, _ := identity.NewNodeIdentity(config, address, false)
+	node1Local, _ := node.NewNodeIdentity(config, address, false)
 	node1Remote, _ := NewRemoteNode(node1Local.String(), address)
 
 	// node 2
@@ -115,7 +115,7 @@ func TestHandshakeProtocol(t *testing.T) {
 
 	address1 := fmt.Sprintf("0.0.0.0:%d", port1)
 
-	node2Local, _ := identity.NewNodeIdentity(config, address1, false)
+	node2Local, _ := node.NewNodeIdentity(config, address1, false)
 	node2Remote, _ := NewRemoteNode(node2Local.String(), address1)
 
 	// STEP 1: Node 1 generates handshake data and sends it to node2 ....
@@ -209,7 +209,7 @@ func TestBadHandshakes(t *testing.T) {
 
 		address := fmt.Sprintf("0.0.0.0:%d", port)
 
-		node1Local, _ := identity.NewNodeIdentity(cfg, address, false)
+		node1Local, _ := node.NewNodeIdentity(cfg, address, false)
 		node1Remote, _ := NewRemoteNode(node1Local.String(), address)
 
 		// node 2
@@ -218,7 +218,7 @@ func TestBadHandshakes(t *testing.T) {
 
 		address1 := fmt.Sprintf("0.0.0.0:%d", port1)
 
-		node2Local, _ := identity.NewNodeIdentity(cfg2, address1, false)
+		node2Local, _ := node.NewNodeIdentity(cfg2, address1, false)
 		node2Remote, _ := NewRemoteNode(node2Local.String(), address1)
 
 		// STEP 1: Node 1 generates handshake data and sends it to node2 ....

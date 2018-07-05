@@ -2,21 +2,21 @@ package dht
 
 import (
 	"container/list"
-	"github.com/spacemeshos/go-spacemesh/p2p/identity"
+	"github.com/spacemeshos/go-spacemesh/p2p/node"
 )
 
 // Bucket is a dht k-bucket type. Bucket methods are NOT thread safe.
 // RoutingTable (or other clients) is responsible for serializing access to Bucket's methods.
 type Bucket interface {
-	Peers() []identity.Node
-	Has(n identity.Node) bool
-	Remove(n identity.Node) bool
-	MoveToFront(n identity.Node)
-	PushFront(n identity.Node)
-	PushBack(n identity.Node)
-	PopBack() identity.Node
+	Peers() []node.Node
+	Has(n node.Node) bool
+	Remove(n node.Node) bool
+	MoveToFront(n node.Node)
+	PushFront(n node.Node)
+	PushBack(n node.Node)
+	PopBack() node.Node
 	Len() int
-	Split(cpl int, target identity.DhtID) Bucket
+	Split(cpl int, target node.DhtID) Bucket
 	List() *list.List
 }
 
@@ -33,10 +33,10 @@ func NewBucket() Bucket {
 }
 
 // Peers returns a slice of RemoteNodeData for the peers stored in the bucket.
-func (b *bucketimpl) Peers() []identity.Node {
-	ps := make([]identity.Node, 0, b.list.Len())
+func (b *bucketimpl) Peers() []node.Node {
+	ps := make([]node.Node, 0, b.list.Len())
 	for e := b.list.Front(); e != nil; e = e.Next() {
-		n := e.Value.(identity.Node)
+		n := e.Value.(node.Node)
 		ps = append(ps, n)
 	}
 	return ps
@@ -48,9 +48,9 @@ func (b *bucketimpl) List() *list.List {
 }
 
 // Has returns true iff the bucket stores n.
-func (b *bucketimpl) Has(n identity.Node) bool {
+func (b *bucketimpl) Has(n node.Node) bool {
 	for e := b.list.Front(); e != nil; e = e.Next() {
-		n1 := e.Value.(identity.Node)
+		n1 := e.Value.(node.Node)
 		if n1.DhtID().Equals(n.DhtID()) {
 			return true
 		}
@@ -60,9 +60,9 @@ func (b *bucketimpl) Has(n identity.Node) bool {
 
 // Remove removes n from the bucket if it is stored in it.
 // It returns true if n was in the bucket and was removed and false otherwise.
-func (b *bucketimpl) Remove(n identity.Node) bool {
+func (b *bucketimpl) Remove(n node.Node) bool {
 	for e := b.list.Front(); e != nil; e = e.Next() {
-		if e.Value.(identity.Node).DhtID().Equals(n.DhtID()) {
+		if e.Value.(node.Node).DhtID().Equals(n.DhtID()) {
 			b.list.Remove(e)
 			return true
 		}
@@ -71,32 +71,32 @@ func (b *bucketimpl) Remove(n identity.Node) bool {
 }
 
 // MoveToFront moves n to the front of the bucket.
-func (b *bucketimpl) MoveToFront(n identity.Node) {
+func (b *bucketimpl) MoveToFront(n node.Node) {
 	for e := b.list.Front(); e != nil; e = e.Next() {
-		if e.Value.(identity.Node).DhtID().Equals(n.DhtID()) {
+		if e.Value.(node.Node).DhtID().Equals(n.DhtID()) {
 			b.list.MoveToFront(e)
 		}
 	}
 }
 
 // PushFront adds a new identity to the front of the bucket.
-func (b *bucketimpl) PushFront(n identity.Node) {
+func (b *bucketimpl) PushFront(n node.Node) {
 	b.list.PushFront(n)
 }
 
 // PushBack adds a new identity to the back of the bucket.
-func (b *bucketimpl) PushBack(n identity.Node) {
+func (b *bucketimpl) PushBack(n node.Node) {
 	b.list.PushBack(n)
 }
 
 // PopBack removes the identity at the back of the bucket from the bucket and returns it.
-func (b *bucketimpl) PopBack() identity.Node {
+func (b *bucketimpl) PopBack() node.Node {
 	last := b.list.Back()
 	if last == nil {
-		return identity.EmptyNode
+		return node.EmptyNode
 	}
 	b.list.Remove(last)
-	return last.Value.(identity.Node)
+	return last.Value.(node.Node)
 }
 
 // Len returns the number of nodes stored in the bucket.
@@ -107,11 +107,11 @@ func (b *bucketimpl) Len() int {
 // Split splits bucket stored nodes into two buckets.
 // The receiver bucket will have peers with cpl equal to cpl with target.
 // The returned bucket will have peers with cpl greater than cpl with target (closer peers).
-func (b *bucketimpl) Split(cpl int, target identity.DhtID) Bucket {
+func (b *bucketimpl) Split(cpl int, target node.DhtID) Bucket {
 	newbucket := NewBucket()
 	e := b.list.Front()
 	for e != nil {
-		n := e.Value.(identity.Node)
+		n := e.Value.(node.Node)
 		peerCPL := n.DhtID().CommonPrefixLen(target)
 		if peerCPL > cpl {
 			newbucket.PushBack(n)
