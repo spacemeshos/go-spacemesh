@@ -13,6 +13,7 @@ import (
 	"net"
 	"sync"
 	"time"
+	"github.com/spacemeshos/go-spacemesh/p2p/node"
 )
 
 // There are two types of TCP connections
@@ -24,12 +25,6 @@ const (
 	TcpSecured ConnectionType = iota
 	TcpUnsecured
 )
-
-type localNode interface {
-	PublicKey() crypto.PublicKey
-	PrivateKey() crypto.PrivateKey
-	NetworkId() int
-}
 
 type remoteNode interface {
 	PublicKey() crypto.PublicKey
@@ -64,14 +59,14 @@ type Net interface {
 	GetLogger() *logging.Logger
 	GetNetworkId() int32
 	HandlePreSessionIncomingMessage(msg IncomingMessage) error
-	GetLocalNode() localNode
+	GetLocalNode() *node.LocalNode
 	Shutdown()
 }
 
 // impl internal type
 type netImpl struct {
 	networkId int32
-	localNode localNode
+	localNode *node.LocalNode
 	logger    *logging.Logger
 
 	tcpListener      net.Listener
@@ -98,7 +93,7 @@ type netImpl struct {
 
 // NewNet creates a new network.
 // It attempts to tcp listen on address. e.g. localhost:1234 .
-func NewNet(tcpListenAddress string, conf nodeconfig.Config, logger *logging.Logger, localEntity localNode) (Net, error) {
+func NewNet(tcpListenAddress string, conf nodeconfig.Config, logger *logging.Logger, localEntity *node.LocalNode) (Net, error) {
 
 	n := &netImpl{
 		networkId:        int32(conf.NetworkID),
@@ -163,7 +158,7 @@ func (n *netImpl) GetNetworkId() int32 {
 	return n.networkId
 }
 
-func (n *netImpl) GetLocalNode() localNode {
+func (n *netImpl) GetLocalNode() *node.LocalNode {
 	return n.localNode
 }
 

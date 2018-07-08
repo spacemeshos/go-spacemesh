@@ -1,14 +1,10 @@
 package node
 
 import (
-	"errors"
-	"fmt"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
-	"sync"
 )
 
 // LocalNode implementation.
@@ -16,7 +12,6 @@ type LocalNode struct {
 	Node
 	privKey       crypto.PrivateKey
 	pubTCPAddress string
-	pubTCPMutex   sync.RWMutex
 
 	networkID nodeconfig.NetworkID
 
@@ -26,35 +21,6 @@ type LocalNode struct {
 // NetworkID returns the local node's network id (testnet/mainnet, etc..)
 func (n *LocalNode) NetworkID() nodeconfig.NetworkID {
 	return n.networkID
-}
-
-// PubTCPAddress returns the node's public tcp address.
-func (n *LocalNode) PubTCPAddress() string {
-	n.pubTCPMutex.RLock()
-	addr := n.pubTCPAddress
-	n.pubTCPMutex.RUnlock()
-	return addr
-}
-
-// RefreshPubTCPAddress attempts to refresh the node public ip address and returns true if it was able to do so.
-func (n *LocalNode) RefreshPubTCPAddress() bool {
-
-	// Figure out node public ip address
-	addr, err := net.GetPublicIPAddress()
-	if err != nil {
-		log.Error("failed to obtain public ip address")
-		return false
-	}
-
-	port, err := net.GetPort(n.Address())
-	if err != nil {
-		log.Error("Invalid tcp ip address", err)
-		return false
-	}
-	n.pubTCPMutex.Lock()
-	n.pubTCPAddress = fmt.Sprintf("%s:%s", addr, port)
-	n.pubTCPMutex.Unlock()
-	return true
 }
 
 // PrivateKey returns this node's private key.
@@ -127,11 +93,6 @@ func newLocalNodeWithKeys(pubKey crypto.PublicKey, privKey crypto.PrivateKey, ad
 	n.Log = log.New(n.pubKey.Pretty(), nodeDir, "node.log")
 
 	n.Info("Local node identity >> %v", n.String())
-
-	ok := n.RefreshPubTCPAddress()
-	if !ok {
-		return nil, errors.New("critical error - failed to obtain node public ip address. Check your Internet connection and try again")
-	}
 
 	n.Debug("Node public ip address %s. Please make sure that your home router or access point accepts incoming connections on this port and forwards incoming such connection requests to this computer.", n.pubTCPAddress)
 

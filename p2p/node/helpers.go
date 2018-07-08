@@ -2,9 +2,9 @@ package node
 
 import (
 	"fmt"
-	"github.com/pkg/errors"
+	"errors"
 	"github.com/spacemeshos/go-spacemesh/crypto"
-	"github.com/spacemeshos/go-spacemesh/p2p/net"
+	"net"
 	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 	"math/rand"
 	"testing"
@@ -22,7 +22,7 @@ func GenerateTestNode(t *testing.T) (*LocalNode, Node) {
 // GenerateTestNodeWithConfig creates a local test node without persisting data to local store.
 func GenerateTestNodeWithConfig(t *testing.T, config nodeconfig.Config) (*LocalNode, Node) {
 
-	port, err := net.GetUnboundedPort()
+	port, err := GetUnboundedPort()
 	if err != nil {
 		t.Error("Failed to get a port to bind", err)
 	}
@@ -65,3 +65,29 @@ func GenerateRandomNodesData(n int) []Node {
 	}
 	return res
 }
+
+
+// CheckUserPort tries to listen on a port and check whether is usable or not
+func CheckUserPort(port uint32) bool {
+	address := fmt.Sprintf("0.0.0.0:%d", port)
+	l, e := net.Listen("tcp", address)
+	if e != nil {
+		return true
+	}
+	l.Close()
+	return false
+}
+
+// GetUnboundedPort returns a port that is for sure unbounded or an error.
+func GetUnboundedPort() (int, error) {
+	port := crypto.GetRandomUserPort()
+	retryCount := 0
+	for used := true; used && retryCount < 10; used, retryCount = CheckUserPort(port), retryCount+1 {
+		port = crypto.GetRandomUserPort()
+	}
+	if retryCount >= 10 {
+		return 0, errors.New("failed to establish network, probably no internet connection")
+	}
+	return int(port), nil
+}
+

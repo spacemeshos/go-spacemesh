@@ -13,7 +13,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/dht"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
-	"github.com/spacemeshos/go-spacemesh/crypto"
 )
 
 const (
@@ -51,14 +50,9 @@ func (s *swarmImpl) bootstrap() {
 
 		if s.localNode.String() != rn.String() {
 			s.onRegisterNodeRequest(rn)
-			//s.onConnectionRequest(rn, connected)
-			remotePub, e := crypto.NewPublicKey(rn.Bytes())
-			if e != nil {
-				// TODO handle error (not really, @Yosher promised that req will have a crypto.PublicKey)
-			}
-			_, e = s.cPool.getConnection(rn.IP(), remotePub)
+			_, e := s.cPool.getConnection(rn.Address(), rn.PublicKey())
 			if (e != nil) {
-				s.localNode.Warning("failed to connect to bootstrap node %v. err: %v", rn.ID(), e)
+				s.localNode.Warning("failed to connect to bootstrap node %v. err: %v", rn.PublicKey(), e)
 				break
 			}
 			atomic.AddUint32(&bn, 1)
@@ -120,11 +114,7 @@ func (s *swarmImpl) ConnectToRandomNodes(count int) {
 		done := make(chan error)
 		go func(d chan error, p node.Node) {
 			go func() {
-				remotePub, err := crypto.NewPublicKey(p.Bytes())
-				if err != nil {
-					// TODO handle error (not really, @Yosher promised that req will have a crypto.PublicKey)
-				}
-				_, err = s.cPool.getConnection(p.IP(), remotePub)
+				_, err := s.cPool.getConnection(p.Address(), p.PublicKey())
 				d <- err
 			}()
 			timeout := time.NewTimer(ConnectToNodeTimeout)
@@ -224,7 +214,7 @@ func (s *swarmImpl) onSendInternalMessage(r SendMessageReq) {
 }
 
 func (s *swarmImpl) bootstrapLoop(retryTicker *time.Ticker) {
-	s.localNode.GetLogger().Info("DEBUG: swarm::bootstrapLoop")
+	s.localNode.Logger.Info("DEBUG: swarm::bootstrapLoop")
 	s.bootstrap()
 BSLOOP:
 	for {

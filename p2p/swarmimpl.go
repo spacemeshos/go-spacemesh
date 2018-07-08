@@ -117,7 +117,7 @@ func New(config nodeconfig.Config, loadIdentity bool) (Swarm, error) {
 		log.Error("Failed to create a node, err: %v", err)
 	}
 
-	n, err := net.NewNet(tcpAddress, l.Config(), l.GetLogger(), l)
+	n, err := net.NewNet(address, config, l.Logger, l)
 	if err != nil {
 		log.Error("can't create swarm without a network", err)
 		return nil, err
@@ -362,7 +362,6 @@ func (s *swarmImpl) shutDownInternal() {
 func (s *swarmImpl) listenToNetworkMessages() {
 Loop:
 	for {
-		s.localNode.GetLogger().Info("DEBUG: swarm::listenToNetworkMessages")
 		select {
 		//case c := <-s.network.GetNewConnections():
 		//	go s.onNewConnection(c)
@@ -371,7 +370,6 @@ Loop:
 			go s.onRemoteClientMessage(m)
 
 		case m := <-s.network.GetPreSessionIncomingMessages():
-			s.localNode.GetLogger().Info("DEBUG: about to handle pre session msg")
 			go s.network.HandlePreSessionIncomingMessage(m)
 
 		case err := <-s.network.GetConnectionErrors():
@@ -400,7 +398,6 @@ func (s *swarmImpl) beginProcessingEvents(bootstrap bool) {
 	checkTimeSync := time.NewTicker(nodeconfig.TimeConfigValues.RefreshNtpInterval)
 	retryMessage := time.NewTicker(time.Second * 5)
 
-	s.localNode.GetLogger().Info("DEBUG: swarm::beginProcessingEvents")
 	if bootstrap {
 		s.bootstrapLoop(retryMessage)
 	}
