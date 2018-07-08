@@ -33,7 +33,7 @@ func init() {
 		config.P2P.DialTimeout, "Network dial timeout duration")
 	RootCmd.PersistentFlags().DurationVar(&config.P2P.ConnKeepAlive, "conn-keepalive",
 		config.P2P.ConnKeepAlive, "Network connection keep alive")
-	RootCmd.PersistentFlags().IntVar(&config.P2P.NetworkID, "network-id",
+	RootCmd.PersistentFlags().Int8Var(&config.P2P.NetworkID, "network-id",
 		config.P2P.NetworkID, "NetworkID to run on (0 - mainnet, 1 - testnet)")
 	RootCmd.PersistentFlags().StringVar(&config.P2P.NodeID, "node-id",
 		config.P2P.NodeID, "Load node data by id (pub key) from local store")

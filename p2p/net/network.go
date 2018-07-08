@@ -16,28 +16,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 )
 
-// There are two types of TCP connections
-// 	TcpSecured - A session was established, all messages are sent encrypted
-// 	TcpUnsecured - No session was established, messages are sent raw.
-type ConnectionType int
-
-const (
-	TcpSecured ConnectionType = iota
-	TcpUnsecured
-)
-
-type remoteNode interface {
-	PublicKey() crypto.PublicKey
-}
-
-type connChan struct {
-	Chan chan *Connection
-}
-
-func NewConnChan() *connChan {
-	return &connChan{make(chan *Connection, 20)}
-}
-
 // Net is a connection manager able to dial remote endpoints
 // Net clients should register all callbacks
 // Connections may be initiated by Dial() or by remote clients connecting to the listen address
@@ -48,8 +26,7 @@ func NewConnChan() *connChan {
 // Net has no channel events processing loops - clients are responsible for polling these channels and popping events from them
 type Net interface {
 	Dial(address string, remotePublicKey crypto.PublicKey, networkId int8) (*Connection, error) // Connect to a remote node. Can send when no error.
-	Register(newConn *connChan)
-	//GetNewConnections() chan *Connection
+	SubscribeOnNewConnections() chan *Connection
 	GetClosingConnections() chan *Connection
 	GetConnectionErrors() chan ConnectionError
 	GetIncomingMessage() chan IncomingMessage
@@ -100,7 +77,6 @@ func NewNet(tcpListenAddress string, conf nodeconfig.Config, logger *logging.Log
 		localNode:        localEntity,
 		logger:           logger,
 		tcpListenAddress: tcpListenAddress,
-		//newConnections:     make(chan *Connection, 20),
 		closingConnections:         make(chan *Connection, 20),
 		connectionErrors:           make(chan ConnectionError, 20),
 		incomingMessages:           make(chan IncomingMessage, 20),
@@ -124,11 +100,6 @@ func NewNet(tcpListenAddress string, conf nodeconfig.Config, logger *logging.Log
 func (n *netImpl) GetMessageSentCallback() chan MessageSentEvent {
 	return n.messageSentEvents
 }
-
-// GetNewConnections Implement Network interface public channel accessors.
-//func (n *netImpl) GetNewConnections() chan *Connection {
-//	return n.newConnections
-//}
 
 func (n *netImpl) GetClosingConnections() chan *Connection {
 	return n.closingConnections
@@ -295,10 +266,12 @@ func (n *netImpl) acceptTCP() {
 	}
 }
 
-func (n *netImpl) Register(newConn *connChan) {
+func (n *netImpl) SubscribeOnNewConnections() chan *Connection{
 	n.regMutex.Lock()
-	n.regNewConn = append(n.regNewConn, newConn.Chan)
+	ch := make(chan *Connection, 20)
+	n.regNewConn = append(n.regNewConn, ch)
 	n.regMutex.Unlock()
+	return ch
 }
 
 func (n *netImpl) publishNewConnection(conn *Connection) {

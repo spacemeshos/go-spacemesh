@@ -22,7 +22,7 @@ type Swarm interface {
 
 	// TODO: support sending a message to all connected peers without any dest id provided by caller
 
-	// Register a node with the swarm based on its id and tcp address but don't attempt to connect to it
+	// SubscribeOnNewConnections a node with the swarm based on its id and tcp address but don't attempt to connect to it
 	RegisterNode(data node.Node)
 
 	// Attempt to establish a session with a remote node with a known id and tcp address
@@ -38,7 +38,7 @@ type Swarm interface {
 	// Send a handshake protocol message that is used to establish a session
 	//sendHandshakeMessage(req SendMessageReq)
 
-	// Register a callback channel for state changes related to remote nodes
+	// SubscribeOnNewConnections a callback channel for state changes related to remote nodes
 	// Currently used for testing network bootstrapping
 	RegisterNodeEventsCallback(callback NodeEventCallback)
 

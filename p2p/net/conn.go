@@ -9,15 +9,6 @@ import (
 	"gopkg.in/op/go-logging.v1"
 )
 
-// Connection is a closeable network connection, that can send and receive messages from a remote instance.
-// Connection is an io.Writer and an io.Closer.
-/*type Connection interface {
-	ID() string
-	Send(message []byte, id []byte)
-	Close() error
-	RemoteAddr() net.Addr
-}*/
-
 // MessageSentEvent specifies a sent network message data.
 type MessageSentEvent struct {
 	Connection *Connection
@@ -61,6 +52,7 @@ const (
 )
 
 // A network connection supporting full-duplex messaging
+// Connection is an io.Writer and an io.Closer
 type Connection struct {
 	logger *logging.Logger
 	// metadata for logging / debugging

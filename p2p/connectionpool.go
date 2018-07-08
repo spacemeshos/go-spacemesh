@@ -4,6 +4,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"sync"
+	"gopkg.in/op/go-logging.v1"
+	"github.com/spacemeshos/go-spacemesh/p2p/node"
 )
 
 type DialError struct {
@@ -16,8 +18,17 @@ type DialResult struct {
 	err			error
 }
 
+
+type networker interface {
+	Dial(address string, remotePublicKey crypto.PublicKey, networkId int8) (*net.Connection, error) // Connect to a remote node. Can send when no error.
+	SubscribeOnNewConnections() chan *net.Connection
+	GetNetworkId() int8
+	GetLogger() *logging.Logger
+}
+
 type ConnectionPool struct {
-	net        	net.Net
+	localNode	*node.LocalNode
+	net        	networker
 	connections map[string]*net.Connection
 	connMutex   sync.RWMutex
 	pending     map[string][]chan DialResult
@@ -28,19 +39,19 @@ type ConnectionPool struct {
 
 }
 
-func NewConnectionPool(network net.Net) *ConnectionPool {
-	connC := net.NewConnChan()
+func NewConnectionPool(network networker, lNode *node.LocalNode) *ConnectionPool {
+	connC := network.SubscribeOnNewConnections()
 	cPool := &ConnectionPool{
+		localNode:		lNode,
 		net:			network,
 		connections:	make(map[string]*net.Connection),
 		connMutex:		sync.RWMutex{},
 		pending:		make(map[string][]chan DialResult),
 		pendMutex:		sync.Mutex{},
-		newConn:		connC.Chan,
+		newConn:		connC,
 		errConn:		make(chan DialError),
 	}
 	go cPool.beginEventProcessing()
-	cPool.net.Register(connC)
 	return cPool
 }
 
@@ -104,7 +115,7 @@ func (cp *ConnectionPool) beginEventProcessing() {
 				// put new connection in connection pool
 				cp.connMutex.Lock()
 				rPub := conn.RemotePublicKey()
-				cp.net.GetLogger().Info("new connection %v -> %v", cp.net.GetLocalNode().PublicKey(), rPub)
+				cp.net.GetLogger().Info("new connection %v -> %v", cp.localNode.PublicKey(), rPub)
 				cur, ok := cp.connections[rPub.String()]
 				if ok {
 					if cur.Source() == net.Remote {

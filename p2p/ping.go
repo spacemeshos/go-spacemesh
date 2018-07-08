@@ -18,7 +18,7 @@ type Ping interface {
 	// reqIdD: allows the client to match responses with requests by id.
 	Send(msg string, reqID []byte, remoteNodeID string)
 
-	// Register a callback for typed incoming ping responses (pongs) or send errors.
+	// SubscribeOnNewConnections a callback for typed incoming ping responses (pongs) or send errors.
 	Register(callback chan SendPingResp)
 }
 
@@ -96,7 +96,7 @@ func (p *pingProtocolImpl) Send(msg string, reqID []byte, remoteNodeID string) {
 	p.swarm.SendMessage(req)
 }
 
-// Register callback on remotely received pings
+// SubscribeOnNewConnections callback on remotely received pings
 func (p *pingProtocolImpl) Register(callback chan SendPingResp) {
 	p.callbacksRegReq <- callback
 }

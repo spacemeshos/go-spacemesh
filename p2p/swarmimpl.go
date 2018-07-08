@@ -132,7 +132,7 @@ func New(config nodeconfig.Config, loadIdentity bool) (Swarm, error) {
 		bootError:    nil,
 		localNode:    l,
 		network:      n,
-		cPool:		  NewConnectionPool(n),
+		cPool:		  NewConnectionPool(n, l),
 		shutdown:     make(chan struct{}), // non-buffered so requests to shutdown block until swarm is shut down
 
 		afterBootCallback: make(chan error, 1), // notify clients about
@@ -211,7 +211,7 @@ func (s *swarmImpl) bootComplete(successCode error) {
 	s.afterBootCallback <- successCode
 }
 
-// Register an event handler callback for connection state events
+// SubscribeOnNewConnections an event handler callback for connection state events
 func (s *swarmImpl) RegisterNodeEventsCallback(callback NodeEventCallback) {
 	s.necMutex.Lock()
 	s.nec = append(s.nec, callback)
@@ -245,7 +245,7 @@ func (s *swarmImpl) getPeerByConnection(connID string) Peer {
 	return sender
 }
 
-// Register an event handler callback for connection state events
+// SubscribeOnNewConnections an event handler callback for connection state events
 func (s *swarmImpl) RetryMessageLater(req SendMessageReq) {
 	s.retryMessage <- req
 }

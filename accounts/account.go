@@ -23,7 +23,7 @@ type Account struct {
 	PubKey     crypto.PublicKey
 	cryptoData CryptoData
 	kdParams   crypto.KDParams
-	NetworkID  int
+	NetworkID  int8
 }
 
 var (
