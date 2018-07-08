@@ -21,7 +21,7 @@ func TestHandshakeCoreData(t *testing.T) {
 
 	config := nodeconfig.DefaultConfig()
 	// node 1
-	port, err := net.GetUnboundedPort()
+	port, err := node.GetUnboundedPort()
 	assert.NoError(t, err, "Should be able to establish a connection on a port")
 
 	address := fmt.Sprintf("0.0.0.0:%d", port)
@@ -36,7 +36,7 @@ func TestHandshakeCoreData(t *testing.T) {
 	node1Remote, _ := NewRemoteNode(node1Local.String(), address)
 
 	// node 2
-	port1, err := net.GetUnboundedPort()
+	port1, err := node.GetUnboundedPort()
 	assert.NoError(t, err, "Should be able to establish a connection on a port")
 
 	address1 := fmt.Sprintf("0.0.0.0:%d", port1)
@@ -51,7 +51,7 @@ func TestHandshakeCoreData(t *testing.T) {
 	node2Remote, _ := NewRemoteNode(node2Local.String(), address1)
 
 	// STEP 1: Node1 generates handshake data and sends it to node2 ....
-	data, session, err := net.GenerateHandshakeRequestData(node1Local.PublicKey(), node1Local.PrivateKey(), node2Remote.PublicKey(), int32(node1Local.NetworkId()))
+	data, session, err := net.GenerateHandshakeRequestData(node1Local.PublicKey(), node1Local.PrivateKey(), node2Remote.PublicKey(), node1Local.NetworkID())
 
 	b := assert.NoError(t, err, "expected no error")
 	b = assert.NotNil(t, session, "expected session")
@@ -62,7 +62,7 @@ func TestHandshakeCoreData(t *testing.T) {
 
 	// STEP 2: Node2 gets handshake data from node 1 and processes it to establish a session with a shared AES key
 
-	resp, session1, err := net.ProcessHandshakeRequest(int32(node2Local.NetworkId()), node2Local.PublicKey(), node2Local.PrivateKey(), node1Remote.PublicKey(), data)
+	resp, session1, err := net.ProcessHandshakeRequest(node2Local.NetworkID(), node2Local.PublicKey(), node2Local.PrivateKey(), node1Remote.PublicKey(), data)
 
 	b = assert.NoError(t, err, "expected no error")
 	b = assert.NotNil(t, session1, "expected session")
@@ -100,7 +100,7 @@ func TestHandshakeProtocol(t *testing.T) {
 
 	config := nodeconfig.DefaultConfig()
 	// node 1
-	port, err := net.GetUnboundedPort()
+	port, err := node.GetUnboundedPort()
 	assert.NoError(t, err, "Should be able to establish a connection on a port")
 
 	address := fmt.Sprintf("0.0.0.0:%d", port)
@@ -110,7 +110,7 @@ func TestHandshakeProtocol(t *testing.T) {
 
 	// node 2
 
-	port1, err := net.GetUnboundedPort()
+	port1, err := node.GetUnboundedPort()
 	assert.NoError(t, err, "Should be able to establish a connection on a port")
 
 	address1 := fmt.Sprintf("0.0.0.0:%d", port1)
@@ -120,7 +120,7 @@ func TestHandshakeProtocol(t *testing.T) {
 
 	// STEP 1: Node 1 generates handshake data and sends it to node2 ....
 
-	data, session, err := net.GenerateHandshakeRequestData(node1Local.PublicKey(), node1Local.PrivateKey(), node2Remote.PublicKey(), int32(node1Local.NetworkId()))
+	data, session, err := net.GenerateHandshakeRequestData(node1Local.PublicKey(), node1Local.PrivateKey(), node2Remote.PublicKey(), node1Local.NetworkID())
 
 	assert.NoError(t, err, "expected no error")
 	assert.NotNil(t, session, "expected session")
@@ -153,7 +153,7 @@ func TestHandshakeProtocol(t *testing.T) {
 
 	// STEP 3: local node 2 handles req data and generates response
 
-	resp, session1, err := net.ProcessHandshakeRequest(int32(node2Local.NetworkId()), node2Local.PublicKey(), node2Local.PrivateKey(), node1Remote.PublicKey(), data)
+	resp, session1, err := net.ProcessHandshakeRequest(node2Local.NetworkID(), node2Local.PublicKey(), node2Local.PrivateKey(), node1Remote.PublicKey(), data)
 
 	assert.NoError(t, err, "expected no error")
 	assert.NotNil(t, session1, "expected session")
@@ -204,7 +204,7 @@ func TestBadHandshakes(t *testing.T) {
 	testProtocol := func(cfg nodeconfig.Config, cfg2 nodeconfig.Config) error {
 		// node 1
 
-		port, err := net.GetUnboundedPort()
+		port, err := node.GetUnboundedPort()
 		assert.NoError(t, err, "Should be able to establish a connection on a port")
 
 		address := fmt.Sprintf("0.0.0.0:%d", port)
@@ -213,7 +213,7 @@ func TestBadHandshakes(t *testing.T) {
 		node1Remote, _ := NewRemoteNode(node1Local.String(), address)
 
 		// node 2
-		port1, err := net.GetUnboundedPort()
+		port1, err := node.GetUnboundedPort()
 		assert.NoError(t, err, "Should be able to establish a connection on a port")
 
 		address1 := fmt.Sprintf("0.0.0.0:%d", port1)
@@ -223,7 +223,7 @@ func TestBadHandshakes(t *testing.T) {
 
 		// STEP 1: Node 1 generates handshake data and sends it to node2 ....
 
-		data, session, err := net.GenerateHandshakeRequestData(node1Local.PublicKey(), node1Local.PrivateKey(), node2Remote.PublicKey(), int32(node1Local.NetworkId()))
+		data, session, err := net.GenerateHandshakeRequestData(node1Local.PublicKey(), node1Local.PrivateKey(), node2Remote.PublicKey(), node1Local.NetworkID())
 
 		if err != nil {
 			return fmt.Errorf("expected no error, %v", err)
@@ -269,7 +269,7 @@ func TestBadHandshakes(t *testing.T) {
 
 		// STEP 3: local node 2 handles req data and generates response
 
-		resp, session1, err := net.ProcessHandshakeRequest(int32(node2Local.NetworkId()), node2Local.PublicKey(), node2Local.PrivateKey(), node1Remote.PublicKey(), data)
+		resp, session1, err := net.ProcessHandshakeRequest(node2Local.NetworkID(), node2Local.PublicKey(), node2Local.PrivateKey(), node1Remote.PublicKey(), data)
 
 		if err != nil {
 			return fmt.Errorf("error processing handshake %v", err)

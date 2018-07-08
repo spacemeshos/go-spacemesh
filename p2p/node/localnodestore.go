@@ -19,7 +19,7 @@ type nodeFileData struct {
 	PubKey     string `json:"pubKey"`
 	PrivKey    string `json:"priKey"`
 	CoinBaseID string `json:"coinbase"` // coinbase account id
-	NetworkID  int    `json:"network"`  // network that the node lives in
+	NetworkID  int8    `json:"network"`  // network that the node lives in
 }
 
 // Node store - local node data persistence functionality
@@ -30,7 +30,7 @@ func (n *LocalNode) persistData() error {
 	data := nodeFileData{
 		PubKey:    n.pubKey.String(),
 		PrivKey:   n.privKey.String(),
-		NetworkID: int(n.networkID),
+		NetworkID: n.networkID,
 	}
 
 	bytes, err := json.MarshalIndent(data, "", "  ")

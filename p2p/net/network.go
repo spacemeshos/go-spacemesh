@@ -47,7 +47,7 @@ func NewConnChan() *connChan {
 // Network main client is the swarm
 // Net has no channel events processing loops - clients are responsible for polling these channels and popping events from them
 type Net interface {
-	Dial(address string, remotePublicKey crypto.PublicKey, networkId int32) (*Connection, error) // Connect to a remote node. Can send when no error.
+	Dial(address string, remotePublicKey crypto.PublicKey, networkId int8) (*Connection, error) // Connect to a remote node. Can send when no error.
 	Register(newConn *connChan)
 	//GetNewConnections() chan *Connection
 	GetClosingConnections() chan *Connection
@@ -57,7 +57,7 @@ type Net interface {
 	GetMessageSendErrors() chan MessageSendError
 	GetMessageSentCallback() chan MessageSentEvent
 	GetLogger() *logging.Logger
-	GetNetworkId() int32
+	GetNetworkId() int8
 	HandlePreSessionIncomingMessage(msg IncomingMessage) error
 	GetLocalNode() *node.LocalNode
 	Shutdown()
@@ -65,7 +65,7 @@ type Net interface {
 
 // impl internal type
 type netImpl struct {
-	networkId int32
+	networkId int8
 	localNode *node.LocalNode
 	logger    *logging.Logger
 
@@ -96,7 +96,7 @@ type netImpl struct {
 func NewNet(tcpListenAddress string, conf nodeconfig.Config, logger *logging.Logger, localEntity *node.LocalNode) (Net, error) {
 
 	n := &netImpl{
-		networkId:        int32(conf.NetworkID),
+		networkId:        conf.NetworkID,
 		localNode:        localEntity,
 		logger:           logger,
 		tcpListenAddress: tcpListenAddress,
@@ -154,7 +154,7 @@ func (n *netImpl) GetLogger() *logging.Logger {
 	return n.logger
 }
 
-func (n *netImpl) GetNetworkId() int32 {
+func (n *netImpl) GetNetworkId() int8 {
 	return n.networkId
 }
 
@@ -185,7 +185,7 @@ func (n *netImpl) createConnection(address string, remotePub crypto.PublicKey, t
 	return c, nil
 }
 
-func (n *netImpl) createSecuredConnection(address string, remotePublicKey crypto.PublicKey, networkId int32, timeOut time.Duration, keepAlive time.Duration) (*Connection, error) {
+func (n *netImpl) createSecuredConnection(address string, remotePublicKey crypto.PublicKey, networkId int8, timeOut time.Duration, keepAlive time.Duration) (*Connection, error) {
 	errMsg := "failed to establish secured connection."
 	conn, err := n.createConnection(address, remotePublicKey, timeOut, keepAlive)
 	if err != nil {
@@ -244,7 +244,7 @@ func (n *netImpl) createSecuredConnection(address string, remotePublicKey crypto
 // address:: ip:port
 // Returns established connection that local clients can send messages to or error if failed
 // to establish a connection, currently only secured connections are supported
-func (n *netImpl) Dial(address string, remotePublicKey crypto.PublicKey, networkId int32) (*Connection, error) {
+func (n *netImpl) Dial(address string, remotePublicKey crypto.PublicKey, networkId int8) (*Connection, error) {
 	conn, err := n.createSecuredConnection(address, remotePublicKey, networkId, n.config.DialTimeout, n.config.ConnKeepAlive)
 	if err != nil {
 		return nil, fmt.Errorf("failed to Dail. err: %v", err)

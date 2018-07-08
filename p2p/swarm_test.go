@@ -6,8 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"sync/atomic"
-
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
@@ -19,13 +17,9 @@ func TestSessionCreation(t *testing.T) {
 
 	filesystem.SetupTestSpacemeshDataFolders(t, "swarm_test")
 
-	//callback := make(chan HandshakeData)
-	//callback2 := make(chan HandshakeData)
-	node1Local, _ := p2pTestInstance(t, defaultConfig())
-	node2Local, _ := p2pTestInstance(t, defaultConfig())
-	//node1Local.GetSwarm().getHandshakeProtocol().RegisterNewSessionCallback(callback)
-	//node2Local.GetSwarm().getHandshakeProtocol().RegisterNewSessionCallback(callback2)
-	c, e := node1Local.getConnectionPool().getConnection(node2Local.LocalNode().Address(), node2Local.LocalNode().PublicKey())//ConnectTo(node2Local.GetRemoteNodeData(), nil)
+	node1Local := p2pTestInstance(t, defaultConfig())
+	node2Local := p2pTestInstance(t, defaultConfig())
+	c, e := node1Local.getConnectionPool().getConnection(node2Local.LocalNode().Address(), node2Local.LocalNode().PublicKey())
 	if e != nil {
 		t.Fatalf("failed to connect. err: %v", e)
 	}

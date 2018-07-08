@@ -13,13 +13,13 @@ type LocalNode struct {
 	privKey       crypto.PrivateKey
 	pubTCPAddress string
 
-	networkID nodeconfig.NetworkID
+	networkID int8
 
 	log.Log
 }
 
 // NetworkID returns the local node's network id (testnet/mainnet, etc..)
-func (n *LocalNode) NetworkID() nodeconfig.NetworkID {
+func (n *LocalNode) NetworkID() int8 {
 	return n.networkID
 }
 
@@ -68,14 +68,14 @@ func NewNodeIdentity(config nodeconfig.Config, address string, persist bool) (*L
 	return newLocalNodeWithKeys(pub, priv, address, config.NetworkID, persist)
 }
 
-func newLocalNodeWithKeys(pubKey crypto.PublicKey, privKey crypto.PrivateKey, address string, networkID int, persist bool) (*LocalNode, error) {
+func newLocalNodeWithKeys(pubKey crypto.PublicKey, privKey crypto.PrivateKey, address string, networkID int8, persist bool) (*LocalNode, error) {
 
 	n := &LocalNode{
 		Node: Node{
 			pubKey:  pubKey,
 			address: address,
 		},
-		networkID: nodeconfig.NetworkID(networkID),
+		networkID: networkID,
 		privKey:   privKey,
 	}
 

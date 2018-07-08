@@ -318,7 +318,7 @@ const HandshakeResp = "/handshake/1.0/handshake-resp/"
 // Node that NetworkSession is not yet authenticated - this happens only when the handshake response is processed and authenticated
 // This is called by node1 (initiator)
 func GenerateHandshakeRequestData(localPublicKey crypto.PublicKey, localPrivateKey crypto.PrivateKey, remotePublicKey crypto.PublicKey,
-	networkId int32) (*pb.HandshakeData, NetworkSession, error) {
+	networkId int8) (*pb.HandshakeData, NetworkSession, error) {
 
 	// we use the Elliptic Curve Encryption Scheme
 	// https://en.wikipedia.org/wiki/Integrated_Encryption_Scheme
@@ -328,7 +328,7 @@ func GenerateHandshakeRequestData(localPublicKey crypto.PublicKey, localPrivateK
 	}
 
 	data.ClientVersion = nodeconfig.ClientVersion
-	data.NetworkID = networkId
+	data.NetworkID = int32(networkId)
 	data.Timestamp = time.Now().Unix()
 
 	iv := make([]byte, 16)
@@ -456,7 +456,7 @@ func authenticateSenderNode(req *pb.HandshakeData) error {
 // Process a session handshake request data from remoteNode r
 // Returns Handshake data to send to r and a network session data object that includes the session sym  enc/dec key
 // This is called by responder in the handshake protocol (node2)
-func ProcessHandshakeRequest(networkId int32, lPub crypto.PublicKey, lPri crypto.PrivateKey, rPub crypto.PublicKey, req *pb.HandshakeData) (*pb.HandshakeData, NetworkSession, error) {
+func ProcessHandshakeRequest(networkId int8, lPub crypto.PublicKey, lPri crypto.PrivateKey, rPub crypto.PublicKey, req *pb.HandshakeData) (*pb.HandshakeData, NetworkSession, error) {
 	// check that received clientversion is valid client string
 	reqVersion := strings.Split(req.ClientVersion, "/")
 	if len(reqVersion) != 2 {
@@ -474,7 +474,7 @@ func ProcessHandshakeRequest(networkId int32, lPub crypto.PublicKey, lPri crypto
 	}
 
 	// make sure we're on the same network
-	if req.NetworkID != networkId {
+	if req.NetworkID != int32(networkId) {
 		return nil, nil, fmt.Errorf("request net id (%d) is different than local net id (%d)", req.NetworkID, networkId)
 		//TODO : drop and blacklist this sender
 	}
@@ -545,7 +545,7 @@ func ProcessHandshakeRequest(networkId int32, lPub crypto.PublicKey, lPri crypto
 
 	resp := &pb.HandshakeData{
 		ClientVersion: nodeconfig.ClientVersion,
-		NetworkID:     networkId,
+		NetworkID:     int32(networkId),
 		SessionId:     req.SessionId,
 		Timestamp:     time.Now().Unix(),
 		NodePubKey:    lPub.InternalKey().SerializeUncompressed(),
