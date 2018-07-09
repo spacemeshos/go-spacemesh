@@ -233,6 +233,52 @@ func (dsci *MaliciousHoldMessageReceiver) ReceiveMessage(message *pb.ConsensusMe
 	dsci.ds.sendToRemainingNodes(message, publicKeys) // to be sent in round +1
 	return nil
 }
+
+type MaliciousSendHoldMessageReceiver struct {
+	DolevStrongInstance
+}
+
+// ReceiveMessage is the main receiver handler for a message received from a dolev strong instance running in the network
+func (dsci *MaliciousSendHoldMessageReceiver) ReceiveMessage(message *pb.ConsensusMessage) error{
+	//calculates round according to local clock
+	round := dsci.ds.getRound()
+	log.Info("received message in round %v num of signatures: %v", round, len(message.Validators))
+
+	if dsci.abortProcessingInstance {
+		return fmt.Errorf("message received on aborted isntance, round: %v", round)
+	}
+
+	if round > dsci.ds.dsConfig.NumOfAdverseries+1 {
+		return fmt.Errorf("round out of order: %v", round)
+	}
+
+	publicKeys, err := dsci.findAndValidateSignatures(message)
+	if err != nil {
+		return err
+	}
+	if dsci.value != nil {
+		if res := bytes.Compare(dsci.value, message.Msg.Data); res != 0 {
+			dsci.abortProcessingInstance = true //with abort
+			return fmt.Errorf("received two different messages from same sender, aborting this instance")
+		}
+		// no need to do anything
+		return nil
+	}
+	dsci.value = message.Msg.Data
+
+	// add our signature on the message
+	err = dsci.ds.signMessageAndAppend(message)
+	if err != nil {
+		return fmt.Errorf("cannot sign message %v error %v", message, err)
+	}
+	//add this node to the nodes already signed
+	publicKeys[dsci.ds.publicKey.String()] = struct{}{}
+	dsci.ds.sendToRemainingNodes(message, publicKeys) // to be sent in round +1
+
+	time.Sleep(5 *time.Second)
+	dsci.ds.sendToRemainingNodes(message, publicKeys) // to be sent in round +1
+	return nil
+}
 //func (mal *)
 
 func (msg messageData) Data() []byte {
@@ -392,6 +438,58 @@ func TestSanity(t *testing.T) {
 		validateDSC(t, dsc, arr, nodeIds[i], nodeIds[numOfNodes-1], true)
 		i++
 	}
+}
+
+func TestReceiverHoldAndResendMessage(t *testing.T) {
+	numOfNodes := 20
+	nodeIds, nodes := createNodesAndIds(numOfNodes)
+	var dsInstances []Algorithm
+
+	cfg := config.DefaultConfig()
+	cfg.NodesPerLayer = int32(numOfNodes)
+	cfg.NumOfAdverseries = int32(numOfNodes / 2)
+	timer := MyTimer{}
+
+	mockNetwork := NewMockNetwork(0)
+	quit := mockNetwork.routeMessages()
+	zeroBuf := make([]byte, 0)
+
+
+
+	for i := 0; i < numOfNodes; i++ {
+		ds := initDSC(mockNetwork, nodeIds, nodes[i], cfg, timer)
+		dsInstances = append(dsInstances, ds)
+	}
+
+
+	nodeMock := mockNetwork.createNewNodeNetMock(nodes[numOfNodes-2].publicKey.String())
+	ds, _ := createDSC(cfg, timer, nodeIds, nodeMock, nodes[numOfNodes-2].publicKey, nodes[numOfNodes-2].privateKey)
+
+	for _, node := range nodes {
+		ds.activeInstances[node.publicKey.String()] = &MaliciousSendHoldMessageReceiver{DolevStrongInstance{value: nil,ds:ds}}
+	}
+
+	dsInstances[numOfNodes-2] = ds
+
+	for i := 0; i < numOfNodes-1; i++ {
+		x := messageData(zeroBuf)
+		//start instance blocks until protocol is finished
+		go dsInstances[i].StartInstance(x)
+	}
+
+	arr := []byte{'l', 'o', 'l'}
+	msg := messageData(arr)
+	dsInstances[numOfNodes-1].StartInstance(msg)
+
+	log.Info("closing network")
+	quit <- struct{}{}
+	i := 0
+	for _, dsc := range dsInstances {
+		//skip the malicious node
+		validateDSC(t, dsc, arr, nodeIds[i], nodeIds[numOfNodes-1], true)
+		i++
+	}
+
 }
 
 func TestReceiverHoldMessage(t *testing.T) {
