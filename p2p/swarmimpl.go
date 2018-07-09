@@ -322,7 +322,7 @@ func (s *swarmImpl) GetPeer(id string, callback chan Peer) {
 	s.getPeerRequests <- gpr
 }
 
-// Sends a message to a remote node
+// SendMessage Sends a message to a remote node
 // Swarm will establish session if needed or use an existing session and open connection
 // Designed to be used by any high level protocol
 // req.reqID: globally unique id string - used for tracking messages we didn't get a response for yet

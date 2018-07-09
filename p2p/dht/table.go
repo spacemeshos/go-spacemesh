@@ -29,9 +29,9 @@ type RoutingTable interface {
 	// table ops
 	Update(p node.Node)                // adds a peer to the table
 	Remove(p node.Node)                // remove a peer from the table
-	Find(req PeerByIDRequest)          // find a specific peer by identity.DhtID
-	NearestPeer(req PeerByIDRequest)   // nearest peer to a identity.DhtID
-	NearestPeers(req NearestPeersReq)  // ip to n nearest peers to a identity.DhtID
+	Find(req PeerByIDRequest)          // find a specific peer by node.DhtID
+	NearestPeer(req PeerByIDRequest)   // nearest peer to a node.DhtID
+	NearestPeers(req NearestPeersReq)  // ip to n nearest peers to a node.DhtID
 	ListPeers(callback PeersOpChannel) // list all peers
 	Size(callback chan int)            // total # of peers in the table
 
@@ -78,7 +78,7 @@ type NearestPeersReq struct {
 // RoutingTable defines the routing table.
 // Most recently network active nodes are placed in beginning of buckets.
 // Least active nodes are the back of each bucket.
-// Bucket index is the size of the common prefix of nodes in that buckets and the local identity
+// Bucket index is the size of the common prefix of nodes in that buckets and the local node
 // l:  0 1 0 0 1 1
 // n1: 0 0 1 1 0 1
 // n2: 0 1 0 1 1 1
@@ -89,7 +89,7 @@ type NearestPeersReq struct {
 // Closer nodes will appear in buckets with a higher index
 // Most recently-seen nodes appear in the top of their buckets while least-often seen nodes at the bottom
 type routingTableImpl struct {
-	//logger for this routing table usually the identity logger
+	//logger for this routing table usually the node logger
 	log *logging.Logger
 
 	// Local peer ID that holds this routing table
@@ -121,7 +121,7 @@ type routingTableImpl struct {
 	// /remove
 }
 
-// NewRoutingTable creates a new routing table with a given bucket=size and local identity identity.DhtID
+// NewRoutingTable creates a new routing table with a given bucket=size and local node node.DhtID
 func NewRoutingTable(bucketsize int, localID node.DhtID, log *logging.Logger) RoutingTable {
 
 	// Create all our buckets.
@@ -235,11 +235,11 @@ func (rt *routingTableImpl) processEvents() {
 func (rt *routingTableImpl) update(p node.Node) {
 
 	if rt.local.Equals(p.DhtID()) {
-		rt.log.Warning("Ignoring attempt to add local identity to the routing table")
+		rt.log.Warning("Ignoring attempt to add local node to the routing table")
 		return
 	}
 
-	// determine identity bucket based on cpl
+	// determine node bucket based on cpl
 	cpl := p.DhtID().CommonPrefixLen(rt.local)
 	if cpl >= len(rt.buckets) {
 		// choose the last bucket
@@ -249,7 +249,7 @@ func (rt *routingTableImpl) update(p node.Node) {
 	bucket := rt.buckets[cpl]
 
 	if bucket.Has(p) {
-		// Move this identity to the front as it is the most-recently active identity
+		// Move this node to the front as it is the most-recently active node
 		// Active nodes should be in the front of their buckets and least-active one at the back
 		bucket.MoveToFront(p)
 		return
@@ -257,8 +257,8 @@ func (rt *routingTableImpl) update(p node.Node) {
 
 	// todo: consider connection metrics
 	if bucket.Len() >= rt.bucketsize { // bucket overflows
-		// TODO: if bucket is full ping oldest identity and replace if it fails to answer
-		// TODO: check latency metrics and replace if new identity is better then oldest one.
+		// TODO: if bucket is full ping oldest node and replace if it fails to answer
+		// TODO: check latency metrics and replace if new node is better then oldest one.
 		// Fresh, recent contacted (alive), low latency nodes should be kept at top of the bucket.
 		return
 	}
@@ -266,9 +266,9 @@ func (rt *routingTableImpl) update(p node.Node) {
 	bucket.PushFront(p)
 }
 
-// Remove a identity from the routing table.
-// Callback to peerRemoved will be called if identity was in table and was removed
-// If identity wasn't in the table then remove doesn't have any side effects on the table
+// Remove a node from the routing table.
+// Callback to peerRemoved will be called if node was in table and was removed
+// If node wasn't in the table then remove doesn't have any side effects on the table
 func (rt *routingTableImpl) remove(p node.Node) {
 
 	cpl := p.DhtID().CommonPrefixLen(rt.local)
@@ -324,8 +324,6 @@ func (rt *routingTableImpl) nearestPeers(id node.DhtID, count int) []node.Node {
 
 	bucket := rt.buckets[cpl]
 
-	//var peerArr identity.PeerSorter
-	//peerArr = identity.CopyPeersFromList(id, peerArr, bucket.List())
 	var peerArr []node.Node
 	peerArr = append(peerArr, bucket.Peers()...)
 
