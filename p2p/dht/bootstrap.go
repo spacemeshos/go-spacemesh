@@ -56,7 +56,7 @@ HEALTHLOOP:
 		reschan := make(chan error)
 
 		go func() {
-			_, err := d.Lookup(d.local.PublicKey())
+			_, err := d.Lookup(d.local.PublicKey().String())
 			reschan <- err
 		}()
 

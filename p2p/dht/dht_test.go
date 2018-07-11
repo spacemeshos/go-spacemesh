@@ -56,7 +56,7 @@ func TestDHT_Update(t *testing.T) {
 
 	assert.True(t, size > nodeconfig.DefaultConfig().SwarmConfig.RoutingTableBucketSize, "Routing table should be at least as big as bucket size")
 
-	looked, err := dht.Lookup(randnode.PublicKey())
+	looked, err := dht.Lookup(randnode.PublicKey().String())
 
 	assert.NoError(t, err, "error finding existing node")
 
@@ -70,7 +70,7 @@ func TestDHT_Lookup(t *testing.T) {
 
 	dht.Update(randnode)
 
-	node, err := dht.Lookup(randnode.PublicKey())
+	node, err := dht.Lookup(randnode.PublicKey().String())
 
 	assert.NoError(t, err, "Should not return an error")
 
@@ -88,7 +88,7 @@ func TestDHT_Lookup2(t *testing.T) {
 
 	dht2.Update(dht.local.Node)
 
-	node, err := dht2.Lookup(randnode.PublicKey())
+	node, err := dht2.Lookup(randnode.PublicKey().String())
 	assert.NoError(t, err, "error finding node ", err)
 
 	assert.Equal(t, node.String(), randnode.String(), "not the same node")
@@ -172,5 +172,7 @@ func TestDHT_Bootstrap2(t *testing.T) {
 			t.Error("Failed to boot within time")
 		}
 	}
+
+	time.Sleep(1 * time.Second)
 
 }

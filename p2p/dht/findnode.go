@@ -8,6 +8,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"sync"
 	"time"
 )
@@ -28,18 +29,18 @@ type findNodeResults struct {
 }
 
 type findNodeProtocol struct {
-	service Service
+	service service.Service
 
 	pending      map[string]chan findNodeResults
 	pendingMutex sync.RWMutex
 
-	ingressChannel chan Message
+	ingressChannel chan service.Message
 
 	rt RoutingTable
 }
 
 // NewFindNodeProtocol creates a new FindNodeProtocol instance.
-func newFindNodeProtocol(service Service, rt RoutingTable) *findNodeProtocol {
+func newFindNodeProtocol(service service.Service, rt RoutingTable) *findNodeProtocol {
 
 	p := &findNodeProtocol{
 		rt:             rt,
@@ -64,9 +65,7 @@ func (p *findNodeProtocol) sendRequestMessage(server crypto.PublicKey, payload [
 	if err != nil {
 		return nil, err
 	}
-
-	go p.service.SendMessage(server, msg)
-	return reqID, nil
+	return reqID, p.service.SendMessage(server.String(), protocol, msg)
 }
 
 func (p *findNodeProtocol) sendResponseMessage(server crypto.PublicKey, reqID, payload []byte) error {
@@ -79,9 +78,7 @@ func (p *findNodeProtocol) sendResponseMessage(server crypto.PublicKey, reqID, p
 	if err != nil {
 		return err
 	}
-
-	go p.service.SendMessage(server, msg)
-	return nil
+	return p.service.SendMessage(server.String(), protocol, msg)
 }
 
 // FindNode Send a single find node request to a remote node
@@ -138,7 +135,7 @@ func (p *findNodeProtocol) readLoop() {
 			break
 		}
 
-		go func(msg Message) {
+		go func(msg service.Message) {
 
 			headers := &pb.FindNode{}
 			err := proto.Unmarshal(msg.Data(), headers)

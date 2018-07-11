@@ -1,13 +1,13 @@
 package dht
 
 import (
-	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"sync"
 )
 
-var mainChan = make(chan Message)
-var keyToChan = make(map[string]chan Message)
+var mainChan = make(chan service.Message)
+var keyToChan = make(map[string]chan service.Message)
 var keyToChanMutex sync.RWMutex
 
 var initRouting sync.Once
@@ -17,7 +17,7 @@ func MsgRouting() {
 		for {
 			mc := <-mainChan
 			keyToChanMutex.RLock()
-			nodechan, ok := keyToChan[mc.(*msgMock).target.String()]
+			nodechan, ok := keyToChan[mc.(*msgMock).nodeID]
 			keyToChanMutex.RUnlock()
 			if ok {
 				nodechan <- mc
@@ -29,7 +29,7 @@ func MsgRouting() {
 type msgMock struct {
 	data   []byte
 	sender node.Node
-	target crypto.PublicKey
+	nodeID string
 }
 
 func (mm *msgMock) Data() []byte {
@@ -39,20 +39,20 @@ func (mm *msgMock) Data() []byte {
 func (mm *msgMock) Sender() node.Node {
 	return mm.sender
 }
-func (mm *msgMock) Target() crypto.PublicKey {
-	return mm.target
+func (mm *msgMock) Target() string {
+	return mm.nodeID
 }
 
 type p2pMock struct {
 	local      node.Node
-	inchannel  chan Message
-	outchannel chan Message
+	inchannel  chan service.Message
+	outchannel chan service.Message
 }
 
 func newP2PMock(local node.Node) *p2pMock {
 	p2p := &p2pMock{
 		local:      local,
-		inchannel:  make(chan Message, 3),
+		inchannel:  make(chan service.Message),
 		outchannel: mainChan,
 	}
 	keyToChanMutex.Lock()
@@ -61,10 +61,11 @@ func newP2PMock(local node.Node) *p2pMock {
 	return p2p
 }
 
-func (p2p *p2pMock) RegisterProtocol(protocol string) chan Message {
+func (p2p *p2pMock) RegisterProtocol(protocol string) chan service.Message {
 	return p2p.inchannel
 }
 
-func (p2p *p2pMock) SendMessage(target crypto.PublicKey, msg []byte) {
-	p2p.outchannel <- &msgMock{msg, p2p.local, target}
+func (p2p *p2pMock) SendMessage(nodeID string, protocol string, payload []byte) error {
+	p2p.outchannel <- &msgMock{payload, p2p.local, nodeID}
+	return nil
 }
