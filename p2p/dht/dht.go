@@ -6,7 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 
 	"github.com/pkg/errors"
-	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"time"
 )
 
@@ -20,18 +20,6 @@ var (
 	ErrEmptyRoutingTable = errors.New("no nodes to query - routing table is empty")
 )
 
-// Message is an interface to represent a simple message structure
-type Message interface {
-	Sender() node.Node
-	Data() []byte
-}
-
-// Service is an interface that represents a networking service (ideally p2p) that we can use to send messages or listen to incoming messages
-type Service interface {
-	RegisterProtocol(protocol string) chan Message
-	SendMessage(target crypto.PublicKey, msg []byte)
-}
-
 // DHT represents the Distributed Hash Table, it holds the Routing Table local node cache. and a FindNode kademlia protocol.
 // DHT Is created with a LocalNode identity as base. (DhtID)
 type DHT struct {
@@ -42,11 +30,11 @@ type DHT struct {
 	rt  RoutingTable
 	fnp *findNodeProtocol
 
-	service Service
+	service service.Service
 }
 
 // New creates a new dht
-func New(node *node.LocalNode, config nodeconfig.SwarmConfig, service Service) *DHT {
+func New(node *node.LocalNode, config nodeconfig.SwarmConfig, service service.Service) *DHT {
 	d := &DHT{
 		config:  config,
 		local:   node,
@@ -64,8 +52,8 @@ func (d *DHT) Update(node node.Node) {
 
 // Lookup finds a node in the dht by its public key, it issues a search inside the local routing table,
 // if the node can't be found there it sends a query to the network.
-func (d *DHT) Lookup(id crypto.PublicKey) (node.Node, error) {
-	dhtid := node.NewDhtID(id.Bytes())
+func (d *DHT) Lookup(pubkey string) (node.Node, error) {
+	dhtid := node.NewDhtIDFromBase58(pubkey)
 	poc := make(PeersOpChannel)
 	d.rt.NearestPeers(NearestPeersReq{dhtid, d.config.RoutingTableAlpha, poc})
 	res := (<-poc).Peers
@@ -77,7 +65,7 @@ func (d *DHT) Lookup(id crypto.PublicKey) (node.Node, error) {
 		return res[0], nil
 	}
 
-	return d.kadLookup(id, res)
+	return d.kadLookup(pubkey, res)
 }
 
 // Implements the kad algo for locating a remote node
@@ -85,7 +73,7 @@ func (d *DHT) Lookup(id crypto.PublicKey) (node.Node, error) {
 // nodeId: - base58 node id string
 // Returns requested node via the callback or nil if not found
 // Also used as a bootstrap function to populate the routing table with the results.
-func (d *DHT) kadLookup(id crypto.PublicKey, searchList []node.Node) (node.Node, error) {
+func (d *DHT) kadLookup(id string, searchList []node.Node) (node.Node, error) {
 	// save queried node ids for the operation
 	queried := map[string]struct{}{}
 
@@ -99,7 +87,7 @@ func (d *DHT) kadLookup(id crypto.PublicKey, searchList []node.Node) (node.Node,
 
 		// is closestNode out target ?
 		closestNode := searchList[0]
-		if closestNode.PublicKey().String() == id.String() {
+		if closestNode.PublicKey().String() == id {
 			return closestNode, nil
 		}
 
@@ -120,7 +108,7 @@ func (d *DHT) kadLookup(id crypto.PublicKey, searchList []node.Node) (node.Node,
 			// merge newly found nodes
 			searchList = node.Union(searchList, res)
 			// sort by distance from target
-			searchList = node.SortByDhtID(res, node.NewDhtID(id.Bytes()))
+			searchList = node.SortByDhtID(res, node.NewDhtIDFromBase58(id))
 		}
 		// keep iterating using new servers that were not queried yet from searchlist (if any)
 	}
@@ -157,7 +145,7 @@ func filterFindNodeServers(nodes []node.Node, queried map[string]struct{}, alpha
 // findNodeOp a target node on one or more servers
 // returns closest nodes which are closers than closestNode to targetId
 // if node found it will be in top of results list
-func (d *DHT) findNodeOp(servers []node.Node, queried map[string]struct{}, id crypto.PublicKey, closestNode node.Node) []node.Node {
+func (d *DHT) findNodeOp(servers []node.Node, queried map[string]struct{}, id string, closestNode node.Node) []node.Node {
 	l := len(servers)
 
 	if l == 0 {
@@ -173,7 +161,7 @@ func (d *DHT) findNodeOp(servers []node.Node, queried map[string]struct{}, id cr
 		// find node protocol adds found nodes to the local routing table
 		// populates queried node's routing table with us and return.
 		go func(i int) {
-			fnd, err := d.fnp.FindNode(servers[i], id.String())
+			fnd, err := d.fnp.FindNode(servers[i], id)
 			if err != nil {
 				//TODO: handle errors
 				return
