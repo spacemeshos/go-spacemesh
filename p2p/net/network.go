@@ -26,7 +26,7 @@ import (
 // Net has no channel events processing loops - clients are responsible for polling these channels and popping events from them
 type Net interface {
 	Dial(address string, remotePublicKey crypto.PublicKey, networkId int8) (*Connection, error) // Connect to a remote node. Can send when no error.
-	SubscribeOnNewConnections() chan *Connection
+	SubscribeOnNewRemoteConnections() chan *Connection
 	GetLogger() *logging.Logger
 	GetNetworkId() int8
 	HandlePreSessionIncomingMessage(c *Connection, msg wire.InMessage) error
@@ -45,11 +45,8 @@ type netImpl struct {
 
 	isShuttingDown bool
 
-	regNewConn []chan *Connection
-	regMutex   sync.RWMutex
-
-	// remote connections that are pending session request
-	pendingConn []*Connection
+	regNewRemoteConn []chan *Connection
+	regMutex         sync.RWMutex
 
 	config config.Config
 }
@@ -63,6 +60,7 @@ func NewNet(tcpListenAddress string, conf config.Config, logger *logging.Logger,
 		localNode:        localEntity,
 		logger:           logger,
 		tcpListenAddress: tcpListenAddress,
+		regNewRemoteConn:			make([]chan *Connection, 0),
 		config:           conf,
 	}
 
@@ -181,11 +179,7 @@ func (n *netImpl) Dial(address string, remotePublicKey crypto.PublicKey, network
 	if err != nil {
 		return nil, fmt.Errorf("failed to Dail. err: %v", err)
 	}
-
 	go conn.beginEventProcessing()
-	// update on new connection
-	n.publishNewConnection(conn)
-
 	return conn, nil
 }
 
@@ -227,17 +221,17 @@ func (n *netImpl) acceptTCP() {
 	}
 }
 
-func (n *netImpl) SubscribeOnNewConnections() chan *Connection {
+func (n *netImpl) SubscribeOnNewRemoteConnections() chan *Connection {
 	n.regMutex.Lock()
 	ch := make(chan *Connection, 20)
-	n.regNewConn = append(n.regNewConn, ch)
+	n.regNewRemoteConn = append(n.regNewRemoteConn, ch)
 	n.regMutex.Unlock()
 	return ch
 }
 
-func (n *netImpl) publishNewConnection(conn *Connection) {
+func (n *netImpl) publishNewRemoteConnection(conn *Connection) {
 	n.regMutex.RLock()
-	for _, c := range n.regNewConn {
+	for _, c := range n.regNewRemoteConn {
 		c <- conn
 	}
 	n.regMutex.RUnlock()
@@ -260,13 +254,9 @@ func (n *netImpl) HandlePreSessionIncomingMessage(c *Connection, message wire.In
 			return fmt.Errorf("%s. err: %v", errMsg, err)
 		}
 	}
-	n.logger.Info("DEBUG: processing HS request")
 	respData, session, err := ProcessHandshakeRequest(c.net.GetNetworkId(), n.localNode.PublicKey(), n.localNode.PrivateKey(), c.remotePub, data)
-
 	payload, err := proto.Marshal(respData)
 	if err != nil {
-		//handshakeData.SetError(err)
-		//h.stateChanged(handshakeData)
 		return fmt.Errorf("%s. err: %v", errMsg, err)
 	}
 
@@ -277,6 +267,6 @@ func (n *netImpl) HandlePreSessionIncomingMessage(c *Connection, message wire.In
 
 	c.session = session
 	// update on new connection
-	n.publishNewConnection(c)
+	n.publishNewRemoteConnection(c)
 	return nil
 }
