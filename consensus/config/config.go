@@ -8,7 +8,7 @@ import (
 // Config is the main configuration of the dolev strong parameters
 type Config struct {
 	NodesPerLayer    int32         `mapstructure:"nodes-per-layer"`
-	PhaseTime        time.Duration `mapstructure:"phase-time"`
+	RoundTime        time.Duration `mapstructure:"phase-time"`
 	StartTime        time.Time     `mapstructure:"start-time"`
 	NetworkDelayMax  time.Duration `mapstructure:"network-delay-time"`
 	NumOfAdverseries int32         `mapstructure:"num-of-adverseries"`
@@ -26,7 +26,7 @@ func duration(duration string) (dur time.Duration) {
 // DefaultConfig returns the default values of dolev strong configuration
 func DefaultConfig() Config {
 	return Config{
-		PhaseTime:        duration("1s"),
+		RoundTime:        duration("1s"),
 		NodesPerLayer:    200,
 		NetworkDelayMax:  duration("500ms"),
 		StartTime:        time.Now(),

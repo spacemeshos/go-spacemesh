@@ -2,17 +2,17 @@ package consensus
 
 import (
 	"bytes"
+	"fmt"
+	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/consensus/config"
+	"github.com/spacemeshos/go-spacemesh/consensus/pb"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/stretchr/testify/assert"
+	"math/rand"
 	"sync"
 	"testing"
 	"time"
-	"github.com/spacemeshos/go-spacemesh/consensus/pb"
-	"github.com/gogo/protobuf/proto"
-	"math/rand"
-	"fmt"
 )
 
 type messageData []byte
@@ -26,11 +26,11 @@ type MockNetwork struct {
 	connections  map[string]chan OpaqueMessage
 	inputChannel chan MockNetworkMessage
 	mutex        sync.Mutex
-	delayMs		 int32
+	delayMs      int32
 }
 
-type MaliciousTwoValuesSender struct{
-	DolevStrongConsensus
+type MaliciousTwoValuesSender struct {
+	DolevStrongMultiInstanceConsensus
 }
 
 func (mal *MaliciousTwoValuesSender) StartInstance(msg OpaqueMessage, msg2 OpaqueMessage) []byte {
@@ -43,7 +43,7 @@ func (mal *MaliciousTwoValuesSender) StartInstance(msg OpaqueMessage, msg2 Opaqu
 }
 
 type MaliciousSplitMessageSender struct {
-	DolevStrongConsensus
+	DolevStrongMultiInstanceConsensus
 }
 
 func (mal *MaliciousSplitMessageSender) StartInstance(msg1 OpaqueMessage, group1 []string, msg2 OpaqueMessage, group2 []string) []byte {
@@ -57,19 +57,19 @@ func (mal *MaliciousSplitMessageSender) StartInstance(msg1 OpaqueMessage, group1
 }
 
 // SendMessage sends this message in order to reach consensus
-func (impl *MaliciousSplitMessageSender) SendMessage(msg OpaqueMessage, group1 []string) error {
+func (mal *MaliciousSplitMessageSender) SendMessage(msg OpaqueMessage, group1 []string) error {
 	if len(msg.Data()) == 0 {
 		return nil
 	}
 	dataMsg := pb.MessageData{
 		Data:       msg.Data(),
-		AuthPubKey: impl.publicKey.Bytes(),
+		AuthPubKey: mal.publicKey.Bytes(),
 	}
 	protocolMsg := pb.ConsensusMessage{
 		Msg:        &dataMsg,
 		Validators: []*pb.Validator{},
 	}
-	err := impl.signMessageAndAppend(&protocolMsg)
+	err := mal.signMessageAndAppend(&protocolMsg)
 	if err != nil {
 		log.Error("cannot sign message %v", protocolMsg)
 		return err
@@ -78,9 +78,9 @@ func (impl *MaliciousSplitMessageSender) SendMessage(msg OpaqueMessage, group1 [
 	if ok != nil {
 		log.Error("could not marshal output message", protocolMsg)
 	}
-	for _,key := range group1 {
+	for _, key := range group1 {
 		//don't send to signed validators
-		_, err := impl.net.SendMessage(data, key)
+		_, err := mal.net.SendMessage(data, key)
 		if err != nil {
 			//todo: should we break the loop now?
 			//return err
@@ -90,7 +90,7 @@ func (impl *MaliciousSplitMessageSender) SendMessage(msg OpaqueMessage, group1 [
 }
 
 type MaliciousSignedTwoTimesSender struct {
-	DolevStrongConsensus
+	DolevStrongMultiInstanceConsensus
 }
 
 // SendMessage sends this message in order to reach consensus
@@ -123,13 +123,13 @@ func (impl *MaliciousSignedTwoTimesSender) SendMessage(msg OpaqueMessage) error 
 }
 
 type MaliciousDelayedSecondMessageSender struct {
-	DolevStrongConsensus
+	DolevStrongMultiInstanceConsensus
 }
 
 func (mal *MaliciousDelayedSecondMessageSender) StartInstance(msg OpaqueMessage, msg2 OpaqueMessage) []byte {
 	mal.startTime = time.Now()
 	go mal.SendMessage(msg2)
-	time.Sleep(time.Duration(mal.dsConfig.NumOfAdverseries /2) * mal.dsConfig.PhaseTime)
+	time.Sleep(time.Duration(mal.dsConfig.NumOfAdverseries/2) * mal.dsConfig.RoundTime)
 	go mal.SendMessage(msg)
 	go mal.StartListening()
 	mal.waitForConsensus()
@@ -141,7 +141,7 @@ type MaliciousChangeMessageReceiver struct {
 }
 
 // ReceiveMessage is the main receiver handler for a message received from a dolev strong instance running in the network
-func (dsci *MaliciousChangeMessageReceiver) ReceiveMessage(message *pb.ConsensusMessage) error{
+func (dsci *MaliciousChangeMessageReceiver) ReceiveMessage(message *pb.ConsensusMessage) error {
 	//calculates round according to local clock
 	round := dsci.ds.getRound()
 	log.Info("received message in round %v num of signatures: %v", round, len(message.Validators))
@@ -195,7 +195,7 @@ type MaliciousHoldMessageReceiver struct {
 }
 
 // ReceiveMessage is the main receiver handler for a message received from a dolev strong instance running in the network
-func (dsci *MaliciousHoldMessageReceiver) ReceiveMessage(message *pb.ConsensusMessage) error{
+func (dsci *MaliciousHoldMessageReceiver) ReceiveMessage(message *pb.ConsensusMessage) error {
 	//calculates round according to local clock
 	round := dsci.ds.getRound()
 	log.Info("received message in round %v num of signatures: %v", round, len(message.Validators))
@@ -229,7 +229,7 @@ func (dsci *MaliciousHoldMessageReceiver) ReceiveMessage(message *pb.ConsensusMe
 	}
 	//add this node to the nodes already signed
 	publicKeys[dsci.ds.publicKey.String()] = struct{}{}
-	time.Sleep(5 *time.Second)
+	time.Sleep(5 * time.Second)
 	dsci.ds.sendToRemainingNodes(message, publicKeys) // to be sent in round +1
 	return nil
 }
@@ -239,10 +239,9 @@ type MaliciousSendHoldMessageReceiver struct {
 }
 
 // ReceiveMessage is the main receiver handler for a message received from a dolev strong instance running in the network
-func (dsci *MaliciousSendHoldMessageReceiver) ReceiveMessage(message *pb.ConsensusMessage) error{
+func (dsci *MaliciousSendHoldMessageReceiver) ReceiveMessage(message *pb.ConsensusMessage) error {
 	//calculates round according to local clock
 	round := dsci.ds.getRound()
-	log.Info("received message in round %v num of signatures: %v", round, len(message.Validators))
 
 	if dsci.abortProcessingInstance {
 		return fmt.Errorf("message received on aborted isntance, round: %v", round)
@@ -272,13 +271,16 @@ func (dsci *MaliciousSendHoldMessageReceiver) ReceiveMessage(message *pb.Consens
 		return fmt.Errorf("cannot sign message %v error %v", message, err)
 	}
 	//add this node to the nodes already signed
+	log.Info("Sending first message")
 	publicKeys[dsci.ds.publicKey.String()] = struct{}{}
 	dsci.ds.sendToRemainingNodes(message, publicKeys) // to be sent in round +1
 
-	time.Sleep(5 *time.Second)
+	time.Sleep(5 * time.Second)
+	log.Info("Resending message")
 	dsci.ds.sendToRemainingNodes(message, publicKeys) // to be sent in round +1
 	return nil
 }
+
 //func (mal *)
 
 func (msg messageData) Data() []byte {
@@ -287,10 +289,10 @@ func (msg messageData) Data() []byte {
 
 func NewMockNetwork(delayMilliseconds int32) *MockNetwork {
 	val := &MockNetwork{
-		connections:  	make(map[string]chan OpaqueMessage),
-		inputChannel: 	make(chan MockNetworkMessage, 0),
-		mutex:        	sync.Mutex{},
-		delayMs:		delayMilliseconds,
+		connections:  make(map[string]chan OpaqueMessage),
+		inputChannel: make(chan MockNetworkMessage, 0),
+		mutex:        sync.Mutex{},
+		delayMs:      delayMilliseconds,
 	}
 	return val
 }
@@ -316,16 +318,18 @@ func (net *MockNetwork) routeMessages() chan struct{} {
 		for {
 			select {
 			case msg := <-net.inputChannel:
-					log.Info("recevied message")
-				if net.delayMs > 0{
+				log.Info("recevied message")
+				if net.delayMs > 0 {
 
 					time.Sleep(time.Duration(rn.Int31n(net.delayMs)) * time.Millisecond)
 				}
+				net.mutex.Lock()
 				x, ok := net.connections[msg.sender]
+				net.mutex.Unlock()
 				if !ok {
 					log.Error("Peer not found")
 				} else {
-					messageNum ++
+					messageNum++
 					go func() {
 						x <- msg.data
 					}()
@@ -347,12 +351,12 @@ type NodeNetMock struct {
 }
 
 func (net *NodeNetMock) SendMessage(message []byte, addr string) (int, error) {
-	log.Info("node %v sent data to %v", net.id, addr)
+	//log.Info("node %v sent data to %v", net.id, addr)
 	data := messageData(message)
 	networkMessage := MockNetworkMessage{data, addr}
 	go func() {
 		net.sendChannel <- networkMessage
-		log.Info("finished sending %v <-> %v", net.id, addr)
+		//log.Info("finished sending %v <-> %v", net.id, addr)
 	}()
 
 	return 0, nil
@@ -385,7 +389,7 @@ func NewNode() Node {
 	return Node{pub, priv}
 }
 
-func createNodesAndIds(numOfNodes int) ([]string, []Node){
+func createNodesAndIds(numOfNodes int) ([]string, []Node) {
 	nodeIds := make([]string, numOfNodes)
 	nodes := make([]Node, numOfNodes)
 
@@ -397,7 +401,7 @@ func createNodesAndIds(numOfNodes int) ([]string, []Node){
 		log.Info("creating new node %v", node.publicKey.String())
 	}
 
-	return nodeIds,nodes
+	return nodeIds, nodes
 }
 
 func TestSanity(t *testing.T) {
@@ -413,8 +417,6 @@ func TestSanity(t *testing.T) {
 	mockNetwork := NewMockNetwork(0)
 	quit := mockNetwork.routeMessages()
 	zeroBuf := make([]byte, 0)
-
-
 
 	for i := 0; i < numOfNodes; i++ {
 		ds := initDSC(mockNetwork, nodeIds, nodes[i], cfg, timer)
@@ -443,7 +445,7 @@ func TestSanity(t *testing.T) {
 func TestReceiverHoldAndResendMessage(t *testing.T) {
 	numOfNodes := 20
 	nodeIds, nodes := createNodesAndIds(numOfNodes)
-	var dsInstances []Algorithm
+	var dsInstances []*DolevStrongMultiInstanceConsensus
 
 	cfg := config.DefaultConfig()
 	cfg.NodesPerLayer = int32(numOfNodes)
@@ -454,22 +456,17 @@ func TestReceiverHoldAndResendMessage(t *testing.T) {
 	quit := mockNetwork.routeMessages()
 	zeroBuf := make([]byte, 0)
 
-
-
 	for i := 0; i < numOfNodes; i++ {
 		ds := initDSC(mockNetwork, nodeIds, nodes[i], cfg, timer)
 		dsInstances = append(dsInstances, ds)
 	}
 
-
-	nodeMock := mockNetwork.createNewNodeNetMock(nodes[numOfNodes-2].publicKey.String())
-	ds, _ := createDSC(cfg, timer, nodeIds, nodeMock, nodes[numOfNodes-2].publicKey, nodes[numOfNodes-2].privateKey)
-
+	log.Info("HoldBack %v", nodes[numOfNodes-2].publicKey.String())
 	for _, node := range nodes {
-		ds.activeInstances[node.publicKey.String()] = &MaliciousSendHoldMessageReceiver{DolevStrongInstance{value: nil,ds:ds}}
+		dsInstances[numOfNodes-2].activeInstances[node.publicKey.String()] = &MaliciousSendHoldMessageReceiver{DolevStrongInstance{value: nil, ds: dsInstances[numOfNodes-2]}}
 	}
-
-	dsInstances[numOfNodes-2] = ds
+	log.Info("Actual: %v", nodeIds[numOfNodes-2])
+	//dsInstances[numOfNodes-2] = ds
 
 	for i := 0; i < numOfNodes-1; i++ {
 		x := messageData(zeroBuf)
@@ -506,19 +503,16 @@ func TestReceiverHoldMessage(t *testing.T) {
 	quit := mockNetwork.routeMessages()
 	zeroBuf := make([]byte, 0)
 
-
-
 	for i := 0; i < numOfNodes; i++ {
 		ds := initDSC(mockNetwork, nodeIds, nodes[i], cfg, timer)
 		dsInstances = append(dsInstances, ds)
 	}
 
-
 	nodeMock := mockNetwork.createNewNodeNetMock(nodes[numOfNodes-2].publicKey.String())
-	ds, _ := createDSC(cfg, timer, nodeIds, nodeMock, nodes[numOfNodes-2].publicKey, nodes[numOfNodes-2].privateKey)
+	ds, _ := NewDSC(cfg, timer, nodeIds, nodeMock, nodes[numOfNodes-2].publicKey, nodes[numOfNodes-2].privateKey)
 
 	for _, node := range nodes {
-		ds.activeInstances[node.publicKey.String()] = &MaliciousHoldMessageReceiver{DolevStrongInstance{value: nil,ds:ds}}
+		ds.activeInstances[node.publicKey.String()] = &MaliciousHoldMessageReceiver{DolevStrongInstance{value: nil, ds: ds}}
 	}
 
 	dsInstances[numOfNodes-2] = ds
@@ -541,7 +535,6 @@ func TestReceiverHoldMessage(t *testing.T) {
 		validateDSC(t, dsc, arr, nodeIds[i], nodeIds[numOfNodes-1], true)
 		i++
 	}
-
 }
 
 func TestReceiverChangeMessage(t *testing.T) {
@@ -558,19 +551,16 @@ func TestReceiverChangeMessage(t *testing.T) {
 	quit := mockNetwork.routeMessages()
 	zeroBuf := make([]byte, 0)
 
-
-
 	for i := 0; i < numOfNodes; i++ {
 		ds := initDSC(mockNetwork, nodeIds, nodes[i], cfg, timer)
 		dsInstances = append(dsInstances, ds)
 	}
 
-
 	nodeMock := mockNetwork.createNewNodeNetMock(nodes[numOfNodes-2].publicKey.String())
-	ds, _ := createDSC(cfg, timer, nodeIds, nodeMock, nodes[numOfNodes-2].publicKey, nodes[numOfNodes-2].privateKey)
+	ds, _ := NewDSC(cfg, timer, nodeIds, nodeMock, nodes[numOfNodes-2].publicKey, nodes[numOfNodes-2].privateKey)
 
 	for _, node := range nodes {
-		ds.activeInstances[node.publicKey.String()] = &MaliciousChangeMessageReceiver{DolevStrongInstance{value: nil,ds:ds}}
+		ds.activeInstances[node.publicKey.String()] = &MaliciousChangeMessageReceiver{DolevStrongInstance{value: nil, ds: ds}}
 	}
 
 	dsInstances[numOfNodes-2] = ds
@@ -590,7 +580,7 @@ func TestReceiverChangeMessage(t *testing.T) {
 	i := 0
 	for _, dsc := range dsInstances {
 		//skip the malicious node
-		if i== numOfNodes-2 {
+		if i == numOfNodes-2 {
 			continue
 		}
 		validateDSC(t, dsc, arr, nodeIds[i], nodeIds[numOfNodes-1], true)
@@ -599,9 +589,9 @@ func TestReceiverChangeMessage(t *testing.T) {
 
 }
 
-func startInstance(wg *sync.WaitGroup, dsc Algorithm, msg messageData){
+func startInstance(wg *sync.WaitGroup, dsc Algorithm, msg messageData) {
 	wg.Add(1)
-	go func(){
+	go func() {
 		dsc.StartInstance(msg)
 		wg.Done()
 	}()
@@ -620,12 +610,11 @@ func TestMultipleSenders(t *testing.T) {
 	mockNetwork := NewMockNetwork(0)
 	quit := mockNetwork.routeMessages()
 
-
 	var wg sync.WaitGroup
 	for i := 0; i < numOfNodes; i++ {
 		ds := initDSC(mockNetwork, nodeIds, nodes[i], cfg, timer)
 		dsInstances = append(dsInstances, ds)
-		startInstance(&wg, dsInstances[i],messageData(nodes[i].publicKey.Bytes()[8:]))
+		startInstance(&wg, dsInstances[i], messageData(nodes[i].publicKey.Bytes()[8:]))
 	}
 	wg.Wait()
 
@@ -633,9 +622,9 @@ func TestMultipleSenders(t *testing.T) {
 	quit <- struct{}{}
 	//i := 0
 	for instanceIndex, dsc := range dsInstances {
-		for _, node := range nodes{//if this is the initiator node, output should be produces after send message...
-			if nodes[instanceIndex] != node{
-				assert.NotNil(t, dsc.GetOtherInstancesOutput()[node.publicKey.String()],"value not found for %v", node.publicKey.String())
+		for _, node := range nodes { //if this is the initiator node, output should be produces after send message...
+			if nodes[instanceIndex] != node {
+				assert.NotNil(t, dsc.GetOtherInstancesOutput()[node.publicKey.String()], "value not found for %v", node.publicKey.String())
 				assert.Equal(t, dsc.GetOtherInstancesOutput()[node.publicKey.String()], node.publicKey.Bytes()[8:])
 			}
 
@@ -684,7 +673,6 @@ func TestNodeNotInListJoins(t *testing.T) {
 
 }
 
-
 func TestSenderSendsTwoMessagesToDifferentParties(t *testing.T) {
 	numOfNodes := 8
 
@@ -701,7 +689,7 @@ func TestSenderSendsTwoMessagesToDifferentParties(t *testing.T) {
 
 	nodeIds, nodes := createNodesAndIds(numOfNodes)
 
-	for i := 0; i < numOfNodes -1; i++ {
+	for i := 0; i < numOfNodes-1; i++ {
 		ds := initDSC(mockNetwork, nodeIds, nodes[i], cfg, timer)
 		dsInstances = append(dsInstances, ds)
 	}
@@ -712,17 +700,17 @@ func TestSenderSendsTwoMessagesToDifferentParties(t *testing.T) {
 		go dsInstances[i].StartInstance(x)
 	}
 
-	node := nodes[numOfNodes -1]
+	node := nodes[numOfNodes-1]
 	nodeMock := mockNetwork.createNewNodeNetMock(node.publicKey.String())
-	dsc, _ := createDSC(cfg, timer, nodeIds, nodeMock, node.publicKey, node.privateKey)
-	mal := MaliciousSplitMessageSender{*dsc,}
+	dsc, _ := NewDSC(cfg, timer, nodeIds, nodeMock, node.publicKey, node.privateKey)
+	mal := MaliciousSplitMessageSender{*dsc}
 
 	//mal, _ := initMaliciousDSC(mockNetwork, nodeIds, nodes[numOfNodes -1], cfg, timer)
 
 	arr := []byte{'l', 'o', 'l'}
 	msg := messageData(arr)
 	msg2 := messageData([]byte("lol2"))
-	mal.StartInstance(msg,nodeIds[:numOfNodes/2], msg2, nodeIds[numOfNodes/2:numOfNodes-1])
+	mal.StartInstance(msg, nodeIds[:numOfNodes/2], msg2, nodeIds[numOfNodes/2:numOfNodes-1])
 
 	log.Info("closing network")
 	quit <- struct{}{}
@@ -750,7 +738,7 @@ func TestSenderSignsTwoTimes(t *testing.T) {
 
 	nodeIds, nodes := createNodesAndIds(numOfNodes)
 
-	for i := 0; i < numOfNodes -1; i++ {
+	for i := 0; i < numOfNodes-1; i++ {
 		ds := initDSC(mockNetwork, nodeIds, nodes[i], cfg, timer)
 		dsInstances = append(dsInstances, ds)
 	}
@@ -761,10 +749,10 @@ func TestSenderSignsTwoTimes(t *testing.T) {
 		go dsInstances[i].StartInstance(x)
 	}
 
-	node := nodes[numOfNodes -1]
+	node := nodes[numOfNodes-1]
 	nodeMock := mockNetwork.createNewNodeNetMock(node.publicKey.String())
-	dsc, _ := createDSC(cfg, timer, nodeIds, nodeMock, node.publicKey, node.privateKey)
-	mal := MaliciousSignedTwoTimesSender{*dsc,}
+	dsc, _ := NewDSC(cfg, timer, nodeIds, nodeMock, node.publicKey, node.privateKey)
+	mal := MaliciousSignedTwoTimesSender{*dsc}
 
 	arr := []byte{'l', 'o', 'l'}
 	msg := messageData(arr)
@@ -796,7 +784,7 @@ func TestSenderSendsTwoMessages(t *testing.T) {
 
 	nodeIds, nodes := createNodesAndIds(numOfNodes)
 
-	for i := 0; i < numOfNodes -1; i++ {
+	for i := 0; i < numOfNodes-1; i++ {
 		ds := initDSC(mockNetwork, nodeIds, nodes[i], cfg, timer)
 		dsInstances = append(dsInstances, ds)
 	}
@@ -807,7 +795,7 @@ func TestSenderSendsTwoMessages(t *testing.T) {
 		go dsInstances[i].StartInstance(x)
 	}
 
-	node := nodes[numOfNodes -1]
+	node := nodes[numOfNodes-1]
 	nodeMock := mockNetwork.createNewNodeNetMock(node.publicKey.String())
 	mal, _ := initMaliciousDSC(cfg, timer, nodeIds, nodeMock, node.publicKey, node.privateKey)
 
@@ -844,7 +832,7 @@ func TestSenderSendsTwoMessagesWithDelay(t *testing.T) {
 
 	nodeIds, nodes := createNodesAndIds(numOfNodes)
 
-	for i := 0; i < numOfNodes -1; i++ {
+	for i := 0; i < numOfNodes-1; i++ {
 		ds := initDSC(mockNetwork, nodeIds, nodes[i], cfg, timer)
 		dsInstances = append(dsInstances, ds)
 	}
@@ -855,10 +843,10 @@ func TestSenderSendsTwoMessagesWithDelay(t *testing.T) {
 		go dsInstances[i].StartInstance(x)
 	}
 
-	node := nodes[numOfNodes -1]
+	node := nodes[numOfNodes-1]
 	nodeMock := mockNetwork.createNewNodeNetMock(node.publicKey.String())
-	dsc, _ := createDSC(cfg, timer, nodeIds, nodeMock, node.publicKey, node.privateKey)
-	mal := MaliciousDelayedSecondMessageSender{*dsc,}
+	dsc, _ := NewDSC(cfg, timer, nodeIds, nodeMock, node.publicKey, node.privateKey)
+	mal := MaliciousDelayedSecondMessageSender{*dsc}
 
 	//mal, _ := initMaliciousDSC(mockNetwork, nodeIds, nodes[numOfNodes -1], cfg, timer)
 
@@ -877,7 +865,7 @@ func TestSenderSendsTwoMessagesWithDelay(t *testing.T) {
 
 }
 
-func initDolevStrongConsensus(numOfNodes int) *DolevStrongConsensus{
+func initDolevStrongConsensus(numOfNodes int) *DolevStrongMultiInstanceConsensus {
 	cfg := config.DefaultConfig()
 	cfg.NodesPerLayer = int32(numOfNodes)
 	cfg.NumOfAdverseries = int32(numOfNodes / 2)
@@ -888,16 +876,16 @@ func initDolevStrongConsensus(numOfNodes int) *DolevStrongConsensus{
 	node := NewNode()
 
 	nodeMock := mockNetwork.createNewNodeNetMock(node.publicKey.String())
-	dolevStrong, _ := createDSC(cfg,timer,nil,nodeMock,node.publicKey,node.privateKey)
+	dolevStrong, _ := NewDSC(cfg, timer, nil, nodeMock, node.publicKey, node.privateKey)
 	return dolevStrong
 }
 
-func TestInvalidPublicKeyOfInitiatorMessage(t *testing.T){
+func TestInvalidPublicKeyOfInitiatorMessage(t *testing.T) {
 	numOfNodes := 10
 	dolevStrong := initDolevStrongConsensus(numOfNodes)
 
 	arr := messageData([]byte("anton"))
-	msg := createMessage(arr ,dolevStrong)
+	msg := createMessage(arr, dolevStrong)
 
 	// flip a byte in the pub key to fail
 	msg.Msg.AuthPubKey[0] = ^msg.Msg.AuthPubKey[0]
@@ -909,24 +897,24 @@ func TestInvalidPublicKeyOfInitiatorMessage(t *testing.T){
 	assert.Error(t, err)
 }
 
-func TestInvalidSignature(t *testing.T){
+func TestInvalidSignature(t *testing.T) {
 	numOfNodes := 10
 	dolevStrong := initDolevStrongConsensus(numOfNodes)
 	msg := createMessage(messageData([]byte("anton")), dolevStrong)
 	dolevStrong.signMessageAndAppend(&msg)
 	msg.Msg.Data[0] = ^msg.Msg.Data[0]
 	instance := DolevStrongInstance{
-		ds:dolevStrong,
+		ds: dolevStrong,
 	}
 	_, err := instance.findAndValidateSignatures(&msg)
-	assert.Error(t,err)
+	assert.Error(t, err)
 }
 
 func validateDSC(t *testing.T, dsc Algorithm, expected []byte, node string, senderInstance string, shouldExist bool) {
 	outputs := dsc.GetOtherInstancesOutput()
 	for key, out := range outputs {
 		if key == senderInstance && node != senderInstance {
-			if shouldExist{
+			if shouldExist {
 				assert.True(t, bytes.Equal(out, expected), "buffer not found in any instance %v", node)
 			} else {
 				assert.False(t, bytes.Equal(out, expected), "buffer found in instance %v", node)
@@ -937,9 +925,7 @@ func validateDSC(t *testing.T, dsc Algorithm, expected []byte, node string, send
 
 }
 
-
-
-func initDSC(mockNetwork *MockNetwork, activeNodes []string, node Node, cfg config.Config, timer MyTimer) Algorithm {
+func initDSC(mockNetwork *MockNetwork, activeNodes []string, node Node, cfg config.Config, timer MyTimer) *DolevStrongMultiInstanceConsensus {
 	nodeMock := mockNetwork.createNewNodeNetMock(node.publicKey.String())
 	ds, _ := NewDSC(cfg, timer, activeNodes, nodeMock, node.publicKey, node.privateKey)
 	return ds
@@ -951,11 +937,11 @@ func createDSC(conf config.Config,
 	nodes []string,
 	network NetworkConnection,
 	pubKey crypto.PublicKey,
-	privKey crypto.PrivateKey) (*DolevStrongConsensus, error) {
+	privKey crypto.PrivateKey) (*DolevStrongMultiInstanceConsensus, error) {
 
-	dsc := &DolevStrongConsensus{
+	dsc := &DolevStrongMultiInstanceConsensus{
 		activeInstances: make(map[string]CAInstance),
-		ingressChannel:  make(chan OpaqueMessage),
+		ingressChannel:  network.RegisterProtocol("DolevStrong"),
 		publicKey:       pubKey,
 		privateKey:      privKey,
 		net:             network,
@@ -966,7 +952,7 @@ func createDSC(conf config.Config,
 		abortListening:  make(chan struct{}, 1),
 	}
 	for _, node := range nodes {
-		dsc.activeInstances[node] = NewCAInstance(dsc)
+		dsc.activeInstances[node] = NewDolevStrongInstance(dsc)
 	}
 
 	return dsc, nil
@@ -979,7 +965,7 @@ func initMaliciousDSC(conf config.Config,
 	pubKey crypto.PublicKey,
 	privKey crypto.PrivateKey) (*MaliciousTwoValuesSender, error) {
 
-	dsc := DolevStrongConsensus{
+	dsc := DolevStrongMultiInstanceConsensus{
 		activeInstances: make(map[string]CAInstance),
 		ingressChannel:  make(chan OpaqueMessage),
 		publicKey:       pubKey,
@@ -994,17 +980,15 @@ func initMaliciousDSC(conf config.Config,
 
 	mal := &MaliciousTwoValuesSender{
 		dsc,
-
 	}
 	for _, node := range nodes {
-		dsc.activeInstances[node] = NewCAInstance(&dsc)
+		dsc.activeInstances[node] = NewDolevStrongInstance(&dsc)
 	}
 
 	return mal, nil
 }
 
-
-func createMessage(msg OpaqueMessage, impl *DolevStrongConsensus) pb.ConsensusMessage{
+func createMessage(msg OpaqueMessage, impl *DolevStrongMultiInstanceConsensus) pb.ConsensusMessage {
 	dataMsg := pb.MessageData{
 		Data:       msg.Data(),
 		AuthPubKey: impl.publicKey.Bytes(),

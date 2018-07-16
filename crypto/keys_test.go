@@ -88,7 +88,6 @@ func TestCryptoApi(t *testing.T) {
 
 }
 
-
 func BenchmarkVerify(b *testing.B) {
 	b.StopTimer()
 

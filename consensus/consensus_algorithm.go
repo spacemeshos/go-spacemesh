@@ -26,7 +26,7 @@ type Algorithm interface {
 
 	//======= for ut =======
 	// Starts listening for new attempts to reach consensus from other nodes
-	StartListening() error
+	StartListening()
 
 	// Sends this message in order to reach consensus
 	SendMessage(msg OpaqueMessage) error
