@@ -1,12 +1,12 @@
 package node
 
 import (
-	"fmt"
 	"errors"
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/crypto"
-	"net"
-	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
+	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"math/rand"
+	"net"
 	"testing"
 	"time"
 )
@@ -16,11 +16,11 @@ var ErrFailedToCreate = errors.New("Failed to create local test node")
 
 // GenerateTestNode generates a local test node without persisting data to local store and with default config value.
 func GenerateTestNode(t *testing.T) (*LocalNode, Node) {
-	return GenerateTestNodeWithConfig(t, nodeconfig.DefaultConfig())
+	return GenerateTestNodeWithConfig(t, config.DefaultConfig())
 }
 
 // GenerateTestNodeWithConfig creates a local test node without persisting data to local store.
-func GenerateTestNodeWithConfig(t *testing.T, config nodeconfig.Config) (*LocalNode, Node) {
+func GenerateTestNodeWithConfig(t *testing.T, config config.Config) (*LocalNode, Node) {
 
 	port, err := GetUnboundedPort()
 	if err != nil {
@@ -66,7 +66,6 @@ func GenerateRandomNodesData(n int) []Node {
 	return res
 }
 
-
 // CheckUserPort tries to listen on a port and check whether is usable or not
 func CheckUserPort(port uint32) bool {
 	address := fmt.Sprintf("0.0.0.0:%d", port)
@@ -90,4 +89,3 @@ func GetUnboundedPort() (int, error) {
 	}
 	return int(port), nil
 }
-

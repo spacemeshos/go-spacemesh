@@ -6,14 +6,14 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/delimited"
-	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
+	"github.com/spacemeshos/go-spacemesh/p2p/net/wire"
+	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"gopkg.in/op/go-logging.v1"
 	"net"
 	"sync"
 	"time"
-	"github.com/spacemeshos/go-spacemesh/p2p/node"
 )
 
 // Net is a connection manager able to dial remote endpoints
@@ -27,15 +27,9 @@ import (
 type Net interface {
 	Dial(address string, remotePublicKey crypto.PublicKey, networkId int8) (*Connection, error) // Connect to a remote node. Can send when no error.
 	SubscribeOnNewConnections() chan *Connection
-	GetClosingConnections() chan *Connection
-	GetConnectionErrors() chan ConnectionError
-	GetIncomingMessage() chan IncomingMessage
-	GetPreSessionIncomingMessages() chan IncomingMessage
-	GetMessageSendErrors() chan MessageSendError
-	GetMessageSentCallback() chan MessageSentEvent
 	GetLogger() *logging.Logger
 	GetNetworkId() int8
-	HandlePreSessionIncomingMessage(msg IncomingMessage) error
+	HandlePreSessionIncomingMessage(c *Connection, msg wire.InMessage) error
 	GetLocalNode() *node.LocalNode
 	Shutdown()
 }
@@ -47,15 +41,7 @@ type netImpl struct {
 	logger    *logging.Logger
 
 	tcpListener      net.Listener
-	tcpListenAddress string // Address to open connection: localhost:9999
-
-	//newConnections     chan *Connection
-	closingConnections         chan *Connection
-	connectionErrors           chan ConnectionError
-	incomingMessages           chan IncomingMessage
-	preSessionIncomingMessages chan IncomingMessage
-	messageSendErrors          chan MessageSendError
-	messageSentEvents          chan MessageSentEvent
+	tcpListenAddress string // Address to open connection: localhost:9999\
 
 	isShuttingDown bool
 
@@ -65,25 +51,19 @@ type netImpl struct {
 	// remote connections that are pending session request
 	pendingConn []*Connection
 
-	config nodeconfig.Config
+	config config.Config
 }
 
 // NewNet creates a new network.
 // It attempts to tcp listen on address. e.g. localhost:1234 .
-func NewNet(tcpListenAddress string, conf nodeconfig.Config, logger *logging.Logger, localEntity *node.LocalNode) (Net, error) {
+func NewNet(tcpListenAddress string, conf config.Config, logger *logging.Logger, localEntity *node.LocalNode) (Net, error) {
 
 	n := &netImpl{
 		networkId:        conf.NetworkID,
 		localNode:        localEntity,
 		logger:           logger,
 		tcpListenAddress: tcpListenAddress,
-		closingConnections:         make(chan *Connection, 20),
-		connectionErrors:           make(chan ConnectionError, 20),
-		incomingMessages:           make(chan IncomingMessage, 20),
-		preSessionIncomingMessages: make(chan IncomingMessage, 20),
-		messageSendErrors:          make(chan MessageSendError, 20),
-		messageSentEvents:          make(chan MessageSentEvent, 20),
-		config:                     conf,
+		config:           conf,
 	}
 
 	err := n.listen()
@@ -95,30 +75,6 @@ func NewNet(tcpListenAddress string, conf nodeconfig.Config, logger *logging.Log
 	n.logger.Debug("created network with tcp address: %s", tcpListenAddress)
 
 	return n, nil
-}
-
-func (n *netImpl) GetMessageSentCallback() chan MessageSentEvent {
-	return n.messageSentEvents
-}
-
-func (n *netImpl) GetClosingConnections() chan *Connection {
-	return n.closingConnections
-}
-
-func (n *netImpl) GetConnectionErrors() chan ConnectionError {
-	return n.connectionErrors
-}
-
-func (n *netImpl) GetIncomingMessage() chan IncomingMessage {
-	return n.incomingMessages
-}
-
-func (n *netImpl) GetPreSessionIncomingMessages() chan IncomingMessage {
-	return n.preSessionIncomingMessages
-}
-
-func (n *netImpl) GetMessageSendErrors() chan MessageSendError {
-	return n.messageSendErrors
 }
 
 func (n *netImpl) GetLogger() *logging.Logger {
@@ -175,22 +131,31 @@ func (n *netImpl) createSecuredConnection(address string, remotePublicKey crypto
 	}
 	// TODO: support callback errors
 	n.logger.Info("DEBUG: sending HS req")
-	conn.Send(payload, session.ID())
-
-	var msg delimited.MsgAndID
-	var ok bool
-	select {
-	case msg, ok = <-conn.incomingMsgs.MsgChan:
-		if !ok { // chan closed
-			conn.Close()
-			return nil, errors.New("%s err: incoming channel was closed unexpectedly")
+	msgResult := make(chan wire.InMessage)
+	fts := make(chan struct{}) // failed to send
+	go func() {
+		select {
+		case recv := <-conn.formatter.In():
+			msgResult <- recv
+		case <-fts:
+			msgResult <- conn.formatter.MakeIn(nil, errors.New("failed to send initiating message"))
 		}
-	case err := <-conn.incomingMsgs.ErrChan:
-		return nil, fmt.Errorf("%s err: %v", errMsg, err)
+	}()
+
+	err = conn.Send(payload)
+
+	if err != nil {
+		fts <- struct{}{}
+	}
+
+	msg := <-msgResult
+
+	if msg.Error() != nil {
+		return nil, msg.Error()
 	}
 
 	respData := &pb.HandshakeData{}
-	err = proto.Unmarshal(msg.Msg, respData)
+	err = proto.Unmarshal(msg.Message(), respData)
 	if err != nil {
 		//n.logger.Warning("invalid incoming handshake resp bin data", err)
 		conn.Close()
@@ -202,10 +167,6 @@ func (n *netImpl) createSecuredConnection(address string, remotePublicKey crypto
 		conn.Close()
 		return nil, fmt.Errorf("%s err: %v", errMsg, err)
 	}
-
-	// TODO: Remove isAuthenticated - we announce state only when its authenticated
-	// Session is now authenticated
-	//session.SetAuthenticated(true)
 
 	conn.session = session
 	return conn, nil
@@ -266,7 +227,7 @@ func (n *netImpl) acceptTCP() {
 	}
 }
 
-func (n *netImpl) SubscribeOnNewConnections() chan *Connection{
+func (n *netImpl) SubscribeOnNewConnections() chan *Connection {
 	n.regMutex.Lock()
 	ch := make(chan *Connection, 20)
 	n.regNewConn = append(n.regNewConn, ch)
@@ -282,40 +243,25 @@ func (n *netImpl) publishNewConnection(conn *Connection) {
 	n.regMutex.RUnlock()
 }
 
-func (n *netImpl) HandlePreSessionIncomingMessage(msg IncomingMessage) error {
+func (n *netImpl) HandlePreSessionIncomingMessage(c *Connection, message wire.InMessage) error {
 	//TODO replace the next few lines with a way to validate that the message is a handshake request based on the message metadata
 	errMsg := "failed to handle handshake request"
 	data := &pb.HandshakeData{}
-	err := proto.Unmarshal(msg.Message, data)
+	err := proto.Unmarshal(message.Message(), data)
 	if err != nil {
 		return fmt.Errorf("%s. err: %v", errMsg, err)
 	}
 
-	//err = authenticateSenderNode(data)
-	//if err != nil {
-	//	return fmt.Errorf("%s. err: %v", errMsg, err)
-	//}
-
 	// new remote connection doesn't hold the remote public key until it gets the handshake request
-	if msg.Connection.remotePub == nil {
-		msg.Connection.remotePub, err = crypto.NewPublicKey(data.GetNodePubKey())
-		n.GetLogger().Info("DEBUG: handling HS req from %v", msg.Connection.remotePub)
+	if c.remotePub == nil {
+		c.remotePub, err = crypto.NewPublicKey(data.GetNodePubKey())
+		n.GetLogger().Info("DEBUG: handling HS req from %v", c.remotePub)
 		if err != nil {
 			return fmt.Errorf("%s. err: %v", errMsg, err)
 		}
 	}
 	n.logger.Info("DEBUG: processing HS request")
-	respData, session, err := ProcessHandshakeRequest(msg.Connection.net.GetNetworkId(), n.localNode.PublicKey(), n.localNode.PrivateKey(), msg.Connection.remotePub, data)
-
-	// we have a new session started by a remote node
-	//handshakeData := NewHandshakeData(h.swarm.GetLocalNode(), msg.Sender(), session, err)
-
-	//if err != nil {
-	//	// failed to process request
-	//	handshakeData.SetError(err)
-	//	h.stateChanged(handshakeData)
-	//	return
-	//}
+	respData, session, err := ProcessHandshakeRequest(c.net.GetNetworkId(), n.localNode.PublicKey(), n.localNode.PrivateKey(), c.remotePub, data)
 
 	payload, err := proto.Marshal(respData)
 	if err != nil {
@@ -324,22 +270,13 @@ func (n *netImpl) HandlePreSessionIncomingMessage(msg IncomingMessage) error {
 		return fmt.Errorf("%s. err: %v", errMsg, err)
 	}
 
-	// TODO: support callback errors
-	msg.Connection.Send(payload, session.ID())
-	// send response back to sender
-	//h.swarm.sendHandshakeMessage(SendMessageReq{
-	//	ReqID:    session.ID(),
-	//	PeerID:   msg.Sender().String(),
-	//	Payload:  payload,
-	//	Callback: nil,
-	//})
+	err = c.Send(payload)
+	if err != nil {
+		return err
+	}
 
-	// we have an active session initiated by a remote node
-	//h.stateChanged(handshakeData)
-
-	//h.swarm.GetLocalNode().Debug("Remotely initiated session established. Session id: %s :-)", session.String())
-	msg.Connection.session = session
+	c.session = session
 	// update on new connection
-	n.publishNewConnection(msg.Connection)
+	n.publishNewConnection(c)
 	return nil
 }

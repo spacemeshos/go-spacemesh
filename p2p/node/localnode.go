@@ -4,7 +4,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
+	"github.com/spacemeshos/go-spacemesh/p2p/config"
 )
 
 // LocalNode implementation.
@@ -31,7 +31,7 @@ func (n *LocalNode) PrivateKey() crypto.PrivateKey {
 // NewLocalNode creates a local node with a provided ip address.
 // Attempts to set node node from persisted data in local store.
 // Creates a new node if none was loaded.
-func NewLocalNode(config nodeconfig.Config, address string, persist bool) (*LocalNode, error) {
+func NewLocalNode(config config.Config, address string, persist bool) (*LocalNode, error) {
 
 	if len(config.NodeID) > 0 {
 		// user provided node id/pubkey via the cli - attempt to start that node w persisted data
@@ -60,7 +60,7 @@ func NewLocalNode(config nodeconfig.Config, address string, persist bool) (*Loca
 }
 
 // NewNodeIdentity creates a new local node without attempting to restore node from local store.
-func NewNodeIdentity(config nodeconfig.Config, address string, persist bool) (*LocalNode, error) {
+func NewNodeIdentity(config config.Config, address string, persist bool) (*LocalNode, error) {
 	priv, pub, err := crypto.GenerateKeyPair()
 	if err != nil {
 		return nil, err
@@ -79,7 +79,7 @@ func newLocalNodeWithKeys(pubKey crypto.PublicKey, privKey crypto.PrivateKey, ad
 		privKey:   privKey,
 	}
 
-	dataDir, err := filesystem.EnsureNodesDataDirectory(nodeconfig.NodesDirectoryName)
+	dataDir, err := filesystem.EnsureNodesDataDirectory(config.NodesDirectoryName)
 	if err != nil {
 		return nil, err
 	}

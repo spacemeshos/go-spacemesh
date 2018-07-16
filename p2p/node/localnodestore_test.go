@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
-	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
+	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
@@ -13,7 +13,7 @@ func TestNodeLocalStore(t *testing.T) {
 	// start clean
 	filesystem.SetupTestSpacemeshDataFolders(t, "localnode_store")
 
-	p, err := filesystem.EnsureNodesDataDirectory(nodeconfig.NodesDirectoryName)
+	p, err := filesystem.EnsureNodesDataDirectory(config.NodesDirectoryName)
 	assert.NoError(t, err, "failed to create or verify nodes data dir")
 
 	err = filesystem.TestEmptyFolder(p)
@@ -24,7 +24,7 @@ func TestNodeLocalStore(t *testing.T) {
 
 	address := fmt.Sprintf("0.0.0.0:%d", port1)
 
-	cfg := nodeconfig.DefaultConfig()
+	cfg := config.DefaultConfig()
 
 	node, err := NewNodeIdentity(cfg, address, false)
 	assert.NoError(t, err, "failed to create new local node")
@@ -36,7 +36,7 @@ func TestNodeLocalStore(t *testing.T) {
 
 	assert.NoError(t, err, "could'nt get node path")
 
-	file := filesystem.NodeDataFile(p, nodeconfig.NodeDataFileName, node.String())
+	file := filesystem.NodeDataFile(p, config.NodeDataFileName, node.String())
 	fmt.Println(file)
 	exists := filesystem.PathExists(file)
 

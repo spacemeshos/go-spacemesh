@@ -1,4 +1,4 @@
-package nodeconfig
+package config
 
 import (
 	"time"
@@ -33,7 +33,7 @@ type Config struct {
 	NodeID        string `mapstructure:"node-id"`
 	DialTimeout   time.Duration
 	ConnKeepAlive time.Duration
-	NetworkID     int8         `mapstructure:"network-id"`
+	NetworkID     int8        `mapstructure:"network-id"`
 	SwarmConfig   SwarmConfig `mapstructure:"swarm"`
 	TimeConfig    TimeConfig
 }

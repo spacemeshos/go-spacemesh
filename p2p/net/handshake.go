@@ -11,14 +11,14 @@ import (
 	"io"
 	"time"
 
+	"fmt"
+	"github.com/btcsuite/btcd/btcec"
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
-	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
+	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
-	"github.com/btcsuite/btcd/btcec"
-	"strings"
-	"fmt"
 	"github.com/spacemeshos/go-spacemesh/p2p/version"
+	"strings"
 )
 
 // HandshakeReq specifies the handshake protocol request message identifier. pattern is [protocol][version][method-name].
@@ -327,7 +327,7 @@ func GenerateHandshakeRequestData(localPublicKey crypto.PublicKey, localPrivateK
 		Protocol: HandshakeReq,
 	}
 
-	data.ClientVersion = nodeconfig.ClientVersion
+	data.ClientVersion = config.ClientVersion
 	data.NetworkID = int32(networkId)
 	data.Timestamp = time.Now().Unix()
 
@@ -340,12 +340,12 @@ func GenerateHandshakeRequestData(localPublicKey crypto.PublicKey, localPrivateK
 	data.Iv = iv
 
 	/*
-	// attempt to refresh the node's public ip address
-	node.RefreshPubTCPAddress()
+		// attempt to refresh the node's public ip address
+		node.RefreshPubTCPAddress()
 
-	// announce the pub ip address of the node - not the private one
-	data.TcpAddress = node.PubTCPAddress()
-*/
+		// announce the pub ip address of the node - not the private one
+		data.TcpAddress = node.PubTCPAddress()
+	*/
 	ephemeral, err := btcec.NewPrivateKey(btcec.S256())
 	if err != nil {
 		return nil, nil, err
@@ -465,7 +465,7 @@ func ProcessHandshakeRequest(networkId int8, lPub crypto.PublicKey, lPri crypto.
 	}
 
 	// compare that version to the min client version in config
-	ok, err := version.CheckNodeVersion(reqVersion[1], nodeconfig.MinClientVersion)
+	ok, err := version.CheckNodeVersion(reqVersion[1], config.MinClientVersion)
 	if err == nil && !ok {
 		return nil, nil, errors.New("unsupported client version")
 	}
@@ -544,7 +544,7 @@ func ProcessHandshakeRequest(networkId int8, lPub crypto.PublicKey, lPri crypto.
 	//node.RefreshPubTCPAddress()
 
 	resp := &pb.HandshakeData{
-		ClientVersion: nodeconfig.ClientVersion,
+		ClientVersion: config.ClientVersion,
 		NetworkID:     int32(networkId),
 		SessionId:     req.SessionId,
 		Timestamp:     time.Now().Unix(),
@@ -552,7 +552,6 @@ func ProcessHandshakeRequest(networkId int8, lPub crypto.PublicKey, lPri crypto.
 		PubKey:        req.PubKey,
 		Iv:            iv,
 		Hmac:          hmac1,
-		TcpAddress:    "1.1.1.1", //node.PubTCPAddress(), TODO what is it used for?
 		Protocol:      HandshakeResp,
 		Sign:          "",
 	}

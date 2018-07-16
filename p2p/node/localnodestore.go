@@ -11,7 +11,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
+	"github.com/spacemeshos/go-spacemesh/p2p/config"
 )
 
 // nodeFileData defines persistent node data.
@@ -19,7 +19,7 @@ type nodeFileData struct {
 	PubKey     string `json:"pubKey"`
 	PrivKey    string `json:"priKey"`
 	CoinBaseID string `json:"coinbase"` // coinbase account id
-	NetworkID  int8    `json:"network"`  // network that the node lives in
+	NetworkID  int8   `json:"network"`  // network that the node lives in
 }
 
 // Node store - local node data persistence functionality
@@ -38,12 +38,12 @@ func (n *LocalNode) persistData() error {
 		return err
 	}
 
-	nodeDataPath, err := filesystem.EnsureNodesDataDirectory(nodeconfig.NodesDirectoryName)
+	nodeDataPath, err := filesystem.EnsureNodesDataDirectory(config.NodesDirectoryName)
 	if err != nil {
 		return err
 	}
 
-	path := filesystem.NodeDataFile(nodeDataPath, nodeconfig.NodeDataFileName, n.String())
+	path := filesystem.NodeDataFile(nodeDataPath, config.NodeDataFileName, n.String())
 
 	// make sure our node file is written to the os filesystem.
 	f, err := os.Create(path)
@@ -74,12 +74,12 @@ func (n *LocalNode) persistData() error {
 // Read node persisted data based on node id.
 func readNodeData(nodeID string) (*nodeFileData, error) {
 
-	nodeDataPath, err := filesystem.EnsureNodesDataDirectory(nodeconfig.NodesDirectoryName)
+	nodeDataPath, err := filesystem.EnsureNodesDataDirectory(config.NodesDirectoryName)
 	if err != nil {
 		return nil, err
 	}
 
-	path := filesystem.NodeDataFile(nodeDataPath, nodeconfig.NodeDataFileName, nodeID)
+	path := filesystem.NodeDataFile(nodeDataPath, config.NodeDataFileName, nodeID)
 
 	data := bytes.NewBuffer(nil)
 
@@ -115,7 +115,7 @@ func readNodeData(nodeID string) (*nodeFileData, error) {
 // To load a specific node on startup - users need to pass the node id using a cli arg.
 func readFirstNodeData() (*nodeFileData, error) {
 
-	nodeDataPath, err := filesystem.EnsureNodesDataDirectory(nodeconfig.NodesDirectoryName)
+	nodeDataPath, err := filesystem.EnsureNodesDataDirectory(config.NodesDirectoryName)
 	if err != nil {
 		return nil, err
 	}
@@ -130,7 +130,7 @@ func readFirstNodeData() (*nodeFileData, error) {
 		n := f.Name()
 		// make sure we get only a real node file
 		if f.IsDir() && !strings.HasPrefix(n, ".") {
-			p := filesystem.NodeDataFile(nodeDataPath, nodeconfig.NodeDataFileName, n)
+			p := filesystem.NodeDataFile(nodeDataPath, config.NodeDataFileName, n)
 			if filesystem.PathExists(p) {
 				return readNodeData(n)
 			}

@@ -1,46 +1,21 @@
 package net
 
 import (
+	"errors"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/delimited"
+	"github.com/spacemeshos/go-spacemesh/p2p/net/wire"
 	"gopkg.in/op/go-logging.v1"
 )
 
-// MessageSentEvent specifies a sent network message data.
-type MessageSentEvent struct {
-	Connection *Connection
-	ID         []byte
-}
-
-// IncomingMessage specifies incoming network message data.
-type IncomingMessage struct {
-	Connection *Connection
-	Message    []byte
-}
-
-// ConnectionError specifies a connection error.
-type ConnectionError struct {
-	Connection *Connection
-	Err        error
-	ID         []byte // optional outgoing message id
-}
-
-// MessageSendError defines an error condition for sending a message.
-type MessageSendError struct {
-	Connection *Connection
-	Message    []byte
-	Err        error
-	ID         []byte
-}
-
-// OutgoingMessage specifies an outgoing message data.
-type OutgoingMessage struct {
-	Message []byte
-	ID      []byte
-}
+var (
+	ErrClosedChannel    = errors.New("unexpected closed connection channel")
+	ErrConnectionClosed = errors.New("connections was intentionally closed")
+)
 
 // ConnectionSource specifies the connection originator - local or remote node.
 type ConnectionSource int
@@ -56,15 +31,17 @@ const (
 type Connection struct {
 	logger *logging.Logger
 	// metadata for logging / debugging
-	id      string           // uuid for logging
-	source  ConnectionSource // remote or local
-	created time.Time
+	id        string           // uuid for logging
+	source    ConnectionSource // remote or local
+	created   time.Time
 	remotePub crypto.PublicKey
 
 	closeChan chan struct{}
 
-	incomingMsgs *delimited.Chan // implemented using delimited.Chan - incoming messages
-	outgoingMsgs *delimited.Chan // outgoing message queue
+	formatter wire.Formatter // format messages in some way
+
+	incmoingMessages      []chan wire.InMessage
+	incmoingMessagesMutex sync.RWMutex
 
 	conn net.Conn // wrapped network connection
 	net  Net      // network context
@@ -75,29 +52,21 @@ type Connection struct {
 // Create a new connection wrapping a net.Conn with a provided connection manager
 func newConnection(conn net.Conn, n Net, s ConnectionSource, remotePub crypto.PublicKey) *Connection {
 
-	// todo parametrize incoming msgs chan buffer size - hard-coded for now
-
-	// msgio channel used for incoming message
-	incomingMsgs := delimited.NewChan(10)
-	outgoingMsgs := delimited.NewChan(10)
-
+	// todo pass wire format inside and make it pluggable
+	// todo parametrize channel size - hard-coded for now
 	connection := &Connection{
-		logger:       n.GetLogger(),
-		id:           crypto.UUIDString(),
-		created:      time.Now(),
-		remotePub:	  remotePub,
-		source:       s,
-		incomingMsgs: incomingMsgs,
-		outgoingMsgs: outgoingMsgs,
-		conn:         conn,
-		net:          n,
-		closeChan:    make(chan struct{}),
+		logger:    n.GetLogger(),
+		id:        crypto.UUIDString(),
+		created:   time.Now(),
+		remotePub: remotePub,
+		formatter: delimited.NewChan(10),
+		source:    s,
+		conn:      conn,
+		net:       n,
+		closeChan: make(chan struct{}),
 	}
 
-	// start reading incoming message from the connection and into the channel
-	go incomingMsgs.ReadFromReader(conn)
-	// write to the connection through the delimited writer
-	go outgoingMsgs.WriteToWriter(conn)
+	connection.formatter.Pipe(connection.conn)
 
 	// start processing channel-based message
 	//TODO should be called explicitly by net
@@ -130,64 +99,77 @@ func (c *Connection) String() string {
 	return c.id
 }
 
+func (c *Connection) Subscribe() chan wire.InMessage {
+	imc := make(chan wire.InMessage, 20)
+	c.incmoingMessagesMutex.Lock()
+	c.incmoingMessages = append(c.incmoingMessages, imc)
+	c.incmoingMessagesMutex.Unlock()
+	return imc
+}
+
+func (c *Connection) publish(im wire.InMessage) {
+	c.incmoingMessagesMutex.RLock()
+	for _, imc := range c.incmoingMessages {
+		imc <- im
+	}
+	c.incmoingMessagesMutex.RUnlock()
+}
+
 // Send binary data to a connection
 // data is copied over so caller can get rid of the data
 // Concurrency: can be called from any go routine
-func (c *Connection) Send(message []byte, id []byte) {
-	//TODO add err callback
-	// queue messages for sending
-	c.outgoingMsgs.MsgChan <- delimited.MsgAndID{ID: id, Msg: message}
+func (c *Connection) Send(m []byte) error {
+	return wire.Send(c.formatter, m)
 }
 
 // Close closes the connection (implements io.Closer). It is go safe.
-func (c *Connection) Close() error {
-	c.incomingMsgs.Close()
-	c.outgoingMsgs.Close()
-	go func() { c.closeChan <- struct{}{} }()
-	return nil
+func (c *Connection) Close() {
+	c.closeChan <- struct{}{}
 }
 
 // Push outgoing message to the connections
 // Read from the incoming new messages and send down the connection
 func (c *Connection) beginEventProcessing() {
 
+	var err error
+
 Loop:
 	for {
 		select {
-
-		case err := <-c.outgoingMsgs.ErrChan:
-			go func() {
-				c.net.GetConnectionErrors() <- ConnectionError{c, err.Err, err.ID}
-			}()
-
-		case msg, ok := <-c.incomingMsgs.MsgChan:
+		case msg, ok := <-c.formatter.In():
 
 			if !ok { // chan closed
+				err = ErrClosedChannel
 				break Loop
 			}
 
-			// pump the message to the network
-			go func() {
-				if c.session == nil {
-					c.net.GetLogger().Info("DEBUG: got pre session message")
-					// dedicated channel for handshake requests
-					c.net.GetPreSessionIncomingMessages() <- IncomingMessage{c, msg.Msg}
-				} else {
-					// channel for protocol messages
-					c.net.GetIncomingMessage() <- IncomingMessage{c, msg.Msg}
+			if msg.Error() != nil {
+				err = msg.Error()
+				break Loop
+			}
+
+			if c.session == nil {
+				c.net.GetLogger().Info("DEBUG: got pre session message")
+				err = c.net.HandlePreSessionIncomingMessage(c, msg)
+				if err != nil {
+					break Loop
 				}
-			}()
+			} else {
+				// channel for protocol messages
+				go c.publish(msg)
+				//c.net.GetIncomingMessage() <- IncomingMessage{c, msg.Message()}
+			}
 
 		case <-c.closeChan:
-			go func() {
-				c.net.GetClosingConnections() <- c
-			}()
+			err = ErrConnectionClosed
 			break Loop
-
-		case err := <-c.incomingMsgs.ErrChan:
-			go func() {
-				c.net.GetConnectionErrors() <- ConnectionError{c, err.Err, err.ID}
-			}()
 		}
 	}
+
+	c.formatter.Close()
+	c.publish(c.formatter.MakeIn(nil, err))
+	for _, cim := range c.incmoingMessages {
+		close(cim)
+	}
+	// TODO: Teardown this connection
 }
