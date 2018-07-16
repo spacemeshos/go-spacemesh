@@ -796,8 +796,10 @@ func TestSenderSendsTwoMessages(t *testing.T) {
 	}
 
 	node := nodes[numOfNodes-1]
-	nodeMock := mockNetwork.createNewNodeNetMock(node.publicKey.String())
-	mal, _ := initMaliciousDSC(cfg, timer, nodeIds, nodeMock, node.publicKey, node.privateKey)
+
+	mal := &MaliciousTwoValuesSender{
+		*initDSC(mockNetwork, nodeIds, node, cfg, timer),
+	}
 
 	//mal, _ := initMaliciousDSC(mockNetwork, nodeIds, nodes[numOfNodes -1], cfg, timer)
 
@@ -929,63 +931,6 @@ func initDSC(mockNetwork *MockNetwork, activeNodes []string, node Node, cfg conf
 	nodeMock := mockNetwork.createNewNodeNetMock(node.publicKey.String())
 	ds, _ := NewDSC(cfg, timer, activeNodes, nodeMock, node.publicKey, node.privateKey)
 	return ds
-}
-
-// NewDSC creates a new instance of dolev strong agreement protocol
-func createDSC(conf config.Config,
-	timer Timer,
-	nodes []string,
-	network NetworkConnection,
-	pubKey crypto.PublicKey,
-	privKey crypto.PrivateKey) (*DolevStrongMultiInstanceConsensus, error) {
-
-	dsc := &DolevStrongMultiInstanceConsensus{
-		activeInstances: make(map[string]CAInstance),
-		ingressChannel:  network.RegisterProtocol("DolevStrong"),
-		publicKey:       pubKey,
-		privateKey:      privKey,
-		net:             network,
-		dsConfig:        conf,
-		timer:           timer,
-		startTime:       time.Now(),
-		abortInstance:   make(chan struct{}, 1),
-		abortListening:  make(chan struct{}, 1),
-	}
-	for _, node := range nodes {
-		dsc.activeInstances[node] = NewDolevStrongInstance(dsc)
-	}
-
-	return dsc, nil
-}
-
-func initMaliciousDSC(conf config.Config,
-	timer Timer,
-	nodes []string,
-	network NetworkConnection,
-	pubKey crypto.PublicKey,
-	privKey crypto.PrivateKey) (*MaliciousTwoValuesSender, error) {
-
-	dsc := DolevStrongMultiInstanceConsensus{
-		activeInstances: make(map[string]CAInstance),
-		ingressChannel:  make(chan OpaqueMessage),
-		publicKey:       pubKey,
-		privateKey:      privKey,
-		net:             network,
-		dsConfig:        conf,
-		timer:           timer,
-		startTime:       time.Now(),
-		abortInstance:   make(chan struct{}, 1),
-		abortListening:  make(chan struct{}, 1),
-	}
-
-	mal := &MaliciousTwoValuesSender{
-		dsc,
-	}
-	for _, node := range nodes {
-		dsc.activeInstances[node] = NewDolevStrongInstance(&dsc)
-	}
-
-	return mal, nil
 }
 
 func createMessage(msg OpaqueMessage, impl *DolevStrongMultiInstanceConsensus) pb.ConsensusMessage {
