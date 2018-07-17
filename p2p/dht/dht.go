@@ -5,7 +5,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 
-	"github.com/pkg/errors"
+	"errors"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"time"
 )

@@ -5,6 +5,7 @@ import (
 	"gopkg.in/op/go-logging.v1"
 	"time"
 	"github.com/spacemeshos/go-spacemesh/p2p/net/wire"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 type ReadWriteCloserMock struct {
@@ -23,24 +24,29 @@ func (m ReadWriteCloserMock) Close() error {
 	return nil
 }
 
+
+func getTestLogger(name string) *logging.Logger {
+	return log.New(name, "", "").Logger
+}
+
 type NetworkMock struct {
 	dialErr 			error
-	dialConn			*Connection
 	dialDelayMs			int8
 	regNewRemoteConn 	[]chan *Connection
 	networkId			int8
 	closingConn			chan *Connection
+	logger				*logging.Logger
 }
 
 func NewNetworkMock() *NetworkMock{
 	return &NetworkMock{
 		regNewRemoteConn:	make([]chan *Connection, 0),
 		closingConn:		make(chan *Connection),
+		logger:				getTestLogger("network mock"),
 	}
 }
 
-func (n *NetworkMock) SetDialResult(conn *Connection, err error) {
-	n.dialConn = conn
+func (n *NetworkMock) SetDialResult(err error) {
 	n.dialErr = err
 }
 
@@ -50,7 +56,8 @@ func (n *NetworkMock) SetDialDelayMs(delay int8) {
 
 func (n *NetworkMock) Dial(address string, remotePublicKey crypto.PublicKey, networkId int8) (*Connection, error) {
 	time.Sleep(time.Duration(n.dialDelayMs) * time.Millisecond)
-	return n.dialConn, n.dialErr
+	conn := newConnection(ReadWriteCloserMock{}, n, Local, remotePublicKey, n.logger)
+	return conn, n.dialErr
 }
 
 func (n *NetworkMock) SubscribeOnNewRemoteConnections() chan *Connection {
@@ -83,10 +90,10 @@ func (n NetworkMock) PublishClosingConnection(conn *Connection) {
 	}()
 }
 
-func HandlePreSessionIncomingMessage(c *Connection, msg wire.InMessage) error {
+func (n *NetworkMock) HandlePreSessionIncomingMessage(c *Connection, msg wire.InMessage) error {
 	return nil
 }
 
 func (n *NetworkMock) GetLogger() *logging.Logger {
-	return nil
+	return n.logger
 }

@@ -6,7 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
-	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
+	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/timesync"
 
 	//"github.com/sasha-s/go-deadlock"
@@ -31,7 +31,7 @@ type swarmImpl struct {
 	demuxer   Demuxer
 	cPool	  *ConnectionPool
 
-	config nodeconfig.Config
+	config config.Config
 
 	// TODO : Replace with an interlocked function Add/Remove
 	nodeEventRegChannel    chan NodeEventCallback

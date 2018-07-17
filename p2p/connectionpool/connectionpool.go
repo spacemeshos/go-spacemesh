@@ -1,4 +1,4 @@
-package p2p
+package connectionpool
 
 import (
 	"github.com/spacemeshos/go-spacemesh/crypto"
@@ -36,8 +36,7 @@ type ConnectionPool struct {
 	pendMutex	sync.Mutex
 dialWait    sync.WaitGroup
 	shutdown    bool
-	msgSubscribtions []chan IncomingMessage
-	msgSubMutex      sync.RWMutex
+
 
 	newConn		chan *net.Connection
 	teardown		chan struct{}
@@ -54,26 +53,10 @@ func NewConnectionPool(network networker, lPub crypto.PublicKey) *ConnectionPool
 		pendMutex:		sync.Mutex{},
 		dialWait:    sync.WaitGroup{},
 		shutdown:    false,newConn:		connC,
-		teardown:		make(chan struct{}),msgSubscribtions: make([]chan IncomingMessage, 0),
+		teardown:		make(chan struct{}),
 	}
 	go cPool.beginEventProcessing()
 	return cPool
-}
-
-func (cp *ConnectionPool) SubscribeMessages() <-chan IncomingMessage {
-	inc := make(chan IncomingMessage)
-	cp.msgSubMutex.Lock()
-	cp.msgSubscribtions = append(cp.msgSubscribtions, inc)
-	cp.msgSubMutex.Unlock()
-	return inc
-}
-
-func (cp *ConnectionPool) publishMessage(message IncomingMessage) {
-	cp.msgSubMutex.RLock()
-	for _, mss := range cp.msgSubscribtions {
-		mss <- message
-	}
-	cp.msgSubMutex.RUnlock()
 }
 
 func (cp *ConnectionPool) Shutdown() {

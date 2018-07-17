@@ -1,7 +1,7 @@
 package dht
 
 import (
-	"github.com/pkg/errors"
+	"errors"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"time"
 )

@@ -1,17 +1,17 @@
 package p2p
 
 import (
-	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
+	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/stretchr/testify/assert"
 	"testing"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 )
 
-func defaultConfig() nodeconfig.Config {
-	return nodeconfig.DefaultConfig()
+func defaultConfig() config.Config {
+	return config.DefaultConfig()
 }
 
-func p2pTestInstance(t testing.TB, config nodeconfig.Config) Swarm {
+func p2pTestInstance(t testing.TB, config config.Config) Swarm {
 	port, err := node.GetUnboundedPort()
 	assert.NoError(t, err, "Error getting a port", err)
 	config.TCPPort = port

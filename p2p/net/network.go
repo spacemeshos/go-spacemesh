@@ -105,7 +105,7 @@ func (n *netImpl) createConnection(address string, remotePub crypto.PublicKey, t
 	}
 
 	n.logger.Debug("Connected to %s...", address)
-	c := newConnection(netConn, n, Local, remotePub)
+	c := newConnection(netConn, n, Local, remotePub, n.logger)
 
 	return c, nil
 }
@@ -214,7 +214,7 @@ func (n *netImpl) acceptTCP() {
 		}
 
 		n.logger.Debug("Got new connection... Remote Address: %s", netConn.RemoteAddr())
-		c := newConnection(netConn, n, Remote, nil)
+		c := newConnection(netConn, n, Remote, nil, n.logger)
 
 		go c.beginEventProcessing()
 		// network won't publish the connection before it the remote node had established a session
@@ -254,7 +254,7 @@ func (n *netImpl) HandlePreSessionIncomingMessage(c *Connection, message wire.In
 			return fmt.Errorf("%s. err: %v", errMsg, err)
 		}
 	}
-	respData, session, err := ProcessHandshakeRequest(c.net.GetNetworkId(), n.localNode.PublicKey(), n.localNode.PrivateKey(), c.remotePub, data)
+	respData, session, err := ProcessHandshakeRequest(c.listener.GetNetworkId(), n.localNode.PublicKey(), n.localNode.PrivateKey(), c.remotePub, data)
 	payload, err := proto.Marshal(respData)
 	if err != nil {
 		return fmt.Errorf("%s. err: %v", errMsg, err)

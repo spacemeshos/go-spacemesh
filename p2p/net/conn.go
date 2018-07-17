@@ -2,7 +2,6 @@ package net
 
 import (
 	"errors"
-	"net"
 	"sync"
 	"time"
 
@@ -36,7 +35,6 @@ type Connection struct {
 	source    ConnectionSource // remote or local
 	created   time.Time
 	remotePub crypto.PublicKey
-	remoteAddr	net.Addr
 
 	closeChan chan struct{}
 
@@ -53,10 +51,11 @@ type Connection struct {
 
 type SessionListener interface {
 	HandlePreSessionIncomingMessage(c *Connection, msg wire.InMessage) error
+	GetNetworkId() int8
 }
 
 // Create a new connection wrapping a net.Conn with a provided connection manager
-func newConnection(conn io.ReadWriteCloser, sl SessionListener, s ConnectionSource, remotePub crypto.PublicKey, remoteAddr net.Addr, log *logging.Logger) *Connection {
+func newConnection(conn io.ReadWriteCloser, sl SessionListener, s ConnectionSource, remotePub crypto.PublicKey, log *logging.Logger) *Connection {
 
 	// todo pass wire format inside and make it pluggable
 	// todo parametrize channel size - hard-coded for now
@@ -65,7 +64,6 @@ func newConnection(conn io.ReadWriteCloser, sl SessionListener, s ConnectionSour
 		id:        	crypto.UUIDString(),
 		created:   	time.Now(),
 		remotePub: 	remotePub,
-		remoteAddr:	remoteAddr,
 		formatter: 	delimited.NewChan(10),
 		source:    	s,
 		conn:      	conn,
@@ -79,11 +77,6 @@ func newConnection(conn io.ReadWriteCloser, sl SessionListener, s ConnectionSour
 
 func (c *Connection) ID() string {
 	return c.id
-}
-
-// RemoteAddr returns the remote network address.
-func (c *Connection) RemoteAddr() net.Addr {
-	return c.remoteAddr
 }
 
 func (c Connection) RemotePublicKey() crypto.PublicKey {
