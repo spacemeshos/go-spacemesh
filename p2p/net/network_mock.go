@@ -4,7 +4,24 @@ import (
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"gopkg.in/op/go-logging.v1"
 	"time"
+	"github.com/spacemeshos/go-spacemesh/p2p/net/wire"
 )
+
+type ReadWriteCloserMock struct {
+
+}
+
+func (m ReadWriteCloserMock) Read(p []byte) (n int, err error) {
+	return 0, nil
+}
+
+func (m ReadWriteCloserMock) Write(p []byte) (n int, err error) {
+	return 0, nil
+}
+
+func (m ReadWriteCloserMock) Close() error {
+	return nil
+}
 
 type NetworkMock struct {
 	dialErr 			error
@@ -64,6 +81,10 @@ func (n NetworkMock) PublishClosingConnection(conn *Connection) {
 	go func() {
 		n.closingConn <- conn
 	}()
+}
+
+func HandlePreSessionIncomingMessage(c *Connection, msg wire.InMessage) error {
+	return nil
 }
 
 func (n *NetworkMock) GetLogger() *logging.Logger {
