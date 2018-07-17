@@ -10,6 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/delimited"
 	"github.com/spacemeshos/go-spacemesh/p2p/net/wire"
 	"gopkg.in/op/go-logging.v1"
+	"io"
 )
 
 var (
@@ -35,6 +36,7 @@ type Connection struct {
 	source    ConnectionSource // remote or local
 	created   time.Time
 	remotePub crypto.PublicKey
+	remoteAddr	net.Addr
 
 	closeChan chan struct{}
 
@@ -43,34 +45,35 @@ type Connection struct {
 	incmoingMessages      []chan wire.InMessage
 	incmoingMessagesMutex sync.RWMutex
 
-	conn net.Conn // wrapped network connection
-	net  Net      // network context
+	conn 		io.ReadWriteCloser 	// interface for network connection
+	listener  	SessionListener     // network context
 
 	session NetworkSession
 }
 
+type SessionListener interface {
+	HandlePreSessionIncomingMessage(c *Connection, msg wire.InMessage) error
+}
+
 // Create a new connection wrapping a net.Conn with a provided connection manager
-func newConnection(conn net.Conn, n Net, s ConnectionSource, remotePub crypto.PublicKey) *Connection {
+func newConnection(conn io.ReadWriteCloser, sl SessionListener, s ConnectionSource, remotePub crypto.PublicKey, remoteAddr net.Addr, log *logging.Logger) *Connection {
 
 	// todo pass wire format inside and make it pluggable
 	// todo parametrize channel size - hard-coded for now
 	connection := &Connection{
-		logger:    n.GetLogger(),
-		id:        crypto.UUIDString(),
-		created:   time.Now(),
-		remotePub: remotePub,
-		formatter: delimited.NewChan(10),
-		source:    s,
-		conn:      conn,
-		net:       n,
-		closeChan: make(chan struct{}),
+		logger:    	log,
+		id:        	crypto.UUIDString(),
+		created:   	time.Now(),
+		remotePub: 	remotePub,
+		remoteAddr:	remoteAddr,
+		formatter: 	delimited.NewChan(10),
+		source:    	s,
+		conn:      	conn,
+		listener:   sl,
+		closeChan: 	make(chan struct{}),
 	}
 
 	connection.formatter.Pipe(connection.conn)
-
-	// start processing channel-based message
-	//TODO should be called explicitly by net
-	//go connection.beginEventProcessing()
 	return connection
 }
 
@@ -80,7 +83,7 @@ func (c *Connection) ID() string {
 
 // RemoteAddr returns the remote network address.
 func (c *Connection) RemoteAddr() net.Addr {
-	return c.conn.RemoteAddr()
+	return c.remoteAddr
 }
 
 func (c Connection) RemotePublicKey() crypto.PublicKey {
@@ -149,8 +152,8 @@ Loop:
 			}
 
 			if c.session == nil {
-				c.net.GetLogger().Info("DEBUG: got pre session message")
-				err = c.net.HandlePreSessionIncomingMessage(c, msg)
+				c.logger.Info("DEBUG: got pre session message")
+				err = c.listener.HandlePreSessionIncomingMessage(c, msg)
 				if err != nil {
 					break Loop
 				}
