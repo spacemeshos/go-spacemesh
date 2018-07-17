@@ -2,13 +2,13 @@ package dht
 
 import (
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
-	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
+	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
 )
 
-func createTestDHT(t *testing.T, config nodeconfig.Config) *DHT {
+func createTestDHT(t *testing.T, config config.Config) *DHT {
 	node, _ := node.GenerateTestNode(t)
 	initRouting.Do(MsgRouting)
 	p2pmock := newP2PMock(node.Node)
@@ -19,12 +19,12 @@ func TestNew(t *testing.T) {
 	node, _ := node.GenerateTestNode(t)
 	MsgRouting()
 	p2pmock := newP2PMock(node.Node)
-	d := New(node, nodeconfig.DefaultConfig().SwarmConfig, p2pmock)
+	d := New(node, config.DefaultConfig().SwarmConfig, p2pmock)
 	assert.NotNil(t, d, "D is not nil")
 }
 
 func TestDHT_Update(t *testing.T) {
-	dht := createTestDHT(t, nodeconfig.DefaultConfig())
+	dht := createTestDHT(t, config.DefaultConfig())
 	randnode := node.GenerateRandomNodeData()
 	dht.Update(randnode)
 
@@ -34,7 +34,7 @@ func TestDHT_Update(t *testing.T) {
 
 	assert.Equal(t, 1, size, "Routing table filled")
 
-	morenodes := node.GenerateRandomNodesData(nodeconfig.DefaultConfig().SwarmConfig.RoutingTableBucketSize - 2) // more than bucketsize might result is some nodes not getting in
+	morenodes := node.GenerateRandomNodesData(config.DefaultConfig().SwarmConfig.RoutingTableBucketSize - 2) // more than bucketsize might result is some nodes not getting in
 
 	for i := range morenodes {
 		dht.Update(morenodes[i])
@@ -43,7 +43,7 @@ func TestDHT_Update(t *testing.T) {
 	dht.rt.Size(req)
 	size = <-req
 
-	assert.Equal(t, nodeconfig.DefaultConfig().SwarmConfig.RoutingTableBucketSize-1, size)
+	assert.Equal(t, config.DefaultConfig().SwarmConfig.RoutingTableBucketSize-1, size)
 
 	evenmorenodes := node.GenerateRandomNodesData(30) // more than bucketsize might result is some nodes not getting in
 
@@ -54,7 +54,7 @@ func TestDHT_Update(t *testing.T) {
 	dht.rt.Size(req)
 	size = <-req
 
-	assert.True(t, size > nodeconfig.DefaultConfig().SwarmConfig.RoutingTableBucketSize, "Routing table should be at least as big as bucket size")
+	assert.True(t, size > config.DefaultConfig().SwarmConfig.RoutingTableBucketSize, "Routing table should be at least as big as bucket size")
 
 	looked, err := dht.Lookup(randnode.PublicKey().String())
 
@@ -65,7 +65,7 @@ func TestDHT_Update(t *testing.T) {
 }
 
 func TestDHT_Lookup(t *testing.T) {
-	dht := createTestDHT(t, nodeconfig.DefaultConfig())
+	dht := createTestDHT(t, config.DefaultConfig())
 	randnode := node.GenerateRandomNodeData()
 
 	dht.Update(randnode)
@@ -78,13 +78,13 @@ func TestDHT_Lookup(t *testing.T) {
 }
 
 func TestDHT_Lookup2(t *testing.T) {
-	dht := createTestDHT(t, nodeconfig.DefaultConfig())
+	dht := createTestDHT(t, config.DefaultConfig())
 
 	randnode := node.GenerateRandomNodeData()
 
 	dht.Update(randnode)
 
-	dht2 := createTestDHT(t, nodeconfig.DefaultConfig())
+	dht2 := createTestDHT(t, config.DefaultConfig())
 
 	dht2.Update(dht.local.Node)
 
@@ -97,10 +97,10 @@ func TestDHT_Lookup2(t *testing.T) {
 
 func TestDHT_Bootstrap(t *testing.T) {
 	// Create a bootstrap node
-	dht := createTestDHT(t, nodeconfig.DefaultConfig())
+	dht := createTestDHT(t, config.DefaultConfig())
 
 	// config for other nodes
-	cfg2 := nodeconfig.DefaultConfig()
+	cfg2 := config.DefaultConfig()
 	cfg2.SwarmConfig.RandomConnections = 2 // min numbers of peers to succeed in bootstrap
 	cfg2.SwarmConfig.BootstrapNodes = []string{node.StringFromNode(dht.local.Node)}
 
@@ -141,10 +141,10 @@ func TestDHT_Bootstrap2(t *testing.T) {
 	const minToBoot = 25
 
 	// Create a bootstrap node
-	dht := createTestDHT(t, nodeconfig.DefaultConfig())
+	dht := createTestDHT(t, config.DefaultConfig())
 
 	// config for other nodes
-	cfg2 := nodeconfig.DefaultConfig()
+	cfg2 := config.DefaultConfig()
 	cfg2.SwarmConfig.RandomConnections = minToBoot // min numbers of peers to succeed in bootstrap
 	cfg2.SwarmConfig.BootstrapNodes = []string{node.StringFromNode(dht.local.Node)}
 

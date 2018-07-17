@@ -2,12 +2,12 @@ package dht
 
 import (
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
-	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
+	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
-func createTestFindNode(t *testing.T, config nodeconfig.Config) (*node.LocalNode, *findNodeProtocol) {
+func createTestFindNode(t *testing.T, config config.Config) (*node.LocalNode, *findNodeProtocol) {
 	node, _ := node.GenerateTestNode(t)
 	initRouting.Do(MsgRouting)
 	p2pmock := newP2PMock(node.Node)
@@ -16,8 +16,8 @@ func createTestFindNode(t *testing.T, config nodeconfig.Config) (*node.LocalNode
 }
 
 func TestFindNodeProtocol_FindNode(t *testing.T) {
-	_, fnd1 := createTestFindNode(t, nodeconfig.DefaultConfig())
-	node2, _ := createTestFindNode(t, nodeconfig.DefaultConfig())
+	_, fnd1 := createTestFindNode(t, config.DefaultConfig())
+	node2, _ := createTestFindNode(t, config.DefaultConfig())
 	idarr, err := fnd1.FindNode(node2.Node, node.GenerateRandomNodeData().String())
 
 	assert.NoError(t, err, "Should not return error")
@@ -25,8 +25,8 @@ func TestFindNodeProtocol_FindNode(t *testing.T) {
 }
 
 func TestFindNodeProtocol_FindNode2(t *testing.T) {
-	node1, fnd1 := createTestFindNode(t, nodeconfig.DefaultConfig())
-	node2, fnd2 := createTestFindNode(t, nodeconfig.DefaultConfig())
+	node1, fnd1 := createTestFindNode(t, config.DefaultConfig())
+	node2, fnd2 := createTestFindNode(t, config.DefaultConfig())
 	randnode := node.GenerateRandomNodeData()
 
 	fnd2.rt.Update(randnode)

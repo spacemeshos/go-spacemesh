@@ -3,7 +3,7 @@ package dht
 
 import (
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
-	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
+	"github.com/spacemeshos/go-spacemesh/p2p/config"
 
 	"github.com/pkg/errors"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -23,7 +23,7 @@ var (
 // DHT represents the Distributed Hash Table, it holds the Routing Table local node cache. and a FindNode kademlia protocol.
 // DHT Is created with a LocalNode identity as base. (DhtID)
 type DHT struct {
-	config nodeconfig.SwarmConfig
+	config config.SwarmConfig
 
 	local *node.LocalNode
 
@@ -34,7 +34,7 @@ type DHT struct {
 }
 
 // New creates a new dht
-func New(node *node.LocalNode, config nodeconfig.SwarmConfig, service service.Service) *DHT {
+func New(node *node.LocalNode, config config.SwarmConfig, service service.Service) *DHT {
 	d := &DHT{
 		config:  config,
 		local:   node,

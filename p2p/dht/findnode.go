@@ -55,17 +55,17 @@ func newFindNodeProtocol(service service.Service, rt RoutingTable) *findNodeProt
 }
 
 func (p *findNodeProtocol) sendRequestMessage(server crypto.PublicKey, payload []byte) ([]byte, error) {
-	reqID := crypto.UUID()
+	reqID := crypto.NewUUID()
 	findnode := &pb.FindNode{}
 	findnode.Req = true
-	findnode.ReqID = reqID
+	findnode.ReqID = reqID[:]
 	findnode.Payload = payload
 
 	msg, err := proto.Marshal(findnode)
 	if err != nil {
 		return nil, err
 	}
-	return reqID, p.service.SendMessage(server.String(), protocol, msg)
+	return reqID[:], p.service.SendMessage(server.String(), protocol, msg)
 }
 
 func (p *findNodeProtocol) sendResponseMessage(server crypto.PublicKey, reqID, payload []byte) error {
