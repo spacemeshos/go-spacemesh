@@ -6,9 +6,9 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/net/wire"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
-	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"gopkg.in/op/go-logging.v1"
 	"net"
@@ -31,7 +31,14 @@ type Net interface {
 	GetNetworkId() int8
 	HandlePreSessionIncomingMessage(c *Connection, msg wire.InMessage) error
 	GetLocalNode() *node.LocalNode
+	IncomingMessages() chan IncomingMessageEvent
+	ClosingConnections() chan *Connection
 	Shutdown()
+}
+
+type IncomingMessageEvent struct {
+	Conn    *Connection
+	Message []byte
 }
 
 // impl internal type
@@ -48,6 +55,9 @@ type netImpl struct {
 	regNewRemoteConn []chan *Connection
 	regMutex         sync.RWMutex
 
+	incomingMessages   chan IncomingMessageEvent
+	closingConnections chan *Connection
+
 	config config.Config
 }
 
@@ -56,12 +66,14 @@ type netImpl struct {
 func NewNet(tcpListenAddress string, conf config.Config, logger *logging.Logger, localEntity *node.LocalNode) (Net, error) {
 
 	n := &netImpl{
-		networkId:        conf.NetworkID,
-		localNode:        localEntity,
-		logger:           logger,
-		tcpListenAddress: tcpListenAddress,
-		regNewRemoteConn:			make([]chan *Connection, 0),
-		config:           conf,
+		networkId:          conf.NetworkID,
+		localNode:          localEntity,
+		logger:             logger,
+		tcpListenAddress:   tcpListenAddress,
+		regNewRemoteConn:   make([]chan *Connection, 0),
+		incomingMessages:   make(chan IncomingMessageEvent),
+		closingConnections: make(chan *Connection),
+		config:             conf,
 	}
 
 	err := n.listen()
@@ -87,6 +99,14 @@ func (n *netImpl) GetLocalNode() *node.LocalNode {
 	return n.localNode
 }
 
+func (n *netImpl) IncomingMessages() chan IncomingMessageEvent {
+	return n.incomingMessages
+}
+
+func (n *netImpl) ClosingConnections() chan *Connection {
+	return n.closingConnections
+}
+
 func (n *netImpl) createConnection(address string, remotePub crypto.PublicKey, timeOut time.Duration, keepAlive time.Duration) (*Connection, error) {
 	if n.isShuttingDown {
 		return nil, fmt.Errorf("can't dial because the connection is shutting down")
@@ -95,7 +115,6 @@ func (n *netImpl) createConnection(address string, remotePub crypto.PublicKey, t
 	dialer := &net.Dialer{}
 	dialer.KeepAlive = keepAlive // drop connections after a period of inactivity
 	dialer.Timeout = timeOut     // max time bef
-
 	n.logger.Debug("TCP dialing %s ...", address)
 
 	netConn, err := dialer.Dial("tcp", address)
@@ -254,7 +273,7 @@ func (n *netImpl) HandlePreSessionIncomingMessage(c *Connection, message wire.In
 			return fmt.Errorf("%s. err: %v", errMsg, err)
 		}
 	}
-	respData, session, err := ProcessHandshakeRequest(c.listener.GetNetworkId(), n.localNode.PublicKey(), n.localNode.PrivateKey(), c.remotePub, data)
+	respData, session, err := ProcessHandshakeRequest(c.networker.GetNetworkId(), n.localNode.PublicKey(), n.localNode.PrivateKey(), c.remotePub, data)
 	payload, err := proto.Marshal(respData)
 	if err != nil {
 		return fmt.Errorf("%s. err: %v", errMsg, err)

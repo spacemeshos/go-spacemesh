@@ -2,14 +2,14 @@ package net
 
 import (
 	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/net/wire"
 	"gopkg.in/op/go-logging.v1"
 	"time"
-	"github.com/spacemeshos/go-spacemesh/p2p/net/wire"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"net"
 )
 
 type ReadWriteCloserMock struct {
-
 }
 
 func (m ReadWriteCloserMock) Read(p []byte) (n int, err error) {
@@ -24,25 +24,33 @@ func (m ReadWriteCloserMock) Close() error {
 	return nil
 }
 
+func (m ReadWriteCloserMock) RemoteAddr() net.Addr {
+	r, err := net.ResolveTCPAddr("tcp", "127.0.0.0")
+	if err != nil {
+		panic(err)
+	}
+	return r
+}
 
 func getTestLogger(name string) *logging.Logger {
 	return log.New(name, "", "").Logger
 }
 
 type NetworkMock struct {
-	dialErr 			error
-	dialDelayMs			int8
-	regNewRemoteConn 	[]chan *Connection
-	networkId			int8
-	closingConn			chan *Connection
-	logger				*logging.Logger
+	dialErr          error
+	dialDelayMs      int8
+	regNewRemoteConn []chan *Connection
+	networkId        int8
+	closingConn      chan *Connection
+	incomingMessages      chan IncomingMessageEvent
+	logger           *logging.Logger
 }
 
-func NewNetworkMock() *NetworkMock{
+func NewNetworkMock() *NetworkMock {
 	return &NetworkMock{
-		regNewRemoteConn:	make([]chan *Connection, 0),
-		closingConn:		make(chan *Connection),
-		logger:				getTestLogger("network mock"),
+		regNewRemoteConn: make([]chan *Connection, 0),
+		closingConn:      make(chan *Connection),
+		logger:           getTestLogger("network mock"),
 	}
 }
 
@@ -80,8 +88,12 @@ func (n *NetworkMock) GetNetworkId() int8 {
 	return n.networkId
 }
 
-func (n *NetworkMock) GetClosingConnections() chan *Connection {
+func (n *NetworkMock) ClosingConnections() chan *Connection {
 	return n.closingConn
+}
+
+func (n* NetworkMock) IncomingMessages() chan IncomingMessageEvent {
+	return n.incomingMessages
 }
 
 func (n NetworkMock) PublishClosingConnection(conn *Connection) {
