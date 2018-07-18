@@ -4,9 +4,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 
-	"sync"
-	"gopkg.in/op/go-logging.v1"
 	"errors"
+	"gopkg.in/op/go-logging.v1"
+	"sync"
 )
 
 type DialError struct {
@@ -23,37 +23,37 @@ type networker interface {
 	Dial(address string, remotePublicKey crypto.PublicKey, networkId int8) (*net.Connection, error) // Connect to a remote node. Can send when no error.
 	SubscribeOnNewRemoteConnections() chan *net.Connection
 	GetNetworkId() int8
-	GetClosingConnections() chan *net.Connection
+	ClosingConnections() chan *net.Connection
 	GetLogger() *logging.Logger
 }
 
 type ConnectionPool struct {
-	localPub   	crypto.PublicKey
-	net        	networker
+	localPub    crypto.PublicKey
+	net         networker
 	connections map[string]*net.Connection
 	connMutex   sync.RWMutex
 	pending     map[string][]chan DialResult
-	pendMutex	sync.Mutex
-dialWait    sync.WaitGroup
+	pendMutex   sync.Mutex
+	dialWait    sync.WaitGroup
 	shutdown    bool
 
-
-	newConn		chan *net.Connection
-	teardown		chan struct{}
+	newConn  chan *net.Connection
+	teardown chan struct{}
 }
 
 func NewConnectionPool(network networker, lPub crypto.PublicKey) *ConnectionPool {
 	connC := network.SubscribeOnNewRemoteConnections()
 	cPool := &ConnectionPool{
-		localPub:	 lPub,
-		net:			network,
-		connections:	make(map[string]*net.Connection),
-		connMutex:		sync.RWMutex{},
-		pending:		make(map[string][]chan DialResult),
-		pendMutex:		sync.Mutex{},
+		localPub:    lPub,
+		net:         network,
+		connections: make(map[string]*net.Connection),
+		connMutex:   sync.RWMutex{},
+		pending:     make(map[string][]chan DialResult),
+		pendMutex:   sync.Mutex{},
 		dialWait:    sync.WaitGroup{},
-		shutdown:    false,newConn:		connC,
-		teardown:		make(chan struct{}),
+		shutdown:    false,
+		newConn:     connC,
+		teardown:    make(chan struct{}),
 	}
 	go cPool.beginEventProcessing()
 	return cPool
@@ -72,7 +72,6 @@ func (cp *ConnectionPool) Shutdown() {
 	cp.dialWait.Wait()
 	cp.teardown <- struct{}{}
 }
-
 
 func (cp *ConnectionPool) handleDialError(rPub crypto.PublicKey, err error) {
 	cp.pendMutex.Lock()
@@ -124,7 +123,7 @@ func (cp *ConnectionPool) handleClosedConnection(conn *net.Connection) {
 }
 
 // fetch or create connection to the address which is associated with the remote public key
-func (cp *ConnectionPool) getConnection(address string, remotePub crypto.PublicKey) (*net.Connection, error) {
+func (cp *ConnectionPool) GetConnection(address string, remotePub crypto.PublicKey) (*net.Connection, error) {
 	cp.connMutex.RLock()
 	if cp.shutdown {
 		cp.connMutex.RUnlock()
@@ -185,23 +184,23 @@ func (cp *ConnectionPool) beginEventProcessing() {
 Loop:
 	for {
 		select {
-			case conn := <-cp.newConn:
+		case conn := <-cp.newConn:
 
-				cp.handleNewConnection( conn.RemotePublicKey(), conn)
+			cp.handleNewConnection(conn.RemotePublicKey(), conn)
 
-				case conn := <-cp. net.GetClosingConnections():
-						cp.handleClosedConnection(
-						conn)
+		case conn := <-cp.net.ClosingConnections():
+			cp.handleClosedConnection(
+				conn)
 
-						case <-cp.teardown:
-				cp.connMutex.Lock()
-				// there should be no new connections arriving at this point
-				for _, c := range cp.connections {
-					// we won't handle the closing connection events for these connections since we exit the loop once the teardown is done
+		case <-cp.teardown:
+			cp.connMutex.Lock()
+			// there should be no new connections arriving at this point
+			for _, c := range cp.connections {
+				// we won't handle the closing connection events for these connections since we exit the loop once the teardown is done
 				c.Close()
-				}
-				cp.connMutex.Unlock()
-				break Loop
+			}
+			cp.connMutex.Unlock()
+			break Loop
 		}
 	}
 }
