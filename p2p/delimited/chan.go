@@ -66,20 +66,16 @@ func NewChan(chanSize int) *Chan {
 	}
 }
 
-func (s *Chan) Pipe(closer io.ReadWriteCloser) {
-	go s.ReadFromReader(closer)
-	go s.WriteToWriter(closer)
-}
-
-// ReadFromReader wraps the given io.Reader with a delimited.Reader, reads all
-// messages, ands sends them down the channel.
-func (s *Chan) ReadFromReader(r io.Reader) {
-	s.readFrom(NewReader(r))
+func (s *Chan) Pipe(rw io.ReadWriter) {
+	go s.readFromReader(rw)
+	go s.writeToWriter(rw)
 }
 
 // ReadFrom wraps the given io.Reader with a delimited.Reader, reads all
 // messages, ands sends them down the channel.
-func (s *Chan) readFrom(mr *Reader) {
+func (s *Chan) readFromReader(r io.Reader) {
+
+	mr := NewReader(r)
 	// single reader, no need for Mutex
 Loop:
 	for {
@@ -107,13 +103,11 @@ Loop:
 	}
 
 	close(s.InMsgChan)
-	// signal we're done
-	s.CloseChan <- struct{}{}
 }
 
 // WriteToWriter wraps the given io.Writer with a delimited.Writer, listens on the
 // channel and writes all messages to the writer.
-func (s *Chan) WriteToWriter(w io.Writer) {
+func (s *Chan) writeToWriter(w io.Writer) {
 	// new buffer per message
 	// if bottleneck, cycle around a set of buffers
 	mw := NewWriter(w)
@@ -125,11 +119,7 @@ Loop:
 		case <-s.CloseChan:
 			break Loop // told we're done
 
-		case msg, ok := <-s.OutMsgChan:
-			if !ok { // chan closed
-				break Loop
-			}
-
+		case msg := <-s.OutMsgChan:
 			if _, err := mw.WriteRecord(msg.Message()); err != nil {
 				if err != io.EOF {
 					// unexpected error. tell the client.
@@ -142,12 +132,12 @@ Loop:
 			msg.Result() <- nil
 		}
 	}
-
-	// signal we're done
-	s.CloseChan <- struct{}{}
+	close(s.OutMsgChan)
 }
 
 // Close the Chan
 func (s *Chan) Close() {
+	// Close both.
+	s.CloseChan <- struct{}{}
 	s.CloseChan <- struct{}{}
 }
