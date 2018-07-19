@@ -190,8 +190,7 @@ Loop:
 				cp.handleNewConnection( conn.RemotePublicKey(), conn)
 
 				case conn := <-cp. net.ClosingConnections():
-						cp.handleClosedConnection(
-						conn)
+						cp.handleClosedConnection(conn)
 
 		case <-cp.teardown:
 			cp.connMutex.Lock()

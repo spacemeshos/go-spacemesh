@@ -31,12 +31,12 @@ type Net interface {
 	HandlePreSessionIncomingMessage(c Connectioner, msg wire.InMessage) error
 	GetLocalNode() *node.LocalNode
 	IncomingMessages() chan IncomingMessageEvent
-	ClosingConnections() chan *Connection
+	ClosingConnections() chan Connectioner
 	Shutdown()
 }
 
 type IncomingMessageEvent struct {
-	Conn    *Connection
+	Conn    Connectioner
 	Message []byte
 }
 
@@ -55,7 +55,7 @@ type netImpl struct {
 	regMutex         sync.RWMutex
 
 	incomingMessages   chan IncomingMessageEvent
-	closingConnections chan *Connection
+	closingConnections chan Connectioner
 
 	config config.Config
 }
@@ -71,7 +71,7 @@ func NewNet(tcpListenAddress string, conf config.Config, logger *logging.Logger,
 		tcpListenAddress: tcpListenAddress,
 		regNewRemoteConn:			make([]chan Connectioner, 0),
 		incomingMessages:   make(chan IncomingMessageEvent),
-		closingConnections: make(chan *Connection),config:           conf,
+		closingConnections: make(chan Connectioner, 20),config:           conf,
 	}
 
 	err := n.listen()
@@ -101,7 +101,7 @@ func (n *netImpl) IncomingMessages() chan IncomingMessageEvent {
 	return n.incomingMessages
 }
 
-func (n *netImpl) ClosingConnections() chan *Connection {
+func (n *netImpl) ClosingConnections() chan Connectioner {
 	return n.closingConnections
 }
 
@@ -122,7 +122,7 @@ func (n *netImpl) createConnection(address string, remotePub crypto.PublicKey, t
 	}
 
 	n.logger.Debug("Connected to %s...", address)
-	c := NewConnection(netConn, n, Local, remotePub, n.logger)
+	c := newConnection(netConn, n, Local, remotePub, n.logger)
 
 	return c, nil
 }
@@ -150,7 +150,7 @@ func (n *netImpl) createSecuredConnection(address string, remotePublicKey crypto
 	fts := make(chan struct{}) // failed to send
 	go func() {
 		select {
-		case recv := <-conn.formatter.In():
+		case recv := <-conn.IncomingChannel():
 			msgResult <- recv
 		case <-fts:
 			break
@@ -184,7 +184,7 @@ func (n *netImpl) createSecuredConnection(address string, remotePublicKey crypto
 		return nil, fmt.Errorf("%s err: %v", errMsg, err)
 	}
 
-	conn.session = session
+	conn.SetSession(session)
 	return conn, nil
 }
 
@@ -232,7 +232,7 @@ func (n *netImpl) acceptTCP() {
 		}
 
 		n.logger.Debug("Got new connection... Remote Address: %s", netConn.RemoteAddr())
-		c := NewConnection(netConn, n, Remote, nil, n.logger)
+		c := newConnection(netConn, n, Remote, nil, n.logger)
 
 		go c.beginEventProcessing()
 		// network won't publish the connection before it the remote node had established a session
@@ -266,13 +266,15 @@ func (n *netImpl) HandlePreSessionIncomingMessage(c Connectioner, message wire.I
 
 	// new remote connection doesn't hold the remote public key until it gets the handshake request
 	if c.RemotePublicKey() == nil {
-		c.remotePub, err = crypto.NewPublicKey(data.GetNodePubKey())
-		n.GetLogger().Info("DEBUG: handling HS req from %v", c.remotePub)
+		rPub, err := crypto.NewPublicKey(data.GetNodePubKey())
+		n.GetLogger().Info("DEBUG: handling HS req from %v", rPub)
 		if err != nil {
 			return fmt.Errorf("%s. err: %v", errMsg, err)
 		}
+		c.SetRemotePublicKey(rPub)
+
 	}
-	respData, session, err := ProcessHandshakeRequest(c.networker.GetNetworkId(), n.localNode.PublicKey(), n.localNode.PrivateKey(), c.remotePub, data)
+	respData, session, err := ProcessHandshakeRequest(n.GetNetworkId(), n.localNode.PublicKey(), n.localNode.PrivateKey(), c.RemotePublicKey(), data)
 	payload, err := proto.Marshal(respData)
 	if err != nil {
 		return fmt.Errorf("%s. err: %v", errMsg, err)
@@ -283,7 +285,7 @@ func (n *netImpl) HandlePreSessionIncomingMessage(c Connectioner, message wire.I
 		return err
 	}
 
-	c.session = session
+	c.SetSession(session)
 	// update on new connection
 	n.publishNewRemoteConnection(c)
 	return nil

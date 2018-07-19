@@ -33,8 +33,12 @@ type Connectioner interface {
 	ID() string
 	RemotePublicKey() crypto.PublicKey
 	SetRemotePublicKey(key crypto.PublicKey)
+	SetSession(session NetworkSession)
+	Session() NetworkSession
 	Source() ConnectionSource
 	IncomingChannel() chan wire.InMessage
+
+	Send(m []byte) error
 	Close()
 
 	beginEventProcessing()
@@ -64,7 +68,7 @@ type Connection struct {
 type networker interface {
 	HandlePreSessionIncomingMessage(c Connectioner, msg wire.InMessage) error
 	IncomingMessages() chan IncomingMessageEvent
-	ClosingConnections() chan *Connection
+	ClosingConnections() chan Connectioner
 	GetNetworkId() int8
 }
 
@@ -74,7 +78,7 @@ type readWriteCloseAddresser interface {
 }
 
 // Create a new connection wrapping a net.Conn with a provided connection manager
-func NewConnection(conn readWriteCloseAddresser, netw networker, s ConnectionSource, remotePub crypto.PublicKey, log *logging.Logger) *Connection {
+func newConnection(conn readWriteCloseAddresser, netw networker, s ConnectionSource, remotePub crypto.PublicKey, log *logging.Logger) *Connection {
 
 	// todo pass wire format inside and make it pluggable
 	// todo parametrize channel size - hard-coded for now
@@ -114,6 +118,10 @@ func (c Connection) Source() ConnectionSource {
 	return c.source
 }
 
+func (c *Connection) SetSession(session NetworkSession) {
+	c.session = session
+}
+
 func (c *Connection) Session() NetworkSession {
 	return c.session
 }
@@ -126,6 +134,10 @@ func (c *Connection) publish(message wire.InMessage) {
 	c.networker.IncomingMessages() <- IncomingMessageEvent{c, message.Message()}
 }
 
+func (c *Connection) IncomingChannel() chan wire.InMessage {
+	return c.formatter.In()
+}
+
 // Send binary data to a connection
 // data is copied over so caller can get rid of the data
 // Concurrency: can be called from any go routine
@@ -136,6 +148,13 @@ func (c *Connection) Send(m []byte) error {
 // Close closes the connection (implements io.Closer). It is go safe.
 func (c *Connection) Close() {
 	c.closeChan <- struct{}{}
+}
+
+func (c *Connection) shutdown(err error) {
+	c.logger.Info("shutdown. err=%v", err)
+	c.formatter.Close()
+	c.conn.Close()
+	c.networker.ClosingConnections() <- c
 }
 
 // Push outgoing message to the connections
@@ -175,10 +194,5 @@ Loop:
 			break Loop
 		}
 	}
-
-	c.formatter.Close()
-	c.publish(c.formatter.MakeIn(nil, err))
-	c.conn.Close()
-	c.networker.ClosingConnections() <- c
-	// TODO: Teardown this connection
+	c.shutdown(err)
 }
