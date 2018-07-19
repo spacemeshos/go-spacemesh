@@ -7,6 +7,7 @@ import (
 	"gopkg.in/op/go-logging.v1"
 	"time"
 	"net"
+	"sync/atomic"
 )
 
 type ReadWriteCloserMock struct {
@@ -39,19 +40,26 @@ func getTestLogger(name string) *logging.Logger {
 type NetworkMock struct {
 	dialErr          error
 	dialDelayMs      int8
-	regNewRemoteConn []chan *Connection
+	dialCount			int32
+	regNewRemoteConn []chan Connectioner
 	networkId        int8
-	closingConn      chan *Connection
+	closingConn      chan Connectioner
 	incomingMessages      chan IncomingMessageEvent
 	logger           *logging.Logger
 }
 
 func NewNetworkMock() *NetworkMock {
 	return &NetworkMock{
-		regNewRemoteConn: make([]chan *Connection, 0),
-		closingConn:      make(chan *Connection),
+		regNewRemoteConn: make([]chan Connectioner, 0),
+		closingConn:      make(chan Connectioner),
 		logger:           getTestLogger("network mock"),
 	}
+}
+
+func (n * NetworkMock) reset() {
+	n.dialCount = 0
+	n.dialDelayMs = 0
+	n.dialErr = nil
 }
 
 func (n *NetworkMock) SetDialResult(err error) {
@@ -62,19 +70,27 @@ func (n *NetworkMock) SetDialDelayMs(delay int8) {
 	n.dialDelayMs = delay
 }
 
-func (n *NetworkMock) Dial(address string, remotePublicKey crypto.PublicKey, networkId int8) (*Connection, error) {
+
+
+func (n *NetworkMock) Dial(address string, remotePublicKey crypto.PublicKey, networkId int8) (Connectioner, error) {
+	n.networkId = networkId
+	atomic.AddInt32(&n.dialCount, 1)
 	time.Sleep(time.Duration(n.dialDelayMs) * time.Millisecond)
-	conn := newConnection(ReadWriteCloserMock{}, n, Local, remotePublicKey, n.logger)
+	conn := NewConnection(ReadWriteCloserMock{}, n, Local, remotePublicKey, n.logger)
 	return conn, n.dialErr
 }
 
-func (n *NetworkMock) SubscribeOnNewRemoteConnections() chan *Connection {
-	ch := make(chan *Connection, 20)
+func (n *NetworkMock) GetDialCount() int32 {
+	return n.dialCount
+}
+
+func (n *NetworkMock) SubscribeOnNewRemoteConnections() chan Connectioner {
+	ch := make(chan Connectioner, 20)
 	n.regNewRemoteConn = append(n.regNewRemoteConn, ch)
 	return ch
 }
 
-func (n NetworkMock) PublishNewRemoteConnection(conn *Connection) {
+func (n NetworkMock) PublishNewRemoteConnection(conn Connectioner) {
 	for _, ch := range n.regNewRemoteConn {
 		ch <- conn
 	}
@@ -88,7 +104,7 @@ func (n *NetworkMock) GetNetworkId() int8 {
 	return n.networkId
 }
 
-func (n *NetworkMock) ClosingConnections() chan *Connection {
+func (n *NetworkMock) ClosingConnections() chan Connectioner {
 	return n.closingConn
 }
 
@@ -96,13 +112,13 @@ func (n* NetworkMock) IncomingMessages() chan IncomingMessageEvent {
 	return n.incomingMessages
 }
 
-func (n NetworkMock) PublishClosingConnection(conn *Connection) {
+func (n NetworkMock) PublishClosingConnection(conn Connectioner) {
 	go func() {
 		n.closingConn <- conn
 	}()
 }
 
-func (n *NetworkMock) HandlePreSessionIncomingMessage(c *Connection, msg wire.InMessage) error {
+func (n *NetworkMock) HandlePreSessionIncomingMessage(c Connectioner, msg wire.InMessage) error {
 	return nil
 }
 

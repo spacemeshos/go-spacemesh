@@ -9,6 +9,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/net/wire"
 	"gopkg.in/op/go-logging.v1"
 	"io"
+	"fmt"
 	"net"
 )
 
@@ -25,6 +26,19 @@ const (
 	Local ConnectionSource = iota
 	Remote
 )
+
+type Connectioner interface {
+	fmt.Stringer
+
+	ID() string
+	RemotePublicKey() crypto.PublicKey
+	SetRemotePublicKey(key crypto.PublicKey)
+	Source() ConnectionSource
+	IncomingChannel() chan wire.InMessage
+	Close()
+
+	beginEventProcessing()
+}
 
 // A network connection supporting full-duplex messaging
 // Connection is an io.Writer and an io.Closer
@@ -48,7 +62,7 @@ type Connection struct {
 }
 
 type networker interface {
-	HandlePreSessionIncomingMessage(c *Connection, msg wire.InMessage) error
+	HandlePreSessionIncomingMessage(c Connectioner, msg wire.InMessage) error
 	IncomingMessages() chan IncomingMessageEvent
 	ClosingConnections() chan *Connection
 	GetNetworkId() int8
@@ -60,7 +74,7 @@ type readWriteCloseAddresser interface {
 }
 
 // Create a new connection wrapping a net.Conn with a provided connection manager
-func newConnection(conn readWriteCloseAddresser, netw networker, s ConnectionSource, remotePub crypto.PublicKey, log *logging.Logger) *Connection {
+func NewConnection(conn readWriteCloseAddresser, netw networker, s ConnectionSource, remotePub crypto.PublicKey, log *logging.Logger) *Connection {
 
 	// todo pass wire format inside and make it pluggable
 	// todo parametrize channel size - hard-coded for now
@@ -86,6 +100,10 @@ func (c *Connection) ID() string {
 
 func (c *Connection) RemoteAddr() net.Addr {
 	return c.conn.RemoteAddr()
+}
+
+func (c *Connection) SetRemotePublicKey(key crypto.PublicKey) {
+	c.remotePub = key
 }
 
 func (c Connection) RemotePublicKey() crypto.PublicKey {

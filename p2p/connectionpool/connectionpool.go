@@ -15,29 +15,29 @@ type DialError struct {
 }
 
 type DialResult struct {
-	conn *net.Connection
+	conn net.Connectioner
 	err  error
 }
 
 type networker interface {
-	Dial(address string, remotePublicKey crypto.PublicKey, networkId int8) (*net.Connection, error) // Connect to a remote node. Can send when no error.
-	SubscribeOnNewRemoteConnections() chan *net.Connection
+	Dial(address string, remotePublicKey crypto.PublicKey, networkId int8) (net.Connectioner, error) // Connect to a remote node. Can send when no error.
+	SubscribeOnNewRemoteConnections() chan net.Connectioner
 	GetNetworkId() int8
-	ClosingConnections() chan *net.Connection
+	ClosingConnections() chan net.Connectioner
 	GetLogger() *logging.Logger
 }
 
 type ConnectionPool struct {
 	localPub    crypto.PublicKey
 	net         networker
-	connections map[string]*net.Connection
+	connections map[string]net.Connectioner
 	connMutex   sync.RWMutex
 	pending     map[string][]chan DialResult
 	pendMutex   sync.Mutex
 	dialWait    sync.WaitGroup
 	shutdown    bool
 
-	newConn  chan *net.Connection
+	newConn  chan net.Connectioner
 	teardown chan struct{}
 }
 
@@ -46,7 +46,7 @@ func NewConnectionPool(network networker, lPub crypto.PublicKey) *ConnectionPool
 	cPool := &ConnectionPool{
 		localPub:    lPub,
 		net:         network,
-		connections: make(map[string]*net.Connection),
+		connections: make(map[string]net.Connectioner),
 		connMutex:   sync.RWMutex{},
 		pending:     make(map[string][]chan DialResult),
 		pendMutex:   sync.Mutex{},
@@ -82,7 +82,7 @@ func (cp *ConnectionPool) handleDialError(rPub crypto.PublicKey, err error) {
 	cp.pendMutex.Unlock()
 }
 
-func (cp *ConnectionPool) handleNewConnection(rPub crypto.PublicKey, conn *net.Connection) {
+func (cp *ConnectionPool) handleNewConnection(rPub crypto.PublicKey, conn net.Connectioner) {
 	cp.connMutex.Lock()
 	cp.net.GetLogger().Info("new connection %v -> %v", cp.localPub, rPub)
 	// check if there isn't already same connection (possible if the second connection is a Remote connection)
@@ -91,10 +91,11 @@ func (cp *ConnectionPool) handleNewConnection(rPub crypto.PublicKey, conn *net.C
 		if cur.Source() == net.Remote {
 			cp.net.GetLogger().Info("connection created by remote node while connection already exists between peers, closing new connection. remote=%s", rPub)
 		} else {
-			cp.net.GetLogger().Info("connection created by local node while connection already exists between peers, closing new connection. remote=%s", rPub)
+			cp.net.GetLogger().Warning("connection created by local node while connection already exists between peers, closing new connection. remote=%s", rPub)
 		}
 		conn.Close()
 		cp.connMutex.Unlock()
+		cp.net.GetLogger().Info("333333333")
 		return
 	}
 	cp.connections[rPub.String()] = conn
@@ -110,7 +111,7 @@ func (cp *ConnectionPool) handleNewConnection(rPub crypto.PublicKey, conn *net.C
 	cp.pendMutex.Unlock()
 }
 
-func (cp *ConnectionPool) handleClosedConnection(conn *net.Connection) {
+func (cp *ConnectionPool) handleClosedConnection(conn net.Connectioner) {
 	cp.net.GetLogger().Info("connection %s was closed", conn.String())
 	cp.connMutex.Lock()
 	rPub := conn.RemotePublicKey().String()
@@ -123,7 +124,7 @@ func (cp *ConnectionPool) handleClosedConnection(conn *net.Connection) {
 }
 
 // fetch or create connection to the address which is associated with the remote public key
-func (cp *ConnectionPool) GetConnection(address string, remotePub crypto.PublicKey) (*net.Connection, error) {
+func (cp *ConnectionPool) GetConnection(address string, remotePub crypto.PublicKey) (net.Connectioner, error) {
 	cp.connMutex.RLock()
 	if cp.shutdown {
 		cp.connMutex.RUnlock()
@@ -165,7 +166,7 @@ func (cp *ConnectionPool) GetConnection(address string, remotePub crypto.PublicK
 }
 
 // only fetch the connection, returns nil if no such connection in pool
-func (cp *ConnectionPool) hasConnection(remotePub crypto.PublicKey) *net.Connection {
+func (cp *ConnectionPool) hasConnection(remotePub crypto.PublicKey) net.Connectioner {
 	cp.connMutex.RLock()
 	if cp.shutdown {
 		cp.connMutex.RUnlock()
@@ -184,13 +185,13 @@ func (cp *ConnectionPool) beginEventProcessing() {
 Loop:
 	for {
 		select {
-		case conn := <-cp.newConn:
+			case conn := <-cp.newConn:
 
-			cp.handleNewConnection(conn.RemotePublicKey(), conn)
+				cp.handleNewConnection( conn.RemotePublicKey(), conn)
 
-		case conn := <-cp.net.ClosingConnections():
-			cp.handleClosedConnection(
-				conn)
+				case conn := <-cp. net.ClosingConnections():
+						cp.handleClosedConnection(
+						conn)
 
 		case <-cp.teardown:
 			cp.connMutex.Lock()

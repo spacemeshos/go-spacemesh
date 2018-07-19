@@ -1,7 +1,6 @@
 package net
 
 import (
-	"errors"
 	"fmt"
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
@@ -25,11 +24,11 @@ import (
 // Network main client is the swarm
 // Net has no channel events processing loops - clients are responsible for polling these channels and popping events from them
 type Net interface {
-	Dial(address string, remotePublicKey crypto.PublicKey, networkId int8) (*Connection, error) // Connect to a remote node. Can send when no error.
-	SubscribeOnNewRemoteConnections() chan *Connection
+	Dial(address string, remotePublicKey crypto.PublicKey, networkId int8) (Connectioner, error) // Connect to a remote node. Can send when no error.
+	SubscribeOnNewRemoteConnections() chan Connectioner
 	GetLogger() *logging.Logger
 	GetNetworkId() int8
-	HandlePreSessionIncomingMessage(c *Connection, msg wire.InMessage) error
+	HandlePreSessionIncomingMessage(c Connectioner, msg wire.InMessage) error
 	GetLocalNode() *node.LocalNode
 	IncomingMessages() chan IncomingMessageEvent
 	ClosingConnections() chan *Connection
@@ -52,7 +51,7 @@ type netImpl struct {
 
 	isShuttingDown bool
 
-	regNewRemoteConn []chan *Connection
+	regNewRemoteConn []chan Connectioner
 	regMutex         sync.RWMutex
 
 	incomingMessages   chan IncomingMessageEvent
@@ -66,14 +65,13 @@ type netImpl struct {
 func NewNet(tcpListenAddress string, conf config.Config, logger *logging.Logger, localEntity *node.LocalNode) (Net, error) {
 
 	n := &netImpl{
-		networkId:          conf.NetworkID,
-		localNode:          localEntity,
-		logger:             logger,
-		tcpListenAddress:   tcpListenAddress,
-		regNewRemoteConn:   make([]chan *Connection, 0),
+		networkId:        conf.NetworkID,
+		localNode:        localEntity,
+		logger:           logger,
+		tcpListenAddress: tcpListenAddress,
+		regNewRemoteConn:			make([]chan Connectioner, 0),
 		incomingMessages:   make(chan IncomingMessageEvent),
-		closingConnections: make(chan *Connection),
-		config:             conf,
+		closingConnections: make(chan *Connection),config:           conf,
 	}
 
 	err := n.listen()
@@ -107,7 +105,7 @@ func (n *netImpl) ClosingConnections() chan *Connection {
 	return n.closingConnections
 }
 
-func (n *netImpl) createConnection(address string, remotePub crypto.PublicKey, timeOut time.Duration, keepAlive time.Duration) (*Connection, error) {
+func (n *netImpl) createConnection(address string, remotePub crypto.PublicKey, timeOut time.Duration, keepAlive time.Duration) (Connectioner, error) {
 	if n.isShuttingDown {
 		return nil, fmt.Errorf("can't dial because the connection is shutting down")
 	}
@@ -124,12 +122,12 @@ func (n *netImpl) createConnection(address string, remotePub crypto.PublicKey, t
 	}
 
 	n.logger.Debug("Connected to %s...", address)
-	c := newConnection(netConn, n, Local, remotePub, n.logger)
+	c := NewConnection(netConn, n, Local, remotePub, n.logger)
 
 	return c, nil
 }
 
-func (n *netImpl) createSecuredConnection(address string, remotePublicKey crypto.PublicKey, networkId int8, timeOut time.Duration, keepAlive time.Duration) (*Connection, error) {
+func (n *netImpl) createSecuredConnection(address string, remotePublicKey crypto.PublicKey, networkId int8, timeOut time.Duration, keepAlive time.Duration) (Connectioner, error) {
 	errMsg := "failed to establish secured connection."
 	conn, err := n.createConnection(address, remotePublicKey, timeOut, keepAlive)
 	if err != nil {
@@ -155,7 +153,7 @@ func (n *netImpl) createSecuredConnection(address string, remotePublicKey crypto
 		case recv := <-conn.formatter.In():
 			msgResult <- recv
 		case <-fts:
-			msgResult <- conn.formatter.MakeIn(nil, errors.New("failed to send initiating message"))
+			break
 		}
 	}()
 
@@ -163,6 +161,7 @@ func (n *netImpl) createSecuredConnection(address string, remotePublicKey crypto
 
 	if err != nil {
 		fts <- struct{}{}
+		return nil, err
 	}
 
 	msg := <-msgResult
@@ -193,7 +192,7 @@ func (n *netImpl) createSecuredConnection(address string, remotePublicKey crypto
 // address:: ip:port
 // Returns established connection that local clients can send messages to or error if failed
 // to establish a connection, currently only secured connections are supported
-func (n *netImpl) Dial(address string, remotePublicKey crypto.PublicKey, networkId int8) (*Connection, error) {
+func (n *netImpl) Dial(address string, remotePublicKey crypto.PublicKey, networkId int8) (Connectioner, error) {
 	conn, err := n.createSecuredConnection(address, remotePublicKey, networkId, n.config.DialTimeout, n.config.ConnKeepAlive)
 	if err != nil {
 		return nil, fmt.Errorf("failed to Dail. err: %v", err)
@@ -233,22 +232,22 @@ func (n *netImpl) acceptTCP() {
 		}
 
 		n.logger.Debug("Got new connection... Remote Address: %s", netConn.RemoteAddr())
-		c := newConnection(netConn, n, Remote, nil, n.logger)
+		c := NewConnection(netConn, n, Remote, nil, n.logger)
 
 		go c.beginEventProcessing()
 		// network won't publish the connection before it the remote node had established a session
 	}
 }
 
-func (n *netImpl) SubscribeOnNewRemoteConnections() chan *Connection {
+func (n *netImpl) SubscribeOnNewRemoteConnections() chan Connectioner {
 	n.regMutex.Lock()
-	ch := make(chan *Connection, 20)
+	ch := make(chan Connectioner, 20)
 	n.regNewRemoteConn = append(n.regNewRemoteConn, ch)
 	n.regMutex.Unlock()
 	return ch
 }
 
-func (n *netImpl) publishNewRemoteConnection(conn *Connection) {
+func (n *netImpl) publishNewRemoteConnection(conn Connectioner) {
 	n.regMutex.RLock()
 	for _, c := range n.regNewRemoteConn {
 		c <- conn
@@ -256,7 +255,7 @@ func (n *netImpl) publishNewRemoteConnection(conn *Connection) {
 	n.regMutex.RUnlock()
 }
 
-func (n *netImpl) HandlePreSessionIncomingMessage(c *Connection, message wire.InMessage) error {
+func (n *netImpl) HandlePreSessionIncomingMessage(c Connectioner, message wire.InMessage) error {
 	//TODO replace the next few lines with a way to validate that the message is a handshake request based on the message metadata
 	errMsg := "failed to handle handshake request"
 	data := &pb.HandshakeData{}
@@ -266,7 +265,7 @@ func (n *netImpl) HandlePreSessionIncomingMessage(c *Connection, message wire.In
 	}
 
 	// new remote connection doesn't hold the remote public key until it gets the handshake request
-	if c.remotePub == nil {
+	if c.RemotePublicKey() == nil {
 		c.remotePub, err = crypto.NewPublicKey(data.GetNodePubKey())
 		n.GetLogger().Info("DEBUG: handling HS req from %v", c.remotePub)
 		if err != nil {
