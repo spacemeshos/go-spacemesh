@@ -118,6 +118,9 @@ func (p *findNodeProtocol) FindNode(serverNode node.Node, target string) ([]node
 		for _, n := range response.results {
 			p.rt.Update(n)
 		}
+		//req := make(chan int)
+		//p.rt.Size(req)
+		//fmt.Println("Returning results ", response.results, <-req)
 
 		return response.results, nil
 	case <-timeout.C:

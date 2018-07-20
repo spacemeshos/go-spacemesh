@@ -1,37 +1,65 @@
 package dht
 
 import (
-	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"fmt"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
+	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"github.com/spacemeshos/go-spacemesh/p2p/simulator"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
-func createTestFindNode(t *testing.T, config config.Config) (*node.LocalNode, *findNodeProtocol) {
-	node, _ := node.GenerateTestNode(t)
-	initRouting.Do(MsgRouting)
-	p2pmock := newP2PMock(node.Node)
-	rt := NewRoutingTable(config.SwarmConfig.RoutingTableBucketSize, node.DhtID(), node.Logger)
-	return node, newFindNodeProtocol(p2pmock, rt)
+func getTestLogger(test string, args ...interface{}) log.Log {
+	return log.New(fmt.Sprintf("%v ", test, args), "", "")
 }
 
+//func createTestFindNode(t *testing.T, config config.Config) (node.Node, *findNodeProtocol) {
+//	//node, _ := node.GenerateTestNode(t)
+//	//initRouting.Do(MsgRouting)
+//	//p2pmock := newP2PMock(node.Node)
+//	sim := simulator.New()
+//	n := sim.NewNode()
+//	rt := NewRoutingTable(config.SwarmConfig.RoutingTableBucketSize, n.DhtID(), getTestLogger("createTestFindNode").Logger)
+//	return _, newFindNodeProtocol(n, rt)
+//}
+
 func TestFindNodeProtocol_FindNode(t *testing.T) {
-	_, fnd1 := createTestFindNode(t, config.DefaultConfig())
-	node2, _ := createTestFindNode(t, config.DefaultConfig())
-	idarr, err := fnd1.FindNode(node2.Node, node.GenerateRandomNodeData().String())
+
+	cfg := config.DefaultConfig()
+	sim := simulator.New()
+
+	n1 := sim.NewNode()
+	rt1 := NewRoutingTable(cfg.SwarmConfig.RoutingTableBucketSize, n1.DhtID(), getTestLogger("FindNode - ").Logger)
+	fnd1 := newFindNodeProtocol(n1, rt1)
+
+	n2 := sim.NewNode()
+	rt2 := NewRoutingTable(cfg.SwarmConfig.RoutingTableBucketSize, n2.DhtID(), getTestLogger("FindNode - ").Logger)
+	_ = newFindNodeProtocol(n2, rt2)
+
+	idarr, err := fnd1.FindNode(n2.Node, node.GenerateRandomNodeData().String())
 
 	assert.NoError(t, err, "Should not return error")
 	assert.Equal(t, []node.Node{}, idarr, "Should be an empty array")
 }
 
 func TestFindNodeProtocol_FindNode2(t *testing.T) {
-	node1, fnd1 := createTestFindNode(t, config.DefaultConfig())
-	node2, fnd2 := createTestFindNode(t, config.DefaultConfig())
 	randnode := node.GenerateRandomNodeData()
+
+	cfg := config.DefaultConfig()
+	sim := simulator.New()
+
+	n1 := sim.NewNode()
+	rt1 := NewRoutingTable(cfg.SwarmConfig.RoutingTableBucketSize, n1.DhtID(), getTestLogger("FindNode - ").Logger)
+	fnd1 := newFindNodeProtocol(n1, rt1)
+
+	n2 := sim.NewNode()
+	rt2 := NewRoutingTable(cfg.SwarmConfig.RoutingTableBucketSize, n2.DhtID(), getTestLogger("FindNode - ").Logger)
+	fnd2 := newFindNodeProtocol(n2, rt2)
 
 	fnd2.rt.Update(randnode)
 
-	idarr, err := fnd1.FindNode(node2.Node, randnode.String())
+	idarr, err := fnd1.FindNode(n2.Node, randnode.String())
 
 	expected := []node.Node{randnode}
 
@@ -46,12 +74,12 @@ func TestFindNodeProtocol_FindNode2(t *testing.T) {
 	// sort because this is how its returned
 	expected = node.SortByDhtID(expected, randnode.DhtID())
 
-	idarr, err = fnd1.FindNode(node2.Node, randnode.String())
+	idarr, err = fnd1.FindNode(n2.Node, randnode.String())
 
 	assert.NoError(t, err, "Should not return error")
-	assert.Equal(t, expected, idarr, "Should be array that contains the node")
+	assert.Equal(t, expected, idarr, "Should be same array")
 
-	idarr, err = fnd2.FindNode(node1.Node, randnode.String())
+	idarr, err = fnd2.FindNode(n1.Node, randnode.String())
 
 	assert.NoError(t, err, "Should not return error")
 	assert.Equal(t, expected, idarr, "Should be array that contains the node")

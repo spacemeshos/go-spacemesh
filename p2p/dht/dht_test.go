@@ -1,30 +1,36 @@
 package dht
 
 import (
-	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
+	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"github.com/spacemeshos/go-spacemesh/p2p/simulator"
 	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
 )
 
-func createTestDHT(t *testing.T, config config.Config) *DHT {
-	node, _ := node.GenerateTestNode(t)
-	initRouting.Do(MsgRouting)
-	p2pmock := newP2PMock(node.Node)
-	return New(node, config.SwarmConfig, p2pmock)
-}
-
 func TestNew(t *testing.T) {
-	node, _ := node.GenerateTestNode(t)
-	MsgRouting()
-	p2pmock := newP2PMock(node.Node)
-	d := New(node, config.DefaultConfig().SwarmConfig, p2pmock)
+	ln, _ := node.GenerateTestNode(t)
+
+	cfg := config.DefaultConfig()
+	sim := simulator.New()
+
+	n1 := sim.NewNodeFrom(ln.Node)
+
+	d := New(ln, cfg.SwarmConfig, n1)
 	assert.NotNil(t, d, "D is not nil")
 }
 
 func TestDHT_Update(t *testing.T) {
-	dht := createTestDHT(t, config.DefaultConfig())
+	ln, _ := node.GenerateTestNode(t)
+
+	cfg := config.DefaultConfig()
+	sim := simulator.New()
+
+	n1 := sim.NewNodeFrom(ln.Node)
+
+	dht := New(ln, cfg.SwarmConfig, n1)
+
 	randnode := node.GenerateRandomNodeData()
 	dht.Update(randnode)
 
@@ -65,7 +71,15 @@ func TestDHT_Update(t *testing.T) {
 }
 
 func TestDHT_Lookup(t *testing.T) {
-	dht := createTestDHT(t, config.DefaultConfig())
+	ln, _ := node.GenerateTestNode(t)
+
+	cfg := config.DefaultConfig()
+	sim := simulator.New()
+
+	n1 := sim.NewNodeFrom(ln.Node)
+
+	dht := New(ln, cfg.SwarmConfig, n1)
+
 	randnode := node.GenerateRandomNodeData()
 
 	dht.Update(randnode)
@@ -78,13 +92,24 @@ func TestDHT_Lookup(t *testing.T) {
 }
 
 func TestDHT_Lookup2(t *testing.T) {
-	dht := createTestDHT(t, config.DefaultConfig())
+	ln, _ := node.GenerateTestNode(t)
+
+	cfg := config.DefaultConfig()
+	sim := simulator.New()
+
+	n1 := sim.NewNodeFrom(ln.Node)
+
+	dht := New(ln, cfg.SwarmConfig, n1)
 
 	randnode := node.GenerateRandomNodeData()
 
 	dht.Update(randnode)
 
-	dht2 := createTestDHT(t, config.DefaultConfig())
+	ln2, _ := node.GenerateTestNode(t)
+
+	n2 := sim.NewNodeFrom(ln2.Node)
+
+	dht2 := New(ln2, cfg.SwarmConfig, n2)
 
 	dht2.Update(dht.local.Node)
 
@@ -97,7 +122,12 @@ func TestDHT_Lookup2(t *testing.T) {
 
 func TestDHT_Bootstrap(t *testing.T) {
 	// Create a bootstrap node
-	dht := createTestDHT(t, config.DefaultConfig())
+	ln, _ := node.GenerateTestNode(t)
+	cfg := config.DefaultConfig()
+	sim := simulator.New()
+	n1 := sim.NewNodeFrom(ln.Node)
+
+	dht := New(ln, cfg.SwarmConfig, n1)
 
 	// config for other nodes
 	cfg2 := config.DefaultConfig()
@@ -107,9 +137,17 @@ func TestDHT_Bootstrap(t *testing.T) {
 	booted := make(chan error)
 
 	// Boot 3 more nodes
-	dht2 := createTestDHT(t, cfg2)
-	dht3 := createTestDHT(t, cfg2)
-	dht4 := createTestDHT(t, cfg2)
+	ln2, _ := node.GenerateTestNode(t)
+	n2 := sim.NewNodeFrom(ln2.Node)
+	dht2 := New(ln2, cfg2.SwarmConfig, n2)
+
+	ln3, _ := node.GenerateTestNode(t)
+	n3 := sim.NewNodeFrom(ln3.Node)
+	dht3 := New(ln3, cfg2.SwarmConfig, n3)
+
+	ln4, _ := node.GenerateTestNode(t)
+	n4 := sim.NewNodeFrom(ln4.Node)
+	dht4 := New(ln4, cfg2.SwarmConfig, n4)
 
 	go func() {
 		err2 := dht2.Bootstrap()
@@ -140,8 +178,14 @@ func TestDHT_Bootstrap2(t *testing.T) {
 	const nodesNum = 100
 	const minToBoot = 25
 
+	sim := simulator.New()
+
 	// Create a bootstrap node
-	dht := createTestDHT(t, config.DefaultConfig())
+	bs, _ := node.GenerateTestNode(t)
+	cfg := config.DefaultConfig()
+	bsn := sim.NewNodeFrom(bs.Node)
+
+	dht := New(bs, cfg.SwarmConfig, bsn)
 
 	// config for other nodes
 	cfg2 := config.DefaultConfig()
@@ -153,7 +197,11 @@ func TestDHT_Bootstrap2(t *testing.T) {
 	dhts := make([]*DHT, nodesNum)
 
 	for i := 0; i < nodesNum; i++ {
-		d := createTestDHT(t, cfg2)
+		lln, _ := node.GenerateTestNode(t)
+		nn := sim.NewNodeFrom(lln.Node)
+
+		d := New(lln, cfg2.SwarmConfig, nn)
+
 		dhts[i] = d
 		go func(d *DHT) { err := d.Bootstrap(); booted <- err }(d)
 	}
