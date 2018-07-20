@@ -50,7 +50,7 @@ func GenerateTestNodeWithConfig(t *testing.T, config config.Config) (*LocalNode,
 // GenerateRandomNodeData generates a remote random node data for testing.
 func GenerateRandomNodeData() Node {
 	rand.Seed(time.Now().UnixNano())
-	port := rand.Uint32()
+	port := rand.Int31n(48127) + 1024
 
 	address := fmt.Sprintf("0.0.0.0:%d", port)
 	_, pub, _ := crypto.GenerateKeyPair()

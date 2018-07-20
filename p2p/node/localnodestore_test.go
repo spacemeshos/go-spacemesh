@@ -3,7 +3,6 @@ package node
 import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
-	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/stretchr/testify/assert"
 	"testing"
@@ -19,7 +18,7 @@ func TestNodeLocalStore(t *testing.T) {
 	err = filesystem.TestEmptyFolder(p)
 	assert.NoError(t, err, "There should be no files in the node folder now")
 
-	port1, err := net.GetUnboundedPort()
+	port1, err := GetUnboundedPort()
 	assert.NoError(t, err, "Should be able to establish a connection on a port")
 
 	address := fmt.Sprintf("0.0.0.0:%d", port1)
