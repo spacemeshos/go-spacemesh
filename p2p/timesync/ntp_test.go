@@ -3,7 +3,7 @@ package timesync
 import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/crypto"
-	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
+	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
@@ -12,7 +12,7 @@ import (
 func TestCheckSystemClockDrift(t *testing.T) {
 	drift, err := CheckSystemClockDrift()
 	t.Log("Checking system clock drift from NTP")
-	if drift < -nodeconfig.TimeConfigValues.MaxAllowedDrift || drift > nodeconfig.TimeConfigValues.MaxAllowedDrift {
+	if drift < -config.TimeConfigValues.MaxAllowedDrift || drift > config.TimeConfigValues.MaxAllowedDrift {
 		assert.NotNil(t, err, fmt.Sprintf("Didn't get that drift exceedes. %s", err))
 	} else {
 		assert.Nil(t, err, fmt.Sprintf("Drift is ok"))

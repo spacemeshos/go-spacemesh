@@ -4,7 +4,7 @@ package timesync
 import (
 	"encoding/binary"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
+	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"math/rand"
 	"net"
 	"sort"
@@ -101,7 +101,7 @@ func ntpRequest(server string, rq *NtpPacket) (time.Time, time.Duration, *NtpPac
 	defer conn.Close()
 
 	if err := conn.SetDeadline(
-		time.Now().Add(nodeconfig.TimeConfigValues.DefaultTimeoutLatency)); err != nil {
+		time.Now().Add(config.TimeConfigValues.DefaultTimeoutLatency)); err != nil {
 		return zeroTime, zeroDuration, nil, fmt.Errorf("failed to set deadline: %s", err)
 	}
 	before := time.Now()
@@ -134,7 +134,7 @@ func ntpTimeDrift() (time.Duration, error) {
 	queriedServers := make(map[int]bool)
 	rand.Seed(time.Now().Unix()) // we don't need too special seed for that
 	sl := len(DefaultServers) - 1
-	for i := 0; i < nodeconfig.TimeConfigValues.NtpQueries; i++ {
+	for i := 0; i < config.TimeConfigValues.NtpQueries; i++ {
 		rndsrv := rand.Intn(sl)
 		for queriedServers[rndsrv] {
 			rndsrv = rand.Intn(sl)
@@ -154,7 +154,7 @@ func ntpTimeDrift() (time.Duration, error) {
 
 	all := sortableDurations{}
 	errors := []error{}
-	for i := 0; i < nodeconfig.TimeConfigValues.NtpQueries; i++ {
+	for i := 0; i < config.TimeConfigValues.NtpQueries; i++ {
 		select {
 		case err := <-errorChan:
 			errors = append(errors, err)
@@ -180,7 +180,7 @@ func CheckSystemClockDrift() (time.Duration, error) {
 		return drift, err
 	}
 	// Check if drift exceeds our max allowed drift
-	if drift < -nodeconfig.TimeConfigValues.MaxAllowedDrift || drift > nodeconfig.TimeConfigValues.MaxAllowedDrift {
+	if drift < -config.TimeConfigValues.MaxAllowedDrift || drift > config.TimeConfigValues.MaxAllowedDrift {
 		return drift, fmt.Errorf("System clock is %s away from NTP servers. please synchronize your OS ", drift)
 	}
 
