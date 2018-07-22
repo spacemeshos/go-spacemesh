@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"errors"
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht"
@@ -56,6 +57,7 @@ func (s *swarmImpl) bootstrap() {
 			select {
 			case <-timeout.C:
 				s.localNode.Error("Failed to bootstrap node")
+				s.bootComplete(errors.New("failed to bootstrap node"))
 				return
 			default:
 				if atomic.LoadUint32(&bn) > 0 {
@@ -70,7 +72,7 @@ func (s *swarmImpl) bootstrap() {
 					s.localNode.Debug("Bootstrap filled routing table, establishing k random connections")
 					if s.routingTable.IsHealthy() {
 						s.ConnectToRandomNodes(c)
-						s.bootComplete()
+						s.bootComplete(nil)
 					}
 					return
 				}
@@ -123,7 +125,9 @@ func (s *swarmImpl) ConnectToRandomNodes(count int) {
 
 func (s *swarmImpl) onSendInternalMessage(r SendMessageReq) {
 
+	s.peerMapMutex.RLock()
 	peer := s.peers[r.PeerID]
+	s.peerMapMutex.RUnlock()
 
 	if peer == nil {
 		prs := s.getNearestPeers(dht.NewIDFromBase58String(r.PeerID), 1)
@@ -218,12 +222,6 @@ BSLOOP:
 			s.onConnectionRequest(n.req, n.done)
 		case r := <-s.sendMsgRequests:
 			s.onSendInternalMessage(r)
-		case ipm := <-s.incomingPendingMessages:
-			s.addIncomingPendingMessage(ipm)
-		case nec := <-s.nodeEventRegChannel:
-			s.registerNodeEventsCallback(nec)
-		case rnec := <-s.nodeEventRemoveChannel:
-			s.removeNodeEventsCallback(rnec)
 		case qmsg := <-s.retryMessage:
 			s.retryMessageLater(qmsg)
 		case <-retryTicker.C:

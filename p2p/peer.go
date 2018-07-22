@@ -49,6 +49,8 @@ type peerImpl struct {
 	sessions     map[string]NetworkSession
 }
 
+// TODO : refactor to newPeer
+
 // NewRemoteNode creates a new remote node using provided id and tcp address.
 func NewRemoteNode(id string, tcpAddress string) (Peer, error) {
 

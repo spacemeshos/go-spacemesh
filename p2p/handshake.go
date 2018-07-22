@@ -18,6 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
+	"sync"
 )
 
 // HandshakeReq specifies the handshake protocol request message identifier. pattern is [protocol][version][method-name].
@@ -102,13 +103,12 @@ type handshakeProtocolImpl struct {
 	swarm               Swarm
 	newSessionCallbacks []chan HandshakeData     // a list of callback channels for new sessions
 	pendingSessions     map[string]HandshakeData // sessions pending authentication
+	pendingMutex        sync.RWMutex
 
 	// ops
 	incomingHandshakeRequests MessagesChan
 	incomingHandsakeResponses MessagesChan
 	registerSessionCallback   chan chan HandshakeData
-	addPendingSession         chan HandshakeData
-	deletePendingSessionByID  chan string
 	sessionStateChanged       chan HandshakeData
 	pendingCheckRequest       chan pendingSessionRequest
 }
@@ -124,9 +124,7 @@ func NewHandshakeProtocol(s Swarm) HandshakeProtocol {
 		incomingHandsakeResponses: make(chan IncomingMessage, 20),
 		registerSessionCallback:   make(chan chan HandshakeData, 2),
 		newSessionCallbacks:       make([]chan HandshakeData, 0), // start with empty slice
-		deletePendingSessionByID:  make(chan string, 5),
 		sessionStateChanged:       make(chan HandshakeData, 3),
-		addPendingSession:         make(chan HandshakeData, 3),
 		pendingCheckRequest:       make(chan pendingSessionRequest, 3),
 	}
 
@@ -174,7 +172,9 @@ func (h *handshakeProtocolImpl) CreateSession(peer Peer) {
 	}
 
 	// so we can match handshake responses with the session
-	go func() { h.addPendingSession <- handshakeData }()
+	h.pendingMutex.Lock()
+	h.pendingSessions[handshakeData.Session().String()] = handshakeData
+	h.pendingMutex.Unlock()
 
 	h.swarm.GetLocalNode().Debug("Creating session handshake request session id: %s", session.String())
 
@@ -185,6 +185,7 @@ func (h *handshakeProtocolImpl) CreateSession(peer Peer) {
 		Callback: nil,
 	})
 
+	//TODO: We don't really need to announce half state
 	h.stateChanged(handshakeData)
 }
 
@@ -201,17 +202,9 @@ func (h *handshakeProtocolImpl) processEvents() {
 		case c := <-h.registerSessionCallback:
 			h.newSessionCallbacks = append(h.newSessionCallbacks, c)
 
-		case d := <-h.addPendingSession:
-			sessionKey := d.Session().String()
-			h.swarm.GetLocalNode().Debug("Storing pending session w key: %s", sessionKey)
-			h.pendingSessions[sessionKey] = d
-
 		case pcr := <-h.pendingCheckRequest:
 			p := h.sessionIsPending(pcr.SessionID)
 			go func(pending bool) { pcr.Callback <- pending }(p)
-
-		case k := <-h.deletePendingSessionByID:
-			delete(h.pendingSessions, k)
 
 		case s := <-h.sessionStateChanged:
 			for _, c := range h.newSessionCallbacks {
@@ -228,7 +221,10 @@ func (h *handshakeProtocolImpl) sessionIsPending(sessionID string) bool {
 
 // SessionIsPending checks if there's a pending session for this session ID
 func (h *handshakeProtocolImpl) SessionIsPending(sessionID string, callback chan bool) {
-	h.pendingCheckRequest <- pendingSessionRequest{sessionID, callback}
+	h.pendingMutex.RLock()
+	_, e := h.pendingSessions[sessionID]
+	h.pendingMutex.Unlock()
+	callback <- e
 }
 
 // Handles a remote handshake request.
@@ -296,7 +292,9 @@ func (h *handshakeProtocolImpl) onHandleIncomingHandshakeResponse(msg IncomingMe
 	h.swarm.GetLocalNode().Debug("Incoming handshake response for session id %s", sessionID)
 
 	// this is the session data we sent to the node
+	h.pendingMutex.RLock()
 	sessionRequestData := h.pendingSessions[sessionID]
+	h.pendingMutex.RUnlock()
 
 	if sessionRequestData == nil {
 		h.swarm.GetLocalNode().Error("Expected to have data about this session - aborting")
@@ -311,7 +309,9 @@ func (h *handshakeProtocolImpl) onHandleIncomingHandshakeResponse(msg IncomingMe
 	}
 
 	// no longer pending if error or if sesssion created
-	h.deletePendingSessionByID <- sessionID
+	h.pendingMutex.Lock()
+	delete(h.pendingSessions, sessionID)
+	h.pendingMutex.Unlock()
 
 	h.stateChanged(sessionRequestData)
 	h.swarm.GetLocalNode().Debug("Locally initiated session established! Session id: %s :-)", sessionID)
@@ -590,6 +590,7 @@ func processHandshakeResponse(node LocalNode, r Peer, s NetworkSession, resp *pb
 		return errors.New("invalid signature")
 	}
 
+	// TODO: Remove isAuthenticated - we announce state only when its authenticated
 	// Session is now authenticated
 	s.SetAuthenticated(true)
 
