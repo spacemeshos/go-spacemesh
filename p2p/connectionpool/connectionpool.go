@@ -84,7 +84,7 @@ func (cp *ConnectionPool) handleDialError(rPub crypto.PublicKey, err error) {
 
 func (cp *ConnectionPool) handleNewConnection(rPub crypto.PublicKey, conn net.Connectioner) {
 	cp.connMutex.Lock()
-	cp.net.GetLogger().Info("new connection %v -> %v", cp.localPub, rPub)
+	cp.net.GetLogger().Info("new connection %v -> %v. id=%s", cp.localPub, rPub, conn.ID())
 	// check if there isn't already same connection (possible if the second connection is a Remote connection)
 	cur, ok := cp.connections[rPub.String()]
 	if ok {
@@ -95,7 +95,6 @@ func (cp *ConnectionPool) handleNewConnection(rPub crypto.PublicKey, conn net.Co
 		}
 		conn.Close()
 		cp.connMutex.Unlock()
-		cp.net.GetLogger().Info("333333333")
 		return
 	}
 	cp.connections[rPub.String()] = conn
@@ -158,10 +157,8 @@ func (cp *ConnectionPool) GetConnection(address string, remotePub crypto.PublicK
 	cp.pending[remotePub.String()] = append(cp.pending[remotePub.String()], pendChan)
 	cp.pendMutex.Unlock()
 	cp.connMutex.RUnlock()
-
 	// wait for the connection to be established, if the channel is closed (in case of dialing error) will return nil
 	res := <-pendChan
-
 	return res.conn, res.err
 }
 
