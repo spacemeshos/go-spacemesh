@@ -71,6 +71,17 @@ func (cp *ConnectionPool) Shutdown() {
 
 	cp.dialWait.Wait()
 	cp.teardown <- struct{}{}
+	// we won't handle the closing connection events for these connections since we exit the loop once the teardown is done
+	cp.closeConnections()
+}
+
+func (cp *ConnectionPool) closeConnections() {
+	cp.connMutex.Lock()
+	// there should be no new connections arriving at this point
+	for _, c := range cp.connections {
+		c.Close()
+	}
+	cp.connMutex.Unlock()
 }
 
 func (cp *ConnectionPool) handleDialError(rPub crypto.PublicKey, err error) {
@@ -162,41 +173,17 @@ func (cp *ConnectionPool) GetConnection(address string, remotePub crypto.PublicK
 	return res.conn, res.err
 }
 
-// only fetch the connection, returns nil if no such connection in pool
-func (cp *ConnectionPool) hasConnection(remotePub crypto.PublicKey) net.Connectioner {
-	cp.connMutex.RLock()
-	if cp.shutdown {
-		cp.connMutex.RUnlock()
-		return nil
-	}
-	// look for the connection in the pool
-	conn, found := cp.connections[remotePub.String()]
-	cp.connMutex.RUnlock()
-	if found {
-		return conn
-	}
-	return nil
-}
-
 func (cp *ConnectionPool) beginEventProcessing() {
 Loop:
 	for {
 		select {
-			case conn := <-cp.newConn:
+		case conn := <-cp.newConn:
+			cp.handleNewConnection(conn.RemotePublicKey(), conn)
 
-				cp.handleNewConnection( conn.RemotePublicKey(), conn)
-
-				case conn := <-cp. net.ClosingConnections():
-						cp.handleClosedConnection(conn)
+		case conn := <-cp.net.ClosingConnections():
+			cp.handleClosedConnection(conn)
 
 		case <-cp.teardown:
-			cp.connMutex.Lock()
-			// there should be no new connections arriving at this point
-			for _, c := range cp.connections {
-				// we won't handle the closing connection events for these connections since we exit the loop once the teardown is done
-				c.Close()
-			}
-			cp.connMutex.Unlock()
 			break Loop
 		}
 	}

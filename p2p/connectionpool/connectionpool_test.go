@@ -7,11 +7,17 @@ import (
 	"testing"
 	"errors"
 	"time"
+	"fmt"
+	"math/rand"
 )
 
 func generatePublicKey() crypto.PublicKey {
 	_, pubKey, _ := crypto.GenerateKeyPair()
 	return pubKey
+}
+
+func generateIpAddress() string {
+	return fmt.Sprintf("%d.%d.%d.%d", rand.Int31n(255), rand.Int31n(255), rand.Int31n(255), rand.Int31n(255))
 }
 
 func TestGetConnectionWithNoConnection(t *testing.T) {
@@ -153,32 +159,103 @@ func TestGetConnectionAfterShutdown(t *testing.T) {
 	assert.NotNil(t, err)
 	assert.Nil(t, conn)
 }
-//
-//func TestShutdownWithMultipleDials(t *testing.T) {
-//	n := net.NewNetworkMock()
-//	n.SetDialDelayMs(100)
-//	n.SetDialResult(nil)
-//
-//	cPool := NewConnectionPool(n, generatePublicKey())
-//	newConns := make(chan net.Connectioner)
-//	iterCnt := 20
-//	for i := 0;	i < iterCnt; i++ {
-//		go func() {
-//			addr := fmt.Sprintf("%d.%d.%d.%d", rand.Int31n(255), rand.Int31n(255), rand.Int31n(255), rand.Int31n(255))
-//			key := generatePublicKey()
-//			conn, _ := cPool.GetConnection(addr, key)
-//			newConns <- conn
-//		}()
-//	}
-//	time.Sleep(20 * time.Millisecond)
-//	cPool.Shutdown()
-//	var cnt int
-//	for conn := range newConns {
-//		cMock := conn.(*net.ConnectionMock)
-//		assert.True(t, cMock.Closed())
-//		cnt++
-//		if cnt == iterCnt {
-//			break
-//		}
-//	}
-//}
+
+func TestShutdownWithMultipleDials(t *testing.T) {
+	n := net.NewNetworkMock()
+	n.SetDialDelayMs(100)
+	n.SetDialResult(nil)
+
+	cPool := NewConnectionPool(n, generatePublicKey())
+	newConns := make(chan net.Connectioner)
+	iterCnt := 20
+	for i := 0;	i < iterCnt; i++ {
+		go func() {
+			addr := generateIpAddress()
+			key := generatePublicKey()
+			conn, err := cPool.GetConnection(addr, key)
+			if err == nil {
+				newConns <- conn
+			}
+		}()
+	}
+	time.Sleep(20 * time.Millisecond)
+	cPool.Shutdown()
+	var cnt int
+	for conn := range newConns {
+		cMock := conn.(*net.ConnectionMock)
+		assert.True(t, cMock.Closed(), "connection %s is still open", cMock.ID())
+		cnt++
+		if cnt == iterCnt {
+			break
+		}
+	}
+}
+
+func TestClosedConnection(t *testing.T) {
+	nMock := net.NewNetworkMock()
+	nMock.SetDialDelayMs(50)
+	nMock.SetDialResult(nil)
+	cPool := NewConnectionPool(nMock, generatePublicKey())
+	remotePub := generatePublicKey()
+	addr := "1.1.1.1"
+
+	// create connection
+	conn, _ := cPool.GetConnection(addr, remotePub)
+
+	// report that the connection was closed
+	nMock.PublishClosingConnection(conn)
+	time.Sleep(20 * time.Millisecond)
+
+	// query same connection and assert that it's a new instance
+	conn2, _ := cPool.GetConnection(addr, remotePub)
+	assert.NotEqual(t, conn.ID(), conn2.ID())
+	assert.Equal(t, int32(2), nMock.GetDialCount())
+}
+
+func TestRandom(t *testing.T) {
+	type Peer struct {
+		key  crypto.PublicKey
+		addr string
+	}
+
+	peerCnt := 30
+	peers := make([]Peer, 0)
+	for i := 0; i < peerCnt; i++ {
+		peers = append(peers, Peer{generatePublicKey(), generateIpAddress()})
+	}
+
+	nMock := net.NewNetworkMock()
+	nMock.SetDialDelayMs(50)
+	nMock.SetDialResult(nil)
+	cPool := NewConnectionPool(nMock, generatePublicKey())
+	rand.Seed(time.Now().UnixNano())
+	for {
+		r := rand.Int31n(3)
+		if r == 0 {
+			go func() {
+				peer := peers[rand.Int31n(int32(peerCnt))]
+				rConn := net.NewConnectionMock(peer.key, net.Remote)
+				cPool.newConn <- rConn
+			}()
+		} else if r == 1 {
+			go func() {
+				peer := peers[rand.Int31n(int32(peerCnt))]
+				conn, err := cPool.GetConnection(peer.addr, peer.key)
+				assert.Nil(t, err)
+				nMock.PublishClosingConnection(conn)
+			}()
+		} else {
+			go func() {
+				peer := peers[rand.Int31n(int32(peerCnt))]
+				_, err := cPool.GetConnection(peer.addr, peer.key)
+				assert.Nil(t, err)
+			}()
+		}
+		time.Sleep(10 * time.Millisecond)
+
+		if rand.Int31n(100) == 0 {
+			cPool.Shutdown()
+			break
+		}
+	}
+}
