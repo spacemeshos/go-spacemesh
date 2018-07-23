@@ -18,21 +18,14 @@ import (
 // The handshake protocol goal is to create an authenticated network session.
 type NetworkSession interface {
 	ID() []byte         // Unique session id
-	String() string     // globally unique session id for p2p debugging and key store purposes
-	KeyE() []byte       // session shared sym key for enc - 32 bytes
 	KeyM() []byte       // session shared sym key for mac - 32 bytes
 	PubKey() []byte     // 65 bytes session-only pub key uncompressed
-	Created() time.Time // time when session was established
-
-	// TODO: add support for idle session expiration
-
-	LocalNodeID() string  // string encoded session local node id
-	RemoteNodeID() string // string encoded session remote node id
 
 	Decrypt(in []byte) ([]byte, error) // decrypt data using session dec key
 	Encrypt(in []byte) ([]byte, error) // encrypt data using session enc key
 }
 
+// TODO: add support for idle session expiration
 // NetworkSessionImpl implements NetworkSession.
 type NetworkSessionImpl struct {
 	id      []byte
