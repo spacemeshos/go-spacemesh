@@ -71,7 +71,8 @@ func NewNet(conf config.Config, localEntity *node.LocalNode) (Net, error) {
 		tcpListenAddress: localEntity.Address(),
 		regNewRemoteConn:			make([]chan Connectioner, 0),
 		incomingMessages:   make(chan IncomingMessageEvent),
-		closingConnections: make(chan Connectioner, 20),config:           conf,
+		closingConnections: make(chan Connectioner, 20),
+		config:           conf,
 	}
 
 	err := n.listen()
@@ -138,7 +139,7 @@ func (n *netImpl) createSecuredConnection(address string, remotePublicKey crypto
 		conn.Close()
 		return nil, fmt.Errorf("%s err: %v", errMsg, err)
 	}
-	n.logger.Debug("Creating session handshake request session id: %s", session.String())
+	n.logger.Debug("Creating session handshake request session id: %s", session)
 	payload, err := proto.Marshal(data)
 	if err != nil {
 		conn.Close()
