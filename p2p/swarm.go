@@ -12,6 +12,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/gogo/protobuf/proto"
+	"errors"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/connectionpool"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
@@ -70,13 +71,12 @@ func newSwarm(config config.Config, loadIdentity bool) (*swarm, error) {
 		l, err = node.NewNodeIdentity(config, address, true)
 	}
 	if err != nil {
-		log.Error("Failed to create a node, err: %v", err)
+		return nil, fmt.Errorf("failed to create a node, err: %v", err)
 	}
 
 	n, err := net.NewNet(address, config, l.Logger, l)
 	if err != nil {
-		log.Error("can't create swarm without a network", err)
-		return nil, err
+		return nil, fmt.Errorf("can't create swarm without a network, err: %v", err)
 	}
 
 	s := &swarm{
@@ -273,17 +273,20 @@ func (s *swarm) shutDownInternal() {
 }
 
 func (s *swarm) listenToNetworkMessages() {
-	go func() {
-		for c := range s.network.SubscribeOnNewRemoteConnections() {
-			s.dht.Update(node.New(c.RemotePublicKey(), c.RemoteAddr().String()))
-		}
-	}()
+	newconnections := s.network.SubscribeOnNewRemoteConnections()
 Loop:
 	for {
 		select {
-		case m := <-s.network.IncomingMessages():
-			go s.onRemoteClientMessage(m)
-
+		case ime := <-s.network.IncomingMessages():
+			go func(ime net.IncomingMessageEvent) {
+				err := s.onRemoteClientMessage(ime)
+				if err != nil {
+					ime.Conn.Close()
+					// TODO: differentiate action on errors
+				}
+			}(ime)
+		case nc := <-newconnections:
+			go func(nc net.Connectioner) { s.dht.Update(node.New(nc.RemotePublicKey(), nc.RemoteAddr().String())) }(nc)
 		case <-s.shutdown:
 			s.shutdown <- struct{}{}
 			break Loop
@@ -315,32 +318,39 @@ Loop:
 	}
 }
 
+// onRemoteClientMessage possible errors
+
+var (
+	ErrBadFormat   = errors.New("bad msg format, could'nt deserialize")
+	ErrOutOfSync   = errors.New("received out of sync msg")
+	ErrNoPayload   = errors.New("deprecated code path, no payload in message")
+	ErrFailDecrypt = errors.New("can't decrypt message payload with session key")
+	ErrAuthAuthor  = errors.New("failed to verify author")
+	ErrNoProtocol  = errors.New("Received msg to an unsupported protocol")
+)
+
 // onRemoteClientMessage pre-process a protocol message from a remote client handling decryption and authentication
 // authenticated messages are forwarded to corresponding protocol handlers
 // Main incoming network messages handler
 // c: connection we got this message on
 // msg: binary protobufs encoded data
-func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) {
+func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 	s.lNode.Debug(fmt.Sprintf("Handle message from <<  %v", msg.Conn.RemotePublicKey().Pretty()))
 	c := &pb.CommonMessageData{}
 	err := proto.Unmarshal(msg.Message, c)
 	if err != nil {
-		s.lNode.Warning("Bad request - closing connection...")
-		msg.Conn.Close()
-		return
+		return ErrBadFormat
 	}
 
 	// check that the message was send within a reasonable time
 	if ok := timesync.CheckMessageDrift(c.Timestamp); !ok {
 		// TODO: consider kill connection with this node and maybe blacklist
 		// TODO : Also consider moving send timestamp into metadata.
-		s.lNode.Error("Received out of sync msg from %s dropping .. ", msg.Conn.RemotePublicKey().Pretty())
-		return
+		return ErrOutOfSync
 	}
 
 	if len(c.Payload) == 0 {
-		s.lNode.Error(" this code path is deprecated!!!")
-		return
+		return ErrNoPayload
 	}
 
 	// protocol messages are encrypted in payload
@@ -349,22 +359,19 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) {
 
 	decPayload, err := session.Decrypt(c.Payload)
 	if err != nil {
-		s.lNode.Warning("Dropping incoming protocol message - can't decrypt message payload with session key. %v", err)
-		return
+		return ErrFailDecrypt
 	}
 
 	pm := &pb.ProtocolMessage{}
 	err = proto.Unmarshal(decPayload, pm)
 	if err != nil {
-		s.lNode.Warning("Dropping incoming protocol message - Failed to get protocol message from payload. %v", err)
-		return
+		return ErrBadFormat
 	}
 
 	// authenticate message author - we already authenticated the sender via the shared session key secret
 	err = authAuthor(pm)
 	if err != nil {
-		s.lNode.Warning("Dropping incoming protocol message - Failed to verify author. %v", err)
-		return
+		return ErrAuthAuthor
 	}
 
 	s.lNode.Debug("Authorized %v protocol message ", pm.Metadata.Protocol)
@@ -378,10 +385,11 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) {
 	s.protocolHandlerMutex.RUnlock()
 
 	if msgchan == nil {
-		s.lNode.Errorf("Received msg to an unsupported protocol")
-		return
+		return ErrNoProtocol
 	}
 
 	s.lNode.Debug("Forwarding message to protocol")
 	msgchan <- protocolMessage{remoteNode, pm.Payload}
+
+	return nil
 }
