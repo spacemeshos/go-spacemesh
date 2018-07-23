@@ -33,9 +33,14 @@ type Connectioner interface {
 	ID() string
 	RemotePublicKey() crypto.PublicKey
 	SetRemotePublicKey(key crypto.PublicKey)
-	SetSession(session NetworkSession)
+
+	RemoteAddr() net.Addr
+
 	Session() NetworkSession
+	SetSession(session NetworkSession)
+
 	Source() ConnectionSource
+
 	IncomingChannel() chan wire.InMessage
 
 	Send(m []byte) error
