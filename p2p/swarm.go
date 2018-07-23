@@ -73,7 +73,7 @@ func newSwarm(config config.Config, loadIdentity bool) (*swarm, error) {
 		log.Error("Failed to create a node, err: %v", err)
 	}
 
-	n, err := net.NewNet(address, config, l.Logger, l)
+	n, err := net.NewNet(config, l)
 	if err != nil {
 		log.Error("can't create swarm without a network", err)
 		return nil, err

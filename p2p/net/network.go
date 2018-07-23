@@ -62,13 +62,13 @@ type netImpl struct {
 
 // NewNet creates a new network.
 // It attempts to tcp listen on address. e.g. localhost:1234 .
-func NewNet(tcpListenAddress string, conf config.Config, logger *logging.Logger, localEntity *node.LocalNode) (Net, error) {
+func NewNet(conf config.Config, localEntity *node.LocalNode) (Net, error) {
 
 	n := &netImpl{
 		networkId:        conf.NetworkID,
 		localNode:        localEntity,
-		logger:           logger,
-		tcpListenAddress: tcpListenAddress,
+		logger:           localEntity.Logger,
+		tcpListenAddress: localEntity.Address(),
 		regNewRemoteConn:			make([]chan Connectioner, 0),
 		incomingMessages:   make(chan IncomingMessageEvent),
 		closingConnections: make(chan Connectioner, 20),config:           conf,
@@ -80,7 +80,7 @@ func NewNet(tcpListenAddress string, conf config.Config, logger *logging.Logger,
 		return nil, err
 	}
 
-	n.logger.Debug("created network with tcp address: %s", tcpListenAddress)
+	n.logger.Debug("created network with tcp address: %s", n.tcpListenAddress)
 
 	return n, nil
 }
@@ -259,6 +259,7 @@ func (n *netImpl) HandlePreSessionIncomingMessage(c Connectioner, message wire.I
 	//TODO replace the next few lines with a way to validate that the message is a handshake request based on the message metadata
 	errMsg := "failed to handle handshake request"
 	data := &pb.HandshakeData{}
+
 	err := proto.Unmarshal(message.Message(), data)
 	if err != nil {
 		return fmt.Errorf("%s. err: %v", errMsg, err)
