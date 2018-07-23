@@ -152,9 +152,10 @@ func (n *netImpl) createSecuredConnection(address string, remotePublicKey crypto
 	}
 
 	var msg wire.InMessage
+	var ok bool
 	timer := time.NewTimer(n.config.ResponseTimeout)
 	select {
-	case msg, ok := <-conn.IncomingChannel():
+	case msg, ok = <-conn.IncomingChannel():
 		if !ok {
 			return nil, fmt.Errorf("%s err: incoming channel got closed", errMsg)
 		}
