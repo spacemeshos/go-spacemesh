@@ -188,6 +188,7 @@ func CheckSystemClockDrift() (time.Duration, error) {
 }
 
 // CheckMessageDrift checks if a given message timestamp is too far from our local clock.
+// accepts a unix timestamp. can be created with Time.Now().Unix()
 func CheckMessageDrift(data int64) bool {
 	reqTime := time.Unix(data, 0)
 	drift := time.Now().Sub(reqTime)
