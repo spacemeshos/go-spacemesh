@@ -145,30 +145,25 @@ func (n *netImpl) createSecuredConnection(address string, remotePublicKey crypto
 		conn.Close()
 		return nil, fmt.Errorf("%s err: %v", errMsg, err)
 	}
-	// TODO: support callback errors
-	n.logger.Info("DEBUG: sending HS req")
-	msgResult := make(chan wire.InMessage)
-	fts := make(chan struct{}) // failed to send
-	go func() {
-		select {
-		case recv := <-conn.IncomingChannel():
-			msgResult <- recv
-		case <-fts:
-			break
-		}
-	}()
 
 	err = conn.Send(payload)
-
 	if err != nil {
-		fts <- struct{}{}
 		return nil, err
 	}
 
-	msg := <-msgResult
-
-	if msg.Error() != nil {
-		return nil, msg.Error()
+	var msg wire.InMessage
+	timer := time.NewTimer(n.config.ResponseTimeout)
+	select {
+	case msg, ok := <-conn.IncomingChannel():
+		if !ok {
+			return nil, fmt.Errorf("%s err: incoming channel got closed", errMsg)
+		}
+		if msg.Error() != nil {
+			return nil, fmt.Errorf("%s err: %v", errMsg, msg.Error())
+		}
+	case <-timer.C:
+		n.logger.Info("waiting for HS response timed-out. remoteKey=%v", remotePublicKey)
+		return nil, fmt.Errorf("%s err: HS response timed-out", errMsg)
 	}
 
 	respData := &pb.HandshakeData{}

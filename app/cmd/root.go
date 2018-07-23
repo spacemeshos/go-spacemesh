@@ -35,6 +35,8 @@ func init() {
 		config.P2P.ConnKeepAlive, "Network connection keep alive")
 	RootCmd.PersistentFlags().Int8Var(&config.P2P.NetworkID, "network-id",
 		config.P2P.NetworkID, "NetworkID to run on (0 - mainnet, 1 - testnet)")
+	RootCmd.PersistentFlags().DurationVar(&config.P2P.ResponseTimeout, "response-timeout",
+		config.P2P.ResponseTimeout, "Timeout for waiting on resposne message")
 	RootCmd.PersistentFlags().StringVar(&config.P2P.NodeID, "node-id",
 		config.P2P.NodeID, "Load node data by id (pub key) from local store")
 	RootCmd.PersistentFlags().BoolVar(&config.P2P.SwarmConfig.Bootstrap, "swarm-bootstrap",

@@ -30,20 +30,12 @@ func (msg NetMessage) Error() error {
 	return msg.err
 }
 
-type ConnectionWithErrorOnSend struct {
-	ConnectionMock
-}
-
-func (impl *ConnectionWithErrorOnSend) Send(bt []byte) error{
-	return fmt.Errorf("error or whatever")
-}
-
 func waitForCallbackOrTimeout(t *testing.T, outchan chan Connectioner, expectedSession NetworkSession){
 	select {
 	case res := <- outchan :
 		assert.Equal(t, expectedSession.ID(),res.Session().ID(),"wrong session received")
 	case <-time.After(1 * time.Second):
-		assert.False(t,false, "Didn't get channel notification")
+		assert.Nil(t,expectedSession, "Didn't get channel notification")
 	}
 }
 
@@ -52,10 +44,10 @@ func TestHandlePreSessionIncomingMessage(t *testing.T){
 	address := fmt.Sprintf("0.0.0.0:%d", port)
 	//cfg := config.DefaultConfig()
 	localNode, err := node.NewLocalNode(config.ConfigValues, address, false)
+	assert.NoError(t, err, "should be able to create localnode")
 	remoteNode, err := node.NewLocalNode(config.ConfigValues, address, false)
-	assert.NoError(t, err, "Should be able to create localnode")
+	assert.NoError(t, err, "should be able to create localnode")
 	con := NewConnectionMock(remoteNode.PublicKey(), Remote)
-	//n, _ := NewNet(config.ConfigValues, localNode)
 	remoteNet, _ := NewNet(config.ConfigValues, remoteNode)
 	outchan := remoteNet.SubscribeOnNewRemoteConnections()
 	out, session, er := GenerateHandshakeRequestData(localNode.PublicKey(), localNode.PrivateKey(),con.RemotePublicKey(), remoteNet.GetNetworkId())
@@ -67,6 +59,7 @@ func TestHandlePreSessionIncomingMessage(t *testing.T){
 	err = remoteNet.HandlePreSessionIncomingMessage(con, msg)
 	assert.NoError(t, err, "handle session failed")
 	waitForCallbackOrTimeout(t, outchan, session)
+	assert.Equal(t, int32(1), con.SendCount())
 
 	con.remotePub = nil
 	err = remoteNet.HandlePreSessionIncomingMessage(con, msg)
@@ -74,8 +67,10 @@ func TestHandlePreSessionIncomingMessage(t *testing.T){
 	waitForCallbackOrTimeout(t, outchan, session)
 	assert.Equal(t,remoteNode.PublicKey().String(),con.remotePub.String(),"Remote connection was not updated properly")
 
-	othercon := ConnectionWithErrorOnSend{*con}
-	err = remoteNet.HandlePreSessionIncomingMessage(&othercon, msg)
+	othercon := NewConnectionMock(remoteNode.PublicKey(), Remote)
+	othercon.SetSendResult(fmt.Errorf("error or whatever"))
+	err = remoteNet.HandlePreSessionIncomingMessage(othercon, msg)
 	assert.Error(t, err, "handle session failed")
-	waitForCallbackOrTimeout(t, outchan, session)
+	assert.Nil(t, othercon.Session())
+	waitForCallbackOrTimeout(t, outchan, nil)
 }

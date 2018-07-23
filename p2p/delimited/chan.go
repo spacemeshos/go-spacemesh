@@ -3,11 +3,14 @@ package delimited
 import (
 	"github.com/spacemeshos/go-spacemesh/p2p/net/wire"
 	"io"
+	"sync"
 )
 
 // Chan is a delimited duplex channel. It is used to have a channel interface
 // around a delimited.Reader or Writer.
 type Chan struct {
+	connection io.ReadWriteCloser
+	closeSync  sync.Once
 	OutMsgChan chan wire.OutMessage
 	InMsgChan  chan wire.InMessage
 	CloseChan  chan struct{}
@@ -60,15 +63,23 @@ func (s *Chan) MakeOut(m []byte, e chan error) wire.OutMessage {
 // NewChan constructs a Chan with a given buffer size.
 func NewChan(chanSize int) *Chan {
 	return &Chan{
+		closeSync:	sync.Once{},
 		OutMsgChan: make(chan wire.OutMessage, chanSize),
 		InMsgChan:  make(chan wire.InMessage, chanSize),
 		CloseChan:  make(chan struct{}, 2),
 	}
 }
 
-func (s *Chan) Pipe(rw io.ReadWriter) {
-	go s.readFromReader(rw)
-	go s.writeToWriter(rw)
+func (s *Chan) Pipe(rwc io.ReadWriteCloser) {
+	s.connection = rwc
+	go s.readFromReader(rwc)
+	go s.writeToWriter(rwc)
+}
+
+func (s *Chan) closeConnection() {
+	s.closeSync.Do(func() {
+		s.connection.Close()
+	})
 }
 
 // ReadFrom wraps the given io.Reader with a delimited.Reader, reads all
@@ -81,11 +92,6 @@ Loop:
 	for {
 		buf, err := mr.Next()
 		if err != nil {
-			if err == io.EOF {
-				break Loop // done
-			}
-			// unexpected error. tell the client.
-			s.InMsgChan <- InMessage{nil, err}
 			break Loop
 		}
 
@@ -102,6 +108,7 @@ Loop:
 		}
 	}
 
+	s.closeConnection()
 	close(s.InMsgChan)
 }
 
@@ -132,6 +139,8 @@ Loop:
 			msg.Result() <- nil
 		}
 	}
+
+	s.closeConnection()
 	close(s.OutMsgChan)
 }
 
@@ -140,4 +149,5 @@ func (s *Chan) Close() {
 	// Close both.
 	s.CloseChan <- struct{}{}
 	s.CloseChan <- struct{}{}
+
 }

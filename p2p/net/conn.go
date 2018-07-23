@@ -59,14 +59,9 @@ type Connection struct {
 	created    time.Time
 	remotePub  crypto.PublicKey
 	remoteAddr net.Addr
-
 	closeChan chan struct{}
-
 	formatter wire.Formatter // format messages in some way
-
-	conn      readWriteCloseAddresser // interface for network connection
 	networker networker               // network context
-
 	session NetworkSession
 }
 
@@ -88,18 +83,18 @@ func newConnection(conn readWriteCloseAddresser, netw networker, s ConnectionSou
 	// todo pass wire format inside and make it pluggable
 	// todo parametrize channel size - hard-coded for now
 	connection := &Connection{
-		logger:    log,
-		id:        crypto.UUIDString(),
-		created:   time.Now(),
-		remotePub: remotePub,
-		formatter: delimited.NewChan(10),
-		source:    s,
-		conn:      conn,
-		networker: netw,
-		closeChan: make(chan struct{}),
+		logger:     log,
+		id:         crypto.UUIDString(),
+		created:    time.Now(),
+		remotePub:  remotePub,
+		remoteAddr: conn.RemoteAddr(),
+		formatter:  delimited.NewChan(10),
+		source:     s,
+		networker:  netw,
+		closeChan:  make(chan struct{}),
 	}
 
-	connection.formatter.Pipe(connection.conn)
+	connection.formatter.Pipe(conn)
 	return connection
 }
 
@@ -108,7 +103,7 @@ func (c *Connection) ID() string {
 }
 
 func (c *Connection) RemoteAddr() net.Addr {
-	return c.conn.RemoteAddr()
+	return c.remoteAddr
 }
 
 func (c *Connection) SetRemotePublicKey(key crypto.PublicKey) {
@@ -158,7 +153,6 @@ func (c *Connection) Close() {
 func (c *Connection) shutdown(err error) {
 	c.logger.Info("shutdown. err=%v", err)
 	c.formatter.Close()
-	c.conn.Close()
 	c.networker.ClosingConnections() <- c
 }
 

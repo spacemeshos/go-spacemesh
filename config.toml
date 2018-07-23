@@ -15,6 +15,7 @@ node-id = ""
 dial-timeout = "1m"
 conn-keepalive = "48h"
 network-id = 1 # 0 - MainNet, 1 - TestNet
+response-timeout = "2s"
 
 # Node Swarm Config
 [swarm]

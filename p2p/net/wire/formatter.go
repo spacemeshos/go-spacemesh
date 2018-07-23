@@ -5,7 +5,7 @@ import "io"
 // TODO: A sync formatter
 
 type Formatter interface {
-	Pipe(rw io.ReadWriter)
+	Pipe(rw io.ReadWriteCloser)
 	In() chan InMessage
 	Out() chan OutMessage
 	MakeIn(m []byte, e error) InMessage
