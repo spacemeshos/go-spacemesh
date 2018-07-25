@@ -37,33 +37,36 @@ type ConnectionPool struct {
 	dialWait    sync.WaitGroup
 	shutdown    bool
 
-	newConn  chan net.Connectioner
-	teardown chan struct{}
+	newRemoteConn chan net.Connectioner
+	teardown      chan struct{}
 }
 
 func NewConnectionPool(network networker, lPub crypto.PublicKey) *ConnectionPool {
 	connC := network.SubscribeOnNewRemoteConnections()
 	cPool := &ConnectionPool{
-		localPub:    lPub,
-		net:         network,
-		connections: make(map[string]net.Connectioner),
-		connMutex:   sync.RWMutex{},
-		pending:     make(map[string][]chan DialResult),
-		pendMutex:   sync.Mutex{},
-		dialWait:    sync.WaitGroup{},
-		shutdown:    false,
-		newConn:     connC,
-		teardown:    make(chan struct{}),
+		localPub:      lPub,
+		net:           network,
+		connections:   make(map[string]net.Connectioner),
+		connMutex:     sync.RWMutex{},
+		pending:       make(map[string][]chan DialResult),
+		pendMutex:     sync.Mutex{},
+		dialWait:      sync.WaitGroup{},
+		shutdown:      false,
+		newRemoteConn: connC,
+		teardown:      make(chan struct{}),
 	}
 	go cPool.beginEventProcessing()
 	return cPool
 }
 
+// Graceful shutdown of the ConnectionPool.
+// - Close all open connections
+// - Waits for all Dial routines to complete and release any routine waiting for GetConnection
 func (cp *ConnectionPool) Shutdown() {
 	cp.connMutex.Lock()
 	if cp.shutdown {
-		cp.net.GetLogger().Error("shutdown was already called")
 		cp.connMutex.Unlock()
+		cp.net.GetLogger().Error("shutdown was already called")
 		return
 	}
 	cp.shutdown = true
@@ -84,41 +87,36 @@ func (cp *ConnectionPool) closeConnections() {
 	cp.connMutex.Unlock()
 }
 
-func (cp *ConnectionPool) handleDialError(rPub crypto.PublicKey, err error) {
+func (cp *ConnectionPool) handleDialResult(rPub crypto.PublicKey, result DialResult) {
 	cp.pendMutex.Lock()
 	for _, p := range cp.pending[rPub.String()] {
-		p <- DialResult{nil, err}
+		p <- result
 	}
 	delete(cp.pending, rPub.String())
 	cp.pendMutex.Unlock()
 }
 
-func (cp *ConnectionPool) handleNewConnection(rPub crypto.PublicKey, conn net.Connectioner) {
+func (cp *ConnectionPool) handleNewConnection(rPub crypto.PublicKey, conn net.Connectioner, source net.ConnectionSource) {
 	cp.connMutex.Lock()
 	cp.net.GetLogger().Info("new connection %v -> %v. id=%s", cp.localPub, rPub, conn.ID())
 	// check if there isn't already same connection (possible if the second connection is a Remote connection)
-	cur, ok := cp.connections[rPub.String()]
+	_, ok := cp.connections[rPub.String()]
 	if ok {
-		if cur.Source() == net.Remote {
+		cp.connMutex.Unlock()
+		if source == net.Remote {
 			cp.net.GetLogger().Info("connection created by remote node while connection already exists between peers, closing new connection. remote=%s", rPub)
 		} else {
 			cp.net.GetLogger().Warning("connection created by local node while connection already exists between peers, closing new connection. remote=%s", rPub)
 		}
 		conn.Close()
-		cp.connMutex.Unlock()
 		return
 	}
 	cp.connections[rPub.String()] = conn
 	cp.connMutex.Unlock()
 
 	// update all registered channels
-	cp.pendMutex.Lock()
 	res := DialResult{conn, nil}
-	for _, p := range cp.pending[rPub.String()] {
-		p <- res
-	}
-	delete(cp.pending, rPub.String())
-	cp.pendMutex.Unlock()
+	cp.handleDialResult(rPub, res)
 }
 
 func (cp *ConnectionPool) handleClosedConnection(conn net.Connectioner) {
@@ -157,9 +155,9 @@ func (cp *ConnectionPool) GetConnection(address string, remotePub crypto.PublicK
 			cp.dialWait.Add(1)
 			conn, err := cp.net.Dial(address, remotePub, cp.net.GetNetworkId())
 			if err != nil {
-				cp.handleDialError(remotePub, err)
+				cp.handleDialResult(remotePub, DialResult{nil, err})
 			} else {
-				cp.handleNewConnection(remotePub, conn)
+				cp.handleNewConnection(remotePub, conn, net.Local)
 			}
 			cp.dialWait.Done()
 		}()
@@ -177,8 +175,8 @@ func (cp *ConnectionPool) beginEventProcessing() {
 Loop:
 	for {
 		select {
-		case conn := <-cp.newConn:
-			cp.handleNewConnection(conn.RemotePublicKey(), conn)
+		case conn := <-cp.newRemoteConn:
+			cp.handleNewConnection(conn.RemotePublicKey(), conn, net.Remote)
 
 		case conn := <-cp.net.ClosingConnections():
 			cp.handleClosedConnection(conn)

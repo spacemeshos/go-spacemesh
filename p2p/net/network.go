@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-// Net is a connection manager able to dial remote endpoints
+// Net is a connection factory able to dial remote endpoints
 // Net clients should register all callbacks
 // Connections may be initiated by Dial() or by remote clients connecting to the listen address
 // ConnManager includes a TCP server, and a TCP client
@@ -37,6 +37,11 @@ type Net interface {
 type IncomingMessageEvent struct {
 	Conn    Connectioner
 	Message []byte
+}
+
+type ManagedConnectioner interface {
+	Connectioner
+	beginEventProcessing()
 }
 
 // impl internal type
@@ -105,7 +110,7 @@ func (n *netImpl) ClosingConnections() chan Connectioner {
 	return n.closingConnections
 }
 
-func (n *netImpl) createConnection(address string, remotePub crypto.PublicKey, timeOut time.Duration, keepAlive time.Duration) (Connectioner, error) {
+func (n *netImpl) createConnection(address string, remotePub crypto.PublicKey, timeOut time.Duration, keepAlive time.Duration) (ManagedConnectioner, error) {
 	if n.isShuttingDown {
 		return nil, fmt.Errorf("can't dial because the connection is shutting down")
 	}
@@ -122,12 +127,12 @@ func (n *netImpl) createConnection(address string, remotePub crypto.PublicKey, t
 	}
 
 	n.logger.Debug("Connected to %s...", address)
-	c := newConnection(netConn, n, Local, remotePub, n.logger)
+	c := newConnection(netConn, n, remotePub, n.logger)
 
 	return c, nil
 }
 
-func (n *netImpl) createSecuredConnection(address string, remotePublicKey crypto.PublicKey, networkId int8, timeOut time.Duration, keepAlive time.Duration) (Connectioner, error) {
+func (n *netImpl) createSecuredConnection(address string, remotePublicKey crypto.PublicKey, networkId int8, timeOut time.Duration, keepAlive time.Duration) (ManagedConnectioner, error) {
 	errMsg := "failed to establish secured connection."
 	conn, err := n.createConnection(address, remotePublicKey, timeOut, keepAlive)
 	if err != nil {
@@ -228,7 +233,7 @@ func (n *netImpl) acceptTCP() {
 		}
 
 		n.logger.Debug("Got new connection... Remote Address: %s", netConn.RemoteAddr())
-		c := newConnection(netConn, n, Remote, nil, n.logger)
+		c := newConnection(netConn, n,nil, n.logger)
 
 		go c.beginEventProcessing()
 		// network won't publish the connection before it the remote node had established a session

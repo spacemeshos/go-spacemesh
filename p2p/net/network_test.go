@@ -71,8 +71,7 @@ func TestHandlePreSessionIncomingMessage(t *testing.T){
 	out.NetworkID = out.NetworkID +1
 	data, err = proto.Marshal(out)
 	assert.NoError(t, err, "cannot marshal obj")
-	msg.data = data
-	err = remoteNet.HandlePreSessionIncomingMessage(con, msg)
+	err = remoteNet.HandlePreSessionIncomingMessage(con, data)
 	assert.Error(t, err,"Sent message with wrong networkID")
 	//,_, er = GenerateHandshakeRequestData(localNode.PublicKey(), localNode.PrivateKey(),con.RemotePublicKey(), remoteNet.GetNetworkId() +1)
 

@@ -71,7 +71,7 @@ func TestRemoteConnectionWithNoConnection(t *testing.T) {
 
 	cPool := NewConnectionPool(n, generatePublicKey())
 	rConn := net.NewConnectionMock(remotePub, net.Remote)
-	cPool.newConn <- rConn
+	cPool.newRemoteConn <- rConn
 	time.Sleep(50 * time.Millisecond)
 	conn, err := cPool.GetConnection(addr, remotePub)
 	assert.Equal(t, remotePub.String(), conn.RemotePublicKey().String())
@@ -92,7 +92,7 @@ func TestRemoteConnectionWithConnection(t *testing.T) {
 	assert.Equal(t, remotePub.String(), conn.RemotePublicKey().String())
 	assert.Nil(t, err)
 	rConn := net.NewConnectionMock(remotePub, net.Remote)
-	cPool.newConn <- rConn
+	cPool.newRemoteConn <- rConn
 	time.Sleep(50 * time.Millisecond)
 	conn2, err := cPool.GetConnection(addr, remotePub)
 	assert.Equal(t, remotePub.String(), conn.RemotePublicKey().String())
@@ -118,7 +118,7 @@ func TestRemoteConnectionDuringDial(t *testing.T) {
 	}(waitCh)
 	rConn := net.NewConnectionMock(remotePub, net.Remote)
 	time.Sleep(20 * time.Millisecond)
-	cPool.newConn <- rConn
+	cPool.newRemoteConn <- rConn
 	getConn := <- waitCh
 	assert.Equal(t, remotePub.String(), getConn.RemotePublicKey().String())
 	assert.Equal(t, rConn.ID(), getConn.ID())
@@ -235,7 +235,7 @@ func TestRandom(t *testing.T) {
 			go func() {
 				peer := peers[rand.Int31n(int32(peerCnt))]
 				rConn := net.NewConnectionMock(peer.key, net.Remote)
-				cPool.newConn <- rConn
+				cPool.newRemoteConn <- rConn
 			}()
 		} else if r == 1 {
 			go func() {

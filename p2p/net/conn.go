@@ -40,14 +40,10 @@ type Connectioner interface {
 	Session() NetworkSession
 	SetSession(session NetworkSession)
 
-	Source() ConnectionSource
-
 	IncomingChannel() chan []byte
 
 	Send(m []byte) error
 	Close()
-
-	beginEventProcessing()
 }
 
 // A network connection supporting full-duplex messaging
@@ -56,7 +52,6 @@ type Connection struct {
 	logger *logging.Logger
 	// metadata for logging / debugging
 	id         string           // uuid for logging
-	source     ConnectionSource // remote or local
 	created    time.Time
 	remotePub  crypto.PublicKey
 	remoteAddr net.Addr
@@ -80,7 +75,7 @@ type readWriteCloseAddresser interface {
 }
 
 // Create a new connection wrapping a net.Conn with a provided connection manager
-func newConnection(conn readWriteCloseAddresser, netw networker, s ConnectionSource, remotePub crypto.PublicKey, log *logging.Logger) *Connection {
+func newConnection(conn readWriteCloseAddresser, netw networker, remotePub crypto.PublicKey, log *logging.Logger) *Connection {
 
 	// todo pass wire format inside and make it pluggable
 	// todo parametrize channel size - hard-coded for now
@@ -91,7 +86,6 @@ func newConnection(conn readWriteCloseAddresser, netw networker, s ConnectionSou
 		remotePub:  remotePub,
 		remoteAddr: conn.RemoteAddr(),
 		formatter:  delimited.NewChan(10),
-		source:     s,
 		networker:  netw,
 		closeChan:  make(chan struct{}),
 	}
@@ -114,10 +108,6 @@ func (c *Connection) SetRemotePublicKey(key crypto.PublicKey) {
 
 func (c Connection) RemotePublicKey() crypto.PublicKey {
 	return c.remotePub
-}
-
-func (c Connection) Source() ConnectionSource {
-	return c.source
 }
 
 func (c *Connection) SetSession(session NetworkSession) {
