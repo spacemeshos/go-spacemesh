@@ -50,8 +50,8 @@ func (d *KadDHT) Bootstrap() error {
 	}
 
 	timeout := time.NewTimer(BootstrapTimeout)
-
-HEALTHLOOP:
+// TODO: Issue a healthcheck / refresh loop every x interval.
+BOOTLOOP:
 	for {
 		reschan := make(chan error)
 
@@ -73,7 +73,7 @@ HEALTHLOOP:
 			d.rt.Size(req)
 			size := <-req
 			if size >= c {
-				break HEALTHLOOP
+				break BOOTLOOP
 			}
 			time.Sleep(LookupIntervals)
 		}

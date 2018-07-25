@@ -11,6 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"sync"
 	"time"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 // todo: should be a kad param and configurable
@@ -24,8 +25,8 @@ const protocol = "/dht/1.0/find-node/"
 var ErrEncodeFailed = errors.New("failed to encode data")
 
 type findNodeResults struct {
-	err     error
 	results []node.Node
+	err     error
 }
 
 type findNodeProtocol struct {
@@ -143,7 +144,7 @@ func (p *findNodeProtocol) readLoop() {
 			headers := &pb.FindNode{}
 			err := proto.Unmarshal(msg.Data(), headers)
 			if err != nil {
-				//TODO : Handle errors
+				log.Error("Error handling incoming FindNode message, err:", err)
 				return
 			}
 
@@ -182,11 +183,7 @@ func (p *findNodeProtocol) handleIncomingRequest(sender crypto.PublicKey, reqID,
 
 	select { // block until we got results from the  routing table or timeout
 	case c := <-callback:
-		peers := []node.Node{}
-		for i := range c.Peers { // we don't want to send peer to itself
-			peers = append(peers, c.Peers[i])
-		}
-		results = toNodeInfo(peers, sender.String())
+		results = toNodeInfo(c.Peers, sender.String())
 	case <-time.After(tableQueryTimeout):
 		results = []*pb.NodeInfo{} // an empty slice
 	}
@@ -199,7 +196,7 @@ func (p *findNodeProtocol) handleIncomingRequest(sender crypto.PublicKey, reqID,
 
 	err = p.sendResponseMessage(sender, reqID, payload)
 	if err != nil {
-		// TODO : handle errors.
+		log.Error("Error sending response message, err:", err)
 	}
 }
 
@@ -209,14 +206,14 @@ func (p *findNodeProtocol) handleIncomingResponse(reqID, msg []byte) {
 	data := &pb.FindNodeResp{}
 	err := proto.Unmarshal(msg, data)
 	if err != nil {
-		p.sendResponse(reqID, findNodeResults{err, nil})
+		p.sendResponse(reqID, findNodeResults{nil, err})
 		return
 	}
 
 	// update routing table with newly found nodes
 	nodes := fromNodeInfos(data.NodeInfos)
 
-	p.sendResponse(reqID, findNodeResults{nil, nodes})
+	p.sendResponse(reqID, findNodeResults{nodes, nil})
 }
 
 func (p *findNodeProtocol) sendResponse(reqID []byte, results findNodeResults) {
@@ -260,6 +257,7 @@ func fromNodeInfos(nodes []*pb.NodeInfo) []node.Node {
 		pubk, err := crypto.NewPublicKey(n.NodeId)
 		if err != nil {
 			// TODO Error handling, problem : don't break everything because one messed up nodeinfo
+			log.Error("There was an error parsing nodeid : ", n.NodeId, ", skipping it. err: ", err)
 			continue
 		}
 		node := node.New(pubk, n.Address)
