@@ -40,17 +40,13 @@ func waitForCallbackOrTimeout(t *testing.T, outchan chan Connectioner, expectedS
 }
 
 func TestHandlePreSessionIncomingMessage(t *testing.T){
-	port := 0
-	address := fmt.Sprintf("0.0.0.0:%d", port)
 	//cfg := config.DefaultConfig()
-	localNode, err := node.NewLocalNode(config.ConfigValues, address, false)
-	assert.NoError(t, err, "should be able to create localnode")
-	remoteNode, err := node.NewLocalNode(config.ConfigValues, address, false)
-	assert.NoError(t, err, "should be able to create localnode")
-	con := NewConnectionMock(remoteNode.PublicKey(), Remote)
+	localNode, _ := node.GenerateTestNode(t)
+	remoteNode, _ := node.GenerateTestNode(t)
+	con := NewConnectionMock(localNode.PublicKey(), Remote)
 	remoteNet, _ := NewNet(config.ConfigValues, remoteNode)
 	outchan := remoteNet.SubscribeOnNewRemoteConnections()
-	out, session, er := GenerateHandshakeRequestData(localNode.PublicKey(), localNode.PrivateKey(),con.RemotePublicKey(), remoteNet.GetNetworkId())
+	out, session, er := GenerateHandshakeRequestData(localNode.PublicKey(), localNode.PrivateKey(),remoteNode.PublicKey(), remoteNet.GetNetworkId())
 	assert.NoError(t, er, "cant generate handshake message")
 	data, err := proto.Marshal(out)
 	assert.NoError(t, err, "cannot marshal obj")
@@ -63,7 +59,7 @@ func TestHandlePreSessionIncomingMessage(t *testing.T){
 	err = remoteNet.HandlePreSessionIncomingMessage(con, data)
 	assert.NoError(t, err, "handle session failed")
 	waitForCallbackOrTimeout(t, outchan, session)
-	assert.Equal(t,remoteNode.PublicKey().String(),con.remotePub.String(),"Remote connection was not updated properly")
+	assert.Equal(t,localNode.PublicKey().String(),con.remotePub.String(),"Remote connection was not updated properly")
 
 	othercon := NewConnectionMock(remoteNode.PublicKey(), Remote)
 	othercon.SetSendResult(fmt.Errorf("error or whatever"))
@@ -71,4 +67,13 @@ func TestHandlePreSessionIncomingMessage(t *testing.T){
 	assert.Error(t, err, "handle session failed")
 	assert.Nil(t, othercon.Session())
 	waitForCallbackOrTimeout(t, outchan, nil)
+
+	out.NetworkID = out.NetworkID +1
+	data, err = proto.Marshal(out)
+	assert.NoError(t, err, "cannot marshal obj")
+	msg.data = data
+	err = remoteNet.HandlePreSessionIncomingMessage(con, msg)
+	assert.Error(t, err,"Sent message with wrong networkID")
+	//,_, er = GenerateHandshakeRequestData(localNode.PublicKey(), localNode.PrivateKey(),con.RemotePublicKey(), remoteNet.GetNetworkId() +1)
+
 }
