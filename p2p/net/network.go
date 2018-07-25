@@ -6,7 +6,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
-	"github.com/spacemeshos/go-spacemesh/p2p/net/wire"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"gopkg.in/op/go-logging.v1"
@@ -28,7 +27,7 @@ type Net interface {
 	SubscribeOnNewRemoteConnections() chan Connectioner
 	GetLogger() *logging.Logger
 	GetNetworkId() int8
-	HandlePreSessionIncomingMessage(c Connectioner, msg wire.InMessage) error
+	HandlePreSessionIncomingMessage(c Connectioner, msg []byte) error
 	GetLocalNode() *node.LocalNode
 	IncomingMessages() chan IncomingMessageEvent
 	ClosingConnections() chan Connectioner
@@ -148,27 +147,27 @@ func (n *netImpl) createSecuredConnection(address string, remotePublicKey crypto
 
 	err = conn.Send(payload)
 	if err != nil {
+		conn.Close()
 		return nil, err
 	}
 
-	var msg wire.InMessage
+	var msg []byte
 	var ok bool
 	timer := time.NewTimer(n.config.ResponseTimeout)
 	select {
 	case msg, ok = <-conn.IncomingChannel():
 		if !ok {
+			conn.Close()
 			return nil, fmt.Errorf("%s err: incoming channel got closed", errMsg)
-		}
-		if msg.Error() != nil {
-			return nil, fmt.Errorf("%s err: %v", errMsg, msg.Error())
 		}
 	case <-timer.C:
 		n.logger.Info("waiting for HS response timed-out. remoteKey=%v", remotePublicKey)
+		conn.Close()
 		return nil, fmt.Errorf("%s err: HS response timed-out", errMsg)
 	}
 
 	respData := &pb.HandshakeData{}
-	err = proto.Unmarshal(msg.Message(), respData)
+	err = proto.Unmarshal(msg, respData)
 	if err != nil {
 		//n.logger.Warning("invalid incoming handshake resp bin data", err)
 		conn.Close()
@@ -252,12 +251,12 @@ func (n *netImpl) publishNewRemoteConnection(conn Connectioner) {
 	n.regMutex.RUnlock()
 }
 
-func (n *netImpl) HandlePreSessionIncomingMessage(c Connectioner, message wire.InMessage) error {
+func (n *netImpl) HandlePreSessionIncomingMessage(c Connectioner, message []byte) error {
 	//TODO replace the next few lines with a way to validate that the message is a handshake request based on the message metadata
 	errMsg := "failed to handle handshake request"
 	data := &pb.HandshakeData{}
 
-	err := proto.Unmarshal(message.Message(), data)
+	err := proto.Unmarshal(message, data)
 	if err != nil {
 		return fmt.Errorf("%s. err: %v", errMsg, err)
 	}

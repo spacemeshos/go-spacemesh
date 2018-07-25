@@ -11,6 +11,7 @@ import (
 	"io"
 	"fmt"
 	"net"
+	"sync"
 )
 
 var (
@@ -41,7 +42,7 @@ type Connectioner interface {
 
 	Source() ConnectionSource
 
-	IncomingChannel() chan wire.InMessage
+	IncomingChannel() chan []byte
 
 	Send(m []byte) error
 	Close()
@@ -59,14 +60,15 @@ type Connection struct {
 	created    time.Time
 	remotePub  crypto.PublicKey
 	remoteAddr net.Addr
-	closeChan chan struct{}
-	formatter wire.Formatter // format messages in some way
-	networker networker               // network context
-	session NetworkSession
+	closeChan  chan struct{}
+	formatter  wire.Formatter // format messages in some way
+	networker  networker      // network context
+	session    NetworkSession
+	closeOnce  sync.Once
 }
 
 type networker interface {
-	HandlePreSessionIncomingMessage(c Connectioner, msg wire.InMessage) error
+	HandlePreSessionIncomingMessage(c Connectioner, msg []byte) error
 	IncomingMessages() chan IncomingMessageEvent
 	ClosingConnections() chan Connectioner
 	GetNetworkId() int8
@@ -130,11 +132,11 @@ func (c *Connection) String() string {
 	return c.id
 }
 
-func (c *Connection) publish(message wire.InMessage) {
-	c.networker.IncomingMessages() <- IncomingMessageEvent{c, message.Message()}
+func (c *Connection) publish(message []byte) {
+	c.networker.IncomingMessages() <- IncomingMessageEvent{c, message}
 }
 
-func (c *Connection) IncomingChannel() chan wire.InMessage {
+func (c *Connection) IncomingChannel() chan []byte {
 	return c.formatter.In()
 }
 
@@ -142,12 +144,14 @@ func (c *Connection) IncomingChannel() chan wire.InMessage {
 // data is copied over so caller can get rid of the data
 // Concurrency: can be called from any go routine
 func (c *Connection) Send(m []byte) error {
-	return wire.Send(c.formatter, m)
+	return c.formatter.Out(m)
 }
 
 // Close closes the connection (implements io.Closer). It is go safe.
 func (c *Connection) Close() {
-	c.closeChan <- struct{}{}
+	c.closeOnce.Do(func() {
+		c.closeChan <- struct{}{}
+	})
 }
 
 func (c *Connection) shutdown(err error) {
@@ -172,13 +176,7 @@ Loop:
 				break Loop
 			}
 
-			if msg.Error() != nil {
-				err = msg.Error()
-				break Loop
-			}
-
 			if c.session == nil {
-				c.logger.Info("DEBUG: got pre session message")
 				err = c.networker.HandlePreSessionIncomingMessage(c, msg)
 				if err != nil {
 					break Loop

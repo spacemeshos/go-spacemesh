@@ -3,7 +3,6 @@ package net
 import (
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/net/wire"
 	"gopkg.in/op/go-logging.v1"
 	"time"
 	"net"
@@ -40,19 +39,22 @@ func getTestLogger(name string) *logging.Logger {
 type NetworkMock struct {
 	dialErr          error
 	dialDelayMs      int8
-	dialCount			int32
+	dialCount        int32
+	preSessionErr    error
+	preSessionCount  int32
 	regNewRemoteConn []chan Connectioner
 	networkId        int8
 	closingConn      chan Connectioner
-	incomingMessages      chan IncomingMessageEvent
+	incomingMessages chan IncomingMessageEvent
 	logger           *logging.Logger
 }
 
 func NewNetworkMock() *NetworkMock {
 	return &NetworkMock{
 		regNewRemoteConn: make([]chan Connectioner, 0),
-		closingConn:      make(chan Connectioner),
+		closingConn:      make(chan Connectioner, 20),
 		logger:           getTestLogger("network mock"),
+		incomingMessages: make(chan IncomingMessageEvent),
 	}
 }
 
@@ -118,8 +120,17 @@ func (n NetworkMock) PublishClosingConnection(conn Connectioner) {
 	}()
 }
 
-func (n *NetworkMock) HandlePreSessionIncomingMessage(c Connectioner, msg wire.InMessage) error {
-	return nil
+func (n *NetworkMock) SetPreSessionResult(err error) {
+	n.preSessionErr = err
+}
+
+func (n NetworkMock) GetPreSessionCount() int32 {
+	return n.preSessionCount
+}
+
+func (n *NetworkMock) HandlePreSessionIncomingMessage(c Connectioner, msg []byte) error {
+	atomic.AddInt32(&n.preSessionCount, 1)
+	return n.preSessionErr
 }
 
 func (n *NetworkMock) GetLogger() *logging.Logger {

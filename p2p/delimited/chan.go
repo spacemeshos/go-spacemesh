@@ -1,41 +1,48 @@
 package delimited
 
 import (
-	"github.com/spacemeshos/go-spacemesh/p2p/net/wire"
 	"io"
 	"sync"
+	"fmt"
 )
 
 // Chan is a delimited duplex channel. It is used to have a channel interface
 // around a delimited.Reader or Writer.
 type Chan struct {
 	connection io.ReadWriteCloser
-	closeSync  sync.Once
-	OutMsgChan chan wire.OutMessage
-	InMsgChan  chan wire.InMessage
+	closeOnce  sync.Once
+
+	outMsgChan chan outMessage
+	inMsgChan  chan []byte
 	CloseChan  chan struct{}
 }
 
 // Satisfy formatter.
 
-func (s *Chan) In() chan wire.InMessage {
-	return s.InMsgChan
+func (s *Chan) In() chan[]byte {
+	return s.inMsgChan
 }
 
-func (s *Chan) Out() chan wire.OutMessage {
-	return s.OutMsgChan
+func (s *Chan) Out(message []byte) error {
+	outCb := make(chan error)
+	select {
+	case s.outMsgChan <- outMessage{message, outCb}:
+		return <-outCb
+	case <-s.CloseChan:
+		return fmt.Errorf("formatter is closed")
+	}
 }
 
-type OutMessage struct {
+type outMessage struct {
 	m []byte
 	r chan error
 }
 
-func (om OutMessage) Message() []byte {
+func (om outMessage) Message() []byte {
 	return om.m
 }
 
-func (om OutMessage) Result() chan error {
+func (om outMessage) Result() chan error {
 	return om.r
 }
 
@@ -52,21 +59,12 @@ func (im InMessage) Error() error {
 	return im.e
 }
 
-func (s *Chan) MakeIn(m []byte, e error) wire.InMessage {
-	return InMessage{m, e}
-}
-
-func (s *Chan) MakeOut(m []byte, e chan error) wire.OutMessage {
-	return OutMessage{m, e}
-}
-
 // NewChan constructs a Chan with a given buffer size.
 func NewChan(chanSize int) *Chan {
 	return &Chan{
-		closeSync:	sync.Once{},
-		OutMsgChan: make(chan wire.OutMessage, chanSize),
-		InMsgChan:  make(chan wire.InMessage, chanSize),
-		CloseChan:  make(chan struct{}, 2),
+		outMsgChan: make(chan outMessage, chanSize),
+		inMsgChan:  make(chan []byte, chanSize),
+		CloseChan:  make(chan struct{}),
 	}
 }
 
@@ -74,12 +72,6 @@ func (s *Chan) Pipe(rwc io.ReadWriteCloser) {
 	s.connection = rwc
 	go s.readFromReader(rwc)
 	go s.writeToWriter(rwc)
-}
-
-func (s *Chan) closeConnection() {
-	s.closeSync.Do(func() {
-		s.connection.Close()
-	})
 }
 
 // ReadFrom wraps the given io.Reader with a delimited.Reader, reads all
@@ -103,13 +95,13 @@ Loop:
 				newbuf := make([]byte, len(buf))
 				copy(newbuf, buf)
 				// ok seems fine. send it away
-				s.InMsgChan <- InMessage{newbuf, nil}
+				s.inMsgChan <- newbuf
 			}
 		}
 	}
 
-	s.closeConnection()
-	close(s.InMsgChan)
+	s.Close() 			// close writer
+	close(s.inMsgChan)
 }
 
 // WriteToWriter wraps the given io.Writer with a delimited.Writer, listens on the
@@ -126,28 +118,22 @@ Loop:
 		case <-s.CloseChan:
 			break Loop // told we're done
 
-		case msg := <-s.OutMsgChan:
+		case msg := <-s.outMsgChan:
 			if _, err := mw.WriteRecord(msg.Message()); err != nil {
-				if err != io.EOF {
-					// unexpected error. tell the client.
-					msg.Result() <- err
-				}
-
-				break Loop
+				// unexpected error. tell the client.
+				msg.Result() <- err
+			} else {
+				// Report msg was sent
+				msg.Result() <- nil
 			}
-			// Report msg was sent
-			msg.Result() <- nil
 		}
 	}
-
-	s.closeConnection()
-	close(s.OutMsgChan)
 }
 
 // Close the Chan
 func (s *Chan) Close() {
-	// Close both.
-	s.CloseChan <- struct{}{}
-	s.CloseChan <- struct{}{}
-
+	s.closeOnce.Do(func() {
+		close(s.CloseChan) 		// close both writer and reader
+		s.connection.Close() 	// close internal connection
+	})
 }

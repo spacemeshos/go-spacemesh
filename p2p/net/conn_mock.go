@@ -1,7 +1,6 @@
 package net
 
 import (
-	"github.com/spacemeshos/go-spacemesh/p2p/net/wire"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"time"
 	"sync/atomic"
@@ -60,7 +59,7 @@ func (cm ConnectionMock) Source() ConnectionSource {
 	return cm.source
 }
 
-func (cm ConnectionMock) IncomingChannel() chan wire.InMessage {
+func (cm ConnectionMock) IncomingChannel() chan []byte {
 	return nil
 }
 
