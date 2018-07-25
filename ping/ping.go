@@ -2,7 +2,6 @@ package ping
 
 import (
 	"github.com/gogo/protobuf/proto"
-	"github.com/pkg/errors"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -10,6 +9,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/ping/pb"
 	"sync"
 	"time"
+	"errors"
 )
 
 type Pinger interface {
