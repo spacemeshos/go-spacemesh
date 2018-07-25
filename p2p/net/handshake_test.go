@@ -19,7 +19,7 @@ func TestGenerateHandshakeRequestData(t *testing.T) {
 	con := NewConnectionMock(remoteNode.PublicKey(), Remote)
 	remoteNet, _ := NewNet(config.ConfigValues, remoteNode)
 	//outchan := remoteNet.SubscribeOnNewRemoteConnections()
-	_, _, er := GenerateHandshakeRequestData(localNode.PublicKey(), localNode.PrivateKey(), con.RemotePublicKey(), remoteNet.GetNetworkId())
+	_, _, er := GenerateHandshakeRequestData(localNode.PublicKey(), localNode.PrivateKey(), con.RemotePublicKey(), remoteNet.NetworkID())
 	assert.NoError(t, er, "Sanity failed")
 
 }

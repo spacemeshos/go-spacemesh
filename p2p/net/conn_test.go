@@ -76,7 +76,7 @@ func TestPreSessionMessage(t *testing.T) {
 	go conn.beginEventProcessing()
 	rwcam.SetReadResult([]byte{3, 1, 1, 1}, nil)
 	time.Sleep(50 * time.Millisecond)
-	assert.Equal(t, int32(1), netw.GetPreSessionCount())
+	assert.Equal(t, int32(1), netw.PreSessionCount())
 }
 
 func TestPreSessionError(t *testing.T) {
@@ -90,7 +90,7 @@ func TestPreSessionError(t *testing.T) {
 	rwcam.SetReadResult([]byte{3, 1, 1, 1}, nil)
 	closedConn := <-netw.ClosingConnections()
 	assert.Equal(t, conn.id, closedConn.ID())
-	assert.Equal(t, int32(1), netw.GetPreSessionCount())
+	assert.Equal(t, int32(1), netw.PreSessionCount())
 }
 
 func TestClose(t *testing.T) {

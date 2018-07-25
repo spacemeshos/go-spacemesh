@@ -15,25 +15,18 @@ import (
 	"time"
 )
 
-// Net is a connection factory able to dial remote endpoints
-// Net clients should register all callbacks
-// Connections may be initiated by Dial() or by remote clients connecting to the listen address
-// ConnManager includes a TCP server, and a TCP client
-// It provides full duplex messaging functionality over the same tcp/ip connection
-// Network should not know about higher-level networking types such as remoteNode, swarm and networkSession
-// Network main client is the swarm
-// Net has no channel events processing loops - clients are responsible for polling these channels and popping events from them
-type Net interface {
-	Dial(address string, remotePublicKey crypto.PublicKey, networkId int8) (Connection, error) // Connect to a remote node. Can send when no error.
-	SubscribeOnNewRemoteConnections() chan Connection
-	GetLogger() *logging.Logger
-	GetNetworkId() int8
-	HandlePreSessionIncomingMessage(c Connection, msg []byte) error
-	GetLocalNode() *node.LocalNode
-	IncomingMessages() chan IncomingMessageEvent
-	ClosingConnections() chan Connection
-	Shutdown()
-}
+
+//type Net interface {
+//	Dial(address string, remotePublicKey crypto.PublicKey, networkId int8) (Connection, error) // Connect to a remote node. Can send when no error.
+//	SubscribeOnNewRemoteConnections() chan Connection
+//	Logger() *logging.Logger
+//	NetworkID() int8
+//	HandlePreSessionIncomingMessage(c Connection, msg []byte) error
+//	LocalNode() *node.LocalNode
+//	IncomingMessages() chan IncomingMessageEvent
+//	ClosingConnections() chan Connection
+//	Shutdown()
+//}
 
 type IncomingMessageEvent struct {
 	Conn    Connection
@@ -45,8 +38,15 @@ type ManagedConnection interface {
 	beginEventProcessing()
 }
 
-// impl internal type
-type netImpl struct {
+// Net is a connection factory able to dial remote endpoints
+// Net clients should register all callbacks
+// Connections may be initiated by Dial() or by remote clients connecting to the listen address
+// ConnManager includes a TCP server, and a TCP client
+// It provides full duplex messaging functionality over the same tcp/ip connection
+// Network should not know about higher-level networking types such as remoteNode, swarm and networkSession
+// Network main client is the swarm
+// Net has no channel events processing loops - clients are responsible for polling these channels and popping events from them
+type Net struct {
 	networkId int8
 	localNode *node.LocalNode
 	logger    *logging.Logger
@@ -67,9 +67,9 @@ type netImpl struct {
 
 // NewNet creates a new network.
 // It attempts to tcp listen on address. e.g. localhost:1234 .
-func NewNet(conf config.Config, localEntity *node.LocalNode) (Net, error) {
+func NewNet(conf config.Config, localEntity *node.LocalNode) (*Net, error) {
 
-	n := &netImpl{
+	n := &Net{
 		networkId:          conf.NetworkID,
 		localNode:          localEntity,
 		logger:             localEntity.Logger,
@@ -91,27 +91,27 @@ func NewNet(conf config.Config, localEntity *node.LocalNode) (Net, error) {
 	return n, nil
 }
 
-func (n *netImpl) GetLogger() *logging.Logger {
+func (n *Net) Logger() *logging.Logger {
 	return n.logger
 }
 
-func (n *netImpl) GetNetworkId() int8 {
+func (n *Net) NetworkID() int8 {
 	return n.networkId
 }
 
-func (n *netImpl) GetLocalNode() *node.LocalNode {
+func (n *Net) LocalNode() *node.LocalNode {
 	return n.localNode
 }
 
-func (n *netImpl) IncomingMessages() chan IncomingMessageEvent {
+func (n *Net) IncomingMessages() chan IncomingMessageEvent {
 	return n.incomingMessages
 }
 
-func (n *netImpl) ClosingConnections() chan Connection {
+func (n *Net) ClosingConnections() chan Connection {
 	return n.closingConnections
 }
 
-func (n *netImpl) createConnection(address string, remotePub crypto.PublicKey, timeOut time.Duration, keepAlive time.Duration) (ManagedConnection, error) {
+func (n *Net) createConnection(address string, remotePub crypto.PublicKey, timeOut time.Duration, keepAlive time.Duration) (ManagedConnection, error) {
 	if n.isShuttingDown {
 		return nil, fmt.Errorf("can't dial because the connection is shutting down")
 	}
@@ -134,7 +134,7 @@ func (n *netImpl) createConnection(address string, remotePub crypto.PublicKey, t
 	return c, nil
 }
 
-func (n *netImpl) createSecuredConnection(address string, remotePublicKey crypto.PublicKey, networkId int8, timeOut time.Duration, keepAlive time.Duration) (ManagedConnection, error) {
+func (n *Net) createSecuredConnection(address string, remotePublicKey crypto.PublicKey, networkId int8, timeOut time.Duration, keepAlive time.Duration) (ManagedConnection, error) {
 	errMsg := "failed to establish secured connection."
 	conn, err := n.createConnection(address, remotePublicKey, timeOut, keepAlive)
 	if err != nil {
@@ -195,7 +195,7 @@ func (n *netImpl) createSecuredConnection(address string, remotePublicKey crypto
 // address:: ip:port
 // Returns established connection that local clients can send messages to or error if failed
 // to establish a connection, currently only secured connections are supported
-func (n *netImpl) Dial(address string, remotePublicKey crypto.PublicKey, networkId int8) (Connection, error) {
+func (n *Net) Dial(address string, remotePublicKey crypto.PublicKey, networkId int8) (Connection, error) {
 	conn, err := n.createSecuredConnection(address, remotePublicKey, networkId, n.config.DialTimeout, n.config.ConnKeepAlive)
 	if err != nil {
 		return nil, fmt.Errorf("failed to Dail. err: %v", err)
@@ -204,13 +204,13 @@ func (n *netImpl) Dial(address string, remotePublicKey crypto.PublicKey, network
 	return conn, nil
 }
 
-func (n *netImpl) Shutdown() {
+func (n *Net) Shutdown() {
 	n.isShuttingDown = true
 	n.tcpListener.Close()
 }
 
 // Start network server
-func (n *netImpl) listen() error {
+func (n *Net) listen() error {
 	n.logger.Info("Starting to listen...")
 	tcpListener, err := net.Listen("tcp", n.tcpListenAddress)
 	if err != nil {
@@ -221,7 +221,7 @@ func (n *netImpl) listen() error {
 	return nil
 }
 
-func (n *netImpl) acceptTCP() {
+func (n *Net) acceptTCP() {
 	for {
 		n.logger.Debug("Waiting for incoming connections...")
 		netConn, err := n.tcpListener.Accept()
@@ -243,7 +243,7 @@ func (n *netImpl) acceptTCP() {
 	}
 }
 
-func (n *netImpl) SubscribeOnNewRemoteConnections() chan Connection {
+func (n *Net) SubscribeOnNewRemoteConnections() chan Connection {
 	n.regMutex.Lock()
 	ch := make(chan Connection, 20)
 	n.regNewRemoteConn = append(n.regNewRemoteConn, ch)
@@ -251,7 +251,7 @@ func (n *netImpl) SubscribeOnNewRemoteConnections() chan Connection {
 	return ch
 }
 
-func (n *netImpl) publishNewRemoteConnection(conn Connection) {
+func (n *Net) publishNewRemoteConnection(conn Connection) {
 	n.regMutex.RLock()
 	for _, c := range n.regNewRemoteConn {
 		c <- conn
@@ -259,7 +259,7 @@ func (n *netImpl) publishNewRemoteConnection(conn Connection) {
 	n.regMutex.RUnlock()
 }
 
-func (n *netImpl) HandlePreSessionIncomingMessage(c Connection, message []byte) error {
+func (n *Net) HandlePreSessionIncomingMessage(c Connection, message []byte) error {
 	//TODO replace the next few lines with a way to validate that the message is a handshake request based on the message metadata
 	errMsg := "failed to handle handshake request"
 	data := &pb.HandshakeData{}
@@ -272,14 +272,14 @@ func (n *netImpl) HandlePreSessionIncomingMessage(c Connection, message []byte) 
 	// new remote connection doesn't hold the remote public key until it gets the handshake request
 	if c.RemotePublicKey() == nil {
 		rPub, err := crypto.NewPublicKey(data.GetNodePubKey())
-		n.GetLogger().Info("DEBUG: handling HS req from %v", rPub)
+		n.Logger().Info("DEBUG: handling HS req from %v", rPub)
 		if err != nil {
 			return fmt.Errorf("%s. err: %v", errMsg, err)
 		}
 		c.SetRemotePublicKey(rPub)
 
 	}
-	respData, session, err := ProcessHandshakeRequest(n.GetNetworkId(), n.localNode.PublicKey(), n.localNode.PrivateKey(), c.RemotePublicKey(), data)
+	respData, session, err := ProcessHandshakeRequest(n.NetworkID(), n.localNode.PublicKey(), n.localNode.PrivateKey(), c.RemotePublicKey(), data)
 	payload, err := proto.Marshal(respData)
 	if err != nil {
 		return fmt.Errorf("%s. err: %v", errMsg, err)

@@ -30,7 +30,7 @@ func TestGetConnectionWithNoConnection(t *testing.T) {
 	conn, err := cPool.GetConnection(addr, remotePub)
 	assert.Nil(t, err)
 	assert.Equal(t, remotePub.String(), conn.RemotePublicKey().String())
-	assert.Equal(t, int32(1), net.GetDialCount())
+	assert.Equal(t, int32(1), net.DialCount())
 }
 
 func TestGetConnectionWithConnection(t *testing.T) {
@@ -44,7 +44,7 @@ func TestGetConnectionWithConnection(t *testing.T) {
 	conn, err := cPool.GetConnection(addr, remotePub)
 	assert.Nil(t, err)
 	assert.Equal(t, remotePub.String(), conn.RemotePublicKey().String())
-	assert.Equal(t, int32(1), net.GetDialCount())
+	assert.Equal(t, int32(1), net.DialCount())
 }
 
 func TestGetConnectionWithError(t *testing.T) {
@@ -58,7 +58,7 @@ func TestGetConnectionWithError(t *testing.T) {
 	conn, aErr := cPool.GetConnection(addr, remotePub)
 	assert.Equal(t, eErr, aErr)
 	assert.Nil(t, conn)
-	assert.Equal(t, int32(1), net.GetDialCount())
+	assert.Equal(t, int32(1), net.DialCount())
 }
 
 func TestRemoteConnectionWithNoConnection(t *testing.T) {
@@ -76,7 +76,7 @@ func TestRemoteConnectionWithNoConnection(t *testing.T) {
 	assert.Equal(t, remotePub.String(), conn.RemotePublicKey().String())
 	assert.Equal(t, rConn.ID(), conn.ID())
 	assert.Nil(t, err)
-	assert.Equal(t, int32(0), n.GetDialCount())
+	assert.Equal(t, int32(0), n.DialCount())
 }
 
 func TestRemoteConnectionWithConnection(t *testing.T) {
@@ -98,7 +98,7 @@ func TestRemoteConnectionWithConnection(t *testing.T) {
 	assert.NotEqual(t, rConn.ID(), conn.ID())
 	assert.Equal(t, conn2.ID(), conn.ID())
 	assert.Nil(t, err)
-	assert.Equal(t, int32(1), n.GetDialCount())
+	assert.Equal(t, int32(1), n.DialCount())
 	assert.True(t, rConn.Closed())
 }
 
@@ -121,7 +121,7 @@ func TestRemoteConnectionDuringDial(t *testing.T) {
 	getConn := <-waitCh
 	assert.Equal(t, remotePub.String(), getConn.RemotePublicKey().String())
 	assert.Equal(t, rConn.ID(), getConn.ID())
-	assert.Equal(t, int32(1), n.GetDialCount())
+	assert.Equal(t, int32(1), n.DialCount())
 	assert.False(t, rConn.Closed())
 }
 
@@ -208,7 +208,7 @@ func TestClosedConnection(t *testing.T) {
 	// query same connection and assert that it's a new instance
 	conn2, _ := cPool.GetConnection(addr, remotePub)
 	assert.NotEqual(t, conn.ID(), conn2.ID())
-	assert.Equal(t, int32(2), nMock.GetDialCount())
+	assert.Equal(t, int32(2), nMock.DialCount())
 }
 
 func TestRandom(t *testing.T) {

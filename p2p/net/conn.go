@@ -65,7 +65,7 @@ type networker interface {
 	HandlePreSessionIncomingMessage(c Connection, msg []byte) error
 	IncomingMessages() chan IncomingMessageEvent
 	ClosingConnections() chan Connection
-	GetNetworkId() int8
+	NetworkID() int8
 }
 
 type readWriteCloseAddresser interface {

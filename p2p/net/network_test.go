@@ -45,7 +45,7 @@ func TestHandlePreSessionIncomingMessage(t *testing.T) {
 	con := NewConnectionMock(localNode.PublicKey(), Remote)
 	remoteNet, _ := NewNet(config.ConfigValues, remoteNode)
 	outchan := remoteNet.SubscribeOnNewRemoteConnections()
-	out, session, er := GenerateHandshakeRequestData(localNode.PublicKey(), localNode.PrivateKey(), remoteNode.PublicKey(), remoteNet.GetNetworkId())
+	out, session, er := GenerateHandshakeRequestData(localNode.PublicKey(), localNode.PrivateKey(), remoteNode.PublicKey(), remoteNet.NetworkID())
 	assert.NoError(t, er, "cant generate handshake message")
 	data, err := proto.Marshal(out)
 	assert.NoError(t, err, "cannot marshal obj")
@@ -72,6 +72,6 @@ func TestHandlePreSessionIncomingMessage(t *testing.T) {
 	assert.NoError(t, err, "cannot marshal obj")
 	err = remoteNet.HandlePreSessionIncomingMessage(con, data)
 	assert.Error(t, err, "Sent message with wrong networkID")
-	//,_, er = GenerateHandshakeRequestData(localNode.PublicKey(), localNode.PrivateKey(),con.RemotePublicKey(), remoteNet.GetNetworkId() +1)
+	//,_, er = GenerateHandshakeRequestData(localNode.PublicKey(), localNode.PrivateKey(),con.RemotePublicKey(), remoteNet.NetworkID() +1)
 
 }

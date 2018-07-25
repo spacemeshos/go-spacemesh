@@ -80,7 +80,7 @@ func (n *NetworkMock) Dial(address string, remotePublicKey crypto.PublicKey, net
 	return conn, n.dialErr
 }
 
-func (n *NetworkMock) GetDialCount() int32 {
+func (n *NetworkMock) DialCount() int32 {
 	return n.dialCount
 }
 
@@ -100,7 +100,7 @@ func (n *NetworkMock) setNetworkId(id int8) {
 	n.networkId = id
 }
 
-func (n *NetworkMock) GetNetworkId() int8 {
+func (n *NetworkMock) NetworkID() int8 {
 	return n.networkId
 }
 
@@ -122,7 +122,7 @@ func (n *NetworkMock) SetPreSessionResult(err error) {
 	n.preSessionErr = err
 }
 
-func (n NetworkMock) GetPreSessionCount() int32 {
+func (n NetworkMock) PreSessionCount() int32 {
 	return n.preSessionCount
 }
 
@@ -131,6 +131,6 @@ func (n *NetworkMock) HandlePreSessionIncomingMessage(c Connection, msg []byte) 
 	return n.preSessionErr
 }
 
-func (n *NetworkMock) GetLogger() *logging.Logger {
+func (n *NetworkMock) Logger() *logging.Logger {
 	return n.logger
 }
