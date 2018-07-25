@@ -42,17 +42,17 @@ type NetworkMock struct {
 	dialCount        int32
 	preSessionErr    error
 	preSessionCount  int32
-	regNewRemoteConn []chan Connectioner
+	regNewRemoteConn []chan Connection
 	networkId        int8
-	closingConn      chan Connectioner
+	closingConn      chan Connection
 	incomingMessages chan IncomingMessageEvent
 	logger           *logging.Logger
 }
 
 func NewNetworkMock() *NetworkMock {
 	return &NetworkMock{
-		regNewRemoteConn: make([]chan Connectioner, 0),
-		closingConn:      make(chan Connectioner, 20),
+		regNewRemoteConn: make([]chan Connection, 0),
+		closingConn:      make(chan Connection, 20),
 		logger:           getTestLogger("network mock"),
 		incomingMessages: make(chan IncomingMessageEvent),
 	}
@@ -74,7 +74,7 @@ func (n *NetworkMock) SetDialDelayMs(delay int8) {
 
 
 
-func (n *NetworkMock) Dial(address string, remotePublicKey crypto.PublicKey, networkId int8) (Connectioner, error) {
+func (n *NetworkMock) Dial(address string, remotePublicKey crypto.PublicKey, networkId int8) (Connection, error) {
 	n.networkId = networkId
 	atomic.AddInt32(&n.dialCount, 1)
 	time.Sleep(time.Duration(n.dialDelayMs) * time.Millisecond)
@@ -86,13 +86,13 @@ func (n *NetworkMock) GetDialCount() int32 {
 	return n.dialCount
 }
 
-func (n *NetworkMock) SubscribeOnNewRemoteConnections() chan Connectioner {
-	ch := make(chan Connectioner, 20)
+func (n *NetworkMock) SubscribeOnNewRemoteConnections() chan Connection {
+	ch := make(chan Connection, 20)
 	n.regNewRemoteConn = append(n.regNewRemoteConn, ch)
 	return ch
 }
 
-func (n NetworkMock) PublishNewRemoteConnection(conn Connectioner) {
+func (n NetworkMock) PublishNewRemoteConnection(conn Connection) {
 	for _, ch := range n.regNewRemoteConn {
 		ch <- conn
 	}
@@ -106,7 +106,7 @@ func (n *NetworkMock) GetNetworkId() int8 {
 	return n.networkId
 }
 
-func (n *NetworkMock) ClosingConnections() chan Connectioner {
+func (n *NetworkMock) ClosingConnections() chan Connection {
 	return n.closingConn
 }
 
@@ -114,7 +114,7 @@ func (n* NetworkMock) IncomingMessages() chan IncomingMessageEvent {
 	return n.incomingMessages
 }
 
-func (n NetworkMock) PublishClosingConnection(conn Connectioner) {
+func (n NetworkMock) PublishClosingConnection(conn Connection) {
 	go func() {
 		n.closingConn <- conn
 	}()
@@ -128,7 +128,7 @@ func (n NetworkMock) GetPreSessionCount() int32 {
 	return n.preSessionCount
 }
 
-func (n *NetworkMock) HandlePreSessionIncomingMessage(c Connectioner, msg []byte) error {
+func (n *NetworkMock) HandlePreSessionIncomingMessage(c Connection, msg []byte) error {
 	atomic.AddInt32(&n.preSessionCount, 1)
 	return n.preSessionErr
 }

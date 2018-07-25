@@ -111,8 +111,8 @@ func TestRemoteConnectionDuringDial(t *testing.T) {
 	n.SetDialResult(nil)
 
 	cPool := NewConnectionPool(n, generatePublicKey())
-	waitCh := make(chan net.Connectioner)
-	go func(ch chan net.Connectioner) {
+	waitCh := make(chan net.Connection)
+	go func(ch chan net.Connection) {
 		conn, _ := cPool.GetConnection(addr, remotePub)
 		ch <- conn
 	}(waitCh)
@@ -134,7 +134,7 @@ func TestShutdown(t *testing.T) {
 	addr :="1.1.1.1"
 
 	cPool := NewConnectionPool(n, generatePublicKey())
-	newConns := make(chan net.Connectioner)
+	newConns := make(chan net.Connection)
 	go func() {
 		conn, _ := cPool.GetConnection(addr, remotePub)
 		newConns <- conn
@@ -166,7 +166,7 @@ func TestShutdownWithMultipleDials(t *testing.T) {
 	n.SetDialResult(nil)
 
 	cPool := NewConnectionPool(n, generatePublicKey())
-	newConns := make(chan net.Connectioner)
+	newConns := make(chan net.Connection)
 	iterCnt := 20
 	for i := 0;	i < iterCnt; i++ {
 		go func() {

@@ -28,8 +28,6 @@ const HandshakeReq = "/handshake/1.0/handshake-req/"
 const HandshakeResp = "/handshake/1.0/handshake-resp/"
 
 
-/////////////////////////// functions below - they don't provide Handshake protocol state
-
 // Generate handshake and session data between node and remoteNode
 // Returns handshake data to send to removeNode and a network session data object that includes the session enc/dec sym key and iv
 // Node that NetworkSession is not yet authenticated - this happens only when the handshake response is processed and authenticated
@@ -56,13 +54,6 @@ func GenerateHandshakeRequestData(localPublicKey crypto.PublicKey, localPrivateK
 	data.SessionId = iv
 	data.Iv = iv
 
-	/*
-		// attempt to refresh the node's public ip address
-		node.RefreshPubTCPAddress()
-
-		// announce the pub ip address of the node - not the private one
-		data.TcpAddress = node.PubTCPAddress()
-	*/
 	ephemeral, err := btcec.NewPrivateKey(btcec.S256())
 	if err != nil {
 		return nil, nil, err
@@ -108,39 +99,6 @@ func GenerateHandshakeRequestData(localPublicKey crypto.PublicKey, localPrivateK
 	return data, session, nil
 }
 
-/*
-// Authenticate that the sender node generated the signed data
-func authenticateSenderNode(req *pb.HandshakeData) error {
-
-	// get public key from data
-	snderPubKey, err := crypto.NewPublicKey(req.NodePubKey)
-	if err != nil {
-		return err
-	}
-
-	// copy the signature
-	sig := req.Sign
-
-	// recreate the signed binary corpus - all data without the signature
-	req.Sign = ""
-	bin, err := proto.Marshal(req)
-	if err != nil {
-		return err
-	}
-
-	// Verify that the signed data was signed by the public key
-	v, err := snderPubKey.VerifyString(bin, sig)
-	if err != nil {
-		return err
-	}
-
-	if !v {
-		return errors.New("failed to verify data is from claimed sender node")
-	}
-
-	return nil
-
-}*/
 
 // Process a session handshake request data from remoteNode r
 // Returns Handshake data to send to r and a network session data object that includes the session sym  enc/dec key

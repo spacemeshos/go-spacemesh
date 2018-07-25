@@ -288,7 +288,7 @@ func (s *swarm) processMessage(ime net.IncomingMessageEvent) {
 }
 
 // update a full connection to the routing table.
-func (s *swarm) updateConnection(nc net.Connectioner) {
+func (s *swarm) updateConnection(nc net.Connection) {
 	if nc.RemotePublicKey() != nil {
 		s.dht.Update(node.New(nc.RemotePublicKey(), nc.RemoteAddr().String()))
 	}

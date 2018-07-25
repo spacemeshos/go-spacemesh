@@ -30,7 +30,7 @@ func (msg NetMessage) Error() error {
 	return msg.err
 }
 
-func waitForCallbackOrTimeout(t *testing.T, outchan chan Connectioner, expectedSession NetworkSession){
+func waitForCallbackOrTimeout(t *testing.T, outchan chan Connection, expectedSession NetworkSession){
 	select {
 	case res := <- outchan :
 		assert.Equal(t, expectedSession.ID(),res.Session().ID(),"wrong session received")

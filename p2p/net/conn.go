@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/crypto"
-	"github.com/spacemeshos/go-spacemesh/p2p/delimited"
 	"github.com/spacemeshos/go-spacemesh/p2p/net/wire"
 	"gopkg.in/op/go-logging.v1"
 	"io"
@@ -28,7 +27,7 @@ const (
 	Remote
 )
 
-type Connectioner interface {
+type Connection interface {
 	fmt.Stringer
 
 	ID() string
@@ -47,8 +46,8 @@ type Connectioner interface {
 }
 
 // A network connection supporting full-duplex messaging
-// Connection is an io.Writer and an io.Closer
-type Connection struct {
+// FormattedConnection is an io.Writer and an io.Closer
+type FormattedConnection struct {
 	logger *logging.Logger
 	// metadata for logging / debugging
 	id         string           // uuid for logging
@@ -63,9 +62,9 @@ type Connection struct {
 }
 
 type networker interface {
-	HandlePreSessionIncomingMessage(c Connectioner, msg []byte) error
+	HandlePreSessionIncomingMessage(c Connection, msg []byte) error
 	IncomingMessages() chan IncomingMessageEvent
-	ClosingConnections() chan Connectioner
+	ClosingConnections() chan Connection
 	GetNetworkId() int8
 }
 
@@ -75,17 +74,17 @@ type readWriteCloseAddresser interface {
 }
 
 // Create a new connection wrapping a net.Conn with a provided connection manager
-func newConnection(conn readWriteCloseAddresser, netw networker, remotePub crypto.PublicKey, log *logging.Logger) *Connection {
+func newConnection(conn readWriteCloseAddresser, netw networker, formatter wire.Formatter, remotePub crypto.PublicKey, log *logging.Logger) *FormattedConnection {
 
 	// todo pass wire format inside and make it pluggable
 	// todo parametrize channel size - hard-coded for now
-	connection := &Connection{
+	connection := &FormattedConnection{
 		logger:     log,
 		id:         crypto.UUIDString(),
 		created:    time.Now(),
 		remotePub:  remotePub,
 		remoteAddr: conn.RemoteAddr(),
-		formatter:  delimited.NewChan(10),
+		formatter:  formatter,
 		networker:  netw,
 		closeChan:  make(chan struct{}),
 	}
@@ -94,57 +93,57 @@ func newConnection(conn readWriteCloseAddresser, netw networker, remotePub crypt
 	return connection
 }
 
-func (c *Connection) ID() string {
+func (c *FormattedConnection) ID() string {
 	return c.id
 }
 
-func (c *Connection) RemoteAddr() net.Addr {
+func (c *FormattedConnection) RemoteAddr() net.Addr {
 	return c.remoteAddr
 }
 
-func (c *Connection) SetRemotePublicKey(key crypto.PublicKey) {
+func (c *FormattedConnection) SetRemotePublicKey(key crypto.PublicKey) {
 	c.remotePub = key
 }
 
-func (c Connection) RemotePublicKey() crypto.PublicKey {
+func (c FormattedConnection) RemotePublicKey() crypto.PublicKey {
 	return c.remotePub
 }
 
-func (c *Connection) SetSession(session NetworkSession) {
+func (c *FormattedConnection) SetSession(session NetworkSession) {
 	c.session = session
 }
 
-func (c *Connection) Session() NetworkSession {
+func (c *FormattedConnection) Session() NetworkSession {
 	return c.session
 }
 
-func (c *Connection) String() string {
+func (c *FormattedConnection) String() string {
 	return c.id
 }
 
-func (c *Connection) publish(message []byte) {
+func (c *FormattedConnection) publish(message []byte) {
 	c.networker.IncomingMessages() <- IncomingMessageEvent{c, message}
 }
 
-func (c *Connection) IncomingChannel() chan []byte {
+func (c *FormattedConnection) IncomingChannel() chan []byte {
 	return c.formatter.In()
 }
 
 // Send binary data to a connection
 // data is copied over so caller can get rid of the data
 // Concurrency: can be called from any go routine
-func (c *Connection) Send(m []byte) error {
+func (c *FormattedConnection) Send(m []byte) error {
 	return c.formatter.Out(m)
 }
 
 // Close closes the connection (implements io.Closer). It is go safe.
-func (c *Connection) Close() {
+func (c *FormattedConnection) Close() {
 	c.closeOnce.Do(func() {
 		c.closeChan <- struct{}{}
 	})
 }
 
-func (c *Connection) shutdown(err error) {
+func (c *FormattedConnection) shutdown(err error) {
 	c.logger.Info("shutdown. err=%v", err)
 	c.formatter.Close()
 	c.networker.ClosingConnections() <- c
@@ -152,7 +151,7 @@ func (c *Connection) shutdown(err error) {
 
 // Push outgoing message to the connections
 // Read from the incoming new messages and send down the connection
-func (c *Connection) beginEventProcessing() {
+func (c *FormattedConnection) beginEventProcessing() {
 
 	var err error
 
