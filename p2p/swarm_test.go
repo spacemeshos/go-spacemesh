@@ -6,15 +6,15 @@ import (
 	"time"
 
 	"github.com/gogo/protobuf/proto"
+	"github.com/pkg/errors"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
+	"github.com/spacemeshos/go-spacemesh/p2p/dht"
+	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
-	"github.com/stretchr/testify/assert"
-	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/timesync"
-	"github.com/pkg/errors"
-	"github.com/spacemeshos/go-spacemesh/p2p/dht"
+	"github.com/stretchr/testify/assert"
 )
 
 func p2pTestInstance(t testing.TB, config config.Config) *swarm {
@@ -43,7 +43,6 @@ func Test_newSwarm(t *testing.T) {
 	s.Shutdown()
 }
 
-
 func TestSwarm_signMessage(t *testing.T) {
 	n, _ := node.GenerateTestNode(t)
 	pm := &pb.ProtocolMessage{
@@ -70,20 +69,20 @@ func TestSwarm_Shutdown(t *testing.T) {
 	s.Shutdown()
 
 	select {
-		case _, ok := <-s.shutdown:
-			assert.False(t, ok)
-		case <-time.After(1 * time.Second):
-			t.Error("Failed to shutdown")
+	case _, ok := <-s.shutdown:
+		assert.False(t, ok)
+	case <-time.After(1 * time.Second):
+		t.Error("Failed to shutdown")
 	}
 }
 
 func TestSwarm_processMessage(t *testing.T) {
 	s := swarm{}
-    s.lNode, _ = node.GenerateTestNode(t)
-    r := node.GenerateRandomNodeData()
+	s.lNode, _ = node.GenerateTestNode(t)
+	r := node.GenerateRandomNodeData()
 	c := &net.ConnectionMock{}
 	c.SetRemotePublicKey(r.PublicKey())
-	ime := net.IncomingMessageEvent{ Message: nil, Conn: c }
+	ime := net.IncomingMessageEvent{Message: nil, Conn: c}
 	s.processMessage(ime) // should error
 
 	assert.True(t, c.Closed())
@@ -212,7 +211,6 @@ func Test_newProtocolMessageMeatadata(t *testing.T) {
 
 }
 
-
 func TestSwarm_onRemoteClientMessage(t *testing.T) {
 	p := p2pTestInstance(t, config.DefaultConfig())
 	nmock := &net.ConnectionMock{}
@@ -221,7 +219,7 @@ func TestSwarm_onRemoteClientMessage(t *testing.T) {
 	// Test bad format
 
 	msg := []byte("badbadformat")
-	imc := net.IncomingMessageEvent{ nmock, msg }
+	imc := net.IncomingMessageEvent{nmock, msg}
 	err := p.onRemoteClientMessage(imc)
 	assert.Equal(t, err, ErrBadFormat)
 
@@ -229,7 +227,7 @@ func TestSwarm_onRemoteClientMessage(t *testing.T) {
 
 	realmsg := &pb.CommonMessageData{
 		SessionId: []byte("test"),
-		Payload: []byte("test"),
+		Payload:   []byte("test"),
 		Timestamp: time.Now().Add(timesync.MaxAllowedMessageDrift + time.Minute).Unix(),
 	}
 	bin, _ := proto.Marshal(realmsg)
@@ -243,7 +241,7 @@ func TestSwarm_onRemoteClientMessage(t *testing.T) {
 
 	cmd := &pb.CommonMessageData{
 		SessionId: []byte("test"),
-		Payload: []byte(""),
+		Payload:   []byte(""),
 		Timestamp: time.Now().Unix(),
 	}
 
@@ -265,7 +263,6 @@ func TestSwarm_onRemoteClientMessage(t *testing.T) {
 
 	// Test bad session
 
-
 	session := &net.SessionMock{}
 	session.SetDecrypt(nil, errors.New("fail"))
 	imc.Conn.SetSession(session)
@@ -284,7 +281,7 @@ func TestSwarm_onRemoteClientMessage(t *testing.T) {
 
 	goodmsg := &pb.ProtocolMessage{
 		Metadata: newProtocolMessageMetadata(p.lNode.PublicKey(), exampleProtocol, false), // not signed
-		Payload: []byte(examplePayload),
+		Payload:  []byte(examplePayload),
 	}
 
 	goodbin, _ := proto.Marshal(goodmsg)
@@ -314,7 +311,7 @@ func TestSwarm_onRemoteClientMessage(t *testing.T) {
 	// Test no err
 
 	c := p.RegisterProtocol(exampleProtocol)
-	go func () { <-c }()
+	go func() { <-c }()
 
 	err = p.onRemoteClientMessage(imc)
 

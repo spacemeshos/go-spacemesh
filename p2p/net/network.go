@@ -6,13 +6,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
+	"github.com/spacemeshos/go-spacemesh/p2p/delimited"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"gopkg.in/op/go-logging.v1"
 	"net"
 	"sync"
 	"time"
-	"github.com/spacemeshos/go-spacemesh/p2p/delimited"
 )
 
 // Net is a connection factory able to dial remote endpoints
@@ -70,14 +70,14 @@ type netImpl struct {
 func NewNet(conf config.Config, localEntity *node.LocalNode) (Net, error) {
 
 	n := &netImpl{
-		networkId:        conf.NetworkID,
-		localNode:        localEntity,
-		logger:           localEntity.Logger,
-		tcpListenAddress: localEntity.Address(),
-		regNewRemoteConn:			make([]chan Connection, 0),
+		networkId:          conf.NetworkID,
+		localNode:          localEntity,
+		logger:             localEntity.Logger,
+		tcpListenAddress:   localEntity.Address(),
+		regNewRemoteConn:   make([]chan Connection, 0),
 		incomingMessages:   make(chan IncomingMessageEvent),
 		closingConnections: make(chan Connection, 20),
-		config:           conf,
+		config:             conf,
 	}
 
 	err := n.listen()
@@ -236,7 +236,7 @@ func (n *netImpl) acceptTCP() {
 
 		n.logger.Debug("Got new connection... Remote Address: %s", netConn.RemoteAddr())
 		formatter := delimited.NewChan(10)
-		c := newConnection(netConn, n,formatter, nil, n.logger)
+		c := newConnection(netConn, n, formatter, nil, n.logger)
 
 		go c.beginEventProcessing()
 		// network won't publish the connection before it the remote node had established a session

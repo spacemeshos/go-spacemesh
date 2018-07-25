@@ -6,12 +6,12 @@ import (
 	"github.com/btcsuite/btcutil/base58"
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"sync"
 	"time"
-	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 // todo: should be a kad param and configurable

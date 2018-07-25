@@ -9,16 +9,16 @@ import (
 	"io"
 	"time"
 
+	"bytes"
+	"errors"
+	"fmt"
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
-	"strings"
 	"github.com/spacemeshos/go-spacemesh/p2p/version"
-	"fmt"
-	"bytes"
-	"errors"
+	"strings"
 )
 
 // HandshakeReq specifies the handshake protocol request message identifier. pattern is [protocol][version][method-name].
@@ -26,7 +26,6 @@ const HandshakeReq = "/handshake/1.0/handshake-req/"
 
 // HandshakeResp specifies the handshake protocol response message identifier.
 const HandshakeResp = "/handshake/1.0/handshake-resp/"
-
 
 // Generate handshake and session data between node and remoteNode
 // Returns handshake data to send to removeNode and a network session data object that includes the session enc/dec sym key and iv
@@ -98,7 +97,6 @@ func GenerateHandshakeRequestData(localPublicKey crypto.PublicKey, localPrivateK
 
 	return data, session, nil
 }
-
 
 // Process a session handshake request data from remoteNode r
 // Returns Handshake data to send to r and a network session data object that includes the session sym  enc/dec key

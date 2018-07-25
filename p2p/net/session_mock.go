@@ -1,14 +1,13 @@
 package net
 
 type SessionMock struct {
-
 	decResult []byte
-	decError error
+	decError  error
 	encResult []byte
-	encError error
+	encError  error
 
 	pubkey []byte
-	keyM []byte
+	keyM   []byte
 }
 
 func (sm *SessionMock) ID() []byte {

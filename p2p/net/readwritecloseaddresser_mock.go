@@ -6,9 +6,9 @@ import (
 )
 
 type ReadWriteCloseAddresserMock struct {
-	readIn  []byte
-	readErr error
-	readCnt int
+	readIn   []byte
+	readErr  error
+	readCnt  int
 	readChan chan struct{}
 
 	writeErr error

@@ -4,9 +4,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"gopkg.in/op/go-logging.v1"
-	"time"
 	"net"
 	"sync/atomic"
+	"time"
 )
 
 type ReadWriteCloserMock struct {
@@ -58,7 +58,7 @@ func NewNetworkMock() *NetworkMock {
 	}
 }
 
-func (n * NetworkMock) reset() {
+func (n *NetworkMock) reset() {
 	n.dialCount = 0
 	n.dialDelayMs = 0
 	n.dialErr = nil
@@ -71,8 +71,6 @@ func (n *NetworkMock) SetDialResult(err error) {
 func (n *NetworkMock) SetDialDelayMs(delay int8) {
 	n.dialDelayMs = delay
 }
-
-
 
 func (n *NetworkMock) Dial(address string, remotePublicKey crypto.PublicKey, networkId int8) (Connection, error) {
 	n.networkId = networkId
@@ -110,7 +108,7 @@ func (n *NetworkMock) ClosingConnections() chan Connection {
 	return n.closingConn
 }
 
-func (n* NetworkMock) IncomingMessages() chan IncomingMessageEvent {
+func (n *NetworkMock) IncomingMessages() chan IncomingMessageEvent {
 	return n.incomingMessages
 }
 

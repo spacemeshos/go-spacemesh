@@ -50,7 +50,7 @@ func (d *KadDHT) Bootstrap() error {
 	}
 
 	timeout := time.NewTimer(BootstrapTimeout)
-// TODO: Issue a healthcheck / refresh loop every x interval.
+	// TODO: Issue a healthcheck / refresh loop every x interval.
 BOOTLOOP:
 	for {
 		reschan := make(chan error)

@@ -3,19 +3,18 @@ package dht
 import "github.com/spacemeshos/go-spacemesh/p2p/node"
 
 type DHT interface {
-		Update(node node.Node)
-		Lookup(pubkey string) (node.Node, error)
-		Bootstrap() error
+	Update(node node.Node)
+	Lookup(pubkey string) (node.Node, error)
+	Bootstrap() error
 }
 
-
 type MockDHT struct {
-	update func(n node.Node)
+	update      func(n node.Node)
 	updateCount int
-	bsres error
-	bsCount int
-	lookupRes node.Node
-	lookupErr error
+	bsres       error
+	bsCount     int
+	lookupRes   node.Node
+	lookupErr   error
 }
 
 func (m *MockDHT) SetUpdate(f func(n node.Node)) {
@@ -28,7 +27,9 @@ func (m *MockDHT) SetLookupResult(node node.Node, err error) {
 }
 
 func (m *MockDHT) Update(node node.Node) {
-	if m.update != nil { m.update(node) }
+	if m.update != nil {
+		m.update(node)
+	}
 	m.updateCount++
 }
 

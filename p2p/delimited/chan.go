@@ -1,9 +1,9 @@
 package delimited
 
 import (
+	"fmt"
 	"io"
 	"sync"
-	"fmt"
 )
 
 // Chan is a delimited duplex channel. It is used to have a channel interface
@@ -19,7 +19,7 @@ type Chan struct {
 
 // Satisfy formatter.
 
-func (s *Chan) In() chan[]byte {
+func (s *Chan) In() chan []byte {
 	return s.inMsgChan
 }
 
@@ -100,7 +100,7 @@ Loop:
 		}
 	}
 
-	s.Close() 			// close writer
+	s.Close() // close writer
 	close(s.inMsgChan)
 }
 
@@ -133,7 +133,7 @@ Loop:
 // Close the Chan
 func (s *Chan) Close() {
 	s.closeOnce.Do(func() {
-		close(s.CloseChan) 		// close both writer and reader
-		s.connection.Close() 	// close internal connection
+		close(s.CloseChan)   // close both writer and reader
+		s.connection.Close() // close internal connection
 	})
 }

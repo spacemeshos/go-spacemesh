@@ -1,14 +1,14 @@
 package connectionpool
 
 import (
+	"errors"
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/stretchr/testify/assert"
-	"testing"
-	"errors"
-	"time"
-	"fmt"
 	"math/rand"
+	"testing"
+	"time"
 )
 
 func generatePublicKey() crypto.PublicKey {
@@ -32,7 +32,6 @@ func TestGetConnectionWithNoConnection(t *testing.T) {
 	assert.Equal(t, remotePub.String(), conn.RemotePublicKey().String())
 	assert.Equal(t, int32(1), net.GetDialCount())
 }
-
 
 func TestGetConnectionWithConnection(t *testing.T) {
 	net := net.NewNetworkMock()
@@ -83,7 +82,7 @@ func TestRemoteConnectionWithNoConnection(t *testing.T) {
 func TestRemoteConnectionWithConnection(t *testing.T) {
 	n := net.NewNetworkMock()
 	remotePub := generatePublicKey()
-	addr :="1.1.1.1"
+	addr := "1.1.1.1"
 	n.SetDialDelayMs(50)
 	n.SetDialResult(nil)
 
@@ -106,7 +105,7 @@ func TestRemoteConnectionWithConnection(t *testing.T) {
 func TestRemoteConnectionDuringDial(t *testing.T) {
 	n := net.NewNetworkMock()
 	remotePub := generatePublicKey()
-	addr :="1.1.1.1"
+	addr := "1.1.1.1"
 	n.SetDialDelayMs(100)
 	n.SetDialResult(nil)
 
@@ -119,7 +118,7 @@ func TestRemoteConnectionDuringDial(t *testing.T) {
 	rConn := net.NewConnectionMock(remotePub, net.Remote)
 	time.Sleep(20 * time.Millisecond)
 	cPool.newRemoteConn <- rConn
-	getConn := <- waitCh
+	getConn := <-waitCh
 	assert.Equal(t, remotePub.String(), getConn.RemotePublicKey().String())
 	assert.Equal(t, rConn.ID(), getConn.ID())
 	assert.Equal(t, int32(1), n.GetDialCount())
@@ -131,7 +130,7 @@ func TestShutdown(t *testing.T) {
 	n.SetDialDelayMs(100)
 	n.SetDialResult(nil)
 	remotePub := generatePublicKey()
-	addr :="1.1.1.1"
+	addr := "1.1.1.1"
 
 	cPool := NewConnectionPool(n, generatePublicKey())
 	newConns := make(chan net.Connection)
@@ -141,7 +140,7 @@ func TestShutdown(t *testing.T) {
 	}()
 	time.Sleep(20 * time.Millisecond)
 	cPool.Shutdown()
-	conn := <- newConns
+	conn := <-newConns
 	cMock := conn.(*net.ConnectionMock)
 	assert.True(t, cMock.Closed())
 }
@@ -151,7 +150,7 @@ func TestGetConnectionAfterShutdown(t *testing.T) {
 	n.SetDialDelayMs(100)
 	n.SetDialResult(nil)
 	remotePub := generatePublicKey()
-	addr :="1.1.1.1"
+	addr := "1.1.1.1"
 
 	cPool := NewConnectionPool(n, generatePublicKey())
 	cPool.Shutdown()
@@ -168,7 +167,7 @@ func TestShutdownWithMultipleDials(t *testing.T) {
 	cPool := NewConnectionPool(n, generatePublicKey())
 	newConns := make(chan net.Connection)
 	iterCnt := 20
-	for i := 0;	i < iterCnt; i++ {
+	for i := 0; i < iterCnt; i++ {
 		go func() {
 			addr := generateIpAddress()
 			key := generatePublicKey()

@@ -1,11 +1,11 @@
 package node
 
 import (
-	"testing"
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/stretchr/testify/assert"
-	"fmt"
 	"strings"
+	"testing"
 )
 
 func TestNew(t *testing.T) {

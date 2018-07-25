@@ -17,9 +17,9 @@ import (
 // enc/dec is using an ephemeral sym key exchanged securely between the peers via the handshake protocol
 // The handshake protocol goal is to create an authenticated network session.
 type NetworkSession interface {
-	ID() []byte         // Unique session id
-	KeyM() []byte       // session shared sym key for mac - 32 bytes
-	PubKey() []byte     // 65 bytes session-only pub key uncompressed
+	ID() []byte     // Unique session id
+	KeyM() []byte   // session shared sym key for mac - 32 bytes
+	PubKey() []byte // 65 bytes session-only pub key uncompressed
 
 	Decrypt(in []byte) ([]byte, error) // decrypt data using session dec key
 	Encrypt(in []byte) ([]byte, error) // encrypt data using session enc key

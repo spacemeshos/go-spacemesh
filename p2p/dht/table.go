@@ -27,12 +27,12 @@ const (
 type RoutingTable interface {
 
 	// table ops
-	Update(p node.Node)                // adds a peer to the table
-	Remove(p node.Node)                // remove a peer from the table
-	Find(req PeerByIDRequest)          // find a specific peer by node.DhtID
-	NearestPeer(req PeerByIDRequest)   // nearest peer to a node.DhtID
-	NearestPeers(req NearestPeersReq)  // ip to n nearest peers to a node.DhtID
-	Size(callback chan int)            // total # of peers in the table
+	Update(p node.Node)               // adds a peer to the table
+	Remove(p node.Node)               // remove a peer from the table
+	Find(req PeerByIDRequest)         // find a specific peer by node.DhtID
+	NearestPeer(req PeerByIDRequest)  // nearest peer to a node.DhtID
+	NearestPeers(req NearestPeersReq) // ip to n nearest peers to a node.DhtID
+	Size(callback chan int)           // total # of peers in the table
 
 	Print()
 }
@@ -357,7 +357,6 @@ func (rt *routingTableImpl) size(callback chan int) {
 	}
 	go func() { callback <- tot }()
 }
-
 
 // Print a descriptive statement about the provided RoutingTable
 // Only call from external clients not from internal event handlers

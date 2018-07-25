@@ -10,9 +10,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/timesync"
 
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"github.com/gogo/protobuf/proto"
-	"errors"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/connectionpool"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
@@ -122,7 +122,6 @@ func newProtocolMessageMetadata(author crypto.PublicKey, protocol string, gossip
 func (s *swarm) localNode() *node.LocalNode {
 	return s.lNode
 }
-
 
 func (s *swarm) connectionPool() *connectionpool.ConnectionPool {
 	return s.cPool
@@ -341,7 +340,7 @@ var (
 	ErrFailDecrypt = errors.New("can't decrypt message payload with session key")
 	ErrAuthAuthor  = errors.New("failed to verify author")
 	ErrNoProtocol  = errors.New("Received msg to an unsupported protocol")
-	ErrNoSession = errors.New("connection is missing a session")
+	ErrNoSession   = errors.New("connection is missing a session")
 )
 
 // onRemoteClientMessage pre-process a protocol message from a remote client handling decryption and authentication

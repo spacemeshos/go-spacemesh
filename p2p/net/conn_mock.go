@@ -2,9 +2,9 @@ package net
 
 import (
 	"github.com/spacemeshos/go-spacemesh/crypto"
-	"time"
-	"sync/atomic"
 	"net"
+	"sync/atomic"
+	"time"
 )
 
 type ConnectionMock struct {
@@ -41,11 +41,9 @@ func (cm *ConnectionMock) SetRemotePublicKey(key crypto.PublicKey) {
 	cm.remotePub = key
 }
 
-
 func (cm *ConnectionMock) RemoteAddr() net.Addr {
 	return &net.IPAddr{}
 }
-
 
 func (cm *ConnectionMock) SetSession(session NetworkSession) {
 	cm.session = session

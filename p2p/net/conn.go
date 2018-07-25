@@ -4,11 +4,11 @@ import (
 	"errors"
 	"time"
 
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/net/wire"
 	"gopkg.in/op/go-logging.v1"
 	"io"
-	"fmt"
 	"net"
 	"sync"
 )
@@ -50,7 +50,7 @@ type Connection interface {
 type FormattedConnection struct {
 	logger *logging.Logger
 	// metadata for logging / debugging
-	id         string           // uuid for logging
+	id         string // uuid for logging
 	created    time.Time
 	remotePub  crypto.PublicKey
 	remoteAddr net.Addr

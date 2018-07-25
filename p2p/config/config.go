@@ -27,10 +27,10 @@ func duration(duration string) (dur time.Duration) {
 
 // Config defines the configuration options for the Spacemesh peer-to-peer networking layer
 type Config struct {
-	SecurityParam   int           `mapstructure:"security-param"`
-	FastSync        bool          `mapstructure:"fast-sync"`
-	TCPPort         int           `mapstructure:"tcp-port"`
-	NodeID          string        `mapstructure:"node-id"`
+	SecurityParam   int    `mapstructure:"security-param"`
+	FastSync        bool   `mapstructure:"fast-sync"`
+	TCPPort         int    `mapstructure:"tcp-port"`
+	NodeID          string `mapstructure:"node-id"`
 	DialTimeout     time.Duration
 	ConnKeepAlive   time.Duration
 	NetworkID       int8          `mapstructure:"network-id"`

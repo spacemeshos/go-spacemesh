@@ -1,14 +1,14 @@
 package net
 
 import (
-	"testing"
-	"github.com/spacemeshos/go-spacemesh/crypto"
 	"fmt"
-	"math/rand"
-	"github.com/stretchr/testify/assert"
-	"time"
-	"net"
+	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/delimited"
+	"github.com/stretchr/testify/assert"
+	"math/rand"
+	"net"
+	"testing"
+	"time"
 )
 
 func generatePublicKey() crypto.PublicKey {
@@ -19,7 +19,6 @@ func generatePublicKey() crypto.PublicKey {
 func generateIpAddress() string {
 	return fmt.Sprintf("%d.%d.%d.%d", rand.Int31n(255), rand.Int31n(255), rand.Int31n(255), rand.Int31n(255))
 }
-
 
 func TestSendReceiveMessage(t *testing.T) {
 	netw := NewNetworkMock()
@@ -32,7 +31,7 @@ func TestSendReceiveMessage(t *testing.T) {
 	msg := "hello"
 	err := conn.Send([]byte(msg))
 	assert.NoError(t, err)
-	assert.Equal(t, len(msg) + 1, len(rwcam.WriteOut()))  // the +1 is because of the delimited wire format
+	assert.Equal(t, len(msg)+1, len(rwcam.WriteOut())) // the +1 is because of the delimited wire format
 	rwcam.SetReadResult(rwcam.WriteOut(), nil)
 	data := <-netw.IncomingMessages()
 	assert.Equal(t, []byte(msg), data.Message)

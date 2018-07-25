@@ -211,14 +211,14 @@ func TestRoutingTableImpl_Remove(t *testing.T) {
 	rt.Update(rnode)
 
 	cnode := make(PeerOpChannel)
-	rt.Find(PeerByIDRequest{rnode.DhtID(),cnode })
-	n := <- cnode
+	rt.Find(PeerByIDRequest{rnode.DhtID(), cnode})
+	n := <-cnode
 	assert.NotEqual(t, n.Peer, node.EmptyNode)
 
 	rt.Remove(rnode)
 
-	rt.Find(PeerByIDRequest{rnode.DhtID(),cnode })
-	n = <- cnode
+	rt.Find(PeerByIDRequest{rnode.DhtID(), cnode})
+	n = <-cnode
 	assert.Equal(t, n.Peer, node.EmptyNode)
 }
 
