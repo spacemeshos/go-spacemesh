@@ -49,7 +49,7 @@ type swarm struct {
 
 	cPool *connectionpool.ConnectionPool
 
-	dht *dht.DHT
+	dht dht.DHT
 
 	// Shutdown the loop
 	shutdown chan struct{} // local request to kill the swarm from outside. e.g when local node is shutting down
@@ -123,6 +123,7 @@ func (s *swarm) localNode() *node.LocalNode {
 	return s.lNode
 }
 
+
 func (s *swarm) connectionPool() *connectionpool.ConnectionPool {
 	return s.cPool
 }
@@ -145,7 +146,9 @@ func signMessage(pv crypto.PrivateKey, pm *pb.ProtocolMessage) error {
 	return nil
 }
 
+// authAuthor authorizes that a message is signed by its claimed author
 func authAuthor(pm *pb.ProtocolMessage) error {
+	// TODO: consider getting pubkey from outside. attackar coul'd just manipulate the whole message pubkey and sign.
 	sign := pm.Metadata.AuthorSign
 	sPubkey := pm.Metadata.AuthPubKey
 
@@ -154,7 +157,7 @@ func authAuthor(pm *pb.ProtocolMessage) error {
 		return fmt.Errorf("could'nt create public key from %v, err: %v", hex.EncodeToString(sPubkey), err)
 	}
 
-	pm.Metadata.AuthorSign = ""
+	pm.Metadata.AuthorSign = "" // we have to verify the message without the sign
 
 	bin, err := proto.Marshal(pm)
 
@@ -188,11 +191,10 @@ func authAuthor(pm *pb.ProtocolMessage) error {
 // req.reqID: globally unique id string - used for tracking messages we didn't get a response for yet
 // req.msg: marshaled message data
 // req.destId: receiver remote node public key/id
-
 // Local request to send a message to a remote node
 func (s *swarm) SendMessage(peerPubKey string, protocol string, payload []byte) error {
 
-	peer, err := s.dht.Lookup(peerPubKey)
+	peer, err := s.dht.Lookup(peerPubKey) // blocking, might issue a network lookup that'll take time.
 
 	if err != nil {
 		return err
@@ -263,32 +265,46 @@ func (s *swarm) RegisterProtocol(protocol string) chan service.Message {
 	return mchan
 }
 
+// Shutdown sends a shutdown signal to all running services of swarm and then runs an internal shutdown to cleanup.
 func (s *swarm) Shutdown() {
-	s.shutdown <- struct{}{}
+	close(s.shutdown)
+	<-s.shutdown // Block until really closes.
+	s.shutdownInternal()
 }
 
-func (s *swarm) shutDownInternal() {
+// shutdown gracefully shuts down swarm services.
+func (s *swarm) shutdownInternal() {
 	//TODO : Gracefully shutdown swarm => finish incmoing / outgoing msgs
 	s.network.Shutdown()
 }
 
+// process an incoming message
+func (s *swarm) processMessage(ime net.IncomingMessageEvent) {
+	err := s.onRemoteClientMessage(ime)
+	if err != nil {
+		ime.Conn.Close()
+		// TODO: differentiate action on errors
+	}
+}
+
+// update a full connection to the routing table.
+func (s *swarm) updateConnection(nc net.Connectioner) {
+	if nc.RemotePublicKey() != nil {
+		s.dht.Update(node.New(nc.RemotePublicKey(), nc.RemoteAddr().String()))
+	}
+}
+
+// listenToNetworkMessages is waiting for network events from net as new connections or messages and handles them.
 func (s *swarm) listenToNetworkMessages() {
 	newconnections := s.network.SubscribeOnNewRemoteConnections()
 Loop:
 	for {
 		select {
 		case ime := <-s.network.IncomingMessages():
-			go func(ime net.IncomingMessageEvent) {
-				err := s.onRemoteClientMessage(ime)
-				if err != nil {
-					ime.Conn.Close()
-					// TODO: differentiate action on errors
-				}
-			}(ime)
+			go s.processMessage(ime)
 		case nc := <-newconnections:
-			go func(nc net.Connectioner) { s.dht.Update(node.New(nc.RemotePublicKey(), nc.RemoteAddr().String())) }(nc)
+			go s.updateConnection(nc)
 		case <-s.shutdown:
-			s.shutdown <- struct{}{}
 			break Loop
 		}
 	}
@@ -303,8 +319,6 @@ Loop:
 	for {
 		select {
 		case <-s.shutdown:
-			s.shutDownInternal()
-			s.shutdown <- struct{}{}
 			break Loop
 
 		case <-checkTimeSync.C:
@@ -327,6 +341,7 @@ var (
 	ErrFailDecrypt = errors.New("can't decrypt message payload with session key")
 	ErrAuthAuthor  = errors.New("failed to verify author")
 	ErrNoProtocol  = errors.New("Received msg to an unsupported protocol")
+	ErrNoSession = errors.New("connection is missing a session")
 )
 
 // onRemoteClientMessage pre-process a protocol message from a remote client handling decryption and authentication
@@ -356,6 +371,10 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 	// protocol messages are encrypted in payload
 	// Locate the session
 	session := msg.Conn.Session()
+
+	if session == nil {
+		return ErrNoSession
+	}
 
 	decPayload, err := session.Decrypt(c.Payload)
 	if err != nil {

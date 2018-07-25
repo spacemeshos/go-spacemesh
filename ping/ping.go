@@ -111,21 +111,22 @@ func (p *Ping) sendRequest(target string, reqid crypto.UUID, ping *pb.Ping) (cha
 	p.pending[reqid] = pchan
 	p.pendMuxtex.Unlock()
 
-	remove := func(err error) error {
+	remove := func() {
 		p.pendMuxtex.Lock()
 		delete(p.pending, reqid)
 		p.pendMuxtex.Unlock()
-		return err
 	}
 
 	payload, err := proto.Marshal(ping)
 	if err != nil {
-		return nil, remove(err)
+		remove()
+		return nil, err
 	}
 
 	err = p.p2p.SendMessage(target, protocol, payload)
 	if err != nil {
-		return nil, remove(err)
+		remove()
+		return nil, err
 	}
 
 	return pchan, nil

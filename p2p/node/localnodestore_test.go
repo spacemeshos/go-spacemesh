@@ -58,7 +58,7 @@ func TestNodeLocalStore(t *testing.T) {
 	node1, err := NewLocalNode(cfg, address, true)
 	assert.NoError(t, err, "local node creation error")
 	assert.Equal(t, node.String(), node1.String(), "expected restored node")
-	assert.Equal(t, int(node.NetworkID()), cfg.NetworkID, "Expected same network id")
+	assert.Equal(t, node.NetworkID(), cfg.NetworkID, "Expected same network id")
 
 	// cleanup
 	filesystem.DeleteSpacemeshDataFolders(t)

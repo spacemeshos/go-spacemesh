@@ -83,7 +83,7 @@ func New(key crypto.PublicKey, address string) Node {
 	return Node{key, address}
 }
 
-// NewNodeFromString creates a remote identity from a string in the following format: 126.0.0.1:3572/QmcjTLy94HGFo4JoYibudGeBV2DSBb6E4apBjFsBGnMsWa .
+// NewNodeFromString creates a remote identity from a string in the following format: 126.0.0.1:3572/r9gJRWVB9JVPap2HKnduoFySvHtVTfJdQ4WG8DriUD82 .
 func NewNodeFromString(data string) (Node, error) {
 	items := strings.Split(data, "/")
 	if len(items) != 2 {
@@ -96,7 +96,7 @@ func NewNodeFromString(data string) (Node, error) {
 	return Node{pubk, items[0]}, nil
 }
 
-// StringFromNode generates a string that represent a node in the network in following format: 126.0.0.1:3572/QmcjTLy94HGFo4JoYibudGeBV2DSBb6E4apBjFsBGnMsWa.
+// StringFromNode generates a string that represent a node in the network in following format: 126.0.0.1:3572/r9gJRWVB9JVPap2HKnduoFySvHtVTfJdQ4WG8DriUD82.
 func StringFromNode(n Node) string {
 	return strings.Join([]string{n.Address(), n.PublicKey().String()}, "/")
 }

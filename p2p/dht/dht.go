@@ -20,9 +20,9 @@ var (
 	ErrEmptyRoutingTable = errors.New("no nodes to query - routing table is empty")
 )
 
-// DHT represents the Distributed Hash Table, it holds the Routing Table local node cache. and a FindNode kademlia protocol.
-// DHT Is created with a localNode identity as base. (DhtID)
-type DHT struct {
+// KadDHT represents the Distributed Hash Table, it holds the Routing Table local node cache. and a FindNode kademlia protocol.
+// KadDHT Is created with a localNode identity as base. (DhtID)
+type KadDHT struct {
 	config config.SwarmConfig
 
 	local *node.LocalNode
@@ -34,8 +34,8 @@ type DHT struct {
 }
 
 // New creates a new dht
-func New(node *node.LocalNode, config config.SwarmConfig, service service.Service) *DHT {
-	d := &DHT{
+func New(node *node.LocalNode, config config.SwarmConfig, service service.Service) *KadDHT {
+	d := &KadDHT{
 		config:  config,
 		local:   node,
 		rt:      NewRoutingTable(config.RoutingTableBucketSize, node.DhtID(), node.Logger),
@@ -46,13 +46,13 @@ func New(node *node.LocalNode, config config.SwarmConfig, service service.Servic
 }
 
 // Update insert or update a node in the routing table.
-func (d *DHT) Update(node node.Node) {
+func (d *KadDHT) Update(node node.Node) {
 	d.rt.Update(node)
 }
 
 // Lookup finds a node in the dht by its public key, it issues a search inside the local routing table,
 // if the node can't be found there it sends a query to the network.
-func (d *DHT) Lookup(pubkey string) (node.Node, error) {
+func (d *KadDHT) Lookup(pubkey string) (node.Node, error) {
 	dhtid := node.NewDhtIDFromBase58(pubkey)
 	poc := make(PeersOpChannel)
 	d.rt.NearestPeers(NearestPeersReq{dhtid, d.config.RoutingTableAlpha, poc})
@@ -73,7 +73,7 @@ func (d *DHT) Lookup(pubkey string) (node.Node, error) {
 // nodeId: - base58 node id string
 // Returns requested node via the callback or nil if not found
 // Also used as a bootstrap function to populate the routing table with the results.
-func (d *DHT) kadLookup(id string, searchList []node.Node) (node.Node, error) {
+func (d *KadDHT) kadLookup(id string, searchList []node.Node) (node.Node, error) {
 	// save queried node ids for the operation
 	queried := map[string]struct{}{}
 
@@ -145,7 +145,7 @@ func filterFindNodeServers(nodes []node.Node, queried map[string]struct{}, alpha
 // findNodeOp a target node on one or more servers
 // returns closest nodes which are closers than closestNode to targetId
 // if node found it will be in top of results list
-func (d *DHT) findNodeOp(servers []node.Node, queried map[string]struct{}, id string, closestNode node.Node) []node.Node {
+func (d *KadDHT) findNodeOp(servers []node.Node, queried map[string]struct{}, id string, closestNode node.Node) []node.Node {
 	l := len(servers)
 
 	if l == 0 {

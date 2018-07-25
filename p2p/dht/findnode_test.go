@@ -11,18 +11,8 @@ import (
 )
 
 func getTestLogger(test string, args ...interface{}) log.Log {
-	return log.New(fmt.Sprintf("%v ", test, args), "", "")
+	return log.New(fmt.Sprintf(test, args), "", "")
 }
-
-//func createTestFindNode(t *testing.T, config config.Config) (node.Node, *findNodeProtocol) {
-//	//node, _ := node.GenerateTestNode(t)
-//	//initRouting.Do(MsgRouting)
-//	//p2pmock := newP2PMock(node.Node)
-//	sim := simulator.New()
-//	n := sim.NewNode()
-//	rt := NewRoutingTable(config.SwarmConfig.RoutingTableBucketSize, n.DhtID(), getTestLogger("createTestFindNode").Logger)
-//	return _, newFindNodeProtocol(n, rt)
-//}
 
 func TestFindNodeProtocol_FindNode(t *testing.T) {
 

@@ -194,7 +194,7 @@ func TestDHT_Bootstrap2(t *testing.T) {
 
 	booted := make(chan error)
 
-	dhts := make([]*DHT, nodesNum)
+	dhts := make([]*KadDHT, nodesNum)
 
 	for i := 0; i < nodesNum; i++ {
 		lln, _ := node.GenerateTestNode(t)
@@ -203,7 +203,7 @@ func TestDHT_Bootstrap2(t *testing.T) {
 		d := New(lln, cfg2.SwarmConfig, nn)
 
 		dhts[i] = d
-		go func(d *DHT) { err := d.Bootstrap(); booted <- err }(d)
+		go func(d *KadDHT) { err := d.Bootstrap(); booted <- err }(d)
 	}
 
 	timer := time.NewTimer(timeout)
@@ -220,7 +220,4 @@ func TestDHT_Bootstrap2(t *testing.T) {
 			t.Error("Failed to boot within time")
 		}
 	}
-
-	time.Sleep(1 * time.Second)
-
 }

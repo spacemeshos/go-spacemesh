@@ -32,7 +32,6 @@ type RoutingTable interface {
 	Find(req PeerByIDRequest)          // find a specific peer by node.DhtID
 	NearestPeer(req PeerByIDRequest)   // nearest peer to a node.DhtID
 	NearestPeers(req NearestPeersReq)  // ip to n nearest peers to a node.DhtID
-	ListPeers(callback PeersOpChannel) // list all peers
 	Size(callback chan int)            // total # of peers in the table
 
 	Print()
@@ -140,7 +139,6 @@ func NewRoutingTable(bucketsize int, localID node.DhtID, log *logging.Logger) Ro
 		findReqs:         make(chan PeerByIDRequest, 3),
 		nearestPeerReqs:  make(chan PeerByIDRequest, 3),
 		nearestPeersReqs: make(chan NearestPeersReq, 3),
-		listPeersReqs:    make(chan PeersOpChannel, 3),
 		sizeReqs:         make(chan chan int, 3),
 
 		updateReqs: make(chan node.Node),
@@ -162,11 +160,6 @@ func NewRoutingTable(bucketsize int, localID node.DhtID, log *logging.Logger) Ro
 // Size returns the total number of peers in the routing table
 func (rt *routingTableImpl) Size(callback chan int) {
 	rt.sizeReqs <- callback
-}
-
-// ListPeers takes a RoutingTable and returns a list of all peers from all buckets in the table.
-func (rt *routingTableImpl) ListPeers(callback PeersOpChannel) {
-	rt.listPeersReqs <- callback
 }
 
 // Finds a specific peer by ID/ Returns nil in the callback when not found
@@ -206,9 +199,6 @@ func (rt *routingTableImpl) processEvents() {
 
 		case r := <-rt.sizeReqs:
 			rt.size(r)
-
-		case r := <-rt.listPeersReqs:
-			rt.listPeers(r)
 
 		case r := <-rt.nearestPeersReqs:
 			peers := rt.nearestPeers(r.ID, r.Count)
@@ -368,13 +358,6 @@ func (rt *routingTableImpl) size(callback chan int) {
 	go func() { callback <- tot }()
 }
 
-func (rt *routingTableImpl) listPeers(callback PeersOpChannel) {
-	var peers []node.Node
-	for _, buck := range rt.buckets {
-		peers = append(peers, buck.Peers()...)
-	}
-	go func() { callback <- &PeersOpResult{Peers: peers} }()
-}
 
 // Print a descriptive statement about the provided RoutingTable
 // Only call from external clients not from internal event handlers

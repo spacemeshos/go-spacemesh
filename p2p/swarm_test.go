@@ -6,19 +6,43 @@ import (
 	"time"
 
 	"github.com/gogo/protobuf/proto"
+	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"github.com/stretchr/testify/assert"
+	"github.com/spacemeshos/go-spacemesh/p2p/net"
+	"github.com/spacemeshos/go-spacemesh/p2p/timesync"
+	"github.com/pkg/errors"
+	"github.com/spacemeshos/go-spacemesh/p2p/dht"
 )
+
+func p2pTestInstance(t testing.TB, config config.Config) *swarm {
+	port, err := node.GetUnboundedPort()
+	assert.NoError(t, err, "Error getting a port", err)
+	config.TCPPort = port
+	p, err := newSwarm(config, false)
+	assert.NoError(t, err, "Error creating p2p stack, err: %v", err)
+	return p
+}
 
 const exampleProtocol = "EX"
 const examplePayload = "Example"
 
 func TestNew(t *testing.T) {
-	s, err := New(defaultConfig())
+	s, err := New(config.DefaultConfig())
 	assert.NoError(t, err, err)
 	assert.NotNil(t, s, "its nil")
+	s.Shutdown()
 }
+
+func Test_newSwarm(t *testing.T) {
+	s, err := newSwarm(config.DefaultConfig(), false)
+	assert.NoError(t, err)
+	assert.NotNil(t, s)
+	s.Shutdown()
+}
+
 
 func TestSwarm_signMessage(t *testing.T) {
 	n, _ := node.GenerateTestNode(t)
@@ -34,38 +58,96 @@ func TestSwarm_signMessage(t *testing.T) {
 
 	assert.NoError(t, err)
 
-	signMessage(n.PrivateKey(), pm)
-
+	err = signMessage(n.PrivateKey(), pm)
+	assert.NoError(t, err, err)
 	assert.Equal(t, pm.Metadata.AuthorSign, hex.EncodeToString(asig))
 
+}
 
+func TestSwarm_Shutdown(t *testing.T) {
+	s, err := newSwarm(config.DefaultConfig(), false)
+	assert.NoError(t, err)
+	s.Shutdown()
 
+	select {
+		case _, ok := <-s.shutdown:
+			assert.False(t, ok)
+		case <-time.After(1 * time.Second):
+			t.Error("Failed to shutdown")
+	}
+}
+
+func TestSwarm_processMessage(t *testing.T) {
+	s := swarm{}
+    s.lNode, _ = node.GenerateTestNode(t)
+    r := node.GenerateRandomNodeData()
+	c := &net.ConnectionMock{}
+	c.SetRemotePublicKey(r.PublicKey())
+	ime := net.IncomingMessageEvent{ Message: nil, Conn: c }
+	s.processMessage(ime) // should error
+
+	assert.True(t, c.Closed())
+}
+
+func TestSwarm_updateConnection(t *testing.T) {
+	p := &swarm{}
+	p.lNode, _ = node.GenerateTestNode(t)
+	dhtmock := &dht.MockDHT{}
+	p.dht = dhtmock
+	c := &net.ConnectionMock{}
+
+	p.updateConnection(c)
+
+	assert.Equal(t, dhtmock.UpdateCount(), 0)
+
+	r := node.GenerateRandomNodeData()
+	c.SetRemotePublicKey(r.PublicKey())
+
+	p.updateConnection(c)
+
+	assert.Equal(t, dhtmock.UpdateCount(), 1)
 }
 
 func TestSwarm_authAuthor(t *testing.T) {
 	// create a message
-	n, _ := node.GenerateTestNode(t)
+
+	priv, pub, err := crypto.GenerateKeyPair()
+
+	assert.NoError(t, err, err)
+	assert.NotNil(t, priv)
+	assert.NotNil(t, pub)
+
 	pm := &pb.ProtocolMessage{
-		Metadata: newProtocolMessageMetadata(n.PublicKey(), exampleProtocol, false),
+		Metadata: newProtocolMessageMetadata(pub, exampleProtocol, false),
 		Payload:  []byte(examplePayload),
 	}
 	ppm, err := proto.Marshal(pm)
 	assert.NoError(t, err, "cant marshal msg ", err)
+
 	// sign it
-	s, err := n.PrivateKey().Sign(ppm)
+	s, err := priv.Sign(ppm)
 	assert.NoError(t, err, "cant sign ", err)
 	ssign := hex.EncodeToString(s)
+
 	pm.Metadata.AuthorSign = ssign
 
-	// verify normally
+	vererr := authAuthor(pm)
+	assert.NoError(t, vererr)
 
-	ver, err := n.PublicKey().Verify(ppm, s)
-	assert.NoError(t, err)
-	assert.True(t, ver)
+	priv2, pub2, err := crypto.GenerateKeyPair()
 
-	// verify with auth author
-	ver2err := authAuthor(pm)
-	assert.NoError(t, ver2err)
+	assert.NoError(t, err, err)
+	assert.NotNil(t, priv2)
+	assert.NotNil(t, pub2)
+
+	s, err = priv2.Sign(ppm)
+	assert.NoError(t, err, "cant sign ", err)
+	ssign = hex.EncodeToString(s)
+
+	pm.Metadata.AuthorSign = ssign
+
+	vererr = authAuthor(pm)
+	assert.Error(t, vererr)
 }
 
 func TestSwarm_SignAuth(t *testing.T) {
@@ -83,17 +165,9 @@ func TestSwarm_SignAuth(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestSwarm_SendMessage(t *testing.T) {
-	p1 := p2pTestInstance(t, defaultConfig())
-
-	err := p1.SendMessage(node.GenerateRandomNodeData().String(), exampleProtocol, []byte(examplePayload))
-
-	assert.Error(t, err)
-}
-
-func TestSwarm_RegisterProtocol(t *testing.T) {
-	p1 := p2pTestInstance(t, defaultConfig())
-	p2 := p2pTestInstance(t, defaultConfig())
+func TestSwarm_RoundTrip(t *testing.T) {
+	p1 := p2pTestInstance(t, config.DefaultConfig())
+	p2 := p2pTestInstance(t, config.DefaultConfig())
 
 	exchan := p1.RegisterProtocol(exampleProtocol)
 
@@ -119,265 +193,130 @@ func TestSwarm_RegisterProtocol(t *testing.T) {
 
 }
 
-//
-//// Basic session test
-//func TestSessionCreation(t *testing.T) {
-//
-//	filesystem.SetupTestSpacemeshDataFolders(t, "swarm_test")
-//
-//	node1Local := p2pTestInstance(t, defaultConfig())
-//	node2Local := p2pTestInstance(t, defaultConfig())
-//	c, e := node1Local.getConnectionPool().getConnection(node2Local.localNode().Address(), node2Local.localNode().PublicKey())
-//	if e != nil {
-//		t.Fatalf("failed to connect. err: %v", e)
-//	}
-//	if c.Session() == nil {
-//		t.Fatalf("failed to establish session in node1")
-//	}
-//	c = node2Local.getConnectionPool().hasConnection(node1Local.localNode().PublicKey())
-//	if c == nil {
-//		t.Fatalf("node2 has no connection with node1")
-//	}
-//	if c.Session() == nil {
-//		t.Fatalf("failed to establish session in node2")
-//	}
-//
-//	node1Local.Shutdown()
-//	node2Local.Shutdown()
-//
-//	filesystem.DeleteSpacemeshDataFolders(t)
-//}
-//
-//func TestMultipleSessions(t *testing.T) {
-//
-//	filesystem.SetupTestSpacemeshDataFolders(t, "swarm_test")
-//	defer filesystem.DeleteSpacemeshDataFolders(t)
-//
-//	finishChan := make(chan struct{})
-//	const timeout = time.Second * 10
-//	const count = 500
-//
-//	node1Local := p2pTestInstance(t, defaultConfig()) // First node acts as bootstrap node.
-//	bootnode := node1Local.localNode().Node
-//	event := make(NodeEventCallback)
-//	node1Local.RegisterNodeEventsCallback(event)
-//
-//	go func() { // wait for events before starting
-//		i := 0
-//		for {
-//			ev := <-event
-//			if ev.State == SessionEstablished {
-//				i++
-//			}
-//			if i == count {
-//				break
-//			}
-//		}
-//		finishChan <- struct{}{}
-//	}()
-//
-//	nodes := make([]swarm, count)
-//
-//	for i := 0; i < count; i++ {
-//		n := p2pTestInstance(t, defaultConfig()) // create a node
-//		nodes[i] = n
-//		remotePub, err := crypto.NewPublicKey(bootnode.PublicKey().Bytes())
-//		if err != nil {
-//			// TODO handle error (not really, @Yosher promised that req will have a crypto.PublicKey)
-//		}
-//		n.getConnectionPool().getConnection(bootnode.Address(), remotePub) // connect to first node
-//		//nodes = append(nodes, n)
-//	}
-//
-//	limit := time.NewTimer(timeout)
-//
-//	select {
-//	case <-finishChan: // all nodes established.
-//		break
-//	case <-limit.C:
-//		t.Errorf("Could'nt establish %d sessions within a reasonable %v time", count, timeout.String())
-//	}
-//
-//	for _, node := range nodes {
-//		node.Shutdown()
-//	}
-//
-//	filesystem.DeleteSpacemeshDataFolders(t)
-//}
-//
-//func TestSimpleBootstrap(t *testing.T) {
-//
-//	filesystem.SetupTestSpacemeshDataFolders(t, "swarm_test")
-//	defer filesystem.DeleteSpacemeshDataFolders(t)
-//	// setup:
-//	// node1 - bootstrap node
-//	// node2 - connects to node1 on startup (bootstrap)
-//	// node2 - sends a ping to node1
-//
-//	node1Local := p2pTestInstance(t, defaultConfig())
-//	NewPingProtocol(node1Local)
-//
-//	pd := node1Local.localNode().Node
-//	bs := fmt.Sprintf("%s/%s", pd.Address(), pd.String())
-//
-//	// node1 is a bootstrap node to node2
-//	c := defaultConfig()
-//	c.SwarmConfig.Bootstrap = true
-//	c.SwarmConfig.RandomConnections = 1
-//	c.SwarmConfig.BootstrapNodes = []string{bs}
-//
-//	node2Local := p2pTestInstance(t, c)
-//
-//	// ping node2 -> node 1
-//	reqID := crypto.NewUUID()
-//	callback := make(chan SendPingResp)
-//
-//	ping2 := NewPingProtocol(node2Local)
-//	ping2.Register(callback)
-//
-//	ping2.Send("hello Spacemesh!", reqID, pd.String())
-//
-//Loop:
-//	for {
-//		select {
-//		case c := <-callback:
-//			assert.Nil(t, c.err, "expected no err in response")
-//			if bytes.Equal(c.GetMetadata().ReqId, reqID) {
-//				break Loop
-//			}
-//		case <-time.After(time.Second * 30):
-//			t.Fatal("Timeout error - expected callback")
-//		}
-//	}
-//
-//	node1Local.Shutdown()
-//	node2Local.Shutdown()
-//}
-//
-//func TestSmallBootstrap(t *testing.T) {
-//
-//	filesystem.SetupTestSpacemeshDataFolders(t, "swarm_test")
-//	defer filesystem.DeleteSpacemeshDataFolders(t)
-//
-//	const timeout = 25 * time.Second
-//	const randomConnections = 5
-//	const totalNodes = 30
-//
-//	// setup:
-//	//
-//	// 1 bootstrap node
-//	//
-//	// 10 nodes using bootstrap node
-//	//
-//	// each node asks for 5 random nodes and connects to them
-//	// verify each node has an established session with 5 other nodes
-//
-//	bnode := p2pTestInstance(t, defaultConfig())
-//	pd := bnode.localNode().Node
-//	bs := fmt.Sprintf("%s/%s", pd.Address(), pd.String())
-//	// nodes bootstrap config
-//	c := defaultConfig()
-//	c.SwarmConfig.Bootstrap = true
-//	c.SwarmConfig.RandomConnections = randomConnections
-//	c.SwarmConfig.BootstrapNodes = []string{bs}
-//
-//	nodes := make([]swarm, 0)
-//
-//	nodechan := make(chan swarm)
-//
-//	for i := 0; i < totalNodes; i++ {
-//		go func() { ln := p2pTestInstance(t, c); nodechan <- ln }()
-//	}
-//
-//	for n := range nodechan {
-//		nodes = append(nodes, n)
-//		if len(nodes) == totalNodes {
-//			close(nodechan)
-//		}
-//	}
-//
-//	bootChan := make(chan error)
-//
-//	for _, n := range nodes {
-//		go func(s swarm) { bootChan <- s.WaitForBootstrap() }(n)
-//	}
-//	i := 0
-//
-//	ti := time.NewTimer(timeout)
-//
-//	for i < totalNodes-1 {
-//		select {
-//		case e := <-bootChan:
-//			if e != nil {
-//				t.Errorf("failed to boot, err:%v", e)
-//			}
-//			i++
-//		case <-ti.C:
-//			t.Errorf("Failed to bootstrap in timeout %v", timeout)
-//		}
-//	}
-//
-//	for _, node := range nodes {
-//		node.Shutdown()
-//	}
-//}
-//
-//// todo: fix me - this test is broken
-//func TestBasicBootstrap(t *testing.T) {
-//	filesystem.SetupTestSpacemeshDataFolders(t, "swarm_test")
-//	defer filesystem.DeleteSpacemeshDataFolders(t)
-//	// setup:
-//	// node1 - bootstrap node
-//	// node2 - connects to node1 on startup (bootstrap)
-//	// node3 - connects to node1 on startup (bootstrap)
-//	// node2 - sends a ping to node3 knowing only its id but not dial info
-//
-//	node1Local := p2pTestInstance(t, defaultConfig())
-//	pd := node1Local.localNode().Node
-//	bs := fmt.Sprintf("%s/%s", pd.Address(), pd.String())
-//
-//	// node1 and node 2 config
-//	c := config.ConfigValues
-//	c.SwarmConfig.Bootstrap = true
-//	c.SwarmConfig.RandomConnections = 2
-//	c.SwarmConfig.BootstrapNodes = []string{bs}
-//	nchan := make(chan swarm)
-//	nchan2 := make(chan swarm)
-//	go func() {
-//		nchan <- p2pTestInstance(t, c)
-//	}()
-//	go func() {
-//		nchan2 <- p2pTestInstance(t, c)
-//	}()
-//
-//	node2Local := <-nchan
-//	node3Local := <-nchan2
-//
-//	node2Local.WaitForBootstrap()
-//	node3Local.WaitForBootstrap()
-//
-//	ping2 := NewPingProtocol(node2Local)
-//	NewPingProtocol(node3Local)
-//
-//	reqID := crypto.NewUUID()
-//	callback := make(chan SendPingResp)
-//	ping2.Register(callback)
-//	ping2.Send("hello Spacemesh", reqID, node3Local.localNode().String())
-//
-//Loop:
-//	for {
-//		select {
-//		case c := <-callback:
-//			assert.Nil(t, c.err, "expected no err in response")
-//			if bytes.Equal(c.GetMetadata().ReqId, reqID) {
-//				break Loop
-//			}
-//		case <-time.After(time.Second * 30):
-//			t.Fatal("Timeout error - expected callback")
-//		}
-//	}
-//
-//	node1Local.Shutdown()
-//	node2Local.Shutdown()
-//	node3Local.Shutdown()
-//}
+func Test_newProtocolMessageMeatadata(t *testing.T) {
+	//newProtocolMessageMetadata()
+	_, pk, _ := crypto.GenerateKeyPair()
+	const gossip = false
+
+	assert.NotNil(t, pk)
+
+	meta := newProtocolMessageMetadata(pk, exampleProtocol, gossip)
+
+	assert.NotNil(t, meta, "should be a metadata")
+	assert.Equal(t, meta.Timestamp, time.Now().Unix())
+	assert.Equal(t, meta.ClientVersion, config.ClientVersion)
+	assert.Equal(t, meta.AuthPubKey, pk.Bytes())
+	assert.Equal(t, meta.Protocol, exampleProtocol)
+	assert.Equal(t, meta.Gossip, gossip)
+	assert.Equal(t, meta.AuthorSign, "")
+
+}
+
+
+func TestSwarm_onRemoteClientMessage(t *testing.T) {
+	p := p2pTestInstance(t, config.DefaultConfig())
+	nmock := &net.ConnectionMock{}
+	nmock.SetRemotePublicKey(node.GenerateRandomNodeData().PublicKey())
+
+	// Test bad format
+
+	msg := []byte("badbadformat")
+	imc := net.IncomingMessageEvent{ nmock, msg }
+	err := p.onRemoteClientMessage(imc)
+	assert.Equal(t, err, ErrBadFormat)
+
+	// Test out of sync
+
+	realmsg := &pb.CommonMessageData{
+		SessionId: []byte("test"),
+		Payload: []byte("test"),
+		Timestamp: time.Now().Add(timesync.MaxAllowedMessageDrift + time.Minute).Unix(),
+	}
+	bin, _ := proto.Marshal(realmsg)
+
+	imc.Message = bin
+
+	err = p.onRemoteClientMessage(imc)
+	assert.Equal(t, err, ErrOutOfSync)
+
+	// Test no payload
+
+	cmd := &pb.CommonMessageData{
+		SessionId: []byte("test"),
+		Payload: []byte(""),
+		Timestamp: time.Now().Unix(),
+	}
+
+	bin, _ = proto.Marshal(cmd)
+	imc.Message = bin
+	err = p.onRemoteClientMessage(imc)
+
+	assert.Equal(t, err, ErrNoPayload)
+
+	// Test No Session
+
+	cmd.Payload = []byte("test")
+
+	bin, _ = proto.Marshal(cmd)
+	imc.Message = bin
+
+	err = p.onRemoteClientMessage(imc)
+	assert.Equal(t, err, ErrNoSession)
+
+	// Test bad session
+
+
+	session := &net.SessionMock{}
+	session.SetDecrypt(nil, errors.New("fail"))
+	imc.Conn.SetSession(session)
+
+	err = p.onRemoteClientMessage(imc)
+	assert.Equal(t, err, ErrFailDecrypt)
+
+	// Test bad format again
+
+	session.SetDecrypt([]byte("wont_format_fo_protocol_message"), nil)
+
+	err = p.onRemoteClientMessage(imc)
+	assert.Equal(t, err, ErrBadFormat)
+
+	// Test bad auth sign
+
+	goodmsg := &pb.ProtocolMessage{
+		Metadata: newProtocolMessageMetadata(p.lNode.PublicKey(), exampleProtocol, false), // not signed
+		Payload: []byte(examplePayload),
+	}
+
+	goodbin, _ := proto.Marshal(goodmsg)
+
+	cmd.Payload = goodbin
+	bin, _ = proto.Marshal(cmd)
+	imc.Message = bin
+	session.SetDecrypt(goodbin, nil)
+
+	err = p.onRemoteClientMessage(imc)
+	assert.Equal(t, err, ErrAuthAuthor)
+
+	// Test no protocol
+
+	err = signMessage(p.lNode.PrivateKey(), goodmsg)
+	assert.NoError(t, err, err)
+
+	goodbin, _ = proto.Marshal(goodmsg)
+	cmd.Payload = goodbin
+	bin, _ = proto.Marshal(cmd)
+	imc.Message = bin
+	session.SetDecrypt(goodbin, nil)
+
+	err = p.onRemoteClientMessage(imc)
+	assert.Equal(t, err, ErrNoProtocol)
+
+	// Test no err
+
+	c := p.RegisterProtocol(exampleProtocol)
+	go func () { <-c }()
+
+	err = p.onRemoteClientMessage(imc)
+
+	assert.NoError(t, err)
+}

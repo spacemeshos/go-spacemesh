@@ -27,7 +27,7 @@ var (
 // Bootstrap issues a bootstrap by inserting the preloaded nodes to the routing table then querying them with our
 // ID with a FindNode (using `dht.Lookup`). the process involves updating all returned nodes to the routing table
 // while all the nodes that receive our query will add us to their routing tables and send us as response to a `FindNode`.
-func (d *DHT) Bootstrap() error {
+func (d *KadDHT) Bootstrap() error {
 
 	c := d.config.RandomConnections
 	if c <= 0 {

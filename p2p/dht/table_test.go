@@ -9,6 +9,7 @@ import (
 	"gopkg.in/op/go-logging.v1"
 
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"github.com/stretchr/testify/assert"
 )
 
 func GetTestLogger(name string) *logging.Logger {
@@ -191,6 +192,34 @@ func TestTableMultiThreaded(t *testing.T) {
 			rt.Find(PeerByIDRequest{ID: nodes[n].DhtID(), Callback: nil})
 		}
 	}()
+}
+
+func TestRoutingTableImpl_Print(t *testing.T) {
+	local := node.GenerateRandomNodeData()
+	localID := local.DhtID()
+	rt := NewRoutingTable(10, localID, GetTestLogger(localID.Pretty()))
+	rt.Print()
+}
+
+func TestRoutingTableImpl_Remove(t *testing.T) {
+	local := node.GenerateRandomNodeData()
+	localID := local.DhtID()
+	rt := NewRoutingTable(10, localID, GetTestLogger(localID.Pretty()))
+
+	rnode := node.GenerateRandomNodeData()
+
+	rt.Update(rnode)
+
+	cnode := make(PeerOpChannel)
+	rt.Find(PeerByIDRequest{rnode.DhtID(),cnode })
+	n := <- cnode
+	assert.NotEqual(t, n.Peer, node.EmptyNode)
+
+	rt.Remove(rnode)
+
+	rt.Find(PeerByIDRequest{rnode.DhtID(),cnode })
+	n = <- cnode
+	assert.Equal(t, n.Peer, node.EmptyNode)
 }
 
 func BenchmarkUpdates(b *testing.B) {

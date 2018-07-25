@@ -7,27 +7,7 @@ import (
 
 type Service service.Service
 
+// New creates a new P2P service a.k.a `swarm` it tries to load node information from the disk.
 func New(config config.Config) (*swarm, error) {
 	return newSwarm(config, true)
-}
-
-type Mock struct {
-	sm   error
-	proc chan service.Message
-}
-
-func (m *Mock) RegisterProtocol(protocol string) chan service.Message {
-	return nil
-}
-
-func (m *Mock) SendMessage(nodeID, protocol string, payload []byte) error {
-	return nil
-}
-
-func (m *Mock) SetSendMessage(e error) {
-	m.sm = e
-}
-
-func (m *Mock) SetRegisterProtocol(csm chan service.Message) {
-	m.proc = csm
 }
