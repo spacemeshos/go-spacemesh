@@ -40,8 +40,8 @@ devtools:
 	# Get the dependencies
 	govendor sync
 
-	./install-protobuf.sh
-	./genproto.sh
+	./ci/install-protobuf.sh
+	./ci/genproto.sh
 
 cover:
 	@echo "mode: count" > cover-all.out
