@@ -7,10 +7,10 @@ branches:
         - develop
 jobs:
     include:
-        - stage: lint
-          script:
-              - ./ci/validate-gofmt.sh
-              - go get -u golang.org/x/lint/golint
-              - ./ci/validate-lint.sh 2>&1 >/dev/null |  grep -vE "_mock|_test"
+#        - stage: lint
+#          script:
+#              - ./ci/validate-gofmt.sh
+#              - go get -u golang.org/x/lint/golint
+#              - ./ci/validate-lint.sh 2>&1 >/dev/null |  grep -vE "_mock|_test"
         - stage: test
           script: go test -p 1 github.com/spacemeshos/go-spacemesh/...
