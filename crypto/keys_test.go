@@ -100,3 +100,28 @@ func TestCryptoApi(t *testing.T) {
 	assert.True(t, bytes.Equal(msgData, clearText), "expected same dec message")
 
 }
+
+func BenchmarkVerify(b *testing.B) {
+	b.StopTimer()
+
+	priv, pub, err := GenerateKeyPair()
+
+	assert.Nil(b, err, "Failed to generate keys")
+
+	const msg = "hello world"
+	msgData := []byte(msg)
+
+	// test signatures
+	signature, err := priv.Sign(msgData)
+
+	assert.Nil(b, err, fmt.Sprintf("signing error: %v", err))
+
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		//ok, err := pub.Verify(msgData, signature)
+		pub.Verify(msgData, signature)
+
+	}
+	b.StopTimer()
+
+}
