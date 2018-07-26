@@ -15,13 +15,11 @@ import (
 	"time"
 )
 
-
 // IncomingMessageEvent is the event reported on new incoming message, it contains the message and the Connection carrying the message
 type IncomingMessageEvent struct {
 	Conn    Connection
 	Message []byte
 }
-
 
 // ManagedConnection in an interface extending Connection with some internal methods that are required for Net to manage Connections
 type ManagedConnection interface {
@@ -82,7 +80,6 @@ func NewNet(conf config.Config, localEntity *node.LocalNode) (*Net, error) {
 
 	return n, nil
 }
-
 
 // Logger returns a reference to logger
 func (n *Net) Logger() *logging.Logger {
@@ -201,7 +198,6 @@ func (n *Net) Dial(address string, remotePublicKey crypto.PublicKey) (Connection
 	go conn.beginEventProcessing()
 	return conn, nil
 }
-
 
 // Shutdown initiate a graceful closing of the TCP listener and all other internal routines
 func (n *Net) Shutdown() {
