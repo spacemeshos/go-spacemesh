@@ -207,7 +207,7 @@ func (n *Net) Shutdown() {
 
 // Start network server
 func (n *Net) listen() error {
-	n.logger.Info("Starting to listen...")
+	n.logger.Info("Starting to listen on %v", n.tcpListenAddress)
 	tcpListener, err := net.Listen("tcp", n.tcpListenAddress)
 	if err != nil {
 		return err
@@ -278,9 +278,12 @@ func (n *Net) HandlePreSessionIncomingMessage(c Connection, message []byte) erro
 
 	}
 	respData, session, err := ProcessHandshakeRequest(n.NetworkID(), n.localNode.PublicKey(), n.localNode.PrivateKey(), c.RemotePublicKey(), data)
+	if err != nil {
+		return fmt.Errorf("%s. here err: %v", errMsg, err)
+	}
 	payload, err := proto.Marshal(respData)
 	if err != nil {
-		return fmt.Errorf("%s. err: %v", errMsg, err)
+		return fmt.Errorf("%s. hereto err: %v", errMsg, err)
 	}
 
 	err = c.Send(payload)

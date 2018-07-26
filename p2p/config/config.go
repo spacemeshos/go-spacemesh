@@ -31,6 +31,7 @@ type Config struct {
 	FastSync        bool   `mapstructure:"fast-sync"`
 	TCPPort         int    `mapstructure:"tcp-port"`
 	NodeID          string `mapstructure:"node-id"`
+	NewNode         bool   `mapstructure:"new-node"`
 	DialTimeout     time.Duration
 	ConnKeepAlive   time.Duration
 	NetworkID       int8          `mapstructure:"network-id"`
@@ -41,11 +42,11 @@ type Config struct {
 
 // SwarmConfig specifies swarm config params.
 type SwarmConfig struct {
-	Bootstrap              bool `mapstructure:"swarm-bootstrap"`
-	RoutingTableBucketSize int  `mapstructure:"swarm-rtbs"`
-	RoutingTableAlpha      int  `mapstructure:"swarm-rtalpha"`
-	RandomConnections      int  `mapstructure:"swarm-randcon"`
-	BootstrapNodes         []string
+	Bootstrap              bool     `mapstructure:"bootstrap"`
+	RoutingTableBucketSize int      `mapstructure:"bucketsize"`
+	RoutingTableAlpha      int      `mapstructure:"alpha"`
+	RandomConnections      int      `mapstructure:"randcon"`
+	BootstrapNodes         []string `mapstructure:"bootnodes"`
 }
 
 // TimeConfig specifies the timesync params for ntp.
@@ -73,9 +74,7 @@ func DefaultConfig() Config {
 		RoutingTableBucketSize: 20,
 		RoutingTableAlpha:      3,
 		RandomConnections:      5,
-		BootstrapNodes: []string{ // these should be the spacemesh foundation bootstrap nodes
-			"125.0.0.1:3572/iaMujEYTByKcjMZWMqg79eJBGMDm8ADsWZFdouhpfeKj",
-			"125.0.0.1:3763/x34UDdiCBAsXmLyMMpPQzs313B9UDeHNqFpYsLGfaFvm",
+		BootstrapNodes:         []string{ // these should be the spacemesh foundation bootstrap nodes
 		},
 	}
 
@@ -84,6 +83,7 @@ func DefaultConfig() Config {
 		FastSync:        true,
 		TCPPort:         7513,
 		NodeID:          "",
+		NewNode:         false,
 		DialTimeout:     duration("1m"),
 		ConnKeepAlive:   duration("48h"),
 		NetworkID:       TestNet,

@@ -10,6 +10,13 @@ import (
 	"time"
 )
 
+// DHT is an interface to a general distributed hash table.
+type DHT interface {
+	Update(node node.Node)
+	Lookup(pubkey string) (node.Node, error)
+	Bootstrap() error
+}
+
 // LookupTimeout is the timelimit we give to a single lookup operation
 const LookupTimeout = 5 * time.Second
 

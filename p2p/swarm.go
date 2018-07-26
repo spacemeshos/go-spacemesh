@@ -18,6 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"strings"
 	"sync"
 )
 
@@ -56,20 +57,21 @@ type swarm struct {
 }
 
 // newSwarm creates a new P2P instance
-func newSwarm(config config.Config, loadIdentity bool) (*swarm, error) {
+func newSwarm(config config.Config, newNode bool) (*swarm, error) {
 
 	port := config.TCPPort
-	address := fmt.Sprintf("0.0.0.0:%d", port)
+	address := fmt.Sprintf("127.0.0.1:%d", port)
 
 	var l *node.LocalNode
 	var err error
 	// Load an existing identity from file if exists.
 
-	if loadIdentity {
-		l, err = node.NewLocalNode(config, address, true)
-	} else {
+	if newNode {
 		l, err = node.NewNodeIdentity(config, address, true)
+	} else {
+		l, err = node.NewLocalNode(config, address, true)
 	}
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to create a node, err: %v", err)
 	}
@@ -289,7 +291,7 @@ func (s *swarm) processMessage(ime net.IncomingMessageEvent) {
 // update a full connection to the routing table.
 func (s *swarm) updateConnection(nc net.Connection) {
 	if nc.RemotePublicKey() != nil {
-		s.dht.Update(node.New(nc.RemotePublicKey(), nc.RemoteAddr().String()))
+		s.dht.Update(node.New(nc.RemotePublicKey(), fmt.Sprintf("%v:%v", strings.Split(nc.RemoteAddr().String(), ":")[0], s.config.TCPPort)))
 	}
 }
 
@@ -401,7 +403,7 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 
 	s.lNode.Debug("Authorized %v protocol message ", pm.Metadata.Protocol)
 
-	remoteNode := node.New(msg.Conn.RemotePublicKey(), msg.Conn.RemoteAddr().String())
+	remoteNode := node.New(msg.Conn.RemotePublicKey(), fmt.Sprintf("%v:%v", strings.Split(msg.Conn.RemoteAddr().String(), ":")[0], s.config.TCPPort))
 	// update the routing table - we just heard from this authenticated node
 	s.dht.Update(remoteNode)
 	// route authenticated message to the reigstered protocol

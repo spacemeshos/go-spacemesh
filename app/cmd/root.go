@@ -39,6 +39,8 @@ func init() {
 		config.P2P.ResponseTimeout, "Timeout for waiting on resposne message")
 	RootCmd.PersistentFlags().StringVar(&config.P2P.NodeID, "node-id",
 		config.P2P.NodeID, "Load node data by id (pub key) from local store")
+	RootCmd.PersistentFlags().BoolVar(&config.P2P.NewNode, "new-node",
+		config.P2P.NewNode, "Load node data by id (pub key) from local store")
 	RootCmd.PersistentFlags().BoolVar(&config.P2P.SwarmConfig.Bootstrap, "swarm-bootstrap",
 		config.P2P.SwarmConfig.Bootstrap, "Bootstrap the swarm")
 	RootCmd.PersistentFlags().IntVar(&config.P2P.SwarmConfig.RoutingTableBucketSize, "swarm-rtbs",

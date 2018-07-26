@@ -165,6 +165,7 @@ func TestSwarm_SignAuth(t *testing.T) {
 }
 
 func TestSwarm_RoundTrip(t *testing.T) {
+	t.Skip()
 	p1 := p2pTestInstance(t, config.DefaultConfig())
 	p2 := p2pTestInstance(t, config.DefaultConfig())
 

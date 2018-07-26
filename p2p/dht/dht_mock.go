@@ -2,13 +2,6 @@ package dht
 
 import "github.com/spacemeshos/go-spacemesh/p2p/node"
 
-// DHT is an interface to a general distributed hash table.
-type DHT interface {
-	Update(node node.Node)
-	Lookup(pubkey string) (node.Node, error)
-	Bootstrap() error
-}
-
 // MockDHT is a mocked dht
 type MockDHT struct {
 	update      func(n node.Node)
