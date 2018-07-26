@@ -1,6 +1,7 @@
 package ping
 
 import (
+	"errors"
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -9,7 +10,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/ping/pb"
 	"sync"
 	"time"
-	"errors"
 )
 
 // Pinger is an identity that does ping.

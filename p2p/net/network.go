@@ -15,7 +15,6 @@ import (
 	"time"
 )
 
-
 //type Net interface {
 //	Dial(address string, remotePublicKey crypto.PublicKey, networkId int8) (Connection, error) // Connect to a remote node. Can send when no error.
 //	SubscribeOnNewRemoteConnections() chan Connection

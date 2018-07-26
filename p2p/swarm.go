@@ -45,7 +45,7 @@ type swarm struct {
 	protocolHandlers     map[string]chan service.Message
 	protocolHandlerMutex sync.RWMutex
 
-	network net.Net
+	network *net.Net
 
 	cPool *connectionpool.ConnectionPool
 

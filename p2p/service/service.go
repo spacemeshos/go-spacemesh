@@ -12,4 +12,5 @@ type Message interface {
 type Service interface {
 	RegisterProtocol(protocol string) chan Message
 	SendMessage(nodeID string, protocol string, payload []byte) error
+	Shutdown()
 }

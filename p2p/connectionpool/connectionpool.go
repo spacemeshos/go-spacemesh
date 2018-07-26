@@ -22,7 +22,6 @@ type networker interface {
 	Logger() *logging.Logger
 }
 
-
 // ConnectionPool stores all net.Connections and make them available to all users of net.Connection.
 // There are two sources of connections -
 // - Local connections that were created by local node (by calling GetConnection)
