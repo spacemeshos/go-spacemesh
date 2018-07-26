@@ -40,6 +40,9 @@ devtools:
 	# Get the dependencies
 	govendor sync
 
+	./install-protobuf.sh
+	./genproto.sh
+
 cover:
 	@echo "mode: count" > cover-all.out
 	@$(foreach pkg,$(PKGS),\
