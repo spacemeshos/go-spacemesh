@@ -1,61 +1,79 @@
 package delimited
 
 import (
+	"fmt"
 	"io"
+	"sync"
 )
 
 // Chan is a delimited duplex channel. It is used to have a channel interface
 // around a delimited.Reader or Writer.
 type Chan struct {
-	MsgChan   chan MsgAndID
-	ErrChan   chan ErrAndID
-	CloseChan chan struct{}
+	connection io.ReadWriteCloser
+	closeOnce  sync.Once
+
+	outMsgChan chan outMessage
+	inMsgChan  chan []byte
+	CloseChan  chan struct{}
 }
 
-// MsgAndID is a struct for passing a message paired with an id,
-// we need the id to report errors with this message id later
-// ID is nil on an incoming message
-type MsgAndID struct {
-	ID  []byte
-	Msg []byte
+// Satisfy formatter.
+
+// In exposes the incoming message channel
+func (s *Chan) In() chan []byte {
+	return s.inMsgChan
 }
 
-// ErrAndID is a struct that holds an error and an id
-// it is used to report errors regarding the specific message id.
-// ID is nil when the err is incoming error message (we don't know the id)
-type ErrAndID struct {
-	ID  []byte
-	Err error
+// Out sends message on the wire, blocking.
+func (s *Chan) Out(message []byte) error {
+	outCb := make(chan error)
+	select {
+	case s.outMsgChan <- outMessage{message, outCb}:
+		return <-outCb
+	case <-s.CloseChan:
+		return fmt.Errorf("formatter is closed")
+	}
+}
+
+type outMessage struct {
+	m []byte
+	r chan error
+}
+
+func (om outMessage) Message() []byte {
+	return om.m
+}
+
+func (om outMessage) Result() chan error {
+	return om.r
 }
 
 // NewChan constructs a Chan with a given buffer size.
 func NewChan(chanSize int) *Chan {
 	return &Chan{
-		MsgChan:   make(chan MsgAndID, chanSize),
-		ErrChan:   make(chan ErrAndID, 1),
-		CloseChan: make(chan struct{}, 2),
+		outMsgChan: make(chan outMessage, chanSize),
+		inMsgChan:  make(chan []byte, chanSize),
+		CloseChan:  make(chan struct{}),
 	}
 }
 
-// ReadFromReader wraps the given io.Reader with a delimited.Reader, reads all
-// messages, ands sends them down the channel.
-func (s *Chan) ReadFromReader(r io.Reader) {
-	s.readFrom(NewReader(r))
+// Pipe invokes the reader and writer flows, once it's ran Chan can start serving incoming/outgoing messages
+func (s *Chan) Pipe(rwc io.ReadWriteCloser) {
+	s.connection = rwc
+	go s.readFromReader(rwc)
+	go s.writeToWriter(rwc)
 }
 
 // ReadFrom wraps the given io.Reader with a delimited.Reader, reads all
 // messages, ands sends them down the channel.
-func (s *Chan) readFrom(mr *Reader) {
+func (s *Chan) readFromReader(r io.Reader) {
+
+	mr := NewReader(r)
 	// single reader, no need for Mutex
 Loop:
 	for {
 		buf, err := mr.Next()
 		if err != nil {
-			if err == io.EOF {
-				break Loop // done
-			}
-			// unexpected error. tell the client.
-			s.ErrChan <- ErrAndID{nil, err}
 			break Loop
 		}
 
@@ -64,22 +82,21 @@ Loop:
 			break Loop // told we're done
 		default:
 			if buf != nil {
-				emptybuf := make([]byte, len(buf))
-				copy(emptybuf, buf)
+				newbuf := make([]byte, len(buf))
+				copy(newbuf, buf)
 				// ok seems fine. send it away
-				s.MsgChan <- MsgAndID{nil, emptybuf}
+				s.inMsgChan <- newbuf
 			}
 		}
 	}
 
-	close(s.MsgChan)
-	// signal we're done
-	s.CloseChan <- struct{}{}
+	s.Close() // close writer
+	close(s.inMsgChan)
 }
 
 // WriteToWriter wraps the given io.Writer with a delimited.Writer, listens on the
 // channel and writes all messages to the writer.
-func (s *Chan) WriteToWriter(w io.Writer) {
+func (s *Chan) writeToWriter(w io.Writer) {
 	// new buffer per message
 	// if bottleneck, cycle around a set of buffers
 	mw := NewWriter(w)
@@ -91,27 +108,22 @@ Loop:
 		case <-s.CloseChan:
 			break Loop // told we're done
 
-		case msg, ok := <-s.MsgChan:
-			if !ok { // chan closed
-				break Loop
-			}
-
-			if _, err := mw.WriteRecord(msg.Msg); err != nil {
-				if err != io.EOF {
-					// unexpected error. tell the client.
-					s.ErrChan <- ErrAndID{msg.ID, err}
-				}
-
-				break Loop
+		case msg := <-s.outMsgChan:
+			if _, err := mw.WriteRecord(msg.Message()); err != nil {
+				// unexpected error. tell the client.
+				msg.Result() <- err
+			} else {
+				// Report msg was sent
+				msg.Result() <- nil
 			}
 		}
 	}
-
-	// signal we're done
-	s.CloseChan <- struct{}{}
 }
 
 // Close the Chan
 func (s *Chan) Close() {
-	s.CloseChan <- struct{}{}
+	s.closeOnce.Do(func() {
+		close(s.CloseChan)   // close both writer and reader
+		s.connection.Close() // close internal connection
+	})
 }

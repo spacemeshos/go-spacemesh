@@ -24,7 +24,7 @@ func TestApp(t *testing.T) {
 
 	<-App.NodeInitCallback
 
-	assert.NotNil(t, App.Node)
+	assert.NotNil(t, App.P2P)
 	assert.NotNil(t, App)
 
 	// app should exit based on this signal

@@ -10,18 +10,21 @@ data-folder = "~/.spacemesh-data"
 [p2p]
 security-param = 20
 fast-sync = true
-tcp-port = 7512
+tcp-port = 7513
 node-id = ""
+new-node= false
 dial-timeout = "1m"
 conn-keepalive = "48h"
 network-id = 1 # 0 - MainNet, 1 - TestNet
+response-timeout = "2s"
 
 # Node Swarm Config
-[swarm]
-swarm-bootstrap = false
-swarm-rtbs = 20 # Routing table bucket size
-swarm-rtalpha = 3 # Routing table alpha
-swarm-randcon = 2 # Number of random connections
+[p2p.swarm]
+bootstrap = false
+bucketsize = 20 # Routing table bucket size
+rtalpha = 3 # Routing table alpha
+randcon = 2 # Number of random connections
+bootnodes = ["0.0.0.0:7517/j7qWfWaJRVp25ZsnCu9rJ4PmhigZBtesB4YmQHqqPvtR"]
 
 # API Config
 [api]

@@ -27,7 +27,7 @@ test:
 .PHONY: build test devtools cover
 
 lint:
-	go list ./... | grep -v /vendor/ | xargs -n 1 golint
+	./ci/validate-lint.sh 2>&1 >/dev/null |  grep -vE "_mock|_test"
 
 devtools:
 	# Install the build tools
@@ -39,6 +39,9 @@ devtools:
 
 	# Get the dependencies
 	govendor sync
+
+	./ci/install-protobuf.sh
+	./ci/genproto.sh
 
 cover:
 	@echo "mode: count" > cover-all.out

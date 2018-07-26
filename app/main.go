@@ -21,7 +21,7 @@ import (
 // SpacemeshApp is the cli app singleton
 type SpacemeshApp struct {
 	*cobra.Command
-	Node             p2p.LocalNode
+	P2P              p2p.Service
 	Config           *cfg.Config
 	NodeInitCallback chan bool
 	grpcAPIService   *api.SpaceMeshGrpcService
@@ -34,7 +34,7 @@ var EntryPointCreated = make(chan bool, 1)
 
 var (
 	// App is main app entry point.
-	// It provides access the local node and other top-level modules.
+	// It provides access the local identity and other top-level modules.
 	App *SpacemeshApp
 
 	// ExitApp is a channel used to signal the app to gracefully exit.
@@ -73,7 +73,7 @@ func newSpacemeshApp() *SpacemeshApp {
 	}
 	cmd.RootCmd.Version = Version
 	cmd.RootCmd.PreRunE = node.before
-	cmd.RootCmd.Run = node.startSpacemeshNode
+	cmd.RootCmd.Run = node.startSpacemesh
 	cmd.RootCmd.PostRunE = node.cleanup
 
 	return node
@@ -152,7 +152,7 @@ func (app *SpacemeshApp) setupLogging() {
 	// app-level logging
 	log.InitSpacemeshLoggingSystem(dataDir, "spacemesh.log")
 
-	log.Info("\n\nSpacemesh app session starting... %s", app.getAppInfo())
+	log.Info("%s", app.getAppInfo())
 }
 
 func (app *SpacemeshApp) getAppInfo() string {
@@ -180,22 +180,18 @@ func (app *SpacemeshApp) cleanup(cmd *cobra.Command, args []string) (err error) 
 	return nil
 }
 
-func (app *SpacemeshApp) startSpacemeshNode(cmd *cobra.Command, args []string) {
-	log.Info("Starting local node...")
+func (app *SpacemeshApp) startSpacemesh(cmd *cobra.Command, args []string) {
+	log.Info("Starting Spacemesh")
 
-	port := app.Config.P2P.TCPPort
-	address := fmt.Sprintf("0.0.0.0:%d", port)
-
-	// start a new node passing the app-wide node config values and persist it to store
-	// so future sessions use the same local node id
-	node, err := p2p.NewLocalNode(address, app.Config.P2P, true)
+	// start p2p services
+	log.Info("Initializing P2P services")
+	swarm, err := p2p.New(app.Config.P2P)
 
 	if err != nil {
-		log.Error(fmt.Sprintf("%v", err))
+		log.Error("Error starting p2p services, err: %v", err)
 	}
 
-	node.NotifyOnShutdown(ExitApp)
-	app.Node = node
+	app.P2P = swarm
 	app.NodeInitCallback <- true
 
 	apiConf := app.Config.API

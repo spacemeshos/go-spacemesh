@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package pb;
+option go_package = "pb";
+
+// Structure -
+//  FindNode {
+//        Req
+//        ReqID
+//        FindNodeReq/FindNodeResp as a payload
+//  }
+
+
+message FindNode {
+    bool req = 1; // Req or Resp, 0 - req / 1 - resp
+    bytes reqID = 2;
+    bytes payload = 3;
+}
+
+// example protocol
+message FindNodeReq {
+    bytes nodeID =1;
+    int32 maxResults = 2;
+}
+
+message NodeInfo {
+    bytes nodeId = 1;
+    string address = 2;
+}
+
+message FindNodeResp {
+    repeated NodeInfo nodeInfos = 1;
+}

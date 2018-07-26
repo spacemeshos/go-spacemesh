@@ -75,6 +75,19 @@ func TestCryptoApi(t *testing.T) {
 
 	assert.True(t, ok, "Failed to verify signature")
 
+	ok, err = pub.VerifyString(msgData, hex.EncodeToString(signature))
+	assert.Nil(t, err, fmt.Sprintf("sign verification error: %v", err))
+	assert.True(t, ok, "Failed to verify signature")
+
+	_, pub2, _ := GenerateKeyPair()
+	ok, err = pub2.Verify(msgData, signature)
+	assert.NoError(t, err)
+	assert.False(t, ok)
+
+	ok, err = pub2.VerifyString(msgData, hex.EncodeToString(signature))
+	assert.Nil(t, err, fmt.Sprintf("sign verification error: %v", err))
+	assert.False(t, ok, "succeed to verify wrong signature")
+
 	// test encrypting a message for pub by pub - anyone w pub can do that
 	cypherText, err := pub.Encrypt(msgData)
 

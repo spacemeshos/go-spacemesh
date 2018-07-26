@@ -6,7 +6,7 @@ import (
 	consensusConfig "github.com/spacemeshos/go-spacemesh/consensus/config"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	"github.com/spacemeshos/go-spacemesh/log"
-	p2pConfig "github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
+	p2pConfig "github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spf13/viper"
 	"path/filepath"
 )
