@@ -27,12 +27,12 @@ const HandshakeReq = "/handshake/1.0/handshake-req/"
 // HandshakeResp specifies the handshake protocol response message identifier.
 const HandshakeResp = "/handshake/1.0/handshake-resp/"
 
-// Generate handshake and session data between node and remoteNode
+// GenerateHandshakeRequestData and session data between node and remoteNode
 // Returns handshake data to send to removeNode and a network session data object that includes the session enc/dec sym key and iv
 // Node that NetworkSession is not yet authenticated - this happens only when the handshake response is processed and authenticated
 // This is called by node1 (initiator)
 func GenerateHandshakeRequestData(localPublicKey crypto.PublicKey, localPrivateKey crypto.PrivateKey, remotePublicKey crypto.PublicKey,
-	networkId int8) (*pb.HandshakeData, NetworkSession, error) {
+	networkID int8) (*pb.HandshakeData, NetworkSession, error) {
 
 	// we use the Elliptic Curve Encryption Scheme
 	// https://en.wikipedia.org/wiki/Integrated_Encryption_Scheme
@@ -42,7 +42,7 @@ func GenerateHandshakeRequestData(localPublicKey crypto.PublicKey, localPrivateK
 	}
 
 	data.ClientVersion = config.ClientVersion
-	data.NetworkID = int32(networkId)
+	data.NetworkID = int32(networkID)
 	data.Timestamp = time.Now().Unix()
 
 	iv := make([]byte, 16)
@@ -98,10 +98,10 @@ func GenerateHandshakeRequestData(localPublicKey crypto.PublicKey, localPrivateK
 	return data, session, nil
 }
 
-// Process a session handshake request data from remoteNode r
+// ProcessHandshakeRequest Process a session handshake request data from remoteNode r
 // Returns Handshake data to send to r and a network session data object that includes the session sym  enc/dec key
 // This is called by responder in the handshake protocol (node2)
-func ProcessHandshakeRequest(networkId int8, lPub crypto.PublicKey, lPri crypto.PrivateKey, rPub crypto.PublicKey, req *pb.HandshakeData) (*pb.HandshakeData, NetworkSession, error) {
+func ProcessHandshakeRequest(networkID int8, lPub crypto.PublicKey, lPri crypto.PrivateKey, rPub crypto.PublicKey, req *pb.HandshakeData) (*pb.HandshakeData, NetworkSession, error) {
 	// check that received clientversion is valid client string
 	reqVersion := strings.Split(req.ClientVersion, "/")
 	if len(reqVersion) != 2 {
@@ -119,8 +119,8 @@ func ProcessHandshakeRequest(networkId int8, lPub crypto.PublicKey, lPri crypto.
 	}
 
 	// make sure we're on the same network
-	if req.NetworkID != int32(networkId) {
-		return nil, nil, fmt.Errorf("request net id (%d) is different than local net id (%d)", req.NetworkID, networkId)
+	if req.NetworkID != int32(networkID) {
+		return nil, nil, fmt.Errorf("request net id (%d) is different than local net id (%d)", req.NetworkID, networkID)
 		//TODO : drop and blacklist this sender
 	}
 
@@ -187,7 +187,7 @@ func ProcessHandshakeRequest(networkId int8, lPub crypto.PublicKey, lPri crypto.
 
 	resp := &pb.HandshakeData{
 		ClientVersion: config.ClientVersion,
-		NetworkID:     int32(networkId),
+		NetworkID:     int32(networkID),
 		SessionId:     req.SessionId,
 		Timestamp:     time.Now().Unix(),
 		NodePubKey:    lPub.InternalKey().SerializeUncompressed(),
@@ -215,9 +215,8 @@ func ProcessHandshakeRequest(networkId int8, lPub crypto.PublicKey, lPri crypto.
 	return resp, s, nil
 }
 
-// Process handshake protocol response. This is called by initiator (node1) to handle response from node2
+// ProcessHandshakeResponse is called by initiator (node1) to handle response from node2
 // and to establish the session
-// Side effect - passed network session is set to authenticated
 func ProcessHandshakeResponse(remotePub crypto.PublicKey, s NetworkSession, resp *pb.HandshakeData) error {
 
 	// verified shared public secret

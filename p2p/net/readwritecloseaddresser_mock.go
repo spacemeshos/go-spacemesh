@@ -4,6 +4,7 @@ import (
 	"net"
 	"sync"
 )
+
 // ReadWriteCloseAddresserMock is a ninja robot
 type ReadWriteCloseAddresserMock struct {
 	readIn   []byte
@@ -66,7 +67,6 @@ func (rwcam *ReadWriteCloseAddresserMock) WriteOut() (p []byte) {
 	return
 }
 
-
 // WriteCount is a mock
 func (rwcam *ReadWriteCloseAddresserMock) WriteCount() int {
 	return rwcam.writeCnt
@@ -99,7 +99,6 @@ func (rwcam *ReadWriteCloseAddresserMock) Close() error {
 	close(rwcam.readChan)
 	return rwcam.closeRes
 }
-
 
 func (rwcam *ReadWriteCloseAddresserMock) setRemoteAddrResult(addr net.Addr) {
 	rwcam.remoteAddrRes = addr

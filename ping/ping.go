@@ -18,6 +18,7 @@ type Pinger interface {
 }
 
 const protocol = "/ping/1.0/"
+
 // PingTimeout is a timeout for ping reply
 const PingTimeout = time.Second * 10 // TODO: Parametrize
 

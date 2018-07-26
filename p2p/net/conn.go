@@ -5,19 +5,20 @@ import (
 	"time"
 
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/crypto"
-	"github.com/spacemeshos/go-spacemesh/p2p/net/wire"
-	"gopkg.in/op/go-logging.v1"
 	"io"
 	"net"
 	"sync"
+
+	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/p2p/net/wire"
+	"gopkg.in/op/go-logging.v1"
 )
 
 var (
 	// ErrClosedIncomingChannel is sent when the connection is closed because the underlying formatter incoming channel was closed
 	ErrClosedIncomingChannel = errors.New("unexpected closed incoming channel")
 	// ErrConnectionClosed is sent when the connection is closed after Close was called
-	ErrConnectionClosed      = errors.New("connections was intentionally closed")
+	ErrConnectionClosed = errors.New("connections was intentionally closed")
 )
 
 // ConnectionSource specifies the connection originator - local or remote node.
@@ -59,7 +60,7 @@ type FormattedConnection struct {
 	formatter  wire.Formatter // format messages in some way
 	networker  networker      // network context
 	session    NetworkSession
-	closeOnce  sync.Once
+	closeOnce  *sync.Once
 }
 
 type networker interface {
@@ -93,7 +94,6 @@ func newConnection(conn readWriteCloseAddresser, netw networker, formatter wire.
 	connection.formatter.Pipe(conn)
 	return connection
 }
-
 
 // ID returns the channel's ID
 func (c *FormattedConnection) ID() string {

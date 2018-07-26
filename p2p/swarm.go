@@ -334,13 +334,20 @@ Loop:
 // onRemoteClientMessage possible errors
 
 var (
-	ErrBadFormat   = errors.New("bad msg format, could'nt deserialize")
-	ErrOutOfSync   = errors.New("received out of sync msg")
-	ErrNoPayload   = errors.New("deprecated code path, no payload in message")
+	// ErrBadFormat could'nt deserialize
+	ErrBadFormat = errors.New("bad msg format, could'nt deserialize")
+	// ErrOutOfSync is returned when messsage timestamp was out of sync
+	ErrOutOfSync = errors.New("received out of sync msg")
+	// ErrNoPayload empty payload message
+	ErrNoPayload = errors.New("deprecated code path, no payload in message")
+	// ErrFailDecrypt session cant decrypt
 	ErrFailDecrypt = errors.New("can't decrypt message payload with session key")
-	ErrAuthAuthor  = errors.New("failed to verify author")
-	ErrNoProtocol  = errors.New("Received msg to an unsupported protocol")
-	ErrNoSession   = errors.New("connection is missing a session")
+	// ErrAuthAuthor message sign is wrong
+	ErrAuthAuthor = errors.New("failed to verify author")
+	// ErrNoProtocol we don't have the protocol message
+	ErrNoProtocol = errors.New("received msg to an unsupported protocol")
+	// ErrNoSession we don't have this session
+	ErrNoSession = errors.New("connection is missing a session")
 )
 
 // onRemoteClientMessage pre-process a protocol message from a remote client handling decryption and authentication

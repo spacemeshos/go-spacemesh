@@ -7,8 +7,10 @@ import (
 	"sync"
 )
 
-// simulator is a p2p node factory and message bridge
-type simulator struct {
+// TODO : implmement delays?
+
+// Simulator is a p2p node factory and message bridge
+type Simulator struct {
 	ingressChannel chan service.Message
 	io.Closer
 	mutex           sync.RWMutex
@@ -17,20 +19,21 @@ type simulator struct {
 
 // Node is a simulated p2p node that can be used as a p2p service
 type Node struct {
-	sim *simulator
+	sim *Simulator
 	node.Node
 }
 
-func New() *simulator {
-	s := &simulator{
+// New Creates a p2p simulation by providing nodes as p2p services and bridge them.
+func New() *Simulator {
+	s := &Simulator{
 		ingressChannel:  make(chan service.Message),
 		protocolHandler: make(map[string]map[string]chan service.Message),
 	}
 	return s
 }
 
-// NewNode creates a new p2p node in this simulator
-func (s *simulator) NewNode() *Node {
+// NewNode creates a new p2p node in this Simulator
+func (s *Simulator) NewNode() *Node {
 	n := node.GenerateRandomNodeData()
 	sn := &Node{
 		s,
@@ -43,7 +46,7 @@ func (s *simulator) NewNode() *Node {
 }
 
 // NewNodeFrom creates a new node from existing details
-func (s *simulator) NewNodeFrom(n node.Node) *Node {
+func (s *Simulator) NewNodeFrom(n node.Node) *Node {
 	sn := &Node{
 		s,
 		n,
@@ -90,7 +93,7 @@ func (sn *Node) RegisterProtocol(protocol string) chan service.Message {
 	return c
 }
 
-// Shutdown closes all node channels are remove it from the simulator map
+// Shutdown closes all node channels are remove it from the Simulator map
 func (sn *Node) Shutdown() {
 	sn.sim.mutex.Lock()
 	for _, c := range sn.sim.protocolHandler[sn.Node.String()] {
