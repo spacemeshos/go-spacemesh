@@ -11,6 +11,6 @@ jobs:
           script:
               - ./ci/validate-gofmt.sh
               - go get -u golang.org/x/lint/golint
-              - ./ci/validate-lint.sh
+              - make lint
         - stage: test
           script: go test -p 1 github.com/spacemeshos/go-spacemesh/...
