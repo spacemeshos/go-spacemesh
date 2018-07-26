@@ -34,6 +34,7 @@ type IncomingMessageEvent struct {
 
 type ManagedConnection interface {
 	Connection
+	incomingChannel() chan []byte
 	beginEventProcessing()
 }
 
@@ -161,7 +162,7 @@ func (n *Net) createSecuredConnection(address string, remotePublicKey crypto.Pub
 	var ok bool
 	timer := time.NewTimer(n.config.ResponseTimeout)
 	select {
-	case msg, ok = <-conn.IncomingChannel():
+	case msg, ok = <-conn.incomingChannel():
 		if !ok {
 			conn.Close()
 			return nil, fmt.Errorf("%s err: incoming channel got closed", errMsg)

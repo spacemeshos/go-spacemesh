@@ -15,7 +15,7 @@ type dialResult struct {
 }
 
 type networker interface {
-	Dial(address string, remotePublicKey crypto.PublicKey, networkId int8) (net.Connection, error) // Connect to a remote node. Can send when no error.
+	Dial(address string, remotePublicKey crypto.PublicKey, networkID int8) (net.Connection, error) // Connect to a remote node. Can send when no error.
 	SubscribeOnNewRemoteConnections() chan net.Connection
 	NetworkID() int8
 	ClosingConnections() chan net.Connection
@@ -59,9 +59,9 @@ func NewConnectionPool(network networker, lPub crypto.PublicKey) *ConnectionPool
 	return cPool
 }
 
-// Graceful shutdown of the ConnectionPool.
+// Shutdown of the ConnectionPool, gracefully.
 // - Close all open connections
-// - Waits for all Dial routines to complete and release any routine waiting for GetConnection
+// - Waits for all Dial routines to complete and unblock any routines waiting for GetConnection
 func (cp *ConnectionPool) Shutdown() {
 	cp.connMutex.Lock()
 	if cp.shutdown {

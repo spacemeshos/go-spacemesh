@@ -14,8 +14,10 @@ import (
 )
 
 var (
-	ErrClosedChannel    = errors.New("unexpected closed connection channel")
-	ErrConnectionClosed = errors.New("connections was intentionally closed")
+	// ErrClosedIncomingChannel is sent when the connection is closed because the underlying formatter incoming channel was closed
+	ErrClosedIncomingChannel = errors.New("unexpected closed incoming channel")
+	// ErrConnectionClosed is sent when the connection is closed after Close was called
+	ErrConnectionClosed      = errors.New("connections was intentionally closed")
 )
 
 // ConnectionSource specifies the connection originator - local or remote node.
@@ -27,6 +29,7 @@ const (
 	Remote
 )
 
+// Connection is an interface stating the API of all secured connections in the system
 type Connection interface {
 	fmt.Stringer
 
@@ -39,14 +42,12 @@ type Connection interface {
 	Session() NetworkSession
 	SetSession(session NetworkSession)
 
-	IncomingChannel() chan []byte
-
 	Send(m []byte) error
 	Close()
 }
 
-// A network connection supporting full-duplex messaging
 // FormattedConnection is an io.Writer and an io.Closer
+// A network connection supporting full-duplex messaging
 type FormattedConnection struct {
 	logger *logging.Logger
 	// metadata for logging / debugging
@@ -93,30 +94,38 @@ func newConnection(conn readWriteCloseAddresser, netw networker, formatter wire.
 	return connection
 }
 
+
+// ID returns the channel's ID
 func (c *FormattedConnection) ID() string {
 	return c.id
 }
 
+// RemoteAddr returns the channel's remote peer address
 func (c *FormattedConnection) RemoteAddr() net.Addr {
 	return c.remoteAddr
 }
 
+// SetRemotePublicKey sets the remote peer's public key
 func (c *FormattedConnection) SetRemotePublicKey(key crypto.PublicKey) {
 	c.remotePub = key
 }
 
+// RemotePublicKey returns the remote peer's public key
 func (c FormattedConnection) RemotePublicKey() crypto.PublicKey {
 	return c.remotePub
 }
 
+// SetSession sets the network session
 func (c *FormattedConnection) SetSession(session NetworkSession) {
 	c.session = session
 }
 
+// Session returns the network session
 func (c *FormattedConnection) Session() NetworkSession {
 	return c.session
 }
 
+// String returns a string describing the connection
 func (c *FormattedConnection) String() string {
 	return c.id
 }
@@ -125,7 +134,8 @@ func (c *FormattedConnection) publish(message []byte) {
 	c.networker.IncomingMessages() <- IncomingMessageEvent{c, message}
 }
 
-func (c *FormattedConnection) IncomingChannel() chan []byte {
+// incomingChannel returns the incoming messages channel
+func (c *FormattedConnection) incomingChannel() chan []byte {
 	return c.formatter.In()
 }
 
@@ -161,7 +171,7 @@ Loop:
 		case msg, ok := <-c.formatter.In():
 
 			if !ok { // chan closed
-				err = ErrClosedChannel
+				err = ErrClosedIncomingChannel
 				break Loop
 			}
 

@@ -19,10 +19,12 @@ type Chan struct {
 
 // Satisfy formatter.
 
+// In exposes the incoming message channel
 func (s *Chan) In() chan []byte {
 	return s.inMsgChan
 }
 
+// Out sends message on the wire, blocking.
 func (s *Chan) Out(message []byte) error {
 	outCb := make(chan error)
 	select {
@@ -46,19 +48,6 @@ func (om outMessage) Result() chan error {
 	return om.r
 }
 
-type InMessage struct {
-	m []byte
-	e error
-}
-
-func (im InMessage) Message() []byte {
-	return im.m
-}
-
-func (im InMessage) Error() error {
-	return im.e
-}
-
 // NewChan constructs a Chan with a given buffer size.
 func NewChan(chanSize int) *Chan {
 	return &Chan{
@@ -68,6 +57,7 @@ func NewChan(chanSize int) *Chan {
 	}
 }
 
+// Pipe invokes the reader and writer flows, once it's ran Chan can start serving incoming/outgoing messages
 func (s *Chan) Pipe(rwc io.ReadWriteCloser) {
 	s.connection = rwc
 	go s.readFromReader(rwc)

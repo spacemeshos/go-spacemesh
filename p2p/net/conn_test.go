@@ -144,7 +144,7 @@ func TestGettersToBoostCoverage(t *testing.T) {
 	assert.Equal(t, rPub, conn.RemotePublicKey())
 	conn.SetSession(&NetworkSessionImpl{})
 	assert.NotNil(t, conn.Session())
-	assert.NotNil(t, conn.IncomingChannel())
+	assert.NotNil(t, conn.incomingChannel())
 	assert.Equal(t, addr.String(), conn.RemoteAddr().String())
 
 }
