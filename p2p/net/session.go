@@ -26,6 +26,7 @@ type NetworkSession interface {
 }
 
 // TODO: add support for idle session expiration
+
 // NetworkSessionImpl implements NetworkSession.
 type NetworkSessionImpl struct {
 	id      []byte

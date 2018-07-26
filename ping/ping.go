@@ -12,24 +12,28 @@ import (
 	"errors"
 )
 
+// Pinger is an identity that does ping.
 type Pinger interface {
 	PublicKey() crypto.PublicKey
 }
 
 const protocol = "/ping/1.0/"
+// PingTimeout is a timeout for ping reply
 const PingTimeout = time.Second * 10 // TODO: Parametrize
 
 var responses = map[string]string{"hello": "world"}
 var responseMutex sync.RWMutex
 
+// AddResponse adds response according to originating request
 func AddResponse(req, res string) {
 	responseMutex.Lock()
 	responses[req] = res
 	responseMutex.Unlock()
 }
 
-var ErrPingTimedOut = errors.New("Ping took too long to response")
+var errPingTimedOut = errors.New("Ping took too long to response")
 
+// Ping manages ping requests and responses
 type Ping struct {
 	p2p p2p.Service
 
@@ -39,6 +43,7 @@ type Ping struct {
 	ingressChannel chan service.Message
 }
 
+// New creates new ping instance, receives p2p as network infra
 func New(p2p p2p.Service) *Ping {
 	p := &Ping{pending: make(map[crypto.UUID]chan *pb.Ping)}
 	p.p2p = p2p
@@ -78,6 +83,7 @@ func (p *Ping) readLoop() {
 	}
 }
 
+// Ping sends actual pings to target
 func (p *Ping) Ping(target, msg string) (string, error) {
 	var response string
 	reqid := crypto.NewUUID()
@@ -99,7 +105,7 @@ func (p *Ping) Ping(target, msg string) (string, error) {
 		delete(p.pending, reqid)
 		p.pendMuxtex.Unlock()
 	case <-timer.C:
-		return response, ErrPingTimedOut
+		return response, errPingTimedOut
 	}
 
 	return response, nil
