@@ -60,7 +60,7 @@ type FormattedConnection struct {
 	formatter  wire.Formatter // format messages in some way
 	networker  networker      // network context
 	session    NetworkSession
-	closeOnce  *sync.Once
+	closeOnce  sync.Once
 }
 
 type networker interface {
@@ -111,7 +111,7 @@ func (c *FormattedConnection) SetRemotePublicKey(key crypto.PublicKey) {
 }
 
 // RemotePublicKey returns the remote peer's public key
-func (c FormattedConnection) RemotePublicKey() crypto.PublicKey {
+func (c *FormattedConnection) RemotePublicKey() crypto.PublicKey {
 	return c.remotePub
 }
 
