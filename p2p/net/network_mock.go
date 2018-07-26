@@ -82,8 +82,7 @@ func (n *NetworkMock) SetDialDelayMs(delay int8) {
 }
 
 // Dial dials
-func (n *NetworkMock) Dial(address string, remotePublicKey crypto.PublicKey, networkId int8) (Connection, error) {
-	n.networkId = networkId
+func (n *NetworkMock) Dial(address string, remotePublicKey crypto.PublicKey) (Connection, error) {
 	atomic.AddInt32(&n.dialCount, 1)
 	time.Sleep(time.Duration(n.dialDelayMs) * time.Millisecond)
 	conn := NewConnectionMock(remotePublicKey, Local)

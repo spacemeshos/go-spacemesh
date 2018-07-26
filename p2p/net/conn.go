@@ -78,7 +78,6 @@ type readWriteCloseAddresser interface {
 // Create a new connection wrapping a net.Conn with a provided connection manager
 func newConnection(conn readWriteCloseAddresser, netw networker, formatter wire.Formatter, remotePub crypto.PublicKey, log *logging.Logger) *FormattedConnection {
 
-	// todo pass wire format inside and make it pluggable
 	// todo parametrize channel size - hard-coded for now
 	connection := &FormattedConnection{
 		logger:     log,

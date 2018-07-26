@@ -15,7 +15,7 @@ type dialResult struct {
 }
 
 type networker interface {
-	Dial(address string, remotePublicKey crypto.PublicKey, networkID int8) (net.Connection, error) // Connect to a remote node. Can send when no error.
+	Dial(address string, remotePublicKey crypto.PublicKey) (net.Connection, error) // Connect to a remote node. Can send when no error.
 	SubscribeOnNewRemoteConnections() chan net.Connection
 	NetworkID() int8
 	ClosingConnections() chan net.Connection
@@ -153,7 +153,7 @@ func (cp *ConnectionPool) GetConnection(address string, remotePub crypto.PublicK
 		// No one is waiting for a connection with the remote peer, need to call Dial
 		go func() {
 			cp.dialWait.Add(1)
-			conn, err := cp.net.Dial(address, remotePub, cp.net.NetworkID())
+			conn, err := cp.net.Dial(address, remotePub)
 			if err != nil {
 				cp.handleDialResult(remotePub, dialResult{nil, err})
 			} else {

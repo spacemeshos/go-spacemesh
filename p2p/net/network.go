@@ -15,23 +15,15 @@ import (
 	"time"
 )
 
-//type Net interface {
-//	Dial(address string, remotePublicKey crypto.PublicKey, networkId int8) (Connection, error) // Connect to a remote node. Can send when no error.
-//	SubscribeOnNewRemoteConnections() chan Connection
-//	Logger() *logging.Logger
-//	NetworkID() int8
-//	HandlePreSessionIncomingMessage(c Connection, msg []byte) error
-//	LocalNode() *node.LocalNode
-//	IncomingMessages() chan IncomingMessageEvent
-//	ClosingConnections() chan Connection
-//	Shutdown()
-//}
 
+// IncomingMessageEvent is the event reported on new incoming message, it contains the message and the Connection carrying the message
 type IncomingMessageEvent struct {
 	Conn    Connection
 	Message []byte
 }
 
+
+// ManagedConnection in an interface extending Connection with some internal methods that are required for Net to manage Connections
 type ManagedConnection interface {
 	Connection
 	incomingChannel() chan []byte
@@ -47,7 +39,7 @@ type ManagedConnection interface {
 // Network main client is the swarm
 // Net has no channel events processing loops - clients are responsible for polling these channels and popping events from them
 type Net struct {
-	networkId int8
+	networkID int8
 	localNode *node.LocalNode
 	logger    *logging.Logger
 
@@ -70,7 +62,7 @@ type Net struct {
 func NewNet(conf config.Config, localEntity *node.LocalNode) (*Net, error) {
 
 	n := &Net{
-		networkId:          conf.NetworkID,
+		networkID:          conf.NetworkID,
 		localNode:          localEntity,
 		logger:             localEntity.Logger,
 		tcpListenAddress:   localEntity.Address(),
@@ -91,22 +83,28 @@ func NewNet(conf config.Config, localEntity *node.LocalNode) (*Net, error) {
 	return n, nil
 }
 
+
+// Logger returns a reference to logger
 func (n *Net) Logger() *logging.Logger {
 	return n.logger
 }
 
+// NetworkID retuers Net's network ID
 func (n *Net) NetworkID() int8 {
-	return n.networkId
+	return n.networkID
 }
 
+// LocalNode return's the local node descriptor
 func (n *Net) LocalNode() *node.LocalNode {
 	return n.localNode
 }
 
+// IncomingMessages returns Net's channel for incoming messages
 func (n *Net) IncomingMessages() chan IncomingMessageEvent {
 	return n.incomingMessages
 }
 
+// ClosingConnections returns Net's channel where closing connections events are reported
 func (n *Net) ClosingConnections() chan Connection {
 	return n.closingConnections
 }
@@ -134,13 +132,13 @@ func (n *Net) createConnection(address string, remotePub crypto.PublicKey, timeO
 	return c, nil
 }
 
-func (n *Net) createSecuredConnection(address string, remotePublicKey crypto.PublicKey, networkId int8, timeOut time.Duration, keepAlive time.Duration) (ManagedConnection, error) {
+func (n *Net) createSecuredConnection(address string, remotePublicKey crypto.PublicKey, timeOut time.Duration, keepAlive time.Duration) (ManagedConnection, error) {
 	errMsg := "failed to establish secured connection."
 	conn, err := n.createConnection(address, remotePublicKey, timeOut, keepAlive)
 	if err != nil {
 		return nil, err
 	}
-	data, session, err := GenerateHandshakeRequestData(n.localNode.PublicKey(), n.localNode.PrivateKey(), remotePublicKey, networkId)
+	data, session, err := GenerateHandshakeRequestData(n.localNode.PublicKey(), n.localNode.PrivateKey(), remotePublicKey, n.networkID)
 	if err != nil {
 		conn.Close()
 		return nil, fmt.Errorf("%s err: %v", errMsg, err)
@@ -195,8 +193,8 @@ func (n *Net) createSecuredConnection(address string, remotePublicKey crypto.Pub
 // address:: ip:port
 // Returns established connection that local clients can send messages to or error if failed
 // to establish a connection, currently only secured connections are supported
-func (n *Net) Dial(address string, remotePublicKey crypto.PublicKey, networkId int8) (Connection, error) {
-	conn, err := n.createSecuredConnection(address, remotePublicKey, networkId, n.config.DialTimeout, n.config.ConnKeepAlive)
+func (n *Net) Dial(address string, remotePublicKey crypto.PublicKey) (Connection, error) {
+	conn, err := n.createSecuredConnection(address, remotePublicKey, n.config.DialTimeout, n.config.ConnKeepAlive)
 	if err != nil {
 		return nil, fmt.Errorf("failed to Dail. err: %v", err)
 	}
@@ -204,6 +202,8 @@ func (n *Net) Dial(address string, remotePublicKey crypto.PublicKey, networkId i
 	return conn, nil
 }
 
+
+// Shutdown initiate a graceful closing of the TCP listener and all other internal routines
 func (n *Net) Shutdown() {
 	n.isShuttingDown = true
 	n.tcpListener.Close()
@@ -243,6 +243,7 @@ func (n *Net) acceptTCP() {
 	}
 }
 
+// SubscribeOnNewRemoteConnections returns new channel where events of new remote connections are reported
 func (n *Net) SubscribeOnNewRemoteConnections() chan Connection {
 	n.regMutex.Lock()
 	ch := make(chan Connection, 20)
@@ -259,6 +260,7 @@ func (n *Net) publishNewRemoteConnection(conn Connection) {
 	n.regMutex.RUnlock()
 }
 
+// HandlePreSessionIncomingMessage establishes session with the remote peer and update the Connection with the new session
 func (n *Net) HandlePreSessionIncomingMessage(c Connection, message []byte) error {
 	//TODO replace the next few lines with a way to validate that the message is a handshake request based on the message metadata
 	errMsg := "failed to handle handshake request"
