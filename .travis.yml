@@ -7,7 +7,11 @@ branches:
         - develop
 jobs:
     include:
-        - stage: test
+        - stage: lint
           script:
             - make devtools
-            - go test -p 1 github.com/spacemeshos/go-spacemesh/...
+            - make lint
+          - stage: test
+          script:
+            - make devtools
+            - make test

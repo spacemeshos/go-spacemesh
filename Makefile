@@ -27,22 +27,17 @@ test:
 .PHONY: build test devtools cover
 
 lint:
-	./ci/validate-lint.sh 2>&1 >/dev/null |  grep -vE "_mock|_test"
+	./ci/validate-lint.sh
 
 devtools:
 	# Install the build tools
 	go get -u github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway
 	go get -u github.com/grpc-ecosystem/grpc-gateway/protoc-gen-swagger
 	go get -u github.com/golang/protobuf/protoc-gen-go
-	go get -u github.com/golang/lint/golint
 	go get -u github.com/kardianos/govendor
 
 	# Get the dependencies
 	govendor sync
-
-	./ci/install-protobuf.sh
-	./ci/genproto.sh
-
 cover:
 	@echo "mode: count" > cover-all.out
 	@$(foreach pkg,$(PKGS),\

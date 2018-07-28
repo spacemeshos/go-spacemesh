@@ -9,6 +9,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
+//TODO: check if caching strings worth it.
+
 // Key defines basic key caps.
 type Key interface {
 	String() string // this is a base58 encoded of Bytes()
@@ -42,8 +44,7 @@ type PublicKey interface { // 33 bytes
 }
 
 type publicKeyImpl struct {
-	k            *btcec.PublicKey
-	cachedString string
+	k *btcec.PublicKey
 }
 
 type privateKeyImpl struct {
@@ -57,7 +58,7 @@ func GenerateKeyPair() (PrivateKey, PublicKey, error) {
 		return nil, nil, err
 	}
 
-	return &privateKeyImpl{privKey}, &publicKeyImpl{privKey.PubKey(), ""}, nil
+	return &privateKeyImpl{privKey}, &publicKeyImpl{privKey.PubKey()}, nil
 }
 
 // NewPrivateKey creates a new private key from data
@@ -131,7 +132,7 @@ func NewPublicKey(data []byte) (PublicKey, error) {
 		return nil, err
 	}
 
-	return &publicKeyImpl{k, ""}, nil
+	return &publicKeyImpl{k}, nil
 }
 
 // NewPublicKeyFromString creates a new public key from a base58 encoded string data.
@@ -152,10 +153,7 @@ func (p *publicKeyImpl) Bytes() []byte {
 
 // String returns a base58 encoded string of the key binary data.
 func (p *publicKeyImpl) String() string {
-	if p.cachedString == "" {
-		p.cachedString = base58.Encode(p.Bytes())
-	}
-	return p.cachedString
+	return base58.Encode(p.Bytes())
 }
 
 // Pretty returns a readable short string of the public key.
