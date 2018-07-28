@@ -27,7 +27,7 @@ test:
 .PHONY: build test devtools cover
 
 lint:
-	./ci/validate-lint.sh 2>&1 >/dev/null |  grep -vE "_mock|_test"
+	./ci/validate-lint.sh
 
 devtools:
 	# Install the build tools
