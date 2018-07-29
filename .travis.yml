@@ -11,7 +11,7 @@ jobs:
           script:
             - make devtools
             - make lint
-          - stage: test
+        - stage: test
           script:
             - make devtools
             - make test
