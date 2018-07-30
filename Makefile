@@ -27,19 +27,17 @@ test:
 .PHONY: build test devtools cover
 
 lint:
-	go list ./... | grep -v /vendor/ | xargs -n 1 golint
+	./ci/validate-lint.sh
 
 devtools:
 	# Install the build tools
 	go get -u github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway
 	go get -u github.com/grpc-ecosystem/grpc-gateway/protoc-gen-swagger
 	go get -u github.com/golang/protobuf/protoc-gen-go
-	go get -u github.com/golang/lint/golint
 	go get -u github.com/kardianos/govendor
 
 	# Get the dependencies
 	govendor sync
-
 cover:
 	@echo "mode: count" > cover-all.out
 	@$(foreach pkg,$(PKGS),\

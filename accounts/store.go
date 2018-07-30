@@ -17,7 +17,7 @@ type AccountData struct {
 	PublicKey  string          `json:"publicKey"`
 	CryptoData CryptoData      `json:"crypto"`
 	KDParams   crypto.KDParams `json:"kd"`
-	NetworkID  int             `json:"networkId"`
+	NetworkID  int8            `json:"networkId"`
 }
 
 // CryptoData is the data use to encrypt/decrypt locally stored account data.

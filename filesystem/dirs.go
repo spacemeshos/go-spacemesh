@@ -151,3 +151,26 @@ func GetFullDirectoryPath(name string) (string, error) {
 
 	return aPath, err
 }
+
+// EnsureNodesDataDirectory Gets the os-specific full path to the nodes master data directory.
+// Attempts to create the directory on-demand.
+func EnsureNodesDataDirectory(nodesDirectoryName string) (string, error) {
+	dataPath, err := GetSpacemeshDataDirectoryPath()
+	if err != nil {
+		return "", err
+	}
+
+	nodesDir := filepath.Join(dataPath, nodesDirectoryName)
+	return GetFullDirectoryPath(nodesDir)
+}
+
+// EnsureNodeDataDirectory Gets the path to the node's data directory, e.g. /nodes/[node-id]/
+// Directory will be created on demand if it doesn't exist.
+func EnsureNodeDataDirectory(nodesDataDir string, nodeID string) (string, error) {
+	return GetFullDirectoryPath(filepath.Join(nodesDataDir, nodeID))
+}
+
+// NodeDataFile Returns the os-specific full path to the node's data file.
+func NodeDataFile(nodesDataDir, NodeDataFileName, nodeID string) string {
+	return filepath.Join(nodesDataDir, nodeID, NodeDataFileName)
+}

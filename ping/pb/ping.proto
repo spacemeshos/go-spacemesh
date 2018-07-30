@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package pb;
+option go_package = "pb";
+
+message Ping {
+	bytes ReqID = 1;
+	bool Req = 2;
+	string Message = 3;
+}

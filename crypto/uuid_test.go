@@ -14,7 +14,7 @@ func TestUUID(t *testing.T) {
 	id1Str := id1.String()
 	assert.Equal(t, id, id1Str, "expected same uuid")
 
-	id2 := UUID()
-	assert.Equal(t, len(id2), 36, "expected 16")
+	id2 := NewUUID()
+	assert.Equal(t, len(id2), 16, "expected 16")
 
 }

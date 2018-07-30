@@ -3,7 +3,7 @@ package timesync
 import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/crypto"
-	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
+	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
@@ -12,7 +12,7 @@ import (
 func TestCheckSystemClockDrift(t *testing.T) {
 	drift, err := CheckSystemClockDrift()
 	t.Log("Checking system clock drift from NTP")
-	if drift < -nodeconfig.TimeConfigValues.MaxAllowedDrift || drift > nodeconfig.TimeConfigValues.MaxAllowedDrift {
+	if drift < -config.TimeConfigValues.MaxAllowedDrift || drift > config.TimeConfigValues.MaxAllowedDrift {
 		assert.NotNil(t, err, fmt.Sprintf("Didn't get that drift exceedes. %s", err))
 	} else {
 		assert.Nil(t, err, fmt.Sprintf("Drift is ok"))
@@ -57,3 +57,24 @@ func TestSortableDurations_RemoveExtremes(t *testing.T) {
 }
 
 // TODO : add more tests for rest of the functions
+
+func TestCheckMessageDrift(t *testing.T) {
+	reqtime := time.Now()
+	for i := 0; reqtime.Add(time.Second * time.Duration(i)).Before(reqtime.Add(MaxAllowedMessageDrift)); i++ {
+		fu := reqtime.Add(time.Second * time.Duration(i))
+		pa := reqtime.Add(-(time.Second * time.Duration(i)))
+
+		assert.True(t, CheckMessageDrift(fu.Unix()))
+		assert.True(t, CheckMessageDrift(pa.Unix()))
+	}
+
+	msgtime := time.Now().Add(-(MaxAllowedMessageDrift + time.Minute))
+	// check message that was sent too far in the past
+	on := CheckMessageDrift(msgtime.Unix())
+	assert.False(t, on)
+
+	msgtime = time.Now().Add(MaxAllowedMessageDrift + time.Minute)
+	// check message that was sent too far in the future
+	on = CheckMessageDrift(msgtime.Unix())
+	assert.False(t, on)
+}

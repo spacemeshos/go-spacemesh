@@ -2,13 +2,14 @@
 
 pkgs=`go list ./... | grep -vF /vendor/`
 
-go vet $pkgs
-if [ $? -eq 1 ]; then
-	exit 1
+#output=`go vet $pkgs` TODO: grep -B does'nt work with grep -v
+#if [ "$output" != "" ]; then
+#	exit 1
+#fi
+
+output=`golint $pkgs 2>&1 | grep -vE "_mock|_test"`
+if [ $(echo -n "$output" |  wc -l) -ne 0 ]; then
+    echo -n "$output";
+    exit 1;
 fi
 
-output=`golint $pkgs`
-if [ "$output" != "" ]; then
-	echo "$output" 1>&2
-	exit 1
-fi

@@ -58,7 +58,7 @@ func (s SpaceMeshGrpcService) startServiceInternal(status chan bool) {
 
 	pb.RegisterSpaceMeshServiceServer(s.Server, s)
 
-	// Register reflection service on gRPC server
+	// SubscribeOnNewConnections reflection service on gRPC server
 	reflection.Register(s.Server)
 
 	log.Debug("grpc API listening on port %d", port)

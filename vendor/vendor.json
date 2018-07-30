@@ -39,10 +39,10 @@
 			"revisionTime": "2017-11-13T18:07:20Z"
 		},
 		{
-			"checksumSHA1": "yqF125xVSkmfLpIVGrLlfE05IUk=",
+			"checksumSHA1": "JZV+pLo8Z/kIYExrZr1Zu9KSKyU=",
 			"path": "github.com/golang/protobuf/proto",
-			"revision": "1e59b77b52bf8e4b449a57e6f79f21226d571845",
-			"revisionTime": "2017-11-13T18:07:20Z"
+			"revision": "9eb2c01ac278a5d89ce4b2be68fe4500955d8179",
+			"revisionTime": "2018-06-22T17:40:09Z"
 		},
 		{
 			"checksumSHA1": "XNHQiRltA7NQJV0RvUroY+cf+zg=",
@@ -600,18 +600,6 @@
 			"checksumSHA1": "rL5r44ASTGubGW88gqQwlvVQshw=",
 			"path": "gopkg.in/op/go-logging.v1",
 			"revision": "b2cb9fa56473e98db8caba80237377e83fe44db5",
-			"revisionTime": "2017-08-11T01:42:03Z"
-		},
-		{
-			"checksumSHA1": "brhONOPp4CSdTZf5uEtcH+FpFUI=",
-			"path": "gopkg.in/urfave/cli.v1",
-			"revision": "0bdeddeeb0f650497d603c4ad7b20cfe685682f6",
-			"revisionTime": "2016-11-21T01:42:03Z"
-		},
-		{
-			"checksumSHA1": "xC05ftJepJipUMJIb96+9elSLXQ=",
-			"path": "gopkg.in/urfave/cli.v1/altsrc",
-			"revision": "cfb38830724cc34fedffe9a2a29fb54fa9169cd1",
 			"revisionTime": "2017-08-11T01:42:03Z"
 		}
 	],
