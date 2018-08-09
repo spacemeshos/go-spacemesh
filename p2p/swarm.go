@@ -96,22 +96,25 @@ func newSwarm(config config.Config, newNode bool) (*swarm, error) {
 
 	s.lNode.Debug("Created swarm for local node %s, %s", l.Address(), l.Pretty())
 
+	return s, nil
+}
+
+func (s *swarm) Start() error {
 	go s.handleNewConnectionEvents()
 
 	s.listenToNetworkMessages() // fires up a goroutine for each queue of messages
 
-	if config.SwarmConfig.Bootstrap {
+	if s.config.SwarmConfig.Bootstrap {
 		err := s.dht.Bootstrap()
 		if err != nil {
 			s.Shutdown()
-			return nil, err
+			return err
 		}
 		s.localNode().Info("Bootstrap succeed with %d nodes", config.SwarmConfig.RandomConnections)
 	}
 
 	go s.checkTimeDrifts()
-
-	return s, nil
+	return nil
 }
 
 // newProtocolMessageMetadata creates meta-data for an outgoing protocol message authored by this node.

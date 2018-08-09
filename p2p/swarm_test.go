@@ -26,6 +26,8 @@ func p2pTestInstance(t testing.TB, config config.Config) *swarm {
 	config.TCPPort = port
 	p, err := newSwarm(config, true) //false)
 	assert.NoError(t, err, "Error creating p2p stack, err: %v", err)
+	err = p.Start()
+	assert.NoError(t, err, err)
 	return p
 }
 
@@ -35,6 +37,8 @@ const examplePayload = "Example"
 func TestNew(t *testing.T) {
 	s, err := New(config.DefaultConfig())
 	assert.NoError(t, err, err)
+	err = s.Start()
+	assert.NoError(t, err, err)
 	assert.NotNil(t, s, "its nil")
 	s.Shutdown()
 }
@@ -42,6 +46,8 @@ func TestNew(t *testing.T) {
 func Test_newSwarm(t *testing.T) {
 	s, err := newSwarm(config.DefaultConfig(), false)
 	assert.NoError(t, err)
+	err = s.Start()
+	assert.NoError(t, err, err)
 	assert.NotNil(t, s)
 	s.Shutdown()
 }
@@ -69,6 +75,8 @@ func TestSwarm_signMessage(t *testing.T) {
 func TestSwarm_Shutdown(t *testing.T) {
 	s, err := newSwarm(config.DefaultConfig(), false)
 	assert.NoError(t, err)
+	err = s.Start()
+	assert.NoError(t, err, err)
 	s.Shutdown()
 
 	select {
@@ -77,6 +85,21 @@ func TestSwarm_Shutdown(t *testing.T) {
 	case <-time.After(1 * time.Second):
 		t.Error("Failed to shutdown")
 	}
+}
+
+func TestSwarm_ShutdownNoStart(t *testing.T) {
+	s, err := newSwarm(config.DefaultConfig(), false)
+	assert.NoError(t, err)
+	s.Shutdown()
+}
+
+
+func TestSwarm_RegisterProtocolNoStart(t *testing.T) {
+	s, err := newSwarm(config.DefaultConfig(), false)
+	msgs := s.RegisterProtocol("Anton")
+	assert.NotNil(t, msgs)
+	assert.NoError(t, err)
+	s.Shutdown()
 }
 
 func TestSwarm_processMessage(t *testing.T) {
