@@ -13,7 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/p2p/timesync"
+	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
