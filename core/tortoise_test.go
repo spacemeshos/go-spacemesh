@@ -8,27 +8,26 @@ import (
 )
 
 func TestAlgorithm_Sanity(t *testing.T) {
-	layerSize := 50
+	layerSize := 200
 	cachedLayers := 100
 
 	alg := NewAlgorithm(uint32(layerSize),uint32(cachedLayers))
 	l := createGenesisLayer()
 	alg.HandleIncomingLayer(l)
-	for i:=0; i<cachedLayers-1; i++ {
-		lyr := createFullPointingLayer(&l,layerSize)
+	for i:=0; i<11-1; i++ {
+		lyr := createFullPointingLayer(l,layerSize)
 		alg.HandleIncomingLayer(lyr)
 		l = lyr
 	}
 }
 
-func createGenesisLayer() Layer{
+func createGenesisLayer() *Layer{
 	log.Info("Creating genesis")
 	ts := time.Now()
 	coin := false
 	data := []byte("genesis")
 
 	bl := NewBlock(coin,data,ts)
-
 	l := NewLayer()
 
 	l.AddBlock(bl)
@@ -37,7 +36,7 @@ func createGenesisLayer() Layer{
 }
 
 
-func createFullPointingLayer(prev *Layer, blocksInLayer int) Layer{
+func createFullPointingLayer(prev *Layer, blocksInLayer int) *Layer{
 	ts := time.Now()
 	coin := false
 	// just some random data
