@@ -18,7 +18,7 @@ type Block struct {
 	data       []byte
 }
 
-func NewBlock(coin bool, data []byte, ts time.Time) Block{
+func NewBlock(coin bool, data []byte, ts time.Time) *Block{
 	b := Block{
 		id: BLockId(uuid.New()),
 		blockVotes: make(map[BLockId]bool),
@@ -26,7 +26,7 @@ func NewBlock(coin bool, data []byte, ts time.Time) Block{
 		data:data,
 		coin:coin,
 	}
-	return b
+	return &b
 }
 
 type Layer struct {
@@ -34,16 +34,16 @@ type Layer struct {
 	layerNum uint64
 }
 
-func (l *Layer) AddBlock(block Block){
+func (l *Layer) AddBlock(block *Block){
 	block.layerNum = l.layerNum
-	l.blocks = append(l.blocks, block)
+	l.blocks = append(l.blocks, *block)
 }
 
-func NewLayer() Layer{
+func NewLayer() *Layer{
 	l := Layer{
 		blocks: make([]Block,0),
 		layerNum: layerCounter,
 	}
 	layerCounter++
-	return l
+	return &l
 }

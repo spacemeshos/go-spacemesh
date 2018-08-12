@@ -30,6 +30,7 @@ func NewAlgorithm(layerSize uint32, cachedLayers uint32) Algorithm{
 		block2Id:          make(map[BLockId]uint32),
 		allBlocks:         make(map[BLockId]*Block),
 		layerQueue:        make(LayerQueue, cachedLayers +1),
+		idQueue:           make(NewIdQueue,layerSize),
 		remainingBlockIds: totBlocks,
 		totalBlocks: totBlocks,
 		posVotes:          make([]bitarray.BitArray,totBlocks),
@@ -50,9 +51,9 @@ func (alg *Algorithm) LayerVotingAvg() uint64 {
 	return 3
 }
 
-func (alg *Algorithm) IsTortoiseValid(originBlock *Block, targetBlock BLockId, targetBlockId uint64, visibleBlocks bitarray.BitArray) bool {
+func (alg *Algorithm) IsTortoiseValid(originBlock *Block, targetBlock BLockId, targetBlockIdx uint64, visibleBlocks bitarray.BitArray) bool {
 	//log.Info("calculating votes for: %v on target id: %v",alg.block2Id[originBlock.id], targetBlockId)
-	voteFor, voteAgainst := alg.countTotalVotesForBlock(targetBlockId, visibleBlocks)
+	voteFor, voteAgainst := alg.countTotalVotesForBlock(targetBlockIdx, visibleBlocks)
 
 	/*if err != nil {
 		log.Error("Failed to count votes")
@@ -140,21 +141,24 @@ func (alg *Algorithm) createBlockVotingMap(origin *Block) (*bitarray.BitArray, *
 	return &blockMap, &visibilityMap
 }
 
-func (alg *Algorithm) countTotalVotesForBlock(targetId uint64, visibleBlocks bitarray.BitArray) (uint64, uint64){
+func (alg *Algorithm) countTotalVotesForBlock(targetIdx uint64, visibleBlocks bitarray.BitArray) (uint64, uint64){
 	//targetId := alg.block2Id[target.id]
 	var posVotes, conVotes uint64 = 0,0
-	for _, blockIdx := range alg.block2Id {
+	for blockIdx:=0; blockIdx< len(alg.block2Id); blockIdx++{//_, blockIdx := range alg.block2Id {
 		//if this block sees our
-		if val, err := alg.visibilityMap[blockIdx].GetBit(targetId); err == nil && val {
-			if set, _ := alg.posVotes[blockIdx].GetBit(targetId); set {
-				posVotes++
-			} else {
-				conVotes++
+		//if alg.allBlocks[targetID].layerNum
+		if val, err := visibleBlocks.GetBit(uint64(blockIdx)); val{ //if this block is visible from our target
+			if val, err = alg.visibilityMap[blockIdx].GetBit(targetIdx); err == nil && val {
+				if set, _ := alg.posVotes[blockIdx].GetBit(targetIdx); set {
+					posVotes++
+				} else {
+					conVotes++
+				}
 			}
 		}
 
 	}
-	log.Info("target block id: %v, for :%v, against %v", targetId, posVotes, conVotes)
+	//log.Info("target block id: %v, for :%v, against %v", targetId, posVotes, conVotes)
 	return posVotes, conVotes
 }
 
@@ -198,10 +202,11 @@ func (alg *Algorithm) assignIdForBlock(blk *Block) uint32{
 
 }
 
-func (alg *Algorithm) HandleIncomingLayer(l Layer){
+func (alg *Algorithm) HandleIncomingLayer(l *Layer){
 	log.Info("received layer id %v =======================================", l.layerNum)
 	//todo: thread safety
-	alg.layers[l.layerNum] = &l
+	alg.layers[l.layerNum] = l
+	alg.layerQueue <- l
 	//blockBitArrays := make(map[Block]bitarray.BitArray)
 	if len(alg.layerQueue) >= int(alg.cachedLayers ) {
 		layer := <-alg.layerQueue
