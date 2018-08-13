@@ -5,7 +5,7 @@ import (
 	"github.com/google/uuid"
 )
 
-type BLockId uuid.UUID
+type BLockId string//uuid.UUID
 
 var layerCounter uint64 = 0
 
@@ -16,15 +16,19 @@ type Block struct {
 	timestamp  time.Time
 	coin       bool
 	data       []byte
+	proVotes	uint64
+	conVotes	uint64
 }
 
 func NewBlock(coin bool, data []byte, ts time.Time) *Block{
 	b := Block{
-		id: BLockId(uuid.New()),
+		id: BLockId(uuid.New().String()),
 		blockVotes: make(map[BLockId]bool),
 		timestamp: ts,
 		data:data,
 		coin:coin,
+		proVotes:0,
+		conVotes:0,
 	}
 	return &b
 }
