@@ -93,14 +93,16 @@ func (alg *Algorithm) getLayerById(layerId uint64) (*Layer, error){
 }
 
 func (alg *Algorithm) CountVotesInLastLayer(block *Block) (uint64, uint64){
+	return block.conVotes, block.proVotes
+	/*
 	var voteFor, voteAgainst uint64 = 0,0
 	l, er := alg.getLayerById(block.layerNum +1)
 	if er != nil {
 		log.Error("%v", er)
 		return 0,0
 	}
-	for _,visibleBlock := range l.blocks {
-		if vote, ok := visibleBlock.blockVotes[block.id]; ok {
+	for i :=0; i < len(l.blocks); i++ {//_,visibleBlock := range l.blocks {
+		if vote, ok := l.blocks[i].blockVotes[block.id]; ok {
 			if vote {
 				voteFor++
 			} else {
@@ -108,7 +110,7 @@ func (alg *Algorithm) CountVotesInLastLayer(block *Block) (uint64, uint64){
 			}
 		}
 	}
-	return voteFor, voteAgainst
+	return voteFor, voteAgainst*/
 }
 
 
@@ -121,22 +123,32 @@ func (alg *Algorithm) createBlockVotingMap(origin *Block) (*bitarray.BitArray, *
 	for blockId,vote := range origin.blockVotes { //todo: check for double votes
 		//todo: assert that block exists
 		targetBlockId := uint64(alg.block2Id[blockId])
+		block := alg.allBlocks[blockId]
 		visibilityMap.SetBit(targetBlockId)
 		targetPosition := alg.visibilityMap[targetBlockId]
 		visibilityMap = visibilityMap.Or(targetPosition.visibility)
 		//log.Info("target map %v new visibility map %v", targetMap.ToNums(), visibilityMap.ToNums())
 		if vote{
 			blockMap.SetBit(targetBlockId)
+			block.proVotes++
+		} else {
+			block.conVotes++
 		}
 	}
-
+	count := 0
 	// Go over all other blocks that exist and calculate the origin blocks votes for them
 	for blockId, targetBlockIdx := range alg.block2Id {
-		if _, ok := origin.blockVotes[blockId]; ok {
-			continue
+		if count < len(origin.blockVotes) {
+			if _, ok := origin.blockVotes[blockId]; ok {
+				count++
+				continue
+			}
 		}
 		val, err := visibilityMap.GetBit(uint64(targetBlockIdx))
-		if err == nil && val {
+		if err != nil{
+			return &blockMap, &visibilityMap //todo: put error
+		}
+		if val {
 			if alg.IsTortoiseValid(origin,blockId ,uint64(targetBlockIdx), visibilityMap) {
 				blockMap.SetBit(uint64(targetBlockIdx))
 			}
@@ -149,10 +161,10 @@ func (alg *Algorithm) countTotalVotesForBlock(targetIdx uint64, visibleBlocks bi
 	//targetId := alg.block2Id[target.id]
 	var posVotes, conVotes uint64 = 0,0
 	targetLayer := alg.visibilityMap[targetIdx].layer
-	for blockIdx:=0; blockIdx< len(alg.block2Id); blockIdx++{//_, blockIdx := range alg.block2Id {
+	for blockIdx:=0; blockIdx< len(alg.block2Id); blockIdx++{//_, blockIdx := range alg.block2Id { possible bug what if there is an id > len(alg.block2id)
 		//if this block sees our
 		//if alg.allBlocks[targetID].layerNum
-		blockPosition := alg.visibilityMap[blockIdx]
+		blockPosition := &alg.visibilityMap[blockIdx]
 		if blockPosition.layer <= targetLayer {
 			continue
 		}
@@ -218,7 +230,7 @@ func (alg *Algorithm) assignIdForBlock(blk *Block) uint32{
 }
 
 func (alg *Algorithm) HandleIncomingLayer(l *Layer){
-	log.Info("received layer id %v =======================================", l.layerNum)
+	log.Info("received layer id %v total blocks: %v =====", l.layerNum, len(alg.allBlocks))
 	//todo: thread safety
 	alg.layers[l.layerNum] = l
 	alg.layerQueue <- l
