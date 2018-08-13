@@ -9,6 +9,10 @@ import (	"github.com/golang-collections/go-datastructures/bitarray"
 type LayerQueue chan *Layer
 type NewIdQueue chan uint32
 
+type BlockPosition struct {
+	visibility bitarray.BitArray
+	layer      uint64
+}
 
 type Algorithm struct {
 	block2Id          map[BLockId]uint32
@@ -16,7 +20,7 @@ type Algorithm struct {
 	layerQueue        LayerQueue
 	idQueue           NewIdQueue
 	posVotes          []bitarray.BitArray
-	visibilityMap     []bitarray.BitArray
+	visibilityMap     []BlockPosition
 	layers            map[uint64]*Layer
 	layerSize         uint32
 	cachedLayers      uint32
@@ -34,7 +38,7 @@ func NewAlgorithm(layerSize uint32, cachedLayers uint32) Algorithm{
 		remainingBlockIds: totBlocks,
 		totalBlocks: totBlocks,
 		posVotes:          make([]bitarray.BitArray,totBlocks),
-		visibilityMap:     make([]bitarray.BitArray,totBlocks),
+		visibilityMap:     make([]BlockPosition,totBlocks),
 		layers:            make(map[uint64]*Layer),
 		layerSize:         layerSize,
 		cachedLayers:		cachedLayers,
@@ -118,8 +122,8 @@ func (alg *Algorithm) createBlockVotingMap(origin *Block) (*bitarray.BitArray, *
 		//todo: assert that block exists
 		targetBlockId := uint64(alg.block2Id[blockId])
 		visibilityMap.SetBit(targetBlockId)
-		targetMap := alg.visibilityMap[targetBlockId]
-		visibilityMap = visibilityMap.Or(targetMap)
+		targetPosition := alg.visibilityMap[targetBlockId]
+		visibilityMap = visibilityMap.Or(targetPosition.visibility)
 		//log.Info("target map %v new visibility map %v", targetMap.ToNums(), visibilityMap.ToNums())
 		if vote{
 			blockMap.SetBit(targetBlockId)
@@ -144,15 +148,26 @@ func (alg *Algorithm) createBlockVotingMap(origin *Block) (*bitarray.BitArray, *
 func (alg *Algorithm) countTotalVotesForBlock(targetIdx uint64, visibleBlocks bitarray.BitArray) (uint64, uint64){
 	//targetId := alg.block2Id[target.id]
 	var posVotes, conVotes uint64 = 0,0
+	targetLayer := alg.visibilityMap[targetIdx].layer
 	for blockIdx:=0; blockIdx< len(alg.block2Id); blockIdx++{//_, blockIdx := range alg.block2Id {
 		//if this block sees our
 		//if alg.allBlocks[targetID].layerNum
+		blockPosition := alg.visibilityMap[blockIdx]
+		if blockPosition.layer <= targetLayer {
+			continue
+		}
 		if val, err := visibleBlocks.GetBit(uint64(blockIdx)); val{ //if this block is visible from our target
-			if val, err = alg.visibilityMap[blockIdx].GetBit(targetIdx); err == nil && val {
+			if val, err = blockPosition.visibility.GetBit(targetIdx); err == nil && val {
 				if set, _ := alg.posVotes[blockIdx].GetBit(targetIdx); set {
 					posVotes++
+					if posVotes >= alg.GlobalVotingAvg() {
+						return posVotes, conVotes
+					}
 				} else {
 					conVotes++
+					if conVotes >= alg.GlobalVotingAvg() {
+						return posVotes, conVotes
+					}
 				}
 			}
 		}
@@ -165,7 +180,7 @@ func (alg *Algorithm) countTotalVotesForBlock(targetIdx uint64, visibleBlocks bi
 func (alg *Algorithm) zeroBitColumn(idx uint64){
 	for row, bitvec := range alg.posVotes {
 		bitvec.ClearBit(idx)
-		alg.visibilityMap[row].ClearBit(idx)
+		alg.visibilityMap[row].visibility.ClearBit(idx)
 	}
 }
 
@@ -219,7 +234,7 @@ func (alg *Algorithm) HandleIncomingLayer(l *Layer){
 
 			blockId := alg.assignIdForBlock(&originBlock)
 			alg.posVotes[blockId] = *votesBM
-			alg.visibilityMap[blockId] = *visibleBM
+			alg.visibilityMap[blockId] = BlockPosition{*visibleBM, originBlock.layerNum}
 		}
 
 	}
