@@ -20,7 +20,7 @@ type Algorithm struct {
 	layerQueue        LayerQueue
 	idQueue           NewIdQueue
 	posVotes          []bitarray.BitArray
-	visibilityMap     []BlockPosition
+	visibilityMap     [20000]BlockPosition
 	layers            map[uint64]*Layer
 	layerSize         uint32
 	cachedLayers      uint32
@@ -38,7 +38,7 @@ func NewAlgorithm(layerSize uint32, cachedLayers uint32) Algorithm{
 		remainingBlockIds: totBlocks,
 		totalBlocks: totBlocks,
 		posVotes:          make([]bitarray.BitArray,totBlocks),
-		visibilityMap:     make([]BlockPosition,totBlocks),
+		//visibilityMap:     make([20000]BlockPosition),
 		layers:            make(map[uint64]*Layer),
 		layerSize:         layerSize,
 		cachedLayers:		cachedLayers,
@@ -47,12 +47,12 @@ func NewAlgorithm(layerSize uint32, cachedLayers uint32) Algorithm{
 }
 
 func (alg *Algorithm) GlobalVotingAvg() uint64 {
-	return 10
+	return 100
 }
 
 
 func (alg *Algorithm) LayerVotingAvg() uint64 {
-	return 3
+	return 30
 }
 
 func (alg *Algorithm) IsTortoiseValid(originBlock *Block, targetBlock BLockId, targetBlockIdx uint64, visibleBlocks bitarray.BitArray) bool {
@@ -136,9 +136,10 @@ func (alg *Algorithm) createBlockVotingMap(origin *Block) (*bitarray.BitArray, *
 		}
 	}
 	count := 0
+	ln := len(origin.blockVotes)
 	// Go over all other blocks that exist and calculate the origin blocks votes for them
 	for blockId, targetBlockIdx := range alg.block2Id {
-		if count < len(origin.blockVotes) {
+		if count < ln {
 			if _, ok := origin.blockVotes[blockId]; ok {
 				count++
 				continue
@@ -161,7 +162,8 @@ func (alg *Algorithm) countTotalVotesForBlock(targetIdx uint64, visibleBlocks bi
 	//targetId := alg.block2Id[target.id]
 	var posVotes, conVotes uint64 = 0,0
 	targetLayer := alg.visibilityMap[targetIdx].layer
-	for blockIdx:=0; blockIdx< len(alg.block2Id); blockIdx++{//_, blockIdx := range alg.block2Id { possible bug what if there is an id > len(alg.block2id)
+	ln := len(alg.block2Id)
+	for blockIdx:=0; blockIdx< ln; blockIdx++{//_, blockIdx := range alg.block2Id { possible bug what if there is an id > len(alg.block2id)
 		//if this block sees our
 		//if alg.allBlocks[targetID].layerNum
 		blockPosition := &alg.visibilityMap[blockIdx]
@@ -172,14 +174,14 @@ func (alg *Algorithm) countTotalVotesForBlock(targetIdx uint64, visibleBlocks bi
 			if val, err = blockPosition.visibility.GetBit(targetIdx); err == nil && val {
 				if set, _ := alg.posVotes[blockIdx].GetBit(targetIdx); set {
 					posVotes++
-					if posVotes >= alg.GlobalVotingAvg() {
+					/*if posVotes >= alg.GlobalVotingAvg() {
 						return posVotes, conVotes
-					}
+					}*/
 				} else {
 					conVotes++
-					if conVotes >= alg.GlobalVotingAvg() {
+					/*if conVotes >= alg.GlobalVotingAvg() {
 						return posVotes, conVotes
-					}
+					}*/
 				}
 			}
 		}
