@@ -91,6 +91,11 @@ func (sm simMessage) Sender() node.Node {
 	return sm.sender
 }
 
+func (sn *Node) Start() error {
+	// on simulation this doesn't really matter yet.
+	return nil
+}
+
 // SendMessage sends a protocol message to the specified nodeID.
 // returns error if the node cant be found. corresponds to `Service.SendMessage`
 func (sn *Node) SendMessage(nodeID string, protocol string, payload []byte) error {

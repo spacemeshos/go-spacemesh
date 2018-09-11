@@ -22,7 +22,7 @@ const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 type CommonMessageData struct {
 	SessionId            []byte   `protobuf:"bytes,1,opt,name=sessionId,proto3" json:"sessionId,omitempty"`
 	Payload              []byte   `protobuf:"bytes,2,opt,name=payload,proto3" json:"payload,omitempty"`
-	Timestamp            int64    `protobuf:"varint,3,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	Timestamp            int64    `protobuf:"varint,3,opt,name=timestamp" json:"timestamp,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -77,16 +77,16 @@ func (m *CommonMessageData) GetTimestamp() int64 {
 type HandshakeData struct {
 	SessionId            []byte   `protobuf:"bytes,1,opt,name=sessionId,proto3" json:"sessionId,omitempty"`
 	Payload              []byte   `protobuf:"bytes,2,opt,name=payload,proto3" json:"payload,omitempty"`
-	Timestamp            int64    `protobuf:"varint,3,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
-	ClientVersion        string   `protobuf:"bytes,4,opt,name=clientVersion,proto3" json:"clientVersion,omitempty"`
-	NetworkID            int32    `protobuf:"varint,5,opt,name=networkID,proto3" json:"networkID,omitempty"`
-	Protocol             string   `protobuf:"bytes,6,opt,name=protocol,proto3" json:"protocol,omitempty"`
+	Timestamp            int64    `protobuf:"varint,3,opt,name=timestamp" json:"timestamp,omitempty"`
+	ClientVersion        string   `protobuf:"bytes,4,opt,name=clientVersion" json:"clientVersion,omitempty"`
+	NetworkID            int32    `protobuf:"varint,5,opt,name=networkID" json:"networkID,omitempty"`
+	Protocol             string   `protobuf:"bytes,6,opt,name=protocol" json:"protocol,omitempty"`
 	NodePubKey           []byte   `protobuf:"bytes,7,opt,name=nodePubKey,proto3" json:"nodePubKey,omitempty"`
 	Iv                   []byte   `protobuf:"bytes,8,opt,name=iv,proto3" json:"iv,omitempty"`
 	PubKey               []byte   `protobuf:"bytes,9,opt,name=pubKey,proto3" json:"pubKey,omitempty"`
 	Hmac                 []byte   `protobuf:"bytes,10,opt,name=hmac,proto3" json:"hmac,omitempty"`
-	Sign                 string   `protobuf:"bytes,11,opt,name=sign,proto3" json:"sign,omitempty"`
-	Port                 uint32   `protobuf:"varint,12,opt,name=port,proto3" json:"port,omitempty"`
+	Sign                 string   `protobuf:"bytes,11,opt,name=sign" json:"sign,omitempty"`
+	Port                 uint32   `protobuf:"varint,12,opt,name=port" json:"port,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -204,7 +204,7 @@ func (m *HandshakeData) GetPort() uint32 {
 // it allows multi310.445plexing back to higher level protocols
 // data is here and not in CommonMessageData to avoid leaked data on unencrypted connections
 type ProtocolMessage struct {
-	Metadata             *Metadata `protobuf:"bytes,1,opt,name=metadata,proto3" json:"metadata,omitempty"`
+	Metadata             *Metadata `protobuf:"bytes,1,opt,name=metadata" json:"metadata,omitempty"`
 	Payload              []byte    `protobuf:"bytes,2,opt,name=payload,proto3" json:"payload,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}  `json:"-"`
 	XXX_unrecognized     []byte    `json:"-"`
@@ -250,12 +250,12 @@ func (m *ProtocolMessage) GetPayload() []byte {
 }
 
 type Metadata struct {
-	Protocol             string   `protobuf:"bytes,1,opt,name=protocol,proto3" json:"protocol,omitempty"`
-	ClientVersion        string   `protobuf:"bytes,2,opt,name=clientVersion,proto3" json:"clientVersion,omitempty"`
-	Timestamp            int64    `protobuf:"varint,3,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
-	Gossip               bool     `protobuf:"varint,4,opt,name=gossip,proto3" json:"gossip,omitempty"`
+	Protocol             string   `protobuf:"bytes,1,opt,name=protocol" json:"protocol,omitempty"`
+	ClientVersion        string   `protobuf:"bytes,2,opt,name=clientVersion" json:"clientVersion,omitempty"`
+	Timestamp            int64    `protobuf:"varint,3,opt,name=timestamp" json:"timestamp,omitempty"`
+	Gossip               bool     `protobuf:"varint,4,opt,name=gossip" json:"gossip,omitempty"`
 	AuthPubKey           []byte   `protobuf:"bytes,5,opt,name=authPubKey,proto3" json:"authPubKey,omitempty"`
-	AuthorSign           string   `protobuf:"bytes,6,opt,name=authorSign,proto3" json:"authorSign,omitempty"`
+	AuthorSign           string   `protobuf:"bytes,6,opt,name=authorSign" json:"authorSign,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`

@@ -8,8 +8,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"gopkg.in/op/go-logging.v1"
 
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/stretchr/testify/assert"
+	"sync"
 )
 
 func GetTestLogger(name string) *logging.Logger {
@@ -192,6 +194,96 @@ func TestTableMultiThreaded(t *testing.T) {
 			rt.Find(PeerByIDRequest{ID: nodes[n].DhtID(), Callback: nil})
 		}
 	}()
+}
+
+func TestRoutingTableImpl_SelectPeers(t *testing.T) {
+	const n = 1000
+	const random = 10
+
+	test := func(t *testing.T) {
+
+		local := node.GenerateRandomNodeData()
+		localID := local.DhtID()
+
+		rt := NewRoutingTable(10, localID, GetTestLogger(localID.Pretty()))
+
+		fillRT := func() {
+			nodes := node.GenerateRandomNodesData(n)
+			for n := range nodes {
+				rt.Update(nodes[n])
+			}
+		}
+
+		req := make(chan int)
+		rt.Size(req)
+		if <-req < random {
+			fillRT()
+		}
+
+		selected := rt.SelectPeers(random)
+
+		assert.Len(t, selected, random)
+		idset := make(map[string]struct{})
+		for i := 0; i < len(selected); i++ {
+			if _, ok := idset[selected[i].String()]; ok {
+				t.Errorf("duplicate")
+			}
+			idset[selected[i].String()] = struct{}{}
+		}
+	}
+
+	// to be sure duplicates never go in
+	for i := 0; i < 100; i++ {
+		assert.True(t, t.Run(fmt.Sprintf("test%d", i), test))
+	}
+
+}
+func TestRoutingTableImpl_SelectPeers2(t *testing.T) {
+	const n = 1000
+	const random = 10
+
+	ids := make(map[string]node.Node)
+	sids := make(map[string]RoutingTable)
+	toselect := make(map[string]struct{})
+
+	var wg sync.WaitGroup
+	var wg2 sync.WaitGroup
+
+	wg.Add(1)
+	for i := 0; i < n; i++ {
+		local := node.GenerateRandomNodeData()
+		localID := local.DhtID()
+
+		rt := NewRoutingTable(25, localID, GetTestLogger(localID.Pretty()))
+
+		ids[local.String()] = local
+		sids[local.String()] = rt
+
+		go func(l node.Node, rt RoutingTable) {
+			wg.Wait()
+			wg2.Add(1)
+			for nn := range ids {
+				if ids[nn].String() != l.String() {
+					rt.Update(ids[nn])
+				}
+			}
+			wg2.Done()
+
+		}(local, rt)
+	}
+	wg.Done()
+	fmt.Println("dobe updating")
+	wg2.Wait()
+	for rtid := range sids {
+		sel := sids[rtid].SelectPeers(random)
+		assert.NotNil(t, sel)
+		for ns := range sel {
+			toselect[sel[ns].String()] = struct{}{}
+		}
+
+	}
+
+	assert.Equal(t, len(toselect), n) // every node got selected
 }
 
 func TestRoutingTableImpl_Print(t *testing.T) {
