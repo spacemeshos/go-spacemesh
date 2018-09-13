@@ -61,6 +61,47 @@ func TestGetConnectionWithError(t *testing.T) {
 	assert.Equal(t, int32(1), net.DialCount())
 }
 
+func TestGetConnectionDuringDial(t *testing.T) {
+	n := net.NewNetworkMock()
+	remotePub := generatePublicKey()
+	addr := "1.1.1.1"
+	n.SetDialDelayMs(100)
+	n.SetDialResult(nil)
+
+	cPool := NewConnectionPool(n, generatePublicKey())
+	waitCh := make(chan net.Connection)
+	// dispatch 2 GetConnection calls
+	dispatchF := func(ch chan net.Connection) {
+		conn, _ := cPool.GetConnection(addr, remotePub)
+		assert.Equal(t, remotePub.String(), conn.RemotePublicKey().String())
+		ch <- conn
+	}
+	go dispatchF(waitCh)
+	go dispatchF(waitCh)
+	cnt := 0
+	var prevId string
+Loop:
+	for {
+		select {
+		case c := <-waitCh:
+			if prevId == "" {
+				prevId = c.ID()
+			} else {
+				assert.Equal(t, prevId, c.ID())
+			}
+			cnt++
+			if cnt == 2 {
+				break Loop
+			}
+		case <-time.After(120 * time.Millisecond):
+			fmt.Println("timeout!")
+			assert.True(t, false)
+			break Loop
+		}
+	}
+	assert.Equal(t, int32(1), n.DialCount())
+}
+
 func TestRemoteConnectionWithNoConnection(t *testing.T) {
 	n := net.NewNetworkMock()
 	remotePub := generatePublicKey()
