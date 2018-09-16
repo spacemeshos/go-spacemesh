@@ -11,7 +11,6 @@ import (
 type LocalNode struct {
 	Node
 	privKey       crypto.PrivateKey
-	pubTCPAddress string
 
 	networkID int8
 
@@ -93,8 +92,6 @@ func newLocalNodeWithKeys(pubKey crypto.PublicKey, privKey crypto.PrivateKey, ad
 	n.Log = log.New(n.pubKey.Pretty(), nodeDir, "node.log")
 
 	n.Info("Local node identity >> %v", n.String())
-
-	n.Debug("Node public ip address %s. Please make sure that your home router or access point accepts incoming connections on this port and forwards incoming such connection requests to this computer.", n.pubTCPAddress)
 
 	if persist {
 		// persist store data so we can start it on future app sessions
