@@ -7,7 +7,6 @@ import (
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"sync"
 	"time"
 )
 
@@ -34,10 +33,6 @@ type NetworkSessionImpl struct {
 	keyM    []byte
 	pubKey  []byte
 	created time.Time
-
-	// We must protect authenticated somehow. we won't use event loop for one state variable
-	authMutex     sync.RWMutex
-	authenticated bool
 
 	localNodeID  string
 	remoteNodeID string
@@ -136,8 +131,6 @@ func NewNetworkSession(id, keyE, keyM, pubKey []byte, localNodeID, remoteNodeID 
 		keyM:          keyM,
 		pubKey:        pubKey,
 		created:       time.Now(),
-		authMutex:     sync.RWMutex{},
-		authenticated: false,
 		localNodeID:   localNodeID,
 		remoteNodeID:  remoteNodeID,
 	}
