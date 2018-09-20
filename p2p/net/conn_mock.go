@@ -20,11 +20,10 @@ type ConnectionMock struct {
 	closed bool
 }
 
-func NewConnectionMock(key crypto.PublicKey, src ConnectionSource) *ConnectionMock {
+func NewConnectionMock(key crypto.PublicKey) *ConnectionMock {
 	return &ConnectionMock{
 		id:        crypto.UUIDString(),
 		remotePub: key,
-		source:    src,
 		closed:    false,
 	}
 }
@@ -53,9 +52,6 @@ func (cm ConnectionMock) Session() NetworkSession {
 	return cm.session
 }
 
-func (cm ConnectionMock) Source() ConnectionSource {
-	return cm.source
-}
 
 func (cm ConnectionMock) IncomingChannel() chan []byte {
 	return nil
@@ -70,7 +66,7 @@ func (cm *ConnectionMock) SetSendResult(err error) {
 }
 
 func (cm ConnectionMock) SendCount() int32 {
-	return cm.sendCnt
+	return atomic.LoadInt32(&cm.sendCnt)
 }
 
 func (cm *ConnectionMock) Send(m []byte) error {

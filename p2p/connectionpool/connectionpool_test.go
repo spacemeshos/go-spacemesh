@@ -110,7 +110,8 @@ func TestRemoteConnectionWithNoConnection(t *testing.T) {
 	n.SetDialResult(nil)
 
 	cPool := NewConnectionPool(n, generatePublicKey())
-	rConn := net.NewConnectionMock(remotePub, net.Remote)
+	rConn := net.NewConnectionMock(remotePub)
+	rConn.SetSession(net.NewSessionMock([]byte("aaa")))
 	cPool.newRemoteConn <- rConn
 	time.Sleep(50 * time.Millisecond)
 	conn, err := cPool.GetConnection(addr, remotePub)
@@ -120,50 +121,38 @@ func TestRemoteConnectionWithNoConnection(t *testing.T) {
 	assert.Equal(t, int32(0), n.DialCount())
 }
 
-func TestRemoteConnectionWithConnection(t *testing.T) {
+func TestRemoteConnectionWithExistingConnection(t *testing.T) {
 	n := net.NewNetworkMock()
-	remotePub := generatePublicKey()
 	addr := "1.1.1.1"
-	n.SetDialDelayMs(50)
-	n.SetDialResult(nil)
-
 	cPool := NewConnectionPool(n, generatePublicKey())
-	conn, err := cPool.GetConnection(addr, remotePub)
-	assert.Equal(t, remotePub.String(), conn.RemotePublicKey().String())
-	assert.Nil(t, err)
-	rConn := net.NewConnectionMock(remotePub, net.Remote)
+
+	// local connection has session ID < remote's session ID
+	remotePub := generatePublicKey()
+	localSessionID := []byte("110")
+	n.SetNextDialSessionID(localSessionID)
+	lConn, _ := cPool.GetConnection(addr, remotePub)
+	rConn := net.NewConnectionMock(remotePub)
+	rConn.SetSession(net.NewSessionMock([]byte("111")))
 	cPool.newRemoteConn <- rConn
-	time.Sleep(50 * time.Millisecond)
-	conn2, err := cPool.GetConnection(addr, remotePub)
-	assert.Equal(t, remotePub.String(), conn.RemotePublicKey().String())
-	assert.NotEqual(t, rConn.ID(), conn.ID())
-	assert.Equal(t, conn2.ID(), conn.ID())
-	assert.Nil(t, err)
-	assert.Equal(t, int32(1), n.DialCount())
-	assert.True(t, rConn.Closed())
-}
-
-func TestRemoteConnectionDuringDial(t *testing.T) {
-	n := net.NewNetworkMock()
-	remotePub := generatePublicKey()
-	addr := "1.1.1.1"
-	n.SetDialDelayMs(100)
-	n.SetDialResult(nil)
-
-	cPool := NewConnectionPool(n, generatePublicKey())
-	waitCh := make(chan net.Connection)
-	go func(ch chan net.Connection) {
-		conn, _ := cPool.GetConnection(addr, remotePub)
-		ch <- conn
-	}(waitCh)
-	rConn := net.NewConnectionMock(remotePub, net.Remote)
 	time.Sleep(20 * time.Millisecond)
-	cPool.newRemoteConn <- rConn
-	getConn := <-waitCh
-	assert.Equal(t, remotePub.String(), getConn.RemotePublicKey().String())
-	assert.Equal(t, rConn.ID(), getConn.ID())
+	assert.Equal(t, remotePub.String(), lConn.RemotePublicKey().String())
 	assert.Equal(t, int32(1), n.DialCount())
 	assert.False(t, rConn.Closed())
+	assert.True(t, lConn.Closed())
+
+	// local connection has session ID > remote's session ID
+	remotePub = generatePublicKey()
+	localSessionID = []byte("111")
+	n.SetNextDialSessionID(localSessionID)
+	lConn, _ = cPool.GetConnection(addr, remotePub)
+	rConn = net.NewConnectionMock(remotePub)
+	rConn.SetSession(net.NewSessionMock([]byte("110")))
+	cPool.newRemoteConn <- rConn
+	time.Sleep(20 * time.Millisecond)
+	assert.Equal(t, remotePub.String(), lConn.RemotePublicKey().String())
+	assert.Equal(t, int32(2), n.DialCount())
+	assert.True(t, rConn.Closed())
+	assert.False(t, lConn.Closed())
 }
 
 func TestShutdown(t *testing.T) {
@@ -274,7 +263,10 @@ func TestRandom(t *testing.T) {
 		if r == 0 {
 			go func() {
 				peer := peers[rand.Int31n(int32(peerCnt))]
-				rConn := net.NewConnectionMock(peer.key, net.Remote)
+				rConn := net.NewConnectionMock(peer.key)
+				sID := make([]byte, 4)
+				rand.Read(sID)
+				rConn.SetSession(net.NewSessionMock(sID))
 				cPool.newRemoteConn <- rConn
 			}()
 		} else if r == 1 {

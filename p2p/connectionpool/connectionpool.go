@@ -7,6 +7,7 @@ import (
 	"errors"
 	"gopkg.in/op/go-logging.v1"
 	"sync"
+	"bytes"
 )
 
 type dialResult struct {
@@ -96,27 +97,52 @@ func (cp *ConnectionPool) handleDialResult(rPub crypto.PublicKey, result dialRes
 	cp.pendMutex.Unlock()
 }
 
-func (cp *ConnectionPool) handleNewConnection(rPub crypto.PublicKey, conn net.Connection, source net.ConnectionSource) {
+func compareConnections(conn1 net.Connection, conn2 net.Connection) int {
+
+	return bytes.Compare(conn1.Session().ID(), conn2.Session().ID())
+}
+
+func (cp *ConnectionPool) handleNewConnection(rPub crypto.PublicKey, newConn net.Connection, source net.ConnectionSource) {
 	cp.connMutex.Lock()
-	cp.net.Logger().Info("new connection %v -> %v. id=%s", cp.localPub, rPub, conn.ID())
+	var srcPub, dstPub string
+	if source == net.Local {
+		srcPub = cp.localPub.String()
+		dstPub = rPub.String()
+	} else {
+		srcPub = rPub.String()
+		dstPub = cp.localPub.String()
+	}
+	cp.net.Logger().Info("new connection %s -> %s. id=%s, sessionID=%v", srcPub, dstPub, newConn.ID(), newConn.Session().ID())
 	// check if there isn't already same connection (possible if the second connection is a Remote connection)
-	_, ok := cp.connections[rPub.String()]
+	curConn, ok := cp.connections[rPub.String()]
 	if ok {
-		cp.connMutex.Unlock()
-		if source == net.Remote {
-			cp.net.Logger().Info("connection created by remote node while connection already exists between peers, closing new connection. remote=%s", rPub)
-		} else {
-			cp.net.Logger().Warning("connection created by local node while connection already exists between peers, closing new connection. remote=%s", rPub)
+		// it is possible to get a new connection with the same peers as another existing connection, in case the two peers tried to connect to each other at the same time.
+		// We need both peers to agree on which connection to keep and which one to close otherwise they might end up closing both connections (bug #195)
+		res := compareConnections(curConn, newConn)
+		if res <= 0 { // newConn >= curConn
+			if res == 0 { // newConn == curConn
+				// TODO Is it a potential threat (session hijacking)? Should we keep the existing connection?
+				cp.net.Logger().Warning("new connection was created with same session ID as an existing connection, keeping the new connection (assuming existing connection is stale). existing session ID=%v, new session ID=%v, remote=%s", curConn.Session().ID(), newConn.Session().ID(), rPub)
+			} else {
+				cp.net.Logger().Info("connection created while connection already exists between peers, closing existing connection. existing session ID=%v, new session ID=%v, remote=%s", curConn.Session().ID(), newConn.Session().ID(), rPub)
+			}
+			curConn.Close()
+			cp.connections[rPub.String()] = newConn
+			// we don't need to update on the new connection since there were already a connection in the table and there shouldn't be any registered channel waiting for updates
+		} else { // newConn < curConn
+			cp.net.Logger().Info("connection created while connection already exists between peers, closing new connection. existing session ID=%v, new session ID=%v, remote=%s", curConn.Session().ID(), newConn.Session().ID(), rPub)
+			newConn.Close()
 		}
-		conn.Close()
+		cp.connMutex.Unlock()
 		return
 	}
-	cp.connections[rPub.String()] = conn
+	cp.connections[rPub.String()] = newConn
 	cp.connMutex.Unlock()
 
 	// update all registered channels
-	res := dialResult{conn, nil}
+	res := dialResult{newConn, nil}
 	cp.handleDialResult(rPub, res)
+	return
 }
 
 func (cp *ConnectionPool) handleClosedConnection(conn net.Connection) {
@@ -179,6 +205,7 @@ Loop:
 			cp.handleNewConnection(conn.RemotePublicKey(), conn, net.Remote)
 
 		case conn := <-cp.net.ClosingConnections():
+			cp.net.Logger().Info("11111111111")
 			cp.handleClosedConnection(conn)
 
 		case <-cp.teardown:
