@@ -181,10 +181,6 @@ func ProcessHandshakeRequest(networkID int8, lPub crypto.PublicKey, lPri crypto.
 	hm1.Write(iv)
 	hmac1 := hm1.Sum(nil)
 
-	// TODO consider how to handle IP addr changing
-	// attempt to refresh the node's public ip address
-	//node.RefreshPubTCPAddress()
-
 	resp := &pb.HandshakeData{
 		ClientVersion: config.ClientVersion,
 		NetworkID:     int32(networkID),
