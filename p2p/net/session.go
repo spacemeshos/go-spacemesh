@@ -7,6 +7,7 @@ import (
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"sync"
 	"time"
 )
 
@@ -22,6 +23,8 @@ type NetworkSession interface {
 
 	Decrypt(in []byte) ([]byte, error) // decrypt data using session dec key
 	Encrypt(in []byte) ([]byte, error) // encrypt data using session enc key
+
+	EncryptGuard() *sync.Mutex // used for creating a per session transaction of data encryption and data delivery
 }
 
 // TODO: add support for idle session expiration
@@ -37,21 +40,9 @@ type NetworkSessionImpl struct {
 	localNodeID  string
 	remoteNodeID string
 
-	blockEncrypter cbcMode
-	blockDecrypter cbcMode
-}
-
-// cbcMode is an interface for block ciphers using cipher block chaining.
-// we use it to expose SetIV
-type cbcMode interface {
-	cipher.BlockMode
-	SetIV([]byte)
-}
-
-// resetIV sets the iv to the session ID. it is called after encrpyt decrypt.
-func (n *NetworkSessionImpl) resetIV() {
-	n.blockEncrypter.SetIV(n.id)
-	n.blockDecrypter.SetIV(n.id)
+	blockEncrypter cipher.BlockMode
+	encGuard       sync.Mutex
+	blockDecrypter cipher.BlockMode
 }
 
 //LocalNodeID returns the session's local node id.
@@ -103,7 +94,6 @@ func (n *NetworkSessionImpl) Encrypt(in []byte) ([]byte, error) {
 	paddedIn := crypto.AddPKCSPadding(in)
 	out := make([]byte, len(paddedIn))
 	n.blockEncrypter.CryptBlocks(out, paddedIn)
-	n.resetIV()
 	return out, nil
 }
 
@@ -114,25 +104,30 @@ func (n *NetworkSessionImpl) Decrypt(in []byte) ([]byte, error) {
 		return nil, errors.New("Invalid input buffer - 0 len")
 	}
 
-	n.blockDecrypter.CryptBlocks(in, in)
-	clearText, err := crypto.RemovePKCSPadding(in)
+	out := make([]byte, l)
+	n.blockDecrypter.CryptBlocks(out, in)
+	clearText, err := crypto.RemovePKCSPadding(out)
 	if err != nil {
 		return nil, err
 	}
-	n.resetIV()
 	return clearText, nil
+}
+
+// EncryptGuard returns a mutex that is used by clients of session to tie encryption and sending together.
+func (n *NetworkSessionImpl) EncryptGuard() *sync.Mutex {
+	return &n.encGuard
 }
 
 // NewNetworkSession creates a new network session based on provided data
 func NewNetworkSession(id, keyE, keyM, pubKey []byte, localNodeID, remoteNodeID string) (*NetworkSessionImpl, error) {
 	n := &NetworkSessionImpl{
-		id:            id,
-		keyE:          keyE,
-		keyM:          keyM,
-		pubKey:        pubKey,
-		created:       time.Now(),
-		localNodeID:   localNodeID,
-		remoteNodeID:  remoteNodeID,
+		id:           id,
+		keyE:         keyE,
+		keyM:         keyM,
+		pubKey:       pubKey,
+		created:      time.Now(),
+		localNodeID:  localNodeID,
+		remoteNodeID: remoteNodeID,
 	}
 
 	// create and store block enc/dec
@@ -142,8 +137,7 @@ func NewNetworkSession(id, keyE, keyM, pubKey []byte, localNodeID, remoteNodeID 
 		return nil, err
 	}
 
-	n.blockEncrypter = cipher.NewCBCEncrypter(blockCipher, n.id).(cbcMode)
-	n.blockDecrypter = cipher.NewCBCDecrypter(blockCipher, n.id).(cbcMode)
-
+	n.blockEncrypter = cipher.NewCBCEncrypter(blockCipher, n.id)
+	n.blockDecrypter = cipher.NewCBCDecrypter(blockCipher, n.id)
 	return n, nil
 }

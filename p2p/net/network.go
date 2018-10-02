@@ -1,6 +1,7 @@
 package net
 
 import (
+	"crypto/sha1"
 	"fmt"
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
@@ -11,9 +12,16 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"gopkg.in/op/go-logging.v1"
 	"net"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 )
+
+// DefaultQueueCount is the default number of messages queue we hold. messages queues are used to serialize message receiving
+const DefaultQueueCount uint = 6
+// DefaultMessageQueueSize is the buffer size of each queue mentioned above. (queues are buffered channels)
+const DefaultMessageQueueSize uint = 256
 
 // IncomingMessageEvent is the event reported on new incoming message, it contains the message and the Connection carrying the message
 type IncomingMessageEvent struct {
@@ -49,7 +57,12 @@ type Net struct {
 	regNewRemoteConn []chan Connection
 	regMutex         sync.RWMutex
 
-	incomingMessages   chan IncomingMessageEvent
+	incomingMessages chan IncomingMessageEvent
+
+	queuesCount           uint
+	queueSize             uint
+	incomingMessagesQueue []chan IncomingMessageEvent
+
 	closingConnections chan Connection
 
 	config config.Config
@@ -59,15 +72,25 @@ type Net struct {
 // It attempts to tcp listen on address. e.g. localhost:1234 .
 func NewNet(conf config.Config, localEntity *node.LocalNode) (*Net, error) {
 
+	qcount := DefaultQueueCount      // todo : get from cfg
+	qsize := DefaultMessageQueueSize // todo : get from cfg
+
 	n := &Net{
-		networkID:          conf.NetworkID,
-		localNode:          localEntity,
-		logger:             localEntity.Logger,
-		tcpListenAddress:   localEntity.Address(),
-		regNewRemoteConn:   make([]chan Connection, 0),
-		incomingMessages:   make(chan IncomingMessageEvent),
-		closingConnections: make(chan Connection, 20),
-		config:             conf,
+		networkID:             conf.NetworkID,
+		localNode:             localEntity,
+		logger:                localEntity.Logger,
+		tcpListenAddress:      localEntity.Address(),
+		regNewRemoteConn:      make([]chan Connection, 0),
+		queuesCount:           qcount,
+		queueSize:             qsize,
+		incomingMessagesQueue: make([]chan IncomingMessageEvent, qcount, qcount),
+		incomingMessages:      make(chan IncomingMessageEvent),
+		closingConnections:    make(chan Connection, 20),
+		config:                conf,
+	}
+
+	for imq := range n.incomingMessagesQueue {
+		n.incomingMessagesQueue[imq] = make(chan IncomingMessageEvent, qsize)
 	}
 
 	err := n.listen()
@@ -96,9 +119,32 @@ func (n *Net) LocalNode() *node.LocalNode {
 	return n.localNode
 }
 
+func sumByteArray(b [20]byte) uint {
+	var sumOfChars uint
+
+	//take each byte in the string and add the values
+	for i := 0; i < len(b); i++ {
+		byteVal := b[i]
+		sumOfChars += uint(byteVal)
+	}
+
+	// return as hex value in upper case
+	return sumOfChars
+}
+
+// EnqueueMessage inserts a message into a queue, to decide on which queue to send the message to
+// it sorts the local and remote public keys, hash them together and use the sum result % with the number of queues to divide results to sections.
+func (n *Net) EnqueueMessage(event IncomingMessageEvent) {
+	strs := []string{n.localNode.PublicKey().String(), event.Conn.RemotePublicKey().String()}
+	sort.Strings(strs)
+	sb := sha1.Sum([]byte(strings.Join(strs, "")))
+	sba := sumByteArray(sb)
+	n.incomingMessagesQueue[sba%n.queuesCount] <- event
+}
+
 // IncomingMessages returns Net's channel for incoming messages
-func (n *Net) IncomingMessages() chan IncomingMessageEvent {
-	return n.incomingMessages
+func (n *Net) IncomingMessages() []chan IncomingMessageEvent {
+	return n.incomingMessagesQueue
 }
 
 // ClosingConnections returns Net's channel where closing connections events are reported
@@ -181,7 +227,6 @@ func (n *Net) createSecuredConnection(address string, remotePublicKey crypto.Pub
 		conn.Close()
 		return nil, fmt.Errorf("%s err: %v", errMsg, err)
 	}
-
 	conn.SetSession(session)
 	return conn, nil
 }

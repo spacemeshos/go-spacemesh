@@ -38,6 +38,8 @@ func waitForCallbackOrTimeout(t *testing.T, outchan chan Connection, expectedSes
 	}
 }
 
+// TODO: Test queues
+
 func TestHandlePreSessionIncomingMessage(t *testing.T) {
 	//cfg := config.DefaultConfig()
 	localNode, _ := node.GenerateTestNode(t)
@@ -73,5 +75,4 @@ func TestHandlePreSessionIncomingMessage(t *testing.T) {
 	err = remoteNet.HandlePreSessionIncomingMessage(con, data)
 	assert.Error(t, err, "Sent message with wrong networkID")
 	//,_, er = GenerateHandshakeRequestData(localNode.PublicKey(), localNode.PrivateKey(),con.RemotePublicKey(), remoteNet.NetworkID() +1)
-
 }

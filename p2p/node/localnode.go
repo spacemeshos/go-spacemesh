@@ -10,7 +10,7 @@ import (
 // LocalNode implementation.
 type LocalNode struct {
 	Node
-	privKey       crypto.PrivateKey
+	privKey crypto.PrivateKey
 
 	networkID int8
 
