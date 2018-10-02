@@ -4,10 +4,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 
+	"bytes"
 	"errors"
 	"gopkg.in/op/go-logging.v1"
 	"sync"
-	"bytes"
 )
 
 type dialResult struct {

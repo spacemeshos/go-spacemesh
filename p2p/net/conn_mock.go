@@ -52,7 +52,6 @@ func (cm ConnectionMock) Session() NetworkSession {
 	return cm.session
 }
 
-
 func (cm ConnectionMock) IncomingChannel() chan []byte {
 	return nil
 }
