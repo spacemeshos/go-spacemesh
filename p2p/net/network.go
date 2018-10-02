@@ -57,8 +57,6 @@ type Net struct {
 	regNewRemoteConn []chan Connection
 	regMutex         sync.RWMutex
 
-	incomingMessages chan IncomingMessageEvent
-
 	queuesCount           uint
 	queueSize             uint
 	incomingMessagesQueue []chan IncomingMessageEvent
@@ -84,7 +82,6 @@ func NewNet(conf config.Config, localEntity *node.LocalNode) (*Net, error) {
 		queuesCount:           qcount,
 		queueSize:             qsize,
 		incomingMessagesQueue: make([]chan IncomingMessageEvent, qcount, qcount),
-		incomingMessages:      make(chan IncomingMessageEvent),
 		closingConnections:    make(chan Connection, 20),
 		config:                conf,
 	}

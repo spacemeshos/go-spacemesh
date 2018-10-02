@@ -54,6 +54,7 @@ type swarm struct {
 
 	// Shutdown the loop
 	shutdown chan struct{} // local request to kill the swarm from outside. e.g when local node is shutting down
+	msgCnt   int
 }
 
 // newSwarm creates a new P2P instance, configured by config, if newNode is true it will create a new node identity
