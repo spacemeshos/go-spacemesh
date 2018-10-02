@@ -12,6 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"sync"
 	"time"
+	"github.com/davecgh/go-spew/spew"
 )
 
 const PeerMessageQueueSize = 100
@@ -79,7 +80,7 @@ func makePeer(node2 node.Node, c net.Connection, log log.Log) *peer {
 	return &peer{
 		log,
 		node2,
-		make(chan error),
+		make(chan error,1),
 		time.Now(),
 		c,
 		make(map[string]struct{}),
@@ -137,11 +138,10 @@ func (p *peer) start(dischann chan struct{}) {
 				// todo: handle errors
 				log.Error("Failed sending message to this peer %v", p.Node.PublicKey().String())
 				p.disc <- err
-				return
 			}
 		case d := <-p.disc:
 			log.Error("peer disconnected %v", d)
-			p.conn.Close()
+			//p.conn.Close()
 			if dischann != nil {
 				dischann <- struct{}{}
 			}
@@ -169,6 +169,10 @@ func (s *Neighborhood) Peer(pubkey string) (node.Node, net.Connection) {
 
 // the actual broadcast procedure, loop on peers and add the message to their queues
 func (s *Neighborhood) Broadcast(msg []byte) error {
+
+	if len(s.peers) == 0 {
+		panic("WHOHO")
+	}
 
 	s.oldMessageMu.RLock()
 	if _, ok := s.oldMessageQ[string(msg)]; ok {
@@ -212,6 +216,11 @@ func (s *Neighborhood) getMorePeers(numpeers int) {
 	nds := s.ps.SelectPeers(numpeers)
 	ndsLen := len(nds)
 	if ndsLen == 0 {
+		go func() {
+			time.Sleep(1 * time.Second)
+			s.morePeersReq <- struct{}{}
+		}()
+		// this gets busy at start so we spare a second
 		return // we cant connect if we don't have peers
 	}
 
@@ -219,6 +228,7 @@ func (s *Neighborhood) getMorePeers(numpeers int) {
 	// TODO: try splitting the load and don't connect to more than X at a time
 	for i := 0; i < ndsLen; i++ {
 		go func(nd node.Node, reportChan chan cnErr) {
+			spew.Dump(nd)
 			c, err := s.cp.GetConnection(nd.Address(), nd.PublicKey())
 			reportChan <- cnErr{nd, c, err}
 		}(nds[i], res)
@@ -253,6 +263,10 @@ func (s *Neighborhood) getMorePeers(numpeers int) {
 		}
 	}
 	s.Info("Connected to %d/%d peers", i-j, s.config.RandomConnections)
+	if i-j < s.config.RandomConnections {
+		s.morePeersReq <- struct{}{}
+	}
+	s.Info(spew.Sdump(s.peers))
 
 }
 
@@ -266,10 +280,9 @@ func (s *Neighborhood) Start() error {
 	// initial
 	s.morePeersReq <- struct{}{}
 	ret := make(chan struct{})
-	var o sync.Once
 
 	go func() {
-
+		var o sync.Once
 	loop:
 		for {
 			select {
@@ -291,5 +304,6 @@ func (s *Neighborhood) Start() error {
 	}()
 
 	<-ret
+
 	return nil
 }

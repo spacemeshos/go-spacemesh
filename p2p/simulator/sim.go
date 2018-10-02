@@ -5,6 +5,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"io"
 	"sync"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 // TODO : implmement delays?
@@ -106,6 +107,7 @@ func (sn *Node) SendMessage(nodeID string, protocol string, payload []byte) erro
 		thec <- simMessage{payload, sn.Node}
 		sn.sim.updateNode(nodeID, sn)
 	}
+	log.Info("%v >> %v (%v)", sn.Node.PublicKey(), nodeID, payload)
 	return nil
 }
 
