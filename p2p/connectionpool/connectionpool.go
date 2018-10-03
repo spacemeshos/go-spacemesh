@@ -119,6 +119,7 @@ func (cp *ConnectionPool) handleNewConnection(rPub crypto.PublicKey, newConn net
 		// it is possible to get a new connection with the same peers as another existing connection, in case the two peers tried to connect to each other at the same time.
 		// We need both peers to agree on which connection to keep and which one to close otherwise they might end up closing both connections (bug #195)
 		res := compareConnections(curConn, newConn)
+		var closeConn net.Connection
 		if res <= 0 { // newConn >= curConn
 			if res == 0 { // newConn == curConn
 				// TODO Is it a potential threat (session hijacking)? Should we keep the existing connection?
@@ -126,14 +127,17 @@ func (cp *ConnectionPool) handleNewConnection(rPub crypto.PublicKey, newConn net
 			} else {
 				cp.net.Logger().Info("connection created while connection already exists between peers, closing existing connection. existing session ID=%v, new session ID=%v, remote=%s", curConn.Session().ID(), newConn.Session().ID(), rPub)
 			}
-			curConn.Close()
+			closeConn = curConn
 			cp.connections[rPub.String()] = newConn
 			// we don't need to update on the new connection since there were already a connection in the table and there shouldn't be any registered channel waiting for updates
 		} else { // newConn < curConn
 			cp.net.Logger().Info("connection created while connection already exists between peers, closing new connection. existing session ID=%v, new session ID=%v, remote=%s", curConn.Session().ID(), newConn.Session().ID(), rPub)
-			newConn.Close()
+			closeConn = newConn
 		}
 		cp.connMutex.Unlock()
+		if closeConn != nil {
+			closeConn.Close()
+		}
 		return
 	}
 	cp.connections[rPub.String()] = newConn
@@ -205,7 +209,6 @@ Loop:
 			cp.handleNewConnection(conn.RemotePublicKey(), conn, net.Remote)
 
 		case conn := <-cp.net.ClosingConnections():
-			cp.net.Logger().Info("11111111111")
 			cp.handleClosedConnection(conn)
 
 		case <-cp.teardown:
