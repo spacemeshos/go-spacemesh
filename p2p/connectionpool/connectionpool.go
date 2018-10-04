@@ -129,7 +129,6 @@ func (cp *ConnectionPool) handleNewConnection(rPub crypto.PublicKey, newConn net
 			}
 			closeConn = curConn
 			cp.connections[rPub.String()] = newConn
-			// we don't need to update on the new connection since there were already a connection in the table and there shouldn't be any registered channel waiting for updates
 		} else { // newConn < curConn
 			cp.net.Logger().Info("connection created while connection already exists between peers, closing new connection. existing session ID=%v, new session ID=%v, remote=%s", curConn.Session().ID(), newConn.Session().ID(), rPub)
 			closeConn = newConn
@@ -138,6 +137,8 @@ func (cp *ConnectionPool) handleNewConnection(rPub crypto.PublicKey, newConn net
 		if closeConn != nil {
 			closeConn.Close()
 		}
+
+		// we don't need to update on the new connection since there were already a connection in the table and there shouldn't be any registered channel waiting for updates
 		return
 	}
 	cp.connections[rPub.String()] = newConn
@@ -146,7 +147,6 @@ func (cp *ConnectionPool) handleNewConnection(rPub crypto.PublicKey, newConn net
 	// update all registered channels
 	res := dialResult{newConn, nil}
 	cp.handleDialResult(rPub, res)
-	return
 }
 
 func (cp *ConnectionPool) handleClosedConnection(conn net.Connection) {
