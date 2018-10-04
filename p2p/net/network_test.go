@@ -42,7 +42,7 @@ func TestHandlePreSessionIncomingMessage(t *testing.T) {
 	//cfg := config.DefaultConfig()
 	localNode, _ := node.GenerateTestNode(t)
 	remoteNode, _ := node.GenerateTestNode(t)
-	con := NewConnectionMock(localNode.PublicKey(), Remote)
+	con := NewConnectionMock(localNode.PublicKey())
 	remoteNet, _ := NewNet(config.ConfigValues, remoteNode)
 	outchan := remoteNet.SubscribeOnNewRemoteConnections()
 	out, session, er := GenerateHandshakeRequestData(localNode.PublicKey(), localNode.PrivateKey(), remoteNode.PublicKey(), remoteNet.NetworkID())
@@ -60,7 +60,7 @@ func TestHandlePreSessionIncomingMessage(t *testing.T) {
 	waitForCallbackOrTimeout(t, outchan, session)
 	assert.Equal(t, localNode.PublicKey().String(), con.remotePub.String(), "Remote connection was not updated properly")
 
-	othercon := NewConnectionMock(remoteNode.PublicKey(), Remote)
+	othercon := NewConnectionMock(remoteNode.PublicKey())
 	othercon.SetSendResult(fmt.Errorf("error or whatever"))
 	err = remoteNet.HandlePreSessionIncomingMessage(othercon, data)
 	assert.Error(t, err, "handle session failed")

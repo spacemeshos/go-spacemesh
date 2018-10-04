@@ -7,6 +7,7 @@ import (
 	"net"
 	"sync/atomic"
 	"time"
+	"math/rand"
 )
 
 // ReadWriteCloserMock is a mock of ReadWriteCloserMock
@@ -52,6 +53,7 @@ type NetworkMock struct {
 	networkId        int8
 	closingConn      chan Connection
 	incomingMessages chan IncomingMessageEvent
+	dialSessionID    []byte
 	logger           *logging.Logger
 }
 
@@ -71,6 +73,10 @@ func (n *NetworkMock) reset() {
 	n.dialErr = nil
 }
 
+func (n *NetworkMock) SetNextDialSessionID(sID []byte) {
+	n.dialSessionID = sID
+}
+
 // SetDialResult is a mock
 func (n *NetworkMock) SetDialResult(err error) {
 	n.dialErr = err
@@ -85,13 +91,19 @@ func (n *NetworkMock) SetDialDelayMs(delay int8) {
 func (n *NetworkMock) Dial(address string, remotePublicKey crypto.PublicKey) (Connection, error) {
 	atomic.AddInt32(&n.dialCount, 1)
 	time.Sleep(time.Duration(n.dialDelayMs) * time.Millisecond)
-	conn := NewConnectionMock(remotePublicKey, Local)
+	sID := n.dialSessionID
+	if sID == nil {
+		sID = make([]byte, 4)
+		rand.Read(sID)
+	}
+	conn := NewConnectionMock(remotePublicKey)
+	conn.SetSession(SessionMock{id: sID})
 	return conn, n.dialErr
 }
 
 // DialCount gets the dial count
 func (n *NetworkMock) DialCount() int32 {
-	return n.dialCount
+	return atomic.LoadInt32(&n.dialCount)
 }
 
 // SubscribeOnNewRemoteConnections subscribes on new connections
@@ -141,7 +153,7 @@ func (n *NetworkMock) SetPreSessionResult(err error) {
 
 // PreSessionCount counts
 func (n NetworkMock) PreSessionCount() int32 {
-	return n.preSessionCount
+	return atomic.LoadInt32(&n.preSessionCount)
 }
 
 // HandlePreSessionIncomingMessage and stuff
