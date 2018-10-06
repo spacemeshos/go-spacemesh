@@ -1,7 +1,6 @@
 package net
 
 import (
-	"crypto/sha1"
 	"fmt"
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
@@ -12,14 +11,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"gopkg.in/op/go-logging.v1"
 	"net"
-	"sort"
-	"strings"
 	"sync"
 	"time"
 )
 
 // DefaultQueueCount is the default number of messages queue we hold. messages queues are used to serialize message receiving
 const DefaultQueueCount uint = 6
+
 // DefaultMessageQueueSize is the buffer size of each queue mentioned above. (queues are buffered channels)
 const DefaultMessageQueueSize uint = 256
 
@@ -58,7 +56,6 @@ type Net struct {
 	regMutex         sync.RWMutex
 
 	queuesCount           uint
-	queueSize             uint
 	incomingMessagesQueue []chan IncomingMessageEvent
 
 	closingConnections chan Connection
@@ -80,7 +77,6 @@ func NewNet(conf config.Config, localEntity *node.LocalNode) (*Net, error) {
 		tcpListenAddress:      localEntity.Address(),
 		regNewRemoteConn:      make([]chan Connection, 0),
 		queuesCount:           qcount,
-		queueSize:             qsize,
 		incomingMessagesQueue: make([]chan IncomingMessageEvent, qcount, qcount),
 		closingConnections:    make(chan Connection, 20),
 		config:                conf,
@@ -116,7 +112,8 @@ func (n *Net) LocalNode() *node.LocalNode {
 	return n.localNode
 }
 
-func sumByteArray(b [20]byte) uint {
+// sumByteArray sums all bytes in an array as uint
+func sumByteArray(b []byte) uint {
 	var sumOfChars uint
 
 	//take each byte in the string and add the values
@@ -124,22 +121,18 @@ func sumByteArray(b [20]byte) uint {
 		byteVal := b[i]
 		sumOfChars += uint(byteVal)
 	}
-
-	// return as hex value in upper case
 	return sumOfChars
 }
 
 // EnqueueMessage inserts a message into a queue, to decide on which queue to send the message to
-// it sorts the local and remote public keys, hash them together and use the sum result % with the number of queues to divide results to sections.
+// it sum the remote public key bytes as integer to segment to queueCount queues.
 func (n *Net) EnqueueMessage(event IncomingMessageEvent) {
-	strs := []string{n.localNode.PublicKey().String(), event.Conn.RemotePublicKey().String()}
-	sort.Strings(strs)
-	sb := sha1.Sum([]byte(strings.Join(strs, "")))
-	sba := sumByteArray(sb)
+	sba := sumByteArray(event.Conn.RemotePublicKey().Bytes())
 	n.incomingMessagesQueue[sba%n.queuesCount] <- event
 }
 
-// IncomingMessages returns Net's channel for incoming messages
+// IncomingMessages returns a slice of channels which incoming messages are delivered on
+// the receiver should iterate  on all the channels and read all messages. to sync messages order but enable parallel messages handling.
 func (n *Net) IncomingMessages() []chan IncomingMessageEvent {
 	return n.incomingMessagesQueue
 }

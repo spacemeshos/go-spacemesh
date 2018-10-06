@@ -85,7 +85,7 @@ func TestSwarm_processMessage(t *testing.T) {
 	r := node.GenerateRandomNodeData()
 	c := &net.ConnectionMock{}
 	c.SetRemotePublicKey(r.PublicKey())
-	ime := net.IncomingMessageEvent{Message: nil, Conn: c}
+	ime := net.IncomingMessageEvent{Message: []byte("0"), Conn: c}
 	s.processMessage(ime) // should error
 
 	assert.True(t, c.Closed())

@@ -96,9 +96,9 @@ func newSwarm(config config.Config, newNode bool) (*swarm, error) {
 
 	s.lNode.Debug("Created swarm for local node %s, %s", l.Address(), l.Pretty())
 
-	go s.listenToNetworkMessages()
-
 	go s.updateNewConnections()
+
+	s.listenToNetworkMessages() // fires up a goroutine for each queue of messages
 
 	if config.SwarmConfig.Bootstrap {
 		err := s.dht.Bootstrap()
@@ -394,6 +394,7 @@ var (
 func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 
 	if msg.Message == nil || msg.Conn == nil {
+		s.lNode.Fatal("Fatal error: Got nil message or connection")
 		return ErrBadFormat
 	}
 

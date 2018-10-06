@@ -190,7 +190,6 @@ Loop:
 					break Loop
 				}
 			} else {
-				// channel for protocol messages
 				c.publish(msg)
 			}
 
