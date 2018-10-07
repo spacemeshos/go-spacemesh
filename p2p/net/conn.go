@@ -68,7 +68,7 @@ type FormattedConnection struct {
 
 type networker interface {
 	HandlePreSessionIncomingMessage(c Connection, msg []byte) error
-	IncomingMessages() chan IncomingMessageEvent
+	EnqueueMessage(ime IncomingMessageEvent)
 	ClosingConnections() chan Connection
 	NetworkID() int8
 }
@@ -91,7 +91,7 @@ func newConnection(conn readWriteCloseAddresser, netw networker, formatter wire.
 		formatter:  formatter,
 		networker:  netw,
 		closeChan:  make(chan struct{}),
-		closed:		0,
+		closed:     0,
 	}
 
 	connection.formatter.Pipe(conn)
@@ -134,7 +134,7 @@ func (c *FormattedConnection) String() string {
 }
 
 func (c *FormattedConnection) publish(message []byte) {
-	c.networker.IncomingMessages() <- IncomingMessageEvent{c, message}
+	c.networker.EnqueueMessage(IncomingMessageEvent{c, message})
 }
 
 // incomingChannel returns the incoming messages channel
@@ -162,9 +162,8 @@ func (c *FormattedConnection) Closed() bool {
 	return atomic.LoadInt32(&c.closed) > 0
 }
 
-
 func (c *FormattedConnection) shutdown(err error) {
-	c.logger.Info("shutdown. err=%v", err)
+	c.logger.Info("shutdown. id=%s err=%v", c.id, err)
 	c.formatter.Close()
 	c.networker.ClosingConnections() <- c
 }
@@ -191,8 +190,7 @@ Loop:
 					break Loop
 				}
 			} else {
-				// channel for protocol messages
-				go c.publish(msg)
+				c.publish(msg)
 			}
 
 		case <-c.closeChan:

@@ -4,10 +4,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"gopkg.in/op/go-logging.v1"
+	"math/rand"
 	"net"
 	"sync/atomic"
 	"time"
-	"math/rand"
 )
 
 // ReadWriteCloserMock is a mock of ReadWriteCloserMock
@@ -52,7 +52,7 @@ type NetworkMock struct {
 	regNewRemoteConn []chan Connection
 	networkId        int8
 	closingConn      chan Connection
-	incomingMessages chan IncomingMessageEvent
+	incomingMessages []chan IncomingMessageEvent
 	dialSessionID    []byte
 	logger           *logging.Logger
 }
@@ -63,7 +63,7 @@ func NewNetworkMock() *NetworkMock {
 		regNewRemoteConn: make([]chan Connection, 0),
 		closingConn:      make(chan Connection, 20),
 		logger:           getTestLogger("network mock"),
-		incomingMessages: make(chan IncomingMessageEvent),
+		incomingMessages: []chan IncomingMessageEvent{make(chan IncomingMessageEvent, 256)},
 	}
 }
 
@@ -135,8 +135,13 @@ func (n *NetworkMock) ClosingConnections() chan Connection {
 }
 
 // IncomingMessages return channel of IncomingMessages
-func (n *NetworkMock) IncomingMessages() chan IncomingMessageEvent {
+func (n *NetworkMock) IncomingMessages() []chan IncomingMessageEvent {
 	return n.incomingMessages
+}
+
+// IncomingMessages return channel of IncomingMessages
+func (n *NetworkMock) EnqueueMessage(event IncomingMessageEvent) {
+	n.incomingMessages[0] <- event
 }
 
 // PublishClosingConnection does just that

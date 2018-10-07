@@ -33,7 +33,7 @@ func TestSendReceiveMessage(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, len(msg)+1, len(rwcam.WriteOut())) // the +1 is because of the delimited wire format
 	rwcam.SetReadResult(rwcam.WriteOut(), nil)
-	data := <-netw.IncomingMessages()
+	data := <-netw.IncomingMessages()[0]
 	assert.Equal(t, []byte(msg), data.Message)
 }
 

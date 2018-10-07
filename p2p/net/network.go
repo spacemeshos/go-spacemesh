@@ -15,6 +15,12 @@ import (
 	"time"
 )
 
+// DefaultQueueCount is the default number of messages queue we hold. messages queues are used to serialize message receiving
+const DefaultQueueCount uint = 6
+
+// DefaultMessageQueueSize is the buffer size of each queue mentioned above. (queues are buffered channels)
+const DefaultMessageQueueSize uint = 256
+
 // IncomingMessageEvent is the event reported on new incoming message, it contains the message and the Connection carrying the message
 type IncomingMessageEvent struct {
 	Conn    Connection
@@ -49,7 +55,9 @@ type Net struct {
 	regNewRemoteConn []chan Connection
 	regMutex         sync.RWMutex
 
-	incomingMessages   chan IncomingMessageEvent
+	queuesCount           uint
+	incomingMessagesQueue []chan IncomingMessageEvent
+
 	closingConnections chan Connection
 
 	config config.Config
@@ -59,15 +67,23 @@ type Net struct {
 // It attempts to tcp listen on address. e.g. localhost:1234 .
 func NewNet(conf config.Config, localEntity *node.LocalNode) (*Net, error) {
 
+	qcount := DefaultQueueCount      // todo : get from cfg
+	qsize := DefaultMessageQueueSize // todo : get from cfg
+
 	n := &Net{
-		networkID:          conf.NetworkID,
-		localNode:          localEntity,
-		logger:             localEntity.Logger,
-		tcpListenAddress:   localEntity.Address(),
-		regNewRemoteConn:   make([]chan Connection, 0),
-		incomingMessages:   make(chan IncomingMessageEvent),
-		closingConnections: make(chan Connection, 20),
-		config:             conf,
+		networkID:             conf.NetworkID,
+		localNode:             localEntity,
+		logger:                localEntity.Logger,
+		tcpListenAddress:      localEntity.Address(),
+		regNewRemoteConn:      make([]chan Connection, 0),
+		queuesCount:           qcount,
+		incomingMessagesQueue: make([]chan IncomingMessageEvent, qcount, qcount),
+		closingConnections:    make(chan Connection, 20),
+		config:                conf,
+	}
+
+	for imq := range n.incomingMessagesQueue {
+		n.incomingMessagesQueue[imq] = make(chan IncomingMessageEvent, qsize)
 	}
 
 	err := n.listen()
@@ -96,9 +112,29 @@ func (n *Net) LocalNode() *node.LocalNode {
 	return n.localNode
 }
 
-// IncomingMessages returns Net's channel for incoming messages
-func (n *Net) IncomingMessages() chan IncomingMessageEvent {
-	return n.incomingMessages
+// sumByteArray sums all bytes in an array as uint
+func sumByteArray(b []byte) uint {
+	var sumOfChars uint
+
+	//take each byte in the string and add the values
+	for i := 0; i < len(b); i++ {
+		byteVal := b[i]
+		sumOfChars += uint(byteVal)
+	}
+	return sumOfChars
+}
+
+// EnqueueMessage inserts a message into a queue, to decide on which queue to send the message to
+// it sum the remote public key bytes as integer to segment to queueCount queues.
+func (n *Net) EnqueueMessage(event IncomingMessageEvent) {
+	sba := sumByteArray(event.Conn.RemotePublicKey().Bytes())
+	n.incomingMessagesQueue[sba%n.queuesCount] <- event
+}
+
+// IncomingMessages returns a slice of channels which incoming messages are delivered on
+// the receiver should iterate  on all the channels and read all messages. to sync messages order but enable parallel messages handling.
+func (n *Net) IncomingMessages() []chan IncomingMessageEvent {
+	return n.incomingMessagesQueue
 }
 
 // ClosingConnections returns Net's channel where closing connections events are reported
@@ -181,7 +217,6 @@ func (n *Net) createSecuredConnection(address string, remotePublicKey crypto.Pub
 		conn.Close()
 		return nil, fmt.Errorf("%s err: %v", errMsg, err)
 	}
-
 	conn.SetSession(session)
 	return conn, nil
 }

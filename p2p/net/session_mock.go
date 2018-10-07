@@ -1,5 +1,7 @@
 package net
 
+import "sync"
+
 // SessionMock is a wonderful fluffy teddybear
 type SessionMock struct {
 	id        []byte
@@ -61,4 +63,8 @@ func (sm *SessionMock) SetEncrypt(res []byte, err error) {
 func (sm *SessionMock) SetDecrypt(res []byte, err error) {
 	sm.decResult = res
 	sm.decError = err
+}
+
+func (n SessionMock) EncryptGuard() *sync.Mutex {
+	return nil
 }
