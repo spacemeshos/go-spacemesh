@@ -12,7 +12,6 @@ import (
 	"gopkg.in/op/go-logging.v1"
 	"net"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 )
@@ -178,7 +177,7 @@ func (n *Net) createSecuredConnection(address string, remotePublicKey crypto.Pub
 	if err != nil {
 		return nil, err
 	}
-	data, session, err := GenerateHandshakeRequestData(n.localNode.PublicKey(), n.localNode.PrivateKey(), remotePublicKey, n.networkID, n.tcpListenAddress.Port)
+	data, session, err := GenerateHandshakeRequestData(n.localNode.PublicKey(), n.localNode.PrivateKey(), remotePublicKey, n.networkID, uint16(n.tcpListenAddress.Port))
 	if err != nil {
 		conn.Close()
 		return nil, fmt.Errorf("%s err: %v", errMsg, err)
@@ -225,13 +224,20 @@ func (n *Net) createSecuredConnection(address string, remotePublicKey crypto.Pub
 		return nil, fmt.Errorf("%s err: %v", errMsg, err)
 	}
 	conn.SetSession(session)
-	port, err := strconv.ParseInt(strings.Split(address, ":")[1], 10, 32)
+
+	_, port, err := net.SplitHostPort(address)
 	if err != nil {
 		conn.Close()
-		return nil, fmt.Errorf("can't parse address port err=%v", err)
+		return nil, fmt.Errorf("failed to extract port form peer address %v, err:%v", address, err)
 	}
 
-	conn.SetRemoteListenPort(uint16(port))
+	portnum, err := strconv.Atoi(port)
+	if err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("failed to extract port form peer address %v, err:%v", address, err)
+	}
+
+	conn.SetRemoteListenPort(uint16(portnum))
 	return conn, nil
 }
 

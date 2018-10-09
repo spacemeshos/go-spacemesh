@@ -27,12 +27,12 @@ func TestGenerateHandshakeRequestData(t *testing.T) {
 
 }
 
-func getPort(t *testing.T, remote node.Node) int {
+func getPort(t *testing.T, remote node.Node) uint16 {
 	_, port, err := net.SplitHostPort(remote.Address())
 	assert.NoError(t, err)
 	portint, err := strconv.Atoi(port)
 	assert.NoError(t, err)
-	return portint
+	return uint16(portint)
 }
 
 func generateRequestData(t *testing.T) (*pb.HandshakeData, node.LocalNode, node.LocalNode, int8) {

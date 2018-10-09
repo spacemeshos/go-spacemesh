@@ -32,7 +32,7 @@ const HandshakeResp = "/handshake/1.0/handshake-resp/"
 // Node that NetworkSession is not yet authenticated - this happens only when the handshake response is processed and authenticated
 // This is called by node1 (initiator)
 func GenerateHandshakeRequestData(localPublicKey crypto.PublicKey, localPrivateKey crypto.PrivateKey, remotePublicKey crypto.PublicKey,
-	networkID int8, port int) (*pb.HandshakeData, NetworkSession, error) {
+	networkID int8, port uint16) (*pb.HandshakeData, NetworkSession, error) {
 
 	// we use the Elliptic Curve Encryption Scheme
 	// https://en.wikipedia.org/wiki/Integrated_Encryption_Scheme
@@ -181,7 +181,6 @@ func ProcessHandshakeRequest(networkID int8, lPub crypto.PublicKey, lPri crypto.
 	hm1 := hmac.New(sha256.New, keyM)
 	hm1.Write(iv)
 	hmac1 := hm1.Sum(nil)
-	fmt.Println("Generated hmac ", hmac1)
 
 	resp := &pb.HandshakeData{
 		ClientVersion: config.ClientVersion,
