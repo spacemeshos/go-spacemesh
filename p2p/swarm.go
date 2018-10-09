@@ -1,7 +1,7 @@
 package p2p
 
 import (
-	"time"
+	inet "net"
 
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
@@ -18,8 +18,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 type protocolMessage struct {
@@ -62,7 +64,7 @@ type swarm struct {
 func newSwarm(config config.Config, newNode bool) (*swarm, error) {
 
 	port := config.TCPPort
-	address := fmt.Sprintf("127.0.0.1:%d", port)
+	address := inet.JoinHostPort("0.0.0.0", strconv.Itoa(port))
 
 	var l *node.LocalNode
 	var err error
@@ -106,6 +108,7 @@ func newSwarm(config config.Config, newNode bool) (*swarm, error) {
 			s.Shutdown()
 			return nil, err
 		}
+		s.localNode().Info("Bootstrap succeed with %d nodes", config.SwarmConfig.RandomConnections)
 	}
 
 	go s.checkTimeDrifts()
@@ -197,6 +200,7 @@ func authAuthor(pm *pb.ProtocolMessage) error {
 // req.destId: receiver remote node public key/id
 // Local request to send a message to a remote node
 func (s *swarm) SendMessage(peerPubKey string, protocol string, payload []byte) error {
+	s.lNode.Info("Sending message to %v", peerPubKey)
 
 	peer, err := s.dht.Lookup(peerPubKey) // blocking, might issue a network lookup that'll take time.
 
@@ -304,7 +308,7 @@ func (s *swarm) processMessage(ime net.IncomingMessageEvent) {
 // update a full connection to the routing table.
 func (s *swarm) updateConnection(nc net.Connection) {
 	if nc.RemotePublicKey() != nil {
-		s.dht.Update(node.New(nc.RemotePublicKey(), fmt.Sprintf("%v:%v", strings.Split(nc.RemoteAddr().String(), ":")[0], s.config.TCPPort)))
+		s.dht.Update(node.New(nc.RemotePublicKey(), fmt.Sprintf("%v:%v", strings.Split(nc.RemoteAddr().String(), ":")[0], nc.RemoteListenPort())))
 	}
 }
 

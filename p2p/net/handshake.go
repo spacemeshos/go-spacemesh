@@ -32,7 +32,7 @@ const HandshakeResp = "/handshake/1.0/handshake-resp/"
 // Node that NetworkSession is not yet authenticated - this happens only when the handshake response is processed and authenticated
 // This is called by node1 (initiator)
 func GenerateHandshakeRequestData(localPublicKey crypto.PublicKey, localPrivateKey crypto.PrivateKey, remotePublicKey crypto.PublicKey,
-	networkID int8) (*pb.HandshakeData, NetworkSession, error) {
+	networkID int8, port int) (*pb.HandshakeData, NetworkSession, error) {
 
 	// we use the Elliptic Curve Encryption Scheme
 	// https://en.wikipedia.org/wiki/Integrated_Encryption_Scheme
@@ -74,6 +74,8 @@ func GenerateHandshakeRequestData(localPublicKey crypto.PublicKey, localPrivateK
 	data.Hmac = hm.Sum(nil)
 	data.Sign = ""
 
+	data.Port = uint32(port)
+
 	// sign corpus - marshall data without the signature to protobufs3 binary format
 	bin, err := proto.Marshal(data)
 	if err != nil {
@@ -105,7 +107,6 @@ func ProcessHandshakeRequest(networkID int8, lPub crypto.PublicKey, lPri crypto.
 	// check that received clientversion is valid client string
 	reqVersion := strings.Split(req.ClientVersion, "/")
 	if len(reqVersion) != 2 {
-		//node.Warning("Dropping incoming message - invalid client version")
 		return nil, nil, errors.New("invalid client version")
 	}
 
@@ -180,6 +181,7 @@ func ProcessHandshakeRequest(networkID int8, lPub crypto.PublicKey, lPri crypto.
 	hm1 := hmac.New(sha256.New, keyM)
 	hm1.Write(iv)
 	hmac1 := hm1.Sum(nil)
+	fmt.Println("Generated hmac ", hmac1)
 
 	resp := &pb.HandshakeData{
 		ClientVersion: config.ClientVersion,
@@ -229,9 +231,11 @@ func ProcessHandshakeResponse(remotePub crypto.PublicKey, s NetworkSession, resp
 	hm := hmac.New(sha256.New, s.KeyM())
 	hm.Write(resp.Iv)
 	expectedMAC := hm.Sum(nil)
+	//fmt.Println("MY Generated hmac ", expectedMAC, "but original was ", resp.Hmac)
 
 	if !hmac.Equal(resp.Hmac, expectedMAC) {
-		return errors.New("invalid hmac")
+		err := fmt.Sprintf("invalid hmac need %v got %v", resp.Hmac, expectedMAC)
+		return errors.New(err)
 	}
 
 	// verify signature
@@ -252,10 +256,6 @@ func ProcessHandshakeResponse(remotePub crypto.PublicKey, s NetworkSession, resp
 	if !v {
 		return errors.New("invalid signature")
 	}
-
-	// TODO does peer need to hold all sessions?
-	// update remote node session here
-	//r.UpdateSession(s.String(), s)
 
 	return nil
 }

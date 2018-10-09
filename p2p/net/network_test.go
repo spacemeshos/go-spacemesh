@@ -80,7 +80,7 @@ func TestHandlePreSessionIncomingMessage(t *testing.T) {
 	con := NewConnectionMock(localNode.PublicKey())
 	remoteNet, _ := NewNet(config.ConfigValues, remoteNode)
 	outchan := remoteNet.SubscribeOnNewRemoteConnections()
-	out, session, er := GenerateHandshakeRequestData(localNode.PublicKey(), localNode.PrivateKey(), remoteNode.PublicKey(), remoteNet.NetworkID())
+	out, session, er := GenerateHandshakeRequestData(localNode.PublicKey(), localNode.PrivateKey(), remoteNode.PublicKey(), remoteNet.NetworkID(), getPort(t, remoteNode.Node))
 	assert.NoError(t, er, "cant generate handshake message")
 	data, err := proto.Marshal(out)
 	assert.NoError(t, err, "cannot marshal obj")

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"errors"
+	"fmt"
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
@@ -353,4 +354,59 @@ func TestSwarm_onRemoteClientMessage(t *testing.T) {
 	err = p.onRemoteClientMessage(imc)
 
 	assert.NoError(t, err)
+}
+
+func TestBootstrap(t *testing.T) {
+	bootnodes := []int{3}
+	nodes := []int{50}
+	rcon := []int{3}
+
+	rseed := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	for i := 0; i < len(nodes); i++ {
+		t.Run(fmt.Sprintf("Peers:%v/randconn:%v", nodes[i], rcon[i]), func(t *testing.T) {
+			bufchan := make(chan *swarm, nodes[i])
+
+			bnarr := []string{}
+
+			for k := 0; k < bootnodes[i]; k++ {
+				bn := p2pTestInstance(t, config.DefaultConfig())
+				bn.lNode.Info("This is a bootnode - %v", bn.lNode.Node.String())
+				bnarr = append(bnarr, node.StringFromNode(bn.lNode.Node))
+			}
+
+			cfg := config.DefaultConfig()
+			cfg.SwarmConfig.Bootstrap = true
+			cfg.SwarmConfig.RandomConnections = rcon[i]
+			cfg.SwarmConfig.BootstrapNodes = bnarr
+
+			var wg sync.WaitGroup
+
+			for j := 0; j < nodes[i]; j++ {
+				wg.Add(1)
+				go func() {
+					time.Sleep(time.Millisecond * time.Duration(rseed.Int31n(1000)))
+					sw := p2pTestInstance(t, cfg)
+					wg.Done()
+					bufchan <- sw
+				}()
+			}
+
+			wg.Wait()
+			close(bufchan)
+			swarms := []*swarm{}
+			for s := range bufchan {
+				swarms = append(swarms, s)
+
+			}
+
+			randnode := swarms[rseed.Int31n(int32(nodes[i]))-1]
+			randnode2 := swarms[rseed.Int31n(int32(nodes[i]))-1]
+			randnode.RegisterProtocol(exampleProtocol)
+			recv := randnode2.RegisterProtocol(exampleProtocol)
+
+			sendDirectMessage(t, randnode, randnode2.lNode.PublicKey().String(), recv, true)
+			time.Sleep(3 * time.Second)
+		})
+	}
 }

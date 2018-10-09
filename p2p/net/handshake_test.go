@@ -6,6 +6,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"github.com/stretchr/testify/assert"
+	"net"
+	"strconv"
 	"testing"
 )
 
@@ -18,10 +20,19 @@ func TestGenerateHandshakeRequestData(t *testing.T) {
 	assert.NoError(t, err, "should be able to create localnode")
 	con := NewConnectionMock(remoteNode.PublicKey())
 	remoteNet, _ := NewNet(config.ConfigValues, remoteNode)
+
 	//outchan := remoteNet.SubscribeOnNewRemoteConnections()
-	_, _, er := GenerateHandshakeRequestData(localNode.PublicKey(), localNode.PrivateKey(), con.RemotePublicKey(), remoteNet.NetworkID())
+	_, _, er := GenerateHandshakeRequestData(localNode.PublicKey(), localNode.PrivateKey(), con.RemotePublicKey(), remoteNet.NetworkID(), getPort(t, remoteNode.Node))
 	assert.NoError(t, er, "Sanity failed")
 
+}
+
+func getPort(t *testing.T, remote node.Node) int {
+	_, port, err := net.SplitHostPort(remote.Address())
+	assert.NoError(t, err)
+	portint, err := strconv.Atoi(port)
+	assert.NoError(t, err)
+	return portint
 }
 
 func generateRequestData(t *testing.T) (*pb.HandshakeData, node.LocalNode, node.LocalNode, int8) {
@@ -29,9 +40,7 @@ func generateRequestData(t *testing.T) (*pb.HandshakeData, node.LocalNode, node.
 	localNode, _ := node.GenerateTestNode(t)
 	remoteNode, _ := node.GenerateTestNode(t)
 	netId := int8(1)
-	con := NewConnectionMock(remoteNode.PublicKey())
-	//outchan := remoteNet.SubscribeOnNewRemoteConnections()
-	out, _, err := GenerateHandshakeRequestData(localNode.PublicKey(), localNode.PrivateKey(), con.RemotePublicKey(), netId)
+	out, _, err := GenerateHandshakeRequestData(localNode.PublicKey(), localNode.PrivateKey(), remoteNode.PublicKey(), netId, getPort(t, remoteNode.Node))
 	assert.NoError(t, err, "Failed to generate request")
 	return out, *localNode, *remoteNode, netId
 }

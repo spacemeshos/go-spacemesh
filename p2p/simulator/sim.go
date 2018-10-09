@@ -11,50 +11,69 @@ import (
 
 // Simulator is a p2p node factory and message bridge
 type Simulator struct {
-	ingressChannel chan service.Message
 	io.Closer
 	mutex           sync.RWMutex
 	protocolHandler map[string]map[string]chan service.Message // maps peerPubkey -> protocol -> handler
+	nodes           map[string]*Node
+}
+
+type dht interface {
+	Update(node2 node.Node)
 }
 
 // Node is a simulated p2p node that can be used as a p2p service
 type Node struct {
 	sim *Simulator
 	node.Node
+	dht dht
 }
 
 // New Creates a p2p simulation by providing nodes as p2p services and bridge them.
 func New() *Simulator {
 	s := &Simulator{
-		ingressChannel:  make(chan service.Message),
 		protocolHandler: make(map[string]map[string]chan service.Message),
+		nodes:           make(map[string]*Node),
 	}
 	return s
+}
+
+func (s *Simulator) createdNode(n *Node) {
+	s.mutex.Lock()
+	s.protocolHandler[n.PublicKey().String()] = make(map[string]chan service.Message)
+	s.nodes[n.PublicKey().String()] = n
+	s.mutex.Unlock()
 }
 
 // NewNode creates a new p2p node in this Simulator
 func (s *Simulator) NewNode() *Node {
 	n := node.GenerateRandomNodeData()
 	sn := &Node{
-		s,
-		n,
+		sim:  s,
+		Node: n,
 	}
-	s.mutex.Lock()
-	s.protocolHandler[n.PublicKey().String()] = make(map[string]chan service.Message)
-	s.mutex.Unlock()
+	s.createdNode(sn)
 	return sn
 }
 
 // NewNodeFrom creates a new node from existing details
 func (s *Simulator) NewNodeFrom(n node.Node) *Node {
 	sn := &Node{
-		s,
-		n,
+		sim:  s,
+		Node: n,
 	}
-	s.mutex.Lock()
-	s.protocolHandler[n.PublicKey().String()] = make(map[string]chan service.Message)
-	s.mutex.Unlock()
+	s.createdNode(sn)
 	return sn
+}
+
+func (s *Simulator) updateNode(node string, sender *Node) {
+	s.mutex.Lock()
+	n, ok := s.nodes[node]
+	if ok {
+		if n.dht != nil {
+			n.Update(sender.Node)
+		}
+	}
+	s.mutex.Unlock()
 }
 
 type simMessage struct {
@@ -80,6 +99,7 @@ func (sn *Node) SendMessage(nodeID string, protocol string, payload []byte) erro
 	sn.sim.mutex.RUnlock()
 	if ok {
 		thec <- simMessage{payload, sn.Node}
+		sn.sim.updateNode(nodeID, sn)
 	}
 	return nil
 }
@@ -91,6 +111,19 @@ func (sn *Node) RegisterProtocol(protocol string) chan service.Message {
 	sn.sim.protocolHandler[sn.Node.String()][protocol] = c
 	sn.sim.mutex.Unlock()
 	return c
+}
+
+// AttachDHT attaches a dht for the update function of the simulation node
+func (sn *Node) AttachDHT(dht dht) {
+	sn.dht = dht
+}
+
+// Update updates a node in the dht, it panics if no dht was declared
+func (sn *Node) Update(node2 node.Node) {
+	if sn.dht == nil {
+		panic("Tried to update without attaching dht")
+	}
+	sn.dht.Update(node2)
 }
 
 // Shutdown closes all node channels are remove it from the Simulator map

@@ -40,6 +40,8 @@ type Connection interface {
 	SetRemotePublicKey(key crypto.PublicKey)
 
 	RemoteAddr() net.Addr
+	RemoteListenPort() uint16
+	SetRemoteListenPort(port uint16)
 
 	Session() NetworkSession
 	SetSession(session NetworkSession)
@@ -54,16 +56,17 @@ type Connection interface {
 type FormattedConnection struct {
 	logger *logging.Logger
 	// metadata for logging / debugging
-	id         string // uuid for logging
-	created    time.Time
-	remotePub  crypto.PublicKey
-	remoteAddr net.Addr
-	closeChan  chan struct{}
-	formatter  wire.Formatter // format messages in some way
-	networker  networker      // network context
-	session    NetworkSession
-	closeOnce  sync.Once
-	closed     int32
+	id               string // uuid for logging
+	created          time.Time
+	remotePub        crypto.PublicKey
+	remoteAddr       net.Addr
+	remoteListenPort uint16
+	closeChan        chan struct{}
+	formatter        wire.Formatter // format messages in some way
+	networker        networker      // network context
+	session          NetworkSession
+	closeOnce        sync.Once
+	closed           int32
 }
 
 type networker interface {
@@ -106,6 +109,17 @@ func (c *FormattedConnection) ID() string {
 // RemoteAddr returns the channel's remote peer address
 func (c *FormattedConnection) RemoteAddr() net.Addr {
 	return c.remoteAddr
+}
+
+// RemoteListenPort this is used to know on which port the peer from this connection listens
+func (c *FormattedConnection) RemoteListenPort() uint16 {
+	return c.remoteListenPort
+
+}
+
+// SetRemoteListenPort this is used to know on which port the peer from this connection listens
+func (c *FormattedConnection) SetRemoteListenPort(port uint16) {
+	c.remoteListenPort = port
 }
 
 // SetRemotePublicKey sets the remote peer's public key

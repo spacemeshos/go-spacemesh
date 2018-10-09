@@ -40,6 +40,14 @@ func (cm *ConnectionMock) SetRemotePublicKey(key crypto.PublicKey) {
 	cm.remotePub = key
 }
 
+func (cm ConnectionMock) RemoteListenPort() uint16 {
+	return 0
+}
+
+func (cm *ConnectionMock) SetRemoteListenPort(port uint16) {
+
+}
+
 func (cm *ConnectionMock) RemoteAddr() net.Addr {
 	return &net.IPAddr{}
 }

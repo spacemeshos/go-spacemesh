@@ -11,6 +11,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"gopkg.in/op/go-logging.v1"
 	"net"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -48,7 +50,7 @@ type Net struct {
 	logger    *logging.Logger
 
 	tcpListener      net.Listener
-	tcpListenAddress string // Address to open connection: localhost:9999\
+	tcpListenAddress *net.TCPAddr // Address to open connection: localhost:9999\
 
 	isShuttingDown bool
 
@@ -70,11 +72,16 @@ func NewNet(conf config.Config, localEntity *node.LocalNode) (*Net, error) {
 	qcount := DefaultQueueCount      // todo : get from cfg
 	qsize := DefaultMessageQueueSize // todo : get from cfg
 
+	tcpAddress, err := net.ResolveTCPAddr("tcp", localEntity.Address())
+	if err != nil {
+		fmt.Errorf("can't resolve local address %v", err)
+	}
+
 	n := &Net{
 		networkID:             conf.NetworkID,
 		localNode:             localEntity,
 		logger:                localEntity.Logger,
-		tcpListenAddress:      localEntity.Address(),
+		tcpListenAddress:      tcpAddress,
 		regNewRemoteConn:      make([]chan Connection, 0),
 		queuesCount:           qcount,
 		incomingMessagesQueue: make([]chan IncomingMessageEvent, qcount, qcount),
@@ -86,7 +93,7 @@ func NewNet(conf config.Config, localEntity *node.LocalNode) (*Net, error) {
 		n.incomingMessagesQueue[imq] = make(chan IncomingMessageEvent, qsize)
 	}
 
-	err := n.listen()
+	err = n.listen()
 
 	if err != nil {
 		return nil, err
@@ -171,7 +178,7 @@ func (n *Net) createSecuredConnection(address string, remotePublicKey crypto.Pub
 	if err != nil {
 		return nil, err
 	}
-	data, session, err := GenerateHandshakeRequestData(n.localNode.PublicKey(), n.localNode.PrivateKey(), remotePublicKey, n.networkID)
+	data, session, err := GenerateHandshakeRequestData(n.localNode.PublicKey(), n.localNode.PrivateKey(), remotePublicKey, n.networkID, n.tcpListenAddress.Port)
 	if err != nil {
 		conn.Close()
 		return nil, fmt.Errorf("%s err: %v", errMsg, err)
@@ -218,6 +225,13 @@ func (n *Net) createSecuredConnection(address string, remotePublicKey crypto.Pub
 		return nil, fmt.Errorf("%s err: %v", errMsg, err)
 	}
 	conn.SetSession(session)
+	port, err := strconv.ParseInt(strings.Split(address, ":")[1], 10, 32)
+	if err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("can't parse address port err=%v", err)
+	}
+
+	conn.SetRemoteListenPort(uint16(port))
 	return conn, nil
 }
 
@@ -243,7 +257,7 @@ func (n *Net) Shutdown() {
 // Start network server
 func (n *Net) listen() error {
 	n.logger.Info("Starting to listen on %v", n.tcpListenAddress)
-	tcpListener, err := net.Listen("tcp", n.tcpListenAddress)
+	tcpListener, err := net.Listen("tcp", n.tcpListenAddress.String())
 	if err != nil {
 		return err
 	}
@@ -314,7 +328,7 @@ func (n *Net) HandlePreSessionIncomingMessage(c Connection, message []byte) erro
 	}
 	respData, session, err := ProcessHandshakeRequest(n.NetworkID(), n.localNode.PublicKey(), n.localNode.PrivateKey(), c.RemotePublicKey(), data)
 	if err != nil {
-		return fmt.Errorf("%s. here err: %v", errMsg, err)
+		return fmt.Errorf("%s. err: %v", errMsg, err)
 	}
 	payload, err := proto.Marshal(respData)
 	if err != nil {
@@ -327,6 +341,7 @@ func (n *Net) HandlePreSessionIncomingMessage(c Connection, message []byte) erro
 	}
 
 	c.SetSession(session)
+	c.SetRemoteListenPort(uint16(data.Port))
 	// update on new connection
 	n.publishNewRemoteConnection(c)
 	return nil
