@@ -102,17 +102,17 @@ func newConnection(conn readWriteCloseAddresser, netw networker, formatter wire.
 }
 
 // ID returns the channel's ID
-func (c FormattedConnection) ID() string {
+func (c *FormattedConnection) ID() string {
 	return c.id
 }
 
 // RemoteAddr returns the channel's remote peer address
-func (c FormattedConnection) RemoteAddr() net.Addr {
+func (c *FormattedConnection) RemoteAddr() net.Addr {
 	return c.remoteAddr
 }
 
 // RemoteListenPort this is used to know on which port the peer from this connection listens
-func (c FormattedConnection) RemoteListenPort() uint16 {
+func (c *FormattedConnection) RemoteListenPort() uint16 {
 	return c.remoteListenPort
 }
 
@@ -127,7 +127,7 @@ func (c *FormattedConnection) SetRemotePublicKey(key crypto.PublicKey) {
 }
 
 // RemotePublicKey returns the remote peer's public key
-func (c FormattedConnection) RemotePublicKey() crypto.PublicKey {
+func (c *FormattedConnection) RemotePublicKey() crypto.PublicKey {
 	return c.remotePub
 }
 
@@ -142,7 +142,7 @@ func (c *FormattedConnection) Session() NetworkSession {
 }
 
 // String returns a string describing the connection
-func (c FormattedConnection) String() string {
+func (c *FormattedConnection) String() string {
 	return c.id
 }
 
@@ -165,7 +165,7 @@ func (c *FormattedConnection) Send(m []byte) error {
 // Close closes the connection (implements io.Closer). It is go safe.
 func (c *FormattedConnection) Close() {
 	c.closeOnce.Do(func() {
-		atomic.AddInt32(&c.closed, int32(1))
+		atomic.AddInt32(&c.closed, 1)
 		c.closeChan <- struct{}{}
 	})
 }

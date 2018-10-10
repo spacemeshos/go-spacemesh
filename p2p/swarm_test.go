@@ -358,10 +358,10 @@ func TestSwarm_onRemoteClientMessage(t *testing.T) {
 
 func TestBootstrap(t *testing.T) {
 	bootnodes := []int{3}
-	nodes := []int{50}
+	nodes := []int{30}
 	rcon := []int{3}
 
-	rseed := rand.New(rand.NewSource(time.Now().UnixNano()))
+	rand.Seed(time.Now().UnixNano())
 
 	for i := 0; i < len(nodes); i++ {
 		t.Run(fmt.Sprintf("Peers:%v/randconn:%v", nodes[i], rcon[i]), func(t *testing.T) {
@@ -385,10 +385,10 @@ func TestBootstrap(t *testing.T) {
 			for j := 0; j < nodes[i]; j++ {
 				wg.Add(1)
 				go func() {
-					time.Sleep(time.Millisecond * time.Duration(rseed.Int31n(1000)))
+					time.Sleep(time.Millisecond * time.Duration(rand.Int31n(1000)))
 					sw := p2pTestInstance(t, cfg)
-					wg.Done()
 					bufchan <- sw
+					wg.Done()
 				}()
 			}
 
@@ -400,8 +400,8 @@ func TestBootstrap(t *testing.T) {
 
 			}
 
-			randnode := swarms[rseed.Int31n(int32(nodes[i]))-1]
-			randnode2 := swarms[rseed.Int31n(int32(nodes[i]))-1]
+			randnode := swarms[rand.Int31n(int32(nodes[i]))-1]
+			randnode2 := swarms[rand.Int31n(int32(nodes[i]))-1]
 			randnode.RegisterProtocol(exampleProtocol)
 			recv := randnode2.RegisterProtocol(exampleProtocol)
 
