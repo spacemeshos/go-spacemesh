@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
+	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/stretchr/testify/assert"
 	"math/rand"
 	"testing"
@@ -112,7 +113,7 @@ func TestRemoteConnectionWithNoConnection(t *testing.T) {
 	cPool := NewConnectionPool(n, generatePublicKey())
 	rConn := net.NewConnectionMock(remotePub)
 	rConn.SetSession(net.NewSessionMock([]byte("aaa")))
-	cPool.newRemoteConn <- rConn
+	cPool.newRemoteConn <- net.NewConnectionEvent{rConn, node.EmptyNode}
 	time.Sleep(50 * time.Millisecond)
 	conn, err := cPool.GetConnection(addr, remotePub)
 	assert.Equal(t, remotePub.String(), conn.RemotePublicKey().String())
@@ -133,7 +134,7 @@ func TestRemoteConnectionWithExistingConnection(t *testing.T) {
 	lConn, _ := cPool.GetConnection(addr, remotePub)
 	rConn := net.NewConnectionMock(remotePub)
 	rConn.SetSession(net.NewSessionMock([]byte("111")))
-	cPool.newRemoteConn <- rConn
+	cPool.newRemoteConn <- net.NewConnectionEvent{rConn, node.EmptyNode}
 	time.Sleep(20 * time.Millisecond)
 	assert.Equal(t, remotePub.String(), lConn.RemotePublicKey().String())
 	assert.Equal(t, int32(1), n.DialCount())
@@ -147,7 +148,7 @@ func TestRemoteConnectionWithExistingConnection(t *testing.T) {
 	lConn, _ = cPool.GetConnection(addr, remotePub)
 	rConn = net.NewConnectionMock(remotePub)
 	rConn.SetSession(net.NewSessionMock([]byte("110")))
-	cPool.newRemoteConn <- rConn
+	cPool.newRemoteConn <- net.NewConnectionEvent{rConn, node.EmptyNode}
 	time.Sleep(20 * time.Millisecond)
 	assert.Equal(t, remotePub.String(), lConn.RemotePublicKey().String())
 	assert.Equal(t, int32(2), n.DialCount())
@@ -267,7 +268,7 @@ func TestRandom(t *testing.T) {
 				sID := make([]byte, 4)
 				rand.Read(sID)
 				rConn.SetSession(net.NewSessionMock(sID))
-				cPool.newRemoteConn <- rConn
+				cPool.newRemoteConn <- net.NewConnectionEvent{rConn, node.EmptyNode}
 			}()
 		} else if r == 1 {
 			go func() {

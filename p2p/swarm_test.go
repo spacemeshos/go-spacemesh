@@ -10,7 +10,6 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
-	"github.com/spacemeshos/go-spacemesh/p2p/dht"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
@@ -90,25 +89,6 @@ func TestSwarm_processMessage(t *testing.T) {
 	s.processMessage(ime) // should error
 
 	assert.True(t, c.Closed())
-}
-
-func TestSwarm_updateConnection(t *testing.T) {
-	p := &swarm{}
-	p.lNode, _ = node.GenerateTestNode(t)
-	dhtmock := &dht.MockDHT{}
-	p.dht = dhtmock
-	c := &net.ConnectionMock{}
-
-	p.updateConnection(c)
-
-	assert.Equal(t, dhtmock.UpdateCount(), 0)
-
-	r := node.GenerateRandomNodeData()
-	c.SetRemotePublicKey(r.PublicKey())
-
-	p.updateConnection(c)
-
-	assert.Equal(t, dhtmock.UpdateCount(), 1)
 }
 
 func TestSwarm_authAuthor(t *testing.T) {

@@ -40,8 +40,6 @@ type Connection interface {
 	SetRemotePublicKey(key crypto.PublicKey)
 
 	RemoteAddr() net.Addr
-	RemoteListenPort() uint16
-	SetRemoteListenPort(port uint16)
 
 	Session() NetworkSession
 	SetSession(session NetworkSession)
@@ -111,16 +109,6 @@ func (c *FormattedConnection) RemoteAddr() net.Addr {
 	return c.remoteAddr
 }
 
-// RemoteListenPort this is used to know on which port the peer from this connection listens
-func (c *FormattedConnection) RemoteListenPort() uint16 {
-	return c.remoteListenPort
-}
-
-// SetRemoteListenPort this is used to set the port the peer from this connection listens on
-func (c *FormattedConnection) SetRemoteListenPort(port uint16) {
-	c.remoteListenPort = port
-}
-
 // SetRemotePublicKey sets the remote peer's public key
 func (c *FormattedConnection) SetRemotePublicKey(key crypto.PublicKey) {
 	c.remotePub = key
@@ -170,7 +158,7 @@ func (c *FormattedConnection) Close() {
 	})
 }
 
-// Reports whether the connection was closed. It is go safe.
+// Closed Reports whether the connection was closed. It is go safe.
 func (c *FormattedConnection) Closed() bool {
 	return atomic.LoadInt32(&c.closed) > 0
 }

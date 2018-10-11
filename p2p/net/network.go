@@ -12,6 +12,7 @@ import (
 	"gopkg.in/op/go-logging.v1"
 	"net"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -53,7 +54,7 @@ type Net struct {
 
 	isShuttingDown bool
 
-	regNewRemoteConn []chan Connection
+	regNewRemoteConn []chan NewConnectionEvent
 	regMutex         sync.RWMutex
 
 	queuesCount           uint
@@ -62,6 +63,12 @@ type Net struct {
 	closingConnections chan Connection
 
 	config config.Config
+}
+
+// NewConnectionEvent is a struct holding a new created connection and a node info.
+type NewConnectionEvent struct {
+	Conn Connection
+	Node node.Node
 }
 
 // NewNet creates a new network.
@@ -73,7 +80,7 @@ func NewNet(conf config.Config, localEntity *node.LocalNode) (*Net, error) {
 
 	tcpAddress, err := net.ResolveTCPAddr("tcp", localEntity.Address())
 	if err != nil {
-		fmt.Errorf("can't resolve local address %v", err)
+		fmt.Errorf("can't resolve local address: %v, err:%v", localEntity.Address(), err)
 	}
 
 	n := &Net{
@@ -81,7 +88,7 @@ func NewNet(conf config.Config, localEntity *node.LocalNode) (*Net, error) {
 		localNode:             localEntity,
 		logger:                localEntity.Logger,
 		tcpListenAddress:      tcpAddress,
-		regNewRemoteConn:      make([]chan Connection, 0),
+		regNewRemoteConn:      make([]chan NewConnectionEvent, 0),
 		queuesCount:           qcount,
 		incomingMessagesQueue: make([]chan IncomingMessageEvent, qcount, qcount),
 		closingConnections:    make(chan Connection, 20),
@@ -224,20 +231,6 @@ func (n *Net) createSecuredConnection(address string, remotePublicKey crypto.Pub
 		return nil, fmt.Errorf("%s err: %v", errMsg, err)
 	}
 	conn.SetSession(session)
-
-	_, port, err := net.SplitHostPort(address)
-	if err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("failed to extract port form peer address %v, err:%v", address, err)
-	}
-
-	portnum, err := strconv.Atoi(port)
-	if err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("failed to extract port form peer address %v, err:%v", address, err)
-	}
-
-	conn.SetRemoteListenPort(uint16(portnum))
 	return conn, nil
 }
 
@@ -295,18 +288,18 @@ func (n *Net) acceptTCP() {
 }
 
 // SubscribeOnNewRemoteConnections returns new channel where events of new remote connections are reported
-func (n *Net) SubscribeOnNewRemoteConnections() chan Connection {
+func (n *Net) SubscribeOnNewRemoteConnections() chan NewConnectionEvent {
 	n.regMutex.Lock()
-	ch := make(chan Connection, 20)
+	ch := make(chan NewConnectionEvent, 20)
 	n.regNewRemoteConn = append(n.regNewRemoteConn, ch)
 	n.regMutex.Unlock()
 	return ch
 }
 
-func (n *Net) publishNewRemoteConnection(conn Connection) {
+func (n *Net) publishNewRemoteConnectionEvent(conn Connection, node node.Node) {
 	n.regMutex.RLock()
 	for _, c := range n.regNewRemoteConn {
-		c <- conn
+		c <- NewConnectionEvent{conn, node}
 	}
 	n.regMutex.RUnlock()
 }
@@ -347,8 +340,11 @@ func (n *Net) HandlePreSessionIncomingMessage(c Connection, message []byte) erro
 	}
 
 	c.SetSession(session)
-	c.SetRemoteListenPort(uint16(data.Port))
+
 	// update on new connection
-	n.publishNewRemoteConnection(c)
+	addr := strings.Split(c.RemoteAddr().String(), ":")[0] // this should never be bad unless address is corrupted
+	anode := node.New(c.RemotePublicKey(), net.JoinHostPort(addr, strconv.Itoa(int(data.Port))))
+	n.publishNewRemoteConnectionEvent(c, anode)
+
 	return nil
 }

@@ -49,7 +49,7 @@ type NetworkMock struct {
 	dialCount        int32
 	preSessionErr    error
 	preSessionCount  int32
-	regNewRemoteConn []chan Connection
+	regNewRemoteConn []chan NewConnectionEvent
 	networkId        int8
 	closingConn      chan Connection
 	incomingMessages []chan IncomingMessageEvent
@@ -60,7 +60,7 @@ type NetworkMock struct {
 // NewNetworkMock is a mock
 func NewNetworkMock() *NetworkMock {
 	return &NetworkMock{
-		regNewRemoteConn: make([]chan Connection, 0),
+		regNewRemoteConn: make([]chan NewConnectionEvent, 0),
 		closingConn:      make(chan Connection, 20),
 		logger:           getTestLogger("network mock"),
 		incomingMessages: []chan IncomingMessageEvent{make(chan IncomingMessageEvent, 256)},
@@ -107,16 +107,16 @@ func (n *NetworkMock) DialCount() int32 {
 }
 
 // SubscribeOnNewRemoteConnections subscribes on new connections
-func (n *NetworkMock) SubscribeOnNewRemoteConnections() chan Connection {
-	ch := make(chan Connection, 20)
+func (n *NetworkMock) SubscribeOnNewRemoteConnections() chan NewConnectionEvent {
+	ch := make(chan NewConnectionEvent, 20)
 	n.regNewRemoteConn = append(n.regNewRemoteConn, ch)
 	return ch
 }
 
 // PublishNewRemoteConnection and stuff
-func (n NetworkMock) PublishNewRemoteConnection(conn Connection) {
+func (n NetworkMock) PublishNewRemoteConnection(nce NewConnectionEvent) {
 	for _, ch := range n.regNewRemoteConn {
-		ch <- conn
+		ch <- nce
 	}
 }
 

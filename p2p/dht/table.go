@@ -245,6 +245,8 @@ func (rt *routingTableImpl) update(p node.Node) {
 		return
 	}
 
+	// this is a new node.
+
 	// todo: consider connection metrics
 	if bucket.Len() >= rt.bucketsize { // bucket overflows
 		// TODO: if bucket is full ping oldest node and replace if it fails to answer

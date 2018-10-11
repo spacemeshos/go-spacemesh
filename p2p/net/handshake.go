@@ -230,11 +230,9 @@ func ProcessHandshakeResponse(remotePub crypto.PublicKey, s NetworkSession, resp
 	hm := hmac.New(sha256.New, s.KeyM())
 	hm.Write(resp.Iv)
 	expectedMAC := hm.Sum(nil)
-	//fmt.Println("MY Generated hmac ", expectedMAC, "but original was ", resp.Hmac)
 
 	if !hmac.Equal(resp.Hmac, expectedMAC) {
-		err := fmt.Sprintf("invalid hmac need %v got %v", resp.Hmac, expectedMAC)
-		return errors.New(err)
+		return fmt.Errorf("invalid hmac need %v got %v", resp.Hmac, expectedMAC)
 	}
 
 	// verify signature

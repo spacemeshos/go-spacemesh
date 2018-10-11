@@ -31,10 +31,10 @@ func (msg NetMessage) Error() error {
 	return msg.err
 }
 
-func waitForCallbackOrTimeout(t *testing.T, outchan chan Connection, expectedSession NetworkSession) {
+func waitForCallbackOrTimeout(t *testing.T, outchan chan NewConnectionEvent, expectedSession NetworkSession) {
 	select {
 	case res := <-outchan:
-		assert.Equal(t, expectedSession.ID(), res.Session().ID(), "wrong session received")
+		assert.Equal(t, expectedSession.ID(), res.Conn.Session().ID(), "wrong session received")
 	case <-time.After(1 * time.Second):
 		assert.Nil(t, expectedSession, "Didn't get channel notification")
 	}
