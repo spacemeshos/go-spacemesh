@@ -246,6 +246,9 @@ func (rt *routingTableImpl) update(p node.Node) {
 	}
 
 	// this is a new node.
+	if p.Address() == "" {
+		rt.log.Errorf("Updated non-existing peer without an address pubkey: %v", p.PublicKey().String())
+	}
 
 	// todo: consider connection metrics
 	if bucket.Len() >= rt.bucketsize { // bucket overflows

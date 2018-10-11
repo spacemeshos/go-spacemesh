@@ -54,17 +54,16 @@ type Connection interface {
 type FormattedConnection struct {
 	logger *logging.Logger
 	// metadata for logging / debugging
-	id               string // uuid for logging
-	created          time.Time
-	remotePub        crypto.PublicKey
-	remoteAddr       net.Addr
-	remoteListenPort uint16
-	closeChan        chan struct{}
-	formatter        wire.Formatter // format messages in some way
-	networker        networker      // network context
-	session          NetworkSession
-	closeOnce        sync.Once
-	closed           int32
+	id         string // uuid for logging
+	created    time.Time
+	remotePub  crypto.PublicKey
+	remoteAddr net.Addr
+	closeChan  chan struct{}
+	formatter  wire.Formatter // format messages in some way
+	networker  networker      // network context
+	session    NetworkSession
+	closeOnce  sync.Once
+	closed     int32
 }
 
 type networker interface {
