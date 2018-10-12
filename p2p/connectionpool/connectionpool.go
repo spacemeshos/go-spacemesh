@@ -17,7 +17,7 @@ type dialResult struct {
 
 type networker interface {
 	Dial(address string, remotePublicKey crypto.PublicKey) (net.Connection, error) // Connect to a remote node. Can send when no error.
-	SubscribeOnNewRemoteConnections() chan net.Connection
+	SubscribeOnNewRemoteConnections() chan net.NewConnectionEvent
 	NetworkID() int8
 	ClosingConnections() chan net.Connection
 	Logger() *logging.Logger
@@ -37,13 +37,12 @@ type ConnectionPool struct {
 	dialWait    sync.WaitGroup
 	shutdown    bool
 
-	newRemoteConn chan net.Connection
+	newRemoteConn chan net.NewConnectionEvent
 	teardown      chan struct{}
 }
 
 // NewConnectionPool creates new ConnectionPool
 func NewConnectionPool(network networker, lPub crypto.PublicKey) *ConnectionPool {
-	connC := network.SubscribeOnNewRemoteConnections()
 	cPool := &ConnectionPool{
 		localPub:      lPub,
 		net:           network,
@@ -53,7 +52,7 @@ func NewConnectionPool(network networker, lPub crypto.PublicKey) *ConnectionPool
 		pendMutex:     sync.Mutex{},
 		dialWait:      sync.WaitGroup{},
 		shutdown:      false,
-		newRemoteConn: connC,
+		newRemoteConn: network.SubscribeOnNewRemoteConnections(),
 		teardown:      make(chan struct{}),
 	}
 	go cPool.beginEventProcessing()
@@ -205,8 +204,8 @@ func (cp *ConnectionPool) beginEventProcessing() {
 Loop:
 	for {
 		select {
-		case conn := <-cp.newRemoteConn:
-			cp.handleNewConnection(conn.RemotePublicKey(), conn, net.Remote)
+		case nce := <-cp.newRemoteConn:
+			cp.handleNewConnection(nce.Conn.RemotePublicKey(), nce.Conn, net.Remote)
 
 		case conn := <-cp.net.ClosingConnections():
 			cp.handleClosedConnection(conn)

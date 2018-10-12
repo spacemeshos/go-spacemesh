@@ -154,8 +154,6 @@ func (p *findNodeProtocol) readLoop() {
 				return
 			}
 
-			p.rt.Update(msg.Sender())
-
 			if headers.Req {
 				p.handleIncomingRequest(msg.Sender().PublicKey(), headers.ReqID, headers.Payload)
 				return

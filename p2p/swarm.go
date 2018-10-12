@@ -1,7 +1,7 @@
 package p2p
 
 import (
-	"time"
+	inet "net"
 
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
@@ -18,8 +18,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"strings"
+	"strconv"
 	"sync"
+	"time"
 )
 
 type protocolMessage struct {
@@ -54,7 +55,6 @@ type swarm struct {
 
 	// Shutdown the loop
 	shutdown chan struct{} // local request to kill the swarm from outside. e.g when local node is shutting down
-	msgCnt   int
 }
 
 // newSwarm creates a new P2P instance, configured by config, if newNode is true it will create a new node identity
@@ -62,7 +62,7 @@ type swarm struct {
 func newSwarm(config config.Config, newNode bool) (*swarm, error) {
 
 	port := config.TCPPort
-	address := fmt.Sprintf("127.0.0.1:%d", port)
+	address := inet.JoinHostPort("0.0.0.0", strconv.Itoa(port))
 
 	var l *node.LocalNode
 	var err error
@@ -96,7 +96,7 @@ func newSwarm(config config.Config, newNode bool) (*swarm, error) {
 
 	s.lNode.Debug("Created swarm for local node %s, %s", l.Address(), l.Pretty())
 
-	go s.updateNewConnections()
+	go s.handleNewConnectionEvents()
 
 	s.listenToNetworkMessages() // fires up a goroutine for each queue of messages
 
@@ -106,6 +106,7 @@ func newSwarm(config config.Config, newNode bool) (*swarm, error) {
 			s.Shutdown()
 			return nil, err
 		}
+		s.localNode().Info("Bootstrap succeed with %d nodes", config.SwarmConfig.RandomConnections)
 	}
 
 	go s.checkTimeDrifts()
@@ -197,6 +198,7 @@ func authAuthor(pm *pb.ProtocolMessage) error {
 // req.destId: receiver remote node public key/id
 // Local request to send a message to a remote node
 func (s *swarm) SendMessage(peerPubKey string, protocol string, payload []byte) error {
+	s.lNode.Info("Sending message to %v", peerPubKey)
 
 	peer, err := s.dht.Lookup(peerPubKey) // blocking, might issue a network lookup that'll take time.
 
@@ -301,13 +303,6 @@ func (s *swarm) processMessage(ime net.IncomingMessageEvent) {
 	}
 }
 
-// update a full connection to the routing table.
-func (s *swarm) updateConnection(nc net.Connection) {
-	if nc.RemotePublicKey() != nil {
-		s.dht.Update(node.New(nc.RemotePublicKey(), fmt.Sprintf("%v:%v", strings.Split(nc.RemoteAddr().String(), ":")[0], s.config.TCPPort)))
-	}
-}
-
 // listenToNetworkMessages is waiting for network events from net as new connections or messages and handles them.
 func (s *swarm) listenToNetworkMessages() {
 
@@ -332,13 +327,13 @@ func (s *swarm) listenToNetworkMessages() {
 
 }
 
-func (s *swarm) updateNewConnections() {
-	newconnections := s.network.SubscribeOnNewRemoteConnections()
+func (s *swarm) handleNewConnectionEvents() {
+	newConnEvents := s.network.SubscribeOnNewRemoteConnections()
 Loop:
 	for {
 		select {
-		case nc := <-newconnections:
-			go s.updateConnection(nc)
+		case nce := <-newConnEvents:
+			go func(nod node.Node) { s.dht.Update(nod) }(nce.Node)
 		case <-s.shutdown:
 			break Loop
 		}
@@ -443,7 +438,7 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 
 	s.lNode.Debug("Authorized %v protocol message ", pm.Metadata.Protocol)
 
-	remoteNode := node.New(msg.Conn.RemotePublicKey(), fmt.Sprintf("%v:%v", strings.Split(msg.Conn.RemoteAddr().String(), ":")[0], s.config.TCPPort))
+	remoteNode := node.New(msg.Conn.RemotePublicKey(), "") // if we got so far, we already have the node in our rt, hence address won't be used
 	// update the routing table - we just heard from this authenticated node
 	s.dht.Update(remoteNode)
 	// route authenticated message to the reigstered protocol

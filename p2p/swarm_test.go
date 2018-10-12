@@ -6,10 +6,10 @@ import (
 	"time"
 
 	"errors"
+	"fmt"
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
-	"github.com/spacemeshos/go-spacemesh/p2p/dht"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
@@ -89,25 +89,6 @@ func TestSwarm_processMessage(t *testing.T) {
 	s.processMessage(ime) // should error
 
 	assert.True(t, c.Closed())
-}
-
-func TestSwarm_updateConnection(t *testing.T) {
-	p := &swarm{}
-	p.lNode, _ = node.GenerateTestNode(t)
-	dhtmock := &dht.MockDHT{}
-	p.dht = dhtmock
-	c := &net.ConnectionMock{}
-
-	p.updateConnection(c)
-
-	assert.Equal(t, dhtmock.UpdateCount(), 0)
-
-	r := node.GenerateRandomNodeData()
-	c.SetRemotePublicKey(r.PublicKey())
-
-	p.updateConnection(c)
-
-	assert.Equal(t, dhtmock.UpdateCount(), 1)
 }
 
 func TestSwarm_authAuthor(t *testing.T) {
@@ -353,4 +334,64 @@ func TestSwarm_onRemoteClientMessage(t *testing.T) {
 	err = p.onRemoteClientMessage(imc)
 
 	assert.NoError(t, err)
+}
+
+func TestBootstrap(t *testing.T) {
+	bootnodes := []int{3}
+	nodes := []int{30}
+	rcon := []int{3}
+
+	rand.Seed(time.Now().UnixNano())
+
+	for i := 0; i < len(nodes); i++ {
+		t.Run(fmt.Sprintf("Peers:%v/randconn:%v", nodes[i], rcon[i]), func(t *testing.T) {
+			bufchan := make(chan *swarm, nodes[i])
+
+			bnarr := []string{}
+
+			for k := 0; k < bootnodes[i]; k++ {
+				bn := p2pTestInstance(t, config.DefaultConfig())
+				bn.lNode.Info("This is a bootnode - %v", bn.lNode.Node.String())
+				bnarr = append(bnarr, node.StringFromNode(bn.lNode.Node))
+			}
+
+			cfg := config.DefaultConfig()
+			cfg.SwarmConfig.Bootstrap = true
+			cfg.SwarmConfig.RandomConnections = rcon[i]
+			cfg.SwarmConfig.BootstrapNodes = bnarr
+
+			var wg sync.WaitGroup
+
+			for j := 0; j < nodes[i]; j++ {
+				wg.Add(1)
+				go func() {
+					sw := p2pTestInstance(t, cfg)
+					bufchan <- sw
+					wg.Done()
+				}()
+			}
+
+			wg.Wait()
+			close(bufchan)
+			swarms := []*swarm{}
+			for s := range bufchan {
+				swarms = append(swarms, s)
+
+			}
+
+			randnode := swarms[rand.Int31n(int32(len(swarms)))-1]
+			randnode2 := swarms[rand.Int31n(int32(len(swarms)))-1]
+
+			for (randnode == nil || randnode2 == nil) || randnode.lNode.String() == randnode2.lNode.String() {
+				randnode = swarms[rand.Int31n(int32(len(swarms)))-1]
+				randnode2 = swarms[rand.Int31n(int32(len(swarms)))-1]
+			}
+
+			randnode.RegisterProtocol(exampleProtocol)
+			recv := randnode2.RegisterProtocol(exampleProtocol)
+
+			sendDirectMessage(t, randnode, randnode2.lNode.PublicKey().String(), recv, true)
+			time.Sleep(3 * time.Second)
+		})
+	}
 }

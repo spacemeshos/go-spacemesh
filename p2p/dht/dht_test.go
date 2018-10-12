@@ -62,11 +62,14 @@ func TestDHT_Update(t *testing.T) {
 
 	assert.True(t, size > config.DefaultConfig().SwarmConfig.RoutingTableBucketSize, "Routing table should be at least as big as bucket size")
 
-	looked, err := dht.Lookup(randnode.PublicKey().String())
+	lastnode := evenmorenodes[0]
 
-	assert.NoError(t, err, "error finding existing node")
+	looked, err := dht.Lookup(lastnode.PublicKey().String())
 
-	assert.True(t, looked.String() == randnode.String(), "didnt find the same node")
+	assert.NoError(t, err, "error finding existing node ")
+
+	assert.Equal(t, looked.String(), lastnode.String(), "didnt find the same node")
+	assert.Equal(t, looked.Address(), lastnode.Address(), "didnt find the same node")
 
 }
 
@@ -120,47 +123,41 @@ func TestDHT_Lookup2(t *testing.T) {
 
 }
 
+func simNodeWithDHT(t *testing.T, sc config.SwarmConfig, sim *simulator.Simulator) (*simulator.Node, DHT) {
+	ln, _ := node.GenerateTestNode(t)
+	n := sim.NewNodeFrom(ln.Node)
+	dht := New(ln, sc, n)
+	n.AttachDHT(dht)
+
+	return n, dht
+}
+
+func bootAndWait(t *testing.T, dht DHT, errchan chan error) {
+	err := dht.Bootstrap()
+	errchan <- err
+}
+
 func TestDHT_Bootstrap(t *testing.T) {
 	// Create a bootstrap node
-	ln, _ := node.GenerateTestNode(t)
-	cfg := config.DefaultConfig()
 	sim := simulator.New()
-	n1 := sim.NewNodeFrom(ln.Node)
-
-	dht := New(ln, cfg.SwarmConfig, n1)
+	bn, _ := simNodeWithDHT(t, config.DefaultConfig().SwarmConfig, sim)
 
 	// config for other nodes
 	cfg2 := config.DefaultConfig()
 	cfg2.SwarmConfig.RandomConnections = 2 // min numbers of peers to succeed in bootstrap
-	cfg2.SwarmConfig.BootstrapNodes = []string{node.StringFromNode(dht.local.Node)}
+	cfg2.SwarmConfig.BootstrapNodes = []string{node.StringFromNode(bn.Node)}
 
 	booted := make(chan error)
 
-	// Boot 3 more nodes
-	ln2, _ := node.GenerateTestNode(t)
-	n2 := sim.NewNodeFrom(ln2.Node)
-	dht2 := New(ln2, cfg2.SwarmConfig, n2)
+	// boot 3 more dhts
 
-	ln3, _ := node.GenerateTestNode(t)
-	n3 := sim.NewNodeFrom(ln3.Node)
-	dht3 := New(ln3, cfg2.SwarmConfig, n3)
+	_, dht2 := simNodeWithDHT(t, cfg2.SwarmConfig, sim)
+	_, dht3 := simNodeWithDHT(t, cfg2.SwarmConfig, sim)
+	_, dht4 := simNodeWithDHT(t, cfg2.SwarmConfig, sim)
 
-	ln4, _ := node.GenerateTestNode(t)
-	n4 := sim.NewNodeFrom(ln4.Node)
-	dht4 := New(ln4, cfg2.SwarmConfig, n4)
-
-	go func() {
-		err2 := dht2.Bootstrap()
-		booted <- err2
-	}()
-	go func() {
-		err3 := dht3.Bootstrap()
-		booted <- err3
-	}()
-	go func() {
-		err4 := dht4.Bootstrap()
-		booted <- err4
-	}()
+	go bootAndWait(t, dht2, booted)
+	go bootAndWait(t, dht3, booted)
+	go bootAndWait(t, dht4, booted)
 
 	// Collect errors
 	err := <-booted
@@ -181,29 +178,19 @@ func TestDHT_Bootstrap2(t *testing.T) {
 	sim := simulator.New()
 
 	// Create a bootstrap node
-	bs, _ := node.GenerateTestNode(t)
 	cfg := config.DefaultConfig()
-	bsn := sim.NewNodeFrom(bs.Node)
-
-	dht := New(bs, cfg.SwarmConfig, bsn)
+	bn, _ := simNodeWithDHT(t, cfg.SwarmConfig, sim)
 
 	// config for other nodes
 	cfg2 := config.DefaultConfig()
 	cfg2.SwarmConfig.RandomConnections = minToBoot // min numbers of peers to succeed in bootstrap
-	cfg2.SwarmConfig.BootstrapNodes = []string{node.StringFromNode(dht.local.Node)}
+	cfg2.SwarmConfig.BootstrapNodes = []string{node.StringFromNode(bn.Node)}
 
 	booted := make(chan error)
 
-	dhts := make([]*KadDHT, nodesNum)
-
 	for i := 0; i < nodesNum; i++ {
-		lln, _ := node.GenerateTestNode(t)
-		nn := sim.NewNodeFrom(lln.Node)
-
-		d := New(lln, cfg2.SwarmConfig, nn)
-
-		dhts[i] = d
-		go func(d *KadDHT) { err := d.Bootstrap(); booted <- err }(d)
+		_, d := simNodeWithDHT(t, cfg2.SwarmConfig, sim)
+		go bootAndWait(t, d, booted)
 	}
 
 	timer := time.NewTimer(timeout)
