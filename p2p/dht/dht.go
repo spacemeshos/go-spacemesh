@@ -8,7 +8,6 @@ import (
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"time"
-	"fmt"
 )
 
 // DHT is an interface to a general distributed hash table.
@@ -69,7 +68,6 @@ func New(node *node.LocalNode, config config.SwarmConfig, service service.Servic
 
 // Update insert or update a node in the routing table.
 func (d *KadDHT) Update(node node.Node) {
-	fmt.Println("update: dhtId=%s", node.DhtID().String())
 	d.rt.Update(node)
 }
 
@@ -77,7 +75,6 @@ func (d *KadDHT) Update(node node.Node) {
 // if the node can't be found there it sends a query to the network.
 func (d *KadDHT) Lookup(pubkey string) (node.Node, error) {
 	dhtid := node.NewDhtIDFromBase58(pubkey)
-	fmt.Println("pub=%s dhtid=%s", pubkey, dhtid.String())
 	poc := make(PeersOpChannel)
 	d.rt.NearestPeers(NearestPeersReq{dhtid, d.config.RoutingTableAlpha, poc})
 	res := (<-poc).Peers

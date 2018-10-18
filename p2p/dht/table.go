@@ -272,7 +272,11 @@ func (rt *routingTableImpl) randomPeers(qty int) []node.Node {
 		buckets[i], buckets[j] = buckets[j], buckets[i]
 	}
 
-	buf := make([]node.Node, qty)
+	bufSize := qty
+	if (size < qty) {
+		bufSize = size
+	}
+	buf := make([]node.Node, bufSize)
 	// Move head of each bucket into buf, removing buckets that become empty.
 	var i, j int
 	for ; i < len(buf); i, j = i+1, (j+1)%len(buckets) {

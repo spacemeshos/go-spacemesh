@@ -70,7 +70,7 @@ func TestSwarm_GossipRoundTrip(t *testing.T) {
 	b := time.Now()
 	err = nodes[0].Broadcast("gossip", msg)
 
-	fmt.Printf("%v GOSSIPED TO %v, err=%v\r\n", nodes[0].lNode.String(), err)
+	fmt.Printf("%v GOSSIPED, err=%v\r\n", nodes[0].lNode.String(), err)
 
 	var got int32 = 0
 	didntget := make([]*swarm, 0)

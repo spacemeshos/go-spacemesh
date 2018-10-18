@@ -228,6 +228,7 @@ func TestRoutingTableImpl_SelectPeers(t *testing.T) {
 			if _, ok := idset[selected[i].String()]; ok {
 				t.Errorf("duplicate")
 			}
+			assert.NotNil(t, selected[i].PublicKey())
 			idset[selected[i].String()] = struct{}{}
 		}
 	}

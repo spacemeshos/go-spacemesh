@@ -28,6 +28,7 @@ func p2pTestInstance(t testing.TB, config config.Config) *swarm {
 	p, err := newSwarm(config, true, true)
 	assert.NoError(t, err, "Error creating p2p stack, err: %v", err)
 	assert.NotNil(t, p)
+	p.Start()
 	return p
 }
 

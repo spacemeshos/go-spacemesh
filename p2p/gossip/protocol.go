@@ -210,13 +210,14 @@ func (s *Neighborhood) getMorePeers(numpeers int) {
 
 	// dht should provide us with random peers to connect to
 	nds := s.ps.SelectPeers(numpeers)
-	if len(nds) == 0 {
+	ndsLen := len(nds)
+	if ndsLen == 0 {
 		return // we cant connect if we don't have peers
 	}
 
 	// Try a connection to each peer.
 	// TODO: try splitting the load and don't connect to more than X at a time
-	for i := 0; i < numpeers; i++ {
+	for i := 0; i < ndsLen; i++ {
 		go func(nd node.Node, reportChan chan cnErr) {
 			c, err := s.cp.GetConnection(nd.Address(), nd.PublicKey())
 			reportChan <- cnErr{nd, c, err}
