@@ -11,9 +11,17 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"gopkg.in/op/go-logging.v1"
 	"net"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
+
+// DefaultQueueCount is the default number of messages queue we hold. messages queues are used to serialize message receiving
+const DefaultQueueCount uint = 6
+
+// DefaultMessageQueueSize is the buffer size of each queue mentioned above. (queues are buffered channels)
+const DefaultMessageQueueSize uint = 256
 
 // IncomingMessageEvent is the event reported on new incoming message, it contains the message and the Connection carrying the message
 type IncomingMessageEvent struct {
@@ -42,35 +50,56 @@ type Net struct {
 	logger    *logging.Logger
 
 	tcpListener      net.Listener
-	tcpListenAddress string // Address to open connection: localhost:9999\
+	tcpListenAddress *net.TCPAddr // Address to open connection: localhost:9999\
 
 	isShuttingDown bool
 
-	regNewRemoteConn []chan Connection
+	regNewRemoteConn []chan NewConnectionEvent
 	regMutex         sync.RWMutex
 
-	incomingMessages   chan IncomingMessageEvent
+	queuesCount           uint
+	incomingMessagesQueue []chan IncomingMessageEvent
+
 	closingConnections chan Connection
 
 	config config.Config
+}
+
+// NewConnectionEvent is a struct holding a new created connection and a node info.
+type NewConnectionEvent struct {
+	Conn Connection
+	Node node.Node
 }
 
 // NewNet creates a new network.
 // It attempts to tcp listen on address. e.g. localhost:1234 .
 func NewNet(conf config.Config, localEntity *node.LocalNode) (*Net, error) {
 
-	n := &Net{
-		networkID:          conf.NetworkID,
-		localNode:          localEntity,
-		logger:             localEntity.Logger,
-		tcpListenAddress:   localEntity.Address(),
-		regNewRemoteConn:   make([]chan Connection, 0),
-		incomingMessages:   make(chan IncomingMessageEvent),
-		closingConnections: make(chan Connection, 20),
-		config:             conf,
+	qcount := DefaultQueueCount      // todo : get from cfg
+	qsize := DefaultMessageQueueSize // todo : get from cfg
+
+	tcpAddress, err := net.ResolveTCPAddr("tcp", localEntity.Address())
+	if err != nil {
+		fmt.Errorf("can't resolve local address: %v, err:%v", localEntity.Address(), err)
 	}
 
-	err := n.listen()
+	n := &Net{
+		networkID:             conf.NetworkID,
+		localNode:             localEntity,
+		logger:                localEntity.Logger,
+		tcpListenAddress:      tcpAddress,
+		regNewRemoteConn:      make([]chan NewConnectionEvent, 0),
+		queuesCount:           qcount,
+		incomingMessagesQueue: make([]chan IncomingMessageEvent, qcount, qcount),
+		closingConnections:    make(chan Connection, 20),
+		config:                conf,
+	}
+
+	for imq := range n.incomingMessagesQueue {
+		n.incomingMessagesQueue[imq] = make(chan IncomingMessageEvent, qsize)
+	}
+
+	err = n.listen()
 
 	if err != nil {
 		return nil, err
@@ -96,9 +125,29 @@ func (n *Net) LocalNode() *node.LocalNode {
 	return n.localNode
 }
 
-// IncomingMessages returns Net's channel for incoming messages
-func (n *Net) IncomingMessages() chan IncomingMessageEvent {
-	return n.incomingMessages
+// sumByteArray sums all bytes in an array as uint
+func sumByteArray(b []byte) uint {
+	var sumOfChars uint
+
+	//take each byte in the string and add the values
+	for i := 0; i < len(b); i++ {
+		byteVal := b[i]
+		sumOfChars += uint(byteVal)
+	}
+	return sumOfChars
+}
+
+// EnqueueMessage inserts a message into a queue, to decide on which queue to send the message to
+// it sum the remote public key bytes as integer to segment to queueCount queues.
+func (n *Net) EnqueueMessage(event IncomingMessageEvent) {
+	sba := sumByteArray(event.Conn.RemotePublicKey().Bytes())
+	n.incomingMessagesQueue[sba%n.queuesCount] <- event
+}
+
+// IncomingMessages returns a slice of channels which incoming messages are delivered on
+// the receiver should iterate  on all the channels and read all messages. to sync messages order but enable parallel messages handling.
+func (n *Net) IncomingMessages() []chan IncomingMessageEvent {
+	return n.incomingMessagesQueue
 }
 
 // ClosingConnections returns Net's channel where closing connections events are reported
@@ -135,7 +184,7 @@ func (n *Net) createSecuredConnection(address string, remotePublicKey crypto.Pub
 	if err != nil {
 		return nil, err
 	}
-	data, session, err := GenerateHandshakeRequestData(n.localNode.PublicKey(), n.localNode.PrivateKey(), remotePublicKey, n.networkID)
+	data, session, err := GenerateHandshakeRequestData(n.localNode.PublicKey(), n.localNode.PrivateKey(), remotePublicKey, n.networkID, uint16(n.tcpListenAddress.Port))
 	if err != nil {
 		conn.Close()
 		return nil, fmt.Errorf("%s err: %v", errMsg, err)
@@ -181,7 +230,6 @@ func (n *Net) createSecuredConnection(address string, remotePublicKey crypto.Pub
 		conn.Close()
 		return nil, fmt.Errorf("%s err: %v", errMsg, err)
 	}
-
 	conn.SetSession(session)
 	return conn, nil
 }
@@ -208,7 +256,7 @@ func (n *Net) Shutdown() {
 // Start network server
 func (n *Net) listen() error {
 	n.logger.Info("Starting to listen on %v", n.tcpListenAddress)
-	tcpListener, err := net.Listen("tcp", n.tcpListenAddress)
+	tcpListener, err := net.Listen("tcp", n.tcpListenAddress.String())
 	if err != nil {
 		return err
 	}
@@ -240,18 +288,18 @@ func (n *Net) acceptTCP() {
 }
 
 // SubscribeOnNewRemoteConnections returns new channel where events of new remote connections are reported
-func (n *Net) SubscribeOnNewRemoteConnections() chan Connection {
+func (n *Net) SubscribeOnNewRemoteConnections() chan NewConnectionEvent {
 	n.regMutex.Lock()
-	ch := make(chan Connection, 20)
+	ch := make(chan NewConnectionEvent, 20)
 	n.regNewRemoteConn = append(n.regNewRemoteConn, ch)
 	n.regMutex.Unlock()
 	return ch
 }
 
-func (n *Net) publishNewRemoteConnection(conn Connection) {
+func (n *Net) publishNewRemoteConnectionEvent(conn Connection, node node.Node) {
 	n.regMutex.RLock()
 	for _, c := range n.regNewRemoteConn {
-		c <- conn
+		c <- NewConnectionEvent{conn, node}
 	}
 	n.regMutex.RUnlock()
 }
@@ -279,7 +327,7 @@ func (n *Net) HandlePreSessionIncomingMessage(c Connection, message []byte) erro
 	}
 	respData, session, err := ProcessHandshakeRequest(n.NetworkID(), n.localNode.PublicKey(), n.localNode.PrivateKey(), c.RemotePublicKey(), data)
 	if err != nil {
-		return fmt.Errorf("%s. here err: %v", errMsg, err)
+		return fmt.Errorf("%s. err: %v", errMsg, err)
 	}
 	payload, err := proto.Marshal(respData)
 	if err != nil {
@@ -292,7 +340,11 @@ func (n *Net) HandlePreSessionIncomingMessage(c Connection, message []byte) erro
 	}
 
 	c.SetSession(session)
+
 	// update on new connection
-	n.publishNewRemoteConnection(c)
+	addr := strings.Split(c.RemoteAddr().String(), ":")[0] // this should never be bad unless address is corrupted
+	anode := node.New(c.RemotePublicKey(), net.JoinHostPort(addr, strconv.Itoa(int(data.Port))))
+	n.publishNewRemoteConnectionEvent(c, anode)
+
 	return nil
 }

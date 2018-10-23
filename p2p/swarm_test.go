@@ -6,22 +6,25 @@ import (
 	"time"
 
 	"errors"
+	"fmt"
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
-	"github.com/spacemeshos/go-spacemesh/p2p/dht"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/p2p/timesync"
 	"github.com/stretchr/testify/assert"
+	"math/rand"
+	"sync"
 )
 
 func p2pTestInstance(t testing.TB, config config.Config) *swarm {
 	port, err := node.GetUnboundedPort()
 	assert.NoError(t, err, "Error getting a port", err)
 	config.TCPPort = port
-	p, err := newSwarm(config, false)
+	p, err := newSwarm(config, true) //false)
 	assert.NoError(t, err, "Error creating p2p stack, err: %v", err)
 	return p
 }
@@ -82,29 +85,10 @@ func TestSwarm_processMessage(t *testing.T) {
 	r := node.GenerateRandomNodeData()
 	c := &net.ConnectionMock{}
 	c.SetRemotePublicKey(r.PublicKey())
-	ime := net.IncomingMessageEvent{Message: nil, Conn: c}
+	ime := net.IncomingMessageEvent{Message: []byte("0"), Conn: c}
 	s.processMessage(ime) // should error
 
 	assert.True(t, c.Closed())
-}
-
-func TestSwarm_updateConnection(t *testing.T) {
-	p := &swarm{}
-	p.lNode, _ = node.GenerateTestNode(t)
-	dhtmock := &dht.MockDHT{}
-	p.dht = dhtmock
-	c := &net.ConnectionMock{}
-
-	p.updateConnection(c)
-
-	assert.Equal(t, dhtmock.UpdateCount(), 0)
-
-	r := node.GenerateRandomNodeData()
-	c.SetRemotePublicKey(r.PublicKey())
-
-	p.updateConnection(c)
-
-	assert.Equal(t, dhtmock.UpdateCount(), 1)
 }
 
 func TestSwarm_authAuthor(t *testing.T) {
@@ -164,33 +148,66 @@ func TestSwarm_SignAuth(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+func RandString(n int) string {
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letters[rand.Intn(len(letters))]
+	}
+	return string(b)
+}
+
+func sendDirectMessage(t *testing.T, sender *swarm, recvPub string, inChan chan service.Message, checkpayload bool) {
+	payload := []byte(RandString(10))
+	err := sender.SendMessage(recvPub, exampleProtocol, payload)
+	assert.NoError(t, err)
+	select {
+	case msg := <-inChan:
+		if checkpayload {
+			assert.Equal(t, msg.Data(), payload)
+		}
+		assert.Equal(t, msg.Sender().String(), sender.lNode.String())
+		break
+	case <-time.After(2 * time.Second):
+		t.Error("Took too much time to recieve")
+	}
+}
+
 func TestSwarm_RoundTrip(t *testing.T) {
-	t.Skip()
 	p1 := p2pTestInstance(t, config.DefaultConfig())
 	p2 := p2pTestInstance(t, config.DefaultConfig())
 
-	exchan := p1.RegisterProtocol(exampleProtocol)
-
-	assert.Equal(t, exchan, p1.protocolHandlers[exampleProtocol])
-
-	err := p2.SendMessage(p1.lNode.String(), exampleProtocol, []byte(examplePayload))
-
-	assert.Error(t, err, "ERR") // should'nt be in routing table
+	exchan1 := p1.RegisterProtocol(exampleProtocol)
+	assert.Equal(t, exchan1, p1.protocolHandlers[exampleProtocol])
+	exchan2 := p2.RegisterProtocol(exampleProtocol)
+	assert.Equal(t, exchan2, p2.protocolHandlers[exampleProtocol])
 
 	p2.dht.Update(p1.lNode.Node)
 
-	err = p2.SendMessage(p1.lNode.String(), exampleProtocol, []byte(examplePayload))
+	sendDirectMessage(t, p2, p1.lNode.PublicKey().String(), exchan1, true)
+	sendDirectMessage(t, p1, p2.lNode.PublicKey().String(), exchan2, true)
+}
 
-	select {
-	case msg := <-exchan:
-		assert.Equal(t, msg.Data(), []byte(examplePayload))
+func TestSwarm_MultipleMessages(t *testing.T) {
+	p1 := p2pTestInstance(t, config.DefaultConfig())
+	p2 := p2pTestInstance(t, config.DefaultConfig())
 
-		assert.Equal(t, msg.Sender().String(), p2.lNode.String())
-		break
-	case <-time.After(1 * time.Second):
-		t.Error("Took to much time to recieve")
+	exchan1 := p1.RegisterProtocol(exampleProtocol)
+	assert.Equal(t, exchan1, p1.protocolHandlers[exampleProtocol])
+	exchan2 := p2.RegisterProtocol(exampleProtocol)
+	assert.Equal(t, exchan2, p2.protocolHandlers[exampleProtocol])
+
+	err := p2.SendMessage(p1.lNode.String(), exampleProtocol, []byte(examplePayload))
+	assert.Error(t, err, "ERR") // should'nt be in routing table
+	p2.dht.Update(p1.lNode.Node)
+
+	var wg sync.WaitGroup
+	for i := 0; i < 500; i++ {
+		wg.Add(1)
+		go func() { sendDirectMessage(t, p2, p1.localNode().String(), exchan1, false); wg.Done() }()
 	}
-
+	wg.Wait()
 }
 
 func Test_newProtocolMessageMeatadata(t *testing.T) {
@@ -317,4 +334,64 @@ func TestSwarm_onRemoteClientMessage(t *testing.T) {
 	err = p.onRemoteClientMessage(imc)
 
 	assert.NoError(t, err)
+}
+
+func TestBootstrap(t *testing.T) {
+	bootnodes := []int{3}
+	nodes := []int{30}
+	rcon := []int{3}
+
+	rand.Seed(time.Now().UnixNano())
+
+	for i := 0; i < len(nodes); i++ {
+		t.Run(fmt.Sprintf("Peers:%v/randconn:%v", nodes[i], rcon[i]), func(t *testing.T) {
+			bufchan := make(chan *swarm, nodes[i])
+
+			bnarr := []string{}
+
+			for k := 0; k < bootnodes[i]; k++ {
+				bn := p2pTestInstance(t, config.DefaultConfig())
+				bn.lNode.Info("This is a bootnode - %v", bn.lNode.Node.String())
+				bnarr = append(bnarr, node.StringFromNode(bn.lNode.Node))
+			}
+
+			cfg := config.DefaultConfig()
+			cfg.SwarmConfig.Bootstrap = true
+			cfg.SwarmConfig.RandomConnections = rcon[i]
+			cfg.SwarmConfig.BootstrapNodes = bnarr
+
+			var wg sync.WaitGroup
+
+			for j := 0; j < nodes[i]; j++ {
+				wg.Add(1)
+				go func() {
+					sw := p2pTestInstance(t, cfg)
+					bufchan <- sw
+					wg.Done()
+				}()
+			}
+
+			wg.Wait()
+			close(bufchan)
+			swarms := []*swarm{}
+			for s := range bufchan {
+				swarms = append(swarms, s)
+
+			}
+
+			randnode := swarms[rand.Int31n(int32(len(swarms)))-1]
+			randnode2 := swarms[rand.Int31n(int32(len(swarms)))-1]
+
+			for (randnode == nil || randnode2 == nil) || randnode.lNode.String() == randnode2.lNode.String() {
+				randnode = swarms[rand.Int31n(int32(len(swarms)))-1]
+				randnode2 = swarms[rand.Int31n(int32(len(swarms)))-1]
+			}
+
+			randnode.RegisterProtocol(exampleProtocol)
+			recv := randnode2.RegisterProtocol(exampleProtocol)
+
+			sendDirectMessage(t, randnode, randnode2.lNode.PublicKey().String(), recv, true)
+			time.Sleep(3 * time.Second)
+		})
+	}
 }

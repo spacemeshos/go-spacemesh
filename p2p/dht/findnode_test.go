@@ -11,7 +11,7 @@ import (
 )
 
 func getTestLogger(test string, args ...interface{}) log.Log {
-	return log.New(fmt.Sprintf(test, args), "", "")
+	return log.New(fmt.Sprintf(test, args...), "", "")
 }
 
 func TestFindNodeProtocol_FindNode(t *testing.T) {

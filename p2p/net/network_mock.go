@@ -4,6 +4,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"gopkg.in/op/go-logging.v1"
+	"math/rand"
 	"net"
 	"sync/atomic"
 	"time"
@@ -48,20 +49,21 @@ type NetworkMock struct {
 	dialCount        int32
 	preSessionErr    error
 	preSessionCount  int32
-	regNewRemoteConn []chan Connection
+	regNewRemoteConn []chan NewConnectionEvent
 	networkId        int8
 	closingConn      chan Connection
-	incomingMessages chan IncomingMessageEvent
+	incomingMessages []chan IncomingMessageEvent
+	dialSessionID    []byte
 	logger           *logging.Logger
 }
 
 // NewNetworkMock is a mock
 func NewNetworkMock() *NetworkMock {
 	return &NetworkMock{
-		regNewRemoteConn: make([]chan Connection, 0),
+		regNewRemoteConn: make([]chan NewConnectionEvent, 0),
 		closingConn:      make(chan Connection, 20),
 		logger:           getTestLogger("network mock"),
-		incomingMessages: make(chan IncomingMessageEvent),
+		incomingMessages: []chan IncomingMessageEvent{make(chan IncomingMessageEvent, 256)},
 	}
 }
 
@@ -69,6 +71,10 @@ func (n *NetworkMock) reset() {
 	n.dialCount = 0
 	n.dialDelayMs = 0
 	n.dialErr = nil
+}
+
+func (n *NetworkMock) SetNextDialSessionID(sID []byte) {
+	n.dialSessionID = sID
 }
 
 // SetDialResult is a mock
@@ -85,26 +91,32 @@ func (n *NetworkMock) SetDialDelayMs(delay int8) {
 func (n *NetworkMock) Dial(address string, remotePublicKey crypto.PublicKey) (Connection, error) {
 	atomic.AddInt32(&n.dialCount, 1)
 	time.Sleep(time.Duration(n.dialDelayMs) * time.Millisecond)
-	conn := NewConnectionMock(remotePublicKey, Local)
+	sID := n.dialSessionID
+	if sID == nil {
+		sID = make([]byte, 4)
+		rand.Read(sID)
+	}
+	conn := NewConnectionMock(remotePublicKey)
+	conn.SetSession(SessionMock{id: sID})
 	return conn, n.dialErr
 }
 
 // DialCount gets the dial count
 func (n *NetworkMock) DialCount() int32 {
-	return n.dialCount
+	return atomic.LoadInt32(&n.dialCount)
 }
 
 // SubscribeOnNewRemoteConnections subscribes on new connections
-func (n *NetworkMock) SubscribeOnNewRemoteConnections() chan Connection {
-	ch := make(chan Connection, 20)
+func (n *NetworkMock) SubscribeOnNewRemoteConnections() chan NewConnectionEvent {
+	ch := make(chan NewConnectionEvent, 20)
 	n.regNewRemoteConn = append(n.regNewRemoteConn, ch)
 	return ch
 }
 
 // PublishNewRemoteConnection and stuff
-func (n NetworkMock) PublishNewRemoteConnection(conn Connection) {
+func (n NetworkMock) PublishNewRemoteConnection(nce NewConnectionEvent) {
 	for _, ch := range n.regNewRemoteConn {
-		ch <- conn
+		ch <- nce
 	}
 }
 
@@ -123,8 +135,13 @@ func (n *NetworkMock) ClosingConnections() chan Connection {
 }
 
 // IncomingMessages return channel of IncomingMessages
-func (n *NetworkMock) IncomingMessages() chan IncomingMessageEvent {
+func (n *NetworkMock) IncomingMessages() []chan IncomingMessageEvent {
 	return n.incomingMessages
+}
+
+// IncomingMessages return channel of IncomingMessages
+func (n *NetworkMock) EnqueueMessage(event IncomingMessageEvent) {
+	n.incomingMessages[0] <- event
 }
 
 // PublishClosingConnection does just that
@@ -141,7 +158,7 @@ func (n *NetworkMock) SetPreSessionResult(err error) {
 
 // PreSessionCount counts
 func (n NetworkMock) PreSessionCount() int32 {
-	return n.preSessionCount
+	return atomic.LoadInt32(&n.preSessionCount)
 }
 
 // HandlePreSessionIncomingMessage and stuff

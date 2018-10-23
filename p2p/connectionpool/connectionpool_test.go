@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
+	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/stretchr/testify/assert"
 	"math/rand"
 	"testing"
@@ -61,48 +62,7 @@ func TestGetConnectionWithError(t *testing.T) {
 	assert.Equal(t, int32(1), net.DialCount())
 }
 
-func TestRemoteConnectionWithNoConnection(t *testing.T) {
-	n := net.NewNetworkMock()
-	remotePub := generatePublicKey()
-	addr := "1.1.1.1"
-	n.SetDialDelayMs(50)
-	n.SetDialResult(nil)
-
-	cPool := NewConnectionPool(n, generatePublicKey())
-	rConn := net.NewConnectionMock(remotePub, net.Remote)
-	cPool.newRemoteConn <- rConn
-	time.Sleep(50 * time.Millisecond)
-	conn, err := cPool.GetConnection(addr, remotePub)
-	assert.Equal(t, remotePub.String(), conn.RemotePublicKey().String())
-	assert.Equal(t, rConn.ID(), conn.ID())
-	assert.Nil(t, err)
-	assert.Equal(t, int32(0), n.DialCount())
-}
-
-func TestRemoteConnectionWithConnection(t *testing.T) {
-	n := net.NewNetworkMock()
-	remotePub := generatePublicKey()
-	addr := "1.1.1.1"
-	n.SetDialDelayMs(50)
-	n.SetDialResult(nil)
-
-	cPool := NewConnectionPool(n, generatePublicKey())
-	conn, err := cPool.GetConnection(addr, remotePub)
-	assert.Equal(t, remotePub.String(), conn.RemotePublicKey().String())
-	assert.Nil(t, err)
-	rConn := net.NewConnectionMock(remotePub, net.Remote)
-	cPool.newRemoteConn <- rConn
-	time.Sleep(50 * time.Millisecond)
-	conn2, err := cPool.GetConnection(addr, remotePub)
-	assert.Equal(t, remotePub.String(), conn.RemotePublicKey().String())
-	assert.NotEqual(t, rConn.ID(), conn.ID())
-	assert.Equal(t, conn2.ID(), conn.ID())
-	assert.Nil(t, err)
-	assert.Equal(t, int32(1), n.DialCount())
-	assert.True(t, rConn.Closed())
-}
-
-func TestRemoteConnectionDuringDial(t *testing.T) {
+func TestGetConnectionDuringDial(t *testing.T) {
 	n := net.NewNetworkMock()
 	remotePub := generatePublicKey()
 	addr := "1.1.1.1"
@@ -111,18 +71,89 @@ func TestRemoteConnectionDuringDial(t *testing.T) {
 
 	cPool := NewConnectionPool(n, generatePublicKey())
 	waitCh := make(chan net.Connection)
-	go func(ch chan net.Connection) {
+	// dispatch 2 GetConnection calls
+	dispatchF := func(ch chan net.Connection) {
 		conn, _ := cPool.GetConnection(addr, remotePub)
+		assert.Equal(t, remotePub.String(), conn.RemotePublicKey().String())
 		ch <- conn
-	}(waitCh)
-	rConn := net.NewConnectionMock(remotePub, net.Remote)
+	}
+	go dispatchF(waitCh)
+	go dispatchF(waitCh)
+	cnt := 0
+	var prevId string
+Loop:
+	for {
+		select {
+		case c := <-waitCh:
+			if prevId == "" {
+				prevId = c.ID()
+			} else {
+				assert.Equal(t, prevId, c.ID())
+			}
+			cnt++
+			if cnt == 2 {
+				break Loop
+			}
+		case <-time.After(120 * time.Millisecond):
+			fmt.Println("timeout!")
+			assert.True(t, false)
+			break Loop
+		}
+	}
+	assert.Equal(t, int32(1), n.DialCount())
+}
+
+func TestRemoteConnectionWithNoConnection(t *testing.T) {
+	n := net.NewNetworkMock()
+	remotePub := generatePublicKey()
+	addr := "1.1.1.1"
+	n.SetDialDelayMs(50)
+	n.SetDialResult(nil)
+
+	cPool := NewConnectionPool(n, generatePublicKey())
+	rConn := net.NewConnectionMock(remotePub)
+	rConn.SetSession(net.NewSessionMock([]byte("aaa")))
+	cPool.newRemoteConn <- net.NewConnectionEvent{rConn, node.EmptyNode}
+	time.Sleep(50 * time.Millisecond)
+	conn, err := cPool.GetConnection(addr, remotePub)
+	assert.Equal(t, remotePub.String(), conn.RemotePublicKey().String())
+	assert.Equal(t, rConn.ID(), conn.ID())
+	assert.Nil(t, err)
+	assert.Equal(t, int32(0), n.DialCount())
+}
+
+func TestRemoteConnectionWithExistingConnection(t *testing.T) {
+	n := net.NewNetworkMock()
+	addr := "1.1.1.1"
+	cPool := NewConnectionPool(n, generatePublicKey())
+
+	// local connection has session ID < remote's session ID
+	remotePub := generatePublicKey()
+	localSessionID := []byte("110")
+	n.SetNextDialSessionID(localSessionID)
+	lConn, _ := cPool.GetConnection(addr, remotePub)
+	rConn := net.NewConnectionMock(remotePub)
+	rConn.SetSession(net.NewSessionMock([]byte("111")))
+	cPool.newRemoteConn <- net.NewConnectionEvent{rConn, node.EmptyNode}
 	time.Sleep(20 * time.Millisecond)
-	cPool.newRemoteConn <- rConn
-	getConn := <-waitCh
-	assert.Equal(t, remotePub.String(), getConn.RemotePublicKey().String())
-	assert.Equal(t, rConn.ID(), getConn.ID())
+	assert.Equal(t, remotePub.String(), lConn.RemotePublicKey().String())
 	assert.Equal(t, int32(1), n.DialCount())
 	assert.False(t, rConn.Closed())
+	assert.True(t, lConn.Closed())
+
+	// local connection has session ID > remote's session ID
+	remotePub = generatePublicKey()
+	localSessionID = []byte("111")
+	n.SetNextDialSessionID(localSessionID)
+	lConn, _ = cPool.GetConnection(addr, remotePub)
+	rConn = net.NewConnectionMock(remotePub)
+	rConn.SetSession(net.NewSessionMock([]byte("110")))
+	cPool.newRemoteConn <- net.NewConnectionEvent{rConn, node.EmptyNode}
+	time.Sleep(20 * time.Millisecond)
+	assert.Equal(t, remotePub.String(), lConn.RemotePublicKey().String())
+	assert.Equal(t, int32(2), n.DialCount())
+	assert.True(t, rConn.Closed())
+	assert.False(t, lConn.Closed())
 }
 
 func TestShutdown(t *testing.T) {
@@ -233,8 +264,11 @@ func TestRandom(t *testing.T) {
 		if r == 0 {
 			go func() {
 				peer := peers[rand.Int31n(int32(peerCnt))]
-				rConn := net.NewConnectionMock(peer.key, net.Remote)
-				cPool.newRemoteConn <- rConn
+				rConn := net.NewConnectionMock(peer.key)
+				sID := make([]byte, 4)
+				rand.Read(sID)
+				rConn.SetSession(net.NewSessionMock(sID))
+				cPool.newRemoteConn <- net.NewConnectionEvent{rConn, node.EmptyNode}
 			}()
 		} else if r == 1 {
 			go func() {

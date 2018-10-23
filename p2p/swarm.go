@@ -1,7 +1,7 @@
 package p2p
 
 import (
-	"time"
+	inet "net"
 
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
@@ -18,8 +18,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"strings"
+	"strconv"
 	"sync"
+	"time"
 )
 
 type protocolMessage struct {
@@ -56,11 +57,12 @@ type swarm struct {
 	shutdown chan struct{} // local request to kill the swarm from outside. e.g when local node is shutting down
 }
 
-// newSwarm creates a new P2P instance
+// newSwarm creates a new P2P instance, configured by config, if newNode is true it will create a new node identity
+// and not load from disk. it creates a new `net`, connection pool and dht.
 func newSwarm(config config.Config, newNode bool) (*swarm, error) {
 
 	port := config.TCPPort
-	address := fmt.Sprintf("127.0.0.1:%d", port)
+	address := inet.JoinHostPort("0.0.0.0", strconv.Itoa(port))
 
 	var l *node.LocalNode
 	var err error
@@ -88,14 +90,15 @@ func newSwarm(config config.Config, newNode bool) (*swarm, error) {
 		network:          n,
 		cPool:            connectionpool.NewConnectionPool(n, l.PublicKey()),
 		shutdown:         make(chan struct{}), // non-buffered so requests to shutdown block until swarm is shut down
-
 	}
 
 	s.dht = dht.New(l, config.SwarmConfig, s)
 
 	s.lNode.Debug("Created swarm for local node %s, %s", l.Address(), l.Pretty())
 
-	go s.listenToNetworkMessages()
+	go s.handleNewConnectionEvents()
+
+	s.listenToNetworkMessages() // fires up a goroutine for each queue of messages
 
 	if config.SwarmConfig.Bootstrap {
 		err := s.dht.Bootstrap()
@@ -103,6 +106,7 @@ func newSwarm(config config.Config, newNode bool) (*swarm, error) {
 			s.Shutdown()
 			return nil, err
 		}
+		s.localNode().Info("Bootstrap succeed with %d nodes", config.SwarmConfig.RandomConnections)
 	}
 
 	go s.checkTimeDrifts()
@@ -194,6 +198,7 @@ func authAuthor(pm *pb.ProtocolMessage) error {
 // req.destId: receiver remote node public key/id
 // Local request to send a message to a remote node
 func (s *swarm) SendMessage(peerPubKey string, protocol string, payload []byte) error {
+	s.lNode.Info("Sending message to %v", peerPubKey)
 
 	peer, err := s.dht.Lookup(peerPubKey) // blocking, might issue a network lookup that'll take time.
 
@@ -223,38 +228,48 @@ func (s *swarm) SendMessage(peerPubKey string, protocol string, payload []byte) 
 		return err
 	}
 
-	err = authAuthor(protomessage)
-	if err != nil {
-		return err
-	}
-
 	data, err := proto.Marshal(protomessage)
 	if err != nil {
 		return fmt.Errorf("failed to encode signed message err: %v", err)
 	}
 
+	session.EncryptGuard().Lock()
+
+	// messages must be sent in the same order as the order that the messages were encrypted because the iv used to encrypt
+	// (and therefore decrypt) is the last encrypted block of the previous message that were encrypted
 	encPayload, err := session.Encrypt(data)
 	if err != nil {
+		session.EncryptGuard().Unlock()
 		e := fmt.Errorf("aborting send - failed to encrypt payload: %v", err)
 		return e
 	}
 
+	ts := time.Now().Unix()
+
 	cmd := &pb.CommonMessageData{
 		SessionId: session.ID(),
 		Payload:   encPayload,
-		Timestamp: time.Now().Unix(),
+		Timestamp: ts,
 	}
 
 	final, err := proto.Marshal(cmd)
 	if err != nil {
+		session.EncryptGuard().Unlock()
+		// since the encryption succeeded and the iv was modified for the next message, we must close the connection otherwise
+		// the missing message will prevent the receiver from decrypting any future message
+		s.lNode.Logger.Error("message was encrypted but wasn't sent, closing the connection")
+		conn.Close()
 		e := fmt.Errorf("aborting send - invalid msg format %v", err)
 		return e
 	}
 
 	// finally - send it away!
-	s.lNode.Debug("Sending protocol message down the connection to %v", log.PrettyID(peerPubKey))
+	s.lNode.Debug("Sending protocol message down the connection to %v, ts=%v", log.PrettyID(peerPubKey), ts)
 
-	return conn.Send(final)
+	err = conn.Send(final)
+	session.EncryptGuard().Unlock()
+
+	return err
 }
 
 // RegisterProtocol registers an handler for `protocol`
@@ -288,23 +303,37 @@ func (s *swarm) processMessage(ime net.IncomingMessageEvent) {
 	}
 }
 
-// update a full connection to the routing table.
-func (s *swarm) updateConnection(nc net.Connection) {
-	if nc.RemotePublicKey() != nil {
-		s.dht.Update(node.New(nc.RemotePublicKey(), fmt.Sprintf("%v:%v", strings.Split(nc.RemoteAddr().String(), ":")[0], s.config.TCPPort)))
-	}
-}
-
 // listenToNetworkMessages is waiting for network events from net as new connections or messages and handles them.
 func (s *swarm) listenToNetworkMessages() {
-	newconnections := s.network.SubscribeOnNewRemoteConnections()
+
+	// We listen to each of the messages queues we get from `net
+	// It's net's responsibility to distribute the messages to the queues
+	// in a way that they're processing order will work
+	// swarm process all the queues concurrently but synchronously for each queue
+
+	netqueues := s.network.IncomingMessages()
+	for nq := range netqueues { // run a separate worker for each queue.
+		go func(c chan net.IncomingMessageEvent) {
+			for {
+				select {
+				case msg := <-c:
+					s.processMessage(msg)
+				case <-s.shutdown:
+					return
+				}
+			}
+		}(netqueues[nq])
+	}
+
+}
+
+func (s *swarm) handleNewConnectionEvents() {
+	newConnEvents := s.network.SubscribeOnNewRemoteConnections()
 Loop:
 	for {
 		select {
-		case ime := <-s.network.IncomingMessages():
-			go s.processMessage(ime)
-		case nc := <-newconnections:
-			go s.updateConnection(nc)
+		case nce := <-newConnEvents:
+			go func(nod node.Node) { s.dht.Update(nod) }(nce.Node)
 		case <-s.shutdown:
 			break Loop
 		}
@@ -358,6 +387,12 @@ var (
 // c: connection we got this message on
 // msg: binary protobufs encoded data
 func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
+
+	if msg.Message == nil || msg.Conn == nil {
+		s.lNode.Fatal("Fatal error: Got nil message or connection")
+		return ErrBadFormat
+	}
+
 	s.lNode.Debug(fmt.Sprintf("Handle message from <<  %v", msg.Conn.RemotePublicKey().Pretty()))
 	c := &pb.CommonMessageData{}
 	err := proto.Unmarshal(msg.Message, c)
@@ -368,7 +403,7 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 	// check that the message was send within a reasonable time
 	if ok := timesync.CheckMessageDrift(c.Timestamp); !ok {
 		// TODO: consider kill connection with this node and maybe blacklist
-		// TODO : Also consider moving send timestamp into metadata.
+		// TODO : Also consider moving send timestamp into metadata(encrypted).
 		return ErrOutOfSync
 	}
 
@@ -403,7 +438,7 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 
 	s.lNode.Debug("Authorized %v protocol message ", pm.Metadata.Protocol)
 
-	remoteNode := node.New(msg.Conn.RemotePublicKey(), fmt.Sprintf("%v:%v", strings.Split(msg.Conn.RemoteAddr().String(), ":")[0], s.config.TCPPort))
+	remoteNode := node.New(msg.Conn.RemotePublicKey(), "") // if we got so far, we already have the node in our rt, hence address won't be used
 	// update the routing table - we just heard from this authenticated node
 	s.dht.Update(remoteNode)
 	// route authenticated message to the reigstered protocol
@@ -416,6 +451,7 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 	}
 
 	s.lNode.Debug("Forwarding message to protocol")
+
 	msgchan <- protocolMessage{remoteNode, pm.Payload}
 
 	return nil

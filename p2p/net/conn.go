@@ -12,6 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/net/wire"
 	"gopkg.in/op/go-logging.v1"
+	"sync/atomic"
 )
 
 var (
@@ -45,6 +46,7 @@ type Connection interface {
 
 	Send(m []byte) error
 	Close()
+	Closed() bool
 }
 
 // FormattedConnection is an io.Writer and an io.Closer
@@ -61,11 +63,12 @@ type FormattedConnection struct {
 	networker  networker      // network context
 	session    NetworkSession
 	closeOnce  sync.Once
+	closed     int32
 }
 
 type networker interface {
 	HandlePreSessionIncomingMessage(c Connection, msg []byte) error
-	IncomingMessages() chan IncomingMessageEvent
+	EnqueueMessage(ime IncomingMessageEvent)
 	ClosingConnections() chan Connection
 	NetworkID() int8
 }
@@ -88,6 +91,7 @@ func newConnection(conn readWriteCloseAddresser, netw networker, formatter wire.
 		formatter:  formatter,
 		networker:  netw,
 		closeChan:  make(chan struct{}),
+		closed:     0,
 	}
 
 	connection.formatter.Pipe(conn)
@@ -130,7 +134,7 @@ func (c *FormattedConnection) String() string {
 }
 
 func (c *FormattedConnection) publish(message []byte) {
-	c.networker.IncomingMessages() <- IncomingMessageEvent{c, message}
+	c.networker.EnqueueMessage(IncomingMessageEvent{c, message})
 }
 
 // incomingChannel returns the incoming messages channel
@@ -148,12 +152,18 @@ func (c *FormattedConnection) Send(m []byte) error {
 // Close closes the connection (implements io.Closer). It is go safe.
 func (c *FormattedConnection) Close() {
 	c.closeOnce.Do(func() {
+		atomic.AddInt32(&c.closed, 1)
 		c.closeChan <- struct{}{}
 	})
 }
 
+// Closed Reports whether the connection was closed. It is go safe.
+func (c *FormattedConnection) Closed() bool {
+	return atomic.LoadInt32(&c.closed) > 0
+}
+
 func (c *FormattedConnection) shutdown(err error) {
-	c.logger.Info("shutdown. err=%v", err)
+	c.logger.Info("shutdown. id=%s err=%v", c.id, err)
 	c.formatter.Close()
 	c.networker.ClosingConnections() <- c
 }
@@ -180,8 +190,7 @@ Loop:
 					break Loop
 				}
 			} else {
-				// channel for protocol messages
-				go c.publish(msg)
+				c.publish(msg)
 			}
 
 		case <-c.closeChan:
