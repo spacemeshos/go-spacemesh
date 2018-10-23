@@ -45,6 +45,7 @@ type SwarmConfig struct {
 	Bootstrap              bool     `mapstructure:"bootstrap"`
 	RoutingTableBucketSize int      `mapstructure:"bucketsize"`
 	RoutingTableAlpha      int      `mapstructure:"alpha"`
+	MaxNearestNodesResults int	`mapstructure:"max-near-node"`
 	RandomConnections      int      `mapstructure:"randcon"`
 	BootstrapNodes         []string `mapstructure:"bootnodes"`
 }
@@ -73,6 +74,7 @@ func DefaultConfig() Config {
 		Bootstrap:              false,
 		RoutingTableBucketSize: 20,
 		RoutingTableAlpha:      3,
+		MaxNearestNodesResults: 20,
 		RandomConnections:      5,
 		BootstrapNodes:         []string{ // these should be the spacemesh foundation bootstrap nodes
 		},
