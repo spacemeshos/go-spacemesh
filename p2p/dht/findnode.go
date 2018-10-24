@@ -6,6 +6,7 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -13,8 +14,6 @@ import (
 	"time"
 )
 
-// todo: should be a kad param and configurable
-const maxNearestNodesResults = 20
 const tableQueryTimeout = time.Second * 3
 const findNodeTimeout = 1 * time.Minute
 
@@ -30,8 +29,8 @@ type findNodeResults struct {
 }
 
 type findNodeProtocol struct {
-	service service.Service
-
+	service      service.Service
+	config       config.SwarmConfig
 	pending      map[crypto.UUID]chan findNodeResults
 	pendingMutex sync.RWMutex
 
@@ -41,13 +40,14 @@ type findNodeProtocol struct {
 }
 
 // NewFindNodeProtocol creates a new FindNodeProtocol instance.
-func newFindNodeProtocol(service service.Service, rt RoutingTable) *findNodeProtocol {
+func newFindNodeProtocol(service service.Service, rt RoutingTable, config config.SwarmConfig) *findNodeProtocol {
 
 	p := &findNodeProtocol{
 		rt:             rt,
 		pending:        make(map[crypto.UUID]chan findNodeResults),
 		ingressChannel: service.RegisterProtocol(protocol),
 		service:        service,
+		config:         config,
 	}
 
 	go p.readLoop()
@@ -95,7 +95,7 @@ func (p *findNodeProtocol) FindNode(serverNode node.Node, target string) ([]node
 	nodeID := base58.Decode(target)
 	data := &pb.FindNodeReq{
 		NodeID:     nodeID,
-		MaxResults: maxNearestNodesResults,
+		MaxResults: int32(p.config.MaxNearestNodesResults),
 	}
 
 	payload, err := proto.Marshal(data)
@@ -181,7 +181,7 @@ func (p *findNodeProtocol) handleIncomingRequest(sender crypto.PublicKey, reqID,
 
 	callback := make(PeersOpChannel)
 
-	count := int(crypto.MinInt32(req.MaxResults, maxNearestNodesResults))
+	count := int(crypto.MinInt32(req.MaxResults, int32(p.config.MaxNearestNodesResults)))
 
 	// get up to count nearest peers to nodeDhtId
 	p.rt.NearestPeers(NearestPeersReq{ID: nodeDhtID, Count: count, Callback: callback})
