@@ -5,6 +5,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 
+	"context"
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"time"
@@ -16,7 +17,7 @@ type DHT interface {
 	Lookup(pubkey string) (node.Node, error)
 
 	SelectPeers(qty int) []node.Node
-	Bootstrap() error
+	Bootstrap(ctx context.Context) error
 
 	Size() int
 }

@@ -28,7 +28,7 @@ func TestApp(t *testing.T) {
 	assert.Equal(t, App.Config.API.StartJSONServer, true)
 
 	// app should exit based on this signal
-	ExitApp <- true
+	Cancel()
 
 	filesystem.DeleteSpacemeshDataFolders(t)
 

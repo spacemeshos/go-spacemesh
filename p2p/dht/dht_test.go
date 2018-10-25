@@ -1,6 +1,7 @@
 package dht
 
 import (
+	"context"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/simulator"
@@ -133,7 +134,7 @@ func simNodeWithDHT(t *testing.T, sc config.SwarmConfig, sim *simulator.Simulato
 }
 
 func bootAndWait(t *testing.T, dht DHT, errchan chan error) {
-	err := dht.Bootstrap()
+	err := dht.Bootstrap(context.TODO())
 	errchan <- err
 }
 

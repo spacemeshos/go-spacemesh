@@ -3,22 +3,22 @@ package p2p
 import (
 	inet "net"
 
-	"github.com/spacemeshos/go-spacemesh/p2p/config"
-	"github.com/spacemeshos/go-spacemesh/p2p/dht"
-	"github.com/spacemeshos/go-spacemesh/p2p/net"
-	"github.com/spacemeshos/go-spacemesh/timesync"
-
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/gogo/protobuf/proto"
+	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/connectionpool"
+	"github.com/spacemeshos/go-spacemesh/p2p/dht"
 	"github.com/spacemeshos/go-spacemesh/p2p/gossip"
 	"github.com/spacemeshos/go-spacemesh/p2p/message"
+	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/timesync"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -39,11 +39,11 @@ func (pm protocolMessage) Data() []byte {
 }
 
 type swarm struct {
-	started uint32
-	bootErr error
-	bootChan chan struct{}
+	started   uint32
+	bootErr   error
+	bootChan  chan struct{}
 	gossipErr error
-	gossipC chan struct{}
+	gossipC   chan struct{}
 
 	config config.Config
 
@@ -85,7 +85,7 @@ func (s *swarm) waitForGossip() error {
 
 // newSwarm creates a new P2P instance, configured by config, if newNode is true it will create a new node identity
 // and not load from disk. it creates a new `net`, connection pool and dht.
-func newSwarm(config config.Config, newNode bool, persist bool) (*swarm, error) {
+func newSwarm(ctx context.Context, config config.Config, newNode bool, persist bool) (*swarm, error) {
 
 	port := config.TCPPort
 	address := inet.JoinHostPort("0.0.0.0", strconv.Itoa(port))
@@ -112,8 +112,8 @@ func newSwarm(config config.Config, newNode bool, persist bool) (*swarm, error) 
 	s := &swarm{
 		config:           config,
 		lNode:            l,
-		bootChan:	make(chan struct{}),
-		gossipC:	make(chan struct{}),
+		bootChan:         make(chan struct{}),
+		gossipC:          make(chan struct{}),
 		protocolHandlers: make(map[string]chan service.Message),
 		network:          n,
 		cPool:            connectionpool.NewConnectionPool(n, l.PublicKey()),
