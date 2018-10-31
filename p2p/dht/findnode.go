@@ -9,12 +9,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/dht/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"sync"
 	"time"
 )
 
 // todo: should be a kad param and configurable
-const maxNearestNodesResults = 20
 const tableQueryTimeout = time.Second * 3
 const findNodeTimeout = 1 * time.Minute
 
@@ -41,7 +41,7 @@ type findNodeProtocol struct {
 }
 
 // NewFindNodeProtocol creates a new FindNodeProtocol instance.
-func newFindNodeProtocol(service service.Service, rt RoutingTable) *findNodeProtocol {
+func newFindNodeProtocol(service service.Service, rt RoutingTable, config config.SwarmConfig) *findNodeProtocol {
 
 	p := &findNodeProtocol{
 		rt:             rt,
@@ -50,7 +50,7 @@ func newFindNodeProtocol(service service.Service, rt RoutingTable) *findNodeProt
 		service:        service,
 	}
 
-	go p.readLoop()
+	go p.readLoop(config)
 
 	return p
 }
@@ -88,14 +88,14 @@ func (p *findNodeProtocol) sendResponseMessage(server crypto.PublicKey, reqID, p
 
 // FindNode Send a single find node request to a remote node
 // id: base58 encoded remote node id
-func (p *findNodeProtocol) FindNode(serverNode node.Node, target string) ([]node.Node, error) {
+func (p *findNodeProtocol) FindNode(serverNode node.Node, target string, config config.SwarmConfig) ([]node.Node, error) {
 
 	var err error
 
 	nodeID := base58.Decode(target)
 	data := &pb.FindNodeReq{
 		NodeID:     nodeID,
-		MaxResults: maxNearestNodesResults,
+		MaxResults: int32(config.MaxNearestNodesResults),
 	}
 
 	payload, err := proto.Marshal(data)
@@ -137,7 +137,7 @@ func (p *findNodeProtocol) FindNode(serverNode node.Node, target string) ([]node
 	return nil, err
 }
 
-func (p *findNodeProtocol) readLoop() {
+func (p *findNodeProtocol) readLoop(config config.SwarmConfig) {
 	for {
 		msg, ok := <-p.ingressChannel
 		if !ok {
@@ -155,7 +155,7 @@ func (p *findNodeProtocol) readLoop() {
 			}
 
 			if headers.Req {
-				p.handleIncomingRequest(msg.Sender().PublicKey(), headers.ReqID, headers.Payload)
+				p.handleIncomingRequest(msg.Sender().PublicKey(), headers.ReqID, headers.Payload, config)
 				return
 			}
 			reqid := headers.ReqID
@@ -169,7 +169,7 @@ func (p *findNodeProtocol) readLoop() {
 
 // Handles a find node request from a remote node
 // Process the request and send back the response to the remote node
-func (p *findNodeProtocol) handleIncomingRequest(sender crypto.PublicKey, reqID, msg []byte) {
+func (p *findNodeProtocol) handleIncomingRequest(sender crypto.PublicKey, reqID, msg []byte, config config.SwarmConfig) {
 	req := &pb.FindNodeReq{}
 	err := proto.Unmarshal(msg, req)
 	if err != nil {
@@ -181,7 +181,7 @@ func (p *findNodeProtocol) handleIncomingRequest(sender crypto.PublicKey, reqID,
 
 	callback := make(PeersOpChannel)
 
-	count := int(crypto.MinInt32(req.MaxResults, maxNearestNodesResults))
+	count := int(crypto.MinInt32(req.MaxResults, int32(config.MaxNearestNodesResults)))
 
 	// get up to count nearest peers to nodeDhtId
 	p.rt.NearestPeers(NearestPeersReq{ID: nodeDhtID, Count: count, Callback: callback})

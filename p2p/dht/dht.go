@@ -48,7 +48,7 @@ func New(node *node.LocalNode, config config.SwarmConfig, service service.Servic
 		rt:      NewRoutingTable(config.RoutingTableBucketSize, node.DhtID(), node.Logger),
 		service: service,
 	}
-	d.fnp = newFindNodeProtocol(service, d.rt)
+	d.fnp = newFindNodeProtocol(service, d.rt, d.config)
 	return d
 }
 
@@ -168,7 +168,7 @@ func (d *KadDHT) findNodeOp(servers []node.Node, queried map[string]struct{}, id
 		// find node protocol adds found nodes to the local routing table
 		// populates queried node's routing table with us and return.
 		go func(i int) {
-			fnd, err := d.fnp.FindNode(servers[i], id)
+			fnd, err := d.fnp.FindNode(servers[i], id, d.config)
 			if err != nil {
 				//TODO: handle errors
 				return

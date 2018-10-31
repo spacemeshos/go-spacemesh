@@ -47,8 +47,10 @@ func init() {
 		config.P2P.SwarmConfig.RoutingTableBucketSize, "The rounding table bucket size")
 	RootCmd.PersistentFlags().IntVar(&config.P2P.SwarmConfig.RoutingTableAlpha, "swarm-rtalpha",
 		config.P2P.SwarmConfig.RoutingTableAlpha, "The rounding table Alpha")
+	RootCmd.PersistentFlags().IntVar(&config.P2P.SwarmConfig.MaxNearestNodesResults, "swarm-maxnear",
+		config.P2P.SwarmConfig.MaxNearestNodesResults, "The max nearest node")
 	RootCmd.PersistentFlags().IntVar(&config.P2P.SwarmConfig.RandomConnections, "swarm-randcon",
-		config.P2P.SwarmConfig.RoutingTableAlpha, "Number of random connections")
+		config.P2P.SwarmConfig.RandomConnections, "Number of random connections")
 	RootCmd.PersistentFlags().StringSliceVar(&config.P2P.SwarmConfig.BootstrapNodes, "swarm-bootstrap-nodes",
 		config.P2P.SwarmConfig.BootstrapNodes, "Number of random connections")
 	RootCmd.PersistentFlags().DurationVar(&config.P2P.TimeConfig.MaxAllowedDrift, "max-allowed-time-drift",
