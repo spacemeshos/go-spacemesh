@@ -48,7 +48,7 @@ func New(node *node.LocalNode, config config.SwarmConfig, service service.Servic
 		rt:      NewRoutingTable(config.RoutingTableBucketSize, node.DhtID(), node.Logger),
 		service: service,
 	}
-	d.fnp = newFindNodeProtocol(service, d.rt, d.config)
+	d.fnp = newFindNodeProtocol(service, d.rt, config) //d.config)   repace in v3
 	return d
 }
 

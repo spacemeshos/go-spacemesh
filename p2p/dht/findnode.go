@@ -31,7 +31,7 @@ type findNodeResults struct {
 
 type findNodeProtocol struct {
 	service service.Service
-
+	config       config.SwarmConfig  // less in v3
 	pending      map[crypto.UUID]chan findNodeResults
 	pendingMutex sync.RWMutex
 
@@ -48,6 +48,7 @@ func newFindNodeProtocol(service service.Service, rt RoutingTable, config config
 		pending:        make(map[crypto.UUID]chan findNodeResults),
 		ingressChannel: service.RegisterProtocol(protocol),
 		service:        service,
+		config:         config,  //less in v3
 	}
 
 	go p.readLoop(config)
