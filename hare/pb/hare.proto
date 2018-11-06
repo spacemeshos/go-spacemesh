@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+package pb;
+option go_package = "pb";
+
+// top message of the protocol
+message HareMessage {
+    bytes pubKey = 1;
+
+    bytes inner_sig = 2; // sign type, layer and payload
+    uint32 type = 3; // message type (status/commit/proposal/notify)
+    bytes layer = 4;
+    BasicMessage message = 5;
+
+    bytes outer_sig = 6; // optional. sign also certificate
+    Certificate cert = 7; // optional
+}
+
+// the certificate
+message Certificate {
+    repeated bytes blockId = 1; // the committed set S
+    repeated HareMessage commits = 2; // a collection of commit messages
+    bytes aggSig = 3; // aggregated sign for commits
+}
+
+// safe value proof message
+message SVP {
+    repeated HareMessage statuses = 1; // a collection of status messages
+    bytes aggSig = 2; // aggregated sig for statuses
+    Certificate cert = 3;
+}
+
+// basic message
+message BasicMessage {
+    uint32 k = 1;
+    repeated uint32 blockId = 2; // the set S. optional for commit message in a certificate
+    bytes role_proof = 3; // role is implicit by message type, this is the proof
+    SVP svp_proof = 4; // optional. only for proposal messages
+}
