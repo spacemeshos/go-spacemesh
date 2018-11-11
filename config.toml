@@ -1,6 +1,7 @@
 # sample spacemesh config file
 # use the config flag to start a node with a config file.
-# e.g $./go-spacemash -config ./config.toml
+# e.g $./go-spacemash --config ./config.toml
+# cli flags will get a higher priority than configured in the file.
 
 # Main Config
 [main]
@@ -22,7 +23,7 @@ response-timeout = "2s"
 [p2p.swarm]
 bootstrap = false
 bucketsize = 20 # Routing table bucket size
-rtalpha = 3 # Routing table alpha
+alpha = 3 # Routing table alpha
 randcon = 2 # Number of random connections
 bootnodes = ["0.0.0.0:7517/j7qWfWaJRVp25ZsnCu9rJ4PmhigZBtesB4YmQHqqPvtR"]
 

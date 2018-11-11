@@ -6,7 +6,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 )
 
@@ -26,17 +25,11 @@ func TestApp(t *testing.T) {
 
 	assert.NotNil(t, App.P2P)
 	assert.NotNil(t, App)
+	assert.Equal(t, App.Config.API.StartJSONServer, true)
 
 	// app should exit based on this signal
 	ExitApp <- true
 
 	filesystem.DeleteSpacemeshDataFolders(t)
 
-}
-
-func TestParseConfig(t *testing.T) {
-	err := config.LoadConfig("./config.toml")
-	assert.Nil(t, err)
-	_, err = ParseConfig()
-	assert.Nil(t, err)
 }
