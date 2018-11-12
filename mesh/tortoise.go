@@ -1,4 +1,4 @@
-package core
+package mesh
 
 import (	"github.com/golang-collections/go-datastructures/bitarray"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -15,8 +15,8 @@ type BlockPosition struct {
 }
 
 type Algorithm struct {
-	block2Id          map[BLockId]uint32
-	allBlocks         map[BLockId]*Block
+	block2Id          map[BLockID]uint32
+	allBlocks         map[BLockID]*Block
 	layerQueue        LayerQueue
 	idQueue           NewIdQueue
 	posVotes          []bitarray.BitArray
@@ -31,8 +31,8 @@ type Algorithm struct {
 func NewAlgorithm(layerSize uint32, cachedLayers uint32) Algorithm{
 	totBlocks := layerSize*cachedLayers
 	trtl := Algorithm{
-		block2Id:          make(map[BLockId]uint32),
-		allBlocks:         make(map[BLockId]*Block),
+		block2Id:          make(map[BLockID]uint32),
+		allBlocks:         make(map[BLockID]*Block),
 		layerQueue:        make(LayerQueue, cachedLayers +1),
 		idQueue:           make(NewIdQueue,layerSize),
 		remainingBlockIds: totBlocks,
@@ -55,13 +55,10 @@ func (alg *Algorithm) LayerVotingAvg() uint64 {
 	return 30
 }
 
-func (alg *Algorithm) IsTortoiseValid(originBlock *Block, targetBlock BLockId, targetBlockIdx uint64, visibleBlocks bitarray.BitArray) bool {
-	//log.Info("calculating votes for: %v on target id: %v",alg.block2Id[originBlock.id], targetBlockId)
+func (alg *Algorithm) IsTortoiseValid(originBlock *Block, targetBlock BLockID, targetBlockIdx uint64, visibleBlocks bitarray.BitArray) bool {
 	voteFor, voteAgainst := alg.countTotalVotesForBlock(targetBlockIdx, visibleBlocks)
 
-	/*if err != nil {
-		log.Error("Failed to count votes")
-	}*/
+
 	if voteFor > alg.GlobalVotingAvg() {
 		return true
 	}
@@ -71,9 +68,7 @@ func (alg *Algorithm) IsTortoiseValid(originBlock *Block, targetBlock BLockId, t
 
 	voteFor, voteAgainst = alg.CountVotesInLastLayer(alg.allBlocks[targetBlock]) //??
 
-	/*if err != nil {
-		log.Error("Failed to count votes")
-	}*/
+
 	if voteFor > alg.LayerVotingAvg() {
 		return true
 	}
@@ -94,29 +89,11 @@ func (alg *Algorithm) getLayerById(layerId uint64) (*Layer, error){
 
 func (alg *Algorithm) CountVotesInLastLayer(block *Block) (uint64, uint64){
 	return block.conVotes, block.proVotes
-	/*
-	var voteFor, voteAgainst uint64 = 0,0
-	l, er := alg.getLayerById(block.layerNum +1)
-	if er != nil {
-		log.Error("%v", er)
-		return 0,0
-	}
-	for i :=0; i < len(l.blocks); i++ {//_,visibleBlock := range l.blocks {
-		if vote, ok := l.blocks[i].blockVotes[block.id]; ok {
-			if vote {
-				voteFor++
-			} else {
-				voteAgainst++
-			}
-		}
-	}
-	return voteFor, voteAgainst*/
 }
 
 
 
 func (alg *Algorithm) createBlockVotingMap(origin *Block) (*bitarray.BitArray, *bitarray.BitArray){
-	//log.Info("creating block voting map for %v", origin.id)
 	blockMap := bitarray.NewBitArray(uint64(alg.totalBlocks))
 	visibilityMap := bitarray.NewBitArray(uint64(alg.totalBlocks))
 	// Count direct voters
@@ -127,7 +104,6 @@ func (alg *Algorithm) createBlockVotingMap(origin *Block) (*bitarray.BitArray, *
 		visibilityMap.SetBit(targetBlockId)
 		targetPosition := alg.visibilityMap[targetBlockId]
 		visibilityMap = visibilityMap.Or(targetPosition.visibility)
-		//log.Info("target map %v new visibility map %v", targetMap.ToNums(), visibilityMap.ToNums())
 		if vote{
 			blockMap.SetBit(targetBlockId)
 			block.proVotes++
@@ -159,11 +135,10 @@ func (alg *Algorithm) createBlockVotingMap(origin *Block) (*bitarray.BitArray, *
 }
 
 func (alg *Algorithm) countTotalVotesForBlock(targetIdx uint64, visibleBlocks bitarray.BitArray) (uint64, uint64){
-	//targetId := alg.block2Id[target.id]
 	var posVotes, conVotes uint64 = 0,0
 	targetLayer := alg.visibilityMap[targetIdx].layer
 	ln := len(alg.block2Id)
-	for blockIdx:=0; blockIdx< ln; blockIdx++{//_, blockIdx := range alg.block2Id { possible bug what if there is an id > len(alg.block2id)
+	for blockIdx:=0; blockIdx< ln; blockIdx++{ // possible bug what if there is an id > len(alg.block2id)
 		//if this block sees our
 		//if alg.allBlocks[targetID].layerNum
 		blockPosition := &alg.visibilityMap[blockIdx]
@@ -174,20 +149,13 @@ func (alg *Algorithm) countTotalVotesForBlock(targetIdx uint64, visibleBlocks bi
 			if val, err = blockPosition.visibility.GetBit(targetIdx); err == nil && val {
 				if set, _ := alg.posVotes[blockIdx].GetBit(targetIdx); set {
 					posVotes++
-					/*if posVotes >= alg.GlobalVotingAvg() {
-						return posVotes, conVotes
-					}*/
 				} else {
 					conVotes++
-					/*if conVotes >= alg.GlobalVotingAvg() {
-						return posVotes, conVotes
-					}*/
 				}
 			}
 		}
 
 	}
-	//log.Info("target block id: %v, for :%v, against %v", targetId, posVotes, conVotes)
 	return posVotes, conVotes
 }
 
@@ -236,7 +204,6 @@ func (alg *Algorithm) HandleIncomingLayer(l *Layer){
 	//todo: thread safety
 	alg.layers[l.layerNum] = l
 	alg.layerQueue <- l
-	//blockBitArrays := make(map[Block]bitarray.BitArray)
 	if len(alg.layerQueue) >= int(alg.cachedLayers ) {
 		layer := <-alg.layerQueue
 		alg.recycleLayer(layer)

@@ -1,34 +1,34 @@
-package core
+package mesh
 
 import (
 	"time"
 	"github.com/google/uuid"
 )
 
-type BLockId uint32//uuid.UUID
+type BLockID uint32
 
 var layerCounter uint64 = 0
 
 type Block struct {
-	id         BLockId
+	id         BLockID
 	layerNum   uint64
-	blockVotes map[BLockId]bool
+	blockVotes map[BLockID]bool
 	timestamp  time.Time
 	coin       bool
 	data       []byte
-	proVotes	uint64
-	conVotes	uint64
+	proVotes   uint64
+	conVotes   uint64
 }
 
 func NewBlock(coin bool, data []byte, ts time.Time) *Block{
 	b := Block{
-		id: BLockId(uuid.New().ID()),
-		blockVotes: make(map[BLockId]bool),
-		timestamp: ts,
-		data:data,
-		coin:coin,
-		proVotes:0,
-		conVotes:0,
+		id:         BLockID(uuid.New().ID()),
+		blockVotes: make(map[BLockID]bool),
+		timestamp:  ts,
+		data:       data,
+		coin:       coin,
+		proVotes:   0,
+		conVotes:   0,
 	}
 	return &b
 }
