@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
@@ -12,7 +13,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"sync"
 	"time"
-	"github.com/davecgh/go-spew/spew"
 )
 
 const PeerMessageQueueSize = 100
@@ -80,7 +80,7 @@ func makePeer(node2 node.Node, c net.Connection, log log.Log) *peer {
 	return &peer{
 		log,
 		node2,
-		make(chan error,1),
+		make(chan error, 1),
 		time.Now(),
 		c,
 		make(map[string]struct{}),
@@ -171,7 +171,7 @@ func (s *Neighborhood) Peer(pubkey string) (node.Node, net.Connection) {
 func (s *Neighborhood) Broadcast(msg []byte) error {
 
 	if len(s.peers) == 0 {
-		panic("WHOHO")
+		return errors.New("No peers in neighborhood")
 	}
 
 	s.oldMessageMu.RLock()

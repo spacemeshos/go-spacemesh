@@ -23,8 +23,5 @@ func TestNeighborhood_Peer(t *testing.T) {
 func TestNeighborhood_Broadcast(t *testing.T) {
 	n := NewNeighborhood(config.DefaultConfig().SwarmConfig, nil, nil, log.New("tesT", "", ""))
 	err := n.Broadcast([]byte("msg"))
-	assert.NoError(t, err)
-	err = n.Broadcast([]byte("msg"))
 	assert.Error(t, err)
-	//todo test more
 }
