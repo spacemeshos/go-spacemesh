@@ -1,4 +1,4 @@
-package core
+package mesh
 
 import (
 	"testing"
@@ -8,7 +8,7 @@ import (
 )
 
 func TestAlgorithm_Sanity(t *testing.T) {
-	layerSize := 200
+	layerSize := 50
 	cachedLayers := 100
 
 	alg := NewAlgorithm(uint32(layerSize),uint32(cachedLayers))
