@@ -6,21 +6,17 @@ option go_package = "pb";
 // top message of the protocol
 message HareMessage {
     bytes pubKey = 1;
-
-    bytes inner_sig = 2; // sign type, layer and payload
-    uint32 type = 3; // message type (status/commit/proposal/notify)
-    bytes layer = 4;
-    BasicMessage message = 5;
-
-    bytes outer_sig = 6; // optional. sign also certificate
+    bytes innerSig = 2; // sign inner message
+    InnerMessage message = 5;
+    bytes outerSig = 6; // optional. sign also certificate
     Certificate cert = 7; // optional
 }
 
 // the certificate
 message Certificate {
-    repeated bytes blockId = 1; // the committed set S
+    repeated bytes blocks = 1; // the committed set S
     repeated HareMessage commits = 2; // a collection of commit messages
-    bytes aggSig = 3; // aggregated sign for commits
+    bytes aggSig = 3; // aggregated sig for commits
 }
 
 // safe value proof message
@@ -31,9 +27,18 @@ message SVP {
 }
 
 // basic message
-message BasicMessage {
-    uint32 k = 1;
-    repeated uint32 blockId = 2; // the set S. optional for commit message in a certificate
-    bytes role_proof = 3; // role is implicit by message type, this is the proof
-    SVP svp_proof = 4; // optional. only for proposal messages
+message InnerMessage {
+    enum Type { // message type
+        STATUS = 0;
+        PROPOSAL = 1;
+        COMMIT = 2;
+        NOTIFY = 3;
+    }
+    Type type = 1;
+    bytes layer = 2;
+    uint32 k = 3; // the iteration
+    uint32 ki = 4;
+    repeated bytes blocks = 5; // the set S. optional for commit message in a certificate
+    bytes roleProof = 6; // role is implicit by message type, this is the proof
+    SVP svpProof = 7; // optional. only for proposal messages
 }
