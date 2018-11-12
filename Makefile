@@ -35,7 +35,6 @@ devtools:
 	go get -u github.com/grpc-ecosystem/grpc-gateway/protoc-gen-swagger
 	go get -u github.com/golang/protobuf/protoc-gen-go
 	go get -u github.com/kardianos/govendor
-	go get -u github.com/golang-collections/go-datastructures/bitarray
 
 	# Get the dependencies
 	govendor sync
