@@ -33,6 +33,12 @@
 			"revisionTime": "2017-12-04T08:42:57Z"
 		},
 		{
+			"checksumSHA1": "cdwG2WEgs5djSe2VyQZ3Hkx3vWs=",
+			"path": "github.com/golang-collections/go-datastructures/bitarray",
+			"revision": "59788d5eb2591d3497ffb8fafed2f16fe00e7775",
+			"revisionTime": "2015-02-11T16:07:25Z"
+		},
+		{
 			"checksumSHA1": "iVfdaLxIDjfk2KLP8dCMIbsxZZM=",
 			"path": "github.com/golang/protobuf/jsonpb",
 			"revision": "1e59b77b52bf8e4b449a57e6f79f21226d571845",
