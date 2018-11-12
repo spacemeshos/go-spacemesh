@@ -153,7 +153,7 @@ func NewRoutingTable(bucketsize int, localID node.DhtID, log *logging.Logger) Ro
 		nearestPeersReqs: make(chan NearestPeersReq, 3),
 		sizeReqs:         make(chan chan int, 3),
 
-		updateReqs: make(chan node.Node, 1),
+		updateReqs: make(chan node.Node),
 		removeReqs: make(chan node.Node, 3),
 
 		peerRemovedCallbacks: make(map[string]PeerChannel),

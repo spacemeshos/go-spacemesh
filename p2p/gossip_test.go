@@ -13,6 +13,7 @@ import (
 )
 
 func TestSwarm_GossipRoundTrip(t *testing.T) {
+	t.Skip()
 	type sp struct {
 		s      *swarm
 		protoC chan service.Message
@@ -110,6 +111,7 @@ func TestSwarm_GossipRoundTrip(t *testing.T) {
 
 
 func TestSwarm_GossipRoundTrip2(t *testing.T) {
+	t.Skip()
 	type sp struct {
 		s      *swarm
 		protoC chan service.Message
