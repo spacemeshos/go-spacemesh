@@ -107,7 +107,7 @@ func (sn *Node) SendMessage(nodeID string, protocol string, payload []byte) erro
 		thec <- simMessage{payload, sn.Node}
 		sn.sim.updateNode(nodeID, sn)
 	}
-	log.Info("%v >> %v (%v)", sn.Node.PublicKey(), nodeID, payload)
+	log.Debug("%v >> %v (%v)", sn.Node.PublicKey(), nodeID, payload)
 	return nil
 }
 
@@ -120,7 +120,7 @@ func (sn *Node) Broadcast(protocol string, payload []byte) error {
 		}
 	}
 	sn.sim.mutex.RUnlock()
-	log.Info("%v >> All ( Gossip ) (%v)", sn.Node.PublicKey(), payload)
+	log.Debug("%v >> All ( Gossip ) (%v)", sn.Node.PublicKey(), payload
 	return nil
 }
 
