@@ -209,7 +209,7 @@ func (n *Net) createSecuredConnection(address string, remotePublicKey crypto.Pub
 	case msg, ok = <-conn.incomingChannel():
 		if !ok {
 			conn.Close()
-			return nil, fmt.Errorf("%s err: incoming channel got closed", errMsg)
+			return nil, fmt.Errorf("%s err: incoming channel got closed with %v", errMsg, conn.RemotePublicKey())
 		}
 	case <-timer.C:
 		n.logger.Info("waiting for HS response timed-out. remoteKey=%v", remotePublicKey)
@@ -318,12 +318,11 @@ func (n *Net) HandlePreSessionIncomingMessage(c Connection, message []byte) erro
 	// new remote connection doesn't hold the remote public key until it gets the handshake request
 	if c.RemotePublicKey() == nil {
 		rPub, err := crypto.NewPublicKey(data.GetNodePubKey())
-		n.Logger().Info("DEBUG: handling HS req from %v", rPub)
+		n.Logger().Debug("DEBUG: handling HS req from %v", rPub)
 		if err != nil {
 			return fmt.Errorf("%s. err: %v", errMsg, err)
 		}
 		c.SetRemotePublicKey(rPub)
-
 	}
 	respData, session, err := ProcessHandshakeRequest(n.NetworkID(), n.localNode.PublicKey(), n.localNode.PrivateKey(), c.RemotePublicKey(), data)
 	if err != nil {

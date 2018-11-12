@@ -11,6 +11,8 @@ const (
 	BootstrapTimeout = 5 * time.Minute
 	// LookupIntervals is the time we wait between another kad lookup if bootstrap failed.
 	LookupIntervals = 3 * time.Second
+	// RefreshInterval is the time we wait between dht refreshes
+	RefreshInterval = 5 * time.Minute
 )
 
 var (
@@ -28,6 +30,8 @@ var (
 // ID with a FindNode (using `dht.Lookup`). the process involves updating all returned nodes to the routing table
 // while all the nodes that receive our query will add us to their routing tables and send us as response to a `FindNode`.
 func (d *KadDHT) Bootstrap() error {
+
+	d.local.Debug("Starting node bootstrap ", d.local.String())
 
 	c := d.config.RandomConnections
 	if c <= 0 {
@@ -49,7 +53,10 @@ func (d *KadDHT) Bootstrap() error {
 		return ErrConnectToBootNode
 	}
 
+	d.local.Debug("lookup using %d preloaded bootnodes ", bn)
+
 	timeout := time.NewTimer(BootstrapTimeout)
+	i := 0
 	// TODO: Issue a healthcheck / refresh loop every x interval.
 BOOTLOOP:
 	for {
@@ -64,6 +71,7 @@ BOOTLOOP:
 		case <-timeout.C:
 			return ErrFailedToBoot
 		case err := <-reschan:
+			i++
 			if err == nil {
 				return ErrFoundOurself
 			}
@@ -72,11 +80,44 @@ BOOTLOOP:
 			req := make(chan int)
 			d.rt.Size(req)
 			size := <-req
-			if size >= c {
+			if (size - bn) >= c { // Don't count bootstrap nodes
 				break BOOTLOOP
 			}
+			d.local.Warning("%d lookup didn't bootstrap the routing table", i)
+			d.local.Warning("RT now has %d peers", size-bn)
 			time.Sleep(LookupIntervals)
 		}
 	}
 	return nil // succeed
+}
+
+func (d *KadDHT) healthLoop() {
+	tick := time.NewTicker(RefreshInterval)
+	for range tick.C {
+		err := d.refresh()
+		if err != nil {
+			d.local.Error("DHT Refresh failed, trying again")
+		}
+	}
+}
+
+func (d *KadDHT) refresh() error {
+	reschan := make(chan error)
+
+	go func() {
+		_, err := d.Lookup(d.local.PublicKey().String())
+		reschan <- err
+	}()
+
+	select {
+	case err := <-reschan:
+		if err == nil {
+			return ErrFoundOurself
+		}
+		// should be - ErrLookupFailed
+		// We want to have lookup failed error
+		// no one should return us ourselves.
+	}
+
+	return nil
 }

@@ -37,7 +37,13 @@ type findNodeProtocol struct {
 
 	ingressChannel chan service.Message
 
+	log log.Log
+
 	rt RoutingTable
+}
+
+type localService interface {
+	LocalNode() *node.LocalNode
 }
 
 // NewFindNodeProtocol creates a new FindNodeProtocol instance.
@@ -48,6 +54,12 @@ func newFindNodeProtocol(service service.Service, rt RoutingTable) *findNodeProt
 		pending:        make(map[crypto.UUID]chan findNodeResults),
 		ingressChannel: service.RegisterProtocol(protocol),
 		service:        service,
+	}
+
+	if srv, ok := service.(localService); ok {
+		p.log = srv.LocalNode().Log
+	} else {
+		p.log = log.AppLog
 	}
 
 	go p.readLoop()
@@ -150,7 +162,7 @@ func (p *findNodeProtocol) readLoop() {
 			headers := &pb.FindNode{}
 			err := proto.Unmarshal(msg.Data(), headers)
 			if err != nil {
-				log.Error("Error handling incoming FindNode message, err:", err)
+				log.Error("Error handling incoming FindNode ", err)
 				return
 			}
 
@@ -203,7 +215,15 @@ func (p *findNodeProtocol) handleIncomingRequest(sender crypto.PublicKey, reqID,
 
 	err = p.sendResponseMessage(sender, reqID, payload)
 	if err != nil {
-		log.Error("Error sending response message, err:", err)
+		//pp := make(PeerOpChannel)
+		//// is he in routinug table
+		//p.rt.Find(PeerByIDRequest{ node.NewDhtID(sender.Bytes()),  pp})
+		//f := <-pp
+		//if f != nil  && f.Peer != node.EmptyNode {
+		//	p.log.Error("He was found but wtf ", f.Peer)
+		//}
+		id := p.service.(localService).LocalNode().String()
+		p.log.Error("%v failed sending response message to %v, err:%v", id, sender.String(), err)
 	}
 }
 

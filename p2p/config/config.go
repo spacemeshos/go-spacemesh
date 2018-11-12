@@ -87,7 +87,7 @@ func DefaultConfig() Config {
 		DialTimeout:     duration("1m"),
 		ConnKeepAlive:   duration("48h"),
 		NetworkID:       TestNet,
-		ResponseTimeout: duration("2s"),
+		ResponseTimeout: duration("15s"),
 		SwarmConfig:     SwarmConfigValues,
 		TimeConfig:      TimeConfigValues,
 	}

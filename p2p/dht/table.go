@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"gopkg.in/op/go-logging.v1"
+	"math/rand"
+	"time"
 )
 
 const (
 	// IDLength is the length of an ID,  dht ids are 32 bytes
-	IDLength = 256
+	IDLength = 256 // bits
 	// BucketCount is the amount of buckets we hold
 	// Kademlia says we need a bucket to each bit but reality says half of network would be at bucket 0
 	// half of remaining nodes will be in bucket 1 and so forth.
@@ -32,7 +34,10 @@ type RoutingTable interface {
 	Find(req PeerByIDRequest)         // find a specific peer by node.DhtID
 	NearestPeer(req PeerByIDRequest)  // nearest peer to a node.DhtID
 	NearestPeers(req NearestPeersReq) // ip to n nearest peers to a node.DhtID
-	Size(callback chan int)           // total # of peers in the table
+
+	SelectPeers(qty int) []node.Node // Get a list of random peers
+
+	Size(callback chan int) // total # of peers in the table
 
 	Print()
 }
@@ -74,6 +79,11 @@ type NearestPeersReq struct {
 	Callback PeersOpChannel
 }
 
+type randomPeersReq struct {
+	count int
+	cb    chan []node.Node
+}
+
 // RoutingTable defines the routing table.
 // Most recently network active nodes are placed in beginning of buckets.
 // Least active nodes are the back of each bucket.
@@ -99,6 +109,7 @@ type routingTableImpl struct {
 	nearestPeerReqs  chan PeerByIDRequest
 	nearestPeersReqs chan NearestPeersReq
 	listPeersReqs    chan PeersOpChannel
+	randomPeersReq   chan *randomPeersReq
 	sizeReqs         chan chan int
 	printReq         chan struct{}
 
@@ -137,6 +148,7 @@ func NewRoutingTable(bucketsize int, localID node.DhtID, log *logging.Logger) Ro
 		local:      localID,
 
 		findReqs:         make(chan PeerByIDRequest, 3),
+		randomPeersReq:   make(chan *randomPeersReq),
 		nearestPeerReqs:  make(chan PeerByIDRequest, 3),
 		nearestPeersReqs: make(chan NearestPeersReq, 3),
 		sizeReqs:         make(chan chan int, 3),
@@ -184,6 +196,16 @@ func (rt *routingTableImpl) Remove(peer node.Node) {
 	rt.removeReqs <- peer
 }
 
+func (rt *routingTableImpl) SelectPeers(qty int) []node.Node {
+	cb := make(chan []node.Node)
+	rpq := &randomPeersReq{
+		qty,
+		cb,
+	}
+	rt.randomPeersReq <- rpq
+	return <-cb
+}
+
 //// below - non-ts private impl details (should only be called by processEvents() and not directly
 
 // main event processing loop
@@ -212,11 +234,65 @@ func (rt *routingTableImpl) processEvents() {
 		case r := <-rt.findReqs:
 			rt.onFindReq(r)
 
+		case r := <-rt.randomPeersReq:
+			r.cb <- rt.randomPeers(r.count)
+
 		case <-rt.printReq:
 			rt.onPrintReq()
 		}
 
 	}
+}
+
+func (rt *routingTableImpl) randomPeers(qty int) []node.Node {
+	// TODO: WRITE our own random peer chosing (better than that shamelessly taken from eth version)
+	r := make(chan int)
+	rt.size(r)
+	size := <-r
+
+	if size <= 0 {
+		return nil
+	}
+	type nodeSlice []node.Node
+
+	var buckets []nodeSlice
+	buckets = make([]nodeSlice, 0)
+
+	for i := 0; i < len(rt.buckets); i++ {
+		peers := rt.buckets[i].Peers()
+		if len(peers) > 0 {
+			buckets = append(buckets, peers)
+		}
+	}
+
+	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
+	// Shuffle the buckets.
+	for i := len(buckets) - 1; i > 0; i-- {
+		j := rnd.Intn(len(buckets))
+		buckets[i], buckets[j] = buckets[j], buckets[i]
+	}
+
+	bufSize := qty
+	if (size < qty) {
+		bufSize = size
+	}
+	buf := make([]node.Node, bufSize)
+	// Move head of each bucket into buf, removing buckets that become empty.
+	var i, j int
+	for ; i < len(buf); i, j = i+1, (j+1)%len(buckets) {
+		b := buckets[j]
+		buf[i] = b[0]
+		buckets[j] = b[1:]
+
+		if len(b) == 1 {
+			buckets = append(buckets[:j], buckets[j+1:]...)
+		}
+		if len(buckets) == 0 {
+			break
+		}
+	}
+
+	return buf
 }
 
 // Update updates the routing table with the given contact. it will be added to the routing table if we have space
@@ -256,6 +332,8 @@ func (rt *routingTableImpl) update(p node.Node) {
 		// TODO: if bucket is full ping oldest node and replace if it fails to answer
 		// TODO: check latency metrics and replace if new node is better then oldest one.
 		// Fresh, recent contacted (alive), low latency nodes should be kept at top of the bucket.
+		bucket.PopBack() // todo :ping them.
+		bucket.PushFront(p)
 		return
 	}
 
@@ -381,5 +459,5 @@ func (rt *routingTableImpl) onPrintReq() {
 			str += fmt.Sprintf("\t\t%s cpl:%v\n", p.Pretty(), rt.local.CommonPrefixLen(p.DhtID()))
 		}
 	}
-	rt.log.Debug(str)
+	rt.log.Info(str)
 }
