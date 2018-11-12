@@ -111,6 +111,19 @@ func (sn *Node) SendMessage(nodeID string, protocol string, payload []byte) erro
 	return nil
 }
 
+// Broadcast
+func (sn *Node) Broadcast(protocol string, payload []byte) error {
+	sn.sim.mutex.RLock()
+	for n := range sn.sim.protocolHandler {
+		if c, ok := sn.sim.protocolHandler[n][protocol]; ok {
+			c <- simMessage{payload, sn.Node}
+		}
+	}
+	sn.sim.mutex.RUnlock()
+	log.Info("%v >> All ( Gossip ) (%v)", sn.Node.PublicKey(), payload)
+	return nil
+}
+
 // RegisterProtocol creates and returns a channel for a given protocol.
 func (sn *Node) RegisterProtocol(protocol string) chan service.Message {
 	c := make(chan service.Message)
