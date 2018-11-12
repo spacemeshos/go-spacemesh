@@ -120,7 +120,7 @@ func (sn *Node) Broadcast(protocol string, payload []byte) error {
 		}
 	}
 	sn.sim.mutex.RUnlock()
-	log.Debug("%v >> All ( Gossip ) (%v)", sn.Node.PublicKey(), payload
+	log.Debug("%v >> All ( Gossip ) (%v)", sn.Node.PublicKey(), payload)
 	return nil
 }
 
