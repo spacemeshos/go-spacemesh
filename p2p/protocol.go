@@ -15,8 +15,8 @@ import (
 type Protocol struct {
 	name               string
 	network            Service
-	pending            map[crypto.UUID]chan interface{}
 	pendMutex          sync.RWMutex
+	pending            map[crypto.UUID]chan interface{}
 	resHandlers        map[crypto.UUID]func(msg []byte) interface{}
 	msgRequestHandlers map[string]func(msg []byte) []byte
 	ingressChannel     chan service.Message
@@ -43,39 +43,36 @@ func (p *Protocol) readLoop() {
 			break
 		}
 
+		//todo add buffer and option to limit number of concurrent goroutines
+
 		go func(msg service.Message) {
 			headers := &pb.MessageWrapper{}
-			err := proto.Unmarshal(msg.Data(), headers)
 
-			if err != nil {
+			if err := proto.Unmarshal(msg.Data(), headers); err != nil {
 				log.Error("Error handling incoming Protocol message, err:", err)
 				return
 			}
 
-			id, err := uuid.FromBytes(headers.ReqID)
-
-			if err != nil {
-				log.Error("Error Parsing message request id, err:", err)
-				return
-			}
-
 			if headers.Req {
-				a := string(headers.Type)
-				b := headers.Payload
-				if payload := p.msgRequestHandlers[a](b); payload != nil {
+				if payload := p.msgRequestHandlers[string(headers.Type)](headers.Payload); payload != nil {
 					rmsg, fParseErr := proto.Marshal(&pb.MessageWrapper{Req: false, ReqID: headers.ReqID, Type: headers.Type, Payload: payload})
 					if fParseErr != nil {
-						log.Error("Error Parsing Protocol message, err:", err)
+						log.Error("Error Parsing Protocol message, err:", fParseErr)
 						return
 					}
 					sendErr := p.network.SendMessage(msg.Sender().PublicKey().String(), p.name, rmsg)
 					if sendErr != nil {
-						log.Error("Error sending response message, err:", err)
+						log.Error("Error sending response message, err:", sendErr)
 					}
 					return
 				}
 			} else {
-				id := crypto.UUID(id)
+				reqId, err := uuid.FromBytes(headers.ReqID)
+				if err != nil {
+					log.Error("Error Parsing message request id, err:", err)
+					return
+				}
+				id := crypto.UUID(reqId)
 				p.pendMutex.RLock()
 				pend, okPend := p.pending[id]
 				foo, okFoo := p.resHandlers[id]
