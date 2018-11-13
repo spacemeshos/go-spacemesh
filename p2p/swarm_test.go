@@ -74,13 +74,13 @@ func TestSwarm_Shutdown(t *testing.T) {
 }
 
 func TestSwarm_ShutdownNoStart(t *testing.T) {
-	s, err := newSwarm(config.DefaultConfig(), true, false)
+	s, err := newSwarm(context.TODO(), config.DefaultConfig(), true, false)
 	assert.NoError(t, err)
 	s.Shutdown()
 }
 
 func TestSwarm_RegisterProtocolNoStart(t *testing.T) {
-	s, err := newSwarm(config.DefaultConfig(), true, false)
+	s, err := newSwarm(context.TODO(), config.DefaultConfig(), true, false)
 	msgs := s.RegisterProtocol("Anton")
 	assert.NotNil(t, msgs)
 	assert.NoError(t, err)

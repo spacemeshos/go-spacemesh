@@ -62,7 +62,8 @@ type swarm struct {
 	cPool *connectionpool.ConnectionPool
 
 	dht dht.DHT
-
+	// Context for cancel
+	ctx context.Context
 	// Shutdown the loop
 	shutdown chan struct{} // local request to kill the swarm from outside. e.g when local node is shutting down
 }
@@ -118,7 +119,7 @@ func newSwarm(ctx context.Context, config config.Config, newNode bool, persist b
 		network:          n,
 		cPool:            connectionpool.NewConnectionPool(n, l.PublicKey()),
 		shutdown:         make(chan struct{}), // non-buffered so requests to shutdown block until swarm is shut down
-
+		ctx:              ctx,
 	}
 
 	s.dht = dht.New(l, config.SwarmConfig, s)
@@ -146,7 +147,7 @@ func (s *swarm) Start() error {
 	if s.config.SwarmConfig.Bootstrap {
 		go func() {
 			b := time.Now()
-			err := s.dht.Bootstrap()
+			err := s.dht.Bootstrap(s.ctx)
 			if err != nil {
 				s.bootErr = err
 				s.Shutdown()

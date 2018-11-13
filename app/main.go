@@ -3,15 +3,12 @@ package app
 import (
 	"context"
 	"fmt"
-<<<<<<< HEAD
 	"github.com/spf13/pflag"
 	"os"
 	"os/signal"
 	"reflect"
 	"runtime"
 
-=======
->>>>>>> Fix for issue 194: Updated exit channel with a context with cancel
 	"github.com/spacemeshos/go-spacemesh/accounts"
 	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/app/cmd"
@@ -22,9 +19,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"os"
-	"os/signal"
-	"runtime"
 )
 
 // SpacemeshApp is the cli app singleton
@@ -238,7 +232,7 @@ func (app *SpacemeshApp) startSpacemesh(cmd *cobra.Command, args []string) {
 
 	// start p2p services
 	log.Info("Initializing P2P services")
-	swarm, err := p2p.New(Ctx,app.Config.P2P)
+	swarm, err := p2p.New(Ctx, app.Config.P2P)
 	if err != nil {
 		log.Error("Error starting p2p services, err: %v", err)
 		panic("Error starting p2p services")
@@ -249,7 +243,6 @@ func (app *SpacemeshApp) startSpacemesh(cmd *cobra.Command, args []string) {
 		log.Error("Error starting p2p services, err: %v", err)
 		panic("Error starting p2p services")
 	}
-
 
 	app.P2P = swarm
 	app.NodeInitCallback <- true
