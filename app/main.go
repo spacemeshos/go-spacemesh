@@ -15,7 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/p2p/timesync"
+	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -253,10 +253,17 @@ func (app *SpacemeshApp) startSpacemesh(cmd *cobra.Command, args []string) {
 	// start p2p services
 	log.Info("Initializing P2P services")
 	swarm, err := p2p.New(app.Config.P2P)
+	if err != nil {
+		log.Error("Error starting p2p services, err: %v", err)
+		panic("Error starting p2p services")
+	}
+	err = swarm.Start()
 
 	if err != nil {
 		log.Error("Error starting p2p services, err: %v", err)
+		panic("Error starting p2p services")
 	}
+
 
 	app.P2P = swarm
 	app.NodeInitCallback <- true

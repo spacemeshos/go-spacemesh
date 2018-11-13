@@ -208,3 +208,25 @@ func TestDHT_Bootstrap2(t *testing.T) {
 		}
 	}
 }
+
+func Test_filterFindNodeServers(t *testing.T) {
+	//func filterFindNodeServers(nodes []node.Node, queried map[string]struct{}, alpha int) []node.Node {
+
+	nodes := node.GenerateRandomNodesData(20)
+
+	q := make(map[string]struct{})
+	q[nodes[0].String()] = struct{}{}
+	q[nodes[1].String()] = struct{}{}
+	q[nodes[2].String()] = struct{}{}
+
+	filtered := filterFindNodeServers(nodes, q, 5)
+
+	assert.Equal(t, 5, len(filtered))
+
+	for n := range filtered {
+		if _, ok := q[filtered[n].String()]; ok {
+			t.Error("It was in the filtered")
+		}
+	}
+
+}

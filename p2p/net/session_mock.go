@@ -68,3 +68,5 @@ func (sm *SessionMock) SetDecrypt(res []byte, err error) {
 func (n SessionMock) EncryptGuard() *sync.Mutex {
 	return nil
 }
+
+var _ NetworkSession = (*SessionMock)(nil)

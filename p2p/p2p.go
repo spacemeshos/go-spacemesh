@@ -10,5 +10,5 @@ type Service service.Service
 
 // New creates a new P2P service a.k.a `swarm` it tries to load node information from the disk.
 func New(config config.Config) (Service, error) {
-	return newSwarm(config, config.NewNode)
+	return newSwarm(config, config.NewNode, true) // TODO ADD Persist param
 }

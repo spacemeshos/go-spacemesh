@@ -149,7 +149,7 @@ func (cp *ConnectionPool) handleNewConnection(rPub crypto.PublicKey, newConn net
 }
 
 func (cp *ConnectionPool) handleClosedConnection(conn net.Connection) {
-	cp.net.Logger().Info("connection %s was closed", conn.String())
+	cp.net.Logger().Debug("connection %v with %v was closed", conn.String())
 	cp.connMutex.Lock()
 	rPub := conn.RemotePublicKey().String()
 	cur, ok := cp.connections[rPub]

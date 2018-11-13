@@ -9,6 +9,7 @@ import (
 // RoutingTable (or other clients) is responsible for serializing access to Bucket's methods.
 type Bucket interface {
 	Peers() []node.Node
+	Front() node.Node
 	Has(n node.Node) bool
 	Remove(n node.Node) bool
 	MoveToFront(n node.Node)
@@ -30,6 +31,10 @@ func NewBucket() Bucket {
 	return &bucketimpl{
 		list: list.New(),
 	}
+}
+
+func (b *bucketimpl) Front() node.Node {
+	return b.list.Front().Value.(node.Node)
 }
 
 // Peers returns a slice of RemoteNodeData for the peers stored in the bucket.
