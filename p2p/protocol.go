@@ -127,9 +127,9 @@ func (p *Protocol) SendAsyncRequest(msgType string, payload []byte, address stri
 		p.removeFromPending(reqID)
 		return nil, errors.New("could not find block")
 	case <-timer.C:
+		//don't remove from pending
 		err = errors.New("fetch block took too long to respond")
 	}
-	p.removeFromPending(reqID)
 	return nil, err
 }
 
