@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	defaultConfigFileName  = "config.toml"
+	defaultConfigFileName  = "./config.toml"
 	defaultLogFileName     = "spacemesh.log"
 	defaultAccountFileName = "accounts"
 	defaultDataDirName     = "spacemesh"
@@ -64,36 +64,36 @@ func defaultBaseConfig() BaseConfig {
 	return BaseConfig{
 		HomeDir:    defaultHomeDir,
 		DataDir:    defaultDataDir,
-		ConfigFile: defaultConfigFile,
+		ConfigFile: defaultConfigFileName,
 		LogDir:     defaultLogDir,
 		AccountDir: defaultAccountDir,
 	}
 }
 
 // LoadConfig load the config file
-func LoadConfig(fileLocation string) (err error) {
+func LoadConfig(fileLocation string, vip *viper.Viper) (err error) {
 	log.Info("Parsing config file at location: %s", fileLocation)
 
-	if fileLocation != "" {
-		filename := filepath.Base(fileLocation)
+	if fileLocation == "" {
+		fileLocation = defaultConfigFileName
+	}
 
-		slice := len(filename) - len(filepath.Ext(filename))
+	vip.SetConfigFile(fileLocation)
+	err = vip.ReadInConfig()
 
-		viper.SetConfigName(filename[:slice])
-		viper.AddConfigPath(filepath.Dir(filename))
-		viper.AddConfigPath(".")
-		viper.AddConfigPath("../")
-
-		err = viper.ReadInConfig()
-
+	if err != nil {
+		if fileLocation != defaultConfigFileName {
+			log.Warning("failed loading %v trying %v", fileLocation, defaultConfigFileName)
+			vip.SetConfigFile(defaultConfigFileName)
+			err = vip.ReadInConfig()
+		}
+		// we change err so check again
 		if err != nil {
 			return fmt.Errorf("failed to read config file %v", err)
 		}
-
-		return nil
 	}
 
-	return fmt.Errorf("failed to read config file")
+	return nil
 }
 
 // SetConfigFile overrides the default config file path

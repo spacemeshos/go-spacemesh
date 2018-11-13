@@ -45,7 +45,9 @@ func TestNew(t *testing.T) {
 }
 
 func Test_newSwarm(t *testing.T) {
-	s, err := newSwarm(config.DefaultConfig(), true, false)
+	cfg := config.DefaultConfig()
+	cfg.TCPPort = int(crypto.GetRandomUserPort())
+	s, err := newSwarm(cfg, true, false)
 	assert.NoError(t, err)
 	err = s.Start()
 	assert.NoError(t, err, err)
@@ -54,7 +56,9 @@ func Test_newSwarm(t *testing.T) {
 }
 
 func TestSwarm_Shutdown(t *testing.T) {
-	s, err := newSwarm(config.DefaultConfig(), true, false)
+	cfg := config.DefaultConfig()
+	cfg.TCPPort = int(crypto.GetRandomUserPort())
+	s, err := newSwarm(cfg, true, false)
 	assert.NoError(t, err)
 	err = s.Start()
 	assert.NoError(t, err, err)

@@ -129,7 +129,7 @@ type MaliciousDelayedSecondMessageSender struct {
 func (mal *MaliciousDelayedSecondMessageSender) StartInstance(msg OpaqueMessage, msg2 OpaqueMessage) []byte {
 	mal.startTime = time.Now()
 	go mal.SendMessage(msg2)
-	time.Sleep(time.Duration(mal.dsConfig.NumOfAdverseries/2) * mal.dsConfig.RoundTime)
+	time.Sleep(time.Duration(mal.dsConfig.NumOfAdversaries/2) * mal.dsConfig.RoundTime)
 	go mal.SendMessage(msg)
 	go mal.StartListening()
 	mal.waitForConsensus()
@@ -150,7 +150,7 @@ func (dsci *MaliciousChangeMessageReceiver) ReceiveMessage(message *pb.Consensus
 		return fmt.Errorf("message received on aborted isntance, round: %v", round)
 	}
 
-	if round > dsci.ds.dsConfig.NumOfAdverseries+1 {
+	if round > dsci.ds.dsConfig.NumOfAdversaries+1 {
 		return fmt.Errorf("round out of order: %v", round)
 	}
 
@@ -204,7 +204,7 @@ func (dsci *MaliciousHoldMessageReceiver) ReceiveMessage(message *pb.ConsensusMe
 		return fmt.Errorf("message received on aborted isntance, round: %v", round)
 	}
 
-	if round > dsci.ds.dsConfig.NumOfAdverseries+1 {
+	if round > dsci.ds.dsConfig.NumOfAdversaries+1 {
 		return fmt.Errorf("round out of order: %v", round)
 	}
 
@@ -247,7 +247,7 @@ func (dsci *MaliciousSendHoldMessageReceiver) ReceiveMessage(message *pb.Consens
 		return fmt.Errorf("message received on aborted isntance, round: %v", round)
 	}
 
-	if round > dsci.ds.dsConfig.NumOfAdverseries+1 {
+	if round > dsci.ds.dsConfig.NumOfAdversaries+1 {
 		return fmt.Errorf("round out of order: %v", round)
 	}
 
@@ -412,7 +412,7 @@ func TestSanity(t *testing.T) {
 
 	cfg := config.DefaultConfig()
 	cfg.NodesPerLayer = int32(numOfNodes)
-	cfg.NumOfAdverseries = int32(numOfNodes / 2)
+	cfg.NumOfAdversaries = int32(numOfNodes / 2)
 	timer := MyTimer{}
 
 	mockNetwork := NewMockNetwork(0)
@@ -451,7 +451,7 @@ func TestReceiverHoldAndResendMessage(t *testing.T) {
 
 	cfg := config.DefaultConfig()
 	cfg.NodesPerLayer = int32(numOfNodes)
-	cfg.NumOfAdverseries = int32(numOfNodes / 2)
+	cfg.NumOfAdversaries = int32(numOfNodes / 2)
 	timer := MyTimer{}
 
 	mockNetwork := NewMockNetwork(0)
@@ -499,7 +499,7 @@ func TestReceiverHoldMessage(t *testing.T) {
 
 	cfg := config.DefaultConfig()
 	cfg.NodesPerLayer = int32(numOfNodes)
-	cfg.NumOfAdverseries = int32(numOfNodes / 2)
+	cfg.NumOfAdversaries = int32(numOfNodes / 2)
 	timer := MyTimer{}
 
 	mockNetwork := NewMockNetwork(0)
@@ -548,7 +548,7 @@ func TestReceiverChangeMessage(t *testing.T) {
 
 	cfg := config.DefaultConfig()
 	cfg.NodesPerLayer = int32(numOfNodes)
-	cfg.NumOfAdverseries = int32(numOfNodes / 2)
+	cfg.NumOfAdversaries = int32(numOfNodes / 2)
 	timer := MyTimer{}
 
 	mockNetwork := NewMockNetwork(0)
@@ -609,7 +609,7 @@ func TestMultipleSenders(t *testing.T) {
 
 	cfg := config.DefaultConfig()
 	cfg.NodesPerLayer = int32(numOfNodes)
-	cfg.NumOfAdverseries = int32(numOfNodes / 2)
+	cfg.NumOfAdversaries = int32(numOfNodes / 2)
 	timer := MyTimer{}
 
 	mockNetwork := NewMockNetwork(0)
@@ -645,7 +645,7 @@ func TestNodeNotInListJoins(t *testing.T) {
 
 	cfg := config.DefaultConfig()
 	cfg.NodesPerLayer = int32(numOfNodes)
-	cfg.NumOfAdverseries = int32(numOfNodes / 2)
+	cfg.NumOfAdversaries = int32(numOfNodes / 2)
 	timer := MyTimer{}
 
 	mockNetwork := NewMockNetwork(0)
@@ -687,7 +687,7 @@ func TestSenderSendsTwoMessagesToDifferentParties(t *testing.T) {
 
 	cfg := config.DefaultConfig()
 	cfg.NodesPerLayer = int32(numOfNodes)
-	cfg.NumOfAdverseries = int32(numOfNodes / 2)
+	cfg.NumOfAdversaries = int32(numOfNodes / 2)
 	timer := MyTimer{}
 
 	mockNetwork := NewMockNetwork(0)
@@ -737,7 +737,7 @@ func TestSenderSignsTwoTimes(t *testing.T) {
 
 	cfg := config.DefaultConfig()
 	cfg.NodesPerLayer = int32(numOfNodes)
-	cfg.NumOfAdverseries = int32(numOfNodes / 2)
+	cfg.NumOfAdversaries = int32(numOfNodes / 2)
 	timer := MyTimer{}
 
 	mockNetwork := NewMockNetwork(0)
@@ -784,7 +784,7 @@ func TestSenderSendsTwoMessages(t *testing.T) {
 
 	cfg := config.DefaultConfig()
 	cfg.NodesPerLayer = int32(numOfNodes)
-	cfg.NumOfAdverseries = int32(numOfNodes / 2)
+	cfg.NumOfAdversaries = int32(numOfNodes / 2)
 	timer := MyTimer{}
 
 	mockNetwork := NewMockNetwork(0)
@@ -835,7 +835,7 @@ func TestSenderSendsTwoMessagesWithDelay(t *testing.T) {
 
 	cfg := config.DefaultConfig()
 	cfg.NodesPerLayer = int32(numOfNodes)
-	cfg.NumOfAdverseries = int32(numOfNodes / 2)
+	cfg.NumOfAdversaries = int32(numOfNodes / 2)
 	timer := MyTimer{}
 
 	mockNetwork := NewMockNetwork(0)
@@ -880,7 +880,7 @@ func TestSenderSendsTwoMessagesWithDelay(t *testing.T) {
 func initDolevStrongConsensus(numOfNodes int) *DolevStrongMultiInstanceConsensus {
 	cfg := config.DefaultConfig()
 	cfg.NodesPerLayer = int32(numOfNodes)
-	cfg.NumOfAdverseries = int32(numOfNodes / 2)
+	cfg.NumOfAdversaries = int32(numOfNodes / 2)
 	timer := MyTimer{}
 
 	mockNetwork := NewMockNetwork(0)

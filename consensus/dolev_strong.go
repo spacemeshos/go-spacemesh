@@ -109,7 +109,7 @@ func (impl *DolevStrongMultiInstanceConsensus) StartListening() {
 }
 
 func (impl *DolevStrongMultiInstanceConsensus) waitForConsensus() {
-	numOfRounds := impl.dsConfig.NumOfAdverseries + 1
+	numOfRounds := impl.dsConfig.NumOfAdversaries + 1
 	ticker := time.NewTicker(time.Duration(time.Duration(numOfRounds) * impl.dsConfig.RoundTime))
 
 	for {
@@ -180,7 +180,7 @@ func (dsci *DolevStrongInstance) ReceiveMessage(message *pb.ConsensusMessage) er
 		return fmt.Errorf("message received on aborted isntance, round: %v", round)
 	}
 
-	if round > dsci.ds.dsConfig.NumOfAdverseries+1 {
+	if round > dsci.ds.dsConfig.NumOfAdversaries+1 {
 		return fmt.Errorf("round out of order: %v", round)
 	}
 
