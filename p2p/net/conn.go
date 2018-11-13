@@ -163,7 +163,7 @@ func (c *FormattedConnection) Closed() bool {
 }
 
 func (c *FormattedConnection) shutdown(err error) {
-	c.logger.Info("shutdown. id=%s err=%v", c.id, err)
+	c.logger.Info("(%v) shutdown. id=%s err=%v", c.remotePub.String(), c.id, err)
 	c.formatter.Close()
 	c.networker.ClosingConnections() <- c
 }

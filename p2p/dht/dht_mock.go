@@ -56,3 +56,12 @@ func (m *MockDHT) Bootstrap() error {
 	m.bsCount++
 	return m.bsres
 }
+
+func (m *MockDHT) SelectPeers(qty int) []node.Node {
+	return []node.Node{}
+}
+
+func (m *MockDHT) Size() int {
+	//todo: set size
+	return m.updateCount
+}

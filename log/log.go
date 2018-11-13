@@ -18,7 +18,7 @@ type Log struct {
 }
 
 // smlogger is the local app singleton logger.
-var smLogger Log
+var AppLog Log
 var debugMode bool
 
 func init() {
@@ -30,7 +30,7 @@ func init() {
 	logFormat := ` %{color}%{level:.4s} %{id:03x} %{time:15:04:05.000} ▶%{color:reset} %{message}`
 	leveledBackend := getBackendLevel("app", "<APP>", logFormat)
 	log.SetBackend(leveledBackend)
-	smLogger = Log{Logger: log}
+	AppLog = Log{Logger: log}
 }
 
 // getAllBackend returns level backends with an exception to Debug leve
@@ -109,29 +109,29 @@ func InitSpacemeshLoggingSystem(dataFolderPath string, logFileName string) {
 
 	log.SetBackend(logging.MultiLogger(backends...))
 
-	smLogger = Log{log}
+	AppLog = Log{log}
 }
 
 // public wrappers abstracting away logging lib impl
 
 // Info prints formatted info level log message.
 func Info(format string, args ...interface{}) {
-	smLogger.Info(format, args...)
+	AppLog.Info(format, args...)
 }
 
 // Debug prints formatted debug level log message.
 func Debug(format string, args ...interface{}) {
-	smLogger.Debug(format, args...)
+	AppLog.Debug(format, args...)
 }
 
 // Error prints formatted error level log message.
 func Error(format string, args ...interface{}) {
-	smLogger.Error(format, args...)
+	AppLog.Error(format, args...)
 }
 
 // Warning prints formatted warning level log message.
 func Warning(format string, args ...interface{}) {
-	smLogger.Warning(format, args...)
+	AppLog.Warning(format, args...)
 }
 
 // PrettyID formats ID.
