@@ -78,63 +78,43 @@ func (app *SpacemeshApp) ParseConfig() (err error) {
 }
 
 func EnsureCLIFlags(cmd *cobra.Command, appcfg *cfg.Config) {
+
+	assignFields := func(p reflect.Type, elem reflect.Value, name string) {
+		for i := 0; i < p.NumField(); i++ {
+			if p.Field(i).Tag.Get("mapstructure") == name {
+				elem.Field(i).Set(reflect.ValueOf(viper.Get(name)))
+				return
+			}
+		}
+	}
 	// this is ugly but we have to do this because viper can't handle nested structs when deserialize
 	cmd.PersistentFlags().VisitAll(func(f *pflag.Flag) {
 		if f.Changed {
 			name := f.Name
+
 			ff := reflect.TypeOf(*appcfg)
-
-			for i := 0; i < ff.NumField(); i++ {
-				if ff.Field(i).Tag.Get("mapstructure") == name {
-					reflect.ValueOf(&appcfg).Elem().Field(i).Set(reflect.ValueOf(viper.Get(name)))
-					return
-				}
-			}
-
-			ff = reflect.TypeOf(appcfg.P2P)
-
-			for i := 0; i < ff.NumField(); i++ {
-				if ff.Field(i).Tag.Get("mapstructure") == name {
-					reflect.ValueOf(&appcfg.P2P).Elem().Field(i).Set(reflect.ValueOf(viper.Get(name)))
-					return
-				}
-			}
-			ff = reflect.TypeOf(appcfg.P2P.SwarmConfig)
-
-			for i := 0; i < ff.NumField(); i++ {
-				if ff.Field(i).Tag.Get("mapstructure") == name {
-					reflect.ValueOf(&appcfg.P2P.SwarmConfig).Elem().Field(i).Set(reflect.ValueOf(viper.Get(name)))
-					return
-				}
-			}
-
-			ff = reflect.TypeOf(appcfg.P2P.TimeConfig)
-
-			for i := 0; i < ff.NumField(); i++ {
-				if ff.Field(i).Tag.Get("mapstructure") == name {
-					reflect.ValueOf(&appcfg.P2P.TimeConfig).Elem().Field(i).Set(reflect.ValueOf(viper.Get(name)))
-					return
-				}
-			}
+			elem := reflect.ValueOf(&appcfg).Elem()
+			assignFields(ff, elem, name)
 
 			ff = reflect.TypeOf(appcfg.API)
+			elem = reflect.ValueOf(&appcfg.API).Elem()
+			assignFields(ff, elem, name)
 
-			for i := 0; i < ff.NumField(); i++ {
-				if ff.Field(i).Tag.Get("mapstructure") == name {
-					reflect.ValueOf(&appcfg.API).Elem().Field(i).Set(reflect.ValueOf(viper.Get(name)))
-					return
-				}
-			}
+			ff = reflect.TypeOf(appcfg.P2P)
+			elem = reflect.ValueOf(&appcfg.P2P).Elem()
+			assignFields(ff, elem, name)
+
+			ff = reflect.TypeOf(appcfg.P2P.SwarmConfig)
+			elem = reflect.ValueOf(&appcfg.P2P.SwarmConfig).Elem()
+			assignFields(ff, elem, name)
+
+			ff = reflect.TypeOf(appcfg.P2P.TimeConfig)
+			elem = reflect.ValueOf(&appcfg.P2P.TimeConfig).Elem()
+			assignFields(ff, elem, name)
 
 			ff = reflect.TypeOf(appcfg.CONSENSUS)
-
-			for i := 0; i < ff.NumField(); i++ {
-				if ff.Field(i).Tag.Get("mapstructure") == name {
-					reflect.ValueOf(&appcfg.CONSENSUS).Elem().Field(i).Set(reflect.ValueOf(viper.Get(name)))
-					return
-				}
-			}
-
+			elem = reflect.ValueOf(&appcfg.CONSENSUS).Elem()
+			assignFields(ff, elem, name)
 		}
 	})
 }
