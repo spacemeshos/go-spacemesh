@@ -14,7 +14,7 @@ import (
 
 type Protocol struct {
 	name               string
-	peers              Service
+	network            Service
 	pending            map[crypto.UUID]chan interface{}
 	pendMutex          sync.RWMutex
 	resHandlers        map[crypto.UUID]func(msg []byte) interface{}
@@ -22,13 +22,13 @@ type Protocol struct {
 	ingressChannel     chan service.Message
 }
 
-func NewProtocol(peers Service, name string) *Protocol {
+func NewProtocol(network Service, name string) *Protocol {
 	p := &Protocol{
 		name:               name,
 		pending:            make(map[crypto.UUID]chan interface{}),
 		resHandlers:        make(map[crypto.UUID]func(msg []byte) interface{}),
-		peers:              peers,
-		ingressChannel:     peers.RegisterProtocol(name),
+		network:            network,
+		ingressChannel:     network.RegisterProtocol(name),
 		msgRequestHandlers: make(map[string]func(msg []byte) []byte),
 	}
 	go p.readLoop()
@@ -68,7 +68,7 @@ func (p *Protocol) readLoop() {
 						log.Error("Error Parsing Protocol message, err:", err)
 						return
 					}
-					sendErr := p.peers.SendMessage(msg.Sender().PublicKey().String(), p.name, rmsg)
+					sendErr := p.network.SendMessage(msg.Sender().PublicKey().String(), p.name, rmsg)
 					if sendErr != nil {
 						log.Error("Error sending response message, err:", err)
 					}
@@ -113,7 +113,7 @@ func (p *Protocol) SendAsyncRequest(msgType string, payload []byte, address stri
 	p.resHandlers[reqID] = resHandler
 	p.pendMutex.Unlock()
 
-	if sendErr := p.peers.SendMessage(address, p.name, msg); sendErr != nil {
+	if sendErr := p.network.SendMessage(address, p.name, msg); sendErr != nil {
 		p.removeFromPending(reqID)
 		return nil, sendErr
 	}
@@ -127,9 +127,9 @@ func (p *Protocol) SendAsyncRequest(msgType string, payload []byte, address stri
 		p.removeFromPending(reqID)
 		return nil, errors.New("could not find block")
 	case <-timer.C:
+		//don't remove from pending
 		err = errors.New("fetch block took too long to respond")
 	}
-	p.removeFromPending(reqID)
 	return nil, err
 }
 
@@ -150,7 +150,7 @@ func (p *Protocol) SendRequest(msgType string, payload []byte, address string, t
 
 	defer p.removeFromPending(reqID)
 
-	if sendErr := p.peers.SendMessage(address, p.name, msg); sendErr != nil {
+	if sendErr := p.network.SendMessage(address, p.name, msg); sendErr != nil {
 		return nil, sendErr
 	}
 
