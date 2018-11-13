@@ -42,53 +42,63 @@ func (p *Protocol) readLoop() {
 			// Channel is closed.
 			break
 		}
-
 		//todo add buffer and option to limit number of concurrent goroutines
-
-		go func(msg service.Message) {
-			headers := &pb.MessageWrapper{}
-
-			if err := proto.Unmarshal(msg.Data(), headers); err != nil {
-				log.Error("Error handling incoming Protocol message, err:", err)
-				return
-			}
-
-			if headers.Req {
-				if payload := p.msgRequestHandlers[string(headers.Type)](headers.Payload); payload != nil {
-					rmsg, fParseErr := proto.Marshal(&pb.MessageWrapper{Req: false, ReqID: headers.ReqID, Type: headers.Type, Payload: payload})
-					if fParseErr != nil {
-						log.Error("Error Parsing Protocol message, err:", fParseErr)
-						return
-					}
-					sendErr := p.network.SendMessage(msg.Sender().PublicKey().String(), p.name, rmsg)
-					if sendErr != nil {
-						log.Error("Error sending response message, err:", sendErr)
-					}
-					return
-				}
-			} else {
-				reqId, err := uuid.FromBytes(headers.ReqID)
-				if err != nil {
-					log.Error("Error Parsing message request id, err:", err)
-					return
-				}
-				id := crypto.UUID(reqId)
-				p.pendMutex.RLock()
-				pend, okPend := p.pending[id]
-				foo, okFoo := p.resHandlers[id]
-				p.pendMutex.RUnlock()
-				if okPend {
-					p.removeFromPending(id)
-					if okFoo {
-						pend <- foo(headers.Payload)
-					} else {
-						pend <- headers.Payload
-					}
-				}
-			}
-		}(msg)
+		go p.handleMessage(msg)
 	}
 
+}
+
+func (p *Protocol) handleMessage(msg service.Message) {
+	headers := &pb.MessageWrapper{}
+
+	if err := proto.Unmarshal(msg.Data(), headers); err != nil {
+		log.Error("Error handling incoming Protocol message, err:", err)
+		return
+	}
+
+	if headers.Req {
+		p.handleRequestMessage(msg.Sender().String(), headers)
+	} else {
+		p.handleResponseMessage(headers)
+	}
+
+}
+
+func (p *Protocol) handleRequestMessage(sender string, headers *pb.MessageWrapper) {
+	if payload := p.msgRequestHandlers[string(headers.Type)](headers.Payload); payload != nil {
+		rmsg, fParseErr := proto.Marshal(&pb.MessageWrapper{Req: false, ReqID: headers.ReqID, Type: headers.Type, Payload: payload})
+		if fParseErr != nil {
+			log.Error("Error Parsing Protocol message, err:", fParseErr)
+			return
+		}
+		sendErr := p.network.SendMessage(sender, p.name, rmsg)
+		if sendErr != nil {
+			log.Error("Error sending response message, err:", sendErr)
+		}
+		return
+	}
+
+}
+
+func (p *Protocol) handleResponseMessage(headers *pb.MessageWrapper) {
+	reqId, err := uuid.FromBytes(headers.ReqID)
+	if err != nil {
+		log.Error("Error Parsing message request id, err:", err)
+		return
+	}
+	id := crypto.UUID(reqId)
+	p.pendMutex.RLock()
+	pend, okPend := p.pending[id]
+	foo, okFoo := p.resHandlers[id]
+	p.pendMutex.RUnlock()
+	if okPend {
+		p.removeFromPending(id)
+		if okFoo {
+			pend <- foo(headers.Payload)
+		} else {
+			pend <- headers.Payload
+		}
+	}
 }
 
 func (p *Protocol) RegisterMsgHandler(msgType string, reqHandler func(msg []byte) []byte) {
