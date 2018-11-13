@@ -65,6 +65,7 @@ func (p *Protocol) handleMessage(msg service.Message) {
 }
 
 func (p *Protocol) handleRequestMessage(sender string, headers *pb.MessageWrapper) {
+
 	if payload := p.msgRequestHandlers[string(headers.Type)](headers.Payload); payload != nil {
 		rmsg, fParseErr := proto.Marshal(&pb.MessageWrapper{Req: false, ReqID: headers.ReqID, Type: headers.Type, Payload: payload})
 		if fParseErr != nil {
@@ -75,17 +76,17 @@ func (p *Protocol) handleRequestMessage(sender string, headers *pb.MessageWrappe
 		if sendErr != nil {
 			log.Error("Error sending response message, err:", sendErr)
 		}
-		return
 	}
-
 }
 
 func (p *Protocol) handleResponseMessage(headers *pb.MessageWrapper) {
+
 	reqId, err := uuid.FromBytes(headers.ReqID)
 	if err != nil {
 		log.Error("Error Parsing message request id, err:", err)
 		return
 	}
+
 	id := crypto.UUID(reqId)
 	p.pendMutex.RLock()
 	pend, okPend := p.pending[id]
@@ -106,8 +107,8 @@ func (p *Protocol) RegisterMsgHandler(msgType string, reqHandler func(msg []byte
 }
 
 func (p *Protocol) SendAsyncRequest(msgType string, payload []byte, address string, timeout time.Duration, resHandler func(msg []byte) interface{}) (interface{}, error) {
-	reqID := crypto.NewUUID()
 
+	reqID := crypto.NewUUID()
 	pbsp := &pb.MessageWrapper{Req: true, ReqID: reqID[:], Type: []byte(msgType), Payload: payload}
 	msg, err := proto.Marshal(pbsp)
 	if err != nil {
