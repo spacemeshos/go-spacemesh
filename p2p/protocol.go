@@ -3,6 +3,7 @@ package p2p
 import (
 	"errors"
 	"github.com/gogo/protobuf/proto"
+	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -41,7 +42,7 @@ func (p *Protocol) readLoop() {
 	for {
 		msg, ok := <-p.ingressChannel
 		if !ok {
-			// Channel is closed.
+			log.Error("read loop channel was closed")
 			break
 		}
 		//todo add buffer and option to limit number of concurrent goroutines
@@ -59,14 +60,14 @@ func (p *Protocol) handleMessage(msg service.Message) {
 	}
 
 	if headers.Req {
-		p.handleRequestMessage(msg.Sender().String(), headers)
+		p.handleRequestMessage(msg.Sender().PublicKey(), headers)
 	} else {
 		p.handleResponseMessage(headers)
 	}
 
 }
 
-func (p *Protocol) handleRequestMessage(sender string, headers *pb.MessageWrapper) {
+func (p *Protocol) handleRequestMessage(sender crypto.PublicKey, headers *pb.MessageWrapper) {
 
 	if payload := p.msgRequestHandlers[MessageType(headers.Type)](headers.Payload); payload != nil {
 		rmsg, fParseErr := proto.Marshal(&pb.MessageWrapper{Req: false, ReqID: headers.ReqID, Type: headers.Type, Payload: payload})
@@ -74,7 +75,7 @@ func (p *Protocol) handleRequestMessage(sender string, headers *pb.MessageWrappe
 			log.Error("Error Parsing Protocol message, err:", fParseErr)
 			return
 		}
-		sendErr := p.network.SendMessage(sender, p.name, rmsg)
+		sendErr := p.network.SendMessage(sender.String(), p.name, rmsg)
 		if sendErr != nil {
 			log.Error("Error sending response message, err:", sendErr)
 		}
@@ -165,9 +166,9 @@ func (p *Protocol) SendRequest(msgType MessageType, payload []byte, address stri
 		if response != nil {
 			return response, nil
 		}
-		return nil, errors.New("could not find block")
+		return nil, errors.New("Response was nil")
 	case <-timer.C:
-		err = errors.New("fetch block took too long to respond")
+		err = errors.New("peer took too long to respond")
 	}
 
 	return nil, err
