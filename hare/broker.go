@@ -10,28 +10,28 @@ import (
 
 const InboxCapacity = 100
 
-// Stopper is used to add stoppability to an object
-type Stopper struct {
-	channel chan struct{} // stoppable go routines listen to this channel
+// Closer is used to add closeability to an object
+type Closer struct {
+	channel chan struct{} // closeable go routines listen to this channel
 }
 
-func NewStopper() Stopper {
-	return Stopper{make(chan struct{})}
+func NewCloser() Closer {
+	return Closer{make(chan struct{})}
 }
 
-// Stops all listening instances (should be called only once)
-func (stopper *Stopper) Stop() {
-	close(stopper.channel)
+// Closes all listening instances (should be called only once)
+func (closer *Closer) Close() {
+	close(closer.channel)
 }
 
-// StopChannel returns the channel channel to wait on
-func (stopper *Stopper) StopChannel() chan struct{} {
-	return stopper.channel
+// CloseChannel returns the channel to wait on
+func (closer *Closer) CloseChannel() chan struct{} {
+	return closer.channel
 }
 
 // Broker is responsible for dispatching hare messages to the matching layer listener
 type Broker struct {
-	Stopper
+	Closer
 	network NetworkService
 	inbox   chan service.Message
 	outbox  map[uint32]chan *pb.HareMessage
@@ -40,7 +40,7 @@ type Broker struct {
 
 func NewBroker(networkService NetworkService) *Broker {
 	p := new(Broker)
-	p.Stopper = NewStopper()
+	p.Closer = NewCloser()
 	p.network = networkService
 	p.outbox = make(map[uint32]chan *pb.HareMessage)
 
@@ -74,7 +74,7 @@ func (broker *Broker) dispatcher() {
 			}
 			broker.mutex.RUnlock()
 
-		case <-broker.StopChannel():
+		case <-broker.CloseChannel():
 			return
 		}
 	}
