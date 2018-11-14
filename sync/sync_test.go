@@ -2,10 +2,39 @@ package sync
 
 import (
 	"fmt"
+	"github.com/gogo/protobuf/proto"
+	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/sync/pb"
 	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
 )
+
+func NewBlockResponseHandler() (func(msg []byte), chan *pb.FetchBlockResp) {
+	ch := make(chan *pb.FetchBlockResp)
+	foo := func(msg []byte) {
+		data := &pb.FetchBlockResp{}
+		err := proto.Unmarshal(msg, data)
+		if err != nil {
+			fmt.Println("some error")
+		}
+		ch <- data
+	}
+	return foo, ch
+}
+
+func NewLayerHashHandler() (func(msg []byte), chan *pb.LayerHashResp) {
+	ch := make(chan *pb.LayerHashResp)
+	foo := func(msg []byte) {
+		data := &pb.LayerHashResp{}
+		err := proto.Unmarshal(msg, data)
+		if err != nil {
+			fmt.Println("some error")
+		}
+		ch <- data
+	}
+	return foo, ch
+}
 
 func TestSyncer_Status(t *testing.T) {
 	sync := NewSync(nil, nil, nil, Configuration{1, 1, 100 * time.Millisecond, 1})
@@ -13,7 +42,7 @@ func TestSyncer_Status(t *testing.T) {
 }
 
 func TestSyncer_Start(t *testing.T) {
-	layers := NewMockLayers()
+	layers := mesh.NewLayers(nil, nil)
 	sync := NewSync(&PeersMocks{}, layers, nil, Configuration{1, 1, 1 * time.Millisecond, 1})
 	fmt.Println(sync.Status())
 	sync.Start()
@@ -35,7 +64,7 @@ func TestSyncer_Close(t *testing.T) {
 }
 
 func TestSyncer_ForceSync(t *testing.T) {
-	layers := NewMockLayers()
+	layers := mesh.NewLayers(nil, nil)
 	sync := NewSync(&PeersMocks{}, layers, nil, Configuration{1, 1, 60 * time.Minute, 1})
 	sync.Start()
 

@@ -15,8 +15,8 @@ type BlockPosition struct {
 }
 
 type Algorithm struct {
-	block2Id          map[BLockID]uint32
-	allBlocks         map[BLockID]*Block
+	block2Id          map[BlockID]uint32
+	allBlocks         map[BlockID]*Block
 	layerQueue        LayerQueue
 	idQueue           NewIdQueue
 	posVotes          []bitarray.BitArray
@@ -31,8 +31,8 @@ type Algorithm struct {
 func NewAlgorithm(layerSize uint32, cachedLayers uint32) Algorithm {
 	totBlocks := layerSize * cachedLayers
 	trtl := Algorithm{
-		block2Id:          make(map[BLockID]uint32),
-		allBlocks:         make(map[BLockID]*Block),
+		block2Id:          make(map[BlockID]uint32),
+		allBlocks:         make(map[BlockID]*Block),
 		layerQueue:        make(LayerQueue, cachedLayers+1),
 		idQueue:           make(NewIdQueue, layerSize),
 		remainingBlockIds: totBlocks,
@@ -54,7 +54,7 @@ func (alg *Algorithm) LayerVotingAvg() uint64 {
 	return 30
 }
 
-func (alg *Algorithm) IsTortoiseValid(originBlock *Block, targetBlock BLockID, targetBlockIdx uint64, visibleBlocks bitarray.BitArray) bool {
+func (alg *Algorithm) IsTortoiseValid(originBlock *Block, targetBlock BlockID, targetBlockIdx uint64, visibleBlocks bitarray.BitArray) bool {
 	voteFor, voteAgainst := alg.countTotalVotesForBlock(targetBlockIdx, visibleBlocks)
 
 	if voteFor > alg.GlobalVotingAvg() {

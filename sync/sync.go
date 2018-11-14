@@ -184,7 +184,7 @@ func (s *Syncer) getBlockById(peer Peer, id string) (Block, error) {
 	if err != nil {
 		//err handling
 	}
-	return &b, nil
+	return b, nil
 }
 
 func (s *Syncer) BlockRequestHandler(msg []byte) []byte {
@@ -194,9 +194,9 @@ func (s *Syncer) BlockRequestHandler(msg []byte) []byte {
 		return nil
 	}
 
-	block, err := s.layers.GetBlock(int(req.Layer), req.BlockId)
+	block, err := s.layers.GetBlock(mesh.BlockID(req.BlockId))
 	if err != nil {
-		log.Error("Error handling request message, err:", err) //todo describe err
+		log.Error("Error handling Block request message, err:", err) //todo describe err
 		return nil
 	}
 
@@ -205,6 +205,7 @@ func (s *Syncer) BlockRequestHandler(msg []byte) []byte {
 		log.Error("Error handling request message, err:", err) //todo describe err
 		return nil
 	}
+
 	return payload
 }
 
@@ -217,7 +218,7 @@ func (s *Syncer) LayerHashRequestHandler(msg []byte) []byte {
 
 	layer, err := s.layers.GetLayer(int(req.Layer))
 	if err != nil {
-		log.Error("Error handling request message, err:", err) //todo describe err
+		log.Error("Error handling layer request message, err:", err) //todo describe err
 		return nil
 	}
 

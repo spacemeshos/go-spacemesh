@@ -10,7 +10,7 @@ import (
 type Mesh interface {
 	AddLayer(layer *Layer) error
 	GetLayer(i int) (*Layer, error)
-	GetBlock(layer int, id uint32) (*Block, error)
+	GetBlock(id BlockID) (*Block, error)
 	LocalLayerCount() uint32
 	LatestKnownLayer() uint32
 	SetLatestKnownLayer(idx uint32)
@@ -23,6 +23,7 @@ type LayersDB struct {
 	layerCount       uint32
 	latestKnownLayer uint32
 	layers           []*Layer
+	blocks           map[BlockID]*Block
 	newPeerCh        chan Peer
 	newBlockCh       chan Block
 	exit             chan bool
@@ -32,7 +33,17 @@ type LayersDB struct {
 }
 
 func NewLayers(newPeerCh chan Peer, newBlockCh chan Block) Mesh {
-	ll := &LayersDB{0, 0, nil, newPeerCh, newBlockCh, make(chan bool), sync.Mutex{}, sync.Mutex{}, sync.Mutex{}}
+	ll := &LayersDB{
+		0,
+		0,
+		nil,
+		make(map[BlockID]*Block),
+		newPeerCh,
+		newBlockCh,
+		make(chan bool),
+		sync.Mutex{},
+		sync.Mutex{},
+		sync.Mutex{}}
 	go ll.run()
 	return ll
 }
@@ -67,14 +78,14 @@ func (s *LayersDB) run() {
 
 func (ll *LayersDB) GetLayer(i int) (*Layer, error) {
 	// TODO validate index
-	if i >= len(ll.layers) {
+	if i > len(ll.layers) {
 		return nil, errors.New("index to high")
 	}
-	return ll.layers[i], nil
+	return ll.layers[i-1], nil
 }
 
-func (ll *LayersDB) GetBlock(layer int, id uint32) (*Block, error) {
-	return nil, nil
+func (ll *LayersDB) GetBlock(id BlockID) (*Block, error) {
+	return ll.blocks[id], nil
 }
 
 func (ll *LayersDB) LocalLayerCount() uint32 {
@@ -104,7 +115,11 @@ func (ll *LayersDB) AddLayer(layer *Layer) error {
 
 	ll.lMutex.Lock()
 	//if is valid
-	ll.layers = append(ll.layers, NewExistingLayer(uint32(layer.Index()), nil))
+	ll.layers = append(ll.layers, NewExistingLayer(uint32(layer.Index()), layer.blocks))
+	//add blocks to db
+	for _, b := range layer.blocks {
+		ll.blocks[b.id] = b
+	}
 	ll.layerCount = uint32(len(ll.layers))
 	ll.lMutex.Unlock()
 	return nil

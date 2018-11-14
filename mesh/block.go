@@ -5,14 +5,14 @@ import (
 	"time"
 )
 
-type BLockID uint32
+type BlockID uint32
 
 var layerCounter uint32 = 0
 
 type Block struct {
-	id         BLockID
+	id         BlockID
 	layerIndex uint32
-	blockVotes map[BLockID]bool
+	blockVotes map[BlockID]bool
 	timestamp  time.Time
 	coin       bool
 	data       []byte
@@ -30,8 +30,8 @@ func (b Block) Layer() uint32 {
 
 func NewExistingBlock(id uint32, layerIndex uint32, data []byte) *Block {
 	b := Block{
-		id:         BLockID(id),
-		blockVotes: make(map[BLockID]bool),
+		id:         BlockID(id),
+		blockVotes: make(map[BlockID]bool),
 		layerIndex: layerIndex,
 		data:       data,
 	}
@@ -40,8 +40,8 @@ func NewExistingBlock(id uint32, layerIndex uint32, data []byte) *Block {
 
 func NewBlock(coin bool, data []byte, ts time.Time) *Block {
 	b := Block{
-		id:         BLockID(uuid.New().ID()),
-		blockVotes: make(map[BLockID]bool),
+		id:         BlockID(uuid.New().ID()),
+		blockVotes: make(map[BlockID]bool),
 		timestamp:  ts,
 		data:       data,
 		coin:       coin,
