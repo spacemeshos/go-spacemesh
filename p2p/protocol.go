@@ -45,10 +45,10 @@ func (p *Protocol) readLoop() {
 		//todo add buffer and option to limit number of concurrent goroutines
 		go p.handleMessage(msg)
 	}
-
 }
 
 func (p *Protocol) handleMessage(msg service.Message) {
+
 	headers := &pb.MessageWrapper{}
 
 	if err := proto.Unmarshal(msg.Data(), headers); err != nil {
@@ -92,6 +92,7 @@ func (p *Protocol) handleResponseMessage(headers *pb.MessageWrapper) {
 	pend, okPend := p.pending[id]
 	foo, okFoo := p.resHandlers[id]
 	p.pendMutex.RUnlock()
+
 	if okPend {
 		p.removeFromPending(id)
 		if okFoo {
@@ -100,6 +101,13 @@ func (p *Protocol) handleResponseMessage(headers *pb.MessageWrapper) {
 			pend <- headers.Payload
 		}
 	}
+}
+
+func (p *Protocol) removeFromPending(reqID [16]byte) {
+	p.pendMutex.Lock()
+	delete(p.pending, reqID)
+	delete(p.resHandlers, reqID)
+	p.pendMutex.Unlock()
 }
 
 func (p *Protocol) RegisterMsgHandler(msgType string, reqHandler func(msg []byte) []byte) {
@@ -127,6 +135,7 @@ func (p *Protocol) SendAsyncRequest(msgType string, payload []byte, address stri
 	}
 
 	timer := time.NewTimer(timeout)
+
 	select {
 	case response := <-respc:
 		if response != nil {
@@ -174,11 +183,4 @@ func (p *Protocol) SendRequest(msgType string, payload []byte, address string, t
 	}
 
 	return nil, err
-}
-
-func (p *Protocol) removeFromPending(reqID [16]byte) {
-	p.pendMutex.Lock()
-	delete(p.pending, reqID)
-	delete(p.resHandlers, reqID)
-	p.pendMutex.Unlock()
 }
