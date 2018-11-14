@@ -88,13 +88,16 @@ func (p *Protocol) handleResponseMessage(headers *pb.MessageWrapper) {
 	}
 
 	id := crypto.UUID(reqId)
+
+	//get and remove from pending
 	p.pendMutex.RLock()
 	pend, okPend := p.pending[id]
 	foo, okFoo := p.resHandlers[id]
+	delete(p.pending, id)
+	delete(p.resHandlers, id)
 	p.pendMutex.RUnlock()
 
 	if okPend {
-		p.removeFromPending(id)
 		if okFoo {
 			foo(headers.Payload)
 		} else {
