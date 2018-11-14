@@ -49,8 +49,8 @@ message Metadata {
 }
 
 message MessageWrapper {
-     bytes type = 1; //msg type
+     uint32 type = 1; //msg type
      bool req = 2;   // Req or Resp, 0 - req / 1 - resp
-     bytes reqID = 3;
+     uint32 reqID = 3;
      bytes payload = 4; //encapsulated msg
 }
