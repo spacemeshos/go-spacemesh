@@ -17,7 +17,7 @@ type Protocol struct {
 	network            Service
 	pendMutex          sync.RWMutex
 	pending            map[crypto.UUID]chan interface{}
-	resHandlers        map[crypto.UUID]func(msg []byte) interface{}
+	resHandlers        map[crypto.UUID]func(msg []byte)
 	msgRequestHandlers map[string]func(msg []byte) []byte
 	ingressChannel     chan service.Message
 }
@@ -26,7 +26,7 @@ func NewProtocol(network Service, name string) *Protocol {
 	p := &Protocol{
 		name:               name,
 		pending:            make(map[crypto.UUID]chan interface{}),
-		resHandlers:        make(map[crypto.UUID]func(msg []byte) interface{}),
+		resHandlers:        make(map[crypto.UUID]func(msg []byte)),
 		network:            network,
 		ingressChannel:     network.RegisterProtocol(name),
 		msgRequestHandlers: make(map[string]func(msg []byte) []byte),
@@ -96,7 +96,7 @@ func (p *Protocol) handleResponseMessage(headers *pb.MessageWrapper) {
 	if okPend {
 		p.removeFromPending(id)
 		if okFoo {
-			pend <- foo(headers.Payload)
+			foo(headers.Payload)
 		} else {
 			pend <- headers.Payload
 		}
@@ -114,13 +114,13 @@ func (p *Protocol) RegisterMsgHandler(msgType string, reqHandler func(msg []byte
 	p.msgRequestHandlers[msgType] = reqHandler
 }
 
-func (p *Protocol) SendAsyncRequest(msgType string, payload []byte, address string, timeout time.Duration, resHandler func(msg []byte) interface{}) (interface{}, error) {
+func (p *Protocol) SendAsyncRequest(msgType string, payload []byte, address string, resHandler func(msg []byte)) error {
 
 	reqID := crypto.NewUUID()
 	pbsp := &pb.MessageWrapper{Req: true, ReqID: reqID[:], Type: []byte(msgType), Payload: payload}
 	msg, err := proto.Marshal(pbsp)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	respc := make(chan interface{})
@@ -131,23 +131,10 @@ func (p *Protocol) SendAsyncRequest(msgType string, payload []byte, address stri
 
 	if sendErr := p.network.SendMessage(address, p.name, msg); sendErr != nil {
 		p.removeFromPending(reqID)
-		return nil, sendErr
+		return sendErr
 	}
 
-	timer := time.NewTimer(timeout)
-
-	select {
-	case response := <-respc:
-		if response != nil {
-			return response, nil
-		}
-		p.removeFromPending(reqID)
-		return nil, errors.New("could not find block")
-	case <-timer.C:
-		//don't remove from pending
-		err = errors.New("fetch block took too long to respond")
-	}
-	return nil, err
+	return nil
 }
 
 func (p *Protocol) SendRequest(msgType string, payload []byte, address string, timeout time.Duration) (interface{}, error) {
