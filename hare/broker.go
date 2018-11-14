@@ -5,7 +5,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"hash/fnv"
 	"sync"
 )
 
@@ -13,19 +12,16 @@ const InboxCapacity = 100
 
 // Stopper is used to add stoppability to an object
 type Stopper struct {
-	count   uint8         // the number of listeners
-	channel chan struct{} // listeners listen to this channel
+	channel chan struct{} // stoppable go routines listen to this channel
 }
 
-func NewStopper(listenersCount uint8) *Stopper {
-	return &Stopper{listenersCount, make(chan struct{})}
+func NewStopper() Stopper {
+	return Stopper{make(chan struct{})}
 }
 
 // Stops all listening instances (should be called only once)
 func (stopper *Stopper) Stop() {
-	for i := uint8(0); i < stopper.count; i++ {
-		stopper.channel <- struct{}{} // signal listener through channel
-	}
+	close(stopper.channel)
 }
 
 // StopChannel returns the channel channel to wait on
@@ -33,24 +29,18 @@ func (stopper *Stopper) StopChannel() chan struct{} {
 	return stopper.channel
 }
 
-// Increment the number of listening instances
-// Should not be called after Stop()
-func (stopper *Stopper) Increment() {
-	stopper.count++
-}
-
 // Broker is responsible for dispatching hare messages to the matching layer listener
 type Broker struct {
-	*Stopper
+	Stopper
 	network NetworkService
 	inbox   chan service.Message
 	outbox  map[uint32]chan *pb.HareMessage
-	mutex   sync.Mutex
+	mutex   sync.RWMutex
 }
 
 func NewBroker(networkService NetworkService) *Broker {
 	p := new(Broker)
-	p.Stopper = NewStopper(1)
+	p.Stopper = NewStopper()
 	p.network = networkService
 	p.outbox = make(map[uint32]chan *pb.HareMessage)
 
@@ -75,11 +65,13 @@ func (broker *Broker) dispatcher() {
 				log.Error("Could not unmarshal message: ", err)
 			}
 
-			h := fnv.New32()
-			h.Write(hareMsg.Message.Layer)
-			id := h.Sum32()
+			layerId := NewLayerId(hareMsg.Message.Layer)
 
-			broker.outbox[id] <- hareMsg
+			broker.mutex.RLock()
+			if c, exist := broker.outbox[layerId.Id()]; exist {
+				c <- hareMsg
+			}
+			broker.mutex.RUnlock()
 
 		case <-broker.StopChannel():
 			return
@@ -87,17 +79,17 @@ func (broker *Broker) dispatcher() {
 	}
 }
 
-// Inbox returns the message channel associated with the given layer
-func (broker *Broker) Inbox(iden Identifiable) chan *pb.HareMessage {
-	broker.mutex.Lock()
-	defer broker.mutex.Unlock()
-
+// CreateInbox creates and returns the message channel associated with the given layer
+func (broker *Broker) CreateInbox(iden Identifiable) chan *pb.HareMessage {
 	var id = iden.Id()
+
 	if _, exist := broker.outbox[id]; exist {
-		panic("Inbox called more than once per layer")
+		panic("CreateInbox called more than once per layer")
 	}
 
+	broker.mutex.Lock()
 	broker.outbox[id] = make(chan *pb.HareMessage, InboxCapacity) // create new channel
+	broker.mutex.Unlock()
 
 	return broker.outbox[id]
 }

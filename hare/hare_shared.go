@@ -8,12 +8,6 @@ import (
 
 const ProtoName = "HARE_PROTOCOL"
 const RoundDuration = time.Second * time.Duration(15)
-const (
-	Status   = 0 // round 0
-	Proposal = 1 // round 1
-	Commit   = 2 // round 2
-	Notify   = 3 // round 3
-)
 
 type BlockId uint32 // TODO: replace with import
 type LayerId [32]byte // TODO: replace with import
@@ -29,6 +23,13 @@ type NetworkService interface {
 
 type Identifiable interface {
 	Id() uint32
+}
+
+func NewLayerId(buff []byte) *LayerId {
+	layer := &LayerId{}
+	copy(layer.Bytes(), buff)
+
+	return layer
 }
 
 func (layerId *LayerId) Id() uint32 {

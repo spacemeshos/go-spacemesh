@@ -33,7 +33,7 @@ func TestBroker_Received(t *testing.T) {
 
 	broker := NewBroker(n1)
 	broker.Start()
-	inbox := broker.Inbox(Layer1)
+	inbox := broker.CreateInbox(Layer1)
 
 	serMsg := createMessage(t, Layer1)
 	n2.Broadcast(ProtoName, serMsg)
@@ -49,9 +49,8 @@ func TestBroker_Abort(t *testing.T) {
 	n1 := sim.NewNode()
 
 	broker := NewBroker(n1)
-	broker.Increment()
 	broker.Start()
-	broker.Inbox(Layer1)
+	broker.CreateInbox(Layer1)
 
 	timer := time.NewTimer(3 * time.Second)
 
@@ -87,9 +86,9 @@ func TestBroker_MultipleLayers(t *testing.T) {
 
 	broker := NewBroker(n1)
 	broker.Start()
-	inbox1 := broker.Inbox(Layer1)
-	inbox2 := broker.Inbox(Layer2)
-	inbox3 := broker.Inbox(Layer3)
+	inbox1 := broker.CreateInbox(Layer1)
+	inbox2 := broker.CreateInbox(Layer2)
+	inbox3 := broker.CreateInbox(Layer3)
 
 	go sendMessages(t, Layer1, n2, msgCount)
 	go sendMessages(t, Layer2, n2, msgCount)
