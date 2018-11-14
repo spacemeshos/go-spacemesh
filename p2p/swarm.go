@@ -316,7 +316,7 @@ Loop:
 	for {
 		select {
 		case nce := <-newConnEvents:
-			go func(nod node.Node) { s.dht.Update(nod) }(nce.Node)
+			go func(nce net.NewConnectionEvent) { s.dht.Update(nce.Node); s.gossip.AddPeer(nce.Node, nce.Conn) }(nce)
 		case <-s.shutdown:
 			break Loop
 		}
