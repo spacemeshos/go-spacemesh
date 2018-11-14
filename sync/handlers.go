@@ -2,6 +2,7 @@ package sync
 
 import (
 	"github.com/gogo/protobuf/proto"
+	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/sync/pb"
 )
 
@@ -11,7 +12,8 @@ func HandleBlockResponse(msg []byte) interface{} {
 	if err != nil {
 		return nil
 	}
-	return &BlockMock{data.BlockId, int(data.Layer)} //todo add data to block
+
+	return mesh.NewExistingBlock(data.BlockId, data.Layer, nil)
 }
 
 // Handle an incoming pong message from a remote node

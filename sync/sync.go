@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/sync/pb"
 	"sync/atomic"
 	"time"
@@ -26,6 +27,17 @@ type Configuration struct {
 	pNum         int
 	syncInterval time.Duration
 	concurrency  int
+}
+
+type Block interface {
+	Id() uint32
+	Layer() uint32
+}
+
+type Layer interface {
+	Index() int
+	Blocks() []*mesh.Block
+	Hash() string
 }
 
 type Syncer struct {
@@ -100,9 +112,9 @@ func (s *Syncer) run() {
 func (s *Syncer) Synchronise() {
 	for i := s.layers.LocalLayerCount(); ; i++ {
 
-		blockIds := s.GetLayerBlockIDs(i) //returns a set of all known blocks in the mesh
+		blockIds := s.GetLayerBlockIDs(int(i)) //returns a set of all known blocks in the mesh
 		ids := make(chan *string)
-		output := make(chan *Block)
+		output := make(chan Block)
 
 		// each worker gorutine tries to fetch a block iteretivly from each peer
 		for i := 0; i < s.config.concurrency; i++ {
@@ -113,7 +125,7 @@ func (s *Syncer) Synchronise() {
 						if err != nil {
 							continue
 						} else if s.sv.CheckSyntacticValidity(b) { //cant really do this
-							output <- &b
+							output <- b
 						}
 					}
 				}
@@ -131,10 +143,10 @@ func (s *Syncer) Synchronise() {
 
 		blocks := make([]Block, len(blockIds))
 		for block := range output {
-			blocks = append(blocks, *block)
+			blocks = append(blocks, block)
 		}
 
-		s.layers.AddLayer(i, blocks)
+		//s.layers.AddLayer(mesh.NewExistingLayer(i, blocks)) //todo fix
 	}
 }
 
@@ -184,7 +196,7 @@ func (s *Syncer) BlockRequestHandler(msg []byte) []byte {
 		return nil
 	}
 
-	payload, err := proto.Marshal(&pb.FetchBlockResp{Layer: int32(block.Layer()), BlockId: block.Id()})
+	payload, err := proto.Marshal(&pb.FetchBlockResp{Layer: block.Layer(), BlockId: block.Id()})
 	if err != nil {
 		log.Error("Error handling request message, err:", err) //todo describe err
 		return nil

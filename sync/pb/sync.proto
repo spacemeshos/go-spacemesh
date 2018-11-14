@@ -8,14 +8,14 @@ option go_package = "pb";
 
 // example protocol
 message FetchBlockReq {
-      bytes blockId = 1;
-      int32 layer = 2;
+      uint32 blockId = 1;
+      uint32 layer = 2;
 }
 
 
 message FetchBlockResp {
-    bytes blockId = 1;
-    int32 layer = 2;
+    uint32 blockId = 1;
+    uint32 layer = 2;
     bytes payload = 3;
 }
 

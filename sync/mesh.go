@@ -3,27 +3,17 @@ package sync
 import (
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/mesh"
 	"sync"
 )
 
-type Block interface {
-	Id() []byte
-	Layer() int
-}
-
-type Layer interface {
-	Index() int
-	Blocks() []Block
-	Hash() string
-}
-
 type Mesh interface {
-	AddLayer(idx int, layer []Block) error
+	AddLayer(layer Layer) error
 	GetLayer(i int) (Layer, error)
-	GetBlock(layer int, id []byte) (Block, error)
-	LocalLayerCount() int
-	LatestKnownLayer() int
-	SetLatestKnownLayer(idx int)
+	GetBlock(layer int, id uint32) (Block, error)
+	LocalLayerCount() uint32
+	LatestKnownLayer() uint32
+	SetLatestKnownLayer(idx uint32)
 	Close()
 }
 
@@ -31,39 +21,9 @@ type BlockValidator interface {
 	CheckSyntacticValidity(block Block) bool
 }
 
-type BlockMock struct {
-	id    []byte
-	layer int
-}
-
-func (b *BlockMock) Id() []byte {
-	return b.id
-}
-
-func (b *BlockMock) Layer() int {
-	return b.layer
-}
-
-type LayerMock struct {
-	idx    int
-	blocks []Block
-}
-
-func (l *LayerMock) Index() int {
-	return l.idx
-}
-
-func (l *LayerMock) Blocks() []Block {
-	return l.blocks
-}
-
-func (l *LayerMock) Hash() string {
-	return fmt.Sprintf("hash of layer %d", l.idx)
-}
-
 type LayersDB struct {
-	layerCount       int
-	latestKnownLayer int
+	layerCount       uint32
+	latestKnownLayer uint32
 	layers           []Layer
 	newPeerCh        chan Peer
 	newBlockCh       chan Block
@@ -97,7 +57,7 @@ func (s *LayersDB) run() {
 			//	do something on new peer ??????????
 		case b := <-s.newBlockCh:
 			s.lkMutex.Lock()
-			s.latestKnownLayer = max(s.latestKnownLayer, int(b.Layer()))
+			s.latestKnownLayer = uint32(max(int(s.latestKnownLayer), int(b.Layer())))
 			s.lkMutex.Unlock()
 		case <-s.exit:
 			fmt.Println("run stoped")
@@ -115,28 +75,28 @@ func (ll *LayersDB) GetLayer(i int) (Layer, error) {
 	return ll.layers[i], nil
 }
 
-func (ll *LayersDB) GetBlock(layer int, id []byte) (Block, error) {
+func (ll *LayersDB) GetBlock(layer int, id uint32) (Block, error) {
 	return nil, nil
 }
 
-func (ll *LayersDB) LocalLayerCount() int {
+func (ll *LayersDB) LocalLayerCount() uint32 {
 	return ll.layerCount
 }
 
-func (ll *LayersDB) LatestKnownLayer() int {
+func (ll *LayersDB) LatestKnownLayer() uint32 {
 	return ll.latestKnownLayer
 }
 
-func (ll *LayersDB) SetLatestKnownLayer(idx int) {
+func (ll *LayersDB) SetLatestKnownLayer(idx uint32) {
 	ll.latestKnownLayer = idx
 }
 
-func (ll *LayersDB) AddLayer(idx int, layer []Block) error {
+func (ll *LayersDB) AddLayer(layer Layer) error {
 	// validate idx
 	// this is just an optimization
-	if ll.layerCount != 0 && idx-1 > int(ll.layerCount) {
+	if ll.layerCount != 0 && layer.Index()-1 > int(ll.layerCount) {
 		return errors.New("can't add layer, missing mesh ")
-	} else if idx < int(ll.layerCount)-1 {
+	} else if layer.Index() < int(ll.layerCount)-1 {
 		return errors.New("layer already known ")
 	}
 
@@ -146,8 +106,8 @@ func (ll *LayersDB) AddLayer(idx int, layer []Block) error {
 
 	ll.lMutex.Lock()
 	//if is valid
-	ll.layers = append(ll.layers, &LayerMock{idx, layer})
-	ll.layerCount = len(ll.layers)
+	ll.layers = append(ll.layers, mesh.NewExistingLayer(uint32(layer.Index()), nil))
+	ll.layerCount = uint32(len(ll.layers))
 	ll.lMutex.Unlock()
 	return nil
 }

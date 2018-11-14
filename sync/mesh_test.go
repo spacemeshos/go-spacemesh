@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
@@ -10,7 +11,7 @@ func TestLayers_AddLayer(t *testing.T) {
 	newBlockCh := make(chan Block)
 	layers := NewLayers(newPeerCh, newBlockCh)
 	idx := 0
-	layers.AddLayer(idx, make([]Block, 10))
+	layers.AddLayer(mesh.NewExistingLayer(uint32(idx), make([]*mesh.Block, 10)))
 	assert.True(t, layers.LocalLayerCount() == 1, "wrong layer count")
 	_, err := layers.GetLayer(idx)
 	assert.True(t, err == nil, "error: ", err)
@@ -20,9 +21,9 @@ func TestLayers_AddWrongLayer(t *testing.T) {
 	newPeerCh := make(chan Peer)
 	newBlockCh := make(chan Block)
 	layers := NewLayers(newPeerCh, newBlockCh)
-	layers.AddLayer(1, make([]Block, 10))
-	layers.AddLayer(3, make([]Block, 10))
-	layers.AddLayer(2, make([]Block, 10))
+	layers.AddLayer(mesh.NewExistingLayer(uint32(1), make([]*mesh.Block, 10)))
+	layers.AddLayer(mesh.NewExistingLayer(uint32(3), make([]*mesh.Block, 10)))
+	layers.AddLayer(mesh.NewExistingLayer(uint32(2), make([]*mesh.Block, 10)))
 	assert.True(t, layers.LocalLayerCount() == 2, "wrong layer count")
 	_, err := layers.GetLayer(1)
 	assert.True(t, err == nil, "error: ", err)
@@ -40,10 +41,9 @@ func TestLayers_GetLayer(t *testing.T) {
 	newPeerCh := make(chan Peer)
 	newBlockCh := make(chan Block)
 	layers := NewLayers(newPeerCh, newBlockCh)
-	layers.AddLayer(0, make([]Block, 10))
-	layers.AddLayer(1, make([]Block, 10))
-	layers.AddLayer(2, make([]Block, 10))
-	layers.AddLayer(3, make([]Block, 10))
+	layers.AddLayer(mesh.NewExistingLayer(uint32(1), make([]*mesh.Block, 10)))
+	layers.AddLayer(mesh.NewExistingLayer(uint32(3), make([]*mesh.Block, 10)))
+	layers.AddLayer(mesh.NewExistingLayer(uint32(2), make([]*mesh.Block, 10)))
 	l, err := layers.GetLayer(2)
 	assert.True(t, err == nil, "error: ", err)
 	assert.True(t, l.Index() == 2, "wrong layer")
@@ -54,10 +54,9 @@ func TestLayers_LocalLayerCount(t *testing.T) {
 	newPeerCh := make(chan Peer)
 	newBlockCh := make(chan Block)
 	layers := NewLayers(newPeerCh, newBlockCh)
-	layers.AddLayer(0, make([]Block, 10))
-	layers.AddLayer(1, make([]Block, 10))
-	layers.AddLayer(2, make([]Block, 10))
-	layers.AddLayer(3, make([]Block, 10))
+	layers.AddLayer(mesh.NewExistingLayer(uint32(1), make([]*mesh.Block, 10)))
+	layers.AddLayer(mesh.NewExistingLayer(uint32(3), make([]*mesh.Block, 10)))
+	layers.AddLayer(mesh.NewExistingLayer(uint32(2), make([]*mesh.Block, 10)))
 	assert.True(t, layers.LocalLayerCount() == 4, "wrong layer count")
 
 }

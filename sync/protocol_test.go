@@ -3,6 +3,7 @@ package sync
 import (
 	"fmt"
 	"github.com/gogo/protobuf/proto"
+	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/simulator"
 	"github.com/spacemeshos/go-spacemesh/sync/pb"
@@ -18,22 +19,23 @@ const layerHashTimeout = 1 * time.Minute
 var (
 	syncObj = NewSync(
 		&PeersMocks{},
-		&LayersMocks{0, 0, make([]LayerMock, 0, 10)},
+
+		&LayersMocks{0, 0, make([]Layer, 0, 10)},
 		nil,
 		Configuration{1, 1, 1 * time.Millisecond, 1},
 	)
 )
 
-func SendBlockRequest(sp *p2p.Protocol, peer Peer, id []byte, layer int32) (Block, error) {
+func SendBlockRequest(sp *p2p.Protocol, peer Peer, id uint32) (Block, error) {
 	data := &pb.FetchBlockReq{
-		BlockId: []byte("block id 1"),
-		Layer:   int32(1),
+		BlockId: id,
+		Layer:   uint32(1),
 	}
 	payload, err := proto.Marshal(data)
 	if err != nil {
 		return nil, err
 	}
-	b, err := sp.SendAsyncRequest(block, payload, peer.PublicKey().String(), fetchBlockTimeout, HandleBlockResponse)
+	b, err := sp.SendAsyncRequest(blockMsg, payload, peer.PublicKey().String(), fetchBlockTimeout, HandleBlockResponse)
 
 	if err != nil {
 		return nil, err
@@ -59,7 +61,7 @@ func SendLayerHashRequest(sp *p2p.Protocol, peer Peer, layer int32) (string, err
 }
 
 const protocol = "/sync/fblock/1.0/"
-const block = "block"
+const blockMsg = "block"
 const layerHash = "layerHash"
 
 func TestSyncProtocol_AddMsgHandlers(t *testing.T) {
@@ -68,15 +70,16 @@ func TestSyncProtocol_AddMsgHandlers(t *testing.T) {
 	fnd1 := p2p.NewProtocol(sim.NewNode(), protocol)
 
 	n2 := sim.NewNode()
+	block := mesh.NewBlock(false, nil, time.Now())
 
-	syncObj.layers.AddLayer(1, []Block{&BlockMock{[]byte("block id 1"), 1}})
+	syncObj.layers.AddLayer(mesh.NewExistingLayer(uint32(1), []*mesh.Block{block}))
 
 	fnd2 := p2p.NewProtocol(n2, protocol)
-	fnd2.RegisterMsgHandler(block, syncObj.BlockRequestHandler)
-	idarr, err := SendBlockRequest(fnd1, n2.Node, []byte("block id 1"), 1)
+	fnd2.RegisterMsgHandler(blockMsg, syncObj.BlockRequestHandler)
+	idarr, err := SendBlockRequest(fnd1, n2.Node, block.Id())
 
 	assert.NoError(t, err, "Should not return error")
-	assert.Equal(t, idarr.Id(), []byte("block id 1"), "wrong block")
+	assert.Equal(t, idarr.Id(), block.Id(), "wrong block")
 }
 
 func TestSyncProtocol_AddMsgHandlers2(t *testing.T) {
@@ -88,7 +91,7 @@ func TestSyncProtocol_AddMsgHandlers2(t *testing.T) {
 	n2 := sim.NewNode()
 	p2 := PeersMocks{n2}
 
-	syncObj.layers.AddLayer(1, []Block{&BlockMock{[]byte("block id 1"), 1}})
+	syncObj.layers.AddLayer(mesh.NewExistingLayer(uint32(1), make([]*mesh.Block, 10)))
 
 	fnd2 := p2p.NewProtocol(p2, protocol)
 	fnd2.RegisterMsgHandler(layerHash, syncObj.LayerHashRequestHandler)
@@ -104,37 +107,43 @@ func TestSyncProtocol_AddMsgHandlers3(t *testing.T) {
 	p1 := PeersMocks{sim.NewNode()}
 	fnd1 := p2p.NewProtocol(p1, protocol)
 	fnd1.RegisterMsgHandler(layerHash, syncObj.LayerHashRequestHandler)
-	fnd1.RegisterMsgHandler(block, syncObj.BlockRequestHandler)
+	fnd1.RegisterMsgHandler(blockMsg, syncObj.BlockRequestHandler)
 	n2 := sim.NewNode()
 	p2 := PeersMocks{n2}
-	syncObj.layers.AddLayer(1, []Block{&BlockMock{[]byte("block id 1"), 1}})
-	syncObj.layers.AddLayer(2, []Block{&BlockMock{[]byte("block id 2"), 1}})
-	syncObj.layers.AddLayer(3, []Block{&BlockMock{[]byte("block id 3"), 1}})
+
+	block1 := mesh.NewBlock(false, nil, time.Now())
+	block2 := mesh.NewBlock(false, nil, time.Now())
+	block3 := mesh.NewBlock(false, nil, time.Now())
+
+	syncObj.layers.AddLayer(mesh.NewExistingLayer(uint32(1), []*mesh.Block{block1}))
+	syncObj.layers.AddLayer(mesh.NewExistingLayer(uint32(2), []*mesh.Block{block2}))
+	syncObj.layers.AddLayer(mesh.NewExistingLayer(uint32(3), []*mesh.Block{block3}))
+
 	fnd2 := p2p.NewProtocol(p2, protocol)
 	fnd2.RegisterMsgHandler(layerHash, syncObj.LayerHashRequestHandler)
-	fnd2.RegisterMsgHandler(block, syncObj.BlockRequestHandler)
+	fnd2.RegisterMsgHandler(blockMsg, syncObj.BlockRequestHandler)
 
 	idarr, err := SendLayerHashRequest(fnd1, n2.Node, 1)
 	assert.NoError(t, err, "Should not return error")
 	fmt.Println(idarr)
 
-	idarr2, err2 := SendBlockRequest(fnd1, n2.Node, []byte("block id 1"), 1)
+	idarr2, err2 := SendBlockRequest(fnd1, n2.Node, block1.Id())
 	assert.NoError(t, err2, "Should not return error")
-	assert.Equal(t, idarr2.Id(), []byte("block id 1"), "wrong block")
+	assert.Equal(t, idarr2.Id(), block1.Id(), "wrong block")
 
 	idarr, err = SendLayerHashRequest(fnd1, n2.Node, 2)
 	assert.NoError(t, err, "Should not return error")
 	fmt.Println(idarr)
 
-	idarr2, err2 = SendBlockRequest(fnd1, n2.Node, []byte("block id 1"), 1)
+	idarr2, err2 = SendBlockRequest(fnd1, n2.Node, block1.Id())
 	assert.NoError(t, err2, "Should not return error")
-	assert.Equal(t, idarr2.Id(), []byte("block id 1"), "wrong block")
+	assert.Equal(t, idarr2.Id(), block1.Id(), "wrong block")
 
 	idarr, err = SendLayerHashRequest(fnd1, n2.Node, 3)
 	assert.NoError(t, err, "Should not return error")
 	fmt.Println(idarr)
 
-	idarr2, err2 = SendBlockRequest(fnd1, n2.Node, []byte("block id 1"), 1)
+	idarr2, err2 = SendBlockRequest(fnd1, n2.Node, block1.Id())
 	assert.NoError(t, err2, "Should not return error")
-	assert.Equal(t, idarr2.Id(), []byte("block id 1"), "wrong block")
+	assert.Equal(t, idarr2.Id(), block1.Id(), "wrong block")
 }
