@@ -42,53 +42,72 @@ func (p *Protocol) readLoop() {
 			// Channel is closed.
 			break
 		}
-
 		//todo add buffer and option to limit number of concurrent goroutines
+		go p.handleMessage(msg)
+	}
+}
 
-		go func(msg service.Message) {
-			headers := &pb.MessageWrapper{}
+func (p *Protocol) handleMessage(msg service.Message) {
 
-			if err := proto.Unmarshal(msg.Data(), headers); err != nil {
-				log.Error("Error handling incoming Protocol message, err:", err)
-				return
-			}
+	headers := &pb.MessageWrapper{}
 
-			if headers.Req {
-				if payload := p.msgRequestHandlers[string(headers.Type)](headers.Payload); payload != nil {
-					rmsg, fParseErr := proto.Marshal(&pb.MessageWrapper{Req: false, ReqID: headers.ReqID, Type: headers.Type, Payload: payload})
-					if fParseErr != nil {
-						log.Error("Error Parsing Protocol message, err:", fParseErr)
-						return
-					}
-					sendErr := p.network.SendMessage(msg.Sender().PublicKey().String(), p.name, rmsg)
-					if sendErr != nil {
-						log.Error("Error sending response message, err:", sendErr)
-					}
-					return
-				}
-			} else {
-				reqId, err := uuid.FromBytes(headers.ReqID)
-				if err != nil {
-					log.Error("Error Parsing message request id, err:", err)
-					return
-				}
-				id := crypto.UUID(reqId)
-				p.pendMutex.RLock()
-				pend, okPend := p.pending[id]
-				foo, okFoo := p.resHandlers[id]
-				p.pendMutex.RUnlock()
-				if okPend {
-					p.removeFromPending(id)
-					if okFoo {
-						pend <- foo(headers.Payload)
-					} else {
-						pend <- headers.Payload
-					}
-				}
-			}
-		}(msg)
+	if err := proto.Unmarshal(msg.Data(), headers); err != nil {
+		log.Error("Error handling incoming Protocol message, err:", err)
+		return
 	}
 
+	if headers.Req {
+		p.handleRequestMessage(msg.Sender().String(), headers)
+	} else {
+		p.handleResponseMessage(headers)
+	}
+
+}
+
+func (p *Protocol) handleRequestMessage(sender string, headers *pb.MessageWrapper) {
+
+	if payload := p.msgRequestHandlers[string(headers.Type)](headers.Payload); payload != nil {
+		rmsg, fParseErr := proto.Marshal(&pb.MessageWrapper{Req: false, ReqID: headers.ReqID, Type: headers.Type, Payload: payload})
+		if fParseErr != nil {
+			log.Error("Error Parsing Protocol message, err:", fParseErr)
+			return
+		}
+		sendErr := p.network.SendMessage(sender, p.name, rmsg)
+		if sendErr != nil {
+			log.Error("Error sending response message, err:", sendErr)
+		}
+	}
+}
+
+func (p *Protocol) handleResponseMessage(headers *pb.MessageWrapper) {
+
+	reqId, err := uuid.FromBytes(headers.ReqID)
+	if err != nil {
+		log.Error("Error Parsing message request id, err:", err)
+		return
+	}
+
+	id := crypto.UUID(reqId)
+	p.pendMutex.RLock()
+	pend, okPend := p.pending[id]
+	foo, okFoo := p.resHandlers[id]
+	p.pendMutex.RUnlock()
+
+	if okPend {
+		p.removeFromPending(id)
+		if okFoo {
+			pend <- foo(headers.Payload)
+		} else {
+			pend <- headers.Payload
+		}
+	}
+}
+
+func (p *Protocol) removeFromPending(reqID [16]byte) {
+	p.pendMutex.Lock()
+	delete(p.pending, reqID)
+	delete(p.resHandlers, reqID)
+	p.pendMutex.Unlock()
 }
 
 func (p *Protocol) RegisterMsgHandler(msgType string, reqHandler func(msg []byte) []byte) {
@@ -96,8 +115,8 @@ func (p *Protocol) RegisterMsgHandler(msgType string, reqHandler func(msg []byte
 }
 
 func (p *Protocol) SendAsyncRequest(msgType string, payload []byte, address string, timeout time.Duration, resHandler func(msg []byte) interface{}) (interface{}, error) {
-	reqID := crypto.NewUUID()
 
+	reqID := crypto.NewUUID()
 	pbsp := &pb.MessageWrapper{Req: true, ReqID: reqID[:], Type: []byte(msgType), Payload: payload}
 	msg, err := proto.Marshal(pbsp)
 	if err != nil {
@@ -116,6 +135,7 @@ func (p *Protocol) SendAsyncRequest(msgType string, payload []byte, address stri
 	}
 
 	timer := time.NewTimer(timeout)
+
 	select {
 	case response := <-respc:
 		if response != nil {
@@ -163,11 +183,4 @@ func (p *Protocol) SendRequest(msgType string, payload []byte, address string, t
 	}
 
 	return nil, err
-}
-
-func (p *Protocol) removeFromPending(reqID [16]byte) {
-	p.pendMutex.Lock()
-	delete(p.pending, reqID)
-	delete(p.resHandlers, reqID)
-	p.pendMutex.Unlock()
 }
