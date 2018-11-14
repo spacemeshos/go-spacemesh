@@ -36,13 +36,13 @@ type Block interface {
 
 type Layer interface {
 	Index() int
-	Blocks() []*mesh.Block
+	Blocks() []Block
 	Hash() string
 }
 
 type Syncer struct {
 	peers     Peers
-	layers    Mesh
+	layers    mesh.Mesh
 	sv        BlockValidator //todo should not be here
 	config    Configuration
 	SyncLock  uint32
@@ -77,7 +77,7 @@ func (s *Syncer) Start() {
 	}
 }
 
-func NewSync(peers Peers, layers Mesh, bv BlockValidator, conf Configuration) *Syncer {
+func NewSync(peers Peers, layers mesh.Mesh, bv BlockValidator, conf Configuration) *Syncer {
 	sm := Syncer{peers, layers, bv, conf, 0, 0, make(chan bool), make(chan bool)}
 	return &sm
 }
@@ -107,6 +107,10 @@ func (s *Syncer) run() {
 			}()
 		}
 	}
+}
+
+type BlockValidator interface {
+	CheckSyntacticValidity(block Block) bool
 }
 
 func (s *Syncer) Synchronise() {
@@ -180,7 +184,7 @@ func (s *Syncer) getBlockById(peer Peer, id string) (Block, error) {
 	if err != nil {
 		//err handling
 	}
-	return b, nil
+	return &b, nil
 }
 
 func (s *Syncer) BlockRequestHandler(msg []byte) []byte {

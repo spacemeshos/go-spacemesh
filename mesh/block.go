@@ -20,11 +20,11 @@ type Block struct {
 	conVotes   uint64
 }
 
-func (b *Block) Id() uint32 {
+func (b Block) Id() uint32 {
 	return uint32(b.id)
 }
 
-func (b *Block) Layer() uint32 {
+func (b Block) Layer() uint32 {
 	return b.layerIndex
 }
 

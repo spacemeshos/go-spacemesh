@@ -1,30 +1,28 @@
-package sync
+package mesh
 
 import (
+	"crypto"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 	"sync"
 )
 
 type Mesh interface {
-	AddLayer(layer Layer) error
-	GetLayer(i int) (Layer, error)
-	GetBlock(layer int, id uint32) (Block, error)
+	AddLayer(layer *Layer) error
+	GetLayer(i int) (*Layer, error)
+	GetBlock(layer int, id uint32) (*Block, error)
 	LocalLayerCount() uint32
 	LatestKnownLayer() uint32
 	SetLatestKnownLayer(idx uint32)
 	Close()
 }
 
-type BlockValidator interface {
-	CheckSyntacticValidity(block Block) bool
-}
+type Peer crypto.PublicKey
 
 type LayersDB struct {
 	layerCount       uint32
 	latestKnownLayer uint32
-	layers           []Layer
+	layers           []*Layer
 	newPeerCh        chan Peer
 	newBlockCh       chan Block
 	exit             chan bool
@@ -67,7 +65,7 @@ func (s *LayersDB) run() {
 	}
 }
 
-func (ll *LayersDB) GetLayer(i int) (Layer, error) {
+func (ll *LayersDB) GetLayer(i int) (*Layer, error) {
 	// TODO validate index
 	if i >= len(ll.layers) {
 		return nil, errors.New("index to high")
@@ -75,7 +73,7 @@ func (ll *LayersDB) GetLayer(i int) (Layer, error) {
 	return ll.layers[i], nil
 }
 
-func (ll *LayersDB) GetBlock(layer int, id uint32) (Block, error) {
+func (ll *LayersDB) GetBlock(layer int, id uint32) (*Block, error) {
 	return nil, nil
 }
 
@@ -91,7 +89,7 @@ func (ll *LayersDB) SetLatestKnownLayer(idx uint32) {
 	ll.latestKnownLayer = idx
 }
 
-func (ll *LayersDB) AddLayer(layer Layer) error {
+func (ll *LayersDB) AddLayer(layer *Layer) error {
 	// validate idx
 	// this is just an optimization
 	if ll.layerCount != 0 && layer.Index()-1 > int(ll.layerCount) {
@@ -106,7 +104,7 @@ func (ll *LayersDB) AddLayer(layer Layer) error {
 
 	ll.lMutex.Lock()
 	//if is valid
-	ll.layers = append(ll.layers, mesh.NewExistingLayer(uint32(layer.Index()), nil))
+	ll.layers = append(ll.layers, NewExistingLayer(uint32(layer.Index()), nil))
 	ll.layerCount = uint32(len(ll.layers))
 	ll.lMutex.Unlock()
 	return nil
