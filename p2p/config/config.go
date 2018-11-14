@@ -42,6 +42,7 @@ type Config struct {
 
 // SwarmConfig specifies swarm config params.
 type SwarmConfig struct {
+	Gossip                 bool     `mapstructure:"gossip"`
 	Bootstrap              bool     `mapstructure:"bootstrap"`
 	RoutingTableBucketSize int      `mapstructure:"bucketsize"`
 	RoutingTableAlpha      int      `mapstructure:"alpha"`
@@ -70,6 +71,7 @@ func DefaultConfig() Config {
 
 	// SwarmConfigValues defines default values for swarm config params.
 	var SwarmConfigValues = SwarmConfig{
+		Gossip:                 false,
 		Bootstrap:              false,
 		RoutingTableBucketSize: 20,
 		RoutingTableAlpha:      3,
