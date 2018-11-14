@@ -63,6 +63,7 @@ func (broker *Broker) dispatcher() {
 			err := proto.Unmarshal(msg.Data(), hareMsg)
 			if err != nil {
 				log.Error("Could not unmarshal message: ", err)
+				continue
 			}
 
 			layerId := NewLayerId(hareMsg.Message.Layer)
@@ -83,13 +84,17 @@ func (broker *Broker) dispatcher() {
 func (broker *Broker) CreateInbox(iden Identifiable) chan *pb.HareMessage {
 	var id = iden.Id()
 
+	broker.mutex.RLock()
 	if _, exist := broker.outbox[id]; exist {
 		panic("CreateInbox called more than once per layer")
 	}
+	broker.mutex.RUnlock()
 
 	broker.mutex.Lock()
 	broker.outbox[id] = make(chan *pb.HareMessage, InboxCapacity) // create new channel
 	broker.mutex.Unlock()
 
+	broker.mutex.RLock()
+	defer broker.mutex.RUnlock()
 	return broker.outbox[id]
 }
