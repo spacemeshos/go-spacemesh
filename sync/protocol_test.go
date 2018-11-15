@@ -54,7 +54,7 @@ const layerHash = 2
 func TestSyncProtocol_AddMsgHandlers(t *testing.T) {
 
 	sim := simulator.New()
-	fnd1 := p2p.NewProtocol(sim.NewNode(), protocol)
+	fnd1 := p2p.NewProtocol(sim.NewNode(), protocol, time.Second*5)
 
 	n2 := sim.NewNode()
 
@@ -63,7 +63,7 @@ func TestSyncProtocol_AddMsgHandlers(t *testing.T) {
 
 	syncObj.layers.AddLayer(mesh.NewExistingLayer(uint32(1), []*mesh.Block{block}))
 
-	fnd2 := p2p.NewProtocol(n2, protocol)
+	fnd2 := p2p.NewProtocol(n2, protocol, time.Second*5)
 	fnd2.RegisterMsgHandler(blockMsg, syncObj.BlockRequestHandler)
 
 	ch, err := SendBlockRequest(fnd1, n2.Node.PublicKey(), block.Id())
@@ -77,14 +77,14 @@ func TestSyncProtocol_AddMsgHandlers2(t *testing.T) {
 
 	sim := simulator.New()
 	p1 := PeersMocks{sim.NewNode()}
-	fnd1 := p2p.NewProtocol(p1, protocol)
+	fnd1 := p2p.NewProtocol(p1, protocol, time.Second*5)
 
 	n2 := sim.NewNode()
 	p2 := PeersMocks{n2}
 
 	syncObj.layers.AddLayer(mesh.NewExistingLayer(uint32(1), make([]*mesh.Block, 0, 10)))
 
-	fnd2 := p2p.NewProtocol(p2, protocol)
+	fnd2 := p2p.NewProtocol(p2, protocol, time.Second*5)
 	fnd2.RegisterMsgHandler(layerHash, syncObj.LayerHashRequestHandler)
 
 	ch, err := SendLayerHashRequest(fnd1, n2.Node.PublicKey(), 1)
@@ -97,7 +97,7 @@ func TestSyncProtocol_AddMsgHandlers3(t *testing.T) {
 
 	sim := simulator.New()
 	p1 := PeersMocks{sim.NewNode()}
-	fnd1 := p2p.NewProtocol(p1, protocol)
+	fnd1 := p2p.NewProtocol(p1, protocol, time.Second*5)
 	fnd1.RegisterMsgHandler(layerHash, syncObj.LayerHashRequestHandler)
 	fnd1.RegisterMsgHandler(blockMsg, syncObj.BlockRequestHandler)
 	n2 := sim.NewNode()
@@ -111,7 +111,7 @@ func TestSyncProtocol_AddMsgHandlers3(t *testing.T) {
 	syncObj.layers.AddLayer(mesh.NewExistingLayer(uint32(2), []*mesh.Block{block2}))
 	syncObj.layers.AddLayer(mesh.NewExistingLayer(uint32(3), []*mesh.Block{block3}))
 
-	fnd2 := p2p.NewProtocol(p2, protocol)
+	fnd2 := p2p.NewProtocol(p2, protocol, time.Second*5)
 	fnd2.RegisterMsgHandler(layerHash, syncObj.LayerHashRequestHandler)
 	fnd2.RegisterMsgHandler(blockMsg, syncObj.BlockRequestHandler)
 

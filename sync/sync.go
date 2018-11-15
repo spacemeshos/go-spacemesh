@@ -3,8 +3,10 @@ package sync
 import (
 	"fmt"
 	"github.com/gogo/protobuf/proto"
+	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/sync/pb"
 	"sync/atomic"
 	"time"
@@ -38,6 +40,18 @@ type Layer interface {
 	Index() int
 	Blocks() []Block
 	Hash() string
+}
+
+type Peer crypto.PublicKey
+
+type Peers interface {
+	p2p.Service
+	Count() int
+	GetLayerHash(peer int) string
+	GetLayerBlockIDs(peer Peer, i int, hash string) ([]string, error)
+	GetBlockByID(peer Peer, id string) (Block, error)
+	GetPeers() []Peer
+	LatestLayer() int
 }
 
 type Syncer struct {
@@ -145,12 +159,12 @@ func (s *Syncer) Synchronise() {
 
 		close(ids) //todo check that gorutins stop
 
-		blocks := make([]Block, len(blockIds))
+		blocks := make([]*mesh.Block, 0, len(blockIds))
 		for block := range output {
-			blocks = append(blocks, block)
+			blocks = append(blocks, mesh.NewExistingBlock(block.Id(), block.Layer(), nil))
 		}
 
-		//s.layers.AddLayer(mesh.NewExistingLayer(i, blocks)) //todo fix
+		s.layers.AddLayer(mesh.NewExistingLayer(i, blocks))
 	}
 }
 
