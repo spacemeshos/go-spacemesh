@@ -1,6 +1,7 @@
 package p2p
 
 import (
+	"container/list"
 	"errors"
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
@@ -14,39 +15,64 @@ import (
 
 type MessageType uint32
 
+type Item struct {
+	id        uint64
+	timestamp time.Time
+}
+
 type Protocol struct {
-	count              uint32
+	id                 uint64
 	name               string
 	network            Service
 	pendMutex          sync.RWMutex
-	pending            map[uint32]chan interface{}
-	resHandlers        map[uint32]func(msg []byte)
+	pendingMap         map[uint64]chan interface{}
+	pendingQueue       *list.List
+	resHandlers        map[uint64]func(msg []byte)
 	msgRequestHandlers map[MessageType]func(msg []byte) []byte
 	ingressChannel     chan service.Message
+	requestLifetime    time.Duration
 }
 
-func NewProtocol(network Service, name string) *Protocol {
+func NewProtocol(network Service, name string, ttl time.Duration) *Protocol {
 	p := &Protocol{
 		name:               name,
-		pending:            make(map[uint32]chan interface{}),
-		resHandlers:        make(map[uint32]func(msg []byte)),
+		pendingMap:         make(map[uint64]chan interface{}),
+		resHandlers:        make(map[uint64]func(msg []byte)),
+		pendingQueue:       list.New(),
 		network:            network,
 		ingressChannel:     network.RegisterProtocol(name),
 		msgRequestHandlers: make(map[MessageType]func(msg []byte) []byte),
+		requestLifetime:    ttl,
 	}
+
 	go p.readLoop()
 	return p
 }
 
 func (p *Protocol) readLoop() {
 	for {
-		msg, ok := <-p.ingressChannel
-		if !ok {
-			log.Error("read loop channel was closed")
-			break
+		timer := time.NewTimer(time.Second)
+		select {
+		case msg, ok := <-p.ingressChannel:
+			if !ok {
+				log.Error("read loop channel was closed")
+				break
+			}
+			//todo add buffer and option to limit number of concurrent goroutines
+			go p.handleMessage(msg)
+		case <-timer.C:
+			go p.cleanStaleMessages()
 		}
-		//todo add buffer and option to limit number of concurrent goroutines
-		go p.handleMessage(msg)
+	}
+}
+
+func (p *Protocol) cleanStaleMessages() {
+	for {
+		if msg := p.pendingQueue.Front(); msg != nil && time.Since(msg.Value.(Item).timestamp) > p.requestLifetime {
+			p.pendingQueue.Remove(msg)
+		} else {
+			return
+		}
 	}
 }
 
@@ -84,11 +110,11 @@ func (p *Protocol) handleRequestMessage(sender crypto.PublicKey, headers *pb.Mes
 
 func (p *Protocol) handleResponseMessage(headers *pb.MessageWrapper) {
 
-	//get and remove from pending
+	//get and remove from pendingMap
 	p.pendMutex.RLock()
-	pend, okPend := p.pending[headers.ReqID]
+	pend, okPend := p.pendingMap[headers.ReqID]
 	foo, okFoo := p.resHandlers[headers.ReqID]
-	delete(p.pending, headers.ReqID)
+	delete(p.pendingMap, headers.ReqID)
 	delete(p.resHandlers, headers.ReqID)
 	p.pendMutex.RUnlock()
 
@@ -101,9 +127,9 @@ func (p *Protocol) handleResponseMessage(headers *pb.MessageWrapper) {
 	}
 }
 
-func (p *Protocol) removeFromPending(reqID uint32) {
+func (p *Protocol) removeFromPending(reqID uint64) {
 	p.pendMutex.Lock()
-	delete(p.pending, reqID)
+	delete(p.pendingMap, reqID)
 	delete(p.resHandlers, reqID)
 	p.pendMutex.Unlock()
 }
@@ -123,8 +149,9 @@ func (p *Protocol) SendAsyncRequest(msgType MessageType, payload []byte, address
 
 	respc := make(chan interface{})
 	p.pendMutex.Lock()
-	p.pending[reqID] = respc
+	p.pendingMap[reqID] = respc
 	p.resHandlers[reqID] = resHandler
+	p.pendingQueue.PushBack(Item{id: reqID, timestamp: time.Now()})
 	p.pendMutex.Unlock()
 
 	if sendErr := p.network.SendMessage(address, p.name, msg); sendErr != nil {
@@ -135,8 +162,8 @@ func (p *Protocol) SendAsyncRequest(msgType MessageType, payload []byte, address
 	return nil
 }
 
-func (p *Protocol) newRequestId() uint32 {
-	return atomic.AddUint32(&p.count, 1)
+func (p *Protocol) newRequestId() uint64 {
+	return atomic.AddUint64(&p.id, 1)
 }
 
 func (p *Protocol) SendRequest(msgType MessageType, payload []byte, address string, timeout time.Duration) (interface{}, error) {
@@ -151,7 +178,7 @@ func (p *Protocol) SendRequest(msgType MessageType, payload []byte, address stri
 	respc := make(chan interface{})
 
 	p.pendMutex.Lock()
-	p.pending[reqID] = respc
+	p.pendingMap[reqID] = respc
 	p.pendMutex.Unlock()
 
 	defer p.removeFromPending(reqID)
@@ -166,7 +193,7 @@ func (p *Protocol) SendRequest(msgType MessageType, payload []byte, address stri
 		if response != nil {
 			return response, nil
 		}
-		return nil, errors.New("Response was nil")
+		return nil, errors.New("response was nil")
 	case <-timer.C:
 		err = errors.New("peer took too long to respond")
 	}
