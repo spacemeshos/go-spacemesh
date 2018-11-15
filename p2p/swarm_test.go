@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"context"
 	"errors"
 	"fmt"
 	"github.com/gogo/protobuf/proto"
@@ -25,7 +26,7 @@ func p2pTestInstance(t testing.TB, config config.Config) *swarm {
 	port, err := node.GetUnboundedPort()
 	assert.NoError(t, err, "Error getting a port", err)
 	config.TCPPort = port
-	p, err := newSwarm(config, true, true)
+	p, err := newSwarm(context.TODO(), config, true, true)
 	assert.NoError(t, err, "Error creating p2p stack, err: %v", err)
 	assert.NotNil(t, p)
 	p.Start()
@@ -36,7 +37,7 @@ const exampleProtocol = "EX"
 const examplePayload = "Example"
 
 func TestNew(t *testing.T) {
-	s, err := New(config.DefaultConfig())
+	s, err := New(context.TODO(), config.DefaultConfig())
 	assert.NoError(t, err, err)
 	err = s.Start()
 	assert.NoError(t, err, err)
@@ -47,7 +48,7 @@ func TestNew(t *testing.T) {
 func Test_newSwarm(t *testing.T) {
 	cfg := config.DefaultConfig()
 	cfg.TCPPort = int(crypto.GetRandomUserPort())
-	s, err := newSwarm(cfg, true, false)
+	s, err := newSwarm(context.TODO(), cfg, true, false)
 	assert.NoError(t, err)
 	err = s.Start()
 	assert.NoError(t, err, err)
@@ -58,7 +59,7 @@ func Test_newSwarm(t *testing.T) {
 func TestSwarm_Shutdown(t *testing.T) {
 	cfg := config.DefaultConfig()
 	cfg.TCPPort = int(crypto.GetRandomUserPort())
-	s, err := newSwarm(cfg, true, false)
+	s, err := newSwarm(context.TODO(), cfg, true, false)
 	assert.NoError(t, err)
 	err = s.Start()
 	assert.NoError(t, err, err)
@@ -73,13 +74,13 @@ func TestSwarm_Shutdown(t *testing.T) {
 }
 
 func TestSwarm_ShutdownNoStart(t *testing.T) {
-	s, err := newSwarm(config.DefaultConfig(), true, false)
+	s, err := newSwarm(context.TODO(), config.DefaultConfig(), true, false)
 	assert.NoError(t, err)
 	s.Shutdown()
 }
 
 func TestSwarm_RegisterProtocolNoStart(t *testing.T) {
-	s, err := newSwarm(config.DefaultConfig(), true, false)
+	s, err := newSwarm(context.TODO(), config.DefaultConfig(), true, false)
 	msgs := s.RegisterProtocol("Anton")
 	assert.NotNil(t, msgs)
 	assert.NoError(t, err)

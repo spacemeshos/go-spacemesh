@@ -3,22 +3,22 @@ package p2p
 import (
 	inet "net"
 
-	"github.com/spacemeshos/go-spacemesh/p2p/config"
-	"github.com/spacemeshos/go-spacemesh/p2p/dht"
-	"github.com/spacemeshos/go-spacemesh/p2p/net"
-	"github.com/spacemeshos/go-spacemesh/timesync"
-
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/gogo/protobuf/proto"
+	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/connectionpool"
+	"github.com/spacemeshos/go-spacemesh/p2p/dht"
 	"github.com/spacemeshos/go-spacemesh/p2p/gossip"
 	"github.com/spacemeshos/go-spacemesh/p2p/message"
+	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/timesync"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -62,7 +62,8 @@ type swarm struct {
 	cPool *connectionpool.ConnectionPool
 
 	dht dht.DHT
-
+	// Context for cancel
+	ctx context.Context
 	// Shutdown the loop
 	shutdown chan struct{} // local request to kill the swarm from outside. e.g when local node is shutting down
 }
@@ -85,7 +86,7 @@ func (s *swarm) waitForGossip() error {
 
 // newSwarm creates a new P2P instance, configured by config, if newNode is true it will create a new node identity
 // and not load from disk. it creates a new `net`, connection pool and dht.
-func newSwarm(config config.Config, newNode bool, persist bool) (*swarm, error) {
+func newSwarm(ctx context.Context, config config.Config, newNode bool, persist bool) (*swarm, error) {
 
 	port := config.TCPPort
 	address := inet.JoinHostPort("0.0.0.0", strconv.Itoa(port))
@@ -118,7 +119,7 @@ func newSwarm(config config.Config, newNode bool, persist bool) (*swarm, error) 
 		network:          n,
 		cPool:            connectionpool.NewConnectionPool(n, l.PublicKey()),
 		shutdown:         make(chan struct{}), // non-buffered so requests to shutdown block until swarm is shut down
-
+		ctx:              ctx,
 	}
 
 	s.dht = dht.New(l, config.SwarmConfig, s)
@@ -146,7 +147,7 @@ func (s *swarm) Start() error {
 	if s.config.SwarmConfig.Bootstrap {
 		go func() {
 			b := time.Now()
-			err := s.dht.Bootstrap()
+			err := s.dht.Bootstrap(s.ctx)
 			if err != nil {
 				s.bootErr = err
 				s.Shutdown()

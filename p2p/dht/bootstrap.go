@@ -1,6 +1,7 @@
 package dht
 
 import (
+	"context"
 	"errors"
 	"github.com/btcsuite/btcutil/base58"
 	"github.com/spacemeshos/go-spacemesh/crypto"
@@ -28,12 +29,14 @@ var (
 	ErrFoundOurself = errors.New("found ourselves in the routing table")
 	// ErrFailedToBoot is returned when we exceed the BootstrapTimeout
 	ErrFailedToBoot = errors.New("failed to bootstrap within time limit")
+	// ErrBootAbort is returned when when bootstrap is canceled by context cancel
+	ErrBootAbort = errors.New("Bootstrap canceled by signal")
 )
 
 // Bootstrap issues a bootstrap by inserting the preloaded nodes to the routing table then querying them with our
 // ID with a FindNode (using `dht.Lookup`). the process involves updating all returned nodes to the routing table
 // while all the nodes that receive our query will add us to their routing tables and send us as response to a `FindNode`.
-func (d *KadDHT) Bootstrap() error {
+func (d *KadDHT) Bootstrap(ctx context.Context) error {
 
 	d.local.Debug("Starting node bootstrap ", d.local.String())
 
@@ -91,6 +94,8 @@ loop:
 		}()
 
 		select {
+		case <-ctx.Done():
+			return ErrBootAbort
 		case <-timeout.C:
 			return ErrFailedToBoot
 		case err := <-reschan:
