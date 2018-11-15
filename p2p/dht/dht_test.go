@@ -1,8 +1,12 @@
 package dht
 
 import (
+	"context"
+	"fmt"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/p2p/simulator"
 	"github.com/stretchr/testify/assert"
 	"testing"
@@ -49,7 +53,7 @@ func TestKadDHT_EveryNodeIsInRoutingTable(t *testing.T) {
 	booted := make(chan all, numPeers)
 
 	bootWaitRetrnAll := func(t *testing.T, ln *node.LocalNode, serv *simulator.Node, dht *KadDHT, c chan all) {
-		err := dht.Bootstrap()
+		err := dht.Bootstrap(context.TODO())
 		c <- all{
 			err,
 			dht,
@@ -153,7 +157,7 @@ func TestDHT_EveryNodeIsInSelected(t *testing.T) {
 					n := sim.NewNodeFrom(ln.Node)
 					dht := New(ln, cfg, n)
 					n.AttachDHT(dht)
-					err := dht.Bootstrap()
+					err := dht.Bootstrap(context.TODO())
 
 					booted <- all{
 						err,

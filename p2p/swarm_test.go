@@ -447,12 +447,12 @@ func TestBootstrap(t *testing.T) {
 
 			}
 
-			randnode := swarms[rand.Int31n(int32(len(swarms)))-1]
-			randnode2 := swarms[rand.Int31n(int32(len(swarms)))-1]
+			randnode := swarms[rand.Int31n(int32(len(swarms)-1))]
+			randnode2 := swarms[rand.Int31n(int32(len(swarms)-1))]
 
 			for (randnode == nil || randnode2 == nil) || randnode.lNode.String() == randnode2.lNode.String() {
-				randnode = swarms[rand.Int31n(int32(len(swarms)))-1]
-				randnode2 = swarms[rand.Int31n(int32(len(swarms)))-1]
+				randnode = swarms[rand.Int31n(int32(len(swarms)-1))]
+				randnode2 = swarms[rand.Int31n(int32(len(swarms)-1))]
 			}
 
 			randnode.RegisterProtocol(exampleProtocol)

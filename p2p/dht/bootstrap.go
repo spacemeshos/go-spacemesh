@@ -65,19 +65,18 @@ func (d *KadDHT) Bootstrap(ctx context.Context) error {
 
 	d.local.Debug("lookup using %d preloaded bootnodes ", bn)
 
-	err := d.tryBoot(c)
+	ctx, _ = context.WithTimeout(ctx, BootstrapTimeout)
+	err := d.tryBoot(ctx, c)
 
 	return err
 }
 
-func (d *KadDHT) tryBoot(minPeers int) error {
+func (d *KadDHT) tryBoot(ctx context.Context, minPeers int) error {
 
 	searchFor := d.local.PublicKey().String()
 	booted := false
 	i := 0
 	d.local.Debug("BOOTSTRAP: Running kademlia lookup for ourselves")
-
-	timeout := time.NewTimer(BootstrapTimeout)
 
 loop:
 	for {
@@ -96,8 +95,6 @@ loop:
 		select {
 		case <-ctx.Done():
 			return ErrBootAbort
-		case <-timeout.C:
-			return ErrFailedToBoot
 		case err := <-reschan:
 			i++
 			if err == nil {
