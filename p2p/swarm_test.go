@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/gogo/protobuf/proto"
+	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/message"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
@@ -18,7 +19,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"math/rand"
 	"sync"
-	"github.com/spacemeshos/go-spacemesh/crypto"
 )
 
 func p2pTestInstance(t testing.TB, config config.Config) *swarm {
@@ -86,7 +86,7 @@ func TestSwarm_RegisterProtocolNoStart(t *testing.T) {
 	s.Shutdown()
 }
 
-func  TestSwarm_processMessage(t *testing.T) {
+func TestSwarm_processMessage(t *testing.T) {
 	s := swarm{}
 	s.lNode, _ = node.GenerateTestNode(t)
 	r := node.GenerateRandomNodeData()
@@ -213,6 +213,54 @@ func TestSwarm_MultipleMessages(t *testing.T) {
 	for i := 0; i < 500; i++ {
 		wg.Add(1)
 		go func() { sendDirectMessage(t, p2, p1.lNode.String(), exchan1, false); wg.Done() }()
+	}
+	wg.Wait()
+}
+
+func TestSwarm_MultipleMessagesFromMultipleSenders(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.SwarmConfig.Gossip = false
+	cfg.SwarmConfig.Bootstrap = false
+
+	p1 := p2pTestInstance(t, cfg)
+
+	exchan1 := p1.RegisterProtocol(exampleProtocol)
+	assert.Equal(t, exchan1, p1.protocolHandlers[exampleProtocol])
+
+	pend := make(map[string]chan struct{})
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+
+	go func() {
+		for {
+			msg := <-exchan1
+			sender := msg.Sender().PublicKey().String()
+			mu.Lock()
+			c, ok := pend[sender]
+			if !ok {
+				t.FailNow()
+			}
+			close(c)
+			delete(pend, sender)
+			mu.Unlock()
+			wg.Done()
+		}
+	}()
+
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func() {
+			p := p2pTestInstance(t, cfg)
+			p.dht.Update(p1.LocalNode().Node)
+			mychan := make(chan struct{})
+			mu.Lock()
+			pend[p.lNode.Node.PublicKey().String()] = mychan
+			mu.Unlock()
+
+			payload := []byte(RandString(10))
+			err := p.SendMessage(p1.lNode.PublicKey().String(), exampleProtocol, payload)
+			assert.NoError(t, err)
+		}()
 	}
 	wg.Wait()
 }

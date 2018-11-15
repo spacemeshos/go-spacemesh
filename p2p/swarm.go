@@ -39,11 +39,11 @@ func (pm protocolMessage) Data() []byte {
 }
 
 type swarm struct {
-	started uint32
-	bootErr error
-	bootChan chan struct{}
+	started   uint32
+	bootErr   error
+	bootChan  chan struct{}
 	gossipErr error
-	gossipC chan struct{}
+	gossipC   chan struct{}
 
 	config config.Config
 
@@ -112,8 +112,8 @@ func newSwarm(config config.Config, newNode bool, persist bool) (*swarm, error) 
 	s := &swarm{
 		config:           config,
 		lNode:            l,
-		bootChan:	make(chan struct{}),
-		gossipC:	make(chan struct{}),
+		bootChan:         make(chan struct{}),
+		gossipC:          make(chan struct{}),
 		protocolHandlers: make(map[string]chan service.Message),
 		network:          n,
 		cPool:            connectionpool.NewConnectionPool(n, l.PublicKey()),
@@ -156,17 +156,20 @@ func (s *swarm) Start() error {
 		}()
 	}
 
-	go func() {
-		if s.config.SwarmConfig.Bootstrap {
-			s.waitForBoot()
-		}
-		err := s.gossip.Start()
-		if err != nil {
-			s.gossipErr = err
-			s.Shutdown()
-		}
-		close(s.gossipC)
-	}() // todo handle error async
+	if s.config.SwarmConfig.Gossip {
+		go func() {
+			if s.config.SwarmConfig.Bootstrap {
+				s.waitForBoot()
+			}
+			err := s.gossip.Start()
+			if err != nil {
+				s.gossipErr = err
+				s.Shutdown()
+			}
+			<-s.gossip.Initial()
+			close(s.gossipC)
+		}() // todo handle error async
+	}
 
 	return nil
 }
@@ -192,18 +195,15 @@ func (s *swarm) SendMessage(peerPubKey string, protocol string, payload []byte) 
 	var peer node.Node
 	var conn net.Connection
 
-	peer, conn = s.gossip.Peer(peerPubKey) // check if he's a neighbor
-	if peer == node.EmptyNode {
-		peer, err = s.dht.Lookup(peerPubKey) // blocking, might issue a network lookup that'll take time.
+	peer, err = s.dht.Lookup(peerPubKey) // blocking, might issue a network lookup that'll take time.
+	if err != nil {
+		return err
+	}
 
-		if err != nil {
-			return err
-		}
-		conn, err = s.cPool.GetConnection(peer.Address(), peer.PublicKey()) // blocking, might take some time in case there is no connection
-		if err != nil {
-			s.lNode.Warning("failed to send message to %v, no valid connection. err: %v", peer.String(), err)
-			return err
-		}
+	conn, err = s.cPool.GetConnection(peer.Address(), peer.PublicKey()) // blocking, might take some time in case there is no connection
+	if err != nil {
+		s.lNode.Warning("failed to send message to %v, no valid connection. err: %v", peer.String(), err)
+		return err
 	}
 
 	session := conn.Session()
@@ -245,6 +245,8 @@ func (s *swarm) SendMessage(peerPubKey string, protocol string, payload []byte) 
 
 	err = conn.Send(final)
 	session.EncryptGuard().Unlock()
+
+	s.lNode.Debug("Message sent succesfully")
 
 	return err
 }
