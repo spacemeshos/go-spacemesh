@@ -1,11 +1,11 @@
 package simulator
 
 import (
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"io"
 	"sync"
-	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 // TODO : implmement delays?
