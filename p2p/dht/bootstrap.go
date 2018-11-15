@@ -2,6 +2,8 @@ package dht
 
 import (
 	"errors"
+	"github.com/btcsuite/btcutil/base58"
+	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"time"
 )
@@ -13,6 +15,8 @@ const (
 	LookupIntervals = 3 * time.Second
 	// RefreshInterval is the time we wait between dht refreshes
 	RefreshInterval = 5 * time.Minute
+
+	BootstrapTries = 5
 )
 
 var (
@@ -33,8 +37,10 @@ func (d *KadDHT) Bootstrap() error {
 
 	d.local.Debug("Starting node bootstrap ", d.local.String())
 
+	alpha := d.config.RoutingTableAlpha
 	c := d.config.RandomConnections
-	if c <= 0 {
+
+	if c <= 0 || alpha <= 0 {
 		return ErrZeroConnections
 	}
 	// register bootstrap nodes
@@ -47,6 +53,7 @@ func (d *KadDHT) Bootstrap() error {
 		}
 		d.rt.Update(node)
 		bn++
+		d.local.Info("added new bootstrap node %v", node)
 	}
 
 	if bn == 0 {
@@ -55,15 +62,31 @@ func (d *KadDHT) Bootstrap() error {
 
 	d.local.Debug("lookup using %d preloaded bootnodes ", bn)
 
-	timeout := time.NewTimer(BootstrapTimeout)
+	err := d.tryBoot(c)
+
+	return err
+}
+
+func (d *KadDHT) tryBoot(minPeers int) error {
+
+	searchFor := d.local.PublicKey().String()
+	booted := false
 	i := 0
-	// TODO: Issue a healthcheck / refresh loop every x interval.
-BOOTLOOP:
+	d.local.Debug("BOOTSTRAP: Running kademlia lookup for ourselves")
+
+	timeout := time.NewTimer(BootstrapTimeout)
+
+loop:
 	for {
 		reschan := make(chan error)
 
 		go func() {
-			_, err := d.Lookup(d.local.PublicKey().String())
+			if booted || i >= BootstrapTries {
+				rnd, _ := crypto.GetRandomBytes(32)
+				searchFor = base58.Encode(rnd)
+				d.local.Debug("BOOTSTRAP: Running kademlia lookup for random peer")
+			}
+			_, err := d.Lookup(searchFor)
 			reschan <- err
 		}()
 
@@ -73,50 +96,25 @@ BOOTLOOP:
 		case err := <-reschan:
 			i++
 			if err == nil {
-				return ErrFoundOurself
+				continue
 			}
 			// We want to have lookup failed error
 			// no one should return us ourselves.
 			req := make(chan int)
 			d.rt.Size(req)
 			size := <-req
-			if (size - bn) >= c { // Don't count bootstrap nodes
-				break BOOTLOOP
+
+			if (size) >= minPeers { // Don't count bootstrap nodes
+				if booted {
+					break loop
+				}
+				booted = true
+			} else {
+				d.local.Warning("%d lookup didn't bootstrap the routing table. RT now has %d peers", i, size)
 			}
-			d.local.Warning("%d lookup didn't bootstrap the routing table", i)
-			d.local.Warning("RT now has %d peers", size-bn)
+
 			time.Sleep(LookupIntervals)
 		}
-	}
-	return nil // succeed
-}
-
-func (d *KadDHT) healthLoop() {
-	tick := time.NewTicker(RefreshInterval)
-	for range tick.C {
-		err := d.refresh()
-		if err != nil {
-			d.local.Error("DHT Refresh failed, trying again")
-		}
-	}
-}
-
-func (d *KadDHT) refresh() error {
-	reschan := make(chan error)
-
-	go func() {
-		_, err := d.Lookup(d.local.PublicKey().String())
-		reschan <- err
-	}()
-
-	select {
-	case err := <-reschan:
-		if err == nil {
-			return ErrFoundOurself
-		}
-		// should be - ErrLookupFailed
-		// We want to have lookup failed error
-		// no one should return us ourselves.
 	}
 
 	return nil

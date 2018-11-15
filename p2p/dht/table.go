@@ -2,10 +2,9 @@ package dht
 
 import (
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"gopkg.in/op/go-logging.v1"
-	"math/rand"
-	"time"
 )
 
 const (
@@ -72,6 +71,11 @@ type PeerByIDRequest struct {
 	Callback PeerOpChannel
 }
 
+type PeerAndCallback struct {
+	peer node.Node
+	ret  chan struct{}
+}
+
 // NearestPeersReq includes one peer id, a count param and a callback PeersOpChannel.
 type NearestPeersReq struct {
 	ID       node.DhtID
@@ -113,7 +117,7 @@ type routingTableImpl struct {
 	sizeReqs         chan chan int
 	printReq         chan struct{}
 
-	updateReqs chan node.Node
+	updateReqs chan PeerAndCallback
 	removeReqs chan node.Node
 
 	// latency metrics
@@ -122,7 +126,7 @@ type routingTableImpl struct {
 	// Maximum acceptable latency for peers in this cluster
 	//maxLatency time.Duration
 
-	buckets    [BucketCount]Bucket
+	buckets    []Bucket
 	bucketsize int // max number of nodes per bucket. typically 10 or 20.
 
 	peerRemovedCallbacks map[string]PeerChannel
@@ -135,9 +139,9 @@ type routingTableImpl struct {
 func NewRoutingTable(bucketsize int, localID node.DhtID, log *logging.Logger) RoutingTable {
 
 	// Create all our buckets.
-	buckets := [BucketCount]Bucket{}
+	buckets := []Bucket{}
 	for i := 0; i < BucketCount; i++ {
-		buckets[i] = NewBucket()
+		buckets = append(buckets, NewBucket())
 	}
 
 	rt := &routingTableImpl{
@@ -153,7 +157,7 @@ func NewRoutingTable(bucketsize int, localID node.DhtID, log *logging.Logger) Ro
 		nearestPeersReqs: make(chan NearestPeersReq, 3),
 		sizeReqs:         make(chan chan int, 3),
 
-		updateReqs: make(chan node.Node),
+		updateReqs: make(chan PeerAndCallback),
 		removeReqs: make(chan node.Node, 3),
 
 		peerRemovedCallbacks: make(map[string]PeerChannel),
@@ -189,7 +193,12 @@ func (rt *routingTableImpl) NearestPeers(req NearestPeersReq) {
 }
 
 func (rt *routingTableImpl) Update(peer node.Node) {
-	rt.updateReqs <- peer
+	cb := make(chan struct{})
+	rt.updateReqs <- PeerAndCallback{peer, cb}
+	select {
+	case <-cb:
+	default:
+	}
 }
 
 func (rt *routingTableImpl) Remove(peer node.Node) {
@@ -214,7 +223,7 @@ func (rt *routingTableImpl) processEvents() {
 		select {
 
 		case p := <-rt.updateReqs:
-			rt.update(p)
+			rt.update(p.peer, p.ret)
 
 		case p := <-rt.removeReqs:
 			rt.remove(p)
@@ -256,7 +265,7 @@ func (rt *routingTableImpl) randomPeers(qty int) []node.Node {
 	type nodeSlice []node.Node
 
 	var buckets []nodeSlice
-	buckets = make([]nodeSlice, 0)
+	buckets = make([]nodeSlice, 0, BucketCount*2)
 
 	for i := 0; i < len(rt.buckets); i++ {
 		peers := rt.buckets[i].Peers()
@@ -265,15 +274,14 @@ func (rt *routingTableImpl) randomPeers(qty int) []node.Node {
 		}
 	}
 
-	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
 	// Shuffle the buckets.
 	for i := len(buckets) - 1; i > 0; i-- {
-		j := rnd.Intn(len(buckets))
+		j := crypto.GetRandomUInt32(uint32(len(buckets)))
 		buckets[i], buckets[j] = buckets[j], buckets[i]
 	}
 
 	bufSize := qty
-	if (size < qty) {
+	if size < qty {
 		bufSize = size
 	}
 	buf := make([]node.Node, bufSize)
@@ -298,7 +306,7 @@ func (rt *routingTableImpl) randomPeers(qty int) []node.Node {
 // Update updates the routing table with the given contact. it will be added to the routing table if we have space
 // or if its better in terms of latency and recent contact than out oldest contact in the right bucket.
 // this keeps fresh nodes at the top of the bucket and make sure we won't lose contact with the network and keep most healthy nodes.
-func (rt *routingTableImpl) update(p node.Node) {
+func (rt *routingTableImpl) update(p node.Node, cb chan struct{}) {
 
 	if rt.local.Equals(p.DhtID()) {
 		rt.log.Warning("Ignoring attempt to add local node to the routing table")
@@ -325,33 +333,64 @@ func (rt *routingTableImpl) update(p node.Node) {
 		rt.log.Errorf("Updated non-existing peer without an address pubkey: %v", p.PublicKey().String())
 		return
 	}
-	// this is a new node.
 
+	// this is a new node.
 	// todo: consider connection metrics
-	if bucket.Len() >= rt.bucketsize { // bucket overflows
-		// TODO: if bucket is full ping oldest node and replace if it fails to answer
+
+	// bucket overflows ?
+	if bucket.Len() >= rt.bucketsize {
+		// If this bucket is the rightmost bucket, and its full
+		// we need to split it and create a new bucket
+		if cpl == len(rt.buckets)-1 { // this is the bucket
+			rt.split()
+			// after split we check again in which bucket we should add peer.
+			rt.update(p, cb)
+			return
+		} else {
+			// TODO: if bucket is full and can't be split ping oldest node and replace if it fails to answer
+			// for now assume we pinged last node and it answered until we get ping done.
+			close(cb)
+			return
+		}
 		// TODO: check latency metrics and replace if new node is better then oldest one.
 		// Fresh, recent contacted (alive), low latency nodes should be kept at top of the bucket.
-		bucket.PopBack() // todo :ping them.
-		bucket.PushFront(p)
-		return
 	}
 
+	// new node and bucket isn't full
 	bucket.PushFront(p)
+
+	close(cb)
+}
+
+func (rt *routingTableImpl) split() {
+	lastBucket := len(rt.buckets) - 1
+
+	bucket := rt.buckets[lastBucket]
+	newBucket := bucket.Split(lastBucket, rt.local)
+
+	rt.buckets = append(rt.buckets, newBucket)
+
+	// last bucket is still too big, split again
+	if newBucket.Len() > rt.bucketsize {
+		rt.split()
+	}
+
+	// If all elements were on left side of split...
+	if bucket.Len() > rt.bucketsize {
+		bucket.PopBack()
+	}
 }
 
 // Remove a node from the routing table.
 // Callback to peerRemoved will be called if node was in table and was removed
 // If node wasn't in the table then remove doesn't have any side effects on the table
 func (rt *routingTableImpl) remove(p node.Node) {
-
 	cpl := p.DhtID().CommonPrefixLen(rt.local)
-	bucketID := cpl
-	if bucketID >= len(rt.buckets) {
-		bucketID = len(rt.buckets) - 1
+	if cpl >= len(rt.buckets) {
+		cpl = len(rt.buckets) - 1
 	}
 
-	bucket := rt.buckets[bucketID]
+	bucket := rt.buckets[cpl]
 	bucket.Remove(p)
 }
 
