@@ -1,7 +1,6 @@
 package message
 
 import (
-	"encoding/hex"
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
@@ -27,7 +26,7 @@ func Test_NewProtocolMessageMeatadata(t *testing.T) {
 	assert.Equal(t, meta.AuthPubKey, pk.Bytes())
 	assert.Equal(t, meta.Protocol, "EX")
 	assert.Equal(t, meta.Gossip, gossip)
-	assert.Equal(t, meta.AuthorSign, "")
+	assert.Equal(t, meta.AuthorSign, []byte(nil))
 
 }
 
@@ -50,9 +49,8 @@ func TestSwarm_AuthAuthor(t *testing.T) {
 	// sign it
 	s, err := priv.Sign(ppm)
 	assert.NoError(t, err, "cant sign ", err)
-	ssign := hex.EncodeToString(s)
 
-	pm.Metadata.AuthorSign = ssign
+	pm.Metadata.AuthorSign = s
 
 	vererr := AuthAuthor(pm)
 	assert.NoError(t, vererr)
@@ -65,9 +63,8 @@ func TestSwarm_AuthAuthor(t *testing.T) {
 
 	s, err = priv2.Sign(ppm)
 	assert.NoError(t, err, "cant sign ", err)
-	ssign = hex.EncodeToString(s)
 
-	pm.Metadata.AuthorSign = ssign
+	pm.Metadata.AuthorSign = s
 
 	vererr = AuthAuthor(pm)
 	assert.Error(t, vererr)

@@ -1,7 +1,6 @@
 package p2p
 
 import (
-	"encoding/hex"
 	"testing"
 	"time"
 
@@ -118,9 +117,8 @@ func TestSwarm_authAuthor(t *testing.T) {
 	// sign it
 	s, err := priv.Sign(ppm)
 	assert.NoError(t, err, "cant sign ", err)
-	ssign := hex.EncodeToString(s)
 
-	pm.Metadata.AuthorSign = ssign
+	pm.Metadata.AuthorSign = s
 
 	vererr := message.AuthAuthor(pm)
 	assert.NoError(t, vererr)
@@ -133,9 +131,8 @@ func TestSwarm_authAuthor(t *testing.T) {
 
 	s, err = priv2.Sign(ppm)
 	assert.NoError(t, err, "cant sign ", err)
-	ssign = hex.EncodeToString(s)
 
-	pm.Metadata.AuthorSign = ssign
+	pm.Metadata.AuthorSign = s
 
 	vererr = message.AuthAuthor(pm)
 	assert.Error(t, vererr)

@@ -23,7 +23,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"encoding/hex"
 )
 
 type protocolMessage struct {
@@ -227,8 +226,7 @@ func (s *swarm) SendMessage(peerPubKey string, protocol string, payload []byte) 
 
 	sign, _ := session.Sign(data)
 
-	// TODO : AuthorSign: string => bytes
-	protomessage.Metadata.AuthorSign = hex.EncodeToString(sign)
+	protomessage.Metadata.AuthorSign = sign
 
 	data, err = proto.Marshal(protomessage)
 	if err != nil {
@@ -431,11 +429,7 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 	}
 
 	sign := pm.Metadata.AuthorSign
-	binsign, err := hex.DecodeString(sign)
-	if err != nil {
-		return err
-	}
-	pm.Metadata.AuthorSign = ""
+	pm.Metadata.AuthorSign = nil
 
 	data, err := proto.Marshal(pm)
 	if err != nil {
@@ -443,11 +437,10 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 		return e
 	}
 
-	if !session.VerifySignature(data, binsign) {
+	if !session.VerifySignature(data, sign) {
 		return ErrAuthAuthor
 	}
 
-	// TODO : AuthorSign: string => bytes
 	pm.Metadata.AuthorSign = sign
 
 

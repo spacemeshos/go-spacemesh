@@ -56,8 +56,7 @@ func SignMessage(pv crypto.PrivateKey, pm *pb.ProtocolMessage) error {
 		return fmt.Errorf("failed to sign message err:%v", err)
 	}
 
-	// TODO : AuthorSign: string => bytes
-	pm.Metadata.AuthorSign = hex.EncodeToString(sign)
+	pm.Metadata.AuthorSign = sign
 
 	return nil
 }
@@ -78,7 +77,7 @@ func AuthAuthor(pm *pb.ProtocolMessage) error {
 		return fmt.Errorf("could'nt create public key from %v, err: %v", hex.EncodeToString(sPubkey), err)
 	}
 
-	pm.Metadata.AuthorSign = "" // we have to verify the message without the sign
+	pm.Metadata.AuthorSign = nil // we have to verify the message without the sign
 
 	bin, err := proto.Marshal(pm)
 
@@ -86,12 +85,7 @@ func AuthAuthor(pm *pb.ProtocolMessage) error {
 		return err
 	}
 
-	binsig, err := hex.DecodeString(sign)
-	if err != nil {
-		return err
-	}
-
-	v, err := pubkey.Verify(bin, binsig)
+	v, err := pubkey.Verify(bin, sign)
 
 	if err != nil {
 		return err

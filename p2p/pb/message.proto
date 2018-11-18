@@ -45,5 +45,5 @@ message Metadata {
     int64 timestamp = 3;      // Unix time - authoring time (not sending time)
     bool gossip = 4;          // True to have receiver peer gossip the message to its neighbors
     bytes authPubKey = 5;     // Authoring node Secp256k1 public key (32bytes) - may not be sender
-    string authorSign = 6;    // Signature of message data by author + method specific data by message creator node. format: hexEncode([]bytes)
+    bytes authorSign = 6;    // Signature of message data by author + method specific data by message creator node. format: hexEncode([]bytes)
 }
