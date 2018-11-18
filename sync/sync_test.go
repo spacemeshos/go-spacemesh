@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"errors"
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -12,13 +13,13 @@ import (
 )
 
 func TestSyncer_Status(t *testing.T) {
-	sync := NewSync(NewPeers(simulator.New().NewNode()), nil, nil, Configuration{1, 1, 100 * time.Millisecond, 1})
+	sync := NewSync(NewPeers(simulator.New().NewNode()), nil, nil, Configuration{1, 1, 100 * time.Millisecond, 1, 10 * time.Second})
 	assert.True(t, sync.Status() == IDLE, "status was running")
 }
 
 func TestSyncer_Start(t *testing.T) {
 	layers := mesh.NewLayers(nil, nil)
-	sync := NewSync(NewPeers(simulator.New().NewNode()), layers, nil, Configuration{1, 1, 1 * time.Millisecond, 1})
+	sync := NewSync(NewPeers(simulator.New().NewNode()), layers, nil, Configuration{1, 1, 1 * time.Millisecond, 1, 10 * time.Second})
 	fmt.Println(sync.Status())
 	sync.Start()
 	for i := 0; i < 5 && sync.Status() == IDLE; i++ {
@@ -28,7 +29,7 @@ func TestSyncer_Start(t *testing.T) {
 }
 
 func TestSyncer_Close(t *testing.T) {
-	sync := NewSync(NewPeers(simulator.New().NewNode()), nil, nil, Configuration{1, 1, 100 * time.Millisecond, 1})
+	sync := NewSync(NewPeers(simulator.New().NewNode()), nil, nil, Configuration{1, 1, 100 * time.Millisecond, 1, 10 * time.Second})
 	sync.Start()
 	sync.Close()
 	s := sync
@@ -40,7 +41,7 @@ func TestSyncer_Close(t *testing.T) {
 
 func TestSyncer_ForceSync(t *testing.T) {
 	layers := mesh.NewLayers(nil, nil)
-	sync := NewSync(NewPeers(simulator.New().NewNode()), layers, nil, Configuration{1, 1, 60 * time.Minute, 1})
+	sync := NewSync(NewPeers(simulator.New().NewNode()), layers, nil, Configuration{1, 1, 60 * time.Minute, 1, 10 * time.Second})
 	sync.Start()
 
 	for i := 0; i < 5 && sync.Status() == RUNNING; i++ {
@@ -59,7 +60,7 @@ func TestSyncProtocol_AddMsgHandlers(t *testing.T) {
 	syncObj := NewSync(NewPeers(sim.NewNode()),
 		mesh.NewLayers(nil, nil),
 		nil,
-		Configuration{1, 1, 1 * time.Millisecond, 1},
+		Configuration{1, 1, 1 * time.Millisecond, 1, 10 * time.Second},
 	)
 
 	n2 := sim.NewNode()
@@ -67,7 +68,7 @@ func TestSyncProtocol_AddMsgHandlers(t *testing.T) {
 	block := mesh.NewExistingBlock(id, 1, nil)
 	syncObj.layers.AddLayer(mesh.NewExistingLayer(uint32(1), []*mesh.Block{block}))
 	fnd2 := p2p.NewProtocol(n2, protocol, time.Second*5)
-	fnd2.RegisterMsgHandler(blockMsg, syncObj.BlockRequestHandler)
+	fnd2.RegisterMsgHandler(BLOCK, syncObj.BlockRequestHandler)
 
 	ch, err := syncObj.SendBlockRequest(n2.Node.PublicKey(), block.Id())
 	a := <-ch
@@ -82,21 +83,56 @@ func TestSyncProtocol_AddMsgHandlers2(t *testing.T) {
 	syncObj := NewSync(NewPeers(sim.NewNode()),
 		mesh.NewLayers(nil, nil),
 		nil,
-		Configuration{1, 1, 1 * time.Millisecond, 1},
+		Configuration{1, 1, 1 * time.Millisecond, 1, 10 * time.Second},
 	)
 
 	n2 := sim.NewNode()
 	syncObj.layers.AddLayer(mesh.NewExistingLayer(uint32(1), make([]*mesh.Block, 0, 10)))
 	fnd2 := p2p.NewProtocol(n2, protocol, time.Second*5)
-	fnd2.RegisterMsgHandler(layerHash, syncObj.LayerHashRequestHandler)
+	fnd2.RegisterMsgHandler(LAYER_HASH, syncObj.LayerHashRequestHandler)
 
-	ch, err := syncObj.SendLayerHashRequest(n2.Node.PublicKey(), 1)
-	a := <-ch
+	hash, err := syncObj.SendLayerHashRequest(n2.Node.PublicKey(), 1)
 	assert.NoError(t, err, "Should not return error")
-	assert.Equal(t, "some hash representing the layer", string(a.Hash), "wrong block")
+	assert.Equal(t, "some hash representing the layer", string(hash), "wrong block")
 }
 
 func TestSyncProtocol_AddMsgHandlers3(t *testing.T) {
+
+	sim := simulator.New()
+	syncObj := NewSync(NewPeers(sim.NewNode()),
+		mesh.NewLayers(nil, nil),
+		nil,
+		Configuration{1, 1, 1 * time.Millisecond, 1, 10 * time.Second},
+	)
+
+	n2 := sim.NewNode()
+	layer := mesh.NewExistingLayer(uint32(1), make([]*mesh.Block, 0, 10))
+	layer.AddBlock(mesh.NewExistingBlock(uuid.New().ID(), 1, nil))
+	layer.AddBlock(mesh.NewExistingBlock(uuid.New().ID(), 1, nil))
+	layer.AddBlock(mesh.NewExistingBlock(uuid.New().ID(), 1, nil))
+	layer.AddBlock(mesh.NewExistingBlock(uuid.New().ID(), 1, nil))
+	syncObj.layers.AddLayer(layer)
+	fnd2 := p2p.NewProtocol(n2, protocol, time.Second*5)
+	fnd2.RegisterMsgHandler(LAYER_IDS, syncObj.LayerIdsRequestHandler)
+	hashCh, err := syncObj.SendLayerIDsRequest(n2.Node.PublicKey(), 1)
+	ids := <-hashCh
+	assert.NoError(t, err, "Should not return error")
+	assert.Equal(t, len(layer.Blocks()), len(ids), "wrong block")
+	for _, a := range layer.Blocks() {
+		found := false
+		for _, id := range ids {
+			if a.Id() == id {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Error(errors.New("id list did not match"))
+		}
+	}
+}
+
+func TestSyncProtocol_AddMsgHandlers4(t *testing.T) {
 
 	sim := simulator.New()
 	n1 := sim.NewNode()
@@ -104,13 +140,13 @@ func TestSyncProtocol_AddMsgHandlers3(t *testing.T) {
 	syncObj1 := NewSync(NewPeers(n1),
 		mesh.NewLayers(nil, nil),
 		nil,
-		Configuration{1, 1, 1 * time.Millisecond, 1},
+		Configuration{1, 1, 1 * time.Millisecond, 1, 10 * time.Second},
 	)
 
 	syncObj2 := NewSync(NewPeers(n2),
 		mesh.NewLayers(nil, nil),
 		nil,
-		Configuration{1, 1, 1 * time.Millisecond, 1},
+		Configuration{1, 1, 1 * time.Millisecond, 1, 10 * time.Second},
 	)
 
 	block1 := mesh.NewExistingBlock(uuid.New().ID(), 1, nil)
@@ -121,30 +157,27 @@ func TestSyncProtocol_AddMsgHandlers3(t *testing.T) {
 	syncObj1.layers.AddLayer(mesh.NewExistingLayer(uint32(2), []*mesh.Block{block2}))
 	syncObj1.layers.AddLayer(mesh.NewExistingLayer(uint32(3), []*mesh.Block{block3}))
 
-	ch, err := syncObj2.SendLayerHashRequest(n1.PublicKey(), 1)
+	hash, err := syncObj2.SendLayerHashRequest(n1.PublicKey(), 1)
 	assert.NoError(t, err, "Should not return error")
-	msg := <-ch
-	assert.Equal(t, "some hash representing the layer", string(msg.Hash), "wrong block")
+	assert.Equal(t, "some hash representing the layer", string(hash), "wrong block")
 
 	ch2, err2 := syncObj2.SendBlockRequest(n1.PublicKey(), block1.Id())
 	assert.NoError(t, err2, "Should not return error")
 	msg2 := <-ch2
 	assert.Equal(t, msg2.GetId(), block1.Id(), "wrong block")
 
-	ch, err = syncObj2.SendLayerHashRequest(n1.PublicKey(), 2)
+	hash, err = syncObj2.SendLayerHashRequest(n1.PublicKey(), 2)
 	assert.NoError(t, err, "Should not return error")
-	msg = <-ch
-	assert.Equal(t, "some hash representing the layer", string(msg.Hash), "wrong block")
+	assert.Equal(t, "some hash representing the layer", string(hash), "wrong block")
 
 	ch2, err2 = syncObj2.SendBlockRequest(n1.PublicKey(), block2.Id())
 	assert.NoError(t, err2, "Should not return error")
 	msg2 = <-ch2
 	assert.Equal(t, msg2.GetId(), block2.Id(), "wrong block")
 
-	ch, err = syncObj2.SendLayerHashRequest(n1.PublicKey(), 3)
+	hash, err = syncObj2.SendLayerHashRequest(n1.PublicKey(), 3)
 	assert.NoError(t, err, "Should not return error")
-	msg = <-ch
-	assert.Equal(t, "some hash representing the layer", string(msg.Hash), "wrong block")
+	assert.Equal(t, "some hash representing the layer", string(hash), "wrong block")
 
 	ch2, err2 = syncObj2.SendBlockRequest(n1.PublicKey(), block3.Id())
 	assert.NoError(t, err2, "Should not return error")

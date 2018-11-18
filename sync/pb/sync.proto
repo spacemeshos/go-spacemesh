@@ -4,9 +4,6 @@ package sync;
 option go_package = "pb";
 
 
-
-
-// example protocol
 message FetchBlockReq {
       uint32 Id = 1;
       uint32 layer = 2;
@@ -20,7 +17,6 @@ message FetchBlockResp {
 }
 
 
-// example protocol
 message LayerHashReq {
       uint32 layer = 1;
 }
@@ -28,4 +24,14 @@ message LayerHashReq {
 
 message LayerHashResp {
     bytes hash = 1;
+}
+
+
+message LayerIdsReq {
+      uint32 layer = 1;
+}
+
+
+message LayerIdsResp {
+   repeated  uint32 ids = 1;
 }

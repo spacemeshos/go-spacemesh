@@ -68,9 +68,9 @@ func (l *Layer) Hash() string {
 	return "some hash representing the layer"
 }
 
-func (l *Layer) AddBlock(block Block) {
+func (l *Layer) AddBlock(block *Block) {
 	block.layerIndex = l.index
-	l.blocks = append(l.blocks, &block)
+	l.blocks = append(l.blocks, block)
 }
 
 func NewLayer() *Layer {
