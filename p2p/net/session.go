@@ -9,6 +9,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"sync"
 	"time"
+	"crypto/sha256"
+	"crypto/hmac"
 )
 
 // NetworkSession is an authenticated network session between 2 peers.
@@ -25,6 +27,8 @@ type NetworkSession interface {
 	Encrypt(in []byte) ([]byte, error) // encrypt data using session enc key
 
 	EncryptGuard() *sync.Mutex // used for creating a per session transaction of data encryption and data delivery
+	Sign(data []byte) ([]byte, error)
+	VerifySignature(data []byte, sign []byte) bool
 }
 
 // TODO: add support for idle session expiration
@@ -116,6 +120,20 @@ func (n *NetworkSessionImpl) Decrypt(in []byte) ([]byte, error) {
 // EncryptGuard returns a mutex that is used by clients of session to tie encryption and sending together.
 func (n *NetworkSessionImpl) EncryptGuard() *sync.Mutex {
 	return &n.encGuard
+}
+
+// Sign signs that input message using the sessions hmac and returns the signature or an error
+func (n *NetworkSessionImpl) Sign(data []byte) ([]byte, error) {
+	hm := hmac.New(sha256.New, n.keyM)
+	return hm.Sum(data), nil
+}
+
+// VerifySignature verifies that the given signature is a valid signature for the given data
+func (n *NetworkSessionImpl) VerifySignature(data []byte, sign []byte) bool {
+	hm := hmac.New(sha256.New, n.keyM)
+	dataSign := hm.Sum(data)
+
+	return hmac.Equal(dataSign, sign)
 }
 
 // NewNetworkSession creates a new network session based on provided data

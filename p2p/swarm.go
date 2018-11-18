@@ -23,6 +23,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"encoding/hex"
 )
 
 type protocolMessage struct {
@@ -218,12 +219,18 @@ func (s *swarm) SendMessage(peerPubKey string, protocol string, payload []byte) 
 		Payload:  payload,
 	}
 
-	err = message.SignMessage(s.lNode.PrivateKey(), protomessage)
+	data, err := proto.Marshal(protomessage)
 	if err != nil {
-		return err
+		e := fmt.Errorf("invalid msg format %v", err)
+		return e
 	}
 
-	data, err := proto.Marshal(protomessage)
+	sign, _ := session.Sign(data)
+
+	// TODO : AuthorSign: string => bytes
+	protomessage.Metadata.AuthorSign = hex.EncodeToString(sign)
+
+	data, err = proto.Marshal(protomessage)
 	if err != nil {
 		return fmt.Errorf("failed to encode signed message err: %v", err)
 	}
@@ -422,11 +429,27 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 		spew.Dump(pm)
 		panic("this is a defected message") // todo: Session bug, session scrambles messages and remove metadata
 	}
-	// authenticate message author - we already authenticated the sender via the shared session key secret
-	err = message.AuthAuthor(pm)
+
+	sign := pm.Metadata.AuthorSign
+	binsign, err := hex.DecodeString(sign)
 	if err != nil {
+		return err
+	}
+	pm.Metadata.AuthorSign = ""
+
+	data, err := proto.Marshal(pm)
+	if err != nil {
+		e := fmt.Errorf("invalid msg format %v", err)
+		return e
+	}
+
+	if !session.VerifySignature(data, binsign) {
 		return ErrAuthAuthor
 	}
+
+	// TODO : AuthorSign: string => bytes
+	pm.Metadata.AuthorSign = sign
+
 
 	if !pm.Metadata.Gossip && !bytes.Equal(pm.Metadata.AuthPubKey, msg.Conn.RemotePublicKey().Bytes()) {
 		//wtf ?

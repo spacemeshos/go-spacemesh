@@ -1,6 +1,8 @@
 package net
 
-import "sync"
+import (
+	"sync"
+)
 
 // SessionMock is a wonderful fluffy teddybear
 type SessionMock struct {
@@ -9,6 +11,7 @@ type SessionMock struct {
 	decError  error
 	encResult []byte
 	encError  error
+	verifySignatureResult bool
 
 	pubkey []byte
 	keyM   []byte
@@ -65,8 +68,20 @@ func (sm *SessionMock) SetDecrypt(res []byte, err error) {
 	sm.decError = err
 }
 
+func (sm *SessionMock) SetVerifySignature(res bool) {
+	sm.verifySignatureResult = res
+}
+
 func (n SessionMock) EncryptGuard() *sync.Mutex {
 	return nil
+}
+
+func (n SessionMock) Sign(data []byte) ([]byte, error) {
+	return []byte(""), nil
+}
+
+func (n SessionMock) VerifySignature(data []byte, sign []byte) bool {
+	return n.verifySignatureResult
 }
 
 var _ NetworkSession = (*SessionMock)(nil)

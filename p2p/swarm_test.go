@@ -326,9 +326,12 @@ func TestSwarm_onRemoteClientMessage(t *testing.T) {
 	bin, _ = proto.Marshal(cmd)
 	imc.Message = bin
 	session.SetDecrypt(goodbin, nil)
+	session.SetVerifySignature(false)
 
 	err = p.onRemoteClientMessage(imc)
 	assert.Equal(t, err, ErrAuthAuthor)
+	session.SetVerifySignature(true)
+
 
 	// Test no protocol
 
