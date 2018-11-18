@@ -11,7 +11,7 @@ type Config struct {
 	RoundTime        time.Duration `mapstructure:"phase-time"`
 	StartTime        time.Time     `mapstructure:"start-time"`
 	NetworkDelayMax  time.Duration `mapstructure:"network-delay-time"`
-	NumOfAdverseries int32         `mapstructure:"num-of-adverseries"`
+	NumOfAdversaries int32         `mapstructure:"num-of-adversaries"`
 }
 
 //todo: this is a duplicate function found also in p2p config
@@ -30,6 +30,6 @@ func DefaultConfig() Config {
 		NodesPerLayer:    200,
 		NetworkDelayMax:  duration("500ms"),
 		StartTime:        time.Now(),
-		NumOfAdverseries: 10,
+		NumOfAdversaries: 10,
 	}
 }

@@ -23,12 +23,11 @@ func init() {
 		"config", "c", config.BaseConfig.ConfigFile, "Set Load configuration from file")
 	RootCmd.PersistentFlags().StringVarP(&config.BaseConfig.DataDir, "datadir", "d",
 		config.BaseConfig.DataDir, "Specify data directory for spacemesh")
-
 	/** ======================== P2P Flags ========================== **/
 	RootCmd.PersistentFlags().IntVar(&config.P2P.SecurityParam, "security-param",
 		config.P2P.SecurityParam, "Consensus protocol k security param")
 	RootCmd.PersistentFlags().IntVar(&config.P2P.TCPPort, "tcp-port",
-		config.P2P.SecurityParam, "TCP Port to listen on")
+		config.P2P.TCPPort, "TCP Port to listen on")
 	RootCmd.PersistentFlags().DurationVar(&config.P2P.DialTimeout, "dial-timeout",
 		config.P2P.DialTimeout, "Network dial timeout duration")
 	RootCmd.PersistentFlags().DurationVar(&config.P2P.ConnKeepAlive, "conn-keepalive",
@@ -41,20 +40,24 @@ func init() {
 		config.P2P.NodeID, "Load node data by id (pub key) from local store")
 	RootCmd.PersistentFlags().BoolVar(&config.P2P.NewNode, "new-node",
 		config.P2P.NewNode, "Load node data by id (pub key) from local store")
-	RootCmd.PersistentFlags().BoolVar(&config.P2P.SwarmConfig.Bootstrap, "swarm-bootstrap",
+	RootCmd.PersistentFlags().BoolVar(&config.P2P.SwarmConfig.Bootstrap, "bootstrap",
 		config.P2P.SwarmConfig.Bootstrap, "Bootstrap the swarm")
-	RootCmd.PersistentFlags().IntVar(&config.P2P.SwarmConfig.RoutingTableBucketSize, "swarm-rtbs",
+	RootCmd.PersistentFlags().IntVar(&config.P2P.SwarmConfig.RoutingTableBucketSize, "bucketsize",
 		config.P2P.SwarmConfig.RoutingTableBucketSize, "The rounding table bucket size")
-	RootCmd.PersistentFlags().IntVar(&config.P2P.SwarmConfig.RoutingTableAlpha, "swarm-rtalpha",
+	RootCmd.PersistentFlags().IntVar(&config.P2P.SwarmConfig.RoutingTableAlpha, "alpha",
 		config.P2P.SwarmConfig.RoutingTableAlpha, "The rounding table Alpha")
-	RootCmd.PersistentFlags().IntVar(&config.P2P.SwarmConfig.RandomConnections, "swarm-randcon",
+	RootCmd.PersistentFlags().IntVar(&config.P2P.SwarmConfig.RandomConnections, "randcon",
 		config.P2P.SwarmConfig.RoutingTableAlpha, "Number of random connections")
-	RootCmd.PersistentFlags().StringSliceVar(&config.P2P.SwarmConfig.BootstrapNodes, "swarm-bootstrap-nodes",
+	RootCmd.PersistentFlags().StringSliceVar(&config.P2P.SwarmConfig.BootstrapNodes, "bootnodes",
 		config.P2P.SwarmConfig.BootstrapNodes, "Number of random connections")
 	RootCmd.PersistentFlags().DurationVar(&config.P2P.TimeConfig.MaxAllowedDrift, "max-allowed-time-drift",
 		config.P2P.TimeConfig.MaxAllowedDrift, "When to close the app until user resolves time sync problems")
 	RootCmd.PersistentFlags().IntVar(&config.P2P.TimeConfig.NtpQueries, "ntp-queries",
-		config.P2P.TimeConfig.NtpQueries, "Number of random connections")
+		config.P2P.TimeConfig.NtpQueries, "Number of ntp queries to do")
+	RootCmd.PersistentFlags().DurationVar(&config.P2P.TimeConfig.DefaultTimeoutLatency, "default-timeout-latency",
+		config.P2P.TimeConfig.DefaultTimeoutLatency, "Default timeout to ntp query")
+	RootCmd.PersistentFlags().DurationVar(&config.P2P.TimeConfig.RefreshNtpInterval, "ntp-refresh-interval",
+		config.P2P.TimeConfig.RefreshNtpInterval, "Refresh intervals to ntp")
 
 	/** ======================== API Flags ========================== **/
 	// StartJSONApiServerFlag determines if json api server should be started
