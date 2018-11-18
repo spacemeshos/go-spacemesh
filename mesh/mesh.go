@@ -77,9 +77,8 @@ func (s *LayersDB) run() {
 }
 
 func (ll *LayersDB) GetLayer(i int) (*Layer, error) {
-	// TODO validate index
-	if i > len(ll.layers) {
-		return nil, errors.New("index to high")
+	if len(ll.layers) == 0 || i < 0 || i > len(ll.layers) {
+		return nil, errors.New("index out of bounds")
 	}
 	return ll.layers[i-1], nil
 }
@@ -104,15 +103,13 @@ func (ll *LayersDB) AddLayer(layer *Layer) error {
 	// validate idx
 	// this is just an optimization
 	if ll.layerCount != 0 && layer.Index()-1 > int(ll.layerCount) {
-		return errors.New("can't add layer, missing mesh ")
+		return errors.New("can't add layer, missing previous layer ")
 	} else if layer.Index() < int(ll.layerCount)-1 {
 		return errors.New("layer already known ")
 	}
 
 	// validate blocks
-	// todo tortoise the mesh
-	// two tortoise simultaneously?
-
+	// todo send to tortoise
 	ll.lMutex.Lock()
 	//if is valid
 	ll.layers = append(ll.layers, NewExistingLayer(uint32(layer.Index()), layer.blocks))
