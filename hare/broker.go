@@ -47,8 +47,13 @@ func NewBroker(networkService NetworkService) *Broker {
 	return p
 }
 
-// Start listening to protocol messages and dispatch messages
+// Start listening to protocol messages and dispatch messages (non-blocking)
 func (broker *Broker) Start() {
+	if broker.inbox != nil { // Start has been called at least twice
+		log.Error("Instance already started")
+		return
+	}
+
 	broker.inbox = broker.network.RegisterProtocol(ProtoName)
 
 	go broker.dispatcher()
