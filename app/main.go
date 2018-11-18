@@ -1,9 +1,12 @@
 package app
 
 import (
+	"context"
 	"fmt"
+	"github.com/spf13/pflag"
 	"os"
 	"os/signal"
+	"reflect"
 	"runtime"
 
 	"github.com/spacemeshos/go-spacemesh/accounts"
@@ -37,9 +40,6 @@ var (
 	// It provides access the local identity and other top-level modules.
 	App *SpacemeshApp
 
-	// ExitApp is a channel used to signal the app to gracefully exit.
-	ExitApp = make(chan bool, 1)
-
 	// Version is the app's semantic version. Designed to be overwritten by make.
 	Version = "0.0.1"
 
@@ -48,20 +48,75 @@ var (
 
 	// Commit is the git commit used to build the app. Designed to be overwritten by make.
 	Commit = ""
+	// ctx    cancel used to signal the app to gracefully exit.
+	Ctx, Cancel = context.WithCancel(context.Background())
 )
 
 // ParseConfig unmarshal config file into struct
-func ParseConfig() (*cfg.Config, error) {
-	conf := cfg.DefaultConfig()
+func (app *SpacemeshApp) ParseConfig() (err error) {
 
-	err := viper.Unmarshal(&conf)
-
-	if err != nil {
-		log.Error("Failed to parse config\n")
-		return nil, err
+	fileLocation := viper.GetString("config")
+	vip := viper.New()
+	// read in default config if passed as param using viper
+	if err = cfg.LoadConfig(fileLocation, vip); err != nil {
+		log.Error(fmt.Sprintf("couldn't load config file at location: %s swithing to defaults \n error: %v.",
+			fileLocation, err))
+		//return err
 	}
 
-	return &conf, nil
+	conf := cfg.DefaultConfig()
+	// load config if it was loaded to our viper
+	err = vip.Unmarshal(&conf)
+	if err != nil {
+		log.Error("Failed to parse config\n")
+		return err
+	}
+
+	app.Config = &conf
+
+	return nil
+}
+
+func EnsureCLIFlags(cmd *cobra.Command, appcfg *cfg.Config) {
+
+	assignFields := func(p reflect.Type, elem reflect.Value, name string) {
+		for i := 0; i < p.NumField(); i++ {
+			if p.Field(i).Tag.Get("mapstructure") == name {
+				elem.Field(i).Set(reflect.ValueOf(viper.Get(name)))
+				return
+			}
+		}
+	}
+	// this is ugly but we have to do this because viper can't handle nested structs when deserialize
+	cmd.PersistentFlags().VisitAll(func(f *pflag.Flag) {
+		if f.Changed {
+			name := f.Name
+
+			ff := reflect.TypeOf(*appcfg)
+			elem := reflect.ValueOf(&appcfg).Elem()
+			assignFields(ff, elem, name)
+
+			ff = reflect.TypeOf(appcfg.API)
+			elem = reflect.ValueOf(&appcfg.API).Elem()
+			assignFields(ff, elem, name)
+
+			ff = reflect.TypeOf(appcfg.P2P)
+			elem = reflect.ValueOf(&appcfg.P2P).Elem()
+			assignFields(ff, elem, name)
+
+			ff = reflect.TypeOf(appcfg.P2P.SwarmConfig)
+			elem = reflect.ValueOf(&appcfg.P2P.SwarmConfig).Elem()
+			assignFields(ff, elem, name)
+
+			ff = reflect.TypeOf(appcfg.P2P.TimeConfig)
+			elem = reflect.ValueOf(&appcfg.P2P.TimeConfig).Elem()
+			assignFields(ff, elem, name)
+
+			ff = reflect.TypeOf(appcfg.CONSENSUS)
+			elem = reflect.ValueOf(&appcfg.CONSENSUS).Elem()
+			assignFields(ff, elem, name)
+		}
+	})
 }
 
 // NewSpacemeshApp creates an instance of the spacemesh app
@@ -94,27 +149,19 @@ func (app *SpacemeshApp) before(cmd *cobra.Command, args []string) (err error) {
 	go func() {
 		for range signalChan {
 			log.Info("Received an interrupt, stopping services...\n")
-			ExitApp <- true
+			Cancel()
 		}
 	}()
 
-	fileLocation := viper.GetString("config")
-
-	// read in default config if passed as param using viper
-	if err := cfg.LoadConfig(fileLocation); err != nil {
-		log.Error(fmt.Sprintf("couldn't load config file at location: %s \n error: %v",
-			fileLocation, err))
-		return err
-	}
-
 	// parse the config file based on flags et al
-	app.Config, err = ParseConfig()
+	err = app.ParseConfig()
 
 	if err != nil {
-		log.Error(fmt.Sprintf("couldn't parse the config toml file %v", err))
+		log.Error(fmt.Sprintf("couldn't parse the config %v", err))
 	}
 
-	//app.setupLogging(ctx.Bool("debug"))
+	// ensure cli flags are higher priority than config file
+	EnsureCLIFlags(cmd, app.Config)
 
 	app.setupLogging()
 
@@ -185,7 +232,7 @@ func (app *SpacemeshApp) startSpacemesh(cmd *cobra.Command, args []string) {
 
 	// start p2p services
 	log.Info("Initializing P2P services")
-	swarm, err := p2p.New(app.Config.P2P)
+	swarm, err := p2p.New(Ctx, app.Config.P2P)
 	if err != nil {
 		log.Error("Error starting p2p services, err: %v", err)
 		panic("Error starting p2p services")
@@ -197,11 +244,10 @@ func (app *SpacemeshApp) startSpacemesh(cmd *cobra.Command, args []string) {
 		panic("Error starting p2p services")
 	}
 
-
 	app.P2P = swarm
 	app.NodeInitCallback <- true
 
-	apiConf := app.Config.API
+	apiConf := &app.Config.API
 
 	// todo: if there's no loaded account - do the new account interactive flow here
 
@@ -229,7 +275,8 @@ func (app *SpacemeshApp) startSpacemesh(cmd *cobra.Command, args []string) {
 
 	// app blocks until it receives a signal to exit
 	// this signal may come from the node or from sig-abort (ctrl-c)
-	<-ExitApp
+
+	<-Ctx.Done()
 	//return nil
 }
 
