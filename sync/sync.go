@@ -27,7 +27,7 @@ type BlockValidator interface {
 }
 
 type Configuration struct {
-	hdist          int
+	hdist          uint32
 	pNum           int
 	syncInterval   time.Duration
 	concurrency    int
@@ -121,10 +121,19 @@ func (s *Syncer) run() {
 }
 
 func (s *Syncer) Synchronise() {
-	for i := s.layers.LocalLayerCount(); ; i++ {
+	for i := s.layers.LocalLayerCount(); i < s.layers.LatestKnownLayer()-s.config.hdist; {
+		i++
 		blockIds := s.GetLayerBlockIDs(i) //returns a set of all known blocks in the mesh
-		ids := make(chan uint32)
+		ids := make(chan uint32, len(blockIds))
 		output := make(chan Block)
+
+		//bufferd chan for workers  to read from
+
+		for _, id := range blockIds {
+			ids <- id
+		}
+
+		close(ids)
 
 		// each worker goroutine tries to fetch a block iteratively from each peer
 		for i := 0; i < s.config.concurrency; i++ {
@@ -140,17 +149,9 @@ func (s *Syncer) Synchronise() {
 
 					}
 				}
+				close(output)
 			}()
 		}
-
-		//feed the workers with ids
-		go func() {
-			for _, id := range blockIds {
-				ids <- id
-			}
-		}()
-
-		close(ids) //todo check that gorutins stop
 
 		blocks := make([]*mesh.Block, 0, len(blockIds))
 		for block := range output {
@@ -177,9 +178,10 @@ func (s *Syncer) GetLayerBlockIDs(index uint32) []uint32 {
 
 	var res []uint32
 	for _, v := range m {
-		blocks, err := s.SendLayerIDsRequest(v, index)
+		blocksCh, err := s.SendLayerIDsRequest(v, index)
+		blocks := <-blocksCh
 		if err == nil {
-			res = append(res, <-blocks...)
+			res = append(res, blocks...)
 		}
 	}
 

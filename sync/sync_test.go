@@ -12,14 +12,21 @@ import (
 	"time"
 )
 
+type BlockValidatorMock struct {
+}
+
+func (BlockValidatorMock) ValidateBlock(block Block) bool {
+	return true
+}
+
 func TestSyncer_Status(t *testing.T) {
-	sync := NewSync(NewPeers(simulator.New().NewNode()), nil, nil, Configuration{1, 1, 100 * time.Millisecond, 1, 10 * time.Second})
+	sync := NewSync(NewPeers(simulator.New().NewNode()), nil, BlockValidatorMock{}, Configuration{1, 1, 100 * time.Millisecond, 1, 10 * time.Second})
 	assert.True(t, sync.Status() == IDLE, "status was running")
 }
 
 func TestSyncer_Start(t *testing.T) {
 	layers := mesh.NewLayers(nil, nil)
-	sync := NewSync(NewPeers(simulator.New().NewNode()), layers, nil, Configuration{1, 1, 1 * time.Millisecond, 1, 10 * time.Second})
+	sync := NewSync(NewPeers(simulator.New().NewNode()), layers, BlockValidatorMock{}, Configuration{1, 1, 1 * time.Millisecond, 1, 10 * time.Second})
 	fmt.Println(sync.Status())
 	sync.Start()
 	for i := 0; i < 5 && sync.Status() == IDLE; i++ {
@@ -29,7 +36,7 @@ func TestSyncer_Start(t *testing.T) {
 }
 
 func TestSyncer_Close(t *testing.T) {
-	sync := NewSync(NewPeers(simulator.New().NewNode()), nil, nil, Configuration{1, 1, 100 * time.Millisecond, 1, 10 * time.Second})
+	sync := NewSync(NewPeers(simulator.New().NewNode()), nil, BlockValidatorMock{}, Configuration{1, 1, 100 * time.Millisecond, 1, 10 * time.Second})
 	sync.Start()
 	sync.Close()
 	s := sync
@@ -41,7 +48,7 @@ func TestSyncer_Close(t *testing.T) {
 
 func TestSyncer_ForceSync(t *testing.T) {
 	layers := mesh.NewLayers(nil, nil)
-	sync := NewSync(NewPeers(simulator.New().NewNode()), layers, nil, Configuration{1, 1, 60 * time.Minute, 1, 10 * time.Second})
+	sync := NewSync(NewPeers(simulator.New().NewNode()), layers, BlockValidatorMock{}, Configuration{1, 1, 60 * time.Minute, 1, 10 * time.Second})
 	sync.Start()
 
 	for i := 0; i < 5 && sync.Status() == RUNNING; i++ {
@@ -59,7 +66,7 @@ func TestSyncProtocol_AddMsgHandlers(t *testing.T) {
 	sim := simulator.New()
 	syncObj := NewSync(NewPeers(sim.NewNode()),
 		mesh.NewLayers(nil, nil),
-		nil,
+		BlockValidatorMock{},
 		Configuration{1, 1, 1 * time.Millisecond, 1, 10 * time.Second},
 	)
 
@@ -82,7 +89,7 @@ func TestSyncProtocol_AddMsgHandlers2(t *testing.T) {
 	sim := simulator.New()
 	syncObj := NewSync(NewPeers(sim.NewNode()),
 		mesh.NewLayers(nil, nil),
-		nil,
+		BlockValidatorMock{},
 		Configuration{1, 1, 1 * time.Millisecond, 1, 10 * time.Second},
 	)
 
@@ -101,7 +108,7 @@ func TestSyncProtocol_AddMsgHandlers3(t *testing.T) {
 	sim := simulator.New()
 	syncObj := NewSync(NewPeers(sim.NewNode()),
 		mesh.NewLayers(nil, nil),
-		nil,
+		BlockValidatorMock{},
 		Configuration{1, 1, 1 * time.Millisecond, 1, 10 * time.Second},
 	)
 
@@ -135,17 +142,19 @@ func TestSyncProtocol_AddMsgHandlers3(t *testing.T) {
 func TestSyncProtocol_AddMsgHandlers4(t *testing.T) {
 
 	sim := simulator.New()
+
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
+
 	syncObj1 := NewSync(NewPeers(n1),
 		mesh.NewLayers(nil, nil),
-		nil,
+		BlockValidatorMock{},
 		Configuration{1, 1, 1 * time.Millisecond, 1, 10 * time.Second},
 	)
 
 	syncObj2 := NewSync(NewPeers(n2),
 		mesh.NewLayers(nil, nil),
-		nil,
+		BlockValidatorMock{},
 		Configuration{1, 1, 1 * time.Millisecond, 1, 10 * time.Second},
 	)
 
@@ -183,4 +192,52 @@ func TestSyncProtocol_AddMsgHandlers4(t *testing.T) {
 	assert.NoError(t, err2, "Should not return error")
 	msg2 = <-ch2
 	assert.Equal(t, msg2.GetId(), block3.Id(), "wrong block")
+}
+
+func TestSyncProtocol_AddMsgHandlers5(t *testing.T) {
+
+	sim := simulator.New()
+
+	n1 := sim.NewNode()
+	syncObj1 := NewSync(NewPeers(n1),
+		mesh.NewLayers(nil, nil),
+		BlockValidatorMock{},
+		Configuration{2, 1, 1 * time.Second, 1, 10 * time.Second},
+	)
+
+	n2 := sim.NewNode()
+
+	syncObj2 := NewSync(PeersImpl{n2, func() []Peer { return []Peer{n1.PublicKey()} }},
+		mesh.NewLayers(nil, nil),
+		BlockValidatorMock{},
+		Configuration{2, 1, 1 * time.Second, 1, 10 * time.Second},
+	)
+
+	block1 := mesh.NewExistingBlock(uuid.New().ID(), 1, nil)
+	block2 := mesh.NewExistingBlock(uuid.New().ID(), 1, nil)
+	block3 := mesh.NewExistingBlock(uuid.New().ID(), 1, nil)
+	block4 := mesh.NewExistingBlock(uuid.New().ID(), 1, nil)
+	block5 := mesh.NewExistingBlock(uuid.New().ID(), 1, nil)
+	block6 := mesh.NewExistingBlock(uuid.New().ID(), 1, nil)
+	block7 := mesh.NewExistingBlock(uuid.New().ID(), 1, nil)
+	block8 := mesh.NewExistingBlock(uuid.New().ID(), 1, nil)
+	block9 := mesh.NewExistingBlock(uuid.New().ID(), 1, nil)
+	block10 := mesh.NewExistingBlock(uuid.New().ID(), 1, nil)
+
+	syncObj1.layers.AddLayer(mesh.NewExistingLayer(uint32(1), []*mesh.Block{block1, block6}))
+	syncObj1.layers.AddLayer(mesh.NewExistingLayer(uint32(2), []*mesh.Block{block2, block7}))
+	syncObj1.layers.AddLayer(mesh.NewExistingLayer(uint32(3), []*mesh.Block{block3, block8}))
+	syncObj1.layers.AddLayer(mesh.NewExistingLayer(uint32(3), []*mesh.Block{block4, block9}))
+	syncObj1.layers.AddLayer(mesh.NewExistingLayer(uint32(3), []*mesh.Block{block5, block10}))
+
+	syncObj2.layers.SetLatestKnownLayer(5)
+	syncObj2.Start()
+	syncObj2.ForceSync()
+
+	for syncObj2.Status() == RUNNING {
+		time.Sleep(1 * time.Second)
+	}
+
+	assert.Equal(t, syncObj2.layers.LocalLayerCount(), uint32(3), "wrong block")
+
 }

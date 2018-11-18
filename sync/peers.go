@@ -14,12 +14,13 @@ type Peers interface {
 
 type PeersImpl struct {
 	p2p.Service
+	getPeers func() []Peer
 }
 
 func NewPeers(p p2p.Service) Peers {
-	return &PeersImpl{p}
+	return &PeersImpl{p, nil}
 }
 
 func (pi PeersImpl) GetPeers() []Peer {
-	return nil
+	return pi.getPeers()
 }
