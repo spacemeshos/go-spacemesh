@@ -74,10 +74,11 @@ func (broker *Broker) dispatcher() {
 			layerId := NewLayerId(hareMsg.Message.Layer)
 
 			broker.mutex.RLock()
-			if c, exist := broker.outbox[layerId.Id()]; exist {
+			c, exist := broker.outbox[layerId.Id()]
+			broker.mutex.RUnlock()
+			if exist {
 				c <- hareMsg
 			}
-			broker.mutex.RUnlock()
 
 		case <-broker.CloseChannel():
 			return
@@ -95,11 +96,10 @@ func (broker *Broker) CreateInbox(iden Identifiable) chan *pb.HareMessage {
 	}
 	broker.mutex.RUnlock()
 
+	outChan := make(chan *pb.HareMessage, InboxCapacity) // create new channel
 	broker.mutex.Lock()
-	broker.outbox[id] = make(chan *pb.HareMessage, InboxCapacity) // create new channel
+	broker.outbox[id] = outChan
 	broker.mutex.Unlock()
 
-	broker.mutex.RLock()
-	defer broker.mutex.RUnlock()
-	return broker.outbox[id]
+	return outChan
 }
