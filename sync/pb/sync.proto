@@ -8,13 +8,13 @@ option go_package = "pb";
 
 // example protocol
 message FetchBlockReq {
-      uint32 blockId = 1;
+      uint32 Id = 1;
       uint32 layer = 2;
 }
 
 
 message FetchBlockResp {
-    uint32 blockId = 1;
+    uint32 Id = 1;
     uint32 layer = 2;
     bytes payload = 3;
 }
@@ -22,7 +22,7 @@ message FetchBlockResp {
 
 // example protocol
 message LayerHashReq {
-      int32 layer = 1;
+      uint32 layer = 1;
 }
 
 
