@@ -1,6 +1,7 @@
 package dht
 
 import (
+	"context"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/simulator"
@@ -133,7 +134,7 @@ func simNodeWithDHT(t *testing.T, sc config.SwarmConfig, sim *simulator.Simulato
 }
 
 func bootAndWait(t *testing.T, dht DHT, errchan chan error) {
-	err := dht.Bootstrap()
+	err := dht.Bootstrap(context.TODO())
 	errchan <- err
 }
 
@@ -207,6 +208,27 @@ func TestDHT_Bootstrap2(t *testing.T) {
 			t.Error("Failed to boot within time")
 		}
 	}
+}
+
+func TestDHT_BootstrapAbort(t *testing.T) {
+	// Create a bootstrap node
+	sim := simulator.New()
+	bn, _ := simNodeWithDHT(t, config.DefaultConfig().SwarmConfig, sim)
+	// config for other nodes
+	cfg2 := config.DefaultConfig()
+	cfg2.SwarmConfig.RandomConnections = 2
+	cfg2.SwarmConfig.BootstrapNodes = []string{node.StringFromNode(bn.Node)}
+	_, dht := simNodeWithDHT(t, cfg2.SwarmConfig, sim)
+	// Create a bootstrap node to abort
+	Ctx, Cancel := context.WithCancel(context.Background())
+	// Abort bootstrap after 2 Seconds
+	go func() {
+		time.Sleep(2 * time.Second)
+		Cancel()
+	}()
+	// Should return error after 2 seconds
+	err := dht.Bootstrap(Ctx)
+	assert.EqualError(t, err, ErrBootAbort.Error(), "Should be able to abort bootstrap")
 }
 
 func Test_filterFindNodeServers(t *testing.T) {
