@@ -157,11 +157,11 @@ func (p *Protocol) SendAsyncRequest(msgType MessageType, payload []byte, address
 	p.pendMutex.Lock()
 	p.pendingMap[reqID] = respc
 	p.resHandlers[reqID] = resHandler
-	p.pendingQueue.PushBack(Item{id: reqID, timestamp: time.Now()})
+	elem := p.pendingQueue.PushBack(Item{id: reqID, timestamp: time.Now()})
 	p.pendMutex.Unlock()
 
 	if sendErr := p.network.SendMessage(address, p.name, msg); sendErr != nil {
-		p.removeFromPending(reqID)
+		p.removeFromPending(reqID, elem)
 		return sendErr
 	}
 
@@ -187,7 +187,7 @@ func (p *Protocol) SendRequest(msgType MessageType, payload []byte, address stri
 	p.pendingMap[reqID] = respc
 	p.pendMutex.Unlock()
 
-	defer p.removeFromPending(reqID)
+	defer p.removeFromPending(reqID, nil)
 
 	if sendErr := p.network.SendMessage(address, p.name, msg); sendErr != nil {
 		return nil, sendErr
