@@ -3,7 +3,7 @@ go: 1.9.x
 
 
 before_install:
-- bash ci/install-protobuf.sh
+- sudo apt-get install protobuf-compiler
 - bash ci/genproto.sh
 
 branches:
