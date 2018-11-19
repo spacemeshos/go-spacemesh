@@ -9,9 +9,9 @@ import (
 	"time"
 )
 
-var Layer1 = &LayerId{1}
-var Layer2 = &LayerId{2}
-var Layer3 = &LayerId{3}
+var Layer1 = &LayerId{Bytes32{1}}
+var Layer2 = &LayerId{Bytes32{2}}
+var Layer3 = &LayerId{Bytes32{3}}
 
 func createMessage(t *testing.T, layer Byteable) []byte {
 	hareMsg := &pb.HareMessage{}
@@ -40,7 +40,7 @@ func TestBroker_Received(t *testing.T) {
 
 	recv := <- inbox
 
-	assert.True(t, recv.Message.Layer[0] == Layer1[0])
+	assert.True(t, recv.Message.Layer[0] == Layer1.Bytes()[0])
 }
 
 // test that aborting the broker aborts
@@ -73,7 +73,7 @@ func sendMessages(t *testing.T, layer *LayerId, n *simulator.Node, count int) {
 func waitForMessages(t *testing.T, inbox chan *pb.HareMessage, layer *LayerId, msgCount int) {
 	for i := 0; i < msgCount; i++ {
 		x := <-inbox
-		assert.True(t, x.Message.Layer[0] == layer[0])
+		assert.True(t, x.Message.Layer[0] == layer.Bytes()[0])
 	}
 }
 

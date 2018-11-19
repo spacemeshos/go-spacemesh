@@ -71,7 +71,7 @@ func (broker *Broker) dispatcher() {
 				continue
 			}
 
-			layerId := NewLayerId(hareMsg.Message.Layer)
+			layerId := NewBytes32(hareMsg.Message.Layer)
 
 			broker.mutex.RLock()
 			c, exist := broker.outbox[layerId.Id()]

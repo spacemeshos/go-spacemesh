@@ -1,22 +1,17 @@
 package hare
 
 import (
+	"errors"
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"hash/fnv"
 	"time"
 )
 
 const ProtoName = "HARE_PROTOCOL"
 const RoundDuration = time.Second * time.Duration(15)
 const InitialKnowledgeSize = 1000
-
-type PubKey [20]byte
-type RoleSignature [25]byte
-type BlockId uint32   // TODO: replace with import
-type LayerId [32]byte // TODO: replace with import
 
 type Byteable interface {
 	Bytes() []byte
@@ -27,53 +22,30 @@ type NetworkService interface {
 	Broadcast(protocol string, payload []byte) error
 }
 
-type Identifiable interface {
-	Id() uint32
-}
-
-func NewLayerId(buff []byte) *LayerId {
-	layer := &LayerId{}
-	copy(layer.Bytes(), buff)
-
-	return layer
-}
-
-func (layerId *LayerId) Id() uint32 {
-	h := fnv.New32()
-	h.Write(layerId[:])
-	return h.Sum32()
-}
-
-func (layerId *LayerId) Bytes() []byte {
-	return layerId[:]
-}
-
-type Set struct {
-	blocks map[BlockId]struct{}
-}
-
 type State struct {
-	k    uint32          // the iteration number
-	ki   uint32          // ?
-	s    Set             // the set of blocks
-	cert *pb.Certificate // the certificate
+	k    uint32      // the iteration number
+	ki   uint32      // ?
+	s    Set         // the set of blocks
+	cert Certificate // the certificate
 }
 
 type ConsensusProcess struct {
 	State
 	Closer // the consensus is closeable
+	pubKey      PubKey
 	layerId     LayerId
 	oracle      Rolacle // roles oracle
 	signing     Signing
 	network     NetworkService
-	startTime   time.Time
+	startTime   time.Time // TODO: needed?
 	inbox       chan *pb.HareMessage
 	knowledge   []*pb.HareMessage
 	isProcessed map[uint32]bool // TODO: could be empty struct
+	// TODO: add knowledge of notify messages. What is the life-cycle of such messages?
 }
 
 func (proc *ConsensusProcess) NewConsensusProcess(layer LayerId, s Set, oracle Rolacle, signing Signing, p2p NetworkService, broker *Broker) {
-	proc.State = State{0, 0, s, nil}
+	proc.State = State{0, 0, s, Certificate{}}
 	proc.Closer = NewCloser()
 	proc.layerId = layer
 	proc.oracle = oracle
@@ -110,45 +82,49 @@ func (proc *ConsensusProcess) eventLoop() {
 
 	for {
 		select {
-		case msg := <-proc.inbox:
-			proc.handleMessage(msg) // TODO: should be go handle (?)
-		case <-ticker.C:
+		case msg := <-proc.inbox: // msg event
+			proc.handleMessage(msg)
+		case <-ticker.C: // next round event
 			proc.nextRound()
-		case <-proc.CloseChannel():
+		case <-proc.CloseChannel(): // close event
 			log.Info("Stop event loop, instance aborted")
 			return
 		}
 	}
 }
 
-func (proc *ConsensusProcess) handleMessage(hareMsg *pb.HareMessage) {
+func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
+	// Note: layer is already verified by the broker
+
 	// verify iteration
-	if hareMsg.Message.K != proc.k {
+	if m.Message.K != proc.k {
 		return
 	}
 
 	// validate signature
-	data, err := proto.Marshal(hareMsg.Message)
+	data, err := proto.Marshal(m.Message)
 	if err != nil {
 		return
 	}
-	if !proc.signing.Validate(data, hareMsg.InnerSig) {
+	if !proc.signing.Validate(data, m.InnerSig) {
 		return
 	}
 
-	// validate role TODO: in proposal we have additional verification at the end of the round
-	if !proc.oracle.ValidateRole(roleFromIteration(hareMsg.Message.K), hareMsg.Message.RoleProof) {
+	// validate role TODO: in proposal we have additional verification at the end of the round (in processMessages)
+	if !proc.oracle.ValidateRole(roleFromIteration(m.Message.K),
+		RoleRequest{PubKey{NewBytes32(m.PubKey)}, LayerId{NewBytes32(m.Message.Layer)}, m.Message.K},
+		Signature(m.Message.RoleProof)) {
 		return
 	}
 
-	proc.knowledge = append(proc.knowledge, hareMsg)
+	proc.knowledge = append(proc.knowledge, m)
 }
 
 func (proc *ConsensusProcess) nextRound() {
 	log.Info("Next round: %d", proc.k+1)
 
 	// process the round
-	go proc.processMessages(proc.knowledge)
+	go proc.processMessages(proc.knowledge, proc.k)
 
 	// advance to next round
 	proc.k++
@@ -157,34 +133,63 @@ func (proc *ConsensusProcess) nextRound() {
 	proc.knowledge = make([]*pb.HareMessage, InitialKnowledgeSize)
 }
 
-func (proc *ConsensusProcess) processMessages(msg []*pb.HareMessage) {
+// TODO: put msg []*pb.HareMessage, k uint32 in Context struct?
+func (proc *ConsensusProcess) processMessages(msg []*pb.HareMessage, k uint32) {
+	// TODO: safety?
 	// check if process of messages has already been made for this round
-	if _, exist := proc.isProcessed[msg[0].Message.K]; exist {
+	if _, exist := proc.isProcessed[k]; exist {
 		return
 	}
 
 	// TODO: process to create suitable hare message
 
-	m := proc.round0()
-	buff, err := proto.Marshal(m)
+	m, err := proc.lookForProposal(msg, k) // end of round 0
 	if err != nil {
 		return
 	}
 
 	// send message
-	proc.network.Broadcast(ProtoName, buff)
+	proc.network.Broadcast(ProtoName, m)
 
 	// mark as processed
-	proc.isProcessed[m.Message.K] = true
+	proc.isProcessed[k] = true
 }
 
-func (proc *ConsensusProcess) round0() *pb.HareMessage {
-	// TODO: build SVP msg
+func (proc *ConsensusProcess) lookForProposal(msg []*pb.HareMessage, k uint32) ([]byte, error) {
 
-	// send proposal
+	// TODO: pass on knowledge & look for a set to propose
+
+	x := &pb.InnerMessage{}
+	x.Type = int32(Proposal)
+	x.Layer = proc.layerId.Bytes()
+	x.K = k
+	x.Ki = proc.ki
+	x.Blocks = proc.s.To2DSlice()
+	x.RoleProof = proc.oracle.Role(RoleRequest{proc.pubKey, proc.layerId, k})
+	x.Svp = &pb.AggregatedMessages{} // TODO: build SVP msg
+
+	buff, err := proto.Marshal(x)
+	if err != nil {
+		return nil, errors.New("error marshaling inner message")
+	}
+
+	sig := proc.signing.Sign(buff)
+
+	m := &pb.HareMessage{}
+	m.PubKey = proc.pubKey.Bytes()
+	m.Message = x
+	m.InnerSig = sig
+	// TODO: m.Cert =
+
+	buff, err = proto.Marshal(m)
+	if err != nil {
+		return nil, errors.New("error marshaling message")
+	}
+
+	return buff, nil
 }
 
-func roleFromIteration(k uint32) uint8 {
+func roleFromIteration(k uint32) byte {
 	if k%4 == 1 { // only round 1 is leader
 		return Leader
 	}

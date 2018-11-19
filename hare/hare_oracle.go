@@ -14,8 +14,8 @@ const (
 )
 
 type Rolacle interface {
-	Role(rq RoleRequest) RoleSignature
-	ValidateRole(rq RoleRequest, sig RoleSignature) bool
+	Role(rq RoleRequest) Signature
+	ValidateRole(role byte, rq RoleRequest, sig Signature) bool
 }
 
 type RoleRequest struct {
@@ -32,12 +32,12 @@ func (roleRequest *RoleRequest) bytes() []byte {
 }
 
 type MockOracle struct {
-	roles map[uint32]uint8
+	roles map[uint32]byte
 	isLeaderTaken bool
 }
 
 func (mockOracle *MockOracle) NewMockOracle() {
-	mockOracle.roles = make(map[uint32]uint8)
+	mockOracle.roles = make(map[uint32]byte)
 	mockOracle.isLeaderTaken = false
 }
 
@@ -47,18 +47,18 @@ func (roleRequest *RoleRequest) Id() uint32 {
 	return h.Sum32()
 }
 
-func (mockOracle *MockOracle) Role(rq RoleRequest) RoleSignature {
+func (mockOracle *MockOracle) Role(rq RoleRequest) Signature {
 	i := rq.Id()
 
 	if !mockOracle.isLeaderTaken {
 		mockOracle.roles[i] = Leader
 		mockOracle.isLeaderTaken = true
-		return RoleSignature{}
+		return Signature{}
 	}
 
 	// check if exist
 	if _, exist := mockOracle.roles[i]; exist {
-		return RoleSignature{}
+		return Signature{}
 	}
 
 	if i < math.MaxUint32 / 2 {
@@ -67,9 +67,9 @@ func (mockOracle *MockOracle) Role(rq RoleRequest) RoleSignature {
 		mockOracle.roles[i] = Passive
 	}
 
-	return RoleSignature{}
+	return Signature{}
 }
 
-func (mockOracle *MockOracle) ValidateRole(role byte, rq RoleRequest, sig RoleSignature) bool {
-	return mockOracle.roles[rq.Id()] == role && sig == RoleSignature{}
+func (mockOracle *MockOracle) ValidateRole(role byte, rq RoleRequest, sig Signature) bool {
+	return mockOracle.roles[rq.Id()] == role && sig == nil
 }
