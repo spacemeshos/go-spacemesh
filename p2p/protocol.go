@@ -30,19 +30,19 @@ type Protocol struct {
 	resHandlers        map[uint64]func(msg []byte)
 	msgRequestHandlers map[MessageType]func(msg []byte) []byte
 	ingressChannel     chan service.Message
-	requestLifetime    time.Duration
+	requestTimeout     time.Duration
 }
 
-func NewProtocol(network Service, name string, ttl time.Duration) *Protocol {
+func NewProtocol(network Service, name string, requestTimeout time.Duration) *Protocol {
 	p := &Protocol{
 		name:               name,
+		network:            network,
+		requestTimeout:     requestTimeout,
+		pendingQueue:       list.New(),
+		ingressChannel:     network.RegisterProtocol(name),
 		pendingMap:         make(map[uint64]chan interface{}),
 		resHandlers:        make(map[uint64]func(msg []byte)),
-		pendingQueue:       list.New(),
-		network:            network,
-		ingressChannel:     network.RegisterProtocol(name),
 		msgRequestHandlers: make(map[MessageType]func(msg []byte) []byte),
-		requestLifetime:    ttl,
 	}
 
 	go p.readLoop()
@@ -70,7 +70,7 @@ func (p *Protocol) cleanStaleMessages() {
 	for {
 		if elem := p.pendingQueue.Front(); elem != nil {
 			item := elem.Value.(Item)
-			if time.Since(item.timestamp) > p.requestLifetime {
+			if time.Since(item.timestamp) > p.requestTimeout {
 				p.removeFromPending(item.id, elem)
 			} else {
 				return
