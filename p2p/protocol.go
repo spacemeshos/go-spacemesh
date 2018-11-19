@@ -68,10 +68,13 @@ func (p *Protocol) readLoop() {
 
 func (p *Protocol) cleanStaleMessages() {
 	for {
-		if msg := p.pendingQueue.Front(); msg != nil && time.Since(msg.Value.(Item).timestamp) > p.requestLifetime {
-			p.pendingQueue.Remove(msg)
-		} else {
-			return
+		if elem := p.pendingQueue.Front(); elem != nil {
+			item := elem.Value.(Item)
+			if time.Since(item.timestamp) > p.requestLifetime {
+				p.removeFromPending(item.id, elem)
+			} else {
+				return
+			}
 		}
 	}
 }
@@ -127,8 +130,11 @@ func (p *Protocol) handleResponseMessage(headers *pb.MessageWrapper) {
 	}
 }
 
-func (p *Protocol) removeFromPending(reqID uint64) {
+func (p *Protocol) removeFromPending(reqID uint64, req *list.Element) {
 	p.pendMutex.Lock()
+	if req != nil {
+		p.pendingQueue.Remove(req)
+	}
 	delete(p.pendingMap, reqID)
 	delete(p.resHandlers, reqID)
 	p.pendMutex.Unlock()
