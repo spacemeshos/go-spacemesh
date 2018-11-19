@@ -3,8 +3,8 @@ go: 1.9.x
 
 
 before_install:
-- bash install-protobuf.sh
-- bash genproto.sh
+- bash ci/install-protobuf.sh
+- bash ci/genproto.sh
 
 branches:
   only:
