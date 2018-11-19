@@ -190,10 +190,7 @@ func (s *Syncer) GetLayerBlockIDs(index uint32) []uint32 {
 
 func (s Syncer) SendBlockRequest(peer Peer, id uint32) (chan Block, error) {
 
-	data := &pb.FetchBlockReq{
-		Id:    id,
-		Layer: uint32(1),
-	}
+	data := &pb.FetchBlockReq{Id: id}
 	payload, err := proto.Marshal(data)
 	if err != nil {
 		return nil, err
@@ -206,7 +203,7 @@ func (s Syncer) SendBlockRequest(peer Peer, id uint32) (chan Block, error) {
 		if err != nil {
 			fmt.Println("some error")
 		}
-		ch <- data
+		ch <- data.Block
 	}
 
 	return ch, s.p.SendAsyncRequest(BLOCK, payload, peer.String(), foo)
@@ -271,7 +268,7 @@ func (s *Syncer) BlockRequestHandler(msg []byte) []byte {
 		return nil
 	}
 
-	payload, err := proto.Marshal(&pb.FetchBlockResp{Layer: block.Layer(), Id: block.Id()})
+	payload, err := proto.Marshal(&pb.FetchBlockResp{Id: block.Id(), Block: &pb.Block{Id: block.Id(), Layer: block.Layer()}})
 	if err != nil {
 		log.Error("Error handling request message, err:", err) //todo describe err
 		return nil

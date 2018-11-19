@@ -6,14 +6,12 @@ option go_package = "pb";
 
 message FetchBlockReq {
       uint32 Id = 1;
-      uint32 layer = 2;
 }
 
 
 message FetchBlockResp {
     uint32 Id = 1;
-    uint32 layer = 2;
-    bytes payload = 3;
+    Block block = 3;
 }
 
 
@@ -34,4 +32,11 @@ message LayerIdsReq {
 
 message LayerIdsResp {
    repeated  uint32 ids = 1;
+}
+
+
+
+message Block {
+     uint32 Id = 1;
+     uint32 layer = 2;
 }

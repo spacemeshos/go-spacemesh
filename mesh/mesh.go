@@ -65,9 +65,7 @@ func (s *LayersDB) run() {
 		case <-s.newPeerCh:
 			//	do something on new peer ??????????
 		case b := <-s.newBlockCh:
-			s.lkMutex.Lock()
 			s.latestKnownLayer = uint32(max(int(s.latestKnownLayer), int(b.Layer())))
-			s.lkMutex.Unlock()
 		case <-s.exit:
 			fmt.Println("run stoped")
 			return
