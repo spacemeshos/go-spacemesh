@@ -3,10 +3,9 @@ go: 1.9.x
 
 
 before_install:
-- sudo apt-get install protobuf-compiler
+- bash ci/install-protobuf.sh
 - go get -u github.com/golang/protobuf/protoc-gen-go
 - protoc --version
-
 - bash ci/genproto.sh
 
 branches:
