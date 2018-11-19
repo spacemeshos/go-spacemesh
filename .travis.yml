@@ -1,17 +1,22 @@
 language: go
 go: 1.9.x
 
+
+before_install:
+- bash install-protobuf.sh
+- bash genproto.sh
+
 branches:
-    only:
-        - master
-        - develop
+  only:
+  - master
+  - develop
 jobs:
-    include:
-        - stage: lint
-          script:
-            - make devtools
-            - make lint
-        - stage: test
-          script:
-            - make devtools
-            - make test
+  include:
+  - stage: lint
+    script:
+    - make devtools
+    - make lint
+  - stage: test
+    script:
+    - make devtools
+    - make test
