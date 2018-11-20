@@ -18,10 +18,9 @@ package trie
 
 import (
 	"fmt"
-
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/spacemeshos/go-spacemesh/common"
 
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 // SecureTrie wraps a trie with key hashing. In a secure trie, all
