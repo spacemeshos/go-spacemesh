@@ -1,17 +1,25 @@
 language: go
 go: 1.9.x
 
+
+before_install:
+- bash ci/install-protobuf.sh
+- go get -u github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway
+- go get -u github.com/grpc-ecosystem/grpc-gateway/protoc-gen-swagger
+- go get -u github.com/golang/protobuf/protoc-gen-go
+- protoc --version
+- bash ci/genproto.sh
+
 branches:
-    only:
-        - master
-        - develop
+  only:
+  - master
+  - develop
 jobs:
-    include:
-        - stage: lint
-          script:
-            - make devtools
-            - make lint
-        - stage: test
-          script:
-            - make devtools
-            - make test
+  include:
+  - stage: lint
+    script:
+    - make lint
+  - stage: test
+    script:
+    - make devtools
+    - make test
