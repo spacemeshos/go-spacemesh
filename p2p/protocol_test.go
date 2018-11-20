@@ -2,6 +2,7 @@ package p2p
 
 import (
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/simulator"
 	"github.com/stretchr/testify/assert"
 	"testing"
@@ -30,7 +31,6 @@ func TestProtocol_SendRequest(t *testing.T) {
 }
 
 func TestProtocol_SendAsyncRequestRequest(t *testing.T) {
-
 	sim := simulator.New()
 	n1 := sim.NewNode()
 	fnd1 := NewProtocol(n1, protocol, 5*time.Second)
@@ -61,7 +61,6 @@ func TestProtocol_SendAsyncRequestRequest(t *testing.T) {
 }
 
 func TestProtocol_CleanOldPendingMessages(t *testing.T) {
-
 	sim := simulator.New()
 	n1 := sim.NewNode()
 	fnd1 := NewProtocol(n1, protocol, 5*time.Second)
@@ -87,11 +86,21 @@ func TestProtocol_CleanOldPendingMessages(t *testing.T) {
 
 	err := fnd2.SendAsyncRequest(1, nil, n1.PublicKey().String(), callback)
 	assert.NoError(t, err, "Should not return error")
-	assert.EqualValues(t, 1, fnd2.pendingQueue.Len(), "value received did not match correct value")
+	assert.EqualValues(t, 1, fnd2.pendingQueue.Len(), "value received did not match correct value1")
 
-	for fnd2.pendingQueue.Len() > 0 {
+	timeout := time.After(3 * time.Second)
+	// Keep trying until we're timed out or got a result or got an error
 
+	select {
+	// Got a timeout! fail with a timeout error
+	case <-timeout:
+		log.Debug("timeout")
+		t.Error("timeout")
+		return
+	default:
+		if fnd2.pendingQueue.Len() == 0 {
+			assert.EqualValues(t, 0, fnd2.pendingQueue.Len(), "value received did not match correct value2")
+		}
 	}
 
-	assert.EqualValues(t, 0, fnd2.pendingQueue.Len(), "value received did not match correct value")
 }
