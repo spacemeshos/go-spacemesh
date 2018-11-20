@@ -31,7 +31,6 @@ func TestProtocol_SendRequest(t *testing.T) {
 }
 
 func TestProtocol_SendAsyncRequestRequest(t *testing.T) {
-
 	sim := simulator.New()
 	n1 := sim.NewNode()
 	fnd1 := NewProtocol(n1, protocol, 5*time.Second)
