@@ -64,12 +64,12 @@ func TestProtocol_CleanOldPendingMessages(t *testing.T) {
 
 	sim := simulator.New()
 	n1 := sim.NewNode()
-	fnd1 := NewProtocol(n1, protocol, 5*time.Second)
+	fnd1 := NewProtocol(n1, protocol, 2*time.Second)
 
 	//handler that returns some bytes on request
 
 	handler := func(msg []byte) []byte {
-		time.Sleep(10 * time.Second)
+		time.Sleep(1 * time.Second)
 		return nil
 	}
 
