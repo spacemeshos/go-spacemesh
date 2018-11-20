@@ -4,7 +4,7 @@ import (
 	"context"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
-	"github.com/spacemeshos/go-spacemesh/p2p/simulator"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
@@ -14,7 +14,7 @@ func TestNew(t *testing.T) {
 	ln, _ := node.GenerateTestNode(t)
 
 	cfg := config.DefaultConfig()
-	sim := simulator.New()
+	sim := service.NewSimulator()
 
 	n1 := sim.NewNodeFrom(ln.Node)
 
@@ -26,7 +26,7 @@ func TestDHT_Update(t *testing.T) {
 	ln, _ := node.GenerateTestNode(t)
 
 	cfg := config.DefaultConfig()
-	sim := simulator.New()
+	sim := service.NewSimulator()
 
 	n1 := sim.NewNodeFrom(ln.Node)
 
@@ -78,7 +78,7 @@ func TestDHT_Lookup(t *testing.T) {
 	ln, _ := node.GenerateTestNode(t)
 
 	cfg := config.DefaultConfig()
-	sim := simulator.New()
+	sim := service.NewSimulator()
 
 	n1 := sim.NewNodeFrom(ln.Node)
 
@@ -99,7 +99,7 @@ func TestDHT_Lookup2(t *testing.T) {
 	ln, _ := node.GenerateTestNode(t)
 
 	cfg := config.DefaultConfig()
-	sim := simulator.New()
+	sim := service.NewSimulator()
 
 	n1 := sim.NewNodeFrom(ln.Node)
 
@@ -124,7 +124,7 @@ func TestDHT_Lookup2(t *testing.T) {
 
 }
 
-func simNodeWithDHT(t *testing.T, sc config.SwarmConfig, sim *simulator.Simulator) (*simulator.Node, DHT) {
+func simNodeWithDHT(t *testing.T, sc config.SwarmConfig, sim *service.Simulator) (*service.Node, DHT) {
 	ln, _ := node.GenerateTestNode(t)
 	n := sim.NewNodeFrom(ln.Node)
 	dht := New(ln, sc, n)
@@ -140,7 +140,7 @@ func bootAndWait(t *testing.T, dht DHT, errchan chan error) {
 
 func TestDHT_Bootstrap(t *testing.T) {
 	// Create a bootstrap node
-	sim := simulator.New()
+	sim := service.NewSimulator()
 	bn, _ := simNodeWithDHT(t, config.DefaultConfig().SwarmConfig, sim)
 
 	// config for other nodes
@@ -176,7 +176,7 @@ func TestDHT_Bootstrap2(t *testing.T) {
 	const nodesNum = 100
 	const minToBoot = 25
 
-	sim := simulator.New()
+	sim := service.NewSimulator()
 
 	// Create a bootstrap node
 	cfg := config.DefaultConfig()
@@ -212,7 +212,7 @@ func TestDHT_Bootstrap2(t *testing.T) {
 
 func TestDHT_BootstrapAbort(t *testing.T) {
 	// Create a bootstrap node
-	sim := simulator.New()
+	sim := service.NewSimulator()
 	bn, _ := simNodeWithDHT(t, config.DefaultConfig().SwarmConfig, sim)
 	// config for other nodes
 	cfg2 := config.DefaultConfig()

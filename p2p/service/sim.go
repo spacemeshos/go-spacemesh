@@ -30,7 +30,7 @@ type Node struct {
 }
 
 // New Creates a p2p simulation by providing nodes as p2p services and bridge them.
-func New() *Simulator {
+func NewSimulator() *Simulator {
 	s := &Simulator{
 		protocolHandler: make(map[string]map[string]chan Message),
 		nodes:           make(map[string]*Node),

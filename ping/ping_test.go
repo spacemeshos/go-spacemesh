@@ -1,13 +1,13 @@
 package ping
 
 import (
-	"github.com/spacemeshos/go-spacemesh/p2p/simulator"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
 func TestPing_Ping(t *testing.T) {
-	sim := simulator.New()
+	sim := service.NewSimulator()
 	node1 := sim.NewNode()
 	node2 := sim.NewNode()
 

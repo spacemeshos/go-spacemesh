@@ -3,7 +3,7 @@ package hare
 import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/hare/pb"
-	"github.com/spacemeshos/go-spacemesh/p2p/simulator"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
@@ -27,7 +27,7 @@ func createMessage(t *testing.T, layer Byteable) []byte {
 
 // test that a message to a specific layer is delivered by the broker
 func TestBroker_Received(t *testing.T) {
-	sim := simulator.New()
+	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
 
@@ -38,14 +38,14 @@ func TestBroker_Received(t *testing.T) {
 	serMsg := createMessage(t, Layer1)
 	n2.Broadcast(ProtoName, serMsg)
 
-	recv := <- inbox
+	recv := <-inbox
 
 	assert.True(t, recv.Message.Layer[0] == Layer1[0])
 }
 
 // test that aborting the broker aborts
 func TestBroker_Abort(t *testing.T) {
-	sim := simulator.New()
+	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 
 	broker := NewBroker(n1)
@@ -64,7 +64,7 @@ func TestBroker_Abort(t *testing.T) {
 	}
 }
 
-func sendMessages(t *testing.T, layer *LayerId, n *simulator.Node, count int) {
+func sendMessages(t *testing.T, layer *LayerId, n *service.Node, count int) {
 	for i := 0; i < count; i++ {
 		n.Broadcast(ProtoName, createMessage(t, layer))
 	}
@@ -79,7 +79,7 @@ func waitForMessages(t *testing.T, inbox chan *pb.HareMessage, layer *LayerId, m
 
 // test flow for multiple layers
 func TestBroker_MultipleLayers(t *testing.T) {
-	sim := simulator.New()
+	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
 	const msgCount = 100

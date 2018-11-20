@@ -5,7 +5,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
-	"github.com/spacemeshos/go-spacemesh/p2p/simulator"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
@@ -17,7 +17,7 @@ func getTestLogger(test string, args ...interface{}) log.Log {
 func TestFindNodeProtocol_FindNode(t *testing.T) {
 
 	cfg := config.DefaultConfig()
-	sim := simulator.New()
+	sim := service.NewSimulator()
 
 	n1 := sim.NewNode()
 	rt1 := NewRoutingTable(cfg.SwarmConfig.RoutingTableBucketSize, n1.DhtID(), getTestLogger("FindNode - ").Logger)
@@ -37,7 +37,7 @@ func TestFindNodeProtocol_FindNode2(t *testing.T) {
 	randnode := node.GenerateRandomNodeData()
 
 	cfg := config.DefaultConfig()
-	sim := simulator.New()
+	sim := service.NewSimulator()
 
 	n1 := sim.NewNode()
 	rt1 := NewRoutingTable(cfg.SwarmConfig.RoutingTableBucketSize, n1.DhtID(), getTestLogger("FindNode - ").Logger)
