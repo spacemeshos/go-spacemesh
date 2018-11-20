@@ -64,19 +64,19 @@ func TestProtocol_CleanOldPendingMessages(t *testing.T) {
 
 	sim := simulator.New()
 	n1 := sim.NewNode()
-	fnd1 := NewProtocol(n1, protocol, 2*time.Second)
+	fnd1 := NewProtocol(n1, protocol, 5*time.Second)
 
 	//handler that returns some bytes on request
 
 	handler := func(msg []byte) []byte {
-		time.Sleep(1 * time.Second)
+		time.Sleep(10 * time.Second)
 		return nil
 	}
 
 	fnd1.RegisterMsgHandler(1, handler)
 
 	n2 := sim.NewNode()
-	fnd2 := NewProtocol(n2, protocol, 5*time.Second)
+	fnd2 := NewProtocol(n2, protocol, 10*time.Millisecond)
 
 	//send request with handler that converts to string and sends via channel
 	strCh := make(chan string)
@@ -88,6 +88,6 @@ func TestProtocol_CleanOldPendingMessages(t *testing.T) {
 	err := fnd2.SendAsyncRequest(1, nil, n1.PublicKey().String(), callback)
 	assert.NoError(t, err, "Should not return error")
 	assert.EqualValues(t, 1, fnd2.pendingQueue.Len(), "value received did not match correct value")
-	time.Sleep(time.Second * 6)
+	time.Sleep(2 * time.Second)
 	assert.EqualValues(t, 0, fnd2.pendingQueue.Len(), "value received did not match correct value")
 }
