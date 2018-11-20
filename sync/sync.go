@@ -103,7 +103,7 @@ func (s *Syncer) run() {
 			doSync = true
 		case doSync = <-s.forceSync:
 		case <-s.exit:
-			fmt.Println("run stoped")
+			log.Debug("run stoped")
 			return
 		default:
 			doSync = false
