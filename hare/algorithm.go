@@ -6,6 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"sync"
 	"time"
 )
 
@@ -41,7 +42,8 @@ type ConsensusProcess struct {
 	inbox       chan *pb.HareMessage
 	knowledge   []*pb.HareMessage
 	isProcessed map[uint32]bool // TODO: could be empty struct
-	// TODO: add knowledge of notify messages. What is the life-cycle of such messages?
+	mutex       sync.Mutex
+	// TODO: add knowledge of notify messages. What is the life-cycle of such messages? persistent according to Julian
 }
 
 func (proc *ConsensusProcess) NewConsensusProcess(layer LayerId, s Set, oracle Rolacle, signing Signing, p2p NetworkService, broker *Broker) {
@@ -63,6 +65,12 @@ func (proc *ConsensusProcess) Start() {
 	}
 
 	proc.startTime = time.Now()
+
+	// send first status message
+	m, err := proc.buildStatusMessage()
+	if err == nil {
+		proc.network.Broadcast(ProtoName, m)
+	}
 
 	go proc.eventLoop()
 }
@@ -110,7 +118,7 @@ func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
 		return
 	}
 
-	// validate role TODO: in proposal we have additional verification at the end of the round (in processMessages)
+	// validate role
 	if !proc.oracle.ValidateRole(roleFromIteration(m.Message.K),
 		RoleRequest{PubKey{NewBytes32(m.PubKey)}, LayerId{NewBytes32(m.Message.Layer)}, m.Message.K},
 		Signature(m.Message.RoleProof)) {
@@ -121,29 +129,35 @@ func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
 }
 
 func (proc *ConsensusProcess) nextRound() {
-	log.Info("Next round: %d", proc.k+1)
+	log.Info("End of round: %d", proc.k)
 
 	// process the round
-	go proc.processMessages(proc.knowledge, proc.k)
+	// state is passed by value, ownership of knowledge is also passed
+	go proc.processMessages(proc.State, proc.knowledge)
 
 	// advance to next round
 	proc.k++
 
-	// reset knowledge
+	// can reset knowledge as ownership was passed before
 	proc.knowledge = make([]*pb.HareMessage, InitialKnowledgeSize)
 }
 
-// TODO: put msg []*pb.HareMessage, k uint32 in Context struct?
-func (proc *ConsensusProcess) processMessages(msg []*pb.HareMessage, k uint32) {
-	// TODO: safety?
+// TODO: put state and msg in Context struct?
+func (proc *ConsensusProcess) processMessages(state State, msg []*pb.HareMessage) {
+	// only one process should run concurrently
+	proc.mutex.Lock()
+	defer proc.mutex.Unlock()
+
 	// check if process of messages has already been made for this round
-	if _, exist := proc.isProcessed[k]; exist {
+	if _, exist := proc.isProcessed[state.k]; exist {
 		return
 	}
 
-	// TODO: process to create suitable hare message
+	// TODO: in proposal we should also verify there is no contradiction
 
-	m, err := proc.lookForProposal(msg, k) // end of round 0
+	// TODO: process to create suitable hare message for the round
+
+	m, err := proc.lookForProposal(state, msg) // end of round 0
 	if err != nil {
 		return
 	}
@@ -152,20 +166,48 @@ func (proc *ConsensusProcess) processMessages(msg []*pb.HareMessage, k uint32) {
 	proc.network.Broadcast(ProtoName, m)
 
 	// mark as processed
-	proc.isProcessed[k] = true
+	proc.isProcessed[state.k] = true
 }
 
-func (proc *ConsensusProcess) lookForProposal(msg []*pb.HareMessage, k uint32) ([]byte, error) {
+func (proc *ConsensusProcess) buildStatusMessage() ([]byte, error) {
+	x := &pb.InnerMessage{}
+	x.Type = int32(Status)
+	x.Layer = proc.layerId.Bytes()
+	x.K = proc.k
+	x.Ki = proc.ki
+	x.Blocks = proc.s.To2DSlice()
 
-	// TODO: pass on knowledge & look for a set to propose
+	buff, err := proto.Marshal(x)
+	if err != nil {
+		return nil, errors.New("error marshaling inner message")
+	}
+
+	sig := proc.signing.Sign(buff)
+
+	m := &pb.HareMessage{}
+	m.PubKey = proc.pubKey.Bytes()
+	m.Message = x
+	m.InnerSig = sig
+
+	buff, err = proto.Marshal(m)
+	if err != nil {
+		return nil, errors.New("error marshaling message")
+	}
+
+	return buff, nil
+}
+
+func (proc *ConsensusProcess) lookForProposal(state State, msg []*pb.HareMessage) ([]byte, error) {
+
+	// TODO: pass on msg & look for a set to propose
 
 	x := &pb.InnerMessage{}
 	x.Type = int32(Proposal)
 	x.Layer = proc.layerId.Bytes()
-	x.K = k
-	x.Ki = proc.ki
-	x.Blocks = proc.s.To2DSlice()
-	x.RoleProof = proc.oracle.Role(RoleRequest{proc.pubKey, proc.layerId, k})
+	x.K = state.k
+	x.Ki = state.ki
+	x.Blocks = state.s.To2DSlice()
+	x.RoleProof = proc.oracle.Role(RoleRequest{proc.pubKey, proc.layerId, state.k})
 	x.Svp = &pb.AggregatedMessages{} // TODO: build SVP msg
 
 	buff, err := proto.Marshal(x)
