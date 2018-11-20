@@ -65,7 +65,7 @@ func (broker *Broker) dispatcher() {
 		select {
 		case msg := <-broker.inbox:
 			hareMsg := &pb.HareMessage{}
-			err := proto.Unmarshal(msg.Bytes().Bytes(), hareMsg)
+			err := proto.Unmarshal(msg.Bytes(), hareMsg)
 			if err != nil {
 				log.Error("Could not unmarshal message: ", err)
 				continue

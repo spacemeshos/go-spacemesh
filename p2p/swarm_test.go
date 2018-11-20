@@ -173,7 +173,7 @@ func sendDirectMessage(t *testing.T, sender *swarm, recvPub string, inChan chan 
 	select {
 	case msg := <-inChan:
 		if checkpayload {
-			assert.Equal(t, msg.Bytes().Bytes(), payload)
+			assert.Equal(t, msg.Bytes(), payload)
 		}
 		assert.Equal(t, msg.Sender().String(), sender.lNode.String())
 		break
