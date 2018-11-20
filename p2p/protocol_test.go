@@ -61,7 +61,6 @@ func TestProtocol_SendAsyncRequestRequest(t *testing.T) {
 }
 
 func TestProtocol_CleanOldPendingMessages(t *testing.T) {
-
 	sim := simulator.New()
 	n1 := sim.NewNode()
 	fnd1 := NewProtocol(n1, protocol, 5*time.Second)
@@ -69,7 +68,7 @@ func TestProtocol_CleanOldPendingMessages(t *testing.T) {
 	//handler that returns some bytes on request
 
 	handler := func(msg []byte) []byte {
-		time.Sleep(10 * time.Second)
+		time.Sleep(2 * time.Second)
 		return nil
 	}
 
@@ -88,6 +87,10 @@ func TestProtocol_CleanOldPendingMessages(t *testing.T) {
 	err := fnd2.SendAsyncRequest(1, nil, n1.PublicKey().String(), callback)
 	assert.NoError(t, err, "Should not return error")
 	assert.EqualValues(t, 1, fnd2.pendingQueue.Len(), "value received did not match correct value")
-	time.Sleep(2 * time.Second)
+
+	for fnd2.pendingQueue.Len() > 0 {
+
+	}
+
 	assert.EqualValues(t, 0, fnd2.pendingQueue.Len(), "value received did not match correct value")
 }
