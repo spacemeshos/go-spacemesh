@@ -43,12 +43,15 @@ type ConsensusProcess struct {
 	knowledge   []*pb.HareMessage
 	isProcessed map[uint32]bool // TODO: could be empty struct
 	mutex       sync.Mutex
+	stateMutex  sync.Mutex
 	// TODO: add knowledge of notify messages. What is the life-cycle of such messages? persistent according to Julian
 }
 
-func (proc *ConsensusProcess) NewConsensusProcess(layer LayerId, s Set, oracle Rolacle, signing Signing, p2p NetworkService, broker *Broker) {
+func NewConsensusProcess(key PubKey, layer LayerId, s Set, oracle Rolacle, signing Signing, p2p NetworkService, broker *Broker) *ConsensusProcess {
+	proc := &ConsensusProcess{}
 	proc.State = State{0, 0, s, Certificate{}}
 	proc.Closer = NewCloser()
+	proc.pubKey = key
 	proc.layerId = layer
 	proc.oracle = oracle
 	proc.signing = signing
@@ -56,23 +59,29 @@ func (proc *ConsensusProcess) NewConsensusProcess(layer LayerId, s Set, oracle R
 	proc.inbox = broker.CreateInbox(&layer)
 	proc.knowledge = make([]*pb.HareMessage, 0)
 	proc.isProcessed = make(map[uint32]bool)
+
+	return proc
 }
 
-func (proc *ConsensusProcess) Start() {
+func (proc *ConsensusProcess) Start() error {
 	if !proc.startTime.IsZero() { // called twice on same instance
 		log.Error("ConsensusProcess has already been started.")
-		return
+		return errors.New("failed starting consensus process")
 	}
 
 	proc.startTime = time.Now()
 
 	// send first status message
 	m, err := proc.buildStatusMessage()
-	if err == nil {
-		proc.network.Broadcast(ProtoName, m)
+	if err != nil {
+		return errors.New("failed starting consensus process")
 	}
 
+	proc.network.Broadcast(ProtoName, m)
+
 	go proc.eventLoop()
+
+	return nil
 }
 
 func (proc *ConsensusProcess) WaitForCompletion() {
@@ -143,7 +152,7 @@ func (proc *ConsensusProcess) nextRound() {
 }
 
 // TODO: put state and msg in Context struct?
-func (proc *ConsensusProcess) processMessages(state State, msg []*pb.HareMessage) {
+func (proc *ConsensusProcess) processMessages(state State, msgs []*pb.HareMessage) {
 	// only one process should run concurrently
 	proc.mutex.Lock()
 	defer proc.mutex.Unlock()
@@ -153,29 +162,34 @@ func (proc *ConsensusProcess) processMessages(state State, msg []*pb.HareMessage
 		return
 	}
 
-	// TODO: in proposal we should also verify there is no contradiction
+	// mark as processed
+	proc.isProcessed[state.k] = true
 
 	// TODO: process to create suitable hare message for the round
 
-	m, err := proc.lookForProposal(state, msg) // end of round 0
+	var m []byte
+	var err error = nil
+	switch state.k % 4 {
+	case 0: // end of round 0
+		m, err = proc.lookForProposal(state, msgs)
+	case 1: // end of round 1
+		m, err = proc.validateProposal(state, msgs)
+	case 2: // end of round 2
+		m, err = proc.lookForCommits(state, msgs)
+	case 3: // end of round 3
+		m, err = proc.buildStatusMessage()
+	}
+
 	if err != nil {
 		return
 	}
 
 	// send message
 	proc.network.Broadcast(ProtoName, m)
-
-	// mark as processed
-	proc.isProcessed[state.k] = true
 }
 
 func (proc *ConsensusProcess) buildStatusMessage() ([]byte, error) {
-	x := &pb.InnerMessage{}
-	x.Type = int32(Status)
-	x.Layer = proc.layerId.Bytes()
-	x.K = proc.k
-	x.Ki = proc.ki
-	x.Blocks = proc.s.To2DSlice()
+	x := NewInnerBuilder().SetType(Status).SetLayer(proc.layerId).SetIteration(proc.k).SetKi(proc.ki).SetBlocks(proc.s).Build()
 
 	buff, err := proto.Marshal(x)
 	if err != nil {
@@ -184,10 +198,8 @@ func (proc *ConsensusProcess) buildStatusMessage() ([]byte, error) {
 
 	sig := proc.signing.Sign(buff)
 
-	m := &pb.HareMessage{}
-	m.PubKey = proc.pubKey.Bytes()
-	m.Message = x
-	m.InnerSig = sig
+	outer := NewProtoBuilder()
+	m := outer.SetInnerMessage(x).SetPubKey(proc.pubKey).SetInnerSignature(sig).Build()
 
 	buff, err = proto.Marshal(m)
 	if err != nil {
@@ -201,14 +213,11 @@ func (proc *ConsensusProcess) lookForProposal(state State, msg []*pb.HareMessage
 
 	// TODO: pass on msg & look for a set to propose
 
-	x := &pb.InnerMessage{}
-	x.Type = int32(Proposal)
-	x.Layer = proc.layerId.Bytes()
-	x.K = state.k
-	x.Ki = state.ki
-	x.Blocks = state.s.To2DSlice()
-	x.RoleProof = proc.oracle.Role(RoleRequest{proc.pubKey, proc.layerId, state.k})
-	x.Svp = &pb.AggregatedMessages{} // TODO: build SVP msg
+	inner := NewInnerBuilder()
+	inner.SetType(Proposal).SetLayer(proc.layerId).SetIteration(proc.k).SetKi(proc.ki).SetBlocks(proc.s)
+	inner.SetRoleProof(proc.oracle.Role(RoleRequest{proc.pubKey, proc.layerId, state.k}))
+
+	x := inner.Build()
 
 	buff, err := proto.Marshal(x)
 	if err != nil {
@@ -217,18 +226,39 @@ func (proc *ConsensusProcess) lookForProposal(state State, msg []*pb.HareMessage
 
 	sig := proc.signing.Sign(buff)
 
-	m := &pb.HareMessage{}
-	m.PubKey = proc.pubKey.Bytes()
-	m.Message = x
-	m.InnerSig = sig
-	// TODO: m.Cert =
+	outer := NewProtoBuilder()
+	outer.SetPubKey(proc.pubKey).SetInnerMessage(x).SetInnerSignature(sig)
 
-	buff, err = proto.Marshal(m)
+	buff, err = proto.Marshal(outer.Build())
 	if err != nil {
 		return nil, errors.New("error marshaling message")
 	}
 
 	return buff, nil
+}
+
+func (proc *ConsensusProcess) validateProposal(state State, msg []*pb.HareMessage) ([]byte, error) {
+	// TODO: validate no contradicting proposals
+
+	// TODO: if ok then SAFELY update state
+
+	// TODO: if ok then build commit message
+
+	return []byte{}, nil
+}
+
+func (proc *ConsensusProcess) lookForCommits(state State, msg []*pb.HareMessage) ([]byte, error) {
+	// TODO: check if we received f+1 commit messages
+
+	// TODO: if ok construct the notify message
+
+	return []byte{}, nil
+}
+
+func (proc *ConsensusProcess) updateState(state State) {
+	proc.stateMutex.Lock()
+	proc.State = state
+	proc.stateMutex.Unlock()
 }
 
 func roleFromIteration(k uint32) byte {

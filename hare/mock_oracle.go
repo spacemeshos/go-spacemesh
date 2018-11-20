@@ -36,9 +36,12 @@ type MockOracle struct {
 	isLeaderTaken bool
 }
 
-func (mockOracle *MockOracle) NewMockOracle() {
-	mockOracle.roles = make(map[uint32]byte)
-	mockOracle.isLeaderTaken = false
+func NewMockOracle() *MockOracle {
+	mock := &MockOracle{}
+	mock.roles = make(map[uint32]byte)
+	mock.isLeaderTaken = false
+
+	return mock
 }
 
 func (roleRequest *RoleRequest) Id() uint32 {

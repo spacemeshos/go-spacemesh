@@ -102,3 +102,8 @@ func NewCertificate(p *pb.Certificate) Certificate {
 
 	return c
 }
+
+func (cert *Certificate) Validate(signing Signing) bool {
+	// TODO: iterate messages & verify with signing
+	return false
+}
