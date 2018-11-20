@@ -17,6 +17,7 @@
 package trie
 
 import (
+	"github.com/ethereum/go-ethereum/rlp"
 	"hash"
 	"sync"
 
@@ -24,7 +25,6 @@ import (
 	//"github.com/ethereum/go-ethereum/rlp"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
 type hasher struct {
