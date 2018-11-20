@@ -83,8 +83,8 @@ type simMessage struct {
 }
 
 // Bytes is the message's binary data in byte array format.
-func (sm simMessage) Data() Data {
-	return sm.msg
+func (sm simMessage) Data() *Data_MsgWrapper {
+	return sm.msg.(*Data_MsgWrapper)
 }
 
 // Bytes is the message's binary data in byte array format.
