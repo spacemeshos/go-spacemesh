@@ -18,7 +18,6 @@ jobs:
   include:
   - stage: lint
     script:
-    - make devtools
     - make lint
   - stage: test
     script:
