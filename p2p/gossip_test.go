@@ -92,7 +92,7 @@ func TestSwarm_GossipRoundTrip(t *testing.T) {
 			continue
 		}
 
-		if bytes.Equal(resp.Data().Bytes(), msg) {
+		if bytes.Equal(resp.Bytes().Bytes(), msg) {
 			nodes[c].lNode.Info("GOT THE gossip MESSAge ", atomic.AddInt32(&got, 1))
 		}
 	}

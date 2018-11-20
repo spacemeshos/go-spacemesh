@@ -83,9 +83,14 @@ type simMessage struct {
 	sender node.Node
 }
 
-// Data is the message's binary data in byte array format.
+// Bytes is the message's binary data in byte array format.
 func (sm simMessage) Data() service.Data {
 	return sm.msg
+}
+
+// Bytes is the message's binary data in byte array format.
+func (sm simMessage) Bytes() []byte {
+	return sm.msg.Bytes()
 }
 
 // Sender is the node who sent this message
@@ -100,7 +105,16 @@ func (sn *Node) Start() error {
 
 // SendMessage sends a protocol message to the specified nodeID.
 // returns error if the node cant be found. corresponds to `Service.SendMessage`
-func (sn *Node) SendMessage(nodeID string, protocol string, payload service.Data) error {
+
+func (s *Node) SendWrappedMessage(nodeID string, protocol string, payload *service.Data_MsgWrapper) error {
+	return s.sendMessageImpl(nodeID, protocol, payload)
+}
+
+func (s *Node) SendMessage(nodeID string, protocol string, payload []byte) error {
+	return s.sendMessageImpl(nodeID, protocol, service.Data_Bytes{Payload: payload})
+}
+
+func (sn *Node) sendMessageImpl(nodeID string, protocol string, payload service.Data) error {
 	sn.sim.mutex.RLock()
 	thec, ok := sn.sim.protocolHandler[nodeID][protocol]
 	sn.sim.mutex.RUnlock()

@@ -1,17 +1,26 @@
-package p2p
+package service
 
 import (
 	"container/list"
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"sync"
 	"sync/atomic"
 	"time"
 )
 
 type MessageType uint32
+
+type ServerService interface {
+	Service
+	SendWrappedMessage(nodeID string, protocol string, payload *Data_MsgWrapper) error
+}
+
+type ServerMessage interface {
+	Message
+	Data() *Data_MsgWrapper
+}
 
 type Item struct {
 	id        uint64
@@ -21,17 +30,17 @@ type Item struct {
 type Message_Server struct {
 	ReqId              uint64 //request id
 	name               string //server name
-	network            service.Service
+	network            ServerService
 	pendMutex          sync.RWMutex
 	pendingMap         map[uint64]chan interface{}             //pending messages by request ReqId
 	pendingQueue       *list.List                              //queue of pending messages
 	resHandlers        map[uint64]func(msg []byte)             //response handlers by request ReqId
 	msgRequestHandlers map[MessageType]func(msg []byte) []byte //request handlers by request type
-	ingressChannel     chan service.Message                    //chan to relay messages into the server
+	ingressChannel     chan Message                            //chan to relay messages into the server
 	requestLifetime    time.Duration                           //time a request can stay in the pending queue until evicted
 }
 
-func NewProtocol(network service.Service, name string, requestLifetime time.Duration) *Message_Server {
+func NewProtocol(network ServerService, name string, requestLifetime time.Duration) *Message_Server {
 	p := &Message_Server{
 		name:               name,
 		pendingMap:         make(map[uint64]chan interface{}),
@@ -57,7 +66,7 @@ func (p *Message_Server) readLoop() {
 				break
 			}
 			//todo add buffer and option to limit number of concurrent goroutines
-			go p.handleMessage(msg)
+			go p.handleMessage(msg.(ServerMessage))
 		case <-timer.C:
 			go p.cleanStaleMessages()
 		}
@@ -77,31 +86,26 @@ func (p *Message_Server) cleanStaleMessages() {
 	}
 }
 
-func (p *Message_Server) handleMessage(msg service.Message) {
-	switch x := msg.Data().(type) {
-	case *service.Data_MsgWrapper:
-		if x.Req {
-			p.handleRequestMessage(msg.Sender().PublicKey(), x)
-		} else {
-			p.handleResponseMessage(x)
-		}
-	default:
-		log.Debug("fuck my life ", x)
+func (p *Message_Server) handleMessage(msg ServerMessage) {
+	if msg.Data().Req {
+		p.handleRequestMessage(msg.Sender().PublicKey(), msg.Data())
+	} else {
+		p.handleResponseMessage(msg.Data())
 	}
 }
 
-func (p *Message_Server) handleRequestMessage(sender crypto.PublicKey, headers *service.Data_MsgWrapper) {
+func (p *Message_Server) handleRequestMessage(sender crypto.PublicKey, headers *Data_MsgWrapper) {
 
 	if payload := p.msgRequestHandlers[MessageType(headers.MsgType)](headers.Payload); payload != nil {
-		rmsg := &service.Data_MsgWrapper{MsgType: headers.MsgType, ReqID: headers.ReqID, Payload: payload}
-		sendErr := p.network.SendMessage(sender.String(), p.name, rmsg)
+		rmsg := &Data_MsgWrapper{MsgType: headers.MsgType, ReqID: headers.ReqID, Payload: payload}
+		sendErr := p.network.SendWrappedMessage(sender.String(), p.name, rmsg)
 		if sendErr != nil {
 			log.Error("Error sending response message, err:", sendErr)
 		}
 	}
 }
 
-func (p *Message_Server) handleResponseMessage(headers *service.Data_MsgWrapper) {
+func (p *Message_Server) handleResponseMessage(headers *Data_MsgWrapper) {
 
 	//get and remove from pendingMap
 	p.pendMutex.Lock()
@@ -137,7 +141,7 @@ func (p *Message_Server) RegisterMsgHandler(msgType MessageType, reqHandler func
 func (p *Message_Server) SendAsyncRequest(msgType MessageType, payload []byte, address string, resHandler func(msg []byte)) error {
 
 	reqID := p.newRequestId()
-	msg := &service.Data_MsgWrapper{Req: true, ReqID: reqID, MsgType: uint32(msgType), Payload: payload}
+	msg := &Data_MsgWrapper{Req: true, ReqID: reqID, MsgType: uint32(msgType), Payload: payload}
 	respc := make(chan interface{})
 	p.pendMutex.Lock()
 	p.pendingMap[reqID] = respc
@@ -145,7 +149,7 @@ func (p *Message_Server) SendAsyncRequest(msgType MessageType, payload []byte, a
 	item := p.pendingQueue.PushBack(Item{id: reqID, timestamp: time.Now()})
 	p.pendMutex.Unlock()
 
-	if sendErr := p.network.SendMessage(address, p.name, msg); sendErr != nil {
+	if sendErr := p.network.SendWrappedMessage(address, p.name, msg); sendErr != nil {
 		p.removeFromPending(reqID, item)
 		return sendErr
 	}
@@ -160,7 +164,7 @@ func (p *Message_Server) newRequestId() uint64 {
 func (p *Message_Server) SendRequest(msgType MessageType, payload []byte, address string, timeout time.Duration) (interface{}, error) {
 	reqID := p.newRequestId()
 
-	msg := &service.Data_MsgWrapper{Req: true, ReqID: reqID, MsgType: uint32(msgType), Payload: payload}
+	msg := &Data_MsgWrapper{Req: true, ReqID: reqID, MsgType: uint32(msgType), Payload: payload}
 	respc := make(chan interface{})
 
 	p.pendMutex.Lock()
@@ -169,7 +173,7 @@ func (p *Message_Server) SendRequest(msgType MessageType, payload []byte, addres
 
 	defer p.removeFromPending(reqID, nil)
 
-	if sendErr := p.network.SendMessage(address, p.name, msg); sendErr != nil {
+	if sendErr := p.network.SendWrappedMessage(address, p.name, msg); sendErr != nil {
 		return nil, sendErr
 	}
 

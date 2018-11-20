@@ -7,7 +7,7 @@ import (
 
 // OpaqueMessage is a basic blob of bytes type interface
 type OpaqueMessage interface {
-	// Data returns the bytes contained by this message
+	// Bytes returns the bytes contained by this message
 	Data() []byte
 }
 

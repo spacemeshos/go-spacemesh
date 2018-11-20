@@ -169,7 +169,7 @@ func (dsci *MaliciousChangeMessageReceiver) ReceiveMessage(message *pb.Consensus
 	}
 	//todo: what if the signatures are of nodes that are not in the layer?
 	if dsci.value != nil {
-		if res := bytes.Compare(dsci.value, message.Msg.Data); res != 0 {
+		if res := bytes.Compare(dsci.value, message.Msg.Bytes); res != 0 {
 			dsci.abortProcessingInstance = true //with abort
 			return fmt.Errorf("received two different messages from same sender, aborting this instance")
 		}

@@ -53,7 +53,7 @@ func TestProcessHandshakeRequest(t *testing.T) {
 	assert.NoError(t, err, "Sanity processing request failed", err)
 
 	_, _, err = ProcessHandshakeRequest(netId, remoteNet.PublicKey(), remoteNet.PrivateKey(), localNode.PublicKey(), data)
-	assert.NoError(t, err, "Data modified during test")
+	assert.NoError(t, err, "Bytes modified during test")
 
 	data.NetworkID = data.NetworkID + 1
 	_, _, err = ProcessHandshakeRequest(netId, remoteNet.PublicKey(), remoteNet.PrivateKey(), localNode.PublicKey(), data)

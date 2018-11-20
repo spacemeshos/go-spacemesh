@@ -1,6 +1,7 @@
 package p2p
 
 import (
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	inet "net"
 
 	"bytes"
@@ -17,7 +18,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"strconv"
 	"sync"
@@ -36,6 +36,10 @@ func (pm protocolMessage) Sender() node.Node {
 
 func (pm protocolMessage) Data() service.Data {
 	return pm.data
+}
+
+func (pm protocolMessage) Bytes() []byte {
+	return pm.data.Bytes()
 }
 
 type swarm struct {
@@ -180,6 +184,14 @@ func (s *swarm) connectionPool() *connectionpool.ConnectionPool {
 	return s.cPool
 }
 
+func (s *swarm) sendWrappedMessage(nodeID string, protocol string, payload *service.Data_MsgWrapper) error {
+	return s.sendMessageImpl(nodeID, protocol, payload)
+}
+
+func (s *swarm) SendMessage(nodeID string, protocol string, payload []byte) error {
+	return s.sendMessageImpl(nodeID, protocol, service.Data_Bytes{Payload: payload})
+}
+
 // SendMessage Sends a message to a remote node
 // swarm will establish session if needed or use an existing session and open connection
 // Designed to be used by any high level server
@@ -187,7 +199,7 @@ func (s *swarm) connectionPool() *connectionpool.ConnectionPool {
 // req.msg: marshaled message data
 // req.destId: receiver remote node public key/id
 // Local request to send a message to a remote node
-func (s *swarm) SendMessage(peerPubKey string, protocol string, protocolMsg service.Data) error {
+func (s *swarm) sendMessageImpl(peerPubKey string, protocol string, payload service.Data) error {
 	s.lNode.Info("Sending message to %v", peerPubKey)
 	var err error
 	var peer node.Node
@@ -217,7 +229,7 @@ func (s *swarm) SendMessage(peerPubKey string, protocol string, protocolMsg serv
 		Metadata: message.NewProtocolMessageMetadata(s.lNode.PublicKey(), protocol, false),
 	}
 
-	switch x := protocolMsg.(type) {
+	switch x := payload.(type) {
 	case service.Data_MsgWrapper:
 		protomessage.Data = &pb.ProtocolMessage_Msg{&pb.MessageWrapper{Type: x.MsgType, Req: x.Req, ReqID: x.ReqID, Payload: x.Payload}}
 	case service.Data_Bytes:
