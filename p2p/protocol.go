@@ -119,12 +119,12 @@ func (p *Protocol) handleRequestMessage(sender crypto.PublicKey, headers *pb.Mes
 func (p *Protocol) handleResponseMessage(headers *pb.MessageWrapper) {
 
 	//get and remove from pendingMap
-	p.pendMutex.RLock()
+	p.pendMutex.Lock()
 	pend, okPend := p.pendingMap[headers.ReqID]
 	foo, okFoo := p.resHandlers[headers.ReqID]
 	delete(p.pendingMap, headers.ReqID)
 	delete(p.resHandlers, headers.ReqID)
-	p.pendMutex.RUnlock()
+	p.pendMutex.Unlock()
 
 	if okPend {
 		if okFoo {
