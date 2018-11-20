@@ -3,8 +3,8 @@ package hare
 import (
 	"bytes"
 	"encoding/binary"
-	"github.com/go-ethereum/common/math"
 	"hash/fnv"
+	"math"
 )
 
 const (
