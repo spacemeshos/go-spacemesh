@@ -65,7 +65,6 @@ func TestSwarm_GossipRoundTrip(t *testing.T) {
 		}
 	}
 
-
 	fmt.Println(" ################################################ ALL PEERS BOOTSTRAPPED ################################################")
 
 	msg := []byte("gossip")
@@ -93,7 +92,7 @@ func TestSwarm_GossipRoundTrip(t *testing.T) {
 			continue
 		}
 
-		if bytes.Equal(resp.Data(), msg) {
+		if bytes.Equal(resp.Data().Bytes(), msg) {
 			nodes[c].lNode.Info("GOT THE gossip MESSAge ", atomic.AddInt32(&got, 1))
 		}
 	}
@@ -108,7 +107,6 @@ func TestSwarm_GossipRoundTrip(t *testing.T) {
 	bn.lNode.Info("didnt get : %v", didnt)
 	time.Sleep(time.Millisecond * 1000) // to see the log
 }
-
 
 func TestSwarm_GossipRoundTrip2(t *testing.T) {
 	t.Skip()
@@ -161,7 +159,7 @@ func TestSwarm_GossipRoundTrip2(t *testing.T) {
 		if i >= numPeers {
 			close(nchan)
 		}
-		fmt.Println("FINSIHED : " ,i)
+		fmt.Println("FINSIHED : ", i)
 	}
 	i = 0
 	for n := range nodes {
@@ -184,6 +182,6 @@ func TestSwarm_GossipRoundTrip2(t *testing.T) {
 		}
 	}
 
-	assert.Equal(t, i , numPeers)
+	assert.Equal(t, i, numPeers)
 
 }

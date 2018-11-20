@@ -3,9 +3,11 @@
 
 package pb
 
-import proto "github.com/golang/protobuf/proto"
-import fmt "fmt"
-import math "math"
+import (
+	fmt "fmt"
+	proto "github.com/golang/protobuf/proto"
+	math "math"
+)
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -31,16 +33,17 @@ func (m *FindNode) Reset()         { *m = FindNode{} }
 func (m *FindNode) String() string { return proto.CompactTextString(m) }
 func (*FindNode) ProtoMessage()    {}
 func (*FindNode) Descriptor() ([]byte, []int) {
-	return fileDescriptor_findnode_dcc2d32c502bf7a8, []int{0}
+	return fileDescriptor_81fb8451f4c1d278, []int{0}
 }
+
 func (m *FindNode) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_FindNode.Unmarshal(m, b)
 }
 func (m *FindNode) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_FindNode.Marshal(b, m, deterministic)
 }
-func (dst *FindNode) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_FindNode.Merge(dst, src)
+func (m *FindNode) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_FindNode.Merge(m, src)
 }
 func (m *FindNode) XXX_Size() int {
 	return xxx_messageInfo_FindNode.Size(m)
@@ -85,16 +88,17 @@ func (m *FindNodeReq) Reset()         { *m = FindNodeReq{} }
 func (m *FindNodeReq) String() string { return proto.CompactTextString(m) }
 func (*FindNodeReq) ProtoMessage()    {}
 func (*FindNodeReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_findnode_dcc2d32c502bf7a8, []int{1}
+	return fileDescriptor_81fb8451f4c1d278, []int{1}
 }
+
 func (m *FindNodeReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_FindNodeReq.Unmarshal(m, b)
 }
 func (m *FindNodeReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_FindNodeReq.Marshal(b, m, deterministic)
 }
-func (dst *FindNodeReq) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_FindNodeReq.Merge(dst, src)
+func (m *FindNodeReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_FindNodeReq.Merge(m, src)
 }
 func (m *FindNodeReq) XXX_Size() int {
 	return xxx_messageInfo_FindNodeReq.Size(m)
@@ -131,16 +135,17 @@ func (m *NodeInfo) Reset()         { *m = NodeInfo{} }
 func (m *NodeInfo) String() string { return proto.CompactTextString(m) }
 func (*NodeInfo) ProtoMessage()    {}
 func (*NodeInfo) Descriptor() ([]byte, []int) {
-	return fileDescriptor_findnode_dcc2d32c502bf7a8, []int{2}
+	return fileDescriptor_81fb8451f4c1d278, []int{2}
 }
+
 func (m *NodeInfo) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_NodeInfo.Unmarshal(m, b)
 }
 func (m *NodeInfo) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_NodeInfo.Marshal(b, m, deterministic)
 }
-func (dst *NodeInfo) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_NodeInfo.Merge(dst, src)
+func (m *NodeInfo) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_NodeInfo.Merge(m, src)
 }
 func (m *NodeInfo) XXX_Size() int {
 	return xxx_messageInfo_NodeInfo.Size(m)
@@ -176,16 +181,17 @@ func (m *FindNodeResp) Reset()         { *m = FindNodeResp{} }
 func (m *FindNodeResp) String() string { return proto.CompactTextString(m) }
 func (*FindNodeResp) ProtoMessage()    {}
 func (*FindNodeResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_findnode_dcc2d32c502bf7a8, []int{3}
+	return fileDescriptor_81fb8451f4c1d278, []int{3}
 }
+
 func (m *FindNodeResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_FindNodeResp.Unmarshal(m, b)
 }
 func (m *FindNodeResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_FindNodeResp.Marshal(b, m, deterministic)
 }
-func (dst *FindNodeResp) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_FindNodeResp.Merge(dst, src)
+func (m *FindNodeResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_FindNodeResp.Merge(m, src)
 }
 func (m *FindNodeResp) XXX_Size() int {
 	return xxx_messageInfo_FindNodeResp.Size(m)
@@ -210,9 +216,9 @@ func init() {
 	proto.RegisterType((*FindNodeResp)(nil), "pb.FindNodeResp")
 }
 
-func init() { proto.RegisterFile("p2p/dht/pb/findnode.proto", fileDescriptor_findnode_dcc2d32c502bf7a8) }
+func init() { proto.RegisterFile("p2p/dht/pb/findnode.proto", fileDescriptor_81fb8451f4c1d278) }
 
-var fileDescriptor_findnode_dcc2d32c502bf7a8 = []byte{
+var fileDescriptor_81fb8451f4c1d278 = []byte{
 	// 231 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x54, 0xd0, 0xc1, 0x4b, 0xc3, 0x30,
 	0x14, 0x06, 0x70, 0xda, 0xba, 0xd9, 0xbd, 0xf5, 0x20, 0x41, 0x24, 0x5e, 0xa4, 0xf4, 0x54, 0x3c,

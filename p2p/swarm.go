@@ -27,14 +27,14 @@ import (
 
 type protocolMessage struct {
 	sender node.Node
-	data   []byte
+	data   service.MessageData
 }
 
 func (pm protocolMessage) Sender() node.Node {
 	return pm.sender
 }
 
-func (pm protocolMessage) Data() []byte {
+func (pm protocolMessage) Data() service.MessageData {
 	return pm.data
 }
 
@@ -50,8 +50,8 @@ type swarm struct {
 	// set in construction and immutable state
 	lNode *node.LocalNode
 
-	// map between protocol names to listening protocol handlers
-	// NOTE: maybe let more than one handler register on a protocol ?
+	// map between server names to listening server handlers
+	// NOTE: maybe let more than one handler register on a server ?
 	protocolHandlers     map[string]chan service.Message
 	protocolHandlerMutex sync.RWMutex
 
@@ -182,12 +182,12 @@ func (s *swarm) connectionPool() *connectionpool.ConnectionPool {
 
 // SendMessage Sends a message to a remote node
 // swarm will establish session if needed or use an existing session and open connection
-// Designed to be used by any high level protocol
+// Designed to be used by any high level server
 // req.reqID: globally unique id string - used for tracking messages we didn't get a response for yet
 // req.msg: marshaled message data
 // req.destId: receiver remote node public key/id
 // Local request to send a message to a remote node
-func (s *swarm) SendMessage(peerPubKey string, protocol string, payload []byte) error {
+func (s *swarm) SendMessage(peerPubKey string, protocol string, protocolMsg service.MessageData) error {
 	s.lNode.Info("Sending message to %v", peerPubKey)
 	var err error
 	var peer node.Node
@@ -215,7 +215,17 @@ func (s *swarm) SendMessage(peerPubKey string, protocol string, payload []byte) 
 
 	protomessage := &pb.ProtocolMessage{
 		Metadata: message.NewProtocolMessageMetadata(s.lNode.PublicKey(), protocol, false),
-		Payload:  payload,
+	}
+
+	switch x := protocolMsg.(type) {
+	case service.MessageData_MsgWrapper:
+		protomessage.Data = &pb.ProtocolMessage_Msg{&pb.MessageWrapper{Type: x.MsgType, Req: x.Req, ReqID: x.ReqID, Payload: x.Payload}}
+	case service.MessageData_Bytes:
+		protomessage.Data = &pb.ProtocolMessage_Payload{Payload: x.Bytes()}
+	case nil:
+		// The field is not set.
+	default:
+		return fmt.Errorf("protocolMsg has unexpected type %T", x)
 	}
 
 	err = message.SignMessage(s.lNode.PrivateKey(), protomessage)
@@ -240,7 +250,7 @@ func (s *swarm) SendMessage(peerPubKey string, protocol string, payload []byte) 
 		// the missing message will prevent the receiver from decrypting any future message
 		s.lNode.Logger.Error("prepare message failed, closing the connection")
 		conn.Close()
-		e := fmt.Errorf("aborting send - failed to encrypt payload: %v", err)
+		e := fmt.Errorf("aborting send - failed to encrypt protocolMsg: %v", err)
 		return e
 	}
 
@@ -250,7 +260,7 @@ func (s *swarm) SendMessage(peerPubKey string, protocol string, payload []byte) 
 	return err
 }
 
-// RegisterProtocol registers an handler for `protocol`
+// RegisterProtocol registers an handler for `server`
 func (s *swarm) RegisterProtocol(protocol string) chan service.Message {
 	mchan := make(chan service.Message, 100)
 	s.protocolHandlerMutex.Lock()
@@ -351,7 +361,7 @@ Loop:
 var (
 	// ErrBadFormat1 could'nt deserialize the payload
 	ErrBadFormat1 = errors.New("bad msg format, could'nt deserialize 1")
-	// ErrBadFormat2 could'nt deserialize the protocol message payload
+	// ErrBadFormat2 could'nt deserialize the server message payload
 	ErrBadFormat2 = errors.New("bad msg format, could'nt deserialize 2")
 	// ErrOutOfSync is returned when messsage timestamp was out of sync
 	ErrOutOfSync = errors.New("received out of sync msg")
@@ -361,16 +371,16 @@ var (
 	ErrFailDecrypt = errors.New("can't decrypt message payload with session key")
 	// ErrAuthAuthor message sign is wrong
 	ErrAuthAuthor = errors.New("failed to verify author")
-	// ErrNoProtocol we don't have the protocol message
-	ErrNoProtocol = errors.New("received msg to an unsupported protocol")
+	// ErrNoProtocol we don't have the server message
+	ErrNoProtocol = errors.New("received msg to an unsupported server")
 	// ErrNoSession we don't have this session
 	ErrNoSession = errors.New("connection is missing a session")
 	// ErrNotFromPeer - we got message singed with a different publickkey and its not gossip
 	ErrNotFromPeer = errors.New("this message was signed with the wrong public key")
 )
 
-// onRemoteClientMessage pre-process a protocol message from a remote client handling decryption and authentication
-// authenticated messages are forwarded to corresponding protocol handlers
+// onRemoteClientMessage pre-process a server message from a remote client handling decryption and authentication
+// authenticated messages are forwarded to corresponding server handlers
 // Main incoming network messages handler
 // c: connection we got this message on
 // msg: binary protobufs encoded data
@@ -399,7 +409,7 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 		return ErrNoPayload
 	}
 
-	// protocol messages are encrypted in payload
+	// server messages are encrypted in payload
 	// Locate the session
 	session := msg.Conn.Session()
 
@@ -433,13 +443,13 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 		return ErrNotFromPeer
 	}
 
-	s.lNode.Debug("Authorized %v protocol message ", pm.Metadata.Protocol)
+	s.lNode.Debug("Authorized %v server message ", pm.Metadata.Protocol)
 
 	remoteNode := node.New(msg.Conn.RemotePublicKey(), "") // if we got so far, we already have the node in our rt, hence address won't be used
 	// update the routing table - we just heard from this authenticated node
 	s.dht.Update(remoteNode)
 
-	// participate in gossip even if we don't know this protocol
+	// participate in gossip even if we don't know this server
 	if pm.Metadata.Gossip { // todo : use gossip uid
 		s.LocalNode().Debug("Got gossip message! relaying it")
 		// don't block anyway
@@ -449,19 +459,23 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 	if err != nil {
 		return nil
 	}
-	// route authenticated message to the reigstered protocol
+	// route authenticated message to the reigstered server
 	s.protocolHandlerMutex.RLock()
 	msgchan := s.protocolHandlers[pm.Metadata.Protocol]
 	s.protocolHandlerMutex.RUnlock()
 
 	if msgchan == nil {
-		s.LocalNode().Errorf("there was a bad protocol ", pm.Metadata.Protocol)
+		s.LocalNode().Errorf("there was a bad server ", pm.Metadata.Protocol)
 		return ErrNoProtocol
 	}
 
-	s.lNode.Debug("Forwarding message to protocol")
+	s.lNode.Debug("Forwarding message to server")
 
-	msgchan <- protocolMessage{remoteNode, pm.Payload}
+	if payload := pm.GetPayload(); payload != nil {
+		msgchan <- protocolMessage{remoteNode, service.MessageData_Bytes{Payload: payload}}
+	} else if wrap := pm.GetMsg(); wrap != nil {
+		msgchan <- protocolMessage{remoteNode, service.MessageData_MsgWrapper{Req: wrap.Req, MsgType: wrap.Type, ReqID: wrap.ReqID, Payload: wrap.Payload}}
+	}
 
 	return nil
 }
@@ -471,7 +485,7 @@ func (s *swarm) Broadcast(protocol string, payload []byte) error {
 	// start by making the message
 	pm := &pb.ProtocolMessage{
 		Metadata: message.NewProtocolMessageMetadata(s.LocalNode().PublicKey(), protocol, true),
-		Payload:  payload,
+		Data:     &pb.ProtocolMessage_Payload{Payload: payload},
 	}
 
 	err := message.SignMessage(s.lNode.PrivateKey(), pm)

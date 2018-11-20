@@ -110,7 +110,7 @@ func TestSwarm_authAuthor(t *testing.T) {
 
 	pm := &pb.ProtocolMessage{
 		Metadata: message.NewProtocolMessageMetadata(pub, exampleProtocol, false),
-		Payload:  []byte(examplePayload),
+		Data:     &pb.ProtocolMessage_Payload{Payload: []byte(examplePayload)},
 	}
 	ppm, err := proto.Marshal(pm)
 	assert.NoError(t, err, "cant marshal msg ", err)
@@ -145,7 +145,7 @@ func TestSwarm_SignAuth(t *testing.T) {
 	n, _ := node.GenerateTestNode(t)
 	pm := &pb.ProtocolMessage{
 		Metadata: message.NewProtocolMessageMetadata(n.PublicKey(), exampleProtocol, false),
-		Payload:  []byte(examplePayload),
+		Data:     &pb.ProtocolMessage_Payload{Payload: []byte(examplePayload)},
 	}
 
 	err := message.SignMessage(n.PrivateKey(), pm)
@@ -168,7 +168,7 @@ func RandString(n int) string {
 
 func sendDirectMessage(t *testing.T, sender *swarm, recvPub string, inChan chan service.Message, checkpayload bool) {
 	payload := []byte(RandString(10))
-	err := sender.SendMessage(recvPub, exampleProtocol, payload)
+	err := sender.SendMessage(recvPub, exampleProtocol, service.MessageData_Bytes{Payload: payload})
 	assert.NoError(t, err)
 	select {
 	case msg := <-inChan:
@@ -206,7 +206,7 @@ func TestSwarm_MultipleMessages(t *testing.T) {
 	exchan2 := p2.RegisterProtocol(exampleProtocol)
 	assert.Equal(t, exchan2, p2.protocolHandlers[exampleProtocol])
 
-	err := p2.SendMessage(p1.lNode.String(), exampleProtocol, []byte(examplePayload))
+	err := p2.SendMessage(p1.lNode.String(), exampleProtocol, service.MessageData_Bytes{Payload: []byte(examplePayload)})
 	assert.Error(t, err, "ERR") // should'nt be in routing table
 	p2.dht.Update(p1.lNode.Node)
 
@@ -317,7 +317,7 @@ func TestSwarm_onRemoteClientMessage(t *testing.T) {
 
 	goodmsg := &pb.ProtocolMessage{
 		Metadata: message.NewProtocolMessageMetadata(id.PublicKey(), exampleProtocol, false), // not signed
-		Payload:  []byte(examplePayload),
+		Data:     &pb.ProtocolMessage_Payload{Payload: []byte(examplePayload)},
 	}
 
 	goodbin, _ := proto.Marshal(goodmsg)
@@ -330,7 +330,7 @@ func TestSwarm_onRemoteClientMessage(t *testing.T) {
 	err = p.onRemoteClientMessage(imc)
 	assert.Equal(t, err, ErrAuthAuthor)
 
-	// Test no protocol
+	// Test no server
 
 	err = message.SignMessage(id.PrivateKey(), goodmsg)
 	assert.NoError(t, err, err)

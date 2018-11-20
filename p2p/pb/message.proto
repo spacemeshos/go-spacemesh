@@ -36,7 +36,10 @@ message HandshakeData {
 // data is here and not in CommonMessageData to avoid leaked data on unencrypted connections
 message ProtocolMessage {
     Metadata metadata = 1;
-    bytes payload = 2;
+       oneof data {
+         bytes payload = 2;
+         MessageWrapper msg = 3;
+        }
 }
 
 message Metadata {
@@ -51,6 +54,6 @@ message Metadata {
 message MessageWrapper {
      uint32 type = 1; //msg type
      bool req = 2;   // Req or Resp, 0 - req / 1 - resp
-     uint32 reqID = 3;
+     uint64 reqID = 3;
      bytes payload = 4; //encapsulated msg
 }
