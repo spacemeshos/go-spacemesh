@@ -53,8 +53,8 @@ type swarm struct {
 	// set in construction and immutable state
 	lNode *node.LocalNode
 
-	// map between server names to listening server handlers
-	// NOTE: maybe let more than one handler register on a server ?
+	// map between protocol names to listening protocol handlers
+	// NOTE: maybe let more than one handler register on a protocol ?
 	protocolHandlers     map[string]chan service.Message
 	protocolHandlerMutex sync.RWMutex
 
@@ -193,7 +193,7 @@ func (s *swarm) SendMessage(nodeID string, protocol string, payload []byte) erro
 
 // SendMessage Sends a message to a remote node
 // swarm will establish session if needed or use an existing session and open connection
-// Designed to be used by any high level server
+// Designed to be used by any high level protocol
 // req.reqID: globally unique id string - used for tracking messages we didn't get a response for yet
 // req.msg: marshaled message data
 // req.destId: receiver remote node public key/id
@@ -271,7 +271,7 @@ func (s *swarm) sendMessageImpl(peerPubKey string, protocol string, payload serv
 	return err
 }
 
-// RegisterProtocol registers an handler for `server`
+// RegisterProtocol registers an handler for `protocol`
 func (s *swarm) RegisterProtocol(protocol string) chan service.Message {
 	mchan := make(chan service.Message, 100)
 	s.protocolHandlerMutex.Lock()
@@ -372,7 +372,7 @@ Loop:
 var (
 	// ErrBadFormat1 could'nt deserialize the payload
 	ErrBadFormat1 = errors.New("bad msg format, could'nt deserialize 1")
-	// ErrBadFormat2 could'nt deserialize the server message payload
+	// ErrBadFormat2 could'nt deserialize the protocol message payload
 	ErrBadFormat2 = errors.New("bad msg format, could'nt deserialize 2")
 	// ErrOutOfSync is returned when messsage timestamp was out of sync
 	ErrOutOfSync = errors.New("received out of sync msg")
@@ -382,16 +382,16 @@ var (
 	ErrFailDecrypt = errors.New("can't decrypt message payload with session key")
 	// ErrAuthAuthor message sign is wrong
 	ErrAuthAuthor = errors.New("failed to verify author")
-	// ErrNoProtocol we don't have the server message
-	ErrNoProtocol = errors.New("received msg to an unsupported server")
+	// ErrNoProtocol we don't have the protocol message
+	ErrNoProtocol = errors.New("received msg to an unsupported protocol")
 	// ErrNoSession we don't have this session
 	ErrNoSession = errors.New("connection is missing a session")
 	// ErrNotFromPeer - we got message singed with a different publickkey and its not gossip
 	ErrNotFromPeer = errors.New("this message was signed with the wrong public key")
 )
 
-// onRemoteClientMessage pre-process a server message from a remote client handling decryption and authentication
-// authenticated messages are forwarded to corresponding server handlers
+// onRemoteClientMessage pre-process a protocol message from a remote client handling decryption and authentication
+// authenticated messages are forwarded to corresponding protocol handlers
 // Main incoming network messages handler
 // c: connection we got this message on
 // msg: binary protobufs encoded data
@@ -420,7 +420,7 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 		return ErrNoPayload
 	}
 
-	// server messages are encrypted in payload
+	// protocol messages are encrypted in payload
 	// Locate the session
 	session := msg.Conn.Session()
 
@@ -454,13 +454,13 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 		return ErrNotFromPeer
 	}
 
-	s.lNode.Debug("Authorized %v server message ", pm.Metadata.Protocol)
+	s.lNode.Debug("Authorized %v protocol message ", pm.Metadata.Protocol)
 
 	remoteNode := node.New(msg.Conn.RemotePublicKey(), "") // if we got so far, we already have the node in our rt, hence address won't be used
 	// update the routing table - we just heard from this authenticated node
 	s.dht.Update(remoteNode)
 
-	// participate in gossip even if we don't know this server
+	// participate in gossip even if we don't know this protocol
 	if pm.Metadata.Gossip { // todo : use gossip uid
 		s.LocalNode().Debug("Got gossip message! relaying it")
 		// don't block anyway
@@ -470,17 +470,17 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 	if err != nil {
 		return nil
 	}
-	// route authenticated message to the reigstered server
+	// route authenticated message to the reigstered protocol
 	s.protocolHandlerMutex.RLock()
 	msgchan := s.protocolHandlers[pm.Metadata.Protocol]
 	s.protocolHandlerMutex.RUnlock()
 
 	if msgchan == nil {
-		s.LocalNode().Errorf("there was a bad server ", pm.Metadata.Protocol)
+		s.LocalNode().Errorf("there was a bad protocol ", pm.Metadata.Protocol)
 		return ErrNoProtocol
 	}
 
-	s.lNode.Debug("Forwarding message to server")
+	s.lNode.Debug("Forwarding message to protocol")
 
 	if payload := pm.GetPayload(); payload != nil {
 		msgchan <- protocolMessage{remoteNode, service.Data_Bytes{Payload: payload}}
