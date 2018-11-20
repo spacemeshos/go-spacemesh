@@ -171,7 +171,7 @@ func (s *Syncer) GetLayerBlockIDs(index uint32) []uint32 {
 	for _, p := range peers {
 		hash, err := s.SendLayerHashRequest(p, index)
 		if err != nil {
-			//err handling
+			//todo err handling
 		}
 		m[string(hash)] = p
 	}
@@ -201,7 +201,7 @@ func (s Syncer) SendBlockRequest(peer Peer, id uint32) (chan Block, error) {
 		data := &pb.FetchBlockResp{}
 		err := proto.Unmarshal(msg, data)
 		if err != nil {
-			fmt.Println("some error")
+			log.Error("could not unmarshal block data")
 		}
 		ch <- data.Block
 	}
@@ -214,20 +214,20 @@ func (s Syncer) SendLayerHashRequest(peer Peer, layer uint32) ([]byte, error) {
 	data := &pb.LayerHashReq{Layer: layer}
 	payload, err := proto.Marshal(data)
 	if err != nil {
-		fmt.Println("some error")
+		log.Error("could not marshall layer hash request")
 		return nil, err
 	}
 
 	msg, err := s.p.SendRequest(LAYER_HASH, payload, peer.String(), s.config.requestTimeout)
 	if err != nil {
-		fmt.Println("some error")
+		log.Error("could not send layer hash request")
 		return nil, err
 	}
 
 	res := &pb.LayerHashResp{}
 	err = proto.Unmarshal(msg.([]byte), res)
 	if err != nil {
-		fmt.Println("some error")
+		log.Error("could not unmarshal layer hash response")
 		return nil, err
 	}
 
@@ -247,7 +247,7 @@ func (s *Syncer) SendLayerIDsRequest(peer Peer, idx uint32) (chan []uint32, erro
 		data := &pb.LayerIdsResp{}
 		err := proto.Unmarshal(msg, data)
 		if err != nil {
-			fmt.Println("some error")
+			log.Error("could not unmarshal layer ids response")
 		}
 		ch <- data.Ids
 	}

@@ -3,7 +3,6 @@ package mesh
 import (
 	"crypto"
 	"errors"
-	"fmt"
 	"sync"
 )
 
@@ -28,8 +27,7 @@ type LayersDB struct {
 	newBlockCh       chan Block
 	exit             chan bool
 	lMutex           sync.Mutex
-	lkMutex          sync.Mutex
-	lcMutex          sync.Mutex
+	lcMutex          sync.RWMutex
 }
 
 func NewLayers(newPeerCh chan Peer, newBlockCh chan Block) Mesh {
@@ -42,9 +40,7 @@ func NewLayers(newPeerCh chan Peer, newBlockCh chan Block) Mesh {
 		newBlockCh,
 		make(chan bool),
 		sync.Mutex{},
-		sync.Mutex{},
-		sync.Mutex{}}
-	go ll.run()
+		sync.RWMutex{}}
 	return ll
 }
 
@@ -59,21 +55,6 @@ func max(a, b int) int {
 	return b
 }
 
-func (s *LayersDB) run() {
-	for {
-		select {
-		case <-s.newPeerCh:
-			//	do something on new peer ??????????
-		case b := <-s.newBlockCh:
-			s.latestKnownLayer = uint32(max(int(s.latestKnownLayer), int(b.Layer())))
-		case <-s.exit:
-			fmt.Println("run stoped")
-			return
-		default:
-		}
-	}
-}
-
 func (ll *LayersDB) GetLayer(i int) (*Layer, error) {
 	if len(ll.layers) == 0 || i < 0 || i > len(ll.layers) {
 		return nil, errors.New("index out of bounds")
@@ -86,10 +67,12 @@ func (ll *LayersDB) GetBlock(id BlockID) (*Block, error) {
 }
 
 func (ll *LayersDB) LocalLayerCount() uint32 {
+	//todo thread safety
 	return ll.layerCount
 }
 
 func (ll *LayersDB) LatestKnownLayer() uint32 {
+	//todo thread safety
 	return ll.latestKnownLayer
 }
 

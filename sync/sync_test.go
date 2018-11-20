@@ -12,6 +12,12 @@ import (
 	"time"
 )
 
+var (
+	sim = simulator.New()
+	n1  = sim.NewNode()
+	n2  = sim.NewNode()
+)
+
 type BlockValidatorMock struct {
 }
 
@@ -26,7 +32,7 @@ func TestSyncer_Status(t *testing.T) {
 
 func TestSyncer_Start(t *testing.T) {
 	layers := mesh.NewLayers(nil, nil)
-	sync := NewSync(NewPeers(simulator.New().NewNode()), layers, BlockValidatorMock{}, Configuration{1, 1, 1 * time.Millisecond, 1, 10 * time.Second})
+	sync := NewSync(PeersImpl{n2, func() []Peer { return []Peer{n1.PublicKey()} }}, layers, BlockValidatorMock{}, Configuration{1, 1, 1 * time.Millisecond, 1, 10 * time.Second})
 	fmt.Println(sync.Status())
 	sync.Start()
 	for i := 0; i < 5 && sync.Status() == IDLE; i++ {
@@ -46,31 +52,13 @@ func TestSyncer_Close(t *testing.T) {
 	assert.True(t, !ok, "channel 'exit' still open")
 }
 
-func TestSyncer_ForceSync(t *testing.T) {
-	layers := mesh.NewLayers(nil, nil)
-	sync := NewSync(NewPeers(simulator.New().NewNode()), layers, BlockValidatorMock{}, Configuration{1, 1, 60 * time.Minute, 1, 10 * time.Second})
-	sync.Start()
-
-	for i := 0; i < 5 && sync.Status() == RUNNING; i++ {
-		time.Sleep(1 * time.Second)
-	}
-
-	layers.SetLatestKnownLayer(200)
-	sync.ForceSync()
-	time.Sleep(5 * time.Second)
-	assert.True(t, sync.Status() == RUNNING, "status was idle")
-}
-
 func TestSyncProtocol_AddMsgHandlers(t *testing.T) {
-
-	sim := simulator.New()
-	syncObj := NewSync(NewPeers(sim.NewNode()),
+	syncObj := NewSync(NewPeers(n1),
 		mesh.NewLayers(nil, nil),
 		BlockValidatorMock{},
 		Configuration{1, 1, 1 * time.Millisecond, 1, 10 * time.Second},
 	)
 
-	n2 := sim.NewNode()
 	id := uuid.New().ID()
 	block := mesh.NewExistingBlock(id, 1, nil)
 	syncObj.layers.AddLayer(mesh.NewExistingLayer(uint32(1), []*mesh.Block{block}))
@@ -85,15 +73,12 @@ func TestSyncProtocol_AddMsgHandlers(t *testing.T) {
 }
 
 func TestSyncProtocol_AddMsgHandlers2(t *testing.T) {
-
-	sim := simulator.New()
-	syncObj := NewSync(NewPeers(sim.NewNode()),
+	syncObj := NewSync(NewPeers(n1),
 		mesh.NewLayers(nil, nil),
 		BlockValidatorMock{},
 		Configuration{1, 1, 1 * time.Millisecond, 1, 10 * time.Second},
 	)
 
-	n2 := sim.NewNode()
 	syncObj.layers.AddLayer(mesh.NewExistingLayer(uint32(1), make([]*mesh.Block, 0, 10)))
 	fnd2 := p2p.NewProtocol(n2, protocol, time.Second*5)
 	fnd2.RegisterMsgHandler(LAYER_HASH, syncObj.LayerHashRequestHandler)
@@ -104,15 +89,11 @@ func TestSyncProtocol_AddMsgHandlers2(t *testing.T) {
 }
 
 func TestSyncProtocol_AddMsgHandlers3(t *testing.T) {
-
-	sim := simulator.New()
-	syncObj := NewSync(NewPeers(sim.NewNode()),
+	syncObj := NewSync(NewPeers(n1),
 		mesh.NewLayers(nil, nil),
 		BlockValidatorMock{},
 		Configuration{1, 1, 1 * time.Millisecond, 1, 10 * time.Second},
 	)
-
-	n2 := sim.NewNode()
 	layer := mesh.NewExistingLayer(uint32(1), make([]*mesh.Block, 0, 10))
 	layer.AddBlock(mesh.NewExistingBlock(uuid.New().ID(), 1, nil))
 	layer.AddBlock(mesh.NewExistingBlock(uuid.New().ID(), 1, nil))
@@ -140,12 +121,6 @@ func TestSyncProtocol_AddMsgHandlers3(t *testing.T) {
 }
 
 func TestSyncProtocol_AddMsgHandlers4(t *testing.T) {
-
-	sim := simulator.New()
-
-	n1 := sim.NewNode()
-	n2 := sim.NewNode()
-
 	syncObj1 := NewSync(NewPeers(n1),
 		mesh.NewLayers(nil, nil),
 		BlockValidatorMock{},
@@ -196,16 +171,11 @@ func TestSyncProtocol_AddMsgHandlers4(t *testing.T) {
 
 func TestSyncProtocol_AddMsgHandlers5(t *testing.T) {
 
-	sim := simulator.New()
-
-	n1 := sim.NewNode()
 	syncObj1 := NewSync(NewPeers(n1),
 		mesh.NewLayers(nil, nil),
 		BlockValidatorMock{},
 		Configuration{2, 1, 1 * time.Second, 1, 10 * time.Second},
 	)
-
-	n2 := sim.NewNode()
 
 	syncObj2 := NewSync(PeersImpl{n2, func() []Peer { return []Peer{n1.PublicKey()} }},
 		mesh.NewLayers(nil, nil),

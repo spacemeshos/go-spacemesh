@@ -31,6 +31,7 @@ type Protocol struct {
 	msgRequestHandlers map[MessageType]func(msg []byte) []byte
 	ingressChannel     chan service.Message
 	requestTimeout     time.Duration
+	Exit               chan struct{}
 }
 
 func NewProtocol(network Service, name string, requestTimeout time.Duration) *Protocol {
@@ -43,6 +44,7 @@ func NewProtocol(network Service, name string, requestTimeout time.Duration) *Pr
 		pendingMap:         make(map[uint64]chan interface{}),
 		resHandlers:        make(map[uint64]func(msg []byte)),
 		msgRequestHandlers: make(map[MessageType]func(msg []byte) []byte),
+		Exit:               make(chan struct{}),
 	}
 
 	go p.readLoop()
@@ -62,6 +64,9 @@ func (p *Protocol) readLoop() {
 			go p.handleMessage(msg)
 		case <-timer.C:
 			go p.cleanStaleMessages()
+		case <-timer.C:
+			go p.cleanStaleMessages()
+
 		}
 	}
 }
