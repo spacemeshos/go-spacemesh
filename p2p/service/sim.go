@@ -1,10 +1,9 @@
-package simulator
+package service
 
 import (
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"io"
 	"sync"
 )
@@ -15,7 +14,7 @@ import (
 type Simulator struct {
 	io.Closer
 	mutex           sync.RWMutex
-	protocolHandler map[string]map[string]chan service.Message // maps peerPubkey -> protocol -> handler
+	protocolHandler map[string]map[string]chan Message // maps peerPubkey -> protocol -> handler
 	nodes           map[string]*Node
 }
 
@@ -33,7 +32,7 @@ type Node struct {
 // New Creates a p2p simulation by providing nodes as p2p services and bridge them.
 func New() *Simulator {
 	s := &Simulator{
-		protocolHandler: make(map[string]map[string]chan service.Message),
+		protocolHandler: make(map[string]map[string]chan Message),
 		nodes:           make(map[string]*Node),
 	}
 	return s
@@ -41,7 +40,7 @@ func New() *Simulator {
 
 func (s *Simulator) createdNode(n *Node) {
 	s.mutex.Lock()
-	s.protocolHandler[n.PublicKey().String()] = make(map[string]chan service.Message)
+	s.protocolHandler[n.PublicKey().String()] = make(map[string]chan Message)
 	s.nodes[n.PublicKey().String()] = n
 	s.mutex.Unlock()
 }
@@ -79,12 +78,12 @@ func (s *Simulator) updateNode(node string, sender *Node) {
 }
 
 type simMessage struct {
-	msg    service.Data
+	msg    Data
 	sender node.Node
 }
 
 // Bytes is the message's binary data in byte array format.
-func (sm simMessage) Data() service.Data {
+func (sm simMessage) Data() Data {
 	return sm.msg
 }
 
@@ -104,17 +103,17 @@ func (sn *Node) Start() error {
 }
 
 // SendMessage sends a protocol message to the specified nodeID.
-// returns error if the node cant be found. corresponds to `Service.SendMessage`
+// returns error if the node cant be found. corresponds to `SendMessage`
 
-func (s *Node) SendWrappedMessage(nodeID string, protocol string, payload *service.Data_MsgWrapper) error {
+func (s *Node) SendWrappedMessage(nodeID string, protocol string, payload *Data_MsgWrapper) error {
 	return s.sendMessageImpl(nodeID, protocol, payload)
 }
 
 func (s *Node) SendMessage(nodeID string, protocol string, payload []byte) error {
-	return s.sendMessageImpl(nodeID, protocol, service.Data_Bytes{Payload: payload})
+	return s.sendMessageImpl(nodeID, protocol, Data_Bytes{Payload: payload})
 }
 
-func (sn *Node) sendMessageImpl(nodeID string, protocol string, payload service.Data) error {
+func (sn *Node) sendMessageImpl(nodeID string, protocol string, payload Data) error {
 	sn.sim.mutex.RLock()
 	thec, ok := sn.sim.protocolHandler[nodeID][protocol]
 	sn.sim.mutex.RUnlock()
@@ -132,7 +131,7 @@ func (sn *Node) Broadcast(protocol string, payload []byte) error {
 	sn.sim.mutex.RLock()
 	for n := range sn.sim.protocolHandler {
 		if c, ok := sn.sim.protocolHandler[n][protocol]; ok {
-			c <- simMessage{service.Data_Bytes{Payload: payload}, sn.Node}
+			c <- simMessage{Data_Bytes{Payload: payload}, sn.Node}
 		}
 	}
 	sn.sim.mutex.RUnlock()
@@ -141,8 +140,8 @@ func (sn *Node) Broadcast(protocol string, payload []byte) error {
 }
 
 // RegisterProtocol creates and returns a channel for a given protocol.
-func (sn *Node) RegisterProtocol(protocol string) chan service.Message {
-	c := make(chan service.Message)
+func (sn *Node) RegisterProtocol(protocol string) chan Message {
+	c := make(chan Message)
 	sn.sim.mutex.Lock()
 	sn.sim.protocolHandler[sn.Node.String()][protocol] = c
 	sn.sim.mutex.Unlock()

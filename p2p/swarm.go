@@ -1,9 +1,6 @@
 package p2p
 
 import (
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	inet "net"
-
 	"bytes"
 	"context"
 	"errors"
@@ -18,7 +15,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/timesync"
+	inet "net"
 	"strconv"
 	"sync"
 	"sync/atomic"
