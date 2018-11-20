@@ -63,7 +63,7 @@ func (p *Ping) readLoop() {
 
 		go func(msg service.Message) {
 			ping := &pb.Ping{}
-			err := proto.Unmarshal(msg.Data(), ping)
+			err := proto.Unmarshal(msg.Data().Bytes(), ping)
 			if err != nil {
 				log.Error("failed to read incoming ping message err:", err)
 				// TODO : handle errors in readloop
@@ -130,7 +130,7 @@ func (p *Ping) sendRequest(target string, reqid crypto.UUID, ping *pb.Ping) (cha
 		return nil, err
 	}
 
-	err = p.p2p.SendMessage(target, protocol, payload)
+	err = p.p2p.SendMessage(target, protocol, service.Data_Bytes{Payload: payload})
 	if err != nil {
 		remove()
 		return nil, err
@@ -159,7 +159,7 @@ func (p *Ping) handleRequest(sender Pinger, ping *pb.Ping) error {
 		return err
 	}
 	log.Debug("Ping: Responding with %v", resp)
-	return p.p2p.SendMessage(sender.PublicKey().String(), protocol, bin)
+	return p.p2p.SendMessage(sender.PublicKey().String(), protocol, service.Data_Bytes{Payload: bin})
 }
 
 func (p *Ping) handleResponse(ping *pb.Ping) {

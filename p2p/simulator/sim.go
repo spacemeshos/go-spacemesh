@@ -79,12 +79,12 @@ func (s *Simulator) updateNode(node string, sender *Node) {
 }
 
 type simMessage struct {
-	msg    service.MessageData
+	msg    service.Data
 	sender node.Node
 }
 
 // Data is the message's binary data in byte array format.
-func (sm simMessage) Data() service.MessageData {
+func (sm simMessage) Data() service.Data {
 	return sm.msg
 }
 
@@ -100,7 +100,7 @@ func (sn *Node) Start() error {
 
 // SendMessage sends a protocol message to the specified nodeID.
 // returns error if the node cant be found. corresponds to `Service.SendMessage`
-func (sn *Node) SendMessage(nodeID string, protocol string, payload service.MessageData) error {
+func (sn *Node) SendMessage(nodeID string, protocol string, payload service.Data) error {
 	sn.sim.mutex.RLock()
 	thec, ok := sn.sim.protocolHandler[nodeID][protocol]
 	sn.sim.mutex.RUnlock()
@@ -118,7 +118,7 @@ func (sn *Node) Broadcast(protocol string, payload []byte) error {
 	sn.sim.mutex.RLock()
 	for n := range sn.sim.protocolHandler {
 		if c, ok := sn.sim.protocolHandler[n][protocol]; ok {
-			c <- simMessage{service.MessageData_Bytes{Payload: payload}, sn.Node}
+			c <- simMessage{service.Data_Bytes{Payload: payload}, sn.Node}
 		}
 	}
 	sn.sim.mutex.RUnlock()

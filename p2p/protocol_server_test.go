@@ -2,7 +2,6 @@ package p2p
 
 import (
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/simulator"
 	"github.com/stretchr/testify/assert"
 	"testing"
@@ -94,7 +93,6 @@ func TestProtocol_CleanOldPendingMessages(t *testing.T) {
 	select {
 	// Got a timeout! fail with a timeout error
 	case <-timeout:
-		log.Debug("timeout")
 		t.Error("timeout")
 		return
 	default:

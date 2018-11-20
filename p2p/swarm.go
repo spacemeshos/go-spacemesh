@@ -8,7 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/davecgh/go-spew/spew"
-	"github.com/gogo/protobuf/proto"
+	"github.com/golang/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/connectionpool"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht"
@@ -27,14 +27,14 @@ import (
 
 type protocolMessage struct {
 	sender node.Node
-	data   service.MessageData
+	data   service.Data
 }
 
 func (pm protocolMessage) Sender() node.Node {
 	return pm.sender
 }
 
-func (pm protocolMessage) Data() service.MessageData {
+func (pm protocolMessage) Data() service.Data {
 	return pm.data
 }
 
@@ -187,7 +187,7 @@ func (s *swarm) connectionPool() *connectionpool.ConnectionPool {
 // req.msg: marshaled message data
 // req.destId: receiver remote node public key/id
 // Local request to send a message to a remote node
-func (s *swarm) SendMessage(peerPubKey string, protocol string, protocolMsg service.MessageData) error {
+func (s *swarm) SendMessage(peerPubKey string, protocol string, protocolMsg service.Data) error {
 	s.lNode.Info("Sending message to %v", peerPubKey)
 	var err error
 	var peer node.Node
@@ -218,9 +218,9 @@ func (s *swarm) SendMessage(peerPubKey string, protocol string, protocolMsg serv
 	}
 
 	switch x := protocolMsg.(type) {
-	case service.MessageData_MsgWrapper:
+	case service.Data_MsgWrapper:
 		protomessage.Data = &pb.ProtocolMessage_Msg{&pb.MessageWrapper{Type: x.MsgType, Req: x.Req, ReqID: x.ReqID, Payload: x.Payload}}
-	case service.MessageData_Bytes:
+	case service.Data_Bytes:
 		protomessage.Data = &pb.ProtocolMessage_Payload{Payload: x.Bytes()}
 	case nil:
 		// The field is not set.
@@ -472,9 +472,9 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 	s.lNode.Debug("Forwarding message to server")
 
 	if payload := pm.GetPayload(); payload != nil {
-		msgchan <- protocolMessage{remoteNode, service.MessageData_Bytes{Payload: payload}}
+		msgchan <- protocolMessage{remoteNode, service.Data_Bytes{Payload: payload}}
 	} else if wrap := pm.GetMsg(); wrap != nil {
-		msgchan <- protocolMessage{remoteNode, service.MessageData_MsgWrapper{Req: wrap.Req, MsgType: wrap.Type, ReqID: wrap.ReqID, Payload: wrap.Payload}}
+		msgchan <- protocolMessage{remoteNode, service.Data_MsgWrapper{Req: wrap.Req, MsgType: wrap.Type, ReqID: wrap.ReqID, Payload: wrap.Payload}}
 	}
 
 	return nil

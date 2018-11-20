@@ -168,12 +168,12 @@ func RandString(n int) string {
 
 func sendDirectMessage(t *testing.T, sender *swarm, recvPub string, inChan chan service.Message, checkpayload bool) {
 	payload := []byte(RandString(10))
-	err := sender.SendMessage(recvPub, exampleProtocol, service.MessageData_Bytes{Payload: payload})
+	err := sender.SendMessage(recvPub, exampleProtocol, service.Data_Bytes{Payload: payload})
 	assert.NoError(t, err)
 	select {
 	case msg := <-inChan:
 		if checkpayload {
-			assert.Equal(t, msg.Data(), payload)
+			assert.Equal(t, msg.Data().Bytes(), payload)
 		}
 		assert.Equal(t, msg.Sender().String(), sender.lNode.String())
 		break
@@ -206,7 +206,7 @@ func TestSwarm_MultipleMessages(t *testing.T) {
 	exchan2 := p2.RegisterProtocol(exampleProtocol)
 	assert.Equal(t, exchan2, p2.protocolHandlers[exampleProtocol])
 
-	err := p2.SendMessage(p1.lNode.String(), exampleProtocol, service.MessageData_Bytes{Payload: []byte(examplePayload)})
+	err := p2.SendMessage(p1.lNode.String(), exampleProtocol, service.Data_Bytes{Payload: []byte(examplePayload)})
 	assert.Error(t, err, "ERR") // should'nt be in routing table
 	p2.dht.Update(p1.lNode.Node)
 

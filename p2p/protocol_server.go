@@ -79,7 +79,7 @@ func (p *Message_Server) cleanStaleMessages() {
 
 func (p *Message_Server) handleMessage(msg service.Message) {
 	switch x := msg.Data().(type) {
-	case *service.MessageData_MsgWrapper:
+	case *service.Data_MsgWrapper:
 		if x.Req {
 			p.handleRequestMessage(msg.Sender().PublicKey(), x)
 		} else {
@@ -90,10 +90,10 @@ func (p *Message_Server) handleMessage(msg service.Message) {
 	}
 }
 
-func (p *Message_Server) handleRequestMessage(sender crypto.PublicKey, headers *service.MessageData_MsgWrapper) {
+func (p *Message_Server) handleRequestMessage(sender crypto.PublicKey, headers *service.Data_MsgWrapper) {
 
 	if payload := p.msgRequestHandlers[MessageType(headers.MsgType)](headers.Payload); payload != nil {
-		rmsg := &service.MessageData_MsgWrapper{MsgType: headers.MsgType, ReqID: headers.ReqID, Payload: payload}
+		rmsg := &service.Data_MsgWrapper{MsgType: headers.MsgType, ReqID: headers.ReqID, Payload: payload}
 		sendErr := p.network.SendMessage(sender.String(), p.name, rmsg)
 		if sendErr != nil {
 			log.Error("Error sending response message, err:", sendErr)
@@ -101,7 +101,7 @@ func (p *Message_Server) handleRequestMessage(sender crypto.PublicKey, headers *
 	}
 }
 
-func (p *Message_Server) handleResponseMessage(headers *service.MessageData_MsgWrapper) {
+func (p *Message_Server) handleResponseMessage(headers *service.Data_MsgWrapper) {
 
 	//get and remove from pendingMap
 	p.pendMutex.Lock()
@@ -137,7 +137,7 @@ func (p *Message_Server) RegisterMsgHandler(msgType MessageType, reqHandler func
 func (p *Message_Server) SendAsyncRequest(msgType MessageType, payload []byte, address string, resHandler func(msg []byte)) error {
 
 	reqID := p.newRequestId()
-	msg := &service.MessageData_MsgWrapper{Req: true, ReqID: reqID, MsgType: uint32(msgType), Payload: payload}
+	msg := &service.Data_MsgWrapper{Req: true, ReqID: reqID, MsgType: uint32(msgType), Payload: payload}
 	respc := make(chan interface{})
 	p.pendMutex.Lock()
 	p.pendingMap[reqID] = respc
@@ -160,7 +160,7 @@ func (p *Message_Server) newRequestId() uint64 {
 func (p *Message_Server) SendRequest(msgType MessageType, payload []byte, address string, timeout time.Duration) (interface{}, error) {
 	reqID := p.newRequestId()
 
-	msg := &service.MessageData_MsgWrapper{Req: true, ReqID: reqID, MsgType: uint32(msgType), Payload: payload}
+	msg := &service.Data_MsgWrapper{Req: true, ReqID: reqID, MsgType: uint32(msgType), Payload: payload}
 	respc := make(chan interface{})
 
 	p.pendMutex.Lock()

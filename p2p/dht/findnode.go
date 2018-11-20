@@ -82,7 +82,7 @@ func (p *findNodeProtocol) sendRequestMessage(server crypto.PublicKey, payload [
 	p.pending[reqID] = responseChan
 	p.pendingMutex.Unlock()
 
-	return true, p.service.SendMessage(server.String(), protocol, &service.MessageData_Bytes{Payload: msg})
+	return true, p.service.SendMessage(server.String(), protocol, &service.Data_Bytes{Payload: msg})
 }
 
 func (p *findNodeProtocol) sendResponseMessage(server crypto.PublicKey, reqID, payload []byte) error {
@@ -95,7 +95,7 @@ func (p *findNodeProtocol) sendResponseMessage(server crypto.PublicKey, reqID, p
 	if err != nil {
 		return err
 	}
-	return p.service.SendMessage(server.String(), protocol, &service.MessageData_Bytes{Payload: msg})
+	return p.service.SendMessage(server.String(), protocol, &service.Data_Bytes{Payload: msg})
 }
 
 // FindNode Send a single find node request to a remote node
