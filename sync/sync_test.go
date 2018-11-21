@@ -217,9 +217,6 @@ func TestSyncProtocol_AddMsgHandlers5(t *testing.T) {
 		Configuration{2, 1, 1 * time.Second, 1, 10 * time.Second},
 	)
 
-	syncObj2.layers.SetLatestKnownLayer(5)
-	syncObj2.Start()
-	syncObj2.ForceSync()
 	block1 := mesh.NewExistingBlock(uuid.New().ID(), 1, nil)
 	block2 := mesh.NewExistingBlock(uuid.New().ID(), 1, nil)
 	block3 := mesh.NewExistingBlock(uuid.New().ID(), 2, nil)
@@ -237,7 +234,8 @@ func TestSyncProtocol_AddMsgHandlers5(t *testing.T) {
 	syncObj1.layers.AddLayer(mesh.NewExistingLayer(uint32(3), []*mesh.Block{block9, block10}))
 	assert.Equal(t, 1, 1, "")
 	timeout := time.After(10 * time.Second)
-
+	syncObj2.layers.SetLatestKnownLayer(5)
+	syncObj2.Start()
 	// Keep trying until we're timed out or got a result or got an error
 loop:
 	for {
