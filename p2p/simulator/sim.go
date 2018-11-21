@@ -110,7 +110,7 @@ func (sn *Node) SendMessage(nodeID string, protocol string, payload []byte) erro
 		return nil
 	}
 	log.Debug("%v >> %v (%v)", sn.Node.PublicKey(), nodeID, payload)
-	return errors.New("could not find protocol handler")
+	return errors.New("could not find " + protocol + " handler for node: " + nodeID)
 }
 
 // Broadcast

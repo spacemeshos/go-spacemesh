@@ -12,12 +12,6 @@ import (
 	"time"
 )
 
-var (
-	sim = simulator.New()
-	n1  = sim.NewNode()
-	n2  = sim.NewNode()
-)
-
 type BlockValidatorMock struct {
 }
 
@@ -32,14 +26,36 @@ func TestSyncer_Status(t *testing.T) {
 }
 
 func TestSyncer_Start(t *testing.T) {
-	layers := mesh.NewLayers(nil, nil)
-	sync := NewSync(PeersImpl{n2, func() []Peer { return []Peer{n1.PublicKey()} }}, layers, BlockValidatorMock{}, Configuration{1, 1, 1 * time.Millisecond, 1, 10 * time.Second})
+	sim := simulator.New()
+	n1 := sim.NewNode()
+	n2 := sim.NewNode()
+	NewSync(PeersImpl{n1, func() []Peer { return []Peer{n2.PublicKey()} }},
+		mesh.NewLayers(nil, nil),
+		BlockValidatorMock{},
+		Configuration{2, 1, 1 * time.Second, 1, 10 * time.Second},
+	)
+
+	sync := NewSync(PeersImpl{n2, func() []Peer { return []Peer{n1.PublicKey()} }},
+		mesh.NewLayers(nil, nil),
+		BlockValidatorMock{},
+		Configuration{2, 1, 1 * time.Second, 1, 10 * time.Second},
+	)
+
 	fmt.Println(sync.Status())
 	sync.Start()
-	for i := 0; i < 5 && sync.Status() == IDLE; i++ {
-		time.Sleep(1 * time.Second)
+	timeout := time.After(10 * time.Second)
+	for {
+		select {
+		// Got a timeout! fail with a timeout error
+		case <-timeout:
+			t.Error("timed out ")
+			return
+		default:
+			if sync.Status() == RUNNING {
+				return
+			}
+		}
 	}
-	assert.True(t, sync.Status() == RUNNING, "status was idle")
 }
 
 func TestSyncer_Close(t *testing.T) {
@@ -54,6 +70,9 @@ func TestSyncer_Close(t *testing.T) {
 }
 
 func TestSyncProtocol_AddMsgHandlers(t *testing.T) {
+	sim := simulator.New()
+	n1 := sim.NewNode()
+	n2 := sim.NewNode()
 	syncObj := NewSync(NewPeers(n1),
 		mesh.NewLayers(nil, nil),
 		BlockValidatorMock{},
@@ -74,6 +93,9 @@ func TestSyncProtocol_AddMsgHandlers(t *testing.T) {
 }
 
 func TestSyncProtocol_AddMsgHandlers2(t *testing.T) {
+	sim := simulator.New()
+	n1 := sim.NewNode()
+	n2 := sim.NewNode()
 	syncObj := NewSync(NewPeers(n1),
 		mesh.NewLayers(nil, nil),
 		BlockValidatorMock{},
@@ -90,6 +112,9 @@ func TestSyncProtocol_AddMsgHandlers2(t *testing.T) {
 }
 
 func TestSyncProtocol_AddMsgHandlers3(t *testing.T) {
+	sim := simulator.New()
+	n1 := sim.NewNode()
+	n2 := sim.NewNode()
 	syncObj := NewSync(NewPeers(n1),
 		mesh.NewLayers(nil, nil),
 		BlockValidatorMock{},
@@ -122,6 +147,9 @@ func TestSyncProtocol_AddMsgHandlers3(t *testing.T) {
 }
 
 func TestSyncProtocol_AddMsgHandlers4(t *testing.T) {
+	sim := simulator.New()
+	n1 := sim.NewNode()
+	n2 := sim.NewNode()
 	syncObj1 := NewSync(NewPeers(n1),
 		mesh.NewLayers(nil, nil),
 		BlockValidatorMock{},
@@ -171,6 +199,7 @@ func TestSyncProtocol_AddMsgHandlers4(t *testing.T) {
 }
 
 func TestSyncProtocol_AddMsgHandlers5(t *testing.T) {
+	t.Skip()
 	sim := simulator.New()
 	nn1 := sim.NewNode()
 	nn2 := sim.NewNode()

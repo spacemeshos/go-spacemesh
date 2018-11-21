@@ -118,8 +118,16 @@ func (s *Syncer) run() {
 	}
 }
 
+func (s *Syncer) syncTo() uint32 {
+	if s.layers.LatestKnownLayer() < s.config.hdist {
+		return 0
+	}
+
+	return s.layers.LatestKnownLayer() - s.config.hdist
+}
+
 func (s *Syncer) Synchronise() {
-	for i := s.layers.LocalLayerCount(); i < s.layers.LatestKnownLayer()-s.config.hdist; {
+	for i := s.layers.LocalLayerCount(); i < s.syncTo(); {
 		i++
 		blockIds := s.GetLayerBlockIDs(i) //returns a set of all known blocks in the mesh
 		log.Debug("get layer block ids: ", blockIds)
@@ -160,6 +168,7 @@ func (s *Syncer) Synchronise() {
 		log.Debug("add layer ", i)
 		s.layers.AddLayer(mesh.NewExistingLayer(i, blocks))
 	}
+	log.Debug("synchronise done")
 }
 
 func (s *Syncer) GetLayerBlockIDs(index uint32) []uint32 {
@@ -313,7 +322,7 @@ func (s *Syncer) LayerIdsRequestHandler(msg []byte) []byte {
 
 	layer, err := s.layers.GetLayer(int(req.Layer))
 	if err != nil {
-		log.Error("Error handling layer request message, err:", err) //todo describe err
+		log.Error("Error handling layer ids request message, err:", err) //todo describe err
 		return nil
 	}
 
