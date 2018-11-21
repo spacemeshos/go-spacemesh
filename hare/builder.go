@@ -1,6 +1,9 @@
 package hare
 
-import "github.com/spacemeshos/go-spacemesh/hare/pb"
+import (
+	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/hare/pb"
+)
 
 type OuterBuilder struct {
 	m *pb.HareMessage
@@ -10,7 +13,7 @@ func NewOuterBuilder() *OuterBuilder {
 	return &OuterBuilder{&pb.HareMessage{}}
 }
 
-func (proto *OuterBuilder) SetPubKey(key PubKey) *OuterBuilder {
+func (proto *OuterBuilder) SetPubKey(key crypto.PublicKey) *OuterBuilder {
 	proto.m.PubKey = key.Bytes()
 	return proto
 }

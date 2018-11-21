@@ -25,6 +25,15 @@ func createMessage(t *testing.T, layer Byteable) []byte {
 	return serMsg
 }
 
+type MockInboxer struct {
+	inbox chan *pb.HareMessage
+}
+
+func (inboxer *MockInboxer) Inbox(size uint32) chan *pb.HareMessage {
+	inboxer.inbox = make(chan *pb.HareMessage, size)
+	return inboxer.inbox
+}
+
 // test that a message to a specific layer is delivered by the broker
 func TestBroker_Received(t *testing.T) {
 	sim := simulator.New()
@@ -33,12 +42,14 @@ func TestBroker_Received(t *testing.T) {
 
 	broker := NewBroker(n1)
 	broker.Start()
-	inbox := broker.CreateInbox(Layer1)
+
+	inboxer := &MockInboxer{}
+	broker.Register(Layer1, inboxer)
 
 	serMsg := createMessage(t, Layer1)
 	n2.Broadcast(ProtoName, serMsg)
 
-	recv := <- inbox
+	recv := <- inboxer.inbox
 
 	assert.True(t, recv.Message.Layer[0] == Layer1.Bytes()[0])
 }
@@ -50,7 +61,6 @@ func TestBroker_Abort(t *testing.T) {
 
 	broker := NewBroker(n1)
 	broker.Start()
-	broker.CreateInbox(Layer1)
 
 	timer := time.NewTimer(3 * time.Second)
 
@@ -86,9 +96,17 @@ func TestBroker_MultipleLayers(t *testing.T) {
 
 	broker := NewBroker(n1)
 	broker.Start()
-	inbox1 := broker.CreateInbox(Layer1)
-	inbox2 := broker.CreateInbox(Layer2)
-	inbox3 := broker.CreateInbox(Layer3)
+
+	inboxer1 := &MockInboxer{}
+	inboxer2 := &MockInboxer{}
+	inboxer3 := &MockInboxer{}
+	broker.Register(Layer1, inboxer1)
+	broker.Register(Layer2, inboxer2)
+	broker.Register(Layer3, inboxer3)
+
+	inbox1 := inboxer1.inbox
+	inbox2 := inboxer2.inbox
+	inbox3 := inboxer3.inbox
 
 	go sendMessages(t, Layer1, n2, msgCount)
 	go sendMessages(t, Layer2, n2, msgCount)

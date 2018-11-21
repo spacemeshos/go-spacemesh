@@ -3,6 +3,7 @@ package hare
 import (
 	"errors"
 	"github.com/gogo/protobuf/proto"
+	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -25,7 +26,7 @@ type NetworkService interface {
 
 type State struct {
 	k    uint32      // the iteration number
-	ki   uint32      // ?
+	ki   uint32      // indicates when S was first committed upon
 	s    Set         // the set of blocks
 	cert Certificate // the certificate
 }
@@ -33,7 +34,7 @@ type State struct {
 type ConsensusProcess struct {
 	State
 	Closer // the consensus is closeable
-	pubKey      PubKey
+	pubKey      crypto.PublicKey
 	layerId     LayerId
 	oracle      Rolacle // roles oracle
 	signing     Signing
@@ -47,7 +48,7 @@ type ConsensusProcess struct {
 	// TODO: add knowledge of notify messages. What is the life-cycle of such messages? persistent according to Julian
 }
 
-func NewConsensusProcess(key PubKey, layer LayerId, s Set, oracle Rolacle, signing Signing, p2p NetworkService, broker *Broker) *ConsensusProcess {
+func NewConsensusProcess(key crypto.PublicKey, layer LayerId, s Set, oracle Rolacle, signing Signing, p2p NetworkService) *ConsensusProcess {
 	proc := &ConsensusProcess{}
 	proc.State = State{0, 0, s, Certificate{}}
 	proc.Closer = NewCloser()
@@ -56,7 +57,6 @@ func NewConsensusProcess(key PubKey, layer LayerId, s Set, oracle Rolacle, signi
 	proc.oracle = oracle
 	proc.signing = signing
 	proc.network = p2p
-	proc.inbox = broker.CreateInbox(&layer)
 	proc.knowledge = make([]*pb.HareMessage, 0, InitialKnowledgeSize)
 	proc.isProcessed = make(map[uint32]bool)
 
@@ -84,12 +84,9 @@ func (proc *ConsensusProcess) Start() error {
 	return nil
 }
 
-func (proc *ConsensusProcess) WaitForCompletion() {
-	select {
-	case <-proc.CloseChannel():
-		// TODO: access broker and remove layer (consider register/unregister terminology)
-		return
-	}
+func (proc *ConsensusProcess) Inbox(size uint32) chan *pb.HareMessage {
+	proc.inbox = make(chan *pb.HareMessage, size)
+	return proc.inbox
 }
 
 func (proc *ConsensusProcess) eventLoop() {
@@ -121,16 +118,19 @@ func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
 	// validate signature
 	data, err := proto.Marshal(m.Message)
 	if err != nil {
+		log.Error("Failed marshaling inner message")
 		return
 	}
 	if !proc.signing.Validate(data, m.InnerSig) {
+		log.Warning("invalid message signature detected")
 		return
 	}
 
 	// validate role
 	if !proc.oracle.ValidateRole(roleFromIteration(m.Message.K),
-		RoleRequest{PubKey{NewBytes32(m.PubKey)}, LayerId{NewBytes32(m.Message.Layer)}, m.Message.K},
+		RoleRequest{m.PubKey, LayerId{NewBytes32(m.Message.Layer)}, m.Message.K},
 		Signature(m.Message.RoleProof)) {
+		log.Warning("invalid role detected")
 		return
 	}
 
@@ -212,6 +212,7 @@ func (proc *ConsensusProcess) lookForProposal(state State, msg []*pb.HareMessage
 
 	// TODO: pass on msg & look for a set to propose
 
+	/*
 	inner := NewInnerBuilder()
 	inner.SetType(Proposal).SetLayer(proc.layerId).SetIteration(proc.k).SetKi(proc.ki).SetBlocks(proc.s)
 	inner.SetRoleProof(proc.oracle.Role(RoleRequest{proc.pubKey, proc.layerId, state.k}))
@@ -232,6 +233,8 @@ func (proc *ConsensusProcess) lookForProposal(state State, msg []*pb.HareMessage
 	if err != nil {
 		return nil, errors.New("error marshaling message")
 	}
+	*/
+	var buff []byte
 
 	return buff, nil
 }

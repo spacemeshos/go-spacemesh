@@ -8,9 +8,6 @@ import (
 type Bytes32 [32]byte
 type Signature []byte
 
-type PubKey struct {
-	Bytes32
-}
 type BlockId struct {
 	Bytes32
 }
@@ -25,10 +22,6 @@ const (
 	Commit   MessageType = 2
 	Notify   MessageType = 3
 )
-
-type Identifiable interface {
-	Id() uint32
-}
 
 func NewBytes32(buff []byte) Bytes32 {
 	x := Bytes32{}

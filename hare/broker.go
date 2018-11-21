@@ -10,6 +10,14 @@ import (
 
 const InboxCapacity = 100
 
+type Identifiable interface {
+	Id() uint32
+}
+
+type Inboxer interface {
+	Inbox(size uint32) chan *pb.HareMessage
+}
+
 // Closer is used to add closeability to an object
 type Closer struct {
 	channel chan struct{} // closeable go routines listen to this channel
@@ -86,20 +94,18 @@ func (broker *Broker) dispatcher() {
 	}
 }
 
-// CreateInbox creates and returns the message channel associated with the given layer
-func (broker *Broker) CreateInbox(iden Identifiable) chan *pb.HareMessage {
-	var id = iden.Id()
-
-	broker.mutex.RLock()
-	if _, exist := broker.outbox[id]; exist {
-		panic("CreateInbox called more than once per layer")
-	}
-	broker.mutex.RUnlock()
-
-	outChan := make(chan *pb.HareMessage, InboxCapacity) // create new channel
+// Register a listener to messages
+func (broker *Broker) Register(identifiable Identifiable, inboxer Inboxer) {
+	id := identifiable.Id()
 	broker.mutex.Lock()
-	broker.outbox[id] = outChan
+	broker.outbox[id] = inboxer.Inbox(InboxCapacity)
 	broker.mutex.Unlock()
+}
 
-	return outChan
+// Unregister a listener
+func (broker *Broker) Unregister(identifiable Identifiable) {
+	id := identifiable.Id()
+	broker.mutex.Lock()
+	delete(broker.outbox, id)
+	broker.mutex.Unlock()
 }

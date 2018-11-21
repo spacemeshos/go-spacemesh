@@ -2,12 +2,23 @@ package hare
 
 import (
 	"github.com/gogo/protobuf/proto"
+	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/simulator"
 	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
 )
+
+func getPublicKey(t *testing.T) crypto.PublicKey {
+	_, pub, err := crypto.GenerateKeyPair()
+
+	if err != nil {
+		assert.Fail(t, "failed generating key")
+	}
+
+	return pub
+}
 
 // test that a message to a specific layer is delivered by the broker
 func TestConsensusProcess_Start(t *testing.T) {
@@ -20,7 +31,8 @@ func TestConsensusProcess_Start(t *testing.T) {
 	oracle := NewMockOracle()
 	signing := NewMockSigning()
 
-	proc := NewConsensusProcess(PubKey{}, *Layer1, s, oracle, signing, n1, broker)
+	proc := NewConsensusProcess(getPublicKey(t), *Layer1, s, oracle, signing, n1)
+	broker.Register(Layer1, proc)
 	proc.Start()
 
 	m := &pb.HareMessage{}
@@ -55,7 +67,8 @@ func TestConsensusProcess_handleMessage(t *testing.T) {
 	oracle := NewMockOracle()
 	signing := NewMockSigning()
 
-	proc := NewConsensusProcess(PubKey{}, *Layer1, s, oracle, signing, n1, broker)
+	proc := NewConsensusProcess(getPublicKey(t), *Layer1, s, oracle, signing, n1)
+	broker.Register(Layer1, proc)
 
 	x, err := proc.buildStatusMessage()
 
@@ -85,7 +98,8 @@ func TestConsensusProcess_nextRound(t *testing.T) {
 	oracle := NewMockOracle()
 	signing := NewMockSigning()
 
-	proc := NewConsensusProcess(PubKey{}, *Layer1, s, oracle, signing, n1, broker)
+	proc := NewConsensusProcess(getPublicKey(t), *Layer1, s, oracle, signing, n1)
+	broker.Register(Layer1, proc)
 
 	proc.nextRound()
 	assert.Equal(t, uint32(1), proc.k)

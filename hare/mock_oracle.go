@@ -18,7 +18,7 @@ type Rolacle interface {
 }
 
 type RoleRequest struct {
-	pubKey PubKey
+	pubKey []byte
 	layerId LayerId
 	k uint32
 }
