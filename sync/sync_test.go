@@ -21,14 +21,13 @@ func (BlockValidatorMock) ValidateBlock(block Block) bool {
 }
 
 func TestSyncer_Status(t *testing.T) {
-	t.Skip()
+	fmt.Println("test sync status")
 	sync := NewSync(NewPeers(simulator.New().NewNode()), nil, BlockValidatorMock{}, Configuration{1, 1, 100 * time.Millisecond, 1, 10 * time.Second})
 	assert.True(t, sync.Status() == IDLE, "status was running")
 }
 
 func TestSyncer_Start(t *testing.T) {
-	t.Skip()
-
+	fmt.Println("test sync start")
 	sim := simulator.New()
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
@@ -62,8 +61,7 @@ func TestSyncer_Start(t *testing.T) {
 }
 
 func TestSyncer_Close(t *testing.T) {
-	t.Skip()
-
+	fmt.Println("test sync close")
 	sync := NewSync(NewPeers(simulator.New().NewNode()), nil, BlockValidatorMock{}, Configuration{1, 1, 100 * time.Millisecond, 1, 10 * time.Second})
 	sync.Start()
 	sync.Close()
@@ -74,9 +72,9 @@ func TestSyncer_Close(t *testing.T) {
 	assert.True(t, !ok, "channel 'exit' still open")
 }
 
-func TestSyncProtocol_AddMsgHandlers(t *testing.T) {
+func TestSyncProtocol_BlockRequest(t *testing.T) {
 	t.Skip()
-
+	fmt.Println("test sync block request")
 	sim := simulator.New()
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
@@ -99,7 +97,8 @@ func TestSyncProtocol_AddMsgHandlers(t *testing.T) {
 	assert.Equal(t, a.GetId(), block.Id(), "wrong block")
 }
 
-func TestSyncProtocol_AddMsgHandlers2(t *testing.T) {
+func TestSyncProtocol_LayerHashRequest(t *testing.T) {
+	fmt.Println("test sync layer hash request")
 	sim := simulator.New()
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
@@ -118,8 +117,9 @@ func TestSyncProtocol_AddMsgHandlers2(t *testing.T) {
 	assert.Equal(t, "some hash representing the layer", string(hash), "wrong block")
 }
 
-func TestSyncProtocol_AddMsgHandlers3(t *testing.T) {
+func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 	t.Skip()
+	fmt.Println("test sync layer ids request")
 	sim := simulator.New()
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
@@ -154,8 +154,9 @@ func TestSyncProtocol_AddMsgHandlers3(t *testing.T) {
 	}
 }
 
-func TestSyncProtocol_AddMsgHandlers4(t *testing.T) {
+func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	t.Skip()
+	fmt.Println("test sync layer fetch blocks")
 	sim := simulator.New()
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
