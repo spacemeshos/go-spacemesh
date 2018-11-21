@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"hash/fnv"
-	"math"
 )
 
 const (
@@ -33,13 +32,11 @@ func (roleRequest *RoleRequest) bytes() []byte {
 
 type MockOracle struct {
 	roles map[uint32]byte
-	isLeaderTaken bool
 }
 
 func NewMockOracle() *MockOracle {
 	mock := &MockOracle{}
 	mock.roles = make(map[uint32]byte)
-	mock.isLeaderTaken = false
 
 	return mock
 }
@@ -53,26 +50,17 @@ func (roleRequest *RoleRequest) Id() uint32 {
 func (mockOracle *MockOracle) Role(rq RoleRequest) Signature {
 	i := rq.Id()
 
-	if !mockOracle.isLeaderTaken {
-		mockOracle.roles[i] = Leader
-		mockOracle.isLeaderTaken = true
-		return Signature{}
-	}
-
 	// check if exist
 	if _, exist := mockOracle.roles[i]; exist {
 		return Signature{}
 	}
 
-	if i < math.MaxUint32 / 2 {
-		mockOracle.roles[i] = Active
-	} else {
-		mockOracle.roles[i] = Passive
-	}
+	mockOracle.roles[i] = roleFromIteration(rq.k)
 
 	return Signature{}
 }
 
 func (mockOracle *MockOracle) ValidateRole(role byte, rq RoleRequest, sig Signature) bool {
-	return mockOracle.roles[rq.Id()] == role && sig == nil
+	mockOracle.Role(rq)
+	return mockOracle.roles[rq.Id()] == role && bytes.Equal(sig, Signature{})
 }

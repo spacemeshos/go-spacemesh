@@ -57,7 +57,7 @@ func NewConsensusProcess(key PubKey, layer LayerId, s Set, oracle Rolacle, signi
 	proc.signing = signing
 	proc.network = p2p
 	proc.inbox = broker.CreateInbox(&layer)
-	proc.knowledge = make([]*pb.HareMessage, 0)
+	proc.knowledge = make([]*pb.HareMessage, 0, InitialKnowledgeSize)
 	proc.isProcessed = make(map[uint32]bool)
 
 	return proc
@@ -148,7 +148,7 @@ func (proc *ConsensusProcess) nextRound() {
 	proc.k++
 
 	// can reset knowledge as ownership was passed before
-	proc.knowledge = make([]*pb.HareMessage, InitialKnowledgeSize)
+	proc.knowledge = make([]*pb.HareMessage, 0, InitialKnowledgeSize)
 }
 
 // TODO: put state and msg in Context struct?
@@ -165,11 +165,10 @@ func (proc *ConsensusProcess) processMessages(state State, msgs []*pb.HareMessag
 	// mark as processed
 	proc.isProcessed[state.k] = true
 
-	// TODO: process to create suitable hare message for the round
-
+	// process to create suitable hare message for the round
 	var m []byte
 	var err error = nil
-	switch state.k % 4 {
+	switch state.k % 4 { // switch round
 	case 0: // end of round 0
 		m, err = proc.lookForProposal(state, msgs)
 	case 1: // end of round 1

@@ -10,7 +10,7 @@ import (
 )
 
 // test that a message to a specific layer is delivered by the broker
-func TestConsensusProcess_Run10(t *testing.T) {
+func TestConsensusProcess_Start(t *testing.T) {
 	sim := simulator.New()
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
@@ -37,11 +37,58 @@ func TestConsensusProcess_Run10(t *testing.T) {
 
 	n2.Broadcast(ProtoName, buff)
 
-	to := time.Second * time.Duration(10)
+	to := time.Second * time.Duration(1) // run 1 sec
 	timer := time.NewTicker(to)
 
 	select {
 	case <-timer.C:
 		assert.True(t, true)
 	}
+}
+
+func TestConsensusProcess_handleMessage(t *testing.T) {
+	sim := simulator.New()
+	n1 := sim.NewNode()
+
+	broker := NewBroker(n1)
+	s := Set{}
+	oracle := NewMockOracle()
+	signing := NewMockSigning()
+
+	proc := NewConsensusProcess(PubKey{}, *Layer1, s, oracle, signing, n1, broker)
+
+	x, err := proc.buildStatusMessage()
+
+	if err != nil {
+		assert.Fail(t, "error building status message")
+	}
+
+	hareMsg := &pb.HareMessage{}
+	err = proto.Unmarshal(x, hareMsg)
+
+	if err != nil {
+		assert.Fail(t, "protobuf error")
+	}
+
+	proc.handleMessage(hareMsg)
+	assert.Equal(t, 1, len(proc.knowledge))
+	proc.nextRound()
+	assert.Equal(t, 0, len(proc.knowledge))
+}
+
+func TestConsensusProcess_nextRound(t *testing.T) {
+	sim := simulator.New()
+	n1 := sim.NewNode()
+
+	broker := NewBroker(n1)
+	s := Set{}
+	oracle := NewMockOracle()
+	signing := NewMockSigning()
+
+	proc := NewConsensusProcess(PubKey{}, *Layer1, s, oracle, signing, n1, broker)
+
+	proc.nextRound()
+	assert.Equal(t, uint32(1), proc.k)
+	proc.nextRound()
+	assert.Equal(t, uint32(2), proc.k)
 }
