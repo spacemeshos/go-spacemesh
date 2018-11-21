@@ -1,7 +1,6 @@
 package sync
 
 import (
-	"fmt"
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -113,7 +112,6 @@ func (s *Syncer) run() {
 				if atomic.CompareAndSwapUint32(&s.SyncLock, 0, 1) {
 					s.Synchronise()
 					atomic.StoreUint32(&s.SyncLock, 0)
-					return
 				}
 			}()
 		}
@@ -124,6 +122,7 @@ func (s *Syncer) Synchronise() {
 	for i := s.layers.LocalLayerCount(); i < s.layers.LatestKnownLayer()-s.config.hdist; {
 		i++
 		blockIds := s.GetLayerBlockIDs(i) //returns a set of all known blocks in the mesh
+		log.Debug("get layer block ids: ", blockIds)
 		ids := make(chan uint32, len(blockIds))
 		output := make(chan Block)
 
@@ -155,9 +154,10 @@ func (s *Syncer) Synchronise() {
 
 		blocks := make([]*mesh.Block, 0, len(blockIds))
 		for block := range output {
+			log.Debug("add block to layer", block)
 			blocks = append(blocks, mesh.NewExistingBlock(block.GetId(), block.GetLayer(), nil))
 		}
-
+		log.Debug("add layer ", i)
 		s.layers.AddLayer(mesh.NewExistingLayer(i, blocks))
 	}
 }
@@ -189,7 +189,7 @@ func (s *Syncer) GetLayerBlockIDs(index uint32) []uint32 {
 }
 
 func (s Syncer) SendBlockRequest(peer Peer, id uint32) (chan Block, error) {
-
+	log.Debug("send block request Peer: ", "id: ", id)
 	data := &pb.FetchBlockReq{Id: id}
 	payload, err := proto.Marshal(data)
 	if err != nil {
@@ -198,6 +198,7 @@ func (s Syncer) SendBlockRequest(peer Peer, id uint32) (chan Block, error) {
 
 	ch := make(chan Block)
 	foo := func(msg []byte) {
+		log.Debug("handle block response")
 		data := &pb.FetchBlockResp{}
 		err := proto.Unmarshal(msg, data)
 		if err != nil {
@@ -210,6 +211,7 @@ func (s Syncer) SendBlockRequest(peer Peer, id uint32) (chan Block, error) {
 }
 
 func (s Syncer) SendLayerHashRequest(peer Peer, layer uint32) ([]byte, error) {
+	log.Debug("send Layer hash request Peer: ", "layer: ", layer)
 
 	data := &pb.LayerHashReq{Layer: layer}
 	payload, err := proto.Marshal(data)
@@ -220,14 +222,14 @@ func (s Syncer) SendLayerHashRequest(peer Peer, layer uint32) ([]byte, error) {
 
 	msg, err := s.p.SendRequest(LAYER_HASH, payload, peer.String(), s.config.requestTimeout)
 	if err != nil {
-		log.Error("could not send layer hash request")
+		log.Error("could not send layer hash request ", err)
 		return nil, err
 	}
 
 	res := &pb.LayerHashResp{}
 	err = proto.Unmarshal(msg.([]byte), res)
 	if err != nil {
-		log.Error("could not unmarshal layer hash response")
+		log.Error("could not unmarshal layer hash response ", err)
 		return nil, err
 	}
 
@@ -256,6 +258,7 @@ func (s *Syncer) SendLayerIDsRequest(peer Peer, idx uint32) (chan []uint32, erro
 }
 
 func (s *Syncer) BlockRequestHandler(msg []byte) []byte {
+	log.Debug("handle block request")
 	req := &pb.FetchBlockReq{}
 	err := proto.Unmarshal(msg, req)
 	if err != nil {
@@ -273,6 +276,8 @@ func (s *Syncer) BlockRequestHandler(msg []byte) []byte {
 		log.Error("Error handling request message, err:", err) //todo describe err
 		return nil
 	}
+
+	log.Debug("return block ", block)
 
 	return payload
 }

@@ -22,6 +22,7 @@ type BlockValidatorMock struct {
 }
 
 func (BlockValidatorMock) ValidateBlock(block Block) bool {
+	fmt.Println("validate block ", block)
 	return true
 }
 
@@ -170,44 +171,55 @@ func TestSyncProtocol_AddMsgHandlers4(t *testing.T) {
 }
 
 func TestSyncProtocol_AddMsgHandlers5(t *testing.T) {
-
-	syncObj1 := NewSync(NewPeers(n1),
+	sim := simulator.New()
+	nn1 := sim.NewNode()
+	nn2 := sim.NewNode()
+	syncObj1 := NewSync(PeersImpl{nn1, func() []Peer { return []Peer{nn2.PublicKey()} }},
 		mesh.NewLayers(nil, nil),
 		BlockValidatorMock{},
 		Configuration{2, 1, 1 * time.Second, 1, 10 * time.Second},
 	)
 
-	syncObj2 := NewSync(PeersImpl{n2, func() []Peer { return []Peer{n1.PublicKey()} }},
+	syncObj2 := NewSync(PeersImpl{nn2, func() []Peer { return []Peer{nn1.PublicKey()} }},
 		mesh.NewLayers(nil, nil),
 		BlockValidatorMock{},
 		Configuration{2, 1, 1 * time.Second, 1, 10 * time.Second},
 	)
-
-	block1 := mesh.NewExistingBlock(uuid.New().ID(), 1, nil)
-	block2 := mesh.NewExistingBlock(uuid.New().ID(), 1, nil)
-	block3 := mesh.NewExistingBlock(uuid.New().ID(), 1, nil)
-	block4 := mesh.NewExistingBlock(uuid.New().ID(), 1, nil)
-	block5 := mesh.NewExistingBlock(uuid.New().ID(), 1, nil)
-	block6 := mesh.NewExistingBlock(uuid.New().ID(), 1, nil)
-	block7 := mesh.NewExistingBlock(uuid.New().ID(), 1, nil)
-	block8 := mesh.NewExistingBlock(uuid.New().ID(), 1, nil)
-	block9 := mesh.NewExistingBlock(uuid.New().ID(), 1, nil)
-	block10 := mesh.NewExistingBlock(uuid.New().ID(), 1, nil)
-
-	syncObj1.layers.AddLayer(mesh.NewExistingLayer(uint32(1), []*mesh.Block{block1, block6}))
-	syncObj1.layers.AddLayer(mesh.NewExistingLayer(uint32(2), []*mesh.Block{block2, block7}))
-	syncObj1.layers.AddLayer(mesh.NewExistingLayer(uint32(3), []*mesh.Block{block3, block8}))
-	syncObj1.layers.AddLayer(mesh.NewExistingLayer(uint32(3), []*mesh.Block{block4, block9}))
-	syncObj1.layers.AddLayer(mesh.NewExistingLayer(uint32(3), []*mesh.Block{block5, block10}))
 
 	syncObj2.layers.SetLatestKnownLayer(5)
 	syncObj2.Start()
 	syncObj2.ForceSync()
 
-	for syncObj2.Status() == RUNNING {
-		time.Sleep(1 * time.Second)
+	block1 := mesh.NewExistingBlock(uuid.New().ID(), 1, nil)
+	block2 := mesh.NewExistingBlock(uuid.New().ID(), 1, nil)
+	block3 := mesh.NewExistingBlock(uuid.New().ID(), 2, nil)
+	block4 := mesh.NewExistingBlock(uuid.New().ID(), 2, nil)
+	block5 := mesh.NewExistingBlock(uuid.New().ID(), 3, nil)
+	block6 := mesh.NewExistingBlock(uuid.New().ID(), 3, nil)
+	block7 := mesh.NewExistingBlock(uuid.New().ID(), 4, nil)
+	block8 := mesh.NewExistingBlock(uuid.New().ID(), 4, nil)
+	block9 := mesh.NewExistingBlock(uuid.New().ID(), 5, nil)
+	block10 := mesh.NewExistingBlock(uuid.New().ID(), 5, nil)
+
+	syncObj1.layers.AddLayer(mesh.NewExistingLayer(uint32(1), []*mesh.Block{block1, block2}))
+	syncObj1.layers.AddLayer(mesh.NewExistingLayer(uint32(2), []*mesh.Block{block3, block4}))
+	syncObj1.layers.AddLayer(mesh.NewExistingLayer(uint32(3), []*mesh.Block{block5, block6}))
+	syncObj1.layers.AddLayer(mesh.NewExistingLayer(uint32(3), []*mesh.Block{block7, block8}))
+	syncObj1.layers.AddLayer(mesh.NewExistingLayer(uint32(3), []*mesh.Block{block9, block10}))
+
+	timeout := time.After(10 * time.Second)
+	// Keep trying until we're timed out or got a result or got an error
+	for {
+		select {
+		// Got a timeout! fail with a timeout error
+		case <-timeout:
+			t.Error("timed out ")
+			return
+		default:
+			if syncObj2.Status() == IDLE {
+				assert.Equal(t, syncObj2.layers.LocalLayerCount(), uint32(3), "wrong block")
+				return
+			}
+		}
 	}
-
-	assert.Equal(t, syncObj2.layers.LocalLayerCount(), uint32(3), "wrong block")
-
 }
