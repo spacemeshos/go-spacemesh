@@ -20,12 +20,6 @@ func (BlockValidatorMock) ValidateBlock(block Block) bool {
 	return true
 }
 
-func TestSyncer_Status(t *testing.T) {
-	fmt.Println("test sync status")
-	sync := NewSync(NewPeers(simulator.New().NewNode()), nil, BlockValidatorMock{}, Configuration{1, 1, 100 * time.Millisecond, 1, 10 * time.Second})
-	assert.True(t, sync.Status() == IDLE, "status was running")
-}
-
 func TestSyncer_Start(t *testing.T) {
 	fmt.Println("test sync start")
 	sim := simulator.New()
@@ -42,8 +36,8 @@ func TestSyncer_Start(t *testing.T) {
 		BlockValidatorMock{},
 		Configuration{2, 1, 1 * time.Second, 1, 10 * time.Second},
 	)
-
-	fmt.Println(sync.Status())
+	sync.layers.SetLatestKnownLayer(5)
+	fmt.Println(sync.IsSynced())
 	sync.Start()
 	timeout := time.After(10 * time.Second)
 	for {
@@ -53,7 +47,7 @@ func TestSyncer_Start(t *testing.T) {
 			t.Error("timed out ")
 			return
 		default:
-			if sync.Status() == RUNNING {
+			if !sync.IsSynced() {
 				return
 			}
 		}
@@ -249,7 +243,7 @@ loop:
 			t.Error("timed out ")
 		default:
 			fmt.Println("check status")
-			if syncObj2.layers.LocalLayerCount() == 3 {
+			if syncObj2.IsSynced() {
 				t.Log("done!")
 				break loop
 			}

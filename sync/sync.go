@@ -59,9 +59,6 @@ func (s *Syncer) Close() {
 type Status int
 
 const (
-	RUNNING Status = 1
-	IDLE    Status = 0
-
 	BLOCK      p2p.MessageType = 1
 	LAYER_HASH p2p.MessageType = 2
 	LAYER_IDS  p2p.MessageType = 3
@@ -69,8 +66,8 @@ const (
 	protocol = "/sync/fblock/1.0/"
 )
 
-func (s *Syncer) Status() Status {
-	return Status(atomic.LoadUint32(&s.SyncLock))
+func (s *Syncer) IsSynced() bool {
+	return s.layers.LocalLayerCount() == s.syncTo()
 }
 
 func (s *Syncer) Stop() {
@@ -168,7 +165,8 @@ func (s *Syncer) Synchronise() {
 		log.Debug("add layer ", i)
 		s.layers.AddLayer(mesh.NewExistingLayer(i, blocks))
 	}
-	log.Debug("synchronise done")
+
+	log.Debug("synchronise done, local layer index is ", s.layers.LocalLayerCount())
 }
 
 func (s *Syncer) GetLayerBlockIDs(index uint32) []uint32 {
