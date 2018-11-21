@@ -2,82 +2,82 @@ package hare
 
 import "github.com/spacemeshos/go-spacemesh/hare/pb"
 
-type ProtoMessageBuilder struct {
+type OuterBuilder struct {
 	m *pb.HareMessage
 }
 
-func NewProtoBuilder() *ProtoMessageBuilder {
-	return &ProtoMessageBuilder{}
+func NewOuterBuilder() *OuterBuilder {
+	return &OuterBuilder{&pb.HareMessage{}}
 }
 
-func (proto *ProtoMessageBuilder) SetPubKey(key PubKey) *ProtoMessageBuilder {
+func (proto *OuterBuilder) SetPubKey(key PubKey) *OuterBuilder {
 	proto.m.PubKey = key.Bytes()
 	return proto
 }
 
-func (proto *ProtoMessageBuilder) SetInnerMessage(message *pb.InnerMessage) *ProtoMessageBuilder {
+func (proto *OuterBuilder) SetInnerMessage(message *pb.InnerMessage) *OuterBuilder {
 	proto.m.Message = message
 	return proto
 }
 
-func (proto *ProtoMessageBuilder) SetCertificate(certificate *pb.Certificate) *ProtoMessageBuilder {
+func (proto *OuterBuilder) SetCertificate(certificate *pb.Certificate) *OuterBuilder {
 	proto.m.Cert = certificate
 	return proto
 }
 
-func (proto *ProtoMessageBuilder) SetInnerSignature(sig Signature) *ProtoMessageBuilder {
+func (proto *OuterBuilder) SetInnerSignature(sig Signature) *OuterBuilder {
 	proto.m.InnerSig = sig
 	return proto
 }
 
-func (proto *ProtoMessageBuilder) Build() *pb.HareMessage {
+func (proto *OuterBuilder) Build() *pb.HareMessage {
 	return proto.m
 }
 
-type InnerMessageBuilder struct {
+type InnerBuilder struct {
 	m *pb.InnerMessage
 }
 
-func NewInnerBuilder() *InnerMessageBuilder {
-	return &InnerMessageBuilder{}
+func NewInnerBuilder() *InnerBuilder {
+	return &InnerBuilder{&pb.InnerMessage{}}
 }
 
-func (inner *InnerMessageBuilder) SetType(msgType MessageType) *InnerMessageBuilder {
+func (inner *InnerBuilder) SetType(msgType MessageType) *InnerBuilder {
 	inner.m.Type = int32(msgType)
 	return inner
 }
 
-func (inner *InnerMessageBuilder) SetLayer(id LayerId) *InnerMessageBuilder {
+func (inner *InnerBuilder) SetLayer(id LayerId) *InnerBuilder {
 	inner.m.Layer = id.Bytes()
 	return inner
 }
 
-func (inner *InnerMessageBuilder) SetIteration(k uint32) *InnerMessageBuilder {
+func (inner *InnerBuilder) SetIteration(k uint32) *InnerBuilder {
 	inner.m.K = k
 	return inner
 }
 
-func (inner *InnerMessageBuilder) SetKi(ki uint32) *InnerMessageBuilder {
+func (inner *InnerBuilder) SetKi(ki uint32) *InnerBuilder {
 	inner.m.Ki = ki
 	return inner
 }
 
-func (inner *InnerMessageBuilder) SetBlocks(set Set) *InnerMessageBuilder {
+func (inner *InnerBuilder) SetBlocks(set Set) *InnerBuilder {
 	inner.m.Blocks = set.To2DSlice()
 	return inner
 }
 
-func (inner *InnerMessageBuilder) SetRoleProof(sig Signature) *InnerMessageBuilder {
+func (inner *InnerBuilder) SetRoleProof(sig Signature) *InnerBuilder {
 	inner.m.RoleProof = sig
 	return inner
 }
 
-func (inner *InnerMessageBuilder) SetSVP(svp *pb.AggregatedMessages) *InnerMessageBuilder {
+func (inner *InnerBuilder) SetSVP(svp *pb.AggregatedMessages) *InnerBuilder {
 	inner.m.Svp = svp
 	return inner
 }
 
-func (inner *InnerMessageBuilder) Build() *pb.InnerMessage {
+func (inner *InnerBuilder) Build() *pb.InnerMessage {
 	return inner.m
 }
 

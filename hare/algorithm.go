@@ -198,7 +198,7 @@ func (proc *ConsensusProcess) buildStatusMessage() ([]byte, error) {
 
 	sig := proc.signing.Sign(buff)
 
-	outer := NewProtoBuilder()
+	outer := NewOuterBuilder()
 	m := outer.SetInnerMessage(x).SetPubKey(proc.pubKey).SetInnerSignature(sig).Build()
 
 	buff, err = proto.Marshal(m)
@@ -226,7 +226,7 @@ func (proc *ConsensusProcess) lookForProposal(state State, msg []*pb.HareMessage
 
 	sig := proc.signing.Sign(buff)
 
-	outer := NewProtoBuilder()
+	outer := NewOuterBuilder()
 	outer.SetPubKey(proc.pubKey).SetInnerMessage(x).SetInnerSignature(sig)
 
 	buff, err = proto.Marshal(outer.Build())
