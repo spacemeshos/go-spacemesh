@@ -26,7 +26,7 @@ type LayersDB struct {
 	newPeerCh        chan Peer
 	newBlockCh       chan Block
 	exit             chan bool
-	lMutex           sync.Mutex
+	lMutex           sync.RWMutex
 	lcMutex          sync.RWMutex
 }
 
@@ -39,7 +39,7 @@ func NewLayers(newPeerCh chan Peer, newBlockCh chan Block) Mesh {
 		newPeerCh,
 		newBlockCh,
 		make(chan bool),
-		sync.Mutex{},
+		sync.RWMutex{},
 		sync.RWMutex{}}
 	return ll
 }
@@ -56,10 +56,13 @@ func max(a, b int) int {
 }
 
 func (ll *LayersDB) GetLayer(i int) (*Layer, error) {
+	ll.lMutex.RLock()
 	if len(ll.layers) == 0 || i < 0 || i > len(ll.layers) {
 		return nil, errors.New("index out of bounds")
 	}
-	return ll.layers[i-1], nil
+	l := ll.layers[i-1]
+	ll.lMutex.RUnlock()
+	return l, nil
 }
 
 func (ll *LayersDB) GetBlock(id BlockID) (*Block, error) {
