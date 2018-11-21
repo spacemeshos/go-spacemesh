@@ -3,6 +3,7 @@ package mesh
 import (
 	"crypto"
 	"errors"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"sync"
 )
 
@@ -57,8 +58,12 @@ func max(a, b int) int {
 
 func (ll *LayersDB) GetLayer(i int) (*Layer, error) {
 	ll.lMutex.RLock()
-	if len(ll.layers) == 0 || i < 0 || i > len(ll.layers) {
-		return nil, errors.New("index out of bounds")
+	if i < 1 {
+		return nil, errors.New("index out of bounds len: " + string(len(ll.layers)) + " " + string(i))
+	}
+	if len(ll.layers) == 0 || i > len(ll.layers) {
+		log.Debug("unknown layer ")
+		return nil, errors.New("unknown layer ")
 	}
 	l := ll.layers[i-1]
 	ll.lMutex.RUnlock()

@@ -56,9 +56,9 @@ func (s *Syncer) Close() {
 	close(s.exit)
 }
 
-type Status int
-
 const (
+	IDLE       uint32          = 0
+	RUNNING    uint32          = 1
 	BLOCK      p2p.MessageType = 1
 	LAYER_HASH p2p.MessageType = 2
 	LAYER_IDS  p2p.MessageType = 3
@@ -106,9 +106,9 @@ func (s *Syncer) run() {
 		}
 		if doSync {
 			go func() {
-				if atomic.CompareAndSwapUint32(&s.SyncLock, 0, 1) {
+				if atomic.CompareAndSwapUint32(&s.SyncLock, IDLE, RUNNING) {
 					s.Synchronise()
-					atomic.StoreUint32(&s.SyncLock, 0)
+					atomic.StoreUint32(&s.SyncLock, IDLE)
 				}
 			}()
 		}
@@ -195,7 +195,7 @@ func (s *Syncer) GetLayerBlockIDs(index uint32) []uint32 {
 	return res
 }
 
-func (s Syncer) SendBlockRequest(peer Peer, id uint32) (chan Block, error) {
+func (s *Syncer) SendBlockRequest(peer Peer, id uint32) (chan Block, error) {
 	log.Debug("send block request Peer: ", "id: ", id)
 	data := &pb.FetchBlockReq{Id: id}
 	payload, err := proto.Marshal(data)
@@ -217,7 +217,7 @@ func (s Syncer) SendBlockRequest(peer Peer, id uint32) (chan Block, error) {
 	return ch, s.p.SendAsyncRequest(BLOCK, payload, peer.String(), foo)
 }
 
-func (s Syncer) SendLayerHashRequest(peer Peer, layer uint32) ([]byte, error) {
+func (s *Syncer) SendLayerHashRequest(peer Peer, layer uint32) ([]byte, error) {
 	log.Debug("send Layer hash request Peer: ", "layer: ", layer)
 
 	data := &pb.LayerHashReq{Layer: layer}
@@ -320,7 +320,7 @@ func (s *Syncer) LayerIdsRequestHandler(msg []byte) []byte {
 
 	layer, err := s.layers.GetLayer(int(req.Layer))
 	if err != nil {
-		log.Error("Error handling layer ids request message, err:", err) //todo describe err
+		log.Debug("Error handling layer ids request message, err:", err) //todo describe err
 		return nil
 	}
 

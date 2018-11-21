@@ -73,7 +73,10 @@ func (p *Protocol) readLoop() {
 
 func (p *Protocol) cleanStaleMessages() {
 	for {
-		if elem := p.pendingQueue.Front(); elem != nil {
+		p.pendMutex.RLock()
+		elem := p.pendingQueue.Front()
+		p.pendMutex.Lock()
+		if elem != nil {
 			item := elem.Value.(Item)
 			if time.Since(item.timestamp) > p.requestTimeout {
 				p.removeFromPending(item.id, elem)
