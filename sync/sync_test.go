@@ -21,6 +21,7 @@ func (BlockValidatorMock) ValidateBlock(block Block) bool {
 }
 
 func TestSyncer_Status(t *testing.T) {
+	t.Skip()
 	fmt.Println("test sync status")
 	sync := NewSync(NewPeers(simulator.New().NewNode()), nil, BlockValidatorMock{}, Configuration{1, 1, 100 * time.Millisecond, 1, 10 * time.Second})
 	assert.True(t, sync.Status() == IDLE, "status was running")
@@ -61,6 +62,7 @@ func TestSyncer_Start(t *testing.T) {
 }
 
 func TestSyncer_Close(t *testing.T) {
+	t.Skip()
 	fmt.Println("test sync close")
 	sync := NewSync(NewPeers(simulator.New().NewNode()), nil, BlockValidatorMock{}, Configuration{1, 1, 100 * time.Millisecond, 1, 10 * time.Second})
 	sync.Start()
@@ -98,6 +100,7 @@ func TestSyncProtocol_BlockRequest(t *testing.T) {
 }
 
 func TestSyncProtocol_LayerHashRequest(t *testing.T) {
+	t.Skip()
 	fmt.Println("test sync layer hash request")
 	sim := simulator.New()
 	n1 := sim.NewNode()
