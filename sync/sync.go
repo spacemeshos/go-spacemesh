@@ -335,7 +335,9 @@ func (s *Syncer) LayerIdsRequestHandler(msg []byte) []byte {
 
 	ids := make([]uint32, 0, len(blocks))
 
-	for _, b := range blocks {
+	for i, b := range blocks {
+	    ids[i] = b
+	}
 		ids = append(ids, b.Id())
 	}
 
