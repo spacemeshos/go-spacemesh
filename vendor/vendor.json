@@ -111,10 +111,10 @@
 			"revisionTime": "2017-11-26T19:57:40Z"
 		},
 		{
-			"checksumSHA1": "vqiK5r5dntV7JNZ+ZsGlD0Samos=",
+			"checksumSHA1": "yUJS5jJyNTvxHCUUXiK3xnKfN14=",
 			"path": "github.com/grpc-ecosystem/grpc-gateway/utilities",
-			"revision": "e4b8a938efae14de11fd97311e873e989896348c",
-			"revisionTime": "2017-11-26T19:57:40Z"
+			"revision": "d8ad87ee91e1062c2a6117bda0b5523e9cb949ef",
+			"revisionTime": "2018-11-19T18:46:39Z"
 		},
 		{
 			"checksumSHA1": "HtpYAWHvd9mq+mHkpo7z8PGzMik=",

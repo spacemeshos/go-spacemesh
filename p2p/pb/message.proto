@@ -47,3 +47,10 @@ message Metadata {
     bytes authPubKey = 5;     // Authoring node Secp256k1 public key (32bytes) - may not be sender
     string authorSign = 6;    // Signature of message data by author + method specific data by message creator node. format: hexEncode([]bytes)
 }
+
+message MessageWrapper {
+     uint32 type = 1; //msg type
+     bool req = 2;   // Req or Resp, 0 - req / 1 - resp
+     uint32 reqID = 3;
+     bytes payload = 4; //encapsulated msg
+}
