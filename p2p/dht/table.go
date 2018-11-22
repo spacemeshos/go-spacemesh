@@ -139,10 +139,7 @@ type routingTableImpl struct {
 func NewRoutingTable(bucketsize int, localID node.DhtID, log *logging.Logger) RoutingTable {
 
 	// Create all our buckets.
-	buckets := []Bucket{}
-	for i := 0; i < BucketCount; i++ {
-		buckets = append(buckets, NewBucket())
-	}
+	buckets := []Bucket{NewBucket()}
 
 	rt := &routingTableImpl{
 
@@ -265,7 +262,7 @@ func (rt *routingTableImpl) randomPeers(qty int) []node.Node {
 	type nodeSlice []node.Node
 
 	var buckets []nodeSlice
-	buckets = make([]nodeSlice, 0, BucketCount*2)
+	buckets = make([]nodeSlice, 0, len(rt.buckets)*rt.bucketsize)
 
 	for i := 0; i < len(rt.buckets); i++ {
 		peers := rt.buckets[i].Peers()
@@ -341,13 +338,14 @@ func (rt *routingTableImpl) update(p node.Node, cb chan struct{}) {
 	if bucket.Len() >= rt.bucketsize {
 		// If this bucket is the rightmost bucket, and its full
 		// we need to split it and create a new bucket
-		if cpl == len(rt.buckets)-1 { // this is the bucket
+		if cpl == len(rt.buckets)-1 && cpl < BucketCount { // this is the bucket
 			rt.split()
 			// after split we check again in which bucket we should add peer.
 			rt.update(p, cb)
 			return
 		} else {
 			// TODO: if bucket is full and can't be split ping oldest node and replace if it fails to answer
+			// TODO: save peer for replacement later
 			// for now assume we pinged last node and it answered until we get ping done.
 			close(cb)
 			return
@@ -369,16 +367,6 @@ func (rt *routingTableImpl) split() {
 	newBucket := bucket.Split(lastBucket, rt.local)
 
 	rt.buckets = append(rt.buckets, newBucket)
-
-	// last bucket is still too big, split again
-	if newBucket.Len() > rt.bucketsize {
-		rt.split()
-	}
-
-	// If all elements were on left side of split...
-	if bucket.Len() > rt.bucketsize {
-		bucket.PopBack()
-	}
 }
 
 // Remove a node from the routing table.

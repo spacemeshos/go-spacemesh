@@ -112,15 +112,13 @@ func (b *bucketimpl) Split(cpl int, target node.DhtID) Bucket {
 	e := b.list.Front()
 	for e != nil {
 		n := e.Value.(node.Node)
+		next := e.Next()
 		peerCPL := n.DhtID().CommonPrefixLen(target)
 		if peerCPL > cpl {
 			newbucket.PushBack(n)
-			curr := e
-			e = e.Next()
-			b.list.Remove(curr)
-			continue
+			b.list.Remove(e)
 		}
-		e = e.Next()
+		e = next
 	}
 	return newbucket
 }

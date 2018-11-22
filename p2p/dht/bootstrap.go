@@ -17,7 +17,7 @@ const (
 	// RefreshInterval is the time we wait between dht refreshes
 	RefreshInterval = 5 * time.Minute
 
-	BootstrapTries = 5
+	bootstrapTries = 5
 )
 
 var (
@@ -49,14 +49,14 @@ func (d *KadDHT) Bootstrap(ctx context.Context) error {
 	// register bootstrap nodes
 	bn := 0
 	for _, n := range d.config.BootstrapNodes {
-		node, err := node.NewNodeFromString(n)
+		nd, err := node.NewNodeFromString(n)
 		if err != nil {
 			// TODO : handle errors
 			continue
 		}
-		d.rt.Update(node)
+		d.rt.Update(nd)
 		bn++
-		d.local.Info("added new bootstrap node %v", node)
+		d.local.Info("added new bootstrap node %v", nd)
 	}
 
 	if bn == 0 {
@@ -74,8 +74,8 @@ func (d *KadDHT) Bootstrap(ctx context.Context) error {
 func (d *KadDHT) tryBoot(ctx context.Context, minPeers int) error {
 
 	searchFor := d.local.PublicKey().String()
-	booted := false
-	i := 0
+	gotpeers := false
+	tries := 0
 	d.local.Debug("BOOTSTRAP: Running kademlia lookup for ourselves")
 
 loop:
@@ -83,7 +83,9 @@ loop:
 		reschan := make(chan error)
 
 		go func() {
-			if booted || i >= BootstrapTries {
+			if gotpeers || tries >= bootstrapTries {
+				// TODO: consider choosing a random key that is close to the local id
+				// or TODO: implement real kademlia refreshes - #241
 				rnd, _ := crypto.GetRandomBytes(32)
 				searchFor = base58.Encode(rnd)
 				d.local.Debug("BOOTSTRAP: Running kademlia lookup for random peer")
@@ -96,23 +98,25 @@ loop:
 		case <-ctx.Done():
 			return ErrBootAbort
 		case err := <-reschan:
-			i++
+			tries++
 			if err == nil {
+				// if we got the peer we were looking for (us or random)
+				// the best thing we can do is just try again or try another random peer.
+				// hence we continue here.
+				//todo : maybe if we gotpeers than we can just break ?
 				continue
 			}
-			// We want to have lookup failed error
-			// no one should return us ourselves.
 			req := make(chan int)
 			d.rt.Size(req)
 			size := <-req
 
-			if (size) >= minPeers { // Don't count bootstrap nodes
-				if booted {
+			if (size) >= minPeers {
+				if gotpeers {
 					break loop
 				}
-				booted = true
+				gotpeers = true
 			} else {
-				d.local.Warning("%d lookup didn't bootstrap the routing table. RT now has %d peers", i, size)
+				d.local.Warning("%d lookup didn't bootstrap the routing table. RT now has %d peers", tries, size)
 			}
 
 			time.Sleep(LookupIntervals)
