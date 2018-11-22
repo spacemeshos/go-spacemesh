@@ -13,6 +13,8 @@ import (
 	"time"
 )
 
+
+// this is a long test, about 60sec - will be fixed on #289
 func TestGossip(t *testing.T) {
 	bootnodes := []int{1}
 	nodes := []int{10}

@@ -459,7 +459,7 @@ func TestBootstrap(t *testing.T) {
 			recv := randnode2.RegisterProtocol(exampleProtocol)
 
 			sendDirectMessage(t, randnode, randnode2.lNode.PublicKey().String(), recv, true)
-			time.Sleep(3 * time.Second)
+			time.Sleep(1* time.Second)
 		})
 	}
 }

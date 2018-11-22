@@ -15,19 +15,32 @@ import (
 	"time"
 )
 
-// NoResultsTimeout is the timeout we wait between requesting more peers repeatedly
-const NoResultsTimeout = 1 * time.Second
+// NoResultsInterval is the timeout we wait between requesting more peers repeatedly
+const NoResultsInterval = 1 * time.Second
 
 // PeerMessageQueueSize is the len of the msgQ each peer holds.
 const PeerMessageQueueSize = 100
 
+// ConnectingTimeout is the timeout we wait when trying to connect a neighborhood
+const ConnectingTimeout = 20 * time.Second //todo: add to the config
+
+// fnv.New32 must be used everytime to be sure we get consistent results.
+func generateID(msg []byte) uint32 {
+	msghash := fnv.New32() // todo: Add nonce to messages instead
+	msghash.Write(msg)
+	return msghash.Sum32()
+}
+
 // Protocol is a simple declaration of the gossip protocol
 type Protocol interface {
 	Broadcast(payload []byte) error
+
 	Start() error
-	Initial() <-chan struct{}
-	AddPeer(node.Node, net.Connection)
 	Close()
+
+	Initial() <-chan struct{}
+	AddIncomingPeer(node.Node, net.Connection)
+	Disconnect(key crypto.PublicKey)
 }
 
 // PeerSampler is a our interface to select peers
@@ -40,8 +53,8 @@ type ConnectionFactory interface {
 	GetConnection(address string, pk crypto.PublicKey) (net.Connection, error)
 }
 
-// NodeConPair
-type NodeConPair struct {
+// nodeConPair
+type nodeConPair struct {
 	node.Node
 	net.Connection
 }
@@ -58,16 +71,14 @@ type Neighborhood struct {
 	peers   map[string]*peer
 	inpeers map[string]*peer
 
-	morePeersReq chan struct{}
+	morePeersReq      chan struct{}
+	connectingTimeout time.Duration
 
-	inc chan NodeConPair
-
-	// closed peers are reported here
-	remove chan string
+	inc chan nodeConPair // report incoming connection
 
 	// we make sure we don't send a message twice
 	oldMessageMu sync.RWMutex
-	oldMessageQ  map[string]struct{}
+	oldMessageQ  map[uint32]struct{}
 
 	ps PeerSampler
 
@@ -82,15 +93,17 @@ type Neighborhood struct {
 // NewNeighborhood creates a new gossip protocol from type Neighborhood.
 func NewNeighborhood(config config.SwarmConfig, ps PeerSampler, cp ConnectionFactory, log2 log.Log) *Neighborhood {
 	return &Neighborhood{
-		Log:          log2,
-		config:       config,
-		initial:      make(chan struct{}),
-		morePeersReq: make(chan struct{}, config.RandomConnections),
-		peers:        make(map[string]*peer, config.RandomConnections),
-		inpeers:      make(map[string]*peer, config.RandomConnections),
-		oldMessageQ:  make(map[string]struct{}), // todo : remember to drain this
-		ps:           ps,
-		cp:           cp,
+		Log:               log2,
+		config:            config,
+		initial:           make(chan struct{}),
+		morePeersReq:      make(chan struct{}, config.RandomConnections),
+		connectingTimeout: ConnectingTimeout,
+		peers:             make(map[string]*peer, config.RandomConnections),
+		inpeers:           make(map[string]*peer, config.RandomConnections),
+		oldMessageQ:       make(map[uint32]struct{}), // todo : remember to drain this
+		shutdown:          make(chan struct{}),
+		ps:                ps,
+		cp:                cp,
 	}
 }
 
@@ -100,7 +113,6 @@ var _ Protocol = new(Neighborhood)
 type peer struct {
 	log.Log
 	node.Node
-	disc          chan error
 	connected     time.Time
 	conn          net.Connection
 	knownMessages map[uint32]struct{}
@@ -111,7 +123,6 @@ func makePeer(node2 node.Node, c net.Connection, log log.Log) *peer {
 	return &peer{
 		log,
 		node2,
-		make(chan error, 1),
 		time.Now(),
 		c,
 		make(map[uint32]struct{}),
@@ -127,11 +138,10 @@ func (p *peer) send(message []byte) error {
 }
 
 // addMessages adds a message to this peer's queue
-func (p *peer) addMessage(msg []byte) error {
+func (p *peer) addMessage(msg []byte, checksum uint32) error {
 	// dont do anything if this peer know this msg
-	msghash := fnv.New32()
-	msghash.Write(msg)
-	if _, ok := p.knownMessages[msghash.Sum32()]; ok {
+
+	if _, ok := p.knownMessages[checksum]; ok {
 		return errors.New("already got this msg")
 	}
 
@@ -151,7 +161,7 @@ func (p *peer) addMessage(msg []byte) error {
 
 	select {
 	case p.msgQ <- data:
-		p.knownMessages[msghash.Sum32()] = struct{}{}
+		p.knownMessages[checksum] = struct{}{}
 	default:
 		return errors.New("Q was full")
 
@@ -160,25 +170,17 @@ func (p *peer) addMessage(msg []byte) error {
 	return nil
 }
 
-func (p *peer) start(dischann chan string) {
+func (p *peer) start() {
 	for {
-		select {
-		case m := <-p.msgQ:
-			err := p.send(m)
-			if err != nil {
-				// todo: handle errors
-				log.Error("Failed sending message to this peer %v", p.Node.PublicKey().String())
-				p.disc <- err
-			}
-		case d := <-p.disc:
-			log.Error("peer disconnected %v", d)
-			if dischann != nil {
-				dischann <- p.PublicKey().String()
-			}
+		m := <-p.msgQ
+		err := p.send(m)
+		if err != nil {
+			// todo: stop only when error is critical (identify errors)
+			log.Error("Failed sending message to this peer %v", p.Node.PublicKey().String())
 			return
 		}
-
 	}
+
 }
 
 // Close closes the neighborhood and shutsdown requests for more peers
@@ -187,7 +189,7 @@ func (s *Neighborhood) Close() {
 	close(s.shutdown)
 }
 
-// the actual broadcast procedure, loop on peers and add the message to their queues
+// Broadcast is the actual broadcast procedure, loop on peers and add the message to their queues
 func (s *Neighborhood) Broadcast(msg []byte) error {
 
 	if len(s.peers)+len(s.inpeers) == 0 {
@@ -196,8 +198,10 @@ func (s *Neighborhood) Broadcast(msg []byte) error {
 
 	oldmessage := false
 
+	checksum := generateID(msg)
+
 	s.oldMessageMu.RLock()
-	if _, ok := s.oldMessageQ[string(msg)]; ok {
+	if _, ok := s.oldMessageQ[checksum]; ok {
 		// todo : - have some more metrics for termination
 		// todo	: - maybe tell the peer weg ot this message already?
 		oldmessage = true
@@ -206,21 +210,21 @@ func (s *Neighborhood) Broadcast(msg []byte) error {
 
 	if !oldmessage {
 		s.oldMessageMu.Lock()
-		s.oldMessageQ[string(msg)] = struct{}{}
+		s.oldMessageQ[checksum] = struct{}{}
 		s.oldMessageMu.Unlock()
 	}
 
 	s.peersMutex.RLock()
 	for p := range s.peers {
 		peer := s.peers[p]
-		go peer.addMessage(msg)
+		go peer.addMessage(msg, checksum)
 		s.Debug("adding message to peer %v", peer.Pretty())
 	}
 	s.peersMutex.RUnlock()
 	s.inpeersMutex.RLock()
 	for p := range s.inpeers {
 		peer := s.inpeers[p]
-		go peer.addMessage(msg)
+		go peer.addMessage(msg, checksum)
 		s.Debug("adding message to peer %v", peer.Pretty())
 	}
 	s.inpeersMutex.RUnlock()
@@ -234,10 +238,19 @@ func (s *Neighborhood) Broadcast(msg []byte) error {
 }
 
 // getMorePeers tries to fill the `peers` slice with dialed outbound peers that we selected from the dht.
-func (s *Neighborhood) getMorePeers(numpeers int) {
+func (s *Neighborhood) getMorePeers(numpeers int) int {
 
 	if numpeers == 0 {
-		return
+		return 0
+	}
+
+	// dht should provide us with random peers to connect to
+	nds := s.ps.SelectPeers(numpeers)
+	ndsLen := len(nds)
+	if ndsLen == 0 {
+		s.Debug("Peer sampler returned nothing.")
+		// this gets busy at start so we spare a second
+		return 0 // zero samples here so no reason to proceed
 	}
 
 	type cnErr struct {
@@ -246,18 +259,8 @@ func (s *Neighborhood) getMorePeers(numpeers int) {
 		err error
 	}
 
+	aborted := make(chan struct{})
 	res := make(chan cnErr, numpeers)
-
-	// dht should provide us with random peers to connect to
-	nds := s.ps.SelectPeers(numpeers)
-	ndsLen := len(nds)
-	if ndsLen == 0 {
-		s.Debug("Peer sampler returned nothing.")
-		// this gets busy at start so we spare a second
-		time.Sleep(NoResultsTimeout)
-		s.getMorePeers(numpeers)
-		return // zero samples here so no reason to proceed
-	}
 
 	// Try a connection to each peer.
 	// TODO: try splitting the load and don't connect to more than X at a time
@@ -268,17 +271,20 @@ func (s *Neighborhood) getMorePeers(numpeers int) {
 		}(nds[i], res)
 	}
 
-	i, j := 0, 0
-	tm := time.NewTimer(time.Second * 20 * time.Duration(ndsLen))
+	total, bad := 0, 0
+	tm := time.NewTimer(s.connectingTimeout) // todo: configure
 loop:
 	for {
 		select {
 		case cne := <-res:
-			i++ // We count i everytime to know when to close the channel
+			total++ // We count i everytime to know when to close the channel
 
-			if cne.err != nil && cne.n == node.EmptyNode {
+			if cne.err != nil || cne.n == node.EmptyNode {
 				s.Error("can't establish connection with sampled peer %v, %v", cne.n.String(), cne.err)
-				j++
+				bad++
+				if total == ndsLen {
+					break loop
+				}
 				continue // this peer didn't work, todo: tell dht
 			}
 
@@ -295,73 +301,86 @@ loop:
 			s.peers[cne.n.PublicKey().String()] = p
 			s.peersMutex.Unlock()
 
-			go p.start(s.remove)
+			go p.start()
 			s.Debug("Neighborhood: Added peer to peer list %v", cne.n.Pretty())
 
-			if i == ndsLen {
+			if total == ndsLen {
 				break loop
 			}
 		case <-tm.C:
+			close(aborted)
 			break loop
 		}
 	}
 
-	if len(s.peers) < s.config.RandomConnections {
-		s.Debug("getMorePeers enough calling again")
-		s.getMorePeers(s.config.RandomConnections - len(s.peers))
-	}
-
-	s.initialized()
+	return total - bad
 }
 
-func (s *Neighborhood) initialized() {
-	s.Info("Reached negihborhood goal ", len(s.peers))
-	s.peersMutex.RLock()
-	spew.Dump(s.peers)
-	s.peersMutex.RUnlock()
-	s.initOnce.Do(func() { close(s.initial) })
-}
-
-// Start Neighborhood manages the peers we are connected to all the time
+// Start a loop that manages the peers we are connected to all the time
 // It connects to config.RandomConnections and after that maintains this number
-// of connections, if a connection is closed it should send a channel message that will
-// trigger new connections to fill the requirement.
+// of connections, if a connection is closed we notify the loop that we need more peers now.
 func (s *Neighborhood) Start() error {
 	//TODO: Save and load persistent peers ?
 	s.Info("Neighborhood service started")
-	// initial
-	s.morePeersReq <- struct{}{}
 
-	go func() {
-	loop:
-		for {
-			select {
-			case torm := <-s.remove:
-				s.Warning("Peer removed ", torm)
-				go s.Disconnect(torm)
-			case <-s.morePeersReq:
-				s.Info("Requesting more peers")
-				if len(s.peers) >= s.config.RandomConnections {
-					s.initialized()
-				} else {
-					go s.getMorePeers(s.config.RandomConnections - len(s.peers))
-				}
-			case <-s.shutdown:
-				break loop // maybe error ?
-			}
-		}
-	}()
+	// initial request for peers
+	go s.loop()
+	s.morePeersReq <- struct{}{}
 
 	return nil
 }
 
-// Initial returns when the neighborhood was initialized
+func (s *Neighborhood) loop() {
+loop:
+	for {
+		select {
+		case <-s.morePeersReq:
+			s.Debug("loop: got morePeersReq")
+			go s.askForMorePeers()
+		case <-s.shutdown:
+			break loop // maybe error ?
+		}
+	}
+}
+
+func (s *Neighborhood) askForMorePeers() {
+	numpeers := len(s.peers)
+	req := s.config.RandomConnections - numpeers
+
+	if req > 0 {
+		success := s.getMorePeers(req)
+
+		if success == 0 {
+			// if we could'nt get any maybe were initializing
+			// wait a little bit before trying again
+			time.Sleep(NoResultsInterval)
+			s.morePeersReq <- struct{}{}
+			return
+		}
+
+		// todo: better way then going in this everytime ?
+		if len(s.peers) >= s.config.RandomConnections {
+			s.initOnce.Do(func() {
+				s.Info("gossip; connected to initial required neighbors - %v", len(s.peers))
+				close(s.initial)
+				s.peersMutex.RLock()
+				s.Debug(spew.Sdump(s.peers))
+				s.peersMutex.RUnlock()
+			})
+		}
+
+	}
+}
+
+// Initial returns when the neighborhood was initialized.
 func (s *Neighborhood) Initial() <-chan struct{} {
 	return s.initial
 }
 
 // Disconnect removes a peer from the neighborhood, it requests more peers if our outbound peer count is less than configured
-func (s *Neighborhood) Disconnect(peer string) {
+func (s *Neighborhood) Disconnect(key crypto.PublicKey) {
+	peer := key.String()
+
 	s.inpeersMutex.Lock()
 	if _, ok := s.inpeers[peer]; ok {
 		delete(s.inpeers, peer)
@@ -378,11 +397,11 @@ func (s *Neighborhood) Disconnect(peer string) {
 	s.morePeersReq <- struct{}{}
 }
 
-// AddPeer inserts a peer to the neighborhood as a remote peer.
-func (s *Neighborhood) AddPeer(n node.Node, c net.Connection) {
+// AddIncomingPeer inserts a peer to the neighborhood as a remote peer.
+func (s *Neighborhood) AddIncomingPeer(n node.Node, c net.Connection) {
 	p := makePeer(n, c, s.Log)
 	s.inpeersMutex.Lock()
 	s.inpeers[n.PublicKey().String()] = p
 	s.inpeersMutex.Unlock()
-	go p.start(s.remove)
+	go p.start()
 }
