@@ -64,9 +64,6 @@ func (p *Protocol) readLoop() {
 			go p.handleMessage(msg)
 		case <-timer.C:
 			go p.cleanStaleMessages()
-		case <-timer.C:
-			go p.cleanStaleMessages()
-
 		}
 	}
 }
@@ -75,7 +72,7 @@ func (p *Protocol) cleanStaleMessages() {
 	for {
 		p.pendMutex.RLock()
 		elem := p.pendingQueue.Front()
-		p.pendMutex.Lock()
+		p.pendMutex.RUnlock()
 		if elem != nil {
 			item := elem.Value.(Item)
 			if time.Since(item.timestamp) > p.requestTimeout {
@@ -152,7 +149,7 @@ func (p *Protocol) RegisterMsgHandler(msgType MessageType, reqHandler func(msg [
 	p.msgRequestHandlers[msgType] = reqHandler
 }
 
-func (p *Protocol) SendAsyncRequest(msgType MessageType, payload []byte, address string, resHandler func(msg []byte)) error {
+func (p *Protocol) SendAsyncRequest(msgType MessageType, payload []byte, address crypto.PublicKey, resHandler func(msg []byte)) error {
 
 	reqID := p.newRequestId()
 	pbsp := &pb.MessageWrapper{Req: true, ReqID: reqID, Type: uint32(msgType), Payload: payload}
@@ -168,7 +165,7 @@ func (p *Protocol) SendAsyncRequest(msgType MessageType, payload []byte, address
 	elem := p.pendingQueue.PushBack(Item{id: reqID, timestamp: time.Now()})
 	p.pendMutex.Unlock()
 
-	if sendErr := p.network.SendMessage(address, p.name, msg); sendErr != nil {
+	if sendErr := p.network.SendMessage(address.String(), p.name, msg); sendErr != nil {
 		p.removeFromPending(reqID, elem)
 		return sendErr
 	}
@@ -180,7 +177,7 @@ func (p *Protocol) newRequestId() uint64 {
 	return atomic.AddUint64(&p.id, 1)
 }
 
-func (p *Protocol) SendRequest(msgType MessageType, payload []byte, address string, timeout time.Duration) (interface{}, error) {
+func (p *Protocol) SendRequest(msgType MessageType, payload []byte, address crypto.PublicKey, timeout time.Duration) (interface{}, error) {
 	reqID := p.newRequestId()
 
 	pbsp := &pb.MessageWrapper{Req: true, ReqID: reqID, Type: uint32(msgType), Payload: payload}
@@ -197,7 +194,7 @@ func (p *Protocol) SendRequest(msgType MessageType, payload []byte, address stri
 
 	defer p.removeFromPending(reqID, nil)
 
-	if sendErr := p.network.SendMessage(address, p.name, msg); sendErr != nil {
+	if sendErr := p.network.SendMessage(address.String(), p.name, msg); sendErr != nil {
 		return nil, sendErr
 	}
 

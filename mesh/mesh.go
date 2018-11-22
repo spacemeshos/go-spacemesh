@@ -49,14 +49,8 @@ func (s *LayersDB) Close() {
 	s.exit <- true
 }
 
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
 func (ll *LayersDB) GetLayer(i int) (*Layer, error) {
+	defer ll.lMutex.RUnlock()
 	ll.lMutex.RLock()
 	if i < 1 {
 		return nil, errors.New("index out of bounds len: " + string(len(ll.layers)) + " " + string(i))
@@ -66,11 +60,11 @@ func (ll *LayersDB) GetLayer(i int) (*Layer, error) {
 		return nil, errors.New("unknown layer ")
 	}
 	l := ll.layers[i-1]
-	ll.lMutex.RUnlock()
 	return l, nil
 }
 
 func (ll *LayersDB) GetBlock(id BlockID) (*Block, error) {
+	//todo thread safety
 	return ll.blocks[id], nil
 }
 
@@ -85,6 +79,7 @@ func (ll *LayersDB) LatestKnownLayer() uint32 {
 }
 
 func (ll *LayersDB) SetLatestKnownLayer(idx uint32) {
+	//todo thread safety
 	ll.latestKnownLayer = idx
 }
 

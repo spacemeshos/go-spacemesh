@@ -8,6 +8,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/simulator"
 	"github.com/stretchr/testify/assert"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -38,6 +39,7 @@ func TestSyncer_Start(t *testing.T) {
 	)
 	sync.layers.SetLatestKnownLayer(5)
 	fmt.Println(sync.IsSynced())
+	defer sync.Close()
 	sync.Start()
 	timeout := time.After(10 * time.Second)
 	for {
@@ -47,7 +49,7 @@ func TestSyncer_Start(t *testing.T) {
 			t.Error("timed out ")
 			return
 		default:
-			if !sync.IsSynced() {
+			if atomic.LoadUint32(&sync.startLock) == 1 {
 				return
 			}
 		}
@@ -77,6 +79,8 @@ func TestSyncProtocol_BlockRequest(t *testing.T) {
 		Configuration{1, 1, 1 * time.Millisecond, 1, 10 * time.Second},
 	)
 
+	defer syncObj.Close()
+
 	id := uuid.New().ID()
 	block := mesh.NewExistingBlock(id, 1, nil)
 	syncObj.layers.AddLayer(mesh.NewExistingLayer(uint32(1), []*mesh.Block{block}))
@@ -101,6 +105,8 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 		Configuration{1, 1, 1 * time.Millisecond, 1, 10 * time.Second},
 	)
 
+	defer syncObj.Close()
+
 	syncObj.layers.AddLayer(mesh.NewExistingLayer(uint32(1), make([]*mesh.Block, 0, 10)))
 	fnd2 := p2p.NewProtocol(n2, protocol, time.Second*5)
 	fnd2.RegisterMsgHandler(LAYER_HASH, syncObj.LayerHashRequestHandler)
@@ -120,6 +126,9 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 		BlockValidatorMock{},
 		Configuration{1, 1, 1 * time.Millisecond, 1, 10 * time.Second},
 	)
+
+	defer syncObj.Close()
+
 	layer := mesh.NewExistingLayer(uint32(1), make([]*mesh.Block, 0, 10))
 	layer.AddBlock(mesh.NewExistingBlock(uuid.New().ID(), 1, nil))
 	layer.AddBlock(mesh.NewExistingBlock(uuid.New().ID(), 1, nil))
@@ -157,11 +166,17 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 		Configuration{1, 1, 1 * time.Millisecond, 1, 10 * time.Second},
 	)
 
+	defer syncObj1.Close()
+	syncObj1.Start()
+
 	syncObj2 := NewSync(NewPeers(n2),
 		mesh.NewLayers(nil, nil),
 		BlockValidatorMock{},
 		Configuration{1, 1, 1 * time.Millisecond, 1, 10 * time.Second},
 	)
+
+	defer syncObj2.Close()
+	syncObj1.Start()
 
 	block1 := mesh.NewExistingBlock(uuid.New().ID(), 1, nil)
 	block2 := mesh.NewExistingBlock(uuid.New().ID(), 1, nil)
@@ -197,9 +212,10 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	assert.NoError(t, err2, "Should not return error")
 	msg2 = <-ch2
 	assert.Equal(t, msg2.GetId(), block3.Id(), "wrong block")
+
 }
 
-func TestSyncProtocol_AddMsgHandlers5(t *testing.T) {
+func TestSyncProtocol_SyncTwoNodes(t *testing.T) {
 
 	sim := simulator.New()
 	nn1 := sim.NewNode()
@@ -232,9 +248,10 @@ func TestSyncProtocol_AddMsgHandlers5(t *testing.T) {
 	syncObj1.layers.AddLayer(mesh.NewExistingLayer(uint32(3), []*mesh.Block{block5, block6}))
 	syncObj1.layers.AddLayer(mesh.NewExistingLayer(uint32(3), []*mesh.Block{block7, block8}))
 	syncObj1.layers.AddLayer(mesh.NewExistingLayer(uint32(3), []*mesh.Block{block9, block10}))
-	assert.Equal(t, 1, 1, "")
+
 	timeout := time.After(10 * time.Second)
 	syncObj2.layers.SetLatestKnownLayer(5)
+	defer syncObj2.Close()
 	syncObj2.Start()
 	// Keep trying until we're timed out or got a result or got an error
 loop:
@@ -244,12 +261,94 @@ loop:
 		case <-timeout:
 			t.Error("timed out ")
 		default:
-			fmt.Println("check status")
 			if syncObj2.layers.LocalLayerCount() == 3 {
 				t.Log("done!")
 				break loop
 			}
-			break loop
 		}
 	}
+}
+
+func TestSyncProtocol_SyncMultipalNodes(t *testing.T) {
+
+	sim := simulator.New()
+	nn1 := sim.NewNode()
+	nn2 := sim.NewNode()
+	nn3 := sim.NewNode()
+	nn4 := sim.NewNode()
+
+	syncObj1 := NewSync(PeersImpl{nn1, func() []Peer { return []Peer{nn2.PublicKey()} }},
+		mesh.NewLayers(nil, nil),
+		BlockValidatorMock{},
+		Configuration{2, 1, 1 * time.Second, 1, 10 * time.Second},
+	)
+
+	syncObj2 := NewSync(PeersImpl{nn2, func() []Peer { return []Peer{nn1.PublicKey()} }},
+		mesh.NewLayers(nil, nil),
+		BlockValidatorMock{},
+		Configuration{2, 1, 1 * time.Second, 1, 10 * time.Second},
+	)
+
+	syncObj3 := NewSync(PeersImpl{nn3, func() []Peer { return []Peer{nn1.PublicKey(), nn2.PublicKey(), nn4.PublicKey()} }},
+		mesh.NewLayers(nil, nil),
+		BlockValidatorMock{},
+		Configuration{2, 1, 1 * time.Second, 1, 10 * time.Second},
+	)
+
+	syncObj4 := NewSync(PeersImpl{nn4, func() []Peer { return []Peer{nn1.PublicKey(), nn2.PublicKey(), nn3.PublicKey()} }},
+		mesh.NewLayers(nil, nil),
+		BlockValidatorMock{},
+		Configuration{2, 1, 1 * time.Second, 1, 10 * time.Second},
+	)
+
+	block1 := mesh.NewExistingBlock(uuid.New().ID(), 1, nil)
+	block2 := mesh.NewExistingBlock(uuid.New().ID(), 1, nil)
+	block3 := mesh.NewExistingBlock(uuid.New().ID(), 2, nil)
+	block4 := mesh.NewExistingBlock(uuid.New().ID(), 2, nil)
+	block5 := mesh.NewExistingBlock(uuid.New().ID(), 3, nil)
+	block6 := mesh.NewExistingBlock(uuid.New().ID(), 3, nil)
+	block7 := mesh.NewExistingBlock(uuid.New().ID(), 4, nil)
+	block8 := mesh.NewExistingBlock(uuid.New().ID(), 4, nil)
+	block9 := mesh.NewExistingBlock(uuid.New().ID(), 5, nil)
+	block10 := mesh.NewExistingBlock(uuid.New().ID(), 5, nil)
+
+	syncObj1.layers.AddLayer(mesh.NewExistingLayer(uint32(1), []*mesh.Block{block1, block2}))
+	syncObj1.layers.AddLayer(mesh.NewExistingLayer(uint32(2), []*mesh.Block{block3, block4}))
+	syncObj1.layers.AddLayer(mesh.NewExistingLayer(uint32(3), []*mesh.Block{block5, block6}))
+	syncObj1.layers.AddLayer(mesh.NewExistingLayer(uint32(3), []*mesh.Block{block7, block8}))
+	syncObj1.layers.AddLayer(mesh.NewExistingLayer(uint32(3), []*mesh.Block{block9, block10}))
+
+	defer syncObj1.Close()
+	syncObj1.layers.SetLatestKnownLayer(5)
+
+	defer syncObj2.Close()
+	syncObj2.layers.SetLatestKnownLayer(5)
+	syncObj2.Start()
+
+	defer syncObj3.Close()
+	syncObj3.layers.SetLatestKnownLayer(5)
+	syncObj3.Start()
+
+	defer syncObj4.Close()
+	syncObj4.layers.SetLatestKnownLayer(5)
+	syncObj4.Start()
+
+	// Keep trying until we're timed out or got a result or got an error
+	timeout := time.After(20 * time.Second)
+
+loop:
+	for {
+		select {
+		// Got a timeout! fail with a timeout error
+		case <-timeout:
+			t.Error("timed out ")
+		default:
+			if syncObj2.layers.LocalLayerCount() == 3 && syncObj3.layers.LocalLayerCount() == 3 {
+				t.Log("done!")
+				break loop
+			}
+		}
+	}
+
+	fmt.Println("")
 }

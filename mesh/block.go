@@ -64,8 +64,8 @@ func (l *Layer) Blocks() []*Block {
 	return l.blocks
 }
 
-func (l *Layer) Hash() string {
-	return "some hash representing the layer"
+func (l *Layer) Hash() []byte {
+	return []byte("some hash representing the layer")
 }
 
 func (l *Layer) AddBlock(block *Block) {

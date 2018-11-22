@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"fmt"
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -42,16 +43,14 @@ type Syncer struct {
 	SyncLock  uint32
 	startLock uint32
 	forceSync chan bool
-	exit      chan bool
+	exit      chan interface{}
 }
 
-// i dont like this becuse no one outside can see that this is blocking
 func (s *Syncer) ForceSync() {
 	s.forceSync <- true
 }
 
 func (s *Syncer) Close() {
-	s.exit <- true
 	close(s.forceSync)
 	close(s.exit)
 }
@@ -67,7 +66,7 @@ const (
 )
 
 func (s *Syncer) IsSynced() bool {
-	return s.layers.LocalLayerCount() == s.syncTo()
+	return s.layers.LocalLayerCount() == s.maxSyncLayer()
 }
 
 func (s *Syncer) Stop() {
@@ -82,7 +81,7 @@ func (s *Syncer) Start() {
 }
 
 func NewSync(peers Peers, layers mesh.Mesh, bv BlockValidator, conf Configuration) *Syncer {
-	s := Syncer{peers, layers, bv, conf, p2p.NewProtocol(peers, protocol, time.Second*5), 0, 0, make(chan bool), make(chan bool)}
+	s := Syncer{peers, layers, bv, conf, p2p.NewProtocol(peers, protocol, time.Second*5), 0, 0, make(chan bool), make(chan interface{})}
 	s.p.RegisterMsgHandler(LAYER_HASH, s.LayerHashRequestHandler)
 	s.p.RegisterMsgHandler(BLOCK, s.BlockRequestHandler)
 	s.p.RegisterMsgHandler(LAYER_IDS, s.LayerIdsRequestHandler)
@@ -95,18 +94,20 @@ func (s *Syncer) run() {
 	for {
 		doSync := false
 		select {
-		case <-syncTicker.C:
-			doSync = true
-		case doSync = <-s.forceSync:
 		case <-s.exit:
 			log.Debug("run stoped")
 			return
+		case doSync = <-s.forceSync:
+		case <-syncTicker.C:
+			fmt.Println("timer !!!")
+			doSync = true
 		default:
 			doSync = false
 		}
 		if doSync {
 			go func() {
 				if atomic.CompareAndSwapUint32(&s.SyncLock, IDLE, RUNNING) {
+					fmt.Println("do sync")
 					s.Synchronise()
 					atomic.StoreUint32(&s.SyncLock, IDLE)
 				}
@@ -115,7 +116,7 @@ func (s *Syncer) run() {
 	}
 }
 
-func (s *Syncer) syncTo() uint32 {
+func (s *Syncer) maxSyncLayer() uint32 {
 	if s.layers.LatestKnownLayer() < s.config.hdist {
 		return 0
 	}
@@ -124,10 +125,9 @@ func (s *Syncer) syncTo() uint32 {
 }
 
 func (s *Syncer) Synchronise() {
-	for i := s.layers.LocalLayerCount(); i < s.syncTo(); {
+	for i := s.layers.LocalLayerCount(); i < s.maxSyncLayer(); {
 		i++
 		blockIds := s.GetLayerBlockIDs(i) //returns a set of all known blocks in the mesh
-		log.Debug("get layer block ids: ", blockIds)
 		ids := make(chan uint32, len(blockIds))
 		output := make(chan Block)
 
@@ -163,6 +163,7 @@ func (s *Syncer) Synchronise() {
 			blocks = append(blocks, mesh.NewExistingBlock(block.GetId(), block.GetLayer(), nil))
 		}
 		log.Debug("add layer ", i)
+
 		s.layers.AddLayer(mesh.NewExistingLayer(i, blocks))
 	}
 
@@ -176,9 +177,11 @@ func (s *Syncer) GetLayerBlockIDs(index uint32) []uint32 {
 	// request hash from all
 
 	for _, p := range peers {
+
 		hash, err := s.SendLayerHashRequest(p, index)
 		if err != nil {
-			//todo err handling
+			log.Debug("could not get layer ", index, " hash from peer")
+			continue
 		}
 		m[string(hash)] = p
 	}
@@ -214,7 +217,7 @@ func (s *Syncer) SendBlockRequest(peer Peer, id uint32) (chan Block, error) {
 		ch <- data.Block
 	}
 
-	return ch, s.p.SendAsyncRequest(BLOCK, payload, peer.String(), foo)
+	return ch, s.p.SendAsyncRequest(BLOCK, payload, peer, foo)
 }
 
 func (s *Syncer) SendLayerHashRequest(peer Peer, layer uint32) ([]byte, error) {
@@ -227,7 +230,7 @@ func (s *Syncer) SendLayerHashRequest(peer Peer, layer uint32) ([]byte, error) {
 		return nil, err
 	}
 
-	msg, err := s.p.SendRequest(LAYER_HASH, payload, peer.String(), s.config.requestTimeout)
+	msg, err := s.p.SendRequest(LAYER_HASH, payload, peer, s.config.requestTimeout)
 	if err != nil {
 		log.Error("could not send layer hash request ", err)
 		return nil, err
@@ -261,7 +264,7 @@ func (s *Syncer) SendLayerIDsRequest(peer Peer, idx uint32) (chan []uint32, erro
 		ch <- data.Ids
 	}
 
-	return ch, s.p.SendAsyncRequest(LAYER_IDS, payload, peer.String(), foo)
+	return ch, s.p.SendAsyncRequest(LAYER_IDS, payload, peer, foo)
 }
 
 func (s *Syncer) BlockRequestHandler(msg []byte) []byte {
@@ -302,7 +305,7 @@ func (s *Syncer) LayerHashRequestHandler(msg []byte) []byte {
 		return nil
 	}
 
-	payload, err := proto.Marshal(&pb.LayerHashResp{Hash: []byte(layer.Hash())})
+	payload, err := proto.Marshal(&pb.LayerHashResp{Hash: layer.Hash()})
 	if err != nil {
 		log.Error("Error handling request message, err:", err) //todo describe err
 		return nil
