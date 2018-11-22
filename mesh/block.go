@@ -6,6 +6,7 @@ import (
 )
 
 type BlockID uint32
+type LayerID uint32
 
 var layerCounter uint32 = 0
 

@@ -117,7 +117,7 @@ func (s *Syncer) run() {
 }
 
 func (s *Syncer) maxSyncLayer() uint32 {
-	if s.layers.LatestKnownLayer() < s.config.hdist {
+	if uint32(s.layers.LatestKnownLayer()) < s.config.hdist {
 		return 0
 	}
 
@@ -148,6 +148,7 @@ func (s *Syncer) Synchronise() {
 							b := <-bCh
 							if s.sv.ValidateBlock(b) { //some validation testing
 								output <- b
+								break
 							}
 						}
 

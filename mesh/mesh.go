@@ -65,7 +65,11 @@ func (ll *LayersDB) GetLayer(i int) (*Layer, error) {
 
 func (ll *LayersDB) GetBlock(id BlockID) (*Block, error) {
 	//todo thread safety
-	return ll.blocks[id], nil
+	block, ok := ll.blocks[id]
+	if ok == false {
+		return nil, errors.New("could not find block")
+	}
+	return block, nil
 }
 
 func (ll *LayersDB) LocalLayerCount() uint32 {
