@@ -42,7 +42,7 @@ type Syncer struct {
 	SyncLock  uint32
 	startLock uint32
 	forceSync chan bool
-	exit      chan interface{}
+	exit      chan struct{}
 }
 
 func (s *Syncer) ForceSync() {
@@ -69,7 +69,7 @@ func (s *Syncer) IsSynced() bool {
 }
 
 func (s *Syncer) Stop() {
-	s.exit <- true
+	s.exit <- struct{}{}
 }
 
 func (s *Syncer) Start() {
