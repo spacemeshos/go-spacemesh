@@ -280,25 +280,25 @@ func TestSyncProtocol_SyncMultipalNodes(t *testing.T) {
 	syncObj1 := NewSync(PeersImpl{nn1, func() []Peer { return []Peer{nn2.PublicKey()} }},
 		mesh.NewLayers(nil, nil),
 		BlockValidatorMock{},
-		Configuration{2, 1, 1 * time.Second, 1, 3 * time.Second},
+		Configuration{2, 1, 1 * time.Second, 1, 1 * time.Second},
 	)
 
 	syncObj2 := NewSync(PeersImpl{nn2, func() []Peer { return []Peer{nn1.PublicKey()} }},
 		mesh.NewLayers(nil, nil),
 		BlockValidatorMock{},
-		Configuration{2, 1, 1 * time.Second, 1, 3 * time.Second},
+		Configuration{2, 1, 1 * time.Second, 1, 1 * time.Second},
 	)
 
 	syncObj3 := NewSync(PeersImpl{nn3, func() []Peer { return []Peer{nn1.PublicKey(), nn2.PublicKey(), nn4.PublicKey()} }},
 		mesh.NewLayers(nil, nil),
 		BlockValidatorMock{},
-		Configuration{2, 1, 1 * time.Second, 1, 3 * time.Second},
+		Configuration{2, 1, 1 * time.Second, 1, 1 * time.Second},
 	)
 
 	syncObj4 := NewSync(PeersImpl{nn4, func() []Peer { return []Peer{nn1.PublicKey(), nn2.PublicKey(), nn3.PublicKey()} }},
 		mesh.NewLayers(nil, nil),
 		BlockValidatorMock{},
-		Configuration{2, 1, 1 * time.Second, 1, 3 * time.Second},
+		Configuration{2, 1, 1 * time.Second, 1, 1 * time.Second},
 	)
 
 	block1 := mesh.NewExistingBlock(uuid.New().ID(), 1, nil)
@@ -334,7 +334,7 @@ func TestSyncProtocol_SyncMultipalNodes(t *testing.T) {
 	syncObj4.Start()
 
 	// Keep trying until we're timed out or got a result or got an error
-	timeout := time.After(20 * time.Second)
+	timeout := time.After(30 * time.Second)
 
 loop:
 	for {
@@ -349,6 +349,4 @@ loop:
 			}
 		}
 	}
-
-	fmt.Println("")
 }

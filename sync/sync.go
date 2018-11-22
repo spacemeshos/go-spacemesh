@@ -1,7 +1,6 @@
 package sync
 
 import (
-	"fmt"
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -99,7 +98,6 @@ func (s *Syncer) run() {
 			return
 		case doSync = <-s.forceSync:
 		case <-syncTicker.C:
-			fmt.Println("timer !!!")
 			doSync = true
 		default:
 			doSync = false
@@ -107,7 +105,7 @@ func (s *Syncer) run() {
 		if doSync {
 			go func() {
 				if atomic.CompareAndSwapUint32(&s.SyncLock, IDLE, RUNNING) {
-					fmt.Println("do sync")
+					log.Debug("do sync")
 					s.Synchronise()
 					atomic.StoreUint32(&s.SyncLock, IDLE)
 				}
@@ -145,13 +143,16 @@ func (s *Syncer) Synchronise() {
 				for id := range ids {
 					for _, p := range s.peers.GetPeers() {
 						if bCh, err := s.SendBlockRequest(p, id); err == nil {
-							b := <-bCh
-							if s.sv.ValidateBlock(b) { //some validation testing
-								output <- b
-								break
+							select {
+							case b := <-bCh:
+								if s.sv.ValidateBlock(b) { //some validation testing
+									output <- b
+									break
+								}
+							case <-time.After(s.config.requestTimeout):
+								log.Debug("block request timeout")
 							}
 						}
-
 					}
 				}
 				close(output)
@@ -214,6 +215,8 @@ func (s *Syncer) SendBlockRequest(peer Peer, id uint32) (chan Block, error) {
 		err := proto.Unmarshal(msg, data)
 		if err != nil {
 			log.Error("could not unmarshal block data")
+			close(ch)
+			return
 		}
 		ch <- data.Block
 	}
