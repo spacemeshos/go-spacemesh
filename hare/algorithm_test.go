@@ -7,7 +7,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/simulator"
 	"github.com/stretchr/testify/assert"
 	"testing"
-	"time"
 )
 
 func getPublicKey(t *testing.T) crypto.PublicKey {
@@ -21,7 +20,24 @@ func getPublicKey(t *testing.T) crypto.PublicKey {
 }
 
 // test that a message to a specific layer is delivered by the broker
-func TestConsensusProcess_Start(t *testing.T) {
+func TestConsensusProcess_StartTwice(t *testing.T) {
+	sim := simulator.New()
+	n1 := sim.NewNode()
+
+	broker := NewBroker(n1)
+	s := Set{}
+	oracle := NewMockOracle()
+	signing := NewMockSigning()
+
+	proc := NewConsensusProcess(getPublicKey(t), *Layer1, s, oracle, signing, n1)
+	broker.Register(Layer1, proc)
+	err := proc.Start()
+	assert.Equal(t, nil , err)
+	err = proc.Start()
+	assert.Equal(t, "failed starting consensus process" , err.Error())
+}
+
+func TestConsensusProcess_eventLoop(t *testing.T) {
 	sim := simulator.New()
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
@@ -33,29 +49,11 @@ func TestConsensusProcess_Start(t *testing.T) {
 
 	proc := NewConsensusProcess(getPublicKey(t), *Layer1, s, oracle, signing, n1)
 	broker.Register(Layer1, proc)
-	proc.Start()
+	go proc.eventLoop()
+	n2.Broadcast(ProtoName, []byte{})
 
-	m := &pb.HareMessage{}
-
-	x := &pb.InnerMessage{}
-	x.Type = int32(Status)
-	m.Message = x
-
-	buff, err := proto.Marshal(m)
-
-	if err != nil {
-		assert.Fail(t, "proto error")
-	}
-
-	n2.Broadcast(ProtoName, buff)
-
-	to := time.Second * time.Duration(1) // run 1 sec
-	timer := time.NewTicker(to)
-
-	select {
-	case <-timer.C:
-		assert.True(t, true)
-	}
+	proc.Close()
+	<-proc.CloseChannel()
 }
 
 func TestConsensusProcess_handleMessage(t *testing.T) {

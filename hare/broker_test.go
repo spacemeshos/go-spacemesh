@@ -34,6 +34,18 @@ func (inboxer *MockInboxer) createInbox(size uint32) chan *pb.HareMessage {
 	return inboxer.inbox
 }
 
+func TestBroker_Start(t *testing.T) {
+	sim := simulator.New()
+	n1 := sim.NewNode()
+	broker := NewBroker(n1)
+
+	err := broker.Start()
+	assert.Equal(t, nil, err)
+
+	err = broker.Start()
+	assert.Equal(t, "instance already started", err.Error())
+}
+
 // test that a message to a specific layer is delivered by the broker
 func TestBroker_Received(t *testing.T) {
 	sim := simulator.New()
@@ -117,4 +129,16 @@ func TestBroker_MultipleLayers(t *testing.T) {
 	waitForMessages(t, inbox3, Layer3, msgCount)
 
 	assert.True(t, true)
+}
+
+func TestBroker_RegisterUnregister(t *testing.T) {
+	sim := simulator.New()
+	n1 := sim.NewNode()
+	broker := NewBroker(n1)
+	broker.Start()
+	inbox := &MockInboxer{}
+	broker.Register(Layer1, inbox)
+	assert.Equal(t, 1, len(broker.outbox))
+	broker.Unregister(Layer1)
+	assert.Equal(t, 0, len(broker.outbox))
 }
