@@ -404,10 +404,16 @@ func TestSwarm_onRemoteClientMessage(t *testing.T) {
 	// todo : test gossip codepaths.
 }
 
+//TODO : Test this without real network
 func TestBootstrap(t *testing.T) {
 	bootnodes := []int{3}
 	nodes := []int{30}
 	rcon := []int{3}
+
+	bootcfg := config.DefaultConfig()
+	bootcfg.SwarmConfig.Bootstrap = false
+	bootcfg.SwarmConfig.Gossip = false
+
 
 	rand.Seed(time.Now().UnixNano())
 
@@ -418,13 +424,14 @@ func TestBootstrap(t *testing.T) {
 			bnarr := []string{}
 
 			for k := 0; k < bootnodes[i]; k++ {
-				bn := p2pTestInstance(t, config.DefaultConfig())
+				bn := p2pTestInstance(t, bootcfg)
 				bn.lNode.Info("This is a bootnode - %v", bn.lNode.Node.String())
 				bnarr = append(bnarr, node.StringFromNode(bn.lNode.Node))
 			}
 
 			cfg := config.DefaultConfig()
 			cfg.SwarmConfig.Bootstrap = true
+			cfg.SwarmConfig.Gossip = false
 			cfg.SwarmConfig.RandomConnections = rcon[i]
 			cfg.SwarmConfig.BootstrapNodes = bnarr
 
@@ -434,6 +441,7 @@ func TestBootstrap(t *testing.T) {
 				wg.Add(1)
 				go func() {
 					sw := p2pTestInstance(t, cfg)
+					sw.waitForBoot()
 					bufchan <- sw
 					wg.Done()
 				}()

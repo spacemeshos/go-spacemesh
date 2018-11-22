@@ -125,7 +125,7 @@ func TestNeighborhood_Broadcast4(t *testing.T) {
 	n.AddIncomingPeer(rnd, con)
 
 	n.Broadcast([]byte("LOL"))
-	tm := time.NewTimer(time.Millisecond * 1)
+	tm := time.NewTimer(time.Millisecond * 5)
 loop:
 	for {
 		select {
