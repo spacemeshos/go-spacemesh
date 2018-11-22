@@ -315,11 +315,14 @@ func (s *swarm) listenToNetworkMessages() {
 
 func (s *swarm) handleNewConnectionEvents() {
 	newConnEvents := s.network.SubscribeOnNewRemoteConnections()
+	closing := s.network.SubscribeClosingConnections()
 Loop:
 	for {
 		select {
+		case con := <-closing:
+			go s.gossip.Disconnect(con.RemotePublicKey()) //todo notify dht?
 		case nce := <-newConnEvents:
-			go func(nce net.NewConnectionEvent) { s.dht.Update(nce.Node); s.gossip.AddPeer(nce.Node, nce.Conn) }(nce)
+			go func(nce net.NewConnectionEvent) { s.dht.Update(nce.Node); s.gossip.AddIncomingPeer(nce.Node, nce.Conn) }(nce)
 		case <-s.shutdown:
 			break Loop
 		}
