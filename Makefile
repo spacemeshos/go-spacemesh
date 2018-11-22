@@ -24,7 +24,7 @@ $(PLATFORMS):
 test:
 	go test -p 1 ./...
 
-.PHONY: build test devtools cover
+.PHONY: build test devtools cover rpc
 
 lint:
 	./ci/validate-lint.sh
@@ -44,3 +44,12 @@ cover:
 		go test -coverprofile=cover.out -covermode=count $(pkg);\
 		tail -n +2 cover.out >> cover-all.out;)
 	go tool cover -html=cover-all.out
+
+rpc:
+	@echo "Compiling protos:"
+	cd ./api/pb; ./gen_protos.sh
+	cd ./p2p/pb; ./gen_protos.sh
+	cd ./merkle/pb; ./gen_protos.sh
+	cd ./hare/pb; ./gen_protos.sh
+	cd ./consensus/pb; ./gen_protos.sh
+	cd ./ping/pb; ./gen_protos.sh
