@@ -53,8 +53,10 @@ func NewProtocol(network Service, name string, requestTimeout time.Duration) *Pr
 
 func (p *Protocol) readLoop() {
 	for {
-		timer := time.NewTimer(time.Second)
+		timer := time.NewTicker(10 * time.Second) //todo find the correct time/pass in configuration
 		select {
+		case <-timer.C:
+			go p.cleanStaleMessages()
 		case msg, ok := <-p.ingressChannel:
 			if !ok {
 				log.Error("read loop channel was closed")
@@ -62,8 +64,7 @@ func (p *Protocol) readLoop() {
 			}
 			//todo add buffer and option to limit number of concurrent goroutines
 			go p.handleMessage(msg)
-		case <-timer.C:
-			go p.cleanStaleMessages()
+
 		}
 	}
 }

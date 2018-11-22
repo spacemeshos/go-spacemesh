@@ -191,9 +191,13 @@ func (s *Syncer) GetLayerBlockIDs(index uint32) []uint32 {
 	var res []uint32
 	for _, v := range m {
 		blocksCh, err := s.SendLayerIDsRequest(v, index)
-		blocks := <-blocksCh
-		if err == nil {
-			res = append(res, blocks...)
+		select {
+		case blocks := <-blocksCh:
+			if err == nil {
+				res = append(res, blocks...)
+			}
+		case <-time.After(s.config.requestTimeout):
+			log.Debug("block request timeout")
 		}
 	}
 
