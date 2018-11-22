@@ -10,6 +10,7 @@ import (
 )
 
 const InboxCapacity = 100
+type StartInstanceError error
 
 type Identifiable interface {
 	Id() uint32
@@ -60,7 +61,7 @@ func NewBroker(networkService NetworkService) *Broker {
 func (broker *Broker) Start() error {
 	if broker.inbox != nil { // Start has been called at least twice
 		log.Error("Could not start instance")
-		return errors.New("instance already started")
+		return StartInstanceError(errors.New("instance already started"))
 	}
 
 	broker.inbox = broker.network.RegisterProtocol(ProtoName)

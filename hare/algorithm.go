@@ -72,7 +72,7 @@ func NewConsensusProcess(key crypto.PublicKey, layer LayerId, s Set, oracle Rola
 func (proc *ConsensusProcess) Start() error {
 	if !proc.startTime.IsZero() { // called twice on same instance
 		log.Error("ConsensusProcess has already been started.")
-		return errors.New("failed starting consensus process")
+		return StartInstanceError(errors.New("instance already started"))
 	}
 
 	proc.startTime = time.Now()
