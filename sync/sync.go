@@ -26,10 +26,9 @@ type BlockValidator interface {
 }
 
 type Configuration struct {
-	hdist          uint32
-	pNum           int
+	hdist          uint32 //dist of consensus layers from newst layer
 	syncInterval   time.Duration
-	concurrency    int
+	concurrency    int //number of workers for sync method
 	requestTimeout time.Duration
 }
 
