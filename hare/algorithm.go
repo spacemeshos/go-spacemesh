@@ -14,6 +14,7 @@ import (
 const ProtoName = "HARE_PROTOCOL"
 const RoundDuration = time.Second * time.Duration(15)
 const InitialKnowledgeSize = 1000
+const f = 100
 
 type Byteable interface {
 	Bytes() []byte
@@ -42,9 +43,8 @@ type ConsensusProcess struct {
 	startTime   time.Time // TODO: needed?
 	inbox       chan *pb.HareMessage
 	knowledge   []*pb.HareMessage
-	isProcessed map[uint32]bool // TODO: could be empty struct
-	mutex       sync.Mutex
 	stateMutex  sync.Mutex
+	roundMsg    []byte
 	// TODO: add knowledge of notify messages. What is the life-cycle of such messages? persistent according to Julian
 }
 
@@ -58,7 +58,13 @@ func NewConsensusProcess(key crypto.PublicKey, layer LayerId, s Set, oracle Rola
 	proc.signing = signing
 	proc.network = p2p
 	proc.knowledge = make([]*pb.HareMessage, 0, InitialKnowledgeSize)
-	proc.isProcessed = make(map[uint32]bool)
+	m, err := proc.buildStatusMessage()
+	if err != nil {
+		log.Error("could not build status message")
+		proc.roundMsg = nil
+	} else {
+		proc.roundMsg = m
+	}
 
 	return proc
 }
@@ -71,20 +77,12 @@ func (proc *ConsensusProcess) Start() error {
 
 	proc.startTime = time.Now()
 
-	// send first status message
-	m, err := proc.buildStatusMessage()
-	if err != nil {
-		return errors.New("failed starting consensus process")
-	}
-
-	proc.network.Broadcast(ProtoName, m)
-
 	go proc.eventLoop()
 
 	return nil
 }
 
-func (proc *ConsensusProcess) Inbox(size uint32) chan *pb.HareMessage {
+func (proc *ConsensusProcess) createInbox(size uint32) chan *pb.HareMessage {
 	proc.inbox = make(chan *pb.HareMessage, size)
 	return proc.inbox
 }
@@ -134,59 +132,45 @@ func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
 		return
 	}
 
+	// continue process msg by round
+	proc.processMessageByRound(m)
+
+	// TODO: decide how we store messages maybe we don't need raw msgs
 	proc.knowledge = append(proc.knowledge, m)
 }
 
 func (proc *ConsensusProcess) nextRound() {
 	log.Info("End of round: %d", proc.k)
 
-	// process the round
-	// state is passed by value, ownership of knowledge is also passed
-	go proc.processMessages(proc.State, proc.knowledge)
+	// send message if available
+	if proc.roundMsg != nil {
+		proc.network.Broadcast(ProtoName, proc.roundMsg)
+		proc.roundMsg = nil
+	}
 
 	// advance to next round
 	proc.k++
 
-	// can reset knowledge as ownership was passed before
+	// reset knowledge
 	proc.knowledge = make([]*pb.HareMessage, 0, InitialKnowledgeSize)
 }
 
 // TODO: put state and msg in Context struct?
-func (proc *ConsensusProcess) processMessages(state State, msgs []*pb.HareMessage) {
-	// only one process should run concurrently
-	proc.mutex.Lock()
-	defer proc.mutex.Unlock()
-
-	// check if process of messages has already been made for this round
-	if _, exist := proc.isProcessed[state.k]; exist {
-		return
-	}
-
-	// mark as processed
-	proc.isProcessed[state.k] = true
-
-	// process to create suitable hare message for the round
-	var m []byte
-	var err error = nil
-	switch state.k % 4 { // switch round
+func (proc *ConsensusProcess) processMessageByRound(msg *pb.HareMessage) {
+	// TODO: do we have cases in which we don't need to do further processing? (final decisions)
+	switch proc.k % 4 { // switch round
 	case 0: // end of round 0
-		m, err = proc.lookForProposal(state, msgs)
+		proc.processMsgRound0(msg)
 	case 1: // end of round 1
-		m, err = proc.validateProposal(state, msgs)
+		proc.processMsgRound1(msg)
 	case 2: // end of round 2
-		m, err = proc.lookForCommits(state, msgs)
+		proc.processMsgRound2(msg)
 	case 3: // end of round 3
-		m, err = proc.buildStatusMessage()
+		proc.processMsgRound3(msg)
 	}
-
-	if err != nil {
-		return
-	}
-
-	// send message
-	proc.network.Broadcast(ProtoName, m)
 }
 
+// TODO: maybe change it to SetStatusMessage and just set proc.roundMsg?
 func (proc *ConsensusProcess) buildStatusMessage() ([]byte, error) {
 	x := NewInnerBuilder().SetType(Status).SetLayer(proc.layerId).SetIteration(proc.k).SetKi(proc.ki).SetBlocks(proc.s).Build()
 
@@ -208,55 +192,6 @@ func (proc *ConsensusProcess) buildStatusMessage() ([]byte, error) {
 	return buff, nil
 }
 
-func (proc *ConsensusProcess) lookForProposal(state State, msg []*pb.HareMessage) ([]byte, error) {
-
-	// TODO: pass on msg & look for a set to propose
-
-	/*
-	inner := NewInnerBuilder()
-	inner.SetType(Proposal).SetLayer(proc.layerId).SetIteration(proc.k).SetKi(proc.ki).SetBlocks(proc.s)
-	inner.SetRoleProof(proc.oracle.Role(RoleRequest{proc.pubKey, proc.layerId, state.k}))
-
-	x := inner.Build()
-
-	buff, err := proto.Marshal(x)
-	if err != nil {
-		return nil, errors.New("error marshaling inner message")
-	}
-
-	sig := proc.signing.Sign(buff)
-
-	outer := NewOuterBuilder()
-	outer.SetPubKey(proc.pubKey).SetInnerMessage(x).SetInnerSignature(sig)
-
-	buff, err = proto.Marshal(outer.Build())
-	if err != nil {
-		return nil, errors.New("error marshaling message")
-	}
-	*/
-	var buff []byte
-
-	return buff, nil
-}
-
-func (proc *ConsensusProcess) validateProposal(state State, msg []*pb.HareMessage) ([]byte, error) {
-	// TODO: validate no contradicting proposals
-
-	// TODO: if ok then SAFELY update state
-
-	// TODO: if ok then build commit message
-
-	return []byte{}, nil
-}
-
-func (proc *ConsensusProcess) lookForCommits(state State, msg []*pb.HareMessage) ([]byte, error) {
-	// TODO: check if we received f+1 commit messages
-
-	// TODO: if ok construct the notify message
-
-	return []byte{}, nil
-}
-
 func (proc *ConsensusProcess) updateState(state State) {
 	proc.stateMutex.Lock()
 	proc.State = state
@@ -269,4 +204,26 @@ func roleFromIteration(k uint32) byte {
 	}
 
 	return Active
+}
+
+func (proc *ConsensusProcess) processMsgRound0(msg *pb.HareMessage) {
+	// TODO: try to build SVP based on msg
+	// TODO: update state to prepare proposal message
+	// TODO: if have svp build proposal msg
+}
+
+func (proc *ConsensusProcess) processMsgRound1(msg *pb.HareMessage) {
+	// TODO: verify no contradiction with current proposal
+	// TODO: update state - state.S=S else state.S=nil
+}
+
+func (proc *ConsensusProcess) processMsgRound2(msg *pb.HareMessage) {
+	// TODO: check if you have f+1 commit messages on same S
+	// TODO: if ok - update state.S=S
+	// TODO: build a certificate C from the messages
+}
+
+func (proc *ConsensusProcess) processMsgRound3(msg *pb.HareMessage) {
+	// TODO: if received notify for S with cert C
+	// TODO: update state iff...
 }

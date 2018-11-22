@@ -15,7 +15,7 @@ type Identifiable interface {
 }
 
 type Inboxer interface {
-	Inbox(size uint32) chan *pb.HareMessage
+	createInbox(size uint32) chan *pb.HareMessage
 }
 
 // Closer is used to add closeability to an object
@@ -98,7 +98,7 @@ func (broker *Broker) dispatcher() {
 func (broker *Broker) Register(identifiable Identifiable, inboxer Inboxer) {
 	id := identifiable.Id()
 	broker.mutex.Lock()
-	broker.outbox[id] = inboxer.Inbox(InboxCapacity)
+	broker.outbox[id] = inboxer.createInbox(InboxCapacity)
 	broker.mutex.Unlock()
 }
 

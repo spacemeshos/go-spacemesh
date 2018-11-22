@@ -29,7 +29,7 @@ type MockInboxer struct {
 	inbox chan *pb.HareMessage
 }
 
-func (inboxer *MockInboxer) Inbox(size uint32) chan *pb.HareMessage {
+func (inboxer *MockInboxer) createInbox(size uint32) chan *pb.HareMessage {
 	inboxer.inbox = make(chan *pb.HareMessage, size)
 	return inboxer.inbox
 }
