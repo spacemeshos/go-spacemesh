@@ -340,9 +340,7 @@ func (s *Syncer) LayerIdsRequestHandler(msg []byte) []byte {
 	ids := make([]uint32, 0, len(blocks))
 
 	for i, b := range blocks {
-	    ids[i] = b
-	}
-		ids = append(ids, b.Id())
+		ids[i] = b.Id()
 	}
 
 	payload, err := proto.Marshal(&pb.LayerIdsResp{Ids: ids})
