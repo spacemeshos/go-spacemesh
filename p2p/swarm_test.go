@@ -406,6 +406,7 @@ func TestSwarm_onRemoteClientMessage(t *testing.T) {
 
 //TODO : Test this without real network
 func TestBootstrap(t *testing.T) {
+	t.Skip()
 	bootnodes := []int{3}
 	nodes := []int{30}
 	rcon := []int{3}
