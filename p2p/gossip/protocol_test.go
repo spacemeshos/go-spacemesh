@@ -125,33 +125,23 @@ func TestNeighborhood_Broadcast4(t *testing.T) {
 	n.AddIncomingPeer(rnd, con)
 
 	n.Broadcast([]byte("LOL"))
-	tm := time.NewTimer(time.Millisecond * 5)
+	tm := time.NewTimer(time.Second)
 loop:
 	for {
 		select {
 		case <-tm.C:
-			n.peersMutex.Lock()
-			for _, p := range n.peers {
-				i := p.conn.(*net.ConnectionMock).SendCount()
-				if assert.True(t, i > 0) {
-					n.peersMutex.Unlock()
-					break loop
-				}
-			}
-			n.peersMutex.Unlock()
-			n.inpeersMutex.Lock()
-			for _, p := range n.inpeers {
-				i := p.conn.(*net.ConnectionMock).SendCount()
-				if assert.True(t, i > 0) {
-					n.inpeersMutex.Unlock()
-					break loop
-				}
-			}
-			n.inpeersMutex.Lock()
-			break loop
+			t.Error()
 		default:
-
 		}
+		n.inpeersMutex.RLock()
+		for _, p := range n.inpeers {
+			i := p.conn.(*net.ConnectionMock).SendCount()
+			if i > 0 {
+				break loop
+			}
+		}
+		n.inpeersMutex.RUnlock()
+
 	}
 }
 
