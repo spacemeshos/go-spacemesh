@@ -1,9 +1,8 @@
 package hare
 
 import (
-	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
-	"github.com/spacemeshos/go-spacemesh/hare/pb"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/stretchr/testify/assert"
 	"testing"
@@ -68,20 +67,15 @@ func TestConsensusProcess_handleMessage(t *testing.T) {
 	proc := NewConsensusProcess(getPublicKey(t), *Layer1, s, oracle, signing, n1)
 	broker.Register(Layer1, proc)
 
-	x, err := proc.buildStatusMessage()
+	x, err := NewMessageBuilder().SetIteration(0).SetLayer(*Layer1).Sign(proc.signing)
 
 	if err != nil {
-		assert.Fail(t, "error building status message")
+		log.Error("Could not sign msg")
 	}
 
-	hareMsg := &pb.HareMessage{}
-	err = proto.Unmarshal(x, hareMsg)
+	m := x.Build()
 
-	if err != nil {
-		assert.Fail(t, "protobuf error")
-	}
-
-	proc.handleMessage(hareMsg)
+	proc.handleMessage(m)
 	assert.Equal(t, 1, len(proc.knowledge))
 	proc.nextRound()
 	assert.Equal(t, 0, len(proc.knowledge))

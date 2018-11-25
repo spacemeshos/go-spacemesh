@@ -44,8 +44,8 @@ type Set struct {
 	blocks []BlockId
 }
 
-func NewSet(data [][]byte) Set {
-	s := Set{}
+func NewSet(data [][]byte) *Set {
+	s := &Set{}
 
 	s.blocks = make([]BlockId, len(data))
 	for i := 0; i < len(data); i++ {
@@ -53,6 +53,20 @@ func NewSet(data [][]byte) Set {
 	}
 
 	return s
+}
+
+func (s *Set) Equals(g *Set) bool {
+	if len(s.blocks) != len(g.blocks) {
+		return false
+	}
+
+	for i :=0;i<len(s.blocks);i++ {
+		if s.blocks[i] != g.blocks[i] {
+			return false
+		}
+	}
+
+	return true
 }
 
 func (s *Set) To2DSlice() [][]byte {
@@ -83,15 +97,23 @@ func NewAggregatedMessages(p *pb.AggregatedMessages) AggregatedMessages {
 }
 
 type Certificate struct {
-	set Set
+	set *Set
 	AggregatedMessages
 }
 
-func NewCertificate(p *pb.Certificate) Certificate {
-	c := Certificate{}
+func NewCertificate(p *pb.Certificate) *Certificate {
+	c := &Certificate{}
 
 	c.set = NewSet(p.Blocks)
 	c.AggregatedMessages = NewAggregatedMessages(p.AggMsgs)
+
+	return c
+}
+
+func buildCertificate(s *Set, commits []*pb.HareMessage) *Certificate {
+	c := &Certificate{}
+	c.set = s
+	// TODO...
 
 	return c
 }
