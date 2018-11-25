@@ -187,6 +187,7 @@ func (p *peer) start() {
 func (s *Neighborhood) Close() {
 	// no need to shutdown con, conpool will do so in a shutdown. the morepeerreq won't work
 	close(s.shutdown)
+	//todo close all peers
 }
 
 // Broadcast is the actual broadcast procedure, loop on peers and add the message to their queues
@@ -259,7 +260,6 @@ func (s *Neighborhood) getMorePeers(numpeers int) int {
 		err error
 	}
 
-	aborted := make(chan struct{})
 	res := make(chan cnErr, numpeers)
 
 	// Try a connection to each peer.
@@ -279,7 +279,7 @@ loop:
 		case cne := <-res:
 			total++ // We count i everytime to know when to close the channel
 
-			if cne.err != nil || cne.n == node.EmptyNode {
+			if cne.err != nil {
 				s.Error("can't establish connection with sampled peer %v, %v", cne.n.String(), cne.err)
 				bad++
 				if total == ndsLen {
@@ -308,7 +308,8 @@ loop:
 				break loop
 			}
 		case <-tm.C:
-			close(aborted)
+			break loop
+		case <-s.shutdown:
 			break loop
 		}
 	}
@@ -347,29 +348,27 @@ func (s *Neighborhood) askForMorePeers() {
 	numpeers := len(s.peers)
 	req := s.config.RandomConnections - numpeers
 
-	if req > 0 {
-		success := s.getMorePeers(req)
-
-		if success == 0 {
-			// if we could'nt get any maybe were initializing
-			// wait a little bit before trying again
-			time.Sleep(NoResultsInterval)
-			s.morePeersReq <- struct{}{}
-			return
-		}
-
-		// todo: better way then going in this everytime ?
-		if len(s.peers) >= s.config.RandomConnections {
-			s.initOnce.Do(func() {
-				s.Info("gossip; connected to initial required neighbors - %v", len(s.peers))
-				close(s.initial)
-				s.peersMutex.RLock()
-				s.Debug(spew.Sdump(s.peers))
-				s.peersMutex.RUnlock()
-			})
-		}
-
+	if req <= 0 {
+		return
 	}
+
+	s.getMorePeers(req)
+
+	// todo: better way then going in this everytime ?
+	if len(s.peers) >= s.config.RandomConnections {
+		s.initOnce.Do(func() {
+			s.Info("gossip; connected to initial required neighbors - %v", len(s.peers))
+			close(s.initial)
+			s.peersMutex.RLock()
+			s.Debug(spew.Sdump(s.peers))
+			s.peersMutex.RUnlock()
+		})
+		return
+	}
+	// if we could'nt get any maybe were initializing
+	// wait a little bit before trying again
+	time.Sleep(NoResultsInterval)
+	s.morePeersReq <- struct{}{}
 }
 
 // Initial returns when the neighborhood was initialized.
