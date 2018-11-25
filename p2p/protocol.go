@@ -132,6 +132,7 @@ func (p *Protocol) handleResponseMessage(headers *pb.MessageWrapper) {
 			foo(headers.Payload)
 		} else {
 			pend <- headers.Payload
+			close(pend)
 		}
 	}
 }
@@ -141,6 +142,13 @@ func (p *Protocol) removeFromPending(reqID uint64, req *list.Element) {
 	if req != nil {
 		p.pendingQueue.Remove(req)
 	}
+
+	ch, ok := p.pendingMap[reqID]
+
+	if ok {
+		close(ch)
+	}
+
 	delete(p.pendingMap, reqID)
 	delete(p.resHandlers, reqID)
 	p.pendMutex.Unlock()
