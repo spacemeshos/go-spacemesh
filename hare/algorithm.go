@@ -207,6 +207,7 @@ func roleFromIteration(k uint32) byte {
 }
 
 func (proc *ConsensusProcess) processMsgRound0(msg *pb.HareMessage) {
+	// TODO: if cert empty then simple proposal of my S with no cert
 	// TODO: try to build SVP based on msg
 	// TODO: update state to prepare proposal message
 	// TODO: if have svp build proposal msg

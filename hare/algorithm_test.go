@@ -34,7 +34,7 @@ func TestConsensusProcess_StartTwice(t *testing.T) {
 	err := proc.Start()
 	assert.Equal(t, nil , err)
 	err = proc.Start()
-	assert.Equal(t, "failed starting consensus process" , err.Error())
+	assert.Equal(t, "instance already started" , err.Error())
 }
 
 func TestConsensusProcess_eventLoop(t *testing.T) {
