@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/spacemeshos/go-spacemesh/mesh"
-	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/p2p/simulator"
+	"github.com/spacemeshos/go-spacemesh/p2p/server"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/stretchr/testify/assert"
 	"sync/atomic"
 	"testing"
@@ -23,7 +23,7 @@ func (BlockValidatorMock) ValidateBlock(block Block) bool {
 
 func TestSyncer_Start(t *testing.T) {
 	fmt.Println("test sync start")
-	sim := simulator.New()
+	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
 	NewSync(PeersImpl{n1, func() []Peer { return []Peer{n2.PublicKey()} }},
@@ -58,7 +58,7 @@ func TestSyncer_Start(t *testing.T) {
 
 func TestSyncer_Close(t *testing.T) {
 	fmt.Println("test sync close")
-	sync := NewSync(NewPeers(simulator.New().NewNode()), nil, BlockValidatorMock{}, Configuration{1, 100 * time.Millisecond, 1, 10 * time.Second})
+	sync := NewSync(NewPeers(service.NewSimulator().NewNode()), nil, BlockValidatorMock{}, Configuration{1, 100 * time.Millisecond, 1, 10 * time.Second})
 	sync.Start()
 	sync.Close()
 	s := sync
@@ -70,7 +70,7 @@ func TestSyncer_Close(t *testing.T) {
 
 func TestSyncProtocol_BlockRequest(t *testing.T) {
 	fmt.Println("test sync block request")
-	sim := simulator.New()
+	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
 	syncObj := NewSync(NewPeers(n1),
@@ -84,7 +84,7 @@ func TestSyncProtocol_BlockRequest(t *testing.T) {
 	id := uuid.New().ID()
 	block := mesh.NewExistingBlock(id, 1, nil)
 	syncObj.layers.AddLayer(mesh.NewExistingLayer(uint32(1), []*mesh.Block{block}))
-	fnd2 := p2p.NewProtocol(n2, protocol, time.Second*5)
+	fnd2 := server.NewMsgServer(n2, protocol, time.Second*5)
 	fnd2.RegisterMsgHandler(BLOCK, syncObj.blockRequestHandler)
 
 	ch, err := syncObj.sendBlockRequest(n2.Node.PublicKey(), block.Id())
@@ -96,7 +96,7 @@ func TestSyncProtocol_BlockRequest(t *testing.T) {
 
 func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 	fmt.Println("test sync layer hash request")
-	sim := simulator.New()
+	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
 	syncObj := NewSync(NewPeers(n1),
@@ -108,7 +108,7 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 	defer syncObj.Close()
 
 	syncObj.layers.AddLayer(mesh.NewExistingLayer(uint32(1), make([]*mesh.Block, 0, 10)))
-	fnd2 := p2p.NewProtocol(n2, protocol, time.Second*5)
+	fnd2 := server.NewMsgServer(n2, protocol, time.Second*5)
 	fnd2.RegisterMsgHandler(LAYER_HASH, syncObj.layerHashRequestHandler)
 
 	hash, err := syncObj.sendLayerHashRequest(n2.Node.PublicKey(), 1)
@@ -118,7 +118,7 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 
 func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 	fmt.Println("test sync layer ids request")
-	sim := simulator.New()
+	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
 	syncObj := NewSync(NewPeers(n1),
@@ -135,7 +135,7 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 	layer.AddBlock(mesh.NewExistingBlock(uuid.New().ID(), 1, nil))
 	layer.AddBlock(mesh.NewExistingBlock(uuid.New().ID(), 1, nil))
 	syncObj.layers.AddLayer(layer)
-	fnd2 := p2p.NewProtocol(n2, protocol, time.Second*5)
+	fnd2 := server.NewMsgServer(n2, protocol, time.Second*5)
 	fnd2.RegisterMsgHandler(LAYER_IDS, syncObj.layerIdsRequestHandler)
 	hashCh, err := syncObj.sendLayerIDsRequest(n2.Node.PublicKey(), 1)
 	ids := <-hashCh
@@ -157,7 +157,7 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 
 func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	fmt.Println("test sync layer fetch blocks")
-	sim := simulator.New()
+	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
 	syncObj1 := NewSync(NewPeers(n1),
@@ -217,7 +217,7 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 
 func TestSyncProtocol_SyncTwoNodes(t *testing.T) {
 
-	sim := simulator.New()
+	sim := service.NewSimulator()
 	nn1 := sim.NewNode()
 	nn2 := sim.NewNode()
 
@@ -271,7 +271,7 @@ loop:
 
 func TestSyncProtocol_SyncMultipalNodes(t *testing.T) {
 
-	sim := simulator.New()
+	sim := service.NewSimulator()
 	nn1 := sim.NewNode()
 	nn2 := sim.NewNode()
 	nn3 := sim.NewNode()

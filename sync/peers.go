@@ -2,22 +2,22 @@ package sync
 
 import (
 	"github.com/spacemeshos/go-spacemesh/crypto"
-	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/server"
 )
 
 type Peer crypto.PublicKey
 
 type Peers interface {
-	p2p.Service
+	server.ServerService
 	GetPeers() []Peer
 }
 
 type PeersImpl struct {
-	p2p.Service
+	server.ServerService
 	getPeers func() []Peer
 }
 
-func NewPeers(p p2p.Service) Peers {
+func NewPeers(p server.ServerService) Peers {
 	return &PeersImpl{p, nil}
 }
 

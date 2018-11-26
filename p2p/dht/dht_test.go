@@ -6,7 +6,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"github.com/spacemeshos/go-spacemesh/p2p/simulator"
 	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
@@ -16,7 +15,7 @@ func TestNew(t *testing.T) {
 	ln, _ := node.GenerateTestNode(t)
 
 	cfg := config.DefaultConfig()
-	sim := simulator.New()
+	sim := service.NewSimulator()
 
 	n1 := sim.NewNodeFrom(ln.Node)
 
@@ -29,7 +28,7 @@ func TestKadDHT_EveryNodeIsInRoutingTable(t *testing.T) {
 	numPeers, connections := 100, 5
 
 	bncfg := config.DefaultConfig()
-	sim := simulator.New()
+	sim := service.NewSimulator()
 
 	bn, _ := node.GenerateTestNode(t)
 	b1 := sim.NewNodeFrom(bn.Node)
@@ -51,7 +50,7 @@ func TestKadDHT_EveryNodeIsInRoutingTable(t *testing.T) {
 
 	booted := make(chan all, numPeers)
 
-	bootWaitRetrnAll := func(t *testing.T, ln *node.LocalNode, serv *simulator.Node, dht *KadDHT, c chan all) {
+	bootWaitRetrnAll := func(t *testing.T, ln *node.LocalNode, serv *service.Node, dht *KadDHT, c chan all) {
 		err := dht.Bootstrap(context.TODO())
 		c <- all{
 			err,
@@ -122,7 +121,7 @@ func TestDHT_EveryNodeIsInSelected(t *testing.T) {
 			numPeers, connections := 30, 8
 
 			bncfg := config.DefaultConfig()
-			sim := simulator.New()
+			sim := service.NewSimulator()
 
 			bn, _ := node.GenerateTestNode(t)
 			b1 := sim.NewNodeFrom(bn.Node)
@@ -213,7 +212,7 @@ func TestDHT_Update(t *testing.T) {
 	ln, _ := node.GenerateTestNode(t)
 
 	cfg := config.DefaultConfig()
-	sim := simulator.New()
+	sim := service.NewSimulator()
 
 	n1 := sim.NewNodeFrom(ln.Node)
 
@@ -265,7 +264,7 @@ func TestDHT_Lookup(t *testing.T) {
 	ln, _ := node.GenerateTestNode(t)
 
 	cfg := config.DefaultConfig()
-	sim := simulator.New()
+	sim := service.NewSimulator()
 
 	n1 := sim.NewNodeFrom(ln.Node)
 
@@ -286,7 +285,7 @@ func TestDHT_Lookup2(t *testing.T) {
 	ln, _ := node.GenerateTestNode(t)
 
 	cfg := config.DefaultConfig()
-	sim := simulator.New()
+	sim := service.NewSimulator()
 
 	n1 := sim.NewNodeFrom(ln.Node)
 
@@ -311,7 +310,7 @@ func TestDHT_Lookup2(t *testing.T) {
 
 }
 
-func simNodeWithDHT(t *testing.T, sc config.SwarmConfig, sim *simulator.Simulator) (*simulator.Node, DHT) {
+func simNodeWithDHT(t *testing.T, sc config.SwarmConfig, sim *service.Simulator) (*service.Node, DHT) {
 	ln, _ := node.GenerateTestNode(t)
 	n := sim.NewNodeFrom(ln.Node)
 	dht := New(ln, sc, n)
@@ -332,7 +331,7 @@ func TestDHT_Bootstrap(t *testing.T) {
 	const nodesNum = 100
 	const minToBoot = 10
 
-	sim := simulator.New()
+	sim := service.NewSimulator()
 
 	// Create a bootstrap node
 	cfg := config.DefaultConfig()
@@ -368,7 +367,7 @@ func TestDHT_Bootstrap(t *testing.T) {
 
 func TestDHT_BootstrapAbort(t *testing.T) {
 	// Create a bootstrap node
-	sim := simulator.New()
+	sim := service.NewSimulator()
 	bn, _ := simNodeWithDHT(t, config.DefaultConfig().SwarmConfig, sim)
 	// config for other nodes
 	cfg2 := config.DefaultConfig()

@@ -41,7 +41,7 @@ type Message_Server struct {
 	requestLifetime    time.Duration                           //time a request can stay in the pending queue until evicted
 }
 
-func NewProtocol(network ServerService, name string, requestLifetime time.Duration) *Message_Server {
+func NewMsgServer(network ServerService, name string, requestLifetime time.Duration) *Message_Server {
 	p := &Message_Server{
 		name:               name,
 		pendingMap:         make(map[uint64]chan interface{}),
@@ -139,7 +139,7 @@ func (p *Message_Server) RegisterMsgHandler(msgType MessageType, reqHandler func
 	p.msgRequestHandlers[msgType] = reqHandler
 }
 
-func (p *Message_Server) SendAsyncRequest(msgType MessageType, payload []byte, address string, resHandler func(msg []byte)) error {
+func (p *Message_Server) SendAsyncRequest(msgType MessageType, payload []byte, address crypto.PublicKey, resHandler func(msg []byte)) error {
 
 	reqID := p.newRequestId()
 	msg := &service.Data_MsgWrapper{Req: true, ReqID: reqID, MsgType: uint32(msgType), Payload: payload}
@@ -150,7 +150,7 @@ func (p *Message_Server) SendAsyncRequest(msgType MessageType, payload []byte, a
 	item := p.pendingQueue.PushBack(Item{id: reqID, timestamp: time.Now()})
 	p.pendMutex.Unlock()
 
-	if sendErr := p.network.SendWrappedMessage(address, p.name, msg); sendErr != nil {
+	if sendErr := p.network.SendWrappedMessage(address.String(), p.name, msg); sendErr != nil {
 		p.removeFromPending(reqID, item)
 		return sendErr
 	}
@@ -162,7 +162,7 @@ func (p *Message_Server) newRequestId() uint64 {
 	return atomic.AddUint64(&p.ReqId, 1)
 }
 
-func (p *Message_Server) SendRequest(msgType MessageType, payload []byte, address string, timeout time.Duration) (interface{}, error) {
+func (p *Message_Server) SendRequest(msgType MessageType, payload []byte, address crypto.PublicKey, timeout time.Duration) (interface{}, error) {
 	reqID := p.newRequestId()
 
 	msg := &service.Data_MsgWrapper{Req: true, ReqID: reqID, MsgType: uint32(msgType), Payload: payload}
@@ -174,7 +174,7 @@ func (p *Message_Server) SendRequest(msgType MessageType, payload []byte, addres
 
 	defer p.removeFromPending(reqID, nil)
 
-	if sendErr := p.network.SendWrappedMessage(address, p.name, msg); sendErr != nil {
+	if sendErr := p.network.SendWrappedMessage(address.String(), p.name, msg); sendErr != nil {
 		return nil, sendErr
 	}
 
