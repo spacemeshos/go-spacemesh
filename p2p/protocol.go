@@ -31,6 +31,7 @@ type Protocol struct {
 	msgRequestHandlers map[MessageType]func(msg []byte) []byte
 	ingressChannel     chan service.Message
 	requestTimeout     time.Duration
+	Exit               chan struct{}
 }
 
 func NewProtocol(network Service, name string, requestTimeout time.Duration) *Protocol {
@@ -43,6 +44,7 @@ func NewProtocol(network Service, name string, requestTimeout time.Duration) *Pr
 		pendingMap:         make(map[uint64]chan interface{}),
 		resHandlers:        make(map[uint64]func(msg []byte)),
 		msgRequestHandlers: make(map[MessageType]func(msg []byte) []byte),
+		Exit:               make(chan struct{}),
 	}
 
 	go p.readLoop()
@@ -51,8 +53,10 @@ func NewProtocol(network Service, name string, requestTimeout time.Duration) *Pr
 
 func (p *Protocol) readLoop() {
 	for {
-		timer := time.NewTimer(time.Second)
+		timer := time.NewTicker(10 * time.Second) //todo find the correct time/pass in configuration
 		select {
+		case <-timer.C:
+			go p.cleanStaleMessages()
 		case msg, ok := <-p.ingressChannel:
 			if !ok {
 				log.Error("read loop channel was closed")
@@ -60,15 +64,17 @@ func (p *Protocol) readLoop() {
 			}
 			//todo add buffer and option to limit number of concurrent goroutines
 			go p.handleMessage(msg)
-		case <-timer.C:
-			go p.cleanStaleMessages()
+
 		}
 	}
 }
 
 func (p *Protocol) cleanStaleMessages() {
 	for {
-		if elem := p.pendingQueue.Front(); elem != nil {
+		p.pendMutex.RLock()
+		elem := p.pendingQueue.Front()
+		p.pendMutex.RUnlock()
+		if elem != nil {
 			item := elem.Value.(Item)
 			if time.Since(item.timestamp) > p.requestTimeout {
 				p.removeFromPending(item.id, elem)
@@ -114,18 +120,19 @@ func (p *Protocol) handleRequestMessage(sender crypto.PublicKey, headers *pb.Mes
 func (p *Protocol) handleResponseMessage(headers *pb.MessageWrapper) {
 
 	//get and remove from pendingMap
-	p.pendMutex.RLock()
+	p.pendMutex.Lock()
 	pend, okPend := p.pendingMap[headers.ReqID]
 	foo, okFoo := p.resHandlers[headers.ReqID]
 	delete(p.pendingMap, headers.ReqID)
 	delete(p.resHandlers, headers.ReqID)
-	p.pendMutex.RUnlock()
+	p.pendMutex.Unlock()
 
 	if okPend {
 		if okFoo {
 			foo(headers.Payload)
 		} else {
 			pend <- headers.Payload
+			close(pend)
 		}
 	}
 }
@@ -135,6 +142,13 @@ func (p *Protocol) removeFromPending(reqID uint64, req *list.Element) {
 	if req != nil {
 		p.pendingQueue.Remove(req)
 	}
+
+	ch, ok := p.pendingMap[reqID]
+
+	if ok {
+		close(ch)
+	}
+
 	delete(p.pendingMap, reqID)
 	delete(p.resHandlers, reqID)
 	p.pendMutex.Unlock()
@@ -144,7 +158,7 @@ func (p *Protocol) RegisterMsgHandler(msgType MessageType, reqHandler func(msg [
 	p.msgRequestHandlers[msgType] = reqHandler
 }
 
-func (p *Protocol) SendAsyncRequest(msgType MessageType, payload []byte, address string, resHandler func(msg []byte)) error {
+func (p *Protocol) SendAsyncRequest(msgType MessageType, payload []byte, address crypto.PublicKey, resHandler func(msg []byte)) error {
 
 	reqID := p.newRequestId()
 	pbsp := &pb.MessageWrapper{Req: true, ReqID: reqID, Type: uint32(msgType), Payload: payload}
@@ -160,7 +174,7 @@ func (p *Protocol) SendAsyncRequest(msgType MessageType, payload []byte, address
 	elem := p.pendingQueue.PushBack(Item{id: reqID, timestamp: time.Now()})
 	p.pendMutex.Unlock()
 
-	if sendErr := p.network.SendMessage(address, p.name, msg); sendErr != nil {
+	if sendErr := p.network.SendMessage(address.String(), p.name, msg); sendErr != nil {
 		p.removeFromPending(reqID, elem)
 		return sendErr
 	}
@@ -172,7 +186,7 @@ func (p *Protocol) newRequestId() uint64 {
 	return atomic.AddUint64(&p.id, 1)
 }
 
-func (p *Protocol) SendRequest(msgType MessageType, payload []byte, address string, timeout time.Duration) (interface{}, error) {
+func (p *Protocol) SendRequest(msgType MessageType, payload []byte, address crypto.PublicKey, timeout time.Duration) (interface{}, error) {
 	reqID := p.newRequestId()
 
 	pbsp := &pb.MessageWrapper{Req: true, ReqID: reqID, Type: uint32(msgType), Payload: payload}
@@ -189,7 +203,7 @@ func (p *Protocol) SendRequest(msgType MessageType, payload []byte, address stri
 
 	defer p.removeFromPending(reqID, nil)
 
-	if sendErr := p.network.SendMessage(address, p.name, msg); sendErr != nil {
+	if sendErr := p.network.SendMessage(address.String(), p.name, msg); sendErr != nil {
 		return nil, sendErr
 	}
 
