@@ -1,7 +1,8 @@
-package service
+package server
 
 import (
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
@@ -10,7 +11,7 @@ import (
 const protocol = "/protocol/test/1.0/"
 
 func TestProtocol_SendRequest(t *testing.T) {
-	sim := NewSimulator()
+	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 	fnd1 := NewProtocol(n1, protocol, 5*time.Second)
 
@@ -29,7 +30,7 @@ func TestProtocol_SendRequest(t *testing.T) {
 }
 
 func TestProtocol_SendAsyncRequestRequest(t *testing.T) {
-	sim := NewSimulator()
+	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 	fnd1 := NewProtocol(n1, protocol, 5*time.Second)
 
@@ -59,7 +60,7 @@ func TestProtocol_SendAsyncRequestRequest(t *testing.T) {
 }
 
 func TestProtocol_CleanOldPendingMessages(t *testing.T) {
-	sim := NewSimulator()
+	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 	fnd1 := NewProtocol(n1, protocol, 5*time.Second)
 

@@ -1,10 +1,11 @@
-package service
+package server
 
 import (
 	"container/list"
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -12,42 +13,14 @@ import (
 
 type MessageType uint32
 
-type Data interface {
-	messageData()
-	Bytes() []byte
-}
-
-type Data_Bytes struct {
-	Payload []byte
-}
-
-type Data_MsgWrapper struct {
-	Req     bool
-	MsgType uint32
-	ReqID   uint64
-	Payload []byte
-}
-
-func (m Data_Bytes) messageData() {}
-
-func (m Data_Bytes) Bytes() []byte {
-	return m.Payload
-}
-
-func (m Data_MsgWrapper) messageData() {}
-
-func (m Data_MsgWrapper) Bytes() []byte {
-	return m.Payload
-}
-
 type ServerService interface {
-	Service
-	SendWrappedMessage(nodeID string, protocol string, payload *Data_MsgWrapper) error
+	service.Service
+	SendWrappedMessage(nodeID string, protocol string, payload *service.Data_MsgWrapper) error
 }
 
 type ServerMessage interface {
-	Message
-	Data() *Data_MsgWrapper
+	service.Message
+	Data() *service.Data_MsgWrapper
 }
 
 type Item struct {
@@ -64,7 +37,7 @@ type Message_Server struct {
 	pendingQueue       *list.List                              //queue of pending messages
 	resHandlers        map[uint64]func(msg []byte)             //response handlers by request ReqId
 	msgRequestHandlers map[MessageType]func(msg []byte) []byte //request handlers by request type
-	ingressChannel     chan Message                            //chan to relay messages into the server
+	ingressChannel     chan service.Message                    //chan to relay messages into the server
 	requestLifetime    time.Duration                           //time a request can stay in the pending queue until evicted
 }
 
@@ -122,10 +95,10 @@ func (p *Message_Server) handleMessage(msg ServerMessage) {
 	}
 }
 
-func (p *Message_Server) handleRequestMessage(sender crypto.PublicKey, headers *Data_MsgWrapper) {
+func (p *Message_Server) handleRequestMessage(sender crypto.PublicKey, headers *service.Data_MsgWrapper) {
 
 	if payload := p.msgRequestHandlers[MessageType(headers.MsgType)](headers.Payload); payload != nil {
-		rmsg := &Data_MsgWrapper{MsgType: headers.MsgType, ReqID: headers.ReqID, Payload: payload}
+		rmsg := &service.Data_MsgWrapper{MsgType: headers.MsgType, ReqID: headers.ReqID, Payload: payload}
 		sendErr := p.network.SendWrappedMessage(sender.String(), p.name, rmsg)
 		if sendErr != nil {
 			log.Error("Error sending response message, err:", sendErr)
@@ -133,7 +106,7 @@ func (p *Message_Server) handleRequestMessage(sender crypto.PublicKey, headers *
 	}
 }
 
-func (p *Message_Server) handleResponseMessage(headers *Data_MsgWrapper) {
+func (p *Message_Server) handleResponseMessage(headers *service.Data_MsgWrapper) {
 
 	//get and remove from pendingMap
 	p.pendMutex.Lock()
@@ -169,7 +142,7 @@ func (p *Message_Server) RegisterMsgHandler(msgType MessageType, reqHandler func
 func (p *Message_Server) SendAsyncRequest(msgType MessageType, payload []byte, address string, resHandler func(msg []byte)) error {
 
 	reqID := p.newRequestId()
-	msg := &Data_MsgWrapper{Req: true, ReqID: reqID, MsgType: uint32(msgType), Payload: payload}
+	msg := &service.Data_MsgWrapper{Req: true, ReqID: reqID, MsgType: uint32(msgType), Payload: payload}
 	respc := make(chan interface{})
 	p.pendMutex.Lock()
 	p.pendingMap[reqID] = respc
@@ -192,7 +165,7 @@ func (p *Message_Server) newRequestId() uint64 {
 func (p *Message_Server) SendRequest(msgType MessageType, payload []byte, address string, timeout time.Duration) (interface{}, error) {
 	reqID := p.newRequestId()
 
-	msg := &Data_MsgWrapper{Req: true, ReqID: reqID, MsgType: uint32(msgType), Payload: payload}
+	msg := &service.Data_MsgWrapper{Req: true, ReqID: reqID, MsgType: uint32(msgType), Payload: payload}
 	respc := make(chan interface{})
 
 	p.pendMutex.Lock()
