@@ -8,37 +8,28 @@ message HareMessage {
     bytes pubKey = 1;
     bytes innerSig = 2; // sign inner message
     InnerMessage message = 3;
-    bytes outerSig = 4; // optional. sign also certificate
-    Certificate cert = 5; // optional
+    Certificate cert = 4; // optional
 }
 
 // the certificate
 message Certificate {
     repeated bytes blocks = 1; // the committed set S
-    repeated HareMessage commits = 2; // a collection of commit messages
-    bytes aggSig = 3; // aggregated sig for commits
+    AggregatedMessages aggMsgs = 2;
 }
 
-// safe value proof message
-message SVP {
-    repeated HareMessage statuses = 1; // a collection of status messages
-    bytes aggSig = 2; // aggregated sig for statuses
-    Certificate cert = 3;
+// Aggregated messages
+message AggregatedMessages {
+    repeated HareMessage messages = 1; // a collection of messages
+    bytes aggSig = 2;
 }
 
 // basic message
 message InnerMessage {
-    enum Type { // message type
-        STATUS = 0;
-        PROPOSAL = 1;
-        COMMIT = 2;
-        NOTIFY = 3;
-    }
-    Type type = 1;
+    int32 type = 1;
     bytes layer = 2;
     uint32 k = 3; // the iteration
     uint32 ki = 4;
     repeated bytes blocks = 5; // the set S. optional for commit message in a certificate
     bytes roleProof = 6; // role is implicit by message type, this is the proof
-    SVP svpProof = 7; // optional. only for proposal messages
+    AggregatedMessages svp = 7; // optional. only for proposal messages
 }
