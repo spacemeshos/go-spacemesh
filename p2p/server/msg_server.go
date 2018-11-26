@@ -59,8 +59,10 @@ func NewMsgServer(network ServerService, name string, requestLifetime time.Durat
 
 func (p *Message_Server) readLoop() {
 	for {
-		timer := time.NewTimer(time.Second)
+		timer := time.NewTicker(10 * time.Second)
 		select {
+		case <-timer.C:
+			go p.cleanStaleMessages()
 		case msg, ok := <-p.ingressChannel:
 			if !ok {
 				log.Error("read loop channel was closed")
@@ -68,8 +70,6 @@ func (p *Message_Server) readLoop() {
 			}
 			//todo add buffer and option to limit number of concurrent goroutines
 			go p.handleMessage(msg.(ServerMessage))
-		case <-timer.C:
-			go p.cleanStaleMessages()
 		}
 	}
 }

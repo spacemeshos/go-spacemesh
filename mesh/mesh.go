@@ -74,6 +74,8 @@ func (ll *LayersDB) GetBlock(id BlockID) (*Block, error) {
 
 func (ll *LayersDB) LocalLayerCount() uint32 {
 	//todo thread safety
+	defer ll.lcMutex.RUnlock()
+	ll.lcMutex.RLock()
 	return ll.layerCount
 }
 
@@ -105,7 +107,10 @@ func (ll *LayersDB) AddLayer(layer *Layer) error {
 	for _, b := range layer.blocks {
 		ll.blocks[b.id] = b
 	}
+	ll.lcMutex.Lock()
 	ll.layerCount = uint32(len(ll.layers))
+	ll.lcMutex.Unlock()
 	ll.lMutex.Unlock()
+
 	return nil
 }
