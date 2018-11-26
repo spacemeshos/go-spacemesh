@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-// prepares a message for sending on a given session, session must be checked first
+// PrepareMessage prepares a message for sending on a given session, session must be checked first
 func PrepareMessage(ns net.NetworkSession, data []byte) ([]byte, error) {
 	encPayload, err := ns.Encrypt(data)
 	if err != nil {
@@ -33,7 +33,7 @@ func PrepareMessage(ns net.NetworkSession, data []byte) ([]byte, error) {
 	return final, nil
 }
 
-// newProtocolMessageMetadata creates meta-data for an outgoing protocol message authored by this node.
+// NewProtocolMessageMetadata creates meta-data for an outgoing protocol message authored by this node.
 func NewProtocolMessageMetadata(author crypto.PublicKey, protocol string, gossip bool) *pb.Metadata {
 	return &pb.Metadata{
 		Protocol:      protocol,
@@ -44,6 +44,7 @@ func NewProtocolMessageMetadata(author crypto.PublicKey, protocol string, gossip
 	}
 }
 
+// SignMessage signs a message with a privatekey.
 func SignMessage(pv crypto.PrivateKey, pm *pb.ProtocolMessage) error {
 	data, err := proto.Marshal(pm)
 	if err != nil {
@@ -62,7 +63,7 @@ func SignMessage(pv crypto.PrivateKey, pm *pb.ProtocolMessage) error {
 	return nil
 }
 
-// authAuthor authorizes that a message is signed by its claimed author
+// AuthAuthor authorizes that a message is signed by its claimed author
 func AuthAuthor(pm *pb.ProtocolMessage) error {
 	// TODO: consider getting pubkey from outside. attackar coul'd just manipulate the whole message pubkey and sign.
 	if pm == nil || pm.Metadata == nil {

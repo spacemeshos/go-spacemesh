@@ -45,12 +45,15 @@ type KadDHT struct {
 	service service.Service
 }
 
+// Size returns the size of the routing table.
 func (d *KadDHT) Size() int {
 	req := make(chan int)
 	d.rt.Size(req)
 	return <-req
 }
 
+// SelectPeers asks routingtable to randomly select a slice of nodes in size `qty`
+// SelectPeers asks routingtable to randomly select a slice of nodes in size `qty`
 func (d *KadDHT) SelectPeers(qty int) []node.Node {
 	return d.rt.SelectPeers(qty)
 }
@@ -149,22 +152,24 @@ func filterFindNodeServers(nodes []node.Node, queried map[string]struct{}, alpha
 		return nodes
 	}
 
+	newlist := make([]node.Node, 0, len(nodes))
+
 	// filter out queried servers.
 	i := 0
 	for _, v := range nodes {
-		if _, exist := queried[v.String()]; exist {
+		if _, exist := queried[v.PublicKey().String()]; exist {
 			continue
 		}
 
-		nodes[i] = v
+		newlist = append(newlist, v)
 		i++
 
-		if i >= alpha {
+		if i == alpha {
 			break
 		}
 	}
 
-	return nodes[:i]
+	return newlist
 }
 
 // findNodeOp a target node on one or more servers

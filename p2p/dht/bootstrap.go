@@ -3,6 +3,8 @@ package dht
 import (
 	"context"
 	"errors"
+	"github.com/btcsuite/btcutil/base58"
+	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"time"
 )
@@ -14,6 +16,8 @@ const (
 	LookupIntervals = 3 * time.Second
 	// RefreshInterval is the time we wait between dht refreshes
 	RefreshInterval = 5 * time.Minute
+
+	bootstrapTries = 5
 )
 
 var (
@@ -36,20 +40,23 @@ func (d *KadDHT) Bootstrap(ctx context.Context) error {
 
 	d.local.Debug("Starting node bootstrap ", d.local.String())
 
+	alpha := d.config.RoutingTableAlpha
 	c := d.config.RandomConnections
-	if c <= 0 {
+
+	if c <= 0 || alpha <= 0 {
 		return ErrZeroConnections
 	}
 	// register bootstrap nodes
 	bn := 0
 	for _, n := range d.config.BootstrapNodes {
-		node, err := node.NewNodeFromString(n)
+		nd, err := node.NewNodeFromString(n)
 		if err != nil {
 			// TODO : handle errors
 			continue
 		}
-		d.rt.Update(node)
+		d.rt.Update(nd)
 		bn++
+		d.local.Info("added new bootstrap node %v", nd)
 	}
 
 	if bn == 0 {
@@ -58,70 +65,62 @@ func (d *KadDHT) Bootstrap(ctx context.Context) error {
 
 	d.local.Debug("lookup using %d preloaded bootnodes ", bn)
 
-	timeout := time.NewTimer(BootstrapTimeout)
-	i := 0
-	// TODO: Issue a healthcheck / refresh loop every x interval.
-BOOTLOOP:
+	ctx, _ = context.WithTimeout(ctx, BootstrapTimeout)
+	err := d.tryBoot(ctx, c)
+
+	return err
+}
+
+func (d *KadDHT) tryBoot(ctx context.Context, minPeers int) error {
+
+	searchFor := d.local.PublicKey().String()
+	gotpeers := false
+	tries := 0
+	d.local.Debug("BOOTSTRAP: Running kademlia lookup for ourselves")
+
+loop:
 	for {
 		reschan := make(chan error)
 
 		go func() {
-			_, err := d.Lookup(d.local.PublicKey().String())
+			if gotpeers || tries >= bootstrapTries {
+				// TODO: consider choosing a random key that is close to the local id
+				// or TODO: implement real kademlia refreshes - #241
+				rnd, _ := crypto.GetRandomBytes(32)
+				searchFor = base58.Encode(rnd)
+				d.local.Debug("BOOTSTRAP: Running kademlia lookup for random peer")
+			}
+			_, err := d.Lookup(searchFor)
 			reschan <- err
 		}()
 
 		select {
 		case <-ctx.Done():
 			return ErrBootAbort
-		case <-timeout.C:
-			return ErrFailedToBoot
 		case err := <-reschan:
-			i++
+			tries++
 			if err == nil {
-				return ErrFoundOurself
+				// if we got the peer we were looking for (us or random)
+				// the best thing we can do is just try again or try another random peer.
+				// hence we continue here.
+				//todo : maybe if we gotpeers than we can just break ?
+				continue
 			}
-			// We want to have lookup failed error
-			// no one should return us ourselves.
 			req := make(chan int)
 			d.rt.Size(req)
 			size := <-req
-			if (size - bn) >= c { // Don't count bootstrap nodes
-				break BOOTLOOP
+
+			if (size) >= minPeers {
+				if gotpeers {
+					break loop
+				}
+				gotpeers = true
+			} else {
+				d.local.Warning("%d lookup didn't bootstrap the routing table. RT now has %d peers", tries, size)
 			}
-			d.local.Warning("%d lookup didn't bootstrap the routing table", i)
-			d.local.Warning("RT now has %d peers", size-bn)
+
 			time.Sleep(LookupIntervals)
 		}
-	}
-	return nil // succeed
-}
-
-func (d *KadDHT) healthLoop() {
-	tick := time.NewTicker(RefreshInterval)
-	for range tick.C {
-		err := d.refresh()
-		if err != nil {
-			d.local.Error("DHT Refresh failed, trying again")
-		}
-	}
-}
-
-func (d *KadDHT) refresh() error {
-	reschan := make(chan error)
-
-	go func() {
-		_, err := d.Lookup(d.local.PublicKey().String())
-		reschan <- err
-	}()
-
-	select {
-	case err := <-reschan:
-		if err == nil {
-			return ErrFoundOurself
-		}
-		// should be - ErrLookupFailed
-		// We want to have lookup failed error
-		// no one should return us ourselves.
 	}
 
 	return nil

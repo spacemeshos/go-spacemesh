@@ -157,17 +157,20 @@ func (s *swarm) Start() error {
 		}()
 	}
 
-	go func() {
-		if s.config.SwarmConfig.Bootstrap {
-			s.waitForBoot()
-		}
-		err := s.gossip.Start()
-		if err != nil {
-			s.gossipErr = err
-			s.Shutdown()
-		}
-		close(s.gossipC)
-	}() // todo handle error async
+	if s.config.SwarmConfig.Gossip {
+		go func() {
+			if s.config.SwarmConfig.Bootstrap {
+				s.waitForBoot()
+			}
+			err := s.gossip.Start()
+			if err != nil {
+				s.gossipErr = err
+				s.Shutdown()
+			}
+			<-s.gossip.Initial()
+			close(s.gossipC)
+		}() // todo handle error async
+	}
 
 	return nil
 }
@@ -193,18 +196,15 @@ func (s *swarm) SendMessage(peerPubKey string, protocol string, payload []byte) 
 	var peer node.Node
 	var conn net.Connection
 
-	peer, conn = s.gossip.Peer(peerPubKey) // check if he's a neighbor
-	if peer == node.EmptyNode {
-		peer, err = s.dht.Lookup(peerPubKey) // blocking, might issue a network lookup that'll take time.
+	peer, err = s.dht.Lookup(peerPubKey) // blocking, might issue a network lookup that'll take time.
+	if err != nil {
+		return err
+	}
 
-		if err != nil {
-			return err
-		}
-		conn, err = s.cPool.GetConnection(peer.Address(), peer.PublicKey()) // blocking, might take some time in case there is no connection
-		if err != nil {
-			s.lNode.Warning("failed to send message to %v, no valid connection. err: %v", peer.String(), err)
-			return err
-		}
+	conn, err = s.cPool.GetConnection(peer.Address(), peer.PublicKey()) // blocking, might take some time in case there is no connection
+	if err != nil {
+		s.lNode.Warning("failed to send message to %v, no valid connection. err: %v", peer.String(), err)
+		return err
 	}
 
 	session := conn.Session()
@@ -246,6 +246,8 @@ func (s *swarm) SendMessage(peerPubKey string, protocol string, payload []byte) 
 
 	err = conn.Send(final)
 	session.EncryptGuard().Unlock()
+
+	s.lNode.Debug("Message sent succesfully")
 
 	return err
 }
@@ -313,11 +315,14 @@ func (s *swarm) listenToNetworkMessages() {
 
 func (s *swarm) handleNewConnectionEvents() {
 	newConnEvents := s.network.SubscribeOnNewRemoteConnections()
+	closing := s.network.SubscribeClosingConnections()
 Loop:
 	for {
 		select {
+		case con := <-closing:
+			go s.gossip.Disconnect(con.RemotePublicKey()) //todo notify dht?
 		case nce := <-newConnEvents:
-			go func(nod node.Node) { s.dht.Update(nod) }(nce.Node)
+			go func(nce net.NewConnectionEvent) { s.dht.Update(nce.Node); s.gossip.AddIncomingPeer(nce.Node, nce.Conn) }(nce)
 		case <-s.shutdown:
 			break Loop
 		}

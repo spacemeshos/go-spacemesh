@@ -35,12 +35,20 @@ func (sm SessionMock) KeyM() []byte {
 
 // Encrypt is this
 func (sm SessionMock) Encrypt(in []byte) ([]byte, error) {
-	return sm.encResult, sm.encError
+	out := in
+	if sm.encResult != nil {
+		out = sm.encResult
+	}
+	return out, sm.encError
 }
 
 // Decrypt is this
 func (sm SessionMock) Decrypt(in []byte) ([]byte, error) {
-	return sm.decResult, sm.decError
+	out := in
+	if sm.decResult != nil {
+		out = sm.decResult
+	}
+	return out, sm.decError
 }
 
 // SetPubKey is this

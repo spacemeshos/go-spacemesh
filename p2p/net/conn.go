@@ -69,7 +69,8 @@ type FormattedConnection struct {
 type networker interface {
 	HandlePreSessionIncomingMessage(c Connection, msg []byte) error
 	EnqueueMessage(ime IncomingMessageEvent)
-	ClosingConnections() chan Connection
+	SubscribeClosingConnections() chan Connection
+	publishClosingConnection(c Connection)
 	NetworkID() int8
 }
 
@@ -165,7 +166,7 @@ func (c *FormattedConnection) Closed() bool {
 func (c *FormattedConnection) shutdown(err error) {
 	c.logger.Info("(%v) shutdown. id=%s err=%v", c.remotePub.String(), c.id, err)
 	c.formatter.Close()
-	c.networker.ClosingConnections() <- c
+	c.networker.publishClosingConnection(c)
 }
 
 // Push outgoing message to the connections

@@ -13,5 +13,6 @@ type Service interface {
 	Start() error
 	RegisterProtocol(protocol string) chan Message
 	SendMessage(nodeID string, protocol string, payload []byte) error
+	Broadcast(protocol string, payload []byte) error
 	Shutdown()
 }
