@@ -60,7 +60,8 @@ type Net struct {
 	queuesCount           uint
 	incomingMessagesQueue []chan IncomingMessageEvent
 
-	closingConnections chan Connection
+	closingConnections []chan Connection
+	clsMutex           sync.RWMutex
 
 	config config.Config
 }
@@ -91,7 +92,7 @@ func NewNet(conf config.Config, localEntity *node.LocalNode) (*Net, error) {
 		regNewRemoteConn:      make([]chan NewConnectionEvent, 0),
 		queuesCount:           qcount,
 		incomingMessagesQueue: make([]chan IncomingMessageEvent, qcount, qcount),
-		closingConnections:    make(chan Connection, 20),
+		closingConnections:    make([]chan Connection, 0),
 		config:                conf,
 	}
 
@@ -150,9 +151,21 @@ func (n *Net) IncomingMessages() []chan IncomingMessageEvent {
 	return n.incomingMessagesQueue
 }
 
-// ClosingConnections returns Net's channel where closing connections events are reported
-func (n *Net) ClosingConnections() chan Connection {
-	return n.closingConnections
+// SubscribeClosingConnections registers a channel where closing connections events are reported
+func (n *Net) SubscribeClosingConnections() chan Connection {
+	n.clsMutex.Lock()
+	ch := make(chan Connection, 20) // todo: set a var for the buf size
+	n.closingConnections = append(n.closingConnections, ch)
+	n.clsMutex.Unlock()
+	return ch
+}
+
+func (n *Net) publishClosingConnection(connection Connection) {
+	n.clsMutex.RLock()
+	for _, c := range n.closingConnections {
+		c <- connection
+	}
+	n.clsMutex.RUnlock()
 }
 
 func (n *Net) createConnection(address string, remotePub crypto.PublicKey, timeOut time.Duration, keepAlive time.Duration) (ManagedConnection, error) {

@@ -1,18 +1,19 @@
 package mesh
 
 import (
-	"time"
 	"github.com/google/uuid"
+	"time"
 )
 
-type BLockID uint32
+type BlockID uint32
+type LayerID uint32
 
-var layerCounter uint64 = 0
+var layerCounter uint32 = 0
 
 type Block struct {
-	id         BLockID
-	layerNum   uint64
-	blockVotes map[BLockID]bool
+	id         BlockID
+	layerIndex uint32
+	blockVotes map[BlockID]bool
 	timestamp  time.Time
 	coin       bool
 	data       []byte
@@ -20,10 +21,28 @@ type Block struct {
 	conVotes   uint64
 }
 
-func NewBlock(coin bool, data []byte, ts time.Time) *Block{
+func (b Block) Id() uint32 {
+	return uint32(b.id)
+}
+
+func (b Block) Layer() uint32 {
+	return b.layerIndex
+}
+
+func NewExistingBlock(id uint32, layerIndex uint32, data []byte) *Block {
 	b := Block{
-		id:         BLockID(uuid.New().ID()),
-		blockVotes: make(map[BLockID]bool),
+		id:         BlockID(id),
+		blockVotes: make(map[BlockID]bool),
+		layerIndex: layerIndex,
+		data:       data,
+	}
+	return &b
+}
+
+func NewBlock(coin bool, data []byte, ts time.Time) *Block {
+	b := Block{
+		id:         BlockID(uuid.New().ID()),
+		blockVotes: make(map[BlockID]bool),
 		timestamp:  ts,
 		data:       data,
 		coin:       coin,
@@ -34,20 +53,40 @@ func NewBlock(coin bool, data []byte, ts time.Time) *Block{
 }
 
 type Layer struct {
-	blocks []Block
-	layerNum uint64
+	blocks []*Block
+	index  uint32
 }
 
-func (l *Layer) AddBlock(block *Block){
-	block.layerNum = l.layerNum
-	l.blocks = append(l.blocks, *block)
+func (l *Layer) Index() int {
+	return int(l.index)
 }
 
-func NewLayer() *Layer{
+func (l *Layer) Blocks() []*Block {
+	return l.blocks
+}
+
+func (l *Layer) Hash() []byte {
+	return []byte("some hash representing the layer")
+}
+
+func (l *Layer) AddBlock(block *Block) {
+	block.layerIndex = l.index
+	l.blocks = append(l.blocks, block)
+}
+
+func NewLayer() *Layer {
 	l := Layer{
-		blocks: make([]Block,0),
-		layerNum: layerCounter,
+		blocks: make([]*Block, 0),
+		index:  layerCounter,
 	}
 	layerCounter++
+	return &l
+}
+
+func NewExistingLayer(idx uint32, blocks []*Block) *Layer {
+	l := Layer{
+		blocks: blocks,
+		index:  idx,
+	}
 	return &l
 }

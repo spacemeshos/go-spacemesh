@@ -23,7 +23,7 @@ func TestProtocol_SendRequest(t *testing.T) {
 	fnd2 := NewProtocol(n2, protocol, 5*time.Second)
 
 	//send request recive interface{} and verify
-	b, err := fnd2.SendRequest(1, nil, n1.PublicKey().String(), time.Minute)
+	b, err := fnd2.SendRequest(1, nil, n1.PublicKey(), time.Minute)
 
 	assert.NoError(t, err, "Should not return error")
 	assert.EqualValues(t, []byte("some value to return"), b, "value received did not match correct value")
@@ -52,7 +52,7 @@ func TestProtocol_SendAsyncRequestRequest(t *testing.T) {
 		strCh <- string(msg)
 	}
 
-	err := fnd2.SendAsyncRequest(1, nil, n1.PublicKey().String(), callback)
+	err := fnd2.SendAsyncRequest(1, nil, n1.PublicKey(), callback)
 	msg := <-strCh
 
 	assert.EqualValues(t, "some value to return", string(msg), "value received did not match correct value")
@@ -83,7 +83,7 @@ func TestProtocol_CleanOldPendingMessages(t *testing.T) {
 		strCh <- string(msg)
 	}
 
-	err := fnd2.SendAsyncRequest(1, nil, n1.PublicKey().String(), callback)
+	err := fnd2.SendAsyncRequest(1, nil, n1.PublicKey(), callback)
 	assert.NoError(t, err, "Should not return error")
 	assert.EqualValues(t, 1, fnd2.pendingQueue.Len(), "value received did not match correct value1")
 
