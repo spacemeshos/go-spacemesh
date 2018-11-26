@@ -7,7 +7,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"sync"
 	"time"
 )
 
@@ -43,7 +42,6 @@ type ConsensusProcess struct {
 	startTime   time.Time // TODO: needed?
 	inbox       chan *pb.HareMessage
 	knowledge   []*pb.HareMessage
-	stateMutex  sync.Mutex
 	roundMsg    []byte
 	// TODO: add knowledge of notify messages. What is the life-cycle of such messages? persistent according to Julian
 }
@@ -107,9 +105,11 @@ func (proc *ConsensusProcess) eventLoop() {
 
 func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
 	// Note: layer is already verified by the broker
+	// Currently we reject past/future messages
 
 	// verify iteration
 	if m.Message.K != proc.k {
+		log.Warning("Iteration mismatch. Message iteration is: %d expected: %d", m.Message.K, proc.k)
 		return
 	}
 
@@ -144,7 +144,10 @@ func (proc *ConsensusProcess) nextRound() {
 
 	// send message if available
 	if proc.roundMsg != nil {
-		proc.network.Broadcast(ProtoName, proc.roundMsg)
+		err := proc.network.Broadcast(ProtoName, proc.roundMsg)
+		if err != nil {
+			log.Error("Could not broadcast message %s", err.Error())
+		}
 		proc.roundMsg = nil
 	}
 
@@ -190,12 +193,6 @@ func (proc *ConsensusProcess) buildStatusMessage() ([]byte, error) {
 	}
 
 	return buff, nil
-}
-
-func (proc *ConsensusProcess) updateState(state State) {
-	proc.stateMutex.Lock()
-	proc.State = state
-	proc.stateMutex.Unlock()
 }
 
 func roleFromIteration(k uint32) byte {
