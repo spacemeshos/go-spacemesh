@@ -29,13 +29,13 @@ func TestSyncer_Start(t *testing.T) {
 	NewSync(PeersImpl{n1, func() []Peer { return []Peer{n2.PublicKey()} }},
 		mesh.NewLayers(nil, nil),
 		BlockValidatorMock{},
-		Configuration{2, 1 * time.Second, 1, 10 * time.Second},
+		Configuration{2, 1 * time.Second, 1, 300, 10 * time.Second},
 	)
 
 	sync := NewSync(PeersImpl{n2, func() []Peer { return []Peer{n1.PublicKey()} }},
 		mesh.NewLayers(nil, nil),
 		BlockValidatorMock{},
-		Configuration{2, 1 * time.Second, 1, 10 * time.Second},
+		Configuration{2, 1 * time.Second, 1, 300, 10 * time.Second},
 	)
 	sync.layers.SetLatestKnownLayer(5)
 	fmt.Println(sync.IsSynced())
@@ -58,7 +58,7 @@ func TestSyncer_Start(t *testing.T) {
 
 func TestSyncer_Close(t *testing.T) {
 	fmt.Println("test sync close")
-	sync := NewSync(NewPeers(simulator.New().NewNode()), nil, BlockValidatorMock{}, Configuration{1, 100 * time.Millisecond, 1, 10 * time.Second})
+	sync := NewSync(NewPeers(simulator.New().NewNode()), mesh.NewLayers(nil, nil), BlockValidatorMock{}, Configuration{1, 100 * time.Millisecond, 1, 300, 10 * time.Second})
 	sync.Start()
 	sync.Close()
 	s := sync
@@ -76,7 +76,7 @@ func TestSyncProtocol_BlockRequest(t *testing.T) {
 	syncObj := NewSync(NewPeers(n1),
 		mesh.NewLayers(nil, nil),
 		BlockValidatorMock{},
-		Configuration{1, 1 * time.Millisecond, 1, 10 * time.Second},
+		Configuration{1, 1 * time.Millisecond, 1, 300, 10 * time.Second},
 	)
 
 	defer syncObj.Close()
@@ -102,7 +102,7 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 	syncObj := NewSync(NewPeers(n1),
 		mesh.NewLayers(nil, nil),
 		BlockValidatorMock{},
-		Configuration{1, 1 * time.Millisecond, 1, 2 * time.Second},
+		Configuration{1, 1 * time.Millisecond, 1, 300, 2 * time.Second},
 	)
 
 	defer syncObj.Close()
@@ -110,7 +110,7 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 	syncObj2 := NewSync(NewPeers(n2),
 		mesh.NewLayers(nil, nil),
 		BlockValidatorMock{},
-		Configuration{1, 1 * time.Millisecond, 1, 2 * time.Second},
+		Configuration{1, 1 * time.Millisecond, 1, 300, 2 * time.Second},
 	)
 
 	defer syncObj2.Close()
@@ -134,7 +134,7 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 	syncObj := NewSync(NewPeers(n1),
 		mesh.NewLayers(nil, nil),
 		BlockValidatorMock{},
-		Configuration{1, 1 * time.Millisecond, 1, 10 * time.Second},
+		Configuration{1, 1 * time.Millisecond, 1, 300, 10 * time.Second},
 	)
 
 	defer syncObj.Close()
@@ -147,7 +147,7 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 	syncObj.layers.AddLayer(layer)
 	fnd2 := p2p.NewProtocol(n2, protocol, time.Second*5)
 	fnd2.RegisterMsgHandler(LAYER_IDS, syncObj.layerIdsRequestHandler)
-	hashCh, err := syncObj.sendLayerIDsRequest(n2.Node.PublicKey(), 1)
+	hashCh, err := syncObj.sendLayerIDsRequest(n2.Node.PublicKey(), 1, make(chan []uint32))
 	ids := <-hashCh
 	assert.NoError(t, err, "Should not return error")
 	assert.Equal(t, len(layer.Blocks()), len(ids), "wrong block")
@@ -173,7 +173,7 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	syncObj1 := NewSync(NewPeers(n1),
 		mesh.NewLayers(nil, nil),
 		BlockValidatorMock{},
-		Configuration{1, 1 * time.Millisecond, 1, 10 * time.Second},
+		Configuration{1, 1 * time.Millisecond, 1, 300, 10 * time.Second},
 	)
 
 	defer syncObj1.Close()
@@ -182,7 +182,7 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	syncObj2 := NewSync(NewPeers(n2),
 		mesh.NewLayers(nil, nil),
 		BlockValidatorMock{},
-		Configuration{1, 1 * time.Millisecond, 1, 10 * time.Second},
+		Configuration{1, 1 * time.Millisecond, 1, 300, 10 * time.Second},
 	)
 
 	defer syncObj2.Close()
@@ -237,13 +237,13 @@ func TestSyncProtocol_SyncTwoNodes(t *testing.T) {
 	syncObj1 := NewSync(PeersImpl{nn1, func() []Peer { return []Peer{nn2.PublicKey()} }},
 		mesh.NewLayers(nil, nil),
 		BlockValidatorMock{},
-		Configuration{2, 1 * time.Second, 1, 10 * time.Second},
+		Configuration{2, 1 * time.Second, 1, 300, 10 * time.Second},
 	)
 
 	syncObj2 := NewSync(PeersImpl{nn2, func() []Peer { return []Peer{nn1.PublicKey()} }},
 		mesh.NewLayers(nil, nil),
 		BlockValidatorMock{},
-		Configuration{2, 1 * time.Second, 1, 10 * time.Second},
+		Configuration{2, 1 * time.Second, 1, 300, 10 * time.Second},
 	)
 
 	block1 := mesh.NewExistingBlock(uuid.New().ID(), 1, nil)
@@ -262,7 +262,7 @@ func TestSyncProtocol_SyncTwoNodes(t *testing.T) {
 	syncObj1.layers.AddLayer(mesh.NewExistingLayer(uint32(3), []*mesh.Block{block7, block8}))
 	syncObj1.layers.AddLayer(mesh.NewExistingLayer(uint32(3), []*mesh.Block{block9, block10}))
 
-	timeout := time.After(5 * time.Second)
+	timeout := time.After(60 * time.Second)
 	syncObj2.layers.SetLatestKnownLayer(5)
 	defer syncObj2.Close()
 	syncObj2.Start()
@@ -294,25 +294,25 @@ func TestSyncProtocol_SyncMultipalNodes(t *testing.T) {
 	syncObj1 := NewSync(PeersImpl{nn1, func() []Peer { return []Peer{nn2.PublicKey()} }},
 		mesh.NewLayers(nil, nil),
 		BlockValidatorMock{},
-		Configuration{2, 10 * time.Second, 3, 1 * time.Second},
+		Configuration{2, 10 * time.Second, 3, 300, 1 * time.Second},
 	)
 
 	syncObj2 := NewSync(PeersImpl{nn2, func() []Peer { return []Peer{nn1.PublicKey()} }},
 		mesh.NewLayers(nil, nil),
 		BlockValidatorMock{},
-		Configuration{2, 10 * time.Second, 3, 1 * time.Second},
+		Configuration{2, 10 * time.Second, 3, 300, 1 * time.Second},
 	)
 
 	syncObj3 := NewSync(PeersImpl{nn3, func() []Peer { return []Peer{nn2.PublicKey(), nn4.PublicKey()} }},
 		mesh.NewLayers(nil, nil),
 		BlockValidatorMock{},
-		Configuration{2, 10 * time.Second, 3, 1 * time.Second},
+		Configuration{2, 10 * time.Second, 3, 300, 1 * time.Second},
 	)
 
 	syncObj4 := NewSync(PeersImpl{nn4, func() []Peer { return []Peer{nn2.PublicKey(), nn3.PublicKey()} }},
 		mesh.NewLayers(nil, nil),
 		BlockValidatorMock{},
-		Configuration{2, 10 * time.Second, 3, 1 * time.Second},
+		Configuration{2, 10 * time.Second, 3, 300, 1 * time.Second},
 	)
 
 	block1 := mesh.NewExistingBlock(uuid.New().ID(), 1, nil)
