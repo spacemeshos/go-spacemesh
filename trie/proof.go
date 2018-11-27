@@ -19,8 +19,8 @@ package trie
 import (
 	"bytes"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/database"
 
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -34,7 +34,7 @@ import (
 // If the trie does not contain a value for key, the returned proof contains all
 // nodes of the longest existing prefix of the key (at least the root node), ending
 // with the node that proves the absence of the key.
-func (t *Trie) Prove(key []byte, fromLevel uint, proofDb ethdb.Putter) error {
+func (t *Trie) Prove(key []byte, fromLevel uint, proofDb database.Putter) error {
 	// Collect all nodes on the path to key.
 	key = keybytesToHex(key)
 	nodes := []node{}
@@ -95,7 +95,7 @@ func (t *Trie) Prove(key []byte, fromLevel uint, proofDb ethdb.Putter) error {
 // If the trie does not contain a value for key, the returned proof contains all
 // nodes of the longest existing prefix of the key (at least the root node), ending
 // with the node that proves the absence of the key.
-func (t *SecureTrie) Prove(key []byte, fromLevel uint, proofDb ethdb.Putter) error {
+func (t *SecureTrie) Prove(key []byte, fromLevel uint, proofDb database.Putter) error {
 	return t.trie.Prove(key, fromLevel, proofDb)
 }
 

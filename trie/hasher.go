@@ -21,10 +21,8 @@ import (
 	"hash"
 	"sync"
 
-	//"github.com/ethereum/go-ethereum/crypto/sha3"
-	//"github.com/ethereum/go-ethereum/rlp"
-	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
+	"github.com/spacemeshos/go-spacemesh/common"
 )
 
 type hasher struct {
@@ -172,7 +170,7 @@ func (h *hasher) store(n node, db *Database, force bool) (node, error) {
 	}
 	// Generate the RLP encoding of the node
 	h.tmp.Reset()
-	if err := rlp.Encode(&h.tmp, n); err != nil {
+	if err :=rlp.Encode(&h.tmp, n); err != nil { //  xdr_encoder.EncodeXDR(&h.tmp, n); err != nil {//
 		panic("encode error: " + err.Error())
 	}
 	if len(h.tmp) < 32 && !force {
