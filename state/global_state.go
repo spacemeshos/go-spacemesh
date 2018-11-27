@@ -34,7 +34,7 @@ type StateDB struct {
 
 // Create a new state from a given trie.
 func New(root common.Hash, db Database) (*StateDB, error) {
-	tr, err := db.OpenTrie(root) //todo: this
+	tr, err := db.OpenTrie(root)
 	if err != nil {
 		return nil, err
 	}
@@ -167,6 +167,10 @@ func (self *StateDB) getStateObj(addr common.Address) (StateObj *StateObj) {
 }
 
 
+func  (self *StateDB) makeDirtyObj(obj *StateObj ){
+	self.stateObjectsDirty[obj.address] = struct{}{}
+}
+
 func (self *StateDB) setStateObj(object *StateObj) {
 	self.stateObjects[object.Address()] = object
 }
@@ -192,6 +196,7 @@ func (self *StateDB) createObject(addr common.Address) (newobj, prev *StateObj) 
 		self.journal.append(resetObjectChange{prev: prev})
 	}*/
 	self.setStateObj(newobj)
+	self.makeDirtyObj(newobj)
 	return newobj, prev
 }
 

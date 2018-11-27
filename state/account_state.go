@@ -74,6 +74,7 @@ func (c *StateObj) touch() {
 		// flattened journals.
 		c.db.journal.dirty(c.address)
 	}*/ //todo: think if we need this
+	c.db.makeDirtyObj(c)
 }
 
 // empty returns whether the account is considered empty.
@@ -96,6 +97,7 @@ func (self *StateObj) SetBalance(amount *big.Int) {
 		prev:    new(big.Int).Set(self.data.Balance),
 	})*/ //todo: this
 	self.setBalance(amount)
+	self.db.makeDirtyObj(self)
 }
 
 func (self *StateObj) setBalance(amount *big.Int) {
@@ -126,6 +128,7 @@ func (self *StateObj) SetNonce(nonce uint64) {
 		prev:    self.account.Nonce,
 	})*/ //todo: this
 	self.setNonce(nonce)
+	self.db.makeDirtyObj(self)
 }
 
 func (self *StateObj) setNonce(nonce uint64) {
