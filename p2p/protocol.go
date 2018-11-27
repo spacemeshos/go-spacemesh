@@ -31,7 +31,7 @@ type Protocol struct {
 	msgRequestHandlers map[MessageType]func(msg []byte) []byte
 	ingressChannel     chan service.Message
 	requestTimeout     time.Duration
-	Exit               chan struct{}
+	exit               chan struct{}
 }
 
 func NewProtocol(network Service, name string, requestTimeout time.Duration) *Protocol {
@@ -44,17 +44,31 @@ func NewProtocol(network Service, name string, requestTimeout time.Duration) *Pr
 		pendingMap:         make(map[uint64]chan interface{}),
 		resHandlers:        make(map[uint64]func(msg []byte)),
 		msgRequestHandlers: make(map[MessageType]func(msg []byte) []byte),
-		Exit:               make(chan struct{}),
+		exit:               make(chan struct{}),
 	}
 
 	go p.readLoop()
 	return p
 }
 
+func (p *Protocol) Close() {
+	p.exit <- struct{}{}
+	<-p.exit
+	for k, v := range p.pendingMap {
+		close(v)
+		delete(p.pendingMap, k)
+		delete(p.resHandlers, k)
+	}
+}
+
 func (p *Protocol) readLoop() {
 	for {
 		timer := time.NewTicker(10 * time.Second) //todo find the correct time/pass in configuration
 		select {
+		case <-p.exit:
+			log.Debug("shutting down protocol ", p.name)
+			close(p.exit)
+			return
 		case <-timer.C:
 			go p.cleanStaleMessages()
 		case msg, ok := <-p.ingressChannel:
