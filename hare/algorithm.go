@@ -25,25 +25,27 @@ type NetworkService interface {
 }
 
 type State struct {
-	k    uint32       // the iteration number
-	ki   uint32       // indicates when S was first committed upon
-	s    *Set         // the set of blocks
-	cert *Certificate // the certificate
+	k           uint32              // the iteration number
+	ki          uint32              // indicates when S was first committed upon
+	s           *Set                // the set of blocks
+	certificate *AggregatedMessages // the certificate
 }
 
 type ConsensusProcess struct {
 	State
 	Closer // the consensus is closeable
-	pubKey        crypto.PublicKey
-	layerId       LayerId
-	oracle        Rolacle // roles oracle
-	signing       Signing
-	network       NetworkService
-	startTime     time.Time // TODO: needed?
-	inbox         chan *pb.HareMessage
-	knowledge     []*pb.HareMessage
-	roundMsg      *pb.HareMessage
-	isConflicting bool
+	pubKey          crypto.PublicKey
+	layerId         LayerId
+	oracle          Rolacle // roles oracle
+	signing         Signing
+	network         NetworkService
+	startTime       time.Time // TODO: needed?
+	inbox           chan *pb.HareMessage
+	knowledge       []*pb.HareMessage
+	roundMsg        *pb.HareMessage
+	isConflicting   bool
+	isDecisionFinal bool
+	tracker         *RefCountTracker
 	// TODO: add knowledge of notify messages. What is the life-cycle of such messages? persistent according to Julian
 }
 
@@ -58,12 +60,14 @@ func NewConsensusProcess(key crypto.PublicKey, layer LayerId, s Set, oracle Rola
 	proc.network = p2p
 	proc.knowledge = make([]*pb.HareMessage, 0, InitialKnowledgeSize)
 	proc.roundMsg = nil
+	proc.tracker = NewRefCountTracker()
 	err := proc.setStatusMessage()
 	if err != nil {
 		log.Error("could not build status message")
 		proc.roundMsg = nil
 	}
 	proc.isConflicting = false
+	proc.isDecisionFinal = false
 
 	return proc
 }
@@ -125,9 +129,13 @@ func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
 		return
 	}
 
+	pub, err := crypto.NewPublicKey(m.PubKey)
+	if err != nil {
+		return
+	}
 	// validate role
 	if !proc.oracle.ValidateRole(roleFromIteration(m.Message.K),
-		RoleRequest{m.PubKey, LayerId{NewBytes32(m.Message.Layer)}, m.Message.K},
+		RoleRequest{pub, LayerId{NewBytes32(m.Message.Layer)}, m.Message.K},
 		Signature(m.Message.RoleProof)) {
 		log.Warning("invalid role detected")
 		return
@@ -136,14 +144,16 @@ func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
 	// continue process msg by round
 	proc.processMessageByRound(m)
 
-	// TODO: decide how we store messages maybe we don't need raw msgs
 	proc.knowledge = append(proc.knowledge, m)
 }
 
 func (proc *ConsensusProcess) nextRound() {
 	log.Info("End of round: %d", proc.k)
 
-	if proc.roundMsg != nil { // message available
+	// check if message ready to send and check role to see if we should send
+	if proc.roundMsg != nil && proc.oracle.ValidateRole(roleFromIteration(proc.k),
+														RoleRequest{proc.pubKey, proc.layerId, proc.k},
+														Signature{}) {
 		m, err := proto.Marshal(proc.roundMsg)
 		if err == nil { // no error, send msg
 			proc.network.Broadcast(ProtoName, m)
@@ -159,11 +169,11 @@ func (proc *ConsensusProcess) nextRound() {
 	proc.knowledge = make([]*pb.HareMessage, 0, InitialKnowledgeSize)
 }
 
-// TODO: put state and msg in Context struct?
 func (proc *ConsensusProcess) processMessageByRound(msg *pb.HareMessage) {
-	// TODO: check MY role, check if already processed
+	if proc.isDecisionFinal { // no process required
+		return
+	}
 
-	// TODO: do we have cases in which we don't need to do further processing? (final decisions)
 	switch proc.k % 4 { // switch round
 	case 0: // end of round 0
 		proc.processMsgRound0(msg)
@@ -184,6 +194,11 @@ func (proc *ConsensusProcess) setStatusMessage() error {
 	if err != nil {
 		return err
 	}
+
+	// TODO: try to build SVP based on msg
+
+	//s := proc.tracker.buildSet(f+1)
+	//builder.SetSVP(proc.knowledge)
 
 	proc.roundMsg = builder.Build()
 
@@ -213,19 +228,27 @@ func roleFromIteration(k uint32) byte {
 }
 
 func (proc *ConsensusProcess) processMsgRound0(msg *pb.HareMessage) {
-	// TODO: if cert empty then simple proposal of my S with no cert
+	// TODO: roundMsg?
 
-	//proc.mymap[msg]
-
-	if proc.cert == nil {
+	// if certificate empty then simple proposal of my S with no certificate
+	if proc.certificate == nil { // TODO: not good
 		proc.setStatusMessage()
+		return
 	}
 
-	// TODO: try to build SVP based on msg
-	//s := NewSet(msg.Message.Blocks)
+	// record blocks from msg
+	s := NewSet(msg.Message.Blocks)
+	for i := 0; i < f; i++ {
+		proc.tracker.Track(&s.blocks[i])
+	}
 
-	// TODO: update state to prepare proposal message
-	// TODO: if have svp build proposal msg
+	if len(proc.knowledge) < f { // only record, wait for f+1 for decision
+		return
+	}
+
+	proc.knowledge = append(proc.knowledge, msg)
+	proc.setStatusMessage()
+	proc.isDecisionFinal = true
 }
 
 func (proc *ConsensusProcess) processMsgRound1(msg *pb.HareMessage) {
@@ -260,12 +283,12 @@ func (proc *ConsensusProcess) processMsgRound2(msg *pb.HareMessage) {
 	if count == f+1 { //  we have enough commit messages on same S
 		if !proc.isConflicting { // verify no contradiction
 			proc.s = s // update s
-			buildCertificate(s, proc.knowledge)
+			proc.certificate = NewAggregatedMessages(proc.knowledge, Signature{})
 		}
 	}
 }
 
 func (proc *ConsensusProcess) processMsgRound3(msg *pb.HareMessage) {
-	// TODO: if received notify for S with cert C
+	// TODO: if received notify for S with certificate C
 	// TODO: update state iff...
 }

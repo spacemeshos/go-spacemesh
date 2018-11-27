@@ -3,6 +3,7 @@ package hare
 import (
 	"bytes"
 	"encoding/binary"
+	"github.com/spacemeshos/go-spacemesh/crypto"
 	"hash/fnv"
 )
 
@@ -18,7 +19,7 @@ type Rolacle interface {
 }
 
 type RoleRequest struct {
-	pubKey []byte
+	pubKey crypto.PublicKey
 	layerId LayerId
 	k uint32
 }

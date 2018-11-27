@@ -13,6 +13,7 @@ func getPublicKey(t *testing.T) crypto.PublicKey {
 
 	if err != nil {
 		assert.Fail(t, "failed generating key")
+		t.FailNow()
 	}
 
 	return pub
@@ -67,7 +68,7 @@ func TestConsensusProcess_handleMessage(t *testing.T) {
 	proc := NewConsensusProcess(getPublicKey(t), *Layer1, s, oracle, signing, n1)
 	broker.Register(Layer1, proc)
 
-	x, err := NewMessageBuilder().SetIteration(0).SetLayer(*Layer1).Sign(proc.signing)
+	x, err := NewMessageBuilder().SetIteration(0).SetLayer(*Layer1).SetPubKey(getPublicKey(t)).Sign(proc.signing)
 
 	if err != nil {
 		log.Error("Could not sign msg")

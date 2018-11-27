@@ -44,6 +44,13 @@ type Set struct {
 	blocks []BlockId
 }
 
+func NewEmptySet() *Set {
+	s := &Set{}
+	s.blocks = make([]BlockId, 0)
+
+	return s
+}
+
 func NewSet(data [][]byte) *Set {
 	s := &Set{}
 
@@ -53,6 +60,10 @@ func NewSet(data [][]byte) *Set {
 	}
 
 	return s
+}
+
+func (s *Set) Add(id BlockId) {
+	s.blocks = append(s.blocks, id)
 }
 
 func (s *Set) Equals(g *Set) bool {
@@ -83,8 +94,16 @@ type AggregatedMessages struct {
 	aggSig   Signature
 }
 
-func NewAggregatedMessages(p *pb.AggregatedMessages) AggregatedMessages {
-	m := AggregatedMessages{}
+func NewAggregatedMessages(msgs []*pb.HareMessage, aggSig Signature) *AggregatedMessages {
+	m := &AggregatedMessages{}
+	m.messages = msgs
+	m.aggSig = aggSig
+
+	return m
+}
+
+func AggregatedMessagesFromProto(p *pb.AggregatedMessages) *AggregatedMessages {
+	m := &AggregatedMessages{}
 
 	m.messages = make([]*pb.HareMessage, len(p.Messages))
 	for i := 0; i < len(p.Messages); i++ {
@@ -96,29 +115,14 @@ func NewAggregatedMessages(p *pb.AggregatedMessages) AggregatedMessages {
 	return m
 }
 
-type Certificate struct {
-	set *Set
-	AggregatedMessages
+func (agg *AggregatedMessages) ToProto() *pb.AggregatedMessages {
+	m := &pb.AggregatedMessages{}
+	m.Messages = agg.messages
+	m.AggSig = agg.aggSig
+
+	return m
 }
 
-func NewCertificate(p *pb.Certificate) *Certificate {
-	c := &Certificate{}
-
-	c.set = NewSet(p.Blocks)
-	c.AggregatedMessages = NewAggregatedMessages(p.AggMsgs)
-
-	return c
-}
-
-func buildCertificate(s *Set, commits []*pb.HareMessage) *Certificate {
-	c := &Certificate{}
-	c.set = s
-	// TODO...
-
-	return c
-}
-
-func (cert *Certificate) Validate(signing Signing) bool {
-	// TODO: iterate messages & verify with signing
-	return false
+func (agg *AggregatedMessages) Validate() bool {
+	return true
 }
