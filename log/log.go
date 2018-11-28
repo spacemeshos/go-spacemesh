@@ -4,11 +4,11 @@ package log
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"gopkg.in/natefinch/lumberjack.v2"
 	"gopkg.in/op/go-logging.v1"
+	"log/syslog"
 )
 
 // Log is an exported type that embeds our logger.
@@ -37,8 +37,15 @@ func init() {
 // which is only returned if the flag debug is set
 func getBackendLevel(module, prefix, format string) logging.LeveledBackend {
 	logFormat := logging.MustStringFormatter(format)
+////
+	// Configure logger to write to the syslog. You could do this in init(), too.
+	logwriter, err := syslog.New(syslog.LOG_NOTICE, "myprog")
+	if err != nil {
+		fmt.Println("FAILED TO CALL SYSLOG.NEW err=%v", err)
+	}
 
-	backend := logging.NewLogBackend(os.Stdout, prefix, 0)
+/////
+	backend := logging.NewLogBackend(logwriter, prefix, 0)  //os.Stdout, prefix, 0)
 	backendFormatter := logging.NewBackendFormatter(backend, logFormat)
 	leveledBackend := logging.AddModuleLevel(backendFormatter)
 

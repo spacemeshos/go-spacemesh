@@ -1,7 +1,6 @@
 package gossip
 
 import (
-	"errors"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
@@ -9,6 +8,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/stretchr/testify/assert"
 	"testing"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"sync"
 	"time"
 )
 
@@ -25,6 +26,71 @@ func (mcp *mockCpool) GetConnection(address string, pk crypto.PublicKey) (net.Co
 	return c, nil
 }
 
+type mockBaseNetwork struct {
+	msgSentByPeer        map[string]uint32
+	inbox                chan service.Message
+	connSubs             []chan crypto.PublicKey
+	discSubs             []chan crypto.PublicKey
+	totalMsgCount        int
+	processProtocolCount int
+	msgMutex             sync.Mutex
+}
+
+func newMockBaseNetwork() *mockBaseNetwork {
+	return &mockBaseNetwork{
+		make(map[string]uint32),
+		make(chan service.Message, 20),
+		make([]chan crypto.PublicKey, 0, 5),
+		make([]chan crypto.PublicKey, 0, 5),
+		0,
+		0,
+		sync.Mutex{},
+	}
+}
+
+func (mbn *mockBaseNetwork) SendMessage(peerPubKey string, protocol string, payload []byte) error {
+	mbn.msgMutex.Lock()
+	mbn.msgSentByPeer[peerPubKey]++
+	mbn.totalMsgCount++
+	mbn.msgMutex.Unlock()
+	return nil
+}
+
+func (mbn *mockBaseNetwork) RegisterProtocol(protocol string) chan service.Message {
+	return mbn.inbox
+}
+
+func (mbn *mockBaseNetwork) SubscribePeerEvents() (conn chan crypto.PublicKey, disc chan crypto.PublicKey) {
+	conn = make(chan crypto.PublicKey, 20)
+	disc = make(chan crypto.PublicKey, 20)
+
+	mbn.connSubs = append(mbn.connSubs, conn)
+	mbn.discSubs = append(mbn.discSubs, disc)
+	return
+}
+
+func (mbn *mockBaseNetwork) ProcessProtocolMessage(sender node.Node, protocol string, payload []byte) error {
+	mbn.processProtocolCount++
+	return nil
+}
+
+func (mbn *mockBaseNetwork) addRandomPeers(cnt int) {
+	for i := 0; i < cnt; i++ {
+		_, pub, _ := crypto.GenerateKeyPair()
+		mbn.addRandomPeer(pub)
+	}
+}
+
+func (mbn *mockBaseNetwork) addRandomPeer(pub crypto.PublicKey) {
+	for _, p := range (mbn.connSubs) {
+		p <- pub
+	}
+}
+
+func (mbn *mockBaseNetwork) totalMessageSent() int {
+	return mbn.totalMsgCount
+}
+
 type mockSampler struct {
 	f func(count int) []node.Node
 }
@@ -36,261 +102,194 @@ func (mcs *mockSampler) SelectPeers(count int) []node.Node {
 	return node.GenerateRandomNodesData(count)
 }
 
-//todo : more unit tests
-
-func TestNeighborhood_Broadcast(t *testing.T) {
-	n := NewNeighborhood(config.DefaultConfig().SwarmConfig, new(mockSampler), new(mockCpool), log.New("tesT", "", ""))
-	err := n.Broadcast([]byte("msg"))
-	assert.Error(t, err)
+type TestMessage struct {
+	data []byte
 }
 
+func (tm TestMessage) Sender() node.Node {
+	return node.Node{}
+}
+
+func (tm TestMessage) setData(msg []byte) {
+	tm.data = msg
+}
+
+func (tm TestMessage) Data() []byte {
+	return tm.data
+}
+
+//todo : more unit tests
+
 func TestNeighborhood_AddIncomingPeer(t *testing.T) {
-	n := NewNeighborhood(config.DefaultConfig().SwarmConfig, new(mockSampler), new(mockCpool), log.New("tesT", "", ""))
+	n := NewProtocol(config.DefaultConfig().SwarmConfig, newMockBaseNetwork(), log.New("tesT", "", ""))
 	n.Start()
-	rnd := node.GenerateRandomNodeData()
-	n.AddIncomingPeer(rnd, nil)
+	_, pub, _ := crypto.GenerateKeyPair()
+	n.addPeer(pub)
 
-	n.inpeersMutex.RLock()
-	p, ok := n.inpeers[rnd.PublicKey().String()]
-	n.inpeersMutex.RUnlock()
+	assert.True(t, n.hasPeer(pub))
+	assert.Equal(t, 1, n.peersCount())
+}
 
-	assert.True(t, ok)
-	assert.NotNil(t, p)
+func TestNeighborhood_Relay(t *testing.T) {
+	net := newMockBaseNetwork()
+	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, log.New("tesT", "", ""))
+	n.Start()
+	net.addRandomPeers(20)
+
+	//n.Broadcast([]byte("LOL"))
+	var msg service.Message = TestMessage{[]byte("LOL")}
+	net.inbox <- msg
+	time.Sleep(300 * time.Millisecond)
+	assert.Equal(t, 1, net.processProtocolCount)
+}
+
+func TestNeighborhood_Broadcast(t *testing.T) {
+	net := newMockBaseNetwork()
+	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, log.New("tesT", "", ""))
+	n.Start()
+	net.addRandomPeers(20)
+
+	n.Broadcast([]byte("LOL"))
+	time.Sleep(300 * time.Millisecond)
+	assert.Equal(t, 0, net.processProtocolCount)
+	assert.Equal(t,20, net.totalMessageSent())
+}
+
+func TestNeighborhood_Relay2(t *testing.T) {
+	net := newMockBaseNetwork()
+	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, log.New("tesT", "", ""))
+	n.Start()
+
+	var msg service.Message = TestMessage{[]byte("LOL")}
+	net.inbox <- msg
+	time.Sleep(300 * time.Millisecond)
+	assert.Equal(t, 1, net.processProtocolCount)
+	assert.Equal(t,0, net.totalMessageSent())
+
+	net.addRandomPeers(20)
+	net.inbox <- msg
+	time.Sleep(300 * time.Millisecond)
+	assert.Equal(t, 1, net.processProtocolCount)
+	assert.Equal(t,20, net.totalMessageSent())
 }
 
 func TestNeighborhood_Broadcast2(t *testing.T) {
-	n := NewNeighborhood(config.DefaultConfig().SwarmConfig, new(mockSampler), new(mockCpool), log.New("tesT", "", ""))
+	net := newMockBaseNetwork()
+	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, log.New("tesT", "", ""))
 	n.Start()
-	<-n.Initial()
-	err := n.Broadcast([]byte("LOL"))
-	assert.NoError(t, err)
-	tm := time.NewTimer(time.Millisecond * 1)
-loop:
-	for {
-		select {
-		case <-tm.C:
-			n.peersMutex.Lock()
-			for _, p := range n.peers {
-				i := p.conn.(*net.ConnectionMock).SendCount()
-				if assert.True(t, i > 0) {
-					n.peersMutex.Unlock()
-					break loop
-				}
-			}
-			n.peersMutex.Lock()
-			break loop
-		default:
 
-		}
-	}
+	msgB := []byte("LOL")
+	n.Broadcast(msgB)
+	time.Sleep(300 * time.Millisecond)
+	assert.Equal(t, 0, net.processProtocolCount)
+	assert.Equal(t,0, net.totalMessageSent())
+
+	net.addRandomPeers(20)
+	var msg service.Message = TestMessage{msgB}
+	net.inbox <- msg
+	time.Sleep(300 * time.Millisecond)
+	assert.Equal(t, 0, net.processProtocolCount)
+	assert.Equal(t,20, net.totalMessageSent())
 }
 
 func TestNeighborhood_Broadcast3(t *testing.T) {
-	n := NewNeighborhood(config.DefaultConfig().SwarmConfig, new(mockSampler), new(mockCpool), log.New("tesT", "", ""))
+	net := newMockBaseNetwork()
+	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, log.New("tesT", "", ""))
 	n.Start()
-	<-n.Initial()
-	chk := generateID([]byte("LOL"))
-	n.oldMessageQ[chk] = struct{}{}
 
-	err := n.Broadcast([]byte("LOL"))
-	assert.Error(t, err)
-	tm := time.NewTimer(time.Millisecond * 1)
-loop:
-	for {
-		select {
-		case <-tm.C:
-			n.peersMutex.Lock()
-			for _, p := range n.peers {
-				i := p.conn.(*net.ConnectionMock).SendCount()
-				if assert.True(t, i > 0) {
-					n.peersMutex.Unlock()
-					break loop
-				}
-			}
-			n.peersMutex.Lock()
-			break loop
-		default:
+	net.addRandomPeers(20)
 
-		}
-	}
+	msgB := []byte("LOL")
+	n.Broadcast(msgB)
+	time.Sleep(300 * time.Millisecond)
+	assert.Equal(t, 0, net.processProtocolCount)
+	assert.Equal(t,20, net.totalMessageSent())
+
+	var msg service.Message = TestMessage{msgB}
+	net.inbox <- msg
+	time.Sleep(300 * time.Millisecond)
+	assert.Equal(t, 0, net.processProtocolCount)
+	assert.Equal(t,20, net.totalMessageSent())
 }
 
-func TestNeighborhood_Broadcast4(t *testing.T) {
-	n := NewNeighborhood(config.DefaultConfig().SwarmConfig, new(mockSampler), new(mockCpool), log.New("tesT", "", ""))
+func TestNeighborhood_Relay3(t *testing.T) {
+	net := newMockBaseNetwork()
+	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, log.New("tesT", "", ""))
 	n.Start()
-	<-n.Initial()
 
-	rnd := node.GenerateRandomNodeData()
-	con, _ := new(mockCpool).GetConnection(rnd.Address(), rnd.PublicKey())
-	n.AddIncomingPeer(rnd, con)
+	var msg service.Message = TestMessage{[]byte("LOL")}
+	net.inbox <- msg
+	time.Sleep(300 * time.Millisecond)
+	assert.Equal(t, 1, net.processProtocolCount)
+	assert.Equal(t,0, net.totalMessageSent())
 
-	n.Broadcast([]byte("LOL"))
-	tm := time.NewTimer(time.Second)
-loop:
-	for {
-		select {
-		case <-tm.C:
-			t.Error()
-		default:
-		}
-		n.inpeersMutex.RLock()
-		for _, p := range n.inpeers {
-			i := p.conn.(*net.ConnectionMock).SendCount()
-			if i > 0 {
-				break loop
-			}
-		}
-		n.inpeersMutex.RUnlock()
+	net.addRandomPeers(20)
+	net.inbox <- msg
+	time.Sleep(300 * time.Millisecond)
+	assert.Equal(t, 1, net.processProtocolCount)
+	assert.Equal(t,20, net.totalMessageSent())
 
-	}
+	net.addRandomPeers(1)
+	net.inbox <- msg
+	time.Sleep(300 * time.Millisecond)
+	assert.Equal(t, 1, net.processProtocolCount)
+	assert.Equal(t,21, net.totalMessageSent())
 }
 
-func Test_Neihborhood_getMorePeers(t *testing.T) {
-	// test normal flow
-	numpeers := 3
-	sampMock := new(mockSampler)
-	cpoolMock := new(mockCpool)
-	n := NewNeighborhood(config.DefaultConfig().SwarmConfig, sampMock, cpoolMock, log.New("test", "", ""))
+func TestNeighborhood_Start(t *testing.T) {
+	net := newMockBaseNetwork()
+	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, log.New("tesT", "", ""))
 
-	res := n.getMorePeers(0) // this should'nt work
-	assert.Equal(t, res, 0)
+	// before Start
+	net.addRandomPeers(20)
+	assert.Equal(t,0, n.peersCount())
 
-	//test no peers
-	sampMock.f = func(count int) []node.Node {
-		return []node.Node{}
-	}
+	n.Start()
 
-	res = n.getMorePeers(10)
-	assert.Equal(t, res, 0)
-	sampMock.f = nil
-
-	// test connection error
-	cpoolMock.f = func(address string, pk crypto.PublicKey) (net.Connection, error) {
-		return nil, errors.New("can't make connection")
-	}
-
-	res = n.getMorePeers(1) // this should'nt work
-	assert.Equal(t, res, 0)
-	cpoolMock.f = nil // for next tests
-
-	// not starting so we can test getMorePeers
-	res = n.getMorePeers(numpeers)
-	assert.Equal(t, res, numpeers)
-	assert.Equal(t, len(n.peers), numpeers)
-
-	// test inc peer
-
-	nd := node.GenerateRandomNodeData()
-	cn, _ := cpoolMock.GetConnection(nd.Address(), nd.PublicKey())
-	n.AddIncomingPeer(nd, cn)
-
-	n.peersMutex.RLock()
-	_, ok := n.inpeers[nd.PublicKey().String()]
-	n.peersMutex.RUnlock()
-	assert.True(t, ok)
-
-	//test replacing inc peer
-
-	sampMock.f = func(count int) []node.Node {
-		some := node.GenerateRandomNodesData(count - 1)
-		some = append(some, nd)
-		return some
-	}
-
-	res = n.getMorePeers(numpeers)
-	assert.Equal(t, res, numpeers)
-	assert.Equal(t, len(n.peers), numpeers+res)
-
-	n.peersMutex.RLock()
-	_, ok = n.peers[nd.PublicKey().String()]
-	n.peersMutex.RUnlock()
-	assert.True(t, ok)
-
-	n.peersMutex.RLock()
-	_, ok = n.inpeers[nd.PublicKey().String()]
-	n.peersMutex.RUnlock()
-	assert.False(t, ok)
-}
-
-func TestNeighborhood_Initial(t *testing.T) {
-	sampMock := new(mockSampler)
-	cpoolMock := new(mockCpool)
-	n := NewNeighborhood(config.DefaultConfig().SwarmConfig, sampMock, cpoolMock, log.New("test", "", ""))
-	err := n.Start()
-	assert.NoError(t, err, "start returned err") // should never error
-	in := n.Initial()
-	select {
-	case <-in:
-		break
-	case <-time.After(time.Second * 2):
-		t.Error("2 seconds passed")
-	}
-	n.Close()
-}
-
-func TestNeighborhood_Disconnect(t *testing.T) {
-	sampMock := new(mockSampler)
-	cpoolMock := new(mockCpool)
-
-	out := node.GenerateRandomNodeData()
-	t.Log("MY PEER ", out)
-
-	sampMock.f = func(count int) []node.Node {
-		some := node.GenerateRandomNodesData(count - 1)
-		some = append(some, out)
-		return some
-	}
-
-	n := NewNeighborhood(config.DefaultConfig().SwarmConfig, sampMock, cpoolMock, log.New("tesT", "", ""))
-	err := n.Start()
-	assert.NoError(t, err) // should never error
-
-	select {
-	case <-n.Initial():
-		break
-	case <-time.After(time.Second):
-		t.Error("didnt initialize")
-	}
-
-	sampMock.f = nil // dont give out on a normal state
-
-	nd := node.GenerateRandomNodeData()
-	cn, _ := cpoolMock.GetConnection(nd.Address(), nd.PublicKey())
-	n.AddIncomingPeer(nd, cn)
-
-	n.inpeersMutex.RLock()
-	_, ok := n.inpeers[nd.PublicKey().String()]
-	assert.True(t, ok)
-	n.inpeersMutex.RUnlock()
-
-	n.Disconnect(nd.PublicKey())
-
-	n.inpeersMutex.RLock()
-	_, ok = n.inpeers[nd.PublicKey().String()]
-	assert.False(t, ok)
-	n.inpeersMutex.RUnlock()
-
-	cpoolMock.f = func(address string, pk crypto.PublicKey) (net.Connection, error) {
-		return nil, errors.New("no connections")
-	}
-
-	n.Disconnect(out.PublicKey())
-
-	n.peersMutex.RLock()
-	_, ok = n.peers[nd.PublicKey().String()]
-	assert.False(t, ok)
-	n.peersMutex.RUnlock()
-
+	net.addRandomPeers(20)
+	time.Sleep(300 * time.Millisecond)
+	assert.Equal(t,20, n.peersCount())
 }
 
 func TestNeighborhood_Close(t *testing.T) {
-	sampMock := new(mockSampler)
-	cpoolMock := new(mockCpool)
+	net := newMockBaseNetwork()
+	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, log.New("tesT", "", ""))
 
-	n := NewNeighborhood(config.DefaultConfig().SwarmConfig, sampMock, cpoolMock, log.New("tesT", "", ""))
-	err := n.Start()
-	assert.NoError(t, err) // should never error
+	n.Start()
+	net.addRandomPeers(20)
+	time.Sleep(300 * time.Millisecond)
+	assert.Equal(t,20, n.peersCount())
 
 	n.Close()
-	<-n.shutdown
+	net.addRandomPeers(20)
+	assert.Equal(t,20, n.peersCount())
+}
+
+func TestNeighborhood_Disconnect(t *testing.T) {
+	net := newMockBaseNetwork()
+	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, log.New("tesT", "", ""))
+
+	n.Start()
+	_, pub1, _ := crypto.GenerateKeyPair()
+	n.addPeer(pub1)
+	_, pub2, _ := crypto.GenerateKeyPair()
+	n.addPeer(pub2)
+	assert.Equal(t,2, n.peersCount())
+
+	net.inbox <- TestMessage{[]byte("LOL")}
+	time.Sleep(300 * time.Millisecond)
+	assert.Equal(t, 1, net.processProtocolCount)
+	assert.Equal(t,2, net.totalMessageSent())
+
+	n.removePeer(pub1)
+	net.inbox <- TestMessage{[]byte("LOL2")}
+	time.Sleep(300 * time.Millisecond)
+	assert.Equal(t, 2, net.processProtocolCount)
+	assert.Equal(t,3, net.totalMessageSent())
+
+	n.addPeer(pub1)
+	net.inbox <- TestMessage{[]byte("LOL")}
+	time.Sleep(300 * time.Millisecond)
+	assert.Equal(t, 2, net.processProtocolCount)
+	assert.Equal(t,4, net.totalMessageSent())
 }
