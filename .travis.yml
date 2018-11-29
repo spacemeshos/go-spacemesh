@@ -12,6 +12,7 @@ before_install:
 - protoc --version
 - bash ci/genproto.sh
 - go get -u github.com/kardianos/govendor
+- govendor sync
 
 
 branches:
