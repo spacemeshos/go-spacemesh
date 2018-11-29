@@ -143,7 +143,8 @@ func (s *Syncer) Synchronise() {
 
 		blockIds, err := s.getLayerBlockIDs(i) //returns a set of all known blocks in the mesh
 		if err != nil {
-			log.Error("could not get layer block ids ", err)
+			log.Error("could not get layer block ids: ", err)
+			log.Debug("synchronise failed, local layer index is ", s.layers.LocalLayerCount())
 			return
 		}
 
