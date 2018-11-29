@@ -76,7 +76,10 @@ func (p *MessageServer) readLoop() {
 
 func (p *MessageServer) cleanStaleMessages() {
 	for {
-		if elem := p.pendingQueue.Front(); elem != nil {
+		p.pendMutex.RLock()
+		elem := p.pendingQueue.Front()
+		p.pendMutex.RUnlock()
+		if elem != nil {
 			item := elem.Value.(Item)
 			if time.Since(item.timestamp) > p.requestLifetime {
 				p.removeFromPending(item.id, elem)
@@ -86,7 +89,6 @@ func (p *MessageServer) cleanStaleMessages() {
 		}
 	}
 }
-
 func (p *MessageServer) handleMessage(msg ServerMessage) {
 	if msg.Data().Req {
 		p.handleRequestMessage(msg.Sender().PublicKey(), msg.Data())
@@ -130,6 +132,13 @@ func (p *MessageServer) removeFromPending(reqID uint64, req *list.Element) {
 	if req != nil {
 		p.pendingQueue.Remove(req)
 	}
+
+	ch, ok := p.pendingMap[reqID]
+
+	if ok {
+		close(ch)
+	}
+
 	delete(p.pendingMap, reqID)
 	delete(p.resHandlers, reqID)
 	p.pendMutex.Unlock()
