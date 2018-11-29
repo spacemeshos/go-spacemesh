@@ -160,7 +160,7 @@ func (p *findNodeProtocol) readLoop() {
 		go func(msg service.Message) {
 
 			headers := &pb.FindNode{}
-			err := proto.Unmarshal(msg.Data(), headers)
+			err := proto.Unmarshal(msg.Bytes(), headers)
 			if err != nil {
 				log.Error("Error handling incoming FindNode ", err)
 				return

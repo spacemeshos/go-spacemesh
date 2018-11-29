@@ -1,14 +1,12 @@
 package p2p
 
 import (
-	inet "net"
-
 	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"github.com/davecgh/go-spew/spew"
-	"github.com/gogo/protobuf/proto"
+	"github.com/golang/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/connectionpool"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht"
@@ -19,6 +17,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/timesync"
+	inet "net"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -27,15 +26,19 @@ import (
 
 type protocolMessage struct {
 	sender node.Node
-	data   []byte
+	data   service.Data
 }
 
 func (pm protocolMessage) Sender() node.Node {
 	return pm.sender
 }
 
-func (pm protocolMessage) Data() []byte {
+func (pm protocolMessage) Data() service.Data {
 	return pm.data
+}
+
+func (pm protocolMessage) Bytes() []byte {
+	return pm.data.Bytes()
 }
 
 type swarm struct {
@@ -183,6 +186,14 @@ func (s *swarm) connectionPool() *connectionpool.ConnectionPool {
 	return s.cPool
 }
 
+func (s *swarm) sendWrappedMessage(nodeID string, protocol string, payload *service.Data_MsgWrapper) error {
+	return s.sendMessageImpl(nodeID, protocol, payload)
+}
+
+func (s *swarm) SendMessage(nodeID string, protocol string, payload []byte) error {
+	return s.sendMessageImpl(nodeID, protocol, service.Data_Bytes{Payload: payload})
+}
+
 // SendMessage Sends a message to a remote node
 // swarm will establish session if needed or use an existing session and open connection
 // Designed to be used by any high level protocol
@@ -190,7 +201,7 @@ func (s *swarm) connectionPool() *connectionpool.ConnectionPool {
 // req.msg: marshaled message data
 // req.destId: receiver remote node public key/id
 // Local request to send a message to a remote node
-func (s *swarm) SendMessage(peerPubKey string, protocol string, payload []byte) error {
+func (s *swarm) sendMessageImpl(peerPubKey string, protocol string, payload service.Data) error {
 	s.lNode.Info("Sending message to %v", peerPubKey)
 	var err error
 	var peer node.Node
@@ -215,7 +226,17 @@ func (s *swarm) SendMessage(peerPubKey string, protocol string, payload []byte) 
 
 	protomessage := &pb.ProtocolMessage{
 		Metadata: message.NewProtocolMessageMetadata(s.lNode.PublicKey(), protocol, false),
-		Payload:  payload,
+	}
+
+	switch x := payload.(type) {
+	case service.Data_MsgWrapper:
+		protomessage.Data = &pb.ProtocolMessage_Msg{&pb.MessageWrapper{Type: x.MsgType, Req: x.Req, ReqID: x.ReqID, Payload: x.Payload}}
+	case service.Data_Bytes:
+		protomessage.Data = &pb.ProtocolMessage_Payload{Payload: x.Bytes()}
+	case nil:
+		// The field is not set.
+	default:
+		return fmt.Errorf("protocolMsg has unexpected type %T", x)
 	}
 
 	err = message.SignMessage(s.lNode.PrivateKey(), protomessage)
@@ -240,7 +261,7 @@ func (s *swarm) SendMessage(peerPubKey string, protocol string, payload []byte) 
 		// the missing message will prevent the receiver from decrypting any future message
 		s.lNode.Logger.Error("prepare message failed, closing the connection")
 		conn.Close()
-		e := fmt.Errorf("aborting send - failed to encrypt payload: %v", err)
+		e := fmt.Errorf("aborting send - failed to encrypt protocolMsg: %v", err)
 		return e
 	}
 
@@ -466,7 +487,11 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 
 	s.lNode.Debug("Forwarding message to protocol")
 
-	msgchan <- protocolMessage{remoteNode, pm.Payload}
+	if payload := pm.GetPayload(); payload != nil {
+		msgchan <- protocolMessage{remoteNode, service.Data_Bytes{Payload: payload}}
+	} else if wrap := pm.GetMsg(); wrap != nil {
+		msgchan <- protocolMessage{remoteNode, service.Data_MsgWrapper{Req: wrap.Req, MsgType: wrap.Type, ReqID: wrap.ReqID, Payload: wrap.Payload}}
+	}
 
 	return nil
 }
@@ -476,7 +501,7 @@ func (s *swarm) Broadcast(protocol string, payload []byte) error {
 	// start by making the message
 	pm := &pb.ProtocolMessage{
 		Metadata: message.NewProtocolMessageMetadata(s.LocalNode().PublicKey(), protocol, true),
-		Payload:  payload,
+		Data:     &pb.ProtocolMessage_Payload{Payload: payload},
 	}
 
 	err := message.SignMessage(s.lNode.PrivateKey(), pm)

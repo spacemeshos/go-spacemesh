@@ -36,7 +36,10 @@ message HandshakeData {
 // data is here and not in CommonMessageData to avoid leaked data on unencrypted connections
 message ProtocolMessage {
     Metadata metadata = 1;
-    bytes payload = 2;
+       oneof data {
+         bytes payload = 2;
+         MessageWrapper msg = 3;
+        }
 }
 
 message Metadata {
