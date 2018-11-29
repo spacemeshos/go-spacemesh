@@ -28,7 +28,7 @@ type Item struct {
 	timestamp time.Time
 }
 
-type Message_Server struct {
+type MessageServer struct {
 	ReqId              uint64 //request id
 	name               string //server name
 	network            ServerService
@@ -41,8 +41,8 @@ type Message_Server struct {
 	requestLifetime    time.Duration                           //time a request can stay in the pending queue until evicted
 }
 
-func NewMsgServer(network ServerService, name string, requestLifetime time.Duration) *Message_Server {
-	p := &Message_Server{
+func NewMsgServer(network ServerService, name string, requestLifetime time.Duration) *MessageServer {
+	p := &MessageServer{
 		name:               name,
 		pendingMap:         make(map[uint64]chan interface{}),
 		resHandlers:        make(map[uint64]func(msg []byte)),
@@ -57,7 +57,7 @@ func NewMsgServer(network ServerService, name string, requestLifetime time.Durat
 	return p
 }
 
-func (p *Message_Server) readLoop() {
+func (p *MessageServer) readLoop() {
 	for {
 		timer := time.NewTicker(10 * time.Second)
 		select {
@@ -74,7 +74,7 @@ func (p *Message_Server) readLoop() {
 	}
 }
 
-func (p *Message_Server) cleanStaleMessages() {
+func (p *MessageServer) cleanStaleMessages() {
 	for {
 		if elem := p.pendingQueue.Front(); elem != nil {
 			item := elem.Value.(Item)
@@ -87,7 +87,7 @@ func (p *Message_Server) cleanStaleMessages() {
 	}
 }
 
-func (p *Message_Server) handleMessage(msg ServerMessage) {
+func (p *MessageServer) handleMessage(msg ServerMessage) {
 	if msg.Data().Req {
 		p.handleRequestMessage(msg.Sender().PublicKey(), msg.Data())
 	} else {
@@ -95,7 +95,7 @@ func (p *Message_Server) handleMessage(msg ServerMessage) {
 	}
 }
 
-func (p *Message_Server) handleRequestMessage(sender crypto.PublicKey, headers *service.Data_MsgWrapper) {
+func (p *MessageServer) handleRequestMessage(sender crypto.PublicKey, headers *service.Data_MsgWrapper) {
 
 	if payload := p.msgRequestHandlers[MessageType(headers.MsgType)](headers.Payload); payload != nil {
 		rmsg := &service.Data_MsgWrapper{MsgType: headers.MsgType, ReqID: headers.ReqID, Payload: payload}
@@ -106,7 +106,7 @@ func (p *Message_Server) handleRequestMessage(sender crypto.PublicKey, headers *
 	}
 }
 
-func (p *Message_Server) handleResponseMessage(headers *service.Data_MsgWrapper) {
+func (p *MessageServer) handleResponseMessage(headers *service.Data_MsgWrapper) {
 
 	//get and remove from pendingMap
 	p.pendMutex.Lock()
@@ -125,7 +125,7 @@ func (p *Message_Server) handleResponseMessage(headers *service.Data_MsgWrapper)
 	}
 }
 
-func (p *Message_Server) removeFromPending(reqID uint64, req *list.Element) {
+func (p *MessageServer) removeFromPending(reqID uint64, req *list.Element) {
 	p.pendMutex.Lock()
 	if req != nil {
 		p.pendingQueue.Remove(req)
@@ -135,11 +135,11 @@ func (p *Message_Server) removeFromPending(reqID uint64, req *list.Element) {
 	p.pendMutex.Unlock()
 }
 
-func (p *Message_Server) RegisterMsgHandler(msgType MessageType, reqHandler func(msg []byte) []byte) {
+func (p *MessageServer) RegisterMsgHandler(msgType MessageType, reqHandler func(msg []byte) []byte) {
 	p.msgRequestHandlers[msgType] = reqHandler
 }
 
-func (p *Message_Server) SendAsyncRequest(msgType MessageType, payload []byte, address crypto.PublicKey, resHandler func(msg []byte)) error {
+func (p *MessageServer) SendAsyncRequest(msgType MessageType, payload []byte, address crypto.PublicKey, resHandler func(msg []byte)) error {
 
 	reqID := p.newRequestId()
 	msg := &service.Data_MsgWrapper{Req: true, ReqID: reqID, MsgType: uint32(msgType), Payload: payload}
@@ -158,11 +158,11 @@ func (p *Message_Server) SendAsyncRequest(msgType MessageType, payload []byte, a
 	return nil
 }
 
-func (p *Message_Server) newRequestId() uint64 {
+func (p *MessageServer) newRequestId() uint64 {
 	return atomic.AddUint64(&p.ReqId, 1)
 }
 
-func (p *Message_Server) SendRequest(msgType MessageType, payload []byte, address crypto.PublicKey, timeout time.Duration) (interface{}, error) {
+func (p *MessageServer) SendRequest(msgType MessageType, payload []byte, address crypto.PublicKey, timeout time.Duration) (interface{}, error) {
 	reqID := p.newRequestId()
 
 	msg := &service.Data_MsgWrapper{Req: true, ReqID: reqID, MsgType: uint32(msgType), Payload: payload}

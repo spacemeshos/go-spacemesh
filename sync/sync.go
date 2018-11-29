@@ -38,7 +38,7 @@ type Syncer struct {
 	layers    mesh.Mesh
 	sv        BlockValidator //todo should not be here
 	config    Configuration
-	p         *server.Message_Server
+	p         *server.MessageServer
 	SyncLock  uint32
 	startLock uint32
 	forceSync chan bool
