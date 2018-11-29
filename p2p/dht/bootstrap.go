@@ -12,7 +12,7 @@ import (
 const (
 	// BootstrapTimeout is the maximum time we allow the bootstrap process to extend
 	BootstrapTimeout = 5 * time.Minute
-	// LookupIntervals is the time we wait between another kad lookup if bootstrap failed.
+	// LookupIntervals is the time we wait between another kad LookupFunc if bootstrap failed.
 	LookupIntervals = 3 * time.Second
 	// RefreshInterval is the time we wait between dht refreshes
 	RefreshInterval = 5 * time.Minute
@@ -63,7 +63,7 @@ func (d *KadDHT) Bootstrap(ctx context.Context) error {
 		return ErrConnectToBootNode
 	}
 
-	d.local.Debug("lookup using %d preloaded bootnodes ", bn)
+	d.local.Debug("LookupFunc using %d preloaded bootnodes ", bn)
 
 	ctx, _ = context.WithTimeout(ctx, BootstrapTimeout)
 	err := d.tryBoot(ctx, c)
@@ -76,7 +76,7 @@ func (d *KadDHT) tryBoot(ctx context.Context, minPeers int) error {
 	searchFor := d.local.PublicKey().String()
 	gotpeers := false
 	tries := 0
-	d.local.Debug("BOOTSTRAP: Running kademlia lookup for ourselves")
+	d.local.Debug("BOOTSTRAP: Running kademlia LookupFunc for ourselves")
 
 loop:
 	for {
@@ -88,7 +88,7 @@ loop:
 				// or TODO: implement real kademlia refreshes - #241
 				rnd, _ := crypto.GetRandomBytes(32)
 				searchFor = base58.Encode(rnd)
-				d.local.Debug("BOOTSTRAP: Running kademlia lookup for random peer")
+				d.local.Debug("BOOTSTRAP: Running kademlia LookupFunc for random peer")
 			}
 			_, err := d.Lookup(searchFor)
 			reschan <- err
@@ -116,7 +116,7 @@ loop:
 				}
 				gotpeers = true
 			} else {
-				d.local.Warning("%d lookup didn't bootstrap the routing table. RT now has %d peers", tries, size)
+				d.local.Warning("%d LookupFunc didn't bootstrap the routing table. RT now has %d peers", tries, size)
 			}
 
 			time.Sleep(LookupIntervals)

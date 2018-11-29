@@ -1,6 +1,7 @@
 package p2p
 
 import (
+	"github.com/spacemeshos/go-spacemesh/crypto"
 	inet "net"
 
 	"bytes"
@@ -25,6 +26,9 @@ import (
 	"time"
 )
 
+// ConnectingTimeout is the timeout we wait when trying to connect a neighborhood
+const ConnectingTimeout = 20 * time.Second //todo: add to the config
+
 type protocolMessage struct {
 	sender node.Node
 	data   []byte
@@ -38,7 +42,12 @@ func (pm protocolMessage) Data() []byte {
 	return pm.data
 }
 
+type cPool interface {
+	GetConnection(address string, pk crypto.PublicKey) (net.Connection, error)
+}
+
 type swarm struct {
+	// init info props
 	started   uint32
 	bootErr   error
 	bootChan  chan struct{}
@@ -46,6 +55,12 @@ type swarm struct {
 	gossipC   chan struct{}
 
 	config config.Config
+
+	// Context for cancel
+	ctx context.Context
+
+	// Shutdown the loop
+	shutdown chan struct{} // local request to kill the swarm from outside. e.g when local node is shutting down
 
 	// set in construction and immutable state
 	lNode *node.LocalNode
@@ -55,17 +70,27 @@ type swarm struct {
 	protocolHandlers     map[string]chan service.Message
 	protocolHandlerMutex sync.RWMutex
 
-	gossip gossip.Protocol
-
+	gossip  gossip.Protocol
 	network *net.Net
+	cPool   cPool
+	dht     dht.DHT
 
-	cPool *connectionpool.ConnectionPool
+	//neighborhood
+	initOnce sync.Once
+	initial  chan struct{}
 
-	dht dht.DHT
-	// Context for cancel
-	ctx context.Context
-	// Shutdown the loop
-	shutdown chan struct{} // local request to kill the swarm from outside. e.g when local node is shutting down
+	peersMutex   sync.RWMutex
+	inpeersMutex sync.RWMutex
+	peers        map[string]crypto.PublicKey
+	inpeers      map[string]crypto.PublicKey
+
+	morePeersReq      chan struct{}
+	connectingTimeout time.Duration
+
+	newPeerLock sync.RWMutex
+	delPeerLock sync.RWMutex
+	newPeerSub  []chan crypto.PublicKey
+	delPeerSub  []chan crypto.PublicKey
 }
 
 func (s *swarm) waitForBoot() error {
@@ -111,20 +136,30 @@ func newSwarm(ctx context.Context, config config.Config, newNode bool, persist b
 	}
 
 	s := &swarm{
+		ctx:              ctx,
 		config:           config,
 		lNode:            l,
 		bootChan:         make(chan struct{}),
 		gossipC:          make(chan struct{}),
+		shutdown:         make(chan struct{}), // non-buffered so requests to shutdown block until swarm is shut down
+
+		initial:		make(chan struct{}),
+		morePeersReq:   make(chan struct{}),
+		inpeers: 		make(map[string]crypto.PublicKey),
+		peers: 		make(map[string]crypto.PublicKey),
+		newPeerSub:  make([]chan crypto.PublicKey, 0, 10),
+		delPeerSub:  make([]chan crypto.PublicKey, 0, 10),
+		connectingTimeout: ConnectingTimeout,
+
 		protocolHandlers: make(map[string]chan service.Message),
 		network:          n,
 		cPool:            connectionpool.NewConnectionPool(n, l.PublicKey()),
-		shutdown:         make(chan struct{}), // non-buffered so requests to shutdown block until swarm is shut down
-		ctx:              ctx,
 	}
 
 	s.dht = dht.New(l, config.SwarmConfig, s)
 
 	s.gossip = gossip.NewNeighborhood(config.SwarmConfig, s.dht, s.cPool, s.lNode.Log)
+//	s.neighborhood = NewNeighborhood(config.SwarmConfig, s.dht, s.cPool, s.lNode.Log)
 
 	s.lNode.Debug("Created swarm for local node %s, %s", l.Address(), l.Pretty())
 
@@ -157,20 +192,19 @@ func (s *swarm) Start() error {
 		}()
 	}
 
-	if s.config.SwarmConfig.Gossip {
+	// wait for neighborhood
 		go func() {
 			if s.config.SwarmConfig.Bootstrap {
 				s.waitForBoot()
 			}
-			err := s.gossip.Start()
+			err := s.StartNeighborhood()
 			if err != nil {
 				s.gossipErr = err
 				s.Shutdown()
 			}
-			<-s.gossip.Initial()
+			<-s.initial
 			close(s.gossipC)
 		}() // todo handle error async
-	}
 
 	return nil
 }
@@ -179,7 +213,7 @@ func (s *swarm) LocalNode() *node.LocalNode {
 	return s.lNode
 }
 
-func (s *swarm) connectionPool() *connectionpool.ConnectionPool {
+func (s *swarm) connectionPool() cPool {
 	return s.cPool
 }
 
@@ -320,12 +354,28 @@ Loop:
 	for {
 		select {
 		case con := <-closing:
-			go s.gossip.Disconnect(con.RemotePublicKey()) //todo notify dht?
+			go s.retryOrReplace(con.RemotePublicKey()) //todo notify dht?
 		case nce := <-newConnEvents:
-			go func(nce net.NewConnectionEvent) { s.dht.Update(nce.Node); s.gossip.AddIncomingPeer(nce.Node, nce.Conn) }(nce)
+			go func(nce net.NewConnectionEvent) { s.dht.Update(nce.Node); s.addIncomingPeer(nce.Node.PublicKey()) }(nce)
 		case <-s.shutdown:
 			break Loop
 		}
+	}
+}
+
+
+func (s *swarm) retryOrReplace(key crypto.PublicKey) {
+	getpeer := s.dht.InternalLookup(node.NewDhtID(key.Bytes()))
+
+	if getpeer == nil {
+			s.Disconnect(key)
+			return
+	}
+	peer := getpeer[0]
+
+	_, err := s.cPool.GetConnection(peer.Address(), peer.PublicKey())
+	if err != nil {
+		s.Disconnect(key)
 	}
 }
 
@@ -444,16 +494,6 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 	// update the routing table - we just heard from this authenticated node
 	s.dht.Update(remoteNode)
 
-	// participate in gossip even if we don't know this protocol
-	if pm.Metadata.Gossip { // todo : use gossip uid
-		s.LocalNode().Debug("Got gossip message! relaying it")
-		// don't block anyway
-		err = s.gossip.Broadcast(decPayload) // err only if this is an old message
-	}
-
-	if err != nil {
-		return nil
-	}
 	// route authenticated message to the reigstered protocol
 	s.protocolHandlerMutex.RLock()
 	msgchan := s.protocolHandlers[pm.Metadata.Protocol]
@@ -463,10 +503,26 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 		s.LocalNode().Errorf("there was a bad protocol ", pm.Metadata.Protocol)
 		return ErrNoProtocol
 	}
-
 	s.lNode.Debug("Forwarding message to protocol")
 
 	msgchan <- protocolMessage{remoteNode, pm.Payload}
+
+	return nil
+}
+
+func (s *swarm) ProcessProtocolMessage(sender node.Node, protocol string, payload []byte) error {
+	// route authenticated message to the reigstered protocol
+	s.protocolHandlerMutex.RLock()
+	msgchan := s.protocolHandlers[protocol]
+	s.protocolHandlerMutex.RUnlock()
+
+	if msgchan == nil {
+		s.LocalNode().Errorf("there was a bad protocol ",protocol)
+		return ErrNoProtocol
+	}
+	s.lNode.Debug("Forwarding message to protocol")
+
+	msgchan <- protocolMessage{sender, payload}
 
 	return nil
 }
@@ -491,4 +547,216 @@ func (s *swarm) Broadcast(protocol string, payload []byte) error {
 	}
 
 	return s.gossip.Broadcast(msg)
+}
+
+// Neighborhood : neighborhood is the peers we keep close , meaning we try to keep connections
+// to them at any given time and if not possible we replace them. protocols use the neighborhood
+// to run their logic with peers.
+
+func (s *swarm) publishNewPeer(peer crypto.PublicKey) {
+	s.newPeerLock.RLock()
+	for _, p := range s.newPeerSub {
+		select {
+		 	case p <- peer:
+		 	default:
+		}
+	}
+	s.newPeerLock.RUnlock()
+}
+
+func (s *swarm) publishDelPeer(peer crypto.PublicKey) {
+	s.delPeerLock.RLock()
+	for _, p := range s.delPeerSub {
+		select {
+		 	case p <- peer:
+		 	default:
+		}
+	}
+	s.delPeerLock.RUnlock()
+}
+
+// SubscribePeerEvents lets clients listen on events inside the swarm about peers. first chan is new peers, second is deleted peers.
+func (s *swarm) SubscribePeerEvents() (chan crypto.PublicKey, chan crypto.PublicKey) {
+	in := make(chan crypto.PublicKey, s.config.SwarmConfig.RandomConnections) // todo. what size this should be ? maybe let client pass channels.
+	del := make(chan crypto.PublicKey, s.config.SwarmConfig.RandomConnections)
+	s.newPeerLock.Lock()
+	s.newPeerSub = append(s.newPeerSub, in)
+	s.newPeerLock.Unlock()
+	s.delPeerLock.Lock()
+	s.delPeerSub = append(s.delPeerSub, del)
+	s.delPeerLock.Unlock()
+	// todo : send the existing peers right away ?
+	return in, del
+}
+
+// NoResultsInterval is the timeout we wait between requesting more peers repeatedly
+const NoResultsInterval = 1 * time.Second
+
+// StartNeighborhood a loop that manages the peers we are connected to all the time
+// It connects to config.RandomConnections and after that maintains this number
+// of connections, if a connection is closed we notify the loop that we need more peers now.
+func (s *swarm) StartNeighborhood() error {
+	//TODO: Save and load persistent peers ?
+	s.lNode.Info("Neighborhood service started")
+
+	// initial request for peers
+	go s.loop()
+	s.morePeersReq <- struct{}{}
+
+	return nil
+}
+
+
+func (s *swarm) loop() {
+loop:
+	for {
+		select {
+		case <-s.morePeersReq:
+			s.lNode.Debug("loop: got morePeersReq")
+			go s.askForMorePeers()
+		//todo: try getting the connections (hearbeat)
+		case <-s.shutdown:
+			break loop // maybe error ?
+		}
+	}
+}
+
+func (s *swarm) askForMorePeers() {
+	numpeers := len(s.peers)
+	req := s.config.SwarmConfig.RandomConnections - numpeers
+
+	if req <= 0 {
+		return
+	}
+
+	s.getMorePeers(req)
+
+	// todo: better way then going in this everytime ?
+	if len(s.peers) >= s.config.SwarmConfig.RandomConnections {
+		s.initOnce.Do(func() {
+			s.lNode.Info("gossip; connected to initial required neighbors - %v", len(s.peers))
+			close(s.initial)
+			s.peersMutex.RLock()
+			s.lNode.Debug(spew.Sdump(s.peers))
+			s.peersMutex.RUnlock()
+		})
+		return
+	}
+	// if we could'nt get any maybe were initializing
+	// wait a little bit before trying again
+	time.Sleep(NoResultsInterval)
+	s.morePeersReq <- struct{}{}
+}
+
+
+
+// getMorePeers tries to fill the `peers` slice with dialed outbound peers that we selected from the dht.
+func (s *swarm) getMorePeers(numpeers int) int {
+
+	if numpeers == 0 {
+		return 0
+	}
+
+	// dht should provide us with random peers to connect to
+	nds := s.dht.SelectPeers(numpeers)
+	ndsLen := len(nds)
+	if ndsLen == 0 {
+		s.lNode.Debug("Peer sampler returned nothing.")
+		// this gets busy at start so we spare a second
+		return 0 // zero samples here so no reason to proceed
+	}
+
+	type cnErr struct {
+		n   node.Node
+		err error
+	}
+
+	res := make(chan cnErr, numpeers)
+
+	// Try a connection to each peer.
+	// TODO: try splitting the load and don't connect to more than X at a time
+	for i := 0; i < ndsLen; i++ {
+		go func(nd node.Node, reportChan chan cnErr) {
+			_, err := s.cPool.GetConnection(nd.Address(), nd.PublicKey())
+			reportChan <- cnErr{nd, err}
+		}(nds[i], res)
+	}
+
+	total, bad := 0, 0
+	tm := time.NewTimer(s.connectingTimeout) // todo: configure
+loop:
+	for {
+		select {
+		case cne := <-res:
+			total++ // We count i everytime to know when to close the channel
+
+			if cne.err != nil {
+				s.lNode.Debug("can't establish connection with sampled peer %v, %v", cne.n.String(), cne.err)
+				bad++
+				if total == ndsLen {
+					break loop
+				}
+				continue // this peer didn't work, todo: tell dht
+			}
+
+			s.inpeersMutex.Lock()
+			_, ok := s.inpeers[cne.n.PublicKey().String()]
+			if ok {
+				delete(s.inpeers, cne.n.PublicKey().String())
+			}
+			s.inpeersMutex.Unlock()
+
+			s.peersMutex.Lock()
+			s.peers[cne.n.PublicKey().String()] = cne.n.PublicKey()
+			s.peersMutex.Unlock()
+
+			if !ok { // if this peer was an inpeer then we already published it.
+				s.publishNewPeer(cne.n.PublicKey())
+			}
+
+			s.lNode.Debug("Neighborhood: Added peer to peer list %v", cne.n.Pretty())
+
+			if total == ndsLen {
+				break loop
+			}
+		case <-tm.C:
+			break loop
+		case <-s.shutdown:
+			break loop
+		}
+	}
+
+	return total - bad
+}
+
+
+
+// Disconnect removes a peer from the neighborhood, it requests more peers if our outbound peer count is less than configured
+func (s *swarm) Disconnect(key crypto.PublicKey) {
+	peer := key.String()
+
+	s.inpeersMutex.Lock()
+	if _, ok := s.inpeers[peer]; ok {
+		delete(s.inpeers, peer)
+		s.inpeersMutex.Unlock()
+		s.publishDelPeer(key)
+		return
+	}
+	s.inpeersMutex.Unlock()
+
+	s.peersMutex.Lock()
+	if _, ok := s.peers[peer]; ok {
+		delete(s.peers, peer)
+	}
+	s.peersMutex.Unlock()
+	s.publishDelPeer(key)
+	s.morePeersReq <- struct{}{}
+}
+
+// AddIncomingPeer inserts a peer to the neighborhood as a remote peer.
+func (s *swarm) addIncomingPeer(n crypto.PublicKey) {
+	s.inpeersMutex.Lock()
+	s.inpeers[n.String()] = n
+	s.inpeersMutex.Unlock()
+	s.publishNewPeer(n)
 }

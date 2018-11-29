@@ -2,6 +2,7 @@ package simulator
 
 import (
 	"errors"
+	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -17,7 +18,13 @@ type Simulator struct {
 	mutex           sync.RWMutex
 	protocolHandler map[string]map[string]chan service.Message // maps peerPubkey -> protocol -> handler
 	nodes           map[string]*Node
+
+	subLock sync.Mutex
+	newPeersSubs []chan crypto.PublicKey
+	delPeersSubs []chan crypto.PublicKey
 }
+
+var _ service.Service = new(Node)
 
 type dht interface {
 	Update(node2 node.Node)
@@ -39,11 +46,38 @@ func New() *Simulator {
 	return s
 }
 
+func (s *Simulator) SubscribeToPeerEvents() (chan crypto.PublicKey, chan crypto.PublicKey) {
+	newp := make(chan crypto.PublicKey)
+	delp := make(chan crypto.PublicKey)
+	s.subLock.Lock()
+	s.newPeersSubs = append(s.newPeersSubs, newp)
+	s.delPeersSubs = append(s.delPeersSubs, delp)
+	s.subLock.Unlock()
+	return newp, delp
+}
+
+func (s *Simulator) publishNewPeer(peer crypto.PublicKey) {
+	s.subLock.Lock()
+	for _, s := range s.newPeersSubs {
+		s <- peer
+	}
+	s.subLock.Unlock()
+}
+
+func (s *Simulator) publishDelPeer(peer crypto.PublicKey) {
+	s.subLock.Lock()
+	for _, s := range s.delPeersSubs {
+		s <- peer
+	}
+	s.subLock.Unlock()
+}
+
 func (s *Simulator) createdNode(n *Node) {
 	s.mutex.Lock()
 	s.protocolHandler[n.PublicKey().String()] = make(map[string]chan service.Message)
 	s.nodes[n.PublicKey().String()] = n
 	s.mutex.Unlock()
+	s.publishNewPeer(n.PublicKey())
 }
 
 // NewNode creates a new p2p node in this Simulator
@@ -98,6 +132,18 @@ func (sn *Node) Start() error {
 	return nil
 }
 
+// ProcessProtocolMessage
+func (sn *Node) ProcessProtocolMessage(sender node.Node, protocol string, payload []byte) error {
+	sn.sim.mutex.RLock()
+	c, ok := sn.sim.protocolHandler[sn.String()][protocol]
+	sn.sim.mutex.RUnlock()
+	if !ok {
+		return errors.New("Unknown protocol")
+	}
+	c <- simMessage{payload, sender}
+	return nil
+}
+
 // SendMessage sends a protocol message to the specified nodeID.
 // returns error if the node cant be found. corresponds to `Service.SendMessage`
 func (sn *Node) SendMessage(nodeID string, protocol string, payload []byte) error {
@@ -124,6 +170,10 @@ func (sn *Node) Broadcast(protocol string, payload []byte) error {
 	sn.sim.mutex.RUnlock()
 	log.Debug("%v >> All ( Gossip ) (%v)", sn.Node.PublicKey(), payload)
 	return nil
+}
+
+func (sn *Node) SubscribePeerEvents() (chan crypto.PublicKey, chan crypto.PublicKey) {
+	return sn.sim.SubscribeToPeerEvents()
 }
 
 // RegisterProtocol creates and returns a channel for a given protocol.

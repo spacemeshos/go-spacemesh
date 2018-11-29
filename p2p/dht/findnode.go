@@ -229,7 +229,7 @@ func (p *findNodeProtocol) handleIncomingResponse(reqID crypto.UUID, msg []byte)
 		return
 	}
 
-	// update routing table with newly found nodes
+	// UpdateFunc routing table with newly found nodes
 	nodes := fromNodeInfos(data.NodeInfos)
 
 	p.sendResponse(reqID, findNodeResults{nodes, nil})
