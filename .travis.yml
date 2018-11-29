@@ -4,9 +4,10 @@ go: 1.9.x
 
 before_install:
 - bash ci/install-protobuf.sh
-- go get -u github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway
-- go get -u github.com/grpc-ecosystem/grpc-gateway/protoc-gen-swagger
-- go get -u github.com/golang/protobuf/protoc-gen-go
+- GIT_TAG="v1.2.0" # change as needed
+- go get -d -u github.com/golang/protobuf/protoc-gen-go
+- git -C "$(go env GOPATH)"/src/github.com/golang/protobuf checkout $GIT_TAG
+- go install github.com/golang/protobuf/protoc-gen-go
 - protoc --version
 - bash ci/genproto.sh
 
