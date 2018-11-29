@@ -33,9 +33,7 @@ devtools:
 	# Install the build tools
 	go get -u github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway
 	go get -u github.com/grpc-ecosystem/grpc-gateway/protoc-gen-swagger
-    rm -rf $GOPATH/src/github.com/golang/protobuf
-    git clone -b v1.2.0 https://github.com/golang/protobuf $GOPATH/src/github.com/golang/protobuf
-    go install github.com/golang/protobuf/protoc-gen-go
+	go get -u github.com/golang/protobuf/protoc-gen-go
 	go get -u github.com/kardianos/govendor
 
 

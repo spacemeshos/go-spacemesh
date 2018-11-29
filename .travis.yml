@@ -11,6 +11,8 @@ before_install:
 - go install github.com/golang/protobuf/protoc-gen-go
 - protoc --version
 - bash ci/genproto.sh
+- go get -u github.com/kardianos/govendor
+
 
 branches:
   only:
@@ -23,5 +25,4 @@ jobs:
     - make lint
   - stage: test
     script:
-    - make devtools
     - make test
