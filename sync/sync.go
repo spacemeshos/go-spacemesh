@@ -4,7 +4,7 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
-	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/sync/pb"
 	"sync"
 	"sync/atomic"
@@ -38,7 +38,7 @@ type Syncer struct {
 	layers    mesh.Mesh
 	sv        BlockValidator //todo should not be here
 	config    Configuration
-	p         *p2p.Protocol
+	p         *server.MessageServer
 	SyncLock  uint32
 	startLock uint32
 	forceSync chan bool
@@ -55,11 +55,11 @@ func (s *Syncer) Close() {
 }
 
 const (
-	IDLE       uint32          = 0
-	RUNNING    uint32          = 1
-	BLOCK      p2p.MessageType = 1
-	LAYER_HASH p2p.MessageType = 2
-	LAYER_IDS  p2p.MessageType = 3
+	IDLE       uint32             = 0
+	RUNNING    uint32             = 1
+	BLOCK      server.MessageType = 1
+	LAYER_HASH server.MessageType = 2
+	LAYER_IDS  server.MessageType = 3
 
 	protocol = "/sync/fblock/1.0/"
 )
@@ -85,7 +85,7 @@ func NewSync(peers Peers, layers mesh.Mesh, bv BlockValidator, conf Configuratio
 		layers,
 		bv,
 		conf,
-		p2p.NewProtocol(peers, protocol, time.Second*5),
+		server.NewMsgServer(peers, protocol, time.Second*5),
 		0,
 		0,
 		make(chan bool),

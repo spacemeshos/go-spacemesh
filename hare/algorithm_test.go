@@ -4,7 +4,7 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/hare/pb"
-	"github.com/spacemeshos/go-spacemesh/p2p/simulator"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
@@ -21,7 +21,7 @@ func getPublicKey(t *testing.T) crypto.PublicKey {
 
 // test that a message to a specific layer is delivered by the broker
 func TestConsensusProcess_StartTwice(t *testing.T) {
-	sim := simulator.New()
+	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 
 	broker := NewBroker(n1)
@@ -32,13 +32,13 @@ func TestConsensusProcess_StartTwice(t *testing.T) {
 	proc := NewConsensusProcess(getPublicKey(t), *Layer1, s, oracle, signing, n1)
 	broker.Register(Layer1, proc)
 	err := proc.Start()
-	assert.Equal(t, nil , err)
+	assert.Equal(t, nil, err)
 	err = proc.Start()
-	assert.Equal(t, "instance already started" , err.Error())
+	assert.Equal(t, "instance already started", err.Error())
 }
 
 func TestConsensusProcess_eventLoop(t *testing.T) {
-	sim := simulator.New()
+	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
 
@@ -57,7 +57,7 @@ func TestConsensusProcess_eventLoop(t *testing.T) {
 }
 
 func TestConsensusProcess_handleMessage(t *testing.T) {
-	sim := simulator.New()
+	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 
 	broker := NewBroker(n1)
@@ -88,7 +88,7 @@ func TestConsensusProcess_handleMessage(t *testing.T) {
 }
 
 func TestConsensusProcess_nextRound(t *testing.T) {
-	sim := simulator.New()
+	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 
 	broker := NewBroker(n1)

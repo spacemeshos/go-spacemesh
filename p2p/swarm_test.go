@@ -110,7 +110,7 @@ func TestSwarm_authAuthor(t *testing.T) {
 
 	pm := &pb.ProtocolMessage{
 		Metadata: message.NewProtocolMessageMetadata(pub, exampleProtocol, false),
-		Payload:  []byte(examplePayload),
+		Data:     &pb.ProtocolMessage_Payload{Payload: []byte(examplePayload)},
 	}
 	ppm, err := proto.Marshal(pm)
 	assert.NoError(t, err, "cant marshal msg ", err)
@@ -145,7 +145,7 @@ func TestSwarm_SignAuth(t *testing.T) {
 	n, _ := node.GenerateTestNode(t)
 	pm := &pb.ProtocolMessage{
 		Metadata: message.NewProtocolMessageMetadata(n.PublicKey(), exampleProtocol, false),
-		Payload:  []byte(examplePayload),
+		Data:     &pb.ProtocolMessage_Payload{Payload: []byte(examplePayload)},
 	}
 
 	err := message.SignMessage(n.PrivateKey(), pm)
@@ -173,7 +173,7 @@ func sendDirectMessage(t *testing.T, sender *swarm, recvPub string, inChan chan 
 	select {
 	case msg := <-inChan:
 		if checkpayload {
-			assert.Equal(t, msg.Data(), payload)
+			assert.Equal(t, msg.Bytes(), payload)
 		}
 		assert.Equal(t, msg.Sender().String(), sender.lNode.String())
 		break
@@ -365,7 +365,7 @@ func TestSwarm_onRemoteClientMessage(t *testing.T) {
 
 	goodmsg := &pb.ProtocolMessage{
 		Metadata: message.NewProtocolMessageMetadata(id.PublicKey(), exampleProtocol, false), // not signed
-		Payload:  []byte(examplePayload),
+		Data:     &pb.ProtocolMessage_Payload{Payload: []byte(examplePayload)},
 	}
 
 	goodbin, _ := proto.Marshal(goodmsg)
@@ -378,7 +378,7 @@ func TestSwarm_onRemoteClientMessage(t *testing.T) {
 	err = p.onRemoteClientMessage(imc)
 	assert.Equal(t, err, ErrAuthAuthor)
 
-	// Test no protocol
+	// Test no server
 
 	err = message.SignMessage(id.PrivateKey(), goodmsg)
 	assert.NoError(t, err, err)
