@@ -14,6 +14,8 @@ import (
 // DHT is an interface to a general distributed hash table.
 type DHT interface {
 	Update(node node.Node)
+
+	InternalLookup(dhtid node.DhtID) []node.Node
 	Lookup(pubkey string) (node.Node, error)
 
 	SelectPeers(qty int) []node.Node
@@ -22,7 +24,7 @@ type DHT interface {
 	Size() int
 }
 
-// LookupTimeout is the timelimit we give to a single lookup operation
+// LookupTimeout is the timelimit we give to a single LookupFunc operation
 const LookupTimeout = 15 * time.Second
 
 var (
@@ -70,7 +72,7 @@ func New(node *node.LocalNode, config config.SwarmConfig, service service.Servic
 	return d
 }
 
-// Update insert or update a node in the routing table.
+// Update insert or UpdateFunc a node in the routing table.
 func (d *KadDHT) Update(node node.Node) {
 	d.rt.Update(node)
 }
@@ -79,11 +81,11 @@ func (d *KadDHT) Update(node node.Node) {
 // if the node can't be found there it sends a query to the network.
 func (d *KadDHT) Lookup(pubkey string) (node.Node, error) {
 	dhtid := node.NewDhtIDFromBase58(pubkey)
-	poc := make(PeersOpChannel)
-	d.rt.NearestPeers(NearestPeersReq{dhtid, d.config.RoutingTableAlpha, poc})
-	res := (<-poc).Peers
-	if len(res) == 0 {
-		return node.EmptyNode, ErrEmptyRoutingTable
+
+	res := d.InternalLookup(dhtid)
+
+	if res == nil {
+		return node.EmptyNode, errors.New("no peers found in routing table")
 	}
 
 	if res[0].DhtID().Equals(dhtid) {
@@ -91,6 +93,16 @@ func (d *KadDHT) Lookup(pubkey string) (node.Node, error) {
 	}
 
 	return d.kadLookup(pubkey, res)
+}
+// InternalLookup finds a node in the dht by its public key, it issues a search inside the local routing table
+func (d *KadDHT) InternalLookup(dhtid node.DhtID) []node.Node {
+	poc := make(PeersOpChannel)
+	d.rt.NearestPeers(NearestPeersReq{dhtid, d.config.RoutingTableAlpha, poc})
+	res := (<-poc).Peers
+	if len(res) == 0 {
+		return nil
+	}
+	return res
 }
 
 // Implements the kad algo for locating a remote node
@@ -126,7 +138,7 @@ func (d *KadDHT) kadLookup(id string, searchList []node.Node) (node.Node, error)
 			return node.EmptyNode, ErrLookupFailed
 		}
 
-		// lookup nodeId using the target servers
+		// LookupFunc nodeId using the target servers
 		res := d.findNodeOp(servers, queried, id, closestNode)
 		if len(res) > 0 {
 

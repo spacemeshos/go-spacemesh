@@ -1,37 +1,43 @@
 package dht
 
-import "github.com/spacemeshos/go-spacemesh/p2p/node"
+import (
+	"context"
+	"github.com/spacemeshos/go-spacemesh/p2p/node"
+)
 
 // MockDHT is a mocked dht
 type MockDHT struct {
-	update      func(n node.Node)
-	updateCount int
-	bsres       error
-	bsCount     int
-	lookupRes   node.Node
-	lookupErr   error
+	UpdateFunc         func(n node.Node)
+	updateCount        int
+	SelectPeersFunc func(qty int) []node.Node
+	bsres              error
+	bsCount            int
+	InternalLookupFunc func(dhtid node.DhtID) []node.Node
+	LookupFunc         func(string) (node.Node, error)
+	lookupRes          node.Node
+	lookupErr          error
 }
 
-// SetUpdate sets the function to run on an issued update
+// SetUpdate sets the function to run on an issued UpdateFunc
 func (m *MockDHT) SetUpdate(f func(n node.Node)) {
-	m.update = f
+	m.UpdateFunc = f
 }
 
-// SetLookupResult sets the result ok a lookup operation
+// SetLookupResult sets the result ok a LookupFunc operation
 func (m *MockDHT) SetLookupResult(node node.Node, err error) {
 	m.lookupRes = node
 	m.lookupErr = err
 }
 
-// Update is a dht update operation it updates the updatecount
+// Update is a dht UpdateFunc operation it updates the updatecount
 func (m *MockDHT) Update(node node.Node) {
-	if m.update != nil {
-		m.update(node)
+	if m.UpdateFunc != nil {
+		m.UpdateFunc(node)
 	}
 	m.updateCount++
 }
 
-// UpdateCount returns the number of times update was called
+// UpdateCount returns the number of times UpdateFunc was called
 func (m *MockDHT) UpdateCount() int {
 	return m.updateCount
 }
@@ -41,9 +47,20 @@ func (m *MockDHT) BootstrapCount() int {
 	return m.bsCount
 }
 
-// Lookup is a dht lookup operation
+// Lookup is a dht LookupFunc operation
 func (m *MockDHT) Lookup(pubkey string) (node.Node, error) {
+	if m.LookupFunc != nil {
+		return m.LookupFunc(pubkey)
+	}
 	return m.lookupRes, m.lookupErr
+}
+
+// Lookup is a dht LookupFunc operation
+func (m *MockDHT) InternalLookup(dhtid node.DhtID) []node.Node {
+	if m.InternalLookupFunc != nil {
+		return m.InternalLookupFunc(dhtid)
+	}
+	return nil
 }
 
 // SetBootstrap set the bootstrap result
@@ -51,13 +68,16 @@ func (m *MockDHT) SetBootstrap(err error) {
 	m.bsres = err
 }
 
-// Bootstrap is a dht bootstrap operation function it update the bootstrap count
-func (m *MockDHT) Bootstrap() error {
+// Bootstrap is a dht bootstrap operation function it UpdateFunc the bootstrap count
+func (m *MockDHT) Bootstrap(ctx context.Context) error {
 	m.bsCount++
 	return m.bsres
 }
 
 func (m *MockDHT) SelectPeers(qty int) []node.Node {
+	if m.SelectPeersFunc != nil {
+		return m.SelectPeersFunc(qty)
+	}
 	return []node.Node{}
 }
 
