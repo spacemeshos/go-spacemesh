@@ -5,7 +5,6 @@ go: 1.9.x
 before_install:
 - bash ci/install-protobuf.sh
 - git clone -b v1.2.0 https://github.com/golang/protobuf $GOPATH/src/github.com/golang/protobuf/protoc-gen-go
-- go install github.com/golang/protobuf/protoc-gen-go
 - protoc --version
 - bash ci/genproto.sh
 
