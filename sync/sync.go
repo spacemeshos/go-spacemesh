@@ -7,7 +7,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/sync/pb"
-	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -150,12 +149,10 @@ func (s *Syncer) Synchronise() {
 
 		output := make(chan Block)
 		// each worker goroutine tries to fetch a block iteratively from each peer
-		var wg sync.WaitGroup
-		wg.Add(s.config.concurrency)
+		count := int32(s.config.concurrency)
 
 		for i := 0; i < s.config.concurrency; i++ {
 			go func() {
-				defer wg.Done()
 				for id := range blockIds {
 					for _, p := range s.peers.GetPeers() {
 						if bCh, err := s.sendBlockRequest(p, id); err == nil {
@@ -164,18 +161,14 @@ func (s *Syncer) Synchronise() {
 								output <- b
 								break
 							}
-
 						}
 					}
 				}
-
+				if atomic.AddInt32(&count, -1); atomic.LoadInt32(&count) == 0 { // last one closes the channel
+					close(output)
+				}
 			}()
 		}
-
-		go func() {
-			wg.Wait()
-			close(output)
-		}()
 
 		blocks := make([]*mesh.Block, 0, len(blockIds))
 
