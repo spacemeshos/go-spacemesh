@@ -139,6 +139,8 @@ func (self *StateDB) updateStateObj(StateObj *StateObj) {
 	self.setError(self.globalTrie.TryUpdate(addr[:], data))
 }
 
+
+
 // Retrieve a state object given by the address. Returns nil if not found.
 func (self *StateDB) getStateObj(addr common.Address) (StateObj *StateObj) {
 	// Prefer 'live' objects.
@@ -262,8 +264,13 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error) 
 		s.stateObjectsDirty[addr] = struct{}{}
 	}*/
 	// Commit objects to the trie.
-	/*for addr, stateObject := range s.stateObjects {
+	for addr, stateObject := range s.stateObjects {
 		_, isDirty := s.stateObjectsDirty[addr]
+
+		if isDirty{
+			s.updateStateObj(stateObject)
+		}
+		/*
 		switch {
 		case stateObject.suicided || (isDirty && deleteEmptyObjects && stateObject.empty()):
 			// If the object has been removed, don't bother syncing it
@@ -281,9 +288,9 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error) 
 			}
 			// Update the object in the main account trie.
 			s.updateStateObject(stateObject)
-		}
-		delete(s.stateObjectsDirty, addr)
-	}*/
+		}*/
+		//delete(s.stateObjectsDirty, addr)
+	}
 	// Write trie changes.
 	root, err = s.globalTrie.Commit(nil)
 	/*func(leaf []byte, parent common.Hash) error {
