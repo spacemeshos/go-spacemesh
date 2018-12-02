@@ -288,17 +288,17 @@ func (s *Syncer) getLayerHashes(index uint32) (map[string]Peer, error) {
 	for {
 		select {
 		// Got a timeout! fail with a timeout error
+		case <-timeout:
+			if len(m) > 0 {
+				return m, errors.New("failed to fetch all blocks")
+			}
+			return nil, errors.New("no peers responded to hash request")
 		case pair := <-ch:
 			m[string(pair.hash)] = pair.peer
 			resCounter++
 			if resCounter == totalRequests {
 				return m, nil
 			}
-		case <-timeout:
-			if len(m) > 0 {
-				return m, nil
-			}
-			return nil, errors.New("no peers responded to hash request")
 		}
 	}
 }
