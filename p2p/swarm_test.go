@@ -20,6 +20,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"math/rand"
 	"sync"
+	"fmt"
 )
 
 type cpoolMock struct {
@@ -425,6 +426,55 @@ func TestSwarm_onRemoteClientMessage(t *testing.T) {
 	// todo : test gossip codepaths.
 }
 
+func assertNewPeerEvent(t *testing.T, peer crypto.PublicKey, connChan <-chan crypto.PublicKey) {
+	select {
+	case newPeer := <-connChan:
+		assert.Equal(t, peer.String(), newPeer.String())
+	default:
+		assert.Error(t, errors.New("no new peer event"))
+	}
+}
+
+func assertNewPeerEvents(t *testing.T, expCount int, connChan <-chan crypto.PublicKey) {
+	//var actCount int
+	//loop:
+	//for {
+	//	select {
+	//	case _ = <-connChan:
+	//		actCount++
+	//	default:
+	//		break loop
+	//	}
+	//}
+	assert.Equal(t, expCount, len(connChan))
+}
+
+func assertNoNewPeerEvent(t *testing.T, eventChan <-chan crypto.PublicKey) {
+	select {
+	case newPeer := <-eventChan:
+		assert.Error(t, errors.New("unexpected new peer event, peer " + newPeer.String()))
+	default:
+		return
+	}
+}
+
+func assertNewDisconnectedPeerEvent(t *testing.T, peer crypto.PublicKey, discChan <-chan crypto.PublicKey) {
+	select {
+	case newPeer := <-discChan:
+		assert.Equal(t, peer.String(), newPeer.String())
+	default:
+		assert.Error(t, errors.New("no new peer event"))
+	}
+}
+
+func assertNoNewDisconnectedPeerEvent(t *testing.T, eventChan <-chan crypto.PublicKey) {
+	select {
+	case newPeer := <-eventChan:
+		assert.Error(t, errors.New("unexpected new peer event, peer " + newPeer.String()))
+	default:
+		return
+	}
+}
 
 
 func Test_Neihborhood_getMorePeers(t *testing.T) {
@@ -435,8 +485,11 @@ func Test_Neihborhood_getMorePeers(t *testing.T) {
 	cfg.SwarmConfig.Gossip = false
 	n := p2pTestInstance(t, cfg)
 
+	conn, _ := n.SubscribePeerEvents()
+
 	res := n.getMorePeers(0) // this should'nt work
 	assert.Equal(t, res, 0)
+	assertNoNewPeerEvent(t, conn)
 
 	mdht := new(dht.MockDHT)
 	n.dht = mdht
@@ -444,9 +497,12 @@ func Test_Neihborhood_getMorePeers(t *testing.T) {
 
 	res = n.getMorePeers(10)
 	assert.Equal(t, res, 0)
+	assertNoNewPeerEvent(t, conn)
 
+	testNode := node.GenerateRandomNodeData()
+	fmt.Println("??????????? " + testNode.PublicKey().String())
 	mdht.SelectPeersFunc = func(qty int) []node.Node {
-		return node.GenerateRandomNodesData(qty)
+		return []node.Node{testNode}
 	}
 
 	cpm := new(cpoolMock)
@@ -457,24 +513,36 @@ func Test_Neihborhood_getMorePeers(t *testing.T) {
 	}
 
 	n.cPool = cpm
-
 	res = n.getMorePeers(1) // this should'nt work
 	assert.Equal(t, res, 0)
 	cpm.f = nil // for next tests
+	assertNoNewPeerEvent(t, conn)
+
+	res = n.getMorePeers(1)
+	assert.Equal(t, 1, res)
+	assert.Equal(t, len(n.outpeers), 1)
+	assert.True(t, n.hasOutgoingPeer(testNode.PublicKey()))
+	assertNewPeerEvents(t, 1, conn)
+	assertNewPeerEvent(t, testNode.PublicKey(), conn)
+
+
+	mdht.SelectPeersFunc = func(qty int) []node.Node {
+		return node.GenerateRandomNodesData(qty)
+	}
 
 	res = n.getMorePeers(numpeers)
 	assert.Equal(t, res, numpeers)
-	assert.Equal(t, len(n.peers), numpeers)
+	assert.Equal(t, len(n.outpeers), numpeers)
+	assertNewPeerEvents(t, numpeers, conn)
 
 	//test inc peer
 
 	nd := node.GenerateRandomNodeData()
 	n.addIncomingPeer(nd.PublicKey())
 
-	n.inpeersMutex.RLock()
-	_, ok := n.inpeers[nd.PublicKey().String()]
-	n.inpeersMutex.RUnlock()
-	assert.True(t, ok)
+	assert.True(t, n.hasIncomingPeer(nd.PublicKey()))
+	assertNewPeerEvents(t, 1, conn)
+	assertNewPeerEvent(t, nd.PublicKey(), conn)
 
 	inlen := len(n.inpeers)
 
@@ -488,19 +556,10 @@ func Test_Neihborhood_getMorePeers(t *testing.T) {
 
 	res = n.getMorePeers(numpeers)
 	assert.Equal(t, res, numpeers)
-	assert.Equal(t, len(n.peers), numpeers+res)
-
+	assert.Equal(t, len(n.outpeers), numpeers+res)
 	assert.True(t, len(n.inpeers) == inlen-1)
-
-	n.peersMutex.RLock()
-	_, ok = n.peers[nd.PublicKey().String()]
-	n.peersMutex.RUnlock()
-	assert.True(t, ok)
-
-	n.peersMutex.RLock()
-	_, ok = n.inpeers[nd.PublicKey().String()]
-	n.peersMutex.RUnlock()
-	assert.False(t, ok)
+	assert.True(t, n.hasOutgoingPeer(nd.PublicKey()))
+	assert.False(t, n.hasIncomingPeer(nd.PublicKey()))
 }
 
 
@@ -532,48 +591,39 @@ func TestNeighborhood_Initial(t *testing.T) {
 	p.Shutdown()
 }
 
-//func TestNeighborhood_Disconnect(t *testing.T) {
-//
-//	n := p2pTestInstance(t, config.DefaultConfig())
-//
-//	tim := time.After(time.Second)
-//	select {
-//	case <-n.initial:
-//		break
-//	case <-tim:
-//		t.Error("didnt initialize")
-//	}
-//
-//	sampMock.f = nil // dont give out on a normal state
-//
-//	nd := node.GenerateRandomNodeData()
-//	cn, _ := cpoolMock.GetConnection(nd.Address(), nd.PublicKey())
-//	n.AddIncomingPeer(nd, cn)
-//
-//	n.inpeersMutex.RLock()
-//	_, ok := n.inpeers[nd.PublicKey().String()]
-//	assert.True(t, ok)
-//	n.inpeersMutex.RUnlock()
-//
-//	n.Disconnect(nd.PublicKey())
-//
-//	n.inpeersMutex.RLock()
-//	_, ok = n.inpeers[nd.PublicKey().String()]
-//	assert.False(t, ok)
-//	n.inpeersMutex.RUnlock()
-//
-//	cpoolMock.f = func(address string, pk crypto.PublicKey) (net.Connection, error) {
-//		return nil, errors.New("no connections")
-//	}
-//
-//	n.Disconnect(out.PublicKey())
-//
-//	n.peersMutex.RLock()
-//	_, ok = n.peers[nd.PublicKey().String()]
-//	assert.False(t, ok)
-//	n.peersMutex.RUnlock()
-//
-//}
+func TestNeighborhood_Disconnect(t *testing.T) {
+
+	//n := p2pTestInstance(t, config.DefaultConfig())
+	//
+	//tim := time.After(time.Second)
+	//select {
+	//case <-n.initial:
+	//	break
+	//case <-tim:
+	//	t.Error("didnt initialize")
+	//}
+	//
+	////sampMock.f = nil // dont give out on a normal state
+	//
+	//nd := node.GenerateRandomNodeData()
+	//cn, _ := cpoolMock.GetConnection(nd.Address(), nd.PublicKey())
+	//n.addIncomingPeer(nd.PublicKey())
+	//
+	//assert.True(t, n.hasIncomingPeer(nd.PublicKey()))
+	//
+	//n.Disconnect(nd.PublicKey())
+	//
+	//assert.False(t, n.hasIncomingPeer(nd.PublicKey()))
+	//
+	//cpoolMock.f = func(address string, pk crypto.PublicKey) (net.Connection, error) {
+	//	return nil, errors.New("no connections")
+	//}
+	//
+	//n.Disconnect(out.PublicKey())
+	//
+	//assert.False(t, n.hasOutgoingPeer(nd.PublicKey()))
+
+}
 
 func TestSwarm_AddIncomingPeer(t *testing.T) {
 	p := p2pTestInstance(t, config.DefaultConfig())
