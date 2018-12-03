@@ -48,14 +48,6 @@ type Database interface {
 	// CopyTrie returns an independent copy of the given trie.
 	CopyTrie(Trie) Trie
 
-	// ContractCode retrieves a particular contract's code.
-	//ContractCode(addrHash, codeHash common.Hash) ([]byte, error)
-
-	// ContractCodeSize retrieves a particular contracts code's size.
-	//ContractCodeSize(addrHash, codeHash common.Hash) (int, error)
-
-	// TrieDB retrieves the low level trie database used for data storage.
-	//TrieDB() *trie.Database
 }
 
 // Trie is a Ethereum Merkle Trie.
