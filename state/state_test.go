@@ -32,8 +32,6 @@ type StateSuite struct {
 	state *StateDB
 }
 
-//var _ = checker.Suite(&StateSuite{})
-
 var toAddr = common.BytesToAddress
 
 func TestDump(t *testing.T) {

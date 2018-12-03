@@ -66,14 +66,6 @@ func (c *StateObj) AddBalance(amount *big.Int) {
 }
 
 func (c *StateObj) touch() {
-	/*c.db.journal.append(touchChange{
-		account: &c.address,
-	})
-	if c.address == ripemd {
-		// Explicitly put it in the dirty-cache, which is otherwise generated from
-		// flattened journals.
-		c.db.journal.dirty(c.address)
-	}*/ //todo: think if we need this
 	c.db.makeDirtyObj(c)
 }
 
@@ -92,10 +84,6 @@ func (c *StateObj) SubBalance(amount *big.Int) {
 }
 
 func (self *StateObj) SetBalance(amount *big.Int) {
-	/*self.db.journal.append(balanceChange{
-		account: &self.address,
-		prev:    new(big.Int).Set(self.data.Balance),
-	})*/ //todo: this
 	self.setBalance(amount)
 	self.db.makeDirtyObj(self)
 }
@@ -123,10 +111,6 @@ func (c *StateObj) Address() common.Address {
 }
 
 func (self *StateObj) SetNonce(nonce uint64) {
-	/*self.db.journal.append(nonceChange{
-		account: &self.address,
-		prev:    self.account.Nonce,
-	})*/ //todo: this
 	self.setNonce(nonce)
 	self.db.makeDirtyObj(self)
 }

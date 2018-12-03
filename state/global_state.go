@@ -232,20 +232,7 @@ func (self *StateDB) Copy() *StateDB {
 		stateObjects:      make(map[common.Address]*StateObj),
 		stateObjectsDirty: make(map[common.Address]struct{}),
 	}
-	// Copy the dirty states, logs, and preimages
-	/*for addr := range self.journal.dirties {
-		// As documented [here](https://github.com/ethereum/go-ethereum/pull/16485#issuecomment-380438527),
-		// and in the Finalise-method, there is a case where an object is in the journal but not
-		// in the stateObjects: OOG after touch on ripeMD prior to Byzantium. Thus, we need to check for
-		// nil
-		if object, exist := self.stateObjects[addr]; exist {
-			state.stateObjects[addr] = object.deepCopy(state)
-			state.stateObjectsDirty[addr] = struct{}{}
-		}
-	}*/
-	// Above, we don't copy the actual journal. This means that if the copy is copied, the
-	// loop above will be a no-op, since the copy's journal is empty.
-	// Thus, here we iterate over stateObjects, to enable copies of copies
+
 	for addr := range self.stateObjectsDirty {
 		if _, exist := state.stateObjects[addr]; !exist {
 			state.stateObjects[addr] = self.stateObjects[addr].deepCopy(state)
@@ -258,11 +245,6 @@ func (self *StateDB) Copy() *StateDB {
 
 // Commit writes the state to the underlying in-memory trie database.
 func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error) {
-	//defer s.clearJournalAndRefund() todo: no journal
-
-	/*for addr := range s.journal.dirties {
-		s.stateObjectsDirty[addr] = struct{}{}
-	}*/
 	// Commit objects to the trie.
 	for addr, stateObject := range s.stateObjects {
 		_, isDirty := s.stateObjectsDirty[addr]
@@ -270,44 +252,9 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error) 
 		if isDirty{
 			s.updateStateObj(stateObject)
 		}
-		/*
-		switch {
-		case stateObject.suicided || (isDirty && deleteEmptyObjects && stateObject.empty()):
-			// If the object has been removed, don't bother syncing it
-			// and just mark it for deletion in the trie.
-			s.deleteStateObject(stateObject)
-		case isDirty:
-			// Write any contract code associated with the state object
-			if stateObject.code != nil && stateObject.dirtyCode {
-				s.db.TrieDB().InsertBlob(common.BytesToHash(stateObject.CodeHash()), stateObject.code)
-				stateObject.dirtyCode = false
-			}
-			// Write any storage changes in the state object to its storage trie.
-			if err := stateObject.CommitTrie(s.db); err != nil {
-				return common.Hash{}, err
-			}
-			// Update the object in the main account trie.
-			s.updateStateObject(stateObject)
-		}*/
-		//delete(s.stateObjectsDirty, addr)
 	}
 	// Write trie changes.
 	root, err = s.globalTrie.Commit(nil)
-	/*func(leaf []byte, parent common.Hash) error {
-		var account Account
-		if err := rlp.DecodeBytes(leaf, &account); err != nil {
-			return nil
-		}
-		if account.Root != emptyState {
-			s.db.TrieDB().Reference(account.Root, parent)
-		}
-		code := common.BytesToHash(account.CodeHash)
-		if code != emptyCode {
-			s.db.TrieDB().Reference(code, parent)
-		}
-		return nil
-	})*/
-	//log.Debug("Trie cache stats after commit", "misses", trie.CacheMisses(), "unloads", trie.CacheUnloads())
 	return root, err
 }
 
@@ -316,35 +263,12 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error) 
 // and clears the journal as well as the refunds.
 func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 	//todo: do we need this?
-	/*for addr := range s.journal.dirties {
-		stateObject, exist := s.stateObjects[addr]
-		if !exist {
-			// ripeMD is 'touched' at block 1714175, in tx 0x1237f737031e40bcde4a8b7e717b2d15e3ecadfe49bb1bbc71ee9deb09c6fcf2
-			// That tx goes out of gas, and although the notion of 'touched' does not exist there, the
-			// touch-event will still be recorded in the journal. Since ripeMD is a special snowflake,
-			// it will persist in the journal even though the journal is reverted. In this special circumstance,
-			// it may exist in `s.journal.dirties` but not in `s.stateObjects`.
-			// Thus, we can safely ignore it here
-			continue
-		}
-
-		if stateObject.suicided || (deleteEmptyObjects && stateObject.empty()) {
-			s.deleteStateObject(stateObject)
-		} else {
-			stateObject.updateRoot(s.db)
-			s.updateStateObject(stateObject)
-		}
-		s.stateObjectsDirty[addr] = struct{}{}
-	}
-	// Invalidate journal because reverting across transactions is not allowed.
-	s.clearJournalAndRefund()(*/
 }
 
 // IntermediateRoot computes the current root hash of the state trie.
 // It is called in between transactions to get the root hash that
 // goes into transaction receipts.
 func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
-	//s.Finalise(deleteEmptyObjects)
 	return s.globalTrie.Hash()
 }
 
