@@ -73,7 +73,7 @@ type swarm struct {
 	protocolHandlers     map[string]chan service.Message
 	protocolHandlerMutex sync.RWMutex
 
-	gossip  gossip.Protocol
+	gossip  *gossip.Protocol
 	network *net.Net
 	cPool   cPool
 	dht     dht.DHT
@@ -82,9 +82,9 @@ type swarm struct {
 	initOnce sync.Once
 	initial  chan struct{}
 
-	peersMutex   sync.RWMutex
+	outpeersMutex   sync.RWMutex
 	inpeersMutex sync.RWMutex
-	peers        map[string]crypto.PublicKey
+	outpeers        map[string]crypto.PublicKey
 	inpeers      map[string]crypto.PublicKey
 
 	morePeersReq      chan struct{}
@@ -149,7 +149,7 @@ func newSwarm(ctx context.Context, config config.Config, newNode bool, persist b
 		initial:		make(chan struct{}),
 		morePeersReq:   make(chan struct{}),
 		inpeers: 		make(map[string]crypto.PublicKey),
-		peers: 		make(map[string]crypto.PublicKey),
+		outpeers: 		make(map[string]crypto.PublicKey),
 		newPeerSub:  make([]chan crypto.PublicKey, 0, 10),
 		delPeerSub:  make([]chan crypto.PublicKey, 0, 10),
 		connectingTimeout: ConnectingTimeout,
@@ -161,7 +161,7 @@ func newSwarm(ctx context.Context, config config.Config, newNode bool, persist b
 
 	s.dht = dht.New(l, config.SwarmConfig, s)
 
-	s.gossip = gossip.NewNeighborhood(config.SwarmConfig, s.dht, s.cPool, s.lNode.Log)
+	s.gossip = gossip.NewProtocol(config.SwarmConfig, s, s.lNode.Log)
 
 	s.lNode.Debug("Created swarm for local node %s, %s", l.Address(), l.Pretty())
 
@@ -570,7 +570,8 @@ func (s *swarm) Broadcast(protocol string, payload []byte) error {
 		return err
 	}
 
-	return s.gossip.Broadcast(msg)
+	s.gossip.Broadcast(msg)
+	return nil
 }
 
 // Neighborhood : neighborhood is the peers we keep close , meaning we try to keep connections
@@ -624,14 +625,14 @@ func (s *swarm) StartNeighborhood() error {
 	s.lNode.Info("Neighborhood service started")
 
 	// initial request for peers
-	go s.loop()
+	go s.peersLoop()
 	s.morePeersReq <- struct{}{}
 
 	return nil
 }
 
 
-func (s *swarm) loop() {
+func (s *swarm) peersLoop() {
 loop:
 	for {
 		select {
@@ -646,9 +647,8 @@ loop:
 }
 
 func (s *swarm) askForMorePeers() {
-	numpeers := len(s.peers)
+	numpeers := len(s.outpeers)
 	req := s.config.SwarmConfig.RandomConnections - numpeers
-
 	if req <= 0 {
 		return
 	}
@@ -656,13 +656,13 @@ func (s *swarm) askForMorePeers() {
 	s.getMorePeers(req)
 
 	// todo: better way then going in this everytime ?
-	if len(s.peers) >= s.config.SwarmConfig.RandomConnections {
+	if len(s.outpeers) >= s.config.SwarmConfig.RandomConnections {
 		s.initOnce.Do(func() {
-			s.lNode.Info("gossip; connected to initial required neighbors - %v", len(s.peers))
+			s.lNode.Info("gossip; connected to initial required neighbors - %v", len(s.outpeers))
 			close(s.initial)
-			s.peersMutex.RLock()
-			s.lNode.Debug(spew.Sdump(s.peers))
-			s.peersMutex.RUnlock()
+			s.outpeersMutex.RLock()
+			s.lNode.Debug(spew.Sdump(s.outpeers))
+			s.outpeersMutex.RUnlock()
 		})
 		return
 	}
@@ -725,19 +725,22 @@ loop:
 
 			s.inpeersMutex.Lock()
 			_, ok := s.inpeers[cne.n.PublicKey().String()]
-			if ok {
-				delete(s.inpeers, cne.n.PublicKey().String())
-			}
 			s.inpeersMutex.Unlock()
+			if ok {
+				s.lNode.Debug("not allowing peers from inbound to upgrade to outbound to prevent poisoning, peer %v", cne.n.String())
+				bad++
+				if total == ndsLen {
+					break loop
+				}
+				continue
 
-			s.peersMutex.Lock()
-			s.peers[cne.n.PublicKey().String()] = cne.n.PublicKey()
-			s.peersMutex.Unlock()
-
-			if !ok { // if this peer was an inpeer then we already published it.
-				s.publishNewPeer(cne.n.PublicKey())
 			}
 
+			s.outpeersMutex.Lock()
+			s.outpeers[cne.n.PublicKey().String()] = cne.n.PublicKey()
+			s.outpeersMutex.Unlock()
+
+			s.publishNewPeer(cne.n.PublicKey())
 			s.lNode.Debug("Neighborhood: Added peer to peer list %v", cne.n.Pretty())
 
 			if total == ndsLen {
@@ -768,11 +771,11 @@ func (s *swarm) Disconnect(key crypto.PublicKey) {
 	}
 	s.inpeersMutex.Unlock()
 
-	s.peersMutex.Lock()
-	if _, ok := s.peers[peer]; ok {
-		delete(s.peers, peer)
+	s.outpeersMutex.Lock()
+	if _, ok := s.outpeers[peer]; ok {
+		delete(s.outpeers, peer)
 	}
-	s.peersMutex.Unlock()
+	s.outpeersMutex.Unlock()
 	s.publishDelPeer(key)
 	s.morePeersReq <- struct{}{}
 }
@@ -780,7 +783,22 @@ func (s *swarm) Disconnect(key crypto.PublicKey) {
 // AddIncomingPeer inserts a peer to the neighborhood as a remote peer.
 func (s *swarm) addIncomingPeer(n crypto.PublicKey) {
 	s.inpeersMutex.Lock()
+	// todo limit number of inpeers
 	s.inpeers[n.String()] = n
 	s.inpeersMutex.Unlock()
 	s.publishNewPeer(n)
+}
+
+func (s *swarm) hasIncomingPeer(peer crypto.PublicKey) bool {
+	s.inpeersMutex.RLock()
+	_, ok := s.inpeers[peer.String()]
+	s.inpeersMutex.RUnlock()
+	return ok
+}
+
+func (s *swarm) hasOutgoingPeer(peer crypto.PublicKey) bool {
+	s.outpeersMutex.RLock()
+	_, ok := s.outpeers[peer.String()]
+	s.outpeersMutex.RUnlock()
+	return ok
 }
