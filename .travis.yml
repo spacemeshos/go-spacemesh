@@ -3,7 +3,7 @@ go: 1.9.x
 
 
 before_install:
-- bash setup_env.sh
+- sudo ./setup_env.sh
 
 
 branches:
