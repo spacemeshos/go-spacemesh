@@ -39,6 +39,8 @@ type MessageServer struct {
 	msgRequestHandlers map[MessageType]func(msg []byte) []byte //request handlers by request type
 	ingressChannel     chan service.Message                    //chan to relay messages into the server
 	requestLifetime    time.Duration                           //time a request can stay in the pending queue until evicted
+	workerCount        sync.WaitGroup
+	exit               chan struct{}
 }
 
 func NewMsgServer(network ServerService, name string, requestLifetime time.Duration) *MessageServer {
@@ -51,16 +53,31 @@ func NewMsgServer(network ServerService, name string, requestLifetime time.Durat
 		ingressChannel:     network.RegisterProtocol(name),
 		msgRequestHandlers: make(map[MessageType]func(msg []byte) []byte),
 		requestLifetime:    requestLifetime,
+		exit:               make(chan struct{}),
 	}
 
 	go p.readLoop()
 	return p
 }
 
+func (p *MessageServer) Close() {
+	p.exit <- struct{}{}
+	<-p.exit
+	for k, v := range p.pendingMap {
+		close(v)
+		delete(p.pendingMap, k)
+		delete(p.resHandlers, k)
+	}
+}
+
 func (p *MessageServer) readLoop() {
 	for {
 		timer := time.NewTicker(10 * time.Second)
 		select {
+		case <-p.exit:
+			log.Debug("shutting down protocol ", p.name)
+			close(p.exit)
+			return
 		case <-timer.C:
 			go p.cleanStaleMessages()
 		case msg, ok := <-p.ingressChannel:
@@ -69,7 +86,12 @@ func (p *MessageServer) readLoop() {
 				break
 			}
 			//todo add buffer and option to limit number of concurrent goroutines
-			go p.handleMessage(msg.(ServerMessage))
+			p.workerCount.Add(1)
+			go func() {
+				defer p.workerCount.Done()
+				p.handleMessage(msg.(ServerMessage))
+			}()
+
 		}
 	}
 }
