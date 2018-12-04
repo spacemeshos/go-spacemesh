@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -e
 ./ci/install-protobuf.sh
 
 go get -u github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway
