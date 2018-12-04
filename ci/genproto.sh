@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!bin/bash
 res=$(find . -not -path ./vendor/ -not -path ./.git/ -not -path ./.idea/ -type d -name "pb")
 #echo $res
 while read -r p; do
