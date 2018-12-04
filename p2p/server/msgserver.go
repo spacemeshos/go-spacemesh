@@ -63,6 +63,7 @@ func NewMsgServer(network ServerService, name string, requestLifetime time.Durat
 func (p *MessageServer) Close() {
 	p.exit <- struct{}{}
 	<-p.exit
+	p.workerCount.Wait()
 	for k, v := range p.pendingMap {
 		close(v)
 		delete(p.pendingMap, k)
