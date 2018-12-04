@@ -4,10 +4,10 @@ package dht
 import (
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
 
 	"context"
 	"errors"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"time"
 )
 
