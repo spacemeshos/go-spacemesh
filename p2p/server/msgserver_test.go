@@ -104,9 +104,9 @@ func TestProtocol_CleanOldPendingMessages(t *testing.T) {
 }
 
 func TestProtocol_Close(t *testing.T) {
-	sim := simulator.New()
+	sim := service.NewSimulator()
 	n1 := sim.NewNode()
-	fnd1 := NewProtocol(n1, protocol, 5*time.Second)
+	fnd1 := NewMsgServer(n1, protocol, 5*time.Second)
 
 	//handler that returns some bytes on request
 
@@ -118,7 +118,7 @@ func TestProtocol_Close(t *testing.T) {
 	fnd1.RegisterMsgHandler(1, handler)
 
 	n2 := sim.NewNode()
-	fnd2 := NewProtocol(n2, protocol, 10*time.Millisecond)
+	fnd2 := NewMsgServer(n2, protocol, 10*time.Millisecond)
 
 	//send request with handler that converts to string and sends via channel
 	strCh := make(chan string)
