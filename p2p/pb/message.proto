@@ -3,15 +3,6 @@ syntax = "proto3";
 package pb;
 option go_package = "pb";
 
-// Handshake protocol message format
-
-// data common to all messages - Top level msg format
-message CommonMessageData {
-    bytes sessionId = 1;  // always set (handshake or other protocol messages)
-    bytes payload = 2;    // encrypted payload with session aes key - binary protobufs. empty for handshake methods
-    int64 timestamp = 3;  // sending time
-    // we don't want to add anything here even protocol names as it goes unencrypted over the wire
-}
 
 // Handshake protocol data used for both request and response - sent unencrypted over the wire
 message HandshakeData {
@@ -40,12 +31,11 @@ message ProtocolMessage {
 }
 
 message Metadata {
-    string protocol = 1;      // Protocol id string
+    string nextProtocol = 1;      // Protocol id string
     string clientVersion = 2; // Author client version
     int64 timestamp = 3;      // Unix time - authoring time (not sending time)
-    bool gossip = 4;          // True to have receiver peer gossip the message to its neighbors
-    bytes authPubKey = 5;     // Authoring node Secp256k1 public key (32bytes) - may not be sender
-    string authorSign = 6;    // Signature of message data by author + method specific data by message creator node. format: hexEncode([]bytes)
+    bytes authPubKey = 4;     // Authoring node Secp256k1 public key (32bytes) - may not be sender
+    bytes msgSign = 5;        // Signature of message data by author + method specific data by message creator node. format: hexEncode([]bytes)
 }
 
 message MessageWrapper {
