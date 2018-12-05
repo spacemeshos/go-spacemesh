@@ -1,10 +1,7 @@
 #!/bin/bash -e
 ./ci/install-protobuf.sh
 
-rm -rf $GOPATH/src/github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway
 go get -u github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway
-
-rm -rf $GOPATH/src/github.com/grpc-ecosystem/grpc-gateway/protoc-gen-swagger
 go get -u github.com/grpc-ecosystem/grpc-gateway/protoc-gen-swagger
 
 rm -rf $GOPATH/src/github.com/golang/protobuf
