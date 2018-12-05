@@ -6,6 +6,7 @@ while read -r p; do
   protoc -I/usr/local/include -I. -I$GOPATH/src -I$GOPATH/src/github.com/grpc-ecosystem/grpc-gateway/third_party/googleapis --go_out=plugins=grpc:. $p/*.proto
 done <<< "$res"
 
+pushd . > /dev/null
 cd api/pb/
 
 protoc -I/usr/local/include -I. \
@@ -25,3 +26,5 @@ protoc -I/usr/local/include -I. \
   -I$GOPATH/src/github.com/grpc-ecosystem/grpc-gateway/third_party/googleapis \
   --swagger_out=logtostderr=true:. \
 api.proto
+
+popd > /dev/null

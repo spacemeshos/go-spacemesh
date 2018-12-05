@@ -31,3 +31,4 @@ rsync -a protoc3/include/ /usr/local/include/
 echo "cleaning up..."
 rm protoc.zip
 rm -rf protoc3
+echo "done"
