@@ -2,16 +2,16 @@ package gossip
 
 import (
 	"errors"
+	"github.com/golang/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
-	"hash/fnv"
-	"sync"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"hash/fnv"
+	"sync"
 	"time"
-	"github.com/golang/protobuf/proto"
 )
 
 const messageQBufferSize = 100
@@ -39,11 +39,10 @@ type BaseNetwork interface {
 type Signer interface {
 	PublicKey() crypto.PublicKey
 	Sign(data []byte) ([]byte, error)
-	ValidateSign(data []byte, sign []byte) error
 }
 
 type protocolMessage struct {
-	msg *pb.ProtocolMessage
+	msg     *pb.ProtocolMessage
 	isRelay bool
 }
 
@@ -52,9 +51,9 @@ type Protocol struct {
 	log.Log
 
 	ProtocolName string
-	config config.SwarmConfig
-	net    BaseNetwork
-	signer Signer
+	config       config.SwarmConfig
+	net          BaseNetwork
+	signer       Signer
 
 	peerConn chan crypto.PublicKey
 	peerDisc chan crypto.PublicKey
@@ -74,19 +73,19 @@ func NewProtocol(config config.SwarmConfig, base BaseNetwork, signer Signer, log
 	// intentionally not subscribing to peers events so that the channels won't block in case executing Start delays
 	relayChan := base.RegisterProtocol(ProtocolName)
 	return &Protocol{
-		Log:         log2,
+		Log:          log2,
 		ProtocolName: "/p2p/1.0/gossip",
-		config:      config,
-		net:         base,
-		signer:      signer,
-		peerConn:    nil,
-		peerDisc:    nil,
-		peers:       make(map[string]*peer),
-		shutdown:    make(chan struct{}),
-		oldMessageQ: make(map[hash]struct{}), // todo : remember to drain this
-		peersMutex:  sync.RWMutex{},
-		relayQ:      relayChan,
-		messageQ:    make(chan protocolMessage, messageQBufferSize),
+		config:       config,
+		net:          base,
+		signer:       signer,
+		peerConn:     nil,
+		peerDisc:     nil,
+		peers:        make(map[string]*peer),
+		shutdown:     make(chan struct{}),
+		oldMessageQ:  make(map[hash]struct{}), // todo : remember to drain this
+		peersMutex:   sync.RWMutex{},
+		relayQ:       relayChan,
+		messageQ:     make(chan protocolMessage, messageQBufferSize),
 	}
 }
 
@@ -162,7 +161,7 @@ func (prot *Protocol) propagateMessage(msg []byte, h hash) {
 	prot.peersMutex.RUnlock()
 }
 
-func (prot *Protocol) validateMessage(msg *pb.ProtocolMessage) error {
+func (prot *Protocol) validateMessage(msg *pb.ProtocolMessage, authPubKey crypto.PublicKey) error {
 	sign := msg.Metadata.MsgSign
 	msg.Metadata.MsgSign = nil
 	bin, err := proto.Marshal(msg)
@@ -172,8 +171,8 @@ func (prot *Protocol) validateMessage(msg *pb.ProtocolMessage) error {
 		return err
 	}
 
-	err = prot.signer.ValidateSign(bin, sign)
-	if err != nil {
+	valid, err := authPubKey.Verify(bin, sign)
+	if !valid || err != nil {
 		prot.Log.Error("fail to validate message's signature when validating gossip message, err %v", err)
 		return err
 	}
@@ -210,16 +209,21 @@ func (prot *Protocol) Broadcast(payload []byte, nextProt string) error {
 
 	sign, err2 := prot.signer.Sign(bin)
 	if err2 != nil {
-		prot.Log.Error("failed to sign header when generating gossip header, err %v", err)
+		prot.Log.Error("failed to Sign header when generating gossip header, err %v", err)
 		return err
 	}
 
 	msg.Metadata.MsgSign = sign
 
+	finbin, err := proto.Marshal(msg)
+	if err != nil {
+		return err
+	}
+
 	// so we won't process our own messages
-	hash := calcHash(payload)
+	hash := calcHash(finbin)
 	prot.markMessage(hash)
-	prot.propagateMessage(payload, hash)
+	prot.propagateMessage(finbin, hash)
 	return nil
 }
 
@@ -258,7 +262,6 @@ func (prot *Protocol) handleRelayMessage(msgB []byte) error {
 		// todo	: - maybe tell the peer weg ot this message already?
 		prot.Log.Info("got old message, hash %d", hash)
 	} else {
-		prot.oldMessageQ[hash] = struct{}{}
 
 		msg := &pb.ProtocolMessage{}
 		err := proto.Unmarshal(msgB, msg)
@@ -267,19 +270,21 @@ func (prot *Protocol) handleRelayMessage(msgB []byte) error {
 			return err
 		}
 
-		err = prot.validateMessage(msg)
-		if err != nil {
-			prot.Log.Error("failed to validate message when handling relay message, err %v", err)
-			return err
-		}
 		authKey, err := crypto.NewPublicKey(msg.Metadata.AuthPubKey)
 		if err != nil {
 			prot.Log.Error("failed to decode the auth public key when handling relay message, err %v", err)
 			return err
 		}
-		go prot.net.ProcessProtocolMessage(node.Node{authKey, nil}, msg.Metadata.NextProtocol, msg.Payload)
-	}
 
+		err = prot.validateMessage(msg, authKey)
+		if err != nil {
+			prot.Log.Error("failed to validate message when handling relay message, err %v", err)
+			return err
+		}
+
+		prot.markMessage(hash)
+		go prot.net.ProcessProtocolMessage(node.New(authKey, ""), msg.Metadata.NextProtocol, msg.Payload)
+	}
 
 	prot.propagateMessage(msgB, hash)
 
@@ -293,6 +298,7 @@ loop:
 		case msg := <-prot.relayQ:
 			// incoming messages from p2p layer for process and relay
 			go func() {
+				//todo some err handling
 				prot.handleRelayMessage(msg.Data())
 			}()
 		case peer := <-prot.peerConn:
@@ -315,6 +321,6 @@ func (prot *Protocol) peersCount() int {
 
 // hasPeer returns whether or not a peer is known to the protocol, used for testing only
 func (prot *Protocol) hasPeer(key crypto.PublicKey) bool {
-	_, ok := prot.peers[key.String()]
+	_, ok := prot.peers[key.String()] // todo ? no mutex?
 	return ok
 }
