@@ -1,7 +1,6 @@
 package message
 
 import (
-	"encoding/hex"
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
@@ -19,16 +18,14 @@ func Test_NewProtocolMessageMeatadata(t *testing.T) {
 
 	assert.NotNil(t, pk)
 
-	meta := NewProtocolMessageMetadata(pk, "EX", gossip)
+	meta := NewProtocolMessageMetadata(pk, "EX")
 
 	assert.NotNil(t, meta, "should be a metadata")
 	assert.Equal(t, meta.Timestamp, time.Now().Unix())
 	assert.Equal(t, meta.ClientVersion, config.ClientVersion)
 	assert.Equal(t, meta.AuthPubKey, pk.Bytes())
-	assert.Equal(t, meta.Protocol, "EX")
-	assert.Equal(t, meta.Gossip, gossip)
-	assert.Equal(t, meta.AuthorSign, "")
-
+	assert.Equal(t, meta.NextProtocol, "EX")
+	assert.Equal(t, meta.MsgSign, []byte(nil))
 }
 
 func TestSwarm_AuthAuthor(t *testing.T) {
@@ -41,7 +38,7 @@ func TestSwarm_AuthAuthor(t *testing.T) {
 	assert.NotNil(t, pub)
 
 	pm := &pb.ProtocolMessage{
-		Metadata: NewProtocolMessageMetadata(pub, "EX", false),
+		Metadata: NewProtocolMessageMetadata(pub, "EX"),
 		Payload:  []byte("EX"),
 	}
 	ppm, err := proto.Marshal(pm)
@@ -50,9 +47,8 @@ func TestSwarm_AuthAuthor(t *testing.T) {
 	// sign it
 	s, err := priv.Sign(ppm)
 	assert.NoError(t, err, "cant sign ", err)
-	ssign := hex.EncodeToString(s)
 
-	pm.Metadata.AuthorSign = ssign
+	pm.Metadata.MsgSign = s
 
 	vererr := AuthAuthor(pm)
 	assert.NoError(t, vererr)
@@ -65,9 +61,8 @@ func TestSwarm_AuthAuthor(t *testing.T) {
 
 	s, err = priv2.Sign(ppm)
 	assert.NoError(t, err, "cant sign ", err)
-	ssign = hex.EncodeToString(s)
 
-	pm.Metadata.AuthorSign = ssign
+	pm.Metadata.MsgSign = s
 
 	vererr = AuthAuthor(pm)
 	assert.Error(t, vererr)
@@ -76,7 +71,7 @@ func TestSwarm_AuthAuthor(t *testing.T) {
 func TestSwarm_SignAuth(t *testing.T) {
 	n, _ := node.GenerateTestNode(t)
 	pm := &pb.ProtocolMessage{
-		Metadata: NewProtocolMessageMetadata(n.PublicKey(), "EX", false),
+		Metadata: NewProtocolMessageMetadata(n.PublicKey(), "EX"),
 		Payload:  []byte("EX"),
 	}
 
