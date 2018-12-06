@@ -19,5 +19,7 @@ protoc --version
 
 ./ci/genproto.sh
 
+echo "running govendor sync..."
 go get -u github.com/kardianos/govendor
 govendor sync
+echo "setup complete 🎉"
