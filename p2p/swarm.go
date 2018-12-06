@@ -2,7 +2,6 @@ package p2p
 
 import (
 	"github.com/spacemeshos/go-spacemesh/crypto"
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -82,10 +81,10 @@ type swarm struct {
 	initOnce sync.Once
 	initial  chan struct{}
 
-	outpeersMutex   sync.RWMutex
-	inpeersMutex sync.RWMutex
-	outpeers        map[string]crypto.PublicKey
-	inpeers      map[string]crypto.PublicKey
+	outpeersMutex sync.RWMutex
+	inpeersMutex  sync.RWMutex
+	outpeers      map[string]crypto.PublicKey
+	inpeers       map[string]crypto.PublicKey
 
 	morePeersReq      chan struct{}
 	connectingTimeout time.Duration
@@ -139,19 +138,19 @@ func newSwarm(ctx context.Context, config config.Config, newNode bool, persist b
 	}
 
 	s := &swarm{
-		ctx:              ctx,
-		config:           config,
-		lNode:            l,
-		bootChan:         make(chan struct{}),
-		gossipC:          make(chan struct{}),
-		shutdown:         make(chan struct{}), // non-buffered so requests to shutdown block until swarm is shut down
+		ctx:      ctx,
+		config:   config,
+		lNode:    l,
+		bootChan: make(chan struct{}),
+		gossipC:  make(chan struct{}),
+		shutdown: make(chan struct{}), // non-buffered so requests to shutdown block until swarm is shut down
 
-		initial:		make(chan struct{}),
-		morePeersReq:   make(chan struct{}),
-		inpeers: 		make(map[string]crypto.PublicKey),
-		outpeers: 		make(map[string]crypto.PublicKey),
-		newPeerSub:  make([]chan crypto.PublicKey, 0, 10),
-		delPeerSub:  make([]chan crypto.PublicKey, 0, 10),
+		initial:           make(chan struct{}),
+		morePeersReq:      make(chan struct{}),
+		inpeers:           make(map[string]crypto.PublicKey),
+		outpeers:          make(map[string]crypto.PublicKey),
+		newPeerSub:        make([]chan crypto.PublicKey, 0, 10),
+		delPeerSub:        make([]chan crypto.PublicKey, 0, 10),
 		connectingTimeout: ConnectingTimeout,
 
 		protocolHandlers: make(map[string]chan service.Message),
@@ -161,11 +160,36 @@ func newSwarm(ctx context.Context, config config.Config, newNode bool, persist b
 
 	s.dht = dht.New(l, config.SwarmConfig, s)
 
-	s.gossip = gossip.NewProtocol(config.SwarmConfig, s, s.lNode.Log)
+	s.gossip = gossip.NewProtocol(config.SwarmConfig, s, signerValidtaor(s), s.lNode.Log)
 
 	s.lNode.Debug("Created swarm for local node %s, %s", l.Address(), l.Pretty())
 
 	return s, nil
+}
+
+type signerValidator struct {
+	pubKey   crypto.PublicKey
+	signFunc func([]byte) ([]byte, error)
+}
+
+func (sv *signerValidator) PublicKey() crypto.PublicKey {
+	return sv.pubKey
+}
+
+func (sv *signerValidator) Sign(data []byte) ([]byte, error) {
+	return sv.signFunc(data)
+}
+
+func signerValidtaor(s *swarm) *signerValidator {
+	return &signerValidator{s.lNode.PublicKey(), s.lNode.PrivateKey().Sign}
+}
+
+func (s *swarm) sign(data []byte) ([]byte, error) {
+	return s.lNode.PrivateKey().Sign(data)
+}
+
+func (s *swarm) publicKey() crypto.PublicKey {
+	return s.lNode.PublicKey()
 }
 
 func (s *swarm) Start() error {
@@ -195,18 +219,18 @@ func (s *swarm) Start() error {
 	}
 
 	// wait for neighborhood
-		go func() {
-			if s.config.SwarmConfig.Bootstrap {
-				s.waitForBoot()
-			}
-			err := s.StartNeighborhood()
-			if err != nil {
-				s.gossipErr = err
-				s.Shutdown()
-			}
-			<-s.initial
-			close(s.gossipC)
-		}() // todo handle error async
+	go func() {
+		if s.config.SwarmConfig.Bootstrap {
+			s.waitForBoot()
+		}
+		err := s.StartNeighborhood()
+		if err != nil {
+			s.gossipErr = err
+			s.Shutdown()
+		}
+		<-s.initial
+		close(s.gossipC)
+	}() // todo handle error async
 
 	return nil
 }
@@ -388,20 +412,18 @@ func (s *swarm) retryOrReplace(key crypto.PublicKey) {
 	getpeer := s.dht.InternalLookup(node.NewDhtID(key.Bytes()))
 
 	if getpeer == nil {
-			s.Disconnect(key)
-			return
+		s.Disconnect(key) // if we didn't find then we can't try replaceing
+		return
 	}
 	peer := getpeer[0]
 
 	_, err := s.cPool.GetConnection(peer.Address(), peer.PublicKey())
-	if err != nil {
+	if err != nil { // we could'nt connect :/
 		s.Disconnect(key)
 	}
 }
 
-// swarm serial event processing
-// provides concurrency safety as only one callback is executed at a time
-// so there's no need for sync internal data structures
+// periodically checks that our clock is sync
 func (s *swarm) checkTimeDrifts() {
 	checkTimeSync := time.NewTicker(config.TimeConfigValues.RefreshNtpInterval)
 Loop:
@@ -430,8 +452,6 @@ var (
 	ErrBadFormat2 = errors.New("bad msg format, could'nt deserialize 2")
 	// ErrOutOfSync is returned when messsage timestamp was out of sync
 	ErrOutOfSync = errors.New("received out of sync msg")
-	// ErrNoPayload empty payload message
-	ErrNoPayload = errors.New("deprecated code path, no payload in message")
 	// ErrFailDecrypt session cant decrypt
 	ErrFailDecrypt = errors.New("can't decrypt message payload with session key")
 	// ErrAuthAuthor message sign is wrong
@@ -452,27 +472,10 @@ var (
 func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 
 	if msg.Message == nil || msg.Conn == nil {
-		s.lNode.Fatal("Fatal error: Got nil message or connection")
 		return ErrBadFormat1
 	}
 
 	s.lNode.Debug(fmt.Sprintf("Handle message from <<  %v", msg.Conn.RemotePublicKey().Pretty()))
-	c := &pb.CommonMessageData{}
-	err := proto.Unmarshal(msg.Message, c)
-	if err != nil {
-		return ErrBadFormat1
-	}
-
-	// check that the message was send within a reasonable time
-	if ok := timesync.CheckMessageDrift(c.Timestamp); !ok {
-		// TODO: consider kill connection with this node and maybe blacklist
-		// TODO : Also consider moving send timestamp into metadata(encrypted).
-		return ErrOutOfSync
-	}
-
-	if len(c.Payload) == 0 {
-		return ErrNoPayload
-	}
 
 	// protocol messages are encrypted in payload
 	// Locate the session
@@ -482,7 +485,7 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 		return ErrNoSession
 	}
 
-	decPayload, err := session.Decrypt(c.Payload)
+	decPayload, err := session.Decrypt(msg.Message)
 	if err != nil {
 		return ErrFailDecrypt
 	}
@@ -493,47 +496,31 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 		s.lNode.Errorf("proto marshinling err=", err)
 		return ErrBadFormat2
 	}
-	if pm.Metadata == nil {
-		spew.Dump(pm)
-		panic("this is a defected message") // todo: Session bug, session scrambles messages and remove metadata
-	}
+
 	// authenticate message author - we already authenticated the sender via the shared session key secret
-	err = message.AuthAuthor(pm)
+	err = message.AuthSender(pm, msg.Conn.RemotePublicKey())
 	if err != nil {
 		return ErrAuthAuthor
 	}
 
-	if !pm.Metadata.Gossip && !bytes.Equal(pm.Metadata.AuthPubKey, msg.Conn.RemotePublicKey().Bytes()) {
-		//wtf ?
-		return ErrNotFromPeer
+	// check that the message was send within a reasonable time
+	if ok := timesync.CheckMessageDrift(pm.Metadata.Timestamp); !ok {
+		// TODO: consider kill connection with this node and maybe blacklist
+		// TODO : Also consider moving send timestamp into metadata(encrypted).
+		return ErrOutOfSync
 	}
 
-	s.lNode.Debug("Authorized %v protocol message ", pm.Metadata.Protocol)
+	s.lNode.Debug("Authorized %v protocol message ", pm.Metadata.NextProtocol)
 
 	remoteNode := node.New(msg.Conn.RemotePublicKey(), "") // if we got so far, we already have the node in our rt, hence address won't be used
 	// update the routing table - we just heard from this authenticated node
 	s.dht.Update(remoteNode)
 
-	// route authenticated message to the reigstered protocol
-	s.protocolHandlerMutex.RLock()
-	msgchan := s.protocolHandlers[pm.Metadata.Protocol]
-	s.protocolHandlerMutex.RUnlock()
-
-	if msgchan == nil {
-		s.LocalNode().Errorf("there was a bad protocol ", pm.Metadata.Protocol)
-		return ErrNoProtocol
-	}
-	s.lNode.Debug("Forwarding message to protocol")
-
-	if payload := pm.GetPayload(); payload != nil {
-		msgchan <- protocolMessage{remoteNode, service.Data_Bytes{Payload: payload}}
-	} else if wrap := pm.GetMsg(); wrap != nil {
-		msgchan <- protocolMessage{remoteNode, service.Data_MsgWrapper{Req: wrap.Req, MsgType: wrap.Type, ReqID: wrap.ReqID, Payload: wrap.Payload}}
-	}
-
-	return nil
+	// route authenticated message to the registered protocol
+	return s.ProcessProtocolMessage(remoteNode, pm.Metadata.NextProtocol, pm.Payload)
 }
 
+// ProcessProtocolMessage passes an already decrypted message to a protocol.
 func (s *swarm) ProcessProtocolMessage(sender node.Node, protocol string, payload []byte) error {
 	// route authenticated message to the reigstered protocol
 	s.protocolHandlerMutex.RLock()
@@ -541,37 +528,18 @@ func (s *swarm) ProcessProtocolMessage(sender node.Node, protocol string, payloa
 	s.protocolHandlerMutex.RUnlock()
 
 	if msgchan == nil {
-		s.LocalNode().Errorf("there was a bad protocol ",protocol)
 		return ErrNoProtocol
 	}
-	s.lNode.Debug("Forwarding message to protocol")
+	s.lNode.Debug("Forwarding message to %v protocol", protocol)
 
 	msgchan <- protocolMessage{sender, payload}
 
 	return nil
 }
 
-// Broadcast creates a gossip message signs it and disseminate it to neighbors
+// Broadcast creates a gossip message signs it and disseminate it to neighbors.
 func (s *swarm) Broadcast(protocol string, payload []byte) error {
-	// start by making the message
-	pm := &pb.ProtocolMessage{
-		Metadata: message.NewProtocolMessageMetadata(s.LocalNode().PublicKey(), protocol, true),
-		Data:     &pb.ProtocolMessage_Payload{Payload: payload},
-	}
-
-	err := message.SignMessage(s.lNode.PrivateKey(), pm)
-	if err != nil {
-		return err
-	}
-
-	msg, err := proto.Marshal(pm)
-
-	if err != nil {
-		return err
-	}
-
-	s.gossip.Broadcast(msg)
-	return nil
+	return s.ProcessProtocolMessage(s.lNode.Node, s.gossip.ProtocolName, payload)
 }
 
 // Neighborhood : neighborhood is the peers we keep close , meaning we try to keep connections
@@ -582,8 +550,8 @@ func (s *swarm) publishNewPeer(peer crypto.PublicKey) {
 	s.newPeerLock.RLock()
 	for _, p := range s.newPeerSub {
 		select {
-		 	case p <- peer:
-		 	default:
+		case p <- peer:
+		default:
 		}
 	}
 	s.newPeerLock.RUnlock()
@@ -593,8 +561,8 @@ func (s *swarm) publishDelPeer(peer crypto.PublicKey) {
 	s.delPeerLock.RLock()
 	for _, p := range s.delPeerSub {
 		select {
-		 	case p <- peer:
-		 	default:
+		case p <- peer:
+		default:
 		}
 	}
 	s.delPeerLock.RUnlock()
@@ -630,7 +598,6 @@ func (s *swarm) StartNeighborhood() error {
 
 	return nil
 }
-
 
 func (s *swarm) peersLoop() {
 loop:
@@ -671,8 +638,6 @@ func (s *swarm) askForMorePeers() {
 	time.Sleep(NoResultsInterval)
 	s.morePeersReq <- struct{}{}
 }
-
-
 
 // getMorePeers tries to fill the `peers` slice with dialed outbound peers that we selected from the dht.
 func (s *swarm) getMorePeers(numpeers int) int {
