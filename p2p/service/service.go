@@ -17,7 +17,7 @@ type Service interface {
 	RegisterProtocol(protocol string) chan Message
 	SendMessage(nodeID string, protocol string, payload []byte) error
 	SubscribePeerEvents() (new chan crypto.PublicKey, del chan crypto.PublicKey)
-	ProcessProtocolMessage(sender node.Node, protocol string, payload []byte) error
+	ProcessProtocolMessage(sender node.Node, protocol string, payload Data) error
 	Broadcast(protocol string, payload []byte) error
 	Shutdown()
 }

@@ -39,7 +39,7 @@ func TestSwarm_AuthAuthor(t *testing.T) {
 
 	pm := &pb.ProtocolMessage{
 		Metadata: NewProtocolMessageMetadata(pub, "EX"),
-		Payload:  []byte("EX"),
+		Data:     &pb.ProtocolMessage_Payload{[]byte("EX")},
 	}
 	ppm, err := proto.Marshal(pm)
 	assert.NoError(t, err, "cant marshal msg ", err)
@@ -72,7 +72,7 @@ func TestSwarm_SignAuth(t *testing.T) {
 	n, _ := node.GenerateTestNode(t)
 	pm := &pb.ProtocolMessage{
 		Metadata: NewProtocolMessageMetadata(n.PublicKey(), "EX"),
-		Payload:  []byte("EX"),
+		Data:     &pb.ProtocolMessage_Payload{[]byte("EX")},
 	}
 
 	err := SignMessage(n.PrivateKey(), pm)

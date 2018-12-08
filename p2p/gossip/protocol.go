@@ -33,7 +33,7 @@ type BaseNetwork interface {
 	SendMessage(peerPubKey string, protocol string, payload []byte) error
 	RegisterProtocol(protocol string) chan service.Message
 	SubscribePeerEvents() (conn chan crypto.PublicKey, disc chan crypto.PublicKey)
-	ProcessProtocolMessage(sender node.Node, protocol string, payload []byte) error
+	ProcessProtocolMessage(sender node.Node, protocol string, data service.Data) error
 }
 
 type Signer interface {
@@ -197,7 +197,7 @@ func (prot *Protocol) Broadcast(payload []byte, nextProt string) error {
 
 	msg := &pb.ProtocolMessage{
 		Metadata: header,
-		Payload:  payload,
+		Data:     &pb.ProtocolMessage_Payload{Payload: payload},
 	}
 
 	bin, err := proto.Marshal(msg)
@@ -234,11 +234,15 @@ func (prot *Protocol) Start() {
 }
 
 func (prot *Protocol) addPeer(peer crypto.PublicKey) {
+	prot.peersMutex.Lock()
 	prot.peers[peer.String()] = newPeer(prot.net, peer, prot.Log)
+	prot.peersMutex.Unlock()
 }
 
 func (prot *Protocol) removePeer(peer crypto.PublicKey) {
+	prot.peersMutex.Lock()
 	delete(prot.peers, peer.String())
+	prot.peersMutex.Unlock()
 }
 
 func (prot *Protocol) isOldMessage(h hash) bool {
@@ -283,7 +287,16 @@ func (prot *Protocol) handleRelayMessage(msgB []byte) error {
 		}
 
 		prot.markMessage(hash)
-		go prot.net.ProcessProtocolMessage(node.New(authKey, ""), msg.Metadata.NextProtocol, msg.Payload)
+
+		var data service.Data
+
+		if payload := msg.GetPayload(); payload != nil {
+			data = service.Data_Bytes{Payload: payload}
+		} else if wrap := msg.GetMsg(); wrap != nil {
+			data = service.Data_MsgWrapper{Req: wrap.Req, MsgType: wrap.Type, ReqID: wrap.ReqID, Payload: wrap.Payload}
+		}
+
+		go prot.net.ProcessProtocolMessage(node.New(authKey, ""), msg.Metadata.NextProtocol, data)
 	}
 
 	prot.propagateMessage(msgB, hash)
@@ -299,12 +312,12 @@ loop:
 			// incoming messages from p2p layer for process and relay
 			go func() {
 				//todo some err handling
-				prot.handleRelayMessage(msg.Data())
+				prot.handleRelayMessage(msg.Bytes())
 			}()
 		case peer := <-prot.peerConn:
-			prot.addPeer(peer)
+			go prot.addPeer(peer)
 		case peer := <-prot.peerDisc:
-			prot.removePeer(peer)
+			go prot.removePeer(peer)
 		case <-prot.shutdown:
 			break loop // maybe error ?
 		}

@@ -129,7 +129,7 @@ func TestSwarm_authAuthor(t *testing.T) {
 
 	pm := &pb.ProtocolMessage{
 		Metadata: message.NewProtocolMessageMetadata(pub, exampleProtocol),
-		Payload:  []byte(examplePayload),
+		Data:     &pb.ProtocolMessage_Payload{[]byte(examplePayload)},
 	}
 	ppm, err := proto.Marshal(pm)
 	assert.NoError(t, err, "cant marshal msg ", err)
@@ -162,7 +162,7 @@ func TestSwarm_SignAuth(t *testing.T) {
 	n, _ := node.GenerateTestNode(t)
 	pm := &pb.ProtocolMessage{
 		Metadata: message.NewProtocolMessageMetadata(n.PublicKey(), exampleProtocol),
-		Payload:  []byte(examplePayload),
+		Data:     &pb.ProtocolMessage_Payload{[]byte(examplePayload)},
 	}
 
 	err := message.SignMessage(n.PrivateKey(), pm)
@@ -190,7 +190,7 @@ func sendDirectMessage(t *testing.T, sender *swarm, recvPub string, inChan chan 
 	select {
 	case msg := <-inChan:
 		if checkpayload {
-			assert.Equal(t, msg.Data(), payload)
+			assert.Equal(t, msg.Bytes(), payload)
 		}
 		assert.Equal(t, msg.Sender().String(), sender.lNode.String())
 		break
@@ -319,35 +319,33 @@ func TestSwarm_onRemoteClientMessage(t *testing.T) {
 
 	// Test bad format
 	imc := net.IncomingMessageEvent{nmock, nil}
-	//err = p.onRemoteClientMessage(imc)
-	//assert.Equal(t, err, ErrBadFormat1)
-	////
-	////// Test No Session
-	//imc.Message = []byte("test")
-	//
-	//err = p.onRemoteClientMessage(imc)
-	//assert.Equal(t, err, ErrNoSession)
-	////Test bad session
-	//
+	err = p.onRemoteClientMessage(imc)
+	assert.Equal(t, err, ErrBadFormat1)
+
+	// Test No Session
+	imc.Message = []byte("test")
+
+	err = p.onRemoteClientMessage(imc)
+	assert.Equal(t, err, ErrNoSession)
+
+	//Test bad session
 	session := &net.SessionMock{}
 	session.SetDecrypt(nil, errors.New("fail"))
 	imc.Conn.SetSession(session)
 
-	//err = p.onRemoteClientMessage(imc)
-	//assert.Equal(t, err, ErrFailDecrypt)
-	//
+	err = p.onRemoteClientMessage(imc)
+	assert.Equal(t, err, ErrFailDecrypt)
+
 	//// Test bad format again
-	//
-	//session.SetDecrypt([]byte("wont_format_fo_protocol_message"), nil)
-	//
-	//err = p.onRemoteClientMessage(imc)
-	//assert.Equal(t, err, ErrBadFormat2)
+	session.SetDecrypt([]byte("wont_format_fo_protocol_message"), nil)
+
+	err = p.onRemoteClientMessage(imc)
+	assert.Equal(t, err, ErrBadFormat2)
 
 	// Test bad auth sign
-
 	goodmsg := &pb.ProtocolMessage{
 		Metadata: message.NewProtocolMessageMetadata(id.PublicKey(), exampleProtocol), // not signed
-		Payload:  []byte(examplePayload),
+		Data:     &pb.ProtocolMessage_Payload{[]byte(examplePayload)},
 	}
 
 	goodbin, _ := proto.Marshal(goodmsg)

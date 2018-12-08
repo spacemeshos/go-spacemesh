@@ -18,12 +18,12 @@ type Simulator struct {
 	protocolHandler map[string]map[string]chan Message // maps peerPubkey -> protocol -> handler
 	nodes           map[string]*Node
 
-	subLock sync.Mutex
+	subLock      sync.Mutex
 	newPeersSubs []chan crypto.PublicKey
 	delPeersSubs []chan crypto.PublicKey
 }
 
-var _ service.Service = new(Node)
+var _ Service = new(Node)
 
 type dht interface {
 	Update(node2 node.Node)
@@ -137,7 +137,7 @@ func (sn *Node) Start() error {
 }
 
 // ProcessProtocolMessage
-func (sn *Node) ProcessProtocolMessage(sender node.Node, protocol string, payload []byte) error {
+func (sn *Node) ProcessProtocolMessage(sender node.Node, protocol string, payload Data) error {
 	sn.sim.mutex.RLock()
 	c, ok := sn.sim.protocolHandler[sn.String()][protocol]
 	sn.sim.mutex.RUnlock()

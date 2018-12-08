@@ -1,12 +1,12 @@
 package p2p
 
 import (
-	"github.com/spacemeshos/go-spacemesh/crypto"
 	"context"
 	"errors"
 	"fmt"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/golang/protobuf/proto"
+	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/connectionpool"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht"
@@ -282,7 +282,7 @@ func (s *swarm) sendMessageImpl(peerPubKey string, protocol string, payload serv
 	}
 
 	protomessage := &pb.ProtocolMessage{
-		Metadata: message.NewProtocolMessageMetadata(s.lNode.PublicKey(), protocol, false),
+		Metadata: message.NewProtocolMessageMetadata(s.lNode.PublicKey(), protocol),
 	}
 
 	switch x := payload.(type) {
@@ -407,7 +407,6 @@ Loop:
 	}
 }
 
-
 func (s *swarm) retryOrReplace(key crypto.PublicKey) {
 	getpeer := s.dht.InternalLookup(node.NewDhtID(key.Bytes()))
 
@@ -517,11 +516,20 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 	s.dht.Update(remoteNode)
 
 	// route authenticated message to the registered protocol
-	return s.ProcessProtocolMessage(remoteNode, pm.Metadata.NextProtocol, pm.Payload)
+
+	var data service.Data
+
+	if payload := pm.GetPayload(); payload != nil {
+		data = service.Data_Bytes{Payload: payload}
+	} else if wrap := pm.GetMsg(); wrap != nil {
+		data = service.Data_MsgWrapper{Req: wrap.Req, MsgType: wrap.Type, ReqID: wrap.ReqID, Payload: wrap.Payload}
+	}
+
+	return s.ProcessProtocolMessage(remoteNode, pm.Metadata.NextProtocol, data)
 }
 
 // ProcessProtocolMessage passes an already decrypted message to a protocol.
-func (s *swarm) ProcessProtocolMessage(sender node.Node, protocol string, payload []byte) error {
+func (s *swarm) ProcessProtocolMessage(sender node.Node, protocol string, data service.Data) error {
 	// route authenticated message to the reigstered protocol
 	s.protocolHandlerMutex.RLock()
 	msgchan := s.protocolHandlers[protocol]
@@ -532,14 +540,14 @@ func (s *swarm) ProcessProtocolMessage(sender node.Node, protocol string, payloa
 	}
 	s.lNode.Debug("Forwarding message to %v protocol", protocol)
 
-	msgchan <- protocolMessage{sender, payload}
+	msgchan <- protocolMessage{sender, data}
 
 	return nil
 }
 
 // Broadcast creates a gossip message signs it and disseminate it to neighbors.
 func (s *swarm) Broadcast(protocol string, payload []byte) error {
-	return s.ProcessProtocolMessage(s.lNode.Node, s.gossip.ProtocolName, payload)
+	return s.ProcessProtocolMessage(s.lNode.Node, s.gossip.ProtocolName, service.Data_Bytes{payload})
 }
 
 // Neighborhood : neighborhood is the peers we keep close , meaning we try to keep connections
@@ -720,8 +728,6 @@ loop:
 
 	return total - bad
 }
-
-
 
 // Disconnect removes a peer from the neighborhood, it requests more peers if our outbound peer count is less than configured
 func (s *swarm) Disconnect(key crypto.PublicKey) {
