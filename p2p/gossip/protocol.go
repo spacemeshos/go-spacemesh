@@ -264,7 +264,7 @@ func (prot *Protocol) handleRelayMessage(msgB []byte) error {
 	if prot.isOldMessage(hash) {
 		// todo : - have some more metrics for termination
 		// todo	: - maybe tell the peer weg ot this message already?
-		prot.Log.Info("got old message, hash %d", hash)
+		prot.Log.Debug("got old message, hash %d", hash)
 	} else {
 
 		msg := &pb.ProtocolMessage{}

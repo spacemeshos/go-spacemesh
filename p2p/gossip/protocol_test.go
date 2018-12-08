@@ -59,7 +59,7 @@ func passOrDeadlock(t testing.TB, group *sync.WaitGroup) {
 		close(ch)
 	}(group, ch)
 
-	timer := time.NewTimer(time.Millisecond * 1500)
+	timer := time.NewTimer(time.Millisecond * 5000)
 	select {
 	case <-ch:
 		return
