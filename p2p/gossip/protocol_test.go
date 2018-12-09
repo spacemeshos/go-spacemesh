@@ -59,7 +59,7 @@ func passOrDeadlock(t testing.TB, group *sync.WaitGroup) {
 		close(ch)
 	}(group, ch)
 
-	timer := time.NewTimer(time.Second)
+	timer := time.NewTimer(time.Second * 5)
 	select {
 	case <-ch:
 		return
@@ -106,7 +106,10 @@ func (mbn *mockBaseNetwork) addRandomPeer(pub crypto.PublicKey) {
 }
 
 func (mbn *mockBaseNetwork) totalMessageSent() int {
-	return mbn.totalMsgCount
+	mbn.msgMutex.Lock()
+	total := mbn.totalMsgCount
+	mbn.msgMutex.Unlock()
+	return total
 }
 
 type mockSampler struct {

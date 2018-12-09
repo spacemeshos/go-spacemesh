@@ -334,6 +334,8 @@ func (prot *Protocol) peersCount() int {
 
 // hasPeer returns whether or not a peer is known to the protocol, used for testing only
 func (prot *Protocol) hasPeer(key crypto.PublicKey) bool {
-	_, ok := prot.peers[key.String()] // todo ? no mutex?
+	prot.peersMutex.RLock()
+	_, ok := prot.peers[key.String()]
+	prot.peersMutex.RUnlock()
 	return ok
 }
