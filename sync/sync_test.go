@@ -16,7 +16,7 @@ import (
 type BlockValidatorMock struct {
 }
 
-func (BlockValidatorMock) ValidateBlock(block Block) bool {
+func (BlockValidatorMock) ValidateBlock(block *mesh.Block) bool {
 	fmt.Println("validate block ", block)
 	return true
 }
@@ -81,9 +81,9 @@ func TestSyncProtocol_BlockRequest(t *testing.T) {
 
 	defer syncObj.Close()
 
-	id := uuid.New().ID()
+	id := mesh.BlockID(uuid.New().ID())
 	block := mesh.NewExistingBlock(id, 1, nil)
-	syncObj.layers.AddLayer(mesh.NewExistingLayer(uint32(1), []*mesh.Block{block}))
+	syncObj.layers.AddLayer(mesh.NewExistingLayer(1, []*mesh.Block{block}))
 	fnd2 := server.NewMsgServer(n2, protocol, time.Second*5)
 	fnd2.RegisterMsgHandler(BLOCK, syncObj.blockRequestHandler)
 
@@ -91,7 +91,7 @@ func TestSyncProtocol_BlockRequest(t *testing.T) {
 	a := <-ch
 
 	assert.NoError(t, err, "Should not return error")
-	assert.Equal(t, a.GetId(), block.Id(), "wrong block")
+	assert.Equal(t, a.Id(), block.Id(), "wrong block")
 }
 
 func TestSyncProtocol_LayerHashRequest(t *testing.T) {
@@ -107,7 +107,7 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 
 	defer syncObj.Close()
 
-	syncObj.layers.AddLayer(mesh.NewExistingLayer(uint32(1), make([]*mesh.Block, 0, 10)))
+	syncObj.layers.AddLayer(mesh.NewExistingLayer(1, make([]*mesh.Block, 0, 10)))
 	fnd2 := server.NewMsgServer(n2, protocol, time.Second*5)
 	fnd2.RegisterMsgHandler(LAYER_HASH, syncObj.layerHashRequestHandler)
 
@@ -129,11 +129,11 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 
 	defer syncObj.Close()
 
-	layer := mesh.NewExistingLayer(uint32(1), make([]*mesh.Block, 0, 10))
-	layer.AddBlock(mesh.NewExistingBlock(uuid.New().ID(), 1, nil))
-	layer.AddBlock(mesh.NewExistingBlock(uuid.New().ID(), 1, nil))
-	layer.AddBlock(mesh.NewExistingBlock(uuid.New().ID(), 1, nil))
-	layer.AddBlock(mesh.NewExistingBlock(uuid.New().ID(), 1, nil))
+	layer := mesh.NewExistingLayer(1, make([]*mesh.Block, 0, 10))
+	layer.AddBlock(mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), 1, nil))
+	layer.AddBlock(mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), 1, nil))
+	layer.AddBlock(mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), 1, nil))
+	layer.AddBlock(mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), 1, nil))
 	syncObj.layers.AddLayer(layer)
 	fnd2 := server.NewMsgServer(n2, protocol, time.Second*5)
 	fnd2.RegisterMsgHandler(LAYER_IDS, syncObj.layerIdsRequestHandler)
@@ -144,7 +144,7 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 	for _, a := range layer.Blocks() {
 		found := false
 		for _, id := range ids {
-			if a.Id() == id {
+			if a.Id() == mesh.BlockID(id) {
 				found = true
 				break
 			}
@@ -178,13 +178,13 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	defer syncObj2.Close()
 	syncObj1.Start()
 
-	block1 := mesh.NewExistingBlock(uuid.New().ID(), 1, nil)
-	block2 := mesh.NewExistingBlock(uuid.New().ID(), 1, nil)
-	block3 := mesh.NewExistingBlock(uuid.New().ID(), 1, nil)
+	block1 := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), 1, nil)
+	block2 := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), 1, nil)
+	block3 := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), 1, nil)
 
-	syncObj1.layers.AddLayer(mesh.NewExistingLayer(uint32(1), []*mesh.Block{block1}))
-	syncObj1.layers.AddLayer(mesh.NewExistingLayer(uint32(2), []*mesh.Block{block2}))
-	syncObj1.layers.AddLayer(mesh.NewExistingLayer(uint32(3), []*mesh.Block{block3}))
+	syncObj1.layers.AddLayer(mesh.NewExistingLayer(1, []*mesh.Block{block1}))
+	syncObj1.layers.AddLayer(mesh.NewExistingLayer(2, []*mesh.Block{block2}))
+	syncObj1.layers.AddLayer(mesh.NewExistingLayer(3, []*mesh.Block{block3}))
 
 	hash, err := syncObj2.sendLayerHashRequest(n1.PublicKey(), 1)
 	assert.NoError(t, err, "Should not return error")
@@ -193,7 +193,7 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	ch2, err2 := syncObj2.sendBlockRequest(n1.PublicKey(), block1.Id())
 	assert.NoError(t, err2, "Should not return error")
 	msg2 := <-ch2
-	assert.Equal(t, msg2.GetId(), block1.Id(), "wrong block")
+	assert.Equal(t, msg2.Id(), block1.Id(), "wrong block")
 
 	hash, err = syncObj2.sendLayerHashRequest(n1.PublicKey(), 2)
 	assert.NoError(t, err, "Should not return error")
@@ -202,7 +202,7 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	ch2, err2 = syncObj2.sendBlockRequest(n1.PublicKey(), block2.Id())
 	assert.NoError(t, err2, "Should not return error")
 	msg2 = <-ch2
-	assert.Equal(t, msg2.GetId(), block2.Id(), "wrong block")
+	assert.Equal(t, msg2.Id(), block2.Id(), "wrong block")
 
 	hash, err = syncObj2.sendLayerHashRequest(n1.PublicKey(), 3)
 	assert.NoError(t, err, "Should not return error")
@@ -211,7 +211,7 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	ch2, err2 = syncObj2.sendBlockRequest(n1.PublicKey(), block3.Id())
 	assert.NoError(t, err2, "Should not return error")
 	msg2 = <-ch2
-	assert.Equal(t, msg2.GetId(), block3.Id(), "wrong block")
+	assert.Equal(t, msg2.Id(), block3.Id(), "wrong block")
 
 }
 
@@ -233,21 +233,21 @@ func TestSyncProtocol_SyncTwoNodes(t *testing.T) {
 		Configuration{2, 1 * time.Second, 1, 10 * time.Second},
 	)
 
-	block1 := mesh.NewExistingBlock(uuid.New().ID(), 1, nil)
-	block2 := mesh.NewExistingBlock(uuid.New().ID(), 1, nil)
-	block3 := mesh.NewExistingBlock(uuid.New().ID(), 2, nil)
-	block4 := mesh.NewExistingBlock(uuid.New().ID(), 2, nil)
-	block5 := mesh.NewExistingBlock(uuid.New().ID(), 3, nil)
-	block6 := mesh.NewExistingBlock(uuid.New().ID(), 3, nil)
-	block7 := mesh.NewExistingBlock(uuid.New().ID(), 4, nil)
-	block8 := mesh.NewExistingBlock(uuid.New().ID(), 4, nil)
-	block9 := mesh.NewExistingBlock(uuid.New().ID(), 5, nil)
-	block10 := mesh.NewExistingBlock(uuid.New().ID(), 5, nil)
-	syncObj1.layers.AddLayer(mesh.NewExistingLayer(uint32(1), []*mesh.Block{block1, block2}))
-	syncObj1.layers.AddLayer(mesh.NewExistingLayer(uint32(2), []*mesh.Block{block3, block4}))
-	syncObj1.layers.AddLayer(mesh.NewExistingLayer(uint32(3), []*mesh.Block{block5, block6}))
-	syncObj1.layers.AddLayer(mesh.NewExistingLayer(uint32(3), []*mesh.Block{block7, block8}))
-	syncObj1.layers.AddLayer(mesh.NewExistingLayer(uint32(3), []*mesh.Block{block9, block10}))
+	block1 := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), 1, nil)
+	block2 := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), 1, nil)
+	block3 := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), 2, nil)
+	block4 := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), 2, nil)
+	block5 := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), 3, nil)
+	block6 := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), 3, nil)
+	block7 := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), 4, nil)
+	block8 := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), 4, nil)
+	block9 := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), 5, nil)
+	block10 := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), 5, nil)
+	syncObj1.layers.AddLayer(mesh.NewExistingLayer(1, []*mesh.Block{block1, block2}))
+	syncObj1.layers.AddLayer(mesh.NewExistingLayer(2, []*mesh.Block{block3, block4}))
+	syncObj1.layers.AddLayer(mesh.NewExistingLayer(3, []*mesh.Block{block5, block6}))
+	syncObj1.layers.AddLayer(mesh.NewExistingLayer(3, []*mesh.Block{block7, block8}))
+	syncObj1.layers.AddLayer(mesh.NewExistingLayer(3, []*mesh.Block{block9, block10}))
 
 	timeout := time.After(10 * time.Second)
 	syncObj2.layers.SetLatestKnownLayer(5)
@@ -301,22 +301,22 @@ func TestSyncProtocol_SyncMultipalNodes(t *testing.T) {
 		Configuration{2, 1 * time.Second, 3, 1 * time.Second},
 	)
 
-	block1 := mesh.NewExistingBlock(uuid.New().ID(), 1, nil)
-	block2 := mesh.NewExistingBlock(uuid.New().ID(), 1, nil)
-	block3 := mesh.NewExistingBlock(uuid.New().ID(), 2, nil)
-	block4 := mesh.NewExistingBlock(uuid.New().ID(), 2, nil)
-	block5 := mesh.NewExistingBlock(uuid.New().ID(), 3, nil)
-	block6 := mesh.NewExistingBlock(uuid.New().ID(), 3, nil)
-	block7 := mesh.NewExistingBlock(uuid.New().ID(), 4, nil)
-	block8 := mesh.NewExistingBlock(uuid.New().ID(), 4, nil)
-	block9 := mesh.NewExistingBlock(uuid.New().ID(), 5, nil)
-	block10 := mesh.NewExistingBlock(uuid.New().ID(), 5, nil)
+	block1 := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), 1, nil)
+	block2 := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), 1, nil)
+	block3 := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), 2, nil)
+	block4 := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), 2, nil)
+	block5 := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), 3, nil)
+	block6 := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), 3, nil)
+	block7 := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), 4, nil)
+	block8 := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), 4, nil)
+	block9 := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), 5, nil)
+	block10 := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), 5, nil)
 
-	syncObj1.layers.AddLayer(mesh.NewExistingLayer(uint32(1), []*mesh.Block{block1, block2}))
-	syncObj1.layers.AddLayer(mesh.NewExistingLayer(uint32(2), []*mesh.Block{block3, block4}))
-	syncObj1.layers.AddLayer(mesh.NewExistingLayer(uint32(3), []*mesh.Block{block5, block6}))
-	syncObj1.layers.AddLayer(mesh.NewExistingLayer(uint32(3), []*mesh.Block{block7, block8}))
-	syncObj1.layers.AddLayer(mesh.NewExistingLayer(uint32(3), []*mesh.Block{block9, block10}))
+	syncObj1.layers.AddLayer(mesh.NewExistingLayer(1, []*mesh.Block{block1, block2}))
+	syncObj1.layers.AddLayer(mesh.NewExistingLayer(2, []*mesh.Block{block3, block4}))
+	syncObj1.layers.AddLayer(mesh.NewExistingLayer(3, []*mesh.Block{block5, block6}))
+	syncObj1.layers.AddLayer(mesh.NewExistingLayer(3, []*mesh.Block{block7, block8}))
+	syncObj1.layers.AddLayer(mesh.NewExistingLayer(3, []*mesh.Block{block9, block10}))
 
 	defer syncObj1.Close()
 	syncObj1.layers.SetLatestKnownLayer(5)

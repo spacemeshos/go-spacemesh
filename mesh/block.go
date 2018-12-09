@@ -5,14 +5,14 @@ import (
 	"time"
 )
 
-type BlockID uint32
-type LayerID uint32
+type BlockID uint64
+type LayerID uint64
 
-var layerCounter uint32 = 0
+var layerCounter LayerID = 0
 
 type Block struct {
 	id         BlockID
-	layerIndex uint32
+	layerId    LayerID
 	blockVotes map[BlockID]bool
 	timestamp  time.Time
 	coin       bool
@@ -21,27 +21,28 @@ type Block struct {
 	conVotes   uint64
 }
 
-func (b Block) Id() uint32 {
-	return uint32(b.id)
+func (b Block) Id() BlockID {
+	return b.id
 }
 
-func (b Block) Layer() uint32 {
-	return b.layerIndex
+func (b Block) Layer() LayerID {
+	return b.layerId
 }
 
-func NewExistingBlock(id uint32, layerIndex uint32, data []byte) *Block {
+func NewExistingBlock(id BlockID, layerIndex LayerID, data []byte) *Block {
 	b := Block{
 		id:         BlockID(id),
 		blockVotes: make(map[BlockID]bool),
-		layerIndex: layerIndex,
+		layerId:    LayerID(layerIndex),
 		data:       data,
 	}
 	return &b
 }
 
-func NewBlock(coin bool, data []byte, ts time.Time) *Block {
+func NewBlock(coin bool, data []byte, ts time.Time, layerId LayerID) *Block {
 	b := Block{
 		id:         BlockID(uuid.New().ID()),
+		layerId:    layerId,
 		blockVotes: make(map[BlockID]bool),
 		timestamp:  ts,
 		data:       data,
@@ -54,11 +55,11 @@ func NewBlock(coin bool, data []byte, ts time.Time) *Block {
 
 type Layer struct {
 	blocks []*Block
-	index  uint32
+	index  LayerID
 }
 
-func (l *Layer) Index() int {
-	return int(l.index)
+func (l *Layer) Index() LayerID {
+	return l.index
 }
 
 func (l *Layer) Blocks() []*Block {
@@ -70,7 +71,7 @@ func (l *Layer) Hash() []byte {
 }
 
 func (l *Layer) AddBlock(block *Block) {
-	block.layerIndex = l.index
+	block.layerId = l.index
 	l.blocks = append(l.blocks, block)
 }
 
@@ -83,7 +84,7 @@ func NewLayer() *Layer {
 	return &l
 }
 
-func NewExistingLayer(idx uint32, blocks []*Block) *Layer {
+func NewExistingLayer(idx LayerID, blocks []*Block) *Layer {
 	l := Layer{
 		blocks: blocks,
 		index:  idx,

@@ -29,7 +29,7 @@ func createGenesisLayer() *Layer {
 	coin := false
 	data := []byte("genesis")
 
-	bl := NewBlock(coin, data, ts)
+	bl := NewBlock(coin, data, ts, 0)
 	l := NewLayer()
 
 	l.AddBlock(bl)
@@ -44,7 +44,7 @@ func createFullPointingLayer(prev *Layer, blocksInLayer int) *Layer {
 	data := []byte(crypto.UUIDString())
 	l := NewLayer()
 	for i := 0; i < blocksInLayer; i++ {
-		bl := NewBlock(coin, data, ts)
+		bl := NewBlock(coin, data, ts, 1)
 
 		for _, pervBloc := range prev.blocks {
 			bl.blockVotes[pervBloc.id] = true

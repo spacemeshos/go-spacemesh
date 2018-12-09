@@ -11,19 +11,14 @@ import (
 	"time"
 )
 
-type Block interface {
-	GetLayer() uint32
-	GetId() uint32
-}
-
 type Layer interface {
 	Index() int
-	Blocks() []Block
+	Blocks() []*mesh.Block
 	Hash() string
 }
 
 type BlockValidator interface {
-	ValidateBlock(block Block) bool
+	ValidateBlock(block *mesh.Block) bool
 }
 
 type Configuration struct {
@@ -125,19 +120,19 @@ func (s *Syncer) run() {
 	}
 }
 
-func (s *Syncer) maxSyncLayer() uint32 {
+func (s *Syncer) maxSyncLayer() uint64 {
 	if uint32(s.layers.LatestKnownLayer()) < s.config.hdist {
 		return 0
 	}
 
-	return s.layers.LatestKnownLayer() - s.config.hdist
+	return s.layers.LatestKnownLayer() - uint64(s.config.hdist)
 }
 
 func (s *Syncer) Synchronise() {
 	for i := s.layers.LocalLayerCount(); i < s.maxSyncLayer(); {
 		i++
-		blockIds := s.getLayerBlockIDs(i) //returns a set of all known blocks in the mesh
-		output := make(chan Block)
+		blockIds := s.getLayerBlockIDs(mesh.LayerID(i)) //returns a set of all known blocks in the mesh
+		output := make(chan *mesh.Block)
 		// each worker goroutine tries to fetch a block iteratively from each peer
 		var wg sync.WaitGroup
 		wg.Add(s.config.concurrency)
@@ -170,18 +165,18 @@ func (s *Syncer) Synchronise() {
 
 		for block := range output {
 			log.Debug("add block to layer", block)
-			blocks = append(blocks, mesh.NewExistingBlock(block.GetId(), block.GetLayer(), nil))
+			blocks = append(blocks, mesh.NewExistingBlock(block.Id(), block.Layer(), nil))
 		}
 
 		log.Debug("add layer ", i)
 
-		s.layers.AddLayer(mesh.NewExistingLayer(i, blocks))
+		s.layers.AddLayer(mesh.NewExistingLayer(mesh.LayerID(i), blocks))
 	}
 
 	log.Debug("synchronise done, local layer index is ", s.layers.LocalLayerCount())
 }
 
-func (s *Syncer) getLayerBlockIDs(index uint32) chan uint32 {
+func (s *Syncer) getLayerBlockIDs(index mesh.LayerID) chan mesh.BlockID {
 
 	m := make(map[string]Peer, 20)
 	peers := s.peers.GetPeers()
@@ -198,7 +193,7 @@ func (s *Syncer) getLayerBlockIDs(index uint32) chan uint32 {
 		m[string(hash)] = p
 	}
 
-	idSet := make(map[uint32]bool, 300) //todo move this to config
+	idSet := make(map[uint64]bool, 300) //todo move this to config
 
 	//todo concurrency
 	for _, v := range m {
@@ -213,24 +208,28 @@ func (s *Syncer) getLayerBlockIDs(index uint32) chan uint32 {
 		}
 	}
 
-	res := make(chan uint32, len(idSet))
+	res := make(chan mesh.BlockID, len(idSet))
 	for b := range idSet {
-		res <- b
+		res <- mesh.BlockID(b)
 	}
 
 	close(res)
 	return res
 }
 
-func (s *Syncer) sendBlockRequest(peer Peer, id uint32) (chan Block, error) {
+func newExistingBlock(block *pb.Block) *mesh.Block {
+	return mesh.NewExistingBlock(mesh.BlockID(block.Id), mesh.LayerID(block.Layer), nil)
+}
+
+func (s *Syncer) sendBlockRequest(peer Peer, id mesh.BlockID) (chan *mesh.Block, error) {
 	log.Debug("send block request Peer: ", peer, " id: ", id)
-	data := &pb.FetchBlockReq{Id: id}
+	data := &pb.FetchBlockReq{Id: uint64(id)}
 	payload, err := proto.Marshal(data)
 	if err != nil {
 		return nil, err
 	}
 
-	ch := make(chan Block)
+	ch := make(chan *mesh.Block)
 
 	foo := func(msg []byte) {
 		defer close(ch)
@@ -240,16 +239,17 @@ func (s *Syncer) sendBlockRequest(peer Peer, id uint32) (chan Block, error) {
 			log.Error("could not unmarshal block data")
 			return
 		}
-		ch <- data.Block
+
+		ch <- newExistingBlock(data.Block)
 	}
 
 	return ch, s.p.SendAsyncRequest(BLOCK, payload, peer, foo)
 }
 
-func (s *Syncer) sendLayerHashRequest(peer Peer, layer uint32) ([]byte, error) {
+func (s *Syncer) sendLayerHashRequest(peer Peer, layer mesh.LayerID) ([]byte, error) {
 	log.Debug("send Layer hash request Peer: ", peer, " layer: ", layer)
 
-	data := &pb.LayerHashReq{Layer: layer}
+	data := &pb.LayerHashReq{Layer: uint64(layer)}
 	payload, err := proto.Marshal(data)
 	if err != nil {
 		log.Error("could not marshall layer hash request")
@@ -272,16 +272,16 @@ func (s *Syncer) sendLayerHashRequest(peer Peer, layer uint32) ([]byte, error) {
 	return res.Hash, nil
 }
 
-func (s *Syncer) sendLayerIDsRequest(peer Peer, idx uint32) (chan []uint32, error) {
+func (s *Syncer) sendLayerIDsRequest(peer Peer, idx mesh.LayerID) (chan []uint64, error) {
 	log.Debug("send Layer ids request Peer: ", peer, " layer: ", idx)
 
-	data := &pb.LayerIdsReq{Layer: idx}
+	data := &pb.LayerIdsReq{Layer: uint64(idx)}
 	payload, err := proto.Marshal(data)
 	if err != nil {
 		return nil, err
 	}
 
-	ch := make(chan []uint32)
+	ch := make(chan []uint64)
 	foo := func(msg []byte) {
 		defer close(ch)
 		data := &pb.LayerIdsResp{}
@@ -302,13 +302,14 @@ func (s *Syncer) blockRequestHandler(msg []byte) []byte {
 		return nil
 	}
 
-	block, err := s.layers.GetBlock(mesh.BlockID(req.Id))
+	block, err := s.layers.GetBlock(req.Id)
 	if err != nil {
 		log.Error("Error handling Block request message, err:", err) //todo describe err
 		return nil
 	}
 
-	payload, err := proto.Marshal(&pb.FetchBlockResp{Id: block.Id(), Block: &pb.Block{Id: block.Id(), Layer: block.Layer()}})
+	id := uint64(block.Id())
+	payload, err := proto.Marshal(&pb.FetchBlockResp{Id: id, Block: &pb.Block{Id: id, Layer: uint64(block.Layer())}})
 	if err != nil {
 		log.Error("Error handling request message, err:", err) //todo describe err
 		return nil
@@ -326,7 +327,7 @@ func (s *Syncer) layerHashRequestHandler(msg []byte) []byte {
 		return nil
 	}
 
-	layer, err := s.layers.GetLayer(int(req.Layer))
+	layer, err := s.layers.GetLayer(req.Layer)
 	if err != nil {
 		log.Error("Error handling layer request message, err:", err) //todo describe err
 		return nil
@@ -347,7 +348,7 @@ func (s *Syncer) layerIdsRequestHandler(msg []byte) []byte {
 		return nil
 	}
 
-	layer, err := s.layers.GetLayer(int(req.Layer))
+	layer, err := s.layers.GetLayer(req.Layer)
 	if err != nil {
 		log.Debug("Error handling layer ids request message, err:", err) //todo describe err
 		return nil
@@ -355,10 +356,10 @@ func (s *Syncer) layerIdsRequestHandler(msg []byte) []byte {
 
 	blocks := layer.Blocks()
 
-	ids := make([]uint32, 0, len(blocks))
+	ids := make([]uint64, 0, len(blocks))
 
 	for _, b := range blocks {
-		ids = append(ids, b.Id())
+		ids = append(ids, uint64(b.Id()))
 	}
 
 	payload, err := proto.Marshal(&pb.LayerIdsResp{Ids: ids})

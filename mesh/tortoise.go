@@ -11,7 +11,7 @@ type NewIdQueue chan uint32
 
 type BlockPosition struct {
 	visibility bitarray.BitArray
-	layer      uint32
+	layer      LayerID
 }
 
 type Algorithm struct {
@@ -21,7 +21,7 @@ type Algorithm struct {
 	idQueue           NewIdQueue
 	posVotes          []bitarray.BitArray
 	visibilityMap     [20000]BlockPosition
-	layers            map[uint32]*Layer
+	layers            map[LayerID]*Layer
 	layerSize         uint32
 	cachedLayers      uint32
 	remainingBlockIds uint32
@@ -39,7 +39,7 @@ func NewAlgorithm(layerSize uint32, cachedLayers uint32) Algorithm {
 		totalBlocks:       totBlocks,
 		posVotes:          make([]bitarray.BitArray, totBlocks),
 		//visibilityMap:     make([20000]BlockPosition),
-		layers:       make(map[uint32]*Layer),
+		layers:       make(map[LayerID]*Layer),
 		layerSize:    layerSize,
 		cachedLayers: cachedLayers,
 	}
@@ -76,7 +76,7 @@ func (alg *Algorithm) IsTortoiseValid(originBlock *Block, targetBlock BlockID, t
 	return originBlock.coin
 }
 
-func (alg *Algorithm) getLayerById(layerId uint32) (*Layer, error) {
+func (alg *Algorithm) getLayerById(layerId LayerID) (*Layer, error) {
 	if _, ok := alg.layers[layerId]; !ok {
 		return nil, fmt.Errorf("layer id not found %v", layerId)
 	}
@@ -209,7 +209,7 @@ func (alg *Algorithm) HandleIncomingLayer(l *Layer) {
 
 			blockId := alg.assignIdForBlock(originBlock)
 			alg.posVotes[blockId] = *votesBM
-			alg.visibilityMap[blockId] = BlockPosition{*visibleBM, originBlock.layerIndex}
+			alg.visibilityMap[blockId] = BlockPosition{*visibleBM, originBlock.layerId}
 		}
 
 	}
