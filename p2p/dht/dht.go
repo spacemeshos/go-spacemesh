@@ -24,7 +24,7 @@ type DHT interface {
 	Size() int
 }
 
-// LookupTimeout is the timelimit we give to a single LookupFunc operation
+// LookupTimeout is the timelimit we give to a single lookup operation
 const LookupTimeout = 15 * time.Second
 
 var (
@@ -54,8 +54,7 @@ func (d *KadDHT) Size() int {
 	return <-req
 }
 
-// SelectPeers asks routingtable to randomly select a slice of nodes in size `qty`
-// SelectPeers asks routingtable to randomly select a slice of nodes in size `qty`
+// SelectPeers asks routing table to randomly select a slice of nodes in size `qty`
 func (d *KadDHT) SelectPeers(qty int) []node.Node {
 	return d.rt.SelectPeers(qty)
 }
@@ -72,7 +71,7 @@ func New(node *node.LocalNode, config config.SwarmConfig, service service.Servic
 	return d
 }
 
-// Update insert or UpdateFunc a node in the routing table.
+// Update insert or updates a node in the routing table.
 func (d *KadDHT) Update(node node.Node) {
 	d.rt.Update(node)
 }
@@ -138,7 +137,7 @@ func (d *KadDHT) kadLookup(id string, searchList []node.Node) (node.Node, error)
 			return node.EmptyNode, ErrLookupFailed
 		}
 
-		// LookupFunc nodeId using the target servers
+		// lookup nodeId using the target servers
 		res := d.findNodeOp(servers, queried, id, closestNode)
 		if len(res) > 0 {
 

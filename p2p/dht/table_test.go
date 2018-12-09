@@ -81,7 +81,7 @@ func TestTableUpdate(t *testing.T) {
 				t.Fatalf("Expected to find 5 close nodes to %s.", n.DhtID().Pretty())
 			}
 		case <-time.After(time.Second * 5):
-			t.Fatalf("Failed to get expected UpdateFunc callbacks on time")
+			t.Fatalf("Failed to get expected update callbacks on time")
 		}
 	}
 }
@@ -113,7 +113,7 @@ func TestTableFind(t *testing.T) {
 		select {
 		case c := <-callback:
 			if c.Peer == node.EmptyNode || c.Peer != n {
-				t.Fatalf("Failed to LookupFunc known identity...")
+				t.Fatalf("Failed to lookup known identity...")
 			}
 		case <-time.After(time.Second * 5):
 			t.Fatalf("Failed to get expected nearest callbacks on time")
