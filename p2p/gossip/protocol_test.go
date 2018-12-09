@@ -9,6 +9,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/stretchr/testify/assert"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -30,7 +31,7 @@ type mockBaseNetwork struct {
 func newMockBaseNetwork() *mockBaseNetwork {
 	return &mockBaseNetwork{
 		make(map[string]uint32),
-		make(chan service.Message, 20),
+		make(chan service.Message, 30),
 		make([]chan crypto.PublicKey, 0, 5),
 		make([]chan crypto.PublicKey, 0, 5),
 		0,
@@ -47,25 +48,27 @@ func (mbn *mockBaseNetwork) SendMessage(peerPubKey string, protocol string, payl
 	mbn.lastMsg = payload
 	mbn.msgSentByPeer[peerPubKey]++
 	mbn.totalMsgCount++
-	releaseWaiters(mbn.msgwg)
 	mbn.msgMutex.Unlock()
+	releaseWaiters(mbn.msgwg)
 	return nil
 }
 
 func passOrDeadlock(t testing.TB, group *sync.WaitGroup) {
 	ch := make(chan struct{})
-	go func(wg *sync.WaitGroup, ch chan struct{}) {
-		wg.Wait()
-		close(ch)
-	}(group, ch)
+	go func(ch chan struct{}, t testing.TB) {
+		timer := time.NewTimer(time.Second*3)
+		for {
+			select {
+			case <-ch:
+				return
+			case <-timer.C:
+				t.FailNow() // deadlocked
+			}
+		}
+	}(ch, t)
 
-	timer := time.NewTimer(time.Second * 5)
-	select {
-	case <-ch:
-		return
-	case <-timer.C:
-		t.Error("deadlock")
-	}
+	group.Wait()
+	close(ch)
 }
 
 // we use releaseWaiters to release a waitgroup and not panic if we don't use it
@@ -175,6 +178,34 @@ func newTestSignedMessageData(t testing.TB, signer Signer) []byte {
 	return signedMessage(t, signer, pm).Bytes()
 }
 
+func addPeersAndTest(t testing.TB, num int, p *Protocol, net *mockBaseNetwork, work bool) {
+
+	pc := p.peersCount()
+	reg , _ := net.SubscribePeerEvents()
+	net.addRandomPeers(num)
+
+	i := 0
+lop:
+	for {
+		select {
+		case <-reg:
+			i++
+			runtime.Gosched() // we need to somehow let other goroutines work before us
+		default:
+			break lop
+		}
+	}
+
+	if !assert.Equal(t, num, i) {
+		t.FailNow()
+	}
+
+	worked := pc+num == p.peersCount()
+	if worked != work {
+		t.FailNow()
+	}
+}
+
 //todo : more unit tests
 
 func TestNeighborhood_AddIncomingPeer(t *testing.T) {
@@ -202,7 +233,7 @@ func TestNeighborhood_Relay(t *testing.T) {
 	net := newMockBaseNetwork()
 	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newTestSigner(t), log.New("tesT", "", ""))
 	n.Start()
-	net.addRandomPeers(20)
+	addPeersAndTest(t, 20, n, net, true)
 
 	signer := newTestSigner(t)
 	pm := &pb.ProtocolMessage{
@@ -231,7 +262,7 @@ func TestNeighborhood_Broadcast(t *testing.T) {
 	net := newMockBaseNetwork()
 	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newTestSigner(t), log.New("tesT", "", ""))
 	n.Start()
-	net.addRandomPeers(20)
+	addPeersAndTest(t, 20, n, net, true)
 	net.msgwg.Add(20)
 
 	n.Broadcast([]byte("LOL"), "")
@@ -264,8 +295,8 @@ func TestNeighborhood_Relay2(t *testing.T) {
 	assert.Equal(t, 1, net.processProtocolCount)
 	assert.Equal(t, 0, net.totalMessageSent())
 
+	addPeersAndTest(t, 20, n, net, true)
 	net.msgwg.Add(20)
-	net.addRandomPeers(20)
 	net.inbox <- msg
 	passOrDeadlock(t, net.msgwg)
 	assert.Equal(t, 20, net.totalMessageSent())
@@ -277,15 +308,15 @@ func TestNeighborhood_Broadcast2(t *testing.T) {
 	n.Start()
 
 	msgB := newTestSignedMessageData(t, newTestSigner(t))
-	net.addRandomPeers(1)
+	addPeersAndTest(t, 1, n, net, true)
 	net.msgwg.Add(1)
 	n.Broadcast(msgB, "") // dosent matter
 	passOrDeadlock(t, net.msgwg)
 	assert.Equal(t, 0, net.processProtocolCount)
 	assert.Equal(t, 1, net.totalMessageSent())
 
+	addPeersAndTest(t, 20, n, net, true)
 	net.msgwg.Add(20)
-	net.addRandomPeers(20)
 	var msg service.Message = TestMessage{service.Data_Bytes{net.lastMsg}}
 	net.inbox <- msg
 	passOrDeadlock(t, net.msgwg)
@@ -300,7 +331,7 @@ func TestNeighborhood_Broadcast3(t *testing.T) {
 	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newTestSigner(t), log.New("tesT", "", ""))
 	n.Start()
 
-	net.addRandomPeers(20)
+	addPeersAndTest(t, 20, n, net, true)
 
 	msgB := []byte("LOL")
 	net.msgwg.Add(20)
@@ -327,14 +358,16 @@ func TestNeighborhood_Relay3(t *testing.T) {
 	assert.Equal(t, 1, net.processProtocolCount)
 	assert.Equal(t, 0, net.totalMessageSent())
 
-	net.addRandomPeers(20)
+	addPeersAndTest(t, 20, n, net, true)
+
 	net.msgwg.Add(20)
 	net.inbox <- msg
 	passOrDeadlock(t, net.msgwg)
 	assert.Equal(t, 1, net.processProtocolCount)
 	assert.Equal(t, 20, net.totalMessageSent())
 
-	net.addRandomPeers(1)
+	addPeersAndTest(t, 1, n, net, true)
+
 	net.msgwg.Add(1)
 	net.inbox <- msg
 	passOrDeadlock(t, net.msgwg)
@@ -348,14 +381,11 @@ func TestNeighborhood_Start(t *testing.T) {
 	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newTestSigner(t), log.New("tesT", "", ""))
 
 	// before Start
-	net.addRandomPeers(20)
-	assert.Equal(t, 0, n.peersCount())
+	addPeersAndTest(t, 20, n, net, false)
 
 	n.Start()
 
-	net.addRandomPeers(20)
-	time.Sleep(300 * time.Millisecond)
-	assert.Equal(t, 20, n.peersCount())
+	addPeersAndTest(t, 20, n, net, true)
 }
 
 func TestNeighborhood_Close(t *testing.T) {
@@ -363,13 +393,10 @@ func TestNeighborhood_Close(t *testing.T) {
 	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newTestSigner(t), log.New("tesT", "", ""))
 
 	n.Start()
-	net.addRandomPeers(20)
-	time.Sleep(300 * time.Millisecond)
-	assert.Equal(t, 20, n.peersCount())
+	addPeersAndTest(t, 20, n, net, true)
 
 	n.Close()
-	net.addRandomPeers(20)
-	assert.Equal(t, 20, n.peersCount())
+	addPeersAndTest(t, 20, n, net, false)
 }
 
 func TestNeighborhood_Disconnect(t *testing.T) {
