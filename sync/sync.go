@@ -45,6 +45,7 @@ func (s *Syncer) ForceSync() {
 }
 
 func (s *Syncer) Close() {
+	s.layers.Close()
 	close(s.forceSync)
 	close(s.exit)
 }
@@ -130,26 +131,21 @@ func (s *Syncer) maxSyncLayer() uint64 {
 
 func (s *Syncer) Synchronise() {
 	for i := s.layers.LocalLayerCount(); i < s.maxSyncLayer(); {
-		i++
 		blockIds := s.getLayerBlockIDs(mesh.LayerID(i)) //returns a set of all known blocks in the mesh
 		output := make(chan *mesh.Block)
 		// each worker goroutine tries to fetch a block iteratively from each peer
 		var wg sync.WaitGroup
 		wg.Add(s.config.concurrency)
-
 		for i := 0; i < s.config.concurrency; i++ {
 			go func() {
 				defer wg.Done()
 				for id := range blockIds {
-					for _, p := range s.peers.GetPeers() {
-						if bCh, err := s.sendBlockRequest(p, id); err == nil {
-							b := <-bCh
-							if b != nil && s.sv.ValidateBlock(b) { //some validation testing
-								output <- b
-								break
-							}
-
-						}
+					//check local database
+					b, err := s.layers.GetBlock(id)
+					if err == nil {
+						output <- b
+					} else if b := s.getBlockFromPeers(id); b != nil {
+						output <- b
 					}
 				}
 
@@ -171,9 +167,22 @@ func (s *Syncer) Synchronise() {
 		log.Debug("add layer ", i)
 
 		s.layers.AddLayer(mesh.NewExistingLayer(mesh.LayerID(i), blocks))
+		i++
 	}
 
 	log.Debug("synchronise done, local layer index is ", s.layers.LocalLayerCount())
+}
+
+func (s *Syncer) getBlockFromPeers(id mesh.BlockID) *mesh.Block {
+	for _, p := range s.peers.GetPeers() {
+		if bCh, err := s.sendBlockRequest(p, id); err == nil {
+			b := <-bCh
+			if b != nil && s.sv.ValidateBlock(b) { //some validation testing
+				return b
+			}
+		}
+	}
+	return nil
 }
 
 func (s *Syncer) getLayerBlockIDs(index mesh.LayerID) chan mesh.BlockID {
@@ -302,7 +311,7 @@ func (s *Syncer) blockRequestHandler(msg []byte) []byte {
 		return nil
 	}
 
-	block, err := s.layers.GetBlock(req.Id)
+	block, err := s.layers.GetBlock(mesh.BlockID(req.Id))
 	if err != nil {
 		log.Error("Error handling Block request message, err:", err) //todo describe err
 		return nil
@@ -327,7 +336,7 @@ func (s *Syncer) layerHashRequestHandler(msg []byte) []byte {
 		return nil
 	}
 
-	layer, err := s.layers.GetLayer(req.Layer)
+	layer, err := s.layers.GetLayer(mesh.LayerID(req.Layer))
 	if err != nil {
 		log.Error("Error handling layer request message, err:", err) //todo describe err
 		return nil
@@ -348,7 +357,7 @@ func (s *Syncer) layerIdsRequestHandler(msg []byte) []byte {
 		return nil
 	}
 
-	layer, err := s.layers.GetLayer(req.Layer)
+	layer, err := s.layers.GetLayer(mesh.LayerID(req.Layer))
 	if err != nil {
 		log.Debug("Error handling layer ids request message, err:", err) //todo describe err
 		return nil

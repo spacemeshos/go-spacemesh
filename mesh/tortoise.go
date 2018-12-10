@@ -73,25 +73,25 @@ func (alg *Algorithm) IsTortoiseValid(originBlock *Block, targetBlock BlockID, t
 		return false
 	}
 
-	return originBlock.coin
+	return originBlock.Coin
 }
 
 func (alg *Algorithm) getLayerById(layerId LayerID) (*Layer, error) {
 	if _, ok := alg.layers[layerId]; !ok {
-		return nil, fmt.Errorf("layer id not found %v", layerId)
+		return nil, fmt.Errorf("layer BlockId not found %v", layerId)
 	}
 	return alg.layers[layerId], nil
 }
 
 func (alg *Algorithm) CountVotesInLastLayer(block *Block) (uint64, uint64) {
-	return block.conVotes, block.proVotes
+	return block.ConVotes, block.ProVotes
 }
 
 func (alg *Algorithm) createBlockVotingMap(origin *Block) (*bitarray.BitArray, *bitarray.BitArray) {
 	blockMap := bitarray.NewBitArray(uint64(alg.totalBlocks))
 	visibilityMap := bitarray.NewBitArray(uint64(alg.totalBlocks))
 	// Count direct voters
-	for blockId, vote := range origin.blockVotes { //todo: check for double votes
+	for blockId, vote := range origin.BlockVotes { //todo: check for double votes
 		//todo: assert that block exists
 		targetBlockId := uint64(alg.block2Id[blockId])
 		block := alg.allBlocks[blockId]
@@ -100,17 +100,17 @@ func (alg *Algorithm) createBlockVotingMap(origin *Block) (*bitarray.BitArray, *
 		visibilityMap = visibilityMap.Or(targetPosition.visibility)
 		if vote {
 			blockMap.SetBit(targetBlockId)
-			block.proVotes++
+			block.ProVotes++
 		} else {
-			block.conVotes++
+			block.ConVotes++
 		}
 	}
 	count := 0
-	ln := len(origin.blockVotes)
+	ln := len(origin.BlockVotes)
 	// Go over all other blocks that exist and calculate the origin blocks votes for them
 	for blockId, targetBlockIdx := range alg.block2Id {
 		if count < ln {
-			if _, ok := origin.blockVotes[blockId]; ok {
+			if _, ok := origin.BlockVotes[blockId]; ok {
 				count++
 				continue
 			}
@@ -132,7 +132,7 @@ func (alg *Algorithm) countTotalVotesForBlock(targetIdx uint64, visibleBlocks bi
 	var posVotes, conVotes uint64 = 0, 0
 	targetLayer := alg.visibilityMap[targetIdx].layer
 	ln := len(alg.block2Id)
-	for blockIdx := 0; blockIdx < ln; blockIdx++ { // possible bug what if there is an id > len(alg.block2id)
+	for blockIdx := 0; blockIdx < ln; blockIdx++ { // possible bug what if there is an BlockId > len(alg.block2id)
 		//if this block sees our
 		//if alg.allBlocks[targetID].index
 		blockPosition := &alg.visibilityMap[blockIdx]
@@ -162,10 +162,10 @@ func (alg *Algorithm) zeroBitColumn(idx uint64) {
 
 func (alg *Algorithm) recycleLayer(l *Layer) {
 	for _, block := range l.blocks {
-		id := alg.block2Id[block.id]
-		alg.idQueue <- alg.block2Id[block.id]
-		delete(alg.block2Id, block.id)
-		delete(alg.allBlocks, block.id)
+		id := alg.block2Id[block.BlockId]
+		alg.idQueue <- alg.block2Id[block.BlockId]
+		delete(alg.block2Id, block.BlockId)
+		delete(alg.allBlocks, block.BlockId)
 		alg.zeroBitColumn(uint64(id))
 	}
 	delete(alg.layers, l.index)
@@ -173,28 +173,28 @@ func (alg *Algorithm) recycleLayer(l *Layer) {
 
 func (alg *Algorithm) assignIdForBlock(blk *Block) uint32 {
 	//todo: should this section be protected by a mutex?
-	alg.allBlocks[blk.id] = blk
+	alg.allBlocks[blk.BlockId] = blk
 	if len(alg.idQueue) > 0 {
 		id := <-alg.idQueue
-		alg.block2Id[blk.id] = id
+		alg.block2Id[blk.BlockId] = id
 		return id
 	}
 	if alg.remainingBlockIds > 0 {
 		newId := alg.totalBlocks - alg.remainingBlockIds
-		alg.block2Id[blk.id] = newId
+		alg.block2Id[blk.BlockId] = newId
 		alg.remainingBlockIds--
 
 		return newId
 	} else {
-		log.Error("Cannot find id for block, something went wrong")
-		panic("Cannot find id for block, something went wrong")
+		log.Error("Cannot find BlockId for block, something went wrong")
+		panic("Cannot find BlockId for block, something went wrong")
 		return 0
 	}
 
 }
 
 func (alg *Algorithm) HandleIncomingLayer(l *Layer) {
-	log.Info("received layer id %v total blocks: %v =====", l.index, len(alg.allBlocks))
+	log.Info("received layer BlockId %v total blocks: %v =====", l.index, len(alg.allBlocks))
 	//todo: thread safety
 	alg.layers[l.index] = l
 	alg.layerQueue <- l
@@ -209,7 +209,7 @@ func (alg *Algorithm) HandleIncomingLayer(l *Layer) {
 
 			blockId := alg.assignIdForBlock(originBlock)
 			alg.posVotes[blockId] = *votesBM
-			alg.visibilityMap[blockId] = BlockPosition{*visibleBM, originBlock.layerId}
+			alg.visibilityMap[blockId] = BlockPosition{*visibleBM, originBlock.Layer()}
 		}
 
 	}

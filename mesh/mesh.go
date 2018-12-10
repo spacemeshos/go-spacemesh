@@ -15,8 +15,8 @@ import (
 
 type Mesh interface {
 	AddLayer(layer *Layer) error
-	GetLayer(i uint64) (*Layer, error)
-	GetBlock(id uint64) (*Block, error)
+	GetLayer(i LayerID) (*Layer, error)
+	GetBlock(id BlockID) (*Block, error)
 	LocalLayerCount() uint64
 	LatestKnownLayer() uint64
 	SetLatestKnownLayer(idx uint64)
@@ -38,12 +38,7 @@ type LayersDB struct {
 	lcMutex          sync.RWMutex
 }
 
-func NewLayers(newPeerCh chan Peer, newBlockCh chan *Block) Mesh {
-
-	blocks := database.NewLevelDbStore("blocks", nil, nil)
-
-	layers := database.NewLevelDbStore("layers", nil, nil)
-
+func NewMesh(newPeerCh chan Peer, newBlockCh chan *Block, layers database.DB, blocks database.DB) Mesh {
 	ll := &LayersDB{
 		blocks:     blocks,
 		layers:     layers,
@@ -78,32 +73,66 @@ func (s *LayersDB) run() {
 	}
 }
 
-func (ll *LayersDB) GetLayer(i uint64) (*Layer, error) {
+func (ll *LayersDB) GetLayer(i LayerID) (*Layer, error) {
 
 	ll.lMutex.RLock()
-	if i > ll.layerCount {
+	index := uint64(i)
+	if index >= ll.layerCount {
 		ll.lMutex.RUnlock()
 		log.Debug("unknown layer ")
 		return nil, errors.New("unknown layer ")
 	}
 	ll.lMutex.RUnlock()
 
-	l, err := ll.layers.Get(new(big.Int).SetUint64(i).Bytes())
+	l, err := ll.layers.Get(new(big.Int).SetUint64(index).Bytes())
 	if err != nil {
 		return nil, errors.New("error getting layer from db ")
 	}
 
-	var layer Layer
-	_, err = xdr.Unmarshal(bytes.NewReader(l), &layer)
-	if err != nil {
+	var ids []BlockID
+	if _, err = xdr.Unmarshal(bytes.NewReader(l), &ids); err != nil {
 		return nil, errors.New("error marshaling layer ")
 	}
 
-	return &layer, nil
+	blocks, err := ll.getLayerBlocks(ids)
+	if err != nil {
+		return nil, errors.New("could not get all blocks from db ")
+	}
+
+	return &Layer{index: LayerID(i), blocks: blocks}, nil
 }
 
-func (ll *LayersDB) GetBlock(id uint64) (*Block, error) {
-	b, err := ll.blocks.Get(new(big.Int).SetUint64(id).Bytes())
+func (ll *LayersDB) getLayerBlocks(ids []BlockID) ([]*Block, error) {
+
+	blocks := make([]*Block, 0, len(ids))
+	for _, id := range ids {
+		block, err := ll.GetBlock(id)
+		if err != nil {
+			return nil, errors.New("could not retrive block " + string(id))
+		}
+		blocks = append(blocks, block)
+	}
+
+	return blocks, nil
+}
+
+func (ll *LayersDB) AddBlock(block Block) error {
+
+	bytes, err := blockAsBytes(block)
+	if err != nil {
+		return errors.New("could not encode block")
+	}
+
+	err = ll.blocks.Put(new(big.Int).SetUint64(uint64(block.BlockId)).Bytes(), bytes)
+	if err != nil {
+		return errors.New("could not add block to database")
+	}
+
+	return nil
+}
+
+func (ll *LayersDB) GetBlock(id BlockID) (*Block, error) {
+	b, err := ll.blocks.Get(new(big.Int).SetUint64(uint64(id)).Bytes())
 	if err != nil {
 		return nil, errors.New("could not find block in database")
 	}
@@ -148,26 +177,18 @@ func (ll *LayersDB) AddLayer(layer *Layer) error {
 	ll.lMutex.Lock()
 	//if is valid
 
-	ids := make([]BlockID, 0, len(layer.blocks))
-	for _, b := range layer.blocks {
-		ids = append(ids, b.id)
+	w, err := blockIdsAsBytes(layer)
+	if err != nil {
+		return errors.New("could not encode layer block ids")
 	}
 
-	var w bytes.Buffer
-	if _, err := xdr.Marshal(&w, &ids); err != nil {
-		return errors.New("error marshalling block ids  ")
-	}
-
-	ll.layers.Put(new(big.Int).SetUint64(uint64(layer.index)).Bytes(), w.Bytes())
+	ll.layers.Put(new(big.Int).SetUint64(uint64(layer.index)).Bytes(), w)
 
 	//add blocks to db
 	for _, b := range layer.blocks {
-		var w bytes.Buffer
-		if _, err := xdr.Marshal(&w, &b); err != nil {
-			return errors.New("error marshalling blocks   ")
+		if err = ll.AddBlock(*b); err != nil {
+			log.Error("could not add block "+string(b.BlockId), err)
 		}
-
-		ll.blocks.Put(new(big.Int).SetUint64(uint64(b.id)).Bytes(), w.Bytes())
 	}
 
 	ll.lcMutex.Lock()
@@ -176,4 +197,24 @@ func (ll *LayersDB) AddLayer(layer *Layer) error {
 	ll.lMutex.Unlock()
 
 	return nil
+}
+
+func blockIdsAsBytes(layer *Layer) ([]byte, error) {
+	ids := make([]BlockID, 0, len(layer.blocks))
+	for _, b := range layer.blocks {
+		ids = append(ids, b.BlockId)
+	}
+	var w bytes.Buffer
+	if _, err := xdr.Marshal(&w, &ids); err != nil {
+		return nil, errors.New("error marshalling block ids ")
+	}
+	return w.Bytes(), nil
+}
+
+func blockAsBytes(block Block) ([]byte, error) {
+	var w bytes.Buffer
+	if _, err := xdr.Marshal(&w, &block); err != nil {
+		return nil, errors.New("error marshalling block ids ")
+	}
+	return w.Bytes(), nil
 }

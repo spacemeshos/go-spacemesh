@@ -11,44 +11,44 @@ type LayerID uint64
 var layerCounter LayerID = 0
 
 type Block struct {
-	id         BlockID
-	layerId    LayerID
-	blockVotes map[BlockID]bool
-	timestamp  time.Time
-	coin       bool
-	data       []byte
-	proVotes   uint64
-	conVotes   uint64
+	BlockId    BlockID
+	LayerIndex LayerID
+	Data       []byte
+	Coin       bool
+	Timestamp  time.Time
+	ProVotes   uint64
+	ConVotes   uint64
+	BlockVotes map[BlockID]bool
 }
 
 func (b Block) Id() BlockID {
-	return b.id
+	return b.BlockId
 }
 
 func (b Block) Layer() LayerID {
-	return b.layerId
+	return b.LayerIndex
 }
 
 func NewExistingBlock(id BlockID, layerIndex LayerID, data []byte) *Block {
 	b := Block{
-		id:         BlockID(id),
-		blockVotes: make(map[BlockID]bool),
-		layerId:    LayerID(layerIndex),
-		data:       data,
+		BlockId:    BlockID(id),
+		BlockVotes: make(map[BlockID]bool),
+		LayerIndex: LayerID(layerIndex),
+		Data:       data,
 	}
 	return &b
 }
 
 func NewBlock(coin bool, data []byte, ts time.Time, layerId LayerID) *Block {
 	b := Block{
-		id:         BlockID(uuid.New().ID()),
-		layerId:    layerId,
-		blockVotes: make(map[BlockID]bool),
-		timestamp:  ts,
-		data:       data,
-		coin:       coin,
-		proVotes:   0,
-		conVotes:   0,
+		BlockId:    BlockID(uuid.New().ID()),
+		LayerIndex: layerId,
+		BlockVotes: make(map[BlockID]bool),
+		Timestamp:  ts,
+		Data:       data,
+		Coin:       coin,
+		ProVotes:   0,
+		ConVotes:   0,
 	}
 	return &b
 }
@@ -71,7 +71,7 @@ func (l *Layer) Hash() []byte {
 }
 
 func (l *Layer) AddBlock(block *Block) {
-	block.layerId = l.index
+	block.LayerIndex = l.index
 	l.blocks = append(l.blocks, block)
 }
 
