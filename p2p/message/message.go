@@ -51,10 +51,8 @@ func SignMessage(pv crypto.PrivateKey, pm *pb.ProtocolMessage) error {
 
 // AuthAuthor authorizes that a message is signed by its claimed author
 func AuthAuthor(pm *pb.ProtocolMessage) error {
-	// TODO: consider getting pubkey from outside. attackar coul'd just manipulate the whole message pubkey and sign.
 	if pm == nil || pm.Metadata == nil {
-		fmt.Println("WTF HAPPENED !?", pm.Metadata, pm)
-		//spew.Dump(*pm)
+		return fmt.Errorf("can't sign defected message, message or metadata was empty")
 	}
 
 	sign := pm.Metadata.MsgSign
@@ -74,39 +72,6 @@ func AuthAuthor(pm *pb.ProtocolMessage) error {
 	}
 
 	v, err := pubkey.Verify(bin, sign)
-
-	if err != nil {
-		return err
-	}
-
-	if !v {
-		return fmt.Errorf("coudld'nt verify message")
-	}
-
-	pm.Metadata.MsgSign = sign // restore sign because maybe we'll send it again ( gossip )
-
-	return nil
-}
-
-// AuthSender authorizes that a message is signed by its claimed sender
-func AuthSender(pm *pb.ProtocolMessage, key crypto.PublicKey) error {
-	// TODO: consider getting pubkey from outside. attackar coul'd just manipulate the whole message pubkey and sign.
-	if pm == nil || pm.Metadata == nil {
-		fmt.Println("WTF HAPPENED !?", pm.Metadata, pm)
-		//spew.Dump(*pm)
-	}
-
-	sign := pm.Metadata.MsgSign
-
-	pm.Metadata.MsgSign = nil // we have to verify the message without the sign
-
-	bin, err := proto.Marshal(pm)
-
-	if err != nil {
-		return err
-	}
-
-	v, err := key.Verify(bin, sign)
 
 	if err != nil {
 		return err

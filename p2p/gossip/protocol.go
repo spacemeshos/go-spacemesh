@@ -6,6 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
+	"github.com/spacemeshos/go-spacemesh/p2p/message"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -29,34 +30,30 @@ func calcHash(msg []byte) hash {
 }
 
 // Interface for the underlying p2p layer
-type BaseNetwork interface {
+type baseNetwork interface {
 	SendMessage(peerPubKey string, protocol string, payload []byte) error
 	RegisterProtocol(protocol string) chan service.Message
 	SubscribePeerEvents() (conn chan crypto.PublicKey, disc chan crypto.PublicKey)
 	ProcessProtocolMessage(sender node.Node, protocol string, data service.Data) error
 }
 
-type Signer interface {
+type signer interface {
 	PublicKey() crypto.PublicKey
 	Sign(data []byte) ([]byte, error)
 }
 
 type protocolMessage struct {
 	msg     *pb.ProtocolMessage
-	isRelay bool
 }
 
 // Protocol is the gossip protocol
 type Protocol struct {
 	log.Log
 
-	ProtocolName string
-	config       config.SwarmConfig
-	net          BaseNetwork
-	signer       Signer
+	config config.SwarmConfig
+	net    baseNetwork
+	signer signer
 
-	peerConn chan crypto.PublicKey
-	peerDisc chan crypto.PublicKey
 	peers    map[string]*peer
 	shutdown chan struct{}
 
@@ -69,17 +66,14 @@ type Protocol struct {
 }
 
 // NewProtocol creates a new gossip protocol instance. Call Start to start reading peers
-func NewProtocol(config config.SwarmConfig, base BaseNetwork, signer Signer, log2 log.Log) *Protocol {
+func NewProtocol(config config.SwarmConfig, base baseNetwork, signer signer, log2 log.Log) *Protocol {
 	// intentionally not subscribing to peers events so that the channels won't block in case executing Start delays
 	relayChan := base.RegisterProtocol(ProtocolName)
 	return &Protocol{
 		Log:          log2,
-		ProtocolName: "/p2p/1.0/gossip",
 		config:       config,
 		net:          base,
 		signer:       signer,
-		peerConn:     nil,
-		peerDisc:     nil,
 		peers:        make(map[string]*peer),
 		shutdown:     make(chan struct{}),
 		oldMessageQ:  make(map[hash]struct{}), // todo : remember to drain this
@@ -161,19 +155,12 @@ func (prot *Protocol) propagateMessage(msg []byte, h hash) {
 	prot.peersMutex.RUnlock()
 }
 
-func (prot *Protocol) validateMessage(msg *pb.ProtocolMessage, authPubKey crypto.PublicKey) error {
-	sign := msg.Metadata.MsgSign
-	msg.Metadata.MsgSign = nil
-	bin, err := proto.Marshal(msg)
-	msg.Metadata.MsgSign = sign
-	if err != nil {
-		prot.Log.Error("failed to marshal message when validating gossip message, err %v", err)
-		return err
-	}
+func (prot *Protocol) validateMessage(msg *pb.ProtocolMessage) error {
 
-	valid, err := authPubKey.Verify(bin, sign)
-	if !valid || err != nil {
-		prot.Log.Error("fail to validate message's signature when validating gossip message, err %v", err)
+	err := message.AuthAuthor(msg)
+
+	if err != nil {
+		prot.Log.Error("fail to authorize gossip message, err %v", err)
 		return err
 	}
 
@@ -229,8 +216,8 @@ func (prot *Protocol) Broadcast(payload []byte, nextProt string) error {
 
 // Start a loop that process peers events
 func (prot *Protocol) Start() {
-	prot.peerConn, prot.peerDisc = prot.net.SubscribePeerEvents()
-	go prot.eventLoop()
+	peerConn, peerDisc := prot.net.SubscribePeerEvents() // this was start blocks until we registered.
+	go prot.eventLoop(peerConn, peerDisc)
 }
 
 func (prot *Protocol) addPeer(peer crypto.PublicKey) {
@@ -274,13 +261,7 @@ func (prot *Protocol) handleRelayMessage(msgB []byte) error {
 			return err
 		}
 
-		authKey, err := crypto.NewPublicKey(msg.Metadata.AuthPubKey)
-		if err != nil {
-			prot.Log.Error("failed to decode the auth public key when handling relay message, err %v", err)
-			return err
-		}
-
-		err = prot.validateMessage(msg, authKey)
+		err = prot.validateMessage(msg)
 		if err != nil {
 			prot.Log.Error("failed to validate message when handling relay message, err %v", err)
 			return err
@@ -296,6 +277,12 @@ func (prot *Protocol) handleRelayMessage(msgB []byte) error {
 			data = service.Data_MsgWrapper{Req: wrap.Req, MsgType: wrap.Type, ReqID: wrap.ReqID, Payload: wrap.Payload}
 		}
 
+		authKey, err := crypto.NewPublicKey(msg.Metadata.AuthPubKey)
+		if err != nil {
+			prot.Log.Error("failed to decode the auth public key when handling relay message, err %v", err)
+			return err
+		}
+
 		go prot.net.ProcessProtocolMessage(node.New(authKey, ""), msg.Metadata.NextProtocol, data)
 	}
 
@@ -304,19 +291,19 @@ func (prot *Protocol) handleRelayMessage(msgB []byte) error {
 	return nil
 }
 
-func (prot *Protocol) eventLoop() {
+func (prot *Protocol) eventLoop(peerConn chan crypto.PublicKey, peerDisc chan crypto.PublicKey) {
 loop:
 	for {
 		select {
 		case msg := <-prot.relayQ:
 			// incoming messages from p2p layer for process and relay
 			go func() {
-				//todo some err handling
+				//  [todo some err handling
 				prot.handleRelayMessage(msg.Bytes())
 			}()
-		case peer := <-prot.peerConn:
+		case peer := <-peerConn:
 			go prot.addPeer(peer)
-		case peer := <-prot.peerDisc:
+		case peer := <-peerDisc:
 			go prot.removePeer(peer)
 		case <-prot.shutdown:
 			break loop // maybe error ?

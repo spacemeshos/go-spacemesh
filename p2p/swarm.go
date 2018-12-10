@@ -1,6 +1,7 @@
 package p2p
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -89,8 +90,7 @@ type swarm struct {
 	morePeersReq      chan struct{}
 	connectingTimeout time.Duration
 
-	newPeerLock sync.RWMutex
-	delPeerLock sync.RWMutex
+	peerLock    sync.RWMutex
 	newPeerSub  []chan crypto.PublicKey
 	delPeerSub  []chan crypto.PublicKey
 }
@@ -160,7 +160,7 @@ func newSwarm(ctx context.Context, config config.Config, newNode bool, persist b
 
 	s.dht = dht.New(l, config.SwarmConfig, s)
 
-	s.gossip = gossip.NewProtocol(config.SwarmConfig, s, signerValidtaor(s), s.lNode.Log)
+	s.gossip = gossip.NewProtocol(config.SwarmConfig, s, newSignerValidator(s), s.lNode.Log)
 
 	s.lNode.Debug("Created swarm for local node %s, %s", l.Address(), l.Pretty())
 
@@ -172,24 +172,18 @@ type signerValidator struct {
 	signFunc func([]byte) ([]byte, error)
 }
 
+// PublicKey is the signerValidtor pair pub key
 func (sv *signerValidator) PublicKey() crypto.PublicKey {
 	return sv.pubKey
 }
 
+// Sign is delegating the sign function form the private key
 func (sv *signerValidator) Sign(data []byte) ([]byte, error) {
 	return sv.signFunc(data)
 }
 
-func signerValidtaor(s *swarm) *signerValidator {
+func newSignerValidator(s *swarm) *signerValidator {
 	return &signerValidator{s.lNode.PublicKey(), s.lNode.PrivateKey().Sign}
-}
-
-func (s *swarm) sign(data []byte) ([]byte, error) {
-	return s.lNode.PrivateKey().Sign(data)
-}
-
-func (s *swarm) publicKey() crypto.PublicKey {
-	return s.lNode.PublicKey()
 }
 
 func (s *swarm) Start() error {
@@ -211,22 +205,30 @@ func (s *swarm) Start() error {
 			err := s.dht.Bootstrap(s.ctx)
 			if err != nil {
 				s.bootErr = err
+				close(s.bootChan)
 				s.Shutdown()
+				return
 			}
 			close(s.bootChan)
 			s.lNode.Info("DHT Bootstrapped with %d peers in %v", s.dht.Size(), time.Since(b))
 		}()
 	}
 
+	// start gossip before starting to collect peers
+
+	s.gossip.Start() // non-blocking
+
 	// wait for neighborhood
 	go func() {
 		if s.config.SwarmConfig.Bootstrap {
 			s.waitForBoot()
 		}
-		err := s.StartNeighborhood()
+		err := s.startNeighborhood()
 		if err != nil {
 			s.gossipErr = err
+			close(s.gossipC)
 			s.Shutdown()
+			return
 		}
 		<-s.initial
 		close(s.gossipC)
@@ -496,8 +498,17 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 		return ErrBadFormat2
 	}
 
-	// authenticate message author - we already authenticated the sender via the shared session key secret
-	err = message.AuthSender(pm, msg.Conn.RemotePublicKey())
+	// authenticate valid pubkey, same as session remote pubkey and validate sign.
+	authPub, err := crypto.NewPublicKey(pm.Metadata.AuthPubKey)
+	if err != nil {
+		return ErrAuthAuthor
+	}
+
+	if !bytes.Equal(authPub.Bytes(), msg.Conn.RemotePublicKey().Bytes()) {
+		return ErrAuthAuthor
+	}
+
+	err = message.AuthAuthor(pm)
 	if err != nil {
 		return ErrAuthAuthor
 	}
@@ -547,7 +558,7 @@ func (s *swarm) ProcessProtocolMessage(sender node.Node, protocol string, data s
 
 // Broadcast creates a gossip message signs it and disseminate it to neighbors.
 func (s *swarm) Broadcast(protocol string, payload []byte) error {
-	return s.ProcessProtocolMessage(s.lNode.Node, s.gossip.ProtocolName, service.Data_Bytes{payload})
+	return s.ProcessProtocolMessage(s.lNode.Node, gossip.ProtocolName, service.Data_Bytes{payload})
 }
 
 // Neighborhood : neighborhood is the peers we keep close , meaning we try to keep connections
@@ -555,37 +566,35 @@ func (s *swarm) Broadcast(protocol string, payload []byte) error {
 // to run their logic with peers.
 
 func (s *swarm) publishNewPeer(peer crypto.PublicKey) {
-	s.newPeerLock.RLock()
+	s.peerLock.RLock()
 	for _, p := range s.newPeerSub {
 		select {
 		case p <- peer:
 		default:
 		}
 	}
-	s.newPeerLock.RUnlock()
+	s.peerLock.RUnlock()
 }
 
 func (s *swarm) publishDelPeer(peer crypto.PublicKey) {
-	s.delPeerLock.RLock()
+	s.peerLock.RLock()
 	for _, p := range s.delPeerSub {
 		select {
 		case p <- peer:
 		default:
 		}
 	}
-	s.delPeerLock.RUnlock()
+	s.peerLock.RUnlock()
 }
 
 // SubscribePeerEvents lets clients listen on events inside the swarm about peers. first chan is new peers, second is deleted peers.
 func (s *swarm) SubscribePeerEvents() (chan crypto.PublicKey, chan crypto.PublicKey) {
 	in := make(chan crypto.PublicKey, s.config.SwarmConfig.RandomConnections) // todo. what size this should be ? maybe let client pass channels.
 	del := make(chan crypto.PublicKey, s.config.SwarmConfig.RandomConnections)
-	s.newPeerLock.Lock()
+	s.peerLock.Lock()
 	s.newPeerSub = append(s.newPeerSub, in)
-	s.newPeerLock.Unlock()
-	s.delPeerLock.Lock()
 	s.delPeerSub = append(s.delPeerSub, del)
-	s.delPeerLock.Unlock()
+	s.peerLock.Unlock()
 	// todo : send the existing peers right away ?
 	return in, del
 }
@@ -593,10 +602,10 @@ func (s *swarm) SubscribePeerEvents() (chan crypto.PublicKey, chan crypto.Public
 // NoResultsInterval is the timeout we wait between requesting more peers repeatedly
 const NoResultsInterval = 1 * time.Second
 
-// StartNeighborhood a loop that manages the peers we are connected to all the time
+// startNeighborhood a loop that manages the peers we are connected to all the time
 // It connects to config.RandomConnections and after that maintains this number
 // of connections, if a connection is closed we notify the loop that we need more peers now.
-func (s *swarm) StartNeighborhood() error {
+func (s *swarm) startNeighborhood() error {
 	//TODO: Save and load persistent peers ?
 	s.lNode.Info("Neighborhood service started")
 

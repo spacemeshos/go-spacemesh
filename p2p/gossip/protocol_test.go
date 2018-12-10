@@ -9,7 +9,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/stretchr/testify/assert"
-	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -164,7 +163,7 @@ func newTestSigner(t testing.TB) testSigner {
 	return testSigner{pv}
 }
 
-func newTestSignedMessageData(t testing.TB, signer Signer) []byte {
+func newTestSignedMessageData(t testing.TB, signer signer) []byte {
 	pm := &pb.ProtocolMessage{
 		Metadata: &pb.Metadata{
 			NextProtocol:  ProtocolName,
@@ -190,19 +189,20 @@ lop:
 		select {
 		case <-reg:
 			i++
-			runtime.Gosched() // we need to somehow let other goroutines work before us
+			time.Sleep(time.Millisecond) // we need to somehow let other goroutines work before us
 		default:
 			break lop
 		}
 	}
 
-	if !assert.Equal(t, num, i) {
-		t.FailNow()
+	if i != num {
+		t.Fatal("Didn't get added peers on chan")
 	}
 
-	worked := pc+num == p.peersCount()
+	newpc := p.peersCount()
+	worked := pc+num == newpc
 	if worked != work {
-		t.FailNow()
+		t.Fatalf("adding the peers didn't work as expected old peer count: %d, tried to add: %d, new peercount: %d", pc, num, newpc)
 	}
 }
 
@@ -218,7 +218,7 @@ func TestNeighborhood_AddIncomingPeer(t *testing.T) {
 	assert.Equal(t, 1, n.peersCount())
 }
 
-func signedMessage(t testing.TB, s Signer, message *pb.ProtocolMessage) service.Data {
+func signedMessage(t testing.TB, s signer, message *pb.ProtocolMessage) service.Data {
 	pmbin, err := proto.Marshal(message)
 	assert.NoError(t, err)
 	sign, err := s.Sign(pmbin)
@@ -233,6 +233,7 @@ func TestNeighborhood_Relay(t *testing.T) {
 	net := newMockBaseNetwork()
 	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newTestSigner(t), log.New("tesT", "", ""))
 	n.Start()
+
 	addPeersAndTest(t, 20, n, net, true)
 
 	signer := newTestSigner(t)
