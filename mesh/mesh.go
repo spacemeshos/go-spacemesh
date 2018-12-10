@@ -84,17 +84,17 @@ func (ll *LayersDB) GetLayer(i LayerID) (*Layer, error) {
 	}
 	ll.lMutex.RUnlock()
 
-	l, err := ll.layers.Get(new(big.Int).SetUint64(index).Bytes())
+	ids, err := ll.layers.Get(new(big.Int).SetUint64(index).Bytes())
 	if err != nil {
 		return nil, errors.New("error getting layer from db ")
 	}
 
-	var ids []BlockID
-	if _, err = xdr.Unmarshal(bytes.NewReader(l), &ids); err != nil {
-		return nil, errors.New("error marshaling layer ")
+	blockIds, err := bytesToBlockIds(ids)
+	if err != nil {
+		return nil, errors.New("could not get all blocks from db ")
 	}
 
-	blocks, err := ll.getLayerBlocks(ids)
+	blocks, err := ll.getLayerBlocks(blockIds)
 	if err != nil {
 		return nil, errors.New("could not get all blocks from db ")
 	}
@@ -136,11 +136,8 @@ func (ll *LayersDB) GetBlock(id BlockID) (*Block, error) {
 	if err != nil {
 		return nil, errors.New("could not find block in database")
 	}
-	var block Block
-	if _, err = xdr.Unmarshal(bytes.NewReader(b), &block); err != nil {
-		return nil, errors.New("could not unmarshal block")
-	}
-	return &block, nil
+
+	return bytesToBlock(b)
 }
 
 func (ll *LayersDB) LocalLayerCount() uint64 {
@@ -197,24 +194,4 @@ func (ll *LayersDB) AddLayer(layer *Layer) error {
 	ll.lMutex.Unlock()
 
 	return nil
-}
-
-func blockIdsAsBytes(layer *Layer) ([]byte, error) {
-	ids := make([]BlockID, 0, len(layer.blocks))
-	for _, b := range layer.blocks {
-		ids = append(ids, b.BlockId)
-	}
-	var w bytes.Buffer
-	if _, err := xdr.Marshal(&w, &ids); err != nil {
-		return nil, errors.New("error marshalling block ids ")
-	}
-	return w.Bytes(), nil
-}
-
-func blockAsBytes(block Block) ([]byte, error) {
-	var w bytes.Buffer
-	if _, err := xdr.Marshal(&w, &block); err != nil {
-		return nil, errors.New("error marshalling block ids ")
-	}
-	return w.Bytes(), nil
 }
