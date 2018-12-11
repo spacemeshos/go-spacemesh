@@ -7,16 +7,16 @@ import (
 	"time"
 )
 
-func getMesh(newBlockCh chan *Block, id string) Mesh {
+func getMesh(id string) Mesh {
 	bdb := database.NewLevelDbStore("blocks_test_"+id, nil, nil)
 	ldb := database.NewLevelDbStore("layers_test_"+id, nil, nil)
-	layers := NewMesh(newBlockCh, ldb, bdb)
+	layers := NewMesh(ldb, bdb)
 	return layers
 }
 
 func TestLayers_AddBlock(t *testing.T) {
 
-	layers := getMesh(make(chan *Block), "t1")
+	layers := getMesh("t1")
 	defer layers.Close()
 
 	block1 := NewBlock(true, []byte("data1"), time.Now(), 1)
@@ -34,22 +34,22 @@ func TestLayers_AddBlock(t *testing.T) {
 
 func TestLayers_AddLayer(t *testing.T) {
 
-	layers := getMesh(make(chan *Block), "t2")
+	layers := getMesh("t2")
 	defer layers.Close()
 
-	block1 := NewBlock(true, []byte("data1"), time.Now(), 1)
-	block2 := NewBlock(true, []byte("data2"), time.Now(), 2)
-	block3 := NewBlock(true, []byte("data3"), time.Now(), 3)
+	block1 := NewBlock(true, []byte("data"), time.Now(), 1)
+	block2 := NewBlock(true, []byte("data"), time.Now(), 2)
+	block3 := NewBlock(true, []byte("data"), time.Now(), 3)
 	l, err := layers.GetLayer(0)
 	assert.True(t, err != nil, "error: ", err)
 	layers.AddLayer(NewExistingLayer(0, []*Block{block1, block2, block3}))
 	l, err = layers.GetLayer(0)
 	assert.True(t, layers.LocalLayerCount() == 1, "wrong layer count")
-	assert.True(t, string(l.blocks[1].Data) == "data2", "wrong block data ")
+	assert.True(t, string(l.blocks[1].Data) == "data", "wrong block data ")
 }
 
 func TestLayers_AddWrongLayer(t *testing.T) {
-	layers := getMesh(make(chan *Block), "t3")
+	layers := getMesh("t3")
 	defer layers.Close()
 	block1 := NewBlock(true, nil, time.Now(), 0)
 	block2 := NewBlock(true, nil, time.Now(), 0)
@@ -67,7 +67,7 @@ func TestLayers_AddWrongLayer(t *testing.T) {
 }
 
 func TestLayers_GetLayer(t *testing.T) {
-	layers := getMesh(make(chan *Block), "t4")
+	layers := getMesh("t4")
 	defer layers.Close()
 	block1 := NewBlock(true, nil, time.Now(), 0)
 	block2 := NewBlock(true, nil, time.Now(), 0)
@@ -82,7 +82,7 @@ func TestLayers_GetLayer(t *testing.T) {
 }
 
 func TestLayers_LocalLayerCount(t *testing.T) {
-	layers := getMesh(make(chan *Block), "t5")
+	layers := getMesh("t5")
 	defer layers.Close()
 	block1 := NewBlock(true, nil, time.Now(), 0)
 	block2 := NewBlock(true, nil, time.Now(), 3)
@@ -96,14 +96,14 @@ func TestLayers_LocalLayerCount(t *testing.T) {
 }
 
 func TestLayers_LatestKnownLayer(t *testing.T) {
-	layers := getMesh(make(chan *Block), "t6")
+	layers := getMesh("t6")
 	defer layers.Close()
 	layers.SetLatestKnownLayer(10)
 	assert.True(t, layers.LatestKnownLayer() == 10, "wrong layer")
 }
 
 func TestLayers_WakeUp(t *testing.T) {
-	//layers := getMesh(make(chan Peer), make(chan *Block), "t5")
+	//layers := getMesh(make(chan Peer),  "t5")
 	//defer layers.Close()
 	//layers.SetLatestKnownLayer(10)
 	//assert.True(t, layers.LatestKnownLayer() == 10, "wrong layer")

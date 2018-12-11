@@ -7,7 +7,15 @@ import (
 	"sync"
 )
 
-type MeshDB struct {
+type MeshDB interface {
+	AddLayer(layer *Layer) error //todo change this to add batch blocks
+	GetLayer(i LayerID) (*Layer, error)
+	GetBlock(id BlockID) (*Block, error)
+	AddBlock(block *Block) error
+	Close()
+}
+
+type meshDB struct {
 	layers     database.DB
 	blocks     database.DB
 	lMutex     sync.RWMutex
@@ -15,40 +23,41 @@ type MeshDB struct {
 	layerLocks map[LayerID]sync.Mutex
 }
 
-func NewMeshDb(layers database.DB, blocks database.DB) MeshData {
-	ll := &MeshDB{
+func NewMeshDb(layers database.DB, blocks database.DB) MeshDB {
+	ll := &meshDB{
 		blocks:     blocks,
 		layers:     layers,
 		layerLocks: make(map[LayerID]sync.Mutex),
 	}
 	return ll
 }
-func (s *MeshDB) Close() {
+
+func (s *meshDB) Close() {
 	s.blocks.Close()
 	s.layers.Close()
 }
 
-func (ll *MeshDB) GetLayer(index LayerID) (*Layer, error) {
+func (ll *meshDB) GetLayer(index LayerID) (*Layer, error) {
 	ids, err := ll.layers.Get(index.ToBytes())
 	if err != nil {
-		return nil, errors.New("error getting layer from meshData ")
+		return nil, errors.New("error getting layer from database ")
 	}
 
 	blockIds, err := bytesToBlockIds(ids)
 	if err != nil {
-		return nil, errors.New("could not get all blocks from meshData ")
+		return nil, errors.New("could not get all blocks from database ")
 	}
 
 	blocks, err := ll.getLayerBlocks(blockIds)
 	if err != nil {
-		return nil, errors.New("could not get all blocks from meshData ")
+		return nil, errors.New("could not get all blocks from database ")
 	}
 
 	return &Layer{index: LayerID(index), blocks: blocks}, nil
 }
 
 //todo fix concurrency for block
-func (ll *MeshDB) AddBlock(block *Block) error {
+func (ll *meshDB) AddBlock(block *Block) error {
 
 	_, err := ll.blocks.Get(block.BlockId.ToBytes())
 	if err == nil {
@@ -74,7 +83,7 @@ func (ll *MeshDB) AddBlock(block *Block) error {
 	return ll.updateLayerIds(err, block)
 }
 
-func (ll *MeshDB) getLayerLock(index LayerID) sync.Mutex {
+func (ll *meshDB) getLayerLock(index LayerID) sync.Mutex {
 	layerLock, found := ll.layerLocks[index]
 	if !found {
 		layerLock = sync.Mutex{}
@@ -83,7 +92,7 @@ func (ll *MeshDB) getLayerLock(index LayerID) sync.Mutex {
 	return layerLock
 }
 
-func (ll *MeshDB) GetBlock(id BlockID) (*Block, error) {
+func (ll *meshDB) GetBlock(id BlockID) (*Block, error) {
 	b, err := ll.blocks.Get(id.ToBytes())
 	if err != nil {
 		return nil, errors.New("could not find block in database")
@@ -93,7 +102,7 @@ func (ll *MeshDB) GetBlock(id BlockID) (*Block, error) {
 }
 
 //todo this overwrites the previous value if it exists
-func (ll *MeshDB) AddLayer(layer *Layer) error {
+func (ll *meshDB) AddLayer(layer *Layer) error {
 	ll.llKeyMutex.Lock()
 	layerLock := ll.getLayerLock(layer.index)
 	layerLock.Lock()
@@ -110,7 +119,7 @@ func (ll *MeshDB) AddLayer(layer *Layer) error {
 		return errors.New("could not encode layer block ids")
 	}
 
-	//add blocks to meshData
+	//add blocks to meshDb
 	for _, b := range layer.blocks {
 
 		bytes, err := blockAsBytes(*b)
@@ -131,11 +140,11 @@ func (ll *MeshDB) AddLayer(layer *Layer) error {
 	return nil
 }
 
-func (ll *MeshDB) updateLayerIds(err error, block *Block) error {
+func (ll *meshDB) updateLayerIds(err error, block *Block) error {
 	ids, err := ll.layers.Get(block.LayerIndex.ToBytes())
 	blockIds, err := bytesToBlockIds(ids)
 	if err != nil {
-		return errors.New("could not get all blocks from meshData ")
+		return errors.New("could not get all blocks from database ")
 	}
 	blockIds[block.BlockId] = true
 	w, err := blockIdsAsBytes(blockIds)
@@ -146,7 +155,7 @@ func (ll *MeshDB) updateLayerIds(err error, block *Block) error {
 	return nil
 }
 
-func (ll *MeshDB) getLayerBlocks(ids map[BlockID]bool) ([]*Block, error) {
+func (ll *meshDB) getLayerBlocks(ids map[BlockID]bool) ([]*Block, error) {
 
 	blocks := make([]*Block, 0, len(ids))
 	for k, _ := range ids {
