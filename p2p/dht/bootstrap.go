@@ -63,7 +63,7 @@ func (d *KadDHT) Bootstrap(ctx context.Context) error {
 		return ErrConnectToBootNode
 	}
 
-	d.local.Debug("lookup using %d preloaded bootnodes ", bn)
+	d.local.Debug("Lookup using %d preloaded bootnodes ", bn)
 
 	ctx, _ = context.WithTimeout(ctx, BootstrapTimeout)
 	err := d.tryBoot(ctx, c)
