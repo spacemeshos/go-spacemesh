@@ -29,18 +29,9 @@ test:
 lint:
 	./ci/validate-lint.sh
 
-devtools:
-	# Install the build tools
-	go get -u github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway
-	go get -u github.com/grpc-ecosystem/grpc-gateway/protoc-gen-swagger
-	go get -u github.com/golang/protobuf/protoc-gen-go
-	go get -u github.com/kardianos/govendor
+prepare:
+	./setup_env.sh
 
-
-
-
-	# Get the dependencies
-	govendor sync
 cover:
 	@echo "mode: count" > cover-all.out
 	@$(foreach pkg,$(PKGS),\

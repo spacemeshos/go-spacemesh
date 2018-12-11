@@ -1,20 +1,26 @@
 package dht
 
-import "github.com/spacemeshos/go-spacemesh/p2p/node"
+import (
+	"context"
+	"github.com/spacemeshos/go-spacemesh/p2p/node"
+)
 
 // MockDHT is a mocked dht
 type MockDHT struct {
-	update      func(n node.Node)
-	updateCount int
-	bsres       error
-	bsCount     int
-	lookupRes   node.Node
-	lookupErr   error
+	UpdateFunc         func(n node.Node)
+	updateCount        int
+	SelectPeersFunc func(qty int) []node.Node
+	bsres              error
+	bsCount            int
+	InternalLookupFunc func(dhtid node.DhtID) []node.Node
+	LookupFunc         func(string) (node.Node, error)
+	lookupRes          node.Node
+	lookupErr          error
 }
 
 // SetUpdate sets the function to run on an issued update
 func (m *MockDHT) SetUpdate(f func(n node.Node)) {
-	m.update = f
+	m.UpdateFunc = f
 }
 
 // SetLookupResult sets the result ok a lookup operation
@@ -25,8 +31,8 @@ func (m *MockDHT) SetLookupResult(node node.Node, err error) {
 
 // Update is a dht update operation it updates the updatecount
 func (m *MockDHT) Update(node node.Node) {
-	if m.update != nil {
-		m.update(node)
+	if m.UpdateFunc != nil {
+		m.UpdateFunc(node)
 	}
 	m.updateCount++
 }
@@ -43,7 +49,18 @@ func (m *MockDHT) BootstrapCount() int {
 
 // Lookup is a dht lookup operation
 func (m *MockDHT) Lookup(pubkey string) (node.Node, error) {
+	if m.LookupFunc != nil {
+		return m.LookupFunc(pubkey)
+	}
 	return m.lookupRes, m.lookupErr
+}
+
+// InternalLookup is a lookup only in the local routing table
+func (m *MockDHT) InternalLookup(dhtid node.DhtID) []node.Node {
+	if m.InternalLookupFunc != nil {
+		return m.InternalLookupFunc(dhtid)
+	}
+	return nil
 }
 
 // SetBootstrap set the bootstrap result
@@ -52,15 +69,21 @@ func (m *MockDHT) SetBootstrap(err error) {
 }
 
 // Bootstrap is a dht bootstrap operation function it update the bootstrap count
-func (m *MockDHT) Bootstrap() error {
+func (m *MockDHT) Bootstrap(ctx context.Context) error {
 	m.bsCount++
 	return m.bsres
 }
 
+
+// SelectPeers mocks selecting peers.
 func (m *MockDHT) SelectPeers(qty int) []node.Node {
+	if m.SelectPeersFunc != nil {
+		return m.SelectPeersFunc(qty)
+	}
 	return []node.Node{}
 }
 
+// Size returns the size of peers in the dht
 func (m *MockDHT) Size() int {
 	//todo: set size
 	return m.updateCount
