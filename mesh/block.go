@@ -2,16 +2,11 @@ package mesh
 
 import (
 	"github.com/google/uuid"
-	"math/big"
 	"time"
 )
 
 type BlockID uint64
 type LayerID uint64
-
-func (b BlockID) ToBytes() []byte   { return uint64ToBytes(uint64(b)) }
-func (l LayerID) ToBytes() []byte   { return uint64ToBytes(uint64(l)) }
-func uint64ToBytes(i uint64) []byte { return new(big.Int).SetUint64(uint64(i)).Bytes() }
 
 var layerCounter LayerID = 0
 

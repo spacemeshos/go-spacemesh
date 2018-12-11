@@ -4,7 +4,12 @@ import (
 	"bytes"
 	"errors"
 	"github.com/davecgh/go-xdr/xdr2"
+	"math/big"
 )
+
+func (b BlockID) ToBytes() []byte   { return uint64ToBytes(uint64(b)) }
+func (l LayerID) ToBytes() []byte   { return uint64ToBytes(uint64(l)) }
+func uint64ToBytes(i uint64) []byte { return new(big.Int).SetUint64(uint64(i)).Bytes() }
 
 func blockIdsAsBytes(ids map[BlockID]bool) ([]byte, error) {
 	var w bytes.Buffer
