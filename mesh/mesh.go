@@ -1,197 +1,140 @@
 package mesh
 
 import (
-	"bytes"
 	"crypto"
 	"errors"
-	"github.com/davecgh/go-xdr/xdr2"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"math/big"
 	"sync"
 	"sync/atomic"
 	"time"
 )
 
-type Mesh interface {
-	AddLayer(layer *Layer) error
+type Peer crypto.PublicKey
+
+const layerSize = 200
+const cachedLayers = 50
+
+type MeshData interface {
+	AddLayer(layer *Layer) error //todo change this to add batch blocks
 	GetLayer(i LayerID) (*Layer, error)
 	GetBlock(id BlockID) (*Block, error)
-	LocalLayerCount() uint64
-	LatestKnownLayer() uint64
-	SetLatestKnownLayer(idx uint64)
+	AddBlock(block *Block) error
 	Close()
 }
 
-type Peer crypto.PublicKey
-
-type LayersDB struct {
-	layerCount       uint64
-	latestKnownLayer uint64
-	layers           database.DB
-	blocks           database.DB
-	newPeerCh        chan Peer
-	newBlockCh       chan *Block
-	exit             chan struct{}
-	lMutex           sync.RWMutex
-	lkMutex          sync.RWMutex
-	lcMutex          sync.RWMutex
+type Mesh interface {
+	MeshData
+	LocalLayerCount() uint64
+	LatestKnownLayer() uint64
+	SetLatestKnownLayer(idx uint64)
 }
 
-func NewMesh(newPeerCh chan Peer, newBlockCh chan *Block, layers database.DB, blocks database.DB) Mesh {
-	ll := &LayersDB{
-		blocks:     blocks,
-		layers:     layers,
-		newPeerCh:  newPeerCh,
-		newBlockCh: newBlockCh,
-		exit:       make(chan struct{})}
-
-	go ll.run()
-	return ll
+type ConsistentMesh struct {
+	VerifiedLayerCount uint64
+	latestKnownLayer   uint64
+	meshData           MeshData
+	newBlockCh         chan *Block
+	exit               chan struct{}
+	lMutex             sync.RWMutex
+	lkMutex            sync.RWMutex
+	tortoise           Algorithm
 }
 
-func (s *LayersDB) Close() {
-	s.exit <- struct{}{}
-	close(s.exit)
-	close(s.newBlockCh)
-	close(s.newPeerCh)
-	s.blocks.Close()
-	s.layers.Close()
-}
+func (cm *ConsistentMesh) run() {
 
-func (s *LayersDB) run() {
 	for {
 		select {
-		case <-s.exit:
+		case <-cm.exit:
 			log.Debug("run stoped")
 			return
-		case <-s.newBlockCh:
-		case <-s.newPeerCh:
+		case b := <-cm.newBlockCh:
+			cm.SetLatestKnownLayer(uint64(b.Layer()))
+			cm.AddBlock(b)
 		default:
 			time.Sleep(100 * time.Millisecond)
 		}
 	}
 }
 
-func (ll *LayersDB) GetLayer(i LayerID) (*Layer, error) {
+func NewMesh(newBlockCh chan *Block, layers database.DB, blocks database.DB) Mesh {
+	ll := &ConsistentMesh{
+		newBlockCh: newBlockCh,
+		tortoise:   NewAlgorithm(uint32(layerSize), uint32(cachedLayers)),
+		meshData:   NewMeshDb(layers, blocks),
+		exit:       make(chan struct{})}
 
-	ll.lMutex.RLock()
-	index := uint64(i)
-	if index >= ll.layerCount {
-		ll.lMutex.RUnlock()
-		log.Debug("unknown layer ")
-		return nil, errors.New("unknown layer ")
-	}
-	ll.lMutex.RUnlock()
+	go ll.run()
 
-	ids, err := ll.layers.Get(new(big.Int).SetUint64(index).Bytes())
-	if err != nil {
-		return nil, errors.New("error getting layer from db ")
-	}
-
-	blockIds, err := bytesToBlockIds(ids)
-	if err != nil {
-		return nil, errors.New("could not get all blocks from db ")
-	}
-
-	blocks, err := ll.getLayerBlocks(blockIds)
-	if err != nil {
-		return nil, errors.New("could not get all blocks from db ")
-	}
-
-	return &Layer{index: LayerID(i), blocks: blocks}, nil
+	return ll
 }
 
-func (ll *LayersDB) getLayerBlocks(ids []BlockID) ([]*Block, error) {
+func (cm *ConsistentMesh) LocalLayerCount() uint64 {
+	return atomic.LoadUint64(&cm.VerifiedLayerCount)
+}
 
-	blocks := make([]*Block, 0, len(ids))
-	for _, id := range ids {
-		block, err := ll.GetBlock(id)
-		if err != nil {
-			return nil, errors.New("could not retrive block " + string(id))
-		}
-		blocks = append(blocks, block)
+func (cm *ConsistentMesh) LatestKnownLayer() uint64 {
+	defer cm.lkMutex.RUnlock()
+	cm.lkMutex.RLock()
+	return cm.latestKnownLayer
+}
+
+//todo do this better
+func (cm *ConsistentMesh) SetLatestKnownLayer(idx uint64) {
+	defer cm.lkMutex.Unlock()
+	cm.lkMutex.Lock()
+	if idx > cm.latestKnownLayer {
+		cm.latestKnownLayer = idx
 	}
-
-	return blocks, nil
 }
 
-func (ll *LayersDB) AddBlock(block Block) error {
-
-	bytes, err := blockAsBytes(block)
-	if err != nil {
-		return errors.New("could not encode block")
-	}
-
-	err = ll.blocks.Put(new(big.Int).SetUint64(uint64(block.BlockId)).Bytes(), bytes)
-	if err != nil {
-		return errors.New("could not add block to database")
-	}
-
-	return nil
-}
-
-func (ll *LayersDB) GetBlock(id BlockID) (*Block, error) {
-	b, err := ll.blocks.Get(new(big.Int).SetUint64(uint64(id)).Bytes())
-	if err != nil {
-		return nil, errors.New("could not find block in database")
-	}
-
-	return bytesToBlock(b)
-}
-
-func (ll *LayersDB) LocalLayerCount() uint64 {
-	defer ll.lcMutex.RUnlock()
-	ll.lcMutex.RLock()
-	return ll.layerCount
-}
-
-func (ll *LayersDB) LatestKnownLayer() uint64 {
-	defer ll.lkMutex.RUnlock()
-	ll.lkMutex.RLock()
-	return atomic.LoadUint64(&ll.latestKnownLayer)
-}
-
-func (ll *LayersDB) SetLatestKnownLayer(idx uint64) {
-	defer ll.lkMutex.Unlock()
-	ll.lkMutex.Lock()
-	ll.latestKnownLayer = idx
-}
-
-func (ll *LayersDB) AddLayer(layer *Layer) error {
-	//validate idx
-
-	if LayerID(ll.layerCount) > layer.Index() {
+//todo thread safety
+//this is for sync use sync adds layers one by one
+//layer should include all layer blocks we know
+func (cm *ConsistentMesh) AddLayer(layer *Layer) error {
+	if LayerID(cm.VerifiedLayerCount) > layer.Index() {
 		return errors.New("can't add layer (already exists)")
 	}
 
-	if LayerID(ll.layerCount) < layer.Index() {
+	if LayerID(cm.VerifiedLayerCount) < layer.Index() {
 		return errors.New("can't add layer missing previous layers")
 	}
 
-	// validate blocks
-	// todo send to tortoise
-	ll.lMutex.Lock()
-	//if is valid
+	cm.meshData.AddLayer(layer)
 
-	w, err := blockIdsAsBytes(layer)
-	if err != nil {
-		return errors.New("could not encode layer block ids")
-	}
+	cm.lMutex.Lock()
+	defer cm.lMutex.Unlock()
 
-	ll.layers.Put(new(big.Int).SetUint64(uint64(layer.index)).Bytes(), w)
-
-	//add blocks to db
-	for _, b := range layer.blocks {
-		if err = ll.AddBlock(*b); err != nil {
-			log.Error("could not add block "+string(b.BlockId), err)
-		}
-	}
-
-	ll.lcMutex.Lock()
-	ll.layerCount++
-	ll.lcMutex.Unlock()
-	ll.lMutex.Unlock()
+	cm.tortoise.HandleIncomingLayer(layer)
+	atomic.AddUint64(&cm.VerifiedLayerCount, 1)
 
 	return nil
+}
+
+func (cm *ConsistentMesh) GetLayer(i LayerID) (*Layer, error) {
+
+	cm.lMutex.RLock()
+	if i >= LayerID(cm.VerifiedLayerCount) {
+		cm.lMutex.RUnlock()
+		return nil, errors.New("layer not verified yet")
+	}
+	cm.lMutex.RUnlock()
+
+	return cm.meshData.GetLayer(i)
+}
+
+func (cm *ConsistentMesh) AddBlock(block *Block) error {
+	//todo trigger consistency validation with tortoise
+	return cm.meshData.AddBlock(block)
+}
+
+func (cm *ConsistentMesh) GetBlock(id BlockID) (*Block, error) {
+	return cm.meshData.GetBlock(id)
+}
+
+func (cm *ConsistentMesh) Close() {
+	cm.exit <- struct{}{}
+	close(cm.exit)
+	close(cm.newBlockCh)
+	cm.meshData.Close()
 }

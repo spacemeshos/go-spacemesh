@@ -6,11 +6,7 @@ import (
 	"github.com/davecgh/go-xdr/xdr2"
 )
 
-func blockIdsAsBytes(layer *Layer) ([]byte, error) {
-	ids := make([]BlockID, 0, len(layer.blocks))
-	for _, b := range layer.blocks {
-		ids = append(ids, b.BlockId)
-	}
+func blockIdsAsBytes(ids map[BlockID]bool) ([]byte, error) {
 	var w bytes.Buffer
 	if _, err := xdr.Marshal(&w, &ids); err != nil {
 		return nil, errors.New("error marshalling block ids ")
@@ -26,8 +22,8 @@ func blockAsBytes(block Block) ([]byte, error) {
 	return w.Bytes(), nil
 }
 
-func bytesToBlockIds(blockIds []byte) ([]BlockID, error) {
-	var ids []BlockID
+func bytesToBlockIds(blockIds []byte) (map[BlockID]bool, error) {
+	var ids map[BlockID]bool
 	if _, err := xdr.Unmarshal(bytes.NewReader(blockIds), &ids); err != nil {
 		return nil, errors.New("error marshaling layer ")
 	}

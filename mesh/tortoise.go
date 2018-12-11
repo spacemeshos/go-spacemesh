@@ -194,8 +194,6 @@ func (alg *Algorithm) assignIdForBlock(blk *Block) uint32 {
 }
 
 func (alg *Algorithm) HandleIncomingLayer(l *Layer) {
-	log.Info("received layer BlockId %v total blocks: %v =====", l.index, len(alg.allBlocks))
-	//todo: thread safety
 	alg.layers[l.index] = l
 	alg.layerQueue <- l
 	if len(alg.layerQueue) >= int(alg.cachedLayers) {
@@ -206,13 +204,16 @@ func (alg *Algorithm) HandleIncomingLayer(l *Layer) {
 		//todo: what to do if block is invalid?
 		if originBlock.IsSyntacticallyValid() {
 			votesBM, visibleBM := alg.createBlockVotingMap(originBlock)
-
 			blockId := alg.assignIdForBlock(originBlock)
 			alg.posVotes[blockId] = *votesBM
 			alg.visibilityMap[blockId] = BlockPosition{*visibleBM, originBlock.Layer()}
 		}
-
 	}
+}
+
+func (alg *Algorithm) HandleIncomingBlock(b *Block) {
+	log.Info("received layer BlockId %v total blocks: %v =====", b.Id(), len(alg.allBlocks))
+
 }
 
 func (block *Block) IsContextuallyValid() bool {
