@@ -53,7 +53,7 @@ func (ll *MeshDB) AddBlock(block *Block) error {
 	_, err := ll.blocks.Get(block.BlockId.ToBytes())
 	if err == nil {
 		log.Debug("block ", block.BlockId, " already exists in database")
-		return nil
+		return errors.New("block " + string(block.BlockId) + " already exists in database")
 	}
 
 	bytes, err := blockAsBytes(*block)

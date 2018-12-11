@@ -124,8 +124,11 @@ func (cm *ConsistentMesh) GetLayer(i LayerID) (*Layer, error) {
 }
 
 func (cm *ConsistentMesh) AddBlock(block *Block) error {
-	//todo trigger consistency validation with tortoise
-	return cm.meshData.AddBlock(block)
+	if err := cm.meshData.AddBlock(block); err != nil {
+		return err
+	}
+	cm.tortoise.HandleLateBlock(block)
+	return nil
 }
 
 func (cm *ConsistentMesh) GetBlock(id BlockID) (*Block, error) {

@@ -211,9 +211,8 @@ func (alg *Algorithm) HandleIncomingLayer(l *Layer) {
 	}
 }
 
-func (alg *Algorithm) HandleIncomingBlock(b *Block) {
+func (alg *Algorithm) HandleLateBlock(b *Block) {
 	log.Info("received layer BlockId %v total blocks: %v =====", b.Id(), len(alg.allBlocks))
-
 }
 
 func (block *Block) IsContextuallyValid() bool {
