@@ -47,10 +47,10 @@ func createFullPointingLayer(prev *Layer, blocksInLayer int) *Layer {
 		bl := NewBlock(coin, data, ts, 1)
 
 		for _, pervBloc := range prev.blocks {
-			bl.BlockVotes[pervBloc.id] = true
+			bl.BlockVotes[pervBloc.Id] = true
 		}
 		l.AddBlock(bl)
 	}
-	log.Info("Created layer id %v", l.index)
+	log.Info("Created layer Id %v", l.index)
 	return l
 }

@@ -78,7 +78,7 @@ func (alg *Algorithm) IsTortoiseValid(originBlock *Block, targetBlock BlockID, t
 
 func (alg *Algorithm) getLayerById(layerId LayerID) (*Layer, error) {
 	if _, ok := alg.layers[layerId]; !ok {
-		return nil, fmt.Errorf("layer id not found %v", layerId)
+		return nil, fmt.Errorf("layer Id not found %v", layerId)
 	}
 	return alg.layers[layerId], nil
 }
@@ -162,10 +162,10 @@ func (alg *Algorithm) zeroBitColumn(idx uint64) {
 
 func (alg *Algorithm) recycleLayer(l *Layer) {
 	for _, block := range l.blocks {
-		id := alg.block2Id[block.id]
-		alg.idQueue <- alg.block2Id[block.id]
-		delete(alg.block2Id, block.id)
-		delete(alg.allBlocks, block.id)
+		id := alg.block2Id[block.Id]
+		alg.idQueue <- alg.block2Id[block.Id]
+		delete(alg.block2Id, block.Id)
+		delete(alg.allBlocks, block.Id)
 		alg.zeroBitColumn(uint64(id))
 	}
 	delete(alg.layers, l.index)
@@ -173,21 +173,21 @@ func (alg *Algorithm) recycleLayer(l *Layer) {
 
 func (alg *Algorithm) assignIdForBlock(blk *Block) uint32 {
 	//todo: should this section be protected by a mutex?
-	alg.allBlocks[blk.id] = blk
+	alg.allBlocks[blk.Id] = blk
 	if len(alg.idQueue) > 0 {
 		id := <-alg.idQueue
-		alg.block2Id[blk.id] = id
+		alg.block2Id[blk.Id] = id
 		return id
 	}
 	if alg.remainingBlockIds > 0 {
 		newId := alg.totalBlocks - alg.remainingBlockIds
-		alg.block2Id[blk.id] = newId
+		alg.block2Id[blk.Id] = newId
 		alg.remainingBlockIds--
 
 		return newId
 	} else {
-		log.Error("Cannot find id for block, something went wrong")
-		panic("Cannot find id for block, something went wrong")
+		log.Error("Cannot find Id for block, something went wrong")
+		panic("Cannot find Id for block, something went wrong")
 		return 0
 	}
 
@@ -212,7 +212,7 @@ func (alg *Algorithm) HandleIncomingLayer(l *Layer) {
 }
 
 func (alg *Algorithm) HandleLateBlock(b *Block) {
-	log.Info("received layer id %v total blocks: %v =====", b.Id(), len(alg.allBlocks))
+	log.Info("received layer Id %v total blocks: %v =====", b.ID(), len(alg.allBlocks))
 }
 
 func (block *Block) IsContextuallyValid() bool {

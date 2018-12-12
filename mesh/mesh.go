@@ -92,9 +92,9 @@ func (cm *mesh) GetLayer(i LayerID) (*Layer, error) {
 }
 
 func (cm *mesh) AddBlock(block *Block) error {
-	log.Debug("add block ", block.Id())
+	log.Debug("add block ", block.ID())
 	if err := cm.meshDb.AddBlock(block); err != nil {
-		log.Debug("failed to add block ", block.Id(), " ", err)
+		log.Debug("failed to add block ", block.ID(), " ", err)
 		return err
 	}
 	cm.tortoise.HandleLateBlock(block)

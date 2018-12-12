@@ -161,7 +161,7 @@ func (s *Syncer) Synchronise() {
 
 		for block := range output {
 			log.Debug("add block to layer", block)
-			blocks = append(blocks, mesh.NewExistingBlock(block.Id(), block.Layer(), nil))
+			blocks = append(blocks, mesh.NewExistingBlock(block.ID(), block.Layer(), nil))
 		}
 
 		log.Debug("add layer ", i)
@@ -317,7 +317,7 @@ func (s *Syncer) blockRequestHandler(msg []byte) []byte {
 		return nil
 	}
 
-	id := uint64(block.Id())
+	id := uint64(block.ID())
 	payload, err := proto.Marshal(&pb.FetchBlockResp{Id: id, Block: &pb.Block{Id: id, Layer: uint64(block.Layer())}})
 	if err != nil {
 		log.Error("Error handling request message, err:", err) //todo describe err
@@ -368,7 +368,7 @@ func (s *Syncer) layerIdsRequestHandler(msg []byte) []byte {
 	ids := make([]uint64, 0, len(blocks))
 
 	for _, b := range blocks {
-		ids = append(ids, uint64(b.Id()))
+		ids = append(ids, uint64(b.ID()))
 	}
 
 	payload, err := proto.Marshal(&pb.LayerIdsResp{Ids: ids})
