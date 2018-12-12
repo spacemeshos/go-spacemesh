@@ -11,7 +11,7 @@ type LayerID uint64
 var layerCounter LayerID = 0
 
 type Block struct {
-	BlockId    BlockID
+	id         BlockID
 	LayerIndex LayerID
 	Data       []byte
 	Coin       bool
@@ -22,7 +22,7 @@ type Block struct {
 }
 
 func (b Block) Id() BlockID {
-	return b.BlockId
+	return b.id
 }
 
 func (b Block) Layer() LayerID {
@@ -31,7 +31,7 @@ func (b Block) Layer() LayerID {
 
 func NewExistingBlock(id BlockID, layerIndex LayerID, data []byte) *Block {
 	b := Block{
-		BlockId:    BlockID(id),
+		id:         BlockID(id),
 		BlockVotes: make(map[BlockID]bool),
 		LayerIndex: LayerID(layerIndex),
 		Data:       data,
@@ -41,7 +41,7 @@ func NewExistingBlock(id BlockID, layerIndex LayerID, data []byte) *Block {
 
 func NewBlock(coin bool, data []byte, ts time.Time, layerId LayerID) *Block {
 	b := Block{
-		BlockId:    BlockID(uuid.New().ID()),
+		id:         BlockID(uuid.New().ID()),
 		LayerIndex: layerId,
 		BlockVotes: make(map[BlockID]bool),
 		Timestamp:  ts,

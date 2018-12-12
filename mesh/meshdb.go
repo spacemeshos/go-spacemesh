@@ -59,10 +59,10 @@ func (ll *meshDB) GetLayer(index LayerID) (*Layer, error) {
 //todo fix concurrency for block
 func (ll *meshDB) AddBlock(block *Block) error {
 
-	_, err := ll.blocks.Get(block.BlockId.ToBytes())
+	_, err := ll.blocks.Get(block.Id().ToBytes())
 	if err == nil {
-		log.Debug("block ", block.BlockId, " already exists in database")
-		return errors.New("block " + string(block.BlockId) + " already exists in database")
+		log.Debug("block ", block.Id(), " already exists in database")
+		return errors.New("block " + string(block.Id()) + " already exists in database")
 	}
 
 	bytes, err := blockAsBytes(*block)
@@ -76,7 +76,7 @@ func (ll *meshDB) AddBlock(block *Block) error {
 	ll.llKeyMutex.Unlock()
 	defer layerLock.Unlock()
 
-	if err = ll.blocks.Put(block.BlockId.ToBytes(), bytes); err != nil {
+	if err = ll.blocks.Put(block.Id().ToBytes(), bytes); err != nil {
 		return errors.New("could not add block to database")
 	}
 
@@ -111,7 +111,7 @@ func (ll *meshDB) AddLayer(layer *Layer) error {
 
 	ids := make(map[BlockID]bool)
 	for _, b := range layer.blocks {
-		ids[b.BlockId] = true
+		ids[b.id] = true
 	}
 
 	//add blocks to meshDb
@@ -119,14 +119,14 @@ func (ll *meshDB) AddLayer(layer *Layer) error {
 		bytes, err := blockAsBytes(*b)
 		if err != nil {
 			log.Error("problem serializing block ", b.Id(), err)
-			delete(ids, b.BlockId) //remove failed block from layer
+			delete(ids, b.Id()) //remove failed block from layer
 			continue
 		}
 
-		err = ll.blocks.Put(b.BlockId.ToBytes(), bytes)
+		err = ll.blocks.Put(b.Id().ToBytes(), bytes)
 		if err != nil {
 			log.Error("could not add block ", b.Id(), " to database ", err)
-			delete(ids, b.BlockId) //remove failed block from layer
+			delete(ids, b.Id()) //remove failed block from layer
 		}
 
 	}
@@ -147,7 +147,7 @@ func (ll *meshDB) updateLayerIds(err error, block *Block) error {
 	if err != nil {
 		return errors.New("could not get all blocks from database ")
 	}
-	blockIds[block.BlockId] = true
+	blockIds[block.Id()] = true
 	w, err := blockIdsAsBytes(blockIds)
 	if err != nil {
 		return errors.New("could not encode layer block ids")

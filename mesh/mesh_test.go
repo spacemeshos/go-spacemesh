@@ -27,7 +27,7 @@ func TestLayers_AddBlock(t *testing.T) {
 	layers.AddBlock(block2)
 	layers.AddBlock(block3)
 
-	rBlock2, _ := layers.GetBlock(block2.BlockId)
+	rBlock2, _ := layers.GetBlock(block2.id)
 
 	assert.True(t, string(rBlock2.Data) == "data2", "wrong layer count")
 }
