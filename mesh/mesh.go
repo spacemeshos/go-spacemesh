@@ -112,9 +112,19 @@ func (cm *mesh) Close() {
 }
 
 //todo add configuration options
-func LateBlockHandler(mesh Mesh, newBlockCh chan *Block, exit chan struct{}) (run func(), kill func()) {
+func LateBlockHandler(mesh Mesh) (kill func(), blockCh chan<- *Block) {
 	log.Debug("Listening for blocks")
-	run = func() {
+	exit := make(chan struct{})
+	newBlockCh := make(chan *Block)
+
+	kill = func() {
+		log.Debug("closing LateBlockHandler")
+		exit <- struct{}{}
+		close(exit)
+		close(newBlockCh)
+	}
+
+	go func() {
 
 		for {
 			select {
@@ -129,14 +139,7 @@ func LateBlockHandler(mesh Mesh, newBlockCh chan *Block, exit chan struct{}) (ru
 			}
 
 		}
-	}
+	}()
 
-	kill = func() {
-		log.Debug("closing LateBlockHandler")
-		exit <- struct{}{}
-		close(exit)
-		close(newBlockCh)
-	}
-
-	return run, kill
+	return kill, newBlockCh
 }
