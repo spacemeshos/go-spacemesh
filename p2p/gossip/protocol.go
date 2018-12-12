@@ -2,405 +2,327 @@ package gossip
 
 import (
 	"errors"
-	"fmt"
-	"github.com/davecgh/go-spew/spew"
+	"github.com/golang/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/message"
-	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"github.com/spacemeshos/go-spacemesh/p2p/pb"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"hash/fnv"
 	"sync"
 	"time"
 )
 
-// NoResultsInterval is the timeout we wait between requesting more peers repeatedly
-const NoResultsInterval = 1 * time.Second
+const messageQBufferSize = 100
 
-// PeerMessageQueueSize is the len of the msgQ each peer holds.
-const PeerMessageQueueSize = 100
+const ProtocolName = "/p2p/1.0/gossip"
+const protocolVer = "0"
 
-// ConnectingTimeout is the timeout we wait when trying to connect a neighborhood
-const ConnectingTimeout = 20 * time.Second //todo: add to the config
+type hash uint32
 
 // fnv.New32 must be used everytime to be sure we get consistent results.
-func generateID(msg []byte) uint32 {
+func calcHash(msg []byte) hash {
 	msghash := fnv.New32() // todo: Add nonce to messages instead
 	msghash.Write(msg)
-	return msghash.Sum32()
+	return hash(msghash.Sum32())
 }
 
-// Protocol is a simple declaration of the gossip protocol
-type Protocol interface {
-	Broadcast(payload []byte) error
-
-	Start() error
-	Close()
-
-	Initial() <-chan struct{}
-	AddIncomingPeer(node.Node, net.Connection)
-	Disconnect(key crypto.PublicKey)
+// Interface for the underlying p2p layer
+type baseNetwork interface {
+	SendMessage(peerPubKey string, protocol string, payload []byte) error
+	RegisterProtocol(protocol string) chan service.Message
+	SubscribePeerEvents() (conn chan crypto.PublicKey, disc chan crypto.PublicKey)
+	ProcessProtocolMessage(sender node.Node, protocol string, data service.Data) error
 }
 
-// PeerSampler is a our interface to select peers
-type PeerSampler interface {
-	SelectPeers(count int) []node.Node
+type signer interface {
+	PublicKey() crypto.PublicKey
+	Sign(data []byte) ([]byte, error)
 }
 
-// ConnectionFactory is our interface to get connections
-type ConnectionFactory interface {
-	GetConnection(address string, pk crypto.PublicKey) (net.Connection, error)
+type protocolMessage struct {
+	msg     *pb.ProtocolMessage
 }
 
-// nodeConPair
-type nodeConPair struct {
-	node.Node
-	net.Connection
-}
-
-// Neighborhood is the gossip protocol, it manages a list of peers and sends them broadcasts
-type Neighborhood struct {
+// Protocol is the gossip protocol
+type Protocol struct {
 	log.Log
 
 	config config.SwarmConfig
+	net    baseNetwork
+	signer signer
 
-	initOnce sync.Once
-	initial  chan struct{}
-
-	peers   map[string]*peer
-	inpeers map[string]*peer
-
-	morePeersReq      chan struct{}
-	connectingTimeout time.Duration
-
-	inc chan nodeConPair // report incoming connection
-
-	// we make sure we don't send a message twice
-	oldMessageMu sync.RWMutex
-	oldMessageQ  map[uint32]struct{}
-
-	ps PeerSampler
-
-	cp ConnectionFactory
-
+	peers    map[string]*peer
 	shutdown chan struct{}
 
+	oldMessageMu sync.RWMutex
+	oldMessageQ  map[hash]struct{}
 	peersMutex   sync.RWMutex
-	inpeersMutex sync.RWMutex
+
+	relayQ   chan service.Message
+	messageQ chan protocolMessage
 }
 
-// NewNeighborhood creates a new gossip protocol from type Neighborhood.
-func NewNeighborhood(config config.SwarmConfig, ps PeerSampler, cp ConnectionFactory, log2 log.Log) *Neighborhood {
-	return &Neighborhood{
-		Log:               log2,
-		config:            config,
-		initial:           make(chan struct{}),
-		morePeersReq:      make(chan struct{}, config.RandomConnections),
-		connectingTimeout: ConnectingTimeout,
-		peers:             make(map[string]*peer, config.RandomConnections),
-		inpeers:           make(map[string]*peer, config.RandomConnections),
-		oldMessageQ:       make(map[uint32]struct{}), // todo : remember to drain this
-		shutdown:          make(chan struct{}),
-		ps:                ps,
-		cp:                cp,
+// NewProtocol creates a new gossip protocol instance. Call Start to start reading peers
+func NewProtocol(config config.SwarmConfig, base baseNetwork, signer signer, log2 log.Log) *Protocol {
+	// intentionally not subscribing to peers events so that the channels won't block in case executing Start delays
+	relayChan := base.RegisterProtocol(ProtocolName)
+	return &Protocol{
+		Log:          log2,
+		config:       config,
+		net:          base,
+		signer:       signer,
+		peers:        make(map[string]*peer),
+		shutdown:     make(chan struct{}),
+		oldMessageQ:  make(map[hash]struct{}), // todo : remember to drain this
+		peersMutex:   sync.RWMutex{},
+		relayQ:       relayChan,
+		messageQ:     make(chan protocolMessage, messageQBufferSize),
 	}
 }
 
-// Make sure that neighborhood works as a Protocol in compile time
-var _ Protocol = new(Neighborhood)
+// sender is an interface for peer's p2p layer
+type sender interface {
+	SendMessage(peerPubKey string, protocol string, payload []byte) error
+}
 
+// peer is a struct storing peer's state
 type peer struct {
 	log.Log
-	node.Node
-	connected     time.Time
-	conn          net.Connection
-	knownMessages map[uint32]struct{}
-	msgQ          chan []byte
+	pubKey        crypto.PublicKey
+	msgMutex      sync.RWMutex
+	knownMessages map[hash]struct{}
+	net           sender
 }
 
-func makePeer(node2 node.Node, c net.Connection, log log.Log) *peer {
+func newPeer(net sender, pubKey crypto.PublicKey, log log.Log) *peer {
 	return &peer{
 		log,
-		node2,
-		time.Now(),
-		c,
-		make(map[uint32]struct{}),
-		make(chan []byte, PeerMessageQueueSize),
+		pubKey,
+		sync.RWMutex{},
+		make(map[hash]struct{}),
+		net,
 	}
 }
 
-func (p *peer) send(message []byte) error {
-	if p.conn == nil || p.conn.Session() == nil {
-		return fmt.Errorf("the connection does not exist for this peer")
-	}
-	return p.conn.Send(message)
-}
-
-// addMessages adds a message to this peer's queue
-func (p *peer) addMessage(msg []byte, checksum uint32) error {
-	// dont do anything if this peer know this msg
-
+// send sends a gossip message to the peer
+func (p *peer) send(msg []byte, checksum hash) error {
+	// don't do anything if this peer know this msg
+	p.msgMutex.RLock()
 	if _, ok := p.knownMessages[checksum]; ok {
+		p.msgMutex.RUnlock()
 		return errors.New("already got this msg")
 	}
+	p.msgMutex.RUnlock()
+	go func() {
+		err := p.net.SendMessage(p.pubKey.String(), ProtocolName, msg)
+		if err != nil {
+			p.Log.Info("Gossip protocol failed to send msg (calcHash %d) to peer %v, first attempt. err=%v", checksum, p.pubKey, err)
+			// doing one retry before giving up
+			err = p.net.SendMessage(p.pubKey.String(), "", msg)
+			if err != nil {
+				p.Log.Info("Gossip protocol failed to send msg (calcHash %d) to peer %v, second attempt. err=%v", checksum, p.pubKey, err)
+				return
+			}
+		}
+		p.msgMutex.Lock()
+		p.knownMessages[checksum] = struct{}{}
+		p.msgMutex.Unlock()
+	}()
+	return nil
+}
 
-	// check if connection and session are ok
-	c := p.conn
-	session := c.Session()
-	if c == nil || session == nil {
-		// todo: refresh Neighborhood or create session
-		return errors.New("no session")
+func (prot *Protocol) Close() {
+	close(prot.shutdown)
+}
+
+// markMessage adds the calcHash to the old message queue so the message won't be processed in case received again
+func (prot *Protocol) markMessage(h hash) {
+	prot.oldMessageMu.Lock()
+	prot.oldMessageQ[h] = struct{}{}
+	prot.oldMessageMu.Unlock()
+}
+
+func (prot *Protocol) propagateMessage(msg []byte, h hash) {
+	prot.peersMutex.RLock()
+	for p := range prot.peers {
+		peer := prot.peers[p]
+		prot.Debug("sending message to peer %v, hash %d", peer.pubKey, h)
+		peer.send(msg, h) // non blocking
+	}
+	prot.peersMutex.RUnlock()
+}
+
+func (prot *Protocol) validateMessage(msg *pb.ProtocolMessage) error {
+
+	err := message.AuthAuthor(msg)
+
+	if err != nil {
+		prot.Log.Error("fail to authorize gossip message, err %v", err)
+		return err
 	}
 
-	data, err := message.PrepareMessage(session, msg)
+	if msg.Metadata.ClientVersion != protocolVer {
+		prot.Log.Error("fail to validate message's protocol version when validating gossip message, err %v", err)
+		return err
+	}
+	return nil
+}
 
+// Broadcast is the actual broadcast procedure, loop on peers and add the message to their queues
+func (prot *Protocol) Broadcast(payload []byte, nextProt string) error {
+	// add gossip header
+	header := &pb.Metadata{
+		NextProtocol:  nextProt,
+		ClientVersion: protocolVer,
+		Timestamp:     time.Now().Unix(),
+		AuthPubKey:    prot.signer.PublicKey().Bytes(),
+		MsgSign:       nil,
+	}
+
+	msg := &pb.ProtocolMessage{
+		Metadata: header,
+		Data:     &pb.ProtocolMessage_Payload{Payload: payload},
+	}
+
+	bin, err := proto.Marshal(msg)
+	if err != nil {
+		prot.Log.Error("failed to marshal message when generating gossip header, err %v", err)
+		return err
+
+	}
+
+	sign, err2 := prot.signer.Sign(bin)
+	if err2 != nil {
+		prot.Log.Error("failed to Sign header when generating gossip header, err %v", err)
+		return err
+	}
+
+	msg.Metadata.MsgSign = sign
+
+	finbin, err := proto.Marshal(msg)
 	if err != nil {
 		return err
 	}
 
-	select {
-	case p.msgQ <- data:
-		p.knownMessages[checksum] = struct{}{}
-	default:
-		return errors.New("Q was full")
-
-	}
-
+	// so we won't process our own messages
+	hash := calcHash(finbin)
+	prot.markMessage(hash)
+	prot.propagateMessage(finbin, hash)
 	return nil
 }
 
-func (p *peer) start() {
-	for {
-		m := <-p.msgQ
-		err := p.send(m)
-		if err != nil {
-			// todo: stop only when error is critical (identify errors)
-			log.Error("Failed sending message to this peer %v", p.Node.PublicKey().String())
-			return
-		}
-	}
-
+// Start a loop that process peers events
+func (prot *Protocol) Start() {
+	peerConn, peerDisc := prot.net.SubscribePeerEvents() // this was start blocks until we registered.
+	go prot.eventLoop(peerConn, peerDisc)
 }
 
-// Close closes the neighborhood and shutsdown requests for more peers
-func (s *Neighborhood) Close() {
-	// no need to shutdown con, conpool will do so in a shutdown. the morepeerreq won't work
-	close(s.shutdown)
-	//todo close all peers
+func (prot *Protocol) addPeer(peer crypto.PublicKey) {
+	prot.peersMutex.Lock()
+	prot.peers[peer.String()] = newPeer(prot.net, peer, prot.Log)
+	prot.peersMutex.Unlock()
 }
 
-// Broadcast is the actual broadcast procedure, loop on peers and add the message to their queues
-func (s *Neighborhood) Broadcast(msg []byte) error {
+func (prot *Protocol) removePeer(peer crypto.PublicKey) {
+	prot.peersMutex.Lock()
+	delete(prot.peers, peer.String())
+	prot.peersMutex.Unlock()
+}
 
-	if len(s.peers)+len(s.inpeers) == 0 {
-		return errors.New("No peers in neighborhood")
+func (prot *Protocol) isOldMessage(h hash) bool {
+	var oldmessage bool
+	prot.oldMessageMu.RLock()
+	if _, ok := prot.oldMessageQ[h]; ok {
+		oldmessage = true
+	} else {
+		oldmessage = false
 	}
+	prot.oldMessageMu.RUnlock()
+	return oldmessage
+}
 
-	oldmessage := false
+func (prot *Protocol) handleRelayMessage(msgB []byte) error {
+	hash := calcHash(msgB)
 
-	checksum := generateID(msg)
-
-	s.oldMessageMu.RLock()
-	if _, ok := s.oldMessageQ[checksum]; ok {
+	// in case the message was received through the relay channel we need to remove the Gossip layer and hand the payload for the next protocol to process
+	if prot.isOldMessage(hash) {
 		// todo : - have some more metrics for termination
 		// todo	: - maybe tell the peer weg ot this message already?
-		oldmessage = true
-	}
-	s.oldMessageMu.RUnlock()
+		prot.Log.Debug("got old message, hash %d", hash)
+	} else {
 
-	if !oldmessage {
-		s.oldMessageMu.Lock()
-		s.oldMessageQ[checksum] = struct{}{}
-		s.oldMessageMu.Unlock()
-	}
-
-	s.peersMutex.RLock()
-	for p := range s.peers {
-		peer := s.peers[p]
-		go peer.addMessage(msg, checksum)
-		s.Debug("adding message to peer %v", peer.Pretty())
-	}
-	s.peersMutex.RUnlock()
-	s.inpeersMutex.RLock()
-	for p := range s.inpeers {
-		peer := s.inpeers[p]
-		go peer.addMessage(msg, checksum)
-		s.Debug("adding message to peer %v", peer.Pretty())
-	}
-	s.inpeersMutex.RUnlock()
-
-	//TODO: if we didn't send to RandomConnections then try to other peers.
-	if oldmessage {
-		return errors.New("old message")
-	}
-
-	return nil
-}
-
-// getMorePeers tries to fill the `peers` slice with dialed outbound peers that we selected from the dht.
-func (s *Neighborhood) getMorePeers(numpeers int) int {
-
-	if numpeers == 0 {
-		return 0
-	}
-
-	// dht should provide us with random peers to connect to
-	nds := s.ps.SelectPeers(numpeers)
-	ndsLen := len(nds)
-	if ndsLen == 0 {
-		s.Debug("Peer sampler returned nothing.")
-		// this gets busy at start so we spare a second
-		return 0 // zero samples here so no reason to proceed
-	}
-
-	type cnErr struct {
-		n   node.Node
-		c   net.Connection
-		err error
-	}
-
-	res := make(chan cnErr, numpeers)
-
-	// Try a connection to each peer.
-	// TODO: try splitting the load and don't connect to more than X at a time
-	for i := 0; i < ndsLen; i++ {
-		go func(nd node.Node, reportChan chan cnErr) {
-			c, err := s.cp.GetConnection(nd.Address(), nd.PublicKey())
-			reportChan <- cnErr{nd, c, err}
-		}(nds[i], res)
-	}
-
-	total, bad := 0, 0
-	tm := time.NewTimer(s.connectingTimeout) // todo: configure
-loop:
-	for {
-		select {
-		case cne := <-res:
-			total++ // We count i everytime to know when to close the channel
-
-			if cne.err != nil {
-				s.Error("can't establish connection with sampled peer %v, %v", cne.n.String(), cne.err)
-				bad++
-				if total == ndsLen {
-					break loop
-				}
-				continue // this peer didn't work, todo: tell dht
-			}
-
-			p := makePeer(cne.n, cne.c, s.Log)
-			s.inpeersMutex.Lock()
-			//_, ok := s.outbound[cne.n.String()]
-			_, ok := s.inpeers[cne.n.PublicKey().String()]
-			if ok {
-				delete(s.inpeers, cne.n.PublicKey().String())
-			}
-			s.inpeersMutex.Unlock()
-
-			s.peersMutex.Lock()
-			s.peers[cne.n.PublicKey().String()] = p
-			s.peersMutex.Unlock()
-
-			go p.start()
-			s.Debug("Neighborhood: Added peer to peer list %v", cne.n.Pretty())
-
-			if total == ndsLen {
-				break loop
-			}
-		case <-tm.C:
-			break loop
-		case <-s.shutdown:
-			break loop
+		msg := &pb.ProtocolMessage{}
+		err := proto.Unmarshal(msgB, msg)
+		if err != nil {
+			prot.Log.Error("failed to unmarshal when handling relay message, err %v", err)
+			return err
 		}
+
+		err = prot.validateMessage(msg)
+		if err != nil {
+			prot.Log.Error("failed to validate message when handling relay message, err %v", err)
+			return err
+		}
+
+		prot.markMessage(hash)
+
+		var data service.Data
+
+		if payload := msg.GetPayload(); payload != nil {
+			data = service.Data_Bytes{Payload: payload}
+		} else if wrap := msg.GetMsg(); wrap != nil {
+			data = service.Data_MsgWrapper{Req: wrap.Req, MsgType: wrap.Type, ReqID: wrap.ReqID, Payload: wrap.Payload}
+		}
+
+		authKey, err := crypto.NewPublicKey(msg.Metadata.AuthPubKey)
+		if err != nil {
+			prot.Log.Error("failed to decode the auth public key when handling relay message, err %v", err)
+			return err
+		}
+
+		go prot.net.ProcessProtocolMessage(node.New(authKey, ""), msg.Metadata.NextProtocol, data)
 	}
 
-	return total - bad
-}
-
-// Start a loop that manages the peers we are connected to all the time
-// It connects to config.RandomConnections and after that maintains this number
-// of connections, if a connection is closed we notify the loop that we need more peers now.
-func (s *Neighborhood) Start() error {
-	//TODO: Save and load persistent peers ?
-	s.Info("Neighborhood service started")
-
-	// initial request for peers
-	go s.loop()
-	s.morePeersReq <- struct{}{}
+	prot.propagateMessage(msgB, hash)
 
 	return nil
 }
 
-func (s *Neighborhood) loop() {
+func (prot *Protocol) eventLoop(peerConn chan crypto.PublicKey, peerDisc chan crypto.PublicKey) {
 loop:
 	for {
 		select {
-		case <-s.morePeersReq:
-			s.Debug("loop: got morePeersReq")
-			go s.askForMorePeers()
-		case <-s.shutdown:
+		case msg := <-prot.relayQ:
+			// incoming messages from p2p layer for process and relay
+			go func() {
+				//  [todo some err handling
+				prot.handleRelayMessage(msg.Bytes())
+			}()
+		case peer := <-peerConn:
+			go prot.addPeer(peer)
+		case peer := <-peerDisc:
+			go prot.removePeer(peer)
+		case <-prot.shutdown:
 			break loop // maybe error ?
 		}
 	}
 }
 
-func (s *Neighborhood) askForMorePeers() {
-	numpeers := len(s.peers)
-	req := s.config.RandomConnections - numpeers
-
-	if req <= 0 {
-		return
-	}
-
-	s.getMorePeers(req)
-
-	// todo: better way then going in this everytime ?
-	if len(s.peers) >= s.config.RandomConnections {
-		s.initOnce.Do(func() {
-			s.Info("gossip; connected to initial required neighbors - %v", len(s.peers))
-			close(s.initial)
-			s.peersMutex.RLock()
-			s.Debug(spew.Sdump(s.peers))
-			s.peersMutex.RUnlock()
-		})
-		return
-	}
-	// if we could'nt get any maybe were initializing
-	// wait a little bit before trying again
-	time.Sleep(NoResultsInterval)
-	s.morePeersReq <- struct{}{}
+// peersCount returns the number of peers know to the protocol, used for testing only
+func (prot *Protocol) peersCount() int {
+	prot.peersMutex.RLock()
+	cnt := len(prot.peers)
+	prot.peersMutex.RUnlock()
+	return cnt
 }
 
-// Initial returns when the neighborhood was initialized.
-func (s *Neighborhood) Initial() <-chan struct{} {
-	return s.initial
-}
-
-// Disconnect removes a peer from the neighborhood, it requests more peers if our outbound peer count is less than configured
-func (s *Neighborhood) Disconnect(key crypto.PublicKey) {
-	peer := key.String()
-
-	s.inpeersMutex.Lock()
-	if _, ok := s.inpeers[peer]; ok {
-		delete(s.inpeers, peer)
-		s.inpeersMutex.Unlock()
-		return
-	}
-	s.inpeersMutex.Unlock()
-
-	s.peersMutex.Lock()
-	if _, ok := s.peers[peer]; ok {
-		delete(s.peers, peer)
-	}
-	s.peersMutex.Unlock()
-	s.morePeersReq <- struct{}{}
-}
-
-// AddIncomingPeer inserts a peer to the neighborhood as a remote peer.
-func (s *Neighborhood) AddIncomingPeer(n node.Node, c net.Connection) {
-	p := makePeer(n, c, s.Log)
-	s.inpeersMutex.Lock()
-	s.inpeers[n.PublicKey().String()] = p
-	s.inpeersMutex.Unlock()
-	go p.start()
+// hasPeer returns whether or not a peer is known to the protocol, used for testing only
+func (prot *Protocol) hasPeer(key crypto.PublicKey) bool {
+	prot.peersMutex.RLock()
+	_, ok := prot.peers[key.String()]
+	prot.peersMutex.RUnlock()
+	return ok
 }
