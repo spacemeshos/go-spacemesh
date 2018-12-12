@@ -7,7 +7,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"sync"
 	"sync/atomic"
-	"time"
 )
 
 type Peer crypto.PublicKey
@@ -97,6 +96,7 @@ func (cm *mesh) AddBlock(block *Block) error {
 		log.Debug("failed to add block ", block.ID(), " ", err)
 		return err
 	}
+	cm.SetLatestKnownLayer(uint32(block.Layer()))
 	cm.tortoise.HandleLateBlock(block)
 	return nil
 }
@@ -109,37 +109,4 @@ func (cm *mesh) GetBlock(id BlockID) (*Block, error) {
 func (cm *mesh) Close() {
 	log.Debug("closing db")
 	cm.meshDb.Close()
-}
-
-//todo add configuration options
-func LateBlockHandler(mesh Mesh) (kill func(), blockCh chan<- *Block) {
-	log.Debug("Listening for blocks")
-	exit := make(chan struct{})
-	newBlockCh := make(chan *Block)
-
-	kill = func() {
-		log.Debug("closing LateBlockHandler")
-		exit <- struct{}{}
-		close(exit)
-		close(newBlockCh)
-	}
-
-	go func() {
-
-		for {
-			select {
-			case <-exit:
-				log.Debug("run stoped")
-				return
-			case b := <-newBlockCh:
-				mesh.SetLatestKnownLayer(uint32(b.Layer()))
-				mesh.AddBlock(b)
-			default:
-				time.Sleep(100 * time.Millisecond)
-			}
-
-		}
-	}()
-
-	return kill, newBlockCh
 }
