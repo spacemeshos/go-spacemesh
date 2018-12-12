@@ -97,7 +97,7 @@ func (cm *mesh) AddBlock(block *Block) error {
 		return err
 	}
 	cm.SetLatestKnownLayer(uint32(block.Layer()))
-	cm.tortoise.HandleLateBlock(block)
+	cm.tortoise.HandleLateBlock(block) //todo should be thread safe?
 	return nil
 }
 
