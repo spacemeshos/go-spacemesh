@@ -5,8 +5,8 @@ import (
 	"time"
 )
 
-type BlockID uint64
-type LayerID uint64
+type BlockID uint32
+type LayerID uint32
 
 var layerCounter LayerID = 0
 

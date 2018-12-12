@@ -17,14 +17,14 @@ const cachedLayers = 50
 
 type Mesh interface {
 	MeshDB
-	LocalLayerCount() uint64
-	LatestKnownLayer() uint64
-	SetLatestKnownLayer(idx uint64)
+	LocalLayerCount() uint32
+	LatestKnownLayer() uint32
+	SetLatestKnownLayer(idx uint32)
 }
 
 type mesh struct {
-	localLayerCount  uint64
-	latestKnownLayer uint64
+	localLayerCount  uint32
+	latestKnownLayer uint32
 	meshDb           MeshDB
 	lMutex           sync.RWMutex
 	lkMutex          sync.RWMutex
@@ -41,17 +41,17 @@ func NewMesh(layers database.DB, blocks database.DB) Mesh {
 	return ll
 }
 
-func (cm *mesh) LocalLayerCount() uint64 {
-	return atomic.LoadUint64(&cm.localLayerCount)
+func (cm *mesh) LocalLayerCount() uint32 {
+	return atomic.LoadUint32(&cm.localLayerCount)
 }
 
-func (cm *mesh) LatestKnownLayer() uint64 {
+func (cm *mesh) LatestKnownLayer() uint32 {
 	defer cm.lkMutex.RUnlock()
 	cm.lkMutex.RLock()
 	return cm.latestKnownLayer
 }
 
-func (cm *mesh) SetLatestKnownLayer(idx uint64) {
+func (cm *mesh) SetLatestKnownLayer(idx uint32) {
 	defer cm.lkMutex.Unlock()
 	cm.lkMutex.Lock()
 	if idx > cm.latestKnownLayer {
@@ -76,7 +76,7 @@ func (cm *mesh) AddLayer(layer *Layer) error {
 
 	cm.meshDb.AddLayer(layer)
 	cm.tortoise.HandleIncomingLayer(layer)
-	atomic.AddUint64(&cm.localLayerCount, 1)
+	atomic.AddUint32(&cm.localLayerCount, 1)
 	return nil
 }
 
@@ -122,7 +122,7 @@ func LateBlockHandler(mesh Mesh, newBlockCh chan *Block, exit chan struct{}) (ru
 				log.Debug("run stoped")
 				return
 			case b := <-newBlockCh:
-				mesh.SetLatestKnownLayer(uint64(b.Layer()))
+				mesh.SetLatestKnownLayer(uint32(b.Layer()))
 				mesh.AddBlock(b)
 			default:
 				time.Sleep(100 * time.Millisecond)

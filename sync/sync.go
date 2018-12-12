@@ -121,12 +121,12 @@ func (s *Syncer) run() {
 	}
 }
 
-func (s *Syncer) maxSyncLayer() uint64 {
-	if uint32(s.layers.LatestKnownLayer()) < s.config.hdist {
+func (s *Syncer) maxSyncLayer() uint32 {
+	if s.layers.LatestKnownLayer() < s.config.hdist {
 		return 0
 	}
 
-	return s.layers.LatestKnownLayer() - uint64(s.config.hdist)
+	return s.layers.LatestKnownLayer() - s.config.hdist
 }
 
 func (s *Syncer) Synchronise() {
