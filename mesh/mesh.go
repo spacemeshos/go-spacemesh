@@ -1,15 +1,12 @@
 package mesh
 
 import (
-	"crypto"
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"sync"
 	"sync/atomic"
 )
-
-type Peer crypto.PublicKey
 
 const layerSize = 200
 const cachedLayers = 50
