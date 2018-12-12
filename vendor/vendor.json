@@ -21,6 +21,12 @@
 			"revisionTime": "2018-02-21T22:46:20Z"
 		},
 		{
+			"checksumSHA1": "2u6FcCnyfRnJvUCWpEZZv6Yy+WE=",
+			"path": "github.com/davecgh/go-xdr/xdr2",
+			"revision": "e6a2ba005892b6a5b27cb5352f64c2e96942dd28",
+			"revisionTime": "2016-11-22T19:31:51Z"
+		},
+		{
 			"checksumSHA1": "7NP1qUMF8Kx1y0zANxx0e+oq9Oo=",
 			"path": "github.com/fsnotify/fsnotify",
 			"revision": "c2828203cd70a50dcccfb2761f8b1f8ceef9a8e9",
