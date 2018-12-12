@@ -8,7 +8,7 @@ import (
 )
 
 type MeshDB interface {
-	AddLayer(layer *Layer) error //todo change this to add batch blocks
+	AddLayer(layer *Layer) error
 	GetLayer(i LayerID) (*Layer, error)
 	GetBlock(id BlockID) (*Block, error)
 	AddBlock(block *Block) error
@@ -114,26 +114,27 @@ func (ll *meshDB) AddLayer(layer *Layer) error {
 		ids[b.BlockId] = true
 	}
 
-	w, err := blockIdsAsBytes(ids)
-	if err != nil {
-		return errors.New("could not encode layer block ids")
-	}
-
 	//add blocks to meshDb
 	for _, b := range layer.blocks {
-
 		bytes, err := blockAsBytes(*b)
 		if err != nil {
-			//todo error handling
-			log.Debug("problem adding block to db ", err)
+			log.Error("problem serializing block ", b.Id(), err)
+			delete(ids, b.BlockId) //remove failed block from layer
+			continue
 		}
 
 		err = ll.blocks.Put(b.BlockId.ToBytes(), bytes)
 		if err != nil {
-			//todo error handling
-			log.Debug("could not add block to database ", err)
+			log.Error("could not add block ", b.Id(), " to database ", err)
+			delete(ids, b.BlockId) //remove failed block from layer
 		}
 
+	}
+
+	w, err := blockIdsAsBytes(ids)
+	if err != nil {
+		//todo recover
+		return errors.New("could not encode layer block ids")
 	}
 
 	ll.layers.Put(layer.Index().ToBytes(), w)

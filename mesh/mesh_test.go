@@ -98,7 +98,11 @@ func TestLayers_LocalLayerCount(t *testing.T) {
 func TestLayers_LatestKnownLayer(t *testing.T) {
 	layers := getMesh("t6")
 	defer layers.Close()
+	layers.SetLatestKnownLayer(3)
+	layers.SetLatestKnownLayer(7)
 	layers.SetLatestKnownLayer(10)
+	layers.SetLatestKnownLayer(1)
+	layers.SetLatestKnownLayer(2)
 	assert.True(t, layers.LatestKnownLayer() == 10, "wrong layer")
 }
 
