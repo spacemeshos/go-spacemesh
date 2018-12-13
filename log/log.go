@@ -1,137 +1,155 @@
 // Package log provides the both file and console (general) logging capabilities
-// to spacemesh modules such as app and identity.
+// to spacemesh modules such as app and node.
 package log
 
 import (
 	"fmt"
+	"math/rand"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
+	"time"
 
 	"gopkg.in/natefinch/lumberjack.v2"
 	"gopkg.in/op/go-logging.v1"
 )
 
-// Log is an exported type that embeds our logger.
-// logging library can be replaced as long as it implements same functionality used across the project.
-type Log struct {
-	*logging.Logger
+const colorString = "\x1b[38;2;{r};{g};{b}m"
+const colorBgString = "\x1b[48;2;{r};{g};{b}m"
+const resetColorString = "\x1b[0m"
+
+var usedColors = make(map[string]bool)
+
+func createRandomColor(txt string) string {
+
+	randomized := func() string {
+		rand.Seed(time.Now().UnixNano())
+		r := strconv.Itoa(rand.Intn(255))
+		g := strconv.Itoa(rand.Intn(255))
+		b := strconv.Itoa(rand.Intn(255))
+		color := strings.Replace(colorString, "{r}", r, 1)
+		color = strings.Replace(color, "{g}", g, 1)
+		color = strings.Replace(color, "{b}", b, 1)
+		return color
+	}
+	randColor := randomized()
+	for usedColors[randColor] {
+		randColor = randomized()
+	}
+
+	return randColor + txt + resetColorString
+}
+
+// SpacemeshLogger is a custom logger.
+type SpacemeshLogger struct {
+	Logger *logging.Logger
 }
 
 // smlogger is the local app singleton logger.
-var AppLog Log
-var debugMode bool
+var smLogger *SpacemeshLogger
 
 func init() {
-
 	// create a basic temp os.Stdout logger
 	// This logger is used until the app calls InitSpacemeshLoggingSystem().
+
 	log := logging.MustGetLogger("app")
 	log.ExtraCalldepth = 1
-	logFormat := ` %{color}%{level:.4s} %{id:03x} %{time:15:04:05.000} ▶%{color:reset} %{message}`
-	leveledBackend := getBackendLevel("app", "<APP>", logFormat)
-	log.SetBackend(leveledBackend)
-	AppLog = Log{Logger: log}
-}
-
-// getAllBackend returns level backends with an exception to Debug leve
-// which is only returned if the flag debug is set
-func getBackendLevel(module, prefix, format string) logging.LeveledBackend {
-	logFormat := logging.MustStringFormatter(format)
-
-	backend := logging.NewLogBackend(os.Stdout, prefix, 0)
+	logFormat := logging.MustStringFormatter(` %{color}%{level:.4s} %{id:03x} %{time:15:04:05.000} ▶%{color:reset} %{message}`)
+	backend := logging.NewLogBackend(os.Stdout, "<APP>", 0)
 	backendFormatter := logging.NewBackendFormatter(backend, logFormat)
-	leveledBackend := logging.AddModuleLevel(backendFormatter)
+	logging.SetBackend(backendFormatter)
+	smLogger = &SpacemeshLogger{Logger: log}
 
-	if debugMode {
-		leveledBackend.SetLevel(logging.DEBUG, module)
-	} else {
-		leveledBackend.SetLevel(logging.INFO, module)
-	}
-
-	return leveledBackend
+	log.Info("Spacemesh uses 256 terminal colors. please make sure your terminal supports it")
+	log.Info(createRandomColor("T") + createRandomColor("E") + createRandomColor("S") + createRandomColor("T"))
+	usedColors = make(map[string]bool)
 }
 
-// DebugMode sets log debug level
-func DebugMode(mode bool) {
-	debugMode = mode
-}
+// CreateLogger creates a logger for a module. e.g. local node logger.
+func CreateLogger(module string, dataFolderPath string, logFileName string) *logging.Logger {
 
-// New creates a logger for a module. e.g. p2p instance logger.
-func New(module string, dataFolderPath string, logFileName string) Log {
 	log := logging.MustGetLogger(module)
 	log.ExtraCalldepth = 1
-	logFormat := ` %{color:reset}%{color}%{level:.4s} %{id:03x} %{time:15:04:05.000} %{shortpkg}.%{shortfunc} ▶%{color:reset} %{message}`
-	logFileFormat := `%{time:15:04:05.000} %{level:.4s} %{id:03x} %{shortpkg}.%{shortfunc} ▶ %{message}`
+	logFormat := logging.MustStringFormatter(` %{color:reset}%{color}%{level:.4s} %{id:03x} %{time:15:04:05.000} %{shortpkg}.%{shortfunc} ▶%{color:reset} %{message}`)
 	// module name is set is message prefix
+	backend := logging.NewLogBackend(os.Stdout, createRandomColor(module), 0)
+	backendFormatter := logging.NewBackendFormatter(backend, logFormat)
 
-	backends := getBackendLevelWithFileBackend(module, module, logFormat, logFileFormat, dataFolderPath, logFileName)
+	fileName := filepath.Join(dataFolderPath, logFileName)
 
-	log.SetBackend(logging.MultiLogger(backends...))
-
-	return Log{log}
-}
-
-// getBackendLevelWithFileBackend returns backends level including log file backend
-func getBackendLevelWithFileBackend(module, prefix, logFormat, fileFormat, dataFolderPath, logFileName string) []logging.Backend {
-	leveledBackends := []logging.Backend{getBackendLevel(module, prefix, logFormat)}
-
-	if dataFolderPath != "" && logFileName != "" {
-		fileName := filepath.Join(dataFolderPath, logFileName)
-
-		fileLogger := &lumberjack.Logger{
-			Filename:   fileName,
-			MaxSize:    500, // megabytes
-			MaxBackups: 3,
-			MaxAge:     28, // days
-			Compress:   false,
-		}
-
-		fileLoggerBackend := logging.NewLogBackend(fileLogger, "", 0)
-		logFileFormat := logging.MustStringFormatter(fileFormat)
-		fileBackendFormatter := logging.NewBackendFormatter(fileLoggerBackend, logFileFormat)
-		leveledBackends = append(leveledBackends, logging.AddModuleLevel(fileBackendFormatter))
+	fileLogger := &lumberjack.Logger{
+		Filename:   fileName,
+		MaxSize:    500, // megabytes
+		MaxBackups: 3,
+		MaxAge:     28, // days
+		Compress:   false,
 	}
 
-	return leveledBackends
+	fileLoggerBackend := logging.NewLogBackend(fileLogger, "", 0)
+	logFileFormat := logging.MustStringFormatter(`%{time:15:04:05.000} %{level:.4s} %{id:03x} %{shortpkg}.%{shortfunc} ▶ %{message}`)
+	fileBackendFormatter := logging.NewBackendFormatter(fileLoggerBackend, logFileFormat)
+
+	backendConsoleLevel := logging.AddModuleLevel(backendFormatter)
+	backendFileLevel := logging.AddModuleLevel(fileBackendFormatter)
+	log.SetBackend(logging.MultiLogger(backendConsoleLevel, backendFileLevel))
+
+	return log
 }
 
 // InitSpacemeshLoggingSystem initializes app logging system.
 func InitSpacemeshLoggingSystem(dataFolderPath string, logFileName string) {
+
 	log := logging.MustGetLogger("app")
 
 	// we wrap all log calls so we need to add 1 to call depth
 	log.ExtraCalldepth = 1
 
-	logFormat := ` %{color}%{level:.4s} %{id:03x} %{time:15:04:05.000} %{shortpkg}.%{shortfunc}%{color:reset} ▶ %{message}`
-	logFileFormat := `%{time:15:04:05.000} %{level:.4s}-%{id:03x} %{shortpkg}.%{shortfunc} ▶ %{message}`
+	logFormat := logging.MustStringFormatter(` %{color}%{level:.4s} %{id:03x} %{time:15:04:05.000} %{shortpkg}.%{shortfunc}%{color:reset} ▶ %{message}`)
+	backend := logging.NewLogBackend(os.Stdout, "<APP>", 0)
+	backendFormatter := logging.NewBackendFormatter(backend, logFormat)
 
-	backends := getBackendLevelWithFileBackend("app", "<APP>", logFormat, logFileFormat, dataFolderPath, logFileName)
+	fileName := filepath.Join(dataFolderPath, logFileName)
 
-	log.SetBackend(logging.MultiLogger(backends...))
+	fileLogger := &lumberjack.Logger{
+		Filename:   fileName,
+		MaxSize:    500, // megabytes
+		MaxBackups: 3,
+		MaxAge:     28, // days
+		Compress:   false,
+	}
 
-	AppLog = Log{log}
+	fileLoggerBackend := logging.NewLogBackend(fileLogger, "", 0)
+	logFileFormat := logging.MustStringFormatter(`%{time:15:04:05.000} %{level:.4s}-%{id:03x} %{shortpkg}.%{shortfunc} ▶ %{message}`)
+	fileBackendFormatter := logging.NewBackendFormatter(fileLoggerBackend, logFileFormat)
+
+	backendConsoleLevel := logging.AddModuleLevel(backendFormatter)
+	backendFileLevel := logging.AddModuleLevel(fileBackendFormatter)
+	log.SetBackend(logging.MultiLogger(backendConsoleLevel, backendFileLevel))
+
+	smLogger = &SpacemeshLogger{Logger: log}
 }
 
 // public wrappers abstracting away logging lib impl
 
 // Info prints formatted info level log message.
 func Info(format string, args ...interface{}) {
-	AppLog.Info(format, args...)
+	smLogger.Logger.Info(format, args...)
 }
 
 // Debug prints formatted debug level log message.
 func Debug(format string, args ...interface{}) {
-	AppLog.Debug(format, args...)
+	smLogger.Logger.Debug(format, args...)
 }
 
 // Error prints formatted error level log message.
 func Error(format string, args ...interface{}) {
-	AppLog.Error(format, args...)
+	smLogger.Logger.Error(format, args...)
 }
 
 // Warning prints formatted warning level log message.
 func Warning(format string, args ...interface{}) {
-	AppLog.Warning(format, args...)
+	smLogger.Logger.Warning(format, args...)
 }
 
 // PrettyID formats ID.

@@ -1,0 +1,1 @@
+- [anon gossip](https://github.com/gfanti/bips/blob/master/bip-dandelion.mediawiki)
