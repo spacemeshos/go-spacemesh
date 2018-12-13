@@ -1,7 +1,7 @@
 package state
 
 import (
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/spacemeshos/go-spacemesh/rlp"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"io"

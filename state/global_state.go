@@ -2,7 +2,7 @@ package state
 
 import (
 	"fmt"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/spacemeshos/go-spacemesh/rlp"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"math/big"
@@ -10,7 +10,18 @@ import (
 )
 
 type GlobalStateDB interface {
-
+	Exist(addr common.Address) bool
+	Empty(addr common.Address) bool
+	GetBalance(addr common.Address) *big.Int
+	GetNonce(addr common.Address) uint64
+	AddBalance(addr common.Address, amount *big.Int)
+	SubBalance(addr common.Address, amount *big.Int)
+	SetNonce(addr common.Address, nonce uint64)
+	GetOrNewStateObj(addr common.Address) *StateObj
+	CreateAccount(addr common.Address)
+	Commit(deleteEmptyObjects bool) (root common.Hash, err error)
+	//Copy() *GlobalStateDB
+	IntermediateRoot(deleteEmptyObjects bool) common.Hash
 }
 
 
@@ -253,6 +264,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error) 
 			s.updateStateObj(stateObject)
 		}
 	}
+	s.stateObjectsDirty = make(map[common.Address]struct{})
 	// Write trie changes.
 	root, err = s.globalTrie.Commit(nil)
 	return root, err
