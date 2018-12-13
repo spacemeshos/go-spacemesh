@@ -276,7 +276,7 @@ loop:
 		case <-timeout:
 			t.Error("timed out ")
 		default:
-			if syncObj2.layers.LocalLayerCount() == 3 {
+			if syncObj2.layers.LatestIrreversible() == 3 {
 				t.Log("done!")
 				break loop
 			}
@@ -358,7 +358,7 @@ loop:
 		case <-timeout:
 			t.Error("timed out ")
 		default:
-			if syncObj2.layers.LocalLayerCount() == 3 && syncObj3.layers.LocalLayerCount() == 3 {
+			if syncObj2.layers.LatestIrreversible() == 3 && syncObj3.layers.LatestIrreversible() == 3 {
 				t.Log("done!")
 				break loop
 			}

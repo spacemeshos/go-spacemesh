@@ -61,7 +61,7 @@ const (
 )
 
 func (s *Syncer) IsSynced() bool {
-	return s.layers.LocalLayerCount() == s.maxSyncLayer()
+	return s.layers.LatestIrreversible() == s.maxSyncLayer()
 }
 
 func (s *Syncer) Stop() {
@@ -130,7 +130,7 @@ func (s *Syncer) maxSyncLayer() uint32 {
 }
 
 func (s *Syncer) Synchronise() {
-	for i := s.layers.LocalLayerCount(); i < s.maxSyncLayer(); {
+	for i := s.layers.LatestIrreversible(); i < s.maxSyncLayer(); {
 		blockIds := s.getLayerBlockIDs(mesh.LayerID(i)) //returns a set of all known blocks in the mesh
 		output := make(chan *mesh.Block)
 		// each worker goroutine tries to fetch a block iteratively from each peer
@@ -170,7 +170,7 @@ func (s *Syncer) Synchronise() {
 		i++
 	}
 
-	log.Debug("synchronise done, local layer index is ", s.layers.LocalLayerCount())
+	log.Debug("synchronise done, local layer index is ", s.layers.LatestIrreversible())
 }
 
 func (s *Syncer) getBlockFromPeers(id mesh.BlockID) *mesh.Block {

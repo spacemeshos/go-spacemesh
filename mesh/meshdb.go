@@ -7,38 +7,33 @@ import (
 	"sync"
 )
 
-type MeshDB interface {
-	AddLayer(layer *Layer) error
-	GetLayer(i LayerID) (*Layer, error)
-	GetBlock(id BlockID) (*Block, error)
-	AddBlock(block *Block) error
-	Close()
-}
-
 type meshDB struct {
-	layers     database.DB
-	blocks     database.DB
-	lMutex     sync.RWMutex
-	llKeyMutex sync.Mutex
-	layerLocks map[LayerID]sync.Mutex
+	layers             database.DB
+	blocks             database.DB
+	contextualValidity database.DB //map blockId to contextualValidation state of block
+	layerLocks         map[LayerID]sync.Mutex
+	lMutex             sync.RWMutex
+	llKeyMutex         sync.Mutex
 }
 
-func NewMeshDb(layers database.DB, blocks database.DB) MeshDB {
+func NewMeshDb(layers database.DB, blocks database.DB, validity database.DB) *meshDB {
 	ll := &meshDB{
-		blocks:     blocks,
-		layers:     layers,
-		layerLocks: make(map[LayerID]sync.Mutex),
+		blocks:             blocks,
+		layers:             layers,
+		contextualValidity: validity,
+		layerLocks:         make(map[LayerID]sync.Mutex),
 	}
 	return ll
 }
 
-func (s *meshDB) Close() {
-	s.blocks.Close()
-	s.layers.Close()
+func (m *meshDB) Close() {
+	m.blocks.Close()
+	m.layers.Close()
+	m.contextualValidity.Close()
 }
 
-func (ll *meshDB) GetLayer(index LayerID) (*Layer, error) {
-	ids, err := ll.layers.Get(index.ToBytes())
+func (m *meshDB) getLayer(index LayerID) (*Layer, error) {
+	ids, err := m.layers.Get(index.ToBytes())
 	if err != nil {
 		return nil, errors.New("error getting layer from database ")
 	}
@@ -48,7 +43,7 @@ func (ll *meshDB) GetLayer(index LayerID) (*Layer, error) {
 		return nil, errors.New("could not get all blocks from database ")
 	}
 
-	blocks, err := ll.getLayerBlocks(blockIds)
+	blocks, err := m.getLayerBlocks(blockIds)
 	if err != nil {
 		return nil, errors.New("could not get all blocks from database ")
 	}
@@ -57,9 +52,10 @@ func (ll *meshDB) GetLayer(index LayerID) (*Layer, error) {
 }
 
 //todo fix concurrency for block
-func (ll *meshDB) AddBlock(block *Block) error {
+//todo check syntactic validity
+func (m *meshDB) addBlock(block *Block) error {
 
-	_, err := ll.blocks.Get(block.ID().ToBytes())
+	_, err := m.blocks.Get(block.ID().ToBytes())
 	if err == nil {
 		log.Debug("block ", block.ID(), " already exists in database")
 		return errors.New("block " + string(block.ID()) + " already exists in database")
@@ -70,30 +66,30 @@ func (ll *meshDB) AddBlock(block *Block) error {
 		return errors.New("could not encode block")
 	}
 
-	ll.llKeyMutex.Lock()
-	layerLock := ll.getLayerLock(block.LayerIndex)
+	m.llKeyMutex.Lock()
+	layerLock := m.getLayerLock(block.LayerIndex)
 	layerLock.Lock()
-	ll.llKeyMutex.Unlock()
+	m.llKeyMutex.Unlock()
 	defer layerLock.Unlock()
 
-	if err = ll.blocks.Put(block.ID().ToBytes(), bytes); err != nil {
+	if err = m.blocks.Put(block.ID().ToBytes(), bytes); err != nil {
 		return errors.New("could not add block to database")
 	}
 
-	return ll.updateLayerIds(err, block)
+	return m.updateLayerIds(err, block)
 }
 
-func (ll *meshDB) getLayerLock(index LayerID) sync.Mutex {
-	layerLock, found := ll.layerLocks[index]
+func (m *meshDB) getLayerLock(index LayerID) sync.Mutex {
+	layerLock, found := m.layerLocks[index]
 	if !found {
 		layerLock = sync.Mutex{}
-		ll.layerLocks[index] = layerLock
+		m.layerLocks[index] = layerLock
 	}
 	return layerLock
 }
 
-func (ll *meshDB) GetBlock(id BlockID) (*Block, error) {
-	b, err := ll.blocks.Get(id.ToBytes())
+func (m *meshDB) getBlock(id BlockID) (*Block, error) {
+	b, err := m.blocks.Get(id.ToBytes())
 	if err != nil {
 		return nil, errors.New("could not find block in database")
 	}
@@ -101,12 +97,24 @@ func (ll *meshDB) GetBlock(id BlockID) (*Block, error) {
 	return bytesToBlock(b)
 }
 
+func (m *meshDB) getContextualValidity(id BlockID) (bool, error) {
+	//todo implement
+	return true, nil
+}
+
+func (m *meshDB) setContextualValidity(id BlockID, valid bool) error {
+	//todo implement
+	//todo concurrency
+	m.contextualValidity.Put(id.ToBytes(), boolAsBytes(valid))
+	return nil
+}
+
 //todo this overwrites the previous value if it exists
-func (ll *meshDB) AddLayer(layer *Layer) error {
-	ll.llKeyMutex.Lock()
-	layerLock := ll.getLayerLock(layer.index)
+func (m *meshDB) addLayer(layer *Layer) error {
+	m.llKeyMutex.Lock()
+	layerLock := m.getLayerLock(layer.index)
 	layerLock.Lock()
-	ll.llKeyMutex.Unlock()
+	m.llKeyMutex.Unlock()
 	defer layerLock.Unlock()
 
 	ids := make(map[BlockID]bool)
@@ -114,7 +122,7 @@ func (ll *meshDB) AddLayer(layer *Layer) error {
 		ids[b.Id] = true
 	}
 
-	//add blocks to meshDb
+	//add blocks to mDB
 	for _, b := range layer.blocks {
 		bytes, err := blockAsBytes(*b)
 		if err != nil {
@@ -123,7 +131,7 @@ func (ll *meshDB) AddLayer(layer *Layer) error {
 			continue
 		}
 
-		err = ll.blocks.Put(b.ID().ToBytes(), bytes)
+		err = m.blocks.Put(b.ID().ToBytes(), bytes)
 		if err != nil {
 			log.Error("could not add block ", b.ID(), " to database ", err)
 			delete(ids, b.ID()) //remove failed block from layer
@@ -137,12 +145,12 @@ func (ll *meshDB) AddLayer(layer *Layer) error {
 		return errors.New("could not encode layer block ids")
 	}
 
-	ll.layers.Put(layer.Index().ToBytes(), w)
+	m.layers.Put(layer.Index().ToBytes(), w)
 	return nil
 }
 
-func (ll *meshDB) updateLayerIds(err error, block *Block) error {
-	ids, err := ll.layers.Get(block.LayerIndex.ToBytes())
+func (m *meshDB) updateLayerIds(err error, block *Block) error {
+	ids, err := m.layers.Get(block.LayerIndex.ToBytes())
 	blockIds, err := bytesToBlockIds(ids)
 	if err != nil {
 		return errors.New("could not get all blocks from database ")
@@ -152,15 +160,15 @@ func (ll *meshDB) updateLayerIds(err error, block *Block) error {
 	if err != nil {
 		return errors.New("could not encode layer block ids")
 	}
-	ll.layers.Put(block.LayerIndex.ToBytes(), w)
+	m.layers.Put(block.LayerIndex.ToBytes(), w)
 	return nil
 }
 
-func (ll *meshDB) getLayerBlocks(ids map[BlockID]bool) ([]*Block, error) {
+func (m *meshDB) getLayerBlocks(ids map[BlockID]bool) ([]*Block, error) {
 
 	blocks := make([]*Block, 0, len(ids))
 	for k, _ := range ids {
-		block, err := ll.GetBlock(k)
+		block, err := m.getBlock(k)
 		if err != nil {
 			return nil, errors.New("could not retrive block " + string(k))
 		}

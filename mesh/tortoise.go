@@ -202,23 +202,13 @@ func (alg *Algorithm) HandleIncomingLayer(l *Layer) {
 	}
 	for _, originBlock := range l.blocks {
 		//todo: what to do if block is invalid?
-		if originBlock.IsSyntacticallyValid() {
-			votesBM, visibleBM := alg.createBlockVotingMap(originBlock)
-			blockId := alg.assignIdForBlock(originBlock)
-			alg.posVotes[blockId] = *votesBM
-			alg.visibilityMap[blockId] = BlockPosition{*visibleBM, originBlock.Layer()}
-		}
+		votesBM, visibleBM := alg.createBlockVotingMap(originBlock)
+		blockId := alg.assignIdForBlock(originBlock)
+		alg.posVotes[blockId] = *votesBM
+		alg.visibilityMap[blockId] = BlockPosition{*visibleBM, originBlock.Layer()}
 	}
 }
 
 func (alg *Algorithm) HandleLateBlock(b *Block) {
 	log.Info("received layer Id %v total blocks: %v =====", b.ID(), len(alg.allBlocks))
-}
-
-func (block *Block) IsContextuallyValid() bool {
-	return true
-}
-
-func (block *Block) IsSyntacticallyValid() bool {
-	return true
 }
