@@ -1,189 +1,91 @@
 package p2p
 
 import (
-	"bytes"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/stretchr/testify/assert"
+	"math/rand"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 )
 
-func TestSwarm_GossipRoundTrip(t *testing.T) {
+
+// this is a long test, about 60sec - will be fixed on #289
+func TestGossip(t *testing.T) {
 	t.Skip()
-	type sp struct {
-		s      *swarm
-		protoC chan service.Message
-	}
+	bootnodes := []int{1}
+	nodes := []int{10}
+	rcon := []int{3}
 
-	numPeers, connections := 100, 5
+	rand.Seed(time.Now().UnixNano())
 
-	nodes := make([]*swarm, numPeers)
-	chans := make([]chan service.Message, numPeers)
-	nchan := make(chan *sp, numPeers)
+	for i := 0; i < len(nodes); i++ {
+		t.Run(fmt.Sprintf("Peers:%v/randconn:%v", nodes[i], rcon[i]), func(t *testing.T) {
+			var wg sync.WaitGroup
 
-	cfg := config.DefaultConfig()
-	cfg.SwarmConfig.RandomConnections = connections
-	cfg.SwarmConfig.Bootstrap = false
-	bn := p2pTestInstance(t, cfg)
-	// TODO: write protocol matching. so we won't crash connections because bad protocol messages.
-	// if we're after protocol matching then we can crash the connection since its probably malicious
-	bn.RegisterProtocol("gossip") // or else it will crash connections
+			bufchan := make(chan *swarm, nodes[i])
 
-	err := bn.Start()
-	assert.NoError(t, err, "Bootnode didnt work")
-	bn.lNode.Info("Bootnode : ", bn.lNode.String())
-	cfg2 := config.DefaultConfig()
-	cfg2.SwarmConfig.RandomConnections = connections
-	cfg2.SwarmConfig.Bootstrap = true
-	cfg2.SwarmConfig.BootstrapNodes = []string{node.StringFromNode(bn.lNode.Node)}
-	for i := 0; i < numPeers; i++ {
-		go func() {
-			nod := p2pTestInstance(t, cfg2)
-			if nod == nil {
-				t.Error("ITS NIL WTF")
+			bnarr := []string{}
+
+			for k := 0; k < bootnodes[i]; k++ {
+				bn := p2pTestInstance(t, config.DefaultConfig())
+				bn.RegisterProtocol(exampleProtocol)
+				bn.lNode.Info("This is a bootnode - %v", bn.lNode.Node.String())
+				bnarr = append(bnarr, node.StringFromNode(bn.lNode.Node))
+
 			}
-			nodchan := nod.RegisterProtocol("gossip") // this is example
-			err := nod.Start()
-			assert.NoError(t, err, err)
-			assert.NoError(t, nod.waitForBoot())
-			assert.NoError(t, nod.waitForGossip())
-			nchan <- &sp{nod, nodchan}
-		}()
-	}
 
-	i := 0
-	for n := range nchan {
-		nodes[i] = n.s
-		chans[i] = n.protoC
-		i++
-		if i >= numPeers {
-			close(nchan)
-		}
-	}
+			cfg := config.DefaultConfig()
+			cfg.SwarmConfig.Bootstrap = true
+			cfg.SwarmConfig.Gossip = true
+			cfg.SwarmConfig.RandomConnections = rcon[i]
+			cfg.SwarmConfig.BootstrapNodes = bnarr
 
-
-	fmt.Println(" ################################################ ALL PEERS BOOTSTRAPPED ################################################")
-
-	msg := []byte("gossip")
-	fmt.Println(" ################################################ GOSSIPING ################################################")
-	assert.NoError(t, bn.waitForGossip())
-	b := time.Now()
-	err = bn.Broadcast("gossip", msg) // we send message form bootnode so we won't need to count it.
-
-	fmt.Printf("%v GOSSIPED, err=%v\r\n", bn.lNode.String(), err)
-
-	var got int32 = 0
-	didntget := make([]*swarm, 0)
-	//var wg sync.WaitGroup
-	assert.Len(t, chans, numPeers)
-	for c := range chans {
-		if nodes[c].lNode.PublicKey().String() == bn.lNode.PublicKey().String() {
-			t.Error("WTF HAPE")
-		}
-		var resp service.Message
-		timeout := time.NewTimer(time.Second * 10)
-		select {
-		case resp = <-chans[c]:
-		case <-timeout.C:
-			didntget = append(didntget, nodes[c])
-			continue
-		}
-
-		if bytes.Equal(resp.Data(), msg) {
-			nodes[c].lNode.Info("GOT THE gossip MESSAge ", atomic.AddInt32(&got, 1))
-		}
-	}
-	//wg.Wait()
-	bn.LocalNode().Info("THIS IS GOT ", got)
-	assert.Equal(t, got, int32(numPeers))
-	bn.lNode.Info("message spread to %v peers in %v", got, time.Since(b))
-	didnt := ""
-	for i := 0; i < len(didntget); i++ {
-		didnt += fmt.Sprintf("%v\r\n", didntget[i].lNode.String())
-	}
-	bn.lNode.Info("didnt get : %v", didnt)
-	time.Sleep(time.Millisecond * 1000) // to see the log
-}
-
-
-func TestSwarm_GossipRoundTrip2(t *testing.T) {
-	t.Skip()
-	type sp struct {
-		s      *swarm
-		protoC chan service.Message
-	}
-
-	numPeers, connections := 100, 5
-
-	nodes := make([]*swarm, numPeers)
-	chans := make([]chan service.Message, numPeers)
-	nchan := make(chan *sp, numPeers)
-
-	cfg := config.DefaultConfig()
-	cfg.SwarmConfig.RandomConnections = connections
-	cfg.SwarmConfig.Bootstrap = false
-	bn := p2pTestInstance(t, cfg)
-	// TODO: write protocol matching. so we won't crash connections because bad protocol messages.
-	// if we're after protocol matching then we can crash the connection since its probably malicious
-	bn.RegisterProtocol("gossip") // or else it will crash connections
-
-	err := bn.Start()
-	assert.NoError(t, err, "Bootnode didnt work")
-	bn.lNode.Info("Bootnode : ", bn.lNode.String())
-	cfg2 := config.DefaultConfig()
-	cfg2.SwarmConfig.RandomConnections = connections
-	cfg2.SwarmConfig.Bootstrap = true
-	cfg2.SwarmConfig.BootstrapNodes = []string{node.StringFromNode(bn.lNode.Node)}
-	for i := 0; i < numPeers; i++ {
-		go func() {
-			nod := p2pTestInstance(t, cfg2)
-			if nod == nil {
-				t.Error("ITS NIL WTF")
+			for j := 0; j < nodes[i]; j++ {
+				wg.Add(1)
+				go func() {
+					sw := p2pTestInstance(t, cfg)
+					sw.waitForBoot()
+					sw.waitForGossip()
+					bufchan <- sw
+					wg.Done()
+				}()
 			}
-			nodchan := nod.RegisterProtocol("gossip") // this is example
-			err := nod.Start()
-			assert.NoError(t, err, err)
-			assert.NoError(t, nod.waitForBoot())
-			assert.NoError(t, nod.waitForGossip())
-			nchan <- &sp{nod, nodchan}
-		}()
-	}
 
-	i := 0
-	for n := range nchan {
-		nodes[i] = n.s
-		chans[i] = n.protoC
-		i++
-		if i >= numPeers {
-			close(nchan)
-		}
-		fmt.Println("FINSIHED : " ,i)
-	}
-	i = 0
-	for n := range nodes {
-		no := nodes[n]
-		found := false
-		for j := range nodes {
-			ono := nodes[j]
-			n, _ := ono.gossip.Peer(no.lNode.PublicKey().String())
-			if n == node.EmptyNode {
-				continue
+			wg.Wait()
+			close(bufchan)
+
+			msgchans := make(map[string]chan service.Message)
+
+			swarms := []*swarm{}
+			for s := range bufchan {
+				msgchans[s.lNode.PublicKey().String()] = s.RegisterProtocol(exampleProtocol)
+				swarms = append(swarms, s)
 			}
-			found = true
 
-		}
-		if found {
-			i++
-			continue
-		} else {
-			t.Error("no one's neighboor ", no.lNode.Pretty())
-		}
+			var got uint32 = 0
+
+			first := swarms[0]
+
+			for _, s := range swarms[1:] {
+				wg.Add(1)
+				ch := msgchans[s.lNode.PublicKey().String()]
+				go func(s *swarm, ch chan service.Message) {
+					_ = <-ch
+					atomic.AddUint32(&got, 1)
+					wg.Done()
+				}(s, ch)
+			}
+
+			first.Broadcast(exampleProtocol, []byte("STAM"))
+			wg.Wait()
+
+			assert.True(t, got >= uint32(nodes[i]-1))
+			time.Sleep(3 * time.Second)
+		})
 	}
-
-	assert.Equal(t, i , numPeers)
-
 }

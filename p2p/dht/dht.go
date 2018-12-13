@@ -4,16 +4,18 @@ package dht
 import (
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
 
 	"context"
 	"errors"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"time"
 )
 
 // DHT is an interface to a general distributed hash table.
 type DHT interface {
 	Update(node node.Node)
+
+	InternalLookup(dhtid node.DhtID) []node.Node
 	Lookup(pubkey string) (node.Node, error)
 
 	SelectPeers(qty int) []node.Node
@@ -45,12 +47,14 @@ type KadDHT struct {
 	service service.Service
 }
 
+// Size returns the size of the routing table.
 func (d *KadDHT) Size() int {
 	req := make(chan int)
 	d.rt.Size(req)
 	return <-req
 }
 
+// SelectPeers asks routing table to randomly select a slice of nodes in size `qty`
 func (d *KadDHT) SelectPeers(qty int) []node.Node {
 	return d.rt.SelectPeers(qty)
 }
@@ -67,7 +71,7 @@ func New(node *node.LocalNode, config config.SwarmConfig, service service.Servic
 	return d
 }
 
-// Update insert or update a node in the routing table.
+// Update insert or updates a node in the routing table.
 func (d *KadDHT) Update(node node.Node) {
 	d.rt.Update(node)
 }
@@ -76,11 +80,11 @@ func (d *KadDHT) Update(node node.Node) {
 // if the node can't be found there it sends a query to the network.
 func (d *KadDHT) Lookup(pubkey string) (node.Node, error) {
 	dhtid := node.NewDhtIDFromBase58(pubkey)
-	poc := make(PeersOpChannel)
-	d.rt.NearestPeers(NearestPeersReq{dhtid, d.config.RoutingTableAlpha, poc})
-	res := (<-poc).Peers
-	if len(res) == 0 {
-		return node.EmptyNode, ErrEmptyRoutingTable
+
+	res := d.InternalLookup(dhtid)
+
+	if res == nil {
+		return node.EmptyNode, errors.New("no peers found in routing table")
 	}
 
 	if res[0].DhtID().Equals(dhtid) {
@@ -88,6 +92,16 @@ func (d *KadDHT) Lookup(pubkey string) (node.Node, error) {
 	}
 
 	return d.kadLookup(pubkey, res)
+}
+// InternalLookup finds a node in the dht by its public key, it issues a search inside the local routing table
+func (d *KadDHT) InternalLookup(dhtid node.DhtID) []node.Node {
+	poc := make(PeersOpChannel)
+	d.rt.NearestPeers(NearestPeersReq{dhtid, d.config.RoutingTableAlpha, poc})
+	res := (<-poc).Peers
+	if len(res) == 0 {
+		return nil
+	}
+	return res
 }
 
 // Implements the kad algo for locating a remote node
@@ -149,22 +163,24 @@ func filterFindNodeServers(nodes []node.Node, queried map[string]struct{}, alpha
 		return nodes
 	}
 
+	newlist := make([]node.Node, 0, len(nodes))
+
 	// filter out queried servers.
 	i := 0
 	for _, v := range nodes {
-		if _, exist := queried[v.String()]; exist {
+		if _, exist := queried[v.PublicKey().String()]; exist {
 			continue
 		}
 
-		nodes[i] = v
+		newlist = append(newlist, v)
 		i++
 
-		if i >= alpha {
+		if i == alpha {
 			break
 		}
 	}
 
-	return nodes[:i]
+	return newlist
 }
 
 // findNodeOp a target node on one or more servers

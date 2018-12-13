@@ -63,7 +63,7 @@ func (p *Ping) readLoop() {
 
 		go func(msg service.Message) {
 			ping := &pb.Ping{}
-			err := proto.Unmarshal(msg.Data(), ping)
+			err := proto.Unmarshal(msg.Bytes(), ping)
 			if err != nil {
 				log.Error("failed to read incoming ping message err:", err)
 				// TODO : handle errors in readloop

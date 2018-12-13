@@ -11,39 +11,27 @@ import (
 	"time"
 )
 
-// prepares a message for sending on a given session, session must be checked first
+// PrepareMessage prepares a message for sending on a given session, session must be checked first
 func PrepareMessage(ns net.NetworkSession, data []byte) ([]byte, error) {
 	encPayload, err := ns.Encrypt(data)
 	if err != nil {
 		return nil, fmt.Errorf("aborting send - failed to encrypt payload: %v", err)
 	}
 
-	cmd := &pb.CommonMessageData{
-		SessionId: ns.ID(),
-		Payload:   encPayload,
-		Timestamp: time.Now().Unix(),
-	}
-
-	final, err := proto.Marshal(cmd)
-	if err != nil {
-		e := fmt.Errorf("aborting send - invalid msg format %v", err)
-		return nil, e
-	}
-
-	return final, nil
+	return encPayload, nil
 }
 
-// newProtocolMessageMetadata creates meta-data for an outgoing protocol message authored by this node.
-func NewProtocolMessageMetadata(author crypto.PublicKey, protocol string, gossip bool) *pb.Metadata {
+// NewProtocolMessageMetadata creates meta-data for an outgoing protocol message authored by this node.
+func NewProtocolMessageMetadata(author crypto.PublicKey, protocol string) *pb.Metadata {
 	return &pb.Metadata{
-		Protocol:      protocol,
+		NextProtocol:  protocol,
 		ClientVersion: config.ClientVersion,
 		Timestamp:     time.Now().Unix(),
-		Gossip:        gossip,
 		AuthPubKey:    author.Bytes(),
 	}
 }
 
+// SignMessage signs a message with a privatekey.
 func SignMessage(pv crypto.PrivateKey, pm *pb.ProtocolMessage) error {
 	data, err := proto.Marshal(pm)
 	if err != nil {
@@ -56,21 +44,18 @@ func SignMessage(pv crypto.PrivateKey, pm *pb.ProtocolMessage) error {
 		return fmt.Errorf("failed to sign message err:%v", err)
 	}
 
-	// TODO : AuthorSign: string => bytes
-	pm.Metadata.AuthorSign = hex.EncodeToString(sign)
+	pm.Metadata.MsgSign = sign
 
 	return nil
 }
 
-// authAuthor authorizes that a message is signed by its claimed author
+// AuthAuthor authorizes that a message is signed by its claimed author
 func AuthAuthor(pm *pb.ProtocolMessage) error {
-	// TODO: consider getting pubkey from outside. attackar coul'd just manipulate the whole message pubkey and sign.
 	if pm == nil || pm.Metadata == nil {
-		fmt.Println("WTF HAPPENED !?", pm.Metadata, pm)
-		//spew.Dump(*pm)
+		return fmt.Errorf("can't sign defected message, message or metadata was empty")
 	}
 
-	sign := pm.Metadata.AuthorSign
+	sign := pm.Metadata.MsgSign
 	sPubkey := pm.Metadata.AuthPubKey
 
 	pubkey, err := crypto.NewPublicKey(sPubkey)
@@ -78,7 +63,7 @@ func AuthAuthor(pm *pb.ProtocolMessage) error {
 		return fmt.Errorf("could'nt create public key from %v, err: %v", hex.EncodeToString(sPubkey), err)
 	}
 
-	pm.Metadata.AuthorSign = "" // we have to verify the message without the sign
+	pm.Metadata.MsgSign = nil // we have to verify the message without the sign
 
 	bin, err := proto.Marshal(pm)
 
@@ -86,12 +71,7 @@ func AuthAuthor(pm *pb.ProtocolMessage) error {
 		return err
 	}
 
-	binsig, err := hex.DecodeString(sign)
-	if err != nil {
-		return err
-	}
-
-	v, err := pubkey.Verify(bin, binsig)
+	v, err := pubkey.Verify(bin, sign)
 
 	if err != nil {
 		return err
@@ -101,7 +81,7 @@ func AuthAuthor(pm *pb.ProtocolMessage) error {
 		return fmt.Errorf("coudld'nt verify message")
 	}
 
-	pm.Metadata.AuthorSign = sign // restore sign because maybe we'll send it again ( gossip )
+	pm.Metadata.MsgSign = sign // restore sign because maybe we'll send it again ( gossip )
 
 	return nil
 }

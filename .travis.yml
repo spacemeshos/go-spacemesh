@@ -1,17 +1,20 @@
 language: go
 go: 1.9.x
 
+
+before_install:
+- sudo -E env "PATH=$PATH" ./setup_env.sh
+
+
 branches:
-    only:
-        - master
-        - develop
+  only:
+  - master
+  - develop
 jobs:
-    include:
-        - stage: lint
-          script:
-            - make devtools
-            - make lint
-        - stage: test
-          script:
-            - make devtools
-            - make test
+  include:
+  - stage: lint
+    script:
+    - make lint
+  - stage: test
+    script:
+    - make test

@@ -160,7 +160,7 @@ func (p *findNodeProtocol) readLoop() {
 		go func(msg service.Message) {
 
 			headers := &pb.FindNode{}
-			err := proto.Unmarshal(msg.Data(), headers)
+			err := proto.Unmarshal(msg.Bytes(), headers)
 			if err != nil {
 				log.Error("Error handling incoming FindNode ", err)
 				return
@@ -215,15 +215,7 @@ func (p *findNodeProtocol) handleIncomingRequest(sender crypto.PublicKey, reqID,
 
 	err = p.sendResponseMessage(sender, reqID, payload)
 	if err != nil {
-		//pp := make(PeerOpChannel)
-		//// is he in routinug table
-		//p.rt.Find(PeerByIDRequest{ node.NewDhtID(sender.Bytes()),  pp})
-		//f := <-pp
-		//if f != nil  && f.Peer != node.EmptyNode {
-		//	p.log.Error("He was found but wtf ", f.Peer)
-		//}
-		id := p.service.(localService).LocalNode().String()
-		p.log.Error("%v failed sending response message to %v, err:%v", id, sender.String(), err)
+		p.log.Error("failed sending response message to %v, err:%v", sender.String(), err)
 	}
 }
 

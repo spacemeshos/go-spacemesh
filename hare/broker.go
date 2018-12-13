@@ -1,6 +1,7 @@
 package hare
 
 import (
+	"errors"
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -9,6 +10,15 @@ import (
 )
 
 const InboxCapacity = 100
+type StartInstanceError error
+
+type Identifiable interface {
+	Id() uint32
+}
+
+type Inboxer interface {
+	createInbox(size uint32) chan *pb.HareMessage
+}
 
 // Closer is used to add closeability to an object
 type Closer struct {
@@ -48,15 +58,17 @@ func NewBroker(networkService NetworkService) *Broker {
 }
 
 // Start listening to protocol messages and dispatch messages (non-blocking)
-func (broker *Broker) Start() {
+func (broker *Broker) Start() error {
 	if broker.inbox != nil { // Start has been called at least twice
-		log.Error("Instance already started")
-		return
+		log.Error("Could not start instance")
+		return StartInstanceError(errors.New("instance already started"))
 	}
 
 	broker.inbox = broker.network.RegisterProtocol(ProtoName)
 
 	go broker.dispatcher()
+
+	return nil
 }
 
 // Dispatch incoming messages to the matching layer instance
@@ -65,13 +77,13 @@ func (broker *Broker) dispatcher() {
 		select {
 		case msg := <-broker.inbox:
 			hareMsg := &pb.HareMessage{}
-			err := proto.Unmarshal(msg.Data(), hareMsg)
+			err := proto.Unmarshal(msg.Bytes(), hareMsg)
 			if err != nil {
 				log.Error("Could not unmarshal message: ", err)
 				continue
 			}
 
-			layerId := NewLayerId(hareMsg.Message.Layer)
+			layerId := NewBytes32(hareMsg.Message.Layer)
 
 			broker.mutex.RLock()
 			c, exist := broker.outbox[layerId.Id()]
@@ -86,20 +98,18 @@ func (broker *Broker) dispatcher() {
 	}
 }
 
-// CreateInbox creates and returns the message channel associated with the given layer
-func (broker *Broker) CreateInbox(iden Identifiable) chan *pb.HareMessage {
-	var id = iden.Id()
-
-	broker.mutex.RLock()
-	if _, exist := broker.outbox[id]; exist {
-		panic("CreateInbox called more than once per layer")
-	}
-	broker.mutex.RUnlock()
-
-	outChan := make(chan *pb.HareMessage, InboxCapacity) // create new channel
+// Register a listener to messages
+func (broker *Broker) Register(identifiable Identifiable, inboxer Inboxer) {
+	id := identifiable.Id()
 	broker.mutex.Lock()
-	broker.outbox[id] = outChan
+	broker.outbox[id] = inboxer.createInbox(InboxCapacity)
 	broker.mutex.Unlock()
+}
 
-	return outChan
+// Unregister a listener
+func (broker *Broker) Unregister(identifiable Identifiable) {
+	id := identifiable.Id()
+	broker.mutex.Lock()
+	delete(broker.outbox, id)
+	broker.mutex.Unlock()
 }

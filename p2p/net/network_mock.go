@@ -51,7 +51,7 @@ type NetworkMock struct {
 	preSessionCount  int32
 	regNewRemoteConn []chan NewConnectionEvent
 	networkId        int8
-	closingConn      chan Connection
+	closingConn      []chan Connection
 	incomingMessages []chan IncomingMessageEvent
 	dialSessionID    []byte
 	logger           *logging.Logger
@@ -61,7 +61,7 @@ type NetworkMock struct {
 func NewNetworkMock() *NetworkMock {
 	return &NetworkMock{
 		regNewRemoteConn: make([]chan NewConnectionEvent, 0),
-		closingConn:      make(chan Connection, 20),
+		closingConn:      make([]chan Connection, 0),
 		logger:           getTestLogger("network mock"),
 		incomingMessages: []chan IncomingMessageEvent{make(chan IncomingMessageEvent, 256)},
 	}
@@ -120,6 +120,25 @@ func (n NetworkMock) PublishNewRemoteConnection(nce NewConnectionEvent) {
 	}
 }
 
+// SubscribeClosingConnections subscribes on new connections
+func (n *NetworkMock) SubscribeClosingConnections() chan Connection {
+	ch := make(chan Connection, 20)
+	n.closingConn = append(n.closingConn, ch)
+	return ch
+}
+
+// publishClosingConnection and stuff
+func (n NetworkMock) publishClosingConnection(con Connection) {
+	for _, ch := range n.closingConn {
+		ch <- con
+	}
+}
+
+// PublishClosingConnection is a hack to expose the above method in the mock but still impl the same interface
+func (n NetworkMock) PublishClosingConnection(con Connection) {
+	n.publishClosingConnection(con)
+}
+
 func (n *NetworkMock) setNetworkId(id int8) {
 	n.networkId = id
 }
@@ -129,26 +148,14 @@ func (n *NetworkMock) NetworkID() int8 {
 	return n.networkId
 }
 
-// ClosingConnections closes connections
-func (n *NetworkMock) ClosingConnections() chan Connection {
-	return n.closingConn
-}
-
 // IncomingMessages return channel of IncomingMessages
 func (n *NetworkMock) IncomingMessages() []chan IncomingMessageEvent {
 	return n.incomingMessages
 }
 
-// IncomingMessages return channel of IncomingMessages
+// EnqueueMessage return channel of IncomingMessages
 func (n *NetworkMock) EnqueueMessage(event IncomingMessageEvent) {
 	n.incomingMessages[0] <- event
-}
-
-// PublishClosingConnection does just that
-func (n NetworkMock) PublishClosingConnection(conn Connection) {
-	go func() {
-		n.closingConn <- conn
-	}()
 }
 
 // SetPreSessionResult does this

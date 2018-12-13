@@ -45,9 +45,11 @@ func TestReceiveError(t *testing.T) {
 	conn := newConnection(rwcam, netw, formatter, rPub, netw.logger)
 	conn.SetSession(&NetworkSessionImpl{})
 
+	getclosed := netw.SubscribeClosingConnections()
+
 	go conn.beginEventProcessing()
 	rwcam.SetReadResult([]byte{}, fmt.Errorf("fail"))
-	closedConn := <-netw.ClosingConnections()
+	closedConn := <-getclosed
 	assert.Equal(t, conn.id, closedConn.ID())
 }
 
@@ -86,9 +88,12 @@ func TestPreSessionError(t *testing.T) {
 	formatter := delimited.NewChan(10)
 	conn := newConnection(rwcam, netw, formatter, rPub, netw.logger)
 	netw.SetPreSessionResult(fmt.Errorf("fail"))
+
+	getclosed := netw.SubscribeClosingConnections()
+
 	go conn.beginEventProcessing()
 	rwcam.SetReadResult([]byte{3, 1, 1, 1}, nil)
-	closedConn := <-netw.ClosingConnections()
+	closedConn := <-getclosed
 	assert.Equal(t, conn.id, closedConn.ID())
 	assert.Equal(t, int32(1), netw.PreSessionCount())
 }
@@ -100,9 +105,11 @@ func TestClose(t *testing.T) {
 	formatter := delimited.NewChan(10)
 	conn := newConnection(rwcam, netw, formatter, rPub, netw.logger)
 	conn.SetSession(&NetworkSessionImpl{})
+	getclosed := netw.SubscribeClosingConnections()
+
 	go conn.beginEventProcessing()
 	conn.Close()
-	closedConn := <-netw.ClosingConnections()
+	closedConn := <-getclosed
 	assert.Equal(t, 1, rwcam.CloseCount())
 	assert.Equal(t, conn.id, closedConn.ID())
 }
@@ -114,16 +121,18 @@ func TestDoubleClose(t *testing.T) {
 	formatter := delimited.NewChan(10)
 	conn := newConnection(rwcam, netw, formatter, rPub, netw.logger)
 	conn.SetSession(&NetworkSessionImpl{})
+	getclosed := netw.SubscribeClosingConnections()
+
 	go conn.beginEventProcessing()
 	conn.Close()
-	closedConn := <-netw.ClosingConnections()
+	closedConn := <-getclosed
 	assert.Equal(t, 1, rwcam.CloseCount())
 	assert.Equal(t, conn.id, closedConn.ID())
 	conn.Close()
 
 	timer := time.NewTimer(100 * time.Millisecond)
 	select {
-	case <-netw.ClosingConnections():
+	case <-getclosed:
 		assert.True(t, false)
 	case <-timer.C:
 	}

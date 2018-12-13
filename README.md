@@ -78,6 +78,14 @@ or
 - Move your fork from `$GOPATH/src/github.com/YOURACCOUNT/go-spacemesh` to `$GOPATH/src/github.com/spacemeshos/go-spacemesh`
 This allows GO tools to work as expected.
 
+### Setting Up Local Environment
+Before building we need to install dependencies and generate protocol buffers. Do this by running:
+```bash
+make prepare
+```
+This will invoke `setup_env.sh` which supports Linux and MacOS.
+
+
 ### Building
 To build `go-spacemesh` for your current system architecture use:
 ```
