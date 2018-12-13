@@ -1,12 +1,12 @@
 package sync
 
 import (
+	"errors"
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/sync/pb"
-	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -30,6 +30,7 @@ type Configuration struct {
 	hdist          uint32 //dist of consensus layers from newst layer
 	syncInterval   time.Duration
 	concurrency    int //number of workers for sync method
+	layerSize      int
 	requestTimeout time.Duration
 }
 
@@ -75,6 +76,7 @@ func (s *Syncer) Stop() {
 func (s *Syncer) Start() {
 	if atomic.CompareAndSwapUint32(&s.startLock, 0, 1) {
 		go s.run()
+		s.forceSync <- true
 		return
 	}
 }
@@ -135,16 +137,22 @@ func (s *Syncer) maxSyncLayer() uint32 {
 
 func (s *Syncer) Synchronise() {
 	for i := s.layers.LocalLayerCount(); i < s.maxSyncLayer(); {
+
 		i++
-		blockIds := s.getLayerBlockIDs(i) //returns a set of all known blocks in the mesh
+
+		blockIds, err := s.getLayerBlockIDs(i) //returns a set of all known blocks in the mesh
+		if err != nil {
+			log.Error("could not get layer block ids: ", err)
+			log.Debug("synchronise failed, local layer index is ", s.layers.LocalLayerCount())
+			return
+		}
+
 		output := make(chan Block)
 		// each worker goroutine tries to fetch a block iteratively from each peer
-		var wg sync.WaitGroup
-		wg.Add(s.config.concurrency)
+		count := int32(s.config.concurrency)
 
 		for i := 0; i < s.config.concurrency; i++ {
 			go func() {
-				defer wg.Done()
 				for id := range blockIds {
 					for _, p := range s.peers.GetPeers() {
 						if bCh, err := s.sendBlockRequest(p, id); err == nil {
@@ -153,18 +161,14 @@ func (s *Syncer) Synchronise() {
 								output <- b
 								break
 							}
-
 						}
 					}
 				}
-
+				if atomic.AddInt32(&count, -1); atomic.LoadInt32(&count) == 0 { // last one closes the channel
+					close(output)
+				}
 			}()
 		}
-
-		go func() {
-			wg.Wait()
-			close(output)
-		}()
 
 		blocks := make([]*mesh.Block, 0, len(blockIds))
 
@@ -181,45 +185,9 @@ func (s *Syncer) Synchronise() {
 	log.Debug("synchronise done, local layer index is ", s.layers.LocalLayerCount())
 }
 
-func (s *Syncer) getLayerBlockIDs(index uint32) chan uint32 {
-
-	m := make(map[string]Peer, 20)
-	peers := s.peers.GetPeers()
-	// request hash from all
-
-	//todo concurrency
-	for _, p := range peers {
-
-		hash, err := s.sendLayerHashRequest(p, index)
-		if err != nil {
-			log.Debug("could not get layer ", index, " hash from peer ", p)
-			continue
-		}
-		m[string(hash)] = p
-	}
-
-	idSet := make(map[uint32]bool, 300) //todo move this to config
-
-	//todo concurrency
-	for _, v := range m {
-		blocksCh, err := s.sendLayerIDsRequest(v, index)
-		blocks := <-blocksCh
-		if err == nil && blocks != nil {
-			for _, b := range blocks {
-				if _, exists := idSet[b]; !exists {
-					idSet[b] = true
-				}
-			}
-		}
-	}
-
-	res := make(chan uint32, len(idSet))
-	for b := range idSet {
-		res <- b
-	}
-
-	close(res)
-	return res
+type peerHashPair struct {
+	peer Peer
+	hash []byte
 }
 
 func (s *Syncer) sendBlockRequest(peer Peer, id uint32) (chan Block, error) {
@@ -246,7 +214,100 @@ func (s *Syncer) sendBlockRequest(peer Peer, id uint32) (chan Block, error) {
 	return ch, s.p.SendAsyncRequest(BLOCK, payload, peer, foo)
 }
 
-func (s *Syncer) sendLayerHashRequest(peer Peer, layer uint32) ([]byte, error) {
+func (s *Syncer) getLayerBlockIDs(index uint32) (chan uint32, error) {
+
+	m, err := s.getLayerHashes(index)
+
+	if err != nil {
+		log.Error("could not get LayerHashes for layer: ", index, err)
+		return nil, err
+	}
+	return s.getIdsforHash(m, index)
+}
+
+func (s *Syncer) getIdsforHash(m map[string]Peer, index uint32) (chan uint32, error) {
+	idSet := make(map[uint32]bool, s.config.layerSize)
+	//todo move this to config
+	ch := make(chan []uint32)
+	reqCounter := 0
+
+	for _, v := range m {
+		_, err := s.sendLayerIDsRequest(v, index, ch)
+		if err != nil {
+			log.Error("could not fetch layer ", index, " block ids from peer ", v) // todo recover from this
+			return nil, err
+		} else {
+			reqCounter++
+		}
+	}
+
+	timeout := time.After(s.config.requestTimeout)
+	for reqCounter > 0 {
+		select {
+		case b := <-ch:
+			for _, id := range b {
+				if _, exists := idSet[id]; !exists {
+					idSet[id] = true
+				}
+			}
+			reqCounter--
+		case <-timeout:
+			if len(idSet) > 0 {
+				log.Error("not all peers responded to hash request")
+				return keysAsChan(idSet), nil
+			}
+			return nil, errors.New("could not get block ids from any peer")
+
+		}
+	}
+
+	return keysAsChan(idSet), nil
+
+}
+
+func keysAsChan(idSet map[uint32]bool) chan uint32 {
+	res := make(chan uint32, len(idSet))
+	defer close(res)
+	for id := range idSet {
+		res <- id
+	}
+	return res
+}
+
+func (s *Syncer) getLayerHashes(index uint32) (map[string]Peer, error) {
+	m := make(map[string]Peer, 20) //todo need to get this from p2p service
+	peers := s.peers.GetPeers()
+	// request hash from all
+	ch := make(chan peerHashPair)
+	defer close(ch)
+	for _, p := range peers {
+		_, err := s.sendLayerHashRequest(p, index, ch)
+		if err != nil {
+			log.Error("could not get layer ", index, " hash from peer ", p)
+			continue
+		}
+	}
+
+	timeout := time.After(s.config.requestTimeout)
+	resCounter := len(peers)
+	for resCounter > 0 {
+		select {
+		// Got a timeout! fail with a timeout error
+		case pair := <-ch:
+			m[string(pair.hash)] = pair.peer
+			resCounter--
+		case <-timeout:
+			if len(m) > 0 {
+				log.Error("not all peers responded to hash request")
+				return m, nil //todo
+			}
+			return nil, errors.New("no peers responded to hash request")
+		}
+	}
+	return m, nil
+}
+
+func (s *Syncer) sendLayerHashRequest(peer Peer, layer uint32, ch chan peerHashPair) (chan peerHashPair, error) {
 	log.Debug("send Layer hash request Peer: ", peer, " layer: ", layer)
 
 	data := &pb.LayerHashReq{Layer: layer}
@@ -255,24 +316,23 @@ func (s *Syncer) sendLayerHashRequest(peer Peer, layer uint32) ([]byte, error) {
 		log.Error("could not marshall layer hash request")
 		return nil, err
 	}
+	foo := func(msg []byte) {
+		res := &pb.LayerHashResp{}
+		if msg == nil {
+			log.Error("layer hash response was nil from ", peer.String())
+			return
+		}
 
-	msg, err := s.p.SendRequest(LAYER_HASH, payload, peer, s.config.requestTimeout)
-	if err != nil {
-		log.Error("could not send layer hash request ", err)
-		return nil, err
+		if err = proto.Unmarshal(msg, res); err != nil {
+			log.Error("could not unmarshal layer hash response ", err)
+			return
+		}
+		ch <- peerHashPair{peer: peer, hash: res.Hash}
 	}
-
-	res := &pb.LayerHashResp{}
-
-	if err = proto.Unmarshal(msg.([]byte), res); err != nil {
-		log.Error("could not unmarshal layer hash response ", err)
-		return nil, err
-	}
-
-	return res.Hash, nil
+	return ch, s.p.SendAsyncRequest(LAYER_HASH, payload, peer, foo)
 }
 
-func (s *Syncer) sendLayerIDsRequest(peer Peer, idx uint32) (chan []uint32, error) {
+func (s *Syncer) sendLayerIDsRequest(peer Peer, idx uint32, ch chan []uint32) (chan []uint32, error) {
 	log.Debug("send Layer ids request Peer: ", peer, " layer: ", idx)
 
 	data := &pb.LayerIdsReq{Layer: idx}
@@ -281,7 +341,6 @@ func (s *Syncer) sendLayerIDsRequest(peer Peer, idx uint32) (chan []uint32, erro
 		return nil, err
 	}
 
-	ch := make(chan []uint32)
 	foo := func(msg []byte) {
 		defer close(ch)
 		data := &pb.LayerIdsResp{}
@@ -328,7 +387,7 @@ func (s *Syncer) layerHashRequestHandler(msg []byte) []byte {
 
 	layer, err := s.layers.GetLayer(int(req.Layer))
 	if err != nil {
-		log.Error("Error handling layer request message, err:", err) //todo describe err
+		log.Error("Error handling layer ", req.Layer, " request message, err:", err) //todo describe err
 		return nil
 	}
 
@@ -349,7 +408,7 @@ func (s *Syncer) layerIdsRequestHandler(msg []byte) []byte {
 
 	layer, err := s.layers.GetLayer(int(req.Layer))
 	if err != nil {
-		log.Debug("Error handling layer ids request message, err:", err) //todo describe err
+		log.Error("Error handling layer ids request message, err:", err) //todo describe err
 		return nil
 	}
 
