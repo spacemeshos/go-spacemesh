@@ -242,33 +242,40 @@ func (s *Syncer) getIdsforHash(m map[string]Peer, index uint32) (chan uint32, er
 	}
 
 	timeout := time.After(s.config.requestTimeout)
-	res := make(chan uint32, s.config.layerSize)
-	defer close(res)
 
+Loop:
 	for {
 		select {
 		case b := <-ch:
 			for _, id := range b {
 				if _, exists := idSet[id]; !exists {
 					idSet[id] = true
-					res <- id
 				}
 			}
 			reqCounter--
 			if reqCounter == 0 {
-				return res, nil
+				break Loop
 			}
 		case <-timeout: // Got a timeout! fail with a timeout error
-			if len(res) == 0 {
+			if len(idSet) == 0 {
 				return nil, errors.New("could not get block ids from any peer")
 			}
-			return res, nil
+			break Loop
 		}
 	}
+
+	res := make(chan uint32, len(idSet))
+	defer close(res)
+	for id, _ := range idSet {
+		res <- id
+	}
+
+	return res, nil
+
 }
 
 func (s *Syncer) getLayerHashes(index uint32) (map[string]Peer, error) {
-	m := make(map[string]Peer, 20)
+	m := make(map[string]Peer, 20) //todo need to get this from p2p service
 	peers := s.peers.GetPeers()
 	// request hash from all
 	ch := make(chan peerHashPair)
