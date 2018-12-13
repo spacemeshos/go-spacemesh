@@ -65,11 +65,7 @@ func NewConsensusProcess(key crypto.PublicKey, layer LayerId, s Set, oracle Rola
 	proc.knowledge = make([]*pb.HareMessage, 0, InitialKnowledgeSize)
 	proc.roundMsg = nil
 	proc.tracker = NewRefCountTracker(N)
-	err := proc.setStatusMessage()
-	if err != nil {
-		log.Error("could not build status message")
-		proc.roundMsg = nil
-	}
+	proc.roundMsg = nil
 	proc.isConflicting = false
 	proc.isDecisionFinal = false
 
@@ -115,6 +111,14 @@ func (proc *ConsensusProcess) eventLoop() {
 		}
 	}
 
+	// build and send pre-round message
+	m, err := proc.buildPreRoundMessage()
+	if err != nil {
+		log.Error("could not build pre-round message")
+	}
+	proc.network.Broadcast(ProtoName, m)
+
+	// start first iteration
 	ticker := time.NewTicker(RoundDuration)
 	for {
 		select {
@@ -215,6 +219,23 @@ func (proc *ConsensusProcess) processMessageByRound(msg *pb.HareMessage) {
 	case 3: // end of round 3
 		proc.processMsgRound3(msg)
 	}
+}
+
+func (proc *ConsensusProcess) buildPreRoundMessage() ([]byte, error) {
+	builder := NewMessageBuilder()
+	builder.SetType(PreRound).SetLayer(proc.layerId).SetIteration(proc.k).SetKi(proc.ki).SetBlocks(*proc.s)
+	builder, err := builder.SetPubKey(proc.pubKey).Sign(proc.signing)
+
+	if err != nil {
+		return nil, err
+	}
+
+	m, err := proto.Marshal(builder.Build())
+	if err != nil {
+		return nil, err
+	}
+
+	return m, nil
 }
 
 func (proc *ConsensusProcess) setStatusMessage() error {
