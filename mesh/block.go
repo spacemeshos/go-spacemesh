@@ -5,14 +5,14 @@ import (
 	"github.com/google/uuid"
 )
 
-type BLockID uint32
+type BlockID uint32
 
 var layerCounter uint64 = 0
 
 type Block struct {
-	id         BLockID
+	id         BlockID
 	layerNum   uint64
-	blockVotes map[BLockID]bool
+	blockVotes map[BlockID]bool
 	timestamp  time.Time
 	coin       bool
 	data       []byte
@@ -22,8 +22,8 @@ type Block struct {
 
 func NewBlock(coin bool, data []byte, ts time.Time) *Block{
 	b := Block{
-		id:         BLockID(uuid.New().ID()),
-		blockVotes: make(map[BLockID]bool),
+		id:         BlockID(uuid.New().ID()),
+		blockVotes: make(map[BlockID]bool),
 		timestamp:  ts,
 		data:       data,
 		coin:       coin,
@@ -34,20 +34,24 @@ func NewBlock(coin bool, data []byte, ts time.Time) *Block{
 }
 
 type Layer struct {
-	blocks []Block
+	Blocks []Block
 	layerNum uint64
 }
 
 func (l *Layer) AddBlock(block *Block){
 	block.layerNum = l.layerNum
-	l.blocks = append(l.blocks, *block)
+	l.Blocks = append(l.Blocks, *block)
 }
 
 func NewLayer() *Layer{
 	l := Layer{
-		blocks: make([]Block,0),
+		Blocks: make([]Block,0),
 		layerNum: layerCounter,
 	}
 	layerCounter++
 	return &l
+}
+
+func (b Block) GetID() BlockID{
+	return b.id
 }

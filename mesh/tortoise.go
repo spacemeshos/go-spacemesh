@@ -15,8 +15,8 @@ type BlockPosition struct {
 }
 
 type Algorithm struct {
-	block2Id          map[BLockID]uint32
-	allBlocks         map[BLockID]*Block
+	block2Id          map[BlockID]uint32
+	allBlocks         map[BlockID]*Block
 	layerQueue        LayerQueue
 	idQueue           NewIdQueue
 	posVotes          []bitarray.BitArray
@@ -28,11 +28,15 @@ type Algorithm struct {
 	totalBlocks uint32
 }
 
+const (
+	BlocksPerLayer = 200
+)
+
 func NewAlgorithm(layerSize uint32, cachedLayers uint32) Algorithm{
 	totBlocks := layerSize*cachedLayers
 	trtl := Algorithm{
-		block2Id:          make(map[BLockID]uint32),
-		allBlocks:         make(map[BLockID]*Block),
+		block2Id:          make(map[BlockID]uint32),
+		allBlocks:         make(map[BlockID]*Block),
 		layerQueue:        make(LayerQueue, cachedLayers +1),
 		idQueue:           make(NewIdQueue,layerSize),
 		remainingBlockIds: totBlocks,
@@ -55,7 +59,7 @@ func (alg *Algorithm) LayerVotingAvg() uint64 {
 	return 30
 }
 
-func (alg *Algorithm) IsTortoiseValid(originBlock *Block, targetBlock BLockID, targetBlockIdx uint64, visibleBlocks bitarray.BitArray) bool {
+func (alg *Algorithm) IsTortoiseValid(originBlock *Block, targetBlock BlockID, targetBlockIdx uint64, visibleBlocks bitarray.BitArray) bool {
 	voteFor, voteAgainst := alg.countTotalVotesForBlock(targetBlockIdx, visibleBlocks)
 
 
@@ -167,7 +171,7 @@ func (alg *Algorithm) zeroBitColumn(idx uint64){
 }
 
 func (alg *Algorithm) recycleLayer(l *Layer){
-	for _, block := range l.blocks{
+	for _, block := range l.Blocks{
 		id := alg.block2Id[block.id]
 		alg.idQueue <- alg.block2Id[block.id]
 		delete(alg.block2Id, block.id)
@@ -208,7 +212,7 @@ func (alg *Algorithm) HandleIncomingLayer(l *Layer){
 		layer := <-alg.layerQueue
 		alg.recycleLayer(layer)
 	}
-	for _, originBlock := range l.blocks{
+	for _, originBlock := range l.Blocks{
 		//todo: what to do if block is invalid?
 		if originBlock.IsSyntacticallyValid() {
 			votesBM, visibleBM := alg.createBlockVotingMap(&originBlock)
