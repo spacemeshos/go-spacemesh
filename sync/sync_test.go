@@ -25,7 +25,8 @@ func (BlockValidatorMock) ValidateBlock(block *mesh.Block) bool {
 func getMesh(newBlockCh chan *mesh.Block, id string) mesh.Mesh {
 	bdb := database.NewLevelDbStore("blocks_test_"+id, nil, nil)
 	ldb := database.NewLevelDbStore("layers_test_"+id, nil, nil)
-	layers := mesh.NewMesh(ldb, bdb)
+	cv := database.NewLevelDbStore("contextualy_valid_test_"+id, nil, nil)
+	layers := mesh.NewMesh(ldb, bdb, cv)
 	return layers
 }
 
