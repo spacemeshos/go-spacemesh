@@ -28,7 +28,7 @@ message InnerMessage {
     int32 type = 1;
     bytes layer = 2;
     uint32 k = 3; // the iteration
-    uint32 ki = 4;
+    int32 ki = 4;
     repeated bytes blocks = 5; // the set S. optional for commit message in a certificate
     bytes roleProof = 6; // role is implicit by message type, this is the proof
     AggregatedMessages svp = 7; // optional. only for proposal messages

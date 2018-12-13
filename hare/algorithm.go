@@ -13,7 +13,8 @@ import (
 const ProtoName = "HARE_PROTOCOL"
 const RoundDuration = time.Second * time.Duration(15)
 const InitialKnowledgeSize = 1000
-const f = 100
+const N = 800
+const f = 400
 
 type Byteable interface {
 	Bytes() []byte
@@ -26,7 +27,7 @@ type NetworkService interface {
 
 type State struct {
 	k           uint32              // the iteration number
-	ki          uint32              // indicates when S was first committed upon
+	ki          int32              // indicates when S was first committed upon
 	s           *Set                // the set of blocks
 	certificate *AggregatedMessages // the certificate
 }
@@ -36,11 +37,13 @@ type ConsensusProcess struct {
 	Closer // the consensus is closeable
 	pubKey          crypto.PublicKey
 	layerId         LayerId
+	t				*Set // loop local set
 	oracle          Rolacle // roles oracle
 	signing         Signing
 	network         NetworkService
 	startTime       time.Time // TODO: needed?
 	inbox           chan *pb.HareMessage
+	preRound		map[string]*pb.HareMessage
 	knowledge       []*pb.HareMessage
 	roundMsg        *pb.HareMessage
 	isConflicting   bool
@@ -58,9 +61,10 @@ func NewConsensusProcess(key crypto.PublicKey, layer LayerId, s Set, oracle Rola
 	proc.oracle = oracle
 	proc.signing = signing
 	proc.network = p2p
+	proc.preRound = make(map[string]*pb.HareMessage, N)
 	proc.knowledge = make([]*pb.HareMessage, 0, InitialKnowledgeSize)
 	proc.roundMsg = nil
-	proc.tracker = NewRefCountTracker()
+	proc.tracker = NewRefCountTracker(N)
 	err := proc.setStatusMessage()
 	if err != nil {
 		log.Error("could not build status message")
@@ -93,8 +97,25 @@ func (proc *ConsensusProcess) createInbox(size uint32) chan *pb.HareMessage {
 func (proc *ConsensusProcess) eventLoop() {
 	log.Info("Start listening")
 
-	ticker := time.NewTicker(RoundDuration)
+	timer := time.NewTimer(RoundDuration)
+	PreRound:
+	for {
+		select {
+		case msg := <-proc.inbox:
+			proc.processMsgPreRound(msg)
+		case <-timer.C:
+			break PreRound
+		}
+	}
 
+	// end of pre-round, update our set
+	for _, v := range proc.s.blocks {
+		if proc.tracker.CountStatus(v) < f + 1 { // not enough witnesses
+			proc.s.Remove(v)
+		}
+	}
+
+	ticker := time.NewTicker(RoundDuration)
 	for {
 		select {
 		case msg := <-proc.inbox: // msg event
@@ -124,6 +145,7 @@ func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
 		log.Error("Failed marshaling inner message")
 		return
 	}
+
 	if !proc.signing.Validate(data, m.InnerSig) {
 		log.Warning("invalid message signature detected")
 		return
@@ -131,6 +153,7 @@ func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
 
 	pub, err := crypto.NewPublicKey(m.PubKey)
 	if err != nil {
+		log.Warning("Could not construct public key: ", err.Error())
 		return
 	}
 	// validate role
@@ -141,8 +164,16 @@ func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
 		return
 	}
 
-	// continue process msg by round
-	proc.processMessageByRound(m)
+	if MessageType(m.Message.Type) == PreRound {
+		// only handle first pre-round msg
+		if _, exist := proc.preRound[pub.String()]; exist {
+			return
+		}
+
+		proc.preRound[pub.String()] = m
+	} else { // continue process msg by round
+		proc.processMessageByRound(m)
+	}
 
 	proc.knowledge = append(proc.knowledge, m)
 }
@@ -227,6 +258,30 @@ func roleFromIteration(k uint32) byte {
 	return Active
 }
 
+func (proc *ConsensusProcess) processMsgPreRound(msg *pb.HareMessage) {
+	// TODO: validate sig
+	// TODO: validate role
+
+	pub, err := crypto.NewPublicKey(msg.PubKey)
+	if err != nil {
+		log.Warning("Could not construct public key: ", err.Error())
+		return
+	}
+
+	// only handle first pre-round msg
+	if _, exist := proc.preRound[pub.String()]; exist {
+		return
+	}
+
+	// record blocks from msg
+	s := NewSet(msg.Message.Blocks)
+	for _, v := range s.blocks {
+		proc.tracker.Track(v)
+	}
+
+	proc.preRound[pub.String()] = msg
+}
+
 func (proc *ConsensusProcess) processMsgRound0(msg *pb.HareMessage) {
 	// TODO: roundMsg?
 
@@ -236,11 +291,8 @@ func (proc *ConsensusProcess) processMsgRound0(msg *pb.HareMessage) {
 		return
 	}
 
-	// record blocks from msg
-	s := NewSet(msg.Message.Blocks)
-	for i := 0; i < f; i++ {
-		proc.tracker.Track(&s.blocks[i])
-	}
+	// TODO: record blocks from msg
+
 
 	if len(proc.knowledge) < f { // only record, wait for f+1 for decision
 		return

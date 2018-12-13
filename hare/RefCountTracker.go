@@ -1,25 +1,30 @@
 package hare
 
 type RefCountTracker struct {
-	table map[BlockId]uint32
+	table map[uint32]uint32
 }
 
-func NewRefCountTracker() *RefCountTracker {
+func NewRefCountTracker(size uint32) *RefCountTracker {
 	t := &RefCountTracker{}
-	t.table = make(map[BlockId]uint32, 0)
+	t.table = make(map[uint32]uint32, size)
 
 	return t
 }
 
-func (tracker *RefCountTracker) Track(id *BlockId) {
-	if _, exist := tracker.table[*id]; !exist {
-		tracker.table[*id] = 1
+func (tracker *RefCountTracker) CountStatus(id BlockId) uint32 {
+	return tracker.table[id.Id()]
+}
+
+func (tracker *RefCountTracker) Track(id Identifiable) {
+	if _, exist := tracker.table[id.Id()]; !exist {
+		tracker.table[id.Id()] = 1
 		return
 	}
 
-	tracker.table[*id]++
+	tracker.table[id.Id()]++
 }
 
+// TODO: probably not needed
 func (tracker *RefCountTracker) buildSet(threshold uint32) *Set {
 	s := NewEmptySet()
 	/*for bid := range tracker.table {

@@ -59,7 +59,7 @@ func (builder *MessageBuilder) SetIteration(k uint32) *MessageBuilder {
 	return builder
 }
 
-func (builder *MessageBuilder) SetKi(ki uint32) *MessageBuilder {
+func (builder *MessageBuilder) SetKi(ki int32) *MessageBuilder {
 	builder.inner.Ki = ki
 	return builder
 }

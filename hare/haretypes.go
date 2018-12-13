@@ -3,6 +3,7 @@ package hare
 import (
 	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"hash/fnv"
+	"reflect"
 )
 
 type Bytes32 [32]byte
@@ -17,10 +18,11 @@ type LayerId struct {
 type MessageType byte
 
 const (
-	Status   MessageType = 0
-	Proposal MessageType = 1
-	Commit   MessageType = 2
-	Notify   MessageType = 3
+	PreRound MessageType = 0
+	Status   MessageType = 1
+	Proposal MessageType = 2
+	Commit   MessageType = 3
+	Notify   MessageType = 4
 )
 
 func NewBytes32(buff []byte) Bytes32 {
@@ -30,23 +32,23 @@ func NewBytes32(buff []byte) Bytes32 {
 	return x
 }
 
-func (b32 *Bytes32) Id() uint32 {
+func (b32 Bytes32) Id() uint32 {
 	h := fnv.New32()
 	h.Write(b32[:])
 	return h.Sum32()
 }
 
-func (b32 *Bytes32) Bytes() []byte {
+func (b32 Bytes32) Bytes() []byte {
 	return b32[:]
 }
 
 type Set struct {
-	blocks []BlockId
+	blocks map[uint32]BlockId
 }
 
 func NewEmptySet() *Set {
 	s := &Set{}
-	s.blocks = make([]BlockId, 0)
+	s.blocks = make(map[uint32]BlockId, 0)
 
 	return s
 }
@@ -54,36 +56,37 @@ func NewEmptySet() *Set {
 func NewSet(data [][]byte) *Set {
 	s := &Set{}
 
-	s.blocks = make([]BlockId, len(data))
+	s.blocks = make(map[uint32]BlockId, len(data))
 	for i := 0; i < len(data); i++ {
-		copy(s.blocks[i].Bytes(), data[i])
+		bid := BlockId{NewBytes32(data[i])}
+		s.blocks[bid.Id()] = bid
 	}
 
 	return s
 }
 
 func (s *Set) Add(id BlockId) {
-	s.blocks = append(s.blocks, id)
+	if _, exist := s.blocks[id.Id()]; exist {
+		return
+	}
+
+	s.blocks[id.Id()] = id
+}
+
+func (s *Set) Remove(id BlockId) {
+	delete(s.blocks, id.Id())
 }
 
 func (s *Set) Equals(g *Set) bool {
-	if len(s.blocks) != len(g.blocks) {
-		return false
-	}
-
-	for i :=0;i<len(s.blocks);i++ {
-		if s.blocks[i] != g.blocks[i] {
-			return false
-		}
-	}
-
-	return true
+	return reflect.DeepEqual(s.blocks, g.blocks)
 }
 
 func (s *Set) To2DSlice() [][]byte {
 	slice := make([][]byte, len(s.blocks))
-	for i := 0; i < len(s.blocks); i++ {
-		copy(slice[i], s.blocks[i].Bytes())
+	i := 0
+	for _, v := range s.blocks {
+		copy(slice[i], v.Bytes())
+		i++
 	}
 
 	return slice
