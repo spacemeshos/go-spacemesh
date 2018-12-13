@@ -242,9 +242,7 @@ func (s *Syncer) getIdsforHash(m map[string]Peer, index uint32) (chan uint32, er
 	}
 
 	timeout := time.After(s.config.requestTimeout)
-
-Loop:
-	for {
+	for reqCounter > 0 {
 		select {
 		case b := <-ch:
 			for _, id := range b {
@@ -253,25 +251,27 @@ Loop:
 				}
 			}
 			reqCounter--
-			if reqCounter == 0 {
-				break Loop
+		case <-timeout:
+			if len(idSet) > 0 {
+				log.Error("not all peers responded to hash request")
+				return keysAsChan(idSet), nil
 			}
-		case <-timeout: // Got a timeout! fail with a timeout error
-			if len(idSet) == 0 {
-				return nil, errors.New("could not get block ids from any peer")
-			}
-			break Loop
+			return nil, errors.New("could not get block ids from any peer")
+
 		}
 	}
 
+	return keysAsChan(idSet), nil
+
+}
+
+func keysAsChan(idSet map[uint32]bool) chan uint32 {
 	res := make(chan uint32, len(idSet))
 	defer close(res)
-	for id, _ := range idSet {
+	for id := range idSet {
 		res <- id
 	}
-
-	return res, nil
-
+	return res
 }
 
 func (s *Syncer) getLayerHashes(index uint32) (map[string]Peer, error) {
@@ -289,25 +289,22 @@ func (s *Syncer) getLayerHashes(index uint32) (map[string]Peer, error) {
 	}
 
 	timeout := time.After(s.config.requestTimeout)
-	resCounter := 0
-	totalRequests := len(peers)
-
-	for {
+	resCounter := len(peers)
+	for resCounter > 0 {
 		select {
 		// Got a timeout! fail with a timeout error
 		case pair := <-ch:
 			m[string(pair.hash)] = pair.peer
-			resCounter++
-			if resCounter == totalRequests {
-				return m, nil
-			}
+			resCounter--
 		case <-timeout:
 			if len(m) > 0 {
-				return m, nil
+				log.Error("not all peers responded to hash request")
+				return m, nil //todo
 			}
 			return nil, errors.New("no peers responded to hash request")
 		}
 	}
+	return m, nil
 }
 
 func (s *Syncer) sendLayerHashRequest(peer Peer, layer uint32, ch chan peerHashPair) (chan peerHashPair, error) {
