@@ -17,11 +17,10 @@
 package trie
 
 import (
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/spacemeshos/go-spacemesh/crypto/sha3"
+	"github.com/spacemeshos/go-spacemesh/rlp"
 	"hash"
 	"sync"
-
-	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/spacemeshos/go-spacemesh/common"
 )
 

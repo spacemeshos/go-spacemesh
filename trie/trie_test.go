@@ -31,14 +31,14 @@ import (
 	"testing"
 	"testing/quick"
 
-	"github.com/davecgh/go-spew/spew"
+
 	"github.com/spacemeshos/go-spacemesh/rlp"
 	"github.com/spacemeshos/go-spacemesh/common"
 )
 
 func init() {
-	spew.Config.Indent = "    "
-	spew.Config.DisableMethods = false
+	//spew.Config.Indent = "    "
+	//spew.Config.DisableMethods = false
 }
 
 // Used for testing
@@ -482,8 +482,8 @@ func checkCacheInvariant(n, parent node, parentCachegen uint16, parentDirty bool
 
 	errorf := func(format string, args ...interface{}) error {
 		msg := fmt.Sprintf(format, args...)
-		msg += fmt.Sprintf("\nat depth %d node %s", depth, spew.Sdump(n))
-		msg += fmt.Sprintf("parent: %s", spew.Sdump(parent))
+		//msg += fmt.Sprintf("\nat depth %d node %s", depth, spew.Sdump(n))
+		//msg += fmt.Sprintf("parent: %s", spew.Sdump(parent))
 		return errors.New(msg)
 	}
 	if flag.gen > parentCachegen {
@@ -503,7 +503,7 @@ func checkCacheInvariant(n, parent node, parentCachegen uint16, parentDirty bool
 func TestRandom(t *testing.T) {
 	if err := quick.Check(runRandTest, nil); err != nil {
 		if cerr, ok := err.(*quick.CheckError); ok {
-			t.Fatalf("random test iteration %d failed: %s", cerr.Count, spew.Sdump(cerr.In))
+			t.Fatalf("random test iteration %d failed: ", cerr.Count)
 		}
 		t.Fatal(err)
 	}

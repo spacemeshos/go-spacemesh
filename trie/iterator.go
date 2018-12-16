@@ -20,8 +20,8 @@ import (
 	"bytes"
 	"container/heap"
 	"errors"
+	"github.com/spacemeshos/go-spacemesh/rlp"
 
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/spacemeshos/go-spacemesh/common"
 )
 

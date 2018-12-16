@@ -8,7 +8,7 @@ import (
 type BlockID uint32
 type LayerID uint32
 
-var layerCounter uint64 = 0
+var layerCounter uint32 = 0
 
 type Block struct {
 	id         BlockID
