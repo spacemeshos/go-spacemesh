@@ -1,7 +1,7 @@
 package common
 
 import (
-	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/spacemeshos/go-spacemesh/common/hexutil"
 	"math/big"
 	"fmt"
 	"math/rand"

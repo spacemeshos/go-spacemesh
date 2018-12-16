@@ -18,9 +18,9 @@ package database
 
 import (
 	"errors"
+	"github.com/spacemeshos/go-spacemesh/common"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/common"
 )
 
 /*

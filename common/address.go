@@ -3,7 +3,7 @@ package common
 import (
 	"encoding/hex"
 	"fmt"
-	"github.com/ethereum/go-ethereum/crypto/sha3"
+	"github.com/spacemeshos/go-spacemesh/crypto/sha3"
 	"math/big"
 	"reflect"
 )
