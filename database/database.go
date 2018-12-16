@@ -21,9 +21,10 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/syndtr/goleveldb/leveldb/filter"
+	"github.com/syndtr/goleveldb/leveldb/iterator"
 	"github.com/syndtr/goleveldb/leveldb/opt"
-	"log"
-
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/syndtr/goleveldb/leveldb/util"
 	"strconv"
 	"strings"
 	"sync"
@@ -41,23 +42,15 @@ type LDBDatabase struct {
 	fn string      // filename for reporting
 	db *leveldb.DB // LevelDB instance
 
-/*	compTimeMeter    metrics.Meter // Meter for measuring the total time spent in database compaction
-	compReadMeter    metrics.Meter // Meter for measuring the data read during compaction
-	compWriteMeter   metrics.Meter // Meter for measuring the data written during compaction
-	writeDelayNMeter metrics.Meter // Meter for measuring the write delay number due to database compaction
-	writeDelayMeter  metrics.Meter // Meter for measuring the write delay duration due to database compaction
-	diskReadMeter    metrics.Meter // Meter for measuring the effective amount of data read
-	diskWriteMeter   metrics.Meter // Meter for measuring the effective amount of data written
-*/
 	quitLock sync.Mutex      // Mutex protecting the quit channel access
 	quitChan chan chan error // Quit channel to stop the metrics collection before closing the database
 
-	log log.Logger // Contextual logger tracking the database path
+	log log.Log // Contextual logger tracking the database path
 }
 
 // NewLDBDatabase returns a LevelDB wrapped object.
 func NewLDBDatabase(file string, cache int, handles int) (*LDBDatabase, error) {
-	logger := log.New("database")
+	logger := log.New("database", "", file)
 
 	// Ensure we have some minimal caching and file guarantees
 	if cache < 16 {
@@ -154,14 +147,6 @@ func (db *LDBDatabase) LDB() *leveldb.DB {
 // Meter configures the database metrics collectors and
 func (db *LDBDatabase) Meter(prefix string) {
 	// Initialize all the metrics collector at the requested prefix
-	/*db.compTimeMeter = metrics.NewRegisteredMeter(prefix+"compact/time", nil)
-	db.compReadMeter = metrics.NewRegisteredMeter(prefix+"compact/input", nil)
-	db.compWriteMeter = metrics.NewRegisteredMeter(prefix+"compact/output", nil)
-	db.diskReadMeter = metrics.NewRegisteredMeter(prefix+"disk/read", nil)
-	db.diskWriteMeter = metrics.NewRegisteredMeter(prefix+"disk/write", nil)
-	db.writeDelayMeter = metrics.NewRegisteredMeter(prefix+"compact/writedelay/duration", nil)
-	db.writeDelayNMeter = metrics.NewRegisteredMeter(prefix+"compact/writedelay/counter", nil)
-*/
 	// Create a quit channel for the periodic collector and run it
 	db.quitLock.Lock()
 	db.quitChan = make(chan chan error)
@@ -282,17 +267,17 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 			merr = err
 			continue
 		}
-		if db.writeDelayNMeter != nil {
+		/*if db.writeDelayNMeter != nil {
 			db.writeDelayNMeter.Mark(delayN - delaystats[0])
 		}
 		if db.writeDelayMeter != nil {
 			db.writeDelayMeter.Mark(duration.Nanoseconds() - delaystats[1])
-		}
+		}*/
 		// If a warning that db is performing compaction has been displayed, any subsequent
 		// warnings will be withheld for one minute not to overwhelm the user.
 		if paused && delayN-delaystats[0] == 0 && duration.Nanoseconds()-delaystats[1] == 0 &&
 			time.Now().After(lastWritePaused.Add(writePauseWarningThrottler)) {
-			db.log.Warn("Database compacting, degraded performance")
+			db.log.Warning("Database compacting, degraded performance")
 			lastWritePaused = time.Now()
 		}
 		delaystats[0], delaystats[1] = delayN, duration.Nanoseconds()
@@ -321,12 +306,6 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 			merr = err
 			continue
 		}
-		/*if db.diskReadMeter != nil {
-			db.diskReadMeter.Mark(int64((nRead - iostats[0]) * 1024 * 1024))
-		}
-		if db.diskWriteMeter != nil {
-			db.diskWriteMeter.Mark(int64((nWrite - iostats[1]) * 1024 * 1024))
-		}*/
 		iostats[0], iostats[1] = nRead, nWrite
 
 		// Sleep a bit, then repeat the stats collection
