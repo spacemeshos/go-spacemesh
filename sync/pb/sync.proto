@@ -5,18 +5,18 @@ option go_package = "pb";
 
 
 message FetchBlockReq {
-      uint64 Id = 1;
+      uint32 Id = 1;
 }
 
 
 message FetchBlockResp {
-    uint64 Id = 1;
+    uint32 Id = 1;
     Block block = 3;
 }
 
 
 message LayerHashReq {
-      uint64 layer = 1;
+      uint32 layer = 1;
 }
 
 
@@ -26,17 +26,17 @@ message LayerHashResp {
 
 
 message LayerIdsReq {
-      uint64 layer = 1;
+      uint32 layer = 1;
 }
 
 
 message LayerIdsResp {
-   repeated  uint64 ids = 1;
+   repeated  uint32 ids = 1;
 }
 
 
 
 message Block {
-     uint64 Id = 1;
-     uint64 layer = 2;
+     uint32 Id = 1;
+     uint32 layer = 2;
 }

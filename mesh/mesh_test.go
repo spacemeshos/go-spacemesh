@@ -111,5 +111,5 @@ func TestLayers_WakeUp(t *testing.T) {
 	//layers := getMesh(make(chan Peer),  "t5")
 	//defer layers.Close()
 	//layers.SetLatestKnownLayer(10)
-	//assert.True(t, layers.LatestIrreversible() == 10, "wrong layer")
+	//assert.True(t, layers.LocalLayerCount() == 10, "wrong layer")
 }
