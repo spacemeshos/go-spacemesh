@@ -283,7 +283,7 @@ func (db *Database) insert(hash common.Hash, blob []byte, node node) {
 	// Create the cached entry for this node
 	entry := &cachedNode{
 		node:      simplifyNode(node),
-		size:      uint16(len(blob)),
+		size:       uint16(len(blob)),
 		flushPrev: db.newest,
 	}
 	for _, child := range entry.childs() {

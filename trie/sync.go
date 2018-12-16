@@ -19,11 +19,14 @@ package trie
 import (
 	"errors"
 	"fmt"
-
-	"github.com/ethereum/go-ethereum/common/prque"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/common/prque"
 )
+
+// Putter wraps the database write operation supported by both batches and regular databases.
+type Putter interface {
+	Put(key []byte, value []byte) error
+}
 
 // ErrNotRequested is returned by the trie sync when it's requested to process a
 // node it did not request.
@@ -213,7 +216,7 @@ func (s *Sync) Process(results []SyncResult) (bool, int, error) {
 
 // Commit flushes the data stored in the internal membatch out to persistent
 // storage, returning the number of items written and any occurred error.
-func (s *Sync) Commit(dbw ethdb.Putter) (int, error) {
+func (s *Sync) Commit(dbw Putter) (int, error) {
 	// Dump the membatch into a database dbw
 	for i, key := range s.membatch.order {
 		if err := dbw.Put(key[:], s.membatch.batch[key]); err != nil {

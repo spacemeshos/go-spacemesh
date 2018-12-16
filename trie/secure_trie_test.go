@@ -18,7 +18,7 @@ package trie
 
 import (
 	"bytes"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"runtime"
 	"sync"

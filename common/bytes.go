@@ -1,12 +1,12 @@
 package common
 
 import (
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"math/big"
 	"fmt"
 	"math/rand"
 	"reflect"
 	"database/sql/driver"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"encoding/hex"
 )
 

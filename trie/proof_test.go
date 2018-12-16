@@ -19,12 +19,12 @@ package trie
 import (
 	"bytes"
 	crand "crypto/rand"
+	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/database"
 	mrand "math/rand"
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/spacemeshos/go-spacemesh/common"
 )
 
@@ -34,18 +34,18 @@ func init() {
 
 // makeProvers creates Merkle trie provers based on different implementations to
 // test all variations.
-func makeProvers(trie *Trie) []func(key []byte) *ethdb.MemDatabase {
-	var provers []func(key []byte) *ethdb.MemDatabase
+func makeProvers(trie *Trie) []func(key []byte) *database.MemDatabase {
+	var provers []func(key []byte) *database.MemDatabase
 
 	// Create a direct trie based Merkle prover
-	provers = append(provers, func(key []byte) *ethdb.MemDatabase {
-		proof := ethdb.NewMemDatabase()
+	provers = append(provers, func(key []byte) *database.MemDatabase {
+		proof := database.NewMemDatabase()
 		trie.Prove(key, 0, proof)
 		return proof
 	})
 	// Create a leaf iterator based Merkle prover
-	provers = append(provers, func(key []byte) *ethdb.MemDatabase {
-		proof := ethdb.NewMemDatabase()
+	provers = append(provers, func(key []byte) *database.MemDatabase {
+		proof := database.NewMemDatabase()
 		if it := NewIterator(trie.NodeIterator(key)); it.Next() && bytes.Equal(key, it.Key) {
 			for _, p := range it.Prove() {
 				proof.Put(crypto.Keccak256(p), p)
@@ -127,7 +127,7 @@ func TestMissingKeyProof(t *testing.T) {
 	updateString(trie, "k", "v")
 
 	for i, key := range []string{"a", "j", "l", "z"} {
-		proof := ethdb.NewMemDatabase()
+		proof := database.NewMemDatabase()
 		trie.Prove([]byte(key), 0, proof)
 
 		if proof.Len() != 1 {
@@ -164,7 +164,7 @@ func BenchmarkProve(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		kv := vals[keys[i%len(keys)]]
-		proofs := ethdb.NewMemDatabase()
+		proofs := database.NewMemDatabase()
 		if trie.Prove(kv.k, 0, proofs); len(proofs.Keys()) == 0 {
 			b.Fatalf("zero length proof for %x", kv.k)
 		}
@@ -175,10 +175,10 @@ func BenchmarkVerifyProof(b *testing.B) {
 	trie, vals := randomTrie(100)
 	root := trie.Hash()
 	var keys []string
-	var proofs []*ethdb.MemDatabase
+	var proofs []*database.MemDatabase
 	for k := range vals {
 		keys = append(keys, k)
-		proof := ethdb.NewMemDatabase()
+		proof := database.NewMemDatabase()
 		trie.Prove([]byte(k), 0, proof)
 		proofs = append(proofs, proof)
 	}
