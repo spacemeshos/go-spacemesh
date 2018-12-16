@@ -57,12 +57,6 @@ func (m *mesh) LatestKnownLayer() uint32 {
 	return m.latestKnownLayer
 }
 
-func (m *mesh) Is() uint32 {
-	defer m.lkMutex.RUnlock()
-	m.lkMutex.RLock()
-	return m.latestKnownLayer
-}
-
 func (m *mesh) SetLatestKnownLayer(idx uint32) {
 	defer m.lkMutex.Unlock()
 	m.lkMutex.Lock()
