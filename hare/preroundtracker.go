@@ -40,8 +40,18 @@ func (pre *PreRoundTracker) OnPreRound(msg *pb.HareMessage) {
 	pre.preRound[pub.String()] = msg
 }
 
-func (pre *PreRoundTracker) CanProve(blockId BlockId) bool {
+func (pre *PreRoundTracker) CanProveBlock(blockId BlockId) bool {
 	return pre.tracker.CountStatus(blockId) >= f+1
+}
+
+func (pre *PreRoundTracker) CanProveSet(set *Set) bool {
+	for _, bid := range set.blocks {
+		if !pre.CanProveBlock(bid) {
+			return false
+		}
+	}
+
+	return true
 }
 
 

@@ -111,7 +111,7 @@ PreRound:
 
 	// end of pre-round, update our set
 	for _, v := range proc.s.blocks {
-		if !proc.preRoundTracker.CanProve(v) { // not enough witnesses
+		if !proc.preRoundTracker.CanProveBlock(v) { // not enough witnesses
 			proc.s.Remove(v)
 		}
 	}
@@ -295,10 +295,13 @@ func (proc *ConsensusProcess) processPreRoundMsg(msg *pb.HareMessage) {
 }
 
 func (proc *ConsensusProcess) processStatusMsg(msg *pb.HareMessage) {
-	proc.statusesTracker.OnStatus(msg)
+	s := NewSet(msg.Message.Blocks)
+	if proc.preRoundTracker.CanProveSet(s) {
+		proc.statusesTracker.RecordStatus(msg)
+	}
 
 	if proc.statusesTracker.IsSVPReady() {
-		proc.setProposalMessage(proc.statusesTracker.GetSVP())
+		proc.setProposalMessage(proc.statusesTracker.BuildSVP())
 	}
 }
 
