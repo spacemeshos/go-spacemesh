@@ -20,12 +20,15 @@ all:
 prepare:
 	./setup_env.sh
 
-build:
+genproto:
 	./scripts/genproto.sh
+
+build:
+	make genproto
 	go build ${LDFLAGS} -o $(CURR_DIR)/$(BINARY)
 
 $(PLATFORMS):
-	./scripts/genproto.sh
+	make genproto
 	GOOS=$(os) GOARCH=amd64 go build ${LDFLAGS} -o $(BIN_DIR)/$(BINARY)-$(VERSION)-$(os)-amd64
 
 test:

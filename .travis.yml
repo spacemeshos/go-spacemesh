@@ -1,10 +1,13 @@
 language: go
+sudo: false
 go: 1.11.x
 
+env:
+  - GO111MODULE=on
 
 before_install:
-- make prepare
-
+  - sudo find /usr/local -exec chmod a+w {} \;
+  - make prepare
 
 branches:
   only:
@@ -13,7 +16,8 @@ jobs:
   include:
   - stage: lint
     script:
-    - make lint
+      - make lint
   - stage: test
     script:
-    - make test
+      - make genproto
+      - make test
