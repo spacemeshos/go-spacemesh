@@ -6,20 +6,20 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-type Round2Tracker struct {
+type ProposalTracker struct {
 	proposals map[string]*pb.HareMessage
 	isConflicting bool
 }
 
-func NewRound2Tracker() Round2Tracker {
-	r2 := Round2Tracker{}
+func NewProposalTracker() ProposalTracker {
+	r2 := ProposalTracker{}
 	r2.proposals = make(map[string]*pb.HareMessage, N)
 	r2.isConflicting = false
 
 	return r2
 }
 
-func (r2 *Round2Tracker) OnProposal(msg *pb.HareMessage) {
+func (pt *ProposalTracker) OnProposal(msg *pb.HareMessage) {
 	pub, err := crypto.NewPublicKey(msg.PubKey)
 	if err != nil {
 		log.Warning("Could not construct public key: ", err.Error())
@@ -28,23 +28,23 @@ func (r2 *Round2Tracker) OnProposal(msg *pb.HareMessage) {
 
 	s := NewSet(msg.Message.Blocks)
 
-	p, exist := r2.proposals[pub.String()]
+	p, exist := pt.proposals[pub.String()]
 	if !exist { // should record
-		r2.proposals[pub.String()] = msg
+		pt.proposals[pub.String()] = msg
 		return
 	}
 
 	// same pub key, verify same set
 	g := NewSet(p.Message.Blocks)
 	if !s.Equals(g) {
-		r2.isConflicting = true
+		pt.isConflicting = true
 	}
 }
 
-func (r2 *Round2Tracker) HasValidProposal() bool {
-	return r2.isConflicting
+func (pt *ProposalTracker) HasValidProposal() bool {
+	return pt.isConflicting
 }
 
-func (r2 *Round2Tracker) ProposedSet() Set {
+func (pt *ProposalTracker) ProposedSet() Set {
 	return Set{}
 }

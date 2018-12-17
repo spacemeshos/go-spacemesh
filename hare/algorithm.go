@@ -44,10 +44,10 @@ type ConsensusProcess struct {
 	inbox           chan *pb.HareMessage
 	roundMsg        *pb.HareMessage
 	preRoundTracker PreRoundTracker
-	statusesTracker Round1Tracker
-	proposalTracker Round2Tracker
-	commitTracker   Round3Tracker
-	notifyTracker   Round4Tracker
+	statusesTracker StatusTracker
+	proposalTracker ProposalTracker
+	commitTracker   CommitTracker
+	notifyTracker   NotifyTracker
 }
 
 func NewConsensusProcess(key crypto.PublicKey, layer LayerId, s Set, oracle Rolacle, signing Signing, p2p NetworkService) *ConsensusProcess {
@@ -61,10 +61,10 @@ func NewConsensusProcess(key crypto.PublicKey, layer LayerId, s Set, oracle Rola
 	proc.network = p2p
 	proc.roundMsg = nil
 	proc.preRoundTracker = NewPreRoundTracker()
-	proc.statusesTracker = NewRound1Tracker()
-	proc.proposalTracker = NewRound2Tracker()
-	proc.commitTracker = NewRound3Tracker()
-	proc.notifyTracker = NewRound4Tracker()
+	proc.statusesTracker = NewStatusTracker()
+	proc.proposalTracker = NewProposalTracker()
+	proc.commitTracker = NewCommitTracker()
+	proc.notifyTracker = NewNotifyTracker()
 
 	return proc
 }
@@ -208,10 +208,10 @@ func (proc *ConsensusProcess) nextRound() {
 	// reset trackers
 	switch proc.k % 4 { // switch end of current round
 	case 0:                                       // 0 is round 1
-		proc.statusesTracker = NewRound1Tracker() // reset statuses tracking
-	case 2:                                       // 2 is round 3
-		proc.proposalTracker = NewRound2Tracker() // reset proposal tracking
-		proc.commitTracker = NewRound3Tracker() // reset commits tracking
+		proc.statusesTracker = NewStatusTracker() // reset statuses tracking
+	case 2:                                         // 2 is round 3
+		proc.proposalTracker = NewProposalTracker() // reset proposal tracking
+		proc.commitTracker = NewCommitTracker()     // reset commits tracking
 	}
 	// TODO: check what to do with the notify. do we really need f+1 notify or can count on the certificate?
 

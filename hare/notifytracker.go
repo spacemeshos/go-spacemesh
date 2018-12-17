@@ -4,26 +4,26 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare/pb"
 )
 
-type Round4Tracker struct {
+type NotifyTracker struct {
 	firstNotify *pb.HareMessage
 }
 
-func NewRound4Tracker() Round4Tracker {
-	r4 := Round4Tracker{}
+func NewNotifyTracker() NotifyTracker {
+	r4 := NotifyTracker{}
 
 	return r4
 }
 
-func (r4 *Round4Tracker) OnNotify(msg *pb.HareMessage) {
-	if r4.firstNotify != nil {
+func (nt *NotifyTracker) OnNotify(msg *pb.HareMessage) {
+	if nt.firstNotify != nil {
 		return
 	}
 
-	r4.firstNotify = msg
+	nt.firstNotify = msg
 }
 
-func (r4 *Round4Tracker) GetNotifyMsg() *pb.HareMessage {
-	return r4.firstNotify
+func (nt *NotifyTracker) GetNotifyMsg() *pb.HareMessage {
+	return nt.firstNotify
 }
 
 
