@@ -6,6 +6,8 @@ env:
   - GO111MODULE=on
 
 before_install:
+  # for some reason changing /usr/local requires sudo in travis, the following gives write access
+  # to all files and folders under /usr/local recursively, required for installing protobuf:
   - sudo find /usr/local -exec chmod a+w {} \;
   - make prepare
 
