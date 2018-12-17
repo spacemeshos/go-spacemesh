@@ -67,23 +67,23 @@ Please read the Spacemesh [full FAQ](https://github.com/spacemeshos/go-spacemesh
 
 ### Getting
 
-install [Go 1.9.2 or later](https://golang.org/dl/) for your platform
+Install [Go 1.11 or later](https://golang.org/dl/) for your platform.
 
+```bash
+git clone git@github.com:spacemeshos/go-spacemesh.git
 ```
-go get github.com/spacemeshos/go-spacemesh
-```
-or
-- Fork the project from https://github.com/spacemeshos/go-spacemesh 
-- Checkout the `develop` branch of your fork from GitHub
-- Move your fork from `$GOPATH/src/github.com/YOURACCOUNT/go-spacemesh` to `$GOPATH/src/github.com/spacemeshos/go-spacemesh`
-This allows GO tools to work as expected.
+_-- or --_
+
+Fork the project from https://github.com/spacemeshos/go-spacemesh
+
+Since the project uses Go 1.11's Modules it's best to place the code **outside** your `$GOPATH`. Read [this](https://github.com/golang/go/wiki/Modules#how-to-install-and-activate-module-support) for alternatives.
 
 ### Setting Up Local Environment
-Before building we need to install dependencies and generate protocol buffers. Do this by running:
+Before building we need to install `protoc` (ProtoBuf compiler) and some tools required to generate ProtoBufs. Do this by running:
 ```bash
 make prepare
 ```
-This will invoke `setup_env.sh` which supports Linux and MacOS.
+This will invoke `setup_env.sh` which supports Linux and MacOS. On other platforms it should be straightforward to follow the steps in this script manually.
 
 
 ### Building
@@ -111,6 +111,13 @@ make test
 or 
 ```
 make cover
+```
+
+### Docker
+A `Dockerfile` is included in the project allowing anyone to build and run a docker image:
+```bash
+docker build -t spacemesh .
+docker run -d --name=spacemesh spacemesh
 ```
 
 #### Next Steps...
