@@ -87,15 +87,11 @@ This will invoke `setup_env.sh` which supports Linux and MacOS.
 
 
 ### Building
-To build `go-spacemesh` for your current system architecture use:
+To build `go-spacemesh` for your current system architecture, from the project root directory, use:
 ```
-make
+make build
 ```
-or
-```
-go build
-```
-from the project root directory. The binary `go-spacemesh` will be saved in the project root directory.
+This will (re-)generate protobuf files and build the `go-spacemesh` binary, saving it in the project root directory. 
 
 To build a binary for a specific architecture directory use:
 ```

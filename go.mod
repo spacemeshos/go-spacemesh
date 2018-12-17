@@ -12,7 +12,7 @@ require (
 	github.com/golang/protobuf v1.2.0
 	github.com/golang/snappy v0.0.0-20170215233205-553a64147049 // indirect
 	github.com/google/uuid v0.0.0-20171122162618-4ebdd04351c7
-	github.com/grpc-ecosystem/grpc-gateway v0.0.0-20181119184639-d8ad87ee91e1
+	github.com/grpc-ecosystem/grpc-gateway v1.6.2
 	github.com/hashicorp/hcl v0.0.0-20180404174102-ef8a98b0bbce // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/magiconair/properties v1.8.0 // indirect
