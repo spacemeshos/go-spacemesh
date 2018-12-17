@@ -4,6 +4,7 @@ COMMIT := $(shell git rev-parse HEAD)
 BRANCH := $(shell git rev-parse --abbrev-ref HEAD)
 BIN_DIR := $(shell pwd)/build
 CURR_DIR := $(shell pwd)
+GO111MODULE := on
 
 # Setup the -ldflags option to pass vars defined here to app vars
 LDFLAGS := -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.branch=${BRANCH}"
