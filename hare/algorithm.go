@@ -12,7 +12,6 @@ import (
 
 const ProtoName = "HARE_PROTOCOL"
 const RoundDuration = time.Second * time.Duration(15)
-const InitialKnowledgeSize = 1000
 const N = 800
 const f = 400
 
@@ -26,9 +25,9 @@ type NetworkService interface {
 }
 
 type State struct {
-	k           uint32              // the iteration number
-	ki          int32               // indicates when S was first committed upon
-	s           *Set                // the set of blocks
+	k           uint32          // the iteration number
+	ki          int32           // indicates when S was first committed upon
+	s           *Set            // the set of blocks
 	certificate *pb.Certificate // the certificate
 }
 
@@ -45,11 +44,10 @@ type ConsensusProcess struct {
 	inbox           chan *pb.HareMessage
 	roundMsg        *pb.HareMessage
 	preRoundTracker PreRoundTracker
-	round1Tracker	Round1Tracker
-	round2Tracker	Round2Tracker
-	round3Tracker	Round3Tracker
-	round4Tracker	Round4Tracker
-	// TODO: add knowledge of notify messages. What is the life-cycle of such messages? persistent according to Julian
+	statusesTracker Round1Tracker
+	proposalTracker Round2Tracker
+	commitTracker   Round3Tracker
+	notifyTracker   Round4Tracker
 }
 
 func NewConsensusProcess(key crypto.PublicKey, layer LayerId, s Set, oracle Rolacle, signing Signing, p2p NetworkService) *ConsensusProcess {
@@ -62,12 +60,11 @@ func NewConsensusProcess(key crypto.PublicKey, layer LayerId, s Set, oracle Rola
 	proc.signing = signing
 	proc.network = p2p
 	proc.roundMsg = nil
-	proc.roundMsg = nil
 	proc.preRoundTracker = NewPreRoundTracker()
-	proc.round1Tracker = NewRound1Tracker()
-	proc.round2Tracker = NewRound2Tracker()
-	proc.round3Tracker = NewRound3Tracker()
-	proc.round4Tracker = NewRound4Tracker()
+	proc.statusesTracker = NewRound1Tracker()
+	proc.proposalTracker = NewRound2Tracker()
+	proc.commitTracker = NewRound3Tracker()
+	proc.notifyTracker = NewRound4Tracker()
 
 	return proc
 }
@@ -106,7 +103,7 @@ PreRound:
 	for {
 		select {
 		case msg := <-proc.inbox:
-			proc.processMsgPreRound(msg)
+			proc.handleMessage(msg)
 		case <-timer.C:
 			break PreRound
 		}
@@ -150,18 +147,7 @@ PreRound:
 
 func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
 	// Note: layer is already verified by the broker
-
-	// TODO: think how to validate role (is it the same? just use Active?)
-	if MessageType(m.Message.Type) == PreRound {
-		proc.preRoundTracker.OnPreRound(m)
-		return
-	}
-
-	// verify iteration
-	if m.Message.K != proc.k {
-		log.Warning("Iteration mismatch. Message iteration is: %d expected: %d", m.Message.K, proc.k)
-		return
-	}
+	// can receive any message at any point
 
 	// validate signature
 	data, err := proto.Marshal(m.Message)
@@ -189,8 +175,21 @@ func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
 		return
 	}
 
-	// continue process msg by round
-	proc.processMessageByRound(m)
+	// continue process msg by type
+	switch MessageType(m.Message.Type) {
+	case PreRound:
+		proc.processPreRoundMsg(m)
+	case Status: // end of round 1
+		proc.processStatusMsg(m)
+	case Proposal: // end of round 2
+		proc.processProposalMsg(m)
+	case Commit: // end of round 3
+		proc.processCommitMsg(m)
+	case Notify: // end of round 4
+		proc.processNotifyMsg(m)
+	default:
+		log.Warning("Unknown message type: ", m.Message.Type)
+	}
 }
 
 func (proc *ConsensusProcess) nextRound() {
@@ -205,26 +204,23 @@ func (proc *ConsensusProcess) nextRound() {
 			proc.network.Broadcast(ProtoName, m)
 		}
 	}
+
+	// reset trackers
+	switch proc.k % 4 { // switch end of current round
+	case 0:                                       // 0 is round 1
+		proc.statusesTracker = NewRound1Tracker() // reset statuses tracking
+	case 2:                                       // 2 is round 3
+		proc.proposalTracker = NewRound2Tracker() // reset proposal tracking
+		proc.commitTracker = NewRound3Tracker() // reset commits tracking
+	}
+	// TODO: check what to do with the notify. do we really need f+1 notify or can count on the certificate?
+
+	// reset round message & iteration set
 	proc.roundMsg = nil
+	proc.t = nil
 
 	// advance to next round
 	proc.k++
-
-	// TODO: init/reset trackers?
-}
-
-func (proc *ConsensusProcess) processMessageByRound(msg *pb.HareMessage) {
-
-	switch proc.k % 4 { // switch round
-	case 0: // end of round 1
-		proc.processMsgRound1(msg)
-	case 1: // end of round 2
-		proc.processMsgRound2(msg)
-	case 2: // end of round 3
-		proc.processMsgRound3(msg)
-	case 3: // end of round 4
-		proc.processMsgRound4(msg)
-	}
 }
 
 func (proc *ConsensusProcess) buildPreRoundMessage() ([]byte, error) {
@@ -273,7 +269,7 @@ func (proc *ConsensusProcess) setProposalMessage(svp *pb.AggregatedMessages) err
 	return nil
 }
 
-func (proc *ConsensusProcess) BuildNotifyMessage() (*pb.HareMessage, error) {
+func (proc *ConsensusProcess) buildNotifyMessage() (*pb.HareMessage, error) {
 	builder := NewMessageBuilder()
 	builder.SetType(Proposal).SetLayer(proc.layerId).SetIteration(proc.k).SetKi(proc.ki).SetBlocks(*proc.s)
 	builder.SetCertificate(proc.certificate)
@@ -294,44 +290,42 @@ func roleFromIteration(k uint32) byte {
 	return Active
 }
 
-func (proc *ConsensusProcess) processMsgPreRound(msg *pb.HareMessage) {
-	// TODO: validate sig
-	// TODO: validate role
+func (proc *ConsensusProcess) processPreRoundMsg(msg *pb.HareMessage) {
 	proc.preRoundTracker.OnPreRound(msg)
 }
 
-func (proc *ConsensusProcess) processMsgRound1(msg *pb.HareMessage) {
-	proc.round1Tracker.OnStatus(msg)
+func (proc *ConsensusProcess) processStatusMsg(msg *pb.HareMessage) {
+	proc.statusesTracker.OnStatus(msg)
 
-	if proc.round1Tracker.IsSVPReady() {
-		proc.setProposalMessage(proc.round1Tracker.GetSVP())
+	if proc.statusesTracker.IsSVPReady() {
+		proc.setProposalMessage(proc.statusesTracker.GetSVP())
 	}
 }
 
-func (proc *ConsensusProcess) processMsgRound2(msg *pb.HareMessage) {
-	proc.round2Tracker.OnProposal(msg)
+func (proc *ConsensusProcess) processProposalMsg(msg *pb.HareMessage) {
+	proc.proposalTracker.OnProposal(msg)
 
-	if !proc.round2Tracker.HasValidProposal() {
+	if !proc.proposalTracker.HasValidProposal() {
 		proc.t = nil
 		return
 	}
 
-	*proc.t = proc.round2Tracker.ProposedSet()
+	*proc.t = proc.proposalTracker.ProposedSet()
 }
 
-func (proc *ConsensusProcess) processMsgRound3(msg *pb.HareMessage) {
-	if proc.round2Tracker.isConflicting {
+func (proc *ConsensusProcess) processCommitMsg(msg *pb.HareMessage) {
+	if proc.proposalTracker.isConflicting {
 		proc.roundMsg = nil
 		return
 	}
 
-	if !proc.round3Tracker.HasEnoughCommits() {
+	if !proc.commitTracker.HasEnoughCommits() {
 		return
 	}
 
 	proc.s = proc.t // commit to t
-	proc.certificate = proc.round3Tracker.BuildCertificate()
-	notifyMsg, err := proc.BuildNotifyMessage() // build notify with certificate
+	proc.certificate = proc.commitTracker.BuildCertificate()
+	notifyMsg, err := proc.buildNotifyMessage() // build notify with certificate
 
 	if err != nil {
 		log.Warning("Could not build notify message: ", err)
@@ -341,11 +335,11 @@ func (proc *ConsensusProcess) processMsgRound3(msg *pb.HareMessage) {
 	proc.roundMsg = notifyMsg
 }
 
-func (proc *ConsensusProcess) processMsgRound4(msg *pb.HareMessage) {
-	proc.round4Tracker.OnNotify(msg)
+func (proc *ConsensusProcess) processNotifyMsg(msg *pb.HareMessage) {
+	proc.notifyTracker.OnNotify(msg)
 
 	// TODO: consider doing it only on change ?
-	m := proc.round4Tracker.GetNotifyMsg()
+	m := proc.notifyTracker.GetNotifyMsg()
 	proc.s = NewSet(m.Message.Blocks)
 	proc.certificate = m.Cert
 }
