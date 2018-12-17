@@ -21,6 +21,12 @@
 			"revisionTime": "2018-02-21T22:46:20Z"
 		},
 		{
+			"checksumSHA1": "2u6FcCnyfRnJvUCWpEZZv6Yy+WE=",
+			"path": "github.com/davecgh/go-xdr/xdr2",
+			"revision": "e6a2ba005892b6a5b27cb5352f64c2e96942dd28",
+			"revisionTime": "2016-11-22T19:31:51Z"
+		},
+		{
 			"checksumSHA1": "7NP1qUMF8Kx1y0zANxx0e+oq9Oo=",
 			"path": "github.com/fsnotify/fsnotify",
 			"revision": "c2828203cd70a50dcccfb2761f8b1f8ceef9a8e9",
@@ -279,10 +285,10 @@
 			"revisionTime": "2018-03-14T08:05:35Z"
 		},
 		{
-			"checksumSHA1": "l9hsW4atYllqlNjJUwHb6lyLn+I=",
+			"checksumSHA1": "LV0VMVON7xY1ttV+s2ph83ntmDQ=",
 			"path": "github.com/syndtr/goleveldb/leveldb",
-			"revision": "34011bf325bce385408353a30b101fe5e923eb6e",
-			"revisionTime": "2017-12-14T12:08:11Z"
+			"revision": "b001fa50d6b27f3f0bb175a87d0cb55426d0a0ae",
+			"revisionTime": "2018-11-28T10:09:59Z"
 		},
 		{
 			"checksumSHA1": "EKIow7XkgNdWvR/982ffIZxKG8Y=",
@@ -327,10 +333,10 @@
 			"revisionTime": "2017-12-14T12:08:11Z"
 		},
 		{
-			"checksumSHA1": "UmQeotV+m8/FduKEfLOhjdp18rs=",
+			"checksumSHA1": "o2TorI3z+vc+EBMJ8XeFoUmXBtU=",
 			"path": "github.com/syndtr/goleveldb/leveldb/opt",
-			"revision": "34011bf325bce385408353a30b101fe5e923eb6e",
-			"revisionTime": "2017-12-14T12:08:11Z"
+			"revision": "b001fa50d6b27f3f0bb175a87d0cb55426d0a0ae",
+			"revisionTime": "2018-11-28T10:09:59Z"
 		},
 		{
 			"checksumSHA1": "tQ2AqXXAEy9icbZI9dLVdZGvWMw=",
