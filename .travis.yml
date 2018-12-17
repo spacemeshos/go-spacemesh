@@ -21,3 +21,7 @@ jobs:
     script:
       - make genproto
       - make test
+
+cache:
+  directories:
+    - $GOPATH/pkg/mod
