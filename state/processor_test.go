@@ -28,16 +28,16 @@ func (s *ProcessorStateSuite) SetupTest() {
 	s.processor = NewTransactionProcessor(rng, s.state)
 }
 
-func (s *ProcessorStateSuite) createAccount(addr []byte, balance int64, nonce uint64) *StateObj{
+func createAccount(state *StateDB, addr []byte, balance int64, nonce uint64) *StateObj{
 	addr1 := toAddr(addr)
-	obj1 := s.state.GetOrNewStateObj(addr1)
+	obj1 := state.GetOrNewStateObj(addr1)
 	obj1.AddBalance(big.NewInt(balance))
 	obj1.SetNonce(nonce)
-	s.state.updateStateObj(obj1)
+	state.updateStateObj(obj1)
 	return  obj1
 }
 
-func (s *ProcessorStateSuite) createTransaction(nonce uint64,
+func createTransaction(nonce uint64,
 	origin common.Address, destination common.Address, amount int64) *Transaction{
 	return &Transaction{
 		AccountNonce: nonce,
@@ -57,13 +57,13 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction() {
 	//test insufficient funds
 	//test wrong nonce
 	//test account doesn't exist
-	obj1 := s.createAccount([]byte{0x01}, 21, 0)
-	obj2 := s.createAccount([]byte{0x01,02}, 1, 10)
-	s.createAccount([]byte{0x02}, 44, 0)
+	obj1 := createAccount(s.state, []byte{0x01}, 21, 0)
+	obj2 := createAccount(s.state, []byte{0x01,02}, 1, 10)
+	createAccount(s.state, []byte{0x02}, 44, 0)
 	s.state.Commit(false)
 
 	transactions := Transactions{
-		s.createTransaction(obj1.Nonce(),obj1.address, obj2.address, 1),
+		createTransaction(obj1.Nonce(),obj1.address, obj2.address, 1),
 	}
 
 
@@ -102,16 +102,16 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_DoubleTr
 	//test insufficient funds
 	//test wrong nonce
 	//test account doesn't exist
-	obj1 := s.createAccount([]byte{0x01}, 21, 0)
-	obj2 := s.createAccount([]byte{0x01,02}, 1, 10)
-	s.createAccount([]byte{0x02}, 44, 0)
+	obj1 := createAccount(s.state, []byte{0x01}, 21, 0)
+	obj2 := createAccount(s.state, []byte{0x01,02}, 1, 10)
+	createAccount(s.state, []byte{0x02}, 44, 0)
 	s.state.Commit(false)
 
 	transactions := Transactions{
-		s.createTransaction(obj1.Nonce(),obj1.address, obj2.address, 1),
-		s.createTransaction(obj1.Nonce(),obj1.address, obj2.address, 1),
-		s.createTransaction(obj1.Nonce(),obj1.address, obj2.address, 1),
-		s.createTransaction(obj1.Nonce(),obj1.address, obj2.address, 1),
+		createTransaction(obj1.Nonce(),obj1.address, obj2.address, 1),
+		createTransaction(obj1.Nonce(),obj1.address, obj2.address, 1),
+		createTransaction(obj1.Nonce(),obj1.address, obj2.address, 1),
+		createTransaction(obj1.Nonce(),obj1.address, obj2.address, 1),
 	}
 
 
@@ -146,8 +146,8 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_DoubleTr
 
 	//Test Incorrect nonce
 	transactions = Transactions{
-		s.createTransaction(obj1.Nonce(),obj1.address, obj2.address, 1),
-		s.createTransaction(obj1.Nonce(),obj1.address, obj2.address, 2),
+		createTransaction(obj1.Nonce(),obj1.address, obj2.address, 1),
+		createTransaction(obj1.Nonce(),obj1.address, obj2.address, 2),
 	}
 
 	for _, trns := range transactions {
@@ -160,7 +160,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_DoubleTr
 
 	//Test Insufficient funds
 	transactions = Transactions{
-		s.createTransaction(obj1.Nonce() +1,obj1.address, obj2.address, 21),
+		createTransaction(obj1.Nonce() +1,obj1.address, obj2.address, 21),
 	}
 
 	for _, trns := range transactions {
@@ -175,7 +175,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_DoubleTr
 
 	//Test Insufficient funds
 	transactions = Transactions{
-		s.createTransaction(obj1.Nonce(),addr, obj2.address, 21),
+		createTransaction(obj1.Nonce(),addr, obj2.address, 21),
 	}
 
 	for _, trns := range transactions {
@@ -188,13 +188,13 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_DoubleTr
 }
 
 func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_Errors() {
-	obj1 := s.createAccount([]byte{0x01}, 21, 0)
-	obj2 := s.createAccount([]byte{0x01, 02}, 1, 10)
-	s.createAccount([]byte{0x02}, 44, 0)
+	obj1 := createAccount(s.state, []byte{0x01}, 21, 0)
+	obj2 := createAccount(s.state, []byte{0x01, 02}, 1, 10)
+	createAccount(s.state, []byte{0x02}, 44, 0)
 	s.state.Commit(false)
 
 	transactions := Transactions{
-		s.createTransaction(obj1.Nonce(),obj1.address, obj2.address, 1),
+		createTransaction(obj1.Nonce(),obj1.address, obj2.address, 1),
 	}
 
 
@@ -203,8 +203,8 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_Errors()
 
 	//Test Incorrect nonce
 	transactions = Transactions{
-		s.createTransaction(obj1.Nonce(),obj1.address, obj2.address, 1),
-		s.createTransaction(obj1.Nonce(),obj1.address, obj2.address, 2),
+		createTransaction(obj1.Nonce(),obj1.address, obj2.address, 1),
+		createTransaction(obj1.Nonce(),obj1.address, obj2.address, 2),
 	}
 
 	for _, trns := range transactions {
@@ -217,7 +217,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_Errors()
 
 	//Test Insufficient funds
 	transactions = Transactions{
-		s.createTransaction(obj1.Nonce() +1,obj1.address, obj2.address, 21),
+		createTransaction(obj1.Nonce() +1,obj1.address, obj2.address, 21),
 	}
 
 	for _, trns := range transactions {
@@ -232,7 +232,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_Errors()
 
 	//Test Insufficient funds
 	transactions = Transactions{
-		s.createTransaction(obj1.Nonce(),addr, obj2.address, 21),
+		createTransaction(obj1.Nonce(),addr, obj2.address, 21),
 	}
 
 	for _, trns := range transactions {
@@ -246,14 +246,14 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_Errors()
 
 
 func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_OrderByNonce() {
-	obj1 := s.createAccount([]byte{0x01}, 2, 0)
-	obj2 := s.createAccount([]byte{0x01, 02}, 1, 10)
-	obj3 := s.createAccount([]byte{0x02}, 44, 0)
+	obj1 := createAccount(s.state,[]byte{0x01}, 2, 0)
+	obj2 := createAccount(s.state,[]byte{0x01, 02}, 1, 10)
+	obj3 := createAccount(s.state,[]byte{0x02}, 44, 0)
 	s.state.Commit(false)
 
 	transactions := Transactions{
-		s.createTransaction(obj1.Nonce() +1, obj1.address, obj3.address, 1),
-		s.createTransaction(obj1.Nonce(), obj1.address, obj2.address, 1),
+		createTransaction(obj1.Nonce() +1, obj1.address, obj3.address, 1),
+		createTransaction(obj1.Nonce(), obj1.address, obj2.address, 1),
 	}
 
 	err := s.processor.ApplyTransactions(transactions)
@@ -286,6 +286,40 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_OrderByN
 	}
 }
 
+
+
 func TestTransactionProcessor_ApplyTransactionTestSuite(t *testing.T){
 	suite.Run(t, new(ProcessorStateSuite))
+}
+
+func TestTransactionProcessor_randomSort(t *testing.T) {
+	rng := rand.New(mt19937.New())
+	rng.Seed(1)
+	db := database.NewMemDatabase()
+	state, _ := New(common.Hash{}, NewDatabase(db))
+
+	processor := NewTransactionProcessor(rng, state)
+
+	obj1 := createAccount(state,[]byte{0x01}, 2, 0)
+	obj2 := createAccount(state,[]byte{0x01, 02}, 1, 10)
+
+	transactions := Transactions{
+		createTransaction(obj1.Nonce(),obj1.address, obj2.address, 1),
+		createTransaction(obj1.Nonce(),obj1.address, obj2.address, 2),
+		createTransaction(obj1.Nonce(),obj2.address, obj1.address, 3),
+		createTransaction(obj1.Nonce(),obj1.address, obj2.address, 4),
+		createTransaction(obj1.Nonce(),obj2.address, obj1.address, 5),
+	}
+
+	expected := Transactions{
+		transactions[4],
+		transactions[3],
+		transactions[1],
+		transactions[0],
+		transactions[2],
+	}
+
+	trans := processor.randomSort(transactions)
+
+	assert.Equal(t, expected, trans)
 }

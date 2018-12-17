@@ -87,7 +87,6 @@ func (tp *TransactionProcessor) mergeDoubles(transactions Transactions) Transact
 }
 
 func (tp *TransactionProcessor) randomSort(transactions Transactions) Transactions{
-	//tp.rand.Seed() todo: what to seed here?
 	vecLen := len(transactions)
 	for i := range transactions {
 		swp := int(tp.rand.Uint32()) % vecLen
