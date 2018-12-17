@@ -200,7 +200,7 @@ func (s *Syncer) sendBlockRequest(peer Peer, id mesh.BlockID) (chan *mesh.Block,
 	return ch, s.p.SendAsyncRequest(BLOCK, payload, peer, foo)
 }
 
-func (s *Syncer) getLayerBlockIDs(index mesh.LayerID) (chan uint32, error) {
+func (s *Syncer) getLayerBlockIDs(index mesh.LayerID) (chan mesh.BlockID, error) {
 
 	m, err := s.getLayerHashes(index)
 
@@ -211,12 +211,9 @@ func (s *Syncer) getLayerBlockIDs(index mesh.LayerID) (chan uint32, error) {
 	return s.getIdsforHash(m, index)
 }
 
-func (s *Syncer) getIdsforHash(m map[string]Peer, index mesh.LayerID) (chan uint32, error) {
-	idSet := make(map[uint32]bool, s.config.layerSize)
-	//todo move this to config
-	ch := make(chan []uint32)
+func (s *Syncer) getIdsforHash(m map[string]Peer, index mesh.LayerID) (chan mesh.BlockID, error) {
 	reqCounter := 0
-
+	ch := make(chan []uint32)
 	for _, v := range m {
 		_, err := s.sendLayerIDsRequest(v, index, ch)
 		if err != nil {
@@ -227,13 +224,15 @@ func (s *Syncer) getIdsforHash(m map[string]Peer, index mesh.LayerID) (chan uint
 		}
 	}
 
+	idSet := make(map[mesh.BlockID]bool, s.config.layerSize) //change uint32 to BlockId
 	timeout := time.After(s.config.requestTimeout)
 	for reqCounter > 0 {
 		select {
 		case b := <-ch:
 			for _, id := range b {
-				if _, exists := idSet[id]; !exists {
-					idSet[id] = true
+				bid := mesh.BlockID(id)
+				if _, exists := idSet[bid]; !exists {
+					idSet[bid] = true
 				}
 			}
 			reqCounter--
@@ -251,8 +250,8 @@ func (s *Syncer) getIdsforHash(m map[string]Peer, index mesh.LayerID) (chan uint
 
 }
 
-func keysAsChan(idSet map[uint32]bool) chan uint32 {
-	res := make(chan uint32, len(idSet))
+func keysAsChan(idSet map[mesh.BlockID]bool) chan mesh.BlockID {
+	res := make(chan mesh.BlockID, len(idSet))
 	defer close(res)
 	for id := range idSet {
 		res <- id

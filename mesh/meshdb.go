@@ -21,7 +21,7 @@ func NewMeshDb(layers database.DB, blocks database.DB, validity database.DB) *me
 		blocks:             blocks,
 		layers:             layers,
 		contextualValidity: validity,
-		layerLocks:         make(map[LayerID]sync.Mutex),
+		layerLocks:         make(map[LayerID]sync.Mutex), //todo clean stale locks
 	}
 	return ll
 }
