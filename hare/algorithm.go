@@ -29,7 +29,7 @@ type State struct {
 	k           uint32              // the iteration number
 	ki          int32               // indicates when S was first committed upon
 	s           *Set                // the set of blocks
-	certificate *AggregatedMessages // the certificate
+	certificate *pb.Certificate // the certificate
 }
 
 type ConsensusProcess struct {
@@ -43,12 +43,12 @@ type ConsensusProcess struct {
 	network         NetworkService
 	startTime       time.Time // TODO: needed?
 	inbox           chan *pb.HareMessage
-	preRound        map[string]*pb.HareMessage
-	knowledge       []*pb.HareMessage
 	roundMsg        *pb.HareMessage
-	isConflicting   bool
-	isDecisionFinal bool
-	tracker         *RefCountTracker
+	preRoundTracker PreRoundTracker
+	round1Tracker	Round1Tracker
+	round2Tracker	Round2Tracker
+	round3Tracker	Round3Tracker
+	round4Tracker	Round4Tracker
 	// TODO: add knowledge of notify messages. What is the life-cycle of such messages? persistent according to Julian
 }
 
@@ -61,13 +61,13 @@ func NewConsensusProcess(key crypto.PublicKey, layer LayerId, s Set, oracle Rola
 	proc.oracle = oracle
 	proc.signing = signing
 	proc.network = p2p
-	proc.preRound = make(map[string]*pb.HareMessage, N)
-	proc.knowledge = make([]*pb.HareMessage, 0, InitialKnowledgeSize)
 	proc.roundMsg = nil
-	proc.tracker = NewRefCountTracker(N)
 	proc.roundMsg = nil
-	proc.isConflicting = false
-	proc.isDecisionFinal = false
+	proc.preRoundTracker = NewPreRoundTracker()
+	proc.round1Tracker = NewRound1Tracker()
+	proc.round2Tracker = NewRound2Tracker()
+	proc.round3Tracker = NewRound3Tracker()
+	proc.round4Tracker = NewRound4Tracker()
 
 	return proc
 }
@@ -114,7 +114,7 @@ PreRound:
 
 	// end of pre-round, update our set
 	for _, v := range proc.s.blocks {
-		if proc.tracker.CountStatus(v) < f+1 { // not enough witnesses
+		if !proc.preRoundTracker.CanProve(v) { // not enough witnesses
 			proc.s.Remove(v)
 		}
 	}
@@ -150,7 +150,12 @@ PreRound:
 
 func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
 	// Note: layer is already verified by the broker
-	// Currently we reject past/future messages
+
+	// TODO: think how to validate role (is it the same? just use Active?)
+	if MessageType(m.Message.Type) == PreRound {
+		proc.preRoundTracker.OnPreRound(m)
+		return
+	}
 
 	// verify iteration
 	if m.Message.K != proc.k {
@@ -176,18 +181,6 @@ func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
 		return
 	}
 
-	// TODO: think how to validate role (is it the same? just use Active?)
-	if MessageType(m.Message.Type) == PreRound {
-		// only handle first pre-round msg
-		if _, exist := proc.preRound[pub.String()]; exist {
-			log.Info("Duplicate sender of pre-round message")
-			return
-		}
-
-		proc.preRound[pub.String()] = m
-		return
-	}
-
 	// validate role
 	if !proc.oracle.ValidateRole(roleFromIteration(m.Message.K),
 		RoleRequest{pub, LayerId{NewBytes32(m.Message.Layer)}, m.Message.K},
@@ -198,8 +191,6 @@ func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
 
 	// continue process msg by round
 	proc.processMessageByRound(m)
-
-	proc.knowledge = append(proc.knowledge, m)
 }
 
 func (proc *ConsensusProcess) nextRound() {
@@ -213,21 +204,16 @@ func (proc *ConsensusProcess) nextRound() {
 		if err == nil { // no error, send msg
 			proc.network.Broadcast(ProtoName, m)
 		}
-
-		proc.roundMsg = nil
 	}
+	proc.roundMsg = nil
 
 	// advance to next round
 	proc.k++
 
-	// reset knowledge
-	proc.knowledge = make([]*pb.HareMessage, 0, InitialKnowledgeSize)
+	// TODO: init/reset trackers?
 }
 
 func (proc *ConsensusProcess) processMessageByRound(msg *pb.HareMessage) {
-	if proc.isDecisionFinal { // no process required
-		return
-	}
 
 	switch proc.k % 4 { // switch round
 	case 0: // end of round 1
@@ -272,9 +258,10 @@ func (proc *ConsensusProcess) setStatusMessage() error {
 	return nil
 }
 
-func (proc *ConsensusProcess) setProposalMessage() error {
+func (proc *ConsensusProcess) setProposalMessage(svp *pb.AggregatedMessages) error {
 	builder := NewMessageBuilder()
 	builder.SetType(Proposal).SetLayer(proc.layerId).SetIteration(proc.k).SetKi(proc.ki).SetBlocks(*proc.s)
+	builder.SetSVP(svp)
 	builder, err := builder.SetPubKey(proc.pubKey).Sign(proc.signing)
 
 	if err != nil {
@@ -284,6 +271,19 @@ func (proc *ConsensusProcess) setProposalMessage() error {
 	proc.roundMsg = builder.Build()
 
 	return nil
+}
+
+func (proc *ConsensusProcess) BuildNotifyMessage() (*pb.HareMessage, error) {
+	builder := NewMessageBuilder()
+	builder.SetType(Proposal).SetLayer(proc.layerId).SetIteration(proc.k).SetKi(proc.ki).SetBlocks(*proc.s)
+	builder.SetCertificate(proc.certificate)
+	builder, err := builder.SetPubKey(proc.pubKey).Sign(proc.signing)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return builder.Build(), nil
 }
 
 func roleFromIteration(k uint32) byte {
@@ -297,84 +297,55 @@ func roleFromIteration(k uint32) byte {
 func (proc *ConsensusProcess) processMsgPreRound(msg *pb.HareMessage) {
 	// TODO: validate sig
 	// TODO: validate role
-
-	pub, err := crypto.NewPublicKey(msg.PubKey)
-	if err != nil {
-		log.Warning("Could not construct public key: ", err.Error())
-		return
-	}
-
-	// only handle first pre-round msg
-	if _, exist := proc.preRound[pub.String()]; exist {
-		return
-	}
-
-	// record blocks from msg
-	s := NewSet(msg.Message.Blocks)
-	for _, v := range s.blocks {
-		proc.tracker.Track(v)
-	}
-
-	proc.preRound[pub.String()] = msg
+	proc.preRoundTracker.OnPreRound(msg)
 }
 
 func (proc *ConsensusProcess) processMsgRound1(msg *pb.HareMessage) {
-	// TODO: roundMsg?
+	proc.round1Tracker.OnStatus(msg)
 
-	if proc.certificate == nil { // empty cert means
-		proc.setStatusMessage()
-		return
+	if proc.round1Tracker.IsSVPReady() {
+		proc.setProposalMessage(proc.round1Tracker.GetSVP())
 	}
-
-	// TODO: record blocks from msg
-
-	if len(proc.knowledge) < f { // only record, wait for f+1 for decision
-		return
-	}
-
-	proc.knowledge = append(proc.knowledge, msg)
-	proc.setStatusMessage()
-	proc.isDecisionFinal = true
 }
 
 func (proc *ConsensusProcess) processMsgRound2(msg *pb.HareMessage) {
-	s := NewSet(msg.Message.Blocks)
+	proc.round2Tracker.OnProposal(msg)
 
-	for i := 0; i < len(proc.knowledge); i++ {
-		g := NewSet(proc.knowledge[i].Message.Blocks)
-		if !s.Equals(g) {
-			proc.isConflicting = true
-			break
-		}
+	if !proc.round2Tracker.HasValidProposal() {
+		proc.t = nil
+		return
 	}
 
-	proc.knowledge = append(proc.knowledge, msg)
-	proc.State.s = s
-	proc.setProposalMessage()
+	*proc.t = proc.round2Tracker.ProposedSet()
 }
 
 func (proc *ConsensusProcess) processMsgRound3(msg *pb.HareMessage) {
-	s := NewSet(msg.Message.Blocks)
-
-	count := 0
-	for i := 0; i < len(proc.knowledge); i++ {
-		g := NewSet(proc.knowledge[i].Message.Blocks)
-		if s.Equals(g) {
-			count++
-		}
+	if proc.round2Tracker.isConflicting {
+		proc.roundMsg = nil
+		return
 	}
 
-	proc.knowledge = append(proc.knowledge, msg)
-
-	if count == f+1 { //  we have enough commit messages on same S
-		if !proc.isConflicting { // verify no contradiction
-			proc.s = s // update s
-			proc.certificate = NewAggregatedMessages(proc.knowledge, Signature{})
-		}
+	if !proc.round3Tracker.HasEnoughCommits() {
+		return
 	}
+
+	proc.s = proc.t // commit to t
+	proc.certificate = proc.round3Tracker.BuildCertificate()
+	notifyMsg, err := proc.BuildNotifyMessage() // build notify with certificate
+
+	if err != nil {
+		log.Warning("Could not build notify message: ", err)
+		return
+	}
+
+	proc.roundMsg = notifyMsg
 }
 
 func (proc *ConsensusProcess) processMsgRound4(msg *pb.HareMessage) {
-	// TODO: if received notify for S with certificate C
-	// TODO: update state iff...
+	proc.round4Tracker.OnNotify(msg)
+
+	// TODO: consider doing it only on change ?
+	m := proc.round4Tracker.GetNotifyMsg()
+	proc.s = NewSet(m.Message.Blocks)
+	proc.certificate = m.Cert
 }

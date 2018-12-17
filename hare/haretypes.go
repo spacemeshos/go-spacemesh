@@ -92,6 +92,16 @@ func (s *Set) To2DSlice() [][]byte {
 	return slice
 }
 
+func (s *Set) Id() uint32 {
+	h := fnv.New32()
+
+	for _, v := range s.blocks {
+		h.Write(v.Bytes())
+	}
+
+	return h.Sum32()
+}
+
 type AggregatedMessages struct {
 	messages []*pb.HareMessage
 	aggSig   Signature
