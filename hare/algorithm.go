@@ -27,7 +27,7 @@ type NetworkService interface {
 
 type State struct {
 	k           uint32              // the iteration number
-	ki          int32              // indicates when S was first committed upon
+	ki          int32               // indicates when S was first committed upon
 	s           *Set                // the set of blocks
 	certificate *AggregatedMessages // the certificate
 }
@@ -37,13 +37,13 @@ type ConsensusProcess struct {
 	Closer // the consensus is closeable
 	pubKey          crypto.PublicKey
 	layerId         LayerId
-	t				*Set // loop local set
+	t               *Set    // loop local set
 	oracle          Rolacle // roles oracle
 	signing         Signing
 	network         NetworkService
 	startTime       time.Time // TODO: needed?
 	inbox           chan *pb.HareMessage
-	preRound		map[string]*pb.HareMessage
+	preRound        map[string]*pb.HareMessage
 	knowledge       []*pb.HareMessage
 	roundMsg        *pb.HareMessage
 	isConflicting   bool
@@ -93,8 +93,16 @@ func (proc *ConsensusProcess) createInbox(size uint32) chan *pb.HareMessage {
 func (proc *ConsensusProcess) eventLoop() {
 	log.Info("Start listening")
 
+	// build and send pre-round message
+	m, err := proc.buildPreRoundMessage()
+	if err != nil {
+		log.Error("could not build pre-round message")
+	}
+	proc.network.Broadcast(ProtoName, m)
+
+	// listen to pre-round messages
 	timer := time.NewTimer(RoundDuration)
-	PreRound:
+PreRound:
 	for {
 		select {
 		case msg := <-proc.inbox:
@@ -106,15 +114,22 @@ func (proc *ConsensusProcess) eventLoop() {
 
 	// end of pre-round, update our set
 	for _, v := range proc.s.blocks {
-		if proc.tracker.CountStatus(v) < f + 1 { // not enough witnesses
+		if proc.tracker.CountStatus(v) < f+1 { // not enough witnesses
 			proc.s.Remove(v)
 		}
 	}
 
-	// build and send pre-round message
-	m, err := proc.buildPreRoundMessage()
+	// set status to be sent in next round
+	if err := proc.setStatusMessage(); err != nil {
+		log.Error("Error setting status message: ", err.Error())
+		proc.Close()
+	}
+
+	// send status message
+	m, err = proto.Marshal(proc.roundMsg)
 	if err != nil {
-		log.Error("could not build pre-round message")
+		log.Error("Could not marshal status message")
+		proc.Close()
 	}
 	proc.network.Broadcast(ProtoName, m)
 
@@ -160,6 +175,19 @@ func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
 		log.Warning("Could not construct public key: ", err.Error())
 		return
 	}
+
+	// TODO: think how to validate role (is it the same? just use Active?)
+	if MessageType(m.Message.Type) == PreRound {
+		// only handle first pre-round msg
+		if _, exist := proc.preRound[pub.String()]; exist {
+			log.Info("Duplicate sender of pre-round message")
+			return
+		}
+
+		proc.preRound[pub.String()] = m
+		return
+	}
+
 	// validate role
 	if !proc.oracle.ValidateRole(roleFromIteration(m.Message.K),
 		RoleRequest{pub, LayerId{NewBytes32(m.Message.Layer)}, m.Message.K},
@@ -168,16 +196,8 @@ func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
 		return
 	}
 
-	if MessageType(m.Message.Type) == PreRound {
-		// only handle first pre-round msg
-		if _, exist := proc.preRound[pub.String()]; exist {
-			return
-		}
-
-		proc.preRound[pub.String()] = m
-	} else { // continue process msg by round
-		proc.processMessageByRound(m)
-	}
+	// continue process msg by round
+	proc.processMessageByRound(m)
 
 	proc.knowledge = append(proc.knowledge, m)
 }
@@ -187,8 +207,8 @@ func (proc *ConsensusProcess) nextRound() {
 
 	// check if message ready to send and check role to see if we should send
 	if proc.roundMsg != nil && proc.oracle.ValidateRole(roleFromIteration(proc.k),
-														RoleRequest{proc.pubKey, proc.layerId, proc.k},
-														Signature{}) {
+		RoleRequest{proc.pubKey, proc.layerId, proc.k},
+		Signature{}) {
 		m, err := proto.Marshal(proc.roundMsg)
 		if err == nil { // no error, send msg
 			proc.network.Broadcast(ProtoName, m)
@@ -210,14 +230,14 @@ func (proc *ConsensusProcess) processMessageByRound(msg *pb.HareMessage) {
 	}
 
 	switch proc.k % 4 { // switch round
-	case 0: // end of round 0
-		proc.processMsgRound0(msg)
-	case 1: // end of round 1
+	case 0: // end of round 1
 		proc.processMsgRound1(msg)
-	case 2: // end of round 2
+	case 1: // end of round 2
 		proc.processMsgRound2(msg)
-	case 3: // end of round 3
+	case 2: // end of round 3
 		proc.processMsgRound3(msg)
+	case 3: // end of round 4
+		proc.processMsgRound4(msg)
 	}
 }
 
@@ -246,11 +266,6 @@ func (proc *ConsensusProcess) setStatusMessage() error {
 	if err != nil {
 		return err
 	}
-
-	// TODO: try to build SVP based on msg
-
-	//s := proc.tracker.buildSet(f+1)
-	//builder.SetSVP(proc.knowledge)
 
 	proc.roundMsg = builder.Build()
 
@@ -303,17 +318,15 @@ func (proc *ConsensusProcess) processMsgPreRound(msg *pb.HareMessage) {
 	proc.preRound[pub.String()] = msg
 }
 
-func (proc *ConsensusProcess) processMsgRound0(msg *pb.HareMessage) {
+func (proc *ConsensusProcess) processMsgRound1(msg *pb.HareMessage) {
 	// TODO: roundMsg?
 
-	// if certificate empty then simple proposal of my S with no certificate
-	if proc.certificate == nil { // TODO: not good
+	if proc.certificate == nil { // empty cert means
 		proc.setStatusMessage()
 		return
 	}
 
 	// TODO: record blocks from msg
-
 
 	if len(proc.knowledge) < f { // only record, wait for f+1 for decision
 		return
@@ -324,7 +337,7 @@ func (proc *ConsensusProcess) processMsgRound0(msg *pb.HareMessage) {
 	proc.isDecisionFinal = true
 }
 
-func (proc *ConsensusProcess) processMsgRound1(msg *pb.HareMessage) {
+func (proc *ConsensusProcess) processMsgRound2(msg *pb.HareMessage) {
 	s := NewSet(msg.Message.Blocks)
 
 	for i := 0; i < len(proc.knowledge); i++ {
@@ -340,7 +353,7 @@ func (proc *ConsensusProcess) processMsgRound1(msg *pb.HareMessage) {
 	proc.setProposalMessage()
 }
 
-func (proc *ConsensusProcess) processMsgRound2(msg *pb.HareMessage) {
+func (proc *ConsensusProcess) processMsgRound3(msg *pb.HareMessage) {
 	s := NewSet(msg.Message.Blocks)
 
 	count := 0
@@ -361,7 +374,7 @@ func (proc *ConsensusProcess) processMsgRound2(msg *pb.HareMessage) {
 	}
 }
 
-func (proc *ConsensusProcess) processMsgRound3(msg *pb.HareMessage) {
+func (proc *ConsensusProcess) processMsgRound4(msg *pb.HareMessage) {
 	// TODO: if received notify for S with certificate C
 	// TODO: update state iff...
 }
