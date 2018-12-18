@@ -77,9 +77,6 @@ func TestConsensusProcess_handleMessage(t *testing.T) {
 	m := x.Build()
 
 	proc.handleMessage(m)
-	assert.Equal(t, 1, len(proc.knowledge))
-	proc.nextRound()
-	assert.Equal(t, 0, len(proc.knowledge))
 }
 
 func TestConsensusProcess_nextRound(t *testing.T) {

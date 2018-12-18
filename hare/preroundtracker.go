@@ -7,14 +7,16 @@ import (
 )
 
 type PreRoundTracker struct {
-	preRound map[string]*pb.HareMessage
-	tracker  *RefCountTracker
+	preRound  map[string]*pb.HareMessage
+	tracker   *RefCountTracker
+	threshold uint32
 }
 
-func NewPreRoundTracker() PreRoundTracker {
+func NewPreRoundTracker(threshold uint32) PreRoundTracker {
 	pre := PreRoundTracker{}
 	pre.preRound = make(map[string]*pb.HareMessage, N)
 	pre.tracker = NewRefCountTracker(N)
+	pre.threshold = threshold
 
 	return pre
 }
@@ -41,7 +43,7 @@ func (pre *PreRoundTracker) OnPreRound(msg *pb.HareMessage) {
 }
 
 func (pre *PreRoundTracker) CanProveBlock(blockId BlockId) bool {
-	return pre.tracker.CountStatus(blockId) >= f+1
+	return pre.tracker.CountStatus(blockId) >= pre.threshold
 }
 
 func (pre *PreRoundTracker) CanProveSet(set *Set) bool {

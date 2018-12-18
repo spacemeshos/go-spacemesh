@@ -85,6 +85,7 @@ func (s *Set) To2DSlice() [][]byte {
 	slice := make([][]byte, len(s.blocks))
 	i := 0
 	for _, v := range s.blocks {
+		slice[i] = make([]byte, 32)
 		copy(slice[i], v.Bytes())
 		i++
 	}

@@ -11,8 +11,13 @@ func NewRefCountTracker(size uint32) *RefCountTracker {
 	return t
 }
 
-func (tracker *RefCountTracker) CountStatus(id BlockId) uint32 {
-	return tracker.table[id.Id()]
+func (tracker *RefCountTracker) CountStatus(id Identifiable) uint32 {
+	count, exist := tracker.table[id.Id()]
+	if !exist {
+		return 0
+	}
+
+	return count
 }
 
 func (tracker *RefCountTracker) Track(id Identifiable) {
@@ -22,16 +27,4 @@ func (tracker *RefCountTracker) Track(id Identifiable) {
 	}
 
 	tracker.table[id.Id()]++
-}
-
-// TODO: probably not needed
-func (tracker *RefCountTracker) buildSet(threshold uint32) *Set {
-	s := NewEmptySet()
-	/*for bid := range tracker.table {
-		if bid > threshold {
-			s.Add(bid)
-		}
-	}*/
-
-	return s
 }

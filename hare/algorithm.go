@@ -61,7 +61,7 @@ func NewConsensusProcess(key crypto.PublicKey, layer LayerId, s Set, oracle Rola
 	proc.signing = signing
 	proc.network = p2p
 	proc.roundMsg = nil
-	proc.preRoundTracker = NewPreRoundTracker()
+	proc.preRoundTracker = NewPreRoundTracker(f+1)
 	proc.statusesTracker = NewStatusTracker()
 	proc.proposalTracker = NewProposalTracker()
 	proc.commitTracker = NewCommitTracker()
