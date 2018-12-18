@@ -55,5 +55,3 @@ func (pre *PreRoundTracker) CanProveSet(set *Set) bool {
 
 	return true
 }
-
-

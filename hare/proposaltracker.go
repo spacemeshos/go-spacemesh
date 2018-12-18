@@ -1,42 +1,33 @@
 package hare
 
 import (
-	"github.com/spacemeshos/go-spacemesh/crypto"
+	"bytes"
 	"github.com/spacemeshos/go-spacemesh/hare/pb"
-	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 type ProposalTracker struct {
-	proposals map[string]*pb.HareMessage
+	proposal      *pb.HareMessage
 	isConflicting bool
 }
 
 func NewProposalTracker() ProposalTracker {
-	r2 := ProposalTracker{}
-	r2.proposals = make(map[string]*pb.HareMessage, N)
-	r2.isConflicting = false
+	pt := ProposalTracker{}
+	pt.proposal = nil
+	pt.isConflicting = false
 
-	return r2
+	return pt
 }
 
 func (pt *ProposalTracker) OnProposal(msg *pb.HareMessage) {
-	pub, err := crypto.NewPublicKey(msg.PubKey)
-	if err != nil {
-		log.Warning("Could not construct public key: ", err.Error())
+	if pt.proposal == nil {
+		pt.proposal = msg
 		return
 	}
 
 	s := NewSet(msg.Message.Blocks)
-
-	p, exist := pt.proposals[pub.String()]
-	if !exist { // should record
-		pt.proposals[pub.String()] = msg
-		return
-	}
-
-	// same pub key, verify same set
-	g := NewSet(p.Message.Blocks)
-	if !s.Equals(g) {
+	g := NewSet(pt.proposal.Message.Blocks)
+	if bytes.Equal(msg.PubKey, pt.proposal.PubKey) && !s.Equals(g) {
+		// same pubKey, not same set
 		pt.isConflicting = true
 	}
 }
@@ -45,6 +36,6 @@ func (pt *ProposalTracker) HasValidProposal() bool {
 	return pt.isConflicting
 }
 
-func (pt *ProposalTracker) ProposedSet() Set {
-	return Set{}
+func (pt *ProposalTracker) ProposedSet() *Set {
+	return NewSet(pt.proposal.Message.Blocks)
 }

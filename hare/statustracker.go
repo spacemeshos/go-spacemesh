@@ -7,7 +7,7 @@ import (
 )
 
 type StatusTracker struct {
-	statuses map[string]*pb.HareMessage
+	statuses  map[string]*pb.HareMessage
 	threshold int
 }
 

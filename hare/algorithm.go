@@ -314,7 +314,7 @@ func (proc *ConsensusProcess) processProposalMsg(msg *pb.HareMessage) {
 		return
 	}
 
-	*proc.t = proc.proposalTracker.ProposedSet()
+	proc.t = proc.proposalTracker.ProposedSet()
 }
 
 func (proc *ConsensusProcess) processCommitMsg(msg *pb.HareMessage) {
