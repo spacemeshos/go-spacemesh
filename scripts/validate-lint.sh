@@ -1,6 +1,6 @@
 #!/bin/bash
 
-pkgs=`go list ./... | grep -vF /vendor/`
+pkgs=`go list ./...`
 
 #output=`go vet $pkgs` TODO: grep -B does'nt work with grep -v
 #if [ "$output" != "" ]; then

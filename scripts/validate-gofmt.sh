@@ -1,7 +1,7 @@
 #!/bin/bash
 
 import_path="github.com/spacemeshos/go-spacemesh"
-pkgs=`go list ./... | grep -vF vendor/`
+pkgs=`go list ./...`
 rootdir_files=`ls *.go`
 ignored_pkgs="."
 

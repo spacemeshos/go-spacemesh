@@ -20,12 +20,12 @@ echo "extracting..."
 unzip -u protoc.zip -d protoc3
 
 # Move protoc to /usr/local/bin/
-echo "moving bin to /usr/local/"
+echo "moving bin/protoc to /usr/local/bin/protoc"
 mv protoc3/bin/* /usr/local/bin/
 
 # Move protoc3/include to /usr/local/include/
 echo "syncing include to /usr/local/include"
-rsync -a protoc3/include/ /usr/local/include/
+rsync -r protoc3/include/ /usr/local/include/
 
 # Cleanup
 echo "cleaning up..."
