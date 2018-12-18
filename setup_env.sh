@@ -1,25 +1,26 @@
 #!/bin/bash -e
-./ci/install-protobuf.sh
+./scripts/install-protobuf.sh
 
-echo "getting grpc-gateway..."
-if [ -d "$GOPATH/src/github.com/golang/protobuf" ]; then
-    pushd . > /dev/null && cd $GOPATH/src/github.com/golang/protobuf && git checkout -q master
-    popd > /dev/null
-fi
-go get -u github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway
-go get -u github.com/grpc-ecosystem/grpc-gateway/protoc-gen-swagger
-
-echo "fixing protobuf version..."
-pushd . > /dev/null && cd $GOPATH/src/github.com/golang/protobuf && git checkout -q v1.2.0
-popd > /dev/null
-
+protobuf_path=$(go list -m -f '{{.Dir}}' github.com/golang/protobuf)
 echo "installing protoc-gen-go..."
-go install github.com/golang/protobuf/protoc-gen-go
-protoc --version
+go install $protobuf_path/protoc-gen-go
 
-./ci/genproto.sh
+# Current version of grpc_gateway does not support go modules, so we install it to the gopath
+# TODO: Follow this issue: https://github.com/grpc-ecosystem/grpc-gateway/issues/755
 
-echo "running govendor sync..."
-go get -u github.com/kardianos/govendor
-govendor sync
+#grpc_gateway_path=$(go list -m -f '{{.Dir}}' github.com/grpc-ecosystem/grpc-gateway)
+#echo "installing protoc-gen-grpc-gateway"
+#go install $grpc_gateway_path/protoc-gen-grpc-gateway
+#
+#echo "installing protoc-gen-swagger"
+#go install $grpc_gateway_path/protoc-gen-swagger
+
+echo "setting GO111MODULE=off to install some legacy deps"
+GO111MODULE=off
+echo "installing protoc-gen-grpc-gateway"
+go get github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway
+echo "installing protoc-gen-swagger"
+go get github.com/grpc-ecosystem/grpc-gateway/protoc-gen-swagger
+GO111MODULE=on
+
 echo "setup complete 🎉"
