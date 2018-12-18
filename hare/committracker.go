@@ -36,14 +36,19 @@ func (ct *CommitTracker) OnCommit(msg *pb.HareMessage) {
 
 	s := NewSet(msg.Message.Blocks)
 
-	// add to msgs array (create if necessary)
-	arr, exist := ct.commits[s.Id()]
+	// create array if necessary
+	_, exist := ct.commits[s.Id()]
 	if !exist {
 		ct.commits[s.Id()] = make([]*pb.HareMessage, 0, f+1)
-		ct.commits[s.Id()] = append(ct.commits[s.Id()], msg)
-	} else {
-		arr = append(arr, msg)
 	}
+
+	arr, _ := ct.commits[s.Id()]
+	if len(arr) == f+1 { // done, we already have f+1 commits
+		return
+	}
+
+	// add msg
+	arr = append(arr, msg)
 
 	if len(ct.commits[s.Id()]) > len(ct.commits[ct.maxSet.Id()]) {
 		ct.maxSet = s
@@ -60,6 +65,11 @@ func (ct *CommitTracker) HasEnoughCommits() bool {
 
 func (ct *CommitTracker) BuildCertificate() *pb.Certificate {
 	c := &pb.Certificate{}
+
+	c.AggMsgs.Messages = ct.commits[ct.maxSet.Id()]
+	c.Blocks = ct.commits[ct.maxSet.Id()][0].Message.Blocks
+	// TODO: set c.AggMsgs.AggSig
+	// TODO: optimize msg size by setting blocks to nil
 
 	return c
 }

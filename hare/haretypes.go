@@ -48,7 +48,7 @@ type Set struct {
 
 func NewEmptySet() *Set {
 	s := &Set{}
-	s.blocks = make(map[uint32]BlockId, 0)
+	s.blocks = make(map[uint32]BlockId, layerSize)
 
 	return s
 }

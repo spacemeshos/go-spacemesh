@@ -35,11 +35,26 @@ func (st *StatusTracker) RecordStatus(msg *pb.HareMessage) {
 }
 
 func (st *StatusTracker) IsSVPReady() bool {
-	return len(st.statuses) >= f+1
+	return len(st.statuses) == f+1
+}
+
+func (st *StatusTracker) BuildUnionSet() *Set {
+	unionSet := NewEmptySet()
+	for _, m := range st.statuses {
+		for _, buff := range m.Message.Blocks {
+			unionSet.Add(BlockId{NewBytes32(buff)})
+		}
+	}
+
+	return unionSet
 }
 
 func (st *StatusTracker) BuildSVP() *pb.AggregatedMessages {
 	svp := &pb.AggregatedMessages{}
+
+	for _, m := range st.statuses {
+		svp.Messages = append(svp.Messages, m)
+	}
 
 	return svp
 }

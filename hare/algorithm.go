@@ -14,6 +14,7 @@ const ProtoName = "HARE_PROTOCOL"
 const RoundDuration = time.Second * time.Duration(15)
 const N = 800
 const f = 400
+const layerSize = 200
 
 type Byteable interface {
 	Bytes() []byte
