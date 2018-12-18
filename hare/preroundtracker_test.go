@@ -8,8 +8,9 @@ import (
 )
 
 const (
-	k = 1
-	ki = -1
+	k           = 1
+	ki          = -1
+	lowThresh10 = 10
 )
 
 var blockId1 = BlockId{Bytes32{1}}
@@ -32,7 +33,7 @@ func TestPreRoundTracker_OnPreRound(t *testing.T) {
 	pubKey := getPublicKey(t)
 
 	m1 := BuildPreRoundMsg(t, pubKey, s)
-	tracker := NewPreRoundTracker(f+1)
+	tracker := NewPreRoundTracker(lowThresh10)
 	tracker.OnPreRound(m1)
 	assert.Equal(t, 1, len(tracker.preRound)) // one msg
 	assert.Equal(t, 2, len(tracker.tracker.table)) // two blocks
@@ -47,9 +48,9 @@ func TestPreRoundTracker_CanProveBlockAndSet(t *testing.T) {
 	s := NewEmptySet()
 	s.Add(blockId1)
 	s.Add(blockId2)
-	tracker := NewPreRoundTracker(f+1)
+	tracker := NewPreRoundTracker(lowThresh10)
 
-	for i:=0;i<f+1;i++ {
+	for i:=0;i< lowThresh10;i++ {
 		m1 := BuildPreRoundMsg(t, getPublicKey(t), s)
 		tracker.OnPreRound(m1)
 	}

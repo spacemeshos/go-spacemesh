@@ -8,10 +8,15 @@ import (
 
 type StatusTracker struct {
 	statuses map[string]*pb.HareMessage
+	threshold int
 }
 
-func NewStatusTracker() StatusTracker {
-	return StatusTracker{}
+func NewStatusTracker(threshold int) StatusTracker {
+	st := StatusTracker{}
+	st.statuses = make(map[string]*pb.HareMessage, N)
+	st.threshold = threshold
+
+	return st
 }
 
 func (st *StatusTracker) RecordStatus(msg *pb.HareMessage) {
@@ -35,7 +40,7 @@ func (st *StatusTracker) RecordStatus(msg *pb.HareMessage) {
 }
 
 func (st *StatusTracker) IsSVPReady() bool {
-	return len(st.statuses) == f+1
+	return len(st.statuses) == st.threshold
 }
 
 func (st *StatusTracker) BuildUnionSet() *Set {

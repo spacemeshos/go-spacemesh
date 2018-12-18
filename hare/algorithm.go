@@ -62,7 +62,7 @@ func NewConsensusProcess(key crypto.PublicKey, layer LayerId, s Set, oracle Rola
 	proc.network = p2p
 	proc.roundMsg = nil
 	proc.preRoundTracker = NewPreRoundTracker(f+1)
-	proc.statusesTracker = NewStatusTracker()
+	proc.statusesTracker = NewStatusTracker(f+1)
 	proc.proposalTracker = NewProposalTracker()
 	proc.commitTracker = NewCommitTracker()
 	proc.notifyTracker = NewNotifyTracker()
@@ -209,7 +209,7 @@ func (proc *ConsensusProcess) nextRound() {
 	// reset trackers
 	switch proc.k % 4 { // switch end of current round
 	case 0:                                       // 0 is round 1
-		proc.statusesTracker = NewStatusTracker() // reset statuses tracking
+		proc.statusesTracker = NewStatusTracker(f+1) // reset statuses tracking
 	case 2:                                         // 2 is round 3
 		proc.proposalTracker = NewProposalTracker() // reset proposal tracking
 		proc.commitTracker = NewCommitTracker()     // reset commits tracking
