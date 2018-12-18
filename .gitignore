@@ -27,3 +27,4 @@ vendor/*/*
 **/pb/*.pb.go
 **/pb/*.pb.gw.go
 **/pb/*.swagger.json
+database/data
