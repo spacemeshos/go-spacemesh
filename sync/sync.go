@@ -26,9 +26,9 @@ type Configuration struct {
 type Syncer struct {
 	peers     Peers
 	layers    mesh.Mesh
-	sv        BlockValidator //todo should not be here
+	bv        BlockValidator //todo should not be here
 	config    Configuration
-	p         *server.MessageServer
+	msgServer *server.MessageServer
 	SyncLock  uint32
 	startLock uint32
 	forceSync chan bool
@@ -50,8 +50,7 @@ const (
 	BLOCK      server.MessageType = 1
 	LAYER_HASH server.MessageType = 2
 	LAYER_IDS  server.MessageType = 3
-
-	protocol = "/sync/fblock/1.0/"
+	protocol                      = "/sync/fblock/1.0/"
 )
 
 func (s *Syncer) IsSynced() bool {
@@ -70,21 +69,23 @@ func (s *Syncer) Start() {
 	}
 }
 
-func NewSync(peers Peers, layers mesh.Mesh, bv BlockValidator, conf Configuration) *Syncer {
+//fires a sync every sm.config.syncInterval or on force space from outside
 
-	s := Syncer{peers,
-		layers,
-		bv,
-		conf,
-		server.NewMsgServer(peers, protocol, time.Second*5),
-		0,
-		0,
-		make(chan bool),
-		make(chan struct{})}
+func NewSync(peers Peers, srv server.ServerService, layers mesh.Mesh, bv BlockValidator, conf Configuration) *Syncer {
+	s := Syncer{
+		peers:     peers,
+		layers:    layers,
+		msgServer: server.NewMsgServer(srv, protocol, time.Second*5),
+		bv:        bv,
+		config:    conf,
+		SyncLock:  0,
+		startLock: 0,
+		forceSync: make(chan bool),
+		exit:      make(chan struct{})}
 
-	s.p.RegisterMsgHandler(LAYER_HASH, s.layerHashRequestHandler)
-	s.p.RegisterMsgHandler(BLOCK, s.blockRequestHandler)
-	s.p.RegisterMsgHandler(LAYER_IDS, s.layerIdsRequestHandler)
+	s.msgServer.RegisterMsgHandler(LAYER_HASH, s.layerHashRequestHandler)
+	s.msgServer.RegisterMsgHandler(BLOCK, s.blockRequestHandler)
+	s.msgServer.RegisterMsgHandler(LAYER_IDS, s.layerIdsRequestHandler)
 
 	return &s
 }
@@ -92,6 +93,7 @@ func NewSync(peers Peers, layers mesh.Mesh, bv BlockValidator, conf Configuratio
 //fires a sync every sm.config.syncInterval or on force space from outside
 func (s *Syncer) run() {
 	syncTicker := time.NewTicker(s.config.syncInterval)
+
 	for {
 		doSync := false
 		select {
@@ -101,8 +103,6 @@ func (s *Syncer) run() {
 		case doSync = <-s.forceSync:
 		case <-syncTicker.C:
 			doSync = true
-		default:
-			doSync = false
 		}
 		if doSync {
 			go func() {
@@ -127,7 +127,7 @@ func (s *Syncer) maxSyncLayer() uint32 {
 func (s *Syncer) Synchronise() {
 	for i := s.layers.LatestIrreversible(); i < s.maxSyncLayer(); i++ {
 		blockIds, err := s.getLayerBlockIDs(mesh.LayerID(i)) //returns a set of all known blocks in the mesh
-		if err != nil {
+		if err != nil || len(blockIds) == 0 {
 			log.Error("could not get layer block ids: ", err)
 			log.Debug("synchronise failed, local layer index is ", s.layers.LatestIrreversible())
 			return
@@ -143,7 +143,7 @@ func (s *Syncer) Synchronise() {
 					for _, p := range s.peers.GetPeers() {
 						if bCh, err := s.sendBlockRequest(p, mesh.BlockID(id)); err == nil {
 							b := <-bCh
-							if b != nil && s.sv.ValidateBlock(b) { //some validation testing
+							if b != nil && s.bv.ValidateBlock(b) { //some validation testing
 								output <- b
 								break
 							}
@@ -163,7 +163,7 @@ func (s *Syncer) Synchronise() {
 			blocks = append(blocks, block)
 		}
 
-		log.Debug("add layer ", i)
+		log.Debug("add layer ", i, " number of blocks found ", len(blocks))
 
 		s.layers.AddLayer(mesh.NewExistingLayer(mesh.LayerID(i), blocks))
 	}
@@ -197,7 +197,7 @@ func (s *Syncer) sendBlockRequest(peer Peer, id mesh.BlockID) (chan *mesh.Block,
 		ch <- mesh.NewExistingBlock(mesh.BlockID(data.Block.GetId()), mesh.LayerID(data.Block.GetLayer()), nil)
 	}
 
-	return ch, s.p.SendAsyncRequest(BLOCK, payload, peer, foo)
+	return ch, s.msgServer.SendAsyncRequest(BLOCK, payload, peer, foo)
 }
 
 func (s *Syncer) getLayerBlockIDs(index mesh.LayerID) (chan mesh.BlockID, error) {
@@ -314,7 +314,7 @@ func (s *Syncer) sendLayerHashRequest(peer Peer, layer mesh.LayerID, ch chan pee
 		}
 		ch <- peerHashPair{peer: peer, hash: res.Hash}
 	}
-	return ch, s.p.SendAsyncRequest(LAYER_HASH, payload, peer, foo)
+	return ch, s.msgServer.SendAsyncRequest(LAYER_HASH, payload, peer, foo)
 }
 
 func (s *Syncer) sendLayerIDsRequest(peer Peer, idx mesh.LayerID, ch chan []uint32) (chan []uint32, error) {
@@ -336,7 +336,7 @@ func (s *Syncer) sendLayerIDsRequest(peer Peer, idx mesh.LayerID, ch chan []uint
 		ch <- data.Ids
 	}
 
-	return ch, s.p.SendAsyncRequest(LAYER_IDS, payload, peer, foo)
+	return ch, s.msgServer.SendAsyncRequest(LAYER_IDS, payload, peer, foo)
 }
 
 func (s *Syncer) blockRequestHandler(msg []byte) []byte {
