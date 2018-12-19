@@ -2,26 +2,31 @@ language: go
 sudo: false
 go: 1.11.x
 
-env:
-  - GO111MODULE=on
+env: GO111MODULE=on
 
-before_install:
-  # for some reason /usr/local is owned by a different user in travis, so we transfer ownership to the current user:
-  - sudo chown -R $(whoami) /usr/local
-  - make prepare
+# for some reason /usr/local is owned by a different user in travis, so we transfer ownership to the current user:
+before_install: sudo chown -R $(whoami) /usr/local
+
+install: make install
 
 branches:
   only:
   - develop
+
 jobs:
   include:
-  - stage: lint
-    script:
-      - make lint
   - stage: test
+    name: lint
+    install: true # this skips the installation step
+    script: make lint
+  - name: test
     script:
       - make genproto
       - make test
+  - name: test-tidy
+    script:
+      - make genproto
+      - make test-tidy
 
 cache:
   directories:
