@@ -81,7 +81,7 @@ Since the project uses Go 1.11's Modules it's best to place the code **outside**
 ### Setting Up Local Environment
 Before building we need to install `protoc` (ProtoBuf compiler) and some tools required to generate ProtoBufs. Do this by running:
 ```bash
-make prepare
+make install
 ```
 This will invoke `setup_env.sh` which supports Linux and MacOS. On other platforms it should be straightforward to follow the steps in this script manually.
 
