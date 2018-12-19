@@ -15,11 +15,11 @@ branches:
 
 jobs:
   include:
-  - stage: lint
+  - stage: test
+    name: lint
     install: true # this skips the installation step
     script: make lint
-  - stage: test
-    name: test
+  - name: test
     script:
       - make genproto
       - make test
