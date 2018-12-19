@@ -11,7 +11,7 @@ LDFLAGS = -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.
 
 PKGS = $(shell go list ./...)
 
-platforms := windows linux darwin
+PLATFORMS := windows linux darwin
 os = $(word 1, $@)
 
 all: install build
@@ -34,10 +34,10 @@ tidy:
 	go mod tidy
 .PHONY: tidy
 
-$(platforms):
+$(PLATFORMS):
 	make genproto
 	GOOS=$(os) GOARCH=amd64 go build ${LDFLAGS} -o $(BIN_DIR)/$(BINARY)-$(VERSION)-$(os)-amd64
-.PHONY: $(platforms)
+.PHONY: $(PLATFORMS)
 
 test:
 	go test -p 1 ./...
