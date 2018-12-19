@@ -9,7 +9,7 @@ import (
 
 func BuildStatusMsg(t *testing.T, pubKey crypto.PublicKey, s *Set) *pb.HareMessage {
 	builder := NewMessageBuilder()
-	builder.SetType(Status).SetLayer(*Layer1).SetIteration(k).SetKi(ki).SetBlocks(*s)
+	builder.SetType(Status).SetLayer(*Layer1).SetIteration(k).SetKi(ki).SetBlocks(s)
 	builder, err := builder.SetPubKey(pubKey).Sign(NewMockSigning())
 	assert.Nil(t, err)
 
@@ -32,4 +32,14 @@ func TestStatusTracker_RecordStatus(t *testing.T) {
 	}
 
 	assert.True(t, tracker.IsSVPReady())
+}
+
+func TestStatusTracker_BuildUnionSet(t *testing.T) {
+	tracker := NewStatusTracker(lowThresh10)
+
+	s := NewEmptySet()
+	s.Add(blockId1)
+	s.Add(blockId2)
+	m := BuildStatusMsg(t, generatePubKey(t), s)
+	tracker.RecordStatus(m)
 }

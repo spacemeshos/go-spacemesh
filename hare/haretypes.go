@@ -1,7 +1,6 @@
 package hare
 
 import (
-	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"hash/fnv"
 )
 
@@ -64,6 +63,11 @@ func NewSet(data [][]byte) *Set {
 	return s
 }
 
+func (s *Set) Contains(id BlockId) bool {
+	_, exist := s.blocks[id.Id()]
+	return exist
+}
+
 func (s *Set) Add(id BlockId) {
 	if _, exist := s.blocks[id.Id()]; exist {
 		return
@@ -110,42 +114,4 @@ func (s *Set) Id() uint32 {
 	}
 
 	return h.Sum32()
-}
-
-type AggregatedMessages struct {
-	messages []*pb.HareMessage
-	aggSig   Signature
-}
-
-func NewAggregatedMessages(msgs []*pb.HareMessage, aggSig Signature) *AggregatedMessages {
-	m := &AggregatedMessages{}
-	m.messages = msgs
-	m.aggSig = aggSig
-
-	return m
-}
-
-func AggregatedMessagesFromProto(p *pb.AggregatedMessages) *AggregatedMessages {
-	m := &AggregatedMessages{}
-
-	m.messages = make([]*pb.HareMessage, len(p.Messages))
-	for i := 0; i < len(p.Messages); i++ {
-		m.messages[i] = p.Messages[i]
-	}
-	m.aggSig = make([]byte, len(p.AggSig))
-	copy(m.aggSig, p.AggSig)
-
-	return m
-}
-
-func (agg *AggregatedMessages) ToProto() *pb.AggregatedMessages {
-	m := &pb.AggregatedMessages{}
-	m.Messages = agg.messages
-	m.AggSig = agg.aggSig
-
-	return m
-}
-
-func (agg *AggregatedMessages) Validate() bool {
-	return true
 }

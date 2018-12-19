@@ -64,7 +64,7 @@ func (builder *MessageBuilder) SetKi(ki int32) *MessageBuilder {
 	return builder
 }
 
-func (builder *MessageBuilder) SetBlocks(set Set) *MessageBuilder {
+func (builder *MessageBuilder) SetBlocks(set *Set) *MessageBuilder {
 	builder.inner.Blocks = set.To2DSlice()
 	return builder
 }

@@ -283,7 +283,7 @@ func (proc *ConsensusProcess) nextRound() {
 
 func (proc *ConsensusProcess) buildPreRoundMessage() ([]byte, error) {
 	builder := NewMessageBuilder()
-	builder.SetType(PreRound).SetLayer(proc.layerId).SetIteration(proc.k).SetKi(proc.ki).SetBlocks(*proc.s)
+	builder.SetType(PreRound).SetLayer(proc.layerId).SetIteration(proc.k).SetKi(proc.ki).SetBlocks(proc.s)
 	builder, err := builder.SetPubKey(proc.pubKey).Sign(proc.signing)
 
 	if err != nil {
@@ -300,7 +300,7 @@ func (proc *ConsensusProcess) buildPreRoundMessage() ([]byte, error) {
 
 func (proc *ConsensusProcess) setStatusMessage() error {
 	builder := NewMessageBuilder()
-	builder.SetType(Status).SetLayer(proc.layerId).SetIteration(proc.k).SetKi(proc.ki).SetBlocks(*proc.s)
+	builder.SetType(Status).SetLayer(proc.layerId).SetIteration(proc.k).SetKi(proc.ki).SetBlocks(proc.s)
 	builder, err := builder.SetPubKey(proc.pubKey).Sign(proc.signing)
 
 	if err != nil {
@@ -314,7 +314,7 @@ func (proc *ConsensusProcess) setStatusMessage() error {
 
 func (proc *ConsensusProcess) setProposalMessage(svp *pb.AggregatedMessages) error {
 	builder := NewMessageBuilder()
-	builder.SetType(Proposal).SetLayer(proc.layerId).SetIteration(proc.k).SetKi(proc.ki).SetBlocks(*proc.s)
+	builder.SetType(Proposal).SetLayer(proc.layerId).SetIteration(proc.k).SetKi(proc.ki).SetBlocks(proc.statusesTracker.BuildUnionSet())
 	builder.SetSVP(svp)
 	builder, err := builder.SetPubKey(proc.pubKey).Sign(proc.signing)
 
@@ -329,7 +329,7 @@ func (proc *ConsensusProcess) setProposalMessage(svp *pb.AggregatedMessages) err
 
 func (proc *ConsensusProcess) buildNotifyMessage() (*pb.HareMessage, error) {
 	builder := NewMessageBuilder()
-	builder.SetType(Proposal).SetLayer(proc.layerId).SetIteration(proc.k).SetKi(proc.ki).SetBlocks(*proc.s)
+	builder.SetType(Proposal).SetLayer(proc.layerId).SetIteration(proc.k).SetKi(proc.ki).SetBlocks(proc.s)
 	builder.SetCertificate(proc.certificate)
 	builder, err := builder.SetPubKey(proc.pubKey).Sign(proc.signing)
 

@@ -19,7 +19,7 @@ var blockId3 = BlockId{Bytes32{3}}
 
 func BuildPreRoundMsg(t *testing.T, pubKey crypto.PublicKey, s *Set) *pb.HareMessage {
 	builder := NewMessageBuilder()
-	builder.SetType(PreRound).SetLayer(*Layer1).SetIteration(k).SetKi(ki).SetBlocks(*s)
+	builder.SetType(PreRound).SetLayer(*Layer1).SetIteration(k).SetKi(ki).SetBlocks(s)
 	builder, err := builder.SetPubKey(pubKey).Sign(NewMockSigning())
 	assert.Nil(t, err)
 
@@ -51,6 +51,7 @@ func TestPreRoundTracker_CanProveBlockAndSet(t *testing.T) {
 	tracker := NewPreRoundTracker(lowThresh10)
 
 	for i := 0; i < lowThresh10; i++ {
+		assert.False(t, tracker.CanProveSet(s))
 		m1 := BuildPreRoundMsg(t, generatePubKey(t), s)
 		tracker.OnPreRound(m1)
 	}

@@ -47,7 +47,10 @@ func (st *StatusTracker) BuildUnionSet() *Set {
 	unionSet := NewEmptySet()
 	for _, m := range st.statuses {
 		for _, buff := range m.Message.Blocks {
-			unionSet.Add(BlockId{NewBytes32(buff)})
+			bid := BlockId{NewBytes32(buff)}
+			if !unionSet.Contains(bid) {
+				unionSet.Add(bid)
+			}
 		}
 	}
 
@@ -60,6 +63,8 @@ func (st *StatusTracker) BuildSVP() *pb.AggregatedMessages {
 	for _, m := range st.statuses {
 		svp.Messages = append(svp.Messages, m)
 	}
+
+	// TODO: set aggregated signature
 
 	return svp
 }
