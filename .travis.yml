@@ -19,10 +19,11 @@ jobs:
     install: true # this skips the installation step
     script: make lint
   - stage: test
+    name: test
     script:
       - make genproto
       - make test
-  - stage: tidy
+  - name: test-tidy
     script:
       - make genproto
       - make test-tidy
