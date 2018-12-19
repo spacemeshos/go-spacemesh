@@ -43,9 +43,7 @@ func (pt *ProposalTracker) OnProposal(msg *pb.HareMessage) {
 func (pt *ProposalTracker) getLeader() (string, bool) {
 	// TODO: later it should actually get the minimum over role proofs
 	for pubKey := range pt.proposals {
-		if !pt.isConflicting[pubKey] {
-			return pubKey, true
-		}
+		return pubKey, true
 	}
 
 	return "", false
@@ -53,7 +51,7 @@ func (pt *ProposalTracker) getLeader() (string, bool) {
 
 func (pt *ProposalTracker) IsConflicting() bool {
 	leader, found := pt.getLeader()
-	if found {
+	if !found {
 		return false
 	}
 

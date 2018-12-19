@@ -15,6 +15,7 @@ const (
 
 var blockId1 = BlockId{Bytes32{1}}
 var blockId2 = BlockId{Bytes32{2}}
+var blockId3 = BlockId{Bytes32{3}}
 
 func BuildPreRoundMsg(t *testing.T, pubKey crypto.PublicKey, s *Set) *pb.HareMessage {
 	builder := NewMessageBuilder()

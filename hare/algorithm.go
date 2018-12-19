@@ -49,7 +49,7 @@ type ConsensusProcess struct {
 	proposalTracker ProposalTracker
 	commitTracker   CommitTracker
 	notifyTracker   NotifyTracker
-	terminating		bool
+	terminating     bool
 }
 
 func NewConsensusProcess(key crypto.PublicKey, layer LayerId, s Set, oracle Rolacle, signing Signing, p2p NetworkService) *ConsensusProcess {
@@ -63,7 +63,7 @@ func NewConsensusProcess(key crypto.PublicKey, layer LayerId, s Set, oracle Rola
 	proc.network = p2p
 	proc.roundMsg = nil
 	proc.preRoundTracker = NewPreRoundTracker(f + 1)
-	proc.statusesTracker = NewStatusTracker()
+	proc.statusesTracker = NewStatusTracker(f + 1)
 	proc.proposalTracker = NewProposalTracker()
 	proc.commitTracker = NewCommitTracker()
 	proc.notifyTracker = NewNotifyTracker(N)
@@ -265,8 +265,8 @@ func (proc *ConsensusProcess) nextRound() {
 
 	// reset trackers
 	switch proc.k % 4 { // switch end of current round
-	case 0:                                       // 0 is round 1
-		proc.statusesTracker = NewStatusTracker() // reset statuses tracking
+	case 0:                                            // 0 is round 1
+		proc.statusesTracker = NewStatusTracker(f + 1) // reset statuses tracking
 	case 2:                                         // 2 is round 3
 		proc.proposalTracker = NewProposalTracker() // reset proposal tracking
 		proc.commitTracker = NewCommitTracker()     // reset commits tracking
@@ -358,7 +358,7 @@ func (proc *ConsensusProcess) processStatusMsg(msg *pb.HareMessage) {
 		proc.statusesTracker.RecordStatus(msg)
 	}
 
-	if proc.statusesTracker.IsSVPReady(f + 1) {
+	if proc.statusesTracker.IsSVPReady() {
 		proc.setProposalMessage(proc.statusesTracker.BuildSVP())
 	}
 }

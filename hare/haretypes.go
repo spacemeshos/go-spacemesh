@@ -3,7 +3,6 @@ package hare
 import (
 	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"hash/fnv"
-	"reflect"
 )
 
 type Bytes32 [32]byte
@@ -78,7 +77,17 @@ func (s *Set) Remove(id BlockId) {
 }
 
 func (s *Set) Equals(g *Set) bool {
-	return reflect.DeepEqual(s.blocks, g.blocks)
+	if len(s.blocks) != len(g.blocks) {
+		return false
+	}
+
+	for _, bid := range s.blocks {
+		if _, exist := g.blocks[bid.Id()]; !exist {
+			return false
+		}
+	}
+
+	return true
 }
 
 func (s *Set) To2DSlice() [][]byte {
