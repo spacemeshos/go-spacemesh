@@ -2,6 +2,7 @@ package hare
 
 import (
 	"hash/fnv"
+	"sort"
 )
 
 type Bytes32 [32]byte
@@ -109,8 +110,16 @@ func (s *Set) To2DSlice() [][]byte {
 func (s *Set) Id() uint32 {
 	h := fnv.New32()
 
-	for _, v := range s.blocks {
-		h.Write(v.Bytes())
+	keys := make([]uint32, len(s.blocks))
+	i:=0
+	for k := range s.blocks {
+		keys[i] = k
+		i++
+	}
+	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
+
+	for i:=0;i<len(keys);i++ {
+		h.Write(s.blocks[keys[i]].Bytes())
 	}
 
 	return h.Sum32()
