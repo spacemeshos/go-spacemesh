@@ -49,6 +49,7 @@ type ConsensusProcess struct {
 	proposalTracker ProposalTracker
 	commitTracker   CommitTracker
 	notifyTracker   NotifyTracker
+	terminating		bool
 }
 
 func NewConsensusProcess(key crypto.PublicKey, layer LayerId, s Set, oracle Rolacle, signing Signing, p2p NetworkService) *ConsensusProcess {
@@ -61,11 +62,12 @@ func NewConsensusProcess(key crypto.PublicKey, layer LayerId, s Set, oracle Rola
 	proc.signing = signing
 	proc.network = p2p
 	proc.roundMsg = nil
-	proc.preRoundTracker = NewPreRoundTracker(f+1)
-	proc.statusesTracker = NewStatusTracker(f+1)
+	proc.preRoundTracker = NewPreRoundTracker(f + 1)
+	proc.statusesTracker = NewStatusTracker()
 	proc.proposalTracker = NewProposalTracker()
 	proc.commitTracker = NewCommitTracker()
-	proc.notifyTracker = NewNotifyTracker()
+	proc.notifyTracker = NewNotifyTracker(N)
+	proc.terminating = false
 
 	return proc
 }
@@ -140,25 +142,62 @@ PreRound:
 		case <-ticker.C: // next round event
 			proc.nextRound()
 		case <-proc.CloseChannel(): // close event
-			log.Info("Stop event loop, instance aborted")
+			log.Info("Stop event loop, terminating")
+			return
+		}
+
+		if proc.terminating {
 			return
 		}
 	}
 }
 
-func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
-	// Note: layer is already verified by the broker
-	// can receive any message at any point
+func (proc *ConsensusProcess) doesMessageMatchRound(m *pb.HareMessage) bool {
+	currentRound := proc.k % 4
 
-	// validate signature
-	data, err := proto.Marshal(m.Message)
-	if err != nil {
-		log.Error("Failed marshaling inner message")
-		return
+	switch MessageType(m.Message.Type) {
+	case PreRound:
+		return true
+	case Status:
+		return currentRound == 1
+	case Proposal:
+		return currentRound == 2 || currentRound == 3
+	case Notify:
+		return true
 	}
 
-	if !proc.signing.Validate(data, m.InnerSig) {
-		log.Warning("invalid message signature detected")
+	log.Error("Unknown message type encountered during validation: ", m.Message.Type)
+	return false
+}
+
+func (proc *ConsensusProcess) validateCertificate(m *pb.HareMessage) bool {
+	if m.Cert == nil {
+		return false
+	}
+
+	if m.Cert.AggMsgs == nil {
+		return false
+	}
+
+	if m.Cert.AggMsgs.Messages == nil {
+		return false
+	}
+
+	if len(m.Cert.AggMsgs.Messages) == 0 {
+		return false
+	}
+
+	// TODO: validate agg sig
+
+	return true
+}
+
+func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
+	// Note: layer is already verified by the broker
+
+	// validate round and message type match
+	if !proc.doesMessageMatchRound(m) {
+		log.Info("Message does not match the current round")
 		return
 	}
 
@@ -173,6 +212,24 @@ func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
 		RoleRequest{pub, LayerId{NewBytes32(m.Message.Layer)}, m.Message.K},
 		Signature(m.Message.RoleProof)) {
 		log.Warning("invalid role detected")
+		return
+	}
+
+	data, err := proto.Marshal(m.Message)
+	if err != nil {
+		log.Error("Failed marshaling inner message")
+		return
+	}
+
+	// validate signature
+	if !proc.signing.Validate(data, m.InnerSig) {
+		log.Warning("invalid message signature detected")
+		return
+	}
+
+	// validate certificate (only notify has certificate)
+	if MessageType(m.Message.Type) == Notify && !proc.validateCertificate(m) {
+		log.Warning("invalid certificate detected")
 		return
 	}
 
@@ -209,7 +266,7 @@ func (proc *ConsensusProcess) nextRound() {
 	// reset trackers
 	switch proc.k % 4 { // switch end of current round
 	case 0:                                       // 0 is round 1
-		proc.statusesTracker = NewStatusTracker(f+1) // reset statuses tracking
+		proc.statusesTracker = NewStatusTracker() // reset statuses tracking
 	case 2:                                         // 2 is round 3
 		proc.proposalTracker = NewProposalTracker() // reset proposal tracking
 		proc.commitTracker = NewCommitTracker()     // reset commits tracking
@@ -301,7 +358,7 @@ func (proc *ConsensusProcess) processStatusMsg(msg *pb.HareMessage) {
 		proc.statusesTracker.RecordStatus(msg)
 	}
 
-	if proc.statusesTracker.IsSVPReady() {
+	if proc.statusesTracker.IsSVPReady(f + 1) {
 		proc.setProposalMessage(proc.statusesTracker.BuildSVP())
 	}
 }
@@ -309,16 +366,17 @@ func (proc *ConsensusProcess) processStatusMsg(msg *pb.HareMessage) {
 func (proc *ConsensusProcess) processProposalMsg(msg *pb.HareMessage) {
 	proc.proposalTracker.OnProposal(msg)
 
-	if !proc.proposalTracker.HasValidProposal() {
+	set, ok := proc.proposalTracker.ProposedSet()
+	if !ok {
 		proc.t = nil
 		return
 	}
 
-	proc.t = proc.proposalTracker.ProposedSet()
+	proc.t = set
 }
 
 func (proc *ConsensusProcess) processCommitMsg(msg *pb.HareMessage) {
-	if proc.proposalTracker.isConflicting {
+	if proc.proposalTracker.IsConflicting() {
 		proc.roundMsg = nil
 		return
 	}
@@ -340,10 +398,29 @@ func (proc *ConsensusProcess) processCommitMsg(msg *pb.HareMessage) {
 }
 
 func (proc *ConsensusProcess) processNotifyMsg(msg *pb.HareMessage) {
-	proc.notifyTracker.OnNotify(msg)
+	if exist := proc.notifyTracker.OnNotify(msg); exist {
+		return
+	}
 
-	// TODO: consider doing it only on change ?
-	m := proc.notifyTracker.GetNotifyMsg()
-	proc.s = NewSet(m.Message.Blocks)
-	proc.certificate = m.Cert
+	s := NewSet(msg.Message.Blocks)
+	// we assume that the expression was checked on handleMessage
+	if msg.Cert.AggMsgs.Messages[0].Message.Ki >= proc.ki {
+		proc.s = s
+		proc.certificate = msg.Cert
+		proc.ki = msg.Message.Ki
+	}
+
+	if proc.notifyTracker.NotificationsCount(s) < f+1 { // not enough
+		return
+	}
+
+	// enough notifications, should broadcast & terminate
+	notifyMsg, err := proc.buildNotifyMessage()
+	data, err := proto.Marshal(notifyMsg)
+	if err != nil {
+		log.Error("Could not marshal notify message")
+		proc.Close()
+	}
+	proc.network.Broadcast(ProtoName, data)
+	proc.terminating = true // ensures immediate termination
 }

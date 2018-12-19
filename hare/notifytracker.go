@@ -1,29 +1,45 @@
 package hare
 
 import (
+	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/hare/pb"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 type NotifyTracker struct {
-	firstNotify *pb.HareMessage
+	notifies map[string]*pb.HareMessage
+	tracker *RefCountTracker
 }
 
-func NewNotifyTracker() NotifyTracker {
-	r4 := NotifyTracker{}
+func NewNotifyTracker(size uint32) NotifyTracker {
+	nt := NotifyTracker{}
+	nt.notifies = make(map[string]*pb.HareMessage, size)
+	nt.tracker = NewRefCountTracker(size)
 
-	return r4
+	return nt
 }
 
-func (nt *NotifyTracker) OnNotify(msg *pb.HareMessage) {
-	if nt.firstNotify != nil {
-		return
+func (nt *NotifyTracker) OnNotify(msg *pb.HareMessage) bool {
+	pub, err := crypto.NewPublicKey(msg.PubKey)
+	if err != nil {
+		log.Warning("Could not construct public key: ", err.Error())
 	}
 
-	nt.firstNotify = msg
+	if _, exist := nt.notifies[pub.String()]; exist { // already exist
+		return true
+	}
+
+	nt.notifies[pub.String()] = msg
+
+	s := NewSet(msg.Message.Blocks)
+	nt.tracker.Track(s)
+
+	return false
 }
 
-func (nt *NotifyTracker) GetNotifyMsg() *pb.HareMessage {
-	return nt.firstNotify
+func (nt *NotifyTracker) NotificationsCount(s *Set) uint32 {
+	return nt.tracker.CountStatus(s)
 }
+
 
 

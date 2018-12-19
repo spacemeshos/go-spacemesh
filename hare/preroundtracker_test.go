@@ -29,7 +29,7 @@ func TestPreRoundTracker_OnPreRound(t *testing.T) {
 	s := NewEmptySet()
 	s.Add(blockId1)
 	s.Add(blockId2)
-	pubKey := getPublicKey(t)
+	pubKey := generatePubKey(t)
 
 	m1 := BuildPreRoundMsg(t, pubKey, s)
 	tracker := NewPreRoundTracker(lowThresh10)
@@ -50,7 +50,7 @@ func TestPreRoundTracker_CanProveBlockAndSet(t *testing.T) {
 	tracker := NewPreRoundTracker(lowThresh10)
 
 	for i := 0; i < lowThresh10; i++ {
-		m1 := BuildPreRoundMsg(t, getPublicKey(t), s)
+		m1 := BuildPreRoundMsg(t, generatePubKey(t), s)
 		tracker.OnPreRound(m1)
 	}
 

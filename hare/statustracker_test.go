@@ -20,15 +20,14 @@ func TestStatusTracker_RecordStatus(t *testing.T) {
 	s := NewEmptySet()
 	s.Add(blockId1)
 	s.Add(blockId2)
-	pubKey := getPublicKey(t)
 
-	m1 := BuildPreRoundMsg(t, pubKey, s)
+	m1 := BuildStatusMsg(t, generatePubKey(t), s)
 	tracker := NewStatusTracker(lowThresh10)
 	tracker.RecordStatus(m1)
 	assert.False(t, tracker.IsSVPReady())
 
 	for i := 0; i < lowThresh10; i++ {
-		m := BuildPreRoundMsg(t, getPublicKey(t), s)
+		m := BuildPreRoundMsg(t, generatePubKey(t), s)
 		tracker.RecordStatus(m)
 	}
 

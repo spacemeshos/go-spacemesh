@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func getPublicKey(t *testing.T) crypto.PublicKey {
+func generatePubKey(t *testing.T) crypto.PublicKey {
 	_, pub, err := crypto.GenerateKeyPair()
 
 	if err != nil {
@@ -29,7 +29,7 @@ func TestConsensusProcess_StartTwice(t *testing.T) {
 	oracle := NewMockOracle()
 	signing := NewMockSigning()
 
-	proc := NewConsensusProcess(getPublicKey(t), *Layer1, s, oracle, signing, n1)
+	proc := NewConsensusProcess(generatePubKey(t), *Layer1, s, oracle, signing, n1)
 	broker.Register(Layer1, proc)
 	err := proc.Start()
 	assert.Equal(t, nil, err)
@@ -47,7 +47,7 @@ func TestConsensusProcess_eventLoop(t *testing.T) {
 	oracle := NewMockOracle()
 	signing := NewMockSigning()
 
-	proc := NewConsensusProcess(getPublicKey(t), *Layer1, s, oracle, signing, n1)
+	proc := NewConsensusProcess(generatePubKey(t), *Layer1, s, oracle, signing, n1)
 	broker.Register(Layer1, proc)
 	go proc.eventLoop()
 	n2.Broadcast(ProtoName, []byte{})
@@ -65,10 +65,10 @@ func TestConsensusProcess_handleMessage(t *testing.T) {
 	oracle := NewMockOracle()
 	signing := NewMockSigning()
 
-	proc := NewConsensusProcess(getPublicKey(t), *Layer1, s, oracle, signing, n1)
+	proc := NewConsensusProcess(generatePubKey(t), *Layer1, s, oracle, signing, n1)
 	broker.Register(Layer1, proc)
 
-	x, err := NewMessageBuilder().SetIteration(0).SetLayer(*Layer1).SetPubKey(getPublicKey(t)).Sign(proc.signing)
+	x, err := NewMessageBuilder().SetIteration(0).SetLayer(*Layer1).SetPubKey(generatePubKey(t)).Sign(proc.signing)
 
 	if err != nil {
 		log.Error("Could not sign msg")
@@ -88,7 +88,7 @@ func TestConsensusProcess_nextRound(t *testing.T) {
 	oracle := NewMockOracle()
 	signing := NewMockSigning()
 
-	proc := NewConsensusProcess(getPublicKey(t), *Layer1, s, oracle, signing, n1)
+	proc := NewConsensusProcess(generatePubKey(t), *Layer1, s, oracle, signing, n1)
 	broker.Register(Layer1, proc)
 
 	proc.nextRound()
