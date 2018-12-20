@@ -65,7 +65,7 @@ func NewConsensusProcess(key crypto.PublicKey, layer LayerId, s Set, oracle Rola
 	proc.preRoundTracker = NewPreRoundTracker(f + 1)
 	proc.statusesTracker = NewStatusTracker(f + 1)
 	proc.proposalTracker = NewProposalTracker()
-	proc.commitTracker = NewCommitTracker()
+	proc.commitTracker = NewCommitTracker(f + 1)
 	proc.notifyTracker = NewNotifyTracker(N)
 	proc.terminating = false
 
@@ -267,9 +267,9 @@ func (proc *ConsensusProcess) nextRound() {
 	switch proc.k % 4 { // switch end of current round
 	case 0:                                            // 0 is round 1
 		proc.statusesTracker = NewStatusTracker(f + 1) // reset statuses tracking
-	case 2:                                         // 2 is round 3
-		proc.proposalTracker = NewProposalTracker() // reset proposal tracking
-		proc.commitTracker = NewCommitTracker()     // reset commits tracking
+	case 2:                                          // 2 is round 3
+		proc.proposalTracker = NewProposalTracker()  // reset proposal tracking
+		proc.commitTracker = NewCommitTracker(f + 1) // reset commits tracking
 	}
 	// TODO: check what to do with the notify. do we really need f+1 notify or can count on the certificate?
 

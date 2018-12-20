@@ -7,21 +7,40 @@ import (
 )
 
 type CommitTracker struct {
-	exist   map[string]bool
-	commits map[uint32][]*pb.HareMessage
-	maxSet *Set
+	exist     map[string]bool
+	commits   map[uint32][]*pb.HareMessage
+	maxSet    *Set
+	threshold int
 }
 
-func NewCommitTracker() CommitTracker {
-	r3 := CommitTracker{}
-	r3.exist = make(map[string]bool, f+1)
-	r3.commits = make(map[uint32][]*pb.HareMessage, N)
-	r3.maxSet = nil
+func NewCommitTracker(threshold int) CommitTracker {
+	ct := CommitTracker{}
+	ct.exist = make(map[string]bool, threshold)
+	ct.commits = make(map[uint32][]*pb.HareMessage, N)
+	ct.maxSet = nil
+	ct.threshold = threshold
 
-	return r3
+	return ct
+}
+
+func (ct *CommitTracker) getMaxCommits() int {
+	if ct.maxSet == nil {
+		return 0
+	}
+
+	val, exist := ct.commits[ct.maxSet.Id()]
+	if !exist || val == nil {
+		panic("should be unreachable")
+	}
+
+	return len(val)
 }
 
 func (ct *CommitTracker) OnCommit(msg *pb.HareMessage) {
+	if ct.HasEnoughCommits() {
+		return
+	}
+
 	pub, err := crypto.NewPublicKey(msg.PubKey)
 	if err != nil {
 		log.Warning("Could not construct public key: ", err.Error())
@@ -39,18 +58,15 @@ func (ct *CommitTracker) OnCommit(msg *pb.HareMessage) {
 	// create array if necessary
 	_, exist := ct.commits[s.Id()]
 	if !exist {
-		ct.commits[s.Id()] = make([]*pb.HareMessage, 0, f+1)
-	}
-
-	arr, _ := ct.commits[s.Id()]
-	if len(arr) == f+1 { // done, we already have f+1 commits
-		return
+		ct.commits[s.Id()] = make([]*pb.HareMessage, 0, ct.threshold)
 	}
 
 	// add msg
+	arr, _ := ct.commits[s.Id()]
 	arr = append(arr, msg)
+	ct.commits[s.Id()] = arr
 
-	if len(ct.commits[s.Id()]) > len(ct.commits[ct.maxSet.Id()]) {
+	if len(arr) >= ct.getMaxCommits() {
 		ct.maxSet = s
 	}
 }
@@ -60,7 +76,7 @@ func (ct *CommitTracker) HasEnoughCommits() bool {
 		return false
 	}
 
-	return len(ct.commits[ct.maxSet.Id()]) >= f+1
+	return ct.getMaxCommits() >= ct.threshold
 }
 
 func (ct *CommitTracker) BuildCertificate() *pb.Certificate {
@@ -73,4 +89,3 @@ func (ct *CommitTracker) BuildCertificate() *pb.Certificate {
 
 	return c
 }
-
