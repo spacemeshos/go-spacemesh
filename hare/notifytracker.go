@@ -7,14 +7,14 @@ import (
 )
 
 type NotifyTracker struct {
-	notifies map[string]*pb.HareMessage
-	tracker *RefCountTracker
+	notifies map[string]*pb.HareMessage // tracks PubKey->Notification
+	tracker  *RefCountTracker           // tracks ref count to each seen set
 }
 
-func NewNotifyTracker(size uint32) NotifyTracker {
+func NewNotifyTracker(expectedSize int) NotifyTracker {
 	nt := NotifyTracker{}
-	nt.notifies = make(map[string]*pb.HareMessage, size)
-	nt.tracker = NewRefCountTracker(size)
+	nt.notifies = make(map[string]*pb.HareMessage, expectedSize)
+	nt.tracker = NewRefCountTracker(expectedSize)
 
 	return nt
 }
@@ -25,12 +25,14 @@ func (nt *NotifyTracker) OnNotify(msg *pb.HareMessage) bool {
 		log.Warning("Could not construct public key: ", err.Error())
 	}
 
-	if _, exist := nt.notifies[pub.String()]; exist { // already exist
+	if _, exist := nt.notifies[pub.String()]; exist { // already seenSenders
 		return true
 	}
 
+	// keep msg for pub
 	nt.notifies[pub.String()] = msg
 
+	// track that set
 	s := NewSet(msg.Message.Blocks)
 	nt.tracker.Track(s)
 
@@ -40,6 +42,3 @@ func (nt *NotifyTracker) OnNotify(msg *pb.HareMessage) bool {
 func (nt *NotifyTracker) NotificationsCount(s *Set) uint32 {
 	return nt.tracker.CountStatus(s)
 }
-
-
-

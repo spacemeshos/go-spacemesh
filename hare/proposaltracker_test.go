@@ -23,7 +23,7 @@ func TestProposalTracker_OnProposalConflict(t *testing.T) {
 	pubKey := generatePubKey(t)
 
 	m1 := BuildProposalMsg(t, pubKey, s)
-	tracker := NewProposalTracker()
+	tracker := NewProposalTracker(lowThresh10)
 	tracker.OnProposal(m1)
 	assert.False(t, tracker.IsConflicting())
 	s.Add(blockId3)
@@ -35,9 +35,9 @@ func TestProposalTracker_OnProposalConflict(t *testing.T) {
 func TestProposalTracker_IsConflicting(t *testing.T) {
 	s := NewEmptySet()
 	s.Add(blockId1)
-	tracker := NewProposalTracker()
+	tracker := NewProposalTracker(lowThresh10)
 
-	for i:=0;i<lowThresh10;i++ {
+	for i := 0; i < lowThresh10; i++ {
 		tracker.OnProposal(BuildProposalMsg(t, generatePubKey(t), s))
 		assert.False(t, tracker.IsConflicting())
 	}

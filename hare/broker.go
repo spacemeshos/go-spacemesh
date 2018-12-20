@@ -10,6 +10,7 @@ import (
 )
 
 const InboxCapacity = 100
+
 type StartInstanceError error
 
 type Identifiable interface {

@@ -4,7 +4,7 @@ type RefCountTracker struct {
 	table map[uint32]uint32
 }
 
-func NewRefCountTracker(size uint32) *RefCountTracker {
+func NewRefCountTracker(size int) *RefCountTracker {
 	t := &RefCountTracker{}
 	t.table = make(map[uint32]uint32, size)
 

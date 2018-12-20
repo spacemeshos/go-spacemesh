@@ -22,7 +22,7 @@ func TestStatusTracker_RecordStatus(t *testing.T) {
 	s.Add(blockId2)
 
 	m1 := BuildStatusMsg(t, generatePubKey(t), s)
-	tracker := NewStatusTracker(lowThresh10)
+	tracker := NewStatusTracker(lowThresh10, lowThresh10)
 	tracker.RecordStatus(m1)
 	assert.False(t, tracker.IsSVPReady())
 
@@ -35,7 +35,7 @@ func TestStatusTracker_RecordStatus(t *testing.T) {
 }
 
 func TestStatusTracker_BuildUnionSet(t *testing.T) {
-	tracker := NewStatusTracker(lowThresh10)
+	tracker := NewStatusTracker(lowThresh10, lowThresh10)
 
 	s := NewEmptySet()
 	s.Add(blockId1)

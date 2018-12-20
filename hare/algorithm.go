@@ -34,7 +34,7 @@ type State struct {
 
 type ConsensusProcess struct {
 	State
-	Closer // the consensus is closeable
+	Closer          // the consensus is closeable
 	pubKey          crypto.PublicKey
 	layerId         LayerId
 	t               *Set    // loop local set
@@ -62,10 +62,10 @@ func NewConsensusProcess(key crypto.PublicKey, layer LayerId, s Set, oracle Rola
 	proc.signing = signing
 	proc.network = p2p
 	proc.roundMsg = nil
-	proc.preRoundTracker = NewPreRoundTracker(f + 1)
-	proc.statusesTracker = NewStatusTracker(f + 1)
-	proc.proposalTracker = NewProposalTracker()
-	proc.commitTracker = NewCommitTracker(f + 1)
+	proc.preRoundTracker = NewPreRoundTracker(f+1, N)
+	proc.statusesTracker = NewStatusTracker(f+1, N)
+	proc.proposalTracker = NewProposalTracker(N)
+	proc.commitTracker = NewCommitTracker(f+1, N)
 	proc.notifyTracker = NewNotifyTracker(N)
 	proc.terminating = false
 
@@ -265,11 +265,11 @@ func (proc *ConsensusProcess) nextRound() {
 
 	// reset trackers
 	switch proc.k % 4 { // switch end of current round
-	case 0:                                            // 0 is round 1
-		proc.statusesTracker = NewStatusTracker(f + 1) // reset statuses tracking
-	case 2:                                          // 2 is round 3
-		proc.proposalTracker = NewProposalTracker()  // reset proposal tracking
-		proc.commitTracker = NewCommitTracker(f + 1) // reset commits tracking
+	case 0: // 0 is round 1
+		proc.statusesTracker = NewStatusTracker(f+1, N) // reset statuses tracking
+	case 2: // 2 is round 3
+		proc.proposalTracker = NewProposalTracker(N)  // reset proposal tracking
+		proc.commitTracker = NewCommitTracker(f+1, N) // reset commits tracking
 	}
 	// TODO: check what to do with the notify. do we really need f+1 notify or can count on the certificate?
 
@@ -314,7 +314,7 @@ func (proc *ConsensusProcess) setStatusMessage() error {
 
 func (proc *ConsensusProcess) setProposalMessage(svp *pb.AggregatedMessages) error {
 	builder := NewMessageBuilder()
-	builder.SetType(Proposal).SetLayer(proc.layerId).SetIteration(proc.k).SetKi(proc.ki).SetBlocks(proc.statusesTracker.BuildUnionSet())
+	builder.SetType(Proposal).SetLayer(proc.layerId).SetIteration(proc.k).SetKi(proc.ki).SetBlocks(proc.statusesTracker.buildUnionSet())
 	builder.SetSVP(svp)
 	builder, err := builder.SetPubKey(proc.pubKey).Sign(proc.signing)
 

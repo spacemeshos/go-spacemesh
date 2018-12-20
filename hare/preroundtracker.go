@@ -7,15 +7,15 @@ import (
 )
 
 type PreRoundTracker struct {
-	preRound  map[string]*pb.HareMessage
-	tracker   *RefCountTracker
-	threshold uint32
+	preRound  map[string]*pb.HareMessage // maps PubKey->Pre-Round msg (unique)
+	tracker   *RefCountTracker           // keeps track of seen blocks
+	threshold uint32                     // the threshold to prove a single block
 }
 
-func NewPreRoundTracker(threshold uint32) PreRoundTracker {
+func NewPreRoundTracker(threshold uint32, expectedSize int) PreRoundTracker {
 	pre := PreRoundTracker{}
-	pre.preRound = make(map[string]*pb.HareMessage, N)
-	pre.tracker = NewRefCountTracker(N)
+	pre.preRound = make(map[string]*pb.HareMessage, expectedSize)
+	pre.tracker = NewRefCountTracker(expectedSize)
 	pre.threshold = threshold
 
 	return pre
@@ -43,10 +43,12 @@ func (pre *PreRoundTracker) OnPreRound(msg *pb.HareMessage) {
 }
 
 func (pre *PreRoundTracker) CanProveBlock(blockId BlockId) bool {
+	// at least threshold occurrences of a given block
 	return pre.tracker.CountStatus(blockId) >= pre.threshold
 }
 
 func (pre *PreRoundTracker) CanProveSet(set *Set) bool {
+	// a set is provable iff all its blocks are provable
 	for _, bid := range set.blocks {
 		if !pre.CanProveBlock(bid) {
 			return false

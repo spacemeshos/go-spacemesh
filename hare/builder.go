@@ -82,5 +82,3 @@ func (builder *MessageBuilder) SetSVP(svp *pb.AggregatedMessages) *MessageBuilde
 type AggregatedBuilder struct {
 	m *pb.AggregatedMessages
 }
-
-

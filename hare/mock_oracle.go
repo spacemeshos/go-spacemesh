@@ -9,8 +9,8 @@ import (
 
 const (
 	Passive = 0
-	Active = 1
-	Leader = 2
+	Active  = 1
+	Leader  = 2
 )
 
 type Rolacle interface {
@@ -19,9 +19,9 @@ type Rolacle interface {
 }
 
 type RoleRequest struct {
-	pubKey crypto.PublicKey
+	pubKey  crypto.PublicKey
 	layerId LayerId
-	k uint32
+	k       uint32
 }
 
 func (roleRequest *RoleRequest) bytes() []byte {

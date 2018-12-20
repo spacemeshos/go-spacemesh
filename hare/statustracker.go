@@ -7,13 +7,13 @@ import (
 )
 
 type StatusTracker struct {
-	statuses  map[string]*pb.HareMessage
-	threshold int
+	statuses  map[string]*pb.HareMessage // maps PubKey->StatusMsg
+	threshold int                        // threshold to indicate a set can be proved
 }
 
-func NewStatusTracker(threshold int) StatusTracker {
+func NewStatusTracker(threshold int, expectedSize int) StatusTracker {
 	st := StatusTracker{}
-	st.statuses = make(map[string]*pb.HareMessage, N)
+	st.statuses = make(map[string]*pb.HareMessage, expectedSize)
 	st.threshold = threshold
 
 	return st
@@ -32,7 +32,7 @@ func (st *StatusTracker) RecordStatus(msg *pb.HareMessage) {
 	}
 
 	_, exist := st.statuses[pub.String()]
-	if exist { // already handled this sender's status
+	if exist { // already handled this sender's status msg
 		return
 	}
 
@@ -43,14 +43,13 @@ func (st *StatusTracker) IsSVPReady() bool {
 	return len(st.statuses) == st.threshold
 }
 
-func (st *StatusTracker) BuildUnionSet() *Set {
+// Returns the union set of all status messages collected
+func (st *StatusTracker) buildUnionSet() *Set {
 	unionSet := NewEmptySet()
 	for _, m := range st.statuses {
 		for _, buff := range m.Message.Blocks {
 			bid := BlockId{NewBytes32(buff)}
-			if !unionSet.Contains(bid) {
-				unionSet.Add(bid)
-			}
+			unionSet.Add(bid) // assuming add is unique
 		}
 	}
 

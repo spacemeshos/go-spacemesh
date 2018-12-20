@@ -7,16 +7,16 @@ import (
 )
 
 type CommitTracker struct {
-	exist     map[string]bool
-	commits   map[uint32][]*pb.HareMessage
-	maxSet    *Set
-	threshold int
+	seenSenders map[string]bool              // tracks seen senders
+	commits     map[uint32][]*pb.HareMessage // tracks Set->Commits
+	maxSet      *Set                         // follows the set who has max number of commits
+	threshold   int                          // the number of required commits
 }
 
-func NewCommitTracker(threshold int) CommitTracker {
+func NewCommitTracker(threshold int, expectedSize int) CommitTracker {
 	ct := CommitTracker{}
-	ct.exist = make(map[string]bool, threshold)
-	ct.commits = make(map[uint32][]*pb.HareMessage, N)
+	ct.seenSenders = make(map[string]bool, expectedSize)
+	ct.commits = make(map[uint32][]*pb.HareMessage, expectedSize)
 	ct.maxSet = nil
 	ct.threshold = threshold
 
@@ -24,16 +24,16 @@ func NewCommitTracker(threshold int) CommitTracker {
 }
 
 func (ct *CommitTracker) getMaxCommits() int {
-	if ct.maxSet == nil {
+	if ct.maxSet == nil { // no max yet
 		return 0
 	}
 
-	val, exist := ct.commits[ct.maxSet.Id()]
-	if !exist || val == nil {
+	arr, exist := ct.commits[ct.maxSet.Id()]
+	if !exist || arr == nil { // should seenSenders and non-nil
 		panic("should be unreachable")
 	}
 
-	return len(val)
+	return len(arr)
 }
 
 func (ct *CommitTracker) OnCommit(msg *pb.HareMessage) {
@@ -47,11 +47,11 @@ func (ct *CommitTracker) OnCommit(msg *pb.HareMessage) {
 		return
 	}
 
-	if ct.exist[pub.String()] {
+	if ct.seenSenders[pub.String()] {
 		return
 	}
 
-	ct.exist[pub.String()] = true
+	ct.seenSenders[pub.String()] = true
 
 	s := NewSet(msg.Message.Blocks)
 
@@ -66,7 +66,7 @@ func (ct *CommitTracker) OnCommit(msg *pb.HareMessage) {
 	arr = append(arr, msg)
 	ct.commits[s.Id()] = arr
 
-	if len(arr) >= ct.getMaxCommits() {
+	if len(arr) >= ct.getMaxCommits() { // update max
 		ct.maxSet = s
 	}
 }

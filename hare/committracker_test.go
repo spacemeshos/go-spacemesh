@@ -17,7 +17,7 @@ func BuildCommitMsg(t *testing.T, pubKey crypto.PublicKey, s *Set) *pb.HareMessa
 }
 
 func TestCommitTracker_OnCommit(t *testing.T) {
-	tracker := NewCommitTracker(lowThresh10 + 1)
+	tracker := NewCommitTracker(lowThresh10+1, lowThresh10)
 	assert.Equal(t, 0, tracker.getMaxCommits())
 	s := NewEmptySet()
 	s.Add(blockId1)

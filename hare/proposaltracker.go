@@ -7,14 +7,14 @@ import (
 )
 
 type ProposalTracker struct {
-	proposals     map[string]*pb.HareMessage
-	isConflicting map[string]bool
+	proposals     map[string]*pb.HareMessage // maps PubKey->Proposal
+	isConflicting map[string]bool            // maps PubKey->ConflictStatus
 }
 
-func NewProposalTracker() ProposalTracker {
+func NewProposalTracker(expectedSize int) ProposalTracker {
 	pt := ProposalTracker{}
-	pt.proposals = make(map[string]*pb.HareMessage, N)
-	pt.isConflicting = make(map[string]bool, N)
+	pt.proposals = make(map[string]*pb.HareMessage, expectedSize)
+	pt.isConflicting = make(map[string]bool, expectedSize)
 
 	return pt
 }
