@@ -28,7 +28,7 @@ func NewMeshDb(layers database.DB, blocks database.DB, validity database.DB) *me
 		blocks:             blocks,
 		layers:             layers,
 		contextualValidity: validity,
-		layerHandlers:      make(map[LayerID]*layerHandler), //todo clean stale locks
+		layerHandlers:      make(map[LayerID]*layerHandler),
 	}
 	return ll
 }

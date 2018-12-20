@@ -284,7 +284,7 @@ func (s *Syncer) getLayerHashes(index mesh.LayerID) (map[string]Peer, error) {
 		case <-timeout:
 			if len(m) > 0 {
 				log.Error("not all peers responded to hash request")
-				return m, nil //todo
+				return m, nil
 			}
 			return nil, errors.New("no peers responded to hash request")
 		}
