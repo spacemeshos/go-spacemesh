@@ -558,7 +558,7 @@ func (s *swarm) ProcessProtocolMessage(sender node.Node, protocol string, data s
 
 // Broadcast creates a gossip message signs it and disseminate it to neighbors.
 func (s *swarm) Broadcast(protocol string, payload []byte) error {
-	return s.ProcessProtocolMessage(s.lNode.Node, gossip.ProtocolName, service.Data_Bytes{payload})
+	return s.gossip.Broadcast(payload, protocol)
 }
 
 // Neighborhood : neighborhood is the peers we keep close , meaning we try to keep connections
