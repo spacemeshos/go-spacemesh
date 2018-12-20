@@ -2,15 +2,17 @@ package p2p
 
 import (
 	"context"
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/sync/errgroup"
+	"sync"
 	"testing"
+	"time"
 )
 
-const DefaultBootCount = 3
-
-func createP2pInstance(t *testing.T, config config.Config) *swarm {
+func createP2pInstance(t testing.TB, config config.Config) *swarm {
 	port, err := node.GetUnboundedPort()
 	assert.Nil(t, err)
 	config.TCPPort = port
@@ -25,9 +27,16 @@ type P2PSwarm struct {
 	Swarm []*swarm
 }
 
-func NewP2PSwarm(t *testing.T, size int) *P2PSwarm {
-	boot := make([]*swarm, DefaultBootCount)
-	swarm := make([]*swarm, size)
+func testLog(text string, args ...interface{}) {
+	fmt.Println("################################################################################################")
+	fmt.Println("Test Logger :")
+	fmt.Println(fmt.Sprintf(text, args...))
+	fmt.Println("################################################################################################")
+}
+
+func NewP2PSwarm(t testing.TB, bootnodes int, networksize int, randconn int) *P2PSwarm {
+	boot := make([]*swarm, bootnodes)
+	swarm := make([]*swarm, networksize)
 
 	bootcfg := config.DefaultConfig()
 	bootcfg.SwarmConfig.Bootstrap = false
@@ -37,25 +46,81 @@ func NewP2PSwarm(t *testing.T, size int) *P2PSwarm {
 	for i := 0; i < len(boot); i++ {
 		boot[i] = createP2pInstance(t, bootcfg)
 		boot[i].Start()
+		testLog("BOOTNODE : %v", boot[i].lNode.String())
 	}
 
 	cfg := config.DefaultConfig()
 	cfg.SwarmConfig.Bootstrap = true
-	cfg.SwarmConfig.Gossip = false
+	cfg.SwarmConfig.Gossip = true
+	cfg.SwarmConfig.RandomConnections = randconn
 	cfg.SwarmConfig.BootstrapNodes = StringIdentifiers(boot)
 
-	// start all
+	tm := time.Now()
+	testLog("Started up %d swarms", networksize)
+	var wg sync.WaitGroup
+
 	for i := 0; i < len(swarm); i++ {
 		swarm[i] = createP2pInstance(t, cfg)
-		go swarm[i].Start()
+		i := i
+		wg.Add(1)
+		go func() {
+			swarm[i].Start()
+			swarm[i].waitForBoot()
+			wg.Done()
+		}()
 	}
 
-	// wait all
-	for i := 0; i < len(swarm); i++ {
-		swarm[i].waitForBoot()
-	}
+	testLog("Launched all proccess !, now Waiting")
+
+	wg.Wait()
+	testLog("Took %s to all swarms to boot up", time.Now().Sub(tm))
 
 	return &P2PSwarm{boot, swarm}
+}
+
+func Errors(arr []error) []int {
+	var idx []int
+	for i, err := range arr {
+		if err != nil {
+			idx = append(idx, i)
+		}
+	}
+	return idx
+}
+
+type filter []int
+
+func (ps *P2PSwarm) ForAll(f func(s *swarm) error, fl filter) []error {
+	e := make([]error, 0)
+swarms:
+	for i, s := range ps.Swarm {
+		for _, j := range fl {
+			if j == i {
+				continue swarms
+			}
+		}
+		e = append(e, f(s))
+	}
+	return e
+}
+
+func (ps *P2PSwarm) ForAllAsync(ctx context.Context, f func(s *swarm) error) (error, []error) {
+	var mtx sync.Mutex
+	errs := make([]error, len(ps.Swarm))
+
+	group, ctx := errgroup.WithContext(ctx)
+	for i, s := range ps.Swarm {
+		i, s := i, s
+		group.Go(func() error {
+			e := f(s)
+			mtx.Lock()
+			errs[i] = e
+			mtx.Unlock()
+			return e
+		})
+	}
+
+	return group.Wait(), errs
 }
 
 func StringIdentifiers(boot []*swarm) []string {
