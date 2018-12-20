@@ -23,6 +23,10 @@ func createP2pInstance(t testing.TB, config config.Config) *swarm {
 }
 
 type P2PSwarm struct {
+
+	before func(s *swarm)
+	after func(s *swarm)
+
 	boot  []*swarm
 	Swarm []*swarm
 }
@@ -34,7 +38,15 @@ func testLog(text string, args ...interface{}) {
 	fmt.Println("################################################################################################")
 }
 
-func NewP2PSwarm(t testing.TB, bootnodes int, networksize int, randconn int) *P2PSwarm {
+
+func NewP2PSwarm(before func(s *swarm), after func(s *swarm)) *P2PSwarm {
+	p2ps := new(P2PSwarm)
+	p2ps.before = before
+	p2ps.after = after
+	return p2ps
+}
+
+func (p2ps *P2PSwarm) Start(t testing.TB, bootnodes int, networksize int, randconn int) {
 	boot := make([]*swarm, bootnodes)
 	swarm := make([]*swarm, networksize)
 
@@ -61,6 +73,9 @@ func NewP2PSwarm(t testing.TB, bootnodes int, networksize int, randconn int) *P2
 
 	for i := 0; i < len(swarm); i++ {
 		swarm[i] = createP2pInstance(t, cfg)
+		if p2ps.before != nil {
+			p2ps.before(swarm[i])
+		}
 		i := i
 		wg.Add(1)
 		go func() {
@@ -75,7 +90,9 @@ func NewP2PSwarm(t testing.TB, bootnodes int, networksize int, randconn int) *P2
 	wg.Wait()
 	testLog("Took %s to all swarms to boot up", time.Now().Sub(tm))
 
-	return &P2PSwarm{boot, swarm}
+	 p2ps.Swarm = swarm
+	 p2ps.boot = boot
+	 // todo: snapshot this
 }
 
 func Errors(arr []error) []int {
