@@ -173,6 +173,7 @@ func (prot *Protocol) validateMessage(msg *pb.ProtocolMessage) error {
 
 // Broadcast is the actual broadcast procedure, loop on peers and add the message to their queues
 func (prot *Protocol) Broadcast(payload []byte, nextProt string) error {
+	prot.Log.Debug("Broadcasting message from type %s", nextProt)
 	// add gossip header
 	header := &pb.Metadata{
 		NextProtocol:  nextProt,
@@ -295,7 +296,10 @@ func (prot *Protocol) eventLoop(peerConn chan crypto.PublicKey, peerDisc chan cr
 loop:
 	for {
 		select {
-		case msg := <-prot.relayQ:
+		case msg, ok := <-prot.relayQ:
+			if !ok {
+				break loop // channel closed
+			}
 			// incoming messages from p2p layer for process and relay
 			go func() {
 				//  [todo some err handling
