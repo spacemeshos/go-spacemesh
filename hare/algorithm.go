@@ -109,6 +109,8 @@ PreRound:
 			proc.handleMessage(msg)
 		case <-timer.C:
 			break PreRound
+		case <-proc.CloseChannel():
+			return
 		}
 	}
 
