@@ -293,12 +293,14 @@ func (prot *Protocol) handleRelayMessage(msgB []byte) error {
 }
 
 func (prot *Protocol) eventLoop(peerConn chan crypto.PublicKey, peerDisc chan crypto.PublicKey) {
+	var err error
 loop:
 	for {
 		select {
 		case msg, ok := <-prot.relayQ:
 			if !ok {
-				break loop // channel closed
+				err = errors.New("channel closed")
+				break loop
 			}
 			// incoming messages from p2p layer for process and relay
 			go func() {
@@ -310,9 +312,11 @@ loop:
 		case peer := <-peerDisc:
 			go prot.removePeer(peer)
 		case <-prot.shutdown:
-			break loop // maybe error ?
+			err = errors.New("protocol shutdown")
+			break loop
 		}
 	}
+	prot.Warning("Gossip protocol event loop stopped. err: %v", err)
 }
 
 // peersCount returns the number of peers know to the protocol, used for testing only
