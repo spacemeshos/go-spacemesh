@@ -27,7 +27,7 @@ genproto:
 
 build:
 	make genproto
-	go build ${LDFLAGS} -o $(CURR_DIR)/$(BINARY)
+	go build ${LDFLAGS} ./...
 .PHONY: build
 
 tidy:
