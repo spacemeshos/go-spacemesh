@@ -190,8 +190,8 @@ func (sn *Node) SubscribePeerEvents() (chan crypto.PublicKey, chan crypto.Public
 }
 
 // RegisterProtocol creates and returns a channel for a given protocol.
-func (sn *Node) RegisterProtocol(protocol string) chan Message {
-	c := make(chan Message)
+func (sn *Node) RegisterProtocol(protocol string, buf int) chan Message {
+	c := make(chan Message, buf)
 	sn.sim.mutex.Lock()
 	sn.sim.protocolHandler[sn.Node.String()][protocol] = c
 	sn.sim.mutex.Unlock()

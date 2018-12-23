@@ -28,6 +28,11 @@ type Item struct {
 	timestamp time.Time
 }
 
+// Config holds configuration params
+type Config struct {
+	BufferSize int
+}
+
 type MessageServer struct {
 	ReqId              uint64 //request id
 	name               string //server name
@@ -43,14 +48,15 @@ type MessageServer struct {
 	exit               chan struct{}
 }
 
-func NewMsgServer(network ServerService, name string, requestLifetime time.Duration) *MessageServer {
+func NewMsgServer(network ServerService, name string, requestLifetime time.Duration, config *Config) *MessageServer {
+
 	p := &MessageServer{
 		name:               name,
 		pendingMap:         make(map[uint64]chan interface{}),
 		resHandlers:        make(map[uint64]func(msg []byte)),
 		pendingQueue:       list.New(),
 		network:            network,
-		ingressChannel:     network.RegisterProtocol(name),
+		ingressChannel:     network.RegisterProtocol(name, config.BufferSize),
 		msgRequestHandlers: make(map[MessageType]func(msg []byte) []byte),
 		requestLifetime:    requestLifetime,
 		exit:               make(chan struct{}),
