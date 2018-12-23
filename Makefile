@@ -36,7 +36,7 @@ tidy:
 
 $(PLATFORMS):
 	make genproto
-	GOOS=$(os) GOARCH=amd64 go build ${LDFLAGS} -o $(BIN_DIR)/$(BINARY)-$(VERSION)-$(os)-amd64
+	GOOS=$(os) GOARCH=amd64 go build ${LDFLAGS} ./...
 .PHONY: $(PLATFORMS)
 
 test:
