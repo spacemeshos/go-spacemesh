@@ -71,10 +71,10 @@ func (s *Syncer) Start() {
 
 //fires a sync every sm.config.syncInterval or on force space from outside
 
-func NewSync(peers Peers, srv server.ServerService, layers mesh.Mesh, bv BlockValidator, conf Configuration) *Syncer {
+func NewSync(srv server.Service, layers mesh.Mesh, bv BlockValidator, conf Configuration) *Syncer {
 	s := Syncer{
-		peers:     peers,
 		layers:    layers,
+		peers:     NewPeers(srv),
 		msgServer: server.NewMsgServer(srv, protocol, time.Second*5),
 		bv:        bv,
 		config:    conf,

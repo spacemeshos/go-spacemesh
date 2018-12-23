@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/sync/errgroup"
 	"sync"
@@ -24,8 +24,8 @@ func createP2pInstance(t testing.TB, config config.Config) *swarm {
 }
 
 type P2PSwarm struct {
-	before func(s service.Service)
-	after  func(s service.Service)
+	before func(s server.Service)
+	after  func(s server.Service)
 
 	boot  []*swarm
 	Swarm []*swarm
@@ -38,7 +38,7 @@ func testLog(text string, args ...interface{}) {
 	fmt.Println("################################################################################################")
 }
 
-func NewP2PSwarm(before func(s service.Service), after func(s service.Service)) *P2PSwarm {
+func NewP2PSwarm(before func(s server.Service), after func(s server.Service)) *P2PSwarm {
 	p2ps := new(P2PSwarm)
 	p2ps.before = before
 	p2ps.after = after
@@ -57,7 +57,7 @@ func (p2ps *P2PSwarm) Start(t testing.TB, bootnodes int, networksize int, randco
 	for i := 0; i < len(boot); i++ {
 		boot[i] = createP2pInstance(t, bootcfg)
 		if p2ps.before != nil {
-			p2ps.before(swarm[i])
+			p2ps.before(boot[i])
 		}
 		boot[i].Start()
 		if p2ps.after != nil {

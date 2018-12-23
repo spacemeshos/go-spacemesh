@@ -13,12 +13,12 @@ import (
 
 type MessageType uint32
 
-type ServerService interface {
+type Service interface {
 	service.Service
 	SendWrappedMessage(nodeID string, protocol string, payload *service.Data_MsgWrapper) error
 }
 
-type ServerMessage interface {
+type Message interface {
 	service.Message
 	Data() *service.Data_MsgWrapper
 }
@@ -31,7 +31,7 @@ type Item struct {
 type MessageServer struct {
 	ReqId              uint64 //request id
 	name               string //server name
-	network            ServerService
+	network            Service
 	pendMutex          sync.RWMutex
 	pendingMap         map[uint64]chan interface{}             //pending messages by request ReqId
 	pendingQueue       *list.List                              //queue of pending messages
@@ -43,7 +43,7 @@ type MessageServer struct {
 	exit               chan struct{}
 }
 
-func NewMsgServer(network ServerService, name string, requestLifetime time.Duration) *MessageServer {
+func NewMsgServer(network Service, name string, requestLifetime time.Duration) *MessageServer {
 	p := &MessageServer{
 		name:               name,
 		pendingMap:         make(map[uint64]chan interface{}),
@@ -90,7 +90,7 @@ func (p *MessageServer) readLoop() {
 			p.workerCount.Add(1)
 			go func() {
 				defer p.workerCount.Done()
-				p.handleMessage(msg.(ServerMessage))
+				p.handleMessage(msg.(Message))
 			}()
 
 		}
@@ -112,7 +112,7 @@ func (p *MessageServer) cleanStaleMessages() {
 		}
 	}
 }
-func (p *MessageServer) handleMessage(msg ServerMessage) {
+func (p *MessageServer) handleMessage(msg Message) {
 	if msg.Data().Req {
 		p.handleRequestMessage(msg.Sender().PublicKey(), msg.Data())
 	} else {
@@ -174,15 +174,15 @@ func (p *MessageServer) RegisterMsgHandler(msgType MessageType, reqHandler func(
 func (p *MessageServer) SendAsyncRequest(msgType MessageType, payload []byte, address crypto.PublicKey, resHandler func(msg []byte)) error {
 
 	reqID := p.newRequestId()
-	msg := &service.Data_MsgWrapper{Req: true, ReqID: reqID, MsgType: uint32(msgType), Payload: payload}
 	respc := make(chan interface{})
 	p.pendMutex.Lock()
 	p.pendingMap[reqID] = respc
 	p.resHandlers[reqID] = resHandler
 	item := p.pendingQueue.PushBack(Item{id: reqID, timestamp: time.Now()})
 	p.pendMutex.Unlock()
-
+	msg := &service.Data_MsgWrapper{Req: true, ReqID: reqID, MsgType: uint32(msgType), Payload: payload}
 	if sendErr := p.network.SendWrappedMessage(address.String(), p.name, msg); sendErr != nil {
+		log.Error("sending message failed ", msg, " error: ", sendErr)
 		p.removeFromPending(reqID, item)
 		return sendErr
 	}

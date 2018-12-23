@@ -3,6 +3,7 @@ package sync
 import (
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"sync/atomic"
 )
 
@@ -18,9 +19,12 @@ type PeersImpl struct {
 	exit     chan struct{}
 }
 
-func NewPeers(newPeerC chan crypto.PublicKey, expiredPeerC chan crypto.PublicKey) Peers {
-	pi := &PeersImpl{atomic.Value{}, make(chan struct{})}
-	pi.listenToPeers(newPeerC, expiredPeerC)
+func NewPeers(s service.Service) Peers {
+	value := atomic.Value{}
+	value.Store(make([]Peer, 0, 20))
+	pi := &PeersImpl{snapshot: value, exit: make(chan struct{})}
+	newPeerC, expiredPeerC := s.SubscribePeerEvents()
+	go pi.listenToPeers(newPeerC, expiredPeerC)
 	return pi
 }
 
@@ -38,15 +42,12 @@ func (pi *PeersImpl) listenToPeers(newPeerC chan crypto.PublicKey, expiredPeerC 
 		select {
 		case <-pi.exit:
 			log.Debug("run stoped")
-			close(newPeerC)
-			close(expiredPeerC)
 			return
 		case peer := <-newPeerC:
 			peerSet[peer] = true
 		case peer := <-expiredPeerC:
 			delete(peerSet, peer)
 		}
-
 		keys := make([]Peer, 0, len(peerSet))
 		for k := range peerSet {
 			keys = append(keys, k)

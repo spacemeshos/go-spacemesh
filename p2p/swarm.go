@@ -91,9 +91,9 @@ type swarm struct {
 	morePeersReq      chan struct{}
 	connectingTimeout time.Duration
 
-	peerLock    sync.RWMutex
-	newPeerSub  []chan crypto.PublicKey
-	delPeerSub  []chan crypto.PublicKey
+	peerLock   sync.RWMutex
+	newPeerSub []chan crypto.PublicKey
+	delPeerSub []chan crypto.PublicKey
 }
 
 func (s *swarm) waitForBoot() error {
@@ -246,7 +246,7 @@ func (s *swarm) connectionPool() cPool {
 	return s.cPool
 }
 
-func (s *swarm) sendWrappedMessage(nodeID string, protocol string, payload *service.Data_MsgWrapper) error {
+func (s *swarm) SendWrappedMessage(nodeID string, protocol string, payload *service.Data_MsgWrapper) error {
 	return s.sendMessageImpl(nodeID, protocol, payload)
 }
 
@@ -289,10 +289,10 @@ func (s *swarm) sendMessageImpl(peerPubKey string, protocol string, payload serv
 	}
 
 	switch x := payload.(type) {
-	case service.Data_MsgWrapper:
-		protomessage.Data = &pb.ProtocolMessage_Msg{&pb.MessageWrapper{Type: x.MsgType, Req: x.Req, ReqID: x.ReqID, Payload: x.Payload}}
 	case service.Data_Bytes:
 		protomessage.Data = &pb.ProtocolMessage_Payload{Payload: x.Bytes()}
+	case *service.Data_MsgWrapper:
+		protomessage.Data = &pb.ProtocolMessage_Msg{Msg: &pb.MessageWrapper{Type: x.MsgType, Req: x.Req, ReqID: x.ReqID, Payload: x.Payload}}
 	case nil:
 		// The field is not set.
 	default:
@@ -336,6 +336,7 @@ func (s *swarm) sendMessageImpl(peerPubKey string, protocol string, payload serv
 // RegisterProtocol registers an handler for `protocol`
 func (s *swarm) RegisterProtocol(protocol string) chan service.Message {
 	mchan := make(chan service.Message, 100)
+	fmt.Println("protocol: ", protocol)
 	s.protocolHandlerMutex.Lock()
 	s.protocolHandlers[protocol] = mchan
 	s.protocolHandlerMutex.Unlock()
@@ -546,7 +547,7 @@ func (s *swarm) ProcessProtocolMessage(sender node.Node, protocol string, data s
 	s.protocolHandlerMutex.RLock()
 	msgchan := s.protocolHandlers[protocol]
 	s.protocolHandlerMutex.RUnlock()
-
+	fmt.Println(protocol)
 	if msgchan == nil {
 		return ErrNoProtocol
 	}
