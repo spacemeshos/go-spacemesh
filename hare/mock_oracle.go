@@ -20,7 +20,7 @@ type Rolacle interface {
 
 type RoleRequest struct {
 	pubKey  crypto.PublicKey
-	layerId LayerId
+	layerId SetId
 	k       uint32
 }
 

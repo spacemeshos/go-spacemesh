@@ -9,9 +9,9 @@ import (
 	"time"
 )
 
-var Layer1 = &LayerId{Bytes32{1}}
-var Layer2 = &LayerId{Bytes32{2}}
-var Layer3 = &LayerId{Bytes32{3}}
+var setId1 = &SetId{Bytes32{1}}
+var setId2 = &SetId{Bytes32{2}}
+var setId3 = &SetId{Bytes32{3}}
 
 func createMessage(t *testing.T, layer Byteable) []byte {
 	hareMsg := &pb.HareMessage{}
@@ -56,14 +56,14 @@ func TestBroker_Received(t *testing.T) {
 	broker.Start()
 
 	inboxer := &MockInboxer{}
-	broker.Register(Layer1, inboxer)
+	broker.Register(setId1, inboxer)
 
-	serMsg := createMessage(t, Layer1)
+	serMsg := createMessage(t, setId1)
 	n2.Broadcast(ProtoName, serMsg)
 
 	recv := <-inboxer.inbox
 
-	assert.True(t, recv.Message.Layer[0] == Layer1.Bytes()[0])
+	assert.True(t, recv.Message.Layer[0] == setId1.Bytes()[0])
 }
 
 // test that aborting the broker aborts
@@ -86,13 +86,13 @@ func TestBroker_Abort(t *testing.T) {
 	}
 }
 
-func sendMessages(t *testing.T, layer *LayerId, n *service.Node, count int) {
+func sendMessages(t *testing.T, layer *SetId, n *service.Node, count int) {
 	for i := 0; i < count; i++ {
 		n.Broadcast(ProtoName, createMessage(t, layer))
 	}
 }
 
-func waitForMessages(t *testing.T, inbox chan *pb.HareMessage, layer *LayerId, msgCount int) {
+func waitForMessages(t *testing.T, inbox chan *pb.HareMessage, layer *SetId, msgCount int) {
 	for i := 0; i < msgCount; i++ {
 		x := <-inbox
 		assert.True(t, x.Message.Layer[0] == layer.Bytes()[0])
@@ -112,21 +112,21 @@ func TestBroker_MultipleLayers(t *testing.T) {
 	inboxer1 := &MockInboxer{}
 	inboxer2 := &MockInboxer{}
 	inboxer3 := &MockInboxer{}
-	broker.Register(Layer1, inboxer1)
-	broker.Register(Layer2, inboxer2)
-	broker.Register(Layer3, inboxer3)
+	broker.Register(setId1, inboxer1)
+	broker.Register(setId2, inboxer2)
+	broker.Register(setId3, inboxer3)
 
 	inbox1 := inboxer1.inbox
 	inbox2 := inboxer2.inbox
 	inbox3 := inboxer3.inbox
 
-	go sendMessages(t, Layer1, n2, msgCount)
-	go sendMessages(t, Layer2, n2, msgCount)
-	go sendMessages(t, Layer3, n2, msgCount)
+	go sendMessages(t, setId1, n2, msgCount)
+	go sendMessages(t, setId2, n2, msgCount)
+	go sendMessages(t, setId3, n2, msgCount)
 
-	waitForMessages(t, inbox1, Layer1, msgCount)
-	waitForMessages(t, inbox2, Layer2, msgCount)
-	waitForMessages(t, inbox3, Layer3, msgCount)
+	waitForMessages(t, inbox1, setId1, msgCount)
+	waitForMessages(t, inbox2, setId2, msgCount)
+	waitForMessages(t, inbox3, setId3, msgCount)
 
 	assert.True(t, true)
 }
@@ -137,8 +137,8 @@ func TestBroker_RegisterUnregister(t *testing.T) {
 	broker := NewBroker(n1)
 	broker.Start()
 	inbox := &MockInboxer{}
-	broker.Register(Layer1, inbox)
+	broker.Register(setId1, inbox)
 	assert.Equal(t, 1, len(broker.outbox))
-	broker.Unregister(Layer1)
+	broker.Unregister(setId1)
 	assert.Equal(t, 0, len(broker.outbox))
 }

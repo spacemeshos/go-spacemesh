@@ -7,41 +7,38 @@ import (
 	"testing"
 )
 
-const size100 = 100
-
-func BuildNotifyMsg(t *testing.T, pubKey crypto.PublicKey, s *Set) *pb.HareMessage {
+func BuildNotifyMsg(pubKey crypto.PublicKey, s *Set) *pb.HareMessage {
 	builder := NewMessageBuilder()
-	builder.SetType(PreRound).SetLayer(*Layer1).SetIteration(k).SetKi(ki).SetBlocks(s)
-	builder, err := builder.SetPubKey(pubKey).Sign(NewMockSigning())
-	assert.Nil(t, err)
+	builder.SetType(PreRound).SetLayer(*setId1).SetIteration(k).SetKi(ki).SetValues(s)
+	builder = builder.SetPubKey(pubKey).Sign(NewMockSigning())
 
 	return builder.Build()
 }
 
 func TestNotifyTracker_OnNotify(t *testing.T) {
-	s := NewEmptySet()
-	s.Add(blockId1)
-	s.Add(blockId2)
+	s := NewEmptySet(lowDefaultSize)
+	s.Add(value1)
+	s.Add(value2)
 	pubKey := generatePubKey(t)
 
-	tracker := NewNotifyTracker(size100)
-	exist := tracker.OnNotify(BuildNotifyMsg(t, pubKey, s))
-	assert.Equal(t, uint32(1), tracker.NotificationsCount(s))
+	tracker := NewNotifyTracker(lowDefaultSize)
+	exist := tracker.OnNotify(BuildNotifyMsg(pubKey, s))
+	assert.Equal(t, 1, tracker.NotificationsCount(s))
 	assert.False(t, exist)
-	exist = tracker.OnNotify(BuildNotifyMsg(t, pubKey, s))
+	exist = tracker.OnNotify(BuildNotifyMsg(pubKey, s))
 	assert.True(t, exist)
-	assert.Equal(t, uint32(1), tracker.NotificationsCount(s))
-	s.Add(blockId3)
-	tracker.OnNotify(BuildNotifyMsg(t, pubKey, s))
-	assert.Equal(t, uint32(0), tracker.NotificationsCount(s))
+	assert.Equal(t, 1, tracker.NotificationsCount(s))
+	s.Add(value3)
+	tracker.OnNotify(BuildNotifyMsg(pubKey, s))
+	assert.Equal(t, 0, tracker.NotificationsCount(s))
 }
 
 func TestNotifyTracker_NotificationsCount(t *testing.T) {
-	s := NewEmptySet()
-	s.Add(blockId1)
-	tracker := NewNotifyTracker(size100)
-	tracker.OnNotify(BuildNotifyMsg(t, generatePubKey(t), s))
-	assert.Equal(t, uint32(1), tracker.NotificationsCount(s))
-	tracker.OnNotify(BuildNotifyMsg(t, generatePubKey(t), s))
-	assert.Equal(t, uint32(2), tracker.NotificationsCount(s))
+	s := NewEmptySet(lowDefaultSize)
+	s.Add(value1)
+	tracker := NewNotifyTracker(lowDefaultSize)
+	tracker.OnNotify(BuildNotifyMsg(generatePubKey(t), s))
+	assert.Equal(t, 1, tracker.NotificationsCount(s))
+	tracker.OnNotify(BuildNotifyMsg(generatePubKey(t), s))
+	assert.Equal(t, 2, tracker.NotificationsCount(s))
 }

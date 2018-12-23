@@ -8,10 +8,10 @@ import (
 type Bytes32 [32]byte
 type Signature []byte
 
-type BlockId struct {
+type Value struct {
 	Bytes32
 }
-type LayerId struct {
+type SetId struct {
 	Bytes32
 }
 type MessageType byte
@@ -42,12 +42,12 @@ func (b32 Bytes32) Bytes() []byte {
 }
 
 type Set struct {
-	blocks map[uint32]BlockId
+	blocks map[uint32]Value
 }
 
-func NewEmptySet() *Set {
+func NewEmptySet(expectedSize int) *Set {
 	s := &Set{}
-	s.blocks = make(map[uint32]BlockId, layerSize)
+	s.blocks = make(map[uint32]Value, expectedSize)
 
 	return s
 }
@@ -55,21 +55,21 @@ func NewEmptySet() *Set {
 func NewSet(data [][]byte) *Set {
 	s := &Set{}
 
-	s.blocks = make(map[uint32]BlockId, len(data))
+	s.blocks = make(map[uint32]Value, len(data))
 	for i := 0; i < len(data); i++ {
-		bid := BlockId{NewBytes32(data[i])}
+		bid := Value{NewBytes32(data[i])}
 		s.blocks[bid.Id()] = bid
 	}
 
 	return s
 }
 
-func (s *Set) Contains(id BlockId) bool {
+func (s *Set) Contains(id Value) bool {
 	_, exist := s.blocks[id.Id()]
 	return exist
 }
 
-func (s *Set) Add(id BlockId) {
+func (s *Set) Add(id Value) {
 	if _, exist := s.blocks[id.Id()]; exist {
 		return
 	}
@@ -77,7 +77,7 @@ func (s *Set) Add(id BlockId) {
 	s.blocks[id.Id()] = id
 }
 
-func (s *Set) Remove(id BlockId) {
+func (s *Set) Remove(id Value) {
 	delete(s.blocks, id.Id())
 }
 

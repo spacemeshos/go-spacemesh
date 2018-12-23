@@ -7,38 +7,37 @@ import (
 	"testing"
 )
 
-func BuildProposalMsg(t *testing.T, pubKey crypto.PublicKey, s *Set) *pb.HareMessage {
+func BuildProposalMsg(pubKey crypto.PublicKey, s *Set) *pb.HareMessage {
 	builder := NewMessageBuilder()
-	builder.SetType(Proposal).SetLayer(*Layer1).SetIteration(k).SetKi(ki).SetBlocks(s)
-	builder, err := builder.SetPubKey(pubKey).Sign(NewMockSigning())
-	assert.Nil(t, err)
+	builder.SetType(Proposal).SetLayer(*setId1).SetIteration(k).SetKi(ki).SetValues(s)
+	builder = builder.SetPubKey(pubKey).Sign(NewMockSigning())
 
 	return builder.Build()
 }
 
 func TestProposalTracker_OnProposalConflict(t *testing.T) {
-	s := NewEmptySet()
-	s.Add(blockId1)
-	s.Add(blockId2)
+	s := NewEmptySet(lowDefaultSize)
+	s.Add(value1)
+	s.Add(value2)
 	pubKey := generatePubKey(t)
 
-	m1 := BuildProposalMsg(t, pubKey, s)
+	m1 := BuildProposalMsg(pubKey, s)
 	tracker := NewProposalTracker(lowThresh10)
 	tracker.OnProposal(m1)
 	assert.False(t, tracker.IsConflicting())
-	s.Add(blockId3)
-	m2 := BuildProposalMsg(t, pubKey, s)
+	s.Add(value3)
+	m2 := BuildProposalMsg(pubKey, s)
 	tracker.OnProposal(m2)
 	assert.True(t, tracker.IsConflicting())
 }
 
 func TestProposalTracker_IsConflicting(t *testing.T) {
-	s := NewEmptySet()
-	s.Add(blockId1)
+	s := NewEmptySet(lowDefaultSize)
+	s.Add(value1)
 	tracker := NewProposalTracker(lowThresh10)
 
 	for i := 0; i < lowThresh10; i++ {
-		tracker.OnProposal(BuildProposalMsg(t, generatePubKey(t), s))
+		tracker.OnProposal(BuildProposalMsg(generatePubKey(t), s))
 		assert.False(t, tracker.IsConflicting())
 	}
 }

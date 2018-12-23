@@ -44,11 +44,11 @@ func (st *StatusTracker) IsSVPReady() bool {
 }
 
 // Returns the union set of all status messages collected
-func (st *StatusTracker) buildUnionSet() *Set {
-	unionSet := NewEmptySet()
+func (st *StatusTracker) BuildUnionSet(expectedSize int) *Set {
+	unionSet := NewEmptySet(expectedSize)
 	for _, m := range st.statuses {
 		for _, buff := range m.Message.Blocks {
-			bid := BlockId{NewBytes32(buff)}
+			bid := Value{NewBytes32(buff)}
 			unionSet.Add(bid) // assuming add is unique
 		}
 	}

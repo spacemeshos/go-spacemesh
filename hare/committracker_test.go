@@ -7,11 +7,10 @@ import (
 	"testing"
 )
 
-func BuildCommitMsg(t *testing.T, pubKey crypto.PublicKey, s *Set) *pb.HareMessage {
+func BuildCommitMsg(pubKey crypto.PublicKey, s *Set) *pb.HareMessage {
 	builder := NewMessageBuilder()
-	builder.SetType(Commit).SetLayer(*Layer1).SetIteration(k).SetKi(ki).SetBlocks(s)
-	builder, err := builder.SetPubKey(pubKey).Sign(NewMockSigning())
-	assert.Nil(t, err)
+	builder.SetType(Commit).SetLayer(*setId1).SetIteration(k).SetKi(ki).SetValues(s)
+	builder = builder.SetPubKey(pubKey).Sign(NewMockSigning())
 
 	return builder.Build()
 }
@@ -19,20 +18,20 @@ func BuildCommitMsg(t *testing.T, pubKey crypto.PublicKey, s *Set) *pb.HareMessa
 func TestCommitTracker_OnCommit(t *testing.T) {
 	tracker := NewCommitTracker(lowThresh10+1, lowThresh10)
 	assert.Equal(t, 0, tracker.getMaxCommits())
-	s := NewEmptySet()
-	s.Add(blockId1)
-	m := BuildCommitMsg(t, generatePubKey(t), s)
+	s := NewEmptySet(lowDefaultSize)
+	s.Add(value1)
+	m := BuildCommitMsg(generatePubKey(t), s)
 	tracker.OnCommit(m)
 	assert.Equal(t, 1, tracker.getMaxCommits())
-	s.Add(blockId2)
+	s.Add(value2)
 	for i := 0; i < lowThresh10; i++ {
-		m := BuildCommitMsg(t, generatePubKey(t), s)
+		m := BuildCommitMsg(generatePubKey(t), s)
 		tracker.OnCommit(m)
 	}
 	assert.Equal(t, lowThresh10, tracker.getMaxCommits())
 
 	assert.False(t, tracker.HasEnoughCommits())
-	tracker.OnCommit(BuildCommitMsg(t, generatePubKey(t), s))
+	tracker.OnCommit(BuildCommitMsg(generatePubKey(t), s))
 	assert.Equal(t, lowThresh10+1, tracker.getMaxCommits())
 	assert.True(t, tracker.HasEnoughCommits())
 }

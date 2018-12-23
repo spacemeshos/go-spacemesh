@@ -4,6 +4,7 @@ import (
 	"errors"
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -11,10 +12,6 @@ import (
 )
 
 const ProtoName = "HARE_PROTOCOL"
-const RoundDuration = time.Second * time.Duration(15)
-const N = 800
-const f = 400
-const layerSize = 200
 
 type Byteable interface {
 	Bytes() []byte
@@ -36,7 +33,7 @@ type ConsensusProcess struct {
 	State
 	Closer          // the consensus is closeable
 	pubKey          crypto.PublicKey
-	layerId         LayerId
+	layerId         SetId
 	t               *Set    // loop local set
 	oracle          Rolacle // roles oracle
 	signing         Signing
@@ -50,11 +47,12 @@ type ConsensusProcess struct {
 	commitTracker   CommitTracker
 	notifyTracker   NotifyTracker
 	terminating     bool
+	cfg             config.Config
 }
 
-func NewConsensusProcess(key crypto.PublicKey, layer LayerId, s Set, oracle Rolacle, signing Signing, p2p NetworkService) *ConsensusProcess {
+func NewConsensusProcess(cfg config.Config, key crypto.PublicKey, layer SetId, s Set, oracle Rolacle, signing Signing, p2p NetworkService) *ConsensusProcess {
 	proc := &ConsensusProcess{}
-	proc.State = State{0, 0, &s, nil}
+	proc.State = State{0, -1, &s, nil}
 	proc.Closer = NewCloser()
 	proc.pubKey = key
 	proc.layerId = layer
@@ -62,12 +60,13 @@ func NewConsensusProcess(key crypto.PublicKey, layer LayerId, s Set, oracle Rola
 	proc.signing = signing
 	proc.network = p2p
 	proc.roundMsg = nil
-	proc.preRoundTracker = NewPreRoundTracker(f+1, N)
-	proc.statusesTracker = NewStatusTracker(f+1, N)
-	proc.proposalTracker = NewProposalTracker(N)
-	proc.commitTracker = NewCommitTracker(f+1, N)
-	proc.notifyTracker = NewNotifyTracker(N)
+	proc.preRoundTracker = NewPreRoundTracker(cfg.F+1, cfg.N)
+	proc.statusesTracker = NewStatusTracker(cfg.F+1, cfg.N)
+	proc.proposalTracker = NewProposalTracker(cfg.N)
+	proc.commitTracker = NewCommitTracker(cfg.F+1, cfg.N)
+	proc.notifyTracker = NewNotifyTracker(cfg.N)
 	proc.terminating = false
+	proc.cfg = cfg
 
 	return proc
 }
@@ -93,15 +92,12 @@ func (proc *ConsensusProcess) createInbox(size uint32) chan *pb.HareMessage {
 func (proc *ConsensusProcess) eventLoop() {
 	log.Info("Start listening")
 
-	// build and send pre-round message
-	m, err := proc.buildPreRoundMessage()
-	if err != nil {
-		log.Error("could not build pre-round message")
-	}
-	proc.network.Broadcast(ProtoName, m)
+	// set pre-round message and send
+	proc.setPreRoundMessage()
+	proc.sendPendingMessage()
 
 	// listen to pre-round messages
-	timer := time.NewTimer(RoundDuration)
+	timer := time.NewTimer(proc.cfg.RoundDuration)
 PreRound:
 	for {
 		select {
@@ -114,29 +110,14 @@ PreRound:
 		}
 	}
 
-	// end of pre-round, update our set
-	for _, v := range proc.s.blocks {
-		if !proc.preRoundTracker.CanProveBlock(v) { // not enough witnesses
-			proc.s.Remove(v)
-		}
-	}
+	proc.preRoundTracker.UpdateSet(proc.s)
 
-	// set status to be sent in next round
-	if err := proc.setStatusMessage(); err != nil {
-		log.Error("Error setting status message: ", err.Error())
-		proc.Close()
-	}
-
-	// send status message
-	m, err = proto.Marshal(proc.roundMsg)
-	if err != nil {
-		log.Error("Could not marshal status message")
-		proc.Close()
-	}
-	proc.network.Broadcast(ProtoName, m)
+	// set status and send
+	proc.setStatusMessage()
+	proc.sendPendingMessage()
 
 	// start first iteration
-	ticker := time.NewTicker(RoundDuration)
+	ticker := time.NewTicker(proc.cfg.RoundDuration)
 	for {
 		select {
 		case msg := <-proc.inbox: // msg event
@@ -211,7 +192,7 @@ func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
 
 	// validate role
 	if !proc.oracle.ValidateRole(roleFromIteration(m.Message.K),
-		RoleRequest{pub, LayerId{NewBytes32(m.Message.Layer)}, m.Message.K},
+		RoleRequest{pub, SetId{NewBytes32(m.Message.Layer)}, m.Message.K},
 		Signature(m.Message.RoleProof)) {
 		log.Warning("invalid role detected")
 		return
@@ -252,26 +233,39 @@ func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
 	}
 }
 
+func (proc *ConsensusProcess) sendPendingMessage() {
+	// no message ready
+	if proc.roundMsg == nil {
+		return
+	}
+
+	// validate role
+	if !proc.oracle.ValidateRole(roleFromIteration(proc.k),
+		RoleRequest{proc.pubKey, proc.layerId, proc.k},
+		Signature{}) {
+		return
+	}
+
+	data, err := proto.Marshal(proc.roundMsg)
+	if err != nil {
+		panic("could not marshal message before send")
+	}
+
+	proc.network.Broadcast(ProtoName, data)
+}
+
 func (proc *ConsensusProcess) nextRound() {
 	log.Info("End of round: %d", proc.k)
 
-	// check if message ready to send and check role to see if we should send
-	if proc.roundMsg != nil && proc.oracle.ValidateRole(roleFromIteration(proc.k),
-		RoleRequest{proc.pubKey, proc.layerId, proc.k},
-		Signature{}) {
-		m, err := proto.Marshal(proc.roundMsg)
-		if err == nil { // no error, send msg
-			proc.network.Broadcast(ProtoName, m)
-		}
-	}
+	proc.sendPendingMessage()
 
 	// reset trackers
 	switch proc.k % 4 { // switch end of current round
 	case 0: // 0 is round 1
-		proc.statusesTracker = NewStatusTracker(f+1, N) // reset statuses tracking
+		proc.statusesTracker = NewStatusTracker(proc.cfg.F+1, proc.cfg.N) // reset statuses tracking
 	case 2: // 2 is round 3
-		proc.proposalTracker = NewProposalTracker(N)  // reset proposal tracking
-		proc.commitTracker = NewCommitTracker(f+1, N) // reset commits tracking
+		proc.proposalTracker = NewProposalTracker(proc.cfg.N)  // reset proposal tracking
+		proc.commitTracker = NewCommitTracker(proc.cfg.F+1, proc.cfg.N) // reset commits tracking
 	}
 	// TODO: check what to do with the notify. do we really need f+1 notify or can count on the certificate?
 
@@ -283,63 +277,38 @@ func (proc *ConsensusProcess) nextRound() {
 	proc.k++
 }
 
-func (proc *ConsensusProcess) buildPreRoundMessage() ([]byte, error) {
+func (proc *ConsensusProcess) setPreRoundMessage() {
 	builder := NewMessageBuilder()
-	builder.SetType(PreRound).SetLayer(proc.layerId).SetIteration(proc.k).SetKi(proc.ki).SetBlocks(proc.s)
-	builder, err := builder.SetPubKey(proc.pubKey).Sign(proc.signing)
-
-	if err != nil {
-		return nil, err
-	}
-
-	m, err := proto.Marshal(builder.Build())
-	if err != nil {
-		return nil, err
-	}
-
-	return m, nil
-}
-
-func (proc *ConsensusProcess) setStatusMessage() error {
-	builder := NewMessageBuilder()
-	builder.SetType(Status).SetLayer(proc.layerId).SetIteration(proc.k).SetKi(proc.ki).SetBlocks(proc.s)
-	builder, err := builder.SetPubKey(proc.pubKey).Sign(proc.signing)
-
-	if err != nil {
-		return err
-	}
+	builder.SetType(PreRound).SetLayer(proc.layerId).SetIteration(proc.k).SetKi(proc.ki).SetValues(proc.s)
+	builder = builder.SetPubKey(proc.pubKey).Sign(proc.signing)
 
 	proc.roundMsg = builder.Build()
-
-	return nil
 }
 
-func (proc *ConsensusProcess) setProposalMessage(svp *pb.AggregatedMessages) error {
+func (proc *ConsensusProcess) setStatusMessage() {
 	builder := NewMessageBuilder()
-	builder.SetType(Proposal).SetLayer(proc.layerId).SetIteration(proc.k).SetKi(proc.ki).SetBlocks(proc.statusesTracker.buildUnionSet())
+	builder.SetType(Status).SetLayer(proc.layerId).SetIteration(proc.k).SetKi(proc.ki).SetValues(proc.s)
+	builder = builder.SetPubKey(proc.pubKey).Sign(proc.signing)
+
+	proc.roundMsg = builder.Build()
+}
+
+func (proc *ConsensusProcess) setProposalMessage(svp *pb.AggregatedMessages) {
+	builder := NewMessageBuilder()
+	builder.SetType(Proposal).SetLayer(proc.layerId).SetIteration(proc.k).SetKi(proc.ki).SetValues(proc.statusesTracker.BuildUnionSet(proc.cfg.SetSize))
 	builder.SetSVP(svp)
-	builder, err := builder.SetPubKey(proc.pubKey).Sign(proc.signing)
-
-	if err != nil {
-		return err
-	}
+	builder = builder.SetPubKey(proc.pubKey).Sign(proc.signing)
 
 	proc.roundMsg = builder.Build()
-
-	return nil
 }
 
-func (proc *ConsensusProcess) buildNotifyMessage() (*pb.HareMessage, error) {
+func (proc *ConsensusProcess) buildNotifyMessage() *pb.HareMessage {
 	builder := NewMessageBuilder()
-	builder.SetType(Proposal).SetLayer(proc.layerId).SetIteration(proc.k).SetKi(proc.ki).SetBlocks(proc.s)
+	builder.SetType(Proposal).SetLayer(proc.layerId).SetIteration(proc.k).SetKi(proc.ki).SetValues(proc.s)
 	builder.SetCertificate(proc.certificate)
-	builder, err := builder.SetPubKey(proc.pubKey).Sign(proc.signing)
+	builder = builder.SetPubKey(proc.pubKey).Sign(proc.signing)
 
-	if err != nil {
-		return nil, err
-	}
-
-	return builder.Build(), nil
+	return builder.Build()
 }
 
 func roleFromIteration(k uint32) byte {
@@ -389,14 +358,7 @@ func (proc *ConsensusProcess) processCommitMsg(msg *pb.HareMessage) {
 
 	proc.s = proc.t // commit to t
 	proc.certificate = proc.commitTracker.BuildCertificate()
-	notifyMsg, err := proc.buildNotifyMessage() // build notify with certificate
-
-	if err != nil {
-		log.Warning("Could not build notify message: ", err)
-		return
-	}
-
-	proc.roundMsg = notifyMsg
+	proc.roundMsg = proc.buildNotifyMessage() // build notify with certificate
 }
 
 func (proc *ConsensusProcess) processNotifyMsg(msg *pb.HareMessage) {
@@ -412,12 +374,12 @@ func (proc *ConsensusProcess) processNotifyMsg(msg *pb.HareMessage) {
 		proc.ki = msg.Message.Ki
 	}
 
-	if proc.notifyTracker.NotificationsCount(s) < f+1 { // not enough
+	if proc.notifyTracker.NotificationsCount(s) < proc.cfg.F+1 { // not enough
 		return
 	}
 
 	// enough notifications, should broadcast & terminate
-	notifyMsg, err := proc.buildNotifyMessage()
+	notifyMsg := proc.buildNotifyMessage()
 	data, err := proto.Marshal(notifyMsg)
 	if err != nil {
 		log.Error("Could not marshal notify message")

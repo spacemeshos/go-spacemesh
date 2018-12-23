@@ -13,7 +13,7 @@ message HareMessage {
 
 // the certificate
 message Certificate {
-    repeated bytes blocks = 1; // the committed set S
+    repeated bytes values = 1; // the committed set S
     AggregatedMessages aggMsgs = 2;
 }
 
@@ -29,7 +29,7 @@ message InnerMessage {
     bytes layer = 2;
     uint32 k = 3; // the iteration
     int32 ki = 4;
-    repeated bytes blocks = 5; // the set S. optional for commit message in a certificate
+    repeated bytes values = 5; // the set S. optional for commit message in a certificate
     bytes roleProof = 6; // role is implicit by message type, this is the proof
     AggregatedMessages svp = 7; // optional. only for proposal messages
 }

@@ -1,10 +1,10 @@
 package hare
 
 import (
-	"errors"
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/hare/pb"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 type MessageBuilder struct {
@@ -33,15 +33,16 @@ func (builder *MessageBuilder) SetCertificate(certificate *pb.Certificate) *Mess
 	return builder
 }
 
-func (builder *MessageBuilder) Sign(signing Signing) (*MessageBuilder, error) {
+func (builder *MessageBuilder) Sign(signing Signing) *MessageBuilder {
 	buff, err := proto.Marshal(builder.inner)
 	if err != nil {
-		return nil, errors.New("error marshaling inner message")
+		log.Error("could not sign message")
+		panic("marshal failed during signing")
 	}
 
 	builder.outer.InnerSig = signing.Sign(buff)
 
-	return builder, nil
+	return builder
 }
 
 func (builder *MessageBuilder) SetType(msgType MessageType) *MessageBuilder {
@@ -49,7 +50,7 @@ func (builder *MessageBuilder) SetType(msgType MessageType) *MessageBuilder {
 	return builder
 }
 
-func (builder *MessageBuilder) SetLayer(id LayerId) *MessageBuilder {
+func (builder *MessageBuilder) SetLayer(id SetId) *MessageBuilder {
 	builder.inner.Layer = id.Bytes()
 	return builder
 }
@@ -64,7 +65,7 @@ func (builder *MessageBuilder) SetKi(ki int32) *MessageBuilder {
 	return builder
 }
 
-func (builder *MessageBuilder) SetBlocks(set *Set) *MessageBuilder {
+func (builder *MessageBuilder) SetValues(set *Set) *MessageBuilder {
 	builder.inner.Blocks = set.To2DSlice()
 	return builder
 }

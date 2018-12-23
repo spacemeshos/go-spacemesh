@@ -39,6 +39,6 @@ func (nt *NotifyTracker) OnNotify(msg *pb.HareMessage) bool {
 	return false
 }
 
-func (nt *NotifyTracker) NotificationsCount(s *Set) uint32 {
-	return nt.tracker.CountStatus(s)
+func (nt *NotifyTracker) NotificationsCount(s *Set) int {
+	return int(nt.tracker.CountStatus(s))
 }
