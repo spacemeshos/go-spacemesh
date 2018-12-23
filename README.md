@@ -22,12 +22,12 @@
 
 ## go-spacemesh
 💾⏰💪
-Thanks for your interest in this open source project. This is the go implementation of the [Spacemesh](https://spacemesh.io) p2p node. Spacemesh is a decentralized blockchain computer using a new race-free consensus protocol that doesn't involve energy-wasteful `proof of work`. We aim to create a secure and scalable decentralized computer formed by a large number of desktop PCs at home. We are designing and coding a modern blockchain platform from the ground up for scale, security and speed based on the learnings of the achievements and mistakes of previous projects in this space. 
+Thanks for your interest in this open source project. This is the go implementation of the [Spacemesh](https://spacemesh.io) p2p node. Spacemesh is a decentralized blockchain computer using a new race-free consensus protocol that doesn't involve energy-wasteful `proof of work`. We aim to create a secure and scalable decentralized computer formed by a large number of desktop PCs at home. We are designing and coding a modern blockchain platform from the ground up for scale, security and speed based on the learnings of the achievements and mistakes of previous projects in this space.
 
 To learn more about Spacemesh head over to our [wiki](https://github.com/spacemeshos/go-spacemesh/wiki).
 
 ### Motivation
-SpacemeshOS is designed to create a decentralized blockchain smart contracts computer and a cryptocurrency that is formed by connecting the home PCs of people from around the world into one virtual computer without incurring massive energy waste and mining pools issues that are inherent in other blockchain computers, and provide a provably-secure and incentive-compatible smart contracts execution environment. Spacemesh OS is designed to be ASIC-resistant and in a way that doesn’t give an unfair advantage to rich parties who can afford setting up dedicated computers on the network. We achieve this by using a novel consensus protocol and optimize the software to be most effectively be used on home PCs that are also used for interactive apps. 
+SpacemeshOS is designed to create a decentralized blockchain smart contracts computer and a cryptocurrency that is formed by connecting the home PCs of people from around the world into one virtual computer without incurring massive energy waste and mining pools issues that are inherent in other blockchain computers, and provide a provably-secure and incentive-compatible smart contracts execution environment. Spacemesh OS is designed to be ASIC-resistant and in a way that doesn’t give an unfair advantage to rich parties who can afford setting up dedicated computers on the network. We achieve this by using a novel consensus protocol and optimize the software to be most effectively be used on home PCs that are also used for interactive apps.
 
 ### What is this good for?
 Provide dapp and app developers with a robust way to add value exchange and other value related features to their apps at scale. Our goal is to create a truly decentralized cryptocoin that fulfills the original vision behind bitcoin to become a secure trustless store of value as well as a transactional currency with extremely low transaction fees.
@@ -38,7 +38,7 @@ go-spacemesh is designed to be installed and operated on users' home PCs to form
 ### Project Status
 Development is currently focused on 3 main node core components:
 1. The p2p/networking - the project includes a modern and robust p2p protocol for use by components up the stack.
-2. The POST/blockmesh based consensus layer - Spacemesh protocol implementation, utilizing the p2p capabilities.  
+2. The POST/blockmesh based consensus layer - Spacemesh protocol implementation, utilizing the p2p capabilities.
 3. App scaffolding - supporting functionality such as config, repl, cli and cross platform packaging.
 
 Over the last few months, we had good progress on #1 and #3 and we are now starting to focus on #2.
@@ -94,7 +94,7 @@ To build `go-spacemesh` for your current system architecture, from the project r
 ```
 make build
 ```
-This will (re-)generate protobuf files and build the `go-spacemesh` binary, saving it in the project root directory. 
+This will (re-)generate protobuf files and build the `go-spacemesh` binary, saving it in the project root directory.
 
 To build a binary for a specific architecture directory use:
 ```
@@ -111,7 +111,7 @@ Platform-specific binaries are saved to the `/build` directory.
 ```
 make test
 ```
-or 
+or
 ```
 make cover
 ```
@@ -128,6 +128,15 @@ docker run -d --name=spacemesh spacemesh
 - Browse project [go docs](https://godoc.org/github.com/spacemeshos/go-spacemesh)
 - Spacemesh Protocol [first AMA session](https://spacemesh.io/tal-m-deep-dive/)
 
-### Got Questions? 
+### Status
+[P2P](https://github.com/spacemeshos/go-spacemesh#workspaces/go-spacemesh-59f1e073ac463071b57d474f/boards?labels=p2p&repos=108372143)
+
+[Sync Protocol](https://github.com/spacemeshos/go-spacemesh#workspaces/go-spacemesh-59f1e073ac463071b57d474f/boards?labels=sync&repos=108372143)
+
+[Hare Protocol](https://github.com/spacemeshos/go-spacemesh#workspaces/go-spacemesh-59f1e073ac463071b57d474f/boards?labels=hare%20protocol&repos=108372143)
+
+[Global State](https://github.com/spacemeshos/go-spacemesh#workspaces/go-spacemesh-59f1e073ac463071b57d474f/boards?labels=global%20state&repos=108372143)
+
+### Got Questions?
 - Introduce yourself and ask anything on the [spacemesh gitter channel](https://gitter.im/spacemesh-os/Lobby).
 - DM [@teamspacemesh](https://twitter.com/teamspacemesh)
