@@ -21,7 +21,7 @@ func generatePubKey(t *testing.T) crypto.PublicKey {
 	return pub
 }
 
-// test that a message to a specific layer is delivered by the broker
+// test that a message to a specific set id is delivered by the broker
 func TestConsensusProcess_StartTwice(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
@@ -70,7 +70,7 @@ func TestConsensusProcess_handleMessage(t *testing.T) {
 	proc := NewConsensusProcess(cfg, generatePubKey(t), *setId1, *s, oracle, signing, n1)
 	broker.Register(setId1, proc)
 
-	m := NewMessageBuilder().SetIteration(0).SetLayer(*setId1).SetPubKey(generatePubKey(t)).Sign(proc.signing).Build()
+	m := NewMessageBuilder().SetIteration(0).SetSetId(*setId1).SetPubKey(generatePubKey(t)).Sign(proc.signing).Build()
 
 	proc.handleMessage(m)
 }

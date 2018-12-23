@@ -11,8 +11,8 @@ type StatusTracker struct {
 	threshold int                        // threshold to indicate a set can be proved
 }
 
-func NewStatusTracker(threshold int, expectedSize int) StatusTracker {
-	st := StatusTracker{}
+func NewStatusTracker(threshold int, expectedSize int) *StatusTracker {
+	st := &StatusTracker{}
 	st.statuses = make(map[string]*pb.HareMessage, expectedSize)
 	st.threshold = threshold
 
@@ -47,7 +47,7 @@ func (st *StatusTracker) IsSVPReady() bool {
 func (st *StatusTracker) BuildUnionSet(expectedSize int) *Set {
 	unionSet := NewEmptySet(expectedSize)
 	for _, m := range st.statuses {
-		for _, buff := range m.Message.Blocks {
+		for _, buff := range m.Message.Values {
 			bid := Value{NewBytes32(buff)}
 			unionSet.Add(bid) // assuming add is unique
 		}

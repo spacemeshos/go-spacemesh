@@ -13,9 +13,9 @@ var setId1 = &SetId{Bytes32{1}}
 var setId2 = &SetId{Bytes32{2}}
 var setId3 = &SetId{Bytes32{3}}
 
-func createMessage(t *testing.T, layer Byteable) []byte {
+func createMessage(t *testing.T, setId Byteable) []byte {
 	hareMsg := &pb.HareMessage{}
-	hareMsg.Message = &pb.InnerMessage{Layer: layer.Bytes()}
+	hareMsg.Message = &pb.InnerMessage{SetId: setId.Bytes()}
 	serMsg, err := proto.Marshal(hareMsg)
 
 	if err != nil {
@@ -46,7 +46,7 @@ func TestBroker_Start(t *testing.T) {
 	assert.Equal(t, "instance already started", err.Error())
 }
 
-// test that a message to a specific layer is delivered by the broker
+// test that a message to a specific set Id is delivered by the broker
 func TestBroker_Received(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
@@ -63,7 +63,7 @@ func TestBroker_Received(t *testing.T) {
 
 	recv := <-inboxer.inbox
 
-	assert.True(t, recv.Message.Layer[0] == setId1.Bytes()[0])
+	assert.True(t, recv.Message.SetId[0] == setId1.Bytes()[0])
 }
 
 // test that aborting the broker aborts
@@ -86,21 +86,21 @@ func TestBroker_Abort(t *testing.T) {
 	}
 }
 
-func sendMessages(t *testing.T, layer *SetId, n *service.Node, count int) {
+func sendMessages(t *testing.T, setId *SetId, n *service.Node, count int) {
 	for i := 0; i < count; i++ {
-		n.Broadcast(ProtoName, createMessage(t, layer))
+		n.Broadcast(ProtoName, createMessage(t, setId))
 	}
 }
 
-func waitForMessages(t *testing.T, inbox chan *pb.HareMessage, layer *SetId, msgCount int) {
+func waitForMessages(t *testing.T, inbox chan *pb.HareMessage, setId *SetId, msgCount int) {
 	for i := 0; i < msgCount; i++ {
 		x := <-inbox
-		assert.True(t, x.Message.Layer[0] == layer.Bytes()[0])
+		assert.True(t, x.Message.SetId[0] == setId.Bytes()[0])
 	}
 }
 
-// test flow for multiple layers
-func TestBroker_MultipleLayers(t *testing.T) {
+// test flow for multiple set id
+func TestBroker_MultipleSetIds(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()

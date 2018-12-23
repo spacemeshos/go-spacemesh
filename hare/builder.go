@@ -50,8 +50,8 @@ func (builder *MessageBuilder) SetType(msgType MessageType) *MessageBuilder {
 	return builder
 }
 
-func (builder *MessageBuilder) SetLayer(id SetId) *MessageBuilder {
-	builder.inner.Layer = id.Bytes()
+func (builder *MessageBuilder) SetSetId(id SetId) *MessageBuilder {
+	builder.inner.SetId = id.Bytes()
 	return builder
 }
 
@@ -66,7 +66,7 @@ func (builder *MessageBuilder) SetKi(ki int32) *MessageBuilder {
 }
 
 func (builder *MessageBuilder) SetValues(set *Set) *MessageBuilder {
-	builder.inner.Blocks = set.To2DSlice()
+	builder.inner.Values = set.To2DSlice()
 	return builder
 }
 

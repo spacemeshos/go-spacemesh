@@ -20,7 +20,7 @@ var value3 = Value{Bytes32{3}}
 
 func BuildPreRoundMsg(pubKey crypto.PublicKey, s *Set) *pb.HareMessage {
 	builder := NewMessageBuilder()
-	builder.SetType(PreRound).SetLayer(*setId1).SetIteration(k).SetKi(ki).SetValues(s)
+	builder.SetType(PreRound).SetSetId(*setId1).SetIteration(k).SetKi(ki).SetValues(s)
 	builder = builder.SetPubKey(pubKey).Sign(NewMockSigning())
 
 	return builder.Build()

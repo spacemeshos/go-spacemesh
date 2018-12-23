@@ -13,8 +13,8 @@ type CommitTracker struct {
 	threshold   int                          // the number of required commits
 }
 
-func NewCommitTracker(threshold int, expectedSize int) CommitTracker {
-	ct := CommitTracker{}
+func NewCommitTracker(threshold int, expectedSize int) *CommitTracker {
+	ct := &CommitTracker{}
 	ct.seenSenders = make(map[string]bool, expectedSize)
 	ct.commits = make(map[uint32][]*pb.HareMessage, expectedSize)
 	ct.maxSet = nil
@@ -53,7 +53,7 @@ func (ct *CommitTracker) OnCommit(msg *pb.HareMessage) {
 
 	ct.seenSenders[pub.String()] = true
 
-	s := NewSet(msg.Message.Blocks)
+	s := NewSet(msg.Message.Values)
 
 	// create array if necessary
 	_, exist := ct.commits[s.Id()]
@@ -83,9 +83,9 @@ func (ct *CommitTracker) BuildCertificate() *pb.Certificate {
 	c := &pb.Certificate{}
 
 	c.AggMsgs.Messages = ct.commits[ct.maxSet.Id()]
-	c.Blocks = ct.commits[ct.maxSet.Id()][0].Message.Blocks
+	c.Values = ct.commits[ct.maxSet.Id()][0].Message.Values
 	// TODO: set c.AggMsgs.AggSig
-	// TODO: optimize msg size by setting blocks to nil
+	// TODO: optimize msg size by setting values to nil
 
 	return c
 }

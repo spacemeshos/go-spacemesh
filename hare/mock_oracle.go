@@ -19,9 +19,9 @@ type Rolacle interface {
 }
 
 type RoleRequest struct {
-	pubKey  crypto.PublicKey
-	layerId SetId
-	k       uint32
+	pubKey crypto.PublicKey
+	setId  SetId
+	k      uint32
 }
 
 func (roleRequest *RoleRequest) bytes() []byte {

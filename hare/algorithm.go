@@ -25,15 +25,15 @@ type NetworkService interface {
 type State struct {
 	k           uint32          // the iteration number
 	ki          int32           // indicates when S was first committed upon
-	s           *Set            // the set of blocks
+	s           *Set            // the set of values
 	certificate *pb.Certificate // the certificate
 }
 
 type ConsensusProcess struct {
 	State
-	Closer          // the consensus is closeable
+	Closer // the consensus is closeable
 	pubKey          crypto.PublicKey
-	layerId         SetId
+	setId           SetId
 	t               *Set    // loop local set
 	oracle          Rolacle // roles oracle
 	signing         Signing
@@ -41,21 +41,21 @@ type ConsensusProcess struct {
 	startTime       time.Time // TODO: needed?
 	inbox           chan *pb.HareMessage
 	roundMsg        *pb.HareMessage
-	preRoundTracker PreRoundTracker
-	statusesTracker StatusTracker
-	proposalTracker ProposalTracker
-	commitTracker   CommitTracker
-	notifyTracker   NotifyTracker
+	preRoundTracker *PreRoundTracker
+	statusesTracker *StatusTracker
+	proposalTracker *ProposalTracker
+	commitTracker   *CommitTracker
+	notifyTracker   *NotifyTracker
 	terminating     bool
 	cfg             config.Config
 }
 
-func NewConsensusProcess(cfg config.Config, key crypto.PublicKey, layer SetId, s Set, oracle Rolacle, signing Signing, p2p NetworkService) *ConsensusProcess {
+func NewConsensusProcess(cfg config.Config, key crypto.PublicKey, setId SetId, s Set, oracle Rolacle, signing Signing, p2p NetworkService) *ConsensusProcess {
 	proc := &ConsensusProcess{}
 	proc.State = State{0, -1, &s, nil}
 	proc.Closer = NewCloser()
 	proc.pubKey = key
-	proc.layerId = layer
+	proc.setId = setId
 	proc.oracle = oracle
 	proc.signing = signing
 	proc.network = p2p
@@ -176,7 +176,7 @@ func (proc *ConsensusProcess) validateCertificate(m *pb.HareMessage) bool {
 }
 
 func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
-	// Note: layer is already verified by the broker
+	// Note: set id is already verified by the broker
 
 	// validate round and message type match
 	if !proc.doesMessageMatchRound(m) {
@@ -192,7 +192,7 @@ func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
 
 	// validate role
 	if !proc.oracle.ValidateRole(roleFromIteration(m.Message.K),
-		RoleRequest{pub, SetId{NewBytes32(m.Message.Layer)}, m.Message.K},
+		RoleRequest{pub, SetId{NewBytes32(m.Message.SetId)}, m.Message.K},
 		Signature(m.Message.RoleProof)) {
 		log.Warning("invalid role detected")
 		return
@@ -207,12 +207,6 @@ func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
 	// validate signature
 	if !proc.signing.Validate(data, m.InnerSig) {
 		log.Warning("invalid message signature detected")
-		return
-	}
-
-	// validate certificate (only notify has certificate)
-	if MessageType(m.Message.Type) == Notify && !proc.validateCertificate(m) {
-		log.Warning("invalid certificate detected")
 		return
 	}
 
@@ -241,13 +235,13 @@ func (proc *ConsensusProcess) sendPendingMessage() {
 
 	// validate role
 	if !proc.oracle.ValidateRole(roleFromIteration(proc.k),
-		RoleRequest{proc.pubKey, proc.layerId, proc.k},
-		Signature{}) {
+		RoleRequest{proc.pubKey, proc.setId, proc.k}, Signature{}) {
 		return
 	}
 
 	data, err := proto.Marshal(proc.roundMsg)
 	if err != nil {
+		log.Error("failed marshaling message")
 		panic("could not marshal message before send")
 	}
 
@@ -257,29 +251,29 @@ func (proc *ConsensusProcess) sendPendingMessage() {
 func (proc *ConsensusProcess) nextRound() {
 	log.Info("End of round: %d", proc.k)
 
+	// advance to next round
+	proc.k++
+
+	// send pending message
 	proc.sendPendingMessage()
 
 	// reset trackers
-	switch proc.k % 4 { // switch end of current round
-	case 0: // 0 is round 1
+	switch proc.k % 4 { // switch current round
+	case 1:                                                               // 1 is round 2
 		proc.statusesTracker = NewStatusTracker(proc.cfg.F+1, proc.cfg.N) // reset statuses tracking
-	case 2: // 2 is round 3
-		proc.proposalTracker = NewProposalTracker(proc.cfg.N)  // reset proposal tracking
+	case 3:                                                             // 3 is round 4
+		proc.proposalTracker = NewProposalTracker(proc.cfg.N)           // reset proposal tracking
 		proc.commitTracker = NewCommitTracker(proc.cfg.F+1, proc.cfg.N) // reset commits tracking
 	}
-	// TODO: check what to do with the notify. do we really need f+1 notify or can count on the certificate?
 
 	// reset round message & iteration set
 	proc.roundMsg = nil
 	proc.t = nil
-
-	// advance to next round
-	proc.k++
 }
 
 func (proc *ConsensusProcess) setPreRoundMessage() {
 	builder := NewMessageBuilder()
-	builder.SetType(PreRound).SetLayer(proc.layerId).SetIteration(proc.k).SetKi(proc.ki).SetValues(proc.s)
+	builder.SetType(PreRound).SetSetId(proc.setId).SetIteration(proc.k).SetKi(proc.ki).SetValues(proc.s)
 	builder = builder.SetPubKey(proc.pubKey).Sign(proc.signing)
 
 	proc.roundMsg = builder.Build()
@@ -287,7 +281,7 @@ func (proc *ConsensusProcess) setPreRoundMessage() {
 
 func (proc *ConsensusProcess) setStatusMessage() {
 	builder := NewMessageBuilder()
-	builder.SetType(Status).SetLayer(proc.layerId).SetIteration(proc.k).SetKi(proc.ki).SetValues(proc.s)
+	builder.SetType(Status).SetSetId(proc.setId).SetIteration(proc.k).SetKi(proc.ki).SetValues(proc.s)
 	builder = builder.SetPubKey(proc.pubKey).Sign(proc.signing)
 
 	proc.roundMsg = builder.Build()
@@ -295,7 +289,7 @@ func (proc *ConsensusProcess) setStatusMessage() {
 
 func (proc *ConsensusProcess) setProposalMessage(svp *pb.AggregatedMessages) {
 	builder := NewMessageBuilder()
-	builder.SetType(Proposal).SetLayer(proc.layerId).SetIteration(proc.k).SetKi(proc.ki).SetValues(proc.statusesTracker.BuildUnionSet(proc.cfg.SetSize))
+	builder.SetType(Proposal).SetSetId(proc.setId).SetIteration(proc.k).SetKi(proc.ki).SetValues(proc.statusesTracker.BuildUnionSet(proc.cfg.SetSize))
 	builder.SetSVP(svp)
 	builder = builder.SetPubKey(proc.pubKey).Sign(proc.signing)
 
@@ -304,7 +298,7 @@ func (proc *ConsensusProcess) setProposalMessage(svp *pb.AggregatedMessages) {
 
 func (proc *ConsensusProcess) buildNotifyMessage() *pb.HareMessage {
 	builder := NewMessageBuilder()
-	builder.SetType(Proposal).SetLayer(proc.layerId).SetIteration(proc.k).SetKi(proc.ki).SetValues(proc.s)
+	builder.SetType(Notify).SetSetId(proc.setId).SetIteration(proc.k).SetKi(proc.ki).SetValues(proc.s)
 	builder.SetCertificate(proc.certificate)
 	builder = builder.SetPubKey(proc.pubKey).Sign(proc.signing)
 
@@ -324,7 +318,7 @@ func (proc *ConsensusProcess) processPreRoundMsg(msg *pb.HareMessage) {
 }
 
 func (proc *ConsensusProcess) processStatusMsg(msg *pb.HareMessage) {
-	s := NewSet(msg.Message.Blocks)
+	s := NewSet(msg.Message.Values)
 	if proc.preRoundTracker.CanProveSet(s) {
 		proc.statusesTracker.RecordStatus(msg)
 	}
@@ -339,11 +333,20 @@ func (proc *ConsensusProcess) processProposalMsg(msg *pb.HareMessage) {
 
 	set, ok := proc.proposalTracker.ProposedSet()
 	if !ok {
+		// Note: we use roundMsg=nil to mark that we should not send anything (for whatever reason)
+		// it is preferred then checking sometimes for t=nil as the protocol states
+		proc.roundMsg = nil
 		proc.t = nil
 		return
 	}
 
+	// update t & and roundMsg
 	proc.t = set
+	builder := NewMessageBuilder()
+	builder.SetType(Notify).SetSetId(proc.setId).SetIteration(proc.k).SetKi(proc.ki).SetValues(proc.t)
+	builder.SetCertificate(proc.certificate)
+	builder = builder.SetPubKey(proc.pubKey).Sign(proc.signing)
+	proc.roundMsg = builder.Build()
 }
 
 func (proc *ConsensusProcess) processCommitMsg(msg *pb.HareMessage) {
@@ -362,11 +365,17 @@ func (proc *ConsensusProcess) processCommitMsg(msg *pb.HareMessage) {
 }
 
 func (proc *ConsensusProcess) processNotifyMsg(msg *pb.HareMessage) {
+	// validate certificate (only notify has certificate)
+	if !proc.validateCertificate(msg) {
+		log.Warning("invalid certificate detected")
+		return
+	}
+
 	if exist := proc.notifyTracker.OnNotify(msg); exist {
 		return
 	}
 
-	s := NewSet(msg.Message.Blocks)
+	s := NewSet(msg.Message.Values)
 	// we assume that the expression was checked on handleMessage
 	if msg.Cert.AggMsgs.Messages[0].Message.Ki >= proc.ki {
 		proc.s = s

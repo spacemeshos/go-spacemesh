@@ -9,7 +9,7 @@ import (
 
 func BuildStatusMsg(pubKey crypto.PublicKey, s *Set) *pb.HareMessage {
 	builder := NewMessageBuilder()
-	builder.SetType(Status).SetLayer(*setId1).SetIteration(k).SetKi(ki).SetValues(s)
+	builder.SetType(Status).SetSetId(*setId1).SetIteration(k).SetKi(ki).SetValues(s)
 	builder = builder.SetPubKey(pubKey).Sign(NewMockSigning())
 
 	return builder.Build()

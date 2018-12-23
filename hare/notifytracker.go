@@ -11,8 +11,8 @@ type NotifyTracker struct {
 	tracker  *RefCountTracker           // tracks ref count to each seen set
 }
 
-func NewNotifyTracker(expectedSize int) NotifyTracker {
-	nt := NotifyTracker{}
+func NewNotifyTracker(expectedSize int) *NotifyTracker {
+	nt := &NotifyTracker{}
 	nt.notifies = make(map[string]*pb.HareMessage, expectedSize)
 	nt.tracker = NewRefCountTracker(expectedSize)
 
@@ -33,7 +33,7 @@ func (nt *NotifyTracker) OnNotify(msg *pb.HareMessage) bool {
 	nt.notifies[pub.String()] = msg
 
 	// track that set
-	s := NewSet(msg.Message.Blocks)
+	s := NewSet(msg.Message.Values)
 	nt.tracker.Track(s)
 
 	return false

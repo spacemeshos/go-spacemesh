@@ -42,12 +42,12 @@ func (b32 Bytes32) Bytes() []byte {
 }
 
 type Set struct {
-	blocks map[uint32]Value
+	values map[uint32]Value
 }
 
 func NewEmptySet(expectedSize int) *Set {
 	s := &Set{}
-	s.blocks = make(map[uint32]Value, expectedSize)
+	s.values = make(map[uint32]Value, expectedSize)
 
 	return s
 }
@@ -55,39 +55,39 @@ func NewEmptySet(expectedSize int) *Set {
 func NewSet(data [][]byte) *Set {
 	s := &Set{}
 
-	s.blocks = make(map[uint32]Value, len(data))
+	s.values = make(map[uint32]Value, len(data))
 	for i := 0; i < len(data); i++ {
 		bid := Value{NewBytes32(data[i])}
-		s.blocks[bid.Id()] = bid
+		s.values[bid.Id()] = bid
 	}
 
 	return s
 }
 
 func (s *Set) Contains(id Value) bool {
-	_, exist := s.blocks[id.Id()]
+	_, exist := s.values[id.Id()]
 	return exist
 }
 
 func (s *Set) Add(id Value) {
-	if _, exist := s.blocks[id.Id()]; exist {
+	if _, exist := s.values[id.Id()]; exist {
 		return
 	}
 
-	s.blocks[id.Id()] = id
+	s.values[id.Id()] = id
 }
 
 func (s *Set) Remove(id Value) {
-	delete(s.blocks, id.Id())
+	delete(s.values, id.Id())
 }
 
 func (s *Set) Equals(g *Set) bool {
-	if len(s.blocks) != len(g.blocks) {
+	if len(s.values) != len(g.values) {
 		return false
 	}
 
-	for _, bid := range s.blocks {
-		if _, exist := g.blocks[bid.Id()]; !exist {
+	for _, bid := range s.values {
+		if _, exist := g.values[bid.Id()]; !exist {
 			return false
 		}
 	}
@@ -96,9 +96,9 @@ func (s *Set) Equals(g *Set) bool {
 }
 
 func (s *Set) To2DSlice() [][]byte {
-	slice := make([][]byte, len(s.blocks))
+	slice := make([][]byte, len(s.values))
 	i := 0
-	for _, v := range s.blocks {
+	for _, v := range s.values {
 		slice[i] = make([]byte, 32)
 		copy(slice[i], v.Bytes())
 		i++
@@ -110,16 +110,16 @@ func (s *Set) To2DSlice() [][]byte {
 func (s *Set) Id() uint32 {
 	h := fnv.New32()
 
-	keys := make([]uint32, len(s.blocks))
+	keys := make([]uint32, len(s.values))
 	i := 0
-	for k := range s.blocks {
+	for k := range s.values {
 		keys[i] = k
 		i++
 	}
 	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
 
 	for i := 0; i < len(keys); i++ {
-		h.Write(s.blocks[keys[i]].Bytes())
+		h.Write(s.values[keys[i]].Bytes())
 	}
 
 	return h.Sum32()

@@ -11,8 +11,8 @@ type ProposalTracker struct {
 	isConflicting map[string]bool            // maps PubKey->ConflictStatus
 }
 
-func NewProposalTracker(expectedSize int) ProposalTracker {
-	pt := ProposalTracker{}
+func NewProposalTracker(expectedSize int) *ProposalTracker {
+	pt := &ProposalTracker{}
 	pt.proposals = make(map[string]*pb.HareMessage, expectedSize)
 	pt.isConflicting = make(map[string]bool, expectedSize)
 
@@ -25,7 +25,7 @@ func (pt *ProposalTracker) OnProposal(msg *pb.HareMessage) {
 		log.Warning("Could not construct public key: ", err.Error())
 	}
 
-	s := NewSet(msg.Message.Blocks)
+	s := NewSet(msg.Message.Values)
 
 	p, exist := pt.proposals[pub.String()]
 	if !exist { // first msg from this pub
@@ -34,7 +34,7 @@ func (pt *ProposalTracker) OnProposal(msg *pb.HareMessage) {
 	}
 
 	// same pub key, verify same set
-	g := NewSet(p.Message.Blocks)
+	g := NewSet(p.Message.Values)
 	if !s.Equals(g) {
 		pt.isConflicting[pub.String()] = true
 	}
@@ -68,5 +68,5 @@ func (pt *ProposalTracker) ProposedSet() (*Set, bool) {
 		return nil, false
 	}
 
-	return NewSet(pt.proposals[leader].Message.Blocks), true
+	return NewSet(pt.proposals[leader].Message.Values), true
 }

@@ -40,7 +40,7 @@ func (closer *Closer) CloseChannel() chan struct{} {
 	return closer.channel
 }
 
-// Broker is responsible for dispatching hare messages to the matching layer listener
+// Broker is responsible for dispatching hare messages to the matching set id listener
 type Broker struct {
 	Closer
 	network NetworkService
@@ -72,7 +72,7 @@ func (broker *Broker) Start() error {
 	return nil
 }
 
-// Dispatch incoming messages to the matching layer instance
+// Dispatch incoming messages to the matching set id instance
 func (broker *Broker) dispatcher() {
 	for {
 		select {
@@ -84,10 +84,10 @@ func (broker *Broker) dispatcher() {
 				continue
 			}
 
-			layerId := NewBytes32(hareMsg.Message.Layer)
+			setId := NewBytes32(hareMsg.Message.SetId)
 
 			broker.mutex.RLock()
-			c, exist := broker.outbox[layerId.Id()]
+			c, exist := broker.outbox[setId.Id()]
 			broker.mutex.RUnlock()
 			if exist {
 				c <- hareMsg
