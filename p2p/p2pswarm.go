@@ -56,7 +56,13 @@ func (p2ps *P2PSwarm) Start(t testing.TB, bootnodes int, networksize int, randco
 	// start boot
 	for i := 0; i < len(boot); i++ {
 		boot[i] = createP2pInstance(t, bootcfg)
+		if p2ps.before != nil {
+			p2ps.before(swarm[i])
+		}
 		boot[i].Start()
+		if p2ps.after != nil {
+			p2ps.after(boot[i])
+		}
 		testLog("BOOTNODE : %v", boot[i].lNode.String())
 	}
 
