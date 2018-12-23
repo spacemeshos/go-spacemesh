@@ -67,8 +67,6 @@ Please read the Spacemesh [full FAQ](https://github.com/spacemeshos/go-spacemesh
 
 ### Getting
 
-Install [Go 1.11 or later](https://golang.org/dl/) for your platform.
-
 ```bash
 git clone git@github.com:spacemeshos/go-spacemesh.git
 ```
@@ -79,6 +77,11 @@ Fork the project from https://github.com/spacemeshos/go-spacemesh
 Since the project uses Go 1.11's Modules it's best to place the code **outside** your `$GOPATH`. Read [this](https://github.com/golang/go/wiki/Modules#how-to-install-and-activate-module-support) for alternatives.
 
 ### Setting Up Local Environment
+
+Install [Go 1.11 or later](https://golang.org/dl/) for your platform, if you haven't already.
+
+Ensure that `$GOPATH` is set correctly and that the `$GOPATH/bin` directory appears in `$PATH`.
+
 Before building we need to install `protoc` (ProtoBuf compiler) and some tools required to generate ProtoBufs. Do this by running:
 ```bash
 make install
