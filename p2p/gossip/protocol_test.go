@@ -55,7 +55,7 @@ func (mbn *mockBaseNetwork) SendMessage(peerPubKey string, protocol string, payl
 func passOrDeadlock(t testing.TB, group *sync.WaitGroup) {
 	ch := make(chan struct{})
 	go func(ch chan struct{}, t testing.TB) {
-		timer := time.NewTimer(time.Second*3)
+		timer := time.NewTimer(time.Second * 3)
 		for {
 			select {
 			case <-ch:
@@ -180,7 +180,7 @@ func newTestSignedMessageData(t testing.TB, signer signer) []byte {
 func addPeersAndTest(t testing.TB, num int, p *Protocol, net *mockBaseNetwork, work bool) {
 
 	pc := p.peersCount()
-	reg , _ := net.SubscribePeerEvents()
+	reg, _ := net.SubscribePeerEvents()
 	net.addRandomPeers(num)
 
 	i := 0
@@ -226,7 +226,7 @@ func signedMessage(t testing.TB, s signer, message *pb.ProtocolMessage) service.
 	message.Metadata.MsgSign = sign
 	finbin, err := proto.Marshal(message)
 	assert.NoError(t, err)
-	return service.Data_Bytes{finbin}
+	return service.DataBytes{finbin}
 }
 
 func TestNeighborhood_Relay(t *testing.T) {
@@ -318,7 +318,7 @@ func TestNeighborhood_Broadcast2(t *testing.T) {
 
 	addPeersAndTest(t, 20, n, net, true)
 	net.msgwg.Add(20)
-	var msg service.Message = TestMessage{service.Data_Bytes{net.lastMsg}}
+	var msg service.Message = TestMessage{service.DataBytes{net.lastMsg}}
 	net.inbox <- msg
 	passOrDeadlock(t, net.msgwg)
 	assert.Equal(t, 0, net.processProtocolCount)
@@ -341,7 +341,7 @@ func TestNeighborhood_Broadcast3(t *testing.T) {
 	assert.Equal(t, 0, net.processProtocolCount)
 	assert.Equal(t, 20, net.totalMessageSent())
 
-	var msg service.Message = TestMessage{service.Data_Bytes{net.lastMsg}}
+	var msg service.Message = TestMessage{service.DataBytes{net.lastMsg}}
 	net.inbox <- msg
 	assert.Equal(t, 0, net.processProtocolCount)
 	assert.Equal(t, 20, net.totalMessageSent())
@@ -352,7 +352,7 @@ func TestNeighborhood_Relay3(t *testing.T) {
 	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newTestSigner(t), log.New("tesT", "", ""))
 	n.Start()
 
-	var msg service.Message = TestMessage{service.Data_Bytes{newTestSignedMessageData(t, newTestSigner(t))}}
+	var msg service.Message = TestMessage{service.DataBytes{newTestSignedMessageData(t, newTestSigner(t))}}
 	net.pcountwg.Add(1)
 	net.inbox <- msg
 	passOrDeadlock(t, net.pcountwg)
@@ -415,7 +415,7 @@ func TestNeighborhood_Disconnect(t *testing.T) {
 
 	net.pcountwg.Add(1)
 	net.msgwg.Add(2)
-	net.inbox <- TestMessage{service.Data_Bytes{msg}}
+	net.inbox <- TestMessage{service.DataBytes{msg}}
 	passOrDeadlock(t, net.pcountwg)
 	passOrDeadlock(t, net.msgwg)
 	assert.Equal(t, 1, net.processProtocolCount)
@@ -426,7 +426,7 @@ func TestNeighborhood_Disconnect(t *testing.T) {
 	n.removePeer(pub1)
 	net.pcountwg.Add(1)
 	net.msgwg.Add(1)
-	net.inbox <- TestMessage{service.Data_Bytes{msg2}}
+	net.inbox <- TestMessage{service.DataBytes{msg2}}
 	passOrDeadlock(t, net.pcountwg)
 	passOrDeadlock(t, net.msgwg)
 	assert.Equal(t, 2, net.processProtocolCount)
@@ -434,7 +434,7 @@ func TestNeighborhood_Disconnect(t *testing.T) {
 
 	n.addPeer(pub1)
 	net.msgwg.Add(1)
-	net.inbox <- TestMessage{service.Data_Bytes{msg2}}
+	net.inbox <- TestMessage{service.DataBytes{msg2}}
 	passOrDeadlock(t, net.msgwg)
 	assert.Equal(t, 2, net.processProtocolCount)
 	assert.Equal(t, 4, net.totalMessageSent())

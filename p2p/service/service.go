@@ -27,25 +27,25 @@ type Data interface {
 	Bytes() []byte
 }
 
-type Data_Bytes struct {
+type DataBytes struct {
 	Payload []byte
 }
 
-type Data_MsgWrapper struct {
+type DataMsgWrapper struct {
 	Req     bool
 	MsgType uint32
 	ReqID   uint64
 	Payload []byte
 }
 
-func (m Data_Bytes) messageData() {}
+func (m DataBytes) messageData() {}
 
-func (m Data_Bytes) Bytes() []byte {
+func (m DataBytes) Bytes() []byte {
 	return m.Payload
 }
 
-func (m Data_MsgWrapper) messageData() {}
+func (m DataMsgWrapper) messageData() {}
 
-func (m Data_MsgWrapper) Bytes() []byte {
+func (m DataMsgWrapper) Bytes() []byte {
 	return m.Payload
 }

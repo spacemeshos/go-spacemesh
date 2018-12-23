@@ -246,12 +246,12 @@ func (s *swarm) connectionPool() cPool {
 	return s.cPool
 }
 
-func (s *swarm) SendWrappedMessage(nodeID string, protocol string, payload *service.Data_MsgWrapper) error {
+func (s *swarm) SendWrappedMessage(nodeID string, protocol string, payload *service.DataMsgWrapper) error {
 	return s.sendMessageImpl(nodeID, protocol, payload)
 }
 
 func (s *swarm) SendMessage(nodeID string, protocol string, payload []byte) error {
-	return s.sendMessageImpl(nodeID, protocol, service.Data_Bytes{Payload: payload})
+	return s.sendMessageImpl(nodeID, protocol, service.DataBytes{Payload: payload})
 }
 
 // SendMessage Sends a message to a remote node
@@ -289,9 +289,9 @@ func (s *swarm) sendMessageImpl(peerPubKey string, protocol string, payload serv
 	}
 
 	switch x := payload.(type) {
-	case service.Data_Bytes:
+	case service.DataBytes:
 		protomessage.Data = &pb.ProtocolMessage_Payload{Payload: x.Bytes()}
-	case *service.Data_MsgWrapper:
+	case *service.DataMsgWrapper:
 		protomessage.Data = &pb.ProtocolMessage_Msg{Msg: &pb.MessageWrapper{Type: x.MsgType, Req: x.Req, ReqID: x.ReqID, Payload: x.Payload}}
 	case nil:
 		// The field is not set.
@@ -533,9 +533,9 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 	var data service.Data
 
 	if payload := pm.GetPayload(); payload != nil {
-		data = service.Data_Bytes{Payload: payload}
+		data = service.DataBytes{Payload: payload}
 	} else if wrap := pm.GetMsg(); wrap != nil {
-		data = service.Data_MsgWrapper{Req: wrap.Req, MsgType: wrap.Type, ReqID: wrap.ReqID, Payload: wrap.Payload}
+		data = &service.DataMsgWrapper{Req: wrap.Req, MsgType: wrap.Type, ReqID: wrap.ReqID, Payload: wrap.Payload}
 	}
 
 	return s.ProcessProtocolMessage(remoteNode, pm.Metadata.NextProtocol, data)
