@@ -19,14 +19,17 @@ func NewNotifyTracker(expectedSize int) *NotifyTracker {
 	return nt
 }
 
+// update state on notification message
+// It returns true if we ignored this message and false otherwise
 func (nt *NotifyTracker) OnNotify(msg *pb.HareMessage) bool {
 	pub, err := crypto.NewPublicKey(msg.PubKey)
 	if err != nil {
 		log.Warning("Could not construct public key: ", err.Error())
+		panic("could not create public key")
 	}
 
 	if _, exist := nt.notifies[pub.String()]; exist { // already seenSenders
-		return true
+		return true // ignored
 	}
 
 	// keep msg for pub

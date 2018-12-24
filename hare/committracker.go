@@ -80,6 +80,10 @@ func (ct *CommitTracker) HasEnoughCommits() bool {
 }
 
 func (ct *CommitTracker) BuildCertificate() *pb.Certificate {
+	if !ct.HasEnoughCommits() {
+		return nil
+	}
+
 	c := &pb.Certificate{}
 
 	c.AggMsgs.Messages = ct.commits[ct.maxSet.Id()]

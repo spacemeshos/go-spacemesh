@@ -42,18 +42,23 @@ func (b32 Bytes32) Bytes() []byte {
 }
 
 type Set struct {
-	values map[uint32]Value
+	values    map[uint32]Value
+	id        uint32
+	isIdValid bool
 }
 
 func NewEmptySet(expectedSize int) *Set {
 	s := &Set{}
 	s.values = make(map[uint32]Value, expectedSize)
+	s.id = 0
+	s.isIdValid = false
 
 	return s
 }
 
 func NewSet(data [][]byte) *Set {
 	s := &Set{}
+	s.isIdValid = false
 
 	s.values = make(map[uint32]Value, len(data))
 	for i := 0; i < len(data); i++ {
@@ -74,10 +79,12 @@ func (s *Set) Add(id Value) {
 		return
 	}
 
+	s.isIdValid = false
 	s.values[id.Id()] = id
 }
 
 func (s *Set) Remove(id Value) {
+	s.isIdValid = false
 	delete(s.values, id.Id())
 }
 
@@ -99,7 +106,7 @@ func (s *Set) To2DSlice() [][]byte {
 	slice := make([][]byte, len(s.values))
 	i := 0
 	for _, v := range s.values {
-		slice[i] = make([]byte, 32)
+		slice[i] = make([]byte, len(v.Bytes()))
 		copy(slice[i], v.Bytes())
 		i++
 	}
@@ -107,9 +114,8 @@ func (s *Set) To2DSlice() [][]byte {
 	return slice
 }
 
-func (s *Set) Id() uint32 {
-	h := fnv.New32()
-
+func (s *Set) updateId() {
+	// order keys
 	keys := make([]uint32, len(s.values))
 	i := 0
 	for k := range s.values {
@@ -118,9 +124,20 @@ func (s *Set) Id() uint32 {
 	}
 	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
 
+	// calc
+	h := fnv.New32()
 	for i := 0; i < len(keys); i++ {
 		h.Write(s.values[keys[i]].Bytes())
 	}
 
-	return h.Sum32()
+	// update
+	s.id = h.Sum32()
+}
+
+func (s *Set) Id() uint32 {
+	if !s.isIdValid {
+		s.updateId()
+	}
+
+	return s.id
 }

@@ -33,6 +33,7 @@ func (st *StatusTracker) RecordStatus(msg *pb.HareMessage) {
 
 	_, exist := st.statuses[pub.String()]
 	if exist { // already handled this sender's status msg
+		log.Warning("Duplicated status message detected %v", pub.String())
 		return
 	}
 
@@ -57,8 +58,11 @@ func (st *StatusTracker) BuildUnionSet(expectedSize int) *Set {
 }
 
 func (st *StatusTracker) BuildSVP() *pb.AggregatedMessages {
-	svp := &pb.AggregatedMessages{}
+	if !st.IsSVPReady(){
+		return nil
+	}
 
+	svp := &pb.AggregatedMessages{}
 	for _, m := range st.statuses {
 		svp.Messages = append(svp.Messages, m)
 	}

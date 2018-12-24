@@ -3,6 +3,7 @@ package hare
 import (
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
+	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/stretchr/testify/assert"
 	"testing"
@@ -91,4 +92,42 @@ func TestConsensusProcess_nextRound(t *testing.T) {
 	assert.Equal(t, uint32(1), proc.k)
 	proc.nextRound()
 	assert.Equal(t, uint32(2), proc.k)
+}
+
+func generateConsensusProcess(t *testing.T) *ConsensusProcess {
+	sim := service.NewSimulator()
+	n1 := sim.NewNode()
+
+	s := NewEmptySet(cfg.SetSize)
+	oracle := NewMockOracle()
+	signing := NewMockSigning()
+
+	return NewConsensusProcess(cfg, generatePubKey(t), *setId1, *s, oracle, signing, n1)
+}
+
+func TestConsensusProcess_DoesMatchRound(t *testing.T) {
+	s := NewEmptySet(cfg.SetSize)
+	pub := generatePubKey(t)
+	cp := generateConsensusProcess(t)
+
+	msgs := make([]*pb.HareMessage, 5, 5)
+	msgs[0] = BuildPreRoundMsg(pub, s)
+	msgs[1] = BuildStatusMsg(pub, s)
+	msgs[2] = BuildProposalMsg(pub, s)
+	msgs[3] = BuildCommitMsg(pub, s)
+	msgs[4] = BuildNotifyMsg(pub, s)
+
+	rounds := make([][4]bool, 5) // index=round
+	rounds[0] = [4]bool{true, true, true, true}
+	rounds[1] = [4]bool{true, false, false, false}
+	rounds[2] = [4]bool{false, true, true, false}
+	rounds[3] = [4]bool{false, false, true, false}
+	rounds[4] = [4]bool{true, true, true, true}
+
+	for j:=0;j<len(msgs);j++ {
+		for i := 0; i < 4; i++ {
+			assert.Equal(t, rounds[j][i], cp.doesMessageMatchRound(msgs[j]))
+			cp.nextRound()
+		}
+	}
 }

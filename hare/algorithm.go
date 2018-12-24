@@ -93,7 +93,7 @@ func (proc *ConsensusProcess) eventLoop() {
 	log.Info("Start listening")
 
 	// set pre-round message and send
-	proc.setPreRoundMessage()
+	proc.roundMsg = proc.initDefaultBuilder(proc.s).SetType(PreRound).Sign(proc.signing).Build()
 	proc.sendPendingMessage()
 
 	// listen to pre-round messages
@@ -142,13 +142,16 @@ func (proc *ConsensusProcess) doesMessageMatchRound(m *pb.HareMessage) bool {
 	case PreRound:
 		return true
 	case Status:
-		return currentRound == 1
+		return currentRound == 0
 	case Proposal:
-		return currentRound == 2 || currentRound == 3
+		return currentRound == 1 || currentRound == 2
+	case Commit:
+		return currentRound == 2
 	case Notify:
 		return true
 	}
 
+	// TODO: should be verified before and panic here
 	log.Error("Unknown message type encountered during validation: ", m.Message.Type)
 	return false
 }
@@ -271,36 +274,19 @@ func (proc *ConsensusProcess) nextRound() {
 	proc.t = nil
 }
 
-func (proc *ConsensusProcess) setPreRoundMessage() {
-	builder := NewMessageBuilder()
-	builder.SetType(PreRound).SetSetId(proc.setId).SetIteration(proc.k).SetKi(proc.ki).SetValues(proc.s)
-	builder = builder.SetPubKey(proc.pubKey).Sign(proc.signing)
+func (proc *ConsensusProcess) initDefaultBuilder(s *Set) *MessageBuilder {
+	builder := NewMessageBuilder().SetPubKey(proc.pubKey).SetSetId(proc.setId)
+	builder = builder.SetIteration(proc.k).SetKi(proc.ki).SetValues(s)
 
-	proc.roundMsg = builder.Build()
+	return builder
 }
 
 func (proc *ConsensusProcess) setStatusMessage() {
-	builder := NewMessageBuilder()
-	builder.SetType(Status).SetSetId(proc.setId).SetIteration(proc.k).SetKi(proc.ki).SetValues(proc.s)
-	builder = builder.SetPubKey(proc.pubKey).Sign(proc.signing)
-
-	proc.roundMsg = builder.Build()
-}
-
-func (proc *ConsensusProcess) setProposalMessage(svp *pb.AggregatedMessages) {
-	builder := NewMessageBuilder()
-	builder.SetType(Proposal).SetSetId(proc.setId).SetIteration(proc.k).SetKi(proc.ki).SetValues(proc.statusesTracker.BuildUnionSet(proc.cfg.SetSize))
-	builder.SetSVP(svp)
-	builder = builder.SetPubKey(proc.pubKey).Sign(proc.signing)
-
-	proc.roundMsg = builder.Build()
+	proc.roundMsg = proc.initDefaultBuilder(proc.s).SetType(Status).Sign(proc.signing).Build()
 }
 
 func (proc *ConsensusProcess) buildNotifyMessage() *pb.HareMessage {
-	builder := NewMessageBuilder()
-	builder.SetType(Notify).SetSetId(proc.setId).SetIteration(proc.k).SetKi(proc.ki).SetValues(proc.s)
-	builder.SetCertificate(proc.certificate)
-	builder = builder.SetPubKey(proc.pubKey).Sign(proc.signing)
+	builder := proc.initDefaultBuilder(proc.s).SetType(Notify).SetCertificate(proc.certificate).Sign(proc.signing)
 
 	return builder.Build()
 }
@@ -311,6 +297,19 @@ func roleFromIteration(k uint32) byte {
 	}
 
 	return Active
+}
+
+// Returns the union set of all status messages collected
+func buildUnionSet(expectedSize int, statuses []*pb.HareMessage) *Set {
+	unionSet := NewEmptySet(expectedSize)
+	for _, m := range statuses {
+		for _, buff := range m.Message.Values {
+			bid := Value{NewBytes32(buff)}
+			unionSet.Add(bid) // assuming add is unique
+		}
+	}
+
+	return unionSet
 }
 
 func (proc *ConsensusProcess) processPreRoundMsg(msg *pb.HareMessage) {
@@ -324,11 +323,19 @@ func (proc *ConsensusProcess) processStatusMsg(msg *pb.HareMessage) {
 	}
 
 	if proc.statusesTracker.IsSVPReady() {
-		proc.setProposalMessage(proc.statusesTracker.BuildSVP())
+		builder := proc.initDefaultBuilder(proc.statusesTracker.BuildUnionSet(proc.cfg.SetSize))
+		svp := proc.statusesTracker.BuildSVP()
+		if svp == nil {
+			log.Error("Could not build save value proof")
+			return
+		}
+		proc.roundMsg = builder.SetType(Proposal).SetSVP(svp).Sign(proc.signing).Build()
 	}
 }
 
 func (proc *ConsensusProcess) processProposalMsg(msg *pb.HareMessage) {
+	// TODO: validate SVP
+
 	proc.proposalTracker.OnProposal(msg)
 
 	set, ok := proc.proposalTracker.ProposedSet()
@@ -342,10 +349,7 @@ func (proc *ConsensusProcess) processProposalMsg(msg *pb.HareMessage) {
 
 	// update t & and roundMsg
 	proc.t = set
-	builder := NewMessageBuilder()
-	builder.SetType(Notify).SetSetId(proc.setId).SetIteration(proc.k).SetKi(proc.ki).SetValues(proc.t)
-	builder.SetCertificate(proc.certificate)
-	builder = builder.SetPubKey(proc.pubKey).Sign(proc.signing)
+	builder := proc.initDefaultBuilder(proc.t).SetType(Notify).SetCertificate(proc.certificate).Sign(proc.signing)
 	proc.roundMsg = builder.Build()
 }
 
@@ -359,11 +363,18 @@ func (proc *ConsensusProcess) processCommitMsg(msg *pb.HareMessage) {
 		return
 	}
 
+	cert := proc.commitTracker.BuildCertificate()
+	if cert == nil {
+		log.Error("Build certificate returned nil")
+		return
+	}
+
 	proc.s = proc.t // commit to t
-	proc.certificate = proc.commitTracker.BuildCertificate()
+	proc.certificate = cert
 	proc.roundMsg = proc.buildNotifyMessage() // build notify with certificate
 }
 
+// TODO: I think we should prepare the status message also here
 func (proc *ConsensusProcess) processNotifyMsg(msg *pb.HareMessage) {
 	// validate certificate (only notify has certificate)
 	if !proc.validateCertificate(msg) {
@@ -371,7 +382,7 @@ func (proc *ConsensusProcess) processNotifyMsg(msg *pb.HareMessage) {
 		return
 	}
 
-	if exist := proc.notifyTracker.OnNotify(msg); exist {
+	if ignored := proc.notifyTracker.OnNotify(msg); ignored {
 		return
 	}
 
