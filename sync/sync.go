@@ -24,6 +24,7 @@ type Configuration struct {
 }
 
 type Syncer struct {
+	name      string
 	peers     Peers
 	layers    mesh.Mesh
 	bv        BlockValidator //todo should not be here

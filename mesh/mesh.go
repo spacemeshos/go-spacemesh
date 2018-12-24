@@ -76,7 +76,7 @@ func (m *mesh) AddLayer(layer *Layer) error {
 		return errors.New("can't add layer (already exists)")
 	}
 
-	if count < layer.Index() {
+	if count+1 < layer.Index() {
 		log.Debug("can't add layer", layer.Index(), " missing previous layers")
 		return errors.New("can't add layer missing previous layers")
 	}
@@ -90,7 +90,7 @@ func (m *mesh) AddLayer(layer *Layer) error {
 
 func (m *mesh) GetLayer(i LayerID) (*Layer, error) {
 	m.lMutex.RLock()
-	if i >= LayerID(m.latestIrreversible) {
+	if i > LayerID(m.latestIrreversible) {
 		m.lMutex.RUnlock()
 		log.Debug("failed to get layer  ", i, " layer not verified yet")
 		return nil, errors.New("layer not verified yet")

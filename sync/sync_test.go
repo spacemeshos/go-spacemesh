@@ -19,17 +19,19 @@ import (
 func SyncFactory(t testing.TB, bootNodes int, networkSize int, randomConnections int, name string) (network []*Syncer) {
 	tim := time.Now()
 	nodes := make([]*Syncer, 0, bootNodes)
-
-	foo := func(net server.Service) {
+	i := 1
+	beforeHook := func(net server.Service) {
 		sync := NewSync(net, getMesh(name+"_"+time.Now().String()), BlockValidatorMock{},
 			Configuration{2, 1 * time.Second, 1, 300, 10 * time.Second},
 		)
+		sync.name = fmt.Sprintf("syncer %d", i)
+		i++
 		nodes = append(nodes, sync)
 	}
 
 	fmt.Println("===============================================================================================")
 	fmt.Println("Running Integration test with these parameters : ", bootNodes, " ", networkSize, " ", randomConnections) //todo add what test
-	net := p2p.NewP2PSwarm(foo, nil)
+	net := p2p.NewP2PSwarm(beforeHook, nil)
 	net.Start(t, bootNodes, networkSize, randomConnections)
 
 	fmt.Println("===============================================================================================")
@@ -433,9 +435,11 @@ func TestSyncProtocol_p2pIntegration(t *testing.T) {
 	block8 := mesh.NewExistingBlock(mesh.BlockID(888), 3, nil)
 	block9 := mesh.NewExistingBlock(mesh.BlockID(999), 4, nil)
 	block10 := mesh.NewExistingBlock(mesh.BlockID(101), 4, nil)
-	syncObjs := SyncFactory(t, 1, 2, 1, "systemtest")
+	syncObjs := SyncFactory(t, 1, 1, 1, "systemtest")
 	syncObj1 := syncObjs[0]
+	defer syncObj1.Close()
 	syncObj2 := syncObjs[1]
+	defer syncObj2.Close()
 	syncObj1.layers.AddLayer(mesh.NewExistingLayer(0, []*mesh.Block{block1, block2}))
 	syncObj1.layers.AddLayer(mesh.NewExistingLayer(1, []*mesh.Block{block3, block4}))
 	syncObj1.layers.AddLayer(mesh.NewExistingLayer(2, []*mesh.Block{block5, block6}))
@@ -444,7 +448,7 @@ func TestSyncProtocol_p2pIntegration(t *testing.T) {
 
 	timeout := time.After(60 * time.Second)
 	syncObj2.layers.SetLatestKnownLayer(5)
-	syncObj1.Start()
+	//syncObj1.Start()
 	syncObj2.Start()
 
 	// Keep trying until we're timed out or got a result or got an error

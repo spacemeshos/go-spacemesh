@@ -336,7 +336,6 @@ func (s *swarm) sendMessageImpl(peerPubKey string, protocol string, payload serv
 // RegisterProtocol registers an handler for `protocol`
 func (s *swarm) RegisterProtocol(protocol string) chan service.Message {
 	mchan := make(chan service.Message, 100)
-	fmt.Println("protocol: ", protocol)
 	s.protocolHandlerMutex.Lock()
 	s.protocolHandlers[protocol] = mchan
 	s.protocolHandlerMutex.Unlock()
@@ -547,7 +546,6 @@ func (s *swarm) ProcessProtocolMessage(sender node.Node, protocol string, data s
 	s.protocolHandlerMutex.RLock()
 	msgchan := s.protocolHandlers[protocol]
 	s.protocolHandlerMutex.RUnlock()
-	fmt.Println(protocol)
 	if msgchan == nil {
 		return ErrNoProtocol
 	}
