@@ -48,6 +48,9 @@ type Database interface {
 	// CopyTrie returns an independent copy of the given trie.
 	CopyTrie(Trie) Trie
 
+	// TrieDB retrieves the low level trie database used for data storage.
+	TrieDB() *trie.Database
+
 }
 
 // Trie is a Ethereum Merkle Trie.

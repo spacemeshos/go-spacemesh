@@ -67,7 +67,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction() {
 	}
 
 
-	err := s.processor.ApplyTransactions(transactions)
+	err := s.processor.ApplyTransactions(1, transactions)
 	assert.NoError(s.T(), err)
 
 	got := string(s.state.Dump())
@@ -115,7 +115,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_DoubleTr
 	}
 
 
-	err := s.processor.ApplyTransactions(transactions)
+	err := s.processor.ApplyTransactions(1, transactions)
 	assert.NoError(s.T(), err)
 
 	got := string(s.state.Dump())
@@ -142,49 +142,6 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_DoubleTr
 	if got != want {
 		s.T().Errorf("dump mismatch:\ngot: %s\nwant: %s\n", got, want)
 	}
-
-
-	//Test Incorrect nonce
-	transactions = Transactions{
-		createTransaction(obj1.Nonce(),obj1.address, obj2.address, 1),
-		createTransaction(obj1.Nonce(),obj1.address, obj2.address, 2),
-	}
-
-	for _, trns := range transactions {
-		log.Info("trans hash %x", trns.Hash())
-	}
-
-	err = s.processor.ApplyTransactions(transactions)
-	assert.Error(s.T(), err)
-	assert.Equal(s.T(), err.Error(), ErrNonce)
-
-	//Test Insufficient funds
-	transactions = Transactions{
-		createTransaction(obj1.Nonce() +1,obj1.address, obj2.address, 21),
-	}
-
-	for _, trns := range transactions {
-		log.Info("trans hash %x", trns.Hash())
-	}
-
-	err = s.processor.ApplyTransactions(transactions)
-	assert.Error(s.T(), err)
-	assert.Equal(s.T(), err.Error(), ErrFunds)
-
-	addr := toAddr([]byte{0x01, 0x01})
-
-	//Test Insufficient funds
-	transactions = Transactions{
-		createTransaction(obj1.Nonce(),addr, obj2.address, 21),
-	}
-
-	for _, trns := range transactions {
-		log.Info("trans hash %x", trns.Hash())
-	}
-
-	err = s.processor.ApplyTransactions(transactions)
-	assert.Error(s.T(), err)
-	assert.Equal(s.T(), err.Error(), ErrOrigin)
 }
 
 func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_Errors() {
@@ -198,7 +155,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_Errors()
 	}
 
 
-	err := s.processor.ApplyTransactions(transactions)
+	err := s.processor.ApplyTransactions(1, transactions)
 	assert.NoError(s.T(), err)
 
 	//Test Incorrect nonce
@@ -211,26 +168,26 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_Errors()
 		log.Info("trans hash %x", trns.Hash())
 	}
 
-	err = s.processor.ApplyTransactions(transactions)
+	err = s.processor.ApplyTransaction(createTransaction(0,obj1.address, obj2.address, 1))
 	assert.Error(s.T(), err)
 	assert.Equal(s.T(), err.Error(), ErrNonce)
 
 	//Test Insufficient funds
 	transactions = Transactions{
-		createTransaction(obj1.Nonce() +1,obj1.address, obj2.address, 21),
+		createTransaction(obj1.Nonce(),obj1.address, obj2.address, 21),
 	}
 
 	for _, trns := range transactions {
 		log.Info("trans hash %x", trns.Hash())
 	}
 
-	err = s.processor.ApplyTransactions(transactions)
+	err = s.processor.ApplyTransaction(createTransaction(obj1.Nonce(),obj1.address, obj2.address, 21))
 	assert.Error(s.T(), err)
 	assert.Equal(s.T(), err.Error(), ErrFunds)
 
 	addr := toAddr([]byte{0x01, 0x01})
 
-	//Test Insufficient funds
+	//Test origin
 	transactions = Transactions{
 		createTransaction(obj1.Nonce(),addr, obj2.address, 21),
 	}
@@ -239,7 +196,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_Errors()
 		log.Info("trans hash %x", trns.Hash())
 	}
 
-	err = s.processor.ApplyTransactions(transactions)
+	err = s.processor.ApplyTransaction(createTransaction(obj1.Nonce(),addr, obj2.address, 21))
 	assert.Error(s.T(), err)
 	assert.Equal(s.T(), err.Error(), ErrOrigin)
 }
@@ -256,8 +213,8 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_OrderByN
 		createTransaction(obj1.Nonce(), obj1.address, obj2.address, 1),
 	}
 
-	err := s.processor.ApplyTransactions(transactions)
-	assert.Error(s.T(), err)
+	s.processor.ApplyTransactions(1, transactions)
+	//assert.Error(s.T(), err)
 
 	got := string(s.state.Dump())
 
