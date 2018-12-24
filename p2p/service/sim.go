@@ -4,6 +4,7 @@ import (
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"io"
 	"sync"
@@ -190,8 +191,8 @@ func (sn *Node) SubscribePeerEvents() (chan crypto.PublicKey, chan crypto.Public
 }
 
 // RegisterProtocol creates and returns a channel for a given protocol.
-func (sn *Node) RegisterProtocol(protocol string, buf int) chan Message {
-	c := make(chan Message, buf)
+func (sn *Node) RegisterProtocol(protocol string) chan Message {
+	c := make(chan Message, config.ConfigValues.BufferSize)
 	sn.sim.mutex.Lock()
 	sn.sim.protocolHandler[sn.Node.String()][protocol] = c
 	sn.sim.mutex.Unlock()

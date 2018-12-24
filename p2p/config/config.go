@@ -38,6 +38,7 @@ type Config struct {
 	ResponseTimeout time.Duration `mapstructure:"response-timeout"`
 	SwarmConfig     SwarmConfig   `mapstructure:"swarm"`
 	TimeConfig      TimeConfig
+	BufferSize 		int
 }
 
 // SwarmConfig specifies swarm config params.
@@ -92,5 +93,6 @@ func DefaultConfig() Config {
 		ResponseTimeout: duration("15s"),
 		SwarmConfig:     SwarmConfigValues,
 		TimeConfig:      TimeConfigValues,
+		BufferSize: 	 10,
 	}
 }

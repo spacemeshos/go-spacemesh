@@ -48,7 +48,7 @@ type MessageServer struct {
 	exit               chan struct{}
 }
 
-func NewMsgServer(network ServerService, name string, requestLifetime time.Duration, config *Config) *MessageServer {
+func NewMsgServer(network ServerService, name string, requestLifetime time.Duration) *MessageServer {
 
 	p := &MessageServer{
 		name:               name,
@@ -56,7 +56,7 @@ func NewMsgServer(network ServerService, name string, requestLifetime time.Durat
 		resHandlers:        make(map[uint64]func(msg []byte)),
 		pendingQueue:       list.New(),
 		network:            network,
-		ingressChannel:     network.RegisterProtocol(name, config.BufferSize),
+		ingressChannel:     network.RegisterProtocol(name),
 		msgRequestHandlers: make(map[MessageType]func(msg []byte) []byte),
 		requestLifetime:    requestLifetime,
 		exit:               make(chan struct{}),

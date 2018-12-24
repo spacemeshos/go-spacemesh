@@ -13,14 +13,14 @@ const protocol = "/protocol/test/1.0/"
 func TestProtocol_SendRequest(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
-	fnd1 := NewMsgServer(n1, protocol, 5*time.Second, &Config{BufferSize: 24})
+	fnd1 := NewMsgServer(n1, protocol, 5*time.Second)
 
 	//handler that returns some bytes on request
 	handler := func(msg []byte) []byte { return []byte("some value to return") }
 	fnd1.RegisterMsgHandler(1, handler)
 
 	n2 := sim.NewNode()
-	fnd2 := NewMsgServer(n2, protocol, 5*time.Second, &Config{BufferSize: 24})
+	fnd2 := NewMsgServer(n2, protocol, 5*time.Second)
 
 	//send request recive interface{} and verify
 	b, err := fnd2.SendRequest(1, nil, n1.PublicKey(), time.Minute)
@@ -32,7 +32,7 @@ func TestProtocol_SendRequest(t *testing.T) {
 func TestProtocol_SendAsyncRequestRequest(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
-	fnd1 := NewMsgServer(n1, protocol, 5*time.Second, &Config{BufferSize: 24})
+	fnd1 := NewMsgServer(n1, protocol, 5*time.Second)
 
 	//handler that returns some bytes on request
 
@@ -43,7 +43,7 @@ func TestProtocol_SendAsyncRequestRequest(t *testing.T) {
 	fnd1.RegisterMsgHandler(1, handler)
 
 	n2 := sim.NewNode()
-	fnd2 := NewMsgServer(n2, protocol, 5*time.Second, &Config{BufferSize: 24})
+	fnd2 := NewMsgServer(n2, protocol, 5*time.Second)
 
 	//send request with handler that converts to string and sends via channel
 	strCh := make(chan string)
@@ -62,7 +62,7 @@ func TestProtocol_SendAsyncRequestRequest(t *testing.T) {
 func TestProtocol_CleanOldPendingMessages(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
-	fnd1 := NewMsgServer(n1, protocol, 5*time.Second, &Config{BufferSize: 24})
+	fnd1 := NewMsgServer(n1, protocol, 5*time.Second)
 
 	//handler that returns some bytes on request
 
@@ -74,7 +74,7 @@ func TestProtocol_CleanOldPendingMessages(t *testing.T) {
 	fnd1.RegisterMsgHandler(1, handler)
 
 	n2 := sim.NewNode()
-	fnd2 := NewMsgServer(n2, protocol, 10*time.Millisecond, &Config{BufferSize: 24})
+	fnd2 := NewMsgServer(n2, protocol, 10*time.Millisecond)
 
 	//send request with handler that converts to string and sends via channel
 	strCh := make(chan string)
@@ -106,7 +106,7 @@ func TestProtocol_CleanOldPendingMessages(t *testing.T) {
 func TestProtocol_Close(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
-	fnd1 := NewMsgServer(n1, protocol, 5*time.Second, &Config{BufferSize: 24})
+	fnd1 := NewMsgServer(n1, protocol, 5*time.Second)
 
 	//handler that returns some bytes on request
 
@@ -118,7 +118,7 @@ func TestProtocol_Close(t *testing.T) {
 	fnd1.RegisterMsgHandler(1, handler)
 
 	n2 := sim.NewNode()
-	fnd2 := NewMsgServer(n2, protocol, 10*time.Millisecond, &Config{BufferSize: 24})
+	fnd2 := NewMsgServer(n2, protocol, 10*time.Millisecond)
 
 	//send request with handler that converts to string and sends via channel
 	strCh := make(chan string)
