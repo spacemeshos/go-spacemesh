@@ -15,3 +15,4 @@ Important: Issue assignment to developers will be by the order of their applicat
 3. You must document all methods, enums and types with [godoc comments](https://blog.golang.org/godoc-documenting-go-code)
 4. You must write go unit tests for all types and methods when submitting a component, and integration tests if you submit a feature
 5. When ready for code review, submit a PR from your repo back to branch `develop`
+6. Attach relevant issue to PR
