@@ -348,13 +348,13 @@ func (s *Syncer) blockRequestHandler(msg []byte) []byte {
 
 	block, err := s.layers.GetBlock(mesh.BlockID(req.Id))
 	if err != nil {
-		log.Error("Error handling Block request message, with BlockID: %d and err: %v", req.Id, err) //todo describe err
+		log.Error("Error handling Block request message, with BlockID: %d and err: %v", req.Id, err)
 		return nil
 	}
 
 	payload, err := proto.Marshal(&pb.FetchBlockResp{Id: uint32(block.ID()), Block: &pb.Block{Id: uint32(block.ID()), Layer: uint32(block.Layer())}})
 	if err != nil {
-		log.Error("Error marshaling response message (FetchBlockResp), with BlockID: %d, LayerID: %d and err:", block.ID(), block.Layer(), err) //todo describe err
+		log.Error("Error marshaling response message (FetchBlockResp), with BlockID: %d, LayerID: %d and err:", block.ID(), block.Layer(), err)
 		return nil
 	}
 
@@ -372,13 +372,13 @@ func (s *Syncer) layerHashRequestHandler(msg []byte) []byte {
 
 	layer, err := s.layers.GetLayer(mesh.LayerID(req.Layer))
 	if err != nil {
-		log.Error("Error handling layer ", req.Layer, " request message with error:", err) //todo describe err
+		log.Error("Error handling layer ", req.Layer, " request message with error:", err)
 		return nil
 	}
 
 	payload, err := proto.Marshal(&pb.LayerHashResp{Hash: layer.Hash()})
 	if err != nil {
-		log.Error("Error marshaling response message (LayerHashResp) with error:", err) //todo describe err
+		log.Error("Error marshaling response message (LayerHashResp) with error:", err)
 		return nil
 	}
 
@@ -393,7 +393,7 @@ func (s *Syncer) layerIdsRequestHandler(msg []byte) []byte {
 
 	layer, err := s.layers.GetLayer(mesh.LayerID(req.Layer))
 	if err != nil {
-		log.Error("Error handling layer ids request message with LayerID: %d and error: %s", req.Layer, err.Error()) //todo describe err
+		log.Error("Error handling layer ids request message with LayerID: %d and error: %s", req.Layer, err.Error())
 		return nil
 	}
 
@@ -407,7 +407,7 @@ func (s *Syncer) layerIdsRequestHandler(msg []byte) []byte {
 
 	payload, err := proto.Marshal(&pb.LayerIdsResp{Ids: ids})
 	if err != nil {
-		log.Error("Error marshaling response message, with blocks IDs: %v and error:", ids, err) //todo describe err
+		log.Error("Error marshaling response message, with blocks IDs: %v and error:", ids, err)
 		return nil
 	}
 
