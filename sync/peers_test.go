@@ -10,21 +10,10 @@ import (
 	"time"
 )
 
-type PeersMock struct {
-	snapshot []Peer
-}
-
-func (pm PeersMock) Close() {
-}
-
-func (pm PeersMock) GetPeers() []Peer {
-	return pm.snapshot
-}
-
 func getPeers(p p2p.Service) (Peers, chan crypto.PublicKey, chan crypto.PublicKey) {
 	value := atomic.Value{}
 	value.Store(make([]Peer, 0, 20))
-	pi := &PeersImpl{snapshot: value, exit: make(chan struct{})}
+	pi := &PeersImpl{snapshot: &value, exit: make(chan struct{})}
 	new, expierd := p.SubscribePeerEvents()
 	go pi.listenToPeers(new, expierd)
 	return pi, new, expierd

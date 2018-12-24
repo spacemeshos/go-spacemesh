@@ -24,7 +24,6 @@ type Configuration struct {
 }
 
 type Syncer struct {
-	name      string
 	peers     Peers
 	layers    mesh.Mesh
 	bv        BlockValidator //todo should not be here
@@ -127,7 +126,8 @@ func (s *Syncer) maxSyncLayer() uint32 {
 
 func (s *Syncer) Synchronise() {
 	for i := s.layers.LatestIrreversible(); i < s.maxSyncLayer(); i++ {
-		blockIds, err := s.getLayerBlockIDs(mesh.LayerID(i)) //returns a set of all known blocks in the mesh
+		id := i + 1
+		blockIds, err := s.getLayerBlockIDs(mesh.LayerID(id)) //returns a set of all known blocks in the mesh
 		if err != nil || len(blockIds) == 0 {
 			log.Error("could not get layer block ids: ", err)
 			log.Debug("synchronise failed, local layer index is ", s.layers.LatestIrreversible())
@@ -303,12 +303,12 @@ func (s *Syncer) sendLayerHashRequest(peer Peer, layer mesh.LayerID, ch chan pee
 		return nil, err
 	}
 	foo := func(msg []byte) {
-		res := &pb.LayerHashResp{}
 		if msg == nil {
 			log.Error("layer hash response was nil from ", peer.String())
 			return
 		}
 
+		res := &pb.LayerHashResp{}
 		if err = proto.Unmarshal(msg, res); err != nil {
 			log.Error("could not unmarshal layer hash response ", err)
 			return
@@ -329,6 +329,11 @@ func (s *Syncer) sendLayerIDsRequest(peer Peer, idx mesh.LayerID, ch chan []uint
 
 	foo := func(msg []byte) {
 		defer close(ch)
+		if msg == nil {
+			log.Error("layer hash response was nil from ", peer.String())
+			return
+		}
+
 		data := &pb.LayerIdsResp{}
 		if err := proto.Unmarshal(msg, data); err != nil {
 			log.Error("could not unmarshal layer ids response")
@@ -366,6 +371,7 @@ func (s *Syncer) blockRequestHandler(msg []byte) []byte {
 
 func (s *Syncer) layerHashRequestHandler(msg []byte) []byte {
 	req := &pb.LayerHashReq{}
+
 	err := proto.Unmarshal(msg, req)
 	if err != nil {
 		return nil

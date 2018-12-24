@@ -15,14 +15,14 @@ type Peers interface {
 }
 
 type PeersImpl struct {
-	snapshot atomic.Value
+	snapshot *atomic.Value
 	exit     chan struct{}
 }
 
 func NewPeers(s service.Service) Peers {
 	value := atomic.Value{}
 	value.Store(make([]Peer, 0, 20))
-	pi := &PeersImpl{snapshot: value, exit: make(chan struct{})}
+	pi := &PeersImpl{snapshot: &value, exit: make(chan struct{})}
 	newPeerC, expiredPeerC := s.SubscribePeerEvents()
 	go pi.listenToPeers(newPeerC, expiredPeerC)
 	return pi
