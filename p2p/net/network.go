@@ -312,7 +312,12 @@ func (n *Net) SubscribeOnNewRemoteConnections() chan NewConnectionEvent {
 func (n *Net) publishNewRemoteConnectionEvent(conn Connection, node node.Node) {
 	n.regMutex.RLock()
 	for _, c := range n.regNewRemoteConn {
-		c <- NewConnectionEvent{conn, node}
+		select {
+		case c <- NewConnectionEvent{conn, node}:
+			continue
+		default:
+			// so we won't block on not listening chans
+		}
 	}
 	n.regMutex.RUnlock()
 }
