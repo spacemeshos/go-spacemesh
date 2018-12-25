@@ -10,6 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/trie"
 	"math/big"
 	"sort"
+	"sync"
 )
 
 
@@ -65,6 +66,7 @@ type TransactionProcessor struct {
 	rootHash common.Hash
 	stateQueue list.List
 	db *trie.Database
+	mu sync.Mutex
 }
 
 const maxPastStates = 20
@@ -78,6 +80,7 @@ func NewTransactionProcessor(rnd PseudoRandomizer, db *StateDB) *TransactionProc
 		rootHash: common.Hash{},
 		stateQueue: list.List{},
 		db : db.TrieDB(),
+		mu : sync.Mutex{},
 	}
 }
 
@@ -87,8 +90,10 @@ func (tp *TransactionProcessor) ApplyTransactions(layer LayerID, transactions Tr
 
 	txs := tp.mergeDoubles(transactions)
 	tp.Process(tp.randomSort(txs), tp.coalesceTransactionsBySender(txs))
-
+	tp.mu.Lock()
 	newHash , err := tp.globalState.Commit(false)
+	log.Info("new state root for layer %v is %x", layer, newHash)
+	tp.mu.Unlock()
 	if err != nil {
 		log.Error("db write error %v", err)
 		return err
@@ -99,7 +104,7 @@ func (tp *TransactionProcessor) ApplyTransactions(layer LayerID, transactions Tr
 		hash := tp.stateQueue.Remove(tp.stateQueue.Back())
 		tp.db.Commit(hash.(common.Hash),false)
 	}
-	//tp.prevStates[layer] =
+	tp.prevStates[layer] = newHash
 	tp.db.Reference(newHash, common.Hash{})
 	//	//call merge
 	//	//eliminate doubles
@@ -109,7 +114,11 @@ func (tp *TransactionProcessor) ApplyTransactions(layer LayerID, transactions Tr
 
 func (tp *TransactionProcessor) Reset(layer LayerID){
 	if state, ok := tp.prevStates[layer]; ok {
+		log.Info("reverting to root %x", state)
+		tp.mu.Lock()
+		defer tp.mu.Unlock()
 		newState, err := New(state, tp.globalState.db)
+		log.Info("reverted, new root %x", newState.IntermediateRoot(false))
 		if err != nil {
 			panic("wtf")
 		}
@@ -198,6 +207,8 @@ var(
 )
 //todo: mining fees...
 func (tp *TransactionProcessor) ApplyTransaction(trans *Transaction) error{
+	tp.mu.Lock()
+	defer tp.mu.Unlock()
 
 	if !tp.globalState.Exist(trans.Origin) {
 		return  fmt.Errorf(ErrOrigin)
@@ -205,7 +216,7 @@ func (tp *TransactionProcessor) ApplyTransaction(trans *Transaction) error{
 
 	origin := tp.globalState.GetOrNewStateObj(trans.Origin)
 
-	//todo: should we allow to spend all accounts data
+	//todo: should we allow to spend all accounts data?
 	if origin.Balance().Cmp(trans.Amount) <= 0 {
 		return  fmt.Errorf(ErrFunds)
 	}
@@ -218,15 +229,6 @@ func (tp *TransactionProcessor) ApplyTransaction(trans *Transaction) error{
 	transfer(tp.globalState,trans.Origin, *trans.Recipient, trans.Amount)
 
 	return nil
-	//check if dst account exists
-	//check if src exist
-	//check if src account has enough funds
-	//set journal backup
-	//add 1 to account nonce
-	//verify current nonce
-	//upate accounts accordingly
-	//error if no funds
-	//commit to tree
 }
 
 func transfer(db GlobalStateDB, sender, recipient common.Address, amount *big.Int) {

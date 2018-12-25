@@ -4,7 +4,6 @@ import (
 	"github.com/seehuhn/mt19937"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/database"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 	"math/big"
@@ -158,28 +157,10 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_Errors()
 	err := s.processor.ApplyTransactions(1, transactions)
 	assert.NoError(s.T(), err)
 
-	//Test Incorrect nonce
-	transactions = Transactions{
-		createTransaction(obj1.Nonce(),obj1.address, obj2.address, 1),
-		createTransaction(obj1.Nonce(),obj1.address, obj2.address, 2),
-	}
-
-	for _, trns := range transactions {
-		log.Info("trans hash %x", trns.Hash())
-	}
-
 	err = s.processor.ApplyTransaction(createTransaction(0,obj1.address, obj2.address, 1))
 	assert.Error(s.T(), err)
 	assert.Equal(s.T(), err.Error(), ErrNonce)
 
-	//Test Insufficient funds
-	transactions = Transactions{
-		createTransaction(obj1.Nonce(),obj1.address, obj2.address, 21),
-	}
-
-	for _, trns := range transactions {
-		log.Info("trans hash %x", trns.Hash())
-	}
 
 	err = s.processor.ApplyTransaction(createTransaction(obj1.Nonce(),obj1.address, obj2.address, 21))
 	assert.Error(s.T(), err)
@@ -188,14 +169,6 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_Errors()
 	addr := toAddr([]byte{0x01, 0x01})
 
 	//Test origin
-	transactions = Transactions{
-		createTransaction(obj1.Nonce(),addr, obj2.address, 21),
-	}
-
-	for _, trns := range transactions {
-		log.Info("trans hash %x", trns.Hash())
-	}
-
 	err = s.processor.ApplyTransaction(createTransaction(obj1.Nonce(),addr, obj2.address, 21))
 	assert.Error(s.T(), err)
 	assert.Equal(s.T(), err.Error(), ErrOrigin)
@@ -243,6 +216,80 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_OrderByN
 	}
 }
 
+func (s *ProcessorStateSuite) TestTransactionProcessor_Reset() {
+	obj1 := createAccount(s.state, []byte{0x01}, 21, 0)
+	obj2 := createAccount(s.state, []byte{0x01,02}, 41, 10)
+	createAccount(s.state, []byte{0x02}, 44, 0)
+	s.state.Commit(false)
+
+	transactions := Transactions{
+		createTransaction(obj1.Nonce(),obj1.address, obj2.address, 1),
+		//createTransaction(obj2.Nonce(),obj2.address, obj1.address, 1),
+	}
+
+
+	err := s.processor.ApplyTransactions(1, transactions)
+	assert.NoError(s.T(), err)
+
+	transactions = Transactions{
+		createTransaction(obj1.Nonce(),obj1.address, obj2.address, 1),
+		createTransaction(obj2.Nonce(),obj2.address, obj1.address, 10),
+	}
+
+
+	err = s.processor.ApplyTransactions(2, transactions)
+	assert.NoError(s.T(), err)
+
+	got := string(s.processor.globalState.Dump())
+
+	want := `{
+	"root": "ad5e89c8f94168027dc1df5da112c76c330ffcbc7df3e73c29f1728e488b77b2",
+	"accounts": {
+		"0000000000000000000000000000000000000001": {
+			"balance": "29",
+			"nonce": 2
+		},
+		"0000000000000000000000000000000000000002": {
+			"balance": "44",
+			"nonce": 0
+		},
+		"0000000000000000000000000000000000000102": {
+			"balance": "33",
+			"nonce": 11
+		}
+	}
+}`
+	if got != want {
+		s.T().Errorf("dump mismatch:\ngot: %s\nwant: %s\n", got, want)
+	}
+
+	s.processor.Reset(1)
+
+	got = string(s.processor.globalState.Dump())
+
+	assert.Equal(s.T(), big.NewInt(20),s.processor.globalState.GetBalance(obj1.address))
+
+	want = `{
+	"root": "0f8918fdba9e0a1542ac89ff9a60c657ff4c5800a700266ecfdcfc2d4e1fad3e",
+	"accounts": {
+		"0000000000000000000000000000000000000001": {
+			"balance": "20",
+			"nonce": 1
+		},
+		"0000000000000000000000000000000000000002": {
+			"balance": "44",
+			"nonce": 0
+		},
+		"0000000000000000000000000000000000000102": {
+			"balance": "42",
+			"nonce": 10
+		}
+	}
+}`
+	if got != want {
+		s.T().Errorf("dump mismatch:\ngot: %s\nwant: %s\n", got, want)
+	}
+}
 
 
 func TestTransactionProcessor_ApplyTransactionTestSuite(t *testing.T){
