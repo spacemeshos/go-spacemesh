@@ -1,6 +1,7 @@
 package p2p
 
 import (
+	"github.com/spacemeshos/go-spacemesh/p2p/connectionpool"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht"
 	"testing"
 	"time"
@@ -174,6 +175,54 @@ func TestSwarm_SignAuth(t *testing.T) {
 }
 
 var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+func Test_ConnectionBeforeMessage(t *testing.T) {
+
+	numNodes := 5
+	var wg sync.WaitGroup
+
+	p2 := p2pTestInstance(t, config.DefaultConfig())
+	c2 := p2.RegisterProtocol(exampleProtocol)
+
+	go func () {
+		for {
+			msg := <-c2 // immediate response will probably trigger GetConnection fast
+			p2.SendMessage(msg.Sender().PublicKey().String(), exampleProtocol, []byte("RESP"))
+			wg.Done()
+		}
+	}()
+
+	oldCpool := p2.cPool.(*connectionpool.ConnectionPool)
+
+	//called := make(chan struct{}, numNodes)
+	cpm := new(cpoolMock)
+	cpm.f = func(address string, pk crypto.PublicKey) (net.Connection, error) {
+		c, err := oldCpool.ExistsOrPending(pk)
+		if err != nil {
+			t.Fatal("Didn't get connection yet while SendMessage called GetConnection")
+		}
+		return c,nil
+	}
+
+
+	p2.cPool = cpm
+
+	payload := []byte(RandString(10))
+
+
+	for i := 0; i < numNodes; i++ {
+		wg.Add(1)
+		go func() {
+			p1 := p2pTestInstance(t, config.DefaultConfig())
+			_ = p1.RegisterProtocol(exampleProtocol)
+			p1.dht.Update(p2.lNode.Node)
+			err := p1.SendMessage(p2.lNode.PublicKey().String(), exampleProtocol, payload)
+			assert.NoError(t, err)
+		}()
+	}
+	wg.Wait()
+
+}
 
 func RandString(n int) string {
 	b := make([]rune, n)
