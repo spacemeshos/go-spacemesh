@@ -38,6 +38,7 @@ type ConnectionPool struct {
 	shutdown    bool
 
 	newRemoteConn chan net.NewConnectionEvent
+	outRemoteConn chan net.NewConnectionEvent
 	teardown      chan struct{}
 }
 
@@ -53,6 +54,7 @@ func NewConnectionPool(network networker, lPub crypto.PublicKey) *ConnectionPool
 		dialWait:      sync.WaitGroup{},
 		shutdown:      false,
 		newRemoteConn: network.SubscribeOnNewRemoteConnections(),
+		outRemoteConn: make(chan net.NewConnectionEvent),
 		teardown:      make(chan struct{}),
 	}
 	go cPool.beginEventProcessing()
@@ -97,7 +99,6 @@ func (cp *ConnectionPool) handleDialResult(rPub crypto.PublicKey, result dialRes
 }
 
 func compareConnections(conn1 net.Connection, conn2 net.Connection) int {
-
 	return bytes.Compare(conn1.Session().ID(), conn2.Session().ID())
 }
 
@@ -149,7 +150,7 @@ func (cp *ConnectionPool) handleNewConnection(rPub crypto.PublicKey, newConn net
 }
 
 func (cp *ConnectionPool) handleClosedConnection(conn net.Connection) {
-	cp.net.Logger().Debug("connection %v with %v was closed", conn.String())
+	cp.net.Logger().Debug("connection %v with %v was closed (sessionID: %v)", conn.String(), conn.RemotePublicKey().Pretty(), conn.Session().ID())
 	cp.connMutex.Lock()
 	rPub := conn.RemotePublicKey().String()
 	cur, ok := cp.connections[rPub]
@@ -200,6 +201,10 @@ func (cp *ConnectionPool) GetConnection(address string, remotePub crypto.PublicK
 	return res.conn, res.err
 }
 
+func (cp *ConnectionPool) RemoteConnectionsChannel() chan net.NewConnectionEvent {
+	return cp.outRemoteConn
+}
+
 
 func (cp *ConnectionPool) ExistsOrPending(remotePub crypto.PublicKey) (net.Connection, error) {
 	cp.connMutex.RLock()
@@ -240,6 +245,7 @@ Loop:
 		select {
 		case nce := <-cp.newRemoteConn:
 			cp.handleNewConnection(nce.Conn.RemotePublicKey(), nce.Conn, net.Remote)
+			go func(nce net.NewConnectionEvent) { cp.outRemoteConn <- nce }(nce)
 
 		case conn := <-closing:
 			cp.handleClosedConnection(conn)
