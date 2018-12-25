@@ -9,13 +9,13 @@ import (
 	"time"
 )
 
-var setId1 = &SetId{Bytes32{1}}
-var setId2 = &SetId{Bytes32{2}}
-var setId3 = &SetId{Bytes32{3}}
+var instanceId1 = &InstanceId{Bytes32{1}}
+var instanceId2 = &InstanceId{Bytes32{2}}
+var instanceId3 = &InstanceId{Bytes32{3}}
 
-func createMessage(t *testing.T, setId Byteable) []byte {
+func createMessage(t *testing.T, instanceId Byteable) []byte {
 	hareMsg := &pb.HareMessage{}
-	hareMsg.Message = &pb.InnerMessage{SetId: setId.Bytes()}
+	hareMsg.Message = &pb.InnerMessage{InstanceId: instanceId.Bytes()}
 	serMsg, err := proto.Marshal(hareMsg)
 
 	if err != nil {
@@ -56,14 +56,14 @@ func TestBroker_Received(t *testing.T) {
 	broker.Start()
 
 	inboxer := &MockInboxer{}
-	broker.Register(setId1, inboxer)
+	broker.Register(instanceId1, inboxer)
 
-	serMsg := createMessage(t, setId1)
+	serMsg := createMessage(t, instanceId1)
 	n2.Broadcast(ProtoName, serMsg)
 
 	recv := <-inboxer.inbox
 
-	assert.True(t, recv.Message.SetId[0] == setId1.Bytes()[0])
+	assert.True(t, recv.Message.InstanceId[0] == instanceId1.Bytes()[0])
 }
 
 // test that aborting the broker aborts
@@ -86,21 +86,21 @@ func TestBroker_Abort(t *testing.T) {
 	}
 }
 
-func sendMessages(t *testing.T, setId *SetId, n *service.Node, count int) {
+func sendMessages(t *testing.T, instanceId *InstanceId, n *service.Node, count int) {
 	for i := 0; i < count; i++ {
-		n.Broadcast(ProtoName, createMessage(t, setId))
+		n.Broadcast(ProtoName, createMessage(t, instanceId))
 	}
 }
 
-func waitForMessages(t *testing.T, inbox chan *pb.HareMessage, setId *SetId, msgCount int) {
+func waitForMessages(t *testing.T, inbox chan *pb.HareMessage, instanceId *InstanceId, msgCount int) {
 	for i := 0; i < msgCount; i++ {
 		x := <-inbox
-		assert.True(t, x.Message.SetId[0] == setId.Bytes()[0])
+		assert.True(t, x.Message.InstanceId[0] == instanceId.Bytes()[0])
 	}
 }
 
 // test flow for multiple set id
-func TestBroker_MultipleSetIds(t *testing.T) {
+func TestBroker_MultipleInstanceIds(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
@@ -112,21 +112,21 @@ func TestBroker_MultipleSetIds(t *testing.T) {
 	inboxer1 := &MockInboxer{}
 	inboxer2 := &MockInboxer{}
 	inboxer3 := &MockInboxer{}
-	broker.Register(setId1, inboxer1)
-	broker.Register(setId2, inboxer2)
-	broker.Register(setId3, inboxer3)
+	broker.Register(instanceId1, inboxer1)
+	broker.Register(instanceId2, inboxer2)
+	broker.Register(instanceId3, inboxer3)
 
 	inbox1 := inboxer1.inbox
 	inbox2 := inboxer2.inbox
 	inbox3 := inboxer3.inbox
 
-	go sendMessages(t, setId1, n2, msgCount)
-	go sendMessages(t, setId2, n2, msgCount)
-	go sendMessages(t, setId3, n2, msgCount)
+	go sendMessages(t, instanceId1, n2, msgCount)
+	go sendMessages(t, instanceId2, n2, msgCount)
+	go sendMessages(t, instanceId3, n2, msgCount)
 
-	waitForMessages(t, inbox1, setId1, msgCount)
-	waitForMessages(t, inbox2, setId2, msgCount)
-	waitForMessages(t, inbox3, setId3, msgCount)
+	waitForMessages(t, inbox1, instanceId1, msgCount)
+	waitForMessages(t, inbox2, instanceId2, msgCount)
+	waitForMessages(t, inbox3, instanceId3, msgCount)
 
 	assert.True(t, true)
 }
@@ -137,8 +137,8 @@ func TestBroker_RegisterUnregister(t *testing.T) {
 	broker := NewBroker(n1)
 	broker.Start()
 	inbox := &MockInboxer{}
-	broker.Register(setId1, inbox)
+	broker.Register(instanceId1, inbox)
 	assert.Equal(t, 1, len(broker.outbox))
-	broker.Unregister(setId1)
+	broker.Unregister(instanceId1)
 	assert.Equal(t, 0, len(broker.outbox))
 }

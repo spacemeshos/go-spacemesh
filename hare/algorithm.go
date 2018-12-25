@@ -33,7 +33,7 @@ type ConsensusProcess struct {
 	State
 	Closer // the consensus is closeable
 	pubKey          crypto.PublicKey
-	setId           SetId
+	instanceId           InstanceId
 	oracle          Rolacle // roles oracle
 	signing         Signing
 	network         NetworkService
@@ -49,12 +49,12 @@ type ConsensusProcess struct {
 	cfg             config.Config
 }
 
-func NewConsensusProcess(cfg config.Config, key crypto.PublicKey, setId SetId, s Set, oracle Rolacle, signing Signing, p2p NetworkService) *ConsensusProcess {
+func NewConsensusProcess(cfg config.Config, key crypto.PublicKey, instanceId InstanceId, s Set, oracle Rolacle, signing Signing, p2p NetworkService) *ConsensusProcess {
 	proc := &ConsensusProcess{}
 	proc.State = State{0, -1, &s, nil}
 	proc.Closer = NewCloser()
 	proc.pubKey = key
-	proc.setId = setId
+	proc.instanceId = instanceId
 	proc.oracle = oracle
 	proc.signing = signing
 	proc.network = p2p
@@ -196,7 +196,7 @@ func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
 
 	// validate role
 	if !proc.oracle.ValidateRole(roleFromIteration(m.Message.K),
-		RoleRequest{pub, SetId{NewBytes32(m.Message.SetId)}, m.Message.K},
+		RoleRequest{pub, InstanceId{NewBytes32(m.Message.InstanceId)}, m.Message.K},
 		Signature(m.Message.RoleProof)) {
 		log.Warning("invalid role detected")
 		return
@@ -239,7 +239,7 @@ func (proc *ConsensusProcess) sendPendingMessage() {
 
 	// validate role
 	if !proc.oracle.ValidateRole(roleFromIteration(proc.k),
-		RoleRequest{proc.pubKey, proc.setId, proc.k}, Signature{}) {
+		RoleRequest{proc.pubKey, proc.instanceId, proc.k}, Signature{}) {
 		return
 	}
 
@@ -295,7 +295,7 @@ func (proc *ConsensusProcess) beginOfRound() {
 }
 
 func (proc *ConsensusProcess) initDefaultBuilder(s *Set) *MessageBuilder {
-	builder := NewMessageBuilder().SetPubKey(proc.pubKey).SetSetId(proc.setId)
+	builder := NewMessageBuilder().SetPubKey(proc.pubKey).SetInstanceId(proc.instanceId)
 	builder = builder.SetIteration(proc.k).SetKi(proc.ki).SetValues(s)
 
 	return builder

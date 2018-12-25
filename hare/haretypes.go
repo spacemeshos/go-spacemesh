@@ -11,7 +11,7 @@ type Signature []byte
 type Value struct {
 	Bytes32
 }
-type SetId struct {
+type InstanceId struct {
 	Bytes32
 }
 type MessageType byte
@@ -139,6 +139,7 @@ func (s *Set) updateId() {
 
 	// update
 	s.id = h.Sum32()
+	s.isIdValid = true
 }
 
 func (s *Set) Id() uint32 {

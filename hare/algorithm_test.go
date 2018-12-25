@@ -32,8 +32,8 @@ func TestConsensusProcess_StartTwice(t *testing.T) {
 	oracle := NewMockOracle()
 	signing := NewMockSigning()
 
-	proc := NewConsensusProcess(cfg, generatePubKey(t), *setId1, *s, oracle, signing, n1)
-	broker.Register(setId1, proc)
+	proc := NewConsensusProcess(cfg, generatePubKey(t), *instanceId1, *s, oracle, signing, n1)
+	broker.Register(instanceId1, proc)
 	err := proc.Start()
 	assert.Equal(t, nil, err)
 	err = proc.Start()
@@ -50,8 +50,8 @@ func TestConsensusProcess_eventLoop(t *testing.T) {
 	oracle := NewMockOracle()
 	signing := NewMockSigning()
 
-	proc := NewConsensusProcess(cfg, generatePubKey(t), *setId1, *s, oracle, signing, n1)
-	broker.Register(setId1, proc)
+	proc := NewConsensusProcess(cfg, generatePubKey(t), *instanceId1, *s, oracle, signing, n1)
+	broker.Register(instanceId1, proc)
 	go proc.eventLoop()
 	n2.Broadcast(ProtoName, []byte{})
 
@@ -68,10 +68,10 @@ func TestConsensusProcess_handleMessage(t *testing.T) {
 	oracle := NewMockOracle()
 	signing := NewMockSigning()
 
-	proc := NewConsensusProcess(cfg, generatePubKey(t), *setId1, *s, oracle, signing, n1)
-	broker.Register(setId1, proc)
+	proc := NewConsensusProcess(cfg, generatePubKey(t), *instanceId1, *s, oracle, signing, n1)
+	broker.Register(instanceId1, proc)
 
-	m := NewMessageBuilder().SetIteration(0).SetSetId(*setId1).SetPubKey(generatePubKey(t)).Sign(proc.signing).Build()
+	m := NewMessageBuilder().SetIteration(0).SetInstanceId(*instanceId1).SetPubKey(generatePubKey(t)).Sign(proc.signing).Build()
 
 	proc.handleMessage(m)
 }
@@ -85,8 +85,8 @@ func TestConsensusProcess_nextRound(t *testing.T) {
 	oracle := NewMockOracle()
 	signing := NewMockSigning()
 
-	proc := NewConsensusProcess(cfg, generatePubKey(t), *setId1, *s, oracle, signing, n1)
-	broker.Register(setId1, proc)
+	proc := NewConsensusProcess(cfg, generatePubKey(t), *instanceId1, *s, oracle, signing, n1)
+	broker.Register(instanceId1, proc)
 
 	proc.advanceToNextRound()
 	assert.Equal(t, uint32(1), proc.k)
@@ -102,7 +102,7 @@ func generateConsensusProcess(t *testing.T) *ConsensusProcess {
 	oracle := NewMockOracle()
 	signing := NewMockSigning()
 
-	return NewConsensusProcess(cfg, generatePubKey(t), *setId1, *s, oracle, signing, n1)
+	return NewConsensusProcess(cfg, generatePubKey(t), *instanceId1, *s, oracle, signing, n1)
 }
 
 func TestConsensusProcess_DoesMatchRound(t *testing.T) {

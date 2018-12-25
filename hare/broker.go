@@ -84,10 +84,10 @@ func (broker *Broker) dispatcher() {
 				continue
 			}
 
-			setId := NewBytes32(hareMsg.Message.SetId)
+			instanceId := NewBytes32(hareMsg.Message.InstanceId)
 
 			broker.mutex.RLock()
-			c, exist := broker.outbox[setId.Id()]
+			c, exist := broker.outbox[instanceId.Id()]
 			broker.mutex.RUnlock()
 			if exist {
 				c <- hareMsg
