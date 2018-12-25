@@ -34,7 +34,6 @@ type ConsensusProcess struct {
 	Closer // the consensus is closeable
 	pubKey          crypto.PublicKey
 	setId           SetId
-	t               *Set    // loop local set
 	oracle          Rolacle // roles oracle
 	signing         Signing
 	network         NetworkService
@@ -63,7 +62,7 @@ func NewConsensusProcess(cfg config.Config, key crypto.PublicKey, setId SetId, s
 	proc.preRoundTracker = NewPreRoundTracker(cfg.F+1, cfg.N)
 	proc.statusesTracker = NewStatusTracker(cfg.F+1, cfg.N)
 	proc.proposalTracker = NewProposalTracker(cfg.N)
-	proc.commitTracker = NewCommitTracker(cfg.F+1, cfg.N)
+	proc.commitTracker = NewCommitTracker(cfg.F+1, cfg.N, nil)
 	proc.notifyTracker = NewNotifyTracker(cfg.N)
 	proc.terminating = false
 	proc.cfg = cfg
@@ -123,7 +122,9 @@ PreRound:
 		case msg := <-proc.inbox: // msg event
 			proc.handleMessage(msg)
 		case <-ticker.C: // next round event
-			proc.nextRound()
+			proc.endOfRound()
+			proc.advanceToNextRound()
+			proc.beginOfRound()
 		case <-proc.CloseChannel(): // close event
 			log.Info("Stop event loop, terminating")
 			return
@@ -136,7 +137,7 @@ PreRound:
 }
 
 func (proc *ConsensusProcess) doesMessageMatchRound(m *pb.HareMessage) bool {
-	currentRound := proc.k % 4
+	currentRound := proc.currentRound()
 
 	switch MessageType(m.Message.Type) {
 	case PreRound:
@@ -249,29 +250,48 @@ func (proc *ConsensusProcess) sendPendingMessage() {
 	}
 
 	proc.network.Broadcast(ProtoName, data)
+	proc.roundMsg = nil // sent
 }
 
-func (proc *ConsensusProcess) nextRound() {
+func (proc *ConsensusProcess) endOfRound() {
 	log.Info("End of round: %d", proc.k)
 
+	// reset trackers
+	switch proc.currentRound() {
+	case Round2:
+		proc.endOfRound2()
+	}
+}
+
+func (proc *ConsensusProcess) advanceToNextRound() {
 	// advance to next round
 	proc.k++
+}
 
+func (proc *ConsensusProcess) beginOfRound() {
 	// send pending message
 	proc.sendPendingMessage()
 
 	// reset trackers
-	switch proc.k % 4 { // switch current round
-	case 1:                                                               // 1 is round 2
-		proc.statusesTracker = NewStatusTracker(proc.cfg.F+1, proc.cfg.N) // reset statuses tracking
-	case 3:                                                             // 3 is round 4
-		proc.proposalTracker = NewProposalTracker(proc.cfg.N)           // reset proposal tracking
-		proc.commitTracker = NewCommitTracker(proc.cfg.F+1, proc.cfg.N) // reset commits tracking
+	switch proc.currentRound() {
+	case Round1:
+		proc.statusesTracker = NewStatusTracker(proc.cfg.F+1, proc.cfg.N)
+	case Round2:
+		// done with building proposal, reset statuses tracking
+		proc.statusesTracker = nil
+	case Round3:
+		proposedSet := proc.proposalTracker.ProposedSet()
+		if proposedSet == nil { // no valid proposal
+			return
+		}
+		builder := proc.initDefaultBuilder(proposedSet).SetType(Notify).SetCertificate(proc.certificate).Sign(proc.signing)
+		proc.roundMsg = builder.Build()
+		proc.commitTracker = NewCommitTracker(proc.cfg.F+1, proc.cfg.N, proposedSet) // track commits for proposed T
+	case Round4:
+		// done with proposals and commits
+		proc.proposalTracker = NewProposalTracker(proc.cfg.N) // reset proposals tracking
+		proc.commitTracker = nil
 	}
-
-	// reset round message & iteration set
-	proc.roundMsg = nil
-	proc.t = nil
 }
 
 func (proc *ConsensusProcess) initDefaultBuilder(s *Set) *MessageBuilder {
@@ -336,42 +356,15 @@ func (proc *ConsensusProcess) processStatusMsg(msg *pb.HareMessage) {
 func (proc *ConsensusProcess) processProposalMsg(msg *pb.HareMessage) {
 	// TODO: validate SVP
 
-	proc.proposalTracker.OnProposal(msg)
-
-	set, ok := proc.proposalTracker.ProposedSet()
-	if !ok {
-		// Note: we use roundMsg=nil to mark that we should not send anything (for whatever reason)
-		// it is preferred then checking sometimes for t=nil as the protocol states
-		proc.roundMsg = nil
-		proc.t = nil
-		return
+	if proc.currentRound() == Round2 { // regular proposal
+		proc.proposalTracker.OnProposal(msg)
+	} else { // late proposal
+		proc.proposalTracker.OnLateProposal(msg)
 	}
-
-	// update t & and roundMsg
-	proc.t = set
-	builder := proc.initDefaultBuilder(proc.t).SetType(Notify).SetCertificate(proc.certificate).Sign(proc.signing)
-	proc.roundMsg = builder.Build()
 }
 
 func (proc *ConsensusProcess) processCommitMsg(msg *pb.HareMessage) {
-	if proc.proposalTracker.IsConflicting() {
-		proc.roundMsg = nil
-		return
-	}
-
-	if !proc.commitTracker.HasEnoughCommits() {
-		return
-	}
-
-	cert := proc.commitTracker.BuildCertificate()
-	if cert == nil {
-		log.Error("Build certificate returned nil")
-		return
-	}
-
-	proc.s = proc.t // commit to t
-	proc.certificate = cert
-	proc.roundMsg = proc.buildNotifyMessage() // build notify with certificate
+	proc.commitTracker.OnCommit(msg)
 }
 
 // TODO: I think we should prepare the status message also here
@@ -407,4 +400,29 @@ func (proc *ConsensusProcess) processNotifyMsg(msg *pb.HareMessage) {
 	}
 	proc.network.Broadcast(ProtoName, data)
 	proc.terminating = true // ensures immediate termination
+}
+
+func (proc *ConsensusProcess) currentRound() int {
+	return int(proc.k % 4)
+}
+
+func (proc *ConsensusProcess) endOfRound2() {
+	if proc.proposalTracker.IsConflicting() {
+		return
+	}
+
+	if !proc.commitTracker.HasEnoughCommits() {
+		return
+	}
+
+	cert := proc.commitTracker.BuildCertificate()
+	if cert == nil {
+		log.Error("Build certificate returned nil")
+		return
+	}
+
+	proc.s = proc.proposalTracker.ProposedSet() // commit to t
+	proc.certificate = cert
+	proc.roundMsg = proc.buildNotifyMessage() // build notify with certificate
+	proc.sendPendingMessage()
 }

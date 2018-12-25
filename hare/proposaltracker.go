@@ -18,6 +18,14 @@ func NewProposalTracker(expectedSize int) *ProposalTracker {
 	return pt
 }
 
+// Tracks and detects conflicting messages
+// Returns true if it is the first time we see m, false otherwise
+func (pt *ProposalTracker) TrackConflict(m *pb.HareMessage) bool {
+
+
+	return true
+}
+
 func (pt *ProposalTracker) OnProposal(msg *pb.HareMessage) {
 	if pt.proposal == nil { // first leader
 		pt.proposal = msg // just update
@@ -32,26 +40,43 @@ func (pt *ProposalTracker) OnProposal(msg *pb.HareMessage) {
 			pt.isConflicting = true
 		}
 
-		return
+		return // process done
 	}
 
 	// TODO: ignore msgs with higher ranked role proof
 
-	pt.proposal = msg // update leader
+	// first time we see msg
+	pt.proposal = msg        // update leader msg
+	pt.isConflicting = false // assume no conflict
+}
+
+func (pt *ProposalTracker) OnLateProposal(msg *pb.HareMessage) {
+	// if same sender then we should check for equivocation
+	if bytes.Equal(pt.proposal.PubKey, msg.PubKey) {
+		s := NewSet(msg.Message.Values)
+		g := NewSet(pt.proposal.Message.Values)
+		if !s.Equals(g) { // equivocation detected
+			pt.isConflicting = true
+		}
+	}
+
+	// not equal check rank
+	// TODO: if msg is ranked lower than proposal set isConflicting to true
 }
 
 func (pt *ProposalTracker) IsConflicting() bool {
 	return pt.isConflicting
 }
 
-func (pt *ProposalTracker) ProposedSet() (*Set, bool) {
+func (pt *ProposalTracker) ProposedSet() *Set {
 	if pt.proposal == nil {
-		return nil, false
+		return nil
 	}
 
 	if pt.isConflicting {
-		return nil, false
+		return nil
 	}
 
-	return NewSet(pt.proposal.Message.Values), true
+	return NewSet(pt.proposal.Message.Values)
 }
+

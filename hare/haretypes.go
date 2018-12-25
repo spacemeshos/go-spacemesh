@@ -17,11 +17,18 @@ type SetId struct {
 type MessageType byte
 
 const (
-	PreRound MessageType = 0
-	Status   MessageType = 1
-	Proposal MessageType = 2
-	Commit   MessageType = 3
-	Notify   MessageType = 4
+	Status   MessageType = 0
+	Proposal MessageType = 1
+	Commit   MessageType = 2
+	Notify   MessageType = 3
+	PreRound MessageType = 10
+)
+
+const (
+	Round1 = 0
+	Round2 = 1
+	Round3 = 2
+	Round4 = 3
 )
 
 func NewBytes32(buff []byte) Bytes32 {

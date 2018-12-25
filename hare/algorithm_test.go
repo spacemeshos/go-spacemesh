@@ -88,9 +88,9 @@ func TestConsensusProcess_nextRound(t *testing.T) {
 	proc := NewConsensusProcess(cfg, generatePubKey(t), *setId1, *s, oracle, signing, n1)
 	broker.Register(setId1, proc)
 
-	proc.nextRound()
+	proc.advanceToNextRound()
 	assert.Equal(t, uint32(1), proc.k)
-	proc.nextRound()
+	proc.advanceToNextRound()
 	assert.Equal(t, uint32(2), proc.k)
 }
 
@@ -127,7 +127,7 @@ func TestConsensusProcess_DoesMatchRound(t *testing.T) {
 	for j:=0;j<len(msgs);j++ {
 		for i := 0; i < 4; i++ {
 			assert.Equal(t, rounds[j][i], cp.doesMessageMatchRound(msgs[j]))
-			cp.nextRound()
+			cp.advanceToNextRound()
 		}
 	}
 }

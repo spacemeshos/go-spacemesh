@@ -7,36 +7,27 @@ import (
 )
 
 type CommitTracker struct {
-	seenSenders map[string]bool              // tracks seen senders
-	commits     map[uint32][]*pb.HareMessage // tracks Set->Commits
-	maxSet      *Set                         // follows the set who has max number of commits
-	threshold   int                          // the number of required commits
+	seenSenders map[string]bool   // tracks seen senders
+	commits     []*pb.HareMessage // tracks Set->Commits
+	proposedSet *Set              // follows the set who has max number of commits
+	threshold   int               // the number of required commits
 }
 
-func NewCommitTracker(threshold int, expectedSize int) *CommitTracker {
+func NewCommitTracker(threshold int, expectedSize int, proposedSet *Set) *CommitTracker {
 	ct := &CommitTracker{}
 	ct.seenSenders = make(map[string]bool, expectedSize)
-	ct.commits = make(map[uint32][]*pb.HareMessage, expectedSize)
-	ct.maxSet = nil
+	ct.commits = make([]*pb.HareMessage, 0, threshold)
+	ct.proposedSet = proposedSet
 	ct.threshold = threshold
 
 	return ct
 }
 
-func (ct *CommitTracker) getMaxCommits() int {
-	if ct.maxSet == nil { // no max yet
-		return 0
-	}
-
-	arr, exist := ct.commits[ct.maxSet.Id()]
-	if !exist || arr == nil { // should seenSenders and non-nil
-		panic("should be unreachable")
-	}
-
-	return len(arr)
-}
-
 func (ct *CommitTracker) OnCommit(msg *pb.HareMessage) {
+	if ct.proposedSet == nil { // no valid proposed set
+		return
+	}
+
 	if ct.HasEnoughCommits() {
 		return
 	}
@@ -54,29 +45,20 @@ func (ct *CommitTracker) OnCommit(msg *pb.HareMessage) {
 	ct.seenSenders[pub.String()] = true
 
 	s := NewSet(msg.Message.Values)
-
-	// create array if necessary
-	_, exist := ct.commits[s.Id()]
-	if !exist {
-		ct.commits[s.Id()] = make([]*pb.HareMessage, 0, ct.threshold)
+	if !ct.proposedSet.Equals(s) { // ignore commit on different set
+		return
 	}
 
 	// add msg
-	arr, _ := ct.commits[s.Id()]
-	arr = append(arr, msg)
-	ct.commits[s.Id()] = arr
-
-	if len(arr) >= ct.getMaxCommits() { // update max
-		ct.maxSet = s
-	}
+	ct.commits = append(ct.commits, msg)
 }
 
 func (ct *CommitTracker) HasEnoughCommits() bool {
-	if ct.maxSet == nil {
+	if ct.proposedSet == nil {
 		return false
 	}
 
-	return ct.getMaxCommits() >= ct.threshold
+	return len(ct.commits) >= ct.threshold
 }
 
 func (ct *CommitTracker) BuildCertificate() *pb.Certificate {
@@ -86,8 +68,8 @@ func (ct *CommitTracker) BuildCertificate() *pb.Certificate {
 
 	c := &pb.Certificate{}
 
-	c.AggMsgs.Messages = ct.commits[ct.maxSet.Id()]
-	c.Values = ct.commits[ct.maxSet.Id()][0].Message.Values
+	c.AggMsgs.Messages = ct.commits
+	c.Values = ct.commits[0].Message.Values
 	// TODO: set c.AggMsgs.AggSig
 	// TODO: optimize msg size by setting values to nil
 
