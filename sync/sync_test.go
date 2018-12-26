@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
@@ -15,20 +16,22 @@ import (
 	"time"
 )
 
-var conf = Configuration{2, 1 * time.Second, 1, 300, 1 * time.Second}
+var conf = Configuration{2, 2 * time.Second, 1, 300, 1500 * time.Millisecond}
 
 func SyncFactory(t testing.TB, bootNodes int, networkSize int, randomConnections int, config Configuration, name string) (syncs []*Syncer) {
 
 	fmt.Println("===============================================================================================")
-	fmt.Println("Running Integration test with these parameters : ", bootNodes, " ", networkSize, " ", randomConnections) //todo add what test
+	fmt.Println("Running Integration test with these parameters : ", bootNodes, " ", networkSize, " ", randomConnections)
 
 	nodes := make([]*Syncer, 0, bootNodes)
 	i := 1
 	beforeHook := func(net server.Service) {
-		sync := NewSync(net, getMesh(name+"_"+time.Now().String()), BlockValidatorMock{}, config)
-		fmt.Println("create sync obj number ", i)
-		i++
+		newname := fmt.Sprintf("%s_%d", name, i)
+		l := log.New(newname, "", "")
+		sync := NewSync(net, getMesh(newname), BlockValidatorMock{}, config, *l.Logger)
+		fmt.Println("create sync obj number ", i, " ", newname)
 		nodes = append(nodes, sync)
+		i++
 	}
 	net := p2p.NewP2PSwarm(beforeHook, nil)
 	net.Start(t, bootNodes, networkSize, randomConnections)
@@ -41,7 +44,8 @@ func SyncMockFactory(number int, conf Configuration, name string) (syncs []*Sync
 	sim := service.NewSimulator()
 	for i := 0; i < number; i++ {
 		net := sim.NewNode()
-		sync := NewSync(net, getMesh(name+"_"+time.Now().String()), BlockValidatorMock{}, conf)
+		l := *log.New("sync", "", "").Logger
+		sync := NewSync(net, getMesh(name+"_"+time.Now().String()), BlockValidatorMock{}, conf, l)
 		nodes = append(nodes, sync)
 		p2ps = append(p2ps, net)
 	}
@@ -52,7 +56,7 @@ type BlockValidatorMock struct {
 }
 
 func (BlockValidatorMock) ValidateBlock(block *mesh.Block) bool {
-	fmt.Println("validate block ", block)
+	fmt.Println("validate block ", block.ID(), " ", block)
 	return true
 }
 
@@ -126,7 +130,7 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
-	syncObj := NewSync(n1, getMesh("TestSyncProtocol_LayerHashRequest"), BlockValidatorMock{}, conf)
+	syncObj := NewSync(n1, getMesh("TestSyncProtocol_LayerHashRequest"), BlockValidatorMock{}, conf, *log.New("sync", "", "").Logger)
 	defer syncObj.Close()
 	lid := mesh.LayerID(1)
 
@@ -134,7 +138,7 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 	fnd2 := server.NewMsgServer(n2, protocol, time.Second*5)
 	fnd2.RegisterMsgHandler(LAYER_HASH, syncObj.layerHashRequestHandler)
 	ch := make(chan peerHashPair)
-	_, err := syncObj.sendLayerHashRequest(n2.Node.PublicKey(), lid, ch)
+	_, err := syncObj.sendLayerHashRequest(n2.Node.PublicKey(), lid, ch, int32(0))
 	hash := <-ch
 	assert.NoError(t, err, "Should not return error")
 	assert.Equal(t, "some hash representing the layer", string(hash.hash), "wrong block")
@@ -146,7 +150,7 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
 
-	syncObj := NewSync(n1, getMesh("TestSyncProtocol_LayerIdsRequest"), BlockValidatorMock{}, conf)
+	syncObj := NewSync(n1, getMesh("TestSyncProtocol_LayerIdsRequest"), BlockValidatorMock{}, conf, *log.New("sync", "", "").Logger)
 	defer syncObj.Close()
 	lid := mesh.LayerID(1)
 	layer := mesh.NewExistingLayer(lid, make([]*mesh.Block, 0, 10))
@@ -185,11 +189,11 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
 
-	syncObj1 := NewSync(n1, getMesh("TestSyncProtocol_FetchBlocks_1"), BlockValidatorMock{}, conf)
+	syncObj1 := NewSync(n1, getMesh("TestSyncProtocol_FetchBlocks_1"), BlockValidatorMock{}, conf, *log.New("sync", "", "").Logger)
 	defer syncObj1.Close()
 	syncObj1.Start()
 
-	syncObj2 := NewSync(n2, getMesh("TestSyncProtocol_FetchBlocks_2"), BlockValidatorMock{}, conf)
+	syncObj2 := NewSync(n2, getMesh("TestSyncProtocol_FetchBlocks_2"), BlockValidatorMock{}, conf, *log.New("sync", "", "").Logger)
 	defer syncObj2.Close()
 	syncObj2.Start()
 
@@ -200,9 +204,9 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	syncObj1.layers.AddLayer(mesh.NewExistingLayer(0, []*mesh.Block{block1}))
 	syncObj1.layers.AddLayer(mesh.NewExistingLayer(1, []*mesh.Block{block2}))
 	syncObj1.layers.AddLayer(mesh.NewExistingLayer(2, []*mesh.Block{block3}))
-
+	count := int32(0)
 	ch := make(chan peerHashPair)
-	_, err := syncObj2.sendLayerHashRequest(n1.PublicKey(), 0, ch)
+	_, err := syncObj2.sendLayerHashRequest(n1.PublicKey(), 0, ch, count)
 	hash := <-ch
 	assert.NoError(t, err, "Should not return error")
 	assert.Equal(t, "some hash representing the layer", string(hash.hash), "wrong block")
@@ -212,7 +216,7 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	msg2 := <-ch2
 	assert.Equal(t, msg2.ID(), block1.ID(), "wrong block")
 
-	_, err = syncObj2.sendLayerHashRequest(n1.PublicKey(), 1, ch)
+	_, err = syncObj2.sendLayerHashRequest(n1.PublicKey(), 1, ch, count)
 	assert.NoError(t, err, "Should not return error")
 	assert.Equal(t, "some hash representing the layer", string(hash.hash), "wrong block")
 
@@ -221,7 +225,7 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	msg2 = <-ch2
 	assert.Equal(t, msg2.ID(), block2.ID(), "wrong block")
 
-	_, err = syncObj2.sendLayerHashRequest(n1.PublicKey(), 2, ch)
+	_, err = syncObj2.sendLayerHashRequest(n1.PublicKey(), 2, ch, count)
 	assert.NoError(t, err, "Should not return error")
 	assert.Equal(t, "some hash representing the layer", string(hash.hash), "wrong block")
 
@@ -302,36 +306,16 @@ func TestSyncProtocol_SyncMultipalNodes(t *testing.T) {
 	pm3 := getPeersMock([]Peer{n1.PublicKey(), n2.PublicKey(), n4.PublicKey()})
 	pm4 := getPeersMock([]Peer{n1.PublicKey(), n2.PublicKey()})
 
-	syncObj1 := NewSync(
-		n1,
-		getMesh("TestSyncProtocol_SyncMultipalNodes_1"),
-		BlockValidatorMock{},
-		Configuration{2, 1 * time.Second, 3, 300, 1 * time.Second},
-	)
+	syncObj1 := NewSync(n1, getMesh("TestSyncProtocol_SyncMultipalNodes_1"), BlockValidatorMock{}, conf, *log.New("sync", "", "").Logger)
 	syncObj1.peers = pm1
 
-	syncObj2 := NewSync(
-		n2,
-		getMesh("TestSyncProtocol_SyncMultipalNodes_2"),
-		BlockValidatorMock{},
-		Configuration{2, 1 * time.Second, 3, 300, 1 * time.Second},
-	)
+	syncObj2 := NewSync(n2, getMesh("TestSyncProtocol_SyncMultipalNodes_2"), BlockValidatorMock{}, conf, *log.New("sync", "", "").Logger)
 	syncObj2.peers = pm2
 
-	syncObj3 := NewSync(
-		n3,
-		getMesh("TestSyncProtocol_SyncMultipalNodes_3"),
-		BlockValidatorMock{},
-		Configuration{2, 1 * time.Second, 3, 300, 1 * time.Second},
-	)
+	syncObj3 := NewSync(n3, getMesh("TestSyncProtocol_SyncMultipalNodes_3"), BlockValidatorMock{}, conf, *log.New("sync", "", "").Logger)
 	syncObj3.peers = pm3
 
-	syncObj4 := NewSync(
-		n4,
-		getMesh("TestSyncProtocol_SyncMultipalNodes_4"),
-		BlockValidatorMock{},
-		Configuration{2, 1 * time.Second, 3, 300, 1 * time.Second},
-	)
+	syncObj4 := NewSync(n4, getMesh("TestSyncProtocol_SyncMultipalNodes_4"), BlockValidatorMock{}, conf, *log.New("sync", "", "").Logger)
 	syncObj4.peers = pm4
 
 	block1 := mesh.NewExistingBlock(mesh.BlockID(111), 0, nil)
@@ -441,7 +425,7 @@ func TestSyncProtocol_p2pIntegrationMultipleNodes(t *testing.T) {
 	block8 := mesh.NewExistingBlock(mesh.BlockID(888), 4, nil)
 	block9 := mesh.NewExistingBlock(mesh.BlockID(999), 5, nil)
 	block10 := mesh.NewExistingBlock(mesh.BlockID(101), 5, nil)
-	syncObjs := SyncFactory(t, 1, 2, 2, conf, "systemtest2")
+	syncObjs := SyncFactory(t, 2, 4, 4, conf, "integrationTest")
 
 	syncObj1 := syncObjs[0]
 	defer syncObj1.Close()
@@ -449,6 +433,12 @@ func TestSyncProtocol_p2pIntegrationMultipleNodes(t *testing.T) {
 	defer syncObj2.Close()
 	syncObj3 := syncObjs[2]
 	defer syncObj3.Close()
+	syncObj4 := syncObjs[3]
+	defer syncObj4.Close()
+	syncObj5 := syncObjs[4]
+	defer syncObj5.Close()
+	syncObj6 := syncObjs[5]
+	defer syncObj6.Close()
 
 	syncObj1.layers.AddLayer(mesh.NewExistingLayer(1, []*mesh.Block{block1, block2}))
 	syncObj1.layers.AddLayer(mesh.NewExistingLayer(2, []*mesh.Block{block3, block4}))
@@ -456,15 +446,32 @@ func TestSyncProtocol_p2pIntegrationMultipleNodes(t *testing.T) {
 	syncObj1.layers.AddLayer(mesh.NewExistingLayer(4, []*mesh.Block{block7, block8}))
 	syncObj1.layers.AddLayer(mesh.NewExistingLayer(5, []*mesh.Block{block9, block10}))
 
-	timeout := time.After(2 * 60 * time.Second)
+	syncObj3.layers.AddLayer(mesh.NewExistingLayer(1, []*mesh.Block{block1, block2}))
+	syncObj3.layers.AddLayer(mesh.NewExistingLayer(2, []*mesh.Block{block3, block4}))
+	syncObj3.layers.AddLayer(mesh.NewExistingLayer(3, []*mesh.Block{block5, block6}))
+	syncObj3.layers.AddLayer(mesh.NewExistingLayer(4, []*mesh.Block{block7, block8}))
+	syncObj3.layers.AddLayer(mesh.NewExistingLayer(5, []*mesh.Block{block9, block10}))
 
+	timeout := time.After(2 * 60 * time.Second)
 	syncObj2.layers.SetLatestKnownLayer(5)
 	syncObj3.layers.SetLatestKnownLayer(5)
+	syncObj4.layers.SetLatestKnownLayer(5)
+	syncObj5.layers.SetLatestKnownLayer(5)
+	syncObj6.layers.SetLatestKnownLayer(5)
+	syncObj1.Start()
 	syncObj2.Start()
 	syncObj3.Start()
-	syncObj1.Start()
+	syncObj4.Start()
+	syncObj5.Start()
+	syncObj6.Start()
+
+	defer fmt.Println("sync 1 ", syncObj2.layers.LatestIrreversible())
+	defer fmt.Println("sync 2 ", syncObj2.layers.LatestIrreversible())
+	defer fmt.Println("sync 3 ", syncObj3.layers.LatestIrreversible())
+	defer fmt.Println("sync 4 ", syncObj4.layers.LatestIrreversible())
+	defer fmt.Println("sync 5 ", syncObj5.layers.LatestIrreversible())
+	defer fmt.Println("sync 6 ", syncObj6.layers.LatestIrreversible())
 	// Keep trying until we're timed out or got a result or got an error
-loop:
 	for {
 		select {
 		// Got a timeout! fail with a timeout error
@@ -472,9 +479,9 @@ loop:
 			t.Error("timed out ")
 			return
 		default:
-			if syncObj2.layers.LatestIrreversible() == 3 && syncObj3.layers.LatestIrreversible() == 3 {
+			if syncObj2.layers.LatestIrreversible() == 3 {
 				t.Log("done!")
-				break loop
+				return
 			}
 		}
 	}
