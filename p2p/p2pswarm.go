@@ -84,6 +84,9 @@ func (p2ps *P2PSwarm) Start(t testing.TB, bootnodes int, networksize int, randco
 		i := i
 		wg.Add(1)
 		go func() {
+			// we add a timeout before starting to reduce the possibility or trying to connect at the same time
+			// pretty rare occasion in real life (which we handle anyway), but happens a lot when running everything in 1 binary.
+			time.Sleep(time.Duration(i) * 50 * time.Millisecond)
 			swarm[i].Start()
 			swarm[i].waitForBoot()
 			wg.Done()
