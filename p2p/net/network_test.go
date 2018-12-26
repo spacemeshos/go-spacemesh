@@ -35,7 +35,7 @@ func waitForCallbackOrTimeout(t *testing.T, outchan chan NewConnectionEvent, exp
 	select {
 	case res := <-outchan:
 		assert.Equal(t, expectedSession.ID(), res.Conn.Session().ID(), "wrong session received")
-	case <-time.After(1 * time.Second):
+	case <-time.After(2 * time.Second):
 		assert.Nil(t, expectedSession, "Didn't get channel notification")
 	}
 }
@@ -81,6 +81,7 @@ func TestHandlePreSessionIncomingMessage(t *testing.T) {
 
 	localNode, _ := node.GenerateTestNodeWithConfig(t, cfg)
 	remoteNode, _ := node.GenerateTestNodeWithConfig(t, cfg)
+
 	con := NewConnectionMock(localNode.PublicKey())
 	con.addr = localNode.Address()
 	remoteNet, _ := NewNet(config.DefaultConfig(), remoteNode)
@@ -100,11 +101,13 @@ func TestHandlePreSessionIncomingMessage(t *testing.T) {
 	assert.Equal(t, int32(1), con.SendCount())
 
 	con.remotePub = nil
+	wg.Add(1)
+
 	go func() {
 		waitForCallbackOrTimeout(t, outchan, session)
 		wg.Done()
 	}()
-	wg.Add(1)
+
 	err = remoteNet.HandlePreSessionIncomingMessage(con, data)
 	assert.NoError(t, err, "handle session failed")
 	wg.Wait()
