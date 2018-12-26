@@ -33,13 +33,14 @@ type ConsensusProcess struct {
 	State
 	Closer // the consensus is closeable
 	pubKey          crypto.PublicKey
-	instanceId           InstanceId
+	instanceId      InstanceId
 	oracle          Rolacle // roles oracle
 	signing         Signing
 	network         NetworkService
 	startTime       time.Time // TODO: needed?
 	inbox           chan *pb.HareMessage
 	roundMsg        *pb.HareMessage
+	role            RolacleResponse // the current role
 	preRoundTracker *PreRoundTracker
 	statusesTracker *StatusTracker
 	proposalTracker *ProposalTracker
@@ -66,6 +67,8 @@ func NewConsensusProcess(cfg config.Config, key crypto.PublicKey, instanceId Ins
 	proc.notifyTracker = NewNotifyTracker(cfg.N)
 	proc.terminating = false
 	proc.cfg = cfg
+
+	proc.updateRole()
 
 	return proc
 }
@@ -111,10 +114,6 @@ PreRound:
 
 	proc.preRoundTracker.UpdateSet(proc.s)
 
-	// set status and send
-	proc.setStatusMessage()
-	proc.sendPendingMessage()
-
 	// start first iteration
 	ticker := time.NewTicker(proc.cfg.RoundDuration)
 	for {
@@ -122,9 +121,9 @@ PreRound:
 		case msg := <-proc.inbox: // msg event
 			proc.handleMessage(msg)
 		case <-ticker.C: // next round event
-			proc.endOfRound()
+			proc.onRoundEnd()
 			proc.advanceToNextRound()
-			proc.beginOfRound()
+			proc.onRoundBegin()
 		case <-proc.CloseChannel(): // close event
 			log.Info("Stop event loop, terminating")
 			return
@@ -158,6 +157,10 @@ func (proc *ConsensusProcess) doesMessageMatchRound(m *pb.HareMessage) bool {
 }
 
 func (proc *ConsensusProcess) validateCertificate(m *pb.HareMessage) bool {
+	if m == nil {
+		return false
+	}
+
 	if m.Cert == nil {
 		return false
 	}
@@ -179,6 +182,14 @@ func (proc *ConsensusProcess) validateCertificate(m *pb.HareMessage) bool {
 	return true
 }
 
+func roleFromIteration(k uint32) Role {
+	if k%4 == Round2 {
+		return Leader
+	}
+
+	return Active
+}
+
 func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
 	// Note: set id is already verified by the broker
 
@@ -195,10 +206,10 @@ func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
 	}
 
 	// validate role
-	if !proc.oracle.ValidateRole(roleFromIteration(m.Message.K),
-		RoleRequest{pub, InstanceId{NewBytes32(m.Message.InstanceId)}, m.Message.K},
-		Signature(m.Message.RoleProof)) {
-		log.Warning("invalid role detected")
+	request := RoleRequest{pub, InstanceId{NewBytes32(m.Message.InstanceId)}, m.Message.K}
+	response := RolacleResponse{roleFromIteration(m.Message.K), Signature(m.Message.RoleProof)}
+	if !proc.oracle.ValidateRole(request, response) {
+		log.Warning("invalid role detected for: ", m.String())
 		return
 	}
 
@@ -238,8 +249,9 @@ func (proc *ConsensusProcess) sendPendingMessage() {
 	}
 
 	// validate role
-	if !proc.oracle.ValidateRole(roleFromIteration(proc.k),
-		RoleRequest{proc.pubKey, proc.instanceId, proc.k}, Signature{}) {
+	request := RoleRequest{proc.pubKey, InstanceId{NewBytes32(proc.instanceId.Bytes())}, proc.k}
+	response := RolacleResponse{proc.role.Role, proc.role.Signature}
+	if !proc.oracle.ValidateRole(request, response) {
 		return
 	}
 
@@ -253,45 +265,68 @@ func (proc *ConsensusProcess) sendPendingMessage() {
 	proc.roundMsg = nil // sent
 }
 
-func (proc *ConsensusProcess) endOfRound() {
+func (proc *ConsensusProcess) onRoundEnd() {
 	log.Info("End of round: %d", proc.k)
 
 	// reset trackers
 	switch proc.currentRound() {
-	case Round2:
-		proc.endOfRound2()
+	case Round3:
+		proc.endOfRound3()
 	}
 }
 
 func (proc *ConsensusProcess) advanceToNextRound() {
-	// advance to next round
 	proc.k++
+	proc.updateRole()
 }
 
-func (proc *ConsensusProcess) beginOfRound() {
-	// send pending message
-	proc.sendPendingMessage()
+func (proc *ConsensusProcess) beginRound1() {
+	proc.roundMsg = proc.initDefaultBuilder(proc.s).SetType(Status).Sign(proc.signing).Build()
+	proc.statusesTracker = NewStatusTracker(proc.cfg.F+1, proc.cfg.N)
+}
 
+func (proc *ConsensusProcess) beginRound2() {
+	if proc.statusesTracker.IsSVPReady() {
+		builder := proc.initDefaultBuilder(proc.statusesTracker.BuildUnionSet(proc.cfg.SetSize))
+		svp := proc.statusesTracker.BuildSVP()
+		if svp != nil {
+			proc.roundMsg = builder.SetType(Proposal).SetSVP(svp).Sign(proc.signing).Build()
+		}
+	}
+
+	// done with building proposal, reset statuses tracking
+	proc.statusesTracker = nil
+}
+
+func (proc *ConsensusProcess) beginRound3() {
+	proposedSet := proc.proposalTracker.ProposedSet()
+	if proposedSet != nil { // has proposal to send
+		builder := proc.initDefaultBuilder(proposedSet).SetType(Notify).SetCertificate(proc.certificate).Sign(proc.signing)
+		proc.roundMsg = builder.Build()
+	}
+	proc.commitTracker = NewCommitTracker(proc.cfg.F+1, proc.cfg.N, proposedSet) // track commits for proposed T
+}
+
+func (proc *ConsensusProcess) beginRound4() {
+	proc.commitTracker = nil
+	proc.proposalTracker = nil
+}
+
+func (proc *ConsensusProcess) onRoundBegin() {
 	// reset trackers
 	switch proc.currentRound() {
 	case Round1:
-		proc.statusesTracker = NewStatusTracker(proc.cfg.F+1, proc.cfg.N)
+		proc.beginRound1()
 	case Round2:
-		// done with building proposal, reset statuses tracking
-		proc.statusesTracker = nil
+		proc.beginRound2()
 	case Round3:
-		proposedSet := proc.proposalTracker.ProposedSet()
-		if proposedSet == nil { // no valid proposal
-			return
-		}
-		builder := proc.initDefaultBuilder(proposedSet).SetType(Notify).SetCertificate(proc.certificate).Sign(proc.signing)
-		proc.roundMsg = builder.Build()
-		proc.commitTracker = NewCommitTracker(proc.cfg.F+1, proc.cfg.N, proposedSet) // track commits for proposed T
+		proc.beginRound3()
 	case Round4:
-		// done with proposals and commits
-		proc.proposalTracker = NewProposalTracker(proc.cfg.N) // reset proposals tracking
-		proc.commitTracker = nil
+		proc.beginRound4()
 	}
+
+	// send pending message
+	proc.sendPendingMessage()
 }
 
 func (proc *ConsensusProcess) initDefaultBuilder(s *Set) *MessageBuilder {
@@ -301,35 +336,10 @@ func (proc *ConsensusProcess) initDefaultBuilder(s *Set) *MessageBuilder {
 	return builder
 }
 
-func (proc *ConsensusProcess) setStatusMessage() {
-	proc.roundMsg = proc.initDefaultBuilder(proc.s).SetType(Status).Sign(proc.signing).Build()
-}
-
 func (proc *ConsensusProcess) buildNotifyMessage() *pb.HareMessage {
 	builder := proc.initDefaultBuilder(proc.s).SetType(Notify).SetCertificate(proc.certificate).Sign(proc.signing)
 
 	return builder.Build()
-}
-
-func roleFromIteration(k uint32) byte {
-	if k%4 == 1 { // only round 1 is leader
-		return Leader
-	}
-
-	return Active
-}
-
-// Returns the union set of all status messages collected
-func buildUnionSet(expectedSize int, statuses []*pb.HareMessage) *Set {
-	unionSet := NewEmptySet(expectedSize)
-	for _, m := range statuses {
-		for _, buff := range m.Message.Values {
-			bid := Value{NewBytes32(buff)}
-			unionSet.Add(bid) // assuming add is unique
-		}
-	}
-
-	return unionSet
 }
 
 func (proc *ConsensusProcess) processPreRoundMsg(msg *pb.HareMessage) {
@@ -340,16 +350,6 @@ func (proc *ConsensusProcess) processStatusMsg(msg *pb.HareMessage) {
 	s := NewSet(msg.Message.Values)
 	if proc.preRoundTracker.CanProveSet(s) {
 		proc.statusesTracker.RecordStatus(msg)
-	}
-
-	if proc.statusesTracker.IsSVPReady() {
-		builder := proc.initDefaultBuilder(proc.statusesTracker.BuildUnionSet(proc.cfg.SetSize))
-		svp := proc.statusesTracker.BuildSVP()
-		if svp == nil {
-			log.Error("Could not build save value proof")
-			return
-		}
-		proc.roundMsg = builder.SetType(Proposal).SetSVP(svp).Sign(proc.signing).Build()
 	}
 }
 
@@ -406,7 +406,7 @@ func (proc *ConsensusProcess) currentRound() int {
 	return int(proc.k % 4)
 }
 
-func (proc *ConsensusProcess) endOfRound2() {
+func (proc *ConsensusProcess) endOfRound3() {
 	if proc.proposalTracker.IsConflicting() {
 		return
 	}
@@ -425,4 +425,7 @@ func (proc *ConsensusProcess) endOfRound2() {
 	proc.certificate = cert
 	proc.roundMsg = proc.buildNotifyMessage() // build notify with certificate
 	proc.sendPendingMessage()
+}
+func (proc *ConsensusProcess) updateRole() {
+	proc.role = proc.oracle.Role(RoleRequest{proc.pubKey, proc.instanceId, proc.k})
 }
