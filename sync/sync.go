@@ -216,7 +216,7 @@ func (s *Syncer) getLayerBlockIDs(index mesh.LayerID) (chan mesh.BlockID, error)
 func (s *Syncer) getIdsforHash(m map[string]Peer, index mesh.LayerID) (chan mesh.BlockID, error) {
 	reqCounter := 0
 	ch := make(chan []uint32)
-	defer close(ch)
+	//defer close(ch todo close channel gracefully
 	for _, v := range m {
 		_, err := s.sendLayerIDsRequest(v, index, ch)
 		if err != nil {
