@@ -216,6 +216,7 @@ func (s *Syncer) getLayerBlockIDs(index mesh.LayerID) (chan mesh.BlockID, error)
 func (s *Syncer) getIdsforHash(m map[string]Peer, index mesh.LayerID) (chan mesh.BlockID, error) {
 	reqCounter := 0
 	ch := make(chan []uint32)
+	defer close(ch)
 	for _, v := range m {
 		_, err := s.sendLayerIDsRequest(v, index, ch)
 		if err != nil {
@@ -303,11 +304,6 @@ func (s *Syncer) sendLayerHashRequest(peer Peer, layer mesh.LayerID, ch chan pee
 	}
 
 	foo := func(msg []byte) {
-		defer func() {
-			if atomic.AddInt32(&count, -1); atomic.LoadInt32(&count) == 0 { // last one closes the channel
-				close(ch)
-			}
-		}()
 		if msg == nil {
 			s.log.Error("layer hash no response from ", peer.String())
 			return
@@ -338,7 +334,6 @@ func (s *Syncer) sendLayerIDsRequest(peer Peer, idx mesh.LayerID, ch chan []uint
 			s.log.Error("layer hash response was nil from ", peer.String())
 			return
 		}
-
 		data := &pb.LayerIdsResp{}
 		if err := proto.Unmarshal(msg, data); err != nil {
 			s.log.Error("could not unmarshal layer ids response")
