@@ -35,7 +35,7 @@ func waitForCallbackOrTimeout(t *testing.T, outchan chan NewConnectionEvent, exp
 	select {
 	case res := <-outchan:
 		assert.Equal(t, expectedSession.ID(), res.Conn.Session().ID(), "wrong session received")
-	case <-time.After(1 * time.Second):
+	case <-time.After(2 * time.Second):
 		assert.Nil(t, expectedSession, "Didn't get channel notification")
 	}
 }
@@ -74,11 +74,11 @@ func TestNet_EnqueueMessage(t *testing.T) {
 }
 
 func TestHandlePreSessionIncomingMessage(t *testing.T) {
-	//cfg := config.DefaultConfig()
 	var wg sync.WaitGroup
 
 	localNode, _ := node.GenerateTestNode(t)
 	remoteNode, _ := node.GenerateTestNode(t)
+
 	con := NewConnectionMock(localNode.PublicKey())
 	con.addr = localNode.Address()
 	remoteNet, _ := NewNet(config.DefaultConfig(), remoteNode)
@@ -89,35 +89,39 @@ func TestHandlePreSessionIncomingMessage(t *testing.T) {
 	assert.NoError(t, err, "cannot marshal obj")
 	wg.Add(1)
 	go func() {
-		waitForCallbackOrTimeout(t, outchan, session)
 		wg.Done()
+		waitForCallbackOrTimeout(t, outchan, session)
 	}()
+
+	wg.Wait()
 	err = remoteNet.HandlePreSessionIncomingMessage(con, data)
 	assert.NoError(t, err, "handle session failed")
-	wg.Wait()
 	assert.Equal(t, int32(1), con.SendCount())
 
 	con.remotePub = nil
-	go func() {
-		waitForCallbackOrTimeout(t, outchan, session)
-		wg.Done()
-	}()
+
 	wg.Add(1)
+	go func() {
+		wg.Done()
+		waitForCallbackOrTimeout(t, outchan, session)
+	}()
+
+	wg.Wait()
 	err = remoteNet.HandlePreSessionIncomingMessage(con, data)
 	assert.NoError(t, err, "handle session failed")
-	wg.Wait()
 	assert.Equal(t, localNode.PublicKey().String(), con.remotePub.String(), "Remote connection was not updated properly")
 
 	othercon := NewConnectionMock(remoteNode.PublicKey())
+	othercon.addr = remoteNode.Address()
 	othercon.SetSendResult(fmt.Errorf("error or whatever"))
-	go func() {
-		waitForCallbackOrTimeout(t, outchan, nil)
-		wg.Done()
-	}()
 	wg.Add(1)
+	go func() {
+		wg.Done()
+		waitForCallbackOrTimeout(t, outchan, nil)
+	}()
+	wg.Wait()
 	err = remoteNet.HandlePreSessionIncomingMessage(othercon, data)
 	assert.Error(t, err, "handle session failed")
-	wg.Wait()
 	assert.Nil(t, othercon.Session())
 
 	out.NetworkID = out.NetworkID + 1
