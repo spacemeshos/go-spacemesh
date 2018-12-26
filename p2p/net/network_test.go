@@ -75,32 +75,50 @@ func TestNet_EnqueueMessage(t *testing.T) {
 
 func TestHandlePreSessionIncomingMessage(t *testing.T) {
 	//cfg := config.DefaultConfig()
+	var wg sync.WaitGroup
+
 	localNode, _ := node.GenerateTestNode(t)
 	remoteNode, _ := node.GenerateTestNode(t)
 	con := NewConnectionMock(localNode.PublicKey())
-	remoteNet, _ := NewNet(config.ConfigValues, remoteNode)
+	con.addr = localNode.Address()
+	remoteNet, _ := NewNet(config.DefaultConfig(), remoteNode)
 	outchan := remoteNet.SubscribeOnNewRemoteConnections()
 	out, session, er := GenerateHandshakeRequestData(localNode.PublicKey(), localNode.PrivateKey(), remoteNode.PublicKey(), remoteNet.NetworkID(), getPort(t, remoteNode.Node))
 	assert.NoError(t, er, "cant generate handshake message")
 	data, err := proto.Marshal(out)
 	assert.NoError(t, err, "cannot marshal obj")
+	wg.Add(1)
+	go func() {
+		waitForCallbackOrTimeout(t, outchan, session)
+		wg.Done()
+	}()
 	err = remoteNet.HandlePreSessionIncomingMessage(con, data)
 	assert.NoError(t, err, "handle session failed")
-	waitForCallbackOrTimeout(t, outchan, session)
+	wg.Wait()
 	assert.Equal(t, int32(1), con.SendCount())
 
 	con.remotePub = nil
+	go func() {
+		waitForCallbackOrTimeout(t, outchan, session)
+		wg.Done()
+	}()
+	wg.Add(1)
 	err = remoteNet.HandlePreSessionIncomingMessage(con, data)
 	assert.NoError(t, err, "handle session failed")
-	waitForCallbackOrTimeout(t, outchan, session)
+	wg.Wait()
 	assert.Equal(t, localNode.PublicKey().String(), con.remotePub.String(), "Remote connection was not updated properly")
 
 	othercon := NewConnectionMock(remoteNode.PublicKey())
 	othercon.SetSendResult(fmt.Errorf("error or whatever"))
+	go func() {
+		waitForCallbackOrTimeout(t, outchan, nil)
+		wg.Done()
+	}()
+	wg.Add(1)
 	err = remoteNet.HandlePreSessionIncomingMessage(othercon, data)
 	assert.Error(t, err, "handle session failed")
+	wg.Wait()
 	assert.Nil(t, othercon.Session())
-	waitForCallbackOrTimeout(t, outchan, nil)
 
 	out.NetworkID = out.NetworkID + 1
 	data, err = proto.Marshal(out)
