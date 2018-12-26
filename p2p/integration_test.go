@@ -15,13 +15,13 @@ import (
 	"time"
 )
 
-type systemTest struct {
+type integrationTest struct {
 	networkSize       int
 	bootNodes         int
 	randomConnections int
 }
 
-func (st *systemTest) Run(t testing.TB, testFunc func(t testing.TB, network *P2PSwarm)) {
+func (st *integrationTest) Run(t testing.TB, testFunc func(t testing.TB, network *P2PSwarm)) {
 	fmt.Println("===============================================================================================")
 	fmt.Println("Running a test with these parameters :" + spew.Sdump(st))
 	tim := time.Now()
@@ -39,7 +39,7 @@ func Test_SendingMessage(t *testing.T) {
 		t.Skip()
 	}
 
-	test := new(systemTest)
+	test := new(integrationTest)
 
 	test.networkSize = 30
 	test.bootNodes = 3
@@ -81,7 +81,7 @@ func Test_Gossiping(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
-	test := new(systemTest)
+	test := new(integrationTest)
 
 	test.networkSize = 30
 	test.bootNodes = 3
