@@ -20,16 +20,15 @@ func TestStatusTracker_RecordStatus(t *testing.T) {
 	s.Add(value1)
 	s.Add(value2)
 
-	m1 := BuildStatusMsg(generatePubKey(t), s)
-	tracker := NewStatusTracker(lowThresh10, lowThresh10)
-	tracker.RecordStatus(m1)
+	tracker := NewStatusTracker(lowThresh10+1, lowThresh10)
 	assert.False(t, tracker.IsSVPReady())
 
 	for i := 0; i < lowThresh10; i++ {
-		m := BuildPreRoundMsg(generatePubKey(t), s)
-		tracker.RecordStatus(m)
+		tracker.RecordStatus(BuildPreRoundMsg(generatePubKey(t), s))
+		assert.False(t, tracker.IsSVPReady())
 	}
 
+	tracker.RecordStatus(BuildPreRoundMsg(generatePubKey(t), s))
 	assert.True(t, tracker.IsSVPReady())
 }
 
@@ -38,7 +37,12 @@ func TestStatusTracker_BuildUnionSet(t *testing.T) {
 
 	s := NewEmptySet(lowDefaultSize)
 	s.Add(value1)
+	tracker.RecordStatus(BuildStatusMsg(generatePubKey(t), s))
 	s.Add(value2)
-	m := BuildStatusMsg(generatePubKey(t), s)
-	tracker.RecordStatus(m)
+	tracker.RecordStatus(BuildStatusMsg(generatePubKey(t), s))
+	s.Add(value3)
+	tracker.RecordStatus(BuildStatusMsg(generatePubKey(t), s))
+
+	g := tracker.BuildUnionSet(cfg.SetSize)
+	assert.True(t, s.Equals(g))
 }

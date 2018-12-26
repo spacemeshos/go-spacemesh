@@ -55,7 +55,7 @@ func (builder *MessageBuilder) SetInstanceId(id InstanceId) *MessageBuilder {
 	return builder
 }
 
-func (builder *MessageBuilder) SetIteration(k uint32) *MessageBuilder {
+func (builder *MessageBuilder) SetIteration(k int32) *MessageBuilder {
 	builder.inner.K = k
 	return builder
 }

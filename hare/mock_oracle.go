@@ -29,7 +29,7 @@ type RolacleResponse struct {
 type RoleRequest struct {
 	pubKey     crypto.PublicKey
 	instanceId InstanceId
-	k          uint32
+	k          int32
 }
 
 func (roleRequest *RoleRequest) bytes() []byte {
