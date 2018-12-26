@@ -201,7 +201,7 @@ func Test_ConnectionBeforeMessage(t *testing.T) {
 	//called := make(chan struct{}, numNodes)
 	cpm := new(cpoolMock)
 	cpm.f = func(address string, pk crypto.PublicKey) (net.Connection, error) {
-		c, err := oldCpool.ExistsOrPending(pk)
+		c, err := oldCpool.GetConnectionIfExists(pk)
 		if err != nil {
 			t.Fatal("Didn't get connection yet while SendMessage called GetConnection")
 		}

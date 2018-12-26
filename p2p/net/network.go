@@ -1,6 +1,7 @@
 package net
 
 import (
+	"errors"
 	"fmt"
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
@@ -12,7 +13,6 @@ import (
 	"gopkg.in/op/go-logging.v1"
 	"net"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 )
@@ -352,7 +352,11 @@ func (n *Net) HandlePreSessionIncomingMessage(c Connection, message []byte) erro
 	}
 
 	// update on new connection
-	addr := strings.Split(c.RemoteAddr().String(), ":")[0] // this should never be bad unless address is corrupted
+	addr, _, err := net.SplitHostPort(c.RemoteAddr().String())
+	if err != nil {
+		return errors.New("un-valid address format, err:%v")
+	}
+
 	anode := node.New(c.RemotePublicKey(), net.JoinHostPort(addr, strconv.Itoa(int(data.Port))))
 
 	err = c.Send(payload)

@@ -201,20 +201,20 @@ func (cp *ConnectionPool) GetConnection(address string, remotePub crypto.PublicK
 	return res.conn, res.err
 }
 
+// RemoteConnectionsChannel is a channel that we send processed connections on
 func (cp *ConnectionPool) RemoteConnectionsChannel() chan net.NewConnectionEvent {
 	return cp.outRemoteConn
 }
 
-
-func (cp *ConnectionPool) ExistsOrPending(remotePub crypto.PublicKey) (net.Connection, error) {
+// GetConnectionIfExists checks if the connection is exists or pending
+func (cp *ConnectionPool) GetConnectionIfExists(remotePub crypto.PublicKey) (net.Connection, error) {
 	cp.connMutex.RLock()
 	if cp.shutdown {
 		cp.connMutex.RUnlock()
 		return nil, errors.New("ConnectionPool was shut down")
 	}
 	// look for the connection in the pool
-	conn, found := cp.connections[remotePub.String()]
-	if found {
+	if conn, found := cp.connections[remotePub.String()]; found {
 		cp.connMutex.RUnlock()
 		return conn, nil
 	}
@@ -222,8 +222,7 @@ func (cp *ConnectionPool) ExistsOrPending(remotePub crypto.PublicKey) (net.Conne
 	// where it is possible that the connection will be established and all registered channels will be notified before
 	// the current registration
 	cp.pendMutex.Lock()
-	_, found = cp.pending[remotePub.String()]
-	if !found {
+	if _, found := cp.pending[remotePub.String()]; !found {
 		// No one is waiting for a connection with the remote peer
 		cp.pendMutex.Unlock()
 		return nil, errors.New("no connection in cpool")
