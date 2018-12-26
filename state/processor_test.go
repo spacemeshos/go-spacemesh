@@ -4,6 +4,7 @@ import (
 	"github.com/seehuhn/mt19937"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 	"math/big"
@@ -72,6 +73,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction() {
 	got := string(s.state.Dump())
 
 	assert.Equal(s.T(), big.NewInt(20),s.state.GetBalance(obj1.address))
+	assert.Equal(s.T(), uint64(1),s.state.GetNonce(obj1.address))
 
 	want := `{
 	"root": "7ed462059ad2df6754b5aa1f3d8a150bb9b0e1c4eb50b6217a8fc4ecbec7fb28",
@@ -176,12 +178,14 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_Errors()
 
 
 func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_OrderByNonce() {
-	obj1 := createAccount(s.state,[]byte{0x01}, 2, 0)
+	obj1 := createAccount(s.state,[]byte{0x01}, 5, 0)
 	obj2 := createAccount(s.state,[]byte{0x01, 02}, 1, 10)
 	obj3 := createAccount(s.state,[]byte{0x02}, 44, 0)
 	s.state.Commit(false)
 
 	transactions := Transactions{
+		createTransaction(obj1.Nonce() +3, obj1.address, obj3.address, 1),
+		createTransaction(obj1.Nonce() +2, obj1.address, obj3.address, 1),
 		createTransaction(obj1.Nonce() +1, obj1.address, obj3.address, 1),
 		createTransaction(obj1.Nonce(), obj1.address, obj2.address, 1),
 	}
@@ -195,14 +199,14 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_OrderByN
 	assert.Equal(s.T(), big.NewInt(2),s.state.GetBalance(obj2.address))
 
 	want := `{
-	"root": "87bb14a6e076efbad8c27788133c968def3e777a3eb4d8257b63f81d8f33229f",
+	"root": "e5212ec1f253fc4d7f77a591f66770ccae676ece70823287638ad7c5f988bced",
 	"accounts": {
 		"0000000000000000000000000000000000000001": {
 			"balance": "1",
-			"nonce": 1
+			"nonce": 4
 		},
 		"0000000000000000000000000000000000000002": {
-			"balance": "44",
+			"balance": "47",
 			"nonce": 0
 		},
 		"0000000000000000000000000000000000000102": {
@@ -288,6 +292,77 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Reset() {
 }`
 	if got != want {
 		s.T().Errorf("dump mismatch:\ngot: %s\nwant: %s\n", got, want)
+	}
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
+	testCycles := 100
+	maxTransactions := 2
+	minTransactions := 1
+
+	revertToLayer := rand.Intn(testCycles)
+	revertAfterLayer := rand.Intn(testCycles - revertToLayer)//rand.Intn(min(testCycles - revertToLayer,maxPastStates))
+	log.Info("starting test: revert on layer %v, after %v layers received since that layer ", revertToLayer, revertAfterLayer)
+
+	obj1 := createAccount(s.state, []byte{0x01}, 5218762487624, 0)
+	obj2 := createAccount(s.state, []byte{0x01, 02}, 341578872634786, 10)
+	obj3 := createAccount(s.state, []byte{0x02}, 1044987234, 0)
+
+	s.state.Commit(false)
+
+
+	accounts := []*StateObj{obj1, obj2, obj3}
+
+	var want string
+	for i := 0; i < testCycles; i++ {
+		numOfTransactions := rand.Intn(maxTransactions - minTransactions) + minTransactions
+		trns := Transactions{}
+		nonceTrack := make(map[*StateObj]int)
+		for j := 0; j < numOfTransactions; j++ {
+
+
+			srcAccount := accounts[int(rand.Uint32() % (uint32(len(accounts) -1) ))]
+			dstAccount := accounts[int(rand.Uint32() % (uint32(len(accounts) -1) ))]
+
+			if _,ok := nonceTrack[srcAccount]; !ok {
+				nonceTrack[srcAccount] =0
+			} else {
+				nonceTrack[srcAccount]++
+			}
+
+			for dstAccount == srcAccount {
+				dstAccount = accounts[int(rand.Uint32() % (uint32(len(accounts) -1) ))]
+			}
+			t := createTransaction(srcAccount.Nonce() + uint64(nonceTrack[srcAccount]),
+				srcAccount.address, dstAccount.address, int64(rand.Uint64() % srcAccount.Balance().Uint64() ))
+			trns = append(trns,  t)
+
+			log.Info("transaction %v nonce %v amount %v", t.Origin.Hex(), t.AccountNonce, t.Amount)
+		}
+		err := s.processor.ApplyTransactions(LayerID(i), trns)
+		assert.NoError(s.T(),err)
+
+		if i == revertToLayer {
+			want = string(s.processor.globalState.Dump())
+			log.Info("wanted state: %v", want)
+		}
+
+		if i == revertToLayer + revertAfterLayer {
+			s.processor.Reset(LayerID(revertToLayer))
+			got := string(s.processor.globalState.Dump())
+
+			if got != want {
+				s.T().Errorf("dump mismatch:\ngot: %s\nwant: %s\n", got, want)
+			}
+		}
+
 	}
 }
 

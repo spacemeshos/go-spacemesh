@@ -114,7 +114,6 @@ func (tp *TransactionProcessor) ApplyTransactions(layer LayerID, transactions Tr
 
 func (tp *TransactionProcessor) Reset(layer LayerID){
 	if state, ok := tp.prevStates[layer]; ok {
-		log.Info("reverting to root %x", state)
 		tp.mu.Lock()
 		defer tp.mu.Unlock()
 		newState, err := New(state, tp.globalState.db)
@@ -169,17 +168,27 @@ func (tp *TransactionProcessor) coalesceTransactionsBySender(transactions Transa
 }
 
 func (tp *TransactionProcessor) Process(transactions Transactions, trnsBySender map[common.Address][]*Transaction) {
-	bySender := make(map[common.Hash]bool)
+	senderPut := make(map[common.Address]bool)
+	sortedOriginByTransactions := make([]common.Address, 0,10)
+
+	// The order of the transactions determines the order addresses by which we take transactions
+	// Maybe refactor this
 	for _, trans := range transactions {
-		for _, trns := range trnsBySender[trans.Origin] {
-			if _, ok := bySender[trns.Hash()]; !ok {
-				bySender[trans.Hash()] = true
-				//todo: should we abort all transaction processing if we failed this one?
-				err := tp.ApplyTransaction(trans)
-				if err != nil {
-					log.Error("transaction aborted: %v", err)
-				}
+		if _, ok := senderPut[trans.Origin]; !ok {
+			sortedOriginByTransactions = append(sortedOriginByTransactions, trans.Origin)
+			senderPut[trans.Origin] =true
+		}
+	}
+
+
+	for _, origin := range sortedOriginByTransactions {
+		for _, trns := range trnsBySender[origin] {
+			//todo: should we abort all transaction processing if we failed this one?
+			err := tp.ApplyTransaction(trns)
+			if err != nil {
+				log.Error("transaction aborted: %v", err)
 			}
+
 		}
 	}
 }
@@ -218,10 +227,12 @@ func (tp *TransactionProcessor) ApplyTransaction(trans *Transaction) error{
 
 	//todo: should we allow to spend all accounts data?
 	if origin.Balance().Cmp(trans.Amount) <= 0 {
+		log.Error(ErrFunds + " have: %v need: %v", origin.Balance(), trans.Amount)
 		return  fmt.Errorf(ErrFunds)
 	}
 
 	if !tp.checkNonce(trans) {
+		log.Error(ErrNonce + " should be %v actual %v", tp.globalState.GetNonce(trans.Origin), trans.AccountNonce)
 		return  fmt.Errorf(ErrNonce)
 	}
 
