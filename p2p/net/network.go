@@ -353,7 +353,7 @@ func (n *Net) HandlePreSessionIncomingMessage(c Connection, message []byte) erro
 	// update on new connection
 	addr, _, err := net.SplitHostPort(c.RemoteAddr().String())
 	if err != nil {
-		return fmt.Errorf("un-valid address format, err: %v", err)
+		return fmt.Errorf("un-valid address format, (%v) err: %v", c.RemoteAddr().String(), err)
 	}
 
 	anode := node.New(c.RemotePublicKey(), net.JoinHostPort(addr, strconv.Itoa(int(data.Port))))
