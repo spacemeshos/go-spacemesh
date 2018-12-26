@@ -200,7 +200,7 @@ func (s *Syncer) sendBlockRequest(peer Peer, id mesh.BlockID) (<-chan *mesh.Bloc
 		ch <- mesh.NewExistingBlock(mesh.BlockID(data.Block.GetId()), mesh.LayerID(data.Block.GetLayer()), nil) //todo switch to real block proto and add data
 	}
 
-	return ch, s.msgServer.SendAsyncRequest(BLOCK, payload, peer, foo)
+	return ch, s.msgServer.SendRequest(BLOCK, payload, peer, foo)
 }
 
 func (s *Syncer) getLayerBlockIDs(index mesh.LayerID) (chan mesh.BlockID, error) {
@@ -267,6 +267,7 @@ func (s *Syncer) getLayerHashes(index mesh.LayerID) (map[string]Peer, error) {
 	peers := s.peers.GetPeers()
 	// request hash from all
 	ch := make(chan peerHashPair)
+	defer close(ch)
 	for _, p := range peers {
 		_, err := s.sendLayerHashRequest(p, index, ch, int32(len(peers)))
 		if err != nil {
@@ -318,7 +319,7 @@ func (s *Syncer) sendLayerHashRequest(peer Peer, layer mesh.LayerID, ch chan pee
 	}
 
 	s.log.Debug("send async request")
-	return ch, s.msgServer.SendAsyncRequest(LAYER_HASH, payload, peer, foo)
+	return ch, s.msgServer.SendRequest(LAYER_HASH, payload, peer, foo)
 }
 
 func (s *Syncer) sendLayerIDsRequest(peer Peer, idx mesh.LayerID, ch chan []uint32) (chan []uint32, error) {
@@ -342,7 +343,7 @@ func (s *Syncer) sendLayerIDsRequest(peer Peer, idx mesh.LayerID, ch chan []uint
 		ch <- data.Ids
 	}
 
-	return ch, s.msgServer.SendAsyncRequest(LAYER_IDS, payload, peer, foo)
+	return ch, s.msgServer.SendRequest(LAYER_IDS, payload, peer, foo)
 }
 
 func (s *Syncer) blockRequestHandler(msg []byte) []byte {

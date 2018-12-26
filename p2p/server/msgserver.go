@@ -61,9 +61,6 @@ func (p *MessageServer) Close() {
 	p.exit <- struct{}{}
 	<-p.exit
 	p.workerCount.Wait()
-	for k := range p.resHandlers {
-		delete(p.resHandlers, k)
-	}
 }
 
 func (p *MessageServer) readLoop() {
@@ -156,7 +153,7 @@ func (p *MessageServer) RegisterMsgHandler(msgType MessageType, reqHandler func(
 	p.msgRequestHandlers[msgType] = reqHandler
 }
 
-func (p *MessageServer) SendAsyncRequest(msgType MessageType, payload []byte, address crypto.PublicKey, resHandler func(msg []byte)) error {
+func (p *MessageServer) SendRequest(msgType MessageType, payload []byte, address crypto.PublicKey, resHandler func(msg []byte)) error {
 	reqID := p.newRequestId()
 	p.pendMutex.Lock()
 	p.resHandlers[reqID] = resHandler

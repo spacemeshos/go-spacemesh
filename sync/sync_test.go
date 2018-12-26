@@ -347,7 +347,9 @@ loop:
 }
 
 func TestSyncProtocol_p2pIntegrationTwoNodes(t *testing.T) {
-
+	if testing.Short() {
+		t.Skip()
+	}
 	block1 := mesh.NewExistingBlock(mesh.BlockID(111), 0, nil)
 	block2 := mesh.NewExistingBlock(mesh.BlockID(222), 0, nil)
 	block3 := mesh.NewExistingBlock(mesh.BlockID(333), 1, nil)
@@ -392,7 +394,9 @@ loop:
 }
 
 func TestSyncProtocol_p2pIntegrationMultipleNodes(t *testing.T) {
-
+	if testing.Short() {
+		t.Skip()
+	}
 	block1 := mesh.NewExistingBlock(mesh.BlockID(111), 1, nil)
 	block2 := mesh.NewExistingBlock(mesh.BlockID(222), 1, nil)
 	block3 := mesh.NewExistingBlock(mesh.BlockID(333), 2, nil)
