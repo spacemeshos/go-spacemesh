@@ -69,7 +69,6 @@ func getMesh(id string) mesh.Mesh {
 }
 
 func TestSyncer_Start(t *testing.T) {
-	fmt.Println("test sync start")
 	syncs, _ := SyncMockFactory(2, conf, "TestSyncer_Start_")
 	sync := syncs[0]
 	defer sync.Close()
@@ -92,7 +91,6 @@ func TestSyncer_Start(t *testing.T) {
 }
 
 func TestSyncer_Close(t *testing.T) {
-	fmt.Println("test sync close")
 	syncs, _ := SyncMockFactory(2, conf, "TestSyncer_Close_")
 	sync := syncs[0]
 	sync.Start()
@@ -105,7 +103,6 @@ func TestSyncer_Close(t *testing.T) {
 }
 
 func TestSyncProtocol_BlockRequest(t *testing.T) {
-	fmt.Println("test sync block request")
 	syncs, p2ps := SyncMockFactory(2, conf, "TestSyncProtocol_BlockRequest_")
 	n2 := p2ps[1]
 	syncObj := syncs[0]
@@ -125,7 +122,6 @@ func TestSyncProtocol_BlockRequest(t *testing.T) {
 }
 
 func TestSyncProtocol_LayerHashRequest(t *testing.T) {
-	fmt.Println("test sync layer hash request")
 	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_LayerHashRequest_")
 	syncObj1 := syncs[0]
 	defer syncObj1.Close()
@@ -142,7 +138,6 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 }
 
 func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
-	fmt.Println("test sync layer ids request")
 	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_LayerIdsRequest_")
 	syncObj := syncs[0]
 	defer syncObj.Close()
@@ -180,7 +175,6 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 }
 
 func TestSyncProtocol_FetchBlocks(t *testing.T) {
-	fmt.Println("test sync layer fetch blocks")
 	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_LayerIdsRequest_")
 	syncObj1 := syncs[0]
 	defer syncObj1.Close()
