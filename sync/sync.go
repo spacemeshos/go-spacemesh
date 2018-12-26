@@ -130,7 +130,6 @@ func (s *Syncer) Synchronise() {
 	for i := s.layers.LatestIrreversible(); i < s.maxSyncLayer(); i++ {
 		s.log.Debug(" synchronise start iteration")
 		blockIds, err := s.getLayerBlockIDs(mesh.LayerID(i + 1)) //returns a set of all known blocks in the mesh
-		s.log.Debug(" after get block ids")
 		if err != nil || len(blockIds) == 0 {
 			s.log.Error(" could not get layer block ids: ", err)
 			s.log.Debug(" synchronise failed, local layer index is ", s.layers.LatestIrreversible())
@@ -190,16 +189,15 @@ func (s *Syncer) sendBlockRequest(peer Peer, id mesh.BlockID) (<-chan *mesh.Bloc
 	foo := func(msg []byte) {
 		if msg == nil {
 			s.log.Error("block response from ", peer, " was nil")
+			return
 		}
 		s.log.Debug("handle block response")
 		data := &pb.FetchBlockResp{}
 		if err := proto.Unmarshal(msg, data); err != nil {
 			s.log.Error("could not unmarshal block data ", err)
 			return
-
-			ch <- mesh.NewExistingBlock(mesh.BlockID(data.Block.GetId()), mesh.LayerID(data.Block.GetLayer()), nil) //todo switch to real block proto and add data
 		}
-
+		ch <- mesh.NewExistingBlock(mesh.BlockID(data.Block.GetId()), mesh.LayerID(data.Block.GetLayer()), nil) //todo switch to real block proto and add data
 	}
 
 	return ch, s.msgServer.SendAsyncRequest(BLOCK, payload, peer, foo)
@@ -320,7 +318,6 @@ func (s *Syncer) sendLayerHashRequest(peer Peer, layer mesh.LayerID, ch chan pee
 			s.log.Error("could not unmarshal layer hash response ", err)
 			return
 		}
-		s.log.Debug("before chan", err)
 		ch <- peerHashPair{peer: peer, hash: res.Hash}
 	}
 
