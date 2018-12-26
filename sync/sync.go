@@ -267,7 +267,7 @@ func (s *Syncer) getLayerHashes(index mesh.LayerID) (map[string]Peer, error) {
 	peers := s.peers.GetPeers()
 	// request hash from all
 	ch := make(chan peerHashPair)
-	defer close(ch)
+	//defer close(ch) //todo close channel gracefully
 	for _, p := range peers {
 		_, err := s.sendLayerHashRequest(p, index, ch, int32(len(peers)))
 		if err != nil {
