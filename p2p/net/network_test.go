@@ -74,11 +74,13 @@ func TestNet_EnqueueMessage(t *testing.T) {
 }
 
 func TestHandlePreSessionIncomingMessage(t *testing.T) {
-	//cfg := config.DefaultConfig()
+	cfg := config.DefaultConfig()
+	cfg.NodeID = ""
+	cfg.NewNode = true
 	var wg sync.WaitGroup
 
-	localNode, _ := node.GenerateTestNode(t)
-	remoteNode, _ := node.GenerateTestNode(t)
+	localNode, _ := node.GenerateTestNodeWithConfig(t, cfg)
+	remoteNode, _ := node.GenerateTestNodeWithConfig(t, cfg)
 	con := NewConnectionMock(localNode.PublicKey())
 	con.addr = localNode.Address()
 	remoteNet, _ := NewNet(config.DefaultConfig(), remoteNode)
@@ -109,6 +111,7 @@ func TestHandlePreSessionIncomingMessage(t *testing.T) {
 	assert.Equal(t, localNode.PublicKey().String(), con.remotePub.String(), "Remote connection was not updated properly")
 
 	othercon := NewConnectionMock(remoteNode.PublicKey())
+	othercon.addr = remoteNode.Address()
 	othercon.SetSendResult(fmt.Errorf("error or whatever"))
 	go func() {
 		waitForCallbackOrTimeout(t, outchan, nil)
