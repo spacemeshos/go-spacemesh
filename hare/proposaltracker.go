@@ -43,7 +43,10 @@ func (pt *ProposalTracker) OnProposal(msg *pb.HareMessage) {
 		return // process done
 	}
 
-	// TODO: ignore msgs with higher ranked role proof
+	// ignore msgs with higher ranked role proof
+	if bytes.Compare(msg.Message.RoleProof, pt.proposal.Message.RoleProof) > 0 {
+		return
+	}
 
 	// first time we see msg
 	pt.proposal = msg        // update leader msg
@@ -61,7 +64,10 @@ func (pt *ProposalTracker) OnLateProposal(msg *pb.HareMessage) {
 	}
 
 	// not equal check rank
-	// TODO: if msg is ranked lower than proposal set isConflicting to true
+	// lower ranked proposal on late proposal is a conflict
+	if bytes.Compare(msg.Message.RoleProof, pt.proposal.Message.RoleProof) < 0 {
+		pt.isConflicting = true
+	}
 }
 
 func (pt *ProposalTracker) IsConflicting() bool {
