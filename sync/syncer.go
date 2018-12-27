@@ -192,8 +192,16 @@ func sendBlockRequest(msgServ *server.MessageServer, peer Peer, id mesh.BlockID)
 			log.Error("could not unmarshal block data")
 			return
 		}
-		ch <- mesh.NewExistingBlock(mesh.BlockID(data.Block.GetId()), mesh.LayerID(data.Block.GetLayer()), nil)
+		mp := make(map[mesh.BlockID]bool)
+		for _, b := range data.Block.VisibleMesh {
+			mp[mesh.BlockID(b)] = true
+		}
+
+		block := mesh.NewExistingBlock(mesh.BlockID(data.Block.GetId()), mesh.LayerID(data.Block.GetLayer()), nil)
+		block.BlockVotes = mp
+		ch <- block
 	}
+
 	return ch, msgServ.SendAsyncRequest(BLOCK, payload, peer, foo)
 }
 
@@ -205,10 +213,10 @@ func (s *Syncer) getLayerBlockIDs(index mesh.LayerID) (chan mesh.BlockID, error)
 		log.Error("could not get LayerHashes for layer: ", index, err)
 		return nil, err
 	}
-	return s.getIdsforHash(m, index)
+	return s.getIdsForHash(m, index)
 }
 
-func (s *Syncer) getIdsforHash(m map[string]Peer, index mesh.LayerID) (chan mesh.BlockID, error) {
+func (s *Syncer) getIdsForHash(m map[string]Peer, index mesh.LayerID) (chan mesh.BlockID, error) {
 	reqCounter := 0
 	ch := make(chan []uint32)
 	for _, v := range m {
@@ -350,7 +358,12 @@ func newBlockRequestHandler(layers mesh.Mesh) func(msg []byte) []byte {
 			return nil
 		}
 
-		payload, err := proto.Marshal(&pb.FetchBlockResp{Id: uint32(block.ID()), Block: &pb.Block{Id: uint32(block.ID()), Layer: uint32(block.Layer())}})
+		vm := make([]uint32, 0, len(block.BlockVotes))
+		for b := range block.BlockVotes {
+			vm = append(vm, uint32(b))
+		}
+
+		payload, err := proto.Marshal(&pb.FetchBlockResp{Id: uint32(block.ID()), Block: &pb.Block{Id: uint32(block.ID()), Layer: uint32(block.Layer()), VisibleMesh: vm}})
 		if err != nil {
 			log.Error("Error handling request message, err:", err) //todo describe err
 			return nil

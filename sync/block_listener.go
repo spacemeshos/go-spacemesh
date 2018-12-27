@@ -43,7 +43,6 @@ func NewBlockListener(peers Peers, bv BlockValidator, layers mesh.Mesh, timeout 
 		BlockValidator: bv,
 		unknownQueue:   make(chan mesh.BlockID, BufferSize),
 		exit:           make(chan struct{})}
-
 	bl.RegisterMsgHandler(BLOCK, newBlockRequestHandler(layers))
 	return &bl
 }
@@ -56,12 +55,13 @@ func (bl *BlockListener) run() {
 			log.Debug("run stoped")
 			return
 		case id := <-bl.unknownQueue:
-			go bl.fetchBlock(id)
+			go bl.FetchBlock(id)
 		}
 	}
 }
 
-func (bl *BlockListener) fetchBlock(id mesh.BlockID) {
+//todo handle case where no peer knows the block
+func (bl *BlockListener) FetchBlock(id mesh.BlockID) {
 	for _, p := range bl.GetPeers() {
 		ch, err := sendBlockRequest(bl.MessageServer, p, id)
 		if err == nil {

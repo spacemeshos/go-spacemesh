@@ -27,12 +27,17 @@ func TestBlockListener(t *testing.T) {
 	block2 := mesh.NewExistingBlock(mesh.BlockID(321), 1, nil)
 	block3 := mesh.NewExistingBlock(mesh.BlockID(222), 2, nil)
 
-	bl1.AddLayer(mesh.NewExistingLayer(0, []*mesh.Block{block1}))
-	bl1.AddLayer(mesh.NewExistingLayer(1, []*mesh.Block{block2}))
-	bl1.AddLayer(mesh.NewExistingLayer(2, []*mesh.Block{block3}))
-	bl2.fetchBlock(block1.Id)
+	block1.BlockVotes[block2.ID()] = true
+	block1.BlockVotes[block3.ID()] = true
+
+	bl1.AddBlock(block1)
+	bl1.AddBlock(block2)
+	bl1.AddBlock(block3)
+
+	bl2.FetchBlock(block1.Id)
 	_, err := bl2.GetBlock(block1.Id)
 	assert.NoError(t, err, "Should be able to establish a connection on a port")
+	time.Sleep(10 * time.Second)
 }
 
 //todo more unit tests
