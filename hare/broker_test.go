@@ -27,11 +27,16 @@ func createMessage(t *testing.T, instanceId Byteable) []byte {
 
 type MockInboxer struct {
 	inbox chan *pb.HareMessage
+	id uint32
 }
 
 func (inboxer *MockInboxer) createInbox(size uint32) chan *pb.HareMessage {
 	inboxer.inbox = make(chan *pb.HareMessage, size)
 	return inboxer.inbox
+}
+
+func (inboxer *MockInboxer) Id() uint32 {
+	return inboxer.id
 }
 
 func TestBroker_Start(t *testing.T) {
@@ -55,8 +60,8 @@ func TestBroker_Received(t *testing.T) {
 	broker := NewBroker(n1)
 	broker.Start()
 
-	inboxer := &MockInboxer{}
-	broker.Register(instanceId1, inboxer)
+	inboxer := &MockInboxer{nil, instanceId1.Id()}
+	broker.Register(inboxer)
 
 	serMsg := createMessage(t, instanceId1)
 	n2.Broadcast(ProtoName, serMsg)
@@ -109,12 +114,12 @@ func TestBroker_MultipleInstanceIds(t *testing.T) {
 	broker := NewBroker(n1)
 	broker.Start()
 
-	inboxer1 := &MockInboxer{}
-	inboxer2 := &MockInboxer{}
-	inboxer3 := &MockInboxer{}
-	broker.Register(instanceId1, inboxer1)
-	broker.Register(instanceId2, inboxer2)
-	broker.Register(instanceId3, inboxer3)
+	inboxer1 := &MockInboxer{nil, instanceId1.Id()}
+	inboxer2 := &MockInboxer{nil, instanceId2.Id()}
+	inboxer3 := &MockInboxer{nil, instanceId3.Id()}
+	broker.Register(inboxer1)
+	broker.Register(inboxer2)
+	broker.Register(inboxer3)
 
 	inbox1 := inboxer1.inbox
 	inbox2 := inboxer2.inbox
@@ -136,8 +141,8 @@ func TestBroker_RegisterUnregister(t *testing.T) {
 	n1 := sim.NewNode()
 	broker := NewBroker(n1)
 	broker.Start()
-	inbox := &MockInboxer{}
-	broker.Register(instanceId1, inbox)
+	inboxer := &MockInboxer{nil, instanceId1.Id()}
+	broker.Register(inboxer)
 	assert.Equal(t, 1, len(broker.outbox))
 	broker.Unregister(instanceId1)
 	assert.Equal(t, 0, len(broker.outbox))

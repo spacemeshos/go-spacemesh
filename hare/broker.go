@@ -21,6 +21,11 @@ type Inboxer interface {
 	createInbox(size uint32) chan *pb.HareMessage
 }
 
+type IdentifiableInboxer interface {
+	Identifiable
+	Inboxer
+}
+
 // Closer is used to add closeability to an object
 type Closer struct {
 	channel chan struct{} // closeable go routines listen to this channel
@@ -100,17 +105,15 @@ func (broker *Broker) dispatcher() {
 }
 
 // Register a listener to messages
-func (broker *Broker) Register(identifiable Identifiable, inboxer Inboxer) {
-	id := identifiable.Id()
+func (broker *Broker) Register(idBox IdentifiableInboxer) {
 	broker.mutex.Lock()
-	broker.outbox[id] = inboxer.createInbox(InboxCapacity)
+	broker.outbox[idBox.Id()] = idBox.createInbox(InboxCapacity)
 	broker.mutex.Unlock()
 }
 
 // Unregister a listener
 func (broker *Broker) Unregister(identifiable Identifiable) {
-	id := identifiable.Id()
 	broker.mutex.Lock()
-	delete(broker.outbox, id)
+	delete(broker.outbox, identifiable.Id())
 	broker.mutex.Unlock()
 }

@@ -1,6 +1,7 @@
 package hare
 
 import (
+	"encoding/binary"
 	"errors"
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
@@ -39,7 +40,7 @@ type ConsensusProcess struct {
 	network         NetworkService
 	startTime       time.Time // TODO: needed?
 	inbox           chan *pb.HareMessage
-	role            RolacleResponse // the current role
+	role            Role // the current role
 	preRoundTracker *PreRoundTracker
 	statusesTracker *StatusTracker
 	proposalTracker *ProposalTracker
@@ -51,13 +52,14 @@ type ConsensusProcess struct {
 
 func NewConsensusProcess(cfg config.Config, key crypto.PublicKey, instanceId InstanceId, s Set, oracle Rolacle, signing Signing, p2p NetworkService) *ConsensusProcess {
 	proc := &ConsensusProcess{}
-	proc.State = State{-1, -1, &s, nil}
+	proc.State = State{0, -1, &s, nil}
 	proc.Closer = NewCloser()
 	proc.pubKey = key
 	proc.instanceId = instanceId
 	proc.oracle = oracle
 	proc.signing = signing
 	proc.network = p2p
+	proc.role = Passive
 	proc.preRoundTracker = NewPreRoundTracker(cfg.F+1, cfg.N)
 	proc.statusesTracker = NewStatusTracker(cfg.F+1, cfg.N)
 	proc.proposalTracker = NewProposalTracker(cfg.N)
@@ -66,9 +68,11 @@ func NewConsensusProcess(cfg config.Config, key crypto.PublicKey, instanceId Ins
 	proc.terminating = false
 	proc.cfg = cfg
 
-	proc.updateRole()
-
 	return proc
+}
+
+func (proc *ConsensusProcess) Id() uint32 {
+	return proc.instanceId.Id()
 }
 
 func (proc *ConsensusProcess) Start() error {
@@ -92,6 +96,9 @@ func (proc *ConsensusProcess) createInbox(size uint32) chan *pb.HareMessage {
 func (proc *ConsensusProcess) eventLoop() {
 	log.Info("Start listening")
 
+	// update role
+	proc.updateRole()
+
 	// set pre-round message and send
 	proc.sendMessage(proc.initDefaultBuilder(proc.s).SetType(PreRound).Sign(proc.signing).Build())
 
@@ -108,12 +115,10 @@ PreRound:
 			return
 		}
 	}
-
 	proc.preRoundTracker.UpdateSet(proc.s)
-	proc.advanceToNextRound()
-	proc.onRoundBegin()
 
 	// start first iteration
+	proc.onRoundBegin()
 	ticker := time.NewTicker(proc.cfg.RoundDuration)
 	for {
 		select {
@@ -141,11 +146,11 @@ func doesMessageMatchRound(iteration int32, m *pb.HareMessage) bool {
 	case PreRound:
 		return true
 	case Status:
-		return claimedRound == 0
+		return claimedRound == Round1
 	case Proposal:
-		return claimedRound == 1 || claimedRound == 2
+		return claimedRound == Round2 || claimedRound == Round3
 	case Commit:
-		return claimedRound == 2
+		return claimedRound == Round3
 	case Notify:
 		return true
 	}
@@ -167,12 +172,22 @@ func (proc *ConsensusProcess) validateCertificate(m *pb.HareMessage) bool {
 		return false
 	}
 
-	if m.Cert.AggMsgs.Messages == nil {
+	msgs := m.Cert.AggMsgs.Messages
+	if msgs == nil {
 		return false
 	}
 
-	if len(m.Cert.AggMsgs.Messages) == 0 {
+	if len(msgs) == 0 {
 		return false
+	}
+
+	// check all set equal to claimed set
+	s := NewSet(m.Message.Values)
+	for _, msg := range msgs {
+		g := NewSet(msg.Message.Values)
+		if !s.Equals(g) {
+			return false
+		}
 	}
 
 	// TODO: validate agg sig
@@ -180,7 +195,7 @@ func (proc *ConsensusProcess) validateCertificate(m *pb.HareMessage) bool {
 	return true
 }
 
-func roleFromIteration(k int32) Role {
+func roleFromRoundCounter(k int32) Role {
 	if k%4 == Round2 {
 		return Leader
 	}
@@ -208,16 +223,8 @@ func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
 		return
 	}
 
-	pub, err := crypto.NewPublicKey(m.PubKey)
-	if err != nil {
-		log.Warning("Could not construct public key: ", err.Error())
-		return
-	}
-
 	// validate role
-	request := RoleRequest{pub, InstanceId{NewBytes32(m.Message.InstanceId)}, m.Message.K}
-	response := RolacleResponse{roleFromIteration(m.Message.K), Signature(m.Message.RoleProof)}
-	if !proc.oracle.ValidateRole(request, response) {
+	if proc.oracle.Role(Signature(m.Message.RoleProof)) == roleFromRoundCounter(m.Message.K) {
 		log.Warning("invalid role detected for: ", m.String())
 		return
 	}
@@ -258,7 +265,11 @@ func (proc *ConsensusProcess) sendMessage(msg *pb.HareMessage) {
 	}
 
 	// send only if you should speak in this round
-	if proc.role.Role == Passive {
+	if proc.currentRound() == Round2 && proc.role != Leader { // leader on round2
+		return
+	}
+
+	if proc.role != Active { // active if not round2
 		return
 	}
 
@@ -285,7 +296,6 @@ func (proc *ConsensusProcess) onRoundEnd() {
 
 func (proc *ConsensusProcess) advanceToNextRound() {
 	proc.k++
-	proc.updateRole()
 }
 
 func (proc *ConsensusProcess) beginRound1() {
@@ -295,7 +305,7 @@ func (proc *ConsensusProcess) beginRound1() {
 }
 
 func (proc *ConsensusProcess) beginRound2() {
-	if proc.role.Role == Leader && proc.statusesTracker.IsSVPReady() {
+	if proc.role == Leader && proc.statusesTracker.IsSVPReady() {
 		builder := proc.initDefaultBuilder(proc.statusesTracker.BuildUnionSet(proc.cfg.SetSize))
 		svp := proc.statusesTracker.BuildSVP()
 		if svp != nil {
@@ -326,6 +336,8 @@ func (proc *ConsensusProcess) beginRound4() {
 }
 
 func (proc *ConsensusProcess) onRoundBegin() {
+	proc.updateRole()
+
 	// reset trackers
 	switch proc.currentRound() {
 	case Round1:
@@ -339,9 +351,17 @@ func (proc *ConsensusProcess) onRoundBegin() {
 	}
 }
 
+func (proc *ConsensusProcess) roleProof() Signature {
+	kInBytes := make([]byte, 4)
+	binary.LittleEndian.PutUint32(kInBytes, uint32(proc.k))
+
+	return proc.signing.Sign(kInBytes)
+}
+
 func (proc *ConsensusProcess) initDefaultBuilder(s *Set) *MessageBuilder {
 	builder := NewMessageBuilder().SetPubKey(proc.pubKey).SetInstanceId(proc.instanceId)
 	builder = builder.SetIteration(proc.k).SetKi(proc.ki).SetValues(s)
+	builder.SetRoleProof(proc.roleProof())
 
 	return builder
 }
@@ -461,5 +481,5 @@ func (proc *ConsensusProcess) endOfRound3() {
 }
 
 func (proc *ConsensusProcess) updateRole() {
-	proc.role = proc.oracle.Role(RoleRequest{proc.pubKey, proc.instanceId, proc.k})
+	proc.role = proc.oracle.Role(proc.roleProof())
 }

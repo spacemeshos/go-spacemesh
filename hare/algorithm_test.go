@@ -33,7 +33,7 @@ func TestConsensusProcess_StartTwice(t *testing.T) {
 	signing := NewMockSigning()
 
 	proc := NewConsensusProcess(cfg, generatePubKey(t), *instanceId1, *s, oracle, signing, n1)
-	broker.Register(instanceId1, proc)
+	broker.Register(proc)
 	err := proc.Start()
 	assert.Equal(t, nil, err)
 	err = proc.Start()
@@ -51,7 +51,7 @@ func TestConsensusProcess_eventLoop(t *testing.T) {
 	signing := NewMockSigning()
 
 	proc := NewConsensusProcess(cfg, generatePubKey(t), *instanceId1, *s, oracle, signing, n1)
-	broker.Register(instanceId1, proc)
+	broker.Register(proc)
 	go proc.eventLoop()
 	n2.Broadcast(ProtoName, []byte{})
 
@@ -69,7 +69,7 @@ func TestConsensusProcess_handleMessage(t *testing.T) {
 	signing := NewMockSigning()
 
 	proc := NewConsensusProcess(cfg, generatePubKey(t), *instanceId1, *s, oracle, signing, n1)
-	broker.Register(instanceId1, proc)
+	broker.Register(proc)
 
 	m := NewMessageBuilder().SetIteration(0).SetInstanceId(*instanceId1).SetPubKey(generatePubKey(t)).Sign(proc.signing).Build()
 
@@ -86,9 +86,8 @@ func TestConsensusProcess_nextRound(t *testing.T) {
 	signing := NewMockSigning()
 
 	proc := NewConsensusProcess(cfg, generatePubKey(t), *instanceId1, *s, oracle, signing, n1)
-	broker.Register(instanceId1, proc)
+	broker.Register(proc)
 
-	proc.advanceToNextRound()
 	proc.advanceToNextRound()
 	assert.Equal(t, int32(1), proc.k)
 	proc.advanceToNextRound()
@@ -125,8 +124,7 @@ func TestConsensusProcess_DoesMatchRound(t *testing.T) {
 	rounds[3] = [4]bool{false, false, true, false}
 	rounds[4] = [4]bool{true, true, true, true}
 
-	cp.advanceToNextRound()
-	for j:=0;j<len(msgs);j++ {
+	for j := 0; j < len(msgs); j++ {
 		for i := 0; i < 4; i++ {
 			assert.Equal(t, rounds[j][i], doesMessageMatchRound(cp.k, msgs[j]))
 			cp.advanceToNextRound()
@@ -139,7 +137,17 @@ func TestConsensusProcess_ValidateCertificate(t *testing.T) {
 	m := &pb.HareMessage{}
 	assert.False(t, proc.validateCertificate(nil))
 	assert.False(t, proc.validateCertificate(m))
-	//m.Cert.AggMsgs = nil
-	//assert.False(t, proc.validateCertificate(m))
-	//m.Cert.AggMsgs.Messages = make([]*pb.HareMessage, 0)
+}
+
+func TestConsensusProcess_Id(t *testing.T) {
+	proc := generateConsensusProcess(t)
+	proc.instanceId = *instanceId1
+	assert.Equal(t, instanceId1.Id(), proc.Id())
+}
+
+func TestNewConsensusProcess_AdvanceToNextRound(t *testing.T) {
+	proc := generateConsensusProcess(t)
+	k := proc.k
+	proc.advanceToNextRound()
+	assert.Equal(t, k+1, proc.k)
 }
