@@ -47,6 +47,7 @@ func (pm protocolMessage) Bytes() []byte {
 
 type cPool interface {
 	GetConnection(address string, pk crypto.PublicKey) (net.Connection, error)
+	RemoteConnectionsChannel() chan net.NewConnectionEvent
 }
 
 type swarm struct {
@@ -394,7 +395,7 @@ func (s *swarm) listenToNetworkMessages() {
 }
 
 func (s *swarm) handleNewConnectionEvents() {
-	newConnEvents := s.network.SubscribeOnNewRemoteConnections()
+	newConnEvents := s.cPool.RemoteConnectionsChannel()
 	closing := s.network.SubscribeClosingConnections()
 Loop:
 	for {

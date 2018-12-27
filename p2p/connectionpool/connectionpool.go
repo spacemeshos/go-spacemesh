@@ -38,6 +38,7 @@ type ConnectionPool struct {
 	shutdown    bool
 
 	newRemoteConn chan net.NewConnectionEvent
+	outRemoteConn chan net.NewConnectionEvent
 	teardown      chan struct{}
 }
 
@@ -53,6 +54,7 @@ func NewConnectionPool(network networker, lPub crypto.PublicKey) *ConnectionPool
 		dialWait:      sync.WaitGroup{},
 		shutdown:      false,
 		newRemoteConn: network.SubscribeOnNewRemoteConnections(),
+		outRemoteConn: make(chan net.NewConnectionEvent),
 		teardown:      make(chan struct{}),
 	}
 	go cPool.beginEventProcessing()
@@ -97,7 +99,6 @@ func (cp *ConnectionPool) handleDialResult(rPub crypto.PublicKey, result dialRes
 }
 
 func compareConnections(conn1 net.Connection, conn2 net.Connection) int {
-
 	return bytes.Compare(conn1.Session().ID(), conn2.Session().ID())
 }
 
@@ -149,7 +150,7 @@ func (cp *ConnectionPool) handleNewConnection(rPub crypto.PublicKey, newConn net
 }
 
 func (cp *ConnectionPool) handleClosedConnection(conn net.Connection) {
-	cp.net.Logger().Debug("connection %v with %v was closed", conn.String())
+	cp.net.Logger().Debug("connection %v with %v was closed (sessionID: %v)", conn.String(), conn.RemotePublicKey().Pretty(), conn.Session().ID())
 	cp.connMutex.Lock()
 	rPub := conn.RemotePublicKey().String()
 	cur, ok := cp.connections[rPub]
@@ -200,6 +201,42 @@ func (cp *ConnectionPool) GetConnection(address string, remotePub crypto.PublicK
 	return res.conn, res.err
 }
 
+// RemoteConnectionsChannel is a channel that we send processed connections on
+func (cp *ConnectionPool) RemoteConnectionsChannel() chan net.NewConnectionEvent {
+	return cp.outRemoteConn
+}
+
+// GetConnectionIfExists checks if the connection is exists or pending
+func (cp *ConnectionPool) GetConnectionIfExists(remotePub crypto.PublicKey) (net.Connection, error) {
+	cp.connMutex.RLock()
+	if cp.shutdown {
+		cp.connMutex.RUnlock()
+		return nil, errors.New("ConnectionPool was shut down")
+	}
+	// look for the connection in the pool
+	if conn, found := cp.connections[remotePub.String()]; found {
+		cp.connMutex.RUnlock()
+		return conn, nil
+	}
+	// register for signal when connection is established - must be called under the connMutex otherwise there is a race
+	// where it is possible that the connection will be established and all registered channels will be notified before
+	// the current registration
+	cp.pendMutex.Lock()
+	if _, found := cp.pending[remotePub.String()]; !found {
+		// No one is waiting for a connection with the remote peer
+		cp.pendMutex.Unlock()
+		return nil, errors.New("no connection in cpool")
+	}
+
+	pendChan := make(chan dialResult)
+	cp.pending[remotePub.String()] = append(cp.pending[remotePub.String()], pendChan)
+	cp.pendMutex.Unlock()
+	cp.connMutex.RUnlock()
+	// wait for the connection to be established, if the channel is closed (in case of dialing error) will return nil
+	res := <-pendChan
+	return res.conn, res.err
+}
+
 func (cp *ConnectionPool) beginEventProcessing() {
 	closing := cp.net.SubscribeClosingConnections()
 Loop:
@@ -207,6 +244,7 @@ Loop:
 		select {
 		case nce := <-cp.newRemoteConn:
 			cp.handleNewConnection(nce.Conn.RemotePublicKey(), nce.Conn, net.Remote)
+			go func(nce net.NewConnectionEvent) { cp.outRemoteConn <- nce }(nce)
 
 		case conn := <-closing:
 			cp.handleClosedConnection(conn)
