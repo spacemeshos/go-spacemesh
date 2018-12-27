@@ -150,7 +150,6 @@ func doesMessageMatchRound(iteration int32, m *pb.HareMessage) bool {
 		return true
 	}
 
-	// TODO: should be verified before and panic here
 	log.Error("Unknown message type encountered during validation: ", m.Message.Type)
 	return false
 }
@@ -190,7 +189,12 @@ func roleFromIteration(k int32) Role {
 }
 
 func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
-	// Note: set id is already verified by the broker
+	// Note: instanceId is already verified by the broker
+
+	// check correct iteration
+	if proc.k/4 != m.Message.K/4 { // either future message or old
+		return
+	}
 
 	// validate round and message type match
 	if !doesMessageMatchRound(proc.k, m) {
@@ -359,8 +363,28 @@ func (proc *ConsensusProcess) processStatusMsg(msg *pb.HareMessage) {
 	}
 }
 
+func (proc *ConsensusProcess) validateProposal(m *pb.HareMessage) bool {
+	// build union
+	unionSet := NewEmptySet(proc.cfg.SetSize)
+	for _, m := range m.Message.Svp.Messages {
+		for _, buff := range m.Message.Values {
+			bid := Value{NewBytes32(buff)}
+			unionSet.Add(bid) // assuming add is unique
+		}
+	}
+
+	s := NewSet(m.Message.Values)
+	if !unionSet.Equals(s) { // s should be the union of all statuses
+		return false
+	}
+
+	return true
+}
+
 func (proc *ConsensusProcess) processProposalMsg(msg *pb.HareMessage) {
-	// TODO: validate SVP
+	if !proc.validateProposal(msg) {
+		return
+	}
 
 	if proc.currentRound() == Round2 { // regular proposal
 		proc.proposalTracker.OnProposal(msg)
@@ -373,7 +397,6 @@ func (proc *ConsensusProcess) processCommitMsg(msg *pb.HareMessage) {
 	proc.commitTracker.OnCommit(msg)
 }
 
-// TODO: I think we should prepare the status message also here
 func (proc *ConsensusProcess) processNotifyMsg(msg *pb.HareMessage) {
 	// validate certificate (only notify has certificate)
 	if !proc.validateCertificate(msg) {
@@ -436,6 +459,7 @@ func (proc *ConsensusProcess) endOfRound3() {
 	roundMsg := proc.buildNotifyMessage() // build notify with certificate
 	proc.sendMessage(roundMsg)
 }
+
 func (proc *ConsensusProcess) updateRole() {
 	proc.role = proc.oracle.Role(RoleRequest{proc.pubKey, proc.instanceId, proc.k})
 }

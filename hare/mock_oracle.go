@@ -39,6 +39,12 @@ func (roleRequest *RoleRequest) bytes() []byte {
 	return binBuf.Bytes()
 }
 
+func (roleRequest *RoleRequest) Id() uint32 {
+	h := fnv.New32()
+	h.Write(roleRequest.bytes())
+	return h.Sum32()
+}
+
 type MockOracle struct {
 	roles         map[uint32]Role
 	isLeaderTaken bool
@@ -49,12 +55,6 @@ func NewMockOracle() *MockOracle {
 	mock.roles = make(map[uint32]Role)
 
 	return mock
-}
-
-func (roleRequest *RoleRequest) Id() uint32 {
-	h := fnv.New32()
-	h.Write(roleRequest.bytes())
-	return h.Sum32()
 }
 
 func (mockOracle *MockOracle) Role(rq RoleRequest) RolacleResponse {
