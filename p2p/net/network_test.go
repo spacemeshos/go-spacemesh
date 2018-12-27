@@ -35,7 +35,7 @@ func waitForCallbackOrTimeout(t *testing.T, outchan chan NewConnectionEvent, exp
 	select {
 	case res := <-outchan:
 		assert.Equal(t, expectedSession.ID(), res.Conn.Session().ID(), "wrong session received")
-	case <-time.After(1 * time.Second):
+	case <-time.After(2 * time.Second):
 		assert.Nil(t, expectedSession, "Didn't get channel notification")
 	}
 }
@@ -74,33 +74,55 @@ func TestNet_EnqueueMessage(t *testing.T) {
 }
 
 func TestHandlePreSessionIncomingMessage(t *testing.T) {
-	//cfg := config.DefaultConfig()
+	var wg sync.WaitGroup
+
 	localNode, _ := node.GenerateTestNode(t)
 	remoteNode, _ := node.GenerateTestNode(t)
+
 	con := NewConnectionMock(localNode.PublicKey())
-	remoteNet, _ := NewNet(config.ConfigValues, remoteNode)
+	con.addr = localNode.Address()
+	remoteNet, _ := NewNet(config.DefaultConfig(), remoteNode)
 	outchan := remoteNet.SubscribeOnNewRemoteConnections()
 	out, session, er := GenerateHandshakeRequestData(localNode.PublicKey(), localNode.PrivateKey(), remoteNode.PublicKey(), remoteNet.NetworkID(), getPort(t, remoteNode.Node))
 	assert.NoError(t, er, "cant generate handshake message")
 	data, err := proto.Marshal(out)
 	assert.NoError(t, err, "cannot marshal obj")
+	wg.Add(1)
+	go func() {
+		wg.Done()
+		waitForCallbackOrTimeout(t, outchan, session)
+	}()
+
+	wg.Wait()
 	err = remoteNet.HandlePreSessionIncomingMessage(con, data)
 	assert.NoError(t, err, "handle session failed")
-	waitForCallbackOrTimeout(t, outchan, session)
 	assert.Equal(t, int32(1), con.SendCount())
 
 	con.remotePub = nil
+
+	wg.Add(1)
+	go func() {
+		wg.Done()
+		waitForCallbackOrTimeout(t, outchan, session)
+	}()
+
+	wg.Wait()
 	err = remoteNet.HandlePreSessionIncomingMessage(con, data)
 	assert.NoError(t, err, "handle session failed")
-	waitForCallbackOrTimeout(t, outchan, session)
 	assert.Equal(t, localNode.PublicKey().String(), con.remotePub.String(), "Remote connection was not updated properly")
 
 	othercon := NewConnectionMock(remoteNode.PublicKey())
+	othercon.addr = remoteNode.Address()
 	othercon.SetSendResult(fmt.Errorf("error or whatever"))
+	wg.Add(1)
+	go func() {
+		wg.Done()
+		waitForCallbackOrTimeout(t, outchan, nil)
+	}()
+	wg.Wait()
 	err = remoteNet.HandlePreSessionIncomingMessage(othercon, data)
 	assert.Error(t, err, "handle session failed")
 	assert.Nil(t, othercon.Session())
-	waitForCallbackOrTimeout(t, outchan, nil)
 
 	out.NetworkID = out.NetworkID + 1
 	data, err = proto.Marshal(out)
