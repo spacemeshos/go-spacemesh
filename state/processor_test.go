@@ -304,7 +304,7 @@ func min(a, b int) int {
 
 func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 	testCycles := 100
-	maxTransactions := 2
+	maxTransactions := 20
 	minTransactions := 1
 
 	revertToLayer := rand.Intn(testCycles)
@@ -317,7 +317,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 
 	s.state.Commit(false)
 
-
+	written := s.db.Len()
 	accounts := []*StateObj{obj1, obj2, obj3}
 
 	var want string
@@ -340,8 +340,8 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 			for dstAccount == srcAccount {
 				dstAccount = accounts[int(rand.Uint32() % (uint32(len(accounts) -1) ))]
 			}
-			t := createTransaction(srcAccount.Nonce() + uint64(nonceTrack[srcAccount]),
-				srcAccount.address, dstAccount.address, int64(rand.Uint64() % srcAccount.Balance().Uint64() ))
+			t := createTransaction(s.processor.globalState.GetNonce(srcAccount.address)+ uint64(nonceTrack[srcAccount]),
+				srcAccount.address, dstAccount.address, int64(rand.Uint64() % srcAccount.Balance().Uint64() )/100)
 			trns = append(trns,  t)
 
 			log.Info("transaction %v nonce %v amount %v", t.Origin.Hex(), t.AccountNonce, t.Amount)
@@ -364,6 +364,10 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 		}
 
 	}
+
+	writtenMore := s.db.Len()
+
+	assert.True(s.T(), writtenMore > written)
 }
 
 

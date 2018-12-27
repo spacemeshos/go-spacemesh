@@ -121,6 +121,7 @@ func (tp *TransactionProcessor) Reset(layer LayerID){
 		if err != nil {
 			panic("wtf")
 		}
+
 		tp.globalState = newState
 		//lock mutex
 		tp.pruneAfterRevert(layer)
