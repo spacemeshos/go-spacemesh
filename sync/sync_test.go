@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-var conf = Configuration{2, 2 * time.Second, 1, 300, 1500 * time.Millisecond}
+var conf = Configuration{2, 15 * time.Second, 3, 300, 7000 * time.Millisecond}
 
 func SyncFactory(t testing.TB, bootNodes int, networkSize int, randomConnections int, config Configuration, name string) (syncs []*Syncer) {
 
@@ -156,8 +156,6 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 	_, err := syncObj.sendLayerIDsRequest(nodes[1].Node.PublicKey(), lid, ch)
 	ids := <-ch
 	assert.NoError(t, err, "Should not return error")
-	fmt.Println("blocks " + string(len(layer.Blocks())))
-	fmt.Println("ids " + string(len(ids)))
 	assert.Equal(t, len(layer.Blocks()), len(ids), "wrong block")
 
 	for _, a := range layer.Blocks() {
@@ -391,6 +389,7 @@ func TestSyncProtocol_p2pIntegrationMultipleNodes(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
+
 	block1 := mesh.NewExistingBlock(mesh.BlockID(111), 1, nil)
 	block2 := mesh.NewExistingBlock(mesh.BlockID(222), 1, nil)
 	block3 := mesh.NewExistingBlock(mesh.BlockID(333), 2, nil)
@@ -442,12 +441,12 @@ func TestSyncProtocol_p2pIntegrationMultipleNodes(t *testing.T) {
 	syncObj5.Start()
 	syncObj6.Start()
 
-	defer fmt.Println("sync 1 ", syncObj2.layers.LatestIrreversible())
-	defer fmt.Println("sync 2 ", syncObj2.layers.LatestIrreversible())
-	defer fmt.Println("sync 3 ", syncObj3.layers.LatestIrreversible())
-	defer fmt.Println("sync 4 ", syncObj4.layers.LatestIrreversible())
-	defer fmt.Println("sync 5 ", syncObj5.layers.LatestIrreversible())
-	defer fmt.Println("sync 6 ", syncObj6.layers.LatestIrreversible())
+	defer log.Debug("sync 1 ", syncObj1.layers.LatestIrreversible())
+	defer log.Debug("sync 2 ", syncObj2.layers.LatestIrreversible())
+	defer log.Debug("sync 3 ", syncObj3.layers.LatestIrreversible())
+	defer log.Debug("sync 4 ", syncObj4.layers.LatestIrreversible())
+	defer log.Debug("sync 5 ", syncObj5.layers.LatestIrreversible())
+	defer log.Debug("sync 6 ", syncObj6.layers.LatestIrreversible())
 	// Keep trying until we're timed out or got a result or got an error
 	for {
 		select {
