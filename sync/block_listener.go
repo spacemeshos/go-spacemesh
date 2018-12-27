@@ -55,6 +55,7 @@ func (bl *BlockListener) run() {
 			log.Debug("run stoped")
 			return
 		case id := <-bl.unknownQueue:
+			log.Debug("fetch block ", id)
 			go bl.FetchBlock(id)
 		}
 	}

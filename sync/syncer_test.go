@@ -22,7 +22,7 @@ func (BlockValidatorMock) ValidateBlock(block *mesh.Block) bool {
 	return true
 }
 
-func getMesh(newBlockCh chan *mesh.Block, id string) mesh.Mesh {
+func getMesh(id string) mesh.Mesh {
 	bdb := database.NewLevelDbStore("blocks_test_"+id, nil, nil)
 	ldb := database.NewLevelDbStore("layers_test_"+id, nil, nil)
 	cv := database.NewLevelDbStore("contextualy_valid_test_"+id, nil, nil)
@@ -37,7 +37,7 @@ func TestSyncer_Start(t *testing.T) {
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
 	sync1 := NewSync(PeersImpl{n1, func() []Peer { return []Peer{n2.PublicKey()} }},
-		getMesh(make(chan *mesh.Block), "TestSyncer_Start_1"),
+		getMesh("TestSyncer_Start_1"),
 		BlockValidatorMock{},
 		Configuration{2, 1 * time.Second, 1, 300, 10 * time.Second},
 	)
@@ -45,7 +45,7 @@ func TestSyncer_Start(t *testing.T) {
 	defer sync1.Close()
 
 	sync := NewSync(PeersImpl{n2, func() []Peer { return []Peer{n1.PublicKey()} }},
-		getMesh(make(chan *mesh.Block), "TestSyncer_Start_2"),
+		getMesh("TestSyncer_Start_2"),
 		BlockValidatorMock{},
 		Configuration{2, 1 * time.Second, 1, 300, 10 * time.Second},
 	)
@@ -71,7 +71,7 @@ func TestSyncer_Start(t *testing.T) {
 
 func TestSyncer_Close(t *testing.T) {
 	fmt.Println("test sync close")
-	sync := NewSync(NewPeers(service.NewSimulator().NewNode()), getMesh(make(chan *mesh.Block), "TestSyncer_Close"), BlockValidatorMock{}, Configuration{1, 100 * time.Millisecond, 1, 300, 10 * time.Second})
+	sync := NewSync(NewPeers(service.NewSimulator().NewNode()), getMesh("TestSyncer_Close"), BlockValidatorMock{}, Configuration{1, 100 * time.Millisecond, 1, 300, 10 * time.Second})
 	sync.Start()
 	sync.Close()
 	s := sync
@@ -89,7 +89,7 @@ func TestSyncProtocol_BlockRequest(t *testing.T) {
 	n2 := sim.NewNode()
 
 	syncObj := NewSync(NewPeers(n1),
-		getMesh(make(chan *mesh.Block), "TestSyncer_BlockRequest"),
+		getMesh("TestSyncer_BlockRequest"),
 		BlockValidatorMock{},
 		Configuration{1, 1 * time.Millisecond, 1, 300, 10 * time.Second},
 	)
@@ -115,7 +115,7 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
 	syncObj := NewSync(NewPeers(n1),
-		getMesh(make(chan *mesh.Block), "TestSyncProtocol_LayerHashRequest"),
+		getMesh("TestSyncProtocol_LayerHashRequest"),
 		BlockValidatorMock{},
 		Configuration{1, 1 * time.Millisecond, 1, 300, 10 * time.Second},
 	)
@@ -138,7 +138,7 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
 	syncObj := NewSync(NewPeers(n1),
-		getMesh(make(chan *mesh.Block), "TestSyncProtocol_LayerIdsRequest"),
+		getMesh("TestSyncProtocol_LayerIdsRequest"),
 		BlockValidatorMock{},
 		Configuration{1, 1 * time.Millisecond, 1, 300, 10 * time.Second},
 	)
@@ -181,7 +181,7 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
 	syncObj1 := NewSync(NewPeers(n1),
-		getMesh(make(chan *mesh.Block), "TestSyncProtocol_FetchBlocks_1"),
+		getMesh("TestSyncProtocol_FetchBlocks_1"),
 		BlockValidatorMock{},
 		Configuration{1, 1 * time.Millisecond, 1, 300, 10 * time.Second},
 	)
@@ -190,7 +190,7 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	syncObj1.Start()
 
 	syncObj2 := NewSync(NewPeers(n2),
-		getMesh(make(chan *mesh.Block), "TestSyncProtocol_FetchBlocks_2"),
+		getMesh("TestSyncProtocol_FetchBlocks_2"),
 		BlockValidatorMock{},
 		Configuration{1, 1 * time.Millisecond, 1, 300, 10 * time.Second},
 	)
@@ -244,13 +244,13 @@ func TestSyncProtocol_SyncTwoNodes(t *testing.T) {
 	nn2 := sim.NewNode()
 
 	syncObj1 := NewSync(PeersImpl{nn1, func() []Peer { return []Peer{nn2.PublicKey()} }},
-		getMesh(make(chan *mesh.Block), "TestSyncProtocol_SyncTwoNodes_1"),
+		getMesh("TestSyncProtocol_SyncTwoNodes_1"),
 		BlockValidatorMock{},
 		Configuration{2, 1 * time.Second, 1, 300, 10 * time.Second},
 	)
 	defer syncObj1.Close()
 	syncObj2 := NewSync(PeersImpl{nn2, func() []Peer { return []Peer{nn1.PublicKey()} }},
-		getMesh(make(chan *mesh.Block), "TestSyncProtocol_SyncTwoNodes_2"),
+		getMesh("TestSyncProtocol_SyncTwoNodes_2"),
 		BlockValidatorMock{},
 		Configuration{2, 1 * time.Second, 1, 300, 10 * time.Second},
 	)
@@ -302,25 +302,25 @@ func TestSyncProtocol_SyncMultipalNodes(t *testing.T) {
 	nn4 := sim.NewNode()
 
 	syncObj1 := NewSync(PeersImpl{nn1, func() []Peer { return []Peer{nn2.PublicKey()} }},
-		getMesh(make(chan *mesh.Block), "TestSyncProtocol_SyncMultipalNodes_1"),
+		getMesh("TestSyncProtocol_SyncMultipalNodes_1"),
 		BlockValidatorMock{},
 		Configuration{2, 1 * time.Second, 3, 300, 1 * time.Second},
 	)
 
 	syncObj2 := NewSync(PeersImpl{nn2, func() []Peer { return []Peer{nn1.PublicKey()} }},
-		getMesh(make(chan *mesh.Block), "TestSyncProtocol_SyncMultipalNodes_2"),
+		getMesh("TestSyncProtocol_SyncMultipalNodes_2"),
 		BlockValidatorMock{},
 		Configuration{2, 1 * time.Second, 3, 300, 1 * time.Second},
 	)
 
 	syncObj3 := NewSync(PeersImpl{nn3, func() []Peer { return []Peer{nn1.PublicKey(), nn2.PublicKey(), nn4.PublicKey()} }},
-		getMesh(make(chan *mesh.Block), "TestSyncProtocol_SyncMultipalNodes_3"),
+		getMesh("TestSyncProtocol_SyncMultipalNodes_3"),
 		BlockValidatorMock{},
 		Configuration{2, 1 * time.Second, 3, 300, 1 * time.Second},
 	)
 
 	syncObj4 := NewSync(PeersImpl{nn4, func() []Peer { return []Peer{nn1.PublicKey(), nn2.PublicKey(), nn3.PublicKey()} }},
-		getMesh(make(chan *mesh.Block), "TestSyncProtocol_SyncMultipalNodes_4"),
+		getMesh("TestSyncProtocol_SyncMultipalNodes_4"),
 		BlockValidatorMock{},
 		Configuration{2, 1 * time.Second, 3, 300, 1 * time.Second},
 	)
