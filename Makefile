@@ -1,4 +1,8 @@
-BINARY := go-spacemesh
+ifeq ($(OS),Windows_NT)
+	BINARY := go-spacemesh.exe
+else
+	BINARY := go-spacemesh
+endif
 VERSION := 0.0.1
 COMMIT = $(shell git rev-parse HEAD)
 BRANCH = $(shell git rev-parse --abbrev-ref HEAD)
@@ -18,16 +22,16 @@ all: install build
 .PHONY: all
 
 install:
-	./setup_env.sh
+	"${CURR_DIR}/setup_env.sh"
 .PHONY: install
 
 genproto:
-	./scripts/genproto.sh
+	"${CURR_DIR}/scripts/genproto.sh"
 .PHONY: genproto
 
 build:
 	make genproto
-	go build ${LDFLAGS} -o $(CURR_DIR)/$(BINARY)
+	go build ${LDFLAGS} -o "${CURR_DIR}/$(BINARY)"
 .PHONY: build
 
 tidy:
@@ -50,7 +54,7 @@ test-tidy:
 .PHONY: test-tidy
 
 lint:
-	./scripts/validate-lint.sh
+	"${CURR_DIR}/scripts/validate-lint.sh"
 .PHONY: lint
 
 cover:

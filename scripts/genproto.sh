@@ -1,5 +1,5 @@
 #!/bin/bash -e
-protobuf_directories=$(find . -not -path ./.git/ -not -path ./.idea/ -type d -name "pb")
+protobuf_directories=$(find . -not -path ./.git -not -path ./.idea -type d -name "pb")
 grpc_gateway_path=$(go list -m -f '{{.Dir}}' github.com/grpc-ecosystem/grpc-gateway)
 googleapis_path="$grpc_gateway_path/third_party/googleapis"
 

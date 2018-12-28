@@ -6,13 +6,14 @@ require (
 	github.com/btcsuite/btcutil v0.0.0-20170726183619-501929d3d046
 	github.com/davecgh/go-spew v1.1.1
 	github.com/davecgh/go-xdr v0.0.0-20161123171359-e6a2ba005892
+	github.com/ghodss/yaml v1.0.0 // indirect
 	github.com/gogo/protobuf v0.0.0-20171204084257-41168f6614b7
 	github.com/golang-collections/go-datastructures v0.0.0-20150211160725-59788d5eb259
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b // indirect
 	github.com/golang/protobuf v1.2.0
 	github.com/golang/snappy v0.0.0-20170215233205-553a64147049 // indirect
 	github.com/google/uuid v0.0.0-20171122162618-4ebdd04351c7
-	github.com/grpc-ecosystem/grpc-gateway v1.6.2
+	github.com/grpc-ecosystem/grpc-gateway v1.6.3
 	github.com/hashicorp/hcl v0.0.0-20180404174102-ef8a98b0bbce // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/magiconair/properties v1.8.0 // indirect
