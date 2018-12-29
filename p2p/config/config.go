@@ -93,6 +93,6 @@ func DefaultConfig() Config {
 		ResponseTimeout: duration("15s"),
 		SwarmConfig:     SwarmConfigValues,
 		TimeConfig:      TimeConfigValues,
-		BufferSize: 	 10,
+		BufferSize: 	 512,
 	}
 }
