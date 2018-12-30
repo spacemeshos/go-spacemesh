@@ -10,8 +10,6 @@ import (
 
 type MessageServer server.MessageServer
 
-const BufferSize = 200 //todo tune buffer to correct size
-
 const blockProtocol = "/blocks/1.0/"
 
 type BlockListener struct {
@@ -19,6 +17,7 @@ type BlockListener struct {
 	Peers
 	mesh.Mesh
 	BlockValidator
+	bufferSize   int
 	workers      chan struct{}     //semaphore
 	unknownQueue chan mesh.BlockID //todo consider benefits of changing to stack
 	startLock    uint32
@@ -44,13 +43,12 @@ func NewBlockListener(net server.Service, bv BlockValidator, layers mesh.Mesh, t
 		Peers:          NewPeers(net),
 		MessageServer:  server.NewMsgServer(net, blockProtocol, timeout),
 		workers:        make(chan struct{}, concurrency),
-		unknownQueue:   make(chan mesh.BlockID, BufferSize),
+		unknownQueue:   make(chan mesh.BlockID, 200), //todo tune buffer size + get buffer from config
 		exit:           make(chan struct{})}
 	bl.RegisterMsgHandler(BLOCK, newBlockRequestHandler(layers))
 	return &bl
 }
 
-//todo limit concurrency
 func (bl *BlockListener) run() {
 	for {
 		select {
