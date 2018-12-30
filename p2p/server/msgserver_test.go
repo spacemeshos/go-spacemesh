@@ -16,25 +16,6 @@ func TestProtocol_SendRequest(t *testing.T) {
 	fnd1 := NewMsgServer(n1, protocol, 5*time.Second)
 
 	//handler that returns some bytes on request
-	handler := func(msg []byte) []byte { return []byte("some value to return") }
-	fnd1.RegisterMsgHandler(1, handler)
-
-	n2 := sim.NewNode()
-	fnd2 := NewMsgServer(n2, protocol, 5*time.Second)
-
-	//send request recive interface{} and verify
-	b, err := fnd2.SendRequest(1, nil, n1.PublicKey(), time.Minute)
-
-	assert.NoError(t, err, "Should not return error")
-	assert.EqualValues(t, []byte("some value to return"), b, "value received did not match correct value")
-}
-
-func TestProtocol_SendAsyncRequestRequest(t *testing.T) {
-	sim := service.NewSimulator()
-	n1 := sim.NewNode()
-	fnd1 := NewMsgServer(n1, protocol, 5*time.Second)
-
-	//handler that returns some bytes on request
 
 	handler := func(msg []byte) []byte {
 		return []byte("some value to return")
@@ -52,7 +33,7 @@ func TestProtocol_SendAsyncRequestRequest(t *testing.T) {
 		strCh <- string(msg)
 	}
 
-	err := fnd2.SendAsyncRequest(1, nil, n1.PublicKey(), callback)
+	err := fnd2.SendRequest(1, nil, n1.PublicKey(), callback)
 	msg := <-strCh
 
 	assert.EqualValues(t, "some value to return", string(msg), "value received did not match correct value")
@@ -83,7 +64,7 @@ func TestProtocol_CleanOldPendingMessages(t *testing.T) {
 		strCh <- string(msg)
 	}
 
-	err := fnd2.SendAsyncRequest(1, nil, n1.PublicKey(), callback)
+	err := fnd2.SendRequest(1, nil, n1.PublicKey(), callback)
 	assert.NoError(t, err, "Should not return error")
 	assert.EqualValues(t, 1, fnd2.pendingQueue.Len(), "value received did not match correct value1")
 
@@ -127,10 +108,8 @@ func TestProtocol_Close(t *testing.T) {
 		strCh <- string(msg)
 	}
 
-	err := fnd2.SendAsyncRequest(1, nil, n1.PublicKey(), callback)
+	err := fnd2.SendRequest(1, nil, n1.PublicKey(), callback)
 	assert.NoError(t, err, "Should not return error")
-	assert.EqualValues(t, 1, len(fnd2.pendingMap), "value received did not match correct value1")
+	assert.EqualValues(t, 1, fnd2.pendingQueue.Len(), "value received did not match correct value1")
 	fnd2.Close()
-	assert.EqualValues(t, 0, len(fnd2.pendingMap), "value received did not match correct value1")
-
 }

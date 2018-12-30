@@ -43,7 +43,7 @@ type signer interface {
 }
 
 type protocolMessage struct {
-	msg     *pb.ProtocolMessage
+	msg *pb.ProtocolMessage
 }
 
 // Protocol is the gossip protocol
@@ -70,16 +70,16 @@ func NewProtocol(config config.SwarmConfig, base baseNetwork, signer signer, log
 	// intentionally not subscribing to peers events so that the channels won't block in case executing Start delays
 	relayChan := base.RegisterProtocol(ProtocolName)
 	return &Protocol{
-		Log:          log2,
-		config:       config,
-		net:          base,
-		signer:       signer,
-		peers:        make(map[string]*peer),
-		shutdown:     make(chan struct{}),
-		oldMessageQ:  make(map[hash]struct{}), // todo : remember to drain this
-		peersMutex:   sync.RWMutex{},
-		relayQ:       relayChan,
-		messageQ:     make(chan protocolMessage, messageQBufferSize),
+		Log:         log2,
+		config:      config,
+		net:         base,
+		signer:      signer,
+		peers:       make(map[string]*peer),
+		shutdown:    make(chan struct{}),
+		oldMessageQ: make(map[hash]struct{}), // todo : remember to drain this
+		peersMutex:  sync.RWMutex{},
+		relayQ:      relayChan,
+		messageQ:    make(chan protocolMessage, messageQBufferSize),
 	}
 }
 
@@ -173,6 +173,7 @@ func (prot *Protocol) validateMessage(msg *pb.ProtocolMessage) error {
 
 // Broadcast is the actual broadcast procedure, loop on peers and add the message to their queues
 func (prot *Protocol) Broadcast(payload []byte, nextProt string) error {
+	prot.Log.Debug("Broadcasting message from type %s", nextProt)
 	// add gossip header
 	header := &pb.Metadata{
 		NextProtocol:  nextProt,
@@ -272,9 +273,9 @@ func (prot *Protocol) handleRelayMessage(msgB []byte) error {
 		var data service.Data
 
 		if payload := msg.GetPayload(); payload != nil {
-			data = service.Data_Bytes{Payload: payload}
+			data = service.DataBytes{Payload: payload}
 		} else if wrap := msg.GetMsg(); wrap != nil {
-			data = service.Data_MsgWrapper{Req: wrap.Req, MsgType: wrap.Type, ReqID: wrap.ReqID, Payload: wrap.Payload}
+			data = &service.DataMsgWrapper{Req: wrap.Req, MsgType: wrap.Type, ReqID: wrap.ReqID, Payload: wrap.Payload}
 		}
 
 		authKey, err := crypto.NewPublicKey(msg.Metadata.AuthPubKey)
@@ -292,10 +293,15 @@ func (prot *Protocol) handleRelayMessage(msgB []byte) error {
 }
 
 func (prot *Protocol) eventLoop(peerConn chan crypto.PublicKey, peerDisc chan crypto.PublicKey) {
+	var err error
 loop:
 	for {
 		select {
-		case msg := <-prot.relayQ:
+		case msg, ok := <-prot.relayQ:
+			if !ok {
+				err = errors.New("channel closed")
+				break loop
+			}
 			// incoming messages from p2p layer for process and relay
 			go func() {
 				//  [todo some err handling
@@ -306,9 +312,11 @@ loop:
 		case peer := <-peerDisc:
 			go prot.removePeer(peer)
 		case <-prot.shutdown:
-			break loop // maybe error ?
+			err = errors.New("protocol shutdown")
+			break loop
 		}
 	}
+	prot.Warning("Gossip protocol event loop stopped. err: %v", err)
 }
 
 // peersCount returns the number of peers know to the protocol, used for testing only

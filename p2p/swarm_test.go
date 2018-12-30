@@ -1,6 +1,7 @@
 package p2p
 
 import (
+	"github.com/spacemeshos/go-spacemesh/p2p/connectionpool"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht"
 	"testing"
 	"time"
@@ -29,6 +30,10 @@ func (cp *cpoolMock) GetConnection(address string, pk crypto.PublicKey) (net.Con
 		return cp.f(address, pk)
 	}
 	return net.NewConnectionMock(pk), nil
+}
+
+func (cp *cpoolMock) RemoteConnectionsChannel() chan net.NewConnectionEvent {
+	return make(chan net.NewConnectionEvent)
 }
 
 func p2pTestInstance(t testing.TB, config config.Config) *swarm {
@@ -174,6 +179,54 @@ func TestSwarm_SignAuth(t *testing.T) {
 }
 
 var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+func Test_ConnectionBeforeMessage(t *testing.T) {
+
+	numNodes := 5
+	var wg sync.WaitGroup
+
+	p2 := p2pTestInstance(t, config.DefaultConfig())
+	c2 := p2.RegisterProtocol(exampleProtocol)
+
+	go func () {
+		for {
+			msg := <-c2 // immediate response will probably trigger GetConnection fast
+			p2.SendMessage(msg.Sender().PublicKey().String(), exampleProtocol, []byte("RESP"))
+			wg.Done()
+		}
+	}()
+
+	oldCpool := p2.cPool.(*connectionpool.ConnectionPool)
+
+	//called := make(chan struct{}, numNodes)
+	cpm := new(cpoolMock)
+	cpm.f = func(address string, pk crypto.PublicKey) (net.Connection, error) {
+		c, err := oldCpool.GetConnectionIfExists(pk)
+		if err != nil {
+			t.Fatal("Didn't get connection yet while SendMessage called GetConnection")
+		}
+		return c,nil
+	}
+
+
+	p2.cPool = cpm
+
+	payload := []byte(RandString(10))
+
+
+	for i := 0; i < numNodes; i++ {
+		wg.Add(1)
+		go func() {
+			p1 := p2pTestInstance(t, config.DefaultConfig())
+			_ = p1.RegisterProtocol(exampleProtocol)
+			p1.dht.Update(p2.lNode.Node)
+			err := p1.SendMessage(p2.lNode.PublicKey().String(), exampleProtocol, payload)
+			assert.NoError(t, err)
+		}()
+	}
+	wg.Wait()
+
+}
 
 func RandString(n int) string {
 	b := make([]rune, n)
@@ -637,72 +690,3 @@ func TestSwarm_AddIncomingPeer(t *testing.T) {
 	assert.True(t, ok)
 	assert.NotNil(t, peer)
 }
-
-//
-////TODO : Test this without real network
-//func TestBootstrap(t *testing.T) {
-//	bootnodes := []int{3}
-//	nodes := []int{30}
-//	rcon := []int{3}
-//
-//	bootcfg := config.DefaultConfig()
-//	bootcfg.SwarmConfig.Bootstrap = false
-//	bootcfg.SwarmConfig.Gossip = false
-//
-//
-//	rand.Seed(time.Now().UnixNano())
-//
-//	for i := 0; i < len(nodes); i++ {
-//		t.Run(fmt.Sprintf("Peers:%v/randconn:%v", nodes[i], rcon[i]), func(t *testing.T) {
-//			bufchan := make(chan *swarm, nodes[i])
-//
-//			bnarr := []string{}
-//
-//			for k := 0; k < bootnodes[i]; k++ {
-//				bn := p2pTestInstance(t, bootcfg)
-//				bn.lNode.Info("This is a bootnode - %v", bn.lNode.Node.String())
-//				bnarr = append(bnarr, node.StringFromNode(bn.lNode.Node))
-//			}
-//
-//			cfg := config.DefaultConfig()
-//			cfg.SwarmConfig.Bootstrap = true
-//			cfg.SwarmConfig.Gossip = false
-//			cfg.SwarmConfig.RandomConnections = rcon[i]
-//			cfg.SwarmConfig.BootstrapNodes = bnarr
-//
-//			var wg sync.WaitGroup
-//
-//			for j := 0; j < nodes[i]; j++ {
-//				wg.Add(1)
-//				go func() {
-//					sw := p2pTestInstance(t, cfg)
-//					sw.waitForBoot()
-//					bufchan <- sw
-//					wg.Done()
-//				}()
-//			}
-//
-//			wg.Wait()
-//			close(bufchan)
-//			swarms := []*swarm{}
-//			for s := range bufchan {
-//				swarms = append(swarms, s)
-//
-//			}
-//
-//			randnode := swarms[rand.Int31n(int32(len(swarms)-1))]
-//			randnode2 := swarms[rand.Int31n(int32(len(swarms)-1))]
-//
-//			for (randnode == nil || randnode2 == nil) || randnode.lNode.String() == randnode2.lNode.String() {
-//				randnode = swarms[rand.Int31n(int32(len(swarms)-1))]
-//				randnode2 = swarms[rand.Int31n(int32(len(swarms)-1))]
-//			}
-//
-//			randnode.RegisterProtocol(exampleProtocol)
-//			recv := randnode2.RegisterProtocol(exampleProtocol)
-//
-//			sendDirectMessage(t, randnode, randnode2.lNode.publicKey().String(), recv, true)
-//			time.Sleep(1* time.Second)
-//		})
-//	}
-//}

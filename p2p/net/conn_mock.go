@@ -3,6 +3,7 @@ package net
 import (
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"net"
+	"strconv"
 	"sync/atomic"
 	"time"
 )
@@ -12,6 +13,8 @@ type ConnectionMock struct {
 	remotePub crypto.PublicKey
 	session   NetworkSession
 	source    ConnectionSource
+
+	addr string
 
 	sendDelayMs int
 	sendRes     error
@@ -41,7 +44,15 @@ func (cm *ConnectionMock) SetRemotePublicKey(key crypto.PublicKey) {
 }
 
 func (cm *ConnectionMock) RemoteAddr() net.Addr {
-	return &net.IPAddr{}
+
+	if cm.addr == "" {
+		return nil
+	}
+
+	addr, port, _ := net.SplitHostPort(cm.addr)
+	portstr, _ := strconv.Atoi(port)
+
+	return &net.TCPAddr{net.ParseIP(addr), portstr, ""}
 }
 
 func (cm *ConnectionMock) SetSession(session NetworkSession) {

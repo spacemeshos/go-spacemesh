@@ -47,6 +47,7 @@ func (pm protocolMessage) Bytes() []byte {
 
 type cPool interface {
 	GetConnection(address string, pk crypto.PublicKey) (net.Connection, error)
+	RemoteConnectionsChannel() chan net.NewConnectionEvent
 }
 
 type swarm struct {
@@ -90,9 +91,9 @@ type swarm struct {
 	morePeersReq      chan struct{}
 	connectingTimeout time.Duration
 
-	peerLock    sync.RWMutex
-	newPeerSub  []chan crypto.PublicKey
-	delPeerSub  []chan crypto.PublicKey
+	peerLock   sync.RWMutex
+	newPeerSub []chan crypto.PublicKey
+	delPeerSub []chan crypto.PublicKey
 }
 
 func (s *swarm) waitForBoot() error {
@@ -245,12 +246,12 @@ func (s *swarm) connectionPool() cPool {
 	return s.cPool
 }
 
-func (s *swarm) sendWrappedMessage(nodeID string, protocol string, payload *service.Data_MsgWrapper) error {
+func (s *swarm) SendWrappedMessage(nodeID string, protocol string, payload *service.DataMsgWrapper) error {
 	return s.sendMessageImpl(nodeID, protocol, payload)
 }
 
 func (s *swarm) SendMessage(nodeID string, protocol string, payload []byte) error {
-	return s.sendMessageImpl(nodeID, protocol, service.Data_Bytes{Payload: payload})
+	return s.sendMessageImpl(nodeID, protocol, service.DataBytes{Payload: payload})
 }
 
 // SendMessage Sends a message to a remote node
@@ -288,10 +289,10 @@ func (s *swarm) sendMessageImpl(peerPubKey string, protocol string, payload serv
 	}
 
 	switch x := payload.(type) {
-	case service.Data_MsgWrapper:
-		protomessage.Data = &pb.ProtocolMessage_Msg{&pb.MessageWrapper{Type: x.MsgType, Req: x.Req, ReqID: x.ReqID, Payload: x.Payload}}
-	case service.Data_Bytes:
+	case service.DataBytes:
 		protomessage.Data = &pb.ProtocolMessage_Payload{Payload: x.Bytes()}
+	case *service.DataMsgWrapper:
+		protomessage.Data = &pb.ProtocolMessage_Msg{Msg: &pb.MessageWrapper{Type: x.MsgType, Req: x.Req, ReqID: x.ReqID, Payload: x.Payload}}
 	case nil:
 		// The field is not set.
 	default:
@@ -394,7 +395,7 @@ func (s *swarm) listenToNetworkMessages() {
 }
 
 func (s *swarm) handleNewConnectionEvents() {
-	newConnEvents := s.network.SubscribeOnNewRemoteConnections()
+	newConnEvents := s.cPool.RemoteConnectionsChannel()
 	closing := s.network.SubscribeClosingConnections()
 Loop:
 	for {
@@ -531,9 +532,9 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 	var data service.Data
 
 	if payload := pm.GetPayload(); payload != nil {
-		data = service.Data_Bytes{Payload: payload}
+		data = service.DataBytes{Payload: payload}
 	} else if wrap := pm.GetMsg(); wrap != nil {
-		data = service.Data_MsgWrapper{Req: wrap.Req, MsgType: wrap.Type, ReqID: wrap.ReqID, Payload: wrap.Payload}
+		data = &service.DataMsgWrapper{Req: wrap.Req, MsgType: wrap.Type, ReqID: wrap.ReqID, Payload: wrap.Payload}
 	}
 
 	return s.ProcessProtocolMessage(remoteNode, pm.Metadata.NextProtocol, data)
@@ -545,7 +546,6 @@ func (s *swarm) ProcessProtocolMessage(sender node.Node, protocol string, data s
 	s.protocolHandlerMutex.RLock()
 	msgchan := s.protocolHandlers[protocol]
 	s.protocolHandlerMutex.RUnlock()
-
 	if msgchan == nil {
 		return ErrNoProtocol
 	}
@@ -558,7 +558,7 @@ func (s *swarm) ProcessProtocolMessage(sender node.Node, protocol string, data s
 
 // Broadcast creates a gossip message signs it and disseminate it to neighbors.
 func (s *swarm) Broadcast(protocol string, payload []byte) error {
-	return s.ProcessProtocolMessage(s.lNode.Node, gossip.ProtocolName, service.Data_Bytes{payload})
+	return s.gossip.Broadcast(payload, protocol)
 }
 
 // Neighborhood : neighborhood is the peers we keep close , meaning we try to keep connections

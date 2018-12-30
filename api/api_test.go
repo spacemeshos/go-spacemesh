@@ -74,9 +74,11 @@ func TestGrpcApi(t *testing.T) {
 	const message = "Hello World"
 
 	grpcService := NewGrpcService()
+	grpcStatus := make(chan bool, 2)
 
 	// start a server
-	grpcService.StartService(nil)
+	grpcService.StartService(grpcStatus)
+	<-grpcStatus
 
 	// start a client
 	addr := "localhost:" + strconv.Itoa(int(config.ConfigValues.GrpcServerPort))
@@ -99,6 +101,7 @@ func TestGrpcApi(t *testing.T) {
 
 	// stop the server
 	grpcService.StopService()
+	<-grpcStatus
 }
 
 func TestJsonApi(t *testing.T) {

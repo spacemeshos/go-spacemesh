@@ -12,7 +12,6 @@ import (
 	"gopkg.in/op/go-logging.v1"
 	"net"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 )
@@ -176,7 +175,7 @@ func (n *Net) createConnection(address string, remotePub crypto.PublicKey, timeO
 	dialer := &net.Dialer{}
 	dialer.KeepAlive = keepAlive // drop connections after a period of inactivity
 	dialer.Timeout = timeOut     // max time bef
-	n.logger.Debug("TCP dialing %s ...", address)
+	n.logger.Debug("Dialing %v @ %v...", remotePub.Pretty(), address)
 
 	netConn, err := dialer.Dial("tcp", address)
 
@@ -303,7 +302,7 @@ func (n *Net) acceptTCP() {
 // SubscribeOnNewRemoteConnections returns new channel where events of new remote connections are reported
 func (n *Net) SubscribeOnNewRemoteConnections() chan NewConnectionEvent {
 	n.regMutex.Lock()
-	ch := make(chan NewConnectionEvent, 20)
+	ch := make(chan NewConnectionEvent)
 	n.regNewRemoteConn = append(n.regNewRemoteConn, ch)
 	n.regMutex.Unlock()
 	return ch
@@ -312,7 +311,12 @@ func (n *Net) SubscribeOnNewRemoteConnections() chan NewConnectionEvent {
 func (n *Net) publishNewRemoteConnectionEvent(conn Connection, node node.Node) {
 	n.regMutex.RLock()
 	for _, c := range n.regNewRemoteConn {
-		c <- NewConnectionEvent{conn, node}
+		select {
+		case c <- NewConnectionEvent{conn, node}:
+			continue
+		default:
+			// so we won't block on not listening chans
+		}
 	}
 	n.regMutex.RUnlock()
 }
@@ -346,17 +350,20 @@ func (n *Net) HandlePreSessionIncomingMessage(c Connection, message []byte) erro
 		return fmt.Errorf("%s. hereto err: %v", errMsg, err)
 	}
 
+	// update on new connection
+	addr, _, err := net.SplitHostPort(c.RemoteAddr().String())
+	if err != nil {
+		return fmt.Errorf("un-valid address format, (%v) err: %v", c.RemoteAddr().String(), err)
+	}
+
+	anode := node.New(c.RemotePublicKey(), net.JoinHostPort(addr, strconv.Itoa(int(data.Port))))
+
 	err = c.Send(payload)
 	if err != nil {
 		return err
 	}
 
 	c.SetSession(session)
-
-	// update on new connection
-	addr := strings.Split(c.RemoteAddr().String(), ":")[0] // this should never be bad unless address is corrupted
-	anode := node.New(c.RemotePublicKey(), net.JoinHostPort(addr, strconv.Itoa(int(data.Port))))
 	n.publishNewRemoteConnectionEvent(c, anode)
-
 	return nil
 }

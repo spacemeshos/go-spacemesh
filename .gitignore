@@ -23,7 +23,7 @@
 /cover-all.out
 */**/cover.out
 
-vendor/*/*
 **/pb/*.pb.go
 **/pb/*.pb.gw.go
 **/pb/*.swagger.json
+database/data
