@@ -149,6 +149,7 @@ func (s *Syncer) Synchronise() {
 							case b := <-bCh:
 								if b != nil && s.bv.ValidateBlock(b) { //some validation testing
 									output <- b
+									break
 								}
 							case <-time.After(s.config.requestTimeout):
 								s.log.Debug("timeout for block ", id)

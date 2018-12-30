@@ -113,6 +113,7 @@ func (p *MessageServer) removeFromPending(reqID uint64) {
 		next = e.Next()
 		if reqID == e.Value.(Item).id {
 			p.pendingQueue.Remove(e)
+			break
 		}
 	}
 	delete(p.resHandlers, reqID)
