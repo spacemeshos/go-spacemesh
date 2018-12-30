@@ -67,8 +67,9 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction() {
 	}
 
 
-	err := s.processor.ApplyTransactions(1, transactions)
+	failed, err := s.processor.ApplyTransactions(1, transactions)
 	assert.NoError(s.T(), err)
+	assert.True(s.T(), failed == 0)
 
 	got := string(s.state.Dump())
 
@@ -116,8 +117,9 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_DoubleTr
 	}
 
 
-	err := s.processor.ApplyTransactions(1, transactions)
+	failed, err := s.processor.ApplyTransactions(1, transactions)
 	assert.NoError(s.T(), err)
+	assert.True(s.T(), failed == 0)
 
 	got := string(s.state.Dump())
 
@@ -156,8 +158,9 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_Errors()
 	}
 
 
-	err := s.processor.ApplyTransactions(1, transactions)
+	failed,err := s.processor.ApplyTransactions(1, transactions)
 	assert.NoError(s.T(), err)
+	assert.True(s.T(), failed == 0)
 
 	err = s.processor.ApplyTransaction(createTransaction(0,obj1.address, obj2.address, 1))
 	assert.Error(s.T(), err)
@@ -232,8 +235,9 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Reset() {
 	}
 
 
-	err := s.processor.ApplyTransactions(1, transactions)
+	failed, err := s.processor.ApplyTransactions(1, transactions)
 	assert.NoError(s.T(), err)
+	assert.True(s.T(), failed == 0)
 
 	transactions = Transactions{
 		createTransaction(obj1.Nonce(),obj1.address, obj2.address, 1),
@@ -241,7 +245,8 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Reset() {
 	}
 
 
-	err = s.processor.ApplyTransactions(2, transactions)
+	failed, err = s.processor.ApplyTransactions(2, transactions)
+	assert.True(s.T(), failed == 0)
 	assert.NoError(s.T(), err)
 
 	got := string(s.processor.globalState.Dump())
@@ -346,8 +351,9 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 
 			log.Info("transaction %v nonce %v amount %v", t.Origin.Hex(), t.AccountNonce, t.Amount)
 		}
-		err := s.processor.ApplyTransactions(LayerID(i), trns)
+		failed, err := s.processor.ApplyTransactions(LayerID(i), trns)
 		assert.NoError(s.T(),err)
+		assert.True(s.T(), failed == 0)
 
 		if i == revertToLayer {
 			want = string(s.processor.globalState.Dump())
