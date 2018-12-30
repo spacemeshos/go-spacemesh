@@ -18,14 +18,6 @@ func NewProposalTracker(expectedSize int) *ProposalTracker {
 	return pt
 }
 
-// Tracks and detects conflicting messages
-// Returns true if it is the first time we see m, false otherwise
-func (pt *ProposalTracker) TrackConflict(m *pb.HareMessage) bool {
-
-
-	return true
-}
-
 func (pt *ProposalTracker) OnProposal(msg *pb.HareMessage) {
 	if pt.proposal == nil { // first leader
 		pt.proposal = msg // just update
@@ -48,8 +40,7 @@ func (pt *ProposalTracker) OnProposal(msg *pb.HareMessage) {
 		return
 	}
 
-	// first time we see msg
-	pt.proposal = msg        // update leader msg
+	pt.proposal = msg        // update lower leader msg
 	pt.isConflicting = false // assume no conflict
 }
 

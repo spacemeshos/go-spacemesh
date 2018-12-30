@@ -24,7 +24,7 @@ type NetworkService interface {
 }
 
 type State struct {
-	k           int32           // the iteration number
+	k           int32           // the round counter (k%4 is the round number)
 	ki          int32           // indicates when S was first committed upon
 	s           *Set            // the set of values
 	certificate *pb.Certificate // the certificate
@@ -73,6 +73,11 @@ func NewConsensusProcess(cfg config.Config, key crypto.PublicKey, instanceId Ins
 
 func (proc *ConsensusProcess) Id() uint32 {
 	return proc.instanceId.Id()
+}
+
+// Returns the iteration number from a given round counter
+func iterationFromCounter(roundCounter int32) int32 {
+	return roundCounter / 4
 }
 
 func (proc *ConsensusProcess) Start() error {
@@ -139,8 +144,30 @@ PreRound:
 	}
 }
 
-func doesMessageMatchRound(iteration int32, m *pb.HareMessage) bool {
-	claimedRound := iteration % 4
+// verifies the message is contextually valid
+func (proc *ConsensusProcess) isContextuallyValid(m *pb.HareMessage) bool {
+	isSameIteration := iterationFromCounter(proc.k) != iterationFromCounter(m.Message.K)
+	currentRound := proc.currentRound()
+	switch MessageType(m.Message.Type) {
+	case PreRound:
+		return true
+	case Status:
+		return isSameIteration && currentRound == Round1
+	case Proposal:
+		return isSameIteration && currentRound == Round2 || currentRound == Round3
+	case Commit:
+		return isSameIteration && currentRound == Round3
+	case Notify:
+		return true
+	default:
+		log.Error("Unknown message type encountered during contextual validation: ", m.Message.Type)
+		return false
+	}
+}
+
+// verifies the message is syntactically valid
+func isSyntacticallyValid(m *pb.HareMessage) bool {
+	claimedRound := m.Message.K % 4
 
 	switch MessageType(m.Message.Type) {
 	case PreRound:
@@ -148,14 +175,14 @@ func doesMessageMatchRound(iteration int32, m *pb.HareMessage) bool {
 	case Status:
 		return claimedRound == Round1
 	case Proposal:
-		return claimedRound == Round2 || claimedRound == Round3
+		return claimedRound == Round2
 	case Commit:
 		return claimedRound == Round3
 	case Notify:
 		return true
 	}
 
-	log.Error("Unknown message type encountered during validation: ", m.Message.Type)
+	log.Error("Unknown message type encountered during syntactic validation: ", m.Message.Type)
 	return false
 }
 
@@ -181,9 +208,21 @@ func (proc *ConsensusProcess) validateCertificate(m *pb.HareMessage) bool {
 		return false
 	}
 
-	// check all set equal to claimed set
+	// validate type, k and set
+	k := msgs[0].Message.K
 	s := NewSet(m.Message.Values)
 	for _, msg := range msgs {
+		// validate commit type
+		if MessageType(msg.Message.Type) != Commit {
+			return false
+		}
+
+		// validate same k
+		if msg.Message.K != k {
+			return false
+		}
+
+		// validate same set
 		g := NewSet(msg.Message.Values)
 		if !s.Equals(g) {
 			return false
@@ -196,30 +235,28 @@ func (proc *ConsensusProcess) validateCertificate(m *pb.HareMessage) bool {
 }
 
 func roleFromRoundCounter(k int32) Role {
-	if k%4 == Round2 {
+	switch k % 4 {
+	case Round2:
 		return Leader
+	case Round4:
+		return Passive
+	default:
+		return Active
 	}
-
-	return Active
 }
 
 func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
 	// Note: instanceId is already verified by the broker
 
-	// check correct iteration
-	if proc.k/4 != m.Message.K/4 { // either future message or old
+	// validate context
+	if !proc.isContextuallyValid(m) {
+		log.Info("Message is not contextual valid")
 		return
 	}
 
-	// validate round and message type match
-	if !doesMessageMatchRound(proc.k, m) {
-		log.Info("Message does not match the current round")
-		return
-	}
-
-	// validate message round and message type match
-	if !doesMessageMatchRound(m.Message.K, m) {
-		log.Info("Message does not match the the claimed round in the message")
+	// validate syntactically valid
+	if !isSyntacticallyValid(m) {
+		log.Info("Message is not syntactically valid")
 		return
 	}
 
@@ -264,12 +301,8 @@ func (proc *ConsensusProcess) sendMessage(msg *pb.HareMessage) {
 		return
 	}
 
-	// send only if you should speak in this round
-	if proc.currentRound() == Round2 && proc.role != Leader { // leader on round2
-		return
-	}
-
-	if proc.role != Active { // active if not round2
+	// send only if our role matches the required role for this round
+	if proc.role != roleFromRoundCounter(proc.k) {
 		return
 	}
 
@@ -360,7 +393,7 @@ func (proc *ConsensusProcess) roleProof() Signature {
 
 func (proc *ConsensusProcess) initDefaultBuilder(s *Set) *MessageBuilder {
 	builder := NewMessageBuilder().SetPubKey(proc.pubKey).SetInstanceId(proc.instanceId)
-	builder = builder.SetIteration(proc.k).SetKi(proc.ki).SetValues(s)
+	builder = builder.SetRoundCounter(proc.k).SetKi(proc.ki).SetValues(s)
 	builder.SetRoleProof(proc.roleProof())
 
 	return builder

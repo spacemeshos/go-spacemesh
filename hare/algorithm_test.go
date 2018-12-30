@@ -71,7 +71,7 @@ func TestConsensusProcess_handleMessage(t *testing.T) {
 	proc := NewConsensusProcess(cfg, generatePubKey(t), *instanceId1, *s, oracle, signing, n1)
 	broker.Register(proc)
 
-	m := NewMessageBuilder().SetIteration(0).SetInstanceId(*instanceId1).SetPubKey(generatePubKey(t)).Sign(proc.signing).Build()
+	m := NewMessageBuilder().SetRoundCounter(0).SetInstanceId(*instanceId1).SetPubKey(generatePubKey(t)).Sign(proc.signing).Build()
 
 	proc.handleMessage(m)
 }
@@ -126,7 +126,7 @@ func TestConsensusProcess_DoesMatchRound(t *testing.T) {
 
 	for j := 0; j < len(msgs); j++ {
 		for i := 0; i < 4; i++ {
-			assert.Equal(t, rounds[j][i], doesMessageMatchRound(cp.k, msgs[j]))
+			assert.Equal(t, rounds[j][i], cp.isContextuallyValid(msgs[j]))
 			cp.advanceToNextRound()
 		}
 	}
@@ -150,4 +150,31 @@ func TestNewConsensusProcess_AdvanceToNextRound(t *testing.T) {
 	k := proc.k
 	proc.advanceToNextRound()
 	assert.Equal(t, k+1, proc.k)
+}
+
+func TestConsensusProcess_CreateInbox(t *testing.T) {
+	proc := generateConsensusProcess(t)
+	proc.createInbox(100)
+	assert.NotNil(t, proc.inbox)
+	assert.Equal(t, 100, cap(proc.inbox))
+}
+
+func TestConsensusProcess_InitDefaultBuilder(t *testing.T) {
+	proc := generateConsensusProcess(t)
+	s := NewEmptySet(cfg.SetSize)
+	s.Add(value1)
+	builder := proc.initDefaultBuilder(s)
+	assert.True(t, NewSet(builder.inner.Values).Equals(s))
+	pub, err := crypto.NewPublicKey(builder.outer.PubKey)
+	assert.Nil(t, err)
+	assert.Equal(t, pub.Bytes(), proc.pubKey.Bytes())
+	assert.Equal(t, builder.inner.K, proc.k)
+	assert.Equal(t, builder.inner.Ki, proc.ki)
+	assert.Equal(t, builder.inner.InstanceId, proc.instanceId.Bytes())
+}
+
+func TestConsensusProcess_buildNotify(t *testing.T) {
+	proc := generateConsensusProcess(t)
+	m := proc.buildNotifyMessage()
+	assert.Equal(t, Notify, MessageType(m.Message.Type))
 }
