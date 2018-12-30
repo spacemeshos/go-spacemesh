@@ -111,10 +111,10 @@ func TestSyncProtocol_BlockRequest(t *testing.T) {
 	block := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), lid, []byte("data data data"))
 	syncObj.AddLayer(mesh.NewExistingLayer(lid, []*mesh.Block{block}))
 
-	fnd2 := server.NewMsgServer(n2, protocol, time.Second*5)
-	fnd2.RegisterMsgHandler(BLOCK, syncObj.blockRequestHandler)
+	fnd2 := server.NewMsgServer(n2, syncProtocol, time.Second*5)
+	fnd2.RegisterMsgHandler(BLOCK, newBlockRequestHandler(syncObj.Mesh))
 
-	ch, err := syncObj.sendBlockRequest(n2.Node.PublicKey(), block.ID())
+	ch, err := sendBlockRequest(syncObj.MessageServer, n2.Node.PublicKey(), block.ID())
 	a := <-ch
 
 	assert.NoError(t, err, "Should not return error")
@@ -131,7 +131,7 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 
 	syncObj1.AddLayer(mesh.NewExistingLayer(lid, make([]*mesh.Block, 0, 10)))
 	ch := make(chan peerHashPair)
-	_, err := syncObj2.sendLayerHashRequest(nodes[0].Node.PublicKey(), lid, ch, int32(0))
+	_, err := syncObj2.sendLayerHashRequest(nodes[0].Node.PublicKey(), lid, ch)
 	hash := <-ch
 	assert.NoError(t, err, "Should not return error")
 	assert.Equal(t, "some hash representing the layer", string(hash.hash), "wrong block")
@@ -150,8 +150,8 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 	layer.AddBlock(mesh.NewExistingBlock(mesh.BlockID(111), lid, nil))
 	layer.AddBlock(mesh.NewExistingBlock(mesh.BlockID(222), lid, nil))
 	syncObj.AddLayer(layer)
-	fnd2 := server.NewMsgServer(nodes[1], protocol, time.Second*5)
-	fnd2.RegisterMsgHandler(LAYER_IDS, syncObj.layerIdsRequestHandler)
+	fnd2 := server.NewMsgServer(nodes[1], syncProtocol, time.Second*5)
+	fnd2.RegisterMsgHandler(LAYER_IDS, newLayerIdsRequestHandler(syncObj.Mesh))
 	ch := make(chan []uint32)
 	_, err := syncObj.sendLayerIDsRequest(nodes[1].Node.PublicKey(), lid, ch)
 	ids := <-ch
@@ -187,32 +187,32 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	syncObj1.AddLayer(mesh.NewExistingLayer(0, []*mesh.Block{block1}))
 	syncObj1.AddLayer(mesh.NewExistingLayer(1, []*mesh.Block{block2}))
 	syncObj1.AddLayer(mesh.NewExistingLayer(2, []*mesh.Block{block3}))
-	count := int32(0)
+
 	ch := make(chan peerHashPair)
-	_, err := syncObj2.sendLayerHashRequest(n1.PublicKey(), 0, ch, count)
+	_, err := syncObj2.sendLayerHashRequest(n1.PublicKey(), 0, ch)
 	hash := <-ch
 	assert.NoError(t, err, "Should not return error")
 	assert.Equal(t, "some hash representing the layer", string(hash.hash), "wrong block")
 
-	ch2, err2 := syncObj2.sendBlockRequest(n1.PublicKey(), block1.ID())
+	ch2, err2 := sendBlockRequest(syncObj2.MessageServer, n1.PublicKey(), block1.ID())
 	assert.NoError(t, err2, "Should not return error")
 	msg2 := <-ch2
 	assert.Equal(t, msg2.ID(), block1.ID(), "wrong block")
 
-	_, err = syncObj2.sendLayerHashRequest(n1.PublicKey(), 1, ch, count)
+	_, err = syncObj2.sendLayerHashRequest(n1.PublicKey(), 1, ch)
 	assert.NoError(t, err, "Should not return error")
 	assert.Equal(t, "some hash representing the layer", string(hash.hash), "wrong block")
 
-	ch2, err2 = syncObj2.sendBlockRequest(n1.PublicKey(), block2.ID())
+	ch2, err2 = sendBlockRequest(syncObj2.MessageServer, n1.PublicKey(), block2.ID())
 	assert.NoError(t, err2, "Should not return error")
 	msg2 = <-ch2
 	assert.Equal(t, msg2.ID(), block2.ID(), "wrong block")
 
-	_, err = syncObj2.sendLayerHashRequest(n1.PublicKey(), 2, ch, count)
+	_, err = syncObj2.sendLayerHashRequest(n1.PublicKey(), 2, ch)
 	assert.NoError(t, err, "Should not return error")
 	assert.Equal(t, "some hash representing the layer", string(hash.hash), "wrong block")
 
-	ch2, err2 = syncObj2.sendBlockRequest(n1.PublicKey(), block3.ID())
+	ch2, err2 = sendBlockRequest(syncObj2.MessageServer, n1.PublicKey(), block3.ID())
 	assert.NoError(t, err2, "Should not return error")
 	msg2 = <-ch2
 	assert.Equal(t, msg2.ID(), block3.ID(), "wrong block")

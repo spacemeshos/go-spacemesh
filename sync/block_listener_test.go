@@ -3,13 +3,27 @@ package sync
 import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"testing"
 	"time"
 )
 
-func ListenerFactory(peers Peers, name string) *BlockListener {
-	return NewBlockListener(peers, BlockValidatorMock{}, getMesh("TestBlockListener_"+name), 1*time.Second, 2)
+type PeersMock struct {
+	getPeers func() []Peer
+}
+
+func (pm PeersMock) GetPeers() []Peer {
+	return pm.getPeers()
+}
+
+func (pm PeersMock) Close() {
+	return
+}
+func ListenerFactory(serv server.Service, peers Peers, name string) *BlockListener {
+	nbl := NewBlockListener(serv, BlockValidatorMock{}, getMesh("TestBlockListener_"+name), 1*time.Second, 2)
+	nbl.Peers = peers //override peers with mock
+	return nbl
 }
 
 func TestBlockListener(t *testing.T) {
@@ -18,8 +32,8 @@ func TestBlockListener(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
-	bl1 := ListenerFactory(PeersImpl{n1, func() []Peer { return []Peer{n2.PublicKey()} }}, "1")
-	bl2 := ListenerFactory(PeersImpl{n1, func() []Peer { return []Peer{n1.PublicKey()} }}, "2")
+	bl1 := ListenerFactory(n1, PeersMock{func() []Peer { return []Peer{n2.PublicKey()} }}, "1")
+	bl2 := ListenerFactory(n2, PeersMock{func() []Peer { return []Peer{n1.PublicKey()} }}, "2")
 	bl2.Start()
 
 	block1 := mesh.NewExistingBlock(mesh.BlockID(123), 0, nil)
@@ -58,8 +72,8 @@ func TestBlockListener2(t *testing.T) {
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
 
-	bl1 := ListenerFactory(PeersImpl{n1, func() []Peer { return []Peer{n2.PublicKey()} }}, "3")
-	bl2 := ListenerFactory(PeersImpl{n2, func() []Peer { return []Peer{n1.PublicKey()} }}, "4")
+	bl1 := ListenerFactory(n1, PeersMock{func() []Peer { return []Peer{n2.PublicKey()} }}, "3")
+	bl2 := ListenerFactory(n2, PeersMock{func() []Peer { return []Peer{n1.PublicKey()} }}, "4")
 
 	bl2.Start()
 
