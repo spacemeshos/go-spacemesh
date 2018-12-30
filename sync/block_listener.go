@@ -19,10 +19,12 @@ type BlockListener struct {
 	Peers
 	mesh.Mesh
 	BlockValidator
+	workers      chan struct{}     //semaphore
 	unknownQueue chan mesh.BlockID //todo consider benefits of changing to stack
 	startLock    uint32
 	timeout      time.Duration
-	exit         chan struct{}
+	exit         chan struct {
+	}
 }
 
 func (bl *BlockListener) Close() {
@@ -35,12 +37,13 @@ func (bl *BlockListener) Start() {
 	}
 }
 
-func NewBlockListener(peers Peers, bv BlockValidator, layers mesh.Mesh, timeout time.Duration) *BlockListener {
+func NewBlockListener(peers Peers, bv BlockValidator, layers mesh.Mesh, timeout time.Duration, concurrency int) *BlockListener {
 	bl := BlockListener{
 		MessageServer:  server.NewMsgServer(peers, blockProtocol, timeout),
 		Mesh:           layers,
 		Peers:          peers,
 		BlockValidator: bv,
+		workers:        make(chan struct{}, concurrency),
 		unknownQueue:   make(chan mesh.BlockID, BufferSize),
 		exit:           make(chan struct{})}
 	bl.RegisterMsgHandler(BLOCK, newBlockRequestHandler(layers))
@@ -56,7 +59,11 @@ func (bl *BlockListener) run() {
 			return
 		case id := <-bl.unknownQueue:
 			log.Debug("fetch block ", id)
-			go bl.FetchBlock(id)
+			bl.workers <- struct{}{}
+			go func() {
+				defer func() { <-bl.workers }()
+				bl.FetchBlock(id)
+			}()
 		}
 	}
 }

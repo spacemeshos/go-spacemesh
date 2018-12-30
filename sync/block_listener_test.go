@@ -8,18 +8,18 @@ import (
 	"time"
 )
 
+func ListenerFactory(peers Peers, name string) *BlockListener {
+	return NewBlockListener(peers, BlockValidatorMock{}, getMesh("TestBlockListener_"+name), 1*time.Second, 2)
+}
+
 func TestBlockListener(t *testing.T) {
 
 	fmt.Println("test sync start")
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
-
-	bl1 := NewBlockListener(PeersImpl{n1, func() []Peer { return []Peer{n2.PublicKey()} }},
-		BlockValidatorMock{}, getMesh("TestBlockListener_1"), 1*time.Second)
-	bl2 := NewBlockListener(PeersImpl{n2, func() []Peer { return []Peer{n1.PublicKey()} }},
-		BlockValidatorMock{}, getMesh("TestBlockListener_2"), 1*time.Second)
-
+	bl1 := ListenerFactory(PeersImpl{n1, func() []Peer { return []Peer{n2.PublicKey()} }}, "1")
+	bl2 := ListenerFactory(PeersImpl{n1, func() []Peer { return []Peer{n1.PublicKey()} }}, "2")
 	bl2.Start()
 
 	block1 := mesh.NewExistingBlock(mesh.BlockID(123), 0, nil)
@@ -34,9 +34,21 @@ func TestBlockListener(t *testing.T) {
 	bl1.AddBlock(block3)
 
 	bl2.FetchBlock(block1.Id)
-	b, _ := bl2.GetBlock(block1.Id)
-	fmt.Println("  ", b)
-	time.Sleep(10 * time.Second)
+	timeout := time.After(30 * time.Second)
+loop:
+	for {
+		select {
+		// Got a timeout! fail with a timeout error
+		case <-timeout:
+			t.Error("timed out ")
+		default:
+			if b, err := bl2.GetBlock(block1.Id); err == nil {
+				fmt.Println("  ", b)
+				t.Log("done!")
+				break loop
+			}
+		}
+	}
 }
 
 func TestBlockListener2(t *testing.T) {
@@ -46,10 +58,8 @@ func TestBlockListener2(t *testing.T) {
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
 
-	bl1 := NewBlockListener(PeersImpl{n1, func() []Peer { return []Peer{n2.PublicKey()} }},
-		BlockValidatorMock{}, getMesh("TestBlockListener_1"), 1*time.Second)
-	bl2 := NewBlockListener(PeersImpl{n2, func() []Peer { return []Peer{n1.PublicKey()} }},
-		BlockValidatorMock{}, getMesh("TestBlockListener_2"), 1*time.Second)
+	bl1 := ListenerFactory(PeersImpl{n1, func() []Peer { return []Peer{n2.PublicKey()} }}, "3")
+	bl2 := ListenerFactory(PeersImpl{n2, func() []Peer { return []Peer{n1.PublicKey()} }}, "4")
 
 	bl2.Start()
 
@@ -90,7 +100,7 @@ func TestBlockListener2(t *testing.T) {
 
 	bl2.FetchBlock(block10.Id)
 
-	timeout := time.After(30 * time.Second)
+	timeout := time.After(10 * time.Second)
 loop:
 	for {
 		select {
