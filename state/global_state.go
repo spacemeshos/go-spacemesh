@@ -5,6 +5,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/rlp"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/trie"
 	"math/big"
 	"sync"
 )
@@ -22,6 +23,7 @@ type GlobalStateDB interface {
 	Commit(deleteEmptyObjects bool) (root common.Hash, err error)
 	//Copy() *GlobalStateDB
 	IntermediateRoot(deleteEmptyObjects bool) common.Hash
+	TrieDB() *trie.Database
 }
 
 
@@ -264,8 +266,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error) 
 			s.updateStateObj(stateObject)
 		}
 	}
-	s.stateObjectsDirty = make(map[common.Address]struct{})
-	// Write trie changes.
+ 	// Write trie changes.
 	root, err = s.globalTrie.Commit(nil)
 	return root, err
 }
@@ -285,5 +286,9 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 }
 
 
+// TrieDB retrieves the low level trie database used for data storage.
+func (s *StateDB) TrieDB() *trie.Database {
+	return s.db.TrieDB()
+}
 
 
