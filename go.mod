@@ -32,7 +32,7 @@ require (
 	github.com/syndtr/goleveldb v0.0.0-20171214120811-34011bf325bc
 	golang.org/x/crypto v0.0.0-20171128194009-94eea52f7b74
 	golang.org/x/net v0.0.0-20180906233101-161cd47e91fd
-	golang.org/x/sync v0.0.0-20181108010431-42b317875d0f // indirect
+	golang.org/x/sync v0.0.0-20181108010431-42b317875d0f
 	google.golang.org/genproto v0.0.0-20171123000638-7f0da29060c6
 	google.golang.org/grpc v0.0.0-20171201233205-cd563b81ec33
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0-20170531160350-a96e63847dc3

@@ -20,12 +20,13 @@ type Mesh interface {
 	LatestIrreversible() uint32
 	LatestKnownLayer() uint32
 	SetLatestKnownLayer(idx uint32)
+
 	Close()
 }
 
 type mesh struct {
 	latestIrreversible uint32
-	latestKnownLayer   uint32
+	latestLayer        uint32
 	mDB                *meshDB
 	lMutex             sync.RWMutex
 	lkMutex            sync.RWMutex
@@ -54,15 +55,15 @@ func (m *mesh) LatestIrreversible() uint32 {
 func (m *mesh) LatestKnownLayer() uint32 {
 	defer m.lkMutex.RUnlock()
 	m.lkMutex.RLock()
-	return m.latestKnownLayer
+	return m.latestLayer
 }
 
 func (m *mesh) SetLatestKnownLayer(idx uint32) {
 	defer m.lkMutex.Unlock()
 	m.lkMutex.Lock()
-	if idx > m.latestKnownLayer {
+	if idx > m.latestLayer {
 		log.Debug("set latest known layer to ", idx)
-		m.latestKnownLayer = idx
+		m.latestLayer = idx
 	}
 }
 
@@ -75,7 +76,7 @@ func (m *mesh) AddLayer(layer *Layer) error {
 		return errors.New("can't add layer (already exists)")
 	}
 
-	if count < layer.Index() {
+	if count+1 < layer.Index() {
 		log.Debug("can't add layer", layer.Index(), " missing previous layers")
 		return errors.New("can't add layer missing previous layers")
 	}
@@ -83,12 +84,13 @@ func (m *mesh) AddLayer(layer *Layer) error {
 	m.mDB.addLayer(layer)
 	m.tortoise.HandleIncomingLayer(layer)
 	atomic.AddUint32(&m.latestIrreversible, 1)
+	m.SetLatestKnownLayer(uint32(layer.Index()))
 	return nil
 }
 
 func (m *mesh) GetLayer(i LayerID) (*Layer, error) {
 	m.lMutex.RLock()
-	if i >= LayerID(m.latestIrreversible) {
+	if i > LayerID(m.latestIrreversible) {
 		m.lMutex.RUnlock()
 		log.Debug("failed to get layer  ", i, " layer not verified yet")
 		return nil, errors.New("layer not verified yet")

@@ -43,7 +43,7 @@ type signer interface {
 }
 
 type protocolMessage struct {
-	msg     *pb.ProtocolMessage
+	msg *pb.ProtocolMessage
 }
 
 // Protocol is the gossip protocol
@@ -70,16 +70,16 @@ func NewProtocol(config config.SwarmConfig, base baseNetwork, signer signer, log
 	// intentionally not subscribing to peers events so that the channels won't block in case executing Start delays
 	relayChan := base.RegisterProtocol(ProtocolName)
 	return &Protocol{
-		Log:          log2,
-		config:       config,
-		net:          base,
-		signer:       signer,
-		peers:        make(map[string]*peer),
-		shutdown:     make(chan struct{}),
-		oldMessageQ:  make(map[hash]struct{}), // todo : remember to drain this
-		peersMutex:   sync.RWMutex{},
-		relayQ:       relayChan,
-		messageQ:     make(chan protocolMessage, messageQBufferSize),
+		Log:         log2,
+		config:      config,
+		net:         base,
+		signer:      signer,
+		peers:       make(map[string]*peer),
+		shutdown:    make(chan struct{}),
+		oldMessageQ: make(map[hash]struct{}), // todo : remember to drain this
+		peersMutex:  sync.RWMutex{},
+		relayQ:      relayChan,
+		messageQ:    make(chan protocolMessage, messageQBufferSize),
 	}
 }
 
@@ -273,9 +273,9 @@ func (prot *Protocol) handleRelayMessage(msgB []byte) error {
 		var data service.Data
 
 		if payload := msg.GetPayload(); payload != nil {
-			data = service.Data_Bytes{Payload: payload}
+			data = service.DataBytes{Payload: payload}
 		} else if wrap := msg.GetMsg(); wrap != nil {
-			data = service.Data_MsgWrapper{Req: wrap.Req, MsgType: wrap.Type, ReqID: wrap.ReqID, Payload: wrap.Payload}
+			data = &service.DataMsgWrapper{Req: wrap.Req, MsgType: wrap.Type, ReqID: wrap.ReqID, Payload: wrap.Payload}
 		}
 
 		authKey, err := crypto.NewPublicKey(msg.Metadata.AuthPubKey)
