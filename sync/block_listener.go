@@ -39,10 +39,10 @@ func (bl *BlockListener) Start() {
 
 func NewBlockListener(peers Peers, bv BlockValidator, layers mesh.Mesh, timeout time.Duration, concurrency int) *BlockListener {
 	bl := BlockListener{
-		MessageServer:  server.NewMsgServer(peers, blockProtocol, timeout),
-		Mesh:           layers,
-		Peers:          peers,
 		BlockValidator: bv,
+		Peers:          peers,
+		Mesh:           layers,
+		MessageServer:  server.NewMsgServer(peers, blockProtocol, timeout),
 		workers:        make(chan struct{}, concurrency),
 		unknownQueue:   make(chan mesh.BlockID, BufferSize),
 		exit:           make(chan struct{})}
