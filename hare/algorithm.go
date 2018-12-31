@@ -330,7 +330,11 @@ func (proc *ConsensusProcess) sendMessage(msg *pb.HareMessage) {
 
 	if err := proc.network.Broadcast(ProtoName, data); err != nil {
 		log.Error("Could not broadcast round message ", err.Error())
+		return
 	}
+
+	// msg successfully sent to network, send it to yourself but don't block
+	go func() { proc.inbox <- msg }()
 }
 
 func (proc *ConsensusProcess) onRoundEnd() {
@@ -544,11 +548,14 @@ func (proc *ConsensusProcess) processNotifyMsg(msg *pb.HareMessage) {
 	notifyMsg := proc.buildNotifyMessage()
 	data, err := proto.Marshal(notifyMsg)
 	if err != nil {
-		log.Error("Could not marshal notify message")
-		proc.Close()
+		panic("Could not marshal notify message")
 	}
-	proc.network.Broadcast(ProtoName, data)
+	err = proc.network.Broadcast(ProtoName, data)
+	if err != nil {
+		log.Error("Failed broadcasting last notify message ", err.Error())
+	}
 	proc.terminating = true // ensures immediate termination
+	proc.Close()
 }
 
 func (proc *ConsensusProcess) currentRound() int32 {
