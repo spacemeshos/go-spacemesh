@@ -39,4 +39,5 @@ message LayerIdsResp {
 message Block {
      uint32 Id = 1;
      uint32 layer = 2;
+     repeated uint32 VisibleMesh = 3;
 }

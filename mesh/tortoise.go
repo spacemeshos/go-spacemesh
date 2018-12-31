@@ -210,5 +210,5 @@ func (alg *Algorithm) HandleIncomingLayer(l *Layer) {
 }
 
 func (alg *Algorithm) HandleLateBlock(b *Block) {
-	log.Info("received layer Id %v total blocks: %v =====", b.ID(), len(alg.allBlocks))
+	log.Info("received block with layer Id %v block id: %v ", b.Layer(), b.ID())
 }
