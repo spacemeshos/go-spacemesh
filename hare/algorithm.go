@@ -24,7 +24,7 @@ type NetworkService interface {
 }
 
 type State struct {
-	k           int32           // the round counter (k%4 is the round number)
+	k           uint32          // the round counter (k%4 is the round number)
 	ki          int32           // indicates when S was first committed upon
 	s           *Set            // the set of values
 	certificate *pb.Certificate // the certificate
@@ -76,7 +76,7 @@ func (proc *ConsensusProcess) Id() uint32 {
 }
 
 // Returns the iteration number from a given round counter
-func iterationFromCounter(roundCounter int32) int32 {
+func iterationFromCounter(roundCounter uint32) uint32 {
 	return roundCounter / 4
 }
 
@@ -184,10 +184,10 @@ func isSyntacticallyValid(m *pb.HareMessage) bool {
 		return claimedRound == Round3
 	case Notify:
 		return true
+	default:
+		log.Error("Unknown message type encountered during syntactic validation: ", m.Message.Type)
+		return false
 	}
-
-	log.Error("Unknown message type encountered during syntactic validation: ", m.Message.Type)
-	return false
 }
 
 func (proc *ConsensusProcess) validateCertificate(m *pb.HareMessage) bool {
@@ -250,7 +250,7 @@ func (proc *ConsensusProcess) validateCertificate(m *pb.HareMessage) bool {
 	return true
 }
 
-func roleFromRoundCounter(k int32) Role {
+func roleFromRoundCounter(k uint32) Role {
 	switch k % 4 {
 	case Round2:
 		return Leader
@@ -403,6 +403,8 @@ func (proc *ConsensusProcess) onRoundBegin() {
 		proc.beginRound3()
 	case Round4:
 		proc.beginRound4()
+	default:
+		log.Error("Current round out of bounds. Expected: 0-4, Found: ", proc.currentRound())
 	}
 }
 
@@ -558,8 +560,8 @@ func (proc *ConsensusProcess) processNotifyMsg(msg *pb.HareMessage) {
 	proc.Close()
 }
 
-func (proc *ConsensusProcess) currentRound() int32 {
-	return proc.k % 4
+func (proc *ConsensusProcess) currentRound() int {
+	return int(proc.k % 4)
 }
 
 func (proc *ConsensusProcess) endOfRound3() {

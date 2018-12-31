@@ -89,9 +89,9 @@ func TestConsensusProcess_nextRound(t *testing.T) {
 	broker.Register(proc)
 
 	proc.advanceToNextRound()
-	assert.Equal(t, int32(1), proc.k)
+	assert.Equal(t, uint32(1), proc.k)
 	proc.advanceToNextRound()
-	assert.Equal(t, int32(2), proc.k)
+	assert.Equal(t, uint32(2), proc.k)
 }
 
 func generateConsensusProcess(t *testing.T) *ConsensusProcess {

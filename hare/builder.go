@@ -55,7 +55,7 @@ func (builder *MessageBuilder) SetInstanceId(id InstanceId) *MessageBuilder {
 	return builder
 }
 
-func (builder *MessageBuilder) SetRoundCounter(k int32) *MessageBuilder {
+func (builder *MessageBuilder) SetRoundCounter(k uint32) *MessageBuilder {
 	builder.inner.K = k
 	return builder
 }
