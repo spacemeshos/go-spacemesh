@@ -11,32 +11,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/suite"
 	"sync/atomic"
 	"testing"
 	"time"
 )
 
 var conf = Configuration{2, 15 * time.Second, 3, 300, 7000 * time.Millisecond}
-
-func SyncFactory(t testing.TB, bootNodes int, networkSize int, randomConnections int, config Configuration, name string) (syncs []*Syncer) {
-
-	fmt.Println("===============================================================================================")
-	fmt.Println("Running Integration test with these parameters : ", bootNodes, " ", networkSize, " ", randomConnections)
-
-	nodes := make([]*Syncer, 0, bootNodes)
-	i := 1
-	beforeHook := func(net server.Service) {
-		newname := fmt.Sprintf("%s_%d", name, i)
-		l := log.New(newname, "", "")
-		sync := NewSync(net, getMesh(newname), BlockValidatorMock{}, config, *l.Logger)
-		fmt.Println("create sync obj number ", i, " ", newname)
-		nodes = append(nodes, sync)
-		i++
-	}
-	net := p2p.NewP2PSwarm(beforeHook, nil)
-	net.Start(t, bootNodes, networkSize, randomConnections)
-	return nodes
-}
 
 func SyncMockFactory(number int, conf Configuration, name string) (syncs []*Syncer, p2ps []*service.Node) {
 	nodes := make([]*Syncer, 0, number)
@@ -338,7 +319,40 @@ loop:
 	}
 }
 
-func TestSyncProtocol_p2pIntegrationTwoNodes(t *testing.T) {
+// Integration
+
+type SyncIntegrationSuite struct {
+	p2p.IntegrationTestSuite
+	syncers []*Syncer
+	// add more params you need
+}
+
+
+func Test_SyncIntegrationSuite(t *testing.T) {
+	sis := new(SyncIntegrationSuite)
+
+	sis.BootstrappedNodeCount = 10
+	sis.NeighborsCount = 3
+	sis.BootstrapNodesCount = 1
+
+	name := "syncer"
+
+	i := 1
+	sis.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
+		newname := fmt.Sprintf("%s_%d", name, i)
+		l := log.New(newname, "", "")
+		sync := NewSync(s, getMesh(newname), BlockValidatorMock{}, conf, *l.Logger)
+		fmt.Println("create sync obj number ", i, " ", newname)
+		sis.syncers = append(sis.syncers, sync)
+		i++
+	}
+
+	suite.Run(t, sis)
+}
+
+
+func (sis *SyncIntegrationSuite) TestSyncProtocol_TwoNodes() {
+	t:= sis.T()
 	if testing.Short() {
 		t.Skip()
 	}
@@ -352,10 +366,10 @@ func TestSyncProtocol_p2pIntegrationTwoNodes(t *testing.T) {
 	block8 := mesh.NewExistingBlock(mesh.BlockID(888), 3, nil)
 	block9 := mesh.NewExistingBlock(mesh.BlockID(999), 4, nil)
 	block10 := mesh.NewExistingBlock(mesh.BlockID(101), 4, nil)
-	syncObjs := SyncFactory(t, 1, 1, 1, conf, "systemtest1")
-	syncObj1 := syncObjs[0]
+
+	syncObj1 := sis.syncers[0]
 	defer syncObj1.Close()
-	syncObj2 := syncObjs[1]
+	syncObj2 := sis.syncers[1]
 	defer syncObj2.Close()
 	syncObj1.layers.AddLayer(mesh.NewExistingLayer(0, []*mesh.Block{block1, block2}))
 	syncObj1.layers.AddLayer(mesh.NewExistingLayer(1, []*mesh.Block{block3, block4}))
@@ -385,7 +399,9 @@ loop:
 	}
 }
 
-func TestSyncProtocol_p2pIntegrationMultipleNodes(t *testing.T) {
+
+func (sis *SyncIntegrationSuite) TestSyncProtocol_MultipleNodes() {
+	t := sis.T()
 	if testing.Short() {
 		t.Skip()
 	}
@@ -400,19 +416,19 @@ func TestSyncProtocol_p2pIntegrationMultipleNodes(t *testing.T) {
 	block8 := mesh.NewExistingBlock(mesh.BlockID(888), 4, nil)
 	block9 := mesh.NewExistingBlock(mesh.BlockID(999), 5, nil)
 	block10 := mesh.NewExistingBlock(mesh.BlockID(101), 5, nil)
-	syncObjs := SyncFactory(t, 2, 4, 4, conf, "integrationTest")
 
-	syncObj1 := syncObjs[0]
+
+	syncObj1 := sis.syncers[0]
 	defer syncObj1.Close()
-	syncObj2 := syncObjs[1]
+	syncObj2 := sis.syncers[1]
 	defer syncObj2.Close()
-	syncObj3 := syncObjs[2]
+	syncObj3 := sis.syncers[2]
 	defer syncObj3.Close()
-	syncObj4 := syncObjs[3]
+	syncObj4 := sis.syncers[3]
 	defer syncObj4.Close()
-	syncObj5 := syncObjs[4]
+	syncObj5 := sis.syncers[4]
 	defer syncObj5.Close()
-	syncObj6 := syncObjs[5]
+	syncObj6 := sis.syncers[5]
 	defer syncObj6.Close()
 
 	syncObj1.layers.AddLayer(mesh.NewExistingLayer(1, []*mesh.Block{block1, block2}))
