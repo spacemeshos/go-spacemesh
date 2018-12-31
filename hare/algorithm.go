@@ -208,7 +208,7 @@ func (proc *ConsensusProcess) validateCertificate(m *pb.HareMessage) bool {
 		return false
 	}
 
-	if len(msgs) == 0 {
+	if len(msgs) != proc.cfg.F+1 { // must include exactly f+1 commit messages
 		return false
 	}
 
@@ -405,6 +405,7 @@ func (proc *ConsensusProcess) onRoundBegin() {
 		proc.beginRound4()
 	default:
 		log.Error("Current round out of bounds. Expected: 0-4, Found: ", proc.currentRound())
+		panic("Current round out of bounds")
 	}
 }
 
@@ -430,8 +431,6 @@ func (proc *ConsensusProcess) buildNotifyMessage() *pb.HareMessage {
 }
 
 func (proc *ConsensusProcess) processPreRoundMsg(msg *pb.HareMessage) {
-	// check set
-	// check pubkey
 	proc.preRoundTracker.OnPreRound(msg)
 }
 
@@ -474,6 +473,18 @@ func (proc *ConsensusProcess) validateProposalTypeB(m *pb.HareMessage, maxRawSet
 }
 
 func (proc *ConsensusProcess) validateProposal(msg *pb.HareMessage) bool {
+	if msg.Message.Svp == nil { // must contain SVP
+		return false
+	}
+
+	if msg.Message.Svp.Messages == nil { // must contain status messages
+		return false
+	}
+
+	if len(msg.Message.Svp.Messages) != proc.cfg.F+1 { // must include exactly f+1 statuses
+		return false
+	}
+
 	maxKi := int32(-1) // ki>=-1
 	var maxRawSet [][]byte = nil
 	for _, status := range msg.Message.Svp.Messages {
@@ -496,11 +507,11 @@ func (proc *ConsensusProcess) validateProposal(msg *pb.HareMessage) bool {
 		}
 	}
 
-	if maxKi == -1 { // A type
+	if maxKi == -1 { // type A
 		if !proc.validateProposalTypeA(msg) {
 			return false
 		}
-	} else if !proc.validateProposalTypeB(msg, maxRawSet) { // B type
+	} else if !proc.validateProposalTypeB(msg, maxRawSet) { // type B
 		return false
 	}
 
