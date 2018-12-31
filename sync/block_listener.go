@@ -36,6 +36,10 @@ func (bl *BlockListener) Start() {
 	}
 }
 
+func (bl *BlockListener) OnNewBlock(b *mesh.Block) {
+	bl.addUnknownToQueue(b)
+}
+
 func NewBlockListener(net server.Service, bv BlockValidator, layers mesh.Mesh, timeout time.Duration, concurrency int) *BlockListener {
 	bl := BlockListener{
 		BlockValidator: bv,
@@ -56,7 +60,7 @@ func (bl *BlockListener) run() {
 			log.Debug("run stoped")
 			return
 		case id := <-bl.unknownQueue:
-			log.Debug("fetch block ", id)
+			log.Debug("fetch block ", id, "buffer is at ", len(bl.unknownQueue)/cap(bl.unknownQueue), " capacity")
 			bl.workers <- struct{}{}
 			go func() {
 				defer func() { <-bl.workers }()
@@ -75,14 +79,18 @@ func (bl *BlockListener) FetchBlock(id mesh.BlockID) {
 				if bl.ValidateBlock(b) {
 					bl.AddBlock(b)
 					//add all child blocks to unknown queue
-					for block := range b.BlockVotes {
-						//if unknown block
-						if _, err := bl.GetBlock(block); err != nil {
-							bl.unknownQueue <- block
-						}
-					}
+					bl.addUnknownToQueue(b)
 				}
 			}
+		}
+	}
+}
+
+func (bl *BlockListener) addUnknownToQueue(b *mesh.Block) {
+	for block := range b.BlockVotes {
+		//if unknown block
+		if _, err := bl.GetBlock(block); err != nil {
+			bl.unknownQueue <- block
 		}
 	}
 }
