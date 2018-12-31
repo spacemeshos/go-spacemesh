@@ -324,25 +324,23 @@ loop:
 type SyncIntegrationSuite struct {
 	p2p.IntegrationTestSuite
 	syncers []*Syncer
+	name    string
 	// add more params you need
 }
 
-
 func Test_SyncIntegrationSuite(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
 	sis := new(SyncIntegrationSuite)
-
-	sis.BootstrappedNodeCount = 10
-	sis.NeighborsCount = 3
+	sis.BootstrappedNodeCount = 2
+	sis.NeighborsCount = 1
 	sis.BootstrapNodesCount = 1
-
-	name := "syncer"
-
+	sis.name = t.Name()
 	i := 1
 	sis.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
-		newname := fmt.Sprintf("%s_%d", name, i)
-		l := log.New(newname, "", "")
-		sync := NewSync(s, getMesh(newname), BlockValidatorMock{}, conf, *l.Logger)
-		fmt.Println("create sync obj number ", i, " ", newname)
+		l := log.New(fmt.Sprintf("%s_%d", sis.name, i), "", "")
+		sync := NewSync(s, getMesh(fmt.Sprintf("%s_%s", sis.name, time.Now())), BlockValidatorMock{}, conf, *l.Logger)
 		sis.syncers = append(sis.syncers, sync)
 		i++
 	}
@@ -350,32 +348,34 @@ func Test_SyncIntegrationSuite(t *testing.T) {
 	suite.Run(t, sis)
 }
 
+func (sis *SyncIntegrationSuite) SetupTest() {
+	for _, a := range sis.syncers {
+		a.Mesh = getMesh(fmt.Sprintf("%s_%s", sis.name, time.Now()))
+	}
+}
 
 func (sis *SyncIntegrationSuite) TestSyncProtocol_TwoNodes() {
-	t:= sis.T()
-	if testing.Short() {
-		t.Skip()
-	}
-	block1 := mesh.NewExistingBlock(mesh.BlockID(111), 0, nil)
-	block2 := mesh.NewExistingBlock(mesh.BlockID(222), 0, nil)
-	block3 := mesh.NewExistingBlock(mesh.BlockID(333), 1, nil)
-	block4 := mesh.NewExistingBlock(mesh.BlockID(444), 1, nil)
-	block5 := mesh.NewExistingBlock(mesh.BlockID(555), 2, nil)
-	block6 := mesh.NewExistingBlock(mesh.BlockID(666), 2, nil)
-	block7 := mesh.NewExistingBlock(mesh.BlockID(777), 3, nil)
-	block8 := mesh.NewExistingBlock(mesh.BlockID(888), 3, nil)
-	block9 := mesh.NewExistingBlock(mesh.BlockID(999), 4, nil)
-	block10 := mesh.NewExistingBlock(mesh.BlockID(101), 4, nil)
+	t := sis.T()
+	block1 := mesh.NewExistingBlock(mesh.BlockID(111), 1, nil)
+	block2 := mesh.NewExistingBlock(mesh.BlockID(222), 1, nil)
+	block3 := mesh.NewExistingBlock(mesh.BlockID(333), 2, nil)
+	block4 := mesh.NewExistingBlock(mesh.BlockID(444), 2, nil)
+	block5 := mesh.NewExistingBlock(mesh.BlockID(555), 3, nil)
+	block6 := mesh.NewExistingBlock(mesh.BlockID(666), 3, nil)
+	block7 := mesh.NewExistingBlock(mesh.BlockID(777), 4, nil)
+	block8 := mesh.NewExistingBlock(mesh.BlockID(888), 4, nil)
+	block9 := mesh.NewExistingBlock(mesh.BlockID(999), 5, nil)
+	block10 := mesh.NewExistingBlock(mesh.BlockID(101), 5, nil)
 
 	syncObj1 := sis.syncers[0]
 	defer syncObj1.Close()
 	syncObj2 := sis.syncers[1]
 	defer syncObj2.Close()
-	syncObj1.AddLayer(mesh.NewExistingLayer(0, []*mesh.Block{block1, block2}))
-	syncObj1.AddLayer(mesh.NewExistingLayer(1, []*mesh.Block{block3, block4}))
-	syncObj1.AddLayer(mesh.NewExistingLayer(2, []*mesh.Block{block5, block6}))
-	syncObj1.AddLayer(mesh.NewExistingLayer(3, []*mesh.Block{block7, block8}))
-	syncObj1.AddLayer(mesh.NewExistingLayer(4, []*mesh.Block{block9, block10}))
+	syncObj1.AddLayer(mesh.NewExistingLayer(1, []*mesh.Block{block1, block2}))
+	syncObj1.AddLayer(mesh.NewExistingLayer(2, []*mesh.Block{block3, block4}))
+	syncObj1.AddLayer(mesh.NewExistingLayer(3, []*mesh.Block{block5, block6}))
+	syncObj1.AddLayer(mesh.NewExistingLayer(4, []*mesh.Block{block7, block8}))
+	syncObj1.AddLayer(mesh.NewExistingLayer(5, []*mesh.Block{block9, block10}))
 
 	timeout := time.After(60 * time.Second)
 	syncObj2.SetLatestKnownLayer(5)
@@ -399,13 +399,9 @@ loop:
 	}
 }
 
-
 func (sis *SyncIntegrationSuite) TestSyncProtocol_MultipleNodes() {
 	t := sis.T()
-	if testing.Short() {
-		t.Skip()
-	}
-
+	t.Skip()
 	block1 := mesh.NewExistingBlock(mesh.BlockID(111), 1, nil)
 	block2 := mesh.NewExistingBlock(mesh.BlockID(222), 1, nil)
 	block3 := mesh.NewExistingBlock(mesh.BlockID(333), 2, nil)
@@ -416,7 +412,6 @@ func (sis *SyncIntegrationSuite) TestSyncProtocol_MultipleNodes() {
 	block8 := mesh.NewExistingBlock(mesh.BlockID(888), 4, nil)
 	block9 := mesh.NewExistingBlock(mesh.BlockID(999), 5, nil)
 	block10 := mesh.NewExistingBlock(mesh.BlockID(101), 5, nil)
-
 
 	syncObj1 := sis.syncers[0]
 	defer syncObj1.Close()
