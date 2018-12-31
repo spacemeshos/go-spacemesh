@@ -53,7 +53,7 @@ func TestSyncer_Start(t *testing.T) {
 	syncs, _ := SyncMockFactory(2, conf, "TestSyncer_Start_")
 	sync := syncs[0]
 	defer sync.Close()
-	sync.layers.SetLatestKnownLayer(5)
+	sync.SetLatestKnownLayer(5)
 	fmt.Println(sync.IsSynced())
 	sync.Start()
 	timeout := time.After(10 * time.Second)
@@ -90,12 +90,12 @@ func TestSyncProtocol_BlockRequest(t *testing.T) {
 	defer syncObj.Close()
 	lid := mesh.LayerID(1)
 	block := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), lid, []byte("data data data"))
-	syncObj.layers.AddLayer(mesh.NewExistingLayer(lid, []*mesh.Block{block}))
+	syncObj.AddLayer(mesh.NewExistingLayer(lid, []*mesh.Block{block}))
 
-	fnd2 := server.NewMsgServer(n2, protocol, time.Second*5)
-	fnd2.RegisterMsgHandler(BLOCK, syncObj.blockRequestHandler)
+	fnd2 := server.NewMsgServer(n2, syncProtocol, time.Second*5)
+	fnd2.RegisterMsgHandler(BLOCK, newBlockRequestHandler(syncObj.Mesh))
 
-	ch, err := syncObj.sendBlockRequest(n2.Node.PublicKey(), block.ID())
+	ch, err := sendBlockRequest(syncObj.MessageServer, n2.Node.PublicKey(), block.ID())
 	a := <-ch
 
 	assert.NoError(t, err, "Should not return error")
@@ -110,9 +110,9 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 	defer syncObj2.Close()
 	lid := mesh.LayerID(1)
 
-	syncObj1.layers.AddLayer(mesh.NewExistingLayer(lid, make([]*mesh.Block, 0, 10)))
+	syncObj1.AddLayer(mesh.NewExistingLayer(lid, make([]*mesh.Block, 0, 10)))
 	ch := make(chan peerHashPair)
-	_, err := syncObj2.sendLayerHashRequest(nodes[0].Node.PublicKey(), lid, ch, int32(0))
+	_, err := syncObj2.sendLayerHashRequest(nodes[0].Node.PublicKey(), lid, ch)
 	hash := <-ch
 	assert.NoError(t, err, "Should not return error")
 	assert.Equal(t, "some hash representing the layer", string(hash.hash), "wrong block")
@@ -130,9 +130,9 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 	layer.AddBlock(mesh.NewExistingBlock(mesh.BlockID(132), lid, nil))
 	layer.AddBlock(mesh.NewExistingBlock(mesh.BlockID(111), lid, nil))
 	layer.AddBlock(mesh.NewExistingBlock(mesh.BlockID(222), lid, nil))
-	syncObj.layers.AddLayer(layer)
-	fnd2 := server.NewMsgServer(nodes[1], protocol, time.Second*5)
-	fnd2.RegisterMsgHandler(LAYER_IDS, syncObj.layerIdsRequestHandler)
+	syncObj.AddLayer(layer)
+	fnd2 := server.NewMsgServer(nodes[1], syncProtocol, time.Second*5)
+	fnd2.RegisterMsgHandler(LAYER_IDS, newLayerIdsRequestHandler(syncObj.Mesh))
 	ch := make(chan []uint32)
 	_, err := syncObj.sendLayerIDsRequest(nodes[1].Node.PublicKey(), lid, ch)
 	ids := <-ch
@@ -165,35 +165,35 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	block2 := mesh.NewExistingBlock(mesh.BlockID(321), 1, nil)
 	block3 := mesh.NewExistingBlock(mesh.BlockID(222), 2, nil)
 
-	syncObj1.layers.AddLayer(mesh.NewExistingLayer(0, []*mesh.Block{block1}))
-	syncObj1.layers.AddLayer(mesh.NewExistingLayer(1, []*mesh.Block{block2}))
-	syncObj1.layers.AddLayer(mesh.NewExistingLayer(2, []*mesh.Block{block3}))
-	count := int32(0)
+	syncObj1.AddLayer(mesh.NewExistingLayer(0, []*mesh.Block{block1}))
+	syncObj1.AddLayer(mesh.NewExistingLayer(1, []*mesh.Block{block2}))
+	syncObj1.AddLayer(mesh.NewExistingLayer(2, []*mesh.Block{block3}))
+
 	ch := make(chan peerHashPair)
-	_, err := syncObj2.sendLayerHashRequest(n1.PublicKey(), 0, ch, count)
+	_, err := syncObj2.sendLayerHashRequest(n1.PublicKey(), 0, ch)
 	hash := <-ch
 	assert.NoError(t, err, "Should not return error")
 	assert.Equal(t, "some hash representing the layer", string(hash.hash), "wrong block")
 
-	ch2, err2 := syncObj2.sendBlockRequest(n1.PublicKey(), block1.ID())
+	ch2, err2 := sendBlockRequest(syncObj2.MessageServer, n1.PublicKey(), block1.ID())
 	assert.NoError(t, err2, "Should not return error")
 	msg2 := <-ch2
 	assert.Equal(t, msg2.ID(), block1.ID(), "wrong block")
 
-	_, err = syncObj2.sendLayerHashRequest(n1.PublicKey(), 1, ch, count)
+	_, err = syncObj2.sendLayerHashRequest(n1.PublicKey(), 1, ch)
 	assert.NoError(t, err, "Should not return error")
 	assert.Equal(t, "some hash representing the layer", string(hash.hash), "wrong block")
 
-	ch2, err2 = syncObj2.sendBlockRequest(n1.PublicKey(), block2.ID())
+	ch2, err2 = sendBlockRequest(syncObj2.MessageServer, n1.PublicKey(), block2.ID())
 	assert.NoError(t, err2, "Should not return error")
 	msg2 = <-ch2
 	assert.Equal(t, msg2.ID(), block2.ID(), "wrong block")
 
-	_, err = syncObj2.sendLayerHashRequest(n1.PublicKey(), 2, ch, count)
+	_, err = syncObj2.sendLayerHashRequest(n1.PublicKey(), 2, ch)
 	assert.NoError(t, err, "Should not return error")
 	assert.Equal(t, "some hash representing the layer", string(hash.hash), "wrong block")
 
-	ch2, err2 = syncObj2.sendBlockRequest(n1.PublicKey(), block3.ID())
+	ch2, err2 = sendBlockRequest(syncObj2.MessageServer, n1.PublicKey(), block3.ID())
 	assert.NoError(t, err2, "Should not return error")
 	msg2 = <-ch2
 	assert.Equal(t, msg2.ID(), block3.ID(), "wrong block")
@@ -206,10 +206,10 @@ func TestSyncProtocol_SyncTwoNodes(t *testing.T) {
 	pm1 := getPeersMock([]Peer{nodes[1].PublicKey()})
 	pm2 := getPeersMock([]Peer{nodes[0].PublicKey()})
 	syncObj1 := syncs[0]
-	syncObj1.peers = pm1 //override peers with mock
+	syncObj1.Peers = pm1 //override peers with mock
 	defer syncObj1.Close()
 	syncObj2 := syncs[1]
-	syncObj2.peers = pm2 //override peers with mock
+	syncObj2.Peers = pm2 //override peers with mock
 	defer syncObj2.Close()
 
 	block1 := mesh.NewExistingBlock(mesh.BlockID(111), 0, nil)
@@ -222,14 +222,14 @@ func TestSyncProtocol_SyncTwoNodes(t *testing.T) {
 	block8 := mesh.NewExistingBlock(mesh.BlockID(888), 3, nil)
 	block9 := mesh.NewExistingBlock(mesh.BlockID(999), 4, nil)
 	block10 := mesh.NewExistingBlock(mesh.BlockID(101), 4, nil)
-	syncObj1.layers.AddLayer(mesh.NewExistingLayer(0, []*mesh.Block{block1, block2}))
-	syncObj1.layers.AddLayer(mesh.NewExistingLayer(1, []*mesh.Block{block3, block4}))
-	syncObj1.layers.AddLayer(mesh.NewExistingLayer(2, []*mesh.Block{block5, block6}))
-	syncObj1.layers.AddLayer(mesh.NewExistingLayer(3, []*mesh.Block{block7, block8}))
-	syncObj1.layers.AddLayer(mesh.NewExistingLayer(4, []*mesh.Block{block9, block10}))
+	syncObj1.AddLayer(mesh.NewExistingLayer(0, []*mesh.Block{block1, block2}))
+	syncObj1.AddLayer(mesh.NewExistingLayer(1, []*mesh.Block{block3, block4}))
+	syncObj1.AddLayer(mesh.NewExistingLayer(2, []*mesh.Block{block5, block6}))
+	syncObj1.AddLayer(mesh.NewExistingLayer(3, []*mesh.Block{block7, block8}))
+	syncObj1.AddLayer(mesh.NewExistingLayer(4, []*mesh.Block{block9, block10}))
 
 	timeout := time.After(10 * time.Second)
-	syncObj2.layers.SetLatestKnownLayer(5)
+	syncObj2.SetLatestKnownLayer(5)
 	syncObj1.Start()
 	syncObj2.Start()
 
@@ -242,7 +242,7 @@ loop:
 			t.Error("timed out ")
 			return
 		default:
-			if syncObj2.layers.LatestIrreversible() == 3 {
+			if syncObj2.LatestIrreversible() == 3 {
 				t.Log("done!")
 				break loop
 			}
@@ -272,10 +272,10 @@ func TestSyncProtocol_SyncMultipleNodes(t *testing.T) {
 	n2 := nodes[1]
 	n4 := nodes[3]
 
-	syncObj1.peers = getPeersMock([]Peer{n2.PublicKey()})
-	syncObj2.peers = getPeersMock([]Peer{n1.PublicKey()})
-	syncObj3.peers = getPeersMock([]Peer{n1.PublicKey(), n2.PublicKey(), n4.PublicKey()})
-	syncObj4.peers = getPeersMock([]Peer{n1.PublicKey(), n2.PublicKey()})
+	syncObj1.Peers = getPeersMock([]Peer{n2.PublicKey()})
+	syncObj2.Peers = getPeersMock([]Peer{n1.PublicKey()})
+	syncObj3.Peers = getPeersMock([]Peer{n1.PublicKey(), n2.PublicKey(), n4.PublicKey()})
+	syncObj4.Peers = getPeersMock([]Peer{n1.PublicKey(), n2.PublicKey()})
 
 	block1 := mesh.NewExistingBlock(mesh.BlockID(111), 0, nil)
 	block2 := mesh.NewExistingBlock(mesh.BlockID(222), 0, nil)
@@ -288,17 +288,17 @@ func TestSyncProtocol_SyncMultipleNodes(t *testing.T) {
 	block9 := mesh.NewExistingBlock(mesh.BlockID(999), 4, nil)
 	block10 := mesh.NewExistingBlock(mesh.BlockID(101), 4, nil)
 
-	syncObj1.layers.AddLayer(mesh.NewExistingLayer(0, []*mesh.Block{block1, block2}))
-	syncObj1.layers.AddLayer(mesh.NewExistingLayer(1, []*mesh.Block{block3, block4}))
-	syncObj1.layers.AddLayer(mesh.NewExistingLayer(2, []*mesh.Block{block5, block6}))
-	syncObj1.layers.AddLayer(mesh.NewExistingLayer(3, []*mesh.Block{block7, block8}))
-	syncObj1.layers.AddLayer(mesh.NewExistingLayer(4, []*mesh.Block{block9, block10}))
+	syncObj1.AddLayer(mesh.NewExistingLayer(0, []*mesh.Block{block1, block2}))
+	syncObj1.AddLayer(mesh.NewExistingLayer(1, []*mesh.Block{block3, block4}))
+	syncObj1.AddLayer(mesh.NewExistingLayer(2, []*mesh.Block{block5, block6}))
+	syncObj1.AddLayer(mesh.NewExistingLayer(3, []*mesh.Block{block7, block8}))
+	syncObj1.AddLayer(mesh.NewExistingLayer(4, []*mesh.Block{block9, block10}))
 
-	syncObj2.layers.SetLatestKnownLayer(5)
+	syncObj2.SetLatestKnownLayer(5)
 	syncObj2.Start()
-	syncObj3.layers.SetLatestKnownLayer(5)
+	syncObj3.SetLatestKnownLayer(5)
 	syncObj3.Start()
-	syncObj4.layers.SetLatestKnownLayer(5)
+	syncObj4.SetLatestKnownLayer(5)
 	syncObj4.Start()
 
 	// Keep trying until we're timed out or got a result or got an error
@@ -311,7 +311,7 @@ loop:
 		case <-timeout:
 			t.Error("timed out ")
 		default:
-			if syncObj2.layers.LatestIrreversible() == 3 && syncObj3.layers.LatestIrreversible() == 3 {
+			if syncObj2.LatestIrreversible() == 3 && syncObj3.LatestIrreversible() == 3 {
 				t.Log("done!")
 				break loop
 			}
@@ -371,14 +371,14 @@ func (sis *SyncIntegrationSuite) TestSyncProtocol_TwoNodes() {
 	defer syncObj1.Close()
 	syncObj2 := sis.syncers[1]
 	defer syncObj2.Close()
-	syncObj1.layers.AddLayer(mesh.NewExistingLayer(0, []*mesh.Block{block1, block2}))
-	syncObj1.layers.AddLayer(mesh.NewExistingLayer(1, []*mesh.Block{block3, block4}))
-	syncObj1.layers.AddLayer(mesh.NewExistingLayer(2, []*mesh.Block{block5, block6}))
-	syncObj1.layers.AddLayer(mesh.NewExistingLayer(3, []*mesh.Block{block7, block8}))
-	syncObj1.layers.AddLayer(mesh.NewExistingLayer(4, []*mesh.Block{block9, block10}))
+	syncObj1.AddLayer(mesh.NewExistingLayer(0, []*mesh.Block{block1, block2}))
+	syncObj1.AddLayer(mesh.NewExistingLayer(1, []*mesh.Block{block3, block4}))
+	syncObj1.AddLayer(mesh.NewExistingLayer(2, []*mesh.Block{block5, block6}))
+	syncObj1.AddLayer(mesh.NewExistingLayer(3, []*mesh.Block{block7, block8}))
+	syncObj1.AddLayer(mesh.NewExistingLayer(4, []*mesh.Block{block9, block10}))
 
 	timeout := time.After(60 * time.Second)
-	syncObj2.layers.SetLatestKnownLayer(5)
+	syncObj2.SetLatestKnownLayer(5)
 	syncObj1.Start()
 	syncObj2.Start()
 
@@ -391,7 +391,7 @@ loop:
 			t.Error("timed out ")
 			return
 		default:
-			if syncObj2.layers.LatestIrreversible() == 3 {
+			if syncObj2.LatestIrreversible() == 3 {
 				t.Log("done!")
 				break loop
 			}
@@ -431,24 +431,24 @@ func (sis *SyncIntegrationSuite) TestSyncProtocol_MultipleNodes() {
 	syncObj6 := sis.syncers[5]
 	defer syncObj6.Close()
 
-	syncObj1.layers.AddLayer(mesh.NewExistingLayer(1, []*mesh.Block{block1, block2}))
-	syncObj1.layers.AddLayer(mesh.NewExistingLayer(2, []*mesh.Block{block3, block4}))
-	syncObj1.layers.AddLayer(mesh.NewExistingLayer(3, []*mesh.Block{block5, block6}))
-	syncObj1.layers.AddLayer(mesh.NewExistingLayer(4, []*mesh.Block{block7, block8}))
-	syncObj1.layers.AddLayer(mesh.NewExistingLayer(5, []*mesh.Block{block9, block10}))
+	syncObj1.AddLayer(mesh.NewExistingLayer(1, []*mesh.Block{block1, block2}))
+	syncObj1.AddLayer(mesh.NewExistingLayer(2, []*mesh.Block{block3, block4}))
+	syncObj1.AddLayer(mesh.NewExistingLayer(3, []*mesh.Block{block5, block6}))
+	syncObj1.AddLayer(mesh.NewExistingLayer(4, []*mesh.Block{block7, block8}))
+	syncObj1.AddLayer(mesh.NewExistingLayer(5, []*mesh.Block{block9, block10}))
 
-	syncObj3.layers.AddLayer(mesh.NewExistingLayer(1, []*mesh.Block{block1, block2}))
-	syncObj3.layers.AddLayer(mesh.NewExistingLayer(2, []*mesh.Block{block3, block4}))
-	syncObj3.layers.AddLayer(mesh.NewExistingLayer(3, []*mesh.Block{block5, block6}))
-	syncObj3.layers.AddLayer(mesh.NewExistingLayer(4, []*mesh.Block{block7, block8}))
-	syncObj3.layers.AddLayer(mesh.NewExistingLayer(5, []*mesh.Block{block9, block10}))
+	syncObj3.AddLayer(mesh.NewExistingLayer(1, []*mesh.Block{block1, block2}))
+	syncObj3.AddLayer(mesh.NewExistingLayer(2, []*mesh.Block{block3, block4}))
+	syncObj3.AddLayer(mesh.NewExistingLayer(3, []*mesh.Block{block5, block6}))
+	syncObj3.AddLayer(mesh.NewExistingLayer(4, []*mesh.Block{block7, block8}))
+	syncObj3.AddLayer(mesh.NewExistingLayer(5, []*mesh.Block{block9, block10}))
 
 	timeout := time.After(2 * 60 * time.Second)
-	syncObj2.layers.SetLatestKnownLayer(5)
-	syncObj3.layers.SetLatestKnownLayer(5)
-	syncObj4.layers.SetLatestKnownLayer(5)
-	syncObj5.layers.SetLatestKnownLayer(5)
-	syncObj6.layers.SetLatestKnownLayer(5)
+	syncObj2.SetLatestKnownLayer(5)
+	syncObj3.SetLatestKnownLayer(5)
+	syncObj4.SetLatestKnownLayer(5)
+	syncObj5.SetLatestKnownLayer(5)
+	syncObj6.SetLatestKnownLayer(5)
 
 	syncObj1.Start()
 	syncObj2.Start()
@@ -457,12 +457,12 @@ func (sis *SyncIntegrationSuite) TestSyncProtocol_MultipleNodes() {
 	syncObj5.Start()
 	syncObj6.Start()
 
-	defer log.Debug("sync 1 ", syncObj1.layers.LatestIrreversible())
-	defer log.Debug("sync 2 ", syncObj2.layers.LatestIrreversible())
-	defer log.Debug("sync 3 ", syncObj3.layers.LatestIrreversible())
-	defer log.Debug("sync 4 ", syncObj4.layers.LatestIrreversible())
-	defer log.Debug("sync 5 ", syncObj5.layers.LatestIrreversible())
-	defer log.Debug("sync 6 ", syncObj6.layers.LatestIrreversible())
+	defer log.Debug("sync 1 ", syncObj1.LatestIrreversible())
+	defer log.Debug("sync 2 ", syncObj2.LatestIrreversible())
+	defer log.Debug("sync 3 ", syncObj3.LatestIrreversible())
+	defer log.Debug("sync 4 ", syncObj4.LatestIrreversible())
+	defer log.Debug("sync 5 ", syncObj5.LatestIrreversible())
+	defer log.Debug("sync 6 ", syncObj6.LatestIrreversible())
 	// Keep trying until we're timed out or got a result or got an error
 	for {
 		select {
@@ -471,7 +471,7 @@ func (sis *SyncIntegrationSuite) TestSyncProtocol_MultipleNodes() {
 			t.Error("timed out ")
 			return
 		default:
-			if syncObj2.layers.LatestIrreversible() == 3 {
+			if syncObj2.LatestIrreversible() == 3 {
 				t.Log("done!")
 				return
 			}
