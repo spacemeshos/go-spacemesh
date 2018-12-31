@@ -7,14 +7,14 @@ import (
 )
 
 type PreRoundTracker struct {
-	preRound  map[string]*pb.HareMessage // maps PubKey->Pre-Round msg (unique)
-	tracker   *RefCountTracker           // keeps track of seen values
-	threshold uint32                     // the threshold to prove a single value
+	preRound  map[string]struct{} // maps PubKey->Pre-Round msg (unique)
+	tracker   *RefCountTracker    // keeps track of seen values
+	threshold uint32              // the threshold to prove a single value
 }
 
 func NewPreRoundTracker(threshold int, expectedSize int) *PreRoundTracker {
 	pre := &PreRoundTracker{}
-	pre.preRound = make(map[string]*pb.HareMessage, expectedSize)
+	pre.preRound = make(map[string]struct{}, expectedSize)
 	pre.tracker = NewRefCountTracker(expectedSize)
 	pre.threshold = uint32(threshold)
 
@@ -39,7 +39,7 @@ func (pre *PreRoundTracker) OnPreRound(msg *pb.HareMessage) {
 		pre.tracker.Track(v)
 	}
 
-	pre.preRound[pub.String()] = msg
+	pre.preRound[pub.String()] = struct{}{}
 }
 
 func (pre *PreRoundTracker) CanProveValue(value Value) bool {

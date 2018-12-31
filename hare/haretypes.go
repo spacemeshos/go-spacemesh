@@ -48,6 +48,7 @@ func (b32 Bytes32) Bytes() []byte {
 	return b32[:]
 }
 
+// Represents a unique set of values
 type Set struct {
 	values    map[uint32]Value
 	id        uint32

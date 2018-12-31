@@ -110,12 +110,12 @@ func TestConsensusProcess_DoesMatchRound(t *testing.T) {
 	pub := generatePubKey(t)
 	cp := generateConsensusProcess(t)
 
-	msgs := make([]*pb.HareMessage, 5, 5)
-	msgs[0] = BuildPreRoundMsg(pub, s)
-	msgs[1] = BuildStatusMsg(pub, s)
-	msgs[2] = BuildProposalMsg(pub, s)
-	msgs[3] = BuildCommitMsg(pub, s)
-	msgs[4] = BuildNotifyMsg(pub, s)
+	msgType := make([]MessageType, 5, 5)
+	msgType[0] = PreRound
+	msgType[1] = Status
+	msgType[2] = Proposal
+	msgType[3] = Commit
+	msgType[4] = Notify
 
 	rounds := make([][4]bool, 5) // index=round
 	rounds[0] = [4]bool{true, true, true, true}
@@ -124,9 +124,12 @@ func TestConsensusProcess_DoesMatchRound(t *testing.T) {
 	rounds[3] = [4]bool{false, false, true, false}
 	rounds[4] = [4]bool{true, true, true, true}
 
-	for j := 0; j < len(msgs); j++ {
+	for j := 0; j < len(msgType); j++ {
 		for i := 0; i < 4; i++ {
-			assert.Equal(t, rounds[j][i], cp.isContextuallyValid(msgs[j]))
+			builder := NewMessageBuilder()
+			builder.SetType(msgType[j]).SetInstanceId(*instanceId1).SetRoundCounter(cp.k).SetKi(ki).SetValues(s)
+			builder = builder.SetPubKey(pub).Sign(NewMockSigning())
+			assert.Equal(t, rounds[j][i], cp.isContextuallyValid(builder.Build()))
 			cp.advanceToNextRound()
 		}
 	}

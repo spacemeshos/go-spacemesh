@@ -37,11 +37,11 @@ func TestPreRoundTracker_OnPreRound(t *testing.T) {
 	tracker.OnPreRound(m1)
 	assert.Equal(t, 1, len(tracker.preRound))      // one msg
 	assert.Equal(t, 2, len(tracker.tracker.table)) // two values
-	m1 = tracker.preRound[pubKey.String()]
+	_, exist1 := tracker.preRound[pubKey.String()]
 	m2 := BuildPreRoundMsg(pubKey, s)
 	tracker.OnPreRound(m2)
-	m2 = tracker.preRound[pubKey.String()]
-	assert.Equal(t, m1, m2) // same pub --> same msg
+	_, exist2 := tracker.preRound[pubKey.String()]
+	assert.Equal(t, exist1, exist2) // same pub --> same msg
 }
 
 func TestPreRoundTracker_CanProveValueAndSet(t *testing.T) {

@@ -146,7 +146,7 @@ PreRound:
 
 // verifies the message is contextually valid
 func (proc *ConsensusProcess) isContextuallyValid(m *pb.HareMessage) bool {
-	isSameIteration := iterationFromCounter(proc.k) != iterationFromCounter(m.Message.K)
+	isSameIteration := iterationFromCounter(proc.k) == iterationFromCounter(m.Message.K)
 	currentRound := proc.currentRound()
 	switch MessageType(m.Message.Type) {
 	case PreRound:
@@ -154,7 +154,7 @@ func (proc *ConsensusProcess) isContextuallyValid(m *pb.HareMessage) bool {
 	case Status:
 		return isSameIteration && currentRound == Round1
 	case Proposal:
-		return isSameIteration && currentRound == Round2 || currentRound == Round3
+		return isSameIteration && (currentRound == Round2 || currentRound == Round3)
 	case Commit:
 		return isSameIteration && currentRound == Round3
 	case Notify:
@@ -167,6 +167,10 @@ func (proc *ConsensusProcess) isContextuallyValid(m *pb.HareMessage) bool {
 
 // verifies the message is syntactically valid
 func isSyntacticallyValid(m *pb.HareMessage) bool {
+	if m.PubKey == nil || m.Message == nil || m.Message.Values == nil {
+		return false
+	}
+
 	claimedRound := m.Message.K % 4
 
 	switch MessageType(m.Message.Type) {
@@ -406,6 +410,8 @@ func (proc *ConsensusProcess) buildNotifyMessage() *pb.HareMessage {
 }
 
 func (proc *ConsensusProcess) processPreRoundMsg(msg *pb.HareMessage) {
+	// check set
+	// check pubkey
 	proc.preRoundTracker.OnPreRound(msg)
 }
 
@@ -416,19 +422,80 @@ func (proc *ConsensusProcess) processStatusMsg(msg *pb.HareMessage) {
 	}
 }
 
-func (proc *ConsensusProcess) validateProposal(m *pb.HareMessage) bool {
-	// build union
+// validate proposal for type A of the proposal (where ki=-1)
+func (proc *ConsensusProcess) validateProposalTypeA(m *pb.HareMessage) bool {
+	s := NewSet(m.Message.Values)
+
 	unionSet := NewEmptySet(proc.cfg.SetSize)
-	for _, m := range m.Message.Svp.Messages {
-		for _, buff := range m.Message.Values {
+	for _, status := range m.Message.Svp.Messages {
+		// check same iteration
+		isSameIteration := iterationFromCounter(proc.k) == iterationFromCounter(status.Message.K)
+		if !isSameIteration {
+			return false
+		}
+
+		// build union
+		for _, buff := range status.Message.Values {
 			bid := Value{NewBytes32(buff)}
 			unionSet.Add(bid) // assuming add is unique
 		}
 	}
 
-	s := NewSet(m.Message.Values)
 	if !unionSet.Equals(s) { // s should be the union of all statuses
 		return false
+	}
+
+	return true
+}
+
+// validate proposal for type B of the proposal (where ki>=0)
+func (proc *ConsensusProcess) validateProposalTypeB(m *pb.HareMessage) bool {
+	maxKi := int32(-1)
+	var maxRawSet [][]byte = nil
+
+	for _, status := range m.Message.Svp.Messages {
+		// check same iteration
+		isSameIteration := iterationFromCounter(proc.k) == iterationFromCounter(status.Message.K)
+		if !isSameIteration {
+			return false
+		}
+
+		if status.Message.Ki >= maxKi {
+			maxKi = status.Message.Ki
+			maxRawSet = status.Message.Values
+		}
+	}
+
+	// at least one ki >= 0
+	if maxKi == -1 {
+		return false
+	}
+
+	// max set should be equal to the claimed set
+	s := NewSet(m.Message.Values)
+	maxSet := NewSet(maxRawSet)
+	if !s.Equals(maxSet) {
+		return false
+	}
+
+	return true
+}
+
+func (proc *ConsensusProcess) validateProposal(msg *pb.HareMessage) bool {
+	if msg.Message.Ki == -1 { // A type
+		if !proc.validateProposalTypeA(msg) {
+			return false
+		}
+	} else if !proc.validateProposalTypeB(msg) { // B type
+		return false
+	}
+	
+	// validate statuses values are provable
+	for _, status := range msg.Message.Svp.Messages {
+		s := NewSet(status.Message.Values)
+		if !proc.preRoundTracker.CanProveSet(s) {
+			return false
+		}
 	}
 
 	return true
