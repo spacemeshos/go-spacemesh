@@ -18,7 +18,7 @@ type BlockListener struct {
 	mesh.Mesh
 	BlockValidator
 	bufferSize   int
-	workers      chan struct{}     //semaphore
+	semaphore    chan struct{}
 	unknownQueue chan mesh.BlockID //todo consider benefits of changing to stack
 	startLock    uint32
 	timeout      time.Duration
@@ -46,7 +46,7 @@ func NewBlockListener(net server.Service, bv BlockValidator, layers mesh.Mesh, t
 		Mesh:           layers,
 		Peers:          NewPeers(net),
 		MessageServer:  server.NewMsgServer(net, blockProtocol, timeout),
-		workers:        make(chan struct{}, concurrency),
+		semaphore:      make(chan struct{}, concurrency),
 		unknownQueue:   make(chan mesh.BlockID, 200), //todo tune buffer size + get buffer from config
 		exit:           make(chan struct{})}
 	bl.RegisterMsgHandler(BLOCK, newBlockRequestHandler(layers))
@@ -57,13 +57,13 @@ func (bl *BlockListener) run() {
 	for {
 		select {
 		case <-bl.exit:
-			log.Debug("run stoped")
+			log.Info("run stoped")
 			return
 		case id := <-bl.unknownQueue:
 			log.Debug("fetch block ", id, "buffer is at ", len(bl.unknownQueue)/cap(bl.unknownQueue), " capacity")
-			bl.workers <- struct{}{}
+			bl.semaphore <- struct{}{}
 			go func() {
-				defer func() { <-bl.workers }()
+				defer func() { <-bl.semaphore }()
 				bl.FetchBlock(id)
 			}()
 		}
@@ -73,14 +73,11 @@ func (bl *BlockListener) run() {
 //todo handle case where no peer knows the block
 func (bl *BlockListener) FetchBlock(id mesh.BlockID) {
 	for _, p := range bl.GetPeers() {
-		ch, err := sendBlockRequest(bl.MessageServer, p, id)
-		if err == nil {
-			if b := <-ch; b != nil {
-				if bl.ValidateBlock(b) {
-					bl.AddBlock(b)
-					//add all child blocks to unknown queue
-					bl.addUnknownToQueue(b)
-				}
+		if ch, err := sendBlockRequest(bl.MessageServer, p, id); err == nil {
+			if b := <-ch; b != nil && bl.ValidateBlock(b) {
+				bl.AddBlock(b)
+				bl.addUnknownToQueue(b) //add all child blocks to unknown queue
+				return
 			}
 		}
 	}
