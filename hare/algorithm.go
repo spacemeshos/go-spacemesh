@@ -215,7 +215,19 @@ func (proc *ConsensusProcess) validateCertificate(m *pb.HareMessage) bool {
 	// validate type, k and set
 	k := msgs[0].Message.K
 	s := NewSet(m.Message.Values)
+	senders := make(map[string]struct{}, proc.cfg.N)
 	for _, msg := range msgs {
+		// validate unique sender
+		pub, err := crypto.NewPublicKey(msg.PubKey)
+		if err != nil {
+			log.Warning("Could not construct public key: ", err.Error())
+			return false
+		}
+		if _, exist := senders[pub.String()]; exist { // pub already exist
+			return false
+		}
+		senders[pub.String()] = struct{}{} // mark sender as exist
+
 		// validate commit type
 		if MessageType(msg.Message.Type) != Commit {
 			return false
@@ -252,15 +264,15 @@ func roleFromRoundCounter(k int32) Role {
 func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
 	// Note: instanceId is already verified by the broker
 
-	// validate context
-	if !proc.isContextuallyValid(m) {
-		log.Info("Message is not contextual valid")
-		return
-	}
-
 	// validate syntactically valid
 	if !isSyntacticallyValid(m) {
 		log.Info("Message is not syntactically valid")
+		return
+	}
+
+	// validate context
+	if !proc.isContextuallyValid(m) {
+		log.Info("Message is not contextual valid")
 		return
 	}
 
@@ -343,11 +355,13 @@ func (proc *ConsensusProcess) beginRound1() {
 
 func (proc *ConsensusProcess) beginRound2() {
 	if proc.role == Leader && proc.statusesTracker.IsSVPReady() {
-		builder := proc.initDefaultBuilder(proc.statusesTracker.BuildUnionSet(proc.cfg.SetSize))
+		builder := proc.initDefaultBuilder(proc.statusesTracker.ProposalSet(proc.cfg.SetSize))
 		svp := proc.statusesTracker.BuildSVP()
 		if svp != nil {
 			roundMsg := builder.SetType(Proposal).SetSVP(svp).Sign(proc.signing).Build()
 			proc.sendMessage(roundMsg)
+		} else {
+			log.Error("Failed to build SVP (nil) after verifying SVP is ready ")
 		}
 	}
 
@@ -425,15 +439,8 @@ func (proc *ConsensusProcess) processStatusMsg(msg *pb.HareMessage) {
 // validate proposal for type A of the proposal (where ki=-1)
 func (proc *ConsensusProcess) validateProposalTypeA(m *pb.HareMessage) bool {
 	s := NewSet(m.Message.Values)
-
 	unionSet := NewEmptySet(proc.cfg.SetSize)
 	for _, status := range m.Message.Svp.Messages {
-		// check same iteration
-		isSameIteration := iterationFromCounter(proc.k) == iterationFromCounter(status.Message.K)
-		if !isSameIteration {
-			return false
-		}
-
 		// build union
 		for _, buff := range status.Message.Values {
 			bid := Value{NewBytes32(buff)}
@@ -449,28 +456,7 @@ func (proc *ConsensusProcess) validateProposalTypeA(m *pb.HareMessage) bool {
 }
 
 // validate proposal for type B of the proposal (where ki>=0)
-func (proc *ConsensusProcess) validateProposalTypeB(m *pb.HareMessage) bool {
-	maxKi := int32(-1)
-	var maxRawSet [][]byte = nil
-
-	for _, status := range m.Message.Svp.Messages {
-		// check same iteration
-		isSameIteration := iterationFromCounter(proc.k) == iterationFromCounter(status.Message.K)
-		if !isSameIteration {
-			return false
-		}
-
-		if status.Message.Ki >= maxKi {
-			maxKi = status.Message.Ki
-			maxRawSet = status.Message.Values
-		}
-	}
-
-	// at least one ki >= 0
-	if maxKi == -1 {
-		return false
-	}
-
+func (proc *ConsensusProcess) validateProposalTypeB(m *pb.HareMessage, maxRawSet [][]byte) bool {
 	// max set should be equal to the claimed set
 	s := NewSet(m.Message.Values)
 	maxSet := NewSet(maxRawSet)
@@ -482,20 +468,34 @@ func (proc *ConsensusProcess) validateProposalTypeB(m *pb.HareMessage) bool {
 }
 
 func (proc *ConsensusProcess) validateProposal(msg *pb.HareMessage) bool {
-	if msg.Message.Ki == -1 { // A type
-		if !proc.validateProposalTypeA(msg) {
+	maxKi := int32(-1) // ki>=-1
+	var maxRawSet [][]byte = nil
+	for _, status := range msg.Message.Svp.Messages {
+		// check same iteration
+		isSameIteration := iterationFromCounter(proc.k) == iterationFromCounter(status.Message.K)
+		if !isSameIteration {
 			return false
 		}
-	} else if !proc.validateProposalTypeB(msg) { // B type
-		return false
-	}
-	
-	// validate statuses values are provable
-	for _, status := range msg.Message.Svp.Messages {
+
+		// validate statuses values are provable
 		s := NewSet(status.Message.Values)
 		if !proc.preRoundTracker.CanProveSet(s) {
 			return false
 		}
+
+		// track max
+		if status.Message.Ki >= maxKi {
+			maxKi = status.Message.Ki
+			maxRawSet = status.Message.Values
+		}
+	}
+
+	if maxKi == -1 { // A type
+		if !proc.validateProposalTypeA(msg) {
+			return false
+		}
+	} else if !proc.validateProposalTypeB(msg, maxRawSet) { // B type
+		return false
 	}
 
 	return true

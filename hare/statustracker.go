@@ -9,12 +9,16 @@ import (
 type StatusTracker struct {
 	statuses  map[string]*pb.HareMessage // maps PubKey->StatusMsg
 	threshold int                        // threshold to indicate a set can be proved
+	maxKi     int32                      // tracks max ki in tracked status messages
+	maxRawSet [][]byte                   // tracks the max raw set in the tracked status messages
 }
 
 func NewStatusTracker(threshold int, expectedSize int) *StatusTracker {
 	st := &StatusTracker{}
 	st.statuses = make(map[string]*pb.HareMessage, expectedSize)
 	st.threshold = threshold
+	st.maxKi = -1 // since ki>=-1
+	st.maxRawSet = nil
 
 	return st
 }
@@ -37,6 +41,12 @@ func (st *StatusTracker) RecordStatus(msg *pb.HareMessage) {
 		return
 	}
 
+	// track max ki & matching raw set
+	if msg.Message.Ki >= st.maxKi {
+		st.maxKi = msg.Message.Ki
+		st.maxRawSet = msg.Message.Values
+	}
+
 	st.statuses[pub.String()] = msg
 }
 
@@ -44,8 +54,20 @@ func (st *StatusTracker) IsSVPReady() bool {
 	return len(st.statuses) == st.threshold
 }
 
+func (st *StatusTracker) ProposalSet(expectedSize int) *Set {
+	if st.maxKi == -1 {
+		return st.buildUnionSet(expectedSize)
+	}
+
+	if st.maxRawSet == nil { // should be impossible to reach
+		panic("maxRawSet is unexpectedly nil")
+	}
+
+	return NewSet(st.maxRawSet)
+}
+
 // Returns the union set of all status messages collected
-func (st *StatusTracker) BuildUnionSet(expectedSize int) *Set {
+func (st *StatusTracker) buildUnionSet(expectedSize int) *Set {
 	unionSet := NewEmptySet(expectedSize)
 	for _, m := range st.statuses {
 		for _, buff := range m.Message.Values {
@@ -58,7 +80,7 @@ func (st *StatusTracker) BuildUnionSet(expectedSize int) *Set {
 }
 
 func (st *StatusTracker) BuildSVP() *pb.AggregatedMessages {
-	if !st.IsSVPReady(){
+	if !st.IsSVPReady() {
 		return nil
 	}
 
