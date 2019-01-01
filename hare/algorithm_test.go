@@ -138,7 +138,6 @@ func TestConsensusProcess_DoesMatchRound(t *testing.T) {
 func TestConsensusProcess_ValidateCertificate(t *testing.T) {
 	proc := generateConsensusProcess(t)
 	m := &pb.HareMessage{}
-	assert.False(t, proc.validateCertificate(nil))
 	assert.False(t, proc.validateCertificate(m))
 }
 

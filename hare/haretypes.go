@@ -1,6 +1,8 @@
 package hare
 
 import (
+	"bytes"
+	"fmt"
 	"hash/fnv"
 	"sort"
 )
@@ -30,6 +32,23 @@ const (
 	Round3 = 2
 	Round4 = 3
 )
+
+func (mType MessageType) String() string {
+	switch mType {
+	case Status:
+		return "Status"
+	case Proposal:
+		return "Proposal"
+	case Commit:
+		return "Commit"
+	case Notify:
+		return "Notify"
+	case PreRound:
+		return "PreRound"
+	default:
+		return "Unknown message type"
+	}
+}
 
 func NewBytes32(buff []byte) Bytes32 {
 	x := Bytes32{}
@@ -149,4 +168,12 @@ func (s *Set) Id() uint32 {
 	}
 
 	return s.id
+}
+
+func (s *Set) String() string {
+	b := new(bytes.Buffer)
+	for k, v := range s.values {
+		fmt.Fprintf(b, "%v=\"%s\"\n", k, v)
+	}
+	return b.String()
 }

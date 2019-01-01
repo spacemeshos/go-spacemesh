@@ -167,7 +167,7 @@ func (proc *ConsensusProcess) isContextuallyValid(m *pb.HareMessage) bool {
 
 // verifies the message is syntactically valid
 func isSyntacticallyValid(m *pb.HareMessage) bool {
-	if m.PubKey == nil || m.Message == nil || m.Message.Values == nil {
+	if m == nil || m.PubKey == nil || m.Message == nil || m.Message.Values == nil {
 		return false
 	}
 
@@ -191,58 +191,65 @@ func isSyntacticallyValid(m *pb.HareMessage) bool {
 }
 
 func (proc *ConsensusProcess) validateCertificate(m *pb.HareMessage) bool {
-	if m == nil {
-		return false
-	}
-
 	if m.Cert == nil {
+		log.Warning("Certificate is nil")
 		return false
 	}
 
 	if m.Cert.AggMsgs == nil {
+		log.Warning("Certificate aggregated struct is nil")
 		return false
 	}
 
 	msgs := m.Cert.AggMsgs.Messages
 	if msgs == nil {
+		log.Warning("Certificate aggregated struct messages array is nil")
 		return false
 	}
 
 	if len(msgs) != proc.cfg.F+1 { // must include exactly f+1 commit messages
+		log.Warning("Number of messages does not match. expected: %v actual: %v", proc.cfg.F+1, len(msgs))
 		return false
 	}
 
-	// validate type, k and set
+	// validate same set
+	msgSet := NewSet(m.Message.Values)
+	certSet := NewSet(m.Cert.Values)
+	if !msgSet.Equals(certSet) {
+		return false
+	}
+
+	// validate commit messages
 	k := msgs[0].Message.K
-	s := NewSet(m.Message.Values)
 	senders := make(map[string]struct{}, proc.cfg.N)
-	for _, msg := range msgs {
+	for _, commit := range msgs {
 		// validate unique sender
-		pub, err := crypto.NewPublicKey(msg.PubKey)
+		pub, err := crypto.NewPublicKey(commit.PubKey)
 		if err != nil {
-			log.Warning("Could not construct public key: ", err.Error())
+			log.Warning("Certificate validation failed: could not construct public key: ", err.Error())
 			return false
 		}
 		if _, exist := senders[pub.String()]; exist { // pub already exist
+			log.Warning("Certificate validation failed: detected same pubKey for different messages")
 			return false
 		}
 		senders[pub.String()] = struct{}{} // mark sender as exist
 
 		// validate commit type
-		if MessageType(msg.Message.Type) != Commit {
+		mType := MessageType(commit.Message.Type)
+		if mType != Commit {
+			log.Warning("Certificate validation failed: expected commit type. actual: ", mType.String())
 			return false
 		}
 
 		// validate same k
-		if msg.Message.K != k {
+		if commit.Message.K != k {
+			log.Warning("Certificate validation failed: not same k. Expected: %v Actual: %v", k, commit.Message.K)
 			return false
 		}
 
-		// validate same set
-		g := NewSet(msg.Message.Values)
-		if !s.Equals(g) {
-			return false
-		}
+		// set values back to the assumed set
+		commit.Message.Values = certSet.To2DSlice()
 	}
 
 	// TODO: validate agg sig
@@ -454,6 +461,7 @@ func (proc *ConsensusProcess) validateProposalTypeA(m *pb.HareMessage) bool {
 	}
 
 	if !unionSet.Equals(s) { // s should be the union of all statuses
+		log.Warning("Proposal type A validation failed: not a union. Expected: %v Actual: %v", s, unionSet)
 		return false
 	}
 
@@ -466,6 +474,7 @@ func (proc *ConsensusProcess) validateProposalTypeB(m *pb.HareMessage, maxRawSet
 	s := NewSet(m.Message.Values)
 	maxSet := NewSet(maxRawSet)
 	if !s.Equals(maxSet) {
+		log.Warning("Proposal type B validation failed: max set not equal to proposed set. Expected: %v Actual: %v", s, maxSet)
 		return false
 	}
 
@@ -474,14 +483,18 @@ func (proc *ConsensusProcess) validateProposalTypeB(m *pb.HareMessage, maxRawSet
 
 func (proc *ConsensusProcess) validateProposal(msg *pb.HareMessage) bool {
 	if msg.Message.Svp == nil { // must contain SVP
+		log.Warning("Proposal validation failed: SVP is nil")
 		return false
 	}
 
 	if msg.Message.Svp.Messages == nil { // must contain status messages
+		log.Warning("Proposal validation failed: statuses in SVP is nil")
 		return false
 	}
 
 	if len(msg.Message.Svp.Messages) != proc.cfg.F+1 { // must include exactly f+1 statuses
+		log.Warning("Proposal validation failed: number of statuses does not match. Expected: %v Actual: %v",
+					proc.cfg.F+1, len(msg.Message.Svp.Messages))
 		return false
 	}
 
@@ -489,19 +502,23 @@ func (proc *ConsensusProcess) validateProposal(msg *pb.HareMessage) bool {
 	var maxRawSet [][]byte = nil
 	for _, status := range msg.Message.Svp.Messages {
 		// check same iteration
-		isSameIteration := iterationFromCounter(proc.k) == iterationFromCounter(status.Message.K)
-		if !isSameIteration {
+		ourIter := iterationFromCounter(proc.k)
+		statusIter := iterationFromCounter(status.Message.K)
+		if ourIter != statusIter { // not same iteration
+			log.Warning("Proposal validation failed: not same iteration. Expected: %v Actual: %v",
+						ourIter, statusIter)
 			return false
 		}
 
 		// validate statuses values are provable
 		s := NewSet(status.Message.Values)
 		if !proc.preRoundTracker.CanProveSet(s) {
+			log.Warning("Proposal validation failed: cannot prove set: %v", s)
 			return false
 		}
 
 		// track max
-		if status.Message.Ki >= maxKi {
+		if status.Message.Ki > maxKi {
 			maxKi = status.Message.Ki
 			maxRawSet = status.Message.Values
 		}
@@ -546,18 +563,21 @@ func (proc *ConsensusProcess) processNotifyMsg(msg *pb.HareMessage) {
 	}
 
 	s := NewSet(msg.Message.Values)
-	// we assume that the expression was checked on handleMessage
-	if msg.Cert.AggMsgs.Messages[0].Message.Ki >= proc.ki {
-		proc.s = s
-		proc.certificate = msg.Cert
-		proc.ki = msg.Message.Ki
+	if proc.currentRound() == Round4 { // not necessary to update otherwise
+		// update state
+		if msg.Cert.AggMsgs.Messages[0].Message.Ki >= proc.ki { // we assume that the expression was checked before
+			proc.s = s
+			proc.certificate = msg.Cert
+			proc.ki = msg.Message.Ki
+		}
 	}
 
 	if proc.notifyTracker.NotificationsCount(s) < proc.cfg.F+1 { // not enough
 		return
 	}
-	
+
 	// enough notifications, should terminate
+	log.Info("Consensus process terminated for %v with output set: ", proc.pubKey, proc.s)
 	proc.terminating = true // ensures immediate termination
 	proc.Close()
 }

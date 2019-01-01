@@ -70,9 +70,12 @@ func (ct *CommitTracker) BuildCertificate() *pb.Certificate {
 	c.Values = ct.proposedSet.To2DSlice()
 	c.AggMsgs.Messages = ct.commits
 
-	// TODO: set c.AggMsgs.AggSig
+	// optimize msg size by setting values to nil
+	for _, commit := range c.AggMsgs.Messages {
+		commit.Message.Values = nil
+	}
 
-	// TODO: optimize msg size by setting values to nil
+	// TODO: set c.AggMsgs.AggSig
 
 	return c
 }
