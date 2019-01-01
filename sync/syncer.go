@@ -130,7 +130,7 @@ func (s *Syncer) maxSyncLayer() uint32 {
 
 func (s *Syncer) Synchronise() {
 	for i := s.LatestIrreversible(); i < s.maxSyncLayer(); i++ {
-		blockIds, err := s.getLayerBlockIDs(mesh.LayerID(i)) //returns a set of all known blocks in the mesh
+		blockIds, err := s.getLayerBlockIDs(mesh.LayerID(i + 1)) //returns a set of all known blocks in the mesh
 		if err != nil {
 			log.Error("could not get layer block ids: ", err)
 			log.Debug("synchronise failed, local layer index is ", s.LatestIrreversible())
