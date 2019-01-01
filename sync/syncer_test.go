@@ -11,7 +11,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/stretchr/testify/assert"
-	"gopkg.in/op/go-logging.v1"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -29,7 +28,7 @@ func SyncFactory(t testing.TB, bootNodes int, networkSize int, randomConnections
 	beforeHook := func(net server.Service) {
 		newname := fmt.Sprintf("%s_%d", name, i)
 		l := log.New(newname, "", "")
-		sync := NewSync(net, getMesh(newname), BlockValidatorMock{}, config, *l.Logger)
+		sync := NewSync(net, getMesh(newname), BlockValidatorMock{}, config, l)
 		fmt.Println("create sync obj number ", i, " ", newname)
 		nodes = append(nodes, sync)
 		i++
@@ -45,7 +44,7 @@ func SyncMockFactory(number int, conf Configuration, name string) (syncs []*Sync
 	sim := service.NewSimulator()
 	for i := 0; i < number; i++ {
 		net := sim.NewNode()
-		l := *log.New("sync", "", "").Logger
+		l := log.New("sync", "", "")
 		sync := NewSync(net, getMesh(name+"_"+time.Now().String()), BlockValidatorMock{}, conf, l)
 		nodes = append(nodes, sync)
 		p2ps = append(p2ps, net)
@@ -65,7 +64,7 @@ func getMesh(id string) mesh.Mesh {
 	bdb := database.NewLevelDbStore("blocks_test_"+id, nil, nil)
 	ldb := database.NewLevelDbStore("layers_test_"+id, nil, nil)
 	cv := database.NewLevelDbStore("contextually_valid_test_"+id, nil, nil)
-	layers := mesh.NewMesh(ldb, bdb, cv, logging.Logger{Module: id})
+	layers := mesh.NewMesh(ldb, bdb, cv, log.New(id, "", ""))
 	return layers
 }
 
@@ -111,7 +110,7 @@ func TestSyncProtocol_BlockRequest(t *testing.T) {
 	lid := mesh.LayerID(1)
 	block := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), lid, []byte("data data data"))
 	syncObj.AddLayer(mesh.NewExistingLayer(lid, []*mesh.Block{block}))
-	ch, err := sendBlockRequest(syncObj2.MessageServer, nodes[0].Node.PublicKey(), block.ID(), syncObj.Logger)
+	ch, err := sendBlockRequest(syncObj2.MessageServer, nodes[0].Node.PublicKey(), block.ID(), syncObj.Log)
 	a := <-ch
 	assert.NoError(t, err, "Should not return error")
 	assert.Equal(t, a.ID(), block.ID(), "wrong block")
@@ -188,7 +187,7 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	assert.NoError(t, err, "Should not return error")
 	assert.Equal(t, "some hash representing the layer", string(hash.hash), "wrong block")
 
-	ch2, err2 := sendBlockRequest(syncObj2.MessageServer, n1.PublicKey(), block1.ID(), syncObj2.Logger)
+	ch2, err2 := sendBlockRequest(syncObj2.MessageServer, n1.PublicKey(), block1.ID(), syncObj2.Log)
 	assert.NoError(t, err2, "Should not return error")
 	msg2 := <-ch2
 	assert.Equal(t, msg2.ID(), block1.ID(), "wrong block")
@@ -197,7 +196,7 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	assert.NoError(t, err, "Should not return error")
 	assert.Equal(t, "some hash representing the layer", string(hash.hash), "wrong block")
 
-	ch2, err2 = sendBlockRequest(syncObj2.MessageServer, n1.PublicKey(), block2.ID(), syncObj2.Logger)
+	ch2, err2 = sendBlockRequest(syncObj2.MessageServer, n1.PublicKey(), block2.ID(), syncObj2.Log)
 	assert.NoError(t, err2, "Should not return error")
 	msg2 = <-ch2
 	assert.Equal(t, msg2.ID(), block2.ID(), "wrong block")
@@ -206,7 +205,7 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	assert.NoError(t, err, "Should not return error")
 	assert.Equal(t, "some hash representing the layer", string(hash.hash), "wrong block")
 
-	ch2, err2 = sendBlockRequest(syncObj2.MessageServer, n1.PublicKey(), block3.ID(), syncObj2.Logger)
+	ch2, err2 = sendBlockRequest(syncObj2.MessageServer, n1.PublicKey(), block3.ID(), syncObj2.Log)
 	assert.NoError(t, err2, "Should not return error")
 	msg2 = <-ch2
 	assert.Equal(t, msg2.ID(), block3.ID(), "wrong block")

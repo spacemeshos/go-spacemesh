@@ -3,8 +3,8 @@ package server
 import (
 	"container/list"
 	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"gopkg.in/op/go-logging.v1"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -28,7 +28,7 @@ type Item struct {
 }
 
 type MessageServer struct {
-	logging.Logger
+	log.Log
 	ReqId              uint64 //request id
 	name               string //server name
 	network            Service
@@ -42,9 +42,9 @@ type MessageServer struct {
 	exit               chan struct{}
 }
 
-func NewMsgServer(network Service, name string, requestLifetime time.Duration, logger logging.Logger) *MessageServer {
+func NewMsgServer(network Service, name string, requestLifetime time.Duration, logger log.Log) *MessageServer {
 	p := &MessageServer{
-		Logger:             logger,
+		Log:                logger,
 		name:               name,
 		resHandlers:        make(map[uint64]func(msg []byte)),
 		pendingQueue:       list.New(),

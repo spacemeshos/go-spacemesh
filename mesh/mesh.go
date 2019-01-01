@@ -3,7 +3,7 @@ package mesh
 import (
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/database"
-	"gopkg.in/op/go-logging.v1"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"sync"
 	"sync/atomic"
 )
@@ -24,7 +24,7 @@ type Mesh interface {
 }
 
 type mesh struct {
-	logging.Logger
+	log.Log
 	latestIrreversible uint32
 	latestLayer        uint32
 	mDB                *meshDB
@@ -34,10 +34,10 @@ type mesh struct {
 	tortoise           Algorithm
 }
 
-func NewMesh(layers database.DB, blocks database.DB, validity database.DB, logger logging.Logger) Mesh {
+func NewMesh(layers database.DB, blocks database.DB, validity database.DB, logger log.Log) Mesh {
 	//todo add boot from disk
 	ll := &mesh{
-		Logger:   logger,
+		Log:      logger,
 		tortoise: NewAlgorithm(uint32(layerSize), uint32(cachedLayers)),
 		mDB:      NewMeshDb(layers, blocks, validity),
 	}

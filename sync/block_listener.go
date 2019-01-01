@@ -1,9 +1,9 @@
 package sync
 
 import (
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
-	"gopkg.in/op/go-logging.v1"
 	"sync/atomic"
 	"time"
 )
@@ -17,7 +17,7 @@ type BlockListener struct {
 	Peers
 	mesh.Mesh
 	BlockValidator
-	logging.Logger
+	log.Log
 	bufferSize   int
 	semaphore    chan struct{}
 	unknownQueue chan mesh.BlockID //todo consider benefits of changing to stack
@@ -41,13 +41,13 @@ func (bl *BlockListener) OnNewBlock(b *mesh.Block) {
 	bl.addUnknownToQueue(b)
 }
 
-func NewBlockListener(net server.Service, bv BlockValidator, layers mesh.Mesh, timeout time.Duration, concurrency int, logger logging.Logger) *BlockListener {
+func NewBlockListener(net server.Service, bv BlockValidator, layers mesh.Mesh, timeout time.Duration, concurrency int, logger log.Log) *BlockListener {
 	bl := BlockListener{
 		BlockValidator: bv,
 		Mesh:           layers,
 		Peers:          NewPeers(net),
 		MessageServer:  server.NewMsgServer(net, blockProtocol, timeout, logger),
-		Logger:         logger,
+		Log:            logger,
 		semaphore:      make(chan struct{}, concurrency),
 		unknownQueue:   make(chan mesh.BlockID, 200), //todo tune buffer size + get buffer from config
 		exit:           make(chan struct{})}
@@ -75,7 +75,7 @@ func (bl *BlockListener) run() {
 //todo handle case where no peer knows the block
 func (bl *BlockListener) FetchBlock(id mesh.BlockID) {
 	for _, p := range bl.GetPeers() {
-		if ch, err := sendBlockRequest(bl.MessageServer, p, id, bl.Logger); err == nil {
+		if ch, err := sendBlockRequest(bl.MessageServer, p, id, bl.Log); err == nil {
 			if b := <-ch; b != nil && bl.ValidateBlock(b) {
 				bl.AddBlock(b)
 				bl.addUnknownToQueue(b) //add all child blocks to unknown queue

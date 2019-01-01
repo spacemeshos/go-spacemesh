@@ -7,7 +7,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/sync/pb"
-	"gopkg.in/op/go-logging.v1"
 	"sync/atomic"
 	"time"
 )
@@ -29,7 +28,7 @@ type Syncer struct {
 	mesh.Mesh
 	BlockValidator //todo should not be here
 	Configuration
-	logging.Logger
+	log.Log
 	*server.MessageServer
 	SyncLock  uint32
 	startLock uint32
@@ -99,11 +98,11 @@ func (s *Syncer) run() {
 }
 
 //fires a sync every sm.syncInterval or on force space from outside
-func NewSync(srv server.Service, layers mesh.Mesh, bv BlockValidator, conf Configuration, logger logging.Logger) *Syncer {
+func NewSync(srv server.Service, layers mesh.Mesh, bv BlockValidator, conf Configuration, logger log.Log) *Syncer {
 	s := Syncer{
 		BlockValidator: bv,
 		Configuration:  conf,
-		Logger:         logger,
+		Log:            logger,
 		Mesh:           layers,
 		Peers:          NewPeers(srv),
 		MessageServer:  server.NewMsgServer(srv, syncProtocol, conf.requestTimeout-time.Millisecond*30, logger),
@@ -145,7 +144,7 @@ func (s *Syncer) Synchronise() {
 			go func() {
 				for id := range blockIds {
 					for _, p := range s.GetPeers() {
-						if bCh, err := sendBlockRequest(s.MessageServer, p, mesh.BlockID(id), s.Logger); err == nil {
+						if bCh, err := sendBlockRequest(s.MessageServer, p, mesh.BlockID(id), s.Log); err == nil {
 							b := <-bCh
 							if b != nil && s.ValidateBlock(b) { //some validation testing
 								output <- b
@@ -180,7 +179,7 @@ type peerHashPair struct {
 	hash []byte
 }
 
-func sendBlockRequest(msgServ *server.MessageServer, peer Peer, id mesh.BlockID, logger logging.Logger) (chan *mesh.Block, error) {
+func sendBlockRequest(msgServ *server.MessageServer, peer Peer, id mesh.BlockID, logger log.Log) (chan *mesh.Block, error) {
 	logger.Debug("send block request Peer: ", peer, " id: ", id)
 	data := &pb.FetchBlockReq{Id: uint32(id)}
 	payload, err := proto.Marshal(data)
@@ -348,7 +347,7 @@ func (s *Syncer) sendLayerIDsRequest(peer Peer, idx mesh.LayerID, ch chan []uint
 	return ch, s.SendRequest(LAYER_IDS, payload, peer, foo)
 }
 
-func newBlockRequestHandler(layers mesh.Mesh, logger logging.Logger) func(msg []byte) []byte {
+func newBlockRequestHandler(layers mesh.Mesh, logger log.Log) func(msg []byte) []byte {
 	return func(msg []byte) []byte {
 		logger.Debug("handle block request")
 		req := &pb.FetchBlockReq{}
@@ -379,7 +378,7 @@ func newBlockRequestHandler(layers mesh.Mesh, logger logging.Logger) func(msg []
 	}
 }
 
-func newLayerHashRequestHandler(layers mesh.Mesh, logger logging.Logger) func(msg []byte) []byte {
+func newLayerHashRequestHandler(layers mesh.Mesh, logger log.Log) func(msg []byte) []byte {
 	return func(msg []byte) []byte {
 		req := &pb.LayerHashReq{}
 		err := proto.Unmarshal(msg, req)
@@ -403,7 +402,7 @@ func newLayerHashRequestHandler(layers mesh.Mesh, logger logging.Logger) func(ms
 	}
 }
 
-func newLayerIdsRequestHandler(layers mesh.Mesh, logger logging.Logger) func(msg []byte) []byte {
+func newLayerIdsRequestHandler(layers mesh.Mesh, logger log.Log) func(msg []byte) []byte {
 	return func(msg []byte) []byte {
 		req := &pb.LayerIdsReq{}
 		if err := proto.Unmarshal(msg, req); err != nil {

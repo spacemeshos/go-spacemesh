@@ -2,10 +2,10 @@ package sync
 
 import (
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"gopkg.in/op/go-logging.v1"
 	"testing"
 	"time"
 )
@@ -22,7 +22,7 @@ func (pm PeersMock) Close() {
 	return
 }
 func ListenerFactory(serv server.Service, peers Peers, name string) *BlockListener {
-	nbl := NewBlockListener(serv, BlockValidatorMock{}, getMesh("TestBlockListener_"+name), 1*time.Second, 2, logging.Logger{Module: name})
+	nbl := NewBlockListener(serv, BlockValidatorMock{}, getMesh("TestBlockListener_"+name), 1*time.Second, 2, log.New(name, "", ""))
 	nbl.Peers = peers //override peers with mock
 	return nbl
 }
