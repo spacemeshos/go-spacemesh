@@ -328,14 +328,19 @@ type SyncIntegrationSuite struct {
 	// add more params you need
 }
 
-func Test_SyncIntegrationSuite(t *testing.T) {
+
+type syncIntegrationTwoNodes struct {
+	SyncIntegrationSuite
+}
+
+func Test_TwoNodes_SyncIntegrationSuite(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
-	sis := new(SyncIntegrationSuite)
-	sis.BootstrappedNodeCount = 2
-	sis.NeighborsCount = 1
+	sis := &syncIntegrationTwoNodes{}
+	sis.BootstrappedNodeCount = 1
 	sis.BootstrapNodesCount = 1
+	sis.NeighborsCount = 1
 	sis.name = t.Name()
 	i := 1
 	sis.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
@@ -344,17 +349,10 @@ func Test_SyncIntegrationSuite(t *testing.T) {
 		sis.syncers = append(sis.syncers, sync)
 		i++
 	}
-
 	suite.Run(t, sis)
 }
 
-func (sis *SyncIntegrationSuite) SetupTest() {
-	for _, a := range sis.syncers {
-		a.Mesh = getMesh(fmt.Sprintf("%s_%s", sis.name, time.Now()))
-	}
-}
-
-func (sis *SyncIntegrationSuite) TestSyncProtocol_TwoNodes() {
+func (sis *syncIntegrationTwoNodes) TestSyncProtocol_TwoNodes() {
 	t := sis.T()
 	block1 := mesh.NewExistingBlock(mesh.BlockID(111), 1, nil)
 	block2 := mesh.NewExistingBlock(mesh.BlockID(222), 1, nil)
@@ -379,11 +377,9 @@ func (sis *SyncIntegrationSuite) TestSyncProtocol_TwoNodes() {
 
 	timeout := time.After(60 * time.Second)
 	syncObj2.SetLatestKnownLayer(5)
-	syncObj1.Start()
 	syncObj2.Start()
 
 	// Keep trying until we're timed out or got a result or got an error
-loop:
 	for {
 		select {
 		// Got a timeout! fail with a timeout error
@@ -393,15 +389,38 @@ loop:
 		default:
 			if syncObj2.LatestIrreversible() == 3 {
 				t.Log("done!")
-				break loop
+				return
 			}
 		}
 	}
 }
 
-func (sis *SyncIntegrationSuite) TestSyncProtocol_MultipleNodes() {
+type syncIntegrationMultipleNodes struct {
+	SyncIntegrationSuite
+}
+
+func Test_Multiple_SyncIntegrationSuite(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	sis := &syncIntegrationMultipleNodes{}
+	sis.BootstrappedNodeCount = 5
+	sis.BootstrapNodesCount = 1
+	sis.NeighborsCount = 5
+	sis.name = t.Name()
+	i := 1
+	sis.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
+		l := log.New(fmt.Sprintf("%s_%d", sis.name, i), "", "")
+		sync := NewSync(s, getMesh(fmt.Sprintf("%s_%s", sis.name, time.Now())), BlockValidatorMock{}, conf, *l.Logger)
+		sis.syncers = append(sis.syncers, sync)
+		i++
+	}
+	suite.Run(t, sis)
+}
+
+func (sis *syncIntegrationMultipleNodes) TestSyncProtocol_MultipleNodes() {
 	t := sis.T()
-	t.Skip()
+
 	block1 := mesh.NewExistingBlock(mesh.BlockID(111), 1, nil)
 	block2 := mesh.NewExistingBlock(mesh.BlockID(222), 1, nil)
 	block3 := mesh.NewExistingBlock(mesh.BlockID(333), 2, nil)

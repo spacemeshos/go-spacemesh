@@ -35,19 +35,25 @@ type IntegrationTestSuite struct {
 	Instances []*swarm
 }
 
-
 func (its *IntegrationTestSuite) SetupSuite() {
 	boot := make([]*swarm, its.BootstrapNodesCount)
 	swarm := make([]*swarm, its.BootstrappedNodeCount)
 
 	bootcfg := config.DefaultConfig()
 	bootcfg.SwarmConfig.Bootstrap = false
-	bootcfg.SwarmConfig.Gossip = false
+	bootcfg.SwarmConfig.Gossip = true
+	bootcfg.SwarmConfig.RandomConnections = its.NeighborsCount
 
 	// start boot
 	for i := 0; i < len(boot); i++ {
 		boot[i] = createP2pInstance(its.T(), bootcfg)
+		if its.BeforeHook != nil {
+			its.BeforeHook(i, boot[i])
+		}
 		boot[i].Start()
+		if its.AfterHook != nil {
+			its.AfterHook(i, boot[i])
+		}
 		testLog("BOOTNODE : %v", boot[i].LocalNode().String())
 	}
 
@@ -73,7 +79,10 @@ func (its *IntegrationTestSuite) SetupSuite() {
 				its.BeforeHook(i, swarm[i])
 			}
 			swarm[i].Start()
-			swarm[i].waitForBoot()
+			err := swarm[i].waitForBoot()
+			if err != nil {
+				its.Require().NoError(err)
+			}
 			if its.AfterHook != nil {
 				its.AfterHook(i, swarm[i])
 			}
