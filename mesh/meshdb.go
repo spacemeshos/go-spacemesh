@@ -79,8 +79,8 @@ func (m *meshDB) getBlock(id BlockID) (*Block, error) {
 }
 
 func (m *meshDB) getContextualValidity(id BlockID) (bool, error) {
-	//todo implement
-	return true, nil
+	b, err := m.contextualValidity.Get(id.ToBytes())
+	return b[0] == 1, err //bytes to bool
 }
 
 func (m *meshDB) setContextualValidity(id BlockID, valid bool) error {
@@ -153,10 +153,16 @@ func (m *meshDB) handleLayerBlocks(ll *layerHandler) {
 				log.Error("could not encode block")
 				continue
 			}
+			if b, err := m.blocks.Get(block.ID().ToBytes()); err == nil && b != nil {
+				log.Error("block ", block, " already in database ")
+				continue
+			}
+
 			if err := m.blocks.Put(block.ID().ToBytes(), bytes); err != nil {
 				log.Error("could not add block to ", block, " database ", err)
 				continue
 			}
+
 			m.updateLayerIds(block)
 			m.tryDeleteHandler(ll) //try delete handler when done to avoid leak
 		default:

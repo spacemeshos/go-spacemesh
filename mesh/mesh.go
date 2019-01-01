@@ -17,10 +17,9 @@ type Mesh interface {
 	GetBlock(id BlockID) (*Block, error)
 	AddBlock(block *Block) error
 	GetContextualValidity(id BlockID) (bool, error)
-	LatestIrreversible() uint32
-	LatestKnownLayer() uint32
-	SetLatestKnownLayer(idx uint32)
-
+	LatestLocalLayer() uint32
+	LatestLayer() uint32
+	SetLatestLayer(idx uint32)
 	Close()
 }
 
@@ -32,6 +31,8 @@ type mesh struct {
 	lkMutex            sync.RWMutex
 	lcMutex            sync.RWMutex
 	tortoise           Algorithm
+	orphanBlocks       map[BlockID]bool
+	orphMutex          sync.RWMutex
 }
 
 func NewMesh(layers database.DB, blocks database.DB, validity database.DB) Mesh {
@@ -48,17 +49,17 @@ func (m *mesh) IsContexuallyValid(b BlockID) bool {
 	return true
 }
 
-func (m *mesh) LatestIrreversible() uint32 {
+func (m *mesh) LatestLocalLayer() uint32 {
 	return atomic.LoadUint32(&m.latestIrreversible)
 }
 
-func (m *mesh) LatestKnownLayer() uint32 {
+func (m *mesh) LatestLayer() uint32 {
 	defer m.lkMutex.RUnlock()
 	m.lkMutex.RLock()
 	return m.latestLayer
 }
 
-func (m *mesh) SetLatestKnownLayer(idx uint32) {
+func (m *mesh) SetLatestLayer(idx uint32) {
 	defer m.lkMutex.Unlock()
 	m.lkMutex.Lock()
 	if idx > m.latestLayer {
@@ -70,7 +71,7 @@ func (m *mesh) SetLatestKnownLayer(idx uint32) {
 func (m *mesh) AddLayer(layer *Layer) error {
 	m.lMutex.Lock()
 	defer m.lMutex.Unlock()
-	count := LayerID(m.LatestIrreversible())
+	count := LayerID(m.LatestLocalLayer())
 	if count > layer.Index() {
 		log.Debug("can't add layer ", layer.Index(), "(already exists)")
 		return errors.New("can't add layer (already exists)")
@@ -84,7 +85,7 @@ func (m *mesh) AddLayer(layer *Layer) error {
 	m.mDB.addLayer(layer)
 	m.tortoise.HandleIncomingLayer(layer)
 	atomic.AddUint32(&m.latestIrreversible, 1)
-	m.SetLatestKnownLayer(uint32(layer.Index()))
+	m.SetLatestLayer(uint32(layer.Index()))
 	return nil
 }
 
@@ -105,9 +106,21 @@ func (m *mesh) AddBlock(block *Block) error {
 		log.Debug("failed to add block ", block.ID(), " ", err)
 		return err
 	}
-	m.SetLatestKnownLayer(uint32(block.Layer()))
+	m.SetLatestLayer(uint32(block.Layer()))
+	//new block add to orphans
+	m.HandleOrphans(block)
 	m.tortoise.HandleLateBlock(block) //todo should be thread safe?
 	return nil
+}
+
+//todo better thread safety
+func (m *mesh) HandleOrphans(block *Block) {
+	m.orphMutex.Lock()
+	defer m.orphMutex.Unlock()
+	m.orphanBlocks[block.ID()] = true
+	for b := range block.BlockVotes {
+		m.orphanBlocks[b] = false
+	}
 }
 
 func (m *mesh) GetBlock(id BlockID) (*Block, error) {

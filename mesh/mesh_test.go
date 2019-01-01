@@ -45,7 +45,7 @@ func TestLayers_AddLayer(t *testing.T) {
 	assert.True(t, err != nil, "error: ", err)
 	layers.AddLayer(NewExistingLayer(1, []*Block{block1, block2, block3}))
 	l, err = layers.GetLayer(id)
-	//assert.True(t, layers.LatestIrreversible() == 0, "wrong layer count")
+	//assert.True(t, layers.LatestLocalLayer() == 0, "wrong layer count")
 	assert.True(t, string(l.blocks[1].Data) == "data", "wrong block data ")
 }
 
@@ -92,23 +92,23 @@ func TestLayers_LocalLayerCount(t *testing.T) {
 	layers.AddLayer(NewExistingLayer(4, []*Block{block2}))
 	layers.AddLayer(NewExistingLayer(2, []*Block{block3}))
 	layers.AddLayer(NewExistingLayer(3, []*Block{block4}))
-	assert.True(t, layers.LatestIrreversible() == 3, "wrong layer count")
+	assert.True(t, layers.LatestLocalLayer() == 3, "wrong layer count")
 }
 
 func TestLayers_LatestKnownLayer(t *testing.T) {
 	layers := getMesh("t6")
 	defer layers.Close()
-	layers.SetLatestKnownLayer(3)
-	layers.SetLatestKnownLayer(7)
-	layers.SetLatestKnownLayer(10)
-	layers.SetLatestKnownLayer(1)
-	layers.SetLatestKnownLayer(2)
-	assert.True(t, layers.LatestKnownLayer() == 10, "wrong layer")
+	layers.SetLatestLayer(3)
+	layers.SetLatestLayer(7)
+	layers.SetLatestLayer(10)
+	layers.SetLatestLayer(1)
+	layers.SetLatestLayer(2)
+	assert.True(t, layers.LatestLayer() == 10, "wrong layer")
 }
 
 func TestLayers_WakeUp(t *testing.T) {
 	//layers := getMesh(make(chan Peer),  "t5")
 	//defer layers.Close()
-	//layers.SetLatestKnownLayer(10)
+	//layers.SetLatestLayer(10)
 	//assert.True(t, layers.LocalLayerCount() == 10, "wrong layer")
 }

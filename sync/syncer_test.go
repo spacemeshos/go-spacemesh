@@ -72,7 +72,7 @@ func TestSyncer_Start(t *testing.T) {
 	syncs, _ := SyncMockFactory(2, conf, "TestSyncer_Start_")
 	sync := syncs[0]
 	defer sync.Close()
-	sync.SetLatestKnownLayer(5)
+	sync.SetLatestLayer(5)
 	fmt.Println(sync.IsSynced())
 	sync.Start()
 	timeout := time.After(10 * time.Second)
@@ -248,7 +248,7 @@ func TestSyncProtocol_SyncTwoNodes(t *testing.T) {
 	syncObj1.AddLayer(mesh.NewExistingLayer(4, []*mesh.Block{block9, block10}))
 
 	timeout := time.After(10 * time.Second)
-	syncObj2.SetLatestKnownLayer(5)
+	syncObj2.SetLatestLayer(5)
 	syncObj1.Start()
 	syncObj2.Start()
 
@@ -261,7 +261,7 @@ loop:
 			t.Error("timed out ")
 			return
 		default:
-			if syncObj2.LatestIrreversible() == 3 {
+			if syncObj2.LatestLocalLayer() == 3 {
 				t.Log("done!")
 				break loop
 			}
@@ -313,11 +313,11 @@ func TestSyncProtocol_SyncMultipleNodes(t *testing.T) {
 	syncObj1.AddLayer(mesh.NewExistingLayer(3, []*mesh.Block{block7, block8}))
 	syncObj1.AddLayer(mesh.NewExistingLayer(4, []*mesh.Block{block9, block10}))
 
-	syncObj2.SetLatestKnownLayer(5)
+	syncObj2.SetLatestLayer(5)
 	syncObj2.Start()
-	syncObj3.SetLatestKnownLayer(5)
+	syncObj3.SetLatestLayer(5)
 	syncObj3.Start()
-	syncObj4.SetLatestKnownLayer(5)
+	syncObj4.SetLatestLayer(5)
 	syncObj4.Start()
 
 	// Keep trying until we're timed out or got a result or got an error
@@ -330,7 +330,7 @@ loop:
 		case <-timeout:
 			t.Error("timed out ")
 		default:
-			if syncObj2.LatestIrreversible() == 3 && syncObj3.LatestIrreversible() == 3 {
+			if syncObj2.LatestLocalLayer() == 3 && syncObj3.LatestLocalLayer() == 3 {
 				t.Log("done!")
 				break loop
 			}
@@ -364,7 +364,7 @@ func TestSyncProtocol_p2pIntegrationTwoNodes(t *testing.T) {
 	syncObj1.AddLayer(mesh.NewExistingLayer(4, []*mesh.Block{block9, block10}))
 
 	timeout := time.After(60 * time.Second)
-	syncObj2.SetLatestKnownLayer(5)
+	syncObj2.SetLatestLayer(5)
 	syncObj1.Start()
 	syncObj2.Start()
 
@@ -377,7 +377,7 @@ loop:
 			t.Error("timed out ")
 			return
 		default:
-			if syncObj2.LatestIrreversible() == 3 {
+			if syncObj2.LatestLocalLayer() == 3 {
 				t.Log("done!")
 				break loop
 			}
@@ -428,11 +428,11 @@ func TestSyncProtocol_p2pIntegrationMultipleNodes(t *testing.T) {
 	syncObj3.AddLayer(mesh.NewExistingLayer(5, []*mesh.Block{block9, block10}))
 
 	timeout := time.After(2 * 60 * time.Second)
-	syncObj2.SetLatestKnownLayer(5)
-	syncObj3.SetLatestKnownLayer(5)
-	syncObj4.SetLatestKnownLayer(5)
-	syncObj5.SetLatestKnownLayer(5)
-	syncObj6.SetLatestKnownLayer(5)
+	syncObj2.SetLatestLayer(5)
+	syncObj3.SetLatestLayer(5)
+	syncObj4.SetLatestLayer(5)
+	syncObj5.SetLatestLayer(5)
+	syncObj6.SetLatestLayer(5)
 
 	syncObj1.Start()
 	syncObj2.Start()
@@ -441,12 +441,12 @@ func TestSyncProtocol_p2pIntegrationMultipleNodes(t *testing.T) {
 	syncObj5.Start()
 	syncObj6.Start()
 
-	defer log.Debug("sync 1 ", syncObj1.LatestIrreversible())
-	defer log.Debug("sync 2 ", syncObj2.LatestIrreversible())
-	defer log.Debug("sync 3 ", syncObj3.LatestIrreversible())
-	defer log.Debug("sync 4 ", syncObj4.LatestIrreversible())
-	defer log.Debug("sync 5 ", syncObj5.LatestIrreversible())
-	defer log.Debug("sync 6 ", syncObj6.LatestIrreversible())
+	defer log.Debug("sync 1 ", syncObj1.LatestLocalLayer())
+	defer log.Debug("sync 2 ", syncObj2.LatestLocalLayer())
+	defer log.Debug("sync 3 ", syncObj3.LatestLocalLayer())
+	defer log.Debug("sync 4 ", syncObj4.LatestLocalLayer())
+	defer log.Debug("sync 5 ", syncObj5.LatestLocalLayer())
+	defer log.Debug("sync 6 ", syncObj6.LatestLocalLayer())
 	// Keep trying until we're timed out or got a result or got an error
 	for {
 		select {
@@ -455,7 +455,7 @@ func TestSyncProtocol_p2pIntegrationMultipleNodes(t *testing.T) {
 			t.Error("timed out ")
 			return
 		default:
-			if syncObj2.LatestIrreversible() == 3 {
+			if syncObj2.LatestLocalLayer() == 3 {
 				t.Log("done!")
 				return
 			}
