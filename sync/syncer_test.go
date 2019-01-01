@@ -328,7 +328,6 @@ type SyncIntegrationSuite struct {
 	// add more params you need
 }
 
-
 type syncIntegrationTwoNodes struct {
 	SyncIntegrationSuite
 }
@@ -450,7 +449,6 @@ func (sis *syncIntegrationMultipleNodes) TestSyncProtocol_MultipleNodes() {
 	syncObj1.AddLayer(mesh.NewExistingLayer(3, []*mesh.Block{block5, block6}))
 	syncObj1.AddLayer(mesh.NewExistingLayer(4, []*mesh.Block{block7, block8}))
 	syncObj1.AddLayer(mesh.NewExistingLayer(5, []*mesh.Block{block9, block10}))
-
 	syncObj3.AddLayer(mesh.NewExistingLayer(1, []*mesh.Block{block1, block2}))
 	syncObj3.AddLayer(mesh.NewExistingLayer(2, []*mesh.Block{block3, block4}))
 	syncObj3.AddLayer(mesh.NewExistingLayer(3, []*mesh.Block{block5, block6}))
@@ -471,24 +469,26 @@ func (sis *syncIntegrationMultipleNodes) TestSyncProtocol_MultipleNodes() {
 	syncObj5.Start()
 	syncObj6.Start()
 
-	defer log.Debug("sync 1 ", syncObj1.LatestIrreversible())
-	defer log.Debug("sync 2 ", syncObj2.LatestIrreversible())
-	defer log.Debug("sync 3 ", syncObj3.LatestIrreversible())
-	defer log.Debug("sync 4 ", syncObj4.LatestIrreversible())
-	defer log.Debug("sync 5 ", syncObj5.LatestIrreversible())
-	defer log.Debug("sync 6 ", syncObj6.LatestIrreversible())
 	// Keep trying until we're timed out or got a result or got an error
 	for {
 		select {
 		// Got a timeout! fail with a timeout error
 		case <-timeout:
 			t.Error("timed out ")
-			return
+			goto end
 		default:
-			if syncObj2.LatestIrreversible() == 3 {
+			if syncObj2.LatestIrreversible() == 3 || syncObj4.LatestIrreversible() == 3 {
 				t.Log("done!")
-				return
+				goto end
 			}
 		}
 	}
+end:
+	log.Debug("sync 1 ", syncObj1.LatestIrreversible())
+	log.Debug("sync 2 ", syncObj2.LatestIrreversible())
+	log.Debug("sync 3 ", syncObj3.LatestIrreversible())
+	log.Debug("sync 4 ", syncObj4.LatestIrreversible())
+	log.Debug("sync 5 ", syncObj5.LatestIrreversible())
+	log.Debug("sync 6 ", syncObj6.LatestIrreversible())
+	return
 }
