@@ -556,17 +556,8 @@ func (proc *ConsensusProcess) processNotifyMsg(msg *pb.HareMessage) {
 	if proc.notifyTracker.NotificationsCount(s) < proc.cfg.F+1 { // not enough
 		return
 	}
-
-	// enough notifications, should broadcast & terminate
-	notifyMsg := proc.buildNotifyMessage()
-	data, err := proto.Marshal(notifyMsg)
-	if err != nil {
-		panic("Could not marshal notify message")
-	}
-	err = proc.network.Broadcast(ProtoName, data)
-	if err != nil {
-		log.Error("Failed broadcasting last notify message ", err.Error())
-	}
+	
+	// enough notifications, should terminate
 	proc.terminating = true // ensures immediate termination
 	proc.Close()
 }
