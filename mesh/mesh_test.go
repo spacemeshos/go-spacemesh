@@ -2,23 +2,23 @@ package mesh
 
 import (
 	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/stretchr/testify/assert"
-	"gopkg.in/op/go-logging.v1"
 	"testing"
 	"time"
 )
 
-func getMesh(id string, logger logging.Logger) Mesh {
+func getMesh(id string) Mesh {
 	bdb := database.NewLevelDbStore("blocks_test_"+id, nil, nil)
 	ldb := database.NewLevelDbStore("layers_test_"+id, nil, nil)
 	cdb := database.NewLevelDbStore("contextual_test_"+id, nil, nil)
-	layers := NewMesh(ldb, bdb, cdb, logger)
+	layers := NewMesh(ldb, bdb, cdb, log.New(id, "", ""))
 	return layers
 }
 
 func TestLayers_AddBlock(t *testing.T) {
 
-	layers := getMesh("t1", logging.Logger{Module: "t1"})
+	layers := getMesh("t1")
 	defer layers.Close()
 
 	block1 := NewBlock(true, []byte("data1"), time.Now(), 1)
@@ -36,7 +36,7 @@ func TestLayers_AddBlock(t *testing.T) {
 
 func TestLayers_AddLayer(t *testing.T) {
 
-	layers := getMesh("t2", logging.Logger{Module: "t2"})
+	layers := getMesh("t2")
 	defer layers.Close()
 	id := LayerID(1)
 	block1 := NewBlock(true, []byte("data"), time.Now(), id)
@@ -51,7 +51,7 @@ func TestLayers_AddLayer(t *testing.T) {
 }
 
 func TestLayers_AddWrongLayer(t *testing.T) {
-	layers := getMesh("t3", logging.Logger{Module: "t3"})
+	layers := getMesh("t3")
 	defer layers.Close()
 	block1 := NewBlock(true, nil, time.Now(), 1)
 	block2 := NewBlock(true, nil, time.Now(), 2)
@@ -68,7 +68,7 @@ func TestLayers_AddWrongLayer(t *testing.T) {
 }
 
 func TestLayers_GetLayer(t *testing.T) {
-	layers := getMesh("t4", logging.Logger{Module: "t4"})
+	layers := getMesh("t4")
 	defer layers.Close()
 	block1 := NewBlock(true, nil, time.Now(), 1)
 	block2 := NewBlock(true, nil, time.Now(), 1)
@@ -83,7 +83,7 @@ func TestLayers_GetLayer(t *testing.T) {
 }
 
 func TestLayers_LocalLayerCount(t *testing.T) {
-	layers := getMesh("t5", logging.Logger{Module: "t5"})
+	layers := getMesh("t5")
 	defer layers.Close()
 	block1 := NewBlock(true, nil, time.Now(), 1)
 	block2 := NewBlock(true, nil, time.Now(), 4)
@@ -97,7 +97,7 @@ func TestLayers_LocalLayerCount(t *testing.T) {
 }
 
 func TestLayers_LatestKnownLayer(t *testing.T) {
-	layers := getMesh("t6", logging.Logger{Module: "t6"})
+	layers := getMesh("t6")
 	defer layers.Close()
 	layers.SetLatestKnownLayer(3)
 	layers.SetLatestKnownLayer(7)
