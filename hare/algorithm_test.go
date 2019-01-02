@@ -104,36 +104,6 @@ func generateConsensusProcess(t *testing.T) *ConsensusProcess {
 	return NewConsensusProcess(cfg, generatePubKey(t), *instanceId1, *s, oracle, signing, n1)
 }
 
-func TestConsensusProcess_DoesMatchRound(t *testing.T) {
-	s := NewEmptySet(cfg.SetSize)
-	pub := generatePubKey(t)
-	cp := generateConsensusProcess(t)
-
-	msgType := make([]MessageType, 5, 5)
-	msgType[0] = PreRound
-	msgType[1] = Status
-	msgType[2] = Proposal
-	msgType[3] = Commit
-	msgType[4] = Notify
-
-	rounds := make([][4]bool, 5) // index=round
-	rounds[0] = [4]bool{true, true, true, true}
-	rounds[1] = [4]bool{true, false, false, false}
-	rounds[2] = [4]bool{false, true, true, false}
-	rounds[3] = [4]bool{false, false, true, false}
-	rounds[4] = [4]bool{true, true, true, true}
-
-	for j := 0; j < len(msgType); j++ {
-		for i := 0; i < 4; i++ {
-			builder := NewMessageBuilder()
-			builder.SetType(msgType[j]).SetInstanceId(*instanceId1).SetRoundCounter(cp.k).SetKi(ki).SetValues(s)
-			builder = builder.SetPubKey(pub).Sign(NewMockSigning())
-			assert.Equal(t, rounds[j][i], cp.isContextuallyValid(builder.Build()))
-			cp.advanceToNextRound()
-		}
-	}
-}
-
 func TestConsensusProcess_Id(t *testing.T) {
 	proc := generateConsensusProcess(t)
 	proc.instanceId = *instanceId1

@@ -7,7 +7,7 @@ import (
 )
 
 func defaultValidator() *MessageValidator {
-	return NewMessageValidator(lowThresh10, lowDefaultSize)
+	return NewMessageValidator(NewMockSigning(), lowThresh10, lowDefaultSize)
 }
 
 func TestMessageValidator_CommitStatus(t *testing.T) {
@@ -39,15 +39,15 @@ func TestMessageValidator_ValidateCertificate(t *testing.T) {
 
 func TestMessageValidator_IsSyntacticallyValid(t *testing.T) {
 	validator := defaultValidator()
-	assert.False(t, validator.IsSyntacticallyValid(nil))
+	assert.False(t, validator.isSyntacticallyValid(nil))
 	m := &pb.HareMessage{}
-	assert.False(t, validator.IsSyntacticallyValid(m))
+	assert.False(t, validator.isSyntacticallyValid(m))
 	m.PubKey = generatePubKey(t).Bytes()
-	assert.False(t, validator.IsSyntacticallyValid(m))
+	assert.False(t, validator.isSyntacticallyValid(m))
 	m.Message = &pb.InnerMessage{}
-	assert.False(t, validator.IsSyntacticallyValid(m))
+	assert.False(t, validator.isSyntacticallyValid(m))
 	m.Message.Values = NewEmptySet(validator.defaultSize).To2DSlice()
-	assert.True(t, validator.IsSyntacticallyValid(m))
+	assert.True(t, validator.isSyntacticallyValid(m))
 }
 
 func TestMessageValidator_Aggregated(t *testing.T) {
@@ -66,4 +66,32 @@ func TestMessageValidator_Aggregated(t *testing.T) {
 	funcs = make([]func(m *pb.HareMessage)bool, 1)
 	funcs[0] = func(m *pb.HareMessage) bool {return false}
 	assert.False(t, validator.validateAggregatedMessage(agg, funcs))
+}
+
+func TestConsensusProcess_isContextuallyValid(t *testing.T) {
+	s := NewEmptySet(cfg.SetSize)
+	pub := generatePubKey(t)
+	cp := generateConsensusProcess(t)
+
+	msgType := make([]MessageType, 4, 4)
+	msgType[0] = Status
+	msgType[1] = Proposal
+	msgType[2] = Commit
+	msgType[3] = Notify
+
+	rounds := make([][4]bool, 4) // index=round
+	rounds[0] = [4]bool{true, false, false, false}
+	rounds[1] = [4]bool{false, true, true, false}
+	rounds[2] = [4]bool{false, false, true, false}
+	rounds[3] = [4]bool{true, true, true, true}
+
+	for j := 0; j < len(msgType); j++ {
+		for i := 0; i < 4; i++ {
+			builder := NewMessageBuilder()
+			builder.SetType(msgType[j]).SetInstanceId(*instanceId1).SetRoundCounter(cp.k).SetKi(ki).SetValues(s)
+			builder = builder.SetPubKey(pub).Sign(NewMockSigning())
+			assert.Equal(t, rounds[j][i], isContextuallyValid(builder.Build(), cp.k))
+			cp.advanceToNextRound()
+		}
+	}
 }

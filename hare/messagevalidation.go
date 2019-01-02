@@ -1,26 +1,70 @@
 package hare
 
 import (
+	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 type MessageValidator struct {
+	signing     Signing
 	threshold   int
 	defaultSize int
 }
 
-func NewMessageValidator(threshold int, defaultSize int) *MessageValidator {
-	return &MessageValidator{threshold, defaultSize}
+func NewMessageValidator(signing Signing, threshold int, defaultSize int) *MessageValidator {
+	return &MessageValidator{signing, threshold, defaultSize}
 }
 
-func (validator *MessageValidator) validateNotify(m *pb.HareMessage) bool {
-	return validator.validateCertificate(m.Cert)
+func (validator *MessageValidator) ValidateMessage(m *pb.HareMessage, k uint32) bool {
+	if !validator.isSyntacticallyValid(m) {
+		log.Warning("Validate message failed: message is not syntactically valid")
+		return false
+	}
+
+	// validate context
+	if !isContextuallyValid(m, k) {
+		log.Info("Validate message failed: message is not contextual valid")
+		return false
+	}
+
+	data, err := proto.Marshal(m.Message)
+	if err != nil {
+		log.Error("Validate message failed: failed marshaling inner message")
+		return false
+	}
+
+	// validate signature
+	if !validator.signing.Validate(data, m.InnerSig) {
+		log.Warning("Validate message failed: invalid message signature detected")
+		return false
+	}
+
+	return true
+}
+
+// verifies the message is contextually valid
+func isContextuallyValid(m *pb.HareMessage, k uint32) bool {
+	isSameIteration := iterationFromCounter(k) == iterationFromCounter(m.Message.K)
+	currentRound := k % 4
+	switch MessageType(m.Message.Type) {
+	case Status:
+		return isSameIteration && currentRound == Round1
+	case Proposal:
+		return isSameIteration && (currentRound == Round2 || currentRound == Round3)
+	case Commit:
+		return isSameIteration && currentRound == Round3
+	case Notify:
+		return true
+	default:
+		log.Error("Unknown message type encountered during contextual validation: ", m.Message.Type)
+		return false
+	}
 }
 
 // verifies the message is syntactically valid
-func (validator *MessageValidator) IsSyntacticallyValid(m *pb.HareMessage) bool {
+func (validator *MessageValidator) isSyntacticallyValid(m *pb.HareMessage) bool {
 	if m == nil || m.PubKey == nil || m.Message == nil || m.Message.Values == nil {
 		log.Warning("Syntax validation failed: nil identified")
 		return false
@@ -33,11 +77,11 @@ func (validator *MessageValidator) IsSyntacticallyValid(m *pb.HareMessage) bool 
 	case Status:
 		return claimedRound == Round1
 	case Proposal:
-		return claimedRound == Round2 && validator.validateProposal(m)
+		return claimedRound == Round2 && validator.validateSVP(m)
 	case Commit:
 		return claimedRound == Round3
 	case Notify:
-		return validator.validateNotify(m)
+		return validator.validateCertificate(m.Cert)
 	default:
 		log.Error("Unknown message type encountered during syntactic validator: ", m.Message.Type)
 		return false
@@ -66,11 +110,12 @@ func (validator *MessageValidator) validateAggregatedMessage(aggMsg *pb.Aggregat
 		return false
 	}
 
+	// TODO: refill values in commit on certificate
 	// TODO: validate agg sig
 
 	senders := make(map[string]struct{}, validator.defaultSize)
 	for _, innerMsg := range aggMsg.Messages {
-		if !validator.IsSyntacticallyValid(innerMsg) {
+		if !validator.isSyntacticallyValid(innerMsg) {
 			log.Warning("Aggregated validation failed: identified an invalid inner message")
 			return false
 		}
@@ -99,13 +144,13 @@ func (validator *MessageValidator) validateAggregatedMessage(aggMsg *pb.Aggregat
 	return true
 }
 
-func (validator *MessageValidator) validateProposal(msg *pb.HareMessage) bool {
+func (validator *MessageValidator) validateSVP(msg *pb.HareMessage) bool {
 	validateSameIteration := func(m *pb.HareMessage) bool {
-		ourIter := iterationFromCounter(msg.Message.K)
+		proposalIter := iterationFromCounter(msg.Message.K)
 		statusIter := iterationFromCounter(m.Message.K)
-		if ourIter != statusIter { // not same iteration
+		if proposalIter != statusIter { // not same iteration
 			log.Warning("Proposal validation failed: not same iteration. Expected: %v Actual: %v",
-				ourIter, statusIter)
+				proposalIter, statusIter)
 			return false
 		}
 
@@ -133,7 +178,7 @@ func (validator *MessageValidator) validateProposal(msg *pb.HareMessage) bool {
 			return false
 		}
 	} else {
-		if !validator.validateSVPTypeB(msg, maxRawSet) { // type B
+		if !validator.validateSVPTypeB(msg, maxRawSet, maxKi) { // type B
 			log.Warning("Proposal validation failed: type B validation failed")
 			return false
 		}
@@ -187,9 +232,15 @@ func validateSVPTypeA(m *pb.HareMessage) bool {
 }
 
 // validate SVP for type B (where ki>=0)
-func (validator *MessageValidator) validateSVPTypeB(msg *pb.HareMessage, maxRawSet [][]byte) bool {
+func (validator *MessageValidator) validateSVPTypeB(msg *pb.HareMessage, maxRawSet [][]byte, maxKi int32) bool {
 	if !validator.validateCertificate(msg.Cert) {
 		log.Warning("Proposal validation failed: failed to validate certificate")
+		return false
+	}
+
+	// cert should have same k as max ki
+	if msg.Message.K != uint32(maxKi) { // cast is safe since maxKi>=0
+		log.Warning("Proposal type B validation failed: Certificate should have k=maxKi")
 		return false
 	}
 

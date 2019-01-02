@@ -61,7 +61,7 @@ func NewConsensusProcess(cfg config.Config, key crypto.PublicKey, instanceId Ins
 	proc.signing = signing
 	proc.network = p2p
 	proc.role = Passive
-	proc.validator = NewMessageValidator(cfg.F+1, cfg.N)
+	proc.validator = NewMessageValidator(signing, cfg.F+1, cfg.N)
 	proc.preRoundTracker = NewPreRoundTracker(cfg.F+1, cfg.N)
 	proc.statusesTracker = NewStatusTracker(cfg.F+1, cfg.N)
 	proc.proposalTracker = NewProposalTracker(cfg.N)
@@ -146,27 +146,6 @@ PreRound:
 	}
 }
 
-// verifies the message is contextually valid
-func (proc *ConsensusProcess) isContextuallyValid(m *pb.HareMessage) bool {
-	isSameIteration := iterationFromCounter(proc.k) == iterationFromCounter(m.Message.K)
-	currentRound := proc.currentRound()
-	switch MessageType(m.Message.Type) {
-	case PreRound:
-		return true
-	case Status:
-		return isSameIteration && currentRound == Round1
-	case Proposal:
-		return isSameIteration && (currentRound == Round2 || currentRound == Round3)
-	case Commit:
-		return isSameIteration && currentRound == Round3
-	case Notify:
-		return true
-	default:
-		log.Error("Unknown message type encountered during contextual validation: ", m.Message.Type)
-		return false
-	}
-}
-
 func roleFromRoundCounter(k uint32) Role {
 	switch k % 4 {
 	case Round2:
@@ -182,32 +161,14 @@ func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
 	// Note: instanceId is already verified by the broker
 
 	// validate syntactically valid
-	if !proc.validator.IsSyntacticallyValid(m) {
+	if !proc.validator.ValidateMessage(m, proc.k) {
 		log.Info("Message is not syntactically valid")
-		return
-	}
-
-	// validate context
-	if !proc.isContextuallyValid(m) {
-		log.Info("Message is not contextual valid")
 		return
 	}
 
 	// validate role
 	if proc.oracle.Role(Signature(m.Message.RoleProof)) == roleFromRoundCounter(m.Message.K) {
 		log.Warning("invalid role detected for: ", m.String())
-		return
-	}
-
-	data, err := proto.Marshal(m.Message)
-	if err != nil {
-		log.Error("Failed marshaling inner message")
-		return
-	}
-
-	// validate signature
-	if !proc.signing.Validate(data, m.InnerSig) {
-		log.Warning("invalid message signature detected")
 		return
 	}
 
