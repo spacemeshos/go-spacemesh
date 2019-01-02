@@ -112,3 +112,25 @@ func TestLayers_WakeUp(t *testing.T) {
 	//layers.SetLatestLayer(10)
 	//assert.True(t, layers.LocalLayerCount() == 10, "wrong layer")
 }
+
+func TestLayers_OrphanBlocks(t *testing.T) {
+	layers := getMesh("t6")
+	defer layers.Close()
+	block1 := NewBlock(true, nil, time.Now(), 1)
+	block2 := NewBlock(true, nil, time.Now(), 1)
+	block3 := NewBlock(true, nil, time.Now(), 2)
+	block4 := NewBlock(true, nil, time.Now(), 2)
+	block5 := NewBlock(true, nil, time.Now(), 3)
+	block5.ViewEdges[block1.ID()] = false
+	block5.ViewEdges[block2.ID()] = false
+	block5.ViewEdges[block3.ID()] = false
+	block5.ViewEdges[block4.ID()] = false
+	layers.AddBlock(block1)
+	layers.AddBlock(block2)
+	layers.AddBlock(block3)
+	layers.AddBlock(block4)
+	assert.True(t, len(layers.GetOrphanBlocks()) == 4, "wrong layer")
+	layers.AddBlock(block5)
+	assert.True(t, len(layers.GetOrphanBlocks()) == 1, "wrong layer")
+
+}

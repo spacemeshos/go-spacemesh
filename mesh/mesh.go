@@ -20,6 +20,7 @@ type Mesh interface {
 	LocalLayer() uint32
 	LatestLayer() uint32
 	SetLatestLayer(idx uint32)
+	GetOrphanBlocks() []BlockID
 	Close()
 }
 
@@ -129,8 +130,10 @@ func (m *mesh) GetOrphanBlocks() []BlockID {
 	m.orphMutex.Lock()
 	defer m.orphMutex.Unlock()
 	keys := make([]BlockID, 0, len(m.orphanBlocks))
-	for k := range m.orphanBlocks {
-		keys = append(keys, k)
+	for k, v := range m.orphanBlocks {
+		if v {
+			keys = append(keys, k)
+		}
 	}
 	return keys
 }
