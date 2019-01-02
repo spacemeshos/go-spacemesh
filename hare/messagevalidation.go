@@ -44,7 +44,7 @@ func (validator *MessageValidator) IsSyntacticallyValid(m *pb.HareMessage) bool 
 	}
 }
 
-func (validator *MessageValidator) validateAggregatedMessage(aggMsg *pb.AggregatedMessages) bool {
+func (validator *MessageValidator) validateAggregatedMessage(aggMsg *pb.AggregatedMessages, validators []func(m *pb.HareMessage)bool) bool {
 	if aggMsg == nil {
 		log.Warning("Aggregated validation failed: aggMsg is nil")
 		return false
@@ -63,10 +63,6 @@ func (validator *MessageValidator) validateAggregatedMessage(aggMsg *pb.Aggregat
 
 	// TODO: validate agg sig
 
-	return true
-}
-
-func (validator *MessageValidator) validateAggregatedInner(aggMsg *pb.AggregatedMessages, validators []func(m *pb.HareMessage)bool) bool {
 	senders := make(map[string]struct{}, validator.cfg.N)
 	for _, innerMsg := range aggMsg.Messages {
 		if !validator.IsSyntacticallyValid(innerMsg) {
@@ -99,16 +95,6 @@ func (validator *MessageValidator) validateAggregatedInner(aggMsg *pb.Aggregated
 }
 
 func (validator *MessageValidator) validateProposal(msg *pb.HareMessage) bool {
-	if !validator.validateCertificate(msg) {
-		log.Warning("Proposal validation failed: failed to validate certificate")
-		return false
-	}
-
-	if !validator.validateAggregatedMessage(msg.Message.Svp) {
-		log.Warning("Proposal validation failed: failed to validate aggregated message")
-		return false
-	}
-
 	validateSameIteration := func(m *pb.HareMessage) bool{
 		ourIter := iterationFromCounter(msg.Message.K)
 		statusIter := iterationFromCounter(m.Message.K)
@@ -120,13 +106,11 @@ func (validator *MessageValidator) validateProposal(msg *pb.HareMessage) bool {
 
 		return true
 	}
-
 	validators := []func(m *pb.HareMessage)bool {validateStatusType, validateSameIteration}
-	if !validator.validateAggregatedInner(msg.Cert.AggMsgs, validators) {
-		log.Warning("Proposal validation failed: inner validation for aggregated messages failed")
+	if !validator.validateAggregatedMessage(msg.Message.Svp, validators) {
+		log.Warning("Proposal validation failed: failed to validate aggregated message")
 		return false
 	}
-
 
 	maxKi := int32(-1) // ki>=-1
 	var maxRawSet [][]byte = nil
@@ -143,9 +127,11 @@ func (validator *MessageValidator) validateProposal(msg *pb.HareMessage) bool {
 			log.Warning("Proposal validation failed: type A validation failed")
 			return false
 		}
-	} else if !validateProposalTypeB(msg, maxRawSet) { // type B
-		log.Warning("Proposal validation failed: type B validation failed")
-		return false
+	} else {
+		if !validator.validateProposalTypeB(msg, maxRawSet) { // type B
+			log.Warning("Proposal validation failed: type B validation failed")
+			return false
+		}
 	}
 
 	return true
@@ -157,15 +143,10 @@ func (validator *MessageValidator) validateCertificate(msg *pb.HareMessage) bool
 		return false
 	}
 
-	if !validator.validateAggregatedMessage(msg.Cert.AggMsgs) {
-		log.Warning("Certificate validation failed: aggregated messages validation failed")
-		return false
-	}
-
 	validateSameK := func(m *pb.HareMessage)bool{return m.Message.K == msg.Cert.AggMsgs.Messages[0].Message.K}
 	validators := []func(m *pb.HareMessage)bool {validateCommitType, validateSameK}
-	if !validator.validateAggregatedInner(msg.Cert.AggMsgs, validators) {
-		log.Warning("Certificate validation failed: inner validation for aggregated messages failed")
+	if !validator.validateAggregatedMessage(msg.Cert.AggMsgs, validators) {
+		log.Warning("Certificate validation failed: aggregated messages validation failed")
 		return false
 	}
 
@@ -201,9 +182,14 @@ func validateProposalTypeA(m *pb.HareMessage) bool {
 }
 
 // validate proposal for type B of the proposal (where ki>=0)
-func validateProposalTypeB(m *pb.HareMessage, maxRawSet [][]byte) bool {
+func (validator *MessageValidator) validateProposalTypeB(msg *pb.HareMessage, maxRawSet [][]byte) bool {
+	if !validator.validateCertificate(msg) {
+		log.Warning("Proposal validation failed: failed to validate certificate")
+		return false
+	}
+
 	// max set should be equal to the claimed set
-	s := NewSet(m.Message.Values)
+	s := NewSet(msg.Message.Values)
 	maxSet := NewSet(maxRawSet)
 	if !s.Equals(maxSet) {
 		log.Warning("Proposal type B validation failed: max set not equal to proposed set. Expected: %v Actual: %v", s, maxSet)
