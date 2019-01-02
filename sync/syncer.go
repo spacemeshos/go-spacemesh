@@ -367,7 +367,7 @@ func newBlockRequestHandler(layers mesh.Mesh) func(msg []byte) []byte {
 			vm = append(vm, uint32(b))
 		}
 
-		payload, err := proto.Marshal(&pb.FetchBlockResp{Id: uint32(block.ID()), Block: &pb.Block{Id: uint32(block.ID()), Layer: uint32(block.Layer()), VisibleMesh: vm}})
+		payload, err := proto.Marshal(&pb.FetchBlockResp{Block: &pb.Block{Id: uint32(block.ID()), Layer: uint32(block.Layer()), VisibleMesh: vm}})
 		if err != nil {
 			log.Error("Error marshaling response message (FetchBlockResp), with BlockID: %d, LayerID: %d and err:", block.ID(), block.Layer(), err)
 			return nil
