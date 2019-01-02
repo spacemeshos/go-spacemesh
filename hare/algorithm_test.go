@@ -3,7 +3,6 @@ package hare
 import (
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
-	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/stretchr/testify/assert"
 	"testing"
@@ -133,12 +132,6 @@ func TestConsensusProcess_DoesMatchRound(t *testing.T) {
 			cp.advanceToNextRound()
 		}
 	}
-}
-
-func TestConsensusProcess_ValidateCertificate(t *testing.T) {
-	proc := generateConsensusProcess(t)
-	m := &pb.HareMessage{}
-	assert.False(t, proc.validateCertificate(m))
 }
 
 func TestConsensusProcess_Id(t *testing.T) {

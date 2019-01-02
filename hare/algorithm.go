@@ -41,6 +41,7 @@ type ConsensusProcess struct {
 	startTime       time.Time // TODO: needed?
 	inbox           chan *pb.HareMessage
 	role            Role // the current role
+	validator       *MessageValidator
 	preRoundTracker *PreRoundTracker
 	statusesTracker *StatusTracker
 	proposalTracker *ProposalTracker
@@ -60,6 +61,7 @@ func NewConsensusProcess(cfg config.Config, key crypto.PublicKey, instanceId Ins
 	proc.signing = signing
 	proc.network = p2p
 	proc.role = Passive
+	proc.validator = NewMessageValidator(cfg)
 	proc.preRoundTracker = NewPreRoundTracker(cfg.F+1, cfg.N)
 	proc.statusesTracker = NewStatusTracker(cfg.F+1, cfg.N)
 	proc.proposalTracker = NewProposalTracker(cfg.N)
@@ -165,98 +167,6 @@ func (proc *ConsensusProcess) isContextuallyValid(m *pb.HareMessage) bool {
 	}
 }
 
-// verifies the message is syntactically valid
-func isSyntacticallyValid(m *pb.HareMessage) bool {
-	if m == nil || m.PubKey == nil || m.Message == nil || m.Message.Values == nil {
-		return false
-	}
-
-	claimedRound := m.Message.K % 4
-
-	switch MessageType(m.Message.Type) {
-	case PreRound:
-		return true
-	case Status:
-		return claimedRound == Round1
-	case Proposal:
-		return claimedRound == Round2
-	case Commit:
-		return claimedRound == Round3
-	case Notify:
-		return true
-	default:
-		log.Error("Unknown message type encountered during syntactic validation: ", m.Message.Type)
-		return false
-	}
-}
-
-func (proc *ConsensusProcess) validateCertificate(m *pb.HareMessage) bool {
-	if m.Cert == nil {
-		log.Warning("Certificate is nil")
-		return false
-	}
-
-	if m.Cert.AggMsgs == nil {
-		log.Warning("Certificate aggregated struct is nil")
-		return false
-	}
-
-	msgs := m.Cert.AggMsgs.Messages
-	if msgs == nil {
-		log.Warning("Certificate aggregated struct messages array is nil")
-		return false
-	}
-
-	if len(msgs) != proc.cfg.F+1 { // must include exactly f+1 commit messages
-		log.Warning("Number of messages does not match. expected: %v actual: %v", proc.cfg.F+1, len(msgs))
-		return false
-	}
-
-	// validate same set
-	msgSet := NewSet(m.Message.Values)
-	certSet := NewSet(m.Cert.Values)
-	if !msgSet.Equals(certSet) {
-		return false
-	}
-
-	// validate commit messages
-	k := msgs[0].Message.K
-	senders := make(map[string]struct{}, proc.cfg.N)
-	for _, commit := range msgs {
-		// validate unique sender
-		pub, err := crypto.NewPublicKey(commit.PubKey)
-		if err != nil {
-			log.Warning("Certificate validation failed: could not construct public key: ", err.Error())
-			return false
-		}
-		if _, exist := senders[pub.String()]; exist { // pub already exist
-			log.Warning("Certificate validation failed: detected same pubKey for different messages")
-			return false
-		}
-		senders[pub.String()] = struct{}{} // mark sender as exist
-
-		// validate commit type
-		mType := MessageType(commit.Message.Type)
-		if mType != Commit {
-			log.Warning("Certificate validation failed: expected commit type. actual: ", mType.String())
-			return false
-		}
-
-		// validate same k
-		if commit.Message.K != k {
-			log.Warning("Certificate validation failed: not same k. Expected: %v Actual: %v", k, commit.Message.K)
-			return false
-		}
-
-		// set values back to the assumed set
-		commit.Message.Values = certSet.To2DSlice()
-	}
-
-	// TODO: validate agg sig
-
-	return true
-}
-
 func roleFromRoundCounter(k uint32) Role {
 	switch k % 4 {
 	case Round2:
@@ -272,7 +182,7 @@ func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
 	// Note: instanceId is already verified by the broker
 
 	// validate syntactically valid
-	if !isSyntacticallyValid(m) {
+	if !proc.validator.IsSyntacticallyValid(m) {
 		log.Info("Message is not syntactically valid")
 		return
 	}
@@ -448,95 +358,11 @@ func (proc *ConsensusProcess) processStatusMsg(msg *pb.HareMessage) {
 	}
 }
 
-// validate proposal for type A of the proposal (where ki=-1)
-func (proc *ConsensusProcess) validateProposalTypeA(m *pb.HareMessage) bool {
-	s := NewSet(m.Message.Values)
-	unionSet := NewEmptySet(proc.cfg.SetSize)
-	for _, status := range m.Message.Svp.Messages {
-		// build union
-		for _, buff := range status.Message.Values {
-			bid := Value{NewBytes32(buff)}
-			unionSet.Add(bid) // assuming add is unique
-		}
-	}
-
-	if !unionSet.Equals(s) { // s should be the union of all statuses
-		log.Warning("Proposal type A validation failed: not a union. Expected: %v Actual: %v", s, unionSet)
-		return false
-	}
-
-	return true
-}
-
-// validate proposal for type B of the proposal (where ki>=0)
-func (proc *ConsensusProcess) validateProposalTypeB(m *pb.HareMessage, maxRawSet [][]byte) bool {
-	// max set should be equal to the claimed set
-	s := NewSet(m.Message.Values)
-	maxSet := NewSet(maxRawSet)
-	if !s.Equals(maxSet) {
-		log.Warning("Proposal type B validation failed: max set not equal to proposed set. Expected: %v Actual: %v", s, maxSet)
-		return false
-	}
-
-	return true
-}
-
-func (proc *ConsensusProcess) validateProposal(msg *pb.HareMessage) bool {
-	if msg.Message.Svp == nil { // must contain SVP
-		log.Warning("Proposal validation failed: SVP is nil")
-		return false
-	}
-
-	if msg.Message.Svp.Messages == nil { // must contain status messages
-		log.Warning("Proposal validation failed: statuses in SVP is nil")
-		return false
-	}
-
-	if len(msg.Message.Svp.Messages) != proc.cfg.F+1 { // must include exactly f+1 statuses
-		log.Warning("Proposal validation failed: number of statuses does not match. Expected: %v Actual: %v",
-					proc.cfg.F+1, len(msg.Message.Svp.Messages))
-		return false
-	}
-
-	maxKi := int32(-1) // ki>=-1
-	var maxRawSet [][]byte = nil
-	for _, status := range msg.Message.Svp.Messages {
-		// check same iteration
-		ourIter := iterationFromCounter(proc.k)
-		statusIter := iterationFromCounter(status.Message.K)
-		if ourIter != statusIter { // not same iteration
-			log.Warning("Proposal validation failed: not same iteration. Expected: %v Actual: %v",
-						ourIter, statusIter)
-			return false
-		}
-
-		// validate statuses values are provable
-		s := NewSet(status.Message.Values)
-		if !proc.preRoundTracker.CanProveSet(s) {
-			log.Warning("Proposal validation failed: cannot prove set: %v", s)
-			return false
-		}
-
-		// track max
-		if status.Message.Ki > maxKi {
-			maxKi = status.Message.Ki
-			maxRawSet = status.Message.Values
-		}
-	}
-
-	if maxKi == -1 { // type A
-		if !proc.validateProposalTypeA(msg) {
-			return false
-		}
-	} else if !proc.validateProposalTypeB(msg, maxRawSet) { // type B
-		return false
-	}
-
-	return true
-}
-
 func (proc *ConsensusProcess) processProposalMsg(msg *pb.HareMessage) {
-	if !proc.validateProposal(msg) {
+	// validate the proposed set is provable
+	s := NewSet(msg.Message.Values)
+	if !proc.preRoundTracker.CanProveSet(s) {
+		log.Warning("Proposal validation failed: cannot prove set: %v", s)
 		return
 	}
 
@@ -552,12 +378,6 @@ func (proc *ConsensusProcess) processCommitMsg(msg *pb.HareMessage) {
 }
 
 func (proc *ConsensusProcess) processNotifyMsg(msg *pb.HareMessage) {
-	// validate certificate (only notify has certificate)
-	if !proc.validateCertificate(msg) {
-		log.Warning("invalid certificate detected")
-		return
-	}
-
 	if ignored := proc.notifyTracker.OnNotify(msg); ignored {
 		return
 	}
