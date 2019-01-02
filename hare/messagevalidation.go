@@ -2,21 +2,21 @@ package hare
 
 import (
 	"github.com/spacemeshos/go-spacemesh/crypto"
-	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 type MessageValidator struct {
-	cfg config.Config
+	threshold   int
+	defaultSize int
 }
 
-func NewMessageValidator(cfg config.Config) *MessageValidator {
-	return &MessageValidator{cfg:cfg}
+func NewMessageValidator(threshold int, defaultSize int) *MessageValidator {
+	return &MessageValidator{threshold, defaultSize}
 }
 
 func (validator *MessageValidator) validateNotify(m *pb.HareMessage) bool {
-	return validator.validateCertificate(m)
+	return validator.validateCertificate(m.Cert)
 }
 
 // verifies the message is syntactically valid
@@ -44,7 +44,12 @@ func (validator *MessageValidator) IsSyntacticallyValid(m *pb.HareMessage) bool 
 	}
 }
 
-func (validator *MessageValidator) validateAggregatedMessage(aggMsg *pb.AggregatedMessages, validators []func(m *pb.HareMessage)bool) bool {
+func (validator *MessageValidator) validateAggregatedMessage(aggMsg *pb.AggregatedMessages, validators []func(m *pb.HareMessage) bool) bool {
+	if validators == nil {
+		log.Error("Aggregated validation failed: validators param is nil")
+		return false
+	}
+
 	if aggMsg == nil {
 		log.Warning("Aggregated validation failed: aggMsg is nil")
 		return false
@@ -55,15 +60,15 @@ func (validator *MessageValidator) validateAggregatedMessage(aggMsg *pb.Aggregat
 		return false
 	}
 
-	if len(aggMsg.Messages) != validator.cfg.F+1 { // must include exactly f+1 messages
+	if len(aggMsg.Messages) != validator.threshold { // must include exactly f+1 messages
 		log.Warning("Aggregated validation failed: number of messages does not match. Expected: %v Actual: %v",
-			validator.cfg.F+1, len(aggMsg.Messages))
+			validator.threshold, len(aggMsg.Messages))
 		return false
 	}
 
 	// TODO: validate agg sig
 
-	senders := make(map[string]struct{}, validator.cfg.N)
+	senders := make(map[string]struct{}, validator.defaultSize)
 	for _, innerMsg := range aggMsg.Messages {
 		if !validator.IsSyntacticallyValid(innerMsg) {
 			log.Warning("Aggregated validation failed: identified an invalid inner message")
@@ -95,7 +100,7 @@ func (validator *MessageValidator) validateAggregatedMessage(aggMsg *pb.Aggregat
 }
 
 func (validator *MessageValidator) validateProposal(msg *pb.HareMessage) bool {
-	validateSameIteration := func(m *pb.HareMessage) bool{
+	validateSameIteration := func(m *pb.HareMessage) bool {
 		ourIter := iterationFromCounter(msg.Message.K)
 		statusIter := iterationFromCounter(m.Message.K)
 		if ourIter != statusIter { // not same iteration
@@ -106,7 +111,7 @@ func (validator *MessageValidator) validateProposal(msg *pb.HareMessage) bool {
 
 		return true
 	}
-	validators := []func(m *pb.HareMessage)bool {validateStatusType, validateSameIteration}
+	validators := []func(m *pb.HareMessage) bool{validateStatusType, validateSameIteration}
 	if !validator.validateAggregatedMessage(msg.Message.Svp, validators) {
 		log.Warning("Proposal validation failed: failed to validate aggregated message")
 		return false
@@ -123,12 +128,12 @@ func (validator *MessageValidator) validateProposal(msg *pb.HareMessage) bool {
 	}
 
 	if maxKi == -1 { // type A
-		if !validateProposalTypeA(msg) {
+		if !validateSVPTypeA(msg) {
 			log.Warning("Proposal validation failed: type A validation failed")
 			return false
 		}
 	} else {
-		if !validator.validateProposalTypeB(msg, maxRawSet) { // type B
+		if !validator.validateSVPTypeB(msg, maxRawSet) { // type B
 			log.Warning("Proposal validation failed: type B validation failed")
 			return false
 		}
@@ -137,15 +142,15 @@ func (validator *MessageValidator) validateProposal(msg *pb.HareMessage) bool {
 	return true
 }
 
-func (validator *MessageValidator) validateCertificate(msg *pb.HareMessage) bool {
-	if msg.Cert == nil {
+func (validator *MessageValidator) validateCertificate(cert *pb.Certificate) bool {
+	if cert == nil {
 		log.Warning("Certificate validation failed: certificate is nil")
 		return false
 	}
 
-	validateSameK := func(m *pb.HareMessage)bool{return m.Message.K == msg.Cert.AggMsgs.Messages[0].Message.K}
-	validators := []func(m *pb.HareMessage)bool {validateCommitType, validateSameK}
-	if !validator.validateAggregatedMessage(msg.Cert.AggMsgs, validators) {
+	validateSameK := func(m *pb.HareMessage) bool { return m.Message.K == cert.AggMsgs.Messages[0].Message.K }
+	validators := []func(m *pb.HareMessage) bool{validateCommitType, validateSameK}
+	if !validator.validateAggregatedMessage(cert.AggMsgs, validators) {
 		log.Warning("Certificate validation failed: aggregated messages validation failed")
 		return false
 	}
@@ -161,8 +166,8 @@ func validateStatusType(m *pb.HareMessage) bool {
 	return MessageType(m.Message.Type) == Status
 }
 
-// validate proposal for type A of the proposal (where ki=-1)
-func validateProposalTypeA(m *pb.HareMessage) bool {
+// validate SVP for type A (where ki=-1)
+func validateSVPTypeA(m *pb.HareMessage) bool {
 	s := NewSet(m.Message.Values)
 	unionSet := NewEmptySet(cap(m.Message.Values))
 	for _, status := range m.Message.Svp.Messages {
@@ -181,9 +186,9 @@ func validateProposalTypeA(m *pb.HareMessage) bool {
 	return true
 }
 
-// validate proposal for type B of the proposal (where ki>=0)
-func (validator *MessageValidator) validateProposalTypeB(msg *pb.HareMessage, maxRawSet [][]byte) bool {
-	if !validator.validateCertificate(msg) {
+// validate SVP for type B (where ki>=0)
+func (validator *MessageValidator) validateSVPTypeB(msg *pb.HareMessage, maxRawSet [][]byte) bool {
+	if !validator.validateCertificate(msg.Cert) {
 		log.Warning("Proposal validation failed: failed to validate certificate")
 		return false
 	}

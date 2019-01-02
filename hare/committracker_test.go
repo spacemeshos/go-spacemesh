@@ -9,7 +9,7 @@ import (
 
 func BuildCommitMsg(pubKey crypto.PublicKey, s *Set) *pb.HareMessage {
 	builder := NewMessageBuilder()
-	builder.SetType(Commit).SetInstanceId(*instanceId1).SetRoundCounter(k).SetKi(ki).SetValues(s)
+	builder.SetType(Commit).SetInstanceId(*instanceId1).SetRoundCounter(Round3).SetKi(ki).SetValues(s)
 	builder = builder.SetPubKey(pubKey).Sign(NewMockSigning())
 
 	return builder.Build()

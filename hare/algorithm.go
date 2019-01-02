@@ -61,7 +61,7 @@ func NewConsensusProcess(cfg config.Config, key crypto.PublicKey, instanceId Ins
 	proc.signing = signing
 	proc.network = p2p
 	proc.role = Passive
-	proc.validator = NewMessageValidator(cfg)
+	proc.validator = NewMessageValidator(cfg.F+1, cfg.N)
 	proc.preRoundTracker = NewPreRoundTracker(cfg.F+1, cfg.N)
 	proc.statusesTracker = NewStatusTracker(cfg.F+1, cfg.N)
 	proc.proposalTracker = NewProposalTracker(cfg.N)
