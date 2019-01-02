@@ -17,7 +17,7 @@ type Mesh interface {
 	GetBlock(id BlockID) (*Block, error)
 	AddBlock(block *Block) error
 	GetContextualValidity(id BlockID) (bool, error)
-	LatestLocalLayer() uint32
+	LocalLayer() uint32
 	LatestLayer() uint32
 	SetLatestLayer(idx uint32)
 	Close()
@@ -50,7 +50,7 @@ func (m *mesh) IsContexuallyValid(b BlockID) bool {
 	return true
 }
 
-func (m *mesh) LatestLocalLayer() uint32 {
+func (m *mesh) LocalLayer() uint32 {
 	return atomic.LoadUint32(&m.latestIrreversible)
 }
 
@@ -72,7 +72,7 @@ func (m *mesh) SetLatestLayer(idx uint32) {
 func (m *mesh) AddLayer(layer *Layer) error {
 	m.lMutex.Lock()
 	defer m.lMutex.Unlock()
-	count := LayerID(m.LatestLocalLayer())
+	count := LayerID(m.LocalLayer())
 	if count > layer.Index() {
 		log.Debug("can't add layer ", layer.Index(), "(already exists)")
 		return errors.New("can't add layer (already exists)")

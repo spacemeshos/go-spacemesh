@@ -56,7 +56,7 @@ const (
 )
 
 func (s *Syncer) IsSynced() bool {
-	return s.LatestIrreversible() == s.maxSyncLayer()
+	return s.LocalLayer() == s.maxSyncLayer()
 }
 
 func (s *Syncer) Stop() {
@@ -121,19 +121,19 @@ func NewSync(srv server.Service, layers mesh.Mesh, bv BlockValidator, conf Confi
 }
 
 func (s *Syncer) maxSyncLayer() uint32 {
-	if uint32(s.LatestKnownLayer()) < s.hdist {
+	if uint32(s.LatestLayer()) < s.hdist {
 		return 0
 	}
 
-	return s.LatestKnownLayer() - s.hdist
+	return s.LatestLayer() - s.hdist
 }
 
 func (s *Syncer) Synchronise() {
-	for i := s.LatestIrreversible(); i < s.maxSyncLayer(); i++ {
+	for i := s.LocalLayer(); i < s.maxSyncLayer(); i++ {
 		blockIds, err := s.getLayerBlockIDs(mesh.LayerID(i + 1)) //returns a set of all known blocks in the mesh
 		if err != nil {
 			log.Error("could not get layer block ids: ", err)
-			log.Debug("synchronise failed, local layer index is ", s.LatestIrreversible())
+			log.Debug("synchronise failed, local layer index is ", s.LocalLayer())
 			return
 		}
 
@@ -172,7 +172,7 @@ func (s *Syncer) Synchronise() {
 		s.AddLayer(mesh.NewExistingLayer(mesh.LayerID(i), blocks))
 	}
 
-	log.Debug("synchronise done, local layer index is ", s.LatestIrreversible())
+	log.Debug("synchronise done, local layer index is ", s.LocalLayer())
 }
 
 type peerHashPair struct {
@@ -202,7 +202,7 @@ func sendBlockRequest(msgServ *server.MessageServer, peer Peer, id mesh.BlockID)
 		}
 
 		block := mesh.NewExistingBlock(mesh.BlockID(data.Block.GetId()), mesh.LayerID(data.Block.GetLayer()), nil)
-		block.BlockVotes = mp
+		block.ViewEdges = mp
 		ch <- block
 	}
 
@@ -362,8 +362,8 @@ func newBlockRequestHandler(layers mesh.Mesh) func(msg []byte) []byte {
 			return nil
 		}
 
-		vm := make([]uint32, 0, len(block.BlockVotes))
-		for b := range block.BlockVotes {
+		vm := make([]uint32, 0, len(block.ViewEdges))
+		for b := range block.ViewEdges {
 			vm = append(vm, uint32(b))
 		}
 

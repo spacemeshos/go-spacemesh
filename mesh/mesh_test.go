@@ -45,7 +45,7 @@ func TestLayers_AddLayer(t *testing.T) {
 	assert.True(t, err != nil, "error: ", err)
 	layers.AddLayer(NewExistingLayer(1, []*Block{block1, block2, block3}))
 	l, err = layers.GetLayer(id)
-	//assert.True(t, layers.LatestLocalLayer() == 0, "wrong layer count")
+	//assert.True(t, layers.LocalLayer() == 0, "wrong layer count")
 	assert.True(t, string(l.blocks[1].Data) == "data", "wrong block data ")
 }
 
@@ -92,7 +92,7 @@ func TestLayers_LocalLayerCount(t *testing.T) {
 	layers.AddLayer(NewExistingLayer(4, []*Block{block2}))
 	layers.AddLayer(NewExistingLayer(2, []*Block{block3}))
 	layers.AddLayer(NewExistingLayer(3, []*Block{block4}))
-	assert.True(t, layers.LatestLocalLayer() == 3, "wrong layer count")
+	assert.True(t, layers.LocalLayer() == 3, "wrong layer count")
 }
 
 func TestLayers_LatestKnownLayer(t *testing.T) {
