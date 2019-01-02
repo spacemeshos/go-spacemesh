@@ -1,14 +1,23 @@
+---
+name: Issue template
+about: Describe this issue template's purpose here.
+title: ''
+labels: ''
+assignees: ''
+
+---
+
 # Overview / Motivation
-TODO: Describe the motivation and goals for the feature / component / enhancement here...
+TODO: Describe the motivation and goals for the issue here...
 
 # The Task
-TODO: Clearly describe the feature / enhancement requirements here...
+TODO: Clearly describe the issue requirements here...
 
 # Implementation Notes
 TODO: Add links to relevant resources, specs, related issues, etc...
 
 # Contribution Guidelines
-Important: Issue assignment to developers will be by the order of their application and proficiency level according to the tasks complexity. We will not assign tasks to developers who have'nt introduced themselves on our Gitter [dev channel](https://gitter.im/spacemesh-os/Lobby) 
+Important: Issue assignment to developers will be by the order of their application and proficiency level according to the tasks complexity. We will not assign tasks to developers who have'nt introduced themselves on our Gitter [dev channel](https://gitter.im/spacemesh-os/Lobby)
 
 1. Introduce yourself on go-spacemesh [dev chat channel](https://gitter.im/spacemesh-os/Lobby) - ask our team any question you may have about this task
 2. Fork branch `develop` to your own repo and work in your repo

@@ -56,7 +56,7 @@ const (
 )
 
 func (s *Syncer) IsSynced() bool {
-	return s.LatestLocalLayer() == s.maxSyncLayer()
+	return s.LatestIrreversible() == s.maxSyncLayer()
 }
 
 func (s *Syncer) Stop() {
@@ -121,19 +121,19 @@ func NewSync(srv server.Service, layers mesh.Mesh, bv BlockValidator, conf Confi
 }
 
 func (s *Syncer) maxSyncLayer() uint32 {
-	if uint32(s.LatestLayer()) < s.hdist {
+	if uint32(s.LatestKnownLayer()) < s.hdist {
 		return 0
 	}
 
-	return s.LatestLayer() - s.hdist
+	return s.LatestKnownLayer() - s.hdist
 }
 
 func (s *Syncer) Synchronise() {
-	for i := s.LatestLocalLayer(); i < s.maxSyncLayer(); i++ {
-		blockIds, err := s.getLayerBlockIDs(mesh.LayerID(i)) //returns a set of all known blocks in the mesh
+	for i := s.LatestIrreversible(); i < s.maxSyncLayer(); i++ {
+		blockIds, err := s.getLayerBlockIDs(mesh.LayerID(i + 1)) //returns a set of all known blocks in the mesh
 		if err != nil {
 			log.Error("could not get layer block ids: ", err)
-			log.Debug("synchronise failed, local layer index is ", s.LatestLocalLayer())
+			log.Debug("synchronise failed, local layer index is ", s.LatestIrreversible())
 			return
 		}
 
@@ -172,7 +172,7 @@ func (s *Syncer) Synchronise() {
 		s.AddLayer(mesh.NewExistingLayer(mesh.LayerID(i), blocks))
 	}
 
-	log.Debug("synchronise done, local layer index is ", s.LatestLocalLayer())
+	log.Debug("synchronise done, local layer index is ", s.LatestIrreversible())
 }
 
 type peerHashPair struct {
@@ -202,7 +202,7 @@ func sendBlockRequest(msgServ *server.MessageServer, peer Peer, id mesh.BlockID)
 		}
 
 		block := mesh.NewExistingBlock(mesh.BlockID(data.Block.GetId()), mesh.LayerID(data.Block.GetLayer()), nil)
-		block.ViewEdges = mp
+		block.BlockVotes = mp
 		ch <- block
 	}
 
@@ -362,12 +362,12 @@ func newBlockRequestHandler(layers mesh.Mesh) func(msg []byte) []byte {
 			return nil
 		}
 
-		vm := make([]uint32, 0, len(block.ViewEdges))
-		for b := range block.ViewEdges {
+		vm := make([]uint32, 0, len(block.BlockVotes))
+		for b := range block.BlockVotes {
 			vm = append(vm, uint32(b))
 		}
 
-		payload, err := proto.Marshal(&pb.FetchBlockResp{Block: &pb.Block{Id: uint32(block.ID()), Layer: uint32(block.Layer()), VisibleMesh: vm}})
+		payload, err := proto.Marshal(&pb.FetchBlockResp{Id: uint32(block.ID()), Block: &pb.Block{Id: uint32(block.ID()), Layer: uint32(block.Layer()), VisibleMesh: vm}})
 		if err != nil {
 			log.Error("Error marshaling response message (FetchBlockResp), with BlockID: %d, LayerID: %d and err:", block.ID(), block.Layer(), err)
 			return nil
