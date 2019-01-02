@@ -38,8 +38,9 @@ type mesh struct {
 func NewMesh(layers database.DB, blocks database.DB, validity database.DB) Mesh {
 	//todo add boot from disk
 	ll := &mesh{
-		tortoise: NewAlgorithm(uint32(layerSize), uint32(cachedLayers)),
-		mDB:      NewMeshDb(layers, blocks, validity),
+		tortoise:     NewAlgorithm(uint32(layerSize), uint32(cachedLayers)),
+		mDB:          NewMeshDb(layers, blocks, validity),
+		orphanBlocks: make(map[BlockID]bool),
 	}
 	return ll
 }
@@ -108,19 +109,30 @@ func (m *mesh) AddBlock(block *Block) error {
 	}
 	m.SetLatestLayer(uint32(block.Layer()))
 	//new block add to orphans
-	m.HandleOrphans(block)
+	m.handleOrphanBlocks(block)
 	m.tortoise.HandleLateBlock(block) //todo should be thread safe?
 	return nil
 }
 
 //todo better thread safety
-func (m *mesh) HandleOrphans(block *Block) {
+func (m *mesh) handleOrphanBlocks(block *Block) {
 	m.orphMutex.Lock()
 	defer m.orphMutex.Unlock()
 	m.orphanBlocks[block.ID()] = true
-	for b := range block.BlockVotes {
+	for b := range block.ViewEdges {
 		m.orphanBlocks[b] = false
 	}
+}
+
+//todo better thread safety
+func (m *mesh) GetOrphanBlocks() []BlockID {
+	m.orphMutex.Lock()
+	defer m.orphMutex.Unlock()
+	keys := make([]BlockID, 0, len(m.orphanBlocks))
+	for k := range m.orphanBlocks {
+		keys = append(keys, k)
+	}
+	return keys
 }
 
 func (m *mesh) GetBlock(id BlockID) (*Block, error) {
