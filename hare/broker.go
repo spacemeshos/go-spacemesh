@@ -10,6 +10,7 @@ import (
 )
 
 const InboxCapacity = 100
+
 type StartInstanceError error
 
 type Identifiable interface {
@@ -18,6 +19,11 @@ type Identifiable interface {
 
 type Inboxer interface {
 	createInbox(size uint32) chan *pb.HareMessage
+}
+
+type IdentifiableInboxer interface {
+	Identifiable
+	Inboxer
 }
 
 // Closer is used to add closeability to an object
@@ -39,7 +45,7 @@ func (closer *Closer) CloseChannel() chan struct{} {
 	return closer.channel
 }
 
-// Broker is responsible for dispatching hare messages to the matching layer listener
+// Broker is responsible for dispatching hare messages to the matching set id listener
 type Broker struct {
 	Closer
 	network NetworkService
@@ -71,7 +77,7 @@ func (broker *Broker) Start() error {
 	return nil
 }
 
-// Dispatch incoming messages to the matching layer instance
+// Dispatch incoming messages to the matching set id instance
 func (broker *Broker) dispatcher() {
 	for {
 		select {
@@ -83,10 +89,10 @@ func (broker *Broker) dispatcher() {
 				continue
 			}
 
-			layerId := NewBytes32(hareMsg.Message.Layer)
+			instanceId := NewBytes32(hareMsg.Message.InstanceId)
 
 			broker.mutex.RLock()
-			c, exist := broker.outbox[layerId.Id()]
+			c, exist := broker.outbox[instanceId.Id()]
 			broker.mutex.RUnlock()
 			if exist {
 				c <- hareMsg
@@ -99,17 +105,15 @@ func (broker *Broker) dispatcher() {
 }
 
 // Register a listener to messages
-func (broker *Broker) Register(identifiable Identifiable, inboxer Inboxer) {
-	id := identifiable.Id()
+func (broker *Broker) Register(idBox IdentifiableInboxer) {
 	broker.mutex.Lock()
-	broker.outbox[id] = inboxer.createInbox(InboxCapacity)
+	broker.outbox[idBox.Id()] = idBox.createInbox(InboxCapacity)
 	broker.mutex.Unlock()
 }
 
 // Unregister a listener
 func (broker *Broker) Unregister(identifiable Identifiable) {
-	id := identifiable.Id()
 	broker.mutex.Lock()
-	delete(broker.outbox, id)
+	delete(broker.outbox, identifiable.Id())
 	broker.mutex.Unlock()
 }

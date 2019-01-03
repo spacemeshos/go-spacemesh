@@ -12,7 +12,7 @@ type MockSigning struct {
 }
 
 func NewMockSigning() *MockSigning {
-	return &MockSigning{[]byte{1, 2, 3}}
+	return &MockSigning{[]byte{1, 2, 3, 4}}
 }
 
 func (mockSigning *MockSigning) Sign(m []byte) []byte {
