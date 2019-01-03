@@ -9,10 +9,12 @@ import (
 )
 
 func getMesh(id string) Mesh {
-	bdb := database.NewLevelDbStore("blocks_test_"+id, nil, nil)
-	ldb := database.NewLevelDbStore("layers_test_"+id, nil, nil)
-	cdb := database.NewLevelDbStore("contextual_test_"+id, nil, nil)
-	layers := NewMesh(ldb, bdb, cdb, log.New(id, "", ""))
+	time := time.Now()
+	bdb := database.NewLevelDbStore("blocks_test_"+id+"_"+time.String(), nil, nil)
+	ldb := database.NewLevelDbStore("layers_test_"+id+"_"+time.String(), nil, nil)
+	cdb := database.NewLevelDbStore("contextual_test_"+id+"_"+time.String(), nil, nil)
+	odb := database.NewLevelDbStore("orphans_test_"+id+"_"+time.String(), nil, nil)
+	layers := NewMesh(ldb, bdb, cdb, odb, log.New(id, "", ""))
 	return layers
 }
 
@@ -46,7 +48,7 @@ func TestLayers_AddLayer(t *testing.T) {
 	assert.True(t, err != nil, "error: ", err)
 	layers.AddLayer(NewExistingLayer(1, []*Block{block1, block2, block3}))
 	l, err = layers.GetLayer(id)
-	//assert.True(t, layers.LatestIrreversible() == 0, "wrong layer count")
+	//assert.True(t, layers.LocalLayer() == 0, "wrong layer count")
 	assert.True(t, string(l.blocks[1].Data) == "data", "wrong block data ")
 }
 
@@ -93,23 +95,45 @@ func TestLayers_LocalLayerCount(t *testing.T) {
 	layers.AddLayer(NewExistingLayer(4, []*Block{block2}))
 	layers.AddLayer(NewExistingLayer(2, []*Block{block3}))
 	layers.AddLayer(NewExistingLayer(3, []*Block{block4}))
-	assert.True(t, layers.LatestIrreversible() == 3, "wrong layer count")
+	assert.True(t, layers.LocalLayer() == 3, "wrong layer count")
 }
 
 func TestLayers_LatestKnownLayer(t *testing.T) {
 	layers := getMesh("t6")
 	defer layers.Close()
-	layers.SetLatestKnownLayer(3)
-	layers.SetLatestKnownLayer(7)
-	layers.SetLatestKnownLayer(10)
-	layers.SetLatestKnownLayer(1)
-	layers.SetLatestKnownLayer(2)
-	assert.True(t, layers.LatestKnownLayer() == 10, "wrong layer")
+	layers.SetLatestLayer(3)
+	layers.SetLatestLayer(7)
+	layers.SetLatestLayer(10)
+	layers.SetLatestLayer(1)
+	layers.SetLatestLayer(2)
+	assert.True(t, layers.LatestLayer() == 10, "wrong layer")
 }
 
 func TestLayers_WakeUp(t *testing.T) {
 	//layers := getMesh(make(chan Peer),  "t5")
 	//defer layers.Close()
-	//layers.SetLatestKnownLayer(10)
+	//layers.SetLatestLayer(10)
 	//assert.True(t, layers.LocalLayerCount() == 10, "wrong layer")
+}
+
+func TestLayers_OrphanBlocks(t *testing.T) {
+	layers := getMesh("t6")
+	defer layers.Close()
+	block1 := NewBlock(true, nil, time.Now(), 1)
+	block2 := NewBlock(true, nil, time.Now(), 1)
+	block3 := NewBlock(true, nil, time.Now(), 2)
+	block4 := NewBlock(true, nil, time.Now(), 2)
+	block5 := NewBlock(true, nil, time.Now(), 3)
+	block5.ViewEdges[block1.ID()] = struct{}{}
+	block5.ViewEdges[block2.ID()] = struct{}{}
+	block5.ViewEdges[block3.ID()] = struct{}{}
+	block5.ViewEdges[block4.ID()] = struct{}{}
+	layers.AddBlock(block1)
+	layers.AddBlock(block2)
+	layers.AddBlock(block3)
+	layers.AddBlock(block4)
+	assert.True(t, len(layers.GetOrphanBlocks()) == 4, "wrong layer")
+	layers.AddBlock(block5)
+	assert.True(t, len(layers.GetOrphanBlocks()) == 1, "wrong layer")
+
 }

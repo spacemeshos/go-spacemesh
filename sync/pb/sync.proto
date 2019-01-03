@@ -10,7 +10,6 @@ message FetchBlockReq {
 
 
 message FetchBlockResp {
-    uint32 Id = 1;
     Block block = 3;
 }
 

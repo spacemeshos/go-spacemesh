@@ -41,10 +41,12 @@ func (BlockValidatorMock) ValidateBlock(block *mesh.Block) bool {
 }
 
 func getMesh(id string) mesh.Mesh {
+	time := time.Now()
 	bdb := database.NewLevelDbStore("blocks_test_"+id, nil, nil)
 	ldb := database.NewLevelDbStore("layers_test_"+id, nil, nil)
 	cv := database.NewLevelDbStore("contextually_valid_test_"+id, nil, nil)
-	layers := mesh.NewMesh(ldb, bdb, cv, log.New(id, "", ""))
+	odb := database.NewLevelDbStore("orphans_test_"+id+"_"+time.String(), nil, nil)
+	layers := mesh.NewMesh(ldb, bdb, cv, odb, log.New(id, "", ""))
 	return layers
 }
 
@@ -52,7 +54,7 @@ func TestSyncer_Start(t *testing.T) {
 	syncs, _ := SyncMockFactory(2, conf, "TestSyncer_Start_")
 	sync := syncs[0]
 	defer sync.Close()
-	sync.SetLatestKnownLayer(5)
+	sync.SetLatestLayer(5)
 	fmt.Println(sync.IsSynced())
 	sync.Start()
 	timeout := time.After(10 * time.Second)
@@ -221,7 +223,7 @@ func TestSyncProtocol_SyncTwoNodes(t *testing.T) {
 	syncObj1.AddLayer(mesh.NewExistingLayer(4, []*mesh.Block{block9, block10}))
 
 	timeout := time.After(10 * time.Second)
-	syncObj2.SetLatestKnownLayer(5)
+	syncObj2.SetLatestLayer(5)
 	syncObj1.Start()
 	syncObj2.Start()
 
@@ -234,7 +236,7 @@ loop:
 			t.Error("timed out ")
 			return
 		default:
-			if syncObj2.LatestIrreversible() == 3 {
+			if syncObj2.LocalLayer() == 3 {
 				t.Log("done!")
 				break loop
 			}
@@ -286,11 +288,11 @@ func TestSyncProtocol_SyncMultipleNodes(t *testing.T) {
 	syncObj1.AddLayer(mesh.NewExistingLayer(3, []*mesh.Block{block7, block8}))
 	syncObj1.AddLayer(mesh.NewExistingLayer(4, []*mesh.Block{block9, block10}))
 
-	syncObj2.SetLatestKnownLayer(5)
+	syncObj2.SetLatestLayer(5)
 	syncObj2.Start()
-	syncObj3.SetLatestKnownLayer(5)
+	syncObj3.SetLatestLayer(5)
 	syncObj3.Start()
-	syncObj4.SetLatestKnownLayer(5)
+	syncObj4.SetLatestLayer(5)
 	syncObj4.Start()
 
 	// Keep trying until we're timed out or got a result or got an error
@@ -303,7 +305,7 @@ loop:
 		case <-timeout:
 			t.Error("timed out ")
 		default:
-			if syncObj2.LatestIrreversible() == 3 && syncObj3.LatestIrreversible() == 3 {
+			if syncObj2.LocalLayer() == 3 && syncObj3.LocalLayer() == 3 {
 				t.Log("done!")
 				break loop
 			}
@@ -367,7 +369,7 @@ func (sis *syncIntegrationTwoNodes) TestSyncProtocol_TwoNodes() {
 	syncObj1.AddLayer(mesh.NewExistingLayer(5, []*mesh.Block{block9, block10}))
 
 	timeout := time.After(60 * time.Second)
-	syncObj2.SetLatestKnownLayer(5)
+	syncObj2.SetLatestLayer(5)
 	syncObj2.Start()
 
 	// Keep trying until we're timed out or got a result or got an error
@@ -378,7 +380,7 @@ func (sis *syncIntegrationTwoNodes) TestSyncProtocol_TwoNodes() {
 			t.Error("timed out ")
 			return
 		default:
-			if syncObj2.LatestIrreversible() == 3 {
+			if syncObj2.LocalLayer() == 3 {
 				t.Log("done!")
 				return
 			}
@@ -448,11 +450,11 @@ func (sis *syncIntegrationMultipleNodes) TestSyncProtocol_MultipleNodes() {
 	syncObj3.AddLayer(mesh.NewExistingLayer(5, []*mesh.Block{block9, block10}))
 
 	timeout := time.After(2 * 60 * time.Second)
-	syncObj2.SetLatestKnownLayer(5)
-	syncObj3.SetLatestKnownLayer(5)
-	syncObj4.SetLatestKnownLayer(5)
-	syncObj5.SetLatestKnownLayer(5)
-	syncObj6.SetLatestKnownLayer(5)
+	syncObj2.SetLatestLayer(5)
+	syncObj3.SetLatestLayer(5)
+	syncObj4.SetLatestLayer(5)
+	syncObj5.SetLatestLayer(5)
+	syncObj6.SetLatestLayer(5)
 
 	syncObj1.Start()
 	syncObj2.Start()
@@ -469,18 +471,18 @@ func (sis *syncIntegrationMultipleNodes) TestSyncProtocol_MultipleNodes() {
 			t.Error("timed out ")
 			goto end
 		default:
-			if syncObj2.LatestIrreversible() == 3 || syncObj4.LatestIrreversible() == 3 {
+			if syncObj2.LocalLayer() == 3 || syncObj4.LocalLayer() == 3 {
 				t.Log("done!")
 				goto end
 			}
 		}
 	}
 end:
-	log.Debug("sync 1 ", syncObj1.LatestIrreversible())
-	log.Debug("sync 2 ", syncObj2.LatestIrreversible())
-	log.Debug("sync 3 ", syncObj3.LatestIrreversible())
-	log.Debug("sync 4 ", syncObj4.LatestIrreversible())
-	log.Debug("sync 5 ", syncObj5.LatestIrreversible())
-	log.Debug("sync 6 ", syncObj6.LatestIrreversible())
+	log.Debug("sync 1 ", syncObj1.LocalLayer())
+	log.Debug("sync 2 ", syncObj2.LocalLayer())
+	log.Debug("sync 3 ", syncObj3.LocalLayer())
+	log.Debug("sync 4 ", syncObj4.LocalLayer())
+	log.Debug("sync 5 ", syncObj5.LocalLayer())
+	log.Debug("sync 6 ", syncObj6.LocalLayer())
 	return
 }
