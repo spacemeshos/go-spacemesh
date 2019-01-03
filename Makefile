@@ -24,7 +24,6 @@ ifeq ($(OS),Windows_NT)
 else
 	./setup_env.sh
 endif
-
 .PHONY: install
 
 genproto:
@@ -33,7 +32,6 @@ ifeq ($(OS),Windows_NT)
 else
 	./scripts/genproto.sh
 endif
-
 .PHONY: genproto
 
 build:
@@ -42,7 +40,7 @@ ifeq ($(OS),Windows_NT)
 	go build ${LDFLAGS} -o $(CURR_DIR_WIN)/$(BINARY).exe
 else
 	make genproto
-	go build ${LDFLAGS} ./...
+	go build ${LDFLAGS} -o $(CURR_DIR)/$(BINARY)
 endif
 .PHONY: build
 
@@ -52,7 +50,7 @@ tidy:
 
 $(PLATFORMS):
 	make genproto
-	GOOS=$(os) GOARCH=amd64 go build ${LDFLAGS} ./...
+	GOOS=$(os) GOARCH=amd64 go build ${LDFLAGS} -o $(CURR_DIR)/$(BINARY)
 .PHONY: $(PLATFORMS)
 
 test:
