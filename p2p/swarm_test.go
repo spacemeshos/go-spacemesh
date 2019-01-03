@@ -21,6 +21,8 @@ import (
 	"sync"
 )
 
+const debug = false
+
 type cpoolMock struct {
 	f func(address string, pk crypto.PublicKey) (net.Connection, error)
 }
@@ -37,23 +39,28 @@ func (cp *cpoolMock) RemoteConnectionsChannel() chan net.NewConnectionEvent {
 }
 
 func p2pTestInstance(t testing.TB, config config.Config) *swarm {
-	port, err := node.GetUnboundedPort()
-	assert.NoError(t, err, "Error getting a port", err)
-	config.TCPPort = port
-	p, err := newSwarm(context.TODO(), config, true, true)
-	assert.NoError(t, err, "Error creating p2p stack, err: %v", err)
-	assert.NotNil(t, p)
-	p.Start()
+	p := p2pTestNoStart(t, config)
+	err := p.Start()
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	return p
 }
 
 func p2pTestNoStart(t testing.TB, config config.Config) *swarm {
 	port, err := node.GetUnboundedPort()
-	assert.NoError(t, err, "Error getting a port", err)
+	if err != nil {
+		t.Fatal("port err ", err)
+	}
 	config.TCPPort = port
-	p, err := newSwarm(context.TODO(), config, true, true)
-	assert.NoError(t, err, "Error creating p2p stack, err: %v", err)
-	assert.NotNil(t, p)
+	p, err := newSwarm(context.TODO(), config, true, debug)
+	if err != nil {
+		t.Fatal("err creating a swarm", err)
+	}
+	if p == nil {
+		t.Fatal("swarm was nil")
+	}
 	return p
 }
 
