@@ -160,7 +160,7 @@ func roleFromRoundCounter(k uint32) Role {
 func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
 	// Note: instanceId is already verified by the broker
 
-	// validate syntactically valid
+	// validate message
 	if !proc.validator.ValidateMessage(m, proc.k) {
 		log.Info("Message is not syntactically valid")
 		return
