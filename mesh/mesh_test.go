@@ -13,7 +13,7 @@ func getMesh(id string) Mesh {
 	ldb := database.NewLevelDbStore("layers_test_"+id+"_"+time.String(), nil, nil)
 	cdb := database.NewLevelDbStore("contextual_test_"+id+"_"+time.String(), nil, nil)
 	odb := database.NewLevelDbStore("orphans_test_"+id+"_"+time.String(), nil, nil)
-	layers := NewMesh(ldb, bdb, cdb, odb)
+	layers := NewMesh(ldb, bdb, cdb, odb, log.New(id, "", ""))
 	return layers
 }
 

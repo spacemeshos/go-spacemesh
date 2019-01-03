@@ -28,6 +28,7 @@ type Item struct {
 }
 
 type MessageServer struct {
+	log.Log
 	ReqId              uint64 //request id
 	name               string //server name
 	network            Service
@@ -41,8 +42,9 @@ type MessageServer struct {
 	exit               chan struct{}
 }
 
-func NewMsgServer(network Service, name string, requestLifetime time.Duration) *MessageServer {
+func NewMsgServer(network Service, name string, requestLifetime time.Duration, logger log.Log) *MessageServer {
 	p := &MessageServer{
+		Log:                logger,
 		name:               name,
 		resHandlers:        make(map[uint64]func(msg []byte)),
 		pendingQueue:       list.New(),
@@ -68,14 +70,14 @@ func (p *MessageServer) readLoop() {
 		timer := time.NewTicker(10 * time.Second)
 		select {
 		case <-p.exit:
-			log.Debug("shutting down protocol ", p.name)
+			p.Debug("shutting down protocol ", p.name)
 			close(p.exit)
 			return
 		case <-timer.C:
 			go p.cleanStaleMessages()
 		case msg, ok := <-p.ingressChannel:
 			if !ok {
-				log.Error("read loop channel was closed")
+				p.Error("read loop channel was closed")
 				break
 			}
 			//todo add buffer and option to limit number of concurrent goroutines
@@ -97,7 +99,7 @@ func (p *MessageServer) cleanStaleMessages() {
 		if elem != nil {
 			item := elem.Value.(Item)
 			if time.Since(item.timestamp) > p.requestLifetime {
-				log.Debug("cleanStaleMessages remove request ", item.id)
+				p.Debug("cleanStaleMessages remove request ", item.id)
 				p.removeFromPending(item.id)
 			} else {
 				return
@@ -134,7 +136,7 @@ func (p *MessageServer) handleRequestMessage(sender crypto.PublicKey, headers *s
 		rmsg := &service.DataMsgWrapper{MsgType: headers.MsgType, ReqID: headers.ReqID, Payload: payload}
 		sendErr := p.network.SendWrappedMessage(sender.String(), p.name, rmsg)
 		if sendErr != nil {
-			log.Error("Error sending response message, err:", sendErr)
+			p.Error("Error sending response message, err:", sendErr)
 		}
 	}
 }
@@ -162,7 +164,7 @@ func (p *MessageServer) SendRequest(msgType MessageType, payload []byte, address
 	p.pendMutex.Unlock()
 	msg := &service.DataMsgWrapper{Req: true, ReqID: reqID, MsgType: uint32(msgType), Payload: payload}
 	if sendErr := p.network.SendWrappedMessage(address.String(), p.name, msg); sendErr != nil {
-		log.Error("sending message failed ", msg, " error: ", sendErr)
+		p.Error("sending message failed ", msg, " error: ", sendErr)
 		p.removeFromPending(reqID)
 		return sendErr
 	}

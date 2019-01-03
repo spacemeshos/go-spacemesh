@@ -28,6 +28,7 @@ type Mesh interface {
 }
 
 type mesh struct {
+	log.Log
 	*meshDB
 	localLayer  uint32
 	latestLayer uint32
@@ -38,9 +39,10 @@ type mesh struct {
 	orphMutex   sync.RWMutex
 }
 
-func NewMesh(layers database.DB, blocks database.DB, validity database.DB, orphans database.DB) Mesh {
+func NewMesh(layers database.DB, blocks database.DB, validity database.DB, orphans database.DB,logger log.Log) Mesh {
 	//todo add boot from disk
 	ll := &mesh{
+		Log:      logger,
 		tortoise: NewAlgorithm(uint32(layerSize), uint32(cachedLayers)),
 		meshDB:   NewMeshDb(layers, blocks, validity, orphans),
 	}
@@ -66,7 +68,7 @@ func (m *mesh) SetLatestLayer(idx uint32) {
 	defer m.lkMutex.Unlock()
 	m.lkMutex.Lock()
 	if idx > m.latestLayer {
-		log.Debug("set latest known layer to ", idx)
+		m.Debug("set latest known layer to ", idx)
 		m.latestLayer = idx
 	}
 }
@@ -76,12 +78,12 @@ func (m *mesh) AddLayer(layer *Layer) error {
 	defer m.lMutex.Unlock()
 	count := LayerID(m.LocalLayer())
 	if count > layer.Index() {
-		log.Debug("can't add layer ", layer.Index(), "(already exists)")
+		m.Debug("can't add layer ", layer.Index(), "(already exists)")
 		return errors.New("can't add layer (already exists)")
 	}
 
 	if count+1 < layer.Index() {
-		log.Debug("can't add layer", layer.Index(), " missing previous layers")
+		m.Debug("can't add layer", layer.Index(), " missing previous layers")
 		return errors.New("can't add layer missing previous layers")
 	}
 
@@ -96,7 +98,7 @@ func (m *mesh) GetLayer(i LayerID) (*Layer, error) {
 	m.lMutex.RLock()
 	if i > LayerID(m.localLayer) {
 		m.lMutex.RUnlock()
-		log.Debug("failed to get layer  ", i, " layer not verified yet")
+		m.Debug("failed to get layer  ", i, " layer not verified yet")
 		return nil, errors.New("layer not verified yet")
 	}
 	m.lMutex.RUnlock()
@@ -104,9 +106,9 @@ func (m *mesh) GetLayer(i LayerID) (*Layer, error) {
 }
 
 func (m *mesh) AddBlock(block *Block) error {
-	log.Debug("add block ", block.ID())
+	m.Debug("add block ", block.ID())
 	if err := m.addBlock(block); err != nil {
-		log.Error("failed to add block ", block.ID(), " ", err)
+		m.Error("failed to add block ", block.ID(), " ", err)
 		return err
 	}
 	m.SetLatestLayer(uint32(block.Layer()))
@@ -149,15 +151,15 @@ func (m *mesh) GetOrphanBlocks() []BlockID {
 }
 
 func (m *mesh) GetBlock(id BlockID) (*Block, error) {
-	log.Debug("get block ", id)
+	m.Debug("get block ", id)
 	return m.getBlock(id)
 }
 
 func (m *mesh) GetContextualValidity(id BlockID) (bool, error) {
-	return m.getContextualValidity(id)
+	return m.mDB.getContextualValidity(id)
 }
 
 func (m *mesh) Close() {
-	log.Debug("closing mDB")
-	m.meshDB.Close()
+	m.Debug("closing mDB")
+	m.mDB.Close()
 }
