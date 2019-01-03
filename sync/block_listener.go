@@ -47,6 +47,7 @@ func NewBlockListener(net server.Service, bv BlockValidator, layers mesh.Mesh, t
 		Mesh:           layers,
 		Peers:          NewPeers(net),
 		MessageServer:  server.NewMsgServer(net, BlockProtocol, timeout, logger),
+		Log:            logger,
 		semaphore:      make(chan struct{}, concurrency),
 		unknownQueue:   make(chan mesh.BlockID, 200), //todo tune buffer size + get buffer from config
 		exit:           make(chan struct{})}
@@ -85,9 +86,8 @@ func (bl *BlockListener) FetchBlock(id mesh.BlockID) {
 	}
 }
 
-
 func (bl *BlockListener) addUnknownToQueue(b *mesh.TortoiseBlock) {
-	for block := range b.BlockVotes {
+	for block := range b.ViewEdges {
 		//if unknown block
 		if _, err := bl.GetBlock(block); err != nil {
 			bl.unknownQueue <- block

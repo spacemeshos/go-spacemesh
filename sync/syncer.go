@@ -179,9 +179,8 @@ type peerHashPair struct {
 	hash []byte
 }
 
-
 func sendBlockRequest(msgServ *server.MessageServer, peer Peer, id mesh.BlockID, logger log.Log) (chan *mesh.TortoiseBlock, error) {
-	log.Debug("send block request Peer: ", peer, " id: ", id)
+	logger.Debug("send block request Peer: ", peer, " id: ", id)
 	data := &pb.FetchBlockReq{Id: uint32(id)}
 	payload, err := proto.Marshal(data)
 	if err != nil {
