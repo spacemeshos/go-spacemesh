@@ -2,21 +2,13 @@ package mesh
 
 import (
 	"bytes"
-	"encoding/binary"
 	"errors"
 	"github.com/davecgh/go-xdr/xdr2"
+	"github.com/spacemeshos/go-spacemesh/common"
 )
 
-func (b BlockID) ToBytes() []byte { return uint32ToBytes(uint32(b)) }
-func (l LayerID) ToBytes() []byte { return uint32ToBytes(uint32(l)) }
-
-func BytesToUint32(i []byte) uint32 { return binary.LittleEndian.Uint32(i) }
-
-func uint32ToBytes(i uint32) []byte {
-	a := make([]byte, 4)
-	binary.LittleEndian.PutUint32(a, i)
-	return a
-}
+func (b BlockID) ToBytes() []byte { return common.Uint32ToBytes(uint32(b)) }
+func (l LayerID) ToBytes() []byte { return common.Uint32ToBytes(uint32(l)) }
 
 func blockIdsAsBytes(ids map[BlockID]bool) ([]byte, error) {
 	var w bytes.Buffer

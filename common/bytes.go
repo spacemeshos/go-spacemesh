@@ -1,13 +1,13 @@
 package common
 
 import (
+	"encoding/binary"
+	"encoding/hex"
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/hexutil"
 	"math/big"
-	"fmt"
 	"math/rand"
 	"reflect"
-	"database/sql/driver"
-	"encoding/hex"
 )
 
 const (
@@ -17,13 +17,19 @@ const (
 	AddressLength = 20
 )
 
+func BytesToUint32(i []byte) uint32 { return binary.LittleEndian.Uint32(i) }
 
+func Uint32ToBytes(i uint32) []byte {
+	a := make([]byte, 4)
+	binary.LittleEndian.PutUint32(a, i)
+	return a
+}
 
 // Hash represents the 32 byte Keccak256 hash of arbitrary data.
 type Hash [HashLength]byte
 
 var (
-	hashT    = reflect.TypeOf(Hash{})
+	hashT = reflect.TypeOf(Hash{})
 )
 
 // BytesToHash sets b to hash.
@@ -141,11 +147,6 @@ func (h *Hash) Scan(src interface{}) error {
 	return nil
 }
 
-// Value implements valuer for database/sql.
-func (h Hash) Value() (driver.Value, error) {
-	return h[:], nil
-}
-
 // CopyBytes returns an exact copy of the provided bytes.
 func CopyBytes(b []byte) (copiedBytes []byte) {
 	if b == nil {
@@ -181,7 +182,6 @@ func LeftPadBytes(slice []byte, l int) []byte {
 	return padded
 }
 
-
 // hasHexPrefix validates str begins with '0x' or '0X'.
 func hasHexPrefix(str string) bool {
 	return len(str) >= 2 && str[0] == '0' && (str[1] == 'x' || str[1] == 'X')
@@ -204,4 +204,3 @@ func isHex(str string) bool {
 	}
 	return true
 }
-

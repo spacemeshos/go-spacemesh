@@ -2,6 +2,7 @@ package mesh
 
 import (
 	"errors"
+	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"sync"
@@ -142,7 +143,7 @@ func (m *mesh) GetOrphanBlocks() []BlockID {
 	for iter.Next() {
 		// Remember that the contents of the returned slice should not be modified, and
 		// only valid until the next call to Next.
-		keys = append(keys, BlockID(BytesToUint32(iter.Key())))
+		keys = append(keys, BlockID(common.BytesToUint32(iter.Key())))
 	}
 	iter.Release()
 	if err := iter.Error(); err != nil {
