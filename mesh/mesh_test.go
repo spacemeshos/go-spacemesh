@@ -123,10 +123,10 @@ func TestLayers_OrphanBlocks(t *testing.T) {
 	block3 := NewBlock(true, nil, time.Now(), 2)
 	block4 := NewBlock(true, nil, time.Now(), 2)
 	block5 := NewBlock(true, nil, time.Now(), 3)
-	block5.ViewEdges[block1.ID()] = false
-	block5.ViewEdges[block2.ID()] = false
-	block5.ViewEdges[block3.ID()] = false
-	block5.ViewEdges[block4.ID()] = false
+	block5.ViewEdges[block1.ID()] = struct{}{}
+	block5.ViewEdges[block2.ID()] = struct{}{}
+	block5.ViewEdges[block3.ID()] = struct{}{}
+	block5.ViewEdges[block4.ID()] = struct{}{}
 	layers.AddBlock(block1)
 	layers.AddBlock(block2)
 	layers.AddBlock(block3)

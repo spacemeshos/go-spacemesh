@@ -106,7 +106,7 @@ func (m *mesh) GetLayer(i LayerID) (*Layer, error) {
 func (m *mesh) AddBlock(block *Block) error {
 	log.Debug("add block ", block.ID())
 	if err := m.addBlock(block); err != nil {
-		log.Debug("failed to add block ", block.ID(), " ", err)
+		log.Error("failed to add block ", block.ID(), " ", err)
 		return err
 	}
 	m.SetLatestLayer(uint32(block.Layer()))

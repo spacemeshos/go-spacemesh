@@ -196,9 +196,9 @@ func sendBlockRequest(msgServ *server.MessageServer, peer Peer, id mesh.BlockID)
 			log.Error("could not unmarshal block data")
 			return
 		}
-		mp := make(map[mesh.BlockID]bool)
+		mp := make(map[mesh.BlockID]struct{})
 		for _, b := range data.Block.VisibleMesh {
-			mp[mesh.BlockID(b)] = true
+			mp[mesh.BlockID(b)] = struct{}{}
 		}
 
 		block := mesh.NewExistingBlock(mesh.BlockID(data.Block.GetId()), mesh.LayerID(data.Block.GetLayer()), nil)

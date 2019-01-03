@@ -19,7 +19,7 @@ type Block struct {
 	ProVotes   uint64
 	ConVotes   uint64
 	BlockVotes map[BlockID]bool
-	ViewEdges  map[BlockID]bool
+	ViewEdges  map[BlockID]struct{}
 }
 
 func (b Block) ID() BlockID {
@@ -34,7 +34,7 @@ func NewExistingBlock(id BlockID, layerIndex LayerID, data []byte) *Block {
 	b := Block{
 		Id:         BlockID(id),
 		BlockVotes: make(map[BlockID]bool),
-		ViewEdges:  make(map[BlockID]bool),
+		ViewEdges:  make(map[BlockID]struct{}),
 		LayerIndex: LayerID(layerIndex),
 		Data:       data,
 	}
@@ -46,7 +46,7 @@ func NewBlock(coin bool, data []byte, ts time.Time, layerId LayerID) *Block {
 		Id:         BlockID(uuid.New().ID()),
 		LayerIndex: layerId,
 		BlockVotes: make(map[BlockID]bool),
-		ViewEdges:  make(map[BlockID]bool),
+		ViewEdges:  make(map[BlockID]struct{}),
 		Timestamp:  ts,
 		Data:       data,
 		Coin:       coin,
