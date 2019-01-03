@@ -77,12 +77,14 @@ func (bl *BlockListener) FetchBlock(id mesh.BlockID) {
 		if ch, err := sendBlockRequest(bl.MessageServer, p, id, bl.Log); err == nil {
 			if b := <-ch; b != nil && bl.ValidateBlock(b) {
 				bl.AddBlock(b)
+				//bl.Mesh.
 				bl.addUnknownToQueue(b) //add all child blocks to unknown queue
 				return
 			}
 		}
 	}
 }
+
 
 func (bl *BlockListener) addUnknownToQueue(b *mesh.TortoiseBlock) {
 	for block := range b.BlockVotes {

@@ -4,21 +4,11 @@ import (
 	"bytes"
 	"errors"
 	"github.com/davecgh/go-xdr/xdr2"
-	"math/big"
+	"github.com/spacemeshos/go-spacemesh/common"
 )
 
-func (b BlockID) ToBytes() []byte { return uint64ToBytes(uint64(b)) }
-func (l LayerID) ToBytes() []byte { return uint64ToBytes(uint64(l)) }
-
-func uint64ToBytes(i uint64) []byte { return new(big.Int).SetUint64(uint64(i)).Bytes() }
-
-func boolAsBytes(b bool) []byte {
-	var bitBool int8
-	if b {
-		bitBool = 1
-	}
-	return append(make([]byte, 0, 1), byte(bitBool))
-}
+func (b BlockID) ToBytes() []byte { return common.Uint32ToBytes(uint32(b)) }
+func (l LayerID) ToBytes() []byte { return common.Uint32ToBytes(uint32(l)) }
 
 func blockIdsAsBytes(ids map[BlockID]bool) ([]byte, error) {
 	var w bytes.Buffer

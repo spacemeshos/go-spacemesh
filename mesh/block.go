@@ -21,6 +21,7 @@ type TortoiseBlock struct {
 	ProVotes   uint64
 	ConVotes   uint64
 	BlockVotes map[BlockID]bool
+	ViewEdges  map[BlockID]struct{}
 }
 
 func (b TortoiseBlock) ID() BlockID {
@@ -35,6 +36,7 @@ func NewExistingBlock(id BlockID, layerIndex LayerID, data []byte) *TortoiseBloc
 	b := TortoiseBlock{
 		Id:         BlockID(id),
 		BlockVotes: make(map[BlockID]bool),
+		ViewEdges:  make(map[BlockID]struct{}),
 		LayerIndex: LayerID(layerIndex),
 		Data:       data,
 	}
@@ -46,6 +48,7 @@ func NewBlock(coin bool, data []byte, ts time.Time, layerId LayerID) *TortoiseBl
 		Id:         BlockID(uuid.New().ID()),
 		LayerIndex: layerId,
 		BlockVotes: make(map[BlockID]bool),
+		ViewEdges:  make(map[BlockID]struct{}),
 		Timestamp:  ts,
 		Data:       data,
 		Coin:       coin,
