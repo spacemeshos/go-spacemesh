@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/stretchr/testify/assert"
 	"testing"
@@ -13,7 +14,7 @@ const protocol = "/protocol/test/1.0/"
 func TestProtocol_SendRequest(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
-	fnd1 := NewMsgServer(n1, protocol, 5*time.Second)
+	fnd1 := NewMsgServer(n1, protocol, 5*time.Second, log.New("t1", "", ""))
 
 	//handler that returns some bytes on request
 
@@ -24,7 +25,7 @@ func TestProtocol_SendRequest(t *testing.T) {
 	fnd1.RegisterMsgHandler(1, handler)
 
 	n2 := sim.NewNode()
-	fnd2 := NewMsgServer(n2, protocol, 5*time.Second)
+	fnd2 := NewMsgServer(n2, protocol, 5*time.Second, log.New("t2", "", ""))
 
 	//send request with handler that converts to string and sends via channel
 	strCh := make(chan string)
@@ -43,7 +44,7 @@ func TestProtocol_SendRequest(t *testing.T) {
 func TestProtocol_CleanOldPendingMessages(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
-	fnd1 := NewMsgServer(n1, protocol, 5*time.Second)
+	fnd1 := NewMsgServer(n1, protocol, 5*time.Second, log.New("t3", "", ""))
 
 	//handler that returns some bytes on request
 
@@ -55,7 +56,7 @@ func TestProtocol_CleanOldPendingMessages(t *testing.T) {
 	fnd1.RegisterMsgHandler(1, handler)
 
 	n2 := sim.NewNode()
-	fnd2 := NewMsgServer(n2, protocol, 10*time.Millisecond)
+	fnd2 := NewMsgServer(n2, protocol, 10*time.Millisecond, log.New("t4", "", ""))
 
 	//send request with handler that converts to string and sends via channel
 	strCh := make(chan string)
@@ -87,7 +88,7 @@ func TestProtocol_CleanOldPendingMessages(t *testing.T) {
 func TestProtocol_Close(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
-	fnd1 := NewMsgServer(n1, protocol, 5*time.Second)
+	fnd1 := NewMsgServer(n1, protocol, 5*time.Second, log.New("t5", "", ""))
 
 	//handler that returns some bytes on request
 
@@ -99,7 +100,7 @@ func TestProtocol_Close(t *testing.T) {
 	fnd1.RegisterMsgHandler(1, handler)
 
 	n2 := sim.NewNode()
-	fnd2 := NewMsgServer(n2, protocol, 10*time.Millisecond)
+	fnd2 := NewMsgServer(n2, protocol, 10*time.Millisecond, log.New("t6", "", ""))
 
 	//send request with handler that converts to string and sends via channel
 	strCh := make(chan string)

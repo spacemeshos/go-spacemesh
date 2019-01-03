@@ -20,11 +20,11 @@ type Mesh interface {
 	LatestIrreversible() uint32
 	LatestKnownLayer() uint32
 	SetLatestKnownLayer(idx uint32)
-
 	Close()
 }
 
 type mesh struct {
+	log.Log
 	latestIrreversible uint32
 	latestLayer        uint32
 	mDB                *meshDB
@@ -34,9 +34,10 @@ type mesh struct {
 	tortoise           Algorithm
 }
 
-func NewMesh(layers database.DB, blocks database.DB, validity database.DB) Mesh {
+func NewMesh(layers database.DB, blocks database.DB, validity database.DB, logger log.Log) Mesh {
 	//todo add boot from disk
 	ll := &mesh{
+		Log:      logger,
 		tortoise: NewAlgorithm(uint32(layerSize), uint32(cachedLayers)),
 		mDB:      NewMeshDb(layers, blocks, validity),
 	}
@@ -62,7 +63,7 @@ func (m *mesh) SetLatestKnownLayer(idx uint32) {
 	defer m.lkMutex.Unlock()
 	m.lkMutex.Lock()
 	if idx > m.latestLayer {
-		log.Debug("set latest known layer to ", idx)
+		m.Debug("set latest known layer to ", idx)
 		m.latestLayer = idx
 	}
 }
@@ -72,12 +73,12 @@ func (m *mesh) AddLayer(layer *Layer) error {
 	defer m.lMutex.Unlock()
 	count := LayerID(m.LatestIrreversible())
 	if count > layer.Index() {
-		log.Debug("can't add layer ", layer.Index(), "(already exists)")
+		m.Debug("can't add layer ", layer.Index(), "(already exists)")
 		return errors.New("can't add layer (already exists)")
 	}
 
 	if count+1 < layer.Index() {
-		log.Debug("can't add layer", layer.Index(), " missing previous layers")
+		m.Debug("can't add layer", layer.Index(), " missing previous layers")
 		return errors.New("can't add layer missing previous layers")
 	}
 
@@ -92,23 +93,26 @@ func (m *mesh) GetLayer(i LayerID) (*Layer, error) {
 	m.lMutex.RLock()
 	if i > LayerID(m.latestIrreversible) {
 		m.lMutex.RUnlock()
-		log.Debug("failed to get layer  ", i, " layer not verified yet")
+		m.Debug("failed to get layer  ", i, " layer not verified yet")
 		return nil, errors.New("layer not verified yet")
 	}
 	m.lMutex.RUnlock()
 	return m.mDB.getLayer(i)
 }
 
+
 func (m *mesh) AddBlock(block *TortoiseBlock) error {
 	log.Debug("add block ", block.ID())
+
 	if err := m.mDB.addBlock(block); err != nil {
-		log.Debug("failed to add block ", block.ID(), " ", err)
+		m.Debug("failed to add block ", block.ID(), " ", err)
 		return err
 	}
 	m.SetLatestKnownLayer(uint32(block.Layer()))
 	m.tortoise.HandleLateBlock(block) //todo should be thread safe?
 	return nil
 }
+
 
 func (m *mesh) GetBlock(id BlockID) (*TortoiseBlock, error) {
 	log.Debug("get block ", id)
@@ -120,6 +124,6 @@ func (m *mesh) GetContextualValidity(id BlockID) (bool, error) {
 }
 
 func (m *mesh) Close() {
-	log.Debug("closing mDB")
+	m.Debug("closing mDB")
 	m.mDB.Close()
 }

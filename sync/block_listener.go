@@ -17,6 +17,7 @@ type BlockListener struct {
 	Peers
 	mesh.Mesh
 	BlockValidator
+	log.Log
 	bufferSize   int
 	semaphore    chan struct{}
 	unknownQueue chan mesh.BlockID //todo consider benefits of changing to stack
@@ -40,16 +41,16 @@ func (bl *BlockListener) OnNewBlock(b *mesh.TortoiseBlock) {
 	bl.addUnknownToQueue(b)
 }
 
-func NewBlockListener(net server.Service, bv BlockValidator, layers mesh.Mesh, timeout time.Duration, concurrency int) *BlockListener {
+func NewBlockListener(net server.Service, bv BlockValidator, layers mesh.Mesh, timeout time.Duration, concurrency int, logger log.Log) *BlockListener {
 	bl := BlockListener{
 		BlockValidator: bv,
 		Mesh:           layers,
 		Peers:          NewPeers(net),
-		MessageServer:  server.NewMsgServer(net, BlockProtocol, timeout),
+		MessageServer:  server.NewMsgServer(net, BlockProtocol, timeout, logger),
 		semaphore:      make(chan struct{}, concurrency),
 		unknownQueue:   make(chan mesh.BlockID, 200), //todo tune buffer size + get buffer from config
 		exit:           make(chan struct{})}
-	bl.RegisterMsgHandler(BLOCK, newBlockRequestHandler(layers))
+	bl.RegisterMsgHandler(BLOCK, newBlockRequestHandler(layers, logger))
 	return &bl
 }
 
@@ -57,10 +58,10 @@ func (bl *BlockListener) run() {
 	for {
 		select {
 		case <-bl.exit:
-			log.Info("run stoped")
+			bl.Logger.Info("run stoped")
 			return
 		case id := <-bl.unknownQueue:
-			log.Debug("fetch block ", id, "buffer is at ", len(bl.unknownQueue)/cap(bl.unknownQueue), " capacity")
+			bl.Logger.Debug("fetch block ", id, "buffer is at ", len(bl.unknownQueue)/cap(bl.unknownQueue), " capacity")
 			bl.semaphore <- struct{}{}
 			go func() {
 				defer func() { <-bl.semaphore }()
@@ -73,7 +74,7 @@ func (bl *BlockListener) run() {
 //todo handle case where no peer knows the block
 func (bl *BlockListener) FetchBlock(id mesh.BlockID) {
 	for _, p := range bl.GetPeers() {
-		if ch, err := sendBlockRequest(bl.MessageServer, p, id); err == nil {
+		if ch, err := sendBlockRequest(bl.MessageServer, p, id, bl.Log); err == nil {
 			if b := <-ch; b != nil && bl.ValidateBlock(b) {
 				bl.AddBlock(b)
 				bl.addUnknownToQueue(b) //add all child blocks to unknown queue

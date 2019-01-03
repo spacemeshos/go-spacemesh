@@ -123,6 +123,14 @@ docker build -t spacemesh .
 docker run -d --name=spacemesh spacemesh
 ```
 
+### Windows
+On windows you will need the following prerequisites:
+- Powershell - included by in Windows by default since Windows 7 and Windows Server 2008 R2
+- Git for Windows - after installation remove `C:\Program Files\Git\bin` from System PATH and add `C:\Program Files\Git\cmd` to System PATH
+- Make - after installation add `C:\Program Files (x86)\GnuWin32\bin` to System PATH
+
+You can then run the command `make install` followed by `make build` as on unix based systems.
+
 #### Next Steps...
 - Please visit our [wiki](https://github.com/spacemeshos/go-spacemesh/wiki)
 - Browse project [go docs](https://godoc.org/github.com/spacemeshos/go-spacemesh)

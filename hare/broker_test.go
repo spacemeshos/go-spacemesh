@@ -9,13 +9,13 @@ import (
 	"time"
 )
 
-var Layer1 = &LayerId{Bytes32{1}}
-var Layer2 = &LayerId{Bytes32{2}}
-var Layer3 = &LayerId{Bytes32{3}}
+var instanceId1 = &InstanceId{Bytes32{1}}
+var instanceId2 = &InstanceId{Bytes32{2}}
+var instanceId3 = &InstanceId{Bytes32{3}}
 
-func createMessage(t *testing.T, layer Byteable) []byte {
+func createMessage(t *testing.T, instanceId Byteable) []byte {
 	hareMsg := &pb.HareMessage{}
-	hareMsg.Message = &pb.InnerMessage{Layer: layer.Bytes()}
+	hareMsg.Message = &pb.InnerMessage{InstanceId: instanceId.Bytes()}
 	serMsg, err := proto.Marshal(hareMsg)
 
 	if err != nil {
@@ -27,11 +27,16 @@ func createMessage(t *testing.T, layer Byteable) []byte {
 
 type MockInboxer struct {
 	inbox chan *pb.HareMessage
+	id uint32
 }
 
 func (inboxer *MockInboxer) createInbox(size uint32) chan *pb.HareMessage {
 	inboxer.inbox = make(chan *pb.HareMessage, size)
 	return inboxer.inbox
+}
+
+func (inboxer *MockInboxer) Id() uint32 {
+	return inboxer.id
 }
 
 func TestBroker_Start(t *testing.T) {
@@ -46,7 +51,7 @@ func TestBroker_Start(t *testing.T) {
 	assert.Equal(t, "instance already started", err.Error())
 }
 
-// test that a message to a specific layer is delivered by the broker
+// test that a message to a specific set Id is delivered by the broker
 func TestBroker_Received(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
@@ -55,15 +60,15 @@ func TestBroker_Received(t *testing.T) {
 	broker := NewBroker(n1)
 	broker.Start()
 
-	inboxer := &MockInboxer{}
-	broker.Register(Layer1, inboxer)
+	inboxer := &MockInboxer{nil, instanceId1.Id()}
+	broker.Register(inboxer)
 
-	serMsg := createMessage(t, Layer1)
+	serMsg := createMessage(t, instanceId1)
 	n2.Broadcast(ProtoName, serMsg)
 
 	recv := <-inboxer.inbox
 
-	assert.True(t, recv.Message.Layer[0] == Layer1.Bytes()[0])
+	assert.True(t, recv.Message.InstanceId[0] == instanceId1.Bytes()[0])
 }
 
 // test that aborting the broker aborts
@@ -86,21 +91,21 @@ func TestBroker_Abort(t *testing.T) {
 	}
 }
 
-func sendMessages(t *testing.T, layer *LayerId, n *service.Node, count int) {
+func sendMessages(t *testing.T, instanceId *InstanceId, n *service.Node, count int) {
 	for i := 0; i < count; i++ {
-		n.Broadcast(ProtoName, createMessage(t, layer))
+		n.Broadcast(ProtoName, createMessage(t, instanceId))
 	}
 }
 
-func waitForMessages(t *testing.T, inbox chan *pb.HareMessage, layer *LayerId, msgCount int) {
+func waitForMessages(t *testing.T, inbox chan *pb.HareMessage, instanceId *InstanceId, msgCount int) {
 	for i := 0; i < msgCount; i++ {
 		x := <-inbox
-		assert.True(t, x.Message.Layer[0] == layer.Bytes()[0])
+		assert.True(t, x.Message.InstanceId[0] == instanceId.Bytes()[0])
 	}
 }
 
-// test flow for multiple layers
-func TestBroker_MultipleLayers(t *testing.T) {
+// test flow for multiple set id
+func TestBroker_MultipleInstanceIds(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
@@ -109,24 +114,24 @@ func TestBroker_MultipleLayers(t *testing.T) {
 	broker := NewBroker(n1)
 	broker.Start()
 
-	inboxer1 := &MockInboxer{}
-	inboxer2 := &MockInboxer{}
-	inboxer3 := &MockInboxer{}
-	broker.Register(Layer1, inboxer1)
-	broker.Register(Layer2, inboxer2)
-	broker.Register(Layer3, inboxer3)
+	inboxer1 := &MockInboxer{nil, instanceId1.Id()}
+	inboxer2 := &MockInboxer{nil, instanceId2.Id()}
+	inboxer3 := &MockInboxer{nil, instanceId3.Id()}
+	broker.Register(inboxer1)
+	broker.Register(inboxer2)
+	broker.Register(inboxer3)
 
 	inbox1 := inboxer1.inbox
 	inbox2 := inboxer2.inbox
 	inbox3 := inboxer3.inbox
 
-	go sendMessages(t, Layer1, n2, msgCount)
-	go sendMessages(t, Layer2, n2, msgCount)
-	go sendMessages(t, Layer3, n2, msgCount)
+	go sendMessages(t, instanceId1, n2, msgCount)
+	go sendMessages(t, instanceId2, n2, msgCount)
+	go sendMessages(t, instanceId3, n2, msgCount)
 
-	waitForMessages(t, inbox1, Layer1, msgCount)
-	waitForMessages(t, inbox2, Layer2, msgCount)
-	waitForMessages(t, inbox3, Layer3, msgCount)
+	waitForMessages(t, inbox1, instanceId1, msgCount)
+	waitForMessages(t, inbox2, instanceId2, msgCount)
+	waitForMessages(t, inbox3, instanceId3, msgCount)
 
 	assert.True(t, true)
 }
@@ -136,9 +141,9 @@ func TestBroker_RegisterUnregister(t *testing.T) {
 	n1 := sim.NewNode()
 	broker := NewBroker(n1)
 	broker.Start()
-	inbox := &MockInboxer{}
-	broker.Register(Layer1, inbox)
+	inboxer := &MockInboxer{nil, instanceId1.Id()}
+	broker.Register(inboxer)
 	assert.Equal(t, 1, len(broker.outbox))
-	broker.Unregister(Layer1)
+	broker.Unregister(instanceId1)
 	assert.Equal(t, 0, len(broker.outbox))
 }

@@ -1,66 +1,47 @@
 package hare
 
 import (
-	"bytes"
 	"encoding/binary"
-	"hash/fnv"
 )
 
+type Role byte
+
 const (
-	Passive = 0
-	Active = 1
-	Leader = 2
+	Passive = Role(0)
+	Active  = Role(1)
+	Leader  = Role(2)
 )
 
 type Rolacle interface {
-	Role(rq RoleRequest) Signature
-	ValidateRole(role byte, rq RoleRequest, sig Signature) bool
-}
-
-type RoleRequest struct {
-	pubKey []byte
-	layerId LayerId
-	k uint32
-}
-
-func (roleRequest *RoleRequest) bytes() []byte {
-	var binBuf bytes.Buffer
-	binary.Write(&binBuf, binary.BigEndian, roleRequest)
-
-	return binBuf.Bytes()
+	Role(sig Signature) Role
 }
 
 type MockOracle struct {
-	roles map[uint32]byte
+	roles         map[uint32]Role
+	isLeaderTaken bool
 }
 
 func NewMockOracle() *MockOracle {
 	mock := &MockOracle{}
-	mock.roles = make(map[uint32]byte)
+	mock.roles = make(map[uint32]Role)
 
 	return mock
 }
 
-func (roleRequest *RoleRequest) Id() uint32 {
-	h := fnv.New32()
-	h.Write(roleRequest.bytes())
-	return h.Sum32()
-}
-
-func (mockOracle *MockOracle) Role(rq RoleRequest) Signature {
-	i := rq.Id()
-
-	// check if exist
-	if _, exist := mockOracle.roles[i]; exist {
-		return Signature{}
+func (mockOracle *MockOracle) Role(proof Signature) Role {
+	if proof == nil {
+		return Passive
 	}
 
-	mockOracle.roles[i] = roleFromIteration(rq.k)
+	data := binary.LittleEndian.Uint32(proof)
 
-	return Signature{}
-}
+	if data < 10 {
+		return Leader
+	}
 
-func (mockOracle *MockOracle) ValidateRole(role byte, rq RoleRequest, sig Signature) bool {
-	mockOracle.Role(rq)
-	return mockOracle.roles[rq.Id()] == role && bytes.Equal(sig, Signature{})
+	if data < 10000 {
+		return Active
+	}
+
+	return Passive
 }

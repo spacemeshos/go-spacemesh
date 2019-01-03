@@ -4,6 +4,7 @@ COMMIT = $(shell git rev-parse HEAD)
 BRANCH = $(shell git rev-parse --abbrev-ref HEAD)
 BIN_DIR = $(shell pwd)/build
 CURR_DIR = $(shell pwd)
+CURR_DIR_WIN = $(shell cd)
 export GO111MODULE = on
 
 # Setup the -ldflags option to pass vars defined here to app vars
@@ -18,16 +19,29 @@ all: install build
 .PHONY: all
 
 install:
+ifeq ($(OS),Windows_NT) 
+	setup_env.bat
+else
 	./setup_env.sh
+endif
 .PHONY: install
 
 genproto:
+ifeq ($(OS),Windows_NT) 
+	scripts\win\genproto.bat
+else
 	./scripts/genproto.sh
+endif
 .PHONY: genproto
 
 build:
+ifeq ($(OS),Windows_NT)
+	make genproto
+	go build ${LDFLAGS} -o $(CURR_DIR_WIN)/$(BINARY).exe
+else
 	make genproto
 	go build ${LDFLAGS} -o $(CURR_DIR)/$(BINARY)
+endif
 .PHONY: build
 
 tidy:
@@ -36,7 +50,7 @@ tidy:
 
 $(PLATFORMS):
 	make genproto
-	GOOS=$(os) GOARCH=amd64 go build ${LDFLAGS} -o $(BIN_DIR)/$(BINARY)-$(VERSION)-$(os)-amd64
+	GOOS=$(os) GOARCH=amd64 go build ${LDFLAGS} -o $(CURR_DIR)/$(BINARY)
 .PHONY: $(PLATFORMS)
 
 test:
