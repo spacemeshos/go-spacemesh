@@ -8,7 +8,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
@@ -370,7 +369,7 @@ func (sis *syncIntegrationTwoNodes) TestSyncProtocol_TwoNodes() {
 	syncObj1.AddLayer(mesh.NewExistingLayer(5, []*mesh.Block{block9, block10}))
 
 	timeout := time.After(60 * time.Second)
-	syncObj2.SetLatestKnownLayer(5)
+	syncObj2.SetLatestLayer(5)
 	syncObj2.Start()
 
 	// Keep trying until we're timed out or got a result or got an error
@@ -381,7 +380,7 @@ func (sis *syncIntegrationTwoNodes) TestSyncProtocol_TwoNodes() {
 			t.Error("timed out ")
 			return
 		default:
-			if syncObj2.LatestIrreversible() == 3 {
+			if syncObj2.LocalLayer() == 3 {
 				t.Log("done!")
 				return
 			}

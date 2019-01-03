@@ -171,7 +171,7 @@ func (s *Syncer) Synchronise() {
 		s.AddLayer(mesh.NewExistingLayer(mesh.LayerID(i), blocks))
 	}
 
-	s.Debug("synchronise done, local layer index is ", s.LatestIrreversible())
+	s.Debug("synchronise done, local layer index is ", s.LocalLayer())
 }
 
 type peerHashPair struct {

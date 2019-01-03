@@ -2,6 +2,7 @@ package mesh
 
 import (
 	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"

@@ -39,7 +39,7 @@ type mesh struct {
 	orphMutex   sync.RWMutex
 }
 
-func NewMesh(layers database.DB, blocks database.DB, validity database.DB, orphans database.DB,logger log.Log) Mesh {
+func NewMesh(layers database.DB, blocks database.DB, validity database.DB, orphans database.DB, logger log.Log) Mesh {
 	//todo add boot from disk
 	ll := &mesh{
 		Log:      logger,
@@ -94,6 +94,7 @@ func (m *mesh) AddLayer(layer *Layer) error {
 	return nil
 }
 
+//todo consider adding a boolean for layer validity instead error
 func (m *mesh) GetLayer(i LayerID) (*Layer, error) {
 	m.lMutex.RLock()
 	if i > LayerID(m.localLayer) {
@@ -156,10 +157,10 @@ func (m *mesh) GetBlock(id BlockID) (*Block, error) {
 }
 
 func (m *mesh) GetContextualValidity(id BlockID) (bool, error) {
-	return m.mDB.getContextualValidity(id)
+	return m.getContextualValidity(id)
 }
 
 func (m *mesh) Close() {
 	m.Debug("closing mDB")
-	m.mDB.Close()
+	m.meshDB.Close()
 }
