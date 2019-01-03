@@ -41,8 +41,8 @@ func TestBlockListener(t *testing.T) {
 	block2 := mesh.NewExistingBlock(mesh.BlockID(321), 1, nil)
 	block3 := mesh.NewExistingBlock(mesh.BlockID(222), 2, nil)
 
-	block1.BlockVotes[block2.ID()] = true
-	block1.BlockVotes[block3.ID()] = true
+	block1.ViewEdges[block2.ID()] = struct{}{}
+	block1.ViewEdges[block3.ID()] = struct{}{}
 
 	bl1.AddBlock(block1)
 	bl1.AddBlock(block2)
@@ -89,18 +89,18 @@ func TestBlockListener2(t *testing.T) {
 	block9 := mesh.NewBlock(true, nil, time.Now(), 4)
 	block10 := mesh.NewBlock(true, nil, time.Now(), 5)
 
-	block2.BlockVotes[block1.ID()] = true
-	block3.BlockVotes[block2.ID()] = true
-	block4.BlockVotes[block2.ID()] = true
-	block5.BlockVotes[block3.ID()] = true
-	block5.BlockVotes[block4.ID()] = true
-	block6.BlockVotes[block4.ID()] = true
-	block7.BlockVotes[block6.ID()] = true
-	block7.BlockVotes[block5.ID()] = true
-	block8.BlockVotes[block6.ID()] = true
-	block9.BlockVotes[block5.ID()] = true
-	block10.BlockVotes[block8.ID()] = true
-	block10.BlockVotes[block9.ID()] = true
+	block2.ViewEdges[block1.ID()] = struct{}{}
+	block3.ViewEdges[block2.ID()] = struct{}{}
+	block4.ViewEdges[block2.ID()] = struct{}{}
+	block5.ViewEdges[block3.ID()] = struct{}{}
+	block5.ViewEdges[block4.ID()] = struct{}{}
+	block6.ViewEdges[block4.ID()] = struct{}{}
+	block7.ViewEdges[block6.ID()] = struct{}{}
+	block7.ViewEdges[block5.ID()] = struct{}{}
+	block8.ViewEdges[block6.ID()] = struct{}{}
+	block9.ViewEdges[block5.ID()] = struct{}{}
+	block10.ViewEdges[block8.ID()] = struct{}{}
+	block10.ViewEdges[block9.ID()] = struct{}{}
 
 	bl1.AddBlock(block1)
 	bl1.AddBlock(block2)
@@ -116,17 +116,17 @@ func TestBlockListener2(t *testing.T) {
 	bl2.FetchBlock(block10.Id)
 
 	timeout := time.After(10 * time.Second)
-loop:
 	for {
 		select {
 		// Got a timeout! fail with a timeout error
 		case <-timeout:
 			t.Error("timed out ")
+			return
 		default:
 			if b, err := bl2.GetBlock(block1.Id); err == nil {
 				fmt.Println("  ", b)
 				t.Log("done!")
-				break loop
+				return
 			}
 		}
 	}

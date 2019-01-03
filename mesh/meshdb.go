@@ -19,15 +19,18 @@ type meshDB struct {
 	layers             database.DB
 	blocks             database.DB
 	contextualValidity database.DB //map blockId to contextualValidation state of block
+	orphanBlocks       database.DB
+	orphanBlockCount   int32
 	layerHandlers      map[LayerID]*layerHandler
 	lhMutex            sync.Mutex
 }
 
-func NewMeshDb(layers database.DB, blocks database.DB, validity database.DB) *meshDB {
+func NewMeshDb(layers database.DB, blocks database.DB, validity database.DB, orphans database.DB) *meshDB {
 	ll := &meshDB{
 		blocks:             blocks,
 		layers:             layers,
 		contextualValidity: validity,
+		orphanBlocks:       orphans,
 		layerHandlers:      make(map[LayerID]*layerHandler),
 	}
 	return ll
@@ -37,6 +40,7 @@ func (m *meshDB) Close() {
 	m.blocks.Close()
 	m.layers.Close()
 	m.contextualValidity.Close()
+	m.orphanBlocks.Close()
 }
 
 func (m *meshDB) getLayer(index LayerID) (*Layer, error) {
@@ -79,14 +83,18 @@ func (m *meshDB) getBlock(id BlockID) (*Block, error) {
 }
 
 func (m *meshDB) getContextualValidity(id BlockID) (bool, error) {
-	//todo implement
-	return true, nil
+	b, err := m.contextualValidity.Get(id.ToBytes())
+	return b[0] == 1, err //bytes to bool
 }
 
 func (m *meshDB) setContextualValidity(id BlockID, valid bool) error {
 	//todo implement
 	//todo concurrency
-	m.contextualValidity.Put(id.ToBytes(), boolAsBytes(valid))
+	var v []byte
+	if valid {
+		v = TRUE
+	}
+	m.contextualValidity.Put(id.ToBytes(), v)
 	return nil
 }
 
@@ -153,10 +161,16 @@ func (m *meshDB) handleLayerBlocks(ll *layerHandler) {
 				log.Error("could not encode block")
 				continue
 			}
+			if b, err := m.blocks.Get(block.ID().ToBytes()); err == nil && b != nil {
+				log.Error("block ", block, " already in database ")
+				continue
+			}
+
 			if err := m.blocks.Put(block.ID().ToBytes(), bytes); err != nil {
 				log.Error("could not add block to ", block, " database ", err)
 				continue
 			}
+
 			m.updateLayerIds(block)
 			m.tryDeleteHandler(ll) //try delete handler when done to avoid leak
 		default:

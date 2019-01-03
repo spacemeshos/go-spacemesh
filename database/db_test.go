@@ -2,6 +2,7 @@ package database
 
 import (
 	"fmt"
+	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
@@ -13,14 +14,27 @@ func TestDB_reopendatabase(t *testing.T) {
 	fmt.Println(string(str))
 	db.Close()
 	db2 := NewLevelDbStore("test", nil, nil)
-	str2, _ := db2.Get(key)
-	fmt.Println(string(str2))
+	_, err := db2.Get(key)
+	assert.True(t, err == nil, "wrong layer")
 	db2.Close()
 }
 
 func TestDB_reopendatabase2(t *testing.T) {
-	db2 := NewLevelDbStore("test", nil, nil)
-	str2, _ := db2.Get([]byte("some key"))
-	fmt.Println(string(str2))
-	db2.Close()
+	db := NewLevelDbStore("test", nil, nil)
+	str, _ := db.Get([]byte("some key"))
+	fmt.Println(string(str))
+	db.Close()
+}
+
+func TestDB_delete(t *testing.T) {
+	key := []byte("some key")
+	db := NewLevelDbStore("test", nil, nil)
+	db.Put(key, []byte("wonderful"))
+	str, err := db.Get(key)
+	fmt.Println(string(str))
+	assert.True(t, err == nil, "wrong layer")
+	db.Delete(key)
+	str, err = db.Get(key)
+	fmt.Println(string(str))
+	assert.True(t, err != nil, "wrong layer")
 }
