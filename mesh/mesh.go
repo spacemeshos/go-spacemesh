@@ -121,9 +121,10 @@ func (m *mesh) handleOrphanBlocks(block *Block) {
 	m.orphanBlocks.Put(block.ID().ToBytes(), TRUE)
 	atomic.AddInt32(&m.orphanBlockCount, 1)
 	for b := range block.ViewEdges {
-		v, err := m.orphanBlocks.Get(b.ToBytes())
-		if err == nil {
-			m.orphanBlocks.Delete(v)
+		blockId := b.ToBytes()
+		if _, err := m.orphanBlocks.Get(blockId); err == nil {
+			log.Debug("delete block ", blockId, "from orphans")
+			m.orphanBlocks.Delete(blockId)
 			atomic.AddInt32(&m.orphanBlockCount, -1)
 		}
 	}
@@ -141,8 +142,9 @@ func (m *mesh) GetOrphanBlocks() []BlockID {
 		keys = append(keys, BlockID(BytesToUint32(iter.Key())))
 	}
 	iter.Release()
-	err := iter.Error()
-	log.Error("error iterating over orphans", err)
+	if err := iter.Error(); err != nil {
+		log.Error("error iterating over orphans", err)
+	}
 	return keys
 }
 
