@@ -25,15 +25,15 @@ type Mesh interface {
 }
 
 type mesh struct {
-	latestIrreversible uint32
-	latestLayer        uint32
-	mDB                *meshDB
-	lMutex             sync.RWMutex
-	lkMutex            sync.RWMutex
-	lcMutex            sync.RWMutex
-	tortoise           Algorithm
-	orphanBlocks       map[BlockID]bool
-	orphMutex          sync.RWMutex
+	localLayer   uint32
+	latestLayer  uint32
+	mDB          *meshDB
+	lMutex       sync.RWMutex
+	lkMutex      sync.RWMutex
+	lcMutex      sync.RWMutex
+	tortoise     Algorithm
+	orphanBlocks map[BlockID]bool
+	orphMutex    sync.RWMutex
 }
 
 func NewMesh(layers database.DB, blocks database.DB, validity database.DB) Mesh {
@@ -52,7 +52,7 @@ func (m *mesh) IsContexuallyValid(b BlockID) bool {
 }
 
 func (m *mesh) LocalLayer() uint32 {
-	return atomic.LoadUint32(&m.latestIrreversible)
+	return atomic.LoadUint32(&m.localLayer)
 }
 
 func (m *mesh) LatestLayer() uint32 {
@@ -86,14 +86,14 @@ func (m *mesh) AddLayer(layer *Layer) error {
 
 	m.mDB.addLayer(layer)
 	m.tortoise.HandleIncomingLayer(layer)
-	atomic.AddUint32(&m.latestIrreversible, 1)
+	atomic.AddUint32(&m.localLayer, 1)
 	m.SetLatestLayer(uint32(layer.Index()))
 	return nil
 }
 
 func (m *mesh) GetLayer(i LayerID) (*Layer, error) {
 	m.lMutex.RLock()
-	if i > LayerID(m.latestIrreversible) {
+	if i > LayerID(m.localLayer) {
 		m.lMutex.RUnlock()
 		log.Debug("failed to get layer  ", i, " layer not verified yet")
 		return nil, errors.New("layer not verified yet")
