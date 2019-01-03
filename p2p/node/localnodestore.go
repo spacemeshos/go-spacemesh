@@ -38,12 +38,17 @@ func (n *LocalNode) persistData() error {
 		return err
 	}
 
-	nodeDataPath, err := filesystem.EnsureNodesDataDirectory(config.NodesDirectoryName)
+	dataDir, err := filesystem.EnsureNodesDataDirectory(config.NodesDirectoryName)
 	if err != nil {
 		return err
 	}
 
-	path := filesystem.NodeDataFile(nodeDataPath, config.NodeDataFileName, n.String())
+	_, err = filesystem.EnsureNodeDataDirectory(dataDir, n.pubKey.String())
+	if err != nil {
+		return err
+	}
+
+	path := filesystem.NodeDataFile(dataDir, config.NodeDataFileName, n.String())
 
 	// make sure our node file is written to the os filesystem.
 	f, err := os.Create(path)
