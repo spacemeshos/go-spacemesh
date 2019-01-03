@@ -11,6 +11,9 @@ import (
 const layerSize = 200
 const cachedLayers = 50
 
+var TRUE = []byte{1}
+var FALSE = []byte{0}
+
 type Mesh interface {
 	AddLayer(layer *Layer) error
 	GetLayer(i LayerID) (*Layer, error)
@@ -25,23 +28,21 @@ type Mesh interface {
 }
 
 type mesh struct {
-	localLayer   uint32
-	latestLayer  uint32
-	mDB          *meshDB
-	lMutex       sync.RWMutex
-	lkMutex      sync.RWMutex
-	lcMutex      sync.RWMutex
-	tortoise     Algorithm
-	orphanBlocks map[BlockID]bool
-	orphMutex    sync.RWMutex
+	*meshDB
+	localLayer  uint32
+	latestLayer uint32
+	lMutex      sync.RWMutex
+	lkMutex     sync.RWMutex
+	lcMutex     sync.RWMutex
+	tortoise    Algorithm
+	orphMutex   sync.RWMutex
 }
 
-func NewMesh(layers database.DB, blocks database.DB, validity database.DB) Mesh {
+func NewMesh(layers database.DB, blocks database.DB, validity database.DB, orphans database.DB) Mesh {
 	//todo add boot from disk
 	ll := &mesh{
-		tortoise:     NewAlgorithm(uint32(layerSize), uint32(cachedLayers)),
-		mDB:          NewMeshDb(layers, blocks, validity),
-		orphanBlocks: make(map[BlockID]bool),
+		tortoise: NewAlgorithm(uint32(layerSize), uint32(cachedLayers)),
+		meshDB:   NewMeshDb(layers, blocks, validity, orphans),
 	}
 	return ll
 }
@@ -84,7 +85,7 @@ func (m *mesh) AddLayer(layer *Layer) error {
 		return errors.New("can't add layer missing previous layers")
 	}
 
-	m.mDB.addLayer(layer)
+	m.addLayer(layer)
 	m.tortoise.HandleIncomingLayer(layer)
 	atomic.AddUint32(&m.localLayer, 1)
 	m.SetLatestLayer(uint32(layer.Index()))
@@ -99,12 +100,12 @@ func (m *mesh) GetLayer(i LayerID) (*Layer, error) {
 		return nil, errors.New("layer not verified yet")
 	}
 	m.lMutex.RUnlock()
-	return m.mDB.getLayer(i)
+	return m.getLayer(i)
 }
 
 func (m *mesh) AddBlock(block *Block) error {
 	log.Debug("add block ", block.ID())
-	if err := m.mDB.addBlock(block); err != nil {
+	if err := m.addBlock(block); err != nil {
 		log.Debug("failed to add block ", block.ID(), " ", err)
 		return err
 	}
@@ -117,11 +118,14 @@ func (m *mesh) AddBlock(block *Block) error {
 
 //todo better thread safety
 func (m *mesh) handleOrphanBlocks(block *Block) {
-	m.orphMutex.Lock()
-	defer m.orphMutex.Unlock()
-	m.orphanBlocks[block.ID()] = true
+	m.orphanBlocks.Put(block.ID().ToBytes(), TRUE)
+	atomic.AddInt32(&m.orphanBlockCount, 1)
 	for b := range block.ViewEdges {
-		m.orphanBlocks[b] = false
+		v, err := m.orphanBlocks.Get(b.ToBytes())
+		if err == nil {
+			m.orphanBlocks.Delete(v)
+			atomic.AddInt32(&m.orphanBlockCount, -1)
+		}
 	}
 }
 
@@ -129,25 +133,29 @@ func (m *mesh) handleOrphanBlocks(block *Block) {
 func (m *mesh) GetOrphanBlocks() []BlockID {
 	m.orphMutex.Lock()
 	defer m.orphMutex.Unlock()
-	keys := make([]BlockID, 0, len(m.orphanBlocks))
-	for k, v := range m.orphanBlocks {
-		if v {
-			keys = append(keys, k)
-		}
+	keys := make([]BlockID, 0, m.orphanBlockCount)
+	iter := m.orphanBlocks.Iterator()
+	for iter.Next() {
+		// Remember that the contents of the returned slice should not be modified, and
+		// only valid until the next call to Next.
+		keys = append(keys, BlockID(BytesToUint32(iter.Key())))
 	}
+	iter.Release()
+	err := iter.Error()
+	log.Error("error iterating over orphans", err)
 	return keys
 }
 
 func (m *mesh) GetBlock(id BlockID) (*Block, error) {
 	log.Debug("get block ", id)
-	return m.mDB.getBlock(id)
+	return m.getBlock(id)
 }
 
 func (m *mesh) GetContextualValidity(id BlockID) (bool, error) {
-	return m.mDB.getContextualValidity(id)
+	return m.getContextualValidity(id)
 }
 
 func (m *mesh) Close() {
 	log.Debug("closing mDB")
-	m.mDB.Close()
+	m.meshDB.Close()
 }

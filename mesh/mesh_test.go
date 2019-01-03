@@ -11,7 +11,8 @@ func getMesh(id string) Mesh {
 	bdb := database.NewLevelDbStore("blocks_test_"+id, nil, nil)
 	ldb := database.NewLevelDbStore("layers_test_"+id, nil, nil)
 	cdb := database.NewLevelDbStore("contextual_test_"+id, nil, nil)
-	layers := NewMesh(ldb, bdb, cdb)
+	odb := database.NewLevelDbStore("orphans_test_"+id, nil, nil)
+	layers := NewMesh(ldb, bdb, cdb, odb)
 	return layers
 }
 

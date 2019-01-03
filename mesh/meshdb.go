@@ -19,15 +19,18 @@ type meshDB struct {
 	layers             database.DB
 	blocks             database.DB
 	contextualValidity database.DB //map blockId to contextualValidation state of block
+	orphanBlocks       database.DB
+	orphanBlockCount   int32
 	layerHandlers      map[LayerID]*layerHandler
 	lhMutex            sync.Mutex
 }
 
-func NewMeshDb(layers database.DB, blocks database.DB, validity database.DB) *meshDB {
+func NewMeshDb(layers database.DB, blocks database.DB, validity database.DB, orphans database.DB) *meshDB {
 	ll := &meshDB{
 		blocks:             blocks,
 		layers:             layers,
 		contextualValidity: validity,
+		orphanBlocks:       orphans,
 		layerHandlers:      make(map[LayerID]*layerHandler),
 	}
 	return ll
@@ -37,6 +40,7 @@ func (m *meshDB) Close() {
 	m.blocks.Close()
 	m.layers.Close()
 	m.contextualValidity.Close()
+	m.orphanBlocks.Close()
 }
 
 func (m *meshDB) getLayer(index LayerID) (*Layer, error) {
@@ -86,7 +90,11 @@ func (m *meshDB) getContextualValidity(id BlockID) (bool, error) {
 func (m *meshDB) setContextualValidity(id BlockID, valid bool) error {
 	//todo implement
 	//todo concurrency
-	m.contextualValidity.Put(id.ToBytes(), boolAsBytes(valid))
+	var v []byte
+	if valid {
+		v = TRUE
+	}
+	m.contextualValidity.Put(id.ToBytes(), v)
 	return nil
 }
 

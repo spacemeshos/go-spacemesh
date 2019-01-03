@@ -2,22 +2,20 @@ package mesh
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"github.com/davecgh/go-xdr/xdr2"
-	"math/big"
 )
 
-func (b BlockID) ToBytes() []byte { return uint64ToBytes(uint64(b)) }
-func (l LayerID) ToBytes() []byte { return uint64ToBytes(uint64(l)) }
+func (b BlockID) ToBytes() []byte { return uint32ToBytes(uint32(b)) }
+func (l LayerID) ToBytes() []byte { return uint32ToBytes(uint32(l)) }
 
-func uint64ToBytes(i uint64) []byte { return new(big.Int).SetUint64(uint64(i)).Bytes() }
+func BytesToUint32(i []byte) uint32 { return binary.LittleEndian.Uint32(i) }
 
-func boolAsBytes(b bool) []byte {
-	var bitBool int8
-	if b {
-		bitBool = 1
-	}
-	return append(make([]byte, 0, 1), byte(bitBool))
+func uint32ToBytes(i uint32) []byte {
+	a := make([]byte, 4)
+	binary.LittleEndian.PutUint32(a, i)
+	return a
 }
 
 func blockIdsAsBytes(ids map[BlockID]bool) ([]byte, error) {
