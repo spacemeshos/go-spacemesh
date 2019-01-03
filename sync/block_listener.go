@@ -10,7 +10,7 @@ import (
 
 type MessageServer server.MessageServer
 
-const blockProtocol = "/blocks/1.0/"
+const BlockProtocol = "/blocks/1.0/"
 
 type BlockListener struct {
 	*server.MessageServer
@@ -36,7 +36,7 @@ func (bl *BlockListener) Start() {
 	}
 }
 
-func (bl *BlockListener) OnNewBlock(b *mesh.Block) {
+func (bl *BlockListener) OnNewBlock(b *mesh.TortoiseBlock) {
 	bl.addUnknownToQueue(b)
 }
 
@@ -45,7 +45,7 @@ func NewBlockListener(net server.Service, bv BlockValidator, layers mesh.Mesh, t
 		BlockValidator: bv,
 		Mesh:           layers,
 		Peers:          NewPeers(net),
-		MessageServer:  server.NewMsgServer(net, blockProtocol, timeout),
+		MessageServer:  server.NewMsgServer(net, BlockProtocol, timeout),
 		semaphore:      make(chan struct{}, concurrency),
 		unknownQueue:   make(chan mesh.BlockID, 200), //todo tune buffer size + get buffer from config
 		exit:           make(chan struct{})}
@@ -83,7 +83,7 @@ func (bl *BlockListener) FetchBlock(id mesh.BlockID) {
 	}
 }
 
-func (bl *BlockListener) addUnknownToQueue(b *mesh.Block) {
+func (bl *BlockListener) addUnknownToQueue(b *mesh.TortoiseBlock) {
 	for block := range b.BlockVotes {
 		//if unknown block
 		if _, err := bl.GetBlock(block); err != nil {

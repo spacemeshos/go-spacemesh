@@ -31,6 +31,22 @@ type Transaction struct {
 	hash *common.Hash
 }
 
+func NewTransaction(nonce uint64,
+	origin common.Address,
+	destination common.Address,
+	amount *big.Int) *Transaction{
+	return &Transaction{
+		AccountNonce: nonce,
+		Origin: origin,
+		Recipient:&destination,
+		Amount: amount,
+		GasLimit:10,
+		Price:big.NewInt(1),
+		hash:nil,
+		Payload:nil,
+	}
+}
+
 func rlpHash(x interface{}) (h common.Hash) {
 	hw := sha3.NewKeccak256()
 	rlp.Encode(hw, x)
@@ -156,6 +172,8 @@ func (tp *TransactionProcessor) coalesceTransactionsBySender(transactions Transa
 
 	for key := range trnsBySender{
 		sort.Slice(trnsBySender[key], func(i, j int) bool {
+			//todo: add fix here:
+			// if trnsBySender[key][i].AccountNonce == trnsBySender[key][j].AccountNonce { return trnsBySender[key][i].Hash() < trnsBySender[key][j].AccountNonce.Hash() }
 			return trnsBySender[key][i].AccountNonce < trnsBySender[key][j].AccountNonce
 		})
 	}

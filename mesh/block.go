@@ -10,7 +10,9 @@ type LayerID uint32
 
 var layerCounter LayerID = 0
 
-type Block struct {
+
+
+type TortoiseBlock struct {
 	Id         BlockID
 	LayerIndex LayerID
 	Data       []byte
@@ -21,16 +23,16 @@ type Block struct {
 	BlockVotes map[BlockID]bool
 }
 
-func (b Block) ID() BlockID {
+func (b TortoiseBlock) ID() BlockID {
 	return b.Id
 }
 
-func (b Block) Layer() LayerID {
+func (b TortoiseBlock) Layer() LayerID {
 	return b.LayerIndex
 }
 
-func NewExistingBlock(id BlockID, layerIndex LayerID, data []byte) *Block {
-	b := Block{
+func NewExistingBlock(id BlockID, layerIndex LayerID, data []byte) *TortoiseBlock {
+	b := TortoiseBlock{
 		Id:         BlockID(id),
 		BlockVotes: make(map[BlockID]bool),
 		LayerIndex: LayerID(layerIndex),
@@ -39,8 +41,8 @@ func NewExistingBlock(id BlockID, layerIndex LayerID, data []byte) *Block {
 	return &b
 }
 
-func NewBlock(coin bool, data []byte, ts time.Time, layerId LayerID) *Block {
-	b := Block{
+func NewBlock(coin bool, data []byte, ts time.Time, layerId LayerID) *TortoiseBlock {
+	b := TortoiseBlock{
 		Id:         BlockID(uuid.New().ID()),
 		LayerIndex: layerId,
 		BlockVotes: make(map[BlockID]bool),
@@ -54,7 +56,7 @@ func NewBlock(coin bool, data []byte, ts time.Time, layerId LayerID) *Block {
 }
 
 type Layer struct {
-	blocks []*Block
+	blocks []*TortoiseBlock
 	index  LayerID
 }
 
@@ -62,7 +64,7 @@ func (l *Layer) Index() LayerID {
 	return l.index
 }
 
-func (l *Layer) Blocks() []*Block {
+func (l *Layer) Blocks() []*TortoiseBlock {
 	return l.blocks
 }
 
@@ -70,21 +72,21 @@ func (l *Layer) Hash() []byte {
 	return []byte("some hash representing the layer")
 }
 
-func (l *Layer) AddBlock(block *Block) {
+func (l *Layer) AddBlock(block *TortoiseBlock) {
 	block.LayerIndex = l.index
 	l.blocks = append(l.blocks, block)
 }
 
 func NewLayer() *Layer {
 	l := Layer{
-		blocks: make([]*Block, 0),
+		blocks: make([]*TortoiseBlock, 0),
 		index:  layerCounter,
 	}
 	layerCounter++
 	return &l
 }
 
-func NewExistingLayer(idx LayerID, blocks []*Block) *Layer {
+func NewExistingLayer(idx LayerID, blocks []*TortoiseBlock) *Layer {
 	l := Layer{
 		blocks: blocks,
 		index:  idx,
