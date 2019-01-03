@@ -42,10 +42,12 @@ func (BlockValidatorMock) ValidateBlock(block *mesh.Block) bool {
 }
 
 func getMesh(id string) mesh.Mesh {
+	time := time.Now()
 	bdb := database.NewLevelDbStore("blocks_test_"+id, nil, nil)
 	ldb := database.NewLevelDbStore("layers_test_"+id, nil, nil)
 	cv := database.NewLevelDbStore("contextually_valid_test_"+id, nil, nil)
-	layers := mesh.NewMesh(ldb, bdb, cv)
+	odb := database.NewLevelDbStore("orphans_test_"+id+"_"+time.String(), nil, nil)
+	layers := mesh.NewMesh(ldb, bdb, cv, odb)
 	return layers
 }
 
