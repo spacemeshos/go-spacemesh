@@ -1,10 +1,8 @@
 package api
 
 import (
-	"errors"
 	"fmt"
 	"io/ioutil"
-	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -12,9 +10,9 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/jsonpb"
-	config "github.com/spacemeshos/go-spacemesh/api/config"
-	pb "github.com/spacemeshos/go-spacemesh/api/pb"
-	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/api/config"
+	"github.com/spacemeshos/go-spacemesh/api/pb"
+	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -22,34 +20,11 @@ import (
 
 // Better a small code duplication than a small dependency
 
-// CheckUserPort tries to listen on a port and check whether is usable or not
-func CheckUserPort(port uint32) bool {
-	address := fmt.Sprintf("0.0.0.0:%d", port)
-	l, e := net.Listen("tcp", address)
-	if e != nil {
-		return true
-	}
-	l.Close()
-	return false
-}
-
-// GetUnboundedPort returns a port that is for sure unbounded or an error.
-func GetUnboundedPort() (int, error) {
-	port := crypto.GetRandomUserPort()
-	retryCount := 0
-	for used := true; used && retryCount < 10; used, retryCount = CheckUserPort(port), retryCount+1 {
-		port = crypto.GetRandomUserPort()
-	}
-	if retryCount >= 10 {
-		return 0, errors.New("failed to establish network, probably no internet connection")
-	}
-	return int(port), nil
-}
 
 func TestServersConfig(t *testing.T) {
 
-	port1, err := GetUnboundedPort()
-	port2, err := GetUnboundedPort()
+	port1, err := node.GetUnboundedPort()
+	port2, err := node.GetUnboundedPort()
 	assert.NoError(t, err, "Should be able to establish a connection on a port")
 
 	config.ConfigValues.JSONServerPort = port1
@@ -64,8 +39,8 @@ func TestServersConfig(t *testing.T) {
 
 func TestGrpcApi(t *testing.T) {
 
-	port1, err := GetUnboundedPort()
-	port2, err := GetUnboundedPort()
+	port1, err := node.GetUnboundedPort()
+	port2, err := node.GetUnboundedPort()
 	assert.NoError(t, err, "Should be able to establish a connection on a port")
 
 	config.ConfigValues.JSONServerPort = port1
@@ -106,8 +81,8 @@ func TestGrpcApi(t *testing.T) {
 
 func TestJsonApi(t *testing.T) {
 
-	port1, err := GetUnboundedPort()
-	port2, err := GetUnboundedPort()
+	port1, err := node.GetUnboundedPort()
+	port2, err := node.GetUnboundedPort()
 	assert.NoError(t, err, "Should be able to establish a connection on a port")
 
 	config.ConfigValues.JSONServerPort = port1
