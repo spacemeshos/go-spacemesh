@@ -230,3 +230,15 @@ func (s *Set) Union(g *Set) *Set {
 
 	return union
 }
+
+// Returns the complement of s relatively to the world u
+func (s *Set) Complement(u *Set) *Set {
+	comp := NewEmptySet(len(u.values))
+	for _, v := range u.values {
+		if !s.Contains(v) {
+			comp.Add(v)
+		}
+	}
+
+	return comp
+}
