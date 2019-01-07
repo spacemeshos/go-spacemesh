@@ -8,17 +8,16 @@ type Signing interface {
 }
 
 type MockSigning struct {
-	sig []byte
 }
 
 func NewMockSigning() *MockSigning {
-	return &MockSigning{[]byte{1, 2, 3, 4}}
+	return &MockSigning{}
 }
 
 func (mockSigning *MockSigning) Sign(m []byte) []byte {
-	return mockSigning.sig
+	return m
 }
 
 func (mockSigning *MockSigning) Validate(m []byte, sig []byte) bool {
-	return bytes.Equal(mockSigning.sig, sig)
+	return bytes.Equal(m, sig)
 }

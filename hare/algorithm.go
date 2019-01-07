@@ -9,6 +9,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"hash/fnv"
 	"time"
 )
 
@@ -24,7 +25,7 @@ type NetworkService interface {
 }
 
 type State struct {
-	k           uint32          // the round counter (k%4 is the round number)
+	k           uint32          // the round counter (r%4 is the round number)
 	ki          int32           // indicates when S was first committed upon
 	s           *Set            // the set of values
 	certificate *pb.Certificate // the certificate
@@ -160,15 +161,18 @@ func roleFromRoundCounter(k uint32) Role {
 func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
 	// Note: instanceId is already verified by the broker
 
+	log.Info("Received message for handling: ", m.String())
+
 	// validate message
 	if !proc.validator.ValidateMessage(m, proc.k) {
-		log.Info("Message is not syntactically valid")
+		log.Warning("Message is not syntactically valid")
 		return
 	}
 
 	// validate role
-	if proc.oracle.Role(Signature(m.Message.RoleProof)) == roleFromRoundCounter(m.Message.K) {
-		log.Warning("invalid role detected for: ", m.String())
+	if proc.oracle.Role(proc.k, Signature(m.Message.RoleProof)) != roleFromRoundCounter(m.Message.K) {
+		log.Warning("Invalid role detected. Expected: %v Actual: %v",
+			proc.oracle.Role(proc.k, Signature(m.Message.RoleProof)), roleFromRoundCounter(m.Message.K))
 		return
 	}
 
@@ -249,6 +253,7 @@ func (proc *ConsensusProcess) beginRound2() {
 
 	// done with building proposal, reset statuses tracking
 	proc.statusesTracker = nil
+	proc.proposalTracker = NewProposalTracker(proc.cfg.N)
 }
 
 func (proc *ConsensusProcess) beginRound3() {
@@ -290,8 +295,14 @@ func (proc *ConsensusProcess) onRoundBegin() {
 func (proc *ConsensusProcess) roleProof() Signature {
 	kInBytes := make([]byte, 4)
 	binary.LittleEndian.PutUint32(kInBytes, uint32(proc.k))
+	hash := fnv.New32()
+	hash.Write(proc.pubKey.Bytes())
+	hash.Write(kInBytes)
 
-	return proc.signing.Sign(kInBytes)
+	hashBytes := make([]byte, 4)
+	binary.LittleEndian.PutUint32(hashBytes, uint32(hash.Sum32()))
+
+	return proc.signing.Sign(hashBytes)
 }
 
 func (proc *ConsensusProcess) initDefaultBuilder(s *Set) *MessageBuilder {
@@ -346,7 +357,7 @@ func (proc *ConsensusProcess) processNotifyMsg(msg *pb.HareMessage) {
 	s := NewSet(msg.Message.Values)
 	if proc.currentRound() == Round4 { // not necessary to update otherwise
 		// update state
-		if msg.Cert.AggMsgs.Messages[0].Message.Ki >= proc.ki { // we assume that the expression was checked before
+		if int32(msg.Cert.AggMsgs.Messages[0].Message.K) >= proc.ki { // we assume that the expression was checked before
 			proc.s = s
 			proc.certificate = msg.Cert
 			proc.ki = msg.Message.Ki
@@ -393,5 +404,5 @@ func (proc *ConsensusProcess) endOfRound3() {
 }
 
 func (proc *ConsensusProcess) updateRole() {
-	proc.role = proc.oracle.Role(proc.roleProof())
+	proc.role = proc.oracle.Role(proc.k, proc.roleProof())
 }

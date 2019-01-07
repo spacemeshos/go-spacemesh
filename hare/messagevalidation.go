@@ -49,6 +49,8 @@ func isContextuallyValid(m *pb.HareMessage, k uint32) bool {
 	isSameIteration := iterationFromCounter(k) == iterationFromCounter(m.Message.K)
 	currentRound := k % 4
 	switch MessageType(m.Message.Type) {
+	case PreRound:
+		return true
 	case Status:
 		return isSameIteration && currentRound == Round1
 	case Proposal:
@@ -65,8 +67,23 @@ func isContextuallyValid(m *pb.HareMessage, k uint32) bool {
 
 // verifies the message is syntactically valid
 func (validator *MessageValidator) isSyntacticallyValid(m *pb.HareMessage) bool {
-	if m == nil || m.PubKey == nil || m.Message == nil || m.Message.Values == nil {
-		log.Warning("Syntax validation failed: nil identified")
+	if m == nil {
+		log.Warning("Syntax validation failed: m is nil")
+		return false
+	}
+
+	if m.PubKey == nil {
+		log.Warning("Syntax validation failed: missing public key")
+		return false
+	}
+
+	if m.Message == nil {
+		log.Warning("Syntax validation failed: inner message is nil")
+		return false
+	}
+
+	if m.Message.Values == nil {
+		log.Warning("Syntax validation failed: values is nil in msg: %v", m)
 		return false
 	}
 
@@ -238,9 +255,9 @@ func (validator *MessageValidator) validateSVPTypeB(msg *pb.HareMessage, maxRawS
 		return false
 	}
 
-	// cert should have same k as max ki
+	// cert should have same r as max ki
 	if msg.Message.K != uint32(maxKi) { // cast is safe since maxKi>=0
-		log.Warning("Proposal type B validation failed: Certificate should have k=maxKi")
+		log.Warning("Proposal type B validation failed: Certificate should have r=maxKi")
 		return false
 	}
 

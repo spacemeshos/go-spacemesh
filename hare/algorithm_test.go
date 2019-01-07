@@ -1,6 +1,7 @@
 package hare
 
 import (
+	"bytes"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -142,4 +143,14 @@ func TestConsensusProcess_buildNotify(t *testing.T) {
 	proc := generateConsensusProcess(t)
 	m := proc.buildNotifyMessage()
 	assert.Equal(t, Notify, MessageType(m.Message.Type))
+}
+
+func TestConsensusProcess_Proof(t *testing.T) {
+	proc := generateConsensusProcess(t)
+	prev := make([]byte, 0)
+	for i:=0;i<lowThresh10;i++ {
+		assert.False(t, bytes.Equal(proc.roleProof(), prev))
+		prev = proc.roleProof()
+		proc.advanceToNextRound()
+	}
 }
