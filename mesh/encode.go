@@ -18,7 +18,7 @@ func blockIdsAsBytes(ids map[BlockID]bool) ([]byte, error) {
 	return w.Bytes(), nil
 }
 
-func blockAsBytes(block Block) ([]byte, error) {
+func BlockAsBytes(block TortoiseBlock) ([]byte, error) {
 	var w bytes.Buffer
 	if _, err := xdr.Marshal(&w, &block); err != nil {
 		return nil, errors.New("error marshalling block ids ")
@@ -34,8 +34,8 @@ func bytesToBlockIds(blockIds []byte) (map[BlockID]bool, error) {
 	return ids, nil
 }
 
-func bytesToBlock(b []byte) (*Block, error) {
-	var block Block
+func bytesToBlock(b []byte) (*TortoiseBlock, error) {
+	var block TortoiseBlock
 	if _, err := xdr.Unmarshal(bytes.NewReader(b), &block); err != nil {
 		return nil, errors.New("could not unmarshal block")
 	}

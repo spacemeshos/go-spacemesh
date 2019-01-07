@@ -18,8 +18,8 @@ var FALSE = []byte{0}
 type Mesh interface {
 	AddLayer(layer *Layer) error
 	GetLayer(i LayerID) (*Layer, error)
-	GetBlock(id BlockID) (*Block, error)
-	AddBlock(block *Block) error
+	GetBlock(id BlockID) (*TortoiseBlock, error)
+	AddBlock(block *TortoiseBlock) error
 	GetContextualValidity(id BlockID) (bool, error)
 	LocalLayer() uint32
 	LatestLayer() uint32
@@ -107,8 +107,9 @@ func (m *mesh) GetLayer(i LayerID) (*Layer, error) {
 	return m.getLayer(i)
 }
 
-func (m *mesh) AddBlock(block *Block) error {
-	m.Debug("add block ", block.ID())
+
+func (m *mesh) AddBlock(block *TortoiseBlock) error {
+	log.Debug("add block ", block.ID())
 	if err := m.addBlock(block); err != nil {
 		m.Error("failed to add block ", block.ID(), " ", err)
 		return err
@@ -120,8 +121,9 @@ func (m *mesh) AddBlock(block *Block) error {
 	return nil
 }
 
+
 //todo better thread safety
-func (m *mesh) handleOrphanBlocks(block *Block) {
+func (m *mesh) handleOrphanBlocks(block *TortoiseBlock) {
 	m.orphanBlocks.Put(block.ID().ToBytes(), TRUE)
 	atomic.AddInt32(&m.orphanBlockCount, 1)
 	for b := range block.ViewEdges {
@@ -152,7 +154,7 @@ func (m *mesh) GetOrphanBlocks() []BlockID {
 	return keys
 }
 
-func (m *mesh) GetBlock(id BlockID) (*Block, error) {
+func (m *mesh) GetBlock(id BlockID) (*TortoiseBlock, error) {
 	m.Debug("get block ", id)
 	return m.getBlock(id)
 }

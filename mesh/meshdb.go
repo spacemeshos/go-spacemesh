@@ -10,7 +10,7 @@ import (
 )
 
 type layerHandler struct {
-	ch           chan *Block
+	ch           chan *TortoiseBlock
 	layer        LayerID
 	pendingCount int32
 }
@@ -62,7 +62,7 @@ func (m *meshDB) getLayer(index LayerID) (*Layer, error) {
 	return &Layer{index: LayerID(index), blocks: blocks}, nil
 }
 
-func (m *meshDB) addBlock(block *Block) error {
+func (m *meshDB) addBlock(block *TortoiseBlock) error {
 	_, err := m.blocks.Get(block.ID().ToBytes())
 	if err == nil {
 		log.Debug("block ", block.ID(), " already exists in database")
@@ -74,7 +74,7 @@ func (m *meshDB) addBlock(block *Block) error {
 	return nil
 }
 
-func (m *meshDB) getBlock(id BlockID) (*Block, error) {
+func (m *meshDB) getBlock(id BlockID) (*TortoiseBlock, error) {
 	b, err := m.blocks.Get(id.ToBytes())
 	if err != nil {
 		return nil, errors.New("could not find block in database")
@@ -121,7 +121,7 @@ func (m *meshDB) addLayer(layer *Layer) error {
 	return nil
 }
 
-func (m *meshDB) updateLayerIds(block *Block) error {
+func (m *meshDB) updateLayerIds(block *TortoiseBlock) error {
 	ids, err := m.layers.Get(block.LayerIndex.ToBytes())
 	blockIds, err := bytesToBlockIds(ids)
 	if err != nil {
@@ -137,9 +137,9 @@ func (m *meshDB) updateLayerIds(block *Block) error {
 	return nil
 }
 
-func (m *meshDB) getLayerBlocks(ids map[BlockID]bool) ([]*Block, error) {
+func (m *meshDB) getLayerBlocks(ids map[BlockID]bool) ([]*TortoiseBlock, error) {
 
-	blocks := make([]*Block, 0, len(ids))
+	blocks := make([]*TortoiseBlock, 0, len(ids))
 	for k, _ := range ids {
 		block, err := m.getBlock(k)
 		if err != nil {
@@ -156,7 +156,7 @@ func (m *meshDB) handleLayerBlocks(ll *layerHandler) {
 		select {
 		case block := <-ll.ch:
 			atomic.AddInt32(&ll.pendingCount, -1)
-			bytes, err := blockAsBytes(*block)
+			bytes, err := BlockAsBytes(*block)
 			if err != nil {
 				log.Error("could not encode block")
 				continue
@@ -194,7 +194,7 @@ func (m *meshDB) getLayerHandler(index LayerID, counter int32) *layerHandler {
 	defer m.lhMutex.Unlock()
 	ll, found := m.layerHandlers[index]
 	if !found {
-		ll = &layerHandler{pendingCount: counter, ch: make(chan *Block)}
+		ll = &layerHandler{pendingCount: counter, ch: make(chan *TortoiseBlock)}
 		m.layerHandlers[index] = ll
 		go m.handleLayerBlocks(ll)
 	} else {
