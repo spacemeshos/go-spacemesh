@@ -74,6 +74,7 @@ type Set struct {
 	isIdValid bool
 }
 
+// Constructs an empty set
 func NewEmptySet(expectedSize int) *Set {
 	s := &Set{}
 	s.values = make(map[uint32]Value, expectedSize)
@@ -83,6 +84,8 @@ func NewEmptySet(expectedSize int) *Set {
 	return s
 }
 
+// Constructs a new set from a 2D slice
+// Each row represents a single value
 func NewSet(data [][]byte) *Set {
 	s := &Set{}
 	s.isIdValid = false
@@ -96,11 +99,13 @@ func NewSet(data [][]byte) *Set {
 	return s
 }
 
+// Checks if a value is contained in the  set s
 func (s *Set) Contains(id Value) bool {
 	_, exist := s.values[id.Id()]
 	return exist
 }
 
+// Adds a value to the set if it doesn't exist already
 func (s *Set) Add(id Value) {
 	if _, exist := s.values[id.Id()]; exist {
 		return
@@ -110,11 +115,17 @@ func (s *Set) Add(id Value) {
 	s.values[id.Id()] = id
 }
 
+// Removes a value from the set if exist
 func (s *Set) Remove(id Value) {
+	if _, exist := s.values[id.Id()]; exist {
+		return
+	}
+
 	s.isIdValid = false
 	delete(s.values, id.Id())
 }
 
+// Returns true if s and g represents the same set, false otherwise
 func (s *Set) Equals(g *Set) bool {
 	if len(s.values) != len(g.values) {
 		return false
@@ -129,6 +140,8 @@ func (s *Set) Equals(g *Set) bool {
 	return true
 }
 
+// Returns a representation of the set as 2D slice
+// Each row is represents a single value
 func (s *Set) To2DSlice() [][]byte {
 	slice := make([][]byte, len(s.values))
 	i := 0
@@ -162,6 +175,7 @@ func (s *Set) updateId() {
 	s.isIdValid = true
 }
 
+// Returns the id of the set
 func (s *Set) Id() uint32 {
 	if !s.isIdValid {
 		s.updateId()
@@ -172,8 +186,47 @@ func (s *Set) Id() uint32 {
 
 func (s *Set) String() string {
 	b := new(bytes.Buffer)
-	for k, v := range s.values {
-		fmt.Fprintf(b, "%v=\"%v\"\n", k, v.Bytes())
+	fmt.Fprintf(b, "Values: \n")
+	for _, v := range s.values {
+		fmt.Fprintf(b, "%v\r\n", v.Bytes())
 	}
 	return b.String()
+}
+
+// Check if s is a subset of g
+func (s *Set) IsSubSetOf(g *Set) bool {
+	for _, v := range s.values {
+		if !g.Contains(v) {
+			return false
+		}
+	}
+
+	return true
+}
+
+// Returns the intersection set of s and g
+func (s *Set) Intersection(g *Set) *Set {
+	both := NewEmptySet(len(s.values))
+	for _, v := range s.values {
+		if g.Contains(v) {
+			both.Add(v)
+		}
+	}
+
+	return both
+}
+
+// Returns the union set of s and g
+func (s *Set) Union(g *Set) *Set {
+	union := NewEmptySet(len(s.values) + len(g.values))
+
+	for _, v := range s.values {
+		union.Add(v)
+	}
+
+	for _, v := range g.values {
+		union.Add(v)
+	}
+
+	return union
 }
