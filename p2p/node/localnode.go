@@ -78,6 +78,11 @@ func newLocalNodeWithKeys(pubKey crypto.PublicKey, privKey crypto.PrivateKey, ad
 		privKey:   privKey,
 	}
 
+	if !persist {
+		n.Log = log.New(n.pubKey.Pretty(), "", "")
+		return n, nil
+	}
+
 	dataDir, err := filesystem.EnsureNodesDataDirectory(config.NodesDirectoryName)
 	if err != nil {
 		return nil, err
@@ -88,18 +93,16 @@ func newLocalNodeWithKeys(pubKey crypto.PublicKey, privKey crypto.PrivateKey, ad
 		return nil, err
 	}
 
-	// setup logging
+	// persistent logging
 	n.Log = log.New(n.pubKey.Pretty(), nodeDir, "node.log")
 
 	n.Info("Local node identity >> %v", n.String())
 
-	if persist {
-		// persist store data so we can start it on future app sessions
-		err = n.persistData()
-		if err != nil { // no much use of starting if we can't store node private key in store
-			n.Error("failed to persist node data to local store", err)
-			return nil, err
-		}
+	// persist store data so we can start it on future app sessions
+	err = n.persistData()
+	if err != nil { // no much use of starting if we can't store node private key in store
+		n.Error("failed to persist node data to local store", err)
+		return nil, err
 	}
 
 	return n, nil

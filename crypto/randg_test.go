@@ -38,12 +38,6 @@ func TestGetRandomBytes(t *testing.T) {
 	assert.False(t, bytes.Equal(tb, eb), "null data from GetRandomBytes")
 }
 
-func TestRandomUserPort(t *testing.T) {
-	x := GetRandomUserPort()
-	assert.True(t, x > 1023, "unexpected small value")
-	assert.True(t, x < 49151, "unexpected large value")
-}
-
 func TestGetRandomUInt32(t *testing.T) {
 	var max = uint32(16384)
 	x := GetRandomUInt32(max)
