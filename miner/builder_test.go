@@ -26,8 +26,8 @@ type MockHare struct {
 	res []mesh.BlockID
 }
 
-func (m MockHare) GetResult() []mesh.BlockID{
-	return m.res
+func (m MockHare) GetResult(id mesh.LayerID) ([]mesh.BlockID, error){
+	return m.res, nil
 }
 
 type MockOrphans struct {
@@ -45,7 +45,10 @@ func TestBlockBuilder_StartStop(t *testing.T) {
 	n := net.NewNode()
 	//receiver := net.NewNode()
 
-	builder := NewBlockBuilder(n,beginRound, MockCoin{}, MockOrphans{st:[]mesh.BlockID{1,2,3}})
+	hareRes := []mesh.BlockID{mesh.BlockID(0), mesh.BlockID(1), mesh.BlockID(2), mesh.BlockID(3)}
+	hare := MockHare{res:hareRes}
+
+	builder := NewBlockBuilder(n,beginRound, MockCoin{}, MockOrphans{st:[]mesh.BlockID{1,2,3}}, hare)
 
 	err := builder.Start()
 	assert.NoError(t, err)
@@ -63,11 +66,6 @@ func TestBlockBuilder_StartStop(t *testing.T) {
 	addr2 := common.BytesToAddress([]byte{0x01})
 	err = builder.AddTransaction(1, addr1,addr2,big.NewInt(1))
 	assert.Error(t,err)
-
-	hareRes := []mesh.BlockID{mesh.BlockID(0), mesh.BlockID(1), mesh.BlockID(2), mesh.BlockID(3)}
-	hare := MockHare{res:hareRes}
-	err = builder.CommitHareResult(hare)
-	assert.Error(t,err)
 }
 
 
@@ -77,7 +75,10 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 	n := net.NewNode()
 	receiver := net.NewNode()
 
-	builder := NewBlockBuilder(n,beginRound, MockCoin{}, MockOrphans{st:[]mesh.BlockID{1,2,3}})
+	hareRes := []mesh.BlockID{mesh.BlockID(0), mesh.BlockID(1), mesh.BlockID(2), mesh.BlockID(3)}
+	hare := MockHare{res:hareRes}
+
+	builder := NewBlockBuilder(n,beginRound, MockCoin{}, MockOrphans{st:[]mesh.BlockID{1,2,3}}, hare)
 
 	err := builder.Start()
 	assert.NoError(t, err)
@@ -86,18 +87,15 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 	addr2 := common.BytesToAddress([]byte{0x01})
 
 	trans := []SerializableTransaction {
-		Transaction2SerializableTransaction(state.NewTransaction(1, addr1,addr2,big.NewInt(1))),
-		Transaction2SerializableTransaction(state.NewTransaction(1, addr1,addr2,big.NewInt(1))),
-		Transaction2SerializableTransaction(state.NewTransaction(2, addr1,addr2,big.NewInt(1))),
+		Transaction2SerializableTransaction(state.NewTransaction(1, addr1,addr2,big.NewInt(1), DefaultGasLimit, big.NewInt(DefaultGas))),
+		Transaction2SerializableTransaction(state.NewTransaction(1, addr1,addr2,big.NewInt(1), DefaultGasLimit, big.NewInt(DefaultGas))),
+		Transaction2SerializableTransaction(state.NewTransaction(2, addr1,addr2,big.NewInt(1), DefaultGasLimit, big.NewInt(DefaultGas))),
 	}
 
 	builder.AddTransaction(trans[0].AccountNonce, trans[0].Origin, *trans[0].Recipient, big.NewInt(0).SetBytes(trans[0].Price))
 	builder.AddTransaction(trans[1].AccountNonce, trans[1].Origin, *trans[1].Recipient, big.NewInt(0).SetBytes(trans[1].Price))
 	builder.AddTransaction(trans[2].AccountNonce, trans[2].Origin, *trans[2].Recipient, big.NewInt(0).SetBytes(trans[2].Price))
 
-	hareRes := []mesh.BlockID{mesh.BlockID(0), mesh.BlockID(1), mesh.BlockID(2), mesh.BlockID(3)}
-	hare := MockHare{res:hareRes}
-	builder.CommitHareResult(hare)
 
 
 	go func() {beginRound <- mesh.LayerID(0) }()
@@ -106,9 +104,9 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 		case output := <- receiver.RegisterProtocol(sync.BlockProtocol):
 			b := Block{}
 			xdr.Unmarshal(bytes.NewBuffer(output.Bytes()), &b)
-			assert.Equal(t, hareRes, b.HareResult)
+			assert.Equal(t, hareRes, b.VotePattern)
 			assert.Equal(t, trans,b.Txs)
-			assert.Equal(t, []mesh.BlockID{1,2,3}, b.Orphans)
+			assert.Equal(t, []mesh.BlockID{1,2,3}, b.View)
 
 		case <-time.After(1 * time.Second):
 			assert.Fail(t, "timeout on receiving block")

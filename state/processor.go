@@ -16,6 +16,8 @@ import (
 
 type LayerID uint64
 
+
+
 //todo: this object should be splitted into two parts: one is the actual value serialized into trie, and an containig obj with caches
 type Transaction struct {
 	AccountNonce 	uint64
@@ -31,17 +33,15 @@ type Transaction struct {
 	hash *common.Hash
 }
 
-func NewTransaction(nonce uint64,
-	origin common.Address,
-	destination common.Address,
-	amount *big.Int) *Transaction{
+func NewTransaction(nonce uint64, origin common.Address, destination common.Address,
+					amount *big.Int, gasLimit uint64, gasPrice *big.Int) *Transaction {
 	return &Transaction{
 		AccountNonce: nonce,
 		Origin: origin,
 		Recipient:&destination,
 		Amount: amount,
-		GasLimit:10,
-		Price:big.NewInt(1),
+		GasLimit:gasLimit,
+		Price:gasPrice,
 		hash:nil,
 		Payload:nil,
 	}
