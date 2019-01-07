@@ -173,7 +173,7 @@ func (s *Set) Id() uint32 {
 func (s *Set) String() string {
 	b := new(bytes.Buffer)
 	for k, v := range s.values {
-		fmt.Fprintf(b, "%v=\"%s\"\n", k, v)
+		fmt.Fprintf(b, "%v=\"%v\"\n", k, v.Bytes())
 	}
 	return b.String()
 }

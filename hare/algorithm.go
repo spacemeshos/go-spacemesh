@@ -170,7 +170,7 @@ func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
 	}
 
 	// validate role
-	if proc.oracle.Role(proc.k, Signature(m.Message.RoleProof)) != roleFromRoundCounter(m.Message.K) {
+	if proc.oracle.Role(m.Message.K, Signature(m.Message.RoleProof)) != roleFromRoundCounter(m.Message.K) {
 		log.Warning("Invalid role detected. Expected: %v Actual: %v",
 			proc.oracle.Role(proc.k, Signature(m.Message.RoleProof)), roleFromRoundCounter(m.Message.K))
 		return
@@ -369,7 +369,7 @@ func (proc *ConsensusProcess) processNotifyMsg(msg *pb.HareMessage) {
 	}
 
 	// enough notifications, should terminate
-	log.Info("Consensus process terminated for %v with output set: ", proc.pubKey, proc.s)
+	log.Info("Consensus process terminated for %v with output set %v", proc.pubKey, proc.s)
 	proc.terminating = true // ensures immediate termination
 	proc.Close()
 }

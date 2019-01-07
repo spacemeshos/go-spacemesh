@@ -210,6 +210,20 @@ func (validator *MessageValidator) validateCertificate(cert *pb.Certificate) boo
 		return false
 	}
 
+	// verify agg msgs
+	if cert.AggMsgs == nil {
+		return false
+	}
+
+	// refill values
+	for _, commit := range cert.AggMsgs.Messages {
+		if commit.Message == nil {
+			return false
+		}
+
+		commit.Message.Values = cert.Values
+	}
+
 	validateSameK := func(m *pb.HareMessage) bool { return m.Message.K == cert.AggMsgs.Messages[0].Message.K }
 	validators := []func(m *pb.HareMessage) bool{validateCommitType, validateSameK}
 	if !validator.validateAggregatedMessage(cert.AggMsgs, validators) {
