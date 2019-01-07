@@ -82,8 +82,6 @@ func (broker *Broker) dispatcher() {
 	for {
 		select {
 		case msg := <-broker.inbox:
-			log.Info("Received msg in broker")
-
 			hareMsg := &pb.HareMessage{}
 			err := proto.Unmarshal(msg.Bytes(), hareMsg)
 			if err != nil {
