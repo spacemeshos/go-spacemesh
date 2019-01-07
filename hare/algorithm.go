@@ -142,6 +142,7 @@ PreRound:
 		}
 
 		if proc.terminating {
+			log.Info("Detected terminating on. Exiting.")
 			return
 		}
 	}
@@ -319,9 +320,18 @@ func (proc *ConsensusProcess) processPreRoundMsg(msg *pb.HareMessage) {
 
 func (proc *ConsensusProcess) processStatusMsg(msg *pb.HareMessage) {
 	s := NewSet(msg.Message.Values)
-	if proc.preRoundTracker.CanProveSet(s) {
-		proc.statusesTracker.RecordStatus(msg)
+	if msg.Message.Ki == -1 { // no certificates, validate by pre-round msgs
+		if !proc.preRoundTracker.CanProveSet(s) { // can't prove s
+			return
+		}
+	} else { // ki>=0, we should have received a certificate for that set, validate certificate
+		if proc.notifyTracker.HasCertificate(s) { // can't prove s
+			return
+		}
 	}
+
+	// s proved, record status
+	proc.statusesTracker.RecordStatus(msg)
 }
 
 func (proc *ConsensusProcess) processProposalMsg(msg *pb.HareMessage) {
@@ -344,14 +354,17 @@ func (proc *ConsensusProcess) processCommitMsg(msg *pb.HareMessage) {
 }
 
 func (proc *ConsensusProcess) processNotifyMsg(msg *pb.HareMessage) {
+	s := NewSet(msg.Message.Values)
+	proc.notifyTracker.OnCertificate(s)
+
 	if ignored := proc.notifyTracker.OnNotify(msg); ignored {
+		log.Warning("Ignoring notification sent from %v", msg.PubKey)
 		return
 	}
 
-	s := NewSet(msg.Message.Values)
 	if proc.currentRound() == Round4 { // not necessary to update otherwise
-		// update state
-		if int32(msg.Cert.AggMsgs.Messages[0].Message.K) >= proc.ki { // we assume that the expression was checked before
+		// we assume that the expression was checked before
+		if int32(msg.Cert.AggMsgs.Messages[0].Message.K) >= proc.ki { // update state iff K >= ki
 			proc.s = s
 			proc.certificate = msg.Cert
 			proc.ki = msg.Message.Ki
@@ -359,6 +372,8 @@ func (proc *ConsensusProcess) processNotifyMsg(msg *pb.HareMessage) {
 	}
 
 	if proc.notifyTracker.NotificationsCount(s) < proc.cfg.F+1 { // not enough
+		//log.Info("Not enough notifications for termination. Expected: %v Actual: %v",
+		//	proc.cfg.F+1, proc.notifyTracker.NotificationsCount(s))
 		return
 	}
 

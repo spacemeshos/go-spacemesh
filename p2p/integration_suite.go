@@ -83,6 +83,10 @@ func (its *IntegrationTestSuite) SetupSuite() {
 			if err != nil {
 				its.Require().NoError(err)
 			}
+			err = swarm[i].waitForGossip()
+			if err != nil {
+				its.Require().NoError(err)
+			}
 			if its.AfterHook != nil {
 				its.AfterHook(i, swarm[i])
 			}

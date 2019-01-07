@@ -7,14 +7,16 @@ import (
 )
 
 type NotifyTracker struct {
-	notifies map[string]*pb.HareMessage // tracks PubKey->Notification
-	tracker  *RefCountTracker           // tracks ref count to each seen set
+	notifies     map[string]*pb.HareMessage // tracks PubKey->Notification
+	tracker      *RefCountTracker           // tracks ref count to each seen set
+	certificates map[uint32]struct{}        // tracks Set->certificate
 }
 
 func NewNotifyTracker(expectedSize int) *NotifyTracker {
 	nt := &NotifyTracker{}
 	nt.notifies = make(map[string]*pb.HareMessage, expectedSize)
 	nt.tracker = NewRefCountTracker(expectedSize)
+	nt.certificates = make(map[uint32]struct{}, expectedSize)
 
 	return nt
 }
@@ -44,4 +46,13 @@ func (nt *NotifyTracker) OnNotify(msg *pb.HareMessage) bool {
 
 func (nt *NotifyTracker) NotificationsCount(s *Set) int {
 	return int(nt.tracker.CountStatus(s))
+}
+
+func (nt *NotifyTracker) OnCertificate(set *Set) {
+	nt.certificates[set.Id()] = struct{}{}
+}
+
+func (nt *NotifyTracker) HasCertificate(set *Set) bool {
+	_, exist := nt.certificates[set.Id()]
+	return exist
 }

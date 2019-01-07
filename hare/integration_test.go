@@ -2,6 +2,7 @@ package hare
 
 import (
 	"github.com/spacemeshos/go-spacemesh/hare/config"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/stretchr/testify/suite"
 	"testing"
@@ -38,6 +39,7 @@ func (his *HareIntegrationSuite) fill(set *Set, begin int, end int) {
 func (his *HareIntegrationSuite) waitForTermination() {
 	for _, p := range his.procs {
 		<-p.CloseChannel()
+		log.Info("%v closed", p.pubKey)
 		his.outputs = append(his.outputs, p.s)
 	}
 
@@ -154,7 +156,7 @@ func Test_100Nodes_HareIntegrationSuite(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
-	const roundDuration = time.Second * time.Duration(3)
+	const roundDuration = time.Second * time.Duration(5)
 	cfg := config.Config{N: 20, F: 10, SetSize: 10, RoundDuration: roundDuration}
 
 	his := &hareIntegration100Nodes{newIntegrationSuite()}
@@ -203,6 +205,7 @@ func (his *hareIntegration100Nodes) Test_100Nodes_AllHonest() {
 		proc.Start()
 	}
 
-	his.waitForTimedTermination(60 * time.Second)
+	his.waitForTimedTermination(120 * time.Second)
+	time.Sleep(time.Second * 5)
 }
 
