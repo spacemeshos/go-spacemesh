@@ -137,7 +137,7 @@ func (s *Set) Add(id Value) {
 
 // Removes a value from the set if exist
 func (s *Set) Remove(id Value) {
-	if _, exist := s.values[id.Id()]; exist {
+	if _, exist := s.values[id.Id()]; !exist {
 		return
 	}
 
@@ -261,4 +261,9 @@ func (s *Set) Complement(u *Set) *Set {
 	}
 
 	return comp
+}
+
+// Returns the size of the set
+func (s *Set) Size() int {
+	return len(s.values)
 }

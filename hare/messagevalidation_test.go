@@ -28,6 +28,8 @@ func TestMessageValidator_ValidateCertificate(t *testing.T) {
 	msgs = append(msgs, &pb.HareMessage{})
 	cert.AggMsgs.Messages = msgs
 	assert.False(t, validator.validateCertificate(cert))
+	cert.Values = NewSmallEmptySet().To2DSlice()
+	assert.False(t, validator.validateCertificate(cert))
 
 	msgs = make([]*pb.HareMessage, validator.threshold)
 	for i := 0; i < validator.threshold; i++ {
