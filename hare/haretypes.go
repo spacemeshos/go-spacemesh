@@ -33,6 +33,8 @@ const (
 	Round4 = 3
 )
 
+const defaultSetSize = 10
+
 func (mType MessageType) String() string {
 	switch mType {
 	case Status:
@@ -75,9 +77,27 @@ type Set struct {
 }
 
 // Constructs an empty set
+func NewSmallEmptySet() *Set {
+	return NewEmptySet(defaultSetSize)
+}
+
+// Constructs an empty set
 func NewEmptySet(expectedSize int) *Set {
 	s := &Set{}
 	s.values = make(map[uint32]Value, expectedSize)
+	s.id = 0
+	s.isIdValid = false
+
+	return s
+}
+
+// Constructs an empty set
+func NewSetFromValues(values... Value) *Set {
+	s := &Set{}
+	s.values = make(map[uint32]Value, len(values))
+	for _, v := range values {
+		s.Add(v)
+	}
 	s.id = 0
 	s.isIdValid = false
 

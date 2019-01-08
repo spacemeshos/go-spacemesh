@@ -16,9 +16,7 @@ func BuildProposalMsg(pubKey crypto.PublicKey, s *Set) *pb.HareMessage {
 }
 
 func TestProposalTracker_OnProposalConflict(t *testing.T) {
-	s := NewEmptySet(lowDefaultSize)
-	s.Add(value1)
-	s.Add(value2)
+	s := NewSetFromValues(value1, value2)
 	pubKey := generatePubKey(t)
 
 	m1 := BuildProposalMsg(pubKey, s)
@@ -40,4 +38,17 @@ func TestProposalTracker_IsConflicting(t *testing.T) {
 		tracker.OnProposal(BuildProposalMsg(generatePubKey(t), s))
 		assert.False(t, tracker.IsConflicting())
 	}
+}
+
+func TestProposalTracker_OnLateProposal(t *testing.T) {
+	s := NewSetFromValues(value1, value2)
+	pubKey := generatePubKey(t)
+	m1 := BuildProposalMsg(pubKey, s)
+	tracker := NewProposalTracker(lowThresh10)
+	tracker.OnProposal(m1)
+	assert.False(t, tracker.IsConflicting())
+	s.Add(value3)
+	m2 := BuildProposalMsg(pubKey, s)
+	tracker.OnLateProposal(m2)
+	assert.True(t, tracker.IsConflicting())
 }
