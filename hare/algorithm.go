@@ -123,7 +123,7 @@ PreRound:
 			return
 		}
 	}
-	proc.preRoundTracker.UpdateSet(proc.s)
+	proc.preRoundTracker.FilterSet(proc.s)
 
 	// start first iteration
 	proc.onRoundBegin()
