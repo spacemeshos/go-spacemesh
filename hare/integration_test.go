@@ -30,6 +30,19 @@ func (his *HareIntegrationSuite) waitForTermination() {
 	his.termination.Close()
 }
 
+func (his *HareIntegrationSuite) waitForTimedTermination(timeout time.Duration) {
+	timer := time.After(timeout)
+	go his.waitForTermination()
+	select {
+	case <-timer:
+		his.T().Error("Timeout")
+		return
+	case <-his.termination.CloseChannel():
+		his.checkResult()
+		return
+	}
+}
+
 func (his *HareIntegrationSuite) checkResult() {
 	t := his.T()
 
@@ -119,19 +132,9 @@ func Test_ThreeNodes_HareIntegrationSuite(t *testing.T) {
 }
 
 func (his *hareIntegrationThreeNodes) Test_ThreeNodes_AllHonest() {
-	t := his.T()
 	for _, proc := range his.procs {
 		proc.Start()
 	}
 
-	timeout := time.After(30 * time.Second)
-	go his.waitForTermination()
-	select {
-	case <-timeout:
-		t.Error("Timeout")
-		return
-	case <-his.termination.CloseChannel():
-		his.checkResult()
-		return
-	}
+	his.waitForTimedTermination(30 * time.Second)
 }
