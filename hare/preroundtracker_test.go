@@ -17,6 +17,9 @@ const (
 var value1 = Value{Bytes32{1}}
 var value2 = Value{Bytes32{2}}
 var value3 = Value{Bytes32{3}}
+var value4 = Value{Bytes32{4}}
+var value5 = Value{Bytes32{5}}
+var value6 = Value{Bytes32{6}}
 
 func BuildPreRoundMsg(pubKey crypto.PublicKey, s *Set) *pb.HareMessage {
 	builder := NewMessageBuilder()

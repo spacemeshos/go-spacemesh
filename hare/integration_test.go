@@ -21,6 +21,14 @@ type HareIntegrationSuite struct {
 	// add more params you need
 }
 
+func newIntegrationSuite() *HareIntegrationSuite {
+	his := &HareIntegrationSuite{}
+	his.termination = NewCloser()
+	his.outputs = make([]*Set, 0)
+
+	return his
+}
+
 func (his *HareIntegrationSuite) waitForTermination() {
 	for _, p := range his.procs {
 		<-p.CloseChannel()
@@ -85,17 +93,7 @@ func (his *HareIntegrationSuite) checkResult() {
 }
 
 type hareIntegrationThreeNodes struct {
-	HareIntegrationSuite
-}
-
-func newIntegrationThreeNodes() *hareIntegrationThreeNodes {
-	his := &hareIntegrationThreeNodes{}
-	his.termination = NewCloser()
-	his.initialSets = make([]*Set, 0)
-	his.honestSets = make([]*Set, 0)
-	his.outputs = make([]*Set, 0)
-
-	return his
+	*HareIntegrationSuite
 }
 
 func Test_ThreeNodes_HareIntegrationSuite(t *testing.T) {
@@ -105,7 +103,7 @@ func Test_ThreeNodes_HareIntegrationSuite(t *testing.T) {
 	const roundDuration = time.Second * time.Duration(1)
 	cfg := config.Config{N: 3, F: 0, SetSize: 10, RoundDuration: roundDuration}
 
-	his := newIntegrationThreeNodes()
+	his := &hareIntegrationThreeNodes{newIntegrationSuite()}
 	his.BootstrappedNodeCount = cfg.N - 1
 	his.BootstrapNodesCount = 1
 	his.NeighborsCount = 2
