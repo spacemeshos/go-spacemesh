@@ -37,7 +37,7 @@ func (bl *BlockListener) Close() {
 func (bl *BlockListener) Start() {
 	if atomic.CompareAndSwapUint32(&bl.startLock, 0, 1) {
 		go bl.run()
-		go bl.ListenToGossipBlocks()
+		//go bl.ListenToGossipBlocks()
 	}
 }
 
@@ -57,7 +57,7 @@ func NewBlockListener(net server.Service, bv BlockValidator, layers mesh.Mesh, t
 		exit:           make(chan struct{}),
 		receivedGossipBlocks: net.RegisterProtocol(NewBlock),
 	}
-	bl.RegisterMsgHandler(BLOCK, newBlockRequestHandler(layers, logger))
+	bl.RegisterMsgHandler(BLOCK , newBlockRequestHandler(layers, logger))
 
 
 	return &bl

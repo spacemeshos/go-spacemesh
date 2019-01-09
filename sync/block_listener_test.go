@@ -22,7 +22,7 @@ func (pm PeersMock) Close() {
 	return
 }
 func ListenerFactory(serv server.Service, peers Peers, name string) *BlockListener {
-	nbl := NewBlockListener(serv, &BlockValidatorMock{}, getMesh("TestBlockListener_"+name), 1*time.Second, 2, log.New(name, "", ""))
+	nbl := NewBlockListener(serv, BlockValidatorMock{}, getMesh("TestBlockListener_"+name), 1*time.Second, 2, log.New(name, "", ""))
 	nbl.Peers = peers //override peers with mock
 	return nbl
 }
@@ -41,8 +41,8 @@ func TestBlockListener(t *testing.T) {
 	block2 := mesh.NewExistingBlock(mesh.BlockID(321), 1, nil)
 	block3 := mesh.NewExistingBlock(mesh.BlockID(222), 2, nil)
 
-	block1.AddVote(block2.ID())
-	block1.AddVote(block3.ID())
+	block1.AddView(block2.ID())
+	block1.AddView(block3.ID())
 
 	bl1.AddBlock(block1)
 	bl1.AddBlock(block2)
@@ -89,18 +89,18 @@ func TestBlockListener2(t *testing.T) {
 	block9 := mesh.NewBlock(true, nil, time.Now(), 4)
 	block10 := mesh.NewBlock(true, nil, time.Now(), 5)
 
-	block2.AddVote(block1.ID())
-	block3.AddVote(block2.ID())
-	block4.AddVote(block2.ID())
-	block5.AddVote(block3.ID())
-	block5.AddVote(block4.ID())
-	block6.AddVote(block4.ID())
-	block7.AddVote(block6.ID())
-	block7.AddVote(block5.ID())
-	block8.AddVote(block6.ID())
-	block9.AddVote(block5.ID())
-	block10.AddVote(block8.ID())
-	block10.AddVote(block9.ID())
+	block2.AddView(block1.ID())
+	block3.AddView(block2.ID())
+	block4.AddView(block2.ID())
+	block5.AddView(block3.ID())
+	block5.AddView(block4.ID())
+	block6.AddView(block4.ID())
+	block7.AddView(block6.ID())
+	block7.AddView(block5.ID())
+	block8.AddView(block6.ID())
+	block9.AddView(block5.ID())
+	block10.AddView(block8.ID())
+	block10.AddView(block9.ID())
 
 	bl1.AddBlock(block1)
 	bl1.AddBlock(block2)
