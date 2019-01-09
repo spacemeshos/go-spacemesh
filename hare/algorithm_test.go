@@ -7,6 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/stretchr/testify/assert"
 	"testing"
+	"time"
 )
 
 var cfg = config.DefaultConfig()
@@ -139,18 +140,115 @@ func TestConsensusProcess_InitDefaultBuilder(t *testing.T) {
 	assert.Equal(t, builder.inner.InstanceId, proc.instanceId.Bytes())
 }
 
-func TestConsensusProcess_buildNotify(t *testing.T) {
-	proc := generateConsensusProcess(t)
-	m := proc.buildNotifyMessage()
-	assert.Equal(t, Notify, MessageType(m.Message.Type))
-}
-
 func TestConsensusProcess_Proof(t *testing.T) {
 	proc := generateConsensusProcess(t)
 	prev := make([]byte, 0)
-	for i:=0;i<lowThresh10;i++ {
+	for i := 0; i < lowThresh10; i++ {
 		assert.False(t, bytes.Equal(proc.roleProof(), prev))
 		prev = proc.roleProof()
 		proc.advanceToNextRound()
 	}
+}
+
+func TestConsensusProcess_roleFromRoundCounter(t *testing.T) {
+	r := uint32(0)
+	for i := 0; i < 10; i++ {
+		assert.Equal(t, Active, roleFromRoundCounter(r))
+		r++
+		assert.Equal(t, Leader, roleFromRoundCounter(r))
+		r++
+		assert.Equal(t, Active, roleFromRoundCounter(r))
+		r++
+		assert.Equal(t, Passive, roleFromRoundCounter(r))
+		r++
+	}
+}
+
+func TestConsensusProcess_sendMessage(t *testing.T) {
+	sim := service.NewSimulator()
+	n1 := sim.NewNode()
+	broker := NewBroker(n1)
+	s := NewEmptySet(cfg.SetSize)
+	oracle := NewMockOracle()
+	signing := NewMockSigning()
+
+	proc := NewConsensusProcess(cfg, generatePubKey(t), *instanceId1, *s, oracle, signing, n1)
+	broker.Register(proc)
+
+	msg := buildStatusMsg(generatePubKey(t), s, 0)
+	proc.sendMessage(msg)
+}
+
+func TestConsensusProcess_procPre(t *testing.T) {
+	proc := generateConsensusProcess(t)
+	s := NewSmallEmptySet()
+	m := BuildPreRoundMsg(generatePubKey(t), s)
+	proc.processPreRoundMsg(m)
+	assert.Equal(t, 1, len(proc.preRoundTracker.preRound))
+}
+
+func TestConsensusProcess_procStatus(t *testing.T) {
+	proc := generateConsensusProcess(t)
+	s := NewSmallEmptySet()
+	m := BuildStatusMsg(generatePubKey(t), s)
+	proc.processStatusMsg(m)
+	assert.Equal(t, 1, len(proc.statusesTracker.statuses))
+}
+
+func TestConsensusProcess_procProposal(t *testing.T) {
+	proc := generateConsensusProcess(t)
+	proc.advanceToNextRound()
+	s := NewSmallEmptySet()
+	m := BuildProposalMsg(generatePubKey(t), s)
+	proc.processProposalMsg(m)
+	assert.NotNil(t, proc.proposalTracker.proposal)
+}
+
+func TestConsensusProcess_procCommit(t *testing.T) {
+	proc := generateConsensusProcess(t)
+	proc.advanceToNextRound()
+	s := NewSmallEmptySet()
+	proc.commitTracker = NewCommitTracker(1, 1, s)
+	m := BuildCommitMsg(generatePubKey(t), s)
+	proc.processCommitMsg(m)
+	assert.Equal(t, 1, len(proc.commitTracker.commits))
+}
+
+func TestConsensusProcess_procNotify(t *testing.T) {
+	proc := generateConsensusProcess(t)
+	proc.advanceToNextRound()
+	s := NewSmallEmptySet()
+	m := BuildNotifyMsg(generatePubKey(t), s)
+	proc.processNotifyMsg(m)
+	assert.Equal(t, 1, len(proc.notifyTracker.notifies))
+}
+
+func TestConsensusProcess_Termination(t *testing.T) {
+	proc := generateConsensusProcess(t)
+	proc.advanceToNextRound()
+	s := NewSetFromValues(value1)
+	for i:=0;i<cfg.F+1;i++ {
+		proc.processNotifyMsg(BuildNotifyMsg(generatePubKey(t), s))
+	}
+
+	timer := time.NewTimer(10 * time.Second)
+	for {
+		select {
+		case <-timer.C:
+			t.Fatal("Timeout")
+		case <-proc.CloseChannel():
+			return
+		}
+	}
+}
+
+func TestConsensusProcess_currentRound(t *testing.T) {
+	proc := generateConsensusProcess(t)
+	assert.Equal(t, Round1, proc.currentRound())
+	proc.advanceToNextRound()
+	assert.Equal(t, Round2, proc.currentRound())
+	proc.advanceToNextRound()
+	assert.Equal(t, Round3, proc.currentRound())
+	proc.advanceToNextRound()
+	assert.Equal(t, Round4, proc.currentRound())
 }

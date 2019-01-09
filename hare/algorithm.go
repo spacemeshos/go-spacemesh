@@ -313,12 +313,6 @@ func (proc *ConsensusProcess) initDefaultBuilder(s *Set) *MessageBuilder {
 	return builder
 }
 
-func (proc *ConsensusProcess) buildNotifyMessage() *pb.HareMessage {
-	builder := proc.initDefaultBuilder(proc.s).SetType(Notify).SetCertificate(proc.certificate).Sign(proc.signing)
-
-	return builder.Build()
-}
-
 func (proc *ConsensusProcess) processPreRoundMsg(msg *pb.HareMessage) {
 	proc.preRoundTracker.OnPreRound(msg)
 }
@@ -399,7 +393,8 @@ func (proc *ConsensusProcess) endOfRound3() {
 	}
 	proc.s = s
 	proc.certificate = cert
-	roundMsg := proc.buildNotifyMessage() // build notify with certificate
+	builder := proc.initDefaultBuilder(proc.s).SetType(Notify).SetCertificate(proc.certificate).Sign(proc.signing)
+	roundMsg := builder.Build() // build notify with certificate
 	proc.sendMessage(roundMsg)
 }
 
