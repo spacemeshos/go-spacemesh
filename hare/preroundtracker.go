@@ -21,6 +21,7 @@ func NewPreRoundTracker(threshold int, expectedSize int) *PreRoundTracker {
 	return pre
 }
 
+// Tracks a pre-round message
 func (pre *PreRoundTracker) OnPreRound(msg *pb.HareMessage) {
 	pub, err := crypto.NewPublicKey(msg.PubKey)
 	if err != nil {
@@ -42,11 +43,13 @@ func (pre *PreRoundTracker) OnPreRound(msg *pb.HareMessage) {
 	pre.preRound[pub.String()] = struct{}{}
 }
 
+// Returns true if the given value is provable, false otherwise
 func (pre *PreRoundTracker) CanProveValue(value Value) bool {
 	// at least threshold occurrences of a given value
 	return pre.tracker.CountStatus(value) >= pre.threshold
 }
 
+// Returns true if the given set is provable, false otherwise
 func (pre *PreRoundTracker) CanProveSet(set *Set) bool {
 	// a set is provable iff all its values are provable
 	for _, bid := range set.values {
@@ -57,8 +60,9 @@ func (pre *PreRoundTracker) CanProveSet(set *Set) bool {
 
 	return true
 }
-func (pre *PreRoundTracker) UpdateSet(set *Set) {
-	// end of pre-round, update our set
+
+// Filters the given set according to collected proofs
+func (pre *PreRoundTracker) FilterSet(set *Set) {
 	for _, v := range set.values {
 		if !pre.CanProveValue(v) { // not enough witnesses
 			set.Remove(v)
