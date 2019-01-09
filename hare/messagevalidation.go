@@ -87,6 +87,11 @@ func (validator *MessageValidator) isSyntacticallyValid(m *pb.HareMessage) bool 
 		return false
 	}
 
+	if len(m.Message.Values) == 0 {
+		log.Warning("Syntax validation failed: values is empty: %v", m)
+		return false
+	}
+
 	claimedRound := m.Message.K % 4
 	switch MessageType(m.Message.Type) {
 	case PreRound:

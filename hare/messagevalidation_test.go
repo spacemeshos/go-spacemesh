@@ -48,8 +48,10 @@ func TestMessageValidator_IsSyntacticallyValid(t *testing.T) {
 	assert.False(t, validator.isSyntacticallyValid(m))
 	m.Message = &pb.InnerMessage{}
 	assert.False(t, validator.isSyntacticallyValid(m))
-	m.Message.Values = NewEmptySet(validator.defaultSize).To2DSlice()
-	assert.True(t, validator.isSyntacticallyValid(m))
+	m.Message.Values = nil
+	assert.False(t, validator.isSyntacticallyValid(m))
+	m.Message.Values = NewSmallEmptySet().To2DSlice()
+	assert.False(t, validator.isSyntacticallyValid(m))
 }
 
 func TestMessageValidator_Aggregated(t *testing.T) {
