@@ -15,13 +15,6 @@ func buildProposalMsg(pubKey crypto.PublicKey, s *Set, signature Signature) *pb.
 	return builder.Build()
 }
 
-func BuildProposalMsgWithRoleProof(pubKey crypto.PublicKey, s *Set, signature Signature) *pb.HareMessage {
-	msg := BuildProposalMsg(pubKey, s)
-	msg.Message.RoleProof = signature
-
-	return msg
-}
-
 func BuildProposalMsg(pubKey crypto.PublicKey, s *Set) *pb.HareMessage {
 	return buildProposalMsg(pubKey, s, Signature{})
 }
@@ -45,14 +38,14 @@ func TestProposalTracker_OnProposal_IgnoreMsgWithLowerRankedRoleProof(t *testing
 	s.Add(value1)
 
 	pubKey := generatePubKey(t)
-	m1 := BuildProposalMsgWithRoleProof(pubKey, s, []byte{1})
+	m1 := buildProposalMsg(pubKey, s, []byte{1})
 
 	tracker := NewProposalTracker(lowThresh10)
 	tracker.OnProposal(m1)
 
 	s.Add(value2)
 	newPubKey := generatePubKey(t)
-	m2 := BuildProposalMsgWithRoleProof(newPubKey, s, []byte{2})
+	m2 := buildProposalMsg(newPubKey, s, []byte{2})
 	tracker.OnProposal(m2)
 	assert.NotEqual(t, tracker.proposal, m2)
 }
@@ -62,14 +55,14 @@ func TestProposalTracker_TestProposalTracker_OnLateProposal_IgnoreMsgWithHigherR
 	s.Add(value1)
 
 	pubKey := generatePubKey(t)
-	m1 := BuildProposalMsgWithRoleProof(pubKey, s, []byte{2})
+	m1 := buildProposalMsg(pubKey, s, []byte{2})
 
 	tracker := NewProposalTracker(lowThresh10)
 	tracker.OnProposal(m1)
 
 	s.Add(value2)
 	newPubKey := generatePubKey(t)
-	m2 := BuildProposalMsgWithRoleProof(newPubKey, s, []byte{1})
+	m2 := buildProposalMsg(newPubKey, s, []byte{1})
 	tracker.OnLateProposal(m2)
 	assert.NotEqual(t, tracker.proposal, m2)
 }
