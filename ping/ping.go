@@ -6,6 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/cryptoBox"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/ping/pb"
 	"sync"
@@ -14,7 +15,7 @@ import (
 
 // Pinger is an identity that does ping.
 type Pinger interface {
-	PublicKey() crypto.PublicKey
+	PublicKey() cryptoBox.PublicKey
 }
 
 const protocol = "/ping/1.0/"
@@ -85,7 +86,7 @@ func (p *Ping) readLoop() {
 }
 
 // Ping sends actual pings to target
-func (p *Ping) Ping(target, msg string) (string, error) {
+func (p *Ping) Ping(target cryptoBox.PublicKey, msg string) (string, error) {
 	var response string
 	reqid := crypto.NewUUID()
 	ping := &pb.Ping{
@@ -112,7 +113,7 @@ func (p *Ping) Ping(target, msg string) (string, error) {
 	return response, nil
 }
 
-func (p *Ping) sendRequest(target string, reqid crypto.UUID, ping *pb.Ping) (chan *pb.Ping, error) {
+func (p *Ping) sendRequest(target cryptoBox.PublicKey, reqid crypto.UUID, ping *pb.Ping) (chan *pb.Ping, error) {
 	pchan := make(chan *pb.Ping)
 	p.pendMuxtex.Lock()
 	p.pending[reqid] = pchan
@@ -159,7 +160,7 @@ func (p *Ping) handleRequest(sender Pinger, ping *pb.Ping) error {
 		return err
 	}
 	log.Debug("Ping: Responding with %v", resp)
-	return p.p2p.SendMessage(sender.PublicKey().String(), protocol, bin)
+	return p.p2p.SendMessage(sender.PublicKey(), protocol, bin)
 }
 
 func (p *Ping) handleResponse(ping *pb.Ping) {

@@ -2,10 +2,10 @@ package dht
 
 import (
 	"errors"
-	"github.com/btcsuite/btcutil/base58"
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/cryptoBox"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -67,7 +67,9 @@ func newFindNodeProtocol(service service.Service, rt RoutingTable) *findNodeProt
 	return p
 }
 
-func (p *findNodeProtocol) sendRequestMessage(server crypto.PublicKey, payload []byte, reqID crypto.UUID, responseChan chan findNodeResults) (bool, error) {
+func (p *findNodeProtocol) sendRequestMessage(server cryptoBox.PublicKey, payload []byte, reqID crypto.UUID,
+	responseChan chan findNodeResults) (bool, error) {
+
 	findnode := &pb.FindNode{}
 	findnode.Req = true
 	findnode.ReqID = reqID[:]
@@ -82,10 +84,10 @@ func (p *findNodeProtocol) sendRequestMessage(server crypto.PublicKey, payload [
 	p.pending[reqID] = responseChan
 	p.pendingMutex.Unlock()
 
-	return true, p.service.SendMessage(server.String(), protocol, msg)
+	return true, p.service.SendMessage(server, protocol, msg)
 }
 
-func (p *findNodeProtocol) sendResponseMessage(server crypto.PublicKey, reqID, payload []byte) error {
+func (p *findNodeProtocol) sendResponseMessage(server cryptoBox.PublicKey, reqID, payload []byte) error {
 	findnode := &pb.FindNode{}
 	findnode.Req = false
 	findnode.ReqID = reqID
@@ -95,16 +97,15 @@ func (p *findNodeProtocol) sendResponseMessage(server crypto.PublicKey, reqID, p
 	if err != nil {
 		return err
 	}
-	return p.service.SendMessage(server.String(), protocol, msg)
+	return p.service.SendMessage(server, protocol, msg)
 }
 
 // FindNode Send a single find node request to a remote node
-// id: base58 encoded remote node id
-func (p *findNodeProtocol) FindNode(serverNode node.Node, target string) ([]node.Node, error) {
+func (p *findNodeProtocol) FindNode(serverNode node.Node, target cryptoBox.PublicKey) ([]node.Node, error) {
 
 	var err error
 
-	nodeID := base58.Decode(target)
+	nodeID := target.Bytes()
 	data := &pb.FindNodeReq{
 		NodeID:     nodeID,
 		MaxResults: maxNearestNodesResults,
@@ -181,7 +182,7 @@ func (p *findNodeProtocol) readLoop() {
 
 // Handles a find node request from a remote node
 // Process the request and send back the response to the remote node
-func (p *findNodeProtocol) handleIncomingRequest(sender crypto.PublicKey, reqID, msg []byte) {
+func (p *findNodeProtocol) handleIncomingRequest(sender cryptoBox.PublicKey, reqID, msg []byte) {
 	req := &pb.FindNodeReq{}
 	err := proto.Unmarshal(msg, req)
 	if err != nil {
@@ -271,7 +272,7 @@ func toNodeInfo(nodes []node.Node, filterID string) []*pb.NodeInfo {
 func fromNodeInfos(nodes []*pb.NodeInfo) []node.Node {
 	res := make([]node.Node, len(nodes))
 	for i, n := range nodes {
-		pubk, err := crypto.NewPublicKey(n.NodeId)
+		pubk, err := cryptoBox.NewPubkeyFromBytes(n.NodeId)
 		if err != nil {
 			// TODO Error handling, problem : don't break everything because one messed up nodeinfo
 			log.Error("There was an error parsing nodeid : ", n.NodeId, ", skipping it. err: ", err)

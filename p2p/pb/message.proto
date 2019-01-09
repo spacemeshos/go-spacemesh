@@ -3,10 +3,9 @@ syntax = "proto3";
 package pb;
 option go_package = "pb";
 
-
 // Handshake protocol data used for both request and response - sent unencrypted over the wire
 message HandshakeData {
-    bytes sessionId = 1;    // for req - same as iv. for response - set to req id
+    bytes sessionId = 1; // for req - same as iv. for response - set to req id
     bytes payload = 2; // empty for now
     int64 timestamp = 3; // sending time
     string clientVersion = 4; // client version of the sender
@@ -27,23 +26,22 @@ message HandshakeData {
 // data is here and not in CommonMessageData to avoid leaked data on unencrypted connections
 message ProtocolMessage {
     Metadata metadata = 1;
-       oneof data {
-         bytes payload = 2;
-         MessageWrapper msg = 3;
-        }
+    oneof data {
+        bytes payload = 2;
+        MessageWrapper msg = 3;
+    }
 }
 
 message Metadata {
-    string nextProtocol = 1;      // Protocol id string
+    string nextProtocol = 1; // Protocol id string
     string clientVersion = 2; // Author client version
-    int64 timestamp = 3;      // Unix time - authoring time (not sending time)
-    bytes authPubKey = 4;     // Authoring node Secp256k1 public key (32bytes) - may not be sender
-    bytes msgSign = 5;        // Signature of message data by author + method specific data by message creator node. format: hexEncode([]bytes)
+    int64 timestamp = 3; // Unix time - authoring time (not sending time)
+    bytes authPubkey = 4; // Authoring node public key (32bytes) - may not be sender
 }
 
 message MessageWrapper {
-     uint32 type = 1; //msg type
-     bool req = 2;   // Req or Resp, 0 - req / 1 - resp
-     uint64 reqID = 3;
-     bytes payload = 4; //encapsulated msg
+    uint32 type = 1; //msg type
+    bool req = 2; // Req or Resp, 0 - req / 1 - resp
+    uint64 reqID = 3;
+    bytes payload = 4; //encapsulated msg
 }

@@ -2,7 +2,7 @@ package net
 
 import (
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/p2p/cryptoBox"
 	"github.com/spacemeshos/go-spacemesh/p2p/delimited"
 	"github.com/stretchr/testify/assert"
 	"math/rand"
@@ -11,8 +11,8 @@ import (
 	"time"
 )
 
-func generatePublicKey() crypto.PublicKey {
-	_, pubKey, _ := crypto.GenerateKeyPair()
+func generatePublicKey() cryptoBox.PublicKey {
+	_, pubKey, _ := cryptoBox.GenerateKeyPair()
 	return pubKey
 }
 
@@ -25,8 +25,8 @@ func TestSendReceiveMessage(t *testing.T) {
 	rwcam := NewReadWriteCloseAddresserMock()
 	rPub := generatePublicKey()
 	formatter := delimited.NewChan(10)
-	conn := newConnection(rwcam, netw, formatter, rPub, netw.logger)
-	conn.SetSession(&NetworkSessionImpl{})
+	conn := newConnection(rwcam, netw, formatter, rPub, nil, netw.logger)
+	conn.SetSession(&networkSessionImpl{})
 	go conn.beginEventProcessing()
 	msg := "hello"
 	err := conn.Send([]byte(msg))
@@ -42,8 +42,8 @@ func TestReceiveError(t *testing.T) {
 	rwcam := NewReadWriteCloseAddresserMock()
 	rPub := generatePublicKey()
 	formatter := delimited.NewChan(10)
-	conn := newConnection(rwcam, netw, formatter, rPub, netw.logger)
-	conn.SetSession(&NetworkSessionImpl{})
+	conn := newConnection(rwcam, netw, formatter, rPub, nil, netw.logger)
+	conn.SetSession(&networkSessionImpl{})
 
 	getclosed := netw.SubscribeClosingConnections()
 
@@ -58,8 +58,8 @@ func TestSendError(t *testing.T) {
 	rwcam := NewReadWriteCloseAddresserMock()
 	rPub := generatePublicKey()
 	formatter := delimited.NewChan(10)
-	conn := newConnection(rwcam, netw, formatter, rPub, netw.logger)
-	conn.SetSession(&NetworkSessionImpl{})
+	conn := newConnection(rwcam, netw, formatter, rPub, nil, netw.logger)
+	conn.SetSession(&networkSessionImpl{})
 	go conn.beginEventProcessing()
 
 	rwcam.SetWriteResult(fmt.Errorf("fail"))
@@ -74,7 +74,7 @@ func TestPreSessionMessage(t *testing.T) {
 	rwcam := NewReadWriteCloseAddresserMock()
 	rPub := generatePublicKey()
 	formatter := delimited.NewChan(10)
-	conn := newConnection(rwcam, netw, formatter, rPub, netw.logger)
+	conn := newConnection(rwcam, netw, formatter, rPub, nil, netw.logger)
 	go conn.beginEventProcessing()
 	rwcam.SetReadResult([]byte{3, 1, 1, 1}, nil)
 	time.Sleep(50 * time.Millisecond)
@@ -86,7 +86,7 @@ func TestPreSessionError(t *testing.T) {
 	rwcam := NewReadWriteCloseAddresserMock()
 	rPub := generatePublicKey()
 	formatter := delimited.NewChan(10)
-	conn := newConnection(rwcam, netw, formatter, rPub, netw.logger)
+	conn := newConnection(rwcam, netw, formatter, rPub, nil, netw.logger)
 	netw.SetPreSessionResult(fmt.Errorf("fail"))
 
 	getclosed := netw.SubscribeClosingConnections()
@@ -103,8 +103,8 @@ func TestClose(t *testing.T) {
 	rwcam := NewReadWriteCloseAddresserMock()
 	rPub := generatePublicKey()
 	formatter := delimited.NewChan(10)
-	conn := newConnection(rwcam, netw, formatter, rPub, netw.logger)
-	conn.SetSession(&NetworkSessionImpl{})
+	conn := newConnection(rwcam, netw, formatter, rPub, nil, netw.logger)
+	conn.SetSession(&networkSessionImpl{})
 	getclosed := netw.SubscribeClosingConnections()
 
 	go conn.beginEventProcessing()
@@ -119,8 +119,8 @@ func TestDoubleClose(t *testing.T) {
 	rwcam := NewReadWriteCloseAddresserMock()
 	rPub := generatePublicKey()
 	formatter := delimited.NewChan(10)
-	conn := newConnection(rwcam, netw, formatter, rPub, netw.logger)
-	conn.SetSession(&NetworkSessionImpl{})
+	conn := newConnection(rwcam, netw, formatter, rPub, nil, netw.logger)
+	conn.SetSession(&networkSessionImpl{})
 	getclosed := netw.SubscribeClosingConnections()
 
 	go conn.beginEventProcessing()
@@ -145,13 +145,13 @@ func TestGettersToBoostCoverage(t *testing.T) {
 	rwcam.setRemoteAddrResult(&addr)
 	rPub := generatePublicKey()
 	formatter := delimited.NewChan(10)
-	conn := newConnection(rwcam, netw, formatter, rPub, netw.logger)
+	conn := newConnection(rwcam, netw, formatter, rPub, nil, netw.logger)
 	assert.Equal(t, 36, len(conn.ID()))
 	assert.Equal(t, conn.ID(), conn.String())
 	rPub = generatePublicKey()
 	conn.SetRemotePublicKey(rPub)
 	assert.Equal(t, rPub, conn.RemotePublicKey())
-	conn.SetSession(&NetworkSessionImpl{})
+	conn.SetSession(&networkSessionImpl{})
 	assert.NotNil(t, conn.Session())
 	assert.NotNil(t, conn.incomingChannel())
 	assert.Equal(t, addr.String(), conn.RemoteAddr().String())

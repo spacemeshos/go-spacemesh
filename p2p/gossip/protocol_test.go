@@ -2,9 +2,9 @@ package gossip
 
 import (
 	"github.com/gogo/protobuf/proto"
-	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
+	"github.com/spacemeshos/go-spacemesh/p2p/cryptoBox"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -17,8 +17,8 @@ import (
 type mockBaseNetwork struct {
 	msgSentByPeer        map[string]uint32
 	inbox                chan service.Message
-	connSubs             []chan crypto.PublicKey
-	discSubs             []chan crypto.PublicKey
+	connSubs             []chan cryptoBox.PublicKey
+	discSubs             []chan cryptoBox.PublicKey
 	totalMsgCount        int
 	processProtocolCount int
 	msgMutex             sync.Mutex
@@ -31,8 +31,8 @@ func newMockBaseNetwork() *mockBaseNetwork {
 	return &mockBaseNetwork{
 		make(map[string]uint32),
 		make(chan service.Message, 30),
-		make([]chan crypto.PublicKey, 0, 5),
-		make([]chan crypto.PublicKey, 0, 5),
+		make([]chan cryptoBox.PublicKey, 0, 5),
+		make([]chan cryptoBox.PublicKey, 0, 5),
 		0,
 		0,
 		sync.Mutex{},
@@ -42,10 +42,10 @@ func newMockBaseNetwork() *mockBaseNetwork {
 	}
 }
 
-func (mbn *mockBaseNetwork) SendMessage(peerPubKey string, protocol string, payload []byte) error {
+func (mbn *mockBaseNetwork) SendMessage(peerPubkey cryptoBox.PublicKey, protocol string, payload []byte) error {
 	mbn.msgMutex.Lock()
 	mbn.lastMsg = payload
-	mbn.msgSentByPeer[peerPubKey]++
+	mbn.msgSentByPeer[peerPubkey.String()]++
 	mbn.totalMsgCount++
 	mbn.msgMutex.Unlock()
 	releaseWaiters(mbn.msgwg)
@@ -79,9 +79,9 @@ func (mbn *mockBaseNetwork) RegisterProtocol(protocol string) chan service.Messa
 	return mbn.inbox
 }
 
-func (mbn *mockBaseNetwork) SubscribePeerEvents() (conn chan crypto.PublicKey, disc chan crypto.PublicKey) {
-	conn = make(chan crypto.PublicKey, 20)
-	disc = make(chan crypto.PublicKey, 20)
+func (mbn *mockBaseNetwork) SubscribePeerEvents() (conn chan cryptoBox.PublicKey, disc chan cryptoBox.PublicKey) {
+	conn = make(chan cryptoBox.PublicKey, 20)
+	disc = make(chan cryptoBox.PublicKey, 20)
 
 	mbn.connSubs = append(mbn.connSubs, conn)
 	mbn.discSubs = append(mbn.discSubs, disc)
@@ -96,12 +96,12 @@ func (mbn *mockBaseNetwork) ProcessProtocolMessage(sender node.Node, protocol st
 
 func (mbn *mockBaseNetwork) addRandomPeers(cnt int) {
 	for i := 0; i < cnt; i++ {
-		_, pub, _ := crypto.GenerateKeyPair()
+		_, pub, _ := cryptoBox.GenerateKeyPair()
 		mbn.addRandomPeer(pub)
 	}
 }
 
-func (mbn *mockBaseNetwork) addRandomPeer(pub crypto.PublicKey) {
+func (mbn *mockBaseNetwork) addRandomPeer(pub cryptoBox.PublicKey) {
 	for _, p := range mbn.connSubs {
 		p <- pub
 	}
@@ -145,36 +145,24 @@ func (tm TestMessage) Bytes() []byte {
 	return tm.data.Bytes()
 }
 
-type testSigner struct {
-	pv crypto.PrivateKey
-}
-
-func (ms testSigner) PublicKey() crypto.PublicKey {
-	return ms.pv.GetPublicKey()
-}
-
-func (ms testSigner) Sign(data []byte) ([]byte, error) {
-	return ms.pv.Sign(data)
-}
-
-func newTestSigner(t testing.TB) testSigner {
-	pv, _, err := crypto.GenerateKeyPair()
+func newPubkey(t *testing.T) cryptoBox.PublicKey {
+	_, pubkey, err := cryptoBox.GenerateKeyPair()
 	assert.NoError(t, err)
-	return testSigner{pv}
+	return pubkey
 }
 
-func newSignedGossipMessageData(t testing.TB, signer signer) ([]byte, *pb.ProtocolMessage) {
+func newTestMessageData(t testing.TB, authPubkey cryptoBox.PublicKey) ([]byte, *pb.ProtocolMessage) {
 	pm := &pb.ProtocolMessage{
 		Metadata: &pb.Metadata{
 			NextProtocol:  ProtocolName,
-			AuthPubKey:    signer.PublicKey().Bytes(),
 			Timestamp:     time.Now().Unix(),
 			ClientVersion: protocolVer,
+			AuthPubkey:    authPubkey.Bytes(),
 		},
 		Data: &pb.ProtocolMessage_Payload{[]byte("LOL")},
 	}
 
-	return signedMessage(t, signer, pm).Bytes(), pm
+	return makePayload(t, pm).Bytes(), pm
 }
 
 func addPeersAndTest(t testing.TB, num int, p *Protocol, net *mockBaseNetwork, work bool) {
@@ -209,47 +197,41 @@ lop:
 //todo : more unit tests
 
 func TestNeighborhood_AddIncomingPeer(t *testing.T) {
-	n := NewProtocol(config.DefaultConfig().SwarmConfig, newMockBaseNetwork(), newTestSigner(t), log.New("tesT", "", ""))
+	n := NewProtocol(config.DefaultConfig().SwarmConfig, newMockBaseNetwork(), newPubkey(t), log.New("tesT", "", ""))
 	n.Start()
-	_, pub, _ := crypto.GenerateKeyPair()
+	_, pub, _ := cryptoBox.GenerateKeyPair()
 	n.addPeer(pub)
 
 	assert.True(t, n.hasPeer(pub))
 	assert.Equal(t, 1, n.peersCount())
 }
 
-func signedMessage(t testing.TB, s signer, message *pb.ProtocolMessage) service.Data {
-	pmbin, err := proto.Marshal(message)
+func makePayload(t testing.TB, message *pb.ProtocolMessage) service.Data {
+	payload, err := proto.Marshal(message)
 	assert.NoError(t, err)
-	sign, err := s.Sign(pmbin)
-	assert.NoError(t, err)
-	message.Metadata.MsgSign = sign
-	finbin, err := proto.Marshal(message)
-	assert.NoError(t, err)
-	return service.DataBytes{finbin}
+	return service.DataBytes{Payload: payload}
 }
 
 func TestNeighborhood_Relay(t *testing.T) {
 	net := newMockBaseNetwork()
-	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newTestSigner(t), log.New("tesT", "", ""))
+	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newPubkey(t), log.New("tesT", "", ""))
 	n.Start()
 
 	addPeersAndTest(t, 20, n, net, true)
 
-	signer := newTestSigner(t)
 	pm := &pb.ProtocolMessage{
 		Metadata: &pb.Metadata{
 			NextProtocol:  ProtocolName,
-			AuthPubKey:    signer.PublicKey().Bytes(),
 			Timestamp:     time.Now().Unix(),
 			ClientVersion: protocolVer,
+			AuthPubkey:    newPubkey(t).Bytes(),
 		},
 		Data: &pb.ProtocolMessage_Payload{[]byte("LOL")},
 	}
 
-	signed := signedMessage(t, signer, pm)
+	payload := makePayload(t, pm)
 
-	var msg service.Message = TestMessage{signed}
+	var msg service.Message = TestMessage{payload}
 	net.pcountwg.Add(1)
 	net.msgwg.Add(20)
 	net.inbox <- msg
@@ -261,7 +243,7 @@ func TestNeighborhood_Relay(t *testing.T) {
 
 func TestNeighborhood_Broadcast(t *testing.T) {
 	net := newMockBaseNetwork()
-	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newTestSigner(t), log.New("tesT", "", ""))
+	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newPubkey(t), log.New("tesT", "", ""))
 	n.Start()
 	addPeersAndTest(t, 20, n, net, true)
 	net.msgwg.Add(20)
@@ -275,22 +257,21 @@ func TestNeighborhood_Broadcast(t *testing.T) {
 
 func TestNeighborhood_Relay2(t *testing.T) {
 	net := newMockBaseNetwork()
-	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newTestSigner(t), log.New("tesT", "", ""))
+	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newPubkey(t), log.New("tesT", "", ""))
 	n.Start()
 
-	signer := newTestSigner(t)
 	pm := &pb.ProtocolMessage{
 		Metadata: &pb.Metadata{
 			NextProtocol:  ProtocolName,
-			AuthPubKey:    signer.PublicKey().Bytes(),
 			Timestamp:     time.Now().Unix(),
 			ClientVersion: protocolVer,
+			AuthPubkey:    newPubkey(t).Bytes(),
 		},
 		Data: &pb.ProtocolMessage_Payload{[]byte("LOL")},
 	}
 
-	signed := signedMessage(t, signer, pm)
-	var msg service.Message = TestMessage{signed}
+	payload := makePayload(t, pm)
+	var msg service.Message = TestMessage{payload}
 	net.pcountwg.Add(1)
 	net.inbox <- msg
 	passOrDeadlock(t, net.pcountwg)
@@ -306,10 +287,10 @@ func TestNeighborhood_Relay2(t *testing.T) {
 
 func TestNeighborhood_Broadcast2(t *testing.T) {
 	net := newMockBaseNetwork()
-	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newTestSigner(t), log.New("tesT", "", ""))
+	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newPubkey(t), log.New("tesT", "", ""))
 	n.Start()
 
-	msgB := []byte("LOL")
+	msgB, _ := newTestMessageData(t, newPubkey(t))
 	addPeersAndTest(t, 1, n, net, true)
 	net.msgwg.Add(1) // sender also handle the message
 	net.pcountwg.Add(1)
@@ -331,7 +312,7 @@ func TestNeighborhood_Broadcast3(t *testing.T) {
 	// todo : Fix this test, because the first message is broadcasted `Broadcast` attaches metadata to it with the current authoring timestamp
 	// to test that the the next message doesn't get processed by the protocol we must create an exact copy of the message produced at `Broadcast`
 	net := newMockBaseNetwork()
-	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newTestSigner(t), log.New("tesT", "", ""))
+	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newPubkey(t), log.New("tesT", "", ""))
 	n.Start()
 
 	addPeersAndTest(t, 20, n, net, true)
@@ -354,7 +335,7 @@ func TestNeighborhood_Broadcast4(t *testing.T) {
 	// todo : Fix this test, because the first message is broadcasted `Broadcast` attaches metadata to it with the current authoring timestamp
 	// to test that the the next message doesn't get processed by the protocol we must create an exact copy of the message produced at `Broadcast`
 	net := newMockBaseNetwork()
-	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newTestSigner(t), log.New("tesT", "", ""))
+	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newPubkey(t), log.New("tesT", "", ""))
 	n.Start()
 
 	addPeersAndTest(t, 20, n, net, true)
@@ -374,10 +355,10 @@ func TestNeighborhood_Broadcast4(t *testing.T) {
 
 func TestNeighborhood_Relay3(t *testing.T) {
 	net := newMockBaseNetwork()
-	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newTestSigner(t), log.New("tesT", "", ""))
+	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newPubkey(t), log.New("tesT", "", ""))
 	n.Start()
 
-	payload, _ := newSignedGossipMessageData(t, newTestSigner(t))
+	payload, _ := newTestMessageData(t, newPubkey(t))
 	var msg service.Message = TestMessage{service.DataBytes{payload}}
 	net.pcountwg.Add(1)
 	net.inbox <- msg
@@ -405,7 +386,7 @@ func TestNeighborhood_Relay3(t *testing.T) {
 
 func TestNeighborhood_Start(t *testing.T) {
 	net := newMockBaseNetwork()
-	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newTestSigner(t), log.New("tesT", "", ""))
+	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newPubkey(t), log.New("tesT", "", ""))
 
 	// before Start
 	addPeersAndTest(t, 20, n, net, false)
@@ -417,7 +398,7 @@ func TestNeighborhood_Start(t *testing.T) {
 
 func TestNeighborhood_Close(t *testing.T) {
 	net := newMockBaseNetwork()
-	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newTestSigner(t), log.New("tesT", "", ""))
+	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newPubkey(t), log.New("tesT", "", ""))
 
 	n.Start()
 	addPeersAndTest(t, 20, n, net, true)
@@ -428,16 +409,16 @@ func TestNeighborhood_Close(t *testing.T) {
 
 func TestNeighborhood_Disconnect(t *testing.T) {
 	net := newMockBaseNetwork()
-	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newTestSigner(t), log.New("tesT", "", ""))
+	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newPubkey(t), log.New("tesT", "", ""))
 
 	n.Start()
-	_, pub1, _ := crypto.GenerateKeyPair()
+	_, pub1, _ := cryptoBox.GenerateKeyPair()
 	n.addPeer(pub1)
-	_, pub2, _ := crypto.GenerateKeyPair()
+	_, pub2, _ := cryptoBox.GenerateKeyPair()
 	n.addPeer(pub2)
 	assert.Equal(t, 2, n.peersCount())
 
-	msg, _ := newSignedGossipMessageData(t, newTestSigner(t))
+	msg, _ := newTestMessageData(t, newPubkey(t))
 
 	net.pcountwg.Add(1)
 	net.msgwg.Add(2)
@@ -447,7 +428,7 @@ func TestNeighborhood_Disconnect(t *testing.T) {
 	assert.Equal(t, 1, net.processProtocolCount)
 	assert.Equal(t, 2, net.totalMessageSent())
 
-	msg2, _ := newSignedGossipMessageData(t, newTestSigner(t))
+	msg2, _ := newTestMessageData(t, newPubkey(t))
 
 	n.removePeer(pub1)
 	net.pcountwg.Add(1)
@@ -468,9 +449,9 @@ func TestNeighborhood_Disconnect(t *testing.T) {
 
 func TestMarkAndValidateMessages(t *testing.T) {
 	net := newMockBaseNetwork()
-	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newTestSigner(t), log.New("tesT", "", ""))
+	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newPubkey(t), log.New("tesT", "", ""))
 
-	_, msg := newSignedGossipMessageData(t, newTestSigner(t))
+	_, msg := newTestMessageData(t, newPubkey(t))
 	h := hash(666) // it doesn't really have to be the real hash
 	isOld, isInvalid := n.markAndValidateMessage(h, msg)
 	assert.False(t, isOld)
@@ -480,7 +461,7 @@ func TestMarkAndValidateMessages(t *testing.T) {
 	assert.True(t, isOld)
 	assert.False(t, isInvalid)
 
-	msg.Metadata.AuthPubKey = nil
+	msg.Metadata.ClientVersion = "-1"
 	h = hash(999) // it doesn't really have to be the real hash
 	isOld, isInvalid = n.markAndValidateMessage(h, msg)
 	assert.False(t, isOld)

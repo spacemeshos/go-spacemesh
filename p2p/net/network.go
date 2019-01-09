@@ -3,9 +3,9 @@ package net
 import (
 	"fmt"
 	"github.com/gogo/protobuf/proto"
-	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
+	"github.com/spacemeshos/go-spacemesh/p2p/cryptoBox"
 	"github.com/spacemeshos/go-spacemesh/p2p/delimited"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
@@ -167,91 +167,66 @@ func (n *Net) publishClosingConnection(connection Connection) {
 	n.clsMutex.RUnlock()
 }
 
-func (n *Net) createConnection(address string, remotePub crypto.PublicKey, timeOut time.Duration, keepAlive time.Duration) (ManagedConnection, error) {
-	if n.isShuttingDown {
-		return nil, fmt.Errorf("can't dial because the connection is shutting down")
-	}
+func dial(keepAlive, timeOut time.Duration, address string) (net.Conn, error) {
 	// connect via dialer so we can set tcp network params
 	dialer := &net.Dialer{}
 	dialer.KeepAlive = keepAlive // drop connections after a period of inactivity
 	dialer.Timeout = timeOut     // max time bef
-	n.logger.Debug("Dialing %v @ %v...", remotePub.Pretty(), address)
 
 	netConn, err := dialer.Dial("tcp", address)
+	return netConn, err
+}
 
+func (n *Net) createConnection(address string, remotePub cryptoBox.PublicKey, session NetworkSession,
+	timeOut, keepAlive time.Duration) (ManagedConnection, error) {
+
+	if n.isShuttingDown {
+		return nil, fmt.Errorf("can't dial because the connection is shutting down")
+	}
+
+	n.logger.Debug("Dialing %v @ %v...", remotePub.String(), address)
+	netConn, err := dial(keepAlive, timeOut, address)
 	if err != nil {
 		return nil, err
 	}
 
 	n.logger.Debug("Connected to %s...", address)
 	formatter := delimited.NewChan(10)
-	c := newConnection(netConn, n, formatter, remotePub, n.logger)
-
-	return c, nil
+	return newConnection(netConn, n, formatter, remotePub, session, n.logger), nil
 }
 
-func (n *Net) createSecuredConnection(address string, remotePublicKey crypto.PublicKey, timeOut time.Duration, keepAlive time.Duration) (ManagedConnection, error) {
-	errMsg := "failed to establish secured connection."
-	conn, err := n.createConnection(address, remotePublicKey, timeOut, keepAlive)
+func (n *Net) createSecuredConnection(address string, remotePubkey cryptoBox.PublicKey, timeOut time.Duration,
+	keepAlive time.Duration) (ManagedConnection, error) {
+
+	session := createSession(n.localNode.PrivateKey(), remotePubkey)
+	conn, err := n.createConnection(address, remotePubkey, session, timeOut, keepAlive)
 	if err != nil {
 		return nil, err
 	}
-	data, session, err := GenerateHandshakeRequestData(n.localNode.PublicKey(), n.localNode.PrivateKey(), remotePublicKey, n.networkID, uint16(n.tcpListenAddress.Port))
-	if err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("%s err: %v", errMsg, err)
-	}
-	n.logger.Debug("Creating session handshake request session id: %s", session)
-	payload, err := proto.Marshal(data)
-	if err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("%s err: %v", errMsg, err)
-	}
 
-	err = conn.Send(payload)
+	handshakeMessage, err := generateHandshakeMessage(session, n.networkID, n.tcpListenAddress.Port, n.localNode.PublicKey())
 	if err != nil {
-		conn.Close()
 		return nil, err
 	}
-
-	var msg []byte
-	var ok bool
-	timer := time.NewTimer(n.config.ResponseTimeout)
-	select {
-	case msg, ok = <-conn.incomingChannel():
-		if !ok {
-			conn.Close()
-			return nil, fmt.Errorf("%s err: incoming channel got closed with %v", errMsg, conn.RemotePublicKey())
-		}
-	case <-timer.C:
-		n.logger.Info("waiting for HS response timed-out. remoteKey=%v", remotePublicKey)
-		conn.Close()
-		return nil, fmt.Errorf("%s err: HS response timed-out", errMsg)
-	}
-
-	respData := &pb.HandshakeData{}
-	err = proto.Unmarshal(msg, respData)
+	err = conn.Send(handshakeMessage)
 	if err != nil {
-		//n.logger.Warning("invalid incoming handshake resp bin data", err)
-		conn.Close()
-		return nil, fmt.Errorf("%s err: %v", errMsg, err)
+		return nil, err
 	}
-
-	err = ProcessHandshakeResponse(remotePublicKey, session, respData)
-	if err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("%s err: %v", errMsg, err)
-	}
-	conn.SetSession(session)
 	return conn, nil
+}
+
+func createSession(privkey cryptoBox.PrivateKey, remotePubkey cryptoBox.PublicKey) NetworkSession {
+	sharedSecret := cryptoBox.GenerateSharedSecret(privkey, remotePubkey)
+	session := NewNetworkSession(sharedSecret, remotePubkey)
+	return session
 }
 
 // Dial a remote server with provided time out
 // address:: ip:port
 // Returns established connection that local clients can send messages to or error if failed
 // to establish a connection, currently only secured connections are supported
-func (n *Net) Dial(address string, remotePublicKey crypto.PublicKey) (Connection, error) {
-	conn, err := n.createSecuredConnection(address, remotePublicKey, n.config.DialTimeout, n.config.ConnKeepAlive)
+func (n *Net) Dial(address string, remotePubkey cryptoBox.PublicKey) (Connection, error) {
+	conn, err := n.createSecuredConnection(address, remotePubkey, n.config.DialTimeout, n.config.ConnKeepAlive)
 	if err != nil {
 		return nil, fmt.Errorf("failed to Dail. err: %v", err)
 	}
@@ -292,7 +267,7 @@ func (n *Net) acceptTCP() {
 
 		n.logger.Debug("Got new connection... Remote Address: %s", netConn.RemoteAddr())
 		formatter := delimited.NewChan(10)
-		c := newConnection(netConn, n, formatter, nil, n.logger)
+		c := newConnection(netConn, n, formatter, nil, nil, n.logger)
 
 		go c.beginEventProcessing()
 		// network won't publish the connection before it the remote node had established a session
@@ -323,47 +298,58 @@ func (n *Net) publishNewRemoteConnectionEvent(conn Connection, node node.Node) {
 
 // HandlePreSessionIncomingMessage establishes session with the remote peer and update the Connection with the new session
 func (n *Net) HandlePreSessionIncomingMessage(c Connection, message []byte) error {
-	//TODO replace the next few lines with a way to validate that the message is a handshake request based on the message metadata
-	errMsg := "failed to handle handshake request"
-	data := &pb.HandshakeData{}
-
-	err := proto.Unmarshal(message, data)
+	message, remotePubkey, err := cryptoBox.ExtractPubkey(message)
 	if err != nil {
-		return fmt.Errorf("%s. err: %v", errMsg, err)
+		return err
 	}
+	c.SetRemotePublicKey(remotePubkey)
+	session := createSession(n.localNode.PrivateKey(), remotePubkey)
+	c.SetSession(session)
 
-	// new remote connection doesn't hold the remote public key until it gets the handshake request
-	if c.RemotePublicKey() == nil {
-		rPub, err := crypto.NewPublicKey(data.GetNodePubKey())
-		n.Logger().Debug("DEBUG: handling HS req from %v", rPub)
-		if err != nil {
-			return fmt.Errorf("%s. err: %v", errMsg, err)
-		}
-		c.SetRemotePublicKey(rPub)
-	}
-	respData, session, err := ProcessHandshakeRequest(n.NetworkID(), n.localNode.PublicKey(), n.localNode.PrivateKey(), c.RemotePublicKey(), data)
-	if err != nil {
-		return fmt.Errorf("%s. err: %v", errMsg, err)
-	}
-	payload, err := proto.Marshal(respData)
-	if err != nil {
-		return fmt.Errorf("%s. hereto err: %v", errMsg, err)
-	}
-
-	// update on new connection
-	addr, _, err := net.SplitHostPort(c.RemoteAddr().String())
-	if err != nil {
-		return fmt.Errorf("un-valid address format, (%v) err: %v", c.RemoteAddr().String(), err)
-	}
-
-	anode := node.New(c.RemotePublicKey(), net.JoinHostPort(addr, strconv.Itoa(int(data.Port))))
-
-	err = c.Send(payload)
+	// open message
+	protoMessage, err := session.OpenMessage(message)
 	if err != nil {
 		return err
 	}
 
-	c.SetSession(session)
+	handshakeData := &pb.HandshakeData{}
+	err = proto.Unmarshal(protoMessage, handshakeData)
+	if err != nil {
+		return err
+	}
+
+	remoteListeningPort := uint16(handshakeData.Port)
+	remoteListeningAddress, err := replacePort(c.RemoteAddr().String(), remoteListeningPort)
+	if err != nil {
+		return err
+	}
+	anode := node.New(c.RemotePublicKey(), remoteListeningAddress)
+
 	n.publishNewRemoteConnectionEvent(c, anode)
+	// TODO: @noam process message?
+	// Specifically -- check the network id and client version
 	return nil
+}
+
+func generateHandshakeMessage(session NetworkSession, networkID int8, localIncomingPort int, localPubkey cryptoBox.PublicKey) ([]byte, error) {
+	handshakeData := &pb.HandshakeData{
+		Timestamp:            time.Now().Unix(),
+		ClientVersion:        config.ClientVersion,
+		NetworkID:            int32(networkID),
+		Port:                 uint32(localIncomingPort),
+	}
+	handshakeMessage, err := proto.Marshal(handshakeData)
+	if err != nil {
+		return nil, err
+	}
+	sealedMessage := session.SealMessage(handshakeMessage)
+	return cryptoBox.PrependPubkey(sealedMessage, localPubkey), nil
+}
+
+func replacePort(addr string, newPort uint16) (string, error) {
+	addrWithoutPort, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return "", fmt.Errorf("invalid address format, (%v) err: %v", addr, err)
+	}
+	return net.JoinHostPort(addrWithoutPort, strconv.Itoa(int(newPort))), nil
 }

@@ -1,42 +1,23 @@
 package net
 
 import (
-	"fmt"
-	"github.com/gogo/protobuf/proto"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
+	"github.com/spacemeshos/go-spacemesh/p2p/cryptoBox"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"math/rand"
 	"sync"
 	"testing"
 	"time"
 )
 
-func testLogger(id string) log.Log {
-	// empty loggers so no files will be kept
-	return log.New(id, "", "")
-}
-
-type NetMessage struct {
-	data []byte
-	err  error
-}
-
-func (msg NetMessage) Message() []byte {
-	return msg.data
-}
-
-func (msg NetMessage) Error() error {
-	return msg.err
-}
-
-func waitForCallbackOrTimeout(t *testing.T, outchan chan NewConnectionEvent, expectedSession NetworkSession) {
+func waitForCallbackOrTimeout(t *testing.T, outchan chan NewConnectionEvent, expectedPeerPubkey cryptoBox.PublicKey) {
 	select {
 	case res := <-outchan:
-		assert.Equal(t, expectedSession.ID(), res.Conn.Session().ID(), "wrong session received")
+		assert.Equal(t, expectedPeerPubkey.String(), res.Conn.Session().ID().String(), "wrong session received")
 	case <-time.After(2 * time.Second):
-		assert.Nil(t, expectedSession, "Didn't get channel notification")
+		assert.Nil(t, expectedPeerPubkey, "Didn't get channel notification")
 	}
 }
 
@@ -74,60 +55,42 @@ func TestNet_EnqueueMessage(t *testing.T) {
 }
 
 func TestHandlePreSessionIncomingMessage(t *testing.T) {
+	r := require.New(t)
 	var wg sync.WaitGroup
 
-	localNode, _ := node.GenerateTestNode(t)
-	remoteNode, _ := node.GenerateTestNode(t)
+	aliceNode, _ := node.GenerateTestNode(t)
+	bobNode, _ := node.GenerateTestNode(t)
 
-	con := NewConnectionMock(localNode.PublicKey())
-	con.addr = localNode.Address()
-	remoteNet, _ := NewNet(config.DefaultConfig(), remoteNode)
-	outchan := remoteNet.SubscribeOnNewRemoteConnections()
-	out, session, er := GenerateHandshakeRequestData(localNode.PublicKey(), localNode.PrivateKey(), remoteNode.PublicKey(), remoteNet.NetworkID(), getPort(t, remoteNode.Node))
-	assert.NoError(t, er, "cant generate handshake message")
-	data, err := proto.Marshal(out)
-	assert.NoError(t, err, "cannot marshal obj")
-	wg.Add(1)
-	go func() {
-		wg.Done()
-		waitForCallbackOrTimeout(t, outchan, session)
-	}()
+	bobsAliceConn := NewConnectionMock(aliceNode.PublicKey())
+	bobsAliceConn.addr = aliceNode.Address()
+	bobsNet, err := NewNet(config.DefaultConfig(), bobNode)
+	r.NoError(err)
+	bobsNewConnChan := bobsNet.SubscribeOnNewRemoteConnections()
 
-	wg.Wait()
-	err = remoteNet.HandlePreSessionIncomingMessage(con, data)
-	assert.NoError(t, err, "handle session failed")
-	assert.Equal(t, int32(1), con.SendCount())
+	aliceSessionWithBob := createSession(aliceNode.PrivateKey(), bobNode.PublicKey())
+	aliceHandshakeMessageToBob, err := generateHandshakeMessage(aliceSessionWithBob, 1, 123, aliceNode.PublicKey())
+	r.NoError(err)
 
-	con.remotePub = nil
+	err = bobsNet.HandlePreSessionIncomingMessage(bobsAliceConn, aliceHandshakeMessageToBob)
+	r.NoError(err)
+	r.Equal(int32(0), bobsAliceConn.SendCount())
 
 	wg.Add(1)
 	go func() {
 		wg.Done()
-		waitForCallbackOrTimeout(t, outchan, session)
+		waitForCallbackOrTimeout(t, bobsNewConnChan, aliceNode.PublicKey())
 	}()
 
 	wg.Wait()
-	err = remoteNet.HandlePreSessionIncomingMessage(con, data)
-	assert.NoError(t, err, "handle session failed")
-	assert.Equal(t, localNode.PublicKey().String(), con.remotePub.String(), "Remote connection was not updated properly")
 
-	othercon := NewConnectionMock(remoteNode.PublicKey())
-	othercon.addr = remoteNode.Address()
-	othercon.SetSendResult(fmt.Errorf("error or whatever"))
+	err = bobsNet.HandlePreSessionIncomingMessage(bobsAliceConn, aliceHandshakeMessageToBob)
+	r.NoError(err)
+	r.Equal(int32(0), bobsAliceConn.SendCount())
+
 	wg.Add(1)
 	go func() {
 		wg.Done()
-		waitForCallbackOrTimeout(t, outchan, nil)
+		waitForCallbackOrTimeout(t, bobsNewConnChan, aliceNode.PublicKey())
 	}()
 	wg.Wait()
-	err = remoteNet.HandlePreSessionIncomingMessage(othercon, data)
-	assert.Error(t, err, "handle session failed")
-	assert.Nil(t, othercon.Session())
-
-	out.NetworkID = out.NetworkID + 1
-	data, err = proto.Marshal(out)
-	assert.NoError(t, err, "cannot marshal obj")
-	err = remoteNet.HandlePreSessionIncomingMessage(con, data)
-	assert.Error(t, err, "Sent message with wrong networkID")
-	//,_, er = GenerateHandshakeRequestData(localNode.PublicKey(), localNode.PrivateKey(),con.RemotePublicKey(), remoteNet.NetworkID() +1)
 }

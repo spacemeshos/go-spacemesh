@@ -90,10 +90,10 @@ func (its *IntegrationTestSuite) SetupSuite() {
 		}()
 	}
 
-	testLog("Launched all proccess !, now Waiting")
+	testLog("Launched all processes 🎉, now waiting...")
 
 	wg.Wait()
-	testLog("Took %s to all swarms to boot up", time.Now().Sub(tm))
+	testLog("Took %s for all swarms to boot up", time.Now().Sub(tm))
 
 	// go interfaces suck with slices
 	its.Instances = swarm

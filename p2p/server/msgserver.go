@@ -2,8 +2,8 @@ package server
 
 import (
 	"container/list"
-	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/cryptoBox"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"sync"
 	"sync/atomic"
@@ -14,7 +14,7 @@ type MessageType uint32
 
 type Service interface {
 	service.Service
-	SendWrappedMessage(nodeID string, protocol string, payload *service.DataMsgWrapper) error
+	SendWrappedMessage(nodeID cryptoBox.PublicKey, protocol string, payload *service.DataMsgWrapper) error
 }
 
 type Message interface {
@@ -131,10 +131,10 @@ func (p *MessageServer) handleMessage(msg Message) {
 	}
 }
 
-func (p *MessageServer) handleRequestMessage(sender crypto.PublicKey, headers *service.DataMsgWrapper) {
+func (p *MessageServer) handleRequestMessage(sender cryptoBox.PublicKey, headers *service.DataMsgWrapper) {
 	if payload := p.msgRequestHandlers[MessageType(headers.MsgType)](headers.Payload); payload != nil {
 		rmsg := &service.DataMsgWrapper{MsgType: headers.MsgType, ReqID: headers.ReqID, Payload: payload}
-		sendErr := p.network.SendWrappedMessage(sender.String(), p.name, rmsg)
+		sendErr := p.network.SendWrappedMessage(sender, p.name, rmsg)
 		if sendErr != nil {
 			p.Error("Error sending response message, err:", sendErr)
 		}
@@ -156,14 +156,14 @@ func (p *MessageServer) RegisterMsgHandler(msgType MessageType, reqHandler func(
 	p.msgRequestHandlers[msgType] = reqHandler
 }
 
-func (p *MessageServer) SendRequest(msgType MessageType, payload []byte, address crypto.PublicKey, resHandler func(msg []byte)) error {
+func (p *MessageServer) SendRequest(msgType MessageType, payload []byte, address cryptoBox.PublicKey, resHandler func(msg []byte)) error {
 	reqID := p.newRequestId()
 	p.pendMutex.Lock()
 	p.resHandlers[reqID] = resHandler
 	p.pendingQueue.PushBack(Item{id: reqID, timestamp: time.Now()})
 	p.pendMutex.Unlock()
 	msg := &service.DataMsgWrapper{Req: true, ReqID: reqID, MsgType: uint32(msgType), Payload: payload}
-	if sendErr := p.network.SendWrappedMessage(address.String(), p.name, msg); sendErr != nil {
+	if sendErr := p.network.SendWrappedMessage(address, p.name, msg); sendErr != nil {
 		p.Error("sending message failed ", msg, " error: ", sendErr)
 		p.removeFromPending(reqID)
 		return sendErr

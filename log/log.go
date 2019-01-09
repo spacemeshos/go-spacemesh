@@ -19,7 +19,7 @@ type Log struct {
 
 // smlogger is the local app singleton logger.
 var AppLog Log
-var debugMode bool
+var debugMode = false
 
 func init() {
 
