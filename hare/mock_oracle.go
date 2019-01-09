@@ -2,6 +2,7 @@ package hare
 
 import (
 	"encoding/binary"
+	"sync"
 )
 
 type Role byte
@@ -13,22 +14,20 @@ const (
 )
 
 type Rolacle interface {
-	Role(sig Signature) Role
+	Role(r uint32, sig Signature) Role
 }
 
-type MockOracle struct {
-	roles         map[uint32]Role
+type MockHashOracle struct {
 	isLeaderTaken bool
 }
 
-func NewMockOracle() *MockOracle {
-	mock := &MockOracle{}
-	mock.roles = make(map[uint32]Role)
+func NewMockOracle() *MockHashOracle {
+	mock := &MockHashOracle{}
 
 	return mock
 }
 
-func (mockOracle *MockOracle) Role(proof Signature) Role {
+func (mockOracle *MockHashOracle) Role(r uint32, proof Signature) Role {
 	if proof == nil {
 		return Passive
 	}
@@ -44,4 +43,25 @@ func (mockOracle *MockOracle) Role(proof Signature) Role {
 	}
 
 	return Passive
+}
+
+type MockStaticOracle struct {
+	roles       map[uint32]Role
+	r           uint32
+	defaultSize int
+	hasLeader   bool
+	mutex       sync.Mutex
+}
+
+func NewMockStaticOracle(defaultSize int) *MockStaticOracle {
+	static := &MockStaticOracle{}
+	static.roles = make(map[uint32]Role, defaultSize)
+	static.defaultSize = defaultSize
+	static.hasLeader = false
+
+	return static
+}
+
+func (static *MockStaticOracle) Role(r uint32, proof Signature) Role {
+	return roleFromRoundCounter(r)
 }

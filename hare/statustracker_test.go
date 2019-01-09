@@ -7,12 +7,16 @@ import (
 	"testing"
 )
 
-func BuildStatusMsg(pubKey crypto.PublicKey, s *Set) *pb.HareMessage {
+func buildStatusMsg(pub crypto.PublicKey, s *Set, ki int32) *pb.HareMessage {
 	builder := NewMessageBuilder()
 	builder.SetType(Status).SetInstanceId(*instanceId1).SetRoundCounter(Round1).SetKi(ki).SetValues(s)
-	builder = builder.SetPubKey(pubKey).Sign(NewMockSigning())
+	builder = builder.SetPubKey(pub).Sign(NewMockSigning())
 
 	return builder.Build()
+}
+
+func BuildStatusMsg(pubKey crypto.PublicKey, s *Set) *pb.HareMessage {
+	return buildStatusMsg(pubKey, s, -1)
 }
 
 func TestStatusTracker_RecordStatus(t *testing.T) {
@@ -96,6 +100,7 @@ func TestStatusTracker_BuildSVP(t *testing.T) {
 
 	expectNotNil := tracker.BuildSVP()
 	assert.NotNil(t, expectNotNil)
+	assert.Equal(t, len(expectNotNil.Messages), lowThresh10)
 }
 
 func TestStatusTracker_BuildUnionSet(t *testing.T) {
@@ -111,4 +116,34 @@ func TestStatusTracker_BuildUnionSet(t *testing.T) {
 
 	g := tracker.buildUnionSet(cfg.SetSize)
 	assert.True(t, s.Equals(g))
+}
+
+func TestStatusTracker_IsSVPReady(t *testing.T) {
+	tracker := NewStatusTracker(1, 1)
+	assert.False(t, tracker.IsSVPReady())
+	s := NewSetFromValues(value1)
+	tracker.RecordStatus(BuildStatusMsg(generatePubKey(t), s))
+	assert.True(t, tracker.IsSVPReady())
+}
+
+func TestStatusTracker_ProposalSetTypeA(t *testing.T) {
+	tracker := NewStatusTracker(2, 1)
+	s1 := NewSetFromValues(value1)
+	s2 := NewSetFromValues(value1, value2)
+	tracker.RecordStatus(buildStatusMsg(generatePubKey(t), s1, -1))
+	tracker.RecordStatus(buildStatusMsg(generatePubKey(t), s2, -1))
+	proposedSet := tracker.ProposalSet(2)
+	assert.NotNil(t, proposedSet)
+	assert.True(t, proposedSet.Equals(s1.Union(s2)))
+}
+
+func TestStatusTracker_ProposalSetTypeB(t *testing.T) {
+	tracker := NewStatusTracker(2, 1)
+	s1 := NewSetFromValues(value1, value3)
+	s2 := NewSetFromValues(value1, value2)
+	tracker.RecordStatus(buildStatusMsg(generatePubKey(t), s1, 0))
+	tracker.RecordStatus(buildStatusMsg(generatePubKey(t), s2, 2))
+	proposedSet := tracker.ProposalSet(2)
+	assert.NotNil(t, proposedSet)
+	assert.True(t, proposedSet.Equals(s2))
 }

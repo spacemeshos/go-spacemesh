@@ -45,6 +45,10 @@ func (pt *ProposalTracker) OnProposal(msg *pb.HareMessage) {
 }
 
 func (pt *ProposalTracker) OnLateProposal(msg *pb.HareMessage) {
+	if pt.proposal == nil {
+		return
+	}
+
 	// if same sender then we should check for equivocation
 	if bytes.Equal(pt.proposal.PubKey, msg.PubKey) {
 		s := NewSet(msg.Message.Values)
