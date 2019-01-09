@@ -28,7 +28,7 @@ func TestMessageValidator_ValidateCertificate(t *testing.T) {
 	msgs = append(msgs, &pb.HareMessage{})
 	cert.AggMsgs.Messages = msgs
 	assert.False(t, validator.validateCertificate(cert))
-	cert.Values = NewSmallEmptySet().To2DSlice()
+	cert.Values = NewSetFromValues(value1).To2DSlice()
 	assert.False(t, validator.validateCertificate(cert))
 
 	msgs = make([]*pb.HareMessage, validator.threshold)
@@ -63,7 +63,7 @@ func TestMessageValidator_Aggregated(t *testing.T) {
 	assert.False(t, validator.validateAggregatedMessage(agg, funcs))
 	msgs := make([]*pb.HareMessage, validator.threshold)
 	for i := 0; i < validator.threshold; i++ {
-		msgs[i] = BuildStatusMsg(generatePubKey(t), NewEmptySet(validator.defaultSize))
+		msgs[i] = BuildStatusMsg(generatePubKey(t), NewSetFromValues(value1))
 	}
 	agg.Messages = msgs
 	assert.True(t, validator.validateAggregatedMessage(agg, funcs))
