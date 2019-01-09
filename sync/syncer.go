@@ -12,7 +12,7 @@ import (
 )
 
 type BlockValidator interface {
-	ValidateBlock(block *mesh.TortoiseBlock) bool
+	ValidateBlock(block *mesh.Block) bool
 }
 
 type Configuration struct {
@@ -136,7 +136,7 @@ func (s *Syncer) Synchronise() {
 			return
 		}
 
-		output := make(chan *mesh.TortoiseBlock)
+		output := make(chan *mesh.Block)
 		// each worker goroutine tries to fetch a block iteratively from each peer
 		count := int32(s.concurrency)
 
@@ -159,7 +159,7 @@ func (s *Syncer) Synchronise() {
 			}()
 		}
 
-		blocks := make([]*mesh.TortoiseBlock, 0, len(blockIds))
+		blocks := make([]*mesh.Block, 0, len(blockIds))
 
 		for block := range output {
 			s.Debug("add block to layer", block)
@@ -179,14 +179,14 @@ type peerHashPair struct {
 	hash []byte
 }
 
-func sendBlockRequest(msgServ *server.MessageServer, peer Peer, id mesh.BlockID, logger log.Log) (chan *mesh.TortoiseBlock, error) {
+func sendBlockRequest(msgServ *server.MessageServer, peer Peer, id mesh.BlockID, logger log.Log) (chan *mesh.Block, error) {
 	logger.Debug("send block request Peer: ", peer, " id: ", id)
 	data := &pb.FetchBlockReq{Id: uint32(id)}
 	payload, err := proto.Marshal(data)
 	if err != nil {
 		return nil, err
 	}
-	ch := make(chan *mesh.TortoiseBlock)
+	ch := make(chan *mesh.Block)
 	foo := func(msg []byte) {
 		defer close(ch)
 		logger.Debug("handle block response")
@@ -195,9 +195,9 @@ func sendBlockRequest(msgServ *server.MessageServer, peer Peer, id mesh.BlockID,
 			logger.Error("could not unmarshal block data")
 			return
 		}
-		mp := make(map[mesh.BlockID]struct{})
+		mp := make([]mesh.BlockID,0,len(data.Block.VisibleMesh))
 		for _, b := range data.Block.VisibleMesh {
-			mp[mesh.BlockID(b)] = struct{}{}
+			mp = append(mp,mesh.BlockID(b))
 		}
 
 		block := mesh.NewExistingBlock(mesh.BlockID(data.Block.GetId()), mesh.LayerID(data.Block.GetLayer()), nil)

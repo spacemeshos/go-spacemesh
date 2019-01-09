@@ -1,9 +1,10 @@
-package mesh
+package consensus
 
 import (
 	"fmt"
 	"github.com/golang-collections/go-datastructures/bitarray"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/mesh"
 )
 
 type LayerQueue chan *Layer
@@ -193,7 +194,8 @@ func (alg *Algorithm) assignIdForBlock(blk *TortoiseBlock) uint32 {
 
 }
 
-func (alg *Algorithm) HandleIncomingLayer(l *Layer) {
+func (alg *Algorithm) HandleIncomingLayer(ll *mesh.Layer) {
+	l := FromLayerToTortoiseLayer(ll)
 	alg.layers[l.index] = l
 	alg.layerQueue <- l
 	if len(alg.layerQueue) >= int(alg.cachedLayers) {

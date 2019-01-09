@@ -408,7 +408,7 @@ func TestSanity(t *testing.T) {
 	t.Skip()
 	numOfNodes := 20
 	nodeIds, nodes := createNodesAndIds(numOfNodes)
-	var dsInstances []Algorithm
+	var dsInstances []HareAlgorithm
 
 	cfg := config.DefaultConfig()
 	cfg.NodesPerLayer = int32(numOfNodes)
@@ -495,7 +495,7 @@ func TestReceiverHoldMessage(t *testing.T) {
 	t.Skip()
 	numOfNodes := 20
 	nodeIds, nodes := createNodesAndIds(numOfNodes)
-	var dsInstances []Algorithm
+	var dsInstances []HareAlgorithm
 
 	cfg := config.DefaultConfig()
 	cfg.NodesPerLayer = int32(numOfNodes)
@@ -544,7 +544,7 @@ func TestReceiverChangeMessage(t *testing.T) {
 	t.Skip()
 	numOfNodes := 20
 	nodeIds, nodes := createNodesAndIds(numOfNodes)
-	var dsInstances []Algorithm
+	var dsInstances []HareAlgorithm
 
 	cfg := config.DefaultConfig()
 	cfg.NodesPerLayer = int32(numOfNodes)
@@ -593,7 +593,7 @@ func TestReceiverChangeMessage(t *testing.T) {
 
 }
 
-func startInstance(wg *sync.WaitGroup, dsc Algorithm, msg messageData) {
+func startInstance(wg *sync.WaitGroup, dsc HareAlgorithm, msg messageData) {
 	wg.Add(1)
 	go func() {
 		dsc.StartInstance(msg)
@@ -605,7 +605,7 @@ func TestMultipleSenders(t *testing.T) {
 	t.Skip()
 	numOfNodes := 20
 	nodeIds, nodes := createNodesAndIds(numOfNodes)
-	var dsInstances []Algorithm
+	var dsInstances []HareAlgorithm
 
 	cfg := config.DefaultConfig()
 	cfg.NodesPerLayer = int32(numOfNodes)
@@ -641,7 +641,7 @@ func TestMultipleSenders(t *testing.T) {
 func TestNodeNotInListJoins(t *testing.T) {
 	t.Skip()
 	numOfNodes := 10
-	var dsInstances []Algorithm
+	var dsInstances []HareAlgorithm
 
 	cfg := config.DefaultConfig()
 	cfg.NodesPerLayer = int32(numOfNodes)
@@ -683,7 +683,7 @@ func TestSenderSendsTwoMessagesToDifferentParties(t *testing.T) {
 	t.Skip()
 	numOfNodes := 8
 
-	var dsInstances []Algorithm
+	var dsInstances []HareAlgorithm
 
 	cfg := config.DefaultConfig()
 	cfg.NodesPerLayer = int32(numOfNodes)
@@ -733,7 +733,7 @@ func TestSenderSignsTwoTimes(t *testing.T) {
 	t.Skip()
 	numOfNodes := 8
 
-	var dsInstances []Algorithm
+	var dsInstances []HareAlgorithm
 
 	cfg := config.DefaultConfig()
 	cfg.NodesPerLayer = int32(numOfNodes)
@@ -780,7 +780,7 @@ func TestSenderSendsTwoMessages(t *testing.T) {
 	t.Skip()
 	numOfNodes := 8
 
-	var dsInstances []Algorithm
+	var dsInstances []HareAlgorithm
 
 	cfg := config.DefaultConfig()
 	cfg.NodesPerLayer = int32(numOfNodes)
@@ -831,7 +831,7 @@ func TestSenderSendsTwoMessagesWithDelay(t *testing.T) {
 	t.Skip()
 	numOfNodes := 20
 
-	var dsInstances []Algorithm
+	var dsInstances []HareAlgorithm
 
 	cfg := config.DefaultConfig()
 	cfg.NodesPerLayer = int32(numOfNodes)
@@ -924,7 +924,7 @@ func TestInvalidSignature(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func validateDSC(t *testing.T, dsc Algorithm, expected []byte, node string, senderInstance string, shouldExist bool) {
+func validateDSC(t *testing.T, dsc HareAlgorithm, expected []byte, node string, senderInstance string, shouldExist bool) {
 	outputs := dsc.GetOtherInstancesOutput()
 	for key, out := range outputs {
 		if key == senderInstance && node != senderInstance {
