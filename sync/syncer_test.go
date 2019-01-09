@@ -25,7 +25,7 @@ func SyncMockFactory(number int, conf Configuration, name string) (syncs []*Sync
 	for i := 0; i < number; i++ {
 		net := sim.NewNode()
 		l := log.New("sync", "", "")
-		sync := NewSync(net, getMesh(name+"_"+time.Now().String()), BlockValidatorMock{}, conf, l)
+		sync := NewSync(net, *getMesh(name+"_"+time.Now().String()), BlockValidatorMock{}, conf, l)
 		nodes = append(nodes, sync)
 		p2ps = append(p2ps, net)
 	}
@@ -45,7 +45,7 @@ type MeshValidatorMock struct {}
 func (m *MeshValidatorMock)	HandleIncomingLayer(layer *mesh.Layer) {}
 func (m *MeshValidatorMock) HandleLateBlock(bl *mesh.Block) {}
 
-func getMesh(id string) mesh.Mesh {
+func getMesh(id string) *mesh.Mesh {
 	time := time.Now()
 	bdb := database.NewLevelDbStore("blocks_test_"+id, nil, nil)
 	ldb := database.NewLevelDbStore("layers_test_"+id, nil, nil)
@@ -343,7 +343,7 @@ func Test_TwoNodes_SyncIntegrationSuite(t *testing.T) {
 	i := 1
 	sis.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
 		l := log.New(fmt.Sprintf("%s_%d", sis.name, i), "", "")
-		sync := NewSync(s, getMesh(fmt.Sprintf("%s_%s", sis.name, time.Now())), BlockValidatorMock{}, conf, l)
+		sync := NewSync(s, *getMesh(fmt.Sprintf("%s_%s", sis.name, time.Now())), BlockValidatorMock{}, conf, l)
 		sis.syncers = append(sis.syncers, sync)
 		i++
 	}
@@ -409,7 +409,7 @@ func Test_Multiple_SyncIntegrationSuite(t *testing.T) {
 	i := 1
 	sis.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
 		l := log.New(fmt.Sprintf("%s_%d", sis.name, i), "", "")
-		sync := NewSync(s, getMesh(fmt.Sprintf("%s_%s", sis.name, time.Now())), BlockValidatorMock{}, conf, l)
+		sync := NewSync(s, *getMesh(fmt.Sprintf("%s_%s", sis.name, time.Now())), BlockValidatorMock{}, conf, l)
 		sis.syncers = append(sis.syncers, sync)
 		i++
 	}
