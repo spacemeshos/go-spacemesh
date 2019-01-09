@@ -202,8 +202,8 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 func TestSyncProtocol_SyncTwoNodes(t *testing.T) {
 
 	syncs, nodes := SyncMockFactory(2, conf, "TestSyncer_Start_")
-	pm1 := getPeersMock([]Peer{nodes[1].PublicKey()})
-	pm2 := getPeersMock([]Peer{nodes[0].PublicKey()})
+	pm1 := getPeersMock([]p2p.Peer{nodes[1].PublicKey()})
+	pm2 := getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
 	syncObj1 := syncs[0]
 	syncObj1.Peers = pm1 //override peers with mock
 	defer syncObj1.Close()
@@ -249,10 +249,10 @@ loop:
 	}
 }
 
-func getPeersMock(peers []Peer) PeersImpl {
+func getPeersMock(peers []p2p.Peer) p2p.PeersImpl {
 	value := atomic.Value{}
 	value.Store(peers)
-	pm1 := PeersImpl{&value, nil}
+	pm1 := p2p.PeersImpl{Snapshot: &value, Exit: nil}
 	return pm1
 }
 
@@ -271,10 +271,10 @@ func TestSyncProtocol_SyncMultipleNodes(t *testing.T) {
 	n2 := nodes[1]
 	n4 := nodes[3]
 
-	syncObj1.Peers = getPeersMock([]Peer{n2.PublicKey()})
-	syncObj2.Peers = getPeersMock([]Peer{n1.PublicKey()})
-	syncObj3.Peers = getPeersMock([]Peer{n1.PublicKey(), n2.PublicKey(), n4.PublicKey()})
-	syncObj4.Peers = getPeersMock([]Peer{n1.PublicKey(), n2.PublicKey()})
+	syncObj1.Peers = getPeersMock([]p2p.Peer{n2.PublicKey()})
+	syncObj2.Peers = getPeersMock([]p2p.Peer{n1.PublicKey()})
+	syncObj3.Peers = getPeersMock([]p2p.Peer{n1.PublicKey(), n2.PublicKey(), n4.PublicKey()})
+	syncObj4.Peers = getPeersMock([]p2p.Peer{n1.PublicKey(), n2.PublicKey()})
 
 	block1 := mesh.NewExistingBlock(mesh.BlockID(111), 0, nil)
 	block2 := mesh.NewExistingBlock(mesh.BlockID(222), 0, nil)

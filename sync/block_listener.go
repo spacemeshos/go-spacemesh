@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"sync/atomic"
@@ -17,7 +18,7 @@ const NewBlock = "newBlock"
 
 type BlockListener struct {
 	*server.MessageServer
-	Peers
+	p2p.Peers
 	*mesh.Mesh
 	BlockValidator
 	log.Log
@@ -49,7 +50,7 @@ func NewBlockListener(net server.Service, bv BlockValidator, layers *mesh.Mesh, 
 	bl := BlockListener{
 		BlockValidator: bv,
 		Mesh:           layers,
-		Peers:          NewPeers(net),
+		Peers:          p2p.NewPeers(net),
 		MessageServer:  server.NewMsgServer(net, BlockProtocol, timeout, logger),
 		Log:            logger,
 		semaphore:      make(chan struct{}, concurrency),
