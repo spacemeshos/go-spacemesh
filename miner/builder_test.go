@@ -86,7 +86,7 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 	addr1 := common.BytesToAddress([]byte{0x02})
 	addr2 := common.BytesToAddress([]byte{0x01})
 
-	trans := []SerializableTransaction {
+	trans := []mesh.SerializableTransaction {
 		Transaction2SerializableTransaction(state.NewTransaction(1, addr1,addr2,big.NewInt(1), DefaultGasLimit, big.NewInt(DefaultGas))),
 		Transaction2SerializableTransaction(state.NewTransaction(1, addr1,addr2,big.NewInt(1), DefaultGasLimit, big.NewInt(DefaultGas))),
 		Transaction2SerializableTransaction(state.NewTransaction(2, addr1,addr2,big.NewInt(1), DefaultGasLimit, big.NewInt(DefaultGas))),
@@ -102,11 +102,11 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 
 	select {
 		case output := <- receiver.RegisterProtocol(sync.BlockProtocol):
-			b := Block{}
+			b := mesh.Block{}
 			xdr.Unmarshal(bytes.NewBuffer(output.Bytes()), &b)
-			assert.Equal(t, hareRes, b.VotePattern)
+			assert.Equal(t, hareRes, b.BlockVotes)
 			assert.Equal(t, trans,b.Txs)
-			assert.Equal(t, []mesh.BlockID{1,2,3}, b.View)
+			assert.Equal(t, []mesh.BlockID{1,2,3}, b.ViewEdges)
 
 		case <-time.After(1 * time.Second):
 			assert.Fail(t, "timeout on receiving block")

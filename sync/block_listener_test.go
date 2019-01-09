@@ -41,8 +41,8 @@ func TestBlockListener(t *testing.T) {
 	block2 := mesh.NewExistingBlock(mesh.BlockID(321), 1, nil)
 	block3 := mesh.NewExistingBlock(mesh.BlockID(222), 2, nil)
 
-	block1.ViewEdges[block2.ID()] = struct{}{}
-	block1.ViewEdges[block3.ID()] = struct{}{}
+	block1.AddView(block2.ID())
+	block1.AddView(block3.ID())
 
 	bl1.AddBlock(block1)
 	bl1.AddBlock(block2)
@@ -89,18 +89,18 @@ func TestBlockListener2(t *testing.T) {
 	block9 := mesh.NewBlock(true, nil, time.Now(), 4)
 	block10 := mesh.NewBlock(true, nil, time.Now(), 5)
 
-	block2.ViewEdges[block1.ID()] = struct{}{}
-	block3.ViewEdges[block2.ID()] = struct{}{}
-	block4.ViewEdges[block2.ID()] = struct{}{}
-	block5.ViewEdges[block3.ID()] = struct{}{}
-	block5.ViewEdges[block4.ID()] = struct{}{}
-	block6.ViewEdges[block4.ID()] = struct{}{}
-	block7.ViewEdges[block6.ID()] = struct{}{}
-	block7.ViewEdges[block5.ID()] = struct{}{}
-	block8.ViewEdges[block6.ID()] = struct{}{}
-	block9.ViewEdges[block5.ID()] = struct{}{}
-	block10.ViewEdges[block8.ID()] = struct{}{}
-	block10.ViewEdges[block9.ID()] = struct{}{}
+	block2.AddView(block1.ID())
+	block3.AddView(block2.ID())
+	block4.AddView(block2.ID())
+	block5.AddView(block3.ID())
+	block5.AddView(block4.ID())
+	block6.AddView(block4.ID())
+	block7.AddView(block6.ID())
+	block7.AddView(block5.ID())
+	block8.AddView(block6.ID())
+	block9.AddView(block5.ID())
+	block10.AddView(block8.ID())
+	block10.AddView(block9.ID())
 
 	bl1.AddBlock(block1)
 	bl1.AddBlock(block2)

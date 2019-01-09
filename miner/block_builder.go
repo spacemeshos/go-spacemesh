@@ -1,9 +1,7 @@
 package miner
 
 import (
-	"bytes"
 	"fmt"
-	"github.com/davecgh/go-xdr/xdr2"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -26,7 +24,7 @@ type BlockBuilder struct{
 	stopChan		chan struct{}
 	newTrans		chan *state.Transaction
 	hareResult		HareResultProvider
-	transactionQueue []SerializableTransaction
+	transactionQueue []mesh.SerializableTransaction
 	mu sync.Mutex
 	network p2p.Service
 	weakCoinToss	WeakCoinProvider
@@ -34,26 +32,7 @@ type BlockBuilder struct{
 	started			bool
 }
 
-type Block struct {
-	Id         	mesh.BlockID
-	LayerIndex 	mesh.LayerID
-	Data       	[]byte
-	Coin       	bool
-	Timestamp  	time.Time
-	Txs        	[]SerializableTransaction
-	VotePattern []mesh.BlockID
-	View       	[]mesh.BlockID
-}
 
-type SerializableTransaction struct{
-	AccountNonce 	uint64
-	Price			[]byte
-	GasLimit		uint64
-	Recipient 		*common.Address
-	Origin			common.Address //todo: remove this, should be calculated from sig.
-	Amount       	[]byte
-	Payload      	[]byte
-}
 
 
 func NewBlockBuilder(net p2p.Service, beginRoundEvent chan mesh.LayerID, weakCoin WeakCoinProvider,
@@ -63,7 +42,7 @@ func NewBlockBuilder(net p2p.Service, beginRoundEvent chan mesh.LayerID, weakCoi
 		stopChan:make(chan struct{}),
 		newTrans:make(chan *state.Transaction),
 		hareResult:hare,
-		transactionQueue:make([]SerializableTransaction,0,10),
+		transactionQueue:make([]mesh.SerializableTransaction,0,10),
 		mu:sync.Mutex{},
 		network:net,
 		weakCoinToss:weakCoin,
@@ -72,8 +51,8 @@ func NewBlockBuilder(net p2p.Service, beginRoundEvent chan mesh.LayerID, weakCoi
 	}
 }
 
-func Transaction2SerializableTransaction(tx *state.Transaction) SerializableTransaction{
-	return SerializableTransaction{
+func Transaction2SerializableTransaction(tx *state.Transaction) mesh.SerializableTransaction{
+	return mesh.SerializableTransaction{
 		AccountNonce:tx.AccountNonce,
 		Origin:tx.Origin,
 		Recipient:tx.Recipient,
@@ -127,31 +106,25 @@ func (t *BlockBuilder) AddTransaction(nonce uint64, origin, destination common.A
 	return nil
 }
 
-func (t *BlockBuilder) createBlock(id mesh.LayerID, txs []SerializableTransaction) Block {
+func (t *BlockBuilder) createBlock(id mesh.LayerID, txs []mesh.SerializableTransaction) mesh.Block {
 	res, err := t.hareResult.GetResult(id)
 	if err != nil {
 		log.Error("didnt receive hare result for layer %v", id)
 	}
-	b := Block{
-		Id :         mesh.BlockID(rand.Int63()),
-		LayerIndex:  id,
-		Data:        nil,
-		Coin:        t.weakCoinToss.GetResult(),
-		Timestamp:   time.Now(),
-		Txs :        txs,
-		VotePattern : res,
-		View:        t.orphans.GetOrphans(),
+	b := mesh.Block{
+		Id :          mesh.BlockID(rand.Int63()),
+		LayerIndex:   id,
+		Data:         nil,
+		Coin:         t.weakCoinToss.GetResult(),
+		Timestamp:    time.Now(),
+		Txs :         txs,
+		BlockVotes : res,
+		ViewEdges:    t.orphans.GetOrphans(),
 	}
 
 	return b
 }
-func BlockAsBytes(block Block) ([]byte, error) {
-	var w bytes.Buffer
-	if _, err := xdr.Marshal(&w, &block); err != nil {
-		return nil, fmt.Errorf("error marshalling block ids %v", err)
-	}
-	return w.Bytes(), nil
-}
+
 
 func (t *BlockBuilder) acceptBlockData() {
 	for {
@@ -165,7 +138,7 @@ func (t *BlockBuilder) acceptBlockData() {
 				t.transactionQueue = t.transactionQueue[common.Min(len(t.transactionQueue), MaxTransactionsPerBlock):]
 				blk := t.createBlock(id, txList)
 				go func() {
-					bytes, err := BlockAsBytes(blk)
+					bytes, err := mesh.BlockAsBytes(blk)
 					if err != nil {
 						log.Error("cannot serialize block %v", err)
 						return
