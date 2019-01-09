@@ -68,6 +68,7 @@ func (ct *CommitTracker) BuildCertificate() *pb.Certificate {
 
 	c := &pb.Certificate{}
 	c.Values = ct.proposedSet.To2DSlice()
+	c.AggMsgs = &pb.AggregatedMessages{}
 	c.AggMsgs.Messages = ct.commits
 
 	// optimize msg size by setting values to nil
