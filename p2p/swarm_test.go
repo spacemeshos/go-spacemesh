@@ -300,7 +300,6 @@ func TestSwarm_MultipleMessages(t *testing.T) {
 }
 
 func TestSwarm_MultipleMessagesFromMultipleSenders(t *testing.T) {
-	t.Skip()
 	cfg := config.DefaultConfig()
 	cfg.SwarmConfig.Gossip = false
 	cfg.SwarmConfig.Bootstrap = false
