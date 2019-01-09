@@ -22,7 +22,7 @@ func (pm PeersMock) Close() {
 	return
 }
 func ListenerFactory(serv server.Service, peers Peers, name string) *BlockListener {
-	nbl := NewBlockListener(serv, BlockValidatorMock{}, getMesh("TestBlockListener_"+name), 1*time.Second, 2, log.New(name, "", ""))
+	nbl := NewBlockListener(serv, BlockValidatorMock{}, *getMesh("TestBlockListener_"+name), 1*time.Second, 2, log.New(name, "", ""))
 	nbl.Peers = peers //override peers with mock
 	return nbl
 }
