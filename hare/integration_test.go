@@ -1,6 +1,7 @@
 package hare
 
 import (
+	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -128,7 +129,8 @@ func Test_ThreeNodes_HareIntegrationSuite(t *testing.T) {
 	oracle := NewMockStaticOracle(cfg.N)
 	his.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
 		broker := NewBroker(s)
-		proc := NewConsensusProcess(cfg, generatePubKey(t), *instanceId1, *his.initialSets[idx], oracle, NewMockSigning(), s)
+		output := make(chan TerminationOutput, 1)
+		proc := NewConsensusProcess(cfg, s.LocalNode().PublicKey(), *instanceId1, his.initialSets[idx], oracle, &signordie{s.LocalNode().PrivateKey()}, s, output)
 		broker.Register(proc)
 		broker.Start()
 		his.procs = append(his.procs, proc)
@@ -149,6 +151,18 @@ func (his *hareIntegrationThreeNodes) Test_ThreeNodes_AllHonest() {
 
 type hareIntegration100Nodes struct {
 	*HareIntegrationSuite
+}
+
+type signordie struct {
+	p crypto.PrivateKey
+}
+
+func (sod signordie) Sign(m []byte) ([]byte) {
+	s, err := sod.p.Sign(m)
+	if err != nil {
+		panic(err)
+	}
+	return s
 }
 
 func Test_100Nodes_HareIntegrationSuite(t *testing.T) {
@@ -178,7 +192,8 @@ func Test_100Nodes_HareIntegrationSuite(t *testing.T) {
 	his.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
 		log.Info("Starting instance ", idx)
 		broker := NewBroker(s)
-		proc := NewConsensusProcess(cfg, generatePubKey(t), *instanceId1, *his.initialSets[idx], oracle, NewMockSigning(), s)
+		output := make(chan TerminationOutput, 1)
+		proc := NewConsensusProcess(cfg, s.LocalNode().PublicKey(), *instanceId1, his.initialSets[idx], oracle, &signordie{s.LocalNode().PrivateKey()}, s, output)
 		broker.Register(proc)
 		broker.Start()
 		his.procs = append(his.procs, proc)
