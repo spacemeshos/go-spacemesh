@@ -15,7 +15,7 @@ const cachedLayers = 50
 var TRUE = []byte{1}
 var FALSE = []byte{0}
 
-type Mesh interface {
+/*type Mesh interface {
 	AddLayer(layer *Layer) error
 	GetLayer(i LayerID) (*Layer, error)
 	GetBlock(id BlockID) (*Block, error)
@@ -26,14 +26,14 @@ type Mesh interface {
 	SetLatestLayer(idx uint32)
 	GetOrphanBlocks() []BlockID
 	Close()
-}
+}*/
 
 type MeshValidator interface{
 	HandleIncomingLayer(layer *Layer)
 	HandleLateBlock(bl *Block)
 }
 
-type meshStore struct {
+type Mesh struct {
 	log.Log
 	*meshDB
 	localLayer  uint32
@@ -45,9 +45,9 @@ type meshStore struct {
 	orphMutex   sync.RWMutex
 }
 
-func NewMesh(layers , blocks, validity, orphans database.DB, mesh MeshValidator,logger log.Log) Mesh {
+func NewMesh(layers , blocks, validity, orphans database.DB, mesh MeshValidator,logger log.Log) *Mesh {
 	//todo add boot from disk
-	ll := &meshStore{
+	ll := &Mesh{
 		Log:      logger,
 		tortoise: mesh,
 		meshDB:   NewMeshDB(layers, blocks, validity, orphans),
@@ -55,22 +55,22 @@ func NewMesh(layers , blocks, validity, orphans database.DB, mesh MeshValidator,
 	return ll
 }
 
-func (m *meshStore) IsContexuallyValid(b BlockID) bool {
+func (m *Mesh) IsContexuallyValid(b BlockID) bool {
 	//todo implement
 	return true
 }
 
-func (m *meshStore) LocalLayer() uint32 {
+func (m *Mesh) LocalLayer() uint32 {
 	return atomic.LoadUint32(&m.localLayer)
 }
 
-func (m *meshStore) LatestLayer() uint32 {
+func (m *Mesh) LatestLayer() uint32 {
 	defer m.lkMutex.RUnlock()
 	m.lkMutex.RLock()
 	return m.latestLayer
 }
 
-func (m *meshStore) SetLatestLayer(idx uint32) {
+func (m *Mesh) SetLatestLayer(idx uint32) {
 	defer m.lkMutex.Unlock()
 	m.lkMutex.Lock()
 	if idx > m.latestLayer {
@@ -79,7 +79,7 @@ func (m *meshStore) SetLatestLayer(idx uint32) {
 	}
 }
 
-func (m *meshStore) AddLayer(layer *Layer) error {
+func (m *Mesh) AddLayer(layer *Layer) error {
 	m.lMutex.Lock()
 	defer m.lMutex.Unlock()
 	count := LayerID(m.LocalLayer())
@@ -101,7 +101,7 @@ func (m *meshStore) AddLayer(layer *Layer) error {
 }
 
 //todo consider adding a boolean for layer validity instead error
-func (m *meshStore) GetLayer(i LayerID) (*Layer, error) {
+func (m *Mesh) GetLayer(i LayerID) (*Layer, error) {
 	m.lMutex.RLock()
 	if i > LayerID(m.localLayer) {
 		m.lMutex.RUnlock()
@@ -113,7 +113,7 @@ func (m *meshStore) GetLayer(i LayerID) (*Layer, error) {
 }
 
 
-func (m *meshStore) AddBlock(block *Block) error {
+func (m *Mesh) AddBlock(block *Block) error {
 	log.Debug("add block ", block.ID())
 	if err := m.addBlock(block); err != nil {
 		m.Error("failed to add block ", block.ID(), " ", err)
@@ -128,7 +128,7 @@ func (m *meshStore) AddBlock(block *Block) error {
 
 
 //todo better thread safety
-func (m *meshStore) handleOrphanBlocks(block *Block) {
+func (m *Mesh) handleOrphanBlocks(block *Block) {
 	m.orphanBlocks.Put(block.ID().ToBytes(), TRUE)
 	atomic.AddInt32(&m.orphanBlockCount, 1)
 	for _, b := range block.ViewEdges {
@@ -142,7 +142,7 @@ func (m *meshStore) handleOrphanBlocks(block *Block) {
 }
 
 //todo better thread safety
-func (m *meshStore) GetOrphanBlocks() []BlockID {
+func (m *Mesh) GetOrphanBlocks() []BlockID {
 	m.orphMutex.Lock()
 	defer m.orphMutex.Unlock()
 	keys := make([]BlockID, 0, m.orphanBlockCount)
@@ -159,16 +159,16 @@ func (m *meshStore) GetOrphanBlocks() []BlockID {
 	return keys
 }
 
-func (m *meshStore) GetBlock(id BlockID) (*Block, error) {
+func (m *Mesh) GetBlock(id BlockID) (*Block, error) {
 	m.Debug("get block ", id)
 	return m.getBlock(id)
 }
 
-func (m *meshStore) GetContextualValidity(id BlockID) (bool, error) {
+func (m *Mesh) GetContextualValidity(id BlockID) (bool, error) {
 	return m.getContextualValidity(id)
 }
 
-func (m *meshStore) Close() {
+func (m *Mesh) Close() {
 	m.Debug("closing mDB")
 	m.meshDB.Close()
 }
