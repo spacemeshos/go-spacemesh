@@ -362,7 +362,7 @@ func newBlockRequestHandler(layers mesh.Mesh, logger log.Log) func(msg []byte) [
 		}
 
 		vm := make([]uint32, 0, len(block.ViewEdges))
-		for b := range block.ViewEdges {
+		for _,b := range block.ViewEdges {
 			vm = append(vm, uint32(b))
 		}
 
