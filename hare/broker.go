@@ -95,6 +95,7 @@ func (broker *Broker) dispatcher() {
 			c, exist := broker.outbox[instanceId.Id()]
 			broker.mutex.RUnlock()
 			if exist {
+				// todo: err if chan is full (len)
 				c <- hareMsg
 			}
 
@@ -105,6 +106,7 @@ func (broker *Broker) dispatcher() {
 }
 
 // Register a listener to messages
+// Note: the registering instance is assumed to be started and accepting messages
 func (broker *Broker) Register(idBox IdentifiableInboxer) {
 	broker.mutex.Lock()
 	broker.outbox[idBox.Id()] = idBox.createInbox(InboxCapacity)

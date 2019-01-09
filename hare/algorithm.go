@@ -24,6 +24,21 @@ type NetworkService interface {
 	Broadcast(protocol string, payload []byte) error
 }
 
+type procOutput struct {
+	id InstanceId
+	set *Set
+}
+
+func (cpo procOutput) Id() []byte {
+	return cpo.id.Bytes()
+}
+
+func (cpo procOutput) Set() *Set {
+	return cpo.set
+}
+
+var _ TerminationOutput = (*procOutput)(nil)
+
 type State struct {
 	k           uint32          // the round counter (r%4 is the round number)
 	ki          int32           // indicates when S was first committed upon
@@ -41,6 +56,7 @@ type ConsensusProcess struct {
 	network         NetworkService
 	startTime       time.Time // TODO: needed?
 	inbox           chan *pb.HareMessage
+	terminationReport chan TerminationOutput
 	role            Role // the current role
 	validator       *MessageValidator
 	preRoundTracker *PreRoundTracker
@@ -54,9 +70,10 @@ type ConsensusProcess struct {
 	pending         map[string]*pb.HareMessage
 }
 
-func NewConsensusProcess(cfg config.Config, key crypto.PublicKey, instanceId InstanceId, s Set, oracle Rolacle, signing Signing, p2p NetworkService) *ConsensusProcess {
+func NewConsensusProcess(cfg config.Config, key crypto.PublicKey, instanceId InstanceId, s *Set, oracle Rolacle, signing Signing, p2p NetworkService, terminationReport chan TerminationOutput) *ConsensusProcess {
 	proc := &ConsensusProcess{}
-	proc.State = State{0, -1, &s, nil}
+	// todo: clone the set so changes won't be effected here
+	proc.State = State{0, -1, s, nil}
 	proc.Closer = NewCloser()
 	proc.pubKey = key
 	proc.instanceId = instanceId
@@ -73,6 +90,7 @@ func NewConsensusProcess(cfg config.Config, key crypto.PublicKey, instanceId Ins
 	proc.terminating = false
 	proc.cfg = cfg
 	proc.notifySent = false
+	proc.terminationReport = terminationReport
 	proc.pending = make(map[string]*pb.HareMessage, cfg.N)
 
 	return proc
@@ -419,6 +437,10 @@ func (proc *ConsensusProcess) processNotifyMsg(msg *pb.HareMessage) {
 	log.Info("Consensus process terminated for %v with output set: ", proc.pubKey, proc.s)
 	proc.terminating = true // ensures immediate termination
 	proc.Close()
+
+	// NOTE: this can only block garbage collection of this instance.
+	// hence we assume the responsible module is reading from the chan
+	proc.terminationReport <- procOutput{proc.instanceId, proc.s}
 }
 
 func (proc *ConsensusProcess) currentRound() int {
