@@ -25,7 +25,7 @@ type Configuration struct {
 
 type Syncer struct {
 	Peers
-	mesh.Mesh
+	*mesh.Mesh
 	BlockValidator //todo should not be here
 	Configuration
 	log.Log
@@ -98,7 +98,7 @@ func (s *Syncer) run() {
 }
 
 //fires a sync every sm.syncInterval or on force space from outside
-func NewSync(srv server.Service, layers mesh.Mesh, bv BlockValidator, conf Configuration, logger log.Log) *Syncer {
+func NewSync(srv server.Service, layers *mesh.Mesh, bv BlockValidator, conf Configuration, logger log.Log) *Syncer {
 	s := Syncer{
 		BlockValidator: bv,
 		Configuration:  conf,
@@ -347,7 +347,7 @@ func (s *Syncer) sendLayerIDsRequest(peer Peer, idx mesh.LayerID, ch chan []uint
 	return ch, s.SendRequest(LAYER_IDS, payload, peer, foo)
 }
 
-func newBlockRequestHandler(layers mesh.Mesh, logger log.Log) func(msg []byte) []byte {
+func newBlockRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg []byte) []byte {
 	return func(msg []byte) []byte {
 		logger.Debug("handle block request")
 		req := &pb.FetchBlockReq{}
@@ -378,7 +378,7 @@ func newBlockRequestHandler(layers mesh.Mesh, logger log.Log) func(msg []byte) [
 	}
 }
 
-func newLayerHashRequestHandler(layers mesh.Mesh, logger log.Log) func(msg []byte) []byte {
+func newLayerHashRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg []byte) []byte {
 	return func(msg []byte) []byte {
 		req := &pb.LayerHashReq{}
 		err := proto.Unmarshal(msg, req)
@@ -402,7 +402,7 @@ func newLayerHashRequestHandler(layers mesh.Mesh, logger log.Log) func(msg []byt
 	}
 }
 
-func newLayerIdsRequestHandler(layers mesh.Mesh, logger log.Log) func(msg []byte) []byte {
+func newLayerIdsRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg []byte) []byte {
 	return func(msg []byte) []byte {
 		req := &pb.LayerIdsReq{}
 		if err := proto.Unmarshal(msg, req); err != nil {

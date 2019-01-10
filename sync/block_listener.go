@@ -18,7 +18,7 @@ const NewBlock = "newBlock"
 type BlockListener struct {
 	*server.MessageServer
 	Peers
-	mesh.Mesh
+	*mesh.Mesh
 	BlockValidator
 	log.Log
 	bufferSize   int
@@ -45,7 +45,7 @@ func (bl *BlockListener) OnNewBlock(b *mesh.Block) {
 	bl.addUnknownToQueue(b)
 }
 
-func NewBlockListener(net server.Service, bv BlockValidator, layers mesh.Mesh, timeout time.Duration, concurrency int, logger log.Log) *BlockListener {
+func NewBlockListener(net server.Service, bv BlockValidator, layers *mesh.Mesh, timeout time.Duration, concurrency int, logger log.Log) *BlockListener {
 	bl := BlockListener{
 		BlockValidator: bv,
 		Mesh:           layers,
