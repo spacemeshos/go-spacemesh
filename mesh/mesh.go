@@ -18,8 +18,8 @@ var FALSE = []byte{0}
 type Mesh interface {
 	AddLayer(layer *Layer) error
 	GetLayer(i LayerID) (*Layer, error)
-	GetBlock(id BlockID) (*TortoiseBlock, error)
-	AddBlock(block *TortoiseBlock) error
+	GetBlock(id BlockID) (*Block, error)
+	AddBlock(block *Block) error
 	GetContextualValidity(id BlockID) (bool, error)
 	LocalLayer() uint32
 	LatestLayer() uint32
@@ -28,7 +28,12 @@ type Mesh interface {
 	Close()
 }
 
-type mesh struct {
+type MeshValidator interface{
+	HandleIncomingLayer(layer *Layer)
+	HandleLateBlock(bl *Block)
+}
+
+type meshStore struct {
 	log.Log
 	*meshDB
 	localLayer  uint32
@@ -36,36 +41,36 @@ type mesh struct {
 	lMutex      sync.RWMutex
 	lkMutex     sync.RWMutex
 	lcMutex     sync.RWMutex
-	tortoise    Algorithm
+	tortoise    MeshValidator
 	orphMutex   sync.RWMutex
 }
 
-func NewMesh(layers database.DB, blocks database.DB, validity database.DB, orphans database.DB, logger log.Log) Mesh {
+func NewMesh(layers , blocks, validity, orphans database.DB, mesh MeshValidator,logger log.Log) Mesh {
 	//todo add boot from disk
-	ll := &mesh{
+	ll := &meshStore{
 		Log:      logger,
-		tortoise: NewAlgorithm(uint32(layerSize), uint32(cachedLayers)),
-		meshDB:   NewMeshDb(layers, blocks, validity, orphans),
+		tortoise: mesh,
+		meshDB:   NewMeshDB(layers, blocks, validity, orphans),
 	}
 	return ll
 }
 
-func (m *mesh) IsContexuallyValid(b BlockID) bool {
+func (m *meshStore) IsContexuallyValid(b BlockID) bool {
 	//todo implement
 	return true
 }
 
-func (m *mesh) LocalLayer() uint32 {
+func (m *meshStore) LocalLayer() uint32 {
 	return atomic.LoadUint32(&m.localLayer)
 }
 
-func (m *mesh) LatestLayer() uint32 {
+func (m *meshStore) LatestLayer() uint32 {
 	defer m.lkMutex.RUnlock()
 	m.lkMutex.RLock()
 	return m.latestLayer
 }
 
-func (m *mesh) SetLatestLayer(idx uint32) {
+func (m *meshStore) SetLatestLayer(idx uint32) {
 	defer m.lkMutex.Unlock()
 	m.lkMutex.Lock()
 	if idx > m.latestLayer {
@@ -74,7 +79,7 @@ func (m *mesh) SetLatestLayer(idx uint32) {
 	}
 }
 
-func (m *mesh) AddLayer(layer *Layer) error {
+func (m *meshStore) AddLayer(layer *Layer) error {
 	m.lMutex.Lock()
 	defer m.lMutex.Unlock()
 	count := LayerID(m.LocalLayer())
@@ -96,7 +101,7 @@ func (m *mesh) AddLayer(layer *Layer) error {
 }
 
 //todo consider adding a boolean for layer validity instead error
-func (m *mesh) GetLayer(i LayerID) (*Layer, error) {
+func (m *meshStore) GetLayer(i LayerID) (*Layer, error) {
 	m.lMutex.RLock()
 	if i > LayerID(m.localLayer) {
 		m.lMutex.RUnlock()
@@ -108,7 +113,7 @@ func (m *mesh) GetLayer(i LayerID) (*Layer, error) {
 }
 
 
-func (m *mesh) AddBlock(block *TortoiseBlock) error {
+func (m *meshStore) AddBlock(block *Block) error {
 	log.Debug("add block ", block.ID())
 	if err := m.addBlock(block); err != nil {
 		m.Error("failed to add block ", block.ID(), " ", err)
@@ -123,10 +128,10 @@ func (m *mesh) AddBlock(block *TortoiseBlock) error {
 
 
 //todo better thread safety
-func (m *mesh) handleOrphanBlocks(block *TortoiseBlock) {
+func (m *meshStore) handleOrphanBlocks(block *Block) {
 	m.orphanBlocks.Put(block.ID().ToBytes(), TRUE)
 	atomic.AddInt32(&m.orphanBlockCount, 1)
-	for b := range block.ViewEdges {
+	for _, b := range block.ViewEdges {
 		blockId := b.ToBytes()
 		if _, err := m.orphanBlocks.Get(blockId); err == nil {
 			log.Debug("delete block ", blockId, "from orphans")
@@ -137,7 +142,7 @@ func (m *mesh) handleOrphanBlocks(block *TortoiseBlock) {
 }
 
 //todo better thread safety
-func (m *mesh) GetOrphanBlocks() []BlockID {
+func (m *meshStore) GetOrphanBlocks() []BlockID {
 	m.orphMutex.Lock()
 	defer m.orphMutex.Unlock()
 	keys := make([]BlockID, 0, m.orphanBlockCount)
@@ -154,16 +159,16 @@ func (m *mesh) GetOrphanBlocks() []BlockID {
 	return keys
 }
 
-func (m *mesh) GetBlock(id BlockID) (*TortoiseBlock, error) {
+func (m *meshStore) GetBlock(id BlockID) (*Block, error) {
 	m.Debug("get block ", id)
 	return m.getBlock(id)
 }
 
-func (m *mesh) GetContextualValidity(id BlockID) (bool, error) {
+func (m *meshStore) GetContextualValidity(id BlockID) (bool, error) {
 	return m.getContextualValidity(id)
 }
 
-func (m *mesh) Close() {
+func (m *meshStore) Close() {
 	m.Debug("closing mDB")
 	m.meshDB.Close()
 }

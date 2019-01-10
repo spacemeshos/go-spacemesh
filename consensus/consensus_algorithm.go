@@ -12,7 +12,7 @@ type OpaqueMessage interface {
 }
 
 // Algorithm is the main API to run a consensus algorithm that coordinates messages between nodes
-type Algorithm interface {
+type HareAlgorithm interface {
 
 	//StartInstance starts an instance of the byzantine agreement, trying to reach agreement for the given message while
 	//receiving other agreement attempts from other nodes. this method blocks until protocol has finished
