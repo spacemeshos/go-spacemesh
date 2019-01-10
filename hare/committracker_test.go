@@ -25,8 +25,32 @@ func TestCommitTracker_OnCommit(t *testing.T) {
 		assert.False(t, tracker.HasEnoughCommits())
 	}
 
+	s1 := NewSetFromValues(value2)
+	m1 := BuildCommitMsg(generatePubKey(t), s1)
+	tracker.OnCommit(m1)
+	assert.Equal(t, len(tracker.commits), lowThresh10)
+
+	m2 := BuildCommitMsg(generatePubKey(t), s)
+	m2.PubKey = []byte("wrong pub key")
+	tracker.OnCommit(m2)
+	assert.Equal(t, len(tracker.commits), lowThresh10)
+
 	tracker.OnCommit(BuildCommitMsg(generatePubKey(t), s))
 	assert.True(t, tracker.HasEnoughCommits())
+
+	m3 := BuildCommitMsg(generatePubKey(t), s)
+	tracker.OnCommit(m3)
+	assert.Equal(t, len(tracker.commits), lowThresh10+1)
+}
+
+func TestCommitTracker_OnCommit_ProposedSetNil(t *testing.T) {
+	s := NewSetFromValues(value1)
+	tracker := NewCommitTracker(1, 1, s)
+	tracker.proposedSet = nil
+
+	m := BuildCommitMsg(generatePubKey(t), s)
+	tracker.OnCommit(m)
+	assert.Empty(t, tracker.commits)
 }
 
 func TestCommitTracker_OnCommitDuplicate(t *testing.T) {
@@ -50,6 +74,9 @@ func TestCommitTracker_HasEnoughCommits(t *testing.T) {
 	tracker.OnCommit(BuildCommitMsg(generatePubKey(t), s))
 	tracker.OnCommit(BuildCommitMsg(generatePubKey(t), s))
 	assert.True(t, tracker.HasEnoughCommits())
+
+	tracker.proposedSet = nil
+	assert.False(t, tracker.HasEnoughCommits())
 }
 
 func TestCommitTracker_BuildCertificate(t *testing.T) {
