@@ -39,7 +39,6 @@ func (his *HareIntegrationSuite) fill(set *Set, begin int, end int) {
 func (his *HareIntegrationSuite) waitForTermination() {
 	for _, p := range his.procs {
 		<-p.CloseChannel()
-		log.Info("%v closed", p.pubKey)
 		his.outputs = append(his.outputs, p.s)
 	}
 
@@ -71,7 +70,7 @@ func (his *HareIntegrationSuite) checkResult() {
 	// check consistency
 	for i := 0; i < len(his.outputs)-1; i++ {
 		if !his.outputs[i].Equals(his.outputs[i+1]) {
-			t.Error("Consistency check failed")
+			t.Errorf("Consistency check failed: Expected: %v Actual: %v", his.outputs[i], his.outputs[i+1])
 		}
 	}
 
@@ -160,28 +159,15 @@ func Test_100Nodes_HareIntegrationSuite(t *testing.T) {
 	cfg := config.Config{N: 20, F: 10, SetSize: 10, RoundDuration: roundDuration}
 
 	his := &hareIntegration100Nodes{newIntegrationSuite()}
-	his.BootstrappedNodeCount = cfg.N - 1
+	his.BootstrappedNodeCount = cfg.N - 3
 	his.BootstrapNodesCount = 3
 	his.NeighborsCount = 8
 	his.name = t.Name()
 
 	i := 1
-	set1 := NewEmptySet(cfg.SetSize)
-	set1.Add(value1)
-	set1.Add(value2)
-	set1.Add(value3)
-	set1.Add(value4)
-
-	set2 := NewEmptySet(cfg.SetSize)
-	set2.Add(value1)
-	set2.Add(value2)
-	set2.Add(value3)
-
-	set3 := NewEmptySet(cfg.SetSize)
-	set3.Add(value2)
-	set3.Add(value3)
-	set3.Add(value4)
-	set3.Add(value5)
+	set1 := NewSetFromValues(value1, value2, value3, value4)
+	set2 := NewSetFromValues(value1, value2, value3)
+	set3 := NewSetFromValues(value2, value3, value4, value5)
 
 	his.initialSets = make([]*Set, cfg.N)
 	his.fill(set1, 0, 5)
@@ -190,6 +176,7 @@ func Test_100Nodes_HareIntegrationSuite(t *testing.T) {
 	his.honestSets = []*Set{set1, set2, set3}
 	oracle := NewMockStaticOracle(cfg.N)
 	his.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
+		log.Info("Starting instance ", idx)
 		broker := NewBroker(s)
 		proc := NewConsensusProcess(cfg, generatePubKey(t), *instanceId1, *his.initialSets[idx], oracle, NewMockSigning(), s)
 		broker.Register(proc)
@@ -206,6 +193,5 @@ func (his *hareIntegration100Nodes) Test_100Nodes_AllHonest() {
 	}
 
 	his.waitForTimedTermination(120 * time.Second)
-	time.Sleep(time.Second * 5)
 }
 

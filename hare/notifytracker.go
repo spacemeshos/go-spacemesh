@@ -1,9 +1,11 @@
 package hare
 
 import (
+	"encoding/binary"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"hash/fnv"
 )
 
 type NotifyTracker struct {
@@ -48,11 +50,27 @@ func (nt *NotifyTracker) NotificationsCount(s *Set) int {
 	return int(nt.tracker.CountStatus(s))
 }
 
-func (nt *NotifyTracker) OnCertificate(set *Set) {
-	nt.certificates[set.Id()] = struct{}{}
+func calcId(k uint32, set *Set) uint32 {
+	hash := fnv.New32()
+
+	// write k
+	buff := make([]byte, 4)
+	binary.LittleEndian.PutUint32(buff, k)
+	hash.Write(buff)
+
+	// write set id
+	buff = make([]byte, 4)
+	binary.LittleEndian.PutUint32(buff, set.Id())
+	hash.Write(buff)
+
+	return hash.Sum32()
 }
 
-func (nt *NotifyTracker) HasCertificate(set *Set) bool {
-	_, exist := nt.certificates[set.Id()]
+func (nt *NotifyTracker) OnCertificate(k uint32, set *Set) {
+	nt.certificates[calcId(k, set)] = struct{}{}
+}
+
+func (nt *NotifyTracker) HasCertificate(k int32, set *Set) bool {
+	_, exist := nt.certificates[calcId(uint32(k), set)]
 	return exist
 }

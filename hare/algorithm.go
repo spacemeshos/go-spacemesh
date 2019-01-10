@@ -162,8 +162,6 @@ func roleFromRoundCounter(k uint32) Role {
 func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
 	// Note: instanceId is already verified by the broker
 
-	log.Info("Received message for handling: ", m.String())
-
 	// validate message
 	if !proc.validator.ValidateMessage(m, proc.k) {
 		log.Warning("Message is not syntactically valid")
@@ -324,8 +322,8 @@ func (proc *ConsensusProcess) processStatusMsg(msg *pb.HareMessage) {
 		if !proc.preRoundTracker.CanProveSet(s) { // can't prove s
 			return
 		}
-	} else { // ki>=0, we should have received a certificate for that set, validate certificate
-		if proc.notifyTracker.HasCertificate(s) { // can't prove s
+	} else { // ki>=0, we should have received a certificate for that set
+		if !proc.notifyTracker.HasCertificate(msg.Message.Ki, s) { // can't prove s
 			return
 		}
 	}
@@ -355,7 +353,7 @@ func (proc *ConsensusProcess) processCommitMsg(msg *pb.HareMessage) {
 
 func (proc *ConsensusProcess) processNotifyMsg(msg *pb.HareMessage) {
 	s := NewSet(msg.Message.Values)
-	proc.notifyTracker.OnCertificate(s)
+	proc.notifyTracker.OnCertificate(msg.Cert.AggMsgs.Messages[0].Message.K, s)
 
 	if ignored := proc.notifyTracker.OnNotify(msg); ignored {
 		log.Warning("Ignoring notification sent from %v", msg.PubKey)
@@ -363,7 +361,7 @@ func (proc *ConsensusProcess) processNotifyMsg(msg *pb.HareMessage) {
 	}
 
 	if proc.currentRound() == Round4 { // not necessary to update otherwise
-		// we assume that the expression was checked before
+		// we assume that this expression was checked before
 		if int32(msg.Cert.AggMsgs.Messages[0].Message.K) >= proc.ki { // update state iff K >= ki
 			proc.s = s
 			proc.certificate = msg.Cert
