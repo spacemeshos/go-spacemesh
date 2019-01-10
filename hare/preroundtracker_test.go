@@ -45,6 +45,11 @@ func TestPreRoundTracker_OnPreRound(t *testing.T) {
 	tracker.OnPreRound(m2)
 	_, exist2 := tracker.preRound[pubKey.String()]
 	assert.Equal(t, exist1, exist2) // same pub --> same msg
+
+	m3 := BuildPreRoundMsg(pubKey, s)
+	m3.PubKey = []byte("wrong pub key")
+	tracker.OnPreRound(m3)
+	assert.Equal(t, 1, len(tracker.preRound))
 }
 
 func TestPreRoundTracker_CanProveValueAndSet(t *testing.T) {
@@ -82,4 +87,14 @@ func TestPreRoundTracker_OnPreRound2(t *testing.T) {
 	assert.Equal(t, 1, len(tracker.preRound))
 	tracker.OnPreRound(BuildPreRoundMsg(pub, s1))
 	assert.Equal(t, 1, len(tracker.preRound))
+}
+
+func TestPreRoundTracker_FilterSet(t *testing.T) {
+	tracker := NewPreRoundTracker(lowThresh10, lowThresh10)
+	s1 := NewSetFromValues(value1)
+	pub := generatePubKey(t)
+
+	tracker.OnPreRound(BuildPreRoundMsg(pub, s1))
+	tracker.FilterSet(s1)
+	assert.False(t, s1.Contains(value1))
 }
