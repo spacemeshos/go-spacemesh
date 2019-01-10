@@ -33,7 +33,7 @@ func TestProposalTracker_OnProposalConflict(t *testing.T) {
 	assert.True(t, tracker.IsConflicting())
 }
 
-func TestProposalTracker_OnProposal_IgnoreMsgWithLowerRankedRoleProof(t *testing.T) {
+func TestProposalTracker_OnProposal_IgnoreMsgWithHigherRankedRoleProof(t *testing.T) {
 	s := NewEmptySet(lowDefaultSize)
 	s.Add(value1)
 
@@ -50,7 +50,7 @@ func TestProposalTracker_OnProposal_IgnoreMsgWithLowerRankedRoleProof(t *testing
 	assert.NotEqual(t, tracker.proposal, m2)
 }
 
-func TestProposalTracker_TestProposalTracker_OnLateProposal_IgnoreMsgWithHigherRankedRoleProof(t *testing.T) {
+func TestProposalTracker_OnLateProposal_IgnoreMsgWithLowerRankedRoleProof(t *testing.T) {
 	s := NewEmptySet(lowDefaultSize)
 	s.Add(value1)
 
@@ -83,6 +83,9 @@ func TestProposalTracker_OnLateProposal(t *testing.T) {
 	pubKey := generatePubKey(t)
 	m1 := BuildProposalMsg(pubKey, s)
 	tracker := NewProposalTracker(lowThresh10)
+	tracker.OnLateProposal(m1)
+	assert.Nil(t, tracker.proposal)
+
 	tracker.OnProposal(m1)
 	assert.False(t, tracker.IsConflicting())
 	s.Add(value3)
