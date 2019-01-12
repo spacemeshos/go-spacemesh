@@ -21,7 +21,7 @@ func init() {
 	/** ======================== BaseConfig Flags ========================== **/
 	RootCmd.PersistentFlags().StringVarP(&config.BaseConfig.ConfigFile,
 		"config", "c", config.BaseConfig.ConfigFile, "Set Load configuration from file")
-	RootCmd.PersistentFlags().StringVarP(&config.BaseConfig.DataDir, "datadir", "d",
+	RootCmd.PersistentFlags().StringVarP(&config.BaseConfig.DataDir, "data-folder", "d",
 		config.BaseConfig.DataDir, "Specify data directory for spacemesh")
 	/** ======================== P2P Flags ========================== **/
 	RootCmd.PersistentFlags().IntVar(&config.P2P.SecurityParam, "security-param",
