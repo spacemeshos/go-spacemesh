@@ -58,7 +58,7 @@ func init() {
 		config.P2P.TimeConfig.NtpQueries, "Number of ntp queries to do")
 	RootCmd.PersistentFlags().DurationVar(&config.P2P.TimeConfig.DefaultTimeoutLatency, "default-timeout-latency",
 		config.P2P.TimeConfig.DefaultTimeoutLatency, "Default timeout to ntp query")
-	RootCmd.PersistentFlags().DurationVar(&config.P2P.TimeConfig.RefreshNtpInterval, "ntp-refresh-interval",
+	RootCmd.PersistentFlags().DurationVar(&config.P2P.TimeConfig.RefreshNtpInterval, "refresh-ntp-interval",
 		config.P2P.TimeConfig.RefreshNtpInterval, "Refresh intervals to ntp")
 
 	/** ======================== API Flags ========================== **/
