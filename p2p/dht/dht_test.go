@@ -327,7 +327,7 @@ func bootAndWait(t *testing.T, dht DHT, errchan chan error) {
 // A bigger bootstrap
 func TestDHT_Bootstrap(t *testing.T) {
 
-	const timeout = 10 * time.Second
+	const timeout = 30 * time.Second
 	const nodesNum = 100
 	const minToBoot = 10
 
