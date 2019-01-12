@@ -176,7 +176,15 @@ func TestConsensusProcess_sendMessage(t *testing.T) {
 	broker.Register(proc)
 
 	msg := buildStatusMsg(generatePubKey(t), s, 0)
+	proc.createInbox(1)
 	proc.sendMessage(msg)
+
+	proc.advanceToNextRound()
+	proc.advanceToNextRound()
+	proc.advanceToNextRound()
+	proc.sendMessage(msg)
+
+	assertInBoxHasMessage(t, proc)
 }
 
 func TestConsensusProcess_procPre(t *testing.T) {
@@ -198,10 +206,21 @@ func TestConsensusProcess_procStatus(t *testing.T) {
 func TestConsensusProcess_procProposal(t *testing.T) {
 	proc := generateConsensusProcess(t)
 	proc.advanceToNextRound()
+
+	pubKey := generatePubKey(t)
+	s1 := NewSetFromValues(value1)
+	m1 := BuildProposalMsg(pubKey, s1)
+	proc.processProposalMsg(m1)
+	assert.NotEqual(t, proc.proposalTracker.proposal, m1)
+
 	s := NewSmallEmptySet()
-	m := BuildProposalMsg(generatePubKey(t), s)
+	m := BuildProposalMsg(pubKey, s)
 	proc.processProposalMsg(m)
 	assert.NotNil(t, proc.proposalTracker.proposal)
+
+	proc.advanceToNextRound()
+	proc.processProposalMsg(m)
+	assert.Equal(t, proc.proposalTracker.proposal, m)
 }
 
 func TestConsensusProcess_procCommit(t *testing.T) {
@@ -227,7 +246,7 @@ func TestConsensusProcess_Termination(t *testing.T) {
 	proc := generateConsensusProcess(t)
 	proc.advanceToNextRound()
 	s := NewSetFromValues(value1)
-	for i:=0;i<cfg.F+1;i++ {
+	for i := 0; i < cfg.F+1; i++ {
 		proc.processNotifyMsg(BuildNotifyMsg(generatePubKey(t), s))
 	}
 
@@ -251,4 +270,107 @@ func TestConsensusProcess_currentRound(t *testing.T) {
 	assert.Equal(t, Round3, proc.currentRound())
 	proc.advanceToNextRound()
 	assert.Equal(t, Round4, proc.currentRound())
+}
+
+func TestConsensusProcess_beginRound4(t *testing.T) {
+	proc := generateConsensusProcess(t)
+	assert.NotNil(t, proc.commitTracker)
+	assert.NotNil(t, proc.proposalTracker)
+	proc.beginRound4()
+	assert.Nil(t, proc.commitTracker)
+	assert.Nil(t, proc.proposalTracker)
+}
+
+func TestConsensusProcess_beginRound3(t *testing.T) {
+	proc := generateConsensusProcess(t)
+	proc.commitTracker.proposedSet = NewSetFromValues(value1)
+
+	preCommitTracker := proc.commitTracker
+	proc.beginRound3()
+	assert.NotEqual(t, preCommitTracker, proc.commitTracker)
+
+	s := NewSmallEmptySet()
+	proc.proposalTracker.proposal = BuildProposalMsg(generatePubKey(t), s)
+	proc.role = Active
+	proc.createInbox(1)
+	proc.beginRound3()
+
+	assertInBoxHasMessage(t, proc)
+}
+
+func assertInBoxHasMessage(t *testing.T, proc *ConsensusProcess) {
+	timer := time.NewTimer(time.Second)
+Loop:
+	for {
+		select {
+		case msg := <-proc.inbox:
+			assert.NotNil(t, msg)
+			break Loop
+		case <-timer.C:
+			assert.True(t, false) // it should not reach
+			break Loop
+		}
+	}
+}
+
+func TestConsensusProcess_beginRound1(t *testing.T) {
+	proc := generateConsensusProcess(t)
+	s := NewSmallEmptySet()
+	m := BuildPreRoundMsg(generatePubKey(t), s)
+	proc.statusesTracker.RecordStatus(m)
+
+	preStatusTracker := proc.statusesTracker
+	proc.beginRound1()
+	assert.NotEqual(t, preStatusTracker, proc.statusesTracker)
+}
+
+func TestConsensusProcess_endOfRound3(t *testing.T)  {
+	proc := generateConsensusProcess(t)
+	proc.endOfRound3()
+
+	assert.Empty(t, proc.s.values)
+
+	s := NewSetFromValues(value1)
+	commitTracker := NewCommitTracker(2, 2, s)
+	commitTracker.OnCommit(BuildCommitMsg(generatePubKey(t), s))
+	commitTracker.OnCommit(BuildCommitMsg(generatePubKey(t), s))
+	proc.commitTracker = commitTracker
+
+	pubKey := generatePubKey(t)
+	m1 := buildProposalMsg(pubKey, s, []byte{1})
+
+	proposalTracker := NewProposalTracker(lowThresh10)
+	proposalTracker.OnProposal(m1)
+
+	proc.endOfRound3()
+	assert.Empty(t, proc.s.values)
+
+	proc.proposalTracker = proposalTracker
+
+	proc.endOfRound3()
+	assert.NotEmpty(t, proc.s.values)
+}
+
+func TestConsensusProcess_endOfRound3_proposalTrackerConflict(t *testing.T)  {
+	proc := generateConsensusProcess(t)
+
+	s := NewSetFromValues(value1)
+	commitTracker := NewCommitTracker(2, 2, s)
+	commitTracker.OnCommit(BuildCommitMsg(generatePubKey(t), s))
+	commitTracker.OnCommit(BuildCommitMsg(generatePubKey(t), s))
+	proc.commitTracker = commitTracker
+
+	pubKey := generatePubKey(t)
+	m1 := buildProposalMsg(pubKey, s, []byte{1})
+
+	proposalTracker := NewProposalTracker(lowThresh10)
+	proposalTracker.OnProposal(m1)
+
+	s.Add(value2)
+	m2 := buildProposalMsg(pubKey, s, []byte{1})
+	proposalTracker.OnProposal(m2)
+	proc.proposalTracker = proposalTracker
+
+	proc.endOfRound3()
+	assert.Empty(t, proc.s.values)
 }
