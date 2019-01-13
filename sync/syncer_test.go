@@ -45,7 +45,7 @@ type MeshValidatorMock struct {}
 func (m *MeshValidatorMock)	HandleIncomingLayer(layer *mesh.Layer) {}
 func (m *MeshValidatorMock) HandleLateBlock(bl *mesh.Block) {}
 
-func getMesh(id string) mesh.Mesh {
+func getMesh(id string) *mesh.Mesh {
 	time := time.Now()
 	bdb := database.NewLevelDbStore("blocks_test_"+id, nil, nil)
 	ldb := database.NewLevelDbStore("layers_test_"+id, nil, nil)
