@@ -39,6 +39,7 @@ type MessageServer struct {
 	ingressChannel     chan service.Message                    //chan to relay messages into the server
 	requestLifetime    time.Duration                           //time a request can stay in the pending queue until evicted
 	workerCount        sync.WaitGroup
+	workerLimiter      chan int
 	exit               chan struct{}
 }
 
@@ -49,10 +50,11 @@ func NewMsgServer(network Service, name string, requestLifetime time.Duration, l
 		resHandlers:        make(map[uint64]func(msg []byte)),
 		pendingQueue:       list.New(),
 		network:            network,
-		ingressChannel:     network.RegisterProtocol(name),
+		ingressChannel:     network.RegisterProtocolWithChannel(name, make(chan service.Message, 100)),
 		msgRequestHandlers: make(map[MessageType]func(msg []byte) []byte),
 		requestLifetime:    requestLifetime,
 		exit:               make(chan struct{}),
+		workerLimiter:      make(chan int, 1000),
 	}
 
 	go p.readLoop()
@@ -80,11 +82,13 @@ func (p *MessageServer) readLoop() {
 				p.Error("read loop channel was closed")
 				break
 			}
-			//todo add buffer and option to limit number of concurrent goroutines
+
+			p.workerLimiter <- 1
 			p.workerCount.Add(1)
 			go func() {
 				defer p.workerCount.Done()
 				p.handleMessage(msg.(Message))
+				<-p.workerLimiter
 			}()
 
 		}

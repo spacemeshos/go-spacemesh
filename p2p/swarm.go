@@ -333,6 +333,14 @@ func (s *swarm) sendMessageImpl(peerPubKey string, protocol string, payload serv
 	return err
 }
 
+// RegisterProtocolWithChannel configures and returns a channel for a given protocol.
+func (s *swarm) RegisterProtocolWithChannel(protocol string, ingressChannel chan service.Message) chan service.Message {
+        s.protocolHandlerMutex.Lock()
+        s.protocolHandlers[protocol] = ingressChannel
+        s.protocolHandlerMutex.Unlock()
+        return ingressChannel
+}
+
 // RegisterProtocol registers an handler for `protocol`
 func (s *swarm) RegisterProtocol(protocol string) chan service.Message {
 	mchan := make(chan service.Message, 100)

@@ -198,6 +198,14 @@ func (sn *Node) RegisterProtocol(protocol string) chan Message {
 	return c
 }
 
+// RegisterProtocolWithChannel configures and returns a channel for a given protocol.
+func (sn *Node) RegisterProtocolWithChannel(protocol string, ingressChannel chan Message) chan Message {
+        sn.sim.mutex.Lock()
+        sn.sim.protocolHandler[sn.Node.String()][protocol] = ingressChannel
+        sn.sim.mutex.Unlock()
+        return ingressChannel
+}
+
 // AttachDHT attaches a dht for the update function of the simulation node
 func (sn *Node) AttachDHT(dht dht) {
 	sn.dht = dht
