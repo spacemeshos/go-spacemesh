@@ -41,6 +41,7 @@ func (nt *NotifyTracker) OnNotify(msg *pb.HareMessage) bool {
 
 	// track that set
 	s := NewSet(msg.Message.Values)
+	nt.onCertificate(msg.Cert.AggMsgs.Messages[0].Message.K, s)
 	nt.tracker.Track(s)
 
 	return false
@@ -66,7 +67,7 @@ func calcId(k uint32, set *Set) uint32 {
 	return hash.Sum32()
 }
 
-func (nt *NotifyTracker) OnCertificate(k uint32, set *Set) {
+func (nt *NotifyTracker) onCertificate(k uint32, set *Set) {
 	nt.certificates[calcId(k, set)] = struct{}{}
 }
 

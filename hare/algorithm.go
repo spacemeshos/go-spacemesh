@@ -349,7 +349,6 @@ func (proc *ConsensusProcess) processCommitMsg(msg *pb.HareMessage) {
 
 func (proc *ConsensusProcess) processNotifyMsg(msg *pb.HareMessage) {
 	s := NewSet(msg.Message.Values)
-	proc.notifyTracker.OnCertificate(msg.Cert.AggMsgs.Messages[0].Message.K, s)
 
 	if ignored := proc.notifyTracker.OnNotify(msg); ignored {
 		log.Warning("Ignoring notification sent from %v", msg.PubKey)
