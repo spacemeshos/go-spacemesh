@@ -46,10 +46,12 @@ func (st *StatusTracker) AnalyzeStatuses(isValid func(m *pb.HareMessage) bool) {
 	for key, m := range st.statuses {
 		if !isValid(m) || count == st.threshold { // only keep valid messages
 			delete(st.statuses, key)
-		} else if m.Message.Ki >= st.maxKi { // track max ki & matching raw set
-			st.maxKi = m.Message.Ki
-			st.maxRawSet = m.Message.Values
+		} else {
 			count++
+			if m.Message.Ki >= st.maxKi { // track max ki & matching raw set
+				st.maxKi = m.Message.Ki
+				st.maxRawSet = m.Message.Values
+			}
 		}
 	}
 
