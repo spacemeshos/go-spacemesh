@@ -96,3 +96,14 @@ func TestStatusTracker_ProposalSetTypeB(t *testing.T) {
 	assert.NotNil(t, proposedSet)
 	assert.True(t, proposedSet.Equals(s2))
 }
+
+func TestStatusTracker_AnalyzeStatuses(t *testing.T) {
+	tracker := NewStatusTracker(2, 1)
+	s1 := NewSetFromValues(value1, value3)
+	s2 := NewSetFromValues(value1, value2)
+	tracker.RecordStatus(buildStatusMsg(generatePubKey(t), s1, 2))
+	tracker.RecordStatus(buildStatusMsg(generatePubKey(t), s2, 1))
+	tracker.RecordStatus(buildStatusMsg(generatePubKey(t), s2, 2))
+	tracker.AnalyzeStatuses(validate)
+	assert.Equal(t, 2, len(tracker.statuses))
+}
