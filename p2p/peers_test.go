@@ -1,16 +1,16 @@
-package sync
+package p2p
 
 import (
-	"github.com/spacemeshos/go-spacemesh/crypto"
-	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"github.com/stretchr/testify/assert"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/stretchr/testify/assert"
 )
 
-func getPeers(p p2p.Service) (Peers, chan crypto.PublicKey, chan crypto.PublicKey) {
+func getPeers(p Service) (Peers, chan crypto.PublicKey, chan crypto.PublicKey) {
 	value := atomic.Value{}
 	value.Store(make([]Peer, 0, 20))
 	pi := &PeersImpl{snapshot: &value, exit: make(chan struct{})}

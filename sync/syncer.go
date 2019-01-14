@@ -5,6 +5,7 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/sync/pb"
 	"sync/atomic"
@@ -24,7 +25,7 @@ type Configuration struct {
 }
 
 type Syncer struct {
-	Peers
+	p2p.Peers
 	*mesh.Mesh
 	BlockValidator //todo should not be here
 	Configuration
@@ -104,7 +105,7 @@ func NewSync(srv server.Service, layers *mesh.Mesh, bv BlockValidator, conf Conf
 		Configuration:  conf,
 		Log:            logger,
 		Mesh:           layers,
-		Peers:          NewPeers(srv),
+		Peers:          p2p.NewPeers(srv),
 		MessageServer:  server.NewMsgServer(srv, syncProtocol, conf.requestTimeout-time.Millisecond*30, logger),
 		SyncLock:       0,
 		startLock:      0,
@@ -175,11 +176,11 @@ func (s *Syncer) Synchronise() {
 }
 
 type peerHashPair struct {
-	peer Peer
+	peer p2p.Peer
 	hash []byte
 }
 
-func sendBlockRequest(msgServ *server.MessageServer, peer Peer, id mesh.BlockID, logger log.Log) (chan *mesh.Block, error) {
+func sendBlockRequest(msgServ *server.MessageServer, peer p2p.Peer, id mesh.BlockID, logger log.Log) (chan *mesh.Block, error) {
 	logger.Debug("send block request Peer: ", peer, " id: ", id)
 	data := &pb.FetchBlockReq{Id: uint32(id)}
 	payload, err := proto.Marshal(data)
@@ -219,7 +220,7 @@ func (s *Syncer) getLayerBlockIDs(index mesh.LayerID) (chan mesh.BlockID, error)
 	return s.getIdsForHash(m, index)
 }
 
-func (s *Syncer) getIdsForHash(m map[string]Peer, index mesh.LayerID) (chan mesh.BlockID, error) {
+func (s *Syncer) getIdsForHash(m map[string]p2p.Peer, index mesh.LayerID) (chan mesh.BlockID, error) {
 	reqCounter := 0
 	ch := make(chan []uint32)
 	for _, v := range m {
@@ -267,8 +268,8 @@ func keysAsChan(idSet map[mesh.BlockID]bool) chan mesh.BlockID {
 	return res
 }
 
-func (s *Syncer) getLayerHashes(index mesh.LayerID) (map[string]Peer, error) {
-	m := make(map[string]Peer, 20) //todo need to get this from p2p service
+func (s *Syncer) getLayerHashes(index mesh.LayerID) (map[string]p2p.Peer, error) {
+	m := make(map[string]p2p.Peer, 20) //todo need to get this from p2p service
 	peers := s.GetPeers()
 	// request hash from all
 	ch := make(chan peerHashPair)
@@ -300,7 +301,7 @@ func (s *Syncer) getLayerHashes(index mesh.LayerID) (map[string]Peer, error) {
 	return m, nil
 }
 
-func (s *Syncer) sendLayerHashRequest(peer Peer, layer mesh.LayerID, ch chan peerHashPair) (chan peerHashPair, error) {
+func (s *Syncer) sendLayerHashRequest(peer p2p.Peer, layer mesh.LayerID, ch chan peerHashPair) (chan peerHashPair, error) {
 	s.Debug("send Layer hash request Peer: ", peer, " layer: ", layer)
 
 	data := &pb.LayerHashReq{Layer: uint32(layer)}
@@ -325,7 +326,7 @@ func (s *Syncer) sendLayerHashRequest(peer Peer, layer mesh.LayerID, ch chan pee
 	return ch, s.SendRequest(LAYER_HASH, payload, peer, foo)
 }
 
-func (s *Syncer) sendLayerIDsRequest(peer Peer, idx mesh.LayerID, ch chan []uint32) (chan []uint32, error) {
+func (s *Syncer) sendLayerIDsRequest(peer p2p.Peer, idx mesh.LayerID, ch chan []uint32) (chan []uint32, error) {
 	s.Debug("send Layer ids request Peer: ", peer, " layer: ", idx)
 
 	data := &pb.LayerIdsReq{Layer: uint32(idx)}

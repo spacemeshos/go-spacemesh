@@ -1,10 +1,11 @@
-package sync
+package p2p
 
 import (
+	"sync/atomic"
+
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"sync/atomic"
 )
 
 type Peer crypto.PublicKey
@@ -19,10 +20,15 @@ type PeersImpl struct {
 	exit     chan struct{}
 }
 
+// NewPeersImpl creates a PeersImpl using specified parameters and returns it
+func NewPeersImpl(snapshot *atomic.Value, exit chan struct{}) *PeersImpl {
+	return &PeersImpl{snapshot: snapshot, exit: exit}
+}
+
 func NewPeers(s service.Service) Peers {
 	value := atomic.Value{}
 	value.Store(make([]Peer, 0, 20))
-	pi := &PeersImpl{snapshot: &value, exit: make(chan struct{})}
+	pi := NewPeersImpl(&value, make(chan struct{}))
 	newPeerC, expiredPeerC := s.SubscribePeerEvents()
 	go pi.listenToPeers(newPeerC, expiredPeerC)
 	return pi
