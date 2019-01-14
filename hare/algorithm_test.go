@@ -60,6 +60,77 @@ func TestConsensusProcess_eventLoop(t *testing.T) {
 	<-proc.CloseChannel()
 }
 
+func TestConsensusProcess_eventLoop_roundGo(t *testing.T) {
+	proc := generateConsensusProcess(t)
+	proc.cfg.RoundDuration = time.Second
+
+	go proc.eventLoop()
+
+	ticker := time.NewTicker(time.Second)
+	count := 0
+
+Loop:
+	for {
+		select {
+		case <-ticker.C:
+			count += 1
+			if count > 6 {
+				proc.Close()
+				break Loop
+			}
+			if count > 2 {
+				assert.True(t, proc.k > Round1)
+			}
+			if count > 3 {
+				assert.True(t, proc.k > Round2)
+			}
+			if count > 4 {
+				assert.True(t, proc.k > Round3)
+			}
+		}
+	}
+}
+
+func TestConsensusProcess_eventLoop_terminate(t *testing.T) {
+	proc := generateConsensusProcess(t)
+	proc.cfg.RoundDuration = time.Second
+
+	go proc.eventLoop()
+	proc.terminating = true
+
+	ticker := time.NewTicker(time.Second)
+	count := 0
+Loop:
+	for {
+		select {
+		case <-ticker.C:
+			count += 1
+			if count > 2 {
+				break Loop
+			}
+		}
+	}
+
+	assert.True(t, proc.k == 1)
+}
+
+func TestConsensusProcess_eventLoop_handleMessage(t *testing.T) {
+	proc := generateConsensusProcess(t)
+	proc.cfg.RoundDuration = time.Second
+	proc.createInbox(1)
+
+	go proc.eventLoop()
+
+	s := NewSmallEmptySet()
+	m := BuildPreRoundMsg(generatePubKey(t), s)
+	proc.role = Active
+	proc.sendMessage(m)
+
+	proc.terminating = true
+
+	assert.Equal(t, 0, len(proc.preRoundTracker.preRound))
+}
+
 func TestConsensusProcess_handleMessage(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
@@ -443,4 +514,33 @@ func TestConsensusProcess_onRoundEnd(t *testing.T) {
 	proc.onRoundEnd()
 
 	assert.NotEmpty(t, proc.s.values)
+}
+
+func TestConsensusProcess_onRoundBegin(t *testing.T) {
+	proc := generateConsensusProcess(t)
+	s := NewSmallEmptySet()
+	m := BuildPreRoundMsg(generatePubKey(t), s)
+	proc.statusesTracker.RecordStatus(m)
+
+	preStatusTracker := proc.statusesTracker
+	proc.onRoundBegin()
+	assert.NotEqual(t, preStatusTracker, proc.statusesTracker) // round 1 begin
+
+	proc.advanceToNextRound()
+
+	proc.statusesTracker = NewStatusTracker(1, 1)
+	proc.statusesTracker.RecordStatus(m)
+	proc.createInbox(1)
+	proc.onRoundBegin()
+	assert.Nil(t, proc.statusesTracker) // round 2 begin
+
+	proc.advanceToNextRound()
+	proc.commitTracker.proposedSet = NewSetFromValues(value1)
+	preCommitTracker := proc.commitTracker
+	proc.onRoundBegin()
+	assert.NotEqual(t, preCommitTracker, proc.commitTracker) // round 3 begin
+
+	proc.advanceToNextRound()
+	proc.onRoundBegin()
+	assert.Nil(t, proc.commitTracker) // round 4 begin
 }
