@@ -18,7 +18,7 @@ type TortoiseBlock struct {
 	LayerIndex LayerID
 	Data       []byte
 	Coin       bool
-	Timestamp  time.Time
+	Timestamp  int64
 	ProVotes   uint64
 	ConVotes   uint64
 	BlockVotes map[BlockID]bool
@@ -41,7 +41,7 @@ func NewBlock(coin bool, data []byte, ts time.Time, layerId LayerID) *TortoiseBl
 		LayerIndex: layerId,
 		BlockVotes: make(map[BlockID]bool),
 		ViewEdges:  make(map[BlockID]struct{}),
-		Timestamp:  ts,
+		Timestamp:  ts.UnixNano(),
 		Data:       data,
 		Coin:       coin,
 		ProVotes:   0,
