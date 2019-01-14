@@ -7,7 +7,9 @@ import (
 )
 
 func defaultValidator() *MessageValidator {
-	return NewMessageValidator(NewMockSigning(), lowThresh10, lowDefaultSize)
+	return NewMessageValidator(NewMockSigning(), lowThresh10, lowDefaultSize, func(m *pb.HareMessage) bool {
+		return true
+	})
 }
 
 func TestMessageValidator_CommitStatus(t *testing.T) {

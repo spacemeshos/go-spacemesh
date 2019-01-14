@@ -7,11 +7,11 @@ import (
 )
 
 type StatusTracker struct {
-	statuses  map[string]*pb.HareMessage // maps PubKey->StatusMsg
-	threshold int                        // threshold to indicate a set can be proved
-	maxKi     int32                      // tracks max ki in tracked status messages
-	maxRawSet [][]byte                   // tracks the max raw set in the tracked status messages
-	analyzed  bool                       // indicates if the messages have already been analyzed
+	statuses  map[string]*pb.HareMessage   // maps PubKey->StatusMsg
+	threshold int                          // threshold to indicate a set can be proved
+	maxKi     int32                        // tracks max ki in tracked status messages
+	maxRawSet [][]byte                     // tracks the max raw set in the tracked status messages
+	analyzed  bool                         // indicates if the messages have already been analyzed
 }
 
 func NewStatusTracker(threshold int, expectedSize int) *StatusTracker {

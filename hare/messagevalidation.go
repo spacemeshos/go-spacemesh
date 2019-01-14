@@ -8,13 +8,14 @@ import (
 )
 
 type MessageValidator struct {
-	signing     Signing
-	threshold   int
-	defaultSize int
+	signing         Signing
+	threshold       int
+	defaultSize     int
+	statusValidator func(m *pb.HareMessage) bool // used to validate status messages in SVP
 }
 
-func NewMessageValidator(signing Signing, threshold int, defaultSize int) *MessageValidator {
-	return &MessageValidator{signing, threshold, defaultSize}
+func NewMessageValidator(signing Signing, threshold int, defaultSize int, validator func(m *pb.HareMessage) bool) *MessageValidator {
+	return &MessageValidator{signing, threshold, defaultSize, validator}
 }
 
 func (validator *MessageValidator) ValidateMessage(m *pb.HareMessage, k uint32) bool {
@@ -199,7 +200,7 @@ func (validator *MessageValidator) validateSVP(msg *pb.HareMessage) bool {
 
 		return true
 	}
-	validators := []func(m *pb.HareMessage) bool{validateStatusType, validateSameIteration}
+	validators := []func(m *pb.HareMessage) bool{validateStatusType, validateSameIteration, validator.statusValidator}
 	if !validator.validateAggregatedMessage(msg.Message.Svp, validators) {
 		log.Warning("Proposal validation failed: failed to validate aggregated message")
 		return false

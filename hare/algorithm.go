@@ -63,7 +63,7 @@ func NewConsensusProcess(cfg config.Config, key crypto.PublicKey, instanceId Ins
 	proc.signing = signing
 	proc.network = p2p
 	proc.role = Passive
-	proc.validator = NewMessageValidator(signing, cfg.F+1, cfg.N)
+	proc.validator = NewMessageValidator(signing, cfg.F+1, cfg.N, proc.statusValidator())
 	proc.preRoundTracker = NewPreRoundTracker(cfg.F+1, cfg.N)
 	proc.statusesTracker = NewStatusTracker(cfg.F+1, cfg.N)
 	proc.proposalTracker = NewProposalTracker(cfg.N)
@@ -242,8 +242,8 @@ func (proc *ConsensusProcess) advanceToNextRound() {
 }
 
 func (proc *ConsensusProcess) beginRound1() {
-	roundMsg := proc.initDefaultBuilder(proc.s).SetType(Status).Sign(proc.signing).Build()
-	proc.sendMessage(roundMsg)
+	statusMsg := proc.initDefaultBuilder(proc.s).SetType(Status).Sign(proc.signing).Build()
+	proc.sendMessage(statusMsg)
 	proc.statusesTracker = NewStatusTracker(proc.cfg.F+1, proc.cfg.N)
 }
 
@@ -252,8 +252,8 @@ func (proc *ConsensusProcess) beginRound2() {
 		builder := proc.initDefaultBuilder(proc.statusesTracker.ProposalSet(proc.cfg.SetSize))
 		svp := proc.statusesTracker.BuildSVP()
 		if svp != nil {
-			roundMsg := builder.SetType(Proposal).SetSVP(svp).Sign(proc.signing).Build()
-			proc.sendMessage(roundMsg)
+			proposalMsg := builder.SetType(Proposal).SetSVP(svp).Sign(proc.signing).Build()
+			proc.sendMessage(proposalMsg)
 		} else {
 			log.Error("Failed to build SVP (nil) after verifying SVP is ready ")
 		}
@@ -268,8 +268,8 @@ func (proc *ConsensusProcess) beginRound3() {
 	proposedSet := proc.proposalTracker.ProposedSet()
 	if proposedSet != nil { // has proposal to send
 		builder := proc.initDefaultBuilder(proposedSet).SetType(Commit).Sign(proc.signing)
-		roundMsg := builder.Build()
-		proc.sendMessage(roundMsg)
+		commitMsg := builder.Build()
+		proc.sendMessage(commitMsg)
 	}
 
 	// proposedSet may be nil, in such case the tracker will ignore messages
@@ -383,22 +383,26 @@ func (proc *ConsensusProcess) currentRound() int {
 	return int(proc.k % 4)
 }
 
-func (proc *ConsensusProcess) endOfRound1() {
+func (proc *ConsensusProcess) statusValidator() func(m *pb.HareMessage) bool {
 	validate := func(m *pb.HareMessage) bool {
 		s := NewSet(m.Message.Values)
 		if m.Message.Ki == -1 { // no certificates, validate by pre-round msgs
-			if proc.preRoundTracker.CanProveSet(s) { // can't prove s
+			if proc.preRoundTracker.CanProveSet(s) { // can prove s
 				return true
 			}
 		} else { // ki>=0, we should have received a certificate for that set
-			if proc.notifyTracker.HasCertificate(m.Message.Ki, s) { // can't prove s
+			if proc.notifyTracker.HasCertificate(m.Message.Ki, s) { // can prove s
 				return true
 			}
 		}
 		return false
 	}
 
-	proc.statusesTracker.AnalyzeStatuses(validate)
+	return validate
+}
+
+func (proc *ConsensusProcess) endOfRound1() {
+	proc.statusesTracker.AnalyzeStatuses(proc.statusValidator())
 }
 
 func (proc *ConsensusProcess) endOfRound3() {
@@ -430,8 +434,8 @@ func (proc *ConsensusProcess) endOfRound3() {
 	proc.s = s
 	proc.certificate = cert
 	builder := proc.initDefaultBuilder(proc.s).SetType(Notify).SetCertificate(proc.certificate).Sign(proc.signing)
-	roundMsg := builder.Build() // build notify with certificate
-	proc.sendMessage(roundMsg)
+	notifyMsg := builder.Build()
+	proc.sendMessage(notifyMsg)
 	proc.notifySent = true
 }
 
