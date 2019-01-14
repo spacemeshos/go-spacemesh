@@ -1,12 +1,16 @@
 package sync
 
 import (
+	"bytes"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/stretchr/testify/assert"
+	"math/big"
 	"testing"
 	"time"
 )
@@ -131,6 +135,47 @@ func TestBlockListener2(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
+	sim := service.NewSimulator()
+	n1 := sim.NewNode()
+	n2 := sim.NewNode()
+
+	bl1 := ListenerFactory(n1, PeersMock{func() []p2p.Peer { return []p2p.Peer{n2.PublicKey()} }}, "5")
+	bl1.Start()
+
+	blk := mesh.NewBlock(false, nil, time.Now(), 1)
+	tx := mesh.NewSerializableTransaction(0, common.BytesToAddress([]byte{0x01}), common.BytesToAddress([]byte{0x02}), big.NewInt(10), big.NewInt(10), 10)
+	blk.AddTransaction(tx)
+	blk.AddVote(1)
+	blk.AddView(2)
+
+	data, err := mesh.BlockAsBytes(*blk)
+	blk2, ok := mesh.BytesAsBlock(bytes.NewReader(data))
+	assert.NoError(t, ok)
+	assert.Equal(t, *blk, blk2)
+
+	assert.NoError(t, err)
+	n2.Broadcast( NewBlock, data)
+
+	timeout := time.After(5 * time.Second)
+	for {
+		select {
+		// Got a timeout! fail with a timeout error
+		case <-timeout:
+			t.Error("timed out ")
+			return
+		default:
+			if b, err := bl1.GetBlock(blk.Id); err == nil {
+				assert.Equal(t, blk, b)
+				fmt.Println("  ", b)
+				t.Log("done!")
+				return
+			}
+		}
+	}
+
 }
 
 //todo integration testing
