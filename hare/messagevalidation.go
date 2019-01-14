@@ -46,7 +46,8 @@ func (validator *MessageValidator) ValidateMessage(m *pb.HareMessage, k uint32) 
 }
 
 // verifies the message is contextually valid
-func isContextuallyValid(m *pb.HareMessage, k uint32) bool {
+func isContextuallyValid(m *pb.HareMessage, expectedK uint32) bool {
+	// PreRound & Notify are always contextually valid
 	switch MessageType(m.Message.Type) {
 	case PreRound:
 		return true
@@ -54,37 +55,13 @@ func isContextuallyValid(m *pb.HareMessage, k uint32) bool {
 		return true
 	}
 
-	expIter := iterationFromCounter(k)
-	actIter := iterationFromCounter(m.Message.K)
-	if expIter != actIter {
-		log.Warning("Contextual validation failed: not same iteration. Expected: %v, Actual: %v", expIter, actIter)
-		return false
+	// Status, Proposal, Commit messages should match the expected k
+	if expectedK == m.Message.K {
+		return true
 	}
 
-	currentRound := k % 4
-	switch MessageType(m.Message.Type) {
-	case Status:
-		if currentRound != Round1 {
-			log.Warning("Contextual validation failed: incorrect round. Expected %v Actual %v", Round1, currentRound)
-			return false
-		}
-		return true
-	case Proposal:
-		if !(currentRound == Round2 || currentRound == Round3) {
-			log.Warning("Contextual validation failed: incorrect round. Expected %v or %v Actual %v", Round2, Round3, currentRound)
-			return false
-		}
-		return true
-	case Commit:
-		if currentRound != Round3 {
-			log.Warning("Contextual validation failed: incorrect round. Expected %v Actual %v", Round3, currentRound)
-			return false
-		}
-		return true
-	default:
-		log.Error("Unknown message type encountered during contextual validation: ", m.Message.Type)
-		return false
-	}
+	log.Warning("Contextual validation failed: not same iteration. Expected: %v, Actual: %v", expectedK, m.Message.K)
+	return false
 }
 
 // verifies the message is syntactically valid

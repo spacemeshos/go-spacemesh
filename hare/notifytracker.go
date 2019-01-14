@@ -9,14 +9,14 @@ import (
 )
 
 type NotifyTracker struct {
-	notifies     map[string]*pb.HareMessage // tracks PubKey->Notification
+	notifies     map[string]struct{} // tracks PubKey->Notification
 	tracker      *RefCountTracker           // tracks ref count to each seen set
 	certificates map[uint32]struct{}        // tracks Set->certificate
 }
 
 func NewNotifyTracker(expectedSize int) *NotifyTracker {
 	nt := &NotifyTracker{}
-	nt.notifies = make(map[string]*pb.HareMessage, expectedSize)
+	nt.notifies = make(map[string]struct{}, expectedSize)
 	nt.tracker = NewRefCountTracker(expectedSize)
 	nt.certificates = make(map[uint32]struct{}, expectedSize)
 
@@ -37,7 +37,7 @@ func (nt *NotifyTracker) OnNotify(msg *pb.HareMessage) bool {
 	}
 
 	// keep msg for pub
-	nt.notifies[pub.String()] = msg
+	nt.notifies[pub.String()] = struct{}{}
 
 	// track that set
 	s := NewSet(msg.Message.Values)

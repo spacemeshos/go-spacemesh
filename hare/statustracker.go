@@ -26,11 +26,6 @@ func NewStatusTracker(threshold int, expectedSize int) *StatusTracker {
 }
 
 func (st *StatusTracker) RecordStatus(msg *pb.HareMessage) {
-	// no need for further processing
-	if st.IsSVPReady() {
-		return
-	}
-
 	pub, err := crypto.NewPublicKey(msg.PubKey)
 	if err != nil {
 		log.Warning("Could not construct public key: ", err.Error())
@@ -47,23 +42,14 @@ func (st *StatusTracker) RecordStatus(msg *pb.HareMessage) {
 }
 
 func (st *StatusTracker) AnalyzeStatuses(isValid func(m *pb.HareMessage) bool) {
+	count := 0
 	for key, m := range st.statuses {
-		if !isValid(m) { // only keep valid messages
+		if !isValid(m) || count == st.threshold { // only keep valid messages
 			delete(st.statuses, key)
-			continue
-		}
-	}
-
-	for key, m := range st.statuses {
-		if len(st.statuses) > st.threshold { // should have exactly threshold
-			delete(st.statuses, key)
-			continue
-		}
-
-		// track max ki & matching raw set
-		if m.Message.Ki >= st.maxKi {
+		} else if m.Message.Ki >= st.maxKi { // track max ki & matching raw set
 			st.maxKi = m.Message.Ki
 			st.maxRawSet = m.Message.Values
+			count++
 		}
 	}
 
