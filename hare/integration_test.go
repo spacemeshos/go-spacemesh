@@ -109,7 +109,7 @@ func Test_ThreeNodes_HareIntegrationSuite(t *testing.T) {
 		t.Skip()
 	}
 	const roundDuration = time.Second * time.Duration(1)
-	cfg := config.Config{N: 3, F: 0, SetSize: 10, RoundDuration: roundDuration}
+	cfg := config.Config{N: 3, F: 1, SetSize: 10, RoundDuration: roundDuration}
 
 	his := &hareIntegrationThreeNodes{newIntegrationSuite()}
 	his.BootstrappedNodeCount = cfg.N - 1
