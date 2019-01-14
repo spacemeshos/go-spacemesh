@@ -170,15 +170,13 @@ func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
 		return
 	}
 
-	// TODO: validate role proof
+	// TODO: validate claimedRole proof
 
-	// validate role
-	msgK := m.Message.K
-	proof := Signature(m.Message.RoleProof)
-	role := roleFromRoundCounter(m.Message.K)
-	if proc.oracle.Role(m.Message.K, proof) != role {
-		log.Warning("Invalid role detected. Expected: %v Actual: %v",
-			proc.oracle.Role(msgK, proof), role)
+	// validate claimedRole
+	expectedRole := proc.oracle.Role(m.Message.K, Signature(m.Message.RoleProof))
+	claimedRole := roleFromRoundCounter(m.Message.K)
+	if expectedRole != claimedRole {
+		log.Warning("Invalid claimedRole detected. Expected: %v Actual: %v", expectedRole, claimedRole)
 		return
 	}
 
