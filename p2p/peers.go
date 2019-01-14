@@ -20,7 +20,7 @@ type PeersImpl struct {
 	exit     chan struct{}
 }
 
-// NewPeersImpl creates a PeersImpl using specfied parameters and returns it
+// NewPeersImpl creates a PeersImpl using specified parameters and returns it
 func NewPeersImpl(snapshot *atomic.Value, exit chan struct{}) *PeersImpl {
 	return &PeersImpl{snapshot: snapshot, exit: exit}
 }
