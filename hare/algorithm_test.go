@@ -187,6 +187,29 @@ func TestConsensusProcess_sendMessage(t *testing.T) {
 	assertInBoxHasMessage(t, proc)
 }
 
+func TestConsensusProcess_sendMessage_Nil(t *testing.T) {
+	proc := generateConsensusProcess(t)
+	proc.createInbox(1)
+
+	proc.sendMessage(nil)
+	assertInBoxHasNoMessage(t, proc)
+}
+
+func assertInBoxHasNoMessage(t *testing.T, proc *ConsensusProcess) {
+	timer := time.NewTimer(time.Second)
+Loop:
+	for {
+		select {
+		case <-proc.inbox:
+			assert.True(t, false)
+			break Loop
+		case <-timer.C:
+			assert.True(t, true) // it should reach
+			break Loop
+		}
+	}
+}
+
 func TestConsensusProcess_procPre(t *testing.T) {
 	proc := generateConsensusProcess(t)
 	s := NewSmallEmptySet()
@@ -324,7 +347,7 @@ func TestConsensusProcess_beginRound1(t *testing.T) {
 	assert.NotEqual(t, preStatusTracker, proc.statusesTracker)
 }
 
-func TestConsensusProcess_endOfRound3(t *testing.T)  {
+func TestConsensusProcess_endOfRound3(t *testing.T) {
 	proc := generateConsensusProcess(t)
 	proc.endOfRound3()
 
@@ -351,7 +374,7 @@ func TestConsensusProcess_endOfRound3(t *testing.T)  {
 	assert.NotEmpty(t, proc.s.values)
 }
 
-func TestConsensusProcess_endOfRound3_proposalTrackerConflict(t *testing.T)  {
+func TestConsensusProcess_endOfRound3_proposalTrackerConflict(t *testing.T) {
 	proc := generateConsensusProcess(t)
 
 	s := NewSetFromValues(value1)
@@ -373,4 +396,51 @@ func TestConsensusProcess_endOfRound3_proposalTrackerConflict(t *testing.T)  {
 
 	proc.endOfRound3()
 	assert.Empty(t, proc.s.values)
+}
+
+func TestIterationFromCounter(t *testing.T) {
+	assert.Equal(t, iterationFromCounter(4), uint32(1))
+}
+
+func TestConsensusProcess_beginRound2(t *testing.T) {
+	proc := generateConsensusProcess(t)
+	proc.role = Leader
+
+	statusTracker := NewStatusTracker(1, 1)
+	s := NewSetFromValues(value1)
+	statusTracker.RecordStatus(BuildStatusMsg(generatePubKey(t), s))
+	proc.statusesTracker = statusTracker
+
+	proc.k = 1
+	proc.createInbox(1)
+	proc.beginRound2()
+
+	assertInBoxHasMessage(t, proc)
+	assert.Nil(t, proc.statusesTracker)
+}
+
+func TestConsensusProcess_onRoundEnd(t *testing.T) {
+	proc := generateConsensusProcess(t)
+
+	s := NewSetFromValues(value1)
+	commitTracker := NewCommitTracker(2, 2, s)
+	commitTracker.OnCommit(BuildCommitMsg(generatePubKey(t), s))
+	commitTracker.OnCommit(BuildCommitMsg(generatePubKey(t), s))
+	proc.commitTracker = commitTracker
+
+	pubKey := generatePubKey(t)
+	m1 := buildProposalMsg(pubKey, s, []byte{1})
+
+	proposalTracker := NewProposalTracker(lowThresh10)
+	proposalTracker.OnProposal(m1)
+
+	proc.proposalTracker = proposalTracker
+	proc.k = 1
+	proc.onRoundEnd()
+	assert.Empty(t, proc.s.values)
+
+	proc.k = 2
+	proc.onRoundEnd()
+
+	assert.NotEmpty(t, proc.s.values)
 }
