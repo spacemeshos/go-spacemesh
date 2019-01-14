@@ -8,13 +8,14 @@ import (
 )
 
 type MessageValidator struct {
-	signing     Signing
-	threshold   int
-	defaultSize int
+	signing         Signing
+	threshold       int
+	defaultSize     int
+	statusValidator func(m *pb.HareMessage) bool // used to validate status messages in SVP
 }
 
-func NewMessageValidator(signing Signing, threshold int, defaultSize int) *MessageValidator {
-	return &MessageValidator{signing, threshold, defaultSize}
+func NewMessageValidator(signing Signing, threshold int, defaultSize int, validator func(m *pb.HareMessage) bool) *MessageValidator {
+	return &MessageValidator{signing, threshold, defaultSize, validator}
 }
 
 func (validator *MessageValidator) ValidateMessage(m *pb.HareMessage, k uint32) bool {
@@ -25,7 +26,7 @@ func (validator *MessageValidator) ValidateMessage(m *pb.HareMessage, k uint32) 
 
 	// validate context
 	if !isContextuallyValid(m, k) {
-		log.Info("Validate message failed: message is not contextual valid")
+		log.Info("Validate message failed: message is not contextually valid")
 		return false
 	}
 
@@ -45,24 +46,22 @@ func (validator *MessageValidator) ValidateMessage(m *pb.HareMessage, k uint32) 
 }
 
 // verifies the message is contextually valid
-func isContextuallyValid(m *pb.HareMessage, k uint32) bool {
-	isSameIteration := iterationFromCounter(k) == iterationFromCounter(m.Message.K)
-	currentRound := k % 4
+func isContextuallyValid(m *pb.HareMessage, expectedK uint32) bool {
+	// PreRound & Notify are always contextually valid
 	switch MessageType(m.Message.Type) {
 	case PreRound:
 		return true
-	case Status:
-		return isSameIteration && currentRound == Round1
-	case Proposal:
-		return isSameIteration && (currentRound == Round2 || currentRound == Round3)
-	case Commit:
-		return isSameIteration && currentRound == Round3
 	case Notify:
 		return true
-	default:
-		log.Error("Unknown message type encountered during contextual validation: ", m.Message.Type)
-		return false
 	}
+
+	// Status, Proposal, Commit messages should match the expected k
+	if expectedK == m.Message.K {
+		return true
+	}
+
+	log.Warning("Contextual validation failed: not same iteration. Expected: %v, Actual: %v", expectedK, m.Message.K)
+	return false
 }
 
 // verifies the message is syntactically valid
@@ -178,7 +177,7 @@ func (validator *MessageValidator) validateSVP(msg *pb.HareMessage) bool {
 
 		return true
 	}
-	validators := []func(m *pb.HareMessage) bool{validateStatusType, validateSameIteration}
+	validators := []func(m *pb.HareMessage) bool{validateStatusType, validateSameIteration, validator.statusValidator}
 	if !validator.validateAggregatedMessage(msg.Message.Svp, validators) {
 		log.Warning("Proposal validation failed: failed to validate aggregated message")
 		return false
@@ -229,6 +228,7 @@ func (validator *MessageValidator) validateCertificate(cert *pb.Certificate) boo
 		commit.Message.Values = cert.Values
 	}
 
+	// Note: no need to validate notify.values=commits.values because we refill the message with notify.values
 	validateSameK := func(m *pb.HareMessage) bool { return m.Message.K == cert.AggMsgs.Messages[0].Message.K }
 	validators := []func(m *pb.HareMessage) bool{validateCommitType, validateSameK}
 	if !validator.validateAggregatedMessage(cert.AggMsgs, validators) {
@@ -269,12 +269,7 @@ func validateSVPTypeA(m *pb.HareMessage) bool {
 
 // validate SVP for type B (where ki>=0)
 func (validator *MessageValidator) validateSVPTypeB(msg *pb.HareMessage, maxRawSet [][]byte, maxKi int32) bool {
-	if !validator.validateCertificate(msg.Cert) {
-		log.Warning("Proposal validation failed: failed to validate certificate")
-		return false
-	}
-
-	// cert should have same r as max ki
+	// cert should have same k as max ki
 	if msg.Message.K != uint32(maxKi) { // cast is safe since maxKi>=0
 		log.Warning("Proposal type B validation failed: Certificate should have r=maxKi")
 		return false
