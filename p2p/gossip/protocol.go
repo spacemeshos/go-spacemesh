@@ -117,6 +117,7 @@ func (p *peer) send(msg []byte, checksum hash) error {
 	}
 	p.msgMutex.RUnlock()
 	go func() {
+		p.Info("blah blah")
 		err := p.net.SendMessage(p.pubKey.String(), ProtocolName, msg)
 		if err != nil {
 			p.Log.Info("Gossip protocol failed to send msg (calcHash %d) to peer %v, first attempt. err=%v", checksum, p.pubKey, err)
@@ -149,7 +150,7 @@ func (prot *Protocol) propagateMessage(msg []byte, h hash) {
 	prot.peersMutex.RLock()
 	for p := range prot.peers {
 		peer := prot.peers[p]
-		prot.Debug("sending message to peer %v, hash %d", peer.pubKey, h)
+		prot.Info("sending message to peer %v, hash %d", peer.pubKey, h)
 		peer.send(msg, h) // non blocking
 	}
 	prot.peersMutex.RUnlock()
@@ -171,7 +172,7 @@ func (prot *Protocol) validateMessage(msg *pb.ProtocolMessage) error {
 	return nil
 }
 
-// Broadcast is the actual broadcast procedure, loop on peers and add the message to their queues
+// Broadcast is the actual broadcast procedure - process the message internally and loop on peers and add the message to their queues
 func (prot *Protocol) Broadcast(payload []byte, nextProt string) error {
 	prot.Log.Debug("Broadcasting message from type %s", nextProt)
 	// add gossip header
@@ -208,9 +209,13 @@ func (prot *Protocol) Broadcast(payload []byte, nextProt string) error {
 		return err
 	}
 
-	// so we won't process our own messages
 	hash := calcHash(finbin)
-	prot.markMessage(hash)
+
+	// every message that we broadcast we also process
+	err = prot.processMessage(hash, msg)
+	if err != nil {
+		return err
+	}
 	prot.propagateMessage(finbin, hash)
 	return nil
 }
@@ -245,6 +250,27 @@ func (prot *Protocol) isOldMessage(h hash) bool {
 	return oldmessage
 }
 
+func (prot *Protocol) processMessage(h hash, msg *pb.ProtocolMessage) error {
+	prot.markMessage(h)
+
+	var data service.Data
+
+	if payload := msg.GetPayload(); payload != nil {
+		data = service.DataBytes{Payload: payload}
+	} else if wrap := msg.GetMsg(); wrap != nil {
+		data = &service.DataMsgWrapper{Req: wrap.Req, MsgType: wrap.Type, ReqID: wrap.ReqID, Payload: wrap.Payload}
+	}
+
+	authKey, err := crypto.NewPublicKey(msg.Metadata.AuthPubKey)
+	if err != nil {
+		prot.Log.Error("failed to decode the auth public key when handling relay message, err %v", err)
+		return err
+	}
+
+	go prot.net.ProcessProtocolMessage(node.New(authKey, ""), msg.Metadata.NextProtocol, data)
+	return nil
+}
+
 func (prot *Protocol) handleRelayMessage(msgB []byte) error {
 	hash := calcHash(msgB)
 
@@ -268,23 +294,10 @@ func (prot *Protocol) handleRelayMessage(msgB []byte) error {
 			return err
 		}
 
-		prot.markMessage(hash)
-
-		var data service.Data
-
-		if payload := msg.GetPayload(); payload != nil {
-			data = service.DataBytes{Payload: payload}
-		} else if wrap := msg.GetMsg(); wrap != nil {
-			data = &service.DataMsgWrapper{Req: wrap.Req, MsgType: wrap.Type, ReqID: wrap.ReqID, Payload: wrap.Payload}
-		}
-
-		authKey, err := crypto.NewPublicKey(msg.Metadata.AuthPubKey)
+		err = prot.processMessage(hash, msg)
 		if err != nil {
-			prot.Log.Error("failed to decode the auth public key when handling relay message, err %v", err)
 			return err
 		}
-
-		go prot.net.ProcessProtocolMessage(node.New(authKey, ""), msg.Metadata.NextProtocol, data)
 	}
 
 	prot.propagateMessage(msgB, hash)
@@ -304,7 +317,7 @@ loop:
 			}
 			// incoming messages from p2p layer for process and relay
 			go func() {
-				//  [todo some err handling
+				//  todo some err handling
 				prot.handleRelayMessage(msg.Bytes())
 			}()
 		case peer := <-peerConn:
