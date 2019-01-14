@@ -252,8 +252,8 @@ loop:
 func getPeersMock(peers []p2p.Peer) p2p.PeersImpl {
 	value := atomic.Value{}
 	value.Store(peers)
-	pm1 := p2p.PeersImpl{Snapshot: &value, Exit: nil}
-	return pm1
+	pm1 := p2p.NewPeersImpl(&value, nil)
+	return *pm1
 }
 
 func TestSyncProtocol_SyncMultipleNodes(t *testing.T) {

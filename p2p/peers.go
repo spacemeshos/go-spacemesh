@@ -16,32 +16,37 @@ type Peers interface {
 }
 
 type PeersImpl struct {
-	Snapshot *atomic.Value
-	Exit     chan struct{}
+	snapshot *atomic.Value
+	exit     chan struct{}
+}
+
+// NewPeersImpl creates a PeersImpl using specfied parameters and returns it
+func NewPeersImpl(snapshot *atomic.Value, exit chan struct{}) *PeersImpl {
+	return &PeersImpl{snapshot: snapshot, exit: exit}
 }
 
 func NewPeers(s service.Service) Peers {
 	value := atomic.Value{}
 	value.Store(make([]Peer, 0, 20))
-	pi := &PeersImpl{Snapshot: &value, Exit: make(chan struct{})}
+	pi := NewPeersImpl(&value, make(chan struct{}))
 	newPeerC, expiredPeerC := s.SubscribePeerEvents()
 	go pi.listenToPeers(newPeerC, expiredPeerC)
 	return pi
 }
 
 func (pi PeersImpl) Close() {
-	close(pi.Exit)
+	close(pi.exit)
 }
 
 func (pi PeersImpl) GetPeers() []Peer {
-	return pi.Snapshot.Load().([]Peer)
+	return pi.snapshot.Load().([]Peer)
 }
 
 func (pi *PeersImpl) listenToPeers(newPeerC chan crypto.PublicKey, expiredPeerC chan crypto.PublicKey) {
 	peerSet := make(map[Peer]bool) //set of uniq peers
 	for {
 		select {
-		case <-pi.Exit:
+		case <-pi.exit:
 			log.Debug("run stoped")
 			return
 		case peer := <-newPeerC:
@@ -53,6 +58,6 @@ func (pi *PeersImpl) listenToPeers(newPeerC chan crypto.PublicKey, expiredPeerC 
 		for k := range peerSet {
 			keys = append(keys, k)
 		}
-		pi.Snapshot.Store(keys) //swap snapshot
+		pi.snapshot.Store(keys) //swap snapshot
 	}
 }
