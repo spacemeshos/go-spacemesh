@@ -50,6 +50,7 @@ type ConsensusProcess struct {
 	notifyTracker   *NotifyTracker
 	terminating     bool
 	cfg             config.Config
+	notifySent      bool
 }
 
 func NewConsensusProcess(cfg config.Config, key crypto.PublicKey, instanceId InstanceId, s Set, oracle Rolacle, signing Signing, p2p NetworkService) *ConsensusProcess {
@@ -70,6 +71,7 @@ func NewConsensusProcess(cfg config.Config, key crypto.PublicKey, instanceId Ins
 	proc.notifyTracker = NewNotifyTracker(cfg.N)
 	proc.terminating = false
 	proc.cfg = cfg
+	proc.notifySent = false
 
 	return proc
 }
@@ -168,10 +170,15 @@ func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
 		return
 	}
 
+	// TODO: validate role proof
+
 	// validate role
-	if proc.oracle.Role(m.Message.K, Signature(m.Message.RoleProof)) != roleFromRoundCounter(m.Message.K) {
+	msgK := m.Message.K
+	proof := Signature(m.Message.RoleProof)
+	role := roleFromRoundCounter(m.Message.K)
+	if proc.oracle.Role(m.Message.K, proof) != role {
 		log.Warning("Invalid role detected. Expected: %v Actual: %v",
-			proc.oracle.Role(proc.k, Signature(m.Message.RoleProof)), roleFromRoundCounter(m.Message.K))
+			proc.oracle.Role(msgK, proof), role)
 		return
 	}
 
@@ -223,6 +230,8 @@ func (proc *ConsensusProcess) onRoundEnd() {
 
 	// reset trackers
 	switch proc.currentRound() {
+	case Round1:
+		proc.endOfRound1()
 	case Round3:
 		proc.endOfRound3()
 	}
@@ -317,18 +326,7 @@ func (proc *ConsensusProcess) processPreRoundMsg(msg *pb.HareMessage) {
 }
 
 func (proc *ConsensusProcess) processStatusMsg(msg *pb.HareMessage) {
-	s := NewSet(msg.Message.Values)
-	if msg.Message.Ki == -1 { // no certificates, validate by pre-round msgs
-		if !proc.preRoundTracker.CanProveSet(s) { // can't prove s
-			return
-		}
-	} else { // ki>=0, we should have received a certificate for that set
-		if !proc.notifyTracker.HasCertificate(msg.Message.Ki, s) { // can't prove s
-			return
-		}
-	}
-
-	// s proved, record status
+	// record status
 	proc.statusesTracker.RecordStatus(msg)
 }
 
@@ -385,7 +383,30 @@ func (proc *ConsensusProcess) currentRound() int {
 	return int(proc.k % 4)
 }
 
+func (proc *ConsensusProcess) endOfRound1() {
+	validate := func(m *pb.HareMessage) bool {
+		s := NewSet(m.Message.Values)
+		if m.Message.Ki == -1 { // no certificates, validate by pre-round msgs
+			if proc.preRoundTracker.CanProveSet(s) { // can't prove s
+				return true
+			}
+		} else { // ki>=0, we should have received a certificate for that set
+			if proc.notifyTracker.HasCertificate(m.Message.Ki, s) { // can't prove s
+				return true
+			}
+		}
+		return false
+	}
+
+	proc.statusesTracker.AnalyzeStatuses(validate)
+}
+
 func (proc *ConsensusProcess) endOfRound3() {
+	// notify already sent after committing, only one should be sent
+	if proc.notifySent {
+		return
+	}
+
 	if proc.proposalTracker.IsConflicting() {
 		return
 	}
@@ -404,11 +425,14 @@ func (proc *ConsensusProcess) endOfRound3() {
 	if s == nil {
 		return
 	}
+
+	// commit & send notification message
 	proc.s = s
 	proc.certificate = cert
 	builder := proc.initDefaultBuilder(proc.s).SetType(Notify).SetCertificate(proc.certificate).Sign(proc.signing)
 	roundMsg := builder.Build() // build notify with certificate
 	proc.sendMessage(roundMsg)
+	proc.notifySent = true
 }
 
 func (proc *ConsensusProcess) updateRole() {

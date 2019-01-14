@@ -56,7 +56,7 @@ func isContextuallyValid(m *pb.HareMessage, k uint32) bool {
 	expIter := iterationFromCounter(k)
 	actIter := iterationFromCounter(m.Message.K)
 	if expIter != actIter {
-		log.Warning("Contextual validation failed: not same iteration. Expected: %v, Actual: %v", )
+		log.Warning("Contextual validation failed: not same iteration. Expected: %v, Actual: %v", expIter, actIter)
 		return false
 	}
 
@@ -290,7 +290,6 @@ func validateSVPTypeA(m *pb.HareMessage) bool {
 
 // validate SVP for type B (where ki>=0)
 func (validator *MessageValidator) validateSVPTypeB(msg *pb.HareMessage, maxRawSet [][]byte, maxKi int32) bool {
-	// cert should have same r as max ki
 	// cert should have same k as max ki
 	if msg.Message.K != uint32(maxKi) { // cast is safe since maxKi>=0
 		log.Warning("Proposal type B validation failed: Certificate should have r=maxKi")

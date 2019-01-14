@@ -19,12 +19,16 @@ func BuildStatusMsg(pubKey crypto.PublicKey, s *Set) *pb.HareMessage {
 	return buildStatusMsg(pubKey, s, -1)
 }
 
+func validate (m *pb.HareMessage) bool{
+	return true
+}
+
 func TestStatusTracker_RecordStatus(t *testing.T) {
 	s := NewEmptySet(lowDefaultSize)
 	s.Add(value1)
 	s.Add(value2)
 
-	tracker := NewStatusTracker(lowThresh10+1, lowThresh10)
+	tracker := NewStatusTracker(lowThresh10, lowThresh10)
 	assert.False(t, tracker.IsSVPReady())
 
 	for i := 0; i < lowThresh10; i++ {
@@ -32,7 +36,7 @@ func TestStatusTracker_RecordStatus(t *testing.T) {
 		assert.False(t, tracker.IsSVPReady())
 	}
 
-	tracker.RecordStatus(BuildPreRoundMsg(generatePubKey(t), s))
+	tracker.AnalyzeStatuses(validate)
 	assert.True(t, tracker.IsSVPReady())
 }
 
@@ -56,6 +60,7 @@ func TestStatusTracker_IsSVPReady(t *testing.T) {
 	assert.False(t, tracker.IsSVPReady())
 	s := NewSetFromValues(value1)
 	tracker.RecordStatus(BuildStatusMsg(generatePubKey(t), s))
+	tracker.AnalyzeStatuses(validate)
 	assert.True(t, tracker.IsSVPReady())
 }
 
@@ -64,6 +69,7 @@ func TestStatusTracker_BuildSVP(t *testing.T) {
 	s := NewSetFromValues(value1)
 	tracker.RecordStatus(BuildStatusMsg(generatePubKey(t), s))
 	tracker.RecordStatus(BuildStatusMsg(generatePubKey(t), s))
+	tracker.AnalyzeStatuses(validate)
 	svp := tracker.BuildSVP()
 	assert.Equal(t, 2, len(svp.Messages))
 }
@@ -85,6 +91,7 @@ func TestStatusTracker_ProposalSetTypeB(t *testing.T) {
 	s2 := NewSetFromValues(value1, value2)
 	tracker.RecordStatus(buildStatusMsg(generatePubKey(t), s1, 0))
 	tracker.RecordStatus(buildStatusMsg(generatePubKey(t), s2, 2))
+	tracker.AnalyzeStatuses(validate)
 	proposedSet := tracker.ProposalSet(2)
 	assert.NotNil(t, proposedSet)
 	assert.True(t, proposedSet.Equals(s2))
