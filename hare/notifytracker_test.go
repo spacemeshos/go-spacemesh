@@ -11,6 +11,11 @@ func BuildNotifyMsg(pubKey crypto.PublicKey, s *Set) *pb.HareMessage {
 	builder := NewMessageBuilder()
 	builder.SetType(PreRound).SetInstanceId(*instanceId1).SetRoundCounter(Round4).SetKi(ki).SetValues(s)
 	builder = builder.SetPubKey(pubKey).Sign(NewMockSigning())
+	cert := &pb.Certificate{}
+	cert.Values = NewSetFromValues(value1).To2DSlice()
+	cert.AggMsgs = &pb.AggregatedMessages{}
+	cert.AggMsgs.Messages = []*pb.HareMessage{BuildCommitMsg(pubKey, s)}
+	builder.SetCertificate(cert)
 
 	return builder.Build()
 }

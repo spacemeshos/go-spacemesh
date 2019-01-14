@@ -217,7 +217,7 @@ func TestConsensusProcess_procCommit(t *testing.T) {
 func TestConsensusProcess_procNotify(t *testing.T) {
 	proc := generateConsensusProcess(t)
 	proc.advanceToNextRound()
-	s := NewSmallEmptySet()
+	s := NewSetFromValues(value1)
 	m := BuildNotifyMsg(generatePubKey(t), s)
 	proc.processNotifyMsg(m)
 	assert.Equal(t, 1, len(proc.notifyTracker.notifies))
