@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"io"
+	"math/big"
 	"time"
 )
 
@@ -18,7 +19,7 @@ type Block struct {
 	LayerIndex  LayerID
 	Data        []byte
 	Coin        bool
-	Timestamp   time.Time
+	Timestamp   int64
 	Txs         []SerializableTransaction
 	BlockVotes 	[]BlockID
 	ViewEdges   []BlockID
@@ -40,11 +41,23 @@ func NewBlock(coin bool, data []byte, ts time.Time, layerId LayerID) *Block {
 		LayerIndex: layerId,
 		BlockVotes: make([]BlockID,0,10),
 		ViewEdges:  make([]BlockID,0,10),
-		Timestamp:  ts,
+		Timestamp:  ts.UnixNano(),
 		Data:       data,
 		Coin:       coin,
 	}
 	return &b
+}
+
+func  NewSerializableTransaction(nonce uint64, origin, recepient common.Address, amount, price *big.Int, gasLimit uint64) *SerializableTransaction{
+	return &SerializableTransaction{
+		AccountNonce: nonce,
+		Price:            price.Bytes(),
+		GasLimit:        gasLimit,
+		Recipient:        &recepient,
+		Origin:            origin,//todo: remove this, should be calculated from sig.
+		Amount:        price.Bytes(),
+		Payload:        nil,
+	}
 }
 
 func (b Block) ID() BlockID {
@@ -63,6 +76,10 @@ func (b *Block) AddVote(id BlockID){
 func (b *Block) AddView(id BlockID){
 	//todo: do this in a sorted manner
 	b.ViewEdges = append(b.ViewEdges, id)
+}
+
+func (b *Block) AddTransaction(sr *SerializableTransaction){
+	b.Txs = append(b.Txs, *sr)
 }
 
 type Layer struct {
@@ -109,6 +126,23 @@ func BlockAsBytes(block Block) ([]byte, error) {
 
 func BytesAsBlock(buf io.Reader) (Block, error){
 	b := Block{}
+	_, err := xdr.Unmarshal(buf, &b)
+	if err != nil {
+		return b,err
+	}
+	return b, nil
+}
+
+func TransactionAsBytes(tx *SerializableTransaction) ([]byte, error) {
+	var w bytes.Buffer
+	if _, err := xdr.Marshal(&w, &tx); err != nil {
+		return nil, fmt.Errorf("error marshalling block ids %v", err)
+	}
+	return w.Bytes(), nil
+}
+
+func BytesAsTransaction(buf io.Reader) (SerializableTransaction, error){
+	b := SerializableTransaction{}
 	_, err := xdr.Unmarshal(buf, &b)
 	if err != nil {
 		return b,err
