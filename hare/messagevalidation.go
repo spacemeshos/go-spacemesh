@@ -251,6 +251,7 @@ func (validator *MessageValidator) validateCertificate(cert *pb.Certificate) boo
 		commit.Message.Values = cert.Values
 	}
 
+	// Note: no need to validate notify.values=commits.values because we refill the message with notify.values
 	validateSameK := func(m *pb.HareMessage) bool { return m.Message.K == cert.AggMsgs.Messages[0].Message.K }
 	validators := []func(m *pb.HareMessage) bool{validateCommitType, validateSameK}
 	if !validator.validateAggregatedMessage(cert.AggMsgs, validators) {
