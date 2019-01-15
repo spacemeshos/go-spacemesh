@@ -262,7 +262,7 @@ func (s *swarm) SendMessage(nodeID string, protocol string, payload []byte) erro
 // req.destId: receiver remote node public key/id
 // Local request to send a message to a remote node
 func (s *swarm) sendMessageImpl(peerPubKey string, protocol string, payload service.Data) error {
-	s.lNode.Info("Sending message to %v", peerPubKey)
+	//s.lNode.Info("Sending message to %v", peerPubKey)
 	var err error
 	var peer node.Node
 	var conn net.Connection
