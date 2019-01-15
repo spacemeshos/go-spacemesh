@@ -178,8 +178,33 @@ func (proc *ConsensusProcess) onEarlyMessage(m *pb.HareMessage) {
 	proc.pending[pub.String()] = m
 }
 
+func (proc *ConsensusProcess) validateRole(m *pb.HareMessage) bool {
+	if m.Message == nil {
+		log.Warning("Role validation failed: message is nil")
+		return false
+	}
+
+	// TODO: validate role proof
+
+	// validate claimedRole
+	expectedRole := proc.oracle.Role(m.Message.K, Signature(m.Message.RoleProof))
+	claimedRole := roleFromRoundCounter(m.Message.K)
+	if expectedRole != claimedRole {
+		log.Warning("Invalid claimedRole detected. Expected: %v Actual: %v", expectedRole, claimedRole)
+		return false
+	}
+
+	return true
+}
+
 func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
 	// Note: instanceId is already verified by the broker
+
+	// first validate role
+	if !proc.validateRole(m) {
+		log.Warning("Role validation failed")
+		return
+	}
 
 	// validate message for this or next round
 	if !proc.validator.ValidateMessage(m, proc.k) {
@@ -190,16 +215,6 @@ func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
 			log.Info("Early message detected. Keeping message")
 			proc.onEarlyMessage(m)
 		}
-	}
-
-	// TODO: validate claimedRole proof
-
-	// validate claimedRole
-	expectedRole := proc.oracle.Role(m.Message.K, Signature(m.Message.RoleProof))
-	claimedRole := roleFromRoundCounter(m.Message.K)
-	if expectedRole != claimedRole {
-		log.Warning("Invalid claimedRole detected. Expected: %v Actual: %v", expectedRole, claimedRole)
-		return
 	}
 
 	// continue process msg by type
