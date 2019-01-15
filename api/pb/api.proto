@@ -18,6 +18,10 @@ message TransferFunds {
     uint64 Amount =4;
 }
 
+message SignedTransaction {
+    bytes txData = 1;
+}
+
 service SpaceMeshService {
     rpc Echo(SimpleMessage) returns (SimpleMessage) {
         option (google.api.http) = {
@@ -34,6 +38,12 @@ service SpaceMeshService {
     rpc GetBalance(AccountId) returns (SimpleMessage) {
         option (google.api.http) = {
           post: "/v1/balance"
+          body: "*"
+        };
+    }
+    rpc SubmitTransaction(SignedTransaction) returns (SimpleMessage) {
+        option (google.api.http) = {
+          post: "/v1/submittransaction"
           body: "*"
         };
     }

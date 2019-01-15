@@ -21,6 +21,7 @@ type SpaceMeshGrpcService struct {
 	Server *grpc.Server
 	Port   uint
 	StateApi StateAPI
+	Network NetworkAPI
 }
 
 // Echo returns the response for an echo api request
@@ -54,11 +55,16 @@ func (s SpaceMeshGrpcService) GetNonce(ctx context.Context, in *pb.AccountId) (*
 	return &msg, nil
 }
 
-// Echo returns the response for an echo api request
-/*func (s SpaceMeshGrpcService) TransferFunds(ctx context.Context, funds pb.TransferFunds) (error) {
-	//todo: maybe receiver
-	return s.StateApi.TransferFunds(funds.Nonce, funds.Sender, funds.Receiver, funds.Amount) //todo: check for serializing bigInt
-}*/
+func (s SpaceMeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.SignedTransaction) (*pb.SimpleMessage, error) {
+	const txGossipChannel = "txs" //todo: refactor this to actual channel name
+	//todo: transactions should be syntactically validated
+
+	//todo" should this be in a go routine?
+	s.Network.Broadcast(txGossipChannel, in.TxData)
+
+	return &pb.SimpleMessage{Value:"ok"}, nil
+}
+
 
 // StopService stops the grpc service.
 func (s SpaceMeshGrpcService) StopService() {
@@ -69,10 +75,10 @@ func (s SpaceMeshGrpcService) StopService() {
 }
 
 // NewGrpcService create a new grpc service using config data.
-func NewGrpcService(state StateAPI) *SpaceMeshGrpcService {
+func NewGrpcService(net NetworkAPI ,state StateAPI) *SpaceMeshGrpcService {
 	port := config.ConfigValues.GrpcServerPort
 	server := grpc.NewServer()
-	return &SpaceMeshGrpcService{Server: server, Port: uint(port), StateApi:state}
+	return &SpaceMeshGrpcService{Server: server, Port: uint(port), StateApi:state, Network:net}
 }
 
 // StartService starts the grpc service.

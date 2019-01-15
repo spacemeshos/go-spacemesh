@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"github.com/golang/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"io/ioutil"
 	"math/big"
@@ -28,6 +29,13 @@ type NodeAPIMock struct {
 	nonces map[common.Address]uint64
 }
 
+type NetworkMock struct {
+	broadcasted *[]byte
+}
+
+func (s NetworkMock) Broadcast(chanel string, payload []byte){
+	s.broadcasted = &payload
+}
 
 func NewNodeAPIMock() NodeAPIMock{
 	return NodeAPIMock{
@@ -58,7 +66,8 @@ func TestServersConfig(t *testing.T) {
 	config.ConfigValues.JSONServerPort = port1
 	config.ConfigValues.GrpcServerPort = port2
 	ap := NodeAPIMock{}
-	grpcService := NewGrpcService(ap)
+	net := NetworkMock{}
+	grpcService := NewGrpcService(&net, ap)
 	jsonService := NewJSONHTTPServer()
 
 	assert.Equal(t, grpcService.Port, uint(config.ConfigValues.GrpcServerPort), "Expected same port")
@@ -76,7 +85,9 @@ func TestGrpcApi(t *testing.T) {
 
 	const message = "Hello World"
 	ap := NodeAPIMock{}
-	grpcService := NewGrpcService(ap)
+	net := NetworkMock{}
+
+	grpcService := NewGrpcService(&net, ap)
 	grpcStatus := make(chan bool, 2)
 
 	// start a server
@@ -116,7 +127,8 @@ func TestJsonApi(t *testing.T) {
 	config.ConfigValues.JSONServerPort = port1
 	config.ConfigValues.GrpcServerPort = port2
 	ap := NodeAPIMock{}
-	grpcService := NewGrpcService(ap)
+	net := NetworkMock{}
+	grpcService := NewGrpcService(net, ap)
 	jsonService := NewJSONHTTPServer()
 
 	jsonStatus := make(chan bool, 2)
@@ -189,9 +201,10 @@ func TestJsonWalletApi(t *testing.T) {
 		config.ConfigValues.GrpcServerPort = port2
 	}
 	ap := NewNodeAPIMock()
+	net := NetworkMock{ broadcasted:&[]byte{0x00}}
 	ap.nonces[addr] = 10
 	ap.balances[addr] = big.NewInt(100)
-	grpcService := NewGrpcService(ap)
+	grpcService := NewGrpcService(&net, ap)
 	jsonService := NewJSONHTTPServer()
 
 	jsonStatus := make(chan bool, 2)
@@ -260,6 +273,32 @@ func TestJsonWalletApi(t *testing.T) {
 	assert.Equal(t, value, contentType)
 
 
+	txParams := pb.SignedTransaction{TxData:[]byte{0x00, 0x01,0x02,0x03}}
+	payload, err = m.MarshalToString(&txParams)
+	url = fmt.Sprintf("http://127.0.0.1:%d/v1/submittransaction", config.ConfigValues.JSONServerPort)
+	resp, err = http.Post(url, contentType, strings.NewReader(payload)) //todo: we currently accept all kinds of payloads
+	assert.NoError(t, err, "failed to http post to api endpoint")
+
+	defer resp.Body.Close()
+	buf, err = ioutil.ReadAll(resp.Body)
+	assert.NoError(t, err, "failed to read response body")
+
+	if got, want := resp.StatusCode, http.StatusOK; got != want {
+		t.Errorf("resp.StatusCode = %d; want %d", got, want)
+	}
+
+	err = jsonpb.UnmarshalString(string(buf), &msg)
+	assert.NoError(t, err)
+
+	gotV, wantV = msg.Value, "ok"
+	assert.Equal(t, wantV, gotV)
+
+	_, err = proto.Marshal(&txParams)
+	assert.NoError(t, err)
+
+	value = resp.Header.Get("Content-Type")
+	assert.Equal(t, value, contentType)
+
 	// stop the services
 	jsonService.StopService()
 	<-jsonStatus
@@ -276,8 +315,10 @@ func TestJsonWalletApi_Errors(t *testing.T) {
 	config.ConfigValues.JSONServerPort = port1
 	config.ConfigValues.GrpcServerPort = port2
 	ap := NewNodeAPIMock()
+	net := NetworkMock{}
 
-	grpcService := NewGrpcService(ap)
+
+	grpcService := NewGrpcService(&net, ap)
 	jsonService := NewJSONHTTPServer()
 
 	jsonStatus := make(chan bool, 2)

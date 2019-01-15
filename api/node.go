@@ -12,3 +12,7 @@ type StateAPI interface {
 
 	Exist(address common.Address) bool
 }
+
+type NetworkAPI interface {
+	Broadcast(channel string, data []byte)
+}
