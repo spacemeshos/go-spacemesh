@@ -22,13 +22,13 @@ type BlockListener struct {
 	*mesh.Mesh
 	BlockValidator
 	log.Log
-	bufferSize   int
-	semaphore    chan struct{}
-	unknownQueue chan mesh.BlockID //todo consider benefits of changing to stack
+	bufferSize           int
+	semaphore            chan struct{}
+	unknownQueue         chan mesh.BlockID //todo consider benefits of changing to stack
 	receivedGossipBlocks chan service.Message
-	startLock    uint32
-	timeout      time.Duration
-	exit         chan struct {}
+	startLock            uint32
+	timeout              time.Duration
+	exit                 chan struct{}
 }
 
 func (bl *BlockListener) Close() {
@@ -48,30 +48,29 @@ func (bl *BlockListener) OnNewBlock(b *mesh.Block) {
 
 func NewBlockListener(net server.Service, bv BlockValidator, layers *mesh.Mesh, timeout time.Duration, concurrency int, logger log.Log) *BlockListener {
 	bl := BlockListener{
-		BlockValidator: bv,
-		Mesh:           layers,
-		Peers:          p2p.NewPeers(net),
-		MessageServer:  server.NewMsgServer(net, BlockProtocol, timeout, logger),
-		Log:            logger,
-		semaphore:      make(chan struct{}, concurrency),
-		unknownQueue:   make(chan mesh.BlockID, 200), //todo tune buffer size + get buffer from config
-		exit:           make(chan struct{}),
+		BlockValidator:       bv,
+		Mesh:                 layers,
+		Peers:                p2p.NewPeers(net, logger),
+		MessageServer:        server.NewMsgServer(net, BlockProtocol, timeout, logger),
+		Log:                  logger,
+		semaphore:            make(chan struct{}, concurrency),
+		unknownQueue:         make(chan mesh.BlockID, 200), //todo tune buffer size + get buffer from config
+		exit:                 make(chan struct{}),
 		receivedGossipBlocks: net.RegisterProtocol(NewBlock),
 	}
-	bl.RegisterMsgHandler(BLOCK , newBlockRequestHandler(layers, logger))
-
+	bl.RegisterMsgHandler(BLOCK, newBlockRequestHandler(layers, logger))
 
 	return &bl
 }
 
-func (bl *BlockListener) ListenToGossipBlocks(){
-	for{
+func (bl *BlockListener) ListenToGossipBlocks() {
+	for {
 		select {
-			case data := <- bl.receivedGossipBlocks:
-				_, err := mesh.BytesAsBlock(bytes.NewReader(data.Bytes()))
-				if err != nil {
-					log.Error("received invalid block from sender %v", data.Sender())
-				}
+		case data := <-bl.receivedGossipBlocks:
+			_, err := mesh.BytesAsBlock(bytes.NewReader(data.Bytes()))
+			if err != nil {
+				log.Error("received invalid block from sender %v", data.Sender())
+			}
 		}
 	}
 }
