@@ -148,6 +148,7 @@ func (s *Syncer) Synchronise() {
 						if bCh, err := sendBlockRequest(s.MessageServer, p, mesh.BlockID(id), s.Log); err == nil {
 							b := <-bCh
 							if b != nil && s.ValidateBlock(b) { //some validation testing
+								s.Debug("received block", b)
 								output <- b
 								break
 							}
@@ -169,10 +170,10 @@ func (s *Syncer) Synchronise() {
 
 		s.Debug("add layer ", i)
 
-		s.AddLayer(mesh.NewExistingLayer(mesh.LayerID(i), blocks))
+		s.AddLayer(mesh.NewExistingLayer(mesh.LayerID(i+1), blocks))
 	}
 
-	s.Debug("synchronise done, local layer index is ", s.LocalLayer())
+	s.Debug("synchronise done, local layer index is ", s.LocalLayer(), "most recent is ", s.LatestLayer())
 }
 
 type peerHashPair struct {
@@ -273,20 +274,27 @@ func (s *Syncer) getLayerHashes(index mesh.LayerID) (map[string]p2p.Peer, error)
 	peers := s.GetPeers()
 	// request hash from all
 	ch := make(chan peerHashPair, len(peers))
-	defer close(ch)
+	resCounter := len(peers)
 	for _, p := range peers {
-		_, err := s.sendLayerHashRequest(p, index, ch)
+		c, err := s.sendLayerHashRequest(p, index)
 		if err != nil {
 			s.Error("could not get layer ", index, " hash from peer ", p)
 			continue
 		}
+		//merge channels and close when done
+		go func() {
+			v := <-c
+			ch <- v
+			if resCounter == 0 {
+				defer close(ch)
+			}
+		}()
 	}
 
 	timeout := time.After(s.requestTimeout)
-	resCounter := len(peers)
 	for resCounter > 0 {
-		select {
 		// Got a timeout! fail with a timeout error
+		select {
 		case pair := <-ch:
 			m[string(pair.hash)] = pair.peer
 			resCounter--
@@ -301,9 +309,9 @@ func (s *Syncer) getLayerHashes(index mesh.LayerID) (map[string]p2p.Peer, error)
 	return m, nil
 }
 
-func (s *Syncer) sendLayerHashRequest(peer p2p.Peer, layer mesh.LayerID, ch chan peerHashPair) (chan peerHashPair, error) {
+func (s *Syncer) sendLayerHashRequest(peer p2p.Peer, layer mesh.LayerID) (chan peerHashPair, error) {
 	s.Debug("send Layer hash request Peer: ", peer, " layer: ", layer)
-
+	ch := make(chan peerHashPair)
 	data := &pb.LayerHashReq{Layer: uint32(layer)}
 	payload, err := proto.Marshal(data)
 	if err != nil {

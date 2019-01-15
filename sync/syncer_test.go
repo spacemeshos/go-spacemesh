@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-var conf = Configuration{2, 1 * time.Second, 4, 300, 30 * time.Millisecond}
+var conf = Configuration{2, 1 * time.Second, 1, 300, 10 * time.Millisecond}
 
 func SyncMockFactory(number int, conf Configuration, name string) (syncs []*Syncer, p2ps []*service.Node) {
 	nodes := make([]*Syncer, 0, number)
@@ -24,7 +24,8 @@ func SyncMockFactory(number int, conf Configuration, name string) (syncs []*Sync
 	sim := service.NewSimulator()
 	for i := 0; i < number; i++ {
 		net := sim.NewNode()
-		l := log.New("sync", "", "")
+		name := fmt.Sprintf(name+"_%d", i)
+		l := log.New(name, "", "")
 		sync := NewSync(net, getMesh(name+"_"+time.Now().String()), BlockValidatorMock{}, conf, l)
 		nodes = append(nodes, sync)
 		p2ps = append(p2ps, net)
@@ -36,7 +37,6 @@ type BlockValidatorMock struct {
 }
 
 func (BlockValidatorMock) ValidateBlock(block *mesh.Block) bool {
-	fmt.Println("validate block ", block.ID(), " ", block)
 	return true
 }
 
@@ -112,8 +112,7 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 	lid := mesh.LayerID(1)
 
 	syncObj1.AddLayer(mesh.NewExistingLayer(lid, make([]*mesh.Block, 0, 10)))
-	ch := make(chan peerHashPair)
-	_, err := syncObj2.sendLayerHashRequest(nodes[0].Node.PublicKey(), lid, ch)
+	ch, err := syncObj2.sendLayerHashRequest(nodes[0].Node.PublicKey(), lid)
 	hash := <-ch
 	assert.NoError(t, err, "Should not return error")
 	assert.Equal(t, "some hash representing the layer", string(hash.hash), "wrong block")
@@ -168,8 +167,7 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	syncObj1.AddLayer(mesh.NewExistingLayer(1, []*mesh.Block{block2}))
 	syncObj1.AddLayer(mesh.NewExistingLayer(2, []*mesh.Block{block3}))
 
-	ch := make(chan peerHashPair)
-	_, err := syncObj2.sendLayerHashRequest(n1.PublicKey(), 0, ch)
+	ch, err := syncObj2.sendLayerHashRequest(n1.PublicKey(), 0)
 	hash := <-ch
 	assert.NoError(t, err, "Should not return error")
 	assert.Equal(t, "some hash representing the layer", string(hash.hash), "wrong block")
@@ -179,7 +177,7 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	msg2 := <-ch2
 	assert.Equal(t, msg2.ID(), block1.ID(), "wrong block")
 
-	_, err = syncObj2.sendLayerHashRequest(n1.PublicKey(), 1, ch)
+	ch, err = syncObj2.sendLayerHashRequest(n1.PublicKey(), 1)
 	assert.NoError(t, err, "Should not return error")
 	assert.Equal(t, "some hash representing the layer", string(hash.hash), "wrong block")
 
@@ -188,7 +186,7 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	msg2 = <-ch2
 	assert.Equal(t, msg2.ID(), block2.ID(), "wrong block")
 
-	_, err = syncObj2.sendLayerHashRequest(n1.PublicKey(), 2, ch)
+	ch, err = syncObj2.sendLayerHashRequest(n1.PublicKey(), 2)
 	assert.NoError(t, err, "Should not return error")
 	assert.Equal(t, "some hash representing the layer", string(hash.hash), "wrong block")
 
@@ -220,15 +218,16 @@ func TestSyncProtocol_SyncTwoNodes(t *testing.T) {
 	block7 := mesh.NewExistingBlock(mesh.BlockID(777), 3, nil)
 	block8 := mesh.NewExistingBlock(mesh.BlockID(888), 3, nil)
 	block9 := mesh.NewExistingBlock(mesh.BlockID(999), 4, nil)
-	block10 := mesh.NewExistingBlock(mesh.BlockID(101), 4, nil)
+	block10 := mesh.NewExistingBlock(mesh.BlockID(101), 5, nil)
 	syncObj1.AddLayer(mesh.NewExistingLayer(0, []*mesh.Block{block1, block2}))
 	syncObj1.AddLayer(mesh.NewExistingLayer(1, []*mesh.Block{block3, block4}))
 	syncObj1.AddLayer(mesh.NewExistingLayer(2, []*mesh.Block{block5, block6}))
 	syncObj1.AddLayer(mesh.NewExistingLayer(3, []*mesh.Block{block7, block8}))
 	syncObj1.AddLayer(mesh.NewExistingLayer(4, []*mesh.Block{block9, block10}))
+	syncObj1.AddLayer(mesh.NewExistingLayer(5, []*mesh.Block{block10}))
 
 	timeout := time.After(10 * time.Second)
-	syncObj2.SetLatestLayer(5)
+	syncObj2.SetLatestLayer(4)
 	syncObj1.Start()
 	syncObj2.Start()
 
@@ -241,7 +240,7 @@ loop:
 			t.Error("timed out ")
 			return
 		default:
-			if syncObj2.LocalLayer() == 3 {
+			if syncObj2.LocalLayer() == 2 {
 				t.Log("done!")
 				break loop
 			}
@@ -258,7 +257,7 @@ func getPeersMock(peers []p2p.Peer) p2p.PeersImpl {
 
 func TestSyncProtocol_SyncMultipleNodes(t *testing.T) {
 
-	syncs, nodes := SyncMockFactory(4, conf, "TestSyncProtocol_SyncMultipleNodes_")
+	syncs, nodes := SyncMockFactory(4, conf, "SyncMultipleNodes_")
 	syncObj1 := syncs[0]
 	defer syncObj1.Close()
 	syncObj2 := syncs[1]
@@ -312,6 +311,7 @@ loop:
 		default:
 			if syncObj2.LocalLayer() == 3 && syncObj3.LocalLayer() == 3 {
 				t.Log("done!")
+				fmt.Println(syncObj2.LocalLayer(), " ", syncObj3.LocalLayer())
 				break loop
 			}
 		}
@@ -419,7 +419,7 @@ func Test_Multiple_SyncIntegrationSuite(t *testing.T) {
 func (sis *syncIntegrationMultipleNodes) TestSyncProtocol_MultipleNodes() {
 	t := sis.T()
 
-	block1 := mesh.NewExistingBlock(mesh.BlockID(111), 1, nil)
+	block1 := mesh.NewExistingBlock(mesh.BlockID(111), 0, nil)
 	block2 := mesh.NewExistingBlock(mesh.BlockID(222), 1, nil)
 	block3 := mesh.NewExistingBlock(mesh.BlockID(333), 2, nil)
 	block4 := mesh.NewExistingBlock(mesh.BlockID(444), 2, nil)
@@ -443,13 +443,15 @@ func (sis *syncIntegrationMultipleNodes) TestSyncProtocol_MultipleNodes() {
 	syncObj6 := sis.syncers[5]
 	defer syncObj6.Close()
 
-	syncObj1.AddLayer(mesh.NewExistingLayer(1, []*mesh.Block{block1, block2}))
+	syncObj1.AddLayer(mesh.NewExistingLayer(0, []*mesh.Block{block1}))
+	syncObj1.AddLayer(mesh.NewExistingLayer(1, []*mesh.Block{block2}))
 	syncObj1.AddLayer(mesh.NewExistingLayer(2, []*mesh.Block{block3, block4}))
 	syncObj1.AddLayer(mesh.NewExistingLayer(3, []*mesh.Block{block5, block6}))
 	syncObj1.AddLayer(mesh.NewExistingLayer(4, []*mesh.Block{block7, block8}))
 	syncObj1.AddLayer(mesh.NewExistingLayer(5, []*mesh.Block{block9, block10}))
 
-	syncObj3.AddLayer(mesh.NewExistingLayer(1, []*mesh.Block{block1, block2}))
+	syncObj3.AddLayer(mesh.NewExistingLayer(0, []*mesh.Block{block1}))
+	syncObj3.AddLayer(mesh.NewExistingLayer(1, []*mesh.Block{block2}))
 	syncObj3.AddLayer(mesh.NewExistingLayer(2, []*mesh.Block{block3, block4}))
 	syncObj3.AddLayer(mesh.NewExistingLayer(3, []*mesh.Block{block5, block6}))
 	syncObj3.AddLayer(mesh.NewExistingLayer(4, []*mesh.Block{block7, block8}))
