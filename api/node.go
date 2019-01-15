@@ -14,5 +14,5 @@ type StateAPI interface {
 }
 
 type NetworkAPI interface {
-	Broadcast(channel string, data []byte)
+	Broadcast(channel string, data []byte) error
 }

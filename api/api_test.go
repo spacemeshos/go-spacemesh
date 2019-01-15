@@ -30,11 +30,12 @@ type NodeAPIMock struct {
 }
 
 type NetworkMock struct {
-	broadcasted *[]byte
+	broadcasted []byte
 }
 
-func (s NetworkMock) Broadcast(chanel string, payload []byte){
-	s.broadcasted = &payload
+func (s *NetworkMock) Broadcast(chanel string, payload []byte) error{
+	s.broadcasted = payload
+	return nil
 }
 
 func NewNodeAPIMock() NodeAPIMock{
@@ -128,7 +129,7 @@ func TestJsonApi(t *testing.T) {
 	config.ConfigValues.GrpcServerPort = port2
 	ap := NodeAPIMock{}
 	net := NetworkMock{}
-	grpcService := NewGrpcService(net, ap)
+	grpcService := NewGrpcService(&net, ap)
 	jsonService := NewJSONHTTPServer()
 
 	jsonStatus := make(chan bool, 2)
@@ -201,7 +202,7 @@ func TestJsonWalletApi(t *testing.T) {
 		config.ConfigValues.GrpcServerPort = port2
 	}
 	ap := NewNodeAPIMock()
-	net := NetworkMock{ broadcasted:&[]byte{0x00}}
+	net := NetworkMock{ broadcasted:[]byte{0x00}}
 	ap.nonces[addr] = 10
 	ap.balances[addr] = big.NewInt(100)
 	grpcService := NewGrpcService(&net, ap)
@@ -295,6 +296,8 @@ func TestJsonWalletApi(t *testing.T) {
 
 	_, err = proto.Marshal(&txParams)
 	assert.NoError(t, err)
+
+	assert.Equal(t, txParams.TxData, net.broadcasted)
 
 	value = resp.Header.Get("Content-Type")
 	assert.Equal(t, value, contentType)
