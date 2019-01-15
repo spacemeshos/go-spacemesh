@@ -58,9 +58,18 @@ func (s JSONHTTPServer) startInternal(status chan bool) {
 
 	// register the http server on the local grpc server
 	portStr := strconv.Itoa(int(config.ConfigValues.GrpcServerPort))
-	echoEndpoint := flag.String("api_endpoint", "localhost:"+portStr, "endpoint of api grpc service")
 
-	if err := gw.RegisterSpaceMeshServiceHandlerFromEndpoint(ctx, mux, *echoEndpoint, opts); err != nil {
+	const endpoint = "api_endpoint"
+	var echoEndpoint string
+
+	fl := flag.Lookup(endpoint)
+	if fl != nil {
+		flag.Set(endpoint,"localhost:"+portStr)
+		echoEndpoint = fl.Value.String()
+	} else {
+		echoEndpoint = *flag.String(endpoint, "localhost:"+portStr, "endpoint of api grpc service")
+	}
+	if err := gw.RegisterSpaceMeshServiceHandlerFromEndpoint(ctx, mux, echoEndpoint, opts); err != nil {
 		log.Error("failed to register http endpoint with grpc", err)
 	}
 
