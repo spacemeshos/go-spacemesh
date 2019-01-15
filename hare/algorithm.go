@@ -218,9 +218,6 @@ func (proc *ConsensusProcess) sendMessage(msg *pb.HareMessage) {
 		log.Error("Could not broadcast round message ", err.Error())
 		return
 	}
-
-	// msg successfully sent to network, send it to yourself but don't block
-	go func() { proc.inbox <- msg }()
 }
 
 func (proc *ConsensusProcess) onRoundEnd() {
