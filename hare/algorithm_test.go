@@ -252,3 +252,13 @@ func TestConsensusProcess_currentRound(t *testing.T) {
 	proc.advanceToNextRound()
 	assert.Equal(t, Round4, proc.currentRound())
 }
+
+func TestConsensusProcess_onEarlyMessage(t *testing.T) {
+	proc := generateConsensusProcess(t)
+	m := BuildPreRoundMsg(generatePubKey(t), NewSmallEmptySet())
+	proc.advanceToNextRound()
+	proc.onEarlyMessage(m)
+	assert.Equal(t, 1, len(proc.pending))
+	proc.onEarlyMessage(m)
+	assert.Equal(t, 1, len(proc.pending))
+}
