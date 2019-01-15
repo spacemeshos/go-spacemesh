@@ -230,17 +230,17 @@ func (s *Syncer) getIdsForHash(m map[string]p2p.Peer, index mesh.LayerID) (chan 
 		c, err := s.sendLayerIDsRequest(v, index)
 		if err != nil {
 			s.Error("could not fetch layer ", index, " block ids from peer ", v) // todo recover from this
-			return nil, err
-		} else {
-			reqCounter++
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				v := <-c
-				ch <- v
-			}()
+			continue
 		}
+		reqCounter++
+		wg.Add(1)
+		go func() {
+			v := <-c
+			ch <- v
+			wg.Done()
+		}()
 	}
+
 	go func() { wg.Wait(); close(ch) }()
 	idSet := make(map[mesh.BlockID]bool, s.layerSize) //change uint32 to BlockId
 	timeout := time.After(s.requestTimeout)
@@ -297,9 +297,9 @@ func (s *Syncer) getLayerHashes(index mesh.LayerID) (map[string]p2p.Peer, error)
 		//merge channels and close when done
 		wg.Add(1)
 		go func() {
-			defer wg.Done()
 			v := <-c
 			ch <- v
+			wg.Done()
 		}()
 	}
 	go func() { wg.Wait(); close(ch) }()
