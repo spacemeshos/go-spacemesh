@@ -267,6 +267,7 @@ func TestHare_onTick(t *testing.T) {
 
 	h := New(cfg, n1, n1.PublicKey(), signing, om, oracle, layerTicker)
 	h.networkDelta = 0
+	h.bufferSize = 1
 
 	createdChan := make(chan struct{})
 
@@ -291,7 +292,7 @@ func TestHare_onTick(t *testing.T) {
 
 	//collect output one more time
 	wg.Wait()
-
+	time.Sleep(100 * time.Millisecond)
 	res2, err := h.GetResult(mesh.LayerID(0))
 	require.NoError(t, err)
 

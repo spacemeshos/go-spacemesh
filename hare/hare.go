@@ -134,7 +134,7 @@ func (h *Hare) collectOutput(output TerminationOutput) error {
 	h.mu.Lock()
 	if len(h.outputs) == h.bufferSize {
 		for k := range h.outputs {
-			if int(k) < int(h.lastLayer)-h.bufferSize {
+			if h.isTooLate(k) {
 				delete(h.outputs, k)
 			}
 		}
@@ -202,12 +202,13 @@ func (h *Hare) GetResult(id mesh.LayerID) ([]mesh.BlockID, error) {
 }
 
 func (h *Hare) outputCollectionLoop() {
-	// todo: think about adding some concurrency here.
 	for {
 		select {
 		case out := <-h.outputChan:
 			err := h.collectOutput(out)
-			log.Warning("Err collecting output from hare err: %v", err)
+			if err != nil {
+				log.Warning("Err collecting output from hare err: %v", err)
+			}
 		case <-h.CloseChannel():
 			return
 		}
