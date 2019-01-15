@@ -196,9 +196,9 @@ func sendBlockRequest(msgServ *server.MessageServer, peer p2p.Peer, id mesh.Bloc
 			logger.Error("could not unmarshal block data")
 			return
 		}
-		mp := make([]mesh.BlockID,0,len(data.Block.VisibleMesh))
+		mp := make([]mesh.BlockID, 0, len(data.Block.VisibleMesh))
 		for _, b := range data.Block.VisibleMesh {
-			mp = append(mp,mesh.BlockID(b))
+			mp = append(mp, mesh.BlockID(b))
 		}
 
 		block := mesh.NewExistingBlock(mesh.BlockID(data.Block.GetId()), mesh.LayerID(data.Block.GetLayer()), nil)
@@ -272,7 +272,7 @@ func (s *Syncer) getLayerHashes(index mesh.LayerID) (map[string]p2p.Peer, error)
 	m := make(map[string]p2p.Peer, 20) //todo need to get this from p2p service
 	peers := s.GetPeers()
 	// request hash from all
-	ch := make(chan peerHashPair)
+	ch := make(chan peerHashPair, len(peers))
 	defer close(ch)
 	for _, p := range peers {
 		_, err := s.sendLayerHashRequest(p, index, ch)
@@ -363,7 +363,7 @@ func newBlockRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg []byte) 
 		}
 
 		vm := make([]uint32, 0, len(block.ViewEdges))
-		for _,b := range block.ViewEdges {
+		for _, b := range block.ViewEdges {
 			vm = append(vm, uint32(b))
 		}
 

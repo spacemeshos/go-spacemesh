@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-var conf = Configuration{2, 15 * time.Second, 3, 300, 7000 * time.Millisecond}
+var conf = Configuration{2, 1 * time.Second, 4, 300, 30 * time.Millisecond}
 
 func SyncMockFactory(number int, conf Configuration, name string) (syncs []*Syncer, p2ps []*service.Node) {
 	nodes := make([]*Syncer, 0, number)
@@ -36,14 +36,14 @@ type BlockValidatorMock struct {
 }
 
 func (BlockValidatorMock) ValidateBlock(block *mesh.Block) bool {
-	fmt.Println("validate block ", block .ID(), " ", block)
+	fmt.Println("validate block ", block.ID(), " ", block)
 	return true
 }
 
-type MeshValidatorMock struct {}
+type MeshValidatorMock struct{}
 
-func (m *MeshValidatorMock)	HandleIncomingLayer(layer *mesh.Layer) {}
-func (m *MeshValidatorMock) HandleLateBlock(bl *mesh.Block) {}
+func (m *MeshValidatorMock) HandleIncomingLayer(layer *mesh.Layer) {}
+func (m *MeshValidatorMock) HandleLateBlock(bl *mesh.Block)        {}
 
 func getMesh(id string) *mesh.Mesh {
 	time := time.Now()
@@ -51,7 +51,7 @@ func getMesh(id string) *mesh.Mesh {
 	ldb := database.NewLevelDbStore("layers_test_"+id, nil, nil)
 	cv := database.NewLevelDbStore("contextually_valid_test_"+id, nil, nil)
 	odb := database.NewLevelDbStore("orphans_test_"+id+"_"+time.String(), nil, nil)
-	layers := mesh.NewMesh(ldb, bdb, cv, odb, &MeshValidatorMock{},log.New(id, "", ""))
+	layers := mesh.NewMesh(ldb, bdb, cv, odb, &MeshValidatorMock{}, log.New(id, "", ""))
 	return layers
 }
 
