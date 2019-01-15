@@ -209,7 +209,8 @@ func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
 	// validate message for this or next round
 	if !proc.validator.ValidateMessage(m, proc.k) {
 		if !proc.validator.ValidateMessage(m, proc.k+1) {
-			log.Warning("Message is not syntactically valid for either round")
+			// TODO: should return error from message validation to indicate what failed, should retry only for contextual failure
+			log.Warning("Message is not valid for either round")
 			return
 		} else { // a valid early message, keep it for later
 			log.Info("Early message detected. Keeping message")
