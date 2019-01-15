@@ -105,7 +105,7 @@ func NewSync(srv server.Service, layers *mesh.Mesh, bv BlockValidator, conf Conf
 		Configuration:  conf,
 		Log:            logger,
 		Mesh:           layers,
-		Peers:          p2p.NewPeers(srv, logger),
+		Peers:          p2p.NewPeers(srv),
 		MessageServer:  server.NewMsgServer(srv, syncProtocol, conf.requestTimeout-time.Millisecond*30, logger),
 		SyncLock:       0,
 		startLock:      0,

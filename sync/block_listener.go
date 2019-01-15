@@ -50,7 +50,7 @@ func NewBlockListener(net server.Service, bv BlockValidator, layers *mesh.Mesh, 
 	bl := BlockListener{
 		BlockValidator:       bv,
 		Mesh:                 layers,
-		Peers:                p2p.NewPeers(net, logger),
+		Peers:                p2p.NewPeers(net),
 		MessageServer:        server.NewMsgServer(net, BlockProtocol, timeout, logger),
 		Log:                  logger,
 		semaphore:            make(chan struct{}, concurrency),
