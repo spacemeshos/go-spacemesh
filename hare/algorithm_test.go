@@ -480,6 +480,7 @@ func TestConsensusProcess_beginRound2(t *testing.T) {
 	statusTracker := NewStatusTracker(1, 1)
 	s := NewSetFromValues(value1)
 	statusTracker.RecordStatus(BuildStatusMsg(generatePubKey(t), s))
+	statusTracker.analyzed = true
 	proc.statusesTracker = statusTracker
 
 	proc.k = 1
