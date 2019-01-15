@@ -171,6 +171,7 @@ func (proc *ConsensusProcess) onEarlyMessage(m *pb.HareMessage) {
 	}
 
 	if _, exist := proc.pending[pub.String()]; exist { // ignore, already received
+		log.Warning("Already received message from sender %v", pub.String())
 		return
 	}
 
@@ -185,7 +186,7 @@ func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
 		if !proc.validator.ValidateMessage(m, proc.k+1) {
 			log.Warning("Message is not syntactically valid for either round")
 			return
-		} else { // early message, keep it for later
+		} else { // a valid early message, keep it for later
 			log.Info("Early message detected. Keeping message")
 			proc.onEarlyMessage(m)
 		}
