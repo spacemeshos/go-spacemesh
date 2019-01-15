@@ -545,3 +545,15 @@ func TestConsensusProcess_onRoundBegin(t *testing.T) {
 	proc.onRoundBegin()
 	assert.Nil(t, proc.commitTracker) // round 4 begin
 }
+
+func TestNewConsensusProcess_statusValidator(t *testing.T) {
+	proc := generateConsensusProcess(t)
+
+	s := NewSmallEmptySet()
+	m := BuildPreRoundMsg(generatePubKey(t), s)
+
+	assert.True(t, proc.statusValidator()(m))
+
+	m.Message.Ki = 1
+	assert.False(t, proc.statusValidator()(m))
+}
