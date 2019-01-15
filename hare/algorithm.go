@@ -154,17 +154,16 @@ PreRound:
 		select {
 		case msg := <-proc.inbox: // msg event
 			proc.handleMessage(msg)
+			if proc.terminating {
+				log.Info("Detected terminating on. Exiting.")
+				return
+			}
 		case <-ticker.C: // next round event
 			proc.onRoundEnd()
 			proc.advanceToNextRound()
 			proc.onRoundBegin()
 		case <-proc.CloseChannel(): // close event
 			log.Info("Stop event loop, terminating")
-			return
-		}
-
-		if proc.terminating {
-			log.Info("Detected terminating on. Exiting.")
 			return
 		}
 	}
@@ -435,12 +434,9 @@ func (proc *ConsensusProcess) processNotifyMsg(msg *pb.HareMessage) {
 
 	// enough notifications, should terminate
 	log.Info("Consensus process terminated for %v with output set: ", proc.pubKey, proc.s)
-	proc.terminating = true // ensures immediate termination
-	proc.Close()
-
-	// NOTE: this can only block garbage collection of this instance.
-	// hence we assume the responsible module is reading from the chan
 	proc.terminationReport <- procOutput{proc.instanceId, proc.s}
+	proc.Close()
+	proc.terminating = true // ensures immediate termination
 }
 
 func (proc *ConsensusProcess) currentRound() int {
