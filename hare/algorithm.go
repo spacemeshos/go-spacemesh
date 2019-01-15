@@ -51,6 +51,7 @@ type ConsensusProcess struct {
 	terminating     bool
 	cfg             config.Config
 	notifySent      bool
+	pending         map[string]*pb.HareMessage
 }
 
 func NewConsensusProcess(cfg config.Config, key crypto.PublicKey, instanceId InstanceId, s Set, oracle Rolacle, signing Signing, p2p NetworkService) *ConsensusProcess {
@@ -72,6 +73,7 @@ func NewConsensusProcess(cfg config.Config, key crypto.PublicKey, instanceId Ins
 	proc.terminating = false
 	proc.cfg = cfg
 	proc.notifySent = false
+	proc.pending = make(map[string]*pb.HareMessage, cfg.N)
 
 	return proc
 }
@@ -161,13 +163,32 @@ func roleFromRoundCounter(k uint32) Role {
 	}
 }
 
+func (proc *ConsensusProcess) onEarlyMessage(m *pb.HareMessage) {
+	pub, err := crypto.NewPublicKey(m.PubKey)
+	if err != nil {
+		log.Warning("Could not construct public key: ", err.Error())
+		return
+	}
+
+	if _, exist := proc.pending[pub.String()]; exist { // ignore, already received
+		return
+	}
+
+	proc.pending[pub.String()] = m
+}
+
 func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
 	// Note: instanceId is already verified by the broker
 
-	// validate message
+	// validate message for this or next round
 	if !proc.validator.ValidateMessage(m, proc.k) {
-		log.Warning("Message is not syntactically valid")
-		return
+		if !proc.validator.ValidateMessage(m, proc.k+1) {
+			log.Warning("Message is not syntactically valid for either round")
+			return
+		} else { // early message, keep it for later
+			log.Info("Early message detected. Keeping message")
+			proc.onEarlyMessage(m)
+		}
 	}
 
 	// TODO: validate claimedRole proof
@@ -276,6 +297,12 @@ func (proc *ConsensusProcess) beginRound4() {
 	proc.proposalTracker = nil
 }
 
+func (proc *ConsensusProcess) handlePending(pending map[string]*pb.HareMessage) {
+	for _, m := range pending {
+		proc.inbox <- m
+	}
+}
+
 func (proc *ConsensusProcess) onRoundBegin() {
 	proc.updateRole()
 
@@ -293,6 +320,10 @@ func (proc *ConsensusProcess) onRoundBegin() {
 		log.Error("Current round out of bounds. Expected: 0-4, Found: ", proc.currentRound())
 		panic("Current round out of bounds")
 	}
+
+	pendingProcess := proc.pending
+	proc.pending = make(map[string]*pb.HareMessage, proc.cfg.N)
+	go proc.handlePending(pendingProcess)
 }
 
 func (proc *ConsensusProcess) roleProof() Signature {
