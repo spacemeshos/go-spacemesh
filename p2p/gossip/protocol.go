@@ -117,7 +117,6 @@ func (p *peer) send(msg []byte, checksum hash) error {
 	}
 	p.msgMutex.RUnlock()
 	go func() {
-		p.Info("blah blah")
 		err := p.net.SendMessage(p.pubKey.String(), ProtocolName, msg)
 		if err != nil {
 			p.Log.Info("Gossip protocol failed to send msg (calcHash %d) to peer %v, first attempt. err=%v", checksum, p.pubKey, err)
@@ -150,7 +149,7 @@ func (prot *Protocol) propagateMessage(msg []byte, h hash) {
 	prot.peersMutex.RLock()
 	for p := range prot.peers {
 		peer := prot.peers[p]
-		prot.Info("sending message to peer %v, hash %d", peer.pubKey, h)
+		prot.Debug("sending message to peer %v, hash %d", peer.pubKey, h)
 		peer.send(msg, h) // non blocking
 	}
 	prot.peersMutex.RUnlock()
@@ -258,6 +257,7 @@ func (prot *Protocol) processMessage(h hash, msg *pb.ProtocolMessage) error {
 	if payload := msg.GetPayload(); payload != nil {
 		data = service.DataBytes{Payload: payload}
 	} else if wrap := msg.GetMsg(); wrap != nil {
+		prot.Log.Warning("unexpected usage of request-response framework over Gossip - WAS IT IN PURPOSE? ")
 		data = &service.DataMsgWrapper{Req: wrap.Req, MsgType: wrap.Type, ReqID: wrap.ReqID, Payload: wrap.Payload}
 	}
 
