@@ -43,14 +43,14 @@ type MessageServer struct {
 	exit               chan struct{}
 }
 
-func NewMsgServer(network Service, name string, requestLifetime time.Duration, logger log.Log) *MessageServer {
+func NewMsgServer(network Service, name string, requestLifetime time.Duration, c chan service.Message, logger log.Log) *MessageServer {
 	p := &MessageServer{
 		Log:                logger,
 		name:               name,
 		resHandlers:        make(map[uint64]func(msg []byte)),
 		pendingQueue:       list.New(),
 		network:            network,
-		ingressChannel:     network.RegisterProtocolWithChannel(name, make(chan service.Message, 100)),
+		ingressChannel:     network.RegisterProtocolWithChannel(name, c),
 		msgRequestHandlers: make(map[MessageType]func(msg []byte) []byte),
 		requestLifetime:    requestLifetime,
 		exit:               make(chan struct{}),

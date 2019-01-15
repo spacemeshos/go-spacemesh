@@ -51,7 +51,7 @@ func NewBlockListener(net server.Service, bv BlockValidator, layers *mesh.Mesh, 
 		BlockValidator: bv,
 		Mesh:           layers,
 		Peers:          p2p.NewPeers(net),
-		MessageServer:  server.NewMsgServer(net, BlockProtocol, timeout, logger),
+		MessageServer:  server.NewMsgServer(net, BlockProtocol, timeout, make(chan service.Message, 100), logger),
 		Log:            logger,
 		semaphore:      make(chan struct{}, concurrency),
 		unknownQueue:   make(chan mesh.BlockID, 200), //todo tune buffer size + get buffer from config
