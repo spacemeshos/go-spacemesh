@@ -19,14 +19,14 @@ func NewMessageValidator(signing Signing, threshold int, defaultSize int, valida
 }
 
 func (validator *MessageValidator) ValidateMessage(m *pb.HareMessage, k uint32) bool {
-	if !validator.isSyntacticallyValid(m) {
-		log.Warning("Validate message failed: message is not syntactically valid")
-		return false
-	}
-
 	// validate context
 	if !isContextuallyValid(m, k) {
 		log.Info("Validate message failed: message is not contextually valid")
+		return false
+	}
+
+	if !validator.isSyntacticallyValid(m) {
+		log.Warning("Validate message failed: message is not syntactically valid")
 		return false
 	}
 
@@ -37,7 +37,14 @@ func (validator *MessageValidator) ValidateMessage(m *pb.HareMessage, k uint32) 
 	}
 
 	// validate signature
-	if !validator.signing.Validate(data, m.InnerSig) {
+	pk, err := crypto.NewPublicKey(m.PubKey)
+	if err != nil {
+		log.Error("Validate message failed: could'nt parse pubkey")
+		return false
+	}
+
+	ok, err := pk.Verify(data, m.InnerSig)
+	if err != nil || !ok {
 		log.Warning("Validate message failed: invalid message signature detected")
 		return false
 	}
@@ -47,6 +54,11 @@ func (validator *MessageValidator) ValidateMessage(m *pb.HareMessage, k uint32) 
 
 // verifies the message is contextually valid
 func isContextuallyValid(m *pb.HareMessage, expectedK uint32) bool {
+	if m.Message == nil {
+		log.Warning("Contextual validation failed: m.Message is nil")
+		return false
+	}
+
 	// PreRound & Notify are always contextually valid
 	switch MessageType(m.Message.Type) {
 	case PreRound:
@@ -60,7 +72,7 @@ func isContextuallyValid(m *pb.HareMessage, expectedK uint32) bool {
 		return true
 	}
 
-	log.Warning("Contextual validation failed: not same iteration. Expected: %v, Actual: %v", expectedK, m.Message.K)
+	log.Info("Contextual validation failed: not same iteration. Expected: %v, Actual: %v", expectedK, m.Message.K)
 	return false
 }
 
