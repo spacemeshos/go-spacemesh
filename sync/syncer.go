@@ -105,7 +105,7 @@ func NewSync(srv server.Service, layers *mesh.Mesh, bv BlockValidator, conf Conf
 		Configuration:  conf,
 		Log:            logger,
 		Mesh:           layers,
-		Peers:          p2p.NewPeers(srv),
+		Peers:          p2p.NewPeers(srv, logger),
 		MessageServer:  server.NewMsgServer(srv, syncProtocol, conf.requestTimeout-time.Millisecond*30, logger),
 		SyncLock:       0,
 		startLock:      0,
@@ -223,15 +223,23 @@ func (s *Syncer) getLayerBlockIDs(index mesh.LayerID) (chan mesh.BlockID, error)
 
 func (s *Syncer) getIdsForHash(m map[string]p2p.Peer, index mesh.LayerID) (chan mesh.BlockID, error) {
 	reqCounter := 0
-	ch := make(chan []uint32)
+	ch := make(chan []uint32, len(m))
 	for _, v := range m {
-		_, err := s.sendLayerIDsRequest(v, index, ch)
+		c, err := s.sendLayerIDsRequest(v, index)
+
 		if err != nil {
 			s.Error("could not fetch layer ", index, " block ids from peer ", v) // todo recover from this
 			return nil, err
 		} else {
 			reqCounter++
 		}
+		go func() {
+			v := <-c
+			ch <- v
+			if reqCounter == 0 {
+				defer close(ch)
+			}
+		}()
 	}
 
 	idSet := make(map[mesh.BlockID]bool, s.layerSize) //change uint32 to BlockId
@@ -272,6 +280,9 @@ func keysAsChan(idSet map[mesh.BlockID]bool) chan mesh.BlockID {
 func (s *Syncer) getLayerHashes(index mesh.LayerID) (map[string]p2p.Peer, error) {
 	m := make(map[string]p2p.Peer, 20) //todo need to get this from p2p service
 	peers := s.GetPeers()
+	if len(peers) == 0 {
+		return nil, errors.New("no peers")
+	}
 	// request hash from all
 	ch := make(chan peerHashPair, len(peers))
 	resCounter := len(peers)
@@ -334,7 +345,7 @@ func (s *Syncer) sendLayerHashRequest(peer p2p.Peer, layer mesh.LayerID) (chan p
 	return ch, s.SendRequest(LAYER_HASH, payload, peer, foo)
 }
 
-func (s *Syncer) sendLayerIDsRequest(peer p2p.Peer, idx mesh.LayerID, ch chan []uint32) (chan []uint32, error) {
+func (s *Syncer) sendLayerIDsRequest(peer p2p.Peer, idx mesh.LayerID) (chan []uint32, error) {
 	s.Debug("send Layer ids request Peer: ", peer, " layer: ", idx)
 
 	data := &pb.LayerIdsReq{Layer: uint32(idx)}
@@ -342,7 +353,7 @@ func (s *Syncer) sendLayerIDsRequest(peer p2p.Peer, idx mesh.LayerID, ch chan []
 	if err != nil {
 		return nil, err
 	}
-
+	ch := make(chan []uint32)
 	foo := func(msg []byte) {
 		defer close(ch)
 		data := &pb.LayerIdsResp{}

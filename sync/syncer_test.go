@@ -131,8 +131,7 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 	layer.AddBlock(mesh.NewExistingBlock(mesh.BlockID(111), lid, nil))
 	layer.AddBlock(mesh.NewExistingBlock(mesh.BlockID(222), lid, nil))
 	syncObj1.AddLayer(layer)
-	ch := make(chan []uint32)
-	_, err := syncObj.sendLayerIDsRequest(nodes[1].Node.PublicKey(), lid, ch)
+	ch, err := syncObj.sendLayerIDsRequest(nodes[1].Node.PublicKey(), lid)
 	ids := <-ch
 	assert.NoError(t, err, "Should not return error")
 	assert.Equal(t, len(layer.Blocks()), len(ids), "wrong block")
@@ -227,7 +226,7 @@ func TestSyncProtocol_SyncTwoNodes(t *testing.T) {
 	syncObj1.AddLayer(mesh.NewExistingLayer(5, []*mesh.Block{block10}))
 
 	timeout := time.After(10 * time.Second)
-	syncObj2.SetLatestLayer(4)
+	syncObj2.SetLatestLayer(5)
 	syncObj1.Start()
 	syncObj2.Start()
 
@@ -404,12 +403,12 @@ func Test_Multiple_SyncIntegrationSuite(t *testing.T) {
 	sis := &syncIntegrationMultipleNodes{}
 	sis.BootstrappedNodeCount = 5
 	sis.BootstrapNodesCount = 1
-	sis.NeighborsCount = 5
+	sis.NeighborsCount = 4
 	sis.name = t.Name()
 	i := 1
 	sis.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
 		l := log.New(fmt.Sprintf("%s_%d", sis.name, i), "", "")
-		sync := NewSync(s, getMesh(fmt.Sprintf("%s_%s", sis.name, time.Now())), BlockValidatorMock{}, conf, l)
+		sync := NewSync(s, getMesh(fmt.Sprintf("%s_%d_%s", sis.name, i, time.Now())), BlockValidatorMock{}, conf, l)
 		sis.syncers = append(sis.syncers, sync)
 		i++
 	}

@@ -719,14 +719,14 @@ loop:
 			}
 
 			s.outpeersMutex.Lock()
-			s.outpeers[cne.n.PublicKey().String()] = cne.n.PublicKey()
-			s.outpeersMutex.Unlock()
-
-			s.publishNewPeer(cne.n.PublicKey())
-			s.lNode.Debug("Neighborhood: Added peer to peer list %v", cne.n.Pretty())
-
-			if total == ndsLen {
-				break loop
+			_, ok = s.outpeers[cne.n.PublicKey().String()]
+			if ok {
+				s.outpeersMutex.Unlock()
+				bad++
+				if total == ndsLen {
+					break loop
+				}
+				continue
 			}
 		case <-tm.C:
 			break loop
