@@ -122,5 +122,5 @@ func TestBlockBuilder_SerializeTrans(t *testing.T) {
 	ntx, err := mesh.BytesAsTransaction(bytes.NewReader(buf))
 	assert.NoError(t,err)
 
-	assert.Equal(t, *tx ,ntx)
+	assert.Equal(t, *tx ,*ntx)
 }
