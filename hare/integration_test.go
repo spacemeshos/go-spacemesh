@@ -100,17 +100,17 @@ func (his *HareIntegrationSuite) checkResult() {
 	}
 }
 
-// Test 1: Three nodes sanity
+// Test 1: 16 nodes sanity
 type hareIntegrationThreeNodes struct {
 	*HareIntegrationSuite
 }
 
-func Test_ThreeNodes_HareIntegrationSuite(t *testing.T) {
+func Test_16Nodes_HareIntegrationSuite(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
 	const roundDuration = time.Second * time.Duration(2)
-	cfg := config.Config{N: 10, F: 2, SetSize: 10, RoundDuration: roundDuration}
+	cfg := config.Config{N: 16, F: 2, SetSize: 10, RoundDuration: roundDuration}
 
 	his := &hareIntegrationThreeNodes{newIntegrationSuite()}
 	his.BootstrappedNodeCount = cfg.N - 1
@@ -148,9 +148,9 @@ func (his *hareIntegrationThreeNodes) Test_ThreeNodes_AllHonest() {
 	his.waitForTimedTermination(60 * time.Second)
 }
 
-// Test 2: 100 procs
+// Test 2: 20 nodes sanity
 
-type hareIntegration100Nodes struct {
+type hareIntegration20Nodes struct {
 	*HareIntegrationSuite
 }
 
@@ -166,14 +166,14 @@ func (sod signordie) Sign(m []byte) ([]byte) {
 	return s
 }
 
-func Test_100Nodes_HareIntegrationSuite(t *testing.T) {
+func Test_20Nodes_HareIntegrationSuite(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
 	const roundDuration = time.Second * time.Duration(5)
 	cfg := config.Config{N: 20, F: 8, SetSize: 10, RoundDuration: roundDuration}
 
-	his := &hareIntegration100Nodes{newIntegrationSuite()}
+	his := &hareIntegration20Nodes{newIntegrationSuite()}
 	his.BootstrappedNodeCount = cfg.N - 3
 	his.BootstrapNodesCount = 3
 	his.NeighborsCount = 8
@@ -205,7 +205,7 @@ func Test_100Nodes_HareIntegrationSuite(t *testing.T) {
 	suite.Run(t, his)
 }
 
-func (his *hareIntegration100Nodes) Test_100Nodes_AllHonest() {
+func (his *hareIntegration20Nodes) Test_100Nodes_AllHonest() {
 	for _, proc := range his.procs {
 		proc.Start()
 	}

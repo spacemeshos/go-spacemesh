@@ -53,7 +53,11 @@ func (mock *MockHashOracle) Unregister(pubKey crypto.PublicKey) {
 }
 
 func (mock *MockHashOracle) calcThreshold(comitySize int) uint32 {
-	return uint32(float64(comitySize) / float64(len(mock.clients)) * float64(math.MaxUint32))
+	if len(mock.clients) == 0 {
+		panic("Called calcThreshold with 0 clients registered")
+	}
+
+	return uint32(uint64(comitySize) * uint64(math.MaxUint32) / uint64(len(mock.clients)))
 }
 
 func (mock *MockHashOracle) Role(proof Signature) Role {
@@ -63,8 +67,8 @@ func (mock *MockHashOracle) Role(proof Signature) Role {
 	}
 
 	// calculate thresholds
-	threshLeader := mock.calcThreshold(5)               // expect 5 leaders
-	threshActive := mock.calcThreshold(mock.comitySize) // expect comitySize-5 actives
+	threshLeader := mock.calcThreshold(3)               // expect 3 leaders
+	threshActive := mock.calcThreshold(mock.comitySize) // expect comitySize-3 actives
 
 	// calculate hash of proof
 	hash := fnv.New32()
