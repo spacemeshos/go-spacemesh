@@ -28,7 +28,7 @@ var FALSE = []byte{0}
 	Close()
 }*/
 
-type MeshValidator interface{
+type MeshValidator interface {
 	HandleIncomingLayer(layer *Layer)
 	HandleLateBlock(bl *Block)
 }
@@ -45,7 +45,7 @@ type Mesh struct {
 	orphMutex   sync.RWMutex
 }
 
-func NewMesh(layers , blocks, validity, orphans database.DB, mesh MeshValidator,logger log.Log) *Mesh {
+func NewMesh(layers, blocks, validity, orphans database.DB, mesh MeshValidator, logger log.Log) *Mesh {
 	//todo add boot from disk
 	ll := &Mesh{
 		Log:      logger,
@@ -95,7 +95,7 @@ func (m *Mesh) AddLayer(layer *Layer) error {
 
 	m.addLayer(layer)
 	m.tortoise.HandleIncomingLayer(layer)
-	atomic.AddUint32(&m.localLayer, 1)
+	atomic.StoreUint32(&m.localLayer, uint32(layer.Index()))
 	m.SetLatestLayer(uint32(layer.Index()))
 	return nil
 }
@@ -112,7 +112,6 @@ func (m *Mesh) GetLayer(i LayerID) (*Layer, error) {
 	return m.getLayer(i)
 }
 
-
 func (m *Mesh) AddBlock(block *Block) error {
 	log.Debug("add block ", block.ID())
 	if err := m.addBlock(block); err != nil {
@@ -125,7 +124,6 @@ func (m *Mesh) AddBlock(block *Block) error {
 	m.tortoise.HandleLateBlock(block) //todo should be thread safe?
 	return nil
 }
-
 
 //todo better thread safety
 func (m *Mesh) handleOrphanBlocks(block *Block) {
