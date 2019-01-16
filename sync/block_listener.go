@@ -74,6 +74,7 @@ func (bl *BlockListener) ListenToGossipBlocks(){
 			blk, err := mesh.BytesAsBlock(bytes.NewReader(data.Bytes()))
 			if err != nil {
 				log.Error("received invalid block from sender %v", data.Sender())
+				break
 			}
 			if bl.ValidateBlock(&blk){
 				err := bl.AddBlock(&blk)

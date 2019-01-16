@@ -144,8 +144,9 @@ func (t *BlockBuilder) listenForTx(){
 			x, err := mesh.BytesAsTransaction(bytes.NewReader(data.Bytes()))
 			if err != nil {
 				log.Error("cannot parse incoming TX")
+				break
 			}
-			t.newTrans <- &x
+			t.newTrans <- x
 		}
 	}
 }
@@ -155,7 +156,6 @@ func (t *BlockBuilder) acceptBlockData() {
 	for {
 		select {
 			case <-t.stopChan:
-				t.started = false
 				return
 
 			case id := <-t.beginRoundEvent:

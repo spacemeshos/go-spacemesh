@@ -55,7 +55,7 @@ func  NewSerializableTransaction(nonce uint64, origin, recepient common.Address,
 		GasLimit:        gasLimit,
 		Recipient:        &recepient,
 		Origin:            origin,//todo: remove this, should be calculated from sig.
-		Amount:        price.Bytes(),
+		Amount:        amount.Bytes(),
 		Payload:        nil,
 	}
 }
@@ -141,7 +141,7 @@ func TransactionAsBytes(tx *SerializableTransaction) ([]byte, error) {
 	return w.Bytes(), nil
 }
 
-func BytesAsTransaction(buf io.Reader) (SerializableTransaction, error){
+func BytesAsTransaction(buf io.Reader) (*SerializableTransaction, error){
 	b := SerializableTransaction{}
 	_, err := xdr.Unmarshal(buf, &b)
 	if err != nil {
