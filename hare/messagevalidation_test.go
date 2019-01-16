@@ -7,7 +7,9 @@ import (
 )
 
 func defaultValidator() *MessageValidator {
-	return NewMessageValidator(NewMockSigning(), lowThresh10, lowDefaultSize)
+	return NewMessageValidator(NewMockSigning(), lowThresh10, lowDefaultSize, func(m *pb.HareMessage) bool {
+		return true
+	})
 }
 
 func TestMessageValidator_CommitStatus(t *testing.T) {
@@ -83,18 +85,13 @@ func TestConsensusProcess_isContextuallyValid(t *testing.T) {
 	msgType[2] = Commit
 	msgType[3] = Notify
 
-	rounds := make([][4]bool, 4) // index=round
-	rounds[0] = [4]bool{true, false, false, false}
-	rounds[1] = [4]bool{false, true, true, false}
-	rounds[2] = [4]bool{false, false, true, false}
-	rounds[3] = [4]bool{true, true, true, true}
-
 	for j := 0; j < len(msgType); j++ {
 		for i := 0; i < 4; i++ {
 			builder := NewMessageBuilder()
 			builder.SetType(msgType[j]).SetInstanceId(*instanceId1).SetRoundCounter(cp.k).SetKi(ki).SetValues(s)
 			builder = builder.SetPubKey(pub).Sign(NewMockSigning())
-			assert.Equal(t, rounds[j][i], isContextuallyValid(builder.Build(), cp.k))
+			//mt.Printf("%v   j=%v i=%v Exp: %v Actual %v\n", cp.k, j, i, rounds[j][i], isContextuallyValid(builder.Build(), cp.k))
+			assert.Equal(t, true, isContextuallyValid(builder.Build(), cp.k))
 			cp.advanceToNextRound()
 		}
 	}

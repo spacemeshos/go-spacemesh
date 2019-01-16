@@ -163,7 +163,7 @@ func newTestSigner(t testing.TB) testSigner {
 	return testSigner{pv}
 }
 
-func newTestSignedMessageData(t testing.TB, signer signer) []byte {
+func newSignedGossipMessageData(t testing.TB, signer signer) ([]byte, *pb.ProtocolMessage) {
 	pm := &pb.ProtocolMessage{
 		Metadata: &pb.Metadata{
 			NextProtocol:  ProtocolName,
@@ -174,7 +174,7 @@ func newTestSignedMessageData(t testing.TB, signer signer) []byte {
 		Data: &pb.ProtocolMessage_Payload{[]byte("LOL")},
 	}
 
-	return signedMessage(t, signer, pm).Bytes()
+	return signedMessage(t, signer, pm).Bytes(), pm
 }
 
 func addPeersAndTest(t testing.TB, num int, p *Protocol, net *mockBaseNetwork, work bool) {
@@ -265,10 +265,11 @@ func TestNeighborhood_Broadcast(t *testing.T) {
 	n.Start()
 	addPeersAndTest(t, 20, n, net, true)
 	net.msgwg.Add(20)
+	net.pcountwg.Add(1)
 
 	n.Broadcast([]byte("LOL"), "")
 	passOrDeadlock(t, net.msgwg)
-	assert.Equal(t, 0, net.processProtocolCount)
+	assert.Equal(t, 1, net.processProtocolCount)
 	assert.Equal(t, 20, net.totalMessageSent())
 }
 
@@ -308,12 +309,13 @@ func TestNeighborhood_Broadcast2(t *testing.T) {
 	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newTestSigner(t), log.New("tesT", "", ""))
 	n.Start()
 
-	msgB := newTestSignedMessageData(t, newTestSigner(t))
+	msgB := []byte("LOL")
 	addPeersAndTest(t, 1, n, net, true)
-	net.msgwg.Add(1)
-	n.Broadcast(msgB, "") // dosent matter
+	net.msgwg.Add(1) // sender also handle the message
+	net.pcountwg.Add(1)
+	n.Broadcast(msgB, "") // doesn't matter
 	passOrDeadlock(t, net.msgwg)
-	assert.Equal(t, 0, net.processProtocolCount)
+	assert.Equal(t, 1, net.processProtocolCount)
 	assert.Equal(t, 1, net.totalMessageSent())
 
 	addPeersAndTest(t, 20, n, net, true)
@@ -321,7 +323,7 @@ func TestNeighborhood_Broadcast2(t *testing.T) {
 	var msg service.Message = TestMessage{service.DataBytes{net.lastMsg}}
 	net.inbox <- msg
 	passOrDeadlock(t, net.msgwg)
-	assert.Equal(t, 0, net.processProtocolCount)
+	assert.Equal(t, 1, net.processProtocolCount)
 	assert.Equal(t, 21, net.totalMessageSent())
 }
 
@@ -336,14 +338,37 @@ func TestNeighborhood_Broadcast3(t *testing.T) {
 
 	msgB := []byte("LOL")
 	net.msgwg.Add(20)
+	net.pcountwg.Add(1)
 	n.Broadcast(msgB, "")
 	passOrDeadlock(t, net.msgwg)
-	assert.Equal(t, 0, net.processProtocolCount)
+	assert.Equal(t, 1, net.processProtocolCount)
 	assert.Equal(t, 20, net.totalMessageSent())
 
 	var msg service.Message = TestMessage{service.DataBytes{net.lastMsg}}
 	net.inbox <- msg
-	assert.Equal(t, 0, net.processProtocolCount)
+	assert.Equal(t, 1, net.processProtocolCount)
+	assert.Equal(t, 20, net.totalMessageSent())
+}
+
+func TestNeighborhood_Broadcast4(t *testing.T) {
+	// todo : Fix this test, because the first message is broadcasted `Broadcast` attaches metadata to it with the current authoring timestamp
+	// to test that the the next message doesn't get processed by the protocol we must create an exact copy of the message produced at `Broadcast`
+	net := newMockBaseNetwork()
+	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newTestSigner(t), log.New("tesT", "", ""))
+	n.Start()
+
+	addPeersAndTest(t, 20, n, net, true)
+
+	msgB := []byte("LOL")
+	net.msgwg.Add(20)
+	net.pcountwg.Add(1)
+	n.Broadcast(msgB, "")
+	passOrDeadlock(t, net.msgwg)
+	assert.Equal(t, 1, net.processProtocolCount)
+	assert.Equal(t, 20, net.totalMessageSent())
+
+	n.Broadcast(msgB, "")
+	assert.Equal(t, 1, net.processProtocolCount)
 	assert.Equal(t, 20, net.totalMessageSent())
 }
 
@@ -352,7 +377,8 @@ func TestNeighborhood_Relay3(t *testing.T) {
 	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newTestSigner(t), log.New("tesT", "", ""))
 	n.Start()
 
-	var msg service.Message = TestMessage{service.DataBytes{newTestSignedMessageData(t, newTestSigner(t))}}
+	payload, _ := newSignedGossipMessageData(t, newTestSigner(t))
+	var msg service.Message = TestMessage{service.DataBytes{payload}}
 	net.pcountwg.Add(1)
 	net.inbox <- msg
 	passOrDeadlock(t, net.pcountwg)
@@ -411,7 +437,7 @@ func TestNeighborhood_Disconnect(t *testing.T) {
 	n.addPeer(pub2)
 	assert.Equal(t, 2, n.peersCount())
 
-	msg := newTestSignedMessageData(t, newTestSigner(t))
+	msg, _ := newSignedGossipMessageData(t, newTestSigner(t))
 
 	net.pcountwg.Add(1)
 	net.msgwg.Add(2)
@@ -421,7 +447,7 @@ func TestNeighborhood_Disconnect(t *testing.T) {
 	assert.Equal(t, 1, net.processProtocolCount)
 	assert.Equal(t, 2, net.totalMessageSent())
 
-	msg2 := newTestSignedMessageData(t, newTestSigner(t))
+	msg2, _ := newSignedGossipMessageData(t, newTestSigner(t))
 
 	n.removePeer(pub1)
 	net.pcountwg.Add(1)
@@ -438,4 +464,29 @@ func TestNeighborhood_Disconnect(t *testing.T) {
 	passOrDeadlock(t, net.msgwg)
 	assert.Equal(t, 2, net.processProtocolCount)
 	assert.Equal(t, 4, net.totalMessageSent())
+}
+
+func TestMarkAndValidateMessages(t *testing.T) {
+	net := newMockBaseNetwork()
+	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newTestSigner(t), log.New("tesT", "", ""))
+
+	_, msg := newSignedGossipMessageData(t, newTestSigner(t))
+	h := hash(666) // it doesn't really have to be the real hash
+	isOld, isInvalid := n.markAndValidateMessage(h, msg)
+	assert.False(t, isOld)
+	assert.False(t, isInvalid)
+
+	isOld, isInvalid = n.markAndValidateMessage(h, msg)
+	assert.True(t, isOld)
+	assert.False(t, isInvalid)
+
+	msg.Metadata.AuthPubKey = nil
+	h = hash(999) // it doesn't really have to be the real hash
+	isOld, isInvalid = n.markAndValidateMessage(h, msg)
+	assert.False(t, isOld)
+	assert.True(t, isInvalid)
+
+	isOld, isInvalid = n.markAndValidateMessage(h, msg)
+	assert.True(t, isOld)
+	assert.True(t, isInvalid)
 }

@@ -262,7 +262,7 @@ func (s *swarm) SendMessage(nodeID string, protocol string, payload []byte) erro
 // req.destId: receiver remote node public key/id
 // Local request to send a message to a remote node
 func (s *swarm) sendMessageImpl(peerPubKey string, protocol string, payload service.Data) error {
-	s.lNode.Info("Sending message to %v", peerPubKey)
+	//s.lNode.Info("Sending message to %v", peerPubKey)
 	var err error
 	var peer node.Node
 	var conn net.Connection
@@ -699,38 +699,39 @@ loop:
 			if cne.err != nil {
 				s.lNode.Debug("can't establish connection with sampled peer %v, %v", cne.n.String(), cne.err)
 				bad++
-				if total == ndsLen {
-					break loop
-				}
 				continue // this peer didn't work, todo: tell dht
 			}
 
+			pkstr := cne.n.PublicKey().String()
+
 			s.inpeersMutex.Lock()
-			_, ok := s.inpeers[cne.n.PublicKey().String()]
+			_, ok := s.inpeers[pkstr]
 			s.inpeersMutex.Unlock()
 			if ok {
 				s.lNode.Debug("not allowing peers from inbound to upgrade to outbound to prevent poisoning, peer %v", cne.n.String())
 				bad++
-				if total == ndsLen {
-					break loop
-				}
 				continue
-
 			}
 
 			s.outpeersMutex.Lock()
-			s.outpeers[cne.n.PublicKey().String()] = cne.n.PublicKey()
+			if _,ok := s.outpeers[pkstr]; ok {
+				s.outpeersMutex.Unlock()
+				s.lNode.Debug("selected an already outbound peer. not counting that peer.", cne.n.String())
+				bad++
+				continue
+			}
+			s.outpeers[pkstr] = cne.n.PublicKey()
 			s.outpeersMutex.Unlock()
 
 			s.publishNewPeer(cne.n.PublicKey())
 			s.lNode.Debug("Neighborhood: Added peer to peer list %v", cne.n.Pretty())
-
-			if total == ndsLen {
-				break loop
-			}
 		case <-tm.C:
 			break loop
 		case <-s.shutdown:
+			break loop
+		}
+
+		if total == ndsLen {
 			break loop
 		}
 	}
