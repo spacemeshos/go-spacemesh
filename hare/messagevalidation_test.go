@@ -96,3 +96,10 @@ func TestConsensusProcess_isContextuallyValid(t *testing.T) {
 		}
 	}
 }
+
+func TestMessageValidator_ValidateMessage(t *testing.T) {
+	proc := generateConsensusProcess(t)
+	v := proc.validator
+	assert.True(t, v.ValidateMessage(proc.initDefaultBuilder(proc.s).SetType(PreRound).Sign(proc.signing).Build(), 0))
+	assert.True(t, v.ValidateMessage(proc.initDefaultBuilder(proc.s).SetType(Status).Sign(proc.signing).Build(), 0))
+}

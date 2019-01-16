@@ -72,8 +72,7 @@ type ConsensusProcess struct {
 
 func NewConsensusProcess(cfg config.Config, key crypto.PublicKey, instanceId InstanceId, s *Set, oracle Rolacle, signing Signing, p2p NetworkService, terminationReport chan TerminationOutput) *ConsensusProcess {
 	proc := &ConsensusProcess{}
-	// todo: clone the set so changes won't be effected here
-	proc.State = State{0, -1, s, nil}
+	proc.State = State{0, -1, s.Clone(), nil}
 	proc.Closer = NewCloser()
 	proc.pubKey = key
 	proc.instanceId = instanceId
@@ -130,7 +129,8 @@ func (proc *ConsensusProcess) eventLoop() {
 	proc.updateRole()
 
 	// set pre-round message and send
-	proc.sendMessage(proc.initDefaultBuilder(proc.s).SetType(PreRound).Sign(proc.signing).Build())
+	m:=proc.initDefaultBuilder(proc.s).SetType(PreRound).Sign(proc.signing).Build()
+	proc.sendMessage(m)
 
 	// listen to pre-round messages
 	timer := time.NewTimer(proc.cfg.RoundDuration)
@@ -204,7 +204,7 @@ func (proc *ConsensusProcess) validateRole(m *pb.HareMessage) bool {
 	// TODO: validate role proof
 
 	// validate claimedRole
-	expectedRole := proc.oracle.Role(m.Message.K, Signature(m.Message.RoleProof))
+	expectedRole := proc.oracle.Role(Signature(m.Message.RoleProof))
 	claimedRole := roleFromRoundCounter(m.Message.K)
 	if expectedRole != claimedRole {
 		log.Warning("Invalid claimedRole detected. Expected: %v Actual: %v", expectedRole, claimedRole)
@@ -292,12 +292,14 @@ func (proc *ConsensusProcess) advanceToNextRound() {
 }
 
 func (proc *ConsensusProcess) beginRound1() {
+	proc.statusesTracker = NewStatusTracker(proc.cfg.F+1, proc.cfg.N)
 	statusMsg := proc.initDefaultBuilder(proc.s).SetType(Status).Sign(proc.signing).Build()
 	proc.sendMessage(statusMsg)
-	proc.statusesTracker = NewStatusTracker(proc.cfg.F+1, proc.cfg.N)
 }
 
 func (proc *ConsensusProcess) beginRound2() {
+	proc.proposalTracker = NewProposalTracker(proc.cfg.N)
+
 	if proc.role == Leader && proc.statusesTracker.IsSVPReady() {
 		builder := proc.initDefaultBuilder(proc.statusesTracker.ProposalSet(proc.cfg.SetSize))
 		svp := proc.statusesTracker.BuildSVP()
@@ -311,11 +313,14 @@ func (proc *ConsensusProcess) beginRound2() {
 
 	// done with building proposal, reset statuses tracking
 	proc.statusesTracker = nil
-	proc.proposalTracker = NewProposalTracker(proc.cfg.N)
 }
 
 func (proc *ConsensusProcess) beginRound3() {
 	proposedSet := proc.proposalTracker.ProposedSet()
+
+	// proposedSet may be nil, in such case the tracker will ignore messages
+	proc.commitTracker = NewCommitTracker(proc.cfg.F+1, proc.cfg.N, proposedSet) // track commits for proposed set
+
 	if proposedSet != nil { // has proposal to send
 		builder := proc.initDefaultBuilder(proposedSet).SetType(Commit).Sign(proc.signing)
 		commitMsg := builder.Build()
@@ -500,5 +505,5 @@ func (proc *ConsensusProcess) endOfRound3() {
 }
 
 func (proc *ConsensusProcess) updateRole() {
-	proc.role = proc.oracle.Role(proc.k, proc.roleProof())
+	proc.role = proc.oracle.Role(proc.roleProof())
 }

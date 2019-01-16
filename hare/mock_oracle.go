@@ -1,7 +1,10 @@
 package hare
 
 import (
-	"encoding/binary"
+	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/log"
+	"hash/fnv"
+	"math"
 	"sync"
 )
 
@@ -14,34 +17,68 @@ const (
 )
 
 type Rolacle interface {
-	Role(r uint32, sig Signature) Role
+	Role(sig Signature) Role
 }
 
 type MockHashOracle struct {
-	isLeaderTaken bool
+	clients    map[string]struct{}
+	comitySize int
+	mutex      sync.Mutex
 }
 
-func NewMockOracle() *MockHashOracle {
-	mock := &MockHashOracle{}
+// N is the expected comity size
+func NewMockHashOracle(expectedSize int, comitySize int) *MockHashOracle {
+	mock := new(MockHashOracle)
+	mock.clients = make(map[string]struct{}, expectedSize)
+	mock.comitySize = comitySize
 
 	return mock
 }
 
-func (mockOracle *MockHashOracle) Role(r uint32, proof Signature) Role {
+func (mock *MockHashOracle) Register(pubKey crypto.PublicKey) {
+	mock.mutex.Lock()
+	defer mock.mutex.Unlock()
+
+	if _, exist := mock.clients[pubKey.String()]; exist {
+		return
+	}
+
+	mock.clients[pubKey.String()] = struct{}{}
+}
+
+func (mock *MockHashOracle) Unregister(pubKey crypto.PublicKey) {
+	mock.mutex.Lock()
+	delete(mock.clients, pubKey.String())
+	mock.mutex.Unlock()
+}
+
+func (mock *MockHashOracle) calcThreshold(comitySize int) uint32 {
+	return uint32(float64(comitySize) / float64(len(mock.clients)) * float64(math.MaxUint32))
+}
+
+func (mock *MockHashOracle) Role(proof Signature) Role {
 	if proof == nil {
+		log.Warning("Oracle query with proof=nil. Returning passive")
 		return Passive
 	}
 
-	data := binary.LittleEndian.Uint32(proof)
+	// calculate thresholds
+	threshLeader := mock.calcThreshold(5)               // expect 5 leaders
+	threshActive := mock.calcThreshold(mock.comitySize) // expect comitySize-5 actives
 
-	if data < 10 {
+	// calculate hash of proof
+	hash := fnv.New32()
+	hash.Write(proof)
+	proofHash := hash.Sum32()
+	if proofHash < threshLeader {
 		return Leader
 	}
 
-	if data < 10000 {
+	if proofHash < threshActive {
 		return Active
 	}
 
+	// the rest are passive
 	return Passive
 }
 
