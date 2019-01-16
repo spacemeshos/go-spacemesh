@@ -15,7 +15,6 @@ import (
 	"time"
 )
 
-
 type MockCoin struct {}
 
 func (m MockCoin) GetResult() bool {
@@ -101,7 +100,7 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 	go func() {beginRound <- mesh.LayerID(0) }()
 
 	select {
-		case output := <- receiver.RegisterProtocol(sync.BlockProtocol):
+		case output := <- receiver.RegisterProtocol(sync.NewBlock):
 			b := mesh.Block{}
 			xdr.Unmarshal(bytes.NewBuffer(output.Bytes()), &b)
 			assert.Equal(t, hareRes, b.BlockVotes)
@@ -113,4 +112,15 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 
 	}
 
+}
+
+func TestBlockBuilder_SerializeTrans(t *testing.T) {
+	tx := mesh.NewSerializableTransaction(0, common.BytesToAddress([]byte{0x01}), common.BytesToAddress([]byte{0x02}), big.NewInt(10), big.NewInt(10), 10)
+	buf, err := mesh.TransactionAsBytes(tx)
+	assert.NoError(t,err)
+
+	ntx, err := mesh.BytesAsTransaction(bytes.NewReader(buf))
+	assert.NoError(t,err)
+
+	assert.Equal(t, *tx ,*ntx)
 }

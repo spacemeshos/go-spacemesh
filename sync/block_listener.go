@@ -38,7 +38,7 @@ func (bl *BlockListener) Close() {
 func (bl *BlockListener) Start() {
 	if atomic.CompareAndSwapUint32(&bl.startLock, 0, 1) {
 		go bl.run()
-		//go bl.ListenToGossipBlocks()
+		go bl.ListenToGossipBlocks()
 	}
 }
 
@@ -67,11 +67,24 @@ func NewBlockListener(net server.Service, bv BlockValidator, layers *mesh.Mesh, 
 func (bl *BlockListener) ListenToGossipBlocks(){
 	for{
 		select {
-			case data := <- bl.receivedGossipBlocks:
-				_, err := mesh.BytesAsBlock(bytes.NewReader(data.Bytes()))
+		case <-bl.exit:
+			bl.Logger.Info("listening  stopped")
+			return
+		case data := <- bl.receivedGossipBlocks:
+			blk, err := mesh.BytesAsBlock(bytes.NewReader(data.Bytes()))
+			if err != nil {
+				log.Error("received invalid block from sender %v", data.Sender())
+				break
+			}
+			if bl.ValidateBlock(&blk){
+				err := bl.AddBlock(&blk)
 				if err != nil {
-					log.Error("received invalid block from sender %v", data.Sender())
+					log.Info("Block already received")
+					break
 				}
+				bl.addUnknownToQueue(&blk)
+			}
+
 		}
 	}
 }
@@ -80,7 +93,7 @@ func (bl *BlockListener) run() {
 	for {
 		select {
 		case <-bl.exit:
-			bl.Logger.Info("run stoped")
+			bl.Logger.Info("run stopped")
 			return
 		case id := <-bl.unknownQueue:
 			bl.Logger.Debug("fetch block ", id, "buffer is at ", len(bl.unknownQueue)/cap(bl.unknownQueue), " capacity")
@@ -99,7 +112,6 @@ func (bl *BlockListener) FetchBlock(id mesh.BlockID) {
 		if ch, err := sendBlockRequest(bl.MessageServer, p, id, bl.Log); err == nil {
 			if b := <-ch; b != nil && bl.ValidateBlock(b) {
 				bl.AddBlock(b)
-				//bl.Mesh.
 				bl.addUnknownToQueue(b) //add all child blocks to unknown queue
 				return
 			}
