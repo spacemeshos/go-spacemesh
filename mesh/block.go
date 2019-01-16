@@ -145,9 +145,9 @@ func BytesAsTransaction(buf io.Reader) (*SerializableTransaction, error){
 	b := SerializableTransaction{}
 	_, err := xdr.Unmarshal(buf, &b)
 	if err != nil {
-		return b,err
+		return &b,err
 	}
-	return b, nil
+	return &b, nil
 }
 
 func NewExistingBlock(id BlockID, layerIndex LayerID, data []byte) *Block {
