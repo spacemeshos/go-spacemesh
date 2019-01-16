@@ -1,16 +1,15 @@
 package hare
 
 import (
-	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
-func BuildNotifyMsg(pubKey crypto.PublicKey, s *Set) *pb.HareMessage {
+func BuildNotifyMsg(pubKey Verifier, s *Set) *pb.HareMessage {
 	builder := NewMessageBuilder()
 	builder.SetType(PreRound).SetInstanceId(*instanceId1).SetRoundCounter(Round4).SetKi(ki).SetValues(s)
-	builder = builder.SetPubKey(pubKey).Sign(NewMockSigning())
+	builder = builder.SetPubKey(pubKey.Bytes()).Sign(NewMockSigning())
 	cert := &pb.Certificate{}
 	cert.Values = NewSetFromValues(value1).To2DSlice()
 	cert.AggMsgs = &pb.AggregatedMessages{}

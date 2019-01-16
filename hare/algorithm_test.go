@@ -13,7 +13,7 @@ import (
 
 var cfg = config.DefaultConfig()
 
-func generatePubKey(t *testing.T) crypto.PublicKey {
+func generatePubKey(t *testing.T) Verifier {
 	_, pub, err := crypto.GenerateKeyPair()
 
 	if err != nil {
@@ -21,7 +21,7 @@ func generatePubKey(t *testing.T) crypto.PublicKey {
 		t.FailNow()
 	}
 
-	return pub
+	return NewVerifier(pub.Bytes())
 }
 
 // test that a message to a specific set id is delivered by the broker
@@ -57,7 +57,7 @@ func TestConsensusProcess_handleMessage(t *testing.T) {
 	broker := NewBroker(n1)
 	proc := generateConsensusProcess(t)
 	broker.Register(proc)
-	m := NewMessageBuilder().SetRoundCounter(0).SetInstanceId(*instanceId1).SetPubKey(generatePubKey(t)).Sign(proc.signing).Build()
+	m := BuildPreRoundMsg(generatePubKey(t), NewSetFromValues(value1))
 	proc.handleMessage(m)
 }
 
@@ -80,12 +80,11 @@ func generateConsensusProcess(t *testing.T) *ConsensusProcess {
 
 	s := NewSetFromValues(value1)
 	oracle := NewMockHashOracle(numOfClients)
-	oracle.Register(bn.PublicKey())
-	signing := &signordie{bn.PrivateKey()}
-
+	signing := NewMockSigning()
+	oracle.Register(signing.Verifier())
 	output := make(chan TerminationOutput,1)
 
-	return NewConsensusProcess(cfg, bn.PublicKey(), *instanceId1, s, oracle, signing, n1, output)
+	return NewConsensusProcess(cfg, *instanceId1, s, oracle, signing, n1, output)
 }
 
 func TestConsensusProcess_Id(t *testing.T) {
@@ -116,7 +115,7 @@ func TestConsensusProcess_InitDefaultBuilder(t *testing.T) {
 	assert.True(t, NewSet(builder.inner.Values).Equals(s))
 	pub, err := crypto.NewPublicKey(builder.outer.PubKey)
 	assert.Nil(t, err)
-	assert.Equal(t, pub.Bytes(), proc.pubKey.Bytes())
+	assert.Equal(t, pub.Bytes(), proc.signing.Verifier().Bytes())
 	assert.Equal(t, builder.inner.K, proc.k)
 	assert.Equal(t, builder.inner.Ki, proc.ki)
 	assert.Equal(t, builder.inner.InstanceId, proc.instanceId.Bytes())
@@ -155,7 +154,7 @@ func TestConsensusProcess_sendMessage(t *testing.T) {
 	signing := NewMockSigning()
 
 	output := make(chan TerminationOutput,1)
-	proc := NewConsensusProcess(cfg, generatePubKey(t), *instanceId1, s, oracle, signing, n1, output)
+	proc := NewConsensusProcess(cfg, *instanceId1, s, oracle, signing, n1, output)
 	broker.Register(proc)
 
 	msg := buildStatusMsg(generatePubKey(t), s, 0)

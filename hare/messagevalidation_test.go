@@ -89,7 +89,7 @@ func TestConsensusProcess_isContextuallyValid(t *testing.T) {
 		for i := 0; i < 4; i++ {
 			builder := NewMessageBuilder()
 			builder.SetType(msgType[j]).SetInstanceId(*instanceId1).SetRoundCounter(cp.k).SetKi(ki).SetValues(s)
-			builder = builder.SetPubKey(pub).Sign(NewMockSigning())
+			builder = builder.SetPubKey(pub.Bytes()).Sign(NewMockSigning())
 			//mt.Printf("%v   j=%v i=%v Exp: %v Actual %v\n", cp.k, j, i, rounds[j][i], isContextuallyValid(builder.Build(), cp.k))
 			assert.Equal(t, true, isContextuallyValid(builder.Build(), cp.k))
 			cp.advanceToNextRound()

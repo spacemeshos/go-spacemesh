@@ -49,7 +49,6 @@ type State struct {
 type ConsensusProcess struct {
 	State
 	Closer // the consensus is closeable
-	pubKey            crypto.PublicKey
 	instanceId        InstanceId
 	oracle            Rolacle // roles oracle
 	signing           Signing
@@ -70,11 +69,10 @@ type ConsensusProcess struct {
 	pending           map[string]*pb.HareMessage
 }
 
-func NewConsensusProcess(cfg config.Config, key crypto.PublicKey, instanceId InstanceId, s *Set, oracle Rolacle, signing Signing, p2p NetworkService, terminationReport chan TerminationOutput) *ConsensusProcess {
+func NewConsensusProcess(cfg config.Config, instanceId InstanceId, s *Set, oracle Rolacle, signing Signing, p2p NetworkService, terminationReport chan TerminationOutput) *ConsensusProcess {
 	proc := &ConsensusProcess{}
 	proc.State = State{0, -1, s.Clone(), nil}
 	proc.Closer = NewCloser()
-	proc.pubKey = key
 	proc.instanceId = instanceId
 	proc.oracle = oracle
 	proc.signing = signing
@@ -379,7 +377,7 @@ func (proc *ConsensusProcess) roleProof() Signature {
 	kInBytes := make([]byte, 4)
 	binary.LittleEndian.PutUint32(kInBytes, uint32(proc.k))
 	hash := fnv.New32()
-	hash.Write(proc.pubKey.Bytes())
+	hash.Write(proc.signing.Verifier().Bytes())
 	hash.Write(kInBytes)
 
 	hashBytes := make([]byte, 4)
@@ -389,7 +387,7 @@ func (proc *ConsensusProcess) roleProof() Signature {
 }
 
 func (proc *ConsensusProcess) initDefaultBuilder(s *Set) *MessageBuilder {
-	builder := NewMessageBuilder().SetPubKey(proc.pubKey).SetInstanceId(proc.instanceId)
+	builder := NewMessageBuilder().SetPubKey(proc.signing.Verifier().Bytes()).SetInstanceId(proc.instanceId)
 	builder = builder.SetRoundCounter(proc.k).SetKi(proc.ki).SetValues(s)
 	builder.SetRoleProof(proc.roleProof())
 
@@ -448,7 +446,8 @@ func (proc *ConsensusProcess) processNotifyMsg(msg *pb.HareMessage) {
 	}
 
 	// enough notifications, should terminate
-	log.Info("Consensus process terminated for %v with output set: ", proc.pubKey, proc.s)
+	proc.s = s // update to the agreed set
+	log.Info("Consensus process terminated for %v with output set: ", proc.signing.Verifier().Bytes(), proc.s)
 	proc.terminationReport <- procOutput{proc.instanceId, proc.s}
 	proc.Close()
 	proc.terminating = true // ensures immediate termination

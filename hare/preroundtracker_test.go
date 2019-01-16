@@ -1,7 +1,6 @@
 package hare
 
 import (
-	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/stretchr/testify/assert"
 	"testing"
@@ -21,10 +20,10 @@ var value4 = Value{Bytes32{4}}
 var value5 = Value{Bytes32{5}}
 var value6 = Value{Bytes32{6}}
 
-func BuildPreRoundMsg(pubKey crypto.PublicKey, s *Set) *pb.HareMessage {
+func BuildPreRoundMsg(pubKey Verifier, s *Set) *pb.HareMessage {
 	builder := NewMessageBuilder()
 	builder.SetType(PreRound).SetInstanceId(*instanceId1).SetRoundCounter(k).SetKi(ki).SetValues(s)
-	builder = builder.SetPubKey(pubKey).Sign(NewMockSigning())
+	builder = builder.SetPubKey(pubKey.Bytes()).Sign(NewMockSigning())
 
 	return builder.Build()
 }

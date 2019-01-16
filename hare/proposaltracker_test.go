@@ -1,21 +1,20 @@
 package hare
 
 import (
-	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
-func buildProposalMsg(pubKey crypto.PublicKey, s *Set, signature Signature) *pb.HareMessage {
+func buildProposalMsg(pubKey Verifier, s *Set, signature Signature) *pb.HareMessage {
 	builder := NewMessageBuilder().SetRoleProof(signature)
 	builder.SetType(Proposal).SetInstanceId(*instanceId1).SetRoundCounter(Round2).SetKi(ki).SetValues(s)
-	builder = builder.SetPubKey(pubKey).Sign(NewMockSigning())
+	builder = builder.SetPubKey(pubKey.Bytes()).Sign(NewMockSigning())
 
 	return builder.Build()
 }
 
-func BuildProposalMsg(pubKey crypto.PublicKey, s *Set) *pb.HareMessage {
+func BuildProposalMsg(pubKey Verifier, s *Set) *pb.HareMessage {
 	return buildProposalMsg(pubKey, s, Signature{})
 }
 

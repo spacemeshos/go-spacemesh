@@ -1,7 +1,6 @@
 package hare
 
 import (
-	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"hash/fnv"
 	"math"
@@ -15,6 +14,10 @@ const (
 	Active  = Role(1)
 	Leader  = Role(2)
 )
+
+type Stringer interface {
+	String() string
+}
 
 type Rolacle interface {
 	Validate(committeeSize int, proof Signature) bool
@@ -54,21 +57,21 @@ func NewMockHashOracle(expectedSize int) *MockHashOracle {
 	return mock
 }
 
-func (mock *MockHashOracle) Register(pubKey crypto.PublicKey) {
+func (mock *MockHashOracle) Register(stringer Stringer) {
 	mock.mutex.Lock()
 
-	if _, exist := mock.clients[pubKey.String()]; exist {
+	if _, exist := mock.clients[stringer.String()]; exist {
 		mock.mutex.Unlock()
 		return
 	}
 
-	mock.clients[pubKey.String()] = struct{}{}
+	mock.clients[stringer.String()] = struct{}{}
 	mock.mutex.Unlock()
 }
 
-func (mock *MockHashOracle) Unregister(pubKey crypto.PublicKey) {
+func (mock *MockHashOracle) Unregister(stringer Stringer) {
 	mock.mutex.Lock()
-	delete(mock.clients, pubKey.String())
+	delete(mock.clients, stringer.String())
 	mock.mutex.Unlock()
 }
 
