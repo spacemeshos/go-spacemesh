@@ -148,6 +148,9 @@ func (prot *Protocol) markMessage(h hash) bool {
 	var ok bool
 	if _, ok = prot.oldMessageQ[h]; !ok {
 		prot.oldMessageQ[h] = struct{}{}
+		prot.Log.Debug("marking message as old, hash %v", h)
+	} else {
+		prot.Log.Debug("message is already old, hash %v", h)
 	}
 	prot.Log.Debug("marking message as old, hash %v, is already old %v", h, ok)
 	prot.oldMessageMu.Unlock()
@@ -250,7 +253,7 @@ func (prot *Protocol) removePeer(peer crypto.PublicKey) {
 
 // marks a hash as old message and check message validity
 func (prot *Protocol) markAndValidateMessage(h hash, msg *pb.ProtocolMessage) (isOldMessage, isInvalid bool) {
-	prot.oldMessageMu.RLock()
+	prot.oldMessageMu.Lock()
 	if _, isOldMessage = prot.oldMessageQ[h]; !isOldMessage {
 		prot.oldMessageQ[h] = struct{}{}
 	}
@@ -262,7 +265,7 @@ func (prot *Protocol) markAndValidateMessage(h hash, msg *pb.ProtocolMessage) (i
 			prot.invalidMessageQ[h] = struct{}{}
 		}
 	}
-	prot.oldMessageMu.RUnlock()
+	prot.oldMessageMu.Unlock()
 	return
 }
 
