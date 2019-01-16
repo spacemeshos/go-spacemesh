@@ -57,9 +57,10 @@ type Protocol struct {
 	peers    map[string]*peer
 	shutdown chan struct{}
 
-	oldMessageMu sync.RWMutex
-	oldMessageQ  map[hash]struct{}
-	peersMutex   sync.RWMutex
+	oldMessageMu    sync.RWMutex
+	oldMessageQ     map[hash]struct{}
+	invalidMessageQ map[hash]struct{}
+	peersMutex      sync.RWMutex
 
 	relayQ   chan service.Message
 	messageQ chan protocolMessage
@@ -70,16 +71,17 @@ func NewProtocol(config config.SwarmConfig, base baseNetwork, signer signer, log
 	// intentionally not subscribing to peers events so that the channels won't block in case executing Start delays
 	relayChan := base.RegisterProtocol(ProtocolName)
 	return &Protocol{
-		Log:         log2,
-		config:      config,
-		net:         base,
-		signer:      signer,
-		peers:       make(map[string]*peer),
-		shutdown:    make(chan struct{}),
-		oldMessageQ: make(map[hash]struct{}), // todo : remember to drain this
-		peersMutex:  sync.RWMutex{},
-		relayQ:      relayChan,
-		messageQ:    make(chan protocolMessage, messageQBufferSize),
+		Log:             log2,
+		config:          config,
+		net:             base,
+		signer:          signer,
+		peers:           make(map[string]*peer),
+		shutdown:        make(chan struct{}),
+		oldMessageQ:     make(map[hash]struct{}), // todo : remember to drain this
+		invalidMessageQ: make(map[hash]struct{}), // todo : remember to drain this
+		peersMutex:      sync.RWMutex{},
+		relayQ:          relayChan,
+		messageQ:        make(chan protocolMessage, messageQBufferSize),
 	}
 }
 
@@ -117,6 +119,7 @@ func (p *peer) send(msg []byte, checksum hash) error {
 	}
 	p.msgMutex.RUnlock()
 	go func() {
+		p.Debug("sending message to peer %v, hash %d", p.pubKey, checksum)
 		err := p.net.SendMessage(p.pubKey.String(), ProtocolName, msg)
 		if err != nil {
 			p.Log.Info("Gossip protocol failed to send msg (calcHash %d) to peer %v, first attempt. err=%v", checksum, p.pubKey, err)
@@ -138,18 +141,23 @@ func (prot *Protocol) Close() {
 	close(prot.shutdown)
 }
 
-// markMessage adds the calcHash to the old message queue so the message won't be processed in case received again
-func (prot *Protocol) markMessage(h hash) {
+// markMessage adds the calcHash to the old message queue so the message won't be processed in case received again.
+// Returns true if message was already processed before
+func (prot *Protocol) markMessage(h hash) bool {
 	prot.oldMessageMu.Lock()
-	prot.oldMessageQ[h] = struct{}{}
+	var ok bool
+	if _, ok = prot.oldMessageQ[h]; !ok {
+		prot.oldMessageQ[h] = struct{}{}
+	}
+	prot.Log.Debug("marking message as old, hash %v, is already old %v", h, ok)
 	prot.oldMessageMu.Unlock()
+	return ok
 }
 
 func (prot *Protocol) propagateMessage(msg []byte, h hash) {
 	prot.peersMutex.RLock()
 	for p := range prot.peers {
 		peer := prot.peers[p]
-		prot.Debug("sending message to peer %v, hash %d", peer.pubKey, h)
 		peer.send(msg, h) // non blocking
 	}
 	prot.peersMutex.RUnlock()
@@ -210,10 +218,13 @@ func (prot *Protocol) Broadcast(payload []byte, nextProt string) error {
 
 	hash := calcHash(finbin)
 
-	// every message that we broadcast we also process
-	err = prot.processMessage(hash, msg)
-	if err != nil {
-		return err
+	// every message that we broadcast we also process, unless it is a message that we already processed before
+	isOld := prot.markMessage(hash)
+	if !isOld {
+		err = prot.processMessage(msg)
+		if err != nil {
+			return err
+		}
 	}
 	prot.propagateMessage(finbin, hash)
 	return nil
@@ -237,21 +248,25 @@ func (prot *Protocol) removePeer(peer crypto.PublicKey) {
 	prot.peersMutex.Unlock()
 }
 
-func (prot *Protocol) isOldMessage(h hash) bool {
-	var oldmessage bool
+// marks a hash as old message and check message validity
+func (prot *Protocol) markAndValidateMessage(h hash, msg *pb.ProtocolMessage) (isOldMessage, isInvalid bool) {
 	prot.oldMessageMu.RLock()
-	if _, ok := prot.oldMessageQ[h]; ok {
-		oldmessage = true
-	} else {
-		oldmessage = false
+	if _, isOldMessage = prot.oldMessageQ[h]; !isOldMessage {
+		prot.oldMessageQ[h] = struct{}{}
+	}
+	if _, isInvalid = prot.invalidMessageQ[h]; !isInvalid && !isOldMessage{
+		err := prot.validateMessage(msg)
+		if err != nil {
+			prot.Log.Error("failed to validate message when handling relay message, err %v", err)
+			isInvalid = true
+			prot.invalidMessageQ[h] = struct{}{}
+		}
 	}
 	prot.oldMessageMu.RUnlock()
-	return oldmessage
+	return
 }
 
-func (prot *Protocol) processMessage(h hash, msg *pb.ProtocolMessage) error {
-	prot.markMessage(h)
-
+func (prot *Protocol) processMessage(msg *pb.ProtocolMessage) error {
 	var data service.Data
 
 	if payload := msg.GetPayload(); payload != nil {
@@ -271,38 +286,38 @@ func (prot *Protocol) processMessage(h hash, msg *pb.ProtocolMessage) error {
 	return nil
 }
 
-func (prot *Protocol) handleRelayMessage(msgB []byte) error {
+func (prot *Protocol) handleRelayMessage(msgB []byte) {
 	hash := calcHash(msgB)
+	msg := &pb.ProtocolMessage{}
+	err := proto.Unmarshal(msgB, msg)
+	if err != nil {
+		prot.Log.Error("failed to unmarshal when handling relay message, err %v", err)
+		return
+	}
 
-	// in case the message was received through the relay channel we need to remove the Gossip layer and hand the payload for the next protocol to process
-	if prot.isOldMessage(hash) {
+	// in case the message was received through the relay channel we need to remove the Gossip layer and hand the
+	// payload for the next protocol to process
+	isOld, isInvalid := prot.markAndValidateMessage(hash, msg)
+	if isInvalid {
+		// todo : - have some more metrics for termination
+		prot.Log.Info("got invalid message, hash %d, isOld %v", hash, isOld)
+		return // not propagating invalid messages
+	}
+	if isOld {
 		// todo : - have some more metrics for termination
 		// todo	: - maybe tell the peer weg ot this message already?
-		prot.Log.Debug("got old message, hash %d", hash)
+		prot.Log.Debug("got old message, hash %d, isInvalid %v", hash, isInvalid)
+
 	} else {
-
-		msg := &pb.ProtocolMessage{}
-		err := proto.Unmarshal(msgB, msg)
+		//todo - processMessage is non-blocking, need to check validation and not propagate invalid messages
+		err = prot.processMessage(msg)
 		if err != nil {
-			prot.Log.Error("failed to unmarshal when handling relay message, err %v", err)
-			return err
-		}
-
-		err = prot.validateMessage(msg)
-		if err != nil {
-			prot.Log.Error("failed to validate message when handling relay message, err %v", err)
-			return err
-		}
-
-		err = prot.processMessage(hash, msg)
-		if err != nil {
-			return err
+			return
 		}
 	}
 
 	prot.propagateMessage(msgB, hash)
-
-	return nil
+	return
 }
 
 func (prot *Protocol) eventLoop(peerConn chan crypto.PublicKey, peerDisc chan crypto.PublicKey) {
@@ -317,7 +332,6 @@ loop:
 			}
 			// incoming messages from p2p layer for process and relay
 			go func() {
-				//  todo some err handling
 				prot.handleRelayMessage(msg.Bytes())
 			}()
 		case peer := <-peerConn:
