@@ -10,18 +10,17 @@ import (
 	"time"
 )
 
-const comitySize = 18
-const numOfClients = 20
+const numOfClients = 100
 
 func TestMockHashOracle_Register(t *testing.T) {
-	oracle := NewMockHashOracle(numOfClients, comitySize)
+	oracle := NewMockHashOracle(numOfClients)
 	oracle.Register(generatePubKey(t))
 	oracle.Register(generatePubKey(t))
 	assert.Equal(t, 2, len(oracle.clients))
 }
 
 func TestMockHashOracle_Unregister(t *testing.T) {
-	oracle := NewMockHashOracle(numOfClients, comitySize)
+	oracle := NewMockHashOracle(numOfClients)
 	pub := generatePubKey(t)
 	oracle.Register(pub)
 	assert.Equal(t, 1, len(oracle.clients))
@@ -30,7 +29,7 @@ func TestMockHashOracle_Unregister(t *testing.T) {
 }
 
 func TestMockHashOracle_Concurrency(t *testing.T) {
-	oracle := NewMockHashOracle(numOfClients, comitySize)
+	oracle := NewMockHashOracle(numOfClients)
 	c := make(chan crypto.PublicKey, 1000)
 	done := make(chan int, 2)
 
@@ -66,47 +65,30 @@ func genSig() Signature {
 }
 
 func TestMockHashOracle_Role(t *testing.T) {
-	oracle := NewMockHashOracle(numOfClients, comitySize)
+	oracle := NewMockHashOracle(numOfClients)
 	for i := 0; i < numOfClients; i++ {
 		pub := generatePubKey(t)
 		oracle.Register(pub)
 	}
 
-	passive := 0
-	active := 0
-	leader := 0
+	committeeSize := 20
+	counter := 0
 	for i := 0; i < numOfClients; i++ {
-		r := oracle.Role(genSig())
-		switch r {
-		case Passive:
-			passive++
-		case Active:
-			active++
-		case Leader:
-			leader++
-		default:
-			t.Fail()
+		if oracle.Validate(committeeSize, genSig()) {
+			counter++
 		}
 	}
 
-	//fmt.Printf("P=%v A=%v L=%v\n", passive, active, leader)
-
-	total := active + leader
-	if math.Abs(float64(comitySize - total)) > 10 * comitySize { // allow only 10% deviation
-		t.Errorf("Comity size error. Expected: %v Actual %v", comitySize, total)
-		t.Fail()
-	}
-
-	if leader > 10 {
-		t.Errorf("Too many leaders. Expected: %v Actual %v", 1, leader)
+	if counter * 3 < committeeSize { // allow only 10% deviation
+		t.Errorf("Comity size error. Expected: %v Actual: %v", committeeSize, counter)
 		t.Fail()
 	}
 }
 
 func TestMockHashOracle_calcThreshold(t *testing.T) {
-	oracle := NewMockHashOracle(2, 2)
+	oracle := NewMockHashOracle(2)
 	oracle.Register(generatePubKey(t))
 	oracle.Register(generatePubKey(t))
-	assert.Equal(t, uint32(math.MaxUint32 / 2), oracle.calcThreshold(1))
+	assert.Equal(t, uint32(math.MaxUint32/2), oracle.calcThreshold(1))
 	assert.Equal(t, uint32(math.MaxUint32), oracle.calcThreshold(2))
 }

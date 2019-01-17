@@ -125,7 +125,7 @@ func Test_16Nodes_HareIntegrationSuite(t *testing.T) {
 	his.fill(set1, 0, 6)
 	his.fill(set2, 7, cfg.N-1)
 	his.honestSets = []*Set{set1}
-	oracle := NewMockHashOracle(cfg.N, cfg.N)
+	oracle := NewMockHashOracle(cfg.N)
 	his.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
 		broker := NewBroker(s)
 		output := make(chan TerminationOutput, 1)
@@ -189,7 +189,7 @@ func Test_20Nodes_HareIntegrationSuite(t *testing.T) {
 	his.fill(set2, 6, 12)
 	his.fill(set3, 13, cfg.N-1)
 	his.honestSets = []*Set{set1, set2, set3}
-	oracle := NewMockHashOracle(cfg.N, 18)
+	oracle := NewMockHashOracle(cfg.N)
 	his.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
 		log.Info("Starting instance ", idx)
 		broker := NewBroker(s)

@@ -79,7 +79,7 @@ func generateConsensusProcess(t *testing.T) *ConsensusProcess {
 	n1 := sim.NewNodeFrom(bn.Node)
 
 	s := NewSetFromValues(value1)
-	oracle := NewMockHashOracle(numOfClients, comitySize)
+	oracle := NewMockHashOracle(numOfClients)
 	oracle.Register(bn.PublicKey())
 	signing := &signordie{bn.PrivateKey()}
 
@@ -151,7 +151,7 @@ func TestConsensusProcess_sendMessage(t *testing.T) {
 	n1 := sim.NewNode()
 	broker := NewBroker(n1)
 	s := NewEmptySet(cfg.SetSize)
-	oracle := NewMockHashOracle(numOfClients, comitySize)
+	oracle := NewMockHashOracle(numOfClients)
 	signing := NewMockSigning()
 
 	output := make(chan TerminationOutput,1)

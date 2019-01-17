@@ -25,7 +25,7 @@ type NetworkService interface {
 }
 
 type procOutput struct {
-	id InstanceId
+	id  InstanceId
 	set *Set
 }
 
@@ -49,25 +49,25 @@ type State struct {
 type ConsensusProcess struct {
 	State
 	Closer // the consensus is closeable
-	pubKey          crypto.PublicKey
-	instanceId      InstanceId
-	oracle          Rolacle // roles oracle
-	signing         Signing
-	network         NetworkService
-	startTime       time.Time // TODO: needed?
-	inbox           chan *pb.HareMessage
+	pubKey            crypto.PublicKey
+	instanceId        InstanceId
+	oracle            Rolacle // roles oracle
+	signing           Signing
+	network           NetworkService
+	startTime         time.Time // TODO: needed?
+	inbox             chan *pb.HareMessage
 	terminationReport chan TerminationOutput
-	role            Role // the current role
-	validator       *MessageValidator
-	preRoundTracker *PreRoundTracker
-	statusesTracker *StatusTracker
-	proposalTracker *ProposalTracker
-	commitTracker   *CommitTracker
-	notifyTracker   *NotifyTracker
-	terminating     bool
-	cfg             config.Config
-	notifySent      bool
-	pending         map[string]*pb.HareMessage
+	role              Role // the current role
+	validator         *MessageValidator
+	preRoundTracker   *PreRoundTracker
+	statusesTracker   *StatusTracker
+	proposalTracker   *ProposalTracker
+	commitTracker     *CommitTracker
+	notifyTracker     *NotifyTracker
+	terminating       bool
+	cfg               config.Config
+	notifySent        bool
+	pending           map[string]*pb.HareMessage
 }
 
 func NewConsensusProcess(cfg config.Config, key crypto.PublicKey, instanceId InstanceId, s *Set, oracle Rolacle, signing Signing, p2p NetworkService, terminationReport chan TerminationOutput) *ConsensusProcess {
@@ -126,10 +126,10 @@ func (proc *ConsensusProcess) eventLoop() {
 	log.Info("Start listening")
 
 	// update role
-	proc.updateRole()
+	proc.role = proc.currentRole()
 
 	// set pre-round message and send
-	m:=proc.initDefaultBuilder(proc.s).SetType(PreRound).Sign(proc.signing).Build()
+	m := proc.initDefaultBuilder(proc.s).SetType(PreRound).Sign(proc.signing).Build()
 	proc.sendMessage(m)
 
 	// listen to pre-round messages
@@ -146,6 +146,9 @@ PreRound:
 		}
 	}
 	proc.preRoundTracker.FilterSet(proc.s)
+	if proc.s.Size() == 0 {
+		log.Error("Fatal: PreRound ended with empty set")
+	}
 
 	// start first iteration
 	proc.onRoundBegin()
@@ -195,6 +198,15 @@ func (proc *ConsensusProcess) onEarlyMessage(m *pb.HareMessage) {
 	proc.pending[pub.String()] = m
 }
 
+func (proc *ConsensusProcess) expectedCommitteeSize(k uint32) int {
+	if k%4 == Round2 {
+		return 5 // 5 leaders
+	}
+
+	// N actives
+	return proc.cfg.N
+}
+
 func (proc *ConsensusProcess) validateRole(m *pb.HareMessage) bool {
 	if m.Message == nil {
 		log.Warning("Role validation failed: message is nil")
@@ -203,11 +215,9 @@ func (proc *ConsensusProcess) validateRole(m *pb.HareMessage) bool {
 
 	// TODO: validate role proof
 
-	// validate claimedRole
-	expectedRole := proc.oracle.Role(Signature(m.Message.RoleProof))
-	claimedRole := roleFromRoundCounter(m.Message.K)
-	if expectedRole != claimedRole {
-		log.Warning("Invalid claimedRole detected. Expected: %v Actual: %v", expectedRole, claimedRole)
+	// validate role
+	if !proc.oracle.Validate(proc.expectedCommitteeSize(m.Message.K), Signature(m.Message.RoleProof)) {
+		log.Warning("Role validation failed")
 		return false
 	}
 
@@ -343,7 +353,7 @@ func (proc *ConsensusProcess) handlePending(pending map[string]*pb.HareMessage) 
 }
 
 func (proc *ConsensusProcess) onRoundBegin() {
-	proc.updateRole()
+	proc.role = proc.currentRole()
 
 	// reset trackers
 	switch proc.currentRound() {
@@ -504,6 +514,13 @@ func (proc *ConsensusProcess) endOfRound3() {
 	proc.notifySent = true
 }
 
-func (proc *ConsensusProcess) updateRole() {
-	proc.role = proc.oracle.Role(proc.roleProof())
+func (proc *ConsensusProcess) currentRole() Role {
+	if proc.oracle.Validate(proc.expectedCommitteeSize(proc.k), proc.roleProof()) {
+		if proc.currentRound() == Round2 {
+			return Leader
+		}
+		return Active
+	}
+
+	return Passive
 }

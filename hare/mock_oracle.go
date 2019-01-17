@@ -17,33 +17,32 @@ const (
 )
 
 type Rolacle interface {
-	Role(sig Signature) Role
+	Validate(committeeSize int, proof Signature) bool
 }
 
 type MockHashOracle struct {
-	clients    map[string]struct{}
-	comitySize int
-	mutex      sync.Mutex
+	clients map[string]struct{}
+	mutex   sync.RWMutex
 }
 
 // N is the expected comity size
-func NewMockHashOracle(expectedSize int, comitySize int) *MockHashOracle {
+func NewMockHashOracle(expectedSize int) *MockHashOracle {
 	mock := new(MockHashOracle)
 	mock.clients = make(map[string]struct{}, expectedSize)
-	mock.comitySize = comitySize
 
 	return mock
 }
 
 func (mock *MockHashOracle) Register(pubKey crypto.PublicKey) {
 	mock.mutex.Lock()
-	defer mock.mutex.Unlock()
 
 	if _, exist := mock.clients[pubKey.String()]; exist {
+		mock.mutex.Unlock()
 		return
 	}
 
 	mock.clients[pubKey.String()] = struct{}{}
+	mock.mutex.Unlock()
 }
 
 func (mock *MockHashOracle) Unregister(pubKey crypto.PublicKey) {
@@ -52,38 +51,41 @@ func (mock *MockHashOracle) Unregister(pubKey crypto.PublicKey) {
 	mock.mutex.Unlock()
 }
 
-func (mock *MockHashOracle) calcThreshold(comitySize int) uint32 {
+// Calculates the threshold for the given committee size
+func (mock *MockHashOracle) calcThreshold(committeeSize int) uint32 {
+	mock.mutex.RLock()
+	defer mock.mutex.RUnlock()
+
 	if len(mock.clients) == 0 {
-		panic("Called calcThreshold with 0 clients registered")
+		log.Error("Called calcThreshold with 0 clients registered")
+		return 0
 	}
 
-	return uint32(uint64(comitySize) * uint64(math.MaxUint32) / uint64(len(mock.clients)))
+	if committeeSize > len(mock.clients) {
+		log.Error("Requested for a committee bigger than the number of registered clients. Expected at least %v clients Actual: %v",
+			committeeSize, len(mock.clients))
+		return 0
+	}
+
+	return uint32(uint64(committeeSize) * uint64(math.MaxUint32) / uint64(len(mock.clients)))
 }
 
-func (mock *MockHashOracle) Role(proof Signature) Role {
+// Validate if a proof is valid for a given committee size
+func (mock *MockHashOracle) Validate(committeeSize int, proof Signature) bool {
 	if proof == nil {
-		log.Warning("Oracle query with proof=nil. Returning passive")
-		return Passive
+		log.Warning("Oracle query with proof=nil. Returning false")
+		return false
 	}
-
-	// calculate thresholds
-	threshLeader := mock.calcThreshold(3)               // expect 3 leaders
-	threshActive := mock.calcThreshold(mock.comitySize) // expect comitySize-3 actives
 
 	// calculate hash of proof
 	hash := fnv.New32()
 	hash.Write(proof)
 	proofHash := hash.Sum32()
-	if proofHash < threshLeader {
-		return Leader
+	if proofHash <= mock.calcThreshold(committeeSize) { // check threshold
+		return true
 	}
 
-	if proofHash < threshActive {
-		return Active
-	}
-
-	// the rest are passive
-	return Passive
+	return false
 }
 
 type MockStaticOracle struct {
