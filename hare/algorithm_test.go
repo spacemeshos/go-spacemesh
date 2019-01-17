@@ -2,7 +2,6 @@ package hare
 
 import (
 	"bytes"
-	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -13,15 +12,10 @@ import (
 
 var cfg = config.DefaultConfig()
 
-func generatePubKey(t *testing.T) Verifier {
-	_, pub, err := crypto.GenerateKeyPair()
+func generateVerifier(t *testing.T) Verifier {
+	ms := NewMockSigning()
 
-	if err != nil {
-		assert.Fail(t, "failed generating key")
-		t.FailNow()
-	}
-
-	return NewVerifier(pub.Bytes())
+	return ms.Verifier()
 }
 
 // test that a message to a specific set id is delivered by the broker
@@ -57,7 +51,7 @@ func TestConsensusProcess_handleMessage(t *testing.T) {
 	broker := NewBroker(n1)
 	proc := generateConsensusProcess(t)
 	broker.Register(proc)
-	m := BuildPreRoundMsg(generatePubKey(t), NewSetFromValues(value1))
+	m := BuildPreRoundMsg(generateVerifier(t), NewSetFromValues(value1))
 	proc.handleMessage(m)
 }
 
@@ -113,9 +107,8 @@ func TestConsensusProcess_InitDefaultBuilder(t *testing.T) {
 	s.Add(value1)
 	builder := proc.initDefaultBuilder(s)
 	assert.True(t, NewSet(builder.inner.Values).Equals(s))
-	pub, err := crypto.NewPublicKey(builder.outer.PubKey)
-	assert.Nil(t, err)
-	assert.Equal(t, pub.Bytes(), proc.signing.Verifier().Bytes())
+	verifier := NewVerifier(builder.outer.PubKey)
+	assert.Equal(t, verifier.Bytes(), proc.signing.Verifier().Bytes())
 	assert.Equal(t, builder.inner.K, proc.k)
 	assert.Equal(t, builder.inner.Ki, proc.ki)
 	assert.Equal(t, builder.inner.InstanceId, proc.instanceId.Bytes())
@@ -157,14 +150,14 @@ func TestConsensusProcess_sendMessage(t *testing.T) {
 	proc := NewConsensusProcess(cfg, *instanceId1, s, oracle, signing, n1, output)
 	broker.Register(proc)
 
-	msg := buildStatusMsg(generatePubKey(t), s, 0)
+	msg := buildStatusMsg(generateVerifier(t), s, 0)
 	proc.sendMessage(msg)
 }
 
 func TestConsensusProcess_procPre(t *testing.T) {
 	proc := generateConsensusProcess(t)
 	s := NewSmallEmptySet()
-	m := BuildPreRoundMsg(generatePubKey(t), s)
+	m := BuildPreRoundMsg(generateVerifier(t), s)
 	proc.processPreRoundMsg(m)
 	assert.Equal(t, 1, len(proc.preRoundTracker.preRound))
 }
@@ -172,7 +165,7 @@ func TestConsensusProcess_procPre(t *testing.T) {
 func TestConsensusProcess_procStatus(t *testing.T) {
 	proc := generateConsensusProcess(t)
 	s := NewSmallEmptySet()
-	m := BuildStatusMsg(generatePubKey(t), s)
+	m := BuildStatusMsg(generateVerifier(t), s)
 	proc.processStatusMsg(m)
 	assert.Equal(t, 1, len(proc.statusesTracker.statuses))
 }
@@ -181,7 +174,7 @@ func TestConsensusProcess_procProposal(t *testing.T) {
 	proc := generateConsensusProcess(t)
 	proc.advanceToNextRound()
 	s := NewSmallEmptySet()
-	m := BuildProposalMsg(generatePubKey(t), s)
+	m := BuildProposalMsg(generateVerifier(t), s)
 	proc.processProposalMsg(m)
 	assert.NotNil(t, proc.proposalTracker.proposal)
 }
@@ -191,7 +184,7 @@ func TestConsensusProcess_procCommit(t *testing.T) {
 	proc.advanceToNextRound()
 	s := NewSmallEmptySet()
 	proc.commitTracker = NewCommitTracker(1, 1, s)
-	m := BuildCommitMsg(generatePubKey(t), s)
+	m := BuildCommitMsg(generateVerifier(t), s)
 	proc.processCommitMsg(m)
 	assert.Equal(t, 1, len(proc.commitTracker.commits))
 }
@@ -200,7 +193,7 @@ func TestConsensusProcess_procNotify(t *testing.T) {
 	proc := generateConsensusProcess(t)
 	proc.advanceToNextRound()
 	s := NewSetFromValues(value1)
-	m := BuildNotifyMsg(generatePubKey(t), s)
+	m := BuildNotifyMsg(generateVerifier(t), s)
 	proc.processNotifyMsg(m)
 	assert.Equal(t, 1, len(proc.notifyTracker.notifies))
 }
@@ -212,7 +205,7 @@ func TestConsensusProcess_Termination(t *testing.T) {
 	s := NewSetFromValues(value1)
 
 	for i:=0;i<cfg.F+1;i++ {
-		proc.processNotifyMsg(BuildNotifyMsg(generatePubKey(t), s))
+		proc.processNotifyMsg(BuildNotifyMsg(generateVerifier(t), s))
 	}
 
 	timer := time.NewTimer(10 * time.Second)
@@ -239,7 +232,7 @@ func TestConsensusProcess_currentRound(t *testing.T) {
 
 func TestConsensusProcess_onEarlyMessage(t *testing.T) {
 	proc := generateConsensusProcess(t)
-	m := BuildPreRoundMsg(generatePubKey(t), NewSmallEmptySet())
+	m := BuildPreRoundMsg(generateVerifier(t), NewSmallEmptySet())
 	proc.advanceToNextRound()
 	proc.onEarlyMessage(m)
 	assert.Equal(t, 1, len(proc.pending))

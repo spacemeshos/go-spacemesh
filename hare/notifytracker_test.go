@@ -6,14 +6,14 @@ import (
 	"testing"
 )
 
-func BuildNotifyMsg(pubKey Verifier, s *Set) *pb.HareMessage {
+func BuildNotifyMsg(verifier Verifier, s *Set) *pb.HareMessage {
 	builder := NewMessageBuilder()
 	builder.SetType(PreRound).SetInstanceId(*instanceId1).SetRoundCounter(Round4).SetKi(ki).SetValues(s)
-	builder = builder.SetPubKey(pubKey.Bytes()).Sign(NewMockSigning())
+	builder = builder.SetPubKey(verifier.Bytes()).Sign(NewMockSigning())
 	cert := &pb.Certificate{}
 	cert.Values = NewSetFromValues(value1).To2DSlice()
 	cert.AggMsgs = &pb.AggregatedMessages{}
-	cert.AggMsgs.Messages = []*pb.HareMessage{BuildCommitMsg(pubKey, s)}
+	cert.AggMsgs.Messages = []*pb.HareMessage{BuildCommitMsg(verifier, s)}
 	builder.SetCertificate(cert)
 
 	return builder.Build()
@@ -23,17 +23,17 @@ func TestNotifyTracker_OnNotify(t *testing.T) {
 	s := NewEmptySet(lowDefaultSize)
 	s.Add(value1)
 	s.Add(value2)
-	pubKey := generatePubKey(t)
+	verifier := generateVerifier(t)
 
 	tracker := NewNotifyTracker(lowDefaultSize)
-	exist := tracker.OnNotify(BuildNotifyMsg(pubKey, s))
+	exist := tracker.OnNotify(BuildNotifyMsg(verifier, s))
 	assert.Equal(t, 1, tracker.NotificationsCount(s))
 	assert.False(t, exist)
-	exist = tracker.OnNotify(BuildNotifyMsg(pubKey, s))
+	exist = tracker.OnNotify(BuildNotifyMsg(verifier, s))
 	assert.True(t, exist)
 	assert.Equal(t, 1, tracker.NotificationsCount(s))
 	s.Add(value3)
-	tracker.OnNotify(BuildNotifyMsg(pubKey, s))
+	tracker.OnNotify(BuildNotifyMsg(verifier, s))
 	assert.Equal(t, 0, tracker.NotificationsCount(s))
 }
 
@@ -41,8 +41,8 @@ func TestNotifyTracker_NotificationsCount(t *testing.T) {
 	s := NewEmptySet(lowDefaultSize)
 	s.Add(value1)
 	tracker := NewNotifyTracker(lowDefaultSize)
-	tracker.OnNotify(BuildNotifyMsg(generatePubKey(t), s))
+	tracker.OnNotify(BuildNotifyMsg(generateVerifier(t), s))
 	assert.Equal(t, 1, tracker.NotificationsCount(s))
-	tracker.OnNotify(BuildNotifyMsg(generatePubKey(t), s))
+	tracker.OnNotify(BuildNotifyMsg(generateVerifier(t), s))
 	assert.Equal(t, 2, tracker.NotificationsCount(s))
 }
