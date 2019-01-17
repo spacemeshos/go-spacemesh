@@ -140,7 +140,7 @@ func (p *Ping) sendRequest(target p2pcrypto.PublicKey, reqid crypto.UUID, ping *
 	return pchan, nil
 }
 
-func (p *Ping) handleRequest(sender Pinger, ping *pb.Ping) error {
+func (p *Ping) handleRequest(sender crypto.PublicKey, ping *pb.Ping) error {
 	responseMutex.RLock()
 	resp, ok := responses[ping.Message]
 	responseMutex.RUnlock()
@@ -160,7 +160,7 @@ func (p *Ping) handleRequest(sender Pinger, ping *pb.Ping) error {
 		return err
 	}
 	log.Debug("Ping: Responding with %v", resp)
-	return p.p2p.SendMessage(sender.PublicKey(), protocol, bin)
+	return p.p2p.SendMessage(sender, protocol, bin)
 }
 
 func (p *Ping) handleResponse(ping *pb.Ping) {

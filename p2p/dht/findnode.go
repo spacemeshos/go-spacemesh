@@ -168,7 +168,7 @@ func (p *findNodeProtocol) readLoop() {
 			}
 
 			if headers.Req {
-				p.handleIncomingRequest(msg.Sender().PublicKey(), headers.ReqID, headers.Payload)
+				p.handleIncomingRequest(msg.Sender(), headers.ReqID, headers.Payload)
 				return
 			}
 			reqid := headers.ReqID

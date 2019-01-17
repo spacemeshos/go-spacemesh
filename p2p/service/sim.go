@@ -127,7 +127,7 @@ func (s *Simulator) updateNode(node p2pcrypto.PublicKey, sender *Node) {
 
 type simMessage struct {
 	msg    Data
-	sender node.Node
+	sender p2pcrypto.PublicKey
 }
 
 // Bytes is the message's binary data in byte array format.
@@ -141,7 +141,7 @@ func (sm simMessage) Bytes() []byte {
 }
 
 // Sender is the node who sent this message
-func (sm simMessage) Sender() node.Node {
+func (sm simMessage) Sender() p2pcrypto.PublicKey {
 	return sm.sender
 }
 
@@ -151,7 +151,7 @@ func (sn *Node) Start() error {
 }
 
 // ProcessProtocolMessage
-func (sn *Node) ProcessProtocolMessage(sender node.Node, protocol string, payload Data) error {
+func (sn *Node) ProcessProtocolMessage(sender p2pcrypto.PublicKey, protocol string, payload Data) error {
 	sn.sleep(sn.rcvDelay)
 	sn.sim.mutex.RLock()
 	c, ok := sn.sim.protocolHandler[sn.PublicKey().String()][protocol]
@@ -179,7 +179,7 @@ func (sn *Node) sendMessageImpl(nodeID p2pcrypto.PublicKey, protocol string, pay
 	thec, ok := sn.sim.protocolHandler[nodeID.String()][protocol]
 	sn.sim.mutex.RUnlock()
 	if ok {
-		thec <- simMessage{payload, sn.Node}
+		thec <- simMessage{payload, sn.Node.PublicKey()}
 		sn.sim.updateNode(nodeID, sn)
 		return nil
 	}
@@ -191,7 +191,7 @@ func (sn *Node) sleep(delay uint32) {
 	if delay == 0 {
 		return
 	}
-	
+
 	ranDelay := delay
 	if sn.randBehaviour {
 		ranDelay = rand.Uint32() % delay
@@ -206,7 +206,7 @@ func (sn *Node) Broadcast(protocol string, payload []byte) error {
 		sn.sim.mutex.RLock()
 		for n := range sn.sim.protocolHandler {
 			if c, ok := sn.sim.protocolHandler[n][protocol]; ok {
-				c <- simMessage{DataBytes{Payload: payload}, sn.Node}
+				c <- simMessage{DataBytes{Payload: payload}, sn.Node.PublicKey()}
 			}
 		}
 		sn.sim.mutex.RUnlock()

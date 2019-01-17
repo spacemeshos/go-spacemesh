@@ -13,6 +13,6 @@ func NewProtocolMessageMetadata(author p2pcrypto.PublicKey, protocol string) *pb
 		NextProtocol:  protocol,
 		ClientVersion: config.ClientVersion,
 		Timestamp:     time.Now().Unix(),
-		AuthPubkey:    author.Bytes(),
+		AuthPubKey:    author.Bytes(),
 	}
 }

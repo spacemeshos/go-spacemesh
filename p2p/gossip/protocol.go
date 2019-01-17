@@ -7,7 +7,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"hash/fnv"
@@ -34,7 +33,7 @@ type baseNetwork interface {
 	SendMessage(peerPubkey p2pcrypto.PublicKey, protocol string, payload []byte) error
 	RegisterProtocol(protocol string) chan service.Message
 	SubscribePeerEvents() (conn chan p2pcrypto.PublicKey, disc chan p2pcrypto.PublicKey)
-	ProcessProtocolMessage(sender node.Node, protocol string, data service.Data) error
+	ProcessProtocolMessage(sender p2pcrypto.PublicKey, protocol string, data service.Data) error
 }
 
 type protocolMessage struct {
@@ -177,7 +176,7 @@ func (prot *Protocol) Broadcast(payload []byte, nextProt string) error {
 		NextProtocol:  nextProt,
 		ClientVersion: protocolVer,
 		Timestamp:     time.Now().Unix(),
-		AuthPubkey:    prot.localNodePubkey.Bytes(), // TODO: @noam consider replacing this with another reply mechanism
+		AuthPubKey:    prot.localNodePubkey.Bytes(), // TODO: @noam consider replacing this with another reply mechanism
 	}
 
 	msg := &pb.ProtocolMessage{
@@ -250,13 +249,13 @@ func (prot *Protocol) processMessage(msg *pb.ProtocolMessage) error {
 		data = &service.DataMsgWrapper{Req: wrap.Req, MsgType: wrap.Type, ReqID: wrap.ReqID, Payload: wrap.Payload}
 	}
 
-	senderPubkey, err := p2pcrypto.NewPubkeyFromBytes(msg.Metadata.AuthPubkey)
+	senderPubkey, err := p2pcrypto.NewPubkeyFromBytes(msg.Metadata.AuthPubKey)
 	if err != nil {
 		prot.Log.Error("failed to decode the auth public key when handling relay message, err %v", err)
 		return err
 	}
 
-	go prot.net.ProcessProtocolMessage(node.New(senderPubkey, ""), msg.Metadata.NextProtocol, data)
+	go prot.net.ProcessProtocolMessage(senderPubkey, msg.Metadata.NextProtocol, data)
 	return nil
 }
 
