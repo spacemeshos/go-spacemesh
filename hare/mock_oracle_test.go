@@ -2,7 +2,6 @@ package hare
 
 import (
 	"encoding/binary"
-	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/stretchr/testify/assert"
 	"math"
 	"math/rand"
@@ -14,14 +13,14 @@ const numOfClients = 100
 
 func TestMockHashOracle_Register(t *testing.T) {
 	oracle := NewMockHashOracle(numOfClients)
-	oracle.Register(generatePubKey(t))
-	oracle.Register(generatePubKey(t))
+	oracle.Register(generateVerifier(t))
+	oracle.Register(generateVerifier(t))
 	assert.Equal(t, 2, len(oracle.clients))
 }
 
 func TestMockHashOracle_Unregister(t *testing.T) {
 	oracle := NewMockHashOracle(numOfClients)
-	pub := generatePubKey(t)
+	pub := generateVerifier(t)
 	oracle.Register(pub)
 	assert.Equal(t, 1, len(oracle.clients))
 	oracle.Unregister(pub)
@@ -30,12 +29,12 @@ func TestMockHashOracle_Unregister(t *testing.T) {
 
 func TestMockHashOracle_Concurrency(t *testing.T) {
 	oracle := NewMockHashOracle(numOfClients)
-	c := make(chan crypto.PublicKey, 1000)
+	c := make(chan Verifier, 1000)
 	done := make(chan int, 2)
 
 	go func() {
 		for i := 0; i < 500; i++ {
-			pub := generatePubKey(t)
+			pub := generateVerifier(t)
 			oracle.Register(pub)
 			c <- pub
 		}
@@ -67,7 +66,7 @@ func genSig() Signature {
 func TestMockHashOracle_Role(t *testing.T) {
 	oracle := NewMockHashOracle(numOfClients)
 	for i := 0; i < numOfClients; i++ {
-		pub := generatePubKey(t)
+		pub := generateVerifier(t)
 		oracle.Register(pub)
 	}
 
@@ -87,8 +86,8 @@ func TestMockHashOracle_Role(t *testing.T) {
 
 func TestMockHashOracle_calcThreshold(t *testing.T) {
 	oracle := NewMockHashOracle(2)
-	oracle.Register(generatePubKey(t))
-	oracle.Register(generatePubKey(t))
+	oracle.Register(generateVerifier(t))
+	oracle.Register(generateVerifier(t))
 	assert.Equal(t, uint32(math.MaxUint32/2), oracle.calcThreshold(1))
 	assert.Equal(t, uint32(math.MaxUint32), oracle.calcThreshold(2))
 }
