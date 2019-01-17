@@ -7,10 +7,43 @@ message SimpleMessage {
     string value = 1;
 }
 
+message AccountId {
+    bytes address =1;
+}
+
+message TransferFunds {
+    AccountId sender =1;
+    AccountId receiver =2;
+    uint64 Nonce =3;
+    uint64 Amount =4;
+}
+
+message SignedTransaction {
+    bytes txData = 1;
+}
+
 service SpaceMeshService {
     rpc Echo(SimpleMessage) returns (SimpleMessage) {
         option (google.api.http) = {
           post: "/v1/example/echo"
+          body: "*"
+        };
+    }
+    rpc GetNonce(AccountId) returns (SimpleMessage) {
+        option (google.api.http) = {
+          post: "/v1/nonce"
+          body: "*"
+        };
+    }
+    rpc GetBalance(AccountId) returns (SimpleMessage) {
+        option (google.api.http) = {
+          post: "/v1/balance"
+          body: "*"
+        };
+    }
+    rpc SubmitTransaction(SignedTransaction) returns (SimpleMessage) {
+        option (google.api.http) = {
+          post: "/v1/submittransaction"
           body: "*"
         };
     }
