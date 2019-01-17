@@ -37,7 +37,14 @@ func (validator *MessageValidator) ValidateMessage(m *pb.HareMessage, k uint32) 
 	}
 
 	// validate signature
-	if !validator.signing.Validate(data, m.InnerSig) {
+	pk, err := crypto.NewPublicKey(m.PubKey)
+	if err != nil {
+		log.Error("Validate message failed: could'nt parse pubkey")
+		return false
+	}
+
+	ok, err := pk.Verify(data, m.InnerSig)
+	if err != nil || !ok {
 		log.Warning("Validate message failed: invalid message signature detected")
 		return false
 	}

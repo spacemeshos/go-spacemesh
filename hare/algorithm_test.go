@@ -33,7 +33,9 @@ func TestConsensusProcess_StartTwice(t *testing.T) {
 	oracle := NewMockOracle()
 	signing := NewMockSigning()
 
-	proc := NewConsensusProcess(cfg, generatePubKey(t), *instanceId1, *s, oracle, signing, n1)
+	output := make(chan TerminationOutput,1)
+	proc := NewConsensusProcess(cfg, generatePubKey(t), *instanceId1, s, oracle, signing, n1, output)
+
 	broker.Register(proc)
 	err := proc.Start()
 	assert.Equal(t, nil, err)
@@ -51,7 +53,9 @@ func TestConsensusProcess_eventLoop(t *testing.T) {
 	oracle := NewMockOracle()
 	signing := NewMockSigning()
 
-	proc := NewConsensusProcess(cfg, generatePubKey(t), *instanceId1, *s, oracle, signing, n1)
+	output := make(chan TerminationOutput,1)
+	proc := NewConsensusProcess(cfg, generatePubKey(t), *instanceId1, s, oracle, signing, n1, output)
+
 	broker.Register(proc)
 	go proc.eventLoop()
 	n2.Broadcast(ProtoName, []byte{})
@@ -68,8 +72,8 @@ func TestConsensusProcess_handleMessage(t *testing.T) {
 	s := NewEmptySet(cfg.SetSize)
 	oracle := NewMockOracle()
 	signing := NewMockSigning()
-
-	proc := NewConsensusProcess(cfg, generatePubKey(t), *instanceId1, *s, oracle, signing, n1)
+	output := make(chan TerminationOutput,1)
+	proc := NewConsensusProcess(cfg, generatePubKey(t), *instanceId1, s, oracle, signing, n1, output)
 	broker.Register(proc)
 
 	m := NewMessageBuilder().SetRoundCounter(0).SetInstanceId(*instanceId1).SetPubKey(generatePubKey(t)).Sign(proc.signing).Build()
@@ -86,7 +90,8 @@ func TestConsensusProcess_nextRound(t *testing.T) {
 	oracle := NewMockOracle()
 	signing := NewMockSigning()
 
-	proc := NewConsensusProcess(cfg, generatePubKey(t), *instanceId1, *s, oracle, signing, n1)
+	output := make(chan TerminationOutput,1)
+	proc := NewConsensusProcess(cfg, generatePubKey(t), *instanceId1, s, oracle, signing, n1, output)
 	broker.Register(proc)
 
 	proc.advanceToNextRound()
@@ -103,7 +108,9 @@ func generateConsensusProcess(t *testing.T) *ConsensusProcess {
 	oracle := NewMockOracle()
 	signing := NewMockSigning()
 
-	return NewConsensusProcess(cfg, generatePubKey(t), *instanceId1, *s, oracle, signing, n1)
+	output := make(chan TerminationOutput,1)
+
+	return NewConsensusProcess(cfg, generatePubKey(t), *instanceId1, s, oracle, signing, n1, output)
 }
 
 func TestConsensusProcess_Id(t *testing.T) {
@@ -172,7 +179,8 @@ func TestConsensusProcess_sendMessage(t *testing.T) {
 	oracle := NewMockOracle()
 	signing := NewMockSigning()
 
-	proc := NewConsensusProcess(cfg, generatePubKey(t), *instanceId1, *s, oracle, signing, n1)
+	output := make(chan TerminationOutput,1)
+	proc := NewConsensusProcess(cfg, generatePubKey(t), *instanceId1, s, oracle, signing, n1, output)
 	broker.Register(proc)
 
 	msg := buildStatusMsg(generatePubKey(t), s, 0)
@@ -224,9 +232,11 @@ func TestConsensusProcess_procNotify(t *testing.T) {
 }
 
 func TestConsensusProcess_Termination(t *testing.T) {
+
 	proc := generateConsensusProcess(t)
 	proc.advanceToNextRound()
 	s := NewSetFromValues(value1)
+
 	for i:=0;i<cfg.F+1;i++ {
 		proc.processNotifyMsg(BuildNotifyMsg(generatePubKey(t), s))
 	}
