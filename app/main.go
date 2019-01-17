@@ -138,6 +138,10 @@ func newSpacemeshApp() *SpacemeshApp {
 
 }
 
+func (app *SpacemeshApp) introduction() {
+	log.Info("Welcome to Spacemesh. Spacemesh full node is starting...")
+}
+
 // this is what he wants to execute before app starts
 // this is my persistent pre run that involves parsing the
 // toml config file
@@ -155,6 +159,8 @@ func (app *SpacemeshApp) before(cmd *cobra.Command, args []string) (err error) {
 			Cancel()
 		}
 	}()
+
+	app.introduction()
 
 	// parse the config file based on flags et al
 	err = app.ParseConfig()
