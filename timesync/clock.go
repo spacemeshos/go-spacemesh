@@ -5,7 +5,8 @@ import (
 	"sync"
 	"time"
 )
-
+//this package sends a tick each tickInterval to all consumers of the tick
+//This also send the current layerID which is calculated from the number of ticks passed since epoch
 type LayerTimer chan mesh.LayerID
 
 type Ticker struct {
@@ -66,6 +67,17 @@ func (t *Ticker) updateLayerID(){
 }
 
 func (t *Ticker) StartClock(){
+	if t.time.Now().Before(t.startEpoch) {
+		sleepTill := t.startEpoch.Sub(t.time.Now())
+		tmr := time.NewTimer(sleepTill)
+		select {
+			case <- tmr.C:
+				break
+			case <-t.stop:
+				return
+		}
+	}
+
 	t.updateLayerID()
 	diff := ((t.time.Now().Sub(t.startEpoch)) / t.tickInterval) + t.tickInterval
 	time.Sleep(diff)
@@ -81,41 +93,3 @@ func (t *Ticker) StartClock(){
 		}
 	}
 }
-
-
-/*
-const INTERVAL_PERIOD time.Duration = 24 * time.Hour
-
-const HOUR_TO_TICK int = 23
-const MINUTE_TO_TICK int = 00
-const SECOND_TO_TICK int = 03
-
-type jobTicker struct {
-	timer *time.Timer
-}
-
-func runningRoutine() {
-	jobTicker := &jobTicker{}
-	jobTicker.updateTimer()
-	for {
-		<-jobTicker.timer.C
-		fmt.Println(time.Now(), "- just ticked")
-		jobTicker.updateTimer()
-	}
-}
-
-func (t *jobTicker) updateTimer() {
-	nextTick := time.Date(time.Now().Year(), time.Now().Month(),
-		time.Now().Day(), HOUR_TO_TICK, MINUTE_TO_TICK, SECOND_TO_TICK, 0, time.Local)
-	if !nextTick.After(time.Now()) {
-		nextTick = nextTick.Add(INTERVAL_PERIOD)
-	}
-	fmt.Println(nextTick, "- next tick")
-	diff := nextTick.Sub(time.Now())
-	if t.timer == nil {
-		t.timer = time.NewTimer(diff)
-	} else {
-		t.timer.Reset(diff)
-	}
-}
-*/

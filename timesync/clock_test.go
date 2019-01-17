@@ -37,6 +37,27 @@ func TestTicker_StartClock(t *testing.T) {
 	ts.Stop()
 }
 
+func TestTicker_StartClock_BeforeEpoch(t *testing.T) {
+	tick := 1 * time.Second
+	layout := "2006-01-02T15:04:05.000Z"
+	str := "2018-11-12T11:45:28.371Z"
+	tmr := MockTimer{}
+	start, _ := time.Parse(layout, str)
+
+	waitTime := start.Sub(tmr.Now())
+	ts := NewTicker(tmr,tick, start)
+	tk := ts.Subscribe()
+	then := time.Now()
+	ts.Start()
+
+	select {
+	case <-tk:
+		dur := time.Now().Sub(then)
+		assert.True(t, waitTime < dur)
+	}
+	ts.Stop()
+}
+
 func TestTicker_StartClock_LayerID(t *testing.T) {
 	tick := 1 * time.Second
 	layout := "2006-01-02T15:04:05.000Z"
