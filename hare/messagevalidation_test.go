@@ -13,8 +13,8 @@ func defaultValidator() *MessageValidator {
 }
 
 func TestMessageValidator_CommitStatus(t *testing.T) {
-	assert.True(t, validateCommitType(BuildCommitMsg(generatePubKey(t), NewEmptySet(lowDefaultSize))))
-	assert.True(t, validateStatusType(BuildStatusMsg(generatePubKey(t), NewEmptySet(lowDefaultSize))))
+	assert.True(t, validateCommitType(BuildCommitMsg(generateVerifier(t), NewEmptySet(lowDefaultSize))))
+	assert.True(t, validateStatusType(BuildStatusMsg(generateVerifier(t), NewEmptySet(lowDefaultSize))))
 }
 
 func TestMessageValidator_ValidateCertificate(t *testing.T) {
@@ -35,7 +35,7 @@ func TestMessageValidator_ValidateCertificate(t *testing.T) {
 
 	msgs = make([]*pb.HareMessage, validator.threshold)
 	for i := 0; i < validator.threshold; i++ {
-		msgs[i] = BuildCommitMsg(generatePubKey(t), NewEmptySet(validator.defaultSize))
+		msgs[i] = BuildCommitMsg(generateVerifier(t), NewEmptySet(validator.defaultSize))
 	}
 	cert.AggMsgs.Messages = msgs
 	assert.True(t, validator.validateCertificate(cert))
@@ -46,7 +46,7 @@ func TestMessageValidator_IsSyntacticallyValid(t *testing.T) {
 	assert.False(t, validator.isSyntacticallyValid(nil))
 	m := &pb.HareMessage{}
 	assert.False(t, validator.isSyntacticallyValid(m))
-	m.PubKey = generatePubKey(t).Bytes()
+	m.PubKey = generateVerifier(t).Bytes()
 	assert.False(t, validator.isSyntacticallyValid(m))
 	m.Message = &pb.InnerMessage{}
 	assert.False(t, validator.isSyntacticallyValid(m))
@@ -65,7 +65,7 @@ func TestMessageValidator_Aggregated(t *testing.T) {
 	assert.False(t, validator.validateAggregatedMessage(agg, funcs))
 	msgs := make([]*pb.HareMessage, validator.threshold)
 	for i := 0; i < validator.threshold; i++ {
-		msgs[i] = BuildStatusMsg(generatePubKey(t), NewSetFromValues(value1))
+		msgs[i] = BuildStatusMsg(generateVerifier(t), NewSetFromValues(value1))
 	}
 	agg.Messages = msgs
 	assert.True(t, validator.validateAggregatedMessage(agg, funcs))
@@ -76,7 +76,7 @@ func TestMessageValidator_Aggregated(t *testing.T) {
 
 func TestConsensusProcess_isContextuallyValid(t *testing.T) {
 	s := NewEmptySet(cfg.SetSize)
-	pub := generatePubKey(t)
+	pub := generateVerifier(t)
 	cp := generateConsensusProcess(t)
 
 	msgType := make([]MessageType, 4, 4)
@@ -89,7 +89,7 @@ func TestConsensusProcess_isContextuallyValid(t *testing.T) {
 		for i := 0; i < 4; i++ {
 			builder := NewMessageBuilder()
 			builder.SetType(msgType[j]).SetInstanceId(*instanceId1).SetRoundCounter(cp.k).SetKi(ki).SetValues(s)
-			builder = builder.SetPubKey(pub).Sign(NewMockSigning())
+			builder = builder.SetPubKey(pub.Bytes()).Sign(NewMockSigning())
 			//mt.Printf("%v   j=%v i=%v Exp: %v Actual %v\n", cp.k, j, i, rounds[j][i], isContextuallyValid(builder.Build(), cp.k))
 			assert.Equal(t, true, isContextuallyValid(builder.Build(), cp.k))
 			cp.advanceToNextRound()

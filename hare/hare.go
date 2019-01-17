@@ -98,7 +98,7 @@ func New(conf config.Config, p2p NetworkService, me crypto.PublicKey, sign Signi
 	h.outputs = make(map[mesh.LayerID][]mesh.BlockID, h.bufferSize) //  we keep results about LayerBuffer past layers
 
 	h.factory = func(conf config.Config, key crypto.PublicKey, instanceId InstanceId, s *Set, oracle Rolacle, signing Signing, p2p NetworkService, terminationReport chan TerminationOutput) Consensus {
-		return NewConsensusProcess(conf, key, instanceId, s, oracle, signing, p2p, terminationReport)
+		return NewConsensusProcess(conf, instanceId, s, oracle, signing, p2p, terminationReport)
 	}
 
 	return h
