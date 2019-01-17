@@ -2,7 +2,6 @@ package hare
 
 import (
 	"github.com/gogo/protobuf/proto"
-	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -23,8 +22,8 @@ func (builder *MessageBuilder) Build() *pb.HareMessage {
 	return builder.outer
 }
 
-func (builder *MessageBuilder) SetPubKey(key crypto.PublicKey) *MessageBuilder {
-	builder.outer.PubKey = key.Bytes()
+func (builder *MessageBuilder) SetPubKey(pub []byte) *MessageBuilder {
+	builder.outer.PubKey = pub
 	return builder
 }
 
