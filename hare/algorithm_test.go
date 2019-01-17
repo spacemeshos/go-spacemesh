@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
+	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/stretchr/testify/assert"
 	"testing"
@@ -27,15 +28,8 @@ func generatePubKey(t *testing.T) crypto.PublicKey {
 func TestConsensusProcess_StartTwice(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
-
 	broker := NewBroker(n1)
-	s := NewEmptySet(cfg.SetSize)
-	oracle := NewMockOracle()
-	signing := NewMockSigning()
-
-	output := make(chan TerminationOutput,1)
-	proc := NewConsensusProcess(cfg, generatePubKey(t), *instanceId1, s, oracle, signing, n1, output)
-
+	proc := generateConsensusProcess(t)
 	broker.Register(proc)
 	err := proc.Start()
 	assert.Equal(t, nil, err)
@@ -47,15 +41,8 @@ func TestConsensusProcess_eventLoop(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
-
 	broker := NewBroker(n1)
-	s := NewEmptySet(cfg.SetSize)
-	oracle := NewMockOracle()
-	signing := NewMockSigning()
-
-	output := make(chan TerminationOutput,1)
-	proc := NewConsensusProcess(cfg, generatePubKey(t), *instanceId1, s, oracle, signing, n1, output)
-
+	proc := generateConsensusProcess(t)
 	broker.Register(proc)
 	go proc.eventLoop()
 	n2.Broadcast(ProtoName, []byte{})
@@ -67,33 +54,19 @@ func TestConsensusProcess_eventLoop(t *testing.T) {
 func TestConsensusProcess_handleMessage(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
-
 	broker := NewBroker(n1)
-	s := NewEmptySet(cfg.SetSize)
-	oracle := NewMockOracle()
-	signing := NewMockSigning()
-	output := make(chan TerminationOutput,1)
-	proc := NewConsensusProcess(cfg, generatePubKey(t), *instanceId1, s, oracle, signing, n1, output)
+	proc := generateConsensusProcess(t)
 	broker.Register(proc)
-
 	m := NewMessageBuilder().SetRoundCounter(0).SetInstanceId(*instanceId1).SetPubKey(generatePubKey(t)).Sign(proc.signing).Build()
-
 	proc.handleMessage(m)
 }
 
 func TestConsensusProcess_nextRound(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
-
 	broker := NewBroker(n1)
-	s := NewEmptySet(cfg.SetSize)
-	oracle := NewMockOracle()
-	signing := NewMockSigning()
-
-	output := make(chan TerminationOutput,1)
-	proc := NewConsensusProcess(cfg, generatePubKey(t), *instanceId1, s, oracle, signing, n1, output)
+	proc := generateConsensusProcess(t)
 	broker.Register(proc)
-
 	proc.advanceToNextRound()
 	assert.Equal(t, uint32(1), proc.k)
 	proc.advanceToNextRound()
@@ -101,16 +74,18 @@ func TestConsensusProcess_nextRound(t *testing.T) {
 }
 
 func generateConsensusProcess(t *testing.T) *ConsensusProcess {
+	bn, _ := node.GenerateTestNode(t)
 	sim := service.NewSimulator()
-	n1 := sim.NewNode()
+	n1 := sim.NewNodeFrom(bn.Node)
 
-	s := NewEmptySet(cfg.SetSize)
-	oracle := NewMockOracle()
-	signing := NewMockSigning()
+	s := NewSetFromValues(value1)
+	oracle := NewMockHashOracle(numOfClients)
+	oracle.Register(bn.PublicKey())
+	signing := &signordie{bn.PrivateKey()}
 
 	output := make(chan TerminationOutput,1)
 
-	return NewConsensusProcess(cfg, generatePubKey(t), *instanceId1, s, oracle, signing, n1, output)
+	return NewConsensusProcess(cfg, bn.PublicKey(), *instanceId1, s, oracle, signing, n1, output)
 }
 
 func TestConsensusProcess_Id(t *testing.T) {
@@ -176,7 +151,7 @@ func TestConsensusProcess_sendMessage(t *testing.T) {
 	n1 := sim.NewNode()
 	broker := NewBroker(n1)
 	s := NewEmptySet(cfg.SetSize)
-	oracle := NewMockOracle()
+	oracle := NewMockHashOracle(numOfClients)
 	signing := NewMockSigning()
 
 	output := make(chan TerminationOutput,1)
