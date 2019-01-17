@@ -100,17 +100,17 @@ func (his *HareIntegrationSuite) checkResult() {
 	}
 }
 
-// Test 1: Three nodes sanity
+// Test 1: 16 nodes sanity
 type hareIntegrationThreeNodes struct {
 	*HareIntegrationSuite
 }
 
-func Test_ThreeNodes_HareIntegrationSuite(t *testing.T) {
+func Test_16Nodes_HareIntegrationSuite(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
-	const roundDuration = time.Second * time.Duration(1)
-	cfg := config.Config{N: 3, F: 1, SetSize: 10, RoundDuration: roundDuration}
+	const roundDuration = time.Second * time.Duration(2)
+	cfg := config.Config{N: 16, F: 2, SetSize: 10, RoundDuration: roundDuration}
 
 	his := &hareIntegrationThreeNodes{newIntegrationSuite()}
 	his.BootstrappedNodeCount = cfg.N - 1
@@ -119,18 +119,19 @@ func Test_ThreeNodes_HareIntegrationSuite(t *testing.T) {
 	his.name = t.Name()
 
 	i := 1
-	set1 := NewEmptySet(cfg.SetSize)
-	set1.Add(value1)
-	set1.Add(value2)
-	set2 := NewEmptySet(cfg.SetSize)
-	set2.Add(value1)
-	his.initialSets = []*Set{set1, set1, set2}
+	set1 := NewSetFromValues(value1, value2)
+	set2 := NewSetFromValues(value1)
+	his.initialSets = make([]*Set, cfg.N)
+	his.fill(set1, 0, 6)
+	his.fill(set2, 7, cfg.N-1)
 	his.honestSets = []*Set{set1}
-	oracle := NewMockStaticOracle(cfg.N)
+	oracle := NewMockHashOracle(cfg.N)
 	his.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
 		broker := NewBroker(s)
 		output := make(chan TerminationOutput, 1)
-		proc := NewConsensusProcess(cfg, s.LocalNode().PublicKey(), *instanceId1, his.initialSets[idx], oracle, &signordie{s.LocalNode().PrivateKey()}, s, output)
+		pub := s.LocalNode().PublicKey()
+		oracle.Register(pub)
+		proc := NewConsensusProcess(cfg, pub, *instanceId1, his.initialSets[idx], oracle, &signordie{s.LocalNode().PrivateKey()}, s, output)
 		broker.Register(proc)
 		broker.Start()
 		his.procs = append(his.procs, proc)
@@ -144,12 +145,12 @@ func (his *hareIntegrationThreeNodes) Test_ThreeNodes_AllHonest() {
 		proc.Start()
 	}
 
-	his.waitForTimedTermination(30 * time.Second)
+	his.waitForTimedTermination(60 * time.Second)
 }
 
-// Test 2: 100 procs
+// Test 2: 20 nodes sanity
 
-type hareIntegration100Nodes struct {
+type hareIntegration20Nodes struct {
 	*HareIntegrationSuite
 }
 
@@ -165,14 +166,14 @@ func (sod signordie) Sign(m []byte) ([]byte) {
 	return s
 }
 
-func Test_100Nodes_HareIntegrationSuite(t *testing.T) {
+func Test_20Nodes_HareIntegrationSuite(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
 	const roundDuration = time.Second * time.Duration(5)
-	cfg := config.Config{N: 20, F: 10, SetSize: 10, RoundDuration: roundDuration}
+	cfg := config.Config{N: 20, F: 8, SetSize: 10, RoundDuration: roundDuration}
 
-	his := &hareIntegration100Nodes{newIntegrationSuite()}
+	his := &hareIntegration20Nodes{newIntegrationSuite()}
 	his.BootstrappedNodeCount = cfg.N - 3
 	his.BootstrapNodesCount = 3
 	his.NeighborsCount = 8
@@ -188,12 +189,14 @@ func Test_100Nodes_HareIntegrationSuite(t *testing.T) {
 	his.fill(set2, 6, 12)
 	his.fill(set3, 13, cfg.N-1)
 	his.honestSets = []*Set{set1, set2, set3}
-	oracle := NewMockStaticOracle(cfg.N)
+	oracle := NewMockHashOracle(cfg.N)
 	his.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
 		log.Info("Starting instance ", idx)
 		broker := NewBroker(s)
 		output := make(chan TerminationOutput, 1)
-		proc := NewConsensusProcess(cfg, s.LocalNode().PublicKey(), *instanceId1, his.initialSets[idx], oracle, &signordie{s.LocalNode().PrivateKey()}, s, output)
+		pub := s.LocalNode().PublicKey()
+		oracle.Register(pub)
+		proc := NewConsensusProcess(cfg, pub, *instanceId1, his.initialSets[idx], oracle, &signordie{s.LocalNode().PrivateKey()}, s, output)
 		broker.Register(proc)
 		broker.Start()
 		his.procs = append(his.procs, proc)
@@ -202,7 +205,7 @@ func Test_100Nodes_HareIntegrationSuite(t *testing.T) {
 	suite.Run(t, his)
 }
 
-func (his *hareIntegration100Nodes) Test_100Nodes_AllHonest() {
+func (his *hareIntegration20Nodes) Test_100Nodes_AllHonest() {
 	for _, proc := range his.procs {
 		proc.Start()
 	}

@@ -119,6 +119,16 @@ func NewSet(data [][]byte) *Set {
 	return s
 }
 
+// Clones the set
+func (s *Set) Clone() *Set {
+	clone := NewEmptySet(len(s.values))
+	for _, v := range s.values {
+		clone.Add(v)
+	}
+
+	return clone
+}
+
 // Checks if a value is contained in the  set s
 func (s *Set) Contains(id Value) bool {
 	_, exist := s.values[id.Id()]

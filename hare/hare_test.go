@@ -76,7 +76,7 @@ func TestNew(t *testing.T) {
 
 	layerTicker := make(chan mesh.LayerID)
 
-	oracle := NewMockOracle()
+	oracle := NewMockHashOracle(numOfClients)
 	signing := NewMockSigning()
 
 	om := new(orphanMock)
@@ -94,7 +94,7 @@ func TestHare_Start(t *testing.T) {
 
 	layerTicker := make(chan mesh.LayerID)
 
-	oracle := NewMockOracle()
+	oracle := NewMockHashOracle(numOfClients)
 	signing := NewMockSigning()
 
 	om := new(orphanMock)
@@ -116,7 +116,7 @@ func TestHare_GetResult(t *testing.T) {
 
 	layerTicker := make(chan mesh.LayerID)
 
-	oracle := NewMockOracle()
+	oracle := NewMockHashOracle(numOfClients)
 	signing := NewMockSigning()
 
 	om := new(orphanMock)
@@ -147,7 +147,7 @@ func TestHare_GetResult2(t *testing.T) {
 
 	layerTicker := make(chan mesh.LayerID)
 
-	oracle := NewMockOracle()
+	oracle := NewMockHashOracle(numOfClients)
 	signing := NewMockSigning()
 
 	om := new(orphanMock)
@@ -184,7 +184,7 @@ func TestHare_collectOutput(t *testing.T) {
 
 	layerTicker := make(chan mesh.LayerID)
 
-	oracle := NewMockOracle()
+	oracle := NewMockHashOracle(numOfClients)
 	signing := NewMockSigning()
 
 	om := new(orphanMock)
@@ -213,7 +213,7 @@ func TestHare_collectOutput2(t *testing.T) {
 
 	layerTicker := make(chan mesh.LayerID)
 
-	oracle := NewMockOracle()
+	oracle := NewMockHashOracle(numOfClients)
 	signing := NewMockSigning()
 
 	om := new(orphanMock)
@@ -256,7 +256,7 @@ func TestHare_onTick(t *testing.T) {
 
 	layerTicker := make(chan mesh.LayerID)
 
-	oracle := NewMockOracle()
+	oracle := NewMockHashOracle(numOfClients)
 	signing := NewMockSigning()
 
 	blockset := []mesh.BlockID{mesh.BlockID(0), mesh.BlockID(1), mesh.BlockID(2)}
