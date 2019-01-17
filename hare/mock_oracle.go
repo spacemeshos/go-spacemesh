@@ -20,15 +20,36 @@ type Rolacle interface {
 	Validate(committeeSize int, proof Signature) bool
 }
 
+type hasherU32 struct {
+}
+
+func newHasherU32() *hasherU32 {
+	h := new(hasherU32)
+
+	return h
+}
+
+func (h *hasherU32) Hash(data []byte) uint32 {
+	fnv := fnv.New32()
+	fnv.Write(data)
+	return fnv.Sum32()
+}
+
+func (h *hasherU32) MaxValue() uint32 {
+	return math.MaxUint32
+}
+
 type MockHashOracle struct {
 	clients map[string]struct{}
 	mutex   sync.RWMutex
+	hasher  *hasherU32
 }
 
 // N is the expected comity size
 func NewMockHashOracle(expectedSize int) *MockHashOracle {
 	mock := new(MockHashOracle)
 	mock.clients = make(map[string]struct{}, expectedSize)
+	mock.hasher = newHasherU32()
 
 	return mock
 }
@@ -67,7 +88,7 @@ func (mock *MockHashOracle) calcThreshold(committeeSize int) uint32 {
 		return 0
 	}
 
-	return uint32(uint64(committeeSize) * uint64(math.MaxUint32) / uint64(len(mock.clients)))
+	return uint32(uint64(committeeSize) * uint64(mock.hasher.MaxValue()) / uint64(len(mock.clients)))
 }
 
 // Validate if a proof is valid for a given committee size
@@ -78,9 +99,7 @@ func (mock *MockHashOracle) Validate(committeeSize int, proof Signature) bool {
 	}
 
 	// calculate hash of proof
-	hash := fnv.New32()
-	hash.Write(proof)
-	proofHash := hash.Sum32()
+	proofHash := mock.hasher.Hash(proof)
 	if proofHash <= mock.calcThreshold(committeeSize) { // check threshold
 		return true
 	}
