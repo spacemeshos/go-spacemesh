@@ -29,11 +29,11 @@ import (
 const ConnectingTimeout = 20 * time.Second //todo: add to the config
 
 type protocolMessage struct {
-	sender node.Node
+	sender crypto.PublicKey
 	data   service.Data
 }
 
-func (pm protocolMessage) Sender() node.Node {
+func (pm protocolMessage) Sender() crypto.PublicKey {
 	return pm.sender
 }
 
@@ -537,11 +537,11 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 		data = &service.DataMsgWrapper{Req: wrap.Req, MsgType: wrap.Type, ReqID: wrap.ReqID, Payload: wrap.Payload}
 	}
 
-	return s.ProcessProtocolMessage(remoteNode, pm.Metadata.NextProtocol, data)
+	return s.ProcessProtocolMessage(msg.Conn.RemotePublicKey(), pm.Metadata.NextProtocol, data)
 }
 
 // ProcessProtocolMessage passes an already decrypted message to a protocol.
-func (s *swarm) ProcessProtocolMessage(sender node.Node, protocol string, data service.Data) error {
+func (s *swarm) ProcessProtocolMessage(sender crypto.PublicKey, protocol string, data service.Data) error {
 	// route authenticated message to the reigstered protocol
 	s.protocolHandlerMutex.RLock()
 	msgchan := s.protocolHandlers[protocol]

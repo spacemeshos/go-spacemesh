@@ -7,7 +7,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/message"
-	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"hash/fnv"
@@ -34,7 +33,7 @@ type baseNetwork interface {
 	SendMessage(peerPubKey string, protocol string, payload []byte) error
 	RegisterProtocol(protocol string) chan service.Message
 	SubscribePeerEvents() (conn chan crypto.PublicKey, disc chan crypto.PublicKey)
-	ProcessProtocolMessage(sender node.Node, protocol string, data service.Data) error
+	ProcessProtocolMessage(sender crypto.PublicKey, protocol string, data service.Data) error
 }
 
 type signer interface {
@@ -285,7 +284,7 @@ func (prot *Protocol) processMessage(msg *pb.ProtocolMessage) error {
 		return err
 	}
 
-	go prot.net.ProcessProtocolMessage(node.New(authKey, ""), msg.Metadata.NextProtocol, data)
+	go prot.net.ProcessProtocolMessage(authKey, msg.Metadata.NextProtocol, data)
 	return nil
 }
 

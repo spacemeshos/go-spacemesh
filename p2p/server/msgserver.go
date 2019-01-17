@@ -125,7 +125,7 @@ func (p *MessageServer) removeFromPending(reqID uint64) {
 func (p *MessageServer) handleMessage(msg Message) {
 	data := msg.Data().(*service.DataMsgWrapper)
 	if data.Req {
-		p.handleRequestMessage(msg.Sender().PublicKey(), data)
+		p.handleRequestMessage(msg.Sender(), data)
 	} else {
 		p.handleResponseMessage(data)
 	}

@@ -202,7 +202,7 @@ func Test_ConnectionBeforeMessage(t *testing.T) {
 	go func () {
 		for {
 			msg := <-c2 // immediate response will probably trigger GetConnection fast
-			p2.SendMessage(msg.Sender().PublicKey().String(), exampleProtocol, []byte("RESP"))
+			p2.SendMessage(msg.Sender().String(), exampleProtocol, []byte("RESP"))
 			wg.Done()
 		}
 	}()
@@ -316,7 +316,7 @@ func TestSwarm_MultipleMessagesFromMultipleSenders(t *testing.T) {
 	go func() {
 		for {
 			msg := <-exchan1
-			sender := msg.Sender().PublicKey().String()
+			sender := msg.Sender().String()
 			mu.Lock()
 			c, ok := pend[sender]
 			if !ok {

@@ -113,7 +113,7 @@ func (s *Simulator) updateNode(node string, sender *Node) {
 
 type simMessage struct {
 	msg    Data
-	sender node.Node
+	sender crypto.PublicKey
 }
 
 // Bytes is the message's binary data in byte array format.
@@ -127,7 +127,7 @@ func (sm simMessage) Bytes() []byte {
 }
 
 // Sender is the node who sent this message
-func (sm simMessage) Sender() node.Node {
+func (sm simMessage) Sender() crypto.PublicKey {
 	return sm.sender
 }
 
@@ -137,7 +137,7 @@ func (sn *Node) Start() error {
 }
 
 // ProcessProtocolMessage
-func (sn *Node) ProcessProtocolMessage(sender node.Node, protocol string, payload Data) error {
+func (sn *Node) ProcessProtocolMessage(sender crypto.PublicKey, protocol string, payload Data) error {
 	sn.sim.mutex.RLock()
 	c, ok := sn.sim.protocolHandler[sn.String()][protocol]
 	sn.sim.mutex.RUnlock()
@@ -164,7 +164,7 @@ func (sn *Node) sendMessageImpl(nodeID string, protocol string, payload Data) er
 	thec, ok := sn.sim.protocolHandler[nodeID][protocol]
 	sn.sim.mutex.RUnlock()
 	if ok {
-		thec <- simMessage{payload, sn.Node}
+		thec <- simMessage{payload, sn.Node.PublicKey()}
 		sn.sim.updateNode(nodeID, sn)
 		return nil
 	}
@@ -177,7 +177,7 @@ func (sn *Node) Broadcast(protocol string, payload []byte) error {
 	sn.sim.mutex.RLock()
 	for n := range sn.sim.protocolHandler {
 		if c, ok := sn.sim.protocolHandler[n][protocol]; ok {
-			c <- simMessage{DataBytes{Payload: payload}, sn.Node}
+			c <- simMessage{DataBytes{Payload: payload}, sn.Node.PublicKey()}
 		}
 	}
 	sn.sim.mutex.RUnlock()

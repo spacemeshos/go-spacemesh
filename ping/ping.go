@@ -12,11 +12,6 @@ import (
 	"time"
 )
 
-// Pinger is an identity that does ping.
-type Pinger interface {
-	PublicKey() crypto.PublicKey
-}
-
 const protocol = "/ping/1.0/"
 
 // PingTimeout is a timeout for ping reply
@@ -139,7 +134,7 @@ func (p *Ping) sendRequest(target string, reqid crypto.UUID, ping *pb.Ping) (cha
 	return pchan, nil
 }
 
-func (p *Ping) handleRequest(sender Pinger, ping *pb.Ping) error {
+func (p *Ping) handleRequest(sender crypto.PublicKey, ping *pb.Ping) error {
 	responseMutex.RLock()
 	resp, ok := responses[ping.Message]
 	responseMutex.RUnlock()
@@ -159,7 +154,7 @@ func (p *Ping) handleRequest(sender Pinger, ping *pb.Ping) error {
 		return err
 	}
 	log.Debug("Ping: Responding with %v", resp)
-	return p.p2p.SendMessage(sender.PublicKey().String(), protocol, bin)
+	return p.p2p.SendMessage(sender.String(), protocol, bin)
 }
 
 func (p *Ping) handleResponse(ping *pb.Ping) {
