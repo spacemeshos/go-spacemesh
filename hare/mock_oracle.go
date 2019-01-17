@@ -75,20 +75,21 @@ func (mock *MockHashOracle) Unregister(pubKey crypto.PublicKey) {
 // Calculates the threshold for the given committee size
 func (mock *MockHashOracle) calcThreshold(committeeSize int) uint32 {
 	mock.mutex.RLock()
-	defer mock.mutex.RUnlock()
+	numClients := len(mock.clients)
+	mock.mutex.RUnlock()
 
-	if len(mock.clients) == 0 {
+	if numClients == 0 {
 		log.Error("Called calcThreshold with 0 clients registered")
 		return 0
 	}
 
-	if committeeSize > len(mock.clients) {
+	if committeeSize > numClients {
 		log.Error("Requested for a committee bigger than the number of registered clients. Expected at least %v clients Actual: %v",
-			committeeSize, len(mock.clients))
+			committeeSize, numClients)
 		return 0
 	}
 
-	return uint32(uint64(committeeSize) * uint64(mock.hasher.MaxValue()) / uint64(len(mock.clients)))
+	return uint32(uint64(committeeSize) * uint64(mock.hasher.MaxValue()) / uint64(numClients))
 }
 
 // Validate if a proof is valid for a given committee size
