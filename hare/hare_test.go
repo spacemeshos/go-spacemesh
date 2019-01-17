@@ -2,7 +2,6 @@ package hare
 
 import (
 	"github.com/spacemeshos/go-spacemesh/common"
-	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -59,7 +58,7 @@ func (mcp *mockConsensusProcess) createInbox(size uint32) chan *pb.HareMessage {
 	return c
 }
 
-func NewMockConsensusProcess(cfg config.Config, key crypto.PublicKey, instanceId InstanceId, s *Set, oracle Rolacle, signing Signing, p2p NetworkService, outputChan chan TerminationOutput) *mockConsensusProcess {
+func NewMockConsensusProcess(cfg config.Config, instanceId InstanceId, s *Set, oracle Rolacle, signing Signing, p2p NetworkService, outputChan chan TerminationOutput) *mockConsensusProcess {
 	mcp := new(mockConsensusProcess)
 	mcp.Closer = NewCloser()
 	mcp.id = common.BytesToUint32(instanceId.Bytes())
@@ -81,7 +80,7 @@ func TestNew(t *testing.T) {
 
 	om := new(orphanMock)
 
-	h := New(cfg, n1, n1.PublicKey(), signing, om, oracle, layerTicker)
+	h := New(cfg, n1, signing, om, oracle, layerTicker)
 
 	if h == nil {
 		t.Fatal()
@@ -99,14 +98,14 @@ func TestHare_Start(t *testing.T) {
 
 	om := new(orphanMock)
 
-	h := New(cfg, n1, n1.PublicKey(), signing, om, oracle, layerTicker)
+	h := New(cfg, n1, signing, om, oracle, layerTicker)
 
 	h.broker.Start() // todo: fix that hack. this will cause h.Start to return err
 
 	err := h.Start()
 	require.Error(t, err)
 
-	h2 := New(cfg, n1, n1.PublicKey(), signing, om, oracle, layerTicker)
+	h2 := New(cfg, n1, signing, om, oracle, layerTicker)
 	require.NoError(t, h2.Start())
 }
 
@@ -121,7 +120,7 @@ func TestHare_GetResult(t *testing.T) {
 
 	om := new(orphanMock)
 
-	h := New(cfg, n1, n1.PublicKey(), signing, om, oracle, layerTicker)
+	h := New(cfg, n1, signing, om, oracle, layerTicker)
 
 	res, err := h.GetResult(mesh.LayerID(0))
 
@@ -152,12 +151,12 @@ func TestHare_GetResult2(t *testing.T) {
 
 	om := new(orphanMock)
 
-	h := New(cfg, n1, n1.PublicKey(), signing, om, oracle, layerTicker)
+	h := New(cfg, n1, signing, om, oracle, layerTicker)
 
 	h.networkDelta = 0
 
-	h.factory = func(cfg config.Config, key crypto.PublicKey, instanceId InstanceId, s *Set, oracle Rolacle, signing Signing, p2p NetworkService, outputChan chan TerminationOutput) Consensus {
-		return NewMockConsensusProcess(cfg, key, instanceId, s, oracle, signing, p2p, outputChan)
+	h.factory = func(cfg config.Config, instanceId InstanceId, s *Set, oracle Rolacle, signing Signing, p2p NetworkService, outputChan chan TerminationOutput) Consensus {
+		return NewMockConsensusProcess(cfg, instanceId, s, oracle, signing, p2p, outputChan)
 	}
 
 	h.Start()
@@ -189,7 +188,7 @@ func TestHare_collectOutput(t *testing.T) {
 
 	om := new(orphanMock)
 
-	h := New(cfg, n1, n1.PublicKey(), signing, om, oracle, layerTicker)
+	h := New(cfg, n1, signing, om, oracle, layerTicker)
 
 	mockid := uint32(0)
 	set := NewSetFromValues(Value{NewBytes32([]byte{0})})
@@ -218,7 +217,7 @@ func TestHare_collectOutput2(t *testing.T) {
 
 	om := new(orphanMock)
 
-	h := New(cfg, n1, n1.PublicKey(), signing, om, oracle, layerTicker)
+	h := New(cfg, n1, signing, om, oracle, layerTicker)
 	h.bufferSize = 1
 	h.lastLayer = 0
 	mockid := uint32(0)
@@ -265,15 +264,15 @@ func TestHare_onTick(t *testing.T) {
 		return blockset
 	}
 
-	h := New(cfg, n1, n1.PublicKey(), signing, om, oracle, layerTicker)
+	h := New(cfg, n1, signing, om, oracle, layerTicker)
 	h.networkDelta = 0
 	h.bufferSize = 1
 
 	createdChan := make(chan struct{})
 
 	var nmcp *mockConsensusProcess
-	h.factory = func(cfg config.Config, key crypto.PublicKey, instanceId InstanceId, s *Set, oracle Rolacle, signing Signing, p2p NetworkService, outputChan chan TerminationOutput) Consensus {
-		nmcp = NewMockConsensusProcess(cfg, key, instanceId, s, oracle, signing, p2p, outputChan)
+	h.factory = func(cfg config.Config, instanceId InstanceId, s *Set, oracle Rolacle, signing Signing, p2p NetworkService, outputChan chan TerminationOutput) Consensus {
+		nmcp = NewMockConsensusProcess(cfg, instanceId, s, oracle, signing, p2p, outputChan)
 		createdChan <- struct{}{}
 		return nmcp
 	}
