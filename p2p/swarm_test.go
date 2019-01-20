@@ -12,7 +12,6 @@ import (
 	"errors"
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
-	"github.com/spacemeshos/go-spacemesh/p2p/message"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
@@ -353,7 +352,7 @@ func TestSwarm_onRemoteClientMessage(t *testing.T) {
 	assert.Equal(t, err, ErrBadFormat2)
 
 	goodmsg := &pb.ProtocolMessage{
-		Metadata: message.NewProtocolMessageMetadata(id.PublicKey(), exampleProtocol), // not signed
+		Metadata: NewProtocolMessageMetadata(id.PublicKey(), exampleProtocol), // not signed
 		Data:     &pb.ProtocolMessage_Payload{[]byte(examplePayload)},
 	}
 

@@ -1,4 +1,4 @@
-package message
+package p2p
 
 import (
 	"github.com/spacemeshos/go-spacemesh/p2p/config"

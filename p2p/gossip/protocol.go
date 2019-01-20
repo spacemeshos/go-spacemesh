@@ -177,7 +177,7 @@ func (prot *Protocol) Broadcast(payload []byte, nextProt string) error {
 		NextProtocol:  nextProt,
 		ClientVersion: protocolVer,
 		Timestamp:     time.Now().Unix(),
-		AuthPubkey:    prot.localNodePubkey.Bytes(),
+		AuthPubkey:    prot.localNodePubkey.Bytes(), // TODO: @noam consider replacing this with another reply mechanism
 	}
 
 	msg := &pb.ProtocolMessage{

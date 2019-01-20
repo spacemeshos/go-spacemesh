@@ -40,9 +40,9 @@ type key struct {
 	bytes *[keySize]byte
 }
 
-var _ PrivateKey = &key{}
-var _ PublicKey = &key{}
-var _ SharedSecret = &key{}
+var _ PrivateKey = (*key)(nil)
+var _ PublicKey = (*key)(nil)
+var _ SharedSecret = (*key)(nil)
 
 func (k *key) Raw() *[keySize]byte {
 	return k.bytes

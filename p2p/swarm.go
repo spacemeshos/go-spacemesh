@@ -11,7 +11,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/cryptoBox"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht"
 	"github.com/spacemeshos/go-spacemesh/p2p/gossip"
-	"github.com/spacemeshos/go-spacemesh/p2p/message"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
@@ -265,7 +264,7 @@ func (s *swarm) sendMessageImpl(peerPubKey cryptoBox.PublicKey, protocol string,
 	}
 
 	protomessage := &pb.ProtocolMessage{
-		Metadata: message.NewProtocolMessageMetadata(s.lNode.PublicKey(), protocol),
+		Metadata: NewProtocolMessageMetadata(s.lNode.PublicKey(), protocol),
 	}
 
 	switch x := payload.(type) {
