@@ -73,9 +73,6 @@ type swarm struct {
 	protocolHandlers     map[string]chan service.Message
 	protocolHandlerMutex sync.RWMutex
 
-
-	connMsgLock sync.WaitGroup
-
 	gossip  *gossip.Protocol
 	network *net.Net
 	cPool   cPool
@@ -314,7 +311,7 @@ func (s *swarm) Shutdown() {
 	s.protocolHandlerMutex.Lock()
 	for i, _ := range s.protocolHandlers {
 		delete(s.protocolHandlers, i)
-		//close(prt) // this casues
+		//close(prt) //todo: signal protocols to shutdown with closing chan. (this makes us send on closed chan. )
 	}
 	s.protocolHandlerMutex.Unlock()
 }
