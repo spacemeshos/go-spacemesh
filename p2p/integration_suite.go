@@ -24,12 +24,12 @@ type NodeTestInstance interface {
 type IntegrationTestSuite struct {
 	suite.Suite
 
-	BootstrapNodesCount int
+	BootstrapNodesCount   int
 	BootstrappedNodeCount int
-	NeighborsCount int
+	NeighborsCount        int
 
 	BeforeHook func(idx int, s NodeTestInstance)
-	AfterHook func(idx int, s NodeTestInstance)
+	AfterHook  func(idx int, s NodeTestInstance)
 
 	boot  []*swarm
 	Instances []*swarm
@@ -97,9 +97,14 @@ func (its *IntegrationTestSuite) SetupSuite() {
 
 	// go interfaces suck with slices
 	its.Instances = swarm
-	its.boot = boot
 }
 
+func (its *IntegrationTestSuite) TearDownSuite() {
+	_, _ = its.ForAllAsync(context.Background(), func(idx int, s NodeTestInstance) error {
+		s.Shutdown()
+		return nil
+	})
+}
 
 func createP2pInstance(t testing.TB, config config.Config) *swarm {
 	port, err := node.GetUnboundedPort()
@@ -111,7 +116,6 @@ func createP2pInstance(t testing.TB, config config.Config) *swarm {
 	return p
 }
 
-
 func (its *IntegrationTestSuite) ForAll(f func(idx int, s NodeTestInstance) error, filter []int) []error {
 	e := make([]error, 0)
 swarms:
@@ -121,7 +125,7 @@ swarms:
 				continue swarms
 			}
 		}
-		e = append(e, f(i,s))
+		e = append(e, f(i, s))
 	}
 	return e
 }
@@ -162,7 +166,6 @@ func Errors(arr []error) []int {
 	}
 	return idx
 }
-
 
 func StringIdentifiers(boot ...*swarm) []string {
 	s := make([]string, len(boot))

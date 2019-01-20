@@ -46,6 +46,7 @@ func (pm protocolMessage) Bytes() []byte {
 type cPool interface {
 	GetConnection(address string, pk p2pcrypto.PublicKey) (net.Connection, error)
 	RemoteConnectionsChannel() chan net.NewConnectionEvent
+	Shutdown()
 }
 
 type swarm struct {
@@ -71,6 +72,9 @@ type swarm struct {
 	// NOTE: maybe let more than one handler register on a protocol ?
 	protocolHandlers     map[string]chan service.Message
 	protocolHandlerMutex sync.RWMutex
+
+
+	connMsgLock sync.WaitGroup
 
 	gossip  *gossip.Protocol
 	network *net.Net
@@ -304,28 +308,25 @@ func (s *swarm) RegisterProtocol(protocol string) chan service.Message {
 // Shutdown sends a shutdown signal to all running services of swarm and then runs an internal shutdown to cleanup.
 func (s *swarm) Shutdown() {
 	close(s.shutdown)
-	<-s.shutdown // Block until really closes.
-	s.shutdownInternal()
-}
-
-// shutdown gracefully shuts down swarm services.
-func (s *swarm) shutdownInternal() {
-	//TODO : Gracefully shutdown swarm => finish incmoing / outgoing msgs
 	s.network.Shutdown()
+	s.cPool.Shutdown()
+
+	s.protocolHandlerMutex.Lock()
+	for i, _ := range s.protocolHandlers {
+		delete(s.protocolHandlers, i)
+		//close(prt) // this casues
+	}
+	s.protocolHandlerMutex.Unlock()
 }
 
 // process an incoming message
 func (s *swarm) processMessage(ime net.IncomingMessageEvent) {
-	select {
-	case <-s.shutdown:
-		break
-	default:
-		err := s.onRemoteClientMessage(ime)
-		if err != nil {
-			s.lNode.Errorf("Err reading message from %v, closing connection err=%v", ime.Conn.RemotePublicKey(), err)
-			ime.Conn.Close()
-			// TODO: differentiate action on errors
-		}
+
+	err := s.onRemoteClientMessage(ime)
+	if err != nil {
+		s.lNode.Errorf("Err reading message from %v, closing connection err=%v", ime.Conn.RemotePublicKey(), err)
+		ime.Conn.Close()
+		// TODO: differentiate action on errors
 	}
 }
 
@@ -371,7 +372,8 @@ Loop:
 		case con := <-closing:
 			go s.retryOrReplace(con.RemotePublicKey()) //todo notify dht?
 		case nce := <-newConnEvents:
-			go func(nce net.NewConnectionEvent) { s.dht.Update(nce.Node); s.addIncomingPeer(nce.Node.PublicKey()) }(nce)
+			s.dht.Update(nce.Node)
+			s.addIncomingPeer(nce.Node.PublicKey())
 		case <-s.shutdown:
 			break Loop
 		}
@@ -386,6 +388,11 @@ func (s *swarm) retryOrReplace(key p2pcrypto.PublicKey) {
 		return
 	}
 	peer := getpeer[0]
+
+	if peer.PublicKey().String() != key.String() {
+		s.Disconnect(key)
+		return
+	}
 
 	_, err := s.cPool.GetConnection(peer.Address(), peer.PublicKey())
 	if err != nil { // we could'nt connect :/
@@ -492,9 +499,9 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 // ProcessProtocolMessage passes an already decrypted message to a protocol.
 func (s *swarm) ProcessProtocolMessage(sender node.Node, protocol string, data service.Data) error {
 	// route authenticated message to the reigstered protocol
-	s.protocolHandlerMutex.RLock()
+	s.protocolHandlerMutex.Lock()
 	msgchan := s.protocolHandlers[protocol]
-	s.protocolHandlerMutex.RUnlock()
+	s.protocolHandlerMutex.Unlock()
 	if msgchan == nil {
 		return ErrNoProtocol
 	}
@@ -663,7 +670,7 @@ loop:
 			}
 
 			s.outpeersMutex.Lock()
-			if _,ok := s.outpeers[pkstr]; ok {
+			if _, ok := s.outpeers[pkstr]; ok {
 				s.outpeersMutex.Unlock()
 				s.lNode.Debug("selected an already outbound peer. not counting that peer.", cne.n.String())
 				bad++

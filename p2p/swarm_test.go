@@ -38,6 +38,10 @@ func (cp *cpoolMock) RemoteConnectionsChannel() chan net.NewConnectionEvent {
 	return make(chan net.NewConnectionEvent)
 }
 
+func (cp *cpoolMock) Shutdown() {
+
+}
+
 func p2pTestInstance(t testing.TB, config config.Config) *swarm {
 	p := p2pTestNoStart(t, config)
 	err := p.Start()
@@ -142,9 +146,10 @@ func Test_ConnectionBeforeMessage(t *testing.T) {
 	var wg sync.WaitGroup
 
 	p2 := p2pTestInstance(t, config.DefaultConfig())
+	defer p2.Shutdown()
 	c2 := p2.RegisterProtocol(exampleProtocol)
 
-	go func () {
+	go func() {
 		for {
 			msg := <-c2 // immediate response will probably trigger GetConnection fast
 			p2.SendMessage(msg.Sender().PublicKey(), exampleProtocol, []byte("RESP"))
@@ -161,19 +166,20 @@ func Test_ConnectionBeforeMessage(t *testing.T) {
 		if err != nil {
 			t.Fatal("Didn't get connection yet while SendMessage called GetConnection")
 		}
-		return c,nil
+		return c, nil
 	}
-
 
 	p2.cPool = cpm
 
 	payload := []byte(RandString(10))
 
+	sa := &swarmArray{}
 
 	for i := 0; i < numNodes; i++ {
 		wg.Add(1)
 		go func() {
 			p1 := p2pTestInstance(t, config.DefaultConfig())
+			sa.add(p1)
 			_ = p1.RegisterProtocol(exampleProtocol)
 			p1.dht.Update(p2.lNode.Node)
 			err := p1.SendMessage(p2.lNode.PublicKey(), exampleProtocol, payload)
@@ -181,6 +187,8 @@ func Test_ConnectionBeforeMessage(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+
+	sa.clean()
 
 }
 
@@ -212,6 +220,9 @@ func TestSwarm_RoundTrip(t *testing.T) {
 	p1 := p2pTestInstance(t, config.DefaultConfig())
 	p2 := p2pTestInstance(t, config.DefaultConfig())
 
+	defer p1.Shutdown()
+	defer p2.Shutdown()
+
 	exchan1 := p1.RegisterProtocol(exampleProtocol)
 	assert.Equal(t, exchan1, p1.protocolHandlers[exampleProtocol])
 	exchan2 := p2.RegisterProtocol(exampleProtocol)
@@ -226,6 +237,9 @@ func TestSwarm_RoundTrip(t *testing.T) {
 func TestSwarm_MultipleMessages(t *testing.T) {
 	p1 := p2pTestInstance(t, config.DefaultConfig())
 	p2 := p2pTestInstance(t, config.DefaultConfig())
+
+	defer p1.Shutdown()
+	defer p2.Shutdown()
 
 	exchan1 := p1.RegisterProtocol(exampleProtocol)
 	assert.Equal(t, exchan1, p1.protocolHandlers[exampleProtocol])
@@ -244,12 +258,35 @@ func TestSwarm_MultipleMessages(t *testing.T) {
 	wg.Wait()
 }
 
+type swarmArray struct {
+	s   []*swarm
+	mtx sync.Mutex
+}
+
+func (sa *swarmArray) add(s *swarm) {
+	sa.mtx.Lock()
+	sa.s = append(sa.s, s)
+	sa.mtx.Unlock()
+}
+
+func (sa *swarmArray) clean() {
+	sa.mtx.Lock()
+	for _, s := range sa.s {
+		s.Shutdown()
+	}
+	sa.mtx.Unlock()
+}
+
 func TestSwarm_MultipleMessagesFromMultipleSenders(t *testing.T) {
+
+	const Senders = 100
+
 	cfg := config.DefaultConfig()
 	cfg.SwarmConfig.Gossip = false
 	cfg.SwarmConfig.Bootstrap = false
 
 	p1 := p2pTestInstance(t, cfg)
+	defer p1.Shutdown()
 
 	exchan1 := p1.RegisterProtocol(exampleProtocol)
 	assert.Equal(t, exchan1, p1.protocolHandlers[exampleProtocol])
@@ -274,10 +311,12 @@ func TestSwarm_MultipleMessagesFromMultipleSenders(t *testing.T) {
 		}
 	}()
 
-	for i := 0; i < 100; i++ {
+	sa := &swarmArray{}
+	for i := 0; i < Senders; i++ {
 		wg.Add(1)
 		go func() {
 			p := p2pTestInstance(t, cfg)
+			sa.add(p)
 			p.dht.Update(p1.LocalNode().Node)
 			mychan := make(chan struct{})
 			mu.Lock()
@@ -290,6 +329,74 @@ func TestSwarm_MultipleMessagesFromMultipleSenders(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+	sa.clean()
+}
+
+func TestSwarm_MultipleMessagesFromMultipleSendersToMultipleProtocols(t *testing.T) {
+
+	const Senders = 100
+	const Protos = 50
+
+	cfg := config.DefaultConfig()
+	cfg.SwarmConfig.Gossip = false
+	cfg.SwarmConfig.Bootstrap = false
+
+	pend := make(map[string]chan struct{})
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+
+	p1 := p2pTestInstance(t, cfg)
+	defer p1.Shutdown()
+
+	var protos []string
+
+	for i := 0; i < Protos; i++ {
+		prt := RandString(10)
+		protos = append(protos, prt)
+		exchan := p1.RegisterProtocol(prt)
+
+		go func() {
+			for {
+				msg := <-exchan
+				sender := msg.Sender().PublicKey().String()
+				mu.Lock()
+				c, ok := pend[sender]
+				if !ok {
+					t.FailNow()
+				}
+				close(c)
+				delete(pend, sender)
+				mu.Unlock()
+				wg.Done()
+			}
+		}()
+
+	}
+
+	sa := &swarmArray{}
+	for i := 0; i < Senders; i++ {
+		wg.Add(1)
+		go func() {
+			p := p2pTestInstance(t, cfg)
+			sa.add(p)
+			p.dht.Update(p1.LocalNode().Node)
+			mychan := make(chan struct{})
+			mu.Lock()
+			pend[p.lNode.Node.PublicKey().String()] = mychan
+			mu.Unlock()
+
+			randProto := rand.Int31n(Protos)
+			if randProto == Protos {
+				randProto--
+			}
+
+			payload := []byte(RandString(10))
+			err := p.SendMessage(p1.lNode.PublicKey().String(), protos[randProto], payload)
+			assert.NoError(t, err)
+		}()
+	}
+	wg.Wait()
+	sa.clean()
 }
 
 func TestSwarm_RegisterProtocol(t *testing.T) {
@@ -306,6 +413,7 @@ func TestSwarm_RegisterProtocol(t *testing.T) {
 	}
 	i := 0
 	for r := range nodechan {
+		defer r.Shutdown()
 		_, ok := r.protocolHandlers[exampleProtocol]
 		assert.True(t, ok)
 		_, ok = r.protocolHandlers["/dht/1.0/find-node/"]
@@ -582,6 +690,8 @@ func TestNeighborhood_Initial(t *testing.T) {
 	case <-ti:
 		t.Error("Start succeded")
 	}
+
+	p.Shutdown()
 }
 
 func TestNeighborhood_Disconnect(t *testing.T) {

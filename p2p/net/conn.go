@@ -155,10 +155,12 @@ func (c *FormattedConnection) Send(m []byte) error {
 
 // Close closes the connection (implements io.Closer). It is go safe.
 func (c *FormattedConnection) Close() {
-	c.closeOnce.Do(func() {
-		atomic.AddInt32(&c.closed, 1)
-		c.closeChan <- struct{}{}
-	})
+	if atomic.LoadInt32(&c.closed) != 1 {
+		c.closeOnce.Do(func() {
+			atomic.StoreInt32(&c.closed, 1)
+			close(c.closeChan)
+		})
+	}
 }
 
 // Closed Reports whether the connection was closed. It is go safe.
@@ -168,8 +170,12 @@ func (c *FormattedConnection) Closed() bool {
 
 func (c *FormattedConnection) shutdown(err error) {
 	c.logger.Info("(%v) shutdown. id=%s err=%v", c.remotePub.String(), c.id, err)
+	if atomic.LoadInt32(&c.closed) != 1 {
+		c.networker.publishClosingConnection(c)
+	} else {
+		atomic.StoreInt32(&c.closed, 1)
+	}
 	c.formatter.Close()
-	c.networker.publishClosingConnection(c)
 }
 
 // Push outgoing message to the connections
