@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	keySize = 32
-	nonceSize = 24
+	keySize = 32 // non-configurable, expected by NaCl
+	nonceSize = 24 // non-configurable, expected by NaCl
 )
 
 type Key interface {
