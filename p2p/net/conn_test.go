@@ -85,7 +85,7 @@ func TestPreSessionError(t *testing.T) {
 	assert.Equal(t, int32(1), netw.PreSessionCount())
 }
 
-func TestClose(t *testing.T) {
+func TestErrClose(t *testing.T) {
 	netw := NewNetworkMock()
 	rwcam := NewReadWriteCloseAddresserMock()
 	rPub := p2pcrypto.NewRandomPubkey()
@@ -94,10 +94,24 @@ func TestClose(t *testing.T) {
 	getclosed := netw.SubscribeClosingConnections()
 
 	go conn.beginEventProcessing()
-	conn.Close()
+	rwcam.SetReadResult(nil, errors.New("not working"))
 	closedConn := <-getclosed
 	assert.Equal(t, 1, rwcam.CloseCount())
 	assert.Equal(t, conn.id, closedConn.ID())
+}
+func TestClose(t *testing.T) {
+	netw := NewNetworkMock()
+	rwcam := NewReadWriteCloseAddresserMock()
+	rPub := generatePublicKey()
+	formatter := delimited.NewChan(10)
+	conn := newConnection(rwcam, netw, formatter, rPub, netw.logger)
+	conn.SetSession(&NetworkSessionImpl{})
+
+	go conn.beginEventProcessing()
+	conn.Close()
+	<-conn.closeChan
+	time.Sleep(time.Millisecond * 10) // block a little bit
+	assert.Equal(t, 1, rwcam.CloseCount())
 }
 
 func TestDoubleClose(t *testing.T) {
@@ -106,21 +120,16 @@ func TestDoubleClose(t *testing.T) {
 	rPub := p2pcrypto.NewRandomPubkey()
 	formatter := delimited.NewChan(10)
 	conn := newConnection(rwcam, netw, formatter, rPub, &networkSessionImpl{}, netw.logger)
-	getclosed := netw.SubscribeClosingConnections()
 
 	go conn.beginEventProcessing()
 	conn.Close()
-	closedConn := <-getclosed
+	<-conn.closeChan
+	time.Sleep(time.Millisecond * 10)
 	assert.Equal(t, 1, rwcam.CloseCount())
 	assert.Equal(t, conn.id, closedConn.ID())
 	conn.Close()
 
-	timer := time.NewTimer(100 * time.Millisecond)
-	select {
-	case <-getclosed:
-		assert.True(t, false)
-	case <-timer.C:
-	}
+	time.Sleep(100*time.Millisecond) // just check that we don't panic
 }
 
 func TestGettersToBoostCoverage(t *testing.T) {
