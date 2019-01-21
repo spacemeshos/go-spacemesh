@@ -37,8 +37,13 @@ func (validator *MessageValidator) ValidateMessage(m *pb.HareMessage, k uint32) 
 	}
 
 	// verify signature
-	ok := NewVerifier(m.PubKey).Verify(data, m.InnerSig)
-	if !ok {
+	verifier, err := NewVerifier(m.PubKey)
+	if err != nil {
+		log.Warning("Validate message failed: Could not construct verifier ", err)
+		return false
+	}
+	res, _ := verifier.Verify(data, m.InnerSig)
+	if !res {
 		log.Warning("Validate message failed: invalid message signature detected")
 		return false
 	}

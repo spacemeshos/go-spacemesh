@@ -107,7 +107,7 @@ func TestConsensusProcess_InitDefaultBuilder(t *testing.T) {
 	s.Add(value1)
 	builder := proc.initDefaultBuilder(s)
 	assert.True(t, NewSet(builder.inner.Values).Equals(s))
-	verifier := NewVerifier(builder.outer.PubKey)
+	verifier, _ := NewVerifier(builder.outer.PubKey)
 	assert.Equal(t, verifier.Bytes(), proc.signing.Verifier().Bytes())
 	assert.Equal(t, builder.inner.K, proc.k)
 	assert.Equal(t, builder.inner.Ki, proc.ki)
