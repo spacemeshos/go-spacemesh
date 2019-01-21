@@ -1,7 +1,7 @@
 package cryptoBox
 
 import (
-	crypto_rand "crypto/rand"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"github.com/btcsuite/btcutil/base58"
@@ -17,9 +17,8 @@ const (
 
 type Key interface {
 	Bytes() []byte
-	Raw() *[keySize]byte
+	raw() *[keySize]byte
 	String() string
-	Pretty() string
 }
 
 type PrivateKey interface {
@@ -37,57 +36,42 @@ type SharedSecret interface {
 }
 
 type key struct {
-	bytes *[keySize]byte
+	bytes [keySize]byte
 }
 
 var _ PrivateKey = (*key)(nil)
 var _ PublicKey = (*key)(nil)
 var _ SharedSecret = (*key)(nil)
 
-func (k *key) Raw() *[keySize]byte {
-	return k.bytes
+func (k key) raw() *[keySize]byte {
+	return &k.bytes
 }
 
-func (k *key) Bytes() []byte {
-	if k == nil {
-		return []byte{}
-	}
+func (k key) Bytes() []byte {
 	return k.bytes[:]
 }
 
-func (k *key) String() string {
-	if k == nil {
-		return ""
-	}
-	return base58.Encode(k.bytes[:])
+func (k key) String() string {
+	return base58.Encode(k.Bytes())
 }
 
-func (k *key) Pretty() string {
-	pstr := k.String()
-	maxRunes := 6
-	if len(pstr) < maxRunes {
-		maxRunes = len(pstr)
-	}
-	return fmt.Sprintf("<Key %s>", pstr[:maxRunes])
-}
-
-func getRandomNonce() *[nonceSize]byte {
-	nonce := &[nonceSize]byte{}
-	if _, err := io.ReadFull(crypto_rand.Reader, nonce[:]); err != nil {
+func getRandomNonce() [nonceSize]byte {
+	nonce := [nonceSize]byte{}
+	if _, err := io.ReadFull(rand.Reader, nonce[:]); err != nil {
 		panic(err)
 	}
 	return nonce
 }
 
-func (k *key) Seal(message []byte) (out []byte) {
+func (k key) Seal(message []byte) (out []byte) {
 	nonce := getRandomNonce() // TODO: @noam replace with counter to prevent replays
-	return box.SealAfterPrecomputation(nonce[:], message, nonce, k.bytes)
+	return box.SealAfterPrecomputation(nonce[:], message, &nonce, k.raw())
 }
 
-func (k *key) Open(encryptedMessage []byte) (out []byte, err error) {
+func (k key) Open(encryptedMessage []byte) (out []byte, err error) {
 	nonce := &[nonceSize]byte{}
 	copy(nonce[:], encryptedMessage[:nonceSize])
-	message, ok := box.OpenAfterPrecomputation(nil, encryptedMessage[nonceSize:], nonce, k.bytes)
+	message, ok := box.OpenAfterPrecomputation(nil, encryptedMessage[nonceSize:], nonce, k.raw())
 	if !ok {
 		return nil, errors.New("opening boxed message failed")
 	}
@@ -95,18 +79,18 @@ func (k *key) Open(encryptedMessage []byte) (out []byte, err error) {
 }
 
 func GenerateKeyPair() (PrivateKey, PublicKey, error) {
-	public, private, err := box.GenerateKey(crypto_rand.Reader)
+	public, private, err := box.GenerateKey(rand.Reader)
 	if err != nil {
 		log.Error("failed to generate key pair\n")
 		return nil, nil, err
 	}
 
-	return &key{private}, &key{public}, nil
+	return key{*private}, key{*public}, nil
 }
 
 func GenerateSharedSecret(privkey PrivateKey, peerPubkey PublicKey) SharedSecret {
 	sharedSecret := newKey()
-	box.Precompute(sharedSecret.bytes, peerPubkey.Raw(), privkey.Raw())
+	box.Precompute(sharedSecret.raw(), peerPubkey.raw(), privkey.raw())
 	return sharedSecret
 }
 
@@ -125,13 +109,15 @@ func ExtractPubkey(message []byte) ([]byte, PublicKey, error) {
 	return message[keySize:], pubkey, nil
 }
 
-func newKey() *key {
-	return &key{&[keySize]byte{}}
+func newKey() key {
+	return key{[keySize]byte{}}
 }
 
-func newKeyFromBytes(bytes []byte) (*key, error) {
+var nilKey key
+
+func newKeyFromBytes(bytes []byte) (key, error) {
 	if l := len(bytes); l != keySize {
-		return nil, fmt.Errorf("invalid key size (got %v instead of %v bytes)", l, keySize)
+		return nilKey, fmt.Errorf("invalid key size (got %v instead of %v bytes)", l, keySize)
 	}
 	k := newKey()
 	copy(k.bytes[:], bytes)
@@ -142,10 +128,10 @@ func NewPubkeyFromBytes(bytes []byte) (PublicKey, error) {
 	return newKeyFromBytes(bytes)
 }
 
-func newKeyFromBase58(s string) (*key, error) {
+func newKeyFromBase58(s string) (key, error) {
 	bytes := base58.Decode(s)
 	if len(bytes) == 0 {
-		return nil, errors.New("unable to decode key")
+		return nilKey, errors.New("unable to decode key")
 	}
 	return newKeyFromBytes(bytes)
 }

@@ -18,7 +18,7 @@ func TestBox(t *testing.T) {
 	bobSharedSecret := GenerateSharedSecret(bobPrivkey, alicePubkey)
 	r.Zero(bytes.Compare(aliceSharedSecret.Bytes(), bobSharedSecret.Bytes()))
 	r.Equal(aliceSharedSecret.String(), bobSharedSecret.String())
-	r.Equal(aliceSharedSecret.Raw(), bobSharedSecret.Raw())
+	r.Equal(aliceSharedSecret.raw(), bobSharedSecret.raw())
 
 	secretMessage := []byte("This is a secret -- sh...")
 	sealed := aliceSharedSecret.Seal(secretMessage)
