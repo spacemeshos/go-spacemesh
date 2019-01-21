@@ -174,14 +174,16 @@ func (sn *Node) sendMessageImpl(nodeID string, protocol string, payload Data) er
 
 // Broadcast
 func (sn *Node) Broadcast(protocol string, payload []byte) error {
-	sn.sim.mutex.RLock()
-	for n := range sn.sim.protocolHandler {
-		if c, ok := sn.sim.protocolHandler[n][protocol]; ok {
-			c <- simMessage{DataBytes{Payload: payload}, sn.Node}
+	go func() {
+		sn.sim.mutex.RLock()
+		for n := range sn.sim.protocolHandler {
+			if c, ok := sn.sim.protocolHandler[n][protocol]; ok {
+				c <- simMessage{DataBytes{Payload: payload}, sn.Node}
+			}
 		}
-	}
-	sn.sim.mutex.RUnlock()
-	log.Debug("%v >> All ( Gossip ) (%v)", sn.Node.PublicKey(), payload)
+		sn.sim.mutex.RUnlock()
+		log.Debug("%v >> All ( Gossip ) (%v)", sn.Node.PublicKey(), payload)
+	}()
 	return nil
 }
 

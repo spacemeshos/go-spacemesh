@@ -240,6 +240,7 @@ func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
 		} else { // a valid early message, keep it for later
 			log.Info("Early message detected. Keeping message")
 			proc.onEarlyMessage(m)
+			return
 		}
 	}
 
@@ -400,6 +401,11 @@ func (proc *ConsensusProcess) processPreRoundMsg(msg *pb.HareMessage) {
 
 func (proc *ConsensusProcess) processStatusMsg(msg *pb.HareMessage) {
 	// record status
+
+	if proc.statusesTracker == nil {
+		log.AppLog.Critical("WTF ", proc.k)
+		panic("et hapnaick")
+	}
 	proc.statusesTracker.RecordStatus(msg)
 }
 
