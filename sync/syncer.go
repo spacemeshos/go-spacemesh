@@ -2,16 +2,18 @@ package sync
 
 import (
 	"errors"
+	"sync"
+	"sync/atomic"
+	"time"
+
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
-    "github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/sync/pb"
-	"sync"
-	"sync/atomic"
-	"time"
 )
 
 type BlockValidator interface {
@@ -108,7 +110,7 @@ func NewSync(srv server.Service, layers *mesh.Mesh, bv BlockValidator, conf Conf
 		Log:            logger,
 		Mesh:           layers,
 		Peers:          p2p.NewPeers(srv),
-		MessageServer:  server.NewMsgServer(srv, syncProtocol, conf.requestTimeout-time.Millisecond*30, make(chan service.Message, 100), logger),
+		MessageServer:  server.NewMsgServer(srv, syncProtocol, conf.requestTimeout-time.Millisecond*30, make(chan service.Message, config.ConfigValues.BufferSize), logger),
 		SyncLock:       0,
 		startLock:      0,
 		forceSync:      make(chan bool),

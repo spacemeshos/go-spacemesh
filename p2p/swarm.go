@@ -5,6 +5,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	inet "net"
+	"strconv"
+	"sync"
+	"sync/atomic"
+	"time"
+
 	"github.com/davecgh/go-spew/spew"
 	"github.com/golang/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
@@ -18,11 +24,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/timesync"
-	inet "net"
-	"strconv"
-	"sync"
-	"sync/atomic"
-	"time"
 )
 
 // ConnectingTimeout is the timeout we wait when trying to connect a neighborhood
@@ -335,15 +336,15 @@ func (s *swarm) sendMessageImpl(peerPubKey string, protocol string, payload serv
 
 // RegisterProtocolWithChannel configures and returns a channel for a given protocol.
 func (s *swarm) RegisterProtocolWithChannel(protocol string, ingressChannel chan service.Message) chan service.Message {
-        s.protocolHandlerMutex.Lock()
-        s.protocolHandlers[protocol] = ingressChannel
-        s.protocolHandlerMutex.Unlock()
-        return ingressChannel
+	s.protocolHandlerMutex.Lock()
+	s.protocolHandlers[protocol] = ingressChannel
+	s.protocolHandlerMutex.Unlock()
+	return ingressChannel
 }
 
 // RegisterProtocol registers an handler for `protocol`
 func (s *swarm) RegisterProtocol(protocol string) chan service.Message {
-	mchan := make(chan service.Message, 100)
+	mchan := make(chan service.Message, config.ConfigValues.BufferSize)
 	s.protocolHandlerMutex.Lock()
 	s.protocolHandlers[protocol] = mchan
 	s.protocolHandlerMutex.Unlock()
@@ -722,7 +723,7 @@ loop:
 			}
 
 			s.outpeersMutex.Lock()
-			if _,ok := s.outpeers[pkstr]; ok {
+			if _, ok := s.outpeers[pkstr]; ok {
 				s.outpeersMutex.Unlock()
 				s.lNode.Debug("selected an already outbound peer. not counting that peer.", cne.n.String())
 				bad++

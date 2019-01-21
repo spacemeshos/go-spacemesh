@@ -8,6 +8,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+    "runtime"
 )
 
 type MessageType uint32
@@ -54,7 +55,7 @@ func NewMsgServer(network Service, name string, requestLifetime time.Duration, c
 		msgRequestHandlers: make(map[MessageType]func(msg []byte) []byte),
 		requestLifetime:    requestLifetime,
 		exit:               make(chan struct{}),
-		workerLimiter:      make(chan int, 1000),
+		workerLimiter:      make(chan int, runtime.NumCPU()),
 	}
 
 	go p.readLoop()
