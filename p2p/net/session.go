@@ -16,8 +16,8 @@ type NetworkSession interface {
 	SealMessage(message []byte) []byte               // encrypt data using session enc key
 }
 
-var _ NetworkSession = &networkSessionImpl{}
-var _ NetworkSession = &SessionMock{}
+var _ NetworkSession = (*networkSessionImpl)(nil)
+var _ NetworkSession = (*SessionMock)(nil)
 
 // TODO: add support for idle session expiration
 
@@ -28,17 +28,17 @@ type networkSessionImpl struct {
 }
 
 // String returns the session's identifier string.
-func (n *networkSessionImpl) String() string {
+func (n networkSessionImpl) String() string {
 	return n.peerPubkey.String()
 }
 
 // ID returns the session's unique id
-func (n *networkSessionImpl) ID() cryptoBox.PublicKey {
+func (n networkSessionImpl) ID() cryptoBox.PublicKey {
 	return n.peerPubkey
 }
 
 // Encrypt encrypts in binary data with the session's sym enc key.
-func (n *networkSessionImpl) SealMessage(message []byte) []byte {
+func (n networkSessionImpl) SealMessage(message []byte) []byte {
 	if n.sharedSecret == nil {
 		panic("tried to seal a message before initializing session with a shared secret")
 	}
@@ -46,7 +46,7 @@ func (n *networkSessionImpl) SealMessage(message []byte) []byte {
 }
 
 // Decrypt decrypts in binary data that was encrypted with the session's sym enc key.
-func (n *networkSessionImpl) OpenMessage(boxedMessage []byte) (message []byte, err error) {
+func (n networkSessionImpl) OpenMessage(boxedMessage []byte) (message []byte, err error) {
 	if n.sharedSecret == nil {
 		panic("tried to open a message before initializing session with a shared secret")
 	}

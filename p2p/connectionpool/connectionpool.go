@@ -99,9 +99,6 @@ func (cp *ConnectionPool) handleDialResult(rPub cryptoBox.PublicKey, result dial
 }
 
 func compareConnections(conn1 net.Connection, conn2 net.Connection) int {
-	if conn1.Session().ID() == nil || conn2.Session().ID() == nil {
-		return 0
-	}
 	return bytes.Compare(conn1.Session().ID().Bytes(), conn2.Session().ID().Bytes())
 }
 
