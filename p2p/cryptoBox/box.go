@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/btcsuite/btcutil/base58"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"golang.org/x/crypto/nacl/box"
 	"io"
 )
@@ -81,7 +80,6 @@ func (k key) Open(encryptedMessage []byte) (out []byte, err error) {
 func GenerateKeyPair() (PrivateKey, PublicKey, error) {
 	public, private, err := box.GenerateKey(rand.Reader)
 	if err != nil {
-		log.Error("failed to generate key pair\n")
 		return nil, nil, err
 	}
 
