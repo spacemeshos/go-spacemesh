@@ -8,6 +8,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/timesync"
 	"sync/atomic"
 	"time"
 )
@@ -17,19 +18,22 @@ type MessageServer server.MessageServer
 const BlockProtocol = "/blocks/1.0/"
 const NewBlockProtocol = "newBlock"
 
+
+
 type BlockListener struct {
 	*server.MessageServer
 	p2p.Peers
 	*mesh.Mesh
 	BlockValidator
 	log.Log
-	bufferSize           int
-	semaphore            chan struct{}
-	unknownQueue         chan mesh.BlockID //todo consider benefits of changing to stack
+	bufferSize   int
+	semaphore    chan struct{}
+	unknownQueue chan mesh.BlockID //todo consider benefits of changing to stack
 	receivedGossipBlocks chan service.GossipMessage
-	startLock            uint32
-	timeout              time.Duration
-	exit                 chan struct{}
+	startLock    uint32
+	timeout      time.Duration
+	exit         chan struct {}
+	tick		 chan mesh.LayerID
 }
 
 func (bl *BlockListener) Close() {
@@ -47,17 +51,22 @@ func (bl *BlockListener) OnNewBlock(b *mesh.Block) {
 	bl.addUnknownToQueue(b)
 }
 
-func NewBlockListener(net server.Service, bv BlockValidator, layers *mesh.Mesh, timeout time.Duration, concurrency int, logger log.Log) *BlockListener {
+type TickSubscriber interface {
+	Subscribe() timesync.LayerTimer
+}
+
+func NewBlockListener(net server.Service, layers *mesh.Mesh, timeout time.Duration, concurrency int, clock TickSubscriber, logger log.Log) *BlockListener {
 	bl := BlockListener{
-		BlockValidator:       bv,
-		Mesh:                 layers,
-		Peers:                p2p.NewPeers(net),
-		MessageServer:        server.NewMsgServer(net, BlockProtocol, timeout, make(chan service.DirectMessage, config.ConfigValues.BufferSize), logger),
-		Log:                  logger,
-		semaphore:            make(chan struct{}, concurrency),
-		unknownQueue:         make(chan mesh.BlockID, 200), //todo tune buffer size + get buffer from config
-		exit:                 make(chan struct{}),
+
+		Mesh:           layers,
+		Peers:          p2p.NewPeers(net),
+		MessageServer:  server.NewMsgServer(net, BlockProtocol, timeout, make(chan service.DirectMessage, config.ConfigValues.BufferSize), logger),
+		Log:            logger,
+		semaphore:      make(chan struct{}, concurrency),
+		unknownQueue:   make(chan mesh.BlockID, 200), //todo tune buffer size + get buffer from config
+		exit:           make(chan struct{}),
 		receivedGossipBlocks: net.RegisterGossipProtocol(NewBlockProtocol),
+		tick : clock.Subscribe(),
 	}
 	bl.RegisterMsgHandler(BLOCK, newBlockRequestHandler(layers, logger))
 
@@ -68,7 +77,7 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 	for {
 		select {
 		case <-bl.exit:
-			bl.Logger.Info("listening  stopped")
+			bl.Log.Info("listening  stopped")
 			return
 		case data := <-bl.receivedGossipBlocks:
 			blk, err := mesh.BytesAsBlock(bytes.NewReader(data.Bytes()))
@@ -106,6 +115,16 @@ func (bl *BlockListener) run() {
 				defer func() { <-bl.semaphore }()
 				bl.FetchBlock(id)
 			}()
+
+		case newLayer := <-bl.tick: //todo: should this be here or in own loop?
+			if newLayer == 0 {
+				return
+			}
+			l, err := bl.GetLayer(newLayer -1)
+			if err != nil {
+				log.Error("cannot find layer : %v", err)
+			}
+			bl.Mesh.ValidateLayer(l)
 		}
 	}
 }

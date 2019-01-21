@@ -10,7 +10,7 @@ type DB interface {
 	Put(key, value []byte) error
 	Get(key []byte) (value []byte, err error)
 	Delete(key []byte) error
-	Iterator() Iterator
+	Iterator() iterator.Iterator
 	Close()
 }
 
@@ -43,7 +43,7 @@ func (db LevelDB) Delete(key []byte) error {
 	return db.DB.Delete(key, db.wo)
 }
 
-func (db LevelDB) Iterator() Iterator {
+func (db LevelDB) Iterator() iterator.Iterator {
 	return db.DB.NewIterator(nil, nil)
 }
 

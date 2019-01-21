@@ -24,6 +24,12 @@ type Clock interface {
 	Now() time.Time
 }
 
+type RealClock struct {}
+
+func (RealClock) Now() time.Time {
+	return time.Now()
+}
+
 func NewTicker(time Clock, tickInterval time.Duration, startEpoch time.Time) *Ticker {
 	return &Ticker{
 		subscribes:   make([]LayerTimer, 0, 0),

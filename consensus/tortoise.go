@@ -27,9 +27,10 @@ type Algorithm struct {
 	cachedLayers      uint32
 	remainingBlockIds uint32
 	totalBlocks       uint32
+	layerReadyCallback func(layerId mesh.LayerID)
 }
 
-func NewAlgorithm(layerSize uint32, cachedLayers uint32) Algorithm {
+func NewAlgorithm(layerSize uint32, cachedLayers uint32 ) Algorithm {
 	totBlocks := layerSize * cachedLayers
 	trtl := Algorithm{
 		block2Id:          make(map[BlockID]uint32),
@@ -43,8 +44,13 @@ func NewAlgorithm(layerSize uint32, cachedLayers uint32) Algorithm {
 		layers:       make(map[LayerID]*Layer),
 		layerSize:    layerSize,
 		cachedLayers: cachedLayers,
+		layerReadyCallback:nil,
 	}
 	return trtl
+}
+
+func (alg *Algorithm) RegisterLayerCallback(callback func(mesh.LayerID)){
+	alg.layerReadyCallback = callback
 }
 
 func (alg *Algorithm) GlobalVotingAvg() uint64 {
@@ -211,6 +217,6 @@ func (alg *Algorithm) HandleIncomingLayer(ll *mesh.Layer) {
 	}
 }
 
-func (alg *Algorithm) HandleLateBlock(b *TortoiseBlock) {
+func (alg *Algorithm) HandleLateBlock(b *mesh.Block) {
 	log.Info("received block with layer Id %v block id: %v ", b.Layer(), b.ID())
 }

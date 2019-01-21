@@ -9,6 +9,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/stretchr/testify/assert"
 	"math/big"
 	"testing"
@@ -19,6 +20,12 @@ type PeersMock struct {
 	getPeers func() []p2p.Peer
 }
 
+type ClockMock struct { }
+
+func (t *ClockMock) Subscribe() timesync.LayerTimer {
+	return make(timesync.LayerTimer)
+}
+
 func (pm PeersMock) GetPeers() []p2p.Peer {
 	return pm.getPeers()
 }
@@ -27,7 +34,8 @@ func (pm PeersMock) Close() {
 	return
 }
 func ListenerFactory(serv server.Service, peers p2p.Peers, name string) *BlockListener {
-	nbl := NewBlockListener(serv, BlockValidatorMock{}, getMesh(memoryDB, "TestBlockListener_"+name), 1*time.Second, 2, log.New(name, "", ""))
+
+	nbl := NewBlockListener(serv, getMesh("TestBlockListener_"+name), 1*time.Second, 2, &ClockMock{}, log.New(name, "", ""))
 	nbl.Peers = peers //override peers with mock
 	return nbl
 }

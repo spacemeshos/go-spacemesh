@@ -3,14 +3,21 @@ package app
 import (
 	"context"
 	"fmt"
+	"github.com/seehuhn/mt19937"
 	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/consensus"
 	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/state"
+	"github.com/spacemeshos/go-spacemesh/sync"
 	"github.com/spf13/pflag"
+	"math/rand"
 	"os"
 	"os/signal"
 	"reflect"
 	"runtime"
+	"time"
 
 	"github.com/spacemeshos/go-spacemesh/accounts"
 	"github.com/spacemeshos/go-spacemesh/api"
@@ -250,6 +257,32 @@ func (app *SpacemeshApp) setupTestFeatures() {
 	api.ApproveAPIGossipMessages(Ctx, app.P2P)
 }
 
+func (app *SpacemeshApp) initAndStartServices(swarm server.Service) (*state.StateDB){
+	layout := "2006-01-02T15:04:05.000Z"
+	str := "2018-11-12T11:45:26.371Z"
+	startEpoch, _ := time.Parse(layout, str)
+
+	lg := log.New("shmekel","","")
+
+	trtl := consensus.NewAlgorithm(50, 100)
+
+	db, _ := database.NewLDBDatabase("../database/data/state", 0,0)
+	st, _ := state.New(common.Hash{}, state.NewDatabase(db)) //todo: we probably should load DB with latest hash
+	rng := rand.New(mt19937.New())
+	processor := state.NewTransactionProcessor(rng, st)
+
+	mesh := mesh.NewMesh(db, db, db,db,&trtl,processor,lg) //todo: what to do with the logger?
+
+
+	clock := timesync.NewTicker(timesync.RealClock{}, 5 *time.Second, startEpoch)
+	blockListener := sync.NewBlockListener(swarm,mesh, 1*time.Second, 1,clock, lg)
+
+	blockListener.Start()
+	clock.Start()
+
+	return st
+}
+
 func (app *SpacemeshApp) startSpacemesh(cmd *cobra.Command, args []string) {
 	log.Info("Starting Spacemesh")
 
@@ -277,8 +310,10 @@ func (app *SpacemeshApp) startSpacemesh(cmd *cobra.Command, args []string) {
 		panic("Error starting p2p services")
 	}
 
-	app.NodeInitCallback <- true
 
+
+	app.P2P = swarm
+	app.NodeInitCallback <- true
 	apiConf := &app.Config.API
 
 	//rng := rand.New(mt19937.New())
@@ -286,17 +321,14 @@ func (app *SpacemeshApp) startSpacemesh(cmd *cobra.Command, args []string) {
 	db, _ := database.NewLDBDatabase("state", 0, 0)
 
 	st, _ := state.New(common.Hash{}, state.NewDatabase(db))
+	app.initAndStartServices(swarm)
 
-	//processor := state.NewTransactionProcessor(rng, st)
+
 
 	// todo: if there's no loaded account - do the new account interactive flow here
-
 	// todo: if node has no loaded coin-base account then set the node coinbase to first account
-
 	// todo: if node has a locked coinbase account then prompt for account passphrase to unlock it
-
 	// todo: if node has no POS then start POS creation flow here unless user doesn't want to be a validator via cli
-
 	// todo: start node consensus protocol here only after we have an unlocked account
 
 	// start api servers

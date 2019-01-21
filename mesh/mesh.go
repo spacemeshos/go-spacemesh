@@ -5,6 +5,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/state"
+	"sort"
 	"sync"
 	"sync/atomic"
 )
@@ -31,29 +33,37 @@ var FALSE = []byte{0}
 type MeshValidator interface {
 	HandleIncomingLayer(layer *Layer)
 	HandleLateBlock(bl *Block)
+	RegisterLayerCallback(func(layerId LayerID))
+}
+
+type StateUpdater interface {
+	ApplyTransactions(layer state.LayerID, transactions state.Transactions) (uint32, error)
 }
 
 type Mesh struct {
 	log.Log
 	*meshDB
-	localLayer  uint32
-	latestLayer uint32
-	lMutex      sync.RWMutex
-	lkMutex     sync.RWMutex
-	lcMutex     sync.RWMutex
-	tortoise    MeshValidator
-	orphMutex   sync.RWMutex
+	verifiedLayer uint32
+	latestLayer   uint32
+	lMutex        sync.RWMutex
+	lkMutex       sync.RWMutex
+	lcMutex       sync.RWMutex
+	tortoise      MeshValidator
+	state 		  StateUpdater
+	orphMutex     sync.RWMutex
 }
 
-func NewMesh(layers, blocks, validity, orphans database.DB, mesh MeshValidator, logger log.Log) *Mesh {
+func NewMesh(layers, blocks, validity, orphans database.DB, mesh MeshValidator, state StateUpdater, logger log.Log) *Mesh {
 	//todo add boot from disk
 	ll := &Mesh{
 		Log:      logger,
 		tortoise: mesh,
+		state:state,
 		meshDB:   NewMeshDB(layers, blocks, validity, orphans),
 	}
 	return ll
 }
+
 
 func (m *Mesh) IsContexuallyValid(b BlockID) bool {
 	//todo implement
@@ -61,7 +71,7 @@ func (m *Mesh) IsContexuallyValid(b BlockID) bool {
 }
 
 func (m *Mesh) LocalLayer() uint32 {
-	return atomic.LoadUint32(&m.localLayer)
+	return atomic.LoadUint32(&m.verifiedLayer)
 }
 
 func (m *Mesh) LatestLayer() uint32 {
@@ -94,16 +104,38 @@ func (m *Mesh) AddLayer(layer *Layer) error {
 	}
 
 	m.addLayer(layer)
-	m.tortoise.HandleIncomingLayer(layer)
-	atomic.StoreUint32(&m.localLayer, uint32(layer.Index()))
 	m.SetLatestLayer(uint32(layer.Index()))
 	return nil
+}
+
+func (m *Mesh) ValidateLayer(layer *Layer){
+	m.tortoise.HandleIncomingLayer(layer)
+}
+
+func (m *Mesh) LayerCompleteCallback(layerId LayerID){
+	l, err := m.GetLayer(layerId)
+	atomic.StoreUint32(&m.verifiedLayer, uint32(layerId))
+	if err != nil {
+		panic("wtf - there was a race?")
+	}
+
+	txs := make([]SerializableTransaction,0,len(l.blocks))
+
+	sort.Slice(l.blocks, func(i,j int) bool{
+		return l.blocks[i].Id < l.blocks[j].Id
+	}) //todo: blocks are now sorted... what does it mean?
+
+	for _, b := range l.blocks{
+		txs = append(txs, b.Txs...)
+	}
+	//processor.processTransactions
+
 }
 
 //todo consider adding a boolean for layer validity instead error
 func (m *Mesh) GetLayer(i LayerID) (*Layer, error) {
 	m.lMutex.RLock()
-	if i > LayerID(m.localLayer) {
+	if i > LayerID(m.verifiedLayer) {
 		m.lMutex.RUnlock()
 		m.Debug("failed to get layer  ", i, " layer not verified yet")
 		return nil, errors.New("layer not verified yet")
@@ -121,7 +153,7 @@ func (m *Mesh) AddBlock(block *Block) error {
 	m.SetLatestLayer(uint32(block.Layer()))
 	//new block add to orphans
 	m.handleOrphanBlocks(block)
-	m.tortoise.HandleLateBlock(block) //todo should be thread safe?
+	//m.tortoise.HandleLateBlock(block) //why this? todo should be thread safe?
 	return nil
 }
 

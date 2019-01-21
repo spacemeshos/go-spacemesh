@@ -49,6 +49,7 @@ type MeshValidatorMock struct{}
 
 func (m *MeshValidatorMock) HandleIncomingLayer(layer *mesh.Layer) {}
 func (m *MeshValidatorMock) HandleLateBlock(bl *mesh.Block)        {}
+func (m *MeshValidatorMock) RegisterLayerCallback(func(layerId mesh.LayerID)) {}
 
 func getMeshWithLevelDB(id string) *mesh.Mesh {
 	time := time.Now()
