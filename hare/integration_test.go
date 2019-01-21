@@ -1,7 +1,6 @@
 package hare
 
 import (
-	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -13,91 +12,15 @@ import (
 // Integration Tests
 
 type HareIntegrationSuite struct {
-	termination Closer
 	p2p.IntegrationTestSuite
-	procs       []*ConsensusProcess
-	initialSets []*Set // all initial sets
-	honestSets  []*Set // initial sets of honest
-	outputs     []*Set
-	name        string
-	// add more params you need
+	*HareSuite
 }
 
 func newIntegrationSuite() *HareIntegrationSuite {
-	his := &HareIntegrationSuite{}
-	his.termination = NewCloser()
-	his.outputs = make([]*Set, 0)
+	his := new(HareIntegrationSuite)
+	his.HareSuite = newHareSuite()
 
 	return his
-}
-
-func (his *HareIntegrationSuite) fill(set *Set, begin int, end int) {
-	for i := begin; i <= end; i++ {
-		his.initialSets[i] = set
-	}
-}
-
-func (his *HareIntegrationSuite) waitForTermination() {
-	for _, p := range his.procs {
-		<-p.CloseChannel()
-		his.outputs = append(his.outputs, p.s)
-	}
-
-	his.termination.Close()
-}
-
-func (his *HareIntegrationSuite) waitForTimedTermination(timeout time.Duration) {
-	timer := time.After(timeout)
-	go his.waitForTermination()
-	select {
-	case <-timer:
-		his.T().Fatal("Timeout")
-		return
-	case <-his.termination.CloseChannel():
-		his.checkResult()
-		return
-	}
-}
-
-func (his *HareIntegrationSuite) checkResult() {
-	t := his.T()
-
-	// build world of values (U)
-	u := his.initialSets[0]
-	for i := 1; i < len(his.initialSets); i++ {
-		u = u.Union(his.initialSets[i])
-	}
-
-	// check consistency
-	for i := 0; i < len(his.outputs)-1; i++ {
-		if !his.outputs[i].Equals(his.outputs[i+1]) {
-			t.Errorf("Consistency check failed: Expected: %v Actual: %v", his.outputs[i], his.outputs[i+1])
-		}
-	}
-
-	// build intersection
-	inter := u.Intersection(his.honestSets[0])
-	for i := 1; i < len(his.honestSets); i++ {
-		inter = inter.Intersection(his.honestSets[i])
-	}
-
-	// check that the output contains the intersection
-	if !inter.IsSubSetOf(his.outputs[0]) {
-		t.Error("Validity 1 failed: output does not contain the intersection of honest parties")
-	}
-
-	// build union
-	union := his.honestSets[0]
-	for i := 1; i < len(his.honestSets); i++ {
-		union = union.Union(his.honestSets[i])
-	}
-
-	// check that the output has no intersection with the complement of the union of honest
-	for _, v := range his.outputs[0].values {
-		if union.Complement(u).Contains(v) {
-			t.Error("Validity 2 failed: unexpected value encountered: ", v)
-		}
-	}
 }
 
 // Test 1: 16 nodes sanity
@@ -145,25 +68,13 @@ func (his *hareIntegrationThreeNodes) Test_ThreeNodes_AllHonest() {
 		proc.Start()
 	}
 
-	his.waitForTimedTermination(60 * time.Second)
+	his.WaitForTimedTermination(his.T(), 60 * time.Second)
 }
 
 // Test 2: 20 nodes sanity
 
 type hareIntegration20Nodes struct {
 	*HareIntegrationSuite
-}
-
-type signordie struct {
-	p crypto.PrivateKey
-}
-
-func (sod signordie) Sign(m []byte) ([]byte) {
-	s, err := sod.p.Sign(m)
-	if err != nil {
-		panic(err)
-	}
-	return s
 }
 
 func Test_20Nodes_HareIntegrationSuite(t *testing.T) {
@@ -191,7 +102,7 @@ func Test_20Nodes_HareIntegrationSuite(t *testing.T) {
 	his.honestSets = []*Set{set1, set2, set3}
 	oracle := NewMockHashOracle(cfg.N)
 	his.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
-		log.Info("Starting instance ", idx)
+		log.Info("Starting instance %v", idx)
 		broker := NewBroker(s)
 		output := make(chan TerminationOutput, 1)
 		signing := NewMockSigning()
@@ -210,6 +121,6 @@ func (his *hareIntegration20Nodes) Test_100Nodes_AllHonest() {
 		proc.Start()
 	}
 
-	his.waitForTimedTermination(120 * time.Second)
+	his.WaitForTimedTermination(his.T(), 120 * time.Second)
 }
 
