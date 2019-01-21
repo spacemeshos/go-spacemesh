@@ -1,17 +1,16 @@
 package hare
 
 import (
-	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 type StatusTracker struct {
-	statuses  map[string]*pb.HareMessage   // maps PubKey->StatusMsg
-	threshold int                          // threshold to indicate a set can be proved
-	maxKi     int32                        // tracks max ki in tracked status messages
-	maxRawSet [][]byte                     // tracks the max raw set in the tracked status messages
-	analyzed  bool                         // indicates if the messages have already been analyzed
+	statuses  map[string]*pb.HareMessage // maps PubKey->StatusMsg
+	threshold int                        // threshold to indicate a set can be proved
+	maxKi     int32                      // tracks max ki in tracked status messages
+	maxRawSet [][]byte                   // tracks the max raw set in the tracked status messages
+	analyzed  bool                       // indicates if the messages have already been analyzed
 }
 
 func NewStatusTracker(threshold int, expectedSize int) *StatusTracker {
@@ -26,19 +25,19 @@ func NewStatusTracker(threshold int, expectedSize int) *StatusTracker {
 }
 
 func (st *StatusTracker) RecordStatus(msg *pb.HareMessage) {
-	pub, err := crypto.NewPublicKey(msg.PubKey)
+	verifier, err := NewVerifier(msg.PubKey)
 	if err != nil {
-		log.Warning("Could not construct public key: ", err.Error())
+		log.Warning("Could not construct verifier: ", err)
 		return
 	}
 
-	_, exist := st.statuses[pub.String()]
+	_, exist := st.statuses[verifier.String()]
 	if exist { // already handled this sender's status msg
-		log.Warning("Duplicated status message detected %v", pub.String())
+		log.Warning("Duplicated status message detected %v", verifier.String())
 		return
 	}
 
-	st.statuses[pub.String()] = msg
+	st.statuses[verifier.String()] = msg
 }
 
 func (st *StatusTracker) AnalyzeStatuses(isValid func(m *pb.HareMessage) bool) {
