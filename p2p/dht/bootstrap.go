@@ -85,12 +85,7 @@ loop:
 			if gotpeers || tries >= bootstrapTries {
 				// TODO: consider choosing a random key that is close to the local id
 				// or TODO: implement real kademlia refreshes - #241
-				var err error
-				_, searchFor, err = cryptoBox.GenerateKeyPair()
-				if err != nil {
-					reschan <- err
-					return
-				}
+				searchFor = cryptoBox.NewRandomPubkey()
 				d.local.Debug("BOOTSTRAP: Running kademlia lookup for random peer")
 			}
 			_, err := d.Lookup(searchFor)

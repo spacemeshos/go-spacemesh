@@ -141,3 +141,11 @@ func NewPrivateKeyFromBase58(s string) (PrivateKey, error) {
 func NewPublicKeyFromBase58(s string) (PublicKey, error) {
 	return newKeyFromBase58(s)
 }
+
+func NewRandomPubkey() PublicKey {
+	k := newKey()
+	if _, err := io.ReadFull(rand.Reader, k.bytes[:]); err != nil {
+		panic(err)
+	}
+	return k
+}
