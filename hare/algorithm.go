@@ -400,11 +400,6 @@ func (proc *ConsensusProcess) processPreRoundMsg(msg *pb.HareMessage) {
 
 func (proc *ConsensusProcess) processStatusMsg(msg *pb.HareMessage) {
 	// record status
-
-	if proc.statusesTracker == nil {
-		log.AppLog.Critical("WTF ", proc.k)
-		panic("et hapnaick")
-	}
 	proc.statusesTracker.RecordStatus(msg)
 }
 
