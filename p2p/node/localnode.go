@@ -32,31 +32,28 @@ func (n *LocalNode) PrivateKey() crypto.PrivateKey {
 // Creates a new node if none was loaded.
 func NewLocalNode(config config.Config, address string, persist bool) (*LocalNode, error) {
 
-	if persist {
-
-		if len(config.NodeID) > 0 {
-			// user provided node id/pubkey via the cli - attempt to start that node w persisted data
-			data, err := readNodeData(config.NodeID)
-			if err != nil {
-				return nil, err
-			}
-
-			return newLocalNodeFromFile(address, data, persist)
-		}
-
-		// look for persisted node data in the nodes directory
-		// load the node with the data of the first node found
-		nodeData, err := readFirstNodeData()
+	if len(config.NodeID) > 0 {
+		// user provided node id/pubkey via the cli - attempt to start that node w persisted data
+		data, err := readNodeData(config.NodeID)
 		if err != nil {
-			log.Warning("failed to read node data from local store")
+			return nil, err
 		}
 
-		if nodeData != nil {
-			// create node using persisted node data
-			return newLocalNodeFromFile(address, nodeData, persist)
-		}
-
+		return newLocalNodeFromFile(address, data, persist)
 	}
+
+	// look for persisted node data in the nodes directory
+	// load the node with the data of the first node found
+	nodeData, err := readFirstNodeData()
+	if err != nil {
+		log.Warning("failed to read node data from local store")
+	}
+
+	if nodeData != nil {
+		// create node using persisted node data
+		return newLocalNodeFromFile(address, nodeData, persist)
+	}
+
 	// generate new node
 	return NewNodeIdentity(config, address, persist)
 }
