@@ -110,20 +110,20 @@ func Test_16Nodes_HareIntegrationSuite(t *testing.T) {
 		t.Skip()
 	}
 	const roundDuration = time.Second * time.Duration(2)
-	cfg := config.Config{N: 16, F: 2, SetSize: 10, RoundDuration: roundDuration}
+	cfg := config.Config{N: 16, F: 8, SetSize: 10, RoundDuration: roundDuration}
 
 	his := &hareIntegrationThreeNodes{newIntegrationSuite()}
 	his.BootstrappedNodeCount = cfg.N - 1
 	his.BootstrapNodesCount = 1
-	his.NeighborsCount = 2
+	his.NeighborsCount = 8
 	his.name = t.Name()
 
 	i := 1
 	set1 := NewSetFromValues(value1, value2)
 	set2 := NewSetFromValues(value1)
 	his.initialSets = make([]*Set, cfg.N)
-	his.fill(set1, 0, 6)
-	his.fill(set2, 7, cfg.N-1)
+	his.fill(set1, 0, 10)
+	his.fill(set2, 11, cfg.N-1)
 	his.honestSets = []*Set{set1}
 	oracle := NewMockHashOracle(cfg.N)
 	his.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
