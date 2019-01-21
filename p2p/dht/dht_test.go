@@ -327,7 +327,6 @@ func bootAndWait(t *testing.T, dht DHT, errchan chan error) {
 // A bigger bootstrap
 func TestDHT_Bootstrap(t *testing.T) {
 
-	const timeout = 10 * time.Second
 	const nodesNum = 100
 	const minToBoot = 10
 
@@ -349,18 +348,10 @@ func TestDHT_Bootstrap(t *testing.T) {
 		go bootAndWait(t, d, booted)
 	}
 
-	timer := time.NewTimer(timeout)
-
-	i := 0
-	for i < nodesNum-1 {
-		select {
-		case e := <-booted:
-			if e != nil {
-				t.Error("Failed to boot a node")
-			}
-			i++
-		case <-timer.C:
-			t.Error("Failed to boot within time")
+	for i := 0; i < nodesNum; i++ {
+		err := <-booted
+		if err != nil {
+			t.Fatal(err)
 		}
 	}
 }
