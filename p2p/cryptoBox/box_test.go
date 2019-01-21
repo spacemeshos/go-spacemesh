@@ -29,8 +29,7 @@ func TestBox(t *testing.T) {
 
 func TestPrependPubkey(t *testing.T) {
 	r := require.New(t)
-	_, pubkey, err := GenerateKeyPair()
-	r.NoError(err)
+	pubkey := NewRandomPubkey()
 
 	secretMessage := []byte("This is a secret -- sh...")
 	messageWithPubkey := PrependPubkey(secretMessage, pubkey)

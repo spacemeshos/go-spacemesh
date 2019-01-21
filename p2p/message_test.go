@@ -9,7 +9,7 @@ import (
 )
 
 func Test_NewProtocolMessageMeatadata(t *testing.T) {
-	_, pk, _ := cryptoBox.GenerateKeyPair()
+	pk := cryptoBox.NewRandomPubkey()
 
 	assert.NotNil(t, pk)
 

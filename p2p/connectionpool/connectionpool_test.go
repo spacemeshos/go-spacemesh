@@ -13,8 +13,7 @@ import (
 )
 
 func generatePublicKey() cryptoBox.PublicKey {
-	_, pubKey, _ := cryptoBox.GenerateKeyPair()
-	return pubKey
+	return cryptoBox.NewRandomPubkey()
 }
 
 func generateIpAddress() string {

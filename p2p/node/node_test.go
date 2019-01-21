@@ -9,7 +9,7 @@ import (
 )
 
 func TestNew(t *testing.T) {
-	_, pu, _ := cryptoBox.GenerateKeyPair()
+	pu := cryptoBox.NewRandomPubkey()
 	address := "0.0.0.0:1234"
 
 	node := New(pu, address)

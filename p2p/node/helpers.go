@@ -53,7 +53,7 @@ func GenerateRandomNodeData() Node {
 	port := rand.Int31n(48127) + 1024
 
 	address := fmt.Sprintf("0.0.0.0:%d", port)
-	_, pub, _ := cryptoBox.GenerateKeyPair()
+	pub := cryptoBox.NewRandomPubkey()
 	return Node{pub, address}
 }
 

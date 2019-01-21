@@ -96,7 +96,7 @@ func (mbn *mockBaseNetwork) ProcessProtocolMessage(sender node.Node, protocol st
 
 func (mbn *mockBaseNetwork) addRandomPeers(cnt int) {
 	for i := 0; i < cnt; i++ {
-		_, pub, _ := cryptoBox.GenerateKeyPair()
+		pub := cryptoBox.NewRandomPubkey()
 		mbn.addRandomPeer(pub)
 	}
 }
@@ -112,17 +112,6 @@ func (mbn *mockBaseNetwork) totalMessageSent() int {
 	total := mbn.totalMsgCount
 	mbn.msgMutex.Unlock()
 	return total
-}
-
-type mockSampler struct {
-	f func(count int) []node.Node
-}
-
-func (mcs *mockSampler) SelectPeers(count int) []node.Node {
-	if mcs.f != nil {
-		return mcs.f(count)
-	}
-	return node.GenerateRandomNodesData(count)
 }
 
 type TestMessage struct {
@@ -146,8 +135,7 @@ func (tm TestMessage) Bytes() []byte {
 }
 
 func newPubkey(t *testing.T) cryptoBox.PublicKey {
-	_, pubkey, err := cryptoBox.GenerateKeyPair()
-	assert.NoError(t, err)
+	pubkey := cryptoBox.NewRandomPubkey()
 	return pubkey
 }
 
@@ -199,7 +187,7 @@ lop:
 func TestNeighborhood_AddIncomingPeer(t *testing.T) {
 	n := NewProtocol(config.DefaultConfig().SwarmConfig, newMockBaseNetwork(), newPubkey(t), log.New("tesT", "", ""))
 	n.Start()
-	_, pub, _ := cryptoBox.GenerateKeyPair()
+	pub := cryptoBox.NewRandomPubkey()
 	n.addPeer(pub)
 
 	assert.True(t, n.hasPeer(pub))
@@ -412,9 +400,9 @@ func TestNeighborhood_Disconnect(t *testing.T) {
 	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newPubkey(t), log.New("tesT", "", ""))
 
 	n.Start()
-	_, pub1, _ := cryptoBox.GenerateKeyPair()
+	pub1 := cryptoBox.NewRandomPubkey()
 	n.addPeer(pub1)
-	_, pub2, _ := cryptoBox.GenerateKeyPair()
+	pub2 := cryptoBox.NewRandomPubkey()
 	n.addPeer(pub2)
 	assert.Equal(t, 2, n.peersCount())
 

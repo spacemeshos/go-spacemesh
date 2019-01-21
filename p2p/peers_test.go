@@ -20,7 +20,7 @@ func getPeers(p Service) (Peers, chan cryptoBox.PublicKey, chan cryptoBox.Public
 
 func TestPeers_GetPeers(t *testing.T) {
 	pi, new, _ := getPeers(service.NewSimulator().NewNode())
-	_, a, _ := cryptoBox.GenerateKeyPair()
+	a := cryptoBox.NewRandomPubkey()
 	new <- a
 	time.Sleep(10 * time.Millisecond) //allow context switch
 	peers := pi.GetPeers()
@@ -31,7 +31,7 @@ func TestPeers_GetPeers(t *testing.T) {
 
 func TestPeers_Close(t *testing.T) {
 	pi, new, _ := getPeers(service.NewSimulator().NewNode())
-	_, a, _ := cryptoBox.GenerateKeyPair()
+	a := cryptoBox.NewRandomPubkey()
 	new <- a
 	time.Sleep(10 * time.Millisecond) //allow context switch
 	pi.Close()
@@ -43,11 +43,11 @@ func TestPeers_Close(t *testing.T) {
 
 func TestPeers_AddPeer(t *testing.T) {
 	pi, new, _ := getPeers(service.NewSimulator().NewNode())
-	_, a, _ := cryptoBox.GenerateKeyPair()
-	_, b, _ := cryptoBox.GenerateKeyPair()
-	_, c, _ := cryptoBox.GenerateKeyPair()
-	_, d, _ := cryptoBox.GenerateKeyPair()
-	_, e, _ := cryptoBox.GenerateKeyPair()
+	a := cryptoBox.NewRandomPubkey()
+	b := cryptoBox.NewRandomPubkey()
+	c := cryptoBox.NewRandomPubkey()
+	d := cryptoBox.NewRandomPubkey()
+	e := cryptoBox.NewRandomPubkey()
 	new <- a
 	time.Sleep(10 * time.Millisecond) //allow context switch
 	peers := pi.GetPeers()
@@ -64,11 +64,11 @@ func TestPeers_AddPeer(t *testing.T) {
 
 func TestPeers_RemovePeer(t *testing.T) {
 	pi, new, expierd := getPeers(service.NewSimulator().NewNode())
-	_, a, _ := cryptoBox.GenerateKeyPair()
-	_, b, _ := cryptoBox.GenerateKeyPair()
-	_, c, _ := cryptoBox.GenerateKeyPair()
-	_, d, _ := cryptoBox.GenerateKeyPair()
-	_, e, _ := cryptoBox.GenerateKeyPair()
+	a := cryptoBox.NewRandomPubkey()
+	b := cryptoBox.NewRandomPubkey()
+	c := cryptoBox.NewRandomPubkey()
+	d := cryptoBox.NewRandomPubkey()
+	e := cryptoBox.NewRandomPubkey()
 	new <- a
 	time.Sleep(10 * time.Millisecond) //allow context switch
 	peers := pi.GetPeers()
