@@ -3,8 +3,7 @@ package dht
 import (
 	"context"
 	"errors"
-	"github.com/btcsuite/btcutil/base58"
-	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"time"
 )
@@ -73,7 +72,7 @@ func (d *KadDHT) Bootstrap(ctx context.Context) error {
 
 func (d *KadDHT) tryBoot(ctx context.Context, minPeers int) error {
 
-	searchFor := d.local.PublicKey().String()
+	searchFor := d.local.PublicKey()
 	gotpeers := false
 	tries := 0
 	d.local.Debug("BOOTSTRAP: Running kademlia lookup for ourselves")
@@ -86,8 +85,7 @@ loop:
 			if gotpeers || tries >= bootstrapTries {
 				// TODO: consider choosing a random key that is close to the local id
 				// or TODO: implement real kademlia refreshes - #241
-				rnd, _ := crypto.GetRandomBytes(32)
-				searchFor = base58.Encode(rnd)
+				searchFor = p2pcrypto.NewRandomPubkey()
 				d.local.Debug("BOOTSTRAP: Running kademlia lookup for random peer")
 			}
 			_, err := d.Lookup(searchFor)

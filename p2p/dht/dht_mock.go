@@ -2,6 +2,7 @@ package dht
 
 import (
 	"context"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 )
 
@@ -13,7 +14,7 @@ type MockDHT struct {
 	bsres              error
 	bsCount            int
 	InternalLookupFunc func(dhtid node.DhtID) []node.Node
-	LookupFunc         func(string) (node.Node, error)
+	LookupFunc         func(p2pcrypto.PublicKey) (node.Node, error)
 	lookupRes          node.Node
 	lookupErr          error
 }
@@ -48,7 +49,7 @@ func (m *MockDHT) BootstrapCount() int {
 }
 
 // Lookup is a dht lookup operation
-func (m *MockDHT) Lookup(pubkey string) (node.Node, error) {
+func (m *MockDHT) Lookup(pubkey p2pcrypto.PublicKey) (node.Node, error) {
 	if m.LookupFunc != nil {
 		return m.LookupFunc(pubkey)
 	}

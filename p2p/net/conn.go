@@ -2,6 +2,7 @@ package net
 
 import (
 	"errors"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"time"
 
 	"fmt"
@@ -36,8 +37,8 @@ type Connection interface {
 	fmt.Stringer
 
 	ID() string
-	RemotePublicKey() crypto.PublicKey
-	SetRemotePublicKey(key crypto.PublicKey)
+	RemotePublicKey() p2pcrypto.PublicKey
+	SetRemotePublicKey(key p2pcrypto.PublicKey)
 
 	RemoteAddr() net.Addr
 
@@ -56,7 +57,7 @@ type FormattedConnection struct {
 	// metadata for logging / debugging
 	id         string // uuid for logging
 	created    time.Time
-	remotePub  crypto.PublicKey
+	remotePub  p2pcrypto.PublicKey
 	remoteAddr net.Addr
 	closeChan  chan struct{}
 	formatter  wire.Formatter // format messages in some way
@@ -80,7 +81,8 @@ type readWriteCloseAddresser interface {
 }
 
 // Create a new connection wrapping a net.Conn with a provided connection manager
-func newConnection(conn readWriteCloseAddresser, netw networker, formatter wire.Formatter, remotePub crypto.PublicKey, log *logging.Logger) *FormattedConnection {
+func newConnection(conn readWriteCloseAddresser, netw networker, formatter wire.Formatter,
+	remotePub p2pcrypto.PublicKey, session NetworkSession, log *logging.Logger) *FormattedConnection {
 
 	// todo parametrize channel size - hard-coded for now
 	connection := &FormattedConnection{
@@ -91,6 +93,7 @@ func newConnection(conn readWriteCloseAddresser, netw networker, formatter wire.
 		remoteAddr: conn.RemoteAddr(),
 		formatter:  formatter,
 		networker:  netw,
+		session:    session,
 		closeChan:  make(chan struct{}),
 		closed:     0,
 	}
@@ -110,12 +113,12 @@ func (c *FormattedConnection) RemoteAddr() net.Addr {
 }
 
 // SetRemotePublicKey sets the remote peer's public key
-func (c *FormattedConnection) SetRemotePublicKey(key crypto.PublicKey) {
+func (c *FormattedConnection) SetRemotePublicKey(key p2pcrypto.PublicKey) {
 	c.remotePub = key
 }
 
 // RemotePublicKey returns the remote peer's public key
-func (c *FormattedConnection) RemotePublicKey() crypto.PublicKey {
+func (c *FormattedConnection) RemotePublicKey() p2pcrypto.PublicKey {
 	return c.remotePub
 }
 

@@ -1,14 +1,7 @@
 package net
 
 import (
-	"crypto/aes"
-	"crypto/cipher"
-	"encoding/hex"
-	"errors"
-	"github.com/spacemeshos/go-spacemesh/crypto"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"sync"
-	"time"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 )
 
 // NetworkSession is an authenticated network session between 2 peers.
@@ -17,127 +10,53 @@ import (
 // enc/dec is using an ephemeral sym key exchanged securely between the peers via the handshake protocol
 // The handshake protocol goal is to create an authenticated network session.
 type NetworkSession interface {
-	ID() []byte     // Unique session id
-	KeyM() []byte   // session shared sym key for mac - 32 bytes
-	PubKey() []byte // 65 bytes session-only pub key uncompressed
+	ID() p2pcrypto.PublicKey // Unique session id, currently the peer pubkey TODO: @noam use pubkey from conn and remove this
 
-	Decrypt(in []byte) ([]byte, error) // decrypt data using session dec key
-	Encrypt(in []byte) ([]byte, error) // encrypt data using session enc key
-
-	EncryptGuard() *sync.Mutex // used for creating a per session transaction of data encryption and data delivery
+	OpenMessage(boxedMessage []byte) ([]byte, error) // decrypt data using session dec key
+	SealMessage(message []byte) []byte               // encrypt data using session enc key
 }
+
+var _ NetworkSession = (*networkSessionImpl)(nil)
+var _ NetworkSession = (*SessionMock)(nil)
 
 // TODO: add support for idle session expiration
 
-// NetworkSessionImpl implements NetworkSession.
-type NetworkSessionImpl struct {
-	id      []byte
-	keyE    []byte
-	keyM    []byte
-	pubKey  []byte
-	created time.Time
-
-	localNodeID  string
-	remoteNodeID string
-
-	blockEncrypter cipher.BlockMode
-	encGuard       sync.Mutex
-	blockDecrypter cipher.BlockMode
-}
-
-//LocalNodeID returns the session's local node id.
-func (n *NetworkSessionImpl) LocalNodeID() string {
-	return n.localNodeID
-}
-
-//RemoteNodeID returns the session's remote node id.
-func (n *NetworkSessionImpl) RemoteNodeID() string {
-	return n.remoteNodeID
+// networkSessionImpl implements NetworkSession.
+type networkSessionImpl struct {
+	sharedSecret p2pcrypto.SharedSecret
+	peerPubkey   p2pcrypto.PublicKey
 }
 
 // String returns the session's identifier string.
-func (n *NetworkSessionImpl) String() string {
-	return hex.EncodeToString(n.id)
+func (n networkSessionImpl) String() string {
+	return n.peerPubkey.String()
 }
 
 // ID returns the session's unique id
-func (n *NetworkSessionImpl) ID() []byte {
-	return n.id
-}
-
-// KeyE returns the sessions sym encryption key.
-func (n *NetworkSessionImpl) KeyE() []byte {
-	return n.keyE
-}
-
-// KeyM returns the session's MAC encryption key.
-func (n *NetworkSessionImpl) KeyM() []byte {
-	return n.keyM
-}
-
-// PubKey returns the session's public key.
-func (n *NetworkSessionImpl) PubKey() []byte {
-	return n.pubKey
-}
-
-// Created returns the session creation time.
-func (n *NetworkSessionImpl) Created() time.Time {
-	return n.created
+func (n networkSessionImpl) ID() p2pcrypto.PublicKey {
+	return n.peerPubkey
 }
 
 // Encrypt encrypts in binary data with the session's sym enc key.
-func (n *NetworkSessionImpl) Encrypt(in []byte) ([]byte, error) {
-	l := len(in)
-	if l == 0 {
-		return nil, errors.New("Invalid input buffer - 0 len")
+func (n networkSessionImpl) SealMessage(message []byte) []byte {
+	if n.sharedSecret == nil {
+		panic("tried to seal a message before initializing session with a shared secret")
 	}
-	paddedIn := crypto.AddPKCSPadding(in)
-	out := make([]byte, len(paddedIn))
-	n.blockEncrypter.CryptBlocks(out, paddedIn)
-	return out, nil
+	return n.sharedSecret.Seal(message)
 }
 
 // Decrypt decrypts in binary data that was encrypted with the session's sym enc key.
-func (n *NetworkSessionImpl) Decrypt(in []byte) ([]byte, error) {
-	l := len(in)
-	if l == 0 {
-		return nil, errors.New("Invalid input buffer - 0 len")
+func (n networkSessionImpl) OpenMessage(boxedMessage []byte) (message []byte, err error) {
+	if n.sharedSecret == nil {
+		panic("tried to open a message before initializing session with a shared secret")
 	}
-
-	out := make([]byte, l)
-	n.blockDecrypter.CryptBlocks(out, in)
-	clearText, err := crypto.RemovePKCSPadding(out)
-	if err != nil {
-		return nil, err
-	}
-	return clearText, nil
-}
-
-// EncryptGuard returns a mutex that is used by clients of session to tie encryption and sending together.
-func (n *NetworkSessionImpl) EncryptGuard() *sync.Mutex {
-	return &n.encGuard
+	return n.sharedSecret.Open(boxedMessage)
 }
 
 // NewNetworkSession creates a new network session based on provided data
-func NewNetworkSession(id, keyE, keyM, pubKey []byte, localNodeID, remoteNodeID string) (*NetworkSessionImpl, error) {
-	n := &NetworkSessionImpl{
-		id:           id,
-		keyE:         keyE,
-		keyM:         keyM,
-		pubKey:       pubKey,
-		created:      time.Now(),
-		localNodeID:  localNodeID,
-		remoteNodeID: remoteNodeID,
+func NewNetworkSession(sharedSecret p2pcrypto.SharedSecret, peerPubkey p2pcrypto.PublicKey) NetworkSession {
+	return &networkSessionImpl{
+		sharedSecret: sharedSecret,
+		peerPubkey:   peerPubkey,
 	}
-
-	// create and store block enc/dec
-	blockCipher, err := aes.NewCipher(keyE)
-	if err != nil {
-		log.Error("Failed to create block cipher")
-		return nil, err
-	}
-
-	n.blockEncrypter = cipher.NewCBCEncrypter(blockCipher, n.id)
-	n.blockDecrypter = cipher.NewCBCDecrypter(blockCipher, n.id)
-	return n, nil
 }

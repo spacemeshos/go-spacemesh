@@ -1,80 +1,52 @@
 package net
 
-import "sync"
+import (
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
+)
 
 // SessionMock is a wonderful fluffy teddybear
 type SessionMock struct {
-	id        []byte
+	id        p2pcrypto.PublicKey
 	decResult []byte
 	decError  error
 	encResult []byte
 	encError  error
 
-	pubkey []byte
+	pubkey p2pcrypto.PublicKey
 	keyM   []byte
 }
 
-func NewSessionMock(ID []byte) *SessionMock {
-	return &SessionMock{id: ID}
+func NewSessionMock(pubkey p2pcrypto.PublicKey) *SessionMock {
+	return &SessionMock{id: pubkey}
 }
 
 // ID is this
-func (sm SessionMock) ID() []byte {
+func (sm SessionMock) ID() p2pcrypto.PublicKey {
 	return sm.id
 }
 
-// PubKey is this
-func (sm SessionMock) PubKey() []byte {
-	return sm.pubkey
-}
-
-// KeyM is this
-func (sm SessionMock) KeyM() []byte {
-	return sm.keyM
-}
-
 // Encrypt is this
-func (sm SessionMock) Encrypt(in []byte) ([]byte, error) {
-	out := in
+func (sm SessionMock) SealMessage(message []byte) []byte {
+	out := message
 	if sm.encResult != nil {
 		out = sm.encResult
 	}
-	return out, sm.encError
+	return out
 }
 
 // Decrypt is this
-func (sm SessionMock) Decrypt(in []byte) ([]byte, error) {
-	out := in
+func (sm SessionMock) OpenMessage(boxedMessage []byte) ([]byte, error) {
+	out := boxedMessage
 	if sm.decResult != nil {
 		out = sm.decResult
 	}
 	return out, sm.decError
 }
 
-// SetPubKey is this
-func (sm *SessionMock) SetPubKey(x []byte) {
-	sm.pubkey = x
-}
-
-// SetKeyM is this
-func (sm *SessionMock) SetKeyM(x []byte) {
-	sm.keyM = x
-}
-
-// SetEncrypt is this
-func (sm *SessionMock) SetEncrypt(res []byte, err error) {
-	sm.encResult = res
-	sm.encError = err
-}
-
 // SetDecrypt is this
 func (sm *SessionMock) SetDecrypt(res []byte, err error) {
 	sm.decResult = res
 	sm.decError = err
-}
-
-func (n SessionMock) EncryptGuard() *sync.Mutex {
-	return nil
 }
 
 var _ NetworkSession = (*SessionMock)(nil)

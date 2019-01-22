@@ -3,6 +3,7 @@ package dht
 
 import (
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 
@@ -16,7 +17,7 @@ type DHT interface {
 	Update(node node.Node)
 
 	InternalLookup(dhtid node.DhtID) []node.Node
-	Lookup(pubkey string) (node.Node, error)
+	Lookup(pubkey p2pcrypto.PublicKey) (node.Node, error)
 
 	SelectPeers(qty int) []node.Node
 	Bootstrap(ctx context.Context) error
@@ -78,8 +79,8 @@ func (d *KadDHT) Update(node node.Node) {
 
 // Lookup finds a node in the dht by its public key, it issues a search inside the local routing table,
 // if the node can't be found there it sends a query to the network.
-func (d *KadDHT) Lookup(pubkey string) (node.Node, error) {
-	dhtid := node.NewDhtIDFromBase58(pubkey)
+func (d *KadDHT) Lookup(pubkey p2pcrypto.PublicKey) (node.Node, error) {
+	dhtid := node.NewDhtID(pubkey.Bytes())
 
 	res := d.InternalLookup(dhtid)
 
@@ -109,7 +110,7 @@ func (d *KadDHT) InternalLookup(dhtid node.DhtID) []node.Node {
 // nodeId: - base58 node id string
 // Returns requested node via the callback or nil if not found
 // Also used as a bootstrap function to populate the routing table with the results.
-func (d *KadDHT) kadLookup(id string, searchList []node.Node) (node.Node, error) {
+func (d *KadDHT) kadLookup(id p2pcrypto.PublicKey, searchList []node.Node) (node.Node, error) {
 	// save queried node ids for the operation
 	queried := map[string]struct{}{}
 
@@ -123,7 +124,7 @@ func (d *KadDHT) kadLookup(id string, searchList []node.Node) (node.Node, error)
 
 		// is closestNode out target ?
 		closestNode := searchList[0]
-		if closestNode.PublicKey().String() == id {
+		if closestNode.PublicKey().String() == id.String() {
 			return closestNode, nil
 		}
 
@@ -144,7 +145,7 @@ func (d *KadDHT) kadLookup(id string, searchList []node.Node) (node.Node, error)
 			// merge newly found nodes
 			searchList = node.Union(searchList, res)
 			// sort by distance from target
-			searchList = node.SortByDhtID(res, node.NewDhtIDFromBase58(id))
+			searchList = node.SortByDhtID(res, node.NewDhtID(id.Bytes()))
 		}
 		// keep iterating using new servers that were not queried yet from searchlist (if any)
 	}
@@ -186,7 +187,9 @@ func filterFindNodeServers(nodes []node.Node, queried map[string]struct{}, alpha
 // findNodeOp a target node on one or more servers
 // returns closest nodes which are closers than closestNode to targetId
 // if node found it will be in top of results list
-func (d *KadDHT) findNodeOp(servers []node.Node, queried map[string]struct{}, id string, closestNode node.Node) []node.Node {
+func (d *KadDHT) findNodeOp(servers []node.Node, queried map[string]struct{}, id p2pcrypto.PublicKey,
+	closestNode node.Node) []node.Node {
+
 	l := len(servers)
 
 	if l == 0 {
@@ -203,7 +206,7 @@ func (d *KadDHT) findNodeOp(servers []node.Node, queried map[string]struct{}, id
 		idx := id
 		// find node protocol adds found nodes to the local routing table
 		// populates queried node's routing table with us and return.
-		go func(server node.Node, id string) {
+		go func(server node.Node, id p2pcrypto.PublicKey) {
 			fnd, err := d.fnp.FindNode(server, id)
 			if err != nil {
 				//TODO: handle errors

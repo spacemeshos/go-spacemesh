@@ -3,8 +3,8 @@ package node
 import (
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"math/rand"
 	"net"
 	"testing"
@@ -12,7 +12,7 @@ import (
 )
 
 // ErrFailedToCreate is returned when we fail to create a node
-var ErrFailedToCreate = errors.New("Failed to create local test node")
+var ErrFailedToCreate = errors.New("failed to create local test node")
 
 // GenerateTestNode generates a local test node without persisting data to local store and with default config value.
 func GenerateTestNode(t *testing.T) (*LocalNode, Node) {
@@ -24,7 +24,7 @@ func GenerateTestNodeWithConfig(t *testing.T, config config.Config) (*LocalNode,
 
 	port, err := GetUnboundedPort()
 	if err != nil {
-		t.Error("Failed to get a port to bind", err)
+		t.Error("failed to get a port to bind", err)
 	}
 
 	address := fmt.Sprintf("0.0.0.0:%d", port)
@@ -53,7 +53,7 @@ func GenerateRandomNodeData() Node {
 	port := rand.Int31n(48127) + 1024
 
 	address := fmt.Sprintf("0.0.0.0:%d", port)
-	_, pub, _ := crypto.GenerateKeyPair()
+	pub := p2pcrypto.NewRandomPubkey()
 	return Node{pub, address}
 }
 

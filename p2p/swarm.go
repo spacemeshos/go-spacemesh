@@ -1,18 +1,16 @@
 package p2p
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/golang/protobuf/proto"
-	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/connectionpool"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht"
 	"github.com/spacemeshos/go-spacemesh/p2p/gossip"
-	"github.com/spacemeshos/go-spacemesh/p2p/message"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
@@ -46,7 +44,7 @@ func (pm protocolMessage) Bytes() []byte {
 }
 
 type cPool interface {
-	GetConnection(address string, pk crypto.PublicKey) (net.Connection, error)
+	GetConnection(address string, pk p2pcrypto.PublicKey) (net.Connection, error)
 	RemoteConnectionsChannel() chan net.NewConnectionEvent
 }
 
@@ -85,15 +83,15 @@ type swarm struct {
 
 	outpeersMutex sync.RWMutex
 	inpeersMutex  sync.RWMutex
-	outpeers      map[string]crypto.PublicKey
-	inpeers       map[string]crypto.PublicKey
+	outpeers      map[string]p2pcrypto.PublicKey
+	inpeers       map[string]p2pcrypto.PublicKey
 
 	morePeersReq      chan struct{}
 	connectingTimeout time.Duration
 
 	peerLock   sync.RWMutex
-	newPeerSub []chan crypto.PublicKey
-	delPeerSub []chan crypto.PublicKey
+	newPeerSub []chan p2pcrypto.PublicKey
+	delPeerSub []chan p2pcrypto.PublicKey
 }
 
 func (s *swarm) waitForBoot() error {
@@ -148,10 +146,10 @@ func newSwarm(ctx context.Context, config config.Config, newNode bool, persist b
 
 		initial:           make(chan struct{}),
 		morePeersReq:      make(chan struct{}),
-		inpeers:           make(map[string]crypto.PublicKey),
-		outpeers:          make(map[string]crypto.PublicKey),
-		newPeerSub:        make([]chan crypto.PublicKey, 0, 10),
-		delPeerSub:        make([]chan crypto.PublicKey, 0, 10),
+		inpeers:           make(map[string]p2pcrypto.PublicKey),
+		outpeers:          make(map[string]p2pcrypto.PublicKey),
+		newPeerSub:        make([]chan p2pcrypto.PublicKey, 0, 10),
+		delPeerSub:        make([]chan p2pcrypto.PublicKey, 0, 10),
 		connectingTimeout: ConnectingTimeout,
 
 		protocolHandlers: make(map[string]chan service.Message),
@@ -161,30 +159,11 @@ func newSwarm(ctx context.Context, config config.Config, newNode bool, persist b
 
 	s.dht = dht.New(l, config.SwarmConfig, s)
 
-	s.gossip = gossip.NewProtocol(config.SwarmConfig, s, newSignerValidator(s), s.lNode.Log)
+	s.gossip = gossip.NewProtocol(config.SwarmConfig, s, s.LocalNode().PublicKey(), s.lNode.Log)
 
 	s.lNode.Debug("Created swarm for local node %s, %s", l.Address(), l.Pretty())
 
 	return s, nil
-}
-
-type signerValidator struct {
-	pubKey   crypto.PublicKey
-	signFunc func([]byte) ([]byte, error)
-}
-
-// PublicKey is the signerValidtor pair pub key
-func (sv *signerValidator) PublicKey() crypto.PublicKey {
-	return sv.pubKey
-}
-
-// Sign is delegating the sign function form the private key
-func (sv *signerValidator) Sign(data []byte) ([]byte, error) {
-	return sv.signFunc(data)
-}
-
-func newSignerValidator(s *swarm) *signerValidator {
-	return &signerValidator{s.lNode.PublicKey(), s.lNode.PrivateKey().Sign}
 }
 
 func (s *swarm) Start() error {
@@ -246,12 +225,12 @@ func (s *swarm) connectionPool() cPool {
 	return s.cPool
 }
 
-func (s *swarm) SendWrappedMessage(nodeID string, protocol string, payload *service.DataMsgWrapper) error {
+func (s *swarm) SendWrappedMessage(nodeID p2pcrypto.PublicKey, protocol string, payload *service.DataMsgWrapper) error {
 	return s.sendMessageImpl(nodeID, protocol, payload)
 }
 
-func (s *swarm) SendMessage(nodeID string, protocol string, payload []byte) error {
-	return s.sendMessageImpl(nodeID, protocol, service.DataBytes{Payload: payload})
+func (s *swarm) SendMessage(peerPubkey p2pcrypto.PublicKey, protocol string, payload []byte) error {
+	return s.sendMessageImpl(peerPubkey, protocol, service.DataBytes{Payload: payload})
 }
 
 // SendMessage Sends a message to a remote node
@@ -261,7 +240,7 @@ func (s *swarm) SendMessage(nodeID string, protocol string, payload []byte) erro
 // req.msg: marshaled message data
 // req.destId: receiver remote node public key/id
 // Local request to send a message to a remote node
-func (s *swarm) sendMessageImpl(peerPubKey string, protocol string, payload service.Data) error {
+func (s *swarm) sendMessageImpl(peerPubKey p2pcrypto.PublicKey, protocol string, payload service.Data) error {
 	//s.lNode.Info("Sending message to %v", peerPubKey)
 	var err error
 	var peer node.Node
@@ -285,7 +264,7 @@ func (s *swarm) sendMessageImpl(peerPubKey string, protocol string, payload serv
 	}
 
 	protomessage := &pb.ProtocolMessage{
-		Metadata: message.NewProtocolMessageMetadata(s.lNode.PublicKey(), protocol),
+		Metadata: NewProtocolMessageMetadata(s.lNode.PublicKey(), protocol),
 	}
 
 	switch x := payload.(type) {
@@ -299,36 +278,16 @@ func (s *swarm) sendMessageImpl(peerPubKey string, protocol string, payload serv
 		return fmt.Errorf("protocolMsg has unexpected type %T", x)
 	}
 
-	err = message.SignMessage(s.lNode.PrivateKey(), protomessage)
-	if err != nil {
-		return err
-	}
-
 	data, err := proto.Marshal(protomessage)
 	if err != nil {
 		return fmt.Errorf("failed to encode signed message err: %v", err)
 	}
 
-	session.EncryptGuard().Lock()
-
-	// messages must be sent in the same order as the order that the messages were encrypted because the iv used to encrypt
-	// (and therefore decrypt) is the last encrypted block of the previous message that were encrypted
-	final, err := message.PrepareMessage(session, data)
-
-	if err != nil {
-		session.EncryptGuard().Unlock()
-		// since it is possible that the encryption succeeded and the iv was modified for the next message, we must close the connection otherwise
-		// the missing message will prevent the receiver from decrypting any future message
-		s.lNode.Logger.Error("prepare message failed, closing the connection")
-		conn.Close()
-		e := fmt.Errorf("aborting send - failed to encrypt protocolMsg: %v", err)
-		return e
-	}
+	final := session.SealMessage(data)
 
 	err = conn.Send(final)
-	session.EncryptGuard().Unlock()
 
-	s.lNode.Debug("Message sent succesfully")
+	s.lNode.Debug("Message sent successfully")
 
 	return err
 }
@@ -410,7 +369,7 @@ Loop:
 	}
 }
 
-func (s *swarm) retryOrReplace(key crypto.PublicKey) {
+func (s *swarm) retryOrReplace(key p2pcrypto.PublicKey) {
 	getpeer := s.dht.InternalLookup(node.NewDhtID(key.Bytes()))
 
 	if getpeer == nil {
@@ -456,14 +415,10 @@ var (
 	ErrOutOfSync = errors.New("received out of sync msg")
 	// ErrFailDecrypt session cant decrypt
 	ErrFailDecrypt = errors.New("can't decrypt message payload with session key")
-	// ErrAuthAuthor message sign is wrong
-	ErrAuthAuthor = errors.New("failed to verify author")
 	// ErrNoProtocol we don't have the protocol message
 	ErrNoProtocol = errors.New("received msg to an unsupported protocol")
 	// ErrNoSession we don't have this session
 	ErrNoSession = errors.New("connection is missing a session")
-	// ErrNotFromPeer - we got message singed with a different publickkey and its not gossip
-	ErrNotFromPeer = errors.New("this message was signed with the wrong public key")
 )
 
 // onRemoteClientMessage pre-process a protocol message from a remote client handling decryption and authentication
@@ -477,7 +432,7 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 		return ErrBadFormat1
 	}
 
-	s.lNode.Debug(fmt.Sprintf("Handle message from <<  %v", msg.Conn.RemotePublicKey().Pretty()))
+	s.lNode.Debug(fmt.Sprintf("Handle message from <<  %v", msg.Conn.RemotePublicKey().String()))
 
 	// protocol messages are encrypted in payload
 	// Locate the session
@@ -487,7 +442,7 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 		return ErrNoSession
 	}
 
-	decPayload, err := session.Decrypt(msg.Message)
+	decPayload, err := session.OpenMessage(msg.Message)
 	if err != nil {
 		return ErrFailDecrypt
 	}
@@ -495,23 +450,8 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 	pm := &pb.ProtocolMessage{}
 	err = proto.Unmarshal(decPayload, pm)
 	if err != nil {
-		s.lNode.Errorf("proto marshinling err=", err)
+		s.lNode.Errorf("proto marshaling err=", err)
 		return ErrBadFormat2
-	}
-
-	// authenticate valid pubkey, same as session remote pubkey and validate sign.
-	authPub, err := crypto.NewPublicKey(pm.Metadata.AuthPubKey)
-	if err != nil {
-		return ErrAuthAuthor
-	}
-
-	if !bytes.Equal(authPub.Bytes(), msg.Conn.RemotePublicKey().Bytes()) {
-		return ErrAuthAuthor
-	}
-
-	err = message.AuthAuthor(pm)
-	if err != nil {
-		return ErrAuthAuthor
 	}
 
 	// check that the message was send within a reasonable time
@@ -565,7 +505,7 @@ func (s *swarm) Broadcast(protocol string, payload []byte) error {
 // to them at any given time and if not possible we replace them. protocols use the neighborhood
 // to run their logic with peers.
 
-func (s *swarm) publishNewPeer(peer crypto.PublicKey) {
+func (s *swarm) publishNewPeer(peer p2pcrypto.PublicKey) {
 	s.peerLock.RLock()
 	for _, p := range s.newPeerSub {
 		select {
@@ -576,7 +516,7 @@ func (s *swarm) publishNewPeer(peer crypto.PublicKey) {
 	s.peerLock.RUnlock()
 }
 
-func (s *swarm) publishDelPeer(peer crypto.PublicKey) {
+func (s *swarm) publishDelPeer(peer p2pcrypto.PublicKey) {
 	s.peerLock.RLock()
 	for _, p := range s.delPeerSub {
 		select {
@@ -588,9 +528,9 @@ func (s *swarm) publishDelPeer(peer crypto.PublicKey) {
 }
 
 // SubscribePeerEvents lets clients listen on events inside the swarm about peers. first chan is new peers, second is deleted peers.
-func (s *swarm) SubscribePeerEvents() (chan crypto.PublicKey, chan crypto.PublicKey) {
-	in := make(chan crypto.PublicKey, s.config.SwarmConfig.RandomConnections) // todo. what size this should be ? maybe let client pass channels.
-	del := make(chan crypto.PublicKey, s.config.SwarmConfig.RandomConnections)
+func (s *swarm) SubscribePeerEvents() (conn chan p2pcrypto.PublicKey, disc chan p2pcrypto.PublicKey) {
+	in := make(chan p2pcrypto.PublicKey, s.config.SwarmConfig.RandomConnections) // todo. what size this should be ? maybe let client pass channels.
+	del := make(chan p2pcrypto.PublicKey, s.config.SwarmConfig.RandomConnections)
 	s.peerLock.Lock()
 	s.newPeerSub = append(s.newPeerSub, in)
 	s.delPeerSub = append(s.delPeerSub, del)
@@ -740,29 +680,27 @@ loop:
 }
 
 // Disconnect removes a peer from the neighborhood, it requests more peers if our outbound peer count is less than configured
-func (s *swarm) Disconnect(key crypto.PublicKey) {
-	peer := key.String()
-
+func (s *swarm) Disconnect(peer p2pcrypto.PublicKey) {
 	s.inpeersMutex.Lock()
-	if _, ok := s.inpeers[peer]; ok {
-		delete(s.inpeers, peer)
+	if _, ok := s.inpeers[peer.String()]; ok {
+		delete(s.inpeers, peer.String())
 		s.inpeersMutex.Unlock()
-		s.publishDelPeer(key)
+		s.publishDelPeer(peer)
 		return
 	}
 	s.inpeersMutex.Unlock()
 
 	s.outpeersMutex.Lock()
-	if _, ok := s.outpeers[peer]; ok {
-		delete(s.outpeers, peer)
+	if _, ok := s.outpeers[peer.String()]; ok {
+		delete(s.outpeers, peer.String())
 	}
 	s.outpeersMutex.Unlock()
-	s.publishDelPeer(key)
+	s.publishDelPeer(peer)
 	s.morePeersReq <- struct{}{}
 }
 
 // AddIncomingPeer inserts a peer to the neighborhood as a remote peer.
-func (s *swarm) addIncomingPeer(n crypto.PublicKey) {
+func (s *swarm) addIncomingPeer(n p2pcrypto.PublicKey) {
 	s.inpeersMutex.Lock()
 	// todo limit number of inpeers
 	s.inpeers[n.String()] = n
@@ -770,14 +708,14 @@ func (s *swarm) addIncomingPeer(n crypto.PublicKey) {
 	s.publishNewPeer(n)
 }
 
-func (s *swarm) hasIncomingPeer(peer crypto.PublicKey) bool {
+func (s *swarm) hasIncomingPeer(peer p2pcrypto.PublicKey) bool {
 	s.inpeersMutex.RLock()
 	_, ok := s.inpeers[peer.String()]
 	s.inpeersMutex.RUnlock()
 	return ok
 }
 
-func (s *swarm) hasOutgoingPeer(peer crypto.PublicKey) bool {
+func (s *swarm) hasOutgoingPeer(peer p2pcrypto.PublicKey) bool {
 	s.outpeersMutex.RLock()
 	_, ok := s.outpeers[peer.String()]
 	s.outpeersMutex.RUnlock()

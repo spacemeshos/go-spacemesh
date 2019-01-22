@@ -2,14 +2,14 @@ package node
 
 import (
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/stretchr/testify/assert"
 	"strings"
 	"testing"
 )
 
 func TestNew(t *testing.T) {
-	_, pu, _ := crypto.GenerateKeyPair()
+	pu := p2pcrypto.NewRandomPubkey()
 	address := "0.0.0.0:1234"
 
 	node := New(pu, address)
@@ -21,14 +21,14 @@ func TestNew(t *testing.T) {
 
 func TestNewNodeFromString(t *testing.T) {
 	address := "126.0.0.1:3572"
-	pubkey := "r9gJRWVB9JVPap2HKnduoFySvHtVTfJdQ4WG8DriUD82"
+	pubkey := "DWXX1te9Vr9DNUJVsuQqAhoHgXzXCYvwxfiTHCiyxYF5"
 	data := fmt.Sprintf("%v/%v", address, pubkey)
 
 	node, err := NewNodeFromString(data)
 
 	assert.NoError(t, err)
-	assert.Equal(t, node.Address(), address)
-	assert.Equal(t, node.PublicKey().String(), pubkey)
+	assert.Equal(t, address, node.Address())
+	assert.Equal(t, pubkey, node.PublicKey().String())
 
 	pubkey = "r9gJRWVB9JVPap2HKn"
 	data = fmt.Sprintf("%v/%v", address, pubkey)

@@ -1,16 +1,16 @@
 package node
 
 import (
-	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 )
 
 // LocalNode implementation.
 type LocalNode struct {
 	Node
-	privKey crypto.PrivateKey
+	privKey p2pcrypto.PrivateKey
 
 	networkID int8
 
@@ -23,7 +23,7 @@ func (n *LocalNode) NetworkID() int8 {
 }
 
 // PrivateKey returns this node's private key.
-func (n *LocalNode) PrivateKey() crypto.PrivateKey {
+func (n *LocalNode) PrivateKey() p2pcrypto.PrivateKey {
 	return n.privKey
 }
 
@@ -60,14 +60,14 @@ func NewLocalNode(config config.Config, address string, persist bool) (*LocalNod
 
 // NewNodeIdentity creates a new local node without attempting to restore node from local store.
 func NewNodeIdentity(config config.Config, address string, persist bool) (*LocalNode, error) {
-	priv, pub, err := crypto.GenerateKeyPair()
+	priv, pub, err := p2pcrypto.GenerateKeyPair()
 	if err != nil {
 		return nil, err
 	}
 	return newLocalNodeWithKeys(pub, priv, address, config.NetworkID, persist)
 }
 
-func newLocalNodeWithKeys(pubKey crypto.PublicKey, privKey crypto.PrivateKey, address string, networkID int8, persist bool) (*LocalNode, error) {
+func newLocalNodeWithKeys(pubKey p2pcrypto.PublicKey, privKey p2pcrypto.PrivateKey, address string, networkID int8, persist bool) (*LocalNode, error) {
 
 	n := &LocalNode{
 		Node: Node{
@@ -79,7 +79,7 @@ func newLocalNodeWithKeys(pubKey crypto.PublicKey, privKey crypto.PrivateKey, ad
 	}
 
 	if !persist {
-		n.Log = log.New(n.pubKey.Pretty(), "", "")
+		n.Log = log.New(n.pubKey.String(), "", "")
 		return n, nil
 	}
 
@@ -94,7 +94,7 @@ func newLocalNodeWithKeys(pubKey crypto.PublicKey, privKey crypto.PrivateKey, ad
 	}
 
 	// persistent logging
-	n.Log = log.New(n.pubKey.Pretty(), nodeDir, "node.log")
+	n.Log = log.New(n.pubKey.String(), nodeDir, "node.log")
 
 	n.Info("Local node identity >> %v", n.String())
 
@@ -111,12 +111,12 @@ func newLocalNodeWithKeys(pubKey crypto.PublicKey, privKey crypto.PrivateKey, ad
 // Creates a new node from persisted NodeData.
 func newLocalNodeFromFile(address string, d *nodeFileData, persist bool) (*LocalNode, error) {
 
-	priv, err := crypto.NewPrivateKeyFromString(d.PrivKey)
+	priv, err := p2pcrypto.NewPrivateKeyFromBase58(d.PrivKey)
 	if err != nil {
 		return nil, err
 	}
 
-	pub, err := crypto.NewPublicKeyFromString(d.PubKey)
+	pub, err := p2pcrypto.NewPublicKeyFromBase58(d.PubKey)
 	if err != nil {
 		return nil, err
 	}

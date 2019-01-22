@@ -2,8 +2,8 @@ package service
 
 import (
 	"errors"
-	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"io"
 	"sync"
@@ -19,8 +19,8 @@ type Simulator struct {
 	nodes           map[string]*Node
 
 	subLock      sync.Mutex
-	newPeersSubs []chan crypto.PublicKey
-	delPeersSubs []chan crypto.PublicKey
+	newPeersSubs []chan p2pcrypto.PublicKey
+	delPeersSubs []chan p2pcrypto.PublicKey
 }
 
 var _ Service = new(Node)
@@ -45,9 +45,9 @@ func NewSimulator() *Simulator {
 	return s
 }
 
-func (s *Simulator) SubscribeToPeerEvents() (chan crypto.PublicKey, chan crypto.PublicKey) {
-	newp := make(chan crypto.PublicKey)
-	delp := make(chan crypto.PublicKey)
+func (s *Simulator) SubscribeToPeerEvents() (chan p2pcrypto.PublicKey, chan p2pcrypto.PublicKey) {
+	newp := make(chan p2pcrypto.PublicKey)
+	delp := make(chan p2pcrypto.PublicKey)
 	s.subLock.Lock()
 	s.newPeersSubs = append(s.newPeersSubs, newp)
 	s.delPeersSubs = append(s.delPeersSubs, delp)
@@ -55,18 +55,18 @@ func (s *Simulator) SubscribeToPeerEvents() (chan crypto.PublicKey, chan crypto.
 	return newp, delp
 }
 
-func (s *Simulator) publishNewPeer(peer crypto.PublicKey) {
+func (s *Simulator) publishNewPeer(peer p2pcrypto.PublicKey) {
 	s.subLock.Lock()
-	for _, s := range s.newPeersSubs {
-		s <- peer
+	for _, ch := range s.newPeersSubs {
+		ch <- peer
 	}
 	s.subLock.Unlock()
 }
 
-func (s *Simulator) publishDelPeer(peer crypto.PublicKey) {
+func (s *Simulator) publishDelPeer(peer p2pcrypto.PublicKey) {
 	s.subLock.Lock()
-	for _, s := range s.delPeersSubs {
-		s <- peer
+	for _, ch := range s.delPeersSubs {
+		ch <- peer
 	}
 	s.subLock.Unlock()
 }
@@ -100,9 +100,9 @@ func (s *Simulator) NewNodeFrom(n node.Node) *Node {
 	return sn
 }
 
-func (s *Simulator) updateNode(node string, sender *Node) {
+func (s *Simulator) updateNode(node p2pcrypto.PublicKey, sender *Node) {
 	s.mutex.Lock()
-	n, ok := s.nodes[node]
+	n, ok := s.nodes[node.String()]
 	if ok {
 		if n.dht != nil {
 			n.Update(sender.Node)
@@ -139,7 +139,7 @@ func (sn *Node) Start() error {
 // ProcessProtocolMessage
 func (sn *Node) ProcessProtocolMessage(sender node.Node, protocol string, payload Data) error {
 	sn.sim.mutex.RLock()
-	c, ok := sn.sim.protocolHandler[sn.String()][protocol]
+	c, ok := sn.sim.protocolHandler[sn.PublicKey().String()][protocol]
 	sn.sim.mutex.RUnlock()
 	if !ok {
 		return errors.New("Unknown protocol")
@@ -151,17 +151,17 @@ func (sn *Node) ProcessProtocolMessage(sender node.Node, protocol string, payloa
 // SendMessage sends a protocol message to the specified nodeID.
 // returns error if the node cant be found. corresponds to `SendMessage`
 
-func (s *Node) SendWrappedMessage(nodeID string, protocol string, payload *DataMsgWrapper) error {
-	return s.sendMessageImpl(nodeID, protocol, payload)
+func (sn *Node) SendWrappedMessage(nodeID p2pcrypto.PublicKey, protocol string, payload *DataMsgWrapper) error {
+	return sn.sendMessageImpl(nodeID, protocol, payload)
 }
 
-func (s *Node) SendMessage(nodeID string, protocol string, payload []byte) error {
-	return s.sendMessageImpl(nodeID, protocol, DataBytes{Payload: payload})
+func (sn *Node) SendMessage(peerPubkey p2pcrypto.PublicKey, protocol string, payload []byte) error {
+	return sn.sendMessageImpl(peerPubkey, protocol, DataBytes{Payload: payload})
 }
 
-func (sn *Node) sendMessageImpl(nodeID string, protocol string, payload Data) error {
+func (sn *Node) sendMessageImpl(nodeID p2pcrypto.PublicKey, protocol string, payload Data) error {
 	sn.sim.mutex.RLock()
-	thec, ok := sn.sim.protocolHandler[nodeID][protocol]
+	thec, ok := sn.sim.protocolHandler[nodeID.String()][protocol]
 	sn.sim.mutex.RUnlock()
 	if ok {
 		thec <- simMessage{payload, sn.Node}
@@ -169,7 +169,7 @@ func (sn *Node) sendMessageImpl(nodeID string, protocol string, payload Data) er
 		return nil
 	}
 	log.Debug("%v >> %v (%v)", sn.Node.PublicKey(), nodeID, payload)
-	return errors.New("could not find " + protocol + " handler for node: " + nodeID)
+	return errors.New("could not find " + protocol + " handler for node: " + nodeID.String())
 }
 
 // Broadcast
@@ -187,7 +187,7 @@ func (sn *Node) Broadcast(protocol string, payload []byte) error {
 	return nil
 }
 
-func (sn *Node) SubscribePeerEvents() (chan crypto.PublicKey, chan crypto.PublicKey) {
+func (sn *Node) SubscribePeerEvents() (conn chan p2pcrypto.PublicKey, disc chan p2pcrypto.PublicKey) {
 	return sn.sim.SubscribeToPeerEvents()
 }
 
@@ -195,7 +195,7 @@ func (sn *Node) SubscribePeerEvents() (chan crypto.PublicKey, chan crypto.Public
 func (sn *Node) RegisterProtocol(protocol string) chan Message {
 	c := make(chan Message)
 	sn.sim.mutex.Lock()
-	sn.sim.protocolHandler[sn.Node.String()][protocol] = c
+	sn.sim.protocolHandler[sn.Node.PublicKey().String()][protocol] = c
 	sn.sim.mutex.Unlock()
 	return c
 }
@@ -216,9 +216,9 @@ func (sn *Node) Update(node2 node.Node) {
 // Shutdown closes all node channels are remove it from the Simulator map
 func (sn *Node) Shutdown() {
 	sn.sim.mutex.Lock()
-	for _, c := range sn.sim.protocolHandler[sn.Node.String()] {
+	for _, c := range sn.sim.protocolHandler[sn.Node.PublicKey().String()] {
 		close(c)
 	}
-	delete(sn.sim.protocolHandler, sn.Node.String())
+	delete(sn.sim.protocolHandler, sn.Node.PublicKey().String())
 	sn.sim.mutex.Unlock()
 }

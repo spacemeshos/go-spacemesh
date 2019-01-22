@@ -1,7 +1,7 @@
 package connectionpool
 
 import (
-	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 
 	"bytes"
@@ -16,7 +16,7 @@ type dialResult struct {
 }
 
 type networker interface {
-	Dial(address string, remotePublicKey crypto.PublicKey) (net.Connection, error) // Connect to a remote node. Can send when no error.
+	Dial(address string, remotePublicKey p2pcrypto.PublicKey) (net.Connection, error) // Connect to a remote node. Can send when no error.
 	SubscribeOnNewRemoteConnections() chan net.NewConnectionEvent
 	NetworkID() int8
 	SubscribeClosingConnections() chan net.Connection
@@ -28,7 +28,7 @@ type networker interface {
 // - Local connections that were created by local node (by calling GetConnection)
 // - Remote connections that were provided by a networker impl. in a pub-sub manner
 type ConnectionPool struct {
-	localPub    crypto.PublicKey
+	localPub    p2pcrypto.PublicKey
 	net         networker
 	connections map[string]net.Connection
 	connMutex   sync.RWMutex
@@ -43,7 +43,7 @@ type ConnectionPool struct {
 }
 
 // NewConnectionPool creates new ConnectionPool
-func NewConnectionPool(network networker, lPub crypto.PublicKey) *ConnectionPool {
+func NewConnectionPool(network networker, lPub p2pcrypto.PublicKey) *ConnectionPool {
 	cPool := &ConnectionPool{
 		localPub:      lPub,
 		net:           network,
@@ -89,7 +89,7 @@ func (cp *ConnectionPool) closeConnections() {
 	cp.connMutex.Unlock()
 }
 
-func (cp *ConnectionPool) handleDialResult(rPub crypto.PublicKey, result dialResult) {
+func (cp *ConnectionPool) handleDialResult(rPub p2pcrypto.PublicKey, result dialResult) {
 	cp.pendMutex.Lock()
 	for _, p := range cp.pending[rPub.String()] {
 		p <- result
@@ -99,10 +99,10 @@ func (cp *ConnectionPool) handleDialResult(rPub crypto.PublicKey, result dialRes
 }
 
 func compareConnections(conn1 net.Connection, conn2 net.Connection) int {
-	return bytes.Compare(conn1.Session().ID(), conn2.Session().ID())
+	return bytes.Compare(conn1.Session().ID().Bytes(), conn2.Session().ID().Bytes())
 }
 
-func (cp *ConnectionPool) handleNewConnection(rPub crypto.PublicKey, newConn net.Connection, source net.ConnectionSource) {
+func (cp *ConnectionPool) handleNewConnection(rPub p2pcrypto.PublicKey, newConn net.Connection, source net.ConnectionSource) {
 	cp.connMutex.Lock()
 	var srcPub, dstPub string
 	if source == net.Local {
@@ -150,7 +150,7 @@ func (cp *ConnectionPool) handleNewConnection(rPub crypto.PublicKey, newConn net
 }
 
 func (cp *ConnectionPool) handleClosedConnection(conn net.Connection) {
-	cp.net.Logger().Debug("connection %v with %v was closed (sessionID: %v)", conn.String(), conn.RemotePublicKey().Pretty(), conn.Session().ID())
+	cp.net.Logger().Debug("connection %v with %v was closed (sessionID: %v)", conn.String(), conn.RemotePublicKey().String(), conn.Session().ID())
 	cp.connMutex.Lock()
 	rPub := conn.RemotePublicKey().String()
 	cur, ok := cp.connections[rPub]
@@ -162,7 +162,7 @@ func (cp *ConnectionPool) handleClosedConnection(conn net.Connection) {
 }
 
 // GetConnection fetchs or creates if don't exist a connection to the address which is associated with the remote public key
-func (cp *ConnectionPool) GetConnection(address string, remotePub crypto.PublicKey) (net.Connection, error) {
+func (cp *ConnectionPool) GetConnection(address string, remotePub p2pcrypto.PublicKey) (net.Connection, error) {
 	cp.connMutex.RLock()
 	if cp.shutdown {
 		cp.connMutex.RUnlock()
@@ -207,7 +207,7 @@ func (cp *ConnectionPool) RemoteConnectionsChannel() chan net.NewConnectionEvent
 }
 
 // GetConnectionIfExists checks if the connection is exists or pending
-func (cp *ConnectionPool) GetConnectionIfExists(remotePub crypto.PublicKey) (net.Connection, error) {
+func (cp *ConnectionPool) GetConnectionIfExists(remotePub p2pcrypto.PublicKey) (net.Connection, error) {
 	cp.connMutex.RLock()
 	if cp.shutdown {
 		cp.connMutex.RUnlock()

@@ -251,7 +251,7 @@ func TestDHT_Update(t *testing.T) {
 
 	lastnode := evenmorenodes[0]
 
-	looked, err := dht.Lookup(lastnode.PublicKey().String())
+	looked, err := dht.Lookup(lastnode.PublicKey())
 
 	assert.NoError(t, err, "error finding existing node ")
 
@@ -274,7 +274,7 @@ func TestDHT_Lookup(t *testing.T) {
 
 	dht.Update(randnode)
 
-	node, err := dht.Lookup(randnode.PublicKey().String())
+	node, err := dht.Lookup(randnode.PublicKey())
 
 	assert.NoError(t, err, "Should not return an error")
 
@@ -303,7 +303,7 @@ func TestDHT_Lookup2(t *testing.T) {
 
 	dht2.Update(dht.local.Node)
 
-	node, err := dht2.Lookup(randnode.PublicKey().String())
+	node, err := dht2.Lookup(randnode.PublicKey())
 	assert.NoError(t, err, "error finding node ", err)
 
 	assert.Equal(t, node.String(), randnode.String(), "not the same node")
