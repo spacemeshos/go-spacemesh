@@ -28,7 +28,7 @@ func TestDB_reopendatabase2(t *testing.T) {
 
 func TestDB_delete(t *testing.T) {
 	key := []byte("some key")
-	db := NewMemDatabase()
+	db := NewLevelDbStore("test", nil, nil)
 	db.Put(key, []byte("wonderful"))
 	str, err := db.Get(key)
 	fmt.Println(string(str))
