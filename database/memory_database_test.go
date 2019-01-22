@@ -1,16 +1,11 @@
 package database
 
 import (
-	"fmt"
 	"reflect"
 	"testing"
 )
 
 func checkRow(key []byte,value []byte , iter *MemDatabaseIterator, t *testing.T) {
-	fmt.Println("key", key)
-	fmt.Println("ter.Key()", iter.Key())
-	fmt.Println("value", value)
-	fmt.Println("iter.Value(", iter.Value())
 	if (reflect.DeepEqual(key, iter.Key()) == false || reflect.DeepEqual(value, iter.Value()) == false) {
 		t.Fatalf("Key/Value doesnt match iterator state")
 	}
