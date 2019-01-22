@@ -14,7 +14,7 @@ import (
 )
 
 type mockOutput struct {
-	id   []byte
+	id  []byte
 	set *Set
 }
 
@@ -27,10 +27,10 @@ func (m mockOutput) Set() *Set {
 
 type mockConsensusProcess struct {
 	Closer
-	t   chan TerminationOutput
-	id  uint32
+	t    chan TerminationOutput
+	id   uint32
 	term chan struct{}
-	set *Set
+	set  *Set
 }
 
 func (mcp *mockConsensusProcess) Start() error {
@@ -45,7 +45,6 @@ func (mcp *mockConsensusProcess) Start() error {
 func (mcp *mockConsensusProcess) Id() uint32 {
 	return mcp.id
 }
-
 
 func (mcp *mockConsensusProcess) createInbox(size uint32) chan *pb.HareMessage {
 	c := make(chan *pb.HareMessage)
@@ -164,14 +163,14 @@ func TestHare_GetResult2(t *testing.T) {
 	for i := 0; i < h.bufferSize+1; i++ {
 		h.beginLayer <- mesh.LayerID(i)
 	}
-	time.Sleep(100*time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 
 	_, err := h.GetResult(mesh.LayerID(h.bufferSize))
 	require.NoError(t, err)
 
-	h.beginLayer <- mesh.LayerID(h.bufferSize+1)
+	h.beginLayer <- mesh.LayerID(h.bufferSize + 1)
 
-	time.Sleep(100*time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 
 	_, err = h.GetResult(0)
 	require.Equal(t, err, ErrTooOld)

@@ -1,7 +1,6 @@
 package hare
 
 import (
-	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -23,14 +22,14 @@ func NewPreRoundTracker(threshold int, expectedSize int) *PreRoundTracker {
 
 // Tracks a pre-round message
 func (pre *PreRoundTracker) OnPreRound(msg *pb.HareMessage) {
-	pub, err := crypto.NewPublicKey(msg.PubKey)
+	verifier, err := NewVerifier(msg.PubKey)
 	if err != nil {
-		log.Warning("Could not construct public key: ", err.Error())
+		log.Warning("Could not construct verifier: ", err)
 		return
 	}
 
 	// only handle first pre-round msg
-	if _, exist := pre.preRound[pub.String()]; exist {
+	if _, exist := pre.preRound[verifier.String()]; exist {
 		return
 	}
 
@@ -40,7 +39,7 @@ func (pre *PreRoundTracker) OnPreRound(msg *pb.HareMessage) {
 		pre.tracker.Track(v)
 	}
 
-	pre.preRound[pub.String()] = struct{}{}
+	pre.preRound[verifier.String()] = struct{}{}
 }
 
 // Returns true if the given value is provable, false otherwise

@@ -2,7 +2,6 @@ package hare
 
 import (
 	"github.com/gogo/protobuf/proto"
-	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -37,8 +36,13 @@ func (validator *MessageValidator) ValidateMessage(m *pb.HareMessage, k uint32) 
 	}
 
 	// verify signature
-	ok := NewVerifier(m.PubKey).Verify(data, m.InnerSig)
-	if !ok {
+	verifier, err := NewVerifier(m.PubKey)
+	if err != nil {
+		log.Warning("Validate message failed: Could not construct verifier ", err)
+		return false
+	}
+	res, _ := verifier.Verify(data, m.InnerSig)
+	if !res {
 		log.Warning("Validate message failed: invalid message signature detected")
 		return false
 	}
@@ -148,16 +152,16 @@ func (validator *MessageValidator) validateAggregatedMessage(aggMsg *pb.Aggregat
 		}
 
 		// validate unique sender
-		pub, err := crypto.NewPublicKey(innerMsg.PubKey)
+		verifier, err := NewVerifier(innerMsg.PubKey)
 		if err != nil {
-			log.Warning("Aggregated validation failed: could not construct public key: ", err.Error())
+			log.Warning("Aggregated validation failed: could not construct verifier: ", err)
 			return false
 		}
-		if _, exist := senders[pub.String()]; exist { // pub already exist
+		if _, exist := senders[verifier.String()]; exist { // pub already exist
 			log.Warning("Aggregated validation failed: detected same pubKey for different messages")
 			return false
 		}
-		senders[pub.String()] = struct{}{} // mark sender as exist
+		senders[verifier.String()] = struct{}{} // mark sender as exist
 
 		// validate with attached validators
 		for _, validator := range validators {

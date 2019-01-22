@@ -3,7 +3,6 @@ package hare
 import (
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"math/rand"
 )
 
 type Signing interface {
@@ -18,11 +17,9 @@ type MockSigning struct {
 func NewMockSigning() *MockSigning {
 	ms := new(MockSigning)
 
-	token := make([]byte, 32)
-	rand.Read(token)
-
 	priv, _, err := crypto.GenerateKeyPair()
 	if err != nil {
+		log.Error("Could not create private key ", err)
 		panic("MockSigning construction failed")
 	}
 	ms.key = priv
@@ -33,6 +30,7 @@ func NewMockSigning() *MockSigning {
 func (ms *MockSigning) Sign(m []byte) []byte {
 	sig, err := ms.key.Sign(m)
 	if err != nil {
+		log.Error("Error signing message: ", err)
 		panic("Could not sign message")
 	}
 
@@ -40,11 +38,17 @@ func (ms *MockSigning) Sign(m []byte) []byte {
 }
 
 func (ms *MockSigning) Verifier() Verifier {
-	return NewVerifier(ms.key.GetPublicKey().Bytes())
+	v, err := NewVerifier(ms.key.GetPublicKey().Bytes())
+	if err != nil {
+		log.Error("Error getting public key", err)
+		panic("Could not get public key")
+	}
+
+	return v
 }
 
 type Verifier interface {
-	Verify(data []byte, sig []byte) bool
+	Verify(data []byte, sig []byte) (bool, error)
 	Bytes() []byte
 	String() string
 }
@@ -53,26 +57,26 @@ type PubVerifier struct {
 	pub crypto.PublicKey
 }
 
-func NewVerifier(bytes []byte) Verifier {
+func NewVerifier(bytes []byte) (*PubVerifier, error) {
 	mv := new(PubVerifier)
 	pub, err := crypto.NewPublicKey(bytes)
 	if err != nil {
-		panic("PubVerifier construction failed")
+		return nil, err
 	}
 	mv.pub = pub
 
-	return mv
+	return mv, nil
 }
 
 // Returns true if validation succeeds and false otherwise
-func (mv *PubVerifier) Verify(data []byte, sig []byte) bool {
+func (mv *PubVerifier) Verify(data []byte, sig []byte) (bool, error) {
 	result, err := mv.pub.Verify(data, sig)
 	if err != nil {
 		log.Error("Fatal: verification returned an error: ", err)
-		return false
+		return false, err
 	}
 
-	return result
+	return result, nil
 }
 
 func (mv *PubVerifier) Bytes() []byte {

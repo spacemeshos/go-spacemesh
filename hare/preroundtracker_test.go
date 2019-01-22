@@ -19,6 +19,12 @@ var value3 = Value{Bytes32{3}}
 var value4 = Value{Bytes32{4}}
 var value5 = Value{Bytes32{5}}
 var value6 = Value{Bytes32{6}}
+var value7 = Value{Bytes32{7}}
+var value8 = Value{Bytes32{8}}
+var value9 = Value{Bytes32{9}}
+var value10 = Value{Bytes32{10}}
+
+
 
 func BuildPreRoundMsg(verifier Verifier, s *Set) *pb.HareMessage {
 	builder := NewMessageBuilder()
