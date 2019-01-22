@@ -2,6 +2,7 @@ package hare
 
 import (
 	"github.com/spacemeshos/go-spacemesh/hare/config"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	//_ "net/http/pprof"
 	"testing"
@@ -127,6 +128,18 @@ func (test *ConsensusTest) Start() {
 	go startProcs(test.dishonest)
 }
 
+func createConsensusProcess(cfg config.Config, oracle Rolacle, network p2p.Service, initialSet *Set) *ConsensusProcess {
+	broker := NewBroker(network)
+	output := make(chan TerminationOutput, 1)
+	signing := NewMockSigning()
+	oracle.Register(signing.Verifier())
+	proc := NewConsensusProcess(cfg, *instanceId1, initialSet, oracle, signing, network, output)
+	broker.Register(proc)
+	broker.Start()
+
+	return proc
+}
+
 func TestSingleValueForHonestSet(t *testing.T) {
 	test := newConsensusTest()
 
@@ -140,13 +153,7 @@ func TestSingleValueForHonestSet(t *testing.T) {
 	i := 0
 	creationFunc := func() {
 		s := sim.NewNode()
-		broker := NewBroker(s)
-		output := make(chan TerminationOutput, 1)
-		signing := NewMockSigning()
-		oracle.Register(signing.Verifier())
-		proc := NewConsensusProcess(cfg, *instanceId1, test.initialSets[i], oracle, signing, s, output)
-		broker.Register(proc)
-		broker.Start()
+		proc := createConsensusProcess(cfg, oracle, s, test.initialSets[i])
 		test.procs = append(test.procs, proc)
 		i++
 	}
@@ -178,13 +185,7 @@ func TestAllDifferentSet(t *testing.T) {
 	i := 0
 	creationFunc := func() {
 		s := sim.NewNode()
-		broker := NewBroker(s)
-		output := make(chan TerminationOutput, 1)
-		signing := NewMockSigning()
-		oracle.Register(signing.Verifier())
-		proc := NewConsensusProcess(cfg, *instanceId1, test.initialSets[i], oracle, signing, s, output)
-		broker.Register(proc)
-		broker.Start()
+		proc := createConsensusProcess(cfg, oracle, s, test.initialSets[i])
 		test.procs = append(test.procs, proc)
 		i++
 	}
@@ -199,20 +200,18 @@ func TestDelayedDishonest(t *testing.T) {
 	cfg := config.Config{N: 50, F: 25, SetSize: 5, RoundDuration: time.Second * time.Duration(2)}
 	sim := service.NewSimulator()
 	test.initialSets = make([]*Set, cfg.N)
-	set1 := NewSetFromValues(value1)
-	test.fill(set1, 0, cfg.N-1)
-	test.honestSets = []*Set{set1}
+	honest1 := NewSetFromValues(value1, value2, value4, value5)
+	honest2 := NewSetFromValues(value1, value3, value4, value6)
+	dishonest := NewSetFromValues(value3, value5, value6)
+	test.fill(honest1, 0, 15)
+	test.fill(honest2, 16, cfg.N/2)
+	test.fill(dishonest, cfg.N/2+1, cfg.N-1)
+	test.honestSets = []*Set{honest1, honest2}
 	oracle := NewMockHashOracle(cfg.N)
 	i := 0
 	honestFunc := func() {
 		s := sim.NewNode()
-		broker := NewBroker(s)
-		output := make(chan TerminationOutput, 1)
-		signing := NewMockSigning()
-		oracle.Register(signing.Verifier())
-		proc := NewConsensusProcess(cfg, *instanceId1, test.initialSets[i], oracle, signing, s, output)
-		broker.Register(proc)
-		broker.Start()
+		proc := createConsensusProcess(cfg, oracle, s, test.initialSets[i])
 		test.procs = append(test.procs, proc)
 		i++
 	}
@@ -223,13 +222,7 @@ func TestDelayedDishonest(t *testing.T) {
 	// create dishonest
 	dishonestFunc := func() {
 		s := sim.NewFaulty(time.Second * time.Duration(5)) // 5 sec delay
-		broker := NewBroker(s)
-		output := make(chan TerminationOutput, 1)
-		signing := NewMockSigning()
-		oracle.Register(signing.Verifier())
-		proc := NewConsensusProcess(cfg, *instanceId1, test.initialSets[i], oracle, signing, s, output)
-		broker.Register(proc)
-		broker.Start()
+		proc := createConsensusProcess(cfg, oracle, s, test.initialSets[i])
 		test.dishonest = append(test.dishonest, proc)
 		i++
 	}

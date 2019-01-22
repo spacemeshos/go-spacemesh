@@ -20,6 +20,8 @@ type Stringer interface {
 }
 
 type Rolacle interface {
+	Register(stringer Stringer)
+	Unregister(stringer Stringer)
 	Validate(committeeSize int, proof Signature) bool
 }
 

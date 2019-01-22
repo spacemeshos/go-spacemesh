@@ -63,7 +63,7 @@ func Test_16Nodes_HareIntegrationSuite(t *testing.T) {
 	suite.Run(t, his)
 }
 
-func (his *hareIntegrationThreeNodes) Test_ThreeNodes_AllHonest() {
+func (his *hareIntegrationThreeNodes) Test_16Nodes_AllHonest() {
 	for _, proc := range his.procs {
 		proc.Start()
 	}
@@ -116,7 +116,7 @@ func Test_20Nodes_HareIntegrationSuite(t *testing.T) {
 	suite.Run(t, his)
 }
 
-func (his *hareIntegration20Nodes) Test_100Nodes_AllHonest() {
+func (his *hareIntegration20Nodes) Test_20Nodes_AllHonest() {
 	for _, proc := range his.procs {
 		proc.Start()
 	}
