@@ -4,23 +4,25 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/davecgh/go-spew/spew"
-	"github.com/golang/protobuf/proto"
-	"github.com/spacemeshos/go-spacemesh/p2p/config"
-	"github.com/spacemeshos/go-spacemesh/p2p/connectionpool"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/spacemeshos/go-spacemesh/p2p/dht"
-	"github.com/spacemeshos/go-spacemesh/p2p/gossip"
-	"github.com/spacemeshos/go-spacemesh/p2p/net"
-	"github.com/spacemeshos/go-spacemesh/p2p/node"
-	"github.com/spacemeshos/go-spacemesh/p2p/pb"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"github.com/spacemeshos/go-spacemesh/timesync"
 	inet "net"
 	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/davecgh/go-spew/spew"
+	"github.com/golang/protobuf/proto"
+	"github.com/spacemeshos/go-spacemesh/p2p/config"
+	"github.com/spacemeshos/go-spacemesh/p2p/connectionpool"
+	"github.com/spacemeshos/go-spacemesh/p2p/dht"
+	"github.com/spacemeshos/go-spacemesh/p2p/gossip"
+	"github.com/spacemeshos/go-spacemesh/p2p/net"
+	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
+	"github.com/spacemeshos/go-spacemesh/p2p/pb"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/timesync"
+	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
 )
 
 // ConnectingTimeout is the timeout we wait when trying to connect a neighborhood
@@ -395,7 +397,7 @@ func (s *swarm) retryOrReplace(key p2pcrypto.PublicKey) {
 
 // periodically checks that our clock is sync
 func (s *swarm) checkTimeDrifts() {
-	checkTimeSync := time.NewTicker(config.TimeConfigValues.RefreshNtpInterval)
+	checkTimeSync := time.NewTicker(timeConfig.Values.RefreshNtpInterval)
 Loop:
 	for {
 		select {
