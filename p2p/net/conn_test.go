@@ -2,7 +2,7 @@ package net
 
 import (
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/p2p/cryptoBox"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/delimited"
 	"github.com/stretchr/testify/assert"
 	"net"
@@ -13,7 +13,7 @@ import (
 func TestSendReceiveMessage(t *testing.T) {
 	netw := NewNetworkMock()
 	rwcam := NewReadWriteCloseAddresserMock()
-	rPub := cryptoBox.NewRandomPubkey()
+	rPub := p2pcrypto.NewRandomPubkey()
 	formatter := delimited.NewChan(10)
 	conn := newConnection(rwcam, netw, formatter, rPub, &networkSessionImpl{}, netw.logger)
 	go conn.beginEventProcessing()
@@ -29,7 +29,7 @@ func TestSendReceiveMessage(t *testing.T) {
 func TestReceiveError(t *testing.T) {
 	netw := NewNetworkMock()
 	rwcam := NewReadWriteCloseAddresserMock()
-	rPub := cryptoBox.NewRandomPubkey()
+	rPub := p2pcrypto.NewRandomPubkey()
 	formatter := delimited.NewChan(10)
 	conn := newConnection(rwcam, netw, formatter, rPub, &networkSessionImpl{}, netw.logger)
 
@@ -44,7 +44,7 @@ func TestReceiveError(t *testing.T) {
 func TestSendError(t *testing.T) {
 	netw := NewNetworkMock()
 	rwcam := NewReadWriteCloseAddresserMock()
-	rPub := cryptoBox.NewRandomPubkey()
+	rPub := p2pcrypto.NewRandomPubkey()
 	formatter := delimited.NewChan(10)
 	conn := newConnection(rwcam, netw, formatter, rPub, &networkSessionImpl{}, netw.logger)
 	go conn.beginEventProcessing()
@@ -59,7 +59,7 @@ func TestSendError(t *testing.T) {
 func TestPreSessionMessage(t *testing.T) {
 	netw := NewNetworkMock()
 	rwcam := NewReadWriteCloseAddresserMock()
-	rPub := cryptoBox.NewRandomPubkey()
+	rPub := p2pcrypto.NewRandomPubkey()
 	formatter := delimited.NewChan(10)
 	conn := newConnection(rwcam, netw, formatter, rPub, nil, netw.logger)
 	go conn.beginEventProcessing()
@@ -71,7 +71,7 @@ func TestPreSessionMessage(t *testing.T) {
 func TestPreSessionError(t *testing.T) {
 	netw := NewNetworkMock()
 	rwcam := NewReadWriteCloseAddresserMock()
-	rPub := cryptoBox.NewRandomPubkey()
+	rPub := p2pcrypto.NewRandomPubkey()
 	formatter := delimited.NewChan(10)
 	conn := newConnection(rwcam, netw, formatter, rPub, nil, netw.logger)
 	netw.SetPreSessionResult(fmt.Errorf("fail"))
@@ -88,7 +88,7 @@ func TestPreSessionError(t *testing.T) {
 func TestClose(t *testing.T) {
 	netw := NewNetworkMock()
 	rwcam := NewReadWriteCloseAddresserMock()
-	rPub := cryptoBox.NewRandomPubkey()
+	rPub := p2pcrypto.NewRandomPubkey()
 	formatter := delimited.NewChan(10)
 	conn := newConnection(rwcam, netw, formatter, rPub, &networkSessionImpl{}, netw.logger)
 	getclosed := netw.SubscribeClosingConnections()
@@ -103,7 +103,7 @@ func TestClose(t *testing.T) {
 func TestDoubleClose(t *testing.T) {
 	netw := NewNetworkMock()
 	rwcam := NewReadWriteCloseAddresserMock()
-	rPub := cryptoBox.NewRandomPubkey()
+	rPub := p2pcrypto.NewRandomPubkey()
 	formatter := delimited.NewChan(10)
 	conn := newConnection(rwcam, netw, formatter, rPub, &networkSessionImpl{}, netw.logger)
 	getclosed := netw.SubscribeClosingConnections()
@@ -128,12 +128,12 @@ func TestGettersToBoostCoverage(t *testing.T) {
 	rwcam := NewReadWriteCloseAddresserMock()
 	addr := net.TCPAddr{net.ParseIP("1.1.1.1"), 555, "ipv4"}
 	rwcam.setRemoteAddrResult(&addr)
-	rPub := cryptoBox.NewRandomPubkey()
+	rPub := p2pcrypto.NewRandomPubkey()
 	formatter := delimited.NewChan(10)
 	conn := newConnection(rwcam, netw, formatter, rPub, &networkSessionImpl{}, netw.logger)
 	assert.Equal(t, 36, len(conn.ID()))
 	assert.Equal(t, conn.ID(), conn.String())
-	rPub = cryptoBox.NewRandomPubkey()
+	rPub = p2pcrypto.NewRandomPubkey()
 	conn.SetRemotePublicKey(rPub)
 	assert.Equal(t, rPub, conn.RemotePublicKey())
 	assert.NotNil(t, conn.Session())

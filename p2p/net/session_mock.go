@@ -1,27 +1,27 @@
 package net
 
 import (
-	"github.com/spacemeshos/go-spacemesh/p2p/cryptoBox"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 )
 
 // SessionMock is a wonderful fluffy teddybear
 type SessionMock struct {
-	id        cryptoBox.PublicKey
+	id        p2pcrypto.PublicKey
 	decResult []byte
 	decError  error
 	encResult []byte
 	encError  error
 
-	pubkey cryptoBox.PublicKey
+	pubkey p2pcrypto.PublicKey
 	keyM   []byte
 }
 
-func NewSessionMock(pubkey cryptoBox.PublicKey) *SessionMock {
+func NewSessionMock(pubkey p2pcrypto.PublicKey) *SessionMock {
 	return &SessionMock{id: pubkey}
 }
 
 // ID is this
-func (sm SessionMock) ID() cryptoBox.PublicKey {
+func (sm SessionMock) ID() p2pcrypto.PublicKey {
 	return sm.id
 }
 

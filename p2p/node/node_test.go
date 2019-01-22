@@ -2,14 +2,14 @@ package node
 
 import (
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/p2p/cryptoBox"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/stretchr/testify/assert"
 	"strings"
 	"testing"
 )
 
 func TestNew(t *testing.T) {
-	pu := cryptoBox.NewRandomPubkey()
+	pu := p2pcrypto.NewRandomPubkey()
 	address := "0.0.0.0:1234"
 
 	node := New(pu, address)

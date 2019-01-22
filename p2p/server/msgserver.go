@@ -3,7 +3,7 @@ package server
 import (
 	"container/list"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/cryptoBox"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"sync"
 	"sync/atomic"
@@ -14,7 +14,7 @@ type MessageType uint32
 
 type Service interface {
 	service.Service
-	SendWrappedMessage(nodeID cryptoBox.PublicKey, protocol string, payload *service.DataMsgWrapper) error
+	SendWrappedMessage(nodeID p2pcrypto.PublicKey, protocol string, payload *service.DataMsgWrapper) error
 }
 
 type Message interface {
@@ -131,7 +131,7 @@ func (p *MessageServer) handleMessage(msg Message) {
 	}
 }
 
-func (p *MessageServer) handleRequestMessage(sender cryptoBox.PublicKey, headers *service.DataMsgWrapper) {
+func (p *MessageServer) handleRequestMessage(sender p2pcrypto.PublicKey, headers *service.DataMsgWrapper) {
 	if payload := p.msgRequestHandlers[MessageType(headers.MsgType)](headers.Payload); payload != nil {
 		rmsg := &service.DataMsgWrapper{MsgType: headers.MsgType, ReqID: headers.ReqID, Payload: payload}
 		sendErr := p.network.SendWrappedMessage(sender, p.name, rmsg)
@@ -156,7 +156,7 @@ func (p *MessageServer) RegisterMsgHandler(msgType MessageType, reqHandler func(
 	p.msgRequestHandlers[msgType] = reqHandler
 }
 
-func (p *MessageServer) SendRequest(msgType MessageType, payload []byte, address cryptoBox.PublicKey, resHandler func(msg []byte)) error {
+func (p *MessageServer) SendRequest(msgType MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte)) error {
 	reqID := p.newRequestId()
 	p.pendMutex.Lock()
 	p.resHandlers[reqID] = resHandler

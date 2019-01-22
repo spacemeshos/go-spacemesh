@@ -3,7 +3,7 @@ package service
 import (
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/cryptoBox"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"io"
 	"sync"
@@ -19,8 +19,8 @@ type Simulator struct {
 	nodes           map[string]*Node
 
 	subLock      sync.Mutex
-	newPeersSubs []chan cryptoBox.PublicKey
-	delPeersSubs []chan cryptoBox.PublicKey
+	newPeersSubs []chan p2pcrypto.PublicKey
+	delPeersSubs []chan p2pcrypto.PublicKey
 }
 
 var _ Service = new(Node)
@@ -45,9 +45,9 @@ func NewSimulator() *Simulator {
 	return s
 }
 
-func (s *Simulator) SubscribeToPeerEvents() (chan cryptoBox.PublicKey, chan cryptoBox.PublicKey) {
-	newp := make(chan cryptoBox.PublicKey)
-	delp := make(chan cryptoBox.PublicKey)
+func (s *Simulator) SubscribeToPeerEvents() (chan p2pcrypto.PublicKey, chan p2pcrypto.PublicKey) {
+	newp := make(chan p2pcrypto.PublicKey)
+	delp := make(chan p2pcrypto.PublicKey)
 	s.subLock.Lock()
 	s.newPeersSubs = append(s.newPeersSubs, newp)
 	s.delPeersSubs = append(s.delPeersSubs, delp)
@@ -55,7 +55,7 @@ func (s *Simulator) SubscribeToPeerEvents() (chan cryptoBox.PublicKey, chan cryp
 	return newp, delp
 }
 
-func (s *Simulator) publishNewPeer(peer cryptoBox.PublicKey) {
+func (s *Simulator) publishNewPeer(peer p2pcrypto.PublicKey) {
 	s.subLock.Lock()
 	for _, ch := range s.newPeersSubs {
 		ch <- peer
@@ -63,7 +63,7 @@ func (s *Simulator) publishNewPeer(peer cryptoBox.PublicKey) {
 	s.subLock.Unlock()
 }
 
-func (s *Simulator) publishDelPeer(peer cryptoBox.PublicKey) {
+func (s *Simulator) publishDelPeer(peer p2pcrypto.PublicKey) {
 	s.subLock.Lock()
 	for _, ch := range s.delPeersSubs {
 		ch <- peer
@@ -100,7 +100,7 @@ func (s *Simulator) NewNodeFrom(n node.Node) *Node {
 	return sn
 }
 
-func (s *Simulator) updateNode(node cryptoBox.PublicKey, sender *Node) {
+func (s *Simulator) updateNode(node p2pcrypto.PublicKey, sender *Node) {
 	s.mutex.Lock()
 	n, ok := s.nodes[node.String()]
 	if ok {
@@ -151,15 +151,15 @@ func (sn *Node) ProcessProtocolMessage(sender node.Node, protocol string, payloa
 // SendMessage sends a protocol message to the specified nodeID.
 // returns error if the node cant be found. corresponds to `SendMessage`
 
-func (sn *Node) SendWrappedMessage(nodeID cryptoBox.PublicKey, protocol string, payload *DataMsgWrapper) error {
+func (sn *Node) SendWrappedMessage(nodeID p2pcrypto.PublicKey, protocol string, payload *DataMsgWrapper) error {
 	return sn.sendMessageImpl(nodeID, protocol, payload)
 }
 
-func (sn *Node) SendMessage(peerPubkey cryptoBox.PublicKey, protocol string, payload []byte) error {
+func (sn *Node) SendMessage(peerPubkey p2pcrypto.PublicKey, protocol string, payload []byte) error {
 	return sn.sendMessageImpl(peerPubkey, protocol, DataBytes{Payload: payload})
 }
 
-func (sn *Node) sendMessageImpl(nodeID cryptoBox.PublicKey, protocol string, payload Data) error {
+func (sn *Node) sendMessageImpl(nodeID p2pcrypto.PublicKey, protocol string, payload Data) error {
 	sn.sim.mutex.RLock()
 	thec, ok := sn.sim.protocolHandler[nodeID.String()][protocol]
 	sn.sim.mutex.RUnlock()
@@ -187,7 +187,7 @@ func (sn *Node) Broadcast(protocol string, payload []byte) error {
 	return nil
 }
 
-func (sn *Node) SubscribePeerEvents() (conn chan cryptoBox.PublicKey, disc chan cryptoBox.PublicKey) {
+func (sn *Node) SubscribePeerEvents() (conn chan p2pcrypto.PublicKey, disc chan p2pcrypto.PublicKey) {
 	return sn.sim.SubscribeToPeerEvents()
 }
 

@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
-	"github.com/spacemeshos/go-spacemesh/p2p/cryptoBox"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"math/rand"
 	"net"
 	"testing"
@@ -53,7 +53,7 @@ func GenerateRandomNodeData() Node {
 	port := rand.Int31n(48127) + 1024
 
 	address := fmt.Sprintf("0.0.0.0:%d", port)
-	pub := cryptoBox.NewRandomPubkey()
+	pub := p2pcrypto.NewRandomPubkey()
 	return Node{pub, address}
 }
 

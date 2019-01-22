@@ -2,7 +2,7 @@ package net
 
 import (
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
-	"github.com/spacemeshos/go-spacemesh/p2p/cryptoBox"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-func waitForCallbackOrTimeout(t *testing.T, outchan chan NewConnectionEvent, expectedPeerPubkey cryptoBox.PublicKey) {
+func waitForCallbackOrTimeout(t *testing.T, outchan chan NewConnectionEvent, expectedPeerPubkey p2pcrypto.PublicKey) {
 	select {
 	case res := <-outchan:
 		assert.Equal(t, expectedPeerPubkey.String(), res.Conn.Session().ID().String(), "wrong session received")

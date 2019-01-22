@@ -1,7 +1,7 @@
 package net
 
 import (
-	"github.com/spacemeshos/go-spacemesh/p2p/cryptoBox"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 )
 
 // NetworkSession is an authenticated network session between 2 peers.
@@ -10,7 +10,7 @@ import (
 // enc/dec is using an ephemeral sym key exchanged securely between the peers via the handshake protocol
 // The handshake protocol goal is to create an authenticated network session.
 type NetworkSession interface {
-	ID() cryptoBox.PublicKey // Unique session id, currently the peer pubkey TODO: @noam use pubkey from conn and remove this
+	ID() p2pcrypto.PublicKey // Unique session id, currently the peer pubkey TODO: @noam use pubkey from conn and remove this
 
 	OpenMessage(boxedMessage []byte) ([]byte, error) // decrypt data using session dec key
 	SealMessage(message []byte) []byte               // encrypt data using session enc key
@@ -23,8 +23,8 @@ var _ NetworkSession = (*SessionMock)(nil)
 
 // networkSessionImpl implements NetworkSession.
 type networkSessionImpl struct {
-	sharedSecret cryptoBox.SharedSecret
-	peerPubkey   cryptoBox.PublicKey
+	sharedSecret p2pcrypto.SharedSecret
+	peerPubkey   p2pcrypto.PublicKey
 }
 
 // String returns the session's identifier string.
@@ -33,7 +33,7 @@ func (n networkSessionImpl) String() string {
 }
 
 // ID returns the session's unique id
-func (n networkSessionImpl) ID() cryptoBox.PublicKey {
+func (n networkSessionImpl) ID() p2pcrypto.PublicKey {
 	return n.peerPubkey
 }
 
@@ -54,7 +54,7 @@ func (n networkSessionImpl) OpenMessage(boxedMessage []byte) (message []byte, er
 }
 
 // NewNetworkSession creates a new network session based on provided data
-func NewNetworkSession(sharedSecret cryptoBox.SharedSecret, peerPubkey cryptoBox.PublicKey) NetworkSession {
+func NewNetworkSession(sharedSecret p2pcrypto.SharedSecret, peerPubkey p2pcrypto.PublicKey) NetworkSession {
 	return &networkSessionImpl{
 		sharedSecret: sharedSecret,
 		peerPubkey:   peerPubkey,

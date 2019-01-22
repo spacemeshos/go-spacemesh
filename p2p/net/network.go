@@ -6,7 +6,7 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
-	"github.com/spacemeshos/go-spacemesh/p2p/cryptoBox"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/delimited"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
@@ -180,7 +180,7 @@ func dial(keepAlive, timeOut time.Duration, address string) (net.Conn, error) {
 	return netConn, err
 }
 
-func (n *Net) createConnection(address string, remotePub cryptoBox.PublicKey, session NetworkSession,
+func (n *Net) createConnection(address string, remotePub p2pcrypto.PublicKey, session NetworkSession,
 	timeOut, keepAlive time.Duration) (ManagedConnection, error) {
 
 	if n.isShuttingDown {
@@ -198,7 +198,7 @@ func (n *Net) createConnection(address string, remotePub cryptoBox.PublicKey, se
 	return newConnection(netConn, n, formatter, remotePub, session, n.logger), nil
 }
 
-func (n *Net) createSecuredConnection(address string, remotePubkey cryptoBox.PublicKey, timeOut time.Duration,
+func (n *Net) createSecuredConnection(address string, remotePubkey p2pcrypto.PublicKey, timeOut time.Duration,
 	keepAlive time.Duration) (ManagedConnection, error) {
 
 	session := createSession(n.localNode.PrivateKey(), remotePubkey)
@@ -220,8 +220,8 @@ func (n *Net) createSecuredConnection(address string, remotePubkey cryptoBox.Pub
 	return conn, nil
 }
 
-func createSession(privkey cryptoBox.PrivateKey, remotePubkey cryptoBox.PublicKey) NetworkSession {
-	sharedSecret := cryptoBox.GenerateSharedSecret(privkey, remotePubkey)
+func createSession(privkey p2pcrypto.PrivateKey, remotePubkey p2pcrypto.PublicKey) NetworkSession {
+	sharedSecret := p2pcrypto.GenerateSharedSecret(privkey, remotePubkey)
 	session := NewNetworkSession(sharedSecret, remotePubkey)
 	return session
 }
@@ -230,7 +230,7 @@ func createSession(privkey cryptoBox.PrivateKey, remotePubkey cryptoBox.PublicKe
 // address:: ip:port
 // Returns established connection that local clients can send messages to or error if failed
 // to establish a connection, currently only secured connections are supported
-func (n *Net) Dial(address string, remotePubkey cryptoBox.PublicKey) (Connection, error) {
+func (n *Net) Dial(address string, remotePubkey p2pcrypto.PublicKey) (Connection, error) {
 	conn, err := n.createSecuredConnection(address, remotePubkey, n.config.DialTimeout, n.config.ConnKeepAlive)
 	if err != nil {
 		return nil, fmt.Errorf("failed to Dail. err: %v", err)
@@ -303,7 +303,7 @@ func (n *Net) publishNewRemoteConnectionEvent(conn Connection, node node.Node) {
 
 // HandlePreSessionIncomingMessage establishes session with the remote peer and update the Connection with the new session
 func (n *Net) HandlePreSessionIncomingMessage(c Connection, message []byte) error {
-	message, remotePubkey, err := cryptoBox.ExtractPubkey(message)
+	message, remotePubkey, err := p2pcrypto.ExtractPubkey(message)
 	if err != nil {
 		return err
 	}
@@ -364,7 +364,7 @@ func (n *Net) verifyNetworkIDAndClientVersion(handshakeData *pb.HandshakeData) e
 	return nil
 }
 
-func generateHandshakeMessage(session NetworkSession, networkID int8, localIncomingPort int, localPubkey cryptoBox.PublicKey) ([]byte, error) {
+func generateHandshakeMessage(session NetworkSession, networkID int8, localIncomingPort int, localPubkey p2pcrypto.PublicKey) ([]byte, error) {
 	handshakeData := &pb.HandshakeData{
 		Timestamp:            time.Now().Unix(),
 		ClientVersion:        config.ClientVersion,
@@ -376,7 +376,7 @@ func generateHandshakeMessage(session NetworkSession, networkID int8, localIncom
 		return nil, err
 	}
 	sealedMessage := session.SealMessage(handshakeMessage)
-	return cryptoBox.PrependPubkey(sealedMessage, localPubkey), nil
+	return p2pcrypto.PrependPubkey(sealedMessage, localPubkey), nil
 }
 
 func replacePort(addr string, newPort uint16) (string, error) {

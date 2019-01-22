@@ -2,7 +2,7 @@ package net
 
 import (
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/cryptoBox"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"gopkg.in/op/go-logging.v1"
 	"math/rand"
 	"net"
@@ -88,7 +88,7 @@ func (n *NetworkMock) SetDialDelayMs(delay int8) {
 }
 
 // Dial dials
-func (n *NetworkMock) Dial(address string, remotePublicKey cryptoBox.PublicKey) (Connection, error) {
+func (n *NetworkMock) Dial(address string, remotePublicKey p2pcrypto.PublicKey) (Connection, error) {
 	atomic.AddInt32(&n.dialCount, 1)
 	time.Sleep(time.Duration(n.dialDelayMs) * time.Millisecond)
 	sID := n.dialSessionID
@@ -97,7 +97,7 @@ func (n *NetworkMock) Dial(address string, remotePublicKey cryptoBox.PublicKey) 
 		rand.Read(sID)
 	}
 	conn := NewConnectionMock(remotePublicKey)
-	publicKey, _ := cryptoBox.NewPubkeyFromBytes(sID)
+	publicKey, _ := p2pcrypto.NewPubkeyFromBytes(sID)
 	conn.SetSession(SessionMock{id: publicKey})
 	return conn, n.dialErr
 }

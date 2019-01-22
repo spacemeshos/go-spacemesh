@@ -3,7 +3,7 @@ package dht
 import (
 	"context"
 	"errors"
-	"github.com/spacemeshos/go-spacemesh/p2p/cryptoBox"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"time"
 )
@@ -85,7 +85,7 @@ loop:
 			if gotpeers || tries >= bootstrapTries {
 				// TODO: consider choosing a random key that is close to the local id
 				// or TODO: implement real kademlia refreshes - #241
-				searchFor = cryptoBox.NewRandomPubkey()
+				searchFor = p2pcrypto.NewRandomPubkey()
 				d.local.Debug("BOOTSTRAP: Running kademlia lookup for random peer")
 			}
 			_, err := d.Lookup(searchFor)

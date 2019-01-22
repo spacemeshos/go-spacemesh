@@ -1,4 +1,4 @@
-package cryptoBox
+package p2pcrypto
 
 import (
 	"crypto/rand"

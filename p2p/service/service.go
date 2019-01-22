@@ -1,7 +1,7 @@
 package service
 
 import (
-	"github.com/spacemeshos/go-spacemesh/p2p/cryptoBox"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 )
 
@@ -15,8 +15,8 @@ type Message interface {
 type Service interface {
 	Start() error
 	RegisterProtocol(protocol string) chan Message
-	SendMessage(peerPubkey cryptoBox.PublicKey, protocol string, payload []byte) error
-	SubscribePeerEvents() (conn chan cryptoBox.PublicKey, disc chan cryptoBox.PublicKey)
+	SendMessage(peerPubkey p2pcrypto.PublicKey, protocol string, payload []byte) error
+	SubscribePeerEvents() (conn chan p2pcrypto.PublicKey, disc chan p2pcrypto.PublicKey)
 	ProcessProtocolMessage(sender node.Node, protocol string, payload Data) error
 	Broadcast(protocol string, payload []byte) error
 	Shutdown()

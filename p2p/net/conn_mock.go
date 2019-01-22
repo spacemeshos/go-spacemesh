@@ -2,7 +2,7 @@ package net
 
 import (
 	"github.com/spacemeshos/go-spacemesh/crypto"
-	"github.com/spacemeshos/go-spacemesh/p2p/cryptoBox"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"net"
 	"strconv"
 	"sync/atomic"
@@ -11,7 +11,7 @@ import (
 
 type ConnectionMock struct {
 	id        string
-	remotePub cryptoBox.PublicKey
+	remotePub p2pcrypto.PublicKey
 	session   NetworkSession
 	source    ConnectionSource
 
@@ -24,7 +24,7 @@ type ConnectionMock struct {
 	closed bool
 }
 
-func NewConnectionMock(key cryptoBox.PublicKey) *ConnectionMock {
+func NewConnectionMock(key p2pcrypto.PublicKey) *ConnectionMock {
 	return &ConnectionMock{
 		id:        crypto.UUIDString(),
 		remotePub: key,
@@ -36,11 +36,11 @@ func (cm ConnectionMock) ID() string {
 	return cm.id
 }
 
-func (cm ConnectionMock) RemotePublicKey() cryptoBox.PublicKey {
+func (cm ConnectionMock) RemotePublicKey() p2pcrypto.PublicKey {
 	return cm.remotePub
 }
 
-func (cm *ConnectionMock) SetRemotePublicKey(key cryptoBox.PublicKey) {
+func (cm *ConnectionMock) SetRemotePublicKey(key p2pcrypto.PublicKey) {
 	cm.remotePub = key
 }
 

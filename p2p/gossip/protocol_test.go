@@ -4,7 +4,7 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
-	"github.com/spacemeshos/go-spacemesh/p2p/cryptoBox"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -17,8 +17,8 @@ import (
 type mockBaseNetwork struct {
 	msgSentByPeer        map[string]uint32
 	inbox                chan service.Message
-	connSubs             []chan cryptoBox.PublicKey
-	discSubs             []chan cryptoBox.PublicKey
+	connSubs             []chan p2pcrypto.PublicKey
+	discSubs             []chan p2pcrypto.PublicKey
 	totalMsgCount        int
 	processProtocolCount int
 	msgMutex             sync.Mutex
@@ -31,8 +31,8 @@ func newMockBaseNetwork() *mockBaseNetwork {
 	return &mockBaseNetwork{
 		make(map[string]uint32),
 		make(chan service.Message, 30),
-		make([]chan cryptoBox.PublicKey, 0, 5),
-		make([]chan cryptoBox.PublicKey, 0, 5),
+		make([]chan p2pcrypto.PublicKey, 0, 5),
+		make([]chan p2pcrypto.PublicKey, 0, 5),
 		0,
 		0,
 		sync.Mutex{},
@@ -42,7 +42,7 @@ func newMockBaseNetwork() *mockBaseNetwork {
 	}
 }
 
-func (mbn *mockBaseNetwork) SendMessage(peerPubkey cryptoBox.PublicKey, protocol string, payload []byte) error {
+func (mbn *mockBaseNetwork) SendMessage(peerPubkey p2pcrypto.PublicKey, protocol string, payload []byte) error {
 	mbn.msgMutex.Lock()
 	mbn.lastMsg = payload
 	mbn.msgSentByPeer[peerPubkey.String()]++
@@ -79,9 +79,9 @@ func (mbn *mockBaseNetwork) RegisterProtocol(protocol string) chan service.Messa
 	return mbn.inbox
 }
 
-func (mbn *mockBaseNetwork) SubscribePeerEvents() (conn chan cryptoBox.PublicKey, disc chan cryptoBox.PublicKey) {
-	conn = make(chan cryptoBox.PublicKey, 20)
-	disc = make(chan cryptoBox.PublicKey, 20)
+func (mbn *mockBaseNetwork) SubscribePeerEvents() (conn chan p2pcrypto.PublicKey, disc chan p2pcrypto.PublicKey) {
+	conn = make(chan p2pcrypto.PublicKey, 20)
+	disc = make(chan p2pcrypto.PublicKey, 20)
 
 	mbn.connSubs = append(mbn.connSubs, conn)
 	mbn.discSubs = append(mbn.discSubs, disc)
@@ -96,12 +96,12 @@ func (mbn *mockBaseNetwork) ProcessProtocolMessage(sender node.Node, protocol st
 
 func (mbn *mockBaseNetwork) addRandomPeers(cnt int) {
 	for i := 0; i < cnt; i++ {
-		pub := cryptoBox.NewRandomPubkey()
+		pub := p2pcrypto.NewRandomPubkey()
 		mbn.addRandomPeer(pub)
 	}
 }
 
-func (mbn *mockBaseNetwork) addRandomPeer(pub cryptoBox.PublicKey) {
+func (mbn *mockBaseNetwork) addRandomPeer(pub p2pcrypto.PublicKey) {
 	for _, p := range mbn.connSubs {
 		p <- pub
 	}
@@ -134,12 +134,12 @@ func (tm TestMessage) Bytes() []byte {
 	return tm.data.Bytes()
 }
 
-func newPubkey(t *testing.T) cryptoBox.PublicKey {
-	pubkey := cryptoBox.NewRandomPubkey()
+func newPubkey(t *testing.T) p2pcrypto.PublicKey {
+	pubkey := p2pcrypto.NewRandomPubkey()
 	return pubkey
 }
 
-func newTestMessageData(t testing.TB, authPubkey cryptoBox.PublicKey) ([]byte, *pb.ProtocolMessage) {
+func newTestMessageData(t testing.TB, authPubkey p2pcrypto.PublicKey) ([]byte, *pb.ProtocolMessage) {
 	pm := &pb.ProtocolMessage{
 		Metadata: &pb.Metadata{
 			NextProtocol:  ProtocolName,
@@ -187,7 +187,7 @@ lop:
 func TestNeighborhood_AddIncomingPeer(t *testing.T) {
 	n := NewProtocol(config.DefaultConfig().SwarmConfig, newMockBaseNetwork(), newPubkey(t), log.New("tesT", "", ""))
 	n.Start()
-	pub := cryptoBox.NewRandomPubkey()
+	pub := p2pcrypto.NewRandomPubkey()
 	n.addPeer(pub)
 
 	assert.True(t, n.hasPeer(pub))
@@ -400,9 +400,9 @@ func TestNeighborhood_Disconnect(t *testing.T) {
 	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newPubkey(t), log.New("tesT", "", ""))
 
 	n.Start()
-	pub1 := cryptoBox.NewRandomPubkey()
+	pub1 := p2pcrypto.NewRandomPubkey()
 	n.addPeer(pub1)
-	pub2 := cryptoBox.NewRandomPubkey()
+	pub2 := p2pcrypto.NewRandomPubkey()
 	n.addPeer(pub2)
 	assert.Equal(t, 2, n.peersCount())
 

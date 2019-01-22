@@ -2,13 +2,13 @@ package node
 
 import (
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/p2p/cryptoBox"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"strings"
 )
 
 // Node is the basic node identity struct
 type Node struct {
-	pubKey  cryptoBox.PublicKey
+	pubKey  p2pcrypto.PublicKey
 	address string
 }
 
@@ -16,7 +16,7 @@ type Node struct {
 var EmptyNode Node
 
 // PublicKey returns the public key of the node
-func (n Node) PublicKey() cryptoBox.PublicKey {
+func (n Node) PublicKey() p2pcrypto.PublicKey {
 	return n.pubKey
 }
 
@@ -79,7 +79,7 @@ func SortByDhtID(nodes []Node, id DhtID) []Node {
 }
 
 // New creates a new remotenode identity from a public key and an address
-func New(key cryptoBox.PublicKey, address string) Node {
+func New(key p2pcrypto.PublicKey, address string) Node {
 	return Node{key, address}
 }
 
@@ -89,7 +89,7 @@ func NewNodeFromString(data string) (Node, error) {
 	if len(items) != 2 {
 		return EmptyNode, fmt.Errorf("could'nt create node from string, wrong format")
 	}
-	pubk, err := cryptoBox.NewPublicKeyFromBase58(items[1])
+	pubk, err := p2pcrypto.NewPublicKeyFromBase58(items[1])
 	if err != nil {
 		return EmptyNode, err
 	}

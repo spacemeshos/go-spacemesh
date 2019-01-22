@@ -2,7 +2,7 @@ package p2p
 
 import (
 	"github.com/spacemeshos/go-spacemesh/p2p/connectionpool"
-	"github.com/spacemeshos/go-spacemesh/p2p/cryptoBox"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht"
 	"github.com/stretchr/testify/require"
 	"testing"
@@ -24,10 +24,10 @@ import (
 const debug = false
 
 type cpoolMock struct {
-	f func(address string, pk cryptoBox.PublicKey) (net.Connection, error)
+	f func(address string, pk p2pcrypto.PublicKey) (net.Connection, error)
 }
 
-func (cp *cpoolMock) GetConnection(address string, pk cryptoBox.PublicKey) (net.Connection, error) {
+func (cp *cpoolMock) GetConnection(address string, pk p2pcrypto.PublicKey) (net.Connection, error) {
 	if cp.f != nil {
 		return cp.f(address, pk)
 	}
@@ -156,7 +156,7 @@ func Test_ConnectionBeforeMessage(t *testing.T) {
 
 	//called := make(chan struct{}, numNodes)
 	cpm := new(cpoolMock)
-	cpm.f = func(address string, pk cryptoBox.PublicKey) (net.Connection, error) {
+	cpm.f = func(address string, pk p2pcrypto.PublicKey) (net.Connection, error) {
 		c, err := oldCpool.GetConnectionIfExists(pk)
 		if err != nil {
 			t.Fatal("Didn't get connection yet while SendMessage called GetConnection")
@@ -192,7 +192,7 @@ func RandString(n int) string {
 	return string(b)
 }
 
-func sendDirectMessage(t *testing.T, sender *swarm, recvPub cryptoBox.PublicKey, inChan chan service.Message, checkpayload bool) {
+func sendDirectMessage(t *testing.T, sender *swarm, recvPub p2pcrypto.PublicKey, inChan chan service.Message, checkpayload bool) {
 	payload := []byte(RandString(10))
 	err := sender.SendMessage(recvPub, exampleProtocol, payload)
 	require.NoError(t, err)
@@ -402,7 +402,7 @@ func TestSwarm_onRemoteClientMessage(t *testing.T) {
 
 }
 
-func assertNewPeerEvent(t *testing.T, peer cryptoBox.PublicKey, connChan <-chan cryptoBox.PublicKey) {
+func assertNewPeerEvent(t *testing.T, peer p2pcrypto.PublicKey, connChan <-chan p2pcrypto.PublicKey) {
 	select {
 	case newPeer := <-connChan:
 		assert.Equal(t, peer.String(), newPeer.String())
@@ -411,7 +411,7 @@ func assertNewPeerEvent(t *testing.T, peer cryptoBox.PublicKey, connChan <-chan 
 	}
 }
 
-func assertNewPeerEvents(t *testing.T, expCount int, connChan <-chan cryptoBox.PublicKey) {
+func assertNewPeerEvents(t *testing.T, expCount int, connChan <-chan p2pcrypto.PublicKey) {
 	//var actCount int
 	//loop:
 	//for {
@@ -425,7 +425,7 @@ func assertNewPeerEvents(t *testing.T, expCount int, connChan <-chan cryptoBox.P
 	assert.Equal(t, expCount, len(connChan))
 }
 
-func assertNoNewPeerEvent(t *testing.T, eventChan <-chan cryptoBox.PublicKey) {
+func assertNoNewPeerEvent(t *testing.T, eventChan <-chan p2pcrypto.PublicKey) {
 	select {
 	case newPeer := <-eventChan:
 		assert.Error(t, errors.New("unexpected new peer event, peer "+newPeer.String()))
@@ -434,7 +434,7 @@ func assertNoNewPeerEvent(t *testing.T, eventChan <-chan cryptoBox.PublicKey) {
 	}
 }
 
-func assertNewDisconnectedPeerEvent(t *testing.T, peer cryptoBox.PublicKey, discChan <-chan cryptoBox.PublicKey) {
+func assertNewDisconnectedPeerEvent(t *testing.T, peer p2pcrypto.PublicKey, discChan <-chan p2pcrypto.PublicKey) {
 	select {
 	case newPeer := <-discChan:
 		assert.Equal(t, peer.String(), newPeer.String())
@@ -443,7 +443,7 @@ func assertNewDisconnectedPeerEvent(t *testing.T, peer cryptoBox.PublicKey, disc
 	}
 }
 
-func drainPeerEvents(eventChan <-chan cryptoBox.PublicKey) {
+func drainPeerEvents(eventChan <-chan p2pcrypto.PublicKey) {
 loop:
 	for {
 		select {
@@ -486,7 +486,7 @@ func Test_Swarm_getMorePeers(t *testing.T) {
 	cpm := new(cpoolMock)
 
 	// test connection error
-	cpm.f = func(address string, pk cryptoBox.PublicKey) (net.Connection, error) {
+	cpm.f = func(address string, pk p2pcrypto.PublicKey) (net.Connection, error) {
 		return nil, errors.New("can't make connection")
 	}
 
@@ -568,7 +568,7 @@ func TestNeighborhood_Initial(t *testing.T) {
 	p = p2pTestNoStart(t, cfg)
 	p.dht = mdht
 	cpm := new(cpoolMock)
-	cpm.f = func(address string, pk cryptoBox.PublicKey) (net.Connection, error) {
+	cpm.f = func(address string, pk p2pcrypto.PublicKey) (net.Connection, error) {
 		return net.NewConnectionMock(pk), nil
 	}
 	p.cPool = cpm

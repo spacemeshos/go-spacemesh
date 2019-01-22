@@ -5,7 +5,7 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/cryptoBox"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -67,7 +67,7 @@ func newFindNodeProtocol(service service.Service, rt RoutingTable) *findNodeProt
 	return p
 }
 
-func (p *findNodeProtocol) sendRequestMessage(server cryptoBox.PublicKey, payload []byte, reqID crypto.UUID,
+func (p *findNodeProtocol) sendRequestMessage(server p2pcrypto.PublicKey, payload []byte, reqID crypto.UUID,
 	responseChan chan findNodeResults) (bool, error) {
 
 	findnode := &pb.FindNode{}
@@ -87,7 +87,7 @@ func (p *findNodeProtocol) sendRequestMessage(server cryptoBox.PublicKey, payloa
 	return true, p.service.SendMessage(server, protocol, msg)
 }
 
-func (p *findNodeProtocol) sendResponseMessage(server cryptoBox.PublicKey, reqID, payload []byte) error {
+func (p *findNodeProtocol) sendResponseMessage(server p2pcrypto.PublicKey, reqID, payload []byte) error {
 	findnode := &pb.FindNode{}
 	findnode.Req = false
 	findnode.ReqID = reqID
@@ -101,7 +101,7 @@ func (p *findNodeProtocol) sendResponseMessage(server cryptoBox.PublicKey, reqID
 }
 
 // FindNode Send a single find node request to a remote node
-func (p *findNodeProtocol) FindNode(serverNode node.Node, target cryptoBox.PublicKey) ([]node.Node, error) {
+func (p *findNodeProtocol) FindNode(serverNode node.Node, target p2pcrypto.PublicKey) ([]node.Node, error) {
 
 	var err error
 
@@ -182,7 +182,7 @@ func (p *findNodeProtocol) readLoop() {
 
 // Handles a find node request from a remote node
 // Process the request and send back the response to the remote node
-func (p *findNodeProtocol) handleIncomingRequest(sender cryptoBox.PublicKey, reqID, msg []byte) {
+func (p *findNodeProtocol) handleIncomingRequest(sender p2pcrypto.PublicKey, reqID, msg []byte) {
 	req := &pb.FindNodeReq{}
 	err := proto.Unmarshal(msg, req)
 	if err != nil {
@@ -272,7 +272,7 @@ func toNodeInfo(nodes []node.Node, filterID string) []*pb.NodeInfo {
 func fromNodeInfos(nodes []*pb.NodeInfo) []node.Node {
 	res := make([]node.Node, len(nodes))
 	for i, n := range nodes {
-		pubk, err := cryptoBox.NewPubkeyFromBytes(n.NodeId)
+		pubk, err := p2pcrypto.NewPubkeyFromBytes(n.NodeId)
 		if err != nil {
 			// TODO Error handling, problem : don't break everything because one messed up nodeinfo
 			log.Error("There was an error parsing nodeid : ", n.NodeId, ", skipping it. err: ", err)

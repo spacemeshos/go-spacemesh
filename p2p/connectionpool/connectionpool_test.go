@@ -3,7 +3,7 @@ package connectionpool
 import (
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/p2p/cryptoBox"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/stretchr/testify/assert"
@@ -12,8 +12,8 @@ import (
 	"time"
 )
 
-func generatePublicKey() cryptoBox.PublicKey {
-	return cryptoBox.NewRandomPubkey()
+func generatePublicKey() p2pcrypto.PublicKey {
+	return p2pcrypto.NewRandomPubkey()
 }
 
 func generateIpAddress() string {
@@ -126,9 +126,9 @@ func TestRemoteConnectionWithExistingConnection(t *testing.T) {
 	addr := "1.1.1.1"
 	cPool := NewConnectionPool(n, generatePublicKey())
 
-	lowPubkey, err := cryptoBox.NewPublicKeyFromBase58("7gd5cD8ZanFaqnMHZrgUsUjDeVxMTxfpnu4gDPS69pBU")
+	lowPubkey, err := p2pcrypto.NewPublicKeyFromBase58("7gd5cD8ZanFaqnMHZrgUsUjDeVxMTxfpnu4gDPS69pBU")
 	assert.NoError(t, err)
-	highPubkey, err := cryptoBox.NewPublicKeyFromBase58("FABBx9LKEo9dEpQeo6GBmygoqrrC34JnzDPtz1jL6qAA")
+	highPubkey, err := p2pcrypto.NewPublicKeyFromBase58("FABBx9LKEo9dEpQeo6GBmygoqrrC34JnzDPtz1jL6qAA")
 	assert.NoError(t, err)
 
 	// local connection has session ID < remote's session ID
@@ -252,7 +252,7 @@ func TestClosedConnection(t *testing.T) {
 
 func TestRandom(t *testing.T) {
 	type Peer struct {
-		key  cryptoBox.PublicKey
+		key  p2pcrypto.PublicKey
 		addr string
 	}
 
@@ -273,7 +273,7 @@ func TestRandom(t *testing.T) {
 			go func() {
 				peer := peers[rand.Int31n(int32(peerCnt))]
 				rConn := net.NewConnectionMock(peer.key)
-				sID := cryptoBox.NewRandomPubkey()
+				sID := p2pcrypto.NewRandomPubkey()
 				rConn.SetSession(net.NewSessionMock(sID))
 				cPool.newRemoteConn <- net.NewConnectionEvent{rConn, node.EmptyNode}
 			}()

@@ -6,7 +6,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
-	"github.com/spacemeshos/go-spacemesh/p2p/cryptoBox"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -31,9 +31,9 @@ func calcHash(msg []byte) hash {
 
 // Interface for the underlying p2p layer
 type baseNetwork interface {
-	SendMessage(peerPubkey cryptoBox.PublicKey, protocol string, payload []byte) error
+	SendMessage(peerPubkey p2pcrypto.PublicKey, protocol string, payload []byte) error
 	RegisterProtocol(protocol string) chan service.Message
-	SubscribePeerEvents() (conn chan cryptoBox.PublicKey, disc chan cryptoBox.PublicKey)
+	SubscribePeerEvents() (conn chan p2pcrypto.PublicKey, disc chan p2pcrypto.PublicKey)
 	ProcessProtocolMessage(sender node.Node, protocol string, data service.Data) error
 }
 
@@ -47,7 +47,7 @@ type Protocol struct {
 
 	config          config.SwarmConfig
 	net             baseNetwork
-	localNodePubkey cryptoBox.PublicKey
+	localNodePubkey p2pcrypto.PublicKey
 
 	peers    map[string]*peer
 	shutdown chan struct{}
@@ -62,7 +62,7 @@ type Protocol struct {
 }
 
 // NewProtocol creates a new gossip protocol instance. Call Start to start reading peers
-func NewProtocol(config config.SwarmConfig, base baseNetwork, localNodePubkey cryptoBox.PublicKey, log2 log.Log) *Protocol {
+func NewProtocol(config config.SwarmConfig, base baseNetwork, localNodePubkey p2pcrypto.PublicKey, log2 log.Log) *Protocol {
 	// intentionally not subscribing to peers events so that the channels won't block in case executing Start delays
 	relayChan := base.RegisterProtocol(ProtocolName)
 	return &Protocol{
@@ -82,19 +82,19 @@ func NewProtocol(config config.SwarmConfig, base baseNetwork, localNodePubkey cr
 
 // sender is an interface for peer's p2p layer
 type sender interface {
-	SendMessage(peerPubkey cryptoBox.PublicKey, protocol string, payload []byte) error
+	SendMessage(peerPubkey p2pcrypto.PublicKey, protocol string, payload []byte) error
 }
 
 // peer is a struct storing peer's state
 type peer struct {
 	log.Log
-	pubkey        cryptoBox.PublicKey
+	pubkey        p2pcrypto.PublicKey
 	msgMutex      sync.RWMutex
 	knownMessages map[hash]struct{}
 	net           sender
 }
 
-func newPeer(net sender, pubkey cryptoBox.PublicKey, log log.Log) *peer {
+func newPeer(net sender, pubkey p2pcrypto.PublicKey, log log.Log) *peer {
 	return &peer{
 		log,
 		pubkey,
@@ -210,13 +210,13 @@ func (prot *Protocol) Start() {
 	go prot.eventLoop(peerConn, peerDisc)
 }
 
-func (prot *Protocol) addPeer(peer cryptoBox.PublicKey) {
+func (prot *Protocol) addPeer(peer p2pcrypto.PublicKey) {
 	prot.peersMutex.Lock()
 	prot.peers[peer.String()] = newPeer(prot.net, peer, prot.Log)
 	prot.peersMutex.Unlock()
 }
 
-func (prot *Protocol) removePeer(peer cryptoBox.PublicKey) {
+func (prot *Protocol) removePeer(peer p2pcrypto.PublicKey) {
 	prot.peersMutex.Lock()
 	delete(prot.peers, peer.String())
 	prot.peersMutex.Unlock()
@@ -250,7 +250,7 @@ func (prot *Protocol) processMessage(msg *pb.ProtocolMessage) error {
 		data = &service.DataMsgWrapper{Req: wrap.Req, MsgType: wrap.Type, ReqID: wrap.ReqID, Payload: wrap.Payload}
 	}
 
-	senderPubkey, err := cryptoBox.NewPubkeyFromBytes(msg.Metadata.AuthPubkey)
+	senderPubkey, err := p2pcrypto.NewPubkeyFromBytes(msg.Metadata.AuthPubkey)
 	if err != nil {
 		prot.Log.Error("failed to decode the auth public key when handling relay message, err %v", err)
 		return err
@@ -294,7 +294,7 @@ func (prot *Protocol) handleRelayMessage(msgB []byte) {
 	return
 }
 
-func (prot *Protocol) eventLoop(peerConn chan cryptoBox.PublicKey, peerDisc chan cryptoBox.PublicKey) {
+func (prot *Protocol) eventLoop(peerConn chan p2pcrypto.PublicKey, peerDisc chan p2pcrypto.PublicKey) {
 	var err error
 loop:
 	for {
@@ -329,7 +329,7 @@ func (prot *Protocol) peersCount() int {
 }
 
 // hasPeer returns whether or not a peer is known to the protocol, used for testing only
-func (prot *Protocol) hasPeer(key cryptoBox.PublicKey) bool {
+func (prot *Protocol) hasPeer(key p2pcrypto.PublicKey) bool {
 	prot.peersMutex.RLock()
 	_, ok := prot.peers[key.String()]
 	prot.peersMutex.RUnlock()

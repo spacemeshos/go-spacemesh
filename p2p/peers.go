@@ -4,11 +4,11 @@ import (
 	"sync/atomic"
 
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/cryptoBox"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 )
 
-type Peer cryptoBox.PublicKey
+type Peer p2pcrypto.PublicKey
 
 type Peers interface {
 	GetPeers() []Peer
@@ -42,7 +42,7 @@ func (pi PeersImpl) GetPeers() []Peer {
 	return pi.snapshot.Load().([]Peer)
 }
 
-func (pi *PeersImpl) listenToPeers(newPeerC chan cryptoBox.PublicKey, expiredPeerC chan cryptoBox.PublicKey) {
+func (pi *PeersImpl) listenToPeers(newPeerC chan p2pcrypto.PublicKey, expiredPeerC chan p2pcrypto.PublicKey) {
 	peerSet := make(map[Peer]bool) //set of uniq peers
 	for {
 		select {

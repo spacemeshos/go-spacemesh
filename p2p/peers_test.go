@@ -1,7 +1,7 @@
 package p2p
 
 import (
-	"github.com/spacemeshos/go-spacemesh/p2p/cryptoBox"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/stretchr/testify/assert"
 	"sync/atomic"
@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func getPeers(p Service) (Peers, chan cryptoBox.PublicKey, chan cryptoBox.PublicKey) {
+func getPeers(p Service) (Peers, chan p2pcrypto.PublicKey, chan p2pcrypto.PublicKey) {
 	value := atomic.Value{}
 	value.Store(make([]Peer, 0, 20))
 	pi := &PeersImpl{snapshot: &value, exit: make(chan struct{})}
@@ -20,7 +20,7 @@ func getPeers(p Service) (Peers, chan cryptoBox.PublicKey, chan cryptoBox.Public
 
 func TestPeers_GetPeers(t *testing.T) {
 	pi, new, _ := getPeers(service.NewSimulator().NewNode())
-	a := cryptoBox.NewRandomPubkey()
+	a := p2pcrypto.NewRandomPubkey()
 	new <- a
 	time.Sleep(10 * time.Millisecond) //allow context switch
 	peers := pi.GetPeers()
@@ -31,7 +31,7 @@ func TestPeers_GetPeers(t *testing.T) {
 
 func TestPeers_Close(t *testing.T) {
 	pi, new, _ := getPeers(service.NewSimulator().NewNode())
-	a := cryptoBox.NewRandomPubkey()
+	a := p2pcrypto.NewRandomPubkey()
 	new <- a
 	time.Sleep(10 * time.Millisecond) //allow context switch
 	pi.Close()
@@ -43,11 +43,11 @@ func TestPeers_Close(t *testing.T) {
 
 func TestPeers_AddPeer(t *testing.T) {
 	pi, new, _ := getPeers(service.NewSimulator().NewNode())
-	a := cryptoBox.NewRandomPubkey()
-	b := cryptoBox.NewRandomPubkey()
-	c := cryptoBox.NewRandomPubkey()
-	d := cryptoBox.NewRandomPubkey()
-	e := cryptoBox.NewRandomPubkey()
+	a := p2pcrypto.NewRandomPubkey()
+	b := p2pcrypto.NewRandomPubkey()
+	c := p2pcrypto.NewRandomPubkey()
+	d := p2pcrypto.NewRandomPubkey()
+	e := p2pcrypto.NewRandomPubkey()
 	new <- a
 	time.Sleep(10 * time.Millisecond) //allow context switch
 	peers := pi.GetPeers()
@@ -64,11 +64,11 @@ func TestPeers_AddPeer(t *testing.T) {
 
 func TestPeers_RemovePeer(t *testing.T) {
 	pi, new, expierd := getPeers(service.NewSimulator().NewNode())
-	a := cryptoBox.NewRandomPubkey()
-	b := cryptoBox.NewRandomPubkey()
-	c := cryptoBox.NewRandomPubkey()
-	d := cryptoBox.NewRandomPubkey()
-	e := cryptoBox.NewRandomPubkey()
+	a := p2pcrypto.NewRandomPubkey()
+	b := p2pcrypto.NewRandomPubkey()
+	c := p2pcrypto.NewRandomPubkey()
+	d := p2pcrypto.NewRandomPubkey()
+	e := p2pcrypto.NewRandomPubkey()
 	new <- a
 	time.Sleep(10 * time.Millisecond) //allow context switch
 	peers := pi.GetPeers()

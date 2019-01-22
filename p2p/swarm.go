@@ -8,7 +8,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/connectionpool"
-	"github.com/spacemeshos/go-spacemesh/p2p/cryptoBox"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht"
 	"github.com/spacemeshos/go-spacemesh/p2p/gossip"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
@@ -44,7 +44,7 @@ func (pm protocolMessage) Bytes() []byte {
 }
 
 type cPool interface {
-	GetConnection(address string, pk cryptoBox.PublicKey) (net.Connection, error)
+	GetConnection(address string, pk p2pcrypto.PublicKey) (net.Connection, error)
 	RemoteConnectionsChannel() chan net.NewConnectionEvent
 }
 
@@ -83,15 +83,15 @@ type swarm struct {
 
 	outpeersMutex sync.RWMutex
 	inpeersMutex  sync.RWMutex
-	outpeers      map[string]cryptoBox.PublicKey
-	inpeers       map[string]cryptoBox.PublicKey
+	outpeers      map[string]p2pcrypto.PublicKey
+	inpeers       map[string]p2pcrypto.PublicKey
 
 	morePeersReq      chan struct{}
 	connectingTimeout time.Duration
 
 	peerLock   sync.RWMutex
-	newPeerSub []chan cryptoBox.PublicKey
-	delPeerSub []chan cryptoBox.PublicKey
+	newPeerSub []chan p2pcrypto.PublicKey
+	delPeerSub []chan p2pcrypto.PublicKey
 }
 
 func (s *swarm) waitForBoot() error {
@@ -146,10 +146,10 @@ func newSwarm(ctx context.Context, config config.Config, newNode bool, persist b
 
 		initial:           make(chan struct{}),
 		morePeersReq:      make(chan struct{}),
-		inpeers:           make(map[string]cryptoBox.PublicKey),
-		outpeers:          make(map[string]cryptoBox.PublicKey),
-		newPeerSub:        make([]chan cryptoBox.PublicKey, 0, 10),
-		delPeerSub:        make([]chan cryptoBox.PublicKey, 0, 10),
+		inpeers:           make(map[string]p2pcrypto.PublicKey),
+		outpeers:          make(map[string]p2pcrypto.PublicKey),
+		newPeerSub:        make([]chan p2pcrypto.PublicKey, 0, 10),
+		delPeerSub:        make([]chan p2pcrypto.PublicKey, 0, 10),
 		connectingTimeout: ConnectingTimeout,
 
 		protocolHandlers: make(map[string]chan service.Message),
@@ -225,11 +225,11 @@ func (s *swarm) connectionPool() cPool {
 	return s.cPool
 }
 
-func (s *swarm) SendWrappedMessage(nodeID cryptoBox.PublicKey, protocol string, payload *service.DataMsgWrapper) error {
+func (s *swarm) SendWrappedMessage(nodeID p2pcrypto.PublicKey, protocol string, payload *service.DataMsgWrapper) error {
 	return s.sendMessageImpl(nodeID, protocol, payload)
 }
 
-func (s *swarm) SendMessage(peerPubkey cryptoBox.PublicKey, protocol string, payload []byte) error {
+func (s *swarm) SendMessage(peerPubkey p2pcrypto.PublicKey, protocol string, payload []byte) error {
 	return s.sendMessageImpl(peerPubkey, protocol, service.DataBytes{Payload: payload})
 }
 
@@ -240,7 +240,7 @@ func (s *swarm) SendMessage(peerPubkey cryptoBox.PublicKey, protocol string, pay
 // req.msg: marshaled message data
 // req.destId: receiver remote node public key/id
 // Local request to send a message to a remote node
-func (s *swarm) sendMessageImpl(peerPubKey cryptoBox.PublicKey, protocol string, payload service.Data) error {
+func (s *swarm) sendMessageImpl(peerPubKey p2pcrypto.PublicKey, protocol string, payload service.Data) error {
 	//s.lNode.Info("Sending message to %v", peerPubKey)
 	var err error
 	var peer node.Node
@@ -369,7 +369,7 @@ Loop:
 	}
 }
 
-func (s *swarm) retryOrReplace(key cryptoBox.PublicKey) {
+func (s *swarm) retryOrReplace(key p2pcrypto.PublicKey) {
 	getpeer := s.dht.InternalLookup(node.NewDhtID(key.Bytes()))
 
 	if getpeer == nil {
@@ -505,7 +505,7 @@ func (s *swarm) Broadcast(protocol string, payload []byte) error {
 // to them at any given time and if not possible we replace them. protocols use the neighborhood
 // to run their logic with peers.
 
-func (s *swarm) publishNewPeer(peer cryptoBox.PublicKey) {
+func (s *swarm) publishNewPeer(peer p2pcrypto.PublicKey) {
 	s.peerLock.RLock()
 	for _, p := range s.newPeerSub {
 		select {
@@ -516,7 +516,7 @@ func (s *swarm) publishNewPeer(peer cryptoBox.PublicKey) {
 	s.peerLock.RUnlock()
 }
 
-func (s *swarm) publishDelPeer(peer cryptoBox.PublicKey) {
+func (s *swarm) publishDelPeer(peer p2pcrypto.PublicKey) {
 	s.peerLock.RLock()
 	for _, p := range s.delPeerSub {
 		select {
@@ -528,9 +528,9 @@ func (s *swarm) publishDelPeer(peer cryptoBox.PublicKey) {
 }
 
 // SubscribePeerEvents lets clients listen on events inside the swarm about peers. first chan is new peers, second is deleted peers.
-func (s *swarm) SubscribePeerEvents() (conn chan cryptoBox.PublicKey, disc chan cryptoBox.PublicKey) {
-	in := make(chan cryptoBox.PublicKey, s.config.SwarmConfig.RandomConnections) // todo. what size this should be ? maybe let client pass channels.
-	del := make(chan cryptoBox.PublicKey, s.config.SwarmConfig.RandomConnections)
+func (s *swarm) SubscribePeerEvents() (conn chan p2pcrypto.PublicKey, disc chan p2pcrypto.PublicKey) {
+	in := make(chan p2pcrypto.PublicKey, s.config.SwarmConfig.RandomConnections) // todo. what size this should be ? maybe let client pass channels.
+	del := make(chan p2pcrypto.PublicKey, s.config.SwarmConfig.RandomConnections)
 	s.peerLock.Lock()
 	s.newPeerSub = append(s.newPeerSub, in)
 	s.delPeerSub = append(s.delPeerSub, del)
@@ -680,7 +680,7 @@ loop:
 }
 
 // Disconnect removes a peer from the neighborhood, it requests more peers if our outbound peer count is less than configured
-func (s *swarm) Disconnect(peer cryptoBox.PublicKey) {
+func (s *swarm) Disconnect(peer p2pcrypto.PublicKey) {
 	s.inpeersMutex.Lock()
 	if _, ok := s.inpeers[peer.String()]; ok {
 		delete(s.inpeers, peer.String())
@@ -700,7 +700,7 @@ func (s *swarm) Disconnect(peer cryptoBox.PublicKey) {
 }
 
 // AddIncomingPeer inserts a peer to the neighborhood as a remote peer.
-func (s *swarm) addIncomingPeer(n cryptoBox.PublicKey) {
+func (s *swarm) addIncomingPeer(n p2pcrypto.PublicKey) {
 	s.inpeersMutex.Lock()
 	// todo limit number of inpeers
 	s.inpeers[n.String()] = n
@@ -708,14 +708,14 @@ func (s *swarm) addIncomingPeer(n cryptoBox.PublicKey) {
 	s.publishNewPeer(n)
 }
 
-func (s *swarm) hasIncomingPeer(peer cryptoBox.PublicKey) bool {
+func (s *swarm) hasIncomingPeer(peer p2pcrypto.PublicKey) bool {
 	s.inpeersMutex.RLock()
 	_, ok := s.inpeers[peer.String()]
 	s.inpeersMutex.RUnlock()
 	return ok
 }
 
-func (s *swarm) hasOutgoingPeer(peer cryptoBox.PublicKey) bool {
+func (s *swarm) hasOutgoingPeer(peer p2pcrypto.PublicKey) bool {
 	s.outpeersMutex.RLock()
 	_, ok := s.outpeers[peer.String()]
 	s.outpeersMutex.RUnlock()
