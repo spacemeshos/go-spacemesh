@@ -1,6 +1,7 @@
 package net
 
 import (
+	"errors"
 	"fmt"
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -9,9 +10,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/delimited"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
+	"github.com/spacemeshos/go-spacemesh/p2p/version"
 	"gopkg.in/op/go-logging.v1"
 	"net"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -320,6 +323,10 @@ func (n *Net) HandlePreSessionIncomingMessage(c Connection, message []byte) erro
 		return err
 	}
 
+	err = n.verifyNetworkIDAndClientVersion(handshakeData)
+	if err != nil {
+		return err
+	}
 	remoteListeningPort := uint16(handshakeData.Port)
 	remoteListeningAddress, err := replacePort(c.RemoteAddr().String(), remoteListeningPort)
 	if err != nil {
@@ -330,6 +337,30 @@ func (n *Net) HandlePreSessionIncomingMessage(c Connection, message []byte) erro
 	n.publishNewRemoteConnectionEvent(c, anode)
 	// TODO: @noam process message?
 	// Specifically -- check the network id and client version
+	return nil
+}
+
+func (n *Net) verifyNetworkIDAndClientVersion(handshakeData *pb.HandshakeData) error {
+	// check that received clientversion is valid client string
+	reqVersion := strings.Split(handshakeData.ClientVersion, "/")
+	if len(reqVersion) != 2 {
+		return errors.New("invalid client version")
+	}
+
+	// compare that version to the min client version in config
+	ok, err := version.CheckNodeVersion(reqVersion[1], config.MinClientVersion)
+	if err == nil && !ok {
+		return errors.New("unsupported client version")
+	}
+	if err != nil {
+		return fmt.Errorf("invalid client version, err: %v", err)
+	}
+
+	// make sure we're on the same network
+	if handshakeData.NetworkID != int32(n.networkID) {
+		return fmt.Errorf("request net id (%d) is different than local net id (%d)", handshakeData.NetworkID, n.networkID)
+		//TODO : drop and blacklist this sender
+	}
 	return nil
 }
 
