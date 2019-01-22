@@ -3,6 +3,7 @@ package mesh
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"sync"
@@ -20,18 +21,18 @@ type meshDB struct {
 	layers             database.DB
 	blocks             database.DB
 	contextualValidity database.DB //map blockId to contextualValidation state of block
-	orphanBlocks       database.DB
+	orphanBlocks       map[LayerID]map[BlockID]struct{}
 	orphanBlockCount   int32
 	layerHandlers      map[LayerID]*layerHandler
 	lhMutex            sync.Mutex
 }
 
-func NewMeshDB(layers database.DB, blocks database.DB, validity database.DB, orphans database.DB) *meshDB {
+func NewMeshDB(layers , blocks, validity database.DB) *meshDB {
 	ll := &meshDB{
 		blocks:             blocks,
 		layers:             layers,
 		contextualValidity: validity,
-		orphanBlocks:       orphans,
+		orphanBlocks:       make(map[LayerID]map[BlockID]struct{}),
 		layerHandlers:      make(map[LayerID]*layerHandler),
 	}
 	return ll
@@ -41,13 +42,13 @@ func (m *meshDB) Close() {
 	m.blocks.Close()
 	m.layers.Close()
 	m.contextualValidity.Close()
-	m.orphanBlocks.Close()
+
 }
 
 func (m *meshDB) getLayer(index LayerID) (*Layer, error) {
 	ids, err := m.layers.Get(index.ToBytes())
 	if err != nil {
-		return nil, errors.New("error getting layer from database ")
+		return nil, fmt.Errorf("error getting layer %v from database ", index)
 	}
 
 	blockIds, err := bytesToBlockIds(ids)
@@ -125,6 +126,7 @@ func (m *meshDB) addLayer(layer *Layer) error {
 		return errors.New("could not encode layer block ids")
 	}
 
+	log.Info("putting layer %v", layer.Index())
 	m.layers.Put(layer.Index().ToBytes(), w)
 	return nil
 }

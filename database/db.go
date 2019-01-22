@@ -6,11 +6,11 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/opt"
 )
 
+
 type DB interface {
 	Put(key, value []byte) error
 	Get(key []byte) (value []byte, err error)
 	Delete(key []byte) error
-	Iterator() iterator.Iterator
 	Close()
 }
 
@@ -20,6 +20,9 @@ type Iterator interface {
 	Error() error
 	Release()
 }
+
+
+//type Iterator iterator.Iterator
 
 type LevelDB struct {
 	*leveldb.DB
@@ -41,10 +44,6 @@ func (db LevelDB) Get(key []byte) (value []byte, err error) {
 
 func (db LevelDB) Delete(key []byte) error {
 	return db.DB.Delete(key, db.wo)
-}
-
-func (db LevelDB) Iterator() iterator.Iterator {
-	return db.DB.NewIterator(nil, nil)
 }
 
 func NewLevelDbStore(name string, wo *opt.WriteOptions, ro *opt.ReadOptions) DB {

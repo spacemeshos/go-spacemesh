@@ -33,7 +33,7 @@ type MockOrphans struct {
 	st []mesh.BlockID
 }
 
-func (m MockOrphans) GetOrphans() []mesh.BlockID {
+func (m MockOrphans) GetOrphanBlocksExcept(l mesh.LayerID) []mesh.BlockID{
 	return m.st
 }
 

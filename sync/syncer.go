@@ -30,7 +30,6 @@ type Configuration struct {
 type Syncer struct {
 	p2p.Peers
 	*mesh.Mesh
-	BlockValidator //todo should not be here
 	Configuration
 	log.Log
 	*server.MessageServer
@@ -59,7 +58,7 @@ const (
 )
 
 func (s *Syncer) IsSynced() bool {
-	return s.LocalLayer() == s.maxSyncLayer()
+	return s.VerifiedLayer() == s.maxSyncLayer()
 }
 
 func (s *Syncer) Stop() {
@@ -102,9 +101,8 @@ func (s *Syncer) run() {
 }
 
 //fires a sync every sm.syncInterval or on force space from outside
-func NewSync(srv server.Service, layers *mesh.Mesh, bv BlockValidator, conf Configuration, logger log.Log) *Syncer {
+func NewSync(srv server.Service, layers *mesh.Mesh, conf Configuration, logger log.Log) *Syncer {
 	s := Syncer{
-		BlockValidator: bv,
 		Configuration:  conf,
 		Log:            logger,
 		Mesh:           layers,
@@ -132,11 +130,12 @@ func (s *Syncer) maxSyncLayer() uint32 {
 }
 
 func (s *Syncer) Synchronise() {
-	for i := s.LocalLayer(); i < s.maxSyncLayer(); i++ {
+	log.Info("syncing layer %v to layer %v ", s.LatestSeenLayer(), s.maxSyncLayer())
+	for i := s.LatestSeenLayer(); i < s.maxSyncLayer(); i++ {
 		blockIds, err := s.getLayerBlockIDs(mesh.LayerID(i + 1)) //returns a set of all known blocks in the mesh
 		if err != nil {
 			log.Error("could not get layer block ids: ", err)
-			log.Debug("synchronise failed, local layer index is ", s.LocalLayer())
+			log.Debug("synchronise failed, local layer index is ", i)
 			return
 		}
 
@@ -175,7 +174,7 @@ func (s *Syncer) Synchronise() {
 		s.AddLayer(mesh.NewExistingLayer(mesh.LayerID(i+1), blocks))
 	}
 
-	s.Debug("synchronise done, local layer index is ", s.LocalLayer(), "most recent is ", s.LatestLayer())
+	s.Debug("synchronise done, local layer index is ", s.VerifiedLayer(), "most recent is ", s.LatestSeenLayer())
 }
 
 type peerHashPair struct {

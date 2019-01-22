@@ -9,6 +9,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 	"sync/atomic"
@@ -31,7 +32,11 @@ func SyncMockFactory(number int, conf Configuration, name string, dbType string)
 		net := sim.NewNode()
 		name := fmt.Sprintf(name+"_%d", i)
 		l := log.New(name, "", "")
+
 		sync := NewSync(net, getMesh(name+"_"+time.Now().String(), dbType), BlockValidatorMock{}, conf, l)
+
+		//sync := NewSync(net, getMesh(name+"_"+time.Now().String()),conf, l)
+
 		nodes = append(nodes, sync)
 		p2ps = append(p2ps, net)
 	}
@@ -45,11 +50,13 @@ func (BlockValidatorMock) EligibleBlock(block *mesh.Block) bool {
 	return true
 }
 
+
 type MeshValidatorMock struct{}
 
 func (m *MeshValidatorMock) HandleIncomingLayer(layer *mesh.Layer) {}
 func (m *MeshValidatorMock) HandleLateBlock(bl *mesh.Block)        {}
 func (m *MeshValidatorMock) RegisterLayerCallback(func(layerId mesh.LayerID)) {}
+
 
 func getMeshWithLevelDB(id string) *mesh.Mesh {
 	time := time.Now()
@@ -61,6 +68,13 @@ func getMeshWithLevelDB(id string) *mesh.Mesh {
 	layers := mesh.NewMesh(ldb, bdb, cv, odb, &MeshValidatorMock{}, log.New(id, "", ""))
 	return layers
 }
+
+type MockState struct {}
+
+func (MockState) ApplyTransactions(layer state.LayerID, txs state.Transactions) (uint32, error) {
+	return 0,nil
+}
+
 
 func getMeshWithMemoryDB(id string) *mesh.Mesh {
 	bdb := database.NewMemDatabase()
@@ -136,10 +150,17 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 	lid := mesh.LayerID(1)
 
 	syncObj1.AddLayer(mesh.NewExistingLayer(lid, make([]*mesh.Block, 0, 10)))
+	syncObj1.LayerCompleteCallback(lid) //this is to simulate the approval of the tortoise...
+	timeout := time.NewTimer(2 *time.Second)
 	ch, err := syncObj2.sendLayerHashRequest(nodes[0].Node.PublicKey(), lid)
-	hash := <-ch
-	assert.NoError(t, err, "Should not return error")
-	assert.Equal(t, "some hash representing the layer", string(hash.hash), "wrong block")
+	select {
+		case hash := <-ch:
+			assert.NoError(t, err, "Should not return error")
+			assert.Equal(t, "some hash representing the layer", string(hash.hash), "wrong block")
+		case <-timeout.C:
+			assert.Fail(t, "no message received on channel")
+	}
+
 }
 
 func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
@@ -249,7 +270,7 @@ func TestSyncProtocol_SyncTwoNodes(t *testing.T) {
 	syncObj1.AddLayer(mesh.NewExistingLayer(4, []*mesh.Block{block9}))
 	syncObj1.AddLayer(mesh.NewExistingLayer(5, []*mesh.Block{block10}))
 
-	timeout := time.After(10 * time.Second)
+	timeout := time.After(1000 * time.Second)
 	syncObj2.SetLatestLayer(5)
 	syncObj1.Start()
 	syncObj2.Start()
@@ -263,7 +284,7 @@ loop:
 			t.Error("timed out ")
 			return
 		default:
-			if syncObj2.LocalLayer() == 2 {
+			if syncObj2.LatestSeenLayer() == 2 {
 				t.Log("done!")
 				break loop
 			}
@@ -332,9 +353,9 @@ loop:
 		case <-timeout:
 			t.Error("timed out ")
 		default:
-			if syncObj2.LocalLayer() == 3 && syncObj3.LocalLayer() == 3 {
+			if syncObj2.LatestSeenLayer() == 3 && syncObj3.LatestSeenLayer() == 3 {
 				t.Log("done!")
-				fmt.Println(syncObj2.LocalLayer(), " ", syncObj3.LocalLayer())
+				fmt.Println(syncObj2.LatestSeenLayer(), " ", syncObj3.LatestSeenLayer())
 				break loop
 			}
 		}
@@ -421,7 +442,7 @@ func (sis *syncIntegrationTwoNodes) TestSyncProtocol_TwoNodes() {
 			t.Error("timed out ")
 			return
 		default:
-			if syncObj1.LocalLayer() == 3 {
+			if syncObj1.LatestSeenLayer() == 3 {
 				t.Log("done!")
 				return
 			}
@@ -502,17 +523,17 @@ func (sis *syncIntegrationMultipleNodes) TestSyncProtocol_MultipleNodes() {
 			t.Error("timed out ")
 			goto end
 		default:
-			if syncObj2.LocalLayer() == 3 || syncObj4.LocalLayer() == 3 {
+			if syncObj2.LatestSeenLayer() == 3 || syncObj4.LatestSeenLayer() == 3 {
 				t.Log("done!")
 				goto end
 			}
 		}
 	}
 end:
-	log.Debug("sync 1 ", syncObj1.LocalLayer())
-	log.Debug("sync 2 ", syncObj2.LocalLayer())
-	log.Debug("sync 3 ", syncObj3.LocalLayer())
-	log.Debug("sync 4 ", syncObj4.LocalLayer())
-	log.Debug("sync 5 ", syncObj5.LocalLayer())
+	log.Debug("sync 1 ", syncObj1.LatestSeenLayer())
+	log.Debug("sync 2 ", syncObj2.LatestSeenLayer())
+	log.Debug("sync 3 ", syncObj3.LatestSeenLayer())
+	log.Debug("sync 4 ", syncObj4.LatestSeenLayer())
+	log.Debug("sync 5 ", syncObj5.LatestSeenLayer())
 	return
 }

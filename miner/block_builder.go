@@ -107,7 +107,7 @@ type WeakCoinProvider interface {
 }
 
 type OrphanBlockProvider interface {
-	GetOrphans() []mesh.BlockID
+	GetOrphanBlocksExcept(layer mesh.LayerID) []mesh.BlockID
 }
 
 //used from external API call?
@@ -125,15 +125,16 @@ func (t *BlockBuilder) createBlock(minerID string, id mesh.LayerID, txs []mesh.S
 		log.Error("didnt receive hare result for layer %v", id)
 	}
 	b := mesh.Block{
-		MinerID:    minerID,
-		Id:         mesh.BlockID(rand.Int63()),
-		LayerIndex: id,
-		Data:       nil,
-		Coin:       t.weakCoinToss.GetResult(),
-		Timestamp:  time.Now().UnixNano(),
-		Txs:        txs,
-		BlockVotes: res,
-		ViewEdges:  t.orphans.GetOrphans(),
+
+		MinerID: minerID,
+		Id :          mesh.BlockID(rand.Int63()),
+		LayerIndex:   id,
+		Data:         nil,
+		Coin:         t.weakCoinToss.GetResult(),
+		Timestamp:    time.Now().UnixNano(),
+		Txs :         txs,
+		BlockVotes : res,
+		ViewEdges:    t.orphans.GetOrphanBlocksExcept(id),
 	}
 
 	return b

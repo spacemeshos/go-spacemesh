@@ -24,7 +24,6 @@ type BlockListener struct {
 	*server.MessageServer
 	p2p.Peers
 	*mesh.Mesh
-	BlockValidator
 	log.Log
 	bufferSize   int
 	semaphore    chan struct{}
@@ -34,6 +33,10 @@ type BlockListener struct {
 	timeout      time.Duration
 	exit         chan struct {}
 	tick		 chan mesh.LayerID
+}
+
+type TickProvider interface {
+	Subscribe() timesync.LayerTimer
 }
 
 func (bl *BlockListener) Close() {
@@ -51,11 +54,9 @@ func (bl *BlockListener) OnNewBlock(b *mesh.Block) {
 	bl.addUnknownToQueue(b)
 }
 
-type TickSubscriber interface {
-	Subscribe() timesync.LayerTimer
-}
 
-func NewBlockListener(net server.Service, layers *mesh.Mesh, timeout time.Duration, concurrency int, clock TickSubscriber, logger log.Log) *BlockListener {
+func NewBlockListener(net server.Service, layers *mesh.Mesh, timeout time.Duration, concurrency int, clock TickProvider, logger log.Log) *BlockListener {
+
 	bl := BlockListener{
 
 		Mesh:           layers,
@@ -118,11 +119,12 @@ func (bl *BlockListener) run() {
 
 		case newLayer := <-bl.tick: //todo: should this be here or in own loop?
 			if newLayer == 0 {
-				return
+				break
 			}
 			l, err := bl.GetLayer(newLayer -1)
 			if err != nil {
-				log.Error("cannot find layer : %v", err)
+				log.Error("layer %v not received layer : %v",newLayer -1 ,err)
+				break
 			}
 			bl.Mesh.ValidateLayer(l)
 		}

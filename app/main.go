@@ -4,10 +4,14 @@ import (
 	"context"
 	"fmt"
 	"github.com/seehuhn/mt19937"
+	hareConfig "github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/consensus"
+	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/spacemeshos/go-spacemesh/sync"
@@ -271,13 +275,31 @@ func (app *SpacemeshApp) initAndStartServices(swarm server.Service) (*state.Stat
 	rng := rand.New(mt19937.New())
 	processor := state.NewTransactionProcessor(rng, st)
 
-	mesh := mesh.NewMesh(db, db, db,db,&trtl,processor,lg) //todo: what to do with the logger?
+	mesh := mesh.NewMesh(db, db, db ,&trtl,processor,lg) //todo: what to do with the logger?
 
 
+	coinToss := consensus.WeakCoin{}
 	clock := timesync.NewTicker(timesync.RealClock{}, 5 *time.Second, startEpoch)
-	blockListener := sync.NewBlockListener(swarm,mesh, 1*time.Second, 1,clock, lg)
+
+	blockListener := sync.NewBlockListener(swarm ,mesh, 1*time.Second, 1,clock, lg)
+
+	oracle := hare.NewMockHashOracle(100)
+
+	sgn := hare.MockSigning{}
+	pub, _ := crypto.NewPublicKey(sgn.Verifier().Bytes())
+	ha := hare.New(hareConfig.DefaultConfig(), swarm,pub,&sgn,mesh, oracle, clock.Subscribe())
+	blockProducer := miner.NewBlockBuilder(swarm, clock.Subscribe(), coinToss, mesh,ha)
+
 
 	blockListener.Start()
+	err := ha.Start()
+	if err != nil {
+		panic("cannot start hare")
+	}
+	err = blockProducer.Start()
+	if err != nil {
+		panic("cannot start block producer")
+	}
 	clock.Start()
 
 	return st
