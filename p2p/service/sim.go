@@ -7,6 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"io"
 	"sync"
+	"time"
 )
 
 // TODO : implmement delays?
@@ -33,7 +34,8 @@ type dht interface {
 type Node struct {
 	sim *Simulator
 	node.Node
-	dht dht
+	dht   dht
+	delay time.Duration
 }
 
 // New Creates a p2p simulation by providing nodes as p2p services and bridge them.
@@ -77,6 +79,13 @@ func (s *Simulator) createdNode(n *Node) {
 	s.nodes[n.PublicKey().String()] = n
 	s.mutex.Unlock()
 	s.publishNewPeer(n.PublicKey())
+}
+
+func (s *Simulator) NewFaulty(delay time.Duration) *Node {
+	n := s.NewNode()
+	n.delay = delay
+
+	return n
 }
 
 // NewNode creates a new p2p node in this Simulator
@@ -175,6 +184,7 @@ func (sn *Node) sendMessageImpl(nodeID p2pcrypto.PublicKey, protocol string, pay
 // Broadcast
 func (sn *Node) Broadcast(protocol string, payload []byte) error {
 	go func() {
+		time.Sleep(sn.delay)
 		sn.sim.mutex.RLock()
 		for n := range sn.sim.protocolHandler {
 			if c, ok := sn.sim.protocolHandler[n][protocol]; ok {

@@ -17,6 +17,7 @@ import (
 type HareSuite struct {
 	termination Closer
 	procs       []*ConsensusProcess
+	dishonest   []*ConsensusProcess
 	initialSets []*Set // all initial sets
 	honestSets  []*Set // initial sets of honest
 	outputs     []*Set
@@ -109,16 +110,21 @@ func newConsensusTest() *ConsensusTest {
 	return ct
 }
 
-func (test *ConsensusTest) Create(N int, create func(idx int)) {
+func (test *ConsensusTest) Create(N int, create func()) {
 	for i := 0; i < N; i++ {
-		create(i)
+		create()
+	}
+}
+
+func startProcs(procs []*ConsensusProcess) {
+	for _, proc := range procs {
+		proc.Start()
 	}
 }
 
 func (test *ConsensusTest) Start() {
-	for _, proc := range test.procs {
-		proc.Start()
-	}
+	go startProcs(test.procs)
+	go startProcs(test.dishonest)
 }
 
 func TestSingleValueForHonestSet(t *testing.T) {
@@ -132,13 +138,13 @@ func TestSingleValueForHonestSet(t *testing.T) {
 	test.honestSets = []*Set{set1}
 	oracle := NewMockHashOracle(cfg.N)
 	i := 0
-	creationFunc := func(idx int) {
+	creationFunc := func() {
 		s := sim.NewNode()
 		broker := NewBroker(s)
 		output := make(chan TerminationOutput, 1)
 		signing := NewMockSigning()
 		oracle.Register(signing.Verifier())
-		proc := NewConsensusProcess(cfg, *instanceId1, test.initialSets[idx], oracle, signing, s, output)
+		proc := NewConsensusProcess(cfg, *instanceId1, test.initialSets[i], oracle, signing, s, output)
 		broker.Register(proc)
 		broker.Start()
 		test.procs = append(test.procs, proc)
@@ -146,14 +152,13 @@ func TestSingleValueForHonestSet(t *testing.T) {
 	}
 	test.Create(cfg.N, creationFunc)
 	test.Start()
-	test.WaitForTimedTermination(t, 240*time.Second)
+	test.WaitForTimedTermination(t, 30*time.Second)
 }
-
 
 func TestAllDifferentSet(t *testing.T) {
 	test := newConsensusTest()
 
-	cfg := config.Config{N: 10, F: 5, SetSize: 1, RoundDuration: time.Second * time.Duration(1)}
+	cfg := config.Config{N: 10, F: 5, SetSize: 5, RoundDuration: time.Second * time.Duration(1)}
 	sim := service.NewSimulator()
 	test.initialSets = make([]*Set, cfg.N)
 
@@ -171,13 +176,13 @@ func TestAllDifferentSet(t *testing.T) {
 	test.honestSets = []*Set{base}
 	oracle := NewMockHashOracle(cfg.N)
 	i := 0
-	creationFunc := func(idx int) {
+	creationFunc := func() {
 		s := sim.NewNode()
 		broker := NewBroker(s)
 		output := make(chan TerminationOutput, 1)
 		signing := NewMockSigning()
 		oracle.Register(signing.Verifier())
-		proc := NewConsensusProcess(cfg, *instanceId1, test.initialSets[idx], oracle, signing, s, output)
+		proc := NewConsensusProcess(cfg, *instanceId1, test.initialSets[i], oracle, signing, s, output)
 		broker.Register(proc)
 		broker.Start()
 		test.procs = append(test.procs, proc)
@@ -185,6 +190,51 @@ func TestAllDifferentSet(t *testing.T) {
 	}
 	test.Create(cfg.N, creationFunc)
 	test.Start()
-	test.WaitForTimedTermination(t, 240*time.Second)
+	test.WaitForTimedTermination(t, 30*time.Second)
 }
 
+func TestDelayedDishonest(t *testing.T) {
+	test := newConsensusTest()
+
+	cfg := config.Config{N: 50, F: 25, SetSize: 5, RoundDuration: time.Second * time.Duration(2)}
+	sim := service.NewSimulator()
+	test.initialSets = make([]*Set, cfg.N)
+	set1 := NewSetFromValues(value1)
+	test.fill(set1, 0, cfg.N-1)
+	test.honestSets = []*Set{set1}
+	oracle := NewMockHashOracle(cfg.N)
+	i := 0
+	honestFunc := func() {
+		s := sim.NewNode()
+		broker := NewBroker(s)
+		output := make(chan TerminationOutput, 1)
+		signing := NewMockSigning()
+		oracle.Register(signing.Verifier())
+		proc := NewConsensusProcess(cfg, *instanceId1, test.initialSets[i], oracle, signing, s, output)
+		broker.Register(proc)
+		broker.Start()
+		test.procs = append(test.procs, proc)
+		i++
+	}
+
+	// create honest
+	test.Create(cfg.N/2+1, honestFunc)
+
+	// create dishonest
+	dishonestFunc := func() {
+		s := sim.NewFaulty(time.Second * time.Duration(5)) // 5 sec delay
+		broker := NewBroker(s)
+		output := make(chan TerminationOutput, 1)
+		signing := NewMockSigning()
+		oracle.Register(signing.Verifier())
+		proc := NewConsensusProcess(cfg, *instanceId1, test.initialSets[i], oracle, signing, s, output)
+		broker.Register(proc)
+		broker.Start()
+		test.dishonest = append(test.dishonest, proc)
+		i++
+	}
+	test.Create(cfg.N/2-1, dishonestFunc)
+
+	test.Start()
+	test.WaitForTimedTermination(t, 30*time.Second)
+}
