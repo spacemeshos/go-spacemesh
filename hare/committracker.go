@@ -1,7 +1,6 @@
 package hare
 
 import (
-	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -32,17 +31,17 @@ func (ct *CommitTracker) OnCommit(msg *pb.HareMessage) {
 		return
 	}
 
-	pub, err := crypto.NewPublicKey(msg.PubKey)
+	verifier, err := NewVerifier(msg.PubKey)
 	if err != nil {
-		log.Warning("Could not construct public key: ", err.Error())
+		log.Warning("Could not construct verifier: ", err)
 		return
 	}
 
-	if ct.seenSenders[pub.String()] {
+	if ct.seenSenders[verifier.String()] {
 		return
 	}
 
-	ct.seenSenders[pub.String()] = true
+	ct.seenSenders[verifier.String()] = true
 
 	s := NewSet(msg.Message.Values)
 	if !ct.proposedSet.Equals(s) { // ignore commit on different set

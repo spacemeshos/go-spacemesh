@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"github.com/gogo/protobuf/proto"
-	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -182,18 +181,18 @@ func roleFromRoundCounter(k uint32) Role {
 }
 
 func (proc *ConsensusProcess) onEarlyMessage(m *pb.HareMessage) {
-	pub, err := crypto.NewPublicKey(m.PubKey)
+	verifier, err := NewVerifier(m.PubKey)
 	if err != nil {
-		log.Warning("Could not construct public key: ", err.Error())
+		log.Warning("Could not construct verifier: ", err)
 		return
 	}
 
-	if _, exist := proc.pending[pub.String()]; exist { // ignore, already received
-		log.Warning("Already received message from sender %v", pub.String())
+	if _, exist := proc.pending[verifier.String()]; exist { // ignore, already received
+		log.Warning("Already received message from sender %v", verifier.String())
 		return
 	}
 
-	proc.pending[pub.String()] = m
+	proc.pending[verifier.String()] = m
 }
 
 func (proc *ConsensusProcess) expectedCommitteeSize(k uint32) int {
@@ -240,6 +239,7 @@ func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
 		} else { // a valid early message, keep it for later
 			log.Info("Early message detected. Keeping message")
 			proc.onEarlyMessage(m)
+			return
 		}
 	}
 
