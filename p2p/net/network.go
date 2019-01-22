@@ -206,10 +206,12 @@ func (n *Net) createSecuredConnection(address string, remotePubkey cryptoBox.Pub
 
 	handshakeMessage, err := generateHandshakeMessage(session, n.networkID, n.tcpListenAddress.Port, n.localNode.PublicKey())
 	if err != nil {
+		conn.Close()
 		return nil, err
 	}
 	err = conn.Send(handshakeMessage)
 	if err != nil {
+		conn.Close()
 		return nil, err
 	}
 	return conn, nil
