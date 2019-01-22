@@ -46,11 +46,10 @@ func (m *MeshValidatorMock) HandleIncomingLayer(layer *mesh.Layer) {}
 func (m *MeshValidatorMock) HandleLateBlock(bl *mesh.Block)        {}
 
 func getMesh(id string) *mesh.Mesh {
-	time := time.Now()
-	bdb := database.NewLevelDbStore("blocks_test_"+id, nil, nil)
-	ldb := database.NewLevelDbStore("layers_test_"+id, nil, nil)
-	cv := database.NewLevelDbStore("contextually_valid_test_"+id, nil, nil)
-	odb := database.NewLevelDbStore("orphans_test_"+id+"_"+time.String(), nil, nil)
+	bdb := database.NewMemDatabase()
+	ldb := database.NewMemDatabase()
+	cv := database.NewMemDatabase()
+	odb := database.NewMemDatabase()
 	layers := mesh.NewMesh(ldb, bdb, cv, odb, &MeshValidatorMock{}, log.New(id, "", ""))
 	return layers
 }

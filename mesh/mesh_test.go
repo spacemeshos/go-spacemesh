@@ -14,11 +14,10 @@ func (m *MeshValidatorMock)	HandleIncomingLayer(layer *Layer) {}
 func (m *MeshValidatorMock) HandleLateBlock(bl *Block) {}
 
 func getMesh(id string) *Mesh {
-	time := time.Now()
-	bdb := database.NewLevelDbStore("blocks_test_"+id+"_"+time.String(), nil, nil)
-	ldb := database.NewLevelDbStore("layers_test_"+id+"_"+time.String(), nil, nil)
-	cdb := database.NewLevelDbStore("contextual_test_"+id+"_"+time.String(), nil, nil)
-	odb := database.NewLevelDbStore("orphans_test_"+id+"_"+time.String(), nil, nil)
+	bdb := database.NewMemDatabase()
+	ldb := database.NewMemDatabase()
+	cdb := database.NewMemDatabase()
+	odb := database.NewMemDatabase()
 	layers := NewMesh(ldb, bdb, cdb, odb, &MeshValidatorMock{},log.New(id, "", ""))
 	return layers
 }
