@@ -111,7 +111,7 @@ func TestRemoteConnectionWithNoConnection(t *testing.T) {
 
 	cPool := NewConnectionPool(n, generatePublicKey())
 	rConn := net.NewConnectionMock(remotePub)
-	rConn.SetSession(net.NewSessionMockWithPubkey(remotePub))
+	rConn.SetSession(net.NewSessionMock(remotePub))
 	cPool.newRemoteConn <- net.NewConnectionEvent{rConn, node.EmptyNode}
 	time.Sleep(50 * time.Millisecond)
 	conn, err := cPool.GetConnection(addr, remotePub)
@@ -135,11 +135,11 @@ func TestRemoteConnectionWithExistingConnection(t *testing.T) {
 	remotePub := highPubkey
 	localPub := lowPubkey
 
-	localSession := net.NewSessionMockWithPubkey(localPub)
+	localSession := net.NewSessionMock(localPub)
 	n.SetNextDialSessionID(localSession.ID().Bytes())
 	lConn, _ := cPool.GetConnection(addr, remotePub)
 	rConn := net.NewConnectionMock(remotePub)
-	rConn.SetSession(net.NewSessionMockWithPubkey(remotePub))
+	rConn.SetSession(net.NewSessionMock(remotePub))
 	cPool.newRemoteConn <- net.NewConnectionEvent{rConn, node.EmptyNode}
 	time.Sleep(20 * time.Millisecond)
 	assert.Equal(t, remotePub.String(), lConn.RemotePublicKey().String())
@@ -151,11 +151,11 @@ func TestRemoteConnectionWithExistingConnection(t *testing.T) {
 	remotePub = lowPubkey
 	localPub = highPubkey
 
-	localSession = net.NewSessionMockWithPubkey(localPub)
+	localSession = net.NewSessionMock(localPub)
 	n.SetNextDialSessionID(localSession.ID().Bytes())
 	lConn, _ = cPool.GetConnection(addr, remotePub)
 	rConn = net.NewConnectionMock(remotePub)
-	rConn.SetSession(net.NewSessionMockWithPubkey(remotePub))
+	rConn.SetSession(net.NewSessionMock(remotePub))
 	cPool.newRemoteConn <- net.NewConnectionEvent{rConn, node.EmptyNode}
 	time.Sleep(20 * time.Millisecond)
 	assert.Equal(t, remotePub.String(), lConn.RemotePublicKey().String())
@@ -273,8 +273,7 @@ func TestRandom(t *testing.T) {
 			go func() {
 				peer := peers[rand.Int31n(int32(peerCnt))]
 				rConn := net.NewConnectionMock(peer.key)
-				sID := make([]byte, 32)
-				rand.Read(sID)
+				sID := cryptoBox.NewRandomPubkey()
 				rConn.SetSession(net.NewSessionMock(sID))
 				cPool.newRemoteConn <- net.NewConnectionEvent{rConn, node.EmptyNode}
 			}()

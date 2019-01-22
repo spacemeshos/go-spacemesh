@@ -16,16 +16,8 @@ type SessionMock struct {
 	keyM   []byte
 }
 
-func NewSessionMockWithPubkey(pubkey cryptoBox.PublicKey) *SessionMock {
+func NewSessionMock(pubkey cryptoBox.PublicKey) *SessionMock {
 	return &SessionMock{id: pubkey}
-}
-
-func NewSessionMock(ID []byte) *SessionMock {
-	publicKey, err := cryptoBox.NewPubkeyFromBytes(ID)
-	if err != nil {
-		panic(err)
-	}
-	return &SessionMock{id: publicKey}
 }
 
 // ID is this
