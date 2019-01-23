@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-const TestServerOnline = true
+const TestServerOnline = false
 
 type stringer string
 
