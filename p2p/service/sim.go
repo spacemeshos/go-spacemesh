@@ -126,8 +126,9 @@ func (s *Simulator) updateNode(node p2pcrypto.PublicKey, sender *Node) {
 }
 
 type simMessage struct {
-	msg    Data
-	sender p2pcrypto.PublicKey
+	msg                     Data
+	sender                  p2pcrypto.PublicKey
+	validationCompletedChan chan<- MessageValidation
 }
 
 // Bytes is the message's binary data in byte array format.
@@ -145,13 +146,18 @@ func (sm simMessage) Sender() p2pcrypto.PublicKey {
 	return sm.sender
 }
 
+// ValidationCompletedChan is a channel over which the protocol is expected to update on the message validation
+func (sm simMessage) ValidationCompletedChan() chan<- MessageValidation {
+	return sm.validationCompletedChan
+}
+
 func (sn *Node) Start() error {
 	// on simulation this doesn't really matter yet.
 	return nil
 }
 
 // ProcessProtocolMessage
-func (sn *Node) ProcessProtocolMessage(sender p2pcrypto.PublicKey, protocol string, payload Data) error {
+func (sn *Node) ProcessProtocolMessage(sender p2pcrypto.PublicKey, protocol string, payload Data, validationCompletedChan chan<- MessageValidation) error {
 	sn.sleep(sn.rcvDelay)
 	sn.sim.mutex.RLock()
 	c, ok := sn.sim.protocolHandler[sn.PublicKey().String()][protocol]
@@ -159,7 +165,7 @@ func (sn *Node) ProcessProtocolMessage(sender p2pcrypto.PublicKey, protocol stri
 	if !ok {
 		return errors.New("Unknown protocol")
 	}
-	c <- simMessage{payload, sender}
+	c <- simMessage{payload, sender, validationCompletedChan}
 	return nil
 }
 
@@ -179,7 +185,7 @@ func (sn *Node) sendMessageImpl(nodeID p2pcrypto.PublicKey, protocol string, pay
 	thec, ok := sn.sim.protocolHandler[nodeID.String()][protocol]
 	sn.sim.mutex.RUnlock()
 	if ok {
-		thec <- simMessage{payload, sn.Node.PublicKey()}
+		thec <- simMessage{payload, sn.Node.PublicKey(), nil}  // direct message, don't care for message validation
 		sn.sim.updateNode(nodeID, sn)
 		return nil
 	}
@@ -206,7 +212,7 @@ func (sn *Node) Broadcast(protocol string, payload []byte) error {
 		sn.sim.mutex.RLock()
 		for n := range sn.sim.protocolHandler {
 			if c, ok := sn.sim.protocolHandler[n][protocol]; ok {
-				c <- simMessage{DataBytes{Payload: payload}, sn.Node.PublicKey()}
+				c <- simMessage{DataBytes{Payload: payload}, sn.Node.PublicKey(), nil}
 			}
 		}
 		sn.sim.mutex.RUnlock()

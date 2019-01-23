@@ -30,6 +30,7 @@ const ConnectingTimeout = 20 * time.Second //todo: add to the config
 type protocolMessage struct {
 	sender p2pcrypto.PublicKey
 	data   service.Data
+	validationChan chan<- service.MessageValidation
 }
 
 func (pm protocolMessage) Sender() p2pcrypto.PublicKey {
@@ -42,6 +43,10 @@ func (pm protocolMessage) Data() service.Data {
 
 func (pm protocolMessage) Bytes() []byte {
 	return pm.data.Bytes()
+}
+
+func (pm protocolMessage) ValidationCompletedChan() chan<- service.MessageValidation {
+	return pm.validationChan
 }
 
 type cPool interface {
@@ -492,11 +497,12 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 		data = &service.DataMsgWrapper{Req: wrap.Req, MsgType: wrap.Type, ReqID: wrap.ReqID, Payload: wrap.Payload}
 	}
 
-	return s.ProcessProtocolMessage(msg.Conn.RemotePublicKey(), pm.Metadata.NextProtocol, data)
+	return s.ProcessProtocolMessage(msg.Conn.RemotePublicKey(), pm.Metadata.NextProtocol, data, nil) // validation chan is nil - we only need validation from Gossip messages
 }
 
-// ProcessProtocolMessage passes an already decrypted message to a protocol.
-func (s *swarm) ProcessProtocolMessage(sender p2pcrypto.PublicKey, protocol string, data service.Data) error {
+// ProcessProtocolMessage passes an already decrypted message to a protocol. It is expected that the protocol will send
+// the message syntactic validation result on the validationCompletedChan ASAP
+func (s *swarm) ProcessProtocolMessage(sender p2pcrypto.PublicKey, protocol string, data service.Data, validationCompletedChan chan<- service.MessageValidation) error {
 	// route authenticated message to the reigstered protocol
 	s.protocolHandlerMutex.RLock()
 	msgchan := s.protocolHandlers[protocol]
@@ -506,7 +512,7 @@ func (s *swarm) ProcessProtocolMessage(sender p2pcrypto.PublicKey, protocol stri
 	}
 	s.lNode.Debug("Forwarding message to %v protocol", protocol)
 
-	msgchan <- protocolMessage{sender, data}
+	msgchan <- protocolMessage{sender, data, validationCompletedChan}
 
 	return nil
 }
