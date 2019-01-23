@@ -12,21 +12,60 @@ import (
 	"sync"
 )
 
+const Register = "register"
+const Unregister = "unregister"
+const ValidateSingle = "validate"
+const Validate = "validatemap"
 const OracleServerAddress = "http://localhost:3030" // todo:configure
 
 
-type oracleClientDoer interface {
-	Do(r *http.Request) (*http.Response, error)
+type Requester interface {
+	Get(api, data string) []byte
+}
+
+type HTTPRequester struct {
+	url string
+	c *http.Client
+}
+
+func NewHTTPRequester(url string) *HTTPRequester {
+	return &HTTPRequester{url, &http.Client{}}
+}
+
+func (hr *HTTPRequester) Get(api, data string) []byte {
+	var jsonStr = []byte(data)
+	spew.Println(string(jsonStr))
+	req, err := http.NewRequest("POST", hr.url + "/" + api, bytes.NewBuffer(jsonStr))
+	if err != nil {
+		panic(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := hr.c.Do(req)
+
+	if err != nil {
+		panic(err)
+	}
+
+	buf := bytes.NewBuffer([]byte{})
+	_, err = io.Copy(buf, resp.Body)
+
+	if err != nil {
+		panic(err)
+	}
+
+	resp.Body.Close()
+	return buf.Bytes()
 }
 
 // OracleClient is a temporary replacement fot the real oracle. its gets accurate results from a server.
 type OracleClient struct {
 	world uint64
-	client oracleClientDoer
+	client Requester
 
 	eMtx sync.Mutex
-	instMtx map[int64]*sync.Mutex
-	eligibilityMap map[int64]map[string]struct{}
+	instMtx map[uint32]*sync.Mutex
+	eligibilityMap map[uint32]map[string]struct{}
 }
 
 // NewOracleClient creates a new client to query the oracle. it generates a random worldid
@@ -41,9 +80,9 @@ func NewOracleClient() *OracleClient {
 
 // NewOracleClientWithWorldID creates a new client with a specific worldid
 func NewOracleClientWithWorldID(world uint64) *OracleClient {
-	c := &http.Client{}
-	instMtx := make(map[int64]*sync.Mutex)
-	eligibilityMap := make(map[int64]map[string]struct{})
+	c := NewHTTPRequester(OracleServerAddress)
+	instMtx := make(map[uint32]*sync.Mutex)
+	eligibilityMap := make(map[uint32]map[string]struct{})
 	return &OracleClient{world:world, client:c, eligibilityMap: eligibilityMap, instMtx: instMtx}
 }
 
@@ -52,39 +91,24 @@ func (oc *OracleClient) World() uint64 {
 	return oc.world
 }
 
-func (oc *OracleClient) makeRequest(api string, data string) (*http.Response, error) {
-	var jsonStr = []byte(data)
-	spew.Println(string(jsonStr))
-	req, err := http.NewRequest("POST", OracleServerAddress + "/" + api, bytes.NewBuffer(jsonStr))
-	if err != nil {
-		panic(err)
-	}
-	req.Header.Set("Content-Type", "application/json")
+func registerQuery(world uint64, stringer fmt.Stringer) string {
+	return fmt.Sprintf(`{ "World": %d, "ID": "%v"}`, world, stringer.String())
+}
 
-	resp, err := oc.client.Do(req)
-
-	if err != nil {
-		return nil, err
-	}
-	return resp, nil
+func validateQuery(world uint64, instid uint32, committeeSize int) string {
+	return fmt.Sprintf(`{ "World": %d, "InstanceID": %d, "CommitteeSize": %d}`, world, instid, committeeSize)
 }
 
 // Register asks the oracle server to add this node to the active set
 func (oc *OracleClient) Register(stringer fmt.Stringer) {
 	reg := fmt.Sprintf(`{ "World": %d, "ID": "%v"}`, oc.world, stringer.String())
-	_, err := oc.makeRequest("register", reg)
-	if err != nil {
-		panic(err)
-	}
+	oc.client.Get(Register, reg)
 }
 
 // Unregister asks the oracle server to de-list this node from the active set
 func (oc *OracleClient) Unregister(stringer fmt.Stringer) {
 	unreg := fmt.Sprintf(`{ "World": %d, "ID": "%v"}`, oc.world,stringer.String())
-	_, err := oc.makeRequest("unregister", unreg)
-	if err != nil {
-		panic(err)
-	}
+	oc.client.Get(Unregister, unreg)
 }
 
 type validRes struct {
@@ -96,28 +120,17 @@ type validList struct {
 }
 
 // NOTE: this is old code, the new Validate fetches the whole map at once instead of requesting for each ID/
-// Validate if a proof is valid for a given committee size
-func (oc *OracleClient) ValidateSingle(instanceID []byte, K int, committeeSize int, proof []byte, pubKey fmt.Stringer) bool {
+  func (oc *OracleClient) ValidateSingle(instanceID []byte, K int, committeeSize int, proof []byte, pubKey fmt.Stringer) bool {
 
 	// make special instance ID
 	h := newHasherU32()
 	val := int64(h.Hash(append(instanceID, byte(K))))
 
 	req := fmt.Sprintf(`{ "World": %d, "InstanceID": %d, "CommitteeSize": %d, "ID": "%v"}`, oc.world, val, committeeSize, pubKey.String())
-	resp, err := oc.makeRequest("validate", req)
-	if err != nil {
-		panic(err)
-	}
-
-	buf := bytes.NewBuffer([]byte{})
-	_, err = io.Copy(buf, resp.Body)
-
-	if err != nil {
-		panic(err)
-	}
+	resp := oc.client.Get(ValidateSingle, req)
 
 	res := &validRes{}
-	err = json.Unmarshal(buf.Bytes(), res)
+	err := json.Unmarshal(resp, res)
 	if err != nil {
 		panic(err)
 	}
@@ -125,13 +138,18 @@ func (oc *OracleClient) ValidateSingle(instanceID []byte, K int, committeeSize i
 	return res.Valid
 }
 
+func hashInstanceAndK(instanceID []byte, K int) uint32 {
+	h := newHasherU32()
+	val := h.Hash(append(instanceID, byte(K)))
+	return val
+}
+
 
 // Validate checks whether a given ID is in the eligible list or not. it fetches the list once and gives answers locally after that.
 func (oc *OracleClient) Validate(instanceID []byte, K int, committeeSize int, pubKey fmt.Stringer) bool {
 
 	// make special instance ID
-	h := newHasherU32()
-	val := int64(h.Hash(append(instanceID, byte(K))))
+	val := hashInstanceAndK(instanceID, K)
 
 	oc.eMtx.Lock()
 	_, mok := oc.instMtx[val]
@@ -139,7 +157,7 @@ func (oc *OracleClient) Validate(instanceID []byte, K int, committeeSize int, pu
 		oc.instMtx[val] = &sync.Mutex{}
 	}
 	oc.instMtx[val].Lock()
-	if r, ok := oc.eligibilityMap[int64(val)]; ok {
+	if r, ok := oc.eligibilityMap[val]; ok {
 			oc.eMtx.Unlock()
 			_, valid := r[pubKey.String()]
 			oc.instMtx[val].Unlock()
@@ -148,21 +166,12 @@ func (oc *OracleClient) Validate(instanceID []byte, K int, committeeSize int, pu
 
 	oc.eMtx.Unlock()
 
-	req := fmt.Sprintf(`{ "World": %d, "InstanceID": %d, "CommitteeSize": %d, "ID": "%v"}`, oc.world, val, committeeSize, pubKey.String())
-	resp, err := oc.makeRequest("validatemap", req)
-	if err != nil {
-		panic(err)
-	}
+	req := validateQuery(oc.world, val,committeeSize)
 
-	buf := bytes.NewBuffer([]byte{})
-	_, err = io.Copy(buf, resp.Body)
-
-	if err != nil {
-		panic(err)
-	}
+	resp := oc.client.Get(Validate, req)
 
 	res := &validList{}
-	err = json.Unmarshal(buf.Bytes(), res)
+	err := json.Unmarshal(resp, res)
 	if err != nil {
 		panic(err)
 	}

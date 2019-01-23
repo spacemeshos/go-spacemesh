@@ -32,7 +32,7 @@ func (s stringerer) String() string {
 	return string(s)
 }
 
-// ValidateBlock
+// ValidateBlock makes oracleBlock a BlockValidator
 func (bo *blockOracle) ValidateBlock(block mesh.Block) bool {
 	return bo.Validate(block.LayerIndex, stringerer(block.MinerID))
 }
@@ -40,7 +40,6 @@ func (bo *blockOracle) ValidateBlock(block mesh.Block) bool {
 func (bo *blockOracle) Validate(id mesh.LayerID, pubKey fmt.Stringer) bool {
 	return bo.oc.Validate(common.Uint32ToBytes(uint32(id)), -1, bo.committeeSize, pubKey)
 }
-
 
 type HareOracle interface {
 	Validate(instanceID []byte, K int, committeeSize int, pubKey fmt.Stringer, proof []byte) bool
