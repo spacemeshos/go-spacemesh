@@ -20,9 +20,9 @@ type Stringer interface {
 }
 
 type Rolacle interface {
-	Register(stringer Stringer)
-	Unregister(stringer Stringer)
-	Validate(committeeSize int, proof Signature) bool
+	Register(id string)
+	Unregister(id string)
+	Validate(instanceID []byte, K int, committeeSize int, pubKey Stringer, proof []byte) bool
 }
 
 type hasherU32 struct {

@@ -213,7 +213,7 @@ func (proc *ConsensusProcess) validateRole(m *pb.HareMessage) bool {
 	// TODO: validate role proof
 
 	// validate role
-	if !proc.oracle.Validate(proc.expectedCommitteeSize(m.Message.K), Signature(m.Message.RoleProof)) {
+	if !proc.oracle.Validate(proc.instanceId.Bytes(), int(m.Message.K), proc.expectedCommitteeSize(m.Message.K), proc.signing.Verifier(), Signature(m.Message.RoleProof)) {
 		log.Warning("Role validation failed")
 		return false
 	}
