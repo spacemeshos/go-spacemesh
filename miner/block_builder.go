@@ -6,6 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/state"
@@ -24,6 +25,8 @@ const DefaultGas = 1
 const TxGossipChannel = "TxGossip"
 
 type BlockBuilder struct{
+	minerID fmt.Stringer // could be a pubkey or what ever. the identity we're claiming to be as miners.
+
 	beginRoundEvent chan mesh.LayerID
 	stopChan		chan struct{}
 	newTrans		chan *mesh.SerializableTransaction
@@ -34,15 +37,17 @@ type BlockBuilder struct{
 	network p2p.Service
 	weakCoinToss	WeakCoinProvider
 	orphans			OrphanBlockProvider
+	blockOracle oracle.BlockOracle
 	started			bool
 }
 
 
 
 
-func NewBlockBuilder(net p2p.Service, beginRoundEvent chan mesh.LayerID, weakCoin WeakCoinProvider,
-													orph OrphanBlockProvider, hare HareResultProvider) BlockBuilder{
+func NewBlockBuilder(minerID fmt.Stringer, net p2p.Service, beginRoundEvent chan mesh.LayerID, weakCoin WeakCoinProvider,
+													orph OrphanBlockProvider, hare HareResultProvider, blockOracle oracle.BlockOracle) BlockBuilder{
 	return BlockBuilder{
+		minerID: minerID,
 		beginRoundEvent:beginRoundEvent,
 		stopChan: make(chan struct{}),
 		newTrans: make(chan *mesh.SerializableTransaction),
@@ -53,6 +58,7 @@ func NewBlockBuilder(net p2p.Service, beginRoundEvent chan mesh.LayerID, weakCoi
 		network: net,
 		weakCoinToss: weakCoin,
 		orphans: orph,
+		blockOracle: blockOracle,
 		started: false,
 	}
 
@@ -116,12 +122,13 @@ func (t *BlockBuilder) AddTransaction(nonce uint64, origin, destination common.A
 	return nil
 }
 
-func (t *BlockBuilder) createBlock(id mesh.LayerID, txs []mesh.SerializableTransaction) mesh.Block {
+func (t *BlockBuilder) createBlock(minerID string, id mesh.LayerID, txs []mesh.SerializableTransaction) mesh.Block {
 	res, err := t.hareResult.GetResult(id)
 	if err != nil {
 		log.Error("didnt receive hare result for layer %v", id)
 	}
 	b := mesh.Block{
+		MinerID: minerID,
 		Id :          mesh.BlockID(rand.Int63()),
 		LayerIndex:   id,
 		Data:         nil,
@@ -159,17 +166,20 @@ func (t *BlockBuilder) acceptBlockData() {
 				return
 
 			case id := <-t.beginRoundEvent:
-				txList := t.transactionQueue[:common.Min(len(t.transactionQueue), MaxTransactionsPerBlock)]
-				t.transactionQueue = t.transactionQueue[common.Min(len(t.transactionQueue), MaxTransactionsPerBlock):]
-				blk := t.createBlock(id, txList)
-				go func() {
-					bytes, err := mesh.BlockAsBytes(blk)
-					if err != nil {
-						log.Error("cannot serialize block %v", err)
-						return
-					}
-					t.network.Broadcast(meshSync.NewBlock, bytes)
-				}()
+				if t.blockOracle.Validate(id, t.minerID) {
+					txList := t.transactionQueue[:common.Min(len(t.transactionQueue), MaxTransactionsPerBlock)]
+					t.transactionQueue = t.transactionQueue[common.Min(len(t.transactionQueue), MaxTransactionsPerBlock):]
+					blk := t.createBlock(t.minerID.String(), id, txList)
+					go func() {
+						bytes, err := mesh.BlockAsBytes(blk)
+						if err != nil {
+							log.Error("cannot serialize block %v", err)
+							return
+						}
+						t.network.Broadcast(meshSync.NewBlock, bytes)
+					}()
+				}
+				// todo: else what do we do with all these txs ?!
 
 			case tx := <- t.newTrans:
 				t.transactionQueue = append(t.transactionQueue,*tx)
