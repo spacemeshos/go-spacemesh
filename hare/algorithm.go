@@ -514,7 +514,7 @@ func (proc *ConsensusProcess) endOfRound3() {
 }
 
 func (proc *ConsensusProcess) currentRole() Role {
-	if proc.oracle.Validate(proc.expectedCommitteeSize(proc.k), proc.roleProof()) {
+	if proc.oracle.Validate(proc.instanceId.Bytes(), int(proc.k), proc.expectedCommitteeSize(proc.k), proc.signing.Verifier(), proc.roleProof()) {
 		if proc.currentRound() == Round2 {
 			return Leader
 		}

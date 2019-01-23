@@ -98,7 +98,7 @@ func (mock *MockHashOracle) calcThreshold(committeeSize int) uint32 {
 }
 
 // Validate if a proof is valid for a given committee size
-func (mock *MockHashOracle) Validate(committeeSize int, proof Signature) bool {
+func (mock *MockHashOracle) Validate(instanceID []byte, K int, committeeSize int, pubKey Stringer, proof []byte) bool {
 	if proof == nil {
 		log.Warning("Oracle query with proof=nil. Returning false")
 		return false
