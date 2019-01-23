@@ -195,6 +195,19 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 	}
 }
 
+func verifyChannelReadWithTimeout(t *testing.T, ch chan interface{}) interface{}{
+	timeout := time.NewTimer(3 *time.Second)
+	select {
+
+	case <-timeout.C:
+		t.Error("timed out ")
+		return nil
+	case val := <-ch:
+		return val
+
+	}
+}
+
 func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_LayerIdsRequest_", memoryDB)
 	syncObj1 := syncs[0]
@@ -270,7 +283,7 @@ func TestSyncProtocol_SyncTwoNodes(t *testing.T) {
 	syncObj1.AddLayer(mesh.NewExistingLayer(4, []*mesh.Block{block9}))
 	syncObj1.AddLayer(mesh.NewExistingLayer(5, []*mesh.Block{block10}))
 
-	timeout := time.After(1000 * time.Second)
+	timeout := time.After(4 * time.Second)
 	syncObj2.SetLatestLayer(5)
 	syncObj1.Start()
 	syncObj2.Start()

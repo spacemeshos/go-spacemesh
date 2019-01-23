@@ -215,6 +215,13 @@ func (alg *Algorithm) HandleIncomingLayer(ll *mesh.Layer) {
 		alg.posVotes[blockId] = *votesBM
 		alg.visibilityMap[blockId] = BlockPosition{*visibleBM, originBlock.Layer()}
 	}
+	if l.index <= 0{
+		return
+	}
+
+	if _, exist := alg.layers[l.index -1]; exist {
+		alg.layerReadyCallback(mesh.LayerID(l.index -1))
+	}
 }
 
 func (alg *Algorithm) HandleLateBlock(b *mesh.Block) {

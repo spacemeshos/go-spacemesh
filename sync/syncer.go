@@ -85,8 +85,6 @@ func (s *Syncer) run() {
 		case doSync = <-s.forceSync:
 		case <-syncTicker.C:
 			doSync = true
-		default:
-			doSync = false
 		}
 		if doSync {
 			go func() {

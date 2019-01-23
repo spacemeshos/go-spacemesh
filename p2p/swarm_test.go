@@ -275,6 +275,7 @@ func (sa *swarmArray) clean() {
 
 func TestSwarm_MultipleMessagesFromMultipleSenders(t *testing.T) {
 	const Senders = 100
+
 	cfg := config.DefaultConfig()
 	cfg.SwarmConfig.Gossip = false
 	cfg.SwarmConfig.Bootstrap = false

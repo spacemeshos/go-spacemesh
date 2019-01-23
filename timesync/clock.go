@@ -1,6 +1,7 @@
 package timesync
 
 import (
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"sync"
 	"time"
@@ -74,7 +75,9 @@ func (t *Ticker) updateLayerID() {
 }
 
 func (t *Ticker) StartClock() {
+	log.Info("starting global clock")
 	if t.time.Now().Before(t.startEpoch) {
+		log.Info("global clock sleeping till epoch")
 		sleepTill := t.startEpoch.Sub(t.time.Now())
 		tmr := time.NewTimer(sleepTill)
 		select {
@@ -92,11 +95,12 @@ func (t *Ticker) StartClock() {
 	for {
 		select {
 		case <-tick.C:
-			t.currentLayer++
-			t.notifyOnTick()
-			tick.Reset(t.tickInterval)
-		case <-t.stop:
-			break
+			log.Info("released tick layerId %v", t.currentLayer +1)
+				t.currentLayer++
+				t.notifyOnTick()
+				tick.Reset(t.tickInterval)
+			case <-t.stop:
+				break
 		}
 	}
 }

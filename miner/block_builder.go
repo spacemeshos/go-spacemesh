@@ -136,6 +136,7 @@ func (t *BlockBuilder) createBlock(minerID string, id mesh.LayerID, txs []mesh.S
 		BlockVotes : res,
 		ViewEdges:    t.orphans.GetOrphanBlocksExcept(id),
 	}
+	log.Info("created block in layer %v id %v, num of transactions %v", b.LayerIndex, b.Id, len(b.Txs))
 
 	return b
 }
