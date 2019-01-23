@@ -6,6 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"io"
+	"math/rand"
 	"sync"
 	"time"
 )
@@ -34,12 +35,15 @@ type dht interface {
 type Node struct {
 	sim *Simulator
 	node.Node
-	dht   dht
-	delay time.Duration
+	dht      dht
+	sndDelay uint32
+	rcvDelay uint32
 }
 
 // New Creates a p2p simulation by providing nodes as p2p services and bridge them.
 func NewSimulator() *Simulator {
+	rand.Seed(time.Now().UnixNano())
+
 	s := &Simulator{
 		protocolHandler: make(map[string]map[string]chan Message),
 		nodes:           make(map[string]*Node),
@@ -81,9 +85,10 @@ func (s *Simulator) createdNode(n *Node) {
 	s.publishNewPeer(n.PublicKey())
 }
 
-func (s *Simulator) NewFaulty(delay time.Duration) *Node {
+func (s *Simulator) NewFaulty(maxBroadcastDelaySec uint32, maxReceiveDelaySec uint32) *Node {
 	n := s.NewNode()
-	n.delay = delay
+	n.sndDelay = maxBroadcastDelaySec
+	n.rcvDelay = maxReceiveDelaySec
 
 	return n
 }
@@ -147,6 +152,7 @@ func (sn *Node) Start() error {
 
 // ProcessProtocolMessage
 func (sn *Node) ProcessProtocolMessage(sender node.Node, protocol string, payload Data) error {
+	randSleep(sn.rcvDelay)
 	sn.sim.mutex.RLock()
 	c, ok := sn.sim.protocolHandler[sn.PublicKey().String()][protocol]
 	sn.sim.mutex.RUnlock()
@@ -181,10 +187,18 @@ func (sn *Node) sendMessageImpl(nodeID p2pcrypto.PublicKey, protocol string, pay
 	return errors.New("could not find " + protocol + " handler for node: " + nodeID.String())
 }
 
+func randSleep(delay uint32) {
+	ranDelay := uint32(0)
+	if delay != 0 {
+		ranDelay = rand.Uint32() % delay
+	}
+	time.Sleep(time.Second*time.Duration(ranDelay))
+}
+
 // Broadcast
 func (sn *Node) Broadcast(protocol string, payload []byte) error {
 	go func() {
-		time.Sleep(sn.delay)
+		randSleep(sn.sndDelay)
 		sn.sim.mutex.RLock()
 		for n := range sn.sim.protocolHandler {
 			if c, ok := sn.sim.protocolHandler[n][protocol]; ok {

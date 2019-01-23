@@ -4,14 +4,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	//_ "net/http/pprof"
 	"testing"
 	"time"
 )
-
-//func init() {
-//	go http.ListenAndServe(":3030", nil)
-//}
 
 // Test the consensus process as a whole
 
@@ -194,7 +189,11 @@ func TestAllDifferentSet(t *testing.T) {
 	test.WaitForTimedTermination(t, 30*time.Second)
 }
 
-func TestDelayedDishonest(t *testing.T) {
+func TestSndDelayedDishonest(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
 	test := newConsensusTest()
 
 	cfg := config.Config{N: 50, F: 25, SetSize: 5, RoundDuration: time.Second * time.Duration(2)}
@@ -202,7 +201,7 @@ func TestDelayedDishonest(t *testing.T) {
 	test.initialSets = make([]*Set, cfg.N)
 	honest1 := NewSetFromValues(value1, value2, value4, value5)
 	honest2 := NewSetFromValues(value1, value3, value4, value6)
-	dishonest := NewSetFromValues(value3, value5, value6)
+	dishonest := NewSetFromValues(value3, value5, value6, value7)
 	test.fill(honest1, 0, 15)
 	test.fill(honest2, 16, cfg.N/2)
 	test.fill(dishonest, cfg.N/2+1, cfg.N-1)
@@ -221,7 +220,50 @@ func TestDelayedDishonest(t *testing.T) {
 
 	// create dishonest
 	dishonestFunc := func() {
-		s := sim.NewFaulty(time.Second * time.Duration(5)) // 5 sec delay
+		s := sim.NewFaulty(10, 0) // only broadcast delay
+		proc := createConsensusProcess(cfg, oracle, s, test.initialSets[i])
+		test.dishonest = append(test.dishonest, proc)
+		i++
+	}
+	test.Create(cfg.N/2-1, dishonestFunc)
+
+	test.Start()
+	test.WaitForTimedTermination(t, 30*time.Second)
+}
+
+
+func TestRecvDelayedDishonest(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	test := newConsensusTest()
+
+	cfg := config.Config{N: 50, F: 25, SetSize: 5, RoundDuration: time.Second * time.Duration(2)}
+	sim := service.NewSimulator()
+	test.initialSets = make([]*Set, cfg.N)
+	honest1 := NewSetFromValues(value1, value2, value4, value5)
+	honest2 := NewSetFromValues(value1, value3, value4, value6)
+	dishonest := NewSetFromValues(value3, value5, value6, value7)
+	test.fill(honest1, 0, 15)
+	test.fill(honest2, 16, cfg.N/2)
+	test.fill(dishonest, cfg.N/2+1, cfg.N-1)
+	test.honestSets = []*Set{honest1, honest2}
+	oracle := NewMockHashOracle(cfg.N)
+	i := 0
+	honestFunc := func() {
+		s := sim.NewNode()
+		proc := createConsensusProcess(cfg, oracle, s, test.initialSets[i])
+		test.procs = append(test.procs, proc)
+		i++
+	}
+
+	// create honest
+	test.Create(cfg.N/2+1, honestFunc)
+
+	// create dishonest
+	dishonestFunc := func() {
+		s := sim.NewFaulty(0, 10) // delay rcv
 		proc := createConsensusProcess(cfg, oracle, s, test.initialSets[i])
 		test.dishonest = append(test.dishonest, proc)
 		i++

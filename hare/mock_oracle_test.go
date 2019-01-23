@@ -78,7 +78,7 @@ func TestMockHashOracle_Role(t *testing.T) {
 		}
 	}
 
-	if counter * 3 < committeeSize { // allow only 10% deviation
+	if counter * 3 < committeeSize { // allow only deviation
 		t.Errorf("Comity size error. Expected: %v Actual: %v", committeeSize, counter)
 		t.Fail()
 	}
