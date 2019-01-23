@@ -3,7 +3,6 @@ package hare
 import (
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
-	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/stretchr/testify/require"
@@ -46,8 +45,8 @@ func (mcp *mockConsensusProcess) Id() uint32 {
 	return mcp.id
 }
 
-func (mcp *mockConsensusProcess) createInbox(size uint32) chan *pb.HareMessage {
-	c := make(chan *pb.HareMessage)
+func (mcp *mockConsensusProcess) createInbox(size uint32) chan Message {
+	c := make(chan Message)
 	go func() {
 		for {
 			<-c

@@ -87,7 +87,7 @@ func (mbn *mockBaseNetwork) SubscribePeerEvents() (conn chan p2pcrypto.PublicKey
 	return
 }
 
-func (mbn *mockBaseNetwork) ProcessProtocolMessage(sender p2pcrypto.PublicKey, protocol string, data service.Data, validationCompletedChan chan<- service.MessageValidation) error {
+func (mbn *mockBaseNetwork) ProcessProtocolMessage(sender p2pcrypto.PublicKey, protocol string, data service.Data, validationCompletedChan chan service.MessageValidation) error {
 	mbn.processProtocolCount++
 	releaseWaiters(mbn.pcountwg)
 	if (validationCompletedChan != nil) {

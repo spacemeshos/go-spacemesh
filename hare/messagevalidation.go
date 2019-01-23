@@ -17,9 +17,37 @@ func NewMessageValidator(signing Signing, threshold int, defaultSize int, valida
 	return &MessageValidator{signing, threshold, defaultSize, validator}
 }
 
+func (validator *MessageValidator) SyntacticallyValidateMessage(m *pb.HareMessage) bool {
+	if !validator.isSyntacticallyValid(m) {
+		log.Warning("Validate message failed: message is not syntactically valid")
+		return false
+	}
+
+	data, err := proto.Marshal(m.Message)
+	if err != nil {
+		log.Error("Validate message failed: failed marshaling inner message")
+		return false
+	}
+
+	// verify signature
+	verifier, err := NewVerifier(m.PubKey)
+	if err != nil {
+		log.Warning("Validate message failed: Could not construct verifier ", err)
+		return false
+	}
+	res, _ := verifier.Verify(data, m.InnerSig)
+	if !res {
+		log.Warning("Validate message failed: invalid message signature detected")
+		return false
+	}
+
+	return true
+}
+
+
 func (validator *MessageValidator) ValidateMessage(m *pb.HareMessage, k uint32) bool {
 	// validate context
-	if !isContextuallyValid(m, k) {
+	if !validator.ContextuallyValidateMessage(m, k) {
 		log.Info("Validate message failed: message is not contextually valid")
 		return false
 	}
@@ -51,7 +79,7 @@ func (validator *MessageValidator) ValidateMessage(m *pb.HareMessage, k uint32) 
 }
 
 // verifies the message is contextually valid
-func isContextuallyValid(m *pb.HareMessage, expectedK uint32) bool {
+func (validator *MessageValidator) ContextuallyValidateMessage(m *pb.HareMessage, expectedK uint32) bool {
 	if m.Message == nil {
 		log.Warning("Contextual validation failed: m.Message is nil")
 		return false

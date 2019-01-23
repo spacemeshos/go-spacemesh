@@ -35,7 +35,7 @@ type baseNetwork interface {
 	SendMessage(peerPubkey p2pcrypto.PublicKey, protocol string, payload []byte) error
 	RegisterProtocol(protocol string) chan service.Message
 	SubscribePeerEvents() (conn chan p2pcrypto.PublicKey, disc chan p2pcrypto.PublicKey)
-	ProcessProtocolMessage(sender p2pcrypto.PublicKey, protocol string, data service.Data, validationChan chan<- service.MessageValidation) error
+	ProcessProtocolMessage(sender p2pcrypto.PublicKey, protocol string, data service.Data, validationChan chan service.MessageValidation) error
 }
 
 type protocolMessage struct {
@@ -206,7 +206,7 @@ func (prot *Protocol) Broadcast(payload []byte, nextProt string) error {
 		NextProtocol:  nextProt,
 		ClientVersion: protocolVer,
 		Timestamp:     time.Now().Unix(),
-		AuthPubKey:    prot.localNodePubkey.Bytes(), // TODO: @noam consider replacing this with another reply mechanism
+		AuthPubkey:    prot.localNodePubkey.Bytes(), // TODO: @noam consider replacing this with another reply mechanism
 	}
 
 	msg := &pb.ProtocolMessage{
@@ -290,6 +290,10 @@ loop:
 		select {
 		case msgV := <-prot.propagateQ:
 			h := calcHash(msgV.Message(), msgV.Protocol())
+			if prot.isMessageValid(h) != Unknown {
+				prot.Log.Error("got validation result on message that was already tested for validity. hash %v protocol %s", h, msgV.Protocol())
+				break
+			}
 			prot.markMessageValidity(h, msgV.IsValid())
 			if msgV.IsValid() {
 				prot.propagateMessage(msgV.Message(), h)

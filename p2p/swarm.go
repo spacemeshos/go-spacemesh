@@ -30,7 +30,7 @@ const ConnectingTimeout = 20 * time.Second //todo: add to the config
 type protocolMessage struct {
 	sender p2pcrypto.PublicKey
 	data   service.Data
-	validationChan chan<- service.MessageValidation
+	validationChan chan service.MessageValidation
 }
 
 func (pm protocolMessage) Sender() p2pcrypto.PublicKey {
@@ -45,7 +45,7 @@ func (pm protocolMessage) Bytes() []byte {
 	return pm.data.Bytes()
 }
 
-func (pm protocolMessage) ValidationCompletedChan() chan<- service.MessageValidation {
+func (pm protocolMessage) ValidationCompletedChan() chan service.MessageValidation {
 	return pm.validationChan
 }
 
@@ -502,7 +502,7 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 
 // ProcessProtocolMessage passes an already decrypted message to a protocol. It is expected that the protocol will send
 // the message syntactic validation result on the validationCompletedChan ASAP
-func (s *swarm) ProcessProtocolMessage(sender p2pcrypto.PublicKey, protocol string, data service.Data, validationCompletedChan chan<- service.MessageValidation) error {
+func (s *swarm) ProcessProtocolMessage(sender p2pcrypto.PublicKey, protocol string, data service.Data, validationCompletedChan chan service.MessageValidation) error {
 	// route authenticated message to the reigstered protocol
 	s.protocolHandlerMutex.RLock()
 	msgchan := s.protocolHandlers[protocol]

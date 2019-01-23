@@ -90,8 +90,9 @@ func TestConsensusProcess_isContextuallyValid(t *testing.T) {
 			builder := NewMessageBuilder()
 			builder.SetType(msgType[j]).SetInstanceId(*instanceId1).SetRoundCounter(cp.k).SetKi(ki).SetValues(s)
 			builder = builder.SetPubKey(pub.Bytes()).Sign(NewMockSigning())
-			//mt.Printf("%v   j=%v i=%v Exp: %v Actual %v\n", cp.k, j, i, rounds[j][i], isContextuallyValid(builder.Build(), cp.k))
-			assert.Equal(t, true, isContextuallyValid(builder.Build(), cp.k))
+			//mt.Printf("%v   j=%v i=%v Exp: %v Actual %v\n", cp.k, j, i, rounds[j][i], ContextuallyValidateMessage(builder.Build(), cp.k))
+			validator := defaultValidator()
+			assert.Equal(t, true, validator.ContextuallyValidateMessage(builder.Build(), cp.k))
 			cp.advanceToNextRound()
 		}
 	}

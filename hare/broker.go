@@ -18,7 +18,7 @@ type Identifiable interface {
 }
 
 type Inboxer interface {
-	createInbox(size uint32) chan *pb.HareMessage
+	createInbox(size uint32) chan Message
 }
 
 type IdentifiableInboxer interface {
@@ -50,7 +50,7 @@ type Broker struct {
 	Closer
 	network NetworkService
 	inbox   chan service.Message
-	outbox  map[uint32]chan *pb.HareMessage
+	outbox  map[uint32]chan Message
 	mutex   sync.RWMutex
 }
 
@@ -58,7 +58,7 @@ func NewBroker(networkService NetworkService) *Broker {
 	p := new(Broker)
 	p.Closer = NewCloser()
 	p.network = networkService
-	p.outbox = make(map[uint32]chan *pb.HareMessage)
+	p.outbox = make(map[uint32]chan Message)
 
 	return p
 }
@@ -75,6 +75,16 @@ func (broker *Broker) Start() error {
 	go broker.dispatcher()
 
 	return nil
+}
+
+type Message struct {
+	msg *pb.HareMessage
+	bytes []byte
+	validationChan chan service.MessageValidation
+}
+
+func (msg Message) reportValidationResult(isValid bool) {
+	msg.validationChan <- *service.NewMessageValidation(msg.bytes, ProtoName, isValid)
 }
 
 // Dispatch incoming messages to the matching set id instance
@@ -96,7 +106,7 @@ func (broker *Broker) dispatcher() {
 			broker.mutex.RUnlock()
 			if exist {
 				// todo: err if chan is full (len)
-				c <- hareMsg
+				c <- Message{hareMsg, msg.Bytes(), msg.ValidationCompletedChan()}
 			}
 
 		case <-broker.CloseChannel():

@@ -2,7 +2,10 @@ package hare
 
 import (
 	"bytes"
+	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
+	"github.com/spacemeshos/go-spacemesh/hare/pb"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/stretchr/testify/assert"
@@ -16,6 +19,26 @@ func generateVerifier(t *testing.T) Verifier {
 	ms := NewMockSigning()
 
 	return ms.Verifier()
+}
+
+func buildMessage(msg *pb.HareMessage) Message {
+	data, err := proto.Marshal(msg)
+	if err != nil {
+		log.Error("failed marshaling message")
+	}
+	return Message{msg, data, make(chan service.MessageValidation, 10)}
+}
+
+func assertValidation(t *testing.T, msg Message, expValid bool, expProt string) {
+	timer := time.NewTimer(time.Second * 1)
+	select {
+	case act := <-msg.validationChan:
+		assert.Equal(t, expValid, act.IsValid())
+		assert.Equal(t, msg.bytes, act.Message())
+		assert.Equal(t, expProt, act.Protocol())
+	case <-timer.C:
+		t.FailNow() // deadlocked
+	}
 }
 
 // test that a message to a specific set id is delivered by the broker
@@ -32,6 +55,7 @@ func TestConsensusProcess_StartTwice(t *testing.T) {
 }
 
 func TestConsensusProcess_eventLoop(t *testing.T) {
+	// TODO fix! This test does nothing.. the message that are Broadcast isn't handled because there are no registered protocol handler
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
@@ -52,7 +76,9 @@ func TestConsensusProcess_handleMessage(t *testing.T) {
 	proc := generateConsensusProcess(t)
 	broker.Register(proc)
 	m := BuildPreRoundMsg(generateVerifier(t), NewSetFromValues(value1))
-	proc.handleMessage(m)
+	msg := buildMessage(m)
+	proc.handleMessage(msg)
+	assertValidation(t, msg, false, ProtoName) // the oracle fails to validation the peer so the message validation fails TODO fix test!
 }
 
 func TestConsensusProcess_nextRound(t *testing.T) {
@@ -139,6 +165,7 @@ func TestConsensusProcess_roleFromRoundCounter(t *testing.T) {
 }
 
 func TestConsensusProcess_sendMessage(t *testing.T) {
+	// TDOD fix, this test has no assertions
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 	broker := NewBroker(n1)
@@ -234,8 +261,8 @@ func TestConsensusProcess_onEarlyMessage(t *testing.T) {
 	proc := generateConsensusProcess(t)
 	m := BuildPreRoundMsg(generateVerifier(t), NewSmallEmptySet())
 	proc.advanceToNextRound()
-	proc.onEarlyMessage(m)
+	proc.onEarlyMessage(buildMessage(m))
 	assert.Equal(t, 1, len(proc.pending))
-	proc.onEarlyMessage(m)
+	proc.onEarlyMessage(buildMessage(m))
 	assert.Equal(t, 1, len(proc.pending))
 }
