@@ -24,8 +24,6 @@ func init() {
 	RootCmd.PersistentFlags().StringVarP(&config.BaseConfig.DataDir, "data-folder", "d",
 		config.BaseConfig.DataDir, "Specify data directory for spacemesh")
 	/** ======================== P2P Flags ========================== **/
-	RootCmd.PersistentFlags().IntVar(&config.P2P.SecurityParam, "security-param",
-		config.P2P.SecurityParam, "Consensus protocol k security param")
 	RootCmd.PersistentFlags().IntVar(&config.P2P.TCPPort, "tcp-port",
 		config.P2P.TCPPort, "TCP Port to listen on")
 	RootCmd.PersistentFlags().DurationVar(&config.P2P.DialTimeout, "dial-timeout",
@@ -34,8 +32,6 @@ func init() {
 		config.P2P.ConnKeepAlive, "Network connection keep alive")
 	RootCmd.PersistentFlags().Int8Var(&config.P2P.NetworkID, "network-id",
 		config.P2P.NetworkID, "NetworkID to run on (0 - mainnet, 1 - testnet)")
-	RootCmd.PersistentFlags().DurationVar(&config.P2P.ResponseTimeout, "response-timeout",
-		config.P2P.ResponseTimeout, "Timeout for waiting on resposne message")
 	RootCmd.PersistentFlags().StringVar(&config.P2P.NodeID, "node-id",
 		config.P2P.NodeID, "Load node data by id (pub key) from local store")
 	RootCmd.PersistentFlags().BoolVar(&config.P2P.NewNode, "new-node",
