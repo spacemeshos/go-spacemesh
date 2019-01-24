@@ -246,8 +246,8 @@ func TestSwarm_MultipleMessages(t *testing.T) {
 
 func TestSwarm_MultipleMessagesFromMultipleSenders(t *testing.T) {
 	cfg := config.DefaultConfig()
-	cfg.SwarmConfig.Gossip = false
-	cfg.SwarmConfig.Bootstrap = false
+	cfg.DHTConfig.Gossip = false
+	cfg.DHTConfig.Bootstrap = false
 
 	p1 := p2pTestInstance(t, cfg)
 
@@ -459,9 +459,9 @@ func Test_Swarm_getMorePeers(t *testing.T) {
 	// test normal flow
 	numpeers := 3
 	cfg := config.DefaultConfig()
-	cfg.SwarmConfig.Bootstrap = false
-	cfg.SwarmConfig.Gossip = false
-	cfg.SwarmConfig.RandomConnections = numpeers
+	cfg.DHTConfig.Bootstrap = false
+	cfg.DHTConfig.Gossip = false
+	cfg.DHTConfig.RandomConnections = numpeers
 	n := p2pTestNoStart(t, cfg)
 
 	conn, _ := n.SubscribePeerEvents()
@@ -541,9 +541,9 @@ func Test_Swarm_getMorePeers(t *testing.T) {
 
 func TestNeighborhood_Initial(t *testing.T) {
 	cfg := config.DefaultConfig()
-	cfg.SwarmConfig.RandomConnections = 3
-	cfg.SwarmConfig.Gossip = true
-	cfg.SwarmConfig.Bootstrap = false
+	cfg.DHTConfig.RandomConnections = 3
+	cfg.DHTConfig.Gossip = true
+	cfg.DHTConfig.Bootstrap = false
 
 	p := p2pTestNoStart(t, cfg)
 	mdht := new(dht.MockDHT)

@@ -9,7 +9,6 @@ import (
 // ConfigValues specifies  default values for node config params.
 var (
 	ConfigValues      = DefaultConfig()
-	SwarmConfigValues = ConfigValues.SwarmConfig
 )
 
 func init() {
@@ -26,18 +25,18 @@ func duration(duration string) (dur time.Duration) {
 
 // Config defines the configuration options for the Spacemesh peer-to-peer networking layer
 type Config struct {
-	TCPPort         int           `mapstructure:"tcp-port"`
-	NodeID          string        `mapstructure:"node-id"`
-	NewNode         bool          `mapstructure:"new-node"`
-	DialTimeout     time.Duration `mapstructure:"dial-timeout"`
-	ConnKeepAlive   time.Duration `mapstructure:"conn-keepalive"`
-	NetworkID       int8          `mapstructure:"network-id"`
-	SwarmConfig     SwarmConfig   `mapstructure:"swarm"`
-    BufferSize      int           `mapstructure:"buffer-size"`
+	TCPPort       int           `mapstructure:"tcp-port"`
+	NodeID        string        `mapstructure:"node-id"`
+	NewNode       bool          `mapstructure:"new-node"`
+	DialTimeout   time.Duration `mapstructure:"dial-timeout"`
+	ConnKeepAlive time.Duration `mapstructure:"conn-keepalive"`
+	NetworkID     int8          `mapstructure:"network-id"`
+	DHTConfig     DHTConfig     `mapstructure:"swarm"`
+    BufferSize    int           `mapstructure:"buffer-size"`
 }
 
-// SwarmConfig specifies swarm config params.
-type SwarmConfig struct {
+// DHTConfig specifies swarm config params.
+type DHTConfig struct {
 	Gossip                 bool     `mapstructure:"gossip"`
 	Bootstrap              bool     `mapstructure:"bootstrap"`
 	RoutingTableBucketSize int      `mapstructure:"bucketsize"`
@@ -49,8 +48,8 @@ type SwarmConfig struct {
 // DefaultConfig deines the default p2p configuration
 func DefaultConfig() Config {
 
-	// SwarmConfigValues defines default values for swarm config params.
-	var SwarmConfigValues = SwarmConfig{
+	// DHTConfigValues defines default values for swarm config params.
+	var DHTConfigValues = DHTConfig{
 		Gossip:                 false,
 		Bootstrap:              false,
 		RoutingTableBucketSize: 20,
@@ -61,13 +60,13 @@ func DefaultConfig() Config {
 	}
 
 	return Config{
-		TCPPort:         7513,
-		NodeID:          "",
-		NewNode:         false,
-		DialTimeout:     duration("1m"),
-		ConnKeepAlive:   duration("48h"),
-		NetworkID:       TestNet,
-		SwarmConfig:     SwarmConfigValues,
-        BufferSize:      100,
+		TCPPort:       7513,
+		NodeID:        "",
+		NewNode:       false,
+		DialTimeout:   duration("1m"),
+		ConnKeepAlive: duration("48h"),
+		NetworkID:     TestNet,
+		DHTConfig:     DHTConfigValues,
+        BufferSize:    100,
 	}
 }

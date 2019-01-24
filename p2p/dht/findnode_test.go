@@ -20,11 +20,11 @@ func TestFindNodeProtocol_FindNode(t *testing.T) {
 	sim := service.NewSimulator()
 
 	n1 := sim.NewNode()
-	rt1 := NewRoutingTable(cfg.SwarmConfig.RoutingTableBucketSize, n1.DhtID(), getTestLogger("FindNode - ").Logger)
+	rt1 := NewRoutingTable(cfg.DHTConfig.RoutingTableBucketSize, n1.DhtID(), getTestLogger("FindNode - ").Logger)
 	fnd1 := newFindNodeProtocol(n1, rt1)
 
 	n2 := sim.NewNode()
-	rt2 := NewRoutingTable(cfg.SwarmConfig.RoutingTableBucketSize, n2.DhtID(), getTestLogger("FindNode - ").Logger)
+	rt2 := NewRoutingTable(cfg.DHTConfig.RoutingTableBucketSize, n2.DhtID(), getTestLogger("FindNode - ").Logger)
 	_ = newFindNodeProtocol(n2, rt2)
 
 	idarr, err := fnd1.FindNode(n2.Node, node.GenerateRandomNodeData().PublicKey())
@@ -40,11 +40,11 @@ func TestFindNodeProtocol_FindNode2(t *testing.T) {
 	sim := service.NewSimulator()
 
 	n1 := sim.NewNode()
-	rt1 := NewRoutingTable(cfg.SwarmConfig.RoutingTableBucketSize, n1.DhtID(), getTestLogger("FindNode - ").Logger)
+	rt1 := NewRoutingTable(cfg.DHTConfig.RoutingTableBucketSize, n1.DhtID(), getTestLogger("FindNode - ").Logger)
 	fnd1 := newFindNodeProtocol(n1, rt1)
 
 	n2 := sim.NewNode()
-	rt2 := NewRoutingTable(cfg.SwarmConfig.RoutingTableBucketSize, n2.DhtID(), getTestLogger("FindNode - ").Logger)
+	rt2 := NewRoutingTable(cfg.DHTConfig.RoutingTableBucketSize, n2.DhtID(), getTestLogger("FindNode - ").Logger)
 	fnd2 := newFindNodeProtocol(n2, rt2)
 
 	fnd2.rt.Update(randnode)
