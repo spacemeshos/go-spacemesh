@@ -294,7 +294,7 @@ func (s *swarm) sendMessageImpl(peerPubKey p2pcrypto.PublicKey, protocol string,
 
 // RegisterProtocol registers an handler for `protocol`
 func (s *swarm) RegisterProtocol(protocol string) chan service.Message {
-	mchan := make(chan service.Message, 100)
+	mchan := make(chan service.Message, config.ConfigValues.BufferSize)
 	s.protocolHandlerMutex.Lock()
 	s.protocolHandlers[protocol] = mchan
 	s.protocolHandlerMutex.Unlock()
@@ -327,6 +327,15 @@ func (s *swarm) processMessage(ime net.IncomingMessageEvent) {
 			// TODO: differentiate action on errors
 		}
 	}
+}
+
+
+// RegisterProtocolWithChannel configures and returns a channel for a given protocol.
+func (s *swarm) RegisterProtocolWithChannel(protocol string, ingressChannel chan service.Message) chan service.Message {
+        s.protocolHandlerMutex.Lock()
+        s.protocolHandlers[protocol] = ingressChannel
+        s.protocolHandlerMutex.Unlock()
+        return ingressChannel
 }
 
 // listenToNetworkMessages is waiting for network events from net as new connections or messages and handles them.

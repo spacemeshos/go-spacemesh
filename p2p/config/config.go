@@ -37,6 +37,7 @@ type Config struct {
 	NetworkID       int8          `mapstructure:"network-id"`
 	ResponseTimeout time.Duration `mapstructure:"response-timeout"`
 	SwarmConfig     SwarmConfig   `mapstructure:"swarm"`
+    BufferSize      int           `mapstructure:"buffer-size"`
 	TimeConfig      TimeConfig
 }
 
@@ -92,5 +93,6 @@ func DefaultConfig() Config {
 		ResponseTimeout: duration("15s"),
 		SwarmConfig:     SwarmConfigValues,
 		TimeConfig:      TimeConfigValues,
+        BufferSize:      100,
 	}
 }
