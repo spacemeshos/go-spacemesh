@@ -40,6 +40,8 @@ func init() {
 		config.P2P.NodeID, "Load node data by id (pub key) from local store")
 	RootCmd.PersistentFlags().BoolVar(&config.P2P.NewNode, "new-node",
 		config.P2P.NewNode, "Load node data by id (pub key) from local store")
+    RootCmd.PersistentFlags().IntVar(&config.P2P.BufferSize, "buffer-size",
+		config.P2P.BufferSize, "Size of the messages handler's buffer")
 	RootCmd.PersistentFlags().BoolVar(&config.P2P.SwarmConfig.Gossip, "gossip",
 		config.P2P.SwarmConfig.Gossip, "should we start a gossiping node?")
 	RootCmd.PersistentFlags().BoolVar(&config.P2P.SwarmConfig.Bootstrap, "bootstrap",

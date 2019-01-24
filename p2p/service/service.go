@@ -15,6 +15,7 @@ type Message interface {
 type Service interface {
 	Start() error
 	RegisterProtocol(protocol string) chan Message
+    RegisterProtocolWithChannel(protocol string, ingressChannel chan Message) chan Message
 	SendMessage(peerPubkey p2pcrypto.PublicKey, protocol string, payload []byte) error
 	SubscribePeerEvents() (conn chan p2pcrypto.PublicKey, disc chan p2pcrypto.PublicKey)
 	ProcessProtocolMessage(sender node.Node, protocol string, payload Data) error

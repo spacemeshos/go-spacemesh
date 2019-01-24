@@ -2,6 +2,7 @@ package sync
 
 import (
 	"bytes"
+    "github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -51,7 +52,7 @@ func NewBlockListener(net server.Service, bv BlockValidator, layers *mesh.Mesh, 
 		BlockValidator: bv,
 		Mesh:           layers,
 		Peers:          p2p.NewPeers(net),
-		MessageServer:  server.NewMsgServer(net, BlockProtocol, timeout, logger),
+		MessageServer:  server.NewMsgServer(net, BlockProtocol, timeout, make(chan service.Message, config.ConfigValues.BufferSize), logger),
 		Log:            logger,
 		semaphore:      make(chan struct{}, concurrency),
 		unknownQueue:   make(chan mesh.BlockID, 200), //todo tune buffer size + get buffer from config
