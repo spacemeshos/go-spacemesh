@@ -9,8 +9,6 @@ import (
 type Config struct {
 	NodesPerLayer    int32         `mapstructure:"nodes-per-layer"`
 	RoundTime        time.Duration `mapstructure:"phase-time"`
-	StartTime        time.Time     `mapstructure:"start-time"`
-	NetworkDelayMax  time.Duration `mapstructure:"network-delay-time"`
 	NumOfAdversaries int32         `mapstructure:"num-of-adversaries"`
 }
 
@@ -28,8 +26,6 @@ func DefaultConfig() Config {
 	return Config{
 		RoundTime:        duration("1s"),
 		NodesPerLayer:    200,
-		NetworkDelayMax:  duration("500ms"),
-		StartTime:        time.Now(),
 		NumOfAdversaries: 10,
 	}
 }
