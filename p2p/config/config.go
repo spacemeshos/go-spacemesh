@@ -31,7 +31,7 @@ type Config struct {
 	DialTimeout   time.Duration `mapstructure:"dial-timeout"`
 	ConnKeepAlive time.Duration `mapstructure:"conn-keepalive"`
 	NetworkID     int8          `mapstructure:"network-id"`
-	DHTConfig     DHTConfig     `mapstructure:"swarm"`
+	DHTConfig     DHTConfig     `mapstructure:"dht"`
     BufferSize    int           `mapstructure:"buffer-size"`
 }
 

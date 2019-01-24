@@ -9,19 +9,16 @@ data-folder = "~/.spacemesh-data"
 
 # Node Config
 [p2p]
-security-param = 20
-fast-sync = true
 tcp-port = 7513
 node-id = ""
 new-node= false
 dial-timeout = "1m"
 conn-keepalive = "48h"
 network-id = 1 # 0 - MainNet, 1 - TestNet
-response-timeout = "2s"
 buffer-size = 100
 
-# Node Swarm Config
-[p2p.swarm]
+# Node DHT Config
+[p2p.dht]
 bootstrap = false
 bucketsize = 20 # Routing table bucket size
 alpha = 3 # Routing table alpha
