@@ -1,4 +1,7 @@
 @echo off
+PowerShell.exe -NoProfile -ExecutionPolicy Bypass -Command "& './scripts/win/check-go-version.ps1'"
+if %ERRORLEVEL% GTR 0 exit /B 1
+
 call ./scripts/win/install-protobuf.bat
 
 go get github.com/golang/protobuf/protoc-gen-go
