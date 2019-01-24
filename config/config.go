@@ -14,8 +14,6 @@ import (
 
 const (
 	defaultConfigFileName  = "./config.toml"
-	defaultLogFileName     = "spacemesh.log"
-	defaultAccountFileName = "accounts"
 	defaultDataDirName     = "spacemesh"
 	defaultAppIntParam     = 20
 	defaultAppBoolParam    = 20
@@ -24,9 +22,6 @@ const (
 var (
 	defaultHomeDir    = filesystem.GetUserHomeDirectory()
 	defaultDataDir    = filepath.Join(defaultHomeDir, defaultDataDirName)
-	defaultConfigFile = filepath.Join(defaultHomeDir, defaultConfigFileName)
-	defaultLogDir     = filepath.Join(defaultHomeDir, defaultLogFileName)
-	defaultAccountDir = filepath.Join(defaultHomeDir, defaultAccountFileName)
 )
 
 // Config defines the top level configuration for a spacemesh node
@@ -40,15 +35,8 @@ type Config struct {
 
 // BaseConfig defines the default configuration options for spacemesh app
 type BaseConfig struct {
-	HomeDir string
-
 	DataDir string `mapstructure:"data-folder"`
 
-	ConfigFile string `mapstructure:"config"`
-
-	LogDir string `mapstructure:"log-dir"`
-
-	AccountDir string `mapstructure:"account-dir"`
 }
 
 // DefaultConfig returns the default configuration for a spacemesh node
@@ -65,11 +53,7 @@ func DefaultConfig() Config {
 // DefaultBaseConfig returns a default configuration for spacemesh
 func defaultBaseConfig() BaseConfig {
 	return BaseConfig{
-		HomeDir:    defaultHomeDir,
 		DataDir:    defaultDataDir,
-		ConfigFile: defaultConfigFileName,
-		LogDir:     defaultLogDir,
-		AccountDir: defaultAccountDir,
 	}
 }
 
@@ -97,9 +81,4 @@ func LoadConfig(fileLocation string, vip *viper.Viper) (err error) {
 	}
 
 	return nil
-}
-
-// SetConfigFile overrides the default config file path
-func (cfg *BaseConfig) SetConfigFile(file string) {
-	cfg.ConfigFile = file
 }
