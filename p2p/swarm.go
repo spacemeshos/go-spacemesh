@@ -667,7 +667,7 @@ loop:
 			}
 
 			s.outpeersMutex.Lock()
-			if _, ok := s.outpeers[pkstr]; ok {
+			if _,ok := s.outpeers[pkstr]; ok {
 				s.outpeersMutex.Unlock()
 				s.lNode.Debug("selected an already outbound peer. not counting that peer.", cne.n.String())
 				bad++

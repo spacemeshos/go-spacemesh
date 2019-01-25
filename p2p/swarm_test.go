@@ -3,15 +3,15 @@ package p2p
 import (
 	"github.com/spacemeshos/go-spacemesh/p2p/connectionpool"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht"
+	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
 
 	"context"
 	"errors"
 	"github.com/gogo/protobuf/proto"
-	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
-	"github.com/spacemeshos/go-spacemesh/p2p/message"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
@@ -390,7 +390,7 @@ func TestSwarm_MultipleMessagesFromMultipleSendersToMultipleProtocols(t *testing
 			}
 
 			payload := []byte(RandString(10))
-			err := p.SendMessage(p1.lNode.PublicKey().String(), protos[randProto], payload)
+			err := p.SendMessage(p1.lNode.PublicKey(), protos[randProto], payload)
 			assert.NoError(t, err)
 		}()
 	}

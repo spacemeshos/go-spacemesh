@@ -24,12 +24,12 @@ type NodeTestInstance interface {
 type IntegrationTestSuite struct {
 	suite.Suite
 
-	BootstrapNodesCount   int
+	BootstrapNodesCount int
 	BootstrappedNodeCount int
-	NeighborsCount        int
+	NeighborsCount int
 
 	BeforeHook func(idx int, s NodeTestInstance)
-	AfterHook  func(idx int, s NodeTestInstance)
+	AfterHook func(idx int, s NodeTestInstance)
 
 	boot  []*swarm
 	Instances []*swarm
@@ -97,6 +97,7 @@ func (its *IntegrationTestSuite) SetupSuite() {
 
 	// go interfaces suck with slices
 	its.Instances = swarm
+	its.boot = boot
 }
 
 func (its *IntegrationTestSuite) TearDownSuite() {

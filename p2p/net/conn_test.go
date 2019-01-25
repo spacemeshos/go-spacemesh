@@ -102,10 +102,9 @@ func TestErrClose(t *testing.T) {
 func TestClose(t *testing.T) {
 	netw := NewNetworkMock()
 	rwcam := NewReadWriteCloseAddresserMock()
-	rPub := generatePublicKey()
+	rPub := p2pcrypto.NewRandomPubkey()
 	formatter := delimited.NewChan(10)
-	conn := newConnection(rwcam, netw, formatter, rPub, netw.logger)
-	conn.SetSession(&NetworkSessionImpl{})
+	conn := newConnection(rwcam, netw, formatter, rPub, &networkSessionImpl{}, netw.logger)
 
 	go conn.beginEventProcessing()
 	conn.Close()
@@ -126,7 +125,6 @@ func TestDoubleClose(t *testing.T) {
 	<-conn.closeChan
 	time.Sleep(time.Millisecond * 10)
 	assert.Equal(t, 1, rwcam.CloseCount())
-	assert.Equal(t, conn.id, closedConn.ID())
 	conn.Close()
 
 	time.Sleep(100*time.Millisecond) // just check that we don't panic
