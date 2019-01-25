@@ -1,7 +1,6 @@
 package database
 
 import (
-	"github.com/syndtr/goleveldb/leveldb/util"
 	"reflect"
 )
 
@@ -74,7 +73,5 @@ func (iter *MemDatabaseIterator) Seek(key []byte) bool {
 	return false
 }
 
-func (iter *MemDatabaseIterator) SetReleaser(util.Releaser) { return }
 func (iter *MemDatabaseIterator) Release()                  { return }
-func (iter *MemDatabaseIterator) Valid() bool               { return false }
 func (iter *MemDatabaseIterator) Error() error              { return nil }
