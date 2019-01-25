@@ -40,9 +40,9 @@ func (its *IntegrationTestSuite) SetupSuite() {
 	swarm := make([]*swarm, its.BootstrappedNodeCount)
 
 	bootcfg := config.DefaultConfig()
-	bootcfg.DHTConfig.Bootstrap = false
-	bootcfg.DHTConfig.Gossip = true
-	bootcfg.DHTConfig.RandomConnections = its.NeighborsCount
+	bootcfg.DiscoveryConfig.Bootstrap = false
+	bootcfg.DiscoveryConfig.Gossip = true
+	bootcfg.DiscoveryConfig.RandomConnections = its.NeighborsCount
 
 	// start boot
 	for i := 0; i < len(boot); i++ {
@@ -58,10 +58,10 @@ func (its *IntegrationTestSuite) SetupSuite() {
 	}
 
 	cfg := config.DefaultConfig()
-	cfg.DHTConfig.Bootstrap = true
-	cfg.DHTConfig.Gossip = true
-	cfg.DHTConfig.RandomConnections = its.NeighborsCount
-	cfg.DHTConfig.BootstrapNodes = StringIdentifiers(boot...)
+	cfg.DiscoveryConfig.Bootstrap = true
+	cfg.DiscoveryConfig.Gossip = true
+	cfg.DiscoveryConfig.RandomConnections = its.NeighborsCount
+	cfg.DiscoveryConfig.BootstrapNodes = StringIdentifiers(boot...)
 
 	tm := time.Now()
 	testLog("Started up %d swarms", its.BootstrappedNodeCount)

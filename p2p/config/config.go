@@ -25,18 +25,18 @@ func duration(duration string) (dur time.Duration) {
 
 // Config defines the configuration options for the Spacemesh peer-to-peer networking layer
 type Config struct {
-	TCPPort       int           `mapstructure:"tcp-port"`
-	NodeID        string        `mapstructure:"node-id"`
-	NewNode       bool          `mapstructure:"new-node"`
-	DialTimeout   time.Duration `mapstructure:"dial-timeout"`
-	ConnKeepAlive time.Duration `mapstructure:"conn-keepalive"`
-	NetworkID     int8          `mapstructure:"network-id"`
-	DHTConfig     DHTConfig     `mapstructure:"dht"`
-    BufferSize    int           `mapstructure:"buffer-size"`
+	TCPPort         int             `mapstructure:"tcp-port"`
+	NodeID          string          `mapstructure:"node-id"`
+	NewNode         bool            `mapstructure:"new-node"`
+	DialTimeout     time.Duration   `mapstructure:"dial-timeout"`
+	ConnKeepAlive   time.Duration   `mapstructure:"conn-keepalive"`
+	NetworkID       int8            `mapstructure:"network-id"`
+	DiscoveryConfig DiscoveryConfig `mapstructure:"dht"`
+	BufferSize      int             `mapstructure:"buffer-size"`
 }
 
-// DHTConfig specifies swarm config params.
-type DHTConfig struct {
+// DiscoveryConfig specifies swarm config params.
+type DiscoveryConfig struct {
 	Gossip                 bool     `mapstructure:"gossip"`
 	Bootstrap              bool     `mapstructure:"bootstrap"`
 	RoutingTableBucketSize int      `mapstructure:"bucketsize"`
@@ -49,24 +49,24 @@ type DHTConfig struct {
 func DefaultConfig() Config {
 
 	// DHTConfigValues defines default values for swarm config params.
-	var DHTConfigValues = DHTConfig{
+	var DHTConfigValues = DiscoveryConfig{
 		Gossip:                 false,
 		Bootstrap:              false,
 		RoutingTableBucketSize: 20,
 		RoutingTableAlpha:      3,
 		RandomConnections:      5,
-		BootstrapNodes:         []string{ // these should be the spacemesh foundation bootstrap nodes
+		BootstrapNodes: 		[]string{ // these should be the spacemesh foundation bootstrap nodes
 		},
 	}
 
 	return Config{
-		TCPPort:       7513,
-		NodeID:        "",
-		NewNode:       false,
-		DialTimeout:   duration("1m"),
-		ConnKeepAlive: duration("48h"),
-		NetworkID:     TestNet,
-		DHTConfig:     DHTConfigValues,
-        BufferSize:    100,
+		TCPPort:         7513,
+		NodeID:          "",
+		NewNode:         false,
+		DialTimeout:     duration("1m"),
+		ConnKeepAlive:   duration("48h"),
+		NetworkID:       TestNet,
+		DiscoveryConfig: DHTConfigValues,
+		BufferSize:      100,
 	}
 }

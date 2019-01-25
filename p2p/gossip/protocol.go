@@ -45,7 +45,7 @@ type protocolMessage struct {
 type Protocol struct {
 	log.Log
 
-	config          config.DHTConfig
+	config          config.DiscoveryConfig
 	net             baseNetwork
 	localNodePubkey p2pcrypto.PublicKey
 
@@ -62,7 +62,7 @@ type Protocol struct {
 }
 
 // NewProtocol creates a new gossip protocol instance. Call Start to start reading peers
-func NewProtocol(config config.DHTConfig, base baseNetwork, localNodePubkey p2pcrypto.PublicKey, log2 log.Log) *Protocol {
+func NewProtocol(config config.DiscoveryConfig, base baseNetwork, localNodePubkey p2pcrypto.PublicKey, log2 log.Log) *Protocol {
 	// intentionally not subscribing to peers events so that the channels won't block in case executing Start delays
 	relayChan := base.RegisterProtocol(ProtocolName)
 	return &Protocol{

@@ -40,10 +40,10 @@ func TestGossip(t *testing.T) {
 			}
 
 			cfg := config.DefaultConfig()
-			cfg.DHTConfig.Bootstrap = true
-			cfg.DHTConfig.Gossip = true
-			cfg.DHTConfig.RandomConnections = rcon[i]
-			cfg.DHTConfig.BootstrapNodes = bnarr
+			cfg.DiscoveryConfig.Bootstrap = true
+			cfg.DiscoveryConfig.Gossip = true
+			cfg.DiscoveryConfig.RandomConnections = rcon[i]
+			cfg.DiscoveryConfig.BootstrapNodes = bnarr
 
 			for j := 0; j < nodes[i]; j++ {
 				wg.Add(1)

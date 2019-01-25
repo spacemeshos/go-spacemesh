@@ -38,7 +38,7 @@ var (
 // KadDHT represents the Distributed Hash Table, it holds the Routing Table local node cache. and a FindNode kademlia protocol.
 // KadDHT Is created with a localNode identity as base. (DhtID)
 type KadDHT struct {
-	config config.DHTConfig
+	config config.DiscoveryConfig
 
 	local *node.LocalNode
 
@@ -61,7 +61,7 @@ func (d *KadDHT) SelectPeers(qty int) []node.Node {
 }
 
 // New creates a new dht
-func New(node *node.LocalNode, config config.DHTConfig, service service.Service) *KadDHT {
+func New(node *node.LocalNode, config config.DiscoveryConfig, service service.Service) *KadDHT {
 	d := &KadDHT{
 		config:  config,
 		local:   node,

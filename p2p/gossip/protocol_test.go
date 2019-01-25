@@ -185,7 +185,7 @@ lop:
 //todo : more unit tests
 
 func TestNeighborhood_AddIncomingPeer(t *testing.T) {
-	n := NewProtocol(config.DefaultConfig().DHTConfig, newMockBaseNetwork(), newPubkey(t), log.New("tesT", "", ""))
+	n := NewProtocol(config.DefaultConfig().DiscoveryConfig, newMockBaseNetwork(), newPubkey(t), log.New("tesT", "", ""))
 	n.Start()
 	pub := p2pcrypto.NewRandomPubkey()
 	n.addPeer(pub)
@@ -202,7 +202,7 @@ func makePayload(t testing.TB, message *pb.ProtocolMessage) service.Data {
 
 func TestNeighborhood_Relay(t *testing.T) {
 	net := newMockBaseNetwork()
-	n := NewProtocol(config.DefaultConfig().DHTConfig, net, newPubkey(t), log.New("tesT", "", ""))
+	n := NewProtocol(config.DefaultConfig().DiscoveryConfig, net, newPubkey(t), log.New("tesT", "", ""))
 	n.Start()
 
 	addPeersAndTest(t, 20, n, net, true)
@@ -231,7 +231,7 @@ func TestNeighborhood_Relay(t *testing.T) {
 
 func TestNeighborhood_Broadcast(t *testing.T) {
 	net := newMockBaseNetwork()
-	n := NewProtocol(config.DefaultConfig().DHTConfig, net, newPubkey(t), log.New("tesT", "", ""))
+	n := NewProtocol(config.DefaultConfig().DiscoveryConfig, net, newPubkey(t), log.New("tesT", "", ""))
 	n.Start()
 	addPeersAndTest(t, 20, n, net, true)
 	net.msgwg.Add(20)
@@ -245,7 +245,7 @@ func TestNeighborhood_Broadcast(t *testing.T) {
 
 func TestNeighborhood_Relay2(t *testing.T) {
 	net := newMockBaseNetwork()
-	n := NewProtocol(config.DefaultConfig().DHTConfig, net, newPubkey(t), log.New("tesT", "", ""))
+	n := NewProtocol(config.DefaultConfig().DiscoveryConfig, net, newPubkey(t), log.New("tesT", "", ""))
 	n.Start()
 
 	pm := &pb.ProtocolMessage{
@@ -275,7 +275,7 @@ func TestNeighborhood_Relay2(t *testing.T) {
 
 func TestNeighborhood_Broadcast2(t *testing.T) {
 	net := newMockBaseNetwork()
-	n := NewProtocol(config.DefaultConfig().DHTConfig, net, newPubkey(t), log.New("tesT", "", ""))
+	n := NewProtocol(config.DefaultConfig().DiscoveryConfig, net, newPubkey(t), log.New("tesT", "", ""))
 	n.Start()
 
 	msgB, _ := newTestMessageData(t, newPubkey(t))
@@ -300,7 +300,7 @@ func TestNeighborhood_Broadcast3(t *testing.T) {
 	// todo : Fix this test, because the first message is broadcasted `Broadcast` attaches metadata to it with the current authoring timestamp
 	// to test that the the next message doesn't get processed by the protocol we must create an exact copy of the message produced at `Broadcast`
 	net := newMockBaseNetwork()
-	n := NewProtocol(config.DefaultConfig().DHTConfig, net, newPubkey(t), log.New("tesT", "", ""))
+	n := NewProtocol(config.DefaultConfig().DiscoveryConfig, net, newPubkey(t), log.New("tesT", "", ""))
 	n.Start()
 
 	addPeersAndTest(t, 20, n, net, true)
@@ -323,7 +323,7 @@ func TestNeighborhood_Broadcast4(t *testing.T) {
 	// todo : Fix this test, because the first message is broadcasted `Broadcast` attaches metadata to it with the current authoring timestamp
 	// to test that the the next message doesn't get processed by the protocol we must create an exact copy of the message produced at `Broadcast`
 	net := newMockBaseNetwork()
-	n := NewProtocol(config.DefaultConfig().DHTConfig, net, newPubkey(t), log.New("tesT", "", ""))
+	n := NewProtocol(config.DefaultConfig().DiscoveryConfig, net, newPubkey(t), log.New("tesT", "", ""))
 	n.Start()
 
 	addPeersAndTest(t, 20, n, net, true)
@@ -343,7 +343,7 @@ func TestNeighborhood_Broadcast4(t *testing.T) {
 
 func TestNeighborhood_Relay3(t *testing.T) {
 	net := newMockBaseNetwork()
-	n := NewProtocol(config.DefaultConfig().DHTConfig, net, newPubkey(t), log.New("tesT", "", ""))
+	n := NewProtocol(config.DefaultConfig().DiscoveryConfig, net, newPubkey(t), log.New("tesT", "", ""))
 	n.Start()
 
 	payload, _ := newTestMessageData(t, newPubkey(t))
@@ -374,7 +374,7 @@ func TestNeighborhood_Relay3(t *testing.T) {
 
 func TestNeighborhood_Start(t *testing.T) {
 	net := newMockBaseNetwork()
-	n := NewProtocol(config.DefaultConfig().DHTConfig, net, newPubkey(t), log.New("tesT", "", ""))
+	n := NewProtocol(config.DefaultConfig().DiscoveryConfig, net, newPubkey(t), log.New("tesT", "", ""))
 
 	// before Start
 	addPeersAndTest(t, 20, n, net, false)
@@ -386,7 +386,7 @@ func TestNeighborhood_Start(t *testing.T) {
 
 func TestNeighborhood_Close(t *testing.T) {
 	net := newMockBaseNetwork()
-	n := NewProtocol(config.DefaultConfig().DHTConfig, net, newPubkey(t), log.New("tesT", "", ""))
+	n := NewProtocol(config.DefaultConfig().DiscoveryConfig, net, newPubkey(t), log.New("tesT", "", ""))
 
 	n.Start()
 	addPeersAndTest(t, 20, n, net, true)
@@ -397,7 +397,7 @@ func TestNeighborhood_Close(t *testing.T) {
 
 func TestNeighborhood_Disconnect(t *testing.T) {
 	net := newMockBaseNetwork()
-	n := NewProtocol(config.DefaultConfig().DHTConfig, net, newPubkey(t), log.New("tesT", "", ""))
+	n := NewProtocol(config.DefaultConfig().DiscoveryConfig, net, newPubkey(t), log.New("tesT", "", ""))
 
 	n.Start()
 	pub1 := p2pcrypto.NewRandomPubkey()
@@ -437,7 +437,7 @@ func TestNeighborhood_Disconnect(t *testing.T) {
 
 func TestMarkAndValidateMessages(t *testing.T) {
 	net := newMockBaseNetwork()
-	n := NewProtocol(config.DefaultConfig().DHTConfig, net, newPubkey(t), log.New("tesT", "", ""))
+	n := NewProtocol(config.DefaultConfig().DiscoveryConfig, net, newPubkey(t), log.New("tesT", "", ""))
 
 	_, msg := newTestMessageData(t, newPubkey(t))
 	h := hash(666) // it doesn't really have to be the real hash

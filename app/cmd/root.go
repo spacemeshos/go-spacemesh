@@ -36,18 +36,18 @@ func init() {
 		config.P2P.NewNode, "Load node data by id (pub key) from local store")
     RootCmd.PersistentFlags().IntVar(&config.P2P.BufferSize, "buffer-size",
 		config.P2P.BufferSize, "Size of the messages handler's buffer")
-	RootCmd.PersistentFlags().BoolVar(&config.P2P.DHTConfig.Gossip, "gossip",
-		config.P2P.DHTConfig.Gossip, "should we start a gossiping node?")
-	RootCmd.PersistentFlags().BoolVar(&config.P2P.DHTConfig.Bootstrap, "bootstrap",
-		config.P2P.DHTConfig.Bootstrap, "Bootstrap the swarm")
-	RootCmd.PersistentFlags().IntVar(&config.P2P.DHTConfig.RoutingTableBucketSize, "bucketsize",
-		config.P2P.DHTConfig.RoutingTableBucketSize, "The rounding table bucket size")
-	RootCmd.PersistentFlags().IntVar(&config.P2P.DHTConfig.RoutingTableAlpha, "alpha",
-		config.P2P.DHTConfig.RoutingTableAlpha, "The rounding table Alpha")
-	RootCmd.PersistentFlags().IntVar(&config.P2P.DHTConfig.RandomConnections, "randcon",
-		config.P2P.DHTConfig.RoutingTableAlpha, "Number of random connections")
-	RootCmd.PersistentFlags().StringSliceVar(&config.P2P.DHTConfig.BootstrapNodes, "bootnodes",
-		config.P2P.DHTConfig.BootstrapNodes, "Number of random connections")
+	RootCmd.PersistentFlags().BoolVar(&config.P2P.DiscoveryConfig.Gossip, "gossip",
+		config.P2P.DiscoveryConfig.Gossip, "should we start a gossiping node?")
+	RootCmd.PersistentFlags().BoolVar(&config.P2P.DiscoveryConfig.Bootstrap, "bootstrap",
+		config.P2P.DiscoveryConfig.Bootstrap, "Bootstrap the swarm")
+	RootCmd.PersistentFlags().IntVar(&config.P2P.DiscoveryConfig.RoutingTableBucketSize, "bucketsize",
+		config.P2P.DiscoveryConfig.RoutingTableBucketSize, "The rounding table bucket size")
+	RootCmd.PersistentFlags().IntVar(&config.P2P.DiscoveryConfig.RoutingTableAlpha, "alpha",
+		config.P2P.DiscoveryConfig.RoutingTableAlpha, "The rounding table Alpha")
+	RootCmd.PersistentFlags().IntVar(&config.P2P.DiscoveryConfig.RandomConnections, "randcon",
+		config.P2P.DiscoveryConfig.RoutingTableAlpha, "Number of random connections")
+	RootCmd.PersistentFlags().StringSliceVar(&config.P2P.DiscoveryConfig.BootstrapNodes, "bootnodes",
+		config.P2P.DiscoveryConfig.BootstrapNodes, "Number of random connections")
 	/** ======================== TimeSync Flags ========================== **/
 	RootCmd.PersistentFlags().DurationVar(&config.TimeConfig.MaxAllowedDrift, "max-allowed-time-drift",
 		config.TimeConfig.MaxAllowedDrift, "When to close the app until user resolves time sync problems")
