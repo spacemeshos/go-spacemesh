@@ -178,8 +178,8 @@ func (cp *ConnectionPool) GetConnection(address string, remotePub p2pcrypto.Publ
 	// where it is possible that the connection will be established and all registered channels will be notified before
 	// the current registration
 	cp.pendMutex.Lock()
-	pendChan := make(chan dialResult)
 	_, found = cp.pending[remotePub.String()]
+	pendChan := make(chan dialResult)
 	cp.pending[remotePub.String()] = append(cp.pending[remotePub.String()], pendChan)
 	if !found {
 		// No one is waiting for a connection with the remote peer, need to call Dial

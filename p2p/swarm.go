@@ -367,7 +367,7 @@ Loop:
 	for {
 		select {
 		case con := <-closing:
-			go s.retryOrReplace(con.RemotePublicKey()) //todo notify dht?
+			go s.retryOrDisconnect(con.RemotePublicKey()) //todo notify dht?
 		case nce := <-newConnEvents:
 			s.dht.Update(nce.Node)
 			s.addIncomingPeer(nce.Node.PublicKey())
@@ -377,7 +377,7 @@ Loop:
 	}
 }
 
-func (s *swarm) retryOrReplace(key p2pcrypto.PublicKey) {
+func (s *swarm) retryOrDisconnect(key p2pcrypto.PublicKey) {
 	getpeer := s.dht.InternalLookup(node.NewDhtID(key.Bytes()))
 
 	if getpeer == nil {
@@ -496,9 +496,9 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 // ProcessProtocolMessage passes an already decrypted message to a protocol.
 func (s *swarm) ProcessProtocolMessage(sender node.Node, protocol string, data service.Data) error {
 	// route authenticated message to the reigstered protocol
-	s.protocolHandlerMutex.Lock()
+	s.protocolHandlerMutex.RLock()
 	msgchan := s.protocolHandlers[protocol]
-	s.protocolHandlerMutex.Unlock()
+	s.protocolHandlerMutex.RUnlock()
 	if msgchan == nil {
 		return ErrNoProtocol
 	}
@@ -542,8 +542,8 @@ func (s *swarm) publishDelPeer(peer p2pcrypto.PublicKey) {
 
 // SubscribePeerEvents lets clients listen on events inside the swarm about peers. first chan is new peers, second is deleted peers.
 func (s *swarm) SubscribePeerEvents() (conn chan p2pcrypto.PublicKey, disc chan p2pcrypto.PublicKey) {
-	in := make(chan p2pcrypto.PublicKey, s.config.SwarmConfig.RandomConnections) // todo. what size this should be ? maybe let client pass channels.
-	del := make(chan p2pcrypto.PublicKey, s.config.SwarmConfig.RandomConnections)
+	in := make(chan p2pcrypto.PublicKey, 30) // todo : the size should be determined after #269
+	del := make(chan p2pcrypto.PublicKey, 30)
 	s.peerLock.Lock()
 	s.newPeerSub = append(s.newPeerSub, in)
 	s.delPeerSub = append(s.delPeerSub, del)

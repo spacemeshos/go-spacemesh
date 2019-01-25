@@ -577,14 +577,43 @@ func Test_Swarm_getMorePeers(t *testing.T) {
 	res := n.getMorePeers(0) // this should'nt work
 	assert.Equal(t, res, 0)
 	assertNoNewPeerEvent(t, conn)
+}
+
+func Test_Swarm_getMorePeers2(t *testing.T) {
+	// test normal flow
+	numpeers := 3
+	cfg := config.DefaultConfig()
+	cfg.SwarmConfig.Bootstrap = false
+	cfg.SwarmConfig.Gossip = false
+	cfg.SwarmConfig.RandomConnections = numpeers
+	n := p2pTestNoStart(t, cfg)
+
+	conn, _ := n.SubscribePeerEvents()
 
 	mdht := new(dht.MockDHT)
 	n.dht = mdht
 	// this will return 0 peers because SelectPeers returns empty array when not set
 
-	res = n.getMorePeers(10)
+	res := n.getMorePeers(10)
 	assert.Equal(t, res, 0)
 	assertNoNewPeerEvent(t, conn)
+}
+
+
+func Test_Swarm_getMorePeers3(t *testing.T) {
+	// test normal flow
+	numpeers := 3
+	cfg := config.DefaultConfig()
+	cfg.SwarmConfig.Bootstrap = false
+	cfg.SwarmConfig.Gossip = false
+	cfg.SwarmConfig.RandomConnections = numpeers
+	n := p2pTestNoStart(t, cfg)
+
+	conn, _ := n.SubscribePeerEvents()
+
+
+	mdht := new(dht.MockDHT)
+	n.dht = mdht
 
 	testNode := node.GenerateRandomNodeData()
 	mdht.SelectPeersFunc = func(qty int) []node.Node {
@@ -599,12 +628,36 @@ func Test_Swarm_getMorePeers(t *testing.T) {
 	}
 
 	n.cPool = cpm
-	res = n.getMorePeers(1) // this should'nt work
+	res := n.getMorePeers(1) // this should'nt work
 	assert.Equal(t, res, 0)
-	cpm.f = nil // for next tests
 	assertNoNewPeerEvent(t, conn)
+}
 
-	res = n.getMorePeers(1)
+func Test_Swarm_getMorePeers4(t *testing.T) {
+	// test normal flow
+	numpeers := 3
+	cfg := config.DefaultConfig()
+	cfg.SwarmConfig.Bootstrap = false
+	cfg.SwarmConfig.Gossip = false
+	cfg.SwarmConfig.RandomConnections = numpeers
+	n := p2pTestNoStart(t, cfg)
+
+	conn, _ := n.SubscribePeerEvents()
+
+
+	mdht := new(dht.MockDHT)
+	n.dht = mdht
+
+	testNode := node.GenerateRandomNodeData()
+	mdht.SelectPeersFunc = func(qty int) []node.Node {
+		return []node.Node{testNode}
+	}
+
+	cpm := new(cpoolMock)
+
+	n.cPool = cpm
+
+	res := n.getMorePeers(1)
 	assert.Equal(t, 1, res)
 	assert.Equal(t, len(n.outpeers), 1)
 	assert.True(t, n.hasOutgoingPeer(testNode.PublicKey()))
@@ -612,19 +665,67 @@ func Test_Swarm_getMorePeers(t *testing.T) {
 	assertNewPeerEvent(t, testNode.PublicKey(), conn)
 
 	drainPeerEvents(conn)
+}
 
-	//todo remove the peer instead of counting plus one
-	//
-	//
+func Test_Swarm_getMorePeers5(t *testing.T) {
+	// test normal flow
+	numpeers := 3
+	cfg := config.DefaultConfig()
+	cfg.SwarmConfig.Bootstrap = false
+	cfg.SwarmConfig.Gossip = false
+	cfg.SwarmConfig.RandomConnections = numpeers
+	n := p2pTestNoStart(t, cfg)
+
+	conn, _ := n.SubscribePeerEvents()
+
+	//res := n.getMorePeers(0) // this should'nt work
+	//assert.Equal(t, res, 0)
+	//assertNoNewPeerEvent(t, conn)
+
+	mdht := new(dht.MockDHT)
+	n.dht = mdht
+
+	cpm := new(cpoolMock)
+
+	n.cPool = cpm
+
 	mdht.SelectPeersFunc = func(qty int) []node.Node {
 		return node.GenerateRandomNodesData(qty)
 	}
 
-	res = n.getMorePeers(numpeers)
+	res := n.getMorePeers(numpeers)
 	assert.Equal(t, res, numpeers)
-	assert.Equal(t, len(n.outpeers), numpeers+1) // there's already one inside
+	assert.Equal(t, len(n.outpeers), numpeers) // there's already one inside
 	assertNewPeerEvents(t, numpeers, conn)
 	drainPeerEvents(conn) // so they wont interrupt next test
+}
+
+func Test_Swarm_getMorePeers6(t *testing.T) {
+	// test normal flow
+	numpeers := 3
+	cfg := config.DefaultConfig()
+	cfg.SwarmConfig.Bootstrap = false
+	cfg.SwarmConfig.Gossip = false
+	cfg.SwarmConfig.RandomConnections = numpeers
+	n := p2pTestNoStart(t, cfg)
+
+	conn, _ := n.SubscribePeerEvents()
+
+	//res := n.getMorePeers(0) // this should'nt work
+	//assert.Equal(t, res, 0)
+	//assertNoNewPeerEvent(t, conn)
+
+	mdht := new(dht.MockDHT)
+	n.dht = mdht
+
+	cpm := new(cpoolMock)
+
+	n.cPool = cpm
+
+	mdht.SelectPeersFunc = func(qty int) []node.Node {
+		return node.GenerateRandomNodesData(qty)
+	}
+
 	//test inc peer
 	nd := node.GenerateRandomNodeData()
 	n.addIncomingPeer(nd.PublicKey())
@@ -633,7 +734,7 @@ func Test_Swarm_getMorePeers(t *testing.T) {
 	assertNewPeerEvents(t, 1, conn)
 	assertNewPeerEvent(t, nd.PublicKey(), conn)
 
-	//test replacing inc peer
+	//test not replacing inc peer
 	//
 	mdht.SelectPeersFunc = func(count int) []node.Node {
 		some := node.GenerateRandomNodesData(count - 1)
@@ -641,7 +742,7 @@ func Test_Swarm_getMorePeers(t *testing.T) {
 		return some
 	}
 
-	res = n.getMorePeers(numpeers)
+	res := n.getMorePeers(numpeers)
 	assert.Equal(t, res, numpeers-1)
 	assert.False(t, n.hasOutgoingPeer(nd.PublicKey()))
 	assert.True(t, n.hasIncomingPeer(nd.PublicKey()))
