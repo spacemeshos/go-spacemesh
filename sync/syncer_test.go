@@ -18,7 +18,12 @@ import (
 
 var conf = Configuration{2, 1 * time.Second, 1, 300, 10 * time.Millisecond}
 
-func SyncMockFactory(number int, conf Configuration, name string) (syncs []*Syncer, p2ps []*service.Node) {
+const (
+	levelDB = "LevelDB"
+	memoryDB = "MemoryDB"
+)
+
+func SyncMockFactory(number int, conf Configuration, name string, dbType string) (syncs []*Syncer, p2ps []*service.Node) {
 	nodes := make([]*Syncer, 0, number)
 	p2ps = make([]*service.Node, 0, number)
 	sim := service.NewSimulator()
@@ -26,7 +31,7 @@ func SyncMockFactory(number int, conf Configuration, name string) (syncs []*Sync
 		net := sim.NewNode()
 		name := fmt.Sprintf(name+"_%d", i)
 		l := log.New(name, "", "")
-		sync := NewSync(net, getMesh(name+"_"+time.Now().String()), BlockValidatorMock{}, conf, l)
+		sync := NewSync(net, getMesh(name+"_"+time.Now().String(), dbType), BlockValidatorMock{}, conf, l)
 		nodes = append(nodes, sync)
 		p2ps = append(p2ps, net)
 	}
@@ -45,7 +50,18 @@ type MeshValidatorMock struct{}
 func (m *MeshValidatorMock) HandleIncomingLayer(layer *mesh.Layer) {}
 func (m *MeshValidatorMock) HandleLateBlock(bl *mesh.Block)        {}
 
-func getMesh(id string) *mesh.Mesh {
+func getMeshWithLevelDB(id string) *mesh.Mesh {
+	time := time.Now()
+	bdb := database.NewLevelDbStore("blocks_test_"+id, nil, nil)
+	ldb := database.NewLevelDbStore("layers_test_"+id, nil, nil)
+	cv := database.NewLevelDbStore("contextually_valid_test_"+id, nil, nil)
+	odb := database.NewLevelDbStore("orphans_test_"+id+"_"+time.String(), nil, nil)
+
+	layers := mesh.NewMesh(ldb, bdb, cv, odb, &MeshValidatorMock{}, log.New(id, "", ""))
+	return layers
+}
+
+func getMeshWithMemoryDB(id string) *mesh.Mesh {
 	bdb := database.NewMemDatabase()
 	ldb := database.NewMemDatabase()
 	cv := database.NewMemDatabase()
@@ -54,8 +70,16 @@ func getMesh(id string) *mesh.Mesh {
 	return layers
 }
 
+func getMesh(dbType, id string) *mesh.Mesh {
+	if dbType == levelDB {
+		return getMeshWithLevelDB(id)
+	}
+
+	return getMeshWithMemoryDB(id)
+}
+
 func TestSyncer_Start(t *testing.T) {
-	syncs, _ := SyncMockFactory(2, conf, "TestSyncer_Start_")
+	syncs, _ := SyncMockFactory(2, conf, "TestSyncer_Start_", memoryDB)
 	sync := syncs[0]
 	defer sync.Close()
 	sync.SetLatestLayer(5)
@@ -77,7 +101,7 @@ func TestSyncer_Start(t *testing.T) {
 }
 
 func TestSyncer_Close(t *testing.T) {
-	syncs, _ := SyncMockFactory(2, conf, "TestSyncer_Close_")
+	syncs, _ := SyncMockFactory(2, conf, "TestSyncer_Close_", memoryDB)
 	sync := syncs[0]
 	sync.Start()
 	sync.Close()
@@ -89,7 +113,7 @@ func TestSyncer_Close(t *testing.T) {
 }
 
 func TestSyncProtocol_BlockRequest(t *testing.T) {
-	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_BlockRequest_")
+	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_BlockRequest_", memoryDB)
 	syncObj := syncs[0]
 	syncObj2 := syncs[1]
 	defer syncObj.Close()
@@ -103,7 +127,7 @@ func TestSyncProtocol_BlockRequest(t *testing.T) {
 }
 
 func TestSyncProtocol_LayerHashRequest(t *testing.T) {
-	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_LayerHashRequest_")
+	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_LayerHashRequest_", memoryDB)
 	syncObj1 := syncs[0]
 	defer syncObj1.Close()
 	syncObj2 := syncs[1]
@@ -118,7 +142,7 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 }
 
 func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
-	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_LayerIdsRequest_")
+	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_LayerIdsRequest_", memoryDB)
 	syncObj := syncs[0]
 	defer syncObj.Close()
 	syncObj1 := syncs[1]
@@ -150,7 +174,7 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 }
 
 func TestSyncProtocol_FetchBlocks(t *testing.T) {
-	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_LayerIdsRequest_")
+	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_LayerIdsRequest_", memoryDB)
 	syncObj1 := syncs[0]
 	defer syncObj1.Close()
 	syncObj2 := syncs[1]
@@ -197,7 +221,7 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 
 func TestSyncProtocol_SyncTwoNodes(t *testing.T) {
 
-	syncs, nodes := SyncMockFactory(2, conf, "TestSyncer_Start_")
+	syncs, nodes := SyncMockFactory(2, conf, "TestSyncer_Start_", memoryDB)
 	pm1 := getPeersMock([]p2p.Peer{nodes[1].PublicKey()})
 	pm2 := getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
 	syncObj1 := syncs[0]
@@ -253,9 +277,9 @@ func getPeersMock(peers []p2p.Peer) p2p.PeersImpl {
 	return *pm1
 }
 
-func TestSyncProtocol_SyncMultipleNodes(t *testing.T) {
+func syncTest(dpType string, t *testing.T) {
 
-	syncs, nodes := SyncMockFactory(4, conf, "SyncMultipleNodes_")
+	syncs, nodes := SyncMockFactory(4, conf, "SyncMultipleNodes_", dpType)
 	syncObj1 := syncs[0]
 	defer syncObj1.Close()
 	syncObj2 := syncs[1]
@@ -316,6 +340,19 @@ loop:
 	}
 }
 
+
+func TestSyncProtocol_PersistenceIntegration(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	syncTest(levelDB, t)
+}
+
+
+func TestSyncProtocol_SyncMultipleNodes(t *testing.T) {
+	syncTest(memoryDB, t)
+}
+
 // Integration
 
 type SyncIntegrationSuite struct {
@@ -341,7 +378,7 @@ func Test_TwoNodes_SyncIntegrationSuite(t *testing.T) {
 	i := 1
 	sis.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
 		l := log.New(fmt.Sprintf("%s_%d", sis.name, i), "", "")
-		sync := NewSync(s, getMesh(fmt.Sprintf("%s_%s", sis.name, time.Now())), BlockValidatorMock{}, conf, l)
+		sync := NewSync(s, getMesh(memoryDB, fmt.Sprintf("%s_%s", sis.name, time.Now())), BlockValidatorMock{}, conf, l)
 		sis.syncers = append(sis.syncers, sync)
 		i++
 	}
@@ -409,7 +446,7 @@ func Test_Multiple_SyncIntegrationSuite(t *testing.T) {
 	i := 1
 	sis.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
 		l := log.New(fmt.Sprintf("%s_%d", sis.name, i), "", "")
-		sync := NewSync(s, getMesh(fmt.Sprintf("%s_%d_%s", sis.name, i, time.Now())), BlockValidatorMock{}, conf, l)
+		sync := NewSync(s, getMesh(memoryDB, fmt.Sprintf("%s_%d_%s", sis.name, i, time.Now())), BlockValidatorMock{}, conf, l)
 		sis.syncers = append(sis.syncers, sync)
 		i++
 	}
