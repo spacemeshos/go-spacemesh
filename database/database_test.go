@@ -25,8 +25,6 @@ import (
 	"strconv"
 	"sync"
 	"testing"
-
-
 )
 
 func newTestLDB() (*database.LDBDatabase, func()) {

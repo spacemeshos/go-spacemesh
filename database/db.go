@@ -3,7 +3,6 @@ package database
 import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/syndtr/goleveldb/leveldb"
-	"github.com/syndtr/goleveldb/leveldb/iterator"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 )
 
@@ -15,7 +14,12 @@ type DB interface {
 	Close()
 }
 
-type Iterator iterator.Iterator
+type Iterator interface {
+	Next() bool
+	Key() []byte
+	Error() error
+	Release()
+}
 
 type LevelDB struct {
 	*leveldb.DB
