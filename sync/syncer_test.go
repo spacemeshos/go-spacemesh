@@ -57,15 +57,21 @@ func (m *MeshValidatorMock) HandleIncomingLayer(layer *mesh.Layer) {}
 func (m *MeshValidatorMock) HandleLateBlock(bl *mesh.Block)        {}
 func (m *MeshValidatorMock) RegisterLayerCallback(func(layerId mesh.LayerID)) {}
 
+type stateMock struct {}
+
+func (s *stateMock) ApplyTransactions(id state.LayerID, tx state.Transactions) (uint32, error){
+	return 0, nil
+}
+
 
 func getMeshWithLevelDB(id string) *mesh.Mesh {
-	time := time.Now()
+	//time := time.Now()
 	bdb := database.NewLevelDbStore("blocks_test_"+id, nil, nil)
 	ldb := database.NewLevelDbStore("layers_test_"+id, nil, nil)
 	cv := database.NewLevelDbStore("contextually_valid_test_"+id, nil, nil)
-	odb := database.NewLevelDbStore("orphans_test_"+id+"_"+time.String(), nil, nil)
+	//odb := database.NewLevelDbStore("orphans_test_"+id+"_"+time.String(), nil, nil)
 
-	layers := mesh.NewMesh(ldb, bdb, cv, odb, &MeshValidatorMock{}, log.New(id, "", ""))
+	layers := mesh.NewMesh(ldb, bdb, cv, &MeshValidatorMock{},&stateMock{}, log.New(id, "", ""))
 	return layers
 }
 
@@ -80,8 +86,8 @@ func getMeshWithMemoryDB(id string) *mesh.Mesh {
 	bdb := database.NewMemDatabase()
 	ldb := database.NewMemDatabase()
 	cv := database.NewMemDatabase()
-	odb := database.NewMemDatabase()
-	layers := mesh.NewMesh(ldb, bdb, cv, odb, &MeshValidatorMock{}, log.New(id, "", ""))
+	//odb := database.NewMemDatabase()
+	layers := mesh.NewMesh(ldb, bdb, cv, &MeshValidatorMock{},&stateMock{}, log.New(id, "", ""))
 	return layers
 }
 
@@ -225,33 +231,53 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	syncObj1.AddLayer(mesh.NewExistingLayer(2, []*mesh.Block{block3}))
 
 	ch, err := syncObj2.sendLayerHashRequest(n1.PublicKey(), 0)
-	hash := <-ch
-	assert.NoError(t, err, "Should not return error")
-	assert.Equal(t, "some hash representing the layer", string(hash.hash), "wrong block")
+	timeout := time.NewTimer(3 *time.Second)
+	var hash peerHashPair
+	select {
 
+	case <-timeout.C:
+		t.Error("timed out ")
+	case hash = <-ch:
+		assert.NoError(t, err, "Should not return error")
+		assert.Equal(t, "some hash representing the layer", string(hash.hash), "wrong block")
+	}
 	ch2, err2 := sendBlockRequest(syncObj2.MessageServer, n1.PublicKey(), block1.ID(), syncObj2.Log)
 	assert.NoError(t, err2, "Should not return error")
-	msg2 := <-ch2
-	assert.Equal(t, msg2.ID(), block1.ID(), "wrong block")
+	timeout = time.NewTimer(3 *time.Second)
+	select {
 
+	case <-timeout.C:
+		t.Error("timed out ")
+	case msg2 := <-ch2:
+		assert.Equal(t, msg2.ID(), block1.ID(), "wrong block")
+	}
 	ch, err = syncObj2.sendLayerHashRequest(n1.PublicKey(), 1)
 	assert.NoError(t, err, "Should not return error")
 	assert.Equal(t, "some hash representing the layer", string(hash.hash), "wrong block")
 
 	ch2, err2 = sendBlockRequest(syncObj2.MessageServer, n1.PublicKey(), block2.ID(), syncObj2.Log)
 	assert.NoError(t, err2, "Should not return error")
-	msg2 = <-ch2
-	assert.Equal(t, msg2.ID(), block2.ID(), "wrong block")
+	timeout = time.NewTimer(3 *time.Second)
+	select {
 
+	case <-timeout.C:
+		t.Error("timed out ")
+	case msg2 := <-ch2:
+		assert.Equal(t, msg2.ID(), block2.ID(), "wrong block")
+	}
 	ch, err = syncObj2.sendLayerHashRequest(n1.PublicKey(), 2)
 	assert.NoError(t, err, "Should not return error")
 	assert.Equal(t, "some hash representing the layer", string(hash.hash), "wrong block")
 
 	ch2, err2 = sendBlockRequest(syncObj2.MessageServer, n1.PublicKey(), block3.ID(), syncObj2.Log)
 	assert.NoError(t, err2, "Should not return error")
-	msg2 = <-ch2
-	assert.Equal(t, msg2.ID(), block3.ID(), "wrong block")
-
+	timeout = time.NewTimer(3 *time.Second)
+	select {
+	case <-timeout.C:
+		t.Error("timed out ")
+	case msg2 := <-ch2:
+		assert.Equal(t, msg2.ID(), block3.ID(), "wrong block")
+	}
 }
 
 func TestSyncProtocol_SyncTwoNodes(t *testing.T) {
@@ -297,7 +323,7 @@ loop:
 			t.Error("timed out ")
 			return
 		default:
-			if syncObj2.LatestSeenLayer() == 2 {
+			if syncObj2.LatestReceivedLayer() == 2 {
 				t.Log("done!")
 				break loop
 			}
@@ -366,9 +392,9 @@ loop:
 		case <-timeout:
 			t.Error("timed out ")
 		default:
-			if syncObj2.LatestSeenLayer() == 3 && syncObj3.LatestSeenLayer() == 3 {
+			if syncObj2.LatestReceivedLayer() == 3 && syncObj3.LatestReceivedLayer() == 3 {
 				t.Log("done!")
-				fmt.Println(syncObj2.LatestSeenLayer(), " ", syncObj3.LatestSeenLayer())
+				fmt.Println(syncObj2.LatestReceivedLayer(), " ", syncObj3.LatestReceivedLayer())
 				break loop
 			}
 		}
@@ -455,7 +481,7 @@ func (sis *syncIntegrationTwoNodes) TestSyncProtocol_TwoNodes() {
 			t.Error("timed out ")
 			return
 		default:
-			if syncObj1.LatestSeenLayer() == 3 {
+			if syncObj1.LatestReceivedLayer() == 3 {
 				t.Log("done!")
 				return
 			}
@@ -536,17 +562,17 @@ func (sis *syncIntegrationMultipleNodes) TestSyncProtocol_MultipleNodes() {
 			t.Error("timed out ")
 			goto end
 		default:
-			if syncObj2.LatestSeenLayer() == 3 || syncObj4.LatestSeenLayer() == 3 {
+			if syncObj2.LatestReceivedLayer() == 3 || syncObj4.LatestReceivedLayer() == 3 {
 				t.Log("done!")
 				goto end
 			}
 		}
 	}
 end:
-	log.Debug("sync 1 ", syncObj1.LatestSeenLayer())
-	log.Debug("sync 2 ", syncObj2.LatestSeenLayer())
-	log.Debug("sync 3 ", syncObj3.LatestSeenLayer())
-	log.Debug("sync 4 ", syncObj4.LatestSeenLayer())
-	log.Debug("sync 5 ", syncObj5.LatestSeenLayer())
+	log.Debug("sync 1 ", syncObj1.LatestReceivedLayer())
+	log.Debug("sync 2 ", syncObj2.LatestReceivedLayer())
+	log.Debug("sync 3 ", syncObj3.LatestReceivedLayer())
+	log.Debug("sync 4 ", syncObj4.LatestReceivedLayer())
+	log.Debug("sync 5 ", syncObj5.LatestReceivedLayer())
 	return
 }

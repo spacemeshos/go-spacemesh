@@ -225,6 +225,7 @@ func (sn *Node) sendMessageImpl(nodeID p2pcrypto.PublicKey, protocol string, pay
 		return nil
 	}
 	log.Debug("%v >> %v (%v)", sn.Node.PublicKey(), nodeID, payload)
+	panic("could not find " + protocol + " handler for node: " + nodeID.String())
 	return errors.New("could not find " + protocol + " handler for node: " + nodeID.String())
 }
 

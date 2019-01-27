@@ -230,7 +230,7 @@ func (proc *ConsensusProcess) validateRole(m *pb.HareMessage) bool {
 	}
 
 	// validate role
-	if !proc.oracle.Eligible(hashInstanceAndK(proc.instanceId, m.Message.K), proc.expectedCommitteeSize(m.Message.K), verifier.String(), Signature(m.Message.RoleProof)) {
+	if !proc.oracle.HareEligible(proc.instanceId, m.Message.K, proc.expectedCommitteeSize(m.Message.K), proc.signing.Verifier().String(), Signature(m.Message.RoleProof)) {
 		log.Warning("Role validation failed")
 		return false
 	}
@@ -315,7 +315,7 @@ func (proc *ConsensusProcess) sendMessage(msg *pb.HareMessage) {
 }
 
 func (proc *ConsensusProcess) onRoundEnd() {
-	log.Info("End of round: %d", proc.k)
+	//log.Info("End of round: %d", proc.k)
 
 	// reset trackers
 	switch proc.currentRound() {
@@ -541,7 +541,7 @@ func (proc *ConsensusProcess) isEligible() bool {
 
 // Returns the role matching the current round if eligible for this round, false otherwise
 func (proc *ConsensusProcess) currentRole() Role {
-	if proc.oracle.Eligible(hashInstanceAndK(proc.instanceId, proc.k), proc.expectedCommitteeSize(proc.k), proc.signing.Verifier().String(), proc.roleProof()) {
+	if proc.oracle.HareEligible(proc.instanceId, proc.k, proc.expectedCommitteeSize(proc.k), proc.signing.Verifier().String(), proc.roleProof()) {
 		if proc.currentRound() == Round2 {
 			return Leader
 		}

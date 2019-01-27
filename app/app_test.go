@@ -1,10 +1,15 @@
 package app
 
 import (
-	"github.com/spacemeshos/go-spacemesh/common"
+	"fmt"
+	"github.com/spacemeshos/go-spacemesh/address"
+	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/miner"
+	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/stretchr/testify/suite"
 	"math/big"
 	"os"
 	"testing"
@@ -15,7 +20,34 @@ import (
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 )
 
+type AppTestSuite struct {
+	suite.Suite
+
+	apps []*SpacemeshApp
+	dbs   []string
+}
+
+func (app *AppTestSuite) SetupTest(){
+	app.apps = make([]*SpacemeshApp,0,0)
+	app.dbs = make([]string,0,0)
+}
+
+func (app *AppTestSuite) TearDownTest(){
+
+	for _, ap := range app.apps{
+		ap.stopServices()
+	}
+
+	for _,dbinst := range app.dbs{
+		err := os.RemoveAll(dbinst)
+		if err != nil {
+			panic(fmt.Sprintf("what happened : %v", err))
+		}
+	}
+}
+
 func TestApp(t *testing.T) {
+	t.Skip()
 	filesystem.SetupTestSpacemeshDataFolders(t, "app_test")
 
 	// remove all injected test flags for now
@@ -40,20 +72,35 @@ func TestApp(t *testing.T) {
 
 }
 
-func TestMultipleNodes(t *testing.T){
+func (app *AppTestSuite) initMultipleInstances(t *testing.T,numOfInstances int){
 	net := service.NewSimulator()
+	storeFormat := "../tmp/state_"
+	runningName := 'a'
+	for i := 0; i<numOfInstances; i++ {
+		app.apps = append(app.apps, newSpacemeshApp())
+		store := storeFormat + string(runningName)
+		n := net.NewNode()
 
+		sgn := hare.NewMockSigning() //todo: shouldn't be any mock code here
+		pub, _ := crypto.NewPublicKey(sgn.Verifier().Bytes())
 
-	n := net.NewNode()
+		bo := oracle.NewBlockOracle(1, 2, pub.String())
+		hareOracle := oracle.NewHareOracle(1, pub.String())
 
-	receiver := net.NewNode()
+		err := app.apps[i].initServices(string(runningName), n,store, bo,bo,hareOracle)
+		assert.NoError(t, err)
+		app.apps[i].setupGenesis()
+		app.dbs = append(app.dbs, store)
+		runningName++
+	}
+}
 
-	App = newSpacemeshApp()
+func (app *AppTestSuite) TestMultipleNodes(){
+	app.T().Skip()
+	//EntryPointCreated <- true
 
-	EntryPointCreated <- true
-
-	addr := common.BytesToAddress([]byte{0x01})
-	dst := common.BytesToAddress([]byte{0x01})
+	addr := address.BytesToAddress([]byte{0x01})
+	dst := address.BytesToAddress([]byte{0x02})
 	tx := mesh.SerializableTransaction{}
 	tx.Amount = big.NewInt(10).Bytes()
 	tx.GasLimit =1
@@ -62,26 +109,43 @@ func TestMultipleNodes(t *testing.T){
 	tx.Price = big.NewInt(1).Bytes()
 
 	txbytes, _ := mesh.TransactionAsBytes(&tx)
-	n.Broadcast(miner.TxGossipChannel, txbytes)
-	_ ,err := App.initAndStartServices("a", n)
-	assert.NoError(t, err)
-	st2, err := App.initAndStartServices("b",receiver)
-	assert.NoError(t, err)
 
-	timeout := time.After(30 * time.Second)
+	app.initMultipleInstances(app.T(), 2)
+
+	for _, a := range app.apps{
+		a.startServices()
+	}
+
+	app.apps[0].P2P.Broadcast(miner.IncomingTxProtocol, txbytes)
+	timeout := time.After(250 * time.Second)
 
 
 	for {
 		select {
 		// Got a timeout! fail with a timeout error
 		case <-timeout:
-			t.Error("timed out ")
+			app.T().Error("timed out ")
 		default:
-			if big.NewInt(10) == st2.GetBalance(dst) {
-				return
+			for _, ap := range app.apps {
+				ok := 0
+
+				if big.NewInt(10).Cmp(ap.state.GetBalance(dst)) == 0 {
+					for _, ap2 := range app.apps {
+						assert.Equal(app.T(), ap.state.IntermediateRoot(false), ap2.state.IntermediateRoot(false))
+						if ap.state.IntermediateRoot(false) == ap2.state.IntermediateRoot(false){
+							ok++
+						}
+					}
+					if ok == len(app.apps){
+						return
+					}
+				}
 			}
+			time.Sleep(1 *time.Second)
 		}
 	}
+}
 
-
+func TestAppTestSuite(t *testing.T){
+	suite.Run(t, new(AppTestSuite))
 }

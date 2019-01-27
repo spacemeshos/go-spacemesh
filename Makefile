@@ -54,7 +54,7 @@ $(PLATFORMS):
 .PHONY: $(PLATFORMS)
 
 test:
-	go test -v -short -p 1 ./...
+	go test -short -p 1 ./...
 .PHONY: test
 
 test-tidy:

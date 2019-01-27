@@ -8,7 +8,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"sync"
 	"sync/atomic"
-	"time"
 )
 
 type layerHandler struct {
@@ -67,6 +66,8 @@ func (m *meshDB) getLayer(index LayerID) (*Layer, error) {
 	return l, nil
 }
 
+// addBlock adds a new block to block DB and updates the correct layer with the new block
+// if this is the first occurence of the layer a new layer object will be inserted into layerDB as well
 func (m *meshDB) addBlock(block *Block) error {
 	_, err := m.blocks.Get(block.ID().ToBytes())
 	if err == nil {
@@ -126,18 +127,24 @@ func (m *meshDB) addLayer(layer *Layer) error {
 		return errors.New("could not encode layer block ids")
 	}
 
-	log.Info("putting layer %v", layer.Index())
 	m.layers.Put(layer.Index().ToBytes(), w)
 	return nil
 }
 
 func (m *meshDB) updateLayerIds(block *Block) error {
 	ids, err := m.layers.Get(block.LayerIndex.ToBytes())
-	blockIds, err := bytesToBlockIds(ids)
+	var blockIds map[BlockID]bool
 	if err != nil {
-		return errors.New("could not get all blocks from database ")
+		//layer doesnt exist, need to insert new layer
+		ids = []byte{}
+		blockIds = make(map[BlockID]bool)
+	} else {
+		blockIds, err = bytesToBlockIds(ids)
+		if err != nil {
+			return errors.New("could not get all blocks from database ")
+		}
 	}
-
+	log.Info("added block %v to layer %v", block.ID(), block.LayerIndex)
 	blockIds[block.ID()] = true
 	w, err := blockIdsAsBytes(blockIds)
 	if err != nil {
@@ -172,19 +179,17 @@ func (m *meshDB) handleLayerBlocks(ll *layerHandler) {
 				continue
 			}
 			if b, err := m.blocks.Get(bl.ID().ToBytes()); err == nil && b != nil {
-				log.Error("bl ", bl, " already in database ")
+				log.Error("bl ", bl.ID(), " already in database ")
 				continue
 			}
 
 			if err := m.blocks.Put(bl.ID().ToBytes(), bytes); err != nil {
-				log.Error("could not add bl to ", bl, " database ", err)
+				log.Error("could not add bl to ", bl.ID(), " database ", err)
 				continue
 			}
 
 			m.updateLayerIds(bl)
 			m.tryDeleteHandler(ll) //try delete handler when done to avoid leak
-		default:
-			time.Sleep(50 * time.Millisecond)
 		}
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"github.com/golang-collections/go-datastructures/bitarray"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"sync"
 )
 
 type LayerQueue chan *Layer
@@ -28,6 +29,7 @@ type Algorithm struct {
 	remainingBlockIds uint32
 	totalBlocks       uint32
 	layerReadyCallback func(layerId mesh.LayerID)
+	mu 					sync.Mutex
 }
 
 func NewAlgorithm(layerSize uint32, cachedLayers uint32 ) Algorithm {
@@ -175,7 +177,9 @@ func (alg *Algorithm) recycleLayer(l *Layer) {
 		delete(alg.allBlocks, block.Id)
 		alg.zeroBitColumn(uint64(id))
 	}
+	alg.mu.Lock()
 	delete(alg.layers, l.index)
+	alg.mu.Unlock()
 }
 
 func (alg *Algorithm) assignIdForBlock(blk *TortoiseBlock) uint32 {
@@ -202,7 +206,9 @@ func (alg *Algorithm) assignIdForBlock(blk *TortoiseBlock) uint32 {
 
 func (alg *Algorithm) HandleIncomingLayer(ll *mesh.Layer) {
 	l := FromLayerToTortoiseLayer(ll)
+	alg.mu.Lock()
 	alg.layers[l.index] = l
+	alg.mu.Unlock()
 	alg.layerQueue <- l
 	if len(alg.layerQueue) >= int(alg.cachedLayers) {
 		layer := <-alg.layerQueue
@@ -218,10 +224,11 @@ func (alg *Algorithm) HandleIncomingLayer(ll *mesh.Layer) {
 	if l.index <= 0{
 		return
 	}
-
+	alg.mu.Lock()
 	if _, exist := alg.layers[l.index -1]; exist {
 		alg.layerReadyCallback(mesh.LayerID(l.index -1))
 	}
+	alg.mu.Unlock()
 }
 
 func (alg *Algorithm) HandleLateBlock(b *mesh.Block) {

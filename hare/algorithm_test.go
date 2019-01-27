@@ -42,7 +42,7 @@ type mockRolacle struct {
 	isEligible bool
 }
 
-func (mr *mockRolacle) Eligible(id uint32, committeeSize int, pubKey string, proof []byte) bool {
+func (mr *mockRolacle) HareEligible(instanceID InstanceId, K uint32, committeeSize int, pubKey string, proof []byte) bool {
 	return mr.isEligible
 }
 

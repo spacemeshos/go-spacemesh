@@ -8,7 +8,7 @@ message SimpleMessage {
 }
 
 message AccountId {
-    bytes address =1;
+    string address =1;
 }
 
 message TransferFunds {
@@ -19,7 +19,7 @@ message TransferFunds {
 }
 
 message SignedTransaction {
-    bytes txData = 1;
+    string txData = 1;
 }
 
 message BroadcastMessage {

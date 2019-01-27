@@ -7,6 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/state"
 	"math/big"
 	"sort"
+	"strconv"
 	"sync"
 	"sync/atomic"
 )
@@ -72,7 +73,7 @@ func SerializableTransaction2StateTransaction(tx *SerializableTransaction) *stat
 	amount := big.Int{}
 	amount.SetBytes(tx.Amount)
 
-	return state.NewTransaction(tx.AccountNonce, tx.Origin, *tx.Recipient, &price, tx.GasLimit, &amount)
+	return state.NewTransaction(tx.AccountNonce, tx.Origin, *tx.Recipient, &amount, tx.GasLimit, &price)
 }
 
 func (m *Mesh) IsContexuallyValid(b BlockID) bool {
@@ -84,7 +85,7 @@ func (m *Mesh) VerifiedLayer() uint32 {
 	return atomic.LoadUint32(&m.verifiedLayer)
 }
 
-func (m *Mesh) LatestSeenLayer() uint32 { //maybe switch names with latestlayer?
+func (m *Mesh) LatestReceivedLayer() uint32 { //maybe switch names with latestlayer?
 	return atomic.LoadUint32(&m.lastSeenLayer)
 }
 
@@ -103,10 +104,23 @@ func (m *Mesh) SetLatestLayer(idx uint32) {
 	}
 }
 
+func (m *Mesh) CreateLayer(lid LayerID) (*Layer, error){
+	layer, err := m.getLayer(lid)//m.orphanBlocks[lid]
+	if err != nil {
+		panic("no blocks received for layer" + strconv.Itoa(int(lid)))
+	}
+
+	m.Log.Info("Ive created a new layer %v with %v blocks %v txs" , lid, len(layer.blocks))
+	l := NewExistingLayer(lid, layer.blocks)
+
+	m.AddLayer(l)
+	return l, nil
+}
+
 func (m *Mesh) AddLayer(layer *Layer) error {
 	m.lMutex.Lock()
 	defer m.lMutex.Unlock()
-	count := LayerID(m.LatestSeenLayer())
+	count := LayerID(m.LatestReceivedLayer())
 	if count > layer.Index() {
 		m.Debug("can't add layer ", layer.Index(), "(already exists)")
 		return errors.New("can't add layer (already exists)")
@@ -127,10 +141,13 @@ func (m *Mesh) ValidateLayer(layer *Layer){
 }
 
 func (m *Mesh) LayerCompleteCallback(layerId LayerID){
+	m.Log.Info("layer %v is complete", layerId)
 	l, err := m.getLayer(layerId)
 	atomic.StoreUint32(&m.verifiedLayer, uint32(layerId))
 	if err != nil {
-		panic("wtf - there was a race?")
+		m.Log.Error("layer %v not found", layerId)
+		return
+		//panic("wtf - there was a race?")
 	}
 
 	txs := make([]*state.Transaction,0,len(l.blocks))
@@ -145,7 +162,12 @@ func (m *Mesh) LayerCompleteCallback(layerId LayerID){
 			txs = append(txs, SerializableTransaction2StateTransaction(&tx))
 		}
 	}
-	m.state.ApplyTransactions(state.LayerID(layerId), txs)
+	m.Log.Info("received %v txs in layer %v num of blocks: %v", len(txs), layerId, len(l.blocks))
+	x, err := m.state.ApplyTransactions(state.LayerID(layerId), txs)
+	if err != nil {
+		m.Log.Error("cannot apply transactions %v", err)
+	}
+	m.Log.Info("applied %v transactions", x)
 
 }
 
@@ -180,6 +202,8 @@ func (m *Mesh) AddBlock(block *Block) error {
 
 //todo better thread safety
 func (m *Mesh) handleOrphanBlocks(block *Block) {
+	m.orphMutex.Lock()
+	defer m.orphMutex.Unlock()
 	if _, ok := m.orphanBlocks[block.LayerIndex]; !ok {
 		m.orphanBlocks[block.LayerIndex] = make(map[BlockID]struct{})
 	}
@@ -188,7 +212,7 @@ func (m *Mesh) handleOrphanBlocks(block *Block) {
 	for _, b := range block.ViewEdges {
 		for _, layermap := range m.orphanBlocks{
 			if _, has := layermap[b]; has {
-				log.Debug("delete block ", b, "from orphans")
+				m.Log.Info("delete block ", b, "from orphans")
 				delete(layermap, b)
 				atomic.AddInt32(&m.orphanBlockCount, -1)
 				break
@@ -199,8 +223,8 @@ func (m *Mesh) handleOrphanBlocks(block *Block) {
 }
 
 func (m *Mesh) GetOrphanBlocksByLayerId(layerId LayerID) []BlockID{
-	m.orphMutex.Lock()
-	defer m.orphMutex.Unlock()
+	m.orphMutex.RLock()
+	defer m.orphMutex.RUnlock()
 	if keys, has := m.orphanBlocks[layerId]; has {
 		ids := make([]BlockID, 0, len(keys))
 
@@ -215,10 +239,27 @@ func (m *Mesh) GetOrphanBlocksByLayerId(layerId LayerID) []BlockID{
 
 //todo better thread safety
 func (m *Mesh) GetOrphanBlocks() []BlockID {
-	m.orphMutex.Lock()
-	defer m.orphMutex.Unlock()
+	m.orphMutex.RLock()
+	defer m.orphMutex.RUnlock()
 	keys := make([]BlockID, 0, m.orphanBlockCount)
 	for _, val := range m.orphanBlocks {
+		for bid := range val {
+			keys = append(keys, bid)
+		}
+	}
+
+	return keys
+}
+
+//todo better thread safety
+func (m *Mesh) GetOrphanBlocksExcept(l LayerID) []BlockID {
+	m.orphMutex.RLock()
+	defer m.orphMutex.RUnlock()
+	keys := make([]BlockID, 0, m.orphanBlockCount)
+	for key, val := range m.orphanBlocks {
+		if key == l {
+			continue
+		}
 		for bid := range val {
 			keys = append(keys, bid)
 		}
@@ -239,8 +280,4 @@ func (m *Mesh) GetContextualValidity(id BlockID) (bool, error) {
 func (m *Mesh) Close() {
 	m.Debug("closing mDB")
 	m.meshDB.Close()
-}
-
-func (m *Mesh) ValidateBlock(b *Block) bool{
-	return true //todo: implement this by some rules :)
 }

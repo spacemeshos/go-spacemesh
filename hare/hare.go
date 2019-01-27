@@ -148,20 +148,21 @@ func (h *Hare) onTick(id mesh.LayerID) {
 		h.lastLayer = id
 	}
 	h.layerLock.Unlock()
-
-	ti := time.NewTimer(h.networkDelta)
-	select {
-	case <-ti.C:
-		break // keep going
-	case <-h.CloseChannel():
-		// closed while waiting the delta
-		return
-	}
+	//
+	//ti := time.NewTimer(h.networkDelta)
+	//select {
+	//case <-ti.C:
+	//	break // keep going
+	//case <-h.CloseChannel():
+	//	// closed while waiting the delta
+	//	return
+	//}
 
 	// retrieve set form orphan blocks
 	blocks := h.obp.GetOrphanBlocksByLayerId(id -1)
 
 	set := NewEmptySet(len(blocks))
+	log.Info("received %v new blocks ", len(blocks))
 
 	for _, b := range blocks {
 		// todo: figure out real type of blockid

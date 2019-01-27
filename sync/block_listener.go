@@ -24,6 +24,7 @@ type BlockListener struct {
 	*server.MessageServer
 	p2p.Peers
 	*mesh.Mesh
+	BlockValidator
 	log.Log
 	bufferSize   int
 	semaphore    chan struct{}
@@ -47,6 +48,7 @@ func (bl *BlockListener) Start() {
 	if atomic.CompareAndSwapUint32(&bl.startLock, 0, 1) {
 		go bl.run()
 		go bl.ListenToGossipBlocks()
+		go bl.onTick()
 	}
 }
 
@@ -55,10 +57,10 @@ func (bl *BlockListener) OnNewBlock(b *mesh.Block) {
 }
 
 
-func NewBlockListener(net server.Service, layers *mesh.Mesh, timeout time.Duration, concurrency int, clock TickProvider, logger log.Log) *BlockListener {
+func NewBlockListener(net server.Service, bv BlockValidator, layers *mesh.Mesh, timeout time.Duration, concurrency int, clock TickProvider, logger log.Log) *BlockListener {
 
 	bl := BlockListener{
-
+		BlockValidator: bv,
 		Mesh:           layers,
 		Peers:          p2p.NewPeers(net),
 		MessageServer:  server.NewMsgServer(net, BlockProtocol, timeout, make(chan service.DirectMessage, config.ConfigValues.BufferSize), logger),
@@ -87,8 +89,9 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 				data.ReportValidation(NewBlockProtocol, false)
 				break
 			}
-			if bl.EligibleBlock(&blk) {
-				data.ReportValidation(NewBlockProtocol, true)
+
+			if bl.EligibleBlock(&blk){
+data.ReportValidation(NewBlockProtocol, true)
 				err := bl.AddBlock(&blk)
 				if err != nil {
 					log.Info("Block already received")
@@ -98,10 +101,10 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 			} else {
 				data.ReportValidation(NewBlockProtocol, false)
 			}
-
 		}
 	}
 }
+
 
 func (bl *BlockListener) run() {
 	for {
@@ -116,17 +119,27 @@ func (bl *BlockListener) run() {
 				defer func() { <-bl.semaphore }()
 				bl.FetchBlock(id)
 			}()
+		}
+	}
+}
 
+func (bl *BlockListener) onTick() {
+	for {
+		select {
+		case <-bl.exit:
+			bl.Logger.Info("run stopped")
+			return
 		case newLayer := <-bl.tick: //todo: should this be here or in own loop?
 			if newLayer == 0 {
 				break
 			}
-			l, err := bl.GetLayer(newLayer -1)
+			//log.Info("new layer tick in listener")
+			l, err := bl.GetLayer(newLayer - 1)//bl.CreateLayer(newLayer - 1)
 			if err != nil {
-				log.Error("layer %v not received layer : %v",newLayer -1 ,err)
+				log.Error("layer %v not received layer : %v", newLayer-1, err)
 				break
 			}
-			bl.Mesh.ValidateLayer(l)
+			go bl.Mesh.ValidateLayer(l)
 		}
 	}
 }

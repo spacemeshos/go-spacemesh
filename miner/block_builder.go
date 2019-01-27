@@ -27,7 +27,7 @@ const IncomingTxProtocol = "TxGossip"
 
 type BlockBuilder struct {
 	minerID string // could be a pubkey or what ever. the identity we're claiming to be as miners.
-
+	log.Log
 	beginRoundEvent  chan mesh.LayerID
 	stopChan         chan struct{}
 	newTrans         chan *mesh.SerializableTransaction
@@ -42,10 +42,15 @@ type BlockBuilder struct {
 	started          bool
 }
 
+
+
+
+
 func NewBlockBuilder(minerID string, net p2p.Service, beginRoundEvent chan mesh.LayerID, weakCoin WeakCoinProvider,
-	orph OrphanBlockProvider, hare HareResultProvider, blockOracle oracle.BlockOracle) BlockBuilder {
+	orph OrphanBlockProvider, hare HareResultProvider, blockOracle oracle.BlockOracle, lg log.Log) BlockBuilder {
 	return BlockBuilder{
 		minerID:          minerID,
+		Log : lg,
 		beginRoundEvent:  beginRoundEvent,
 		stopChan:         make(chan struct{}),
 		newTrans:         make(chan *mesh.SerializableTransaction),
@@ -119,14 +124,14 @@ func (t *BlockBuilder) AddTransaction(nonce uint64, origin, destination address.
 	return nil
 }
 
-func (t *BlockBuilder) createBlock(minerID string, id mesh.LayerID, txs []mesh.SerializableTransaction) mesh.Block {
+func (t *BlockBuilder) createBlock(id mesh.LayerID, txs []mesh.SerializableTransaction) mesh.Block {
 	res, err := t.hareResult.GetResult(id)
 	if err != nil {
-		log.Error("didnt receive hare result for layer %v", id)
+		t.Log.Error("didnt receive hare result for layer %v", id)
 	}
 	b := mesh.Block{
 
-		MinerID: minerID,
+		MinerID: t.minerID,
 		Id :          mesh.BlockID(rand.Int63()),
 		LayerIndex:   id,
 		Data:         nil,
@@ -136,20 +141,22 @@ func (t *BlockBuilder) createBlock(minerID string, id mesh.LayerID, txs []mesh.S
 		BlockVotes : res,
 		ViewEdges:    t.orphans.GetOrphanBlocksExcept(id),
 	}
-	log.Info("created block in layer %v id %v, num of transactions %v", b.LayerIndex, b.Id, len(b.Txs))
+	t.Log.Info("Iv'e created block in layer %v id %v, num of transactions %v", b.LayerIndex, b.Id, len(b.Txs))
 
 	return b
 }
 
 func (t *BlockBuilder) listenForTx() {
+	t.Log.Info("start listening for txs")
 	for {
 		select {
 		case <-t.stopChan:
 			return
 		case data := <-t.txGossipChannel:
+			t.Log.Info("got new tx")
 			x, err := mesh.BytesAsTransaction(bytes.NewReader(data.Bytes()))
 			if err != nil {
-				log.Error("cannot parse incoming TX")
+				t.Log.Error("cannot parse incoming TX")
 				data.ReportValidation(IncomingTxProtocol, false)
 				break
 			}
@@ -162,32 +169,29 @@ func (t *BlockBuilder) listenForTx() {
 func (t *BlockBuilder) acceptBlockData() {
 	for {
 		select {
-		case <-t.stopChan:
-			return
 
-		case id := <-t.beginRoundEvent:
+			case <-t.stopChan:
+				return
 
-			if !t.blockOracle.Eligible(id, t.minerID) {
-				break
-			}
-
-			txList := t.transactionQueue[:common.Min(len(t.transactionQueue), MaxTransactionsPerBlock)]
-			t.transactionQueue = t.transactionQueue[common.Min(len(t.transactionQueue), MaxTransactionsPerBlock):]
-			blk := t.createBlock(t.minerID, id, txList)
-
-			go func() {
-				bytes, err := mesh.BlockAsBytes(blk)
-				if err != nil {
-					log.Error("cannot serialize block %v", err)
-					return
+			case id := <-t.beginRoundEvent:
+				if !t.blockOracle.MiningEligible(id, t.minerID) {
+					break
 				}
-				t.network.Broadcast(meshSync.NewBlockProtocol, bytes)
-			}()
 
-			// todo: else what do we do with all these txs ?!
+				txList := t.transactionQueue[:common.Min(len(t.transactionQueue), MaxTransactionsPerBlock)]
+				t.transactionQueue = t.transactionQueue[common.Min(len(t.transactionQueue), MaxTransactionsPerBlock):]
+				blk := t.createBlock(id, txList)
+				go func() {
+					bytes, err := mesh.BlockAsBytes(blk)
+					if err != nil {
+						t.Log.Error("cannot serialize block %v", err)
+						return
+					}
+					t.network.Broadcast(meshSync.NewBlockProtocol, bytes)
+				}()
 
-		case tx := <-t.newTrans:
-			t.transactionQueue = append(t.transactionQueue, *tx)
+			case tx := <- t.newTrans:
+				t.transactionQueue = append(t.transactionQueue,*tx)
 		}
 	}
 }

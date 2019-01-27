@@ -11,6 +11,7 @@ import (
 //This also send the current layerID which is calculated from the number of ticks passed since epoch
 type LayerTimer chan mesh.LayerID
 
+
 type Ticker struct {
 	subscribes   []LayerTimer
 	currentLayer mesh.LayerID
@@ -19,6 +20,7 @@ type Ticker struct {
 	startEpoch   time.Time
 	time         Clock
 	stop         chan struct{}
+	ids map[LayerTimer]int
 }
 
 type Clock interface {
@@ -39,6 +41,7 @@ func NewTicker(time Clock, tickInterval time.Duration, startEpoch time.Time) *Ti
 		startEpoch:   startEpoch,
 		time:         time,
 		stop:         make(chan struct{}),
+		ids : make(map[LayerTimer]int),
 	}
 }
 
@@ -52,15 +55,20 @@ func (t *Ticker) Stop() {
 
 func (t *Ticker) notifyOnTick() {
 	t.m.Lock()
+	defer t.m.Unlock()
 	for _, ch := range t.subscribes {
+
 		ch <- t.currentLayer
+		//log.Info("iv'e notified number : %v", t.ids[ch])
 	}
-	t.m.Unlock()
+	//log.Info("Ive notified all")
+
 }
 
 func (t *Ticker) Subscribe() LayerTimer {
-	ch := make(LayerTimer, 2)
+	ch := make(LayerTimer)
 	t.m.Lock()
+	t.ids[ch] = len(t.ids)
 	t.subscribes = append(t.subscribes, ch)
 	t.m.Unlock()
 

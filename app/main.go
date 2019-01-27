@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/seehuhn/mt19937"
+	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/consensus"
 	"github.com/spacemeshos/go-spacemesh/crypto"
@@ -12,11 +13,11 @@ import (
 	hareConfig "github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/miner"
+	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/spacemeshos/go-spacemesh/sync"
 	"github.com/spf13/pflag"
-	"math/big"
 	"math/rand"
 	"os"
 	"os/signal"
@@ -44,6 +45,18 @@ type SpacemeshApp struct {
 	NodeInitCallback chan bool
 	grpcAPIService   *api.SpacemeshGrpcService
 	jsonAPIService   *api.JSONHTTPServer
+
+	blockListener 	*sync.BlockListener
+	db				database.Database
+	state 			*state.StateDB
+	blockProducer 	*miner.BlockBuilder
+	mesh 			*mesh.Mesh
+	clock 			*timesync.Ticker
+	hare 			*hare.Hare
+}
+
+type MiningEnabler interface {
+	MiningEligible() bool
 }
 
 // EntryPointCreated channel is used to announce that the main App instance was created
@@ -251,10 +264,22 @@ func (app *SpacemeshApp) cleanup(cmd *cobra.Command, args []string) (err error) 
 		app.grpcAPIService.StopService()
 	}
 
+	app.stopServices()
+
 	// add any other cleanup tasks here....
 	log.Info("App cleanup completed\n\n")
 
 	return nil
+}
+
+func (app *SpacemeshApp) setupGenesis(){
+	for id, acc := range config.DefaultGenesisConfig().InitialAccounts {
+		app.state.CreateAccount(id)
+		app.state.AddBalance(id, acc.Balance)
+		app.state.SetNonce(id, acc.Nonce)
+	}
+
+	app.state.Commit(false)
 }
 
 func (app *SpacemeshApp) setupTestFeatures() {
@@ -262,53 +287,85 @@ func (app *SpacemeshApp) setupTestFeatures() {
 	api.ApproveAPIGossipMessages(Ctx, app.P2P)
 }
 
-func (app *SpacemeshApp) initAndStartServices(swarm server.Service) (*state.StateDB, error){
-	layout := "2006-01-02T15:04:05.000Z"
-	str := "2018-11-12T11:45:26.371Z" //todo: move to config
-	startEpoch, _ := time.Parse(layout, str)
-
+func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service, dbStorepath string,
+										blockValidator sync.BlockValidator, blockOracle oracle.BlockOracle,hareOracle hare.Rolacle) (error){
 
 	//todo: should we add all components to a single struct?
-	lg := log.New("shmekel","","")
+	lg := log.New("shmekel_" + instanceName ,"","")
 
 	trtl := consensus.NewAlgorithm(50, 100)
 
-	db, err := database.NewLDBDatabase("../database/data/state_" + instanceName, 0,0)
+	db, err := database.NewLDBDatabase(dbStorepath, 0,0)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	st, err := state.New(common.Hash{}, state.NewDatabase(db)) //todo: we probably should load DB with latest hash
 	if err != nil {
-		return nil, err
+		return err
 	}
 	rng := rand.New(mt19937.New())
-	processor := state.NewTransactionProcessor(rng, st)
+	processor := state.NewTransactionProcessor(rng, st, lg)
+
+
 
 	mesh := mesh.NewMesh(db, db, db ,&trtl,processor,lg) //todo: what to do with the logger?
-
+	trtl.RegisterLayerCallback(mesh.LayerCompleteCallback)
 	coinToss := consensus.WeakCoin{}
-	clock := timesync.NewTicker(timesync.RealClock{}, 5 *time.Second, startEpoch)
-	blockListener := sync.NewBlockListener(swarm ,mesh, 1*time.Second, 1,clock, lg)
+	clock := timesync.NewTicker(timesync.RealClock{}, 5 *time.Second, time.Now())
 
-	oracle := hare.NewMockHashOracle(100)
+
+	//oracle := hare.NewMockHashOracle(100)
 
 	sgn := hare.NewMockSigning()
-	pub, _ := crypto.NewPublicKey(sgn.Verifier().Bytes())
-	ha := hare.New(hareConfig.DefaultConfig(), swarm,pub,sgn,mesh, oracle, clock.Subscribe())
-	blockProducer := miner.NewBlockBuilder(swarm, clock.Subscribe(), coinToss, mesh,ha)
+	//pub, _ := crypto.NewPublicKey(sgn.Verifier().Bytes())
 
-	blockListener.Start()
-	err = ha.Start()
+	//oracle := oracle.NewBlockOracle(1, 2, pub.String())
+	//oracle.Register(pub)
+	blockListener := sync.NewBlockListener(swarm , blockValidator ,mesh, 1*time.Second, 1,clock, lg)
+
+
+	ha := hare.New(hareConfig.DefaultConfig(), swarm,sgn,mesh, hareOracle, clock.Subscribe())
+
+	blockProducer := miner.NewBlockBuilder(instanceName, swarm, clock.Subscribe(), coinToss, mesh,ha, blockOracle,lg)
+
+	app.blockProducer  = &blockProducer
+	app.blockListener = blockListener
+	app.mesh = mesh
+	app.clock = clock
+	app.state = st
+	app.db = db
+	app.hare = ha
+	app.P2P = swarm
+
+	return nil
+}
+
+func (app *SpacemeshApp) startServices(){
+	app.blockListener.Start()
+	err := app.hare.Start()
 	if err != nil {
 		panic("cannot start hare")
 	}
-	err = blockProducer.Start()
+	err = app.blockProducer.Start()
 	if err != nil {
 		panic("cannot start block producer")
 	}
-	clock.Start()
+	app.clock.Start()
+}
 
-	return st, nil
+func (app *SpacemeshApp) stopServices(){
+	if app != nil {
+
+	}
+	app.clock.Stop()
+	err := app.blockProducer.Stop()
+	if err != nil {
+		log.Error("cannot stop block producer %v", err)
+	}
+	app.hare.Close() //todo: need to add this
+	app.blockListener.Close()
+
+	app.db.Close()
 }
 
 func (app *SpacemeshApp) startSpacemesh(cmd *cobra.Command, args []string) {
@@ -317,7 +374,6 @@ func (app *SpacemeshApp) startSpacemesh(cmd *cobra.Command, args []string) {
 	// start p2p services
 	log.Info("Initializing P2P services")
 	swarm, err := p2p.New(Ctx, app.Config.P2P)
-
 	if err != nil {
 		log.Error("Error starting p2p services, err: %v", err)
 		panic("Error starting p2p services")
@@ -338,17 +394,23 @@ func (app *SpacemeshApp) startSpacemesh(cmd *cobra.Command, args []string) {
 		panic("Error starting p2p services")
 	}
 
+	sgn := hare.NewMockSigning() //todo: shouldn't be any mock code here
+	pub, _ := crypto.NewPublicKey(sgn.Verifier().Bytes())
+	bo := oracle.NewBlockOracle(1, int(app.Config.CONSENSUS.NodesPerLayer), pub.String())
+
+	hareOracle := oracle.NewHareOracle(1, pub.String())
 
 
 	app.P2P = swarm
-	app.NodeInitCallback <- true
+
 	apiConf := &app.Config.API
 
-	st, err := app.initAndStartServices("x",swarm)
+	err = app.initServices("x",swarm, "/tmp/", bo,bo, hareOracle)
 	if err != nil {
 		panic("got error starting services : " +  err.Error())
 	}
 
+	app.startServices()
 
 	// todo: if there's no loaded account - do the new account interactive flow here
 	// todo: if node has no loaded coin-base account then set the node coinbase to first account
@@ -359,7 +421,7 @@ func (app *SpacemeshApp) startSpacemesh(cmd *cobra.Command, args []string) {
 	// start api servers
 	if apiConf.StartGrpcServer || apiConf.StartJSONServer {
 		// start grpc if specified or if json rpc specified
-		app.grpcAPIService = api.NewGrpcService(app.P2P, st)
+		app.grpcAPIService = api.NewGrpcService(app.P2P, app.state)
 		app.grpcAPIService.StartService(nil)
 	}
 
@@ -372,6 +434,7 @@ func (app *SpacemeshApp) startSpacemesh(cmd *cobra.Command, args []string) {
 
 	// app blocks until it receives a signal to exit
 	// this signal may come from the node or from sig-abort (ctrl-c)
+	app.NodeInitCallback <- true
 
 	<-Ctx.Done()
 	//return nil
