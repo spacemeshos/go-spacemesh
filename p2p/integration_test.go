@@ -59,6 +59,7 @@ func (its *IntegrationTestSuite) Test_Gossiping() {
 	}, nil)
 
 	msg := []byte(RandString(10))
+
 	_ = node1.Broadcast(exProto, []byte(msg))
 	numgot := int32(0)
 
@@ -74,6 +75,7 @@ func (its *IntegrationTestSuite) Test_Gossiping() {
 				if !bytes.Equal(got.Bytes(), msg) {
 					return fmt.Errorf("wrong msg, got: %s, want: %s", got, msg)
 				}
+				got.ValidationCompletedChan() <- *service.NewMessageValidation(got.Bytes(), exProto, true)
 				atomic.AddInt32(numgot, 1)
 				return nil
 			case <-ctx.Done():
