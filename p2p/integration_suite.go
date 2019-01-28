@@ -111,7 +111,7 @@ func createP2pInstance(t testing.TB, config config.Config) *swarm {
 	port, err := node.GetUnboundedPort()
 	assert.Nil(t, err)
 	config.TCPPort = port
-	p, err := newSwarm(context.TODO(), config, true, true)
+	p, err := newSwarm(context.TODO(), config, true, false)
 	assert.Nil(t, err)
 	assert.NotNil(t, p)
 	return p

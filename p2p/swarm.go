@@ -8,14 +8,15 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/connectionpool"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht"
 	"github.com/spacemeshos/go-spacemesh/p2p/gossip"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/timesync"
+
 	inet "net"
 	"strconv"
 	"sync"
@@ -45,7 +46,6 @@ func (pm protocolMessage) Bytes() []byte {
 
 type cPool interface {
 	GetConnection(address string, pk p2pcrypto.PublicKey) (net.Connection, error)
-	RemoteConnectionsChannel() chan net.NewConnectionEvent
 	Shutdown()
 }
 
@@ -155,10 +155,16 @@ func newSwarm(ctx context.Context, config config.Config, newNode bool, persist b
 
 		protocolHandlers: make(map[string]chan service.Message),
 		network:          n,
-		cPool:            connectionpool.NewConnectionPool(n, l.PublicKey()),
 	}
 
 	s.dht = dht.New(l, config.SwarmConfig, s)
+
+	s.network.SubscribeOnNewRemoteConnections(s.onNewConnection)
+	s.network.SubscribeClosingConnections(s.onClosedConnection)
+
+	// this also subscribes to `net`, the order matters!.
+	s.cPool	= connectionpool.NewConnectionPool(s.network, l.PublicKey())
+	// todo: consider registering cpool from here to explicitly show the order and registrations
 
 	s.gossip = gossip.NewProtocol(config.SwarmConfig, s, s.LocalNode().PublicKey(), s.lNode.Log)
 
@@ -167,14 +173,24 @@ func newSwarm(ctx context.Context, config config.Config, newNode bool, persist b
 	return s, nil
 }
 
+func (s *swarm) onNewConnection(nce net.NewConnectionEvent) {
+	s.dht.Update(nce.Node)
+	// todo: consider doing cpool actions from here.
+	s.addIncomingPeer(nce.Node.PublicKey())
+}
+
+func (s *swarm) onClosedConnection(c net.Connection) {
+	// we don't want to block, we know this node's connection was closed.
+	// we'll try connecting again and if not we'll remove it from peers
+	go s.retryOrDisconnect(c.RemotePublicKey())
+}
+
 func (s *swarm) Start() error {
 	if atomic.LoadUint32(&s.started) == 1 {
 		return errors.New("swarm already running")
 	}
 	atomic.StoreUint32(&s.started, 1)
 	s.lNode.Debug("Starting the p2p layer")
-
-	go s.handleNewConnectionEvents()
 
 	s.listenToNetworkMessages() // fires up a goroutine for each queue of messages
 
@@ -358,23 +374,6 @@ func (s *swarm) listenToNetworkMessages() {
 		}(netqueues[nq])
 	}
 
-}
-
-func (s *swarm) handleNewConnectionEvents() {
-	newConnEvents := s.cPool.RemoteConnectionsChannel()
-	closing := s.network.SubscribeClosingConnections()
-Loop:
-	for {
-		select {
-		case con := <-closing:
-			go s.retryOrDisconnect(con.RemotePublicKey()) //todo notify dht?
-		case nce := <-newConnEvents:
-			s.dht.Update(nce.Node)
-			s.addIncomingPeer(nce.Node.PublicKey())
-		case <-s.shutdown:
-			break Loop
-		}
-	}
 }
 
 func (s *swarm) retryOrDisconnect(key p2pcrypto.PublicKey) {
@@ -646,13 +645,14 @@ func (s *swarm) getMorePeers(numpeers int) int {
 loop:
 	for {
 		select {
+		// NOTE: breaks here intentionally break the select and not the for loop
 		case cne := <-res:
 			total++ // We count i everytime to know when to close the channel
 
 			if cne.err != nil {
 				s.lNode.Debug("can't establish connection with sampled peer %v, %v", cne.n.String(), cne.err)
 				bad++
-				continue // this peer didn't work, todo: tell dht
+				break // this peer didn't work, todo: tell dht
 			}
 
 			pkstr := cne.n.PublicKey().String()
@@ -663,7 +663,7 @@ loop:
 			if ok {
 				s.lNode.Debug("not allowing peers from inbound to upgrade to outbound to prevent poisoning, peer %v", cne.n.String())
 				bad++
-				continue
+				break
 			}
 
 			s.outpeersMutex.Lock()
@@ -671,7 +671,7 @@ loop:
 				s.outpeersMutex.Unlock()
 				s.lNode.Debug("selected an already outbound peer. not counting that peer.", cne.n.String())
 				bad++
-				continue
+				break
 			}
 			s.outpeers[pkstr] = cne.n.PublicKey()
 			s.outpeersMutex.Unlock()

@@ -10,10 +10,10 @@ import (
 	"context"
 	"errors"
 	"github.com/gogo/protobuf/proto"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/stretchr/testify/assert"
@@ -32,10 +32,6 @@ func (cp *cpoolMock) GetConnection(address string, pk p2pcrypto.PublicKey) (net.
 		return cp.f(address, pk)
 	}
 	return net.NewConnectionMock(pk), nil
-}
-
-func (cp *cpoolMock) RemoteConnectionsChannel() chan net.NewConnectionEvent {
-	return make(chan net.NewConnectionEvent)
 }
 
 func (cp *cpoolMock) Shutdown() {
@@ -182,12 +178,12 @@ func Test_ConnectionBeforeMessage(t *testing.T) {
 			sa.add(p1)
 			_ = p1.RegisterProtocol(exampleProtocol)
 			p1.dht.Update(p2.lNode.Node)
-			err := p1.SendMessage(p2.lNode.PublicKey(), exampleProtocol, payload)
-			assert.NoError(t, err)
+			p1.SendMessage(p2.lNode.PublicKey(), exampleProtocol, payload)
 		}()
 	}
-	wg.Wait()
 
+	wg.Wait()
+	cpm.f = nil
 	sa.clean()
 
 }
@@ -211,7 +207,7 @@ func sendDirectMessage(t *testing.T, sender *swarm, recvPub p2pcrypto.PublicKey,
 		}
 		assert.Equal(t, msg.Sender().String(), sender.lNode.String())
 		break
-	case <-time.After(2 * time.Second):
+	case <-time.After(5 * time.Second):
 		t.Error("Took too much time to receive")
 	}
 }
@@ -614,7 +610,6 @@ func Test_Swarm_getMorePeers3(t *testing.T) {
 
 	mdht := new(dht.MockDHT)
 	n.dht = mdht
-
 	testNode := node.GenerateRandomNodeData()
 	mdht.SelectPeersFunc = func(qty int) []node.Node {
 		return []node.Node{testNode}

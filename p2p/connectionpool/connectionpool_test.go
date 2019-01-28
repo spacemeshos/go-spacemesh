@@ -3,9 +3,9 @@ package connectionpool
 import (
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/stretchr/testify/assert"
 	"math/rand"
 	"testing"
@@ -112,7 +112,7 @@ func TestRemoteConnectionWithNoConnection(t *testing.T) {
 	cPool := NewConnectionPool(n, generatePublicKey())
 	rConn := net.NewConnectionMock(remotePub)
 	rConn.SetSession(net.NewSessionMock(remotePub))
-	cPool.newRemoteConn <- net.NewConnectionEvent{rConn, node.EmptyNode}
+	cPool.OnNewConnection(net.NewConnectionEvent{ rConn, node.EmptyNode})
 	time.Sleep(50 * time.Millisecond)
 	conn, err := cPool.GetConnection(addr, remotePub)
 	assert.Equal(t, remotePub.String(), conn.RemotePublicKey().String())
@@ -140,7 +140,7 @@ func TestRemoteConnectionWithExistingConnection(t *testing.T) {
 	lConn, _ := cPool.GetConnection(addr, remotePub)
 	rConn := net.NewConnectionMock(remotePub)
 	rConn.SetSession(net.NewSessionMock(remotePub))
-	cPool.newRemoteConn <- net.NewConnectionEvent{rConn, node.EmptyNode}
+	cPool.OnNewConnection(net.NewConnectionEvent{ rConn, node.EmptyNode})
 	time.Sleep(20 * time.Millisecond)
 	assert.Equal(t, remotePub.String(), lConn.RemotePublicKey().String())
 	assert.Equal(t, int32(1), n.DialCount())
@@ -156,7 +156,7 @@ func TestRemoteConnectionWithExistingConnection(t *testing.T) {
 	lConn, _ = cPool.GetConnection(addr, remotePub)
 	rConn = net.NewConnectionMock(remotePub)
 	rConn.SetSession(net.NewSessionMock(remotePub))
-	cPool.newRemoteConn <- net.NewConnectionEvent{rConn, node.EmptyNode}
+	cPool.OnNewConnection(net.NewConnectionEvent{ rConn, node.EmptyNode})
 	time.Sleep(20 * time.Millisecond)
 	assert.Equal(t, remotePub.String(), lConn.RemotePublicKey().String())
 	assert.Equal(t, int32(2), n.DialCount())
@@ -275,7 +275,7 @@ func TestRandom(t *testing.T) {
 				rConn := net.NewConnectionMock(peer.key)
 				sID := p2pcrypto.NewRandomPubkey()
 				rConn.SetSession(net.NewSessionMock(sID))
-				cPool.newRemoteConn <- net.NewConnectionEvent{rConn, node.EmptyNode}
+				cPool.OnNewConnection(net.NewConnectionEvent{ rConn, node.EmptyNode})
 			}()
 		} else if r == 1 {
 			go func() {

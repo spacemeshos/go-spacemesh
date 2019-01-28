@@ -56,14 +56,15 @@ type Net struct {
 
 	isShuttingDown bool
 
-	regNewRemoteConn []chan NewConnectionEvent
 	regMutex         sync.RWMutex
+	regNewRemoteConn []func(NewConnectionEvent)
+
+	clsMutex           sync.RWMutex
+	closingConnections []func(Connection)
 
 	queuesCount           uint
 	incomingMessagesQueue []chan IncomingMessageEvent
 
-	closingConnections []chan Connection
-	clsMutex           sync.RWMutex
 
 	config config.Config
 }
@@ -91,10 +92,10 @@ func NewNet(conf config.Config, localEntity *node.LocalNode) (*Net, error) {
 		localNode:             localEntity,
 		logger:                localEntity.Logger,
 		tcpListenAddress:      tcpAddress,
-		regNewRemoteConn:      make([]chan NewConnectionEvent, 0),
+		regNewRemoteConn:      make([]func (NewConnectionEvent), 0, 3),
+		closingConnections:    make([]func(Connection), 0,3),
 		queuesCount:           qcount,
 		incomingMessagesQueue: make([]chan IncomingMessageEvent, qcount, qcount),
-		closingConnections:    make([]chan Connection, 0),
 		config:                conf,
 	}
 
@@ -154,18 +155,16 @@ func (n *Net) IncomingMessages() []chan IncomingMessageEvent {
 }
 
 // SubscribeClosingConnections registers a channel where closing connections events are reported
-func (n *Net) SubscribeClosingConnections() chan Connection {
+func (n *Net) SubscribeClosingConnections(f func(connection Connection)) {
 	n.clsMutex.Lock()
-	ch := make(chan Connection, 20) // todo: set a var for the buf size
-	n.closingConnections = append(n.closingConnections, ch)
+	n.closingConnections = append(n.closingConnections, f)
 	n.clsMutex.Unlock()
-	return ch
 }
 
 func (n *Net) publishClosingConnection(connection Connection) {
 	n.clsMutex.RLock()
-	for _, c := range n.closingConnections {
-		c <- connection
+	for _, f := range n.closingConnections {
+		f(connection)
 	}
 	n.clsMutex.RUnlock()
 }
@@ -280,24 +279,17 @@ func (n *Net) acceptTCP() {
 }
 
 // SubscribeOnNewRemoteConnections returns new channel where events of new remote connections are reported
-func (n *Net) SubscribeOnNewRemoteConnections() chan NewConnectionEvent {
+func (n *Net) SubscribeOnNewRemoteConnections(f func(event NewConnectionEvent)) {
 	n.regMutex.Lock()
-	ch := make(chan NewConnectionEvent, 30) // todo : the size should be determined after #269
-	n.regNewRemoteConn = append(n.regNewRemoteConn, ch)
+	n.regNewRemoteConn = append(n.regNewRemoteConn, f)
 	n.regMutex.Unlock()
-	return ch
 }
 
 func (n *Net) publishNewRemoteConnectionEvent(conn Connection, node node.Node) {
 	n.regMutex.RLock()
-	for _, c := range n.regNewRemoteConn {
-		select {
-		case c <- NewConnectionEvent{conn, node}:
-			continue
-		default:
-			// so we won't block on not listening chans
+	for _, f := range n.regNewRemoteConn {
+		 f(NewConnectionEvent{conn, node})
 		}
-	}
 	n.regMutex.RUnlock()
 }
 

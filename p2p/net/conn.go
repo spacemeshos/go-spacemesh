@@ -70,7 +70,7 @@ type FormattedConnection struct {
 type networker interface {
 	HandlePreSessionIncomingMessage(c Connection, msg []byte) error
 	EnqueueMessage(ime IncomingMessageEvent)
-	SubscribeClosingConnections() chan Connection
+	SubscribeClosingConnections(func(Connection))
 	publishClosingConnection(c Connection)
 	NetworkID() int8
 }
