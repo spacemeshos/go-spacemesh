@@ -19,7 +19,7 @@ func TestNew(t *testing.T) {
 
 	n1 := sim.NewNodeFrom(ln.Node)
 
-	d := New(ln, cfg.DiscoveryConfig, n1)
+	d := New(ln, cfg.DiscoveryConfig, n1, cfg.RandomConnections)
 	assert.NotNil(t, d, "D is not nil")
 }
 
@@ -32,12 +32,11 @@ func TestKadDHT_EveryNodeIsInRoutingTable(t *testing.T) {
 
 	bn, _ := node.GenerateTestNode(t)
 	b1 := sim.NewNodeFrom(bn.Node)
-	bdht := New(bn, bncfg.DiscoveryConfig, b1)
+	bdht := New(bn, bncfg.DiscoveryConfig, b1, connections)
 	b1.AttachDHT(bdht)
 
 	cfg := config.DefaultConfig().DiscoveryConfig
 	cfg.Bootstrap = true
-	cfg.RandomConnections = connections
 	cfg.BootstrapNodes = append(cfg.BootstrapNodes, node.StringFromNode(bn.Node))
 
 	type all struct {
@@ -66,7 +65,7 @@ func TestKadDHT_EveryNodeIsInRoutingTable(t *testing.T) {
 	for n := 0; n < numPeers; n++ {
 		ln, _ := node.GenerateTestNode(t)
 		n := sim.NewNodeFrom(ln.Node)
-		dht := New(ln, cfg, n)
+		dht := New(ln, cfg, n, connections)
 		n.AttachDHT(dht)
 		go bootWaitRetrnAll(t, ln, n, dht, booted)
 	}
@@ -124,12 +123,11 @@ func TestDHT_EveryNodeIsInSelected(t *testing.T) {
 
 			bn, _ := node.GenerateTestNode(t)
 			b1 := sim.NewNodeFrom(bn.Node)
-			bdht := New(bn, bncfg.DiscoveryConfig, b1)
+			bdht := New(bn, bncfg.DiscoveryConfig, b1, connections)
 			b1.AttachDHT(bdht)
 
 			cfg := config.DefaultConfig().DiscoveryConfig
 			cfg.Bootstrap = true
-			cfg.RandomConnections = connections
 			cfg.BootstrapNodes = append(cfg.BootstrapNodes, node.StringFromNode(bn.Node))
 
 			type all struct {
@@ -148,7 +146,7 @@ func TestDHT_EveryNodeIsInSelected(t *testing.T) {
 				go func() {
 					ln, _ := node.GenerateTestNode(t)
 					n := sim.NewNodeFrom(ln.Node)
-					dht := New(ln, cfg, n)
+					dht := New(ln, cfg, n, connections)
 					n.AttachDHT(dht)
 					err := dht.Bootstrap(context.TODO())
 
@@ -214,7 +212,7 @@ func TestDHT_Update(t *testing.T) {
 
 	n1 := sim.NewNodeFrom(ln.Node)
 
-	dht := New(ln, cfg.DiscoveryConfig, n1)
+	dht := New(ln, cfg.DiscoveryConfig, n1, cfg.RandomConnections)
 
 	randnode := node.GenerateRandomNodeData()
 	dht.Update(randnode)
@@ -266,7 +264,7 @@ func TestDHT_Lookup(t *testing.T) {
 
 	n1 := sim.NewNodeFrom(ln.Node)
 
-	dht := New(ln, cfg.DiscoveryConfig, n1)
+	dht := New(ln, cfg.DiscoveryConfig, n1, cfg.RandomConnections)
 
 	randnode := node.GenerateRandomNodeData()
 
@@ -287,7 +285,7 @@ func TestDHT_Lookup2(t *testing.T) {
 
 	n1 := sim.NewNodeFrom(ln.Node)
 
-	dht := New(ln, cfg.DiscoveryConfig, n1)
+	dht := New(ln, cfg.DiscoveryConfig, n1, cfg.RandomConnections)
 
 	randnode := node.GenerateRandomNodeData()
 
@@ -297,7 +295,7 @@ func TestDHT_Lookup2(t *testing.T) {
 
 	n2 := sim.NewNodeFrom(ln2.Node)
 
-	dht2 := New(ln2, cfg.DiscoveryConfig, n2)
+	dht2 := New(ln2, cfg.DiscoveryConfig, n2, cfg.RandomConnections)
 
 	dht2.Update(dht.local.Node)
 
@@ -308,10 +306,10 @@ func TestDHT_Lookup2(t *testing.T) {
 
 }
 
-func simNodeWithDHT(t *testing.T, sc config.DiscoveryConfig, sim *service.Simulator) (*service.Node, DHT) {
+func simNodeWithDHT(t *testing.T, sc config.DiscoveryConfig, sim *service.Simulator, connections int) (*service.Node, DHT) {
 	ln, _ := node.GenerateTestNode(t)
 	n := sim.NewNodeFrom(ln.Node)
-	dht := New(ln, sc, n)
+	dht := New(ln, sc, n, connections)
 	n.AttachDHT(dht)
 
 	return n, dht
@@ -332,17 +330,16 @@ func TestDHT_Bootstrap(t *testing.T) {
 
 	// Create a bootstrap node
 	cfg := config.DefaultConfig()
-	bn, _ := simNodeWithDHT(t, cfg.DiscoveryConfig, sim)
+	bn, _ := simNodeWithDHT(t, cfg.DiscoveryConfig, sim, cfg.RandomConnections)
 
 	// config for other nodes
 	cfg2 := config.DefaultConfig()
-	cfg2.DiscoveryConfig.RandomConnections = minToBoot // min numbers of peers to succeed in bootstrap
 	cfg2.DiscoveryConfig.BootstrapNodes = []string{node.StringFromNode(bn.Node)}
 
 	booted := make(chan error)
 
 	for i := 0; i < nodesNum; i++ {
-		_, d := simNodeWithDHT(t, cfg2.DiscoveryConfig, sim)
+		_, d := simNodeWithDHT(t, cfg2.DiscoveryConfig, sim, cfg2.RandomConnections)
 		go bootAndWait(t, d, booted)
 	}
 
@@ -357,12 +354,13 @@ func TestDHT_Bootstrap(t *testing.T) {
 func TestDHT_BootstrapAbort(t *testing.T) {
 	// Create a bootstrap node
 	sim := service.NewSimulator()
-	bn, _ := simNodeWithDHT(t, config.DefaultConfig().DiscoveryConfig, sim)
+	cfg := config.DefaultConfig()
+	bn, _ := simNodeWithDHT(t, cfg.DiscoveryConfig, sim, cfg.RandomConnections)
 	// config for other nodes
 	cfg2 := config.DefaultConfig()
-	cfg2.DiscoveryConfig.RandomConnections = 2
+	cfg2.RandomConnections = 2
 	cfg2.DiscoveryConfig.BootstrapNodes = []string{node.StringFromNode(bn.Node)}
-	_, dht := simNodeWithDHT(t, cfg2.DiscoveryConfig, sim)
+	_, dht := simNodeWithDHT(t, cfg2.DiscoveryConfig, sim, cfg2.RandomConnections)
 	// Create a bootstrap node to abort
 	Ctx, Cancel := context.WithCancel(context.Background())
 	// Abort bootstrap after 2 Seconds

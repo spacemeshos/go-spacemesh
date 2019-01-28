@@ -44,8 +44,8 @@ func init() {
 		config.P2P.DiscoveryConfig.RoutingTableBucketSize, "The rounding table bucket size")
 	RootCmd.PersistentFlags().IntVar(&config.P2P.DiscoveryConfig.RoutingTableAlpha, "alpha",
 		config.P2P.DiscoveryConfig.RoutingTableAlpha, "The routing table Alpha")
-	RootCmd.PersistentFlags().IntVar(&config.P2P.DiscoveryConfig.RandomConnections, "randcon",
-		config.P2P.DiscoveryConfig.RoutingTableAlpha, "Number of random connections")
+	RootCmd.PersistentFlags().IntVar(&config.P2P.RandomConnections, "randcon",
+		config.P2P.RandomConnections, "Number of random connections")
 	RootCmd.PersistentFlags().StringSliceVar(&config.P2P.DiscoveryConfig.BootstrapNodes, "bootnodes",
 		config.P2P.DiscoveryConfig.BootstrapNodes, "Number of random connections")
 	/** ======================== TimeSync Flags ========================== **/

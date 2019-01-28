@@ -459,7 +459,7 @@ func Test_Swarm_getMorePeers(t *testing.T) {
 	numpeers := 3
 	cfg := config.DefaultConfig()
 	cfg.DiscoveryConfig.Bootstrap = false
-	cfg.DiscoveryConfig.RandomConnections = numpeers
+	cfg.RandomConnections = numpeers
 	n := p2pTestNoStart(t, cfg)
 
 	conn, _ := n.SubscribePeerEvents()
@@ -539,7 +539,7 @@ func Test_Swarm_getMorePeers(t *testing.T) {
 
 func TestNeighborhood_Initial(t *testing.T) {
 	cfg := config.DefaultConfig()
-	cfg.DiscoveryConfig.RandomConnections = 3
+	cfg.RandomConnections = 3
 	cfg.DiscoveryConfig.Bootstrap = false
 
 	p := p2pTestNoStart(t, cfg)

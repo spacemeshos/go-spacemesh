@@ -159,7 +159,7 @@ func newSwarm(ctx context.Context, config config.Config, newNode bool, persist b
 		cPool:            connectionpool.NewConnectionPool(n, l.PublicKey()),
 	}
 
-	s.dht = dht.New(l, config.DiscoveryConfig, s)
+	s.dht = dht.New(l, config.DiscoveryConfig, s, config.RandomConnections)
 
 	s.gossip = gossip.NewProtocol(config.DiscoveryConfig, s, s.LocalNode().PublicKey(), s.lNode.Log)
 
@@ -540,8 +540,8 @@ func (s *swarm) publishDelPeer(peer p2pcrypto.PublicKey) {
 
 // SubscribePeerEvents lets clients listen on events inside the swarm about peers. first chan is new peers, second is deleted peers.
 func (s *swarm) SubscribePeerEvents() (conn chan p2pcrypto.PublicKey, disc chan p2pcrypto.PublicKey) {
-	in := make(chan p2pcrypto.PublicKey, s.config.DiscoveryConfig.RandomConnections) // todo. what size this should be ? maybe let client pass channels.
-	del := make(chan p2pcrypto.PublicKey, s.config.DiscoveryConfig.RandomConnections)
+	in := make(chan p2pcrypto.PublicKey, s.config.RandomConnections) // todo. what size this should be ? maybe let client pass channels.
+	del := make(chan p2pcrypto.PublicKey, s.config.RandomConnections)
 	s.peerLock.Lock()
 	s.newPeerSub = append(s.newPeerSub, in)
 	s.delPeerSub = append(s.delPeerSub, del)
@@ -583,7 +583,7 @@ loop:
 
 func (s *swarm) askForMorePeers() {
 	numpeers := len(s.outpeers)
-	req := s.config.DiscoveryConfig.RandomConnections - numpeers
+	req := s.config.RandomConnections - numpeers
 	if req <= 0 {
 		return
 	}
@@ -591,7 +591,7 @@ func (s *swarm) askForMorePeers() {
 	s.getMorePeers(req)
 
 	// todo: better way then going in this everytime ?
-	if len(s.outpeers) >= s.config.DiscoveryConfig.RandomConnections {
+	if len(s.outpeers) >= s.config.RandomConnections {
 		s.initOnce.Do(func() {
 			s.lNode.Info("gossip; connected to initial required neighbors - %v", len(s.outpeers))
 			close(s.initial)

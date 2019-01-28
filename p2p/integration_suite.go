@@ -41,7 +41,7 @@ func (its *IntegrationTestSuite) SetupSuite() {
 
 	bootcfg := config.DefaultConfig()
 	bootcfg.DiscoveryConfig.Bootstrap = false
-	bootcfg.DiscoveryConfig.RandomConnections = its.NeighborsCount
+	bootcfg.RandomConnections = its.NeighborsCount
 
 	// start boot
 	for i := 0; i < len(boot); i++ {
@@ -58,7 +58,7 @@ func (its *IntegrationTestSuite) SetupSuite() {
 
 	cfg := config.DefaultConfig()
 	cfg.DiscoveryConfig.Bootstrap = true
-	cfg.DiscoveryConfig.RandomConnections = its.NeighborsCount
+	cfg.RandomConnections = its.NeighborsCount
 	cfg.DiscoveryConfig.BootstrapNodes = StringIdentifiers(boot...)
 
 	tm := time.Now()

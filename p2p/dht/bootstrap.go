@@ -40,7 +40,7 @@ func (d *KadDHT) Bootstrap(ctx context.Context) error {
 	d.local.Debug("Starting node bootstrap ", d.local.String())
 
 	alpha := d.config.RoutingTableAlpha
-	c := d.config.RandomConnections
+	c := d.randomConnections
 
 	if c <= 0 || alpha <= 0 {
 		return ErrZeroConnections
