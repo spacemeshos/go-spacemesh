@@ -213,7 +213,7 @@ func (proc *ConsensusProcess) validateRole(m *pb.HareMessage) bool {
 	// TODO: validate role proof
 
 	// validate role
-	if !proc.oracle.Validate(proc.instanceId.Bytes(), int(m.Message.K), proc.expectedCommitteeSize(m.Message.K), proc.signing.Verifier(), Signature(m.Message.RoleProof)) {
+	if !proc.oracle.Validate(&proc.instanceId, int(m.Message.K), proc.expectedCommitteeSize(m.Message.K), proc.signing.Verifier().String(), Signature(m.Message.RoleProof)) {
 		log.Warning("Role validation failed")
 		return false
 	}
@@ -514,7 +514,7 @@ func (proc *ConsensusProcess) endOfRound3() {
 }
 
 func (proc *ConsensusProcess) currentRole() Role {
-	if proc.oracle.Validate(proc.instanceId.Bytes(), int(proc.k), proc.expectedCommitteeSize(proc.k), proc.signing.Verifier(), proc.roleProof()) {
+	if proc.oracle.Validate(&proc.instanceId, int(proc.k), proc.expectedCommitteeSize(proc.k), proc.signing.Verifier().String(), proc.roleProof()) {
 		if proc.currentRound() == Round2 {
 			return Leader
 		}

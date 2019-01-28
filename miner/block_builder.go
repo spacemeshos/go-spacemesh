@@ -158,31 +158,35 @@ func (t *BlockBuilder) listenForTx(){
 	}
 }
 
-
 func (t *BlockBuilder) acceptBlockData() {
 	for {
 		select {
-			case <-t.stopChan:
-				return
+		case <-t.stopChan:
+			return
 
-			case id := <-t.beginRoundEvent:
-				if t.blockOracle.Validate(id, t.minerID) {
-					txList := t.transactionQueue[:common.Min(len(t.transactionQueue), MaxTransactionsPerBlock)]
-					t.transactionQueue = t.transactionQueue[common.Min(len(t.transactionQueue), MaxTransactionsPerBlock):]
-					blk := t.createBlock(t.minerID.String(), id, txList)
-					go func() {
-						bytes, err := mesh.BlockAsBytes(blk)
-						if err != nil {
-							log.Error("cannot serialize block %v", err)
-							return
-						}
-						t.network.Broadcast(meshSync.NewBlock, bytes)
-					}()
+		case id := <-t.beginRoundEvent:
+
+			if !t.blockOracle.Validate(id, t.minerID) {
+				break
+			}
+
+			txList := t.transactionQueue[:common.Min(len(t.transactionQueue), MaxTransactionsPerBlock)]
+			t.transactionQueue = t.transactionQueue[common.Min(len(t.transactionQueue), MaxTransactionsPerBlock):]
+			blk := t.createBlock(t.minerID.String(), id, txList)
+
+			go func() {
+				bytes, err := mesh.BlockAsBytes(blk)
+				if err != nil {
+					log.Error("cannot serialize block %v", err)
+					return
 				}
-				// todo: else what do we do with all these txs ?!
+				t.network.Broadcast(meshSync.NewBlock, bytes)
+			}()
 
-			case tx := <- t.newTrans:
-				t.transactionQueue = append(t.transactionQueue,*tx)
+			// todo: else what do we do with all these txs ?!
+
+		case tx := <-t.newTrans:
+			t.transactionQueue = append(t.transactionQueue, *tx)
 		}
 	}
 }

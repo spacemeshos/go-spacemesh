@@ -22,7 +22,7 @@ type Stringer interface {
 type Rolacle interface {
 	Register(id string)
 	Unregister(id string)
-	Validate(instanceID []byte, K int, committeeSize int, pubKey Stringer, proof []byte) bool
+	Eligible(instanceID *InstanceId, K int, committeeSize int, pubKey string, proof []byte) bool
 }
 
 type hasherU32 struct {

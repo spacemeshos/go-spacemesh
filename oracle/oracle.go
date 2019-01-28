@@ -3,6 +3,7 @@ package oracle
 import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 )
 
@@ -26,23 +27,18 @@ func NewBlockOracle(worldid uint64, committeeSize int, pubKey fmt.Stringer) *blo
 	}
 }
 
-type stringerer string
-
-func (s stringerer) String() string {
-	return string(s)
-}
-
 // ValidateBlock makes oracleBlock a BlockValidator
 func (bo *blockOracle) ValidateBlock(block mesh.Block) bool {
-	return bo.Validate(block.LayerIndex, stringerer(block.MinerID))
+	// NOTE: this only validates a single block, the view edges should be manually validated
+	return bo.Validate(block.LayerIndex, block.MinerID)
 }
 
-func (bo *blockOracle) Validate(id mesh.LayerID, pubKey fmt.Stringer) bool {
+func (bo *blockOracle) Validate(id mesh.LayerID, pubKey string) bool {
 	return bo.oc.Validate(common.Uint32ToBytes(uint32(id)), -1, bo.committeeSize, pubKey)
 }
 
 type HareOracle interface {
-	Validate(instanceID []byte, K int, committeeSize int, pubKey fmt.Stringer, proof []byte) bool
+	Validate(instanceID hare.InstanceId, K int, committeeSize int, pubKey string, proof []byte) bool
 }
 
 type hareOracle struct {
@@ -57,9 +53,9 @@ func NewHareOracle(worldid uint64, pubKey fmt.Stringer) *hareOracle {
 	}
 }
 
-func (bo *hareOracle) Validate(instanceID []byte, K uint32, committeeSize int, pubKey fmt.Stringer, proof []byte) bool {
+func (bo *hareOracle) Validate(instanceID hare.InstanceId, K uint32, committeeSize int, pubKey string, proof []byte) bool {
 	//note: we don't use the proof in the oracle server. we keep it just for the future syntax
 	//todo: maybe replace k to be uint32 like hare wants, and don't use -1 for blocks
-	return bo.oc.Validate(instanceID, int(K), committeeSize, pubKey)
+	return bo.oc.Validate(instanceID.Bytes(), int(K), committeeSize, pubKey)
 }
 

@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/davecgh/go-spew/spew"
 	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"io"
 	"math/big"
 	"net/http"
@@ -34,7 +34,7 @@ func NewHTTPRequester(url string) *HTTPRequester {
 
 func (hr *HTTPRequester) Get(api, data string) []byte {
 	var jsonStr = []byte(data)
-	spew.Println(string(jsonStr))
+	log.Info("Sending oracle request : %v ", jsonStr)
 	req, err := http.NewRequest("POST", hr.url + "/" + api, bytes.NewBuffer(jsonStr))
 	if err != nil {
 		panic(err)
@@ -146,7 +146,7 @@ func hashInstanceAndK(instanceID []byte, K int) uint32 {
 
 
 // Validate checks whether a given ID is in the eligible list or not. it fetches the list once and gives answers locally after that.
-func (oc *OracleClient) Validate(instanceID []byte, K int, committeeSize int, pubKey fmt.Stringer) bool {
+func (oc *OracleClient) Validate(instanceID []byte, K int, committeeSize int, pubKey string) bool {
 
 	// make special instance ID
 	val := hashInstanceAndK(instanceID, K)
@@ -159,7 +159,7 @@ func (oc *OracleClient) Validate(instanceID []byte, K int, committeeSize int, pu
 	oc.instMtx[val].Lock()
 	if r, ok := oc.eligibilityMap[val]; ok {
 			oc.eMtx.Unlock()
-			_, valid := r[pubKey.String()]
+			_, valid := r[pubKey]
 			oc.instMtx[val].Unlock()
 			return valid
 		}
@@ -182,9 +182,11 @@ func (oc *OracleClient) Validate(instanceID []byte, K int, committeeSize int, pu
 		elgmap[v] = struct{}{}
 	}
 
-	_, valid := elgmap[pubKey.String()]
+	_, valid := elgmap[pubKey]
 
+	oc.eMtx.Lock()
 	oc.eligibilityMap[val] = elgmap
+	oc.eMtx.Unlock()
 	oc.instMtx[val].Unlock()
 
 	return valid
