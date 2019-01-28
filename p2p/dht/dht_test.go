@@ -95,7 +95,7 @@ func bootstrapNetwork(t *testing.T, numPeers, connections int) (ids []string, dh
 
 func TestKadDHT_EveryNodeIsInRoutingTableAndSelected(t *testing.T) {
 	numPeers := 100
-	connections := 8
+	connections := 10
 
 	idstoFind, dhtsToLook := bootstrapNetwork(t, numPeers , connections)
 
