@@ -41,7 +41,6 @@ func TestGossip(t *testing.T) {
 
 			cfg := config.DefaultConfig()
 			cfg.DiscoveryConfig.Bootstrap = true
-			cfg.DiscoveryConfig.Gossip = true
 			cfg.DiscoveryConfig.RandomConnections = rcon[i]
 			cfg.DiscoveryConfig.BootstrapNodes = bnarr
 

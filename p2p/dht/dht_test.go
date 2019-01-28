@@ -36,7 +36,6 @@ func TestKadDHT_EveryNodeIsInRoutingTable(t *testing.T) {
 	b1.AttachDHT(bdht)
 
 	cfg := config.DefaultConfig().DiscoveryConfig
-	cfg.Gossip = false
 	cfg.Bootstrap = true
 	cfg.RandomConnections = connections
 	cfg.BootstrapNodes = append(cfg.BootstrapNodes, node.StringFromNode(bn.Node))
@@ -129,7 +128,6 @@ func TestDHT_EveryNodeIsInSelected(t *testing.T) {
 			b1.AttachDHT(bdht)
 
 			cfg := config.DefaultConfig().DiscoveryConfig
-			cfg.Gossip = false
 			cfg.Bootstrap = true
 			cfg.RandomConnections = connections
 			cfg.BootstrapNodes = append(cfg.BootstrapNodes, node.StringFromNode(bn.Node))

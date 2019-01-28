@@ -33,11 +33,11 @@ type Config struct {
 	NetworkID       int8            `mapstructure:"network-id"`
 	DiscoveryConfig DiscoveryConfig `mapstructure:"dht"`
 	BufferSize      int             `mapstructure:"buffer-size"`
+	Gossip          bool            `mapstructure:"gossip"`
 }
 
 // DiscoveryConfig specifies swarm config params.
 type DiscoveryConfig struct {
-	Gossip                 bool     `mapstructure:"gossip"`
 	Bootstrap              bool     `mapstructure:"bootstrap"`
 	RoutingTableBucketSize int      `mapstructure:"bucketsize"`
 	RoutingTableAlpha      int      `mapstructure:"alpha"`
@@ -50,7 +50,6 @@ func DefaultConfig() Config {
 
 	// DHTConfigValues defines default values for swarm config params.
 	var DHTConfigValues = DiscoveryConfig{
-		Gossip:                 false,
 		Bootstrap:              false,
 		RoutingTableBucketSize: 20,
 		RoutingTableAlpha:      3,
@@ -68,5 +67,6 @@ func DefaultConfig() Config {
 		NetworkID:       TestNet,
 		DiscoveryConfig: DHTConfigValues,
 		BufferSize:      100,
+		Gossip:          false,
 	}
 }
