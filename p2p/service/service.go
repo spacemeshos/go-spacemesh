@@ -31,6 +31,7 @@ type Message interface {
 	Sender() p2pcrypto.PublicKey
 	Bytes() []byte
 	ValidationCompletedChan() chan MessageValidation
+	ReportValidation(protocol string, isValid bool)
 }
 
 // Service is an interface that represents a networking service (ideally p2p) that we can use to send messages or listen to incoming messages

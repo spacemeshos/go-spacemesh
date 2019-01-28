@@ -128,6 +128,16 @@ swarms:
 		}
 		e = append(e, f(i, s))
 	}
+
+boots:
+	for i, s := range its.boot {
+		for _, j := range filter {
+			if j == i {
+				continue boots
+			}
+		}
+		e = append(e, f(i,s))
+	}
 	return e
 }
 

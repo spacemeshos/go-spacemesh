@@ -22,7 +22,7 @@ const MaxTransactionsPerBlock = 200 //todo: move to config
 const DefaultGasLimit =10
 const DefaultGas = 1
 
-const TxGossipChannel = "TxGossip"
+const IncomingTxProtocol = "TxGossip"
 
 type BlockBuilder struct{
 	minerID string // could be a pubkey or what ever. the identity we're claiming to be as miners.
@@ -51,7 +51,7 @@ func NewBlockBuilder(minerID string, net p2p.Service, beginRoundEvent chan mesh.
 		beginRoundEvent:beginRoundEvent,
 		stopChan: make(chan struct{}),
 		newTrans: make(chan *mesh.SerializableTransaction),
-		txGossipChannel: net.RegisterProtocol(TxGossipChannel),
+		txGossipChannel: net.RegisterProtocol(IncomingTxProtocol),
 		hareResult: hare,
 		transactionQueue: make([]mesh.SerializableTransaction,0,10),
 		mu: sync.Mutex{},
@@ -151,8 +151,10 @@ func (t *BlockBuilder) listenForTx(){
 			x, err := mesh.BytesAsTransaction(bytes.NewReader(data.Bytes()))
 			if err != nil {
 				log.Error("cannot parse incoming TX")
+				data.ReportValidation(IncomingTxProtocol, false)
 				break
 			}
+			data.ReportValidation(IncomingTxProtocol, true)
 			t.newTrans <- x
 		}
 	}
@@ -180,7 +182,7 @@ func (t *BlockBuilder) acceptBlockData() {
 					log.Error("cannot serialize block %v", err)
 					return
 				}
-				t.network.Broadcast(meshSync.NewBlock, bytes)
+				t.network.Broadcast(meshSync.NewBlockProtocol, bytes)
 			}()
 
 			// todo: else what do we do with all these txs ?!

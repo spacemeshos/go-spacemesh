@@ -71,7 +71,7 @@ func (p *Ping) readLoop() {
 			}
 
 			if ping.Req {
-				log.Info("Ping: Request from (%v) - Message : %v", msg.Sender().Pretty(), ping.Message)
+				log.Info("Ping: Request from (%v) - Message : %v", msg.Sender(), ping.Message)
 				err := p.handleRequest(msg.Sender(), ping)
 				if err != nil {
 					log.Error("Error handling ping request", err)
@@ -140,7 +140,7 @@ func (p *Ping) sendRequest(target p2pcrypto.PublicKey, reqid crypto.UUID, ping *
 	return pchan, nil
 }
 
-func (p *Ping) handleRequest(sender crypto.PublicKey, ping *pb.Ping) error {
+func (p *Ping) handleRequest(sender p2pcrypto.PublicKey, ping *pb.Ping) error {
 	responseMutex.RLock()
 	resp, ok := responses[ping.Message]
 	responseMutex.RUnlock()

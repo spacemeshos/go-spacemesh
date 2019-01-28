@@ -15,7 +15,7 @@ import (
 type MessageServer server.MessageServer
 
 const BlockProtocol = "/blocks/1.0/"
-const NewBlock = "newBlock"
+const NewBlockProtocol = "newBlock"
 
 type BlockListener struct {
 	*server.MessageServer
@@ -57,13 +57,15 @@ func NewBlockListener(net server.Service, bv BlockValidator, layers *mesh.Mesh, 
 		semaphore:      make(chan struct{}, concurrency),
 		unknownQueue:   make(chan mesh.BlockID, 200), //todo tune buffer size + get buffer from config
 		exit:           make(chan struct{}),
-		receivedGossipBlocks: net.RegisterProtocol(NewBlock),
+		receivedGossipBlocks: net.RegisterProtocol(NewBlockProtocol),
 	}
 	bl.RegisterMsgHandler(BLOCK , newBlockRequestHandler(layers, logger))
 
 
 	return &bl
 }
+
+
 
 func (bl *BlockListener) ListenToGossipBlocks(){
 	for{
@@ -75,15 +77,19 @@ func (bl *BlockListener) ListenToGossipBlocks(){
 			blk, err := mesh.BytesAsBlock(bytes.NewReader(data.Bytes()))
 			if err != nil {
 				log.Error("received invalid block from sender %v", data.Sender().String())
+				data.ReportValidation(NewBlockProtocol, false)
 				break
 			}
 			if bl.EligibleBlock(&blk){
+				data.ReportValidation(NewBlockProtocol, true)
 				err := bl.AddBlock(&blk)
 				if err != nil {
 					log.Info("Block already received")
 					break
 				}
 				bl.addUnknownToQueue(&blk)
+			} else {
+				data.ReportValidation(NewBlockProtocol, false)
 			}
 
 		}

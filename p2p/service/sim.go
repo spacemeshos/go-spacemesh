@@ -151,6 +151,12 @@ func (sm simMessage) ValidationCompletedChan() chan MessageValidation {
 	return sm.validationCompletedChan
 }
 
+func (sm simMessage) ReportValidation(protocol string, isValid bool) {
+	if sm.validationCompletedChan != nil {
+		sm.validationCompletedChan <- *NewMessageValidation(sm.Bytes(), protocol, isValid)
+	}
+}
+
 func (sn *Node) Start() error {
 	// on simulation this doesn't really matter yet.
 	return nil

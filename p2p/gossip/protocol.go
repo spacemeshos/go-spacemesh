@@ -181,11 +181,30 @@ func (prot *Protocol) markMessageValidity(h hash, isValid bool) {
 	prot.oldMessageMu.Unlock()
 }
 
-func (prot *Protocol) propagateMessage(msg []byte, h hash) {
+func (prot *Protocol) propagateMessage(payload []byte, h hash, nextProt string) {
+	// add gossip header
+	header := &pb.Metadata{
+		NextProtocol:  nextProt,
+		ClientVersion: protocolVer,
+		Timestamp:     time.Now().Unix(),
+		AuthPubkey:    prot.localNodePubkey.Bytes(), // TODO: @noam consider replacing this with another reply mechanism
+	}
+
+	msg := &pb.ProtocolMessage{
+		Metadata: header,
+		Data:     &pb.ProtocolMessage_Payload{Payload: payload},
+	}
+
+	data, err := proto.Marshal(msg)
+	if err != nil {
+		prot.Log.Error("failed to encode signed message err: %v", err)
+		return
+	}
+
 	prot.peersMutex.RLock()
 	for p := range prot.peers {
 		peer := prot.peers[p]
-		peer.send(msg, h) // non blocking
+		peer.send(data, h) // non blocking
 	}
 	prot.peersMutex.RUnlock()
 }
@@ -256,7 +275,7 @@ func (prot *Protocol) processMessage(msg *pb.ProtocolMessage) {
 		validity := prot.isMessageValid(h)
 		prot.Log.Debug("got old message, hash %d validity %v", h, validity)
 		if validity == Valid {
-			prot.propagateMessage(data.Bytes(), h)
+			prot.propagateMessage(data.Bytes(), h, protocol)
 		} else {
 			// if the message is invalid we don't want to propagate it and we can return. If the message's validity is unknown,
 			// since the message is marked as old we can assume that there is another context that currently process this
@@ -296,7 +315,7 @@ loop:
 			}
 			prot.markMessageValidity(h, msgV.IsValid())
 			if msgV.IsValid() {
-				prot.propagateMessage(msgV.Message(), h)
+				prot.propagateMessage(msgV.Message(), h, msgV.Protocol())
 			}
 		case <-prot.shutdown:
 			err = errors.New("protocol shutdown")

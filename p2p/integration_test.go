@@ -50,10 +50,10 @@ func (its *IntegrationTestSuite) Test_Gossiping() {
 	node1 := its.Instances[0]
 
 	its.ForAll(func(idx int, s NodeTestInstance) error {
-		if node1.LocalNode().PublicKey().String() == s.LocalNode().PublicKey().String() {
-			s.RegisterProtocol(exProto)
-			return nil
-		}
+		//if node1.LocalNode().PublicKey().String() == s.LocalNode().PublicKey().String() {
+		//	s.RegisterProtocol(exProto)
+		//	return nil
+		//}
 		msgChans = append(msgChans, s.RegisterProtocol(exProto))
 		return nil
 	}, nil)
@@ -63,7 +63,7 @@ func (its *IntegrationTestSuite) Test_Gossiping() {
 	_ = node1.Broadcast(exProto, []byte(msg))
 	numgot := int32(0)
 
-	ctx, _ := context.WithTimeout(context.Background(), time.Second*10)
+	ctx, _ := context.WithTimeout(context.Background(), time.Second*100)
 	errg, ctx := errgroup.WithContext(ctx)
 	for _, mc := range msgChans {
 		ctx := ctx
@@ -87,7 +87,7 @@ func (its *IntegrationTestSuite) Test_Gossiping() {
 	errs := errg.Wait()
 	its.T().Log(errs)
 	its.NoError(errs)
-	its.Equal(int(numgot), its.BootstrappedNodeCount-1)
+	its.Equal(int(numgot), its.BootstrappedNodeCount + its.BootstrapNodesCount)
 }
 
 func Test_SmallP2PIntegrationSuite(t *testing.T) {

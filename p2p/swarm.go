@@ -49,6 +49,12 @@ func (pm protocolMessage) ValidationCompletedChan() chan service.MessageValidati
 	return pm.validationChan
 }
 
+func (pm protocolMessage) ReportValidation(protocol string, isValid bool) {
+	if pm.validationChan != nil {
+		pm.validationChan <- *service.NewMessageValidation(pm.Bytes(), protocol, isValid)
+	}
+}
+
 type cPool interface {
 	GetConnection(address string, pk p2pcrypto.PublicKey) (net.Connection, error)
 	Shutdown()
