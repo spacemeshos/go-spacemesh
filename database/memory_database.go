@@ -96,6 +96,23 @@ func (db *MemDatabase) NewBatch() Batch {
 
 func (db *MemDatabase) Len() int { return len(db.db) }
 
+func (db *MemDatabase) NewMemDatabaseIterator() *MemDatabaseIterator {
+	keys := make([][]byte, 0, len(db.db))
+	for k := range db.db {
+		keys = append(keys, []byte(k))
+	}
+
+	return &MemDatabaseIterator{
+		keys:  keys,
+		db:    db.db,
+		index: -1,
+	}
+}
+
+func (db *MemDatabase) Iterator() Iterator {
+	return db.NewMemDatabaseIterator()
+}
+
 type kv struct {
 	k, v []byte
 	del  bool

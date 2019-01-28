@@ -1,4 +1,7 @@
 @echo off
+PowerShell.exe -NoProfile -ExecutionPolicy Bypass -Command "& './scripts/win/verify-protoc-gen-go.ps1'"
+if %ERRORLEVEL% GTR 0 exit /B 1
+
 setlocal enableextensions
 FOR /F "usebackq tokens=*" %%G IN (`dir /s/b *.proto ^| find "pb"`) do (
   call :func %%G
