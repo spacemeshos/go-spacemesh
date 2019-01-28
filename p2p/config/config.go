@@ -45,18 +45,19 @@ type DiscoveryConfig struct {
 	BootstrapNodes         []string `mapstructure:"bootnodes"`
 }
 
-// DefaultConfig deines the default p2p configuration
-func DefaultConfig() Config {
-
-	// DHTConfigValues defines default values for swarm config params.
-	var DHTConfigValues = DiscoveryConfig{
+// defaultDiscoveryConfig defines default values for swarm config params.
+func defaultDiscoveryConfig() DiscoveryConfig {
+	return DiscoveryConfig{
 		Bootstrap:              false,
 		RoutingTableBucketSize: 20,
 		RoutingTableAlpha:      3,
 		BootstrapNodes: []string{ // these should be the spacemesh foundation bootstrap nodes
 		},
 	}
+}
 
+// DefaultConfig deines the default p2p configuration
+func DefaultConfig() Config {
 	return Config{
 		TCPPort:           7513,
 		NodeID:            "",
@@ -64,7 +65,7 @@ func DefaultConfig() Config {
 		DialTimeout:       duration("1m"),
 		ConnKeepAlive:     duration("48h"),
 		NetworkID:         TestNet,
-		DiscoveryConfig:   DHTConfigValues,
+		DiscoveryConfig:   defaultDiscoveryConfig(),
 		BufferSize:        100,
 		Gossip:            false,
 		RandomConnections: 5,
