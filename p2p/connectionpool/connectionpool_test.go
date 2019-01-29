@@ -237,15 +237,16 @@ func TestClosedConnection(t *testing.T) {
 	remotePub := generatePublicKey()
 	addr := "1.1.1.1"
 
+	nMock.SubscribeClosingConnections(cPool.OnClosedConnection)
 	// create connection
 	conn, _ := cPool.GetConnection(addr, remotePub)
 
 	// report that the connection was closed
 	nMock.PublishClosingConnection(conn)
-	time.Sleep(20 * time.Millisecond)
 
 	// query same connection and assert that it's a new instance
 	conn2, _ := cPool.GetConnection(addr, remotePub)
+
 	assert.NotEqual(t, conn.ID(), conn2.ID())
 	assert.Equal(t, int32(2), nMock.DialCount())
 }

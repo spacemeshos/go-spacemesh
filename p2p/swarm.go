@@ -162,9 +162,12 @@ func newSwarm(ctx context.Context, config config.Config, newNode bool, persist b
 	s.network.SubscribeOnNewRemoteConnections(s.onNewConnection)
 	s.network.SubscribeClosingConnections(s.onClosedConnection)
 
-	// this also subscribes to `net`, the order matters!.
-	s.cPool	= connectionpool.NewConnectionPool(s.network, l.PublicKey())
-	// todo: consider registering cpool from here to explicitly show the order and registrations
+	cpool := connectionpool.NewConnectionPool(s.network, l.PublicKey())
+
+	s.network.SubscribeOnNewRemoteConnections(cpool.OnNewConnection)
+	s.network.SubscribeClosingConnections(cpool.OnClosedConnection)
+
+	s.cPool	= cpool
 
 	s.gossip = gossip.NewProtocol(config.SwarmConfig, s, s.LocalNode().PublicKey(), s.lNode.Log)
 
@@ -175,7 +178,7 @@ func newSwarm(ctx context.Context, config config.Config, newNode bool, persist b
 
 func (s *swarm) onNewConnection(nce net.NewConnectionEvent) {
 	s.dht.Update(nce.Node)
-	// todo: consider doing cpool actions from here.
+	// todo: consider doing cpool actions from here instead of registering cpool aswell.
 	s.addIncomingPeer(nce.Node.PublicKey())
 }
 

@@ -154,7 +154,7 @@ func (n *Net) IncomingMessages() []chan IncomingMessageEvent {
 	return n.incomingMessagesQueue
 }
 
-// SubscribeClosingConnections registers a channel where closing connections events are reported
+// SubscribeClosingConnections registers a callback for a new connection event. all registered callbacks are called before moving.
 func (n *Net) SubscribeClosingConnections(f func(connection Connection)) {
 	n.clsMutex.Lock()
 	n.closingConnections = append(n.closingConnections, f)
@@ -278,7 +278,7 @@ func (n *Net) acceptTCP() {
 	}
 }
 
-// SubscribeOnNewRemoteConnections returns new channel where events of new remote connections are reported
+// SubscribeOnNewRemoteConnections registers a callback for a new connection event. all registered callbacks are called before moving.
 func (n *Net) SubscribeOnNewRemoteConnections(f func(event NewConnectionEvent)) {
 	n.regMutex.Lock()
 	n.regNewRemoteConn = append(n.regNewRemoteConn, f)

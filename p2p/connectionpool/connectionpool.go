@@ -51,9 +51,6 @@ func NewConnectionPool(network networker, lPub p2pcrypto.PublicKey) *ConnectionP
 		shutdown:      false,
 	}
 
-	network.SubscribeOnNewRemoteConnections(cPool.OnNewConnection)
-	network.SubscribeClosingConnections(cPool.OnClosedConnection)
-
 	return cPool
 }
 
@@ -73,9 +70,9 @@ func (cp *ConnectionPool) OnClosedConnection(c net.Connection) {
 
 func (cp *ConnectionPool) isShuttingDown() bool {
 	var isd bool
-	cp.connMutex.Lock()
+	cp.connMutex.RLock()
 	isd = cp.shutdown
-	cp.connMutex.Unlock()
+	cp.connMutex.RUnlock()
 	return isd
 }
 
