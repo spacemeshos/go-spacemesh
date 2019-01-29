@@ -192,10 +192,7 @@ func (rt *routingTableImpl) NearestPeers(req NearestPeersReq) {
 func (rt *routingTableImpl) Update(peer node.Node) {
 	cb := make(chan struct{})
 	rt.updateReqs <- PeerAndCallback{peer, cb}
-	select {
-	case <-cb:
-	default:
-	}
+	<-cb
 }
 
 func (rt *routingTableImpl) Remove(peer node.Node) {
@@ -304,6 +301,7 @@ func (rt *routingTableImpl) randomPeers(qty int) []node.Node {
 // or if its better in terms of latency and recent contact than out oldest contact in the right bucket.
 // this keeps fresh nodes at the top of the bucket and make sure we won't lose contact with the network and keep most healthy nodes.
 func (rt *routingTableImpl) update(p node.Node, cb chan struct{}) {
+	defer close(cb)
 
 	if rt.local.Equals(p.DhtID()) {
 		rt.log.Warning("Ignoring attempt to add local node to the routing table")
@@ -341,13 +339,12 @@ func (rt *routingTableImpl) update(p node.Node, cb chan struct{}) {
 		if cpl == len(rt.buckets)-1 && cpl < BucketCount { // this is the bucket
 			rt.split()
 			// after split we check again in which bucket we should add peer.
-			rt.update(p, cb)
+			rt.update(p, make(chan struct{}))
 			return
 		} else {
 			// TODO: if bucket is full and can't be split ping oldest node and replace if it fails to answer
 			// TODO: save peer for replacement later
 			// for now assume we pinged last node and it answered until we get ping done.
-			close(cb)
 			return
 		}
 		// TODO: check latency metrics and replace if new node is better then oldest one.
@@ -356,8 +353,6 @@ func (rt *routingTableImpl) update(p node.Node, cb chan struct{}) {
 
 	// new node and bucket isn't full
 	bucket.PushFront(p)
-
-	close(cb)
 }
 
 func (rt *routingTableImpl) split() {

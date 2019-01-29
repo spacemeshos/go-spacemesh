@@ -64,7 +64,6 @@ func (d *KadDHT) Bootstrap(ctx context.Context) error {
 
 	d.local.Debug("Lookup using %d preloaded bootnodes ", bn)
 
-	ctx, _ = context.WithTimeout(ctx, BootstrapTimeout)
 	err := d.tryBoot(ctx, c)
 
 	return err
@@ -117,7 +116,13 @@ loop:
 				d.local.Warning("%d lookup didn't bootstrap the routing table. RT now has %d peers", tries, size)
 			}
 
-			time.Sleep(LookupIntervals)
+			timer := time.NewTimer(LookupIntervals)
+			select {
+				case <-ctx.Done():
+					return ErrBootAbort
+				case <-timer.C:
+					continue loop
+			}
 		}
 	}
 

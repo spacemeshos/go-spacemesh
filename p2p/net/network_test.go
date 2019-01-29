@@ -2,7 +2,6 @@ package net
 
 import (
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -12,14 +11,6 @@ import (
 	"time"
 )
 
-func waitForCallbackOrTimeout(t *testing.T, outchan chan NewConnectionEvent, expectedPeerPubkey p2pcrypto.PublicKey) {
-	select {
-	case res := <-outchan:
-		assert.Equal(t, expectedPeerPubkey.String(), res.Conn.Session().ID().String(), "wrong session received")
-	case <-time.After(2 * time.Second):
-		assert.Nil(t, expectedPeerPubkey, "Didn't get channel notification")
-	}
-}
 
 func Test_sumByteArray(t *testing.T) {
 	bytez := sumByteArray([]byte{0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1})
@@ -54,7 +45,7 @@ func TestNet_EnqueueMessage(t *testing.T) {
 	wg.Wait()
 }
 
-func TestHandlePreSessionIncomingMessage(t *testing.T) {
+func TestHandlePreSessionIncomingMessage2(t *testing.T) {
 	r := require.New(t)
 	var wg sync.WaitGroup
 
@@ -65,32 +56,28 @@ func TestHandlePreSessionIncomingMessage(t *testing.T) {
 	bobsAliceConn.addr = aliceNode.Address()
 	bobsNet, err := NewNet(config.DefaultConfig(), bobNode)
 	r.NoError(err)
-	bobsNewConnChan := bobsNet.SubscribeOnNewRemoteConnections()
+	bobsNet.SubscribeOnNewRemoteConnections(func(event NewConnectionEvent) {
+		r.Equal(aliceNode.PublicKey().String(), event.Conn.Session().ID().String(), "wrong session received")
+		wg.Done()
+	})
 
 	aliceSessionWithBob := createSession(aliceNode.PrivateKey(), bobNode.PublicKey())
 	aliceHandshakeMessageToBob, err := generateHandshakeMessage(aliceSessionWithBob, 1, 123, aliceNode.PublicKey())
 	r.NoError(err)
 
+	wg.Add(1)
+
 	err = bobsNet.HandlePreSessionIncomingMessage(bobsAliceConn, aliceHandshakeMessageToBob)
 	r.NoError(err)
 	r.Equal(int32(0), bobsAliceConn.SendCount())
-
-	wg.Add(1)
-	go func() {
-		wg.Done()
-		waitForCallbackOrTimeout(t, bobsNewConnChan, aliceNode.PublicKey())
-	}()
 
 	wg.Wait()
 
+	wg.Add(1)
+
 	err = bobsNet.HandlePreSessionIncomingMessage(bobsAliceConn, aliceHandshakeMessageToBob)
 	r.NoError(err)
 	r.Equal(int32(0), bobsAliceConn.SendCount())
 
-	wg.Add(1)
-	go func() {
-		wg.Done()
-		waitForCallbackOrTimeout(t, bobsNewConnChan, aliceNode.PublicKey())
-	}()
 	wg.Wait()
 }
