@@ -16,7 +16,7 @@ import (
 )
 
 type BlockValidator interface {
-	ValidateBlock(block *mesh.Block) bool
+	EligibleBlock(block *mesh.Block) bool
 }
 
 type Configuration struct {
@@ -149,7 +149,7 @@ func (s *Syncer) Synchronise() {
 				for id := range blockIds {
 					for _, p := range s.GetPeers() {
 						if bCh, err := sendBlockRequest(s.MessageServer, p, mesh.BlockID(id), s.Log); err == nil {
-							if b := <-bCh; b != nil && s.ValidateBlock(b) { //some validation testing
+							if b := <-bCh; b != nil && s.EligibleBlock(b) { //some validation testing
 								s.Debug("received block", b)
 								output <- b
 								break

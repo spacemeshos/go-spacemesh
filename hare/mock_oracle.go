@@ -20,9 +20,9 @@ type Stringer interface {
 }
 
 type Rolacle interface {
-	Register(stringer Stringer)
-	Unregister(stringer Stringer)
-	Validate(committeeSize int, proof Signature) bool
+	Register(id string)
+	Unregister(id string)
+	Eligible(instanceID *InstanceId, K int, committeeSize int, pubKey string, proof []byte) bool
 }
 
 type hasherU32 struct {
@@ -59,21 +59,21 @@ func NewMockHashOracle(expectedSize int) *MockHashOracle {
 	return mock
 }
 
-func (mock *MockHashOracle) Register(stringer Stringer) {
+func (mock *MockHashOracle) Register(client string) {
 	mock.mutex.Lock()
 
-	if _, exist := mock.clients[stringer.String()]; exist {
+	if _, exist := mock.clients[client]; exist {
 		mock.mutex.Unlock()
 		return
 	}
 
-	mock.clients[stringer.String()] = struct{}{}
+	mock.clients[client] = struct{}{}
 	mock.mutex.Unlock()
 }
 
-func (mock *MockHashOracle) Unregister(stringer Stringer) {
+func (mock *MockHashOracle) Unregister(client string) {
 	mock.mutex.Lock()
-	delete(mock.clients, stringer.String())
+	delete(mock.clients, client)
 	mock.mutex.Unlock()
 }
 
@@ -97,8 +97,8 @@ func (mock *MockHashOracle) calcThreshold(committeeSize int) uint32 {
 	return uint32(uint64(committeeSize) * uint64(mock.hasher.MaxValue()) / uint64(numClients))
 }
 
-// Validate if a proof is valid for a given committee size
-func (mock *MockHashOracle) Validate(committeeSize int, proof Signature) bool {
+// Eligible if a proof is valid for a given committee size
+func (mock *MockHashOracle) Eligible(instanceID *InstanceId, K int, committeeSize int, pubKey string, proof []byte) bool {
 	if proof == nil {
 		log.Warning("Oracle query with proof=nil. Returning false")
 		return false
