@@ -188,6 +188,10 @@ func (sn *Node) sendMessageImpl(nodeID p2pcrypto.PublicKey, protocol string, pay
 }
 
 func (sn *Node) sleep(delay uint32) {
+	if delay == 0 {
+		return
+	}
+	
 	ranDelay := delay
 	if sn.randBehaviour {
 		ranDelay = rand.Uint32() % delay
