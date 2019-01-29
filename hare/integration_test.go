@@ -53,7 +53,7 @@ func Test_16Nodes_HareIntegrationSuite(t *testing.T) {
 		broker := NewBroker(s)
 		output := make(chan TerminationOutput, 1)
 		signing := NewMockSigning()
-		oracle.Register(signing.Verifier())
+		oracle.Register(signing.Verifier().String())
 		proc := NewConsensusProcess(cfg, *instanceId1, his.initialSets[idx], oracle, signing, s, output)
 		broker.Register(proc)
 		broker.Start()
@@ -63,7 +63,7 @@ func Test_16Nodes_HareIntegrationSuite(t *testing.T) {
 	suite.Run(t, his)
 }
 
-func (his *hareIntegrationThreeNodes) Test_ThreeNodes_AllHonest() {
+func (his *hareIntegrationThreeNodes) Test_16Nodes_AllHonest() {
 	for _, proc := range his.procs {
 		proc.Start()
 	}
@@ -106,7 +106,7 @@ func Test_20Nodes_HareIntegrationSuite(t *testing.T) {
 		broker := NewBroker(s)
 		output := make(chan TerminationOutput, 1)
 		signing := NewMockSigning()
-		oracle.Register(signing.Verifier())
+		oracle.Register(signing.Verifier().String())
 		proc := NewConsensusProcess(cfg, *instanceId1, his.initialSets[idx], oracle, signing, s, output)
 		broker.Register(proc)
 		broker.Start()
@@ -116,7 +116,7 @@ func Test_20Nodes_HareIntegrationSuite(t *testing.T) {
 	suite.Run(t, his)
 }
 
-func (his *hareIntegration20Nodes) Test_100Nodes_AllHonest() {
+func (his *hareIntegration20Nodes) Test_20Nodes_AllHonest() {
 	for _, proc := range his.procs {
 		proc.Start()
 	}

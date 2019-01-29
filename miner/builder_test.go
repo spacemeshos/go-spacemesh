@@ -37,6 +37,14 @@ func (m MockOrphans) GetOrphans() []mesh.BlockID{
 	return m.st
 }
 
+type mockBlockOracle struct {
+
+}
+
+func (mbo mockBlockOracle) Eligible(id mesh.LayerID, pubkey string) bool {
+	return true
+}
+
 func TestBlockBuilder_StartStop(t *testing.T) {
 
 	net := service.NewSimulator()
@@ -47,7 +55,7 @@ func TestBlockBuilder_StartStop(t *testing.T) {
 	hareRes := []mesh.BlockID{mesh.BlockID(0), mesh.BlockID(1), mesh.BlockID(2), mesh.BlockID(3)}
 	hare := MockHare{res:hareRes}
 
-	builder := NewBlockBuilder(n,beginRound, MockCoin{}, MockOrphans{st:[]mesh.BlockID{1,2,3}}, hare)
+	builder := NewBlockBuilder(n.Node.String(), n,beginRound, MockCoin{}, MockOrphans{st:[]mesh.BlockID{1,2,3}}, hare, mockBlockOracle{})
 
 	err := builder.Start()
 	assert.NoError(t, err)
@@ -77,7 +85,7 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 	hareRes := []mesh.BlockID{mesh.BlockID(0), mesh.BlockID(1), mesh.BlockID(2), mesh.BlockID(3)}
 	hare := MockHare{res:hareRes}
 
-	builder := NewBlockBuilder(n,beginRound, MockCoin{}, MockOrphans{st:[]mesh.BlockID{1,2,3}}, hare)
+	builder := NewBlockBuilder(n.Node.String(), n,beginRound, MockCoin{}, MockOrphans{st:[]mesh.BlockID{1,2,3}}, hare, mockBlockOracle{})
 
 	err := builder.Start()
 	assert.NoError(t, err)

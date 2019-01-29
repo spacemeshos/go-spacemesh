@@ -75,7 +75,7 @@ func generateConsensusProcess(t *testing.T) *ConsensusProcess {
 	s := NewSetFromValues(value1)
 	oracle := NewMockHashOracle(numOfClients)
 	signing := NewMockSigning()
-	oracle.Register(signing.Verifier())
+	oracle.Register(signing.Verifier().String())
 	output := make(chan TerminationOutput,1)
 
 	return NewConsensusProcess(cfg, *instanceId1, s, oracle, signing, n1, output)

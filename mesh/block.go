@@ -17,6 +17,7 @@ type LayerID uint32
 type Block struct {
 	Id          BlockID
 	LayerIndex  LayerID
+	MinerID string
 	Data        []byte
 	Coin        bool
 	Timestamp   int64

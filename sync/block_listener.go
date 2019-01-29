@@ -77,7 +77,7 @@ func (bl *BlockListener) ListenToGossipBlocks(){
 				log.Error("received invalid block from sender %v", data.Sender())
 				break
 			}
-			if bl.ValidateBlock(&blk){
+			if bl.EligibleBlock(&blk){
 				err := bl.AddBlock(&blk)
 				if err != nil {
 					log.Info("Block already received")
@@ -111,7 +111,7 @@ func (bl *BlockListener) run() {
 func (bl *BlockListener) FetchBlock(id mesh.BlockID) {
 	for _, p := range bl.GetPeers() {
 		if ch, err := sendBlockRequest(bl.MessageServer, p, id, bl.Log); err == nil {
-			if b := <-ch; b != nil && bl.ValidateBlock(b) {
+			if b := <-ch; b != nil && bl.EligibleBlock(b) {
 				bl.AddBlock(b)
 				bl.addUnknownToQueue(b) //add all child blocks to unknown queue
 				return
