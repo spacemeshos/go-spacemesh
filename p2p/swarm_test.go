@@ -333,8 +333,7 @@ func TestSwarm_MultipleMessagesFromMultipleSendersToMultipleProtocols(t *testing
 	const Protos = 50
 
 	cfg := config.DefaultConfig()
-	cfg.SwarmConfig.Gossip = false
-	cfg.SwarmConfig.Bootstrap = false
+	cfg.DiscoveryConfig.Bootstrap = false
 
 	pend := make(map[string]chan struct{})
 	var mu sync.Mutex
@@ -577,9 +576,8 @@ func Test_Swarm_getMorePeers2(t *testing.T) {
 	// test normal flow
 	numpeers := 3
 	cfg := config.DefaultConfig()
-	cfg.SwarmConfig.Bootstrap = false
-	cfg.SwarmConfig.Gossip = false
-	cfg.SwarmConfig.RandomConnections = numpeers
+	cfg.RandomConnections = numpeers
+	cfg.DiscoveryConfig.Bootstrap = false
 	n := p2pTestNoStart(t, cfg)
 
 	conn, _ := n.SubscribePeerEvents()
@@ -598,9 +596,8 @@ func Test_Swarm_getMorePeers3(t *testing.T) {
 	// test normal flow
 	numpeers := 3
 	cfg := config.DefaultConfig()
-	cfg.SwarmConfig.Bootstrap = false
-	cfg.SwarmConfig.Gossip = false
-	cfg.SwarmConfig.RandomConnections = numpeers
+	cfg.RandomConnections = numpeers
+	cfg.DiscoveryConfig.Bootstrap = false
 	n := p2pTestNoStart(t, cfg)
 
 	conn, _ := n.SubscribePeerEvents()
@@ -630,9 +627,8 @@ func Test_Swarm_getMorePeers4(t *testing.T) {
 	// test normal flow
 	numpeers := 3
 	cfg := config.DefaultConfig()
-	cfg.SwarmConfig.Bootstrap = false
-	cfg.SwarmConfig.Gossip = false
-	cfg.SwarmConfig.RandomConnections = numpeers
+	cfg.RandomConnections = numpeers
+	cfg.DiscoveryConfig.Bootstrap = false
 	n := p2pTestNoStart(t, cfg)
 
 	conn, _ := n.SubscribePeerEvents()
@@ -664,9 +660,8 @@ func Test_Swarm_getMorePeers5(t *testing.T) {
 	// test normal flow
 	numpeers := 3
 	cfg := config.DefaultConfig()
-	cfg.SwarmConfig.Bootstrap = false
-	cfg.SwarmConfig.Gossip = false
-	cfg.SwarmConfig.RandomConnections = numpeers
+	cfg.RandomConnections = numpeers
+	cfg.DiscoveryConfig.Bootstrap = false
 	n := p2pTestNoStart(t, cfg)
 
 	conn, _ := n.SubscribePeerEvents()
@@ -697,9 +692,8 @@ func Test_Swarm_getMorePeers6(t *testing.T) {
 	// test normal flow
 	numpeers := 3
 	cfg := config.DefaultConfig()
-	cfg.SwarmConfig.Bootstrap = false
-	cfg.SwarmConfig.Gossip = false
-	cfg.SwarmConfig.RandomConnections = numpeers
+	cfg.RandomConnections = numpeers
+	cfg.DiscoveryConfig.Bootstrap = false
 	n := p2pTestNoStart(t, cfg)
 
 	conn, _ := n.SubscribePeerEvents()
