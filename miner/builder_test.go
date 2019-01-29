@@ -3,7 +3,7 @@ package miner
 import (
 	"bytes"
 	"github.com/davecgh/go-xdr/xdr2"
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/state"
@@ -69,8 +69,8 @@ func TestBlockBuilder_StartStop(t *testing.T) {
 	err = builder.Stop()
 	assert.Error(t, err)
 
-	addr1 := common.BytesToAddress([]byte{0x02})
-	addr2 := common.BytesToAddress([]byte{0x01})
+	addr1 := address.BytesToAddress([]byte{0x02})
+	addr2 := address.BytesToAddress([]byte{0x01})
 	err = builder.AddTransaction(1, addr1,addr2,big.NewInt(1))
 	assert.Error(t,err)
 }
@@ -90,8 +90,8 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 	err := builder.Start()
 	assert.NoError(t, err)
 
-	addr1 := common.BytesToAddress([]byte{0x02})
-	addr2 := common.BytesToAddress([]byte{0x01})
+	addr1 := address.BytesToAddress([]byte{0x02})
+	addr2 := address.BytesToAddress([]byte{0x01})
 
 	trans := []mesh.SerializableTransaction {
 		Transaction2SerializableTransaction(state.NewTransaction(1, addr1,addr2,big.NewInt(1), DefaultGasLimit, big.NewInt(DefaultGas))),
@@ -123,7 +123,7 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 }
 
 func TestBlockBuilder_SerializeTrans(t *testing.T) {
-	tx := mesh.NewSerializableTransaction(0, common.BytesToAddress([]byte{0x01}), common.BytesToAddress([]byte{0x02}), big.NewInt(10), big.NewInt(10), 10)
+	tx := mesh.NewSerializableTransaction(0, address.BytesToAddress([]byte{0x01}), address.BytesToAddress([]byte{0x02}), big.NewInt(10), big.NewInt(10), 10)
 	buf, err := mesh.TransactionAsBytes(tx)
 	assert.NoError(t,err)
 

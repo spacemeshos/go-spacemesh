@@ -3,6 +3,7 @@ package state
 import (
 	"container/list"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/crypto/sha3"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -23,8 +24,8 @@ type Transaction struct {
 	AccountNonce 	uint64
 	Price			*big.Int
 	GasLimit		uint64
-	Recipient 		*common.Address
-	Origin			common.Address //todo: remove this, should be calculated from sig.
+	Recipient 		*address.Address
+	Origin			address.Address //todo: remove this, should be calculated from sig.
 	Amount       	*big.Int
 	Payload      	[]byte
 
@@ -33,7 +34,7 @@ type Transaction struct {
 	hash *common.Hash
 }
 
-func NewTransaction(nonce uint64, origin common.Address, destination common.Address,
+func NewTransaction(nonce uint64, origin address.Address, destination address.Address,
 					amount *big.Int, gasLimit uint64, gasPrice *big.Int) *Transaction {
 	return &Transaction{
 		AccountNonce: nonce,
@@ -164,8 +165,8 @@ func (tp *TransactionProcessor) randomSort(transactions Transactions) Transactio
 	return transactions
 }
 
-func (tp *TransactionProcessor) coalesceTransactionsBySender(transactions Transactions) map[common.Address][]*Transaction {
-	trnsBySender := make(map[common.Address][]*Transaction)
+func (tp *TransactionProcessor) coalesceTransactionsBySender(transactions Transactions) map[address.Address][]*Transaction {
+	trnsBySender := make(map[address.Address][]*Transaction)
 	for _, trns := range transactions {
 		trnsBySender[trns.Origin] = append(trnsBySender[trns.Origin], trns)
 	}
@@ -181,9 +182,9 @@ func (tp *TransactionProcessor) coalesceTransactionsBySender(transactions Transa
 	return trnsBySender
 }
 
-func (tp *TransactionProcessor) Process(transactions Transactions, trnsBySender map[common.Address][]*Transaction) (errors uint32){
-	senderPut := make(map[common.Address]struct{})
-	sortedOriginByTransactions := make([]common.Address, 0,10)
+func (tp *TransactionProcessor) Process(transactions Transactions, trnsBySender map[address.Address][]*Transaction) (errors uint32){
+	senderPut := make(map[address.Address]struct{})
+	sortedOriginByTransactions := make([]address.Address, 0,10)
 	errors = 0
 	// The order of the transactions determines the order addresses by which we take transactions
 	// Maybe refactor this
@@ -258,7 +259,7 @@ func (tp *TransactionProcessor) ApplyTransaction(trans *Transaction) error{
 	return nil
 }
 
-func transfer(db GlobalStateDB, sender, recipient common.Address, amount *big.Int) {
+func transfer(db GlobalStateDB, sender, recipient address.Address, amount *big.Int) {
 	db.SubBalance(sender, amount)
 	db.AddBalance(recipient, amount)
 }

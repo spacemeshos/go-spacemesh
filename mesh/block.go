@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/davecgh/go-xdr/xdr2"
 	"github.com/google/uuid"
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/address"
 	"io"
 	"math/big"
 	"time"
@@ -30,8 +30,8 @@ type SerializableTransaction struct{
 	AccountNonce 	uint64
 	Price			[]byte
 	GasLimit		uint64
-	Recipient 		*common.Address
-	Origin			common.Address //todo: remove this, should be calculated from sig.
+	Recipient 		*address.Address
+	Origin			address.Address //todo: remove this, should be calculated from sig.
 	Amount       	[]byte
 	Payload      	[]byte
 }
@@ -49,7 +49,7 @@ func NewBlock(coin bool, data []byte, ts time.Time, layerId LayerID) *Block {
 	return &b
 }
 
-func  NewSerializableTransaction(nonce uint64, origin, recepient common.Address, amount, price *big.Int, gasLimit uint64) *SerializableTransaction{
+func  NewSerializableTransaction(nonce uint64, origin, recepient address.Address, amount, price *big.Int, gasLimit uint64) *SerializableTransaction{
 	return &SerializableTransaction{
 		AccountNonce: nonce,
 		Price:            price.Bytes(),

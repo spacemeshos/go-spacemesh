@@ -3,7 +3,7 @@ package sync
 import (
 	"bytes"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -146,7 +146,7 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 	bl1.Start()
 
 	blk := mesh.NewBlock(false, nil, time.Now(), 1)
-	tx := mesh.NewSerializableTransaction(0, common.BytesToAddress([]byte{0x01}), common.BytesToAddress([]byte{0x02}), big.NewInt(10), big.NewInt(10), 10)
+	tx := mesh.NewSerializableTransaction(0, address.BytesToAddress([]byte{0x01}), address.BytesToAddress([]byte{0x02}), big.NewInt(10), big.NewInt(10), 10)
 	blk.AddTransaction(tx)
 	blk.AddVote(1)
 	blk.AddView(2)

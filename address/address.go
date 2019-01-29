@@ -1,15 +1,16 @@
-package common
+package address
 
 import (
 	"encoding/hex"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/crypto/sha3"
 	"math/big"
 	"reflect"
 )
 
 // Address represents the 20 byte address of an spacemesh account.
-type Address [AddressLength]byte
+type Address [common.AddressLength]byte
 
 var addressT = reflect.TypeOf(Address{})
 
@@ -29,7 +30,7 @@ func BigToAddress(b *big.Int) Address { return BytesToAddress(b.Bytes()) }
 
 // HexToAddress returns Address with byte values of s.
 // If s is larger than len(h), s will be cropped from the left.
-func HexToAddress(s string) Address { return BytesToAddress(FromHex(s)) }
+func HexToAddress(s string) Address { return BytesToAddress(common.FromHex(s)) }
 
 
 
@@ -40,7 +41,7 @@ func (a Address) Bytes() []byte { return a[:] }
 func (a Address) Big() *big.Int { return new(big.Int).SetBytes(a[:]) }
 
 // Hash converts an address to a hash by left-padding it with zeros.
-func (a Address) Hash() Hash { return BytesToHash(a[:]) }
+func (a Address) Hash() common.Hash { return common.BytesToHash(a[:]) }
 
 // Hex returns an EIP55-compliant hex string representation of the address.
 func (a Address) Hex() string {
@@ -79,9 +80,9 @@ func (a Address) Format(s fmt.State, c rune) {
 // If b is larger than len(a) it will panic.
 func (a *Address) SetBytes(b []byte) {
 	if len(b) > len(a) {
-		b = b[len(b)-AddressLength:]
+		b = b[len(b)-common.AddressLength:]
 	}
-	copy(a[AddressLength-len(b):], b)
+	copy(a[common.AddressLength-len(b):], b)
 }
 
 /*

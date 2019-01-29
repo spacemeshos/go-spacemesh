@@ -17,6 +17,7 @@
 package state
 
 import (
+	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/database"
 
@@ -36,7 +37,7 @@ func TestUpdateLeaks(t *testing.T) {
 
 	// Update it with some accounts
 	for i := byte(0); i < 255; i++ {
-		addr := common.BytesToAddress([]byte{i})
+		addr := address.BytesToAddress([]byte{i})
 		state.AddBalance(addr, big.NewInt(int64(11*i)))
 		state.SetNonce(addr, uint64(42*i))
 		state.IntermediateRoot(false)
@@ -57,22 +58,22 @@ func TestIntermediateLeaks(t *testing.T) {
 	transState, _ := New(common.Hash{}, NewDatabase(transDb))
 	finalState, _ := New(common.Hash{}, NewDatabase(finalDb))
 
-	modify := func(state *StateDB, addr common.Address, i, tweak byte) {
+	modify := func(state *StateDB, addr address.Address, i, tweak byte) {
 		state.SetBalance(addr, big.NewInt(int64(11*i)+int64(tweak)))
 		state.SetNonce(addr, uint64(42*i+tweak))
 	}
 
 	// Modify the transient state.
 	for i := byte(0); i < 255; i++ {
-		modify(transState, common.Address{byte(i)}, i, 0)
+		modify(transState, address.Address{byte(i)}, i, 0)
 	}
 	// Write modifications to trie.
 	transState.IntermediateRoot(false)
 
 	// Overwrite all the data with new values in the transient database.
 	for i := byte(0); i < 255; i++ {
-		modify(transState, common.Address{byte(i)}, i, 99)
-		modify(finalState, common.Address{byte(i)}, i, 99)
+		modify(transState, address.Address{byte(i)}, i, 99)
+		modify(finalState, address.Address{byte(i)}, i, 99)
 	}
 
 	// Commit and cross check the databases.
@@ -104,7 +105,7 @@ func TestCopy(t *testing.T) {
 	orig, _ := New(common.Hash{}, NewDatabase(database.NewMemDatabase()))
 
 	for i := byte(0); i < 255; i++ {
-		obj := orig.GetOrNewStateObj(common.BytesToAddress([]byte{i}))
+		obj := orig.GetOrNewStateObj(address.BytesToAddress([]byte{i}))
 		obj.AddBalance(big.NewInt(int64(i)))
 		orig.updateStateObj(obj)
 	}
@@ -114,8 +115,8 @@ func TestCopy(t *testing.T) {
 	copy := orig.Copy()
 
 	for i := byte(0); i < 255; i++ {
-		origObj := orig.GetOrNewStateObj(common.BytesToAddress([]byte{i}))
-		copyObj := copy.GetOrNewStateObj(common.BytesToAddress([]byte{i}))
+		origObj := orig.GetOrNewStateObj(address.BytesToAddress([]byte{i}))
+		copyObj := copy.GetOrNewStateObj(address.BytesToAddress([]byte{i}))
 
 		origObj.AddBalance(big.NewInt(2 * int64(i)))
 		copyObj.AddBalance(big.NewInt(3 * int64(i)))
@@ -134,8 +135,8 @@ func TestCopy(t *testing.T) {
 
 	// Verify that the two states have been updated independently
 	for i := byte(0); i < 255; i++ {
-		origObj := orig.GetOrNewStateObj(common.BytesToAddress([]byte{i}))
-		copyObj := copy.GetOrNewStateObj(common.BytesToAddress([]byte{i}))
+		origObj := orig.GetOrNewStateObj(address.BytesToAddress([]byte{i}))
+		copyObj := copy.GetOrNewStateObj(address.BytesToAddress([]byte{i}))
 
 		if want := big.NewInt(3 * int64(i)); origObj.Balance().Cmp(want) != 0 {
 			t.Errorf("orig obj %d: balance mismatch: have %v, want %v", i, origObj.Balance(), want)
@@ -153,7 +154,7 @@ func TestCopy(t *testing.T) {
 // See https://github.com/ethereum/go-ethereum/pull/15225#issuecomment-380191512
 func TestCopyOfCopy(t *testing.T) {
 	sdb, _ := New(common.Hash{}, NewDatabase(database.NewMemDatabase()))
-	addr := common.HexToAddress("aaaa")
+	addr := address.HexToAddress("aaaa")
 	sdb.SetBalance(addr, big.NewInt(42))
 
 	if got := sdb.Copy().GetBalance(addr).Uint64(); got != 42 {
