@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"fmt"
 	"github.com/golang/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/address"
@@ -30,10 +31,15 @@ type NodeAPIMock struct {
 }
 
 type NetworkMock struct {
+	broadCastErr bool
 	broadcasted []byte
 }
 
+
 func (s *NetworkMock) Broadcast(chanel string, payload []byte) error{
+	if s.broadCastErr {
+		return errors.New("error during broadcast")
+	}
 	s.broadcasted = payload
 	return nil
 }
@@ -374,6 +380,139 @@ func TestJsonWalletApi_Errors(t *testing.T) {
 	value = resp.Header.Get("Content-Type")
 	assert.Equal(t, value, contentType)
 
+
+	// stop the services
+	jsonService.StopService()
+	<-jsonStatus
+	grpcService.StopService()
+	<-grpcStatus
+}
+
+
+func TestSpaceMeshGrpcService_Broadcast(t *testing.T) {
+
+	port1, err := node.GetUnboundedPort()
+	port2, err := node.GetUnboundedPort()
+	assert.NoError(t, err, "Should be able to establish a connection on a port")
+	Data := []byte{1,3,3,7}
+	if config.ConfigValues.JSONServerPort == 0 {
+		config.ConfigValues.JSONServerPort = port1
+		config.ConfigValues.GrpcServerPort = port2
+	}
+	ap := NewNodeAPIMock()
+	net := NetworkMock{ broadcasted:[]byte{0x00}}
+
+	grpcService := NewGrpcService(&net, ap)
+	jsonService := NewJSONHTTPServer()
+
+	jsonStatus := make(chan bool, 2)
+	grpcStatus := make(chan bool, 2)
+
+	// start grp and json server
+	grpcService.StartService(grpcStatus)
+	<-grpcStatus
+
+	jsonService.StartService(jsonStatus)
+	<-jsonStatus
+
+	const message = "ok"
+	const contentType = "application/json"
+
+	// generate request payload (api input params)
+	reqParams := pb.BroadcastMessage{Protocol: "Test", Data: Data}
+	var m jsonpb.Marshaler
+	payload, err := m.MarshalToString(&reqParams)
+	assert.NoError(t, err, "failed to marshal to string")
+
+	// Without this running this on Travis CI might generate a connection refused error
+	// because the server may not be ready to accept connections just yet.
+	time.Sleep(3 * time.Second)
+
+	url := fmt.Sprintf("http://127.0.0.1:%d/v1/broadcast", config.ConfigValues.JSONServerPort)
+	resp, err := http.Post(url, contentType, strings.NewReader(payload))
+	assert.NoError(t, err, "failed to http post to api endpoint")
+
+	defer resp.Body.Close()
+	buf, err := ioutil.ReadAll(resp.Body)
+	assert.NoError(t, err, "failed to read response body")
+
+	got, want := resp.StatusCode, http.StatusOK
+	assert.Equal(t, want, got)
+
+	var msg pb.SimpleMessage
+	err = jsonpb.UnmarshalString(string(buf), &msg)
+	assert.NoError(t, err)
+
+	gotVal, wantVal := msg.Value, message
+	assert.Equal(t, wantVal, gotVal)
+
+	value := resp.Header.Get("Content-Type")
+	assert.Equal(t, value, contentType)
+
+
+	assert.Equal(t, Data, net.broadcasted)
+
+
+	// stop the services
+	jsonService.StopService()
+	<-jsonStatus
+	grpcService.StopService()
+	<-grpcStatus
+}
+
+
+func TestSpaceMeshGrpcService_BroadcastErrors(t *testing.T) {
+	port1, err := node.GetUnboundedPort()
+	port2, err := node.GetUnboundedPort()
+	assert.NoError(t, err, "Should be able to establish a connection on a port")
+	Data := []byte{1,3,3,7}
+	if config.ConfigValues.JSONServerPort == 0 {
+		config.ConfigValues.JSONServerPort = port1
+		config.ConfigValues.GrpcServerPort = port2
+	}
+	ap := NewNodeAPIMock()
+	net := NetworkMock{ broadcasted:[]byte{0x00}}
+	net.broadCastErr = true
+
+	grpcService := NewGrpcService(&net, ap)
+	jsonService := NewJSONHTTPServer()
+
+	jsonStatus := make(chan bool, 2)
+	grpcStatus := make(chan bool, 2)
+
+	// start grp and json server
+	grpcService.StartService(grpcStatus)
+	<-grpcStatus
+
+	jsonService.StartService(jsonStatus)
+	<-jsonStatus
+
+	const contentType = "application/json"
+
+	// generate request payload (api input params)
+	reqParams := pb.BroadcastMessage{Protocol: "Test",  Data: Data }
+	var m jsonpb.Marshaler
+	payload, err := m.MarshalToString(&reqParams)
+	assert.NoError(t, err, "failed to marshal to string")
+
+	// Without this running this on Travis CI might generate a connection refused error
+	// because the server may not be ready to accept connections just yet.
+	time.Sleep(3 * time.Second)
+
+	url := fmt.Sprintf("http://127.0.0.1:%d/v1/broadcast", config.ConfigValues.JSONServerPort)
+	resp, err := http.Post(url, contentType, strings.NewReader(payload))
+	assert.NoError(t, err, "failed to http post to api endpoint")
+
+	defer resp.Body.Close()
+	_, err = ioutil.ReadAll(resp.Body)
+	assert.NoError(t, err, "failed to read response body")
+
+	got, want := resp.StatusCode, http.StatusInternalServerError //todo: should we change it to err 400 somehow?
+	assert.Equal(t, want, got)
+
+
+	value := resp.Header.Get("Content-Type")
+	assert.Equal(t, value, contentType)
 
 	// stop the services
 	jsonService.StopService()

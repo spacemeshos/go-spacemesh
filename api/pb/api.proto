@@ -22,6 +22,11 @@ message SignedTransaction {
     bytes txData = 1;
 }
 
+message BroadcastMessage {
+    string Protocol = 1;
+    bytes Data = 2;
+}
+
 service SpaceMeshService {
     rpc Echo(SimpleMessage) returns (SimpleMessage) {
         option (google.api.http) = {
@@ -44,6 +49,12 @@ service SpaceMeshService {
     rpc SubmitTransaction(SignedTransaction) returns (SimpleMessage) {
         option (google.api.http) = {
           post: "/v1/submittransaction"
+          body: "*"
+        };
+    }
+    rpc Broadcast(BroadcastMessage) returns (SimpleMessage) {
+        option (google.api.http) = {
+          post: "/v1/broadcast"
           body: "*"
         };
     }

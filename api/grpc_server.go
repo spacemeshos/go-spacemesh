@@ -65,6 +65,16 @@ func (s SpaceMeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.Sign
 	return &pb.SimpleMessage{Value:"ok"}, nil
 }
 
+// P2P API
+
+func (s SpaceMeshGrpcService) Broadcast(ctx context.Context, in *pb.BroadcastMessage) (*pb.SimpleMessage, error) {
+	err := s.Network.Broadcast(in.Protocol, in.Data)
+	if err != nil {
+		return &pb.SimpleMessage{Value:err.Error()}, err
+	}
+	return &pb.SimpleMessage{Value:"ok"}, nil
+}
+
 
 // StopService stops the grpc service.
 func (s SpaceMeshGrpcService) StopService() {
