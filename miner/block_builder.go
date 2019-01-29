@@ -25,7 +25,7 @@ const DefaultGas = 1
 const TxGossipChannel = "TxGossip"
 
 type BlockBuilder struct{
-	minerID fmt.Stringer // could be a pubkey or what ever. the identity we're claiming to be as miners.
+	minerID string // could be a pubkey or what ever. the identity we're claiming to be as miners.
 
 	beginRoundEvent chan mesh.LayerID
 	stopChan		chan struct{}
@@ -44,7 +44,7 @@ type BlockBuilder struct{
 
 
 
-func NewBlockBuilder(minerID fmt.Stringer, net p2p.Service, beginRoundEvent chan mesh.LayerID, weakCoin WeakCoinProvider,
+func NewBlockBuilder(minerID string, net p2p.Service, beginRoundEvent chan mesh.LayerID, weakCoin WeakCoinProvider,
 													orph OrphanBlockProvider, hare HareResultProvider, blockOracle oracle.BlockOracle) BlockBuilder{
 	return BlockBuilder{
 		minerID: minerID,
@@ -166,13 +166,13 @@ func (t *BlockBuilder) acceptBlockData() {
 
 		case id := <-t.beginRoundEvent:
 
-			if !t.blockOracle.Validate(id, t.minerID) {
+			if !t.blockOracle.Eligible(id, t.minerID) {
 				break
 			}
 
 			txList := t.transactionQueue[:common.Min(len(t.transactionQueue), MaxTransactionsPerBlock)]
 			t.transactionQueue = t.transactionQueue[common.Min(len(t.transactionQueue), MaxTransactionsPerBlock):]
-			blk := t.createBlock(t.minerID.String(), id, txList)
+			blk := t.createBlock(t.minerID, id, txList)
 
 			go func() {
 				bytes, err := mesh.BlockAsBytes(blk)

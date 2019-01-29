@@ -12,16 +12,10 @@ import (
 
 const TestServerOnline = false
 
-type stringer string
-
-func (s stringer) String() string {
-	return string(s)
-}
-
-func generateID() stringer {
+func generateID() string {
 	rnd := make([]byte, 32)
 	rand.Read(rnd)
-	return stringer(base58.Encode(rnd))
+	return base58.Encode(rnd)
 }
 
 type requestCounter struct {
@@ -73,7 +67,7 @@ func Test_MockOracleClientValidate(t *testing.T) {
 	oc := NewOracleClient()
 	mr := &mockRequester{results:make(map[string][]byte)}
 	id := generateID()
-	mr.SetResult(Register, id.String(), []byte(`{ "message": "ok" }"`))
+	mr.SetResult(Register, id, []byte(`{ "message": "ok" }"`))
 	counter := &requestCounter{client:mr}
 	counter.setCounting(true)
 	oc.client = counter
@@ -83,13 +77,13 @@ func Test_MockOracleClientValidate(t *testing.T) {
 	instid := hashInstanceAndK([]byte{0}, 1)
 
 	mr.SetResult(Validate, validateQuery(oc.world, instid, 2),
-		[]byte(fmt.Sprintf(`{ "IDs": [ "%v" ] }`, id.String())))
+		[]byte(fmt.Sprintf(`{ "IDs": [ "%v" ] }`, id)))
 
-	valid := oc.Validate([]byte{0}, 1, 2, id.String())
+	valid := oc.Validate([]byte{0}, 1, 2, id)
 
 	require.True(t, valid)
 
-	valid = oc.Validate([]byte{0}, 1, 2, generateID().String())
+	valid = oc.Validate([]byte{0}, 1, 2, generateID())
 
 	require.Equal(t, counter.reqCounter, 2)
 	require.False(t, valid)
@@ -104,7 +98,7 @@ func Test_OracleClientValidate(t *testing.T) {
 
 	oc := NewOracleClient()
 
-	pks := make([]stringer, size)
+	pks := make([]string, size)
 
 	for i:=0;i<size;i++ {
 		pk := generateID()
@@ -116,7 +110,7 @@ func Test_OracleClientValidate(t *testing.T) {
 	incommitte := 0
 
 	for i := 0; i < size; i++ {
-		if oc.Validate([]byte{010}, 2, committee,  pks[i].String()) {
+		if oc.Validate([]byte{010}, 2, committee,  pks[i]) {
 		incommitte++
 		}
 	}
@@ -139,7 +133,7 @@ func Test_Concurrency(t *testing.T) {
 
 	oc := NewOracleClient()
 
-	pks := make([]stringer, size)
+	pks := make([]string, size)
 
 	for i:=0;i<size;i++ {
 		pk := generateID()
@@ -156,7 +150,7 @@ func Test_Concurrency(t *testing.T) {
 	oc.client = mc
 	mc.setCounting(true)
 	for i := 0; i < size; i++ {
-		if oc.Validate(inst, -1, committee, pks[i].String()) {
+		if oc.Validate(inst, -1, committee, pks[i]) {
 			incommitte++
 		}
 	}

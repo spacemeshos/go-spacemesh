@@ -127,7 +127,7 @@ func createConsensusProcess(cfg config.Config, oracle Rolacle, network p2p.Servi
 	broker := NewBroker(network)
 	output := make(chan TerminationOutput, 1)
 	signing := NewMockSigning()
-	oracle.Register(signing.Verifier())
+	oracle.Register(signing.Verifier().String())
 	proc := NewConsensusProcess(cfg, *instanceId1, initialSet, oracle, signing, network, output)
 	broker.Register(proc)
 	broker.Start()
@@ -156,6 +156,7 @@ func TestSingleValueForHonestSet(t *testing.T) {
 	test.Start()
 	test.WaitForTimedTermination(t, 30*time.Second)
 }
+
 
 func TestAllDifferentSet(t *testing.T) {
 	test := newConsensusTest()

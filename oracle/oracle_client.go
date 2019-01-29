@@ -100,14 +100,14 @@ func validateQuery(world uint64, instid uint32, committeeSize int) string {
 }
 
 // Register asks the oracle server to add this node to the active set
-func (oc *OracleClient) Register(stringer fmt.Stringer) {
-	reg := fmt.Sprintf(`{ "World": %d, "ID": "%v"}`, oc.world, stringer.String())
+func (oc *OracleClient) Register(id string) {
+	reg := fmt.Sprintf(`{ "World": %d, "ID": "%v"}`, oc.world, id)
 	oc.client.Get(Register, reg)
 }
 
 // Unregister asks the oracle server to de-list this node from the active set
-func (oc *OracleClient) Unregister(stringer fmt.Stringer) {
-	unreg := fmt.Sprintf(`{ "World": %d, "ID": "%v"}`, oc.world,stringer.String())
+func (oc *OracleClient) Unregister(id string) {
+	unreg := fmt.Sprintf(`{ "World": %d, "ID": "%v"}`, oc.world, id)
 	oc.client.Get(Unregister, unreg)
 }
 
@@ -119,14 +119,14 @@ type validList struct {
 	IDs []string `json:"IDs"`
 }
 
-// NOTE: this is old code, the new Validate fetches the whole map at once instead of requesting for each ID/
-  func (oc *OracleClient) ValidateSingle(instanceID []byte, K int, committeeSize int, proof []byte, pubKey fmt.Stringer) bool {
+// NOTE: this is old code, the new Validate fetches the whole map at once instead of requesting for each ID
+func (oc *OracleClient) ValidateSingle(instanceID []byte, K int, committeeSize int, proof []byte, pubKey string) bool {
 
 	// make special instance ID
 	h := newHasherU32()
 	val := int64(h.Hash(append(instanceID, byte(K))))
 
-	req := fmt.Sprintf(`{ "World": %d, "InstanceID": %d, "CommitteeSize": %d, "ID": "%v"}`, oc.world, val, committeeSize, pubKey.String())
+	req := fmt.Sprintf(`{ "World": %d, "InstanceID": %d, "CommitteeSize": %d, "ID": "%v"}`, oc.world, val, committeeSize, pubKey)
 	resp := oc.client.Get(ValidateSingle, req)
 
 	res := &validRes{}
