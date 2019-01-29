@@ -33,9 +33,9 @@ func calcHash(msg []byte, prot string) hash {
 // Interface for the underlying p2p layer
 type baseNetwork interface {
 	SendMessage(peerPubkey p2pcrypto.PublicKey, protocol string, payload []byte) error
-	RegisterProtocol(protocol string) chan service.Message
+	RegisterDirectProtocol(protocol string) chan service.DirectMessage
 	SubscribePeerEvents() (conn chan p2pcrypto.PublicKey, disc chan p2pcrypto.PublicKey)
-	ProcessProtocolMessage(sender p2pcrypto.PublicKey, protocol string, data service.Data, validationChan chan service.MessageValidation) error
+	ProcessGossipProtocolMessage(protocol string, data service.Data, validationChan chan service.MessageValidation) error
 }
 
 type protocolMessage struct {
@@ -58,7 +58,7 @@ type Protocol struct {
 	invalidMessageQ map[hash]bool
 	peersMutex      sync.RWMutex
 
-	relayQ     chan service.Message
+	relayQ     chan service.DirectMessage
 	messageQ   chan protocolMessage
 	propagateQ chan service.MessageValidation
 }
@@ -66,7 +66,7 @@ type Protocol struct {
 // NewProtocol creates a new gossip protocol instance. Call Start to start reading peers
 func NewProtocol(config config.SwarmConfig, base baseNetwork, localNodePubkey p2pcrypto.PublicKey, log2 log.Log) *Protocol {
 	// intentionally not subscribing to peers events so that the channels won't block in case executing Start delays
-	relayChan := base.RegisterProtocol(ProtocolName)
+	relayChan := base.RegisterDirectProtocol(ProtocolName)
 	return &Protocol{
 		Log:             log2,
 		config:          config,
@@ -283,7 +283,7 @@ func (prot *Protocol) processMessage(msg *pb.ProtocolMessage) {
 			return
 		}
 	} else {
-		err := prot.net.ProcessProtocolMessage(nil, protocol, data, prot.propagateQ)
+		err := prot.net.ProcessGossipProtocolMessage(protocol, data, prot.propagateQ)
 		if err != nil {
 			prot.Log.Error("failed to process protocol message. protocol = %v err = %v", protocol, err)
 			prot.markMessageValidity(h, false)

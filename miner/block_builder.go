@@ -30,7 +30,7 @@ type BlockBuilder struct{
 	beginRoundEvent chan mesh.LayerID
 	stopChan		chan struct{}
 	newTrans		chan *mesh.SerializableTransaction
-	txGossipChannel chan service.Message
+	txGossipChannel chan service.GossipMessage
 	hareResult		HareResultProvider
 	transactionQueue []mesh.SerializableTransaction
 	mu sync.Mutex
@@ -51,7 +51,7 @@ func NewBlockBuilder(minerID string, net p2p.Service, beginRoundEvent chan mesh.
 		beginRoundEvent:beginRoundEvent,
 		stopChan: make(chan struct{}),
 		newTrans: make(chan *mesh.SerializableTransaction),
-		txGossipChannel: net.RegisterProtocol(IncomingTxProtocol),
+		txGossipChannel: net.RegisterGossipProtocol(IncomingTxProtocol),
 		hareResult: hare,
 		transactionQueue: make([]mesh.SerializableTransaction,0,10),
 		mu: sync.Mutex{},

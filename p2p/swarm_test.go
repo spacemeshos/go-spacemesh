@@ -116,7 +116,7 @@ func TestSwarm_ShutdownNoStart(t *testing.T) {
 
 func TestSwarm_RegisterProtocolNoStart(t *testing.T) {
 	s, err := newSwarm(context.TODO(), config.DefaultConfig(), true, false)
-	msgs := s.RegisterProtocol("Anton")
+	msgs := s.RegisterDirectProtocol("Anton")
 	assert.NotNil(t, msgs)
 	assert.NoError(t, err)
 	s.Shutdown()
@@ -143,7 +143,7 @@ func Test_ConnectionBeforeMessage(t *testing.T) {
 
 	p2 := p2pTestInstance(t, config.DefaultConfig())
 	defer p2.Shutdown()
-	c2 := p2.RegisterProtocol(exampleProtocol)
+	c2 := p2.RegisterDirectProtocol(exampleProtocol)
 
 	go func() {
 		for {
@@ -176,7 +176,7 @@ func Test_ConnectionBeforeMessage(t *testing.T) {
 		go func() {
 			p1 := p2pTestInstance(t, config.DefaultConfig())
 			sa.add(p1)
-			_ = p1.RegisterProtocol(exampleProtocol)
+			_ = p1.RegisterDirectProtocol(exampleProtocol)
 			p1.dht.Update(p2.lNode.Node)
 			p1.SendMessage(p2.lNode.PublicKey(), exampleProtocol, payload)
 		}()
@@ -196,7 +196,7 @@ func RandString(n int) string {
 	return string(b)
 }
 
-func sendDirectMessage(t *testing.T, sender *swarm, recvPub p2pcrypto.PublicKey, inChan chan service.Message, checkpayload bool) {
+func sendDirectMessage(t *testing.T, sender *swarm, recvPub p2pcrypto.PublicKey, inChan chan service.DirectMessage, checkpayload bool) {
 	payload := []byte(RandString(10))
 	err := sender.SendMessage(recvPub, exampleProtocol, payload)
 	require.NoError(t, err)
@@ -216,10 +216,10 @@ func TestSwarm_RoundTrip(t *testing.T) {
 	p1 := p2pTestInstance(t, config.DefaultConfig())
 	p2 := p2pTestInstance(t, config.DefaultConfig())
 
-	exchan1 := p1.RegisterProtocol(exampleProtocol)
-	assert.Equal(t, exchan1, p1.protocolHandlers[exampleProtocol])
-	exchan2 := p2.RegisterProtocol(exampleProtocol)
-	assert.Equal(t, exchan2, p2.protocolHandlers[exampleProtocol])
+	exchan1 := p1.RegisterDirectProtocol(exampleProtocol)
+	assert.Equal(t, exchan1, p1.directProtocolHandlers[exampleProtocol])
+	exchan2 := p2.RegisterDirectProtocol(exampleProtocol)
+	assert.Equal(t, exchan2, p2.directProtocolHandlers[exampleProtocol])
 
 	p2.dht.Update(p1.lNode.Node)
 
@@ -234,10 +234,10 @@ func TestSwarm_MultipleMessages(t *testing.T) {
 	p1 := p2pTestInstance(t, config.DefaultConfig())
 	p2 := p2pTestInstance(t, config.DefaultConfig())
 
-	exchan1 := p1.RegisterProtocol(exampleProtocol)
-	assert.Equal(t, exchan1, p1.protocolHandlers[exampleProtocol])
-	exchan2 := p2.RegisterProtocol(exampleProtocol)
-	assert.Equal(t, exchan2, p2.protocolHandlers[exampleProtocol])
+	exchan1 := p1.RegisterDirectProtocol(exampleProtocol)
+	assert.Equal(t, exchan1, p1.directProtocolHandlers[exampleProtocol])
+	exchan2 := p2.RegisterDirectProtocol(exampleProtocol)
+	assert.Equal(t, exchan2, p2.directProtocolHandlers[exampleProtocol])
 
 	err := p2.SendMessage(p1.lNode.PublicKey(), exampleProtocol, []byte(examplePayload))
 	assert.Error(t, err, "ERR") // should'nt be in routing table
@@ -283,8 +283,8 @@ func TestSwarm_MultipleMessagesFromMultipleSenders(t *testing.T) {
 
 	p1 := p2pTestInstance(t, cfg)
 
-	exchan1 := p1.RegisterProtocol(exampleProtocol)
-	assert.Equal(t, exchan1, p1.protocolHandlers[exampleProtocol])
+	exchan1 := p1.RegisterDirectProtocol(exampleProtocol)
+	assert.Equal(t, exchan1, p1.directProtocolHandlers[exampleProtocol])
 
 	pend := make(map[string]chan struct{})
 	var mu sync.Mutex
@@ -348,12 +348,12 @@ func TestSwarm_MultipleMessagesFromMultipleSendersToMultipleProtocols(t *testing
 	for i := 0; i < Protos; i++ {
 		prt := RandString(10)
 		protos = append(protos, prt)
-		exchan := p1.RegisterProtocol(prt)
+		exchan := p1.RegisterDirectProtocol(prt)
 
 		go func() {
 			for {
 				msg := <-exchan
-				sender := msg.Sender().PublicKey().String()
+				sender := msg.Sender().String()
 				mu.Lock()
 				c, ok := pend[sender]
 				if !ok {
@@ -403,16 +403,16 @@ func TestSwarm_RegisterProtocol(t *testing.T) {
 		go func() { // protocols are registered before starting the node and read after that.
 			// there ins't an actual need to sync them.
 			nod := p2pTestInstance(t, cfg)
-			nod.RegisterProtocol(exampleProtocol) // this is example
+			nod.RegisterDirectProtocol(exampleProtocol) // this is example
 			nodechan <- nod
 		}()
 	}
 	i := 0
 	for r := range nodechan {
 		defer r.Shutdown()
-		_, ok := r.protocolHandlers[exampleProtocol]
+		_, ok := r.directProtocolHandlers[exampleProtocol]
 		assert.True(t, ok)
-		_, ok = r.protocolHandlers["/dht/1.0/find-node/"]
+		_, ok = r.directProtocolHandlers["/dht/1.0/find-node/"]
 		assert.True(t, ok)
 		i++
 		if i == numPeers {
@@ -487,7 +487,7 @@ func TestSwarm_onRemoteClientMessage(t *testing.T) {
 	// Test no err
 
 	var wg sync.WaitGroup
-	c := p.RegisterProtocol(exampleProtocol)
+	c := p.RegisterDirectProtocol(exampleProtocol)
 	go func() {
 		ti := time.After(1 * time.Second)
 		select {

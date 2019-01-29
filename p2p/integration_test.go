@@ -21,8 +21,8 @@ func (its *IntegrationTestSuite) Test_SendingMessage()  {
 	node1 := its.Instances[0]
 	node2 := its.Instances[1]
 
-	_ = node1.RegisterProtocol(exProto)
-	ch2 := node2.RegisterProtocol(exProto)
+	_ = node1.RegisterDirectProtocol(exProto)
+	ch2 := node2.RegisterDirectProtocol(exProto)
 
 	err := node1.SendMessage(node2.LocalNode().Node.PublicKey(), exProto, []byte(exMsg))
 	if err != nil {
@@ -44,17 +44,13 @@ func (its *IntegrationTestSuite) Test_SendingMessage()  {
 
 func (its *IntegrationTestSuite) Test_Gossiping() {
 
-	msgChans := make([]chan service.Message, 0)
+	msgChans := make([]chan service.GossipMessage, 0)
 	exProto := RandString(10)
 
 	node1 := its.Instances[0]
 
 	its.ForAll(func(idx int, s NodeTestInstance) error {
-		//if node1.LocalNode().PublicKey().String() == s.LocalNode().PublicKey().String() {
-		//	s.RegisterProtocol(exProto)
-		//	return nil
-		//}
-		msgChans = append(msgChans, s.RegisterProtocol(exProto))
+		msgChans = append(msgChans, s.RegisterGossipProtocol(exProto))
 		return nil
 	}, nil)
 

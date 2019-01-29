@@ -19,7 +19,7 @@ type Byteable interface {
 }
 
 type NetworkService interface {
-	RegisterProtocol(protocol string) chan service.Message
+	RegisterGossipProtocol(protocol string) chan service.GossipMessage
 	Broadcast(protocol string, payload []byte) error
 }
 
@@ -243,7 +243,7 @@ func (proc *ConsensusProcess) handleMessage(msg Message) {
 	if !proc.validator.ContextuallyValidateMessage(m, proc.k) {
 		if !proc.validator.ContextuallyValidateMessage(m, proc.k+1) {
 			// TODO: should return error from message validation to indicate what failed, should retry only for contextual failure
-			log.Warning("Message is not valid for either round")
+			log.Warning("DirectMessage is not valid for either round")
 			return
 		} else { // a valid early message, keep it for later
 			log.Info("Early message detected. Keeping message")

@@ -19,7 +19,7 @@ type Service interface {
 }
 
 type Message interface {
-	service.Message
+	service.DirectMessage
 	Data() service.Data
 }
 
@@ -37,7 +37,7 @@ type MessageServer struct {
 	pendingQueue       *list.List                              //queue of pending messages
 	resHandlers        map[uint64]func(msg []byte)             //response handlers by request ReqId
 	msgRequestHandlers map[MessageType]func(msg []byte) []byte //request handlers by request type
-	ingressChannel     chan service.Message                    //chan to relay messages into the server
+	ingressChannel     chan service.DirectMessage              //chan to relay messages into the server
 	requestLifetime    time.Duration                           //time a request can stay in the pending queue until evicted
 	workerCount        sync.WaitGroup
     workerLimiter      chan int

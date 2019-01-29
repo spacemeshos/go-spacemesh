@@ -49,7 +49,7 @@ func (closer *Closer) CloseChannel() chan struct{} {
 type Broker struct {
 	Closer
 	network NetworkService
-	inbox   chan service.Message
+	inbox   chan service.GossipMessage
 	outbox  map[uint32]chan Message
 	mutex   sync.RWMutex
 }
@@ -70,7 +70,7 @@ func (broker *Broker) Start() error {
 		return StartInstanceError(errors.New("instance already started"))
 	}
 
-	broker.inbox = broker.network.RegisterProtocol(ProtoName)
+	broker.inbox = broker.network.RegisterGossipProtocol(ProtoName)
 
 	go broker.dispatcher()
 

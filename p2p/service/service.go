@@ -26,9 +26,14 @@ func NewMessageValidation(msg []byte, prot string, isValid bool) *MessageValidat
 	return &MessageValidation{msg, prot, isValid}
 }
 
-// Message is an interface to represent a simple message structure
-type Message interface {
+// DirectMessage is an interface that represents a simple direct message structure
+type DirectMessage interface {
 	Sender() p2pcrypto.PublicKey
+	Bytes() []byte
+}
+
+// GossipMessage is an interface that represents a simple gossip message structure
+type GossipMessage interface {
 	Bytes() []byte
 	ValidationCompletedChan() chan MessageValidation
 	ReportValidation(protocol string, isValid bool)
@@ -37,11 +42,13 @@ type Message interface {
 // Service is an interface that represents a networking service (ideally p2p) that we can use to send messages or listen to incoming messages
 type Service interface {
 	Start() error
-	RegisterProtocol(protocol string) chan Message
-    RegisterProtocolWithChannel(protocol string, ingressChannel chan Message) chan Message
+	RegisterDirectProtocol(protocol string) chan DirectMessage
+	RegisterGossipProtocol(protocol string) chan GossipMessage
+	RegisterDirectProtocolWithChannel(protocol string, ingressChannel chan DirectMessage) chan DirectMessage
 	SendMessage(peerPubkey p2pcrypto.PublicKey, protocol string, payload []byte) error
 	SubscribePeerEvents() (new chan p2pcrypto.PublicKey, del chan p2pcrypto.PublicKey)
-	ProcessProtocolMessage(sender p2pcrypto.PublicKey, protocol string, payload Data, validationCompletedChan chan MessageValidation) error
+	ProcessDirectProtocolMessage(sender p2pcrypto.PublicKey, protocol string, payload Data) error
+	ProcessGossipProtocolMessage(protocol string, data Data, validationCompletedChan chan MessageValidation) error
 	Broadcast(protocol string, payload []byte) error
 	Shutdown()
 }

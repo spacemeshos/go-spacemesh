@@ -108,7 +108,7 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 	go func() {beginRound <- mesh.LayerID(0) }()
 
 	select {
-		case output := <- receiver.RegisterProtocol(sync.NewBlockProtocol):
+		case output := <- receiver.RegisterGossipProtocol(sync.NewBlockProtocol):
 			b := mesh.Block{}
 			xdr.Unmarshal(bytes.NewBuffer(output.Bytes()), &b)
 			assert.Equal(t, hareRes, b.BlockVotes)
