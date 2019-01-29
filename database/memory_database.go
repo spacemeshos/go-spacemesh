@@ -19,8 +19,8 @@ package database
 import (
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/common"
+	"sort"
 	"sync"
-
 )
 
 /*
@@ -101,7 +101,9 @@ func (db *MemDatabase) NewMemDatabaseIterator() *MemDatabaseIterator {
 	for k := range db.db {
 		keys = append(keys, []byte(k))
 	}
-
+	sort.Slice(keys, func(i, j int) bool{
+		return string(keys[i]) < string(keys[j])
+	})
 	return &MemDatabaseIterator{
 		keys:  keys,
 		db:    db.db,
