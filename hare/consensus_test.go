@@ -220,7 +220,7 @@ func TestSndDelayedDishonest(t *testing.T) {
 
 	// create dishonest
 	dishonestFunc := func() {
-		s := sim.NewFaulty(10, 0) // only broadcast delay
+		s := sim.NewFaulty(true, 10, 0) // only broadcast delay
 		proc := createConsensusProcess(cfg, oracle, s, test.initialSets[i])
 		test.dishonest = append(test.dishonest, proc)
 		i++
@@ -263,7 +263,7 @@ func TestRecvDelayedDishonest(t *testing.T) {
 
 	// create dishonest
 	dishonestFunc := func() {
-		s := sim.NewFaulty(0, 10) // delay rcv
+		s := sim.NewFaulty(true, 0, 10) // delay rcv
 		proc := createConsensusProcess(cfg, oracle, s, test.initialSets[i])
 		test.dishonest = append(test.dishonest, proc)
 		i++
