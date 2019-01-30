@@ -2,6 +2,7 @@
 package dht
 
 import (
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
@@ -112,8 +113,12 @@ func (d *KadDHT) InternalLookup(dhtid node.DhtID) []node.Node {
 // Also used as a bootstrap function to populate the routing table with the results.
 func (d *KadDHT) kadLookup(id p2pcrypto.PublicKey, searchList []node.Node) (node.Node, error) {
 	// save queried node ids for the operation
+	t := time.Now()
 	queried := map[string]struct{}{}
 
+	defer func() {
+		d.local.LogEvent("LookupFinished", log.MakeParams("queriedCount", len(queried), "uniqueFound", len(searchList), "elapsedtime", time.Since(t).String()))
+	}()
 	// iterative lookups for nodeId using searchList
 
 	for {

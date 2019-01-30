@@ -284,6 +284,7 @@ func (prot *Protocol) handleRelayMessage(msgB []byte) {
 
 	} else {
 		//todo - processMessage is non-blocking, need to check validation and not propagate invalid messages
+		prot.Log.LogEvent("newGossipMessage", log.MakeParams("from", msg.Metadata.AuthPubkey, "proto", msg.Metadata.NextProtocol))
 		err = prot.processMessage(msg)
 		if err != nil {
 			return

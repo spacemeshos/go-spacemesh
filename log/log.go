@@ -3,9 +3,11 @@
 package log
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"gopkg.in/natefinch/lumberjack.v2"
 	"gopkg.in/op/go-logging.v1"
@@ -15,6 +17,29 @@ import (
 // logging library can be replaced as long as it implements same functionality used across the project.
 type Log struct {
 	*logging.Logger
+}
+
+func MakeParams(is ...interface{}) map[string]interface{} {
+	pmap := make(map[string]interface{})
+	for i := 0; i < len(is); i = i+2 {
+		argname := is[i].(string)
+		pmap[argname] = is[i+1]
+	}
+	return pmap
+}
+
+// LogEvent logs an event with params
+// todo : more efficient json logger ( a type safe one )
+func (l *Log) LogEvent(event string, params map[string]interface{}) {
+	params["ts"] = time.Now().Format("3/2/18 15:04:05")
+	params["id"] = l.Module
+	params["event"] = event
+	b, err := json.Marshal(params)
+	if err != nil {
+		l.Error("failed to log an event err: %v", err)
+		return
+	}
+	fmt.Fprint(os.Stdout, fmt.Sprint("\n", string(b), "\n"))
 }
 
 // smlogger is the local app singleton logger.
