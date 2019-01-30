@@ -14,7 +14,7 @@ type LocalNode struct {
 
 	networkID int8
 
-	log.Log
+	*log.Log
 }
 
 // NetworkID returns the local node's network id (testnet/mainnet, etc..)

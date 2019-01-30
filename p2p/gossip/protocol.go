@@ -43,7 +43,7 @@ type protocolMessage struct {
 
 // Protocol is the gossip protocol
 type Protocol struct {
-	log.Log
+	*log.Log
 
 	config          config.SwarmConfig
 	net             baseNetwork
@@ -62,7 +62,7 @@ type Protocol struct {
 }
 
 // NewProtocol creates a new gossip protocol instance. Call Start to start reading peers
-func NewProtocol(config config.SwarmConfig, base baseNetwork, localNodePubkey p2pcrypto.PublicKey, log2 log.Log) *Protocol {
+func NewProtocol(config config.SwarmConfig, base baseNetwork, localNodePubkey p2pcrypto.PublicKey, log2 *log.Log) *Protocol {
 	// intentionally not subscribing to peers events so that the channels won't block in case executing Start delays
 	relayChan := base.RegisterProtocol(ProtocolName)
 	return &Protocol{
@@ -87,14 +87,14 @@ type sender interface {
 
 // peer is a struct storing peer's state
 type peer struct {
-	log.Log
+	*log.Log
 	pubkey        p2pcrypto.PublicKey
 	msgMutex      sync.RWMutex
 	knownMessages map[hash]struct{}
 	net           sender
 }
 
-func newPeer(net sender, pubkey p2pcrypto.PublicKey, log log.Log) *peer {
+func newPeer(net sender, pubkey p2pcrypto.PublicKey, log *log.Log) *peer {
 	return &peer{
 		log,
 		pubkey,

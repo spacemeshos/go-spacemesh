@@ -37,7 +37,7 @@ type findNodeProtocol struct {
 
 	ingressChannel chan service.Message
 
-	log log.Log
+	log *log.Log
 
 	rt RoutingTable
 }

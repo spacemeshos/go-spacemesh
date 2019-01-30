@@ -214,7 +214,7 @@ func (s *swarm) Start() error {
 			dhtsize := s.dht.Size()
 			timeelapsed := time.Since(b)
 			s.lNode.Info("DHT Bootstrapped with %d peers in %v", dhtsize, timeelapsed)
-			s.lNode.LogEvent("bootstrap", log.MakeParams("success", dhtsize > s.config.SwarmConfig.RandomConnections, "dhtsize", dhtsize, "elapsedtime", timeelapsed))
+			s.lNode.LogEvent("bootstrap", log.MakeParams("success", dhtsize > s.config.SwarmConfig.RandomConnections, "dhtSize", dhtsize, "elapsedTime", timeelapsed))
 		}()
 	}
 

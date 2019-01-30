@@ -117,7 +117,7 @@ func (d *KadDHT) kadLookup(id p2pcrypto.PublicKey, searchList []node.Node) (node
 	queried := map[string]struct{}{}
 
 	defer func() {
-		d.local.LogEvent("LookupFinished", log.MakeParams("queriedCount", len(queried), "uniqueFound", len(searchList), "elapsedtime", time.Since(t).String()))
+		d.local.LogEvent("lookupFinished", log.MakeParams("queriedCount", len(queried), "uniqueFound", len(searchList), "elapsedTime", time.Since(t).String()))
 	}()
 	// iterative lookups for nodeId using searchList
 
