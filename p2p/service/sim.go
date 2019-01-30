@@ -280,9 +280,9 @@ func (sn *Node) RegisterGossipProtocol(protocol string) chan GossipMessage {
 }
 
 // RegisterProtocolWithChannel configures and returns a channel for a given protocol.
-func (sn *Node) RegisterProtocolWithChannel(protocol string, ingressChannel chan Message) chan Message {
+func (sn *Node) RegisterDirectProtocolWithChannel(protocol string, ingressChannel chan DirectMessage) chan DirectMessage {
         sn.sim.mutex.Lock()
-        sn.sim.protocolHandler[sn.Node.String()][protocol] = ingressChannel
+        sn.sim.protocolDirectHandler[sn.Node.String()][protocol] = ingressChannel
         sn.sim.mutex.Unlock()
         return ingressChannel
 }
