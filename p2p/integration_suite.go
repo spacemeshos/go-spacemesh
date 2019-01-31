@@ -6,6 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
+	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 	"golang.org/x/sync/errgroup"
@@ -109,7 +110,7 @@ func createP2pInstance(t testing.TB, config config.Config) *swarm {
 	port, err := node.GetUnboundedPort()
 	assert.Nil(t, err)
 	config.TCPPort = port
-	p, err := newSwarm(context.TODO(), config, true, false)
+	p, err := newSwarm(context.TODO(), config, timeConfig.DefaultConfig(), true, false)
 	assert.Nil(t, err)
 	assert.NotNil(t, p)
 	return p

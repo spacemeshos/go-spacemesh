@@ -16,6 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/stretchr/testify/assert"
 	"math/rand"
 	"sync"
@@ -54,7 +55,7 @@ func p2pTestNoStart(t testing.TB, config config.Config) *swarm {
 		t.Fatal("port err ", err)
 	}
 	config.TCPPort = port
-	p, err := newSwarm(context.TODO(), config, true, debug)
+	p, err := newSwarm(context.TODO(), config, timeConfig.DefaultConfig(),true, debug)
 	if err != nil {
 		t.Fatal("err creating a swarm", err)
 	}
@@ -68,7 +69,7 @@ const exampleProtocol = "EX"
 const examplePayload = "Example"
 
 func TestNew(t *testing.T) {
-	s, err := New(context.TODO(), config.DefaultConfig())
+	s, err := New(context.TODO(), config.DefaultConfig(), timeConfig.DefaultConfig(),)
 	assert.NoError(t, err, err)
 	err = s.Start()
 	assert.NoError(t, err, err)
@@ -81,7 +82,7 @@ func Test_newSwarm(t *testing.T) {
 	port, err := node.GetUnboundedPort()
 	assert.NoError(t, err)
 	cfg.TCPPort = port
-	s, err := newSwarm(context.TODO(), cfg, true, false)
+	s, err := newSwarm(context.TODO(), cfg, timeConfig.DefaultConfig(), true, false)
 	assert.NoError(t, err)
 	err = s.Start()
 	assert.NoError(t, err, err)
@@ -94,7 +95,7 @@ func TestSwarm_Shutdown(t *testing.T) {
 	port, err := node.GetUnboundedPort()
 	assert.NoError(t, err)
 	cfg.TCPPort = port
-	s, err := newSwarm(context.TODO(), cfg, true, false)
+	s, err := newSwarm(context.TODO(), cfg, timeConfig.DefaultConfig(),true, false)
 	assert.NoError(t, err)
 	err = s.Start()
 	assert.NoError(t, err, err)
@@ -109,13 +110,13 @@ func TestSwarm_Shutdown(t *testing.T) {
 }
 
 func TestSwarm_ShutdownNoStart(t *testing.T) {
-	s, err := newSwarm(context.TODO(), config.DefaultConfig(), true, false)
+	s, err := newSwarm(context.TODO(), config.DefaultConfig(), timeConfig.DefaultConfig(), true, false)
 	assert.NoError(t, err)
 	s.Shutdown()
 }
 
 func TestSwarm_RegisterProtocolNoStart(t *testing.T) {
-	s, err := newSwarm(context.TODO(), config.DefaultConfig(), true, false)
+	s, err := newSwarm(context.TODO(), config.DefaultConfig(), timeConfig.DefaultConfig(),true, false)
 	msgs := s.RegisterProtocol("Anton")
 	assert.NotNil(t, msgs)
 	assert.NoError(t, err)

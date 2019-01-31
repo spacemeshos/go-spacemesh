@@ -59,6 +59,7 @@ type swarm struct {
 	gossipC   chan struct{}
 
 	config config.Config
+	timeConfig timeConfig.Config
 
 	// Context for cancel
 	ctx context.Context
@@ -114,7 +115,7 @@ func (s *swarm) waitForGossip() error {
 
 // newSwarm creates a new P2P instance, configured by config, if newNode is true it will create a new node identity
 // and not load from disk. it creates a new `net`, connection pool and dht.
-func newSwarm(ctx context.Context, config config.Config, newNode bool, persist bool) (*swarm, error) {
+func newSwarm(ctx context.Context, config config.Config, timeConfig timeConfig.Config, newNode bool, persist bool) (*swarm, error) {
 
 	port := config.TCPPort
 	address := inet.JoinHostPort("0.0.0.0", strconv.Itoa(port))
@@ -141,6 +142,7 @@ func newSwarm(ctx context.Context, config config.Config, newNode bool, persist b
 	s := &swarm{
 		ctx:      ctx,
 		config:   config,
+		timeConfig: timeConfig,
 		lNode:    l,
 		bootChan: make(chan struct{}),
 		gossipC:  make(chan struct{}),
@@ -402,7 +404,7 @@ func (s *swarm) retryOrDisconnect(key p2pcrypto.PublicKey) {
 
 // periodically checks that our clock is sync
 func (s *swarm) checkTimeDrifts() {
-	checkTimeSync := time.NewTicker(timeConfig.Values.RefreshNtpInterval)
+	checkTimeSync := time.NewTicker(s.timeConfig.RefreshNtpInterval)
 Loop:
 	for {
 		select {
