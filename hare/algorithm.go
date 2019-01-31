@@ -55,7 +55,6 @@ type ConsensusProcess struct {
 	startTime         time.Time // TODO: needed?
 	inbox             chan Message
 	terminationReport chan TerminationOutput
-	role              Role // the current role
 	validator         *MessageValidator
 	preRoundTracker   *PreRoundTracker
 	statusesTracker   *StatusTracker
@@ -76,7 +75,6 @@ func NewConsensusProcess(cfg config.Config, instanceId InstanceId, s *Set, oracl
 	proc.oracle = oracle
 	proc.signing = signing
 	proc.network = p2p
-	proc.role = Passive
 	proc.validator = NewMessageValidator(signing, cfg.F+1, cfg.N, proc.statusValidator())
 	proc.preRoundTracker = NewPreRoundTracker(cfg.F+1, cfg.N)
 	proc.statusesTracker = NewStatusTracker(cfg.F+1, cfg.N)
@@ -121,9 +119,6 @@ func (proc *ConsensusProcess) createInbox(size uint32) chan Message {
 
 func (proc *ConsensusProcess) eventLoop() {
 	log.Info("Start listening")
-
-	// update role
-	proc.role = proc.currentRole()
 
 	// set pre-round message and send
 	m := proc.initDefaultBuilder(proc.s).SetType(PreRound).Sign(proc.signing).Build()
@@ -181,6 +176,11 @@ func roleFromRoundCounter(k uint32) Role {
 }
 
 func (proc *ConsensusProcess) onEarlyMessage(m Message) {
+	if m.msg == nil {
+		log.Error("onEarlyMessage called with nil")
+		return
+	}
+
 	verifier, err := NewVerifier(m.msg.PubKey)
 	if err != nil {
 		log.Warning("Could not construct verifier: ", err)
@@ -205,12 +205,17 @@ func (proc *ConsensusProcess) expectedCommitteeSize(k uint32) int {
 }
 
 func (proc *ConsensusProcess) validateRole(m *pb.HareMessage) bool {
+	if m == nil {
+		log.Error("validateRole called with nil")
+		return false
+	}
+
 	if m.Message == nil {
 		log.Warning("Role validation failed: message is nil")
 		return false
 	}
 
-	// TODO: validate role proof
+	// TODO: validate role proof sig
 
 	// validate role
 	if !proc.oracle.Eligible(&proc.instanceId, int(m.Message.K), proc.expectedCommitteeSize(m.Message.K), proc.signing.Verifier().String(), Signature(m.Message.RoleProof)) {
@@ -254,6 +259,10 @@ func (proc *ConsensusProcess) handleMessage(msg Message) {
 	}
 
 	// continue process msg by type
+	proc.processMsg(m)
+}
+
+func (proc *ConsensusProcess) processMsg(m *pb.HareMessage) {
 	switch MessageType(m.Message.Type) {
 	case PreRound:
 		proc.processPreRoundMsg(m)
@@ -270,14 +279,18 @@ func (proc *ConsensusProcess) handleMessage(msg Message) {
 	}
 }
 
+func (proc *ConsensusProcess) isEligible() bool {
+	return proc.currentRole() != Passive
+}
+
 func (proc *ConsensusProcess) sendMessage(msg *pb.HareMessage) {
-	// invalid
+	// invalid msg
 	if msg == nil {
 		return
 	}
 
-	// send only if our role matches the required role for this round
-	if proc.role != roleFromRoundCounter(proc.k) {
+	// check eligibility
+	if !proc.isEligible() {
 		return
 	}
 
@@ -318,7 +331,7 @@ func (proc *ConsensusProcess) beginRound1() {
 func (proc *ConsensusProcess) beginRound2() {
 	proc.proposalTracker = NewProposalTracker(proc.cfg.N)
 
-	if proc.role == Leader && proc.statusesTracker.IsSVPReady() {
+	if proc.isEligible() && proc.statusesTracker.IsSVPReady() {
 		builder := proc.initDefaultBuilder(proc.statusesTracker.ProposalSet(proc.cfg.SetSize))
 		svp := proc.statusesTracker.BuildSVP()
 		if svp != nil {
@@ -361,8 +374,6 @@ func (proc *ConsensusProcess) handlePending(pending map[string]Message) {
 }
 
 func (proc *ConsensusProcess) onRoundBegin() {
-	proc.role = proc.currentRole()
-
 	// reset trackers
 	switch proc.currentRound() {
 	case Round1:
@@ -523,6 +534,7 @@ func (proc *ConsensusProcess) endOfRound3() {
 	proc.notifySent = true
 }
 
+// Returns the role matching the current round if eligible for this round, false otherwise
 func (proc *ConsensusProcess) currentRole() Role {
 	if proc.oracle.Eligible(&proc.instanceId, int(proc.k), proc.expectedCommitteeSize(proc.k), proc.signing.Verifier().String(), proc.roleProof()) {
 		if proc.currentRound() == Round2 {

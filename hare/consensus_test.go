@@ -10,6 +10,8 @@ import (
 
 // Test the consensus process as a whole
 
+var skipBlackBox = true
+
 type HareSuite struct {
 	termination Closer
 	procs       []*ConsensusProcess
@@ -136,6 +138,10 @@ func createConsensusProcess(cfg config.Config, oracle Rolacle, network p2p.Servi
 }
 
 func TestSingleValueForHonestSet(t *testing.T) {
+	if skipBlackBox {
+		t.Skip()
+	}
+
 	test := newConsensusTest()
 
 	cfg := config.Config{N: 50, F: 25, SetSize: 1, RoundDuration: time.Second * time.Duration(1)}
@@ -159,6 +165,10 @@ func TestSingleValueForHonestSet(t *testing.T) {
 
 
 func TestAllDifferentSet(t *testing.T) {
+	if skipBlackBox {
+		t.Skip()
+	}
+
 	test := newConsensusTest()
 
 	cfg := config.Config{N: 10, F: 5, SetSize: 5, RoundDuration: time.Second * time.Duration(1)}
