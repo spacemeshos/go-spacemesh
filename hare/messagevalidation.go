@@ -18,41 +18,7 @@ func NewMessageValidator(signing Signing, threshold int, defaultSize int, valida
 }
 
 func (validator *MessageValidator) SyntacticallyValidateMessage(m *pb.HareMessage) bool {
-	if !validator.isSyntacticallyValid(m) {
-		log.Warning("Validate message failed: message is not syntactically valid")
-		return false
-	}
-
-	data, err := proto.Marshal(m.Message)
-	if err != nil {
-		log.Error("Validate message failed: failed marshaling inner message")
-		return false
-	}
-
-	// verify signature
-	verifier, err := NewVerifier(m.PubKey)
-	if err != nil {
-		log.Warning("Validate message failed: Could not construct verifier ", err)
-		return false
-	}
-	res, _ := verifier.Verify(data, m.InnerSig)
-	if !res {
-		log.Warning("Validate message failed: invalid message signature detected")
-		return false
-	}
-
-	return true
-}
-
-
-func (validator *MessageValidator) ValidateMessage(m *pb.HareMessage, k uint32) bool {
-	// validate context
-	if !validator.ContextuallyValidateMessage(m, k) {
-		log.Info("Validate message failed: message is not contextually valid")
-		return false
-	}
-
-	if !validator.isSyntacticallyValid(m) {
+	if !validator.isValidStructure(m) {
 		log.Warning("Validate message failed: message is not syntactically valid")
 		return false
 	}
@@ -103,7 +69,7 @@ func (validator *MessageValidator) ContextuallyValidateMessage(m *pb.HareMessage
 }
 
 // verifies the message is syntactically valid
-func (validator *MessageValidator) isSyntacticallyValid(m *pb.HareMessage) bool {
+func (validator *MessageValidator) isValidStructure(m *pb.HareMessage) bool {
 	if m == nil {
 		log.Warning("Syntax validation failed: m is nil")
 		return false
@@ -174,7 +140,7 @@ func (validator *MessageValidator) validateAggregatedMessage(aggMsg *pb.Aggregat
 
 	senders := make(map[string]struct{}, validator.defaultSize)
 	for _, innerMsg := range aggMsg.Messages {
-		if !validator.isSyntacticallyValid(innerMsg) {
+		if !validator.isValidStructure(innerMsg) {
 			log.Warning("Aggregated validation failed: identified an invalid inner message")
 			return false
 		}

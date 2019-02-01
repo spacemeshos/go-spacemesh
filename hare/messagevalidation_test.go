@@ -43,17 +43,17 @@ func TestMessageValidator_ValidateCertificate(t *testing.T) {
 
 func TestMessageValidator_IsSyntacticallyValid(t *testing.T) {
 	validator := defaultValidator()
-	assert.False(t, validator.isSyntacticallyValid(nil))
+	assert.False(t, validator.isValidStructure(nil))
 	m := &pb.HareMessage{}
-	assert.False(t, validator.isSyntacticallyValid(m))
+	assert.False(t, validator.isValidStructure(m))
 	m.PubKey = generateVerifier(t).Bytes()
-	assert.False(t, validator.isSyntacticallyValid(m))
+	assert.False(t, validator.isValidStructure(m))
 	m.Message = &pb.InnerMessage{}
-	assert.False(t, validator.isSyntacticallyValid(m))
+	assert.False(t, validator.isValidStructure(m))
 	m.Message.Values = nil
-	assert.False(t, validator.isSyntacticallyValid(m))
+	assert.False(t, validator.isValidStructure(m))
 	m.Message.Values = NewSmallEmptySet().To2DSlice()
-	assert.False(t, validator.isSyntacticallyValid(m))
+	assert.False(t, validator.isValidStructure(m))
 }
 
 func TestMessageValidator_Aggregated(t *testing.T) {
@@ -101,6 +101,11 @@ func TestConsensusProcess_isContextuallyValid(t *testing.T) {
 func TestMessageValidator_ValidateMessage(t *testing.T) {
 	proc := generateConsensusProcess(t)
 	v := proc.validator
-	assert.True(t, v.ValidateMessage(proc.initDefaultBuilder(proc.s).SetType(PreRound).Sign(proc.signing).Build(), 0))
-	assert.True(t, v.ValidateMessage(proc.initDefaultBuilder(proc.s).SetType(Status).Sign(proc.signing).Build(), 0))
+	preround := proc.initDefaultBuilder(proc.s).SetType(PreRound).Sign(proc.signing).Build()
+	assert.True(t, v.SyntacticallyValidateMessage(preround))
+	assert.True(t, v.ContextuallyValidateMessage(preround, 0))
+	status := proc.initDefaultBuilder(proc.s).SetType(Status).Sign(proc.signing).Build()
+	assert.True(t, v.ContextuallyValidateMessage(status, 0))
+	assert.True(t, v.SyntacticallyValidateMessage(status))
+
 }

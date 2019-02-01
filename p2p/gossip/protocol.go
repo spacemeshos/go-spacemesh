@@ -165,13 +165,14 @@ func (prot *Protocol) isMessageValid(h hash) Validity {
 	prot.oldMessageMu.RLock()
 	res, ok := prot.invalidMessageQ[h]
 	prot.oldMessageMu.RUnlock()
-	if ok {
-		if res {
-			return Valid
-		}
+	if !ok {
+		return Unknown
+	}
+	if !res {
 		return Invalid
 	}
-	return Unknown
+	return Valid
+
 }
 
 // markMessageValidity stores the message's validity so that invalid messages won't be propagated in case received again.

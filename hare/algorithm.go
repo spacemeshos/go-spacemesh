@@ -226,12 +226,13 @@ func (proc *ConsensusProcess) handleMessage(msg Message) {
 	m := msg.msg
 	// first validate role
 	if !proc.validateRole(m) {
-		log.Warning("Role validation failed")
+		log.Warning("Role validation failed, pubkey %v", m.PubKey)
 		msg.reportValidationResult(false)
 		return
 	}
 
 	if !proc.validator.SyntacticallyValidateMessage(m) {
+		log.Warning("Syntactically validation failed, pubkey %v", m.PubKey)
 		msg.reportValidationResult(false)
 		return
 	}
@@ -243,10 +244,10 @@ func (proc *ConsensusProcess) handleMessage(msg Message) {
 	if !proc.validator.ContextuallyValidateMessage(m, proc.k) {
 		if !proc.validator.ContextuallyValidateMessage(m, proc.k+1) {
 			// TODO: should return error from message validation to indicate what failed, should retry only for contextual failure
-			log.Warning("DirectMessage is not valid for either round")
+			log.Warning("Message is not valid for either round, pubkey %v", m.PubKey)
 			return
 		} else { // a valid early message, keep it for later
-			log.Info("Early message detected. Keeping message")
+			log.Info("Early message detected. Keeping message, pubkey %v", m.PubKey)
 			proc.onEarlyMessage(msg)
 			return
 		}
@@ -265,7 +266,7 @@ func (proc *ConsensusProcess) handleMessage(msg Message) {
 	case Notify: // end of round 4
 		proc.processNotifyMsg(m)
 	default:
-		log.Warning("Unknown message type: ", m.Message.Type)
+		log.Warning("Unknown message type: %v , pubkey %v", m.Message.Type, m.PubKey)
 	}
 }
 

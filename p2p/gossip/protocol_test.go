@@ -108,7 +108,7 @@ func (mbn *mockBaseNetwork) ProcessDirectProtocolMessage(sender p2pcrypto.Public
 func (mbn *mockBaseNetwork) ProcessGossipProtocolMessage(protocol string, data service.Data, validationCompletedChan chan service.MessageValidation) error {
 	mbn.processProtocolCount++
 	if (validationCompletedChan != nil) {
-		validationCompletedChan <- *service.NewMessageValidation(data.Bytes(), protocol, mbn.isMessageValid)
+		validationCompletedChan <- service.NewMessageValidation(data.Bytes(), protocol, mbn.isMessageValid)
 	}
 	time.Sleep(time.Millisecond) // context switch to allow gossip to handle the validation report
 	releaseWaiters(mbn.pcountwg)

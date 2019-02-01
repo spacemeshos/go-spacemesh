@@ -63,7 +63,7 @@ func (pm gossipProtocolMessage) ValidationCompletedChan() chan service.MessageVa
 
 func (pm gossipProtocolMessage) ReportValidation(protocol string, isValid bool) {
 	if pm.validationChan != nil {
-		pm.validationChan <- *service.NewMessageValidation(pm.Bytes(), protocol, isValid)
+		pm.validationChan <- service.NewMessageValidation(pm.Bytes(), protocol, isValid)
 	}
 }
 
@@ -348,7 +348,7 @@ func (s *swarm) RegisterDirectProtocol(protocol string) chan service.DirectMessa
 
 // RegisterGossipProtocol registers an handler for gossip based `protocol`
 func (s *swarm) RegisterGossipProtocol(protocol string) chan service.GossipMessage {
-	mchan := make(chan service.GossipMessage, config.ConfigValues.BufferSize)
+	mchan := make(chan service.GossipMessage, s.config.BufferSize)
 	s.protocolHandlerMutex.Lock()
 	s.gossipProtocolHandlers[protocol] = mchan
 	s.protocolHandlerMutex.Unlock()

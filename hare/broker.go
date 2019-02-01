@@ -84,7 +84,9 @@ type Message struct {
 }
 
 func (msg Message) reportValidationResult(isValid bool) {
-	msg.validationChan <- *service.NewMessageValidation(msg.bytes, ProtoName, isValid)
+	if msg.validationChan != nil {
+		msg.validationChan <- service.NewMessageValidation(msg.bytes, ProtoName, isValid)
+	}
 }
 
 // Dispatch incoming messages to the matching set id instance

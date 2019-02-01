@@ -71,7 +71,7 @@ func (its *IntegrationTestSuite) Test_Gossiping() {
 				if !bytes.Equal(got.Bytes(), msg) {
 					return fmt.Errorf("wrong msg, got: %s, want: %s", got, msg)
 				}
-				got.ValidationCompletedChan() <- *service.NewMessageValidation(got.Bytes(), exProto, true)
+				got.ValidationCompletedChan() <- service.NewMessageValidation(got.Bytes(), exProto, true)
 				atomic.AddInt32(numgot, 1)
 				return nil
 			case <-ctx.Done():

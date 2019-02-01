@@ -22,8 +22,8 @@ func (mv MessageValidation) IsValid() bool {
 	return mv.isValid
 }
 
-func NewMessageValidation(msg []byte, prot string, isValid bool) *MessageValidation {
-	return &MessageValidation{msg, prot, isValid}
+func NewMessageValidation(msg []byte, prot string, isValid bool) MessageValidation {
+	return MessageValidation{msg, prot, isValid}
 }
 
 // DirectMessage is an interface that represents a simple direct message structure

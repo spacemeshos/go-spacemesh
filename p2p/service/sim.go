@@ -170,7 +170,7 @@ func (sm simGossipMessage) ValidationCompletedChan() chan MessageValidation {
 
 func (sm simGossipMessage) ReportValidation(protocol string, isValid bool) {
 	if sm.validationCompletedChan != nil {
-		sm.validationCompletedChan <- *NewMessageValidation(sm.Bytes(), protocol, isValid)
+		sm.validationCompletedChan <- NewMessageValidation(sm.Bytes(), protocol, isValid)
 	}
 }
 
@@ -307,5 +307,10 @@ func (sn *Node) Shutdown() {
 		close(c)
 	}
 	delete(sn.sim.protocolDirectHandler, sn.Node.PublicKey().String())
+
+	for _, c := range sn.sim.protocolGossipHandler[sn.Node.PublicKey().String()] {
+		close(c)
+	}
+	delete(sn.sim.protocolGossipHandler, sn.Node.PublicKey().String())
 	sn.sim.mutex.Unlock()
 }
