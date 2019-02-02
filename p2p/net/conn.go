@@ -2,6 +2,7 @@ package net
 
 import (
 	"errors"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"time"
 
@@ -12,7 +13,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/net/wire"
-	"gopkg.in/op/go-logging.v1"
 )
 
 var (
@@ -52,8 +52,8 @@ type Connection interface {
 // FormattedConnection is an io.Writer and an io.Closer
 // A network connection supporting full-duplex messaging
 type FormattedConnection struct {
-	logger *logging.Logger
 	// metadata for logging / debugging
+	logger log.Log
 	id         string // uuid for logging
 	created    time.Time
 	remotePub  p2pcrypto.PublicKey
@@ -81,7 +81,7 @@ type readWriteCloseAddresser interface {
 
 // Create a new connection wrapping a net.Conn with a provided connection manager
 func newConnection(conn readWriteCloseAddresser, netw networker, formatter wire.Formatter,
-	remotePub p2pcrypto.PublicKey, session NetworkSession, log *logging.Logger) *FormattedConnection {
+	remotePub p2pcrypto.PublicKey, session NetworkSession, log log.Log) *FormattedConnection {
 
 	// todo parametrize channel size - hard-coded for now
 	connection := &FormattedConnection{

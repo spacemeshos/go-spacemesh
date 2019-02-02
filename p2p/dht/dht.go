@@ -2,6 +2,7 @@
 package dht
 
 import (
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
@@ -65,7 +66,7 @@ func New(node *node.LocalNode, config config.SwarmConfig, service service.Servic
 	d := &KadDHT{
 		config:  config,
 		local:   node,
-		rt:      NewRoutingTable(config.RoutingTableBucketSize, node.DhtID(), node.Logger),
+		rt:      NewRoutingTable(config.RoutingTableBucketSize, node.DhtID(), node.Log),
 		service: service,
 	}
 	d.fnp = newFindNodeProtocol(service, d.rt)
@@ -113,6 +114,10 @@ func (d *KadDHT) InternalLookup(dhtid node.DhtID) []node.Node {
 func (d *KadDHT) kadLookup(id p2pcrypto.PublicKey, searchList []node.Node) (node.Node, error) {
 	// save queried node ids for the operation
 	queried := map[string]struct{}{}
+
+	defer func() {
+		d.local.Debugw("kad_lookup", log.Int("found", len(searchList)), log.Int("queried", len(queried)))
+	}()
 
 	// iterative lookups for nodeId using searchList
 

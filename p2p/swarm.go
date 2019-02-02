@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/golang/protobuf/proto"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/connectionpool"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht"
@@ -235,7 +236,7 @@ func (s *swarm) Start() error {
 				return
 			}
 			close(s.bootChan)
-			s.lNode.Info("DHT Bootstrapped with %d peers in %v", s.dht.Size(), time.Since(b))
+			s.lNode.Infow("bootstrap_complete", log.Bool("success", s.dht.Size() > s.config.SwarmConfig.RandomConnections), log.Int("peers", s.dht.Size()), log.Duration("time_elapsed", time.Since(b)))
 		}()
 	}
 
@@ -332,7 +333,9 @@ func (s *swarm) sendMessageImpl(peerPubKey p2pcrypto.PublicKey, protocol string,
 
 	err = conn.Send(final)
 
-	s.lNode.Debug("DirectMessage sent successfully")
+	if err != nil {
+		s.lNode.Debugw("p2p_message_sent", log.String("to", peerPubKey.String()), log.String("protocol", protocol), log.Int("size", len(final)), log.Int("rawsize", len(payload.Bytes())))
+	}
 
 	return err
 }
@@ -378,7 +381,7 @@ func (s *swarm) processMessage(ime net.IncomingMessageEvent) {
 
 	err := s.onRemoteClientMessage(ime)
 	if err != nil {
-		s.lNode.Errorf("Err reading message from %v, closing connection err=%v", ime.Conn.RemotePublicKey(), err)
+		s.lNode.Error("Err reading message from %v, closing connection err=%v", ime.Conn.RemotePublicKey(), err)
 		ime.Conn.Close()
 		// TODO: differentiate action on errors
 	}
@@ -503,7 +506,7 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 	pm := &pb.ProtocolMessage{}
 	err = proto.Unmarshal(decPayload, pm)
 	if err != nil {
-		s.lNode.Errorf("proto marshaling err=", err)
+		s.lNode.Error("proto marshaling err=", err)
 		return ErrBadFormat2
 	}
 
@@ -513,8 +516,6 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 		// TODO : Also consider moving send timestamp into metadata(encrypted).
 		return ErrOutOfSync
 	}
-
-	s.lNode.Debug("Authorized %v protocol message ", pm.Metadata.NextProtocol)
 
 	remoteNode := node.New(msg.Conn.RemotePublicKey(), "") // if we got so far, we already have the node in our rt, hence address won't be used
 	// update the routing table - we just heard from this authenticated node
@@ -530,8 +531,13 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 		data = &service.DataMsgWrapper{Req: wrap.Req, MsgType: wrap.Type, ReqID: wrap.ReqID, Payload: wrap.Payload}
 	}
 
+	s.lNode.Debugw("p2p_process_message",
+		log.String("protocol", pm.Metadata.NextProtocol),
+		log.String("from", remoteNode.PublicKey().String()),
+		log.Int("size", len(msg.Message)))
+
 	// messages handled here are always processed by direct based protocols, only the gossip protocol calls ProcessGossipProtocolMessage
-	return s.ProcessDirectProtocolMessage(msg.Conn.RemotePublicKey(), pm.Metadata.NextProtocol, data)
+	return s.ProcessProtocolMessage(remoteNode, pm.Metadata.NextProtocol, data)
 }
 
 // ProcessDirectProtocolMessage passes an already decrypted message to a protocol.
@@ -736,7 +742,7 @@ loop:
 			s.outpeersMutex.Unlock()
 
 			s.publishNewPeer(cne.n.PublicKey())
-			s.lNode.Debug("Neighborhood: Added peer to peer list %v", cne.n.Pretty())
+			s.lNode.Debugw("p2p_new_outbound", log.String("id", cne.n.PublicKey().String()))
 		case <-tm.C:
 			break loop
 		case <-s.shutdown:

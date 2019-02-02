@@ -3,7 +3,6 @@ package net
 import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"gopkg.in/op/go-logging.v1"
 	"math/rand"
 	"net"
 	"sync/atomic"
@@ -38,8 +37,8 @@ func (m ReadWriteCloserMock) RemoteAddr() net.Addr {
 	return r
 }
 
-func getTestLogger(name string) *logging.Logger {
-	return log.New(name, "", "").Logger
+func getTestLogger(name string) log.Log {
+	return log.New(name, "", "")
 }
 
 // NetworkMock is a mock struct
@@ -54,7 +53,7 @@ type NetworkMock struct {
 	closingConn      []func(Connection)
 	incomingMessages []chan IncomingMessageEvent
 	dialSessionID    []byte
-	logger           *logging.Logger
+	logger           log.Log
 }
 
 // NewNetworkMock is a mock
@@ -172,6 +171,6 @@ func (n *NetworkMock) HandlePreSessionIncomingMessage(c Connection, msg []byte) 
 }
 
 // Logger return the logger
-func (n *NetworkMock) Logger() *logging.Logger {
+func (n *NetworkMock) Logger() log.Log {
 	return n.logger
 }
