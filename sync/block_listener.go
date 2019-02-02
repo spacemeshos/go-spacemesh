@@ -15,7 +15,7 @@ import (
 type MessageServer server.MessageServer
 
 const BlockProtocol = "/blocks/1.0/"
-const NewBlock = "newBlock"
+const NewBlockProtocol = "newBlock"
 
 type BlockListener struct {
 	*server.MessageServer
@@ -26,7 +26,7 @@ type BlockListener struct {
 	bufferSize   int
 	semaphore    chan struct{}
 	unknownQueue chan mesh.BlockID //todo consider benefits of changing to stack
-	receivedGossipBlocks chan service.Message
+	receivedGossipBlocks chan service.GossipMessage
 	startLock    uint32
 	timeout      time.Duration
 	exit         chan struct {}
@@ -52,18 +52,20 @@ func NewBlockListener(net server.Service, bv BlockValidator, layers *mesh.Mesh, 
 		BlockValidator: bv,
 		Mesh:           layers,
 		Peers:          p2p.NewPeers(net),
-		MessageServer:  server.NewMsgServer(net, BlockProtocol, timeout, make(chan service.Message, config.ConfigValues.BufferSize), logger),
+		MessageServer:  server.NewMsgServer(net, BlockProtocol, timeout, make(chan service.DirectMessage, config.ConfigValues.BufferSize), logger),
 		Log:            logger,
 		semaphore:      make(chan struct{}, concurrency),
 		unknownQueue:   make(chan mesh.BlockID, 200), //todo tune buffer size + get buffer from config
 		exit:           make(chan struct{}),
-		receivedGossipBlocks: net.RegisterProtocol(NewBlock),
+		receivedGossipBlocks: net.RegisterGossipProtocol(NewBlockProtocol),
 	}
 	bl.RegisterMsgHandler(BLOCK , newBlockRequestHandler(layers, logger))
 
 
 	return &bl
 }
+
+
 
 func (bl *BlockListener) ListenToGossipBlocks(){
 	for{
@@ -74,16 +76,20 @@ func (bl *BlockListener) ListenToGossipBlocks(){
 		case data := <- bl.receivedGossipBlocks:
 			blk, err := mesh.BytesAsBlock(bytes.NewReader(data.Bytes()))
 			if err != nil {
-				log.Error("received invalid block from sender %v", data.Sender())
+				log.Error("received invalid block %v", data.Bytes()[:7])
+				data.ReportValidation(NewBlockProtocol, false)
 				break
 			}
 			if bl.EligibleBlock(&blk){
+				data.ReportValidation(NewBlockProtocol, true)
 				err := bl.AddBlock(&blk)
 				if err != nil {
 					log.Info("Block already received")
 					break
 				}
 				bl.addUnknownToQueue(&blk)
+			} else {
+				data.ReportValidation(NewBlockProtocol, false)
 			}
 
 		}

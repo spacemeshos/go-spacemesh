@@ -27,21 +27,44 @@ import (
 // ConnectingTimeout is the timeout we wait when trying to connect a neighborhood
 const ConnectingTimeout = 20 * time.Second //todo: add to the config
 
-type protocolMessage struct {
-	sender node.Node
+type directProtocolMessage struct {
+	sender p2pcrypto.PublicKey
 	data   service.Data
 }
 
-func (pm protocolMessage) Sender() node.Node {
+func (pm directProtocolMessage) Sender() p2pcrypto.PublicKey {
 	return pm.sender
 }
 
-func (pm protocolMessage) Data() service.Data {
+func (pm directProtocolMessage) Data() service.Data {
 	return pm.data
 }
 
-func (pm protocolMessage) Bytes() []byte {
+func (pm directProtocolMessage) Bytes() []byte {
 	return pm.data.Bytes()
+}
+
+type gossipProtocolMessage struct {
+	data   service.Data
+	validationChan chan service.MessageValidation
+}
+
+func (pm gossipProtocolMessage) Data() service.Data {
+	return pm.data
+}
+
+func (pm gossipProtocolMessage) Bytes() []byte {
+	return pm.data.Bytes()
+}
+
+func (pm gossipProtocolMessage) ValidationCompletedChan() chan service.MessageValidation {
+	return pm.validationChan
+}
+
+func (pm gossipProtocolMessage) ReportValidation(protocol string, isValid bool) {
+	if pm.validationChan != nil {
+		pm.validationChan <- service.NewMessageValidation(pm.Bytes(), protocol, isValid)
+	}
 }
 
 type cPool interface {
@@ -70,8 +93,9 @@ type swarm struct {
 
 	// map between protocol names to listening protocol handlers
 	// NOTE: maybe let more than one handler register on a protocol ?
-	protocolHandlers     map[string]chan service.Message
-	protocolHandlerMutex sync.RWMutex
+	directProtocolHandlers map[string]chan service.DirectMessage
+	gossipProtocolHandlers map[string]chan service.GossipMessage
+	protocolHandlerMutex   sync.RWMutex
 
 	gossip  *gossip.Protocol
 	network *net.Net
@@ -153,8 +177,9 @@ func newSwarm(ctx context.Context, config config.Config, newNode bool, persist b
 		delPeerSub:        make([]chan p2pcrypto.PublicKey, 0, 10),
 		connectingTimeout: ConnectingTimeout,
 
-		protocolHandlers: make(map[string]chan service.Message),
-		network:          n,
+		directProtocolHandlers: make(map[string]chan service.DirectMessage),
+		gossipProtocolHandlers: make(map[string]chan service.GossipMessage),
+		network:                n,
 	}
 
 	s.dht = dht.New(l, config.SwarmConfig, s)
@@ -307,16 +332,25 @@ func (s *swarm) sendMessageImpl(peerPubKey p2pcrypto.PublicKey, protocol string,
 
 	err = conn.Send(final)
 
-	s.lNode.Debug("Message sent successfully")
+	s.lNode.Debug("DirectMessage sent successfully")
 
 	return err
 }
 
-// RegisterProtocol registers an handler for `protocol`
-func (s *swarm) RegisterProtocol(protocol string) chan service.Message {
-	mchan := make(chan service.Message, config.ConfigValues.BufferSize)
+// RegisterDirectProtocol registers an handler for direct messaging based `protocol`
+func (s *swarm) RegisterDirectProtocol(protocol string) chan service.DirectMessage {
+	mchan := make(chan service.DirectMessage, config.ConfigValues.BufferSize)
 	s.protocolHandlerMutex.Lock()
-	s.protocolHandlers[protocol] = mchan
+	s.directProtocolHandlers[protocol] = mchan
+	s.protocolHandlerMutex.Unlock()
+	return mchan
+}
+
+// RegisterGossipProtocol registers an handler for gossip based `protocol`
+func (s *swarm) RegisterGossipProtocol(protocol string) chan service.GossipMessage {
+	mchan := make(chan service.GossipMessage, s.config.BufferSize)
+	s.protocolHandlerMutex.Lock()
+	s.gossipProtocolHandlers[protocol] = mchan
 	s.protocolHandlerMutex.Unlock()
 	return mchan
 }
@@ -328,8 +362,12 @@ func (s *swarm) Shutdown() {
 	s.cPool.Shutdown()
 
 	s.protocolHandlerMutex.Lock()
-	for i, _ := range s.protocolHandlers {
-		delete(s.protocolHandlers, i)
+	for i, _ := range s.directProtocolHandlers {
+		delete(s.directProtocolHandlers, i)
+		//close(prt) //todo: signal protocols to shutdown with closing chan. (this makes us send on closed chan. )
+	}
+	for i, _ := range s.gossipProtocolHandlers {
+		delete(s.gossipProtocolHandlers, i)
 		//close(prt) //todo: signal protocols to shutdown with closing chan. (this makes us send on closed chan. )
 	}
 	s.protocolHandlerMutex.Unlock()
@@ -348,9 +386,9 @@ func (s *swarm) processMessage(ime net.IncomingMessageEvent) {
 
 
 // RegisterProtocolWithChannel configures and returns a channel for a given protocol.
-func (s *swarm) RegisterProtocolWithChannel(protocol string, ingressChannel chan service.Message) chan service.Message {
+func (s *swarm) RegisterDirectProtocolWithChannel(protocol string, ingressChannel chan service.DirectMessage) chan service.DirectMessage {
         s.protocolHandlerMutex.Lock()
-        s.protocolHandlers[protocol] = ingressChannel
+        s.directProtocolHandlers[protocol] = ingressChannel
         s.protocolHandlerMutex.Unlock()
         return ingressChannel
 }
@@ -492,21 +530,39 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 		data = &service.DataMsgWrapper{Req: wrap.Req, MsgType: wrap.Type, ReqID: wrap.ReqID, Payload: wrap.Payload}
 	}
 
-	return s.ProcessProtocolMessage(remoteNode, pm.Metadata.NextProtocol, data)
+	// messages handled here are always processed by direct based protocols, only the gossip protocol calls ProcessGossipProtocolMessage
+	return s.ProcessDirectProtocolMessage(msg.Conn.RemotePublicKey(), pm.Metadata.NextProtocol, data)
 }
 
-// ProcessProtocolMessage passes an already decrypted message to a protocol.
-func (s *swarm) ProcessProtocolMessage(sender node.Node, protocol string, data service.Data) error {
-	// route authenticated message to the reigstered protocol
+// ProcessDirectProtocolMessage passes an already decrypted message to a protocol.
+func (s *swarm) ProcessDirectProtocolMessage(sender p2pcrypto.PublicKey, protocol string, data service.Data) error {
+	// route authenticated message to the registered protocol
 	s.protocolHandlerMutex.RLock()
-	msgchan := s.protocolHandlers[protocol]
+	msgchan := s.directProtocolHandlers[protocol]
 	s.protocolHandlerMutex.RUnlock()
 	if msgchan == nil {
 		return ErrNoProtocol
 	}
 	s.lNode.Debug("Forwarding message to %v protocol", protocol)
 
-	msgchan <- protocolMessage{sender, data}
+	msgchan <- directProtocolMessage{sender, data}
+
+	return nil
+}
+
+// ProcessGossipProtocolMessage passes an already decrypted message to a protocol. It is expected that the protocol will send
+// the message syntactic validation result on the validationCompletedChan ASAP
+func (s *swarm) ProcessGossipProtocolMessage(protocol string, data service.Data, validationCompletedChan chan service.MessageValidation) error {
+	// route authenticated message to the registered protocol
+	s.protocolHandlerMutex.RLock()
+	msgchan := s.gossipProtocolHandlers[protocol]
+	s.protocolHandlerMutex.RUnlock()
+	if msgchan == nil {
+		return ErrNoProtocol
+	}
+	s.lNode.Debug("Forwarding message to %v protocol", protocol)
+
+	msgchan <- gossipProtocolMessage{data, validationCompletedChan}
 
 	return nil
 }

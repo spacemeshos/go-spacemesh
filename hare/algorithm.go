@@ -19,7 +19,7 @@ type Byteable interface {
 }
 
 type NetworkService interface {
-	RegisterProtocol(protocol string) chan service.Message
+	RegisterGossipProtocol(protocol string) chan service.GossipMessage
 	Broadcast(protocol string, payload []byte) error
 }
 
@@ -53,7 +53,7 @@ type ConsensusProcess struct {
 	signing           Signing
 	network           NetworkService
 	startTime         time.Time // TODO: needed?
-	inbox             chan *pb.HareMessage
+	inbox             chan Message
 	terminationReport chan TerminationOutput
 	role              Role // the current role
 	validator         *MessageValidator
@@ -65,7 +65,7 @@ type ConsensusProcess struct {
 	terminating       bool
 	cfg               config.Config
 	notifySent        bool
-	pending           map[string]*pb.HareMessage
+	pending           map[string]Message
 }
 
 func NewConsensusProcess(cfg config.Config, instanceId InstanceId, s *Set, oracle Rolacle, signing Signing, p2p NetworkService, terminationReport chan TerminationOutput) *ConsensusProcess {
@@ -87,7 +87,7 @@ func NewConsensusProcess(cfg config.Config, instanceId InstanceId, s *Set, oracl
 	proc.cfg = cfg
 	proc.notifySent = false
 	proc.terminationReport = terminationReport
-	proc.pending = make(map[string]*pb.HareMessage, cfg.N)
+	proc.pending = make(map[string]Message, cfg.N)
 
 	return proc
 }
@@ -114,8 +114,8 @@ func (proc *ConsensusProcess) Start() error {
 	return nil
 }
 
-func (proc *ConsensusProcess) createInbox(size uint32) chan *pb.HareMessage {
-	proc.inbox = make(chan *pb.HareMessage, size)
+func (proc *ConsensusProcess) createInbox(size uint32) chan Message {
+	proc.inbox = make(chan Message, size)
 	return proc.inbox
 }
 
@@ -180,8 +180,8 @@ func roleFromRoundCounter(k uint32) Role {
 	}
 }
 
-func (proc *ConsensusProcess) onEarlyMessage(m *pb.HareMessage) {
-	verifier, err := NewVerifier(m.PubKey)
+func (proc *ConsensusProcess) onEarlyMessage(m Message) {
+	verifier, err := NewVerifier(m.msg.PubKey)
 	if err != nil {
 		log.Warning("Could not construct verifier: ", err)
 		return
@@ -221,24 +221,34 @@ func (proc *ConsensusProcess) validateRole(m *pb.HareMessage) bool {
 	return true
 }
 
-func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
+func (proc *ConsensusProcess) handleMessage(msg Message) {
 	// Note: instanceId is already verified by the broker
-
+	m := msg.msg
 	// first validate role
 	if !proc.validateRole(m) {
-		log.Warning("Role validation failed")
+		log.Warning("Role validation failed, pubkey %v", m.PubKey)
+		msg.reportValidationResult(false)
 		return
 	}
 
+	if !proc.validator.SyntacticallyValidateMessage(m) {
+		log.Warning("Syntactically validation failed, pubkey %v", m.PubKey)
+		msg.reportValidationResult(false)
+		return
+	}
+
+	// Not including the contextual validity in the report since it might have different results between two different peers
+	msg.reportValidationResult(true)
+
 	// validate message for this or next round
-	if !proc.validator.ValidateMessage(m, proc.k) {
-		if !proc.validator.ValidateMessage(m, proc.k+1) {
+	if !proc.validator.ContextuallyValidateMessage(m, proc.k) {
+		if !proc.validator.ContextuallyValidateMessage(m, proc.k+1) {
 			// TODO: should return error from message validation to indicate what failed, should retry only for contextual failure
-			log.Warning("Message is not valid for either round")
+			log.Warning("Message is not valid for either round, pubkey %v", m.PubKey)
 			return
 		} else { // a valid early message, keep it for later
-			log.Info("Early message detected. Keeping message")
-			proc.onEarlyMessage(m)
+			log.Info("Early message detected. Keeping message, pubkey %v", m.PubKey)
+			proc.onEarlyMessage(msg)
 			return
 		}
 	}
@@ -256,7 +266,7 @@ func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
 	case Notify: // end of round 4
 		proc.processNotifyMsg(m)
 	default:
-		log.Warning("Unknown message type: ", m.Message.Type)
+		log.Warning("Unknown message type: %v , pubkey %v", m.Message.Type, m.PubKey)
 	}
 }
 
@@ -344,7 +354,7 @@ func (proc *ConsensusProcess) beginRound4() {
 	proc.proposalTracker = nil
 }
 
-func (proc *ConsensusProcess) handlePending(pending map[string]*pb.HareMessage) {
+func (proc *ConsensusProcess) handlePending(pending map[string]Message) {
 	for _, m := range pending {
 		proc.inbox <- m
 	}
@@ -369,7 +379,7 @@ func (proc *ConsensusProcess) onRoundBegin() {
 	}
 
 	pendingProcess := proc.pending
-	proc.pending = make(map[string]*pb.HareMessage, proc.cfg.N)
+	proc.pending = make(map[string]Message, proc.cfg.N)
 	go proc.handlePending(pendingProcess)
 }
 
