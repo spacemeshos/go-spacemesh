@@ -26,12 +26,12 @@ func createMessage(t *testing.T, instanceId Byteable) []byte {
 }
 
 type MockInboxer struct {
-	inbox chan *pb.HareMessage
+	inbox chan Message
 	id uint32
 }
 
-func (inboxer *MockInboxer) createInbox(size uint32) chan *pb.HareMessage {
-	inboxer.inbox = make(chan *pb.HareMessage, size)
+func (inboxer *MockInboxer) createInbox(size uint32) chan Message {
+	inboxer.inbox = make(chan Message, size)
 	return inboxer.inbox
 }
 
@@ -68,7 +68,7 @@ func TestBroker_Received(t *testing.T) {
 
 	recv := <-inboxer.inbox
 
-	assert.True(t, recv.Message.InstanceId[0] == instanceId1.Bytes()[0])
+	assert.True(t, recv.msg.Message.InstanceId[0] == instanceId1.Bytes()[0])
 }
 
 // test that aborting the broker aborts
@@ -97,10 +97,10 @@ func sendMessages(t *testing.T, instanceId *InstanceId, n *service.Node, count i
 	}
 }
 
-func waitForMessages(t *testing.T, inbox chan *pb.HareMessage, instanceId *InstanceId, msgCount int) {
+func waitForMessages(t *testing.T, inbox chan Message, instanceId *InstanceId, msgCount int) {
 	for i := 0; i < msgCount; i++ {
 		x := <-inbox
-		assert.True(t, x.Message.InstanceId[0] == instanceId.Bytes()[0])
+		assert.True(t, x.msg.Message.InstanceId[0] == instanceId.Bytes()[0])
 	}
 }
 

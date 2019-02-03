@@ -157,7 +157,7 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 	assert.Equal(t, *blk, blk2)
 
 	assert.NoError(t, err)
-	n2.Broadcast( NewBlock, data)
+	n2.Broadcast(NewBlockProtocol, data)
 
 	timeout := time.After(5 * time.Second)
 	for {

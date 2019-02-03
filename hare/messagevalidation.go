@@ -17,14 +17,8 @@ func NewMessageValidator(signing Signing, threshold int, defaultSize int, valida
 	return &MessageValidator{signing, threshold, defaultSize, validator}
 }
 
-func (validator *MessageValidator) ValidateMessage(m *pb.HareMessage, k uint32) bool {
-	// validate context
-	if !isContextuallyValid(m, k) {
-		log.Info("Validate message failed: message is not contextually valid")
-		return false
-	}
-
-	if !validator.isSyntacticallyValid(m) {
+func (validator *MessageValidator) SyntacticallyValidateMessage(m *pb.HareMessage) bool {
+	if !validator.isValidStructure(m) {
 		log.Warning("Validate message failed: message is not syntactically valid")
 		return false
 	}
@@ -51,7 +45,7 @@ func (validator *MessageValidator) ValidateMessage(m *pb.HareMessage, k uint32) 
 }
 
 // verifies the message is contextually valid
-func isContextuallyValid(m *pb.HareMessage, expectedK uint32) bool {
+func (validator *MessageValidator) ContextuallyValidateMessage(m *pb.HareMessage, expectedK uint32) bool {
 	if m.Message == nil {
 		log.Warning("Contextual validation failed: m.Message is nil")
 		return false
@@ -75,7 +69,7 @@ func isContextuallyValid(m *pb.HareMessage, expectedK uint32) bool {
 }
 
 // verifies the message is syntactically valid
-func (validator *MessageValidator) isSyntacticallyValid(m *pb.HareMessage) bool {
+func (validator *MessageValidator) isValidStructure(m *pb.HareMessage) bool {
 	if m == nil {
 		log.Warning("Syntax validation failed: m is nil")
 		return false
@@ -146,7 +140,7 @@ func (validator *MessageValidator) validateAggregatedMessage(aggMsg *pb.Aggregat
 
 	senders := make(map[string]struct{}, validator.defaultSize)
 	for _, innerMsg := range aggMsg.Messages {
-		if !validator.isSyntacticallyValid(innerMsg) {
+		if !validator.isValidStructure(innerMsg) {
 			log.Warning("Aggregated validation failed: identified an invalid inner message")
 			return false
 		}
