@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/golang/protobuf/proto"
-	"github.com/spacemeshos/go-spacemesh/address"
+	"github.com/spacemeshos/go-spacemesh/common"
 	"io/ioutil"
 	"math/big"
 	"net/http"
@@ -110,7 +110,7 @@ func TestGrpcApi(t *testing.T) {
 		t.Fatalf("did not connect. %v", err)
 	}
 	defer conn.Close()
-	c := pb.NewSpaceMeshServiceClient(conn)
+	c := pb.NewSpacemeshServiceClient(conn)
 
 	// call echo and validate result
 	r, err := c.Echo(context.Background(), &pb.SimpleMessage{Value: message})
@@ -419,7 +419,7 @@ func TestSpaceMeshGrpcService_Broadcast(t *testing.T) {
 	const contentType = "application/json"
 
 	// generate request payload (api input params)
-	reqParams := pb.BroadcastMessage{Protocol: "Test", Data: Data}
+	reqParams := pb.BroadcastMessage{Data: Data}
 	var m jsonpb.Marshaler
 	payload, err := m.MarshalToString(&reqParams)
 	assert.NoError(t, err, "failed to marshal to string")
@@ -490,7 +490,7 @@ func TestSpaceMeshGrpcService_BroadcastErrors(t *testing.T) {
 	const contentType = "application/json"
 
 	// generate request payload (api input params)
-	reqParams := pb.BroadcastMessage{Protocol: "Test",  Data: Data }
+	reqParams := pb.BroadcastMessage{ Data: Data }
 	var m jsonpb.Marshaler
 	payload, err := m.MarshalToString(&reqParams)
 	assert.NoError(t, err, "failed to marshal to string")
@@ -519,4 +519,43 @@ func TestSpaceMeshGrpcService_BroadcastErrors(t *testing.T) {
 	<-jsonStatus
 	grpcService.StopService()
 	<-grpcStatus
+}
+
+type mockSrv struct {
+	c chan service.GossipMessage
+	called bool
+}
+
+func (m *mockSrv) RegisterGossipProtocol(string) chan service.GossipMessage {
+	m.called = true
+	return m.c
+}
+
+type mockMsg struct {
+	msg []byte
+	c chan service.MessageValidation
+}
+
+func (m *mockMsg) Bytes() []byte {
+	return m.msg
+}
+
+func (m *mockMsg) ValidationCompletedChan() chan service.MessageValidation {
+	return m.c
+}
+
+func (m *mockMsg) ReportValidation(protocol string, isValid bool) {
+	m.c <- service.NewMessageValidation(m.msg, protocol, isValid)
+}
+
+func TestApproveAPIGossipMessages(t *testing.T) {
+	m := &mockSrv{c:make(chan service.GossipMessage, 1)}
+	ctx, cancel := context.WithCancel(context.Background())
+	ApproveAPIGossipMessages(ctx,m)
+	require.True(t, m.called)
+	msg := &mockMsg{[]byte("TEST"), make(chan service.MessageValidation, 1)}
+	m.c <- msg
+	valid := <-msg.ValidationCompletedChan()
+	require.True(t, valid.IsValid())
+	cancel()
 }

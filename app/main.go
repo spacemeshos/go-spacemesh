@@ -30,7 +30,7 @@ type SpacemeshApp struct {
 	P2P              p2p.Service
 	Config           *cfg.Config
 	NodeInitCallback chan bool
-	grpcAPIService   *api.SpaceMeshGrpcService
+	grpcAPIService   *api.SpacemeshGrpcService
 	jsonAPIService   *api.JSONHTTPServer
 }
 
@@ -242,6 +242,10 @@ func (app *SpacemeshApp) startSpacemesh(cmd *cobra.Command, args []string) {
 	// start p2p services
 	log.Info("Initializing P2P services")
 	swarm, err := p2p.New(Ctx, app.Config.P2P)
+
+	// Gossip messages are validated before propagating. broadcast test protocol isn't
+	api.ApproveAPIGossipMessages(Ctx, swarm) // todo: maybe only enable in tests?
+
 	if err != nil {
 		log.Error("Error starting p2p services, err: %v", err)
 		panic("Error starting p2p services")
