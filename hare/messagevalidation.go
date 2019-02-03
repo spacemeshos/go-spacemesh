@@ -6,6 +6,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
+type messageValidator interface {
+	SyntacticallyValidateMessage(m *pb.HareMessage) bool
+	ContextuallyValidateMessage(m *pb.HareMessage, expectedK uint32) bool
+}
+
 type MessageValidator struct {
 	signing         Signing
 	threshold       int

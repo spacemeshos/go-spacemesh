@@ -92,3 +92,15 @@ func TestPreRoundTracker_OnPreRound2(t *testing.T) {
 	tracker.OnPreRound(prMsg2)
 	assert.Equal(t, 1, len(tracker.preRound))
 }
+
+func TestPreRoundTracker_FilterSet(t *testing.T) {
+	tracker := NewPreRoundTracker(2, 2)
+	s1 := NewSetFromValues(value1, value2)
+	prMsg1 := BuildPreRoundMsg(generateVerifier(t), s1)
+	tracker.OnPreRound(prMsg1)
+	prMsg2 := BuildPreRoundMsg(generateVerifier(t), s1)
+	tracker.OnPreRound(prMsg2)
+	set := NewSetFromValues(value1, value2, value3)
+	tracker.FilterSet(set)
+	assert.True(t, set.Equals(s1))
+}

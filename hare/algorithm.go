@@ -55,11 +55,11 @@ type ConsensusProcess struct {
 	startTime         time.Time // TODO: needed?
 	inbox             chan Message
 	terminationReport chan TerminationOutput
-	validator         *MessageValidator
+	validator         messageValidator
 	preRoundTracker   *PreRoundTracker
 	statusesTracker   *StatusTracker
-	proposalTracker   *ProposalTracker
-	commitTracker     *CommitTracker
+	proposalTracker   proposalTracker
+	commitTracker     commitTracker
 	notifyTracker     *NotifyTracker
 	terminating       bool
 	cfg               config.Config
@@ -277,10 +277,6 @@ func (proc *ConsensusProcess) processMsg(m *pb.HareMessage) {
 	default:
 		log.Warning("Unknown message type: %v , pubkey %v", m.Message.Type, m.PubKey)
 	}
-}
-
-func (proc *ConsensusProcess) isEligible() bool {
-	return proc.currentRole() != Passive
 }
 
 func (proc *ConsensusProcess) sendMessage(msg *pb.HareMessage) {
@@ -532,6 +528,10 @@ func (proc *ConsensusProcess) endOfRound3() {
 	notifyMsg := builder.Build()
 	proc.sendMessage(notifyMsg)
 	proc.notifySent = true
+}
+
+func (proc *ConsensusProcess) isEligible() bool {
+	return proc.currentRole() != Passive
 }
 
 // Returns the role matching the current round if eligible for this round, false otherwise
