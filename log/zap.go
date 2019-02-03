@@ -69,11 +69,6 @@ func Err(v error) Field {
 	return Field(zap.Error(v))
 }
 
-// Err returns an error field
-func Skip() Field {
-	return Field(zap.Skip())
-}
-
 func unpack(fields ...Field) []zap.Field {
 	flds := make([]zap.Field, len(fields))
 	for f := range fields {
