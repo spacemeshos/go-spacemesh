@@ -42,7 +42,7 @@ func (validator *MessageValidator) SyntacticallyValidateMessage(m *pb.HareMessag
 	}
 	res, _ := verifier.Verify(data, m.InnerSig)
 	if !res {
-		log.Warning("Validate message failed: invalid message signature detected")
+		log.Warning("Validate message failed: invalid message signature detected ")
 		return false
 	}
 

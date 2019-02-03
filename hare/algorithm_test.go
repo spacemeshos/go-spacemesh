@@ -114,10 +114,8 @@ func (mct *mockCommitTracker) BuildCertificate() *pb.Certificate {
 	return mct.certificate
 }
 
-func generateVerifier(t *testing.T) Verifier {
-	ms := NewMockSigning()
-
-	return ms.Verifier()
+func generateSigning(t *testing.T) Signing {
+	return NewMockSigning()
 }
 
 func buildMessage(msg *pb.HareMessage) Message {
@@ -181,7 +179,7 @@ func TestConsensusProcess_handleMessage(t *testing.T) {
 	mValidator.firstK = proc.k
 	proc.validator = mValidator
 	broker.Register(proc)
-	m := BuildPreRoundMsg(generateVerifier(t), NewSetFromValues(value1))
+	m := BuildPreRoundMsg(generateSigning(t), NewSetFromValues(value1))
 	msg := buildMessage(m)
 	oracle.isEligible = false
 	proc.handleMessage(msg)
@@ -314,7 +312,7 @@ func TestConsensusProcess_sendMessage(t *testing.T) {
 
 	proc.sendMessage(nil)
 	assert.Equal(t, 0, net.count)
-	msg := buildStatusMsg(generateVerifier(t), s, 0)
+	msg := buildStatusMsg(generateSigning(t), s, 0)
 
 	oracle.isEligible = false
 	proc.sendMessage(msg)
@@ -330,10 +328,10 @@ func TestConsensusProcess_validateRole(t *testing.T) {
 	oracle := &mockRolacle{}
 	proc.oracle = oracle
 	assert.False(t, proc.validateRole(nil))
-	m := BuildPreRoundMsg(generateVerifier(t), NewSmallEmptySet())
+	m := BuildPreRoundMsg(generateSigning(t), NewSmallEmptySet())
 	m.Message = nil
 	assert.False(t, proc.validateRole(m))
-	m = BuildPreRoundMsg(generateVerifier(t), NewSmallEmptySet())
+	m = BuildPreRoundMsg(generateSigning(t), NewSmallEmptySet())
 	oracle.isEligible = false
 	assert.False(t, proc.validateRole(m))
 	oracle.isEligible = true
@@ -343,7 +341,7 @@ func TestConsensusProcess_validateRole(t *testing.T) {
 func TestConsensusProcess_procPre(t *testing.T) {
 	proc := generateConsensusProcess(t)
 	s := NewSmallEmptySet()
-	m := BuildPreRoundMsg(generateVerifier(t), s)
+	m := BuildPreRoundMsg(generateSigning(t), s)
 	proc.processPreRoundMsg(m)
 	assert.Equal(t, 1, len(proc.preRoundTracker.preRound))
 }
@@ -351,7 +349,7 @@ func TestConsensusProcess_procPre(t *testing.T) {
 func TestConsensusProcess_procStatus(t *testing.T) {
 	proc := generateConsensusProcess(t)
 	s := NewSmallEmptySet()
-	m := BuildStatusMsg(generateVerifier(t), s)
+	m := BuildStatusMsg(generateSigning(t), s)
 	proc.processStatusMsg(m)
 	assert.Equal(t, 1, len(proc.statusesTracker.statuses))
 }
@@ -360,7 +358,7 @@ func TestConsensusProcess_procProposal(t *testing.T) {
 	proc := generateConsensusProcess(t)
 	proc.advanceToNextRound()
 	s := NewSmallEmptySet()
-	m := BuildProposalMsg(generateVerifier(t), s)
+	m := BuildProposalMsg(generateSigning(t), s)
 	mpt := &mockProposalTracker{}
 	proc.proposalTracker = mpt
 	proc.processProposalMsg(m)
@@ -375,7 +373,7 @@ func TestConsensusProcess_procCommit(t *testing.T) {
 	proc.advanceToNextRound()
 	s := NewSmallEmptySet()
 	proc.commitTracker = NewCommitTracker(1, 1, s)
-	m := BuildCommitMsg(generateVerifier(t), s)
+	m := BuildCommitMsg(generateSigning(t), s)
 	mct := &mockCommitTracker{}
 	proc.commitTracker = mct
 	proc.processCommitMsg(m)
@@ -386,10 +384,10 @@ func TestConsensusProcess_procNotify(t *testing.T) {
 	proc := generateConsensusProcess(t)
 	proc.advanceToNextRound()
 	s := NewSetFromValues(value1)
-	m := BuildNotifyMsg(generateVerifier(t), s)
+	m := BuildNotifyMsg(generateSigning(t), s)
 	proc.processNotifyMsg(m)
 	assert.Equal(t, 1, len(proc.notifyTracker.notifies))
-	m = BuildNotifyMsg(generateVerifier(t), s)
+	m = BuildNotifyMsg(generateSigning(t), s)
 	proc.ki = 0
 	m.Message.K = uint32(proc.ki)
 	proc.s.Add(value5)
@@ -405,7 +403,7 @@ func TestConsensusProcess_Termination(t *testing.T) {
 	s := NewSetFromValues(value1)
 
 	for i := 0; i < cfg.F+1; i++ {
-		proc.processNotifyMsg(BuildNotifyMsg(generateVerifier(t), s))
+		proc.processNotifyMsg(BuildNotifyMsg(generateSigning(t), s))
 	}
 
 	timer := time.NewTimer(10 * time.Second)
@@ -432,7 +430,7 @@ func TestConsensusProcess_currentRound(t *testing.T) {
 
 func TestConsensusProcess_onEarlyMessage(t *testing.T) {
 	proc := generateConsensusProcess(t)
-	msg := BuildPreRoundMsg(generateVerifier(t), NewSmallEmptySet())
+	msg := BuildPreRoundMsg(generateSigning(t), NewSmallEmptySet())
 	m := buildMessage(msg)
 	proc.advanceToNextRound()
 	proc.onEarlyMessage(buildMessage(nil))
@@ -467,7 +465,7 @@ func TestConsensusProcess_beginRound1(t *testing.T) {
 	oracle := &mockRolacle{}
 	proc.oracle = oracle
 	s := NewSmallEmptySet()
-	m := BuildPreRoundMsg(generateVerifier(t), s)
+	m := BuildPreRoundMsg(generateSigning(t), s)
 	proc.statusesTracker.RecordStatus(m)
 
 	preStatusTracker := proc.statusesTracker
@@ -487,7 +485,7 @@ func TestConsensusProcess_beginRound2(t *testing.T) {
 
 	statusTracker := NewStatusTracker(1, 1)
 	s := NewSetFromValues(value1)
-	statusTracker.RecordStatus(BuildStatusMsg(generateVerifier(t), s))
+	statusTracker.RecordStatus(BuildStatusMsg(generateSigning(t), s))
 	statusTracker.analyzed = true
 	proc.statusesTracker = statusTracker
 
@@ -536,10 +534,10 @@ func TestConsensusProcess_handlePending(t *testing.T) {
 	const count = 5
 	pending := make(map[string]Message)
 	for i := 0; i < count; i++ {
-		v := generateVerifier(t)
+		v := generateSigning(t)
 		msg := BuildStatusMsg(v, NewSetFromValues(value1))
 		m := buildMessage(msg)
-		pending[v.String()] = m
+		pending[v.Verifier().String()] = m
 	}
 	proc.handlePending(pending)
 	assert.Equal(t, count, len(proc.inbox))

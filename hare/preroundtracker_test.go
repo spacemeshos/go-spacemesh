@@ -26,10 +26,10 @@ var value10 = Value{Bytes32{10}}
 
 
 
-func BuildPreRoundMsg(verifier Verifier, s *Set) *pb.HareMessage {
+func BuildPreRoundMsg(signing Signing, s *Set) *pb.HareMessage {
 	builder := NewMessageBuilder()
 	builder.SetType(PreRound).SetInstanceId(*instanceId1).SetRoundCounter(k).SetKi(ki).SetValues(s)
-	builder = builder.SetPubKey(verifier.Bytes()).Sign(NewMockSigning())
+	builder = builder.SetPubKey(signing.Verifier().Bytes()).Sign(signing)
 
 	return builder.Build()
 }
@@ -38,17 +38,17 @@ func TestPreRoundTracker_OnPreRound(t *testing.T) {
 	s := NewEmptySet(lowDefaultSize)
 	s.Add(value1)
 	s.Add(value2)
-	verifier := generateVerifier(t)
+	verifier := generateSigning(t)
 
 	m1 := BuildPreRoundMsg(verifier, s)
 	tracker := NewPreRoundTracker(lowThresh10, lowThresh10)
 	tracker.OnPreRound(m1)
 	assert.Equal(t, 1, len(tracker.preRound))      // one msg
 	assert.Equal(t, 2, len(tracker.tracker.table)) // two values
-	_, exist1 := tracker.preRound[verifier.String()]
+	_, exist1 := tracker.preRound[verifier.Verifier().String()]
 	m2 := BuildPreRoundMsg(verifier, s)
 	tracker.OnPreRound(m2)
-	_, exist2 := tracker.preRound[verifier.String()]
+	_, exist2 := tracker.preRound[verifier.Verifier().String()]
 	assert.Equal(t, exist1, exist2) // same pub --> same msg
 }
 
@@ -58,7 +58,7 @@ func TestPreRoundTracker_CanProveValueAndSet(t *testing.T) {
 
 	for i := 0; i < lowThresh10; i++ {
 		assert.False(t, tracker.CanProveSet(s))
-		m1 := BuildPreRoundMsg(generateVerifier(t), s)
+		m1 := BuildPreRoundMsg(generateSigning(t), s)
 		tracker.OnPreRound(m1)
 	}
 
@@ -71,9 +71,9 @@ func TestPreRoundTracker_UpdateSet(t *testing.T) {
 	tracker := NewPreRoundTracker(2, 2)
 	s1 := NewSetFromValues(value1, value2, value3)
 	s2 := NewSetFromValues(value1, value2, value4)
-	prMsg1 := BuildPreRoundMsg(generateVerifier(t), s1)
+	prMsg1 := BuildPreRoundMsg(generateSigning(t), s1)
 	tracker.OnPreRound(prMsg1)
-	prMsg2 := BuildPreRoundMsg(generateVerifier(t), s2)
+	prMsg2 := BuildPreRoundMsg(generateSigning(t), s2)
 	tracker.OnPreRound(prMsg2)
 	assert.True(t, tracker.CanProveValue(value1))
 	assert.True(t, tracker.CanProveValue(value2))
@@ -84,7 +84,7 @@ func TestPreRoundTracker_UpdateSet(t *testing.T) {
 func TestPreRoundTracker_OnPreRound2(t *testing.T) {
 	tracker := NewPreRoundTracker(2, 2)
 	s1 := NewSetFromValues(value1)
-	verifier := generateVerifier(t)
+	verifier := generateSigning(t)
 	prMsg1 := BuildPreRoundMsg(verifier, s1)
 	tracker.OnPreRound(prMsg1)
 	assert.Equal(t, 1, len(tracker.preRound))
@@ -96,9 +96,9 @@ func TestPreRoundTracker_OnPreRound2(t *testing.T) {
 func TestPreRoundTracker_FilterSet(t *testing.T) {
 	tracker := NewPreRoundTracker(2, 2)
 	s1 := NewSetFromValues(value1, value2)
-	prMsg1 := BuildPreRoundMsg(generateVerifier(t), s1)
+	prMsg1 := BuildPreRoundMsg(generateSigning(t), s1)
 	tracker.OnPreRound(prMsg1)
-	prMsg2 := BuildPreRoundMsg(generateVerifier(t), s1)
+	prMsg2 := BuildPreRoundMsg(generateSigning(t), s1)
 	tracker.OnPreRound(prMsg2)
 	set := NewSetFromValues(value1, value2, value3)
 	tracker.FilterSet(set)
