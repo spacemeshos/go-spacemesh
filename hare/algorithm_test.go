@@ -2,7 +2,10 @@ package hare
 
 import (
 	"bytes"
+	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
+	"github.com/spacemeshos/go-spacemesh/hare/pb"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/stretchr/testify/assert"
@@ -30,8 +33,8 @@ type mockP2p struct {
 	count int
 }
 
-func (m *mockP2p) RegisterProtocol(protocol string) chan service.Message {
-	return make(chan service.Message)
+func (m *mockP2p) RegisterGossipProtocol(protocol string) chan service.GossipMessage {
+	return make(chan service.GossipMessage)
 }
 
 func (m *mockP2p) Broadcast(protocol string, payload []byte) error {
@@ -319,9 +322,10 @@ func TestConsensusProcess_currentRound(t *testing.T) {
 
 func TestConsensusProcess_onEarlyMessage(t *testing.T) {
 	proc := generateConsensusProcess(t)
-	m := BuildPreRoundMsg(generateVerifier(t), NewSmallEmptySet())
+	msg := BuildPreRoundMsg(generateVerifier(t), NewSmallEmptySet())
+	m := buildMessage(msg)
 	proc.advanceToNextRound()
-	proc.onEarlyMessage(nil)
+	proc.onEarlyMessage(buildMessage(nil))
 	assert.Equal(t, 0, len(proc.pending))
 	proc.onEarlyMessage(m)
 	assert.Equal(t, 1, len(proc.pending))
