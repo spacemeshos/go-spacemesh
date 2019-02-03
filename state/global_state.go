@@ -2,9 +2,9 @@ package state
 
 import (
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/rlp"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/rlp"
 	"github.com/spacemeshos/go-spacemesh/trie"
 	"math/big"
 	"sync"
@@ -26,12 +26,11 @@ type GlobalStateDB interface {
 	TrieDB() *trie.Database
 }
 
-
 type StateDB struct {
-	globalTrie 	Trie
-	db 			Database //todo: maybe remove
+	globalTrie Trie
+	db         Database //todo: maybe remove
 	//todo: add journal
-	lock 		sync.Mutex
+	lock sync.Mutex
 
 	// This map holds 'live' objects, which will get modified while processing a state transition.
 	stateObjects      map[common.Address]*StateObj
@@ -52,8 +51,8 @@ func New(root common.Hash, db Database) (*StateDB, error) {
 		return nil, err
 	}
 	return &StateDB{
-		db:				db,
-		globalTrie: 	tr,
+		db:                db,
+		globalTrie:        tr,
 		stateObjects:      make(map[common.Address]*StateObj),
 		stateObjectsDirty: make(map[common.Address]struct{}),
 	}, nil
@@ -76,14 +75,12 @@ func (self *StateDB) Exist(addr common.Address) bool {
 	return self.getStateObj(addr) != nil
 }
 
-
 // Empty returns whether the state object is either non-existent
 // or empty according to the EIP161 specification (balance = nonce = code = 0)
 func (self *StateDB) Empty(addr common.Address) bool {
 	so := self.getStateObj(addr)
 	return so == nil || so.empty()
 }
-
 
 // Retrieve the balance from the given address or 0 if object not found
 func (self *StateDB) GetBalance(addr common.Address) *big.Int {
@@ -137,7 +134,6 @@ func (self *StateDB) SetNonce(addr common.Address, nonce uint64) {
 	}
 }
 
-
 //
 // Setting, updating & deleting state object methods.
 //
@@ -151,8 +147,6 @@ func (self *StateDB) updateStateObj(StateObj *StateObj) {
 	}
 	self.setError(self.globalTrie.TryUpdate(addr[:], data))
 }
-
-
 
 // Retrieve a state object given by the address. Returns nil if not found.
 func (self *StateDB) getStateObj(addr common.Address) (StateObj *StateObj) {
@@ -181,8 +175,7 @@ func (self *StateDB) getStateObj(addr common.Address) (StateObj *StateObj) {
 	return obj
 }
 
-
-func  (self *StateDB) makeDirtyObj(obj *StateObj ){
+func (self *StateDB) makeDirtyObj(obj *StateObj) {
 	self.stateObjectsDirty[obj.address] = struct{}{}
 }
 
@@ -193,7 +186,7 @@ func (self *StateDB) setStateObj(object *StateObj) {
 // Retrieve a state object or create a new state object if nil.
 func (self *StateDB) GetOrNewStateObj(addr common.Address) *StateObj {
 	stateObj := self.getStateObj(addr)
-	if stateObj == nil {//|| StateObj.deleted {
+	if stateObj == nil { //|| StateObj.deleted {
 		stateObj, _ = self.createObject(addr)
 	}
 	return stateObj
@@ -241,7 +234,7 @@ func (self *StateDB) Copy() *StateDB {
 	// Copy all the basic fields, initialize the memory ones
 	state := &StateDB{
 		db:                self.db,
-		globalTrie:              self.db.CopyTrie(self.globalTrie),
+		globalTrie:        self.db.CopyTrie(self.globalTrie),
 		stateObjects:      make(map[common.Address]*StateObj),
 		stateObjectsDirty: make(map[common.Address]struct{}),
 	}
@@ -262,15 +255,14 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error) 
 	for addr, stateObject := range s.stateObjects {
 		_, isDirty := s.stateObjectsDirty[addr]
 
-		if isDirty{
+		if isDirty {
 			s.updateStateObj(stateObject)
 		}
 	}
- 	// Write trie changes.
+	// Write trie changes.
 	root, err = s.globalTrie.Commit(nil)
 	return root, err
 }
-
 
 // Finalise finalises the state by removing the self destructed objects
 // and clears the journal as well as the refunds.
@@ -285,10 +277,7 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	return s.globalTrie.Hash()
 }
 
-
 // TrieDB retrieves the low level trie database used for data storage.
 func (s *StateDB) TrieDB() *trie.Database {
 	return s.db.TrieDB()
 }
-
-

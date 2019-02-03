@@ -3,8 +3,8 @@ package dht
 import (
 	"context"
 	"errors"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"time"
 )
 
@@ -118,10 +118,10 @@ loop:
 
 			timer := time.NewTimer(LookupIntervals)
 			select {
-				case <-ctx.Done():
-					return ErrBootAbort
-				case <-timer.C:
-					continue loop
+			case <-ctx.Done():
+				return ErrBootAbort
+			case <-timer.C:
+				continue loop
 			}
 		}
 	}

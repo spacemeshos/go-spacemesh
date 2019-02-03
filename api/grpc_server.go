@@ -18,10 +18,10 @@ import (
 
 // SpaceMeshGrpcService is a grpc server providing the Spacemesh api
 type SpaceMeshGrpcService struct {
-	Server *grpc.Server
-	Port   uint
+	Server   *grpc.Server
+	Port     uint
 	StateApi StateAPI
-	Network NetworkAPI
+	Network  NetworkAPI
 }
 
 // Echo returns the response for an echo api request
@@ -39,19 +39,19 @@ func (s SpaceMeshGrpcService) GetBalance(ctx context.Context, in *pb.AccountId) 
 
 	val := s.StateApi.GetBalance(addr)
 
-	return &pb.SimpleMessage{Value:val.String()}, nil
+	return &pb.SimpleMessage{Value: val.String()}, nil
 }
 
 // Echo returns the response for an echo api request
 func (s SpaceMeshGrpcService) GetNonce(ctx context.Context, in *pb.AccountId) (*pb.SimpleMessage, error) {
 	addr := common.BytesToAddress(in.Address)
 
-	if s.StateApi.Exist(addr)  != true{
+	if s.StateApi.Exist(addr) != true {
 		return nil, fmt.Errorf("account does not exist")
 	}
 
 	val := s.StateApi.GetNonce(addr)
-	msg := pb.SimpleMessage{Value:strconv.FormatUint(val,10)}
+	msg := pb.SimpleMessage{Value: strconv.FormatUint(val, 10)}
 	return &msg, nil
 }
 
@@ -62,9 +62,8 @@ func (s SpaceMeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.Sign
 	//todo" should this be in a go routine?
 	s.Network.Broadcast(txGossipChannel, in.TxData)
 
-	return &pb.SimpleMessage{Value:"ok"}, nil
+	return &pb.SimpleMessage{Value: "ok"}, nil
 }
-
 
 // StopService stops the grpc service.
 func (s SpaceMeshGrpcService) StopService() {
@@ -75,10 +74,10 @@ func (s SpaceMeshGrpcService) StopService() {
 }
 
 // NewGrpcService create a new grpc service using config data.
-func NewGrpcService(net NetworkAPI ,state StateAPI) *SpaceMeshGrpcService {
+func NewGrpcService(net NetworkAPI, state StateAPI) *SpaceMeshGrpcService {
 	port := config.ConfigValues.GrpcServerPort
 	server := grpc.NewServer()
-	return &SpaceMeshGrpcService{Server: server, Port: uint(port), StateApi:state, Network:net}
+	return &SpaceMeshGrpcService{Server: server, Port: uint(port), StateApi: state, Network: net}
 }
 
 // StartService starts the grpc service.

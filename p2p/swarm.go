@@ -45,7 +45,7 @@ func (pm directProtocolMessage) Bytes() []byte {
 }
 
 type gossipProtocolMessage struct {
-	data   service.Data
+	data           service.Data
 	validationChan chan service.MessageValidation
 }
 
@@ -192,7 +192,7 @@ func newSwarm(ctx context.Context, config config.Config, newNode bool, persist b
 	s.network.SubscribeOnNewRemoteConnections(cpool.OnNewConnection)
 	s.network.SubscribeClosingConnections(cpool.OnClosedConnection)
 
-	s.cPool	= cpool
+	s.cPool = cpool
 
 	s.gossip = gossip.NewProtocol(config.SwarmConfig, s, s.LocalNode().PublicKey(), s.lNode.Log)
 
@@ -384,13 +384,12 @@ func (s *swarm) processMessage(ime net.IncomingMessageEvent) {
 	}
 }
 
-
 // RegisterProtocolWithChannel configures and returns a channel for a given protocol.
 func (s *swarm) RegisterDirectProtocolWithChannel(protocol string, ingressChannel chan service.DirectMessage) chan service.DirectMessage {
-        s.protocolHandlerMutex.Lock()
-        s.directProtocolHandlers[protocol] = ingressChannel
-        s.protocolHandlerMutex.Unlock()
-        return ingressChannel
+	s.protocolHandlerMutex.Lock()
+	s.directProtocolHandlers[protocol] = ingressChannel
+	s.protocolHandlerMutex.Unlock()
+	return ingressChannel
 }
 
 // listenToNetworkMessages is waiting for network events from net as new connections or messages and handles them.
@@ -726,7 +725,7 @@ loop:
 			}
 
 			s.outpeersMutex.Lock()
-			if _,ok := s.outpeers[pkstr]; ok {
+			if _, ok := s.outpeers[pkstr]; ok {
 				s.outpeersMutex.Unlock()
 				s.lNode.Debug("selected an already outbound peer. not counting that peer.", cne.n.String())
 				bad++

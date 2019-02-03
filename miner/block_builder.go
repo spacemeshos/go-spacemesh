@@ -19,65 +19,61 @@ import (
 
 const MaxTransactionsPerBlock = 200 //todo: move to config
 
-const DefaultGasLimit =10
+const DefaultGasLimit = 10
 const DefaultGas = 1
 
 const IncomingTxProtocol = "TxGossip"
 
-type BlockBuilder struct{
+type BlockBuilder struct {
 	minerID string // could be a pubkey or what ever. the identity we're claiming to be as miners.
 
-	beginRoundEvent chan mesh.LayerID
-	stopChan		chan struct{}
-	newTrans		chan *mesh.SerializableTransaction
-	txGossipChannel chan service.GossipMessage
-	hareResult		HareResultProvider
+	beginRoundEvent  chan mesh.LayerID
+	stopChan         chan struct{}
+	newTrans         chan *mesh.SerializableTransaction
+	txGossipChannel  chan service.GossipMessage
+	hareResult       HareResultProvider
 	transactionQueue []mesh.SerializableTransaction
-	mu sync.Mutex
-	network p2p.Service
-	weakCoinToss	WeakCoinProvider
-	orphans			OrphanBlockProvider
-	blockOracle oracle.BlockOracle
-	started			bool
+	mu               sync.Mutex
+	network          p2p.Service
+	weakCoinToss     WeakCoinProvider
+	orphans          OrphanBlockProvider
+	blockOracle      oracle.BlockOracle
+	started          bool
 }
-
-
-
 
 func NewBlockBuilder(minerID string, net p2p.Service, beginRoundEvent chan mesh.LayerID, weakCoin WeakCoinProvider,
-													orph OrphanBlockProvider, hare HareResultProvider, blockOracle oracle.BlockOracle) BlockBuilder{
+	orph OrphanBlockProvider, hare HareResultProvider, blockOracle oracle.BlockOracle) BlockBuilder {
 	return BlockBuilder{
-		minerID: minerID,
-		beginRoundEvent:beginRoundEvent,
-		stopChan: make(chan struct{}),
-		newTrans: make(chan *mesh.SerializableTransaction),
-		txGossipChannel: net.RegisterGossipProtocol(IncomingTxProtocol),
-		hareResult: hare,
-		transactionQueue: make([]mesh.SerializableTransaction,0,10),
-		mu: sync.Mutex{},
-		network: net,
-		weakCoinToss: weakCoin,
-		orphans: orph,
-		blockOracle: blockOracle,
-		started: false,
+		minerID:          minerID,
+		beginRoundEvent:  beginRoundEvent,
+		stopChan:         make(chan struct{}),
+		newTrans:         make(chan *mesh.SerializableTransaction),
+		txGossipChannel:  net.RegisterGossipProtocol(IncomingTxProtocol),
+		hareResult:       hare,
+		transactionQueue: make([]mesh.SerializableTransaction, 0, 10),
+		mu:               sync.Mutex{},
+		network:          net,
+		weakCoinToss:     weakCoin,
+		orphans:          orph,
+		blockOracle:      blockOracle,
+		started:          false,
 	}
 
 }
 
-
-func Transaction2SerializableTransaction(tx *state.Transaction) mesh.SerializableTransaction{
+func Transaction2SerializableTransaction(tx *state.Transaction) mesh.SerializableTransaction {
 	return mesh.SerializableTransaction{
-		AccountNonce:tx.AccountNonce,
-		Origin:tx.Origin,
-		Recipient:tx.Recipient,
-		Amount:tx.Amount.Bytes(),
-		Payload:tx.Payload,
-		GasLimit:tx.GasLimit,
-		Price:tx.Price.Bytes(),
+		AccountNonce: tx.AccountNonce,
+		Origin:       tx.Origin,
+		Recipient:    tx.Recipient,
+		Amount:       tx.Amount.Bytes(),
+		Payload:      tx.Payload,
+		GasLimit:     tx.GasLimit,
+		Price:        tx.Price.Bytes(),
 	}
 }
 
-func (t *BlockBuilder) Start() error{
+func (t *BlockBuilder) Start() error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.started {
@@ -90,7 +86,7 @@ func (t *BlockBuilder) Start() error{
 	return nil
 }
 
-func (t *BlockBuilder) Stop() error{
+func (t *BlockBuilder) Stop() error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if !t.started {
@@ -114,11 +110,11 @@ type OrphanBlockProvider interface {
 }
 
 //used from external API call?
-func (t *BlockBuilder) AddTransaction(nonce uint64, origin, destination common.Address, amount *big.Int) error{
-	if !t.started{
+func (t *BlockBuilder) AddTransaction(nonce uint64, origin, destination common.Address, amount *big.Int) error {
+	if !t.started {
 		return fmt.Errorf("BlockBuilderStopped")
 	}
-	t.newTrans <- mesh.NewSerializableTransaction(nonce,origin,destination,amount, big.NewInt(DefaultGas), DefaultGasLimit)
+	t.newTrans <- mesh.NewSerializableTransaction(nonce, origin, destination, amount, big.NewInt(DefaultGas), DefaultGasLimit)
 	return nil
 }
 
@@ -128,26 +124,26 @@ func (t *BlockBuilder) createBlock(minerID string, id mesh.LayerID, txs []mesh.S
 		log.Error("didnt receive hare result for layer %v", id)
 	}
 	b := mesh.Block{
-		MinerID: minerID,
-		Id :          mesh.BlockID(rand.Int63()),
-		LayerIndex:   id,
-		Data:         nil,
-		Coin:         t.weakCoinToss.GetResult(),
-		Timestamp:    time.Now().UnixNano(),
-		Txs :         txs,
-		BlockVotes : res,
-		ViewEdges:    t.orphans.GetOrphans(),
+		MinerID:    minerID,
+		Id:         mesh.BlockID(rand.Int63()),
+		LayerIndex: id,
+		Data:       nil,
+		Coin:       t.weakCoinToss.GetResult(),
+		Timestamp:  time.Now().UnixNano(),
+		Txs:        txs,
+		BlockVotes: res,
+		ViewEdges:  t.orphans.GetOrphans(),
 	}
 
 	return b
 }
 
-func (t *BlockBuilder) listenForTx(){
+func (t *BlockBuilder) listenForTx() {
 	for {
 		select {
 		case <-t.stopChan:
 			return
-		case data := <- t.txGossipChannel:
+		case data := <-t.txGossipChannel:
 			x, err := mesh.BytesAsTransaction(bytes.NewReader(data.Bytes()))
 			if err != nil {
 				log.Error("cannot parse incoming TX")

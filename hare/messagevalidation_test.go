@@ -58,7 +58,7 @@ func TestMessageValidator_IsSyntacticallyValid(t *testing.T) {
 
 func TestMessageValidator_Aggregated(t *testing.T) {
 	validator := defaultValidator()
-	funcs := make([]func(m *pb.HareMessage)bool, 0)
+	funcs := make([]func(m *pb.HareMessage) bool, 0)
 	assert.False(t, validator.validateAggregatedMessage(nil, funcs))
 
 	agg := &pb.AggregatedMessages{}
@@ -69,8 +69,8 @@ func TestMessageValidator_Aggregated(t *testing.T) {
 	}
 	agg.Messages = msgs
 	assert.True(t, validator.validateAggregatedMessage(agg, funcs))
-	funcs = make([]func(m *pb.HareMessage)bool, 1)
-	funcs[0] = func(m *pb.HareMessage) bool {return false}
+	funcs = make([]func(m *pb.HareMessage) bool, 1)
+	funcs[0] = func(m *pb.HareMessage) bool { return false }
 	assert.False(t, validator.validateAggregatedMessage(agg, funcs))
 }
 

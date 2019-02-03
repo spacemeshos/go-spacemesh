@@ -18,7 +18,7 @@ func BuildStatusMsg(verifier Verifier, s *Set) *pb.HareMessage {
 	return buildStatusMsg(verifier, s, -1)
 }
 
-func validate (m *pb.HareMessage) bool{
+func validate(m *pb.HareMessage) bool {
 	return true
 }
 

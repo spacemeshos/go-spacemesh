@@ -102,7 +102,7 @@ func generateConsensusProcess(t *testing.T) *ConsensusProcess {
 	oracle := NewMockHashOracle(numOfClients)
 	signing := NewMockSigning()
 	oracle.Register(signing.Verifier().String())
-	output := make(chan TerminationOutput,1)
+	output := make(chan TerminationOutput, 1)
 
 	return NewConsensusProcess(cfg, *instanceId1, s, oracle, signing, n1, output)
 }
@@ -173,7 +173,7 @@ func TestConsensusProcess_sendMessage(t *testing.T) {
 	oracle := NewMockHashOracle(numOfClients)
 	signing := NewMockSigning()
 
-	output := make(chan TerminationOutput,1)
+	output := make(chan TerminationOutput, 1)
 	proc := NewConsensusProcess(cfg, *instanceId1, s, oracle, signing, n1, output)
 	broker.Register(proc)
 
@@ -231,7 +231,7 @@ func TestConsensusProcess_Termination(t *testing.T) {
 	proc.advanceToNextRound()
 	s := NewSetFromValues(value1)
 
-	for i:=0;i<cfg.F+1;i++ {
+	for i := 0; i < cfg.F+1; i++ {
 		proc.processNotifyMsg(BuildNotifyMsg(generateVerifier(t), s))
 	}
 

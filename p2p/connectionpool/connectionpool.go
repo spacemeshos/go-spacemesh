@@ -19,7 +19,7 @@ type networker interface {
 	Dial(address string, remotePublicKey p2pcrypto.PublicKey) (net.Connection, error) // Connect to a remote node. Can send when no error.
 	SubscribeOnNewRemoteConnections(func(event net.NewConnectionEvent))
 	NetworkID() int8
-	SubscribeClosingConnections(func( net.Connection))
+	SubscribeClosingConnections(func(net.Connection))
 	Logger() *logging.Logger
 }
 
@@ -41,14 +41,14 @@ type ConnectionPool struct {
 // NewConnectionPool creates new ConnectionPool
 func NewConnectionPool(network networker, lPub p2pcrypto.PublicKey) *ConnectionPool {
 	cPool := &ConnectionPool{
-		localPub:      lPub,
-		net:           network,
-		connections:   make(map[string]net.Connection),
-		connMutex:     sync.RWMutex{},
-		pending:       make(map[string][]chan dialResult),
-		pendMutex:     sync.Mutex{},
-		dialWait:      sync.WaitGroup{},
-		shutdown:      false,
+		localPub:    lPub,
+		net:         network,
+		connections: make(map[string]net.Connection),
+		connMutex:   sync.RWMutex{},
+		pending:     make(map[string][]chan dialResult),
+		pendMutex:   sync.Mutex{},
+		dialWait:    sync.WaitGroup{},
+		shutdown:    false,
 	}
 
 	return cPool

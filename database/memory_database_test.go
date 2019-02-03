@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func checkRow(key []byte,value []byte , iter *MemDatabaseIterator, t *testing.T) {
+func checkRow(key []byte, value []byte, iter *MemDatabaseIterator, t *testing.T) {
 	assert.Equal(t, key, iter.Key(), fmt.Sprintf("have key : %s, need: %s", iter.Key(), key))
 	assert.Equal(t, value, iter.Value(), fmt.Sprintf("have value : %s, need: %s", iter.Value(), value))
 }

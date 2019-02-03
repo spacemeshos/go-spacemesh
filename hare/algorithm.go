@@ -47,7 +47,7 @@ type State struct {
 
 type ConsensusProcess struct {
 	State
-	Closer // the consensus is closeable
+	Closer            // the consensus is closeable
 	instanceId        InstanceId
 	oracle            Rolacle // roles oracle
 	signing           Signing

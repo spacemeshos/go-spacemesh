@@ -19,9 +19,9 @@ func generateID() string {
 }
 
 type requestCounter struct {
-	client Requester
-	mtx sync.Mutex
-	count bool
+	client     Requester
+	mtx        sync.Mutex
+	count      bool
 	reqCounter int
 }
 
@@ -40,15 +40,14 @@ func (mcd *requestCounter) Get(api, data string) []byte {
 
 func (mcd *requestCounter) setCounting(b bool) {
 	mcd.mtx.Lock()
-	mcd.count =b
+	mcd.count = b
 	mcd.mtx.Unlock()
 }
 
 type mockRequester struct {
 	resMutex sync.Mutex
-	results map[string][]byte
+	results  map[string][]byte
 }
-
 
 func (mcd *mockRequester) SetResult(api, data string, res []byte) {
 	mcd.results[api+data] = res
@@ -62,13 +61,12 @@ func (mcd *mockRequester) Get(api, data string) []byte {
 	return nil
 }
 
-
 func Test_MockOracleClientValidate(t *testing.T) {
 	oc := NewOracleClient()
-	mr := &mockRequester{results:make(map[string][]byte)}
+	mr := &mockRequester{results: make(map[string][]byte)}
 	id := generateID()
 	mr.SetResult(Register, id, []byte(`{ "message": "ok" }"`))
-	counter := &requestCounter{client:mr}
+	counter := &requestCounter{client: mr}
 	counter.setCounting(true)
 	oc.client = counter
 	oc.Register(id)
@@ -100,18 +98,17 @@ func Test_OracleClientValidate(t *testing.T) {
 
 	pks := make([]string, size)
 
-	for i:=0;i<size;i++ {
+	for i := 0; i < size; i++ {
 		pk := generateID()
 		pks[i] = pk
 		oc.Register(pk)
 	}
 
-
 	incommitte := 0
 
 	for i := 0; i < size; i++ {
-		if oc.Validate([]byte{010}, 2, committee,  pks[i]) {
-		incommitte++
+		if oc.Validate([]byte{010}, 2, committee, pks[i]) {
+			incommitte++
 		}
 	}
 
@@ -121,7 +118,6 @@ func Test_OracleClientValidate(t *testing.T) {
 		oc.Unregister(pks[i])
 	}
 }
-
 
 func Test_Concurrency(t *testing.T) {
 	if !TestServerOnline {
@@ -135,7 +131,7 @@ func Test_Concurrency(t *testing.T) {
 
 	pks := make([]string, size)
 
-	for i:=0;i<size;i++ {
+	for i := 0; i < size; i++ {
 		pk := generateID()
 		pks[i] = pk
 		oc.Register(pk)
@@ -145,7 +141,7 @@ func Test_Concurrency(t *testing.T) {
 
 	incommitte := 0
 
-	mc := &requestCounter{client:oc.client}
+	mc := &requestCounter{client: oc.client}
 
 	oc.client = mc
 	mc.setCounting(true)

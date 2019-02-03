@@ -260,7 +260,7 @@ func (app *SpacemeshApp) startSpacemesh(cmd *cobra.Command, args []string) {
 
 	//rng := rand.New(mt19937.New())
 
-	db, _ := database.NewLDBDatabase("state", 0,0)
+	db, _ := database.NewLDBDatabase("state", 0, 0)
 
 	st, _ := state.New(common.Hash{}, state.NewDatabase(db))
 

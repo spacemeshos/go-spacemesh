@@ -3,8 +3,8 @@ package dht
 
 import (
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 
 	"context"
@@ -94,6 +94,7 @@ func (d *KadDHT) Lookup(pubkey p2pcrypto.PublicKey) (node.Node, error) {
 
 	return d.kadLookup(pubkey, res)
 }
+
 // InternalLookup finds a node in the dht by its public key, it issues a search inside the local routing table
 func (d *KadDHT) InternalLookup(dhtid node.DhtID) []node.Node {
 	poc := make(PeersOpChannel)

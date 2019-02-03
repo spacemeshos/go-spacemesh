@@ -18,14 +18,13 @@ const ValidateSingle = "validate"
 const Validate = "validatemap"
 const OracleServerAddress = "http://localhost:3030" // todo:configure
 
-
 type Requester interface {
 	Get(api, data string) []byte
 }
 
 type HTTPRequester struct {
 	url string
-	c *http.Client
+	c   *http.Client
 }
 
 func NewHTTPRequester(url string) *HTTPRequester {
@@ -35,7 +34,7 @@ func NewHTTPRequester(url string) *HTTPRequester {
 func (hr *HTTPRequester) Get(api, data string) []byte {
 	var jsonStr = []byte(data)
 	log.Info("Sending oracle request : %v ", jsonStr)
-	req, err := http.NewRequest("POST", hr.url + "/" + api, bytes.NewBuffer(jsonStr))
+	req, err := http.NewRequest("POST", hr.url+"/"+api, bytes.NewBuffer(jsonStr))
 	if err != nil {
 		panic(err)
 	}
@@ -60,11 +59,11 @@ func (hr *HTTPRequester) Get(api, data string) []byte {
 
 // OracleClient is a temporary replacement fot the real oracle. its gets accurate results from a server.
 type OracleClient struct {
-	world uint64
+	world  uint64
 	client Requester
 
-	eMtx sync.Mutex
-	instMtx map[uint32]*sync.Mutex
+	eMtx           sync.Mutex
+	instMtx        map[uint32]*sync.Mutex
 	eligibilityMap map[uint32]map[string]struct{}
 }
 
@@ -83,7 +82,7 @@ func NewOracleClientWithWorldID(world uint64) *OracleClient {
 	c := NewHTTPRequester(OracleServerAddress)
 	instMtx := make(map[uint32]*sync.Mutex)
 	eligibilityMap := make(map[uint32]map[string]struct{})
-	return &OracleClient{world:world, client:c, eligibilityMap: eligibilityMap, instMtx: instMtx}
+	return &OracleClient{world: world, client: c, eligibilityMap: eligibilityMap, instMtx: instMtx}
 }
 
 // World returns the world this oracle works in
@@ -144,7 +143,6 @@ func hashInstanceAndK(instanceID []byte, K int) uint32 {
 	return val
 }
 
-
 // Validate checks whether a given ID is in the eligible list or not. it fetches the list once and gives answers locally after that.
 func (oc *OracleClient) Validate(instanceID []byte, K int, committeeSize int, pubKey string) bool {
 
@@ -158,15 +156,15 @@ func (oc *OracleClient) Validate(instanceID []byte, K int, committeeSize int, pu
 	}
 	oc.instMtx[val].Lock()
 	if r, ok := oc.eligibilityMap[val]; ok {
-			oc.eMtx.Unlock()
-			_, valid := r[pubKey]
-			oc.instMtx[val].Unlock()
-			return valid
-		}
+		oc.eMtx.Unlock()
+		_, valid := r[pubKey]
+		oc.instMtx[val].Unlock()
+		return valid
+	}
 
 	oc.eMtx.Unlock()
 
-	req := validateQuery(oc.world, val,committeeSize)
+	req := validateQuery(oc.world, val, committeeSize)
 
 	resp := oc.client.Get(Validate, req)
 

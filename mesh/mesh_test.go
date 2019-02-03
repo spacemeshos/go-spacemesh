@@ -8,17 +8,17 @@ import (
 	"time"
 )
 
-type MeshValidatorMock struct {}
+type MeshValidatorMock struct{}
 
-func (m *MeshValidatorMock)	HandleIncomingLayer(layer *Layer) {}
-func (m *MeshValidatorMock) HandleLateBlock(bl *Block) {}
+func (m *MeshValidatorMock) HandleIncomingLayer(layer *Layer) {}
+func (m *MeshValidatorMock) HandleLateBlock(bl *Block)        {}
 
 func getMesh(id string) *Mesh {
 	bdb := database.NewMemDatabase()
 	ldb := database.NewMemDatabase()
 	cdb := database.NewMemDatabase()
 	odb := database.NewMemDatabase()
-	layers := NewMesh(ldb, bdb, cdb, odb, &MeshValidatorMock{},log.New(id, "", ""))
+	layers := NewMesh(ldb, bdb, cdb, odb, &MeshValidatorMock{}, log.New(id, "", ""))
 	return layers
 }
 

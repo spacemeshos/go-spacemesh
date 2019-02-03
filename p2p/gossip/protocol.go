@@ -155,6 +155,7 @@ func (prot *Protocol) markMessageAsOld(h hash) bool {
 }
 
 type Validity int
+
 const (
 	Valid Validity = iota
 	Invalid

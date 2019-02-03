@@ -3,8 +3,8 @@ package service
 import (
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"io"
 	"math/rand"
 	"sync"
@@ -19,7 +19,7 @@ type Simulator struct {
 	mutex                 sync.RWMutex
 	protocolDirectHandler map[string]map[string]chan DirectMessage // maps peerPubkey -> protocol -> direct protocol handler
 	protocolGossipHandler map[string]map[string]chan GossipMessage // maps peerPubkey -> protocol -> gossip protocol handler
-	nodes           map[string]*Node
+	nodes                 map[string]*Node
 
 	subLock      sync.Mutex
 	newPeersSubs []chan p2pcrypto.PublicKey
@@ -47,7 +47,7 @@ func NewSimulator() *Simulator {
 	s := &Simulator{
 		protocolDirectHandler: make(map[string]map[string]chan DirectMessage),
 		protocolGossipHandler: make(map[string]map[string]chan GossipMessage),
-		nodes:                 make(map[string]*Node),
+		nodes: make(map[string]*Node),
 	}
 	return s
 }
@@ -129,8 +129,8 @@ func (s *Simulator) updateNode(node p2pcrypto.PublicKey, sender *Node) {
 }
 
 type simDirectMessage struct {
-	msg                     Data
-	sender                  p2pcrypto.PublicKey
+	msg    Data
+	sender p2pcrypto.PublicKey
 }
 
 // Bytes is the message's binary data in byte array format.
@@ -173,7 +173,6 @@ func (sm simGossipMessage) ReportValidation(protocol string, isValid bool) {
 		sm.validationCompletedChan <- NewMessageValidation(sm.Bytes(), protocol, isValid)
 	}
 }
-
 
 func (sn *Node) Start() error {
 	// on simulation this doesn't really matter yet.
@@ -238,7 +237,7 @@ func (sn *Node) sleep(delay uint32) {
 	if sn.randBehaviour {
 		ranDelay = rand.Uint32() % delay
 	}
-	time.Sleep(time.Second*time.Duration(ranDelay))
+	time.Sleep(time.Second * time.Duration(ranDelay))
 }
 
 // Broadcast
@@ -281,10 +280,10 @@ func (sn *Node) RegisterGossipProtocol(protocol string) chan GossipMessage {
 
 // RegisterProtocolWithChannel configures and returns a channel for a given protocol.
 func (sn *Node) RegisterDirectProtocolWithChannel(protocol string, ingressChannel chan DirectMessage) chan DirectMessage {
-        sn.sim.mutex.Lock()
-        sn.sim.protocolDirectHandler[sn.Node.String()][protocol] = ingressChannel
-        sn.sim.mutex.Unlock()
-        return ingressChannel
+	sn.sim.mutex.Lock()
+	sn.sim.protocolDirectHandler[sn.Node.String()][protocol] = ingressChannel
+	sn.sim.mutex.Unlock()
+	return ingressChannel
 }
 
 // AttachDHT attaches a dht for the update function of the simulation node

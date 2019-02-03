@@ -27,7 +27,7 @@ func createMessage(t *testing.T, instanceId Byteable) []byte {
 
 type MockInboxer struct {
 	inbox chan Message
-	id uint32
+	id    uint32
 }
 
 func (inboxer *MockInboxer) createInbox(size uint32) chan Message {

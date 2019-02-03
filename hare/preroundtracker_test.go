@@ -7,9 +7,9 @@ import (
 )
 
 const (
-	k           = 1
-	ki          = -1
-	lowThresh10 = 10
+	k              = 1
+	ki             = -1
+	lowThresh10    = 10
 	lowDefaultSize = 100
 )
 
@@ -23,8 +23,6 @@ var value7 = Value{Bytes32{7}}
 var value8 = Value{Bytes32{8}}
 var value9 = Value{Bytes32{9}}
 var value10 = Value{Bytes32{10}}
-
-
 
 func BuildPreRoundMsg(verifier Verifier, s *Set) *pb.HareMessage {
 	builder := NewMessageBuilder()

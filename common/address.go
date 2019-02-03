@@ -21,8 +21,6 @@ func BytesToAddress(b []byte) Address {
 	return a
 }
 
-
-
 // BigToAddress returns Address with byte values of b.
 // If b is larger than len(h), b will be cropped from the left.
 func BigToAddress(b *big.Int) Address { return BytesToAddress(b.Bytes()) }
@@ -30,8 +28,6 @@ func BigToAddress(b *big.Int) Address { return BytesToAddress(b.Bytes()) }
 // HexToAddress returns Address with byte values of s.
 // If s is larger than len(h), s will be cropped from the left.
 func HexToAddress(s string) Address { return BytesToAddress(FromHex(s)) }
-
-
 
 // Bytes gets the string representation of the underlying address.
 func (a Address) Bytes() []byte { return a[:] }
@@ -113,4 +109,3 @@ func (a *Address) Scan(src interface{}) error {
 	return nil
 }
 */
-

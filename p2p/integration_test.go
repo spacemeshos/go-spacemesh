@@ -13,8 +13,7 @@ import (
 	"time"
 )
 
-
-func (its *IntegrationTestSuite) Test_SendingMessage()  {
+func (its *IntegrationTestSuite) Test_SendingMessage() {
 	exProto := RandString(10)
 	exMsg := RandString(10)
 
@@ -40,7 +39,6 @@ func (its *IntegrationTestSuite) Test_SendingMessage()  {
 		its.T().Fatal("failed to deliver message within second")
 	}
 }
-
 
 func (its *IntegrationTestSuite) Test_Gossiping() {
 
@@ -83,7 +81,7 @@ func (its *IntegrationTestSuite) Test_Gossiping() {
 	errs := errg.Wait()
 	its.T().Log(errs)
 	its.NoError(errs)
-	its.Equal(int(numgot), its.BootstrappedNodeCount + its.BootstrapNodesCount)
+	its.Equal(int(numgot), its.BootstrappedNodeCount+its.BootstrapNodesCount)
 }
 
 func Test_SmallP2PIntegrationSuite(t *testing.T) {

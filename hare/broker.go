@@ -78,8 +78,8 @@ func (broker *Broker) Start() error {
 }
 
 type Message struct {
-	msg *pb.HareMessage
-	bytes []byte
+	msg            *pb.HareMessage
+	bytes          []byte
 	validationChan chan service.MessageValidation
 }
 

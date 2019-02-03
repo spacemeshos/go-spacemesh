@@ -80,4 +80,3 @@ func (pt *ProposalTracker) ProposedSet() *Set {
 
 	return NewSet(pt.proposal.Message.Values)
 }
-
