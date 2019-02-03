@@ -52,7 +52,7 @@ func GetRandomUInt32(max uint32) uint32 {
 	_, err := rand.Read(b)
 
 	if err != nil {
-		log.Error("Failed to get entropy from system", err)
+		log.Error("Failed to get entropy from system %v", err)
 		panic(err)
 	}
 

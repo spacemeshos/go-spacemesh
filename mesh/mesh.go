@@ -113,7 +113,7 @@ func (m *Mesh) GetLayer(i LayerID) (*Layer, error) {
 }
 
 func (m *Mesh) AddBlock(block *Block) error {
-	log.Debug("add block ", block.ID())
+	log.Debugw("add block ", log.Int("id", int(block.ID())))
 	if err := m.addBlock(block); err != nil {
 		m.Error("failed to add block ", block.ID(), " ", err)
 		return err
@@ -132,7 +132,7 @@ func (m *Mesh) handleOrphanBlocks(block *Block) {
 	for _, b := range block.ViewEdges {
 		blockId := b.ToBytes()
 		if _, err := m.orphanBlocks.Get(blockId); err == nil {
-			log.Debug("delete block ", blockId, "from orphans")
+			log.Debugw("delete block from orphans", log.Int("id", int(b)))
 			m.orphanBlocks.Delete(blockId)
 			atomic.AddInt32(&m.orphanBlockCount, -1)
 		}
@@ -152,7 +152,7 @@ func (m *Mesh) GetOrphanBlocks() []BlockID {
 	}
 	iter.Release()
 	if err := iter.Error(); err != nil {
-		log.Error("error iterating over orphans", err)
+		log.Error("error iterating over orphans %v", err)
 	}
 	return keys
 }

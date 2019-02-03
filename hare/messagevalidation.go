@@ -37,7 +37,7 @@ func (validator *MessageValidator) SyntacticallyValidateMessage(m *pb.HareMessag
 	// verify signature
 	verifier, err := NewVerifier(m.PubKey)
 	if err != nil {
-		log.Warning("Validate message failed: Could not construct verifier ", err)
+		log.Warning("Validate message failed: Could not construct verifier %v", err)
 		return false
 	}
 	res, _ := verifier.Verify(data, m.InnerSig)
@@ -113,7 +113,7 @@ func (validator *MessageValidator) isValidStructure(m *pb.HareMessage) bool {
 	case Notify:
 		return validator.validateCertificate(m.Cert)
 	default:
-		log.Error("Unknown message type encountered during syntactic validator: ", m.Message.Type)
+		log.Error("Unknown message type encountered during syntactic validator: %v", m.Message.Type)
 		return false
 	}
 }
@@ -153,7 +153,7 @@ func (validator *MessageValidator) validateAggregatedMessage(aggMsg *pb.Aggregat
 		// validate unique sender
 		verifier, err := NewVerifier(innerMsg.PubKey)
 		if err != nil {
-			log.Warning("Aggregated validation failed: could not construct verifier: ", err)
+			log.Warning("Aggregated validation failed: could not construct verifier: %v", err)
 			return false
 		}
 		if _, exist := senders[verifier.String()]; exist { // pub already exist

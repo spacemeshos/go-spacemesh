@@ -66,7 +66,7 @@ func (p *Ping) readLoop() {
 			ping := &pb.Ping{}
 			err := proto.Unmarshal(msg.Bytes(), ping)
 			if err != nil {
-				log.Error("failed to read incoming ping message err:", err)
+				log.Error("failed to read incoming ping message err: %v", err)
 				// TODO : handle errors in readloop
 			}
 
@@ -74,7 +74,7 @@ func (p *Ping) readLoop() {
 				log.Info("Ping: Request from (%v) - DirectMessage : %v", msg.Sender(), ping.Message)
 				err := p.handleRequest(msg.Sender(), ping)
 				if err != nil {
-					log.Error("Error handling ping request", err)
+					log.Errorw("Error handling ping request", log.Err(err))
 				}
 				return
 			}

@@ -69,7 +69,7 @@ func (m *meshDB) getLayer(index LayerID) (*Layer, error) {
 func (m *meshDB) addBlock(block *Block) error {
 	_, err := m.blocks.Get(block.ID().ToBytes())
 	if err == nil {
-		log.Debug("block ", block.ID(), " already exists in database")
+		log.Debugw("block already exists in database", log.Int("id", int(block.ID())))
 		return errors.New("block " + string(block.ID()) + " already exists in database")
 	}
 
@@ -170,12 +170,12 @@ func (m *meshDB) handleLayerBlocks(ll *layerHandler) {
 				continue
 			}
 			if b, err := m.blocks.Get(bl.ID().ToBytes()); err == nil && b != nil {
-				log.Error("bl ", bl, " already in database ")
+				log.Errorw("block already in database", log.Int("id", int(bl.Id)))
 				continue
 			}
 
 			if err := m.blocks.Put(bl.ID().ToBytes(), bytes); err != nil {
-				log.Error("could not add bl to ", bl, " database ", err)
+				log.Errorw("could not add block to databse", log.Int("id", int(bl.ID())), log.Err(err))
 				continue
 			}
 

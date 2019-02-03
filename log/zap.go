@@ -8,7 +8,7 @@ import (
 
 // Log is an exported type that embeds our logger.
 type Log struct {
-	*zap.Logger
+	Logger *zap.Logger
 }
 
 // Exported from Log basic logging options.
@@ -87,17 +87,17 @@ func (l Log) Infow(msg string, fields ...Field) {
 	l.Logger.Info(msg, unpack(fields...)...)
 }
 
-// Debug prints message with fields
+// Debugw prints message with fields
 func (l Log) Debugw(msg string, fields ...Field) {
 	l.Logger.Debug(msg, unpack(fields...)...)
 }
 
-// Error prints message with fields
+// Errorw prints message with fields
 func (l Log) Errorw(msg string, fields ...Field) {
 	l.Logger.Error(msg, unpack(fields...)...)
 }
 
-// Warning prints message with fields
+// Warningw prints message with fields
 func (l Log) Warningw(msg string, fields ...Field) {
 	l.Logger.Warn(msg, unpack(fields...)...)
 }

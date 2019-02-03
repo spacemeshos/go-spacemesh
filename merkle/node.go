@@ -412,7 +412,7 @@ func (n *nodeImp) getUserStringValue(userDb *userDb, v []byte) string {
 	}
 
 	if err != nil {
-		log.Error("Error getting value from db.", err)
+		log.Error("Error getting value from db. err: %v", err)
 		return "<<error>>"
 	}
 

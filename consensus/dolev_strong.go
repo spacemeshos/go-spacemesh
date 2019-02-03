@@ -152,7 +152,7 @@ func (dsci *DolevStrongInstance) authenticateSignature(validator crypto.PublicKe
 
 	out, err := validator.Verify(data, signature)
 	if err != nil {
-		log.Error("error validating signature", signature, " errno:", err)
+		log.Error("error validating signature %v, errno: %v",  signature, err)
 		return false
 	}
 	return out
@@ -258,7 +258,7 @@ func (impl *DolevStrongMultiInstanceConsensus) sendToRemainingNodes(message *pb.
 	// Sends this message in order to reach consensus
 	data, ok := proto.Marshal(message)
 	if ok != nil {
-		log.Error("could not marshal output message", message)
+		log.Error("could not marshal output message %v", message)
 	}
 	for key := range impl.activeInstances {
 		//don't send to signed validators

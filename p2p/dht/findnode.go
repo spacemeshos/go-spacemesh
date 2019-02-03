@@ -163,7 +163,7 @@ func (p *findNodeProtocol) readLoop() {
 			headers := &pb.FindNode{}
 			err := proto.Unmarshal(msg.Bytes(), headers)
 			if err != nil {
-				log.Error("Error handling incoming FindNode ", err)
+				log.Error("Error handling incoming FindNode err:%v", err)
 				return
 			}
 
@@ -275,7 +275,7 @@ func fromNodeInfos(nodes []*pb.NodeInfo) []node.Node {
 		pubk, err := p2pcrypto.NewPubkeyFromBytes(n.NodeId)
 		if err != nil {
 			// TODO Error handling, problem : don't break everything because one messed up nodeinfo
-			log.Error("There was an error parsing nodeid : ", n.NodeId, ", skipping it. err: ", err)
+			log.Error("There was an error parsing nodeid : %v, skipping it. err: %v",n.NodeId, err)
 			continue
 		}
 		node := node.New(pubk, n.Address)

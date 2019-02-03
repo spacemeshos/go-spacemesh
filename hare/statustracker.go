@@ -27,7 +27,7 @@ func NewStatusTracker(threshold int, expectedSize int) *StatusTracker {
 func (st *StatusTracker) RecordStatus(msg *pb.HareMessage) {
 	verifier, err := NewVerifier(msg.PubKey)
 	if err != nil {
-		log.Warning("Could not construct verifier: ", err)
+		log.Warning("Could not construct verifier: %v", err)
 		return
 	}
 

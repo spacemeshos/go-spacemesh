@@ -79,7 +79,7 @@ func NewAccount(passphrase string) (*Account, error) {
 	cipherText, err := crypto.AesCTRXOR(aesKey, privKeyBytes, nonce)
 
 	if err != nil {
-		log.Error("Failed to encrypt private key", err)
+		log.Errorw("Failed to encrypt private key", log.Err(err))
 		return nil, err
 	}
 

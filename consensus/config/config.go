@@ -18,7 +18,7 @@ type Config struct {
 func duration(duration string) (dur time.Duration) {
 	dur, err := time.ParseDuration(duration)
 	if err != nil {
-		log.Error("Could not parse duration string returning 0, error:", err)
+		log.Errorw("Could not parse duration string returning 0, error:", log.Err(err))
 	}
 	return dur
 }

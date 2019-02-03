@@ -2,7 +2,6 @@ package accounts
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"path/filepath"
 	"strings"
@@ -38,7 +37,7 @@ func LoadAllAccounts() error {
 
 	files, err := ioutil.ReadDir(accountsDataFolder)
 	if err != nil {
-		log.Error("Failed to read account directory files", err)
+		log.Errorw("Failed to read account directory files", log.Err(err))
 		return nil
 	}
 
@@ -48,7 +47,7 @@ func LoadAllAccounts() error {
 			accountID := fileName[:strings.LastIndex(fileName, ".")]
 			_, err := NewAccountFromStore(accountID, accountsDataFolder)
 			if err != nil {
-				log.Error(fmt.Sprintf("failed to load account %s", accountID), err)
+				log.Errorw("failed to load account", log.String("account_id", accountID), log.Err(err))
 			}
 		}
 	}
@@ -113,7 +112,7 @@ func (a *Account) Persist(accountsDataPath string) (string, error) {
 
 	bytes, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
-		log.Error("Failed to marshal node data to json", err)
+		log.Errorw("Failed to marshal node data to json", log.Err(err))
 		return "", err
 	}
 
@@ -121,7 +120,7 @@ func (a *Account) Persist(accountsDataPath string) (string, error) {
 	dataFilePath := filepath.Join(accountsDataPath, fileName)
 	err = ioutil.WriteFile(dataFilePath, bytes, filesystem.OwnerReadWrite)
 	if err != nil {
-		log.Error("Failed to write account to file", err)
+		log.Errorw("Failed to write account to file", log.Err(err))
 		return "", err
 	}
 

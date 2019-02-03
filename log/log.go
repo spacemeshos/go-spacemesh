@@ -11,7 +11,13 @@ import (
 
 	"go.uber.org/zap"
 )
-const JSON = true
+
+
+// determine the level of messages we show.
+var debugMode = false
+// should we format out logs in json
+const JSON = false // todo: configure
+
 
 var DebugLevel = zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
 	return lvl >= zapcore.DebugLevel
@@ -39,8 +45,6 @@ func encoder() zapcore.Encoder {
 
 // AppLog is the local app singleton logger.
 var AppLog Log
-
-var debugMode = true
 
 func init() {
 	// create a basic temp os.Stdout logger
@@ -115,4 +119,24 @@ func Error(msg string, args ...interface{}) {
 // Warning prints formatted warning level log message.
 func Warning(msg string, args ...interface{}) {
 	AppLog.Warning(msg, args...)
+}
+
+// Infow prints a structured info message
+func Infow(msg string, fields ...Field) {
+	AppLog.Infow(msg, fields...)
+}
+
+// Debugw prints a structured debug message
+func Debugw(msg string, fields ...Field) {
+	AppLog.Debugw(msg, fields...)
+}
+
+// Errorw prints a structured err message
+func Errorw(msg string, fields ...Field) {
+	AppLog.Errorw(msg, fields...)
+}
+
+// Warningw prints a structured warn message
+func Warningw(msg string, fields ...Field) {
+	AppLog.Warningw(msg, fields...)
 }

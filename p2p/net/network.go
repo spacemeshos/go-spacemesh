@@ -262,7 +262,7 @@ func (n *Net) acceptTCP() {
 		if err != nil {
 
 			if !n.isShuttingDown {
-				log.Error("Failed to accept connection request", err)
+				log.Error("Failed to accept connection request %v", err)
 				//TODO only print to log and return? The node will continue running without the listener, doesn't sound healthy
 			}
 			return

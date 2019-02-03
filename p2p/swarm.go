@@ -537,7 +537,7 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 		log.Int("size", len(msg.Message)))
 
 	// messages handled here are always processed by direct based protocols, only the gossip protocol calls ProcessGossipProtocolMessage
-	return s.ProcessProtocolMessage(remoteNode, pm.Metadata.NextProtocol, data)
+	return s.ProcessDirectProtocolMessage(remoteNode.PublicKey(), pm.Metadata.NextProtocol, data)
 }
 
 // ProcessDirectProtocolMessage passes an already decrypted message to a protocol.

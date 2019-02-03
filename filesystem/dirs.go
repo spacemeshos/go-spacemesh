@@ -88,14 +88,14 @@ func EnsureSpacemeshDataDirectories() (string, error) {
 func ensureDataSubDirectory(dirName string) (string, error) {
 	dataPath, err := GetSpacemeshDataDirectoryPath()
 	if err != nil {
-		log.Error("Failed to ensure data dir", err)
+		log.Error("Failed to ensure data dir %v", err)
 		return "", err
 	}
 
 	pathName := filepath.Join(dataPath, dirName)
 	aPath, err := GetFullDirectoryPath(pathName)
 	if err != nil {
-		log.Error("Can't access spacemesh folder", pathName, "Erorr:", err)
+		log.Error("Can't access spacemesh folder %v, Error:%v", pathName, err)
 		return "", err
 	}
 	return aPath, nil

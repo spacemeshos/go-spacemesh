@@ -3,6 +3,7 @@ package consensus
 import (
 	"bytes"
 	"fmt"
+	"github.com/btcsuite/btcutil/base58"
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/consensus/config"
 	"github.com/spacemeshos/go-spacemesh/consensus/pb"
@@ -76,7 +77,7 @@ func (mal *MaliciousSplitMessageSender) SendMessage(msg OpaqueMessage, group1 []
 	}
 	data, ok := proto.Marshal(&protocolMsg)
 	if ok != nil {
-		log.Error("could not marshal output message", protocolMsg)
+		log.Errorw("could not marshal output message ", log.String("from", base58.Encode(protocolMsg.Msg.AuthPubKey)))
 	}
 	for _, key := range group1 {
 		//don't send to signed validators
@@ -384,7 +385,7 @@ type Node struct {
 func NewNode() Node {
 	priv, pub, err := crypto.GenerateKeyPair()
 	if err != nil {
-		log.Error("failed to create pub priv key", err)
+		log.Error("failed to create pub priv key err:%v", err)
 	}
 	return Node{pub, priv}
 }
