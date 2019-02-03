@@ -117,3 +117,15 @@ func TestMessageValidator_SyntacticallyValidateMessage(t *testing.T) {
 	m = BuildPreRoundMsg(generateSigning(t), NewSetFromValues(value1))
 	assert.True(t, validator.SyntacticallyValidateMessage(m))
 }
+
+func TestMessageValidator_ContextuallyValidateMessage(t *testing.T) {
+	validator := NewMessageValidator(NewMockSigning(), 1, 3, validate)
+	m := BuildPreRoundMsg(generateSigning(t), NewSmallEmptySet())
+	m.Message = nil
+	assert.False(t, validator.ContextuallyValidateMessage(m, 0))
+	m = BuildPreRoundMsg(generateSigning(t), NewSetFromValues(value1))
+	assert.True(t, validator.ContextuallyValidateMessage(m, 0))
+	m = BuildStatusMsg(generateSigning(t), NewSetFromValues(value1))
+	assert.False(t, validator.ContextuallyValidateMessage(m, 1))
+	assert.True(t, validator.ContextuallyValidateMessage(m, 0))
+}
