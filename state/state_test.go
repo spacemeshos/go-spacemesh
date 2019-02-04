@@ -17,6 +17,7 @@
 package state
 
 import (
+	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/stretchr/testify/assert"
@@ -32,7 +33,7 @@ type StateSuite struct {
 	state *StateDB
 }
 
-var toAddr = common.BytesToAddress
+var toAddr = address.BytesToAddress
 
 func TestDump(t *testing.T) {
 	s := &StateSuite{}

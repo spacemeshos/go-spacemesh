@@ -3,6 +3,7 @@ package miner
 import (
 	"bytes"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -114,7 +115,7 @@ type OrphanBlockProvider interface {
 }
 
 //used from external API call?
-func (t *BlockBuilder) AddTransaction(nonce uint64, origin, destination common.Address, amount *big.Int) error{
+func (t *BlockBuilder) AddTransaction(nonce uint64, origin, destination address.Address, amount *big.Int) error{
 	if !t.started{
 		return fmt.Errorf("BlockBuilderStopped")
 	}

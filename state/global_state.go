@@ -2,6 +2,7 @@ package state
 
 import (
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/rlp"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -11,15 +12,15 @@ import (
 )
 
 type GlobalStateDB interface {
-	Exist(addr common.Address) bool
-	Empty(addr common.Address) bool
-	GetBalance(addr common.Address) *big.Int
-	GetNonce(addr common.Address) uint64
-	AddBalance(addr common.Address, amount *big.Int)
-	SubBalance(addr common.Address, amount *big.Int)
-	SetNonce(addr common.Address, nonce uint64)
-	GetOrNewStateObj(addr common.Address) *StateObj
-	CreateAccount(addr common.Address)
+	Exist(addr address.Address) bool
+	Empty(addr address.Address) bool
+	GetBalance(addr address.Address) *big.Int
+	GetNonce(addr address.Address) uint64
+	AddBalance(addr address.Address, amount *big.Int)
+	SubBalance(addr address.Address, amount *big.Int)
+	SetNonce(addr address.Address, nonce uint64)
+	GetOrNewStateObj(addr address.Address) *StateObj
+	CreateAccount(addr address.Address)
 	Commit(deleteEmptyObjects bool) (root common.Hash, err error)
 	//Copy() *GlobalStateDB
 	IntermediateRoot(deleteEmptyObjects bool) common.Hash
@@ -34,8 +35,8 @@ type StateDB struct {
 	lock 		sync.Mutex
 
 	// This map holds 'live' objects, which will get modified while processing a state transition.
-	stateObjects      map[common.Address]*StateObj
-	stateObjectsDirty map[common.Address]struct{}
+	stateObjects      map[address.Address]*StateObj
+	stateObjectsDirty map[address.Address]struct{}
 
 	// DB error.
 	// State objects are used by the consensus core and VM which are
@@ -54,8 +55,8 @@ func New(root common.Hash, db Database) (*StateDB, error) {
 	return &StateDB{
 		db:				db,
 		globalTrie: 	tr,
-		stateObjects:      make(map[common.Address]*StateObj),
-		stateObjectsDirty: make(map[common.Address]struct{}),
+		stateObjects:      make(map[address.Address]*StateObj),
+		stateObjectsDirty: make(map[address.Address]struct{}),
 	}, nil
 }
 
@@ -72,21 +73,21 @@ func (self *StateDB) Error() error {
 
 // Exist reports whether the given account address exists in the state.
 // Notably this also returns true for suicided accounts.
-func (self *StateDB) Exist(addr common.Address) bool {
+func (self *StateDB) Exist(addr address.Address) bool {
 	return self.getStateObj(addr) != nil
 }
 
 
 // Empty returns whether the state object is either non-existent
 // or empty according to the EIP161 specification (balance = nonce = code = 0)
-func (self *StateDB) Empty(addr common.Address) bool {
+func (self *StateDB) Empty(addr address.Address) bool {
 	so := self.getStateObj(addr)
 	return so == nil || so.empty()
 }
 
 
 // Retrieve the balance from the given address or 0 if object not found
-func (self *StateDB) GetBalance(addr common.Address) *big.Int {
+func (self *StateDB) GetBalance(addr address.Address) *big.Int {
 	StateObj := self.getStateObj(addr)
 	if StateObj != nil {
 		return StateObj.Balance()
@@ -94,7 +95,7 @@ func (self *StateDB) GetBalance(addr common.Address) *big.Int {
 	return common.Big0
 }
 
-func (self *StateDB) GetNonce(addr common.Address) uint64 {
+func (self *StateDB) GetNonce(addr address.Address) uint64 {
 	StateObj := self.getStateObj(addr)
 	if StateObj != nil {
 		return StateObj.Nonce()
@@ -108,7 +109,7 @@ func (self *StateDB) GetNonce(addr common.Address) uint64 {
  */
 
 // AddBalance adds amount to the account associated with addr.
-func (self *StateDB) AddBalance(addr common.Address, amount *big.Int) {
+func (self *StateDB) AddBalance(addr address.Address, amount *big.Int) {
 	stateObj := self.GetOrNewStateObj(addr)
 	if stateObj != nil {
 		stateObj.AddBalance(amount)
@@ -116,21 +117,21 @@ func (self *StateDB) AddBalance(addr common.Address, amount *big.Int) {
 }
 
 // SubBalance subtracts amount from the account associated with addr.
-func (self *StateDB) SubBalance(addr common.Address, amount *big.Int) {
+func (self *StateDB) SubBalance(addr address.Address, amount *big.Int) {
 	StateObj := self.GetOrNewStateObj(addr)
 	if StateObj != nil {
 		StateObj.SubBalance(amount)
 	}
 }
 
-func (self *StateDB) SetBalance(addr common.Address, amount *big.Int) {
+func (self *StateDB) SetBalance(addr address.Address, amount *big.Int) {
 	stateObj := self.GetOrNewStateObj(addr)
 	if stateObj != nil {
 		stateObj.SetBalance(amount)
 	}
 }
 
-func (self *StateDB) SetNonce(addr common.Address, nonce uint64) {
+func (self *StateDB) SetNonce(addr address.Address, nonce uint64) {
 	stateObj := self.GetOrNewStateObj(addr)
 	if stateObj != nil {
 		stateObj.SetNonce(nonce)
@@ -155,7 +156,7 @@ func (self *StateDB) updateStateObj(StateObj *StateObj) {
 
 
 // Retrieve a state object given by the address. Returns nil if not found.
-func (self *StateDB) getStateObj(addr common.Address) (StateObj *StateObj) {
+func (self *StateDB) getStateObj(addr address.Address) (StateObj *StateObj) {
 	// Prefer 'live' objects.
 	if obj := self.stateObjects[addr]; obj != nil {
 		/*if obj.deleted {
@@ -191,7 +192,7 @@ func (self *StateDB) setStateObj(object *StateObj) {
 }
 
 // Retrieve a state object or create a new state object if nil.
-func (self *StateDB) GetOrNewStateObj(addr common.Address) *StateObj {
+func (self *StateDB) GetOrNewStateObj(addr address.Address) *StateObj {
 	stateObj := self.getStateObj(addr)
 	if stateObj == nil {//|| StateObj.deleted {
 		stateObj, _ = self.createObject(addr)
@@ -201,7 +202,7 @@ func (self *StateDB) GetOrNewStateObj(addr common.Address) *StateObj {
 
 // createObject creates a new state object. If there is an existing account with
 // the given address, it is overwritten and returned as the second return value.
-func (self *StateDB) createObject(addr common.Address) (newobj, prev *StateObj) {
+func (self *StateDB) createObject(addr address.Address) (newobj, prev *StateObj) {
 	prev = self.getStateObj(addr)
 	newobj = newObject(self, addr, Account{})
 	newobj.setNonce(0) // sets the object to dirty
@@ -225,7 +226,7 @@ func (self *StateDB) createObject(addr common.Address) (newobj, prev *StateObj) 
 //   2. tx_create(sha(account ++ nonce)) (note that this gets the address of 1)
 //
 // Carrying over the balance ensures that Ether doesn't disappear.
-func (self *StateDB) CreateAccount(addr common.Address) {
+func (self *StateDB) CreateAccount(addr address.Address) {
 	new, prev := self.createObject(addr)
 	if prev != nil {
 		new.setBalance(prev.account.Balance)
@@ -242,8 +243,8 @@ func (self *StateDB) Copy() *StateDB {
 	state := &StateDB{
 		db:                self.db,
 		globalTrie:              self.db.CopyTrie(self.globalTrie),
-		stateObjects:      make(map[common.Address]*StateObj),
-		stateObjectsDirty: make(map[common.Address]struct{}),
+		stateObjects:      make(map[address.Address]*StateObj),
+		stateObjectsDirty: make(map[address.Address]struct{}),
 	}
 
 	for addr := range self.stateObjectsDirty {

@@ -3,7 +3,7 @@ package api
 import (
 	"fmt"
 	"github.com/golang/protobuf/proto"
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/address"
 	"io/ioutil"
 	"math/big"
 	"net/http"
@@ -25,8 +25,8 @@ import (
 
 
 type NodeAPIMock struct {
-	balances map[common.Address]*big.Int
-	nonces map[common.Address]uint64
+	balances map[address.Address]*big.Int
+	nonces map[address.Address]uint64
 }
 
 type NetworkMock struct {
@@ -40,20 +40,20 @@ func (s *NetworkMock) Broadcast(chanel string, payload []byte) error{
 
 func NewNodeAPIMock() NodeAPIMock{
 	return NodeAPIMock{
-		balances : make(map[common.Address]*big.Int),
-		nonces : make(map[common.Address]uint64),
+		balances : make(map[address.Address]*big.Int),
+		nonces : make(map[address.Address]uint64),
 	}
 }
 
-func ( n NodeAPIMock) GetBalance(address common.Address) *big.Int {
+func ( n NodeAPIMock) GetBalance(address address.Address) *big.Int {
 	return n.balances[address]
 }
 
-func (n NodeAPIMock) GetNonce(address common.Address) uint64 {
+func (n NodeAPIMock) GetNonce(address address.Address) uint64 {
 	return n.nonces[address]
 }
 
-func (n NodeAPIMock) Exist(address common.Address) bool{
+func (n NodeAPIMock) Exist(address address.Address) bool{
 	_, ok := n.nonces[address]
 	return ok
 }
@@ -196,7 +196,7 @@ func TestJsonWalletApi(t *testing.T) {
 	port2, err := node.GetUnboundedPort()
 	assert.NoError(t, err, "Should be able to establish a connection on a port")
 	addrBytes := []byte{0x01}
-	addr := common.BytesToAddress(addrBytes)
+	addr := address.BytesToAddress(addrBytes)
 	if config.ConfigValues.JSONServerPort == 0 {
 		config.ConfigValues.JSONServerPort = port1
 		config.ConfigValues.GrpcServerPort = port2

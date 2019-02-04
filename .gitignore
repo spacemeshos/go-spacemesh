@@ -27,3 +27,4 @@
 **/pb/*.pb.gw.go
 **/pb/*.swagger.json
 database/data
+app/state

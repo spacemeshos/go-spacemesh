@@ -2,6 +2,7 @@ package state
 
 import (
 	"github.com/seehuhn/mt19937"
+	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -38,7 +39,7 @@ func createAccount(state *StateDB, addr []byte, balance int64, nonce uint64) *St
 }
 
 func createTransaction(nonce uint64,
-	origin common.Address, destination common.Address, amount int64) *Transaction{
+	origin address.Address, destination address.Address, amount int64) *Transaction{
 	return &Transaction{
 		AccountNonce: nonce,
 		Origin: origin,

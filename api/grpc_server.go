@@ -3,9 +3,9 @@ package api
 
 import (
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/api/pb"
-	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"strconv"
 
@@ -31,7 +31,7 @@ func (s SpaceMeshGrpcService) Echo(ctx context.Context, in *pb.SimpleMessage) (*
 
 // Echo returns the response for an echo api request
 func (s SpaceMeshGrpcService) GetBalance(ctx context.Context, in *pb.AccountId) (*pb.SimpleMessage, error) {
-	addr := common.BytesToAddress(in.Address)
+	addr := address.BytesToAddress(in.Address)
 
 	if s.StateApi.Exist(addr) != true {
 		return nil, fmt.Errorf("account does not exist")
@@ -44,7 +44,7 @@ func (s SpaceMeshGrpcService) GetBalance(ctx context.Context, in *pb.AccountId) 
 
 // Echo returns the response for an echo api request
 func (s SpaceMeshGrpcService) GetNonce(ctx context.Context, in *pb.AccountId) (*pb.SimpleMessage, error) {
-	addr := common.BytesToAddress(in.Address)
+	addr := address.BytesToAddress(in.Address)
 
 	if s.StateApi.Exist(addr)  != true{
 		return nil, fmt.Errorf("account does not exist")

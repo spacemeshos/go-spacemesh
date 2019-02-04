@@ -1,16 +1,16 @@
 package api
 
 import (
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/address"
 	"math/big"
 )
 
 type StateAPI interface {
-	GetBalance(address common.Address) *big.Int
+	GetBalance(address address.Address) *big.Int
 
-	GetNonce(address common.Address) uint64
+	GetNonce(address address.Address) uint64
 
-	Exist(address common.Address) bool
+	Exist(address address.Address) bool
 }
 
 type NetworkAPI interface {
