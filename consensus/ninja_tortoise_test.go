@@ -48,18 +48,16 @@ func TestNinjaTortoise_GlobalOpinion(t *testing.T) {
 }
 
 func TestForEachInView(t *testing.T) {
-	blocks := make(map[mesh.BlockID]*ninjaBlock)
+	blocks := make(map[mesh.BlockID]*mesh.Block)
 	alg := NewNinjaTortoise(2)
 	l := createGenesisLayer()
 	for _, b := range l.Blocks() {
-		nb := &ninjaBlock{Block: *b}
-		blocks[nb.ID()] = nb
+		blocks[b.ID()] = b
 	}
 	for i := 0; i < 3; i++ {
 		lyr := createMulExplicitLayer(l.Index()+1, []*mesh.Layer{l}, 2, 2)
 		for _, b := range lyr.Blocks() {
-			nb := &ninjaBlock{Block: *b}
-			blocks[nb.ID()] = nb
+			blocks[b.ID()] = b
 		}
 		l = lyr
 		for b, vec := range alg.tTally[alg.pBase] {
@@ -68,7 +66,7 @@ func TestForEachInView(t *testing.T) {
 	}
 	mp := map[mesh.BlockID]struct{}{}
 
-	foo := func(nb *ninjaBlock) {
+	foo := func(nb *mesh.Block) {
 		log.Debug("process block %d", nb.ID())
 		mp[nb.ID()] = struct{}{}
 	}
@@ -95,19 +93,20 @@ func NewNinjaTortoise(layerSize uint32) *ninjaTortoise {
 		Log:                log.New("optimized tortoise ", "", ""),
 		LayerSize:          layerSize,
 		pBase:              votingPattern{},
-		blocks:             make(map[mesh.BlockID]*ninjaBlock, K*layerSize),
-		tEffective:         make(map[mesh.BlockID]*votingPattern, K*layerSize),
-		tCorrect:           make(map[mesh.BlockID]map[votingPattern]vec, K*layerSize),
-		layerBlocks:        make(map[mesh.LayerID][]mesh.BlockID, layerSize),
-		tExplicit:          make(map[mesh.BlockID]map[mesh.LayerID]*votingPattern, K),
-		tGood:              make(map[mesh.LayerID]votingPattern, K),
-		tSupport:           make(map[votingPattern]int, layerSize),
-		tPattern:           make(map[votingPattern][]mesh.BlockID, layerSize),
-		tVote:              make(map[votingPattern]map[mesh.BlockID]vec, layerSize),
-		tTally:             make(map[votingPattern]map[mesh.BlockID]vec, layerSize),
-		tComplete:          make(map[votingPattern]struct{}, layerSize),
-		tEffectiveToBlocks: make(map[votingPattern][]mesh.BlockID, layerSize),
-		tPatSupport:        make(map[votingPattern]map[mesh.LayerID]*votingPattern, layerSize),
+		BlockVoteMap:       map[mesh.BlockID]map[mesh.LayerID]*votingPattern{},
+		blocks:             map[mesh.BlockID]*mesh.Block{},
+		tEffective:         map[mesh.BlockID]*votingPattern{},
+		tCorrect:           map[mesh.BlockID]map[votingPattern]vec{},
+		layerBlocks:        map[mesh.LayerID][]mesh.BlockID{},
+		tExplicit:          map[mesh.BlockID]map[mesh.LayerID]*votingPattern{},
+		tGood:              map[mesh.LayerID]votingPattern{},
+		tSupport:           map[votingPattern]int{},
+		tPattern:           map[votingPattern][]mesh.BlockID{},
+		tVote:              map[votingPattern]map[mesh.BlockID]vec{},
+		tTally:             map[votingPattern]map[mesh.BlockID]vec{},
+		tComplete:          map[votingPattern]struct{}{},
+		tEffectiveToBlocks: map[votingPattern][]mesh.BlockID{},
+		tPatSupport:        map[votingPattern]map[mesh.LayerID]*votingPattern{},
 	}
 }
 
@@ -117,11 +116,12 @@ func TestNinjaTortoise_Sanity1(t *testing.T) {
 	layerSize := 2
 	patternSize := layerSize
 	alg := NewNinjaTortoise(2)
-	l := createGenesisLayer()
-	genesisId := l.Blocks()[0].ID()
-	alg.initGenesis(l.Blocks(), Genesis)
-	l = createMulExplicitLayer(l.Index()+1, []*mesh.Layer{l}, 2, 1)
-	alg.initGenPlus1(l.Blocks(), Genesis+1)
+	l1 := createGenesisLayer()
+	genesisId := l1.Blocks()[0].ID()
+	//alg.initGenesis(l1.Blocks(), Genesis)
+	l := createMulExplicitLayer(l1.Index()+1, []*mesh.Layer{l1}, 2, 1)
+	//alg.initGenPlus1(l.Blocks(), Genesis+1)
+	alg.init(l1, l)
 	for i := 0; i < 30; i++ {
 		lyr := createMulExplicitLayer(l.Index()+1, []*mesh.Layer{l}, 2, 2)
 		start := time.Now()
@@ -144,17 +144,15 @@ func TestNinjaTortoise_Sanity2(t *testing.T) {
 	alg := NewNinjaTortoise(uint32(layerSize))
 	l := createGenesisLayer()
 	genesisId := l.Blocks()[0].ID()
-	alg.initGenesis(l.Blocks(), Genesis)
-	l2 := l
+	lPrev := l
 	l = createMulExplicitLayer(l.Index()+1, []*mesh.Layer{l}, layerSize, 1)
-	alg.initGenPlus1(l.Blocks(), Genesis+1)
-
-	for i := 0; i < 100; i++ {
-		lyr := createMulExplicitLayer(l.Index()+1, []*mesh.Layer{l, l2}, layerSize, layerSize-1)
+	alg.init(lPrev, l)
+	for i := 0; i < 30; i++ {
+		lyr := createMulExplicitLayer(l.Index()+1, []*mesh.Layer{l, lPrev}, layerSize, layerSize-1)
 		start := time.Now()
 		alg.UpdateTables(lyr.Blocks(), lyr.Index())
 		alg.Info("Time to process layer: %v ", time.Since(start))
-		l2 = l
+		lPrev = l
 		l = lyr
 		for b, vec := range alg.tTally[alg.pBase] {
 			alg.Debug("------> tally for block %d according to complete pattern %d are %d", b, alg.pBase, vec)
