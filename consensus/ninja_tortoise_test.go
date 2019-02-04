@@ -125,7 +125,7 @@ func TestNinjaTortoise_Sanity1(t *testing.T) {
 	for i := 0; i < 30; i++ {
 		lyr := createMulExplicitLayer(l.Index()+1, []*mesh.Layer{l}, 2, 2)
 		start := time.Now()
-		alg.UpdateTables(lyr.Blocks(), lyr.Index())
+		alg.UpdateTables(lyr)
 		alg.Info("Time to process layer: %v ", time.Since(start))
 		l = lyr
 		for b, vec := range alg.tTally[alg.pBase] {
@@ -150,7 +150,7 @@ func TestNinjaTortoise_Sanity2(t *testing.T) {
 	for i := 0; i < 30; i++ {
 		lyr := createMulExplicitLayer(l.Index()+1, []*mesh.Layer{l, lPrev}, layerSize, layerSize-1)
 		start := time.Now()
-		alg.UpdateTables(lyr.Blocks(), lyr.Index())
+		alg.UpdateTables(lyr)
 		alg.Info("Time to process layer: %v ", time.Since(start))
 		lPrev = l
 		l = lyr
