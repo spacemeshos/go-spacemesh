@@ -26,6 +26,7 @@ var (
 	defaultConfigFile = filepath.Join(defaultHomeDir, defaultConfigFileName)
 	defaultLogDir     = filepath.Join(defaultHomeDir, defaultLogFileName)
 	defaultAccountDir = filepath.Join(defaultHomeDir, defaultAccountFileName)
+	defaultTestMode = false
 )
 
 // Config defines the top level configuration for a spacemesh node
@@ -47,6 +48,8 @@ type BaseConfig struct {
 	LogDir string `mapstructure:"log-dir"`
 
 	AccountDir string `mapstructure:"account-dir"`
+
+	TestMode bool 	`mapstructure:"test-mode"`
 }
 
 // DefaultConfig returns the default configuration for a spacemesh node
@@ -67,6 +70,7 @@ func defaultBaseConfig() BaseConfig {
 		ConfigFile: defaultConfigFileName,
 		LogDir:     defaultLogDir,
 		AccountDir: defaultAccountDir,
+		TestMode:   defaultTestMode,
 	}
 }
 

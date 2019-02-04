@@ -2,8 +2,31 @@ package api
 
 import (
 	"github.com/spacemeshos/go-spacemesh/address"
+	"context"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"math/big"
 )
+
+const APIGossipProtocol = "api_test_gossip"
+
+type Service interface {
+	RegisterGossipProtocol(string) chan service.GossipMessage
+}
+
+// ApproveAPIGossipMessages registers the gossip api test protocol and approves every message as valid
+func ApproveAPIGossipMessages(ctx context.Context, s Service) {
+	gm := s.RegisterGossipProtocol(APIGossipProtocol)
+	go func() {
+		for {
+			select {
+			case m := <-gm:
+				m.ReportValidation(APIGossipProtocol, true)
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+}
 
 type StateAPI interface {
 	GetBalance(address address.Address) *big.Int
