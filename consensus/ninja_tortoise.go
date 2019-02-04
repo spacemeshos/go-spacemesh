@@ -76,14 +76,14 @@ type ninjaTortoise struct {
 	log.Log
 	LayerSize    uint32
 	pBase        votingPattern
-	BlockVoteMap map[mesh.BlockID]map[mesh.LayerID]*votingPattern //Explicit voting , Implicit votes is derived from the view of the latest Explicit voting pattern
+	BlockVoteMap map[mesh.BlockID]map[mesh.LayerID]votingPattern //Explicit voting , Implicit votes is derived from the view of the latest Explicit voting pattern
 	blocks       map[mesh.BlockID]*mesh.Block
-	tEffective   map[mesh.BlockID]*votingPattern        //Explicit voting pattern of latest layer for a block
+	tEffective   map[mesh.BlockID]votingPattern         //Explicit voting pattern of latest layer for a block
 	tCorrect     map[mesh.BlockID]map[votingPattern]vec //correction vectors
 
 	layerBlocks map[mesh.LayerID][]mesh.BlockID
-	tExplicit   map[mesh.BlockID]map[mesh.LayerID]*votingPattern // explict votes from block to layer pattern
-	tGood       map[mesh.LayerID]votingPattern                   // good pattern for layer i
+	tExplicit   map[mesh.BlockID]map[mesh.LayerID]votingPattern // explict votes from block to layer pattern
+	tGood       map[mesh.LayerID]votingPattern                  // good pattern for layer i
 
 	tSupport           map[votingPattern]int                  //for pattern p the number of blocks that support p
 	tPattern           map[votingPattern][]mesh.BlockID       // set of blocks that comprise pattern p
@@ -91,7 +91,7 @@ type ninjaTortoise struct {
 	tTally             map[votingPattern]map[mesh.BlockID]vec //for pattern p and block b count votes for b according to p
 	tComplete          map[votingPattern]struct{}
 	tEffectiveToBlocks map[votingPattern][]mesh.BlockID
-	tPatSupport        map[votingPattern]map[mesh.LayerID]*votingPattern
+	tPatSupport        map[votingPattern]map[mesh.LayerID]votingPattern
 }
 
 func (ni *ninjaTortoise) processBlock(b *mesh.Block) {
@@ -115,27 +115,27 @@ func (ni *ninjaTortoise) processBlock(b *mesh.Block) {
 		return
 	}
 
-	var effective *votingPattern
-	ni.BlockVoteMap[b.ID()] = make(map[mesh.LayerID]*votingPattern, K)
+	var effective votingPattern
+	ni.BlockVoteMap[b.ID()] = make(map[mesh.LayerID]votingPattern, K)
 	for layerId, v := range patterns {
 		vp := votingPattern{id: getId(v), LayerID: layerId}
 		ni.tPattern[vp] = v
-		ni.BlockVoteMap[b.ID()][layerId] = &vp
-		if effective == nil || layerId >= effective.Layer() {
-			effective = &vp
+		ni.BlockVoteMap[b.ID()][layerId] = vp
+		if layerId >= effective.Layer() {
+			effective = vp
 		}
 	}
 
 	ni.tEffective[b.ID()] = effective
 
-	v, found := ni.tEffectiveToBlocks[*effective]
+	v, found := ni.tEffectiveToBlocks[effective]
 	if !found {
 		v = make([]mesh.BlockID, 0, ni.LayerSize)
 	}
 	var pattern []mesh.BlockID = nil
 	pattern = append(v, b.ID())
-	ni.tEffectiveToBlocks[*effective] = pattern
-	ni.Debug("effective pattern to blocks %d %d", *effective, pattern)
+	ni.tEffectiveToBlocks[effective] = pattern
+	ni.Debug("effective pattern to blocks %d %d", effective, pattern)
 
 	return
 }
@@ -228,7 +228,7 @@ func (ni *ninjaTortoise) updatePatternTally(newMinGood votingPattern, bootomOfWi
 
 	foo := func(b *mesh.Block) {
 		if eff, found := ni.tEffective[b.ID()]; found {
-			if g, found := ni.tGood[eff.Layer()]; found && *eff == g {
+			if g, found := ni.tGood[eff.Layer()]; found && eff == g {
 				if _, f := m[g]; !f {
 					m[g] = &correction{}
 				}
@@ -299,18 +299,18 @@ func (ni *ninjaTortoise) updateBlocksSupport(b []*mesh.Block, j mesh.LayerID) ma
 		if found {
 			//explicit
 			if _, expFound := ni.tExplicit[block.ID()]; !expFound {
-				ni.tExplicit[block.ID()] = make(map[mesh.LayerID]*votingPattern, K*ni.LayerSize)
+				ni.tExplicit[block.ID()] = make(map[mesh.LayerID]votingPattern, K*ni.LayerSize)
 			}
 			ni.tExplicit[block.ID()][j] = p
-			ni.tSupport[*p]++         //add to supporting patterns
-			sUpdated[*p] = struct{}{} //add to updated patterns
+			ni.tSupport[p]++         //add to supporting patterns
+			sUpdated[p] = struct{}{} //add to updated patterns
 
 			//implicit
 		} else if eff, effFound := ni.tEffective[block.ID()]; effFound {
-			p, found = ni.tPatSupport[*eff][j]
+			p, found = ni.tPatSupport[eff][j]
 			if found {
-				ni.tSupport[*p]++         //add to supporting patterns
-				sUpdated[*p] = struct{}{} //add to updated patterns
+				ni.tSupport[p]++         //add to supporting patterns
+				sUpdated[p] = struct{}{} //add to updated patterns
 			}
 		}
 	}
@@ -319,14 +319,14 @@ func (ni *ninjaTortoise) updateBlocksSupport(b []*mesh.Block, j mesh.LayerID) ma
 
 func (ni *ninjaTortoise) addPatternVote(p votingPattern) func(b *mesh.Block) {
 	addPatternVote := func(b *mesh.Block) {
-		var vp map[mesh.LayerID]*votingPattern
+		var vp map[mesh.LayerID]votingPattern
 		var found bool
 		if vp, found = ni.tExplicit[b.ID()]; b.Layer() > 0 && !found {
 			panic("block has no explicit voting, something went wrong ")
 		}
 
 		for _, ex := range vp {
-			for _, block := range ni.tPattern[*ex] {
+			for _, block := range ni.tPattern[ex] {
 				ni.Debug("add pattern vote for pattern %d block %d layer %d", p, b.ID(), b.Layer())
 				ni.tTally[p][block] = ni.tTally[p][block].Add(vec{1, 0})
 			}
@@ -357,7 +357,7 @@ func (ni *ninjaTortoise) init(genesis *mesh.Layer, l1 *mesh.Layer) {
 	vp := &votingPattern{id: getId(ni.layerBlocks[Genesis]), LayerID: Genesis}
 	ni.pBase = *vp
 	ni.tGood[Genesis] = *vp
-	ni.tExplicit[genesis.Blocks()[0].ID()] = make(map[mesh.LayerID]*votingPattern, K*ni.LayerSize)
+	ni.tExplicit[genesis.Blocks()[0].ID()] = make(map[mesh.LayerID]votingPattern, K*ni.LayerSize)
 	ni.processBlocks(l1)
 
 	vp1 := votingPattern{id: getId(ni.layerBlocks[Genesis+1]), LayerID: Genesis + 1}
@@ -372,11 +372,11 @@ func (ni *ninjaTortoise) init(genesis *mesh.Layer, l1 *mesh.Layer) {
 
 func updatePatSupport(ni *ninjaTortoise, p votingPattern, bids []mesh.BlockID, idx mesh.LayerID, i mesh.LayerID) {
 	if val, found := ni.tPatSupport[p]; !found || val == nil {
-		ni.tPatSupport[p] = make(map[mesh.LayerID]*votingPattern)
+		ni.tPatSupport[p] = make(map[mesh.LayerID]votingPattern)
 	}
 	pid := getId(bids)
 	ni.Debug("update support for %d layer %d supported pattern %d", p, idx, pid)
-	ni.tPatSupport[p][i] = &votingPattern{id: pid, LayerID: idx}
+	ni.tPatSupport[p][i] = votingPattern{id: pid, LayerID: idx}
 }
 
 func (ni *ninjaTortoise) initToPbase(p votingPattern) {

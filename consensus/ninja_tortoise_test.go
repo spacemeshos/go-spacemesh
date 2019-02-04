@@ -93,12 +93,12 @@ func NewNinjaTortoise(layerSize uint32) *ninjaTortoise {
 		Log:                log.New("optimized tortoise ", "", ""),
 		LayerSize:          layerSize,
 		pBase:              votingPattern{},
-		BlockVoteMap:       map[mesh.BlockID]map[mesh.LayerID]*votingPattern{},
+		BlockVoteMap:       map[mesh.BlockID]map[mesh.LayerID]votingPattern{},
 		blocks:             map[mesh.BlockID]*mesh.Block{},
-		tEffective:         map[mesh.BlockID]*votingPattern{},
+		tEffective:         map[mesh.BlockID]votingPattern{},
 		tCorrect:           map[mesh.BlockID]map[votingPattern]vec{},
 		layerBlocks:        map[mesh.LayerID][]mesh.BlockID{},
-		tExplicit:          map[mesh.BlockID]map[mesh.LayerID]*votingPattern{},
+		tExplicit:          map[mesh.BlockID]map[mesh.LayerID]votingPattern{},
 		tGood:              map[mesh.LayerID]votingPattern{},
 		tSupport:           map[votingPattern]int{},
 		tPattern:           map[votingPattern][]mesh.BlockID{},
@@ -106,7 +106,7 @@ func NewNinjaTortoise(layerSize uint32) *ninjaTortoise {
 		tTally:             map[votingPattern]map[mesh.BlockID]vec{},
 		tComplete:          map[votingPattern]struct{}{},
 		tEffectiveToBlocks: map[votingPattern][]mesh.BlockID{},
-		tPatSupport:        map[votingPattern]map[mesh.LayerID]*votingPattern{},
+		tPatSupport:        map[votingPattern]map[mesh.LayerID]votingPattern{},
 	}
 }
 
