@@ -6,6 +6,7 @@
 # Main Config
 [main]
 data-folder = "~/.spacemesh-data"
+test-mode = false
 
 # Node Config
 [p2p]
