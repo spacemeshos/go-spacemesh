@@ -236,6 +236,11 @@ func (app *SpacemeshApp) cleanup(cmd *cobra.Command, args []string) (err error) 
 	return nil
 }
 
+func (app *SpacemeshApp) setupTestFeatures() {
+	// NOTE: any test-related feature enabling should happen here.
+	api.ApproveAPIGossipMessages(Ctx, app.P2P)
+}
+
 func (app *SpacemeshApp) startSpacemesh(cmd *cobra.Command, args []string) {
 	log.Info("Starting Spacemesh")
 
@@ -243,21 +248,25 @@ func (app *SpacemeshApp) startSpacemesh(cmd *cobra.Command, args []string) {
 	log.Info("Initializing P2P services")
 	swarm, err := p2p.New(Ctx, app.Config.P2P)
 
-	// Gossip messages are validated before propagating. broadcast test protocol isn't
-	api.ApproveAPIGossipMessages(Ctx, swarm) // todo: maybe only enable in tests?
-
 	if err != nil {
 		log.Error("Error starting p2p services, err: %v", err)
 		panic("Error starting p2p services")
 	}
-	err = swarm.Start()
 
-	if err != nil {
-		log.Error("Error starting p2p services, err: %v", err)
-		panic("Error starting p2p services")
+	if app.Config.TestMode {
+		app.setupTestFeatures()
 	}
+
+	// todo : register all protocols
 
 	app.P2P = swarm
+	err = app.P2P.Start()
+
+	if err != nil {
+		log.Error("Error starting p2p services, err: %v", err)
+		panic("Error starting p2p services")
+	}
+
 	app.NodeInitCallback <- true
 
 	apiConf := &app.Config.API

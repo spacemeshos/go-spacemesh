@@ -70,6 +70,7 @@ func (s SpacemeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.Sign
 func (s SpacemeshGrpcService) Broadcast(ctx context.Context, in *pb.BroadcastMessage) (*pb.SimpleMessage, error) {
 	err := s.Network.Broadcast(APIGossipProtocol, in.Data)
 	if err != nil {
+		log.Warning("RPC Broadcast failed please check that `test-mode` is on in order to use RPC Broadcast.")
 		return &pb.SimpleMessage{Value:err.Error()}, err
 	}
 	return &pb.SimpleMessage{Value:"ok"}, nil
