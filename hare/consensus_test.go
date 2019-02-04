@@ -10,7 +10,7 @@ import (
 
 // Test the consensus process as a whole
 
-var skipBlackBox = true
+var skipBlackBox = false
 
 type HareSuite struct {
 	termination Closer
