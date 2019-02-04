@@ -327,8 +327,6 @@ func (n *Net) HandlePreSessionIncomingMessage(c Connection, message []byte) erro
 	anode := node.New(c.RemotePublicKey(), remoteListeningAddress)
 
 	n.publishNewRemoteConnectionEvent(c, anode)
-	// TODO: @noam process message?
-	// Specifically -- check the network id and client version
 	return nil
 }
 
@@ -358,7 +356,6 @@ func (n *Net) verifyNetworkIDAndClientVersion(handshakeData *pb.HandshakeData) e
 
 func generateHandshakeMessage(session NetworkSession, networkID int8, localIncomingPort int, localPubkey p2pcrypto.PublicKey) ([]byte, error) {
 	handshakeData := &pb.HandshakeData{
-		Timestamp:            time.Now().Unix(),
 		ClientVersion:        config.ClientVersion,
 		NetworkID:            int32(networkID),
 		Port:                 uint32(localIncomingPort),
