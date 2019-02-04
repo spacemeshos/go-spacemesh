@@ -208,7 +208,7 @@ func (validator *MessageValidator) validateSVP(msg *pb.HareMessage) bool {
 			return false
 		}
 	} else {
-		if !validator.validateSVPTypeB(msg, maxRawSet, maxKi) { // type B
+		if !validateSVPTypeB(msg, NewSet(maxRawSet)) { // type B
 			log.Warning("Proposal validation failed: type B validation failed")
 			return false
 		}
@@ -256,7 +256,7 @@ func validateStatusType(m *pb.HareMessage) bool {
 	return MessageType(m.Message.Type) == Status
 }
 
-// validate SVP for type A (where ki=-1)
+// validate SVP for type A (where all ki=-1)
 func validateSVPTypeA(m *pb.HareMessage) bool {
 	s := NewSet(m.Message.Values)
 	unionSet := NewEmptySet(cap(m.Message.Values))
@@ -276,17 +276,10 @@ func validateSVPTypeA(m *pb.HareMessage) bool {
 	return true
 }
 
-// validate SVP for type B (where ki>=0)
-func (validator *MessageValidator) validateSVPTypeB(msg *pb.HareMessage, maxRawSet [][]byte, maxKi int32) bool {
-	// cert should have same k as max ki
-	if msg.Message.K != uint32(maxKi) { // cast is safe since maxKi>=0
-		log.Warning("Proposal type B validation failed: Certificate should have r=maxKi")
-		return false
-	}
-
+// validate SVP for type B (where exist ki>=0)
+func validateSVPTypeB(msg *pb.HareMessage, maxSet *Set) bool {
 	// max set should be equal to the claimed set
 	s := NewSet(msg.Message.Values)
-	maxSet := NewSet(maxRawSet)
 	if !s.Equals(maxSet) {
 		log.Warning("Proposal type B validation failed: max set not equal to proposed set. Expected: %v Actual: %v", s, maxSet)
 		return false

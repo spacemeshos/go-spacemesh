@@ -58,6 +58,7 @@ func TestMessageValidator_IsStructureValid(t *testing.T) {
 
 func TestMessageValidator_Aggregated(t *testing.T) {
 	validator := defaultValidator()
+	assert.False(t, validator.validateAggregatedMessage(nil, nil))
 	funcs := make([]func(m *pb.HareMessage)bool, 0)
 	assert.False(t, validator.validateAggregatedMessage(nil, funcs))
 
@@ -69,6 +70,11 @@ func TestMessageValidator_Aggregated(t *testing.T) {
 	}
 	agg.Messages = msgs
 	assert.True(t, validator.validateAggregatedMessage(agg, funcs))
+	tmp := msgs[0].PubKey
+	msgs[0].PubKey = msgs[1].PubKey
+	assert.False(t, validator.validateAggregatedMessage(agg, funcs))
+	msgs[0].PubKey = tmp
+
 	funcs = make([]func(m *pb.HareMessage)bool, 1)
 	funcs[0] = func(m *pb.HareMessage) bool {return false}
 	assert.False(t, validator.validateAggregatedMessage(agg, funcs))
@@ -112,7 +118,10 @@ func TestMessageValidator_ValidateMessage(t *testing.T) {
 
 func TestMessageValidator_SyntacticallyValidateMessage(t *testing.T) {
 	validator := NewMessageValidator(NewMockSigning(), 1, 3, validate)
-	m := BuildPreRoundMsg(generateSigning(t), NewSmallEmptySet())
+	m := BuildPreRoundMsg(generateSigning(t), NewSetFromValues(value1))
+	m.PubKey = NewMockSigning().Verifier().Bytes()
+	assert.False(t, validator.SyntacticallyValidateMessage(m))
+	m = BuildPreRoundMsg(generateSigning(t), NewSmallEmptySet())
 	assert.False(t, validator.SyntacticallyValidateMessage(m))
 	m = BuildPreRoundMsg(generateSigning(t), NewSetFromValues(value1))
 	assert.True(t, validator.SyntacticallyValidateMessage(m))
@@ -128,4 +137,59 @@ func TestMessageValidator_ContextuallyValidateMessage(t *testing.T) {
 	m = BuildStatusMsg(generateSigning(t), NewSetFromValues(value1))
 	assert.False(t, validator.ContextuallyValidateMessage(m, 1))
 	assert.True(t, validator.ContextuallyValidateMessage(m, 0))
+}
+
+func TestMessageValidator_validateSVPTypeA(t *testing.T) {
+	m := buildProposalMsg(NewMockSigning(), NewSetFromValues(value1, value2, value3), []byte{})
+	s1 := NewSetFromValues(value1)
+	s2 := NewSetFromValues(value3)
+	s3 := NewSetFromValues(value1, value5)
+	s4 := NewSetFromValues(value1, value4)
+	m.Message.Svp = buildSVP(-1, s1, s2, s3, s4)
+	assert.False(t, validateSVPTypeA(m))
+	s3 = NewSetFromValues(value2)
+	m.Message.Svp = buildSVP(-1, s1, s2, s3)
+	assert.True(t, validateSVPTypeA(m))
+}
+
+func TestMessageValidator_validateSVPTypeB(t *testing.T) {
+	m := buildProposalMsg(NewMockSigning(), NewSetFromValues(value1, value2, value3), []byte{})
+	s1 := NewSetFromValues(value1)
+	m.Message.Svp = buildSVP(-1, s1)
+	s := NewSetFromValues(value1)
+	m.Message.Values = s.To2DSlice()
+	assert.False(t, validateSVPTypeB(m, NewSetFromValues(value5)))
+	assert.True(t, validateSVPTypeB(m, NewSetFromValues(value1)))
+}
+
+func TestMessageValidator_validateSVP(t *testing.T) {
+	validator := NewMessageValidator(NewMockSigning(), 1, 1, validate)
+	m := buildProposalMsg(NewMockSigning(), NewSetFromValues(value1, value2, value3), []byte{})
+	s1 := NewSetFromValues(value1)
+	m.Message.Svp = buildSVP(-1, s1)
+	m.Message.Svp.Messages[0].Message.Type = int32(Commit)
+	assert.False(t, validator.validateSVP(m))
+	m.Message.Svp = buildSVP(-1, s1)
+	m.Message.Svp.Messages[0].Message.K = 4
+	assert.False(t, validator.validateSVP(m))
+	m.Message.Svp = buildSVP(-1, s1)
+	assert.False(t, validator.validateSVP(m))
+	s2 := NewSetFromValues(value1, value2, value3)
+	m.Message.Svp = buildSVP(-1, s2)
+	assert.True(t, validator.validateSVP(m))
+	m.Message.Svp = buildSVP(0, s1)
+	assert.False(t, validator.validateSVP(m))
+	m.Message.Svp = buildSVP(0, s2)
+	assert.True(t, validator.validateSVP(m))
+}
+
+func buildSVP(ki int32, S... *Set) *pb.AggregatedMessages {
+	msgs := make([]*pb.HareMessage, 0, len(S))
+	for _, s := range S {
+		 msgs = append(msgs, buildStatusMsg(NewMockSigning(), s, ki))
+	}
+
+	svp := &pb.AggregatedMessages{}
+	svp.Messages = msgs
+	return svp
 }
