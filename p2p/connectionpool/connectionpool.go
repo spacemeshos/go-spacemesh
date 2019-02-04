@@ -76,8 +76,8 @@ func (cp *ConnectionPool) isShuttingDown() bool {
 	return isd
 }
 
-// Shutdown of the ConnectionPool, gracefully.
-// - Close all open connections
+// Shutdown gracefully shuts down the ConnectionPool:
+// - Closes all open connections
 // - Waits for all Dial routines to complete and unblock any routines waiting for GetConnection
 func (cp *ConnectionPool) Shutdown() {
 	cp.connMutex.Lock()
@@ -175,7 +175,7 @@ func (cp *ConnectionPool) handleClosedConnection(conn net.Connection) {
 	cp.connMutex.Unlock()
 }
 
-// GetConnection fetchs or creates if don't exist a connection to the address which is associated with the remote public key
+// GetConnection fetches or creates if don't exist a connection to the address which is associated with the remote public key
 func (cp *ConnectionPool) GetConnection(address string, remotePub p2pcrypto.PublicKey) (net.Connection, error) {
 	cp.connMutex.RLock()
 	if cp.shutdown {
