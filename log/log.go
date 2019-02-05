@@ -13,11 +13,12 @@ import (
 )
 
 
+const mainLoggerName = "Spacemesh"
+
 // determine the level of messages we show.
 var debugMode = false
 // should we format out logs in json
-const JSON = false // todo: configure
-
+var jsonLog = false
 
 var DebugLevel = zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
 	return lvl >= zapcore.DebugLevel
@@ -36,7 +37,7 @@ func logLevel() zap.LevelEnablerFunc {
 }
 
 func encoder() zapcore.Encoder {
-	if JSON || debugMode {
+	if jsonLog || debugMode {
 		return zapcore.NewJSONEncoder(zap.NewDevelopmentEncoderConfig())
 	} else {
 		return zapcore.NewConsoleEncoder(zap.NewDevelopmentEncoderConfig())
@@ -49,12 +50,16 @@ var AppLog Log
 func init() {
 	// create a basic temp os.Stdout logger
 	// This logger is used until the app calls InitSpacemeshLoggingSystem().
-	AppLog = New("APP", "", "")
+	AppLog = New(mainLoggerName, "", "")
 }
 
 // DebugMode sets log debug level
 func DebugMode(mode bool) {
 	debugMode = mode
+}
+
+func JSONLog(b bool) {
+	jsonLog = b
 }
 
 // New creates a logger for a module. e.g. p2p instance logger.
@@ -96,7 +101,7 @@ func getFileWriter(dataFolderPath, logFileName string) (io.Writer) {
 
 // InitSpacemeshLoggingSystem initializes app logging system.
 func InitSpacemeshLoggingSystem(dataFolderPath string, logFileName string) {
-	AppLog = New("APP",  dataFolderPath, logFileName)
+	AppLog = New(mainLoggerName,  dataFolderPath, logFileName)
 }
 
 // public wrappers abstracting away logging lib impl

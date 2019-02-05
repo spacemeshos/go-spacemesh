@@ -239,6 +239,8 @@ func (app *SpacemeshApp) cleanup(cmd *cobra.Command, args []string) (err error) 
 func (app *SpacemeshApp) setupTestFeatures() {
 	// NOTE: any test-related feature enabling should happen here.
 	api.ApproveAPIGossipMessages(Ctx, app.P2P)
+	log.DebugMode(true)
+	log.JSONLog(true)
 }
 
 func (app *SpacemeshApp) startSpacemesh(cmd *cobra.Command, args []string) {
