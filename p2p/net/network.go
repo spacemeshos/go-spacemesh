@@ -267,7 +267,8 @@ func (n *Net) acceptTCP() {
 			}
 			return
 		}
-		n.logger.Debugw("Got new connection...", log.String("address", netConn.RemoteAddr().String()), log.String("event", "AcceptedConnection"))
+
+		n.logger.Debug("Got new connection... Remote Address: %s", netConn.RemoteAddr())
 		formatter := delimited.NewChan(10)
 		c := newConnection(netConn, n, formatter, nil, nil, n.logger)
 
