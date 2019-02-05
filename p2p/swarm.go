@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/golang/protobuf/proto"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/connectionpool"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht"
@@ -235,7 +236,9 @@ func (s *swarm) Start() error {
 				return
 			}
 			close(s.bootChan)
-			s.lNode.Info("DHT Bootstrapped with %d peers in %v", s.dht.Size(), time.Since(b))
+			dhtsize := s.dht.Size()
+			s.lNode.With().Info("discovery_bootstrap", log.Bool("succeess", dhtsize > s.config.SwarmConfig.RandomConnections && s.bootErr != nil),
+				log.Int("dht_size", dhtsize), log.Duration("time_elapsed", time.Since(b)))
 		}()
 	}
 
