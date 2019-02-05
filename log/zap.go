@@ -1,7 +1,6 @@
 package log
 
 import (
-	"fmt"
 	"go.uber.org/zap"
 	"time"
 )
@@ -15,22 +14,22 @@ type Log struct {
 
 // Info prints formatted info level log message.
 func (l Log) Info(format string, args ...interface{}) {
-	l.Logger.Info(fmt.Sprintf(format, args...))
+	l.Logger.Sugar().Infof(format, args...)
 }
 
 // Debug prints formatted debug level log message.
 func (l Log) Debug(format string, args ...interface{}) {
-	l.Logger.Debug(fmt.Sprintf(format, args...))
+	l.Logger.Sugar().Debugf(format, args...)
 }
 
 // Error prints formatted error level log message.
 func (l Log) Error(format string, args ...interface{}) {
-	l.Logger.Error(fmt.Sprintf(format, args...))
+	l.Logger.Sugar().Errorf(format,args...)
 }
 
 // Warning prints formatted warning level log message.
 func (l Log) Warning(format string, args ...interface{}) {
-	l.Logger.Warn(fmt.Sprintf(format, args...))
+	l.Logger.Sugar().Warnf(format, args...)
 }
 
 // Wrap and export field logic
@@ -77,22 +76,30 @@ func unpack(fields ...Field) []zap.Field {
 	return flds
 }
 
+type fieldLogger struct {
+	l *zap.Logger
+}
+
+func (l Log) With() fieldLogger {
+	return fieldLogger{l.Logger}
+}
+
 // Infow prints message with fields
-func (l Log) Infow(msg string, fields ...Field) {
-	l.Logger.Info(msg, unpack(fields...)...)
+func (fl fieldLogger) Info(msg string, fields ...Field) {
+	fl.l.Info(msg, unpack(fields...)...)
 }
 
 // Debugw prints message with fields
-func (l Log) Debugw(msg string, fields ...Field) {
-	l.Logger.Debug(msg, unpack(fields...)...)
+func (fl fieldLogger) Debug(msg string, fields ...Field) {
+	fl.l.Debug(msg, unpack(fields...)...)
 }
 
 // Errorw prints message with fields
-func (l Log) Errorw(msg string, fields ...Field) {
-	l.Logger.Error(msg, unpack(fields...)...)
+func (fl fieldLogger) Error(msg string, fields ...Field) {
+	fl.l.Error(msg, unpack(fields...)...)
 }
 
 // Warningw prints message with fields
-func (l Log) Warningw(msg string, fields ...Field) {
-	l.Logger.Warn(msg, unpack(fields...)...)
+func (fl fieldLogger) Warningw(msg string, fields ...Field) {
+	fl.l.Warn(msg, unpack(fields...)...)
 }

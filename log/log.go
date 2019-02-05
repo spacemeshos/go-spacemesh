@@ -121,22 +121,6 @@ func Warning(msg string, args ...interface{}) {
 	AppLog.Warning(msg, args...)
 }
 
-// Infow prints a structured info message
-func Infow(msg string, fields ...Field) {
-	AppLog.Infow(msg, fields...)
-}
-
-// Debugw prints a structured debug message
-func Debugw(msg string, fields ...Field) {
-	AppLog.Debugw(msg, fields...)
-}
-
-// Errorw prints a structured err message
-func Errorw(msg string, fields ...Field) {
-	AppLog.Errorw(msg, fields...)
-}
-
-// Warningw prints a structured warn message
-func Warningw(msg string, fields ...Field) {
-	AppLog.Warningw(msg, fields...)
+func With() fieldLogger {
+	return fieldLogger{AppLog.Logger}
 }
