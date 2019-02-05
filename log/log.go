@@ -37,7 +37,7 @@ func logLevel() zap.LevelEnablerFunc {
 }
 
 func encoder() zapcore.Encoder {
-	if jsonLog || debugMode {
+	if jsonLog {
 		return zapcore.NewJSONEncoder(zap.NewDevelopmentEncoderConfig())
 	} else {
 		return zapcore.NewConsoleEncoder(zap.NewDevelopmentEncoderConfig())
