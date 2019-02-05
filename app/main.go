@@ -95,8 +95,12 @@ func EnsureCLIFlags(cmd *cobra.Command, appcfg *cfg.Config) {
 		if f.Changed {
 			name := f.Name
 
-			ff := reflect.TypeOf(*appcfg)
-			elem := reflect.ValueOf(&appcfg).Elem()
+			ff := reflect.TypeOf(appcfg.BaseConfig)
+			elem := reflect.ValueOf(&appcfg.BaseConfig).Elem()
+			assignFields(ff, elem, name)
+
+			ff = reflect.TypeOf(*appcfg)
+			elem = reflect.ValueOf(&appcfg).Elem()
 			assignFields(ff, elem, name)
 
 			ff = reflect.TypeOf(appcfg.API)
@@ -197,6 +201,11 @@ func (app *SpacemeshApp) before(cmd *cobra.Command, args []string) (err error) {
 // setupLogging configured the app logging system.
 func (app *SpacemeshApp) setupLogging() {
 
+	if app.Config.TestMode {
+		log.DebugMode(true)
+		log.JSONLog(true)
+	}
+
 	// setup logging early
 	dataDir, err := filesystem.GetSpacemeshDataDirectoryPath()
 	if err != nil {
@@ -239,8 +248,6 @@ func (app *SpacemeshApp) cleanup(cmd *cobra.Command, args []string) (err error) 
 func (app *SpacemeshApp) setupTestFeatures() {
 	// NOTE: any test-related feature enabling should happen here.
 	api.ApproveAPIGossipMessages(Ctx, app.P2P)
-	log.DebugMode(true)
-	log.JSONLog(true)
 }
 
 func (app *SpacemeshApp) startSpacemesh(cmd *cobra.Command, args []string) {
@@ -255,13 +262,14 @@ func (app *SpacemeshApp) startSpacemesh(cmd *cobra.Command, args []string) {
 		panic("Error starting p2p services")
 	}
 
+	app.P2P = swarm
+
 	if app.Config.TestMode {
 		app.setupTestFeatures()
 	}
 
 	// todo : register all protocols
 
-	app.P2P = swarm
 	err = app.P2P.Start()
 
 	if err != nil {
