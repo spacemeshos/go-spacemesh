@@ -97,7 +97,7 @@ func (broker *Broker) dispatcher() {
 			hareMsg := &pb.HareMessage{}
 			err := proto.Unmarshal(msg.Bytes(), hareMsg)
 			if err != nil {
-				log.Error("Could not unmarshal message: %v", err)
+				log.Error("Could not unmarshal message: ", err)
 				continue
 			}
 

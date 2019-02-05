@@ -27,7 +27,7 @@ func NewNotifyTracker(expectedSize int) *NotifyTracker {
 func (nt *NotifyTracker) OnNotify(msg *pb.HareMessage) bool {
 	verifier, err := NewVerifier(msg.PubKey)
 	if err != nil {
-		log.Warning("Could not construct verifier: %v", err)
+		log.Warning("Could not construct verifier: ", err)
 		return true
 	}
 

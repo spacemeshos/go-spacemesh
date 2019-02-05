@@ -92,7 +92,7 @@ func (a *Account) UnlockAccount(passphrase string) error {
 	// aes decrypt private key
 	privKeyData, err := crypto.AesCTRXOR(aesKey, cipherText, nonce)
 	if err != nil {
-		log.Errorw("failed to aes decode private key", log.Err(err))
+		log.Error("failed to aes decode private key", err)
 		return err
 	}
 

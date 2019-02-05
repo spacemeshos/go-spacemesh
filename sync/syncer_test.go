@@ -510,10 +510,10 @@ func (sis *syncIntegrationMultipleNodes) TestSyncProtocol_MultipleNodes() {
 		}
 	}
 end:
-	log.Debug("sync 1 %v", syncObj1.LocalLayer())
-	log.Debug("sync 2 %v", syncObj2.LocalLayer())
-	log.Debug("sync 3 %v", syncObj3.LocalLayer())
-	log.Debug("sync 4 %v", syncObj4.LocalLayer())
-	log.Debug("sync 5 %v", syncObj5.LocalLayer())
+	log.Debug("sync 1 ", syncObj1.LocalLayer())
+	log.Debug("sync 2 ", syncObj2.LocalLayer())
+	log.Debug("sync 3 ", syncObj3.LocalLayer())
+	log.Debug("sync 4 ", syncObj4.LocalLayer())
+	log.Debug("sync 5 ", syncObj5.LocalLayer())
 	return
 }

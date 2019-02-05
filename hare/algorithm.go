@@ -183,7 +183,7 @@ func (proc *ConsensusProcess) onEarlyMessage(m Message) {
 
 	verifier, err := NewVerifier(m.msg.PubKey)
 	if err != nil {
-		log.Warning("Could not construct verifier: %v", err)
+		log.Warning("Could not construct verifier: ", err)
 		return
 	}
 
@@ -297,7 +297,7 @@ func (proc *ConsensusProcess) sendMessage(msg *pb.HareMessage) {
 	}
 
 	if err := proc.network.Broadcast(ProtoName, data); err != nil {
-		log.Error("Could not broadcast round message %v", err.Error())
+		log.Error("Could not broadcast round message ", err.Error())
 		return
 	}
 }
@@ -381,7 +381,7 @@ func (proc *ConsensusProcess) onRoundBegin() {
 	case Round4:
 		proc.beginRound4()
 	default:
-		log.Error("Current round out of bounds. Expected: 0-4, Found: %v", proc.currentRound())
+		log.Error("Current round out of bounds. Expected: 0-4, Found: ", proc.currentRound())
 		panic("Current round out of bounds")
 	}
 
@@ -464,7 +464,7 @@ func (proc *ConsensusProcess) processNotifyMsg(msg *pb.HareMessage) {
 
 	// enough notifications, should terminate
 	proc.s = s // update to the agreed set
-	log.Info("Consensus process terminated for %v with output set: %v", proc.signing.Verifier().Bytes(), proc.s)
+	log.Info("Consensus process terminated for %v with output set: ", proc.signing.Verifier().Bytes(), proc.s)
 	proc.terminationReport <- procOutput{proc.instanceId, proc.s}
 	proc.Close()
 	proc.terminating = true // ensures immediate termination

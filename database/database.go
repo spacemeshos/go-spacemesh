@@ -59,7 +59,7 @@ func NewLDBDatabase(file string, cache int, handles int) (*LDBDatabase, error) {
 	if handles < 16 {
 		handles = 16
 	}
-	logger.Infow("Allocated cache and file handles", log.Int("cache", cache), log.Int("handles", handles))
+	logger.Info("Allocated cache and file handles", "cache", cache, "handles", handles)
 
 	// Open the db and recover any potential corruptions
 	db, err := leveldb.OpenFile(file, &opt.Options{
@@ -128,7 +128,7 @@ func (db *LDBDatabase) Close() {
 		errc := make(chan error)
 		db.quitChan <- errc
 		if err := <-errc; err != nil {
-			db.log.Errorw("Metrics collection failed", log.Err(err))
+			db.log.Error("Metrics collection failed", "err", err)
 		}
 		db.quitChan = nil
 	}
@@ -136,7 +136,7 @@ func (db *LDBDatabase) Close() {
 	if err == nil {
 		db.log.Info("Database closed")
 	} else {
-		db.log.Errorw("Failed to close database", log.Err(err))
+		db.log.Error("Failed to close database", "err", err)
 	}
 }
 
@@ -197,7 +197,7 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 		// Retrieve the database stats
 		stats, err := db.db.GetProperty("leveldb.stats")
 		if err != nil {
-			db.log.Errorw("Failed to read database stats", log.Err( err))
+			db.log.Error("Failed to read database stats", "err", err)
 			merr = err
 			continue
 		}
@@ -225,7 +225,7 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 			for idx, counter := range parts[3:] {
 				value, err := strconv.ParseFloat(strings.TrimSpace(counter), 64)
 				if err != nil {
-					db.log.Errorw("Compaction entry parsing failed", log.Err(err))
+					db.log.Error("Compaction entry parsing failed", "err", err)
 					merr = err
 					continue
 				}
@@ -246,7 +246,7 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 		// Retrieve the write delay statistic
 		writedelay, err := db.db.GetProperty("leveldb.writedelay")
 		if err != nil {
-			db.log.Errorw("Failed to read database write delay statistic", log.Err(err))
+			db.log.Error("Failed to read database write delay statistic", "err", err)
 			merr = err
 			continue
 		}
@@ -263,7 +263,7 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 		}
 		duration, err = time.ParseDuration(delayDuration)
 		if err != nil {
-			db.log.Errorw("Failed to parse delay duration", log.Err( err))
+			db.log.Error("Failed to parse delay duration", "err", err)
 			merr = err
 			continue
 		}
@@ -285,24 +285,24 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 		// Retrieve the database iostats.
 		ioStats, err := db.db.GetProperty("leveldb.iostats")
 		if err != nil {
-			db.log.Errorw("Failed to read database iostats", log.Err( err))
+			db.log.Error("Failed to read database iostats", "err", err)
 			merr = err
 			continue
 		}
 		var nRead, nWrite float64
 		parts := strings.Split(ioStats, " ")
 		if len(parts) < 2 {
-			db.log.Errorw("Bad syntax of ioStats", log.String("ioStats", ioStats))
+			db.log.Error("Bad syntax of ioStats", "ioStats", ioStats)
 			merr = fmt.Errorf("bad syntax of ioStats %s", ioStats)
 			continue
 		}
 		if n, err := fmt.Sscanf(parts[0], "Read(MB):%f", &nRead); n != 1 || err != nil {
-			db.log.Errorw("Bad syntax of read entry", log.String("entry", parts[0]))
+			db.log.Error("Bad syntax of read entry", "entry", parts[0])
 			merr = err
 			continue
 		}
 		if n, err := fmt.Sscanf(parts[1], "Write(MB):%f", &nWrite); n != 1 || err != nil {
-			db.log.Errorw("Bad syntax of write entry", log.String("entry", parts[1]))
+			db.log.Error("Bad syntax of write entry", "entry", parts[1])
 			merr = err
 			continue
 		}

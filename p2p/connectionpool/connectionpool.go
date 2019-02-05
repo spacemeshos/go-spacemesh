@@ -197,7 +197,6 @@ func (cp *ConnectionPool) GetConnection(address string, remotePub p2pcrypto.Publ
 	cp.pending[remotePub.String()] = append(cp.pending[remotePub.String()], pendChan)
 	if !found {
 		// No one is waiting for a connection with the remote peer, need to call Dial
-
 		go func() {
 			cp.dialWait.Add(1)
 			conn, err := cp.net.Dial(address, remotePub)

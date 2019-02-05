@@ -104,7 +104,7 @@ func (s SpacemeshGrpcService) startServiceInternal(status chan bool) {
 
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
-		log.Error("failed to listen err:%v", err)
+		log.Error("failed to listen", err)
 		return
 	}
 
@@ -121,7 +121,7 @@ func (s SpacemeshGrpcService) startServiceInternal(status chan bool) {
 
 	// start serving - this blocks until err or server is stopped
 	if err := s.Server.Serve(lis); err != nil {
-		log.Errorw("grpc stopped serving", log.Err(err))
+		log.Error("grpc stopped serving", err)
 	}
 
 	if status != nil {

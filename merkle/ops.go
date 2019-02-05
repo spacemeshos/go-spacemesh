@@ -31,7 +31,7 @@ func (mt *merkleTreeImp) removeNodeFromStore(node Node) error {
 	nodeKey := node.getNodeHash()
 	err := mt.treeData.Delete(nodeKey, nil)
 	if err != nil {
-		log.Error("Failed to delete node from db %v", err)
+		log.Error("Failed to delete node from db", err)
 		return err
 	}
 	return nil
@@ -50,7 +50,7 @@ func (mt *merkleTreeImp) persistNode(node Node) error {
 
 	err = mt.treeData.Put(nodeKey, nodeData, nil)
 	if err != nil {
-		log.Error("Failed to write tree data to db %v", err)
+		log.Error("Failed to write tree data to db", err)
 	}
 
 	log.Debug("Persisted node data: %s", node.print(mt.treeData, mt.userData))
@@ -66,7 +66,7 @@ func (mt *merkleTreeImp) deleteUserValueFromStore(v []byte) error {
 	k := crypto.Sha256(v)
 	err := mt.userData.Delete(k, nil)
 	if err != nil {
-		log.Error("Failed to delete from user data to db err:%v", err)
+		log.Error("Failed to delete from user data to db", err)
 		return err
 	}
 
@@ -82,7 +82,7 @@ func (mt *merkleTreeImp) persistUserValue(v []byte) error {
 	k := crypto.Sha256(v)
 	err := mt.userData.Put(k, v, nil)
 	if err != nil {
-		log.Error("Failed to write user data to db err:%v", err)
+		log.Error("Failed to write user data to db", err)
 		return err
 	}
 
@@ -94,13 +94,13 @@ func (mt *merkleTreeImp) CloseDataStores() error {
 
 	err := mt.treeData.Close()
 	if err != nil && err != leveldb.ErrClosed {
-		log.Error("Failed to close tree db %v", err)
+		log.Error("Failed to close tree db", err)
 		return err
 	}
 
 	err = mt.userData.Close()
 	if err != nil && err != leveldb.ErrClosed {
-		log.Error("Failed to close user db %v", err)
+		log.Error("Failed to close user db", err)
 		return err
 	}
 

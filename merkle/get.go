@@ -23,7 +23,7 @@ func (mt *merkleTreeImp) Get(k []byte) ([]byte, *stack, error) {
 	// get the tree stored user data key to the value
 	userValue, err := mt.findValue(mt.root, keyHexStr, 0, s)
 	if err != nil {
-		log.Error("Error getting user data from m %v", err)
+		log.Error("Error getting user data from m", err)
 		return nil, s, err
 	}
 
