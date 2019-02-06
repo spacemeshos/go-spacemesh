@@ -2,14 +2,14 @@ package state
 
 import (
 	"github.com/spacemeshos/go-spacemesh/address"
-	"github.com/spacemeshos/go-spacemesh/rlp"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/rlp"
 	"io"
 	"math/big"
 )
 
-type AccountState interface{
+type AccountState interface {
 	GetBalance() *big.Int
 	GetNonce() uint64
 	SetNonce(newNonce uint64)
@@ -19,11 +19,10 @@ type AccountState interface{
 	GetAddress() address.Address
 }
 
-
 type StateObj struct {
 	address  address.Address
 	addrHash common.Hash
-	account     Account
+	account  Account
 	db       *StateDB
 }
 
@@ -32,17 +31,16 @@ type Account struct {
 	Balance *big.Int
 }
 
-
 // newObject creates a state object.
 func newObject(db *StateDB, address address.Address, data Account) *StateObj {
 	if data.Balance == nil {
 		data.Balance = new(big.Int)
 	}
 	return &StateObj{
-		db:            	db,
-		address:       	address,
-		addrHash:      	crypto.Keccak256Hash(address[:]),
-		account:		data,
+		db:       db,
+		address:  address,
+		addrHash: crypto.Keccak256Hash(address[:]),
+		account:  data,
 	}
 }
 
@@ -134,4 +132,3 @@ func (self *StateObj) Nonce() uint64 {
 func (self *StateObj) Value() *big.Int {
 	panic("Value on StateObj should never be called")
 }
-

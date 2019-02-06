@@ -241,7 +241,6 @@ func TestRoutingTableImpl_SelectPeers_EnoughPeers(t *testing.T) {
 	sids := make(map[string]RoutingTable)
 	toselect := make(map[string]struct{})
 
-
 	for i := 0; i < n; i++ {
 		local := node.GenerateRandomNodeData()
 		localID := local.DhtID()

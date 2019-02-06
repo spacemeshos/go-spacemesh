@@ -59,7 +59,7 @@ func TestMessageValidator_IsStructureValid(t *testing.T) {
 func TestMessageValidator_Aggregated(t *testing.T) {
 	validator := defaultValidator()
 	assert.False(t, validator.validateAggregatedMessage(nil, nil))
-	funcs := make([]func(m *pb.HareMessage)bool, 0)
+	funcs := make([]func(m *pb.HareMessage) bool, 0)
 	assert.False(t, validator.validateAggregatedMessage(nil, funcs))
 
 	agg := &pb.AggregatedMessages{}
@@ -75,8 +75,8 @@ func TestMessageValidator_Aggregated(t *testing.T) {
 	assert.False(t, validator.validateAggregatedMessage(agg, funcs))
 	msgs[0].PubKey = tmp
 
-	funcs = make([]func(m *pb.HareMessage)bool, 1)
-	funcs[0] = func(m *pb.HareMessage) bool {return false}
+	funcs = make([]func(m *pb.HareMessage) bool, 1)
+	funcs[0] = func(m *pb.HareMessage) bool { return false }
 	assert.False(t, validator.validateAggregatedMessage(agg, funcs))
 }
 
@@ -183,10 +183,10 @@ func TestMessageValidator_validateSVP(t *testing.T) {
 	assert.True(t, validator.validateSVP(m))
 }
 
-func buildSVP(ki int32, S... *Set) *pb.AggregatedMessages {
+func buildSVP(ki int32, S ...*Set) *pb.AggregatedMessages {
 	msgs := make([]*pb.HareMessage, 0, len(S))
 	for _, s := range S {
-		 msgs = append(msgs, buildStatusMsg(NewMockSigning(), s, ki))
+		msgs = append(msgs, buildStatusMsg(NewMockSigning(), s, ki))
 	}
 
 	svp := &pb.AggregatedMessages{}

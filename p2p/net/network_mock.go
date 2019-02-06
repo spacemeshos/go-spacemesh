@@ -119,7 +119,7 @@ func (n NetworkMock) PublishNewRemoteConnection(nce NewConnectionEvent) {
 }
 
 // SubscribeClosingConnections subscribes on new connections
-func (n *NetworkMock) SubscribeClosingConnections(f func(connection Connection) ) {
+func (n *NetworkMock) SubscribeClosingConnections(f func(connection Connection)) {
 	n.closingConn = append(n.closingConn, f)
 }
 

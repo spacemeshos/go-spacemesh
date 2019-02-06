@@ -163,7 +163,6 @@ func TestSingleValueForHonestSet(t *testing.T) {
 	test.WaitForTimedTermination(t, 30*time.Second)
 }
 
-
 func TestAllDifferentSet(t *testing.T) {
 	if skipBlackBox {
 		t.Skip()
@@ -241,7 +240,6 @@ func TestSndDelayedDishonest(t *testing.T) {
 	test.Start()
 	test.WaitForTimedTermination(t, 30*time.Second)
 }
-
 
 func TestRecvDelayedDishonest(t *testing.T) {
 	if testing.Short() {

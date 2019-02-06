@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	keySize = 32 // non-configurable, expected by NaCl
+	keySize   = 32 // non-configurable, expected by NaCl
 	nonceSize = 24 // non-configurable, expected by NaCl
 )
 

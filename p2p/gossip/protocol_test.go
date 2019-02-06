@@ -107,14 +107,13 @@ func (mbn *mockBaseNetwork) ProcessDirectProtocolMessage(sender p2pcrypto.Public
 
 func (mbn *mockBaseNetwork) ProcessGossipProtocolMessage(protocol string, data service.Data, validationCompletedChan chan service.MessageValidation) error {
 	mbn.processProtocolCount++
-	if (validationCompletedChan != nil) {
+	if validationCompletedChan != nil {
 		validationCompletedChan <- service.NewMessageValidation(data.Bytes(), protocol, mbn.isMessageValid)
 	}
 	time.Sleep(time.Millisecond) // context switch to allow gossip to handle the validation report
 	releaseWaiters(mbn.pcountwg)
 	return nil
 }
-
 
 func (mbn *mockBaseNetwork) addRandomPeers(cnt int) {
 	for i := 0; i < cnt; i++ {
@@ -138,7 +137,7 @@ func (mbn *mockBaseNetwork) totalMessageSent() int {
 
 type TestMessage struct {
 	sender p2pcrypto.PublicKey
-	data service.Data
+	data   service.Data
 }
 
 func (tm TestMessage) Sender() p2pcrypto.PublicKey {
@@ -272,7 +271,7 @@ func TestNeighborhood_Relay2(t *testing.T) {
 	n.Start()
 
 	msgB, _ := newTestMessageData(t, newPubkey(t), []byte("LOL1"), "protocol")
-	var msg service.DirectMessage = TestMessage{nil, 	service.DataBytes{msgB}}
+	var msg service.DirectMessage = TestMessage{nil, service.DataBytes{msgB}}
 	net.pcountwg.Add(1)
 	net.directInbox <- msg
 	passOrDeadlock(t, net.pcountwg)

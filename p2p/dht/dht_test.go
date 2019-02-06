@@ -23,7 +23,6 @@ func TestNew(t *testing.T) {
 	assert.NotNil(t, d, "D is not nil")
 }
 
-
 func bootstrapNetwork(t *testing.T, numPeers, connections int) (ids []string, dhts []*KadDHT) {
 	bncfg := config.DefaultConfig()
 	sim := service.NewSimulator()
@@ -92,15 +91,14 @@ func bootstrapNetwork(t *testing.T, numPeers, connections int) (ids []string, dh
 	return idstoFind, dhtsToLook
 }
 
-
 func TestKadDHT_EveryNodeIsInRoutingTableAndSelected(t *testing.T) {
 	numPeers := 100
 	connections := 10
 
-	idstoFind, dhtsToLook := bootstrapNetwork(t, numPeers , connections)
+	idstoFind, dhtsToLook := bootstrapNetwork(t, numPeers, connections)
 
 	var passed = make([]string, 0, numPeers)
-	NL:
+NL:
 	for n := range idstoFind { // iterate nodes
 		id := idstoFind[n]
 		for j := range dhtsToLook { // iterate all selected set
@@ -124,14 +122,13 @@ func TestKadDHT_EveryNodeIsInRoutingTableAndSelected(t *testing.T) {
 
 	selected := make(map[string][]node.Node)
 	// Test Selecting
-	for i :=0; i< len(dhtsToLook); i++ {
+	for i := 0; i < len(dhtsToLook); i++ {
 		selected[dhtsToLook[i].local.String()] = dhtsToLook[i].SelectPeers(connections)
 	}
 
-
 	// check everyone is selected
 	passed = make([]string, 0, numPeers)
-	NL2:
+NL2:
 	for n := range idstoFind { // iterate nodes
 		id := idstoFind[n]
 		for j := range selected { // iterate all selected set

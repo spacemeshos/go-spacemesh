@@ -18,11 +18,11 @@
 package trie
 
 import (
-	"fmt"
 	"bytes"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 var (

@@ -16,14 +16,14 @@ import (
 )
 
 const messageQBufferSize = 100
-const propagateHandleBufferSize = 1000 // number of MessageValidation that we alow buffering, above this number protocols will get stuck
+const propagateHandleBufferSize = 1000 // number of MessageValidation that we allow buffering, above this number protocols will get stuck
 
 const ProtocolName = "/p2p/1.0/gossip"
 const protocolVer = "0"
 
 type hash uint32
 
-// fnv.New32 must be used everytime to be sure we get consistent results.
+// fnv.New32 must be used every time to be sure we get consistent results.
 func calcHash(msg []byte, prot string) hash {
 	msghash := fnv.New32() // todo: Add nonce to messages instead
 	msghash.Write(msg)
@@ -156,6 +156,7 @@ func (prot *Protocol) markMessageAsOld(h hash) bool {
 }
 
 type Validity int
+
 const (
 	Valid Validity = iota
 	Invalid

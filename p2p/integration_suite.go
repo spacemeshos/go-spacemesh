@@ -24,14 +24,14 @@ type NodeTestInstance interface {
 type IntegrationTestSuite struct {
 	suite.Suite
 
-	BootstrapNodesCount int
+	BootstrapNodesCount   int
 	BootstrappedNodeCount int
-	NeighborsCount int
+	NeighborsCount        int
 
 	BeforeHook func(idx int, s NodeTestInstance)
-	AfterHook func(idx int, s NodeTestInstance)
+	AfterHook  func(idx int, s NodeTestInstance)
 
-	boot  []*swarm
+	boot      []*swarm
 	Instances []*swarm
 }
 
@@ -136,7 +136,7 @@ boots:
 				continue boots
 			}
 		}
-		e = append(e, f(i,s))
+		e = append(e, f(i, s))
 	}
 	return e
 }

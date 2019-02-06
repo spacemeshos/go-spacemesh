@@ -1,8 +1,8 @@
 package api
 
 import (
-	"github.com/spacemeshos/go-spacemesh/address"
 	"context"
+	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"math/big"
 )

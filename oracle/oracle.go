@@ -14,7 +14,7 @@ type BlockOracle interface {
 
 type blockOracle struct {
 	committeeSize int
-	oc *OracleClient
+	oc            *OracleClient
 }
 
 func NewBlockOracle(worldid uint64, committeeSize int, pubKey string) *blockOracle {

@@ -8,7 +8,6 @@ import (
 )
 
 type MockTimer struct {
-
 }
 
 func (MockTimer) Now() time.Time {
@@ -24,15 +23,15 @@ func TestTicker_StartClock(t *testing.T) {
 	str := "2018-11-12T11:45:26.371Z"
 	start, _ := time.Parse(layout, str)
 
-	ts := NewTicker(MockTimer{},tick, start)
+	ts := NewTicker(MockTimer{}, tick, start)
 	tk := ts.Subscribe()
 	then := time.Now()
 	ts.Start()
 
 	select {
-		case <-tk:
-			dur := time.Now().Sub(then)
-			assert.True(t, tick < dur)
+	case <-tk:
+		dur := time.Now().Sub(then)
+		assert.True(t, tick < dur)
 	}
 	ts.Stop()
 }
@@ -45,7 +44,7 @@ func TestTicker_StartClock_BeforeEpoch(t *testing.T) {
 	start, _ := time.Parse(layout, str)
 
 	waitTime := start.Sub(tmr.Now())
-	ts := NewTicker(tmr,tick, start)
+	ts := NewTicker(tmr, tick, start)
 	tk := ts.Subscribe()
 	then := time.Now()
 	ts.Start()
@@ -64,7 +63,7 @@ func TestTicker_StartClock_LayerID(t *testing.T) {
 	str := "2018-11-12T11:45:20.371Z"
 	start, _ := time.Parse(layout, str)
 
-	ts := NewTicker(MockTimer{},tick, start)
+	ts := NewTicker(MockTimer{}, tick, start)
 	ts.updateLayerID()
 	assert.Equal(t, mesh.LayerID(6), ts.currentLayer)
 	ts.Stop()

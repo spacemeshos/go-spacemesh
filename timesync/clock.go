@@ -5,18 +5,19 @@ import (
 	"sync"
 	"time"
 )
+
 //this package sends a tick each tickInterval to all consumers of the tick
 //This also send the current layerID which is calculated from the number of ticks passed since epoch
 type LayerTimer chan mesh.LayerID
 
 type Ticker struct {
-	subscribes []LayerTimer
+	subscribes   []LayerTimer
 	currentLayer mesh.LayerID
-	m sync.Mutex
+	m            sync.Mutex
 	tickInterval time.Duration
-	startEpoch time.Time
-	time Clock
-	stop chan struct{}
+	startEpoch   time.Time
+	time         Clock
+	stop         chan struct{}
 }
 
 type Clock interface {
@@ -25,24 +26,24 @@ type Clock interface {
 
 func NewTicker(time Clock, tickInterval time.Duration, startEpoch time.Time) *Ticker {
 	return &Ticker{
-		subscribes: make([]LayerTimer,0,0),
+		subscribes:   make([]LayerTimer, 0, 0),
 		currentLayer: 0,
-		tickInterval:tickInterval,
-		startEpoch:startEpoch,
-		time : time,
-		stop : make(chan struct{}),
+		tickInterval: tickInterval,
+		startEpoch:   startEpoch,
+		time:         time,
+		stop:         make(chan struct{}),
 	}
 }
 
-func (t *Ticker) Start(){
+func (t *Ticker) Start() {
 	go t.StartClock()
 }
 
-func (t *Ticker) Stop(){
+func (t *Ticker) Stop() {
 	close(t.stop)
 }
 
-func (t *Ticker) notifyOnTick(){
+func (t *Ticker) notifyOnTick() {
 	t.m.Lock()
 	for _, ch := range t.subscribes {
 		ch <- t.currentLayer
@@ -59,22 +60,22 @@ func (t *Ticker) Subscribe() LayerTimer {
 	return ch
 }
 
-func (t *Ticker) updateLayerID(){
+func (t *Ticker) updateLayerID() {
 	tksa := t.time.Now().Sub(t.startEpoch)
 	tks := (tksa / t.tickInterval).Nanoseconds()
 	//todo: need to unify all LayerIDs definitions and set them to uint64
 	t.currentLayer = mesh.LayerID(tks)
 }
 
-func (t *Ticker) StartClock(){
+func (t *Ticker) StartClock() {
 	if t.time.Now().Before(t.startEpoch) {
 		sleepTill := t.startEpoch.Sub(t.time.Now())
 		tmr := time.NewTimer(sleepTill)
 		select {
-			case <- tmr.C:
-				break
-			case <-t.stop:
-				return
+		case <-tmr.C:
+			break
+		case <-t.stop:
+			return
 		}
 	}
 
@@ -84,12 +85,12 @@ func (t *Ticker) StartClock(){
 	tick := time.NewTimer(t.tickInterval)
 	for {
 		select {
-			case <-tick.C:
-				t.currentLayer++
-				t.notifyOnTick()
-				tick.Reset(t.tickInterval)
-			case <-t.stop:
-				break
+		case <-tick.C:
+			t.currentLayer++
+			t.notifyOnTick()
+			tick.Reset(t.tickInterval)
+		case <-t.stop:
+			break
 		}
 	}
 }

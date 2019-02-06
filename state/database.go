@@ -22,7 +22,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/trie"
 	"sync"
-
 )
 
 // Trie cache generation limit after which to evict trie nodes from memory.
@@ -50,7 +49,6 @@ type Database interface {
 
 	// TrieDB retrieves the low level trie database used for data storage.
 	TrieDB() *trie.Database
-
 }
 
 // Trie is a Ethereum Merkle Trie.
@@ -71,14 +69,14 @@ type Trie interface {
 // high level trie abstraction.
 func NewDatabase(db database.Database) Database {
 	return &cachingDB{
-		db:            trie.NewDatabase(db),
+		db: trie.NewDatabase(db),
 	}
 }
 
 type cachingDB struct {
-	db            *trie.Database
-	mu            sync.Mutex
-	pastTries     []*trie.SecureTrie
+	db        *trie.Database
+	mu        sync.Mutex
+	pastTries []*trie.SecureTrie
 }
 
 // OpenTrie opens the main account trie.
@@ -126,8 +124,6 @@ func (db *cachingDB) CopyTrie(t Trie) Trie {
 		panic(fmt.Errorf("unknown trie type %T", t))
 	}
 }
-
-
 
 // TrieDB retrieves any intermediate trie-node caching layer.
 func (db *cachingDB) TrieDB() *trie.Database {

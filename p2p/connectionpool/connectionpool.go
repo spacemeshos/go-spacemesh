@@ -21,6 +21,7 @@ type networker interface {
 	NetworkID() int8
 	SubscribeClosingConnections(func( net.Connection))
 	Logger() log.Log
+
 }
 
 // ConnectionPool stores all net.Connections and make them available to all users of net.Connection.
@@ -41,14 +42,14 @@ type ConnectionPool struct {
 // NewConnectionPool creates new ConnectionPool
 func NewConnectionPool(network networker, lPub p2pcrypto.PublicKey) *ConnectionPool {
 	cPool := &ConnectionPool{
-		localPub:      lPub,
-		net:           network,
-		connections:   make(map[string]net.Connection),
-		connMutex:     sync.RWMutex{},
-		pending:       make(map[string][]chan dialResult),
-		pendMutex:     sync.Mutex{},
-		dialWait:      sync.WaitGroup{},
-		shutdown:      false,
+		localPub:    lPub,
+		net:         network,
+		connections: make(map[string]net.Connection),
+		connMutex:   sync.RWMutex{},
+		pending:     make(map[string][]chan dialResult),
+		pendMutex:   sync.Mutex{},
+		dialWait:    sync.WaitGroup{},
+		shutdown:    false,
 	}
 
 	return cPool
@@ -76,8 +77,8 @@ func (cp *ConnectionPool) isShuttingDown() bool {
 	return isd
 }
 
-// Shutdown of the ConnectionPool, gracefully.
-// - Close all open connections
+// Shutdown gracefully shuts down the ConnectionPool:
+// - Closes all open connections
 // - Waits for all Dial routines to complete and unblock any routines waiting for GetConnection
 func (cp *ConnectionPool) Shutdown() {
 	cp.connMutex.Lock()
@@ -175,7 +176,7 @@ func (cp *ConnectionPool) handleClosedConnection(conn net.Connection) {
 	cp.connMutex.Unlock()
 }
 
-// GetConnection fetchs or creates if don't exist a connection to the address which is associated with the remote public key
+// GetConnection fetches or creates if don't exist a connection to the address which is associated with the remote public key
 func (cp *ConnectionPool) GetConnection(address string, remotePub p2pcrypto.PublicKey) (net.Connection, error) {
 	cp.connMutex.RLock()
 	if cp.shutdown {

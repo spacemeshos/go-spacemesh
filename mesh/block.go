@@ -15,33 +15,33 @@ type BlockID uint32
 type LayerID uint32
 
 type Block struct {
-	Id          BlockID
-	LayerIndex  LayerID
-	MinerID string
-	Data        []byte
-	Coin        bool
-	Timestamp   int64
-	Txs         []SerializableTransaction
-	BlockVotes 	[]BlockID
-	ViewEdges   []BlockID
+	Id         BlockID
+	LayerIndex LayerID
+	MinerID    string
+	Data       []byte
+	Coin       bool
+	Timestamp  int64
+	Txs        []SerializableTransaction
+	BlockVotes []BlockID
+	ViewEdges  []BlockID
 }
 
-type SerializableTransaction struct{
-	AccountNonce 	uint64
-	Price			[]byte
-	GasLimit		uint64
-	Recipient 		*address.Address
-	Origin			address.Address //todo: remove this, should be calculated from sig.
-	Amount       	[]byte
-	Payload      	[]byte
+type SerializableTransaction struct {
+	AccountNonce uint64
+	Price        []byte
+	GasLimit     uint64
+	Recipient    *address.Address
+	Origin       address.Address //todo: remove this, should be calculated from sig.
+	Amount       []byte
+	Payload      []byte
 }
 
 func NewBlock(coin bool, data []byte, ts time.Time, layerId LayerID) *Block {
 	b := Block{
 		Id:         BlockID(uuid.New().ID()),
 		LayerIndex: layerId,
-		BlockVotes: make([]BlockID,0,10),
-		ViewEdges:  make([]BlockID,0,10),
+		BlockVotes: make([]BlockID, 0, 10),
+		ViewEdges:  make([]BlockID, 0, 10),
 		Timestamp:  ts.UnixNano(),
 		Data:       data,
 		Coin:       coin,
@@ -49,15 +49,15 @@ func NewBlock(coin bool, data []byte, ts time.Time, layerId LayerID) *Block {
 	return &b
 }
 
-func  NewSerializableTransaction(nonce uint64, origin, recepient address.Address, amount, price *big.Int, gasLimit uint64) *SerializableTransaction{
+func NewSerializableTransaction(nonce uint64, origin, recepient address.Address, amount, price *big.Int, gasLimit uint64) *SerializableTransaction {
 	return &SerializableTransaction{
 		AccountNonce: nonce,
-		Price:            price.Bytes(),
-		GasLimit:        gasLimit,
-		Recipient:        &recepient,
-		Origin:            origin,//todo: remove this, should be calculated from sig.
-		Amount:        amount.Bytes(),
-		Payload:        nil,
+		Price:        price.Bytes(),
+		GasLimit:     gasLimit,
+		Recipient:    &recepient,
+		Origin:       origin, //todo: remove this, should be calculated from sig.
+		Amount:       amount.Bytes(),
+		Payload:      nil,
 	}
 }
 
@@ -69,17 +69,17 @@ func (b Block) Layer() LayerID {
 	return b.LayerIndex
 }
 
-func (b *Block) AddVote(id BlockID){
+func (b *Block) AddVote(id BlockID) {
 	//todo: do this in a sorted manner
 	b.BlockVotes = append(b.BlockVotes, id)
 }
 
-func (b *Block) AddView(id BlockID){
+func (b *Block) AddView(id BlockID) {
 	//todo: do this in a sorted manner
 	b.ViewEdges = append(b.ViewEdges, id)
 }
 
-func (b *Block) AddTransaction(sr *SerializableTransaction){
+func (b *Block) AddTransaction(sr *SerializableTransaction) {
 	b.Txs = append(b.Txs, *sr)
 }
 
@@ -105,7 +105,7 @@ func (l *Layer) AddBlock(block *Block) {
 	l.blocks = append(l.blocks, block)
 }
 
-func (l *Layer) SetBlocks(blocks []*Block){
+func (l *Layer) SetBlocks(blocks []*Block) {
 	l.blocks = blocks
 }
 
@@ -125,11 +125,11 @@ func BlockAsBytes(block Block) ([]byte, error) {
 	return w.Bytes(), nil
 }
 
-func BytesAsBlock(buf io.Reader) (Block, error){
+func BytesAsBlock(buf io.Reader) (Block, error) {
 	b := Block{}
 	_, err := xdr.Unmarshal(buf, &b)
 	if err != nil {
-		return b,err
+		return b, err
 	}
 	return b, nil
 }
@@ -142,11 +142,11 @@ func TransactionAsBytes(tx *SerializableTransaction) ([]byte, error) {
 	return w.Bytes(), nil
 }
 
-func BytesAsTransaction(buf io.Reader) (*SerializableTransaction, error){
+func BytesAsTransaction(buf io.Reader) (*SerializableTransaction, error) {
 	b := SerializableTransaction{}
 	_, err := xdr.Unmarshal(buf, &b)
 	if err != nil {
-		return &b,err
+		return &b, err
 	}
 	return &b, nil
 }
@@ -154,8 +154,8 @@ func BytesAsTransaction(buf io.Reader) (*SerializableTransaction, error){
 func NewExistingBlock(id BlockID, layerIndex LayerID, data []byte) *Block {
 	b := Block{
 		Id:         BlockID(id),
-		BlockVotes: make([]BlockID,0,10),
-		ViewEdges:  make([]BlockID,0,10),
+		BlockVotes: make([]BlockID, 0, 10),
+		ViewEdges:  make([]BlockID, 0, 10),
 		LayerIndex: LayerID(layerIndex),
 		Data:       data,
 	}
@@ -164,9 +164,7 @@ func NewExistingBlock(id BlockID, layerIndex LayerID, data []byte) *Block {
 
 func NewLayer(layerIndex LayerID) *Layer {
 	return &Layer{
-		index: layerIndex,
-		blocks:make([]*Block, 0, 10),
+		index:  layerIndex,
+		blocks: make([]*Block, 0, 10),
 	}
 }
-
-

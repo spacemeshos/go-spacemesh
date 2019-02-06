@@ -23,9 +23,7 @@ import (
 
 	"math/big"
 	"testing"
-
 	//check "gopkg.in/check.v1"
-
 )
 
 // Tests that updating a state trie does not leak any database writes prior to
@@ -146,9 +144,6 @@ func TestCopy(t *testing.T) {
 		}
 	}
 }
-
-
-
 
 // TestCopyOfCopy tests that modified objects are carried over to the copy, and the copy of the copy.
 // See https://github.com/ethereum/go-ethereum/pull/15225#issuecomment-380191512

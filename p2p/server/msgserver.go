@@ -5,7 +5,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-    "runtime"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -40,7 +40,7 @@ type MessageServer struct {
 	ingressChannel     chan service.DirectMessage              //chan to relay messages into the server
 	requestLifetime    time.Duration                           //time a request can stay in the pending queue until evicted
 	workerCount        sync.WaitGroup
-    workerLimiter      chan int
+	workerLimiter      chan int
 	exit               chan struct{}
 }
 
@@ -51,11 +51,11 @@ func NewMsgServer(network Service, name string, requestLifetime time.Duration, c
 		resHandlers:        make(map[uint64]func(msg []byte)),
 		pendingQueue:       list.New(),
 		network:            network,
-        ingressChannel:     network.RegisterDirectProtocolWithChannel(name, c),
+		ingressChannel:     network.RegisterDirectProtocolWithChannel(name, c),
 		msgRequestHandlers: make(map[MessageType]func(msg []byte) []byte),
 		requestLifetime:    requestLifetime,
 		exit:               make(chan struct{}),
-        workerLimiter:      make(chan int, runtime.NumCPU()),
+		workerLimiter:      make(chan int, runtime.NumCPU()),
 	}
 
 	go p.readLoop()
@@ -84,12 +84,12 @@ func (p *MessageServer) readLoop() {
 				break
 			}
 
-            p.workerLimiter <- 1
+			p.workerLimiter <- 1
 			p.workerCount.Add(1)
 			go func() {
 				defer p.workerCount.Done()
 				p.handleMessage(msg.(Message))
-                <-p.workerLimiter
+				<-p.workerLimiter
 			}()
 
 		}

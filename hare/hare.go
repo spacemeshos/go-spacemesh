@@ -49,7 +49,7 @@ type Hare struct {
 
 	broker *Broker
 
-	sign   Signing
+	sign Signing
 
 	obp     orphanBlockProvider
 	rolacle Rolacle

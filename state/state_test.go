@@ -23,9 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"math/big"
 	"testing"
-
-
-//	checker "gopkg.in/check.v1"
+	//	checker "gopkg.in/check.v1"
 )
 
 type StateSuite struct {
@@ -76,7 +74,7 @@ func TestDump(t *testing.T) {
 	}
 }
 
-func TestLookupPastState(t *testing.T){
+func TestLookupPastState(t *testing.T) {
 	s := &StateSuite{}
 	s.db = database.NewMemDatabase()
 	sdb := NewDatabase(s.db)
@@ -86,25 +84,23 @@ func TestLookupPastState(t *testing.T){
 	obj1.AddBalance(big.NewInt(22))
 
 	oldState, err := s.state.Commit(false)
-	assert.NoError(t,err)
+	assert.NoError(t, err)
 
 	obj1.AddBalance(big.NewInt(10))
-	_ ,err = s.state.Commit(false)
-	assert.NoError(t,err)
-
-	oldSt, err  := New(oldState, sdb)
+	_, err = s.state.Commit(false)
 	assert.NoError(t, err)
-	assert.Equal(t, oldSt.GetBalance(toAddr([]byte{0x01})),  big.NewInt(22) )
-	assert.Equal(t, s.state.GetBalance(toAddr([]byte{0x01})),  big.NewInt(32) )
+
+	oldSt, err := New(oldState, sdb)
+	assert.NoError(t, err)
+	assert.Equal(t, oldSt.GetBalance(toAddr([]byte{0x01})), big.NewInt(22))
+	assert.Equal(t, s.state.GetBalance(toAddr([]byte{0x01})), big.NewInt(32))
 
 }
-
 
 func (s *StateSuite) SetUpTest(t *testing.T) {
 	s.db = database.NewMemDatabase()
 	s.state, _ = New(common.Hash{}, NewDatabase(s.db))
 }
-
 
 func compareStateObjects(so0, so1 *StateObj, t *testing.T) {
 	if so0.Address() != so1.Address() {
