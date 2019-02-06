@@ -93,7 +93,6 @@ func NewNinjaTortoise(layerSize uint32) *ninjaTortoise {
 		Log:                log.New("optimized tortoise ", "", ""),
 		LayerSize:          layerSize,
 		pBase:              votingPattern{},
-		BlockVoteMap:       map[mesh.BlockID]map[mesh.LayerID]votingPattern{},
 		blocks:             map[mesh.BlockID]*mesh.Block{},
 		tEffective:         map[mesh.BlockID]votingPattern{},
 		tCorrect:           map[mesh.BlockID]map[votingPattern]vec{},
@@ -131,8 +130,8 @@ func TestNinjaTortoise_Sanity1(t *testing.T) {
 		for b, vec := range alg.tTally[alg.pBase] {
 			alg.Debug("------> tally for block %d according to complete pattern %d are %d", b, alg.pBase, vec)
 		}
-		assert.True(t, alg.tTally[alg.pBase][genesisId] == vec{patternSize + patternSize*i, 0},
-			"lyr %d tally was %d insted of %d", lyr.Index(), alg.tTally[alg.pBase][genesisId], vec{patternSize + patternSize*i, 0})
+		res := vec{0, patternSize + patternSize*i}
+		assert.True(t, alg.tTally[alg.pBase][genesisId] == res, "lyr %d tally was %d insted of %d", lyr.Index(), alg.tTally[alg.pBase][genesisId], res)
 	}
 }
 
@@ -157,8 +156,8 @@ func TestNinjaTortoise_Sanity2(t *testing.T) {
 		for b, vec := range alg.tTally[alg.pBase] {
 			alg.Debug("------> tally for block %d according to complete pattern %d are %d", b, alg.pBase, vec)
 		}
-		assert.True(t, alg.tTally[alg.pBase][genesisId] == vec{patternSize + patternSize*i, 0},
-			"lyr %d tally was %d insted of %d", lyr.Index(), alg.tTally[alg.pBase][genesisId], vec{patternSize + patternSize*i, 0})
+		res := vec{0, patternSize + patternSize*i}
+		assert.True(t, alg.tTally[alg.pBase][genesisId] == res, "lyr %d tally was %d insted of %d", lyr.Index(), alg.tTally[alg.pBase][genesisId], res)
 	}
 }
 
