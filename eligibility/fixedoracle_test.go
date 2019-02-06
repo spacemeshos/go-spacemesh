@@ -26,7 +26,7 @@ func genStr() string {
 }
 
 func TestFixedRolacle_Eligible(t *testing.T) {
-	oracle := newFixedRolacle()
+	oracle := New()
 	for i := 0; i < numOfClients-1; i++ {
 		oracle.Register(true, genStr())
 	}
@@ -39,7 +39,7 @@ func TestFixedRolacle_Eligible(t *testing.T) {
 
 func TestFixedRolacle_Eligible2(t *testing.T) {
 	pubs := make([]string, 0, numOfClients)
-	oracle := newFixedRolacle()
+	oracle := New()
 	for i := 0; i < numOfClients; i++ {
 		s := genStr()
 		pubs = append(pubs, s)
@@ -66,7 +66,7 @@ func TestFixedRolacle_Eligible2(t *testing.T) {
 }
 
 func TestFixedRolacle_Range(t *testing.T) {
-	oracle := newFixedRolacle()
+	oracle := New()
 	pubs := make([]string, 0, numOfClients)
 	for i := 0; i < numOfClients; i++ {
 		s := genStr()
@@ -96,7 +96,7 @@ func TestFixedRolacle_Range(t *testing.T) {
 }
 
 func TestFixedRolacle_Eligible3(t *testing.T) {
-	oracle := newFixedRolacle()
+	oracle := New()
 	for i := 0; i < numOfClients/3; i++ {
 		s := genStr()
 		oracle.Register(true, s)
