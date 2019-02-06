@@ -3,6 +3,7 @@ package gossip
 import (
 	"errors"
 	"fmt"
+	"github.com/btcsuite/btcutil/base58"
 	"github.com/golang/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
@@ -285,7 +286,7 @@ func (prot *Protocol) processMessage(msg *pb.ProtocolMessage) {
 			return
 		}
 	} else {
-		prot.Log.With().Info("new_gossip_message", log.String("from", string(msg.Metadata.AuthPubkey)), log.String("protocol", protocol))
+		prot.Log.With().Info("new_gossip_message", log.String("from", base58.Encode(msg.Metadata.AuthPubkey)), log.String("protocol", protocol))
 		err := prot.net.ProcessGossipProtocolMessage(protocol, data, prot.propagateQ)
 		if err != nil {
 			prot.Log.Error("failed to process protocol message. protocol = %v err = %v", protocol, err)
