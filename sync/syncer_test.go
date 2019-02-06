@@ -19,7 +19,7 @@ import (
 var conf = Configuration{2, 1 * time.Second, 1, 300, 10 * time.Millisecond}
 
 const (
-	levelDB = "LevelDB"
+	levelDB  = "LevelDB"
 	memoryDB = "MemoryDB"
 )
 
@@ -340,14 +340,12 @@ loop:
 	}
 }
 
-
 func TestSyncProtocol_PersistenceIntegration(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
 	syncTest(levelDB, t)
 }
-
 
 func TestSyncProtocol_SyncMultipleNodes(t *testing.T) {
 	syncTest(memoryDB, t)

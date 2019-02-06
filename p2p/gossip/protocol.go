@@ -3,6 +3,7 @@ package gossip
 import (
 	"errors"
 	"fmt"
+	"github.com/btcsuite/btcutil/base58"
 	"github.com/golang/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
@@ -15,14 +16,14 @@ import (
 )
 
 const messageQBufferSize = 100
-const propagateHandleBufferSize = 1000 // number of MessageValidation that we alow buffering, above this number protocols will get stuck
+const propagateHandleBufferSize = 1000 // number of MessageValidation that we allow buffering, above this number protocols will get stuck
 
 const ProtocolName = "/p2p/1.0/gossip"
 const protocolVer = "0"
 
 type hash uint32
 
-// fnv.New32 must be used everytime to be sure we get consistent results.
+// fnv.New32 must be used every time to be sure we get consistent results.
 func calcHash(msg []byte, prot string) hash {
 	msghash := fnv.New32() // todo: Add nonce to messages instead
 	msghash.Write(msg)
@@ -155,6 +156,7 @@ func (prot *Protocol) markMessageAsOld(h hash) bool {
 }
 
 type Validity int
+
 const (
 	Valid Validity = iota
 	Invalid
@@ -284,6 +286,7 @@ func (prot *Protocol) processMessage(msg *pb.ProtocolMessage) {
 			return
 		}
 	} else {
+		prot.Log.With().Info("new_gossip_message", log.String("from", base58.Encode(msg.Metadata.AuthPubkey)), log.String("protocol", protocol))
 		err := prot.net.ProcessGossipProtocolMessage(protocol, data, prot.propagateQ)
 		if err != nil {
 			prot.Log.Error("failed to process protocol message. protocol = %v err = %v", protocol, err)

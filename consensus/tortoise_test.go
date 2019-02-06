@@ -43,7 +43,7 @@ func createFullPointingLayer(prev *mesh.Layer, blocksInLayer int) *mesh.Layer {
 	coin := false
 	// just some random Data
 	data := []byte(crypto.UUIDString())
-	l := mesh.NewLayer(prev.Index() +1 )
+	l := mesh.NewLayer(prev.Index() + 1)
 	for i := 0; i < blocksInLayer; i++ {
 		bl := mesh.NewBlock(coin, data, ts, 1)
 

@@ -95,8 +95,12 @@ func EnsureCLIFlags(cmd *cobra.Command, appcfg *cfg.Config) {
 		if f.Changed {
 			name := f.Name
 
-			ff := reflect.TypeOf(*appcfg)
-			elem := reflect.ValueOf(&appcfg).Elem()
+			ff := reflect.TypeOf(appcfg.BaseConfig)
+			elem := reflect.ValueOf(&appcfg.BaseConfig).Elem()
+			assignFields(ff, elem, name)
+
+			ff = reflect.TypeOf(*appcfg)
+			elem = reflect.ValueOf(&appcfg).Elem()
 			assignFields(ff, elem, name)
 
 			ff = reflect.TypeOf(appcfg.API)
@@ -197,6 +201,11 @@ func (app *SpacemeshApp) before(cmd *cobra.Command, args []string) (err error) {
 // setupLogging configured the app logging system.
 func (app *SpacemeshApp) setupLogging() {
 
+	if app.Config.TestMode {
+		log.DebugMode(true)
+		log.JSONLog(true)
+	}
+
 	// setup logging early
 	dataDir, err := filesystem.GetSpacemeshDataDirectoryPath()
 	if err != nil {
@@ -253,13 +262,14 @@ func (app *SpacemeshApp) startSpacemesh(cmd *cobra.Command, args []string) {
 		panic("Error starting p2p services")
 	}
 
+	app.P2P = swarm
+
 	if app.Config.TestMode {
 		app.setupTestFeatures()
 	}
 
 	// todo : register all protocols
 
-	app.P2P = swarm
 	err = app.P2P.Start()
 
 	if err != nil {
@@ -273,7 +283,7 @@ func (app *SpacemeshApp) startSpacemesh(cmd *cobra.Command, args []string) {
 
 	//rng := rand.New(mt19937.New())
 
-	db, _ := database.NewLDBDatabase("state", 0,0)
+	db, _ := database.NewLDBDatabase("state", 0, 0)
 
 	st, _ := state.New(common.Hash{}, state.NewDatabase(db))
 

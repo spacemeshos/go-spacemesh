@@ -39,7 +39,7 @@ func TestReceiveError(t *testing.T) {
 
 	var wg sync.WaitGroup
 	wg.Add(1)
-	netw.SubscribeClosingConnections(func (closedConn Connection) {
+	netw.SubscribeClosingConnections(func(closedConn Connection) {
 		assert.Equal(t, conn.id, closedConn.ID())
 		wg.Done()
 	})
@@ -49,7 +49,7 @@ func TestReceiveError(t *testing.T) {
 	rwcam.SetReadResult([]byte{}, fmt.Errorf("fail"))
 	wg.Wait()
 
-	}
+}
 
 func TestSendError(t *testing.T) {
 	netw := NewNetworkMock()
@@ -88,7 +88,7 @@ func TestPreSessionError(t *testing.T) {
 
 	var wg sync.WaitGroup
 	wg.Add(1)
-	netw.SubscribeClosingConnections(func (closedConn Connection) {
+	netw.SubscribeClosingConnections(func(closedConn Connection) {
 		assert.Equal(t, conn.id, closedConn.ID())
 		wg.Done()
 	})
@@ -108,7 +108,7 @@ func TestErrClose(t *testing.T) {
 
 	var wg sync.WaitGroup
 	wg.Add(1)
-	netw.SubscribeClosingConnections(func (closedConn Connection) {
+	netw.SubscribeClosingConnections(func(closedConn Connection) {
 		assert.Equal(t, conn.id, closedConn.ID())
 		wg.Done()
 	})
@@ -146,7 +146,7 @@ func TestDoubleClose(t *testing.T) {
 	assert.Equal(t, 1, rwcam.CloseCount())
 	conn.Close()
 
-	time.Sleep(100*time.Millisecond) // just check that we don't panic
+	time.Sleep(100 * time.Millisecond) // just check that we don't panic
 }
 
 func TestGettersToBoostCoverage(t *testing.T) {

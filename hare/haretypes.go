@@ -92,7 +92,7 @@ func NewEmptySet(expectedSize int) *Set {
 }
 
 // Constructs an empty set
-func NewSetFromValues(values... Value) *Set {
+func NewSetFromValues(values ...Value) *Set {
 	s := &Set{}
 	s.values = make(map[uint32]Value, len(values))
 	for _, v := range values {

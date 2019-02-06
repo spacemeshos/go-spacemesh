@@ -2,15 +2,15 @@ package dht
 
 import (
 	"context"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 )
 
 // MockDHT is a mocked dht
 type MockDHT struct {
 	UpdateFunc         func(n node.Node)
 	updateCount        int
-	SelectPeersFunc func(qty int) []node.Node
+	SelectPeersFunc    func(qty int) []node.Node
 	bsres              error
 	bsCount            int
 	InternalLookupFunc func(dhtid node.DhtID) []node.Node
@@ -74,7 +74,6 @@ func (m *MockDHT) Bootstrap(ctx context.Context) error {
 	m.bsCount++
 	return m.bsres
 }
-
 
 // SelectPeers mocks selecting peers.
 func (m *MockDHT) SelectPeers(qty int) []node.Node {

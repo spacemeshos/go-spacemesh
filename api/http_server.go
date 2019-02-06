@@ -64,7 +64,7 @@ func (s JSONHTTPServer) startInternal(status chan bool) {
 
 	fl := flag.Lookup(endpoint)
 	if fl != nil {
-		flag.Set(endpoint,"localhost:"+portStr)
+		flag.Set(endpoint, "localhost:"+portStr)
 		echoEndpoint = fl.Value.String()
 	} else {
 		echoEndpoint = *flag.String(endpoint, "localhost:"+portStr, "endpoint of api grpc service")

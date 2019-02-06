@@ -22,9 +22,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/database"
 
-	"github.com/spacemeshos/go-spacemesh/rlp"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/rlp"
 )
 
 // Prove constructs a merkle proof for key. The result contains all encoded nodes

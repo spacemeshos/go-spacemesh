@@ -68,7 +68,7 @@ func (his *hareIntegrationThreeNodes) Test_16Nodes_AllHonest() {
 		proc.Start()
 	}
 
-	his.WaitForTimedTermination(his.T(), 60 * time.Second)
+	his.WaitForTimedTermination(his.T(), 60*time.Second)
 }
 
 // Test 2: 20 nodes sanity
@@ -121,6 +121,5 @@ func (his *hareIntegration20Nodes) Test_20Nodes_AllHonest() {
 		proc.Start()
 	}
 
-	his.WaitForTimedTermination(his.T(), 120 * time.Second)
+	his.WaitForTimedTermination(his.T(), 120*time.Second)
 }
-

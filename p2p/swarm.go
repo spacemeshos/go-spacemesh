@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/golang/protobuf/proto"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/connectionpool"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht"
@@ -45,7 +46,7 @@ func (pm directProtocolMessage) Bytes() []byte {
 }
 
 type gossipProtocolMessage struct {
-	data   service.Data
+	data           service.Data
 	validationChan chan service.MessageValidation
 }
 
@@ -192,7 +193,7 @@ func newSwarm(ctx context.Context, config config.Config, newNode bool, persist b
 	s.network.SubscribeOnNewRemoteConnections(cpool.OnNewConnection)
 	s.network.SubscribeClosingConnections(cpool.OnClosedConnection)
 
-	s.cPool	= cpool
+	s.cPool = cpool
 
 	s.gossip = gossip.NewProtocol(config.SwarmConfig, s, s.LocalNode().PublicKey(), s.lNode.Log)
 
@@ -235,7 +236,9 @@ func (s *swarm) Start() error {
 				return
 			}
 			close(s.bootChan)
-			s.lNode.Info("DHT Bootstrapped with %d peers in %v", s.dht.Size(), time.Since(b))
+			dhtsize := s.dht.Size()
+			s.lNode.With().Info("discovery_bootstrap", log.Bool("succeess", dhtsize > s.config.SwarmConfig.RandomConnections && s.bootErr != nil),
+				log.Int("dht_size", dhtsize), log.Duration("time_elapsed", time.Since(b)))
 		}()
 	}
 
@@ -378,19 +381,18 @@ func (s *swarm) processMessage(ime net.IncomingMessageEvent) {
 
 	err := s.onRemoteClientMessage(ime)
 	if err != nil {
-		s.lNode.Errorf("Err reading message from %v, closing connection err=%v", ime.Conn.RemotePublicKey(), err)
+		s.lNode.Error("Err reading message from %v, closing connection err=%v", ime.Conn.RemotePublicKey(), err)
 		ime.Conn.Close()
 		// TODO: differentiate action on errors
 	}
 }
 
-
 // RegisterProtocolWithChannel configures and returns a channel for a given protocol.
 func (s *swarm) RegisterDirectProtocolWithChannel(protocol string, ingressChannel chan service.DirectMessage) chan service.DirectMessage {
-        s.protocolHandlerMutex.Lock()
-        s.directProtocolHandlers[protocol] = ingressChannel
-        s.protocolHandlerMutex.Unlock()
-        return ingressChannel
+	s.protocolHandlerMutex.Lock()
+	s.directProtocolHandlers[protocol] = ingressChannel
+	s.protocolHandlerMutex.Unlock()
+	return ingressChannel
 }
 
 // listenToNetworkMessages is waiting for network events from net as new connections or messages and handles them.
@@ -503,7 +505,7 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 	pm := &pb.ProtocolMessage{}
 	err = proto.Unmarshal(decPayload, pm)
 	if err != nil {
-		s.lNode.Errorf("proto marshaling err=", err)
+		s.lNode.Error("proto marshaling err=", err)
 		return ErrBadFormat2
 	}
 
@@ -726,7 +728,7 @@ loop:
 			}
 
 			s.outpeersMutex.Lock()
-			if _,ok := s.outpeers[pkstr]; ok {
+			if _, ok := s.outpeers[pkstr]; ok {
 				s.outpeersMutex.Unlock()
 				s.lNode.Debug("selected an already outbound peer. not counting that peer.", cne.n.String())
 				bad++

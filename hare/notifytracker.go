@@ -9,8 +9,8 @@ import (
 
 type NotifyTracker struct {
 	notifies     map[string]struct{} // tracks PubKey->Notification
-	tracker      *RefCountTracker           // tracks ref count to each seen set
-	certificates map[uint32]struct{}        // tracks Set->certificate
+	tracker      *RefCountTracker    // tracks ref count to each seen set
+	certificates map[uint32]struct{} // tracks Set->certificate
 }
 
 func NewNotifyTracker(expectedSize int) *NotifyTracker {

@@ -283,7 +283,7 @@ func (db *Database) insert(hash common.Hash, blob []byte, node node) {
 	// Create the cached entry for this node
 	entry := &cachedNode{
 		node:      simplifyNode(node),
-		size:       uint16(len(blob)),
+		size:      uint16(len(blob)),
 		flushPrev: db.newest,
 	}
 	for _, child := range entry.childs() {
@@ -429,7 +429,6 @@ func (db *Database) Dereference(root common.Hash) {
 	db.gcnodes += uint64(nodes - len(db.nodes))
 	db.gcsize += storage - db.nodesSize
 	db.gctime += time.Since(start)
-
 
 	log.Debug("Dereferenced trie from memory database", "nodes", nodes-len(db.nodes), "size", storage-db.nodesSize, "time", time.Since(start),
 		"gcnodes", db.gcnodes, "gcsize", db.gcsize, "gctime", db.gctime, "livenodes", len(db.nodes), "livesize", db.nodesSize)
@@ -629,7 +628,6 @@ func (db *Database) Commit(node common.Hash, report bool) error {
 	db.preimagesSize = 0
 
 	db.uncache(node)
-
 
 	logger := log.Info
 	if !report {

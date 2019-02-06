@@ -16,6 +16,7 @@ require (
 	github.com/kr/pretty v0.1.0 // indirect
 	github.com/onsi/ginkgo v1.7.0 // indirect
 	github.com/onsi/gomega v1.4.3 // indirect
+	github.com/pkg/errors v0.8.1 // indirect
 	github.com/seehuhn/mt19937 v0.0.0-20180715112136-cc7708819361
 	github.com/spf13/afero v1.2.0 // indirect
 	github.com/spf13/cobra v0.0.3
@@ -23,6 +24,9 @@ require (
 	github.com/spf13/viper v1.3.1
 	github.com/stretchr/testify v1.2.2
 	github.com/syndtr/goleveldb v0.0.0-20181128100959-b001fa50d6b2
+	go.uber.org/atomic v1.3.2 // indirect
+	go.uber.org/multierr v1.1.0 // indirect
+	go.uber.org/zap v1.9.1
 	golang.org/x/crypto v0.0.0-20190102171810-8d7daa0c54b3
 	golang.org/x/net v0.0.0-20181220203305-927f97764cc3
 	golang.org/x/sync v0.0.0-20181221193216-37e7f081c4d4
@@ -31,5 +35,4 @@ require (
 	google.golang.org/grpc v1.17.0
 	gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
-	gopkg.in/op/go-logging.v1 v1.0.0-20160211212156-b2cb9fa56473
 )
