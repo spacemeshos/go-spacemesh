@@ -2,7 +2,6 @@ package consensus
 
 import (
 	"container/list"
-	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -74,21 +73,18 @@ func (vp votingPattern) Layer() mesh.LayerID {
 //todo memory optimizations
 type ninjaTortoise struct {
 	log.Log
-	LayerSize  uint32
-	pBase      votingPattern
-	tExplicit  map[mesh.BlockID]map[mesh.LayerID]votingPattern //Explicit voting , Implicit votes is derived from the view of the latest Explicit voting pattern
-	blocks     map[mesh.BlockID]*mesh.Block
-	tEffective map[mesh.BlockID]votingPattern         //Explicit voting pattern of latest layer for a block
-	tCorrect   map[mesh.BlockID]map[votingPattern]vec //correction vectors
-
-	layerBlocks map[mesh.LayerID][]mesh.BlockID
-	//tExplicit   map[mesh.BlockID]map[mesh.LayerID]votingPattern // explict votes from block to layer pattern
-	tGood map[mesh.LayerID]votingPattern // good pattern for layer i
-
-	tSupport           map[votingPattern]int                  //for pattern p the number of blocks that support p
-	tPattern           map[votingPattern][]mesh.BlockID       // set of blocks that comprise pattern p
-	tVote              map[votingPattern]map[mesh.BlockID]vec // global opinion
-	tTally             map[votingPattern]map[mesh.BlockID]vec //for pattern p and block b count votes for b according to p
+	LayerSize          uint32
+	pBase              votingPattern
+	blocks             map[mesh.BlockID]*mesh.Block
+	layerBlocks        map[mesh.LayerID][]mesh.BlockID
+	tEffective         map[mesh.BlockID]votingPattern                  //Explicit voting pattern of latest layer for a block
+	tGood              map[mesh.LayerID]votingPattern                  // good pattern for layer i
+	tCorrect           map[mesh.BlockID]map[votingPattern]vec          //correction vectors
+	tExplicit          map[mesh.BlockID]map[mesh.LayerID]votingPattern // explict votes from block to layer pattern
+	tSupport           map[votingPattern]int                           //for pattern p the number of blocks that support p
+	tPattern           map[votingPattern][]mesh.BlockID                // set of blocks that comprise pattern p
+	tVote              map[votingPattern]map[mesh.BlockID]vec          // global opinion
+	tTally             map[votingPattern]map[mesh.BlockID]vec          //for pattern p and block b count votes for b according to p
 	tComplete          map[votingPattern]struct{}
 	tEffectiveToBlocks map[votingPattern][]mesh.BlockID
 	tPatSupport        map[votingPattern]map[mesh.LayerID]votingPattern
@@ -298,10 +294,6 @@ func (ni *ninjaTortoise) updateBlocksSupport(b []*mesh.Block, j mesh.LayerID) ma
 		p, found := ni.tExplicit[block.ID()][j]
 		if found {
 			//explicit
-			//if _, expFound := ni.tExplicit[block.ID()]; !expFound {
-			//	ni.tExplicit[block.ID()] = make(map[mesh.LayerID]votingPattern, K*ni.LayerSize)
-			//}
-			//ni.tExplicit[block.ID()][j] = p
 			ni.tSupport[p]++         //add to supporting patterns
 			sUpdated[p] = struct{}{} //add to updated patterns
 
@@ -399,39 +391,36 @@ func (ni *ninjaTortoise) HandleIncomingLayer(newlyr *mesh.Layer) mesh.LayerID { 
 		if p, gfound := ni.tGood[j]; gfound {
 			//init p's tally to pBase tally
 			initTallyToBase(ni.tTally, ni.pBase, p)
-			//update correction vectors after vote count
+
+			//find bottom of window
 			var windowStart mesh.LayerID
 			if Window > newlyr.Index() {
 				windowStart = 0
 			} else {
 				windowStart = newlyr.Index() - Window
 			}
+
+			//update correction vectors after vote count
 			ni.updateCorrectionVectors(p, windowStart)
+
 			//update pattern tally for each good layer on the way
-			// for each block in p's view add the pattern votes
-			//update vote for each block between bottom of window  to p
+			//for each block in p's view add the pattern votes
+			//update vote for each block between bottom of window to p
 			ni.updatePatternTally(p, windowStart)
 
 			layerViewCounter := forBlockInView(ni.tPattern[p], ni.blocks, ni.pBase.Layer()+1, ni.addPatternVote(p))
 			complete := true
-
 			for idx := windowStart; idx < j; idx++ {
 				layer, _ := ni.layerBlocks[windowStart]
 				bids := make([]mesh.BlockID, 0, ni.LayerSize)
 				for _, bid := range layer {
-
 					//if bid is not in p's view.
 					// add negative vote multiplied by the amount of blocks in the view
 					if _, found := ni.tTally[p][bid]; !found {
 						ni.tTally[p][bid] = sumNodesInView(layerViewCounter, windowStart, p.Layer())
 					}
 
-					v, found := ni.tTally[p][bid]
-					if !found {
-						ni.Error(fmt.Sprintf("%d not in %d view ", bid, p))
-					}
-
-					if vote := globalOpinion(v, ni.LayerSize, float64(p.LayerID-windowStart)); vote != Abstain {
+					if vote := globalOpinion(ni.tTally[p][bid], ni.LayerSize, float64(p.LayerID-windowStart)); vote != Abstain {
 						if val, found := ni.tVote[p]; !found || val == nil {
 							ni.tVote[p] = make(map[mesh.BlockID]vec)
 						}
