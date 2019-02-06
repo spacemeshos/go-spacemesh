@@ -11,7 +11,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/version"
-	"gopkg.in/op/go-logging.v1"
 	"net"
 	"strconv"
 	"strings"
@@ -49,7 +48,7 @@ type ManagedConnection interface {
 type Net struct {
 	networkID int8
 	localNode *node.LocalNode
-	logger    *logging.Logger
+	logger    log.Log
 
 	tcpListener      net.Listener
 	tcpListenAddress *net.TCPAddr // Address to open connection: localhost:9999\
@@ -89,7 +88,7 @@ func NewNet(conf config.Config, localEntity *node.LocalNode) (*Net, error) {
 	n := &Net{
 		networkID:             conf.NetworkID,
 		localNode:             localEntity,
-		logger:                localEntity.Logger,
+		logger:                localEntity.Log,
 		tcpListenAddress:      tcpAddress,
 		regNewRemoteConn:      make([]func(NewConnectionEvent), 0, 3),
 		closingConnections:    make([]func(Connection), 0, 3),
@@ -114,7 +113,7 @@ func NewNet(conf config.Config, localEntity *node.LocalNode) (*Net, error) {
 }
 
 // Logger returns a reference to logger
-func (n *Net) Logger() *logging.Logger {
+func (n *Net) Logger() log.Log {
 	return n.logger
 }
 
@@ -256,13 +255,13 @@ func (n *Net) listen() error {
 }
 
 func (n *Net) acceptTCP() {
+	n.logger.Debug("Waiting for incoming connections...")
 	for {
-		n.logger.Debug("Waiting for incoming connections...")
 		netConn, err := n.tcpListener.Accept()
 		if err != nil {
 
 			if !n.isShuttingDown {
-				log.Error("Failed to accept connection request", err)
+				n.logger.Error("Failed to accept connection request %v", err)
 				//TODO only print to log and return? The node will continue running without the listener, doesn't sound healthy
 			}
 			return

@@ -1,12 +1,12 @@
 package connectionpool
 
 import (
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 
 	"bytes"
 	"errors"
-	"gopkg.in/op/go-logging.v1"
 	"sync"
 )
 
@@ -19,8 +19,9 @@ type networker interface {
 	Dial(address string, remotePublicKey p2pcrypto.PublicKey) (net.Connection, error) // Connect to a remote node. Can send when no error.
 	SubscribeOnNewRemoteConnections(func(event net.NewConnectionEvent))
 	NetworkID() int8
-	SubscribeClosingConnections(func(net.Connection))
-	Logger() *logging.Logger
+	SubscribeClosingConnections(func( net.Connection))
+	Logger() log.Log
+
 }
 
 // ConnectionPool stores all net.Connections and make them available to all users of net.Connection.

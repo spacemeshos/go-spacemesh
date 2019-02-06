@@ -65,7 +65,7 @@ func New(node *node.LocalNode, config config.SwarmConfig, service service.Servic
 	d := &KadDHT{
 		config:  config,
 		local:   node,
-		rt:      NewRoutingTable(config.RoutingTableBucketSize, node.DhtID(), node.Logger),
+		rt:      NewRoutingTable(config.RoutingTableBucketSize, node.DhtID(), node.Log),
 		service: service,
 	}
 	d.fnp = newFindNodeProtocol(service, d.rt)
