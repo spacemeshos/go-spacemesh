@@ -100,10 +100,10 @@ func (bl *BlockListener) run() {
 	for {
 		select {
 		case <-bl.exit:
-			bl.Logger.Info("run stopped")
+			bl.Log.Info("run stopped")
 			return
 		case id := <-bl.unknownQueue:
-			bl.Logger.Debug("fetch block ", id, "buffer is at ", len(bl.unknownQueue)/cap(bl.unknownQueue), " capacity")
+			bl.Log.Debug("fetch block ", id, "buffer is at ", len(bl.unknownQueue)/cap(bl.unknownQueue), " capacity")
 			bl.semaphore <- struct{}{}
 			go func() {
 				defer func() { <-bl.semaphore }()

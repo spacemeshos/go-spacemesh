@@ -16,9 +16,9 @@ import (
 const mainLoggerName = "Spacemesh"
 
 // determine the level of messages we show.
-var debugMode = true
+var debugMode = false
 // should we format out logs in json
-var jsonLog = true
+var jsonLog = false
 
 var DebugLevel = zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
 	return lvl >= zapcore.DebugLevel
