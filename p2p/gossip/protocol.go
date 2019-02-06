@@ -284,6 +284,7 @@ func (prot *Protocol) processMessage(msg *pb.ProtocolMessage) {
 			return
 		}
 	} else {
+		prot.Log.With().Info("new_gossip_message", log.String("from", string(msg.Metadata.AuthPubkey)), log.String("protocol", protocol))
 		err := prot.net.ProcessGossipProtocolMessage(protocol, data, prot.propagateQ)
 		if err != nil {
 			prot.Log.Error("failed to process protocol message. protocol = %v err = %v", protocol, err)
