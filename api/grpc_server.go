@@ -18,10 +18,10 @@ import (
 
 // SpacemeshGrpcService is a grpc server providing the Spacemesh api
 type SpacemeshGrpcService struct {
-	Server *grpc.Server
-	Port   uint
+	Server   *grpc.Server
+	Port     uint
 	StateApi StateAPI
-	Network NetworkAPI
+	Network  NetworkAPI
 }
 
 // Echo returns the response for an echo api request
@@ -39,19 +39,19 @@ func (s SpacemeshGrpcService) GetBalance(ctx context.Context, in *pb.AccountId) 
 
 	val := s.StateApi.GetBalance(addr)
 
-	return &pb.SimpleMessage{Value:val.String()}, nil
+	return &pb.SimpleMessage{Value: val.String()}, nil
 }
 
 // Echo returns the response for an echo api request
 func (s SpacemeshGrpcService) GetNonce(ctx context.Context, in *pb.AccountId) (*pb.SimpleMessage, error) {
 	addr := address.BytesToAddress(in.Address)
 
-	if s.StateApi.Exist(addr)  != true{
+	if s.StateApi.Exist(addr) != true {
 		return nil, fmt.Errorf("account does not exist")
 	}
 
 	val := s.StateApi.GetNonce(addr)
-	msg := pb.SimpleMessage{Value:strconv.FormatUint(val,10)}
+	msg := pb.SimpleMessage{Value: strconv.FormatUint(val, 10)}
 	return &msg, nil
 }
 
@@ -62,7 +62,7 @@ func (s SpacemeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.Sign
 	//todo" should this be in a go routine?
 	s.Network.Broadcast(txGossipChannel, in.TxData)
 
-	return &pb.SimpleMessage{Value:"ok"}, nil
+	return &pb.SimpleMessage{Value: "ok"}, nil
 }
 
 // P2P API
@@ -71,11 +71,10 @@ func (s SpacemeshGrpcService) Broadcast(ctx context.Context, in *pb.BroadcastMes
 	err := s.Network.Broadcast(APIGossipProtocol, in.Data)
 	if err != nil {
 		log.Warning("RPC Broadcast failed please check that `test-mode` is on in order to use RPC Broadcast.")
-		return &pb.SimpleMessage{Value:err.Error()}, err
+		return &pb.SimpleMessage{Value: err.Error()}, err
 	}
-	return &pb.SimpleMessage{Value:"ok"}, nil
+	return &pb.SimpleMessage{Value: "ok"}, nil
 }
-
 
 // StopService stops the grpc service.
 func (s SpacemeshGrpcService) StopService() {
@@ -86,10 +85,10 @@ func (s SpacemeshGrpcService) StopService() {
 }
 
 // NewGrpcService create a new grpc service using config data.
-func NewGrpcService(net NetworkAPI ,state StateAPI) *SpacemeshGrpcService {
+func NewGrpcService(net NetworkAPI, state StateAPI) *SpacemeshGrpcService {
 	port := config.ConfigValues.GrpcServerPort
 	server := grpc.NewServer()
-	return &SpacemeshGrpcService{Server: server, Port: uint(port), StateApi:state, Network:net}
+	return &SpacemeshGrpcService{Server: server, Port: uint(port), StateApi: state, Network: net}
 }
 
 // StartService starts the grpc service.

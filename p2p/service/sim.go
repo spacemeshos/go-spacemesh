@@ -47,7 +47,7 @@ func NewSimulator() *Simulator {
 	s := &Simulator{
 		protocolDirectHandler: make(map[string]map[string]chan DirectMessage),
 		protocolGossipHandler: make(map[string]map[string]chan GossipMessage),
-		nodes: make(map[string]*Node),
+		nodes:                 make(map[string]*Node),
 	}
 	return s
 }
