@@ -47,7 +47,7 @@ type State struct {
 
 type ConsensusProcess struct {
 	State
-	Closer            // the consensus is closeable
+	Closer // the consensus is closeable
 	instanceId        InstanceId
 	oracle            Rolacle // roles oracle
 	signing           Signing
@@ -204,6 +204,12 @@ func (proc *ConsensusProcess) expectedCommitteeSize(k uint32) int {
 	return proc.cfg.N
 }
 
+func hashInstanceAndK(instanceID InstanceId, K uint32) uint32 {
+	h := newHasherU32()
+	val := h.Hash(append(instanceID.Bytes(), byte(K)))
+	return val
+}
+
 func (proc *ConsensusProcess) validateRole(m *pb.HareMessage) bool {
 	if m == nil {
 		log.Error("validateRole called with nil")
@@ -217,8 +223,14 @@ func (proc *ConsensusProcess) validateRole(m *pb.HareMessage) bool {
 
 	// TODO: validate role proof sig
 
+	verifier, err := NewVerifier(m.PubKey)
+	if err != nil {
+		log.Error("Could not build verifier")
+		return false
+	}
+
 	// validate role
-	if !proc.oracle.Eligible(&proc.instanceId, int(m.Message.K), proc.expectedCommitteeSize(m.Message.K), proc.signing.Verifier().String(), Signature(m.Message.RoleProof)) {
+	if !proc.oracle.Eligible(hashInstanceAndK(proc.instanceId, m.Message.K), proc.expectedCommitteeSize(m.Message.K), verifier.String(), Signature(m.Message.RoleProof)) {
 		log.Warning("Role validation failed")
 		return false
 	}
@@ -536,7 +548,7 @@ func (proc *ConsensusProcess) isEligible() bool {
 
 // Returns the role matching the current round if eligible for this round, false otherwise
 func (proc *ConsensusProcess) currentRole() Role {
-	if proc.oracle.Eligible(&proc.instanceId, int(proc.k), proc.expectedCommitteeSize(proc.k), proc.signing.Verifier().String(), proc.roleProof()) {
+	if proc.oracle.Eligible(hashInstanceAndK(proc.instanceId, proc.k), proc.expectedCommitteeSize(proc.k), proc.signing.Verifier().String(), proc.roleProof()) {
 		if proc.currentRound() == Round2 {
 			return Leader
 		}

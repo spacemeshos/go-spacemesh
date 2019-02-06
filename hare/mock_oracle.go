@@ -19,10 +19,13 @@ type Stringer interface {
 	String() string
 }
 
+type Registrable interface {
+	Register(isHonest bool, id string)
+	Unregister(isHonest bool, id string)
+}
+
 type Rolacle interface {
-	Register(id string)
-	Unregister(id string)
-	Eligible(instanceID *InstanceId, K int, committeeSize int, pubKey string, proof []byte) bool
+	Eligible(id uint32, committeeSize int, pubKey string, proof []byte) bool
 }
 
 type hasherU32 struct {
@@ -98,7 +101,7 @@ func (mock *MockHashOracle) calcThreshold(committeeSize int) uint32 {
 }
 
 // Eligible if a proof is valid for a given committee size
-func (mock *MockHashOracle) Eligible(instanceID *InstanceId, K int, committeeSize int, pubKey string, proof []byte) bool {
+func (mock *MockHashOracle) Eligible(id uint32, committeeSize int, pubKey string, proof []byte) bool {
 	if proof == nil {
 		log.Warning("Oracle query with proof=nil. Returning false")
 		return false
