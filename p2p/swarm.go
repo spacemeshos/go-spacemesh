@@ -237,7 +237,7 @@ func (s *swarm) Start() error {
 			}
 			close(s.bootChan)
 			dhtsize := s.dht.Size()
-			s.lNode.With().Info("discovery_bootstrap", log.Bool("succeess", dhtsize > s.config.SwarmConfig.RandomConnections && s.bootErr != nil),
+			s.lNode.With().Info("discovery_bootstrap", log.Bool("succeess", dhtsize > s.config.SwarmConfig.RandomConnections && s.bootErr == nil),
 				log.Int("dht_size", dhtsize), log.Duration("time_elapsed", time.Since(b)))
 		}()
 	}
