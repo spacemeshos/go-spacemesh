@@ -39,11 +39,11 @@ func TestVec_Multiply(t *testing.T) {
 }
 
 func TestNinjaTortoise_GlobalOpinion(t *testing.T) {
-	glo, _ := globalOpinion(vec{2, 0}, 2, 1)
+	glo := globalOpinion(vec{2, 0}, 2, 1)
 	assert.True(t, glo == Support, "vec was wrong %d", glo)
-	glo, _ = globalOpinion(vec{1, 0}, 2, 1)
+	glo = globalOpinion(vec{1, 0}, 2, 1)
 	assert.True(t, glo == Abstain, "vec was wrong %d", glo)
-	glo, _ = globalOpinion(vec{0, 2}, 2, 1)
+	glo = globalOpinion(vec{0, 2}, 2, 1)
 	assert.True(t, glo == Against, "vec was wrong %d", glo)
 }
 
@@ -115,7 +115,7 @@ func NewNinjaTortoise(layerSize uint32) *ninjaTortoise {
 func TestNinjaTortoise_Sanity1(t *testing.T) {
 	layerSize := 2
 	patternSize := layerSize
-	alg := NewNinjaTortoise(2)
+	alg := NewNinjaTortoise(uint32(layerSize))
 	l1 := createGenesisLayer()
 	genesisId := l1.Blocks()[0].ID()
 	//alg.initGenesis(l1.Blocks(), Genesis)
@@ -125,7 +125,7 @@ func TestNinjaTortoise_Sanity1(t *testing.T) {
 	for i := 0; i < 30; i++ {
 		lyr := createMulExplicitLayer(l.Index()+1, []*mesh.Layer{l}, 2, 2)
 		start := time.Now()
-		alg.UpdateTables(lyr)
+		alg.HandleIncomingLayer(lyr)
 		alg.Info("Time to process layer: %v ", time.Since(start))
 		l = lyr
 		for b, vec := range alg.tTally[alg.pBase] {
@@ -150,7 +150,7 @@ func TestNinjaTortoise_Sanity2(t *testing.T) {
 	for i := 0; i < 30; i++ {
 		lyr := createMulExplicitLayer(l.Index()+1, []*mesh.Layer{l, lPrev}, layerSize, layerSize-1)
 		start := time.Now()
-		alg.UpdateTables(lyr)
+		alg.HandleIncomingLayer(lyr)
 		alg.Info("Time to process layer: %v ", time.Since(start))
 		lPrev = l
 		l = lyr
@@ -183,7 +183,7 @@ func createMulExplicitLayer(index mesh.LayerID, prev []*mesh.Layer, blocksInLaye
 				bl.AddVote(mesh.BlockID(b.Id))
 			}
 		}
-		for _, prevBloc := range prev[len(prev)-1].Blocks() {
+		for _, prevBloc := range prev[0].Blocks() {
 			bl.AddView(mesh.BlockID(prevBloc.Id))
 		}
 		l.AddBlock(bl)
