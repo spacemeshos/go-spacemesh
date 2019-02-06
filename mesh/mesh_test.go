@@ -1,6 +1,7 @@
 package mesh
 
 import (
+	"bytes"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/stretchr/testify/assert"
@@ -37,23 +38,23 @@ func TestLayers_AddBlock(t *testing.T) {
 
 	rBlock2, _ := layers.GetBlock(block2.Id)
 
-	assert.True(t, string(rBlock2.Data) == "data2", "wrong layer count")
+	assert.True(t, bytes.Compare(rBlock2.Data, []byte("data2")) == 0, "block content was wrong")
 }
 
 func TestLayers_AddLayer(t *testing.T) {
-
 	layers := getMesh("t2")
 	defer layers.Close()
 	id := LayerID(1)
-	block1 := NewBlock(true, []byte("data"), time.Now(), id)
-	block2 := NewBlock(true, []byte("data"), time.Now(), id)
-	block3 := NewBlock(true, []byte("data"), time.Now(), id)
+	data := []byte("data")
+	block1 := NewBlock(true, data, time.Now(), id)
+	block2 := NewBlock(true, data, time.Now(), id)
+	block3 := NewBlock(true, data, time.Now(), id)
 	l, err := layers.GetLayer(id)
 	assert.True(t, err != nil, "error: ", err)
 	layers.AddLayer(NewExistingLayer(1, []*Block{block1, block2, block3}))
 	l, err = layers.GetLayer(id)
-	//assert.True(t, layers.LocalLayer() == 0, "wrong layer count")
-	assert.True(t, string(l.blocks[1].Data) == "data", "wrong block data ")
+	assert.True(t, err == nil, "could not retrieve layer ")
+	assert.True(t, bytes.Compare(l.Blocks()[0].Data, data) == 0, "block content was wrong")
 }
 
 func TestLayers_AddWrongLayer(t *testing.T) {

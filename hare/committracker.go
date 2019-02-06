@@ -5,6 +5,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
+type commitTracker interface {
+	OnCommit(msg *pb.HareMessage)
+	HasEnoughCommits() bool
+	BuildCertificate() *pb.Certificate
+}
+
 type CommitTracker struct {
 	seenSenders map[string]bool   // tracks seen senders
 	commits     []*pb.HareMessage // tracks Set->Commits

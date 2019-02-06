@@ -6,9 +6,9 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/delimited"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/version"
 	"gopkg.in/op/go-logging.v1"
@@ -65,6 +65,7 @@ type Net struct {
 	queuesCount           uint
 	incomingMessagesQueue []chan IncomingMessageEvent
 
+
 	config config.Config
 }
 
@@ -91,8 +92,8 @@ func NewNet(conf config.Config, localEntity *node.LocalNode) (*Net, error) {
 		localNode:             localEntity,
 		logger:                localEntity.Logger,
 		tcpListenAddress:      tcpAddress,
-		regNewRemoteConn:      make([]func(NewConnectionEvent), 0, 3),
-		closingConnections:    make([]func(Connection), 0, 3),
+		regNewRemoteConn:      make([]func (NewConnectionEvent), 0, 3),
+		closingConnections:    make([]func(Connection), 0,3),
 		queuesCount:           qcount,
 		incomingMessagesQueue: make([]chan IncomingMessageEvent, qcount, qcount),
 		config:                conf,
@@ -287,8 +288,8 @@ func (n *Net) SubscribeOnNewRemoteConnections(f func(event NewConnectionEvent)) 
 func (n *Net) publishNewRemoteConnectionEvent(conn Connection, node node.Node) {
 	n.regMutex.RLock()
 	for _, f := range n.regNewRemoteConn {
-		f(NewConnectionEvent{conn, node})
-	}
+		 f(NewConnectionEvent{conn, node})
+		}
 	n.regMutex.RUnlock()
 }
 
@@ -326,8 +327,6 @@ func (n *Net) HandlePreSessionIncomingMessage(c Connection, message []byte) erro
 	anode := node.New(c.RemotePublicKey(), remoteListeningAddress)
 
 	n.publishNewRemoteConnectionEvent(c, anode)
-	// TODO: @noam process message?
-	// Specifically -- check the network id and client version
 	return nil
 }
 
@@ -357,10 +356,9 @@ func (n *Net) verifyNetworkIDAndClientVersion(handshakeData *pb.HandshakeData) e
 
 func generateHandshakeMessage(session NetworkSession, networkID int8, localIncomingPort int, localPubkey p2pcrypto.PublicKey) ([]byte, error) {
 	handshakeData := &pb.HandshakeData{
-		Timestamp:     time.Now().Unix(),
-		ClientVersion: config.ClientVersion,
-		NetworkID:     int32(networkID),
-		Port:          uint32(localIncomingPort),
+		ClientVersion:        config.ClientVersion,
+		NetworkID:            int32(networkID),
+		Port:                 uint32(localIncomingPort),
 	}
 	handshakeMessage, err := proto.Marshal(handshakeData)
 	if err != nil {

@@ -1,9 +1,12 @@
 package api
 
 import (
+	"errors"
 	"fmt"
 	"github.com/golang/protobuf/proto"
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/address"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/stretchr/testify/require"
 	"io/ioutil"
 	"math/big"
 	"net/http"
@@ -23,36 +26,42 @@ import (
 
 // Better a small code duplication than a small dependency
 
+
 type NodeAPIMock struct {
-	balances map[common.Address]*big.Int
-	nonces   map[common.Address]uint64
+	balances map[address.Address]*big.Int
+	nonces map[address.Address]uint64
 }
 
 type NetworkMock struct {
+	broadCastErr bool
 	broadcasted []byte
 }
 
-func (s *NetworkMock) Broadcast(chanel string, payload []byte) error {
+
+func (s *NetworkMock) Broadcast(chanel string, payload []byte) error{
+	if s.broadCastErr {
+		return errors.New("error during broadcast")
+	}
 	s.broadcasted = payload
 	return nil
 }
 
-func NewNodeAPIMock() NodeAPIMock {
+func NewNodeAPIMock() NodeAPIMock{
 	return NodeAPIMock{
-		balances: make(map[common.Address]*big.Int),
-		nonces:   make(map[common.Address]uint64),
+		balances : make(map[address.Address]*big.Int),
+		nonces : make(map[address.Address]uint64),
 	}
 }
 
-func (n NodeAPIMock) GetBalance(address common.Address) *big.Int {
+func ( n NodeAPIMock) GetBalance(address address.Address) *big.Int {
 	return n.balances[address]
 }
 
-func (n NodeAPIMock) GetNonce(address common.Address) uint64 {
+func (n NodeAPIMock) GetNonce(address address.Address) uint64 {
 	return n.nonces[address]
 }
 
-func (n NodeAPIMock) Exist(address common.Address) bool {
+func (n NodeAPIMock) Exist(address address.Address) bool{
 	_, ok := n.nonces[address]
 	return ok
 }
@@ -103,7 +112,7 @@ func TestGrpcApi(t *testing.T) {
 		t.Fatalf("did not connect. %v", err)
 	}
 	defer conn.Close()
-	c := pb.NewSpaceMeshServiceClient(conn)
+	c := pb.NewSpacemeshServiceClient(conn)
 
 	// call echo and validate result
 	r, err := c.Echo(context.Background(), &pb.SimpleMessage{Value: message})
@@ -187,19 +196,21 @@ func TestJsonApi(t *testing.T) {
 	<-grpcStatus
 }
 
+
+
 func TestJsonWalletApi(t *testing.T) {
 
 	port1, err := node.GetUnboundedPort()
 	port2, err := node.GetUnboundedPort()
 	assert.NoError(t, err, "Should be able to establish a connection on a port")
 	addrBytes := []byte{0x01}
-	addr := common.BytesToAddress(addrBytes)
+	addr := address.BytesToAddress(addrBytes)
 	if config.ConfigValues.JSONServerPort == 0 {
 		config.ConfigValues.JSONServerPort = port1
 		config.ConfigValues.GrpcServerPort = port2
 	}
 	ap := NewNodeAPIMock()
-	net := NetworkMock{broadcasted: []byte{0x00}}
+	net := NetworkMock{ broadcasted:[]byte{0x00}}
 	ap.nonces[addr] = 10
 	ap.balances[addr] = big.NewInt(100)
 	grpcService := NewGrpcService(&net, ap)
@@ -270,7 +281,8 @@ func TestJsonWalletApi(t *testing.T) {
 	value = resp.Header.Get("Content-Type")
 	assert.Equal(t, value, contentType)
 
-	txParams := pb.SignedTransaction{TxData: []byte{0x00, 0x01, 0x02, 0x03}}
+
+	txParams := pb.SignedTransaction{TxData:[]byte{0x00, 0x01,0x02,0x03}}
 	payload, err = m.MarshalToString(&txParams)
 	url = fmt.Sprintf("http://127.0.0.1:%d/v1/submittransaction", config.ConfigValues.JSONServerPort)
 	resp, err = http.Post(url, contentType, strings.NewReader(payload)) //todo: we currently accept all kinds of payloads
@@ -316,6 +328,7 @@ func TestJsonWalletApi_Errors(t *testing.T) {
 	ap := NewNodeAPIMock()
 	net := NetworkMock{}
 
+
 	grpcService := NewGrpcService(&net, ap)
 	jsonService := NewJSONHTTPServer()
 
@@ -352,6 +365,7 @@ func TestJsonWalletApi_Errors(t *testing.T) {
 	got, want := resp.StatusCode, http.StatusInternalServerError //todo: should we change it to err 400 somehow?
 	assert.Equal(t, want, got)
 
+
 	value := resp.Header.Get("Content-Type")
 	assert.Equal(t, value, contentType)
 
@@ -368,9 +382,182 @@ func TestJsonWalletApi_Errors(t *testing.T) {
 	value = resp.Header.Get("Content-Type")
 	assert.Equal(t, value, contentType)
 
+
 	// stop the services
 	jsonService.StopService()
 	<-jsonStatus
 	grpcService.StopService()
 	<-grpcStatus
+}
+
+
+func TestSpaceMeshGrpcService_Broadcast(t *testing.T) {
+
+	port1, err := node.GetUnboundedPort()
+	port2, err := node.GetUnboundedPort()
+	assert.NoError(t, err, "Should be able to establish a connection on a port")
+	Data := []byte{1,3,3,7}
+	if config.ConfigValues.JSONServerPort == 0 {
+		config.ConfigValues.JSONServerPort = port1
+		config.ConfigValues.GrpcServerPort = port2
+	}
+	ap := NewNodeAPIMock()
+	net := NetworkMock{ broadcasted:[]byte{0x00}}
+
+	grpcService := NewGrpcService(&net, ap)
+	jsonService := NewJSONHTTPServer()
+
+	jsonStatus := make(chan bool, 2)
+	grpcStatus := make(chan bool, 2)
+
+	// start grp and json server
+	grpcService.StartService(grpcStatus)
+	<-grpcStatus
+
+	jsonService.StartService(jsonStatus)
+	<-jsonStatus
+
+	const message = "ok"
+	const contentType = "application/json"
+
+	// generate request payload (api input params)
+	reqParams := pb.BroadcastMessage{Data: Data}
+	var m jsonpb.Marshaler
+	payload, err := m.MarshalToString(&reqParams)
+	assert.NoError(t, err, "failed to marshal to string")
+
+	// Without this running this on Travis CI might generate a connection refused error
+	// because the server may not be ready to accept connections just yet.
+	time.Sleep(3 * time.Second)
+
+	url := fmt.Sprintf("http://127.0.0.1:%d/v1/broadcast", config.ConfigValues.JSONServerPort)
+	resp, err := http.Post(url, contentType, strings.NewReader(payload))
+	assert.NoError(t, err, "failed to http post to api endpoint")
+
+	defer resp.Body.Close()
+	buf, err := ioutil.ReadAll(resp.Body)
+	assert.NoError(t, err, "failed to read response body")
+
+	got, want := resp.StatusCode, http.StatusOK
+	assert.Equal(t, want, got)
+
+	var msg pb.SimpleMessage
+	err = jsonpb.UnmarshalString(string(buf), &msg)
+	assert.NoError(t, err)
+
+	gotVal, wantVal := msg.Value, message
+	assert.Equal(t, wantVal, gotVal)
+
+	value := resp.Header.Get("Content-Type")
+	assert.Equal(t, value, contentType)
+
+
+	assert.Equal(t, Data, net.broadcasted)
+
+
+	// stop the services
+	jsonService.StopService()
+	<-jsonStatus
+	grpcService.StopService()
+	<-grpcStatus
+}
+
+
+func TestSpaceMeshGrpcService_BroadcastErrors(t *testing.T) {
+	port1, err := node.GetUnboundedPort()
+	port2, err := node.GetUnboundedPort()
+	assert.NoError(t, err, "Should be able to establish a connection on a port")
+	Data := []byte{1,3,3,7}
+	if config.ConfigValues.JSONServerPort == 0 {
+		config.ConfigValues.JSONServerPort = port1
+		config.ConfigValues.GrpcServerPort = port2
+	}
+	ap := NewNodeAPIMock()
+	net := NetworkMock{ broadcasted:[]byte{0x00}}
+	net.broadCastErr = true
+
+	grpcService := NewGrpcService(&net, ap)
+	jsonService := NewJSONHTTPServer()
+
+	jsonStatus := make(chan bool, 2)
+	grpcStatus := make(chan bool, 2)
+
+	// start grp and json server
+	grpcService.StartService(grpcStatus)
+	<-grpcStatus
+
+	jsonService.StartService(jsonStatus)
+	<-jsonStatus
+
+	const contentType = "application/json"
+
+	// generate request payload (api input params)
+	reqParams := pb.BroadcastMessage{ Data: Data }
+	var m jsonpb.Marshaler
+	payload, err := m.MarshalToString(&reqParams)
+	assert.NoError(t, err, "failed to marshal to string")
+
+	// Without this running this on Travis CI might generate a connection refused error
+	// because the server may not be ready to accept connections just yet.
+	time.Sleep(3 * time.Second)
+
+	url := fmt.Sprintf("http://127.0.0.1:%d/v1/broadcast", config.ConfigValues.JSONServerPort)
+	resp, err := http.Post(url, contentType, strings.NewReader(payload))
+	assert.NoError(t, err, "failed to http post to api endpoint")
+
+	defer resp.Body.Close()
+	_, err = ioutil.ReadAll(resp.Body)
+	assert.NoError(t, err, "failed to read response body")
+
+	got, want := resp.StatusCode, http.StatusInternalServerError //todo: should we change it to err 400 somehow?
+	assert.Equal(t, want, got)
+
+
+	value := resp.Header.Get("Content-Type")
+	assert.Equal(t, value, contentType)
+
+	// stop the services
+	jsonService.StopService()
+	<-jsonStatus
+	grpcService.StopService()
+	<-grpcStatus
+}
+
+type mockSrv struct {
+	c chan service.GossipMessage
+	called bool
+}
+
+func (m *mockSrv) RegisterGossipProtocol(string) chan service.GossipMessage {
+	m.called = true
+	return m.c
+}
+
+type mockMsg struct {
+	msg []byte
+	c chan service.MessageValidation
+}
+
+func (m *mockMsg) Bytes() []byte {
+	return m.msg
+}
+
+func (m *mockMsg) ValidationCompletedChan() chan service.MessageValidation {
+	return m.c
+}
+
+func (m *mockMsg) ReportValidation(protocol string, isValid bool) {
+	m.c <- service.NewMessageValidation(m.msg, protocol, isValid)
+}
+
+func TestApproveAPIGossipMessages(t *testing.T) {
+	m := &mockSrv{c:make(chan service.GossipMessage, 1)}
+	ctx, cancel := context.WithCancel(context.Background())
+	ApproveAPIGossipMessages(ctx,m)
+	require.True(t, m.called)
+	msg := &mockMsg{[]byte("TEST"), make(chan service.MessageValidation, 1)}
+	m.c <- msg
+	valid := <-msg.ValidationCompletedChan()
+	require.True(t, valid.IsValid())
+	cancel()
 }

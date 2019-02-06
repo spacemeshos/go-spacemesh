@@ -5,6 +5,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare/pb"
 )
 
+type proposalTracker interface {
+	OnProposal(msg *pb.HareMessage)
+	OnLateProposal(msg *pb.HareMessage)
+	IsConflicting() bool
+	ProposedSet() *Set
+}
+
 type ProposalTracker struct {
 	proposal      *pb.HareMessage // maps PubKey->Proposal
 	isConflicting bool            // maps PubKey->ConflictStatus

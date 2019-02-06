@@ -23,6 +23,8 @@ func init() {
 		"config", "c", config.BaseConfig.ConfigFile, "Set Load configuration from file")
 	RootCmd.PersistentFlags().StringVarP(&config.BaseConfig.DataDir, "data-folder", "d",
 		config.BaseConfig.DataDir, "Specify data directory for spacemesh")
+	RootCmd.PersistentFlags().BoolVar(&config.TestMode, "test-mode",
+		config.TestMode, "Initialize testing features")
 	/** ======================== P2P Flags ========================== **/
 	RootCmd.PersistentFlags().IntVar(&config.P2P.SecurityParam, "security-param",
 		config.P2P.SecurityParam, "Consensus protocol k security param")
