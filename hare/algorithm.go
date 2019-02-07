@@ -433,13 +433,6 @@ func (proc *ConsensusProcess) processStatusMsg(msg *pb.HareMessage) {
 }
 
 func (proc *ConsensusProcess) processProposalMsg(msg *pb.HareMessage) {
-	// validate the proposed set is provable
-	s := NewSet(msg.Message.Values)
-	if !proc.preRoundTracker.CanProveSet(s) {
-		log.Warning("Proposal validation failed: cannot prove set: %v", s)
-		return
-	}
-
 	if proc.currentRound() == Round2 { // regular proposal
 		proc.proposalTracker.OnProposal(msg)
 	} else { // late proposal
