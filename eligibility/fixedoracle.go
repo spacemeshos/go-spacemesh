@@ -13,6 +13,7 @@ type FixedRolacle struct {
 	mapRW  sync.RWMutex
 }
 
+
 func New() *FixedRolacle {
 	rolacle := &FixedRolacle{}
 	rolacle.honest = make(map[string]struct{})
@@ -20,6 +21,29 @@ func New() *FixedRolacle {
 	rolacle.emaps = make(map[uint32]map[string]struct{})
 
 	return rolacle
+}
+
+func (fo *FixedRolacle) Export(id uint32, committeeSize int) map[string]struct{} {
+	fo.mapRW.RLock()
+	total := len(fo.honest) + len(fo.faulty)
+	fo.mapRW.RUnlock()
+
+	// normalize committee size
+	size := committeeSize
+	if committeeSize > total {
+		log.Error("committee size bigger than the number of clients. Expected %v<=%v", committeeSize, total)
+		size = total
+	}
+
+	fo.mapRW.Lock()
+	// generate if not exist for the requested K
+	if _, exist := fo.emaps[id]; !exist {
+		fo.emaps[id] = fo.generateEligibility(size)
+	}
+	m := fo.emaps[id]
+	fo.mapRW.Unlock()
+
+	return m
 }
 
 func (fo *FixedRolacle) update(m map[string]struct{}, client string) {
