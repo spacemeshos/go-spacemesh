@@ -40,12 +40,10 @@ func (fo *FixedRolacle) Export(id uint32, committeeSize int) map[string]struct{}
 	if _, exist := fo.emaps[id]; !exist {
 		fo.emaps[id] = fo.generateEligibility(size)
 	}
-
-	newmap := cloneMap(fo.emaps[id])
-
+	m := fo.emaps[id]
 	fo.mapRW.Unlock()
 
-	return newmap
+	return m
 }
 
 func (fo *FixedRolacle) update(m map[string]struct{}, client string) {
