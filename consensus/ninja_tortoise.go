@@ -2,6 +2,7 @@ package consensus
 
 import (
 	"container/list"
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -45,7 +46,7 @@ func (a vec) Negate() vec {
 	return a
 }
 
-func (a vec) Multiplay(x int) vec {
+func (a vec) Multiply(x int) vec {
 	a[0] = a[0] * x
 	a[1] = a[1] * x
 	return a
@@ -56,16 +57,6 @@ type votingPattern struct {
 	mesh.LayerID
 }
 
-type correction struct {
-	effectiveCount int
-	vector         vec
-}
-
-func (c *correction) add(v vec) {
-	c.vector = c.vector.Add(v)
-	c.effectiveCount++
-}
-
 func (vp votingPattern) Layer() mesh.LayerID {
 	return vp.LayerID
 }
@@ -73,13 +64,13 @@ func (vp votingPattern) Layer() mesh.LayerID {
 //todo memory optimizations
 type ninjaTortoise struct {
 	log.Log
-	LayerSize          uint32
+	avgLayerSize       uint32
 	pBase              votingPattern
 	blocks             map[mesh.BlockID]*mesh.Block
 	layerBlocks        map[mesh.LayerID][]mesh.BlockID
 	tEffective         map[mesh.BlockID]votingPattern                  //Explicit voting pattern of latest layer for a block
 	tGood              map[mesh.LayerID]votingPattern                  // good pattern for layer i
-	tCorrect           map[mesh.BlockID]map[votingPattern]vec          //correction vectors
+	tCorrect           map[mesh.BlockID]map[mesh.BlockID]vec           //correction vectors
 	tExplicit          map[mesh.BlockID]map[mesh.LayerID]votingPattern // explict votes from block to layer pattern
 	tSupport           map[votingPattern]int                           //for pattern p the number of blocks that support p
 	tPattern           map[votingPattern][]mesh.BlockID                // set of blocks that comprise pattern p
@@ -94,6 +85,10 @@ func (ni *ninjaTortoise) processBlock(b *mesh.Block) {
 
 	ni.Debug("process block: %d layer: %d  ", b.Id, b.Layer())
 
+	if b.Layer() == Genesis {
+		return
+	}
+
 	patterns := make(map[mesh.LayerID][]mesh.BlockID)
 	for _, bid := range b.BlockVotes {
 		ni.Debug("block votes %d", bid)
@@ -102,13 +97,9 @@ func (ni *ninjaTortoise) processBlock(b *mesh.Block) {
 			panic("unknown block!, something went wrong ")
 		}
 		if _, found := patterns[bl.Layer()]; !found {
-			patterns[bl.Layer()] = make([]mesh.BlockID, 0, ni.LayerSize)
+			patterns[bl.Layer()] = make([]mesh.BlockID, 0, ni.avgLayerSize)
 		}
 		patterns[bl.Layer()] = append(patterns[bl.Layer()], bl.ID())
-	}
-
-	if b.Layer() == Genesis {
-		return
 	}
 
 	var effective votingPattern
@@ -126,7 +117,7 @@ func (ni *ninjaTortoise) processBlock(b *mesh.Block) {
 
 	v, found := ni.tEffectiveToBlocks[effective]
 	if !found {
-		v = make([]mesh.BlockID, 0, ni.LayerSize)
+		v = make([]mesh.BlockID, 0, ni.avgLayerSize)
 	}
 	var pattern []mesh.BlockID = nil
 	pattern = append(v, b.ID())
@@ -159,7 +150,7 @@ func forBlockInView(blocks []mesh.BlockID, blockCache map[mesh.BlockID]*mesh.Blo
 		a := stack.Remove(stack.Front()).(mesh.BlockID)
 		block, found := blockCache[a]
 		if !found {
-			panic("error block not found ")
+			panic(fmt.Sprintf("error block not found ID %d", block.ID()))
 		}
 		layerCounter[block.Layer()]++
 		foo(block)
@@ -194,13 +185,12 @@ func (ni *ninjaTortoise) updateCorrectionVectors(p votingPattern, bottomOfWindow
 			if _, found := ni.tExplicit[b.Id][x.Layer()]; found { //if Texplicit[b][x]!=0 check correctness of x.layer and found
 				ni.Debug(" blocks pattern %d block %d layer %d", p, b.ID(), b.Layer())
 				if _, found := ni.tCorrect[b.Id]; !found {
-					ni.tCorrect[b.Id] = make(map[votingPattern]vec)
+					ni.tCorrect[b.Id] = make(map[mesh.BlockID]vec)
 				}
-				var vo vec
-				vo = ni.tVote[p][x.ID()]
+				vo := ni.tVote[p][x.ID()]
 				ni.Debug("vote from pattern %d to block %d layer %d vote %d ", p, x.ID(), x.Layer(), vo)
-				ni.tCorrect[b.Id][p] = ni.tCorrect[b.Id][p].Add(vo.Negate()) //Tcorrect[b][x] = -Tvote[p][x]
-				ni.Debug("update correction vector for block %d layer %d , pattern %d vote %d for block %d ", b.ID(), b.Layer(), p, ni.tCorrect[b.Id][p], x.ID())
+				ni.tCorrect[b.Id][x.ID()] = vo.Negate() //Tcorrect[b][x] = -Tvote[p][x]
+				ni.Debug("update correction vector for block %d layer %d , pattern %d vote %d for block %d ", b.ID(), b.Layer(), p, ni.tCorrect[b.Id][x.ID()], x.ID())
 			} else {
 				ni.Debug("block %d from layer %d dose'nt explicitly vote for layer %d", b.ID(), b.Layer(), x.Layer())
 			}
@@ -210,50 +200,44 @@ func (ni *ninjaTortoise) updateCorrectionVectors(p votingPattern, bottomOfWindow
 	forBlockInView(ni.tPattern[p], ni.blocks, bottomOfWindow, foo)
 }
 
-func (ni *ninjaTortoise) updatePatternTally(newMinGood votingPattern, bootomOfWindow mesh.LayerID) {
+func (ni *ninjaTortoise) updatePatternTally(newMinGood votingPattern, botomOfWindow mesh.LayerID) {
 	ni.Debug("update tally pbase id:%d layer:%d p id:%d layer:%d", ni.pBase.id, ni.pBase.Layer(), newMinGood.id, newMinGood.Layer())
-	// bfs this sucker to get all blocks who's effective vote pattern is g and layer id i s.t pBase<i<p
-	//init p's tally to pBase tally
-	stack := list.New()
-	//include p
-	for _, b := range ni.tPattern[newMinGood] {
-		stack.PushBack(ni.blocks[b])
-	}
 
-	m := make(map[votingPattern]*correction)
-
+	m := make(map[mesh.BlockID]vec)
+	effcount := 0
 	foo := func(b *mesh.Block) {
 		if eff, found := ni.tEffective[b.ID()]; found {
-			if g, found := ni.tGood[eff.Layer()]; found && eff == g {
-				if _, f := m[g]; !f {
-					m[g] = &correction{}
+			effcount++
+			if p, found := ni.tGood[eff.Layer()]; found && eff == p {
+				for k, v := range ni.tCorrect[b.ID()] {
+					m[k].Add(v)
 				}
-				m[g].add(ni.tCorrect[b.ID()][g])
 			}
 		}
 	}
 
 	forBlockInView(ni.tPattern[newMinGood], ni.blocks, ni.pBase.Layer()+1, foo) //ni.pBase.LayerID + 1 because we already copied pbase's votes
 
-	for idx := bootomOfWindow; idx < newMinGood.Layer(); idx++ {
+	for idx := botomOfWindow; idx < newMinGood.Layer(); idx++ {
 		g := ni.tGood[idx]
-		if corr, found := m[g]; found {
-			for b, v := range ni.tVote[g] {
-				tally := ni.tTally[newMinGood][b]
-				ni.Debug("correction vectors for g %d vector %d effective %d tally %d", g, corr.vector, corr.effectiveCount, tally)
-				tally = tally.Add(v.Multiplay(corr.effectiveCount).Add(corr.vector))
-				ni.Debug("tally for pattern %d  and block %d is %d", newMinGood.id, b, tally)
-				ni.tTally[newMinGood][b] = tally //in g's view -> in p's view
+		for b, v := range ni.tVote[g] {
+			tally := ni.tTally[newMinGood][b]
+			ni.Debug("correction vectors for g %d effective %d tally %d", g, effcount, tally)
+			tally = tally.Add(v.Multiply(effcount))
+			if count, found := m[b]; found {
+				tally = tally.Add(count)
+			} else {
+				ni.Debug("no correction vectors for %", g)
 			}
-		} else {
-			ni.Debug("no correction vectors for %", g)
+			ni.Debug("tally for pattern %d  and block %d is %d", newMinGood.id, b, tally)
+			ni.tTally[newMinGood][b] = tally //in g's view -> in p's view
 		}
 	}
 }
 
 //for all layers from pBase to i add b's votes, mark good layers
 // return new minimal good layer
-func (ni *ninjaTortoise) findMinimalGoodLayer(layer *mesh.Layer) mesh.LayerID {
+func (ni *ninjaTortoise) findMinimalNewlyGoodLayer(layer *mesh.Layer) mesh.LayerID {
 	var minGood mesh.LayerID
 
 	var j mesh.LayerID
@@ -272,12 +256,12 @@ func (ni *ninjaTortoise) findMinimalGoodLayer(layer *mesh.Layer) mesh.LayerID {
 			//if a majority supports p (p is good)
 			//according to tal we dont have to know the exact amount, we can multiply layer size by number of layers
 			jGood, found := ni.tGood[j]
-			threshold := 0.5 * float64(mesh.LayerID(ni.LayerSize)*(layer.Index()-p.Layer()))
+			threshold := 0.5 * float64(mesh.LayerID(ni.avgLayerSize)*(layer.Index()-p.Layer()))
 
 			if (jGood != p || !found) && float64(ni.tSupport[p]) > threshold {
 				ni.tGood[p.Layer()] = p
 				//if p is the new minimal good layer
-				if p.Layer() < layer.Index() {
+				if p.Layer() < minGood {
 					minGood = p.Layer()
 				}
 			}
@@ -313,17 +297,17 @@ func (ni *ninjaTortoise) addPatternVote(p votingPattern) func(b *mesh.Block) {
 	addPatternVote := func(b *mesh.Block) {
 		var vp map[mesh.LayerID]votingPattern
 		var found bool
-		if vp, found = ni.tExplicit[b.ID()]; b.Layer() > 0 && !found {
+		if vp, found = ni.tExplicit[b.ID()]; !found {
 			panic("block has no explicit voting, something went wrong ")
 		}
 
 		for _, ex := range vp {
-			if ex.Layer() > ni.pBase.Layer() {
-				for _, block := range ni.tPattern[ex] {
-					ni.Debug("add pattern vote for pattern %d block %d layer %d", p, b.ID(), b.Layer())
-					ni.tTally[p][block] = ni.tTally[p][block].Add(vec{1, 0})
-				}
+			//if ex.Layer() > ni.pBase.Layer() {
+			for _, block := range ni.tPattern[ex] {
+				ni.Debug("add pattern vote for pattern %d block %d layer %d", p, b.ID(), b.Layer())
+				ni.tTally[p][block] = ni.tTally[p][block].Add(vec{1, 0})
 			}
+			//}
 		}
 	}
 	return addPatternVote
@@ -334,7 +318,7 @@ func sumNodesInView(layerViewCounter map[mesh.LayerID]int, i mesh.LayerID, p mes
 	for sum = 0; i <= p; i++ {
 		sum = sum + layerViewCounter[i]
 	}
-	return Against.Multiplay(sum)
+	return Against.Multiply(sum)
 }
 
 func (ni *ninjaTortoise) processBlocks(layer *mesh.Layer) {
@@ -351,13 +335,13 @@ func (ni *ninjaTortoise) init(genesis *mesh.Layer, l1 *mesh.Layer) {
 	vp := &votingPattern{id: getId(ni.layerBlocks[Genesis]), LayerID: Genesis}
 	ni.pBase = *vp
 	ni.tGood[Genesis] = *vp
-	ni.tExplicit[genesis.Blocks()[0].ID()] = make(map[mesh.LayerID]votingPattern, K*ni.LayerSize)
+	ni.tExplicit[genesis.Blocks()[0].ID()] = make(map[mesh.LayerID]votingPattern, K*ni.avgLayerSize)
 	ni.processBlocks(l1)
-
 	vp1 := votingPattern{id: getId(ni.layerBlocks[Genesis+1]), LayerID: Genesis + 1}
 	ni.tPattern[vp1] = ni.layerBlocks[Genesis+1]
 	ni.tVote[vp1] = make(map[mesh.BlockID]vec)
-	ni.tTally[vp1] = map[mesh.BlockID]vec{}
+	ni.tVote[vp1][genesis.Blocks()[0].ID()] = vec{1, 0}
+
 }
 
 func updatePatSupport(ni *ninjaTortoise, p votingPattern, bids []mesh.BlockID, idx mesh.LayerID, i mesh.LayerID) {
@@ -383,11 +367,11 @@ func (ni *ninjaTortoise) HandleIncomingLayer(newlyr *mesh.Layer) mesh.LayerID { 
 	//initialize these tables //not in article
 	ni.processBlocks(newlyr)
 
-	l := ni.findMinimalGoodLayer(newlyr)
+	l := ni.findMinimalNewlyGoodLayer(newlyr)
 
-	//from minimal good pattern to current layer
+	//from minimal newly good pattern to current layer
 	//update pattern tally for all good layers
-	for j := l; j < newlyr.Index(); j++ {
+	for j := l; j > 0 && j < newlyr.Index(); j++ {
 		if p, gfound := ni.tGood[j]; gfound {
 			//init p's tally to pBase tally
 			initTallyToBase(ni.tTally, ni.pBase, p)
@@ -412,7 +396,7 @@ func (ni *ninjaTortoise) HandleIncomingLayer(newlyr *mesh.Layer) mesh.LayerID { 
 			complete := true
 			for idx := windowStart; idx < j; idx++ {
 				layer, _ := ni.layerBlocks[windowStart]
-				bids := make([]mesh.BlockID, 0, ni.LayerSize)
+				bids := make([]mesh.BlockID, 0, ni.avgLayerSize)
 				for _, bid := range layer {
 					//if bid is not in p's view.
 					// add negative vote multiplied by the amount of blocks in the view
@@ -420,7 +404,7 @@ func (ni *ninjaTortoise) HandleIncomingLayer(newlyr *mesh.Layer) mesh.LayerID { 
 						ni.tTally[p][bid] = sumNodesInView(layerViewCounter, windowStart, p.Layer())
 					}
 
-					if vote := globalOpinion(ni.tTally[p][bid], ni.LayerSize, float64(p.LayerID-windowStart)); vote != Abstain {
+					if vote := globalOpinion(ni.tTally[p][bid], ni.avgLayerSize, float64(p.LayerID-windowStart)); vote != Abstain {
 						if val, found := ni.tVote[p]; !found || val == nil {
 							ni.tVote[p] = make(map[mesh.BlockID]vec)
 						}
