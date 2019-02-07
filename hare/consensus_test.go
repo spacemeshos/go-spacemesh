@@ -143,18 +143,15 @@ func createConsensusProcess(isHonest bool, cfg config.Config, oracle fullRolacle
 	return proc
 }
 
-func TestSingleValueForHonestSet(t *testing.T) {
-	if skipBlackBox {
-		t.Skip()
-	}
-
+func TestConsensusFixedOracle(t *testing.T) {
 	test := newConsensusTest()
 
-	cfg := config.Config{N: 50, F: 25, SetSize: 1, RoundDuration: time.Second * time.Duration(1)}
+	cfg := config.Config{N: 16, F: 8, SetSize: 1, RoundDuration: time.Second * time.Duration(1)}
 	sim := service.NewSimulator()
-	test.initialSets = make([]*Set, cfg.N)
+	totalNodes := 20
+	test.initialSets = make([]*Set, totalNodes)
 	set1 := NewSetFromValues(value1)
-	test.fill(set1, 0, cfg.N-1)
+	test.fill(set1, 0, totalNodes-1)
 	test.honestSets = []*Set{set1}
 	oracle := eligibility.New()
 	i := 0
@@ -164,7 +161,34 @@ func TestSingleValueForHonestSet(t *testing.T) {
 		test.procs = append(test.procs, proc)
 		i++
 	}
-	test.Create(cfg.N, creationFunc)
+	test.Create(totalNodes, creationFunc)
+	test.Start()
+	test.WaitForTimedTermination(t, 30*time.Second)
+}
+
+func TestSingleValueForHonestSet(t *testing.T) {
+	if skipBlackBox {
+		t.Skip()
+	}
+
+	test := newConsensusTest()
+
+	cfg := config.Config{N: 50, F: 25, SetSize: 1, RoundDuration: time.Second * time.Duration(1)}
+	totalNodes := 50
+	sim := service.NewSimulator()
+	test.initialSets = make([]*Set, totalNodes)
+	set1 := NewSetFromValues(value1)
+	test.fill(set1, 0, totalNodes-1)
+	test.honestSets = []*Set{set1}
+	oracle := eligibility.New()
+	i := 0
+	creationFunc := func() {
+		s := sim.NewNode()
+		proc := createConsensusProcess(true, cfg, oracle, s, test.initialSets[i])
+		test.procs = append(test.procs, proc)
+		i++
+	}
+	test.Create(totalNodes, creationFunc)
 	test.Start()
 	test.WaitForTimedTermination(t, 30*time.Second)
 }
@@ -178,7 +202,8 @@ func TestAllDifferentSet(t *testing.T) {
 
 	cfg := config.Config{N: 10, F: 5, SetSize: 5, RoundDuration: time.Second * time.Duration(1)}
 	sim := service.NewSimulator()
-	test.initialSets = make([]*Set, cfg.N)
+	totalNodes := 10
+	test.initialSets = make([]*Set, totalNodes)
 
 	base := NewSetFromValues(value1, value2)
 	test.initialSets[0] = base
@@ -213,14 +238,15 @@ func TestSndDelayedDishonest(t *testing.T) {
 	test := newConsensusTest()
 
 	cfg := config.Config{N: 50, F: 25, SetSize: 5, RoundDuration: time.Second * time.Duration(2)}
+	totalNodes := 50
 	sim := service.NewSimulator()
-	test.initialSets = make([]*Set, cfg.N)
+	test.initialSets = make([]*Set, totalNodes)
 	honest1 := NewSetFromValues(value1, value2, value4, value5)
 	honest2 := NewSetFromValues(value1, value3, value4, value6)
 	dishonest := NewSetFromValues(value3, value5, value6, value7)
 	test.fill(honest1, 0, 15)
-	test.fill(honest2, 16, cfg.N/2)
-	test.fill(dishonest, cfg.N/2+1, cfg.N-1)
+	test.fill(honest2, 16, totalNodes/2)
+	test.fill(dishonest, totalNodes/2+1, totalNodes-1)
 	test.honestSets = []*Set{honest1, honest2}
 	oracle := eligibility.New()
 	i := 0
@@ -232,7 +258,7 @@ func TestSndDelayedDishonest(t *testing.T) {
 	}
 
 	// create honest
-	test.Create(cfg.N/2+1, honestFunc)
+	test.Create(totalNodes/2+1, honestFunc)
 
 	// create dishonest
 	dishonestFunc := func() {
@@ -241,7 +267,7 @@ func TestSndDelayedDishonest(t *testing.T) {
 		test.dishonest = append(test.dishonest, proc)
 		i++
 	}
-	test.Create(cfg.N/2-1, dishonestFunc)
+	test.Create(totalNodes/2-1, dishonestFunc)
 
 	test.Start()
 	test.WaitForTimedTermination(t, 30*time.Second)
@@ -255,14 +281,15 @@ func TestRecvDelayedDishonest(t *testing.T) {
 	test := newConsensusTest()
 
 	cfg := config.Config{N: 50, F: 25, SetSize: 5, RoundDuration: time.Second * time.Duration(2)}
+	totalNodes := 50
 	sim := service.NewSimulator()
-	test.initialSets = make([]*Set, cfg.N)
+	test.initialSets = make([]*Set, totalNodes)
 	honest1 := NewSetFromValues(value1, value2, value4, value5)
 	honest2 := NewSetFromValues(value1, value3, value4, value6)
 	dishonest := NewSetFromValues(value3, value5, value6, value7)
 	test.fill(honest1, 0, 15)
-	test.fill(honest2, 16, cfg.N/2)
-	test.fill(dishonest, cfg.N/2+1, cfg.N-1)
+	test.fill(honest2, 16, totalNodes/2)
+	test.fill(dishonest, totalNodes/2+1, totalNodes-1)
 	test.honestSets = []*Set{honest1, honest2}
 	oracle := eligibility.New()
 	i := 0
@@ -274,7 +301,7 @@ func TestRecvDelayedDishonest(t *testing.T) {
 	}
 
 	// create honest
-	test.Create(cfg.N/2+1, honestFunc)
+	test.Create(totalNodes/2+1, honestFunc)
 
 	// create dishonest
 	dishonestFunc := func() {
@@ -283,7 +310,7 @@ func TestRecvDelayedDishonest(t *testing.T) {
 		test.dishonest = append(test.dishonest, proc)
 		i++
 	}
-	test.Create(cfg.N/2-1, dishonestFunc)
+	test.Create(totalNodes/2-1, dishonestFunc)
 
 	test.Start()
 	test.WaitForTimedTermination(t, 30*time.Second)
