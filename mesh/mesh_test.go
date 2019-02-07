@@ -43,11 +43,15 @@ func TestLayers_AddBlock(t *testing.T) {
 	block2 := NewBlock(true, []byte("data2"), time.Now(), 2)
 	block3 := NewBlock(true, []byte("data3"), time.Now(), 3)
 
-	layers.AddBlock(block1)
-	layers.AddBlock(block2)
-	layers.AddBlock(block3)
+	err := layers.AddBlock(block1)
+	assert.NoError(t, err)
+	err = layers.AddBlock(block2)
+	assert.NoError(t, err)
+	err = layers.AddBlock(block3)
+	assert.NoError(t, err)
 
-	rBlock2, _ := layers.GetBlock(block2.Id)
+	rBlock2, err := layers.GetBlock(block2.Id)
+	assert.NoError(t, err)
 
 	assert.True(t, bytes.Compare(rBlock2.Data, []byte("data2")) == 0, "block content was wrong")
 }
@@ -63,7 +67,8 @@ func TestLayers_AddLayer(t *testing.T) {
 	l, err := layers.GetLayer(id)
 	assert.True(t, err != nil, "error: ", err)
 
-	layers.AddLayer(NewExistingLayer(1, []*Block{block1, block2, block3}))
+	err = layers.AddLayer(NewExistingLayer(1, []*Block{block1, block2, block3}))
+	assert.NoError(t,err)
 	layers.LayerCompleteCallback(1)
 	l, err = layers.GetVerifiedLayer(id)
 	assert.NoError(t,err)

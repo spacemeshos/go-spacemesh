@@ -118,7 +118,7 @@ func (proc *ConsensusProcess) createInbox(size uint32) chan Message {
 }
 
 func (proc *ConsensusProcess) eventLoop() {
-	log.Info("Start listening")
+	log.Info("Start listening for instance %v ", proc.instanceId.Bytes())
 
 	// set pre-round message and send
 	m := proc.initDefaultBuilder(proc.s).SetType(PreRound).Sign(proc.signing).Build()
@@ -197,7 +197,7 @@ func (proc *ConsensusProcess) onEarlyMessage(m Message) {
 
 func (proc *ConsensusProcess) expectedCommitteeSize(k uint32) int {
 	if k%4 == Round2 {
-		return 5 // 5 leaders
+		return 1 // 5 leaders
 	}
 
 	// N actives
@@ -299,6 +299,7 @@ func (proc *ConsensusProcess) sendMessage(msg *pb.HareMessage) {
 
 	// check eligibility
 	if !proc.isEligible() {
+		log.Info("%v not eligible round %v", proc.signing.Verifier().String(), proc.k)
 		return
 	}
 
@@ -312,6 +313,7 @@ func (proc *ConsensusProcess) sendMessage(msg *pb.HareMessage) {
 		log.Error("Could not broadcast round message ", err.Error())
 		return
 	}
+
 }
 
 func (proc *ConsensusProcess) onRoundEnd() {

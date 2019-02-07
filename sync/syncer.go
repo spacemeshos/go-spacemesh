@@ -16,7 +16,7 @@ import (
 )
 
 type BlockValidator interface {
-	EligibleBlock(block *mesh.Block) bool
+	BlockEligible(id mesh.LayerID, pubKey string) bool
 }
 
 type Configuration struct {
@@ -148,7 +148,7 @@ func (s *Syncer) Synchronise() {
 				for id := range blockIds {
 					for _, p := range s.GetPeers() {
 						if bCh, err := sendBlockRequest(s.MessageServer, p, mesh.BlockID(id), s.Log); err == nil {
-							if b := <-bCh; b != nil && s.EligibleBlock(b) { //some validation testing
+							if b := <-bCh; b != nil && s.BlockEligible(b.LayerIndex, b.MinerID) { //some validation testing
 								s.Debug("received block", b)
 								output <- b
 								break
@@ -171,7 +171,13 @@ func (s *Syncer) Synchronise() {
 
 		s.Debug("add layer ", i)
 
-		s.AddLayer(mesh.NewExistingLayer(mesh.LayerID(i+1), blocks))
+		l := mesh.NewExistingLayer(mesh.LayerID(i+1), blocks)
+		err = s.AddLayer(l)
+		if err != nil {
+			log.Error("cannot insert layer to db because %v", err)
+			continue
+		}
+		s.ValidateLayer(l)
 	}
 
 	s.Debug("synchronise done, local layer index is ", s.VerifiedLayer(), "most recent is ", s.LatestReceivedLayer())

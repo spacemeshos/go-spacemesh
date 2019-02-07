@@ -287,7 +287,7 @@ func (app *SpacemeshApp) setupTestFeatures() {
 	api.ApproveAPIGossipMessages(Ctx, app.P2P)
 }
 
-func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service, dbStorepath string, blockOracle oracle.BlockOracle,hareOracle hare.Rolacle) (error){
+func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service, dbStorepath string, sgn hare.Signing, blockOracle oracle.BlockOracle,hareOracle hare.Rolacle) (error){
 
 	//todo: should we add all components to a single struct?
 	lg := log.New("shmekel_" + instanceName ,"","")
@@ -313,15 +313,7 @@ func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service,
 	clock := timesync.NewTicker(timesync.RealClock{}, 5 *time.Second, time.Now())
 
 
-	//oracle := hare.NewMockHashOracle(100)
-
-	sgn := hare.NewMockSigning()
-	//pub, _ := crypto.NewPublicKey(sgn.Verifier().Bytes())
-
-	//oracle := oracle.NewBlockOracle(1, 2, pub.String())
-	//oracle.Register(pub)
 	blockListener := sync.NewBlockListener(swarm , blockOracle ,mesh, 1*time.Second, 1,clock, lg)
-
 
 	ha := hare.New(hareConfig.DefaultConfig(), swarm,sgn,mesh, hareOracle, clock.Subscribe())
 
@@ -386,13 +378,6 @@ func (app *SpacemeshApp) startSpacemesh(cmd *cobra.Command, args []string) {
 
 	// todo : register all protocols
 
-	err = app.P2P.Start()
-
-	if err != nil {
-		log.Error("Error starting p2p services, err: %v", err)
-		panic("Error starting p2p services")
-	}
-
 	sgn := hare.NewMockSigning() //todo: shouldn't be any mock code here
 	pub, _ := crypto.NewPublicKey(sgn.Verifier().Bytes())
 	bo := oracle.NewBlockOracle(1, int(app.Config.CONSENSUS.NodesPerLayer), pub.String())
@@ -402,12 +387,19 @@ func (app *SpacemeshApp) startSpacemesh(cmd *cobra.Command, args []string) {
 
 	apiConf := &app.Config.API
 
-	err = app.initServices("x",swarm, "/tmp/", bo,hareOracle)
+	err = app.initServices("x",swarm, "/tmp/",sgn, bo,hareOracle)
 	if err != nil {
 		panic("got error starting services : " +  err.Error())
 	}
 
 	app.startServices()
+
+	err = app.P2P.Start()
+
+	if err != nil {
+		log.Error("Error starting p2p services, err: %v", err)
+		panic("Error starting p2p services")
+	}
 
 	// todo: if there's no loaded account - do the new account interactive flow here
 	// todo: if node has no loaded coin-base account then set the node coinbase to first account

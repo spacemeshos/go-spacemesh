@@ -90,8 +90,8 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 				break
 			}
 
-			if bl.EligibleBlock(&blk){
-data.ReportValidation(NewBlockProtocol, true)
+			if bl.BlockEligible(blk.LayerIndex,blk.MinerID){
+				data.ReportValidation(NewBlockProtocol, true)
 				err := bl.AddBlock(&blk)
 				if err != nil {
 					log.Info("Block already received")
@@ -148,7 +148,7 @@ func (bl *BlockListener) onTick() {
 func (bl *BlockListener) FetchBlock(id mesh.BlockID) {
 	for _, p := range bl.GetPeers() {
 		if ch, err := sendBlockRequest(bl.MessageServer, p, id, bl.Log); err == nil {
-			if b := <-ch; b != nil && bl.EligibleBlock(b) {
+			if b := <-ch; b != nil && bl.BlockEligible(b.LayerIndex, b.MinerID) {
 				bl.AddBlock(b)
 				bl.addUnknownToQueue(b) //add all child blocks to unknown queue
 				return

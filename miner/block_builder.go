@@ -125,10 +125,15 @@ func (t *BlockBuilder) AddTransaction(nonce uint64, origin, destination address.
 }
 
 func (t *BlockBuilder) createBlock(id mesh.LayerID, txs []mesh.SerializableTransaction) mesh.Block {
-	res, err := t.hareResult.GetResult(id)
-	if err != nil {
-		t.Log.Error("didnt receive hare result for layer %v", id)
+	var res []mesh.BlockID = nil
+	var err error
+	if id > 0 {
+		res, err = t.hareResult.GetResult(id -1)
+		if err != nil {
+			t.Log.Error("didnt receive hare result for layer %v", id -1)
+		}
 	}
+
 	b := mesh.Block{
 
 		MinerID: t.minerID,
@@ -174,7 +179,7 @@ func (t *BlockBuilder) acceptBlockData() {
 				return
 
 			case id := <-t.beginRoundEvent:
-				if !t.blockOracle.MiningEligible(id, t.minerID) {
+				if !t.blockOracle.BlockEligible(id, t.minerID) {
 					break
 				}
 

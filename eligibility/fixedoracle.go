@@ -156,7 +156,6 @@ func (fo *FixedRolacle) Eligible(id uint32, committeeSize int, pubKey string, pr
 		fo.emaps[id] = fo.generateEligibility(size)
 	}
 	fo.mapRW.Unlock()
-
 	// get eligibility result
 	_, exist := fo.emaps[id][pubKey]
 

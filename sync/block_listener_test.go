@@ -149,9 +149,12 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
+	//n2.RegisterGossipProtocol(NewBlockProtocol)
 
 	bl1 := ListenerFactory(n1, PeersMock{func() []p2p.Peer { return []p2p.Peer{n2.PublicKey()} }}, "5")
+	bl2 := ListenerFactory(n2, PeersMock{func() []p2p.Peer { return []p2p.Peer{n1.PublicKey()} }}, "4")
 	bl1.Start()
+	bl2.Start()
 
 	blk := mesh.NewBlock(false, nil, time.Now(), 1)
 	tx := mesh.NewSerializableTransaction(0, address.BytesToAddress([]byte{0x01}), address.BytesToAddress([]byte{0x02}), big.NewInt(10), big.NewInt(10), 10)

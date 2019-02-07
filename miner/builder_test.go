@@ -41,7 +41,7 @@ func (m MockOrphans) GetOrphanBlocksExcept(l mesh.LayerID) []mesh.BlockID{
 type mockBlockOracle struct {
 }
 
-func (mbo mockBlockOracle) MiningEligible(id mesh.LayerID, pubkey string) bool {
+func (mbo mockBlockOracle) BlockEligible(id mesh.LayerID, pubkey string) bool {
 	return true
 }
 
@@ -104,7 +104,7 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 	builder.AddTransaction(trans[1].AccountNonce, trans[1].Origin, *trans[1].Recipient, big.NewInt(0).SetBytes(trans[1].Price))
 	builder.AddTransaction(trans[2].AccountNonce, trans[2].Origin, *trans[2].Recipient, big.NewInt(0).SetBytes(trans[2].Price))
 
-	go func() { beginRound <- mesh.LayerID(0) }()
+	go func() { beginRound <- mesh.LayerID(1) }()
 
 	select {
 	case output := <-receiver.RegisterGossipProtocol(sync.NewBlockProtocol):

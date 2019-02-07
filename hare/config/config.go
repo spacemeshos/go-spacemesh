@@ -10,5 +10,5 @@ type Config struct {
 }
 
 func DefaultConfig() Config {
-	return Config{2, 1, 2, 1 *time.Second}
+	return Config{2, 1, 2, 500 *time.Millisecond}
 }

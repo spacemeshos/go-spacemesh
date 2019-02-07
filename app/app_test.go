@@ -3,7 +3,6 @@ package app
 import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/address"
-	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/miner"
@@ -76,18 +75,17 @@ func (app *AppTestSuite) initMultipleInstances(t *testing.T,numOfInstances int){
 	net := service.NewSimulator()
 	storeFormat := "../tmp/state_"
 	runningName := 'a'
+	bo := oracle.NewLocalOracle(numOfInstances)
 	for i := 0; i<numOfInstances; i++ {
 		app.apps = append(app.apps, newSpacemeshApp())
 		store := storeFormat + string(runningName)
 		n := net.NewNode()
 
 		sgn := hare.NewMockSigning() //todo: shouldn't be any mock code here
-		pub, _ := crypto.NewPublicKey(sgn.Verifier().Bytes())
+		pub := sgn.Verifier()
+		bo.Register(true, pub.String())
 
-		bo := oracle.NewBlockOracle(1, 2, pub.String())
-		hareOracle := oracle.NewHareOracle(1, pub.String())
-
-		err := app.apps[i].initServices(string(runningName), n,store, bo,bo,hareOracle)
+		err := app.apps[i].initServices(pub.String(), n,store,sgn,bo,bo)
 		assert.NoError(t, err)
 		app.apps[i].setupGenesis()
 		app.dbs = append(app.dbs, store)
@@ -96,7 +94,6 @@ func (app *AppTestSuite) initMultipleInstances(t *testing.T,numOfInstances int){
 }
 
 func (app *AppTestSuite) TestMultipleNodes(){
-	app.T().Skip()
 	//EntryPointCreated <- true
 
 	addr := address.BytesToAddress([]byte{0x01})
@@ -117,7 +114,7 @@ func (app *AppTestSuite) TestMultipleNodes(){
 	}
 
 	app.apps[0].P2P.Broadcast(miner.IncomingTxProtocol, txbytes)
-	timeout := time.After(250 * time.Second)
+	timeout := time.After(25 * time.Second)
 
 
 	for {

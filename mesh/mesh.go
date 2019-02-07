@@ -7,7 +7,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/state"
 	"math/big"
 	"sort"
-	"strconv"
 	"sync"
 	"sync/atomic"
 )
@@ -104,18 +103,6 @@ func (m *Mesh) SetLatestLayer(idx uint32) {
 	}
 }
 
-func (m *Mesh) CreateLayer(lid LayerID) (*Layer, error){
-	layer, err := m.getLayer(lid)//m.orphanBlocks[lid]
-	if err != nil {
-		panic("no blocks received for layer" + strconv.Itoa(int(lid)))
-	}
-
-	m.Log.Info("Ive created a new layer %v with %v blocks %v txs" , lid, len(layer.blocks))
-	l := NewExistingLayer(lid, layer.blocks)
-
-	m.AddLayer(l)
-	return l, nil
-}
 
 func (m *Mesh) AddLayer(layer *Layer) error {
 	m.lMutex.Lock()

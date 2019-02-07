@@ -148,22 +148,26 @@ func (h *Hare) onTick(id mesh.LayerID) {
 		h.lastLayer = id
 	}
 	h.layerLock.Unlock()
-	//
-	//ti := time.NewTimer(h.networkDelta)
-	//select {
-	//case <-ti.C:
-	//	break // keep going
-	//case <-h.CloseChannel():
-	//	// closed while waiting the delta
-	//	return
-	//}
+
+	ti := time.NewTimer(h.networkDelta)
+	select {
+	case <-ti.C:
+		break // keep going
+	case <-h.CloseChannel():
+		// closed while waiting the delta
+		return
+	}
 
 	// retrieve set form orphan blocks
-	blocks := h.obp.GetOrphanBlocksByLayerId(id -1)
+	blocks := h.obp.GetOrphanBlocksByLayerId(id)
 
-	set := NewEmptySet(len(blocks))
+	if len(blocks) == 0 {
+		log.Info("No blocks for consensus on layer %v", id)
+		return
+	}
+
 	log.Info("received %v new blocks ", len(blocks))
-
+	set := NewEmptySet(len(blocks))
 	for _, b := range blocks {
 		// todo: figure out real type of blockid
 		set.Add(Value{NewBytes32(b.ToBytes())})
