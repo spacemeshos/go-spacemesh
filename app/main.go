@@ -287,8 +287,7 @@ func (app *SpacemeshApp) setupTestFeatures() {
 	api.ApproveAPIGossipMessages(Ctx, app.P2P)
 }
 
-func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service, dbStorepath string,
-										blockValidator sync.BlockValidator, blockOracle oracle.BlockOracle,hareOracle hare.Rolacle) (error){
+func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service, dbStorepath string, blockOracle oracle.BlockOracle,hareOracle hare.Rolacle) (error){
 
 	//todo: should we add all components to a single struct?
 	lg := log.New("shmekel_" + instanceName ,"","")
@@ -321,7 +320,7 @@ func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service,
 
 	//oracle := oracle.NewBlockOracle(1, 2, pub.String())
 	//oracle.Register(pub)
-	blockListener := sync.NewBlockListener(swarm , blockValidator ,mesh, 1*time.Second, 1,clock, lg)
+	blockListener := sync.NewBlockListener(swarm , blockOracle ,mesh, 1*time.Second, 1,clock, lg)
 
 
 	ha := hare.New(hareConfig.DefaultConfig(), swarm,sgn,mesh, hareOracle, clock.Subscribe())
@@ -397,15 +396,13 @@ func (app *SpacemeshApp) startSpacemesh(cmd *cobra.Command, args []string) {
 	sgn := hare.NewMockSigning() //todo: shouldn't be any mock code here
 	pub, _ := crypto.NewPublicKey(sgn.Verifier().Bytes())
 	bo := oracle.NewBlockOracle(1, int(app.Config.CONSENSUS.NodesPerLayer), pub.String())
-
 	hareOracle := oracle.NewHareOracle(1, pub.String())
-
 
 	app.P2P = swarm
 
 	apiConf := &app.Config.API
 
-	err = app.initServices("x",swarm, "/tmp/", bo,bo, hareOracle)
+	err = app.initServices("x",swarm, "/tmp/", bo,hareOracle)
 	if err != nil {
 		panic("got error starting services : " +  err.Error())
 	}

@@ -38,7 +38,7 @@ func (bo *blockOracle) MiningEligible(id mesh.LayerID, pubKey string) bool {
 }
 
 type HareOracle interface {
-	HareEligible(instanceID hare.InstanceId, K int, committeeSize int, pubKey string, proof []byte) bool
+	Eligible(instanceID hare.InstanceId, K int, committeeSize int, pubKey string, proof []byte) bool
 }
 
 type hareOracle struct {
@@ -54,7 +54,7 @@ func NewHareOracle(worldid uint64, pubKey string) *hareOracle {
 }
 
 // Eligible checks eligibility for an identity in a round
-func (bo *hareOracle) HareEligible(id uint32, committeeSize int, pubKey string, proof []byte) bool {
+func (bo *hareOracle) Eligible(id uint32, committeeSize int, pubKey string, proof []byte) bool {
 	//note: we don't use the proof in the oracle server. we keep it just for the future syntax
 	//todo: maybe replace k to be uint32 like hare wants, and don't use -1 for blocks
 	return bo.oc.Eligible(id, committeeSize, pubKey)
