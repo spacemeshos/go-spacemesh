@@ -36,11 +36,9 @@ endif
 
 build:
 ifeq ($(OS),Windows_NT)
-	make genproto
 	go generate ./...
 	go build ${LDFLAGS} -o $(CURR_DIR_WIN)/$(BINARY).exe
 else
-	make genproto
 	go generate ./...
 	go build ${LDFLAGS} -o $(CURR_DIR)/$(BINARY)
 endif
