@@ -73,7 +73,7 @@ func TestMockHashOracle_Role(t *testing.T) {
 	committeeSize := 20
 	counter := 0
 	for i := 0; i < numOfClients; i++ {
-		if oracle.Eligible(instanceId1, 0, committeeSize, generateSigning(t).Verifier().String(), []byte(genSig())) {
+		if oracle.Eligible(0, committeeSize, generateSigning(t).Verifier().String(), []byte(genSig())) {
 			counter++
 		}
 	}
