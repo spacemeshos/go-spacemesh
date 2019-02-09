@@ -58,10 +58,18 @@ test:
 .PHONY: test
 
 test-tidy:
+	git checkout .
 	# We expect `go mod tidy` not to change anything, the test should fail otherwise
 	make tidy
 	git diff --exit-code
 .PHONY: test-tidy
+
+test-fmt:
+	git checkout .
+	# We expect `go fmt` not to change anything, the test should fail otherwise
+	go fmt ./...
+	git diff --exit-code
+.PHONY: test-fmt
 
 lint:
 	./scripts/validate-lint.sh
