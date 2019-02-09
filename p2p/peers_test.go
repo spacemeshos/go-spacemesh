@@ -13,15 +13,15 @@ func getPeers(p Service) (Peers, chan p2pcrypto.PublicKey, chan p2pcrypto.Public
 	value := atomic.Value{}
 	value.Store(make([]Peer, 0, 20))
 	pi := &PeersImpl{snapshot: &value, exit: make(chan struct{})}
-	new, expierd := p.SubscribePeerEvents()
-	go pi.listenToPeers(new, expierd)
-	return pi, new, expierd
+	n, expierd := p.SubscribePeerEvents()
+	go pi.listenToPeers(n, expierd)
+	return pi, n, expierd
 }
 
 func TestPeers_GetPeers(t *testing.T) {
-	pi, new, _ := getPeers(service.NewSimulator().NewNode())
+	pi, n, _ := getPeers(service.NewSimulator().NewNode())
 	a := p2pcrypto.NewRandomPubkey()
-	new <- a
+	n <- a
 	time.Sleep(10 * time.Millisecond) //allow context switch
 	peers := pi.GetPeers()
 	defer pi.Close()
@@ -30,9 +30,9 @@ func TestPeers_GetPeers(t *testing.T) {
 }
 
 func TestPeers_Close(t *testing.T) {
-	pi, new, _ := getPeers(service.NewSimulator().NewNode())
+	pi, n, _ := getPeers(service.NewSimulator().NewNode())
 	a := p2pcrypto.NewRandomPubkey()
-	new <- a
+	n <- a
 	time.Sleep(10 * time.Millisecond) //allow context switch
 	pi.Close()
 	//_, ok := <-new
