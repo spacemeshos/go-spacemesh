@@ -67,19 +67,19 @@ type ninjaTortoise struct {
 	log.Log
 	avgLayerSize       uint32
 	pBase              votingPattern
-	blocks             map[mesh.BlockID]*mesh.Block
-	tEffective         map[mesh.BlockID]votingPattern                  //Explicit voting pattern of latest layer for a block
-	tCorrect           map[mesh.BlockID]map[mesh.BlockID]vec           //correction vectors
-	tExplicit          map[mesh.BlockID]map[mesh.LayerID]votingPattern // explict votes from block to layer pattern
-	layerBlocks        map[mesh.LayerID][]mesh.BlockID
-	tGood              map[mesh.LayerID]votingPattern // good pattern for layer i
-	tSupport           map[votingPattern]int          //for pattern p the number of blocks that support p
-	tComplete          map[votingPattern]struct{}
-	tEffectiveToBlocks map[votingPattern][]mesh.BlockID
-	tVote              map[votingPattern]map[mesh.BlockID]vec      // global opinion
-	tTally             map[votingPattern]map[mesh.BlockID]vec      //for pattern p and block b count votes for b according to p
-	tPattern           map[votingPattern]map[mesh.BlockID]struct{} // set of blocks that comprise pattern p
-	tPatSupport        map[votingPattern]map[mesh.LayerID]votingPattern
+	blocks             map[mesh.BlockID]*mesh.Block                     //block cache
+	tEffective         map[mesh.BlockID]votingPattern                   //Explicit voting pattern of latest layer for a block
+	tCorrect           map[mesh.BlockID]map[mesh.BlockID]vec            //correction vectors
+	tExplicit          map[mesh.BlockID]map[mesh.LayerID]votingPattern  //explict votes from block to layer pattern
+	layerBlocks        map[mesh.LayerID][]mesh.BlockID                  //block ids in each layer
+	tGood              map[mesh.LayerID]votingPattern                   //good pattern for layer i
+	tSupport           map[votingPattern]int                            //for pattern p the number of blocks that support p
+	tComplete          map[votingPattern]struct{}                       //complete voting patterns
+	tEffectiveToBlocks map[votingPattern][]mesh.BlockID                 //inverse blocks effective pattern
+	tVote              map[votingPattern]map[mesh.BlockID]vec           //global opinion
+	tTally             map[votingPattern]map[mesh.BlockID]vec           //for pattern p and block b count votes for b according to p
+	tPattern           map[votingPattern]map[mesh.BlockID]struct{}      //set of blocks that comprise pattern p
+	tPatSupport        map[votingPattern]map[mesh.LayerID]votingPattern //pattern support count
 }
 
 func (ni *ninjaTortoise) processBlock(b *mesh.Block) {
