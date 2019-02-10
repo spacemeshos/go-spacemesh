@@ -177,7 +177,7 @@ func (s *Syncer) Synchronise() {
 			log.Error("cannot insert layer to db because %v", err)
 			continue
 		}
-		s.ValidateLayer(l)
+		go s.ValidateLayer(l)
 	}
 
 	s.Debug("synchronise done, local layer index is ", s.VerifiedLayer(), "most recent is ", s.LatestReceivedLayer())
