@@ -234,7 +234,7 @@ func verifyChannelReadWithTimeout(t *testing.T, ch chan interface{}) interface{}
 
 func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	runtime.GOMAXPROCS(1)
-	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_LayerIdsRequest_", memoryDB)
+	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_FetchBlocks_", memoryDB)
 	syncObj1 := syncs[0]
 	defer syncObj1.Close()
 	syncObj2 := syncs[1]
@@ -290,7 +290,7 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 
 	ch2, err2 = sendBlockRequest(syncObj2.MessageServer, n1.PublicKey(), block3.ID(), syncObj2.Log)
 	assert.NoError(t, err2, "Should not return error")
-	timeout = time.NewTimer(3 *time.Second)
+	timeout = time.NewTimer(5 *time.Second)
 	select {
 	case <-timeout.C:
 		t.Error("timed out ")
