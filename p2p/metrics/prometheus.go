@@ -11,7 +11,6 @@ const (
 	// MetricsSubsystem is a subsystem shared by all metrics exposed by this
 	// package.
 	MetricsSubsystem = "p2p"
-
 )
 
 // TotalPeers is the total number of peers we have connected
@@ -53,9 +52,9 @@ var (
 	}, []string{"protocol", "message_type"})
 
 	// NewGossipMessages is a metric for newly received gossip messages
-	NewGossipMessages     = totalGossipMessages.With("message_type", "new")
+	NewGossipMessages = totalGossipMessages.With("message_type", "new")
 	// OldGossipMessages is a metric for old messages received (duplicates)
-	OldGossipMessages     = totalGossipMessages.With("message_type", "old")
+	OldGossipMessages = totalGossipMessages.With("message_type", "old")
 	// InvalidGossipMessages is a metric for invalid messages received
 	InvalidGossipMessages = totalGossipMessages.With("message_type", "invalid")
 
