@@ -7,7 +7,6 @@ import (
 
 // todo: configure oracle test constants like committee size and honesty.
 
-
 type BlockOracle interface {
 	Eligible(id mesh.LayerID, pubKey string) bool
 }
