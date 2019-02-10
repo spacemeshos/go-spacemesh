@@ -33,7 +33,7 @@ func NewHTTPRequester(url string) *HTTPRequester {
 
 func (hr *HTTPRequester) Get(api, data string) []byte {
 	var jsonStr = []byte(data)
-	log.Info("Sending oracle request : %v ", jsonStr)
+	log.Info("Sending oracle request : %s ", jsonStr)
 	req, err := http.NewRequest("POST", hr.url+"/"+api, bytes.NewBuffer(jsonStr))
 	if err != nil {
 		panic(err)
@@ -90,8 +90,8 @@ func (oc *OracleClient) World() uint64 {
 	return oc.world
 }
 
-func registerQuery(world uint64, stringer fmt.Stringer) string {
-	return fmt.Sprintf(`{ "World": %d, "ID": "%v"}`, world, stringer.String())
+func registerQuery(world uint64, id string, honest bool) string {
+	return fmt.Sprintf(`{ "World": %d, "ID": "%v", "Honest": %t }`, world, id, honest)
 }
 
 func validateQuery(world uint64, instid uint32, committeeSize int) string {
@@ -99,15 +99,13 @@ func validateQuery(world uint64, instid uint32, committeeSize int) string {
 }
 
 // Register asks the oracle server to add this node to the active set
-func (oc *OracleClient) Register(id string) {
-	reg := fmt.Sprintf(`{ "World": %d, "ID": "%v"}`, oc.world, id)
-	oc.client.Get(Register, reg)
+func (oc *OracleClient) Register(honest bool, id string) {
+	oc.client.Get(Register, registerQuery(oc.world, id, honest))
 }
 
 // Unregister asks the oracle server to de-list this node from the active set
-func (oc *OracleClient) Unregister(id string) {
-	unreg := fmt.Sprintf(`{ "World": %d, "ID": "%v"}`, oc.world, id)
-	oc.client.Get(Unregister, unreg)
+func (oc *OracleClient) Unregister(honest bool, id string) {
+	oc.client.Get(Unregister, registerQuery(oc.world, id, honest))
 }
 
 type validRes struct {
@@ -143,28 +141,26 @@ func hashInstanceAndK(instanceID []byte, K int) uint32 {
 	return val
 }
 
-// Validate checks whether a given ID is in the eligible list or not. it fetches the list once and gives answers locally after that.
-func (oc *OracleClient) Validate(instanceID []byte, K int, committeeSize int, pubKey string) bool {
+// Eligible checks whether a given ID is in the eligible list or not. it fetches the list once and gives answers locally after that.
+func (oc *OracleClient) Eligible(id uint32, committeeSize int, pubKey string) bool {
 
 	// make special instance ID
-	val := hashInstanceAndK(instanceID, K)
-
 	oc.eMtx.Lock()
-	_, mok := oc.instMtx[val]
+	_, mok := oc.instMtx[id]
 	if !mok {
-		oc.instMtx[val] = &sync.Mutex{}
+		oc.instMtx[id] = &sync.Mutex{}
 	}
-	oc.instMtx[val].Lock()
-	if r, ok := oc.eligibilityMap[val]; ok {
+	oc.instMtx[id].Lock()
+	if r, ok := oc.eligibilityMap[id]; ok {
 		oc.eMtx.Unlock()
 		_, valid := r[pubKey]
-		oc.instMtx[val].Unlock()
+		oc.instMtx[id].Unlock()
 		return valid
 	}
 
 	oc.eMtx.Unlock()
 
-	req := validateQuery(oc.world, val, committeeSize)
+	req := validateQuery(oc.world, id, committeeSize)
 
 	resp := oc.client.Get(Validate, req)
 
@@ -183,9 +179,9 @@ func (oc *OracleClient) Validate(instanceID []byte, K int, committeeSize int, pu
 	_, valid := elgmap[pubKey]
 
 	oc.eMtx.Lock()
-	oc.eligibilityMap[val] = elgmap
+	oc.eligibilityMap[id] = elgmap
 	oc.eMtx.Unlock()
-	oc.instMtx[val].Unlock()
+	oc.instMtx[id].Unlock()
 
 	return valid
 }

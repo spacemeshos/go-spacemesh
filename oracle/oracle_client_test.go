@@ -69,23 +69,17 @@ func Test_MockOracleClientValidate(t *testing.T) {
 	counter := &requestCounter{client: mr}
 	counter.setCounting(true)
 	oc.client = counter
-<<<<<<< HEAD
-	oc.Register(id)
-=======
 	oc.Register(true, id)
->>>>>>> 961580118b23445872756fdbe5ba3f23cfd7b103
 	require.Equal(t, counter.reqCounter, 1)
 
-	instid := hashInstanceAndK([]byte{0}, 1)
-
-	mr.SetResult(Validate, validateQuery(oc.world, instid, 2),
+	mr.SetResult(Validate, validateQuery(oc.world, 0, 2),
 		[]byte(fmt.Sprintf(`{ "IDs": [ "%v" ] }`, id)))
 
-	valid := oc.Validate([]byte{0}, 1, 2, id)
+	valid := oc.Eligible(0, 2, id)
 
 	require.True(t, valid)
 
-	valid = oc.Validate([]byte{0}, 1, 2, generateID())
+	valid = oc.Eligible(0, 2, generateID())
 
 	require.Equal(t, counter.reqCounter, 2)
 	require.False(t, valid)
@@ -105,13 +99,13 @@ func Test_OracleClientValidate(t *testing.T) {
 	for i := 0; i < size; i++ {
 		pk := generateID()
 		pks[i] = pk
-		oc.Register(pk)
+		oc.Register(true, pk)
 	}
 
 	incommitte := 0
 
 	for i := 0; i < size; i++ {
-		if oc.Validate([]byte{010}, 2, committee, pks[i]) {
+		if oc.Eligible(0, committee, pks[i]) {
 			incommitte++
 		}
 	}
@@ -119,7 +113,7 @@ func Test_OracleClientValidate(t *testing.T) {
 	assert.Equal(t, incommitte, committee)
 
 	for i := 0; i < size; i++ {
-		oc.Unregister(pks[i])
+		oc.Unregister(true, pks[i])
 	}
 }
 
@@ -138,14 +132,9 @@ func Test_Concurrency(t *testing.T) {
 	for i := 0; i < size; i++ {
 		pk := generateID()
 		pks[i] = pk
-		oc.Register(pk)
+		oc.Register(true, pk)
 	}
 
-<<<<<<< HEAD
-	inst := []byte{0, 1}
-
-=======
->>>>>>> 961580118b23445872756fdbe5ba3f23cfd7b103
 	incommitte := 0
 
 	mc := &requestCounter{client: oc.client}
@@ -153,7 +142,7 @@ func Test_Concurrency(t *testing.T) {
 	oc.client = mc
 	mc.setCounting(true)
 	for i := 0; i < size; i++ {
-		if oc.Validate(inst, -1, committee, pks[i]) {
+		if oc.Eligible(0, committee, pks[i]) {
 			incommitte++
 		}
 	}
@@ -161,7 +150,7 @@ func Test_Concurrency(t *testing.T) {
 	mc.setCounting(false)
 
 	for i := 0; i < size; i++ {
-		oc.Unregister(pks[i])
+		oc.Unregister(true, pks[i])
 	}
 
 	assert.Equal(t, mc.reqCounter, 1)
