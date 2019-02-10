@@ -148,7 +148,8 @@ func Test_ConnectionBeforeMessage(t *testing.T) {
 	go func() {
 		for {
 			msg := <-c2 // immediate response will probably trigger GetConnection fast
-			p2.SendMessage(msg.Sender(), exampleProtocol, []byte("RESP"))
+			err := p2.SendMessage(msg.Sender(), exampleProtocol, []byte("RESP"))
+			assert.NoError(t, err)
 			wg.Done()
 		}
 	}()
@@ -178,14 +179,14 @@ func Test_ConnectionBeforeMessage(t *testing.T) {
 			sa.add(p1)
 			_ = p1.RegisterDirectProtocol(exampleProtocol)
 			p1.dht.Update(p2.lNode.Node)
-			p1.SendMessage(p2.lNode.PublicKey(), exampleProtocol, payload)
+			err := p1.SendMessage(p2.lNode.PublicKey(), exampleProtocol, payload)
+			assert.NoError(t, err)
 		}()
 	}
 
 	wg.Wait()
 	cpm.f = nil
 	sa.clean()
-
 }
 
 func RandString(n int) string {
@@ -804,7 +805,7 @@ func TestNeighborhood_Disconnect(t *testing.T) {
 	}
 	assert.False(t, n.hasIncomingPeer(rnd.PublicKey()))
 
-	// manualy add an incoming peer
+	// manually add an incoming peer
 	rnd2 := node.GenerateRandomNodeData()
 	n.outpeers[rnd2.PublicKey().String()] = rnd2.PublicKey() // no need to lock nothing's happening
 	go n.Disconnect(rnd2.PublicKey())
