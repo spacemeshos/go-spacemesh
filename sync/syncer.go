@@ -189,7 +189,7 @@ type peerHashPair struct {
 }
 
 func sendBlockRequest(msgServ *server.MessageServer, peer p2p.Peer, id mesh.BlockID, logger log.Log) (chan *mesh.Block, error) {
-	logger.Info("send block request Peer: ", peer, " id: ", id)
+	logger.Info("send block request Peer: %v id: %v", peer, id)
 	data := &pb.FetchBlockReq{Id: uint32(id)}
 	payload, err := proto.Marshal(data)
 	if err != nil {
