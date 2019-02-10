@@ -23,10 +23,11 @@ jobs:
     script:
       - make genproto
       - make test
-  - name: test-tidy
+  - name: test-tidy-fmt
     script:
       - make genproto
       - make test-tidy
+      - make test-fmt
 
 cache:
   directories:
