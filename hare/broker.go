@@ -1,6 +1,7 @@
 package hare
 
 import (
+	"errors"
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -58,18 +59,18 @@ func NewBroker(networkService NetworkService) *Broker {
 	p.Closer = NewCloser()
 	p.network = networkService
 	p.outbox = make(map[uint32]chan Message)
-	p.inbox = networkService.RegisterGossipProtocol(ProtoName)
+
 
 	return p
 }
 
 // Start listening to protocol messages and dispatch messages (non-blocking)
 func (broker *Broker) Start() error {
-	//if broker.inbox != nil { // Start has been called at least twice
-	//	log.Error("Could not start instance")
-	//	return StartInstanceError(errors.New("instance already started"))
-	//}
-
+	if broker.inbox != nil { // Start has been called at least twice
+		log.Error("Could not start instance")
+		return StartInstanceError(errors.New("instance already started"))
+	}
+	broker.inbox = broker.network.RegisterGossipProtocol(ProtoName)
 	go broker.dispatcher()
 
 	return nil

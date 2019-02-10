@@ -370,12 +370,6 @@ func (app *SpacemeshApp) startSpacemesh(cmd *cobra.Command, args []string) {
 		panic("Error starting p2p services")
 	}
 
-	app.P2P = swarm
-
-	if app.Config.TestMode {
-		app.setupTestFeatures()
-	}
-
 	// todo : register all protocols
 
 	sgn := hare.NewMockSigning() //todo: shouldn't be any mock code here
@@ -383,11 +377,14 @@ func (app *SpacemeshApp) startSpacemesh(cmd *cobra.Command, args []string) {
 	bo := oracle.NewBlockOracle(1, int(app.Config.CONSENSUS.NodesPerLayer), pub.String())
 	hareOracle := oracle.NewHareOracle(1, pub.String())
 
-	app.P2P = swarm
-
 	apiConf := &app.Config.API
 
 	err = app.initServices("x",swarm, "/tmp/",sgn, bo,hareOracle)
+
+	if app.Config.TestMode {
+		app.setupTestFeatures()
+	}
+
 	if err != nil {
 		panic("got error starting services : " +  err.Error())
 	}
