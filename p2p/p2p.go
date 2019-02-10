@@ -10,6 +10,6 @@ import (
 type Service service.Service
 
 // New creates a new P2P service a.k.a `swarm` it tries to load node information from the disk.
-func New(ctx context.Context, config config.Config) (Service, error) {
+func New(ctx context.Context, config config.Config) (*swarm, error) {
 	return newSwarm(ctx, config, config.NewNode, true) // TODO ADD Persist param
 }

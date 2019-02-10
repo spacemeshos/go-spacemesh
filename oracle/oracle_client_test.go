@@ -69,7 +69,11 @@ func Test_MockOracleClientValidate(t *testing.T) {
 	counter := &requestCounter{client: mr}
 	counter.setCounting(true)
 	oc.client = counter
+<<<<<<< HEAD
 	oc.Register(id)
+=======
+	oc.Register(true, id)
+>>>>>>> 961580118b23445872756fdbe5ba3f23cfd7b103
 	require.Equal(t, counter.reqCounter, 1)
 
 	instid := hashInstanceAndK([]byte{0}, 1)
@@ -137,8 +141,11 @@ func Test_Concurrency(t *testing.T) {
 		oc.Register(pk)
 	}
 
+<<<<<<< HEAD
 	inst := []byte{0, 1}
 
+=======
+>>>>>>> 961580118b23445872756fdbe5ba3f23cfd7b103
 	incommitte := 0
 
 	mc := &requestCounter{client: oc.client}

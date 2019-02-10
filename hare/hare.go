@@ -35,7 +35,7 @@ type TerminationOutput interface {
 }
 
 type orphanBlockProvider interface {
-	GetOrphanBlocks() []mesh.BlockID
+	GetOrphanBlocksByLayerId(layerId mesh.LayerID) []mesh.BlockID
 }
 
 // Hare is an orchestrator that shoots consensus processes and collects their termination output
@@ -159,10 +159,15 @@ func (h *Hare) onTick(id mesh.LayerID) {
 	}
 
 	// retrieve set form orphan blocks
-	blocks := h.obp.GetOrphanBlocks()
+	blocks := h.obp.GetOrphanBlocksByLayerId(id)
 
+	if len(blocks) == 0 {
+		log.Info("No blocks for consensus on layer %v", id)
+		return
+	}
+
+	log.Info("received %v new blocks ", len(blocks))
 	set := NewEmptySet(len(blocks))
-
 	for _, b := range blocks {
 		// todo: figure out real type of blockid
 		set.Add(Value{NewBytes32(b.ToBytes())})

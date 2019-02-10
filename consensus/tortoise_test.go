@@ -15,6 +15,7 @@ func TestAlgorithm_Sanity(t *testing.T) {
 	alg := NewAlgorithm(uint32(layerSize), uint32(cachedLayers))
 	l := createGenesisLayer()
 	alg.HandleIncomingLayer(l)
+	alg.RegisterLayerCallback(func(id mesh.LayerID) {})
 	for i := 0; i < 11-1; i++ {
 		lyr := createFullPointingLayer(l, layerSize)
 		start := time.Now()

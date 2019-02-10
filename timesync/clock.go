@@ -1,6 +1,7 @@
 package timesync
 
 import (
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"sync"
 	"time"
@@ -18,10 +19,17 @@ type Ticker struct {
 	startEpoch   time.Time
 	time         Clock
 	stop         chan struct{}
+	ids          map[LayerTimer]int
 }
 
 type Clock interface {
 	Now() time.Time
+}
+
+type RealClock struct{}
+
+func (RealClock) Now() time.Time {
+	return time.Now()
 }
 
 func NewTicker(time Clock, tickInterval time.Duration, startEpoch time.Time) *Ticker {
@@ -32,6 +40,7 @@ func NewTicker(time Clock, tickInterval time.Duration, startEpoch time.Time) *Ti
 		startEpoch:   startEpoch,
 		time:         time,
 		stop:         make(chan struct{}),
+		ids:          make(map[LayerTimer]int),
 	}
 }
 
@@ -45,15 +54,20 @@ func (t *Ticker) Stop() {
 
 func (t *Ticker) notifyOnTick() {
 	t.m.Lock()
+	defer t.m.Unlock()
 	for _, ch := range t.subscribes {
+
 		ch <- t.currentLayer
+		log.Debug("iv'e notified number : %v", t.ids[ch])
 	}
-	t.m.Unlock()
+	log.Debug("Ive notified all")
+
 }
 
 func (t *Ticker) Subscribe() LayerTimer {
-	ch := make(LayerTimer, 2)
+	ch := make(LayerTimer)
 	t.m.Lock()
+	t.ids[ch] = len(t.ids)
 	t.subscribes = append(t.subscribes, ch)
 	t.m.Unlock()
 
@@ -68,7 +82,9 @@ func (t *Ticker) updateLayerID() {
 }
 
 func (t *Ticker) StartClock() {
+	log.Info("starting global clock")
 	if t.time.Now().Before(t.startEpoch) {
+		log.Info("global clock sleeping till epoch")
 		sleepTill := t.startEpoch.Sub(t.time.Now())
 		tmr := time.NewTimer(sleepTill)
 		select {
@@ -86,6 +102,7 @@ func (t *Ticker) StartClock() {
 	for {
 		select {
 		case <-tick.C:
+			log.Info("released tick layerId %v", t.currentLayer+1)
 			t.currentLayer++
 			t.notifyOnTick()
 			tick.Reset(t.tickInterval)
