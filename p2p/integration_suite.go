@@ -19,7 +19,8 @@ type NodeTestInstance interface {
 	LocalNode() *node.LocalNode // this holds the keys
 }
 
-// IntegrationTestSuite is a suite which bootstraps a network according to the given params and lets you run actions on this network.
+// IntegrationTestSuite is a suite which bootstraps a network according to the given params
+// and lets you run actions on this network.
 // you must set the params before running the suite.
 type IntegrationTestSuite struct {
 	suite.Suite

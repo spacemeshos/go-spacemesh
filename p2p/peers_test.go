@@ -13,9 +13,9 @@ func getPeers(p Service) (Peers, chan p2pcrypto.PublicKey, chan p2pcrypto.Public
 	value := atomic.Value{}
 	value.Store(make([]Peer, 0, 20))
 	pi := &PeersImpl{snapshot: &value, exit: make(chan struct{})}
-	n, expierd := p.SubscribePeerEvents()
-	go pi.listenToPeers(n, expierd)
-	return pi, n, expierd
+	n, expired := p.SubscribePeerEvents()
+	go pi.listenToPeers(n, expired)
+	return pi, n, expired
 }
 
 func TestPeers_GetPeers(t *testing.T) {
