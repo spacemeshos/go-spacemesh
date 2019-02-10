@@ -212,14 +212,14 @@ func (ni *ninjaTortoise) updateCorrectionVectors(p votingPattern, bottomOfWindow
 func (ni *ninjaTortoise) updatePatternTally(newMinGood votingPattern, botomOfWindow mesh.LayerID) {
 	ni.Debug("update tally pbase id:%d layer:%d p id:%d layer:%d", ni.pBase.id, ni.pBase.Layer(), newMinGood.id, newMinGood.Layer())
 
-	m := make(map[mesh.BlockID]vec)
-	m2 := make(map[mesh.LayerID]int)
+	correctionMap := make(map[mesh.BlockID]vec)
+	effCountMap := make(map[mesh.LayerID]int)
 	foo := func(b *mesh.Block) {
 		if eff, found := ni.tEffective[b.ID()]; found {
-			m2[eff.Layer()] = m2[eff.Layer()] + 1
+			effCountMap[eff.Layer()] = effCountMap[eff.Layer()] + 1
 			if p, found := ni.tGood[eff.Layer()]; found && eff == p {
 				for k, v := range ni.tCorrect[b.ID()] {
-					m[k] = m[k].Add(v)
+					correctionMap[k] = correctionMap[k].Add(v)
 				}
 			}
 		}
@@ -229,11 +229,11 @@ func (ni *ninjaTortoise) updatePatternTally(newMinGood votingPattern, botomOfWin
 
 	for idx := ni.pBase.Layer(); idx < newMinGood.Layer(); idx++ {
 		g := ni.tGood[idx]
-		effc := m2[idx]
+		effc := effCountMap[idx]
 		for b, v := range ni.tVote[g] {
 			tally := ni.tTally[newMinGood][b]
 			tally = tally.Add(v.Multiply(effc))
-			if count, found := m[b]; found {
+			if count, found := correctionMap[b]; found {
 				tally = tally.Add(count)
 			} else {
 				ni.Debug("no correction vectors for %", g)
@@ -307,11 +307,10 @@ func (ni *ninjaTortoise) addPatternVote(p votingPattern) func(b *mesh.Block) {
 		var vp map[mesh.LayerID]votingPattern
 		var found bool
 		if vp, found = ni.tExplicit[b.ID()]; !found {
-			panic("block has no explicit voting, something went wrong ")
+			panic(fmt.Sprintf("block %d has no explicit voting, something went wrong ", b.ID()))
 		}
 
 		for _, ex := range vp {
-			//if ex.Layer() > ni.pBase.Layer() {
 			for _, bl := range ni.layerBlocks[ex.Layer()] {
 				if _, found := ni.tPattern[ex][bl]; found {
 					ni.Debug("add pattern vote for pattern %d block %d layer %d", p, b.ID(), b.Layer())
