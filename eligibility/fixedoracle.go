@@ -13,7 +13,6 @@ type FixedRolacle struct {
 	mapRW  sync.RWMutex
 }
 
-
 func New() *FixedRolacle {
 	rolacle := &FixedRolacle{}
 	rolacle.honest = make(map[string]struct{})
@@ -130,7 +129,7 @@ func (fo *FixedRolacle) generateEligibility(expCom int) map[string]struct{} {
 		pickUnique(expFaulty, fau, emap)
 	}
 
-	rem := expCom/2-1 - len(fo.faulty)
+	rem := expCom/2 - 1 - len(fo.faulty)
 	if rem > 0 { // need to pickUnique the remaining from honest
 		pickUnique(rem, hon, emap)
 	}
