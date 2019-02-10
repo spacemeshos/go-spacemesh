@@ -80,7 +80,7 @@ func (its *IntegrationTestSuite) SetupSuite() {
 				its.BeforeHook(i, swarm[i])
 			}
 
-			_ : swarm[i].Start() // ignore error?
+			_: swarm[i].Start() // ignore error?
 
 			err := swarm[i].waitForBoot()
 			if err != nil {
