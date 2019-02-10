@@ -50,6 +50,9 @@ type BaseConfig struct {
 	AccountDir string `mapstructure:"account-dir"`
 
 	TestMode bool `mapstructure:"test-mode"`
+
+	CollectMetrics bool `mapstructure:"metrics"`
+	MetricsPort    int  `mapstructure:"metrics-port"`
 }
 
 // DefaultConfig returns the default configuration for a spacemesh node
@@ -65,12 +68,14 @@ func DefaultConfig() Config {
 // DefaultBaseConfig returns a default configuration for spacemesh
 func defaultBaseConfig() BaseConfig {
 	return BaseConfig{
-		HomeDir:    defaultHomeDir,
-		DataDir:    defaultDataDir,
-		ConfigFile: defaultConfigFileName,
-		LogDir:     defaultLogDir,
-		AccountDir: defaultAccountDir,
-		TestMode:   defaultTestMode,
+		HomeDir:        defaultHomeDir,
+		DataDir:        defaultDataDir,
+		ConfigFile:     defaultConfigFileName,
+		LogDir:         defaultLogDir,
+		AccountDir:     defaultAccountDir,
+		TestMode:       defaultTestMode,
+		CollectMetrics: false,
+		MetricsPort:    1010,
 	}
 }
 
