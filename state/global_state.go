@@ -79,6 +79,8 @@ func (self *StateDB) Exist(addr address.Address) bool {
 // Empty returns whether the state object is either non-existent
 // or empty according to the EIP161 specification (balance = nonce = code = 0)
 func (self *StateDB) Empty(addr address.Address) bool {
+	self.lock.Lock()
+	defer self.lock.Unlock()
 	so := self.getStateObj(addr)
 	return so == nil || so.empty()
 }
@@ -151,6 +153,8 @@ func (self *StateDB) updateStateObj(StateObj *StateObj) {
 
 // Retrieve a state object given by the address. Returns nil if not found.
 func (self *StateDB) getStateObj(addr address.Address) (StateObj *StateObj) {
+	self.lock.Lock()
+	defer self.lock.Unlock()
 	// Prefer 'live' objects.
 	if obj := self.stateObjects[addr]; obj != nil {
 		/*if obj.deleted {
@@ -204,6 +208,8 @@ func (self *StateDB) createObject(addr address.Address) (newobj, prev *StateObj)
 	} else {
 		self.journal.append(resetObjectChange{prev: prev})
 	}*/
+	self.lock.Lock()
+	defer self.lock.Unlock()
 	self.setStateObj(newobj)
 	self.makeDirtyObj(newobj)
 	return newobj, prev
@@ -252,6 +258,8 @@ func (self *StateDB) Copy() *StateDB {
 
 // Commit writes the state to the underlying in-memory trie database.
 func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
 	// Commit objects to the trie.
 	for addr, stateObject := range s.stateObjects {
 		_, isDirty := s.stateObjectsDirty[addr]

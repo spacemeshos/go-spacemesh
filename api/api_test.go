@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/golang/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/address"
+	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/stretchr/testify/require"
 	"io/ioutil"
@@ -226,7 +227,7 @@ func TestJsonWalletApi(t *testing.T) {
 	const contentType = "application/json"
 
 	// generate request payload (api input params)
-	reqParams := pb.AccountId{Address: addrBytes}
+	reqParams := pb.AccountId{Address: common.Bytes2Hex(addrBytes)}
 	var m jsonpb.Marshaler
 	payload, err := m.MarshalToString(&reqParams)
 	assert.NoError(t, err, "failed to marshal to string")
@@ -277,7 +278,7 @@ func TestJsonWalletApi(t *testing.T) {
 	value = resp.Header.Get("Content-Type")
 	assert.Equal(t, value, contentType)
 
-	txParams := pb.SignedTransaction{TxData: []byte{0x00, 0x01, 0x02, 0x03}}
+	txParams := pb.SignedTransaction{TxData: "01020304"}
 	payload, err = m.MarshalToString(&txParams)
 	url = fmt.Sprintf("http://127.0.0.1:%d/v1/submittransaction", config.ConfigValues.JSONServerPort)
 	resp, err = http.Post(url, contentType, strings.NewReader(payload)) //todo: we currently accept all kinds of payloads
@@ -300,7 +301,7 @@ func TestJsonWalletApi(t *testing.T) {
 	_, err = proto.Marshal(&txParams)
 	assert.NoError(t, err)
 
-	assert.Equal(t, txParams.TxData, net.broadcasted)
+	assert.Equal(t, txParams.TxData, common.Bytes2Hex(net.broadcasted))
 
 	value = resp.Header.Get("Content-Type")
 	assert.Equal(t, value, contentType)
@@ -339,7 +340,7 @@ func TestJsonWalletApi_Errors(t *testing.T) {
 	const contentType = "application/json"
 
 	// generate request payload (api input params)
-	reqParams := pb.AccountId{Address: addrBytes}
+	reqParams := pb.AccountId{Address: common.Bytes2Hex(addrBytes)}
 	var m jsonpb.Marshaler
 	payload, err := m.MarshalToString(&reqParams)
 	assert.NoError(t, err, "failed to marshal to string")

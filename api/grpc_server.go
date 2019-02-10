@@ -6,6 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/api/pb"
+	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"strconv"
 
@@ -31,7 +32,7 @@ func (s SpacemeshGrpcService) Echo(ctx context.Context, in *pb.SimpleMessage) (*
 
 // Echo returns the response for an echo api request
 func (s SpacemeshGrpcService) GetBalance(ctx context.Context, in *pb.AccountId) (*pb.SimpleMessage, error) {
-	addr := address.BytesToAddress(in.Address)
+	addr := address.HexToAddress(in.Address)
 
 	if s.StateApi.Exist(addr) != true {
 		return nil, fmt.Errorf("account does not exist")
@@ -44,7 +45,7 @@ func (s SpacemeshGrpcService) GetBalance(ctx context.Context, in *pb.AccountId) 
 
 // Echo returns the response for an echo api request
 func (s SpacemeshGrpcService) GetNonce(ctx context.Context, in *pb.AccountId) (*pb.SimpleMessage, error) {
-	addr := address.BytesToAddress(in.Address)
+	addr := address.HexToAddress(in.Address)
 
 	if s.StateApi.Exist(addr) != true {
 		return nil, fmt.Errorf("account does not exist")
@@ -60,7 +61,7 @@ func (s SpacemeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.Sign
 	//todo: transactions should be syntactically validated
 
 	//todo" should this be in a go routine?
-	s.Network.Broadcast(txGossipChannel, in.TxData)
+	s.Network.Broadcast(txGossipChannel, common.FromHex(in.TxData))
 
 	return &pb.SimpleMessage{Value: "ok"}, nil
 }

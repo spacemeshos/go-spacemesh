@@ -5,6 +5,7 @@ import (
 	"github.com/golang-collections/go-datastructures/bitarray"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"sync"
 )
 
 type LayerQueue chan *Layer
@@ -16,17 +17,19 @@ type BlockPosition struct {
 }
 
 type Algorithm struct {
-	block2Id          map[BlockID]uint32
-	allBlocks         map[BlockID]*TortoiseBlock
-	layerQueue        LayerQueue
-	idQueue           NewIdQueue
-	posVotes          []bitarray.BitArray
-	visibilityMap     [20000]BlockPosition
-	layers            map[LayerID]*Layer
-	layerSize         uint32
-	cachedLayers      uint32
-	remainingBlockIds uint32
-	totalBlocks       uint32
+	block2Id           map[BlockID]uint32
+	allBlocks          map[BlockID]*TortoiseBlock
+	layerQueue         LayerQueue
+	idQueue            NewIdQueue
+	posVotes           []bitarray.BitArray
+	visibilityMap      [20000]BlockPosition
+	layers             map[LayerID]*Layer
+	layerSize          uint32
+	cachedLayers       uint32
+	remainingBlockIds  uint32
+	totalBlocks        uint32
+	layerReadyCallback func(layerId mesh.LayerID)
+	mu                 sync.Mutex
 }
 
 func NewAlgorithm(layerSize uint32, cachedLayers uint32) Algorithm {
@@ -40,11 +43,16 @@ func NewAlgorithm(layerSize uint32, cachedLayers uint32) Algorithm {
 		totalBlocks:       totBlocks,
 		posVotes:          make([]bitarray.BitArray, totBlocks),
 		//visibilityMap:     make([20000]BlockPosition),
-		layers:       make(map[LayerID]*Layer),
-		layerSize:    layerSize,
-		cachedLayers: cachedLayers,
+		layers:             make(map[LayerID]*Layer),
+		layerSize:          layerSize,
+		cachedLayers:       cachedLayers,
+		layerReadyCallback: nil,
 	}
 	return trtl
+}
+
+func (alg *Algorithm) RegisterLayerCallback(callback func(mesh.LayerID)) {
+	alg.layerReadyCallback = callback
 }
 
 func (alg *Algorithm) GlobalVotingAvg() uint64 {
@@ -169,7 +177,9 @@ func (alg *Algorithm) recycleLayer(l *Layer) {
 		delete(alg.allBlocks, block.Id)
 		alg.zeroBitColumn(uint64(id))
 	}
+	alg.mu.Lock()
 	delete(alg.layers, l.index)
+	alg.mu.Unlock()
 }
 
 func (alg *Algorithm) assignIdForBlock(blk *TortoiseBlock) uint32 {
@@ -196,7 +206,9 @@ func (alg *Algorithm) assignIdForBlock(blk *TortoiseBlock) uint32 {
 
 func (alg *Algorithm) HandleIncomingLayer(ll *mesh.Layer) {
 	l := FromLayerToTortoiseLayer(ll)
+	alg.mu.Lock()
 	alg.layers[l.index] = l
+	alg.mu.Unlock()
 	alg.layerQueue <- l
 	if len(alg.layerQueue) >= int(alg.cachedLayers) {
 		layer := <-alg.layerQueue
@@ -209,8 +221,16 @@ func (alg *Algorithm) HandleIncomingLayer(ll *mesh.Layer) {
 		alg.posVotes[blockId] = *votesBM
 		alg.visibilityMap[blockId] = BlockPosition{*visibleBM, originBlock.Layer()}
 	}
+	if l.index <= 0 {
+		return
+	}
+	alg.mu.Lock()
+	if _, exist := alg.layers[l.index-1]; exist {
+		alg.layerReadyCallback(mesh.LayerID(l.index - 1))
+	}
+	alg.mu.Unlock()
 }
 
-func (alg *Algorithm) HandleLateBlock(b *TortoiseBlock) {
+func (alg *Algorithm) HandleLateBlock(b *mesh.Block) {
 	log.Info("received block with layer Id %v block id: %v ", b.Layer(), b.ID())
 }
