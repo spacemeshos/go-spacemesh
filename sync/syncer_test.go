@@ -328,7 +328,7 @@ func TestSyncProtocol_SyncTwoNodes(t *testing.T) {
 	syncObj1.AddLayer(mesh.NewExistingLayer(4, []*mesh.Block{block9}))
 	syncObj1.AddLayer(mesh.NewExistingLayer(5, []*mesh.Block{block10}))
 
-	timeout := time.After(4 * time.Second)
+	timeout := time.After(7 * time.Second)
 	syncObj2.SetLatestLayer(5)
 	syncObj1.Start()
 	syncObj2.Start()
