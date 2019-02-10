@@ -58,9 +58,9 @@ func (t *Ticker) notifyOnTick() {
 	for _, ch := range t.subscribes {
 
 		ch <- t.currentLayer
-		//log.Info("iv'e notified number : %v", t.ids[ch])
+		log.Debug("iv'e notified number : %v", t.ids[ch])
 	}
-	//log.Info("Ive notified all")
+	log.Debug("Ive notified all")
 
 }
 

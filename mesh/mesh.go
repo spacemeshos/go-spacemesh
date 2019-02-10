@@ -198,7 +198,7 @@ func (m *Mesh) handleOrphanBlocks(block *Block) {
 	for _, b := range block.ViewEdges {
 		for _, layermap := range m.orphanBlocks {
 			if _, has := layermap[b]; has {
-				m.Log.Info("delete block ", b, "from orphans")
+				m.Log.Debug("delete block ", b, "from orphans")
 				delete(layermap, b)
 				atomic.AddInt32(&m.orphanBlockCount, -1)
 				break

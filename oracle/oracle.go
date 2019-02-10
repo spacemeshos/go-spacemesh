@@ -61,11 +61,6 @@ func (bo *blockOracle) BlockEligible(id mesh.LayerID, pubKey string) bool {
 	return bo.oc.Eligible(uint32(id), bo.committeeSize, pubKey)
 }
 
-/*
-type HareOracle interface {
-	Eligible(instanceID hare.InstanceId, K int, committeeSize int, pubKey string, proof []byte) bool
-}
-*/
 type hareOracle struct {
 	oc *OracleClient
 }
