@@ -142,9 +142,18 @@ func TestSyncProtocol_BlockRequest(t *testing.T) {
 	block := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), lid, []byte("data data data"))
 	syncObj.AddLayer(mesh.NewExistingLayer(lid, []*mesh.Block{block}))
 	ch, err := sendBlockRequest(syncObj2.MessageServer, nodes[0].Node.PublicKey(), block.ID(), syncObj.Log)
-	a := <-ch
-	assert.NoError(t, err, "Should not return error")
-	assert.Equal(t, a.ID(), block.ID(), "wrong block")
+	timeout := time.NewTimer(2 *time.Second)
+
+	select {
+		case a := <-ch:
+			assert.NoError(t, err, "Should not return error")
+			assert.Equal(t, a.ID(), block.ID(), "wrong block")
+		case <-timeout.C:
+			assert.Fail(t, "no message received on channel")
+	}
+
+
+
 }
 
 func TestSyncProtocol_LayerHashRequest(t *testing.T) {
@@ -183,22 +192,30 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 	layer.AddBlock(mesh.NewExistingBlock(mesh.BlockID(222), lid, nil))
 	syncObj1.AddLayer(layer)
 	ch, err := syncObj.sendLayerIDsRequest(nodes[1].Node.PublicKey(), lid)
-	ids := <-ch
-	assert.NoError(t, err, "Should not return error")
-	assert.Equal(t, len(layer.Blocks()), len(ids), "wrong block")
+	timeout := time.NewTimer(2 *time.Second)
 
-	for _, a := range layer.Blocks() {
-		found := false
-		for _, id := range ids {
-			if a.ID() == mesh.BlockID(id) {
-				found = true
-				break
+	select {
+		case ids := <-ch:
+			assert.NoError(t, err, "Should not return error")
+			assert.Equal(t, len(layer.Blocks()), len(ids), "wrong block")
+			for _, a := range layer.Blocks() {
+				found := false
+				for _, id := range ids {
+					if a.ID() == mesh.BlockID(id) {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Error(errors.New("id list did not match"))
+				}
 			}
-		}
-		if !found {
-			t.Error(errors.New("id list did not match"))
-		}
+		case <-timeout.C:
+			assert.Fail(t, "no message received on channel")
 	}
+
+
+
 }
 
 func verifyChannelReadWithTimeout(t *testing.T, ch chan interface{}) interface{}{
