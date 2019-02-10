@@ -12,6 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
+	"runtime"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -232,6 +233,7 @@ func verifyChannelReadWithTimeout(t *testing.T, ch chan interface{}) interface{}
 }
 
 func TestSyncProtocol_FetchBlocks(t *testing.T) {
+	runtime.GOMAXPROCS(1)
 	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_LayerIdsRequest_", memoryDB)
 	syncObj1 := syncs[0]
 	defer syncObj1.Close()
