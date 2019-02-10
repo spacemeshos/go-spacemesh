@@ -46,6 +46,7 @@ type State struct {
 }
 
 type ConsensusProcess struct {
+	log.Log
 	State
 	Closer            // the consensus is closeable
 	instanceId        InstanceId
@@ -67,7 +68,7 @@ type ConsensusProcess struct {
 	pending           map[string]Message
 }
 
-func NewConsensusProcess(cfg config.Config, instanceId InstanceId, s *Set, oracle Rolacle, signing Signing, p2p NetworkService, terminationReport chan TerminationOutput) *ConsensusProcess {
+func NewConsensusProcess(cfg config.Config, instanceId InstanceId, s *Set, oracle Rolacle, signing Signing, p2p NetworkService, terminationReport chan TerminationOutput, logger log.Log) *ConsensusProcess {
 	proc := &ConsensusProcess{}
 	proc.State = State{0, -1, s.Clone(), nil}
 	proc.Closer = NewCloser()
@@ -78,6 +79,7 @@ func NewConsensusProcess(cfg config.Config, instanceId InstanceId, s *Set, oracl
 	proc.validator = NewMessageValidator(signing, cfg.F+1, cfg.N, proc.statusValidator())
 	proc.preRoundTracker = NewPreRoundTracker(cfg.F+1, cfg.N)
 	proc.statusesTracker = NewStatusTracker(cfg.F+1, cfg.N)
+	proc.statusesTracker.Log = logger
 	proc.proposalTracker = NewProposalTracker(cfg.N)
 	proc.commitTracker = NewCommitTracker(cfg.F+1, cfg.N, nil)
 	proc.notifyTracker = NewNotifyTracker(cfg.N)
@@ -86,6 +88,7 @@ func NewConsensusProcess(cfg config.Config, instanceId InstanceId, s *Set, oracl
 	proc.notifySent = false
 	proc.terminationReport = terminationReport
 	proc.pending = make(map[string]Message, cfg.N)
+	proc.Log = logger
 
 	return proc
 }
@@ -101,7 +104,7 @@ func iterationFromCounter(roundCounter uint32) uint32 {
 
 func (proc *ConsensusProcess) Start() error {
 	if !proc.startTime.IsZero() { // called twice on same instance
-		log.Error("ConsensusProcess has already been started.")
+		proc.Error("ConsensusProcess has already been started.")
 		return StartInstanceError(errors.New("instance already started"))
 	}
 
@@ -118,7 +121,7 @@ func (proc *ConsensusProcess) createInbox(size uint32) chan Message {
 }
 
 func (proc *ConsensusProcess) eventLoop() {
-	log.Info("Start listening for instance %v ", proc.instanceId.Bytes())
+	proc.Info("Start listening")
 
 	// set pre-round message and send
 	m := proc.initDefaultBuilder(proc.s).SetType(PreRound).Sign(proc.signing).Build()
@@ -139,7 +142,7 @@ PreRound:
 	}
 	proc.preRoundTracker.FilterSet(proc.s)
 	if proc.s.Size() == 0 {
-		log.Error("Fatal: PreRound ended with empty set")
+		proc.Error("Fatal: PreRound ended with empty set")
 	}
 
 	// start first iteration
@@ -150,7 +153,7 @@ PreRound:
 		case msg := <-proc.inbox: // msg event
 			proc.handleMessage(msg)
 			if proc.terminating {
-				log.Info("Detected terminating on. Exiting.")
+				proc.Info("Detected terminating on. Exiting.")
 				return
 			}
 		case <-ticker.C: // next round event
@@ -158,7 +161,7 @@ PreRound:
 			proc.advanceToNextRound()
 			proc.onRoundBegin()
 		case <-proc.CloseChannel(): // close event
-			log.Info("Stop event loop, terminating")
+			proc.Info("Stop event loop, terminating")
 			return
 		}
 	}
@@ -177,18 +180,18 @@ func roleFromRoundCounter(k uint32) Role {
 
 func (proc *ConsensusProcess) onEarlyMessage(m Message) {
 	if m.msg == nil {
-		log.Error("onEarlyMessage called with nil")
+		proc.Error("onEarlyMessage called with nil")
 		return
 	}
 
 	verifier, err := NewVerifier(m.msg.PubKey)
 	if err != nil {
-		log.Warning("Could not construct verifier: ", err)
+		proc.Warning("Could not construct verifier: ", err)
 		return
 	}
 
 	if _, exist := proc.pending[verifier.String()]; exist { // ignore, already received
-		log.Warning("Already received message from sender %v", verifier.String())
+		proc.Warning("Already received message from sender %v", verifier.String())
 		return
 	}
 
@@ -212,12 +215,12 @@ func hashInstanceAndK(instanceID InstanceId, K uint32) uint32 {
 
 func (proc *ConsensusProcess) validateRole(m *pb.HareMessage) bool {
 	if m == nil {
-		log.Error("validateRole called with nil")
+		proc.Error("validateRole called with nil")
 		return false
 	}
 
 	if m.Message == nil {
-		log.Warning("Role validation failed: message is nil")
+		proc.Warning("Role validation failed: message is nil")
 		return false
 	}
 
@@ -225,13 +228,13 @@ func (proc *ConsensusProcess) validateRole(m *pb.HareMessage) bool {
 
 	verifier, err := NewVerifier(m.PubKey)
 	if err != nil {
-		log.Error("Could not build verifier")
+		proc.Error("Could not build verifier")
 		return false
 	}
 
 	// validate role
 	if !proc.oracle.Eligible(hashInstanceAndK(proc.instanceId, m.Message.K), proc.expectedCommitteeSize(m.Message.K), verifier.String(), Signature(m.Message.RoleProof)) {
-		log.Warning("Role validation failed")
+		proc.Warning("Role validation failed")
 		return false
 	}
 
@@ -243,13 +246,13 @@ func (proc *ConsensusProcess) handleMessage(msg Message) {
 	m := msg.msg
 	// first validate role
 	if !proc.validateRole(m) {
-		log.Warning("Role validation failed, pubkey %v", m.PubKey)
+		proc.Warning("Role validation failed, pubkey %v", m.PubKey)
 		msg.reportValidationResult(false)
 		return
 	}
 
 	if !proc.validator.SyntacticallyValidateMessage(m) {
-		log.Warning("Syntactically validation failed, pubkey %v", m.PubKey)
+		proc.Warning("Syntactically validation failed, pubkey %v", m.PubKey)
 		msg.reportValidationResult(false)
 		return
 	}
@@ -261,10 +264,10 @@ func (proc *ConsensusProcess) handleMessage(msg Message) {
 	if !proc.validator.ContextuallyValidateMessage(m, proc.k) {
 		if !proc.validator.ContextuallyValidateMessage(m, proc.k+1) {
 			// TODO: should return error from message validation to indicate what failed, should retry only for contextual failure
-			log.Warning("Message is not valid for either round, pubkey %v", m.PubKey)
+			proc.Warning("Message is not valid for either round, pubkey %v", m.PubKey)
 			return
 		} else { // a valid early message, keep it for later
-			log.Info("Early message detected. Keeping message, pubkey %v", m.PubKey)
+			proc.Info("Early message detected. Keeping message, pubkey %v", m.PubKey)
 			proc.onEarlyMessage(msg)
 			return
 		}
@@ -287,7 +290,7 @@ func (proc *ConsensusProcess) processMsg(m *pb.HareMessage) {
 	case Notify: // end of round 4
 		proc.processNotifyMsg(m)
 	default:
-		log.Warning("Unknown message type: %v , pubkey %v", m.Message.Type, m.PubKey)
+		proc.Warning("Unknown message type: %v , pubkey %v", m.Message.Type, m.PubKey)
 	}
 }
 
@@ -305,19 +308,19 @@ func (proc *ConsensusProcess) sendMessage(msg *pb.HareMessage) {
 
 	data, err := proto.Marshal(msg)
 	if err != nil {
-		log.Error("failed marshaling message")
+		proc.Error("failed marshaling message")
 		panic("could not marshal message before send")
 	}
 
 	if err := proc.network.Broadcast(ProtoName, data); err != nil {
-		log.Error("Could not broadcast round message ", err.Error())
+		proc.Error("Could not broadcast round message ", err.Error())
 		return
 	}
 
 }
 
 func (proc *ConsensusProcess) onRoundEnd() {
-	log.Info("End of round: %d", proc.k)
+	proc.Info("End of round: %d", proc.k)
 
 	// reset trackers
 	switch proc.currentRound() {
@@ -348,7 +351,7 @@ func (proc *ConsensusProcess) beginRound2() {
 			proposalMsg := builder.SetType(Proposal).SetSVP(svp).Sign(proc.signing).Build()
 			proc.sendMessage(proposalMsg)
 		} else {
-			log.Error("Failed to build SVP (nil) after verifying SVP is ready ")
+			proc.Error("Failed to build SVP (nil) after verifying SVP is ready ")
 		}
 	}
 
@@ -367,9 +370,6 @@ func (proc *ConsensusProcess) beginRound3() {
 		commitMsg := builder.Build()
 		proc.sendMessage(commitMsg)
 	}
-
-	// proposedSet may be nil, in such case the tracker will ignore messages
-	proc.commitTracker = NewCommitTracker(proc.cfg.F+1, proc.cfg.N, proposedSet) // track commits for proposed set
 }
 
 func (proc *ConsensusProcess) beginRound4() {
@@ -395,7 +395,7 @@ func (proc *ConsensusProcess) onRoundBegin() {
 	case Round4:
 		proc.beginRound4()
 	default:
-		log.Error("Current round out of bounds. Expected: 0-4, Found: ", proc.currentRound())
+		proc.Error("Current round out of bounds. Expected: 0-4, Found: ", proc.currentRound())
 		panic("Current round out of bounds")
 	}
 
@@ -450,7 +450,7 @@ func (proc *ConsensusProcess) processNotifyMsg(msg *pb.HareMessage) {
 	s := NewSet(msg.Message.Values)
 
 	if ignored := proc.notifyTracker.OnNotify(msg); ignored {
-		log.Warning("Ignoring notification sent from %v", msg.PubKey)
+		proc.Warning("Ignoring notification sent from %v", msg.PubKey)
 		return
 	}
 
@@ -464,14 +464,14 @@ func (proc *ConsensusProcess) processNotifyMsg(msg *pb.HareMessage) {
 	}
 
 	if proc.notifyTracker.NotificationsCount(s) < proc.cfg.F+1 { // not enough
-		//log.Info("Not enough notifications for termination. Expected: %v Actual: %v",
+		//proc.Info("Not enough notifications for termination. Expected: %v Actual: %v",
 		//	proc.cfg.F+1, proc.notifyTracker.NotificationsCount(s))
 		return
 	}
 
 	// enough notifications, should terminate
 	proc.s = s // update to the agreed set
-	log.Info("Consensus process terminated for %v with output set: ", proc.signing.Verifier().Bytes(), proc.s)
+	proc.Info("Consensus process terminated for %v with output set: ", proc.signing.Verifier().Bytes(), proc.s)
 	proc.terminationReport <- procOutput{proc.instanceId, proc.s}
 	proc.Close()
 	proc.terminating = true // ensures immediate termination
@@ -519,7 +519,7 @@ func (proc *ConsensusProcess) endOfRound3() {
 
 	cert := proc.commitTracker.BuildCertificate()
 	if cert == nil {
-		log.Error("Build certificate returned nil")
+		proc.Error("Build certificate returned nil")
 		return
 	}
 
