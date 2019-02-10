@@ -274,7 +274,7 @@ func (prot *Protocol) processMessage(msg *pb.ProtocolMessage) {
 
 	isOld := prot.markMessageAsOld(h)
 	if isOld {
-		metrics.OldGossipMessages.With("protocol", protocol).Add(1)
+		metrics.OldGossipMessages.With(metrics.ProtocolLabel, protocol).Add(1)
 		// todo : - have some more metrics for termination
 		// todo	: - maybe tell the peer weg ot this message already?
 		validity := prot.isMessageValid(h)
@@ -282,7 +282,7 @@ func (prot *Protocol) processMessage(msg *pb.ProtocolMessage) {
 		if validity == Valid {
 			prot.propagateMessage(data.Bytes(), h, protocol)
 		} else {
-			metrics.InvalidGossipMessages.With("protocol", protocol).Add(1)
+			metrics.InvalidGossipMessages.With(metrics.ProtocolLabel, protocol).Add(1)
 			// if the message is invalid we don't want to propagate it and we can return. If the message's validity is unknown,
 			// since the message is marked as old we can assume that there is another context that currently process this
 			// message and will determine its validity, therefore we can return in such case as well

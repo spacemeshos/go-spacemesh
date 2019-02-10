@@ -153,7 +153,7 @@ func (c *FormattedConnection) Send(m []byte) error {
 	if err != nil {
 		return err
 	}
-	metrics.PeerRecv.With("peer_id", c.remotePub.String()).Add(float64(len(m)))
+	metrics.PeerRecv.With(metrics.PeerIdLabel, c.remotePub.String()).Add(float64(len(m)))
 	return nil
 }
 
@@ -198,7 +198,7 @@ Loop:
 					break Loop
 				}
 			} else {
-				metrics.PeerRecv.With("peer_id", c.remotePub.String()).Add(float64(len(msg)))
+				metrics.PeerRecv.With(metrics.PeerIdLabel, c.remotePub.String()).Add(float64(len(msg)))
 				c.publish(msg)
 			}
 
