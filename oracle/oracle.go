@@ -7,7 +7,6 @@ import (
 
 // todo: configure oracle test constants like committee size and honesty.
 
-
 type BlockOracle interface {
 	BlockEligible(id mesh.LayerID, pubKey string) bool
 }
@@ -18,10 +17,10 @@ type HareOracle interface {
 
 type localBlockOracle struct {
 	committeeSize int
-	oc *eligibility.FixedRolacle
+	oc            *eligibility.FixedRolacle
 }
 
-func NewLocalOracle(committeeSize int) *localBlockOracle{
+func NewLocalOracle(committeeSize int) *localBlockOracle {
 	oc := eligibility.New()
 	//oc.Register(true, pubKey)
 	return &localBlockOracle{
@@ -30,7 +29,7 @@ func NewLocalOracle(committeeSize int) *localBlockOracle{
 	}
 }
 
-func (bo *localBlockOracle) Register(isHonest bool, pubkey string){
+func (bo *localBlockOracle) Register(isHonest bool, pubkey string) {
 	bo.oc.Register(isHonest, pubkey)
 }
 
@@ -40,7 +39,7 @@ func (bo *localBlockOracle) BlockEligible(id mesh.LayerID, pubKey string) bool {
 }
 
 func (bo *localBlockOracle) Eligible(instanceID uint32, committeeSize int, pubKey string, proof []byte) bool {
-	return bo.oc.Eligible(instanceID,committeeSize,pubKey,proof)
+	return bo.oc.Eligible(instanceID, committeeSize, pubKey, proof)
 }
 
 type blockOracle struct {
@@ -61,6 +60,7 @@ func NewBlockOracle(worldid uint64, committeeSize int, pubKey string) *blockOrac
 func (bo *blockOracle) BlockEligible(id mesh.LayerID, pubKey string) bool {
 	return bo.oc.Eligible(uint32(id), bo.committeeSize, pubKey)
 }
+
 /*
 type HareOracle interface {
 	Eligible(instanceID hare.InstanceId, K int, committeeSize int, pubKey string, proof []byte) bool

@@ -18,22 +18,20 @@ type MessageServer server.MessageServer
 const BlockProtocol = "/blocks/1.0/"
 const NewBlockProtocol = "newBlock"
 
-
-
 type BlockListener struct {
 	*server.MessageServer
 	p2p.Peers
 	*mesh.Mesh
 	BlockValidator
 	log.Log
-	bufferSize   int
-	semaphore    chan struct{}
-	unknownQueue chan mesh.BlockID //todo consider benefits of changing to stack
+	bufferSize           int
+	semaphore            chan struct{}
+	unknownQueue         chan mesh.BlockID //todo consider benefits of changing to stack
 	receivedGossipBlocks chan service.GossipMessage
-	startLock    uint32
-	timeout      time.Duration
-	exit         chan struct {}
-	tick		 chan mesh.LayerID
+	startLock            uint32
+	timeout              time.Duration
+	exit                 chan struct{}
+	tick                 chan mesh.LayerID
 }
 
 type TickProvider interface {
@@ -56,20 +54,19 @@ func (bl *BlockListener) OnNewBlock(b *mesh.Block) {
 	bl.addUnknownToQueue(b)
 }
 
-
 func NewBlockListener(net server.Service, bv BlockValidator, layers *mesh.Mesh, timeout time.Duration, concurrency int, clock TickProvider, logger log.Log) *BlockListener {
 
 	bl := BlockListener{
-		BlockValidator: bv,
-		Mesh:           layers,
-		Peers:          p2p.NewPeers(net),
-		MessageServer:  server.NewMsgServer(net, BlockProtocol, timeout, make(chan service.DirectMessage, config.ConfigValues.BufferSize), logger),
-		Log:            logger,
-		semaphore:      make(chan struct{}, concurrency),
-		unknownQueue:   make(chan mesh.BlockID, 200), //todo tune buffer size + get buffer from config
-		exit:           make(chan struct{}),
+		BlockValidator:       bv,
+		Mesh:                 layers,
+		Peers:                p2p.NewPeers(net),
+		MessageServer:        server.NewMsgServer(net, BlockProtocol, timeout, make(chan service.DirectMessage, config.ConfigValues.BufferSize), logger),
+		Log:                  logger,
+		semaphore:            make(chan struct{}, concurrency),
+		unknownQueue:         make(chan mesh.BlockID, 200), //todo tune buffer size + get buffer from config
+		exit:                 make(chan struct{}),
 		receivedGossipBlocks: net.RegisterGossipProtocol(NewBlockProtocol),
-		tick : clock.Subscribe(),
+		tick:                 clock.Subscribe(),
 	}
 	bl.RegisterMsgHandler(BLOCK, newBlockRequestHandler(layers, logger))
 
@@ -90,7 +87,7 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 				break
 			}
 
-			if bl.BlockEligible(blk.LayerIndex,blk.MinerID){
+			if bl.BlockEligible(blk.LayerIndex, blk.MinerID) {
 				data.ReportValidation(NewBlockProtocol, true)
 				err := bl.AddBlock(&blk)
 				if err != nil {
@@ -104,7 +101,6 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 		}
 	}
 }
-
 
 func (bl *BlockListener) run() {
 	for {
@@ -134,7 +130,7 @@ func (bl *BlockListener) onTick() {
 				break
 			}
 			//log.Info("new layer tick in listener")
-			l, err := bl.GetLayer(newLayer - 1)//bl.CreateLayer(newLayer - 1)
+			l, err := bl.GetLayer(newLayer - 1) //bl.CreateLayer(newLayer - 1)
 			if err != nil {
 				log.Error("layer %v not received layer : %v", newLayer-1, err)
 				break

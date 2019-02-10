@@ -46,13 +46,13 @@ type SpacemeshApp struct {
 	grpcAPIService   *api.SpacemeshGrpcService
 	jsonAPIService   *api.JSONHTTPServer
 
-	blockListener 	*sync.BlockListener
-	db				database.Database
-	state 			*state.StateDB
-	blockProducer 	*miner.BlockBuilder
-	mesh 			*mesh.Mesh
-	clock 			*timesync.Ticker
-	hare 			*hare.Hare
+	blockListener *sync.BlockListener
+	db            database.Database
+	state         *state.StateDB
+	blockProducer *miner.BlockBuilder
+	mesh          *mesh.Mesh
+	clock         *timesync.Ticker
+	hare          *hare.Hare
 }
 
 type MiningEnabler interface {
@@ -272,7 +272,7 @@ func (app *SpacemeshApp) cleanup(cmd *cobra.Command, args []string) (err error) 
 	return nil
 }
 
-func (app *SpacemeshApp) setupGenesis(){
+func (app *SpacemeshApp) setupGenesis() {
 	for id, acc := range config.DefaultGenesisConfig().InitialAccounts {
 		app.state.CreateAccount(id)
 		app.state.AddBalance(id, acc.Balance)
@@ -287,14 +287,14 @@ func (app *SpacemeshApp) setupTestFeatures() {
 	api.ApproveAPIGossipMessages(Ctx, app.P2P)
 }
 
-func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service, dbStorepath string, sgn hare.Signing, blockOracle oracle.BlockOracle,hareOracle hare.Rolacle) (error){
+func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service, dbStorepath string, sgn hare.Signing, blockOracle oracle.BlockOracle, hareOracle hare.Rolacle) error {
 
 	//todo: should we add all components to a single struct?
-	lg := log.New("shmekel_" + instanceName ,"","")
+	lg := log.New("shmekel_"+instanceName, "", "")
 
 	trtl := consensus.NewAlgorithm(50, 100)
 
-	db, err := database.NewLDBDatabase(dbStorepath, 0,0)
+	db, err := database.NewLDBDatabase(dbStorepath, 0, 0)
 	if err != nil {
 		return err
 	}
@@ -305,21 +305,18 @@ func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service,
 	rng := rand.New(mt19937.New())
 	processor := state.NewTransactionProcessor(rng, st, lg)
 
-
-
-	mesh := mesh.NewMesh(db, db, db ,&trtl,processor,lg) //todo: what to do with the logger?
+	mesh := mesh.NewMesh(db, db, db, &trtl, processor, lg) //todo: what to do with the logger?
 	trtl.RegisterLayerCallback(mesh.LayerCompleteCallback)
 	coinToss := consensus.WeakCoin{}
-	clock := timesync.NewTicker(timesync.RealClock{}, 5 *time.Second, time.Now())
+	clock := timesync.NewTicker(timesync.RealClock{}, 5*time.Second, time.Now())
 
+	blockListener := sync.NewBlockListener(swarm, blockOracle, mesh, 1*time.Second, 1, clock, lg)
 
-	blockListener := sync.NewBlockListener(swarm , blockOracle ,mesh, 1*time.Second, 1,clock, lg)
+	ha := hare.New(hareConfig.DefaultConfig(), swarm, sgn, mesh, hareOracle, clock.Subscribe())
 
-	ha := hare.New(hareConfig.DefaultConfig(), swarm,sgn,mesh, hareOracle, clock.Subscribe())
+	blockProducer := miner.NewBlockBuilder(instanceName, swarm, clock.Subscribe(), coinToss, mesh, ha, blockOracle, lg)
 
-	blockProducer := miner.NewBlockBuilder(instanceName, swarm, clock.Subscribe(), coinToss, mesh,ha, blockOracle,lg)
-
-	app.blockProducer  = &blockProducer
+	app.blockProducer = &blockProducer
 	app.blockListener = blockListener
 	app.mesh = mesh
 	app.clock = clock
@@ -331,7 +328,7 @@ func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service,
 	return nil
 }
 
-func (app *SpacemeshApp) startServices(){
+func (app *SpacemeshApp) startServices() {
 	app.blockListener.Start()
 	err := app.hare.Start()
 	if err != nil {
@@ -344,7 +341,7 @@ func (app *SpacemeshApp) startServices(){
 	app.clock.Start()
 }
 
-func (app *SpacemeshApp) stopServices(){
+func (app *SpacemeshApp) stopServices() {
 	if app != nil {
 
 	}
@@ -379,14 +376,14 @@ func (app *SpacemeshApp) startSpacemesh(cmd *cobra.Command, args []string) {
 
 	apiConf := &app.Config.API
 
-	err = app.initServices("x",swarm, "/tmp/",sgn, bo,hareOracle)
+	err = app.initServices("x", swarm, "/tmp/", sgn, bo, hareOracle)
 
 	if app.Config.TestMode {
 		app.setupTestFeatures()
 	}
 
 	if err != nil {
-		panic("got error starting services : " +  err.Error())
+		panic("got error starting services : " + err.Error())
 	}
 
 	app.startServices()

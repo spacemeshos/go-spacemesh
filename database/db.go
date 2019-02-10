@@ -6,7 +6,6 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/opt"
 )
 
-
 type DB interface {
 	Put(key, value []byte) error
 	Get(key []byte) (value []byte, err error)
@@ -20,7 +19,6 @@ type Iterator interface {
 	Error() error
 	Release()
 }
-
 
 //type Iterator iterator.Iterator
 

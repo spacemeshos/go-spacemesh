@@ -50,19 +50,17 @@ func (BlockValidatorMock) BlockEligible(id mesh.LayerID, key string) bool {
 	return true
 }
 
-
 type MeshValidatorMock struct{}
 
-func (m *MeshValidatorMock) HandleIncomingLayer(layer *mesh.Layer) {}
-func (m *MeshValidatorMock) HandleLateBlock(bl *mesh.Block)        {}
+func (m *MeshValidatorMock) HandleIncomingLayer(layer *mesh.Layer)            {}
+func (m *MeshValidatorMock) HandleLateBlock(bl *mesh.Block)                   {}
 func (m *MeshValidatorMock) RegisterLayerCallback(func(layerId mesh.LayerID)) {}
 
-type stateMock struct {}
+type stateMock struct{}
 
-func (s *stateMock) ApplyTransactions(id state.LayerID, tx state.Transactions) (uint32, error){
+func (s *stateMock) ApplyTransactions(id state.LayerID, tx state.Transactions) (uint32, error) {
 	return 0, nil
 }
-
 
 func getMeshWithLevelDB(id string) *mesh.Mesh {
 	//time := time.Now()
@@ -71,23 +69,22 @@ func getMeshWithLevelDB(id string) *mesh.Mesh {
 	cv := database.NewLevelDbStore("contextually_valid_test_"+id, nil, nil)
 	//odb := database.NewLevelDbStore("orphans_test_"+id+"_"+time.String(), nil, nil)
 
-	layers := mesh.NewMesh(ldb, bdb, cv, &MeshValidatorMock{},&stateMock{}, log.New(id, "", ""))
+	layers := mesh.NewMesh(ldb, bdb, cv, &MeshValidatorMock{}, &stateMock{}, log.New(id, "", ""))
 	return layers
 }
 
-type MockState struct {}
+type MockState struct{}
 
 func (MockState) ApplyTransactions(layer state.LayerID, txs state.Transactions) (uint32, error) {
-	return 0,nil
+	return 0, nil
 }
-
 
 func getMeshWithMemoryDB(id string) *mesh.Mesh {
 	bdb := database.NewMemDatabase()
 	ldb := database.NewMemDatabase()
 	cv := database.NewMemDatabase()
 	//odb := database.NewMemDatabase()
-	layers := mesh.NewMesh(ldb, bdb, cv, &MeshValidatorMock{},&stateMock{}, log.New(id, "", ""))
+	layers := mesh.NewMesh(ldb, bdb, cv, &MeshValidatorMock{}, &stateMock{}, log.New(id, "", ""))
 	return layers
 }
 
@@ -142,17 +139,15 @@ func TestSyncProtocol_BlockRequest(t *testing.T) {
 	block := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), lid, []byte("data data data"))
 	syncObj.AddLayer(mesh.NewExistingLayer(lid, []*mesh.Block{block}))
 	ch, err := sendBlockRequest(syncObj2.MessageServer, nodes[0].Node.PublicKey(), block.ID(), syncObj.Log)
-	timeout := time.NewTimer(2 *time.Second)
+	timeout := time.NewTimer(2 * time.Second)
 
 	select {
-		case a := <-ch:
-			assert.NoError(t, err, "Should not return error")
-			assert.Equal(t, a.ID(), block.ID(), "wrong block")
-		case <-timeout.C:
-			assert.Fail(t, "no message received on channel")
+	case a := <-ch:
+		assert.NoError(t, err, "Should not return error")
+		assert.Equal(t, a.ID(), block.ID(), "wrong block")
+	case <-timeout.C:
+		assert.Fail(t, "no message received on channel")
 	}
-
-
 
 }
 
@@ -166,14 +161,14 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 
 	syncObj1.AddLayer(mesh.NewExistingLayer(lid, make([]*mesh.Block, 0, 10)))
 	syncObj1.LayerCompleteCallback(lid) //this is to simulate the approval of the tortoise...
-	timeout := time.NewTimer(2 *time.Second)
+	timeout := time.NewTimer(2 * time.Second)
 	ch, err := syncObj2.sendLayerHashRequest(nodes[0].Node.PublicKey(), lid)
 	select {
-		case hash := <-ch:
-			assert.NoError(t, err, "Should not return error")
-			assert.Equal(t, "some hash representing the layer", string(hash.hash), "wrong block")
-		case <-timeout.C:
-			assert.Fail(t, "no message received on channel")
+	case hash := <-ch:
+		assert.NoError(t, err, "Should not return error")
+		assert.Equal(t, "some hash representing the layer", string(hash.hash), "wrong block")
+	case <-timeout.C:
+		assert.Fail(t, "no message received on channel")
 	}
 
 }
@@ -192,34 +187,32 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 	layer.AddBlock(mesh.NewExistingBlock(mesh.BlockID(222), lid, nil))
 	syncObj1.AddLayer(layer)
 	ch, err := syncObj.sendLayerIDsRequest(nodes[1].Node.PublicKey(), lid)
-	timeout := time.NewTimer(2 *time.Second)
+	timeout := time.NewTimer(2 * time.Second)
 
 	select {
-		case ids := <-ch:
-			assert.NoError(t, err, "Should not return error")
-			assert.Equal(t, len(layer.Blocks()), len(ids), "wrong block")
-			for _, a := range layer.Blocks() {
-				found := false
-				for _, id := range ids {
-					if a.ID() == mesh.BlockID(id) {
-						found = true
-						break
-					}
-				}
-				if !found {
-					t.Error(errors.New("id list did not match"))
+	case ids := <-ch:
+		assert.NoError(t, err, "Should not return error")
+		assert.Equal(t, len(layer.Blocks()), len(ids), "wrong block")
+		for _, a := range layer.Blocks() {
+			found := false
+			for _, id := range ids {
+				if a.ID() == mesh.BlockID(id) {
+					found = true
+					break
 				}
 			}
-		case <-timeout.C:
-			assert.Fail(t, "no message received on channel")
+			if !found {
+				t.Error(errors.New("id list did not match"))
+			}
+		}
+	case <-timeout.C:
+		assert.Fail(t, "no message received on channel")
 	}
-
-
 
 }
 
-func verifyChannelReadWithTimeout(t *testing.T, ch chan interface{}) interface{}{
-	timeout := time.NewTimer(3 *time.Second)
+func verifyChannelReadWithTimeout(t *testing.T, ch chan interface{}) interface{} {
+	timeout := time.NewTimer(3 * time.Second)
 	select {
 
 	case <-timeout.C:
@@ -249,7 +242,7 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	syncObj1.AddLayer(mesh.NewExistingLayer(2, []*mesh.Block{block3}))
 
 	ch, err := syncObj2.sendLayerHashRequest(n1.PublicKey(), 0)
-	timeout := time.NewTimer(3 *time.Second)
+	timeout := time.NewTimer(3 * time.Second)
 	var hash peerHashPair
 	select {
 
@@ -261,7 +254,7 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	}
 	ch2, err2 := sendBlockRequest(syncObj2.MessageServer, n1.PublicKey(), block1.ID(), syncObj2.Log)
 	assert.NoError(t, err2, "Should not return error")
-	timeout = time.NewTimer(3 *time.Second)
+	timeout = time.NewTimer(3 * time.Second)
 	select {
 
 	case <-timeout.C:
@@ -275,7 +268,7 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 
 	ch2, err2 = sendBlockRequest(syncObj2.MessageServer, n1.PublicKey(), block2.ID(), syncObj2.Log)
 	assert.NoError(t, err2, "Should not return error")
-	timeout = time.NewTimer(3 *time.Second)
+	timeout = time.NewTimer(3 * time.Second)
 	select {
 
 	case <-timeout.C:
@@ -289,7 +282,7 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 
 	ch2, err2 = sendBlockRequest(syncObj2.MessageServer, n1.PublicKey(), block3.ID(), syncObj2.Log)
 	assert.NoError(t, err2, "Should not return error")
-	timeout = time.NewTimer(5 *time.Second)
+	timeout = time.NewTimer(5 * time.Second)
 	select {
 	case <-timeout.C:
 		t.Error("timed out ")
@@ -327,7 +320,7 @@ func TestSyncProtocol_SyncTwoNodes(t *testing.T) {
 	syncObj1.AddLayer(mesh.NewExistingLayer(4, []*mesh.Block{block9}))
 	syncObj1.AddLayer(mesh.NewExistingLayer(5, []*mesh.Block{block10}))
 
-	timeout := time.After(7 * time.Second)
+	timeout := time.After(5 * time.Second)
 	syncObj2.SetLatestLayer(5)
 	syncObj1.Start()
 	syncObj2.Start()
@@ -341,11 +334,13 @@ loop:
 			t.Error("timed out ")
 			return
 		default:
-			if syncObj2.LatestReceivedLayer() == 2 {
+			if syncObj2.LatestReceivedLayer() == 3 {
 				t.Log("done!")
 				break loop
+			} else {
+				syncObj2.LatestReceivedLayer()
 			}
-			time.Sleep(100* time.Millisecond)
+			time.Sleep(100 * time.Millisecond)
 		}
 	}
 }

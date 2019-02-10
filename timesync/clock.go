@@ -11,7 +11,6 @@ import (
 //This also send the current layerID which is calculated from the number of ticks passed since epoch
 type LayerTimer chan mesh.LayerID
 
-
 type Ticker struct {
 	subscribes   []LayerTimer
 	currentLayer mesh.LayerID
@@ -20,14 +19,14 @@ type Ticker struct {
 	startEpoch   time.Time
 	time         Clock
 	stop         chan struct{}
-	ids map[LayerTimer]int
+	ids          map[LayerTimer]int
 }
 
 type Clock interface {
 	Now() time.Time
 }
 
-type RealClock struct {}
+type RealClock struct{}
 
 func (RealClock) Now() time.Time {
 	return time.Now()
@@ -41,7 +40,7 @@ func NewTicker(time Clock, tickInterval time.Duration, startEpoch time.Time) *Ti
 		startEpoch:   startEpoch,
 		time:         time,
 		stop:         make(chan struct{}),
-		ids : make(map[LayerTimer]int),
+		ids:          make(map[LayerTimer]int),
 	}
 }
 
@@ -103,12 +102,12 @@ func (t *Ticker) StartClock() {
 	for {
 		select {
 		case <-tick.C:
-			log.Info("released tick layerId %v", t.currentLayer +1)
-				t.currentLayer++
-				t.notifyOnTick()
-				tick.Reset(t.tickInterval)
-			case <-t.stop:
-				break
+			log.Info("released tick layerId %v", t.currentLayer+1)
+			t.currentLayer++
+			t.notifyOnTick()
+			tick.Reset(t.tickInterval)
+		case <-t.stop:
+			break
 		}
 	}
 }

@@ -53,7 +53,7 @@ type Connection interface {
 // A network connection supporting full-duplex messaging
 type FormattedConnection struct {
 	// metadata for logging / debugging
-	logger log.Log
+	logger     log.Log
 	id         string // uuid for logging
 	created    time.Time
 	remotePub  p2pcrypto.PublicKey

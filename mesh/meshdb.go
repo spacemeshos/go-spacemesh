@@ -26,7 +26,7 @@ type meshDB struct {
 	lhMutex            sync.Mutex
 }
 
-func NewMeshDB(layers , blocks, validity database.DB) *meshDB {
+func NewMeshDB(layers, blocks, validity database.DB) *meshDB {
 	ll := &meshDB{
 		blocks:             blocks,
 		layers:             layers,

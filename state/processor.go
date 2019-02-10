@@ -88,7 +88,7 @@ const maxPastStates = 20
 
 func NewTransactionProcessor(rnd PseudoRandomizer, db *StateDB, logger log.Log) *TransactionProcessor {
 	return &TransactionProcessor{
-		Log:logger,
+		Log:          logger,
 		rand:         rnd,
 		globalState:  db,
 		prevStates:   make(map[LayerID]common.Hash),
@@ -103,8 +103,8 @@ func NewTransactionProcessor(rnd PseudoRandomizer, db *StateDB, logger log.Log) 
 //should receive sort predicate
 func (tp *TransactionProcessor) ApplyTransactions(layer LayerID, transactions Transactions) (uint32, error) {
 	//todo: need to seed the mersenne twister with random beacon seed
-	if len(transactions) == 0{
-		return 0,nil
+	if len(transactions) == 0 {
+		return 0, nil
 	}
 
 	txs := tp.mergeDoubles(transactions)

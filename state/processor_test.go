@@ -22,7 +22,7 @@ type ProcessorStateSuite struct {
 
 func (s *ProcessorStateSuite) SetupTest() {
 	rng := rand.New(mt19937.New())
-	lg := log.New("proc_logger" ,"","")
+	lg := log.New("proc_logger", "", "")
 	s.db = database.NewMemDatabase()
 	s.state, _ = New(common.Hash{}, NewDatabase(s.db))
 
@@ -378,7 +378,7 @@ func TestTransactionProcessor_randomSort(t *testing.T) {
 	rng.Seed(1)
 	db := database.NewMemDatabase()
 	state, _ := New(common.Hash{}, NewDatabase(db))
-	lg := log.New("proc_logger" ,"","")
+	lg := log.New("proc_logger", "", "")
 	processor := NewTransactionProcessor(rng, state, lg)
 
 	obj1 := createAccount(state, []byte{0x01}, 2, 0)

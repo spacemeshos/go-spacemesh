@@ -17,22 +17,22 @@ type BlockPosition struct {
 }
 
 type Algorithm struct {
-	block2Id          map[BlockID]uint32
-	allBlocks         map[BlockID]*TortoiseBlock
-	layerQueue        LayerQueue
-	idQueue           NewIdQueue
-	posVotes          []bitarray.BitArray
-	visibilityMap     [20000]BlockPosition
-	layers            map[LayerID]*Layer
-	layerSize         uint32
-	cachedLayers      uint32
-	remainingBlockIds uint32
-	totalBlocks       uint32
+	block2Id           map[BlockID]uint32
+	allBlocks          map[BlockID]*TortoiseBlock
+	layerQueue         LayerQueue
+	idQueue            NewIdQueue
+	posVotes           []bitarray.BitArray
+	visibilityMap      [20000]BlockPosition
+	layers             map[LayerID]*Layer
+	layerSize          uint32
+	cachedLayers       uint32
+	remainingBlockIds  uint32
+	totalBlocks        uint32
 	layerReadyCallback func(layerId mesh.LayerID)
-	mu 					sync.Mutex
+	mu                 sync.Mutex
 }
 
-func NewAlgorithm(layerSize uint32, cachedLayers uint32 ) Algorithm {
+func NewAlgorithm(layerSize uint32, cachedLayers uint32) Algorithm {
 	totBlocks := layerSize * cachedLayers
 	trtl := Algorithm{
 		block2Id:          make(map[BlockID]uint32),
@@ -43,15 +43,15 @@ func NewAlgorithm(layerSize uint32, cachedLayers uint32 ) Algorithm {
 		totalBlocks:       totBlocks,
 		posVotes:          make([]bitarray.BitArray, totBlocks),
 		//visibilityMap:     make([20000]BlockPosition),
-		layers:       make(map[LayerID]*Layer),
-		layerSize:    layerSize,
-		cachedLayers: cachedLayers,
-		layerReadyCallback:nil,
+		layers:             make(map[LayerID]*Layer),
+		layerSize:          layerSize,
+		cachedLayers:       cachedLayers,
+		layerReadyCallback: nil,
 	}
 	return trtl
 }
 
-func (alg *Algorithm) RegisterLayerCallback(callback func(mesh.LayerID)){
+func (alg *Algorithm) RegisterLayerCallback(callback func(mesh.LayerID)) {
 	alg.layerReadyCallback = callback
 }
 
@@ -221,12 +221,12 @@ func (alg *Algorithm) HandleIncomingLayer(ll *mesh.Layer) {
 		alg.posVotes[blockId] = *votesBM
 		alg.visibilityMap[blockId] = BlockPosition{*visibleBM, originBlock.Layer()}
 	}
-	if l.index <= 0{
+	if l.index <= 0 {
 		return
 	}
 	alg.mu.Lock()
-	if _, exist := alg.layers[l.index -1]; exist {
-		alg.layerReadyCallback(mesh.LayerID(l.index -1))
+	if _, exist := alg.layers[l.index-1]; exist {
+		alg.layerReadyCallback(mesh.LayerID(l.index - 1))
 	}
 	alg.mu.Unlock()
 }

@@ -42,15 +42,11 @@ type BlockBuilder struct {
 	started          bool
 }
 
-
-
-
-
 func NewBlockBuilder(minerID string, net p2p.Service, beginRoundEvent chan mesh.LayerID, weakCoin WeakCoinProvider,
 	orph OrphanBlockProvider, hare HareResultProvider, blockOracle oracle.BlockOracle, lg log.Log) BlockBuilder {
 	return BlockBuilder{
 		minerID:          minerID,
-		Log : lg,
+		Log:              lg,
 		beginRoundEvent:  beginRoundEvent,
 		stopChan:         make(chan struct{}),
 		newTrans:         make(chan *mesh.SerializableTransaction),
@@ -128,23 +124,23 @@ func (t *BlockBuilder) createBlock(id mesh.LayerID, txs []mesh.SerializableTrans
 	var res []mesh.BlockID = nil
 	var err error
 	if id > 0 {
-		res, err = t.hareResult.GetResult(id -1)
+		res, err = t.hareResult.GetResult(id - 1)
 		if err != nil {
-			t.Log.Error("didnt receive hare result for layer %v", id -1)
+			t.Log.Error("didnt receive hare result for layer %v", id-1)
 		}
 	}
 
 	b := mesh.Block{
 
-		MinerID: t.minerID,
-		Id :          mesh.BlockID(rand.Int63()),
-		LayerIndex:   id,
-		Data:         nil,
-		Coin:         t.weakCoinToss.GetResult(),
-		Timestamp:    time.Now().UnixNano(),
-		Txs :         txs,
-		BlockVotes : res,
-		ViewEdges:    t.orphans.GetOrphanBlocksExcept(id),
+		MinerID:    t.minerID,
+		Id:         mesh.BlockID(rand.Int63()),
+		LayerIndex: id,
+		Data:       nil,
+		Coin:       t.weakCoinToss.GetResult(),
+		Timestamp:  time.Now().UnixNano(),
+		Txs:        txs,
+		BlockVotes: res,
+		ViewEdges:  t.orphans.GetOrphanBlocksExcept(id),
 	}
 	t.Log.Info("Iv'e created block in layer %v id %v, num of transactions %v", b.LayerIndex, b.Id, len(b.Txs))
 
@@ -175,28 +171,28 @@ func (t *BlockBuilder) acceptBlockData() {
 	for {
 		select {
 
-			case <-t.stopChan:
-				return
+		case <-t.stopChan:
+			return
 
-			case id := <-t.beginRoundEvent:
-				if !t.blockOracle.BlockEligible(id, t.minerID) {
-					break
+		case id := <-t.beginRoundEvent:
+			if !t.blockOracle.BlockEligible(id, t.minerID) {
+				break
+			}
+
+			txList := t.transactionQueue[:common.Min(len(t.transactionQueue), MaxTransactionsPerBlock)]
+			t.transactionQueue = t.transactionQueue[common.Min(len(t.transactionQueue), MaxTransactionsPerBlock):]
+			blk := t.createBlock(id, txList)
+			go func() {
+				bytes, err := mesh.BlockAsBytes(blk)
+				if err != nil {
+					t.Log.Error("cannot serialize block %v", err)
+					return
 				}
+				t.network.Broadcast(meshSync.NewBlockProtocol, bytes)
+			}()
 
-				txList := t.transactionQueue[:common.Min(len(t.transactionQueue), MaxTransactionsPerBlock)]
-				t.transactionQueue = t.transactionQueue[common.Min(len(t.transactionQueue), MaxTransactionsPerBlock):]
-				blk := t.createBlock(id, txList)
-				go func() {
-					bytes, err := mesh.BlockAsBytes(blk)
-					if err != nil {
-						t.Log.Error("cannot serialize block %v", err)
-						return
-					}
-					t.network.Broadcast(meshSync.NewBlockProtocol, bytes)
-				}()
-
-			case tx := <- t.newTrans:
-				t.transactionQueue = append(t.transactionQueue,*tx)
+		case tx := <-t.newTrans:
+			t.transactionQueue = append(t.transactionQueue, *tx)
 		}
 	}
 }

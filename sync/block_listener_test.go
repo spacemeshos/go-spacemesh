@@ -20,7 +20,7 @@ type PeersMock struct {
 	getPeers func() []p2p.Peer
 }
 
-type ClockMock struct { }
+type ClockMock struct{}
 
 func (t *ClockMock) Subscribe() timesync.LayerTimer {
 	return make(timesync.LayerTimer)
@@ -35,7 +35,7 @@ func (pm PeersMock) Close() {
 }
 func ListenerFactory(serv server.Service, peers p2p.Peers, name string) *BlockListener {
 
-	nbl := NewBlockListener(serv,BlockValidatorMock{}, getMesh(memoryDB,"TestBlockListener_"+name), 1*time.Second, 2, &ClockMock{}, log.New(name, "", ""))
+	nbl := NewBlockListener(serv, BlockValidatorMock{}, getMesh(memoryDB, "TestBlockListener_"+name), 1*time.Second, 2, &ClockMock{}, log.New(name, "", ""))
 	nbl.Peers = peers //override peers with mock
 	return nbl
 }

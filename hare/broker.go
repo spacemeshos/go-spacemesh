@@ -60,7 +60,6 @@ func NewBroker(networkService NetworkService) *Broker {
 	p.network = networkService
 	p.outbox = make(map[uint32]chan Message)
 
-
 	return p
 }
 

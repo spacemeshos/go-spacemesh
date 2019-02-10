@@ -50,7 +50,7 @@ type Mesh struct {
 	lkMutex       sync.RWMutex
 	lcMutex       sync.RWMutex
 	tortoise      MeshValidator
-	state 		  StateUpdater
+	state         StateUpdater
 	orphMutex     sync.RWMutex
 }
 
@@ -59,7 +59,7 @@ func NewMesh(layers, blocks, validity database.DB, mesh MeshValidator, state Sta
 	ll := &Mesh{
 		Log:      logger,
 		tortoise: mesh,
-		state:state,
+		state:    state,
 		meshDB:   NewMeshDB(layers, blocks, validity),
 	}
 	return ll
@@ -103,7 +103,6 @@ func (m *Mesh) SetLatestLayer(idx uint32) {
 	}
 }
 
-
 func (m *Mesh) AddLayer(layer *Layer) error {
 	m.lMutex.Lock()
 	defer m.lMutex.Unlock()
@@ -123,11 +122,11 @@ func (m *Mesh) AddLayer(layer *Layer) error {
 	return nil
 }
 
-func (m *Mesh) ValidateLayer(layer *Layer){
+func (m *Mesh) ValidateLayer(layer *Layer) {
 	m.tortoise.HandleIncomingLayer(layer)
 }
 
-func (m *Mesh) LayerCompleteCallback(layerId LayerID){
+func (m *Mesh) LayerCompleteCallback(layerId LayerID) {
 	m.Log.Info("layer %v is complete", layerId)
 	l, err := m.getLayer(layerId)
 	atomic.StoreUint32(&m.verifiedLayer, uint32(layerId))
@@ -137,13 +136,13 @@ func (m *Mesh) LayerCompleteCallback(layerId LayerID){
 		//panic("wtf - there was a race?")
 	}
 
-	txs := make([]*state.Transaction,0,len(l.blocks))
+	txs := make([]*state.Transaction, 0, len(l.blocks))
 
-	sort.Slice(l.blocks, func(i,j int) bool{
+	sort.Slice(l.blocks, func(i, j int) bool {
 		return l.blocks[i].Id < l.blocks[j].Id
 	}) //todo: blocks are now sorted... what does it mean? does the ordering degrade security?
 
-	for _, b := range l.blocks{
+	for _, b := range l.blocks {
 		for _, tx := range b.Txs {
 			//todo: think about these conversions.. are they needed?
 			txs = append(txs, SerializableTransaction2StateTransaction(&tx))
@@ -197,7 +196,7 @@ func (m *Mesh) handleOrphanBlocks(block *Block) {
 	m.orphanBlocks[block.LayerIndex][block.Id] = struct{}{}
 	atomic.AddInt32(&m.orphanBlockCount, 1)
 	for _, b := range block.ViewEdges {
-		for _, layermap := range m.orphanBlocks{
+		for _, layermap := range m.orphanBlocks {
 			if _, has := layermap[b]; has {
 				m.Log.Info("delete block ", b, "from orphans")
 				delete(layermap, b)
@@ -209,7 +208,7 @@ func (m *Mesh) handleOrphanBlocks(block *Block) {
 	}
 }
 
-func (m *Mesh) GetOrphanBlocksByLayerId(layerId LayerID) []BlockID{
+func (m *Mesh) GetOrphanBlocksByLayerId(layerId LayerID) []BlockID {
 	m.orphMutex.RLock()
 	defer m.orphMutex.RUnlock()
 	if keys, has := m.orphanBlocks[layerId]; has {
@@ -221,7 +220,7 @@ func (m *Mesh) GetOrphanBlocksByLayerId(layerId LayerID) []BlockID{
 		return ids
 
 	}
-	return make([]BlockID,0,0)
+	return make([]BlockID, 0, 0)
 }
 
 //todo better thread safety

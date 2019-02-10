@@ -34,7 +34,7 @@ type MockOrphans struct {
 	st []mesh.BlockID
 }
 
-func (m MockOrphans) GetOrphanBlocksExcept(l mesh.LayerID) []mesh.BlockID{
+func (m MockOrphans) GetOrphanBlocksExcept(l mesh.LayerID) []mesh.BlockID {
 	return m.st
 }
 
@@ -56,7 +56,7 @@ func TestBlockBuilder_StartStop(t *testing.T) {
 	hare := MockHare{res: hareRes}
 
 	builder := NewBlockBuilder(n.Node.String(), n, beginRound, MockCoin{}, MockOrphans{st: []mesh.BlockID{1, 2, 3}}, hare, mockBlockOracle{},
-	log.New(n.Node.String(), "", ""))
+		log.New(n.Node.String(), "", ""))
 
 	err := builder.Start()
 	assert.NoError(t, err)
@@ -86,7 +86,7 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 	hare := MockHare{res: hareRes}
 
 	builder := NewBlockBuilder(n.Node.String(), n, beginRound, MockCoin{}, MockOrphans{st: []mesh.BlockID{1, 2, 3}}, hare,
-								mockBlockOracle{}, log.New(n.Node.String(), "", ""))
+		mockBlockOracle{}, log.New(n.Node.String(), "", ""))
 
 	err := builder.Start()
 	assert.NoError(t, err)

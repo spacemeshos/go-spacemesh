@@ -1,7 +1,6 @@
 package consensus
 
 type WeakCoin struct {
-
 }
 
 func (WeakCoin) GetResult() bool {

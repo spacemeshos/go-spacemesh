@@ -12,15 +12,14 @@ import (
 
 type MeshValidatorMock struct{}
 
+func (m *MeshValidatorMock) HandleIncomingLayer(layer *Layer)       {}
+func (m *MeshValidatorMock) HandleLateBlock(bl *Block)              {}
+func (m *MeshValidatorMock) RegisterLayerCallback(func(id LayerID)) {}
 
-func (m *MeshValidatorMock)	HandleIncomingLayer(layer *Layer) {}
-func (m *MeshValidatorMock) HandleLateBlock(bl *Block) {}
-func (m *MeshValidatorMock) RegisterLayerCallback(func (id LayerID)) {}
-
-type MockState struct {}
+type MockState struct{}
 
 func (MockState) ApplyTransactions(layer state.LayerID, txs state.Transactions) (uint32, error) {
-	return 0,nil
+	return 0, nil
 }
 
 func getMesh(id string) *Mesh {
@@ -30,7 +29,7 @@ func getMesh(id string) *Mesh {
 	ldb := database.NewMemDatabase()
 	cdb := database.NewMemDatabase()
 
-	layers := NewMesh(ldb, bdb, cdb, &MeshValidatorMock{},&MockState{},log.New(id, "", ""))
+	layers := NewMesh(ldb, bdb, cdb, &MeshValidatorMock{}, &MockState{}, log.New(id, "", ""))
 	return layers
 }
 
@@ -68,10 +67,10 @@ func TestLayers_AddLayer(t *testing.T) {
 	assert.True(t, err != nil, "error: ", err)
 
 	err = layers.AddLayer(NewExistingLayer(1, []*Block{block1, block2, block3}))
-	assert.NoError(t,err)
+	assert.NoError(t, err)
 	layers.LayerCompleteCallback(1)
 	l, err = layers.GetVerifiedLayer(id)
-	assert.NoError(t,err)
+	assert.NoError(t, err)
 	//assert.True(t, layers.VerifiedLayer() == 0, "wrong layer count")
 	assert.True(t, string(l.blocks[1].Data) == "data", "wrong block data ")
 }
@@ -122,7 +121,7 @@ func TestLayers_LocalLayerCount(t *testing.T) {
 	layers.AddLayer(NewExistingLayer(4, []*Block{block2}))
 	layers.AddLayer(NewExistingLayer(2, []*Block{block3}))
 	layers.AddLayer(NewExistingLayer(3, []*Block{block4}))
-	assert.Equal(t,uint32(3), layers.LatestLayer() , "wrong layer count")
+	assert.Equal(t, uint32(3), layers.LatestLayer(), "wrong layer count")
 }
 
 func TestLayers_LatestKnownLayer(t *testing.T) {
