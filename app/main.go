@@ -3,14 +3,15 @@ package app
 import (
 	"context"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common"
-	"github.com/spacemeshos/go-spacemesh/database"
-	"github.com/spacemeshos/go-spacemesh/state"
-	"github.com/spf13/pflag"
 	"os"
 	"os/signal"
 	"reflect"
 	"runtime"
+
+	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/state"
+	"github.com/spf13/pflag"
 
 	"github.com/spacemeshos/go-spacemesh/accounts"
 	"github.com/spacemeshos/go-spacemesh/api"
@@ -115,8 +116,10 @@ func EnsureCLIFlags(cmd *cobra.Command, appcfg *cfg.Config) {
 			elem = reflect.ValueOf(&appcfg.P2P.SwarmConfig).Elem()
 			assignFields(ff, elem, name)
 
-			ff = reflect.TypeOf(appcfg.P2P.TimeConfig)
-			elem = reflect.ValueOf(&appcfg.P2P.TimeConfig).Elem()
+			// ff = reflect.TypeOf(appcfg.P2P.TimeConfig)
+			ff = reflect.TypeOf(appcfg.TimeSync.TimeConfig)
+			// elem = reflect.ValueOf(&appcfg.P2P.TimeConfig).Elem()
+			elem = reflect.ValueOf(&appcfg.TimeSync.TimeConfig).Elem()
 			assignFields(ff, elem, name)
 
 			ff = reflect.TypeOf(appcfg.CONSENSUS)

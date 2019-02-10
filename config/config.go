@@ -2,13 +2,15 @@ package config
 
 import (
 	"fmt"
+	"path/filepath"
+
 	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
 	consensusConfig "github.com/spacemeshos/go-spacemesh/consensus/config"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	"github.com/spacemeshos/go-spacemesh/log"
 	p2pConfig "github.com/spacemeshos/go-spacemesh/p2p/config"
+	timeSyncConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spf13/viper"
-	"path/filepath"
 )
 
 const (
@@ -35,6 +37,7 @@ type Config struct {
 	P2P        p2pConfig.Config       `mapstructure:"p2p"`
 	API        apiConfig.Config       `mapstructure:"api"`
 	CONSENSUS  consensusConfig.Config `mapstructure:"consensus"`
+	TimeSync   timeSyncConfig.Config  `mapstructure:"timesync"`
 }
 
 // BaseConfig defines the default configuration options for spacemesh app
@@ -59,6 +62,7 @@ func DefaultConfig() Config {
 		P2P:        p2pConfig.DefaultConfig(),
 		API:        apiConfig.DefaultConfig(),
 		CONSENSUS:  consensusConfig.DefaultConfig(),
+		TimeSync:   timeSyncConfig.DefaultConfig(),
 	}
 }
 
