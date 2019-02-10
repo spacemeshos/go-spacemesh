@@ -69,7 +69,7 @@ func Test_MockOracleClientValidate(t *testing.T) {
 	counter := &requestCounter{client: mr}
 	counter.setCounting(true)
 	oc.client = counter
-	oc.Register(true,id)
+	oc.Register(true, id)
 	require.Equal(t, counter.reqCounter, 1)
 
 	mr.SetResult(Validate, validateQuery(oc.world, 0, 2),
@@ -134,7 +134,6 @@ func Test_Concurrency(t *testing.T) {
 		pks[i] = pk
 		oc.Register(true, pk)
 	}
-
 
 	incommitte := 0
 

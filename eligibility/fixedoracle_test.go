@@ -107,7 +107,7 @@ func TestFixedRolacle_Eligible3(t *testing.T) {
 		oracle.Register(false, s)
 	}
 
-	exp := numOfClients/2
+	exp := numOfClients / 2
 	oracle.Eligible(1, exp, "", nil)
 
 	hc := 0

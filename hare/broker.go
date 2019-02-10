@@ -69,9 +69,7 @@ func (broker *Broker) Start() error {
 		log.Error("Could not start instance")
 		return StartInstanceError(errors.New("instance already started"))
 	}
-
 	broker.inbox = broker.network.RegisterGossipProtocol(ProtoName)
-
 	go broker.dispatcher()
 
 	return nil
