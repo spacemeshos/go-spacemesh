@@ -302,7 +302,11 @@ func (rt *routingTableImpl) randomPeers(qty int) []node.Node {
 // or if its better in terms of latency and recent contact than out oldest contact in the right bucket.
 // this keeps fresh nodes at the top of the bucket and make sure we won't lose contact with the network and keep most healthy nodes.
 func (rt *routingTableImpl) update(p node.Node, cb chan struct{}) {
-	defer close(cb)
+	var added bool
+	defer func() {
+		rt.log.With().Debug("dht_update", log.String("node_id", p.String()), log.Bool("new", added))
+		close(cb)
+	}()
 
 	if rt.local.Equals(p.DhtID()) {
 		rt.log.Warning("Ignoring attempt to add local node to the routing table")
@@ -355,6 +359,7 @@ func (rt *routingTableImpl) update(p node.Node, cb chan struct{}) {
 	// new node and bucket isn't full
 	metrics.DHTSize.Add(1)
 	bucket.PushFront(p)
+	added = true
 }
 
 func (rt *routingTableImpl) split() {
