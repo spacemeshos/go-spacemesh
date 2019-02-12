@@ -464,8 +464,8 @@ func (proc *ConsensusProcess) processNotifyMsg(msg *pb.HareMessage) {
 	}
 
 	if proc.notifyTracker.NotificationsCount(s) < proc.cfg.F+1 { // not enough
-		//proc.Info("Not enough notifications for termination. Expected: %v Actual: %v",
-		//	proc.cfg.F+1, proc.notifyTracker.NotificationsCount(s))
+		proc.Debug("Not enough notifications for termination. Expected: %v Actual: %v",
+					proc.cfg.F+1, proc.notifyTracker.NotificationsCount(s))
 		return
 	}
 
