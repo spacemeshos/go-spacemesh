@@ -12,6 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare"
 	hareConfig "github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
@@ -380,6 +381,10 @@ func (app *SpacemeshApp) startSpacemesh(cmd *cobra.Command, args []string) {
 
 	if app.Config.TestMode {
 		app.setupTestFeatures()
+	}
+
+	if app.Config.CollectMetrics {
+		metrics.StartCollectingMetrics(app.Config.MetricsPort)
 	}
 
 	if err != nil {
