@@ -11,6 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/connectionpool"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht"
 	"github.com/spacemeshos/go-spacemesh/p2p/gossip"
+	"github.com/spacemeshos/go-spacemesh/p2p/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
@@ -198,7 +199,6 @@ func newSwarm(ctx context.Context, config config.Config, newNode bool, persist b
 	s.gossip = gossip.NewProtocol(config.SwarmConfig, s, s.LocalNode().PublicKey(), s.lNode.Log)
 
 	s.lNode.Debug("Created swarm for local node %s, %s", l.Address(), l.Pretty())
-
 	return s, nil
 }
 
@@ -738,6 +738,7 @@ loop:
 			s.outpeersMutex.Unlock()
 
 			s.publishNewPeer(cne.n.PublicKey())
+			metrics.OutboundPeers.Add(1)
 			s.lNode.Debug("Neighborhood: Added peer to peer list %v", cne.n.Pretty())
 		case <-tm.C:
 			break loop
@@ -760,6 +761,7 @@ func (s *swarm) Disconnect(peer p2pcrypto.PublicKey) {
 		delete(s.inpeers, peer.String())
 		s.inpeersMutex.Unlock()
 		s.publishDelPeer(peer)
+		metrics.InboundPeers.Add(-1)
 		return
 	}
 	s.inpeersMutex.Unlock()
@@ -770,6 +772,7 @@ func (s *swarm) Disconnect(peer p2pcrypto.PublicKey) {
 	}
 	s.outpeersMutex.Unlock()
 	s.publishDelPeer(peer)
+	metrics.OutboundPeers.Add(-1)
 	s.morePeersReq <- struct{}{}
 }
 
@@ -780,6 +783,7 @@ func (s *swarm) addIncomingPeer(n p2pcrypto.PublicKey) {
 	s.inpeers[n.String()] = n
 	s.inpeersMutex.Unlock()
 	s.publishNewPeer(n)
+	metrics.InboundPeers.Add(1)
 }
 
 func (s *swarm) hasIncomingPeer(peer p2pcrypto.PublicKey) bool {
