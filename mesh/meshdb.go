@@ -12,6 +12,7 @@ import (
 
 type layerHandler struct {
 	ch           chan *Block
+	done         chan struct{}
 	layer        LayerID
 	pendingCount int32
 }
@@ -109,7 +110,7 @@ func (m *meshDB) setContextualValidity(id BlockID, valid bool) error {
 }
 
 //todo this overwrites the previous value if it exists
-func (m *meshDB) addLayer(layer *Layer) error {
+func (m *meshDB) addLayer(layer *Layer) {
 	layerHandler := m.getLayerHandler(layer.index, int32(len(layer.blocks)))
 	ids := make(map[BlockID]bool)
 	for _, b := range layer.blocks {
@@ -120,15 +121,8 @@ func (m *meshDB) addLayer(layer *Layer) error {
 	for _, b := range layer.blocks {
 		layerHandler.ch <- b
 	}
-
-	w, err := blockIdsAsBytes(ids)
-	if err != nil {
-		//todo recover
-		return errors.New("could not encode layer block ids")
-	}
-
-	m.layers.Put(layer.Index().ToBytes(), w)
-	return nil
+	<-layerHandler.done
+	return
 }
 
 func (m *meshDB) updateLayerIds(block *Block) error {
@@ -171,7 +165,10 @@ func (m *meshDB) getLayerBlocks(ids map[BlockID]bool) ([]*Block, error) {
 func (m *meshDB) handleLayerBlocks(ll *layerHandler) {
 	for {
 		select {
-		case bl := <-ll.ch:
+		case bl, ok := <-ll.ch:
+			if !ok {
+				return
+			}
 			atomic.AddInt32(&ll.pendingCount, -1)
 			bytes, err := BlockAsBytes(*bl)
 			if err != nil {
@@ -198,6 +195,8 @@ func (m *meshDB) handleLayerBlocks(ll *layerHandler) {
 func (m *meshDB) tryDeleteHandler(ll *layerHandler) {
 	m.lhMutex.Lock()
 	if atomic.LoadInt32(&ll.pendingCount) == 0 {
+		close(ll.done)
+		close(ll.ch)
 		delete(m.layerHandlers, ll.layer)
 	}
 	m.lhMutex.Unlock()
@@ -209,7 +208,7 @@ func (m *meshDB) getLayerHandler(index LayerID, counter int32) *layerHandler {
 	defer m.lhMutex.Unlock()
 	ll, found := m.layerHandlers[index]
 	if !found {
-		ll = &layerHandler{pendingCount: counter, ch: make(chan *Block)}
+		ll = &layerHandler{layer: index, pendingCount: counter, ch: make(chan *Block), done: make(chan struct{})}
 		m.layerHandlers[index] = ll
 		go m.handleLayerBlocks(ll)
 	} else {

@@ -157,9 +157,9 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 	defer syncObj1.Close()
 	syncObj2 := syncs[1]
 	defer syncObj2.Close()
-	lid := mesh.LayerID(1)
-
-	syncObj1.AddLayer(mesh.NewExistingLayer(lid, make([]*mesh.Block, 0, 10)))
+	lid := mesh.LayerID(0)
+	block := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), lid, []byte("data data data"))
+	syncObj1.AddLayer(mesh.NewExistingLayer(lid, []*mesh.Block{block}))
 	syncObj1.LayerCompleteCallback(lid) //this is to simulate the approval of the tortoise...
 	timeout := time.NewTimer(2 * time.Second)
 	ch, err := syncObj2.sendLayerHashRequest(nodes[0].Node.PublicKey(), lid)
@@ -187,7 +187,7 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 	layer.AddBlock(mesh.NewExistingBlock(mesh.BlockID(222), lid, nil))
 	syncObj1.AddLayer(layer)
 	ch, err := syncObj.sendLayerIDsRequest(nodes[1].Node.PublicKey(), lid)
-	timeout := time.NewTimer(2 * time.Second)
+	timeout := time.NewTimer(4 * time.Second)
 
 	select {
 	case ids := <-ch:
@@ -293,7 +293,7 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 
 func TestSyncProtocol_SyncTwoNodes(t *testing.T) {
 
-	syncs, nodes := SyncMockFactory(2, conf, "TestSyncer_Start_", memoryDB)
+	syncs, nodes := SyncMockFactory(2, conf, "TestSyncer_SyncTwoNodes_", memoryDB)
 	pm1 := getPeersMock([]p2p.Peer{nodes[1].PublicKey()})
 	pm2 := getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
 	syncObj1 := syncs[0]
