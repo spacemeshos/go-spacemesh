@@ -14,11 +14,19 @@ const (
 )
 
 var (
-	// the number of valid commit messages
+	// the number of valid commits for a set
 	CommitCounter = prometheus.NewCounterFrom(stdprometheus.CounterOpts{
 		Namespace: Namespace,
 		Subsystem: Subsystem,
 		Name:      "commit_counter",
-		Help:      "Number of valid commit messages.",
+		Help:      "Number of valid commit messages for a set",
+	}, []string{"set_id"})
+
+	// the number of valid notifications for a set
+	NotifyCounter = prometheus.NewCounterFrom(stdprometheus.CounterOpts{
+		Namespace: Namespace,
+		Subsystem: Subsystem,
+		Name:      "notify_counter",
+		Help:      "Number of valid notifications for a set",
 	}, []string{"set_id"})
 )
