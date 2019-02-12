@@ -80,7 +80,7 @@ func NewConsensusProcess(cfg config.Config, instanceId InstanceId, s *Set, oracl
 	proc.preRoundTracker = NewPreRoundTracker(cfg.F+1, cfg.N)
 	proc.statusesTracker = NewStatusTracker(cfg.F+1, cfg.N)
 	proc.statusesTracker.Log = logger
-	proc.proposalTracker = NewProposalTracker(cfg.N)
+	proc.proposalTracker = NewProposalTracker(logger)
 	proc.commitTracker = NewCommitTracker(cfg.F+1, cfg.N, nil)
 	proc.notifyTracker = NewNotifyTracker(cfg.N)
 	proc.terminating = false
@@ -121,7 +121,7 @@ func (proc *ConsensusProcess) createInbox(size uint32) chan Message {
 }
 
 func (proc *ConsensusProcess) eventLoop() {
-	proc.Info("Start listening")
+	proc.With().Info("Consensus Processes Started", log.String("instance_id", proc.instanceId.String()), log.String("set_values", proc.s.String()))
 
 	// set pre-round message and send
 	m := proc.initDefaultBuilder(proc.s).SetType(PreRound).Sign(proc.signing).Build()
@@ -320,7 +320,7 @@ func (proc *ConsensusProcess) sendMessage(msg *pb.HareMessage) {
 }
 
 func (proc *ConsensusProcess) onRoundEnd() {
-	proc.Info("End of round: %d", proc.k)
+	proc.With().Info("End of round", log.Uint32("k", proc.k))
 
 	// reset trackers
 	switch proc.currentRound() {
@@ -342,7 +342,7 @@ func (proc *ConsensusProcess) beginRound1() {
 }
 
 func (proc *ConsensusProcess) beginRound2() {
-	proc.proposalTracker = NewProposalTracker(proc.cfg.N)
+	proc.proposalTracker = NewProposalTracker(proc.Log)
 
 	if proc.isEligible() && proc.statusesTracker.IsSVPReady() {
 		builder := proc.initDefaultBuilder(proc.statusesTracker.ProposalSet(proc.cfg.SetSize))
@@ -471,7 +471,7 @@ func (proc *ConsensusProcess) processNotifyMsg(msg *pb.HareMessage) {
 
 	// enough notifications, should terminate
 	proc.s = s // update to the agreed set
-	proc.Info("Consensus process terminated for %v with output set: ", proc.signing.Verifier().Bytes(), proc.s)
+	proc.With().Info("Consensus process terminated", log.String("set_values", proc.s.String()))
 	proc.terminationReport <- procOutput{proc.instanceId, proc.s}
 	proc.Close()
 	proc.terminating = true // ensures immediate termination
