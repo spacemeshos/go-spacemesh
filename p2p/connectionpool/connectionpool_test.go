@@ -7,6 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"math/rand"
 	"testing"
 	"time"
@@ -299,4 +300,26 @@ func TestRandom(t *testing.T) {
 			break
 		}
 	}
+}
+
+func TestConnectionPool_GetConnectionIfExists(t *testing.T) {
+	n := net.NewNetworkMock()
+	addr := "1.1.1.1"
+	cPool := NewConnectionPool(n, generatePublicKey())
+
+	pk, err := p2pcrypto.NewPublicKeyFromBase58("7gd5cD8ZanFaqnMHZrgUsUjDeVxMTxfpnu4gDPS69pBU")
+	assert.NoError(t, err)
+
+	conn := net.NewConnectionMock(pk)
+	conn.SetSession(net.NewSessionMock(p2pcrypto.NewRandomPubkey()))
+
+	nd := node.New(pk, addr)
+
+	cPool.OnNewConnection(net.NewConnectionEvent{conn, nd})
+
+	getcon, err := cPool.GetConnectionIfExists(pk)
+
+	require.NoError(t, err)
+	require.Equal(t, getcon, conn)
+	require.Equal(t, int(n.DialCount()), 0)
 }
