@@ -48,7 +48,7 @@ type State struct {
 type ConsensusProcess struct {
 	log.Log
 	State
-	Closer            // the consensus is closeable
+	Closer // the consensus is closeable
 	instanceId        InstanceId
 	oracle            Rolacle // roles oracle
 	signing           Signing
@@ -465,7 +465,7 @@ func (proc *ConsensusProcess) processNotifyMsg(msg *pb.HareMessage) {
 
 	if proc.notifyTracker.NotificationsCount(s) < proc.cfg.F+1 { // not enough
 		proc.Debug("Not enough notifications for termination. Expected: %v Actual: %v",
-					proc.cfg.F+1, proc.notifyTracker.NotificationsCount(s))
+			proc.cfg.F+1, proc.notifyTracker.NotificationsCount(s))
 		return
 	}
 
