@@ -169,26 +169,30 @@ func (m *meshDB) handleLayerBlocks(ll *layerHandler) {
 		case _ = <-ll.done:
 			return
 		case bl := <-ll.ch:
-			if bl != nil {
-				atomic.AddInt32(&ll.pendingCount, -1)
-				bytes, err := BlockAsBytes(*bl)
-				if err != nil {
-					log.Error("could not encode bl")
-					continue
-				}
-				if b, err := m.blocks.Get(bl.ID().ToBytes()); err == nil && b != nil {
-					log.Error("bl ", bl.ID(), " already in database ")
-					continue
-				}
 
-				if err := m.blocks.Put(bl.ID().ToBytes(), bytes); err != nil {
-					log.Error("could not add bl to ", bl.ID(), " database ", err)
-					continue
-				}
-
-				m.updateLayerIds(bl)
-				m.tryDeleteHandler(ll) //try delete handler when done to avoid leak
+			//chan was closed
+			if bl == nil {
+				return
 			}
+
+			atomic.AddInt32(&ll.pendingCount, -1)
+			bytes, err := BlockAsBytes(*bl)
+			if err != nil {
+				log.Error("could not encode bl")
+				continue
+			}
+			if b, err := m.blocks.Get(bl.ID().ToBytes()); err == nil && b != nil {
+				log.Error("bl ", bl.ID(), " already in database ")
+				continue
+			}
+
+			if err := m.blocks.Put(bl.ID().ToBytes(), bytes); err != nil {
+				log.Error("could not add bl to ", bl.ID(), " database ", err)
+				continue
+			}
+
+			m.updateLayerIds(bl)
+			m.tryDeleteHandler(ll) //try delete handler when done to avoid leak
 		}
 	}
 }
