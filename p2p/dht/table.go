@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 )
 
@@ -352,6 +353,7 @@ func (rt *routingTableImpl) update(p node.Node, cb chan struct{}) {
 	}
 
 	// new node and bucket isn't full
+	metrics.DHTSize.Add(1)
 	bucket.PushFront(p)
 }
 

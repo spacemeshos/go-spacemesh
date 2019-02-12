@@ -16,33 +16,34 @@ type MessageValidator struct {
 	threshold       int
 	defaultSize     int
 	statusValidator func(m *pb.HareMessage) bool // used to validate status messages in SVP
+	log.Log
 }
 
 func NewMessageValidator(signing Signing, threshold int, defaultSize int, validator func(m *pb.HareMessage) bool) *MessageValidator {
-	return &MessageValidator{signing, threshold, defaultSize, validator}
+	return &MessageValidator{signing, threshold, defaultSize, validator, log.NewDefault("MessageValidator")}
 }
 
 func (validator *MessageValidator) SyntacticallyValidateMessage(m *pb.HareMessage) bool {
 	if !validator.isValidStructure(m) {
-		log.Warning("Validate message failed: message is not syntactically valid")
+		validator.Warning("Validate message failed: message is not syntactically valid")
 		return false
 	}
 
 	data, err := proto.Marshal(m.Message)
 	if err != nil {
-		log.Error("Validate message failed: failed marshaling inner message")
+		validator.Error("Validate message failed: failed marshaling inner message")
 		return false
 	}
 
 	// verify signature
 	verifier, err := NewVerifier(m.PubKey)
 	if err != nil {
-		log.Warning("Validate message failed: Could not construct verifier ", err)
+		validator.Warning("Validate message failed: Could not construct verifier ", err)
 		return false
 	}
 	res, _ := verifier.Verify(data, m.InnerSig)
 	if !res {
-		log.Warning("Validate message failed: invalid message signature detected ")
+		validator.Warning("Validate message failed: invalid message signature detected ")
 		return false
 	}
 
@@ -52,7 +53,7 @@ func (validator *MessageValidator) SyntacticallyValidateMessage(m *pb.HareMessag
 // verifies the message is contextually valid
 func (validator *MessageValidator) ContextuallyValidateMessage(m *pb.HareMessage, expectedK uint32) bool {
 	if m.Message == nil {
-		log.Warning("Contextual validation failed: m.Message is nil")
+		validator.Warning("Contextual validation failed: m.Message is nil")
 		return false
 	}
 
@@ -69,34 +70,34 @@ func (validator *MessageValidator) ContextuallyValidateMessage(m *pb.HareMessage
 		return true
 	}
 
-	log.Info("Contextual validation failed: not same iteration. Expected: %v, Actual: %v", expectedK, m.Message.K)
+	validator.Info("Contextual validation failed: not same iteration. Expected: %v, Actual: %v", expectedK, m.Message.K)
 	return false
 }
 
 // verifies the message is syntactically valid
 func (validator *MessageValidator) isValidStructure(m *pb.HareMessage) bool {
 	if m == nil {
-		log.Warning("Syntax validation failed: m is nil")
+		validator.Warning("Syntax validation failed: m is nil")
 		return false
 	}
 
 	if m.PubKey == nil {
-		log.Warning("Syntax validation failed: missing public key")
+		validator.Warning("Syntax validation failed: missing public key")
 		return false
 	}
 
 	if m.Message == nil {
-		log.Warning("Syntax validation failed: inner message is nil")
+		validator.Warning("Syntax validation failed: inner message is nil")
 		return false
 	}
 
 	if m.Message.Values == nil {
-		log.Warning("Syntax validation failed: values is nil in msg: %v", m)
+		validator.Warning("Syntax validation failed: values is nil in msg: %v", m)
 		return false
 	}
 
 	if len(m.Message.Values) == 0 {
-		log.Warning("Syntax validation failed: values is empty: %v", m)
+		validator.Warning("Syntax validation failed: values is empty: %v", m)
 		return false
 	}
 
@@ -113,29 +114,29 @@ func (validator *MessageValidator) isValidStructure(m *pb.HareMessage) bool {
 	case Notify:
 		return validator.validateCertificate(m.Cert)
 	default:
-		log.Error("Unknown message type encountered during syntactic validator: ", m.Message.Type)
+		validator.Error("Unknown message type encountered during syntactic validator: ", m.Message.Type)
 		return false
 	}
 }
 
 func (validator *MessageValidator) validateAggregatedMessage(aggMsg *pb.AggregatedMessages, validators []func(m *pb.HareMessage) bool) bool {
 	if validators == nil {
-		log.Error("Aggregated validation failed: validators param is nil")
+		validator.Error("Aggregated validation failed: validators param is nil")
 		return false
 	}
 
 	if aggMsg == nil {
-		log.Warning("Aggregated validation failed: aggMsg is nil")
+		validator.Warning("Aggregated validation failed: aggMsg is nil")
 		return false
 	}
 
 	if aggMsg.Messages == nil { // must contain status messages
-		log.Warning("Aggregated validation failed: messages slice is nil")
+		validator.Warning("Aggregated validation failed: messages slice is nil")
 		return false
 	}
 
 	if len(aggMsg.Messages) != validator.threshold { // must include exactly f+1 messages
-		log.Warning("Aggregated validation failed: number of messages does not match. Expected: %v Actual: %v",
+		validator.Warning("Aggregated validation failed: number of messages does not match. Expected: %v Actual: %v",
 			validator.threshold, len(aggMsg.Messages))
 		return false
 	}
@@ -146,26 +147,26 @@ func (validator *MessageValidator) validateAggregatedMessage(aggMsg *pb.Aggregat
 	senders := make(map[string]struct{}, validator.defaultSize)
 	for _, innerMsg := range aggMsg.Messages {
 		if !validator.isValidStructure(innerMsg) {
-			log.Warning("Aggregated validation failed: identified an invalid inner message")
+			validator.Warning("Aggregated validation failed: identified an invalid inner message")
 			return false
 		}
 
 		// validate unique sender
 		verifier, err := NewVerifier(innerMsg.PubKey)
 		if err != nil {
-			log.Warning("Aggregated validation failed: could not construct verifier: ", err)
+			validator.Warning("Aggregated validation failed: could not construct verifier: ", err)
 			return false
 		}
 		if _, exist := senders[verifier.String()]; exist { // pub already exist
-			log.Warning("Aggregated validation failed: detected same pubKey for different messages")
+			validator.Warning("Aggregated validation failed: detected same pubKey for different messages")
 			return false
 		}
 		senders[verifier.String()] = struct{}{} // mark sender as exist
 
 		// validate with attached validators
-		for _, validator := range validators {
-			if !validator(innerMsg) {
-				log.Warning("Aggregated validation failed: attached validator failed")
+		for _, vFunc := range validators {
+			if !vFunc(innerMsg) {
+				validator.Warning("Aggregated validation failed: attached vFunc failed")
 				return false
 			}
 		}
@@ -179,7 +180,7 @@ func (validator *MessageValidator) validateSVP(msg *pb.HareMessage) bool {
 		proposalIter := iterationFromCounter(msg.Message.K)
 		statusIter := iterationFromCounter(m.Message.K)
 		if proposalIter != statusIter { // not same iteration
-			log.Warning("Proposal validation failed: not same iteration. Expected: %v Actual: %v",
+			validator.Warning("Proposal validation failed: not same iteration. Expected: %v Actual: %v",
 				proposalIter, statusIter)
 			return false
 		}
@@ -188,7 +189,7 @@ func (validator *MessageValidator) validateSVP(msg *pb.HareMessage) bool {
 	}
 	validators := []func(m *pb.HareMessage) bool{validateStatusType, validateSameIteration, validator.statusValidator}
 	if !validator.validateAggregatedMessage(msg.Message.Svp, validators) {
-		log.Warning("Proposal validation failed: failed to validate aggregated message")
+		validator.Warning("Proposal validation failed: failed to validate aggregated message")
 		return false
 	}
 
@@ -203,13 +204,13 @@ func (validator *MessageValidator) validateSVP(msg *pb.HareMessage) bool {
 	}
 
 	if maxKi == -1 { // type A
-		if !validateSVPTypeA(msg) {
-			log.Warning("Proposal validation failed: type A validation failed")
+		if !validator.validateSVPTypeA(msg) {
+			validator.Warning("Proposal validation failed: type A validation failed")
 			return false
 		}
 	} else {
-		if !validateSVPTypeB(msg, NewSet(maxRawSet)) { // type B
-			log.Warning("Proposal validation failed: type B validation failed")
+		if !validator.validateSVPTypeB(msg, NewSet(maxRawSet)) { // type B
+			validator.Warning("Proposal validation failed: type B validation failed")
 			return false
 		}
 	}
@@ -219,7 +220,7 @@ func (validator *MessageValidator) validateSVP(msg *pb.HareMessage) bool {
 
 func (validator *MessageValidator) validateCertificate(cert *pb.Certificate) bool {
 	if cert == nil {
-		log.Warning("Certificate validation failed: certificate is nil")
+		validator.Warning("Certificate validation failed: certificate is nil")
 		return false
 	}
 
@@ -241,7 +242,7 @@ func (validator *MessageValidator) validateCertificate(cert *pb.Certificate) boo
 	validateSameK := func(m *pb.HareMessage) bool { return m.Message.K == cert.AggMsgs.Messages[0].Message.K }
 	validators := []func(m *pb.HareMessage) bool{validateCommitType, validateSameK}
 	if !validator.validateAggregatedMessage(cert.AggMsgs, validators) {
-		log.Warning("Certificate validation failed: aggregated messages validation failed")
+		validator.Warning("Certificate validation failed: aggregated messages validation failed")
 		return false
 	}
 
@@ -257,7 +258,7 @@ func validateStatusType(m *pb.HareMessage) bool {
 }
 
 // validate SVP for type A (where all ki=-1)
-func validateSVPTypeA(m *pb.HareMessage) bool {
+func (validator *MessageValidator) validateSVPTypeA(m *pb.HareMessage) bool {
 	s := NewSet(m.Message.Values)
 	unionSet := NewEmptySet(cap(m.Message.Values))
 	for _, status := range m.Message.Svp.Messages {
@@ -269,7 +270,7 @@ func validateSVPTypeA(m *pb.HareMessage) bool {
 	}
 
 	if !unionSet.Equals(s) { // s should be the union of all statuses
-		log.Warning("Proposal type A validation failed: not a union. Expected: %v Actual: %v", s, unionSet)
+		validator.Warning("Proposal type A validation failed: not a union. Expected: %v Actual: %v", s, unionSet)
 		return false
 	}
 
@@ -277,11 +278,11 @@ func validateSVPTypeA(m *pb.HareMessage) bool {
 }
 
 // validate SVP for type B (where exist ki>=0)
-func validateSVPTypeB(msg *pb.HareMessage, maxSet *Set) bool {
+func (validator *MessageValidator) validateSVPTypeB(msg *pb.HareMessage, maxSet *Set) bool {
 	// max set should be equal to the claimed set
 	s := NewSet(msg.Message.Values)
 	if !s.Equals(maxSet) {
-		log.Warning("Proposal type B validation failed: max set not equal to proposed set. Expected: %v Actual: %v", s, maxSet)
+		validator.Warning("Proposal type B validation failed: max set not equal to proposed set. Expected: %v Actual: %v", s, maxSet)
 		return false
 	}
 
