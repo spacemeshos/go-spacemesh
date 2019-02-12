@@ -83,6 +83,10 @@ func New(module string, dataFolderPath string, logFileName string) Log {
 	return Log{log}
 }
 
+func NewDefault(module string) Log {
+	return New(module, "", "")
+}
+
 // getBackendLevelWithFileBackend returns backends level including log file backend
 func getFileWriter(dataFolderPath, logFileName string) io.Writer {
 	fileName := filepath.Join(dataFolderPath, logFileName)

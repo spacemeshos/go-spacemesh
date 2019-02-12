@@ -145,11 +145,12 @@ func TestMessageValidator_validateSVPTypeA(t *testing.T) {
 	s2 := NewSetFromValues(value3)
 	s3 := NewSetFromValues(value1, value5)
 	s4 := NewSetFromValues(value1, value4)
+	v := defaultValidator()
 	m.Message.Svp = buildSVP(-1, s1, s2, s3, s4)
-	assert.False(t, validateSVPTypeA(m))
+	assert.False(t, v.validateSVPTypeA(m))
 	s3 = NewSetFromValues(value2)
 	m.Message.Svp = buildSVP(-1, s1, s2, s3)
-	assert.True(t, validateSVPTypeA(m))
+	assert.True(t, v.validateSVPTypeA(m))
 }
 
 func TestMessageValidator_validateSVPTypeB(t *testing.T) {
@@ -158,8 +159,9 @@ func TestMessageValidator_validateSVPTypeB(t *testing.T) {
 	m.Message.Svp = buildSVP(-1, s1)
 	s := NewSetFromValues(value1)
 	m.Message.Values = s.To2DSlice()
-	assert.False(t, validateSVPTypeB(m, NewSetFromValues(value5)))
-	assert.True(t, validateSVPTypeB(m, NewSetFromValues(value1)))
+	v := defaultValidator()
+	assert.False(t, v.validateSVPTypeB(m, NewSetFromValues(value5)))
+	assert.True(t, v.validateSVPTypeB(m, NewSetFromValues(value1)))
 }
 
 func TestMessageValidator_validateSVP(t *testing.T) {
