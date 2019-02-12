@@ -150,7 +150,7 @@ func TestNinjaTortoise_Sanity2(t *testing.T) {
 	for b, vec := range alg.tTally[alg.pBase] {
 		alg.Info("------> tally for block %d according to complete pattern %d are %d", b, alg.pBase, vec)
 	}
-	assert.True(t, alg.tTally[alg.pBase][l.Blocks()[0].ID()] == vec{7, 0}, "lyr %d tally was %d insted of %d", 0, alg.tTally[alg.pBase][l.Blocks()[0].ID()], vec{7, 0})
+	assert.True(t, alg.tTally[alg.pBase][l.Blocks()[0].ID()] == vec{5, 0}, "lyr %d tally was %d insted of %d", 0, alg.tTally[alg.pBase][l.Blocks()[0].ID()], vec{5, 0})
 }
 
 func createMulExplicitLayer(index mesh.LayerID, prev map[mesh.LayerID]*mesh.Layer, patterns map[mesh.LayerID][]int, blocksInLayer int) *mesh.Layer {
