@@ -78,6 +78,7 @@ func (m *meshDB) addBlock(block *Block) error {
 
 	layerHandler := m.getLayerHandler(block.LayerIndex, 1)
 	layerHandler.ch <- block
+	<-layerHandler.done
 	return nil
 }
 
