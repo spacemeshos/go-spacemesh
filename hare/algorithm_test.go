@@ -229,7 +229,7 @@ func generateConsensusProcess(t *testing.T) *ConsensusProcess {
 	oracle.Register(signing.Verifier().String())
 	output := make(chan TerminationOutput, 1)
 
-	return NewConsensusProcess(cfg, *instanceId1, s, oracle, signing, n1, output)
+	return NewConsensusProcess(cfg, *instanceId1, s, oracle, signing, n1, output, log.NewDefault(signing.Verifier().String()))
 }
 
 func TestConsensusProcess_Id(t *testing.T) {
@@ -301,18 +301,15 @@ func TestConsensusProcess_isEligible(t *testing.T) {
 
 func TestConsensusProcess_sendMessage(t *testing.T) {
 	net := &mockP2p{}
-	broker := NewBroker(net)
-	s := NewEmptySet(cfg.SetSize)
 	oracle := &mockRolacle{}
-	signing := NewMockSigning()
 
-	output := make(chan TerminationOutput, 1)
-	proc := NewConsensusProcess(cfg, *instanceId1, s, oracle, signing, net, output)
-	broker.Register(proc)
+	proc := generateConsensusProcess(t)
+	proc.oracle = oracle
+	proc.network = net
 
 	proc.sendMessage(nil)
 	assert.Equal(t, 0, net.count)
-	msg := buildStatusMsg(generateSigning(t), s, 0)
+	msg := buildStatusMsg(generateSigning(t), proc.s, 0)
 
 	oracle.isEligible = false
 	proc.sendMessage(msg)
