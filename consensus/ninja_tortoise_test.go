@@ -96,8 +96,9 @@ func TestNinjaTortoise_Sanity1(t *testing.T) {
 	alg := NewNinjaTortoise(uint32(layerSize))
 	l1 := createGenesisLayer()
 	genesisId := l1.Blocks()[0].ID()
+	alg.handleIncomingLayer(l1)
 	l := createLayerWithRandVoting(l1.Index()+1, []*mesh.Layer{l1}, layerSize, 1)
-	alg.init(l1, l)
+	alg.handleIncomingLayer(l)
 	for i := 0; i < 30; i++ {
 		lyr := createLayerWithRandVoting(l.Index()+1, []*mesh.Layer{l}, layerSize, layerSize)
 		start := time.Now()
@@ -122,7 +123,8 @@ func TestNinjaTortoise_Sanity2(t *testing.T) {
 	l3 := createMulExplicitLayer(3, map[mesh.LayerID]*mesh.Layer{l2.Index(): l2}, map[mesh.LayerID][]int{l2.Index(): {0}}, 3)
 	l4 := createMulExplicitLayer(4, map[mesh.LayerID]*mesh.Layer{l2.Index(): l2, l3.Index(): l3}, map[mesh.LayerID][]int{l2.Index(): {1, 2}, l3.Index(): {1, 2}}, 4)
 
-	alg.init(l, l1)
+	alg.handleIncomingLayer(l)
+	alg.handleIncomingLayer(l1)
 	alg.handleIncomingLayer(l2)
 	alg.handleIncomingLayer(l3)
 	alg.handleIncomingLayer(l4)

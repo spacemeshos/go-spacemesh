@@ -365,21 +365,11 @@ func (ni *ninjaTortoise) processBlocks(layer *mesh.Layer) {
 
 }
 
-func (ni *ninjaTortoise) init(genesis *mesh.Layer, l1 *mesh.Layer) {
-	ni.processBlocks(genesis)
+func (ni *ninjaTortoise) handleGenesis(genesis *mesh.Layer) {
 	vp := votingPattern{id: getId(ni.layerBlocks[Genesis]), LayerID: Genesis}
 	ni.pBase = vp
 	ni.tGood[Genesis] = vp
 	ni.tExplicit[genesis.Blocks()[0].ID()] = make(map[mesh.LayerID]votingPattern, K*ni.avgLayerSize)
-	ni.processBlocks(l1)
-	vp1 := votingPattern{id: getId(ni.layerBlocks[Genesis+1]), LayerID: Genesis + 1}
-	ni.tPattern[vp1] = map[mesh.BlockID]struct{}{}
-	for _, b := range ni.layerBlocks[Genesis+1] {
-		ni.tPattern[vp1][b] = struct{}{}
-	}
-	ni.tVote[vp1] = make(map[mesh.BlockID]vec)
-	ni.tVote[vp1][genesis.Blocks()[0].ID()] = Support
-
 }
 
 //todo send map instead of ni
@@ -403,8 +393,13 @@ func initTallyToBase(tally map[votingPattern]map[mesh.BlockID]vec, base votingPa
 
 func (ni *ninjaTortoise) handleIncomingLayer(newlyr *mesh.Layer) { //i most recent layer
 	ni.Debug("update tables layer %d", newlyr.Index())
-	//initialize these tables //not in article
+
 	ni.processBlocks(newlyr)
+
+	if newlyr.Index() == Genesis {
+		ni.handleGenesis(newlyr)
+		return
+	}
 
 	l := ni.findMinimalNewlyGoodLayer(newlyr)
 
