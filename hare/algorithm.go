@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
+	"github.com/spacemeshos/go-spacemesh/hare/metrics"
 	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -278,6 +279,8 @@ func (proc *ConsensusProcess) handleMessage(msg Message) {
 }
 
 func (proc *ConsensusProcess) processMsg(m *pb.HareMessage) {
+	metrics.MessageTypeCounter.With("type_id", MessageType(m.Message.Type).String()).Add(1)
+
 	switch MessageType(m.Message.Type) {
 	case PreRound:
 		proc.processPreRoundMsg(m)

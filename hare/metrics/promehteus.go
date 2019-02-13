@@ -29,4 +29,12 @@ var (
 		Name:      "notify_counter",
 		Help:      "Number of valid notifications for a set",
 	}, []string{"set_id"})
+
+	// the number of valid messages for each type
+	MessageTypeCounter = prometheus.NewCounterFrom(stdprometheus.CounterOpts{
+		Namespace: Namespace,
+		Subsystem: Subsystem,
+		Name:      "message_type_counter",
+		Help:      "Number of valid messages sent to processing for each type",
+	}, []string{"type_id"})
 )
