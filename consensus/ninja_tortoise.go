@@ -82,6 +82,27 @@ type ninjaTortoise struct {
 	tPatSupport        map[votingPattern]map[mesh.LayerID]votingPattern //pattern support count
 }
 
+func NewNinjaTortoise(layerSize uint32) *ninjaTortoise {
+	return &ninjaTortoise{
+		Log:                log.New("optimized tortoise ", "", ""),
+		avgLayerSize:       layerSize,
+		pBase:              votingPattern{},
+		blocks:             map[mesh.BlockID]*mesh.Block{},
+		tEffective:         map[mesh.BlockID]votingPattern{},
+		tCorrect:           map[mesh.BlockID]map[mesh.BlockID]vec{},
+		layerBlocks:        map[mesh.LayerID][]mesh.BlockID{},
+		tExplicit:          map[mesh.BlockID]map[mesh.LayerID]votingPattern{},
+		tGood:              map[mesh.LayerID]votingPattern{},
+		tSupport:           map[votingPattern]int{},
+		tPattern:           map[votingPattern]map[mesh.BlockID]struct{}{},
+		tVote:              map[votingPattern]map[mesh.BlockID]vec{},
+		tTally:             map[votingPattern]map[mesh.BlockID]vec{},
+		tComplete:          map[votingPattern]struct{}{},
+		tEffectiveToBlocks: map[votingPattern][]mesh.BlockID{},
+		tPatSupport:        map[votingPattern]map[mesh.LayerID]votingPattern{},
+	}
+}
+
 func (ni *ninjaTortoise) processBlock(b *mesh.Block) {
 
 	ni.Debug("process block: %d layer: %d  ", b.Id, b.Layer())
@@ -344,21 +365,11 @@ func (ni *ninjaTortoise) processBlocks(layer *mesh.Layer) {
 
 }
 
-func (ni *ninjaTortoise) init(genesis *mesh.Layer, l1 *mesh.Layer) {
-	ni.processBlocks(genesis)
+func (ni *ninjaTortoise) handleGenesis(genesis *mesh.Layer) {
 	vp := votingPattern{id: getId(ni.layerBlocks[Genesis]), LayerID: Genesis}
 	ni.pBase = vp
 	ni.tGood[Genesis] = vp
 	ni.tExplicit[genesis.Blocks()[0].ID()] = make(map[mesh.LayerID]votingPattern, K*ni.avgLayerSize)
-	ni.processBlocks(l1)
-	vp1 := votingPattern{id: getId(ni.layerBlocks[Genesis+1]), LayerID: Genesis + 1}
-	ni.tPattern[vp1] = map[mesh.BlockID]struct{}{}
-	for _, b := range ni.layerBlocks[Genesis+1] {
-		ni.tPattern[vp1][b] = struct{}{}
-	}
-	ni.tVote[vp1] = make(map[mesh.BlockID]vec)
-	ni.tVote[vp1][genesis.Blocks()[0].ID()] = Support
-
 }
 
 //todo send map instead of ni
@@ -380,10 +391,15 @@ func initTallyToBase(tally map[votingPattern]map[mesh.BlockID]vec, base votingPa
 	}
 }
 
-func (ni *ninjaTortoise) HandleIncomingLayer(newlyr *mesh.Layer) mesh.LayerID { //i most recent layer
-	ni.Debug("update tables layer %d", newlyr.Index())
-	//initialize these tables //not in article
+func (ni *ninjaTortoise) handleIncomingLayer(newlyr *mesh.Layer) { //i most recent layer
+	ni.Info("update tables layer %d with %d blocks", newlyr.Index(), len(newlyr.Blocks()))
+
 	ni.processBlocks(newlyr)
+
+	if newlyr.Index() == Genesis {
+		ni.handleGenesis(newlyr)
+		return
+	}
 
 	l := ni.findMinimalNewlyGoodLayer(newlyr)
 
@@ -465,5 +481,5 @@ func (ni *ninjaTortoise) HandleIncomingLayer(newlyr *mesh.Layer) mesh.LayerID { 
 			}
 		}
 	}
-	return ni.pBase.LayerID
+	return
 }

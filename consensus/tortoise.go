@@ -16,7 +16,7 @@ type BlockPosition struct {
 	layer      LayerID
 }
 
-type Algorithm struct {
+type tortoise struct {
 	block2Id           map[BlockID]uint32
 	allBlocks          map[BlockID]*TortoiseBlock
 	layerQueue         LayerQueue
@@ -32,9 +32,9 @@ type Algorithm struct {
 	mu                 sync.Mutex
 }
 
-func NewAlgorithm(layerSize uint32, cachedLayers uint32) Algorithm {
+func NewTortoise(layerSize uint32, cachedLayers uint32) *tortoise {
 	totBlocks := layerSize * cachedLayers
-	trtl := Algorithm{
+	trtl := tortoise{
 		block2Id:          make(map[BlockID]uint32),
 		allBlocks:         make(map[BlockID]*TortoiseBlock),
 		layerQueue:        make(LayerQueue, cachedLayers+1),
@@ -48,22 +48,22 @@ func NewAlgorithm(layerSize uint32, cachedLayers uint32) Algorithm {
 		cachedLayers:       cachedLayers,
 		layerReadyCallback: nil,
 	}
-	return trtl
+	return &trtl
 }
 
-func (alg *Algorithm) RegisterLayerCallback(callback func(mesh.LayerID)) {
+func (alg *tortoise) RegisterLayerCallback(callback func(mesh.LayerID)) {
 	alg.layerReadyCallback = callback
 }
 
-func (alg *Algorithm) GlobalVotingAvg() uint64 {
+func (alg *tortoise) GlobalVotingAvg() uint64 {
 	return 100
 }
 
-func (alg *Algorithm) LayerVotingAvg() uint64 {
+func (alg *tortoise) LayerVotingAvg() uint64 {
 	return 30
 }
 
-func (alg *Algorithm) IsTortoiseValid(originBlock *TortoiseBlock, targetBlock BlockID, targetBlockIdx uint64, visibleBlocks bitarray.BitArray) bool {
+func (alg *tortoise) IsTortoiseValid(originBlock *TortoiseBlock, targetBlock BlockID, targetBlockIdx uint64, visibleBlocks bitarray.BitArray) bool {
 	voteFor, voteAgainst := alg.countTotalVotesForBlock(targetBlockIdx, visibleBlocks)
 
 	if voteFor > alg.GlobalVotingAvg() {
@@ -85,18 +85,18 @@ func (alg *Algorithm) IsTortoiseValid(originBlock *TortoiseBlock, targetBlock Bl
 	return originBlock.Coin
 }
 
-func (alg *Algorithm) getLayerById(layerId LayerID) (*Layer, error) {
+func (alg *tortoise) getLayerById(layerId LayerID) (*Layer, error) {
 	if _, ok := alg.layers[layerId]; !ok {
 		return nil, fmt.Errorf("layer Id not found %v", layerId)
 	}
 	return alg.layers[layerId], nil
 }
 
-func (alg *Algorithm) CountVotesInLastLayer(block *TortoiseBlock) (uint64, uint64) {
+func (alg *tortoise) CountVotesInLastLayer(block *TortoiseBlock) (uint64, uint64) {
 	return block.ConVotes, block.ProVotes
 }
 
-func (alg *Algorithm) createBlockVotingMap(origin *TortoiseBlock) (*bitarray.BitArray, *bitarray.BitArray) {
+func (alg *tortoise) createBlockVotingMap(origin *TortoiseBlock) (*bitarray.BitArray, *bitarray.BitArray) {
 	blockMap := bitarray.NewBitArray(uint64(alg.totalBlocks))
 	visibilityMap := bitarray.NewBitArray(uint64(alg.totalBlocks))
 	// Count direct voters
@@ -137,7 +137,7 @@ func (alg *Algorithm) createBlockVotingMap(origin *TortoiseBlock) (*bitarray.Bit
 	return &blockMap, &visibilityMap
 }
 
-func (alg *Algorithm) countTotalVotesForBlock(targetIdx uint64, visibleBlocks bitarray.BitArray) (uint64, uint64) {
+func (alg *tortoise) countTotalVotesForBlock(targetIdx uint64, visibleBlocks bitarray.BitArray) (uint64, uint64) {
 	var posVotes, conVotes uint64 = 0, 0
 	targetLayer := alg.visibilityMap[targetIdx].layer
 	ln := len(alg.block2Id)
@@ -162,14 +162,14 @@ func (alg *Algorithm) countTotalVotesForBlock(targetIdx uint64, visibleBlocks bi
 	return posVotes, conVotes
 }
 
-func (alg *Algorithm) zeroBitColumn(idx uint64) {
+func (alg *tortoise) zeroBitColumn(idx uint64) {
 	for row, bitvec := range alg.posVotes {
 		bitvec.ClearBit(idx)
 		alg.visibilityMap[row].visibility.ClearBit(idx)
 	}
 }
 
-func (alg *Algorithm) recycleLayer(l *Layer) {
+func (alg *tortoise) recycleLayer(l *Layer) {
 	for _, block := range l.blocks {
 		id := alg.block2Id[block.Id]
 		alg.idQueue <- alg.block2Id[block.Id]
@@ -182,7 +182,7 @@ func (alg *Algorithm) recycleLayer(l *Layer) {
 	alg.mu.Unlock()
 }
 
-func (alg *Algorithm) assignIdForBlock(blk *TortoiseBlock) uint32 {
+func (alg *tortoise) assignIdForBlock(blk *TortoiseBlock) uint32 {
 	//todo: should this section be protected by a mutex?
 	alg.allBlocks[blk.Id] = blk
 	if len(alg.idQueue) > 0 {
@@ -204,7 +204,7 @@ func (alg *Algorithm) assignIdForBlock(blk *TortoiseBlock) uint32 {
 
 }
 
-func (alg *Algorithm) HandleIncomingLayer(ll *mesh.Layer) {
+func (alg *tortoise) HandleIncomingLayer(ll *mesh.Layer) {
 	l := FromLayerToTortoiseLayer(ll)
 	alg.mu.Lock()
 	alg.layers[l.index] = l
@@ -231,6 +231,6 @@ func (alg *Algorithm) HandleIncomingLayer(ll *mesh.Layer) {
 	alg.mu.Unlock()
 }
 
-func (alg *Algorithm) HandleLateBlock(b *mesh.Block) {
+func (alg *tortoise) HandleLateBlock(b *mesh.Block) {
 	log.Info("received block with layer Id %v block id: %v ", b.Layer(), b.ID())
 }

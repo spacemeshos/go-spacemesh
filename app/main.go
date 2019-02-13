@@ -281,6 +281,7 @@ func (app *SpacemeshApp) setupGenesis() {
 	}
 
 	app.state.Commit(false)
+	app.mesh.AddLayer(consensus.CreateGenesisLayer())
 }
 
 func (app *SpacemeshApp) setupTestFeatures() {
@@ -292,9 +293,6 @@ func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service,
 
 	//todo: should we add all components to a single struct?
 	lg := log.New("shmekel_"+instanceName, "", "")
-
-	trtl := consensus.NewAlgorithm(50, 100)
-
 	db, err := database.NewLDBDatabase(dbStorepath, 0, 0)
 	if err != nil {
 		return err
@@ -306,8 +304,10 @@ func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service,
 	rng := rand.New(mt19937.New())
 	processor := state.NewTransactionProcessor(rng, st, lg)
 
-	mesh := mesh.NewMesh(db, db, db, &trtl, processor, lg) //todo: what to do with the logger?
-	trtl.RegisterLayerCallback(mesh.LayerCompleteCallback)
+	//trtl := consensus.NewTortoise(50, 100)
+	trtl := consensus.NewAlgorithm(consensus.NewNinjaTortoise(50))
+	mesh := mesh.NewMesh(db, db, db, trtl, processor, lg) //todo: what to do with the logger?
+
 	coinToss := consensus.WeakCoin{}
 	clock := timesync.NewTicker(timesync.RealClock{}, 5*time.Second, time.Now())
 
