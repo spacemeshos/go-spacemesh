@@ -82,6 +82,27 @@ type ninjaTortoise struct {
 	tPatSupport        map[votingPattern]map[mesh.LayerID]votingPattern //pattern support count
 }
 
+func NewNinjaTortoise(layerSize uint32) *ninjaTortoise {
+	return &ninjaTortoise{
+		Log:                log.New("optimized tortoise ", "", ""),
+		avgLayerSize:       layerSize,
+		pBase:              votingPattern{},
+		blocks:             map[mesh.BlockID]*mesh.Block{},
+		tEffective:         map[mesh.BlockID]votingPattern{},
+		tCorrect:           map[mesh.BlockID]map[mesh.BlockID]vec{},
+		layerBlocks:        map[mesh.LayerID][]mesh.BlockID{},
+		tExplicit:          map[mesh.BlockID]map[mesh.LayerID]votingPattern{},
+		tGood:              map[mesh.LayerID]votingPattern{},
+		tSupport:           map[votingPattern]int{},
+		tPattern:           map[votingPattern]map[mesh.BlockID]struct{}{},
+		tVote:              map[votingPattern]map[mesh.BlockID]vec{},
+		tTally:             map[votingPattern]map[mesh.BlockID]vec{},
+		tComplete:          map[votingPattern]struct{}{},
+		tEffectiveToBlocks: map[votingPattern][]mesh.BlockID{},
+		tPatSupport:        map[votingPattern]map[mesh.LayerID]votingPattern{},
+	}
+}
+
 func (ni *ninjaTortoise) processBlock(b *mesh.Block) {
 
 	ni.Debug("process block: %d layer: %d  ", b.Id, b.Layer())
@@ -380,7 +401,7 @@ func initTallyToBase(tally map[votingPattern]map[mesh.BlockID]vec, base votingPa
 	}
 }
 
-func (ni *ninjaTortoise) HandleIncomingLayer(newlyr *mesh.Layer) mesh.LayerID { //i most recent layer
+func (ni *ninjaTortoise) handleIncomingLayer(newlyr *mesh.Layer) { //i most recent layer
 	ni.Debug("update tables layer %d", newlyr.Index())
 	//initialize these tables //not in article
 	ni.processBlocks(newlyr)
@@ -465,5 +486,5 @@ func (ni *ninjaTortoise) HandleIncomingLayer(newlyr *mesh.Layer) mesh.LayerID { 
 			}
 		}
 	}
-	return ni.pBase.LayerID
+	return
 }

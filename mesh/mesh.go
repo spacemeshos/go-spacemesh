@@ -62,6 +62,7 @@ func NewMesh(layers, blocks, validity database.DB, mesh MeshValidator, state Sta
 		state:    state,
 		meshDB:   NewMeshDB(layers, blocks, validity),
 	}
+	mesh.RegisterLayerCallback(ll.LayerCompleteCallback)
 	return ll
 }
 

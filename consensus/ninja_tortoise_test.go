@@ -88,27 +88,6 @@ func TestForEachInView(t *testing.T) {
 func TestNinjaTortoise_UpdatePatternTally(t *testing.T) {
 }
 
-func NewNinjaTortoise(layerSize uint32) *ninjaTortoise {
-	return &ninjaTortoise{
-		Log:                log.New("optimized tortoise ", "", ""),
-		avgLayerSize:       layerSize,
-		pBase:              votingPattern{},
-		blocks:             map[mesh.BlockID]*mesh.Block{},
-		tEffective:         map[mesh.BlockID]votingPattern{},
-		tCorrect:           map[mesh.BlockID]map[mesh.BlockID]vec{},
-		layerBlocks:        map[mesh.LayerID][]mesh.BlockID{},
-		tExplicit:          map[mesh.BlockID]map[mesh.LayerID]votingPattern{},
-		tGood:              map[mesh.LayerID]votingPattern{},
-		tSupport:           map[votingPattern]int{},
-		tPattern:           map[votingPattern]map[mesh.BlockID]struct{}{},
-		tVote:              map[votingPattern]map[mesh.BlockID]vec{},
-		tTally:             map[votingPattern]map[mesh.BlockID]vec{},
-		tComplete:          map[votingPattern]struct{}{},
-		tEffectiveToBlocks: map[votingPattern][]mesh.BlockID{},
-		tPatSupport:        map[votingPattern]map[mesh.LayerID]votingPattern{},
-	}
-}
-
 //vote explicitly only for previous layer
 //correction vectors have no affect here
 func TestNinjaTortoise_Sanity1(t *testing.T) {
@@ -122,7 +101,7 @@ func TestNinjaTortoise_Sanity1(t *testing.T) {
 	for i := 0; i < 30; i++ {
 		lyr := createLayerWithRandVoting(l.Index()+1, []*mesh.Layer{l}, layerSize, layerSize)
 		start := time.Now()
-		alg.HandleIncomingLayer(lyr)
+		alg.handleIncomingLayer(lyr)
 		alg.Info("Time to process layer: %v ", time.Since(start))
 		l = lyr
 		for b, vec := range alg.tTally[alg.pBase] {
@@ -144,9 +123,9 @@ func TestNinjaTortoise_Sanity2(t *testing.T) {
 	l4 := createMulExplicitLayer(4, map[mesh.LayerID]*mesh.Layer{l2.Index(): l2, l3.Index(): l3}, map[mesh.LayerID][]int{l2.Index(): {1, 2}, l3.Index(): {1, 2}}, 4)
 
 	alg.init(l, l1)
-	alg.HandleIncomingLayer(l2)
-	alg.HandleIncomingLayer(l3)
-	alg.HandleIncomingLayer(l4)
+	alg.handleIncomingLayer(l2)
+	alg.handleIncomingLayer(l3)
+	alg.handleIncomingLayer(l4)
 	for b, vec := range alg.tTally[alg.pBase] {
 		alg.Info("------> tally for block %d according to complete pattern %d are %d", b, alg.pBase, vec)
 	}
