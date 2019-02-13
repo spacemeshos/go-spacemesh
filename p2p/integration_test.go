@@ -105,7 +105,7 @@ func Test_BigP2PIntegrationSuite(t *testing.T) {
 
 	s := new(IntegrationTestSuite)
 
-	s.BootstrappedNodeCount = 30
+	s.BootstrappedNodeCount = 100
 	s.BootstrapNodesCount = 3
 	s.NeighborsCount = 8
 

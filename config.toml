@@ -7,6 +7,8 @@
 [main]
 data-folder = "~/.spacemesh-data"
 test-mode = false
+metrics = false
+metrics-port = 1010
 
 # Node Config
 [p2p]

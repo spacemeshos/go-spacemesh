@@ -25,6 +25,10 @@ func init() {
 		config.BaseConfig.DataDir, "Specify data directory for spacemesh")
 	RootCmd.PersistentFlags().BoolVar(&config.TestMode, "test-mode",
 		config.TestMode, "Initialize testing features")
+	RootCmd.PersistentFlags().BoolVar(&config.CollectMetrics, "metrics",
+		config.CollectMetrics, "collect node metrics")
+	RootCmd.PersistentFlags().IntVar(&config.MetricsPort, "metrics-port",
+		config.MetricsPort, "metric server port")
 	/** ======================== P2P Flags ========================== **/
 	RootCmd.PersistentFlags().IntVar(&config.P2P.SecurityParam, "security-param",
 		config.P2P.SecurityParam, "Consensus protocol k security param")
