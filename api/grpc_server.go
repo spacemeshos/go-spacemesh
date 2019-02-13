@@ -6,12 +6,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/api/pb"
-	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/miner"
-	"strconv"
-
+	"math/big"
 	"net"
+	"strconv"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -59,8 +59,26 @@ func (s SpacemeshGrpcService) GetNonce(ctx context.Context, in *pb.AccountId) (*
 
 func (s SpacemeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.SignedTransaction) (*pb.SimpleMessage, error) {
 
+	tx := mesh.SerializableTransaction{}
+	addr := address.HexToAddress(in.DstAddress)
+	tx.Recipient = &addr
+	tx.Origin = address.HexToAddress(in.SrcAddress)
+
+	num , _ := strconv.ParseInt(in.Nonce, 10, 64)
+	tx.AccountNonce = uint64(num)
+	amount := big.Int{}
+	amount.SetString(in.Amount, 10)
+	tx.Amount = amount.Bytes()
+	tx.GasLimit = 10
+	tx.Price = big.NewInt(10).Bytes()
+
+	val, err := mesh.TransactionAsBytes(&tx)
+	if err != nil {
+		return nil, err
+	}
+
 	//todo" should this be in a go routine?
-	s.Network.Broadcast(miner.IncomingTxProtocol, common.FromHex(in.TxData))
+	s.Network.Broadcast(miner.IncomingTxProtocol, val)
 
 	return &pb.SimpleMessage{Value: "ok"}, nil
 }
