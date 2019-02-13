@@ -12,7 +12,7 @@ func TestAlgorithm_Sanity(t *testing.T) {
 	layerSize := 50
 	cachedLayers := 100
 
-	alg := NewAlgorithm(uint32(layerSize), uint32(cachedLayers))
+	alg := NewTortoise(uint32(layerSize), uint32(cachedLayers))
 	l := createGenesisLayer()
 	alg.HandleIncomingLayer(l)
 	alg.RegisterLayerCallback(func(id mesh.LayerID) {})
