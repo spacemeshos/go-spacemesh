@@ -41,7 +41,7 @@ func NewHTTPRequester(url string) *HTTPRequester {
 
 func (hr *HTTPRequester) Get(api, data string) []byte {
 	var jsonStr = []byte(data)
-	log.Info("Sending oracle request : %s ", jsonStr)
+	log.Debug("Sending oracle request : %s ", jsonStr)
 	req, err := http.NewRequest("POST", hr.url+"/"+api, bytes.NewBuffer(jsonStr))
 	if err != nil {
 		panic(err)

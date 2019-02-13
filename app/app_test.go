@@ -3,6 +3,7 @@ package app
 import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/address"
+	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/miner"
@@ -87,7 +88,7 @@ func (app *AppTestSuite) initMultipleInstances(t *testing.T, numOfInstances int)
 
 		err := app.apps[i].initServices(pub.String(), n, store, sgn, bo, bo)
 		assert.NoError(t, err)
-		app.apps[i].setupGenesis()
+		app.apps[i].setupGenesis(config.DefaultGenesisConfig())
 		app.dbs = append(app.dbs, store)
 		runningName++
 	}
