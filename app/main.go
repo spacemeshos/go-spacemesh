@@ -396,6 +396,10 @@ func (app *SpacemeshApp) startSpacemesh(cmd *cobra.Command, args []string) {
 	apiConf := &app.Config.API
 
 	err = app.initServices("x", swarm, "/tmp/", sgn, bo, hareOracle)
+	if err != nil {
+		log.Error("cannot start services %v", err.Error())
+		return
+	}
 	app.setupGenesis(config.DefaultGenesisConfig()) //todo: this is for debug, setup with other config when we have it
 	if app.Config.TestMode {
 		app.setupTestFeatures()
