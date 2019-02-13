@@ -64,7 +64,7 @@ func (s SpacemeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.Sign
 	tx.Recipient = &addr
 	tx.Origin = address.HexToAddress(in.SrcAddress)
 
-	num , _ := strconv.ParseInt(in.Nonce, 10, 64)
+	num, _ := strconv.ParseInt(in.Nonce, 10, 64)
 	tx.AccountNonce = uint64(num)
 	amount := big.Int{}
 	amount.SetString(in.Amount, 10)

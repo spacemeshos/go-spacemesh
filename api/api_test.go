@@ -279,7 +279,7 @@ func TestJsonWalletApi(t *testing.T) {
 	value = resp.Header.Get("Content-Type")
 	assert.Equal(t, value, contentType)
 
-	txParams := pb.SignedTransaction{SrcAddress: "01020304", DstAddress:"01", Amount:"10",Nonce:"12" }
+	txParams := pb.SignedTransaction{SrcAddress: "01020304", DstAddress: "01", Amount: "10", Nonce: "12"}
 	payload, err = m.MarshalToString(&txParams)
 	url = fmt.Sprintf("http://127.0.0.1:%d/v1/submittransaction", config.ConfigValues.JSONServerPort)
 	resp, err = http.Post(url, contentType, strings.NewReader(payload)) //todo: we currently accept all kinds of payloads
@@ -307,7 +307,7 @@ func TestJsonWalletApi(t *testing.T) {
 	tx.Recipient = &rec
 	tx.Origin = address.HexToAddress(txParams.SrcAddress)
 
-	num , _ := strconv.ParseInt(txParams.Nonce, 10, 64)
+	num, _ := strconv.ParseInt(txParams.Nonce, 10, 64)
 	tx.AccountNonce = uint64(num)
 	amount := big.Int{}
 	amount.SetString(txParams.Amount, 10)
