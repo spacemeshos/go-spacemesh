@@ -72,7 +72,11 @@ func (b32 Bytes32) Bytes() []byte {
 
 func (b32 Bytes32) String() string {
 	// TODO: convert the whole 32 bytes to string number
-	return string(b32.Bytes()[:4])
+	s := uint64(0)
+	for x := range b32.Bytes() {
+		s += uint64(x)
+	}
+	return string(s)
 }
 
 // Represents a unique set of values
