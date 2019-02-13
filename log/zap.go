@@ -47,6 +47,11 @@ func Int(name string, val int) Field {
 	return Field(zap.Int(name, val))
 }
 
+// Int32 returns an int Field
+func Uint32(name string, val uint32) Field {
+	return Field(zap.Uint32(name, val))
+}
+
 // Namespace make next fields be inside a namespace.
 func Namespace(name string) Field {
 	return Field(zap.Namespace(name))

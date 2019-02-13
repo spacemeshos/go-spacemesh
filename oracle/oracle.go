@@ -47,9 +47,7 @@ type blockOracle struct {
 	oc            *OracleClient
 }
 
-func NewBlockOracle(worldid uint64, committeeSize int, pubKey string) *blockOracle {
-	oc := NewOracleClientWithWorldID(worldid)
-	oc.Register(true, pubKey)
+func NewBlockOracleFromClient(oc *OracleClient, committeeSize int) *blockOracle {
 	return &blockOracle{
 		committeeSize,
 		oc,
@@ -65,9 +63,7 @@ type hareOracle struct {
 	oc *OracleClient
 }
 
-func NewHareOracle(worldid uint64, pubKey string) *hareOracle {
-	oc := NewOracleClientWithWorldID(worldid)
-	oc.Register(true, pubKey)
+func NewHareOracleFromClient(oc *OracleClient) *hareOracle {
 	return &hareOracle{
 		oc,
 	}
