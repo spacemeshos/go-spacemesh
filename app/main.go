@@ -305,7 +305,7 @@ func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service,
 	processor := state.NewTransactionProcessor(rng, st, lg)
 
 	//trtl := consensus.NewTortoise(50, 100)
-	trtl := consensus.NewAlgorithem(consensus.NewNinjaTortoise(50))
+	trtl := consensus.NewAlgorithm(consensus.NewNinjaTortoise(50))
 	mesh := mesh.NewMesh(db, db, db, trtl, processor, lg) //todo: what to do with the logger?
 
 	coinToss := consensus.WeakCoin{}
