@@ -272,8 +272,8 @@ func (app *SpacemeshApp) cleanup(cmd *cobra.Command, args []string) (err error) 
 	return nil
 }
 
-func (app *SpacemeshApp) setupGenesis() {
-	for id, acc := range config.DefaultGenesisConfig().InitialAccounts {
+func (app *SpacemeshApp) setupGenesis(cfg *config.GenesisConfig) {
+	for id, acc := range cfg.InitialAccounts {
 		app.state.CreateAccount(id)
 		app.state.AddBalance(id, acc.Balance)
 		app.state.SetNonce(id, acc.Nonce)
@@ -377,7 +377,7 @@ func (app *SpacemeshApp) startSpacemesh(cmd *cobra.Command, args []string) {
 	apiConf := &app.Config.API
 
 	err = app.initServices("x", swarm, "/tmp/", sgn, bo, hareOracle)
-
+	app.setupGenesis(config.DefaultGenesisConfig()) //todo: this is for debug, setup with other config when we have it
 	if app.Config.TestMode {
 		app.setupTestFeatures()
 	}
