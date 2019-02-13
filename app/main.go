@@ -156,8 +156,10 @@ func EnsureCLIFlags(cmd *cobra.Command, appcfg *cfg.Config) {
 // NewSpacemeshApp creates an instance of the spacemesh app
 func newSpacemeshApp() *SpacemeshApp {
 
+	defaultConfig := cfg.DefaultConfig()
 	node := &SpacemeshApp{
 		Command:          cmd.RootCmd,
+		Config:           &defaultConfig,
 		NodeInitCallback: make(chan bool, 1),
 	}
 	cmd.RootCmd.Version = Version
@@ -310,7 +312,11 @@ func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service,
 	mesh := mesh.NewMesh(db, db, db, trtl, processor, lg) //todo: what to do with the logger?
 
 	coinToss := consensus.WeakCoin{}
-	clock := timesync.NewTicker(timesync.RealClock{}, 5*time.Second, time.Now())
+	gTime, err := time.Parse(time.RFC3339, app.Config.GenesisTime)
+	if err != nil {
+		return err
+	}
+	clock := timesync.NewTicker(timesync.RealClock{}, 5*time.Second, gTime)
 
 	blockListener := sync.NewBlockListener(swarm, blockOracle, mesh, 1*time.Second, 1, clock, lg)
 
