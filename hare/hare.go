@@ -4,6 +4,7 @@ import (
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
+	"github.com/spacemeshos/go-spacemesh/hare/metrics"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"sync"
@@ -178,6 +179,7 @@ func (h *Hare) onTick(id mesh.LayerID) {
 	cp := h.factory(h.config, instid, set, h.rolacle, h.sign, h.network, h.outputChan)
 	cp.Start()
 	h.broker.Register(cp)
+	metrics.TotalConsensusProcesses.Add(1)
 }
 
 var (
@@ -207,6 +209,7 @@ func (h *Hare) outputCollectionLoop() {
 	for {
 		select {
 		case out := <-h.outputChan:
+			metrics.TotalConsensusProcesses.Add(-1)
 			err := h.collectOutput(out)
 			if err != nil {
 				log.Warning("Err collecting output from hare err: %v", err)

@@ -16,8 +16,6 @@ const (
 	defaultLogFileName     = "spacemesh.log"
 	defaultAccountFileName = "accounts"
 	defaultDataDirName     = "spacemesh"
-	defaultAppIntParam     = 20
-	defaultAppBoolParam    = 20
 )
 
 var (
@@ -53,6 +51,9 @@ type BaseConfig struct {
 
 	CollectMetrics bool `mapstructure:"metrics"`
 	MetricsPort    int  `mapstructure:"metrics-port"`
+
+	OracleServer        string `mapstructure:"oracle_server"`
+	OracleServerWorldId uint64 `mapstructure:"oracle_server_worldid"`
 }
 
 // DefaultConfig returns the default configuration for a spacemesh node
@@ -68,14 +69,16 @@ func DefaultConfig() Config {
 // DefaultBaseConfig returns a default configuration for spacemesh
 func defaultBaseConfig() BaseConfig {
 	return BaseConfig{
-		HomeDir:        defaultHomeDir,
-		DataDir:        defaultDataDir,
-		ConfigFile:     defaultConfigFileName,
-		LogDir:         defaultLogDir,
-		AccountDir:     defaultAccountDir,
-		TestMode:       defaultTestMode,
-		CollectMetrics: false,
-		MetricsPort:    1010,
+		HomeDir:             defaultHomeDir,
+		DataDir:             defaultDataDir,
+		ConfigFile:          defaultConfigFileName,
+		LogDir:              defaultLogDir,
+		AccountDir:          defaultAccountDir,
+		TestMode:            defaultTestMode,
+		CollectMetrics:      false,
+		MetricsPort:         1010,
+		OracleServer:        "http://localhost:3030",
+		OracleServerWorldId: 0,
 	}
 }
 

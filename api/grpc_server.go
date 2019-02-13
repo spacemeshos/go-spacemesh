@@ -8,6 +8,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/api/pb"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/miner"
 	"strconv"
 
 	"net"
@@ -57,11 +58,9 @@ func (s SpacemeshGrpcService) GetNonce(ctx context.Context, in *pb.AccountId) (*
 }
 
 func (s SpacemeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.SignedTransaction) (*pb.SimpleMessage, error) {
-	const txGossipChannel = "txs" //todo: refactor this to actual channel name
-	//todo: transactions should be syntactically validated
 
 	//todo" should this be in a go routine?
-	s.Network.Broadcast(txGossipChannel, common.FromHex(in.TxData))
+	s.Network.Broadcast(miner.IncomingTxProtocol, common.FromHex(in.TxData))
 
 	return &pb.SimpleMessage{Value: "ok"}, nil
 }

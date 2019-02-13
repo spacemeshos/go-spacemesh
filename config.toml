@@ -9,6 +9,8 @@ data-folder = "~/.spacemesh-data"
 test-mode = false
 metrics = false
 metrics-port = 1010
+oracle_server = "http://localhost:3030"
+oracle_server_worldid = 0
 
 # Node Config
 [p2p]
@@ -33,8 +35,8 @@ bootnodes = ["0.0.0.0:7517/j7qWfWaJRVp25ZsnCu9rJ4PmhigZBtesB4YmQHqqPvtR"]
 
 # API Config
 [api]
-grpc-server = false
-json-server = false
+grpc-server = true
+json-server = true
 grpc-port = 9091
 json-port = 9090
 
