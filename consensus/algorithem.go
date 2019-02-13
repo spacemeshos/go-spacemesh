@@ -30,3 +30,15 @@ func (alg *Algorithem) HandleIncomingLayer(ll *mesh.Layer) {
 	alg.Tortoise.handleIncomingLayer(ll)
 	alg.callback(ll.Index())
 }
+
+func CreateGenesisLayer() *mesh.Layer {
+	log.Info("Creating genesis")
+	bl := &mesh.Block{
+		Id:         mesh.BlockID(0),
+		LayerIndex: 0,
+		Data:       []byte("genesis"),
+	}
+	l := mesh.NewLayer(Genesis)
+	l.AddBlock(bl)
+	return l
+}

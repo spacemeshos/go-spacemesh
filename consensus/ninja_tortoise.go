@@ -392,7 +392,7 @@ func initTallyToBase(tally map[votingPattern]map[mesh.BlockID]vec, base votingPa
 }
 
 func (ni *ninjaTortoise) handleIncomingLayer(newlyr *mesh.Layer) { //i most recent layer
-	ni.Debug("update tables layer %d", newlyr.Index())
+	ni.Info("update tables layer %d with %d blocks", newlyr.Index(), len(newlyr.Blocks()))
 
 	ni.processBlocks(newlyr)
 

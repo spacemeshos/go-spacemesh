@@ -281,6 +281,7 @@ func (app *SpacemeshApp) setupGenesis() {
 	}
 
 	app.state.Commit(false)
+	app.mesh.AddLayer(consensus.CreateGenesisLayer())
 }
 
 func (app *SpacemeshApp) setupTestFeatures() {

@@ -50,7 +50,7 @@ func TestNinjaTortoise_GlobalOpinion(t *testing.T) {
 func TestForEachInView(t *testing.T) {
 	blocks := make(map[mesh.BlockID]*mesh.Block)
 	alg := NewNinjaTortoise(2)
-	l := createGenesisLayer()
+	l := CreateGenesisLayer()
 	for _, b := range l.Blocks() {
 		blocks[b.ID()] = b
 	}
@@ -94,7 +94,7 @@ func TestNinjaTortoise_Sanity1(t *testing.T) {
 	layerSize := 30
 	patternSize := layerSize
 	alg := NewNinjaTortoise(uint32(layerSize))
-	l1 := createGenesisLayer()
+	l1 := CreateGenesisLayer()
 	genesisId := l1.Blocks()[0].ID()
 	alg.handleIncomingLayer(l1)
 	l := createLayerWithRandVoting(l1.Index()+1, []*mesh.Layer{l1}, layerSize, 1)
