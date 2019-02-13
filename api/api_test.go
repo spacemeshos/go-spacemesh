@@ -404,7 +404,7 @@ func TestSpaceMeshGrpcService_Broadcast(t *testing.T) {
 	port1, err := node.GetUnboundedPort()
 	port2, err := node.GetUnboundedPort()
 	assert.NoError(t, err, "Should be able to establish a connection on a port")
-	Data := []byte{1, 3, 3, 7}
+	Data := "l33t"
 	if config.ConfigValues.JSONServerPort == 0 {
 		config.ConfigValues.JSONServerPort = port1
 		config.ConfigValues.GrpcServerPort = port2
@@ -459,7 +459,7 @@ func TestSpaceMeshGrpcService_Broadcast(t *testing.T) {
 	value := resp.Header.Get("Content-Type")
 	assert.Equal(t, value, contentType)
 
-	assert.Equal(t, Data, net.broadcasted)
+	assert.Equal(t, Data, string(net.broadcasted))
 
 	// stop the services
 	jsonService.StopService()
@@ -472,7 +472,7 @@ func TestSpaceMeshGrpcService_BroadcastErrors(t *testing.T) {
 	port1, err := node.GetUnboundedPort()
 	port2, err := node.GetUnboundedPort()
 	assert.NoError(t, err, "Should be able to establish a connection on a port")
-	Data := []byte{1, 3, 3, 7}
+	Data := "l337"
 	if config.ConfigValues.JSONServerPort == 0 {
 		config.ConfigValues.JSONServerPort = port1
 		config.ConfigValues.GrpcServerPort = port2
