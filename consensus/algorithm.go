@@ -12,6 +12,7 @@ type Algorithm struct {
 type Tortoise interface {
 	handleIncomingLayer(ll *mesh.Layer)
 	latestComplete() mesh.LayerID
+	getVote(id mesh.BlockID) vec
 }
 
 func NewAlgorithm(trtl Tortoise) *Algorithm {
@@ -19,6 +20,7 @@ func NewAlgorithm(trtl Tortoise) *Algorithm {
 }
 
 func (alg *Algorithm) HandleLateBlock(b *mesh.Block) {
+	//todo feed all layers from b's layer to tortoise
 	log.Info("received block with layer Id %v block id: %v ", b.Layer(), b.ID())
 }
 
@@ -30,7 +32,7 @@ func (alg *Algorithm) HandleIncomingLayer(ll *mesh.Layer) (mesh.LayerID, mesh.La
 }
 
 func (alg *Algorithm) ContextualValidity(id mesh.BlockID) bool {
-	return true
+	return alg.getVote(id) == Support
 }
 
 func CreateGenesisLayer() *mesh.Layer {

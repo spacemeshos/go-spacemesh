@@ -395,20 +395,20 @@ func (ni *ninjaTortoise) latestComplete() mesh.LayerID {
 	return ni.pBase.Layer()
 }
 
-func (ni *ninjaTortoise) getVote(id mesh.BlockID) bool {
+func (ni *ninjaTortoise) getVote(id mesh.BlockID) vec {
 	block, found := ni.blocks[id]
 
 	if !found {
 		ni.Error("block not found !")
-		return false
+		return Against
 	}
 
 	if block.Layer() > ni.pBase.Layer() {
 		ni.Error("we dont have an opinion on block according to current pbase")
-		return false
+		return Against
 	}
 
-	return ni.tVote[ni.pBase][id] == Support
+	return ni.tVote[ni.pBase][id]
 }
 
 func (ni *ninjaTortoise) handleIncomingLayer(newlyr *mesh.Layer) { //i most recent layer
