@@ -37,4 +37,20 @@ var (
 		Name:      "message_type_counter",
 		Help:      "Number of valid messages sent to processing for each type",
 	}, []string{"type_id"})
+
+	// the number of pre-round msgs for each value
+	PreRoundCounter = prometheus.NewCounterFrom(stdprometheus.CounterOpts{
+		Namespace: Namespace,
+		Subsystem: Subsystem,
+		Name:      "pre-round_counter",
+		Help:      "Number of pre-round msgs for each value",
+	}, []string{"value"})
+
+	// the total number of current consensus processes
+	TotalConsensusProcesses = prometheus.NewGaugeFrom(stdprometheus.GaugeOpts{
+		Namespace: Namespace,
+		Subsystem: Subsystem,
+		Name:      "total_consensus_processes",
+		Help:      "The total number of current consensus processes running",
+	}, []string{})
 )
