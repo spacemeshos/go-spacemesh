@@ -29,6 +29,10 @@ func init() {
 		config.CollectMetrics, "collect node metrics")
 	RootCmd.PersistentFlags().IntVar(&config.MetricsPort, "metrics-port",
 		config.MetricsPort, "metric server port")
+	RootCmd.PersistentFlags().StringVar(&config.OracleServer, "oracle_server",
+		config.OracleServer, "The oracle server url. (temporary) ")
+	RootCmd.PersistentFlags().Uint64Var(&config.OracleServerWorldId, "oracle_server_worldid",
+		config.OracleServerWorldId, "The worldid to use with the oracle server (temporary) ")
 	/** ======================== P2P Flags ========================== **/
 	RootCmd.PersistentFlags().IntVar(&config.P2P.SecurityParam, "security-param",
 		config.P2P.SecurityParam, "Consensus protocol k security param")
