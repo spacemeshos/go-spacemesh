@@ -42,7 +42,7 @@ var (
 	PreRoundCounter = prometheus.NewCounterFrom(stdprometheus.CounterOpts{
 		Namespace: Namespace,
 		Subsystem: Subsystem,
-		Name:      "pre-round_counter",
+		Name:      "pre_round_counter",
 		Help:      "Number of pre-round msgs for each value",
 	}, []string{"value"})
 
