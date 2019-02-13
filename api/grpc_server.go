@@ -59,7 +59,6 @@ func (s SpacemeshGrpcService) GetNonce(ctx context.Context, in *pb.AccountId) (*
 
 func (s SpacemeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.SignedTransaction) (*pb.SimpleMessage, error) {
 
-
 	//todo" should this be in a go routine?
 	s.Network.Broadcast(miner.IncomingTxProtocol, common.FromHex(in.TxData))
 

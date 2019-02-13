@@ -454,7 +454,7 @@ func Test_TwoNodes_SyncIntegrationSuite(t *testing.T) {
 		l := log.New(fmt.Sprintf("%s_%d", sis.name, atomic.LoadUint32(&i)), "", "")
 		sync := NewSync(s, getMesh(memoryDB, fmt.Sprintf("%s_%s", sis.name, time.Now())), BlockValidatorMock{}, conf, l)
 		sis.syncers = append(sis.syncers, sync)
-		atomic.AddUint32(&i,1)
+		atomic.AddUint32(&i, 1)
 	}
 	suite.Run(t, sis)
 }
@@ -522,7 +522,7 @@ func Test_Multiple_SyncIntegrationSuite(t *testing.T) {
 		l := log.New(fmt.Sprintf("%s_%d", sis.name, atomic.LoadUint32(&i)), "", "")
 		sync := NewSync(s, getMesh(memoryDB, fmt.Sprintf("%s_%d_%s", sis.name, atomic.LoadUint32(&i), time.Now())), BlockValidatorMock{}, conf, l)
 		sis.syncers = append(sis.syncers, sync)
-		atomic.AddUint32(&i,1)
+		atomic.AddUint32(&i, 1)
 	}
 	suite.Run(t, sis)
 }
