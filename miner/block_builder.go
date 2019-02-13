@@ -123,7 +123,7 @@ func (t *BlockBuilder) AddTransaction(nonce uint64, origin, destination address.
 func (t *BlockBuilder) createBlock(id mesh.LayerID, txs []mesh.SerializableTransaction) mesh.Block {
 	var res []mesh.BlockID = nil
 	var err error
-	if id > 0 {
+	if id > 1 {
 		res, err = t.hareResult.GetResult(id - 1)
 		if err != nil {
 			t.Log.Error("didnt receive hare result for layer %v", id-1)
@@ -131,7 +131,6 @@ func (t *BlockBuilder) createBlock(id mesh.LayerID, txs []mesh.SerializableTrans
 	}
 
 	b := mesh.Block{
-
 		MinerID:    t.minerID,
 		Id:         mesh.BlockID(rand.Int63()),
 		LayerIndex: id,
@@ -142,8 +141,8 @@ func (t *BlockBuilder) createBlock(id mesh.LayerID, txs []mesh.SerializableTrans
 		BlockVotes: res,
 		ViewEdges:  t.orphans.GetOrphanBlocksExcept(id),
 	}
-	t.Log.Info("Iv'e created block in layer %v id %v, num of transactions %v", b.LayerIndex, b.Id, len(b.Txs))
 
+	t.Log.Info("Iv'e created block in layer %v id %v, num of transactions %v", b.LayerIndex, b.Id, len(b.Txs))
 	return b
 }
 

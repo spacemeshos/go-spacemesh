@@ -6,34 +6,19 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/state"
 	"math/big"
-	"sort"
 	"sync"
 	"sync/atomic"
 )
 
 const layerSize = 200
-const cachedLayers = 50
 
 var TRUE = []byte{1}
 var FALSE = []byte{0}
 
-/*type Mesh interface {
-	AddLayer(layer *Layer) error
-	GetVerifiedLayer(i LayerID) (*Layer, error)
-	GetBlock(id BlockID) (*Block, error)
-	AddBlock(block *Block) error
-	GetContextualValidity(id BlockID) (bool, error)
-	VerifiedLayer() uint32
-	LatestLayer() uint32
-	SetLatestLayer(idx uint32)
-	GetOrphans() []BlockID
-	Close()
-}*/
-
 type MeshValidator interface {
-	HandleIncomingLayer(layer *Layer)
+	HandleIncomingLayer(layer *Layer) (LayerID, LayerID)
 	HandleLateBlock(bl *Block)
-	RegisterLayerCallback(func(layerId LayerID))
+	ContextualValidity(id BlockID) bool
 }
 
 type StateUpdater interface {
@@ -62,7 +47,6 @@ func NewMesh(layers, blocks, validity database.DB, mesh MeshValidator, state Sta
 		state:    state,
 		meshDB:   NewMeshDB(layers, blocks, validity),
 	}
-	mesh.RegisterLayerCallback(ll.LayerCompleteCallback)
 	return ll
 }
 
@@ -124,38 +108,35 @@ func (m *Mesh) AddLayer(layer *Layer) error {
 }
 
 func (m *Mesh) ValidateLayer(layer *Layer) {
-	m.tortoise.HandleIncomingLayer(layer)
+	m.Info("Validate layer %d", layer.Index())
+	old, new := m.tortoise.HandleIncomingLayer(layer)
+	m.PushTransactions(old, new)
+	atomic.StoreUint32(&m.verifiedLayer, uint32(layer.Index()))
 }
 
-func (m *Mesh) LayerCompleteCallback(layerId LayerID) {
-	m.Log.Info("layer %v is complete", layerId)
-	l, err := m.getLayer(layerId)
-	atomic.StoreUint32(&m.verifiedLayer, uint32(layerId))
-	if err != nil {
-		m.Log.Error("layer %v not found", layerId)
-		return
-		//panic("wtf - there was a race?")
-	}
+func (m *Mesh) PushTransactions(old LayerID, new LayerID) {
+	for i := old + 1; i <= new; i++ {
+		txs := make([]*state.Transaction, 0, layerSize)
+		l, err := m.getLayer(i)
+		if err != nil {
+			m.Error("") //todo handle error
 
-	txs := make([]*state.Transaction, 0, len(l.blocks))
-
-	sort.Slice(l.blocks, func(i, j int) bool {
-		return l.blocks[i].Id < l.blocks[j].Id
-	}) //todo: blocks are now sorted... what does it mean? does the ordering degrade security?
-
-	for _, b := range l.blocks {
-		for _, tx := range b.Txs {
-			//todo: think about these conversions.. are they needed?
-			txs = append(txs, SerializableTransaction2StateTransaction(&tx))
 		}
-	}
-	m.Log.Info("received %v txs in layer %v num of blocks: %v", len(txs), layerId, len(l.blocks))
-	x, err := m.state.ApplyTransactions(state.LayerID(layerId), txs)
-	if err != nil {
-		m.Log.Error("cannot apply transactions %v", err)
-	}
-	m.Log.Info("applied %v transactions", x)
 
+		for _, b := range l.blocks {
+			if m.tortoise.ContextualValidity(b.ID()) {
+				for _, tx := range b.Txs {
+					//todo: think about these conversions.. are they needed?
+					txs = append(txs, SerializableTransaction2StateTransaction(&tx))
+				}
+			}
+		}
+		x, err := m.state.ApplyTransactions(state.LayerID(i), txs)
+		if err != nil {
+			m.Log.Error("cannot apply transactions %v", err)
+		}
+		m.Log.Info("applied %v transactions", x)
+	}
 }
 
 //todo consider adding a boolean for layer validity instead error

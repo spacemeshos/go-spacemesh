@@ -391,6 +391,26 @@ func initTallyToBase(tally map[votingPattern]map[mesh.BlockID]vec, base votingPa
 	}
 }
 
+func (ni *ninjaTortoise) latestComplete() mesh.LayerID {
+	return ni.pBase.Layer()
+}
+
+func (ni *ninjaTortoise) getVote(id mesh.BlockID) bool {
+	block, found := ni.blocks[id]
+
+	if !found {
+		ni.Error("block not found !")
+		return false
+	}
+
+	if block.Layer() > ni.pBase.Layer() {
+		ni.Error("we dont have an opinion on block according to current pbase")
+		return false
+	}
+
+	return ni.tVote[ni.pBase][id] == Support
+}
+
 func (ni *ninjaTortoise) handleIncomingLayer(newlyr *mesh.Layer) { //i most recent layer
 	ni.Info("update tables layer %d with %d blocks", newlyr.Index(), len(newlyr.Blocks()))
 
