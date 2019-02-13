@@ -2,6 +2,7 @@ package hare
 
 import (
 	"github.com/spacemeshos/go-spacemesh/hare/pb"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
@@ -23,7 +24,7 @@ func TestProposalTracker_OnProposalConflict(t *testing.T) {
 	verifier := generateSigning(t)
 
 	m1 := BuildProposalMsg(verifier, s)
-	tracker := NewProposalTracker(lowThresh10)
+	tracker := NewProposalTracker(log.NewDefault(verifier.Verifier().String()))
 	tracker.OnProposal(m1)
 	assert.False(t, tracker.IsConflicting())
 	s.Add(value3)
@@ -35,7 +36,7 @@ func TestProposalTracker_OnProposalConflict(t *testing.T) {
 func TestProposalTracker_IsConflicting(t *testing.T) {
 	s := NewEmptySet(lowDefaultSize)
 	s.Add(value1)
-	tracker := NewProposalTracker(lowThresh10)
+	tracker := NewProposalTracker(log.NewDefault("ProposalTracker"))
 
 	for i := 0; i < lowThresh10; i++ {
 		tracker.OnProposal(BuildProposalMsg(generateSigning(t), s))
@@ -47,7 +48,7 @@ func TestProposalTracker_OnLateProposal(t *testing.T) {
 	s := NewSetFromValues(value1, value2)
 	verifier := generateSigning(t)
 	m1 := BuildProposalMsg(verifier, s)
-	tracker := NewProposalTracker(lowThresh10)
+	tracker := NewProposalTracker(log.NewDefault(verifier.Verifier().String()))
 	tracker.OnProposal(m1)
 	assert.False(t, tracker.IsConflicting())
 	s.Add(value3)
@@ -57,7 +58,7 @@ func TestProposalTracker_OnLateProposal(t *testing.T) {
 }
 
 func TestProposalTracker_ProposedSet(t *testing.T) {
-	tracker := NewProposalTracker(lowThresh10)
+	tracker := NewProposalTracker(log.NewDefault("ProposalTracker"))
 	proposedSet := tracker.ProposedSet()
 	assert.Nil(t, proposedSet)
 	s1 := NewSetFromValues(value1, value2)

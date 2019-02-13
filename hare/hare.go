@@ -4,6 +4,7 @@ import (
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
+	"github.com/spacemeshos/go-spacemesh/hare/metrics"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"sync"
@@ -95,7 +96,7 @@ func New(conf config.Config, p2p NetworkService, sign Signing, obp orphanBlockPr
 	h.outputs = make(map[mesh.LayerID][]mesh.BlockID, h.bufferSize) //  we keep results about LayerBuffer past layers
 
 	h.factory = func(conf config.Config, instanceId InstanceId, s *Set, oracle Rolacle, signing Signing, p2p NetworkService, terminationReport chan TerminationOutput) Consensus {
-		return NewConsensusProcess(conf, instanceId, s, oracle, signing, p2p, terminationReport)
+		return NewConsensusProcess(conf, instanceId, s, oracle, signing, p2p, terminationReport, log.NewDefault("ConsensusProcess"))
 	}
 
 	return h
@@ -178,6 +179,7 @@ func (h *Hare) onTick(id mesh.LayerID) {
 	cp := h.factory(h.config, instid, set, h.rolacle, h.sign, h.network, h.outputChan)
 	cp.Start()
 	h.broker.Register(cp)
+	metrics.TotalConsensusProcesses.Add(1)
 }
 
 var (
@@ -207,6 +209,7 @@ func (h *Hare) outputCollectionLoop() {
 	for {
 		select {
 		case out := <-h.outputChan:
+			metrics.TotalConsensusProcesses.Add(-1)
 			err := h.collectOutput(out)
 			if err != nil {
 				log.Warning("Err collecting output from hare err: %v", err)

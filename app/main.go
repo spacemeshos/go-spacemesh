@@ -12,6 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare"
 	hareConfig "github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
@@ -46,13 +47,14 @@ type SpacemeshApp struct {
 	grpcAPIService   *api.SpacemeshGrpcService
 	jsonAPIService   *api.JSONHTTPServer
 
-	blockListener *sync.BlockListener
-	db            database.Database
-	state         *state.StateDB
-	blockProducer *miner.BlockBuilder
-	mesh          *mesh.Mesh
-	clock         *timesync.Ticker
-	hare          *hare.Hare
+	blockListener    *sync.BlockListener
+	db               database.Database
+	state            *state.StateDB
+	blockProducer    *miner.BlockBuilder
+	mesh             *mesh.Mesh
+	clock            *timesync.Ticker
+	hare             *hare.Hare
+	unregisterOracle func()
 }
 
 type MiningEnabler interface {
@@ -154,8 +156,10 @@ func EnsureCLIFlags(cmd *cobra.Command, appcfg *cfg.Config) {
 // NewSpacemeshApp creates an instance of the spacemesh app
 func newSpacemeshApp() *SpacemeshApp {
 
+	defaultConfig := cfg.DefaultConfig()
 	node := &SpacemeshApp{
 		Command:          cmd.RootCmd,
+		Config:           &defaultConfig,
 		NodeInitCallback: make(chan bool, 1),
 	}
 	cmd.RootCmd.Version = Version
@@ -272,14 +276,15 @@ func (app *SpacemeshApp) cleanup(cmd *cobra.Command, args []string) (err error) 
 	return nil
 }
 
-func (app *SpacemeshApp) setupGenesis() {
-	for id, acc := range config.DefaultGenesisConfig().InitialAccounts {
+func (app *SpacemeshApp) setupGenesis(cfg *config.GenesisConfig) {
+	for id, acc := range cfg.InitialAccounts {
 		app.state.CreateAccount(id)
 		app.state.AddBalance(id, acc.Balance)
 		app.state.SetNonce(id, acc.Nonce)
 	}
 
 	app.state.Commit(false)
+	app.mesh.AddLayer(consensus.CreateGenesisLayer())
 }
 
 func (app *SpacemeshApp) setupTestFeatures() {
@@ -291,9 +296,6 @@ func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service,
 
 	//todo: should we add all components to a single struct?
 	lg := log.New("shmekel_"+instanceName, "", "")
-
-	trtl := consensus.NewAlgorithm(50, 100)
-
 	db, err := database.NewLDBDatabase(dbStorepath, 0, 0)
 	if err != nil {
 		return err
@@ -305,10 +307,16 @@ func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service,
 	rng := rand.New(mt19937.New())
 	processor := state.NewTransactionProcessor(rng, st, lg)
 
-	mesh := mesh.NewMesh(db, db, db, &trtl, processor, lg) //todo: what to do with the logger?
-	trtl.RegisterLayerCallback(mesh.LayerCompleteCallback)
+	//trtl := consensus.NewTortoise(50, 100)
+	trtl := consensus.NewAlgorithm(consensus.NewNinjaTortoise(50))
+	mesh := mesh.NewMesh(db, db, db, trtl, processor, lg) //todo: what to do with the logger?
+
 	coinToss := consensus.WeakCoin{}
-	clock := timesync.NewTicker(timesync.RealClock{}, 5*time.Second, time.Now())
+	gTime, err := time.Parse(time.RFC3339, app.Config.GenesisTime)
+	if err != nil {
+		return err
+	}
+	clock := timesync.NewTicker(timesync.RealClock{}, time.Duration(app.Config.LayerDurationSec)*time.Second, gTime)
 
 	blockListener := sync.NewBlockListener(swarm, blockOracle, mesh, 1*time.Second, 1, clock, lg)
 
@@ -354,6 +362,10 @@ func (app *SpacemeshApp) stopServices() {
 	app.blockListener.Close()
 
 	app.db.Close()
+
+	if app.unregisterOracle != nil {
+		app.unregisterOracle()
+	}
 }
 
 func (app *SpacemeshApp) startSpacemesh(cmd *cobra.Command, args []string) {
@@ -371,15 +383,26 @@ func (app *SpacemeshApp) startSpacemesh(cmd *cobra.Command, args []string) {
 
 	sgn := hare.NewMockSigning() //todo: shouldn't be any mock code here
 	pub, _ := crypto.NewPublicKey(sgn.Verifier().Bytes())
-	bo := oracle.NewBlockOracle(1, int(app.Config.CONSENSUS.NodesPerLayer), pub.String())
-	hareOracle := oracle.NewHareOracle(1, pub.String())
+
+	oracle.SetServerAddress(app.Config.OracleServer)
+	oracleClient := oracle.NewOracleClientWithWorldID(app.Config.OracleServerWorldId)
+	oracleClient.Register(true, pub.String()) // todo: configure no faulty nodes
+
+	app.unregisterOracle = func() { oracleClient.Unregister(true, pub.String()) }
+
+	bo := oracle.NewBlockOracleFromClient(oracleClient, int(app.Config.CONSENSUS.NodesPerLayer))
+	hareOracle := oracle.NewHareOracleFromClient(oracleClient)
 
 	apiConf := &app.Config.API
 
 	err = app.initServices("x", swarm, "/tmp/", sgn, bo, hareOracle)
-
+	app.setupGenesis(config.DefaultGenesisConfig()) //todo: this is for debug, setup with other config when we have it
 	if app.Config.TestMode {
 		app.setupTestFeatures()
+	}
+
+	if app.Config.CollectMetrics {
+		metrics.StartCollectingMetrics(app.Config.MetricsPort)
 	}
 
 	if err != nil {

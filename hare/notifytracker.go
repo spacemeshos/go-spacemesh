@@ -2,6 +2,8 @@ package hare
 
 import (
 	"encoding/binary"
+	"fmt"
+	"github.com/spacemeshos/go-spacemesh/hare/metrics"
 	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"hash/fnv"
@@ -42,6 +44,7 @@ func (nt *NotifyTracker) OnNotify(msg *pb.HareMessage) bool {
 	s := NewSet(msg.Message.Values)
 	nt.onCertificate(msg.Cert.AggMsgs.Messages[0].Message.K, s)
 	nt.tracker.Track(s)
+	metrics.NotifyCounter.With("set_id", fmt.Sprint(s.Id())).Add(1)
 
 	return false
 }
