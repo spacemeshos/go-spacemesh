@@ -47,13 +47,14 @@ type SpacemeshApp struct {
 	grpcAPIService   *api.SpacemeshGrpcService
 	jsonAPIService   *api.JSONHTTPServer
 
-	blockListener *sync.BlockListener
-	db            database.Database
-	state         *state.StateDB
-	blockProducer *miner.BlockBuilder
-	mesh          *mesh.Mesh
-	clock         *timesync.Ticker
-	hare          *hare.Hare
+	blockListener    *sync.BlockListener
+	db               database.Database
+	state            *state.StateDB
+	blockProducer    *miner.BlockBuilder
+	mesh             *mesh.Mesh
+	clock            *timesync.Ticker
+	hare             *hare.Hare
+	unregisterOracle func()
 }
 
 type MiningEnabler interface {
@@ -355,6 +356,10 @@ func (app *SpacemeshApp) stopServices() {
 	app.blockListener.Close()
 
 	app.db.Close()
+
+	if app.unregisterOracle != nil {
+		app.unregisterOracle()
+	}
 }
 
 func (app *SpacemeshApp) startSpacemesh(cmd *cobra.Command, args []string) {
@@ -372,8 +377,15 @@ func (app *SpacemeshApp) startSpacemesh(cmd *cobra.Command, args []string) {
 
 	sgn := hare.NewMockSigning() //todo: shouldn't be any mock code here
 	pub, _ := crypto.NewPublicKey(sgn.Verifier().Bytes())
-	bo := oracle.NewBlockOracle(1, int(app.Config.CONSENSUS.NodesPerLayer), pub.String())
-	hareOracle := oracle.NewHareOracle(1, pub.String())
+
+	oracle.SetServerAddress(app.Config.OracleServer)
+	oracleClient := oracle.NewOracleClientWithWorldID(app.Config.OracleServerWorldId)
+	oracleClient.Register(true, pub.String()) // todo: configure no faulty nodes
+
+	app.unregisterOracle = func() { oracleClient.Unregister(true, pub.String()) }
+
+	bo := oracle.NewBlockOracleFromClient(oracleClient, int(app.Config.CONSENSUS.NodesPerLayer))
+	hareOracle := oracle.NewHareOracleFromClient(oracleClient)
 
 	apiConf := &app.Config.API
 

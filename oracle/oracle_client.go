@@ -16,7 +16,15 @@ const Register = "register"
 const Unregister = "unregister"
 const ValidateSingle = "validate"
 const Validate = "validatemap"
-const OracleServerAddress = "http://localhost:3030" // todo:configure
+
+const DefaultOracleServerAddress = "http://localhost:3030"
+
+// ServerAddress is the oracle server we're using
+var ServerAddress = DefaultOracleServerAddress
+
+func SetServerAddress(addr string) {
+	ServerAddress = addr
+}
 
 type Requester interface {
 	Get(api, data string) []byte
@@ -79,7 +87,7 @@ func NewOracleClient() *OracleClient {
 
 // NewOracleClientWithWorldID creates a new client with a specific worldid
 func NewOracleClientWithWorldID(world uint64) *OracleClient {
-	c := NewHTTPRequester(OracleServerAddress)
+	c := NewHTTPRequester(ServerAddress)
 	instMtx := make(map[uint32]*sync.Mutex)
 	eligibilityMap := make(map[uint32]map[string]struct{})
 	return &OracleClient{world: world, client: c, eligibilityMap: eligibilityMap, instMtx: instMtx}
