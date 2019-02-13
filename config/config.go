@@ -56,7 +56,8 @@ type BaseConfig struct {
 	OracleServer        string `mapstructure:"oracle_server"`
 	OracleServerWorldId uint64 `mapstructure:"oracle_server_worldid"`
 
-	GenesisTime string `mapstructure:"genesis_time"`
+	GenesisTime      string `mapstructure:"genesis-time"`
+	LayerDurationSec uint32 `mapstructure:"layer-duration-sec"`
 }
 
 // DefaultConfig returns the default configuration for a spacemesh node
@@ -83,6 +84,7 @@ func defaultBaseConfig() BaseConfig {
 		OracleServer:        "http://localhost:3030",
 		OracleServerWorldId: 0,
 		GenesisTime:         time.Now().Format(time.RFC3339),
+		LayerDurationSec:    5,
 	}
 }
 

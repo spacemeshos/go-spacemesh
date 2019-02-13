@@ -11,7 +11,8 @@ metrics = false
 metrics-port = 1010
 oracle_server = "http://localhost:3030"
 oracle_server_worldid = 0
-genesis_time = "2019-13-02T17:02:00+00:00"
+genesis-time = "2019-13-02T17:02:00+00:00"
+layer-duration-sec = "5"
 
 # Node Config
 [p2p]

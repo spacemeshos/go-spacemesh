@@ -316,7 +316,7 @@ func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service,
 	if err != nil {
 		return err
 	}
-	clock := timesync.NewTicker(timesync.RealClock{}, 5*time.Second, gTime)
+	clock := timesync.NewTicker(timesync.RealClock{}, time.Duration(app.Config.LayerDurationSec)*time.Second, gTime)
 
 	blockListener := sync.NewBlockListener(swarm, blockOracle, mesh, 1*time.Second, 1, clock, lg)
 
