@@ -109,7 +109,7 @@ type WeakCoinProvider interface {
 }
 
 type OrphanBlockProvider interface {
-	GetOrphanBlocksExcept(layer mesh.LayerID) []mesh.BlockID
+	GetUnverifiedLayerBlocks(l mesh.LayerID) []mesh.BlockID
 }
 
 //used from external API call?
@@ -146,7 +146,7 @@ func (t *BlockBuilder) createBlock(id mesh.LayerID, txs []mesh.SerializableTrans
 		Timestamp:  time.Now().UnixNano(),
 		Txs:        txs,
 		BlockVotes: res,
-		ViewEdges:  t.orphans.GetOrphanBlocksExcept(id),
+		ViewEdges:  t.orphans.GetUnverifiedLayerBlocks(id - 1),
 	}
 
 	t.Log.Info("Iv'e created block in layer %v id %v, num of transactions %v votes %d viewEdges %d", b.LayerIndex, b.Id, len(b.Txs), len(b.BlockVotes), len(b.ViewEdges))

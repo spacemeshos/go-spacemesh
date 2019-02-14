@@ -160,7 +160,7 @@ func (h *Hare) onTick(id mesh.LayerID) {
 	}
 
 	// retrieve set form orphan blocks
-	blocks := h.obp.GetUnverifiedLayerBlocks(h.lastLayer)
+	blocks := h.obp.GetUnverifiedLayerBlocks(h.lastLayer - 1)
 	if len(blocks) == 0 {
 		log.Info("No blocks for consensus on layer %v", id)
 		return

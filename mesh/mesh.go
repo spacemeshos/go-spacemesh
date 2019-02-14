@@ -123,9 +123,9 @@ func (m *Mesh) PushTransactions(old LayerID, new LayerID) {
 	for i := old; i < new; i++ {
 		txs := make([]*state.Transaction, 0, layerSize)
 		l, err := m.getLayer(i)
-		if err != nil {
+		if err != nil || l == nil {
 			m.Error("") //todo handle error
-
+			return
 		}
 
 		sort.Slice(l.blocks, func(i, j int) bool { return l.blocks[i].ID() < l.blocks[j].ID() })

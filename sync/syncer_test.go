@@ -162,8 +162,9 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 	defer syncObj2.Close()
 	lid := mesh.LayerID(1)
 	l := mesh.NewExistingLayer(lid, make([]*mesh.Block, 0, 10))
+	l.AddBlock(mesh.NewExistingBlock(mesh.BlockID(123), lid, nil))
 	syncObj1.AddLayer(l)
-	syncObj1.ValidateLayer(l) //this is to simulate the approval of the tortoise...
+	//syncObj1.ValidateLayer(l) //this is to simulate the approval of the tortoise...
 	timeout := time.NewTimer(2 * time.Second)
 	ch, err := syncObj2.sendLayerHashRequest(nodes[0].Node.PublicKey(), lid)
 	select {
@@ -296,7 +297,6 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 }
 
 func TestSyncProtocol_SyncTwoNodes(t *testing.T) {
-
 	syncs, nodes := SyncMockFactory(2, conf, "TestSyncer_Start_", memoryDB)
 	pm1 := getPeersMock([]p2p.Peer{nodes[1].PublicKey()})
 	pm2 := getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
