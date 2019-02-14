@@ -148,7 +148,7 @@ PreRound:
 	if proc.s.Size() == 0 {
 		proc.Error("Fatal: PreRound ended with empty set")
 	}
-	proc.advanceToNextRound()
+	proc.advanceToNextRound() // k was initialized to -1, k should be 0
 
 	// start first iteration
 	proc.onRoundBegin()
