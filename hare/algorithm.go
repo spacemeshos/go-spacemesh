@@ -40,7 +40,7 @@ func (cpo procOutput) Set() *Set {
 var _ TerminationOutput = (*procOutput)(nil)
 
 type State struct {
-	k           int32          // the round counter (r%4 is the round number)
+	k           int32           // the round counter (r%4 is the round number)
 	ki          int32           // indicates when S was first committed upon
 	s           *Set            // the set of values
 	certificate *pb.Certificate // the certificate
@@ -148,7 +148,7 @@ PreRound:
 	if proc.s.Size() == 0 {
 		proc.Error("Fatal: PreRound ended with empty set")
 	}
-	proc.advanceToNextRound()
+	proc.advanceToNextRound() // k was initialized to -1, k should be 0
 
 	// start first iteration
 	proc.onRoundBegin()
