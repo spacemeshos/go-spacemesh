@@ -226,12 +226,14 @@ func (validator *MessageValidator) validateCertificate(cert *pb.Certificate) boo
 
 	// verify agg msgs
 	if cert.AggMsgs == nil {
+		validator.Warning("Certificate validation failed: AggMsgs is nil")
 		return false
 	}
 
 	// refill values
 	for _, commit := range cert.AggMsgs.Messages {
 		if commit.Message == nil {
+			validator.Warning("Certificate validation failed: inner commit message is nil")
 			return false
 		}
 

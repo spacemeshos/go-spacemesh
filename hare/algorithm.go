@@ -105,8 +105,13 @@ func iterationFromCounter(roundCounter uint32) uint32 {
 
 func (proc *ConsensusProcess) Start() error {
 	if !proc.startTime.IsZero() { // called twice on same instance
-		proc.Error("ConsensusProcess has already been started.")
+		proc.Error("ConsensusProcess has already been started")
 		return StartInstanceError(errors.New("instance already started"))
+	}
+
+	if proc.s.Size() == 0 { // empty set is not valid
+		proc.Error("ConsensusProcess cannot be started with an empty set")
+		return StartInstanceError(errors.New("instance started with an empty set"))
 	}
 
 	proc.startTime = time.Now()
@@ -122,7 +127,9 @@ func (proc *ConsensusProcess) createInbox(size uint32) chan Message {
 }
 
 func (proc *ConsensusProcess) eventLoop() {
-	proc.With().Info("Consensus Processes Started", log.String("instance_id", proc.instanceId.String()), log.String("set_values", proc.s.String()))
+	proc.With().Info("Consensus Processes Started",
+		log.Int("N", proc.cfg.N), log.Int("f", proc.cfg.F), log.String("duration", proc.cfg.RoundDuration.String()),
+		log.String("instance_id", proc.instanceId.String()), log.String("set_values", proc.s.String()))
 
 	// set pre-round message and send
 	m := proc.initDefaultBuilder(proc.s).SetType(PreRound).Sign(proc.signing).Build()
@@ -245,6 +252,9 @@ func (proc *ConsensusProcess) validateRole(m *pb.HareMessage) bool {
 func (proc *ConsensusProcess) handleMessage(msg Message) {
 	// Note: instanceId is already verified by the broker
 	m := msg.msg
+
+	proc.Debug("Received message: %v", m)
+
 	// first validate role
 	if !proc.validateRole(m) {
 		proc.Warning("Role validation failed, pubkey %v", m.PubKey)
@@ -279,6 +289,8 @@ func (proc *ConsensusProcess) handleMessage(msg Message) {
 }
 
 func (proc *ConsensusProcess) processMsg(m *pb.HareMessage) {
+	proc.Debug("Processing message of type %v", m.Message.Type)
+
 	metrics.MessageTypeCounter.With("type_id", MessageType(m.Message.Type).String()).Add(1)
 
 	switch MessageType(m.Message.Type) {
@@ -300,12 +312,13 @@ func (proc *ConsensusProcess) processMsg(m *pb.HareMessage) {
 func (proc *ConsensusProcess) sendMessage(msg *pb.HareMessage) {
 	// invalid msg
 	if msg == nil {
+		proc.Error("sendMessage was called with nil")
 		return
 	}
 
 	// check eligibility
 	if !proc.isEligible() {
-		log.Info("%v not eligible round %v", proc.signing.Verifier().String(), proc.k)
+		proc.Info("%v not eligible on round %v", proc.signing.Verifier(), proc.k)
 		return
 	}
 
@@ -329,6 +342,15 @@ func (proc *ConsensusProcess) onRoundEnd() {
 	switch proc.currentRound() {
 	case Round1:
 		proc.endOfRound1()
+	case Round2:
+		s := proc.proposalTracker.ProposedSet()
+		sStr := "nil"
+		if s != nil {
+			sStr = s.String()
+		}
+		proc.With().Info("Round 2 ended",
+			log.String("proposed_set", sStr),
+			log.Bool("is_conflicting", proc.proposalTracker.IsConflicting()))
 	case Round3:
 		proc.endOfRound3()
 	}
@@ -504,19 +526,23 @@ func (proc *ConsensusProcess) statusValidator() func(m *pb.HareMessage) bool {
 
 func (proc *ConsensusProcess) endOfRound1() {
 	proc.statusesTracker.AnalyzeStatuses(proc.statusValidator())
+	proc.With().Info("Round 1 ended", log.Bool("is_svp_ready", proc.statusesTracker.IsSVPReady()))
 }
 
 func (proc *ConsensusProcess) endOfRound3() {
 	// notify already sent after committing, only one should be sent
 	if proc.notifySent {
+		proc.Info("End of round 3: notification already sent")
 		return
 	}
 
 	if proc.proposalTracker.IsConflicting() {
+		proc.Warning("End of round 3: proposal is conflicting")
 		return
 	}
 
 	if !proc.commitTracker.HasEnoughCommits() {
+		proc.Warning("End of round 3: not enough commits")
 		return
 	}
 
@@ -528,10 +554,12 @@ func (proc *ConsensusProcess) endOfRound3() {
 
 	s := proc.proposalTracker.ProposedSet()
 	if s == nil {
+		proc.Error("ProposedSet returned nil")
 		return
 	}
 
 	// commit & send notification message
+	proc.Debug("end of round 3: committing on %v and sending notification message", s)
 	proc.s = s
 	proc.certificate = cert
 	builder := proc.initDefaultBuilder(proc.s).SetType(Notify).SetCertificate(proc.certificate).Sign(proc.signing)

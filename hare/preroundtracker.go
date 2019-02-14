@@ -31,6 +31,7 @@ func (pre *PreRoundTracker) OnPreRound(msg *pb.HareMessage) {
 
 	// only handle first pre-round msg
 	if _, exist := pre.preRound[verifier.String()]; exist {
+		log.Debug("Duplicate sender %v", verifier.String())
 		return
 	}
 
