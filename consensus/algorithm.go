@@ -1,6 +1,7 @@
 package consensus
 
 import (
+	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 )
@@ -38,9 +39,16 @@ func (alg *Algorithm) ContextualValidity(id mesh.BlockID) bool {
 func CreateGenesisBlock() *mesh.Block {
 	log.Info("Creating genesis")
 	bl := &mesh.Block{
-		Id:         mesh.BlockID(0),
+		Id:         mesh.BlockID(config.GenesisId),
 		LayerIndex: 0,
 		Data:       []byte("genesis"),
 	}
 	return bl
+}
+
+func createGenesisLayer() *mesh.Layer {
+	log.Info("Creating genesis")
+	l := mesh.NewLayer(Genesis)
+	l.AddBlock(CreateGenesisBlock())
+	return l
 }

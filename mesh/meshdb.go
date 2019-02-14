@@ -188,7 +188,6 @@ func (m *meshDB) handleLayerBlocks(ll *layerHandler) {
 				return
 			}
 
-			log.Info("added block %d to database ", bl)
 			m.updateLayerIds(bl)
 			m.tryDeleteHandler(ll) //try delete handler when done to avoid leak
 		}

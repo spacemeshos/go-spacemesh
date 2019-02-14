@@ -172,10 +172,10 @@ func (m *Mesh) AddBlock(block *Block) error {
 func (m *Mesh) handleOrphanBlocks(block *Block) {
 	m.orphMutex.Lock()
 	defer m.orphMutex.Unlock()
-	if _, ok := m.orphanBlocks[block.LayerIndex]; !ok {
-		m.orphanBlocks[block.LayerIndex] = make(map[BlockID]struct{})
+	if _, ok := m.orphanBlocks[block.Layer()]; !ok {
+		m.orphanBlocks[block.Layer()] = make(map[BlockID]struct{})
 	}
-	m.orphanBlocks[block.LayerIndex][block.Id] = struct{}{}
+	m.orphanBlocks[block.Layer()][block.ID()] = struct{}{}
 	m.Info("Added block %d to orphans", block.ID())
 	atomic.AddInt32(&m.orphanBlockCount, 1)
 	for _, b := range block.ViewEdges {
@@ -232,6 +232,9 @@ func (m *Mesh) GetOrphanBlocksExcept(l LayerID) []BlockID {
 		for bid := range val {
 			keys = append(keys, bid)
 		}
+	}
+	if len(keys) == 0 {
+		panic("no orphans ")
 	}
 	m.Info("orphans for layer %d are %v", l, keys)
 	return keys

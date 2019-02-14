@@ -16,6 +16,8 @@ const (
 	defaultLogFileName     = "spacemesh.log"
 	defaultAccountFileName = "accounts"
 	defaultDataDirName     = "spacemesh"
+	Genesis                = 0
+	GenesisId              = 420
 )
 
 var (

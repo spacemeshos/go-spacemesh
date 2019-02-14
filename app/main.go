@@ -282,11 +282,8 @@ func (app *SpacemeshApp) setupGenesis(cfg *config.GenesisConfig) {
 	}
 
 	genesis := consensus.CreateGenesisBlock()
-	l := mesh.NewExistingLayer(mesh.LayerID(consensus.Genesis), []*mesh.Block{genesis})
 	app.state.Commit(false)
 	app.mesh.AddBlock(genesis)
-	app.mesh.ValidateLayer(l)
-
 }
 
 func (app *SpacemeshApp) setupTestFeatures() {
