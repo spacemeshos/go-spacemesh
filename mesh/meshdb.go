@@ -7,7 +7,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"sync"
-	"sync/atomic"
 )
 
 type layerHandler struct {
@@ -17,20 +16,20 @@ type layerHandler struct {
 }
 
 type layerMutex struct {
-	m			sync.Mutex
-	pending 	sync.Mutex
-	workers 	uint32
+	m       sync.Mutex
+	pending sync.Mutex
+	workers uint32
 }
 
 type meshDB struct {
-	layers             	database.DB
-	blocks             	database.DB
-	contextualValidity 	database.DB //map blockId to contextualValidation state of block
-	orphanBlocks       	map[LayerID]map[BlockID]struct{}
-	orphanBlockCount   	int32
-	layerMutex      	map[LayerID]*layerMutex
-	layerHandlers      	map[LayerID]*layerHandler
-	lhMutex            	sync.Mutex
+	layers             database.DB
+	blocks             database.DB
+	contextualValidity database.DB //map blockId to contextualValidation state of block
+	orphanBlocks       map[LayerID]map[BlockID]struct{}
+	orphanBlockCount   int32
+	layerMutex         map[LayerID]*layerMutex
+	layerHandlers      map[LayerID]*layerHandler
+	lhMutex            sync.Mutex
 }
 
 func NewMeshDB(layers, blocks, validity database.DB) *meshDB {
@@ -40,7 +39,7 @@ func NewMeshDB(layers, blocks, validity database.DB) *meshDB {
 		contextualValidity: validity,
 		orphanBlocks:       make(map[LayerID]map[BlockID]struct{}),
 		layerHandlers:      make(map[LayerID]*layerHandler),
-		layerMutex: 		make(map[LayerID]*layerMutex),
+		layerMutex:         make(map[LayerID]*layerMutex),
 	}
 	return ll
 }
@@ -119,7 +118,7 @@ func (m *meshDB) setContextualValidity(id BlockID, valid bool) error {
 	return nil
 }
 
-func (m *meshDB) writeBlock(bl *Block) error{
+func (m *meshDB) writeBlock(bl *Block) error {
 	bytes, err := BlockAsBytes(*bl)
 	if err != nil {
 		return fmt.Errorf("could not encode bl")
@@ -201,48 +200,13 @@ func (m *meshDB) getLayerBlocks(ids map[BlockID]bool) ([]*Block, error) {
 	return blocks, nil
 }
 
-func (m *meshDB) handleLayerBlocks(ll *layerHandler) {
-	for {
-		select {
-		case bl := <-ll.ch:
-			atomic.AddInt32(&ll.pendingCount, -1)
-			bytes, err := BlockAsBytes(*bl)
-			if err != nil {
-				log.Error("could not encode bl")
-				continue
-			}
-			if b, err := m.blocks.Get(bl.ID().ToBytes()); err == nil && b != nil {
-				log.Error("bl ", bl.ID(), " already in database ")
-				continue
-			}
-
-			if err := m.blocks.Put(bl.ID().ToBytes(), bytes); err != nil {
-				log.Error("could not add bl to ", bl.ID(), " database ", err)
-				continue
-			}
-
-			m.updateLayerIds(bl)
-			m.tryDeleteHandler(ll) //try delete handler when done to avoid leak
-		}
-	}
-}
-
-//try delete layer Handler (deletes if pending pendingCount is 0)
-func (m *meshDB) tryDeleteHandler(ll *layerHandler) {
-	m.lhMutex.Lock()
-	if atomic.LoadInt32(&ll.pendingCount) == 0 {
-		delete(m.layerHandlers, ll.layer)
-	}
-	m.lhMutex.Unlock()
-}
-
 //try delete layer Handler (deletes if pending pendingCount is 0)
 func (m *meshDB) endLayerWorker(index LayerID) {
 	m.lhMutex.Lock()
 	defer m.lhMutex.Unlock()
 
 	ll, found := m.layerMutex[index]
-	if !found{
+	if !found {
 		panic("trying to double close layer mutex")
 	}
 
@@ -254,31 +218,13 @@ func (m *meshDB) endLayerWorker(index LayerID) {
 	ll.pending.Unlock()
 }
 
-/*
-//returns the existing layer Handler (crates one if doesn't exist)
-func (m *meshDB) getLayerHandler(index LayerID, counter int32) *layerHandler {
-	m.lhMutex.Lock()
-	defer m.lhMutex.Unlock()
-	ll, found := m.layerHandlers[index]
-	if !found {
-		ll = &layerHandler{pendingCount: counter, ch: make(chan *Block)}
-		m.layerHandlers[index] = ll
-		go m.handleLayerBlocks(ll)
-	} else {
-		atomic.AddInt32(&ll.pendingCount, counter)
-	}
-	return ll
-}
-*/
-
-
 //returns the existing layer Handler (crates one if doesn't exist)
 func (m *meshDB) getLayerMutex(index LayerID) *layerMutex {
 	m.lhMutex.Lock()
 	defer m.lhMutex.Unlock()
 	ll, found := m.layerMutex[index]
 	if !found {
-		ll = &layerMutex{sync.Mutex{}, sync.Mutex{},0}
+		ll = &layerMutex{sync.Mutex{}, sync.Mutex{}, 0}
 		m.layerMutex[index] = ll
 	}
 	ll.pending.Lock()
