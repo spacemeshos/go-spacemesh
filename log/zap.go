@@ -52,7 +52,10 @@ func Int(name string, val int) Field {
 	return Field(zap.Int(name, val))
 }
 
-// Uint32 returns an uint32 Field
+func Int32(name string, val int32) Field {
+	return Field(zap.Int32(name, val))
+}
+
 func Uint32(name string, val uint32) Field {
 	return Field(zap.Uint32(name, val))
 }
