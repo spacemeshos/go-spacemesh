@@ -119,6 +119,7 @@ func (m *Mesh) AddLayer(layer *Layer) error {
 	}
 	atomic.StoreUint32(&m.lastSeenLayer, uint32(layer.Index()))
 	m.addLayer(layer)
+	m.Log.With().Info("added layer", log.Uint32("id", uint32(layer.Index())), log.Int("num of blocks", len(layer.blocks)))
 	m.SetLatestLayer(uint32(layer.Index()))
 	return nil
 }
