@@ -116,10 +116,8 @@ func EnsureCLIFlags(cmd *cobra.Command, appcfg *cfg.Config) {
 			elem = reflect.ValueOf(&appcfg.P2P.SwarmConfig).Elem()
 			assignFields(ff, elem, name)
 
-			// ff = reflect.TypeOf(appcfg.P2P.TimeConfig)
-			ff = reflect.TypeOf(appcfg.TimeSync.TimeConfig)
-			// elem = reflect.ValueOf(&appcfg.P2P.TimeConfig).Elem()
-			elem = reflect.ValueOf(&appcfg.TimeSync.TimeConfig).Elem()
+			ff = reflect.TypeOf(appcfg.TIME)
+			elem = reflect.ValueOf(&appcfg.TIME).Elem()
 			assignFields(ff, elem, name)
 
 			ff = reflect.TypeOf(appcfg.CONSENSUS)

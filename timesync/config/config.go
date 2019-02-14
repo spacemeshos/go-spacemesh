@@ -8,8 +8,7 @@ import (
 
 // ConfigValues specifies  default values for node config params.
 var (
-	ConfigValues     = DefaultConfig()
-	TimeConfigValues = ConfigValues.TimeConfig
+	TimeConfigValues = DefaultConfig()
 )
 
 // TimeConfig specifies the timesync params for ntp.
@@ -18,11 +17,6 @@ type TimeConfig struct {
 	NtpQueries            int           `mapstructure:"ntp-queries"`
 	DefaultTimeoutLatency time.Duration `mapstructure:"default-timeout-latency"`
 	RefreshNtpInterval    time.Duration `mapstructure:"refresh-ntp-interval"`
-}
-
-// Config defines the configuration options for the Spacemesh peer-to-peer networking layer
-type Config struct {
-	TimeConfig TimeConfig
 }
 
 //todo: this is a duplicate function found also in p2p config
@@ -35,7 +29,7 @@ func duration(duration string) (dur time.Duration) {
 }
 
 // DefaultConfig defines the default tymesync configuration
-func DefaultConfig() Config {
+func DefaultConfig() TimeConfig {
 
 	// TimeConfigValues defines default values for all time and ntp related params.
 	var TimeConfigValues = TimeConfig{
@@ -45,7 +39,5 @@ func DefaultConfig() Config {
 		RefreshNtpInterval:    duration("30m"),
 	}
 
-	return Config{
-		TimeConfig: TimeConfigValues,
-	}
+	return TimeConfigValues
 }
