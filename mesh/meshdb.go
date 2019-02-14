@@ -9,16 +9,9 @@ import (
 	"sync"
 )
 
-type layerHandler struct {
-	ch           chan *Block
-	layer        LayerID
-	pendingCount int32
-}
-
 type layerMutex struct {
-	m       sync.Mutex
-	pending sync.Mutex
-	workers uint32
+	m            sync.Mutex
+	layerWorkers uint32
 }
 
 type meshDB struct {
@@ -28,7 +21,6 @@ type meshDB struct {
 	orphanBlocks       map[LayerID]map[BlockID]struct{}
 	orphanBlockCount   int32
 	layerMutex         map[LayerID]*layerMutex
-	layerHandlers      map[LayerID]*layerHandler
 	lhMutex            sync.Mutex
 }
 
@@ -38,7 +30,6 @@ func NewMeshDB(layers, blocks, validity database.DB) *meshDB {
 		layers:             layers,
 		contextualValidity: validity,
 		orphanBlocks:       make(map[LayerID]map[BlockID]struct{}),
-		layerHandlers:      make(map[LayerID]*layerHandler),
 		layerMutex:         make(map[LayerID]*layerMutex),
 	}
 	return ll
@@ -85,8 +76,6 @@ func (m *meshDB) addBlock(block *Block) error {
 	if err != nil {
 		return err
 	}
-	/*layerHandler := m.getLayerHandler(block.LayerIndex, 1)
-	layerHandler.ch <- block*/
 	return nil
 }
 
@@ -132,7 +121,7 @@ func (m *meshDB) writeBlock(bl *Block) error {
 		return fmt.Errorf("could not add bl to %v databacse %v", bl.ID(), err)
 	}
 
-	m.updateLayerIds(bl)
+	m.updateLayerWithBlock(bl)
 	return nil
 }
 
@@ -159,7 +148,7 @@ func (m *meshDB) addLayer(layer *Layer) error {
 	return nil
 }
 
-func (m *meshDB) updateLayerIds(block *Block) error {
+func (m *meshDB) updateLayerWithBlock(block *Block) error {
 	lm := m.getLayerMutex(block.LayerIndex)
 	defer m.endLayerWorker(block.LayerIndex)
 	lm.m.Lock()
@@ -210,12 +199,10 @@ func (m *meshDB) endLayerWorker(index LayerID) {
 		panic("trying to double close layer mutex")
 	}
 
-	ll.pending.Lock()
-	ll.workers--
-	if ll.workers == 0 {
+	ll.layerWorkers--
+	if ll.layerWorkers == 0 {
 		delete(m.layerMutex, index)
 	}
-	ll.pending.Unlock()
 }
 
 //returns the existing layer Handler (crates one if doesn't exist)
@@ -224,11 +211,9 @@ func (m *meshDB) getLayerMutex(index LayerID) *layerMutex {
 	defer m.lhMutex.Unlock()
 	ll, found := m.layerMutex[index]
 	if !found {
-		ll = &layerMutex{sync.Mutex{}, sync.Mutex{}, 0}
+		ll = &layerMutex{}
 		m.layerMutex[index] = ll
 	}
-	ll.pending.Lock()
-	ll.workers++
-	ll.pending.Unlock()
+	ll.layerWorkers++
 	return ll
 }
