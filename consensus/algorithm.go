@@ -35,14 +35,12 @@ func (alg *Algorithm) ContextualValidity(id mesh.BlockID) bool {
 	return alg.getVote(id) == Support
 }
 
-func CreateGenesisLayer() *mesh.Layer {
+func CreateGenesisBlock() *mesh.Block {
 	log.Info("Creating genesis")
 	bl := &mesh.Block{
 		Id:         mesh.BlockID(0),
 		LayerIndex: 0,
 		Data:       []byte("genesis"),
 	}
-	l := mesh.NewLayer(Genesis)
-	l.AddBlock(bl)
-	return l
+	return bl
 }

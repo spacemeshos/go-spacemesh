@@ -282,7 +282,7 @@ func (app *SpacemeshApp) setupGenesis(cfg *config.GenesisConfig) {
 	}
 
 	app.state.Commit(false)
-	app.mesh.AddLayer(consensus.CreateGenesisLayer())
+	app.mesh.AddBlock(consensus.CreateGenesisBlock())
 }
 
 func (app *SpacemeshApp) setupTestFeatures() {
