@@ -116,7 +116,7 @@ func (ni *ninjaTortoise) processBlock(b *mesh.Block) {
 		ni.Debug("block votes %d", bid)
 		bl, found := ni.blocks[bid]
 		if !found {
-			panic("unknown block!, something went wrong ")
+			panic(fmt.Sprintf("error block not found ID %d", bid))
 		}
 		if _, found := patternMap[bl.Layer()]; !found {
 			patternMap[bl.Layer()] = map[mesh.BlockID]struct{}{}
@@ -171,7 +171,7 @@ func getIdsFromSet(bids map[mesh.BlockID]struct{}) PatternId {
 
 func forBlockInView(blocks map[mesh.BlockID]struct{}, blockCache map[mesh.BlockID]*mesh.Block, layer mesh.LayerID, foo func(block *mesh.Block)) {
 	stack := list.New()
-	for b, _ := range blocks {
+	for b := range blocks {
 		stack.PushFront(b)
 	}
 	set := make(map[mesh.BlockID]struct{})
@@ -391,6 +391,26 @@ func initTallyToBase(tally map[votingPattern]map[mesh.BlockID]vec, base votingPa
 	}
 }
 
+func (ni *ninjaTortoise) latestComplete() mesh.LayerID {
+	return ni.pBase.Layer()
+}
+
+func (ni *ninjaTortoise) getVote(id mesh.BlockID) vec {
+	block, found := ni.blocks[id]
+
+	if !found {
+		ni.Error("block not found !")
+		return Against
+	}
+
+	if block.Layer() > ni.pBase.Layer() {
+		ni.Error("we dont have an opinion on block according to current pbase")
+		return Against
+	}
+
+	return ni.tVote[ni.pBase][id]
+}
+
 func (ni *ninjaTortoise) handleIncomingLayer(newlyr *mesh.Layer) { //i most recent layer
 	ni.Info("update tables layer %d with %d blocks", newlyr.Index(), len(newlyr.Blocks()))
 
@@ -481,5 +501,6 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *mesh.Layer) { //i most rece
 			}
 		}
 	}
+	ni.Info("finished layer %d pbase is %d", newlyr.Index(), ni.pBase.Layer())
 	return
 }

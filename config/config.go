@@ -17,6 +17,8 @@ const (
 	defaultLogFileName     = "spacemesh.log"
 	defaultAccountFileName = "accounts"
 	defaultDataDirName     = "spacemesh"
+	Genesis                = 0
+	GenesisId              = 420
 )
 
 var (
@@ -84,7 +86,7 @@ func defaultBaseConfig() BaseConfig {
 		OracleServer:        "http://localhost:3030",
 		OracleServerWorldId: 0,
 		GenesisTime:         time.Now().Format(time.RFC3339),
-		LayerDurationSec:    5,
+		LayerDurationSec:    10,
 	}
 }
 

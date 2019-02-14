@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/oracle"
@@ -108,7 +109,7 @@ type WeakCoinProvider interface {
 }
 
 type OrphanBlockProvider interface {
-	GetOrphanBlocksExcept(layer mesh.LayerID) []mesh.BlockID
+	GetUnverifiedLayerBlocks(l mesh.LayerID) []mesh.BlockID
 }
 
 //used from external API call?
@@ -123,15 +124,20 @@ func (t *BlockBuilder) AddTransaction(nonce uint64, origin, destination address.
 func (t *BlockBuilder) createBlock(id mesh.LayerID, txs []mesh.SerializableTransaction) mesh.Block {
 	var res []mesh.BlockID = nil
 	var err error
-	if id > 0 {
+
+	if id == 0 {
+		panic("cannot create block in layer 0")
+	}
+
+	if id == 1 {
+		res = append(res, config.GenesisId)
+	} else {
 		res, err = t.hareResult.GetResult(id - 1)
 		if err != nil {
 			t.Log.Error("didnt receive hare result for layer %v", id-1)
 		}
 	}
-
 	b := mesh.Block{
-
 		MinerID:    t.minerID,
 		Id:         mesh.BlockID(rand.Int63()),
 		LayerIndex: id,
@@ -140,10 +146,10 @@ func (t *BlockBuilder) createBlock(id mesh.LayerID, txs []mesh.SerializableTrans
 		Timestamp:  time.Now().UnixNano(),
 		Txs:        txs,
 		BlockVotes: res,
-		ViewEdges:  t.orphans.GetOrphanBlocksExcept(id),
+		ViewEdges:  t.orphans.GetUnverifiedLayerBlocks(id - 1),
 	}
-	t.Log.Info("Iv'e created block in layer %v id %v, num of transactions %v", b.LayerIndex, b.Id, len(b.Txs))
 
+	t.Log.Info("Iv'e created block in layer %v id %v, num of transactions %v votes %d viewEdges %d", b.LayerIndex, b.Id, len(b.Txs), len(b.BlockVotes), len(b.ViewEdges))
 	return b
 }
 

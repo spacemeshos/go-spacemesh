@@ -112,8 +112,8 @@ func (bl *BlockListener) run() {
 			bl.Log.Debug("fetch block ", id, "buffer is at ", len(bl.unknownQueue)/cap(bl.unknownQueue), " capacity")
 			bl.semaphore <- struct{}{}
 			go func() {
-				defer func() { <-bl.semaphore }()
 				bl.FetchBlock(id)
+				<-bl.semaphore
 			}()
 		}
 	}
@@ -132,7 +132,7 @@ func (bl *BlockListener) onTick() {
 			//log.Info("new layer tick in listener")
 			l, err := bl.GetLayer(newLayer - 1) //bl.CreateLayer(newLayer - 1)
 			if err != nil {
-				log.Error("layer %v not received layer : %v", newLayer-1, err)
+				log.Error("error getting layer %v  : %v", newLayer-1, err)
 				break
 			}
 			go bl.Mesh.ValidateLayer(l)
