@@ -48,6 +48,11 @@ func (m *meshDB) getLayer(index LayerID) (*Layer, error) {
 		return nil, fmt.Errorf("error getting layer %v from database ", index)
 	}
 
+	l := NewLayer(LayerID(index))
+	if len(ids) == 0 {
+		return l, nil
+	}
+
 	blockIds, err := bytesToBlockIds(ids)
 	if err != nil {
 		return nil, errors.New("could not get all blocks from database ")
@@ -58,7 +63,7 @@ func (m *meshDB) getLayer(index LayerID) (*Layer, error) {
 		return nil, errors.New("could not get all blocks from database ")
 	}
 
-	l := NewLayer(LayerID(index))
+
 	l.SetBlocks(blocks)
 
 	return l, nil
@@ -127,10 +132,9 @@ func (m *meshDB) writeBlock(bl *Block) error {
 
 //todo this overwrites the previous value if it exists
 func (m *meshDB) addLayer(layer *Layer) error {
-	//layerHandler := m.getLayerHandler(layer.index, int32(len(layer.blocks)))
-	ids := make(map[BlockID]bool)
-	for _, b := range layer.blocks {
-		ids[b.Id] = true
+	if len(layer.blocks) == 0 {
+		m.layers.Put(layer.Index().ToBytes(), []byte{})
+		return nil
 	}
 
 	//add blocks to mDB
@@ -138,13 +142,6 @@ func (m *meshDB) addLayer(layer *Layer) error {
 		m.writeBlock(bl)
 	}
 
-	w, err := blockIdsAsBytes(ids)
-	if err != nil {
-		//todo recover
-		return errors.New("could not encode layer block ids")
-	}
-
-	m.layers.Put(layer.Index().ToBytes(), w)
 	return nil
 }
 
