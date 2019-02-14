@@ -113,7 +113,7 @@ func (app *AppTestSuite) TestMultipleNodes() {
 	}
 
 	app.apps[0].P2P.Broadcast(miner.IncomingTxProtocol, txbytes)
-	timeout := time.After(40 * time.Second)
+	timeout := time.After(2 * 60 * time.Second)
 
 	for {
 		select {
