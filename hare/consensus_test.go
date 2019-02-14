@@ -145,6 +145,10 @@ func createConsensusProcess(isHonest bool, cfg config.Config, oracle fullRolacle
 }
 
 func TestConsensusFixedOracle(t *testing.T) {
+	if skipBlackBox {
+		t.Skip()
+	}
+
 	test := newConsensusTest()
 
 	cfg := config.Config{N: 16, F: 8, SetSize: 1, RoundDuration: time.Second * time.Duration(1)}

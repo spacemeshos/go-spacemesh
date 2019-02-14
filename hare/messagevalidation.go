@@ -8,7 +8,7 @@ import (
 
 type messageValidator interface {
 	SyntacticallyValidateMessage(m *pb.HareMessage) bool
-	ContextuallyValidateMessage(m *pb.HareMessage, expectedK uint32) bool
+	ContextuallyValidateMessage(m *pb.HareMessage, expectedK int32) bool
 }
 
 type MessageValidator struct {
@@ -51,7 +51,7 @@ func (validator *MessageValidator) SyntacticallyValidateMessage(m *pb.HareMessag
 }
 
 // verifies the message is contextually valid
-func (validator *MessageValidator) ContextuallyValidateMessage(m *pb.HareMessage, expectedK uint32) bool {
+func (validator *MessageValidator) ContextuallyValidateMessage(m *pb.HareMessage, expectedK int32) bool {
 	if m.Message == nil {
 		validator.Warning("Contextual validation failed: m.Message is nil")
 		return false
