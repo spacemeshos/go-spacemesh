@@ -156,7 +156,7 @@ func (t *BlockBuilder) listenForTx() {
 		case data := <-t.txGossipChannel:
 			x, err := mesh.BytesAsTransaction(bytes.NewReader(data.Bytes()))
 			t.Log.With().Info("got new tx", log.String("sender", x.Origin.String()), log.String("receiver", x.Recipient.String()),
-				log.String("amount", x.GetAmount().String()), log.Uint64("nonce", x.AccountNonce), log.Bool("valid", err != nil) )
+				log.String("amount", x.GetAmount().String()), log.Uint64("nonce", x.AccountNonce), log.Bool("valid", err != nil))
 			if err != nil {
 				t.Log.Error("cannot parse incoming TX")
 				data.ReportValidation(IncomingTxProtocol, false)

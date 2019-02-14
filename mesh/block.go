@@ -36,13 +36,13 @@ type SerializableTransaction struct {
 	Payload      []byte
 }
 
-func (t *SerializableTransaction) GetAmount() *big.Int{
+func (t *SerializableTransaction) GetAmount() *big.Int {
 	a := &big.Int{}
 	a.SetBytes(t.Amount)
 	return a
 }
 
-func (t *SerializableTransaction) GetPrice() *big.Int{
+func (t *SerializableTransaction) GetPrice() *big.Int {
 	a := &big.Int{}
 	a.SetBytes(t.Price)
 	return a
