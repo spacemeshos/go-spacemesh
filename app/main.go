@@ -293,7 +293,7 @@ func (app *SpacemeshApp) setupTestFeatures() {
 	api.ApproveAPIGossipMessages(Ctx, app.P2P)
 }
 
-func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service, dbStorepath string, sgn hare.Signing, blockOracle oracle.BlockOracle, hareOracle hare.Rolacle) error {
+func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service, dbStorepath string, sgn hare.Signing, blockOracle oracle.BlockOracle, hareOracle hare.Rolacle, layerSize uint32) error {
 
 	//todo: should we add all components to a single struct?
 	lg := log.New("shmekel_"+instanceName, "", "")
@@ -309,7 +309,7 @@ func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service,
 	processor := state.NewTransactionProcessor(rng, st, lg)
 
 	//trtl := consensus.NewTortoise(50, 100)
-	trtl := consensus.NewAlgorithm(consensus.NewNinjaTortoise(50))
+	trtl := consensus.NewAlgorithm(consensus.NewNinjaTortoise(layerSize))
 	mesh := mesh.NewMesh(db, db, db, trtl, processor, lg) //todo: what to do with the logger?
 
 	coinToss := consensus.WeakCoin{}
@@ -396,7 +396,7 @@ func (app *SpacemeshApp) startSpacemesh(cmd *cobra.Command, args []string) {
 
 	apiConf := &app.Config.API
 
-	err = app.initServices("x", swarm, "/tmp/", sgn, bo, hareOracle)
+	err = app.initServices("x", swarm, "/tmp/", sgn, bo, hareOracle, 50)
 	if err != nil {
 		log.Error("cannot start services %v", err.Error())
 		return

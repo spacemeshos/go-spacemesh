@@ -112,8 +112,8 @@ func (bl *BlockListener) run() {
 			bl.Log.Debug("fetch block ", id, "buffer is at ", len(bl.unknownQueue)/cap(bl.unknownQueue), " capacity")
 			bl.semaphore <- struct{}{}
 			go func() {
-				defer func() { <-bl.semaphore }()
 				bl.FetchBlock(id)
+				<-bl.semaphore
 			}()
 		}
 	}

@@ -85,7 +85,7 @@ func (app *AppTestSuite) initMultipleInstances(t *testing.T, numOfInstances int,
 		pub := sgn.Verifier()
 		bo.Register(true, pub.String())
 
-		err := app.apps[i].initServices(pub.String(), n, store, sgn, bo, bo)
+		err := app.apps[i].initServices(pub.String(), n, store, sgn, bo, bo, uint32(numOfInstances))
 		assert.NoError(t, err)
 		app.apps[i].setupGenesis(config.DefaultGenesisConfig())
 		app.dbs = append(app.dbs, store)

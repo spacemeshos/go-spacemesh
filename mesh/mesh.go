@@ -111,8 +111,10 @@ func (m *Mesh) AddLayer(layer *Layer) error {
 func (m *Mesh) ValidateLayer(layer *Layer) {
 	m.Info("Validate layer %d", layer.Index())
 	old, new := m.tortoise.HandleIncomingLayer(layer)
-	m.PushTransactions(old, new)
 	atomic.StoreUint32(&m.verifiedLayer, uint32(layer.Index()))
+	if new > old {
+		m.PushTransactions(old, new)
+	}
 }
 
 func (m *Mesh) PushTransactions(old LayerID, new LayerID) {
@@ -189,6 +191,22 @@ func (m *Mesh) handleOrphanBlocks(block *Block) {
 			}
 		}
 	}
+}
+
+func (m *Mesh) GetUnverifiedLayerBlocks(l LayerID) []BlockID {
+	x, err := m.meshDB.layers.Get(l.ToBytes())
+	if err != nil {
+		panic(fmt.Sprintf("could not retrive latest layer = %d blocks ", l))
+	}
+	blockIds, err := bytesToBlockIds(x)
+	if err != nil {
+		panic(fmt.Sprintf("could bytes to id array for layer %d ", l))
+	}
+	arr := make([]BlockID, 0, len(blockIds))
+	for bid := range blockIds {
+		arr = append(arr, bid)
+	}
+	return arr
 }
 
 //todo better thread safety
