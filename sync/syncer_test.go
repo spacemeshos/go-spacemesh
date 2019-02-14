@@ -52,9 +52,12 @@ func (BlockValidatorMock) BlockEligible(id mesh.LayerID, key string) bool {
 
 type MeshValidatorMock struct{}
 
-func (m *MeshValidatorMock) HandleIncomingLayer(layer *mesh.Layer)            {}
-func (m *MeshValidatorMock) HandleLateBlock(bl *mesh.Block)                   {}
-func (m *MeshValidatorMock) RegisterLayerCallback(func(layerId mesh.LayerID)) {}
+func (m *MeshValidatorMock) HandleIncomingLayer(layer *mesh.Layer) (mesh.LayerID, mesh.LayerID) {
+	return layer.Index() - 1, layer.Index()
+}
+func (m *MeshValidatorMock) HandleLateBlock(bl *mesh.Block)              {}
+func (m *MeshValidatorMock) RegisterLayerCallback(func(id mesh.LayerID)) {}
+func (mlg *MeshValidatorMock) ContextualValidity(id mesh.BlockID) bool   { return true }
 
 type stateMock struct{}
 
@@ -158,9 +161,9 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 	syncObj2 := syncs[1]
 	defer syncObj2.Close()
 	lid := mesh.LayerID(1)
-
-	syncObj1.AddLayer(mesh.NewExistingLayer(lid, make([]*mesh.Block, 0, 10)))
-	syncObj1.LayerCompleteCallback(lid) //this is to simulate the approval of the tortoise...
+	l := mesh.NewExistingLayer(lid, make([]*mesh.Block, 0, 10))
+	syncObj1.AddLayer(l)
+	syncObj1.ValidateLayer(l) //this is to simulate the approval of the tortoise...
 	timeout := time.NewTimer(2 * time.Second)
 	ch, err := syncObj2.sendLayerHashRequest(nodes[0].Node.PublicKey(), lid)
 	select {

@@ -12,9 +12,12 @@ import (
 
 type MeshValidatorMock struct{}
 
-func (m *MeshValidatorMock) HandleIncomingLayer(layer *Layer)       {}
+func (m *MeshValidatorMock) HandleIncomingLayer(layer *Layer) (LayerID, LayerID) {
+	return layer.Index() - 1, layer.Index()
+}
 func (m *MeshValidatorMock) HandleLateBlock(bl *Block)              {}
 func (m *MeshValidatorMock) RegisterLayerCallback(func(id LayerID)) {}
+func (mlg *MeshValidatorMock) ContextualValidity(id BlockID) bool   { return true }
 
 type MockState struct{}
 
@@ -68,8 +71,7 @@ func TestLayers_AddLayer(t *testing.T) {
 
 	err = layers.AddLayer(NewExistingLayer(1, []*Block{block1, block2, block3}))
 	assert.NoError(t, err)
-	layers.LayerCompleteCallback(1)
-	l, err = layers.GetVerifiedLayer(id)
+	l, err = layers.GetLayer(id)
 	assert.NoError(t, err)
 	//assert.True(t, layers.VerifiedLayer() == 0, "wrong layer count")
 	assert.True(t, string(l.blocks[1].Data) == "data", "wrong block data ")
@@ -81,11 +83,15 @@ func TestLayers_AddWrongLayer(t *testing.T) {
 	block1 := NewBlock(true, nil, time.Now(), 1)
 	block2 := NewBlock(true, nil, time.Now(), 2)
 	block3 := NewBlock(true, nil, time.Now(), 4)
-	layers.AddLayer(NewExistingLayer(1, []*Block{block1}))
-	layers.LayerCompleteCallback(1)
-	layers.AddLayer(NewExistingLayer(2, []*Block{block2}))
-	layers.LayerCompleteCallback(2)
-	layers.AddLayer(NewExistingLayer(4, []*Block{block3}))
+	l1 := NewExistingLayer(1, []*Block{block1})
+	layers.AddLayer(l1)
+	layers.ValidateLayer(l1)
+	l2 := NewExistingLayer(2, []*Block{block2})
+	layers.AddLayer(l2)
+	layers.ValidateLayer(l2)
+	l3 := NewExistingLayer(4, []*Block{block3})
+	layers.AddLayer(l3)
+	layers.ValidateLayer(l3)
 	_, err := layers.GetVerifiedLayer(1)
 	assert.True(t, err == nil, "error: ", err)
 	_, err1 := layers.GetVerifiedLayer(2)
@@ -100,8 +106,9 @@ func TestLayers_GetLayer(t *testing.T) {
 	block1 := NewBlock(true, nil, time.Now(), 1)
 	block2 := NewBlock(true, nil, time.Now(), 1)
 	block3 := NewBlock(true, nil, time.Now(), 1)
-	layers.AddLayer(NewExistingLayer(1, []*Block{block1}))
-	layers.LayerCompleteCallback(1)
+	l1 := NewExistingLayer(1, []*Block{block1})
+	layers.AddLayer(l1)
+	layers.ValidateLayer(l1)
 	l, err := layers.GetVerifiedLayer(0)
 	layers.AddLayer(NewExistingLayer(3, []*Block{block2}))
 	layers.AddLayer(NewExistingLayer(2, []*Block{block3}))
