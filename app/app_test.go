@@ -5,7 +5,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/hare"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/oracle"
@@ -107,9 +106,7 @@ func (app *AppTestSuite) TestMultipleNodes() {
 	tx.Price = big.NewInt(1).Bytes()
 
 	txbytes, _ := mesh.TransactionAsBytes(&tx)
-	path := "../tmp/test/state_"
-	log.Info("----------- Clean State files------------")
-	os.RemoveAll("../tmp/test")
+	path := "../tmp/test/state_" + time.Now().String()
 	app.initMultipleInstances(app.T(), 2, path)
 	for _, a := range app.apps {
 		a.startServices()

@@ -132,7 +132,7 @@ func (bl *BlockListener) onTick() {
 			//log.Info("new layer tick in listener")
 			l, err := bl.GetLayer(newLayer - 1) //bl.CreateLayer(newLayer - 1)
 			if err != nil {
-				log.Error("layer %v not received layer : %v", newLayer-1, err)
+				log.Error("error getting layer %v  : %v", newLayer-1, err)
 				break
 			}
 			go bl.Mesh.ValidateLayer(l)

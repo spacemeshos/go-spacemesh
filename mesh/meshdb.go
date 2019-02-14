@@ -57,7 +57,7 @@ func (m *meshDB) getLayer(index LayerID) (*Layer, error) {
 
 	blocks, err := m.getLayerBlocks(blockIds)
 	if err != nil {
-		return nil, errors.New("could not get all blocks from database ")
+		return nil, errors.New("could not get all blocks from database " + err.Error())
 	}
 
 	l := NewLayer(LayerID(index))
@@ -157,10 +157,10 @@ func (m *meshDB) updateLayerIds(block *Block) error {
 func (m *meshDB) getLayerBlocks(ids map[BlockID]bool) ([]*Block, error) {
 
 	blocks := make([]*Block, 0, len(ids))
-	for k, _ := range ids {
+	for k := range ids {
 		block, err := m.getBlock(k)
 		if err != nil {
-			return nil, errors.New("could not retrive block " + string(k))
+			return nil, errors.New("could not retrieve block " + fmt.Sprint(k) + " " + err.Error())
 		}
 		blocks = append(blocks, block)
 	}
@@ -185,9 +185,10 @@ func (m *meshDB) handleLayerBlocks(ll *layerHandler) {
 
 			if err := m.blocks.Put(bl.ID().ToBytes(), bytes); err != nil {
 				log.Error("could not add bl to ", bl.ID(), " database ", err)
-				continue
+				return
 			}
 
+			log.Info("added block %d to database ", bl)
 			m.updateLayerIds(bl)
 			m.tryDeleteHandler(ll) //try delete handler when done to avoid leak
 		}
