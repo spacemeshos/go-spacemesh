@@ -71,12 +71,12 @@ func (b32 Bytes32) Bytes() []byte {
 }
 
 func (b32 Bytes32) String() string {
-	// TODO: convert the whole 32 bytes to string number
-	s := uint64(0)
-	for x := range b32.Bytes() {
-		s += uint64(x)
-	}
-	return string(s)
+	// TODO: should improve
+	return string(b32.Id())
+}
+
+func (id InstanceId) String() string {
+	return string(id.Bytes())
 }
 
 // Represents a unique set of values
@@ -225,9 +225,10 @@ func (s *Set) Id() uint32 {
 }
 
 func (s *Set) String() string {
+	// TODO: should improve
 	b := new(bytes.Buffer)
 	for _, v := range s.values {
-		fmt.Fprintf(b, "%v\r\n", v.Bytes())
+		fmt.Fprintf(b, "%v\r\n", v.Id())
 	}
 	return b.String()
 }
