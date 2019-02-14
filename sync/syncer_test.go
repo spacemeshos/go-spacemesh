@@ -225,7 +225,6 @@ func verifyChannelReadWithTimeout(t *testing.T, ch chan interface{}) interface{}
 }
 
 func TestSyncProtocol_FetchBlocks(t *testing.T) {
-	t.Skip() //todo: ANTONL fix this test immediately after MS!
 	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_FetchBlocks_", memoryDB)
 	syncObj1 := syncs[0]
 	defer syncObj1.Close()
