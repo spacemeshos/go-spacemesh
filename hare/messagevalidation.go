@@ -19,8 +19,8 @@ type MessageValidator struct {
 	log.Log
 }
 
-func NewMessageValidator(signing Signing, threshold int, defaultSize int, validator func(m *pb.HareMessage) bool) *MessageValidator {
-	return &MessageValidator{signing, threshold, defaultSize, validator, log.NewDefault("MessageValidator")}
+func NewMessageValidator(signing Signing, threshold int, defaultSize int, validator func(m *pb.HareMessage) bool, logger log.Log) *MessageValidator {
+	return &MessageValidator{signing, threshold, defaultSize, validator, logger}
 }
 
 func (validator *MessageValidator) SyntacticallyValidateMessage(m *pb.HareMessage) bool {

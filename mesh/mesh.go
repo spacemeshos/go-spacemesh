@@ -7,6 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/state"
 	"math/big"
+	"sort"
 	"sync"
 	"sync/atomic"
 )
@@ -127,6 +128,8 @@ func (m *Mesh) PushTransactions(old LayerID, new LayerID) {
 
 		}
 
+		sort.Slice(l.blocks, func(i, j int) bool { return l.blocks[i].ID() < l.blocks[j].ID() })
+
 		for _, b := range l.blocks {
 			if m.tortoise.ContextualValidity(b.ID()) {
 				for _, tx := range b.Txs {
@@ -139,7 +142,7 @@ func (m *Mesh) PushTransactions(old LayerID, new LayerID) {
 		if err != nil {
 			m.Log.Error("cannot apply transactions %v", err)
 		}
-		m.Log.Info("applied %v transactions", x)
+		m.Log.Info("applied %v transactions in new pbase is %d ", x, new)
 	}
 }
 
@@ -237,6 +240,9 @@ func (m *Mesh) GetOrphanBlocksExcept(l LayerID) []BlockID {
 	for i := range ids {
 		idArr = append(idArr, i)
 	}
+
+	sort.Slice(idArr, func(i, j int) bool { return idArr[i] < idArr[j] })
+
 	m.Info("orphans for layer %d are %v", l, idArr)
 	return idArr
 }

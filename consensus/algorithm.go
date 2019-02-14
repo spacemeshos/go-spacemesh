@@ -26,10 +26,10 @@ func (alg *Algorithm) HandleLateBlock(b *mesh.Block) {
 }
 
 func (alg *Algorithm) HandleIncomingLayer(ll *mesh.Layer) (mesh.LayerID, mesh.LayerID) {
-	old := alg.latestComplete()
+	oldPbase := alg.latestComplete()
 	alg.Tortoise.handleIncomingLayer(ll)
-	new := alg.latestComplete()
-	return old, new
+	newPbase := alg.latestComplete()
+	return oldPbase, newPbase
 }
 
 func (alg *Algorithm) ContextualValidity(id mesh.BlockID) bool {

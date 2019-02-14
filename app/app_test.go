@@ -107,13 +107,13 @@ func (app *AppTestSuite) TestMultipleNodes() {
 
 	txbytes, _ := mesh.TransactionAsBytes(&tx)
 	path := "../tmp/test/state_" + time.Now().String()
-	app.initMultipleInstances(app.T(), 10, path)
+	app.initMultipleInstances(app.T(), 2, path)
 	for _, a := range app.apps {
 		a.startServices()
 	}
 
 	app.apps[0].P2P.Broadcast(miner.IncomingTxProtocol, txbytes)
-	timeout := time.After(25 * time.Second)
+	timeout := time.After(40 * time.Second)
 
 	for {
 		select {

@@ -124,6 +124,11 @@ func (t *BlockBuilder) AddTransaction(nonce uint64, origin, destination address.
 func (t *BlockBuilder) createBlock(id mesh.LayerID, txs []mesh.SerializableTransaction) mesh.Block {
 	var res []mesh.BlockID = nil
 	var err error
+
+	if id == 0 {
+		panic("cannot create block in layer 0")
+	}
+
 	if id == 1 {
 		res = append(res, config.GenesisId)
 	} else {

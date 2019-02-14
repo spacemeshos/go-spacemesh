@@ -77,7 +77,7 @@ func NewConsensusProcess(cfg config.Config, instanceId InstanceId, s *Set, oracl
 	proc.oracle = oracle
 	proc.signing = signing
 	proc.network = p2p
-	proc.validator = NewMessageValidator(signing, cfg.F+1, cfg.N, proc.statusValidator())
+	proc.validator = NewMessageValidator(signing, cfg.F+1, cfg.N, proc.statusValidator(), logger)
 	proc.preRoundTracker = NewPreRoundTracker(cfg.F+1, cfg.N)
 	proc.notifyTracker = NewNotifyTracker(cfg.N)
 	proc.terminating = false
