@@ -179,15 +179,16 @@ func (m *Mesh) handleOrphanBlocks(block *Block) {
 	m.Info("Added block %d to orphans", block.ID())
 	atomic.AddInt32(&m.orphanBlockCount, 1)
 	for _, b := range block.ViewEdges {
-		for _, layermap := range m.orphanBlocks {
-			if _, has := layermap[b]; has {
-				m.Log.Debug("delete block ", b, "from orphans")
-				delete(layermap, b)
-				atomic.AddInt32(&m.orphanBlockCount, -1)
-				break
+		if block.Layer() < LayerID(m.latestLayer) {
+			for _, layermap := range m.orphanBlocks {
+				if _, has := layermap[b]; has {
+					m.Log.Debug("delete block ", b, "from orphans")
+					delete(layermap, b)
+					atomic.AddInt32(&m.orphanBlockCount, -1)
+					break
+				}
 			}
 		}
-
 	}
 }
 

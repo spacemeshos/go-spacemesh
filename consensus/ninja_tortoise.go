@@ -171,7 +171,7 @@ func getIdsFromSet(bids map[mesh.BlockID]struct{}) PatternId {
 
 func forBlockInView(blocks map[mesh.BlockID]struct{}, blockCache map[mesh.BlockID]*mesh.Block, layer mesh.LayerID, foo func(block *mesh.Block)) {
 	stack := list.New()
-	for b, _ := range blocks {
+	for b := range blocks {
 		stack.PushFront(b)
 	}
 	set := make(map[mesh.BlockID]struct{})
