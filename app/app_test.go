@@ -5,6 +5,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/hare"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/oracle"
@@ -72,9 +73,8 @@ func TestApp(t *testing.T) {
 
 }
 
-func (app *AppTestSuite) initMultipleInstances(t *testing.T, numOfInstances int) {
+func (app *AppTestSuite) initMultipleInstances(t *testing.T, numOfInstances int, storeFormat string) {
 	net := service.NewSimulator()
-	storeFormat := "../tmp/state_"
 	runningName := 'a'
 	bo := oracle.NewLocalOracle(numOfInstances)
 	for i := 0; i < numOfInstances; i++ {
@@ -107,9 +107,12 @@ func (app *AppTestSuite) TestMultipleNodes() {
 	tx.Price = big.NewInt(1).Bytes()
 
 	txbytes, _ := mesh.TransactionAsBytes(&tx)
-
-	app.initMultipleInstances(app.T(), 2)
-
+	path := "../tmp/state_"
+	app.initMultipleInstances(app.T(), 2, path)
+	defer func() {
+		log.Info("----------- delete Test files------------")
+		os.RemoveAll(path + "/*")
+	}()
 	for _, a := range app.apps {
 		a.startServices()
 	}

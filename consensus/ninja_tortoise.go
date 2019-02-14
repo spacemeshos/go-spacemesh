@@ -116,7 +116,7 @@ func (ni *ninjaTortoise) processBlock(b *mesh.Block) {
 		ni.Debug("block votes %d", bid)
 		bl, found := ni.blocks[bid]
 		if !found {
-			panic("unknown block!, something went wrong ")
+			panic(fmt.Sprintf("error block not found ID %d", bid))
 		}
 		if _, found := patternMap[bl.Layer()]; !found {
 			patternMap[bl.Layer()] = map[mesh.BlockID]struct{}{}
@@ -501,5 +501,6 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *mesh.Layer) { //i most rece
 			}
 		}
 	}
+	ni.Info("finished layer %d pbase is %d", newlyr.Index(), ni.pBase.Layer())
 	return
 }
