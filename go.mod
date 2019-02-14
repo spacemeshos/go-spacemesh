@@ -1,7 +1,6 @@
 module github.com/spacemeshos/go-spacemesh
 
 require (
-	cloud.google.com/go v0.34.0
 	github.com/BurntSushi/toml v0.3.1 // indirect
 	github.com/VividCortex/gohistogram v1.0.0 // indirect
 	github.com/btcsuite/btcd v0.0.0-20181130015935-7d2daa5bfef2
@@ -14,7 +13,6 @@ require (
 	github.com/golang/protobuf v1.2.0
 	github.com/golang/snappy v0.0.0-20180518054509-2e65f85255db // indirect
 	github.com/google/uuid v1.1.0
-	github.com/googleapis/gax-go v2.0.2+incompatible // indirect
 	github.com/grpc-ecosystem/grpc-gateway v1.6.3
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/kr/pretty v0.1.0 // indirect
@@ -32,7 +30,6 @@ require (
 	github.com/spf13/viper v1.3.1
 	github.com/stretchr/testify v1.3.0
 	github.com/syndtr/goleveldb v0.0.0-20181128100959-b001fa50d6b2
-	go.opencensus.io v0.19.0 // indirect
 	go.uber.org/atomic v1.3.2 // indirect
 	go.uber.org/multierr v1.1.0 // indirect
 	go.uber.org/zap v1.9.1
@@ -40,8 +37,8 @@ require (
 	golang.org/x/net v0.0.0-20190206173232-65e2d4e15006
 	golang.org/x/sync v0.0.0-20181221193216-37e7f081c4d4
 	golang.org/x/sys v0.0.0-20190204203706-41f3e6584952 // indirect
-	google.golang.org/api v0.1.0 // indirect
 	google.golang.org/genproto v0.0.0-20181221175505-bd9b4fb69e2f
 	google.golang.org/grpc v1.17.0
+	gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 )
