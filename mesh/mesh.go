@@ -191,46 +191,16 @@ func (m *Mesh) handleOrphanBlocks(block *Block) {
 	}
 }
 
-func (m *Mesh) GetOrphanBlocksByLayerId(layerId LayerID) []BlockID {
-	m.orphMutex.RLock()
-	defer m.orphMutex.RUnlock()
-	if keys, has := m.orphanBlocks[layerId]; has {
-		ids := make([]BlockID, 0, len(keys))
-
-		for bid := range keys {
-			ids = append(ids, bid)
-		}
-		return ids
-
-	}
-	return make([]BlockID, 0, 0)
-}
-
-//todo better thread safety
-func (m *Mesh) GetOrphanBlocks() []BlockID {
-	m.orphMutex.RLock()
-	defer m.orphMutex.RUnlock()
-	keys := make([]BlockID, 0, m.orphanBlockCount)
-	for _, val := range m.orphanBlocks {
-		for bid := range val {
-			keys = append(keys, bid)
-		}
-	}
-
-	return keys
-}
-
 //todo better thread safety
 func (m *Mesh) GetOrphanBlocksExcept(l LayerID) []BlockID {
 	m.orphMutex.RLock()
 	defer m.orphMutex.RUnlock()
 	keys := make([]BlockID, 0, m.orphanBlockCount)
 	for key, val := range m.orphanBlocks {
-		if key == l {
-			continue
-		}
-		for bid := range val {
-			keys = append(keys, bid)
+		if key < l {
+			for bid := range val {
+				keys = append(keys, bid)
+			}
 		}
 	}
 	if len(keys) == 0 {

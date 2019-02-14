@@ -165,9 +165,9 @@ func TestLayers_OrphanBlocks(t *testing.T) {
 	layers.AddBlock(block2)
 	layers.AddBlock(block3)
 	layers.AddBlock(block4)
-	assert.True(t, len(layers.GetOrphanBlocks()) == 4, "wrong layer")
-	assert.Equal(t, len(layers.GetOrphanBlocksByLayerId(1)), 2)
+	assert.True(t, len(layers.GetOrphanBlocksExcept(5)) == 4, "wrong layer")
+	assert.Equal(t, len(layers.GetOrphanBlocksExcept(2)), 2)
 	layers.AddBlock(block5)
-	assert.True(t, len(layers.GetOrphanBlocks()) == 1, "wrong layer")
+	assert.True(t, len(layers.GetOrphanBlocksExcept(5)) == 1, "wrong layer")
 
 }
