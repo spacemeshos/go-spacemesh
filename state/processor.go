@@ -119,7 +119,7 @@ func (tp *TransactionProcessor) ApplyTransactions(layer LayerID, transactions Tr
 	}
 
 	tp.Log.Info("new state root for layer %v is %x", layer, newHash)
-	tp.Log.With().Info("new state", log.Uint32("layer id", uint32(layer)), log.String("root hash", newHash.String()))
+	tp.Log.With().Info("new state", log.Uint32("layer_id", uint32(layer)), log.String("root_hash", newHash.String()))
 
 	tp.stateQueue.PushBack(newHash)
 	if tp.stateQueue.Len() > maxPastStates {
@@ -142,7 +142,7 @@ func (tp *TransactionProcessor) Reset(layer LayerID) {
 			panic("cannot revert- improper state")
 		}
 		tp.Log.Info("reverted, new root %x", newState.IntermediateRoot(false))
-		tp.Log.With().Info("reverted", log.String("root hash", newState.IntermediateRoot(false).String()))
+		tp.Log.With().Info("reverted", log.String("root_hash", newState.IntermediateRoot(false).String()))
 
 		tp.globalState = newState
 		tp.pruneAfterRevert(layer)
