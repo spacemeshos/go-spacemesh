@@ -343,8 +343,13 @@ func (proc *ConsensusProcess) onRoundEnd() {
 	case Round1:
 		proc.endOfRound1()
 	case Round2:
+		s := proc.proposalTracker.ProposedSet()
+		sStr := "nil"
+		if s != nil {
+			sStr = s.String()
+		}
 		proc.With().Info("Round 2 ended",
-			log.String("proposed_set", proc.proposalTracker.ProposedSet().String()),
+			log.String("proposed_set", sStr),
 			log.Bool("is_conflicting", proc.proposalTracker.IsConflicting()))
 	case Round3:
 		proc.endOfRound3()
