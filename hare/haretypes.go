@@ -75,6 +75,10 @@ func (b32 Bytes32) String() string {
 	return string(b32.Id())
 }
 
+func (id InstanceId) String() string {
+	return string(id.Bytes())
+}
+
 // Represents a unique set of values
 type Set struct {
 	values    map[uint32]Value
