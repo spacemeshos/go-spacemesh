@@ -2,6 +2,7 @@ package mesh
 
 import (
 	"errors"
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/state"
@@ -179,14 +180,12 @@ func (m *Mesh) handleOrphanBlocks(block *Block) {
 	m.Info("Added block %d to orphans", block.ID())
 	atomic.AddInt32(&m.orphanBlockCount, 1)
 	for _, b := range block.ViewEdges {
-		if block.Layer() < LayerID(m.latestLayer) {
-			for _, layermap := range m.orphanBlocks {
-				if _, has := layermap[b]; has {
-					m.Log.Debug("delete block ", b, "from orphans")
-					delete(layermap, b)
-					atomic.AddInt32(&m.orphanBlockCount, -1)
-					break
-				}
+		for _, layermap := range m.orphanBlocks {
+			if _, has := layermap[b]; has {
+				m.Log.Debug("delete block ", b, "from orphans")
+				delete(layermap, b)
+				atomic.AddInt32(&m.orphanBlockCount, -1)
+				break
 			}
 		}
 	}
@@ -196,19 +195,31 @@ func (m *Mesh) handleOrphanBlocks(block *Block) {
 func (m *Mesh) GetOrphanBlocksExcept(l LayerID) []BlockID {
 	m.orphMutex.RLock()
 	defer m.orphMutex.RUnlock()
-	keys := make([]BlockID, 0, m.orphanBlockCount)
+	ids := map[BlockID]struct{}{}
 	for key, val := range m.orphanBlocks {
 		if key < l {
 			for bid := range val {
-				keys = append(keys, bid)
+				ids[bid] = struct{}{}
 			}
 		}
 	}
-	if len(keys) == 0 {
-		panic("no orphans ")
+
+	prevLayer, err := m.getLayer(l - 1)
+	if err != nil {
+		panic(fmt.Sprint("failed getting latest layer  ", err))
 	}
-	m.Info("orphans for layer %d are %v", l, keys)
-	return keys
+
+	//add last layer blocks
+	for _, b := range prevLayer.Blocks() {
+		ids[b.ID()] = struct{}{}
+	}
+
+	idArr := make([]BlockID, 0, len(ids))
+	for i := range ids {
+		idArr = append(idArr, i)
+	}
+	m.Info("orphans for layer %d are %v", l, idArr)
+	return idArr
 }
 
 func (m *Mesh) GetBlock(id BlockID) (*Block, error) {

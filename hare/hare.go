@@ -191,9 +191,6 @@ var (
 
 // GetResults returns the hare output for a given LayerID. returns error if we don't have results yet.
 func (h *Hare) GetResult(id mesh.LayerID) ([]mesh.BlockID, error) {
-	if id == 0 {
-		return []mesh.BlockID{0}, nil
-	}
 	if h.isTooLate(id) {
 		return nil, ErrTooOld
 	}
