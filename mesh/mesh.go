@@ -176,6 +176,7 @@ func (m *Mesh) handleOrphanBlocks(block *Block) {
 		m.orphanBlocks[block.LayerIndex] = make(map[BlockID]struct{})
 	}
 	m.orphanBlocks[block.LayerIndex][block.Id] = struct{}{}
+	m.Info("Added block %d to orphans", block.ID())
 	atomic.AddInt32(&m.orphanBlockCount, 1)
 	for _, b := range block.ViewEdges {
 		for _, layermap := range m.orphanBlocks {
@@ -232,7 +233,7 @@ func (m *Mesh) GetOrphanBlocksExcept(l LayerID) []BlockID {
 			keys = append(keys, bid)
 		}
 	}
-
+	m.Info("orphans for layer %d are %v", l, keys)
 	return keys
 }
 

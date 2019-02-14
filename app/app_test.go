@@ -107,12 +107,10 @@ func (app *AppTestSuite) TestMultipleNodes() {
 	tx.Price = big.NewInt(1).Bytes()
 
 	txbytes, _ := mesh.TransactionAsBytes(&tx)
-	path := "../tmp/state_"
+	path := "../tmp/test/state_"
+	log.Info("----------- Clean State files------------")
+	os.RemoveAll("../tmp/test")
 	app.initMultipleInstances(app.T(), 2, path)
-	defer func() {
-		log.Info("----------- delete Test files------------")
-		os.RemoveAll(path + "/*")
-	}()
 	for _, a := range app.apps {
 		a.startServices()
 	}
