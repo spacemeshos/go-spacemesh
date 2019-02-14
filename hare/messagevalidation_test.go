@@ -106,6 +106,7 @@ func TestConsensusProcess_isContextuallyValid(t *testing.T) {
 
 func TestMessageValidator_ValidateMessage(t *testing.T) {
 	proc := generateConsensusProcess(t)
+	proc.advanceToNextRound()
 	v := proc.validator
 	preround := proc.initDefaultBuilder(proc.s).SetType(PreRound).Sign(proc.signing).Build()
 	assert.True(t, v.SyntacticallyValidateMessage(preround))

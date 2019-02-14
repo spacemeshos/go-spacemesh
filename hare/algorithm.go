@@ -40,7 +40,7 @@ func (cpo procOutput) Set() *Set {
 var _ TerminationOutput = (*procOutput)(nil)
 
 type State struct {
-	k           uint32          // the round counter (r%4 is the round number)
+	k           int32           // the round counter (r%4 is the round number)
 	ki          int32           // indicates when S was first committed upon
 	s           *Set            // the set of values
 	certificate *pb.Certificate // the certificate
@@ -71,7 +71,7 @@ type ConsensusProcess struct {
 
 func NewConsensusProcess(cfg config.Config, instanceId InstanceId, s *Set, oracle Rolacle, signing Signing, p2p NetworkService, terminationReport chan TerminationOutput, logger log.Log) *ConsensusProcess {
 	proc := &ConsensusProcess{}
-	proc.State = State{0, -1, s.Clone(), nil}
+	proc.State = State{-1, -1, s.Clone(), nil}
 	proc.Closer = NewCloser()
 	proc.instanceId = instanceId
 	proc.oracle = oracle
@@ -79,10 +79,6 @@ func NewConsensusProcess(cfg config.Config, instanceId InstanceId, s *Set, oracl
 	proc.network = p2p
 	proc.validator = NewMessageValidator(signing, cfg.F+1, cfg.N, proc.statusValidator())
 	proc.preRoundTracker = NewPreRoundTracker(cfg.F+1, cfg.N)
-	proc.statusesTracker = NewStatusTracker(cfg.F+1, cfg.N)
-	proc.statusesTracker.Log = logger
-	proc.proposalTracker = NewProposalTracker(logger)
-	proc.commitTracker = NewCommitTracker(cfg.F+1, cfg.N, nil)
 	proc.notifyTracker = NewNotifyTracker(cfg.N)
 	proc.terminating = false
 	proc.cfg = cfg
@@ -99,7 +95,7 @@ func (proc *ConsensusProcess) Id() uint32 {
 }
 
 // Returns the iteration number from a given round counter
-func iterationFromCounter(roundCounter uint32) uint32 {
+func iterationFromCounter(roundCounter int32) int32 {
 	return roundCounter / 4
 }
 
@@ -152,6 +148,7 @@ PreRound:
 	if proc.s.Size() == 0 {
 		proc.Error("Fatal: PreRound ended with empty set")
 	}
+	proc.advanceToNextRound() // k was initialized to -1, k should be 0
 
 	// start first iteration
 	proc.onRoundBegin()
@@ -175,17 +172,6 @@ PreRound:
 	}
 }
 
-func roleFromRoundCounter(k uint32) Role {
-	switch k % 4 {
-	case Round2:
-		return Leader
-	case Round4:
-		return Passive
-	default:
-		return Active
-	}
-}
-
 func (proc *ConsensusProcess) onEarlyMessage(m Message) {
 	if m.msg == nil {
 		proc.Error("onEarlyMessage called with nil")
@@ -206,16 +192,16 @@ func (proc *ConsensusProcess) onEarlyMessage(m Message) {
 	proc.pending[verifier.String()] = m
 }
 
-func (proc *ConsensusProcess) expectedCommitteeSize(k uint32) int {
+func (proc *ConsensusProcess) expectedCommitteeSize(k int32) int {
 	if k%4 == Round2 {
-		return 1 // 5 leaders
+		return 1 // 1 leader
 	}
 
 	// N actives
 	return proc.cfg.N
 }
 
-func hashInstanceAndK(instanceID InstanceId, K uint32) uint32 {
+func hashInstanceAndK(instanceID InstanceId, K int32) uint32 {
 	h := newHasherU32()
 	val := h.Hash(append(instanceID.Bytes(), byte(K)))
 	return val
@@ -289,7 +275,7 @@ func (proc *ConsensusProcess) handleMessage(msg Message) {
 }
 
 func (proc *ConsensusProcess) processMsg(m *pb.HareMessage) {
-	proc.Debug("Processing message of type %v", m.Message.Type)
+	proc.Debug("Processing message of type %v", MessageType(m.Message.Type).String())
 
 	metrics.MessageTypeCounter.With("type_id", MessageType(m.Message.Type).String()).Add(1)
 
@@ -333,10 +319,11 @@ func (proc *ConsensusProcess) sendMessage(msg *pb.HareMessage) {
 		return
 	}
 
+	proc.Info("Message sent: %v", MessageType(msg.Message.Type).String())
 }
 
 func (proc *ConsensusProcess) onRoundEnd() {
-	proc.With().Info("End of round", log.Uint32("k", proc.k))
+	proc.With().Info("End of round", log.Int32("k", proc.k))
 
 	// reset trackers
 	switch proc.currentRound() {
@@ -362,6 +349,7 @@ func (proc *ConsensusProcess) advanceToNextRound() {
 
 func (proc *ConsensusProcess) beginRound1() {
 	proc.statusesTracker = NewStatusTracker(proc.cfg.F+1, proc.cfg.N)
+	proc.statusesTracker.Log = proc.Log
 	statusMsg := proc.initDefaultBuilder(proc.s).SetType(Status).Sign(proc.signing).Build()
 	proc.sendMessage(statusMsg)
 }

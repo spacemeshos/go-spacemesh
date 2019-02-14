@@ -115,24 +115,3 @@ func (mock *MockHashOracle) Eligible(instanceID uint32, committeeSize int, pubKe
 
 	return false
 }
-
-type MockStaticOracle struct {
-	roles       map[uint32]Role
-	r           uint32
-	defaultSize int
-	hasLeader   bool
-	mutex       sync.Mutex
-}
-
-func NewMockStaticOracle(defaultSize int) *MockStaticOracle {
-	static := &MockStaticOracle{}
-	static.roles = make(map[uint32]Role, defaultSize)
-	static.defaultSize = defaultSize
-	static.hasLeader = false
-
-	return static
-}
-
-func (static *MockStaticOracle) Role(r uint32, proof Signature) Role {
-	return roleFromRoundCounter(r)
-}

@@ -320,7 +320,7 @@ func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service,
 
 	blockListener := sync.NewBlockListener(swarm, blockOracle, mesh, 1*time.Second, 1, clock, lg)
 
-	ha := hare.New(hareConfig.DefaultConfig(), swarm, sgn, mesh, hareOracle, clock.Subscribe())
+	ha := hare.New(hareConfig.DefaultConfig(), swarm, sgn, mesh, hareOracle, clock.Subscribe(), lg)
 
 	blockProducer := miner.NewBlockBuilder(instanceName, swarm, clock.Subscribe(), coinToss, mesh, ha, blockOracle, lg)
 
