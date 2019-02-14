@@ -107,7 +107,7 @@ func (app *AppTestSuite) TestMultipleNodes() {
 
 	txbytes, _ := mesh.TransactionAsBytes(&tx)
 	path := "../tmp/test/state_" + time.Now().String()
-	app.initMultipleInstances(app.T(), 2, path)
+	app.initMultipleInstances(app.T(), 10, path)
 	for _, a := range app.apps {
 		a.startServices()
 	}
@@ -119,7 +119,7 @@ func (app *AppTestSuite) TestMultipleNodes() {
 		select {
 		// Got a timeout! fail with a timeout error
 		case <-timeout:
-			app.T().Error("timed out ")
+			app.T().Fatal("timed out ")
 		default:
 			for _, ap := range app.apps {
 				ok := 0

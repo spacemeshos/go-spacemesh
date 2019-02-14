@@ -110,15 +110,15 @@ func (m *Mesh) AddLayer(layer *Layer) error {
 
 func (m *Mesh) ValidateLayer(layer *Layer) {
 	m.Info("Validate layer %d", layer.Index())
-	old, new := m.tortoise.HandleIncomingLayer(layer)
+	oldPbase, newPbase := m.tortoise.HandleIncomingLayer(layer)
 	atomic.StoreUint32(&m.verifiedLayer, uint32(layer.Index()))
-	if new > old {
-		m.PushTransactions(old, new)
+	if newPbase > oldPbase {
+		m.PushTransactions(oldPbase, newPbase)
 	}
 }
 
 func (m *Mesh) PushTransactions(old LayerID, new LayerID) {
-	for i := old + 1; i <= new; i++ {
+	for i := old; i < new; i++ {
 		txs := make([]*state.Transaction, 0, layerSize)
 		l, err := m.getLayer(i)
 		if err != nil {
