@@ -29,13 +29,13 @@ func NewStatusTracker(threshold int, expectedSize int) *StatusTracker {
 func (st *StatusTracker) RecordStatus(msg *pb.HareMessage) {
 	verifier, err := NewVerifier(msg.PubKey)
 	if err != nil {
-		log.Warning("Could not construct verifier: ", err)
+		st.Warning("Could not construct verifier: ", err)
 		return
 	}
 
 	_, exist := st.statuses[verifier.String()]
 	if exist { // already handled this sender's status msg
-		log.Warning("Duplicated status message detected %v", verifier.String())
+		st.Warning("Duplicated status message detected %v", verifier.String())
 		return
 	}
 
