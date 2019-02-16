@@ -42,9 +42,27 @@ func String(name, val string) Field {
 	return Field(zap.String(name, val))
 }
 
+// ByteString returns a byte string ([]byte) Field
+func ByteString(name string, val []byte) Field {
+	return Field(zap.ByteString(name, val))
+}
+
 // Int returns an int Field
 func Int(name string, val int) Field {
 	return Field(zap.Int(name, val))
+}
+
+func Int32(name string, val int32) Field {
+	return Field(zap.Int32(name, val))
+}
+
+func Uint32(name string, val uint32) Field {
+	return Field(zap.Uint32(name, val))
+}
+
+// Uint64 returns an uint64 Field
+func Uint64(name string, val uint64) Field {
+	return Field(zap.Uint64(name, val))
 }
 
 // Namespace make next fields be inside a namespace.

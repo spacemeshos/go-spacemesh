@@ -71,6 +71,7 @@ func (pm gossipProtocolMessage) ReportValidation(protocol string, isValid bool) 
 
 type cPool interface {
 	GetConnection(address string, pk p2pcrypto.PublicKey) (net.Connection, error)
+	GetConnectionIfExists(pk p2pcrypto.PublicKey) (net.Connection, error)
 	Shutdown()
 }
 
@@ -294,20 +295,24 @@ func (s *swarm) sendMessageImpl(peerPubKey p2pcrypto.PublicKey, protocol string,
 	var peer node.Node
 	var conn net.Connection
 
-	peer, err = s.dht.Lookup(peerPubKey) // blocking, might issue a network lookup that'll take time.
-	if err != nil {
-		return err
-	}
+	conn, err = s.cPool.GetConnectionIfExists(peerPubKey)
 
-	conn, err = s.cPool.GetConnection(peer.Address(), peer.PublicKey()) // blocking, might take some time in case there is no connection
 	if err != nil {
-		s.lNode.Warning("failed to send message to %v, no valid connection. err: %v", peer.String(), err)
-		return err
+		peer, err = s.dht.Lookup(peerPubKey) // blocking, might issue a network lookup that'll take time.
+		if err != nil {
+			return err
+		}
+
+		conn, err = s.cPool.GetConnection(peer.Address(), peer.PublicKey()) // blocking, might take some time in case there is no connection
+		if err != nil {
+			s.lNode.Warning("failed to send message to %v, no valid connection. err: %v", peer.String(), err)
+			return err
+		}
 	}
 
 	session := conn.Session()
 	if session == nil {
-		s.lNode.Warning("failed to send message to %v, no valid session. err: %v", peer.String(), err)
+		s.lNode.Warning("failed to send message to %v, no valid session. err: %v", conn.RemotePublicKey().String(), err)
 		return err
 	}
 

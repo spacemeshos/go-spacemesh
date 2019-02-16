@@ -3,6 +3,7 @@ package hare
 import (
 	"bytes"
 	"github.com/spacemeshos/go-spacemesh/hare/pb"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 type proposalTracker interface {
@@ -13,14 +14,16 @@ type proposalTracker interface {
 }
 
 type ProposalTracker struct {
+	log.Log
 	proposal      *pb.HareMessage // maps PubKey->Proposal
 	isConflicting bool            // maps PubKey->ConflictStatus
 }
 
-func NewProposalTracker(expectedSize int) *ProposalTracker {
+func NewProposalTracker(log log.Log) *ProposalTracker {
 	pt := &ProposalTracker{}
 	pt.proposal = nil
 	pt.isConflicting = false
+	pt.Log = log
 
 	return pt
 }
@@ -36,6 +39,8 @@ func (pt *ProposalTracker) OnProposal(msg *pb.HareMessage) {
 		s := NewSet(msg.Message.Values)
 		g := NewSet(pt.proposal.Message.Values)
 		if !s.Equals(g) { // equivocation detected
+			pt.With().Info("Equivocation detected", log.String("id_malicious", string(msg.PubKey)),
+				log.String("current_set", g.String()), log.String("conflicting_set", s.String()))
 			pt.isConflicting = true
 		}
 
@@ -61,6 +66,8 @@ func (pt *ProposalTracker) OnLateProposal(msg *pb.HareMessage) {
 		s := NewSet(msg.Message.Values)
 		g := NewSet(pt.proposal.Message.Values)
 		if !s.Equals(g) { // equivocation detected
+			pt.With().Info("Equivocation detected", log.String("id_malicious", string(msg.PubKey)),
+				log.String("current_set", g.String()), log.String("conflicting_set", s.String()))
 			pt.isConflicting = true
 		}
 	}
@@ -68,6 +75,7 @@ func (pt *ProposalTracker) OnLateProposal(msg *pb.HareMessage) {
 	// not equal check rank
 	// lower ranked proposal on late proposal is a conflict
 	if bytes.Compare(msg.Message.RoleProof, pt.proposal.Message.RoleProof) < 0 {
+		pt.With().Info("late lower rank detected", log.String("id_malicious", string(msg.PubKey)))
 		pt.isConflicting = true
 	}
 }

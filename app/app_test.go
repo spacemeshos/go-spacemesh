@@ -3,6 +3,7 @@ package app
 import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/address"
+	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/miner"
@@ -71,9 +72,8 @@ func TestApp(t *testing.T) {
 
 }
 
-func (app *AppTestSuite) initMultipleInstances(t *testing.T, numOfInstances int) {
+func (app *AppTestSuite) initMultipleInstances(t *testing.T, numOfInstances int, storeFormat string) {
 	net := service.NewSimulator()
-	storeFormat := "../tmp/state_"
 	runningName := 'a'
 	bo := oracle.NewLocalOracle(numOfInstances)
 	for i := 0; i < numOfInstances; i++ {
@@ -85,9 +85,9 @@ func (app *AppTestSuite) initMultipleInstances(t *testing.T, numOfInstances int)
 		pub := sgn.Verifier()
 		bo.Register(true, pub.String())
 
-		err := app.apps[i].initServices(pub.String(), n, store, sgn, bo, bo)
+		err := app.apps[i].initServices(pub.String(), n, store, sgn, bo, bo, uint32(numOfInstances))
 		assert.NoError(t, err)
-		app.apps[i].setupGenesis()
+		app.apps[i].setupGenesis(config.DefaultGenesisConfig())
 		app.dbs = append(app.dbs, store)
 		runningName++
 	}
@@ -106,21 +106,20 @@ func (app *AppTestSuite) TestMultipleNodes() {
 	tx.Price = big.NewInt(1).Bytes()
 
 	txbytes, _ := mesh.TransactionAsBytes(&tx)
-
-	app.initMultipleInstances(app.T(), 2)
-
+	path := "../tmp/test/state_" + time.Now().String()
+	app.initMultipleInstances(app.T(), 2, path)
 	for _, a := range app.apps {
 		a.startServices()
 	}
 
 	app.apps[0].P2P.Broadcast(miner.IncomingTxProtocol, txbytes)
-	timeout := time.After(25 * time.Second)
+	timeout := time.After(2 * 60 * time.Second)
 
 	for {
 		select {
 		// Got a timeout! fail with a timeout error
 		case <-timeout:
-			app.T().Error("timed out ")
+			app.T().Fatal("timed out ")
 		default:
 			for _, ap := range app.apps {
 				ok := 0

@@ -233,6 +233,7 @@ func (cp *ConnectionPool) GetConnectionIfExists(remotePub p2pcrypto.PublicKey) (
 	cp.pendMutex.Lock()
 	if _, found := cp.pending[remotePub.String()]; !found {
 		// No one is waiting for a connection with the remote peer
+		cp.connMutex.RUnlock()
 		cp.pendMutex.Unlock()
 		return nil, errors.New("no connection in cpool")
 	}

@@ -1,6 +1,7 @@
 package hare
 
 import (
+	"github.com/spacemeshos/go-spacemesh/hare/metrics"
 	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -30,6 +31,7 @@ func (pre *PreRoundTracker) OnPreRound(msg *pb.HareMessage) {
 
 	// only handle first pre-round msg
 	if _, exist := pre.preRound[verifier.String()]; exist {
+		log.Debug("Duplicate sender %v", verifier.String())
 		return
 	}
 
@@ -37,6 +39,7 @@ func (pre *PreRoundTracker) OnPreRound(msg *pb.HareMessage) {
 	s := NewSet(msg.Message.Values)
 	for _, v := range s.values {
 		pre.tracker.Track(v)
+		metrics.PreRoundCounter.With("value", v.String()).Add(1)
 	}
 
 	pre.preRound[verifier.String()] = struct{}{}

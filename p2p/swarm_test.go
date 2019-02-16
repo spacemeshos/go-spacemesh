@@ -33,6 +33,10 @@ func (cp *cpoolMock) GetConnection(address string, pk p2pcrypto.PublicKey) (net.
 	}
 	return net.NewConnectionMock(pk), nil
 }
+func (cp *cpoolMock) GetConnectionIfExists(pk p2pcrypto.PublicKey) (net.Connection, error) {
+	// todo : test swarm with this
+	return net.NewConnectionMock(pk), nil
+}
 
 func (cp *cpoolMock) Shutdown() {
 

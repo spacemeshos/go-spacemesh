@@ -2,6 +2,7 @@ package mesh
 
 import (
 	"errors"
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/state"
@@ -12,28 +13,14 @@ import (
 )
 
 const layerSize = 200
-const cachedLayers = 50
 
 var TRUE = []byte{1}
 var FALSE = []byte{0}
 
-/*type Mesh interface {
-	AddLayer(layer *Layer) error
-	GetVerifiedLayer(i LayerID) (*Layer, error)
-	GetBlock(id BlockID) (*Block, error)
-	AddBlock(block *Block) error
-	GetContextualValidity(id BlockID) (bool, error)
-	VerifiedLayer() uint32
-	LatestLayer() uint32
-	SetLatestLayer(idx uint32)
-	GetOrphans() []BlockID
-	Close()
-}*/
-
 type MeshValidator interface {
-	HandleIncomingLayer(layer *Layer)
+	HandleIncomingLayer(layer *Layer) (LayerID, LayerID)
 	HandleLateBlock(bl *Block)
-	RegisterLayerCallback(func(layerId LayerID))
+	ContextualValidity(id BlockID) bool
 }
 
 type StateUpdater interface {
@@ -118,43 +105,45 @@ func (m *Mesh) AddLayer(layer *Layer) error {
 	}
 	atomic.StoreUint32(&m.lastSeenLayer, uint32(layer.Index()))
 	m.addLayer(layer)
+	m.Log.With().Info("added layer", log.Uint32("id", uint32(layer.Index())), log.Int("num of blocks", len(layer.blocks)))
 	m.SetLatestLayer(uint32(layer.Index()))
 	return nil
 }
 
 func (m *Mesh) ValidateLayer(layer *Layer) {
-	m.tortoise.HandleIncomingLayer(layer)
+	m.Info("Validate layer %d", layer.Index())
+	oldPbase, newPbase := m.tortoise.HandleIncomingLayer(layer)
+	atomic.StoreUint32(&m.verifiedLayer, uint32(layer.Index()))
+	if newPbase > oldPbase {
+		m.PushTransactions(oldPbase, newPbase)
+	}
 }
 
-func (m *Mesh) LayerCompleteCallback(layerId LayerID) {
-	m.Log.Info("layer %v is complete", layerId)
-	l, err := m.getLayer(layerId)
-	atomic.StoreUint32(&m.verifiedLayer, uint32(layerId))
-	if err != nil {
-		m.Log.Error("layer %v not found", layerId)
-		return
-		//panic("wtf - there was a race?")
-	}
-
-	txs := make([]*state.Transaction, 0, len(l.blocks))
-
-	sort.Slice(l.blocks, func(i, j int) bool {
-		return l.blocks[i].Id < l.blocks[j].Id
-	}) //todo: blocks are now sorted... what does it mean? does the ordering degrade security?
-
-	for _, b := range l.blocks {
-		for _, tx := range b.Txs {
-			//todo: think about these conversions.. are they needed?
-			txs = append(txs, SerializableTransaction2StateTransaction(&tx))
+func (m *Mesh) PushTransactions(old LayerID, new LayerID) {
+	for i := old; i < new; i++ {
+		txs := make([]*state.Transaction, 0, layerSize)
+		l, err := m.getLayer(i)
+		if err != nil || l == nil {
+			m.Error("") //todo handle error
+			return
 		}
-	}
-	m.Log.Info("received %v txs in layer %v num of blocks: %v", len(txs), layerId, len(l.blocks))
-	x, err := m.state.ApplyTransactions(state.LayerID(layerId), txs)
-	if err != nil {
-		m.Log.Error("cannot apply transactions %v", err)
-	}
-	m.Log.Info("applied %v transactions", x)
 
+		sort.Slice(l.blocks, func(i, j int) bool { return l.blocks[i].ID() < l.blocks[j].ID() })
+
+		for _, b := range l.blocks {
+			if m.tortoise.ContextualValidity(b.ID()) {
+				for _, tx := range b.Txs {
+					//todo: think about these conversions.. are they needed?
+					txs = append(txs, SerializableTransaction2StateTransaction(&tx))
+				}
+			}
+		}
+		x, err := m.state.ApplyTransactions(state.LayerID(i), txs)
+		if err != nil {
+			m.Log.Error("cannot apply transactions %v", err)
+		}
+		m.Log.Info("applied %v transactions in new pbase is %d ", x, new)
+	}
 }
 
 //todo consider adding a boolean for layer validity instead error
@@ -190,10 +179,11 @@ func (m *Mesh) AddBlock(block *Block) error {
 func (m *Mesh) handleOrphanBlocks(block *Block) {
 	m.orphMutex.Lock()
 	defer m.orphMutex.Unlock()
-	if _, ok := m.orphanBlocks[block.LayerIndex]; !ok {
-		m.orphanBlocks[block.LayerIndex] = make(map[BlockID]struct{})
+	if _, ok := m.orphanBlocks[block.Layer()]; !ok {
+		m.orphanBlocks[block.Layer()] = make(map[BlockID]struct{})
 	}
-	m.orphanBlocks[block.LayerIndex][block.Id] = struct{}{}
+	m.orphanBlocks[block.Layer()][block.ID()] = struct{}{}
+	m.Info("Added block %d to orphans", block.ID())
 	atomic.AddInt32(&m.orphanBlockCount, 1)
 	for _, b := range block.ViewEdges {
 		for _, layermap := range m.orphanBlocks {
@@ -204,54 +194,57 @@ func (m *Mesh) handleOrphanBlocks(block *Block) {
 				break
 			}
 		}
-
 	}
 }
 
-func (m *Mesh) GetOrphanBlocksByLayerId(layerId LayerID) []BlockID {
-	m.orphMutex.RLock()
-	defer m.orphMutex.RUnlock()
-	if keys, has := m.orphanBlocks[layerId]; has {
-		ids := make([]BlockID, 0, len(keys))
-
-		for bid := range keys {
-			ids = append(ids, bid)
-		}
-		return ids
-
+func (m *Mesh) GetUnverifiedLayerBlocks(l LayerID) []BlockID {
+	x, err := m.meshDB.layers.Get(l.ToBytes())
+	if err != nil {
+		panic(fmt.Sprintf("could not retrive latest layer = %d blocks ", l))
 	}
-	return make([]BlockID, 0, 0)
-}
-
-//todo better thread safety
-func (m *Mesh) GetOrphanBlocks() []BlockID {
-	m.orphMutex.RLock()
-	defer m.orphMutex.RUnlock()
-	keys := make([]BlockID, 0, m.orphanBlockCount)
-	for _, val := range m.orphanBlocks {
-		for bid := range val {
-			keys = append(keys, bid)
-		}
+	blockIds, err := bytesToBlockIds(x)
+	if err != nil {
+		panic(fmt.Sprintf("could bytes to id array for layer %d ", l))
 	}
-
-	return keys
+	arr := make([]BlockID, 0, len(blockIds))
+	for bid := range blockIds {
+		arr = append(arr, bid)
+	}
+	return arr
 }
 
 //todo better thread safety
 func (m *Mesh) GetOrphanBlocksExcept(l LayerID) []BlockID {
 	m.orphMutex.RLock()
 	defer m.orphMutex.RUnlock()
-	keys := make([]BlockID, 0, m.orphanBlockCount)
+	ids := map[BlockID]struct{}{}
 	for key, val := range m.orphanBlocks {
-		if key == l {
-			continue
-		}
-		for bid := range val {
-			keys = append(keys, bid)
+		if key < l {
+			for bid := range val {
+				ids[bid] = struct{}{}
+			}
 		}
 	}
 
-	return keys
+	prevLayer, err := m.getLayer(l - 1)
+	if err != nil {
+		panic(fmt.Sprint("failed getting latest layer  ", err))
+	}
+
+	//add last layer blocks
+	for _, b := range prevLayer.Blocks() {
+		ids[b.ID()] = struct{}{}
+	}
+
+	idArr := make([]BlockID, 0, len(ids))
+	for i := range ids {
+		idArr = append(idArr, i)
+	}
+
+	sort.Slice(idArr, func(i, j int) bool { return idArr[i] < idArr[j] })
+
+	m.Info("orphans for layer %d are %v", l, idArr)
+	return idArr
 }
 
 func (m *Mesh) GetBlock(id BlockID) (*Block, error) {
