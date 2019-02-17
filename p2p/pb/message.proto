@@ -13,7 +13,7 @@ message HandshakeData {
 // just here for now
 
 // used for protocol messages (non-handshake) - this is the decrypted CommonMessageData.payload
-// it allows multi310.445plexing back to higher level protocols
+// it allows multiplexing back to higher level protocols
 // data is here and not in CommonMessageData to avoid leaked data on unencrypted connections
 message ProtocolMessage {
     Metadata metadata = 1;

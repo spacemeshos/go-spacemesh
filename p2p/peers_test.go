@@ -13,15 +13,15 @@ func getPeers(p Service) (Peers, chan p2pcrypto.PublicKey, chan p2pcrypto.Public
 	value := atomic.Value{}
 	value.Store(make([]Peer, 0, 20))
 	pi := &PeersImpl{snapshot: &value, exit: make(chan struct{})}
-	new, expierd := p.SubscribePeerEvents()
-	go pi.listenToPeers(new, expierd)
-	return pi, new, expierd
+	n, expired := p.SubscribePeerEvents()
+	go pi.listenToPeers(n, expired)
+	return pi, n, expired
 }
 
 func TestPeers_GetPeers(t *testing.T) {
-	pi, new, _ := getPeers(service.NewSimulator().NewNode())
+	pi, n, _ := getPeers(service.NewSimulator().NewNode())
 	a := p2pcrypto.NewRandomPubkey()
-	new <- a
+	n <- a
 	time.Sleep(10 * time.Millisecond) //allow context switch
 	peers := pi.GetPeers()
 	defer pi.Close()
@@ -30,9 +30,9 @@ func TestPeers_GetPeers(t *testing.T) {
 }
 
 func TestPeers_Close(t *testing.T) {
-	pi, new, _ := getPeers(service.NewSimulator().NewNode())
+	pi, n, _ := getPeers(service.NewSimulator().NewNode())
 	a := p2pcrypto.NewRandomPubkey()
-	new <- a
+	n <- a
 	time.Sleep(10 * time.Millisecond) //allow context switch
 	pi.Close()
 	//_, ok := <-new
@@ -42,20 +42,20 @@ func TestPeers_Close(t *testing.T) {
 }
 
 func TestPeers_AddPeer(t *testing.T) {
-	pi, new, _ := getPeers(service.NewSimulator().NewNode())
+	pi, n, _ := getPeers(service.NewSimulator().NewNode())
 	a := p2pcrypto.NewRandomPubkey()
 	b := p2pcrypto.NewRandomPubkey()
 	c := p2pcrypto.NewRandomPubkey()
 	d := p2pcrypto.NewRandomPubkey()
 	e := p2pcrypto.NewRandomPubkey()
-	new <- a
+	n <- a
 	time.Sleep(10 * time.Millisecond) //allow context switch
 	peers := pi.GetPeers()
 	assert.True(t, len(peers) == 1, "number of peers incorrect, length was ", len(peers))
-	new <- b
-	new <- c
-	new <- d
-	new <- e
+	n <- b
+	n <- c
+	n <- d
+	n <- e
 	defer pi.Close()
 	time.Sleep(10 * time.Millisecond) //allow context switch
 	peers = pi.GetPeers()
@@ -63,20 +63,20 @@ func TestPeers_AddPeer(t *testing.T) {
 }
 
 func TestPeers_RemovePeer(t *testing.T) {
-	pi, new, expierd := getPeers(service.NewSimulator().NewNode())
+	pi, n, expierd := getPeers(service.NewSimulator().NewNode())
 	a := p2pcrypto.NewRandomPubkey()
 	b := p2pcrypto.NewRandomPubkey()
 	c := p2pcrypto.NewRandomPubkey()
 	d := p2pcrypto.NewRandomPubkey()
 	e := p2pcrypto.NewRandomPubkey()
-	new <- a
+	n <- a
 	time.Sleep(10 * time.Millisecond) //allow context switch
 	peers := pi.GetPeers()
 	assert.True(t, len(peers) == 1, "number of peers incorrect, length was ", len(peers))
-	new <- b
-	new <- c
-	new <- d
-	new <- e
+	n <- b
+	n <- c
+	n <- d
+	n <- e
 	defer pi.Close()
 	time.Sleep(10 * time.Millisecond) //allow context switch
 	peers = pi.GetPeers()
