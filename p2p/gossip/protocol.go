@@ -276,7 +276,7 @@ func (prot *Protocol) processMessage(msg *pb.ProtocolMessage) {
 	if isOld {
 		metrics.OldGossipMessages.With(metrics.ProtocolLabel, protocol).Add(1)
 		// todo : - have some more metrics for termination
-		// todo	: - maybe tell the peer weg ot this message already?
+		// todo	: - maybe tell the peer we got this message already?
 		validity := prot.isMessageValid(h)
 		prot.Log.Debug("got old message, hash %d validity %v", h, validity)
 		if validity == Valid {
@@ -359,7 +359,7 @@ loop:
 	prot.Warning("Gossip protocol event loop stopped. err: %v", err)
 }
 
-// peersCount returns the number of peers know to the protocol, used for testing only
+// peersCount returns the number of peers known to the protocol, used for testing only
 func (prot *Protocol) peersCount() int {
 	prot.peersMutex.RLock()
 	cnt := len(prot.peers)

@@ -22,44 +22,43 @@ func generateIpAddress() string {
 }
 
 func TestGetConnectionWithNoConnection(t *testing.T) {
-	net := net.NewNetworkMock()
-	net.SetDialDelayMs(50)
-	net.SetDialResult(nil)
-	cPool := NewConnectionPool(net, generatePublicKey())
+	n := net.NewNetworkMock()
+	n.SetDialDelayMs(50)
+	n.SetDialResult(nil)
+	cPool := NewConnectionPool(n, generatePublicKey())
 	remotePub := generatePublicKey()
 	addr := "1.1.1.1"
 	conn, err := cPool.GetConnection(addr, remotePub)
 	assert.Nil(t, err)
 	assert.Equal(t, remotePub.String(), conn.RemotePublicKey().String())
-	assert.Equal(t, int32(1), net.DialCount())
+	assert.Equal(t, int32(1), n.DialCount())
 }
 
 func TestGetConnectionWithConnection(t *testing.T) {
-	net := net.NewNetworkMock()
-	net.SetDialDelayMs(50)
-	net.SetDialResult(nil)
-	cPool := NewConnectionPool(net, generatePublicKey())
+	n := net.NewNetworkMock()
+	n.SetDialDelayMs(50)
+	n.SetDialResult(nil)
+	cPool := NewConnectionPool(n, generatePublicKey())
 	remotePub := generatePublicKey()
 	addr := "1.1.1.1"
-	cPool.GetConnection(addr, remotePub)
 	conn, err := cPool.GetConnection(addr, remotePub)
 	assert.Nil(t, err)
 	assert.Equal(t, remotePub.String(), conn.RemotePublicKey().String())
-	assert.Equal(t, int32(1), net.DialCount())
+	assert.Equal(t, int32(1), n.DialCount())
 }
 
 func TestGetConnectionWithError(t *testing.T) {
-	net := net.NewNetworkMock()
-	net.SetDialDelayMs(50)
+	n := net.NewNetworkMock()
+	n.SetDialDelayMs(50)
 	eErr := errors.New("err")
-	net.SetDialResult(eErr)
-	cPool := NewConnectionPool(net, generatePublicKey())
+	n.SetDialResult(eErr)
+	cPool := NewConnectionPool(n, generatePublicKey())
 	remotePub := generatePublicKey()
 	addr := "1.1.1.1"
 	conn, aErr := cPool.GetConnection(addr, remotePub)
 	assert.Equal(t, eErr, aErr)
 	assert.Nil(t, conn)
-	assert.Equal(t, int32(1), net.DialCount())
+	assert.Equal(t, int32(1), n.DialCount())
 }
 
 func TestGetConnectionDuringDial(t *testing.T) {
