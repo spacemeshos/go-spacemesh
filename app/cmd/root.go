@@ -97,16 +97,13 @@ func init() {
 
 	// N determines the size of the hare committee
 	RootCmd.PersistentFlags().IntVar(&config.HARE.N, "hare-committee-size",
-		config.API.JSONServerPort, "Size of Hare committee")
+		config.HARE.N, "Size of Hare committee")
 	// F determines the max number of adversaries in the Hare committee
 	RootCmd.PersistentFlags().IntVar(&config.HARE.F, "hare-max-adversaries",
-		config.API.JSONServerPort, "Max number of adversaries in the Hare committee")
-	// SetSize determines the size of the initial set
-	RootCmd.PersistentFlags().IntVar(&config.HARE.SetSize, "set-size",
-		config.API.JSONServerPort, "Size of the initial set")
+		config.HARE.F, "Max number of adversaries in the Hare committee")
 	// RoundDuration determines the duration of a round in the Hare protocol
 	RootCmd.PersistentFlags().DurationVar(&config.HARE.RoundDuration, "round-duration-ms",
-		config.P2P.ResponseTimeout, "Duration of round in the Hare protocol")
+		config.HARE.RoundDuration, "Duration of round in the Hare protocol")
 
 	/**========================Consensus Flags ========================== **/
 	//todo: add this here
