@@ -11,7 +11,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/hare"
-	hareConfig "github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/miner"
@@ -151,6 +150,10 @@ func EnsureCLIFlags(cmd *cobra.Command, appcfg *cfg.Config) {
 
 			ff = reflect.TypeOf(appcfg.CONSENSUS)
 			elem = reflect.ValueOf(&appcfg.CONSENSUS).Elem()
+			assignFields(ff, elem, name)
+
+			ff = reflect.TypeOf(appcfg.HARE)
+			elem = reflect.ValueOf(&appcfg.HARE).Elem()
 			assignFields(ff, elem, name)
 		}
 	})
@@ -327,7 +330,7 @@ func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service,
 
 	blockListener := sync.NewBlockListener(swarm, blockOracle, mesh, 1*time.Second, 1, clock, lg)
 
-	ha := hare.New(hareConfig.DefaultConfig(), swarm, sgn, mesh, hareOracle, clock.Subscribe(), lg)
+	ha := hare.New(app.Config.HARE, swarm, sgn, mesh, hareOracle, clock.Subscribe(), lg)
 
 	blockProducer := miner.NewBlockBuilder(instanceName, swarm, clock.Subscribe(), coinToss, mesh, ha, blockOracle, lg)
 

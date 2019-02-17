@@ -2,16 +2,15 @@ package config
 
 import (
 	"fmt"
-	"path/filepath"
-
 	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
 	consensusConfig "github.com/spacemeshos/go-spacemesh/consensus/config"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
+	hareConfig "github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	p2pConfig "github.com/spacemeshos/go-spacemesh/p2p/config"
 	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spf13/viper"
-
+	"path/filepath"
 	"time"
 )
 
@@ -39,6 +38,7 @@ type Config struct {
 	P2P        p2pConfig.Config       `mapstructure:"p2p"`
 	API        apiConfig.Config       `mapstructure:"api"`
 	CONSENSUS  consensusConfig.Config `mapstructure:"consensus"`
+	HARE       hareConfig.Config      `mapstructure:"hare"`
 	TIME       timeConfig.TimeConfig  `mapstructure:"time"`
 }
 
@@ -73,6 +73,7 @@ func DefaultConfig() Config {
 		P2P:        p2pConfig.DefaultConfig(),
 		API:        apiConfig.DefaultConfig(),
 		CONSENSUS:  consensusConfig.DefaultConfig(),
+		HARE:		hareConfig.DefaultConfig(),
 		TIME:       timeConfig.DefaultConfig(),
 	}
 }

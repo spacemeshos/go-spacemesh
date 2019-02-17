@@ -47,3 +47,10 @@ json-port = 9090
 max-allowed-time-drift = "10s"
 ntp-queries = 5
 default-timeout-latency = "10s"
+
+# Hare Config
+N = "2"
+F = "1"
+set-size = 2
+round-duration-ms = "1000ms"
+
