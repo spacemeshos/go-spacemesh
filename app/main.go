@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/seehuhn/mt19937"
-	"github.com/spacemeshos/go-spacemesh/api/config"  
+	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/consensus"
 	"github.com/spacemeshos/go-spacemesh/crypto"
