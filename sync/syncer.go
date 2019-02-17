@@ -338,6 +338,7 @@ func (s *Syncer) sendLayerHashRequest(peer p2p.Peer, layer mesh.LayerID) (chan p
 		return nil, err
 	}
 	foo := func(msg []byte) {
+		defer close(ch)
 		res := &pb.LayerHashResp{}
 		if msg == nil {
 			s.Error("layer hash response was nil from ", peer.String())
