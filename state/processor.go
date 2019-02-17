@@ -112,11 +112,14 @@ func (tp *TransactionProcessor) ApplyTransactions(layer LayerID, transactions Tr
 	defer tp.mu.Unlock()
 	failed := tp.Process(tp.randomSort(txs), tp.coalesceTransactionsBySender(txs))
 	newHash, err := tp.globalState.Commit(false)
-	tp.Log.Info("new state root for layer %v is %x", layer, newHash)
+
 	if err != nil {
 		tp.Log.Error("db write error %v", err)
 		return failed, err
 	}
+
+	tp.Log.Info("new state root for layer %v is %x", layer, newHash)
+	tp.Log.With().Info("new state", log.Uint32("layer_id", uint32(layer)), log.String("root_hash", newHash.String()))
 
 	tp.stateQueue.PushBack(newHash)
 	if tp.stateQueue.Len() > maxPastStates {
@@ -134,10 +137,12 @@ func (tp *TransactionProcessor) Reset(layer LayerID) {
 	defer tp.mu.Unlock()
 	if state, ok := tp.prevStates[layer]; ok {
 		newState, err := New(state, tp.globalState.db)
-		tp.Log.Info("reverted, new root %x", newState.IntermediateRoot(false))
+
 		if err != nil {
 			panic("cannot revert- improper state")
 		}
+		tp.Log.Info("reverted, new root %x", newState.IntermediateRoot(false))
+		tp.Log.With().Info("reverted", log.String("root_hash", newState.IntermediateRoot(false).String()))
 
 		tp.globalState = newState
 		tp.pruneAfterRevert(layer)

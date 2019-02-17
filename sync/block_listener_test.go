@@ -71,7 +71,7 @@ loop:
 			t.Error("timed out ")
 		default:
 			if b, err := bl2.GetBlock(block1.Id); err == nil {
-				fmt.Println("  ", b)
+				t.Log("  ", b)
 				t.Log("done!")
 				break loop
 			}
@@ -81,7 +81,7 @@ loop:
 
 func TestBlockListener2(t *testing.T) {
 
-	fmt.Println("test sync start")
+	t.Log("TestBlockListener2 start")
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
@@ -137,7 +137,7 @@ func TestBlockListener2(t *testing.T) {
 			return
 		default:
 			if b, err := bl2.GetBlock(block1.Id); err == nil {
-				fmt.Println("  ", b)
+				t.Log("  ", b)
 				t.Log("done!")
 				return
 			}
@@ -180,7 +180,7 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 		default:
 			if b, err := bl1.GetBlock(blk.Id); err == nil {
 				assert.Equal(t, blk, b)
-				fmt.Println("  ", b)
+				t.Log("  ", b)
 				t.Log("done!")
 				return
 			}

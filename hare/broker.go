@@ -51,6 +51,7 @@ type Broker struct {
 	network NetworkService
 	inbox   chan service.GossipMessage
 	outbox  map[uint32]chan Message
+	pending map[uint32][]Message
 	mutex   sync.RWMutex
 }
 
@@ -59,6 +60,7 @@ func NewBroker(networkService NetworkService) *Broker {
 	p.Closer = NewCloser()
 	p.network = networkService
 	p.outbox = make(map[uint32]chan Message)
+	p.pending = make(map[uint32][]Message, 0)
 
 	return p
 }
@@ -104,9 +106,20 @@ func (broker *Broker) dispatcher() {
 			broker.mutex.RLock()
 			c, exist := broker.outbox[instanceId.Id()]
 			broker.mutex.RUnlock()
+			mOut := Message{hareMsg, msg.Bytes(), msg.ValidationCompletedChan()}
 			if exist {
 				// todo: err if chan is full (len)
-				c <- Message{hareMsg, msg.Bytes(), msg.ValidationCompletedChan()}
+				c <- mOut
+			} else {
+
+				broker.mutex.Lock()
+				if _, exist := broker.pending[instanceId.Id()]; !exist {
+					broker.pending[instanceId.Id()] = make([]Message, 0)
+				}
+				broker.pending[instanceId.Id()] = append(broker.pending[instanceId.Id()], mOut)
+				broker.mutex.Unlock()
+				// report validity so that the message will be propagated without delay
+				mOut.reportValidationResult(true) // TODO consider actually validating the message before reporting the validity
 			}
 
 		case <-broker.CloseChannel():
@@ -120,6 +133,15 @@ func (broker *Broker) dispatcher() {
 func (broker *Broker) Register(idBox IdentifiableInboxer) {
 	broker.mutex.Lock()
 	broker.outbox[idBox.Id()] = idBox.createInbox(InboxCapacity)
+
+	pendingForInstance := broker.pending[idBox.Id()]
+	if pendingForInstance != nil {
+		for _, mOut := range pendingForInstance {
+			broker.outbox[idBox.Id()] <- mOut
+		}
+		delete(broker.pending, idBox.Id())
+	}
+
 	broker.mutex.Unlock()
 }
 

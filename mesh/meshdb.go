@@ -60,7 +60,7 @@ func (m *meshDB) getLayer(index LayerID) (*Layer, error) {
 
 	blocks, err := m.getLayerBlocks(blockIds)
 	if err != nil {
-		return nil, errors.New("could not get all blocks from database ")
+		return nil, errors.New("could not get all blocks from database " + err.Error())
 	}
 
 
@@ -175,10 +175,10 @@ func (m *meshDB) updateLayerWithBlock(block *Block) error {
 func (m *meshDB) getLayerBlocks(ids map[BlockID]bool) ([]*Block, error) {
 
 	blocks := make([]*Block, 0, len(ids))
-	for k, _ := range ids {
+	for k := range ids {
 		block, err := m.getBlock(k)
 		if err != nil {
-			return nil, errors.New("could not retrive block " + string(k))
+			return nil, errors.New("could not retrieve block " + fmt.Sprint(k) + " " + err.Error())
 		}
 		blocks = append(blocks, block)
 	}

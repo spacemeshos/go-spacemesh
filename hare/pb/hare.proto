@@ -27,7 +27,7 @@ message AggregatedMessages {
 message InnerMessage {
     int32 type = 1;
     bytes instanceId = 2;
-    uint32 k = 3; // the round counter
+    int32 k = 3; // the round counter
     int32 ki = 4;
     repeated bytes values = 5; // the set S. optional for commit message in a certificate
     bytes roleProof = 6; // role is implicit by message type, this is the proof
