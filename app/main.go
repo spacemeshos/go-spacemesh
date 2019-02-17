@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+
 	"github.com/seehuhn/mt19937"
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/common"
@@ -20,6 +21,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sync"
 	"github.com/spf13/pflag"
 	"math/rand"
+
 	"os"
 	"os/signal"
 	"reflect"
@@ -34,6 +36,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/timesync"
+	timeCfg "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -142,8 +145,8 @@ func EnsureCLIFlags(cmd *cobra.Command, appcfg *cfg.Config) {
 			elem = reflect.ValueOf(&appcfg.P2P.SwarmConfig).Elem()
 			assignFields(ff, elem, name)
 
-			ff = reflect.TypeOf(appcfg.P2P.TimeConfig)
-			elem = reflect.ValueOf(&appcfg.P2P.TimeConfig).Elem()
+			ff = reflect.TypeOf(appcfg.TIME)
+			elem = reflect.ValueOf(&appcfg.TIME).Elem()
 			assignFields(ff, elem, name)
 
 			ff = reflect.TypeOf(appcfg.CONSENSUS)
@@ -204,6 +207,9 @@ func (app *SpacemeshApp) before(cmd *cobra.Command, args []string) (err error) {
 
 	// ensure cli flags are higher priority than config file
 	EnsureCLIFlags(cmd, app.Config)
+
+	// override default config in timesync since timesync is using TimeCongigValues
+	timeCfg.TimeConfigValues = app.Config.TIME
 
 	app.setupLogging()
 

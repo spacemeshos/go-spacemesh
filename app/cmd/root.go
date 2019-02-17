@@ -68,14 +68,14 @@ func init() {
 		config.P2P.SwarmConfig.RoutingTableAlpha, "Number of random connections")
 	RootCmd.PersistentFlags().StringSliceVar(&config.P2P.SwarmConfig.BootstrapNodes, "bootnodes",
 		config.P2P.SwarmConfig.BootstrapNodes, "Number of random connections")
-	RootCmd.PersistentFlags().DurationVar(&config.P2P.TimeConfig.MaxAllowedDrift, "max-allowed-time-drift",
-		config.P2P.TimeConfig.MaxAllowedDrift, "When to close the app until user resolves time sync problems")
-	RootCmd.PersistentFlags().IntVar(&config.P2P.TimeConfig.NtpQueries, "ntp-queries",
-		config.P2P.TimeConfig.NtpQueries, "Number of ntp queries to do")
-	RootCmd.PersistentFlags().DurationVar(&config.P2P.TimeConfig.DefaultTimeoutLatency, "default-timeout-latency",
-		config.P2P.TimeConfig.DefaultTimeoutLatency, "Default timeout to ntp query")
-	RootCmd.PersistentFlags().DurationVar(&config.P2P.TimeConfig.RefreshNtpInterval, "refresh-ntp-interval",
-		config.P2P.TimeConfig.RefreshNtpInterval, "Refresh intervals to ntp")
+	RootCmd.PersistentFlags().DurationVar(&config.TIME.MaxAllowedDrift, "max-allowed-time-drift",
+		config.TIME.MaxAllowedDrift, "When to close the app until user resolves time sync problems")
+	RootCmd.PersistentFlags().IntVar(&config.TIME.NtpQueries, "ntp-queries",
+		config.TIME.NtpQueries, "Number of ntp queries to do")
+	RootCmd.PersistentFlags().DurationVar(&config.TIME.DefaultTimeoutLatency, "default-timeout-latency",
+		config.TIME.DefaultTimeoutLatency, "Default timeout to ntp query")
+	RootCmd.PersistentFlags().DurationVar(&config.TIME.RefreshNtpInterval, "refresh-ntp-interval",
+		config.TIME.RefreshNtpInterval, "Refresh intervals to ntp")
 
 	/** ======================== API Flags ========================== **/
 	// StartJSONApiServerFlag determines if json api server should be started

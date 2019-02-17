@@ -43,7 +43,7 @@ grpc-port = 9091
 json-port = 9090
 
 # Time sync NTP Config
-[ntp]
+[time]
 max-allowed-time-drift = "10s"
 ntp-queries = 5
 default-timeout-latency = "10s"
