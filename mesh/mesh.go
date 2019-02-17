@@ -142,7 +142,7 @@ func (m *Mesh) PushTransactions(old LayerID, new LayerID) {
 		if err != nil {
 			m.Log.Error("cannot apply transactions %v", err)
 		}
-		m.Log.Info("applied %v transactions in new pbase is %d ", x, new)
+		m.Log.Info("applied %v transactions in new pbase is %d apply result was %d", len(txs), new, x)
 	}
 }
 
