@@ -30,11 +30,11 @@ func (alg *Algorithm) HandleIncomingLayer(ll *mesh.Layer) (mesh.LayerID, mesh.La
 	oldPbase := alg.latestComplete()
 	alg.Tortoise.handleIncomingLayer(ll)
 	newPbase := alg.latestComplete()
-	alg.updateMetrics(ll)
+	updateMetrics(alg, ll)
 	return oldPbase, newPbase
 }
 
-func (alg *Algorithm) updateMetrics(ll *mesh.Layer) {
+func updateMetrics(alg *Algorithm, ll *mesh.Layer) {
 	pbaseCount.Set(float64(alg.latestComplete()))
 	processedCount.Set(float64(ll.Index()))
 	for _, k := range alg.getVotes() {
