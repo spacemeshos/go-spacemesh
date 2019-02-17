@@ -250,7 +250,6 @@ func TestHare_onTick(t *testing.T) {
 	cfg.N = 2
 	cfg.F = 1
 	cfg.RoundDuration = time.Millisecond
-	cfg.SetSize = 3
 
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()

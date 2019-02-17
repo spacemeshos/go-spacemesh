@@ -82,7 +82,7 @@ func TestMessageValidator_Aggregated(t *testing.T) {
 }
 
 func TestConsensusProcess_isContextuallyValid(t *testing.T) {
-	s := NewEmptySet(cfg.SetSize)
+	s := NewEmptySet(defaultSetSize)
 	pub := generateSigning(t)
 	cp := generateConsensusProcess(t)
 
