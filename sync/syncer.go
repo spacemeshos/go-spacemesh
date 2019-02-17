@@ -338,6 +338,7 @@ func (s *Syncer) sendLayerHashRequest(peer p2p.Peer, layer mesh.LayerID) (chan p
 		return nil, err
 	}
 	foo := func(msg []byte) {
+		defer close(ch)
 		res := &pb.LayerHashResp{}
 		if msg == nil {
 			s.Error("layer hash response was nil from ", peer.String())
@@ -380,6 +381,7 @@ func newBlockRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg []byte) 
 		logger.Debug("handle block request")
 		req := &pb.FetchBlockReq{}
 		if err := proto.Unmarshal(msg, req); err != nil {
+			logger.Error("cannot unmarshal message")
 			return nil
 		}
 
@@ -400,7 +402,7 @@ func newBlockRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg []byte) 
 			return nil
 		}
 
-		logger.Debug("return block ", block)
+		logger.Debug("return block %v", block)
 
 		return payload
 	}
