@@ -268,6 +268,12 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	ch, err = syncObj2.sendLayerHashRequest(n1.PublicKey(), 1)
 	assert.NoError(t, err, "Should not return error")
 	assert.Equal(t, "some hash representing the layer", string(hash.hash), "wrong block")
+	select {
+
+	case <-timeout.C:
+		t.Error("timed out ")
+	case <-ch:
+	}
 
 	ch2, err2 = sendBlockRequest(syncObj2.MessageServer, n1.PublicKey(), block2.ID(), syncObj2.Log)
 	assert.NoError(t, err2, "Should not return error")
@@ -282,6 +288,12 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	ch, err = syncObj2.sendLayerHashRequest(n1.PublicKey(), 2)
 	assert.NoError(t, err, "Should not return error")
 	assert.Equal(t, "some hash representing the layer", string(hash.hash), "wrong block")
+	select {
+
+	case <-timeout.C:
+		t.Error("timed out ")
+	case <-ch:
+	}
 
 	ch2, err2 = sendBlockRequest(syncObj2.MessageServer, n1.PublicKey(), block3.ID(), syncObj2.Log)
 	assert.NoError(t, err2, "Should not return error")
