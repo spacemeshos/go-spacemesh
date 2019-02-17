@@ -198,7 +198,7 @@ func sendBlockRequest(msgServ *server.MessageServer, peer p2p.Peer, id mesh.Bloc
 	ch := make(chan *mesh.Block)
 	foo := func(msg []byte) {
 		defer close(ch)
-		//logger.Info("handle block response")
+		logger.Info("handle block response")
 		data := &pb.FetchBlockResp{}
 		if err := proto.Unmarshal(msg, data); err != nil {
 			logger.Error("could not unmarshal block data")
@@ -401,7 +401,7 @@ func newBlockRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg []byte) 
 			return nil
 		}
 
-		logger.Info("return block ", block)
+		logger.Info("return block %v", block)
 
 		return payload
 	}
