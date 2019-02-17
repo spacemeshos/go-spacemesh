@@ -119,8 +119,8 @@ func (m *Mesh) ValidateLayer(layer *Layer) {
 	}
 }
 
-func (m *Mesh) PushTransactions(old LayerID, new LayerID) {
-	for i := old; i < new; i++ {
+func (m *Mesh) PushTransactions(oldBase LayerID, newBase LayerID) {
+	for i := oldBase; i < newBase; i++ {
 		txs := make([]*state.Transaction, 0, layerSize)
 		l, err := m.getLayer(i)
 		if err != nil || l == nil {
@@ -142,7 +142,7 @@ func (m *Mesh) PushTransactions(old LayerID, new LayerID) {
 		if err != nil {
 			m.Log.Error("cannot apply transactions %v", err)
 		}
-		m.Log.Info("applied %v transactions in new pbase is %d ", x, new)
+		m.Log.Info("applied %v transactions in new pbase is %d apply result was %d", len(txs), newBase, x)
 	}
 }
 

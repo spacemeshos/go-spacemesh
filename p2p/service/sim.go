@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-// TODO : implmement delays?
+// TODO : implement delays?
 
 // Simulator is a p2p node factory and message bridge
 type Simulator struct {

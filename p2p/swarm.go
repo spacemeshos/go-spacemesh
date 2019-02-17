@@ -205,7 +205,7 @@ func newSwarm(ctx context.Context, config config.Config, newNode bool, persist b
 
 func (s *swarm) onNewConnection(nce net.NewConnectionEvent) {
 	s.dht.Update(nce.Node)
-	// todo: consider doing cpool actions from here instead of registering cpool aswell.
+	// todo: consider doing cpool actions from here instead of registering cpool as well.
 	s.addIncomingPeer(nce.Node.PublicKey())
 }
 
@@ -238,7 +238,7 @@ func (s *swarm) Start() error {
 			}
 			close(s.bootChan)
 			dhtsize := s.dht.Size()
-			s.lNode.With().Info("discovery_bootstrap", log.Bool("succeess", dhtsize > s.config.SwarmConfig.RandomConnections && s.bootErr == nil),
+			s.lNode.With().Info("discovery_bootstrap", log.Bool("success", dhtsize > s.config.SwarmConfig.RandomConnections && s.bootErr == nil),
 				log.Int("dht_size", dhtsize), log.Duration("time_elapsed", time.Since(b)))
 		}()
 	}
@@ -428,7 +428,7 @@ func (s *swarm) retryOrDisconnect(key p2pcrypto.PublicKey) {
 	getpeer := s.dht.InternalLookup(node.NewDhtID(key.Bytes()))
 
 	if getpeer == nil {
-		s.Disconnect(key) // if we didn't find then we can't try replaceing
+		s.Disconnect(key) // if we didn't find then we can't try replacing
 		return
 	}
 	peer := getpeer[0]
@@ -523,7 +523,8 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 
 	s.lNode.Debug("Authorized %v protocol message ", pm.Metadata.NextProtocol)
 
-	remoteNode := node.New(msg.Conn.RemotePublicKey(), "") // if we got so far, we already have the node in our rt, hence address won't be used
+	// if we got so far, we already have the node in our rt, hence address won't be used
+	remoteNode := node.New(msg.Conn.RemotePublicKey(), "")
 	// update the routing table - we just heard from this authenticated node
 	s.dht.Update(remoteNode)
 
@@ -579,10 +580,9 @@ func (s *swarm) Broadcast(protocol string, payload []byte) error {
 	return s.gossip.Broadcast(payload, protocol)
 }
 
-// Neighborhood : neighborhood is the peers we keep close , meaning we try to keep connections
-// to them at any given time and if not possible we replace them. protocols use the neighborhood
+// Neighborhood : neighborhood is the peers we keep close, meaning we try to keep connections
+// to them at any given time and if not possible we replace them. Protocols use the neighborhood
 // to run their logic with peers.
-
 func (s *swarm) publishNewPeer(peer p2pcrypto.PublicKey) {
 	s.peerLock.RLock()
 	for _, p := range s.newPeerSub {
@@ -641,7 +641,7 @@ loop:
 		case <-s.morePeersReq:
 			s.lNode.Debug("loop: got morePeersReq")
 			go s.askForMorePeers()
-		//todo: try getting the connections (hearbeat)
+		//todo: try getting the connections (heartbeat)
 		case <-s.shutdown:
 			break loop // maybe error ?
 		}
@@ -657,7 +657,7 @@ func (s *swarm) askForMorePeers() {
 
 	s.getMorePeers(req)
 
-	// todo: better way then going in this everytime ?
+	// todo: better way then going in this every time ?
 	if len(s.outpeers) >= s.config.SwarmConfig.RandomConnections {
 		s.initOnce.Do(func() {
 			s.lNode.Info("gossip; connected to initial required neighbors - %v", len(s.outpeers))
@@ -713,7 +713,7 @@ loop:
 		select {
 		// NOTE: breaks here intentionally break the select and not the for loop
 		case cne := <-res:
-			total++ // We count i everytime to know when to close the channel
+			total++ // We count i every time to know when to close the channel
 
 			if cne.err != nil {
 				s.lNode.Debug("can't establish connection with sampled peer %v, %v", cne.n.String(), cne.err)
@@ -759,7 +759,7 @@ loop:
 	return total - bad
 }
 
-// Disconnect removes a peer from the neighborhood, it requests more peers if our outbound peer count is less than configured
+// Disconnect removes a peer from the neighborhood. It requests more peers if our outbound peer count is less than configured
 func (s *swarm) Disconnect(peer p2pcrypto.PublicKey) {
 	s.inpeersMutex.Lock()
 	if _, ok := s.inpeers[peer.String()]; ok {
@@ -784,7 +784,7 @@ func (s *swarm) Disconnect(peer p2pcrypto.PublicKey) {
 // AddIncomingPeer inserts a peer to the neighborhood as a remote peer.
 func (s *swarm) addIncomingPeer(n p2pcrypto.PublicKey) {
 	s.inpeersMutex.Lock()
-	// todo limit number of inpeers
+	// todo limit number of in peers
 	s.inpeers[n.String()] = n
 	s.inpeersMutex.Unlock()
 	s.publishNewPeer(n)
