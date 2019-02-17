@@ -378,7 +378,7 @@ func (s *Syncer) sendLayerIDsRequest(peer p2p.Peer, idx mesh.LayerID) (chan []ui
 
 func newBlockRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg []byte) []byte {
 	return func(msg []byte) []byte {
-		logger.Info("handle block request")
+		logger.Debug("handle block request")
 		req := &pb.FetchBlockReq{}
 		if err := proto.Unmarshal(msg, req); err != nil {
 			logger.Error("cannot unmarshal message")
@@ -402,7 +402,7 @@ func newBlockRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg []byte) 
 			return nil
 		}
 
-		logger.Info("return block %v", block)
+		logger.Debug("return block %v", block)
 
 		return payload
 	}
