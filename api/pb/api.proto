@@ -8,7 +8,7 @@ message SimpleMessage {
 }
 
 message AccountId {
-    bytes address =1;
+    string address =1;
 }
 
 message TransferFunds {
@@ -19,11 +19,14 @@ message TransferFunds {
 }
 
 message SignedTransaction {
-    bytes txData = 1;
+    string srcAddress   = 1;
+    string dstAddress   = 2;
+    string amount       = 3;
+    string nonce        = 4;
 }
 
 message BroadcastMessage {
-    bytes Data = 1;
+    string Data = 1;
 }
 
 service SpacemeshService {

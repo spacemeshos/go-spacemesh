@@ -259,7 +259,9 @@ func TestNeighborhood_Broadcast(t *testing.T) {
 	net.msgwg.Add(20)
 	net.pcountwg.Add(1)
 
-	n.Broadcast([]byte("LOL"), "")
+	err := n.Broadcast([]byte("LOL"), "")
+	assert.NoError(t, err)
+
 	passOrDeadlock(t, net.msgwg)
 	assert.Equal(t, 1, net.processProtocolCount)
 	assert.Equal(t, 20, net.totalMessageSent())
@@ -294,7 +296,10 @@ func TestNeighborhood_Broadcast2(t *testing.T) {
 	addPeersAndTest(t, 1, n, net, true)
 	net.msgwg.Add(1) // sender also handle the message
 	net.pcountwg.Add(1)
-	n.Broadcast(payload, "protocol")
+
+	err := n.Broadcast(payload, "protocol")
+	assert.NoError(t, err)
+
 	passOrDeadlock(t, net.msgwg)
 	assert.Equal(t, 1, net.processProtocolCount)
 	assert.Equal(t, 1, net.totalMessageSent())
@@ -321,7 +326,9 @@ func TestNeighborhood_Broadcast3(t *testing.T) {
 	msgB := []byte("LOL")
 	net.msgwg.Add(20)
 	net.pcountwg.Add(1)
-	n.Broadcast(msgB, "protocol")
+	err := n.Broadcast(msgB, "protocol")
+	assert.NoError(t, err)
+
 	passOrDeadlock(t, net.msgwg)
 	assert.Equal(t, 1, net.processProtocolCount)
 	assert.Equal(t, 20, net.totalMessageSent())
@@ -346,12 +353,17 @@ func TestNeighborhood_Broadcast4(t *testing.T) {
 	msgB := []byte("LOL")
 	net.msgwg.Add(20)
 	net.pcountwg.Add(1)
-	n.Broadcast(msgB, "")
+
+	err := n.Broadcast(msgB, "")
+	assert.NoError(t, err)
+
 	passOrDeadlock(t, net.msgwg)
 	assert.Equal(t, 1, net.processProtocolCount)
 	assert.Equal(t, 20, net.totalMessageSent())
 
-	n.Broadcast(msgB, "")
+	err = n.Broadcast(msgB, "")
+	assert.NoError(t, err)
+
 	passOrDeadlock(t, net.msgwg)
 	assert.Equal(t, 1, net.processProtocolCount)
 	assert.Equal(t, 20, net.totalMessageSent())
@@ -475,7 +487,9 @@ func TestMessageValidity_NotValid(t *testing.T) {
 	net.pcountwg.Add(1)
 	net.setIsMessageValid(false)
 	assert.Equal(t, Unknown, n.isMessageValid(hash))
-	n.Broadcast(msgB, protocol)
+	err := n.Broadcast(msgB, protocol)
+	assert.NoError(t, err)
+
 	passOrDeadlock(t, net.pcountwg)
 	time.Sleep(300 * time.Millisecond)
 	assert.Equal(t, 1, net.processProtocolCount)
@@ -483,7 +497,9 @@ func TestMessageValidity_NotValid(t *testing.T) {
 	assert.Equal(t, Invalid, n.isMessageValid(hash))
 
 	addPeersAndTest(t, 5, n, net, true)
-	n.Broadcast(msgB, protocol)
+	err = n.Broadcast(msgB, protocol)
+	assert.NoError(t, err)
+
 	time.Sleep(300 * time.Millisecond)
 	assert.Equal(t, 1, net.processProtocolCount)
 	assert.Equal(t, 0, net.totalMessageSent())
@@ -504,7 +520,10 @@ func TestMessageValidity_Valid(t *testing.T) {
 	net.pcountwg.Add(1)
 	net.setIsMessageValid(true)
 	assert.Equal(t, Unknown, n.isMessageValid(hash))
-	n.Broadcast(msgB, protocol)
+
+	err := n.Broadcast(msgB, protocol)
+	assert.NoError(t, err)
+
 	passOrDeadlock(t, net.msgwg)
 	assert.Equal(t, 1, net.processProtocolCount)
 	assert.Equal(t, 5, net.totalMessageSent())

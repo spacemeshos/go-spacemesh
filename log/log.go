@@ -12,11 +12,11 @@ import (
 	"go.uber.org/zap"
 )
 
-
 const mainLoggerName = "Spacemesh"
 
 // determine the level of messages we show.
 var debugMode = false
+
 // should we format out logs in json
 var jsonLog = false
 
@@ -83,8 +83,12 @@ func New(module string, dataFolderPath string, logFileName string) Log {
 	return Log{log}
 }
 
+func NewDefault(module string) Log {
+	return New(module, "", "")
+}
+
 // getBackendLevelWithFileBackend returns backends level including log file backend
-func getFileWriter(dataFolderPath, logFileName string) (io.Writer) {
+func getFileWriter(dataFolderPath, logFileName string) io.Writer {
 	fileName := filepath.Join(dataFolderPath, logFileName)
 
 	fileLogger := &lumberjack.Logger{
@@ -100,7 +104,7 @@ func getFileWriter(dataFolderPath, logFileName string) (io.Writer) {
 
 // InitSpacemeshLoggingSystem initializes app logging system.
 func InitSpacemeshLoggingSystem(dataFolderPath string, logFileName string) {
-	AppLog = New(mainLoggerName,  dataFolderPath, logFileName)
+	AppLog = New(mainLoggerName, dataFolderPath, logFileName)
 }
 
 // public wrappers abstracting away logging lib impl

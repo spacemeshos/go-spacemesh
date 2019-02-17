@@ -73,6 +73,7 @@ type StatePreImages struct {
 }
 
 type TransactionProcessor struct {
+	log.Log
 	rand         PseudoRandomizer
 	globalState  *StateDB
 	prevStates   map[LayerID]common.Hash
@@ -85,8 +86,9 @@ type TransactionProcessor struct {
 
 const maxPastStates = 20
 
-func NewTransactionProcessor(rnd PseudoRandomizer, db *StateDB) *TransactionProcessor {
+func NewTransactionProcessor(rnd PseudoRandomizer, db *StateDB, logger log.Log) *TransactionProcessor {
 	return &TransactionProcessor{
+		Log:          logger,
 		rand:         rnd,
 		globalState:  db,
 		prevStates:   make(map[LayerID]common.Hash),
@@ -101,17 +103,23 @@ func NewTransactionProcessor(rnd PseudoRandomizer, db *StateDB) *TransactionProc
 //should receive sort predicate
 func (tp *TransactionProcessor) ApplyTransactions(layer LayerID, transactions Transactions) (uint32, error) {
 	//todo: need to seed the mersenne twister with random beacon seed
+	if len(transactions) == 0 {
+		return 0, nil
+	}
 
 	txs := tp.mergeDoubles(transactions)
 	tp.mu.Lock()
 	defer tp.mu.Unlock()
 	failed := tp.Process(tp.randomSort(txs), tp.coalesceTransactionsBySender(txs))
 	newHash, err := tp.globalState.Commit(false)
-	log.Info("new state root for layer %v is %x", layer, newHash)
+
 	if err != nil {
-		log.Error("db write error %v", err)
+		tp.Log.Error("db write error %v", err)
 		return failed, err
 	}
+
+	tp.Log.Info("new state root for layer %v is %x", layer, newHash)
+	tp.Log.With().Info("new state", log.Uint32("layer_id", uint32(layer)), log.String("root_hash", newHash.String()))
 
 	tp.stateQueue.PushBack(newHash)
 	if tp.stateQueue.Len() > maxPastStates {
@@ -129,10 +137,12 @@ func (tp *TransactionProcessor) Reset(layer LayerID) {
 	defer tp.mu.Unlock()
 	if state, ok := tp.prevStates[layer]; ok {
 		newState, err := New(state, tp.globalState.db)
-		log.Info("reverted, new root %x", newState.IntermediateRoot(false))
+
 		if err != nil {
 			panic("cannot revert- improper state")
 		}
+		tp.Log.Info("reverted, new root %x", newState.IntermediateRoot(false))
+		tp.Log.With().Info("reverted", log.String("root_hash", newState.IntermediateRoot(false).String()))
 
 		tp.globalState = newState
 		tp.pruneAfterRevert(layer)
@@ -238,12 +248,12 @@ func (tp *TransactionProcessor) ApplyTransaction(trans *Transaction) error {
 
 	//todo: should we allow to spend all accounts data?
 	if origin.Balance().Cmp(trans.Amount) <= 0 {
-		log.Error(ErrFunds+" have: %v need: %v", origin.Balance(), trans.Amount)
+		tp.Log.Error(ErrFunds+" have: %v need: %v", origin.Balance(), trans.Amount)
 		return fmt.Errorf(ErrFunds)
 	}
 
 	if !tp.checkNonce(trans) {
-		log.Error(ErrNonce+" should be %v actual %v", tp.globalState.GetNonce(trans.Origin), trans.AccountNonce)
+		tp.Log.Error(ErrNonce+" should be %v actual %v", tp.globalState.GetNonce(trans.Origin), trans.AccountNonce)
 		return fmt.Errorf(ErrNonce)
 	}
 

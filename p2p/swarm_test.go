@@ -33,6 +33,10 @@ func (cp *cpoolMock) GetConnection(address string, pk p2pcrypto.PublicKey) (net.
 	}
 	return net.NewConnectionMock(pk), nil
 }
+func (cp *cpoolMock) GetConnectionIfExists(pk p2pcrypto.PublicKey) (net.Connection, error) {
+	// todo : test swarm with this
+	return net.NewConnectionMock(pk), nil
+}
 
 func (cp *cpoolMock) Shutdown() {
 
@@ -69,9 +73,9 @@ const examplePayload = "Example"
 
 func TestNew(t *testing.T) {
 	s, err := New(context.TODO(), config.DefaultConfig())
-	assert.NoError(t, err, err)
+	assert.NoError(t, err)
 	err = s.Start()
-	assert.NoError(t, err, err)
+	assert.NoError(t, err)
 	assert.NotNil(t, s, "its nil")
 	s.Shutdown()
 }
@@ -84,7 +88,7 @@ func Test_newSwarm(t *testing.T) {
 	s, err := newSwarm(context.TODO(), cfg, true, false)
 	assert.NoError(t, err)
 	err = s.Start()
-	assert.NoError(t, err, err)
+	assert.NoError(t, err)
 	assert.NotNil(t, s)
 	s.Shutdown()
 }
@@ -97,7 +101,7 @@ func TestSwarm_Shutdown(t *testing.T) {
 	s, err := newSwarm(context.TODO(), cfg, true, false)
 	assert.NoError(t, err)
 	err = s.Start()
-	assert.NoError(t, err, err)
+	assert.NoError(t, err)
 	s.Shutdown()
 
 	select {
@@ -274,7 +278,6 @@ func (sa *swarmArray) clean() {
 }
 
 func TestSwarm_MultipleMessagesFromMultipleSenders(t *testing.T) {
-
 	const Senders = 100
 
 	cfg := config.DefaultConfig()

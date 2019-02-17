@@ -19,7 +19,8 @@ type NodeTestInstance interface {
 	LocalNode() *node.LocalNode // this holds the keys
 }
 
-// IntegrationTestSuite is a suite which bootstraps a network according to the given params and lets you run actions on this network.
+// IntegrationTestSuite is a suite which bootstraps a network according to the given params
+// and lets you run actions on this network.
 // you must set the params before running the suite.
 type IntegrationTestSuite struct {
 	suite.Suite
@@ -50,7 +51,8 @@ func (its *IntegrationTestSuite) SetupSuite() {
 		if its.BeforeHook != nil {
 			its.BeforeHook(i, boot[i])
 		}
-		boot[i].Start()
+		_ = boot[i].Start() // ignore error ?
+
 		if its.AfterHook != nil {
 			its.AfterHook(i, boot[i])
 		}
@@ -78,7 +80,10 @@ func (its *IntegrationTestSuite) SetupSuite() {
 			if its.BeforeHook != nil {
 				its.BeforeHook(i, swarm[i])
 			}
-			swarm[i].Start()
+
+		_:
+			swarm[i].Start() // ignore error?
+
 			err := swarm[i].waitForBoot()
 			if err != nil {
 				its.Require().NoError(err)

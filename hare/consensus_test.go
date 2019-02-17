@@ -3,6 +3,7 @@ package hare
 import (
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"testing"
@@ -136,7 +137,7 @@ func createConsensusProcess(isHonest bool, cfg config.Config, oracle fullRolacle
 	output := make(chan TerminationOutput, 1)
 	signing := NewMockSigning()
 	oracle.Register(isHonest, signing.Verifier().String())
-	proc := NewConsensusProcess(cfg, *instanceId1, initialSet, oracle, signing, network, output)
+	proc := NewConsensusProcess(cfg, *instanceId1, initialSet, oracle, signing, network, output, log.NewDefault(signing.Verifier().String()[:8]))
 	broker.Register(proc)
 	broker.Start()
 
@@ -144,6 +145,10 @@ func createConsensusProcess(isHonest bool, cfg config.Config, oracle fullRolacle
 }
 
 func TestConsensusFixedOracle(t *testing.T) {
+	if skipBlackBox {
+		t.Skip()
+	}
+
 	test := newConsensusTest()
 
 	cfg := config.Config{N: 16, F: 8, SetSize: 1, RoundDuration: time.Second * time.Duration(1)}

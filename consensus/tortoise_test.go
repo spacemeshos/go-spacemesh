@@ -12,9 +12,10 @@ func TestAlgorithm_Sanity(t *testing.T) {
 	layerSize := 50
 	cachedLayers := 100
 
-	alg := NewAlgorithm(uint32(layerSize), uint32(cachedLayers))
+	alg := NewTortoise(uint32(layerSize), uint32(cachedLayers))
 	l := createGenesisLayer()
 	alg.HandleIncomingLayer(l)
+	alg.RegisterLayerCallback(func(id mesh.LayerID) {})
 	for i := 0; i < 11-1; i++ {
 		lyr := createFullPointingLayer(l, layerSize)
 		start := time.Now()
@@ -22,20 +23,6 @@ func TestAlgorithm_Sanity(t *testing.T) {
 		log.Info("Time to process layer: %v ", time.Since(start))
 		l = lyr
 	}
-}
-
-func createGenesisLayer() *mesh.Layer {
-	log.Info("Creating genesis")
-	ts := time.Now()
-	coin := false
-	data := []byte("genesis")
-
-	bl := mesh.NewBlock(coin, data, ts, 0)
-	l := mesh.NewLayer(0)
-
-	l.AddBlock(bl)
-
-	return l
 }
 
 func createFullPointingLayer(prev *mesh.Layer, blocksInLayer int) *mesh.Layer {

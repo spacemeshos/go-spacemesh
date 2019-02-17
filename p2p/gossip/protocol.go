@@ -7,6 +7,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
+	"github.com/spacemeshos/go-spacemesh/p2p/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -273,13 +274,15 @@ func (prot *Protocol) processMessage(msg *pb.ProtocolMessage) {
 
 	isOld := prot.markMessageAsOld(h)
 	if isOld {
+		metrics.OldGossipMessages.With(metrics.ProtocolLabel, protocol).Add(1)
 		// todo : - have some more metrics for termination
-		// todo	: - maybe tell the peer weg ot this message already?
+		// todo	: - maybe tell the peer we got this message already?
 		validity := prot.isMessageValid(h)
 		prot.Log.Debug("got old message, hash %d validity %v", h, validity)
 		if validity == Valid {
 			prot.propagateMessage(data.Bytes(), h, protocol)
 		} else {
+			metrics.InvalidGossipMessages.With(metrics.ProtocolLabel, protocol).Add(1)
 			// if the message is invalid we don't want to propagate it and we can return. If the message's validity is unknown,
 			// since the message is marked as old we can assume that there is another context that currently process this
 			// message and will determine its validity, therefore we can return in such case as well
@@ -287,6 +290,7 @@ func (prot *Protocol) processMessage(msg *pb.ProtocolMessage) {
 		}
 	} else {
 		prot.Log.With().Info("new_gossip_message", log.String("from", base58.Encode(msg.Metadata.AuthPubkey)), log.String("protocol", protocol))
+		metrics.NewGossipMessages.With("protocol", protocol).Add(1)
 		err := prot.net.ProcessGossipProtocolMessage(protocol, data, prot.propagateQ)
 		if err != nil {
 			prot.Log.Error("failed to process protocol message. protocol = %v err = %v", protocol, err)
@@ -355,7 +359,7 @@ loop:
 	prot.Warning("Gossip protocol event loop stopped. err: %v", err)
 }
 
-// peersCount returns the number of peers know to the protocol, used for testing only
+// peersCount returns the number of peers known to the protocol, used for testing only
 func (prot *Protocol) peersCount() int {
 	prot.peersMutex.RLock()
 	cnt := len(prot.peers)

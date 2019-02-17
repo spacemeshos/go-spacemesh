@@ -7,6 +7,12 @@
 [main]
 data-folder = "~/.spacemesh-data"
 test-mode = false
+metrics = false
+metrics-port = 1010
+oracle_server = "http://localhost:3030"
+oracle_server_worldid = 0
+genesis-time = "2019-02-13T17:02:00+00:00"
+layer-duration-sec = "5"
 
 # Node Config
 [p2p]
@@ -31,8 +37,8 @@ bootnodes = ["0.0.0.0:7517/j7qWfWaJRVp25ZsnCu9rJ4PmhigZBtesB4YmQHqqPvtR"]
 
 # API Config
 [api]
-grpc-server = false
-json-server = false
+grpc-server = true
+json-server = true
 grpc-port = 9091
 json-port = 9090
 
@@ -41,4 +47,3 @@ json-port = 9090
 max-allowed-time-drift = "10s"
 ntp-queries = 5
 default-timeout-latency = "10s"
-refresh-ntp-interval = "30m"

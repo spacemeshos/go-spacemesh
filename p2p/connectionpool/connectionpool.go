@@ -19,9 +19,8 @@ type networker interface {
 	Dial(address string, remotePublicKey p2pcrypto.PublicKey) (net.Connection, error) // Connect to a remote node. Can send when no error.
 	SubscribeOnNewRemoteConnections(func(event net.NewConnectionEvent))
 	NetworkID() int8
-	SubscribeClosingConnections(func( net.Connection))
+	SubscribeClosingConnections(func(net.Connection))
 	Logger() log.Log
-
 }
 
 // ConnectionPool stores all net.Connections and make them available to all users of net.Connection.
@@ -234,6 +233,7 @@ func (cp *ConnectionPool) GetConnectionIfExists(remotePub p2pcrypto.PublicKey) (
 	cp.pendMutex.Lock()
 	if _, found := cp.pending[remotePub.String()]; !found {
 		// No one is waiting for a connection with the remote peer
+		cp.connMutex.RUnlock()
 		cp.pendMutex.Unlock()
 		return nil, errors.New("no connection in cpool")
 	}

@@ -2,6 +2,7 @@ package hare
 
 import (
 	"github.com/spacemeshos/go-spacemesh/hare/pb"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
@@ -9,7 +10,7 @@ import (
 func defaultValidator() *MessageValidator {
 	return NewMessageValidator(NewMockSigning(), lowThresh10, lowDefaultSize, func(m *pb.HareMessage) bool {
 		return true
-	})
+	}, log.NewDefault("Validator"))
 }
 
 func TestMessageValidator_CommitStatus(t *testing.T) {
@@ -106,6 +107,7 @@ func TestConsensusProcess_isContextuallyValid(t *testing.T) {
 
 func TestMessageValidator_ValidateMessage(t *testing.T) {
 	proc := generateConsensusProcess(t)
+	proc.advanceToNextRound()
 	v := proc.validator
 	preround := proc.initDefaultBuilder(proc.s).SetType(PreRound).Sign(proc.signing).Build()
 	assert.True(t, v.SyntacticallyValidateMessage(preround))
@@ -117,7 +119,7 @@ func TestMessageValidator_ValidateMessage(t *testing.T) {
 }
 
 func TestMessageValidator_SyntacticallyValidateMessage(t *testing.T) {
-	validator := NewMessageValidator(NewMockSigning(), 1, 3, validate)
+	validator := NewMessageValidator(NewMockSigning(), 1, 3, validate, log.NewDefault("Validator"))
 	m := BuildPreRoundMsg(generateSigning(t), NewSetFromValues(value1))
 	m.PubKey = NewMockSigning().Verifier().Bytes()
 	assert.False(t, validator.SyntacticallyValidateMessage(m))
@@ -128,7 +130,7 @@ func TestMessageValidator_SyntacticallyValidateMessage(t *testing.T) {
 }
 
 func TestMessageValidator_ContextuallyValidateMessage(t *testing.T) {
-	validator := NewMessageValidator(NewMockSigning(), 1, 3, validate)
+	validator := NewMessageValidator(NewMockSigning(), 1, 3, validate, log.NewDefault("Validator"))
 	m := BuildPreRoundMsg(generateSigning(t), NewSmallEmptySet())
 	m.Message = nil
 	assert.False(t, validator.ContextuallyValidateMessage(m, 0))
@@ -145,11 +147,12 @@ func TestMessageValidator_validateSVPTypeA(t *testing.T) {
 	s2 := NewSetFromValues(value3)
 	s3 := NewSetFromValues(value1, value5)
 	s4 := NewSetFromValues(value1, value4)
+	v := defaultValidator()
 	m.Message.Svp = buildSVP(-1, s1, s2, s3, s4)
-	assert.False(t, validateSVPTypeA(m))
+	assert.False(t, v.validateSVPTypeA(m))
 	s3 = NewSetFromValues(value2)
 	m.Message.Svp = buildSVP(-1, s1, s2, s3)
-	assert.True(t, validateSVPTypeA(m))
+	assert.True(t, v.validateSVPTypeA(m))
 }
 
 func TestMessageValidator_validateSVPTypeB(t *testing.T) {
@@ -158,12 +161,13 @@ func TestMessageValidator_validateSVPTypeB(t *testing.T) {
 	m.Message.Svp = buildSVP(-1, s1)
 	s := NewSetFromValues(value1)
 	m.Message.Values = s.To2DSlice()
-	assert.False(t, validateSVPTypeB(m, NewSetFromValues(value5)))
-	assert.True(t, validateSVPTypeB(m, NewSetFromValues(value1)))
+	v := defaultValidator()
+	assert.False(t, v.validateSVPTypeB(m, NewSetFromValues(value5)))
+	assert.True(t, v.validateSVPTypeB(m, NewSetFromValues(value1)))
 }
 
 func TestMessageValidator_validateSVP(t *testing.T) {
-	validator := NewMessageValidator(NewMockSigning(), 1, 1, validate)
+	validator := NewMessageValidator(NewMockSigning(), 1, 1, validate, log.NewDefault("Validator"))
 	m := buildProposalMsg(NewMockSigning(), NewSetFromValues(value1, value2, value3), []byte{})
 	s1 := NewSetFromValues(value1)
 	m.Message.Svp = buildSVP(-1, s1)

@@ -1,6 +1,8 @@
 package hare
 
 import (
+	"fmt"
+	"github.com/spacemeshos/go-spacemesh/hare/metrics"
 	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -55,6 +57,7 @@ func (ct *CommitTracker) OnCommit(msg *pb.HareMessage) {
 	}
 
 	// add msg
+	metrics.CommitCounter.With("set_id", fmt.Sprint(s.Id())).Add(1)
 	ct.commits = append(ct.commits, msg)
 }
 

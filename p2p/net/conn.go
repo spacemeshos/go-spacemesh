@@ -3,6 +3,7 @@ package net
 import (
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"time"
 
@@ -53,7 +54,7 @@ type Connection interface {
 // A network connection supporting full-duplex messaging
 type FormattedConnection struct {
 	// metadata for logging / debugging
-	logger log.Log
+	logger     log.Log
 	id         string // uuid for logging
 	created    time.Time
 	remotePub  p2pcrypto.PublicKey
@@ -148,7 +149,12 @@ func (c *FormattedConnection) incomingChannel() chan []byte {
 // data is copied over so caller can get rid of the data
 // Concurrency: can be called from any go routine
 func (c *FormattedConnection) Send(m []byte) error {
-	return c.formatter.Out(m)
+	err := c.formatter.Out(m)
+	if err != nil {
+		return err
+	}
+	metrics.PeerRecv.With(metrics.PeerIdLabel, c.remotePub.String()).Add(float64(len(m)))
+	return nil
 }
 
 // Close closes the connection (implements io.Closer). It is go safe.
@@ -181,7 +187,6 @@ Loop:
 	for {
 		select {
 		case msg, ok := <-c.formatter.In():
-
 			if !ok { // chan closed
 				err = ErrClosedIncomingChannel
 				break Loop
@@ -193,6 +198,7 @@ Loop:
 					break Loop
 				}
 			} else {
+				metrics.PeerRecv.With(metrics.PeerIdLabel, c.remotePub.String()).Add(float64(len(msg)))
 				c.publish(msg)
 			}
 

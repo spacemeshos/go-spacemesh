@@ -24,7 +24,7 @@ func (l Log) Debug(format string, args ...interface{}) {
 
 // Error prints formatted error level log message.
 func (l Log) Error(format string, args ...interface{}) {
-	l.Logger.Sugar().Errorf(format,args...)
+	l.Logger.Sugar().Errorf(format, args...)
 }
 
 // Warning prints formatted warning level log message.
@@ -34,33 +34,50 @@ func (l Log) Warning(format string, args ...interface{}) {
 
 // Wrap and export field logic
 
-
 // Field is a log field holding a name and value
 type Field zap.Field
 
 // String returns a string Field
 func String(name, val string) Field {
-	return Field(zap.String(name,val))
+	return Field(zap.String(name, val))
+}
+
+// ByteString returns a byte string ([]byte) Field
+func ByteString(name string, val []byte) Field {
+	return Field(zap.ByteString(name, val))
 }
 
 // Int returns an int Field
 func Int(name string, val int) Field {
-	return Field(zap.Int(name,val))
+	return Field(zap.Int(name, val))
+}
+
+func Int32(name string, val int32) Field {
+	return Field(zap.Int32(name, val))
+}
+
+func Uint32(name string, val uint32) Field {
+	return Field(zap.Uint32(name, val))
+}
+
+// Uint64 returns an uint64 Field
+func Uint64(name string, val uint64) Field {
+	return Field(zap.Uint64(name, val))
 }
 
 // Namespace make next fields be inside a namespace.
-func Namespace(name string ) Field {
+func Namespace(name string) Field {
 	return Field(zap.Namespace(name))
 }
 
 // Bool returns a bool field
 func Bool(name string, val bool) Field {
-	return Field(zap.Bool(name,val))
+	return Field(zap.Bool(name, val))
 }
 
 // Duration returns a duration field
 func Duration(name string, val time.Duration) Field {
-	return Field(zap.Duration(name,val))
+	return Field(zap.Duration(name, val))
 }
 
 // Err returns an error field

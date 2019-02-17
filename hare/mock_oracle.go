@@ -25,7 +25,7 @@ type Registrable interface {
 }
 
 type Rolacle interface {
-	Eligible(id uint32, committeeSize int, pubKey string, proof []byte) bool
+	Eligible(instanceID uint32, committeeSize int, pubKey string, proof []byte) bool
 }
 
 type hasherU32 struct {
@@ -92,8 +92,8 @@ func (mock *MockHashOracle) calcThreshold(committeeSize int) uint32 {
 	}
 
 	if committeeSize > numClients {
-		log.Error("Requested for a committee bigger than the number of registered clients. Expected at least %v clients Actual: %v",
-			committeeSize, numClients)
+		/*log.Error("Requested for a committee bigger than the number of registered clients. Expected at least %v clients Actual: %v",
+		committeeSize, numClients)*/
 		return 0
 	}
 
@@ -101,7 +101,7 @@ func (mock *MockHashOracle) calcThreshold(committeeSize int) uint32 {
 }
 
 // Eligible if a proof is valid for a given committee size
-func (mock *MockHashOracle) Eligible(id uint32, committeeSize int, pubKey string, proof []byte) bool {
+func (mock *MockHashOracle) Eligible(instanceID uint32, committeeSize int, pubKey string, proof []byte) bool {
 	if proof == nil {
 		log.Warning("Oracle query with proof=nil. Returning false")
 		return false
@@ -114,25 +114,4 @@ func (mock *MockHashOracle) Eligible(id uint32, committeeSize int, pubKey string
 	}
 
 	return false
-}
-
-type MockStaticOracle struct {
-	roles       map[uint32]Role
-	r           uint32
-	defaultSize int
-	hasLeader   bool
-	mutex       sync.Mutex
-}
-
-func NewMockStaticOracle(defaultSize int) *MockStaticOracle {
-	static := &MockStaticOracle{}
-	static.roles = make(map[uint32]Role, defaultSize)
-	static.defaultSize = defaultSize
-	static.hasLeader = false
-
-	return static
-}
-
-func (static *MockStaticOracle) Role(r uint32, proof Signature) Role {
-	return roleFromRoundCounter(r)
 }

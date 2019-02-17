@@ -8,6 +8,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/timesync"
 	"sync/atomic"
 	"time"
 )
@@ -30,6 +31,11 @@ type BlockListener struct {
 	startLock            uint32
 	timeout              time.Duration
 	exit                 chan struct{}
+	tick                 chan mesh.LayerID
+}
+
+type TickProvider interface {
+	Subscribe() timesync.LayerTimer
 }
 
 func (bl *BlockListener) Close() {
@@ -40,6 +46,7 @@ func (bl *BlockListener) Start() {
 	if atomic.CompareAndSwapUint32(&bl.startLock, 0, 1) {
 		go bl.run()
 		go bl.ListenToGossipBlocks()
+		go bl.onTick()
 	}
 }
 
@@ -47,7 +54,8 @@ func (bl *BlockListener) OnNewBlock(b *mesh.Block) {
 	bl.addUnknownToQueue(b)
 }
 
-func NewBlockListener(net server.Service, bv BlockValidator, layers *mesh.Mesh, timeout time.Duration, concurrency int, logger log.Log) *BlockListener {
+func NewBlockListener(net server.Service, bv BlockValidator, layers *mesh.Mesh, timeout time.Duration, concurrency int, clock TickProvider, logger log.Log) *BlockListener {
+
 	bl := BlockListener{
 		BlockValidator:       bv,
 		Mesh:                 layers,
@@ -58,6 +66,7 @@ func NewBlockListener(net server.Service, bv BlockValidator, layers *mesh.Mesh, 
 		unknownQueue:         make(chan mesh.BlockID, 200), //todo tune buffer size + get buffer from config
 		exit:                 make(chan struct{}),
 		receivedGossipBlocks: net.RegisterGossipProtocol(NewBlockProtocol),
+		tick:                 clock.Subscribe(),
 	}
 	bl.RegisterMsgHandler(BLOCK, newBlockRequestHandler(layers, logger))
 
@@ -68,7 +77,7 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 	for {
 		select {
 		case <-bl.exit:
-			bl.Logger.Info("listening  stopped")
+			bl.Log.Info("listening  stopped")
 			return
 		case data := <-bl.receivedGossipBlocks:
 			blk, err := mesh.BytesAsBlock(bytes.NewReader(data.Bytes()))
@@ -77,7 +86,8 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 				data.ReportValidation(NewBlockProtocol, false)
 				break
 			}
-			if bl.EligibleBlock(&blk) {
+			bl.Log.With().Info("got new block", log.Uint32("id", uint32(blk.Id)), log.Int("txs", len(blk.Txs)), log.Bool("valid", err == nil))
+			if bl.BlockEligible(blk.LayerIndex, blk.MinerID) {
 				data.ReportValidation(NewBlockProtocol, true)
 				err := bl.AddBlock(&blk)
 				if err != nil {
@@ -88,7 +98,6 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 			} else {
 				data.ReportValidation(NewBlockProtocol, false)
 			}
-
 		}
 	}
 }
@@ -103,9 +112,30 @@ func (bl *BlockListener) run() {
 			bl.Log.Debug("fetch block ", id, "buffer is at ", len(bl.unknownQueue)/cap(bl.unknownQueue), " capacity")
 			bl.semaphore <- struct{}{}
 			go func() {
-				defer func() { <-bl.semaphore }()
 				bl.FetchBlock(id)
+				<-bl.semaphore
 			}()
+		}
+	}
+}
+
+func (bl *BlockListener) onTick() {
+	for {
+		select {
+		case <-bl.exit:
+			bl.Logger.Info("run stopped")
+			return
+		case newLayer := <-bl.tick: //todo: should this be here or in own loop?
+			if newLayer == 0 {
+				break
+			}
+			//log.Info("new layer tick in listener")
+			l, err := bl.GetLayer(newLayer - 1) //bl.CreateLayer(newLayer - 1)
+			if err != nil {
+				log.Error("error getting layer %v  : %v", newLayer-1, err)
+				break
+			}
+			go bl.Mesh.ValidateLayer(l)
 		}
 	}
 }
@@ -114,7 +144,7 @@ func (bl *BlockListener) run() {
 func (bl *BlockListener) FetchBlock(id mesh.BlockID) {
 	for _, p := range bl.GetPeers() {
 		if ch, err := sendBlockRequest(bl.MessageServer, p, id, bl.Log); err == nil {
-			if b := <-ch; b != nil && bl.EligibleBlock(b) {
+			if b := <-ch; b != nil && bl.BlockEligible(b.LayerIndex, b.MinerID) {
 				bl.AddBlock(b)
 				bl.addUnknownToQueue(b) //add all child blocks to unknown queue
 				return

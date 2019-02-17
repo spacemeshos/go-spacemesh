@@ -16,7 +16,7 @@ import (
 )
 
 type BlockValidator interface {
-	EligibleBlock(block *mesh.Block) bool
+	BlockEligible(id mesh.LayerID, pubKey string) bool
 }
 
 type Configuration struct {
@@ -59,7 +59,7 @@ const (
 )
 
 func (s *Syncer) IsSynced() bool {
-	return s.LocalLayer() == s.maxSyncLayer()
+	return s.VerifiedLayer() == s.maxSyncLayer()
 }
 
 func (s *Syncer) Stop() {
@@ -86,8 +86,6 @@ func (s *Syncer) run() {
 		case doSync = <-s.forceSync:
 		case <-syncTicker.C:
 			doSync = true
-		default:
-			doSync = false
 		}
 		if doSync {
 			go func() {
@@ -132,11 +130,12 @@ func (s *Syncer) maxSyncLayer() uint32 {
 }
 
 func (s *Syncer) Synchronise() {
-	for i := s.LocalLayer(); i < s.maxSyncLayer(); i++ {
+	log.Info("syncing layer %v to layer %v ", s.LatestReceivedLayer(), s.maxSyncLayer())
+	for i := s.LatestReceivedLayer(); i < s.maxSyncLayer(); i++ {
 		blockIds, err := s.getLayerBlockIDs(mesh.LayerID(i + 1)) //returns a set of all known blocks in the mesh
 		if err != nil {
 			log.Error("could not get layer block ids: ", err)
-			log.Debug("synchronise failed, local layer index is ", s.LocalLayer())
+			log.Debug("synchronise failed, local layer index is ", i)
 			return
 		}
 
@@ -149,7 +148,7 @@ func (s *Syncer) Synchronise() {
 				for id := range blockIds {
 					for _, p := range s.GetPeers() {
 						if bCh, err := sendBlockRequest(s.MessageServer, p, mesh.BlockID(id), s.Log); err == nil {
-							if b := <-bCh; b != nil && s.EligibleBlock(b) { //some validation testing
+							if b := <-bCh; b != nil && s.BlockEligible(b.LayerIndex, b.MinerID) { //some validation testing
 								s.Debug("received block", b)
 								output <- b
 								break
@@ -172,10 +171,16 @@ func (s *Syncer) Synchronise() {
 
 		s.Debug("add layer ", i)
 
-		s.AddLayer(mesh.NewExistingLayer(mesh.LayerID(i+1), blocks))
+		l := mesh.NewExistingLayer(mesh.LayerID(i+1), blocks)
+		err = s.AddLayer(l)
+		if err != nil {
+			log.Error("cannot insert layer to db because %v", err)
+			continue
+		}
+		go s.ValidateLayer(l)
 	}
 
-	s.Debug("synchronise done, local layer index is ", s.LocalLayer(), "most recent is ", s.LatestLayer())
+	s.Debug("synchronise done, local layer index is ", s.VerifiedLayer(), "most recent is ", s.LatestReceivedLayer())
 }
 
 type peerHashPair struct {
@@ -184,7 +189,7 @@ type peerHashPair struct {
 }
 
 func sendBlockRequest(msgServ *server.MessageServer, peer p2p.Peer, id mesh.BlockID, logger log.Log) (chan *mesh.Block, error) {
-	logger.Debug("send block request Peer: ", peer, " id: ", id)
+	logger.Info("send block request Peer: %v id: %v", peer, id)
 	data := &pb.FetchBlockReq{Id: uint32(id)}
 	payload, err := proto.Marshal(data)
 	if err != nil {
@@ -193,7 +198,7 @@ func sendBlockRequest(msgServ *server.MessageServer, peer p2p.Peer, id mesh.Bloc
 	ch := make(chan *mesh.Block)
 	foo := func(msg []byte) {
 		defer close(ch)
-		logger.Debug("handle block response")
+		logger.Info("handle block response")
 		data := &pb.FetchBlockResp{}
 		if err := proto.Unmarshal(msg, data); err != nil {
 			logger.Error("could not unmarshal block data")

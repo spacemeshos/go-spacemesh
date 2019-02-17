@@ -9,6 +9,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/stretchr/testify/assert"
 	"math/big"
 	"testing"
@@ -19,6 +20,12 @@ type PeersMock struct {
 	getPeers func() []p2p.Peer
 }
 
+type ClockMock struct{}
+
+func (t *ClockMock) Subscribe() timesync.LayerTimer {
+	return make(timesync.LayerTimer)
+}
+
 func (pm PeersMock) GetPeers() []p2p.Peer {
 	return pm.getPeers()
 }
@@ -27,7 +34,8 @@ func (pm PeersMock) Close() {
 	return
 }
 func ListenerFactory(serv server.Service, peers p2p.Peers, name string) *BlockListener {
-	nbl := NewBlockListener(serv, BlockValidatorMock{}, getMesh(memoryDB, "TestBlockListener_"+name), 1*time.Second, 2, log.New(name, "", ""))
+
+	nbl := NewBlockListener(serv, BlockValidatorMock{}, getMesh(memoryDB, "TestBlockListener_"+name), 1*time.Second, 2, &ClockMock{}, log.New(name, "", ""))
 	nbl.Peers = peers //override peers with mock
 	return nbl
 }
@@ -63,7 +71,7 @@ loop:
 			t.Error("timed out ")
 		default:
 			if b, err := bl2.GetBlock(block1.Id); err == nil {
-				fmt.Println("  ", b)
+				t.Log("  ", b)
 				t.Log("done!")
 				break loop
 			}
@@ -73,7 +81,7 @@ loop:
 
 func TestBlockListener2(t *testing.T) {
 
-	fmt.Println("test sync start")
+	t.Log("TestBlockListener2 start")
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
@@ -129,7 +137,7 @@ func TestBlockListener2(t *testing.T) {
 			return
 		default:
 			if b, err := bl2.GetBlock(block1.Id); err == nil {
-				fmt.Println("  ", b)
+				t.Log("  ", b)
 				t.Log("done!")
 				return
 			}
@@ -141,9 +149,12 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
+	//n2.RegisterGossipProtocol(NewBlockProtocol)
 
 	bl1 := ListenerFactory(n1, PeersMock{func() []p2p.Peer { return []p2p.Peer{n2.PublicKey()} }}, "5")
+	bl2 := ListenerFactory(n2, PeersMock{func() []p2p.Peer { return []p2p.Peer{n1.PublicKey()} }}, "4")
 	bl1.Start()
+	bl2.Start()
 
 	blk := mesh.NewBlock(false, nil, time.Now(), 1)
 	tx := mesh.NewSerializableTransaction(0, address.BytesToAddress([]byte{0x01}), address.BytesToAddress([]byte{0x02}), big.NewInt(10), big.NewInt(10), 10)
@@ -169,7 +180,7 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 		default:
 			if b, err := bl1.GetBlock(blk.Id); err == nil {
 				assert.Equal(t, blk, b)
-				fmt.Println("  ", b)
+				t.Log("  ", b)
 				t.Log("done!")
 				return
 			}

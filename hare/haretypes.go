@@ -16,6 +16,7 @@ type Value struct {
 type InstanceId struct {
 	Bytes32
 }
+
 type MessageType byte
 
 const (
@@ -67,6 +68,15 @@ func (b32 Bytes32) Id() uint32 {
 
 func (b32 Bytes32) Bytes() []byte {
 	return b32[:]
+}
+
+func (b32 Bytes32) String() string {
+	// TODO: should improve
+	return string(b32.Id())
+}
+
+func (id InstanceId) String() string {
+	return string(id.Bytes())
 }
 
 // Represents a unique set of values
@@ -215,10 +225,10 @@ func (s *Set) Id() uint32 {
 }
 
 func (s *Set) String() string {
+	// TODO: should improve
 	b := new(bytes.Buffer)
-	fmt.Fprintf(b, "Values: \n")
 	for _, v := range s.values {
-		fmt.Fprintf(b, "%v\r\n", v.Bytes())
+		fmt.Fprintf(b, "%v\r\n", v.Id())
 	}
 	return b.String()
 }
