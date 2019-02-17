@@ -104,7 +104,6 @@ func TestSyncer_Start(t *testing.T) {
 	sync := syncs[0]
 	defer sync.Close()
 	sync.SetLatestLayer(5)
-	fmt.Println(sync.IsSynced())
 	sync.Start()
 	timeout := time.After(10 * time.Second)
 	for {
@@ -412,7 +411,7 @@ loop:
 		default:
 			if syncObj2.LatestReceivedLayer() == 3 && syncObj3.LatestReceivedLayer() == 3 {
 				t.Log("done!")
-				fmt.Println(syncObj2.LatestReceivedLayer(), " ", syncObj3.LatestReceivedLayer())
+				t.Log(syncObj2.LatestReceivedLayer(), " ", syncObj3.LatestReceivedLayer())
 				break loop
 			}
 		}
