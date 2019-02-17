@@ -178,8 +178,8 @@ func (app *SpacemeshApp) before(cmd *cobra.Command, args []string) (err error) {
 	// ensure cli flags are higher priority than config file
 	EnsureCLIFlags(cmd, app.Config)
 
-	// use TimeConfigValues as time config instead of CLI flags
-	app.Config.TIME = timeCfg.TimeConfigValues
+	// override default config in timesync since timesync is using TimeCongigValues
+	timeCfg.TimeConfigValues = app.Config.TIME
 
 	app.setupLogging()
 
