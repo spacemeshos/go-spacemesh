@@ -395,6 +395,10 @@ func (ni *ninjaTortoise) latestComplete() mesh.LayerID {
 	return ni.pBase.Layer()
 }
 
+func (ni *ninjaTortoise) getVotes() map[mesh.BlockID]vec {
+	return ni.tVote[ni.pBase]
+}
+
 func (ni *ninjaTortoise) getVote(id mesh.BlockID) vec {
 	block, found := ni.blocks[id]
 

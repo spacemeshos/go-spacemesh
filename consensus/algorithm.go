@@ -14,6 +14,7 @@ type Tortoise interface {
 	handleIncomingLayer(ll *mesh.Layer)
 	latestComplete() mesh.LayerID
 	getVote(id mesh.BlockID) vec
+	getVotes() map[mesh.BlockID]vec
 }
 
 func NewAlgorithm(trtl Tortoise) *Algorithm {
@@ -29,7 +30,20 @@ func (alg *Algorithm) HandleIncomingLayer(ll *mesh.Layer) (mesh.LayerID, mesh.La
 	oldPbase := alg.latestComplete()
 	alg.Tortoise.handleIncomingLayer(ll)
 	newPbase := alg.latestComplete()
+	alg.updateMetrics(ll)
 	return oldPbase, newPbase
+}
+
+func (alg *Algorithm) updateMetrics(ll *mesh.Layer) {
+	pbaseCount.Set(float64(alg.latestComplete()))
+	processedCount.Set(float64(ll.Index()))
+	for _, k := range alg.getVotes() {
+		if k == Support {
+			validBlocks.Add(1)
+		} else {
+			invalidBlocks.Add(1)
+		}
+	}
 }
 
 func (alg *Algorithm) ContextualValidity(id mesh.BlockID) bool {
