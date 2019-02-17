@@ -63,7 +63,6 @@ func (m *meshDB) getLayer(index LayerID) (*Layer, error) {
 		return nil, errors.New("could not get all blocks from database " + err.Error())
 	}
 
-
 	l.SetBlocks(blocks)
 
 	return l, nil

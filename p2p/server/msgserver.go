@@ -153,7 +153,10 @@ func (p *MessageServer) handleResponseMessage(headers *service.DataMsgWrapper) {
 	p.pendMutex.Unlock()
 	p.removeFromPending(headers.ReqID)
 	if okFoo {
+		log.Info("found response handler")
 		foo(headers.Payload)
+	} else {
+		log.Error("Cant find handler")
 	}
 }
 
