@@ -8,7 +8,7 @@ import (
 
 type messageValidator interface {
 	SyntacticallyValidateMessage(m *pb.HareMessage) bool
-	ContextuallyValidateMessage(m *pb.HareMessage, expectedK uint32) bool
+	ContextuallyValidateMessage(m *pb.HareMessage, expectedK int32) bool
 }
 
 type MessageValidator struct {
@@ -19,8 +19,8 @@ type MessageValidator struct {
 	log.Log
 }
 
-func NewMessageValidator(signing Signing, threshold int, defaultSize int, validator func(m *pb.HareMessage) bool) *MessageValidator {
-	return &MessageValidator{signing, threshold, defaultSize, validator, log.NewDefault("MessageValidator")}
+func NewMessageValidator(signing Signing, threshold int, defaultSize int, validator func(m *pb.HareMessage) bool, logger log.Log) *MessageValidator {
+	return &MessageValidator{signing, threshold, defaultSize, validator, logger}
 }
 
 func (validator *MessageValidator) SyntacticallyValidateMessage(m *pb.HareMessage) bool {
@@ -51,7 +51,7 @@ func (validator *MessageValidator) SyntacticallyValidateMessage(m *pb.HareMessag
 }
 
 // verifies the message is contextually valid
-func (validator *MessageValidator) ContextuallyValidateMessage(m *pb.HareMessage, expectedK uint32) bool {
+func (validator *MessageValidator) ContextuallyValidateMessage(m *pb.HareMessage, expectedK int32) bool {
 	if m.Message == nil {
 		validator.Warning("Contextual validation failed: m.Message is nil")
 		return false

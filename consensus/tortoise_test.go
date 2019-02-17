@@ -25,20 +25,6 @@ func TestAlgorithm_Sanity(t *testing.T) {
 	}
 }
 
-func createGenesisLayer() *mesh.Layer {
-	log.Info("Creating genesis")
-	ts := time.Now()
-	coin := false
-	data := []byte("genesis")
-
-	bl := mesh.NewBlock(coin, data, ts, 0)
-	l := mesh.NewLayer(0)
-
-	l.AddBlock(bl)
-
-	return l
-}
-
 func createFullPointingLayer(prev *mesh.Layer, blocksInLayer int) *mesh.Layer {
 	ts := time.Now()
 	coin := false

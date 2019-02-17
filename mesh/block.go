@@ -36,6 +36,18 @@ type SerializableTransaction struct {
 	Payload      []byte
 }
 
+func (t *SerializableTransaction) AmountAsBigInt() *big.Int {
+	a := &big.Int{}
+	a.SetBytes(t.Amount)
+	return a
+}
+
+func (t *SerializableTransaction) PriceAsBigInt() *big.Int {
+	a := &big.Int{}
+	a.SetBytes(t.Price)
+	return a
+}
+
 func NewBlock(coin bool, data []byte, ts time.Time, layerId LayerID) *Block {
 	b := Block{
 		Id:         BlockID(uuid.New().ID()),

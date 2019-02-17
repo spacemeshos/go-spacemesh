@@ -21,7 +21,7 @@ type mockMessageValidator struct {
 	contextValid2 bool
 	countSyntax   int
 	countContext  int
-	firstK        uint32
+	firstK        int32
 }
 
 func (mmv *mockMessageValidator) SyntacticallyValidateMessage(m *pb.HareMessage) bool {
@@ -29,7 +29,7 @@ func (mmv *mockMessageValidator) SyntacticallyValidateMessage(m *pb.HareMessage)
 	return mmv.syntaxValid
 }
 
-func (mmv *mockMessageValidator) ContextuallyValidateMessage(m *pb.HareMessage, expectedK uint32) bool {
+func (mmv *mockMessageValidator) ContextuallyValidateMessage(m *pb.HareMessage, expectedK int32) bool {
 	mmv.countContext++
 	if mmv.firstK == expectedK {
 		return mmv.contextValid
@@ -213,9 +213,10 @@ func TestConsensusProcess_nextRound(t *testing.T) {
 	proc := generateConsensusProcess(t)
 	broker.Register(proc)
 	proc.advanceToNextRound()
-	assert.Equal(t, uint32(1), proc.k)
 	proc.advanceToNextRound()
-	assert.Equal(t, uint32(2), proc.k)
+	assert.Equal(t, int32(1), proc.k)
+	proc.advanceToNextRound()
+	assert.Equal(t, int32(2), proc.k)
 }
 
 func generateConsensusProcess(t *testing.T) *ConsensusProcess {
@@ -275,20 +276,6 @@ func TestConsensusProcess_Proof(t *testing.T) {
 	}
 }
 
-func TestConsensusProcess_roleFromRoundCounter(t *testing.T) {
-	r := uint32(0)
-	for i := 0; i < 10; i++ {
-		assert.Equal(t, Active, roleFromRoundCounter(r))
-		r++
-		assert.Equal(t, Leader, roleFromRoundCounter(r))
-		r++
-		assert.Equal(t, Active, roleFromRoundCounter(r))
-		r++
-		assert.Equal(t, Passive, roleFromRoundCounter(r))
-		r++
-	}
-}
-
 func TestConsensusProcess_isEligible(t *testing.T) {
 	proc := generateConsensusProcess(t)
 	oracle := &mockRolacle{}
@@ -345,6 +332,7 @@ func TestConsensusProcess_procPre(t *testing.T) {
 
 func TestConsensusProcess_procStatus(t *testing.T) {
 	proc := generateConsensusProcess(t)
+	proc.beginRound1()
 	s := NewSmallEmptySet()
 	m := BuildStatusMsg(generateSigning(t), s)
 	proc.processStatusMsg(m)
@@ -353,6 +341,7 @@ func TestConsensusProcess_procStatus(t *testing.T) {
 
 func TestConsensusProcess_procProposal(t *testing.T) {
 	proc := generateConsensusProcess(t)
+	proc.advanceToNextRound()
 	proc.advanceToNextRound()
 	s := NewSmallEmptySet()
 	m := BuildProposalMsg(generateSigning(t), s)
@@ -386,7 +375,7 @@ func TestConsensusProcess_procNotify(t *testing.T) {
 	assert.Equal(t, 1, len(proc.notifyTracker.notifies))
 	m = BuildNotifyMsg(generateSigning(t), s)
 	proc.ki = 0
-	m.Message.K = uint32(proc.ki)
+	m.Message.K = proc.ki
 	proc.s.Add(value5)
 	proc.k = Round4
 	proc.processNotifyMsg(m)
@@ -416,6 +405,7 @@ func TestConsensusProcess_Termination(t *testing.T) {
 
 func TestConsensusProcess_currentRound(t *testing.T) {
 	proc := generateConsensusProcess(t)
+	proc.advanceToNextRound()
 	assert.Equal(t, Round1, proc.currentRound())
 	proc.advanceToNextRound()
 	assert.Equal(t, Round2, proc.currentRound())
@@ -451,12 +441,14 @@ func TestProcOutput_Set(t *testing.T) {
 
 func TestIterationFromCounter(t *testing.T) {
 	for i := 0; i < 10; i++ {
-		assert.Equal(t, uint32(i/4), iterationFromCounter(uint32(i)))
+		assert.Equal(t, int32(i/4), iterationFromCounter(int32(i)))
 	}
 }
 
 func TestConsensusProcess_beginRound1(t *testing.T) {
 	proc := generateConsensusProcess(t)
+	proc.advanceToNextRound()
+	proc.onRoundBegin()
 	network := &mockP2p{}
 	proc.network = network
 	oracle := &mockRolacle{}
@@ -474,6 +466,7 @@ func TestConsensusProcess_beginRound1(t *testing.T) {
 
 func TestConsensusProcess_beginRound2(t *testing.T) {
 	proc := generateConsensusProcess(t)
+	proc.advanceToNextRound()
 	network := &mockP2p{}
 	proc.network = network
 	oracle := &mockRolacle{}
@@ -518,6 +511,9 @@ func TestConsensusProcess_beginRound3(t *testing.T) {
 
 func TestConsensusProcess_beginRound4(t *testing.T) {
 	proc := generateConsensusProcess(t)
+	proc.beginRound1()
+	proc.beginRound2()
+	proc.beginRound3()
 	assert.NotNil(t, proc.commitTracker)
 	assert.NotNil(t, proc.proposalTracker)
 	proc.beginRound4()

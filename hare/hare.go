@@ -36,7 +36,7 @@ type TerminationOutput interface {
 }
 
 type orphanBlockProvider interface {
-	GetOrphanBlocksByLayerId(layerId mesh.LayerID) []mesh.BlockID
+	GetUnverifiedLayerBlocks(layerId mesh.LayerID) []mesh.BlockID
 }
 
 // Hare is an orchestrator that shoots consensus processes and collects their termination output
@@ -70,7 +70,7 @@ type Hare struct {
 }
 
 // New returns a new Hare struct.
-func New(conf config.Config, p2p NetworkService, sign Signing, obp orphanBlockProvider, rolacle Rolacle, beginLayer chan mesh.LayerID) *Hare {
+func New(conf config.Config, p2p NetworkService, sign Signing, obp orphanBlockProvider, rolacle Rolacle, beginLayer chan mesh.LayerID, logger log.Log) *Hare {
 	h := new(Hare)
 	h.Closer = NewCloser()
 
@@ -96,7 +96,7 @@ func New(conf config.Config, p2p NetworkService, sign Signing, obp orphanBlockPr
 	h.outputs = make(map[mesh.LayerID][]mesh.BlockID, h.bufferSize) //  we keep results about LayerBuffer past layers
 
 	h.factory = func(conf config.Config, instanceId InstanceId, s *Set, oracle Rolacle, signing Signing, p2p NetworkService, terminationReport chan TerminationOutput) Consensus {
-		return NewConsensusProcess(conf, instanceId, s, oracle, signing, p2p, terminationReport, log.NewDefault("ConsensusProcess"))
+		return NewConsensusProcess(conf, instanceId, s, oracle, signing, p2p, terminationReport, logger)
 	}
 
 	return h
@@ -160,8 +160,7 @@ func (h *Hare) onTick(id mesh.LayerID) {
 	}
 
 	// retrieve set form orphan blocks
-	blocks := h.obp.GetOrphanBlocksByLayerId(id)
-
+	blocks := h.obp.GetUnverifiedLayerBlocks(h.lastLayer)
 	if len(blocks) == 0 {
 		log.Info("No blocks for consensus on layer %v", id)
 		return
@@ -188,6 +187,22 @@ var (
 	// ErrTooEarly is what we return when the requested layer consensus is still in process
 	ErrTooEarly = errors.New("results for that layer haven't arrived yet")
 )
+
+// GetResults returns the hare output for a given LayerID. returns error if we don't have results yet.
+func (h *Hare) BlockingGetResult(id mesh.LayerID) ([]mesh.BlockID, error) {
+	if h.isTooLate(id) {
+		return nil, ErrTooOld
+	}
+
+	h.mu.RLock()
+	blks, ok := h.outputs[id]
+	if !ok {
+		h.mu.RUnlock()
+		return nil, ErrTooEarly
+	}
+	h.mu.RUnlock()
+	return blks, nil
+}
 
 // GetResults returns the hare output for a given LayerID. returns error if we don't have results yet.
 func (h *Hare) GetResult(id mesh.LayerID) ([]mesh.BlockID, error) {

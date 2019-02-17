@@ -53,12 +53,12 @@ func (nt *NotifyTracker) NotificationsCount(s *Set) int {
 	return int(nt.tracker.CountStatus(s))
 }
 
-func calcId(k uint32, set *Set) uint32 {
+func calcId(k int32, set *Set) uint32 {
 	hash := fnv.New32()
 
 	// write k
 	buff := make([]byte, 4)
-	binary.LittleEndian.PutUint32(buff, k)
+	binary.LittleEndian.PutUint32(buff, uint32(k)) // k>=0 because this not pre-round
 	hash.Write(buff)
 
 	// write set id
@@ -69,11 +69,11 @@ func calcId(k uint32, set *Set) uint32 {
 	return hash.Sum32()
 }
 
-func (nt *NotifyTracker) onCertificate(k uint32, set *Set) {
+func (nt *NotifyTracker) onCertificate(k int32, set *Set) {
 	nt.certificates[calcId(k, set)] = struct{}{}
 }
 
 func (nt *NotifyTracker) HasCertificate(k int32, set *Set) bool {
-	_, exist := nt.certificates[calcId(uint32(k), set)]
+	_, exist := nt.certificates[calcId(k, set)]
 	return exist
 }
