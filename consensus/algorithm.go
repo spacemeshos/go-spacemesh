@@ -37,13 +37,17 @@ func (alg *Algorithm) HandleIncomingLayer(ll *mesh.Layer) (mesh.LayerID, mesh.La
 func updateMetrics(alg *Algorithm, ll *mesh.Layer) {
 	pbaseCount.Set(float64(alg.latestComplete()))
 	processedCount.Set(float64(ll.Index()))
+	var valid float64
+	var invalid float64
 	for _, k := range alg.getVotes() {
 		if k == Support {
-			validBlocks.Add(1)
+			valid++
 		} else {
-			invalidBlocks.Add(1)
+			invalid++
 		}
 	}
+	validBlocks.Set(valid)
+	invalidBlocks.Set(invalid)
 }
 
 func (alg *Algorithm) ContextualValidity(id mesh.BlockID) bool {
