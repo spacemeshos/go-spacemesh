@@ -73,7 +73,7 @@ func DefaultConfig() Config {
 		P2P:        p2pConfig.DefaultConfig(),
 		API:        apiConfig.DefaultConfig(),
 		CONSENSUS:  consensusConfig.DefaultConfig(),
-		HARE:		hareConfig.DefaultConfig(),
+		HARE:       hareConfig.DefaultConfig(),
 		TIME:       timeConfig.DefaultConfig(),
 	}
 }
