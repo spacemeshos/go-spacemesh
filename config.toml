@@ -51,6 +51,5 @@ default-timeout-latency = "10s"
 # Hare Config
 N = "2"
 F = "1"
-set-size = 2
 round-duration-ms = "1000ms"
 
