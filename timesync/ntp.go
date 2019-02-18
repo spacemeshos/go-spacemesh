@@ -4,11 +4,12 @@ package timesync
 import (
 	"encoding/binary"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"math/rand"
 	"net"
 	"sort"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/timesync/config"
 )
 
 const (

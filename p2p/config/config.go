@@ -9,7 +9,6 @@ import (
 // ConfigValues specifies  default values for node config params.
 var (
 	ConfigValues      = DefaultConfig()
-	TimeConfigValues  = ConfigValues.TimeConfig
 	SwarmConfigValues = ConfigValues.SwarmConfig
 )
 
@@ -38,7 +37,6 @@ type Config struct {
 	ResponseTimeout time.Duration `mapstructure:"response-timeout"`
 	SwarmConfig     SwarmConfig   `mapstructure:"swarm"`
 	BufferSize      int           `mapstructure:"buffer-size"`
-	TimeConfig      TimeConfig
 }
 
 // SwarmConfig specifies swarm config params.
@@ -51,24 +49,8 @@ type SwarmConfig struct {
 	BootstrapNodes         []string `mapstructure:"bootnodes"`
 }
 
-// TimeConfig specifies the timesync params for ntp.
-type TimeConfig struct {
-	MaxAllowedDrift       time.Duration `mapstructure:"max-allowed-time-drift"`
-	NtpQueries            int           `mapstructure:"ntp-queries"`
-	DefaultTimeoutLatency time.Duration `mapstructure:"default-timeout-latency"`
-	RefreshNtpInterval    time.Duration `mapstructure:"refresh-ntp-interval"`
-}
-
-// DefaultConfig deines the default p2p configuration
+// DefaultConfig defines the default p2p configuration
 func DefaultConfig() Config {
-
-	// TimeConfigValues defines default values for all time and ntp related params.
-	var TimeConfigValues = TimeConfig{
-		MaxAllowedDrift:       duration("10s"),
-		NtpQueries:            5,
-		DefaultTimeoutLatency: duration("10s"),
-		RefreshNtpInterval:    duration("30m"),
-	}
 
 	// SwarmConfigValues defines default values for swarm config params.
 	var SwarmConfigValues = SwarmConfig{
@@ -92,7 +74,6 @@ func DefaultConfig() Config {
 		NetworkID:       TestNet,
 		ResponseTimeout: duration("15s"),
 		SwarmConfig:     SwarmConfigValues,
-		TimeConfig:      TimeConfigValues,
 		BufferSize:      100,
 	}
 }

@@ -49,8 +49,13 @@ tidy:
 .PHONY: tidy
 
 $(PLATFORMS):
+ifeq ($(OS),Windows_NT)
+	make genproto
+	set GOOS=$(os)&&set GOARCH=amd64&&go build ${LDFLAGS} -o $(CURR_DIR)/$(BINARY)
+else
 	make genproto
 	GOOS=$(os) GOARCH=amd64 go build ${LDFLAGS} -o $(CURR_DIR)/$(BINARY)
+endif
 .PHONY: $(PLATFORMS)
 
 test:

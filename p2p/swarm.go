@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"github.com/davecgh/go-spew/spew"
 	"github.com/golang/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -18,6 +19,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/timesync"
+	timeSyncConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
 
 	inet "net"
 	"strconv"
@@ -446,7 +448,7 @@ func (s *swarm) retryOrDisconnect(key p2pcrypto.PublicKey) {
 
 // periodically checks that our clock is sync
 func (s *swarm) checkTimeDrifts() {
-	checkTimeSync := time.NewTicker(config.TimeConfigValues.RefreshNtpInterval)
+	checkTimeSync := time.NewTicker(timeSyncConfig.TimeConfigValues.RefreshNtpInterval)
 Loop:
 	for {
 		select {

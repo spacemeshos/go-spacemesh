@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-var cfg = config.Config{N: 10, F: 5, SetSize: 10, RoundDuration: time.Second * time.Duration(2)}
+var cfg = config.Config{N: 10, F: 5, RoundDuration: time.Second * time.Duration(2)}
 
 type mockMessageValidator struct {
 	syntaxValid   bool
@@ -255,7 +255,7 @@ func TestConsensusProcess_CreateInbox(t *testing.T) {
 
 func TestConsensusProcess_InitDefaultBuilder(t *testing.T) {
 	proc := generateConsensusProcess(t)
-	s := NewEmptySet(cfg.SetSize)
+	s := NewEmptySet(defaultSetSize)
 	s.Add(value1)
 	builder := proc.initDefaultBuilder(s)
 	assert.True(t, NewSet(builder.inner.Values).Equals(s))
