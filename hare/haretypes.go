@@ -34,7 +34,7 @@ const (
 	Round4 = 3
 )
 
-const defaultSetSize = 10
+const defaultSetSize = 200
 
 func (mType MessageType) String() string {
 	switch mType {

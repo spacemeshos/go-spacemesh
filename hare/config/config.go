@@ -3,12 +3,11 @@ package config
 import "time"
 
 type Config struct {
-	N             int           // total number of active parties
-	F             int           // number of dishonest parties
-	SetSize       int           // max size of set in a consensus
-	RoundDuration time.Duration // the duration of a single round
+	N             int           `mapstructure:"hare-committee-size"`  // total number of active parties
+	F             int           `mapstructure:"hare-max-adversaries"` // number of dishonest parties
+	RoundDuration time.Duration `mapstructure:"round-duration-ms"`    // the duration of a single round
 }
 
 func DefaultConfig() Config {
-	return Config{2, 1, 2, 1500 * time.Millisecond}
+	return Config{2, 1, 1500 * time.Millisecond}
 }

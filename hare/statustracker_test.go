@@ -50,7 +50,7 @@ func TestStatusTracker_BuildUnionSet(t *testing.T) {
 	s.Add(value3)
 	tracker.RecordStatus(BuildStatusMsg(generateSigning(t), s))
 
-	g := tracker.buildUnionSet(cfg.SetSize)
+	g := tracker.buildUnionSet(defaultSetSize)
 	assert.True(t, s.Equals(g))
 }
 
