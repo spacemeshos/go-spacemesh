@@ -11,14 +11,14 @@ const (
 	Subsystem = "consensus"
 )
 
-func getGauge(name, help string, labels []string) metrics.Gauge {
+func newGauge(name, help string, labels []string) metrics.Gauge {
 	return prmkit.NewGaugeFrom(prometheus.GaugeOpts{Namespace: Namespace, Subsystem: Subsystem, Name: name, Help: help}, labels)
 }
 
 var (
-	pbaseCount     = getGauge("pbase_counter", "pbase index", []string{})
-	processedCount = getGauge("processed_index", "processed index", []string{})
-	blockVotes     = getGauge("block_votes", "block validity", []string{"validity"})
+	pbaseCount     = newGauge("pbase_counter", "pbase index", []string{})
+	processedCount = newGauge("processed_index", "number of layers processed", []string{})
+	blockVotes     = newGauge("block_votes", "block validity", []string{"validity"})
 	validBlocks    = blockVotes.With("validity", "valid")
 	invalidBlocks  = blockVotes.With("validity", "invalid")
 )
