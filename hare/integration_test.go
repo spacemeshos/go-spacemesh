@@ -51,11 +51,12 @@ func Test_16Nodes_HareIntegrationSuite(t *testing.T) {
 	his.honestSets = []*Set{set1}
 	oracle := eligibility.New()
 	his.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
-		broker := NewBroker(s)
-		output := make(chan TerminationOutput, 1)
 		signing := NewMockSigning()
+		lg := log.NewDefault(signing.Verifier().String())
+		broker := NewBroker(s, newEligibilityValidator(newHareOracle(oracle, cfg.N), lg))
+		output := make(chan TerminationOutput, 1)
 		oracle.Register(true, signing.Verifier().String())
-		proc := NewConsensusProcess(cfg, *instanceId1, his.initialSets[idx], oracle, signing, s, output, log.NewDefault(signing.Verifier().String()))
+		proc := NewConsensusProcess(cfg, *instanceId1, his.initialSets[idx], oracle, signing, s, output, lg)
 		broker.Register(proc)
 		broker.Start()
 		his.procs = append(his.procs, proc)
@@ -103,10 +104,10 @@ func Test_20Nodes_HareIntegrationSuite(t *testing.T) {
 	his.honestSets = []*Set{set1, set2, set3}
 	oracle := eligibility.New()
 	his.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
-		log.Info("Starting instance %v", idx)
-		broker := NewBroker(s)
-		output := make(chan TerminationOutput, 1)
 		signing := NewMockSigning()
+		lg := log.NewDefault(signing.Verifier().String())
+		broker := NewBroker(s, newEligibilityValidator(newHareOracle(oracle, cfg.N), lg))
+		output := make(chan TerminationOutput, 1)
 		oracle.Register(true, signing.Verifier().String())
 		proc := NewConsensusProcess(cfg, *instanceId1, his.initialSets[idx], oracle, signing, s, output, log.NewDefault(signing.Verifier().String()))
 		broker.Register(proc)

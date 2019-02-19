@@ -18,7 +18,7 @@ type Identifiable interface {
 }
 
 type Inboxer interface {
-	createInbox(size uint32) chan Message
+	createInbox(size uint32) chan *pb.HareMessage
 }
 
 type IdentifiableInboxer interface {
@@ -48,19 +48,22 @@ func (closer *Closer) CloseChannel() chan struct{} {
 // Broker is responsible for dispatching hare messages to the matching set id listener
 type Broker struct {
 	Closer
-	network NetworkService
-	inbox   chan service.GossipMessage
-	outbox  map[uint32]chan Message
-	pending map[uint32][]Message
-	mutex   sync.RWMutex
+	network    NetworkService
+	eValidator *eligibilityValidator
+	inbox      chan service.GossipMessage
+	outbox     map[uint32]chan *pb.HareMessage
+	pending    map[uint32][]*pb.HareMessage
+	mutex      sync.RWMutex
+	maxReg     InstanceId
 }
 
-func NewBroker(networkService NetworkService) *Broker {
+func NewBroker(networkService NetworkService, eValidator *eligibilityValidator) *Broker {
 	p := new(Broker)
 	p.Closer = NewCloser()
 	p.network = networkService
-	p.outbox = make(map[uint32]chan Message)
-	p.pending = make(map[uint32][]Message, 0)
+	p.eValidator = eValidator
+	p.outbox = make(map[uint32]chan *pb.HareMessage)
+	p.pending = make(map[uint32][]*pb.HareMessage, 0)
 
 	return p
 }
@@ -77,18 +80,6 @@ func (broker *Broker) Start() error {
 	return nil
 }
 
-type Message struct {
-	msg            *pb.HareMessage
-	bytes          []byte
-	validationChan chan service.MessageValidation
-}
-
-func (msg Message) reportValidationResult(isValid bool) {
-	if msg.validationChan != nil {
-		msg.validationChan <- service.NewMessageValidation(msg.bytes, ProtoName, isValid)
-	}
-}
-
 // Dispatch incoming messages to the matching set id instance
 func (broker *Broker) dispatcher() {
 	for {
@@ -101,25 +92,29 @@ func (broker *Broker) dispatcher() {
 				continue
 			}
 
+			if !broker.eValidator.Validate(hareMsg) {
+				msg.ReportValidation(ProtoName, false)
+				continue
+			}
+
+			msg.ReportValidation(ProtoName, true)
+
 			instanceId := NewBytes32(hareMsg.Message.InstanceId)
 
 			broker.mutex.RLock()
 			c, exist := broker.outbox[instanceId.Id()]
 			broker.mutex.RUnlock()
-			mOut := Message{hareMsg, msg.Bytes(), msg.ValidationCompletedChan()}
 			if exist {
 				// todo: err if chan is full (len)
-				c <- mOut
+				c <- hareMsg
 			} else {
 
 				broker.mutex.Lock()
 				if _, exist := broker.pending[instanceId.Id()]; !exist {
-					broker.pending[instanceId.Id()] = make([]Message, 0)
+					broker.pending[instanceId.Id()] = make([]*pb.HareMessage, 0)
 				}
-				broker.pending[instanceId.Id()] = append(broker.pending[instanceId.Id()], mOut)
+				broker.pending[instanceId.Id()] = append(broker.pending[instanceId.Id()], hareMsg)
 				broker.mutex.Unlock()
-				// report validity so that the message will be propagated without delay
-				mOut.reportValidationResult(true) // TODO consider actually validating the message before reporting the validity
 			}
 
 		case <-broker.CloseChannel():

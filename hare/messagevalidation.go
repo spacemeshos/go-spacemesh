@@ -11,47 +11,89 @@ type messageValidator interface {
 	ContextuallyValidateMessage(m *pb.HareMessage, expectedK int32) bool
 }
 
-type MessageValidator struct {
-	signing         Signing
-	threshold       int
-	defaultSize     int
-	statusValidator func(m *pb.HareMessage) bool // used to validate status messages in SVP
+type eligibilityValidator struct {
+	oracle  HareRolacle
 	log.Log
 }
 
-func NewMessageValidator(signing Signing, threshold int, defaultSize int, validator func(m *pb.HareMessage) bool, logger log.Log) *MessageValidator {
-	return &MessageValidator{signing, threshold, defaultSize, validator, logger}
+func newEligibilityValidator(oracle HareRolacle, logger log.Log) *eligibilityValidator {
+	return &eligibilityValidator{oracle, logger}
 }
 
-func (validator *MessageValidator) SyntacticallyValidateMessage(m *pb.HareMessage) bool {
-	if !validator.isValidStructure(m) {
-		validator.Warning("Validate message failed: message is not syntactically valid")
+func (ev *eligibilityValidator) validateRole(m *pb.HareMessage) bool {
+	if m == nil {
+		ev.Error("Eligibility validator: called with nil")
 		return false
 	}
 
-	data, err := proto.Marshal(m.Message)
-	if err != nil {
-		validator.Error("Validate message failed: failed marshaling inner message")
+	if m.Message == nil {
+		ev.Warning("Eligibility validator: message is nil")
 		return false
 	}
 
-	// verify signature
+	if m.Message.InstanceId == nil {
+		ev.Warning("Eligibility validator: instance id is nil")
+		return false
+	}
+
+	// TODO: validate role proof sig
+
 	verifier, err := NewVerifier(m.PubKey)
 	if err != nil {
-		validator.Warning("Validate message failed: Could not construct verifier ", err)
+		ev.Error("Could not build verifier")
 		return false
 	}
-	res, _ := verifier.Verify(data, m.InnerSig)
-	if !res {
-		validator.Warning("Validate message failed: invalid message signature detected ")
+
+	// validate role
+	if !ev.oracle.Eligible(InstanceId{NewBytes32(m.Message.InstanceId)}, m.Message.K, verifier.String(), Signature(m.Message.RoleProof)) {
+		ev.Warning("Role validation failed")
 		return false
 	}
 
 	return true
 }
 
+func (ev *eligibilityValidator) Validate(m *pb.HareMessage) bool {
+	data, err := proto.Marshal(m.Message)
+	if err != nil {
+		ev.Error("Validate message failed: failed marshaling inner message")
+		return false
+	}
+
+	// verify signature
+	verifier, err := NewVerifier(m.PubKey)
+	if err != nil {
+		ev.Warning("Validate message failed: Could not construct verifier ", err)
+		return false
+	}
+	res, _ := verifier.Verify(data, m.InnerSig)
+	if !res {
+		ev.Warning("Validate message failed: invalid message signature detected ")
+		return false
+	}
+
+	// verify role
+	if !ev.validateRole(m) {
+		ev.Warning("Validate message failed: role is invalid")
+		return false
+	}
+
+	return true
+}
+
+type syntaxContextValidator struct {
+	signing         Signing
+	threshold       int
+	statusValidator func(m *pb.HareMessage) bool // used to validate status messages in SVP
+	log.Log
+}
+
+func newSyntaxContextValidator(signing Signing, threshold int, validator func(m *pb.HareMessage) bool, logger log.Log) *syntaxContextValidator {
+	return &syntaxContextValidator{signing, threshold, validator, logger}
+}
+
 // verifies the message is contextually valid
-func (validator *MessageValidator) ContextuallyValidateMessage(m *pb.HareMessage, expectedK int32) bool {
+func (validator *syntaxContextValidator) ContextuallyValidateMessage(m *pb.HareMessage, expectedK int32) bool {
 	if m.Message == nil {
 		validator.Warning("Contextual validation failed: m.Message is nil")
 		return false
@@ -75,7 +117,7 @@ func (validator *MessageValidator) ContextuallyValidateMessage(m *pb.HareMessage
 }
 
 // verifies the message is syntactically valid
-func (validator *MessageValidator) isValidStructure(m *pb.HareMessage) bool {
+func (validator *syntaxContextValidator) SyntacticallyValidateMessage(m *pb.HareMessage) bool {
 	if m == nil {
 		validator.Warning("Syntax validation failed: m is nil")
 		return false
@@ -119,7 +161,7 @@ func (validator *MessageValidator) isValidStructure(m *pb.HareMessage) bool {
 	}
 }
 
-func (validator *MessageValidator) validateAggregatedMessage(aggMsg *pb.AggregatedMessages, validators []func(m *pb.HareMessage) bool) bool {
+func (validator *syntaxContextValidator) validateAggregatedMessage(aggMsg *pb.AggregatedMessages, validators []func(m *pb.HareMessage) bool) bool {
 	if validators == nil {
 		validator.Error("Aggregated validation failed: validators param is nil")
 		return false
@@ -144,9 +186,9 @@ func (validator *MessageValidator) validateAggregatedMessage(aggMsg *pb.Aggregat
 	// TODO: refill values in commit on certificate
 	// TODO: validate agg sig
 
-	senders := make(map[string]struct{}, validator.defaultSize)
+	senders := make(map[string]struct{})
 	for _, innerMsg := range aggMsg.Messages {
-		if !validator.isValidStructure(innerMsg) {
+		if !validator.SyntacticallyValidateMessage(innerMsg) {
 			validator.Warning("Aggregated validation failed: identified an invalid inner message")
 			return false
 		}
@@ -175,7 +217,7 @@ func (validator *MessageValidator) validateAggregatedMessage(aggMsg *pb.Aggregat
 	return true
 }
 
-func (validator *MessageValidator) validateSVP(msg *pb.HareMessage) bool {
+func (validator *syntaxContextValidator) validateSVP(msg *pb.HareMessage) bool {
 	validateSameIteration := func(m *pb.HareMessage) bool {
 		proposalIter := iterationFromCounter(msg.Message.K)
 		statusIter := iterationFromCounter(m.Message.K)
@@ -218,7 +260,7 @@ func (validator *MessageValidator) validateSVP(msg *pb.HareMessage) bool {
 	return true
 }
 
-func (validator *MessageValidator) validateCertificate(cert *pb.Certificate) bool {
+func (validator *syntaxContextValidator) validateCertificate(cert *pb.Certificate) bool {
 	if cert == nil {
 		validator.Warning("Certificate validation failed: certificate is nil")
 		return false
@@ -260,7 +302,7 @@ func validateStatusType(m *pb.HareMessage) bool {
 }
 
 // validate SVP for type A (where all ki=-1)
-func (validator *MessageValidator) validateSVPTypeA(m *pb.HareMessage) bool {
+func (validator *syntaxContextValidator) validateSVPTypeA(m *pb.HareMessage) bool {
 	s := NewSet(m.Message.Values)
 	unionSet := NewEmptySet(cap(m.Message.Values))
 	for _, status := range m.Message.Svp.Messages {
@@ -280,7 +322,7 @@ func (validator *MessageValidator) validateSVPTypeA(m *pb.HareMessage) bool {
 }
 
 // validate SVP for type B (where exist ki>=0)
-func (validator *MessageValidator) validateSVPTypeB(msg *pb.HareMessage, maxSet *Set) bool {
+func (validator *syntaxContextValidator) validateSVPTypeB(msg *pb.HareMessage, maxSet *Set) bool {
 	// max set should be equal to the claimed set
 	s := NewSet(msg.Message.Values)
 	if !s.Equals(maxSet) {

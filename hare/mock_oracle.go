@@ -28,6 +28,32 @@ type Rolacle interface {
 	Eligible(instanceID uint32, committeeSize int, pubKey string, proof []byte) bool
 }
 
+type HareRolacle interface {
+	Eligible(instanceId InstanceId, k int32, pubKey string, proof []byte) bool
+}
+
+type hareRolacle struct {
+	oracle        Rolacle
+	committeeSize int
+}
+
+func newHareOracle(oracle Rolacle, committeeSize int) *hareRolacle {
+	return &hareRolacle{oracle, committeeSize}
+}
+
+func (hr *hareRolacle) Eligible(instanceId InstanceId, k int32, pubKey string, proof []byte) bool {
+	return hr.oracle.Eligible(hashInstanceAndK(instanceId, k), expectedCommitteeSize(k, hr.committeeSize), pubKey, proof)
+}
+
+func expectedCommitteeSize(k int32, n int) int {
+	if k%4 == Round2 {
+		return 1 // 1 leader
+	}
+
+	// N actives
+	return n
+}
+
 type hasherU32 struct {
 }
 
