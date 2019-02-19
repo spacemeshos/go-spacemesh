@@ -54,7 +54,7 @@ type Broker struct {
 	outbox     map[uint32]chan *pb.HareMessage
 	pending    map[uint32][]*pb.HareMessage
 	mutex      sync.RWMutex
-	maxReg     InstanceId
+	maxReg     uint32
 }
 
 func NewBroker(networkService NetworkService, eValidator *eligibilityValidator) *Broker {
@@ -92,15 +92,28 @@ func (broker *Broker) dispatcher() {
 				continue
 			}
 
-			if !broker.eValidator.Validate(hareMsg) {
+			// message validation
+			if hareMsg.Message == nil {
+				log.Warning("Message validation failed: message is nil")
+				msg.ReportValidation(ProtoName, false)
+			}
+
+			if hareMsg.Message.InstanceId > broker.maxReg+1 { // intended for future unregistered instance
+				log.Warning("Message validation failed: instanceId. Max: %v Actual: %v", broker.maxReg, hareMsg.Message.InstanceId)
 				msg.ReportValidation(ProtoName, false)
 				continue
 			}
 
+			if !broker.eValidator.Validate(hareMsg) {
+				log.Warning("Message validation failed: eValidator returned false %v", hareMsg)
+				msg.ReportValidation(ProtoName, false)
+				continue
+			}
+
+			// validation passed
 			msg.ReportValidation(ProtoName, true)
 
 			instanceId := InstanceId(hareMsg.Message.InstanceId)
-
 			broker.mutex.RLock()
 			c, exist := broker.outbox[instanceId.Id()]
 			broker.mutex.RUnlock()
@@ -127,6 +140,10 @@ func (broker *Broker) dispatcher() {
 // Note: the registering instance is assumed to be started and accepting messages
 func (broker *Broker) Register(idBox IdentifiableInboxer) {
 	broker.mutex.Lock()
+	if idBox.Id() > broker.maxReg {
+		broker.maxReg = idBox.Id()
+	}
+
 	broker.outbox[idBox.Id()] = idBox.createInbox(InboxCapacity)
 
 	pendingForInstance := broker.pending[idBox.Id()]
