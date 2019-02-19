@@ -1,6 +1,7 @@
 package hare
 
 import (
+	"encoding/binary"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"hash/fnv"
 	"math"
@@ -43,6 +44,14 @@ func newHareOracle(oracle Rolacle, committeeSize int) *hareRolacle {
 
 func (hr *hareRolacle) Eligible(instanceId InstanceId, k int32, pubKey string, proof []byte) bool {
 	return hr.oracle.Eligible(hashInstanceAndK(instanceId, k), expectedCommitteeSize(k, hr.committeeSize), pubKey, proof)
+}
+
+func hashInstanceAndK(instanceID InstanceId, K int32) uint32 {
+	kInBytes := make([]byte, 4)
+	binary.LittleEndian.PutUint32(kInBytes, uint32(K))
+	h := newHasherU32()
+	val := h.Hash(instanceID.Bytes(), kInBytes)
+	return val
 }
 
 func expectedCommitteeSize(k int32, n int) int {

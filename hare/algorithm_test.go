@@ -122,14 +122,15 @@ func buildMessage(msg *pb.HareMessage) *pb.HareMessage {
 }
 
 func buildBroker(net NetworkService) *Broker {
-	return NewBroker(net, &mockEligibilityValidator{})
+	return NewBroker(net, &mockEligibilityValidator{true})
 }
 
 type mockEligibilityValidator struct {
+	valid bool
 }
 
 func (mev *mockEligibilityValidator) Validate(m *pb.HareMessage) bool {
-	return true
+	return mev.valid
 }
 
 type mockOracle struct {
@@ -144,20 +145,23 @@ func buildOracle(oracle Rolacle) *hareRolacle {
 }
 
 // test that a message to a specific set id is delivered by the broker
-func TestConsensusProcess_StartTwice(t *testing.T) {
+func TestConsensusProcess_Start(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 	broker := buildBroker(n1)
 	proc := generateConsensusProcess(t)
+	proc.s = NewSmallEmptySet()
 	broker.Register(proc)
 	err := proc.Start()
+	assert.Equal(t, "instance started with an empty set", err.Error())
+	proc.s = NewSetFromValues(value1)
+	err = proc.Start()
 	assert.Equal(t, nil, err)
 	err = proc.Start()
 	assert.Equal(t, "instance already started", err.Error())
 }
 
 func TestConsensusProcess_eventLoop(t *testing.T) {
-	// TODO fix! This test does nothing.. the message that are Broadcast isn't handled because there are no registered protocol handler
 	net := &mockP2p{}
 	broker := buildBroker(net)
 	proc := generateConsensusProcess(t)

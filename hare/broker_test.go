@@ -150,3 +150,76 @@ func TestBroker_RegisterUnregister(t *testing.T) {
 	broker.Unregister(instanceId1)
 	assert.Equal(t, 0, len(broker.outbox))
 }
+
+type mockGossipMessage struct {
+	msg            *pb.HareMessage
+	lastValidation bool
+	vComp          chan service.MessageValidation
+}
+
+func (mgm *mockGossipMessage) Bytes() []byte {
+	data, err := proto.Marshal(mgm.msg)
+	if err != nil {
+		return nil
+	}
+
+	return data
+}
+
+func (mgm *mockGossipMessage) ValidationCompletedChan() chan service.MessageValidation {
+	return mgm.vComp
+}
+
+func (mgm *mockGossipMessage) ReportValidation(protocol string, isValid bool) {
+	mgm.lastValidation = isValid
+	mgm.vComp <- service.MessageValidation{}
+}
+
+func newMockGossipMsg(msg *pb.HareMessage) *mockGossipMessage {
+	return &mockGossipMessage{msg, false, make(chan service.MessageValidation, 10)}
+}
+
+func TestBroker_Send(t *testing.T) {
+	sim := service.NewSimulator()
+	n1 := sim.NewNode()
+	broker := buildBroker(n1)
+	mev := &mockEligibilityValidator{false}
+	broker.eValidator = mev
+	broker.Start()
+
+	m := newMockGossipMsg(nil)
+	broker.inbox <- m
+	<-m.ValidationCompletedChan()
+	assert.False(t, m.lastValidation)
+
+	msg := BuildPreRoundMsg(NewMockSigning(), NewSetFromValues(value1))
+	msg.Message.InstanceId = 2
+	m = newMockGossipMsg(msg)
+	broker.inbox <- m
+	<-m.ValidationCompletedChan()
+	assert.False(t, m.lastValidation)
+
+	msg.Message.InstanceId = 1
+	m = newMockGossipMsg(msg)
+	broker.inbox <- m
+	<-m.ValidationCompletedChan()
+	assert.False(t, m.lastValidation)
+
+	mev.valid = true
+	broker.inbox <- m
+	<-m.ValidationCompletedChan()
+	assert.True(t, m.lastValidation)
+}
+
+func TestBroker_Register(t *testing.T) {
+	sim := service.NewSimulator()
+	n1 := sim.NewNode()
+	broker := buildBroker(n1)
+	broker.Start()
+	inboxer := &MockInboxer{nil, instanceId1.Id()}
+	msg := BuildPreRoundMsg(NewMockSigning(), NewSetFromValues(value1))
+	broker.pending[inboxer.Id()] = []*pb.HareMessage{msg, msg}
+	broker.Register(inboxer)
+	assert.Equal(t, 2, len(broker.outbox[inboxer.Id()]))
+	assert.Equal(t, 0, len(broker.pending[inboxer.Id()]))
+}

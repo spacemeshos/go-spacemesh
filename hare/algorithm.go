@@ -192,23 +192,6 @@ func (proc *ConsensusProcess) onEarlyMessage(m *pb.HareMessage) {
 	proc.pending[verifier.String()] = m
 }
 
-func (proc *ConsensusProcess) expectedCommitteeSize(k int32) int {
-	if k%4 == Round2 {
-		return 1 // 1 leader
-	}
-
-	// N actives
-	return proc.cfg.N
-}
-
-func hashInstanceAndK(instanceID InstanceId, K int32) uint32 {
-	kInBytes := make([]byte, 4)
-	binary.LittleEndian.PutUint32(kInBytes, uint32(K))
-	h := newHasherU32()
-	val := h.Hash(instanceID.Bytes(), kInBytes)
-	return val
-}
-
 func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
 	// Note: instanceId is already verified by the broker
 

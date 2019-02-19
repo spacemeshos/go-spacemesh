@@ -89,6 +89,12 @@ func (broker *Broker) dispatcher() {
 	for {
 		select {
 		case msg := <-broker.inbox:
+			if msg == nil {
+				log.Warning("Message validation failed: called with nil")
+				msg.ReportValidation(ProtoName, false)
+				continue
+			}
+
 			hareMsg := &pb.HareMessage{}
 			err := proto.Unmarshal(msg.Bytes(), hareMsg)
 			if err != nil {
@@ -100,6 +106,7 @@ func (broker *Broker) dispatcher() {
 			if hareMsg.Message == nil {
 				log.Warning("Message validation failed: message is nil")
 				msg.ReportValidation(ProtoName, false)
+				continue
 			}
 
 			if hareMsg.Message.InstanceId > broker.maxReg+1 { // intended for future unregistered instance
