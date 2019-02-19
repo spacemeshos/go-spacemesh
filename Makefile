@@ -1,6 +1,7 @@
 BINARY := go-spacemesh
 VERSION := 0.0.1
 COMMIT = $(shell git rev-parse HEAD)
+SHA = $(shell git rev-parse --short HEAD)
 BRANCH = $(shell git rev-parse --abbrev-ref HEAD)
 BIN_DIR = $(shell pwd)/build
 CURR_DIR = $(shell pwd)
@@ -14,6 +15,8 @@ PKGS = $(shell go list ./...)
 
 PLATFORMS := windows linux darwin
 os = $(word 1, $@)
+
+DOCKER_IMAGE_NAME=go-spacemesh
 
 all: install build
 .PHONY: all
@@ -88,3 +91,15 @@ cover:
 		tail -n +2 cover.out >> cover-all.out;)
 	go tool cover -html=cover-all.out
 .PHONY: cover
+
+dockerbuild:
+	docker build -t $(DOCKER_IMAGE_NAME):latest .
+.PHONY: dockerbuild
+
+dockerpush: dockerbuild
+	echo "$(DOCKER_PASSWORD)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
+	docker tag $(DOCKER_IMAGE_NAME) spacemeshos/$(DOCKER_IMAGE_NAME):develop
+	docker tag $(DOCKER_IMAGE_NAME) spacemeshos/$(DOCKER_IMAGE_NAME):$(SHA)
+	docker push spacemeshos/$(DOCKER_IMAGE_NAME):develop
+	docker push spacemeshos/$(DOCKER_IMAGE_NAME):$(SHA)
+.PHONY: dockerpush
