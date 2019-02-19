@@ -2,6 +2,7 @@ package hare
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"hash/fnv"
 	"sort"
@@ -13,9 +14,7 @@ type Signature []byte
 type Value struct {
 	Bytes32
 }
-type InstanceId struct {
-	Bytes32
-}
+type InstanceId uint32
 
 type MessageType byte
 
@@ -53,6 +52,21 @@ func (mType MessageType) String() string {
 	}
 }
 
+func (id InstanceId) Id() uint32 {
+	return id.Uint32()
+}
+
+func (id InstanceId) Uint32() uint32 {
+	return uint32(id)
+}
+
+func (id InstanceId) Bytes() []byte {
+	idInBytes := make([]byte, 8)
+	binary.LittleEndian.PutUint32(idInBytes, id.Uint32())
+
+	return idInBytes
+}
+
 func NewBytes32(buff []byte) Bytes32 {
 	x := Bytes32{}
 	copy(x[:], buff)
@@ -73,10 +87,6 @@ func (b32 Bytes32) Bytes() []byte {
 func (b32 Bytes32) String() string {
 	// TODO: should improve
 	return string(b32.Id())
-}
-
-func (id InstanceId) String() string {
-	return string(id.Bytes())
 }
 
 // Represents a unique set of values

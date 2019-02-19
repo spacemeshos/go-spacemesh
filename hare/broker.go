@@ -99,7 +99,7 @@ func (broker *Broker) dispatcher() {
 
 			msg.ReportValidation(ProtoName, true)
 
-			instanceId := NewBytes32(hareMsg.Message.InstanceId)
+			instanceId := InstanceId(hareMsg.Message.InstanceId)
 
 			broker.mutex.RLock()
 			c, exist := broker.outbox[instanceId.Id()]

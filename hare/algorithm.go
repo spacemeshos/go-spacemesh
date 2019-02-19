@@ -29,8 +29,8 @@ type procOutput struct {
 	set *Set
 }
 
-func (cpo procOutput) Id() []byte {
-	return cpo.id.Bytes()
+func (cpo procOutput) Id() InstanceId {
+	return cpo.id
 }
 
 func (cpo procOutput) Set() *Set {
@@ -91,7 +91,7 @@ func NewConsensusProcess(cfg config.Config, instanceId InstanceId, s *Set, oracl
 }
 
 func (proc *ConsensusProcess) Id() uint32 {
-	return proc.instanceId.Id()
+	return proc.instanceId.Uint32()
 }
 
 // Returns the iteration number from a given round counter
@@ -125,7 +125,7 @@ func (proc *ConsensusProcess) createInbox(size uint32) chan *pb.HareMessage {
 func (proc *ConsensusProcess) eventLoop() {
 	proc.With().Info("Consensus Processes Started",
 		log.Int("N", proc.cfg.N), log.Int("f", proc.cfg.F), log.String("duration", proc.cfg.RoundDuration.String()),
-		log.String("instance_id", proc.instanceId.String()), log.String("set_values", proc.s.String()))
+		log.Uint32("instance_id", proc.instanceId.Uint32()), log.String("set_values", proc.s.String()))
 
 	// set pre-round message and send
 	m := proc.initDefaultBuilder(proc.s).SetType(PreRound).Sign(proc.signing).Build()
@@ -202,8 +202,10 @@ func (proc *ConsensusProcess) expectedCommitteeSize(k int32) int {
 }
 
 func hashInstanceAndK(instanceID InstanceId, K int32) uint32 {
+	kInBytes := make([]byte, 4)
+	binary.LittleEndian.PutUint32(kInBytes, uint32(K))
 	h := newHasherU32()
-	val := h.Hash(append(instanceID.Bytes(), byte(K)))
+	val := h.Hash(instanceID.Bytes(), kInBytes)
 	return val
 }
 

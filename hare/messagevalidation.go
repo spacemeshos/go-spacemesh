@@ -31,11 +31,6 @@ func (ev *eligibilityValidator) validateRole(m *pb.HareMessage) bool {
 		return false
 	}
 
-	if m.Message.InstanceId == nil {
-		ev.Warning("Eligibility validator: instance id is nil")
-		return false
-	}
-
 	// TODO: validate role proof sig
 
 	verifier, err := NewVerifier(m.PubKey)
@@ -45,7 +40,7 @@ func (ev *eligibilityValidator) validateRole(m *pb.HareMessage) bool {
 	}
 
 	// validate role
-	if !ev.oracle.Eligible(InstanceId{NewBytes32(m.Message.InstanceId)}, m.Message.K, verifier.String(), Signature(m.Message.RoleProof)) {
+	if !ev.oracle.Eligible(InstanceId(m.Message.InstanceId), m.Message.K, verifier.String(), Signature(m.Message.RoleProof)) {
 		ev.Warning("Role validation failed")
 		return false
 	}
