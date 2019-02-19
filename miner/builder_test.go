@@ -34,8 +34,8 @@ type MockOrphans struct {
 	st []mesh.BlockID
 }
 
-func (m MockOrphans) GetUnverifiedLayerBlocks(l mesh.LayerID) []mesh.BlockID {
-	return m.st
+func (m MockOrphans) GetUnverifiedLayerBlocks(l mesh.LayerID) ([]mesh.BlockID, error) {
+	return m.st, nil
 }
 
 type mockBlockOracle struct {

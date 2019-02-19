@@ -197,24 +197,23 @@ func (m *Mesh) handleOrphanBlocks(block *Block) {
 	}
 }
 
-func (m *Mesh) GetUnverifiedLayerBlocks(l LayerID) []BlockID {
+func (m *Mesh) GetUnverifiedLayerBlocks(l LayerID) ([]BlockID, error) {
 	x, err := m.meshDB.layers.Get(l.ToBytes())
 	if err != nil {
-		panic(fmt.Sprintf("could not retrive latest layer = %d blocks ", l))
+		return nil, errors.New(fmt.Sprintf("could not retrive layer = %d blocks ", l))
 	}
 	blockIds, err := bytesToBlockIds(x)
 	if err != nil {
-		panic(fmt.Sprintf("could bytes to id array for layer %d ", l))
+		return nil, errors.New(fmt.Sprintf("could not desirialize layer to id array for layer %d ", l))
 	}
 	arr := make([]BlockID, 0, len(blockIds))
 	for bid := range blockIds {
 		arr = append(arr, bid)
 	}
-	return arr
+	return arr, nil
 }
 
-//todo better thread safety
-func (m *Mesh) GetOrphanBlocksExcept(l LayerID) []BlockID {
+func (m *Mesh) GetOrphanBlocksBefore(l LayerID) ([]BlockID, error) {
 	m.orphMutex.RLock()
 	defer m.orphMutex.RUnlock()
 	ids := map[BlockID]struct{}{}
@@ -226,14 +225,14 @@ func (m *Mesh) GetOrphanBlocksExcept(l LayerID) []BlockID {
 		}
 	}
 
-	prevLayer, err := m.getLayer(l - 1)
+	blocks, err := m.GetUnverifiedLayerBlocks(l - 1)
 	if err != nil {
-		panic(fmt.Sprint("failed getting latest layer  ", err))
+		return nil, errors.New(fmt.Sprint("failed getting latest layer  %v", err))
 	}
 
 	//add last layer blocks
-	for _, b := range prevLayer.Blocks() {
-		ids[b.ID()] = struct{}{}
+	for _, b := range blocks {
+		ids[b] = struct{}{}
 	}
 
 	idArr := make([]BlockID, 0, len(ids))
@@ -244,7 +243,7 @@ func (m *Mesh) GetOrphanBlocksExcept(l LayerID) []BlockID {
 	sort.Slice(idArr, func(i, j int) bool { return idArr[i] < idArr[j] })
 
 	m.Info("orphans for layer %d are %v", l, idArr)
-	return idArr
+	return idArr, nil
 }
 
 func (m *Mesh) GetBlock(id BlockID) (*Block, error) {

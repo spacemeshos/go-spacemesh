@@ -2,6 +2,7 @@ package miner
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
@@ -109,7 +110,7 @@ type WeakCoinProvider interface {
 }
 
 type OrphanBlockProvider interface {
-	GetUnverifiedLayerBlocks(l mesh.LayerID) []mesh.BlockID
+	GetOrphanBlocks(l mesh.LayerID) ([]mesh.BlockID, error)
 }
 
 //used from external API call?
@@ -121,22 +122,25 @@ func (t *BlockBuilder) AddTransaction(nonce uint64, origin, destination address.
 	return nil
 }
 
-func (t *BlockBuilder) createBlock(id mesh.LayerID, txs []mesh.SerializableTransaction) mesh.Block {
+func (t *BlockBuilder) createBlock(id mesh.LayerID, txs []mesh.SerializableTransaction) (*mesh.Block, error) {
 	var res []mesh.BlockID = nil
 	var err error
-
-	if id == 0 {
-		panic("cannot create block in layer 0")
-	}
-
-	if id == 1 {
+	if id == config.Genesis {
+		return nil, errors.New("cannot create block in genesis layer ")
+	} else if id == config.Genesis+1 {
 		res = append(res, config.GenesisId)
 	} else {
 		res, err = t.hareResult.GetResult(id - 1)
 		if err != nil {
-			t.Log.Error("didnt receive hare result for layer %v", id-1)
+			return nil, errors.New(fmt.Sprintf("didnt receive hare result for layer %v", id-1))
 		}
 	}
+
+	viewEdges, err := t.orphans.GetOrphanBlocks(id)
+	if err != nil {
+		return nil, err
+	}
+
 	b := mesh.Block{
 		MinerID:    t.minerID,
 		Id:         mesh.BlockID(rand.Int63()),
@@ -146,11 +150,11 @@ func (t *BlockBuilder) createBlock(id mesh.LayerID, txs []mesh.SerializableTrans
 		Timestamp:  time.Now().UnixNano(),
 		Txs:        txs,
 		BlockVotes: res,
-		ViewEdges:  t.orphans.GetUnverifiedLayerBlocks(id - 1),
+		ViewEdges:  viewEdges,
 	}
 
 	t.Log.Info("Iv'e created block in layer %v id %v, num of transactions %v votes %d viewEdges %d", b.LayerIndex, b.Id, len(b.Txs), len(b.BlockVotes), len(b.ViewEdges))
-	return b
+	return &b, nil
 }
 
 func (t *BlockBuilder) listenForTx() {
@@ -188,9 +192,13 @@ func (t *BlockBuilder) acceptBlockData() {
 
 			txList := t.transactionQueue[:common.Min(len(t.transactionQueue), MaxTransactionsPerBlock)]
 			t.transactionQueue = t.transactionQueue[common.Min(len(t.transactionQueue), MaxTransactionsPerBlock):]
-			blk := t.createBlock(id, txList)
+			blk, err := t.createBlock(id, txList)
+			if err != nil {
+				t.Error("cannot create new block, %v ", err)
+				continue
+			}
 			go func() {
-				bytes, err := mesh.BlockAsBytes(blk)
+				bytes, err := mesh.BlockAsBytes(*blk)
 				if err != nil {
 					t.Log.Error("cannot serialize block %v", err)
 					return
