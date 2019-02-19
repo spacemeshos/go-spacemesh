@@ -110,7 +110,7 @@ type WeakCoinProvider interface {
 }
 
 type OrphanBlockProvider interface {
-	GetOrphanBlocks(l mesh.LayerID) ([]mesh.BlockID, error)
+	GetOrphanBlocksBefore(l mesh.LayerID) ([]mesh.BlockID, error)
 }
 
 //used from external API call?
@@ -136,7 +136,7 @@ func (t *BlockBuilder) createBlock(id mesh.LayerID, txs []mesh.SerializableTrans
 		}
 	}
 
-	viewEdges, err := t.orphans.GetOrphanBlocks(id)
+	viewEdges, err := t.orphans.GetOrphanBlocksBefore(id)
 	if err != nil {
 		return nil, err
 	}
