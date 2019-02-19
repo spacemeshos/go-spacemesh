@@ -104,7 +104,7 @@ func New(conf config.Config, p2p NetworkService, sign Signing, obp orphanBlockPr
 
 func (h *Hare) isTooLate(id InstanceId) bool {
 	h.layerLock.RLock()
-	if id.Uint32() < uint32(h.lastLayer)-uint32(h.bufferSize) { // bufferSize>=0
+	if int64(id.Uint32()) < int64(h.lastLayer)-int64(h.bufferSize) { // bufferSize>=0
 		h.layerLock.RUnlock()
 		return true
 	}

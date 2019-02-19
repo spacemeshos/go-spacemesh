@@ -2,7 +2,6 @@ package hare
 
 import (
 	"bytes"
-	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -42,7 +41,7 @@ type mockRolacle struct {
 	isEligible bool
 }
 
-func (mr *mockRolacle) Eligible(instanceID uint32, committeeSize int, pubKey string, proof []byte) bool {
+func (mr *mockRolacle) Eligible(instanceId InstanceId, k int32, pubKey string, proof []byte) bool {
 	return mr.isEligible
 }
 
@@ -118,31 +117,37 @@ func generateSigning(t *testing.T) Signing {
 	return NewMockSigning()
 }
 
-func buildMessage(msg *pb.HareMessage) Message {
-	data, err := proto.Marshal(msg)
-	if err != nil {
-		log.Error("failed marshaling message")
-	}
-	return Message{msg, data, make(chan service.MessageValidation, 10)}
+func buildMessage(msg *pb.HareMessage) *pb.HareMessage {
+	return msg
 }
 
-func assertValidation(t *testing.T, msg Message, expValid bool, expProt string) {
-	timer := time.NewTimer(time.Second * 1)
-	select {
-	case act := <-msg.validationChan:
-		assert.Equal(t, expValid, act.IsValid())
-		assert.Equal(t, msg.bytes, act.Message())
-		assert.Equal(t, expProt, act.Protocol())
-	case <-timer.C:
-		t.FailNow() // deadlocked
-	}
+func buildBroker(net NetworkService) *Broker {
+	return NewBroker(net, &mockEligibilityValidator{})
+}
+
+type mockEligibilityValidator struct {
+}
+
+func (mev *mockEligibilityValidator) Validate(m *pb.HareMessage) bool {
+	return true
+}
+
+type mockOracle struct {
+}
+
+func (mo *mockOracle) Eligible(instanceId InstanceId, k int32, pubKey string, proof []byte) bool {
+	return true
+}
+
+func buildOracle(oracle Rolacle) *hareRolacle {
+	return newHareOracle(oracle, cfg.N)
 }
 
 // test that a message to a specific set id is delivered by the broker
 func TestConsensusProcess_StartTwice(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
-	broker := NewBroker(n1)
+	broker := buildBroker(n1)
 	proc := generateConsensusProcess(t)
 	broker.Register(proc)
 	err := proc.Start()
@@ -154,12 +159,12 @@ func TestConsensusProcess_StartTwice(t *testing.T) {
 func TestConsensusProcess_eventLoop(t *testing.T) {
 	// TODO fix! This test does nothing.. the message that are Broadcast isn't handled because there are no registered protocol handler
 	net := &mockP2p{}
-	broker := NewBroker(net)
+	broker := buildBroker(net)
 	proc := generateConsensusProcess(t)
 	proc.network = net
 	oracle := &mockRolacle{}
-	proc.oracle = oracle
 	oracle.isEligible = true
+	proc.oracle = oracle
 	broker.Register(proc)
 	proc.s = NewSetFromValues(value1, value2)
 	proc.cfg.F = 2
@@ -170,7 +175,7 @@ func TestConsensusProcess_eventLoop(t *testing.T) {
 
 func TestConsensusProcess_handleMessage(t *testing.T) {
 	net := &mockP2p{}
-	broker := NewBroker(net)
+	broker := buildBroker(net)
 	proc := generateConsensusProcess(t)
 	proc.network = net
 	oracle := &mockRolacle{}
@@ -181,21 +186,15 @@ func TestConsensusProcess_handleMessage(t *testing.T) {
 	broker.Register(proc)
 	m := BuildPreRoundMsg(generateSigning(t), NewSetFromValues(value1))
 	msg := buildMessage(m)
-	oracle.isEligible = false
-	proc.handleMessage(msg)
-	assertValidation(t, msg, false, ProtoName)
 	oracle.isEligible = true
 	mValidator.syntaxValid = false
 	proc.handleMessage(msg)
-	assertValidation(t, msg, false, ProtoName)
 	assert.Equal(t, 1, mValidator.countSyntax)
 	mValidator.syntaxValid = true
 	proc.handleMessage(msg)
-	assertValidation(t, msg, true, ProtoName)
 	assert.NotEqual(t, 0, mValidator.countContext)
 	mValidator.contextValid = true
 	proc.handleMessage(msg)
-	assertValidation(t, msg, true, ProtoName)
 	assert.Equal(t, 0, len(proc.pending))
 	mValidator.contextValid = false
 	proc.handleMessage(msg)
@@ -209,7 +208,7 @@ func TestConsensusProcess_handleMessage(t *testing.T) {
 func TestConsensusProcess_nextRound(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
-	broker := NewBroker(n1)
+	broker := buildBroker(n1)
 	proc := generateConsensusProcess(t)
 	broker.Register(proc)
 	proc.advanceToNextRound()
@@ -230,12 +229,12 @@ func generateConsensusProcess(t *testing.T) *ConsensusProcess {
 	oracle.Register(signing.Verifier().String())
 	output := make(chan TerminationOutput, 1)
 
-	return NewConsensusProcess(cfg, *instanceId1, s, oracle, signing, n1, output, log.NewDefault(signing.Verifier().String()))
+	return NewConsensusProcess(cfg, instanceId1, s, oracle, signing, n1, output, log.NewDefault(signing.Verifier().String()))
 }
 
 func TestConsensusProcess_Id(t *testing.T) {
 	proc := generateConsensusProcess(t)
-	proc.instanceId = *instanceId1
+	proc.instanceId = instanceId1
 	assert.Equal(t, instanceId1.Id(), proc.Id())
 }
 
@@ -263,7 +262,7 @@ func TestConsensusProcess_InitDefaultBuilder(t *testing.T) {
 	assert.Equal(t, verifier.Bytes(), proc.signing.Verifier().Bytes())
 	assert.Equal(t, builder.inner.K, proc.k)
 	assert.Equal(t, builder.inner.Ki, proc.ki)
-	assert.Equal(t, builder.inner.InstanceId, proc.instanceId.Bytes())
+	assert.Equal(t, builder.inner.InstanceId, proc.instanceId.Uint32())
 }
 
 func TestConsensusProcess_Proof(t *testing.T) {
@@ -305,21 +304,6 @@ func TestConsensusProcess_sendMessage(t *testing.T) {
 	oracle.isEligible = true
 	proc.sendMessage(msg)
 	assert.Equal(t, 1, net.count)
-}
-
-func TestConsensusProcess_validateRole(t *testing.T) {
-	proc := generateConsensusProcess(t)
-	oracle := &mockRolacle{}
-	proc.oracle = oracle
-	assert.False(t, proc.validateRole(nil))
-	m := BuildPreRoundMsg(generateSigning(t), NewSmallEmptySet())
-	m.Message = nil
-	assert.False(t, proc.validateRole(m))
-	m = BuildPreRoundMsg(generateSigning(t), NewSmallEmptySet())
-	oracle.isEligible = false
-	assert.False(t, proc.validateRole(m))
-	oracle.isEligible = true
-	assert.True(t, proc.validateRole(m))
 }
 
 func TestConsensusProcess_procPre(t *testing.T) {
@@ -429,13 +413,13 @@ func TestConsensusProcess_onEarlyMessage(t *testing.T) {
 }
 
 func TestProcOutput_Id(t *testing.T) {
-	po := procOutput{*instanceId1, nil}
-	assert.Equal(t, po.Id(), instanceId1.Bytes())
+	po := procOutput{instanceId1, nil}
+	assert.Equal(t, po.Id().Id(), instanceId1.Id())
 }
 
 func TestProcOutput_Set(t *testing.T) {
 	es := NewSmallEmptySet()
-	po := procOutput{*instanceId1, es}
+	po := procOutput{instanceId1, es}
 	assert.True(t, es.Equals(po.Set()))
 }
 
@@ -525,7 +509,7 @@ func TestConsensusProcess_handlePending(t *testing.T) {
 	proc := generateConsensusProcess(t)
 	proc.createInbox(100)
 	const count = 5
-	pending := make(map[string]Message)
+	pending := make(map[string]*pb.HareMessage)
 	for i := 0; i < count; i++ {
 		v := generateSigning(t)
 		msg := BuildStatusMsg(v, NewSetFromValues(value1))

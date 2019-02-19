@@ -26,6 +26,10 @@ type IdentifiableInboxer interface {
 	Inboxer
 }
 
+type Validator interface {
+	Validate(m *pb.HareMessage) bool
+}
+
 // Closer is used to add closeability to an object
 type Closer struct {
 	channel chan struct{} // closeable go routines listen to this channel
@@ -49,7 +53,7 @@ func (closer *Closer) CloseChannel() chan struct{} {
 type Broker struct {
 	Closer
 	network    NetworkService
-	eValidator *eligibilityValidator
+	eValidator Validator
 	inbox      chan service.GossipMessage
 	outbox     map[uint32]chan *pb.HareMessage
 	pending    map[uint32][]*pb.HareMessage
@@ -57,7 +61,7 @@ type Broker struct {
 	maxReg     uint32
 }
 
-func NewBroker(networkService NetworkService, eValidator *eligibilityValidator) *Broker {
+func NewBroker(networkService NetworkService, eValidator Validator) *Broker {
 	p := new(Broker)
 	p.Closer = NewCloser()
 	p.network = networkService

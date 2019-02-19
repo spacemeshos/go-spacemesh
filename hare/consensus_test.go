@@ -133,11 +133,11 @@ func (test *ConsensusTest) Start() {
 }
 
 func createConsensusProcess(isHonest bool, cfg config.Config, oracle fullRolacle, network p2p.Service, initialSet *Set) *ConsensusProcess {
-	broker := NewBroker(network)
+	broker := buildBroker(network)
 	output := make(chan TerminationOutput, 1)
 	signing := NewMockSigning()
 	oracle.Register(isHonest, signing.Verifier().String())
-	proc := NewConsensusProcess(cfg, *instanceId1, initialSet, oracle, signing, network, output, log.NewDefault(signing.Verifier().String()[:8]))
+	proc := NewConsensusProcess(cfg, instanceId1, initialSet, oracle, signing, network, output, log.NewDefault(signing.Verifier().String()[:8]))
 	broker.Register(proc)
 	broker.Start()
 

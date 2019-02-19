@@ -9,13 +9,14 @@ import (
 	"time"
 )
 
-var instanceId1 = &InstanceId{Bytes32{1}}
-var instanceId2 = &InstanceId{Bytes32{2}}
-var instanceId3 = &InstanceId{Bytes32{3}}
+var instanceId0 = InstanceId(0)
+var instanceId1 = InstanceId(1)
+var instanceId2 = InstanceId(2)
+var instanceId3 = InstanceId(3)
 
-func createMessage(t *testing.T, instanceId Byteable) []byte {
+func createMessage(t *testing.T, instanceId InstanceId) []byte {
 	hareMsg := &pb.HareMessage{}
-	hareMsg.Message = &pb.InnerMessage{InstanceId: instanceId.Bytes()}
+	hareMsg.Message = &pb.InnerMessage{InstanceId: instanceId.Uint32()}
 	serMsg, err := proto.Marshal(hareMsg)
 
 	if err != nil {
@@ -26,12 +27,12 @@ func createMessage(t *testing.T, instanceId Byteable) []byte {
 }
 
 type MockInboxer struct {
-	inbox chan Message
+	inbox chan *pb.HareMessage
 	id    uint32
 }
 
-func (inboxer *MockInboxer) createInbox(size uint32) chan Message {
-	inboxer.inbox = make(chan Message, size)
+func (inboxer *MockInboxer) createInbox(size uint32) chan *pb.HareMessage {
+	inboxer.inbox = make(chan *pb.HareMessage, size)
 	return inboxer.inbox
 }
 
@@ -43,12 +44,13 @@ func TestBroker_Start(t *testing.T) {
 	t.Skip() //start now does not support checking if already started
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
-	broker := NewBroker(n1)
+	broker := buildBroker(n1)
 
 	err := broker.Start()
 	assert.Equal(t, nil, err)
 
 	err = broker.Start()
+	assert.NotNil(t, err)
 	assert.Equal(t, "instance already started", err.Error())
 }
 
@@ -58,7 +60,7 @@ func TestBroker_Received(t *testing.T) {
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
 
-	broker := NewBroker(n1)
+	broker := buildBroker(n1)
 	broker.Start()
 
 	inboxer := &MockInboxer{nil, instanceId1.Id()}
@@ -69,7 +71,7 @@ func TestBroker_Received(t *testing.T) {
 
 	recv := <-inboxer.inbox
 
-	assert.True(t, recv.msg.Message.InstanceId[0] == instanceId1.Bytes()[0])
+	assert.True(t, recv.Message.InstanceId == instanceId1.Uint32())
 }
 
 // test that aborting the broker aborts
@@ -77,7 +79,7 @@ func TestBroker_Abort(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 
-	broker := NewBroker(n1)
+	broker := buildBroker(n1)
 	broker.Start()
 
 	timer := time.NewTimer(3 * time.Second)
@@ -92,16 +94,16 @@ func TestBroker_Abort(t *testing.T) {
 	}
 }
 
-func sendMessages(t *testing.T, instanceId *InstanceId, n *service.Node, count int) {
+func sendMessages(t *testing.T, instanceId InstanceId, n *service.Node, count int) {
 	for i := 0; i < count; i++ {
 		n.Broadcast(ProtoName, createMessage(t, instanceId))
 	}
 }
 
-func waitForMessages(t *testing.T, inbox chan Message, instanceId *InstanceId, msgCount int) {
+func waitForMessages(t *testing.T, inbox chan *pb.HareMessage, instanceId InstanceId, msgCount int) {
 	for i := 0; i < msgCount; i++ {
 		x := <-inbox
-		assert.True(t, x.msg.Message.InstanceId[0] == instanceId.Bytes()[0])
+		assert.True(t, x.Message.InstanceId == instanceId.Uint32())
 	}
 }
 
@@ -112,7 +114,7 @@ func TestBroker_MultipleInstanceIds(t *testing.T) {
 	n2 := sim.NewNode()
 	const msgCount = 100
 
-	broker := NewBroker(n1)
+	broker := buildBroker(n1)
 	broker.Start()
 
 	inboxer1 := &MockInboxer{nil, instanceId1.Id()}
@@ -140,7 +142,7 @@ func TestBroker_MultipleInstanceIds(t *testing.T) {
 func TestBroker_RegisterUnregister(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
-	broker := NewBroker(n1)
+	broker := buildBroker(n1)
 	broker.Start()
 	inboxer := &MockInboxer{nil, instanceId1.Id()}
 	broker.Register(inboxer)
