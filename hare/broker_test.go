@@ -148,7 +148,7 @@ func (mgm *mockGossipMessage) ValidationCompletedChan() chan service.MessageVali
 
 func (mgm *mockGossipMessage) ReportValidation(protocol string, isValid bool) {
 	mgm.lastValidation = isValid
-	mgm.vComp <- service.MessageValidation{}
+	mgm.vComp <- service.NewMessageValidation(nil, "", isValid)
 }
 
 func newMockGossipMsg(msg *pb.HareMessage) *mockGossipMessage {
@@ -165,26 +165,22 @@ func TestBroker_Send(t *testing.T) {
 
 	m := newMockGossipMsg(nil)
 	broker.inbox <- m
-	<-m.ValidationCompletedChan()
-	assert.False(t, m.lastValidation)
+	assertMsg(t, m, false)
 
 	msg := BuildPreRoundMsg(NewMockSigning(), NewSetFromValues(value1))
 	msg.Message.InstanceId = 2
 	m = newMockGossipMsg(msg)
 	broker.inbox <- m
-	<-m.ValidationCompletedChan()
-	assert.False(t, m.lastValidation)
+	assertMsg(t, m, false)
 
 	msg.Message.InstanceId = 1
 	m = newMockGossipMsg(msg)
 	broker.inbox <- m
-	<-m.ValidationCompletedChan()
-	assert.False(t, m.lastValidation)
+	assertMsg(t, m, false)
 
 	mev.valid = true
 	broker.inbox <- m
-	<-m.ValidationCompletedChan()
-	assert.True(t, m.lastValidation)
+	assertMsg(t, m, true)
 }
 
 func TestBroker_Register(t *testing.T) {
@@ -197,4 +193,36 @@ func TestBroker_Register(t *testing.T) {
 	broker.Register(instanceId1)
 	assert.Equal(t, 2, len(broker.outbox[instanceId1]))
 	assert.Equal(t, 0, len(broker.pending[instanceId1]))
+}
+
+func assertMsg(t *testing.T, msg *mockGossipMessage, expected bool) {
+	tm := time.NewTimer(2 * time.Second)
+	select {
+	case <-tm.C:
+		t.Error("Timeout")
+		t.FailNow()
+	case res := <-msg.ValidationCompletedChan():
+		assert.Equal(t, expected, res.IsValid())
+	}
+}
+
+func TestBroker_Register2(t *testing.T) {
+	sim := service.NewSimulator()
+	n1 := sim.NewNode()
+	broker := buildBroker(n1)
+	broker.Start()
+	broker.Register(instanceId1)
+	m := BuildPreRoundMsg(NewMockSigning(), NewSetFromValues(value1))
+	m.Message.InstanceId = uint32(instanceId1)
+	msg := newMockGossipMsg(m)
+	broker.inbox <- msg
+	assertMsg(t, msg, true)
+	m.Message.InstanceId = uint32(instanceId2)
+	msg = newMockGossipMsg(m)
+	broker.inbox <- msg
+	assertMsg(t, msg, true)
+	m.Message.InstanceId = uint32(instanceId3)
+	msg = newMockGossipMsg(m)
+	broker.inbox <- msg
+	assertMsg(t, msg, false)
 }

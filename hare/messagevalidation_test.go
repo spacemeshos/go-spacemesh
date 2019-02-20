@@ -44,7 +44,7 @@ func TestMessageValidator_ValidateCertificate(t *testing.T) {
 
 func TestEligibilityValidator_validateRole(t *testing.T) {
 	oracle := &mockRolacle{}
-	ev := newEligibilityValidator(oracle, log.NewDefault(""))
+	ev := NewEligibilityValidator(oracle, log.NewDefault(""))
 	ev.oracle = oracle
 	assert.False(t, ev.validateRole(nil))
 	m := BuildPreRoundMsg(generateSigning(t), NewSmallEmptySet())
