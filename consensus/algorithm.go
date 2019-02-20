@@ -18,9 +18,10 @@ type Tortoise interface {
 }
 
 func NewAlgorithm(trtl Tortoise) *Algorithm {
-	return &Algorithm{Tortoise: trtl}
+	alg := &Algorithm{Tortoise: trtl}
+	alg.HandleIncomingLayer(GenesisLayer())
+	return alg
 }
-
 func (alg *Algorithm) HandleLateBlock(b *mesh.Block) {
 	//todo feed all layers from b's layer to tortoise
 	log.Info("received block with layer Id %v block id: %v ", b.Layer(), b.ID())
@@ -64,7 +65,7 @@ func CreateGenesisBlock() *mesh.Block {
 	return bl
 }
 
-func createGenesisLayer() *mesh.Layer {
+func GenesisLayer() *mesh.Layer {
 	log.Info("Creating genesis")
 	l := mesh.NewLayer(Genesis)
 	l.AddBlock(CreateGenesisBlock())

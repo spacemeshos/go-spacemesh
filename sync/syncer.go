@@ -20,11 +20,11 @@ type BlockValidator interface {
 }
 
 type Configuration struct {
-	hdist          uint32 //dist of consensus layers from newst layer
-	syncInterval   time.Duration
-	concurrency    int //number of workers for sync method
-	layerSize      int
-	requestTimeout time.Duration
+	Hdist          uint32 //dist of consensus layers from newst layer
+	SyncInterval   time.Duration
+	Concurrency    int //number of workers for sync method
+	LayerSize      int
+	RequestTimeout time.Duration
 }
 
 type Syncer struct {
@@ -37,6 +37,7 @@ type Syncer struct {
 	SyncLock  uint32
 	startLock uint32
 	forceSync chan bool
+	clock     TickProvider
 	exit      chan struct{}
 }
 
@@ -76,7 +77,7 @@ func (s *Syncer) Start() {
 
 //fires a sync every sm.syncInterval or on force space from outside
 func (s *Syncer) run() {
-	syncTicker := time.NewTicker(s.syncInterval)
+	syncTicker := time.NewTicker(s.SyncInterval)
 	for {
 		doSync := false
 		select {
@@ -107,7 +108,7 @@ func NewSync(srv server.Service, layers *mesh.Mesh, bv BlockValidator, conf Conf
 		Log:            logger,
 		Mesh:           layers,
 		Peers:          p2p.NewPeers(srv),
-		MessageServer:  server.NewMsgServer(srv, syncProtocol, conf.requestTimeout-time.Millisecond*30, make(chan service.DirectMessage, config.ConfigValues.BufferSize), logger),
+		MessageServer:  server.NewMsgServer(srv, syncProtocol, conf.RequestTimeout-time.Millisecond*30, make(chan service.DirectMessage, config.ConfigValues.BufferSize), logger),
 		SyncLock:       0,
 		startLock:      0,
 		forceSync:      make(chan bool),
@@ -122,65 +123,58 @@ func NewSync(srv server.Service, layers *mesh.Mesh, bv BlockValidator, conf Conf
 }
 
 func (s *Syncer) maxSyncLayer() uint32 {
-	if uint32(s.LatestLayer()) < s.hdist {
+	if uint32(s.LatestLayer()) < s.Hdist {
 		return 0
 	}
 
-	return s.LatestLayer() - s.hdist
+	return s.LatestLayer() - s.Hdist
 }
 
 func (s *Syncer) Synchronise() {
-	log.Info("syncing layer %v to layer %v ", s.LatestReceivedLayer(), s.maxSyncLayer())
-	for i := s.LatestReceivedLayer(); i < s.maxSyncLayer(); i++ {
-		blockIds, err := s.getLayerBlockIDs(mesh.LayerID(i + 1)) //returns a set of all known blocks in the mesh
-		if err != nil {
-			log.Error("could not get layer block ids: ", err)
-			log.Debug("synchronise failed, local layer index is ", i)
-			return
-		}
+	for i := s.VerifiedLayer(); i < s.maxSyncLayer(); i++ {
+		log.Info("syncing layer %v to layer %v ", s.VerifiedLayer(), s.maxSyncLayer())
+		if blockIds, err := s.getLayerBlockIDs(mesh.LayerID(i + 1)); err == nil { //returns a set of all known blocks in the mesh
+			output := make(chan *mesh.Block)
+			// each worker goroutine tries to fetch a block iteratively from each peer
+			count := int32(s.Concurrency)
 
-		output := make(chan *mesh.Block)
-		// each worker goroutine tries to fetch a block iteratively from each peer
-		count := int32(s.concurrency)
-
-		for i := 0; i < s.concurrency; i++ {
-			go func() {
-				for id := range blockIds {
-					for _, p := range s.GetPeers() {
-						if bCh, err := sendBlockRequest(s.MessageServer, p, mesh.BlockID(id), s.Log); err == nil {
-							if b := <-bCh; b != nil && s.BlockEligible(b.LayerIndex, b.MinerID) { //some validation testing
-								s.Debug("received block", b)
-								output <- b
-								break
+			for i := 0; i < s.Concurrency; i++ {
+				go func() {
+					for id := range blockIds {
+						for _, p := range s.GetPeers() {
+							if bCh, err := sendBlockRequest(s.MessageServer, p, mesh.BlockID(id), s.Log); err == nil {
+								if b := <-bCh; b != nil && s.BlockEligible(b.LayerIndex, b.MinerID) { //some validation testing
+									s.Debug("received block", b)
+									output <- b
+									break
+								}
 							}
 						}
 					}
-				}
-				if atomic.AddInt32(&count, -1); atomic.LoadInt32(&count) == 0 { // last one closes the channel
-					close(output)
-				}
-			}()
+					if atomic.AddInt32(&count, -1); atomic.LoadInt32(&count) == 0 { // last one closes the channel
+						close(output)
+					}
+				}()
+			}
+
+			//blocks := make([]*mesh.Block, 0, len(blockIds))
+
+			for block := range output {
+				s.Debug("add block to layer", block)
+				//blocks = append(blocks, block)
+				s.AddBlock(block)
+			}
 		}
-
-		blocks := make([]*mesh.Block, 0, len(blockIds))
-
-		for block := range output {
-			s.Debug("add block to layer", block)
-			blocks = append(blocks, block)
-		}
-
-		s.Debug("add layer ", i)
-
-		l := mesh.NewExistingLayer(mesh.LayerID(i+1), blocks)
-		err = s.AddLayer(l)
+		s.Info("add layer ", i)
+		lyr, err := s.GetLayer(mesh.LayerID(i + 1))
 		if err != nil {
 			log.Error("cannot insert layer to db because %v", err)
 			continue
 		}
-		go s.ValidateLayer(l)
+		go s.ValidateLayer(lyr)
 	}
 
-	s.Debug("synchronise done, local layer index is ", s.VerifiedLayer(), "most recent is ", s.LatestReceivedLayer())
+	s.Debug("synchronise done, local layer index is ", s.VerifiedLayer(), "most recent is ", s.LatestLayer())
 }
 
 type peerHashPair struct {
@@ -222,7 +216,7 @@ func (s *Syncer) getLayerBlockIDs(index mesh.LayerID) (chan mesh.BlockID, error)
 	m, err := s.getLayerHashes(index)
 
 	if err != nil {
-		s.Error("could not get LayerHashes for layer: ", index, err)
+		s.Error("could not get LayerHashes for layer: ", index)
 		return nil, err
 	}
 	return s.getIdsForHash(m, index)
@@ -249,8 +243,8 @@ func (s *Syncer) getIdsForHash(m map[string]p2p.Peer, index mesh.LayerID) (chan 
 	}
 
 	go func() { wg.Wait(); close(ch) }()
-	idSet := make(map[mesh.BlockID]bool, s.layerSize) //change uint32 to BlockId
-	timeout := time.After(s.requestTimeout)
+	idSet := make(map[mesh.BlockID]bool, s.LayerSize) //change uint32 to BlockId
+	timeout := time.After(s.RequestTimeout)
 	for reqCounter > 0 {
 		select {
 		case b := <-ch:
@@ -310,7 +304,7 @@ func (s *Syncer) getLayerHashes(index mesh.LayerID) (map[string]p2p.Peer, error)
 		}()
 	}
 	go func() { wg.Wait(); close(ch) }()
-	timeout := time.After(s.requestTimeout)
+	timeout := time.After(s.RequestTimeout)
 	for resCounter > 0 {
 		// Got a timeout! fail with a timeout error
 		select {

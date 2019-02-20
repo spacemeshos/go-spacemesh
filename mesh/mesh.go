@@ -71,10 +71,6 @@ func (m *Mesh) VerifiedLayer() uint32 {
 	return atomic.LoadUint32(&m.verifiedLayer)
 }
 
-func (m *Mesh) LatestReceivedLayer() uint32 { //maybe switch names with latestlayer?
-	return atomic.LoadUint32(&m.lastSeenLayer)
-}
-
 func (m *Mesh) LatestLayer() uint32 {
 	defer m.lkMutex.RUnlock()
 	m.lkMutex.RLock()
@@ -88,26 +84,6 @@ func (m *Mesh) SetLatestLayer(idx uint32) {
 		m.Debug("set latest known layer to ", idx)
 		m.latestLayer = idx
 	}
-}
-
-func (m *Mesh) AddLayer(layer *Layer) error {
-	m.lMutex.Lock()
-	defer m.lMutex.Unlock()
-	count := LayerID(m.LatestReceivedLayer())
-	if count > layer.Index() {
-		m.Debug("can't add layer ", layer.Index(), "(already exists)")
-		return errors.New("can't add layer (already exists)")
-	}
-
-	if count+1 < layer.Index() {
-		m.Debug("can't add layer", layer.Index(), " missing previous layers")
-		return errors.New("can't add layer missing previous layers")
-	}
-	atomic.StoreUint32(&m.lastSeenLayer, uint32(layer.Index()))
-	m.addLayer(layer)
-	m.Log.With().Info("added layer", log.Uint32("id", uint32(layer.Index())), log.Int("num of blocks", len(layer.blocks)))
-	m.SetLatestLayer(uint32(layer.Index()))
-	return nil
 }
 
 func (m *Mesh) ValidateLayer(layer *Layer) {

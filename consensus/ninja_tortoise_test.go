@@ -49,8 +49,8 @@ func TestNinjaTortoise_GlobalOpinion(t *testing.T) {
 
 func TestForEachInView(t *testing.T) {
 	blocks := make(map[mesh.BlockID]*mesh.Block)
-	alg := NewNinjaTortoise(2)
-	l := createGenesisLayer()
+	alg := NewNinjaTortoise(2, log.New("TestForEachInView", "", ""))
+	l := GenesisLayer()
 	for _, b := range l.Blocks() {
 		blocks[b.ID()] = b
 	}
@@ -93,8 +93,8 @@ func TestNinjaTortoise_UpdatePatternTally(t *testing.T) {
 func TestNinjaTortoise_Sanity1(t *testing.T) {
 	layerSize := 30
 	patternSize := layerSize
-	alg := NewNinjaTortoise(uint32(layerSize))
-	l1 := createGenesisLayer()
+	alg := NewNinjaTortoise(uint32(layerSize), log.New("TestNinjaTortoise_Sanity1", "", ""))
+	l1 := GenesisLayer()
 	genesisId := l1.Blocks()[0].ID()
 	alg.handleIncomingLayer(l1)
 	l := createLayerWithRandVoting(l1.Index()+1, []*mesh.Layer{l1}, layerSize, 1)
@@ -116,7 +116,7 @@ func TestNinjaTortoise_Sanity1(t *testing.T) {
 //vote explicitly for two previous layers
 //correction vectors compensate for double count
 func TestNinjaTortoise_Sanity2(t *testing.T) {
-	alg := NewNinjaTortoise(uint32(3))
+	alg := NewNinjaTortoise(uint32(3), log.New("TestNinjaTortoise_Sanity2", "", ""))
 	l := createMulExplicitLayer(0, map[mesh.LayerID]*mesh.Layer{}, nil, 1)
 	l1 := createMulExplicitLayer(1, map[mesh.LayerID]*mesh.Layer{l.Index(): l}, map[mesh.LayerID][]int{0: {0}}, 3)
 	l2 := createMulExplicitLayer(2, map[mesh.LayerID]*mesh.Layer{l1.Index(): l1}, map[mesh.LayerID][]int{1: {0, 1, 2}}, 3)

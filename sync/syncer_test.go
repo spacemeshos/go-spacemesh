@@ -139,7 +139,7 @@ func TestSyncProtocol_BlockRequest(t *testing.T) {
 	defer syncObj.Close()
 	lid := mesh.LayerID(1)
 	block := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), lid, []byte("data data data"))
-	syncObj.AddLayer(mesh.NewExistingLayer(lid, []*mesh.Block{block}))
+	syncObj.AddBlock(block)
 	ch, err := sendBlockRequest(syncObj2.MessageServer, nodes[0].Node.PublicKey(), block.ID(), syncObj.Log)
 	timeout := time.NewTimer(2 * time.Second)
 
@@ -160,9 +160,7 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 	syncObj2 := syncs[1]
 	defer syncObj2.Close()
 	lid := mesh.LayerID(1)
-	l := mesh.NewExistingLayer(lid, make([]*mesh.Block, 0, 10))
-	l.AddBlock(mesh.NewExistingBlock(mesh.BlockID(123), lid, nil))
-	syncObj1.AddLayer(l)
+	syncObj1.AddBlock(mesh.NewExistingBlock(mesh.BlockID(123), lid, nil))
 	//syncObj1.ValidateLayer(l) //this is to simulate the approval of the tortoise...
 	timeout := time.NewTimer(2 * time.Second)
 	ch, err := syncObj2.sendLayerHashRequest(nodes[0].Node.PublicKey(), lid)
@@ -188,7 +186,12 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 	layer.AddBlock(mesh.NewExistingBlock(mesh.BlockID(132), lid, nil))
 	layer.AddBlock(mesh.NewExistingBlock(mesh.BlockID(111), lid, nil))
 	layer.AddBlock(mesh.NewExistingBlock(mesh.BlockID(222), lid, nil))
-	syncObj1.AddLayer(layer)
+
+	syncObj1.AddBlock(mesh.NewExistingBlock(mesh.BlockID(123), lid, nil))
+	syncObj1.AddBlock(mesh.NewExistingBlock(mesh.BlockID(132), lid, nil))
+	syncObj1.AddBlock(mesh.NewExistingBlock(mesh.BlockID(111), lid, nil))
+	syncObj1.AddBlock(mesh.NewExistingBlock(mesh.BlockID(222), lid, nil))
+
 	ch, err := syncObj.sendLayerIDsRequest(nodes[1].Node.PublicKey(), lid)
 	timeout := time.NewTimer(2 * time.Second)
 
@@ -240,9 +243,9 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	block2 := mesh.NewExistingBlock(mesh.BlockID(321), 1, nil)
 	block3 := mesh.NewExistingBlock(mesh.BlockID(222), 2, nil)
 
-	syncObj1.AddLayer(mesh.NewExistingLayer(0, []*mesh.Block{block1}))
-	syncObj1.AddLayer(mesh.NewExistingLayer(1, []*mesh.Block{block2}))
-	syncObj1.AddLayer(mesh.NewExistingLayer(2, []*mesh.Block{block3}))
+	syncObj1.AddBlock(block1)
+	syncObj1.AddBlock(block2)
+	syncObj1.AddBlock(block3)
 
 	ch, err := syncObj2.sendLayerHashRequest(n1.PublicKey(), 0)
 	timeout := time.NewTimer(3 * time.Second)
@@ -327,12 +330,16 @@ func TestSyncProtocol_SyncTwoNodes(t *testing.T) {
 	block8 := mesh.NewExistingBlock(mesh.BlockID(888), 3, nil)
 	block9 := mesh.NewExistingBlock(mesh.BlockID(999), 4, nil)
 	block10 := mesh.NewExistingBlock(mesh.BlockID(101), 5, nil)
-	syncObj1.AddLayer(mesh.NewExistingLayer(0, []*mesh.Block{block1, block2}))
-	syncObj1.AddLayer(mesh.NewExistingLayer(1, []*mesh.Block{block3, block4}))
-	syncObj1.AddLayer(mesh.NewExistingLayer(2, []*mesh.Block{block5, block6}))
-	syncObj1.AddLayer(mesh.NewExistingLayer(3, []*mesh.Block{block7, block8}))
-	syncObj1.AddLayer(mesh.NewExistingLayer(4, []*mesh.Block{block9}))
-	syncObj1.AddLayer(mesh.NewExistingLayer(5, []*mesh.Block{block10}))
+	syncObj1.AddBlock(block1)
+	syncObj1.AddBlock(block2)
+	syncObj1.AddBlock(block3)
+	syncObj1.AddBlock(block4)
+	syncObj1.AddBlock(block5)
+	syncObj1.AddBlock(block6)
+	syncObj1.AddBlock(block7)
+	syncObj1.AddBlock(block8)
+	syncObj1.AddBlock(block9)
+	syncObj1.AddBlock(block10)
 
 	timeout := time.After(5 * time.Second)
 	syncObj2.SetLatestLayer(5)
@@ -348,11 +355,9 @@ loop:
 			t.Error("timed out ")
 			return
 		default:
-			if syncObj2.LatestReceivedLayer() == 3 {
+			if syncObj2.VerifiedLayer() == 3 {
 				t.Log("done!")
 				break loop
-			} else {
-				syncObj2.LatestReceivedLayer()
 			}
 			time.Sleep(100 * time.Millisecond)
 		}
@@ -397,11 +402,16 @@ func syncTest(dpType string, t *testing.T) {
 	block9 := mesh.NewExistingBlock(mesh.BlockID(999), 4, nil)
 	block10 := mesh.NewExistingBlock(mesh.BlockID(101), 4, nil)
 
-	syncObj1.AddLayer(mesh.NewExistingLayer(0, []*mesh.Block{block1, block2}))
-	syncObj1.AddLayer(mesh.NewExistingLayer(1, []*mesh.Block{block3, block4}))
-	syncObj1.AddLayer(mesh.NewExistingLayer(2, []*mesh.Block{block5, block6}))
-	syncObj1.AddLayer(mesh.NewExistingLayer(3, []*mesh.Block{block7, block8}))
-	syncObj1.AddLayer(mesh.NewExistingLayer(4, []*mesh.Block{block9, block10}))
+	syncObj1.AddBlock(block1)
+	syncObj1.AddBlock(block2)
+	syncObj1.AddBlock(block3)
+	syncObj1.AddBlock(block4)
+	syncObj1.AddBlock(block5)
+	syncObj1.AddBlock(block6)
+	syncObj1.AddBlock(block7)
+	syncObj1.AddBlock(block8)
+	syncObj1.AddBlock(block9)
+	syncObj1.AddBlock(block10)
 
 	syncObj2.SetLatestLayer(5)
 	syncObj2.Start()
@@ -420,9 +430,9 @@ loop:
 		case <-timeout:
 			t.Error("timed out ")
 		default:
-			if syncObj2.LatestReceivedLayer() == 3 && syncObj3.LatestReceivedLayer() == 3 {
+			if syncObj2.VerifiedLayer() == 3 && syncObj3.VerifiedLayer() == 3 {
 				t.Log("done!")
-				t.Log(syncObj2.LatestReceivedLayer(), " ", syncObj3.LatestReceivedLayer())
+				t.Log(syncObj2.VerifiedLayer(), " ", syncObj3.VerifiedLayer())
 				break loop
 			}
 		}
@@ -492,11 +502,16 @@ func (sis *syncIntegrationTwoNodes) TestSyncProtocol_TwoNodes() {
 	syncObj2 := sis.syncers[2]
 	defer syncObj2.Close()
 
-	syncObj2.AddLayer(mesh.NewExistingLayer(0, []*mesh.Block{block1, block2}))
-	syncObj2.AddLayer(mesh.NewExistingLayer(1, []*mesh.Block{block3, block4}))
-	syncObj2.AddLayer(mesh.NewExistingLayer(2, []*mesh.Block{block5, block6}))
-	syncObj2.AddLayer(mesh.NewExistingLayer(3, []*mesh.Block{block7, block8}))
-	syncObj2.AddLayer(mesh.NewExistingLayer(4, []*mesh.Block{block9, block10}))
+	syncObj2.AddBlock(block1)
+	syncObj2.AddBlock(block2)
+	syncObj2.AddBlock(block3)
+	syncObj2.AddBlock(block4)
+	syncObj2.AddBlock(block5)
+	syncObj2.AddBlock(block6)
+	syncObj2.AddBlock(block7)
+	syncObj2.AddBlock(block8)
+	syncObj2.AddBlock(block9)
+	syncObj2.AddBlock(block10)
 	timeout := time.After(60 * time.Second)
 	syncObj1.SetLatestLayer(5)
 	syncObj1.Start()
@@ -509,7 +524,7 @@ func (sis *syncIntegrationTwoNodes) TestSyncProtocol_TwoNodes() {
 			t.Error("timed out ")
 			return
 		default:
-			if syncObj1.LatestReceivedLayer() == 3 {
+			if syncObj1.VerifiedLayer() == 3 {
 				t.Log("done!")
 				return
 			}
@@ -565,10 +580,12 @@ func (sis *syncIntegrationMultipleNodes) TestSyncProtocol_MultipleNodes() {
 	syncObj5 := sis.syncers[4]
 	defer syncObj5.Close()
 
-	syncObj4.AddLayer(mesh.NewExistingLayer(0, []*mesh.Block{block1}))
-	syncObj4.AddLayer(mesh.NewExistingLayer(1, []*mesh.Block{block2}))
-	syncObj4.AddLayer(mesh.NewExistingLayer(2, []*mesh.Block{block3, block4}))
-	syncObj4.AddLayer(mesh.NewExistingLayer(3, []*mesh.Block{block5, block6}))
+	syncObj4.AddBlock(block1)
+	syncObj4.AddBlock(block2)
+	syncObj4.AddBlock(block3)
+	syncObj4.AddBlock(block4)
+	syncObj4.AddBlock(block5)
+	syncObj4.AddBlock(block6)
 
 	timeout := time.After(2 * 60 * time.Second)
 	syncObj2.SetLatestLayer(5)
@@ -590,17 +607,17 @@ func (sis *syncIntegrationMultipleNodes) TestSyncProtocol_MultipleNodes() {
 			t.Error("timed out ")
 			goto end
 		default:
-			if syncObj2.LatestReceivedLayer() == 3 || syncObj4.LatestReceivedLayer() == 3 {
+			if syncObj2.VerifiedLayer() == 3 || syncObj4.VerifiedLayer() == 3 {
 				t.Log("done!")
 				goto end
 			}
 		}
 	}
 end:
-	log.Debug("sync 1 ", syncObj1.LatestReceivedLayer())
-	log.Debug("sync 2 ", syncObj2.LatestReceivedLayer())
-	log.Debug("sync 3 ", syncObj3.LatestReceivedLayer())
-	log.Debug("sync 4 ", syncObj4.LatestReceivedLayer())
-	log.Debug("sync 5 ", syncObj5.LatestReceivedLayer())
+	log.Debug("sync 1 ", syncObj1.VerifiedLayer())
+	log.Debug("sync 2 ", syncObj2.VerifiedLayer())
+	log.Debug("sync 3 ", syncObj3.VerifiedLayer())
+	log.Debug("sync 4 ", syncObj4.VerifiedLayer())
+	log.Debug("sync 5 ", syncObj5.VerifiedLayer())
 	return
 }

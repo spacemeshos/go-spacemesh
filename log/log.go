@@ -32,7 +32,7 @@ func logLevel() zap.LevelEnablerFunc {
 	if debugMode {
 		return DebugLevel
 	} else {
-		return InfoLevel
+		return DebugLevel
 	}
 }
 
