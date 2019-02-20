@@ -330,7 +330,7 @@ func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service,
 	clock := timesync.NewTicker(timesync.RealClock{}, ld, gTime)
 
 	blockListener := sync.NewBlockListener(swarm, blockOracle, msh, 5*time.Second, 4, lg)
-	conf := sync.Configuration{Hdist: 0, SyncInterval: ld, Concurrency: 4, LayerSize: int(layerSize), RequestTimeout: 200 * time.Millisecond}
+	conf := sync.Configuration{Hdist: 1, SyncInterval: ld, Concurrency: 4, LayerSize: int(layerSize), RequestTimeout: 200 * time.Millisecond}
 	syncer := sync.NewSync(swarm, msh, blockOracle, conf, lg)
 
 	ha := hare.New(app.Config.HARE, swarm, sgn, msh, hareOracle, clock.Subscribe(), lg)
