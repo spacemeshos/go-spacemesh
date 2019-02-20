@@ -54,12 +54,13 @@ func hashInstanceAndK(instanceID InstanceId, K int32) uint32 {
 	return val
 }
 
+// Returns the expected committee size for the given round assuming n is the default size
 func expectedCommitteeSize(k int32, n int) int {
 	if k%4 == Round2 {
 		return 1 // 1 leader
 	}
 
-	// N actives
+	// N actives in any other case
 	return n
 }
 

@@ -41,13 +41,12 @@ func (inboxer *MockInboxer) Id() uint32 {
 }
 
 func TestBroker_Start(t *testing.T) {
-	t.Skip() //start now does not support checking if already started
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 	broker := buildBroker(n1)
 
 	err := broker.Start()
-	assert.Equal(t, nil, err)
+	assert.Nil(t, err)
 
 	err = broker.Start()
 	assert.NotNil(t, err)

@@ -7,6 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"sync"
+	"time"
 )
 
 const InboxCapacity = 100
@@ -59,6 +60,7 @@ type Broker struct {
 	pending    map[uint32][]*pb.HareMessage
 	mutex      sync.RWMutex
 	maxReg     uint32
+	startTime  time.Time
 }
 
 func NewBroker(networkService NetworkService, eValidator Validator) *Broker {
@@ -74,10 +76,13 @@ func NewBroker(networkService NetworkService, eValidator Validator) *Broker {
 
 // Start listening to protocol messages and dispatch messages (non-blocking)
 func (broker *Broker) Start() error {
-	if broker.inbox != nil { // Start has been called at least twice
+	if !broker.startTime.IsZero() { // Start has been called at least twice
 		log.Error("Could not start instance")
 		return StartInstanceError(errors.New("instance already started"))
 	}
+
+	broker.startTime = time.Now()
+
 	broker.inbox = broker.network.RegisterGossipProtocol(ProtoName)
 	go broker.dispatcher()
 
