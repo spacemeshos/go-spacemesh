@@ -72,7 +72,7 @@ func newHasherU32() *hasherU32 {
 	return h
 }
 
-func (h *hasherU32) Hash(values... []byte) uint32 {
+func (h *hasherU32) Hash(values ...[]byte) uint32 {
 	fnv := fnv.New32()
 	for _, b := range values {
 		fnv.Write(b)

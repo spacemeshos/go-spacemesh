@@ -12,7 +12,7 @@ type messageValidator interface {
 }
 
 type eligibilityValidator struct {
-	oracle  HareRolacle
+	oracle HareRolacle
 	log.Log
 }
 
