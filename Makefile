@@ -8,6 +8,12 @@ CURR_DIR = $(shell pwd)
 CURR_DIR_WIN = $(shell cd)
 export GO111MODULE = on
 
+ifndef $(TRAVIS_BRANCH)
+	BRANCH = $(shell git rev-parse --abbrev-ref HEAD)
+else
+	BRANCH = $(TRAVIS_BRANCH)
+endif
+
 # Setup the -ldflags option to pass vars defined here to app vars
 LDFLAGS = -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.branch=${BRANCH}"
 
