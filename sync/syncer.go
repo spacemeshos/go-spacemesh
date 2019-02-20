@@ -168,7 +168,7 @@ func (s *Syncer) Synchronise() {
 		s.Info("add layer ", i)
 		lyr, err := s.GetLayer(mesh.LayerID(i + 1))
 		if err != nil {
-			log.Error("cannot insert layer to db because %v", err)
+			log.Info("cannot Validate layer %d to db because %v", i+1, err)
 			continue
 		}
 		go s.ValidateLayer(lyr)
@@ -298,8 +298,10 @@ func (s *Syncer) getLayerHashes(index mesh.LayerID) (map[string]p2p.Peer, error)
 		//merge channels and close when done
 		wg.Add(1)
 		go func() {
-			v := <-c
-			ch <- v
+			v, closed := <-c
+			if !closed {
+				ch <- v
+			}
 			wg.Done()
 		}()
 	}

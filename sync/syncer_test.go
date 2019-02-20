@@ -17,7 +17,7 @@ import (
 	"time"
 )
 
-var conf = Configuration{2, 1 * time.Second, 1, 300, 10 * time.Millisecond}
+var conf = Configuration{0, 1 * time.Second, 1, 300, 10 * time.Millisecond}
 
 const (
 	levelDB  = "LevelDB"
@@ -355,7 +355,7 @@ loop:
 			t.Error("timed out ")
 			return
 		default:
-			if syncObj2.VerifiedLayer() == 3 {
+			if syncObj2.VerifiedLayer() == 5 {
 				t.Log("done!")
 				break loop
 			}
@@ -413,11 +413,11 @@ func syncTest(dpType string, t *testing.T) {
 	syncObj1.AddBlock(block9)
 	syncObj1.AddBlock(block10)
 
-	syncObj2.SetLatestLayer(5)
+	syncObj2.SetLatestLayer(3)
 	syncObj2.Start()
-	syncObj3.SetLatestLayer(5)
+	syncObj3.SetLatestLayer(3)
 	syncObj3.Start()
-	syncObj4.SetLatestLayer(5)
+	syncObj4.SetLatestLayer(3)
 	syncObj4.Start()
 
 	// Keep trying until we're timed out or got a result or got an error
