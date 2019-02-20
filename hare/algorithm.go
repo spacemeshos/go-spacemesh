@@ -76,7 +76,7 @@ func NewConsensusProcess(cfg config.Config, instanceId InstanceId, s *Set, oracl
 	proc.State = State{-1, -1, s.Clone(), nil}
 	proc.Closer = NewCloser()
 	proc.instanceId = instanceId
-	proc.oracle = newHareOracle(oracle, cfg.N)
+	proc.oracle = NewHareOracle(oracle, cfg.N)
 	proc.signing = signing
 	proc.network = p2p
 	proc.validator = newSyntaxContextValidator(signing, cfg.F+1, proc.statusValidator(), logger)
@@ -209,7 +209,7 @@ func (proc *ConsensusProcess) onEarlyMessage(m *pb.HareMessage) {
 func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
 	// Note: instanceId is already verified by the broker
 
-	proc.Debug("Received message: %v", m)
+	proc.Debug("Received message %v", m)
 
 	if !proc.validator.SyntacticallyValidateMessage(m) {
 		proc.Warning("Syntactically validation failed, pubkey %v", m.PubKey)
@@ -278,7 +278,7 @@ func (proc *ConsensusProcess) sendMessage(msg *pb.HareMessage) {
 		return
 	}
 
-	proc.Info("Message sent: %v", MessageType(msg.Message.Type).String())
+	proc.Info("Message of type %v sent", MessageType(msg.Message.Type).String())
 }
 
 func (proc *ConsensusProcess) onRoundEnd() {

@@ -1,9 +1,9 @@
-package app
+package cmd
 
 import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/address"
-	"github.com/spacemeshos/go-spacemesh/api/config"
+	apiCfg "github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -54,9 +54,12 @@ func TestApp(t *testing.T) {
 	// remove all injected test flags for now
 	os.Args = []string{"/go-spacemesh", "--json-server=true"}
 
-	go Main()
+	smapp := newSpacemeshApp()
+	defer smapp.Cleanup(NodeCmd, os.Args)
+	smapp.Initialize(NodeCmd, os.Args)
+	smapp.Start(NodeCmd, os.Args)
 
-	<-EntryPointCreated
+	//<-EntryPointCreated
 
 	assert.NotNil(t, App)
 
@@ -91,7 +94,7 @@ func (app *AppTestSuite) initMultipleInstances(t *testing.T, numOfInstances int,
 
 		err := app.apps[i].initServices(pub.String(), n, store, sgn, bo, bo, uint32(numOfInstances))
 		assert.NoError(t, err)
-		app.apps[i].setupGenesis(config.DefaultGenesisConfig())
+		app.apps[i].setupGenesis(apiCfg.DefaultGenesisConfig())
 		app.dbs = append(app.dbs, store)
 		runningName++
 	}

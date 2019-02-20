@@ -16,7 +16,7 @@ type eligibilityValidator struct {
 	log.Log
 }
 
-func newEligibilityValidator(oracle HareRolacle, logger log.Log) *eligibilityValidator {
+func NewEligibilityValidator(oracle HareRolacle, logger log.Log) *eligibilityValidator {
 	return &eligibilityValidator{oracle, logger}
 }
 

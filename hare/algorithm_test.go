@@ -141,7 +141,7 @@ func (mo *mockOracle) Eligible(instanceId InstanceId, k int32, pubKey string, pr
 }
 
 func buildOracle(oracle Rolacle) *hareRolacle {
-	return newHareOracle(oracle, cfg.N)
+	return NewHareOracle(oracle, cfg.N)
 }
 
 // test that a message to a specific set objectId is delivered by the broker

@@ -77,7 +77,7 @@ type OracleClient struct {
 
 // NewOracleClient creates a new client to query the oracle. it generates a random worldid
 func NewOracleClient() *OracleClient {
-	b, err := crypto.GetRandomBytes(8)
+	b, err := crypto.GetRandomBytes(4)
 	if err != nil {
 		panic(err)
 	}
