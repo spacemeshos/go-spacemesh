@@ -47,7 +47,7 @@ func NewMesh(layers, blocks, validity database.DB, mesh MeshValidator, state Sta
 		Log:      logger,
 		tortoise: mesh,
 		state:    state,
-		meshDB:   NewMeshDB(layers, blocks, validity),
+		meshDB:   NewMeshDB(layers, blocks, validity, logger),
 	}
 	return ll
 }
@@ -139,9 +139,9 @@ func (m *Mesh) GetLayer(i LayerID) (*Layer, error) {
 }
 
 func (m *Mesh) AddBlock(block *Block) error {
-	log.Debug("add block ", block.ID())
+	m.Debug("add block %d", block.ID())
 	if err := m.addBlock(block); err != nil {
-		m.Error("failed to add block ", block.ID(), " ", err)
+		m.Error("failed to add block %v  %v", block.ID(), err)
 		return err
 	}
 	m.SetLatestLayer(uint32(block.Layer()))
@@ -223,7 +223,7 @@ func (m *Mesh) GetOrphanBlocksBefore(l LayerID) ([]BlockID, error) {
 }
 
 func (m *Mesh) GetBlock(id BlockID) (*Block, error) {
-	m.Debug("get block ", id)
+	m.Debug("get block %d", id)
 	return m.getBlock(id)
 }
 

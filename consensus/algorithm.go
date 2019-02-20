@@ -56,7 +56,6 @@ func (alg *Algorithm) ContextualValidity(id mesh.BlockID) bool {
 }
 
 func CreateGenesisBlock() *mesh.Block {
-	log.Info("Creating genesis")
 	bl := &mesh.Block{
 		Id:         mesh.BlockID(config.GenesisId),
 		LayerIndex: 0,
@@ -66,7 +65,6 @@ func CreateGenesisBlock() *mesh.Block {
 }
 
 func GenesisLayer() *mesh.Layer {
-	log.Info("Creating genesis")
 	l := mesh.NewLayer(Genesis)
 	l.AddBlock(CreateGenesisBlock())
 	return l

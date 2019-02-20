@@ -82,7 +82,7 @@ func (s *Syncer) run() {
 		doSync := false
 		select {
 		case <-s.exit:
-			log.Debug("run stoped")
+			s.Debug("run stoped")
 			return
 		case doSync = <-s.forceSync:
 		case <-syncTicker.C:
@@ -132,7 +132,7 @@ func (s *Syncer) maxSyncLayer() uint32 {
 
 func (s *Syncer) Synchronise() {
 	for i := s.VerifiedLayer(); i < s.maxSyncLayer(); i++ {
-		log.Info("syncing layer %v to layer %v ", s.VerifiedLayer(), s.maxSyncLayer())
+		s.Info("syncing layer %v to layer %v ", s.VerifiedLayer(), s.maxSyncLayer())
 		if blockIds, err := s.getLayerBlockIDs(mesh.LayerID(i + 1)); err == nil { //returns a set of all known blocks in the mesh
 			output := make(chan *mesh.Block)
 			// each worker goroutine tries to fetch a block iteratively from each peer
@@ -160,21 +160,21 @@ func (s *Syncer) Synchronise() {
 			//blocks := make([]*mesh.Block, 0, len(blockIds))
 
 			for block := range output {
-				s.Debug("add block to layer", block)
+				s.Debug("add block to layer %v", block)
 				//blocks = append(blocks, block)
 				s.AddBlock(block)
 			}
 		}
-		s.Info("add layer ", i)
+		s.Info("add layer ", i+1)
 		lyr, err := s.GetLayer(mesh.LayerID(i + 1))
 		if err != nil {
-			log.Info("cannot Validate layer %d to db because %v", i+1, err)
+			s.Info("cannot Validate layer %d to db because %v", i+1, err)
 			continue
 		}
 		go s.ValidateLayer(lyr)
 	}
 
-	s.Debug("synchronise done, local layer index is ", s.VerifiedLayer(), "most recent is ", s.LatestLayer())
+	s.Debug("synchronise done, local layer index is %d most recent is  %d", s.VerifiedLayer(), s.LatestLayer())
 }
 
 type peerHashPair struct {
@@ -236,8 +236,9 @@ func (s *Syncer) getIdsForHash(m map[string]p2p.Peer, index mesh.LayerID) (chan 
 		reqCounter++
 		wg.Add(1)
 		go func() {
-			v := <-c
-			ch <- v
+			if v := <-c; v != nil {
+				ch <- v
+			}
 			wg.Done()
 		}()
 	}
@@ -286,7 +287,7 @@ func (s *Syncer) getLayerHashes(index mesh.LayerID) (map[string]p2p.Peer, error)
 	}
 	// request hash from all
 	wg := sync.WaitGroup{}
-	ch := make(chan peerHashPair, len(peers))
+	ch := make(chan *peerHashPair, len(peers))
 
 	resCounter := len(peers)
 	for _, p := range peers {
@@ -298,8 +299,7 @@ func (s *Syncer) getLayerHashes(index mesh.LayerID) (map[string]p2p.Peer, error)
 		//merge channels and close when done
 		wg.Add(1)
 		go func() {
-			v, closed := <-c
-			if !closed {
+			if v := <-c; v != nil {
 				ch <- v
 			}
 			wg.Done()
@@ -311,6 +311,9 @@ func (s *Syncer) getLayerHashes(index mesh.LayerID) (map[string]p2p.Peer, error)
 		// Got a timeout! fail with a timeout error
 		select {
 		case pair := <-ch:
+			if pair == nil { //do nothing on close channel
+				continue
+			}
 			m[string(pair.hash)] = pair.peer
 			resCounter--
 		case <-timeout:
@@ -324,9 +327,9 @@ func (s *Syncer) getLayerHashes(index mesh.LayerID) (map[string]p2p.Peer, error)
 	return m, nil
 }
 
-func (s *Syncer) sendLayerHashRequest(peer p2p.Peer, layer mesh.LayerID) (chan peerHashPair, error) {
-	s.Debug("send Layer hash request Peer: ", peer, " layer: ", layer)
-	ch := make(chan peerHashPair)
+func (s *Syncer) sendLayerHashRequest(peer p2p.Peer, layer mesh.LayerID) (chan *peerHashPair, error) {
+	s.Debug("send Layer hash request Peer: %v layer: %v", peer, layer)
+	ch := make(chan *peerHashPair)
 	data := &pb.LayerHashReq{Layer: uint32(layer)}
 	payload, err := proto.Marshal(data)
 	if err != nil {
@@ -345,7 +348,8 @@ func (s *Syncer) sendLayerHashRequest(peer p2p.Peer, layer mesh.LayerID) (chan p
 			s.Error("could not unmarshal layer hash response ", err)
 			return
 		}
-		ch <- peerHashPair{peer: peer, hash: res.Hash}
+		s.Debug("got hash response from %v hash: %v  layer: %d", peer, res.Hash, layer)
+		ch <- &peerHashPair{peer: peer, hash: res.Hash}
 	}
 	return ch, s.SendRequest(LAYER_HASH, payload, peer, foo)
 }

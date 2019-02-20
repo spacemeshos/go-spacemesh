@@ -15,6 +15,7 @@ type layerMutex struct {
 }
 
 type meshDB struct {
+	log.Log
 	layers             database.DB
 	blocks             database.DB
 	contextualValidity database.DB //map blockId to contextualValidation state of block
@@ -24,8 +25,9 @@ type meshDB struct {
 	lhMutex            sync.Mutex
 }
 
-func NewMeshDB(layers, blocks, validity database.DB) *meshDB {
+func NewMeshDB(layers, blocks, validity database.DB, log log.Log) *meshDB {
 	ll := &meshDB{
+		Log:                log,
 		blocks:             blocks,
 		layers:             layers,
 		contextualValidity: validity,
@@ -161,7 +163,7 @@ func (m *meshDB) updateLayerWithBlock(block *Block) error {
 			return errors.New("could not get all blocks from database ")
 		}
 	}
-	log.Info("added block %v to layer %v", block.ID(), block.LayerIndex)
+	m.Info("added block %v to layer %v", block.ID(), block.LayerIndex)
 	blockIds[block.ID()] = true
 	w, err := blockIdsAsBytes(blockIds)
 	if err != nil {
