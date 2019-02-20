@@ -2,16 +2,16 @@ BINARY := go-spacemesh
 VERSION := 0.0.1
 COMMIT = $(shell git rev-parse HEAD)
 SHA = $(shell git rev-parse --short HEAD)
-BRANCH = $(shell git symbolic-ref --short HEAD)
+# BRANCH = $(shell git symbolic-ref --short HEAD)
 BIN_DIR = $(shell pwd)/build
 CURR_DIR = $(shell pwd)
 CURR_DIR_WIN = $(shell cd)
 export GO111MODULE = on
 
-ifndef $(TRAVIS_PULL_REQUEST_BRANCH)
-	BRANCH = $(shell git rev-parse --abbrev-ref HEAD)
+ifndef TRAVIS_PULL_REQUEST_BRANCH
+	BRANCH := $(shell git rev-parse --abbrev-ref HEAD)
 else
-	BRANCH = $(TRAVIS_PULL_REQUEST_BRANCH)
+	BRANCH := $(TRAVIS_PULL_REQUEST_BRANCH)
 endif
 
 # Setup the -ldflags option to pass vars defined here to app vars
