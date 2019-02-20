@@ -98,8 +98,8 @@ dockerbuild:
 
 dockerpush: dockerbuild
 	echo "$(DOCKER_PASSWORD)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
-	docker tag $(DOCKER_IMAGE_NAME) spacemeshos/$(DOCKER_IMAGE_NAME):develop
+	docker tag $(DOCKER_IMAGE_NAME) spacemeshos/$(DOCKER_IMAGE_NAME):$(BRANCH)
 	docker tag $(DOCKER_IMAGE_NAME) spacemeshos/$(DOCKER_IMAGE_NAME):$(SHA)
-	docker push spacemeshos/$(DOCKER_IMAGE_NAME):develop
+	docker push spacemeshos/$(DOCKER_IMAGE_NAME):$(BRANCH)
 	docker push spacemeshos/$(DOCKER_IMAGE_NAME):$(SHA)
 .PHONY: dockerpush
