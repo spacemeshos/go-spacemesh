@@ -1,0 +1,19 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  generateName: bootstrap-
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        name: bootstrap
+    spec:
+      containers:
+      - name: bootstrap
+        image: spacemeshos/go-spacemesh:ms1
+        args: ['--oracle_server', 'http://172.31.55.212:3030', '--test-mode']
+        ports:
+        - containerPort: 9999
+      nodeSelector:
+        role: client
