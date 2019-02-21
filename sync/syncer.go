@@ -20,7 +20,7 @@ type BlockValidator interface {
 }
 
 type Configuration struct {
-	Hdist          uint32 //dist of consensus layers from newst layer
+	DistFromTop    uint32 //dist of consensus layers from newst layer
 	SyncInterval   time.Duration
 	Concurrency    int //number of workers for sync method
 	LayerSize      int
@@ -122,11 +122,11 @@ func NewSync(srv server.Service, layers *mesh.Mesh, bv BlockValidator, conf Conf
 }
 
 func (s *Syncer) maxSyncLayer() uint32 {
-	if uint32(s.LatestLayer()) < s.Hdist {
+	if uint32(s.LatestLayer()) < s.DistFromTop {
 		return 0
 	}
 
-	return s.LatestLayer() - s.Hdist
+	return s.LatestLayer() - s.DistFromTop
 }
 
 func (s *Syncer) Synchronise() {

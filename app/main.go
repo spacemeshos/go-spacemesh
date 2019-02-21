@@ -328,7 +328,7 @@ func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service,
 	trtl := consensus.NewAlgorithm(consensus.NewNinjaTortoise(layerSize, lg))
 	msh := mesh.NewMesh(db, db, db, trtl, processor, clock.Subscribe(), lg) //todo: what to do with the logger?
 	blockListener := sync.NewBlockListener(swarm, blockOracle, msh, 2*time.Second, 4, lg)
-	conf := sync.Configuration{Hdist: 1, SyncInterval: 1 * time.Second, Concurrency: 4, LayerSize: int(layerSize), RequestTimeout: 100 * time.Millisecond}
+	conf := sync.Configuration{DistFromTop: 1, SyncInterval: 1 * time.Second, Concurrency: 4, LayerSize: int(layerSize), RequestTimeout: 100 * time.Millisecond}
 	syncer := sync.NewSync(swarm, msh, blockOracle, conf, lg)
 
 	ha := hare.New(app.Config.HARE, swarm, sgn, msh, hareOracle, clock.Subscribe(), lg)
