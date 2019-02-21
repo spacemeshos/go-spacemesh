@@ -1,0 +1,192 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "api/pb/api.proto",
+    "version": "version not set"
+  },
+  "schemes": [
+    "http",
+    "https"
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "paths": {
+    "/v1/balance": {
+      "post": {
+        "operationId": "GetBalance",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/pbSimpleMessage"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/pbAccountId"
+            }
+          }
+        ],
+        "tags": [
+          "SpacemeshService"
+        ]
+      }
+    },
+    "/v1/broadcast": {
+      "post": {
+        "operationId": "Broadcast",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/pbSimpleMessage"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/pbBroadcastMessage"
+            }
+          }
+        ],
+        "tags": [
+          "SpacemeshService"
+        ]
+      }
+    },
+    "/v1/example/echo": {
+      "post": {
+        "operationId": "Echo",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/pbSimpleMessage"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/pbSimpleMessage"
+            }
+          }
+        ],
+        "tags": [
+          "SpacemeshService"
+        ]
+      }
+    },
+    "/v1/nonce": {
+      "post": {
+        "operationId": "GetNonce",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/pbSimpleMessage"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/pbAccountId"
+            }
+          }
+        ],
+        "tags": [
+          "SpacemeshService"
+        ]
+      }
+    },
+    "/v1/submittransaction": {
+      "post": {
+        "operationId": "SubmitTransaction",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/pbSimpleMessage"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/pbSignedTransaction"
+            }
+          }
+        ],
+        "tags": [
+          "SpacemeshService"
+        ]
+      }
+    }
+  },
+  "definitions": {
+    "pbAccountId": {
+      "type": "object",
+      "properties": {
+        "address": {
+          "type": "string"
+        }
+      }
+    },
+    "pbBroadcastMessage": {
+      "type": "object",
+      "properties": {
+        "Data": {
+          "type": "string"
+        }
+      }
+    },
+    "pbSignedTransaction": {
+      "type": "object",
+      "properties": {
+        "srcAddress": {
+          "type": "string"
+        },
+        "dstAddress": {
+          "type": "string"
+        },
+        "amount": {
+          "type": "string"
+        },
+        "nonce": {
+          "type": "string"
+        }
+      }
+    },
+    "pbSimpleMessage": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

@@ -25,8 +25,5 @@
 /cover-all.out
 */**/cover.out
 
-**/pb/*.pb.go
-**/pb/*.pb.gw.go
-**/pb/*.swagger.json
 database/data
 app/state
