@@ -324,16 +324,16 @@ func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service,
 	}
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
 	clock := timesync.NewTicker(timesync.RealClock{}, ld, gTime)
-
 	trtl := consensus.NewAlgorithm(consensus.NewNinjaTortoise(layerSize, lg))
-	msh := mesh.NewMesh(db, db, db, trtl, processor, clock.Subscribe(), lg) //todo: what to do with the logger?
-	blockListener := sync.NewBlockListener(swarm, blockOracle, msh, 2*time.Second, 4, lg)
-	conf := sync.Configuration{DistFromTop: 1, SyncInterval: 1 * time.Second, Concurrency: 4, LayerSize: int(layerSize), RequestTimeout: 100 * time.Millisecond}
+	msh := mesh.NewMesh(db, db, db, trtl, processor, lg) //todo: what to do with the logger?
+
+	conf := sync.Configuration{SyncInterval: 1 * time.Second, Concurrency: 4, LayerSize: int(layerSize), RequestTimeout: 100 * time.Millisecond}
 	syncer := sync.NewSync(swarm, msh, blockOracle, conf, clock.Subscribe(), lg)
 
 	ha := hare.New(app.Config.HARE, swarm, sgn, msh, hareOracle, clock.Subscribe(), lg)
 
 	blockProducer := miner.NewBlockBuilder(instanceName, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, lg)
+	blockListener := sync.NewBlockListener(swarm, blockOracle, msh, 2*time.Second, 4, lg)
 
 	app.blockProducer = &blockProducer
 	app.blockListener = blockListener

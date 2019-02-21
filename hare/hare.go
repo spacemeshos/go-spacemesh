@@ -46,7 +46,7 @@ type Hare struct {
 	config config.Config
 
 	network    NetworkService
-	beginLayer chan uint32
+	beginLayer chan mesh.LayerID
 
 	broker *Broker
 
@@ -70,7 +70,7 @@ type Hare struct {
 }
 
 // New returns a new Hare struct.
-func New(conf config.Config, p2p NetworkService, sign Signing, obp orphanBlockProvider, rolacle Rolacle, beginLayer chan uint32, logger log.Log) *Hare {
+func New(conf config.Config, p2p NetworkService, sign Signing, obp orphanBlockProvider, rolacle Rolacle, beginLayer chan mesh.LayerID, logger log.Log) *Hare {
 	h := new(Hare)
 	h.Closer = NewCloser()
 

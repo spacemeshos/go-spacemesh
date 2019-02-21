@@ -30,7 +30,7 @@ const IncomingTxProtocol = "TxGossip"
 type BlockBuilder struct {
 	minerID string // could be a pubkey or what ever. the identity we're claiming to be as miners.
 	log.Log
-	beginRoundEvent  chan uint32
+	beginRoundEvent  chan mesh.LayerID
 	stopChan         chan struct{}
 	newTrans         chan *mesh.SerializableTransaction
 	txGossipChannel  chan service.GossipMessage
@@ -44,7 +44,7 @@ type BlockBuilder struct {
 	started          bool
 }
 
-func NewBlockBuilder(minerID string, net p2p.Service, beginRoundEvent chan uint32, weakCoin WeakCoinProvider,
+func NewBlockBuilder(minerID string, net p2p.Service, beginRoundEvent chan mesh.LayerID, weakCoin WeakCoinProvider,
 	orph OrphanBlockProvider, hare HareResultProvider, blockOracle oracle.BlockOracle, lg log.Log) BlockBuilder {
 	return BlockBuilder{
 		minerID:          minerID,

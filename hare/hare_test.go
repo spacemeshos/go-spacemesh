@@ -72,7 +72,7 @@ func TestNew(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 
-	layerTicker := make(chan uint32)
+	layerTicker := make(chan mesh.LayerID)
 
 	oracle := NewMockHashOracle(numOfClients)
 	signing := NewMockSigning()
@@ -90,7 +90,7 @@ func TestHare_Start(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 
-	layerTicker := make(chan uint32)
+	layerTicker := make(chan mesh.LayerID)
 
 	oracle := NewMockHashOracle(numOfClients)
 	signing := NewMockSigning()
@@ -112,7 +112,7 @@ func TestHare_GetResult(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 
-	layerTicker := make(chan uint32)
+	layerTicker := make(chan mesh.LayerID)
 
 	oracle := NewMockHashOracle(numOfClients)
 	signing := NewMockSigning()
@@ -143,7 +143,7 @@ func TestHare_GetResult2(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 
-	layerTicker := make(chan uint32)
+	layerTicker := make(chan mesh.LayerID)
 
 	oracle := NewMockHashOracle(numOfClients)
 	signing := NewMockSigning()
@@ -164,14 +164,14 @@ func TestHare_GetResult2(t *testing.T) {
 	h.Start()
 
 	for i := 0; i < h.bufferSize+1; i++ {
-		h.beginLayer <- uint32(i)
+		h.beginLayer <- mesh.LayerID(i)
 	}
 	time.Sleep(100 * time.Millisecond)
 
 	_, err := h.GetResult(mesh.LayerID(h.bufferSize))
 	require.NoError(t, err)
 
-	h.beginLayer <- uint32(h.bufferSize + 1)
+	h.beginLayer <- mesh.LayerID(h.bufferSize + 1)
 
 	time.Sleep(100 * time.Millisecond)
 
@@ -183,7 +183,7 @@ func TestHare_collectOutput(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 
-	layerTicker := make(chan uint32)
+	layerTicker := make(chan mesh.LayerID)
 
 	oracle := NewMockHashOracle(numOfClients)
 	signing := NewMockSigning()
@@ -212,7 +212,7 @@ func TestHare_collectOutput2(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 
-	layerTicker := make(chan uint32)
+	layerTicker := make(chan mesh.LayerID)
 
 	oracle := NewMockHashOracle(numOfClients)
 	signing := NewMockSigning()
@@ -254,7 +254,7 @@ func TestHare_onTick(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 
-	layerTicker := make(chan uint32)
+	layerTicker := make(chan mesh.LayerID)
 
 	oracle := NewMockHashOracle(numOfClients)
 	signing := NewMockSigning()

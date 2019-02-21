@@ -48,7 +48,7 @@ func (mbo mockBlockOracle) BlockEligible(id mesh.LayerID, pubkey string) bool {
 func TestBlockBuilder_StartStop(t *testing.T) {
 
 	net := service.NewSimulator()
-	beginRound := make(chan uint32)
+	beginRound := make(chan mesh.LayerID)
 	n := net.NewNode()
 	//receiver := net.NewNode()
 
@@ -78,7 +78,7 @@ func TestBlockBuilder_StartStop(t *testing.T) {
 
 func TestBlockBuilder_CreateBlock(t *testing.T) {
 	net := service.NewSimulator()
-	beginRound := make(chan uint32)
+	beginRound := make(chan mesh.LayerID)
 	n := net.NewNode()
 	receiver := net.NewNode()
 

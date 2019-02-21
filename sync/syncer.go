@@ -21,7 +21,6 @@ type BlockValidator interface {
 }
 
 type Configuration struct {
-	DistFromTop    uint32 //dist of consensus layers from newst layer
 	SyncInterval   time.Duration
 	Concurrency    int //number of workers for sync method
 	LayerSize      int
@@ -79,24 +78,23 @@ func (s *Syncer) Start() {
 
 //fires a sync every sm.syncInterval or on force space from outside
 func (s *Syncer) run() {
+	foo := func() {
+		if atomic.CompareAndSwapUint32(&s.SyncLock, IDLE, RUNNING) {
+			s.Synchronise()
+			atomic.StoreUint32(&s.SyncLock, IDLE)
+		}
+	}
 	for {
-		doSync := false
 		select {
 		case <-s.exit:
 			s.Debug("run stoped")
 			return
-		case doSync = <-s.forceSync:
+		case <-s.forceSync:
+			go foo()
 		case layer := <-s.clock:
-			doSync = true
-			s.currentLayer = layer
-		}
-		if doSync {
-			go func() {
-				if atomic.CompareAndSwapUint32(&s.SyncLock, IDLE, RUNNING) {
-					s.Synchronise()
-					atomic.StoreUint32(&s.SyncLock, IDLE)
-				}
-			}()
+			atomic.StoreUint32(&s.currentLayer, uint32(layer))
+			s.Info("sync got tick for layer %v", layer)
+			go foo()
 		}
 	}
 }
@@ -125,16 +123,12 @@ func NewSync(srv server.Service, layers *mesh.Mesh, bv BlockValidator, conf Conf
 }
 
 func (s *Syncer) maxSyncLayer() uint32 {
-	if uint32(s.currentLayer) < s.DistFromTop {
-		return 0
-	}
-
-	return s.currentLayer - s.DistFromTop
+	return atomic.LoadUint32(&s.currentLayer)
 }
 
 func (s *Syncer) Synchronise() {
 	for currenSyncLayer := s.VerifiedLayer() + 1; currenSyncLayer < s.maxSyncLayer(); currenSyncLayer++ {
-		s.Info("syncing layer %v to layer %v current consensus layer is %d", s.VerifiedLayer(), currenSyncLayer, s.maxSyncLayer())
+		s.Info("syncing layer %v to layer %v current consensus layer is %d", s.VerifiedLayer(), currenSyncLayer, atomic.LoadUint32(&s.currentLayer))
 		s.Info("add layer ", currenSyncLayer)
 		if lyr, err := s.GetLayer(mesh.LayerID(currenSyncLayer)); err == nil {
 			go s.ValidateLayer(lyr)
