@@ -10,6 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/sync/pb"
+	"github.com/spacemeshos/go-spacemesh/timesync"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -34,11 +35,12 @@ type Syncer struct {
 	Configuration
 	log.Log
 	*server.MessageServer
-	SyncLock  uint32
-	startLock uint32
-	forceSync chan bool
-	clock     TickProvider
-	exit      chan struct{}
+	currentLayer uint32
+	SyncLock     uint32
+	startLock    uint32
+	forceSync    chan bool
+	clock        timesync.LayerTimer
+	exit         chan struct{}
 }
 
 func (s *Syncer) ForceSync() {
@@ -77,7 +79,6 @@ func (s *Syncer) Start() {
 
 //fires a sync every sm.syncInterval or on force space from outside
 func (s *Syncer) run() {
-	syncTicker := time.NewTicker(s.SyncInterval)
 	for {
 		doSync := false
 		select {
@@ -85,8 +86,9 @@ func (s *Syncer) run() {
 			s.Debug("run stoped")
 			return
 		case doSync = <-s.forceSync:
-		case <-syncTicker.C:
+		case layer := <-s.clock:
 			doSync = true
+			s.currentLayer = layer
 		}
 		if doSync {
 			go func() {
@@ -100,7 +102,7 @@ func (s *Syncer) run() {
 }
 
 //fires a sync every sm.syncInterval or on force space from outside
-func NewSync(srv server.Service, layers *mesh.Mesh, bv BlockValidator, conf Configuration, logger log.Log) *Syncer {
+func NewSync(srv server.Service, layers *mesh.Mesh, bv BlockValidator, conf Configuration, clock timesync.LayerTimer, logger log.Log) *Syncer {
 	s := Syncer{
 		BlockValidator: bv,
 		Configuration:  conf,
@@ -111,6 +113,7 @@ func NewSync(srv server.Service, layers *mesh.Mesh, bv BlockValidator, conf Conf
 		SyncLock:       0,
 		startLock:      0,
 		forceSync:      make(chan bool),
+		clock:          clock,
 		exit:           make(chan struct{}),
 	}
 
@@ -122,11 +125,11 @@ func NewSync(srv server.Service, layers *mesh.Mesh, bv BlockValidator, conf Conf
 }
 
 func (s *Syncer) maxSyncLayer() uint32 {
-	if uint32(s.LatestLayer()) < s.DistFromTop {
+	if uint32(s.currentLayer) < s.DistFromTop {
 		return 0
 	}
 
-	return s.LatestLayer() - s.DistFromTop
+	return s.currentLayer - s.DistFromTop
 }
 
 func (s *Syncer) Synchronise() {
