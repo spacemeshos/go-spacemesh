@@ -68,7 +68,7 @@ func NewBroker(networkService NetworkService, eValidator Validator) *Broker {
 	p.network = networkService
 	p.eValidator = eValidator
 	p.outbox = make(map[uint32]chan *pb.HareMessage)
-	p.pending = make(map[uint32][]*pb.HareMessage, 0)
+	p.pending = make(map[uint32][]*pb.HareMessage)
 
 	return p
 }
@@ -93,6 +93,8 @@ func (broker *Broker) dispatcher() {
 	for {
 		select {
 		case msg := <-broker.inbox:
+			futureMsg := false
+
 			if msg == nil {
 				log.Error("Message validation failed: called with nil")
 				continue
@@ -113,10 +115,20 @@ func (broker *Broker) dispatcher() {
 				continue
 			}
 
-			if hareMsg.Message.InstanceId > broker.maxReg+1 { // intended for future unregistered instance
+			broker.mutex.RLock()
+			expInstId := broker.maxReg
+			broker.mutex.RUnlock()
+
+			// far future unregistered instance
+			if hareMsg.Message.InstanceId > expInstId+1 {
 				log.Warning("Message validation failed: instanceId. Max: %v Actual: %v", broker.maxReg, hareMsg.Message.InstanceId)
 				msg.ReportValidation(ProtoName, false)
 				continue
+			}
+
+			// near future
+			if hareMsg.Message.InstanceId == expInstId+1 {
+				futureMsg = true
 			}
 
 			if !broker.eValidator.Validate(hareMsg) {
@@ -135,8 +147,7 @@ func (broker *Broker) dispatcher() {
 			if exist {
 				// todo: err if chan is full (len)
 				c <- hareMsg
-			} else {
-
+			} else if futureMsg {
 				broker.mutex.Lock()
 				if _, exist := broker.pending[instanceId.Id()]; !exist {
 					broker.pending[instanceId.Id()] = make([]*pb.HareMessage, 0)
