@@ -1,7 +1,6 @@
 package timesync
 
 import (
-	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
@@ -65,6 +64,6 @@ func TestTicker_StartClock_LayerID(t *testing.T) {
 
 	ts := NewTicker(MockTimer{}, tick, start)
 	ts.updateLayerID()
-	assert.Equal(t, mesh.LayerID(6), ts.currentLayer)
+	assert.Equal(t, 6, ts.currentLayer)
 	ts.Stop()
 }
