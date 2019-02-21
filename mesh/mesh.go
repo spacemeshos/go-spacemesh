@@ -221,7 +221,7 @@ func (m *Mesh) GetOrphanBlocksBefore(l LayerID) ([]BlockID, error) {
 
 	blocks, err := m.GetUnverifiedLayerBlocks(l - 1)
 	if err != nil {
-		return nil, errors.New(fmt.Sprint("failed getting latest layer  %v", err))
+		return nil, errors.New(fmt.Sprint("failed getting latest layer ", err))
 	}
 
 	//add last layer blocks

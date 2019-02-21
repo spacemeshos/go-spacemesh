@@ -34,7 +34,7 @@ type MockOrphans struct {
 	st []mesh.BlockID
 }
 
-func (m MockOrphans) GetUnverifiedLayerBlocks(l mesh.LayerID) ([]mesh.BlockID, error) {
+func (m MockOrphans) GetOrphanBlocksBefore(l mesh.LayerID) ([]mesh.BlockID, error) {
 	return m.st, nil
 }
 
@@ -48,7 +48,7 @@ func (mbo mockBlockOracle) BlockEligible(id mesh.LayerID, pubkey string) bool {
 func TestBlockBuilder_StartStop(t *testing.T) {
 
 	net := service.NewSimulator()
-	beginRound := make(chan mesh.LayerID)
+	beginRound := make(chan uint32)
 	n := net.NewNode()
 	//receiver := net.NewNode()
 
@@ -78,7 +78,7 @@ func TestBlockBuilder_StartStop(t *testing.T) {
 
 func TestBlockBuilder_CreateBlock(t *testing.T) {
 	net := service.NewSimulator()
-	beginRound := make(chan mesh.LayerID)
+	beginRound := make(chan uint32)
 	n := net.NewNode()
 	receiver := net.NewNode()
 
@@ -104,7 +104,7 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 	builder.AddTransaction(trans[1].AccountNonce, trans[1].Origin, *trans[1].Recipient, big.NewInt(0).SetBytes(trans[1].Price))
 	builder.AddTransaction(trans[2].AccountNonce, trans[2].Origin, *trans[2].Recipient, big.NewInt(0).SetBytes(trans[2].Price))
 
-	go func() { beginRound <- mesh.LayerID(2) }()
+	go func() { beginRound <- 2 }()
 
 	select {
 	case output := <-receiver.RegisterGossipProtocol(sync.NewBlockProtocol):
