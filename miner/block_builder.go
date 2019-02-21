@@ -30,7 +30,7 @@ const IncomingTxProtocol = "TxGossip"
 type BlockBuilder struct {
 	minerID string // could be a pubkey or what ever. the identity we're claiming to be as miners.
 	log.Log
-	beginRoundEvent  chan mesh.LayerID
+	beginRoundEvent  chan uint32
 	stopChan         chan struct{}
 	newTrans         chan *mesh.SerializableTransaction
 	txGossipChannel  chan service.GossipMessage
@@ -44,7 +44,7 @@ type BlockBuilder struct {
 	started          bool
 }
 
-func NewBlockBuilder(minerID string, net p2p.Service, beginRoundEvent chan mesh.LayerID, weakCoin WeakCoinProvider,
+func NewBlockBuilder(minerID string, net p2p.Service, beginRoundEvent chan uint32, weakCoin WeakCoinProvider,
 	orph OrphanBlockProvider, hare HareResultProvider, blockOracle oracle.BlockOracle, lg log.Log) BlockBuilder {
 	return BlockBuilder{
 		minerID:          minerID,
@@ -186,13 +186,13 @@ func (t *BlockBuilder) acceptBlockData() {
 			return
 
 		case id := <-t.beginRoundEvent:
-			if !t.blockOracle.BlockEligible(id, t.minerID) {
+			if !t.blockOracle.BlockEligible(mesh.LayerID(id), t.minerID) {
 				break
 			}
 
 			txList := t.transactionQueue[:common.Min(len(t.transactionQueue), MaxTransactionsPerBlock)]
 			t.transactionQueue = t.transactionQueue[common.Min(len(t.transactionQueue), MaxTransactionsPerBlock):]
-			blk, err := t.createBlock(id, txList)
+			blk, err := t.createBlock(mesh.LayerID(id), txList)
 			if err != nil {
 				t.Error("cannot create new block, %v ", err)
 				continue

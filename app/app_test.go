@@ -107,7 +107,7 @@ func (app *AppTestSuite) TestMultipleNodes() {
 
 	txbytes, _ := mesh.TransactionAsBytes(&tx)
 	path := "../tmp/test/state_" + time.Now().String()
-	app.initMultipleInstances(app.T(), 2, path)
+	app.initMultipleInstances(app.T(), 10, path)
 	for _, a := range app.apps {
 		a.startServices()
 	}
@@ -136,7 +136,7 @@ func (app *AppTestSuite) TestMultipleNodes() {
 					}
 				}
 			}
-			time.Sleep(1 * time.Second)
+			time.Sleep(100 * time.Millisecond)
 		}
 	}
 }

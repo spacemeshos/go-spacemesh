@@ -91,7 +91,6 @@ func (s *Syncer) run() {
 		if doSync {
 			go func() {
 				if atomic.CompareAndSwapUint32(&s.SyncLock, IDLE, RUNNING) {
-					s.Debug("do sync")
 					s.Synchronise()
 					atomic.StoreUint32(&s.SyncLock, IDLE)
 				}
@@ -131,50 +130,51 @@ func (s *Syncer) maxSyncLayer() uint32 {
 }
 
 func (s *Syncer) Synchronise() {
-	for i := s.VerifiedLayer(); i < s.maxSyncLayer(); i++ {
-		s.Info("syncing layer %v to layer %v ", s.VerifiedLayer(), s.maxSyncLayer())
-		if blockIds, err := s.getLayerBlockIDs(mesh.LayerID(i + 1)); err == nil { //returns a set of all known blocks in the mesh
-			output := make(chan *mesh.Block)
-			// each worker goroutine tries to fetch a block iteratively from each peer
-			count := int32(s.Concurrency)
+	for currenSyncLayer := s.VerifiedLayer() + 1; currenSyncLayer < s.maxSyncLayer(); currenSyncLayer++ {
+		s.Info("syncing layer %v to layer %v current consensus layer is %d", s.VerifiedLayer(), currenSyncLayer, s.maxSyncLayer())
+		s.Info("add layer ", currenSyncLayer)
+		if lyr, err := s.GetLayer(mesh.LayerID(currenSyncLayer)); err == nil {
+			go s.ValidateLayer(lyr)
+		} else if lyr, err := s.getLayerFromNeighbors(currenSyncLayer); err == nil {
+			go s.ValidateLayer(lyr)
+		}
+	}
+}
 
-			for i := 0; i < s.Concurrency; i++ {
-				go func() {
-					for id := range blockIds {
-						for _, p := range s.GetPeers() {
-							if bCh, err := sendBlockRequest(s.MessageServer, p, mesh.BlockID(id), s.Log); err == nil {
-								if b := <-bCh; b != nil && s.BlockEligible(b.LayerIndex, b.MinerID) { //some validation testing
-									s.Debug("received block", b)
-									output <- b
-									break
-								}
-							}
+func (s *Syncer) getLayerFromNeighbors(currenSyncLayer uint32) (*mesh.Layer, error) {
+	blockIds, err := s.getLayerBlockIDs(mesh.LayerID(currenSyncLayer))
+	if err != nil {
+		return nil, err
+	}
+	blocksArr := make([]*mesh.Block, 0, len(blockIds))
+	// each worker goroutine tries to fetch a block iteratively from each peer
+	output := make(chan *mesh.Block)
+	count := int32(s.Concurrency)
+	for j := 0; j < s.Concurrency; j++ {
+		go func() {
+			for id := range blockIds {
+				for _, p := range s.GetPeers() {
+					if bCh, err := sendBlockRequest(s.MessageServer, p, mesh.BlockID(id), s.Log); err == nil {
+						if b := <-bCh; b != nil && s.BlockEligible(b.LayerIndex, b.MinerID) { //some validation testing
+							s.Debug("received block", b)
+							output <- b
+							break
 						}
 					}
-					if atomic.AddInt32(&count, -1); atomic.LoadInt32(&count) == 0 { // last one closes the channel
-						close(output)
-					}
-				}()
+				}
 			}
-
-			//blocks := make([]*mesh.Block, 0, len(blockIds))
-
-			for block := range output {
-				s.Debug("add block to layer %v", block)
-				//blocks = append(blocks, block)
-				s.AddBlock(block)
+			if atomic.AddInt32(&count, -1); atomic.LoadInt32(&count) == 0 { // last one closes the channel
+				close(output)
 			}
-		}
-		s.Info("add layer ", i+1)
-		lyr, err := s.GetLayer(mesh.LayerID(i + 1))
-		if err != nil {
-			s.Info("cannot Validate layer %d to db because %v", i+1, err)
-			continue
-		}
-		go s.ValidateLayer(lyr)
+		}()
+	}
+	for block := range output {
+		s.Debug("add block to layer %v", block)
+		s.AddBlock(block)
+		blocksArr = append(blocksArr, block)
 	}
 
-	s.Debug("synchronise done, local layer index is %d most recent is  %d", s.VerifiedLayer(), s.LatestLayer())
+	return mesh.NewExistingLayer(mesh.LayerID(currenSyncLayer), blocksArr), nil
 }
 
 type peerHashPair struct {

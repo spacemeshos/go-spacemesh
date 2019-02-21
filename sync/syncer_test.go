@@ -11,6 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/state"
+	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 	"sync/atomic"
@@ -72,8 +73,8 @@ func getMeshWithLevelDB(id string) *mesh.Mesh {
 	ldb := database.NewLevelDbStore("layers_test_"+id, nil, nil)
 	cv := database.NewLevelDbStore("contextually_valid_test_"+id, nil, nil)
 	//odb := database.NewLevelDbStore("orphans_test_"+id+"_"+time.String(), nil, nil)
-
-	layers := mesh.NewMesh(ldb, bdb, cv, &MeshValidatorMock{}, &stateMock{}, log.New(id, "", ""))
+	gTime, _ := time.Parse(time.RFC3339, time.Now().Format(time.RFC3339))
+	layers := mesh.NewMesh(ldb, bdb, cv, &MeshValidatorMock{}, &stateMock{}, timesync.NewTicker(timesync.RealClock{}, 1*time.Second, gTime).Subscribe(), log.New(id, "", ""))
 	return layers
 }
 
@@ -88,7 +89,8 @@ func getMeshWithMemoryDB(id string) *mesh.Mesh {
 	ldb := database.NewMemDatabase()
 	cv := database.NewMemDatabase()
 	//odb := database.NewMemDatabase()
-	layers := mesh.NewMesh(ldb, bdb, cv, &MeshValidatorMock{}, &stateMock{}, log.New(id, "", ""))
+	gTime, _ := time.Parse(time.RFC3339, time.Now().Format(time.RFC3339))
+	layers := mesh.NewMesh(ldb, bdb, cv, &MeshValidatorMock{}, &stateMock{}, timesync.NewTicker(timesync.RealClock{}, 1*time.Second, gTime).Subscribe(), log.New(id, "", ""))
 	return layers
 }
 
@@ -338,7 +340,7 @@ loop:
 			t.Error("timed out ")
 			return
 		default:
-			if syncObj2.VerifiedLayer() == 5 {
+			if syncObj2.VerifiedLayer() == 4 {
 				t.Log("done!")
 				break loop
 			}
@@ -396,11 +398,11 @@ func syncTest(dpType string, t *testing.T) {
 	syncObj1.AddBlock(block9)
 	syncObj1.AddBlock(block10)
 
-	syncObj2.SetLatestLayer(3)
+	syncObj2.SetLatestLayer(4)
 	syncObj2.Start()
-	syncObj3.SetLatestLayer(3)
+	syncObj3.SetLatestLayer(4)
 	syncObj3.Start()
-	syncObj4.SetLatestLayer(3)
+	syncObj4.SetLatestLayer(4)
 	syncObj4.Start()
 
 	// Keep trying until we're timed out or got a result or got an error
@@ -546,6 +548,8 @@ func (sis *syncIntegrationMultipleNodes) TestSyncProtocol_MultipleNodes() {
 	block4 := mesh.NewExistingBlock(mesh.BlockID(444), 2, nil)
 	block5 := mesh.NewExistingBlock(mesh.BlockID(555), 3, nil)
 	block6 := mesh.NewExistingBlock(mesh.BlockID(666), 3, nil)
+	block7 := mesh.NewExistingBlock(mesh.BlockID(555), 4, nil)
+	block8 := mesh.NewExistingBlock(mesh.BlockID(666), 4, nil)
 
 	syncObj1 := sis.syncers[0]
 	defer syncObj1.Close()
@@ -563,12 +567,14 @@ func (sis *syncIntegrationMultipleNodes) TestSyncProtocol_MultipleNodes() {
 	syncObj4.AddBlock(block4)
 	syncObj4.AddBlock(block5)
 	syncObj4.AddBlock(block6)
+	syncObj4.AddBlock(block7)
+	syncObj4.AddBlock(block8)
 
 	timeout := time.After(30 * time.Second)
-	syncObj1.SetLatestLayer(3)
-	syncObj2.SetLatestLayer(3)
-	syncObj3.SetLatestLayer(3)
-	syncObj5.SetLatestLayer(3)
+	syncObj1.SetLatestLayer(4)
+	syncObj2.SetLatestLayer(4)
+	syncObj3.SetLatestLayer(4)
+	syncObj5.SetLatestLayer(4)
 	syncObj1.Start()
 	syncObj2.Start()
 	syncObj3.Start()

@@ -317,10 +317,6 @@ func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service,
 	rng := rand.New(mt19937.New())
 	processor := state.NewTransactionProcessor(rng, st, lg)
 
-	//trtl := consensus.NewTortoise(50, 100)
-	trtl := consensus.NewAlgorithm(consensus.NewNinjaTortoise(layerSize, lg))
-	msh := mesh.NewMesh(db, db, db, trtl, processor, lg) //todo: what to do with the logger?
-
 	coinToss := consensus.WeakCoin{}
 	gTime, err := time.Parse(time.RFC3339, app.Config.GenesisTime)
 	if err != nil {
@@ -329,8 +325,10 @@ func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service,
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
 	clock := timesync.NewTicker(timesync.RealClock{}, ld, gTime)
 
-	blockListener := sync.NewBlockListener(swarm, blockOracle, msh, 5*time.Second, 4, lg)
-	conf := sync.Configuration{Hdist: 1, SyncInterval: ld, Concurrency: 4, LayerSize: int(layerSize), RequestTimeout: 200 * time.Millisecond}
+	trtl := consensus.NewAlgorithm(consensus.NewNinjaTortoise(layerSize, lg))
+	msh := mesh.NewMesh(db, db, db, trtl, processor, clock.Subscribe(), lg) //todo: what to do with the logger?
+	blockListener := sync.NewBlockListener(swarm, blockOracle, msh, 2*time.Second, 4, lg)
+	conf := sync.Configuration{Hdist: 1, SyncInterval: 1 * time.Second, Concurrency: 4, LayerSize: int(layerSize), RequestTimeout: 100 * time.Millisecond}
 	syncer := sync.NewSync(swarm, msh, blockOracle, conf, lg)
 
 	ha := hare.New(app.Config.HARE, swarm, sgn, msh, hareOracle, clock.Subscribe(), lg)

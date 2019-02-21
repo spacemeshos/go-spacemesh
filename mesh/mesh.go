@@ -6,6 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/state"
+	"github.com/spacemeshos/go-spacemesh/timesync"
 	"math/big"
 	"sort"
 	"sync"
@@ -39,17 +40,34 @@ type Mesh struct {
 	tortoise      MeshValidator
 	state         StateUpdater
 	orphMutex     sync.RWMutex
+	clock         timesync.LayerTimer
+	done          chan struct{}
 }
 
-func NewMesh(layers, blocks, validity database.DB, mesh MeshValidator, state StateUpdater, logger log.Log) *Mesh {
+func NewMesh(layers, blocks, validity database.DB, mesh MeshValidator, state StateUpdater, clock timesync.LayerTimer, logger log.Log) *Mesh {
 	//todo add boot from disk
 	ll := &Mesh{
 		Log:      logger,
 		tortoise: mesh,
 		state:    state,
+		clock:    clock,
+		done:     make(chan struct{}),
 		meshDB:   NewMeshDB(layers, blocks, validity, logger),
 	}
+
+	go ll.onTick()
 	return ll
+}
+
+func (m *Mesh) onTick() {
+	for {
+		select {
+		case layer := <-m.clock:
+			m.SetLatestLayer(layer)
+		case <-m.done:
+			return
+		}
+	}
 }
 
 func SerializableTransaction2StateTransaction(tx *SerializableTransaction) *state.Transaction {
@@ -81,15 +99,15 @@ func (m *Mesh) SetLatestLayer(idx uint32) {
 	defer m.lkMutex.Unlock()
 	m.lkMutex.Lock()
 	if idx > m.latestLayer {
-		m.Debug("set latest known layer to ", idx)
+		m.Info("set latest known layer to ", idx)
 		m.latestLayer = idx
 	}
 }
 
 func (m *Mesh) ValidateLayer(layer *Layer) {
 	m.Info("Validate layer %d", layer.Index())
-	oldPbase, newPbase := m.tortoise.HandleIncomingLayer(layer)
 	atomic.StoreUint32(&m.verifiedLayer, uint32(layer.Index()))
+	oldPbase, newPbase := m.tortoise.HandleIncomingLayer(layer)
 	if newPbase > oldPbase {
 		m.PushTransactions(oldPbase, newPbase)
 	}
