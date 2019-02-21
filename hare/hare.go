@@ -159,7 +159,7 @@ func (h *Hare) onTick(id mesh.LayerID) {
 		return
 	}
 
-	// retrieve latest layer blocks
+	// retrieve set form orphan blocks
 	blocks, err := h.obp.GetUnverifiedLayerBlocks(h.lastLayer)
 	if err != nil {
 		log.Info("No blocks for consensus on layer %v %v", id, err)
@@ -239,7 +239,7 @@ func (h *Hare) tickLoop() {
 	for {
 		select {
 		case layer := <-h.beginLayer:
-			go h.onTick(mesh.LayerID(layer))
+			go h.onTick(layer)
 		case <-h.CloseChannel():
 			return
 		}

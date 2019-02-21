@@ -92,8 +92,8 @@ func (m *Mesh) SetLatestLayer(idx uint32) {
 
 func (m *Mesh) ValidateLayer(layer *Layer) {
 	m.Info("Validate layer %d", layer.Index())
-	atomic.StoreUint32(&m.verifiedLayer, uint32(layer.Index()))
 	oldPbase, newPbase := m.tortoise.HandleIncomingLayer(layer)
+	atomic.StoreUint32(&m.verifiedLayer, uint32(layer.Index()))
 	if newPbase > oldPbase {
 		m.PushTransactions(oldPbase, newPbase)
 	}
