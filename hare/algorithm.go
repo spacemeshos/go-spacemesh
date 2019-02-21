@@ -54,7 +54,7 @@ type ConsensusProcess struct {
 	oracle            HareRolacle // roles oracle
 	signing           Signing
 	network           NetworkService
-	startTime         time.Time // TODO: needed?
+	isStarted         bool
 	inbox             chan *pb.HareMessage
 	terminationReport chan TerminationOutput
 	validator         messageValidator
@@ -100,7 +100,7 @@ func iterationFromCounter(roundCounter int32) int32 {
 }
 
 func (proc *ConsensusProcess) Start() error {
-	if !proc.startTime.IsZero() { // called twice on same instance
+	if proc.isStarted { // called twice on same instance
 		proc.Error("ConsensusProcess has already been started")
 		return StartInstanceError(errors.New("instance already started"))
 	}
@@ -110,7 +110,7 @@ func (proc *ConsensusProcess) Start() error {
 		return StartInstanceError(errors.New("instance started with an empty set"))
 	}
 
-	proc.startTime = time.Now()
+	proc.isStarted = true
 
 	go proc.eventLoop()
 

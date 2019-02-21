@@ -7,7 +7,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"sync"
-	"time"
 )
 
 const InboxCapacity = 100
@@ -60,7 +59,7 @@ type Broker struct {
 	pending    map[uint32][]*pb.HareMessage
 	mutex      sync.RWMutex
 	maxReg     uint32
-	startTime  time.Time
+	isStarted  bool
 }
 
 func NewBroker(networkService NetworkService, eValidator Validator) *Broker {
@@ -76,12 +75,12 @@ func NewBroker(networkService NetworkService, eValidator Validator) *Broker {
 
 // Start listening to protocol messages and dispatch messages (non-blocking)
 func (broker *Broker) Start() error {
-	if !broker.startTime.IsZero() { // Start has been called at least twice
+	if broker.isStarted { // Start has been called at least twice
 		log.Error("Could not start instance")
 		return StartInstanceError(errors.New("instance already started"))
 	}
 
-	broker.startTime = time.Now()
+	broker.isStarted = true
 
 	broker.inbox = broker.network.RegisterGossipProtocol(ProtoName)
 	go broker.dispatcher()
@@ -95,8 +94,7 @@ func (broker *Broker) dispatcher() {
 		select {
 		case msg := <-broker.inbox:
 			if msg == nil {
-				log.Warning("Message validation failed: called with nil")
-				msg.ReportValidation(ProtoName, false)
+				log.Error("Message validation failed: called with nil")
 				continue
 			}
 
