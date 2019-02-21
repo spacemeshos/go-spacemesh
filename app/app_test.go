@@ -5,6 +5,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/hare"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/oracle"
@@ -126,7 +127,10 @@ func (app *AppTestSuite) TestMultipleNodes() {
 
 				if big.NewInt(10).Cmp(ap.state.GetBalance(dst)) == 0 {
 					for _, ap2 := range app.apps {
-						assert.Equal(app.T(), ap.state.IntermediateRoot(false), ap2.state.IntermediateRoot(false))
+						r1 := ap.state.IntermediateRoot(false)
+						r2 := ap2.state.IntermediateRoot(false)
+						log.Info("root1: %s root2: %s", r1.String(), r2.String())
+						assert.Equal(app.T(), r1, r2, "state wasn't equal %v %v", r1, r2)
 						if ap.state.IntermediateRoot(false) == ap2.state.IntermediateRoot(false) {
 							ok++
 						}
