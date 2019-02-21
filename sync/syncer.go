@@ -415,7 +415,7 @@ func newLayerHashRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg []by
 
 		layer, err := layers.GetLayer(mesh.LayerID(req.Layer))
 		if err != nil {
-			logger.Error("Error handling layer ", req.Layer, " request message with error:", err)
+			logger.Error("Error handling layer %d request message with error: %v", req.Layer, err)
 			return nil
 		}
 

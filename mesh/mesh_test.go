@@ -5,7 +5,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/state"
-	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
@@ -26,20 +25,13 @@ func (MockState) ApplyTransactions(layer state.LayerID, txs state.Transactions) 
 	return 0, nil
 }
 
-type ClockMock struct{}
-
-func (t *ClockMock) Subscribe() timesync.LayerTimer {
-	return make(timesync.LayerTimer)
-}
-
 func getMesh(id string) *Mesh {
 
 	//time := time.Now()
 	bdb := database.NewMemDatabase()
 	ldb := database.NewMemDatabase()
 	cdb := database.NewMemDatabase()
-	clock := ClockMock{}
-	layers := NewMesh(ldb, bdb, cdb, &MeshValidatorMock{}, &MockState{}, clock.Subscribe(), log.New(id, "", ""))
+	layers := NewMesh(ldb, bdb, cdb, &MeshValidatorMock{}, &MockState{}, log.New(id, "", ""))
 	return layers
 }
 
