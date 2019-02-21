@@ -13,9 +13,9 @@ func (op *orphanMock) GetOrphanBlocks() []mesh.BlockID {
 	return []mesh.BlockID{}
 }
 
-func (op *orphanMock) GetUnverifiedLayerBlocks(l mesh.LayerID) []mesh.BlockID {
+func (op *orphanMock) GetUnverifiedLayerBlocks(l mesh.LayerID) ([]mesh.BlockID, error) {
 	if op.f != nil {
-		return op.f()
+		return op.f(), nil
 	}
-	return []mesh.BlockID{}
+	return []mesh.BlockID{}, nil
 }
