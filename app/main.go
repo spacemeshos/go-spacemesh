@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+
 	"github.com/seehuhn/mt19937"
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/common"
@@ -10,7 +11,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/hare"
-	hareConfig "github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/miner"
@@ -20,6 +20,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sync"
 	"github.com/spf13/pflag"
 	"math/rand"
+
 	"os"
 	"os/signal"
 	"reflect"
@@ -34,6 +35,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/timesync"
+	timeCfg "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -142,12 +144,16 @@ func EnsureCLIFlags(cmd *cobra.Command, appcfg *cfg.Config) {
 			elem = reflect.ValueOf(&appcfg.P2P.SwarmConfig).Elem()
 			assignFields(ff, elem, name)
 
-			ff = reflect.TypeOf(appcfg.P2P.TimeConfig)
-			elem = reflect.ValueOf(&appcfg.P2P.TimeConfig).Elem()
+			ff = reflect.TypeOf(appcfg.TIME)
+			elem = reflect.ValueOf(&appcfg.TIME).Elem()
 			assignFields(ff, elem, name)
 
 			ff = reflect.TypeOf(appcfg.CONSENSUS)
 			elem = reflect.ValueOf(&appcfg.CONSENSUS).Elem()
+			assignFields(ff, elem, name)
+
+			ff = reflect.TypeOf(appcfg.HARE)
+			elem = reflect.ValueOf(&appcfg.HARE).Elem()
 			assignFields(ff, elem, name)
 		}
 	})
@@ -204,6 +210,9 @@ func (app *SpacemeshApp) before(cmd *cobra.Command, args []string) (err error) {
 
 	// ensure cli flags are higher priority than config file
 	EnsureCLIFlags(cmd, app.Config)
+
+	// override default config in timesync since timesync is using TimeCongigValues
+	timeCfg.TimeConfigValues = app.Config.TIME
 
 	app.setupLogging()
 
@@ -321,7 +330,7 @@ func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service,
 
 	blockListener := sync.NewBlockListener(swarm, blockOracle, mesh, 1*time.Second, 1, clock, lg)
 
-	ha := hare.New(hareConfig.DefaultConfig(), swarm, sgn, mesh, hareOracle, clock.Subscribe(), lg)
+	ha := hare.New(app.Config.HARE, swarm, sgn, mesh, hareOracle, clock.Subscribe(), lg)
 
 	blockProducer := miner.NewBlockBuilder(instanceName, swarm, clock.Subscribe(), coinToss, mesh, ha, blockOracle, lg)
 

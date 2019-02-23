@@ -358,7 +358,7 @@ func (proc *ConsensusProcess) beginRound2() {
 	proc.proposalTracker = NewProposalTracker(proc.Log)
 
 	if proc.isEligible() && proc.statusesTracker.IsSVPReady() {
-		builder := proc.initDefaultBuilder(proc.statusesTracker.ProposalSet(proc.cfg.SetSize))
+		builder := proc.initDefaultBuilder(proc.statusesTracker.ProposalSet(defaultSetSize))
 		svp := proc.statusesTracker.BuildSVP()
 		if svp != nil {
 			proposalMsg := builder.SetType(Proposal).SetSVP(svp).Sign(proc.signing).Build()

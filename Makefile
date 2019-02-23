@@ -1,11 +1,18 @@
 BINARY := go-spacemesh
 VERSION := 0.0.1
 COMMIT = $(shell git rev-parse HEAD)
-BRANCH = $(shell git rev-parse --abbrev-ref HEAD)
+SHA = $(shell git rev-parse --short HEAD)
+# BRANCH = $(shell git symbolic-ref --short HEAD)
 BIN_DIR = $(shell pwd)/build
 CURR_DIR = $(shell pwd)
 CURR_DIR_WIN = $(shell cd)
 export GO111MODULE = on
+
+ifndef TRAVIS_PULL_REQUEST_BRANCH
+	BRANCH := $(shell git rev-parse --abbrev-ref HEAD)
+else
+	BRANCH := $(TRAVIS_PULL_REQUEST_BRANCH)
+endif
 
 # Setup the -ldflags option to pass vars defined here to app vars
 LDFLAGS = -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.branch=${BRANCH}"
@@ -14,6 +21,8 @@ PKGS = $(shell go list ./...)
 
 PLATFORMS := windows linux darwin
 os = $(word 1, $@)
+
+DOCKER_IMAGE_NAME=go-spacemesh
 
 all: install build
 .PHONY: all
@@ -49,8 +58,13 @@ tidy:
 .PHONY: tidy
 
 $(PLATFORMS):
+ifeq ($(OS),Windows_NT)
+	make genproto
+	set GOOS=$(os)&&set GOARCH=amd64&&go build ${LDFLAGS} -o $(CURR_DIR)/$(BINARY)
+else
 	make genproto
 	GOOS=$(os) GOARCH=amd64 go build ${LDFLAGS} -o $(CURR_DIR)/$(BINARY)
+endif
 .PHONY: $(PLATFORMS)
 
 test:
@@ -83,3 +97,15 @@ cover:
 		tail -n +2 cover.out >> cover-all.out;)
 	go tool cover -html=cover-all.out
 .PHONY: cover
+
+dockerbuild:
+	docker build -t $(DOCKER_IMAGE_NAME):latest .
+.PHONY: dockerbuild
+
+dockerpush: dockerbuild
+	echo "$(DOCKER_PASSWORD)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
+	docker tag $(DOCKER_IMAGE_NAME) spacemeshos/$(DOCKER_IMAGE_NAME):$(BRANCH)
+	docker tag $(DOCKER_IMAGE_NAME) spacemeshos/$(DOCKER_IMAGE_NAME):$(SHA)
+	docker push spacemeshos/$(DOCKER_IMAGE_NAME):$(BRANCH)
+	docker push spacemeshos/$(DOCKER_IMAGE_NAME):$(SHA)
+.PHONY: dockerpush
