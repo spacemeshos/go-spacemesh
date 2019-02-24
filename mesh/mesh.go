@@ -52,7 +52,6 @@ func NewMesh(layers, blocks, validity database.DB, mesh MeshValidator, state Sta
 		meshDB:   NewMeshDB(layers, blocks, validity, logger),
 	}
 
-	//go ll.onTick()
 	return ll
 }
 

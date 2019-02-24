@@ -63,7 +63,7 @@ type BaseConfig struct {
 	OracleServerWorldId uint64 `mapstructure:"oracle_server_worldid"`
 
 	GenesisTime      string `mapstructure:"genesis-time"`
-	LayerDurationSec uint32 `mapstructure:"layer-duration-sec"`
+	LayerDurationSec int    `mapstructure:"layer-duration-sec"`
 }
 
 // DefaultConfig returns the default configuration for a spacemesh node
