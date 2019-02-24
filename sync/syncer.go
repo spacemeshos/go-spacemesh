@@ -129,12 +129,11 @@ func (s *Syncer) maxSyncLayer() uint32 {
 func (s *Syncer) Synchronise() {
 	for currenSyncLayer := s.VerifiedLayer() + 1; currenSyncLayer < s.maxSyncLayer(); currenSyncLayer++ {
 		s.Info("syncing layer %v to layer %v current consensus layer is %d", s.VerifiedLayer(), currenSyncLayer, atomic.LoadUint32(&s.currentLayer))
-		s.Info("add layer ", currenSyncLayer)
-		if lyr, err := s.GetLayer(mesh.LayerID(currenSyncLayer)); err == nil {
-			go s.ValidateLayer(lyr)
-		} else if lyr, err := s.getLayerFromNeighbors(currenSyncLayer); err == nil {
-			go s.ValidateLayer(lyr)
+		lyr, _ := s.GetLayer(mesh.LayerID(currenSyncLayer))
+		if lyr == nil {
+			lyr, _ = s.getLayerFromNeighbors(currenSyncLayer)
 		}
+		s.ValidateLayer(lyr)
 	}
 }
 
