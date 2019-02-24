@@ -4,23 +4,24 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/davecgh/go-spew/spew"
-	"github.com/golang/protobuf/proto"
-	"github.com/spacemeshos/go-spacemesh/p2p/config"
-	"github.com/spacemeshos/go-spacemesh/p2p/connectionpool"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/spacemeshos/go-spacemesh/p2p/dht"
-	"github.com/spacemeshos/go-spacemesh/p2p/gossip"
-	"github.com/spacemeshos/go-spacemesh/p2p/net"
-	"github.com/spacemeshos/go-spacemesh/p2p/node"
-	"github.com/spacemeshos/go-spacemesh/p2p/pb"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"github.com/spacemeshos/go-spacemesh/timesync"
 	inet "net"
 	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/davecgh/go-spew/spew"
+	"github.com/golang/protobuf/proto"
+	"github.com/spacemeshos/go-spacemesh/p2p/config"
+	"github.com/spacemeshos/go-spacemesh/p2p/connectionpool"
+	"github.com/spacemeshos/go-spacemesh/p2p/dht"
+	"github.com/spacemeshos/go-spacemesh/p2p/gossip"
+	"github.com/spacemeshos/go-spacemesh/p2p/net"
+	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
+	"github.com/spacemeshos/go-spacemesh/p2p/pb"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
 // ConnectingTimeout is the timeout we wait when trying to connect a neighborhood
@@ -233,6 +234,53 @@ func (s *swarm) SendMessage(peerPubkey p2pcrypto.PublicKey, protocol string, pay
 	return s.sendMessageImpl(peerPubkey, protocol, service.DataBytes{Payload: payload})
 }
 
+func (s *swarm) RetrySend(peerPubKey p2pcrypto.PublicKey, protocol string, payload service.Data) error {
+	var err error
+	var peer node.Node
+	var conn net.Connection
+
+	peer, err = s.dht.Lookup(peerPubKey) // blocking, might issue a network lookup that'll take time.
+	if err != nil {
+		return err
+	}
+	conn, err = s.cPool.GetConnection(peer.Address(), peer.PublicKey()) // blocking, might take some time in case there is no connection
+	if err != nil {
+		s.lNode.Warning("failed to send message to %v, no valid connection. err: %v", peer.String(), err)
+		return err
+	}
+	session := conn.Session()
+	if session == nil {
+		s.lNode.Warning("failed to send message to %v, no valid session. err: %v", peer.String(), err)
+		return err
+	}
+	protomessage := &pb.ProtocolMessage{
+		Metadata: NewProtocolMessageMetadata(s.lNode.PublicKey(), protocol),
+	}
+
+	switch x := payload.(type) {
+	case service.DataBytes:
+		protomessage.Data = &pb.ProtocolMessage_Payload{Payload: x.Bytes()}
+	case *service.DataMsgWrapper:
+		protomessage.Data = &pb.ProtocolMessage_Msg{Msg: &pb.MessageWrapper{Type: x.MsgType, Req: x.Req, ReqID: x.ReqID, Payload: x.Payload}}
+	case nil:
+		// The field is not set.
+	default:
+		return fmt.Errorf("protocolMsg has unexpected type %T", x)
+	}
+
+	data, err := proto.Marshal(protomessage)
+	if err != nil {
+		return fmt.Errorf("failed to encode signed message err: %v", err)
+	}
+
+	final := session.SealMessage(data)
+
+	err = conn.Send(final)
+
+	s.lNode.Debug("Message send retry successfully")
+	return err
+}
+
 // SendMessage Sends a message to a remote node
 // swarm will establish session if needed or use an existing session and open connection
 // Designed to be used by any high level protocol
@@ -289,6 +337,11 @@ func (s *swarm) sendMessageImpl(peerPubKey p2pcrypto.PublicKey, protocol string,
 
 	s.lNode.Debug("Message sent successfully")
 
+	if err != nil {
+		// doing one retry before giving up
+		status := s.RetrySend(peerPubKey, protocol, payload)
+		return status
+	}
 	return err
 }
 
@@ -329,13 +382,12 @@ func (s *swarm) processMessage(ime net.IncomingMessageEvent) {
 	}
 }
 
-
 // RegisterProtocolWithChannel configures and returns a channel for a given protocol.
 func (s *swarm) RegisterProtocolWithChannel(protocol string, ingressChannel chan service.Message) chan service.Message {
-        s.protocolHandlerMutex.Lock()
-        s.protocolHandlers[protocol] = ingressChannel
-        s.protocolHandlerMutex.Unlock()
-        return ingressChannel
+	s.protocolHandlerMutex.Lock()
+	s.protocolHandlers[protocol] = ingressChannel
+	s.protocolHandlerMutex.Unlock()
+	return ingressChannel
 }
 
 // listenToNetworkMessages is waiting for network events from net as new connections or messages and handles them.
@@ -663,7 +715,7 @@ loop:
 			}
 
 			s.outpeersMutex.Lock()
-			if _,ok := s.outpeers[pkstr]; ok {
+			if _, ok := s.outpeers[pkstr]; ok {
 				s.outpeersMutex.Unlock()
 				s.lNode.Debug("selected an already outbound peer. not counting that peer.", cne.n.String())
 				bad++
