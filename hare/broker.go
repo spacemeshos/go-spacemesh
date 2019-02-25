@@ -6,7 +6,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"sync"
 )
 
 const InboxCapacity = 100
@@ -39,14 +38,15 @@ func (closer *Closer) CloseChannel() chan struct{} {
 // Broker is responsible for dispatching hare messages to the matching set id listener
 type Broker struct {
 	Closer
-	network    NetworkService
-	eValidator Validator
-	inbox      chan service.GossipMessage
-	outbox     map[InstanceId]chan *pb.HareMessage
-	pending    map[InstanceId][]*pb.HareMessage
-	mutex      sync.RWMutex
-	maxReg     InstanceId
-	isStarted  bool
+	network      NetworkService
+	eValidator   Validator
+	inbox        chan service.GossipMessage
+	outbox       map[InstanceId]chan *pb.HareMessage
+	pending      map[InstanceId][]*pb.HareMessage
+	tasks        chan func()
+	pendingTasks chan struct{}
+	maxReg       InstanceId
+	isStarted    bool
 }
 
 func NewBroker(networkService NetworkService, eValidator Validator) *Broker {
@@ -56,6 +56,8 @@ func NewBroker(networkService NetworkService, eValidator Validator) *Broker {
 	p.eValidator = eValidator
 	p.outbox = make(map[InstanceId]chan *pb.HareMessage)
 	p.pending = make(map[InstanceId][]*pb.HareMessage)
+	p.tasks = make(chan func())
+	p.pendingTasks = make(chan struct{})
 
 	return p
 }
@@ -70,13 +72,13 @@ func (broker *Broker) Start() error {
 	broker.isStarted = true
 
 	broker.inbox = broker.network.RegisterGossipProtocol(ProtoName)
-	go broker.dispatcher()
+	go broker.eventLoop()
 
 	return nil
 }
 
 // Dispatch incoming messages to the matching set id instance
-func (broker *Broker) dispatcher() {
+func (broker *Broker) eventLoop() {
 	for {
 		select {
 		case msg := <-broker.inbox:
@@ -102,10 +104,7 @@ func (broker *Broker) dispatcher() {
 				continue
 			}
 
-			broker.mutex.RLock()
 			expInstId := broker.maxReg
-			broker.mutex.RUnlock()
-
 			msgInstId := InstanceId(hareMsg.Message.InstanceId)
 			// far future unregistered instance
 			if msgInstId > expInstId+1 {
@@ -128,21 +127,19 @@ func (broker *Broker) dispatcher() {
 			// validation passed
 			msg.ReportValidation(ProtoName, true)
 
-			broker.mutex.RLock()
 			c, exist := broker.outbox[msgInstId]
-			broker.mutex.RUnlock()
 			if exist {
 				// todo: err if chan is full (len)
 				c <- hareMsg
 			} else if futureMsg {
-				broker.mutex.Lock()
 				if _, exist := broker.pending[msgInstId]; !exist {
 					broker.pending[msgInstId] = make([]*pb.HareMessage, 0)
 				}
 				broker.pending[msgInstId] = append(broker.pending[msgInstId], hareMsg)
-				broker.mutex.Unlock()
 			}
 
+		case task := <-broker.tasks:
+			task()
 		case <-broker.CloseChannel():
 			return
 		}
@@ -152,29 +149,45 @@ func (broker *Broker) dispatcher() {
 // Register a listener to messages
 // Note: the registering instance is assumed to be started and accepting messages
 func (broker *Broker) Register(id InstanceId) chan *pb.HareMessage {
-	broker.mutex.Lock()
-	if id > broker.maxReg {
-		broker.maxReg = id
-	}
+	inbox := make(chan *pb.HareMessage, InboxCapacity)
 
-	c := make(chan *pb.HareMessage, InboxCapacity)
-	broker.outbox[id] = c
-
-	pendingForInstance := broker.pending[id]
-	if pendingForInstance != nil {
-		for _, mOut := range pendingForInstance {
-			broker.outbox[id] <- mOut
+	regRequest := func() {
+		if id > broker.maxReg {
+			broker.maxReg = id
 		}
-		delete(broker.pending, id)
-	}
 
-	broker.mutex.Unlock()
-	return c
+		broker.outbox[id] = inbox
+
+		pendingForInstance := broker.pending[id]
+		if pendingForInstance != nil {
+			for _, mOut := range pendingForInstance {
+				broker.outbox[id] <- mOut
+			}
+			delete(broker.pending, id)
+		}
+
+		broker.jobDone()
+	}
+	broker.tasks <- regRequest
+	broker.waitForCompletion()
+
+	return inbox
 }
 
 // Unregister a listener
 func (broker *Broker) Unregister(id InstanceId) {
-	broker.mutex.Lock()
-	delete(broker.outbox, id)
-	broker.mutex.Unlock()
+	broker.tasks <- func() {
+		delete(broker.outbox, id)
+		broker.jobDone()
+	}
+
+	broker.waitForCompletion()
+}
+
+func (broker *Broker) waitForCompletion() {
+	<-broker.pendingTasks
+}
+
+func (broker *Broker) jobDone() {
+	broker.pendingTasks <- struct{}{}
 }

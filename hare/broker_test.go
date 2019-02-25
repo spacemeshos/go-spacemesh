@@ -53,7 +53,7 @@ func TestBroker_Received(t *testing.T) {
 	serMsg := createMessage(t, instanceId1)
 	n2.Broadcast(ProtoName, serMsg)
 
-	recv := <- inbox
+	recv := <-inbox
 
 	assert.True(t, recv.Message.InstanceId == uint32(instanceId1))
 }

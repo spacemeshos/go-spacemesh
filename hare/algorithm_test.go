@@ -149,6 +149,7 @@ func TestConsensusProcess_Start(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 	broker := buildBroker(n1)
+	broker.Start()
 	proc := generateConsensusProcess(t)
 	proc.s = NewSmallEmptySet()
 	inbox := broker.Register(proc.Id())
@@ -165,6 +166,7 @@ func TestConsensusProcess_Start(t *testing.T) {
 func TestConsensusProcess_eventLoop(t *testing.T) {
 	net := &mockP2p{}
 	broker := buildBroker(net)
+	broker.Start()
 	proc := generateConsensusProcess(t)
 	proc.network = net
 	oracle := &mockRolacle{}
@@ -181,6 +183,7 @@ func TestConsensusProcess_eventLoop(t *testing.T) {
 func TestConsensusProcess_handleMessage(t *testing.T) {
 	net := &mockP2p{}
 	broker := buildBroker(net)
+	broker.Start()
 	proc := generateConsensusProcess(t)
 	proc.network = net
 	oracle := &mockRolacle{}
@@ -214,6 +217,7 @@ func TestConsensusProcess_nextRound(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 	broker := buildBroker(n1)
+	broker.Start()
 	proc := generateConsensusProcess(t)
 	proc.inbox = broker.Register(proc.Id())
 	proc.advanceToNextRound()
