@@ -9,7 +9,7 @@ import (
 
 func buildProposalMsg(signing Signing, s *Set, signature Signature) *pb.HareMessage {
 	builder := NewMessageBuilder().SetRoleProof(signature)
-	builder.SetType(Proposal).SetInstanceId(*instanceId1).SetRoundCounter(Round2).SetKi(ki).SetValues(s)
+	builder.SetType(Proposal).SetInstanceId(instanceId1).SetRoundCounter(Round2).SetKi(ki).SetValues(s)
 	builder = builder.SetPubKey(signing.Verifier().Bytes()).Sign(signing)
 
 	return builder.Build()

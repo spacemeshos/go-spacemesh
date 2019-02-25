@@ -8,7 +8,7 @@ import (
 
 func buildStatusMsg(signing Signing, s *Set, ki int32) *pb.HareMessage {
 	builder := NewMessageBuilder()
-	builder.SetType(Status).SetInstanceId(*instanceId1).SetRoundCounter(Round1).SetKi(ki).SetValues(s)
+	builder.SetType(Status).SetInstanceId(instanceId1).SetRoundCounter(Round1).SetKi(ki).SetValues(s)
 	builder = builder.SetPubKey(signing.Verifier().Bytes()).Sign(signing)
 
 	return builder.Build()

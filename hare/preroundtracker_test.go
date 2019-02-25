@@ -26,7 +26,7 @@ var value10 = Value{Bytes32{10}}
 
 func BuildPreRoundMsg(signing Signing, s *Set) *pb.HareMessage {
 	builder := NewMessageBuilder()
-	builder.SetType(PreRound).SetInstanceId(*instanceId1).SetRoundCounter(k).SetKi(ki).SetValues(s)
+	builder.SetType(PreRound).SetInstanceId(instanceId1).SetRoundCounter(k).SetKi(ki).SetValues(s)
 	builder = builder.SetPubKey(signing.Verifier().Bytes()).Sign(signing)
 
 	return builder.Build()

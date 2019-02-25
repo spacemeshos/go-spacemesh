@@ -8,7 +8,7 @@ import (
 
 func BuildCommitMsg(signing Signing, s *Set) *pb.HareMessage {
 	builder := NewMessageBuilder()
-	builder.SetType(Commit).SetInstanceId(*instanceId1).SetRoundCounter(Round3).SetKi(ki).SetValues(s)
+	builder.SetType(Commit).SetInstanceId(instanceId1).SetRoundCounter(Round3).SetKi(ki).SetValues(s)
 	builder = builder.SetPubKey(signing.Verifier().Bytes()).Sign(signing)
 
 	return builder.Build()

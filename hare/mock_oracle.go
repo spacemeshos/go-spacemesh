@@ -1,6 +1,7 @@
 package hare
 
 import (
+	"encoding/binary"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"hash/fnv"
 	"math"
@@ -28,6 +29,41 @@ type Rolacle interface {
 	Eligible(instanceID uint32, committeeSize int, pubKey string, proof []byte) bool
 }
 
+type HareRolacle interface {
+	Eligible(instanceId InstanceId, k int32, pubKey string, proof []byte) bool
+}
+
+type hareRolacle struct {
+	oracle        Rolacle
+	committeeSize int
+}
+
+func newHareOracle(oracle Rolacle, committeeSize int) *hareRolacle {
+	return &hareRolacle{oracle, committeeSize}
+}
+
+func (hr *hareRolacle) Eligible(instanceId InstanceId, k int32, pubKey string, proof []byte) bool {
+	return hr.oracle.Eligible(hashInstanceAndK(instanceId, k), expectedCommitteeSize(k, hr.committeeSize), pubKey, proof)
+}
+
+func hashInstanceAndK(instanceID InstanceId, K int32) uint32 {
+	kInBytes := make([]byte, 4)
+	binary.LittleEndian.PutUint32(kInBytes, uint32(K))
+	h := newHasherU32()
+	val := h.Hash(instanceID.Bytes(), kInBytes)
+	return val
+}
+
+// Returns the expected committee size for the given round assuming n is the default size
+func expectedCommitteeSize(k int32, n int) int {
+	if k%4 == Round2 {
+		return 1 // 1 leader
+	}
+
+	// N actives in any other case
+	return n
+}
+
 type hasherU32 struct {
 }
 
@@ -37,9 +73,11 @@ func newHasherU32() *hasherU32 {
 	return h
 }
 
-func (h *hasherU32) Hash(data []byte) uint32 {
+func (h *hasherU32) Hash(values ...[]byte) uint32 {
 	fnv := fnv.New32()
-	fnv.Write(data)
+	for _, b := range values {
+		fnv.Write(b)
+	}
 	return fnv.Sum32()
 }
 
