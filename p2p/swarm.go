@@ -4,14 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-<<<<<<< HEAD
 	inet "net"
 	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
-=======
->>>>>>> upstream/develop
+
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/golang/protobuf/proto"
@@ -27,16 +25,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/timesync"
-<<<<<<< HEAD
-=======
-	timeSyncConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
+
 
 	inet "net"
 	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
->>>>>>> upstream/develop
+
 )
 
 // ConnectingTimeout is the timeout we wait when trying to connect a neighborhood
