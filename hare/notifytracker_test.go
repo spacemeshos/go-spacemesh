@@ -8,7 +8,7 @@ import (
 
 func BuildNotifyMsg(signing Signing, s *Set) *pb.HareMessage {
 	builder := NewMessageBuilder()
-	builder.SetType(PreRound).SetInstanceId(*instanceId1).SetRoundCounter(Round4).SetKi(ki).SetValues(s)
+	builder.SetType(PreRound).SetInstanceId(instanceId1).SetRoundCounter(Round4).SetKi(ki).SetValues(s)
 	builder = builder.SetPubKey(signing.Verifier().Bytes()).Sign(signing)
 	cert := &pb.Certificate{}
 	cert.Values = NewSetFromValues(value1).To2DSlice()

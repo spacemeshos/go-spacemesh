@@ -2,6 +2,7 @@ package hare
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"hash/fnv"
 	"sort"
@@ -13,9 +14,7 @@ type Signature []byte
 type Value struct {
 	Bytes32
 }
-type InstanceId struct {
-	Bytes32
-}
+type InstanceId uint32
 
 type MessageType byte
 
@@ -53,6 +52,13 @@ func (mType MessageType) String() string {
 	}
 }
 
+func (id InstanceId) Bytes() []byte {
+	idInBytes := make([]byte, 4)
+	binary.LittleEndian.PutUint32(idInBytes, uint32(id))
+
+	return idInBytes
+}
+
 func NewBytes32(buff []byte) Bytes32 {
 	x := Bytes32{}
 	copy(x[:], buff)
@@ -60,10 +66,10 @@ func NewBytes32(buff []byte) Bytes32 {
 	return x
 }
 
-func (b32 Bytes32) Id() uint32 {
+func (b32 Bytes32) Id() objectId {
 	h := fnv.New32()
 	h.Write(b32[:])
-	return h.Sum32()
+	return objectId(h.Sum32())
 }
 
 func (b32 Bytes32) Bytes() []byte {
@@ -75,14 +81,10 @@ func (b32 Bytes32) String() string {
 	return string(b32.Id())
 }
 
-func (id InstanceId) String() string {
-	return string(id.Bytes())
-}
-
 // Represents a unique set of values
 type Set struct {
-	values    map[uint32]Value
-	id        uint32
+	values    map[objectId]Value
+	id        objectId
 	isIdValid bool
 }
 
@@ -94,7 +96,7 @@ func NewSmallEmptySet() *Set {
 // Constructs an empty set
 func NewEmptySet(expectedSize int) *Set {
 	s := &Set{}
-	s.values = make(map[uint32]Value, expectedSize)
+	s.values = make(map[objectId]Value, expectedSize)
 	s.id = 0
 	s.isIdValid = false
 
@@ -104,7 +106,7 @@ func NewEmptySet(expectedSize int) *Set {
 // Constructs an empty set
 func NewSetFromValues(values ...Value) *Set {
 	s := &Set{}
-	s.values = make(map[uint32]Value, len(values))
+	s.values = make(map[objectId]Value, len(values))
 	for _, v := range values {
 		s.Add(v)
 	}
@@ -120,7 +122,7 @@ func NewSet(data [][]byte) *Set {
 	s := &Set{}
 	s.isIdValid = false
 
-	s.values = make(map[uint32]Value, len(data))
+	s.values = make(map[objectId]Value, len(data))
 	for i := 0; i < len(data); i++ {
 		bid := Value{NewBytes32(data[i])}
 		s.values[bid.Id()] = bid
@@ -196,7 +198,7 @@ func (s *Set) To2DSlice() [][]byte {
 
 func (s *Set) updateId() {
 	// order keys
-	keys := make([]uint32, len(s.values))
+	keys := make([]objectId, len(s.values))
 	i := 0
 	for k := range s.values {
 		keys[i] = k
@@ -211,12 +213,12 @@ func (s *Set) updateId() {
 	}
 
 	// update
-	s.id = h.Sum32()
+	s.id = objectId(h.Sum32())
 	s.isIdValid = true
 }
 
-// Returns the id of the set
-func (s *Set) Id() uint32 {
+// Returns the objectId of the set
+func (s *Set) Id() objectId {
 	if !s.isIdValid {
 		s.updateId()
 	}

@@ -13,17 +13,8 @@ const InboxCapacity = 100
 
 type StartInstanceError error
 
-type Identifiable interface {
-	Id() uint32
-}
-
-type Inboxer interface {
-	createInbox(size uint32) chan Message
-}
-
-type IdentifiableInboxer interface {
-	Identifiable
-	Inboxer
+type Validator interface {
+	Validate(m *pb.HareMessage) bool
 }
 
 // Closer is used to add closeability to an object
@@ -45,83 +36,109 @@ func (closer *Closer) CloseChannel() chan struct{} {
 	return closer.channel
 }
 
-// Broker is responsible for dispatching hare messages to the matching set id listener
+// Broker is responsible for dispatching hare messages to the matching set objectId listener
 type Broker struct {
 	Closer
-	network NetworkService
-	inbox   chan service.GossipMessage
-	outbox  map[uint32]chan Message
-	pending map[uint32][]Message
-	mutex   sync.RWMutex
+	network    NetworkService
+	eValidator Validator
+	inbox      chan service.GossipMessage
+	outbox     map[InstanceId]chan *pb.HareMessage
+	pending    map[InstanceId][]*pb.HareMessage
+	tasks      chan func()
+	maxReg     InstanceId
+	isStarted  bool
 }
 
-func NewBroker(networkService NetworkService) *Broker {
+func NewBroker(networkService NetworkService, eValidator Validator) *Broker {
 	p := new(Broker)
 	p.Closer = NewCloser()
 	p.network = networkService
-	p.outbox = make(map[uint32]chan Message)
-	p.pending = make(map[uint32][]Message, 0)
+	p.eValidator = eValidator
+	p.outbox = make(map[InstanceId]chan *pb.HareMessage)
+	p.pending = make(map[InstanceId][]*pb.HareMessage)
+	p.tasks = make(chan func())
 
 	return p
 }
 
 // Start listening to protocol messages and dispatch messages (non-blocking)
 func (broker *Broker) Start() error {
-	if broker.inbox != nil { // Start has been called at least twice
+	if broker.isStarted { // Start has been called at least twice
 		log.Error("Could not start instance")
 		return StartInstanceError(errors.New("instance already started"))
 	}
+
+	broker.isStarted = true
+
 	broker.inbox = broker.network.RegisterGossipProtocol(ProtoName)
-	go broker.dispatcher()
+	go broker.eventLoop()
 
 	return nil
 }
 
-type Message struct {
-	msg            *pb.HareMessage
-	bytes          []byte
-	validationChan chan service.MessageValidation
-}
-
-func (msg Message) reportValidationResult(isValid bool) {
-	if msg.validationChan != nil {
-		msg.validationChan <- service.NewMessageValidation(msg.bytes, ProtoName, isValid)
-	}
-}
-
-// Dispatch incoming messages to the matching set id instance
-func (broker *Broker) dispatcher() {
+// Dispatch incoming messages to the matching set objectId instance
+func (broker *Broker) eventLoop() {
 	for {
 		select {
 		case msg := <-broker.inbox:
+			futureMsg := false
+
+			if msg == nil {
+				log.Error("Message validation failed: called with nil")
+				continue
+			}
+
 			hareMsg := &pb.HareMessage{}
 			err := proto.Unmarshal(msg.Bytes(), hareMsg)
 			if err != nil {
 				log.Error("Could not unmarshal message: ", err)
+				msg.ReportValidation(ProtoName, false)
 				continue
 			}
 
-			instanceId := NewBytes32(hareMsg.Message.InstanceId)
-
-			broker.mutex.RLock()
-			c, exist := broker.outbox[instanceId.Id()]
-			broker.mutex.RUnlock()
-			mOut := Message{hareMsg, msg.Bytes(), msg.ValidationCompletedChan()}
-			if exist {
-				// todo: err if chan is full (len)
-				c <- mOut
-			} else {
-
-				broker.mutex.Lock()
-				if _, exist := broker.pending[instanceId.Id()]; !exist {
-					broker.pending[instanceId.Id()] = make([]Message, 0)
-				}
-				broker.pending[instanceId.Id()] = append(broker.pending[instanceId.Id()], mOut)
-				broker.mutex.Unlock()
-				// report validity so that the message will be propagated without delay
-				mOut.reportValidationResult(true) // TODO consider actually validating the message before reporting the validity
+			// message validation
+			if hareMsg.Message == nil {
+				log.Warning("Message validation failed: message is nil")
+				msg.ReportValidation(ProtoName, false)
+				continue
 			}
 
+			expInstId := broker.maxReg
+			msgInstId := InstanceId(hareMsg.Message.InstanceId)
+			// far future unregistered instance
+			if msgInstId > expInstId+1 {
+				log.Warning("Message validation failed: instanceId. Max: %v Actual: %v", broker.maxReg, hareMsg.Message.InstanceId)
+				msg.ReportValidation(ProtoName, false)
+				continue
+			}
+
+			// near future
+			if msgInstId == expInstId+1 {
+				futureMsg = true
+			}
+
+			if !broker.eValidator.Validate(hareMsg) {
+				log.Warning("Message validation failed: eValidator returned false %v", hareMsg)
+				msg.ReportValidation(ProtoName, false)
+				continue
+			}
+
+			// validation passed
+			msg.ReportValidation(ProtoName, true)
+
+			c, exist := broker.outbox[msgInstId]
+			if exist {
+				// todo: err if chan is full (len)
+				c <- hareMsg
+			} else if futureMsg {
+				if _, exist := broker.pending[msgInstId]; !exist {
+					broker.pending[msgInstId] = make([]*pb.HareMessage, 0)
+				}
+				broker.pending[msgInstId] = append(broker.pending[msgInstId], hareMsg)
+			}
+
+		case task := <-broker.tasks:
+			task()
 		case <-broker.CloseChannel():
 			return
 		}
@@ -130,24 +147,43 @@ func (broker *Broker) dispatcher() {
 
 // Register a listener to messages
 // Note: the registering instance is assumed to be started and accepting messages
-func (broker *Broker) Register(idBox IdentifiableInboxer) {
-	broker.mutex.Lock()
-	broker.outbox[idBox.Id()] = idBox.createInbox(InboxCapacity)
+func (broker *Broker) Register(id InstanceId) chan *pb.HareMessage {
+	inbox := make(chan *pb.HareMessage, InboxCapacity)
 
-	pendingForInstance := broker.pending[idBox.Id()]
-	if pendingForInstance != nil {
-		for _, mOut := range pendingForInstance {
-			broker.outbox[idBox.Id()] <- mOut
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	regRequest := func() {
+		if id > broker.maxReg {
+			broker.maxReg = id
 		}
-		delete(broker.pending, idBox.Id())
-	}
 
-	broker.mutex.Unlock()
+		broker.outbox[id] = inbox
+
+		pendingForInstance := broker.pending[id]
+		if pendingForInstance != nil {
+			for _, mOut := range pendingForInstance {
+				broker.outbox[id] <- mOut
+			}
+			delete(broker.pending, id)
+		}
+
+		wg.Done()
+	}
+	broker.tasks <- regRequest
+	wg.Wait()
+
+	return inbox
 }
 
 // Unregister a listener
-func (broker *Broker) Unregister(identifiable Identifiable) {
-	broker.mutex.Lock()
-	delete(broker.outbox, identifiable.Id())
-	broker.mutex.Unlock()
+func (broker *Broker) Unregister(id InstanceId) {
+	wg := sync.WaitGroup{}
+
+	wg.Add(1)
+	broker.tasks <- func() {
+		delete(broker.outbox, id)
+		wg.Done()
+	}
+
+	wg.Wait()
 }
