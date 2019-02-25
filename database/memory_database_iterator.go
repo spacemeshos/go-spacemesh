@@ -21,7 +21,7 @@ func (iter *MemDatabaseIterator) Value() []byte {
 }
 
 func (iter *MemDatabaseIterator) Next() bool {
-	if (iter.index == len(iter.db)-1) {
+	if iter.index == len(iter.db)-1 {
 		return false
 	}
 
@@ -65,7 +65,7 @@ func (iter *MemDatabaseIterator) Seek(key []byte) bool {
 		return false
 	}
 	for k := range iter.db {
-		if (reflect.DeepEqual(k, key)) {
+		if reflect.DeepEqual(k, key) {
 			return true
 		}
 	}
@@ -73,5 +73,5 @@ func (iter *MemDatabaseIterator) Seek(key []byte) bool {
 	return false
 }
 
-func (iter *MemDatabaseIterator) Release()                  { return }
-func (iter *MemDatabaseIterator) Error() error              { return nil }
+func (iter *MemDatabaseIterator) Release()     { return }
+func (iter *MemDatabaseIterator) Error() error { return nil }

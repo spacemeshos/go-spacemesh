@@ -23,10 +23,7 @@ func TestNew(t *testing.T) {
 	assert.NotNil(t, d, "D is not nil")
 }
 
-func TestKadDHT_EveryNodeIsInRoutingTable(t *testing.T) {
-
-	numPeers, connections := 100, 5
-
+func bootstrapNetwork(t *testing.T, numPeers, connections int) (ids []string, dhts []*KadDHT) {
 	bncfg := config.DefaultConfig()
 	sim := service.NewSimulator()
 
@@ -91,6 +88,15 @@ func TestKadDHT_EveryNodeIsInRoutingTable(t *testing.T) {
 	assert.Equal(t, len(idstoFind), numPeers)
 	assert.Equal(t, len(dhtsToLook), numPeers)
 
+	return idstoFind, dhtsToLook
+}
+
+func TestKadDHT_EveryNodeIsInRoutingTableAndSelected(t *testing.T) {
+	numPeers := 100
+	connections := 10
+
+	idstoFind, dhtsToLook := bootstrapNetwork(t, numPeers, connections)
+
 	var passed = make([]string, 0, numPeers)
 NL:
 	for n := range idstoFind { // iterate nodes
@@ -113,99 +119,35 @@ NL:
 	}
 
 	assert.Equal(t, len(passed), numPeers)
-}
 
-func TestDHT_EveryNodeIsInSelected(t *testing.T) {
-	for i := 0; i < 1; i++ {
-		t.Run(fmt.Sprintf("t%v", i), func(t *testing.T) {
-			numPeers, connections := 30, 8
-
-			bncfg := config.DefaultConfig()
-			sim := service.NewSimulator()
-
-			bn, _ := node.GenerateTestNode(t)
-			b1 := sim.NewNodeFrom(bn.Node)
-			bdht := New(bn, bncfg.SwarmConfig, b1)
-			b1.AttachDHT(bdht)
-
-			cfg := config.DefaultConfig().SwarmConfig
-			cfg.Gossip = false
-			cfg.Bootstrap = true
-			cfg.RandomConnections = connections
-			cfg.BootstrapNodes = append(cfg.BootstrapNodes, node.StringFromNode(bn.Node))
-
-			type all struct {
-				err  error
-				dht  DHT
-				ln   *node.LocalNode
-				node service.Service
-			}
-
-			booted := make(chan all, numPeers)
-
-			idstoFind := make([]string, 0, numPeers)
-			selectedIds := make(map[string][]node.Node, numPeers)
-
-			for n := 0; n < numPeers; n++ {
-				go func() {
-					ln, _ := node.GenerateTestNode(t)
-					n := sim.NewNodeFrom(ln.Node)
-					dht := New(ln, cfg, n)
-					n.AttachDHT(dht)
-					err := dht.Bootstrap(context.TODO())
-
-					booted <- all{
-						err,
-						dht,
-						ln,
-						n,
-					}
-				}()
-			}
-
-			i := 0
-			for {
-				if i == numPeers {
-					break
-				}
-				b := <-booted
-				if !assert.NoError(t, b.err) {
-					t.FailNow()
-				}
-				idstoFind = append(idstoFind, b.ln.String())
-				selectedIds[b.ln.String()] = b.dht.SelectPeers(connections)
-
-				fmt.Printf("Node %v finished bootstrap with rt of %v \r\n", b.ln.String(), b.dht.Size())
-				i++
-			}
-
-			assert.Equal(t, len(idstoFind), numPeers)
-			assert.Equal(t, len(selectedIds), numPeers)
-
-			// check everyone is selected
-			var passed = make([]string, 0, numPeers)
-		NL:
-			for n := range idstoFind { // iterate nodes
-				id := idstoFind[n]
-				for j := range selectedIds { // iterate all selected set
-					if id == j {
-						continue
-					}
-
-					for s := range selectedIds[j] {
-						if selectedIds[j][s].String() == id {
-							passed = append(passed, id)
-							continue NL
-						}
-					}
-				}
-			}
-
-			// we got enough selections and we found everyone.
-			assert.True(t, len(passed) > numPeers-5) // select peers is random so it might not select 100% of the peers.
-		})
+	selected := make(map[string][]node.Node)
+	// Test Selecting
+	for i := 0; i < len(dhtsToLook); i++ {
+		selected[dhtsToLook[i].local.String()] = dhtsToLook[i].SelectPeers(connections)
 	}
 
+	// check everyone is selected
+	passed = make([]string, 0, numPeers)
+NL2:
+	for n := range idstoFind { // iterate nodes
+		id := idstoFind[n]
+		for j := range selected { // iterate all selected set
+			if id == j {
+				continue
+			}
+
+			for s := range selected[j] {
+				if selected[j][s].String() == id {
+					passed = append(passed, id)
+					continue NL2
+				}
+			}
+		}
+	}
+	// we got enough selections and we found everyone.
+	assert.True(t, len(passed) >= numPeers-10)
+	// select peers is random so it might not select 100% of the peers.
+	// in reality we'll also relay on peer selecting us so the network will be fully connected.
 }
 
 func TestDHT_Update(t *testing.T) {
@@ -324,38 +266,6 @@ func bootAndWait(t *testing.T, dht DHT, errchan chan error) {
 	errchan <- err
 }
 
-// A bigger bootstrap
-func TestDHT_Bootstrap(t *testing.T) {
-
-	const nodesNum = 100
-	const minToBoot = 10
-
-	sim := service.NewSimulator()
-
-	// Create a bootstrap node
-	cfg := config.DefaultConfig()
-	bn, _ := simNodeWithDHT(t, cfg.SwarmConfig, sim)
-
-	// config for other nodes
-	cfg2 := config.DefaultConfig()
-	cfg2.SwarmConfig.RandomConnections = minToBoot // min numbers of peers to succeed in bootstrap
-	cfg2.SwarmConfig.BootstrapNodes = []string{node.StringFromNode(bn.Node)}
-
-	booted := make(chan error)
-
-	for i := 0; i < nodesNum; i++ {
-		_, d := simNodeWithDHT(t, cfg2.SwarmConfig, sim)
-		go bootAndWait(t, d, booted)
-	}
-
-	for i := 0; i < nodesNum; i++ {
-		err := <-booted
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-}
-
 func TestDHT_BootstrapAbort(t *testing.T) {
 	// Create a bootstrap node
 	sim := service.NewSimulator()
@@ -367,9 +277,9 @@ func TestDHT_BootstrapAbort(t *testing.T) {
 	_, dht := simNodeWithDHT(t, cfg2.SwarmConfig, sim)
 	// Create a bootstrap node to abort
 	Ctx, Cancel := context.WithCancel(context.Background())
-	// Abort bootstrap after 2 Seconds
+	// Abort bootstrap after 500 milliseconds
 	go func() {
-		time.Sleep(2 * time.Second)
+		time.Sleep(500 * time.Millisecond)
 		Cancel()
 	}()
 	// Should return error after 2 seconds

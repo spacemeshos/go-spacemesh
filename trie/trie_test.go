@@ -31,9 +31,8 @@ import (
 	"testing"
 	"testing/quick"
 
-
-	"github.com/spacemeshos/go-spacemesh/rlp"
 	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/rlp"
 )
 
 func init() {

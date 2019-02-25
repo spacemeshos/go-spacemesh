@@ -19,14 +19,14 @@ package state
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/rlp"
 	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/rlp"
 	"github.com/spacemeshos/go-spacemesh/trie"
 )
 
 type DumpAccount struct {
-	Balance  string            `json:"balance"`
-	Nonce    uint64            `json:"nonce"`
+	Balance string `json:"balance"`
+	Nonce   uint64 `json:"nonce"`
 }
 
 type Dump struct {
@@ -48,10 +48,10 @@ func (self *StateDB) RawDump() Dump {
 			panic(err)
 		}
 
-		//obj := newObject(nil, common.BytesToAddress(addr), data)
+		//obj := newObject(nil, address.BytesToAddress(addr), data)
 		account := DumpAccount{
-			Balance:  data.Balance.String(),
-			Nonce:    data.Nonce,
+			Balance: data.Balance.String(),
+			Nonce:   data.Nonce,
 		}
 
 		dump.Accounts[common.Bytes2Hex(addr)] = account

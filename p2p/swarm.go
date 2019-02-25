@@ -4,49 +4,88 @@ import (
 	"context"
 	"errors"
 	"fmt"
+<<<<<<< HEAD
 	inet "net"
 	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
+=======
+>>>>>>> upstream/develop
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/golang/protobuf/proto"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/connectionpool"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht"
 	"github.com/spacemeshos/go-spacemesh/p2p/gossip"
+	"github.com/spacemeshos/go-spacemesh/p2p/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/timesync"
+<<<<<<< HEAD
+=======
+	timeSyncConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
+
+	inet "net"
+	"strconv"
+	"sync"
+	"sync/atomic"
+	"time"
+>>>>>>> upstream/develop
 )
 
 // ConnectingTimeout is the timeout we wait when trying to connect a neighborhood
 const ConnectingTimeout = 20 * time.Second //todo: add to the config
 
-type protocolMessage struct {
-	sender node.Node
+type directProtocolMessage struct {
+	sender p2pcrypto.PublicKey
 	data   service.Data
 }
 
-func (pm protocolMessage) Sender() node.Node {
+func (pm directProtocolMessage) Sender() p2pcrypto.PublicKey {
 	return pm.sender
 }
 
-func (pm protocolMessage) Data() service.Data {
+func (pm directProtocolMessage) Data() service.Data {
 	return pm.data
 }
 
-func (pm protocolMessage) Bytes() []byte {
+func (pm directProtocolMessage) Bytes() []byte {
 	return pm.data.Bytes()
+}
+
+type gossipProtocolMessage struct {
+	data           service.Data
+	validationChan chan service.MessageValidation
+}
+
+func (pm gossipProtocolMessage) Data() service.Data {
+	return pm.data
+}
+
+func (pm gossipProtocolMessage) Bytes() []byte {
+	return pm.data.Bytes()
+}
+
+func (pm gossipProtocolMessage) ValidationCompletedChan() chan service.MessageValidation {
+	return pm.validationChan
+}
+
+func (pm gossipProtocolMessage) ReportValidation(protocol string, isValid bool) {
+	if pm.validationChan != nil {
+		pm.validationChan <- service.NewMessageValidation(pm.Bytes(), protocol, isValid)
+	}
 }
 
 type cPool interface {
 	GetConnection(address string, pk p2pcrypto.PublicKey) (net.Connection, error)
-	RemoteConnectionsChannel() chan net.NewConnectionEvent
+	GetConnectionIfExists(pk p2pcrypto.PublicKey) (net.Connection, error)
+	Shutdown()
 }
 
 type swarm struct {
@@ -70,8 +109,9 @@ type swarm struct {
 
 	// map between protocol names to listening protocol handlers
 	// NOTE: maybe let more than one handler register on a protocol ?
-	protocolHandlers     map[string]chan service.Message
-	protocolHandlerMutex sync.RWMutex
+	directProtocolHandlers map[string]chan service.DirectMessage
+	gossipProtocolHandlers map[string]chan service.GossipMessage
+	protocolHandlerMutex   sync.RWMutex
 
 	gossip  *gossip.Protocol
 	network *net.Net
@@ -153,18 +193,39 @@ func newSwarm(ctx context.Context, config config.Config, newNode bool, persist b
 		delPeerSub:        make([]chan p2pcrypto.PublicKey, 0, 10),
 		connectingTimeout: ConnectingTimeout,
 
-		protocolHandlers: make(map[string]chan service.Message),
-		network:          n,
-		cPool:            connectionpool.NewConnectionPool(n, l.PublicKey()),
+		directProtocolHandlers: make(map[string]chan service.DirectMessage),
+		gossipProtocolHandlers: make(map[string]chan service.GossipMessage),
+		network:                n,
 	}
 
 	s.dht = dht.New(l, config.SwarmConfig, s)
 
+	s.network.SubscribeOnNewRemoteConnections(s.onNewConnection)
+	s.network.SubscribeClosingConnections(s.onClosedConnection)
+
+	cpool := connectionpool.NewConnectionPool(s.network, l.PublicKey())
+
+	s.network.SubscribeOnNewRemoteConnections(cpool.OnNewConnection)
+	s.network.SubscribeClosingConnections(cpool.OnClosedConnection)
+
+	s.cPool = cpool
+
 	s.gossip = gossip.NewProtocol(config.SwarmConfig, s, s.LocalNode().PublicKey(), s.lNode.Log)
 
 	s.lNode.Debug("Created swarm for local node %s, %s", l.Address(), l.Pretty())
-
 	return s, nil
+}
+
+func (s *swarm) onNewConnection(nce net.NewConnectionEvent) {
+	s.dht.Update(nce.Node)
+	// todo: consider doing cpool actions from here instead of registering cpool as well.
+	s.addIncomingPeer(nce.Node.PublicKey())
+}
+
+func (s *swarm) onClosedConnection(c net.Connection) {
+	// we don't want to block, we know this node's connection was closed.
+	// we'll try connecting again and if not we'll remove it from peers
+	go s.retryOrDisconnect(c.RemotePublicKey())
 }
 
 func (s *swarm) Start() error {
@@ -173,8 +234,6 @@ func (s *swarm) Start() error {
 	}
 	atomic.StoreUint32(&s.started, 1)
 	s.lNode.Debug("Starting the p2p layer")
-
-	go s.handleNewConnectionEvents()
 
 	s.listenToNetworkMessages() // fires up a goroutine for each queue of messages
 
@@ -191,7 +250,9 @@ func (s *swarm) Start() error {
 				return
 			}
 			close(s.bootChan)
-			s.lNode.Info("DHT Bootstrapped with %d peers in %v", s.dht.Size(), time.Since(b))
+			dhtsize := s.dht.Size()
+			s.lNode.With().Info("discovery_bootstrap", log.Bool("success", dhtsize > s.config.SwarmConfig.RandomConnections && s.bootErr == nil),
+				log.Int("dht_size", dhtsize), log.Duration("time_elapsed", time.Since(b)))
 		}()
 	}
 
@@ -273,20 +334,24 @@ func (s *swarm) sendMessageImpl(peerPubKey p2pcrypto.PublicKey, protocol string,
 	var peer node.Node
 	var conn net.Connection
 
-	peer, err = s.dht.Lookup(peerPubKey) // blocking, might issue a network lookup that'll take time.
-	if err != nil {
-		return err
-	}
+	conn, err = s.cPool.GetConnectionIfExists(peerPubKey)
 
-	conn, err = s.cPool.GetConnection(peer.Address(), peer.PublicKey()) // blocking, might take some time in case there is no connection
 	if err != nil {
-		s.lNode.Warning("failed to send message to %v, no valid connection. err: %v", peer.String(), err)
-		return err
+		peer, err = s.dht.Lookup(peerPubKey) // blocking, might issue a network lookup that'll take time.
+		if err != nil {
+			return err
+		}
+
+		conn, err = s.cPool.GetConnection(peer.Address(), peer.PublicKey()) // blocking, might take some time in case there is no connection
+		if err != nil {
+			s.lNode.Warning("failed to send message to %v, no valid connection. err: %v", peer.String(), err)
+			return err
+		}
 	}
 
 	session := conn.Session()
 	if session == nil {
-		s.lNode.Warning("failed to send message to %v, no valid session. err: %v", peer.String(), err)
+		s.lNode.Warning("failed to send message to %v, no valid session. err: %v", conn.RemotePublicKey().String(), err)
 		return err
 	}
 
@@ -314,7 +379,7 @@ func (s *swarm) sendMessageImpl(peerPubKey p2pcrypto.PublicKey, protocol string,
 
 	err = conn.Send(final)
 
-	s.lNode.Debug("Message sent successfully")
+	s.lNode.Debug("DirectMessage sent successfully")
 
 	if err != nil {
 		// doing one retry before giving up
@@ -324,11 +389,20 @@ func (s *swarm) sendMessageImpl(peerPubKey p2pcrypto.PublicKey, protocol string,
 	return err
 }
 
-// RegisterProtocol registers an handler for `protocol`
-func (s *swarm) RegisterProtocol(protocol string) chan service.Message {
-	mchan := make(chan service.Message, config.ConfigValues.BufferSize)
+// RegisterDirectProtocol registers an handler for direct messaging based `protocol`
+func (s *swarm) RegisterDirectProtocol(protocol string) chan service.DirectMessage {
+	mchan := make(chan service.DirectMessage, config.ConfigValues.BufferSize)
 	s.protocolHandlerMutex.Lock()
-	s.protocolHandlers[protocol] = mchan
+	s.directProtocolHandlers[protocol] = mchan
+	s.protocolHandlerMutex.Unlock()
+	return mchan
+}
+
+// RegisterGossipProtocol registers an handler for gossip based `protocol`
+func (s *swarm) RegisterGossipProtocol(protocol string) chan service.GossipMessage {
+	mchan := make(chan service.GossipMessage, s.config.BufferSize)
+	s.protocolHandlerMutex.Lock()
+	s.gossipProtocolHandlers[protocol] = mchan
 	s.protocolHandlerMutex.Unlock()
 	return mchan
 }
@@ -336,35 +410,42 @@ func (s *swarm) RegisterProtocol(protocol string) chan service.Message {
 // Shutdown sends a shutdown signal to all running services of swarm and then runs an internal shutdown to cleanup.
 func (s *swarm) Shutdown() {
 	close(s.shutdown)
-	<-s.shutdown // Block until really closes.
-	s.shutdownInternal()
-}
-
-// shutdown gracefully shuts down swarm services.
-func (s *swarm) shutdownInternal() {
-	//TODO : Gracefully shutdown swarm => finish incmoing / outgoing msgs
 	s.network.Shutdown()
+	s.cPool.Shutdown()
+
+	s.protocolHandlerMutex.Lock()
+	for i, _ := range s.directProtocolHandlers {
+		delete(s.directProtocolHandlers, i)
+		//close(prt) //todo: signal protocols to shutdown with closing chan. (this makes us send on closed chan. )
+	}
+	for i, _ := range s.gossipProtocolHandlers {
+		delete(s.gossipProtocolHandlers, i)
+		//close(prt) //todo: signal protocols to shutdown with closing chan. (this makes us send on closed chan. )
+	}
+	s.protocolHandlerMutex.Unlock()
 }
 
 // process an incoming message
 func (s *swarm) processMessage(ime net.IncomingMessageEvent) {
-	select {
-	case <-s.shutdown:
-		break
-	default:
-		err := s.onRemoteClientMessage(ime)
-		if err != nil {
-			s.lNode.Errorf("Err reading message from %v, closing connection err=%v", ime.Conn.RemotePublicKey(), err)
-			ime.Conn.Close()
-			// TODO: differentiate action on errors
-		}
+
+	err := s.onRemoteClientMessage(ime)
+	if err != nil {
+		s.lNode.Error("Err reading message from %v, closing connection err=%v", ime.Conn.RemotePublicKey(), err)
+		ime.Conn.Close()
+		// TODO: differentiate action on errors
 	}
 }
 
 // RegisterProtocolWithChannel configures and returns a channel for a given protocol.
+<<<<<<< HEAD
 func (s *swarm) RegisterProtocolWithChannel(protocol string, ingressChannel chan service.Message) chan service.Message {
 	s.protocolHandlerMutex.Lock()
 	s.protocolHandlers[protocol] = ingressChannel
+=======
+func (s *swarm) RegisterDirectProtocolWithChannel(protocol string, ingressChannel chan service.DirectMessage) chan service.DirectMessage {
+	s.protocolHandlerMutex.Lock()
+	s.directProtocolHandlers[protocol] = ingressChannel
+>>>>>>> upstream/develop
 	s.protocolHandlerMutex.Unlock()
 	return ingressChannel
 }
@@ -393,30 +474,19 @@ func (s *swarm) listenToNetworkMessages() {
 
 }
 
-func (s *swarm) handleNewConnectionEvents() {
-	newConnEvents := s.cPool.RemoteConnectionsChannel()
-	closing := s.network.SubscribeClosingConnections()
-Loop:
-	for {
-		select {
-		case con := <-closing:
-			go s.retryOrReplace(con.RemotePublicKey()) //todo notify dht?
-		case nce := <-newConnEvents:
-			go func(nce net.NewConnectionEvent) { s.dht.Update(nce.Node); s.addIncomingPeer(nce.Node.PublicKey()) }(nce)
-		case <-s.shutdown:
-			break Loop
-		}
-	}
-}
-
-func (s *swarm) retryOrReplace(key p2pcrypto.PublicKey) {
+func (s *swarm) retryOrDisconnect(key p2pcrypto.PublicKey) {
 	getpeer := s.dht.InternalLookup(node.NewDhtID(key.Bytes()))
 
 	if getpeer == nil {
-		s.Disconnect(key) // if we didn't find then we can't try replaceing
+		s.Disconnect(key) // if we didn't find then we can't try replacing
 		return
 	}
 	peer := getpeer[0]
+
+	if peer.PublicKey().String() != key.String() {
+		s.Disconnect(key)
+		return
+	}
 
 	_, err := s.cPool.GetConnection(peer.Address(), peer.PublicKey())
 	if err != nil { // we could'nt connect :/
@@ -426,7 +496,7 @@ func (s *swarm) retryOrReplace(key p2pcrypto.PublicKey) {
 
 // periodically checks that our clock is sync
 func (s *swarm) checkTimeDrifts() {
-	checkTimeSync := time.NewTicker(config.TimeConfigValues.RefreshNtpInterval)
+	checkTimeSync := time.NewTicker(timeSyncConfig.TimeConfigValues.RefreshNtpInterval)
 Loop:
 	for {
 		select {
@@ -490,7 +560,7 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 	pm := &pb.ProtocolMessage{}
 	err = proto.Unmarshal(decPayload, pm)
 	if err != nil {
-		s.lNode.Errorf("proto marshaling err=", err)
+		s.lNode.Error("proto marshaling err=", err)
 		return ErrBadFormat2
 	}
 
@@ -503,7 +573,8 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 
 	s.lNode.Debug("Authorized %v protocol message ", pm.Metadata.NextProtocol)
 
-	remoteNode := node.New(msg.Conn.RemotePublicKey(), "") // if we got so far, we already have the node in our rt, hence address won't be used
+	// if we got so far, we already have the node in our rt, hence address won't be used
+	remoteNode := node.New(msg.Conn.RemotePublicKey(), "")
 	// update the routing table - we just heard from this authenticated node
 	s.dht.Update(remoteNode)
 
@@ -517,21 +588,39 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 		data = &service.DataMsgWrapper{Req: wrap.Req, MsgType: wrap.Type, ReqID: wrap.ReqID, Payload: wrap.Payload}
 	}
 
-	return s.ProcessProtocolMessage(remoteNode, pm.Metadata.NextProtocol, data)
+	// messages handled here are always processed by direct based protocols, only the gossip protocol calls ProcessGossipProtocolMessage
+	return s.ProcessDirectProtocolMessage(msg.Conn.RemotePublicKey(), pm.Metadata.NextProtocol, data)
 }
 
-// ProcessProtocolMessage passes an already decrypted message to a protocol.
-func (s *swarm) ProcessProtocolMessage(sender node.Node, protocol string, data service.Data) error {
-	// route authenticated message to the reigstered protocol
+// ProcessDirectProtocolMessage passes an already decrypted message to a protocol.
+func (s *swarm) ProcessDirectProtocolMessage(sender p2pcrypto.PublicKey, protocol string, data service.Data) error {
+	// route authenticated message to the registered protocol
 	s.protocolHandlerMutex.RLock()
-	msgchan := s.protocolHandlers[protocol]
+	msgchan := s.directProtocolHandlers[protocol]
 	s.protocolHandlerMutex.RUnlock()
 	if msgchan == nil {
 		return ErrNoProtocol
 	}
 	s.lNode.Debug("Forwarding message to %v protocol", protocol)
 
-	msgchan <- protocolMessage{sender, data}
+	msgchan <- directProtocolMessage{sender, data}
+
+	return nil
+}
+
+// ProcessGossipProtocolMessage passes an already decrypted message to a protocol. It is expected that the protocol will send
+// the message syntactic validation result on the validationCompletedChan ASAP
+func (s *swarm) ProcessGossipProtocolMessage(protocol string, data service.Data, validationCompletedChan chan service.MessageValidation) error {
+	// route authenticated message to the registered protocol
+	s.protocolHandlerMutex.RLock()
+	msgchan := s.gossipProtocolHandlers[protocol]
+	s.protocolHandlerMutex.RUnlock()
+	if msgchan == nil {
+		return ErrNoProtocol
+	}
+	s.lNode.Debug("Forwarding message to %v protocol", protocol)
+
+	msgchan <- gossipProtocolMessage{data, validationCompletedChan}
 
 	return nil
 }
@@ -541,10 +630,9 @@ func (s *swarm) Broadcast(protocol string, payload []byte) error {
 	return s.gossip.Broadcast(payload, protocol)
 }
 
-// Neighborhood : neighborhood is the peers we keep close , meaning we try to keep connections
-// to them at any given time and if not possible we replace them. protocols use the neighborhood
+// Neighborhood : neighborhood is the peers we keep close, meaning we try to keep connections
+// to them at any given time and if not possible we replace them. Protocols use the neighborhood
 // to run their logic with peers.
-
 func (s *swarm) publishNewPeer(peer p2pcrypto.PublicKey) {
 	s.peerLock.RLock()
 	for _, p := range s.newPeerSub {
@@ -569,8 +657,8 @@ func (s *swarm) publishDelPeer(peer p2pcrypto.PublicKey) {
 
 // SubscribePeerEvents lets clients listen on events inside the swarm about peers. first chan is new peers, second is deleted peers.
 func (s *swarm) SubscribePeerEvents() (conn chan p2pcrypto.PublicKey, disc chan p2pcrypto.PublicKey) {
-	in := make(chan p2pcrypto.PublicKey, s.config.SwarmConfig.RandomConnections) // todo. what size this should be ? maybe let client pass channels.
-	del := make(chan p2pcrypto.PublicKey, s.config.SwarmConfig.RandomConnections)
+	in := make(chan p2pcrypto.PublicKey, 30) // todo : the size should be determined after #269
+	del := make(chan p2pcrypto.PublicKey, 30)
 	s.peerLock.Lock()
 	s.newPeerSub = append(s.newPeerSub, in)
 	s.delPeerSub = append(s.delPeerSub, del)
@@ -603,7 +691,7 @@ loop:
 		case <-s.morePeersReq:
 			s.lNode.Debug("loop: got morePeersReq")
 			go s.askForMorePeers()
-		//todo: try getting the connections (hearbeat)
+		//todo: try getting the connections (heartbeat)
 		case <-s.shutdown:
 			break loop // maybe error ?
 		}
@@ -619,7 +707,7 @@ func (s *swarm) askForMorePeers() {
 
 	s.getMorePeers(req)
 
-	// todo: better way then going in this everytime ?
+	// todo: better way then going in this every time ?
 	if len(s.outpeers) >= s.config.SwarmConfig.RandomConnections {
 		s.initOnce.Do(func() {
 			s.lNode.Info("gossip; connected to initial required neighbors - %v", len(s.outpeers))
@@ -673,13 +761,14 @@ func (s *swarm) getMorePeers(numpeers int) int {
 loop:
 	for {
 		select {
+		// NOTE: breaks here intentionally break the select and not the for loop
 		case cne := <-res:
-			total++ // We count i everytime to know when to close the channel
+			total++ // We count i every time to know when to close the channel
 
 			if cne.err != nil {
 				s.lNode.Debug("can't establish connection with sampled peer %v, %v", cne.n.String(), cne.err)
 				bad++
-				continue // this peer didn't work, todo: tell dht
+				break // this peer didn't work, todo: tell dht
 			}
 
 			pkstr := cne.n.PublicKey().String()
@@ -690,7 +779,7 @@ loop:
 			if ok {
 				s.lNode.Debug("not allowing peers from inbound to upgrade to outbound to prevent poisoning, peer %v", cne.n.String())
 				bad++
-				continue
+				break
 			}
 
 			s.outpeersMutex.Lock()
@@ -698,12 +787,13 @@ loop:
 				s.outpeersMutex.Unlock()
 				s.lNode.Debug("selected an already outbound peer. not counting that peer.", cne.n.String())
 				bad++
-				continue
+				break
 			}
 			s.outpeers[pkstr] = cne.n.PublicKey()
 			s.outpeersMutex.Unlock()
 
 			s.publishNewPeer(cne.n.PublicKey())
+			metrics.OutboundPeers.Add(1)
 			s.lNode.Debug("Neighborhood: Added peer to peer list %v", cne.n.Pretty())
 		case <-tm.C:
 			break loop
@@ -719,13 +809,14 @@ loop:
 	return total - bad
 }
 
-// Disconnect removes a peer from the neighborhood, it requests more peers if our outbound peer count is less than configured
+// Disconnect removes a peer from the neighborhood. It requests more peers if our outbound peer count is less than configured
 func (s *swarm) Disconnect(peer p2pcrypto.PublicKey) {
 	s.inpeersMutex.Lock()
 	if _, ok := s.inpeers[peer.String()]; ok {
 		delete(s.inpeers, peer.String())
 		s.inpeersMutex.Unlock()
 		s.publishDelPeer(peer)
+		metrics.InboundPeers.Add(-1)
 		return
 	}
 	s.inpeersMutex.Unlock()
@@ -736,16 +827,18 @@ func (s *swarm) Disconnect(peer p2pcrypto.PublicKey) {
 	}
 	s.outpeersMutex.Unlock()
 	s.publishDelPeer(peer)
+	metrics.OutboundPeers.Add(-1)
 	s.morePeersReq <- struct{}{}
 }
 
 // AddIncomingPeer inserts a peer to the neighborhood as a remote peer.
 func (s *swarm) addIncomingPeer(n p2pcrypto.PublicKey) {
 	s.inpeersMutex.Lock()
-	// todo limit number of inpeers
+	// todo limit number of in peers
 	s.inpeers[n.String()] = n
 	s.inpeersMutex.Unlock()
 	s.publishNewPeer(n)
+	metrics.InboundPeers.Add(1)
 }
 
 func (s *swarm) hasIncomingPeer(peer p2pcrypto.PublicKey) bool {

@@ -7,14 +7,12 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/log"
-	"gopkg.in/op/go-logging.v1"
-
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/stretchr/testify/assert"
 )
 
-func GetTestLogger(name string) *logging.Logger {
-	return log.New(name, "", "").Logger
+func GetTestLogger(name string) log.Log {
+	return log.New(name, "", "")
 }
 
 func TestTableCallbacks(t *testing.T) {
@@ -242,7 +240,6 @@ func TestRoutingTableImpl_SelectPeers_EnoughPeers(t *testing.T) {
 	ids := make(map[string]node.Node)
 	sids := make(map[string]RoutingTable)
 	toselect := make(map[string]struct{})
-
 
 	for i := 0; i < n; i++ {
 		local := node.GenerateRandomNodeData()

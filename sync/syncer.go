@@ -3,28 +3,28 @@ package sync
 import (
 	"errors"
 	"github.com/gogo/protobuf/proto"
-    "github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
-    "github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/sync/pb"
+	"github.com/spacemeshos/go-spacemesh/timesync"
 	"sync"
 	"sync/atomic"
 	"time"
 )
 
 type BlockValidator interface {
-	ValidateBlock(block *mesh.Block) bool
+	BlockEligible(id mesh.LayerID, pubKey string) bool
 }
 
 type Configuration struct {
-	hdist          uint32 //dist of consensus layers from newst layer
-	syncInterval   time.Duration
-	concurrency    int //number of workers for sync method
-	layerSize      int
-	requestTimeout time.Duration
+	SyncInterval   time.Duration
+	Concurrency    int //number of workers for sync method
+	LayerSize      int
+	RequestTimeout time.Duration
 }
 
 type Syncer struct {
@@ -34,10 +34,12 @@ type Syncer struct {
 	Configuration
 	log.Log
 	*server.MessageServer
-	SyncLock  uint32
-	startLock uint32
-	forceSync chan bool
-	exit      chan struct{}
+	currentLayer uint32
+	SyncLock     uint32
+	startLock    uint32
+	forceSync    chan bool
+	clock        timesync.LayerTimer
+	exit         chan struct{}
 }
 
 func (s *Syncer) ForceSync() {
@@ -59,7 +61,7 @@ const (
 )
 
 func (s *Syncer) IsSynced() bool {
-	return s.LocalLayer() == s.maxSyncLayer()
+	return s.VerifiedLayer() == s.maxSyncLayer()
 }
 
 func (s *Syncer) Stop() {
@@ -76,43 +78,40 @@ func (s *Syncer) Start() {
 
 //fires a sync every sm.syncInterval or on force space from outside
 func (s *Syncer) run() {
-	syncTicker := time.NewTicker(s.syncInterval)
+	foo := func() {
+		if atomic.CompareAndSwapUint32(&s.SyncLock, IDLE, RUNNING) {
+			s.Synchronise()
+			atomic.StoreUint32(&s.SyncLock, IDLE)
+		}
+	}
 	for {
-		doSync := false
 		select {
 		case <-s.exit:
-			log.Debug("run stoped")
+			s.Debug("run stoped")
 			return
-		case doSync = <-s.forceSync:
-		case <-syncTicker.C:
-			doSync = true
-		default:
-			doSync = false
-		}
-		if doSync {
-			go func() {
-				if atomic.CompareAndSwapUint32(&s.SyncLock, IDLE, RUNNING) {
-					s.Debug("do sync")
-					s.Synchronise()
-					atomic.StoreUint32(&s.SyncLock, IDLE)
-				}
-			}()
+		case <-s.forceSync:
+			go foo()
+		case layer := <-s.clock:
+			atomic.StoreUint32(&s.currentLayer, uint32(layer))
+			s.Info("sync got tick for layer %v", layer)
+			go foo()
 		}
 	}
 }
 
 //fires a sync every sm.syncInterval or on force space from outside
-func NewSync(srv server.Service, layers *mesh.Mesh, bv BlockValidator, conf Configuration, logger log.Log) *Syncer {
+func NewSync(srv server.Service, layers *mesh.Mesh, bv BlockValidator, conf Configuration, clock timesync.LayerTimer, logger log.Log) *Syncer {
 	s := Syncer{
 		BlockValidator: bv,
 		Configuration:  conf,
 		Log:            logger,
 		Mesh:           layers,
 		Peers:          p2p.NewPeers(srv),
-		MessageServer:  server.NewMsgServer(srv, syncProtocol, conf.requestTimeout-time.Millisecond*30, make(chan service.Message, config.ConfigValues.BufferSize), logger),
+		MessageServer:  server.NewMsgServer(srv, syncProtocol, conf.RequestTimeout-time.Millisecond*30, make(chan service.DirectMessage, config.ConfigValues.BufferSize), logger),
 		SyncLock:       0,
 		startLock:      0,
 		forceSync:      make(chan bool),
+		clock:          clock,
 		exit:           make(chan struct{}),
 	}
 
@@ -124,58 +123,54 @@ func NewSync(srv server.Service, layers *mesh.Mesh, bv BlockValidator, conf Conf
 }
 
 func (s *Syncer) maxSyncLayer() uint32 {
-	if uint32(s.LatestLayer()) < s.hdist {
-		return 0
-	}
-
-	return s.LatestLayer() - s.hdist
+	return atomic.LoadUint32(&s.currentLayer)
 }
 
 func (s *Syncer) Synchronise() {
-	for i := s.LocalLayer(); i < s.maxSyncLayer(); i++ {
-		blockIds, err := s.getLayerBlockIDs(mesh.LayerID(i + 1)) //returns a set of all known blocks in the mesh
-		if err != nil {
-			log.Error("could not get layer block ids: ", err)
-			log.Debug("synchronise failed, local layer index is ", s.LocalLayer())
-			return
+	for currenSyncLayer := s.VerifiedLayer() + 1; currenSyncLayer < s.maxSyncLayer(); currenSyncLayer++ {
+		s.Info("syncing layer %v to layer %v current consensus layer is %d", s.VerifiedLayer(), currenSyncLayer, atomic.LoadUint32(&s.currentLayer))
+		lyr, _ := s.GetLayer(mesh.LayerID(currenSyncLayer))
+		if lyr == nil {
+			lyr, _ = s.getLayerFromNeighbors(currenSyncLayer)
 		}
+		s.ValidateLayer(lyr)
+	}
+}
 
-		output := make(chan *mesh.Block)
-		// each worker goroutine tries to fetch a block iteratively from each peer
-		count := int32(s.concurrency)
-
-		for i := 0; i < s.concurrency; i++ {
-			go func() {
-				for id := range blockIds {
-					for _, p := range s.GetPeers() {
-						if bCh, err := sendBlockRequest(s.MessageServer, p, mesh.BlockID(id), s.Log); err == nil {
-							if b := <-bCh; b != nil && s.ValidateBlock(b) { //some validation testing
-								s.Debug("received block", b)
-								output <- b
-								break
-							}
+func (s *Syncer) getLayerFromNeighbors(currenSyncLayer uint32) (*mesh.Layer, error) {
+	blockIds, err := s.getLayerBlockIDs(mesh.LayerID(currenSyncLayer))
+	if err != nil {
+		return nil, err
+	}
+	blocksArr := make([]*mesh.Block, 0, len(blockIds))
+	// each worker goroutine tries to fetch a block iteratively from each peer
+	output := make(chan *mesh.Block)
+	count := int32(s.Concurrency)
+	for j := 0; j < s.Concurrency; j++ {
+		go func() {
+			for id := range blockIds {
+				for _, p := range s.GetPeers() {
+					if bCh, err := sendBlockRequest(s.MessageServer, p, mesh.BlockID(id), s.Log); err == nil {
+						if b := <-bCh; b != nil && s.BlockEligible(b.LayerIndex, b.MinerID) { //some validation testing
+							s.Debug("received block", b)
+							output <- b
+							break
 						}
 					}
 				}
-				if atomic.AddInt32(&count, -1); atomic.LoadInt32(&count) == 0 { // last one closes the channel
-					close(output)
-				}
-			}()
-		}
-
-		blocks := make([]*mesh.Block, 0, len(blockIds))
-
-		for block := range output {
-			s.Debug("add block to layer", block)
-			blocks = append(blocks, block)
-		}
-
-		s.Debug("add layer ", i)
-
-		s.AddLayer(mesh.NewExistingLayer(mesh.LayerID(i+1), blocks))
+			}
+			if atomic.AddInt32(&count, -1); atomic.LoadInt32(&count) == 0 { // last one closes the channel
+				close(output)
+			}
+		}()
+	}
+	for block := range output {
+		s.Debug("add block to layer %v", block)
+		s.AddBlock(block)
+		blocksArr = append(blocksArr, block)
 	}
 
-	s.Debug("synchronise done, local layer index is ", s.LocalLayer(), "most recent is ", s.LatestLayer())
+	return mesh.NewExistingLayer(mesh.LayerID(currenSyncLayer), blocksArr), nil
 }
 
 type peerHashPair struct {
@@ -184,7 +179,7 @@ type peerHashPair struct {
 }
 
 func sendBlockRequest(msgServ *server.MessageServer, peer p2p.Peer, id mesh.BlockID, logger log.Log) (chan *mesh.Block, error) {
-	logger.Debug("send block request Peer: ", peer, " id: ", id)
+	logger.Info("send block request Peer: %v id: %v", peer, id)
 	data := &pb.FetchBlockReq{Id: uint32(id)}
 	payload, err := proto.Marshal(data)
 	if err != nil {
@@ -193,7 +188,7 @@ func sendBlockRequest(msgServ *server.MessageServer, peer p2p.Peer, id mesh.Bloc
 	ch := make(chan *mesh.Block)
 	foo := func(msg []byte) {
 		defer close(ch)
-		logger.Debug("handle block response")
+		logger.Info("handle block response")
 		data := &pb.FetchBlockResp{}
 		if err := proto.Unmarshal(msg, data); err != nil {
 			logger.Error("could not unmarshal block data")
@@ -217,7 +212,7 @@ func (s *Syncer) getLayerBlockIDs(index mesh.LayerID) (chan mesh.BlockID, error)
 	m, err := s.getLayerHashes(index)
 
 	if err != nil {
-		s.Error("could not get LayerHashes for layer: ", index, err)
+		s.Error("could not get LayerHashes for layer: ", index)
 		return nil, err
 	}
 	return s.getIdsForHash(m, index)
@@ -237,15 +232,16 @@ func (s *Syncer) getIdsForHash(m map[string]p2p.Peer, index mesh.LayerID) (chan 
 		reqCounter++
 		wg.Add(1)
 		go func() {
-			v := <-c
-			ch <- v
+			if v := <-c; v != nil {
+				ch <- v
+			}
 			wg.Done()
 		}()
 	}
 
 	go func() { wg.Wait(); close(ch) }()
-	idSet := make(map[mesh.BlockID]bool, s.layerSize) //change uint32 to BlockId
-	timeout := time.After(s.requestTimeout)
+	idSet := make(map[mesh.BlockID]bool, s.LayerSize) //change uint32 to BlockId
+	timeout := time.After(s.RequestTimeout)
 	for reqCounter > 0 {
 		select {
 		case b := <-ch:
@@ -287,7 +283,7 @@ func (s *Syncer) getLayerHashes(index mesh.LayerID) (map[string]p2p.Peer, error)
 	}
 	// request hash from all
 	wg := sync.WaitGroup{}
-	ch := make(chan peerHashPair, len(peers))
+	ch := make(chan *peerHashPair, len(peers))
 
 	resCounter := len(peers)
 	for _, p := range peers {
@@ -299,17 +295,21 @@ func (s *Syncer) getLayerHashes(index mesh.LayerID) (map[string]p2p.Peer, error)
 		//merge channels and close when done
 		wg.Add(1)
 		go func() {
-			v := <-c
-			ch <- v
+			if v := <-c; v != nil {
+				ch <- v
+			}
 			wg.Done()
 		}()
 	}
 	go func() { wg.Wait(); close(ch) }()
-	timeout := time.After(s.requestTimeout)
+	timeout := time.After(s.RequestTimeout)
 	for resCounter > 0 {
 		// Got a timeout! fail with a timeout error
 		select {
 		case pair := <-ch:
+			if pair == nil { //do nothing on close channel
+				continue
+			}
 			m[string(pair.hash)] = pair.peer
 			resCounter--
 		case <-timeout:
@@ -323,9 +323,9 @@ func (s *Syncer) getLayerHashes(index mesh.LayerID) (map[string]p2p.Peer, error)
 	return m, nil
 }
 
-func (s *Syncer) sendLayerHashRequest(peer p2p.Peer, layer mesh.LayerID) (chan peerHashPair, error) {
-	s.Debug("send Layer hash request Peer: ", peer, " layer: ", layer)
-	ch := make(chan peerHashPair)
+func (s *Syncer) sendLayerHashRequest(peer p2p.Peer, layer mesh.LayerID) (chan *peerHashPair, error) {
+	s.Debug("send Layer hash request Peer: %v layer: %v", peer, layer)
+	ch := make(chan *peerHashPair)
 	data := &pb.LayerHashReq{Layer: uint32(layer)}
 	payload, err := proto.Marshal(data)
 	if err != nil {
@@ -333,6 +333,7 @@ func (s *Syncer) sendLayerHashRequest(peer p2p.Peer, layer mesh.LayerID) (chan p
 		return nil, err
 	}
 	foo := func(msg []byte) {
+		defer close(ch)
 		res := &pb.LayerHashResp{}
 		if msg == nil {
 			s.Error("layer hash response was nil from ", peer.String())
@@ -343,7 +344,8 @@ func (s *Syncer) sendLayerHashRequest(peer p2p.Peer, layer mesh.LayerID) (chan p
 			s.Error("could not unmarshal layer hash response ", err)
 			return
 		}
-		ch <- peerHashPair{peer: peer, hash: res.Hash}
+		s.Debug("got hash response from %v hash: %v  layer: %d", peer, res.Hash, layer)
+		ch <- &peerHashPair{peer: peer, hash: res.Hash}
 	}
 	return ch, s.SendRequest(LAYER_HASH, payload, peer, foo)
 }
@@ -375,6 +377,7 @@ func newBlockRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg []byte) 
 		logger.Debug("handle block request")
 		req := &pb.FetchBlockReq{}
 		if err := proto.Unmarshal(msg, req); err != nil {
+			logger.Error("cannot unmarshal message")
 			return nil
 		}
 
@@ -395,7 +398,7 @@ func newBlockRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg []byte) 
 			return nil
 		}
 
-		logger.Debug("return block ", block)
+		logger.Debug("return block %v", block)
 
 		return payload
 	}
@@ -411,7 +414,7 @@ func newLayerHashRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg []by
 
 		layer, err := layers.GetLayer(mesh.LayerID(req.Layer))
 		if err != nil {
-			logger.Error("Error handling layer ", req.Layer, " request message with error:", err)
+			logger.Error("Error handling layer %d request message with error: %v", req.Layer, err)
 			return nil
 		}
 

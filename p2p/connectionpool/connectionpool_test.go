@@ -3,10 +3,11 @@ package connectionpool
 import (
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"math/rand"
 	"testing"
 	"time"
@@ -21,44 +22,43 @@ func generateIpAddress() string {
 }
 
 func TestGetConnectionWithNoConnection(t *testing.T) {
-	net := net.NewNetworkMock()
-	net.SetDialDelayMs(50)
-	net.SetDialResult(nil)
-	cPool := NewConnectionPool(net, generatePublicKey())
+	n := net.NewNetworkMock()
+	n.SetDialDelayMs(50)
+	n.SetDialResult(nil)
+	cPool := NewConnectionPool(n, generatePublicKey())
 	remotePub := generatePublicKey()
 	addr := "1.1.1.1"
 	conn, err := cPool.GetConnection(addr, remotePub)
 	assert.Nil(t, err)
 	assert.Equal(t, remotePub.String(), conn.RemotePublicKey().String())
-	assert.Equal(t, int32(1), net.DialCount())
+	assert.Equal(t, int32(1), n.DialCount())
 }
 
 func TestGetConnectionWithConnection(t *testing.T) {
-	net := net.NewNetworkMock()
-	net.SetDialDelayMs(50)
-	net.SetDialResult(nil)
-	cPool := NewConnectionPool(net, generatePublicKey())
+	n := net.NewNetworkMock()
+	n.SetDialDelayMs(50)
+	n.SetDialResult(nil)
+	cPool := NewConnectionPool(n, generatePublicKey())
 	remotePub := generatePublicKey()
 	addr := "1.1.1.1"
-	cPool.GetConnection(addr, remotePub)
 	conn, err := cPool.GetConnection(addr, remotePub)
 	assert.Nil(t, err)
 	assert.Equal(t, remotePub.String(), conn.RemotePublicKey().String())
-	assert.Equal(t, int32(1), net.DialCount())
+	assert.Equal(t, int32(1), n.DialCount())
 }
 
 func TestGetConnectionWithError(t *testing.T) {
-	net := net.NewNetworkMock()
-	net.SetDialDelayMs(50)
+	n := net.NewNetworkMock()
+	n.SetDialDelayMs(50)
 	eErr := errors.New("err")
-	net.SetDialResult(eErr)
-	cPool := NewConnectionPool(net, generatePublicKey())
+	n.SetDialResult(eErr)
+	cPool := NewConnectionPool(n, generatePublicKey())
 	remotePub := generatePublicKey()
 	addr := "1.1.1.1"
 	conn, aErr := cPool.GetConnection(addr, remotePub)
 	assert.Equal(t, eErr, aErr)
 	assert.Nil(t, conn)
-	assert.Equal(t, int32(1), net.DialCount())
+	assert.Equal(t, int32(1), n.DialCount())
 }
 
 func TestGetConnectionDuringDial(t *testing.T) {
@@ -112,7 +112,7 @@ func TestRemoteConnectionWithNoConnection(t *testing.T) {
 	cPool := NewConnectionPool(n, generatePublicKey())
 	rConn := net.NewConnectionMock(remotePub)
 	rConn.SetSession(net.NewSessionMock(remotePub))
-	cPool.newRemoteConn <- net.NewConnectionEvent{rConn, node.EmptyNode}
+	cPool.OnNewConnection(net.NewConnectionEvent{rConn, node.EmptyNode})
 	time.Sleep(50 * time.Millisecond)
 	conn, err := cPool.GetConnection(addr, remotePub)
 	assert.Equal(t, remotePub.String(), conn.RemotePublicKey().String())
@@ -140,7 +140,7 @@ func TestRemoteConnectionWithExistingConnection(t *testing.T) {
 	lConn, _ := cPool.GetConnection(addr, remotePub)
 	rConn := net.NewConnectionMock(remotePub)
 	rConn.SetSession(net.NewSessionMock(remotePub))
-	cPool.newRemoteConn <- net.NewConnectionEvent{rConn, node.EmptyNode}
+	cPool.OnNewConnection(net.NewConnectionEvent{rConn, node.EmptyNode})
 	time.Sleep(20 * time.Millisecond)
 	assert.Equal(t, remotePub.String(), lConn.RemotePublicKey().String())
 	assert.Equal(t, int32(1), n.DialCount())
@@ -156,7 +156,7 @@ func TestRemoteConnectionWithExistingConnection(t *testing.T) {
 	lConn, _ = cPool.GetConnection(addr, remotePub)
 	rConn = net.NewConnectionMock(remotePub)
 	rConn.SetSession(net.NewSessionMock(remotePub))
-	cPool.newRemoteConn <- net.NewConnectionEvent{rConn, node.EmptyNode}
+	cPool.OnNewConnection(net.NewConnectionEvent{rConn, node.EmptyNode})
 	time.Sleep(20 * time.Millisecond)
 	assert.Equal(t, remotePub.String(), lConn.RemotePublicKey().String())
 	assert.Equal(t, int32(2), n.DialCount())
@@ -237,15 +237,16 @@ func TestClosedConnection(t *testing.T) {
 	remotePub := generatePublicKey()
 	addr := "1.1.1.1"
 
+	nMock.SubscribeClosingConnections(cPool.OnClosedConnection)
 	// create connection
 	conn, _ := cPool.GetConnection(addr, remotePub)
 
 	// report that the connection was closed
 	nMock.PublishClosingConnection(conn)
-	time.Sleep(20 * time.Millisecond)
 
 	// query same connection and assert that it's a new instance
 	conn2, _ := cPool.GetConnection(addr, remotePub)
+
 	assert.NotEqual(t, conn.ID(), conn2.ID())
 	assert.Equal(t, int32(2), nMock.DialCount())
 }
@@ -275,7 +276,7 @@ func TestRandom(t *testing.T) {
 				rConn := net.NewConnectionMock(peer.key)
 				sID := p2pcrypto.NewRandomPubkey()
 				rConn.SetSession(net.NewSessionMock(sID))
-				cPool.newRemoteConn <- net.NewConnectionEvent{rConn, node.EmptyNode}
+				cPool.OnNewConnection(net.NewConnectionEvent{rConn, node.EmptyNode})
 			}()
 		} else if r == 1 {
 			go func() {
@@ -298,4 +299,62 @@ func TestRandom(t *testing.T) {
 			break
 		}
 	}
+}
+
+func TestConnectionPool_GetConnectionIfExists(t *testing.T) {
+	n := net.NewNetworkMock()
+	addr := "1.1.1.1"
+	cPool := NewConnectionPool(n, generatePublicKey())
+
+	pk, err := p2pcrypto.NewPublicKeyFromBase58("7gd5cD8ZanFaqnMHZrgUsUjDeVxMTxfpnu4gDPS69pBU")
+	assert.NoError(t, err)
+
+	conn := net.NewConnectionMock(pk)
+	conn.SetSession(net.NewSessionMock(p2pcrypto.NewRandomPubkey()))
+
+	nd := node.New(pk, addr)
+
+	cPool.OnNewConnection(net.NewConnectionEvent{conn, nd})
+
+	getcon, err := cPool.GetConnectionIfExists(pk)
+
+	require.NoError(t, err)
+	require.Equal(t, getcon, conn)
+	require.Equal(t, int(n.DialCount()), 0)
+}
+
+func TestConnectionPool_GetConnectionIfExists_Concurrency(t *testing.T) {
+	n := net.NewNetworkMock()
+	addr := "1.1.1.1"
+	cPool := NewConnectionPool(n, generatePublicKey())
+
+	pk, err := p2pcrypto.NewPublicKeyFromBase58("7gd5cD8ZanFaqnMHZrgUsUjDeVxMTxfpnu4gDPS69pBU")
+	assert.NoError(t, err)
+
+	conn := net.NewConnectionMock(pk)
+	conn.SetSession(net.NewSessionMock(p2pcrypto.NewRandomPubkey()))
+
+	nd := node.New(pk, addr)
+
+	cPool.OnNewConnection(net.NewConnectionEvent{conn, nd})
+
+	i := 10
+	done := make(chan struct{}, i)
+
+	for j := 0; j < i; j++ {
+
+		go func() {
+			getcon, err := cPool.GetConnectionIfExists(pk)
+			require.NoError(t, err)
+			require.Equal(t, getcon, conn)
+			require.Equal(t, int(n.DialCount()), 0)
+			done <- struct{}{}
+		}()
+
+	}
+
+	for ; i > 0; i-- {
+		<-done
+	}
+
 }

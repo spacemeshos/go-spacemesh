@@ -4,6 +4,9 @@ go: 1.11.x
 
 env: GO111MODULE=on
 
+services:
+  - docker
+
 # for some reason /usr/local is owned by a different user in travis, so we transfer ownership to the current user:
 before_install: sudo chown -R $(whoami) /usr/local
 
@@ -23,10 +26,16 @@ jobs:
     script:
       - make genproto
       - make test
-  - name: test-tidy
+  - name: test-tidy-fmt
     script:
       - make genproto
       - make test-tidy
+      - make test-fmt
+  - stage: docker-push
+    name: "Push to dockerHub"
+    script: 
+      - make dockerpush
+    if: branch = develop AND type = push
 
 cache:
   directories:

@@ -2,11 +2,12 @@ package timesync
 
 import (
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/crypto"
-	"github.com/spacemeshos/go-spacemesh/p2p/config"
-	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/timesync/config"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestCheckSystemClockDrift(t *testing.T) {

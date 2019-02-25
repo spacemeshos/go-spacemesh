@@ -23,6 +23,20 @@ func init() {
 		"config", "c", config.BaseConfig.ConfigFile, "Set Load configuration from file")
 	RootCmd.PersistentFlags().StringVarP(&config.BaseConfig.DataDir, "data-folder", "d",
 		config.BaseConfig.DataDir, "Specify data directory for spacemesh")
+	RootCmd.PersistentFlags().BoolVar(&config.TestMode, "test-mode",
+		config.TestMode, "Initialize testing features")
+	RootCmd.PersistentFlags().BoolVar(&config.CollectMetrics, "metrics",
+		config.CollectMetrics, "collect node metrics")
+	RootCmd.PersistentFlags().IntVar(&config.MetricsPort, "metrics-port",
+		config.MetricsPort, "metric server port")
+	RootCmd.PersistentFlags().StringVar(&config.OracleServer, "oracle_server",
+		config.OracleServer, "The oracle server url. (temporary) ")
+	RootCmd.PersistentFlags().Uint64Var(&config.OracleServerWorldId, "oracle_server_worldid",
+		config.OracleServerWorldId, "The worldid to use with the oracle server (temporary) ")
+	RootCmd.PersistentFlags().StringVar(&config.GenesisTime, "genesis-time",
+		config.GenesisTime, "Time of the genesis layer in 2019-13-02T17:02:00+00:00 format")
+	RootCmd.PersistentFlags().IntVar(&config.LayerDurationSec, "layer-duration-sec",
+		config.LayerDurationSec, "Duration between layers in seconds")
 	/** ======================== P2P Flags ========================== **/
 	RootCmd.PersistentFlags().IntVar(&config.P2P.SecurityParam, "security-param",
 		config.P2P.SecurityParam, "Consensus protocol k security param")
@@ -40,7 +54,7 @@ func init() {
 		config.P2P.NodeID, "Load node data by id (pub key) from local store")
 	RootCmd.PersistentFlags().BoolVar(&config.P2P.NewNode, "new-node",
 		config.P2P.NewNode, "Load node data by id (pub key) from local store")
-    RootCmd.PersistentFlags().IntVar(&config.P2P.BufferSize, "buffer-size",
+	RootCmd.PersistentFlags().IntVar(&config.P2P.BufferSize, "buffer-size",
 		config.P2P.BufferSize, "Size of the messages handler's buffer")
 	RootCmd.PersistentFlags().BoolVar(&config.P2P.SwarmConfig.Gossip, "gossip",
 		config.P2P.SwarmConfig.Gossip, "should we start a gossiping node?")
@@ -54,14 +68,14 @@ func init() {
 		config.P2P.SwarmConfig.RoutingTableAlpha, "Number of random connections")
 	RootCmd.PersistentFlags().StringSliceVar(&config.P2P.SwarmConfig.BootstrapNodes, "bootnodes",
 		config.P2P.SwarmConfig.BootstrapNodes, "Number of random connections")
-	RootCmd.PersistentFlags().DurationVar(&config.P2P.TimeConfig.MaxAllowedDrift, "max-allowed-time-drift",
-		config.P2P.TimeConfig.MaxAllowedDrift, "When to close the app until user resolves time sync problems")
-	RootCmd.PersistentFlags().IntVar(&config.P2P.TimeConfig.NtpQueries, "ntp-queries",
-		config.P2P.TimeConfig.NtpQueries, "Number of ntp queries to do")
-	RootCmd.PersistentFlags().DurationVar(&config.P2P.TimeConfig.DefaultTimeoutLatency, "default-timeout-latency",
-		config.P2P.TimeConfig.DefaultTimeoutLatency, "Default timeout to ntp query")
-	RootCmd.PersistentFlags().DurationVar(&config.P2P.TimeConfig.RefreshNtpInterval, "refresh-ntp-interval",
-		config.P2P.TimeConfig.RefreshNtpInterval, "Refresh intervals to ntp")
+	RootCmd.PersistentFlags().DurationVar(&config.TIME.MaxAllowedDrift, "max-allowed-time-drift",
+		config.TIME.MaxAllowedDrift, "When to close the app until user resolves time sync problems")
+	RootCmd.PersistentFlags().IntVar(&config.TIME.NtpQueries, "ntp-queries",
+		config.TIME.NtpQueries, "Number of ntp queries to do")
+	RootCmd.PersistentFlags().DurationVar(&config.TIME.DefaultTimeoutLatency, "default-timeout-latency",
+		config.TIME.DefaultTimeoutLatency, "Default timeout to ntp query")
+	RootCmd.PersistentFlags().DurationVar(&config.TIME.RefreshNtpInterval, "refresh-ntp-interval",
+		config.TIME.RefreshNtpInterval, "Refresh intervals to ntp")
 
 	/** ======================== API Flags ========================== **/
 	// StartJSONApiServerFlag determines if json api server should be started
@@ -78,6 +92,18 @@ func init() {
 	// GrpcServerPortFlag determines the grpc server local listening port
 	RootCmd.PersistentFlags().IntVar(&config.API.GrpcServerPort, "grpc-port",
 		config.API.GrpcServerPort, "GRPC api server port")
+
+	/**========================Hare Flags ========================== **/
+
+	// N determines the size of the hare committee
+	RootCmd.PersistentFlags().IntVar(&config.HARE.N, "hare-committee-size",
+		config.HARE.N, "Size of Hare committee")
+	// F determines the max number of adversaries in the Hare committee
+	RootCmd.PersistentFlags().IntVar(&config.HARE.F, "hare-max-adversaries",
+		config.HARE.F, "Max number of adversaries in the Hare committee")
+	// RoundDuration determines the duration of a round in the Hare protocol
+	RootCmd.PersistentFlags().DurationVar(&config.HARE.RoundDuration, "hare-round-duration-ms",
+		config.HARE.RoundDuration, "Duration of round in the Hare protocol")
 
 	/**========================Consensus Flags ========================== **/
 	//todo: add this here

@@ -2,6 +2,8 @@ package net
 
 import (
 	"errors"
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"time"
 
@@ -12,8 +14,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/net/wire"
-	"gopkg.in/op/go-logging.v1"
-	"sync/atomic"
 )
 
 var (
@@ -53,8 +53,8 @@ type Connection interface {
 // FormattedConnection is an io.Writer and an io.Closer
 // A network connection supporting full-duplex messaging
 type FormattedConnection struct {
-	logger *logging.Logger
 	// metadata for logging / debugging
+	logger     log.Log
 	id         string // uuid for logging
 	created    time.Time
 	remotePub  p2pcrypto.PublicKey
@@ -64,13 +64,13 @@ type FormattedConnection struct {
 	networker  networker      // network context
 	session    NetworkSession
 	closeOnce  sync.Once
-	closed     int32
+	closed     bool
 }
 
 type networker interface {
 	HandlePreSessionIncomingMessage(c Connection, msg []byte) error
 	EnqueueMessage(ime IncomingMessageEvent)
-	SubscribeClosingConnections() chan Connection
+	SubscribeClosingConnections(func(Connection))
 	publishClosingConnection(c Connection)
 	NetworkID() int8
 }
@@ -82,7 +82,7 @@ type readWriteCloseAddresser interface {
 
 // Create a new connection wrapping a net.Conn with a provided connection manager
 func newConnection(conn readWriteCloseAddresser, netw networker, formatter wire.Formatter,
-	remotePub p2pcrypto.PublicKey, session NetworkSession, log *logging.Logger) *FormattedConnection {
+	remotePub p2pcrypto.PublicKey, session NetworkSession, log log.Log) *FormattedConnection {
 
 	// todo parametrize channel size - hard-coded for now
 	connection := &FormattedConnection{
@@ -95,7 +95,6 @@ func newConnection(conn readWriteCloseAddresser, netw networker, formatter wire.
 		networker:  netw,
 		session:    session,
 		closeChan:  make(chan struct{}),
-		closed:     0,
 	}
 
 	connection.formatter.Pipe(conn)
@@ -150,26 +149,32 @@ func (c *FormattedConnection) incomingChannel() chan []byte {
 // data is copied over so caller can get rid of the data
 // Concurrency: can be called from any go routine
 func (c *FormattedConnection) Send(m []byte) error {
-	return c.formatter.Out(m)
+	err := c.formatter.Out(m)
+	if err != nil {
+		return err
+	}
+	metrics.PeerRecv.With(metrics.PeerIdLabel, c.remotePub.String()).Add(float64(len(m)))
+	return nil
 }
 
 // Close closes the connection (implements io.Closer). It is go safe.
 func (c *FormattedConnection) Close() {
 	c.closeOnce.Do(func() {
-		atomic.AddInt32(&c.closed, 1)
-		c.closeChan <- struct{}{}
+		close(c.closeChan)
 	})
 }
 
 // Closed Reports whether the connection was closed. It is go safe.
 func (c *FormattedConnection) Closed() bool {
-	return atomic.LoadInt32(&c.closed) > 0
+	return c.closed
 }
 
 func (c *FormattedConnection) shutdown(err error) {
-	c.logger.Info("(%v) shutdown. id=%s err=%v", c.remotePub.String(), c.id, err)
+	c.closed = true
+	if err != ErrConnectionClosed {
+		c.networker.publishClosingConnection(c)
+	}
 	c.formatter.Close()
-	c.networker.publishClosingConnection(c)
 }
 
 // Push outgoing message to the connections
@@ -182,7 +187,6 @@ Loop:
 	for {
 		select {
 		case msg, ok := <-c.formatter.In():
-
 			if !ok { // chan closed
 				err = ErrClosedIncomingChannel
 				break Loop
@@ -194,6 +198,7 @@ Loop:
 					break Loop
 				}
 			} else {
+				metrics.PeerRecv.With(metrics.PeerIdLabel, c.remotePub.String()).Add(float64(len(msg)))
 				c.publish(msg)
 			}
 

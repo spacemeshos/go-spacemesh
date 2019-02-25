@@ -8,7 +8,7 @@ message SimpleMessage {
 }
 
 message AccountId {
-    bytes address =1;
+    string address =1;
 }
 
 message TransferFunds {
@@ -19,10 +19,17 @@ message TransferFunds {
 }
 
 message SignedTransaction {
-    bytes txData = 1;
+    string srcAddress   = 1;
+    string dstAddress   = 2;
+    string amount       = 3;
+    string nonce        = 4;
 }
 
-service SpaceMeshService {
+message BroadcastMessage {
+    string Data = 1;
+}
+
+service SpacemeshService {
     rpc Echo(SimpleMessage) returns (SimpleMessage) {
         option (google.api.http) = {
           post: "/v1/example/echo"
@@ -44,6 +51,12 @@ service SpaceMeshService {
     rpc SubmitTransaction(SignedTransaction) returns (SimpleMessage) {
         option (google.api.http) = {
           post: "/v1/submittransaction"
+          body: "*"
+        };
+    }
+    rpc Broadcast(BroadcastMessage) returns (SimpleMessage) {
+        option (google.api.http) = {
+          post: "/v1/broadcast"
           body: "*"
         };
     }

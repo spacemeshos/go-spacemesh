@@ -3,36 +3,36 @@ package mesh
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"sync"
-	"sync/atomic"
-	"time"
 )
 
-type layerHandler struct {
-	ch           chan *Block
-	layer        LayerID
-	pendingCount int32
+type layerMutex struct {
+	m            sync.Mutex
+	layerWorkers uint32
 }
 
 type meshDB struct {
+	log.Log
 	layers             database.DB
 	blocks             database.DB
 	contextualValidity database.DB //map blockId to contextualValidation state of block
-	orphanBlocks       database.DB
+	orphanBlocks       map[LayerID]map[BlockID]struct{}
 	orphanBlockCount   int32
-	layerHandlers      map[LayerID]*layerHandler
+	layerMutex         map[LayerID]*layerMutex
 	lhMutex            sync.Mutex
 }
 
-func NewMeshDB(layers database.DB, blocks database.DB, validity database.DB, orphans database.DB) *meshDB {
+func NewMeshDB(layers, blocks, validity database.DB, log log.Log) *meshDB {
 	ll := &meshDB{
+		Log:                log,
 		blocks:             blocks,
 		layers:             layers,
 		contextualValidity: validity,
-		orphanBlocks:       orphans,
-		layerHandlers:      make(map[LayerID]*layerHandler),
+		orphanBlocks:       make(map[LayerID]map[BlockID]struct{}),
+		layerMutex:         make(map[LayerID]*layerMutex),
 	}
 	return ll
 }
@@ -41,13 +41,18 @@ func (m *meshDB) Close() {
 	m.blocks.Close()
 	m.layers.Close()
 	m.contextualValidity.Close()
-	m.orphanBlocks.Close()
+
 }
 
 func (m *meshDB) getLayer(index LayerID) (*Layer, error) {
 	ids, err := m.layers.Get(index.ToBytes())
 	if err != nil {
-		return nil, errors.New("error getting layer from database ")
+		return nil, fmt.Errorf("error getting layer %v from database ", index)
+	}
+
+	l := NewLayer(LayerID(index))
+	if len(ids) == 0 {
+		return l, nil
 	}
 
 	blockIds, err := bytesToBlockIds(ids)
@@ -57,24 +62,26 @@ func (m *meshDB) getLayer(index LayerID) (*Layer, error) {
 
 	blocks, err := m.getLayerBlocks(blockIds)
 	if err != nil {
-		return nil, errors.New("could not get all blocks from database ")
+		return nil, errors.New("could not get all blocks from database " + err.Error())
 	}
 
-	l := NewLayer(LayerID(index))
 	l.SetBlocks(blocks)
 
 	return l, nil
 }
 
+// addBlock adds a new block to block DB and updates the correct layer with the new block
+// if this is the first occurence of the layer a new layer object will be inserted into layerDB as well
 func (m *meshDB) addBlock(block *Block) error {
 	_, err := m.blocks.Get(block.ID().ToBytes())
 	if err == nil {
 		log.Debug("block ", block.ID(), " already exists in database")
 		return errors.New("block " + string(block.ID()) + " already exists in database")
 	}
-
-	layerHandler := m.getLayerHandler(block.LayerIndex, 1)
-	layerHandler.ch <- block
+	err = m.writeBlock(block)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -106,36 +113,57 @@ func (m *meshDB) setContextualValidity(id BlockID, valid bool) error {
 	return nil
 }
 
-//todo this overwrites the previous value if it exists
-func (m *meshDB) addLayer(layer *Layer) error {
-	layerHandler := m.getLayerHandler(layer.index, int32(len(layer.blocks)))
-	ids := make(map[BlockID]bool)
-	for _, b := range layer.blocks {
-		ids[b.Id] = true
-	}
-
-	//add blocks to mDB
-	for _, b := range layer.blocks {
-		layerHandler.ch <- b
-	}
-
-	w, err := blockIdsAsBytes(ids)
+func (m *meshDB) writeBlock(bl *Block) error {
+	bytes, err := BlockAsBytes(*bl)
 	if err != nil {
-		//todo recover
-		return errors.New("could not encode layer block ids")
+		return fmt.Errorf("could not encode bl")
+
+	}
+	if b, err := m.blocks.Get(bl.ID().ToBytes()); err == nil && b != nil {
+		return fmt.Errorf("bl %v already in database ", bl.ID())
 	}
 
-	m.layers.Put(layer.Index().ToBytes(), w)
+	if err := m.blocks.Put(bl.ID().ToBytes(), bytes); err != nil {
+		return fmt.Errorf("could not add bl to %v databacse %v", bl.ID(), err)
+	}
+
+	m.updateLayerWithBlock(bl)
 	return nil
 }
 
-func (m *meshDB) updateLayerIds(block *Block) error {
-	ids, err := m.layers.Get(block.LayerIndex.ToBytes())
-	blockIds, err := bytesToBlockIds(ids)
-	if err != nil {
-		return errors.New("could not get all blocks from database ")
+//todo this overwrites the previous value if it exists
+func (m *meshDB) addLayer(layer *Layer) error {
+	if len(layer.blocks) == 0 {
+		m.layers.Put(layer.Index().ToBytes(), []byte{})
+		return nil
 	}
 
+	//add blocks to mDB
+	for _, bl := range layer.blocks {
+		m.writeBlock(bl)
+	}
+
+	return nil
+}
+
+func (m *meshDB) updateLayerWithBlock(block *Block) error {
+	lm := m.getLayerMutex(block.LayerIndex)
+	defer m.endLayerWorker(block.LayerIndex)
+	lm.m.Lock()
+	defer lm.m.Unlock()
+	ids, err := m.layers.Get(block.LayerIndex.ToBytes())
+	var blockIds map[BlockID]bool
+	if err != nil {
+		//layer doesnt exist, need to insert new layer
+		ids = []byte{}
+		blockIds = make(map[BlockID]bool)
+	} else {
+		blockIds, err = bytesToBlockIds(ids)
+		if err != nil {
+			return errors.New("could not get all blocks from database ")
+		}
+	}
+	m.Info("added block %v to layer %v", block.ID(), block.LayerIndex)
 	blockIds[block.ID()] = true
 	w, err := blockIdsAsBytes(blockIds)
 	if err != nil {
@@ -148,10 +176,10 @@ func (m *meshDB) updateLayerIds(block *Block) error {
 func (m *meshDB) getLayerBlocks(ids map[BlockID]bool) ([]*Block, error) {
 
 	blocks := make([]*Block, 0, len(ids))
-	for k, _ := range ids {
+	for k := range ids {
 		block, err := m.getBlock(k)
 		if err != nil {
-			return nil, errors.New("could not retrive block " + string(k))
+			return nil, errors.New("could not retrieve block " + fmt.Sprint(k) + " " + err.Error())
 		}
 		blocks = append(blocks, block)
 	}
@@ -159,54 +187,31 @@ func (m *meshDB) getLayerBlocks(ids map[BlockID]bool) ([]*Block, error) {
 	return blocks, nil
 }
 
-func (m *meshDB) handleLayerBlocks(ll *layerHandler) {
-	for {
-		select {
-		case bl := <-ll.ch:
-			atomic.AddInt32(&ll.pendingCount, -1)
-			bytes, err := BlockAsBytes(*bl)
-			if err != nil {
-				log.Error("could not encode bl")
-				continue
-			}
-			if b, err := m.blocks.Get(bl.ID().ToBytes()); err == nil && b != nil {
-				log.Error("bl ", bl, " already in database ")
-				continue
-			}
-
-			if err := m.blocks.Put(bl.ID().ToBytes(), bytes); err != nil {
-				log.Error("could not add bl to ", bl, " database ", err)
-				continue
-			}
-
-			m.updateLayerIds(bl)
-			m.tryDeleteHandler(ll) //try delete handler when done to avoid leak
-		default:
-			time.Sleep(50 * time.Millisecond)
-		}
-	}
-}
-
 //try delete layer Handler (deletes if pending pendingCount is 0)
-func (m *meshDB) tryDeleteHandler(ll *layerHandler) {
+func (m *meshDB) endLayerWorker(index LayerID) {
 	m.lhMutex.Lock()
-	if atomic.LoadInt32(&ll.pendingCount) == 0 {
-		delete(m.layerHandlers, ll.layer)
+	defer m.lhMutex.Unlock()
+
+	ll, found := m.layerMutex[index]
+	if !found {
+		panic("trying to double close layer mutex")
 	}
-	m.lhMutex.Unlock()
+
+	ll.layerWorkers--
+	if ll.layerWorkers == 0 {
+		delete(m.layerMutex, index)
+	}
 }
 
 //returns the existing layer Handler (crates one if doesn't exist)
-func (m *meshDB) getLayerHandler(index LayerID, counter int32) *layerHandler {
+func (m *meshDB) getLayerMutex(index LayerID) *layerMutex {
 	m.lhMutex.Lock()
 	defer m.lhMutex.Unlock()
-	ll, found := m.layerHandlers[index]
+	ll, found := m.layerMutex[index]
 	if !found {
-		ll = &layerHandler{pendingCount: counter, ch: make(chan *Block)}
-		m.layerHandlers[index] = ll
-		go m.handleLayerBlocks(ll)
-	} else {
-		atomic.AddInt32(&ll.pendingCount, counter)
+		ll = &layerMutex{}
+		m.layerMutex[index] = ll
 	}
+	ll.layerWorkers++
 	return ll
 }

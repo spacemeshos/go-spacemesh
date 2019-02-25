@@ -19,19 +19,20 @@ type NodeTestInstance interface {
 	LocalNode() *node.LocalNode // this holds the keys
 }
 
-// IntegrationTestSuite is a suite which bootstraps a network according to the given params and lets you run actions on this network.
+// IntegrationTestSuite is a suite which bootstraps a network according to the given params
+// and lets you run actions on this network.
 // you must set the params before running the suite.
 type IntegrationTestSuite struct {
 	suite.Suite
 
-	BootstrapNodesCount int
+	BootstrapNodesCount   int
 	BootstrappedNodeCount int
-	NeighborsCount int
+	NeighborsCount        int
 
 	BeforeHook func(idx int, s NodeTestInstance)
-	AfterHook func(idx int, s NodeTestInstance)
+	AfterHook  func(idx int, s NodeTestInstance)
 
-	boot  []*swarm
+	boot      []*swarm
 	Instances []*swarm
 }
 
@@ -50,7 +51,8 @@ func (its *IntegrationTestSuite) SetupSuite() {
 		if its.BeforeHook != nil {
 			its.BeforeHook(i, boot[i])
 		}
-		boot[i].Start()
+		_ = boot[i].Start() // ignore error ?
+
 		if its.AfterHook != nil {
 			its.AfterHook(i, boot[i])
 		}
@@ -78,7 +80,10 @@ func (its *IntegrationTestSuite) SetupSuite() {
 			if its.BeforeHook != nil {
 				its.BeforeHook(i, swarm[i])
 			}
-			swarm[i].Start()
+
+		_:
+			swarm[i].Start() // ignore error?
+
 			err := swarm[i].waitForBoot()
 			if err != nil {
 				its.Require().NoError(err)
@@ -100,17 +105,22 @@ func (its *IntegrationTestSuite) SetupSuite() {
 	its.boot = boot
 }
 
+func (its *IntegrationTestSuite) TearDownSuite() {
+	_, _ = its.ForAllAsync(context.Background(), func(idx int, s NodeTestInstance) error {
+		s.Shutdown()
+		return nil
+	})
+}
 
 func createP2pInstance(t testing.TB, config config.Config) *swarm {
 	port, err := node.GetUnboundedPort()
 	assert.Nil(t, err)
 	config.TCPPort = port
-	p, err := newSwarm(context.TODO(), config, true, true)
+	p, err := newSwarm(context.TODO(), config, true, false)
 	assert.Nil(t, err)
 	assert.NotNil(t, p)
 	return p
 }
-
 
 func (its *IntegrationTestSuite) ForAll(f func(idx int, s NodeTestInstance) error, filter []int) []error {
 	e := make([]error, 0)
@@ -121,7 +131,17 @@ swarms:
 				continue swarms
 			}
 		}
-		e = append(e, f(i,s))
+		e = append(e, f(i, s))
+	}
+
+boots:
+	for i, s := range its.boot {
+		for _, j := range filter {
+			if j == i {
+				continue boots
+			}
+		}
+		e = append(e, f(i, s))
 	}
 	return e
 }
@@ -162,7 +182,6 @@ func Errors(arr []error) []int {
 	}
 	return idx
 }
-
 
 func StringIdentifiers(boot ...*swarm) []string {
 	s := make([]string, len(boot))

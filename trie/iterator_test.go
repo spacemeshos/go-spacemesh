@@ -24,7 +24,6 @@ import (
 	"testing"
 
 	"github.com/spacemeshos/go-spacemesh/common"
-
 )
 
 func TestIterator(t *testing.T) {

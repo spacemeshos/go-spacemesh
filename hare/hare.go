@@ -4,6 +4,8 @@ import (
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
+	"github.com/spacemeshos/go-spacemesh/hare/metrics"
+	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"sync"
@@ -20,22 +22,22 @@ type consensusFactory func(cfg config.Config, instanceId InstanceId, s *Set, ora
 
 // Consensus represents a consensus
 type Consensus interface {
-	IdentifiableInboxer
-
+	Id() InstanceId
 	Close()
 	CloseChannel() chan struct{}
 
 	Start() error
+	SetInbox(chan *pb.HareMessage)
 }
 
 // TerminationOutput is a result of a process terminated with output.
 type TerminationOutput interface {
-	Id() []byte
+	Id() InstanceId
 	Set() *Set
 }
 
 type orphanBlockProvider interface {
-	GetOrphanBlocks() []mesh.BlockID
+	GetUnverifiedLayerBlocks(layerId mesh.LayerID) ([]mesh.BlockID, error)
 }
 
 // Hare is an orchestrator that shoots consensus processes and collects their termination output
@@ -49,7 +51,7 @@ type Hare struct {
 
 	broker *Broker
 
-	sign   Signing
+	sign Signing
 
 	obp     orphanBlockProvider
 	rolacle Rolacle
@@ -69,7 +71,7 @@ type Hare struct {
 }
 
 // New returns a new Hare struct.
-func New(conf config.Config, p2p NetworkService, sign Signing, obp orphanBlockProvider, rolacle Rolacle, beginLayer chan mesh.LayerID) *Hare {
+func New(conf config.Config, p2p NetworkService, sign Signing, obp orphanBlockProvider, rolacle Rolacle, beginLayer chan mesh.LayerID, logger log.Log) *Hare {
 	h := new(Hare)
 	h.Closer = NewCloser()
 
@@ -78,7 +80,7 @@ func New(conf config.Config, p2p NetworkService, sign Signing, obp orphanBlockPr
 	h.network = p2p
 	h.beginLayer = beginLayer
 
-	h.broker = NewBroker(p2p)
+	h.broker = NewBroker(p2p, newEligibilityValidator(newHareOracle(rolacle, conf.N), logger))
 
 	h.sign = sign
 
@@ -95,15 +97,15 @@ func New(conf config.Config, p2p NetworkService, sign Signing, obp orphanBlockPr
 	h.outputs = make(map[mesh.LayerID][]mesh.BlockID, h.bufferSize) //  we keep results about LayerBuffer past layers
 
 	h.factory = func(conf config.Config, instanceId InstanceId, s *Set, oracle Rolacle, signing Signing, p2p NetworkService, terminationReport chan TerminationOutput) Consensus {
-		return NewConsensusProcess(conf, instanceId, s, oracle, signing, p2p, terminationReport)
+		return NewConsensusProcess(conf, instanceId, s, oracle, signing, p2p, terminationReport, logger)
 	}
 
 	return h
 }
 
-func (h *Hare) isTooLate(id mesh.LayerID) bool {
+func (h *Hare) isTooLate(id InstanceId) bool {
 	h.layerLock.RLock()
-	if int(id) < int(h.lastLayer)-h.bufferSize {
+	if int64(id) < int64(h.lastLayer)-int64(h.bufferSize) { // bufferSize>=0
 		h.layerLock.RUnlock()
 		return true
 	}
@@ -115,9 +117,9 @@ func (h *Hare) isTooLate(id mesh.LayerID) bool {
 var ErrTooLate = errors.New("consensus process %v finished too late")
 
 func (h *Hare) collectOutput(output TerminationOutput) error {
-	id := common.BytesToUint32(output.Id())
+	id := output.Id()
 
-	if h.isTooLate(mesh.LayerID(id)) {
+	if h.isTooLate(id) {
 		return ErrTooLate
 	}
 
@@ -131,7 +133,7 @@ func (h *Hare) collectOutput(output TerminationOutput) error {
 	h.mu.Lock()
 	if len(h.outputs) == h.bufferSize {
 		for k := range h.outputs {
-			if h.isTooLate(k) {
+			if h.isTooLate(InstanceId(k)) {
 				delete(h.outputs, k)
 			}
 		}
@@ -159,20 +161,28 @@ func (h *Hare) onTick(id mesh.LayerID) {
 	}
 
 	// retrieve set form orphan blocks
-	blocks := h.obp.GetOrphanBlocks()
+	blocks, err := h.obp.GetUnverifiedLayerBlocks(h.lastLayer)
+	if err != nil {
+		log.Error("No blocks for consensus on layer %v %v", id, err)
+		return
+	}
 
+	log.Info("received %v new blocks ", len(blocks))
 	set := NewEmptySet(len(blocks))
-
 	for _, b := range blocks {
 		// todo: figure out real type of blockid
 		set.Add(Value{NewBytes32(b.ToBytes())})
 	}
 
-	instid := InstanceId{NewBytes32(id.ToBytes())}
+	instid := InstanceId(id)
 
 	cp := h.factory(h.config, instid, set, h.rolacle, h.sign, h.network, h.outputChan)
-	cp.Start()
-	h.broker.Register(cp)
+	cp.SetInbox(h.broker.Register(cp.Id()))
+	e := cp.Start()
+	if e != nil {
+		log.Error("Could not start consensus process %v", e.Error())
+	}
+	metrics.TotalConsensusProcesses.Add(1)
 }
 
 var (
@@ -183,8 +193,24 @@ var (
 )
 
 // GetResults returns the hare output for a given LayerID. returns error if we don't have results yet.
+func (h *Hare) BlockingGetResult(id mesh.LayerID) ([]mesh.BlockID, error) {
+	if h.isTooLate(InstanceId(id)) {
+		return nil, ErrTooOld
+	}
+
+	h.mu.RLock()
+	blks, ok := h.outputs[id]
+	if !ok {
+		h.mu.RUnlock()
+		return nil, ErrTooEarly
+	}
+	h.mu.RUnlock()
+	return blks, nil
+}
+
+// GetResults returns the hare output for a given LayerID. returns error if we don't have results yet.
 func (h *Hare) GetResult(id mesh.LayerID) ([]mesh.BlockID, error) {
-	if h.isTooLate(id) {
+	if h.isTooLate(InstanceId(id)) {
 		return nil, ErrTooOld
 	}
 
@@ -202,6 +228,7 @@ func (h *Hare) outputCollectionLoop() {
 	for {
 		select {
 		case out := <-h.outputChan:
+			metrics.TotalConsensusProcesses.Add(-1)
 			err := h.collectOutput(out)
 			if err != nil {
 				log.Warning("Err collecting output from hare err: %v", err)

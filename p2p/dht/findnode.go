@@ -5,9 +5,9 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"sync"
 	"time"
@@ -35,7 +35,7 @@ type findNodeProtocol struct {
 	pending      map[crypto.UUID]chan findNodeResults
 	pendingMutex sync.RWMutex
 
-	ingressChannel chan service.Message
+	ingressChannel chan service.DirectMessage
 
 	log log.Log
 
@@ -52,7 +52,7 @@ func newFindNodeProtocol(service service.Service, rt RoutingTable) *findNodeProt
 	p := &findNodeProtocol{
 		rt:             rt,
 		pending:        make(map[crypto.UUID]chan findNodeResults),
-		ingressChannel: service.RegisterProtocol(protocol),
+		ingressChannel: service.RegisterDirectProtocol(protocol),
 		service:        service,
 	}
 
@@ -158,7 +158,7 @@ func (p *findNodeProtocol) readLoop() {
 			break
 		}
 
-		go func(msg service.Message) {
+		go func(msg service.DirectMessage) {
 
 			headers := &pb.FindNode{}
 			err := proto.Unmarshal(msg.Bytes(), headers)
@@ -168,7 +168,7 @@ func (p *findNodeProtocol) readLoop() {
 			}
 
 			if headers.Req {
-				p.handleIncomingRequest(msg.Sender().PublicKey(), headers.ReqID, headers.Payload)
+				p.handleIncomingRequest(msg.Sender(), headers.ReqID, headers.Payload)
 				return
 			}
 			reqid := headers.ReqID

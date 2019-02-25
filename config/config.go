@@ -5,10 +5,13 @@ import (
 	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
 	consensusConfig "github.com/spacemeshos/go-spacemesh/consensus/config"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
+	hareConfig "github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	p2pConfig "github.com/spacemeshos/go-spacemesh/p2p/config"
+	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spf13/viper"
 	"path/filepath"
+	"time"
 )
 
 const (
@@ -16,8 +19,8 @@ const (
 	defaultLogFileName     = "spacemesh.log"
 	defaultAccountFileName = "accounts"
 	defaultDataDirName     = "spacemesh"
-	defaultAppIntParam     = 20
-	defaultAppBoolParam    = 20
+	Genesis                = 0
+	GenesisId              = 420
 )
 
 var (
@@ -26,6 +29,7 @@ var (
 	defaultConfigFile = filepath.Join(defaultHomeDir, defaultConfigFileName)
 	defaultLogDir     = filepath.Join(defaultHomeDir, defaultLogFileName)
 	defaultAccountDir = filepath.Join(defaultHomeDir, defaultAccountFileName)
+	defaultTestMode   = false
 )
 
 // Config defines the top level configuration for a spacemesh node
@@ -34,6 +38,8 @@ type Config struct {
 	P2P        p2pConfig.Config       `mapstructure:"p2p"`
 	API        apiConfig.Config       `mapstructure:"api"`
 	CONSENSUS  consensusConfig.Config `mapstructure:"consensus"`
+	HARE       hareConfig.Config      `mapstructure:"hare"`
+	TIME       timeConfig.TimeConfig  `mapstructure:"time"`
 }
 
 // BaseConfig defines the default configuration options for spacemesh app
@@ -47,6 +53,17 @@ type BaseConfig struct {
 	LogDir string `mapstructure:"log-dir"`
 
 	AccountDir string `mapstructure:"account-dir"`
+
+	TestMode bool `mapstructure:"test-mode"`
+
+	CollectMetrics bool `mapstructure:"metrics"`
+	MetricsPort    int  `mapstructure:"metrics-port"`
+
+	OracleServer        string `mapstructure:"oracle_server"`
+	OracleServerWorldId uint64 `mapstructure:"oracle_server_worldid"`
+
+	GenesisTime      string `mapstructure:"genesis-time"`
+	LayerDurationSec int    `mapstructure:"layer-duration-sec"`
 }
 
 // DefaultConfig returns the default configuration for a spacemesh node
@@ -56,17 +73,26 @@ func DefaultConfig() Config {
 		P2P:        p2pConfig.DefaultConfig(),
 		API:        apiConfig.DefaultConfig(),
 		CONSENSUS:  consensusConfig.DefaultConfig(),
+		HARE:       hareConfig.DefaultConfig(),
+		TIME:       timeConfig.DefaultConfig(),
 	}
 }
 
 // DefaultBaseConfig returns a default configuration for spacemesh
 func defaultBaseConfig() BaseConfig {
 	return BaseConfig{
-		HomeDir:    defaultHomeDir,
-		DataDir:    defaultDataDir,
-		ConfigFile: defaultConfigFileName,
-		LogDir:     defaultLogDir,
-		AccountDir: defaultAccountDir,
+		HomeDir:             defaultHomeDir,
+		DataDir:             defaultDataDir,
+		ConfigFile:          defaultConfigFileName,
+		LogDir:              defaultLogDir,
+		AccountDir:          defaultAccountDir,
+		TestMode:            defaultTestMode,
+		CollectMetrics:      false,
+		MetricsPort:         1010,
+		OracleServer:        "http://localhost:3030",
+		OracleServerWorldId: 0,
+		GenesisTime:         time.Now().Format(time.RFC3339),
+		LayerDurationSec:    10,
 	}
 }
 

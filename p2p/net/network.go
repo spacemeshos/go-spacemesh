@@ -6,12 +6,11 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/delimited"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/version"
-	"gopkg.in/op/go-logging.v1"
 	"net"
 	"strconv"
 	"strings"
@@ -49,21 +48,21 @@ type ManagedConnection interface {
 type Net struct {
 	networkID int8
 	localNode *node.LocalNode
-	logger    *logging.Logger
+	logger    log.Log
 
 	tcpListener      net.Listener
 	tcpListenAddress *net.TCPAddr // Address to open connection: localhost:9999\
 
 	isShuttingDown bool
 
-	regNewRemoteConn []chan NewConnectionEvent
 	regMutex         sync.RWMutex
+	regNewRemoteConn []func(NewConnectionEvent)
+
+	clsMutex           sync.RWMutex
+	closingConnections []func(Connection)
 
 	queuesCount           uint
 	incomingMessagesQueue []chan IncomingMessageEvent
-
-	closingConnections []chan Connection
-	clsMutex           sync.RWMutex
 
 	config config.Config
 }
@@ -89,12 +88,12 @@ func NewNet(conf config.Config, localEntity *node.LocalNode) (*Net, error) {
 	n := &Net{
 		networkID:             conf.NetworkID,
 		localNode:             localEntity,
-		logger:                localEntity.Logger,
+		logger:                localEntity.Log,
 		tcpListenAddress:      tcpAddress,
-		regNewRemoteConn:      make([]chan NewConnectionEvent, 0),
+		regNewRemoteConn:      make([]func(NewConnectionEvent), 0, 3),
+		closingConnections:    make([]func(Connection), 0, 3),
 		queuesCount:           qcount,
 		incomingMessagesQueue: make([]chan IncomingMessageEvent, qcount, qcount),
-		closingConnections:    make([]chan Connection, 0),
 		config:                conf,
 	}
 
@@ -114,7 +113,7 @@ func NewNet(conf config.Config, localEntity *node.LocalNode) (*Net, error) {
 }
 
 // Logger returns a reference to logger
-func (n *Net) Logger() *logging.Logger {
+func (n *Net) Logger() log.Log {
 	return n.logger
 }
 
@@ -153,19 +152,17 @@ func (n *Net) IncomingMessages() []chan IncomingMessageEvent {
 	return n.incomingMessagesQueue
 }
 
-// SubscribeClosingConnections registers a channel where closing connections events are reported
-func (n *Net) SubscribeClosingConnections() chan Connection {
+// SubscribeClosingConnections registers a callback for a new connection event. all registered callbacks are called before moving.
+func (n *Net) SubscribeClosingConnections(f func(connection Connection)) {
 	n.clsMutex.Lock()
-	ch := make(chan Connection, 20) // todo: set a var for the buf size
-	n.closingConnections = append(n.closingConnections, ch)
+	n.closingConnections = append(n.closingConnections, f)
 	n.clsMutex.Unlock()
-	return ch
 }
 
 func (n *Net) publishClosingConnection(connection Connection) {
 	n.clsMutex.RLock()
-	for _, c := range n.closingConnections {
-		c <- connection
+	for _, f := range n.closingConnections {
+		f(connection)
 	}
 	n.clsMutex.RUnlock()
 }
@@ -258,13 +255,13 @@ func (n *Net) listen() error {
 }
 
 func (n *Net) acceptTCP() {
+	n.logger.Debug("Waiting for incoming connections...")
 	for {
-		n.logger.Debug("Waiting for incoming connections...")
 		netConn, err := n.tcpListener.Accept()
 		if err != nil {
 
 			if !n.isShuttingDown {
-				log.Error("Failed to accept connection request", err)
+				n.logger.Error("Failed to accept connection request %v", err)
 				//TODO only print to log and return? The node will continue running without the listener, doesn't sound healthy
 			}
 			return
@@ -279,24 +276,17 @@ func (n *Net) acceptTCP() {
 	}
 }
 
-// SubscribeOnNewRemoteConnections returns new channel where events of new remote connections are reported
-func (n *Net) SubscribeOnNewRemoteConnections() chan NewConnectionEvent {
+// SubscribeOnNewRemoteConnections registers a callback for a new connection event. all registered callbacks are called before moving.
+func (n *Net) SubscribeOnNewRemoteConnections(f func(event NewConnectionEvent)) {
 	n.regMutex.Lock()
-	ch := make(chan NewConnectionEvent)
-	n.regNewRemoteConn = append(n.regNewRemoteConn, ch)
+	n.regNewRemoteConn = append(n.regNewRemoteConn, f)
 	n.regMutex.Unlock()
-	return ch
 }
 
 func (n *Net) publishNewRemoteConnectionEvent(conn Connection, node node.Node) {
 	n.regMutex.RLock()
-	for _, c := range n.regNewRemoteConn {
-		select {
-		case c <- NewConnectionEvent{conn, node}:
-			continue
-		default:
-			// so we won't block on not listening chans
-		}
+	for _, f := range n.regNewRemoteConn {
+		f(NewConnectionEvent{conn, node})
 	}
 	n.regMutex.RUnlock()
 }
@@ -335,8 +325,6 @@ func (n *Net) HandlePreSessionIncomingMessage(c Connection, message []byte) erro
 	anode := node.New(c.RemotePublicKey(), remoteListeningAddress)
 
 	n.publishNewRemoteConnectionEvent(c, anode)
-	// TODO: @noam process message?
-	// Specifically -- check the network id and client version
 	return nil
 }
 
@@ -366,10 +354,9 @@ func (n *Net) verifyNetworkIDAndClientVersion(handshakeData *pb.HandshakeData) e
 
 func generateHandshakeMessage(session NetworkSession, networkID int8, localIncomingPort int, localPubkey p2pcrypto.PublicKey) ([]byte, error) {
 	handshakeData := &pb.HandshakeData{
-		Timestamp:            time.Now().Unix(),
-		ClientVersion:        config.ClientVersion,
-		NetworkID:            int32(networkID),
-		Port:                 uint32(localIncomingPort),
+		ClientVersion: config.ClientVersion,
+		NetworkID:     int32(networkID),
+		Port:          uint32(localIncomingPort),
 	}
 	handshakeMessage, err := proto.Marshal(handshakeData)
 	if err != nil {

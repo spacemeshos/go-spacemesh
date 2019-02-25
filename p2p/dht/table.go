@@ -3,8 +3,9 @@ package dht
 import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
-	"gopkg.in/op/go-logging.v1"
 )
 
 const (
@@ -103,7 +104,7 @@ type randomPeersReq struct {
 // Most recently-seen nodes appear in the top of their buckets while least-often seen nodes at the bottom
 type routingTableImpl struct {
 	//logger for this routing table usually the node logger
-	log *logging.Logger
+	log log.Log
 
 	// Local peer ID that holds this routing table
 	local node.DhtID
@@ -136,7 +137,7 @@ type routingTableImpl struct {
 }
 
 // NewRoutingTable creates a new routing table with a given bucket=size and local node node.DhtID
-func NewRoutingTable(bucketsize int, localID node.DhtID, log *logging.Logger) RoutingTable {
+func NewRoutingTable(bucketsize int, localID node.DhtID, log log.Log) RoutingTable {
 
 	// Create all our buckets.
 	buckets := []Bucket{NewBucket()}
@@ -192,10 +193,7 @@ func (rt *routingTableImpl) NearestPeers(req NearestPeersReq) {
 func (rt *routingTableImpl) Update(peer node.Node) {
 	cb := make(chan struct{})
 	rt.updateReqs <- PeerAndCallback{peer, cb}
-	select {
-	case <-cb:
-	default:
-	}
+	<-cb
 }
 
 func (rt *routingTableImpl) Remove(peer node.Node) {
@@ -304,6 +302,11 @@ func (rt *routingTableImpl) randomPeers(qty int) []node.Node {
 // or if its better in terms of latency and recent contact than out oldest contact in the right bucket.
 // this keeps fresh nodes at the top of the bucket and make sure we won't lose contact with the network and keep most healthy nodes.
 func (rt *routingTableImpl) update(p node.Node, cb chan struct{}) {
+	var added bool
+	defer func() {
+		rt.log.With().Debug("dht_update", log.String("node_id", p.String()), log.Bool("new", added))
+		close(cb)
+	}()
 
 	if rt.local.Equals(p.DhtID()) {
 		rt.log.Warning("Ignoring attempt to add local node to the routing table")
@@ -327,7 +330,7 @@ func (rt *routingTableImpl) update(p node.Node, cb chan struct{}) {
 	}
 
 	if p.Address() == "" {
-		rt.log.Errorf("Updated non-existing peer without an address pubkey: %v", p.PublicKey().String())
+		rt.log.Error("Updated non-existing peer without an address pubkey: %v", p.PublicKey().String())
 		return
 	}
 
@@ -341,13 +344,12 @@ func (rt *routingTableImpl) update(p node.Node, cb chan struct{}) {
 		if cpl == len(rt.buckets)-1 && cpl < BucketCount { // this is the bucket
 			rt.split()
 			// after split we check again in which bucket we should add peer.
-			rt.update(p, cb)
+			rt.update(p, make(chan struct{}))
 			return
 		} else {
 			// TODO: if bucket is full and can't be split ping oldest node and replace if it fails to answer
 			// TODO: save peer for replacement later
 			// for now assume we pinged last node and it answered until we get ping done.
-			close(cb)
 			return
 		}
 		// TODO: check latency metrics and replace if new node is better then oldest one.
@@ -355,9 +357,9 @@ func (rt *routingTableImpl) update(p node.Node, cb chan struct{}) {
 	}
 
 	// new node and bucket isn't full
+	metrics.DHTSize.Add(1)
 	bucket.PushFront(p)
-
-	close(cb)
+	added = true
 }
 
 func (rt *routingTableImpl) split() {

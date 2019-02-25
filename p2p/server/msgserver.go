@@ -5,7 +5,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-    "runtime"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -19,7 +19,7 @@ type Service interface {
 }
 
 type Message interface {
-	service.Message
+	service.DirectMessage
 	Data() service.Data
 }
 
@@ -37,25 +37,25 @@ type MessageServer struct {
 	pendingQueue       *list.List                              //queue of pending messages
 	resHandlers        map[uint64]func(msg []byte)             //response handlers by request ReqId
 	msgRequestHandlers map[MessageType]func(msg []byte) []byte //request handlers by request type
-	ingressChannel     chan service.Message                    //chan to relay messages into the server
+	ingressChannel     chan service.DirectMessage              //chan to relay messages into the server
 	requestLifetime    time.Duration                           //time a request can stay in the pending queue until evicted
 	workerCount        sync.WaitGroup
-    workerLimiter      chan int
+	workerLimiter      chan int
 	exit               chan struct{}
 }
 
-func NewMsgServer(network Service, name string, requestLifetime time.Duration, c chan service.Message, logger log.Log) *MessageServer {
+func NewMsgServer(network Service, name string, requestLifetime time.Duration, c chan service.DirectMessage, logger log.Log) *MessageServer {
 	p := &MessageServer{
 		Log:                logger,
 		name:               name,
 		resHandlers:        make(map[uint64]func(msg []byte)),
 		pendingQueue:       list.New(),
 		network:            network,
-        ingressChannel:     network.RegisterProtocolWithChannel(name, c),
+		ingressChannel:     network.RegisterDirectProtocolWithChannel(name, c),
 		msgRequestHandlers: make(map[MessageType]func(msg []byte) []byte),
 		requestLifetime:    requestLifetime,
 		exit:               make(chan struct{}),
-        workerLimiter:      make(chan int, runtime.NumCPU()),
+		workerLimiter:      make(chan int, runtime.NumCPU()),
 	}
 
 	go p.readLoop()
@@ -84,12 +84,12 @@ func (p *MessageServer) readLoop() {
 				break
 			}
 
-            p.workerLimiter <- 1
+			p.workerLimiter <- 1
 			p.workerCount.Add(1)
 			go func() {
 				defer p.workerCount.Done()
 				p.handleMessage(msg.(Message))
-                <-p.workerLimiter
+				<-p.workerLimiter
 			}()
 
 		}
@@ -130,7 +130,7 @@ func (p *MessageServer) removeFromPending(reqID uint64) {
 func (p *MessageServer) handleMessage(msg Message) {
 	data := msg.Data().(*service.DataMsgWrapper)
 	if data.Req {
-		p.handleRequestMessage(msg.Sender().PublicKey(), data)
+		p.handleRequestMessage(msg.Sender(), data)
 	} else {
 		p.handleResponseMessage(data)
 	}
@@ -153,7 +153,10 @@ func (p *MessageServer) handleResponseMessage(headers *service.DataMsgWrapper) {
 	p.pendMutex.Unlock()
 	p.removeFromPending(headers.ReqID)
 	if okFoo {
+		log.Debug("found response handler %v", headers.ReqID)
 		foo(headers.Payload)
+	} else {
+		log.Error("Cant find handler %v", headers.ReqID)
 	}
 }
 
@@ -173,6 +176,7 @@ func (p *MessageServer) SendRequest(msgType MessageType, payload []byte, address
 		p.removeFromPending(reqID)
 		return sendErr
 	}
+	p.Debug("sent request id: %v", reqID)
 	return nil
 }
 

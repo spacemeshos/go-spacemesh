@@ -50,11 +50,11 @@ func (builder *MessageBuilder) SetType(msgType MessageType) *MessageBuilder {
 }
 
 func (builder *MessageBuilder) SetInstanceId(id InstanceId) *MessageBuilder {
-	builder.inner.InstanceId = id.Bytes()
+	builder.inner.InstanceId = uint32(id)
 	return builder
 }
 
-func (builder *MessageBuilder) SetRoundCounter(k uint32) *MessageBuilder {
+func (builder *MessageBuilder) SetRoundCounter(k int32) *MessageBuilder {
 	builder.inner.K = k
 	return builder
 }

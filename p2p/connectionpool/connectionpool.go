@@ -1,12 +1,12 @@
 package connectionpool
 
 import (
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 
 	"bytes"
 	"errors"
-	"gopkg.in/op/go-logging.v1"
 	"sync"
 )
 
@@ -17,10 +17,10 @@ type dialResult struct {
 
 type networker interface {
 	Dial(address string, remotePublicKey p2pcrypto.PublicKey) (net.Connection, error) // Connect to a remote node. Can send when no error.
-	SubscribeOnNewRemoteConnections() chan net.NewConnectionEvent
+	SubscribeOnNewRemoteConnections(func(event net.NewConnectionEvent))
 	NetworkID() int8
-	SubscribeClosingConnections() chan net.Connection
-	Logger() *logging.Logger
+	SubscribeClosingConnections(func(net.Connection))
+	Logger() log.Log
 }
 
 // ConnectionPool stores all net.Connections and make them available to all users of net.Connection.
@@ -36,33 +36,48 @@ type ConnectionPool struct {
 	pendMutex   sync.Mutex
 	dialWait    sync.WaitGroup
 	shutdown    bool
-
-	newRemoteConn chan net.NewConnectionEvent
-	outRemoteConn chan net.NewConnectionEvent
-	teardown      chan struct{}
 }
 
 // NewConnectionPool creates new ConnectionPool
 func NewConnectionPool(network networker, lPub p2pcrypto.PublicKey) *ConnectionPool {
 	cPool := &ConnectionPool{
-		localPub:      lPub,
-		net:           network,
-		connections:   make(map[string]net.Connection),
-		connMutex:     sync.RWMutex{},
-		pending:       make(map[string][]chan dialResult),
-		pendMutex:     sync.Mutex{},
-		dialWait:      sync.WaitGroup{},
-		shutdown:      false,
-		newRemoteConn: network.SubscribeOnNewRemoteConnections(),
-		outRemoteConn: make(chan net.NewConnectionEvent),
-		teardown:      make(chan struct{}),
+		localPub:    lPub,
+		net:         network,
+		connections: make(map[string]net.Connection),
+		connMutex:   sync.RWMutex{},
+		pending:     make(map[string][]chan dialResult),
+		pendMutex:   sync.Mutex{},
+		dialWait:    sync.WaitGroup{},
+		shutdown:    false,
 	}
-	go cPool.beginEventProcessing()
+
 	return cPool
 }
 
-// Shutdown of the ConnectionPool, gracefully.
-// - Close all open connections
+func (cp *ConnectionPool) OnNewConnection(nce net.NewConnectionEvent) {
+	if cp.isShuttingDown() {
+		return
+	}
+	cp.handleNewConnection(nce.Conn.RemotePublicKey(), nce.Conn, net.Remote)
+}
+
+func (cp *ConnectionPool) OnClosedConnection(c net.Connection) {
+	if cp.isShuttingDown() {
+		return
+	}
+	cp.handleClosedConnection(c)
+}
+
+func (cp *ConnectionPool) isShuttingDown() bool {
+	var isd bool
+	cp.connMutex.RLock()
+	isd = cp.shutdown
+	cp.connMutex.RUnlock()
+	return isd
+}
+
+// Shutdown gracefully shuts down the ConnectionPool:
+// - Closes all open connections
 // - Waits for all Dial routines to complete and unblock any routines waiting for GetConnection
 func (cp *ConnectionPool) Shutdown() {
 	cp.connMutex.Lock()
@@ -75,7 +90,6 @@ func (cp *ConnectionPool) Shutdown() {
 	cp.connMutex.Unlock()
 
 	cp.dialWait.Wait()
-	cp.teardown <- struct{}{}
 	// we won't handle the closing connection events for these connections since we exit the loop once the teardown is done
 	cp.closeConnections()
 }
@@ -161,7 +175,7 @@ func (cp *ConnectionPool) handleClosedConnection(conn net.Connection) {
 	cp.connMutex.Unlock()
 }
 
-// GetConnection fetchs or creates if don't exist a connection to the address which is associated with the remote public key
+// GetConnection fetches or creates if don't exist a connection to the address which is associated with the remote public key
 func (cp *ConnectionPool) GetConnection(address string, remotePub p2pcrypto.PublicKey) (net.Connection, error) {
 	cp.connMutex.RLock()
 	if cp.shutdown {
@@ -179,6 +193,8 @@ func (cp *ConnectionPool) GetConnection(address string, remotePub p2pcrypto.Publ
 	// the current registration
 	cp.pendMutex.Lock()
 	_, found = cp.pending[remotePub.String()]
+	pendChan := make(chan dialResult)
+	cp.pending[remotePub.String()] = append(cp.pending[remotePub.String()], pendChan)
 	if !found {
 		// No one is waiting for a connection with the remote peer, need to call Dial
 		go func() {
@@ -192,18 +208,11 @@ func (cp *ConnectionPool) GetConnection(address string, remotePub p2pcrypto.Publ
 			cp.dialWait.Done()
 		}()
 	}
-	pendChan := make(chan dialResult)
-	cp.pending[remotePub.String()] = append(cp.pending[remotePub.String()], pendChan)
 	cp.pendMutex.Unlock()
 	cp.connMutex.RUnlock()
 	// wait for the connection to be established, if the channel is closed (in case of dialing error) will return nil
 	res := <-pendChan
 	return res.conn, res.err
-}
-
-// RemoteConnectionsChannel is a channel that we send processed connections on
-func (cp *ConnectionPool) RemoteConnectionsChannel() chan net.NewConnectionEvent {
-	return cp.outRemoteConn
 }
 
 // GetConnectionIfExists checks if the connection is exists or pending
@@ -224,6 +233,7 @@ func (cp *ConnectionPool) GetConnectionIfExists(remotePub p2pcrypto.PublicKey) (
 	cp.pendMutex.Lock()
 	if _, found := cp.pending[remotePub.String()]; !found {
 		// No one is waiting for a connection with the remote peer
+		cp.connMutex.RUnlock()
 		cp.pendMutex.Unlock()
 		return nil, errors.New("no connection in cpool")
 	}
@@ -235,22 +245,4 @@ func (cp *ConnectionPool) GetConnectionIfExists(remotePub p2pcrypto.PublicKey) (
 	// wait for the connection to be established, if the channel is closed (in case of dialing error) will return nil
 	res := <-pendChan
 	return res.conn, res.err
-}
-
-func (cp *ConnectionPool) beginEventProcessing() {
-	closing := cp.net.SubscribeClosingConnections()
-Loop:
-	for {
-		select {
-		case nce := <-cp.newRemoteConn:
-			cp.handleNewConnection(nce.Conn.RemotePublicKey(), nce.Conn, net.Remote)
-			go func(nce net.NewConnectionEvent) { cp.outRemoteConn <- nce }(nce)
-
-		case conn := <-closing:
-			cp.handleClosedConnection(conn)
-
-		case <-cp.teardown:
-			break Loop
-		}
-	}
 }

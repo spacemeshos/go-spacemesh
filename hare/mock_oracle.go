@@ -1,6 +1,7 @@
 package hare
 
 import (
+	"encoding/binary"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"hash/fnv"
 	"math"
@@ -19,8 +20,48 @@ type Stringer interface {
 	String() string
 }
 
+type Registrable interface {
+	Register(isHonest bool, id string)
+	Unregister(isHonest bool, id string)
+}
+
 type Rolacle interface {
-	Validate(committeeSize int, proof Signature) bool
+	Eligible(instanceID uint32, committeeSize int, pubKey string, proof []byte) bool
+}
+
+type HareRolacle interface {
+	Eligible(instanceId InstanceId, k int32, pubKey string, proof []byte) bool
+}
+
+type hareRolacle struct {
+	oracle        Rolacle
+	committeeSize int
+}
+
+func newHareOracle(oracle Rolacle, committeeSize int) *hareRolacle {
+	return &hareRolacle{oracle, committeeSize}
+}
+
+func (hr *hareRolacle) Eligible(instanceId InstanceId, k int32, pubKey string, proof []byte) bool {
+	return hr.oracle.Eligible(hashInstanceAndK(instanceId, k), expectedCommitteeSize(k, hr.committeeSize), pubKey, proof)
+}
+
+func hashInstanceAndK(instanceID InstanceId, K int32) uint32 {
+	kInBytes := make([]byte, 4)
+	binary.LittleEndian.PutUint32(kInBytes, uint32(K))
+	h := newHasherU32()
+	val := h.Hash(instanceID.Bytes(), kInBytes)
+	return val
+}
+
+// Returns the expected committee size for the given round assuming n is the default size
+func expectedCommitteeSize(k int32, n int) int {
+	if k%4 == Round2 {
+		return 1 // 1 leader
+	}
+
+	// N actives in any other case
+	return n
 }
 
 type hasherU32 struct {
@@ -32,9 +73,11 @@ func newHasherU32() *hasherU32 {
 	return h
 }
 
-func (h *hasherU32) Hash(data []byte) uint32 {
+func (h *hasherU32) Hash(values ...[]byte) uint32 {
 	fnv := fnv.New32()
-	fnv.Write(data)
+	for _, b := range values {
+		fnv.Write(b)
+	}
 	return fnv.Sum32()
 }
 
@@ -57,21 +100,21 @@ func NewMockHashOracle(expectedSize int) *MockHashOracle {
 	return mock
 }
 
-func (mock *MockHashOracle) Register(stringer Stringer) {
+func (mock *MockHashOracle) Register(client string) {
 	mock.mutex.Lock()
 
-	if _, exist := mock.clients[stringer.String()]; exist {
+	if _, exist := mock.clients[client]; exist {
 		mock.mutex.Unlock()
 		return
 	}
 
-	mock.clients[stringer.String()] = struct{}{}
+	mock.clients[client] = struct{}{}
 	mock.mutex.Unlock()
 }
 
-func (mock *MockHashOracle) Unregister(stringer Stringer) {
+func (mock *MockHashOracle) Unregister(client string) {
 	mock.mutex.Lock()
-	delete(mock.clients, stringer.String())
+	delete(mock.clients, client)
 	mock.mutex.Unlock()
 }
 
@@ -87,16 +130,16 @@ func (mock *MockHashOracle) calcThreshold(committeeSize int) uint32 {
 	}
 
 	if committeeSize > numClients {
-		log.Error("Requested for a committee bigger than the number of registered clients. Expected at least %v clients Actual: %v",
-			committeeSize, numClients)
+		/*log.Error("Requested for a committee bigger than the number of registered clients. Expected at least %v clients Actual: %v",
+		committeeSize, numClients)*/
 		return 0
 	}
 
 	return uint32(uint64(committeeSize) * uint64(mock.hasher.MaxValue()) / uint64(numClients))
 }
 
-// Validate if a proof is valid for a given committee size
-func (mock *MockHashOracle) Validate(committeeSize int, proof Signature) bool {
+// Eligible if a proof is valid for a given committee size
+func (mock *MockHashOracle) Eligible(instanceID uint32, committeeSize int, pubKey string, proof []byte) bool {
 	if proof == nil {
 		log.Warning("Oracle query with proof=nil. Returning false")
 		return false
@@ -109,25 +152,4 @@ func (mock *MockHashOracle) Validate(committeeSize int, proof Signature) bool {
 	}
 
 	return false
-}
-
-type MockStaticOracle struct {
-	roles       map[uint32]Role
-	r           uint32
-	defaultSize int
-	hasLeader   bool
-	mutex       sync.Mutex
-}
-
-func NewMockStaticOracle(defaultSize int) *MockStaticOracle {
-	static := &MockStaticOracle{}
-	static.roles = make(map[uint32]Role, defaultSize)
-	static.defaultSize = defaultSize
-	static.hasLeader = false
-
-	return static
-}
-
-func (static *MockStaticOracle) Role(r uint32, proof Signature) Role {
-	return roleFromRoundCounter(r)
 }

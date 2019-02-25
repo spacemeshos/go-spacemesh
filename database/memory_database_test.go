@@ -1,14 +1,14 @@
 package database
 
 import (
-	"reflect"
+	"fmt"
+	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
-func checkRow(key []byte,value []byte , iter *MemDatabaseIterator, t *testing.T) {
-	if (reflect.DeepEqual(key, iter.Key()) == false || reflect.DeepEqual(value, iter.Value()) == false) {
-		t.Fatalf("Key/Value doesnt match iterator state")
-	}
+func checkRow(key []byte, value []byte, iter *MemDatabaseIterator, t *testing.T) {
+	assert.Equal(t, key, iter.Key(), fmt.Sprintf("have key : %s, need: %s", iter.Key(), key))
+	assert.Equal(t, value, iter.Value(), fmt.Sprintf("have value : %s, need: %s", iter.Value(), value))
 }
 
 func TestMemoryDB_Iterator(t *testing.T) {

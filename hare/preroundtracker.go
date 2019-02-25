@@ -1,6 +1,7 @@
 package hare
 
 import (
+	"github.com/spacemeshos/go-spacemesh/hare/metrics"
 	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -14,7 +15,7 @@ type PreRoundTracker struct {
 func NewPreRoundTracker(threshold int, expectedSize int) *PreRoundTracker {
 	pre := &PreRoundTracker{}
 	pre.preRound = make(map[string]struct{}, expectedSize)
-	pre.tracker = NewRefCountTracker(expectedSize)
+	pre.tracker = NewRefCountTracker()
 	pre.threshold = uint32(threshold)
 
 	return pre
@@ -30,13 +31,15 @@ func (pre *PreRoundTracker) OnPreRound(msg *pb.HareMessage) {
 
 	// only handle first pre-round msg
 	if _, exist := pre.preRound[verifier.String()]; exist {
+		log.Debug("Duplicate sender %v", verifier.String())
 		return
 	}
 
 	// record values from msg
 	s := NewSet(msg.Message.Values)
 	for _, v := range s.values {
-		pre.tracker.Track(v)
+		pre.tracker.Track(v.Id())
+		metrics.PreRoundCounter.With("value", v.String()).Add(1)
 	}
 
 	pre.preRound[verifier.String()] = struct{}{}
@@ -45,7 +48,7 @@ func (pre *PreRoundTracker) OnPreRound(msg *pb.HareMessage) {
 // Returns true if the given value is provable, false otherwise
 func (pre *PreRoundTracker) CanProveValue(value Value) bool {
 	// at least threshold occurrences of a given value
-	return pre.tracker.CountStatus(value) >= pre.threshold
+	return pre.tracker.CountStatus(value.Id()) >= pre.threshold
 }
 
 // Returns true if the given set is provable, false otherwise

@@ -11,8 +11,6 @@ type LayerID uint32
 
 var layerCounter LayerID = 0
 
-
-
 type TortoiseBlock struct {
 	Id         BlockID
 	LayerIndex LayerID
@@ -32,8 +30,6 @@ func (b TortoiseBlock) ID() BlockID {
 func (b TortoiseBlock) Layer() LayerID {
 	return b.LayerIndex
 }
-
-
 
 func NewBlock(coin bool, data []byte, ts time.Time, layerId LayerID) *TortoiseBlock {
 	b := TortoiseBlock{
@@ -81,9 +77,9 @@ func NewLayer() *Layer {
 	return &l
 }
 
-func FromBlockToTortoiseBlock(block *mesh.Block) *TortoiseBlock{
+func FromBlockToTortoiseBlock(block *mesh.Block) *TortoiseBlock {
 	bl := TortoiseBlock{
-		Id : BlockID(block.Id),
+		Id:         BlockID(block.Id),
 		LayerIndex: LayerID(block.LayerIndex),
 		BlockVotes: make(map[BlockID]bool),
 		ViewEdges:  make(map[BlockID]struct{}),
@@ -92,19 +88,22 @@ func FromBlockToTortoiseBlock(block *mesh.Block) *TortoiseBlock{
 		Coin:       block.Coin,
 		ProVotes:   0,
 		ConVotes:   0,
-
 	}
 
-	for _, id := range block.BlockVotes{ bl.BlockVotes[BlockID(id)] = true }
+	for _, id := range block.BlockVotes {
+		bl.BlockVotes[BlockID(id)] = true
+	}
 	return &bl
 }
 
-func FromLayerToTortoiseLayer(layer *mesh.Layer) *Layer{
+func FromLayerToTortoiseLayer(layer *mesh.Layer) *Layer {
 	l := Layer{
-		index: LayerID(layer.Index()),
-		blocks: make([]*TortoiseBlock,0,len(layer.Blocks())),
+		index:  LayerID(layer.Index()),
+		blocks: make([]*TortoiseBlock, 0, len(layer.Blocks())),
 	}
-	for _, block := range layer.Blocks(){ l.blocks = append(l.blocks, FromBlockToTortoiseBlock(block)) }
+	for _, block := range layer.Blocks() {
+		l.blocks = append(l.blocks, FromBlockToTortoiseBlock(block))
+	}
 	return &l
 }
 
