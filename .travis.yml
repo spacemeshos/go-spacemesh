@@ -34,7 +34,8 @@ jobs:
   - stage: docker-push
     name: "Push to dockerHub"
     script: 
-      - 'if [ "$TRAVIS_PULL_REQUEST" = "false" ]; then make dockerpush; fi'
+      - make dockerpush
+    if: branch = develop AND type = push
 
 cache:
   directories:
