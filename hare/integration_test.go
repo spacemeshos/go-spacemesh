@@ -57,7 +57,7 @@ func Test_16Nodes_HareIntegrationSuite(t *testing.T) {
 		output := make(chan TerminationOutput, 1)
 		oracle.Register(true, signing.Verifier().String())
 		proc := NewConsensusProcess(cfg, instanceId1, his.initialSets[idx], oracle, signing, s, output, lg)
-		broker.Register(proc)
+		proc.SetInbox(broker.Register(proc.Id()))
 		broker.Start()
 		his.procs = append(his.procs, proc)
 		i++
@@ -110,7 +110,7 @@ func Test_20Nodes_HareIntegrationSuite(t *testing.T) {
 		output := make(chan TerminationOutput, 1)
 		oracle.Register(true, signing.Verifier().String())
 		proc := NewConsensusProcess(cfg, instanceId1, his.initialSets[idx], oracle, signing, s, output, log.NewDefault(signing.Verifier().String()))
-		broker.Register(proc)
+		proc.SetInbox(broker.Register(proc.Id()))
 		broker.Start()
 		his.procs = append(his.procs, proc)
 		i++

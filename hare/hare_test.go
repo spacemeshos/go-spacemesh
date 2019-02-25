@@ -43,19 +43,11 @@ func (mcp *mockConsensusProcess) Start() error {
 	return nil
 }
 
-func (mcp *mockConsensusProcess) Id() uint32 {
-	return mcp.id.Id()
+func (mcp *mockConsensusProcess) Id() InstanceId {
+	return mcp.id
 }
 
-func (mcp *mockConsensusProcess) createInbox(size uint32) chan *pb.HareMessage {
-	c := make(chan *pb.HareMessage)
-	go func() {
-		for {
-			<-c
-			// don't really need to use messages just don't block
-		}
-	}()
-	return c
+func (mcp *mockConsensusProcess) SetInbox(chan *pb.HareMessage) {
 }
 
 func NewMockConsensusProcess(cfg config.Config, instanceId InstanceId, s *Set, oracle Rolacle, signing Signing, p2p NetworkService, outputChan chan TerminationOutput) *mockConsensusProcess {

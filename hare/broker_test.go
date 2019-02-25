@@ -16,7 +16,7 @@ var instanceId3 = InstanceId(3)
 
 func createMessage(t *testing.T, instanceId InstanceId) []byte {
 	hareMsg := &pb.HareMessage{}
-	hareMsg.Message = &pb.InnerMessage{InstanceId: instanceId.Uint32()}
+	hareMsg.Message = &pb.InnerMessage{InstanceId: uint32(instanceId)}
 	serMsg, err := proto.Marshal(hareMsg)
 
 	if err != nil {
@@ -24,20 +24,6 @@ func createMessage(t *testing.T, instanceId InstanceId) []byte {
 	}
 
 	return serMsg
-}
-
-type MockInboxer struct {
-	inbox chan *pb.HareMessage
-	id    uint32
-}
-
-func (inboxer *MockInboxer) createInbox(size uint32) chan *pb.HareMessage {
-	inboxer.inbox = make(chan *pb.HareMessage, size)
-	return inboxer.inbox
-}
-
-func (inboxer *MockInboxer) Id() uint32 {
-	return inboxer.id
 }
 
 func TestBroker_Start(t *testing.T) {
@@ -62,15 +48,14 @@ func TestBroker_Received(t *testing.T) {
 	broker := buildBroker(n1)
 	broker.Start()
 
-	inboxer := &MockInboxer{nil, instanceId1.Id()}
-	broker.Register(inboxer)
+	inbox := broker.Register(instanceId1)
 
 	serMsg := createMessage(t, instanceId1)
 	n2.Broadcast(ProtoName, serMsg)
 
-	recv := <-inboxer.inbox
+	recv := <- inbox
 
-	assert.True(t, recv.Message.InstanceId == instanceId1.Uint32())
+	assert.True(t, recv.Message.InstanceId == uint32(instanceId1))
 }
 
 // test that aborting the broker aborts
@@ -102,7 +87,7 @@ func sendMessages(t *testing.T, instanceId InstanceId, n *service.Node, count in
 func waitForMessages(t *testing.T, inbox chan *pb.HareMessage, instanceId InstanceId, msgCount int) {
 	for i := 0; i < msgCount; i++ {
 		x := <-inbox
-		assert.True(t, x.Message.InstanceId == instanceId.Uint32())
+		assert.True(t, x.Message.InstanceId == uint32(instanceId))
 	}
 }
 
@@ -116,16 +101,9 @@ func TestBroker_MultipleInstanceIds(t *testing.T) {
 	broker := buildBroker(n1)
 	broker.Start()
 
-	inboxer1 := &MockInboxer{nil, instanceId1.Id()}
-	inboxer2 := &MockInboxer{nil, instanceId2.Id()}
-	inboxer3 := &MockInboxer{nil, instanceId3.Id()}
-	broker.Register(inboxer1)
-	broker.Register(inboxer2)
-	broker.Register(inboxer3)
-
-	inbox1 := inboxer1.inbox
-	inbox2 := inboxer2.inbox
-	inbox3 := inboxer3.inbox
+	inbox1 := broker.Register(instanceId1)
+	inbox2 := broker.Register(instanceId2)
+	inbox3 := broker.Register(instanceId3)
 
 	go sendMessages(t, instanceId1, n2, msgCount)
 	go sendMessages(t, instanceId2, n2, msgCount)
@@ -143,8 +121,7 @@ func TestBroker_RegisterUnregister(t *testing.T) {
 	n1 := sim.NewNode()
 	broker := buildBroker(n1)
 	broker.Start()
-	inboxer := &MockInboxer{nil, instanceId1.Id()}
-	broker.Register(inboxer)
+	broker.Register(instanceId1)
 	assert.Equal(t, 1, len(broker.outbox))
 	broker.Unregister(instanceId1)
 	assert.Equal(t, 0, len(broker.outbox))
@@ -215,10 +192,9 @@ func TestBroker_Register(t *testing.T) {
 	n1 := sim.NewNode()
 	broker := buildBroker(n1)
 	broker.Start()
-	inboxer := &MockInboxer{nil, instanceId1.Id()}
 	msg := BuildPreRoundMsg(NewMockSigning(), NewSetFromValues(value1))
-	broker.pending[inboxer.Id()] = []*pb.HareMessage{msg, msg}
-	broker.Register(inboxer)
-	assert.Equal(t, 2, len(broker.outbox[inboxer.Id()]))
-	assert.Equal(t, 0, len(broker.pending[inboxer.Id()]))
+	broker.pending[instanceId1] = []*pb.HareMessage{msg, msg}
+	broker.Register(instanceId1)
+	assert.Equal(t, 2, len(broker.outbox[instanceId1]))
+	assert.Equal(t, 0, len(broker.pending[instanceId1]))
 }

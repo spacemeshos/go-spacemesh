@@ -151,7 +151,8 @@ func TestConsensusProcess_Start(t *testing.T) {
 	broker := buildBroker(n1)
 	proc := generateConsensusProcess(t)
 	proc.s = NewSmallEmptySet()
-	broker.Register(proc)
+	inbox := broker.Register(proc.Id())
+	proc.SetInbox(inbox)
 	err := proc.Start()
 	assert.Equal(t, "instance started with an empty set", err.Error())
 	proc.s = NewSetFromValues(value1)
@@ -169,7 +170,7 @@ func TestConsensusProcess_eventLoop(t *testing.T) {
 	oracle := &mockRolacle{}
 	oracle.isEligible = true
 	proc.oracle = oracle
-	broker.Register(proc)
+	proc.inbox = broker.Register(proc.Id())
 	proc.s = NewSetFromValues(value1, value2)
 	proc.cfg.F = 2
 	go proc.eventLoop()
@@ -187,7 +188,7 @@ func TestConsensusProcess_handleMessage(t *testing.T) {
 	mValidator := &mockMessageValidator{}
 	mValidator.firstK = proc.k
 	proc.validator = mValidator
-	broker.Register(proc)
+	proc.inbox = broker.Register(proc.Id())
 	m := BuildPreRoundMsg(generateSigning(t), NewSetFromValues(value1))
 	msg := buildMessage(m)
 	oracle.isEligible = true
@@ -214,7 +215,7 @@ func TestConsensusProcess_nextRound(t *testing.T) {
 	n1 := sim.NewNode()
 	broker := buildBroker(n1)
 	proc := generateConsensusProcess(t)
-	broker.Register(proc)
+	proc.inbox = broker.Register(proc.Id())
 	proc.advanceToNextRound()
 	proc.advanceToNextRound()
 	assert.Equal(t, int32(1), proc.k)
@@ -239,7 +240,7 @@ func generateConsensusProcess(t *testing.T) *ConsensusProcess {
 func TestConsensusProcess_Id(t *testing.T) {
 	proc := generateConsensusProcess(t)
 	proc.instanceId = instanceId1
-	assert.Equal(t, instanceId1.Id(), proc.Id())
+	assert.Equal(t, instanceId1, proc.Id())
 }
 
 func TestNewConsensusProcess_AdvanceToNextRound(t *testing.T) {
@@ -251,7 +252,8 @@ func TestNewConsensusProcess_AdvanceToNextRound(t *testing.T) {
 
 func TestConsensusProcess_CreateInbox(t *testing.T) {
 	proc := generateConsensusProcess(t)
-	proc.createInbox(100)
+	inbox := make(chan *pb.HareMessage, 100)
+	proc.SetInbox(inbox)
 	assert.NotNil(t, proc.inbox)
 	assert.Equal(t, 100, cap(proc.inbox))
 }
@@ -266,7 +268,7 @@ func TestConsensusProcess_InitDefaultBuilder(t *testing.T) {
 	assert.Equal(t, verifier.Bytes(), proc.signing.Verifier().Bytes())
 	assert.Equal(t, builder.inner.K, proc.k)
 	assert.Equal(t, builder.inner.Ki, proc.ki)
-	assert.Equal(t, builder.inner.InstanceId, proc.instanceId.Uint32())
+	assert.Equal(t, InstanceId(builder.inner.InstanceId), proc.instanceId)
 }
 
 func TestConsensusProcess_Proof(t *testing.T) {
@@ -418,7 +420,7 @@ func TestConsensusProcess_onEarlyMessage(t *testing.T) {
 
 func TestProcOutput_Id(t *testing.T) {
 	po := procOutput{instanceId1, nil}
-	assert.Equal(t, po.Id().Id(), instanceId1.Id())
+	assert.Equal(t, po.Id(), instanceId1)
 }
 
 func TestProcOutput_Set(t *testing.T) {
@@ -468,7 +470,7 @@ func TestConsensusProcess_beginRound2(t *testing.T) {
 	proc.statusesTracker = statusTracker
 
 	proc.k = 1
-	proc.createInbox(1)
+	proc.SetInbox(make(chan *pb.HareMessage, 1))
 	proc.beginRound2()
 
 	assert.Equal(t, 1, network.count)
@@ -492,7 +494,7 @@ func TestConsensusProcess_beginRound3(t *testing.T) {
 	mpt.isConflicting = false
 	mpt.proposedSet = NewSetFromValues(value1)
 	oracle.isEligible = true
-	proc.createInbox(1)
+	proc.SetInbox(make(chan *pb.HareMessage, 1))
 	proc.beginRound3()
 	assert.Equal(t, 1, network.count)
 }
@@ -511,7 +513,7 @@ func TestConsensusProcess_beginRound4(t *testing.T) {
 
 func TestConsensusProcess_handlePending(t *testing.T) {
 	proc := generateConsensusProcess(t)
-	proc.createInbox(100)
+	proc.SetInbox(make(chan *pb.HareMessage, 100))
 	const count = 5
 	pending := make(map[string]*pb.HareMessage)
 	for i := 0; i < count; i++ {

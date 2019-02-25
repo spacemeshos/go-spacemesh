@@ -5,6 +5,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/hare/metrics"
+	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"sync"
@@ -21,12 +22,12 @@ type consensusFactory func(cfg config.Config, instanceId InstanceId, s *Set, ora
 
 // Consensus represents a consensus
 type Consensus interface {
-	IdentifiableInboxer
-
+	Id() InstanceId
 	Close()
 	CloseChannel() chan struct{}
 
 	Start() error
+	SetInbox(chan *pb.HareMessage)
 }
 
 // TerminationOutput is a result of a process terminated with output.
@@ -104,7 +105,7 @@ func New(conf config.Config, p2p NetworkService, sign Signing, obp orphanBlockPr
 
 func (h *Hare) isTooLate(id InstanceId) bool {
 	h.layerLock.RLock()
-	if int64(id.Uint32()) < int64(h.lastLayer)-int64(h.bufferSize) { // bufferSize>=0
+	if int64(id) < int64(h.lastLayer)-int64(h.bufferSize) { // bufferSize>=0
 		h.layerLock.RUnlock()
 		return true
 	}
@@ -176,8 +177,11 @@ func (h *Hare) onTick(id mesh.LayerID) {
 	instid := InstanceId(id)
 
 	cp := h.factory(h.config, instid, set, h.rolacle, h.sign, h.network, h.outputChan)
-	cp.Start()
-	h.broker.Register(cp)
+	cp.SetInbox(h.broker.Register(cp.Id()))
+	e := cp.Start()
+	if e != nil {
+		log.Error("Could not start consensus process %v", e.Error())
+	}
 	metrics.TotalConsensusProcesses.Add(1)
 }
 

@@ -90,10 +90,6 @@ func NewConsensusProcess(cfg config.Config, instanceId InstanceId, s *Set, oracl
 	return proc
 }
 
-func (proc *ConsensusProcess) Id() uint32 {
-	return proc.instanceId.Uint32()
-}
-
 // Returns the iteration number from a given round counter
 func iterationFromCounter(roundCounter int32) int32 {
 	return roundCounter / 4
@@ -117,15 +113,18 @@ func (proc *ConsensusProcess) Start() error {
 	return nil
 }
 
-func (proc *ConsensusProcess) createInbox(size uint32) chan *pb.HareMessage {
-	proc.inbox = make(chan *pb.HareMessage, size)
-	return proc.inbox
+func (proc *ConsensusProcess) Id() InstanceId {
+	return proc.instanceId
+}
+
+func (proc *ConsensusProcess) SetInbox(inbox chan *pb.HareMessage) {
+	proc.inbox = inbox
 }
 
 func (proc *ConsensusProcess) eventLoop() {
 	proc.With().Info("Consensus Processes Started",
 		log.Int("N", proc.cfg.N), log.Int("f", proc.cfg.F), log.String("duration", proc.cfg.RoundDuration.String()),
-		log.Uint32("instance_id", proc.instanceId.Uint32()), log.String("set_values", proc.s.String()))
+		log.Uint32("instance_id", uint32(proc.instanceId)), log.String("set_values", proc.s.String()))
 
 	// set pre-round message and send
 	m := proc.initDefaultBuilder(proc.s).SetType(PreRound).Sign(proc.signing).Build()

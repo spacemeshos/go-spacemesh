@@ -18,7 +18,7 @@ type NotifyTracker struct {
 func NewNotifyTracker(expectedSize int) *NotifyTracker {
 	nt := &NotifyTracker{}
 	nt.notifies = make(map[string]struct{}, expectedSize)
-	nt.tracker = NewRefCountTracker(expectedSize)
+	nt.tracker = NewRefCountTracker()
 	nt.certificates = make(map[uint32]struct{}, expectedSize)
 
 	return nt
@@ -43,14 +43,14 @@ func (nt *NotifyTracker) OnNotify(msg *pb.HareMessage) bool {
 	// track that set
 	s := NewSet(msg.Message.Values)
 	nt.onCertificate(msg.Cert.AggMsgs.Messages[0].Message.K, s)
-	nt.tracker.Track(s)
+	nt.tracker.Track(s.Id())
 	metrics.NotifyCounter.With("set_id", fmt.Sprint(s.Id())).Add(1)
 
 	return false
 }
 
 func (nt *NotifyTracker) NotificationsCount(s *Set) int {
-	return int(nt.tracker.CountStatus(s))
+	return int(nt.tracker.CountStatus(s.Id()))
 }
 
 func calcId(k int32, set *Set) uint32 {
@@ -63,7 +63,7 @@ func calcId(k int32, set *Set) uint32 {
 
 	// write set id
 	buff = make([]byte, 4)
-	binary.LittleEndian.PutUint32(buff, set.Id())
+	binary.LittleEndian.PutUint32(buff, uint32(set.Id()))
 	hash.Write(buff)
 
 	return hash.Sum32()

@@ -52,17 +52,9 @@ func (mType MessageType) String() string {
 	}
 }
 
-func (id InstanceId) Id() uint32 {
-	return id.Uint32()
-}
-
-func (id InstanceId) Uint32() uint32 {
-	return uint32(id)
-}
-
 func (id InstanceId) Bytes() []byte {
-	idInBytes := make([]byte, 8)
-	binary.LittleEndian.PutUint32(idInBytes, id.Uint32())
+	idInBytes := make([]byte, 4)
+	binary.LittleEndian.PutUint32(idInBytes, uint32(id))
 
 	return idInBytes
 }
@@ -74,10 +66,10 @@ func NewBytes32(buff []byte) Bytes32 {
 	return x
 }
 
-func (b32 Bytes32) Id() uint32 {
+func (b32 Bytes32) Id() id {
 	h := fnv.New32()
 	h.Write(b32[:])
-	return h.Sum32()
+	return id(h.Sum32())
 }
 
 func (b32 Bytes32) Bytes() []byte {
@@ -91,8 +83,8 @@ func (b32 Bytes32) String() string {
 
 // Represents a unique set of values
 type Set struct {
-	values    map[uint32]Value
-	id        uint32
+	values    map[id]Value
+	id        id
 	isIdValid bool
 }
 
@@ -104,7 +96,7 @@ func NewSmallEmptySet() *Set {
 // Constructs an empty set
 func NewEmptySet(expectedSize int) *Set {
 	s := &Set{}
-	s.values = make(map[uint32]Value, expectedSize)
+	s.values = make(map[id]Value, expectedSize)
 	s.id = 0
 	s.isIdValid = false
 
@@ -114,7 +106,7 @@ func NewEmptySet(expectedSize int) *Set {
 // Constructs an empty set
 func NewSetFromValues(values ...Value) *Set {
 	s := &Set{}
-	s.values = make(map[uint32]Value, len(values))
+	s.values = make(map[id]Value, len(values))
 	for _, v := range values {
 		s.Add(v)
 	}
@@ -130,7 +122,7 @@ func NewSet(data [][]byte) *Set {
 	s := &Set{}
 	s.isIdValid = false
 
-	s.values = make(map[uint32]Value, len(data))
+	s.values = make(map[id]Value, len(data))
 	for i := 0; i < len(data); i++ {
 		bid := Value{NewBytes32(data[i])}
 		s.values[bid.Id()] = bid
@@ -206,7 +198,7 @@ func (s *Set) To2DSlice() [][]byte {
 
 func (s *Set) updateId() {
 	// order keys
-	keys := make([]uint32, len(s.values))
+	keys := make([]id, len(s.values))
 	i := 0
 	for k := range s.values {
 		keys[i] = k
@@ -221,12 +213,12 @@ func (s *Set) updateId() {
 	}
 
 	// update
-	s.id = h.Sum32()
+	s.id = id(h.Sum32())
 	s.isIdValid = true
 }
 
 // Returns the id of the set
-func (s *Set) Id() uint32 {
+func (s *Set) Id() id {
 	if !s.isIdValid {
 		s.updateId()
 	}

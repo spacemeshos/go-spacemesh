@@ -50,7 +50,7 @@ func (builder *MessageBuilder) SetType(msgType MessageType) *MessageBuilder {
 }
 
 func (builder *MessageBuilder) SetInstanceId(id InstanceId) *MessageBuilder {
-	builder.inner.InstanceId = id.Uint32()
+	builder.inner.InstanceId = uint32(id)
 	return builder
 }
 
