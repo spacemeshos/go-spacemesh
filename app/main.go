@@ -48,7 +48,7 @@ type SpacemeshApp struct {
 	NodeInitCallback chan bool
 	grpcAPIService   *api.SpacemeshGrpcService
 	jsonAPIService   *api.JSONHTTPServer
-
+	syncer           *sync.Syncer
 	blockListener    *sync.BlockListener
 	db               database.Database
 	state            *state.StateDB
@@ -317,26 +317,28 @@ func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service,
 	rng := rand.New(mt19937.New())
 	processor := state.NewTransactionProcessor(rng, st, lg)
 
-	//trtl := consensus.NewTortoise(50, 100)
-	trtl := consensus.NewAlgorithm(consensus.NewNinjaTortoise(layerSize))
-	mesh := mesh.NewMesh(db, db, db, trtl, processor, lg) //todo: what to do with the logger?
-
 	coinToss := consensus.WeakCoin{}
 	gTime, err := time.Parse(time.RFC3339, app.Config.GenesisTime)
 	if err != nil {
 		return err
 	}
-	clock := timesync.NewTicker(timesync.RealClock{}, time.Duration(app.Config.LayerDurationSec)*time.Second, gTime)
+	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
+	clock := timesync.NewTicker(timesync.RealClock{}, ld, gTime)
+	trtl := consensus.NewAlgorithm(consensus.NewNinjaTortoise(layerSize, lg))
+	msh := mesh.NewMesh(db, db, db, trtl, processor, lg) //todo: what to do with the logger?
 
-	blockListener := sync.NewBlockListener(swarm, blockOracle, mesh, 1*time.Second, 1, clock, lg)
+	conf := sync.Configuration{SyncInterval: 1 * time.Second, Concurrency: 4, LayerSize: int(layerSize), RequestTimeout: 100 * time.Millisecond}
+	syncer := sync.NewSync(swarm, msh, blockOracle, conf, clock.Subscribe(), lg)
 
-	ha := hare.New(app.Config.HARE, swarm, sgn, mesh, hareOracle, clock.Subscribe(), lg)
+	ha := hare.New(app.Config.HARE, swarm, sgn, msh, hareOracle, clock.Subscribe(), lg)
 
-	blockProducer := miner.NewBlockBuilder(instanceName, swarm, clock.Subscribe(), coinToss, mesh, ha, blockOracle, lg)
+	blockProducer := miner.NewBlockBuilder(instanceName, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, lg)
+	blockListener := sync.NewBlockListener(swarm, blockOracle, msh, 2*time.Second, 4, lg)
 
 	app.blockProducer = &blockProducer
 	app.blockListener = blockListener
-	app.mesh = mesh
+	app.mesh = msh
+	app.syncer = syncer
 	app.clock = clock
 	app.state = st
 	app.db = db
@@ -348,6 +350,7 @@ func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service,
 
 func (app *SpacemeshApp) startServices() {
 	app.blockListener.Start()
+	app.syncer.Start()
 	err := app.hare.Start()
 	if err != nil {
 		panic("cannot start hare")

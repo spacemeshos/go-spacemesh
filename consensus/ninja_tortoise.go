@@ -82,9 +82,9 @@ type ninjaTortoise struct {
 	tPatSupport        map[votingPattern]map[mesh.LayerID]votingPattern //pattern support count
 }
 
-func NewNinjaTortoise(layerSize uint32) *ninjaTortoise {
+func NewNinjaTortoise(layerSize uint32, log log.Log) *ninjaTortoise {
 	return &ninjaTortoise{
-		Log:                log.New("optimized tortoise ", "", ""),
+		Log:                log,
 		avgLayerSize:       layerSize,
 		pBase:              votingPattern{},
 		blocks:             map[mesh.BlockID]*mesh.Block{},

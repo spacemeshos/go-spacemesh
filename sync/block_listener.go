@@ -46,7 +46,6 @@ func (bl *BlockListener) Start() {
 	if atomic.CompareAndSwapUint32(&bl.startLock, 0, 1) {
 		go bl.run()
 		go bl.ListenToGossipBlocks()
-		go bl.onTick()
 	}
 }
 
@@ -54,7 +53,7 @@ func (bl *BlockListener) OnNewBlock(b *mesh.Block) {
 	bl.addUnknownToQueue(b)
 }
 
-func NewBlockListener(net server.Service, bv BlockValidator, layers *mesh.Mesh, timeout time.Duration, concurrency int, clock TickProvider, logger log.Log) *BlockListener {
+func NewBlockListener(net server.Service, bv BlockValidator, layers *mesh.Mesh, timeout time.Duration, concurrency int, logger log.Log) *BlockListener {
 
 	bl := BlockListener{
 		BlockValidator:       bv,
@@ -66,7 +65,6 @@ func NewBlockListener(net server.Service, bv BlockValidator, layers *mesh.Mesh, 
 		unknownQueue:         make(chan mesh.BlockID, 200), //todo tune buffer size + get buffer from config
 		exit:                 make(chan struct{}),
 		receivedGossipBlocks: net.RegisterGossipProtocol(NewBlockProtocol),
-		tick:                 clock.Subscribe(),
 	}
 	bl.RegisterMsgHandler(BLOCK, newBlockRequestHandler(layers, logger))
 
@@ -115,27 +113,6 @@ func (bl *BlockListener) run() {
 				bl.FetchBlock(id)
 				<-bl.semaphore
 			}()
-		}
-	}
-}
-
-func (bl *BlockListener) onTick() {
-	for {
-		select {
-		case <-bl.exit:
-			bl.Logger.Info("run stopped")
-			return
-		case newLayer := <-bl.tick: //todo: should this be here or in own loop?
-			if newLayer == 0 {
-				break
-			}
-			//log.Info("new layer tick in listener")
-			l, err := bl.GetLayer(newLayer - 1) //bl.CreateLayer(newLayer - 1)
-			if err != nil {
-				log.Error("error getting layer %v  : %v", newLayer-1, err)
-				break
-			}
-			go bl.Mesh.ValidateLayer(l)
 		}
 	}
 }

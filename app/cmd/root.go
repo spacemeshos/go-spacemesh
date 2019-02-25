@@ -35,7 +35,7 @@ func init() {
 		config.OracleServerWorldId, "The worldid to use with the oracle server (temporary) ")
 	RootCmd.PersistentFlags().StringVar(&config.GenesisTime, "genesis-time",
 		config.GenesisTime, "Time of the genesis layer in 2019-13-02T17:02:00+00:00 format")
-	RootCmd.PersistentFlags().Uint32Var(&config.LayerDurationSec, "layer-duration-sec",
+	RootCmd.PersistentFlags().IntVar(&config.LayerDurationSec, "layer-duration-sec",
 		config.LayerDurationSec, "Duration between layers in seconds")
 	/** ======================== P2P Flags ========================== **/
 	RootCmd.PersistentFlags().IntVar(&config.P2P.SecurityParam, "security-param",

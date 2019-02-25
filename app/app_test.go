@@ -5,6 +5,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/hare"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/oracle"
@@ -107,7 +108,7 @@ func (app *AppTestSuite) TestMultipleNodes() {
 
 	txbytes, _ := mesh.TransactionAsBytes(&tx)
 	path := "../tmp/test/state_" + time.Now().String()
-	app.initMultipleInstances(app.T(), 2, path)
+	app.initMultipleInstances(app.T(), 10, path)
 	for _, a := range app.apps {
 		a.startServices()
 	}
@@ -121,22 +122,26 @@ func (app *AppTestSuite) TestMultipleNodes() {
 		case <-timeout:
 			app.T().Fatal("timed out ")
 		default:
-			for _, ap := range app.apps {
-				ok := 0
-
+			for idx, ap := range app.apps {
 				if big.NewInt(10).Cmp(ap.state.GetBalance(dst)) == 0 {
-					for _, ap2 := range app.apps {
-						assert.Equal(app.T(), ap.state.IntermediateRoot(false), ap2.state.IntermediateRoot(false))
-						if ap.state.IntermediateRoot(false) == ap2.state.IntermediateRoot(false) {
-							ok++
+					ok := 0
+					for idx2, ap2 := range app.apps {
+						if idx != idx2 {
+							r1 := ap.state.IntermediateRoot(false).String()
+							r2 := ap2.state.IntermediateRoot(false).String()
+							if r1 == r2 {
+								log.Info("%d roots confirmed out of %d", ok, len(app.apps))
+								ok++
+							}
+						}
+						if ok == len(app.apps)-1 {
+							return
 						}
 					}
-					if ok == len(app.apps) {
-						return
-					}
+
 				}
 			}
-			time.Sleep(1 * time.Second)
+			time.Sleep(1 * time.Millisecond)
 		}
 	}
 }

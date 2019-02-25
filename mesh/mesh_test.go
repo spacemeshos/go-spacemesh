@@ -31,7 +31,6 @@ func getMesh(id string) *Mesh {
 	bdb := database.NewMemDatabase()
 	ldb := database.NewMemDatabase()
 	cdb := database.NewMemDatabase()
-
 	layers := NewMesh(ldb, bdb, cdb, &MeshValidatorMock{}, &MockState{}, log.New(id, "", ""))
 	return layers
 }
@@ -69,7 +68,11 @@ func TestLayers_AddLayer(t *testing.T) {
 	l, err := layers.GetLayer(id)
 	assert.True(t, err != nil, "error: ", err)
 
-	err = layers.AddLayer(NewExistingLayer(1, []*Block{block1, block2, block3}))
+	err = layers.AddBlock(block1)
+	assert.NoError(t, err)
+	err = layers.AddBlock(block2)
+	assert.NoError(t, err)
+	err = layers.AddBlock(block3)
 	assert.NoError(t, err)
 	l, err = layers.GetLayer(id)
 	assert.NoError(t, err)
@@ -84,14 +87,12 @@ func TestLayers_AddWrongLayer(t *testing.T) {
 	block2 := NewBlock(true, nil, time.Now(), 2)
 	block3 := NewBlock(true, nil, time.Now(), 4)
 	l1 := NewExistingLayer(1, []*Block{block1})
-	layers.AddLayer(l1)
+	layers.AddBlock(block1)
 	layers.ValidateLayer(l1)
 	l2 := NewExistingLayer(2, []*Block{block2})
-	layers.AddLayer(l2)
+	layers.AddBlock(block2)
 	layers.ValidateLayer(l2)
-	l3 := NewExistingLayer(4, []*Block{block3})
-	layers.AddLayer(l3)
-	layers.ValidateLayer(l3)
+	layers.AddBlock(block3)
 	_, err := layers.GetVerifiedLayer(1)
 	assert.True(t, err == nil, "error: ", err)
 	_, err1 := layers.GetVerifiedLayer(2)
@@ -107,28 +108,14 @@ func TestLayers_GetLayer(t *testing.T) {
 	block2 := NewBlock(true, nil, time.Now(), 1)
 	block3 := NewBlock(true, nil, time.Now(), 1)
 	l1 := NewExistingLayer(1, []*Block{block1})
-	layers.AddLayer(l1)
+	layers.AddBlock(block1)
 	layers.ValidateLayer(l1)
 	l, err := layers.GetVerifiedLayer(0)
-	layers.AddLayer(NewExistingLayer(3, []*Block{block2}))
-	layers.AddLayer(NewExistingLayer(2, []*Block{block3}))
+	layers.AddBlock(block2)
+	layers.AddBlock(block3)
 	l, err = layers.GetVerifiedLayer(1)
 	assert.True(t, err == nil, "error: ", err)
 	assert.True(t, l.Index() == 1, "wrong layer")
-}
-
-func TestLayers_LocalLayerCount(t *testing.T) {
-	layers := getMesh("t5")
-	defer layers.Close()
-	block1 := NewBlock(true, nil, time.Now(), 1)
-	block2 := NewBlock(true, nil, time.Now(), 4)
-	block3 := NewBlock(true, nil, time.Now(), 2)
-	block4 := NewBlock(true, nil, time.Now(), 1)
-	layers.AddLayer(NewExistingLayer(1, []*Block{block1}))
-	layers.AddLayer(NewExistingLayer(4, []*Block{block2}))
-	layers.AddLayer(NewExistingLayer(2, []*Block{block3}))
-	layers.AddLayer(NewExistingLayer(3, []*Block{block4}))
-	assert.Equal(t, uint32(3), layers.LatestLayer(), "wrong layer count")
 }
 
 func TestLayers_LatestKnownLayer(t *testing.T) {
@@ -165,10 +152,13 @@ func TestLayers_OrphanBlocks(t *testing.T) {
 	layers.AddBlock(block2)
 	layers.AddBlock(block3)
 	layers.AddBlock(block4)
-	assert.True(t, len(layers.GetOrphanBlocksExcept(3)) == 4, "wrong layer")
-	assert.Equal(t, len(layers.GetOrphanBlocksExcept(2)), 2)
+	arr, _ := layers.GetOrphanBlocksBefore(3)
+	assert.True(t, len(arr) == 4, "wrong layer")
+	arr2, _ := layers.GetOrphanBlocksBefore(2)
+	assert.Equal(t, len(arr2), 2)
 	layers.AddBlock(block5)
 	time.Sleep(1 * time.Second)
-	assert.True(t, len(layers.GetOrphanBlocksExcept(4)) == 1, "wrong layer")
+	arr3, _ := layers.GetOrphanBlocksBefore(4)
+	assert.True(t, len(arr3) == 1, "wrong layer")
 
 }
