@@ -6,6 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"sync"
 )
 
 const InboxCapacity = 100
@@ -35,7 +36,7 @@ func (closer *Closer) CloseChannel() chan struct{} {
 	return closer.channel
 }
 
-// Broker is responsible for dispatching hare messages to the matching set id listener
+// Broker is responsible for dispatching hare messages to the matching set objectId listener
 type Broker struct {
 	Closer
 	network      NetworkService
@@ -44,7 +45,6 @@ type Broker struct {
 	outbox       map[InstanceId]chan *pb.HareMessage
 	pending      map[InstanceId][]*pb.HareMessage
 	tasks        chan func()
-	pendingTasks chan struct{}
 	maxReg       InstanceId
 	isStarted    bool
 }
@@ -57,7 +57,6 @@ func NewBroker(networkService NetworkService, eValidator Validator) *Broker {
 	p.outbox = make(map[InstanceId]chan *pb.HareMessage)
 	p.pending = make(map[InstanceId][]*pb.HareMessage)
 	p.tasks = make(chan func())
-	p.pendingTasks = make(chan struct{})
 
 	return p
 }
@@ -77,7 +76,7 @@ func (broker *Broker) Start() error {
 	return nil
 }
 
-// Dispatch incoming messages to the matching set id instance
+// Dispatch incoming messages to the matching set objectId instance
 func (broker *Broker) eventLoop() {
 	for {
 		select {
@@ -151,6 +150,8 @@ func (broker *Broker) eventLoop() {
 func (broker *Broker) Register(id InstanceId) chan *pb.HareMessage {
 	inbox := make(chan *pb.HareMessage, InboxCapacity)
 
+	wg := sync.WaitGroup{}
+	wg.Add(1)
 	regRequest := func() {
 		if id > broker.maxReg {
 			broker.maxReg = id
@@ -166,28 +167,23 @@ func (broker *Broker) Register(id InstanceId) chan *pb.HareMessage {
 			delete(broker.pending, id)
 		}
 
-		broker.jobDone()
+		wg.Done()
 	}
 	broker.tasks <- regRequest
-	broker.waitForCompletion()
+	wg.Wait()
 
 	return inbox
 }
 
 // Unregister a listener
 func (broker *Broker) Unregister(id InstanceId) {
+	wg := sync.WaitGroup{}
+
+	wg.Add(1)
 	broker.tasks <- func() {
 		delete(broker.outbox, id)
-		broker.jobDone()
+		wg.Done()
 	}
 
-	broker.waitForCompletion()
-}
-
-func (broker *Broker) waitForCompletion() {
-	<-broker.pendingTasks
-}
-
-func (broker *Broker) jobDone() {
-	broker.pendingTasks <- struct{}{}
+	wg.Wait()
 }

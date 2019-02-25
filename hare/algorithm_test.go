@@ -144,7 +144,7 @@ func buildOracle(oracle Rolacle) *hareRolacle {
 	return newHareOracle(oracle, cfg.N)
 }
 
-// test that a message to a specific set id is delivered by the broker
+// test that a message to a specific set objectId is delivered by the broker
 func TestConsensusProcess_Start(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()

@@ -106,6 +106,11 @@ func (proc *ConsensusProcess) Start() error {
 		return StartInstanceError(errors.New("instance started with an empty set"))
 	}
 
+	if proc.inbox == nil { // no inbox
+		proc.Error("ConsensusProcess cannot be started with nil inbox")
+		return StartInstanceError(errors.New("instance started with nil inbox"))
+	}
+
 	proc.isStarted = true
 
 	go proc.eventLoop()
@@ -118,6 +123,11 @@ func (proc *ConsensusProcess) Id() InstanceId {
 }
 
 func (proc *ConsensusProcess) SetInbox(inbox chan *pb.HareMessage) {
+	if inbox == nil {
+		proc.Error("ConsensusProcess tried to SetInbox with nil")
+		return
+	}
+
 	proc.inbox = inbox
 }
 

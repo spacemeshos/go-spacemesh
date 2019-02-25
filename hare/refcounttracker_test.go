@@ -6,10 +6,10 @@ import (
 )
 
 type MyInt struct {
-	val id
+	val objectId
 }
 
-func (m MyInt) Id() id {
+func (m MyInt) Id() objectId {
 	return m.val
 }
 

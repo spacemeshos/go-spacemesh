@@ -91,7 +91,7 @@ func waitForMessages(t *testing.T, inbox chan *pb.HareMessage, instanceId Instan
 	}
 }
 
-// test flow for multiple set id
+// test flow for multiple set objectId
 func TestBroker_MultipleInstanceIds(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
