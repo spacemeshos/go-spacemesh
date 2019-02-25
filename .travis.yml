@@ -34,7 +34,7 @@ jobs:
   - stage: docker-push
     name: "Push to dockerHub"
     script: 
-      - make dockerpush
+      - 'if [ "$TRAVIS_PULL_REQUEST" = "false" ]; then make dockerpush; fi'
 
 cache:
   directories:
