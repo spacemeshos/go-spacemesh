@@ -39,14 +39,14 @@ func (closer *Closer) CloseChannel() chan struct{} {
 // Broker is responsible for dispatching hare messages to the matching set objectId listener
 type Broker struct {
 	Closer
-	network      NetworkService
-	eValidator   Validator
-	inbox        chan service.GossipMessage
-	outbox       map[InstanceId]chan *pb.HareMessage
-	pending      map[InstanceId][]*pb.HareMessage
-	tasks        chan func()
-	maxReg       InstanceId
-	isStarted    bool
+	network    NetworkService
+	eValidator Validator
+	inbox      chan service.GossipMessage
+	outbox     map[InstanceId]chan *pb.HareMessage
+	pending    map[InstanceId][]*pb.HareMessage
+	tasks      chan func()
+	maxReg     InstanceId
+	isStarted  bool
 }
 
 func NewBroker(networkService NetworkService, eValidator Validator) *Broker {
