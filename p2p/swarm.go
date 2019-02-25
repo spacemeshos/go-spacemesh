@@ -433,15 +433,12 @@ func (s *swarm) processMessage(ime net.IncomingMessageEvent) {
 }
 
 // RegisterProtocolWithChannel configures and returns a channel for a given protocol.
-<<<<<<< HEAD
 func (s *swarm) RegisterProtocolWithChannel(protocol string, ingressChannel chan service.Message) chan service.Message {
 	s.protocolHandlerMutex.Lock()
 	s.protocolHandlers[protocol] = ingressChannel
-=======
 func (s *swarm) RegisterDirectProtocolWithChannel(protocol string, ingressChannel chan service.DirectMessage) chan service.DirectMessage {
 	s.protocolHandlerMutex.Lock()
 	s.directProtocolHandlers[protocol] = ingressChannel
->>>>>>> upstream/develop
 	s.protocolHandlerMutex.Unlock()
 	return ingressChannel
 }
