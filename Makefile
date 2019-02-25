@@ -2,7 +2,6 @@ BINARY := go-spacemesh
 VERSION := 0.0.1
 COMMIT = $(shell git rev-parse HEAD)
 SHA = $(shell git rev-parse --short HEAD)
-# BRANCH = $(shell git symbolic-ref --short HEAD)
 BIN_DIR = $(shell pwd)/build
 CURR_DIR = $(shell pwd)
 CURR_DIR_WIN = $(shell cd)
@@ -106,6 +105,7 @@ dockerpush: dockerbuild
 	echo "$(DOCKER_PASSWORD)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
 	docker tag $(DOCKER_IMAGE_NAME) spacemeshos/$(DOCKER_IMAGE_NAME):$(BRANCH)
 	docker tag $(DOCKER_IMAGE_NAME) spacemeshos/$(DOCKER_IMAGE_NAME):$(SHA)
-	docker push spacemeshos/$(DOCKER_IMAGE_NAME):$(BRANCH)
-	docker push spacemeshos/$(DOCKER_IMAGE_NAME):$(SHA)
+	# Temporary disable the push
+	#docker push spacemeshos/$(DOCKER_IMAGE_NAME):$(BRANCH)
+	#docker push spacemeshos/$(DOCKER_IMAGE_NAME):$(SHA)
 .PHONY: dockerpush
