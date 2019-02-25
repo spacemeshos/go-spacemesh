@@ -284,7 +284,7 @@ func TestHare_onTick(t *testing.T) {
 	wg.Add(2)
 	go func() {
 		wg.Done()
-		layerTicker <- mesh.LayerID(0)
+		layerTicker <- 0
 		<-createdChan
 		<-nmcp.CloseChannel()
 		wg.Done()
@@ -304,7 +304,7 @@ func TestHare_onTick(t *testing.T) {
 	wg.Add(2)
 	go func() {
 		wg.Done()
-		layerTicker <- mesh.LayerID(1)
+		layerTicker <- 1
 		h.Close()
 		wg.Done()
 	}()

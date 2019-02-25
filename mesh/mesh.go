@@ -39,6 +39,7 @@ type Mesh struct {
 	tortoise      MeshValidator
 	state         StateUpdater
 	orphMutex     sync.RWMutex
+	done          chan struct{}
 }
 
 func NewMesh(layers, blocks, validity database.DB, mesh MeshValidator, state StateUpdater, logger log.Log) *Mesh {
@@ -47,8 +48,10 @@ func NewMesh(layers, blocks, validity database.DB, mesh MeshValidator, state Sta
 		Log:      logger,
 		tortoise: mesh,
 		state:    state,
-		meshDB:   NewMeshDB(layers, blocks, validity),
+		done:     make(chan struct{}),
+		meshDB:   NewMeshDB(layers, blocks, validity, logger),
 	}
+
 	return ll
 }
 
@@ -71,10 +74,6 @@ func (m *Mesh) VerifiedLayer() uint32 {
 	return atomic.LoadUint32(&m.verifiedLayer)
 }
 
-func (m *Mesh) LatestReceivedLayer() uint32 { //maybe switch names with latestlayer?
-	return atomic.LoadUint32(&m.lastSeenLayer)
-}
-
 func (m *Mesh) LatestLayer() uint32 {
 	defer m.lkMutex.RUnlock()
 	m.lkMutex.RLock()
@@ -85,29 +84,9 @@ func (m *Mesh) SetLatestLayer(idx uint32) {
 	defer m.lkMutex.Unlock()
 	m.lkMutex.Lock()
 	if idx > m.latestLayer {
-		m.Debug("set latest known layer to ", idx)
+		m.Info("set latest known layer to ", idx)
 		m.latestLayer = idx
 	}
-}
-
-func (m *Mesh) AddLayer(layer *Layer) error {
-	m.lMutex.Lock()
-	defer m.lMutex.Unlock()
-	count := LayerID(m.LatestReceivedLayer())
-	if count > layer.Index() {
-		m.Debug("can't add layer ", layer.Index(), "(already exists)")
-		return errors.New("can't add layer (already exists)")
-	}
-
-	if count+1 < layer.Index() {
-		m.Debug("can't add layer", layer.Index(), " missing previous layers")
-		return errors.New("can't add layer missing previous layers")
-	}
-	atomic.StoreUint32(&m.lastSeenLayer, uint32(layer.Index()))
-	m.addLayer(layer)
-	m.Log.With().Info("added layer", log.Uint32("id", uint32(layer.Index())), log.Int("num of blocks", len(layer.blocks)))
-	m.SetLatestLayer(uint32(layer.Index()))
-	return nil
 }
 
 func (m *Mesh) ValidateLayer(layer *Layer) {
@@ -163,9 +142,9 @@ func (m *Mesh) GetLayer(i LayerID) (*Layer, error) {
 }
 
 func (m *Mesh) AddBlock(block *Block) error {
-	log.Debug("add block ", block.ID())
+	m.Debug("add block %d", block.ID())
 	if err := m.addBlock(block); err != nil {
-		m.Error("failed to add block ", block.ID(), " ", err)
+		m.Error("failed to add block %v  %v", block.ID(), err)
 		return err
 	}
 	m.SetLatestLayer(uint32(block.Layer()))
@@ -197,24 +176,23 @@ func (m *Mesh) handleOrphanBlocks(block *Block) {
 	}
 }
 
-func (m *Mesh) GetUnverifiedLayerBlocks(l LayerID) []BlockID {
+func (m *Mesh) GetUnverifiedLayerBlocks(l LayerID) ([]BlockID, error) {
 	x, err := m.meshDB.layers.Get(l.ToBytes())
 	if err != nil {
-		panic(fmt.Sprintf("could not retrive latest layer = %d blocks ", l))
+		return nil, errors.New(fmt.Sprintf("could not retrive layer = %d blocks ", l))
 	}
 	blockIds, err := bytesToBlockIds(x)
 	if err != nil {
-		panic(fmt.Sprintf("could bytes to id array for layer %d ", l))
+		return nil, errors.New(fmt.Sprintf("could not desirialize layer to id array for layer %d ", l))
 	}
 	arr := make([]BlockID, 0, len(blockIds))
 	for bid := range blockIds {
 		arr = append(arr, bid)
 	}
-	return arr
+	return arr, nil
 }
 
-//todo better thread safety
-func (m *Mesh) GetOrphanBlocksExcept(l LayerID) []BlockID {
+func (m *Mesh) GetOrphanBlocksBefore(l LayerID) ([]BlockID, error) {
 	m.orphMutex.RLock()
 	defer m.orphMutex.RUnlock()
 	ids := map[BlockID]struct{}{}
@@ -226,14 +204,14 @@ func (m *Mesh) GetOrphanBlocksExcept(l LayerID) []BlockID {
 		}
 	}
 
-	prevLayer, err := m.getLayer(l - 1)
+	blocks, err := m.GetUnverifiedLayerBlocks(l - 1)
 	if err != nil {
-		panic(fmt.Sprint("failed getting latest layer  ", err))
+		return nil, errors.New(fmt.Sprint("failed getting latest layer ", err))
 	}
 
 	//add last layer blocks
-	for _, b := range prevLayer.Blocks() {
-		ids[b.ID()] = struct{}{}
+	for _, b := range blocks {
+		ids[b] = struct{}{}
 	}
 
 	idArr := make([]BlockID, 0, len(ids))
@@ -244,11 +222,11 @@ func (m *Mesh) GetOrphanBlocksExcept(l LayerID) []BlockID {
 	sort.Slice(idArr, func(i, j int) bool { return idArr[i] < idArr[j] })
 
 	m.Info("orphans for layer %d are %v", l, idArr)
-	return idArr
+	return idArr, nil
 }
 
 func (m *Mesh) GetBlock(id BlockID) (*Block, error) {
-	m.Debug("get block ", id)
+	m.Debug("get block %d", id)
 	return m.getBlock(id)
 }
 
