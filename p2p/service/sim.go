@@ -117,17 +117,6 @@ func (s *Simulator) NewNodeFrom(n node.Node) *Node {
 	return sn
 }
 
-func (s *Simulator) updateNode(node p2pcrypto.PublicKey, sender *Node) {
-	s.mutex.Lock()
-	n, ok := s.nodes[node.String()]
-	if ok {
-		if n.dht != nil {
-			n.Update(sender.Node)
-		}
-	}
-	s.mutex.Unlock()
-}
-
 type simDirectMessage struct {
 	msg    Data
 	sender p2pcrypto.PublicKey
@@ -221,7 +210,6 @@ func (sn *Node) sendMessageImpl(nodeID p2pcrypto.PublicKey, protocol string, pay
 	sn.sim.mutex.RUnlock()
 	if ok {
 		thec <- simDirectMessage{payload, sn.Node.PublicKey()}
-		sn.sim.updateNode(nodeID, sn)
 		return nil
 	}
 	log.Debug("%v >> %v (%v)", sn.Node.PublicKey(), nodeID, payload)
@@ -289,14 +277,6 @@ func (sn *Node) RegisterDirectProtocolWithChannel(protocol string, ingressChanne
 // AttachDHT attaches a dht for the update function of the simulation node
 func (sn *Node) AttachDHT(dht dht) {
 	sn.dht = dht
-}
-
-// Update updates a node in the dht, it panics if no dht was declared
-func (sn *Node) Update(node2 node.Node) {
-	if sn.dht == nil {
-		panic("Tried to update without attaching dht")
-	}
-	sn.dht.Update(node2)
 }
 
 // Shutdown closes all node channels are remove it from the Simulator map

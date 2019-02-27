@@ -189,13 +189,13 @@ func newSwarm(ctx context.Context, config config.Config, newNode bool, persist b
 
 	s.dht = dht.New(l, config.SwarmConfig, s)
 
-	s.network.SubscribeOnNewRemoteConnections(s.onNewConnection)
-	s.network.SubscribeClosingConnections(s.onClosedConnection)
-
 	cpool := connectionpool.NewConnectionPool(s.network, l.PublicKey())
 
 	s.network.SubscribeOnNewRemoteConnections(cpool.OnNewConnection)
 	s.network.SubscribeClosingConnections(cpool.OnClosedConnection)
+
+	s.network.SubscribeOnNewRemoteConnections(s.onNewConnection)
+	s.network.SubscribeClosingConnections(s.onClosedConnection)
 
 	s.cPool = cpool
 
@@ -206,7 +206,6 @@ func newSwarm(ctx context.Context, config config.Config, newNode bool, persist b
 }
 
 func (s *swarm) onNewConnection(nce net.NewConnectionEvent) {
-	s.dht.Update(nce.Node)
 	// todo: consider doing cpool actions from here instead of registering cpool as well.
 	s.addIncomingPeer(nce.Node.PublicKey())
 }
@@ -284,6 +283,20 @@ func (s *swarm) SendMessage(peerPubkey p2pcrypto.PublicKey, protocol string, pay
 	return s.sendMessageImpl(peerPubkey, protocol, service.DataBytes{Payload: payload})
 }
 
+func (s *swarm) localLookup(peerPubKey p2pcrypto.PublicKey) (node.Node, error) {
+	peers := s.dht.InternalLookup(node.NewDhtID(peerPubKey.Bytes())) // blocking, might issue a network lookup that'll take time.
+
+	if peers == nil || len(peers) == 0 {
+		return node.EmptyNode, errors.New("failed to find node address")
+	}
+
+	if peers[0].PublicKey().String() != peerPubKey.String() {
+		return node.EmptyNode, errors.New("failed to find node address")
+	}
+
+	return peers[0], nil
+}
+
 // SendMessage Sends a message to a remote node
 // swarm will establish session if needed or use an existing session and open connection
 // Designed to be used by any high level protocol
@@ -300,7 +313,9 @@ func (s *swarm) sendMessageImpl(peerPubKey p2pcrypto.PublicKey, protocol string,
 	conn, err = s.cPool.GetConnectionIfExists(peerPubKey)
 
 	if err != nil {
-		peer, err = s.dht.Lookup(peerPubKey) // blocking, might issue a network lookup that'll take time.
+		// currently we never want to issue a network lookup for that
+		peer, err = s.localLookup(peerPubKey)
+
 		if err != nil {
 			return err
 		}
@@ -494,8 +509,6 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 		return ErrBadFormat1
 	}
 
-	s.lNode.Debug(fmt.Sprintf("Handle message from <<  %v", msg.Conn.RemotePublicKey().String()))
-
 	// protocol messages are encrypted in payload
 	// Locate the session
 	session := msg.Conn.Session()
@@ -523,12 +536,7 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 		return ErrOutOfSync
 	}
 
-	s.lNode.Debug("Authorized %v protocol message ", pm.Metadata.NextProtocol)
-
-	// if we got so far, we already have the node in our rt, hence address won't be used
-	remoteNode := node.New(msg.Conn.RemotePublicKey(), "")
-	// update the routing table - we just heard from this authenticated node
-	s.dht.Update(remoteNode)
+	s.lNode.Debug("Handle %v message from <<  %v", pm.Metadata.NextProtocol, msg.Conn.RemotePublicKey().String())
 
 	// route authenticated message to the registered protocol
 
@@ -651,7 +659,9 @@ loop:
 }
 
 func (s *swarm) askForMorePeers() {
+	s.outpeersMutex.RLock()
 	numpeers := len(s.outpeers)
+	s.outpeersMutex.RUnlock()
 	req := s.config.SwarmConfig.RandomConnections - numpeers
 	if req <= 0 {
 		return
@@ -780,6 +790,10 @@ func (s *swarm) Disconnect(peer p2pcrypto.PublicKey) {
 	s.outpeersMutex.Unlock()
 	s.publishDelPeer(peer)
 	metrics.OutboundPeers.Add(-1)
+
+	// todo: don't remove if we know this is a valid peer for later
+	s.dht.Remove(node.New(peer, "")) // address doesn't matter because we only check dhtid
+
 	s.morePeersReq <- struct{}{}
 }
 
