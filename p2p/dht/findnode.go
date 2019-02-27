@@ -137,11 +137,6 @@ func (p *findNodeProtocol) FindNode(serverNode node.Node, target p2pcrypto.Publi
 		if response.err != nil {
 			return nil, response.err
 		}
-
-		for _, n := range response.results {
-			p.rt.Update(n)
-		}
-
 		return response.results, nil
 	case <-timeout.C:
 		err = errors.New("findnode took too long to respond")

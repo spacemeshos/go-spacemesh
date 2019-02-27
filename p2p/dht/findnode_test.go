@@ -66,6 +66,11 @@ func TestFindNodeProtocol_FindNode2(t *testing.T) {
 
 	idarr, err = fnd1.FindNode(n2.Node, randnode.PublicKey())
 
+	for _, n := range idarr {
+		fnd1.rt.Update(n)
+		//expected = append(expected, n)
+	}
+
 	assert.NoError(t, err, "Should not return error")
 	assert.Equal(t, expected, idarr, "Should be same array")
 

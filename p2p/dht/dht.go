@@ -2,20 +2,25 @@
 package dht
 
 import (
+	"context"
+	"errors"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
+	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-
-	"context"
-	"errors"
+	"github.com/spacemeshos/go-spacemesh/ping"
+	"github.com/spacemeshos/go-spacemesh/ping/pb"
 	"time"
 )
 
 // DHT is an interface to a general distributed hash table.
 type DHT interface {
-	Update(node node.Node)
+	Update(p node.Node)
+	Remove(p node.Node)
 
+	// todo: change lookup to be an internal lookup. (do not expose net lookup)
 	InternalLookup(dhtid node.DhtID) []node.Node
 	Lookup(pubkey p2pcrypto.PublicKey) (node.Node, error)
 
@@ -35,6 +40,11 @@ var (
 	ErrEmptyRoutingTable = errors.New("no nodes to query - routing table is empty")
 )
 
+type Pinger interface {
+	RegisterCallback(f func(ping *pb.Ping) error)
+	Ping(p p2pcrypto.PublicKey) error
+}
+
 // KadDHT represents the Distributed Hash Table, it holds the Routing Table local node cache. and a FindNode kademlia protocol.
 // KadDHT Is created with a localNode identity as base. (DhtID)
 type KadDHT struct {
@@ -42,8 +52,10 @@ type KadDHT struct {
 
 	local *node.LocalNode
 
-	rt  RoutingTable
-	fnp *findNodeProtocol
+	rt RoutingTable
+
+	fnp  *findNodeProtocol
+	ping Pinger
 
 	service service.Service
 }
@@ -61,20 +73,39 @@ func (d *KadDHT) SelectPeers(qty int) []node.Node {
 }
 
 // New creates a new dht
-func New(node *node.LocalNode, config config.SwarmConfig, service service.Service) *KadDHT {
+func New(ln *node.LocalNode, config config.SwarmConfig, service service.Service) *KadDHT {
+	pinger := ping.New(ln.Node, service.(server.Service), ln.Log) // TODO : get from outside
 	d := &KadDHT{
 		config:  config,
-		local:   node,
-		rt:      NewRoutingTable(config.RoutingTableBucketSize, node.DhtID(), node.Log),
+		local:   ln,
+		rt:      NewRoutingTable(config.RoutingTableBucketSize, ln.DhtID(), ln.Log),
+		ping:    pinger,
 		service: service,
 	}
 	d.fnp = newFindNodeProtocol(service, d.rt)
+
+	pinger.RegisterCallback(func(p *pb.Ping) error {
+		//todo: check the address provided with an extra ping before upading. ( if we haven't checked it for a while )
+		k, err := p2pcrypto.NewPubkeyFromBytes(p.ID)
+
+		if err != nil {
+			return err
+		}
+		d.rt.Update(node.New(k, p.ListenAddress))
+		return nil
+	})
+
 	return d
 }
 
 // Update insert or updates a node in the routing table.
-func (d *KadDHT) Update(node node.Node) {
-	d.rt.Update(node)
+func (d *KadDHT) Update(p node.Node) {
+	d.rt.Update(p)
+}
+
+// Remove removes a record from the routing table
+func (d *KadDHT) Remove(p node.Node) {
+	d.rt.Remove(p)
 }
 
 // Lookup finds a node in the dht by its public key, it issues a search inside the local routing table,
@@ -113,7 +144,7 @@ func (d *KadDHT) InternalLookup(dhtid node.DhtID) []node.Node {
 // Also used as a bootstrap function to populate the routing table with the results.
 func (d *KadDHT) kadLookup(id p2pcrypto.PublicKey, searchList []node.Node) (node.Node, error) {
 	// save queried node ids for the operation
-	queried := map[string]struct{}{}
+	queried := make(map[string]bool)
 
 	// iterative lookups for nodeId using searchList
 
@@ -139,10 +170,20 @@ func (d *KadDHT) kadLookup(id p2pcrypto.PublicKey, searchList []node.Node) (node
 			return node.EmptyNode, ErrLookupFailed
 		}
 
-		// lookup nodeId using the target servers
-		res := d.findNodeOp(servers, queried, id, closestNode)
-		if len(res) > 0 {
+		probed := 0
+		for _, active := range queried {
+			if active {
+				probed++
+			}
 
+			if probed >= d.config.RoutingTableBucketSize {
+				return node.EmptyNode, ErrLookupFailed // todo: maybe just return what we have
+			}
+		}
+
+		// lookup nodeId using the target servers
+		res := d.findNodeOp(servers, queried, id)
+		if len(res) > 0 {
 			// merge newly found nodes
 			searchList = node.Union(searchList, res)
 			// sort by distance from target
@@ -155,7 +196,7 @@ func (d *KadDHT) kadLookup(id p2pcrypto.PublicKey, searchList []node.Node) (node
 }
 
 // filterFindNodeServers picks up to count server who haven't been queried recently.
-func filterFindNodeServers(nodes []node.Node, queried map[string]struct{}, alpha int) []node.Node {
+func filterFindNodeServers(nodes []node.Node, queried map[string]bool, alpha int) []node.Node {
 
 	// If no server have been queried already, just make sure the list len is alpha
 	if len(queried) == 0 {
@@ -185,11 +226,22 @@ func filterFindNodeServers(nodes []node.Node, queried map[string]struct{}, alpha
 	return newlist
 }
 
+type findNodeOpRes struct {
+	res    []node.Node
+	server node.Node
+}
+
 // findNodeOp a target node on one or more servers
 // returns closest nodes which are closers than closestNode to targetId
 // if node found it will be in top of results list
-func (d *KadDHT) findNodeOp(servers []node.Node, queried map[string]struct{}, id p2pcrypto.PublicKey,
-	closestNode node.Node) []node.Node {
+func (d *KadDHT) findNodeOp(servers []node.Node, queried map[string]bool, id p2pcrypto.PublicKey) []node.Node {
+
+	var out []node.Node
+	startTime := time.Now()
+
+	defer func() {
+		d.local.With().Debug("findNodeOp", log.Int("servers", len(servers)), log.Int("result_count", len(out)), log.Duration("time_elapsed", time.Since(startTime)))
+	}()
 
 	l := len(servers)
 
@@ -197,37 +249,57 @@ func (d *KadDHT) findNodeOp(servers []node.Node, queried map[string]struct{}, id
 		return []node.Node{}
 	}
 
-	// results channel
-	results := make(chan []node.Node)
+	results := make(chan *findNodeOpRes)
+
+	// todo : kademlia says: This recursion can begin before all of the previous RPCs have returned
+	// currently we wait for all.
 
 	// Issue a parallel FindNode op to all servers on the list
 	for i := 0; i < l; i++ {
-		server := servers[i]
-		queried[server.String()] = struct{}{}
-		idx := id
+
 		// find node protocol adds found nodes to the local routing table
 		// populates queried node's routing table with us and return.
-		go func(server node.Node, id p2pcrypto.PublicKey) {
-			fnd, err := d.fnp.FindNode(server, id)
+		go func(server node.Node, idx p2pcrypto.PublicKey) {
+			d.rt.Update(server) // must do this prior to message to make sure we have that node
+
+			var err error
+
+			defer func() {
+				if err != nil {
+					d.local.With().Debug("find_node_failed", log.String("server", server.String()), log.Err(err))
+					results <- &findNodeOpRes{nil, server}
+					d.rt.Remove(server) // remove node if it didn't work
+					return
+				}
+			}()
+
+			err = d.ping.Ping(server.PublicKey())
 			if err != nil {
-				//TODO: handle errors
 				return
 			}
-			results <- fnd
-		}(server, idx)
+
+			fnd, err := d.fnp.FindNode(server, idx)
+			if err != nil {
+				return
+			}
+
+			results <- &findNodeOpRes{fnd, server}
+		}(servers[i], id)
 	}
 
 	done := 0                          // To know when all operations finished
 	idSet := make(map[string]struct{}) // to remove duplicates
 
-	out := make([]node.Node, 0) // the end result we collect
-
 	timeout := time.NewTimer(LookupTimeout)
 Loop:
 	for {
 		select {
-		case res := <-results:
+		case qres := <-results:
 
+			// we mark active nodes
+			queried[qres.server.String()] = qres.res != nil
+
+			res := qres.res
 			for _, n := range res {
 
 				if _, ok := idSet[n.PublicKey().String()]; ok {
@@ -235,7 +307,9 @@ Loop:
 				}
 				idSet[n.PublicKey().String()] = struct{}{}
 
-				d.rt.Update(n)
+				if _, ok := queried[n.PublicKey().String()]; ok {
+					continue
+				}
 				out = append(out, n)
 			}
 
