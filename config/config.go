@@ -60,7 +60,7 @@ type BaseConfig struct {
 	MetricsPort    int  `mapstructure:"metrics-port"`
 
 	OracleServer        string `mapstructure:"oracle_server"`
-	OracleServerWorldId uint64 `mapstructure:"oracle_server_worldid"`
+	OracleServerWorldId int    `mapstructure:"oracle_server_worldid"`
 
 	GenesisTime      string `mapstructure:"genesis-time"`
 	LayerDurationSec int    `mapstructure:"layer-duration-sec"`

@@ -31,7 +31,7 @@ func init() {
 		config.MetricsPort, "metric server port")
 	RootCmd.PersistentFlags().StringVar(&config.OracleServer, "oracle_server",
 		config.OracleServer, "The oracle server url. (temporary) ")
-	RootCmd.PersistentFlags().Uint64Var(&config.OracleServerWorldId, "oracle_server_worldid",
+	RootCmd.PersistentFlags().IntVar(&config.OracleServerWorldId, "oracle_server_worldid",
 		config.OracleServerWorldId, "The worldid to use with the oracle server (temporary) ")
 	RootCmd.PersistentFlags().StringVar(&config.GenesisTime, "genesis-time",
 		config.GenesisTime, "Time of the genesis layer in 2019-13-02T17:02:00+00:00 format")
