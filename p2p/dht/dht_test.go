@@ -234,6 +234,7 @@ func TestKadDHT_Bootstrap(t *testing.T) {
 	cfg.Gossip = false
 	cfg.Bootstrap = true
 	cfg.BootstrapNodes = append(cfg.BootstrapNodes, node.StringFromNode(bn.Node))
+	cfg.RandomConnections = numPeers/3
 
 	donech := make(chan struct{}, numPeers)
 
