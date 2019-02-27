@@ -4,12 +4,14 @@ import time
 import re
 import subprocess
 from os import path
-from kubernetes import client, config
-from node_info import NodeInfo
+from kubernetes import client
 from pytest_testconfig import config as testconfig
 
 from elasticsearch import Elasticsearch
 from elasticsearch_dsl import Search, Q
+
+from fixtures import load_config
+from node_info import NodeInfo
 
 BOOT_DEPLOYMENT_FILE='./k8s/bootstrap.yml'
 CLIENT_DEPLOYMENT_FILE = './k8s/client.yml'
@@ -95,10 +97,6 @@ def query_es_gossip_message(indx, namespace, client_po_name):
     s=set([h.N for h in hits])
     return (len(s))
 
-
-@pytest.fixture(scope='session')
-def load_config():
-    config.load_kube_config('/Users/isaac/.kube/config')
 
 @pytest.fixture
 def setup_bootstrap(request):
