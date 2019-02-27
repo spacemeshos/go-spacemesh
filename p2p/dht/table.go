@@ -121,12 +121,6 @@ type routingTableImpl struct {
 	updateReqs chan PeerAndCallback
 	removeReqs chan node.Node
 
-	// latency metrics
-	//metrics pstore.Metrics
-
-	// Maximum acceptable latency for peers in this cluster
-	//maxLatency time.Duration
-
 	buckets    []Bucket
 	bucketsize int // max number of nodes per bucket. typically 10 or 20.
 
@@ -137,8 +131,7 @@ type routingTableImpl struct {
 }
 
 // NewRoutingTable creates a new routing table with a given bucket=size and local node node.DhtID
-func NewRoutingTable(bucketsize int, localID node.DhtID, log log.Log) RoutingTable {
-
+func NewRoutingTable(bucketsize int, localID node.DhtID, log log.Log) *routingTableImpl {
 	// Create all our buckets.
 	buckets := []Bucket{NewBucket()}
 
@@ -298,20 +291,7 @@ func (rt *routingTableImpl) randomPeers(qty int) []node.Node {
 	return buf
 }
 
-// Update updates the routing table with the given contact. it will be added to the routing table if we have space
-// or if its better in terms of latency and recent contact than out oldest contact in the right bucket.
-// this keeps fresh nodes at the top of the bucket and make sure we won't lose contact with the network and keep most healthy nodes.
-func (rt *routingTableImpl) update(p node.Node, cb chan struct{}) {
-	var added bool
-	defer func() {
-		rt.log.With().Debug("dht_update", log.String("node_id", p.String()), log.Bool("new", added))
-		close(cb)
-	}()
-
-	if rt.local.Equals(p.DhtID()) {
-		rt.log.Warning("Ignoring attempt to add local node to the routing table")
-		return
-	}
+func (rt *routingTableImpl) getBucket(p node.Node) (int, Bucket) {
 
 	// determine node bucket based on cpl
 	cpl := p.DhtID().CommonPrefixLen(rt.local)
@@ -320,7 +300,28 @@ func (rt *routingTableImpl) update(p node.Node, cb chan struct{}) {
 		cpl = len(rt.buckets) - 1
 	}
 
-	bucket := rt.buckets[cpl]
+	return cpl, rt.buckets[cpl]
+}
+
+// Update updates the routing table with the given contact. it will be added to the routing table if we have space
+// or if its better in terms of latency and recent contact than out oldest contact in the right bucket.
+// this keeps fresh nodes at the top of the bucket and make sure we won't lose contact with the network and keep most healthy nodes.
+func (rt *routingTableImpl) update(p node.Node, cb chan struct{}) {
+	var added bool
+	var newnode bool
+	var cpl int
+
+	defer func() {
+		rt.log.With().Debug("dht_update", log.Int("bucket", cpl), log.String("node_id", p.String()), log.Bool("new", newnode), log.Bool("added", added))
+		close(cb)
+	}()
+
+	if rt.local.Equals(p.DhtID()) {
+		rt.log.Warning("Ignoring attempt to add local node to the routing table")
+		return
+	}
+
+	cpl, bucket := rt.getBucket(p)
 
 	if bucket.Has(p) {
 		// Move this node to the front as it is the most-recently active node
@@ -328,6 +329,8 @@ func (rt *routingTableImpl) update(p node.Node, cb chan struct{}) {
 		bucket.MoveToFront(p)
 		return
 	}
+
+	newnode = true
 
 	if p.Address() == "" {
 		rt.log.Error("Updated non-existing peer without an address pubkey: %v", p.PublicKey().String())
@@ -339,26 +342,30 @@ func (rt *routingTableImpl) update(p node.Node, cb chan struct{}) {
 
 	// bucket overflows ?
 	if bucket.Len() >= rt.bucketsize {
-		// If this bucket is the rightmost bucket, and its full
-		// we need to split it and create a new bucket
-		if cpl == len(rt.buckets)-1 && cpl < BucketCount { // this is the bucket
+		// we split buckets that our id is in their range - the last bucket.
+		if cpl == len(rt.buckets)-1 {
 			rt.split()
 			// after split we check again in which bucket we should add peer.
-			rt.update(p, make(chan struct{}))
-			return
-		} else {
-			// TODO: if bucket is full and can't be split ping oldest node and replace if it fails to answer
-			// TODO: save peer for replacement later
-			// for now assume we pinged last node and it answered until we get ping done.
-			return
-		}
-		// TODO: check latency metrics and replace if new node is better then oldest one.
-		// Fresh, recent contacted (alive), low latency nodes should be kept at top of the bucket.
-	}
+			// the structure of the table has changed, so let's recheck if the peer now has a dedicated bucket.
+			cpl, bucket = rt.getBucket(p)
 
+			if bucket.Len() >= rt.bucketsize {
+				// if we still have no space, discard that peer
+				//todo : Replacement cache
+				return
+			}
+			// this will go forward and add that peer
+		}
+
+		// todo : kademlia says: ping least recently seen node
+		// reality - ping must be async so we won't block all table
+		// you don't except update to trigger new connections and such
+		// a lot of updates - a lot of pings - BAD.
+		// take care of removing bad peers from outside the table
+	}
 	// new node and bucket isn't full
-	metrics.DHTSize.Add(1)
 	bucket.PushFront(p)
+	metrics.DHTSize.Add(1)
 	added = true
 }
 
@@ -375,12 +382,7 @@ func (rt *routingTableImpl) split() {
 // Callback to peerRemoved will be called if node was in table and was removed
 // If node wasn't in the table then remove doesn't have any side effects on the table
 func (rt *routingTableImpl) remove(p node.Node) {
-	cpl := p.DhtID().CommonPrefixLen(rt.local)
-	if cpl >= len(rt.buckets) {
-		cpl = len(rt.buckets) - 1
-	}
-
-	bucket := rt.buckets[cpl]
+	_, bucket := rt.getBucket(p)
 	bucket.Remove(p)
 }
 
