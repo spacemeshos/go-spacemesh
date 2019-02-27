@@ -659,7 +659,9 @@ loop:
 }
 
 func (s *swarm) askForMorePeers() {
+	s.outpeersMutex.RLock()
 	numpeers := len(s.outpeers)
+	s.outpeersMutex.RUnlock()
 	req := s.config.SwarmConfig.RandomConnections - numpeers
 	if req <= 0 {
 		return

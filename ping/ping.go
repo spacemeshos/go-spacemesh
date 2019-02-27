@@ -60,6 +60,11 @@ func (p *Pinger) newPingRequestHandler() func(msg []byte) []byte {
 			return nil
 		}
 
+
+		// NOTE: this is blocking, in 2 ways. the functions are blocking the ping response
+		// but they also block each other and even cancel each other. if a callback fails
+		// the next one won't happen and we won't respond. this should be revisited once we
+		// more callbacks or logic to the callback.
 		for _, f := range p.pingCallbacks {
 			if err := f(req); err != nil {
 				return nil

@@ -297,7 +297,7 @@ Loop:
 		case qres := <-results:
 
 			// we mark active nodes
-			queried[qres.server.String()] = qres.res == nil
+			queried[qres.server.String()] = qres.res != nil
 
 			res := qres.res
 			for _, n := range res {
