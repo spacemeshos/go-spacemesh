@@ -284,30 +284,44 @@ func (s *swarm) SendMessage(peerPubkey p2pcrypto.PublicKey, protocol string, pay
 	return s.sendMessageImpl(peerPubkey, protocol, service.DataBytes{Payload: payload})
 }
 
-func (s *swarm) RetrySend(peerPubKey p2pcrypto.PublicKey, message []byte) error {
-	var err error
+func (s *swarm) establishConnection(peerPubKey p2pcrypto.PublicKey) (net.Connection, int){
 	var peer node.Node
 	var conn net.Connection
 
-	peer, err = s.dht.Lookup(peerPubKey) // blocking, might issue a network lookup that'll take time.
+	conn, err = s.cPool.GetConnectionIfExists(peerPubKey)
+
 	if err != nil {
-		return err
+		peer, err = s.dht.Lookup(peerPubKey) // blocking, might issue a network lookup that'll take time.
+		if err != nil {
+			return err, 1
+		}
+
+		conn, err = s.cPool.GetConnection(peer.Address(), peer.PublicKey()) // blocking, might take some time in case there is no connection
+		if err != nil {
+			s.lNode.Warning("failed to send message to %v, no valid connection. err: %v", peer.String(), err)
+			return err, 1
+		}
 	}
-	conn, err = s.cPool.GetConnection(peer.Address(), peer.PublicKey()) // blocking, might take some time in case there is no connection
-	if err != nil {
-		s.lNode.Warning("retry send failed to send message to %v, no valid connection. err: %v", peer.String(), err)
-		return err
-	}
+
 	session := conn.Session()
 	if session == nil {
-		s.lNode.Warning("retry send failed to send message to %v, no valid session. err: %v", peer.String(), err)
-		return err
+		s.lNode.Warning("failed to send message to %v, no valid session. err: %v", conn.RemotePublicKey().String(), err)
+		return err, 1
 	}
+	return conn, 0
+}
 
-	err = conn.Send(message)
-
-	s.lNode.Debug("Message send retry executed successfully")
-	return err
+func (s *swarm) RetrySend(peerPubKey p2pcrypto.PublicKey, message []byte) error {
+	var err error
+	conn, err := s.establishConnection(peerPubKey)
+	if err != 1{
+		res = conn.Send(message)
+		s.lNode.Debug("Message send retry executed successfully")
+		return res	
+	} 
+	else {
+		return conn
+	}
 }
 
 // SendMessage Sends a message to a remote node
@@ -319,29 +333,9 @@ func (s *swarm) RetrySend(peerPubKey p2pcrypto.PublicKey, message []byte) error 
 // Local request to send a message to a remote node
 func (s *swarm) sendMessageImpl(peerPubKey p2pcrypto.PublicKey, protocol string, payload service.Data) error {
 	//s.lNode.Info("Sending message to %v", peerPubKey)
-	var err error
-	var peer node.Node
-	var conn net.Connection
-
-	conn, err = s.cPool.GetConnectionIfExists(peerPubKey)
-
-	if err != nil {
-		peer, err = s.dht.Lookup(peerPubKey) // blocking, might issue a network lookup that'll take time.
-		if err != nil {
-			return err
-		}
-
-		conn, err = s.cPool.GetConnection(peer.Address(), peer.PublicKey()) // blocking, might take some time in case there is no connection
-		if err != nil {
-			s.lNode.Warning("failed to send message to %v, no valid connection. err: %v", peer.String(), err)
-			return err
-		}
-	}
-
-	session := conn.Session()
-	if session == nil {
-		s.lNode.Warning("failed to send message to %v, no valid session. err: %v", conn.RemotePublicKey().String(), err)
-		return err
+	conn, err := s.establishConnection(peerPubKey)
+	if err == 1 {
+		return conn
 	}
 
 	protomessage := &pb.ProtocolMessage{
@@ -425,6 +419,7 @@ func (s *swarm) processMessage(ime net.IncomingMessageEvent) {
 	}
 }
 
+// RegisterProtocolWithChannel configures and returns a channel for a given protocol.
 func (s *swarm) RegisterDirectProtocolWithChannel(protocol string, ingressChannel chan service.DirectMessage) chan service.DirectMessage {
 	s.protocolHandlerMutex.Lock()
 	s.directProtocolHandlers[protocol] = ingressChannel
