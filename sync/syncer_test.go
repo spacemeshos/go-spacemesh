@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
+	"math/big"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -94,6 +95,10 @@ type MockState struct{}
 
 func (MockState) ApplyTransactions(layer state.LayerID, txs state.Transactions) (uint32, error) {
 	return 0, nil
+}
+
+func (s *stateMock) ApplyRewards(layer state.LayerID,miners map[string]struct{}, underQuota map[string]struct{}, bonusReward, diminishedReward *big.Int) {
+
 }
 
 func getMeshWithMemoryDB(id string) *mesh.Mesh {
