@@ -25,6 +25,7 @@ type MeshValidator interface {
 
 type StateUpdater interface {
 	ApplyTransactions(layer state.LayerID, transactions state.Transactions) (uint32, error)
+	ApplyRewards(layer state.LayerID, miners map[string]struct{}, underQuota map[string]struct{}, bonusReward, diminishedReward *big.Int)
 }
 
 type Mesh struct {
@@ -84,7 +85,7 @@ func (m *Mesh) SetLatestLayer(idx uint32) {
 	defer m.lkMutex.Unlock()
 	m.lkMutex.Lock()
 	if idx > m.latestLayer {
-		m.Info("set latest known layer to ", idx)
+		m.Info("set latest known layer to %v", idx)
 		m.latestLayer = idx
 	}
 }
@@ -98,26 +99,39 @@ func (m *Mesh) ValidateLayer(layer *Layer) {
 	}
 }
 
+func SortBlocks(blocks []*Block) []*Block {
+	sort.Slice(blocks, func(i, j int) bool { return blocks[i].ID() < blocks[j].ID() })
+	return blocks
+}
+
+func (m *Mesh) ExtractOrderedSortedTransactions(l *Layer) []*state.Transaction {
+	txs := make([]*state.Transaction, 0, layerSize)
+	sortedBlocks := SortBlocks(l.blocks)
+
+	for _, b := range sortedBlocks {
+		if !m.tortoise.ContextualValidity(b.ID()) {
+			continue
+		}
+		for _, tx := range b.Txs {
+			//todo: think about these conversions.. are they needed?
+			txs = append(txs, SerializableTransaction2StateTransaction(&tx))
+		}
+	}
+	return txs
+}
+
 func (m *Mesh) PushTransactions(oldBase LayerID, newBase LayerID) {
 	for i := oldBase; i < newBase; i++ {
-		txs := make([]*state.Transaction, 0, layerSize)
+
 		l, err := m.getLayer(i)
 		if err != nil || l == nil {
 			m.Error("") //todo handle error
 			return
 		}
 
-		sort.Slice(l.blocks, func(i, j int) bool { return l.blocks[i].ID() < l.blocks[j].ID() })
-
-		for _, b := range l.blocks {
-			if m.tortoise.ContextualValidity(b.ID()) {
-				for _, tx := range b.Txs {
-					//todo: think about these conversions.. are they needed?
-					txs = append(txs, SerializableTransaction2StateTransaction(&tx))
-				}
-			}
-		}
-		x, err := m.state.ApplyTransactions(state.LayerID(i), txs)
+		txs := m.ExtractOrderedSortedTransactions(l)
+		merged := MergeDoubles(txs)
+		x, err := m.state.ApplyTransactions(state.LayerID(i), merged)
 		if err != nil {
 			m.Log.Error("cannot apply transactions %v", err)
 		}
