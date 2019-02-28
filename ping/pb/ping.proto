@@ -4,7 +4,6 @@ package pb;
 option go_package = "pb";
 
 message Ping {
-	bytes ReqID = 1;
-	bool Req = 2;
-	string Message = 3;
+	bytes ID = 1;
+	string listenAddress = 2;
 }

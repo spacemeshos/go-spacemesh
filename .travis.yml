@@ -35,6 +35,7 @@ jobs:
     name: "Push to dockerHub"
     script: 
       - make dockerpush
+    if: branch = develop AND type != pull_request
 
 cache:
   directories:
