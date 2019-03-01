@@ -99,6 +99,16 @@ func BenchmarkTortoiseS50P35(b *testing.B)   { benchmarkTortoise(100, 50, 35, b)
 func BenchmarkTortoiseS100P70(b *testing.B)  { benchmarkTortoise(100, 100, 70, b) }
 func BenchmarkTortoiseS200P140(b *testing.B) { benchmarkTortoise(100, 200, 140, b) }
 
+func TestNinjaTortoise_S10P9(t *testing.T)    { sanity(100, 10, 9) }
+func TestNinjaTortoise_S50P49(b *testing.T)   { sanity(100, 50, 49) }
+func TestNinjaTortoise_S100P99(b *testing.T)  { sanity(100, 100, 99) }
+func TestNinjaTortoise_S200P199(b *testing.T) { sanity(100, 200, 199) }
+
+func TestNinjaTortoise_S10P7(b *testing.T)    { sanity(100, 10, 7) }
+func TestNinjaTortoise_S50P35(b *testing.T)   { sanity(100, 50, 35) }
+func TestNinjaTortoise_S100P70(b *testing.T)  { sanity(100, 100, 70) }
+func TestNinjaTortoise_S200P140(b *testing.T) { sanity(100, 200, 140) }
+
 func benchmarkTortoise(layers int, layerSize int, patternSize int, b *testing.B) {
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
