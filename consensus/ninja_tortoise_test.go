@@ -116,12 +116,12 @@ func BenchmarkTortoiseS50P35(b *testing.B)   { benchmarkTortoise(100, 50, 35, b)
 func BenchmarkTortoiseS100P70(b *testing.B)  { benchmarkTortoise(100, 100, 70, b) }
 func BenchmarkTortoiseS200P140(b *testing.B) { benchmarkTortoise(100, 200, 140, b) }
 
-var badblocks = 0.2
+var badblocks = 0.1
 
-func TestNinjaTortoise_S10P9(t *testing.T)    { sanity(100, 10, 9, badblocks) }
-func TestNinjaTortoise_S50P49(b *testing.T)   { sanity(100, 50, 49, badblocks) }
-func TestNinjaTortoise_S100P99(b *testing.T)  { sanity(100, 100, 99, badblocks) }
-func TestNinjaTortoise_S200P199(b *testing.T) { sanity(100, 200, 199, badblocks) }
+func TestNinjaTortoise_S10P9(t *testing.T)    { sanity(100, 10, 10, badblocks) }
+func TestNinjaTortoise_S50P49(b *testing.T)   { sanity(100, 50, 50, badblocks) }
+func TestNinjaTortoise_S100P99(b *testing.T)  { sanity(100, 100, 100, badblocks) }
+func TestNinjaTortoise_S200P199(b *testing.T) { sanity(100, 200, 200, badblocks) }
 
 func TestNinjaTortoise_S10P7(b *testing.T)    { sanity(100, 10, 7, badblocks) }
 func TestNinjaTortoise_S50P35(b *testing.T)   { sanity(100, 50, 35, badblocks) }
@@ -139,10 +139,10 @@ func benchmarkTortoise(layers int, layerSize int, patternSize int, b *testing.B)
 //vote explicitly only for previous layer
 //correction vectors have no affect here
 func TestNinjaTortoise_Sanity1(t *testing.T) {
-	layerSize := 100
-	patternSize := 70
+	layerSize := 200
+	patternSize := 200
 	layers := 100
-	alg := sanity(layers, layerSize, patternSize, 0)
+	alg := sanity(layers, layerSize, patternSize, 0.2)
 	res := vec{patternSize * (layers - 1), 0}
 	assert.True(t, alg.tTally[alg.pBase][config.GenesisId] == res, "lyr %d tally was %d insted of %d", layers, alg.tTally[alg.pBase][config.GenesisId], res)
 }
