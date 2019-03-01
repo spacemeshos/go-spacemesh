@@ -146,7 +146,6 @@ func TestNinjaTortoise_Sanity1(t *testing.T) {
 }
 
 func sanity(layers int, layerSize int, patternSize int) *ninjaTortoise {
-	fmt.Println(fmt.Sprintf("number of layers: %d layer size: %d good pattern size %d ", layers, layerSize, patternSize))
 	alg := NewNinjaTortoise(uint32(layerSize), log.New("TestNinjaTortoise_Sanity1", "", ""))
 	l1 := GenesisLayer()
 	alg.handleIncomingLayer(l1)
@@ -159,6 +158,7 @@ func sanity(layers int, layerSize int, patternSize int) *ninjaTortoise {
 		alg.Info("Time to process layer: %v ", time.Since(start))
 		l = lyr
 	}
+	fmt.Println(fmt.Sprintf("number of layers: %d layer size: %d good pattern size %d ", layers, layerSize, patternSize))
 	PrintMemUsage()
 	return alg
 }
