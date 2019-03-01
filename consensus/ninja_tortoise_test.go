@@ -1,6 +1,7 @@
 package consensus
 
 import (
+	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -88,29 +89,48 @@ func TestForEachInView(t *testing.T) {
 func TestNinjaTortoise_UpdatePatternTally(t *testing.T) {
 }
 
+func BenchmarkTortoiseS10P9(b *testing.B)    { benchmarkTortoise(100, 10, 9, b) }
+func BenchmarkTortoiseS50P49(b *testing.B)   { benchmarkTortoise(100, 50, 49, b) }
+func BenchmarkTortoiseS100P99(b *testing.B)  { benchmarkTortoise(100, 100, 99, b) }
+func BenchmarkTortoiseS200P199(b *testing.B) { benchmarkTortoise(100, 200, 199, b) }
+
+func BenchmarkTortoiseS10P7(b *testing.B)    { benchmarkTortoise(100, 10, 7, b) }
+func BenchmarkTortoiseS50P35(b *testing.B)   { benchmarkTortoise(100, 50, 35, b) }
+func BenchmarkTortoiseS100P70(b *testing.B)  { benchmarkTortoise(100, 100, 70, b) }
+func BenchmarkTortoiseS200P140(b *testing.B) { benchmarkTortoise(100, 200, 140, b) }
+
+func benchmarkTortoise(layers int, layerSize int, patternSize int, b *testing.B) {
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		sanity(layers, layerSize, patternSize)
+	}
+}
+
 //vote explicitly only for previous layer
 //correction vectors have no affect here
 func TestNinjaTortoise_Sanity1(t *testing.T) {
-	layerSize := 30
-	patternSize := layerSize
+	layerSize := 100
+	patternSize := 70
+	layers := 100
+	alg := sanity(layers, layerSize, patternSize)
+	res := vec{patternSize * (layers - 1), 0}
+	assert.True(t, alg.tTally[alg.pBase][config.GenesisId] == res, "lyr %d tally was %d insted of %d", layers, alg.tTally[alg.pBase][config.GenesisId], res)
+}
+
+func sanity(layers int, layerSize int, patternSize int) *ninjaTortoise {
 	alg := NewNinjaTortoise(uint32(layerSize), log.New("TestNinjaTortoise_Sanity1", "", ""))
 	l1 := GenesisLayer()
-	genesisId := l1.Blocks()[0].ID()
 	alg.handleIncomingLayer(l1)
 	l := createLayerWithRandVoting(l1.Index()+1, []*mesh.Layer{l1}, layerSize, 1)
 	alg.handleIncomingLayer(l)
-	for i := 0; i < 30; i++ {
-		lyr := createLayerWithRandVoting(l.Index()+1, []*mesh.Layer{l}, layerSize, layerSize)
+	for i := 0; i < layers-1; i++ {
+		lyr := createLayerWithRandVoting(l.Index()+1, []*mesh.Layer{l}, layerSize, patternSize)
 		start := time.Now()
 		alg.handleIncomingLayer(lyr)
 		alg.Info("Time to process layer: %v ", time.Since(start))
 		l = lyr
-		for b, vec := range alg.tTally[alg.pBase] {
-			alg.Info("------> tally for block %d according to complete pattern %d are %d", b, alg.pBase, vec)
-		}
-		res := vec{patternSize + patternSize*i, 0}
-		assert.True(t, alg.tTally[alg.pBase][genesisId] == res, "lyr %d tally was %d insted of %d", lyr.Index(), alg.tTally[alg.pBase][genesisId], res)
 	}
+	return alg
 }
 
 //vote explicitly for two previous layers
