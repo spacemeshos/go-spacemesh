@@ -1,6 +1,7 @@
 package consensus
 
 import (
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -8,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"math"
 	"math/rand"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -89,6 +91,21 @@ func TestForEachInView(t *testing.T) {
 func TestNinjaTortoise_UpdatePatternTally(t *testing.T) {
 }
 
+func bToMb(b uint64) uint64 {
+	return b / 1024 / 1024
+}
+
+func PrintMemUsage() {
+	runtime.GC()
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	// For info on each, see: https://golang.org/pkg/runtime/#MemStats
+	fmt.Printf("Alloc = %v MiB", bToMb(m.Alloc))
+	fmt.Printf("\tTotalAlloc = %v MiB", bToMb(m.TotalAlloc))
+	fmt.Printf("\tSys = %v MiB", bToMb(m.Sys))
+	fmt.Printf("\tNumGC = %v\n", m.NumGC)
+}
+
 func BenchmarkTortoiseS10P9(b *testing.B)    { benchmarkTortoise(100, 10, 9, b) }
 func BenchmarkTortoiseS50P49(b *testing.B)   { benchmarkTortoise(100, 50, 49, b) }
 func BenchmarkTortoiseS100P99(b *testing.B)  { benchmarkTortoise(100, 100, 99, b) }
@@ -114,6 +131,7 @@ func benchmarkTortoise(layers int, layerSize int, patternSize int, b *testing.B)
 	for i := 0; i < b.N; i++ {
 		sanity(layers, layerSize, patternSize)
 	}
+	PrintMemUsage()
 }
 
 //vote explicitly only for previous layer
@@ -140,6 +158,7 @@ func sanity(layers int, layerSize int, patternSize int) *ninjaTortoise {
 		alg.Info("Time to process layer: %v ", time.Since(start))
 		l = lyr
 	}
+	PrintMemUsage()
 	return alg
 }
 
