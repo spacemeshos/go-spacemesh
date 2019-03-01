@@ -116,20 +116,22 @@ func BenchmarkTortoiseS50P35(b *testing.B)   { benchmarkTortoise(100, 50, 35, b)
 func BenchmarkTortoiseS100P70(b *testing.B)  { benchmarkTortoise(100, 100, 70, b) }
 func BenchmarkTortoiseS200P140(b *testing.B) { benchmarkTortoise(100, 200, 140, b) }
 
-func TestNinjaTortoise_S10P9(t *testing.T)    { sanity(100, 10, 9) }
-func TestNinjaTortoise_S50P49(b *testing.T)   { sanity(100, 50, 49) }
-func TestNinjaTortoise_S100P99(b *testing.T)  { sanity(100, 100, 99) }
-func TestNinjaTortoise_S200P199(b *testing.T) { sanity(100, 200, 199) }
+var badblocks = 0.2
 
-func TestNinjaTortoise_S10P7(b *testing.T)    { sanity(100, 10, 7) }
-func TestNinjaTortoise_S50P35(b *testing.T)   { sanity(100, 50, 35) }
-func TestNinjaTortoise_S100P70(b *testing.T)  { sanity(100, 100, 70) }
-func TestNinjaTortoise_S200P140(b *testing.T) { sanity(100, 200, 140) }
+func TestNinjaTortoise_S10P9(t *testing.T)    { sanity(100, 10, 9, badblocks) }
+func TestNinjaTortoise_S50P49(b *testing.T)   { sanity(100, 50, 49, badblocks) }
+func TestNinjaTortoise_S100P99(b *testing.T)  { sanity(100, 100, 99, badblocks) }
+func TestNinjaTortoise_S200P199(b *testing.T) { sanity(100, 200, 199, badblocks) }
+
+func TestNinjaTortoise_S10P7(b *testing.T)    { sanity(100, 10, 7, badblocks) }
+func TestNinjaTortoise_S50P35(b *testing.T)   { sanity(100, 50, 35, badblocks) }
+func TestNinjaTortoise_S100P70(b *testing.T)  { sanity(100, 100, 70, badblocks) }
+func TestNinjaTortoise_S200P140(b *testing.T) { sanity(100, 200, 140, badblocks) }
 
 func benchmarkTortoise(layers int, layerSize int, patternSize int, b *testing.B) {
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		sanity(layers, layerSize, patternSize)
+		sanity(layers, layerSize, patternSize, 0)
 	}
 	PrintMemUsage()
 }
@@ -140,25 +142,25 @@ func TestNinjaTortoise_Sanity1(t *testing.T) {
 	layerSize := 100
 	patternSize := 70
 	layers := 100
-	alg := sanity(layers, layerSize, patternSize)
+	alg := sanity(layers, layerSize, patternSize, 0)
 	res := vec{patternSize * (layers - 1), 0}
 	assert.True(t, alg.tTally[alg.pBase][config.GenesisId] == res, "lyr %d tally was %d insted of %d", layers, alg.tTally[alg.pBase][config.GenesisId], res)
 }
 
-func sanity(layers int, layerSize int, patternSize int) *ninjaTortoise {
+func sanity(layers int, layerSize int, patternSize int, badBlks float64) *ninjaTortoise {
 	alg := NewNinjaTortoise(uint32(layerSize), log.New("TestNinjaTortoise_Sanity1", "", ""))
 	l1 := GenesisLayer()
 	alg.handleIncomingLayer(l1)
 	l := createLayerWithRandVoting(l1.Index()+1, []*mesh.Layer{l1}, layerSize, 1)
 	alg.handleIncomingLayer(l)
 	for i := 0; i < layers-1; i++ {
-		lyr := createLayerWithRandVoting(l.Index()+1, []*mesh.Layer{l}, layerSize, patternSize)
+		lyr := createLayerWithCorruptedPattern(l.Index()+1, l, layerSize, patternSize, badBlks)
 		start := time.Now()
 		alg.handleIncomingLayer(lyr)
 		alg.Info("Time to process layer: %v ", time.Since(start))
 		l = lyr
 	}
-	fmt.Println(fmt.Sprintf("number of layers: %d layer size: %d good pattern size %d ", layers, layerSize, patternSize))
+	fmt.Println(fmt.Sprintf("number of layers: %d layer size: %d good pattern size %d bad blocks %v", layers, layerSize, patternSize, badBlks))
 	PrintMemUsage()
 	return alg
 }
@@ -211,6 +213,47 @@ func createMulExplicitLayer(index mesh.LayerID, prev map[mesh.LayerID]*mesh.Laye
 	log.Info("Created layer Id %d with blocks %d", l.Index(), layerBlocks)
 
 	return l
+}
+
+func createLayerWithCorruptedPattern(index mesh.LayerID, prev *mesh.Layer, blocksInLayer int, patternSize int, badBlocks float64) *mesh.Layer {
+	ts := time.Now()
+	coin := false
+	// just some random Data
+	data := []byte(crypto.UUIDString())
+	l := mesh.NewLayer(index)
+
+	blocks := prev.Blocks()
+	blocksInPrevLayer := len(blocks)
+	goodPattern := chooseRandomPattern(blocksInPrevLayer, int(math.Min(float64(blocksInPrevLayer), float64(patternSize))))
+	badPattern := chooseRandomPattern(blocksInPrevLayer, int(math.Min(float64(blocksInPrevLayer), float64(patternSize))))
+
+	gbs := int(float64(blocksInLayer) * (1 - badBlocks))
+	layerBlocks := make([]mesh.BlockID, 0, blocksInLayer)
+	for i := 0; i < gbs; i++ {
+		bl := blockWithPattern(coin, data, ts, goodPattern, prev)
+		layerBlocks = append(layerBlocks, bl.ID())
+		l.AddBlock(bl)
+	}
+	for i := 0; i < blocksInLayer-gbs; i++ {
+		bl := blockWithPattern(coin, data, ts, badPattern, prev)
+		layerBlocks = append(layerBlocks, bl.ID())
+		l.AddBlock(bl)
+	}
+
+	log.Info("Created layer Id %d with blocks %d", l.Index(), layerBlocks)
+	return l
+}
+
+func blockWithPattern(coin bool, data []byte, ts time.Time, goodPattern []int, prev *mesh.Layer) *mesh.Block {
+	bl := mesh.NewBlock(coin, data, ts, 1)
+	for _, id := range goodPattern {
+		b := prev.Blocks()[id]
+		bl.AddVote(mesh.BlockID(b.Id))
+	}
+	for _, prevBloc := range prev.Blocks() {
+		bl.AddView(mesh.BlockID(prevBloc.Id))
+	}
+	return bl
 }
 
 func createLayerWithRandVoting(index mesh.LayerID, prev []*mesh.Layer, blocksInLayer int, patternSize int) *mesh.Layer {
