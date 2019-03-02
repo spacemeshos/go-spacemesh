@@ -108,6 +108,9 @@ Platform-specific binaries are saved to the `/build` directory.
 ```
 
 ### Testing
+
+*NOTE*: if tests are hanging try running `ulimit -n 400`. some tests require that to work.
+
 ```
 make test
 ```
