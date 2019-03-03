@@ -134,9 +134,9 @@ func (s *Syncer) Synchronise() {
 			var err error
 			lyr, err = s.getLayerFromNeighbors(currenSyncLayer)
 			if err != nil {
-
+				s.Info("error getting %v from neighbors ", err)
+				return
 			}
-
 		}
 		s.ValidateLayer(lyr)
 	}
