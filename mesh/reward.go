@@ -75,7 +75,7 @@ func (m *Mesh) AccumulateRewards(rewardLayer LayerID, params RewardParams) {
 	log.Info("fees reward: %v total processed %v total txs %v merged %v blocks: %v", rewards.Int64(), processed, len(txs), len(merged), numBlocks)
 
 	bonusReward, diminishedReward := m.calculateActualRewards(rewards, numBlocks, params, len(uq))
-	m.state.ApplyRewards(state.LayerID(rewardLayer) ,ids, uq, bonusReward, diminishedReward)
+	m.state.ApplyRewards(state.LayerID(rewardLayer), ids, uq, bonusReward, diminishedReward)
 	//todo: should miner id be sorted in a deterministic order prior to applying rewards?
 
 }

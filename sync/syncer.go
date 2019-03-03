@@ -131,7 +131,12 @@ func (s *Syncer) Synchronise() {
 		s.Info("syncing layer %v to layer %v current consensus layer is %d", s.VerifiedLayer(), currenSyncLayer, atomic.LoadUint32(&s.currentLayer))
 		lyr, _ := s.GetLayer(mesh.LayerID(currenSyncLayer))
 		if lyr == nil {
-			lyr, _ = s.getLayerFromNeighbors(currenSyncLayer)
+			var err error
+			lyr, err = s.getLayerFromNeighbors(currenSyncLayer)
+			if err != nil {
+
+			}
+
 		}
 		s.ValidateLayer(lyr)
 	}

@@ -22,7 +22,7 @@ func (MockMapState) ApplyTransactions(layer state.LayerID, txs state.Transaction
 	return 0, nil
 }
 
-func (s *MockMapState) ApplyRewards(layer state.LayerID,miners map[string]struct{}, underQuota map[string]struct{}, bonusReward, diminishedReward *big.Int) {
+func (s *MockMapState) ApplyRewards(layer state.LayerID, miners map[string]struct{}, underQuota map[string]struct{}, bonusReward, diminishedReward *big.Int) {
 	for minerId := range miners {
 		if _, has := underQuota[minerId]; !has {
 			s.Rewards[minerId] = bonusReward

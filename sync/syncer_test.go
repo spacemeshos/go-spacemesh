@@ -97,7 +97,7 @@ func (MockState) ApplyTransactions(layer state.LayerID, txs state.Transactions) 
 	return 0, nil
 }
 
-func (s *stateMock) ApplyRewards(layer state.LayerID,miners map[string]struct{}, underQuota map[string]struct{}, bonusReward, diminishedReward *big.Int) {
+func (s *stateMock) ApplyRewards(layer state.LayerID, miners map[string]struct{}, underQuota map[string]struct{}, bonusReward, diminishedReward *big.Int) {
 
 }
 
