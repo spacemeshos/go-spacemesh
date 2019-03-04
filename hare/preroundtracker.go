@@ -7,14 +7,14 @@ import (
 )
 
 type PreRoundTracker struct {
-	preRound  map[string]struct{} // maps PubKey->Pre-Round msg (unique)
-	tracker   *RefCountTracker    // keeps track of seen values
-	threshold uint32              // the threshold to prove a single value
+	preRound  map[string]*Set  // maps PubKey->Pre-Round msg (unique)
+	tracker   *RefCountTracker // keeps track of seen values
+	threshold uint32           // the threshold to prove a single value
 }
 
 func NewPreRoundTracker(threshold int, expectedSize int) *PreRoundTracker {
 	pre := &PreRoundTracker{}
-	pre.preRound = make(map[string]struct{}, expectedSize)
+	pre.preRound = make(map[string]*Set, expectedSize)
 	pre.tracker = NewRefCountTracker()
 	pre.threshold = uint32(threshold)
 
@@ -29,20 +29,24 @@ func (pre *PreRoundTracker) OnPreRound(msg *pb.HareMessage) {
 		return
 	}
 
-	// only handle first pre-round msg
-	if _, exist := pre.preRound[verifier.String()]; exist {
+	var sToTrack *Set = nil
+	if unionSet, exist := pre.preRound[verifier.String()]; exist { // not first pre-round msg from this sender
 		log.Debug("Duplicate sender %v", verifier.String())
-		return
+		claimedSet := NewSet(msg.Message.Values)                     // new claimed set
+		sToTrack = claimedSet                                        // start with the claimed set
+		sToTrack.Subtract(unionSet)                                  // subtract the union of all sets we have seen so far from this sender
+		pre.preRound[verifier.String()] = unionSet.Union(claimedSet) // update the union to include new values
+	} else { // first pre-round
+		sToTrack = NewSet(msg.Message.Values)      // first pre-round, track all values
+		pre.preRound[verifier.String()] = sToTrack // the union is the set we received
 	}
 
-	// record values from msg
-	s := NewSet(msg.Message.Values)
-	for _, v := range s.values {
+	// record values
+	for _, v := range sToTrack.values {
 		pre.tracker.Track(v.Id())
 		metrics.PreRoundCounter.With("value", v.String()).Add(1)
 	}
 
-	pre.preRound[verifier.String()] = struct{}{}
 }
 
 // Returns true if the given value is provable, false otherwise
