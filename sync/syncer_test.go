@@ -596,7 +596,6 @@ func (sis *syncIntegrationMultipleNodes) TestSyncProtocol_MultipleNodes() {
 	syncObj1.Start()
 	syncObj2.Start()
 	syncObj3.Start()
-	syncObj4.Start()
 	syncObj5.Start()
 
 	// Keep trying until we're timed out or got a result or got an error

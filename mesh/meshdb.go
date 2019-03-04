@@ -52,7 +52,7 @@ func (m *meshDB) getLayer(index LayerID) (*Layer, error) {
 
 	l := NewLayer(LayerID(index))
 	if len(ids) == 0 {
-		return l, nil
+		return nil, fmt.Errorf("no ids for layer %v in database ", index)
 	}
 
 	blockIds, err := bytesToBlockIds(ids)
