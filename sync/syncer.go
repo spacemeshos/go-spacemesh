@@ -132,7 +132,7 @@ func (s *Syncer) Synchronise() {
 		lyr, err := s.GetLayer(mesh.LayerID(currenSyncLayer))
 		if lyr == nil || err != nil {
 			lyr, err := s.getLayerFromNeighbors(currenSyncLayer)
-			if err != nil {
+			if err != nil || lyr == nil {
 				s.Info("could not get layer %v from neighbors ", lyr.Index())
 				return
 			}
