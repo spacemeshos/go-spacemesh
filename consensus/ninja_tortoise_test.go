@@ -106,16 +106,6 @@ func PrintMemUsage() {
 	fmt.Printf("\tNumGC = %v\n", m.NumGC)
 }
 
-func BenchmarkTortoiseS10P9(b *testing.B)    { benchmarkTortoise(100, 10, 9, b) }
-func BenchmarkTortoiseS50P49(b *testing.B)   { benchmarkTortoise(100, 50, 49, b) }
-func BenchmarkTortoiseS100P99(b *testing.B)  { benchmarkTortoise(100, 100, 99, b) }
-func BenchmarkTortoiseS200P199(b *testing.B) { benchmarkTortoise(100, 200, 199, b) }
-
-func BenchmarkTortoiseS10P7(b *testing.B)    { benchmarkTortoise(100, 10, 7, b) }
-func BenchmarkTortoiseS50P35(b *testing.B)   { benchmarkTortoise(100, 50, 35, b) }
-func BenchmarkTortoiseS100P70(b *testing.B)  { benchmarkTortoise(100, 100, 70, b) }
-func BenchmarkTortoiseS200P140(b *testing.B) { benchmarkTortoise(100, 200, 140, b) }
-
 var badblocks = 0.1
 
 func TestNinjaTortoise_S10P9(t *testing.T)    { sanity(100, 10, 10, badblocks) }
