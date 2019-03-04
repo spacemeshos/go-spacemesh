@@ -84,6 +84,20 @@ func (its *IntegrationTestSuite) Test_Gossiping() {
 	its.Equal(int(numgot), its.BootstrappedNodeCount+its.BootstrapNodesCount)
 }
 
+func Test_ReallySmallP2PIntegrationSuite(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	s := new(IntegrationTestSuite)
+
+	s.BootstrappedNodeCount = 2
+	s.BootstrapNodesCount = 1
+	s.NeighborsCount = 2
+
+	suite.Run(t, s)
+}
+
 func Test_SmallP2PIntegrationSuite(t *testing.T) {
 	if testing.Short() {
 		t.Skip()

@@ -1,179 +1,128 @@
 package ping
 
 import (
+	"bytes"
 	"errors"
 	"github.com/gogo/protobuf/proto"
-	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
+	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/ping/pb"
-	"sync"
 	"time"
 )
 
-// Pinger is an identity that does ping.
-type Pinger interface {
-	PublicKey() p2pcrypto.PublicKey
-}
-
-const protocol = "/ping/1.0/"
+const Protocol = "/ping/1.0/"
 
 // PingTimeout is a timeout for ping reply
-const PingTimeout = time.Second * 10 // TODO: Parametrize
+const PingTimeout = time.Second * 1 // TODO: Parametrize
 
-var responses = map[string]string{"hello": "world"}
-var responseMutex sync.RWMutex
-
-// AddResponse adds response according to originating request
-func AddResponse(req, res string) {
-	responseMutex.Lock()
-	responses[req] = res
-	responseMutex.Unlock()
-}
+const PING = server.MessageType(1)
 
 var errPingTimedOut = errors.New("Ping took too long to response")
+var errWrongID = errors.New("the peer claims to have a different identity")
+var errFailed = errors.New("ping request failed")
 
-// Ping manages ping requests and responses
-type Ping struct {
-	p2p p2p.Service
+type Pinger struct {
+	localNode node.Node
 
-	pending    map[crypto.UUID]chan *pb.Ping
-	pendMuxtex sync.RWMutex
+	pingCallbacks []func(ping *pb.Ping) error
 
-	ingressChannel chan service.DirectMessage
+	*server.MessageServer
+	logger log.Log
+	exit   chan struct{}
 }
 
-// New creates new ping instance, receives p2p as network infra
-func New(p2p p2p.Service) *Ping {
-	p := &Ping{pending: make(map[crypto.UUID]chan *pb.Ping)}
-	p.p2p = p2p
-	p.ingressChannel = p2p.RegisterDirectProtocol(protocol)
-	go p.readLoop()
-	return p
+func (p *Pinger) RegisterCallback(f func(ping *pb.Ping) error) {
+	p.pingCallbacks = append(p.pingCallbacks, f)
 }
 
-func (p *Ping) readLoop() {
-	for {
-		msg, ok := <-p.ingressChannel
-		if !ok {
-			// Channel is closed.
-			break
+//fires a sync every sm.syncInterval or on force space from outside
+func New(local node.Node, srv server.Service, logger log.Log) *Pinger {
+	p := Pinger{
+		localNode:     local,
+		logger:        logger,
+		MessageServer: server.NewMsgServer(srv, Protocol, PingTimeout, make(chan service.DirectMessage), logger),
+		exit:          make(chan struct{}),
+	}
+
+	p.RegisterMsgHandler(PING, p.newPingRequestHandler())
+
+	return &p
+}
+
+func (p *Pinger) newPingRequestHandler() func(msg []byte) []byte {
+	return func(msg []byte) []byte {
+		p.logger.Info("handle ping request")
+		req := &pb.Ping{}
+		if err := proto.Unmarshal(msg, req); err != nil {
+			return nil
 		}
 
-		go func(msg service.DirectMessage) {
-			ping := &pb.Ping{}
-			err := proto.Unmarshal(msg.Bytes(), ping)
-			if err != nil {
-				log.Error("failed to read incoming ping message err:", err)
-				// TODO : handle errors in readloop
+		// NOTE: this is blocking, in 2 ways. the functions are blocking the ping response
+		// but they also block each other and even cancel each other. if a callback fails
+		// the next one won't happen and we won't respond. this should be revisited once we
+		// more callbacks or logic to the callback.
+		for _, f := range p.pingCallbacks {
+			if err := f(req); err != nil {
+				return nil
 			}
+		}
 
-			if ping.Req {
-				log.Info("Ping: Request from (%v) - DirectMessage : %v", msg.Sender(), ping.Message)
-				err := p.handleRequest(msg.Sender(), ping)
-				if err != nil {
-					log.Error("Error handling ping request", err)
-				}
-				return
-			}
+		//pong
+		payload, err := proto.Marshal(&pb.Ping{ID: p.localNode.PublicKey().Bytes(), ListenAddress: p.localNode.Address()})
 
-			p.handleResponse(ping)
+		if err != nil {
+			p.logger.Error("Error marshaling response message (Ping)")
+			return nil
+		}
 
-		}(msg)
+		return payload
 	}
 }
 
-// Ping sends actual pings to target
-func (p *Ping) Ping(target p2pcrypto.PublicKey, msg string) (string, error) {
-	var response string
-	reqid := crypto.NewUUID()
-	ping := &pb.Ping{
-		ReqID:   reqid[:],
-		Req:     true,
-		Message: msg,
-	}
-	pchan, err := p.sendRequest(target, reqid, ping)
-	if err != nil {
-		return response, err
-	}
-
-	timer := time.NewTimer(PingTimeout)
-	select {
-	case res := <-pchan:
-		response = res.Message
-		p.pendMuxtex.Lock()
-		delete(p.pending, reqid)
-		p.pendMuxtex.Unlock()
-	case <-timer.C:
-		return response, errPingTimedOut
-	}
-
-	return response, nil
-}
-
-func (p *Ping) sendRequest(target p2pcrypto.PublicKey, reqid crypto.UUID, ping *pb.Ping) (chan *pb.Ping, error) {
-	pchan := make(chan *pb.Ping)
-	p.pendMuxtex.Lock()
-	p.pending[reqid] = pchan
-	p.pendMuxtex.Unlock()
-
-	remove := func() {
-		p.pendMuxtex.Lock()
-		delete(p.pending, reqid)
-		p.pendMuxtex.Unlock()
-	}
-
-	payload, err := proto.Marshal(ping)
-	if err != nil {
-		remove()
-		return nil, err
-	}
-
-	err = p.p2p.SendMessage(target, protocol, payload)
-	if err != nil {
-		remove()
-		return nil, err
-	}
-
-	return pchan, nil
-}
-
-func (p *Ping) handleRequest(sender p2pcrypto.PublicKey, ping *pb.Ping) error {
-	responseMutex.RLock()
-	resp, ok := responses[ping.Message]
-	responseMutex.RUnlock()
-
-	if !ok {
-		resp = ping.Message
-	}
-
-	pingResp := &pb.Ping{
-		ReqID:   ping.ReqID,
-		Req:     false,
-		Message: resp,
-	}
-
-	bin, err := proto.Marshal(pingResp)
+func (p *Pinger) Ping(peer p2pcrypto.PublicKey) error {
+	p.logger.Info("send ping request Peer: %v", peer)
+	data := &pb.Ping{ID: p.localNode.PublicKey().Bytes(), ListenAddress: p.localNode.Address()}
+	payload, err := proto.Marshal(data)
 	if err != nil {
 		return err
 	}
-	log.Debug("Ping: Responding with %v", resp)
-	return p.p2p.SendMessage(sender, protocol, bin)
-}
+	ch := make(chan []byte)
+	foo := func(msg []byte) {
+		defer close(ch)
+		p.logger.Info("handle ping response")
+		data := &pb.Ping{}
+		if err := proto.Unmarshal(msg, data); err != nil {
+			p.logger.Error("could not unmarshal block data")
+			return
+		}
 
-func (p *Ping) handleResponse(ping *pb.Ping) {
-	reqid := ping.ReqID
-	var creqid crypto.UUID
-	copy(creqid[:], reqid)
-	p.pendMuxtex.RLock()
-	c, ok := p.pending[creqid]
-	p.pendMuxtex.RUnlock()
-	if ok {
-		c <- ping
-		p.pendMuxtex.Lock()
-		delete(p.pending, creqid)
-		p.pendMuxtex.Unlock()
+		// todo: if we pinged it we already have id so no need to update
+		// todo : but what if id or listen address has changed ?
+
+		ch <- data.ID
 	}
+
+	err = p.MessageServer.SendRequest(PING, payload, peer, foo)
+
+	if err != nil {
+		return err
+	}
+
+	timeout := time.NewTimer(PingTimeout)
+	select {
+	case id := <-ch:
+		if id == nil {
+			return errFailed
+		}
+		if !bytes.Equal(id, peer.Bytes()) {
+			return errWrongID
+		}
+	case <-timeout.C:
+		return errPingTimedOut
+	}
+
+	return nil
 }
