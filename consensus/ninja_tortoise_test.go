@@ -126,7 +126,7 @@ func TestNinjaTortoise_S100P99(t *testing.T) {
 	}
 	sanity(100, 100, 100, badblocks)
 }
-func TestNinjaTortoise_S10P7(b *testing.T) {
+func TestNinjaTortoise_S10P7(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
