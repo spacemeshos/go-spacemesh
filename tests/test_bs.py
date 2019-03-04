@@ -1,28 +1,59 @@
+from datetime import datetime, timedelta
+from fixtures import load_config
+import os
+from os import path
 import pytest
-import yaml
-import time
+import pytz
 import re
 import subprocess
-from os import path
+import time
+import yaml
 from kubernetes import client
 from pytest_testconfig import config as testconfig
 
 from elasticsearch import Elasticsearch
 from elasticsearch_dsl import Search, Q
 
-from fixtures import load_config
 from node_info import NodeInfo
 
-BOOT_DEPLOYMENT_FILE='./k8s/bootstrap.yml'
+BOOT_DEPLOYMENT_FILE = './k8s/bootstrap.yml'
 CLIENT_DEPLOYMENT_FILE = './k8s/client.yml'
+ORACLE_DEPLOYMENT_FILE = './k8s/oracle.yml'
+
+ELASTICSEARCH_URL = "http://{0}".format(testconfig['elastic']['host'])
+REPLACEABLE_ARGS = ['randcon', 'oracle_server', 'bootnodes', 'genesis_time']
+
+GENESIS_TIME = pytz.utc.localize(datetime.utcnow() + timedelta(seconds=testconfig['genesis_delta'])).isoformat('T', 'seconds')
 
 
-def update_bootsrap_node_in_client(yml_input, bs_ip, bs_port, bs_key):
-    yml_input['spec']['template']['spec']['containers'][0]['args'][-1] = "{0}:{1}/{2}".format(bs_ip, bs_port, bs_key)
+def update_args_in_deployment_yaml(yml_input, **kwargs):
+    args = yml_input['spec']['template']['spec']['containers'][0]['args']
+    for k in kwargs:
+        if k not in REPLACEABLE_ARGS:
+            raise Exception("Unknown arg: {0} - parsing error")
+        replaced = False
+        for i,arg in enumerate(args):
+            if arg[2:].replace('-', '_') == k:
+                # replace the value
+                args[i+1] = kwargs[k]
+                replaced=True
+                break
+        if not replaced:
+            args += (['--{0}'.format(k.replace('_', '-')), kwargs[k]])
+    yml_input['spec']['template']['spec']['containers'][0]['args'] = args
     return yml_input
 
 
-def wait_to_deployment_to_be_ready(deployment_name, name_space):
+def get_elastic_search_api():
+    elastic_password = os.getenv('ES_PASSWD')
+    if not elastic_password:
+        raise Exception("Unknown Elasticsearch password. Please check 'ES_PASSWD' environment variable")
+    es = Elasticsearch([ELASTICSEARCH_URL],
+                       http_auth=(testconfig['elastic']['username'], elastic_password), port=80)
+    return es
+
+
+def wait_to_deployment_to_be_ready(deployment_name, name_space, time_out=None):
     total_sleep_time = 0
 
     while True:
@@ -33,20 +64,19 @@ def wait_to_deployment_to_be_ready(deployment_name, name_space):
         time.sleep(1)
         total_sleep_time += 1
 
+        if time_out and total_sleep_time > time_out:
+            raise Exception("Timeout waiting to deployment to be ready")
 
-def create_deployment(file_name,name_space, **kwargs):
+
+def create_deployment(file_name, name_space, **kwargs):
     with open(path.join(path.dirname(__file__), file_name)) as f:
         dep = yaml.safe_load(f)
         if kwargs:
-            dep = update_bootsrap_node_in_client(dep,
-                                                 kwargs['bootstrap_ip'],
-                                                 kwargs['bootstrap_port'],
-                                                 kwargs['bootstrap_key'])
+            dep = update_args_in_deployment_yaml(dep, **kwargs)
 
         k8s_beta = client.ExtensionsV1beta1Api()
         resp1 = k8s_beta.create_namespaced_deployment(body=dep, namespace=name_space)
-        wait_to_deployment_to_be_ready(resp1.metadata._name, name_space)
-
+        wait_to_deployment_to_be_ready(resp1.metadata._name, name_space, time_out=30)
         return resp1
 
 
@@ -61,12 +91,12 @@ def delete_deployment(deployment_name, name_space):
 
 
 def query_bootstrap_es(indx, namespace, bootstrap_po_name):
-    es = Elasticsearch(['http://127.0.0.1:9200'])
+    es = get_elastic_search_api()
     fltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
            Q("match_phrase", kubernetes__pod_name=bootstrap_po_name) & \
            Q("match_phrase", M="Local node identity")
     s = Search(index=indx, using=es).query('bool', filter=[fltr])
-    hits=list(s.scan())
+    hits = list(s.scan())
     for h in hits:
         match = re.search(r"Local node identity \w+ (?P<bootstarap_key>\w+)", h.log)
         if match:
@@ -75,7 +105,7 @@ def query_bootstrap_es(indx, namespace, bootstrap_po_name):
 
 
 def query_es_client_bootstrap(indx, namespace, client_po_name):
-    es = Elasticsearch(['http://127.0.0.1:9200'])
+    es = get_elastic_search_api()
     fltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
            Q("match_phrase", kubernetes__pod_name=client_po_name) & Q("match_phrase", M='discovery_bootstrap')
     s = Search(index=indx, using=es).query('bool', filter=[fltr])
@@ -83,28 +113,43 @@ def query_es_client_bootstrap(indx, namespace, client_po_name):
 
     print("Number of Hits: {0}".format(len(hits)))
     s=set([h.N for h in hits])
-    return (len(s))
+    return len(s)
 
 
 def query_es_gossip_message(indx, namespace, client_po_name):
-    es = Elasticsearch(['http://127.0.0.1:9200'])
+    es = get_elastic_search_api()
     fltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
            Q("match_phrase", kubernetes__pod_name=client_po_name) & Q("match_phrase", M='new_gossip_message')
     s = Search(index=indx, using=es).query('bool', filter=[fltr])
     hits = list(s.scan())
 
     print("Number of gossip Hits: {0}".format(len(hits)))
-    s=set([h.N for h in hits])
-    return (len(s))
+    s = set([h.N for h in hits])
+    return len(s)
+
+
+@pytest.fixture(scope='module')
+def setup_oracle():
+    namespaced_pods = client.CoreV1Api().list_namespaced_pod(testconfig['namespace'],
+                                                             label_selector="name=oracle").items
+    if not namespaced_pods:
+        resp = create_deployment(ORACLE_DEPLOYMENT_FILE, testconfig['namespace'])
+        namespaced_pods = client.CoreV1Api().list_namespaced_pod(testconfig['namespace'],
+                                                                 label_selector="name=oracle").items
+        if not namespaced_pods:
+            raise Exception('Could not setup Oracle Server')
+    return namespaced_pods[0].status.pod_ip
 
 
 @pytest.fixture
-def setup_bootstrap(request):
+def setup_bootstrap(request, load_config, setup_oracle):
 
     def _setup_bootstrap_in_namespace(name_space):
         global bs_info
         bs_info = NodeInfo()
-        resp=create_deployment(BOOT_DEPLOYMENT_FILE, name_space)
+        resp = create_deployment(BOOT_DEPLOYMENT_FILE, name_space,
+                                 oracle_server='http://{0}:3030'.format(setup_oracle),
+                                 genesis_time=GENESIS_TIME)
 
         bs_info.bs_deployment_name = resp.metadata._name
         namespaced_pods = client.CoreV1Api().list_namespaced_pod(namespace=name_space).items
@@ -132,15 +177,15 @@ def setup_bootstrap(request):
 
 
 @pytest.fixture
-def setup_clients(request, setup_bootstrap):
+def setup_clients(request, setup_bootstrap, setup_oracle):
 
     def _setup_clients_in_namespace(name_space):
         global bs_info, client_info
         client_info = NodeInfo()
         resp = create_deployment(CLIENT_DEPLOYMENT_FILE, name_space,
-                                 bootstrap_ip=bs_info.bs_pod_ip,
-                                 bootstrap_port='7513',
-                                 bootstrap_key=bs_info.bs_key)
+                                 bootnodes="{0}:{1}/{2}".format(bs_info.bs_pod_ip, '7513', bs_info.bs_key),
+                                 oracle_server = 'http://{0}:3030'.format(setup_oracle),
+                                 genesis_time = GENESIS_TIME)
         client_info.bs_deployment_name = resp.metadata._name
         namespaced_pods = client.CoreV1Api().list_namespaced_pod(namespace=name_space, include_uninitialized=True).items
         client_pods = list(filter(lambda i: i.metadata.name.startswith(client_info.bs_deployment_name), namespaced_pods))
@@ -166,21 +211,21 @@ def setup_clients(request, setup_bootstrap):
 #    TESTS
 #==============================================================================
 
-current_index = 'kubernetes_cluster-2019.02.2*'
+current_index = 'kubernetes_cluster-2019.03.*'
 
 
-def test_bootstrap(load_config, setup_bootstrap):
-    time.sleep(10)
+def test_bootstrap(setup_bootstrap):
+    time.sleep(5)
     assert setup_bootstrap.bs_key == query_bootstrap_es(current_index,
                                                         testconfig['namespace'],
                                                         setup_bootstrap.bs_pod_name)
 
 
 def test_client(load_config, setup_clients):
-    time.sleep(10)
+    time.sleep(60)
     global client_info
     peers = query_es_client_bootstrap(current_index, testconfig['namespace'], client_info.bs_deployment_name)
-    assert len(setup_clients) == peers
+    assert peers == len(setup_clients)
 
 
 def test_gossip(load_config, setup_clients):

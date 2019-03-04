@@ -12,8 +12,15 @@ spec:
       containers:
       - name: bootstrap
         image: spacemeshos/go-spacemesh:latest
-        args: ['--oracle_server', 'http://10.12.3.14:3030', '--test-mode']
+        args: ['--config', '/etc/config/config.toml', '--oracle_server', 'http://10.12.3.110:3030', '--test-mode']
         ports:
         - containerPort: 9999
+        volumeMounts:
+        - name: config-volume
+          mountPath: /etc/config
+      volumes:
+      - name: config-volume
+        configMap:
+          name: cm
       nodeSelector:
         role: tests

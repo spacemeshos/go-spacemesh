@@ -14,9 +14,9 @@ spec:
     spec:
       containers:
       - name: client
-        image: spacemeshos/go-spacemesh:ms1
-        args: ['--randcon', '3', '--bootstrap', '--test-mode', '--oracle_server', 'http://172.31.55.212:3030', '--grpc-server', '--json-server', '--bootnodes', '10.36.1.12:7513/26hRBJqMJPUnKgJ9VR6g3kH6aCQhZ9shBvhn3bEHDvRyv']
+        image: spacemeshos/go-spacemesh:latest
+        args: ['--randcon', '3', '--bootstrap', '--test-mode', '--oracle_server', 'http://10.12.3.14:3030', '--grpc-server', '--json-server', '--bootnodes', '10.36.1.12:7513/26hRBJqMJPUnKgJ9VR6g3kH6aCQhZ9shBvhn3bEHDvRyv']
         ports:
         - containerPort: 9090
       nodeSelector:
-        role: client
+        role: tests

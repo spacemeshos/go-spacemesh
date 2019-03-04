@@ -1,1 +1,8 @@
-namespace: isaac
+namespace: sm
+
+genesis_delta: 30
+
+elastic:
+  host: es.spacemesh.io
+  port: 9200
+  username: spacemesh

@@ -2,8 +2,7 @@ import os
 import pytest
 from kubernetes import config
 
-
-@pytest.fixture(scope='session')
+@pytest.fixture(scope='module')
 def load_config():
     kube_config_var = os.getenv('KUBECONFIG', '~/.kube/config')
     kube_config_path = os.path.expanduser(kube_config_var)
