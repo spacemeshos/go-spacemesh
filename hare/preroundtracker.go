@@ -29,16 +29,13 @@ func (pre *PreRoundTracker) OnPreRound(msg *pb.HareMessage) {
 		return
 	}
 
-	var sToTrack *Set = nil
-	if unionSet, exist := pre.preRound[verifier.String()]; exist { // not first pre-round msg from this sender
+	sToTrack := NewSet(msg.Message.Values) // assume track all values
+	alreadyTracked := NewSmallEmptySet()   // assume nothing tracked so far
+
+	if set, exist := pre.preRound[verifier.String()]; exist { // not first pre-round msg from this sender
 		log.Debug("Duplicate sender %v", verifier.String())
-		claimedSet := NewSet(msg.Message.Values)                     // new claimed set
-		sToTrack = claimedSet                                        // start with the claimed set
-		sToTrack.Subtract(unionSet)                                  // subtract the union of all sets we have seen so far from this sender
-		pre.preRound[verifier.String()] = unionSet.Union(claimedSet) // update the union to include new values
-	} else { // first pre-round
-		sToTrack = NewSet(msg.Message.Values)      // first pre-round, track all values
-		pre.preRound[verifier.String()] = sToTrack // the union is the set we received
+		alreadyTracked = set              // update already tracked values
+		sToTrack.Subtract(alreadyTracked) // subtract the already tracked values
 	}
 
 	// record values
@@ -47,6 +44,8 @@ func (pre *PreRoundTracker) OnPreRound(msg *pb.HareMessage) {
 		metrics.PreRoundCounter.With("value", v.String()).Add(1)
 	}
 
+	// update the union to include new values
+	pre.preRound[verifier.String()] = alreadyTracked.Union(sToTrack)
 }
 
 // Returns true if the given value is provable, false otherwise
