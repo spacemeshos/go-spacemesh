@@ -8,6 +8,7 @@ import (
 	hareConfig "github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	p2pConfig "github.com/spacemeshos/go-spacemesh/p2p/config"
+	"github.com/spacemeshos/go-spacemesh/state"
 	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spf13/viper"
 	"path/filepath"
@@ -40,6 +41,7 @@ type Config struct {
 	CONSENSUS  consensusConfig.Config `mapstructure:"consensus"`
 	HARE       hareConfig.Config      `mapstructure:"hare"`
 	TIME       timeConfig.TimeConfig  `mapstructure:"time"`
+	GAS        state.GasParams        `mapstructure:"gas"`
 }
 
 // BaseConfig defines the default configuration options for spacemesh app
@@ -75,6 +77,7 @@ func DefaultConfig() Config {
 		CONSENSUS:  consensusConfig.DefaultConfig(),
 		HARE:       hareConfig.DefaultConfig(),
 		TIME:       timeConfig.DefaultConfig(),
+		GAS:        state.DefaultConfig(),
 	}
 }
 
