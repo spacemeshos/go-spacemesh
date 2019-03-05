@@ -25,6 +25,7 @@ type MeshValidator interface {
 
 type StateUpdater interface {
 	ApplyTransactions(layer state.LayerID, transactions state.Transactions) (uint32, error)
+	ApplyRewards(layer state.LayerID, miners map[string]struct{}, underQuota map[string]struct{}, bonusReward, diminishedReward *big.Int)
 }
 
 type Mesh struct {
@@ -84,7 +85,7 @@ func (m *Mesh) SetLatestLayer(idx uint32) {
 	defer m.lkMutex.Unlock()
 	m.lkMutex.Lock()
 	if idx > m.latestLayer {
-		m.Info("set latest known layer to ", idx)
+		m.Info("set latest known layer to %v", idx)
 		m.latestLayer = idx
 	}
 }
@@ -98,30 +99,44 @@ func (m *Mesh) ValidateLayer(layer *Layer) {
 	}
 }
 
+func SortBlocks(blocks []*Block) []*Block {
+	//not final sorting method, need to talk about this
+	sort.Slice(blocks, func(i, j int) bool { return blocks[i].ID() < blocks[j].ID() })
+	return blocks
+}
+
+func (m *Mesh) ExtractUniqueOrderedTransactions(l *Layer) []*state.Transaction {
+	txs := make([]*state.Transaction, 0, layerSize)
+	sortedBlocks := SortBlocks(l.blocks)
+
+	for _, b := range sortedBlocks {
+		if !m.tortoise.ContextualValidity(b.ID()) {
+			continue
+		}
+		for _, tx := range b.Txs {
+			//todo: think about these conversions.. are they needed?
+			txs = append(txs, SerializableTransaction2StateTransaction(&tx))
+		}
+	}
+
+	return MergeDoubles(txs)
+}
+
 func (m *Mesh) PushTransactions(oldBase LayerID, newBase LayerID) {
 	for i := oldBase; i < newBase; i++ {
-		txs := make([]*state.Transaction, 0, layerSize)
+
 		l, err := m.getLayer(i)
 		if err != nil || l == nil {
 			m.Error("") //todo handle error
 			return
 		}
 
-		sort.Slice(l.blocks, func(i, j int) bool { return l.blocks[i].ID() < l.blocks[j].ID() })
-
-		for _, b := range l.blocks {
-			if m.tortoise.ContextualValidity(b.ID()) {
-				for _, tx := range b.Txs {
-					//todo: think about these conversions.. are they needed?
-					txs = append(txs, SerializableTransaction2StateTransaction(&tx))
-				}
-			}
-		}
-		x, err := m.state.ApplyTransactions(state.LayerID(i), txs)
+		merged := m.ExtractUniqueOrderedTransactions(l)
+		x, err := m.state.ApplyTransactions(state.LayerID(i), merged)
 		if err != nil {
 			m.Log.Error("cannot apply transactions %v", err)
 		}
-		m.Log.Info("applied %v transactions in new pbase is %d apply result was %d", len(txs), newBase, x)
+		m.Log.Info("applied %v transactions in new pbase is %d apply result was %d", len(merged), newBase, x)
 	}
 }
 
@@ -223,6 +238,51 @@ func (m *Mesh) GetOrphanBlocksBefore(l LayerID) ([]BlockID, error) {
 
 	m.Info("orphans for layer %d are %v", l, idArr)
 	return idArr, nil
+}
+
+func (m *Mesh) AccumulateRewards(rewardLayer LayerID, params RewardParams) {
+	l, err := m.getLayer(rewardLayer)
+	if err != nil || l == nil {
+		m.Error("") //todo handle error
+		return
+	}
+
+	ids := make(map[string]struct{})
+	uq := make(map[string]struct{})
+
+	//todo: check if block producer was eligible?
+	for _, bl := range l.blocks {
+		if _, found := ids[bl.MinerID]; found {
+			log.Error("two blocks found from same miner %v in layer %v", bl.MinerID, bl.LayerIndex)
+			continue
+		}
+		ids[bl.MinerID] = struct{}{}
+		if uint32(len(bl.Txs)) < params.TxQuota {
+			//todo: think of giving out reward for unique txs as well
+			uq[bl.MinerID] = struct{}{}
+		}
+	}
+	//accumulate all blocks rewards
+	merged := m.ExtractUniqueOrderedTransactions(l)
+
+	rewards := &big.Int{}
+	processed := 0
+	for _, tx := range merged {
+		res := new(big.Int).Mul(tx.Price, params.SimpleTxCost)
+		processed++
+		rewards.Add(rewards, res)
+	}
+
+	layerReward := CalculateLayerReward(rewardLayer, params)
+	rewards.Add(rewards, layerReward)
+
+	numBlocks := big.NewInt(int64(len(l.blocks)))
+	log.Info("fees reward: %v total processed %v total txs %v merged %v blocks: %v", rewards.Int64(), processed, len(merged), len(merged), numBlocks)
+
+	bonusReward, diminishedReward := calculateActualRewards(rewards, numBlocks, params, len(uq))
+	m.state.ApplyRewards(state.LayerID(rewardLayer), ids, uq, bonusReward, diminishedReward)
+	//todo: should miner id be sorted in a deterministic order prior to applying rewards?
+
 }
 
 func (m *Mesh) GetBlock(id BlockID) (*Block, error) {

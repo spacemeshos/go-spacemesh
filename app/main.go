@@ -315,7 +315,7 @@ func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service,
 		return err
 	}
 	rng := rand.New(mt19937.New())
-	processor := state.NewTransactionProcessor(rng, st, lg)
+	processor := state.NewTransactionProcessor(rng, st, app.Config.GAS, lg)
 
 	coinToss := consensus.WeakCoin{}
 	gTime, err := time.Parse(time.RFC3339, app.Config.GenesisTime)
