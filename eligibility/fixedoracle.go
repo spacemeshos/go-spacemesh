@@ -105,7 +105,7 @@ func (fo *FixedRolacle) generateEligibility(expCom int) map[string]struct{} {
 		return emap
 	}
 
-	expHonest := expCom/2 + 1 + expCom % 2
+	expHonest := expCom/2 + 1 + expCom%2
 	if expHonest > len(fo.honest) {
 		log.Error("Not enough registered honest. Expected %v<=%v", expHonest, len(fo.honest))
 		expHonest = len(fo.honest)

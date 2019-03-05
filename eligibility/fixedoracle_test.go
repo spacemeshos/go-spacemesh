@@ -157,13 +157,11 @@ func TestFixedRolacle_Eligible4(t *testing.T) {
 	}
 
 	// when requesting a bigger committee size everyone should be eligible
-fmt.Println(len(oracle.Export(0, numOfClients)))
+	fmt.Println(len(oracle.Export(0, numOfClients)))
 	for _, s := range ids {
 		assert.True(t, oracle.Eligible(0, numOfClients, s, nil))
 	}
 }
-
-
 
 func TestFixedRolacle_Export(t *testing.T) {
 	oracle := New()
