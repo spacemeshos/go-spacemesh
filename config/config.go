@@ -7,6 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	hareConfig "github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/mesh"
 	p2pConfig "github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/state"
 	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
@@ -41,7 +42,8 @@ type Config struct {
 	CONSENSUS  consensusConfig.Config `mapstructure:"consensus"`
 	HARE       hareConfig.Config      `mapstructure:"hare"`
 	TIME       timeConfig.TimeConfig  `mapstructure:"time"`
-	GAS        state.GasParams        `mapstructure:"gas"`
+	GAS        state.GasConfig        `mapstructure:"gas"`
+	REWARD     mesh.RewardConfig      `mapstructure:"reward"`
 }
 
 // BaseConfig defines the default configuration options for spacemesh app
@@ -78,6 +80,7 @@ func DefaultConfig() Config {
 		HARE:       hareConfig.DefaultConfig(),
 		TIME:       timeConfig.DefaultConfig(),
 		GAS:        state.DefaultConfig(),
+		REWARD:     mesh.DefaultRewardConfig(),
 	}
 }
 

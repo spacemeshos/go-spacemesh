@@ -35,7 +35,7 @@ func getMesh(id string) *Mesh {
 	bdb := database.NewMemDatabase()
 	ldb := database.NewMemDatabase()
 	cdb := database.NewMemDatabase()
-	layers := NewMesh(ldb, bdb, cdb, &MeshValidatorMock{}, &MockState{}, log.New(id, "", ""))
+	layers := NewMesh(ldb, bdb, cdb, ConfigTst(), &MeshValidatorMock{}, &MockState{}, log.New(id, "", ""))
 	return layers
 }
 

@@ -78,7 +78,7 @@ func (s *Syncer) Start() {
 
 //fires a sync every sm.syncInterval or on force space from outside
 func (s *Syncer) run() {
-	foo := func() {
+	syncRoutine := func() {
 		if atomic.CompareAndSwapUint32(&s.SyncLock, IDLE, RUNNING) {
 			s.Synchronise()
 			atomic.StoreUint32(&s.SyncLock, IDLE)
@@ -90,11 +90,11 @@ func (s *Syncer) run() {
 			s.Debug("run stoped")
 			return
 		case <-s.forceSync:
-			go foo()
+			go syncRoutine()
 		case layer := <-s.clock:
 			atomic.StoreUint32(&s.currentLayer, uint32(layer))
 			s.Info("sync got tick for layer %v", layer)
-			go foo()
+			go syncRoutine()
 		}
 	}
 }
