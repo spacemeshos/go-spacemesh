@@ -253,12 +253,12 @@ func createLayerWithCorruptedPattern(index mesh.LayerID, prev *mesh.Layer, block
 	gbs := int(float64(blocksInLayer) * (1 - badBlocks))
 	layerBlocks := make([]mesh.BlockID, 0, blocksInLayer)
 	for i := 0; i < gbs; i++ {
-		bl := blockWithPattern(coin, data, ts, goodPattern, prev)
+		bl := addPattern(mesh.NewBlock(coin, data, ts, 1), goodPattern, prev)
 		layerBlocks = append(layerBlocks, bl.ID())
 		l.AddBlock(bl)
 	}
 	for i := 0; i < blocksInLayer-gbs; i++ {
-		bl := blockWithPattern(coin, data, ts, badPattern, prev)
+		bl := addPattern(mesh.NewBlock(coin, data, ts, 1), badPattern, prev)
 		layerBlocks = append(layerBlocks, bl.ID())
 		l.AddBlock(bl)
 	}
@@ -267,8 +267,7 @@ func createLayerWithCorruptedPattern(index mesh.LayerID, prev *mesh.Layer, block
 	return l
 }
 
-func blockWithPattern(coin bool, data []byte, ts time.Time, goodPattern []int, prev *mesh.Layer) *mesh.Block {
-	bl := mesh.NewBlock(coin, data, ts, 1)
+func addPattern(bl *mesh.Block, goodPattern []int, prev *mesh.Layer) *mesh.Block {
 	for _, id := range goodPattern {
 		b := prev.Blocks()[id]
 		bl.AddVote(mesh.BlockID(b.Id))
