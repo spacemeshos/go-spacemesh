@@ -1,14 +1,18 @@
 package p2p
 
 import (
-	"github.com/spacemeshos/go-spacemesh/p2p/connectionpool"
-	"github.com/spacemeshos/go-spacemesh/p2p/dht"
-	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
 
+	"github.com/spacemeshos/go-spacemesh/p2p/connectionpool"
+	"github.com/spacemeshos/go-spacemesh/p2p/dht"
+	"github.com/stretchr/testify/require"
+
 	"context"
 	"errors"
+	"math/rand"
+	"sync"
+
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
@@ -17,8 +21,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/stretchr/testify/assert"
-	"math/rand"
-	"sync"
 )
 
 const debug = false
@@ -210,6 +212,22 @@ func sendDirectMessage(t *testing.T, sender *swarm, recvPub p2pcrypto.PublicKey,
 			assert.Equal(t, msg.Bytes(), payload)
 		}
 		assert.Equal(t, msg.Sender().String(), sender.lNode.String())
+		break
+	case <-time.After(5 * time.Second):
+		t.Error("Took too much time to receive")
+	}
+}
+
+func sendAbstractMessage(t *testing.T, sender *swarm, recvPub p2pcrypto.PublicKey, msg []byte, checkpayload bool) {
+	payload := []byte(RandString(10))
+	err := RetrySend(sender, recvPub, exampleProtocol, payload)
+	require.NoError(t, err)
+	select {
+	case msg:
+		if checkpayload {
+			assert.Equal(t, msg, payload)
+		}
+		// assert.Equal(t, msg.Sender().String(), sender.lNode.String())
 		break
 	case <-time.After(5 * time.Second):
 		t.Error("Took too much time to receive")

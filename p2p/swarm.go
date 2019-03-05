@@ -313,14 +313,14 @@ func (s *swarm) establishConnection(peerPubKey p2pcrypto.PublicKey) (net.Connect
 
 func RetrySend(s *swarm, peerPubKey p2pcrypto.PublicKey, message []byte) error {
 	var err error
-	conn, err := s.establishConnection(peerPubKey)
-	if err == 1 {
+	conn, val := s.establishConnection(peerPubKey)
+	if val == 1 {
 		return conn
 	}
 
-	res = conn.Send(message)
+	err = conn.Send(message)
 	s.lNode.Debug("Message send retry executed successfully")
-	return res	 
+	return err	 
 }
 
 // SendMessage Sends a message to a remote node
@@ -332,8 +332,8 @@ func RetrySend(s *swarm, peerPubKey p2pcrypto.PublicKey, message []byte) error {
 // Local request to send a message to a remote node
 func (s *swarm) sendMessageImpl(peerPubKey p2pcrypto.PublicKey, protocol string, payload service.Data) error {
 	//s.lNode.Info("Sending message to %v", peerPubKey)
-	conn, err := s.establishConnection(peerPubKey)
-	if err == 1 {
+	conn, val := s.establishConnection(peerPubKey)
+	if val == 1 {
 		return conn
 	}
 
