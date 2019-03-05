@@ -102,7 +102,7 @@ func init() {
 	RootCmd.PersistentFlags().IntVar(&config.HARE.F, "hare-max-adversaries",
 		config.HARE.F, "Max number of adversaries in the Hare committee")
 	// RoundDuration determines the duration of a round in the Hare protocol
-	RootCmd.PersistentFlags().DurationVar(&config.HARE.RoundDuration, "hare-round-duration-ms",
+	RootCmd.PersistentFlags().IntVar(&config.HARE.RoundDuration, "hare-round-duration-sec",
 		config.HARE.RoundDuration, "Duration of round in the Hare protocol")
 
 	/**========================Consensus Flags ========================== **/
