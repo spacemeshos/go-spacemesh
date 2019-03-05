@@ -6,6 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
+// Tracks pre-round messages
 type PreRoundTracker struct {
 	preRound  map[string]*Set  // maps PubKey->Set of already tracked values
 	tracker   *RefCountTracker // keeps track of seen values
@@ -66,7 +67,7 @@ func (pre *PreRoundTracker) CanProveSet(set *Set) bool {
 	return true
 }
 
-// Filters the given set according to collected proofs
+// Filters out the given set from non-provable values
 func (pre *PreRoundTracker) FilterSet(set *Set) {
 	for _, v := range set.values {
 		if !pre.CanProveValue(v) { // not enough witnesses

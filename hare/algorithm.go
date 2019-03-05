@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-const ProtoName = "HARE_PROTOCOL"
+const protoName = "HARE_PROTOCOL"
 
 type Byteable interface {
 	Bytes() []byte
@@ -39,6 +39,7 @@ func (cpo procOutput) Set() *Set {
 
 var _ TerminationOutput = (*procOutput)(nil)
 
+// Represents the state of the participant
 type State struct {
 	k           int32           // the round counter (r%4 is the round number)
 	ki          int32           // indicates when S was first committed upon
@@ -50,7 +51,7 @@ type ConsensusProcess struct {
 	log.Log
 	State
 	Closer
-	instanceId        InstanceId
+	instanceId        InstanceId  // the id of this consensus instance
 	oracle            HareRolacle // roles oracle
 	signing           Signing
 	network           NetworkService
@@ -69,6 +70,7 @@ type ConsensusProcess struct {
 	pending           map[string]*pb.HareMessage
 }
 
+// Creates a new consensus process instance
 func NewConsensusProcess(cfg config.Config, instanceId InstanceId, s *Set, oracle Rolacle, signing Signing, p2p NetworkService, terminationReport chan TerminationOutput, logger log.Log) *ConsensusProcess {
 	proc := &ConsensusProcess{}
 	proc.State = State{-1, -1, s.Clone(), nil}
@@ -95,6 +97,7 @@ func iterationFromCounter(roundCounter int32) int32 {
 	return roundCounter / 4
 }
 
+// Starts the consensus process
 func (proc *ConsensusProcess) Start() error {
 	if proc.isStarted { // called twice on same instance
 		proc.Error("ConsensusProcess has already been started")
@@ -118,10 +121,12 @@ func (proc *ConsensusProcess) Start() error {
 	return nil
 }
 
+// Returns the id of this instance
 func (proc *ConsensusProcess) Id() InstanceId {
 	return proc.instanceId
 }
 
+// Sets the inbox channel
 func (proc *ConsensusProcess) SetInbox(inbox chan *pb.HareMessage) {
 	if inbox == nil {
 		proc.Error("ConsensusProcess tried to SetInbox with nil")
@@ -268,7 +273,7 @@ func (proc *ConsensusProcess) sendMessage(msg *pb.HareMessage) {
 		panic("could not marshal message before send")
 	}
 
-	if err := proc.network.Broadcast(ProtoName, data); err != nil {
+	if err := proc.network.Broadcast(protoName, data); err != nil {
 		proc.Error("Could not broadcast round message ", err.Error())
 		return
 	}
