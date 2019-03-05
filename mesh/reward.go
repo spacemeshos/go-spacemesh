@@ -16,6 +16,14 @@ type RewardParams struct {
 
 //type Transactions []*state.Transaction
 
+
+
+func CalculateLayerReward(id LayerID, params RewardParams) *big.Int {
+	//todo: add inflation rules here
+	return params.BaseReward
+}
+
+
 func MergeDoubles(transactions []*state.Transaction) []*state.Transaction {
 	transactionSet := make(map[common.Hash]struct{})
 	merged := make([]*state.Transaction, 0, len(transactions))
@@ -24,63 +32,14 @@ func MergeDoubles(transactions []*state.Transaction) []*state.Transaction {
 			transactionSet[trns.Hash()] = struct{}{}
 			merged = append(merged, trns)
 		} else {
-			log.Info("double trans merged %v", trns)
+			log.Debug("double trans merged %v", trns)
 		}
 	}
 	return merged
 }
 
-func (m *Mesh) CalculateLayerReward(id LayerID, params RewardParams) *big.Int {
-	return params.BaseReward
-}
 
-func (m *Mesh) AccumulateRewards(rewardLayer LayerID, params RewardParams) {
-	l, err := m.getLayer(rewardLayer)
-	if err != nil || l == nil {
-		m.Error("") //todo handle error
-		return
-	}
-
-	ids := make(map[string]struct{})
-	uq := make(map[string]struct{})
-
-	//todo: check if block producer was eligible?
-	for _, bl := range l.blocks {
-		if _, found := ids[bl.MinerID]; found {
-			log.Error("two blocks found from same miner %v in layer %v", bl.MinerID, bl.LayerIndex)
-			continue
-		}
-		ids[bl.MinerID] = struct{}{}
-		if uint32(len(bl.Txs)) < params.TxQuota {
-			//todo: think of giving out reward for unique txs as well
-			uq[bl.MinerID] = struct{}{}
-		}
-	}
-	//accumulate all blocks rewards
-	txs := m.ExtractOrderedSortedTransactions(l)
-
-	merged := MergeDoubles(txs)
-	rewards := &big.Int{}
-	processed := 0
-	for _, tx := range merged {
-		res := new(big.Int).Mul(tx.Price, params.SimpleTxCost)
-		processed++
-		rewards.Add(rewards, res)
-	}
-
-	layerReward := m.CalculateLayerReward(rewardLayer, params)
-	rewards.Add(rewards, layerReward)
-
-	numBlocks := big.NewInt(int64(len(l.blocks)))
-	log.Info("fees reward: %v total processed %v total txs %v merged %v blocks: %v", rewards.Int64(), processed, len(txs), len(merged), numBlocks)
-
-	bonusReward, diminishedReward := m.calculateActualRewards(rewards, numBlocks, params, len(uq))
-	m.state.ApplyRewards(state.LayerID(rewardLayer), ids, uq, bonusReward, diminishedReward)
-	//todo: should miner id be sorted in a deterministic order prior to applying rewards?
-
-}
-
-func (m *Mesh) calculateActualRewards(rewards *big.Int, numBlocks *big.Int, params RewardParams, underQuotaBlocks int) (*big.Int, *big.Int) {
+func calculateActualRewards(rewards *big.Int, numBlocks *big.Int, params RewardParams, underQuotaBlocks int) (*big.Int, *big.Int) {
 	mod := new(big.Int)
 	// basic_reward =  total rewards / total_num_of_blocks
 	blockRewardPerMiner, _ := new(big.Int).DivMod(rewards, numBlocks, mod)

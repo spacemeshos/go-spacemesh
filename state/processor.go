@@ -76,7 +76,7 @@ type GasParams struct {
 	BasicTxCost *big.Int
 }
 
-func DefaultGasParams() GasParams {
+func DefaultConfig() GasParams {
 	return GasParams{
 		big.NewInt(3),
 	}

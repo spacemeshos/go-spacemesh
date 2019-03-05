@@ -77,7 +77,7 @@ func DefaultConfig() Config {
 		CONSENSUS:  consensusConfig.DefaultConfig(),
 		HARE:       hareConfig.DefaultConfig(),
 		TIME:       timeConfig.DefaultConfig(),
-		GAS:        state.DefaultGasParams(),
+		GAS:        state.DefaultConfig(),
 	}
 }
 
