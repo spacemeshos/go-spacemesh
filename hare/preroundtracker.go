@@ -7,7 +7,7 @@ import (
 )
 
 type PreRoundTracker struct {
-	preRound  map[string]*Set  // maps PubKey->Pre-Round msg (unique)
+	preRound  map[string]*Set  // maps PubKey->Set of already tracked values
 	tracker   *RefCountTracker // keeps track of seen values
 	threshold uint32           // the threshold to prove a single value
 }
