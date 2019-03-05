@@ -54,6 +54,7 @@ func NewBlock(coin bool, data []byte, ts time.Time, layerId LayerID) *Block {
 		LayerIndex: layerId,
 		BlockVotes: make([]BlockID, 0, 10),
 		ViewEdges:  make([]BlockID, 0, 10),
+		Txs:        make([]SerializableTransaction, 0, 10),
 		Timestamp:  ts.UnixNano(),
 		Data:       data,
 		Coin:       coin,

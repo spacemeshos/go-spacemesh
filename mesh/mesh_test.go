@@ -6,6 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/stretchr/testify/assert"
+	"math/big"
 	"testing"
 	"time"
 )
@@ -23,6 +24,9 @@ type MockState struct{}
 
 func (MockState) ApplyTransactions(layer state.LayerID, txs state.Transactions) (uint32, error) {
 	return 0, nil
+}
+
+func (MockState) ApplyRewards(layer state.LayerID, miners map[string]struct{}, underQuota map[string]struct{}, bonusReward, diminishedReward *big.Int) {
 }
 
 func getMesh(id string) *Mesh {
