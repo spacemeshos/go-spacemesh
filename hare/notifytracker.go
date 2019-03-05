@@ -9,6 +9,7 @@ import (
 	"hash/fnv"
 )
 
+// Tracks notify messages
 type NotifyTracker struct {
 	notifies     map[string]struct{} // tracks PubKey->Notification
 	tracker      *RefCountTracker    // tracks ref count to each seen set
@@ -24,8 +25,8 @@ func NewNotifyTracker(expectedSize int) *NotifyTracker {
 	return nt
 }
 
-// update state on notification message
-// It returns true if we ignored this message and false otherwise
+// Track the provided notification message
+// Returns true if the message didn't affect the state, false otherwise
 func (nt *NotifyTracker) OnNotify(msg *pb.HareMessage) bool {
 	verifier, err := NewVerifier(msg.PubKey)
 	if err != nil {
@@ -49,6 +50,7 @@ func (nt *NotifyTracker) OnNotify(msg *pb.HareMessage) bool {
 	return false
 }
 
+// Returns the notification count tracked for the provided set
 func (nt *NotifyTracker) NotificationsCount(s *Set) int {
 	return int(nt.tracker.CountStatus(s.Id()))
 }
@@ -73,6 +75,7 @@ func (nt *NotifyTracker) onCertificate(k int32, set *Set) {
 	nt.certificates[calcId(k, set)] = struct{}{}
 }
 
+// Checks if a certificates exist for the provided set in round k
 func (nt *NotifyTracker) HasCertificate(k int32, set *Set) bool {
 	_, exist := nt.certificates[calcId(k, set)]
 	return exist
