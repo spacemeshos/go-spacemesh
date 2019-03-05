@@ -2,6 +2,7 @@ package eligibility
 
 import (
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"math/rand"
 	"testing"
 )
@@ -126,4 +127,56 @@ func TestFixedRolacle_Eligible3(t *testing.T) {
 
 	assert.Equal(t, exp/2+1, hc)
 	assert.Equal(t, exp/2-1, dc)
+}
+
+func TestGenerateElibility(t *testing.T) {
+	oracle := New()
+	ids := []string{}
+	for i := 0; i < 30; i++ {
+		s := genStr()
+		ids = append(ids, s)
+		oracle.Register(true, s)
+	}
+
+	m := oracle.generateEligibility(len(oracle.honest))
+
+	for _, s := range ids {
+		_, ok := m[s]
+		require.True(t, ok)
+	}
+}
+
+func TestFixedRolacle_Eligible4(t *testing.T) {
+	oracle := New()
+	var ids []string
+	for i := 0; i < 33; i++ {
+		s := genStr()
+		ids = append(ids, s)
+		oracle.Register(true, s)
+	}
+
+	// when requesting a bigger committee size everyone should be eligible
+
+	for _, s := range ids {
+		assert.True(t, oracle.Eligible(0, numOfClients, s, nil))
+	}
+}
+
+func TestFixedRolacle_Export(t *testing.T) {
+	oracle := New()
+	var ids []string
+	for i := 0; i < 35; i++ {
+		s := genStr()
+		ids = append(ids, s)
+		oracle.Register(true, s)
+	}
+
+	// when requesting a bigger committee size everyone should be eligible
+
+	m := oracle.Export(0, numOfClients)
+
+	for _, s := range ids {
+		_, ok := m[s]
+		assert.True(t, ok)
+	}
 }
