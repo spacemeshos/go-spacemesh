@@ -16,13 +16,10 @@ type RewardParams struct {
 
 //type Transactions []*state.Transaction
 
-
-
 func CalculateLayerReward(id LayerID, params RewardParams) *big.Int {
 	//todo: add inflation rules here
 	return params.BaseReward
 }
-
 
 func MergeDoubles(transactions []*state.Transaction) []*state.Transaction {
 	transactionSet := make(map[common.Hash]struct{})
@@ -37,7 +34,6 @@ func MergeDoubles(transactions []*state.Transaction) []*state.Transaction {
 	}
 	return merged
 }
-
 
 func calculateActualRewards(rewards *big.Int, numBlocks *big.Int, params RewardParams, underQuotaBlocks int) (*big.Int, *big.Int) {
 	mod := new(big.Int)

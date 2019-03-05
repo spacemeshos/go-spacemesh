@@ -240,7 +240,6 @@ func (m *Mesh) GetOrphanBlocksBefore(l LayerID) ([]BlockID, error) {
 	return idArr, nil
 }
 
-
 func (m *Mesh) AccumulateRewards(rewardLayer LayerID, params RewardParams) {
 	l, err := m.getLayer(rewardLayer)
 	if err != nil || l == nil {
