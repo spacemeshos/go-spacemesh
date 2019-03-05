@@ -285,6 +285,13 @@ func (s *Set) Complement(u *Set) *Set {
 	return comp
 }
 
+// Subtract g from s
+func (s *Set) Subtract(g *Set) {
+	for _, v := range g.values {
+		s.Remove(v)
+	}
+}
+
 // Returns the size of the set
 func (s *Set) Size() int {
 	return len(s.values)
