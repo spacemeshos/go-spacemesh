@@ -13,6 +13,7 @@ type commitTracker interface {
 	BuildCertificate() *pb.Certificate
 }
 
+// Tracks commit messages
 type CommitTracker struct {
 	seenSenders map[string]bool   // tracks seen senders
 	commits     []*pb.HareMessage // tracks Set->Commits
@@ -30,6 +31,7 @@ func NewCommitTracker(threshold int, expectedSize int, proposedSet *Set) *Commit
 	return ct
 }
 
+// Tracks the provided commit message
 func (ct *CommitTracker) OnCommit(msg *pb.HareMessage) {
 	if ct.proposedSet == nil { // no valid proposed set
 		return
@@ -61,6 +63,7 @@ func (ct *CommitTracker) OnCommit(msg *pb.HareMessage) {
 	ct.commits = append(ct.commits, msg)
 }
 
+// Checks if the tracker received enough commits to build a certificate
 func (ct *CommitTracker) HasEnoughCommits() bool {
 	if ct.proposedSet == nil {
 		return false
@@ -69,6 +72,8 @@ func (ct *CommitTracker) HasEnoughCommits() bool {
 	return len(ct.commits) >= ct.threshold
 }
 
+// Builds the certificate
+// Returns the certificate if has enough commit messages, nil otherwise
 func (ct *CommitTracker) BuildCertificate() *pb.Certificate {
 	if !ct.HasEnoughCommits() {
 		return nil
@@ -77,7 +82,7 @@ func (ct *CommitTracker) BuildCertificate() *pb.Certificate {
 	c := &pb.Certificate{}
 	c.Values = ct.proposedSet.To2DSlice()
 	c.AggMsgs = &pb.AggregatedMessages{}
-	c.AggMsgs.Messages = ct.commits
+	c.AggMsgs.Messages = ct.commits[:ct.threshold]
 
 	// optimize msg size by setting values to nil
 	for _, commit := range c.AggMsgs.Messages {

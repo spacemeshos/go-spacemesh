@@ -70,7 +70,7 @@ func (broker *Broker) Start() error {
 
 	broker.isStarted = true
 
-	broker.inbox = broker.network.RegisterGossipProtocol(ProtoName)
+	broker.inbox = broker.network.RegisterGossipProtocol(protoName)
 	go broker.eventLoop()
 
 	return nil
@@ -92,14 +92,14 @@ func (broker *Broker) eventLoop() {
 			err := proto.Unmarshal(msg.Bytes(), hareMsg)
 			if err != nil {
 				log.Error("Could not unmarshal message: ", err)
-				msg.ReportValidation(ProtoName, false)
+				msg.ReportValidation(protoName, false)
 				continue
 			}
 
 			// message validation
 			if hareMsg.Message == nil {
 				log.Warning("Message validation failed: message is nil")
-				msg.ReportValidation(ProtoName, false)
+				msg.ReportValidation(protoName, false)
 				continue
 			}
 
@@ -108,7 +108,7 @@ func (broker *Broker) eventLoop() {
 			// far future unregistered instance
 			if msgInstId > expInstId+1 {
 				log.Warning("Message validation failed: instanceId. Max: %v Actual: %v", broker.maxReg, hareMsg.Message.InstanceId)
-				msg.ReportValidation(ProtoName, false)
+				msg.ReportValidation(protoName, false)
 				continue
 			}
 
@@ -119,12 +119,12 @@ func (broker *Broker) eventLoop() {
 
 			if !broker.eValidator.Validate(hareMsg) {
 				log.Warning("Message validation failed: eValidator returned false %v", hareMsg)
-				msg.ReportValidation(ProtoName, false)
+				msg.ReportValidation(protoName, false)
 				continue
 			}
 
 			// validation passed
-			msg.ReportValidation(ProtoName, true)
+			msg.ReportValidation(protoName, true)
 
 			c, exist := broker.outbox[msgInstId]
 			if exist {

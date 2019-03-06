@@ -6,15 +6,16 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
+// Tracks pre-round messages
 type PreRoundTracker struct {
-	preRound  map[string]struct{} // maps PubKey->Pre-Round msg (unique)
-	tracker   *RefCountTracker    // keeps track of seen values
-	threshold uint32              // the threshold to prove a single value
+	preRound  map[string]*Set  // maps PubKey->Set of already tracked values
+	tracker   *RefCountTracker // keeps track of seen values
+	threshold uint32           // the threshold to prove a single value
 }
 
 func NewPreRoundTracker(threshold int, expectedSize int) *PreRoundTracker {
 	pre := &PreRoundTracker{}
-	pre.preRound = make(map[string]struct{}, expectedSize)
+	pre.preRound = make(map[string]*Set, expectedSize)
 	pre.tracker = NewRefCountTracker()
 	pre.threshold = uint32(threshold)
 
@@ -29,20 +30,23 @@ func (pre *PreRoundTracker) OnPreRound(msg *pb.HareMessage) {
 		return
 	}
 
-	// only handle first pre-round msg
-	if _, exist := pre.preRound[verifier.String()]; exist {
+	sToTrack := NewSet(msg.Message.Values) // assume track all values
+	alreadyTracked := NewSmallEmptySet()   // assume nothing tracked so far
+
+	if set, exist := pre.preRound[verifier.String()]; exist { // not first pre-round msg from this sender
 		log.Debug("Duplicate sender %v", verifier.String())
-		return
+		alreadyTracked = set              // update already tracked values
+		sToTrack.Subtract(alreadyTracked) // subtract the already tracked values
 	}
 
-	// record values from msg
-	s := NewSet(msg.Message.Values)
-	for _, v := range s.values {
+	// record values
+	for _, v := range sToTrack.values {
 		pre.tracker.Track(v.Id())
 		metrics.PreRoundCounter.With("value", v.String()).Add(1)
 	}
 
-	pre.preRound[verifier.String()] = struct{}{}
+	// update the union to include new values
+	pre.preRound[verifier.String()] = alreadyTracked.Union(sToTrack)
 }
 
 // Returns true if the given value is provable, false otherwise
@@ -63,7 +67,7 @@ func (pre *PreRoundTracker) CanProveSet(set *Set) bool {
 	return true
 }
 
-// Filters the given set according to collected proofs
+// Filters out the given set from non-provable values
 func (pre *PreRoundTracker) FilterSet(set *Set) {
 	for _, v := range set.values {
 		if !pre.CanProveValue(v) { // not enough witnesses

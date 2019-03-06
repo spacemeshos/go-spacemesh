@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"github.com/davecgh/go-spew/spew"
 
 	"github.com/seehuhn/mt19937"
 	"github.com/spacemeshos/go-spacemesh/api/config"
@@ -383,6 +384,8 @@ func (app *SpacemeshApp) stopServices() {
 
 func (app *SpacemeshApp) startSpacemesh(cmd *cobra.Command, args []string) {
 	log.Info("Starting Spacemesh")
+
+	log.Debug("Config : %v", spew.Sdump(app.Config))
 
 	// start p2p services
 	log.Info("Initializing P2P services")
