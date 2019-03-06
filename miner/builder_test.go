@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"github.com/davecgh/go-xdr/xdr2"
 	"github.com/spacemeshos/go-spacemesh/address"
+	"github.com/spacemeshos/go-spacemesh/layer"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -26,7 +27,7 @@ type MockHare struct {
 	res []mesh.BlockID
 }
 
-func (m MockHare) GetResult(id mesh.LayerID) ([]mesh.BlockID, error) {
+func (m MockHare) GetResult(id layer.Id) ([]mesh.BlockID, error) {
 	return m.res, nil
 }
 
@@ -34,21 +35,21 @@ type MockOrphans struct {
 	st []mesh.BlockID
 }
 
-func (m MockOrphans) GetOrphanBlocksBefore(l mesh.LayerID) ([]mesh.BlockID, error) {
+func (m MockOrphans) GetOrphanBlocksBefore(l layer.Id) ([]mesh.BlockID, error) {
 	return m.st, nil
 }
 
 type mockBlockOracle struct {
 }
 
-func (mbo mockBlockOracle) BlockEligible(id mesh.LayerID, pubkey string) bool {
+func (mbo mockBlockOracle) BlockEligible(id layer.Id, pubkey string) bool {
 	return true
 }
 
 func TestBlockBuilder_StartStop(t *testing.T) {
 
 	net := service.NewSimulator()
-	beginRound := make(chan mesh.LayerID)
+	beginRound := make(chan layer.Id)
 	n := net.NewNode()
 	//receiver := net.NewNode()
 
@@ -78,7 +79,7 @@ func TestBlockBuilder_StartStop(t *testing.T) {
 
 func TestBlockBuilder_CreateBlock(t *testing.T) {
 	net := service.NewSimulator()
-	beginRound := make(chan mesh.LayerID)
+	beginRound := make(chan layer.Id)
 	n := net.NewNode()
 	receiver := net.NewNode()
 
