@@ -1,6 +1,9 @@
 namespace: sm
 
+config_map_name: conf
+
 genesis_delta: 30
+deployment_ready_time_out: 90
 
 elastic:
   host: es.spacemesh.io

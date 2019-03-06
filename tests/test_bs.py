@@ -9,6 +9,7 @@ import subprocess
 import time
 import yaml
 from kubernetes import client
+from kubernetes.client.rest import ApiException
 from pytest_testconfig import config as testconfig
 
 from elasticsearch import Elasticsearch
@@ -16,14 +17,14 @@ from elasticsearch_dsl import Search, Q
 
 from node_info import NodeInfo
 
-BOOT_DEPLOYMENT_FILE = './k8s/bootstrap.yml'
-CLIENT_DEPLOYMENT_FILE = './k8s/client.yml'
+BOOT_DEPLOYMENT_FILE = './k8s/bootstrap-w-conf.yml'
+CLIENT_DEPLOYMENT_FILE = './k8s/client-w-conf.yml'
 ORACLE_DEPLOYMENT_FILE = './k8s/oracle.yml'
 
 ELASTICSEARCH_URL = "http://{0}".format(testconfig['elastic']['host'])
 REPLACEABLE_ARGS = ['randcon', 'oracle_server', 'bootnodes', 'genesis_time']
 
-GENESIS_TIME = pytz.utc.localize(datetime.utcnow() + timedelta(seconds=testconfig['genesis_delta'])).isoformat('T', 'seconds')
+GENESIS_TIME = pytz.utc.localize(datetime.utcnow() + timedelta(seconds=testconfig['genesis_delta']))
 
 
 def update_args_in_deployment_yaml(yml_input, **kwargs):
@@ -32,11 +33,11 @@ def update_args_in_deployment_yaml(yml_input, **kwargs):
         if k not in REPLACEABLE_ARGS:
             raise Exception("Unknown arg: {0} - parsing error")
         replaced = False
-        for i,arg in enumerate(args):
+        for i, arg in enumerate(args):
             if arg[2:].replace('-', '_') == k:
                 # replace the value
-                args[i+1] = kwargs[k]
-                replaced=True
+                args[i + 1] = kwargs[k]
+                replaced = True
                 break
         if not replaced:
             args += (['--{0}'.format(k.replace('_', '-')), kwargs[k]])
@@ -55,7 +56,6 @@ def get_elastic_search_api():
 
 def wait_to_deployment_to_be_ready(deployment_name, name_space, time_out=None):
     total_sleep_time = 0
-
     while True:
         resp = client.AppsV1Api().read_namespaced_deployment(name=deployment_name, namespace=name_space)
         if not resp.status.unavailable_replicas:
@@ -76,7 +76,8 @@ def create_deployment(file_name, name_space, **kwargs):
 
         k8s_beta = client.ExtensionsV1beta1Api()
         resp1 = k8s_beta.create_namespaced_deployment(body=dep, namespace=name_space)
-        wait_to_deployment_to_be_ready(resp1.metadata._name, name_space, time_out=30)
+        wait_to_deployment_to_be_ready(resp1.metadata._name, name_space,
+                                       time_out=testconfig['deployment_ready_time_out'])
         return resp1
 
 
@@ -84,9 +85,8 @@ def delete_deployment(deployment_name, name_space):
     k8s_beta = client.ExtensionsV1beta1Api()
     resp = k8s_beta.delete_namespaced_deployment(name=deployment_name,
                                                  namespace=name_space,
-                                                 body=client.V1DeleteOptions(
-                                                     propagation_policy='Foreground',
-                                                     grace_period_seconds=5))
+                                                 body=client.V1DeleteOptions(propagation_policy='Foreground',
+                                                                             grace_period_seconds=5))
     return resp
 
 
@@ -111,8 +111,8 @@ def query_es_client_bootstrap(indx, namespace, client_po_name):
     s = Search(index=indx, using=es).query('bool', filter=[fltr])
     hits = list(s.scan())
 
-    print("Number of Hits: {0}".format(len(hits)))
-    s=set([h.N for h in hits])
+    print("Number of Hits in ES: {0}".format(len(hits)))
+    s = set([h.N for h in hits])
     return len(s)
 
 
@@ -128,6 +128,10 @@ def query_es_gossip_message(indx, namespace, client_po_name):
     return len(s)
 
 
+# ==============================================================================
+#    Fixtures
+# ==============================================================================
+
 @pytest.fixture(scope='module')
 def setup_oracle():
     namespaced_pods = client.CoreV1Api().list_namespaced_pod(testconfig['namespace'],
@@ -142,14 +146,13 @@ def setup_oracle():
 
 
 @pytest.fixture
-def setup_bootstrap(request, load_config, setup_oracle):
-
+def setup_bootstrap(request, load_config, setup_oracle, create_configmap):
     def _setup_bootstrap_in_namespace(name_space):
         global bs_info
         bs_info = NodeInfo()
         resp = create_deployment(BOOT_DEPLOYMENT_FILE, name_space,
                                  oracle_server='http://{0}:3030'.format(setup_oracle),
-                                 genesis_time=GENESIS_TIME)
+                                 genesis_time=GENESIS_TIME.isoformat('T', 'seconds'))
 
         bs_info.bs_deployment_name = resp.metadata._name
         namespaced_pods = client.CoreV1Api().list_namespaced_pod(namespace=name_space).items
@@ -177,18 +180,18 @@ def setup_bootstrap(request, load_config, setup_oracle):
 
 
 @pytest.fixture
-def setup_clients(request, setup_bootstrap, setup_oracle):
-
+def setup_clients(request, setup_oracle, setup_bootstrap):
     def _setup_clients_in_namespace(name_space):
         global bs_info, client_info
         client_info = NodeInfo()
         resp = create_deployment(CLIENT_DEPLOYMENT_FILE, name_space,
                                  bootnodes="{0}:{1}/{2}".format(bs_info.bs_pod_ip, '7513', bs_info.bs_key),
-                                 oracle_server = 'http://{0}:3030'.format(setup_oracle),
-                                 genesis_time = GENESIS_TIME)
+                                 oracle_server='http://{0}:3030'.format(setup_oracle),
+                                 genesis_time=GENESIS_TIME.isoformat('T', 'seconds'))
         client_info.bs_deployment_name = resp.metadata._name
         namespaced_pods = client.CoreV1Api().list_namespaced_pod(namespace=name_space, include_uninitialized=True).items
-        client_pods = list(filter(lambda i: i.metadata.name.startswith(client_info.bs_deployment_name), namespaced_pods))
+        client_pods = list(
+            filter(lambda i: i.metadata.name.startswith(client_info.bs_deployment_name), namespaced_pods))
 
         print("Number of client pods: {0}".format(len(client_pods)))
         for c in client_pods:
@@ -197,6 +200,15 @@ def setup_clients(request, setup_bootstrap, setup_oracle):
                 if resp.status.phase != 'Pending':
                     break
                 time.sleep(1)
+
+        # Make sure genesis time has not passed yet and sleep for the rest
+        time_now = pytz.utc.localize(datetime.utcnow())
+        delta_from_genesis = (GENESIS_TIME - time_now).total_seconds()
+        if delta_from_genesis < 0:
+            raise Exception("genesis_delta time is too short for this deployment")
+        else:
+            print('sleep for {0} sec until genesis time'.format(delta_from_genesis))
+            time.sleep(delta_from_genesis)
         return client_pods
 
     def fin():
@@ -207,14 +219,54 @@ def setup_clients(request, setup_bootstrap, setup_oracle):
     return _setup_clients_in_namespace(testconfig['namespace'])
 
 
-#==============================================================================
+@pytest.fixture
+def create_configmap(request):
+    def _create_configmap_in_namespace(nspace):
+        # Configure ConfigMap metadata
+        # This function assume that there is only 1 configMap in the each namespace
+        configmap_name = testconfig['config_map_name']
+        metadata = client.V1ObjectMeta(annotations=None,
+                                       deletion_grace_period_seconds=30,
+                                       labels=None,
+                                       name=configmap_name,
+                                       namespace=nspace)
+        # Get File Content
+        with open('../config.toml', 'r') as f:
+            file_content = f.read()
+        # Instantiate the configmap object
+        d = {'config.toml': file_content}
+        configmap = client.V1ConfigMap(api_version="v1",
+                                       kind="ConfigMap",
+                                       data=d,
+                                       metadata=metadata)
+        try:
+            client.CoreV1Api().create_namespaced_config_map(namespace=nspace,
+                                                            body=configmap,
+                                                            pretty='pretty_example')
+        except ApiException as e:
+            if eval(e.body)['reason'] == 'AlreadyExists':
+                print('configmap: {0} already exist.'.format(configmap_name))
+            raise e
+        return configmap_name
+
+    def fin():
+        client.CoreV1Api().delete_namespaced_config_map(testconfig['config_map_name'],
+                                                        testconfig['namespace'],
+                                                        body=client.V1DeleteOptions(propagation_policy='Foreground',
+                                                                                    grace_period_seconds=5))
+
+    request.addfinalizer(fin)
+    return _create_configmap_in_namespace(testconfig['namespace'])
+
+# ==============================================================================
 #    TESTS
-#==============================================================================
+# ==============================================================================
 
 current_index = 'kubernetes_cluster-2019.03.*'
 
 
 def test_bootstrap(setup_bootstrap):
+    # wait for the bootstrap logs to be available in ElasticSearch
     time.sleep(5)
     assert setup_bootstrap.bs_key == query_bootstrap_es(current_index,
                                                         testconfig['namespace'],
@@ -222,7 +274,6 @@ def test_bootstrap(setup_bootstrap):
 
 
 def test_client(load_config, setup_clients):
-    time.sleep(60)
     global client_info
     peers = query_es_client_bootstrap(current_index, testconfig['namespace'], client_info.bs_deployment_name)
     assert peers == len(setup_clients)
@@ -237,8 +288,8 @@ def test_gossip(load_config, setup_clients):
 
     api = 'v1/broadcast'
     data = '{"data":"foo"}'
-    p = subprocess.Popen(['./kubectl-cmd.sh', '%s' % client_ip, "%s" % data, api], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                         stderr=subprocess.PIPE)
+    p = subprocess.Popen(['./kubectl-cmd.sh', '%s' % client_ip, "%s" % data, api],
+                         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     (out, err) = p.communicate()
     assert '{"value":"ok"}' in out.decode("utf-8")
 

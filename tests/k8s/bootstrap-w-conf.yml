@@ -21,6 +21,6 @@ spec:
       volumes:
       - name: config-volume
         configMap:
-          name: cm
+          name: conf
       nodeSelector:
         role: tests
