@@ -2,6 +2,7 @@ package consensus
 
 import (
 	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/layer"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"testing"
@@ -15,7 +16,7 @@ func TestAlgorithm_Sanity(t *testing.T) {
 	alg := NewTortoise(uint32(layerSize), uint32(cachedLayers))
 	l := GenesisLayer()
 	alg.HandleIncomingLayer(l)
-	alg.RegisterLayerCallback(func(id mesh.LayerID) {})
+	alg.RegisterLayerCallback(func(id layer.Id) {})
 	for i := 0; i < 11-1; i++ {
 		lyr := createFullPointingLayer(l, layerSize)
 		start := time.Now()

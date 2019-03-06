@@ -6,6 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/crypto/sha3"
+	"github.com/spacemeshos/go-spacemesh/layer"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/rlp"
 	"github.com/spacemeshos/go-spacemesh/trie"
@@ -13,8 +14,6 @@ import (
 	"sort"
 	"sync"
 )
-
-type LayerID uint64
 
 //todo: this object should be splitted into two parts: one is the actual value serialized into trie, and an containig obj with caches
 type Transaction struct {
@@ -86,8 +85,8 @@ type TransactionProcessor struct {
 	log.Log
 	rand         PseudoRandomizer
 	globalState  *StateDB
-	prevStates   map[LayerID]common.Hash
-	currentLayer LayerID
+	prevStates   map[layer.Id]common.Hash
+	currentLayer layer.Id
 	rootHash     common.Hash
 	stateQueue   list.List
 	gasCost      GasConfig
@@ -102,7 +101,7 @@ func NewTransactionProcessor(rnd PseudoRandomizer, db *StateDB, gasParams GasCon
 		Log:          logger,
 		rand:         rnd,
 		globalState:  db,
-		prevStates:   make(map[LayerID]common.Hash),
+		prevStates:   make(map[layer.Id]common.Hash),
 		currentLayer: 0,
 		rootHash:     common.Hash{},
 		stateQueue:   list.List{},
@@ -113,7 +112,7 @@ func NewTransactionProcessor(rnd PseudoRandomizer, db *StateDB, gasParams GasCon
 }
 
 //should receive sort predicate
-func (tp *TransactionProcessor) ApplyTransactions(layer LayerID, txs Transactions) (uint32, error) {
+func (tp *TransactionProcessor) ApplyTransactions(layer layer.Id, txs Transactions) (uint32, error) {
 	//todo: need to seed the mersenne twister with random beacon seed
 	if len(txs) == 0 {
 		return 0, nil
@@ -138,7 +137,7 @@ func (tp *TransactionProcessor) ApplyTransactions(layer LayerID, txs Transaction
 	return failed, nil
 }
 
-func (tp *TransactionProcessor) addStateToHistory(layer LayerID, newHash common.Hash) {
+func (tp *TransactionProcessor) addStateToHistory(layer layer.Id, newHash common.Hash) {
 	tp.stateQueue.PushBack(newHash)
 	if tp.stateQueue.Len() > maxPastStates {
 		hash := tp.stateQueue.Remove(tp.stateQueue.Back())
@@ -149,7 +148,7 @@ func (tp *TransactionProcessor) addStateToHistory(layer LayerID, newHash common.
 
 }
 
-func (tp *TransactionProcessor) ApplyRewards(layer LayerID, miners map[string]struct{}, underQuota map[string]struct{}, bonusReward, diminishedReward *big.Int) {
+func (tp *TransactionProcessor) ApplyRewards(layer layer.Id, miners map[string]struct{}, underQuota map[string]struct{}, bonusReward, diminishedReward *big.Int) {
 	for minerId, _ := range miners {
 		if _, ok := underQuota[minerId]; ok {
 			tp.globalState.AddBalance(address.HexToAddress(minerId), diminishedReward)
@@ -169,7 +168,7 @@ func (tp *TransactionProcessor) ApplyRewards(layer LayerID, miners map[string]st
 
 }
 
-func (tp *TransactionProcessor) Reset(layer LayerID) {
+func (tp *TransactionProcessor) Reset(layer layer.Id) {
 	tp.mu.Lock()
 	defer tp.mu.Unlock()
 	if state, ok := tp.prevStates[layer]; ok {
@@ -239,7 +238,7 @@ func (tp *TransactionProcessor) Process(transactions Transactions, trnsBySender 
 	return errors
 }
 
-func (tp *TransactionProcessor) pruneAfterRevert(targetLayerID LayerID) {
+func (tp *TransactionProcessor) pruneAfterRevert(targetLayerID layer.Id) {
 	//needs to be called under mutex lock
 	for i := tp.currentLayer; i >= targetLayerID; i-- {
 		if hash, ok := tp.prevStates[i]; ok {

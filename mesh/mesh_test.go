@@ -3,6 +3,7 @@ package mesh
 import (
 	"bytes"
 	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/layer"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/stretchr/testify/assert"
@@ -13,20 +14,20 @@ import (
 
 type MeshValidatorMock struct{}
 
-func (m *MeshValidatorMock) HandleIncomingLayer(layer *Layer) (LayerID, LayerID) {
+func (m *MeshValidatorMock) HandleIncomingLayer(layer *Layer) (layer.Id, layer.Id) {
 	return layer.Index() - 1, layer.Index()
 }
-func (m *MeshValidatorMock) HandleLateBlock(bl *Block)              {}
-func (m *MeshValidatorMock) RegisterLayerCallback(func(id LayerID)) {}
-func (mlg *MeshValidatorMock) ContextualValidity(id BlockID) bool   { return true }
+func (m *MeshValidatorMock) HandleLateBlock(bl *Block)               {}
+func (m *MeshValidatorMock) RegisterLayerCallback(func(id layer.Id)) {}
+func (mlg *MeshValidatorMock) ContextualValidity(id BlockID) bool    { return true }
 
 type MockState struct{}
 
-func (MockState) ApplyTransactions(layer state.LayerID, txs state.Transactions) (uint32, error) {
+func (MockState) ApplyTransactions(layer layer.Id, txs state.Transactions) (uint32, error) {
 	return 0, nil
 }
 
-func (MockState) ApplyRewards(layer state.LayerID, miners map[string]struct{}, underQuota map[string]struct{}, bonusReward, diminishedReward *big.Int) {
+func (MockState) ApplyRewards(layer layer.Id, miners map[string]struct{}, underQuota map[string]struct{}, bonusReward, diminishedReward *big.Int) {
 }
 
 func getMesh(id string) *Mesh {
@@ -64,7 +65,7 @@ func TestLayers_AddBlock(t *testing.T) {
 func TestLayers_AddLayer(t *testing.T) {
 	layers := getMesh("t2")
 	defer layers.Close()
-	id := LayerID(1)
+	id := layer.Id(1)
 	data := []byte("data")
 	block1 := NewBlock(true, data, time.Now(), id)
 	block2 := NewBlock(true, data, time.Now(), id)
