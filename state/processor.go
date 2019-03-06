@@ -72,12 +72,12 @@ type StatePreImages struct {
 	preImages Transactions
 }
 
-type GasParams struct {
+type GasConfig struct {
 	BasicTxCost *big.Int
 }
 
-func DefaultConfig() GasParams {
-	return GasParams{
+func DefaultConfig() GasConfig {
+	return GasConfig{
 		big.NewInt(3),
 	}
 }
@@ -90,14 +90,14 @@ type TransactionProcessor struct {
 	currentLayer LayerID
 	rootHash     common.Hash
 	stateQueue   list.List
-	gasCost      GasParams
+	gasCost      GasConfig
 	db           *trie.Database
 	mu           sync.Mutex
 }
 
 const maxPastStates = 20
 
-func NewTransactionProcessor(rnd PseudoRandomizer, db *StateDB, gasParams GasParams, logger log.Log) *TransactionProcessor {
+func NewTransactionProcessor(rnd PseudoRandomizer, db *StateDB, gasParams GasConfig, logger log.Log) *TransactionProcessor {
 	return &TransactionProcessor{
 		Log:          logger,
 		rand:         rnd,
