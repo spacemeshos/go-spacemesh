@@ -31,6 +31,7 @@ type StateUpdater interface {
 type Mesh struct {
 	log.Log
 	*meshDB
+	rewardConfig  RewardConfig
 	verifiedLayer uint32
 	latestLayer   uint32
 	lastSeenLayer uint32
@@ -43,14 +44,15 @@ type Mesh struct {
 	done          chan struct{}
 }
 
-func NewMesh(layers, blocks, validity database.DB, mesh MeshValidator, state StateUpdater, logger log.Log) *Mesh {
+func NewMesh(layers, blocks, validity database.DB, rewardConfig RewardConfig, mesh MeshValidator, state StateUpdater, logger log.Log) *Mesh {
 	//todo add boot from disk
 	ll := &Mesh{
-		Log:      logger,
-		tortoise: mesh,
-		state:    state,
-		done:     make(chan struct{}),
-		meshDB:   NewMeshDB(layers, blocks, validity, logger),
+		Log:          logger,
+		tortoise:     mesh,
+		state:        state,
+		done:         make(chan struct{}),
+		meshDB:       NewMeshDB(layers, blocks, validity, logger),
+		rewardConfig: rewardConfig,
 	}
 
 	return ll
@@ -92,6 +94,11 @@ func (m *Mesh) SetLatestLayer(idx uint32) {
 
 func (m *Mesh) ValidateLayer(layer *Layer) {
 	m.Info("Validate layer %d", layer.Index())
+
+	if layer.index >= m.rewardConfig.RewardMaturity {
+		m.AccumulateRewards(layer.index-m.rewardConfig.RewardMaturity, m.rewardConfig)
+	}
+
 	oldPbase, newPbase := m.tortoise.HandleIncomingLayer(layer)
 	atomic.StoreUint32(&m.verifiedLayer, uint32(layer.Index()))
 	if newPbase > oldPbase {
@@ -240,7 +247,7 @@ func (m *Mesh) GetOrphanBlocksBefore(l LayerID) ([]BlockID, error) {
 	return idArr, nil
 }
 
-func (m *Mesh) AccumulateRewards(rewardLayer LayerID, params RewardParams) {
+func (m *Mesh) AccumulateRewards(rewardLayer LayerID, params RewardConfig) {
 	l, err := m.getLayer(rewardLayer)
 	if err != nil || l == nil {
 		m.Error("") //todo handle error

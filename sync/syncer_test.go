@@ -81,13 +81,23 @@ func (s *stateMock) ApplyTransactions(id state.LayerID, tx state.Transactions) (
 	return 0, nil
 }
 
+func ConfigTst() mesh.RewardConfig {
+	return mesh.RewardConfig{
+		big.NewInt(10),
+		big.NewInt(5000),
+		big.NewInt(15),
+		15,
+		5,
+	}
+}
+
 func getMeshWithLevelDB(id string) *mesh.Mesh {
 	//time := time.Now()
 	bdb := database.NewLevelDbStore("blocks_test_"+id, nil, nil)
 	ldb := database.NewLevelDbStore("layers_test_"+id, nil, nil)
 	cv := database.NewLevelDbStore("contextually_valid_test_"+id, nil, nil)
 	//odb := database.NewLevelDbStore("orphans_test_"+id+"_"+time.String(), nil, nil)
-	layers := mesh.NewMesh(ldb, bdb, cv, &MeshValidatorMock{}, &stateMock{}, log.New(id, "", ""))
+	layers := mesh.NewMesh(ldb, bdb, cv, ConfigTst(), &MeshValidatorMock{}, &stateMock{}, log.New(id, "", ""))
 	return layers
 }
 
@@ -106,7 +116,7 @@ func getMeshWithMemoryDB(id string) *mesh.Mesh {
 	ldb := database.NewMemDatabase()
 	cv := database.NewMemDatabase()
 	//odb := database.NewMemDatabase()
-	layers := mesh.NewMesh(ldb, bdb, cv, &MeshValidatorMock{}, &stateMock{}, log.New(id, "", ""))
+	layers := mesh.NewMesh(ldb, bdb, cv, ConfigTst(), &MeshValidatorMock{}, &stateMock{}, log.New(id, "", ""))
 	return layers
 }
 
