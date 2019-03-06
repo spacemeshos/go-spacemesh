@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/davecgh/go-spew/spew"
-
 	"github.com/seehuhn/mt19937"
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/common"
@@ -40,6 +39,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
+
+var Rnd rand.Rand
 
 // SpacemeshApp is the cli app singleton
 type SpacemeshApp struct {

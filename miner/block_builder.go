@@ -2,6 +2,8 @@ package miner
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/address"
@@ -30,6 +32,7 @@ const IncomingTxProtocol = "TxGossip"
 type BlockBuilder struct {
 	minerID string // could be a pubkey or what ever. the identity we're claiming to be as miners.
 	log.Log
+	rnd              *rand.Rand
 	beginRoundEvent  chan mesh.LayerID
 	stopChan         chan struct{}
 	newTrans         chan *mesh.SerializableTransaction
@@ -46,8 +49,12 @@ type BlockBuilder struct {
 
 func NewBlockBuilder(minerID string, net p2p.Service, beginRoundEvent chan mesh.LayerID, weakCoin WeakCoinProvider,
 	orph OrphanBlockProvider, hare HareResultProvider, blockOracle oracle.BlockOracle, lg log.Log) BlockBuilder {
+
+	seed := int64(binary.BigEndian.Uint64(sha256.New().Sum([]byte(minerID))))
+	log.Info("-----------miner id is %v random seed is %v------------", minerID, seed)
 	return BlockBuilder{
 		minerID:          minerID,
+		rnd:              rand.New(rand.NewSource(seed)),
 		Log:              lg,
 		beginRoundEvent:  beginRoundEvent,
 		stopChan:         make(chan struct{}),
@@ -143,7 +150,7 @@ func (t *BlockBuilder) createBlock(id mesh.LayerID, txs []mesh.SerializableTrans
 
 	b := mesh.Block{
 		MinerID:    t.minerID,
-		Id:         mesh.BlockID(rand.Int63()),
+		Id:         mesh.BlockID(t.rnd.Int63()),
 		LayerIndex: id,
 		Data:       nil,
 		Coin:       t.weakCoinToss.GetResult(),
@@ -187,6 +194,7 @@ func (t *BlockBuilder) acceptBlockData() {
 
 		case id := <-t.beginRoundEvent:
 			if !t.blockOracle.BlockEligible(mesh.LayerID(id), t.minerID) {
+				t.Debug("not Eligible for block creation")
 				break
 			}
 

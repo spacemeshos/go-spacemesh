@@ -194,7 +194,7 @@ func (m *Mesh) handleOrphanBlocks(block *Block) {
 func (m *Mesh) GetUnverifiedLayerBlocks(l LayerID) ([]BlockID, error) {
 	x, err := m.meshDB.layers.Get(l.ToBytes())
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf("could not retrive layer = %d blocks ", l))
+		return nil, errors.New(fmt.Sprintf("could not retrive layer = %d blocks, %v", l, err))
 	}
 	blockIds, err := bytesToBlockIds(x)
 	if err != nil {
