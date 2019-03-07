@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-type BlockID uint32
+type BlockID uint64
 
 type Block struct {
 	Id         BlockID

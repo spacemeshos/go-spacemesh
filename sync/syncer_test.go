@@ -222,7 +222,7 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 	syncObj1.AddBlock(mesh.NewExistingBlock(mesh.BlockID(111), lid, nil))
 	syncObj1.AddBlock(mesh.NewExistingBlock(mesh.BlockID(222), lid, nil))
 
-	ch, err := syncObj.sendLayerIDsRequest(nodes[1].Node.PublicKey(), lid)
+	ch, err := syncObj.sendLayerBlockIDsRequest(nodes[1].Node.PublicKey(), lid)
 	timeout := time.NewTimer(2 * time.Second)
 
 	select {
@@ -353,7 +353,7 @@ func TestSyncProtocol_SyncTwoNodes(t *testing.T) {
 	syncObj1.AddBlock(block8)
 	syncObj1.AddBlock(block9)
 	syncObj1.AddBlock(block10)
-	timeout := time.After(120 * time.Second)
+	timeout := time.After(12 * time.Second)
 	//syncObj1.Start()
 	syncObj2.Start()
 

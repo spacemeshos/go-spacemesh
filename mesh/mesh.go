@@ -33,12 +33,13 @@ type Mesh struct {
 	log.Log
 	*meshDB
 	rewardConfig  RewardConfig
-	verifiedLayer uint32
-	latestLayer   uint32
-	lastSeenLayer uint32
+	verifiedLayer layer.Id
+	latestLayer   layer.Id
+	lastSeenLayer layer.Id
 	lMutex        sync.RWMutex
 	lkMutex       sync.RWMutex
 	lcMutex       sync.RWMutex
+	lvMutex			sync.RWMutex
 	tortoise      MeshValidator
 	state         StateUpdater
 	orphMutex     sync.RWMutex
@@ -74,17 +75,19 @@ func (m *Mesh) IsContexuallyValid(b BlockID) bool {
 	return true
 }
 
-func (m *Mesh) VerifiedLayer() uint32 {
-	return atomic.LoadUint32(&m.verifiedLayer)
+func (m *Mesh) VerifiedLayer() layer.Id {
+	defer m.lvMutex.RUnlock()
+	m.lvMutex.RLock()
+	return m.verifiedLayer
 }
 
-func (m *Mesh) LatestLayer() uint32 {
+func (m *Mesh) LatestLayer() layer.Id {
 	defer m.lkMutex.RUnlock()
 	m.lkMutex.RLock()
 	return m.latestLayer
 }
 
-func (m *Mesh) SetLatestLayer(idx uint32) {
+func (m *Mesh) SetLatestLayer(idx layer.Id) {
 	defer m.lkMutex.Unlock()
 	m.lkMutex.Lock()
 	if idx > m.latestLayer {
@@ -101,7 +104,9 @@ func (m *Mesh) ValidateLayer(lyr *Layer) {
 	}
 
 	oldPbase, newPbase := m.tortoise.HandleIncomingLayer(lyr)
-	atomic.StoreUint32(&m.verifiedLayer, uint32(lyr.Index()))
+	m.lvMutex.Lock()
+	m.verifiedLayer = lyr.Index()
+	m.lvMutex.Unlock()
 	if newPbase > oldPbase {
 		m.PushTransactions(oldPbase, newPbase)
 	}
@@ -170,7 +175,7 @@ func (m *Mesh) AddBlock(block *Block) error {
 		m.Error("failed to add block %v  %v", block.ID(), err)
 		return err
 	}
-	m.SetLatestLayer(uint32(block.Layer()))
+	m.SetLatestLayer(block.Layer())
 	//new block add to orphans
 	m.handleOrphanBlocks(block)
 	//m.tortoise.HandleLateBlock(block) //why this? todo should be thread safe?
