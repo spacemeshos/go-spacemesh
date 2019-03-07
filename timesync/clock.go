@@ -1,19 +1,19 @@
 package timesync
 
 import (
-	"github.com/spacemeshos/go-spacemesh/layer"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/mesh"
 	"sync"
 	"time"
 )
 
 //this package sends a tick each tickInterval to all consumers of the tick
-//This also send the current layer.Id  which is calculated from the number of ticks passed since epoch
-type LayerTimer chan layer.Id
+//This also send the current mesh.LayerID  which is calculated from the number of ticks passed since epoch
+type LayerTimer chan mesh.LayerID
 
 type Ticker struct {
 	subscribes   []LayerTimer
-	currentLayer layer.Id
+	currentLayer mesh.LayerID
 	m            sync.Mutex
 	tickInterval time.Duration
 	startEpoch   time.Time
@@ -78,7 +78,7 @@ func (t *Ticker) updateLayerID() {
 	tksa := t.time.Now().Sub(t.startEpoch)
 	tks := (tksa / t.tickInterval).Nanoseconds()
 	//todo: need to unify all LayerIDs definitions and set them to uint64
-	t.currentLayer = layer.Id(tks)
+	t.currentLayer = mesh.LayerID(tks)
 }
 
 func (t *Ticker) StartClock() {
@@ -102,7 +102,7 @@ func (t *Ticker) StartClock() {
 	for {
 		select {
 		case <-tick.C:
-			log.Info("released tick layer.Id  %v", t.currentLayer+1)
+			log.Info("released tick mesh.LayerID  %v", t.currentLayer+1)
 			t.currentLayer++
 			t.notifyOnTick()
 			tick.Reset(t.tickInterval)

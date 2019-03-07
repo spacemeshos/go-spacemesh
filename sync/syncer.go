@@ -3,7 +3,6 @@ package sync
 import (
 	"errors"
 	"github.com/gogo/protobuf/proto"
-	"github.com/spacemeshos/go-spacemesh/layer"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -18,7 +17,7 @@ import (
 )
 
 type BlockValidator interface {
-	BlockEligible(id layer.Id, pubKey string) bool
+	BlockEligible(id mesh.LayerID, pubKey string) bool
 }
 
 type Configuration struct {
@@ -35,12 +34,12 @@ type Syncer struct {
 	Configuration
 	log.Log
 	*server.MessageServer
-	currentLayer layer.Id
-	SyncLock     uint32
-	startLock    uint32
-	forceSync    chan bool
-	clock        timesync.LayerTimer
-	exit         chan struct{}
+	currentLayer      mesh.LayerID
+	SyncLock          uint32
+	startLock         uint32
+	forceSync         chan bool
+	clock             timesync.LayerTimer
+	exit              chan struct{}
 	currentLayerMutex sync.RWMutex
 }
 
@@ -126,7 +125,7 @@ func NewSync(srv server.Service, layers *mesh.Mesh, bv BlockValidator, conf Conf
 	return &s
 }
 
-func (s *Syncer) maxSyncLayer() layer.Id {
+func (s *Syncer) maxSyncLayer() mesh.LayerID {
 	defer s.currentLayerMutex.RUnlock()
 	s.currentLayerMutex.RLock()
 	return s.currentLayer
@@ -136,7 +135,7 @@ func (s *Syncer) Synchronise() {
 	for currenSyncLayer := s.VerifiedLayer() + 1; currenSyncLayer < s.maxSyncLayer(); currenSyncLayer++ {
 		s.Info("syncing layer %v to layer %v current consensus layer is %d", s.VerifiedLayer(), currenSyncLayer, s.maxSyncLayer())
 
-		lyr, err := s.GetLayer(layer.Id(currenSyncLayer))
+		lyr, err := s.GetLayer(mesh.LayerID(currenSyncLayer))
 		if err != nil {
 			lyr, err = s.getLayerFromNeighbors(currenSyncLayer)
 		}
@@ -150,8 +149,8 @@ func (s *Syncer) Synchronise() {
 	}
 }
 
-func (s *Syncer) getLayerFromNeighbors(currenSyncLayer layer.Id) (*mesh.Layer, error) {
-	blockIds, err := s.getLayerBlockIDs(layer.Id(currenSyncLayer))
+func (s *Syncer) getLayerFromNeighbors(currenSyncLayer mesh.LayerID) (*mesh.Layer, error) {
+	blockIds, err := s.getLayerBlockIDs(mesh.LayerID(currenSyncLayer))
 	if err != nil {
 		return nil, err
 	}
@@ -183,7 +182,7 @@ func (s *Syncer) getLayerFromNeighbors(currenSyncLayer layer.Id) (*mesh.Layer, e
 		blocksArr = append(blocksArr, block)
 	}
 
-	return mesh.NewExistingLayer(layer.Id(currenSyncLayer), blocksArr), nil
+	return mesh.NewExistingLayer(mesh.LayerID(currenSyncLayer), blocksArr), nil
 }
 
 type peerHashPair struct {
@@ -212,7 +211,7 @@ func sendBlockRequest(msgServ *server.MessageServer, peer p2p.Peer, id mesh.Bloc
 			mp = append(mp, mesh.BlockID(b))
 		}
 
-		block := mesh.NewExistingBlock(mesh.BlockID(data.Block.GetId()), layer.Id(data.Block.GetLayer()), nil)
+		block := mesh.NewExistingBlock(mesh.BlockID(data.Block.GetId()), mesh.LayerID(data.Block.GetLayer()), nil)
 		block.ViewEdges = mp
 		ch <- block
 	}
@@ -220,7 +219,7 @@ func sendBlockRequest(msgServ *server.MessageServer, peer p2p.Peer, id mesh.Bloc
 	return ch, msgServ.SendRequest(BLOCK, payload, peer, foo)
 }
 
-func (s *Syncer) getLayerBlockIDs(index layer.Id) (chan mesh.BlockID, error) {
+func (s *Syncer) getLayerBlockIDs(index mesh.LayerID) (chan mesh.BlockID, error) {
 
 	m, err := s.getLayerHashes(index)
 
@@ -231,7 +230,7 @@ func (s *Syncer) getLayerBlockIDs(index layer.Id) (chan mesh.BlockID, error) {
 	return s.getIdsForHash(m, index)
 }
 
-func (s *Syncer) getIdsForHash(m map[string]p2p.Peer, index layer.Id) (chan mesh.BlockID, error) {
+func (s *Syncer) getIdsForHash(m map[string]p2p.Peer, index mesh.LayerID) (chan mesh.BlockID, error) {
 	reqCounter := 0
 
 	ch := make(chan []mesh.BlockID, len(m))
@@ -288,7 +287,7 @@ func keysAsChan(idSet map[mesh.BlockID]bool) chan mesh.BlockID {
 	return res
 }
 
-func (s *Syncer) getLayerHashes(index layer.Id) (map[string]p2p.Peer, error) {
+func (s *Syncer) getLayerHashes(index mesh.LayerID) (map[string]p2p.Peer, error) {
 	m := make(map[string]p2p.Peer, 20) //todo need to get this from p2p service
 	peers := s.GetPeers()
 	if len(peers) == 0 {
@@ -336,7 +335,7 @@ func (s *Syncer) getLayerHashes(index layer.Id) (map[string]p2p.Peer, error) {
 	return m, nil
 }
 
-func (s *Syncer) sendLayerHashRequest(peer p2p.Peer, layer layer.Id) (chan *peerHashPair, error) {
+func (s *Syncer) sendLayerHashRequest(peer p2p.Peer, layer mesh.LayerID) (chan *peerHashPair, error) {
 	s.Debug("send layer hash request Peer: %v layer: %v", peer, layer)
 	ch := make(chan *peerHashPair)
 	data := &pb.LayerHashReq{Layer: uint64(layer)}
@@ -363,8 +362,8 @@ func (s *Syncer) sendLayerHashRequest(peer p2p.Peer, layer layer.Id) (chan *peer
 	return ch, s.SendRequest(LAYER_HASH, payload, peer, foo)
 }
 
-func (s *Syncer) sendLayerBlockIDsRequest(peer p2p.Peer, idx layer.Id) (chan []mesh.BlockID, error) {
-	s.Debug("send layer ids request Peer: ", peer, " layer: ", idx)
+func (s *Syncer) sendLayerBlockIDsRequest(peer p2p.Peer, idx mesh.LayerID) (chan []mesh.BlockID, error) {
+	s.Debug("send mesh.LayerIDs request Peer: ", peer, " layer: ", idx)
 
 	data := &pb.LayerIdsReq{Layer: uint64(idx)}
 	payload, err := proto.Marshal(data)
@@ -376,10 +375,10 @@ func (s *Syncer) sendLayerBlockIDsRequest(peer p2p.Peer, idx layer.Id) (chan []m
 		defer close(ch)
 		data := &pb.LayerIdsResp{}
 		if err := proto.Unmarshal(msg, data); err != nil {
-			s.Error("could not unmarshal layer ids response")
+			s.Error("could not unmarshal mesh.LayerIDs response")
 			return
 		}
-		lyrIds := make([]mesh.BlockID, 0,len(data.Ids))
+		lyrIds := make([]mesh.BlockID, 0, len(data.Ids))
 		for _, id := range data.Ids {
 			lyrIds = append(lyrIds, mesh.BlockID(id))
 		}
@@ -405,9 +404,9 @@ func newBlockRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg []byte) 
 			return nil
 		}
 
-		vm := make([]uint32, 0, len(block.ViewEdges))
+		vm := make([]uint64, 0, len(block.ViewEdges))
 		for _, b := range block.ViewEdges {
-			vm = append(vm, uint32(b))
+			vm = append(vm, uint64(b))
 		}
 
 		payload, err := proto.Marshal(&pb.FetchBlockResp{Block: &pb.Block{Id: uint64(block.ID()), Layer: uint64(block.Layer()), VisibleMesh: vm}})
@@ -430,7 +429,7 @@ func newLayerHashRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg []by
 			return nil
 		}
 
-		layer, err := layers.GetLayer(layer.Id(req.Layer))
+		layer, err := layers.GetLayer(mesh.LayerID(req.Layer))
 		if err != nil {
 			logger.Error("Error handling layer %d request message with error: %v", req.Layer, err)
 			return nil
@@ -453,9 +452,9 @@ func newLayerBlockIdsRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg 
 			return nil
 		}
 
-		layer, err := layers.GetLayer(layer.Id(req.Layer))
+		layer, err := layers.GetLayer(mesh.LayerID(req.Layer))
 		if err != nil {
-			logger.Error("Error handling layer ids request message with LayerID: %d and error: %s", req.Layer, err.Error())
+			logger.Error("Error handling mesh.LayerIDs request message with LayerID: %d and error: %s", req.Layer, err.Error())
 			return nil
 		}
 

@@ -4,6 +4,7 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/mesh"
 )
 
 type messageValidator interface {
@@ -232,7 +233,7 @@ func (validator *syntaxContextValidator) validateSVP(msg *pb.HareMessage) bool {
 	}
 
 	maxKi := int32(-1) // ki>=-1
-	var maxRawSet [][]byte = nil
+	var maxRawSet []uint64 = nil
 	for _, status := range msg.Message.Svp.Messages {
 		// track max
 		if status.Message.Ki > maxKi {
@@ -304,7 +305,7 @@ func (validator *syntaxContextValidator) validateSVPTypeA(m *pb.HareMessage) boo
 	for _, status := range m.Message.Svp.Messages {
 		// build union
 		for _, buff := range status.Message.Values {
-			bid := Value{NewBytes32(buff)}
+			bid := Value{mesh.BlockID(buff)}
 			unionSet.Add(bid) // assuming add is unique
 		}
 	}

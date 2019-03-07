@@ -3,6 +3,7 @@ package hare
 import (
 	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/mesh"
 )
 
 // Tracks status messages
@@ -10,7 +11,7 @@ type StatusTracker struct {
 	statuses  map[string]*pb.HareMessage // maps PubKey->StatusMsg
 	threshold int                        // threshold to indicate a set can be proved
 	maxKi     int32                      // tracks max ki in tracked status messages
-	maxRawSet [][]byte                   // tracks the max raw set in the tracked status messages
+	maxRawSet []uint64                   // tracks the max raw set in the tracked status messages
 	analyzed  bool                       // indicates if the messages have already been analyzed
 	log.Log
 }
@@ -84,7 +85,7 @@ func (st *StatusTracker) buildUnionSet(expectedSize int) *Set {
 	unionSet := NewEmptySet(expectedSize)
 	for _, m := range st.statuses {
 		for _, buff := range m.Message.Values {
-			bid := Value{NewBytes32(buff)}
+			bid := Value{mesh.BlockID(buff)}
 			unionSet.Add(bid) // assuming add is unique
 		}
 	}
