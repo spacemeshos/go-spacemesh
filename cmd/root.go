@@ -19,10 +19,10 @@ var RootCmd = &cobra.Command{
 }
 
 func init() {
-	addCommands(RootCmd)
+	AddCommands(RootCmd)
 }
 
-func addCommands(cmd *cobra.Command) {
+func AddCommands(cmd *cobra.Command) {
 
 	/** ======================== BaseConfig Flags ========================== **/
 	cmd.PersistentFlags().StringVarP(&config.BaseConfig.ConfigFile,

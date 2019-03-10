@@ -1,7 +1,8 @@
-package cmd
+package hare
 
 import (
 	"fmt"
+	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/oracle"
@@ -14,7 +15,7 @@ const defaultSetSize = 200
 var value1 = hare.Value{Bytes32: hare.Bytes32{1}}
 
 // VersionCmd returns the current version of spacemesh
-var HareCmd = &cobra.Command{
+var Cmd = &cobra.Command{
 	Use:   "hare",
 	Short: "start hare",
 	Run: func(cmd *cobra.Command, args []string) {
@@ -29,12 +30,11 @@ var HareCmd = &cobra.Command{
 }
 
 func init() {
-	addCommands(HareCmd)
-	RootCmd.AddCommand(HareCmd)
+	cmdp.AddCommands(Cmd)
 }
 
 type HareApp struct {
-	*baseApp
+	*cmdp.BaseApp
 	p2p    p2p.Service
 	broker *hare.Broker
 	proc   *hare.ConsensusProcess
@@ -43,7 +43,7 @@ type HareApp struct {
 }
 
 func NewHareApp() *HareApp {
-	return &HareApp{baseApp: newBaseApp(), sgn: hare.NewMockSigning()}
+	return &HareApp{BaseApp: cmdp.NewBaseApp(), sgn: hare.NewMockSigning()}
 }
 
 func (app *HareApp) Cleanup() {
@@ -64,7 +64,7 @@ func buildSet() *hare.Set {
 func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	// start p2p services
 	log.Info("Initializing P2P services")
-	swarm, err := p2p.New(Ctx, app.Config.P2P)
+	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P)
 	app.p2p = swarm
 	if err != nil {
 		log.Error("Error starting p2p services, err: %v", err)

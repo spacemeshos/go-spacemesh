@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	bc "github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -12,16 +13,31 @@ import (
 	"reflect"
 )
 
-type baseApp struct {
+var EntryPointCreated = make(chan bool, 1)
+
+var (
+	// Version is the app's semantic version. Designed to be overwritten by make.
+	Version = "0.0.1"
+
+	// Branch is the git branch used to build the App. Designed to be overwritten by make.
+	Branch = ""
+
+	// Commit is the git commit used to build the app. Designed to be overwritten by make.
+	Commit = ""
+	// ctx    cancel used to signal the app to gracefully exit.
+	Ctx, Cancel = context.WithCancel(context.Background())
+)
+
+type BaseApp struct {
 	Config *bc.Config
 }
 
-func newBaseApp() *baseApp {
+func NewBaseApp() *BaseApp {
 	dc := bc.DefaultConfig()
-	return &baseApp{Config: &dc}
+	return &BaseApp{Config: &dc}
 }
 
-func (app *baseApp) Initialize(cmd *cobra.Command) {
+func (app *BaseApp) Initialize(cmd *cobra.Command) {
 	// exit gracefully - e.g. with app Cleanup on sig abort (ctrl-c)
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, os.Interrupt)

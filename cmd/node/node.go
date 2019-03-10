@@ -1,10 +1,10 @@
-package cmd
+package node
 
 import (
-	"context"
 	"fmt"
 	"github.com/seehuhn/mt19937"
 	apiCfg "github.com/spacemeshos/go-spacemesh/api/config"
+	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/consensus"
 	"github.com/spacemeshos/go-spacemesh/crypto"
@@ -37,11 +37,11 @@ import (
 )
 
 // VersionCmd returns the current version of spacemesh
-var NodeCmd = &cobra.Command{
+var Cmd = &cobra.Command{
 	Use:   "node",
 	Short: "start node",
 	Run: func(cmd *cobra.Command, args []string) {
-		app := newSpacemeshApp()
+		app := NewSpacemeshApp()
 		defer app.Cleanup(cmd, args)
 
 		app.Initialize(cmd, args)
@@ -50,8 +50,7 @@ var NodeCmd = &cobra.Command{
 }
 
 func init() {
-	addCommands(NodeCmd)
-	RootCmd.AddCommand(NodeCmd)
+	cmdp.AddCommands(Cmd)
 }
 
 // SpacemeshApp is the cli app singleton
@@ -76,25 +75,6 @@ type SpacemeshApp struct {
 type MiningEnabler interface {
 	MiningEligible() bool
 }
-
-var EntryPointCreated = make(chan bool, 1)
-
-var (
-	// App is main app entry point.
-	// It provides access the local identity and other top-level modules.
-	App *SpacemeshApp
-
-	// Version is the app's semantic version. Designed to be overwritten by make.
-	Version = "0.0.1"
-
-	// Branch is the git branch used to build the App. Designed to be overwritten by make.
-	Branch = ""
-
-	// Commit is the git commit used to build the app. Designed to be overwritten by make.
-	Commit = ""
-	// ctx    cancel used to signal the app to gracefully exit.
-	Ctx, Cancel = context.WithCancel(context.Background())
-)
 
 // ParseConfig unmarshal config file into struct
 func (app *SpacemeshApp) ParseConfig() (err error) {
@@ -121,8 +101,8 @@ func (app *SpacemeshApp) ParseConfig() (err error) {
 	return nil
 }
 
-// newSpacemeshApp creates an instance of the spacemesh app
-func newSpacemeshApp() *SpacemeshApp {
+// NewSpacemeshApp creates an instance of the spacemesh app
+func NewSpacemeshApp() *SpacemeshApp {
 
 	defaultConfig := cfg.DefaultConfig()
 	node := &SpacemeshApp{
@@ -152,7 +132,7 @@ func (app *SpacemeshApp) Initialize(cmd *cobra.Command, args []string) (err erro
 	go func() {
 		for range signalChan {
 			log.Info("Received an interrupt, stopping services...\n")
-			Cancel()
+			cmdp.Cancel()
 		}
 	}()
 
@@ -166,7 +146,7 @@ func (app *SpacemeshApp) Initialize(cmd *cobra.Command, args []string) (err erro
 	}
 
 	// ensure cli flags are higher priority than config file
-	EnsureCLIFlags(cmd, app.Config)
+	cmdp.EnsureCLIFlags(cmd, app.Config)
 
 	// override default config in timesync since timesync is using TimeCongigValues
 	timeCfg.TimeConfigValues = app.Config.TIME
@@ -217,7 +197,7 @@ func (app *SpacemeshApp) setupLogging() {
 
 func (app *SpacemeshApp) getAppInfo() string {
 	return fmt.Sprintf("App version: %s. Git: %s - %s . Go Version: %s. OS: %s-%s ",
-		Version, Branch, Commit, runtime.Version(), runtime.GOOS, runtime.GOARCH)
+		cmdp.Version, cmdp.Branch, cmdp.Commit, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 }
 
 // Post Execute tasks
@@ -256,7 +236,7 @@ func (app *SpacemeshApp) setupGenesis(cfg *apiCfg.GenesisConfig) {
 
 func (app *SpacemeshApp) setupTestFeatures() {
 	// NOTE: any test-related feature enabling should happen here.
-	api.ApproveAPIGossipMessages(Ctx, app.P2P)
+	api.ApproveAPIGossipMessages(cmdp.Ctx, app.P2P)
 }
 
 func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service, dbStorepath string, sgn hare.Signing, blockOracle oracle.BlockOracle, hareOracle hare.Rolacle, layerSize uint32) error {
@@ -272,7 +252,7 @@ func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service,
 		return err
 	}
 	rng := rand.New(mt19937.New())
-	processor := state.NewTransactionProcessor(rng, st, lg)
+	processor := state.NewTransactionProcessor(rng, st, app.Config.GAS, lg)
 
 	coinToss := consensus.WeakCoin{}
 	gTime, err := time.Parse(time.RFC3339, app.Config.GenesisTime)
@@ -282,7 +262,7 @@ func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service,
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
 	clock := timesync.NewTicker(timesync.RealClock{}, ld, gTime)
 	trtl := consensus.NewAlgorithm(consensus.NewNinjaTortoise(layerSize, lg))
-	msh := mesh.NewMesh(db, db, db, trtl, processor, lg) //todo: what to do with the logger?
+	msh := mesh.NewMesh(db, db, db, app.Config.REWARD, trtl, processor, lg) //todo: what to do with the logger?
 
 	conf := sync.Configuration{SyncInterval: 1 * time.Second, Concurrency: 4, LayerSize: int(layerSize), RequestTimeout: 100 * time.Millisecond}
 	syncer := sync.NewSync(swarm, msh, blockOracle, conf, clock.Subscribe(), lg)
@@ -343,7 +323,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 
 	// start p2p services
 	log.Info("Initializing P2P services")
-	swarm, err := p2p.New(Ctx, app.Config.P2P)
+	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P)
 	if err != nil {
 		log.Error("Error starting p2p services, err: %v", err)
 		panic("Error starting p2p services")
@@ -416,6 +396,6 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	// this signal may come from the node or from sig-abort (ctrl-c)
 	app.NodeInitCallback <- true
 
-	<-Ctx.Done()
+	<-cmdp.Ctx.Done()
 	//return nil
 }
