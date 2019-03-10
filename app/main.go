@@ -331,17 +331,18 @@ func (app *SpacemeshApp) initServices(
 		return err
 	}
 
+	lg := log.New(instanceSuffix, "", "")
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
 	clock := timesync.NewTicker(timesync.RealClock{}, ld, gTime)
 	conf := sync.Configuration{SyncInterval: 1 * time.Second, Concurrency: 4, LayerSize: int(app.Config.LayerAvgSize), RequestTimeout: 100 * time.Millisecond}
 
-	trtl := consensus.NewAlgorithm(consensus.NewNinjaTortoise(app.Config.LayerAvgSize, log.New(instanceSuffix+"/Tortoise", "", "")))
-	processor := state.NewTransactionProcessor(rand.New(mt19937.New()), st, app.Config.GAS, log.New(instanceSuffix+"/State", "", ""))
-	msh := mesh.NewMesh(db, db, db, app.Config.REWARD, trtl, processor, log.New(instanceSuffix+"/Mesh", "", "")) //todo: what to do with the logger?
-	syncer := sync.NewSync(swarm, msh, blockOracle, conf, clock.Subscribe(), log.New(instanceSuffix+"/Sync", "", ""))
-	ha := hare.New(app.Config.HARE, swarm, sgn, msh, hareOracle, clock.Subscribe(), log.New(instanceSuffix+"/Hare", "", ""))
-	blockProducer := miner.NewBlockBuilder(instanceName, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, log.New(instanceSuffix+"/Miner", "", ""))
-	blockListener := sync.NewBlockListener(swarm, blockOracle, msh, 2*time.Second, 4, log.New(instanceSuffix+"/BlockListener", "", ""))
+	trtl := consensus.NewAlgorithm(consensus.NewNinjaTortoise(app.Config.LayerAvgSize, lg.WithName("Tortoise")))
+	processor := state.NewTransactionProcessor(rand.New(mt19937.New()), st, app.Config.GAS, lg.WithName("State"))
+	msh := mesh.NewMesh(db, db, db, app.Config.REWARD, trtl, processor, lg.WithName("Mesh")) //todo: what to do with the logger?
+	syncer := sync.NewSync(swarm, msh, blockOracle, conf, clock.Subscribe(), lg.WithName("Sync"))
+	ha := hare.New(app.Config.HARE, swarm, sgn, msh, hareOracle, clock.Subscribe(), lg.WithName("Hare"))
+	blockProducer := miner.NewBlockBuilder(instanceName, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, lg.WithName("Miner"))
+	blockListener := sync.NewBlockListener(swarm, blockOracle, msh, 2*time.Second, 4, lg.WithName("BlockListener"))
 
 	app.blockProducer = &blockProducer
 	app.blockListener = blockListener
