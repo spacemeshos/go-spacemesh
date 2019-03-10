@@ -308,8 +308,10 @@ func (app *SpacemeshApp) initServices(
 	blockOracle oracle.BlockOracle,
 	hareOracle hare.Rolacle,
 ) error {
-
-	instanceSuffix := instanceName[len(instanceName)-5:]
+	instanceSuffix := instanceName
+	if len(instanceName) > 10 {
+		instanceSuffix = instanceName[len(instanceName)-5:]
+	}
 
 	log.Debug("num of goroutines %v num of cpu %v", runtime.NumGoroutine(), runtime.NumCPU())
 	runtime.GOMAXPROCS(runtime.NumCPU() * 2)
