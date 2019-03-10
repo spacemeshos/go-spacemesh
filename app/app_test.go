@@ -2,14 +2,20 @@ package app
 
 import (
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/hare"
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
+	"math/big"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 )
@@ -91,58 +97,58 @@ func (app *AppTestSuite) initMultipleInstances(t *testing.T, numOfInstances int,
 	}
 }
 
-//func (app *AppTestSuite) TestMultipleNodes() {
-//	//EntryPointCreated <- true
-//
-//	addr := address.BytesToAddress([]byte{0x01})
-//	dst := address.BytesToAddress([]byte{0x02})
-//	tx := mesh.SerializableTransaction{}
-//	tx.Amount = big.NewInt(10).Bytes()
-//	tx.GasLimit = 1
-//	tx.Origin = addr
-//	tx.Recipient = &dst
-//	tx.Price = big.NewInt(1).Bytes()
-//
-//	txbytes, _ := mesh.TransactionAsBytes(&tx)
-//	path := "../tmp/test/state_" + time.Now().String()
-//	app.initMultipleInstances(app.T(), 10, path)
-//	for _, a := range app.apps {
-//		a.startServices()
-//	}
-//
-//	app.apps[0].P2P.Broadcast(miner.IncomingTxProtocol, txbytes)
-//	timeout := time.After(2 * 60 * time.Second)
-//
-//	for {
-//		select {
-//		// Got a timeout! fail with a timeout error
-//		case <-timeout:
-//			app.T().Fatal("timed out ")
-//		default:
-//			for idx, ap := range app.apps {
-//				if big.NewInt(10).Cmp(ap.state.GetBalance(dst)) == 0 {
-//					ok := 0
-//					for idx2, ap2 := range app.apps {
-//						if idx != idx2 {
-//							r1 := ap.state.IntermediateRoot(false).String()
-//							r2 := ap2.state.IntermediateRoot(false).String()
-//							if r1 == r2 {
-//								log.Info("%d roots confirmed out of %d", ok, len(app.apps))
-//								ok++
-//							}
-//						}
-//						if ok == len(app.apps)-1 {
-//							return
-//						}
-//					}
-//
-//				}
-//			}
-//			time.Sleep(1 * time.Millisecond)
-//		}
-//	}
-//}
-//
-//func TestAppTestSuite(t *testing.T) {
-//	suite.Run(t, new(AppTestSuite))
-//}
+func (app *AppTestSuite) TestMultipleNodes() {
+	//EntryPointCreated <- true
+
+	addr := address.BytesToAddress([]byte{0x01})
+	dst := address.BytesToAddress([]byte{0x02})
+	tx := mesh.SerializableTransaction{}
+	tx.Amount = big.NewInt(10).Bytes()
+	tx.GasLimit = 1
+	tx.Origin = addr
+	tx.Recipient = &dst
+	tx.Price = big.NewInt(1).Bytes()
+
+	txbytes, _ := mesh.TransactionAsBytes(&tx)
+	path := "../tmp/test/state_" + time.Now().String()
+	app.initMultipleInstances(app.T(), 10, path)
+	for _, a := range app.apps {
+		a.startServices()
+	}
+
+	app.apps[0].P2P.Broadcast(miner.IncomingTxProtocol, txbytes)
+	timeout := time.After(2 * 60 * time.Second)
+
+	for {
+		select {
+		// Got a timeout! fail with a timeout error
+		case <-timeout:
+			app.T().Fatal("timed out ")
+		default:
+			for idx, ap := range app.apps {
+				if big.NewInt(10).Cmp(ap.state.GetBalance(dst)) == 0 {
+					ok := 0
+					for idx2, ap2 := range app.apps {
+						if idx != idx2 {
+							r1 := ap.state.IntermediateRoot(false).String()
+							r2 := ap2.state.IntermediateRoot(false).String()
+							if r1 == r2 {
+								log.Info("%d roots confirmed out of %d", ok, len(app.apps))
+								ok++
+							}
+						}
+						if ok == len(app.apps)-1 {
+							return
+						}
+					}
+
+				}
+			}
+			time.Sleep(1 * time.Millisecond)
+		}
+	}
+}
+
+func TestAppTestSuite(t *testing.T) {
+	suite.Run(t, new(AppTestSuite))
+}
