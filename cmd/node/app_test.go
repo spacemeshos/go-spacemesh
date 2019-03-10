@@ -1,4 +1,4 @@
-package cmd
+package node
 
 import (
 	"fmt"
@@ -17,8 +17,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-
-	"github.com/spacemeshos/go-spacemesh/filesystem"
 )
 
 type AppTestSuite struct {
@@ -47,41 +45,12 @@ func (app *AppTestSuite) TearDownTest() {
 	}
 }
 
-func TestApp(t *testing.T) {
-	t.Skip()
-	filesystem.SetupTestSpacemeshDataFolders(t, "app_test")
-
-	// remove all injected test flags for now
-	os.Args = []string{"/go-spacemesh", "--json-server=true"}
-
-	smapp := newSpacemeshApp()
-	defer smapp.Cleanup(NodeCmd, os.Args)
-	smapp.Initialize(NodeCmd, os.Args)
-	smapp.Start(NodeCmd, os.Args)
-
-	//<-EntryPointCreated
-
-	assert.NotNil(t, App)
-
-	<-App.NodeInitCallback
-
-	assert.NotNil(t, App.P2P)
-	assert.NotNil(t, App)
-	assert.Equal(t, App.Config.API.StartJSONServer, true)
-
-	// app should exit based on this signal
-	Cancel()
-
-	filesystem.DeleteSpacemeshDataFolders(t)
-
-}
-
 func (app *AppTestSuite) initMultipleInstances(t *testing.T, numOfInstances int, storeFormat string) {
 	net := service.NewSimulator()
 	runningName := 'a'
 	bo := oracle.NewLocalOracle(numOfInstances)
 	for i := 0; i < numOfInstances; i++ {
-		smapp := newSpacemeshApp()
+		smapp := NewSpacemeshApp()
 		smapp.Config.HARE.N = numOfInstances
 		smapp.Config.HARE.F = numOfInstances / 2
 		app.apps = append(app.apps, smapp)
