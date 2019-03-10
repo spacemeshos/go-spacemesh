@@ -4,11 +4,9 @@ import (
 	"bytes"
 	"github.com/davecgh/go-xdr/xdr2"
 	"github.com/spacemeshos/go-spacemesh/address"
-	"github.com/spacemeshos/go-spacemesh/layer"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/spacemeshos/go-spacemesh/sync"
 	"github.com/stretchr/testify/assert"
 	"math/big"
@@ -27,7 +25,7 @@ type MockHare struct {
 	res []mesh.BlockID
 }
 
-func (m MockHare) GetResult(id layer.Id) ([]mesh.BlockID, error) {
+func (m MockHare) GetResult(id mesh.LayerID) ([]mesh.BlockID, error) {
 	return m.res, nil
 }
 
@@ -35,21 +33,21 @@ type MockOrphans struct {
 	st []mesh.BlockID
 }
 
-func (m MockOrphans) GetOrphanBlocksBefore(l layer.Id) ([]mesh.BlockID, error) {
+func (m MockOrphans) GetOrphanBlocksBefore(l mesh.LayerID) ([]mesh.BlockID, error) {
 	return m.st, nil
 }
 
 type mockBlockOracle struct {
 }
 
-func (mbo mockBlockOracle) BlockEligible(id layer.Id, pubkey string) bool {
+func (mbo mockBlockOracle) BlockEligible(id mesh.LayerID, pubkey string) bool {
 	return true
 }
 
 func TestBlockBuilder_StartStop(t *testing.T) {
 
 	net := service.NewSimulator()
-	beginRound := make(chan layer.Id)
+	beginRound := make(chan mesh.LayerID)
 	n := net.NewNode()
 	//receiver := net.NewNode()
 
@@ -79,7 +77,7 @@ func TestBlockBuilder_StartStop(t *testing.T) {
 
 func TestBlockBuilder_CreateBlock(t *testing.T) {
 	net := service.NewSimulator()
-	beginRound := make(chan layer.Id)
+	beginRound := make(chan mesh.LayerID)
 	n := net.NewNode()
 	receiver := net.NewNode()
 
@@ -96,9 +94,9 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 	addr2 := address.BytesToAddress([]byte{0x01})
 
 	trans := []mesh.SerializableTransaction{
-		Transaction2SerializableTransaction(state.NewTransaction(1, addr1, addr2, big.NewInt(1), DefaultGasLimit, big.NewInt(DefaultGas))),
-		Transaction2SerializableTransaction(state.NewTransaction(1, addr1, addr2, big.NewInt(1), DefaultGasLimit, big.NewInt(DefaultGas))),
-		Transaction2SerializableTransaction(state.NewTransaction(2, addr1, addr2, big.NewInt(1), DefaultGasLimit, big.NewInt(DefaultGas))),
+		Transaction2SerializableTransaction(mesh.NewTransaction(1, addr1, addr2, big.NewInt(1), DefaultGasLimit, big.NewInt(DefaultGas))),
+		Transaction2SerializableTransaction(mesh.NewTransaction(1, addr1, addr2, big.NewInt(1), DefaultGasLimit, big.NewInt(DefaultGas))),
+		Transaction2SerializableTransaction(mesh.NewTransaction(2, addr1, addr2, big.NewInt(1), DefaultGasLimit, big.NewInt(DefaultGas))),
 	}
 
 	builder.AddTransaction(trans[0].AccountNonce, trans[0].Origin, *trans[0].Recipient, big.NewInt(0).SetBytes(trans[0].Price))

@@ -3,9 +3,7 @@ package mesh
 import (
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/database"
-	"github.com/spacemeshos/go-spacemesh/layer"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/stretchr/testify/assert"
 	"math/big"
 	"math/rand"
@@ -19,11 +17,11 @@ type MockMapState struct {
 	Total   int64
 }
 
-func (MockMapState) ApplyTransactions(layer layer.Id, txs state.Transactions) (uint32, error) {
+func (MockMapState) ApplyTransactions(layer LayerID, txs Transactions) (uint32, error) {
 	return 0, nil
 }
 
-func (s *MockMapState) ApplyRewards(layer layer.Id, miners map[string]struct{}, underQuota map[string]struct{}, bonusReward, diminishedReward *big.Int) {
+func (s *MockMapState) ApplyRewards(layer LayerID, miners map[string]struct{}, underQuota map[string]struct{}, bonusReward, diminishedReward *big.Int) {
 	for minerId := range miners {
 		if _, has := underQuota[minerId]; !has {
 			s.Rewards[minerId] = bonusReward
@@ -176,7 +174,7 @@ func TestMesh_AccumulateRewards_underQuota(t *testing.T) {
 
 }
 
-func createLayer(mesh *Mesh, id layer.Id, numOfBlocks, maxTransactions int) (totalRewards int64) {
+func createLayer(mesh *Mesh, id LayerID, numOfBlocks, maxTransactions int) (totalRewards int64) {
 	for i := 0; i < numOfBlocks; i++ {
 		block1 := NewBlock(true, []byte("data1"), time.Now(), id)
 		block1.MinerID = strconv.Itoa(i)
@@ -197,7 +195,7 @@ func TestMesh_integration(t *testing.T) {
 
 	var rewards int64
 	for i := 0; i < numofLayers; i++ {
-		reward := createLayer(layers, layer.Id(i), numofBlocks, maxTxs)
+		reward := createLayer(layers, LayerID(i), numofBlocks, maxTxs)
 		if rewards == 0 {
 			rewards += reward
 		}
@@ -221,7 +219,7 @@ func TestMesh_MergeDoubles(t *testing.T) {
 	layers := getMeshWithMapState("t1", s)
 	defer layers.Close()
 	dst := address.HexToAddress("2")
-	transactions := []*state.Transaction{
+	transactions := []*Transaction{
 		{
 			AccountNonce: 1,
 			Origin:       address.HexToAddress("1"),

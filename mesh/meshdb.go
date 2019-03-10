@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/database"
-	"github.com/spacemeshos/go-spacemesh/layer"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"sync"
 )
@@ -20,9 +19,9 @@ type meshDB struct {
 	layers             database.DB
 	blocks             database.DB
 	contextualValidity database.DB //map blockId to contextualValidation state of block
-	orphanBlocks       map[layer.Id]map[BlockID]struct{}
+	orphanBlocks       map[LayerID]map[BlockID]struct{}
 	orphanBlockCount   int32
-	layerMutex         map[layer.Id]*layerMutex
+	layerMutex         map[LayerID]*layerMutex
 	lhMutex            sync.Mutex
 }
 
@@ -32,8 +31,8 @@ func NewMeshDB(layers, blocks, validity database.DB, log log.Log) *meshDB {
 		blocks:             blocks,
 		layers:             layers,
 		contextualValidity: validity,
-		orphanBlocks:       make(map[layer.Id]map[BlockID]struct{}),
-		layerMutex:         make(map[layer.Id]*layerMutex),
+		orphanBlocks:       make(map[LayerID]map[BlockID]struct{}),
+		layerMutex:         make(map[LayerID]*layerMutex),
 	}
 	return ll
 }
@@ -45,13 +44,13 @@ func (m *meshDB) Close() {
 
 }
 
-func (m *meshDB) getLayer(index layer.Id) (*Layer, error) {
+func (m *meshDB) getLayer(index LayerID) (*Layer, error) {
 	ids, err := m.layers.Get(index.ToBytes())
 	if err != nil {
 		return nil, fmt.Errorf("error getting layer %v from database ", index)
 	}
 
-	l := NewLayer(layer.Id(index))
+	l := NewLayer(LayerID(index))
 	if len(ids) == 0 {
 		return nil, fmt.Errorf("no ids for layer %v in database ", index)
 	}
@@ -189,7 +188,7 @@ func (m *meshDB) getLayerBlocks(ids map[BlockID]bool) ([]*Block, error) {
 }
 
 //try delete layer Handler (deletes if pending pendingCount is 0)
-func (m *meshDB) endLayerWorker(index layer.Id) {
+func (m *meshDB) endLayerWorker(index LayerID) {
 	m.lhMutex.Lock()
 	defer m.lhMutex.Unlock()
 
@@ -205,7 +204,7 @@ func (m *meshDB) endLayerWorker(index layer.Id) {
 }
 
 //returns the existing layer Handler (crates one if doesn't exist)
-func (m *meshDB) getLayerMutex(index layer.Id) *layerMutex {
+func (m *meshDB) getLayerMutex(index LayerID) *layerMutex {
 	m.lhMutex.Lock()
 	defer m.lhMutex.Unlock()
 	ll, found := m.layerMutex[index]
