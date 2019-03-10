@@ -3,6 +3,7 @@ package mesh
 import (
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/layer"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/stretchr/testify/assert"
@@ -18,11 +19,11 @@ type MockMapState struct {
 	Total   int64
 }
 
-func (MockMapState) ApplyTransactions(layer state.LayerID, txs state.Transactions) (uint32, error) {
+func (MockMapState) ApplyTransactions(layer layer.Id, txs state.Transactions) (uint32, error) {
 	return 0, nil
 }
 
-func (s *MockMapState) ApplyRewards(layer state.LayerID, miners map[string]struct{}, underQuota map[string]struct{}, bonusReward, diminishedReward *big.Int) {
+func (s *MockMapState) ApplyRewards(layer layer.Id, miners map[string]struct{}, underQuota map[string]struct{}, bonusReward, diminishedReward *big.Int) {
 	for minerId := range miners {
 		if _, has := underQuota[minerId]; !has {
 			s.Rewards[minerId] = bonusReward
@@ -34,13 +35,23 @@ func (s *MockMapState) ApplyRewards(layer state.LayerID, miners map[string]struc
 
 }
 
+func ConfigTst() RewardConfig {
+	return RewardConfig{
+		big.NewInt(10),
+		big.NewInt(5000),
+		big.NewInt(15),
+		15,
+		5,
+	}
+}
+
 func getMeshWithMapState(id string, s StateUpdater) *Mesh {
 
 	//time := time.Now()
 	bdb := database.NewMemDatabase()
 	ldb := database.NewMemDatabase()
 	cdb := database.NewMemDatabase()
-	layers := NewMesh(ldb, bdb, cdb, &MeshValidatorMock{}, s, log.New(id, "", ""))
+	layers := NewMesh(ldb, bdb, cdb, ConfigTst(), &MeshValidatorMock{}, s, log.New(id, "", ""))
 	return layers
 }
 
@@ -105,18 +116,23 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 	layers.AddBlock(block3)
 	layers.AddBlock(block4)
 
-	params := RewardParams{
-		big.NewInt(10),
-		big.NewInt(5000),
-		big.NewInt(20),
-		5,
-	}
+	params := NewTestRewardParams()
 
 	layers.AccumulateRewards(1, params)
 	remainder := (totalRewards * params.SimpleTxCost.Int64()) % 4
 
 	assert.Equal(t, s.Total, totalRewards*params.SimpleTxCost.Int64()+params.BaseReward.Int64()+remainder)
 
+}
+
+func NewTestRewardParams() RewardConfig {
+	return RewardConfig{
+		big.NewInt(10),
+		big.NewInt(5000),
+		big.NewInt(20),
+		15,
+		10,
+	}
 }
 
 func TestMesh_AccumulateRewards_underQuota(t *testing.T) {
@@ -148,12 +164,7 @@ func TestMesh_AccumulateRewards_underQuota(t *testing.T) {
 	layers.AddBlock(block3)
 	layers.AddBlock(block4)
 
-	params := RewardParams{
-		big.NewInt(10),
-		big.NewInt(5000),
-		big.NewInt(20),
-		15,
-	}
+	params := NewTestRewardParams()
 
 	layers.AccumulateRewards(1, params)
 	remainder := (totalRewards * params.SimpleTxCost.Int64()) % 4
@@ -163,6 +174,46 @@ func TestMesh_AccumulateRewards_underQuota(t *testing.T) {
 	assert.Equal(t, s.Rewards[block3.MinerID], s.Rewards[block4.MinerID])
 	assert.NotEqual(t, s.Rewards[block1.MinerID], s.Rewards[block3.MinerID])
 
+}
+
+func createLayer(mesh *Mesh, id layer.Id, numOfBlocks, maxTransactions int) (totalRewards int64) {
+	for i := 0; i < numOfBlocks; i++ {
+		block1 := NewBlock(true, []byte("data1"), time.Now(), id)
+		block1.MinerID = strconv.Itoa(i)
+		totalRewards += addTransactions(block1, rand.Intn(maxTransactions))
+		mesh.addBlock(block1)
+	}
+	return totalRewards
+}
+
+func TestMesh_integration(t *testing.T) {
+	numofLayers := 10
+	numofBlocks := 10
+	maxTxs := 20
+
+	s := &MockMapState{Rewards: make(map[string]*big.Int)}
+	layers := getMeshWithMapState("t1", s)
+	defer layers.Close()
+
+	var rewards int64
+	for i := 0; i < numofLayers; i++ {
+		reward := createLayer(layers, layer.Id(i), numofBlocks, maxTxs)
+		if rewards == 0 {
+			rewards += reward
+		}
+	}
+
+	oldTotal := s.Total
+	l4, err := layers.getLayer(4)
+	assert.NoError(t, err)
+	l5, err := layers.getLayer(5)
+	assert.NoError(t, err)
+	//test negative case
+	layers.ValidateLayer(l4)
+	assert.Equal(t, oldTotal, s.Total)
+
+	layers.ValidateLayer(l5)
+	assert.Equal(t, rewards*ConfigTst().SimpleTxCost.Int64()+ConfigTst().BaseReward.Int64(), s.Total)
 }
 
 func TestMesh_MergeDoubles(t *testing.T) {

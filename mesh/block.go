@@ -6,17 +6,17 @@ import (
 	"github.com/davecgh/go-xdr/xdr2"
 	"github.com/google/uuid"
 	"github.com/spacemeshos/go-spacemesh/address"
+	"github.com/spacemeshos/go-spacemesh/layer"
 	"io"
 	"math/big"
 	"time"
 )
 
 type BlockID uint32
-type LayerID uint32
 
 type Block struct {
 	Id         BlockID
-	LayerIndex LayerID
+	LayerIndex layer.Id
 	MinerID    string
 	Data       []byte
 	Coin       bool
@@ -48,10 +48,10 @@ func (t *SerializableTransaction) PriceAsBigInt() *big.Int {
 	return a
 }
 
-func NewBlock(coin bool, data []byte, ts time.Time, layerId LayerID) *Block {
+func NewBlock(coin bool, data []byte, ts time.Time, LayerID layer.Id) *Block {
 	b := Block{
 		Id:         BlockID(uuid.New().ID()),
-		LayerIndex: layerId,
+		LayerIndex: LayerID,
 		BlockVotes: make([]BlockID, 0, 10),
 		ViewEdges:  make([]BlockID, 0, 10),
 		Txs:        make([]SerializableTransaction, 0, 10),
@@ -78,7 +78,7 @@ func (b Block) ID() BlockID {
 	return b.Id
 }
 
-func (b Block) Layer() LayerID {
+func (b Block) Layer() layer.Id {
 	return b.LayerIndex
 }
 
@@ -98,10 +98,10 @@ func (b *Block) AddTransaction(sr *SerializableTransaction) {
 
 type Layer struct {
 	blocks []*Block
-	index  LayerID
+	index  layer.Id
 }
 
-func (l *Layer) Index() LayerID {
+func (l *Layer) Index() layer.Id {
 	return l.index
 }
 
@@ -122,7 +122,7 @@ func (l *Layer) SetBlocks(blocks []*Block) {
 	l.blocks = blocks
 }
 
-func NewExistingLayer(idx LayerID, blocks []*Block) *Layer {
+func NewExistingLayer(idx layer.Id, blocks []*Block) *Layer {
 	l := Layer{
 		blocks: blocks,
 		index:  idx,
@@ -164,18 +164,18 @@ func BytesAsTransaction(buf io.Reader) (*SerializableTransaction, error) {
 	return &b, nil
 }
 
-func NewExistingBlock(id BlockID, layerIndex LayerID, data []byte) *Block {
+func NewExistingBlock(id BlockID, layerIndex layer.Id, data []byte) *Block {
 	b := Block{
 		Id:         BlockID(id),
 		BlockVotes: make([]BlockID, 0, 10),
 		ViewEdges:  make([]BlockID, 0, 10),
-		LayerIndex: LayerID(layerIndex),
+		LayerIndex: layer.Id(layerIndex),
 		Data:       data,
 	}
 	return &b
 }
 
-func NewLayer(layerIndex LayerID) *Layer {
+func NewLayer(layerIndex layer.Id) *Layer {
 	return &Layer{
 		index:  layerIndex,
 		blocks: make([]*Block, 0, 10),

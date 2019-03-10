@@ -5,6 +5,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/layer"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
@@ -26,7 +27,7 @@ func (s *ProcessorStateSuite) SetupTest() {
 	s.db = database.NewMemDatabase()
 	s.state, _ = New(common.Hash{}, NewDatabase(s.db))
 
-	s.processor = NewTransactionProcessor(rng, s.state, GasParams{big.NewInt(5)}, lg)
+	s.processor = NewTransactionProcessor(rng, s.state, GasConfig{big.NewInt(5)}, lg)
 }
 
 func createAccount(state *StateDB, addr []byte, balance int64, nonce uint64) *StateObj {
@@ -344,7 +345,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 
 			log.Info("transaction %v nonce %v amount %v", t.Origin.Hex(), t.AccountNonce, t.Amount)
 		}
-		failed, err := s.processor.ApplyTransactions(LayerID(i), trns)
+		failed, err := s.processor.ApplyTransactions(layer.Id(i), trns)
 		assert.NoError(s.T(), err)
 		assert.True(s.T(), failed == 0)
 
@@ -354,7 +355,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 		}
 
 		if i == revertToLayer+revertAfterLayer {
-			s.processor.Reset(LayerID(revertToLayer))
+			s.processor.Reset(layer.Id(revertToLayer))
 			got := string(s.processor.globalState.Dump())
 
 			if got != want {
@@ -379,7 +380,7 @@ func TestTransactionProcessor_randomSort(t *testing.T) {
 	db := database.NewMemDatabase()
 	state, _ := New(common.Hash{}, NewDatabase(db))
 	lg := log.New("proc_logger", "", "")
-	processor := NewTransactionProcessor(rng, state, GasParams{big.NewInt(5)}, lg)
+	processor := NewTransactionProcessor(rng, state, GasConfig{big.NewInt(5)}, lg)
 
 	obj1 := createAccount(state, []byte{0x01}, 2, 0)
 	obj2 := createAccount(state, []byte{0x01, 02}, 1, 10)

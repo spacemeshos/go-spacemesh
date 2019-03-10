@@ -7,29 +7,30 @@ import (
 
 // Log is an exported type that embeds our logger.
 type Log struct {
-	Logger *zap.Logger
+	logger *zap.Logger
+	sugar  *zap.SugaredLogger
 }
 
 // Exported from Log basic logging options.
 
 // Info prints formatted info level log message.
 func (l Log) Info(format string, args ...interface{}) {
-	l.Logger.Sugar().Infof(format, args...)
+	l.sugar.Infof(format, args...)
 }
 
 // Debug prints formatted debug level log message.
 func (l Log) Debug(format string, args ...interface{}) {
-	l.Logger.Sugar().Debugf(format, args...)
+	l.sugar.Debugf(format, args...)
 }
 
 // Error prints formatted error level log message.
 func (l Log) Error(format string, args ...interface{}) {
-	l.Logger.Sugar().Errorf(format, args...)
+	l.sugar.Errorf(format, args...)
 }
 
 // Warning prints formatted warning level log message.
 func (l Log) Warning(format string, args ...interface{}) {
-	l.Logger.Sugar().Warnf(format, args...)
+	l.sugar.Warnf(format, args...)
 }
 
 // Wrap and export field logic
@@ -97,8 +98,18 @@ type fieldLogger struct {
 	l *zap.Logger
 }
 
-func (l Log) With() fieldLogger {
-	return fieldLogger{l.Logger}
+// With returns a logger object that logs fields
+func (l *Log) With() fieldLogger {
+	return fieldLogger{l.logger}
+}
+
+// LogWith returns a logger the given fields
+func (l *Log) LogWith(fields ...Field) *Log {
+	lgr := l.logger.With(unpack(fields...)...)
+	return &Log{
+		lgr,
+		lgr.Sugar(),
+	}
 }
 
 // Infow prints message with fields

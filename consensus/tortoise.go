@@ -3,6 +3,7 @@ package consensus
 import (
 	"fmt"
 	"github.com/golang-collections/go-datastructures/bitarray"
+	"github.com/spacemeshos/go-spacemesh/layer"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"sync"
@@ -13,7 +14,7 @@ type NewIdQueue chan uint32
 
 type BlockPosition struct {
 	visibility bitarray.BitArray
-	layer      LayerID
+	layer      layer.Id
 }
 
 type tortoise struct {
@@ -23,12 +24,12 @@ type tortoise struct {
 	idQueue            NewIdQueue
 	posVotes           []bitarray.BitArray
 	visibilityMap      [20000]BlockPosition
-	layers             map[LayerID]*Layer
+	layers             map[layer.Id]*Layer
 	layerSize          uint32
 	cachedLayers       uint32
 	remainingBlockIds  uint32
 	totalBlocks        uint32
-	layerReadyCallback func(layerId mesh.LayerID)
+	layerReadyCallback func(layerId layer.Id)
 	mu                 sync.Mutex
 }
 
@@ -43,7 +44,7 @@ func NewTortoise(layerSize uint32, cachedLayers uint32) *tortoise {
 		totalBlocks:       totBlocks,
 		posVotes:          make([]bitarray.BitArray, totBlocks),
 		//visibilityMap:     make([20000]BlockPosition),
-		layers:             make(map[LayerID]*Layer),
+		layers:             make(map[layer.Id]*Layer),
 		layerSize:          layerSize,
 		cachedLayers:       cachedLayers,
 		layerReadyCallback: nil,
@@ -51,7 +52,7 @@ func NewTortoise(layerSize uint32, cachedLayers uint32) *tortoise {
 	return &trtl
 }
 
-func (alg *tortoise) RegisterLayerCallback(callback func(mesh.LayerID)) {
+func (alg *tortoise) RegisterLayerCallback(callback func(layer.Id)) {
 	alg.layerReadyCallback = callback
 }
 
@@ -85,7 +86,7 @@ func (alg *tortoise) IsTortoiseValid(originBlock *TortoiseBlock, targetBlock Blo
 	return originBlock.Coin
 }
 
-func (alg *tortoise) getLayerById(layerId LayerID) (*Layer, error) {
+func (alg *tortoise) getLayerById(layerId layer.Id) (*Layer, error) {
 	if _, ok := alg.layers[layerId]; !ok {
 		return nil, fmt.Errorf("layer Id not found %v", layerId)
 	}
@@ -226,7 +227,7 @@ func (alg *tortoise) HandleIncomingLayer(ll *mesh.Layer) {
 	}
 	alg.mu.Lock()
 	if _, exist := alg.layers[l.index-1]; exist {
-		alg.layerReadyCallback(mesh.LayerID(l.index - 1))
+		alg.layerReadyCallback(layer.Id(l.index - 1))
 	}
 	alg.mu.Unlock()
 }

@@ -48,6 +48,7 @@ func (ev *eligibilityValidator) validateRole(m *pb.HareMessage) bool {
 	return true
 }
 
+// Validates eligibility and signature of the provided message
 func (ev *eligibilityValidator) Validate(m *pb.HareMessage) bool {
 	data, err := proto.Marshal(m.Message)
 	if err != nil {
@@ -87,7 +88,7 @@ func newSyntaxContextValidator(signing Signing, threshold int, validator func(m 
 	return &syntaxContextValidator{signing, threshold, validator, logger}
 }
 
-// verifies the message is contextually valid
+// Validates the message is contextually valid
 func (validator *syntaxContextValidator) ContextuallyValidateMessage(m *pb.HareMessage, expectedK int32) bool {
 	if m.Message == nil {
 		validator.Warning("Contextual validation failed: m.Message is nil")
@@ -111,7 +112,7 @@ func (validator *syntaxContextValidator) ContextuallyValidateMessage(m *pb.HareM
 	return false
 }
 
-// verifies the message is syntactically valid
+// Validates the syntax of the provided message
 func (validator *syntaxContextValidator) SyntacticallyValidateMessage(m *pb.HareMessage) bool {
 	if m == nil {
 		validator.Warning("Syntax validation failed: m is nil")
