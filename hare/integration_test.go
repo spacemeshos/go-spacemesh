@@ -33,7 +33,7 @@ func Test_16Nodes_HareIntegrationSuite(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
-	const roundDuration = time.Second * time.Duration(2)
+	const roundDuration = 2
 	cfg := config.Config{N: 16, F: 8, RoundDuration: roundDuration}
 	totalNodes := 16
 	his := &hareIntegrationThreeNodes{newIntegrationSuite()}
@@ -83,7 +83,7 @@ func Test_20Nodes_HareIntegrationSuite(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
-	const roundDuration = time.Second * time.Duration(5)
+	const roundDuration = 5
 	cfg := config.Config{N: 20, F: 8, RoundDuration: roundDuration}
 	totalNodes := 20
 	his := &hareIntegration20Nodes{newIntegrationSuite()}

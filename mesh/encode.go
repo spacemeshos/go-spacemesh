@@ -8,6 +8,7 @@ import (
 )
 
 func (b BlockID) ToBytes() []byte { return common.Uint32ToBytes(uint32(b)) }
+
 func (l LayerID) ToBytes() []byte { return common.Uint32ToBytes(uint32(l)) }
 
 func blockIdsAsBytes(ids map[BlockID]bool) ([]byte, error) {
