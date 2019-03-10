@@ -7,7 +7,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/spacemeshos/go-spacemesh/sync"
 	"github.com/stretchr/testify/assert"
 	"math/big"
@@ -95,9 +94,9 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 	addr2 := address.BytesToAddress([]byte{0x01})
 
 	trans := []mesh.SerializableTransaction{
-		Transaction2SerializableTransaction(state.NewTransaction(1, addr1, addr2, big.NewInt(1), DefaultGasLimit, big.NewInt(DefaultGas))),
-		Transaction2SerializableTransaction(state.NewTransaction(1, addr1, addr2, big.NewInt(1), DefaultGasLimit, big.NewInt(DefaultGas))),
-		Transaction2SerializableTransaction(state.NewTransaction(2, addr1, addr2, big.NewInt(1), DefaultGasLimit, big.NewInt(DefaultGas))),
+		Transaction2SerializableTransaction(mesh.NewTransaction(1, addr1, addr2, big.NewInt(1), DefaultGasLimit, big.NewInt(DefaultGas))),
+		Transaction2SerializableTransaction(mesh.NewTransaction(1, addr1, addr2, big.NewInt(1), DefaultGasLimit, big.NewInt(DefaultGas))),
+		Transaction2SerializableTransaction(mesh.NewTransaction(2, addr1, addr2, big.NewInt(1), DefaultGasLimit, big.NewInt(DefaultGas))),
 	}
 
 	builder.AddTransaction(trans[0].AccountNonce, trans[0].Origin, *trans[0].Recipient, big.NewInt(0).SetBytes(trans[0].Price))

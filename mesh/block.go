@@ -6,13 +6,17 @@ import (
 	"github.com/davecgh/go-xdr/xdr2"
 	"github.com/google/uuid"
 	"github.com/spacemeshos/go-spacemesh/address"
+	"github.com/spacemeshos/go-spacemesh/common"
 	"io"
 	"math/big"
 	"time"
 )
 
-type BlockID uint32
-type LayerID uint32
+type BlockID uint64
+
+type LayerID uint64
+
+func (l LayerID) ToBytes() []byte { return common.Uint64ToBytes(uint64(l)) }
 
 type Block struct {
 	Id         BlockID
@@ -48,10 +52,10 @@ func (t *SerializableTransaction) PriceAsBigInt() *big.Int {
 	return a
 }
 
-func NewBlock(coin bool, data []byte, ts time.Time, layerId LayerID) *Block {
+func NewBlock(coin bool, data []byte, ts time.Time, LayerID LayerID) *Block {
 	b := Block{
 		Id:         BlockID(uuid.New().ID()),
-		LayerIndex: layerId,
+		LayerIndex: LayerID,
 		BlockVotes: make([]BlockID, 0, 10),
 		ViewEdges:  make([]BlockID, 0, 10),
 		Txs:        make([]SerializableTransaction, 0, 10),

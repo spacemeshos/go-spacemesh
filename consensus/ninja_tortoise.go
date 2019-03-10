@@ -13,7 +13,6 @@ import (
 
 type vec [2]int
 type PatternId uint32
-type LayerId mesh.LayerID
 
 const ( //Threshold
 	K               = 5 //number of explicit layers to vote for
@@ -266,26 +265,26 @@ func (ni *ninjaTortoise) getCorrEffCounter() (map[mesh.BlockID]vec, map[mesh.Lay
 
 //for all layers from pBase to i add b's votes, mark good layers
 // return new minimal good layer
-func (ni *ninjaTortoise) findMinimalNewlyGoodLayer(layer *mesh.Layer) mesh.LayerID {
-	minGood := mesh.LayerID(math.MaxUint32)
+func (ni *ninjaTortoise) findMinimalNewlyGoodLayer(lyr *mesh.Layer) mesh.LayerID {
+	minGood := mesh.LayerID(math.MaxUint64)
 
 	var j mesh.LayerID
-	if Window > layer.Index() {
+	if Window > lyr.Index() {
 		j = ni.pBase.Layer() + 1
 	} else {
-		j = Max(ni.pBase.Layer()+1, layer.Index()-Window+1)
+		j = Max(ni.pBase.Layer()+1, lyr.Index()-Window+1)
 	}
 
-	for ; j < layer.Index(); j++ {
+	for ; j < lyr.Index(); j++ {
 		// update block votes on all patterns in blocks view
-		sUpdated := ni.updateBlocksSupport(layer.Blocks(), j)
+		sUpdated := ni.updateBlocksSupport(lyr.Blocks(), j)
 		//todo do this as part of previous for if possible
 		//for each p that was updated and not the good layer of j check if it is the good layer
 		for p := range sUpdated {
 			//if a majority supports p (p is good)
 			//according to tal we dont have to know the exact amount, we can multiply layer size by number of layers
 			jGood, found := ni.tGood[j]
-			threshold := 0.5 * float64(mesh.LayerID(ni.avgLayerSize)*(layer.Index()-p.Layer()))
+			threshold := 0.5 * float64(mesh.LayerID(ni.avgLayerSize)*(lyr.Index()-p.Layer()))
 
 			if (jGood != p || !found) && float64(ni.tSupport[p]) > threshold {
 				ni.tGood[p.Layer()] = p

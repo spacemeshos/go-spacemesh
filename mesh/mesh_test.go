@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/stretchr/testify/assert"
 	"math/big"
 	"testing"
@@ -22,11 +21,11 @@ func (mlg *MeshValidatorMock) ContextualValidity(id BlockID) bool   { return tru
 
 type MockState struct{}
 
-func (MockState) ApplyTransactions(layer state.LayerID, txs state.Transactions) (uint32, error) {
+func (MockState) ApplyTransactions(layer LayerID, txs Transactions) (uint32, error) {
 	return 0, nil
 }
 
-func (MockState) ApplyRewards(layer state.LayerID, miners map[string]struct{}, underQuota map[string]struct{}, bonusReward, diminishedReward *big.Int) {
+func (MockState) ApplyRewards(layer LayerID, miners map[string]struct{}, underQuota map[string]struct{}, bonusReward, diminishedReward *big.Int) {
 }
 
 func getMesh(id string) *Mesh {
@@ -35,7 +34,7 @@ func getMesh(id string) *Mesh {
 	bdb := database.NewMemDatabase()
 	ldb := database.NewMemDatabase()
 	cdb := database.NewMemDatabase()
-	layers := NewMesh(ldb, bdb, cdb, &MeshValidatorMock{}, &MockState{}, log.New(id, "", ""))
+	layers := NewMesh(ldb, bdb, cdb, ConfigTst(), &MeshValidatorMock{}, &MockState{}, log.New(id, "", ""))
 	return layers
 }
 

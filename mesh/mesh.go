@@ -3,9 +3,12 @@ package mesh
 import (
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/address"
+	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/crypto/sha3"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/state"
+	"github.com/spacemeshos/go-spacemesh/rlp"
 	"math/big"
 	"sort"
 	"sync"
@@ -24,46 +27,95 @@ type MeshValidator interface {
 }
 
 type StateUpdater interface {
-	ApplyTransactions(layer state.LayerID, transactions state.Transactions) (uint32, error)
-	ApplyRewards(layer state.LayerID, miners map[string]struct{}, underQuota map[string]struct{}, bonusReward, diminishedReward *big.Int)
+	ApplyTransactions(layer LayerID, transactions Transactions) (uint32, error)
+	ApplyRewards(layer LayerID, miners map[string]struct{}, underQuota map[string]struct{}, bonusReward, diminishedReward *big.Int)
 }
 
 type Mesh struct {
 	log.Log
 	*meshDB
-	verifiedLayer uint32
-	latestLayer   uint32
-	lastSeenLayer uint32
+	rewardConfig  RewardConfig
+	verifiedLayer LayerID
+	latestLayer   LayerID
+	lastSeenLayer LayerID
 	lMutex        sync.RWMutex
 	lkMutex       sync.RWMutex
 	lcMutex       sync.RWMutex
+	lvMutex       sync.RWMutex
 	tortoise      MeshValidator
 	state         StateUpdater
 	orphMutex     sync.RWMutex
 	done          chan struct{}
 }
 
-func NewMesh(layers, blocks, validity database.DB, mesh MeshValidator, state StateUpdater, logger log.Log) *Mesh {
+func NewMesh(layers, blocks, validity database.DB, rewardConfig RewardConfig, mesh MeshValidator, state StateUpdater, logger log.Log) *Mesh {
 	//todo add boot from disk
 	ll := &Mesh{
-		Log:      logger,
-		tortoise: mesh,
-		state:    state,
-		done:     make(chan struct{}),
-		meshDB:   NewMeshDB(layers, blocks, validity, logger),
+		Log:          logger,
+		tortoise:     mesh,
+		state:        state,
+		done:         make(chan struct{}),
+		meshDB:       NewMeshDB(layers, blocks, validity, logger),
+		rewardConfig: rewardConfig,
 	}
 
 	return ll
 }
 
-func SerializableTransaction2StateTransaction(tx *SerializableTransaction) *state.Transaction {
+//todo: this object should be splitted into two parts: one is the actual value serialized into trie, and an containig obj with caches
+type Transaction struct {
+	AccountNonce uint64
+	Price        *big.Int
+	GasLimit     uint64
+	Recipient    *address.Address
+	Origin       address.Address //todo: remove this, should be calculated from sig.
+	Amount       *big.Int
+	Payload      []byte
+
+	//todo: add signatures
+
+	hash *common.Hash
+}
+
+func (tx *Transaction) Hash() common.Hash {
+	if tx.hash == nil {
+		hash := rlpHash(tx)
+		tx.hash = &hash
+	}
+	return *tx.hash
+}
+
+type Transactions []*Transaction
+
+func NewTransaction(nonce uint64, origin address.Address, destination address.Address,
+	amount *big.Int, gasLimit uint64, gasPrice *big.Int) *Transaction {
+	return &Transaction{
+		AccountNonce: nonce,
+		Origin:       origin,
+		Recipient:    &destination,
+		Amount:       amount,
+		GasLimit:     gasLimit,
+		Price:        gasPrice,
+		hash:         nil,
+		Payload:      nil,
+	}
+}
+
+func rlpHash(x interface{}) (h common.Hash) {
+	hw := sha3.NewKeccak256()
+	rlp.Encode(hw, x)
+	hw.Sum(h[:0])
+	return h
+}
+
+func SerializableTransaction2StateTransaction(tx *SerializableTransaction) *Transaction {
 	price := big.Int{}
 	price.SetBytes(tx.Price)
 
 	amount := big.Int{}
 	amount.SetBytes(tx.Amount)
 
-	return state.NewTransaction(tx.AccountNonce, tx.Origin, *tx.Recipient, &amount, tx.GasLimit, &price)
+	return NewTransaction(tx.AccountNonce, tx.Origin, *tx.Recipient, &amount, tx.GasLimit, &price)
 }
 
 func (m *Mesh) IsContexuallyValid(b BlockID) bool {
@@ -71,17 +123,19 @@ func (m *Mesh) IsContexuallyValid(b BlockID) bool {
 	return true
 }
 
-func (m *Mesh) VerifiedLayer() uint32 {
-	return atomic.LoadUint32(&m.verifiedLayer)
+func (m *Mesh) VerifiedLayer() LayerID {
+	defer m.lvMutex.RUnlock()
+	m.lvMutex.RLock()
+	return m.verifiedLayer
 }
 
-func (m *Mesh) LatestLayer() uint32 {
+func (m *Mesh) LatestLayer() LayerID {
 	defer m.lkMutex.RUnlock()
 	m.lkMutex.RLock()
 	return m.latestLayer
 }
 
-func (m *Mesh) SetLatestLayer(idx uint32) {
+func (m *Mesh) SetLatestLayer(idx LayerID) {
 	defer m.lkMutex.Unlock()
 	m.lkMutex.Lock()
 	if idx > m.latestLayer {
@@ -90,10 +144,17 @@ func (m *Mesh) SetLatestLayer(idx uint32) {
 	}
 }
 
-func (m *Mesh) ValidateLayer(layer *Layer) {
-	m.Info("Validate layer %d", layer.Index())
-	oldPbase, newPbase := m.tortoise.HandleIncomingLayer(layer)
-	atomic.StoreUint32(&m.verifiedLayer, uint32(layer.Index()))
+func (m *Mesh) ValidateLayer(lyr *Layer) {
+	m.Info("Validate layer %d", lyr.Index())
+
+	if lyr.index >= m.rewardConfig.RewardMaturity {
+		m.AccumulateRewards(lyr.index-m.rewardConfig.RewardMaturity, m.rewardConfig)
+	}
+
+	oldPbase, newPbase := m.tortoise.HandleIncomingLayer(lyr)
+	m.lvMutex.Lock()
+	m.verifiedLayer = lyr.Index()
+	m.lvMutex.Unlock()
 	if newPbase > oldPbase {
 		m.PushTransactions(oldPbase, newPbase)
 	}
@@ -105,8 +166,8 @@ func SortBlocks(blocks []*Block) []*Block {
 	return blocks
 }
 
-func (m *Mesh) ExtractUniqueOrderedTransactions(l *Layer) []*state.Transaction {
-	txs := make([]*state.Transaction, 0, layerSize)
+func (m *Mesh) ExtractUniqueOrderedTransactions(l *Layer) []*Transaction {
+	txs := make([]*Transaction, 0, layerSize)
 	sortedBlocks := SortBlocks(l.blocks)
 
 	for _, b := range sortedBlocks {
@@ -132,7 +193,7 @@ func (m *Mesh) PushTransactions(oldBase LayerID, newBase LayerID) {
 		}
 
 		merged := m.ExtractUniqueOrderedTransactions(l)
-		x, err := m.state.ApplyTransactions(state.LayerID(i), merged)
+		x, err := m.state.ApplyTransactions(LayerID(i), merged)
 		if err != nil {
 			m.Log.Error("cannot apply transactions %v", err)
 		}
@@ -162,7 +223,7 @@ func (m *Mesh) AddBlock(block *Block) error {
 		m.Error("failed to add block %v  %v", block.ID(), err)
 		return err
 	}
-	m.SetLatestLayer(uint32(block.Layer()))
+	m.SetLatestLayer(block.Layer())
 	//new block add to orphans
 	m.handleOrphanBlocks(block)
 	//m.tortoise.HandleLateBlock(block) //why this? todo should be thread safe?
@@ -240,7 +301,7 @@ func (m *Mesh) GetOrphanBlocksBefore(l LayerID) ([]BlockID, error) {
 	return idArr, nil
 }
 
-func (m *Mesh) AccumulateRewards(rewardLayer LayerID, params RewardParams) {
+func (m *Mesh) AccumulateRewards(rewardLayer LayerID, params RewardConfig) {
 	l, err := m.getLayer(rewardLayer)
 	if err != nil || l == nil {
 		m.Error("") //todo handle error
@@ -280,7 +341,7 @@ func (m *Mesh) AccumulateRewards(rewardLayer LayerID, params RewardParams) {
 	log.Info("fees reward: %v total processed %v total txs %v merged %v blocks: %v", rewards.Int64(), processed, len(merged), len(merged), numBlocks)
 
 	bonusReward, diminishedReward := calculateActualRewards(rewards, numBlocks, params, len(uq))
-	m.state.ApplyRewards(state.LayerID(rewardLayer), ids, uq, bonusReward, diminishedReward)
+	m.state.ApplyRewards(LayerID(rewardLayer), ids, uq, bonusReward, diminishedReward)
 	//todo: should miner id be sorted in a deterministic order prior to applying rewards?
 
 }

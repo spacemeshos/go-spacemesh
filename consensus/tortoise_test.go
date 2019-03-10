@@ -39,6 +39,6 @@ func createFullPointingLayer(prev *mesh.Layer, blocksInLayer int) *mesh.Layer {
 		}
 		l.AddBlock(bl)
 	}
-	log.Info("Created layer Id %v", l.Index())
+	log.Info("Created mesh.LayerID %v", l.Index())
 	return l
 }

@@ -2,7 +2,6 @@ package hare
 
 import (
 	"errors"
-	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/hare/metrics"
 	"github.com/spacemeshos/go-spacemesh/hare/pb"
@@ -127,7 +126,7 @@ func (h *Hare) collectOutput(output TerminationOutput) error {
 	blocks := make([]mesh.BlockID, len(set.values))
 	i := 0
 	for _, v := range set.values {
-		blocks[i] = mesh.BlockID(common.BytesToUint32(v.Bytes()))
+		blocks[i] = v.BlockID
 		i++
 	}
 	h.mu.Lock()
@@ -171,7 +170,7 @@ func (h *Hare) onTick(id mesh.LayerID) {
 	set := NewEmptySet(len(blocks))
 	for _, b := range blocks {
 		// todo: figure out real type of blockid
-		set.Add(Value{NewBytes32(b.ToBytes())})
+		set.Add(Value{b})
 	}
 
 	instid := InstanceId(id)

@@ -8,7 +8,7 @@ import (
 )
 
 //this package sends a tick each tickInterval to all consumers of the tick
-//This also send the current layerID which is calculated from the number of ticks passed since epoch
+//This also send the current mesh.LayerID  which is calculated from the number of ticks passed since epoch
 type LayerTimer chan mesh.LayerID
 
 type Ticker struct {
@@ -102,7 +102,7 @@ func (t *Ticker) StartClock() {
 	for {
 		select {
 		case <-tick.C:
-			log.Info("released tick layerId %v", t.currentLayer+1)
+			log.Info("released tick mesh.LayerID  %v", t.currentLayer+1)
 			t.currentLayer++
 			t.notifyOnTick()
 			tick.Reset(t.tickInterval)

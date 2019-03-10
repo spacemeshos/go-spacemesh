@@ -3,27 +3,35 @@ package mesh
 import (
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/state"
 	"math/big"
 )
 
-type RewardParams struct {
+type RewardConfig struct {
 	SimpleTxCost   *big.Int
 	BaseReward     *big.Int
 	PenaltyPercent *big.Int
 	TxQuota        uint32
+	RewardMaturity LayerID
 }
 
-//type Transactions []*state.Transaction
+func DefaultRewardConfig() RewardConfig {
+	return RewardConfig{
+		big.NewInt(10),
+		big.NewInt(5000),
+		big.NewInt(15),
+		15,
+		5,
+	}
+}
 
-func CalculateLayerReward(id LayerID, params RewardParams) *big.Int {
+func CalculateLayerReward(id LayerID, params RewardConfig) *big.Int {
 	//todo: add inflation rules here
 	return params.BaseReward
 }
 
-func MergeDoubles(transactions []*state.Transaction) []*state.Transaction {
+func MergeDoubles(transactions []*Transaction) []*Transaction {
 	transactionSet := make(map[common.Hash]struct{})
-	merged := make([]*state.Transaction, 0, len(transactions))
+	merged := make([]*Transaction, 0, len(transactions))
 	for _, trns := range transactions {
 		if _, ok := transactionSet[trns.Hash()]; !ok {
 			transactionSet[trns.Hash()] = struct{}{}
@@ -35,7 +43,7 @@ func MergeDoubles(transactions []*state.Transaction) []*state.Transaction {
 	return merged
 }
 
-func calculateActualRewards(rewards *big.Int, numBlocks *big.Int, params RewardParams, underQuotaBlocks int) (*big.Int, *big.Int) {
+func calculateActualRewards(rewards *big.Int, numBlocks *big.Int, params RewardConfig, underQuotaBlocks int) (*big.Int, *big.Int) {
 	mod := new(big.Int)
 	// basic_reward =  total rewards / total_num_of_blocks
 	blockRewardPerMiner, _ := new(big.Int).DivMod(rewards, numBlocks, mod)

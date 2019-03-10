@@ -184,7 +184,7 @@ func TestHare_collectOutput(t *testing.T) {
 	h := New(cfg, n1, signing, om, oracle, layerTicker, log.NewDefault("Hare"))
 
 	mockid := instanceId1
-	set := NewSetFromValues(Value{NewBytes32([]byte{0})})
+	set := NewSetFromValues(Value{0})
 
 	h.collectOutput(mockOutput{mockid, set})
 	output, ok := h.outputs[mesh.LayerID(mockid)]
@@ -214,7 +214,7 @@ func TestHare_collectOutput2(t *testing.T) {
 	h.bufferSize = 1
 	h.lastLayer = 0
 	mockid := instanceId0
-	set := NewSetFromValues(Value{NewBytes32([]byte{0})})
+	set := NewSetFromValues(Value{0})
 
 	h.collectOutput(mockOutput{mockid, set})
 	output, ok := h.outputs[mesh.LayerID(mockid)]

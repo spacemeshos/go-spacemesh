@@ -5,14 +5,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
+// Tracks status messages
 type StatusTracker struct {
 	statuses  map[string]*pb.HareMessage // maps PubKey->StatusMsg
 	threshold int                        // threshold to indicate a set can be proved
 	maxKi     int32                      // tracks max ki in tracked status messages
-	maxRawSet [][]byte                   // tracks the max raw set in the tracked status messages
-	analyzed  bool
+	maxRawSet []uint64                   // tracks the max raw set in the tracked status messages
+	analyzed  bool                       // indicates if the messages have already been analyzed
 	log.Log
-	// indicates if the messages have already been analyzed
 }
 
 func NewStatusTracker(threshold int, expectedSize int) *StatusTracker {
@@ -26,6 +26,7 @@ func NewStatusTracker(threshold int, expectedSize int) *StatusTracker {
 	return st
 }
 
+// Records the given status message
 func (st *StatusTracker) RecordStatus(msg *pb.HareMessage) {
 	verifier, err := NewVerifier(msg.PubKey)
 	if err != nil {
@@ -42,6 +43,7 @@ func (st *StatusTracker) RecordStatus(msg *pb.HareMessage) {
 	st.statuses[verifier.String()] = msg
 }
 
+// Analyzes the recorded status messages according to the validation function
 func (st *StatusTracker) AnalyzeStatuses(isValid func(m *pb.HareMessage) bool) {
 	count := 0
 	for key, m := range st.statuses {
@@ -59,10 +61,12 @@ func (st *StatusTracker) AnalyzeStatuses(isValid func(m *pb.HareMessage) bool) {
 	st.analyzed = true
 }
 
+// Checks if the SVP is ready
 func (st *StatusTracker) IsSVPReady() bool {
 	return st.analyzed && len(st.statuses) == st.threshold
 }
 
+// Returns the proposed set if available, nil otherwise
 func (st *StatusTracker) ProposalSet(expectedSize int) *Set {
 	if st.maxKi == -1 {
 		return st.buildUnionSet(expectedSize)
@@ -80,7 +84,7 @@ func (st *StatusTracker) buildUnionSet(expectedSize int) *Set {
 	unionSet := NewEmptySet(expectedSize)
 	for _, m := range st.statuses {
 		for _, buff := range m.Message.Values {
-			bid := Value{NewBytes32(buff)}
+			bid := NewValue(buff)
 			unionSet.Add(bid) // assuming add is unique
 		}
 	}
@@ -88,6 +92,8 @@ func (st *StatusTracker) buildUnionSet(expectedSize int) *Set {
 	return unionSet
 }
 
+// Builds the SVP
+// Returns the SVP if available, nil otherwise
 func (st *StatusTracker) BuildSVP() *pb.AggregatedMessages {
 	if !st.IsSVPReady() {
 		return nil

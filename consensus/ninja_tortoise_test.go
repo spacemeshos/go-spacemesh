@@ -233,7 +233,7 @@ func createMulExplicitLayer(index mesh.LayerID, prev map[mesh.LayerID]*mesh.Laye
 		}
 		l.AddBlock(bl)
 	}
-	log.Info("Created layer Id %d with blocks %d", l.Index(), layerBlocks)
+	log.Info("Created mesh.LayerID %d with blocks %d", l.Index(), layerBlocks)
 
 	return l
 }
@@ -305,7 +305,7 @@ func createLayerWithRandVoting(index mesh.LayerID, prev []*mesh.Layer, blocksInL
 		}
 		l.AddBlock(bl)
 	}
-	log.Info("Created layer Id %d with blocks %d", l.Index(), layerBlocks)
+	log.Info("Created mesh.LayerID %d with blocks %d", l.Index(), layerBlocks)
 	return l
 }
 

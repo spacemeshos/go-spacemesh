@@ -4,17 +4,19 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/mesh"
 	"hash/fnv"
 	"sort"
+	"strconv"
 )
 
 type Bytes32 [32]byte
 type Signature []byte
 
 type Value struct {
-	Bytes32
+	mesh.BlockID
 }
-type InstanceId uint32
+type InstanceId mesh.LayerID
 
 type MessageType byte
 
@@ -57,6 +59,26 @@ func (id InstanceId) Bytes() []byte {
 	binary.LittleEndian.PutUint32(idInBytes, uint32(id))
 
 	return idInBytes
+}
+
+func NewValue(value uint64) Value {
+	return Value{mesh.BlockID(value)}
+}
+
+func (v Value) Id() objectId {
+	return objectId(v.BlockID)
+
+}
+
+func (v Value) Bytes() []byte {
+	b := make([]byte, 8)
+	binary.LittleEndian.PutUint64(b, uint64(v.BlockID))
+	return b
+}
+
+func (v Value) String() string {
+	return strconv.FormatUint(uint64(v.BlockID), 10)
+
 }
 
 func NewBytes32(buff []byte) Bytes32 {
@@ -118,14 +140,14 @@ func NewSetFromValues(values ...Value) *Set {
 
 // Constructs a new set from a 2D slice
 // Each row represents a single value
-func NewSet(data [][]byte) *Set {
+func NewSet(data []uint64) *Set {
 	s := &Set{}
 	s.isIdValid = false
 
 	s.values = make(map[objectId]Value, len(data))
 	for i := 0; i < len(data); i++ {
-		bid := Value{NewBytes32(data[i])}
-		s.values[bid.Id()] = bid
+		bid := data[i]
+		s.values[objectId(bid)] = NewValue(bid)
 	}
 
 	return s
@@ -182,18 +204,12 @@ func (s *Set) Equals(g *Set) bool {
 	return true
 }
 
-// Returns a representation of the set as 2D slice
-// Each row is represents a single value
-func (s *Set) To2DSlice() [][]byte {
-	slice := make([][]byte, len(s.values))
-	i := 0
+func (s *Set) To2DSlice() []uint64 {
+	l := make([]uint64, 0, len(s.values))
 	for _, v := range s.values {
-		slice[i] = make([]byte, len(v.Bytes()))
-		copy(slice[i], v.Bytes())
-		i++
+		l = append(l, uint64(v.BlockID))
 	}
-
-	return slice
+	return l
 }
 
 func (s *Set) updateId() {
@@ -283,6 +299,13 @@ func (s *Set) Complement(u *Set) *Set {
 	}
 
 	return comp
+}
+
+// Subtract g from s
+func (s *Set) Subtract(g *Set) {
+	for _, v := range g.values {
+		s.Remove(v)
+	}
 }
 
 // Returns the size of the set

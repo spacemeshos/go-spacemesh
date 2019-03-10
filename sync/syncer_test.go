@@ -10,7 +10,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
@@ -77,8 +76,18 @@ func (mlg *MeshValidatorMock) ContextualValidity(id mesh.BlockID) bool   { retur
 
 type stateMock struct{}
 
-func (s *stateMock) ApplyTransactions(id state.LayerID, tx state.Transactions) (uint32, error) {
+func (s *stateMock) ApplyTransactions(id mesh.LayerID, tx mesh.Transactions) (uint32, error) {
 	return 0, nil
+}
+
+func ConfigTst() mesh.RewardConfig {
+	return mesh.RewardConfig{
+		big.NewInt(10),
+		big.NewInt(5000),
+		big.NewInt(15),
+		15,
+		5,
+	}
 }
 
 func getMeshWithLevelDB(id string) *mesh.Mesh {
@@ -87,17 +96,17 @@ func getMeshWithLevelDB(id string) *mesh.Mesh {
 	ldb := database.NewLevelDbStore("layers_test_"+id, nil, nil)
 	cv := database.NewLevelDbStore("contextually_valid_test_"+id, nil, nil)
 	//odb := database.NewLevelDbStore("orphans_test_"+id+"_"+time.String(), nil, nil)
-	layers := mesh.NewMesh(ldb, bdb, cv, &MeshValidatorMock{}, &stateMock{}, log.New(id, "", ""))
+	layers := mesh.NewMesh(ldb, bdb, cv, ConfigTst(), &MeshValidatorMock{}, &stateMock{}, log.New(id, "", ""))
 	return layers
 }
 
 type MockState struct{}
 
-func (MockState) ApplyTransactions(layer state.LayerID, txs state.Transactions) (uint32, error) {
+func (MockState) ApplyTransactions(layer mesh.LayerID, txs mesh.Transactions) (uint32, error) {
 	return 0, nil
 }
 
-func (s *stateMock) ApplyRewards(layer state.LayerID, miners map[string]struct{}, underQuota map[string]struct{}, bonusReward, diminishedReward *big.Int) {
+func (s *stateMock) ApplyRewards(layer mesh.LayerID, miners map[string]struct{}, underQuota map[string]struct{}, bonusReward, diminishedReward *big.Int) {
 
 }
 
@@ -106,7 +115,7 @@ func getMeshWithMemoryDB(id string) *mesh.Mesh {
 	ldb := database.NewMemDatabase()
 	cv := database.NewMemDatabase()
 	//odb := database.NewMemDatabase()
-	layers := mesh.NewMesh(ldb, bdb, cv, &MeshValidatorMock{}, &stateMock{}, log.New(id, "", ""))
+	layers := mesh.NewMesh(ldb, bdb, cv, ConfigTst(), &MeshValidatorMock{}, &stateMock{}, log.New(id, "", ""))
 	return layers
 }
 
@@ -211,7 +220,7 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 	syncObj1.AddBlock(mesh.NewExistingBlock(mesh.BlockID(111), lid, nil))
 	syncObj1.AddBlock(mesh.NewExistingBlock(mesh.BlockID(222), lid, nil))
 
-	ch, err := syncObj.sendLayerIDsRequest(nodes[1].Node.PublicKey(), lid)
+	ch, err := syncObj.sendLayerBlockIDsRequest(nodes[1].Node.PublicKey(), lid)
 	timeout := time.NewTimer(2 * time.Second)
 
 	select {
@@ -342,7 +351,7 @@ func TestSyncProtocol_SyncTwoNodes(t *testing.T) {
 	syncObj1.AddBlock(block8)
 	syncObj1.AddBlock(block9)
 	syncObj1.AddBlock(block10)
-	timeout := time.After(120 * time.Second)
+	timeout := time.After(12 * time.Second)
 	//syncObj1.Start()
 	syncObj2.Start()
 

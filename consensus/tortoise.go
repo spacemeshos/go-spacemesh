@@ -13,17 +13,17 @@ type NewIdQueue chan uint32
 
 type BlockPosition struct {
 	visibility bitarray.BitArray
-	layer      LayerID
+	layer      mesh.LayerID
 }
 
 type tortoise struct {
-	block2Id           map[BlockID]uint32
-	allBlocks          map[BlockID]*TortoiseBlock
+	block2Id           map[mesh.BlockID]uint32
+	allBlocks          map[mesh.BlockID]*TortoiseBlock
 	layerQueue         LayerQueue
 	idQueue            NewIdQueue
 	posVotes           []bitarray.BitArray
 	visibilityMap      [20000]BlockPosition
-	layers             map[LayerID]*Layer
+	layers             map[mesh.LayerID]*Layer
 	layerSize          uint32
 	cachedLayers       uint32
 	remainingBlockIds  uint32
@@ -35,15 +35,15 @@ type tortoise struct {
 func NewTortoise(layerSize uint32, cachedLayers uint32) *tortoise {
 	totBlocks := layerSize * cachedLayers
 	trtl := tortoise{
-		block2Id:          make(map[BlockID]uint32),
-		allBlocks:         make(map[BlockID]*TortoiseBlock),
+		block2Id:          make(map[mesh.BlockID]uint32),
+		allBlocks:         make(map[mesh.BlockID]*TortoiseBlock),
 		layerQueue:        make(LayerQueue, cachedLayers+1),
 		idQueue:           make(NewIdQueue, layerSize),
 		remainingBlockIds: totBlocks,
 		totalBlocks:       totBlocks,
 		posVotes:          make([]bitarray.BitArray, totBlocks),
 		//visibilityMap:     make([20000]BlockPosition),
-		layers:             make(map[LayerID]*Layer),
+		layers:             make(map[mesh.LayerID]*Layer),
 		layerSize:          layerSize,
 		cachedLayers:       cachedLayers,
 		layerReadyCallback: nil,
@@ -63,7 +63,7 @@ func (alg *tortoise) LayerVotingAvg() uint64 {
 	return 30
 }
 
-func (alg *tortoise) IsTortoiseValid(originBlock *TortoiseBlock, targetBlock BlockID, targetBlockIdx uint64, visibleBlocks bitarray.BitArray) bool {
+func (alg *tortoise) IsTortoiseValid(originBlock *TortoiseBlock, targetBlock mesh.BlockID, targetBlockIdx uint64, visibleBlocks bitarray.BitArray) bool {
 	voteFor, voteAgainst := alg.countTotalVotesForBlock(targetBlockIdx, visibleBlocks)
 
 	if voteFor > alg.GlobalVotingAvg() {
@@ -85,9 +85,9 @@ func (alg *tortoise) IsTortoiseValid(originBlock *TortoiseBlock, targetBlock Blo
 	return originBlock.Coin
 }
 
-func (alg *tortoise) getLayerById(layerId LayerID) (*Layer, error) {
+func (alg *tortoise) getLayerById(layerId mesh.LayerID) (*Layer, error) {
 	if _, ok := alg.layers[layerId]; !ok {
-		return nil, fmt.Errorf("layer Id not found %v", layerId)
+		return nil, fmt.Errorf("mesh.LayerID not found %v", layerId)
 	}
 	return alg.layers[layerId], nil
 }
@@ -232,5 +232,5 @@ func (alg *tortoise) HandleIncomingLayer(ll *mesh.Layer) {
 }
 
 func (alg *tortoise) HandleLateBlock(b *mesh.Block) {
-	log.Info("received block with layer Id %v block id: %v ", b.Layer(), b.ID())
+	log.Info("received block with mesh.LayerID %v block id: %v ", b.Layer(), b.ID())
 }
