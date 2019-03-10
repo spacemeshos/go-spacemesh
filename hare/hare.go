@@ -79,7 +79,7 @@ func New(conf config.Config, p2p NetworkService, sign Signing, obp orphanBlockPr
 	h.network = p2p
 	h.beginLayer = beginLayer
 
-	h.broker = NewBroker(p2p, newEligibilityValidator(newHareOracle(rolacle, conf.N), logger))
+	h.broker = NewBroker(p2p, NewEligibilityValidator(NewHareOracle(rolacle, conf.N), logger))
 
 	h.sign = sign
 

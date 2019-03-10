@@ -103,17 +103,17 @@ func (broker *Broker) eventLoop() {
 				continue
 			}
 
-			expInstId := broker.maxReg
+			expInstId := broker.maxReg + 1 //  max expect current max + 1
 			msgInstId := InstanceId(hareMsg.Message.InstanceId)
 			// far future unregistered instance
-			if msgInstId > expInstId+1 {
-				log.Warning("Message validation failed: instanceId. Max: %v Actual: %v", broker.maxReg, hareMsg.Message.InstanceId)
+			if msgInstId > expInstId {
+				log.Warning("Message validation failed: instanceId. Max: %v Actual: %v", expInstId, msgInstId)
 				msg.ReportValidation(protoName, false)
 				continue
 			}
 
 			// near future
-			if msgInstId == expInstId+1 {
+			if msgInstId == expInstId {
 				futureMsg = true
 			}
 

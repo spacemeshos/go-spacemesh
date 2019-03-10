@@ -52,6 +52,10 @@ else
 endif
 .PHONY: build
 
+hare:
+	cd cmd/hare ; go build ; cd ..
+.PHONY: hare
+
 tidy:
 	go mod tidy
 .PHONY: tidy

@@ -1,9 +1,9 @@
-package app
+package node
 
 import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/address"
-	"github.com/spacemeshos/go-spacemesh/api/config"
+	apiCfg "github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -17,8 +17,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-
-	"github.com/spacemeshos/go-spacemesh/filesystem"
 )
 
 type AppTestSuite struct {
@@ -47,38 +45,12 @@ func (app *AppTestSuite) TearDownTest() {
 	}
 }
 
-func TestApp(t *testing.T) {
-	t.Skip()
-	filesystem.SetupTestSpacemeshDataFolders(t, "app_test")
-
-	// remove all injected test flags for now
-	os.Args = []string{"/go-spacemesh", "--json-server=true"}
-
-	go Main()
-
-	<-EntryPointCreated
-
-	assert.NotNil(t, App)
-
-	<-App.NodeInitCallback
-
-	assert.NotNil(t, App.P2P)
-	assert.NotNil(t, App)
-	assert.Equal(t, App.Config.API.StartJSONServer, true)
-
-	// app should exit based on this signal
-	Cancel()
-
-	filesystem.DeleteSpacemeshDataFolders(t)
-
-}
-
 func (app *AppTestSuite) initMultipleInstances(t *testing.T, numOfInstances int, storeFormat string) {
 	net := service.NewSimulator()
 	runningName := 'a'
 	bo := oracle.NewLocalOracle(numOfInstances)
 	for i := 0; i < numOfInstances; i++ {
-		smapp := newSpacemeshApp()
+		smapp := NewSpacemeshApp()
 		smapp.Config.HARE.N = numOfInstances
 		smapp.Config.HARE.F = numOfInstances / 2
 		app.apps = append(app.apps, smapp)
@@ -91,7 +63,7 @@ func (app *AppTestSuite) initMultipleInstances(t *testing.T, numOfInstances int,
 
 		err := app.apps[i].initServices(pub.String(), n, store, sgn, bo, bo, uint32(numOfInstances))
 		assert.NoError(t, err)
-		app.apps[i].setupGenesis(config.DefaultGenesisConfig())
+		app.apps[i].setupGenesis(apiCfg.DefaultGenesisConfig())
 		app.dbs = append(app.dbs, store)
 		runningName++
 	}

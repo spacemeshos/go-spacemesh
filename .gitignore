@@ -1,6 +1,7 @@
 # See http://help.github.com/ignore-files/ for more about ignoring files.
 
 /tmp
+/app/tmp
 */**/*un~
 */**/*.test
 */**/temp.js
@@ -17,6 +18,7 @@
 .idea
 .vagrant
 
+cmd/hare/hare
 /go-spacemesh
 /cp.out
 /cover.out

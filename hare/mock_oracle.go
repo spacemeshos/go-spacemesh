@@ -38,7 +38,7 @@ type hareRolacle struct {
 	committeeSize int
 }
 
-func newHareOracle(oracle Rolacle, committeeSize int) *hareRolacle {
+func NewHareOracle(oracle Rolacle, committeeSize int) *hareRolacle {
 	return &hareRolacle{oracle, committeeSize}
 }
 

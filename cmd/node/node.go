@@ -1,12 +1,10 @@
-package app
+package node
 
 import (
-	"context"
 	"fmt"
-	"github.com/davecgh/go-spew/spew"
-
 	"github.com/seehuhn/mt19937"
-	"github.com/spacemeshos/go-spacemesh/api/config"
+	apiCfg "github.com/spacemeshos/go-spacemesh/api/config"
+	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/consensus"
 	"github.com/spacemeshos/go-spacemesh/crypto"
@@ -19,18 +17,15 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/spacemeshos/go-spacemesh/sync"
-	"github.com/spf13/pflag"
 	"math/rand"
 
 	"os"
 	"os/signal"
-	"reflect"
 	"runtime"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/accounts"
 	"github.com/spacemeshos/go-spacemesh/api"
-	"github.com/spacemeshos/go-spacemesh/app/cmd"
 	cfg "github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -40,6 +35,23 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
+
+// VersionCmd returns the current version of spacemesh
+var Cmd = &cobra.Command{
+	Use:   "node",
+	Short: "start node",
+	Run: func(cmd *cobra.Command, args []string) {
+		app := NewSpacemeshApp()
+		defer app.Cleanup(cmd, args)
+
+		app.Initialize(cmd, args)
+		app.Start(cmd, args)
+	},
+}
+
+func init() {
+	cmdp.AddCommands(Cmd)
+}
 
 // SpacemeshApp is the cli app singleton
 type SpacemeshApp struct {
@@ -63,27 +75,6 @@ type SpacemeshApp struct {
 type MiningEnabler interface {
 	MiningEligible() bool
 }
-
-// EntryPointCreated channel is used to announce that the main App instance was created
-// mainly used for testing now.
-var EntryPointCreated = make(chan bool, 1)
-
-var (
-	// App is main app entry point.
-	// It provides access the local identity and other top-level modules.
-	App *SpacemeshApp
-
-	// Version is the app's semantic version. Designed to be overwritten by make.
-	Version = "0.0.1"
-
-	// Branch is the git branch used to build the App. Designed to be overwritten by make.
-	Branch = ""
-
-	// Commit is the git commit used to build the app. Designed to be overwritten by make.
-	Commit = ""
-	// ctx    cancel used to signal the app to gracefully exit.
-	Ctx, Cancel = context.WithCancel(context.Background())
-)
 
 // ParseConfig unmarshal config file into struct
 func (app *SpacemeshApp) ParseConfig() (err error) {
@@ -110,69 +101,14 @@ func (app *SpacemeshApp) ParseConfig() (err error) {
 	return nil
 }
 
-func EnsureCLIFlags(cmd *cobra.Command, appcfg *cfg.Config) {
-
-	assignFields := func(p reflect.Type, elem reflect.Value, name string) {
-		for i := 0; i < p.NumField(); i++ {
-			if p.Field(i).Tag.Get("mapstructure") == name {
-				elem.Field(i).Set(reflect.ValueOf(viper.Get(name)))
-				return
-			}
-		}
-	}
-	// this is ugly but we have to do this because viper can't handle nested structs when deserialize
-	cmd.PersistentFlags().VisitAll(func(f *pflag.Flag) {
-		if f.Changed {
-			name := f.Name
-
-			ff := reflect.TypeOf(appcfg.BaseConfig)
-			elem := reflect.ValueOf(&appcfg.BaseConfig).Elem()
-			assignFields(ff, elem, name)
-
-			ff = reflect.TypeOf(*appcfg)
-			elem = reflect.ValueOf(&appcfg).Elem()
-			assignFields(ff, elem, name)
-
-			ff = reflect.TypeOf(appcfg.API)
-			elem = reflect.ValueOf(&appcfg.API).Elem()
-			assignFields(ff, elem, name)
-
-			ff = reflect.TypeOf(appcfg.P2P)
-			elem = reflect.ValueOf(&appcfg.P2P).Elem()
-			assignFields(ff, elem, name)
-
-			ff = reflect.TypeOf(appcfg.P2P.SwarmConfig)
-			elem = reflect.ValueOf(&appcfg.P2P.SwarmConfig).Elem()
-			assignFields(ff, elem, name)
-
-			ff = reflect.TypeOf(appcfg.TIME)
-			elem = reflect.ValueOf(&appcfg.TIME).Elem()
-			assignFields(ff, elem, name)
-
-			ff = reflect.TypeOf(appcfg.CONSENSUS)
-			elem = reflect.ValueOf(&appcfg.CONSENSUS).Elem()
-			assignFields(ff, elem, name)
-
-			ff = reflect.TypeOf(appcfg.HARE)
-			elem = reflect.ValueOf(&appcfg.HARE).Elem()
-			assignFields(ff, elem, name)
-		}
-	})
-}
-
 // NewSpacemeshApp creates an instance of the spacemesh app
-func newSpacemeshApp() *SpacemeshApp {
+func NewSpacemeshApp() *SpacemeshApp {
 
 	defaultConfig := cfg.DefaultConfig()
 	node := &SpacemeshApp{
-		Command:          cmd.RootCmd,
 		Config:           &defaultConfig,
 		NodeInitCallback: make(chan bool, 1),
 	}
-	cmd.RootCmd.Version = Version
-	cmd.RootCmd.PreRunE = node.before
-	cmd.RootCmd.Run = node.startSpacemesh
-	cmd.RootCmd.PostRunE = node.cleanup
 
 	return node
 
@@ -182,12 +118,12 @@ func (app *SpacemeshApp) introduction() {
 	log.Info("Welcome to Spacemesh. Spacemesh full node is starting...")
 }
 
-// this is what he wants to execute before app starts
+// this is what he wants to execute Initialize app starts
 // this is my persistent pre run that involves parsing the
 // toml config file
-func (app *SpacemeshApp) before(cmd *cobra.Command, args []string) (err error) {
+func (app *SpacemeshApp) Initialize(cmd *cobra.Command, args []string) (err error) {
 
-	// exit gracefully - e.g. with app cleanup on sig abort (ctrl-c)
+	// exit gracefully - e.g. with app Cleanup on sig abort (ctrl-c)
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, os.Interrupt)
 
@@ -196,7 +132,7 @@ func (app *SpacemeshApp) before(cmd *cobra.Command, args []string) (err error) {
 	go func() {
 		for range signalChan {
 			log.Info("Received an interrupt, stopping services...\n")
-			Cancel()
+			cmdp.Cancel()
 		}
 	}()
 
@@ -210,7 +146,7 @@ func (app *SpacemeshApp) before(cmd *cobra.Command, args []string) (err error) {
 	}
 
 	// ensure cli flags are higher priority than config file
-	EnsureCLIFlags(cmd, app.Config)
+	cmdp.EnsureCLIFlags(cmd, app.Config)
 
 	// override default config in timesync since timesync is using TimeCongigValues
 	timeCfg.TimeConfigValues = app.Config.TIME
@@ -261,12 +197,12 @@ func (app *SpacemeshApp) setupLogging() {
 
 func (app *SpacemeshApp) getAppInfo() string {
 	return fmt.Sprintf("App version: %s. Git: %s - %s . Go Version: %s. OS: %s-%s ",
-		Version, Branch, Commit, runtime.Version(), runtime.GOOS, runtime.GOARCH)
+		cmdp.Version, cmdp.Branch, cmdp.Commit, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 }
 
 // Post Execute tasks
-func (app *SpacemeshApp) cleanup(cmd *cobra.Command, args []string) (err error) {
-	log.Info("App cleanup starting...")
+func (app *SpacemeshApp) Cleanup(cmd *cobra.Command, args []string) (err error) {
+	log.Info("App Cleanup starting...")
 
 	if app.jsonAPIService != nil {
 		log.Info("Stopping JSON service api...")
@@ -280,13 +216,13 @@ func (app *SpacemeshApp) cleanup(cmd *cobra.Command, args []string) (err error) 
 
 	app.stopServices()
 
-	// add any other cleanup tasks here....
-	log.Info("App cleanup completed\n\n")
+	// add any other Cleanup tasks here....
+	log.Info("App Cleanup completed\n\n")
 
 	return nil
 }
 
-func (app *SpacemeshApp) setupGenesis(cfg *config.GenesisConfig) {
+func (app *SpacemeshApp) setupGenesis(cfg *apiCfg.GenesisConfig) {
 	for id, acc := range cfg.InitialAccounts {
 		app.state.CreateAccount(id)
 		app.state.AddBalance(id, acc.Balance)
@@ -300,7 +236,7 @@ func (app *SpacemeshApp) setupGenesis(cfg *config.GenesisConfig) {
 
 func (app *SpacemeshApp) setupTestFeatures() {
 	// NOTE: any test-related feature enabling should happen here.
-	api.ApproveAPIGossipMessages(Ctx, app.P2P)
+	api.ApproveAPIGossipMessages(cmdp.Ctx, app.P2P)
 }
 
 func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service, dbStorepath string, sgn hare.Signing, blockOracle oracle.BlockOracle, hareOracle hare.Rolacle, layerSize uint32) error {
@@ -382,14 +318,12 @@ func (app *SpacemeshApp) stopServices() {
 	}
 }
 
-func (app *SpacemeshApp) startSpacemesh(cmd *cobra.Command, args []string) {
+func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	log.Info("Starting Spacemesh")
-
-	log.Debug("Config : %v", spew.Sdump(app.Config))
 
 	// start p2p services
 	log.Info("Initializing P2P services")
-	swarm, err := p2p.New(Ctx, app.Config.P2P)
+	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P)
 	if err != nil {
 		log.Error("Error starting p2p services, err: %v", err)
 		panic("Error starting p2p services")
@@ -401,7 +335,7 @@ func (app *SpacemeshApp) startSpacemesh(cmd *cobra.Command, args []string) {
 	pub, _ := crypto.NewPublicKey(sgn.Verifier().Bytes())
 
 	oracle.SetServerAddress(app.Config.OracleServer)
-	oracleClient := oracle.NewOracleClientWithWorldID(app.Config.OracleServerWorldId)
+	oracleClient := oracle.NewOracleClientWithWorldID(uint64(app.Config.OracleServerWorldId))
 	oracleClient.Register(true, pub.String()) // todo: configure no faulty nodes
 
 	app.unregisterOracle = func() { oracleClient.Unregister(true, pub.String()) }
@@ -416,7 +350,7 @@ func (app *SpacemeshApp) startSpacemesh(cmd *cobra.Command, args []string) {
 		log.Error("cannot start services %v", err.Error())
 		return
 	}
-	app.setupGenesis(config.DefaultGenesisConfig()) //todo: this is for debug, setup with other config when we have it
+	app.setupGenesis(apiCfg.DefaultGenesisConfig()) //todo: this is for debug, setup with other config when we have it
 	if app.Config.TestMode {
 		app.setupTestFeatures()
 	}
@@ -462,19 +396,6 @@ func (app *SpacemeshApp) startSpacemesh(cmd *cobra.Command, args []string) {
 	// this signal may come from the node or from sig-abort (ctrl-c)
 	app.NodeInitCallback <- true
 
-	<-Ctx.Done()
+	<-cmdp.Ctx.Done()
 	//return nil
-}
-
-// Main is the entry point for the Spacemesh console app - responsible for parsing and routing cli flags and commands.
-// This is the root of all evil, called from Main.main().
-func Main() {
-	App = newSpacemeshApp()
-
-	EntryPointCreated <- true
-
-	if err := App.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
 }
