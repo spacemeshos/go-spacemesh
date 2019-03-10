@@ -2,9 +2,7 @@ package mesh
 
 import (
 	"github.com/spacemeshos/go-spacemesh/common"
-	"github.com/spacemeshos/go-spacemesh/layer"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/state"
 	"math/big"
 )
 
@@ -13,7 +11,7 @@ type RewardConfig struct {
 	BaseReward     *big.Int
 	PenaltyPercent *big.Int
 	TxQuota        uint32
-	RewardMaturity layer.Id
+	RewardMaturity LayerID
 }
 
 func DefaultRewardConfig() RewardConfig {
@@ -26,14 +24,14 @@ func DefaultRewardConfig() RewardConfig {
 	}
 }
 
-func CalculateLayerReward(id layer.Id, params RewardConfig) *big.Int {
+func CalculateLayerReward(id LayerID, params RewardConfig) *big.Int {
 	//todo: add inflation rules here
 	return params.BaseReward
 }
 
-func MergeDoubles(transactions []*state.Transaction) []*state.Transaction {
+func MergeDoubles(transactions []*Transaction) []*Transaction {
 	transactionSet := make(map[common.Hash]struct{})
-	merged := make([]*state.Transaction, 0, len(transactions))
+	merged := make([]*Transaction, 0, len(transactions))
 	for _, trns := range transactions {
 		if _, ok := transactionSet[trns.Hash()]; !ok {
 			transactionSet[trns.Hash()] = struct{}{}

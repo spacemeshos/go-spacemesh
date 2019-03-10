@@ -2,7 +2,6 @@ package sync
 
 import (
 	"bytes"
-	"github.com/spacemeshos/go-spacemesh/layer"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -32,7 +31,7 @@ type BlockListener struct {
 	startLock            uint32
 	timeout              time.Duration
 	exit                 chan struct{}
-	tick                 chan layer.Id
+	tick                 chan mesh.LayerID
 }
 
 type TickProvider interface {

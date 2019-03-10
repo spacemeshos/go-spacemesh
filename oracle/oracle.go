@@ -2,13 +2,13 @@ package oracle
 
 import (
 	"github.com/spacemeshos/go-spacemesh/eligibility"
-	"github.com/spacemeshos/go-spacemesh/layer"
+	"github.com/spacemeshos/go-spacemesh/mesh"
 )
 
 // todo: configure oracle test constants like committee size and honesty.
 
 type BlockOracle interface {
-	BlockEligible(id layer.Id, pubKey string) bool
+	BlockEligible(id mesh.LayerID, pubKey string) bool
 }
 
 type HareOracle interface {
@@ -34,7 +34,7 @@ func (bo *localBlockOracle) Register(isHonest bool, pubkey string) {
 }
 
 // Eligible checks whether we're eligible to mine a block in layer i
-func (bo *localBlockOracle) BlockEligible(id layer.Id, pubKey string) bool {
+func (bo *localBlockOracle) BlockEligible(id mesh.LayerID, pubKey string) bool {
 	return bo.oc.Eligible(uint32(id), bo.committeeSize, pubKey, nil)
 }
 
@@ -55,7 +55,7 @@ func NewBlockOracleFromClient(oc *OracleClient, committeeSize int) *blockOracle 
 }
 
 // Eligible checks whether we're eligible to mine a block in layer i
-func (bo *blockOracle) BlockEligible(id layer.Id, pubKey string) bool {
+func (bo *blockOracle) BlockEligible(id mesh.LayerID, pubKey string) bool {
 	return bo.oc.Eligible(uint32(id), bo.committeeSize, pubKey)
 }
 
