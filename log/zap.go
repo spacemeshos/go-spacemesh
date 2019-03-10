@@ -104,9 +104,9 @@ func (l *Log) With() fieldLogger {
 }
 
 // LogWith returns a logger the given fields
-func (l *Log) LogWith(fields ...Field) *Log {
+func (l *Log) LogWith(fields ...Field) Log {
 	lgr := l.logger.With(unpack(fields...)...)
-	return &Log{
+	return Log{
 		lgr,
 		lgr.Sugar(),
 	}

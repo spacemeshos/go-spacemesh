@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/davecgh/go-spew/spew"
-
 	"github.com/seehuhn/mt19937"
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/common"
@@ -328,18 +327,19 @@ func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service,
 	if err != nil {
 		return err
 	}
+
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
 	clock := timesync.NewTicker(timesync.RealClock{}, ld, gTime)
-	trtl := consensus.NewAlgorithm(consensus.NewNinjaTortoise(layerSize, lg))
-	msh := mesh.NewMesh(db, db, db, app.Config.REWARD, trtl, processor, lg) //todo: what to do with the logger?
+	trtl := consensus.NewAlgorithm(consensus.NewNinjaTortoise(app.Config.LayerAvgSize, log.New("tortoise", "", "")))
+	msh := mesh.NewMesh(db, db, db, app.Config.REWARD, trtl, processor, log.New("mesh", "", "")) //todo: what to do with the logger?
 
-	conf := sync.Configuration{SyncInterval: 1 * time.Second, Concurrency: 4, LayerSize: int(instances), RequestTimeout: 100 * time.Millisecond}
-	syncer := sync.NewSync(swarm, msh, blockOracle, conf, clock.Subscribe(), lg)
+	conf := sync.Configuration{SyncInterval: 1 * time.Second, Concurrency: 4, LayerSize: int(app.Config.LayerAvgSize), RequestTimeout: 100 * time.Millisecond}
+	syncer := sync.NewSync(swarm, msh, blockOracle, conf, clock.Subscribe(), lg.LogWith(log.String("module", "sync")))
 
-	ha := hare.New(app.Config.HARE, swarm, sgn, msh, hareOracle, clock.Subscribe(), lg)
+	ha := hare.New(app.Config.HARE, swarm, sgn, msh, hareOracle, clock.Subscribe(), log.New("hare", "", ""))
 
-	blockProducer := miner.NewBlockBuilder(instanceName, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, lg)
-	blockListener := sync.NewBlockListener(swarm, blockOracle, msh, 2*time.Second, 4, lg)
+	blockProducer := miner.NewBlockBuilder(instanceName, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, log.New("miner", "", ""))
+	blockListener := sync.NewBlockListener(swarm, blockOracle, msh, 2*time.Second, 4, log.New("blockListener", "", ""))
 
 	app.blockProducer = &blockProducer
 	app.blockListener = blockListener
@@ -416,7 +416,7 @@ func (app *SpacemeshApp) startSpacemesh(cmd *cobra.Command, args []string) {
 
 	apiConf := &app.Config.API
 
-	err = app.initServices("x", swarm, "/tmp/", sgn, bo, hareOracle, 50)
+	err = app.initServices("x", swarm, "/tmp/", sgn, bo, hareOracle)
 	if err != nil {
 		log.Error("cannot start services %v", err.Error())
 		return
