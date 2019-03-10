@@ -1,4 +1,4 @@
-package hare
+package main
 
 import (
 	"fmt"
@@ -8,6 +8,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spf13/cobra"
+	"os"
 	"time"
 )
 
@@ -91,4 +92,11 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	app.proc = proc
 	proc.SetInbox(broker.Register(proc.Id()))
 	proc.Start()
+}
+
+func main() {
+	if err := Cmd.Execute(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 }

@@ -18,6 +18,7 @@
 .idea
 .vagrant
 
+cmd/hare/hare
 /go-spacemesh
 /cp.out
 /cover.out
