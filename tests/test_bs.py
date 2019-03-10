@@ -258,6 +258,15 @@ def create_configmap(request):
     request.addfinalizer(fin)
     return _create_configmap_in_namespace(testconfig['namespace'])
 
+
+@pytest.fixture
+def save_log_on_exit(request):
+    yield
+    if testconfig['script_on_exit'] != '' and request.session.testsfailed == 1:
+        p = subprocess.Popen([testconfig['script_on_exit']],
+                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        (out, err) = p.communicate()
+
 # ==============================================================================
 #    TESTS
 # ==============================================================================
@@ -273,7 +282,7 @@ def test_bootstrap(setup_bootstrap):
                                                         setup_bootstrap.bs_pod_name)
 
 
-def test_client(load_config, setup_clients):
+def test_client(load_config, setup_clients, save_log_on_exit):
     global client_info
     peers = query_es_client_bootstrap(current_index, testconfig['namespace'], client_info.bs_deployment_name)
     assert peers == len(setup_clients)

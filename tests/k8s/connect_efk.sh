@@ -1,7 +1,7 @@
 #! /bin/sh
 
 if [ "$1" == "connect" ]; then
-    echo "connect" 
+    echo "connect"    
     kibana_pod=`kubectl get pods -n logging | grep efk-kibana | awk '{print $1}'`
     kubectl port-forward $kibana_pod -n logging 5601:5601 &
 
