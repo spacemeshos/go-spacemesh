@@ -3,7 +3,6 @@ package hare
 import (
 	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 )
 
 // Tracks status messages
@@ -85,7 +84,7 @@ func (st *StatusTracker) buildUnionSet(expectedSize int) *Set {
 	unionSet := NewEmptySet(expectedSize)
 	for _, m := range st.statuses {
 		for _, buff := range m.Message.Values {
-			bid := Value{mesh.BlockID(buff)}
+			bid := NewValue(buff)
 			unionSet.Add(bid) // assuming add is unique
 		}
 	}

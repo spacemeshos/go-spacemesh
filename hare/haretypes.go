@@ -61,6 +61,10 @@ func (id InstanceId) Bytes() []byte {
 	return idInBytes
 }
 
+func NewValue(value uint64) Value {
+	return Value{mesh.BlockID(value)}
+}
+
 func (v Value) Id() objectId {
 	return objectId(v.BlockID)
 
@@ -143,7 +147,7 @@ func NewSet(data []uint64) *Set {
 	s.values = make(map[objectId]Value, len(data))
 	for i := 0; i < len(data); i++ {
 		bid := data[i]
-		s.values[objectId(bid)] = Value{mesh.BlockID(bid)}
+		s.values[objectId(bid)] = NewValue(bid)
 	}
 
 	return s
@@ -199,20 +203,6 @@ func (s *Set) Equals(g *Set) bool {
 
 	return true
 }
-
-// Returns a representation of the set as 2D slice
-// Each row is represents a single value
-/*func (s *Set) To2DSlice() [][]byte {
-	slice := make([][]byte, len(s.values))
-	i := 0
-	for _, v := range s.values {
-		slice[i] = make([]byte, len(v.Bytes()))
-		copy(slice[i], v.Bytes())
-		i++
-	}
-
-	return slice
-}*/
 
 func (s *Set) To2DSlice() []uint64 {
 	l := make([]uint64, 0, len(s.values))

@@ -4,7 +4,6 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 )
 
 type messageValidator interface {
@@ -305,7 +304,7 @@ func (validator *syntaxContextValidator) validateSVPTypeA(m *pb.HareMessage) boo
 	for _, status := range m.Message.Svp.Messages {
 		// build union
 		for _, buff := range status.Message.Values {
-			bid := Value{mesh.BlockID(buff)}
+			bid := NewValue(buff)
 			unionSet.Add(bid) // assuming add is unique
 		}
 	}
