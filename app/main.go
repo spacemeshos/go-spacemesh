@@ -304,7 +304,11 @@ func (app *SpacemeshApp) setupTestFeatures() {
 	api.ApproveAPIGossipMessages(Ctx, app.P2P)
 }
 
-func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service, dbStorepath string, sgn hare.Signing, blockOracle oracle.BlockOracle, hareOracle hare.Rolacle, instances uint32) error {
+func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service, dbStorepath string, sgn hare.Signing, blockOracle oracle.BlockOracle, hareOracle hare.Rolacle) error {
+
+	log.Debug("num of goroutines %v num of cpu %v", runtime.NumGoroutine(), runtime.NumCPU())
+	runtime.GOMAXPROCS(runtime.NumCPU() * 2)
+	log.Debug("of cpu %v after apply", runtime.NumCPU())
 
 	//todo: should we add all components to a single struct?
 	lg := log.New("shmekel_"+instanceName, "", "")
@@ -329,10 +333,10 @@ func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service,
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
 
 	clock := timesync.NewTicker(timesync.RealClock{}, ld, gTime)
-	trtl := consensus.NewAlgorithm(consensus.NewNinjaTortoise(instances, lg))
+	trtl := consensus.NewAlgorithm(consensus.NewNinjaTortoise(app.Config.LayerAvgSize, lg))
 	msh := mesh.NewMesh(db, db, db, trtl, processor, lg) //todo: what to do with the logger?
 
-	conf := sync.Configuration{SyncInterval: 1 * time.Second, Concurrency: 4, LayerSize: int(instances), RequestTimeout: 100 * time.Millisecond}
+	conf := sync.Configuration{SyncInterval: 1 * time.Second, Concurrency: 4, LayerSize: app.Config.LayerAvgSize, RequestTimeout: 100 * time.Millisecond}
 	syncer := sync.NewSync(swarm, msh, blockOracle, conf, clock.Subscribe(), lg)
 
 	ha := hare.New(app.Config.HARE, swarm, sgn, msh, hareOracle, clock.Subscribe(), lg)
@@ -415,7 +419,7 @@ func (app *SpacemeshApp) startSpacemesh(cmd *cobra.Command, args []string) {
 
 	apiConf := &app.Config.API
 
-	err = app.initServices("x", swarm, "/tmp/", sgn, bo, hareOracle, 50)
+	err = app.initServices("x", swarm, "/tmp/", sgn, bo, hareOracle)
 	if err != nil {
 		log.Error("cannot start services %v", err.Error())
 		return

@@ -82,10 +82,10 @@ type ninjaTortoise struct {
 	tPatSupport        map[votingPattern]map[mesh.LayerID]votingPattern //pattern support count
 }
 
-func NewNinjaTortoise(layerSize uint32, log log.Log) *ninjaTortoise {
+func NewNinjaTortoise(layerSize int, log log.Log) *ninjaTortoise {
 	return &ninjaTortoise{
 		Log:                log,
-		avgLayerSize:       layerSize,
+		avgLayerSize:       uint32(layerSize),
 		pBase:              votingPattern{},
 		blocks:             map[mesh.BlockID]*mesh.Block{},
 		tEffective:         map[mesh.BlockID]votingPattern{},
@@ -275,7 +275,7 @@ func (ni *ninjaTortoise) findMinimalNewlyGoodLayer(layer *mesh.Layer) mesh.Layer
 	} else {
 		j = Max(ni.pBase.Layer()+1, layer.Index()-Window+1)
 	}
-
+	ni.Debug("j is %d", j)
 	for ; j < layer.Index(); j++ {
 		// update block votes on all patterns in blocks view
 		sUpdated := ni.updateBlocksSupport(layer.Blocks(), j)
@@ -302,6 +302,7 @@ func (ni *ninjaTortoise) findMinimalNewlyGoodLayer(layer *mesh.Layer) mesh.Layer
 
 //update block support for pattern in layer j
 func (ni *ninjaTortoise) updateBlocksSupport(b []*mesh.Block, j mesh.LayerID) map[votingPattern]struct{} {
+	ni.Debug("update block support for layer %d", j)
 	sUpdated := map[votingPattern]struct{}{}
 	for _, block := range b {
 		//check if block votes for layer j explicitly or implicitly
@@ -320,6 +321,7 @@ func (ni *ninjaTortoise) updateBlocksSupport(b []*mesh.Block, j mesh.LayerID) ma
 			}
 		}
 	}
+	ni.Debug("updated block support for  %d patterns ", len(sUpdated))
 	return sUpdated
 }
 
@@ -482,12 +484,14 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *mesh.Layer) { //i most rece
 					}
 
 					if vote := globalOpinion(ni.tTally[p][bid], ni.avgLayerSize, float64(p.LayerID-idx)); vote != Abstain {
+						ni.Debug("pattern %v is opinion on block %d is %v", p, bid)
 						ni.tVote[p][bid] = vote
 						if vote == Support {
 							bids = append(bids, bid)
 						}
 					} else {
 						ni.tVote[p][bid] = vote
+						ni.Debug("pattern %v is not complete no opinion on block %d ", p, bid)
 						complete = false //not complete
 					}
 				}

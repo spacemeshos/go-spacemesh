@@ -66,6 +66,7 @@ type BaseConfig struct {
 
 	GenesisTime      string `mapstructure:"genesis-time"`
 	LayerDurationSec int    `mapstructure:"layer-duration-sec"`
+	LayerAvgSize     int    `mapstructure:"layer-average-size"`
 }
 
 // DefaultConfig returns the default configuration for a spacemesh node
