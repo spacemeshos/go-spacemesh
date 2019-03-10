@@ -13,7 +13,6 @@ import (
 )
 
 const defaultSetSize = 200
-var value1 = hare.Value{Bytes32: hare.Bytes32{1}}
 
 // VersionCmd returns the current version of spacemesh
 var Cmd = &cobra.Command{
@@ -55,8 +54,8 @@ func (app *HareApp) Cleanup() {
 func buildSet() *hare.Set {
 	s := hare.NewEmptySet(defaultSetSize)
 
-	for i := 0; i < defaultSetSize; i++ {
-		s.Add(hare.Value{Bytes32: hare.Bytes32{byte(i)}})
+	for i := uint64(0); i < defaultSetSize; i++ {
+		s.Add(hare.NewValue(i))
 	}
 
 	return s
