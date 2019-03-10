@@ -96,7 +96,7 @@ func (s *Syncer) run() {
 			s.currentLayerMutex.Lock()
 			s.currentLayer = layer
 			s.currentLayerMutex.Unlock()
-			s.Info("sync got tick for layer %v", layer)
+			s.Debug("sync got tick for layer %v", layer)
 			go syncRoutine()
 		}
 	}
