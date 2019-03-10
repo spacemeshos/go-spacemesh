@@ -20,6 +20,48 @@ const layerSize = 200
 var TRUE = []byte{1}
 var FALSE = []byte{0}
 
+type MeshValidator interface {
+	HandleIncomingLayer(layer *Layer) (LayerID, LayerID)
+	HandleLateBlock(bl *Block)
+	ContextualValidity(id BlockID) bool
+}
+
+type StateUpdater interface {
+	ApplyTransactions(layer LayerID, transactions Transactions) (uint32, error)
+	ApplyRewards(layer LayerID, miners map[string]struct{}, underQuota map[string]struct{}, bonusReward, diminishedReward *big.Int)
+}
+
+type Mesh struct {
+	log.Log
+	*meshDB
+	rewardConfig  RewardConfig
+	verifiedLayer LayerID
+	latestLayer   LayerID
+	lastSeenLayer LayerID
+	lMutex        sync.RWMutex
+	lkMutex       sync.RWMutex
+	lcMutex       sync.RWMutex
+	lvMutex       sync.RWMutex
+	tortoise      MeshValidator
+	state         StateUpdater
+	orphMutex     sync.RWMutex
+	done          chan struct{}
+}
+
+func NewMesh(layers, blocks, validity database.DB, rewardConfig RewardConfig, mesh MeshValidator, state StateUpdater, logger log.Log) *Mesh {
+	//todo add boot from disk
+	ll := &Mesh{
+		Log:          logger,
+		tortoise:     mesh,
+		state:        state,
+		done:         make(chan struct{}),
+		meshDB:       NewMeshDB(layers, blocks, validity, logger),
+		rewardConfig: rewardConfig,
+	}
+
+	return ll
+}
+
 //todo: this object should be splitted into two parts: one is the actual value serialized into trie, and an containig obj with caches
 type Transaction struct {
 	AccountNonce uint64
@@ -33,6 +75,14 @@ type Transaction struct {
 	//todo: add signatures
 
 	hash *common.Hash
+}
+
+func (tx *Transaction) Hash() common.Hash {
+	if tx.hash == nil {
+		hash := rlpHash(tx)
+		tx.hash = &hash
+	}
+	return *tx.hash
 }
 
 type Transactions []*Transaction
@@ -58,55 +108,6 @@ func rlpHash(x interface{}) (h common.Hash) {
 	return h
 }
 
-func (tx *Transaction) Hash() common.Hash {
-	if tx.hash == nil {
-		hash := rlpHash(tx)
-		tx.hash = &hash
-	}
-	return *tx.hash
-}
-
-type MeshValidator interface {
-	HandleIncomingLayer(layer *Layer) (LayerID, LayerID)
-	HandleLateBlock(bl *Block)
-	ContextualValidity(id BlockID) bool
-}
-
-type StateUpdater interface {
-	ApplyTransactions(layer LayerID, transactions Transactions) (uint32, error)
-	ApplyRewards(layer LayerID, miners map[string]struct{}, underQuota map[string]struct{}, bonusReward, diminishedReward *big.Int)
-}
-
-type Mesh struct {
-	log.Log
-	*meshDB
-	rewardConfig  RewardConfig
-	verifiedLayer uint64
-	latestLayer   uint64
-	lastSeenLayer uint64
-	lMutex        sync.RWMutex
-	lkMutex       sync.RWMutex
-	lcMutex       sync.RWMutex
-	tortoise      MeshValidator
-	state         StateUpdater
-	orphMutex     sync.RWMutex
-	done          chan struct{}
-}
-
-func NewMesh(layers, blocks, validity database.DB, rewardConfig RewardConfig, mesh MeshValidator, state StateUpdater, logger log.Log) *Mesh {
-	//todo add boot from disk
-	ll := &Mesh{
-		Log:          logger,
-		tortoise:     mesh,
-		state:        state,
-		done:         make(chan struct{}),
-		meshDB:       NewMeshDB(layers, blocks, validity, logger),
-		rewardConfig: rewardConfig,
-	}
-
-	return ll
-}
-
 func SerializableTransaction2StateTransaction(tx *SerializableTransaction) *Transaction {
 	price := big.Int{}
 	price.SetBytes(tx.Price)
@@ -123,21 +124,23 @@ func (m *Mesh) IsContexuallyValid(b BlockID) bool {
 }
 
 func (m *Mesh) VerifiedLayer() LayerID {
-	return LayerID(atomic.LoadUint64(&m.verifiedLayer))
+	defer m.lvMutex.RUnlock()
+	m.lvMutex.RLock()
+	return m.verifiedLayer
 }
 
 func (m *Mesh) LatestLayer() LayerID {
 	defer m.lkMutex.RUnlock()
 	m.lkMutex.RLock()
-	return LayerID(m.latestLayer)
+	return m.latestLayer
 }
 
 func (m *Mesh) SetLatestLayer(idx LayerID) {
 	defer m.lkMutex.Unlock()
 	m.lkMutex.Lock()
-	if idx > LayerID(m.latestLayer) {
+	if idx > m.latestLayer {
 		m.Info("set latest known layer to %v", idx)
-		m.latestLayer = uint64(idx)
+		m.latestLayer = idx
 	}
 }
 
@@ -149,7 +152,9 @@ func (m *Mesh) ValidateLayer(lyr *Layer) {
 	}
 
 	oldPbase, newPbase := m.tortoise.HandleIncomingLayer(lyr)
-	atomic.StoreUint64(&m.verifiedLayer, uint64(lyr.Index()))
+	m.lvMutex.Lock()
+	m.verifiedLayer = lyr.Index()
+	m.lvMutex.Unlock()
 	if newPbase > oldPbase {
 		m.PushTransactions(oldPbase, newPbase)
 	}
@@ -248,9 +253,9 @@ func (m *Mesh) handleOrphanBlocks(block *Block) {
 }
 
 func (m *Mesh) GetUnverifiedLayerBlocks(l LayerID) ([]BlockID, error) {
-	x, err := m.meshDB.layers.Get(common.Uint64ToBytes(uint64(l)))
+	x, err := m.meshDB.layers.Get(l.ToBytes())
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf("could not retrive layer = %d blocks, %v", l, err))
+		return nil, errors.New(fmt.Sprintf("could not retrive layer = %d blocks ", l))
 	}
 	blockIds, err := bytesToBlockIds(x)
 	if err != nil {
@@ -336,7 +341,7 @@ func (m *Mesh) AccumulateRewards(rewardLayer LayerID, params RewardConfig) {
 	log.Info("fees reward: %v total processed %v total txs %v merged %v blocks: %v", rewards.Int64(), processed, len(merged), len(merged), numBlocks)
 
 	bonusReward, diminishedReward := calculateActualRewards(rewards, numBlocks, params, len(uq))
-	m.state.ApplyRewards(rewardLayer, ids, uq, bonusReward, diminishedReward)
+	m.state.ApplyRewards(LayerID(rewardLayer), ids, uq, bonusReward, diminishedReward)
 	//todo: should miner id be sorted in a deterministic order prior to applying rewards?
 
 }

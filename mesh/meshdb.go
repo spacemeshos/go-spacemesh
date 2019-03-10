@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"sync"
@@ -46,12 +45,12 @@ func (m *meshDB) Close() {
 }
 
 func (m *meshDB) getLayer(index LayerID) (*Layer, error) {
-	ids, err := m.layers.Get(common.Uint64ToBytes(uint64(index)))
+	ids, err := m.layers.Get(index.ToBytes())
 	if err != nil {
 		return nil, fmt.Errorf("error getting layer %v from database ", index)
 	}
 
-	l := NewLayer(index)
+	l := NewLayer(LayerID(index))
 	if len(ids) == 0 {
 		return nil, fmt.Errorf("no ids for layer %v in database ", index)
 	}

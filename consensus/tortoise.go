@@ -51,7 +51,7 @@ func NewTortoise(layerSize uint32, cachedLayers uint32) *tortoise {
 	return &trtl
 }
 
-func (alg *tortoise) RegisterLayerCallback(callback func(id mesh.LayerID)) {
+func (alg *tortoise) RegisterLayerCallback(callback func(mesh.LayerID)) {
 	alg.layerReadyCallback = callback
 }
 
@@ -87,7 +87,7 @@ func (alg *tortoise) IsTortoiseValid(originBlock *TortoiseBlock, targetBlock mes
 
 func (alg *tortoise) getLayerById(layerId mesh.LayerID) (*Layer, error) {
 	if _, ok := alg.layers[layerId]; !ok {
-		return nil, fmt.Errorf("layer Id not found %v", layerId)
+		return nil, fmt.Errorf("mesh.LayerID not found %v", layerId)
 	}
 	return alg.layers[layerId], nil
 }
@@ -232,5 +232,5 @@ func (alg *tortoise) HandleIncomingLayer(ll *mesh.Layer) {
 }
 
 func (alg *tortoise) HandleLateBlock(b *mesh.Block) {
-	log.Info("received block with layer Id %v block id: %v ", b.Layer(), b.ID())
+	log.Info("received block with mesh.LayerID %v block id: %v ", b.Layer(), b.ID())
 }

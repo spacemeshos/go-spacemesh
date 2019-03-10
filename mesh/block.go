@@ -6,13 +6,17 @@ import (
 	"github.com/davecgh/go-xdr/xdr2"
 	"github.com/google/uuid"
 	"github.com/spacemeshos/go-spacemesh/address"
+	"github.com/spacemeshos/go-spacemesh/common"
 	"io"
 	"math/big"
 	"time"
 )
 
 type BlockID uint64
+
 type LayerID uint64
+
+func (l LayerID) ToBytes() []byte { return common.Uint64ToBytes(uint64(l)) }
 
 type Block struct {
 	Id         BlockID
@@ -21,7 +25,7 @@ type Block struct {
 	Data       []byte
 	Coin       bool
 	Timestamp  int64
-	Txs        []SerializableTransaction ``
+	Txs        []SerializableTransaction
 	BlockVotes []BlockID
 	ViewEdges  []BlockID
 }
@@ -169,7 +173,7 @@ func NewExistingBlock(id BlockID, layerIndex LayerID, data []byte) *Block {
 		Id:         BlockID(id),
 		BlockVotes: make([]BlockID, 0, 10),
 		ViewEdges:  make([]BlockID, 0, 10),
-		LayerIndex: layerIndex,
+		LayerIndex: LayerID(layerIndex),
 		Data:       data,
 	}
 	return &b

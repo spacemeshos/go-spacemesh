@@ -59,7 +59,7 @@ func NewTransactionProcessor(rnd PseudoRandomizer, db *StateDB, gasParams GasCon
 		stateQueue:   list.List{},
 		gasCost:      gasParams,
 		db:           db.TrieDB(),
-		mu:           sync.Mutex{}, //sync between reset and apply transactions
+		mu:           sync.Mutex{}, //sync between reset and apply mesh.Transactions
 	}
 }
 
@@ -70,10 +70,10 @@ func (tp *TransactionProcessor) ApplyTransactions(layer mesh.LayerID, txs mesh.T
 		return 0, nil
 	}
 
-	//txs := MergeDoubles(transactions)
+	//txs := MergeDoubles(mesh.Transactions)
 	tp.mu.Lock()
 	defer tp.mu.Unlock()
-	failed := tp.Process(tp.randomSort(txs), tp.coalesceTransactionsBySender(txs))
+	failed := tp.Process(tp.randomSort(txs), tp.coalescTransactionsBySender(txs))
 	newHash, err := tp.globalState.Commit(false)
 
 	if err != nil {
@@ -82,7 +82,7 @@ func (tp *TransactionProcessor) ApplyTransactions(layer mesh.LayerID, txs mesh.T
 	}
 
 	tp.Log.Info("new state root for layer %v is %x", layer, newHash)
-	tp.Log.With().Info("new state", log.Uint32("layer_id", uint32(layer)), log.String("root_hash", newHash.String()))
+	tp.Log.With().Info("new state", log.Uint64("mesh.LayerID", uint64(layer)), log.String("root_hash", newHash.String()))
 
 	tp.addStateToHistory(layer, newHash)
 
@@ -146,7 +146,7 @@ func (tp *TransactionProcessor) randomSort(transactions mesh.Transactions) mesh.
 	return transactions
 }
 
-func (tp *TransactionProcessor) coalesceTransactionsBySender(transactions mesh.Transactions) map[address.Address][]*mesh.Transaction {
+func (tp *TransactionProcessor) coalescTransactionsBySender(transactions mesh.Transactions) map[address.Address][]*mesh.Transaction {
 	trnsBySender := make(map[address.Address][]*mesh.Transaction)
 	for _, trns := range transactions {
 		trnsBySender[trns.Origin] = append(trnsBySender[trns.Origin], trns)
@@ -167,7 +167,7 @@ func (tp *TransactionProcessor) Process(transactions mesh.Transactions, trnsBySe
 	senderPut := make(map[address.Address]struct{})
 	sortedOriginByTransactions := make([]address.Address, 0, 10)
 	errors = 0
-	// The order of the transactions determines the order addresses by which we take transactions
+	// The order of the mesh.Transactions determines the order addresses by which we take mesh.Transactions
 	// Maybe refactor this
 	for _, trans := range transactions {
 		if _, ok := senderPut[trans.Origin]; !ok {

@@ -84,7 +84,7 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 				data.ReportValidation(NewBlockProtocol, false)
 				break
 			}
-			bl.Log.With().Info("got new block", log.Uint32("id", uint32(blk.Id)), log.Int("txs", len(blk.Txs)), log.Bool("valid", err == nil))
+			bl.Log.With().Info("got new block", log.Uint64("id", uint64(blk.Id)), log.Int("txs", len(blk.Txs)), log.Bool("valid", err == nil))
 			if bl.BlockEligible(blk.LayerIndex, blk.MinerID) {
 				bl.Log.Debug("block %v miner %v eligible ", blk.ID(), blk.MinerID)
 				data.ReportValidation(NewBlockProtocol, true)
