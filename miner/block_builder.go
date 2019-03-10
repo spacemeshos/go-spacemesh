@@ -12,7 +12,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"github.com/spacemeshos/go-spacemesh/state"
 	meshSync "github.com/spacemeshos/go-spacemesh/sync"
 	"math/big"
 	"math/rand"
@@ -65,7 +64,7 @@ func NewBlockBuilder(minerID string, net p2p.Service, beginRoundEvent chan mesh.
 
 }
 
-func Transaction2SerializableTransaction(tx *state.Transaction) mesh.SerializableTransaction {
+func Transaction2SerializableTransaction(tx *mesh.Transaction) mesh.SerializableTransaction {
 	return mesh.SerializableTransaction{
 		AccountNonce: tx.AccountNonce,
 		Origin:       tx.Origin,
