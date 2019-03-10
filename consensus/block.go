@@ -2,18 +2,18 @@ package consensus
 
 import (
 	"github.com/google/uuid"
+	"github.com/spacemeshos/go-spacemesh/layer"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"time"
 )
 
 type BlockID uint32
-type LayerID uint32
 
-var layerCounter LayerID = 0
+var layerCounter layer.Id = 0
 
 type TortoiseBlock struct {
 	Id         BlockID
-	LayerIndex LayerID
+	LayerIndex layer.Id
 	Data       []byte
 	Coin       bool
 	Timestamp  int64
@@ -27,14 +27,14 @@ func (b TortoiseBlock) ID() BlockID {
 	return b.Id
 }
 
-func (b TortoiseBlock) Layer() LayerID {
+func (b TortoiseBlock) Layer() layer.Id {
 	return b.LayerIndex
 }
 
-func NewBlock(coin bool, data []byte, ts time.Time, layerId LayerID) *TortoiseBlock {
+func NewBlock(coin bool, data []byte, ts time.Time, LayerID layer.Id) *TortoiseBlock {
 	b := TortoiseBlock{
 		Id:         BlockID(uuid.New().ID()),
-		LayerIndex: layerId,
+		LayerIndex: LayerID,
 		BlockVotes: make(map[BlockID]bool),
 		ViewEdges:  make(map[BlockID]struct{}),
 		Timestamp:  ts.UnixNano(),
@@ -48,10 +48,10 @@ func NewBlock(coin bool, data []byte, ts time.Time, layerId LayerID) *TortoiseBl
 
 type Layer struct {
 	blocks []*TortoiseBlock
-	index  LayerID
+	index  layer.Id
 }
 
-func (l *Layer) Index() LayerID {
+func (l *Layer) Index() layer.Id {
 	return l.index
 }
 
@@ -80,7 +80,7 @@ func NewLayer() *Layer {
 func FromBlockToTortoiseBlock(block *mesh.Block) *TortoiseBlock {
 	bl := TortoiseBlock{
 		Id:         BlockID(block.Id),
-		LayerIndex: LayerID(block.LayerIndex),
+		LayerIndex: layer.Id(block.LayerIndex),
 		BlockVotes: make(map[BlockID]bool),
 		ViewEdges:  make(map[BlockID]struct{}),
 		Timestamp:  block.Timestamp,
@@ -96,18 +96,18 @@ func FromBlockToTortoiseBlock(block *mesh.Block) *TortoiseBlock {
 	return &bl
 }
 
-func FromLayerToTortoiseLayer(layer *mesh.Layer) *Layer {
+func FromLayerToTortoiseLayer(lyr *mesh.Layer) *Layer {
 	l := Layer{
-		index:  LayerID(layer.Index()),
-		blocks: make([]*TortoiseBlock, 0, len(layer.Blocks())),
+		index:  layer.Id(lyr.Index()),
+		blocks: make([]*TortoiseBlock, 0, len(lyr.Blocks())),
 	}
-	for _, block := range layer.Blocks() {
+	for _, block := range lyr.Blocks() {
 		l.blocks = append(l.blocks, FromBlockToTortoiseBlock(block))
 	}
 	return &l
 }
 
-func NewExistingLayer(idx LayerID, blocks []*TortoiseBlock) *Layer {
+func NewExistingLayer(idx layer.Id, blocks []*TortoiseBlock) *Layer {
 	l := Layer{
 		blocks: blocks,
 		index:  idx,

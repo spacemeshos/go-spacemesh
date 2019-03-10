@@ -43,11 +43,23 @@ func TestPreRoundTracker_OnPreRound(t *testing.T) {
 	tracker.OnPreRound(m1)
 	assert.Equal(t, 1, len(tracker.preRound))      // one msg
 	assert.Equal(t, 2, len(tracker.tracker.table)) // two values
-	_, exist1 := tracker.preRound[verifier.Verifier().String()]
-	m2 := BuildPreRoundMsg(verifier, s)
+	g, _ := tracker.preRound[verifier.Verifier().String()]
+	assert.True(t, s.Equals(g))
+	assert.Equal(t, uint32(1), tracker.tracker.CountStatus(value1.Id()))
+	nSet := NewSetFromValues(value3, value4)
+	m2 := BuildPreRoundMsg(verifier, nSet)
 	tracker.OnPreRound(m2)
-	_, exist2 := tracker.preRound[verifier.Verifier().String()]
-	assert.Equal(t, exist1, exist2) // same pub --> same msg
+	h, _ := tracker.preRound[verifier.Verifier().String()]
+	assert.True(t, h.Equals(s.Union(nSet)))
+
+	interSet := NewSetFromValues(value1, value2, value5)
+	m3 := BuildPreRoundMsg(verifier, interSet)
+	tracker.OnPreRound(m3)
+	h, _ = tracker.preRound[verifier.Verifier().String()]
+	assert.True(t, h.Equals(s.Union(nSet).Union(interSet)))
+	assert.Equal(t, uint32(1), tracker.tracker.CountStatus(value1.Id()))
+	assert.Equal(t, uint32(1), tracker.tracker.CountStatus(value2.Id()))
+	assert.Equal(t, uint32(1), tracker.tracker.CountStatus(value3.Id()))
 }
 
 func TestPreRoundTracker_CanProveValueAndSet(t *testing.T) {

@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/spacemeshos/go-spacemesh/consensus"
 	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/layer"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -14,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
+	"math/big"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -61,23 +63,33 @@ func SyncMockFactory(number int, conf Configuration, name string, dbType string)
 type BlockValidatorMock struct {
 }
 
-func (BlockValidatorMock) BlockEligible(id mesh.LayerID, key string) bool {
+func (BlockValidatorMock) BlockEligible(id layer.Id, key string) bool {
 	return true
 }
 
 type MeshValidatorMock struct{}
 
-func (m *MeshValidatorMock) HandleIncomingLayer(layer *mesh.Layer) (mesh.LayerID, mesh.LayerID) {
+func (m *MeshValidatorMock) HandleIncomingLayer(layer *mesh.Layer) (layer.Id, layer.Id) {
 	return layer.Index() - 1, layer.Index()
 }
-func (m *MeshValidatorMock) HandleLateBlock(bl *mesh.Block)              {}
-func (m *MeshValidatorMock) RegisterLayerCallback(func(id mesh.LayerID)) {}
-func (mlg *MeshValidatorMock) ContextualValidity(id mesh.BlockID) bool   { return true }
+func (m *MeshValidatorMock) HandleLateBlock(bl *mesh.Block)            {}
+func (m *MeshValidatorMock) RegisterLayerCallback(func(id layer.Id))   {}
+func (mlg *MeshValidatorMock) ContextualValidity(id mesh.BlockID) bool { return true }
 
 type stateMock struct{}
 
-func (s *stateMock) ApplyTransactions(id state.LayerID, tx state.Transactions) (uint32, error) {
+func (s *stateMock) ApplyTransactions(id layer.Id, tx state.Transactions) (uint32, error) {
 	return 0, nil
+}
+
+func ConfigTst() mesh.RewardConfig {
+	return mesh.RewardConfig{
+		big.NewInt(10),
+		big.NewInt(5000),
+		big.NewInt(15),
+		15,
+		5,
+	}
 }
 
 func getMeshWithLevelDB(id string) *mesh.Mesh {
@@ -86,14 +98,18 @@ func getMeshWithLevelDB(id string) *mesh.Mesh {
 	ldb := database.NewLevelDbStore("layers_test_"+id, nil, nil)
 	cv := database.NewLevelDbStore("contextually_valid_test_"+id, nil, nil)
 	//odb := database.NewLevelDbStore("orphans_test_"+id+"_"+time.String(), nil, nil)
-	layers := mesh.NewMesh(ldb, bdb, cv, &MeshValidatorMock{}, &stateMock{}, log.New(id, "", ""))
+	layers := mesh.NewMesh(ldb, bdb, cv, ConfigTst(), &MeshValidatorMock{}, &stateMock{}, log.New(id, "", ""))
 	return layers
 }
 
 type MockState struct{}
 
-func (MockState) ApplyTransactions(layer state.LayerID, txs state.Transactions) (uint32, error) {
+func (MockState) ApplyTransactions(layer layer.Id, txs state.Transactions) (uint32, error) {
 	return 0, nil
+}
+
+func (s *stateMock) ApplyRewards(layer layer.Id, miners map[string]struct{}, underQuota map[string]struct{}, bonusReward, diminishedReward *big.Int) {
+
 }
 
 func getMeshWithMemoryDB(id string) *mesh.Mesh {
@@ -101,7 +117,7 @@ func getMeshWithMemoryDB(id string) *mesh.Mesh {
 	ldb := database.NewMemDatabase()
 	cv := database.NewMemDatabase()
 	//odb := database.NewMemDatabase()
-	layers := mesh.NewMesh(ldb, bdb, cv, &MeshValidatorMock{}, &stateMock{}, log.New(id, "", ""))
+	layers := mesh.NewMesh(ldb, bdb, cv, ConfigTst(), &MeshValidatorMock{}, &stateMock{}, log.New(id, "", ""))
 	return layers
 }
 
@@ -151,7 +167,7 @@ func TestSyncProtocol_BlockRequest(t *testing.T) {
 	syncObj := syncs[0]
 	syncObj2 := syncs[1]
 	defer syncObj.Close()
-	lid := mesh.LayerID(1)
+	lid := layer.Id(1)
 	block := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), lid, []byte("data data data"))
 	syncObj.AddBlock(block)
 	ch, err := sendBlockRequest(syncObj2.MessageServer, nodes[0].Node.PublicKey(), block.ID(), syncObj.Log)
@@ -173,7 +189,7 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 	defer syncObj1.Close()
 	syncObj2 := syncs[1]
 	defer syncObj2.Close()
-	lid := mesh.LayerID(1)
+	lid := layer.Id(1)
 	syncObj1.AddBlock(mesh.NewExistingBlock(mesh.BlockID(123), lid, nil))
 	//syncObj1.ValidateLayer(l) //this is to simulate the approval of the tortoise...
 	timeout := time.NewTimer(2 * time.Second)
@@ -194,7 +210,7 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 	defer syncObj.Close()
 	syncObj1 := syncs[1]
 	defer syncObj1.Close()
-	lid := mesh.LayerID(1)
+	lid := layer.Id(1)
 	layer := mesh.NewExistingLayer(lid, make([]*mesh.Block, 0, 10))
 	layer.AddBlock(mesh.NewExistingBlock(mesh.BlockID(123), lid, nil))
 	layer.AddBlock(mesh.NewExistingBlock(mesh.BlockID(132), lid, nil))
@@ -596,6 +612,7 @@ func (sis *syncIntegrationMultipleNodes) TestSyncProtocol_MultipleNodes() {
 	syncObj1.Start()
 	syncObj2.Start()
 	syncObj3.Start()
+	syncObj4.Start()
 	syncObj5.Start()
 
 	// Keep trying until we're timed out or got a result or got an error

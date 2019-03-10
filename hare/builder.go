@@ -6,6 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
+// Used to build proto messages
 type MessageBuilder struct {
 	outer *pb.HareMessage
 	inner *pb.InnerMessage

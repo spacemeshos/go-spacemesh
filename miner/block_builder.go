@@ -7,6 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/config"
+	"github.com/spacemeshos/go-spacemesh/layer"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/oracle"
@@ -30,7 +31,7 @@ const IncomingTxProtocol = "TxGossip"
 type BlockBuilder struct {
 	minerID string // could be a pubkey or what ever. the identity we're claiming to be as miners.
 	log.Log
-	beginRoundEvent  chan mesh.LayerID
+	beginRoundEvent  chan layer.Id
 	stopChan         chan struct{}
 	newTrans         chan *mesh.SerializableTransaction
 	txGossipChannel  chan service.GossipMessage
@@ -44,7 +45,7 @@ type BlockBuilder struct {
 	started          bool
 }
 
-func NewBlockBuilder(minerID string, net p2p.Service, beginRoundEvent chan mesh.LayerID, weakCoin WeakCoinProvider,
+func NewBlockBuilder(minerID string, net p2p.Service, beginRoundEvent chan layer.Id, weakCoin WeakCoinProvider,
 	orph OrphanBlockProvider, hare HareResultProvider, blockOracle oracle.BlockOracle, lg log.Log) BlockBuilder {
 	return BlockBuilder{
 		minerID:          minerID,
@@ -102,7 +103,7 @@ func (t *BlockBuilder) Stop() error {
 }
 
 type HareResultProvider interface {
-	GetResult(id mesh.LayerID) ([]mesh.BlockID, error)
+	GetResult(id layer.Id) ([]mesh.BlockID, error)
 }
 
 type WeakCoinProvider interface {
@@ -110,7 +111,7 @@ type WeakCoinProvider interface {
 }
 
 type OrphanBlockProvider interface {
-	GetOrphanBlocksBefore(l mesh.LayerID) ([]mesh.BlockID, error)
+	GetOrphanBlocksBefore(l layer.Id) ([]mesh.BlockID, error)
 }
 
 //used from external API call?
@@ -122,7 +123,7 @@ func (t *BlockBuilder) AddTransaction(nonce uint64, origin, destination address.
 	return nil
 }
 
-func (t *BlockBuilder) createBlock(id mesh.LayerID, txs []mesh.SerializableTransaction) (*mesh.Block, error) {
+func (t *BlockBuilder) createBlock(id layer.Id, txs []mesh.SerializableTransaction) (*mesh.Block, error) {
 	var res []mesh.BlockID = nil
 	var err error
 	if id == config.Genesis {
@@ -186,13 +187,13 @@ func (t *BlockBuilder) acceptBlockData() {
 			return
 
 		case id := <-t.beginRoundEvent:
-			if !t.blockOracle.BlockEligible(mesh.LayerID(id), t.minerID) {
+			if !t.blockOracle.BlockEligible(layer.Id(id), t.minerID) {
 				break
 			}
 
 			txList := t.transactionQueue[:common.Min(len(t.transactionQueue), MaxTransactionsPerBlock)]
 			t.transactionQueue = t.transactionQueue[common.Min(len(t.transactionQueue), MaxTransactionsPerBlock):]
-			blk, err := t.createBlock(mesh.LayerID(id), txList)
+			blk, err := t.createBlock(layer.Id(id), txList)
 			if err != nil {
 				t.Error("cannot create new block, %v ", err)
 				continue

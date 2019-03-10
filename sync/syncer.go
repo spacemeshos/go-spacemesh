@@ -3,6 +3,7 @@ package sync
 import (
 	"errors"
 	"github.com/gogo/protobuf/proto"
+	"github.com/spacemeshos/go-spacemesh/layer"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -17,7 +18,7 @@ import (
 )
 
 type BlockValidator interface {
-	BlockEligible(id mesh.LayerID, pubKey string) bool
+	BlockEligible(id layer.Id, pubKey string) bool
 }
 
 type Configuration struct {
@@ -78,7 +79,7 @@ func (s *Syncer) Start() {
 
 //fires a sync every sm.syncInterval or on force space from outside
 func (s *Syncer) run() {
-	foo := func() {
+	syncRoutine := func() {
 		if atomic.CompareAndSwapUint32(&s.SyncLock, IDLE, RUNNING) {
 			s.Synchronise()
 			atomic.StoreUint32(&s.SyncLock, IDLE)
@@ -90,11 +91,11 @@ func (s *Syncer) run() {
 			s.Debug("run stoped")
 			return
 		case <-s.forceSync:
-			go foo()
+			go syncRoutine()
 		case layer := <-s.clock:
 			atomic.StoreUint32(&s.currentLayer, uint32(layer))
 			s.Info("sync got tick for layer %v", layer)
-			go foo()
+			go syncRoutine()
 		}
 	}
 }
@@ -129,16 +130,23 @@ func (s *Syncer) maxSyncLayer() uint32 {
 func (s *Syncer) Synchronise() {
 	for currenSyncLayer := s.VerifiedLayer() + 1; currenSyncLayer < s.maxSyncLayer(); currenSyncLayer++ {
 		s.Info("syncing layer %v to layer %v current consensus layer is %d", s.VerifiedLayer(), currenSyncLayer, atomic.LoadUint32(&s.currentLayer))
-		lyr, _ := s.GetLayer(mesh.LayerID(currenSyncLayer))
-		if lyr == nil {
-			lyr, _ = s.getLayerFromNeighbors(currenSyncLayer)
+
+		lyr, err := s.GetLayer(layer.Id(currenSyncLayer))
+		if err != nil {
+			lyr, err = s.getLayerFromNeighbors(currenSyncLayer)
 		}
+
+		if err != nil {
+			s.Info("could not get layer %v from neighbors %v", currenSyncLayer, err)
+			return
+		}
+
 		s.ValidateLayer(lyr)
 	}
 }
 
 func (s *Syncer) getLayerFromNeighbors(currenSyncLayer uint32) (*mesh.Layer, error) {
-	blockIds, err := s.getLayerBlockIDs(mesh.LayerID(currenSyncLayer))
+	blockIds, err := s.getLayerBlockIDs(layer.Id(currenSyncLayer))
 	if err != nil {
 		return nil, err
 	}
@@ -170,7 +178,7 @@ func (s *Syncer) getLayerFromNeighbors(currenSyncLayer uint32) (*mesh.Layer, err
 		blocksArr = append(blocksArr, block)
 	}
 
-	return mesh.NewExistingLayer(mesh.LayerID(currenSyncLayer), blocksArr), nil
+	return mesh.NewExistingLayer(layer.Id(currenSyncLayer), blocksArr), nil
 }
 
 type peerHashPair struct {
@@ -199,7 +207,7 @@ func sendBlockRequest(msgServ *server.MessageServer, peer p2p.Peer, id mesh.Bloc
 			mp = append(mp, mesh.BlockID(b))
 		}
 
-		block := mesh.NewExistingBlock(mesh.BlockID(data.Block.GetId()), mesh.LayerID(data.Block.GetLayer()), nil)
+		block := mesh.NewExistingBlock(mesh.BlockID(data.Block.GetId()), layer.Id(data.Block.GetLayer()), nil)
 		block.ViewEdges = mp
 		ch <- block
 	}
@@ -207,7 +215,7 @@ func sendBlockRequest(msgServ *server.MessageServer, peer p2p.Peer, id mesh.Bloc
 	return ch, msgServ.SendRequest(BLOCK, payload, peer, foo)
 }
 
-func (s *Syncer) getLayerBlockIDs(index mesh.LayerID) (chan mesh.BlockID, error) {
+func (s *Syncer) getLayerBlockIDs(index layer.Id) (chan mesh.BlockID, error) {
 
 	m, err := s.getLayerHashes(index)
 
@@ -218,7 +226,7 @@ func (s *Syncer) getLayerBlockIDs(index mesh.LayerID) (chan mesh.BlockID, error)
 	return s.getIdsForHash(m, index)
 }
 
-func (s *Syncer) getIdsForHash(m map[string]p2p.Peer, index mesh.LayerID) (chan mesh.BlockID, error) {
+func (s *Syncer) getIdsForHash(m map[string]p2p.Peer, index layer.Id) (chan mesh.BlockID, error) {
 	reqCounter := 0
 
 	ch := make(chan []uint32, len(m))
@@ -275,7 +283,7 @@ func keysAsChan(idSet map[mesh.BlockID]bool) chan mesh.BlockID {
 	return res
 }
 
-func (s *Syncer) getLayerHashes(index mesh.LayerID) (map[string]p2p.Peer, error) {
+func (s *Syncer) getLayerHashes(index layer.Id) (map[string]p2p.Peer, error) {
 	m := make(map[string]p2p.Peer, 20) //todo need to get this from p2p service
 	peers := s.GetPeers()
 	if len(peers) == 0 {
@@ -323,8 +331,8 @@ func (s *Syncer) getLayerHashes(index mesh.LayerID) (map[string]p2p.Peer, error)
 	return m, nil
 }
 
-func (s *Syncer) sendLayerHashRequest(peer p2p.Peer, layer mesh.LayerID) (chan *peerHashPair, error) {
-	s.Debug("send Layer hash request Peer: %v layer: %v", peer, layer)
+func (s *Syncer) sendLayerHashRequest(peer p2p.Peer, layer layer.Id) (chan *peerHashPair, error) {
+	s.Debug("send layer hash request Peer: %v layer: %v", peer, layer)
 	ch := make(chan *peerHashPair)
 	data := &pb.LayerHashReq{Layer: uint32(layer)}
 	payload, err := proto.Marshal(data)
@@ -350,8 +358,8 @@ func (s *Syncer) sendLayerHashRequest(peer p2p.Peer, layer mesh.LayerID) (chan *
 	return ch, s.SendRequest(LAYER_HASH, payload, peer, foo)
 }
 
-func (s *Syncer) sendLayerIDsRequest(peer p2p.Peer, idx mesh.LayerID) (chan []uint32, error) {
-	s.Debug("send Layer ids request Peer: ", peer, " layer: ", idx)
+func (s *Syncer) sendLayerIDsRequest(peer p2p.Peer, idx layer.Id) (chan []uint32, error) {
+	s.Debug("send layer ids request Peer: ", peer, " layer: ", idx)
 
 	data := &pb.LayerIdsReq{Layer: uint32(idx)}
 	payload, err := proto.Marshal(data)
@@ -412,7 +420,7 @@ func newLayerHashRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg []by
 			return nil
 		}
 
-		layer, err := layers.GetLayer(mesh.LayerID(req.Layer))
+		layer, err := layers.GetLayer(layer.Id(req.Layer))
 		if err != nil {
 			logger.Error("Error handling layer %d request message with error: %v", req.Layer, err)
 			return nil
@@ -435,7 +443,7 @@ func newLayerIdsRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg []byt
 			return nil
 		}
 
-		layer, err := layers.GetLayer(mesh.LayerID(req.Layer))
+		layer, err := layers.GetLayer(layer.Id(req.Layer))
 		if err != nil {
 			logger.Error("Error handling layer ids request message with LayerID: %d and error: %s", req.Layer, err.Error())
 			return nil

@@ -51,7 +51,7 @@ func TestBroker_Received(t *testing.T) {
 	inbox := broker.Register(instanceId1)
 
 	serMsg := createMessage(t, instanceId1)
-	n2.Broadcast(ProtoName, serMsg)
+	n2.Broadcast(protoName, serMsg)
 
 	recv := <-inbox
 
@@ -80,7 +80,7 @@ func TestBroker_Abort(t *testing.T) {
 
 func sendMessages(t *testing.T, instanceId InstanceId, n *service.Node, count int) {
 	for i := 0; i < count; i++ {
-		n.Broadcast(ProtoName, createMessage(t, instanceId))
+		n.Broadcast(protoName, createMessage(t, instanceId))
 	}
 }
 

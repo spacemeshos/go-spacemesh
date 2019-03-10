@@ -302,7 +302,7 @@ func (app *SpacemeshApp) setupTestFeatures() {
 	api.ApproveAPIGossipMessages(Ctx, app.P2P)
 }
 
-func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service, dbStorepath string, sgn hare.Signing, blockOracle oracle.BlockOracle, hareOracle hare.Rolacle, instances uint32) error {
+func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service, dbStorepath string, sgn hare.Signing, blockOracle oracle.BlockOracle, hareOracle hare.Rolacle, layerSize uint32) error {
 
 	//todo: should we add all components to a single struct?
 	lg := log.New("shmekel_"+instanceName, "", "")
@@ -315,27 +315,24 @@ func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service,
 		return err
 	}
 	rng := rand.New(mt19937.New())
-	processor := state.NewTransactionProcessor(rng, st, lg)
+	processor := state.NewTransactionProcessor(rng, st, app.Config.GAS, lg)
 
 	coinToss := consensus.WeakCoin{}
 	gTime, err := time.Parse(time.RFC3339, app.Config.GenesisTime)
-	log.Info("genesis time: %v", gTime)
 	if err != nil {
 		return err
 	}
-
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
-
 	clock := timesync.NewTicker(timesync.RealClock{}, ld, gTime)
-	trtl := consensus.NewAlgorithm(consensus.NewNinjaTortoise(instances, lg))
-	msh := mesh.NewMesh(db, db, db, trtl, processor, lg) //todo: what to do with the logger?
+	trtl := consensus.NewAlgorithm(consensus.NewNinjaTortoise(layerSize, lg))
+	msh := mesh.NewMesh(db, db, db, app.Config.REWARD, trtl, processor, lg) //todo: what to do with the logger?
 
-	conf := sync.Configuration{SyncInterval: 1 * time.Second, Concurrency: 4, LayerSize: int(instances), RequestTimeout: 100 * time.Millisecond}
+	conf := sync.Configuration{SyncInterval: 1 * time.Second, Concurrency: 4, LayerSize: int(layerSize), RequestTimeout: 100 * time.Millisecond}
 	syncer := sync.NewSync(swarm, msh, blockOracle, conf, clock.Subscribe(), lg)
 
 	ha := hare.New(app.Config.HARE, swarm, sgn, msh, hareOracle, clock.Subscribe(), lg)
 
-	blockProducer := miner.NewBlockBuilder(sgn.Verifier().String(), swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, lg)
+	blockProducer := miner.NewBlockBuilder(instanceName, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, lg)
 	blockListener := sync.NewBlockListener(swarm, blockOracle, msh, 2*time.Second, 4, lg)
 
 	app.blockProducer = &blockProducer
@@ -347,7 +344,7 @@ func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service,
 	app.db = db
 	app.hare = ha
 	app.P2P = swarm
-	log.Info("initServices done")
+
 	return nil
 }
 
@@ -401,12 +398,12 @@ func (app *SpacemeshApp) startSpacemesh(cmd *cobra.Command, args []string) {
 	pub, _ := crypto.NewPublicKey(sgn.Verifier().Bytes())
 
 	oracle.SetServerAddress(app.Config.OracleServer)
-	oracleClient := oracle.NewOracleClientWithWorldID(uint64(app.Config.OracleServerWorldId))
+	oracleClient := oracle.NewOracleClientWithWorldID(app.Config.OracleServerWorldId)
 	oracleClient.Register(true, pub.String()) // todo: configure no faulty nodes
 
 	app.unregisterOracle = func() { oracleClient.Unregister(true, pub.String()) }
 
-	bo := oracle.NewBlockOracleFromClient(oracleClient, int(200))
+	bo := oracle.NewBlockOracleFromClient(oracleClient, int(app.Config.CONSENSUS.NodesPerLayer))
 	hareOracle := oracle.NewHareOracleFromClient(oracleClient)
 
 	apiConf := &app.Config.API

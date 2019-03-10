@@ -14,6 +14,8 @@ import (
 	"time"
 )
 
+const saveResults = false
+
 type NodeTestInstance interface {
 	server.Service
 	LocalNode() *node.LocalNode // this holds the keys
@@ -116,8 +118,8 @@ func createP2pInstance(t testing.TB, config config.Config) *swarm {
 	port, err := node.GetUnboundedPort()
 	assert.Nil(t, err)
 	config.TCPPort = port
-	p, err := newSwarm(context.TODO(), config, true, false)
-	assert.Nil(t, err)
+	p, err := newSwarm(context.TODO(), config, true, saveResults)
+	assert.NoError(t, err)
 	assert.NotNil(t, p)
 	return p
 }

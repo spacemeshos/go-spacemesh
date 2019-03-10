@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/layer"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/state"
 	"math/big"
@@ -18,18 +19,20 @@ var TRUE = []byte{1}
 var FALSE = []byte{0}
 
 type MeshValidator interface {
-	HandleIncomingLayer(layer *Layer) (LayerID, LayerID)
+	HandleIncomingLayer(layer *Layer) (layer.Id, layer.Id)
 	HandleLateBlock(bl *Block)
 	ContextualValidity(id BlockID) bool
 }
 
 type StateUpdater interface {
-	ApplyTransactions(layer state.LayerID, transactions state.Transactions) (uint32, error)
+	ApplyTransactions(layer layer.Id, transactions state.Transactions) (uint32, error)
+	ApplyRewards(layer layer.Id, miners map[string]struct{}, underQuota map[string]struct{}, bonusReward, diminishedReward *big.Int)
 }
 
 type Mesh struct {
 	log.Log
 	*meshDB
+	rewardConfig  RewardConfig
 	verifiedLayer uint32
 	latestLayer   uint32
 	lastSeenLayer uint32
@@ -42,14 +45,15 @@ type Mesh struct {
 	done          chan struct{}
 }
 
-func NewMesh(layers, blocks, validity database.DB, mesh MeshValidator, state StateUpdater, logger log.Log) *Mesh {
+func NewMesh(layers, blocks, validity database.DB, rewardConfig RewardConfig, mesh MeshValidator, state StateUpdater, logger log.Log) *Mesh {
 	//todo add boot from disk
 	ll := &Mesh{
-		Log:      logger,
-		tortoise: mesh,
-		state:    state,
-		done:     make(chan struct{}),
-		meshDB:   NewMeshDB(layers, blocks, validity, logger),
+		Log:          logger,
+		tortoise:     mesh,
+		state:        state,
+		done:         make(chan struct{}),
+		meshDB:       NewMeshDB(layers, blocks, validity, logger),
+		rewardConfig: rewardConfig,
 	}
 
 	return ll
@@ -84,51 +88,70 @@ func (m *Mesh) SetLatestLayer(idx uint32) {
 	defer m.lkMutex.Unlock()
 	m.lkMutex.Lock()
 	if idx > m.latestLayer {
-		m.Info("set latest known layer to ", idx)
+		m.Info("set latest known layer to %v", idx)
 		m.latestLayer = idx
 	}
 }
 
-func (m *Mesh) ValidateLayer(layer *Layer) {
-	m.Info("Validate layer %d", layer.Index())
-	oldPbase, newPbase := m.tortoise.HandleIncomingLayer(layer)
-	atomic.StoreUint32(&m.verifiedLayer, uint32(layer.Index()))
+func (m *Mesh) ValidateLayer(lyr *Layer) {
+	m.Info("Validate layer %d", lyr.Index())
+
+	if lyr.index >= m.rewardConfig.RewardMaturity {
+		m.AccumulateRewards(lyr.index-m.rewardConfig.RewardMaturity, m.rewardConfig)
+	}
+
+	oldPbase, newPbase := m.tortoise.HandleIncomingLayer(lyr)
+	atomic.StoreUint32(&m.verifiedLayer, uint32(lyr.Index()))
 	if newPbase > oldPbase {
 		m.PushTransactions(oldPbase, newPbase)
 	}
 }
 
-func (m *Mesh) PushTransactions(oldBase LayerID, newBase LayerID) {
+func SortBlocks(blocks []*Block) []*Block {
+	//not final sorting method, need to talk about this
+	sort.Slice(blocks, func(i, j int) bool { return blocks[i].ID() < blocks[j].ID() })
+	return blocks
+}
+
+func (m *Mesh) ExtractUniqueOrderedTransactions(l *Layer) []*state.Transaction {
+	txs := make([]*state.Transaction, 0, layerSize)
+	sortedBlocks := SortBlocks(l.blocks)
+
+	for _, b := range sortedBlocks {
+		if !m.tortoise.ContextualValidity(b.ID()) {
+			continue
+		}
+		for _, tx := range b.Txs {
+			//todo: think about these conversions.. are they needed?
+			txs = append(txs, SerializableTransaction2StateTransaction(&tx))
+		}
+	}
+
+	return MergeDoubles(txs)
+}
+
+func (m *Mesh) PushTransactions(oldBase layer.Id, newBase layer.Id) {
 	for i := oldBase; i < newBase; i++ {
-		txs := make([]*state.Transaction, 0, layerSize)
+
 		l, err := m.getLayer(i)
 		if err != nil || l == nil {
 			m.Error("") //todo handle error
 			return
 		}
 
-		sort.Slice(l.blocks, func(i, j int) bool { return l.blocks[i].ID() < l.blocks[j].ID() })
-
-		for _, b := range l.blocks {
-			if m.tortoise.ContextualValidity(b.ID()) {
-				for _, tx := range b.Txs {
-					//todo: think about these conversions.. are they needed?
-					txs = append(txs, SerializableTransaction2StateTransaction(&tx))
-				}
-			}
-		}
-		x, err := m.state.ApplyTransactions(state.LayerID(i), txs)
+		merged := m.ExtractUniqueOrderedTransactions(l)
+		x, err := m.state.ApplyTransactions(layer.Id(i), merged)
 		if err != nil {
 			m.Log.Error("cannot apply transactions %v", err)
 		}
-		m.Log.Info("applied %v transactions in new pbase is %d apply result was %d", len(txs), newBase, x)
+		m.Log.Info("applied %v transactions in new pbase is %d apply result was %d", len(merged), newBase, x)
 	}
 }
 
 //todo consider adding a boolean for layer validity instead error
-func (m *Mesh) GetVerifiedLayer(i LayerID) (*Layer, error) {
+func (m *Mesh) GetVerifiedLayer(i layer.Id) (*Layer, error) {
 	m.lMutex.RLock()
-	if i > LayerID(m.verifiedLayer) {
+	if i > layer.Id(m.verifiedLayer) {
 		m.lMutex.RUnlock()
 		m.Debug("failed to get layer  ", i, " layer not verified yet")
 		return nil, errors.New("layer not verified yet")
@@ -137,7 +160,7 @@ func (m *Mesh) GetVerifiedLayer(i LayerID) (*Layer, error) {
 	return m.getLayer(i)
 }
 
-func (m *Mesh) GetLayer(i LayerID) (*Layer, error) {
+func (m *Mesh) GetLayer(i layer.Id) (*Layer, error) {
 	return m.getLayer(i)
 }
 
@@ -176,7 +199,7 @@ func (m *Mesh) handleOrphanBlocks(block *Block) {
 	}
 }
 
-func (m *Mesh) GetUnverifiedLayerBlocks(l LayerID) ([]BlockID, error) {
+func (m *Mesh) GetUnverifiedLayerBlocks(l layer.Id) ([]BlockID, error) {
 	x, err := m.meshDB.layers.Get(l.ToBytes())
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf("could not retrive layer = %d blocks ", l))
@@ -192,7 +215,7 @@ func (m *Mesh) GetUnverifiedLayerBlocks(l LayerID) ([]BlockID, error) {
 	return arr, nil
 }
 
-func (m *Mesh) GetOrphanBlocksBefore(l LayerID) ([]BlockID, error) {
+func (m *Mesh) GetOrphanBlocksBefore(l layer.Id) ([]BlockID, error) {
 	m.orphMutex.RLock()
 	defer m.orphMutex.RUnlock()
 	ids := map[BlockID]struct{}{}
@@ -223,6 +246,51 @@ func (m *Mesh) GetOrphanBlocksBefore(l LayerID) ([]BlockID, error) {
 
 	m.Info("orphans for layer %d are %v", l, idArr)
 	return idArr, nil
+}
+
+func (m *Mesh) AccumulateRewards(rewardLayer layer.Id, params RewardConfig) {
+	l, err := m.getLayer(rewardLayer)
+	if err != nil || l == nil {
+		m.Error("") //todo handle error
+		return
+	}
+
+	ids := make(map[string]struct{})
+	uq := make(map[string]struct{})
+
+	//todo: check if block producer was eligible?
+	for _, bl := range l.blocks {
+		if _, found := ids[bl.MinerID]; found {
+			log.Error("two blocks found from same miner %v in layer %v", bl.MinerID, bl.LayerIndex)
+			continue
+		}
+		ids[bl.MinerID] = struct{}{}
+		if uint32(len(bl.Txs)) < params.TxQuota {
+			//todo: think of giving out reward for unique txs as well
+			uq[bl.MinerID] = struct{}{}
+		}
+	}
+	//accumulate all blocks rewards
+	merged := m.ExtractUniqueOrderedTransactions(l)
+
+	rewards := &big.Int{}
+	processed := 0
+	for _, tx := range merged {
+		res := new(big.Int).Mul(tx.Price, params.SimpleTxCost)
+		processed++
+		rewards.Add(rewards, res)
+	}
+
+	layerReward := CalculateLayerReward(rewardLayer, params)
+	rewards.Add(rewards, layerReward)
+
+	numBlocks := big.NewInt(int64(len(l.blocks)))
+	log.Info("fees reward: %v total processed %v total txs %v merged %v blocks: %v", rewards.Int64(), processed, len(merged), len(merged), numBlocks)
+
+	bonusReward, diminishedReward := calculateActualRewards(rewards, numBlocks, params, len(uq))
+	m.state.ApplyRewards(layer.Id(rewardLayer), ids, uq, bonusReward, diminishedReward)
+	//todo: should miner id be sorted in a deterministic order prior to applying rewards?
+
 }
 
 func (m *Mesh) GetBlock(id BlockID) (*Block, error) {

@@ -6,6 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/crypto/sha3"
+	"github.com/spacemeshos/go-spacemesh/layer"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/rlp"
 	"github.com/spacemeshos/go-spacemesh/trie"
@@ -13,8 +14,6 @@ import (
 	"sort"
 	"sync"
 )
-
-type LayerID uint64
 
 //todo: this object should be splitted into two parts: one is the actual value serialized into trie, and an containig obj with caches
 type Transaction struct {
@@ -72,42 +71,54 @@ type StatePreImages struct {
 	preImages Transactions
 }
 
+type GasConfig struct {
+	BasicTxCost *big.Int
+}
+
+func DefaultConfig() GasConfig {
+	return GasConfig{
+		big.NewInt(3),
+	}
+}
+
 type TransactionProcessor struct {
 	log.Log
 	rand         PseudoRandomizer
 	globalState  *StateDB
-	prevStates   map[LayerID]common.Hash
-	currentLayer LayerID
+	prevStates   map[layer.Id]common.Hash
+	currentLayer layer.Id
 	rootHash     common.Hash
 	stateQueue   list.List
+	gasCost      GasConfig
 	db           *trie.Database
 	mu           sync.Mutex
 }
 
 const maxPastStates = 20
 
-func NewTransactionProcessor(rnd PseudoRandomizer, db *StateDB, logger log.Log) *TransactionProcessor {
+func NewTransactionProcessor(rnd PseudoRandomizer, db *StateDB, gasParams GasConfig, logger log.Log) *TransactionProcessor {
 	return &TransactionProcessor{
 		Log:          logger,
 		rand:         rnd,
 		globalState:  db,
-		prevStates:   make(map[LayerID]common.Hash),
+		prevStates:   make(map[layer.Id]common.Hash),
 		currentLayer: 0,
 		rootHash:     common.Hash{},
 		stateQueue:   list.List{},
+		gasCost:      gasParams,
 		db:           db.TrieDB(),
 		mu:           sync.Mutex{}, //sync between reset and apply transactions
 	}
 }
 
 //should receive sort predicate
-func (tp *TransactionProcessor) ApplyTransactions(layer LayerID, transactions Transactions) (uint32, error) {
+func (tp *TransactionProcessor) ApplyTransactions(layer layer.Id, txs Transactions) (uint32, error) {
 	//todo: need to seed the mersenne twister with random beacon seed
-	if len(transactions) == 0 {
+	if len(txs) == 0 {
 		return 0, nil
 	}
 
-	txs := tp.mergeDoubles(transactions)
+	//txs := MergeDoubles(transactions)
 	tp.mu.Lock()
 	defer tp.mu.Unlock()
 	failed := tp.Process(tp.randomSort(txs), tp.coalesceTransactionsBySender(txs))
@@ -121,6 +132,12 @@ func (tp *TransactionProcessor) ApplyTransactions(layer LayerID, transactions Tr
 	tp.Log.Info("new state root for layer %v is %x", layer, newHash)
 	tp.Log.With().Info("new state", log.Uint32("layer_id", uint32(layer)), log.String("root_hash", newHash.String()))
 
+	tp.addStateToHistory(layer, newHash)
+
+	return failed, nil
+}
+
+func (tp *TransactionProcessor) addStateToHistory(layer layer.Id, newHash common.Hash) {
 	tp.stateQueue.PushBack(newHash)
 	if tp.stateQueue.Len() > maxPastStates {
 		hash := tp.stateQueue.Remove(tp.stateQueue.Back())
@@ -129,10 +146,29 @@ func (tp *TransactionProcessor) ApplyTransactions(layer LayerID, transactions Tr
 	tp.prevStates[layer] = newHash
 	tp.db.Reference(newHash, common.Hash{})
 
-	return failed, nil
 }
 
-func (tp *TransactionProcessor) Reset(layer LayerID) {
+func (tp *TransactionProcessor) ApplyRewards(layer layer.Id, miners map[string]struct{}, underQuota map[string]struct{}, bonusReward, diminishedReward *big.Int) {
+	for minerId, _ := range miners {
+		if _, ok := underQuota[minerId]; ok {
+			tp.globalState.AddBalance(address.HexToAddress(minerId), diminishedReward)
+		} else {
+			tp.globalState.AddBalance(address.HexToAddress(minerId), bonusReward)
+		}
+	}
+	tp.globalState.Commit(false)
+	newHash, err := tp.globalState.Commit(false)
+
+	if err != nil {
+		tp.Log.Error("db write error %v", err)
+		return
+	}
+
+	tp.addStateToHistory(layer, newHash)
+
+}
+
+func (tp *TransactionProcessor) Reset(layer layer.Id) {
 	tp.mu.Lock()
 	defer tp.mu.Unlock()
 	if state, ok := tp.prevStates[layer]; ok {
@@ -147,18 +183,6 @@ func (tp *TransactionProcessor) Reset(layer LayerID) {
 		tp.globalState = newState
 		tp.pruneAfterRevert(layer)
 	}
-}
-
-func (tp *TransactionProcessor) mergeDoubles(transactions Transactions) Transactions {
-	transactionSet := make(map[common.Hash]struct{})
-	merged := make(Transactions, 0, len(transactions))
-	for _, trns := range transactions {
-		if _, ok := transactionSet[trns.Hash()]; !ok {
-			transactionSet[trns.Hash()] = struct{}{}
-			merged = append(merged, trns)
-		}
-	}
-	return merged
 }
 
 func (tp *TransactionProcessor) randomSort(transactions Transactions) Transactions {
@@ -214,7 +238,7 @@ func (tp *TransactionProcessor) Process(transactions Transactions, trnsBySender 
 	return errors
 }
 
-func (tp *TransactionProcessor) pruneAfterRevert(targetLayerID LayerID) {
+func (tp *TransactionProcessor) pruneAfterRevert(targetLayerID layer.Id) {
 	//needs to be called under mutex lock
 	for i := tp.currentLayer; i >= targetLayerID; i-- {
 		if hash, ok := tp.prevStates[i]; ok {
@@ -238,7 +262,6 @@ var (
 	ErrNonce  = "incorrect nonce"
 )
 
-//todo: mining fees...
 func (tp *TransactionProcessor) ApplyTransaction(trans *Transaction) error {
 	if !tp.globalState.Exist(trans.Origin) {
 		return fmt.Errorf(ErrOrigin)
@@ -246,9 +269,17 @@ func (tp *TransactionProcessor) ApplyTransaction(trans *Transaction) error {
 
 	origin := tp.globalState.GetOrNewStateObj(trans.Origin)
 
-	//todo: should we allow to spend all accounts data?
-	if origin.Balance().Cmp(trans.Amount) <= 0 {
-		tp.Log.Error(ErrFunds+" have: %v need: %v", origin.Balance(), trans.Amount)
+	gas := new(big.Int).Mul(trans.Price, tp.gasCost.BasicTxCost)
+
+	/*if gas < trans.GasLimit {
+
+	}*/
+
+	amountWithGas := new(big.Int).Add(gas, trans.Amount)
+
+	//todo: should we allow to spend all accounts balance?
+	if origin.Balance().Cmp(amountWithGas) <= 0 {
+		tp.Log.Error(ErrFunds+" have: %v need: %v", origin.Balance(), amountWithGas)
 		return fmt.Errorf(ErrFunds)
 	}
 
@@ -259,6 +290,9 @@ func (tp *TransactionProcessor) ApplyTransaction(trans *Transaction) error {
 
 	tp.globalState.SetNonce(trans.Origin, tp.globalState.GetNonce(trans.Origin)+1)
 	transfer(tp.globalState, trans.Origin, *trans.Recipient, trans.Amount)
+
+	//subtract gas from account, gas will be sent to miners in layers after
+	tp.globalState.SubBalance(trans.Origin, gas)
 
 	return nil
 }

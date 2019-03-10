@@ -15,8 +15,6 @@ const (
 	LookupIntervals = 3 * time.Second
 	// RefreshInterval is the time we wait between dht refreshes
 	RefreshInterval = 5 * time.Minute
-
-	bootstrapTries = 5
 )
 
 var (
@@ -72,8 +70,8 @@ func (d *KadDHT) Bootstrap(ctx context.Context) error {
 func (d *KadDHT) tryBoot(ctx context.Context, minPeers int) error {
 
 	searchFor := d.local.PublicKey()
-	gotpeers := false
 	tries := 0
+	var size int
 	d.local.Debug("BOOTSTRAP: Running kademlia lookup for ourselves")
 
 loop:
@@ -81,9 +79,9 @@ loop:
 		reschan := make(chan error)
 
 		go func() {
-			if gotpeers || tries >= bootstrapTries {
-				// TODO: consider choosing a random key that is close to the local id
-				// or TODO: implement real kademlia refreshes - #241
+			if tries > 0 {
+				//TODO: consider choosing a random key that is close to the local id
+				//or TODO: implement real kademlia refreshes - #241
 				searchFor = p2pcrypto.NewRandomPubkey()
 				d.local.Debug("BOOTSTRAP: Running kademlia lookup for random peer")
 			}
@@ -100,30 +98,27 @@ loop:
 				// if we got the peer we were looking for (us or random)
 				// the best thing we can do is just try again or try another random peer.
 				// hence we continue here.
-				//todo : maybe if we gotpeers than we can just break ?
 				continue
 			}
 			req := make(chan int)
 			d.rt.Size(req)
-			size := <-req
+			size = <-req
 
-			if (size) >= minPeers {
-				if gotpeers {
-					break loop
-				}
-				gotpeers = true
-			} else {
-				d.local.Warning("%d lookup didn't bootstrap the routing table. RT now has %d peers", tries, size)
-			}
-
-			timer := time.NewTimer(LookupIntervals)
-			select {
-			case <-ctx.Done():
-				return ErrBootAbort
-			case <-timer.C:
-				continue loop
+			if size >= minPeers {
+				break loop
 			}
 		}
+
+		d.local.Warning("%d lookup didn't bootstrap the routing table. RT now has %d peers", tries, size)
+
+		timer := time.NewTimer(LookupIntervals)
+		select {
+		case <-ctx.Done():
+			return ErrBootAbort
+		case <-timer.C:
+			continue loop
+		}
+
 	}
 
 	return nil
