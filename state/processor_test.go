@@ -5,8 +5,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/database"
-	"github.com/spacemeshos/go-spacemesh/layer"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 	"math/big"
@@ -40,15 +40,14 @@ func createAccount(state *StateDB, addr []byte, balance int64, nonce uint64) *St
 }
 
 func createTransaction(nonce uint64,
-	origin address.Address, destination address.Address, amount int64) *Transaction {
-	return &Transaction{
+	origin address.Address, destination address.Address, amount int64) *mesh.Transaction {
+	return &mesh.Transaction{
 		AccountNonce: nonce,
 		Origin:       origin,
 		Recipient:    &destination,
 		Amount:       big.NewInt(amount),
 		GasLimit:     100,
 		Price:        big.NewInt(1),
-		hash:         nil,
 		Payload:      nil,
 	}
 }
@@ -64,7 +63,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction() {
 	createAccount(s.state, []byte{0x02}, 44, 0)
 	s.state.Commit(false)
 
-	transactions := Transactions{
+	transactions := mesh.Transactions{
 		createTransaction(obj1.Nonce(), obj1.address, obj2.address, 1),
 	}
 
@@ -153,7 +152,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_Errors()
 	createAccount(s.state, []byte{0x02}, 44, 0)
 	s.state.Commit(false)
 
-	transactions := Transactions{
+	transactions := mesh.Transactions{
 		createTransaction(obj1.Nonce(), obj1.address, obj2.address, 1),
 	}
 
@@ -183,7 +182,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_OrderByN
 	obj3 := createAccount(s.state, []byte{0x02}, 44, 0)
 	s.state.Commit(false)
 
-	transactions := Transactions{
+	transactions := mesh.Transactions{
 		createTransaction(obj1.Nonce()+3, obj1.address, obj3.address, 1),
 		createTransaction(obj1.Nonce()+2, obj1.address, obj3.address, 1),
 		createTransaction(obj1.Nonce()+1, obj1.address, obj3.address, 1),
@@ -226,7 +225,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Reset() {
 	createAccount(s.state, []byte{0x02}, 44, 0)
 	s.state.Commit(false)
 
-	transactions := Transactions{
+	transactions := mesh.Transactions{
 		createTransaction(obj1.Nonce(), obj1.address, obj2.address, 1),
 		//createTransaction(obj2.Nonce(),obj2.address, obj1.address, 1),
 	}
@@ -235,7 +234,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Reset() {
 	assert.NoError(s.T(), err)
 	assert.True(s.T(), failed == 0)
 
-	transactions = Transactions{
+	transactions = mesh.Transactions{
 		createTransaction(obj1.Nonce(), obj1.address, obj2.address, 1),
 		createTransaction(obj2.Nonce(), obj2.address, obj1.address, 10),
 	}
@@ -323,7 +322,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 	var want string
 	for i := 0; i < testCycles; i++ {
 		numOfTransactions := rand.Intn(maxTransactions-minTransactions) + minTransactions
-		trns := Transactions{}
+		trns := mesh.Transactions{}
 		nonceTrack := make(map[*StateObj]int)
 		for j := 0; j < numOfTransactions; j++ {
 
@@ -345,7 +344,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 
 			log.Info("transaction %v nonce %v amount %v", t.Origin.Hex(), t.AccountNonce, t.Amount)
 		}
-		failed, err := s.processor.ApplyTransactions(layer.Id(i), trns)
+		failed, err := s.processor.ApplyTransactions(mesh.LayerID(i), trns)
 		assert.NoError(s.T(), err)
 		assert.True(s.T(), failed == 0)
 
@@ -355,7 +354,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 		}
 
 		if i == revertToLayer+revertAfterLayer {
-			s.processor.Reset(layer.Id(revertToLayer))
+			s.processor.Reset(mesh.LayerID(revertToLayer))
 			got := string(s.processor.globalState.Dump())
 
 			if got != want {
@@ -385,7 +384,7 @@ func TestTransactionProcessor_randomSort(t *testing.T) {
 	obj1 := createAccount(state, []byte{0x01}, 2, 0)
 	obj2 := createAccount(state, []byte{0x01, 02}, 1, 10)
 
-	transactions := Transactions{
+	transactions := mesh.Transactions{
 		createTransaction(obj1.Nonce(), obj1.address, obj2.address, 1),
 		createTransaction(obj1.Nonce(), obj1.address, obj2.address, 2),
 		createTransaction(obj1.Nonce(), obj2.address, obj1.address, 3),
@@ -393,7 +392,7 @@ func TestTransactionProcessor_randomSort(t *testing.T) {
 		createTransaction(obj1.Nonce(), obj2.address, obj1.address, 5),
 	}
 
-	expected := Transactions{
+	expected := mesh.Transactions{
 		transactions[4],
 		transactions[3],
 		transactions[1],

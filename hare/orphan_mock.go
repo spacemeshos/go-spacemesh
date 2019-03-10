@@ -1,7 +1,6 @@
 package hare
 
 import (
-	"github.com/spacemeshos/go-spacemesh/layer"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 )
 
@@ -16,7 +15,7 @@ func (op *orphanMock) GetOrphanBlocks() []mesh.BlockID {
 	return []mesh.BlockID{}
 }
 
-func (op *orphanMock) GetUnverifiedLayerBlocks(l layer.Id) ([]mesh.BlockID, error) {
+func (op *orphanMock) GetUnverifiedLayerBlocks(l mesh.LayerID) ([]mesh.BlockID, error) {
 	if op.f != nil {
 		return op.f(), nil
 	}

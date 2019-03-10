@@ -2,7 +2,6 @@ package sync
 
 import (
 	"bytes"
-	"github.com/spacemeshos/go-spacemesh/layer"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -32,7 +31,7 @@ type BlockListener struct {
 	startLock            uint32
 	timeout              time.Duration
 	exit                 chan struct{}
-	tick                 chan layer.Id
+	tick                 chan mesh.LayerID
 }
 
 type TickProvider interface {
@@ -85,7 +84,7 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 				data.ReportValidation(NewBlockProtocol, false)
 				break
 			}
-			bl.Log.With().Info("got new block", log.Uint32("id", uint32(blk.Id)), log.Int("txs", len(blk.Txs)), log.Bool("valid", err == nil))
+			bl.Log.With().Info("got new block", log.Uint64("id", uint64(blk.Id)), log.Int("txs", len(blk.Txs)), log.Bool("valid", err == nil))
 			if bl.BlockEligible(blk.LayerIndex, blk.MinerID) {
 				data.ReportValidation(NewBlockProtocol, true)
 				err := bl.AddBlock(&blk)

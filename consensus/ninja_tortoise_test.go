@@ -2,7 +2,6 @@ package consensus
 
 import (
 	"github.com/spacemeshos/go-spacemesh/crypto"
-	"github.com/spacemeshos/go-spacemesh/layer"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/stretchr/testify/assert"
@@ -118,11 +117,11 @@ func TestNinjaTortoise_Sanity1(t *testing.T) {
 //correction vectors compensate for double count
 func TestNinjaTortoise_Sanity2(t *testing.T) {
 	alg := NewNinjaTortoise(uint32(3), log.New("TestNinjaTortoise_Sanity2", "", ""))
-	l := createMulExplicitLayer(0, map[layer.Id]*mesh.Layer{}, nil, 1)
-	l1 := createMulExplicitLayer(1, map[layer.Id]*mesh.Layer{l.Index(): l}, map[layer.Id][]int{0: {0}}, 3)
-	l2 := createMulExplicitLayer(2, map[layer.Id]*mesh.Layer{l1.Index(): l1}, map[layer.Id][]int{1: {0, 1, 2}}, 3)
-	l3 := createMulExplicitLayer(3, map[layer.Id]*mesh.Layer{l2.Index(): l2}, map[layer.Id][]int{l2.Index(): {0}}, 3)
-	l4 := createMulExplicitLayer(4, map[layer.Id]*mesh.Layer{l2.Index(): l2, l3.Index(): l3}, map[layer.Id][]int{l2.Index(): {1, 2}, l3.Index(): {1, 2}}, 4)
+	l := createMulExplicitLayer(0, map[mesh.LayerID]*mesh.Layer{}, nil, 1)
+	l1 := createMulExplicitLayer(1, map[mesh.LayerID]*mesh.Layer{l.Index(): l}, map[mesh.LayerID][]int{0: {0}}, 3)
+	l2 := createMulExplicitLayer(2, map[mesh.LayerID]*mesh.Layer{l1.Index(): l1}, map[mesh.LayerID][]int{1: {0, 1, 2}}, 3)
+	l3 := createMulExplicitLayer(3, map[mesh.LayerID]*mesh.Layer{l2.Index(): l2}, map[mesh.LayerID][]int{l2.Index(): {0}}, 3)
+	l4 := createMulExplicitLayer(4, map[mesh.LayerID]*mesh.Layer{l2.Index(): l2, l3.Index(): l3}, map[mesh.LayerID][]int{l2.Index(): {1, 2}, l3.Index(): {1, 2}}, 4)
 
 	alg.handleIncomingLayer(l)
 	alg.handleIncomingLayer(l1)
@@ -135,7 +134,7 @@ func TestNinjaTortoise_Sanity2(t *testing.T) {
 	assert.True(t, alg.tTally[alg.pBase][l.Blocks()[0].ID()] == vec{5, 0}, "lyr %d tally was %d insted of %d", 0, alg.tTally[alg.pBase][l.Blocks()[0].ID()], vec{5, 0})
 }
 
-func createMulExplicitLayer(index layer.Id, prev map[layer.Id]*mesh.Layer, patterns map[layer.Id][]int, blocksInLayer int) *mesh.Layer {
+func createMulExplicitLayer(index mesh.LayerID, prev map[mesh.LayerID]*mesh.Layer, patterns map[mesh.LayerID][]int, blocksInLayer int) *mesh.Layer {
 	ts := time.Now()
 	coin := false
 	// just some random Data
@@ -159,12 +158,12 @@ func createMulExplicitLayer(index layer.Id, prev map[layer.Id]*mesh.Layer, patte
 		}
 		l.AddBlock(bl)
 	}
-	log.Info("Created layer Id %d with blocks %d", l.Index(), layerBlocks)
+	log.Info("Created mesh.LayerID %d with blocks %d", l.Index(), layerBlocks)
 
 	return l
 }
 
-func createLayerWithRandVoting(index layer.Id, prev []*mesh.Layer, blocksInLayer int, patternSize int) *mesh.Layer {
+func createLayerWithRandVoting(index mesh.LayerID, prev []*mesh.Layer, blocksInLayer int, patternSize int) *mesh.Layer {
 	ts := time.Now()
 	coin := false
 	// just some random Data
@@ -191,7 +190,7 @@ func createLayerWithRandVoting(index layer.Id, prev []*mesh.Layer, blocksInLayer
 		}
 		l.AddBlock(bl)
 	}
-	log.Info("Created layer Id %d with blocks %d", l.Index(), layerBlocks)
+	log.Info("Created mesh.LayerID %d with blocks %d", l.Index(), layerBlocks)
 	return l
 }
 

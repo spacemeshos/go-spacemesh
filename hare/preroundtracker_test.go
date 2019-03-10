@@ -13,16 +13,16 @@ const (
 	lowDefaultSize = 100
 )
 
-var value1 = Value{Bytes32{1}}
-var value2 = Value{Bytes32{2}}
-var value3 = Value{Bytes32{3}}
-var value4 = Value{Bytes32{4}}
-var value5 = Value{Bytes32{5}}
-var value6 = Value{Bytes32{6}}
-var value7 = Value{Bytes32{7}}
-var value8 = Value{Bytes32{8}}
-var value9 = Value{Bytes32{9}}
-var value10 = Value{Bytes32{10}}
+var value1 = Value{1}
+var value2 = Value{2}
+var value3 = Value{3}
+var value4 = Value{4}
+var value5 = Value{5}
+var value6 = Value{6}
+var value7 = Value{7}
+var value8 = Value{8}
+var value9 = Value{9}
+var value10 = Value{10}
 
 func BuildPreRoundMsg(signing Signing, s *Set) *pb.HareMessage {
 	builder := NewMessageBuilder()
