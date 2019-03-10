@@ -398,7 +398,7 @@ func (app *SpacemeshApp) startSpacemesh(cmd *cobra.Command, args []string) {
 	pub, _ := crypto.NewPublicKey(sgn.Verifier().Bytes())
 
 	oracle.SetServerAddress(app.Config.OracleServer)
-	oracleClient := oracle.NewOracleClientWithWorldID(app.Config.OracleServerWorldId)
+	oracleClient := oracle.NewOracleClientWithWorldID(uint64(app.Config.OracleServerWorldId))
 	oracleClient.Register(true, pub.String()) // todo: configure no faulty nodes
 
 	app.unregisterOracle = func() { oracleClient.Unregister(true, pub.String()) }
