@@ -1,0 +1,16 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: oracle
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        name: oracle
+    spec:
+      containers:
+      - name: oracle
+        image: spacemeshos/oracle:latest
+        ports:
+        - containerPort: 3030
