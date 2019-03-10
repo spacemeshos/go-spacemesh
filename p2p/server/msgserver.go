@@ -73,7 +73,7 @@ func (p *MessageServer) readLoop() {
 		timer := time.NewTicker(10 * time.Second)
 		select {
 		case <-p.exit:
-			p.Debug("shutting down protocol ", p.name)
+			p.Debug("shutting down protocol %v", p.name)
 			close(p.exit)
 			return
 		case <-timer.C:
@@ -104,7 +104,7 @@ func (p *MessageServer) cleanStaleMessages() {
 		if elem != nil {
 			item := elem.Value.(Item)
 			if time.Since(item.timestamp) > p.requestLifetime {
-				p.Debug("cleanStaleMessages remove request ", item.id)
+				p.Debug("cleanStaleMessages remove request %v", item.id)
 				p.removeFromPending(item.id)
 			} else {
 				return
@@ -141,7 +141,7 @@ func (p *MessageServer) handleRequestMessage(sender p2pcrypto.PublicKey, headers
 		rmsg := &service.DataMsgWrapper{MsgType: headers.MsgType, ReqID: headers.ReqID, Payload: payload}
 		sendErr := p.network.SendWrappedMessage(sender, p.name, rmsg)
 		if sendErr != nil {
-			p.Error("Error sending response message, err:", sendErr)
+			p.Error("Error sending response message, err: %v", sendErr)
 		}
 	}
 }

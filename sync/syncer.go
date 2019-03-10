@@ -224,7 +224,7 @@ func (s *Syncer) getLayerBlockIDs(index mesh.LayerID) (chan mesh.BlockID, error)
 	m, err := s.getLayerHashes(index)
 
 	if err != nil {
-		s.Error("could not get LayerHashes for layer: ", index)
+		s.Error("could not get LayerHashes for layer: %v", index)
 		return nil, err
 	}
 	return s.getIdsForHash(m, index)
