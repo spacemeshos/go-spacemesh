@@ -5,39 +5,37 @@ import (
 	"fmt"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/seehuhn/mt19937"
+	"github.com/spacemeshos/go-spacemesh/accounts"
+	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/api/config"
+	"github.com/spacemeshos/go-spacemesh/app/cmd"
 	"github.com/spacemeshos/go-spacemesh/common"
+	cfg "github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/consensus"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/filesystem"
 	"github.com/spacemeshos/go-spacemesh/hare"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/oracle"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/spacemeshos/go-spacemesh/sync"
+	"github.com/spacemeshos/go-spacemesh/timesync"
+	timeCfg "github.com/spacemeshos/go-spacemesh/timesync/config"
+	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
 	"math/rand"
-
 	"os"
 	"os/signal"
 	"reflect"
 	"runtime"
 	"time"
-
-	"github.com/spacemeshos/go-spacemesh/accounts"
-	"github.com/spacemeshos/go-spacemesh/api"
-	"github.com/spacemeshos/go-spacemesh/app/cmd"
-	cfg "github.com/spacemeshos/go-spacemesh/config"
-	"github.com/spacemeshos/go-spacemesh/filesystem"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/timesync"
-	timeCfg "github.com/spacemeshos/go-spacemesh/timesync/config"
-	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 // SpacemeshApp is the cli app singleton
@@ -302,14 +300,21 @@ func (app *SpacemeshApp) setupTestFeatures() {
 	api.ApproveAPIGossipMessages(Ctx, app.P2P)
 }
 
-func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service, dbStorepath string, sgn hare.Signing, blockOracle oracle.BlockOracle, hareOracle hare.Rolacle) error {
+func (app *SpacemeshApp) initServices(
+	instanceName string,
+	swarm server.Service,
+	dbStorepath string,
+	sgn hare.Signing,
+	blockOracle oracle.BlockOracle,
+	hareOracle hare.Rolacle,
+) error {
+
+	instanceSuffix := instanceName[len(instanceName)-5:]
 
 	log.Debug("num of goroutines %v num of cpu %v", runtime.NumGoroutine(), runtime.NumCPU())
 	runtime.GOMAXPROCS(runtime.NumCPU() * 2)
 	log.Debug("of cpu %v after apply", runtime.NumCPU())
 
-	//todo: should we add all components to a single struct?
-	lg := log.New("shmekel_"+instanceName, "", "")
 	db, err := database.NewLDBDatabase(dbStorepath, 0, 0)
 	if err != nil {
 		return err
@@ -318,8 +323,6 @@ func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service,
 	if err != nil {
 		return err
 	}
-	rng := rand.New(mt19937.New())
-	processor := state.NewTransactionProcessor(rng, st, app.Config.GAS, lg)
 
 	coinToss := consensus.WeakCoin{}
 	gTime, err := time.Parse(time.RFC3339, app.Config.GenesisTime)
@@ -330,16 +333,15 @@ func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service,
 
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
 	clock := timesync.NewTicker(timesync.RealClock{}, ld, gTime)
-	trtl := consensus.NewAlgorithm(consensus.NewNinjaTortoise(app.Config.LayerAvgSize, log.New("tortoise", "", "")))
-	msh := mesh.NewMesh(db, db, db, app.Config.REWARD, trtl, processor, log.New("mesh", "", "")) //todo: what to do with the logger?
-
 	conf := sync.Configuration{SyncInterval: 1 * time.Second, Concurrency: 4, LayerSize: int(app.Config.LayerAvgSize), RequestTimeout: 100 * time.Millisecond}
-	syncer := sync.NewSync(swarm, msh, blockOracle, conf, clock.Subscribe(), lg.LogWith(log.String("module", "sync")))
 
-	ha := hare.New(app.Config.HARE, swarm, sgn, msh, hareOracle, clock.Subscribe(), log.New("hare", "", ""))
-
-	blockProducer := miner.NewBlockBuilder(instanceName, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, log.New("miner", "", ""))
-	blockListener := sync.NewBlockListener(swarm, blockOracle, msh, 2*time.Second, 4, log.New("blockListener", "", ""))
+	trtl := consensus.NewAlgorithm(consensus.NewNinjaTortoise(app.Config.LayerAvgSize, log.New(instanceSuffix+"/Tortoise", "", "")))
+	processor := state.NewTransactionProcessor(rand.New(mt19937.New()), st, app.Config.GAS, log.New(instanceSuffix+"/State", "", ""))
+	msh := mesh.NewMesh(db, db, db, app.Config.REWARD, trtl, processor, log.New(instanceSuffix+"/Mesh", "", "")) //todo: what to do with the logger?
+	syncer := sync.NewSync(swarm, msh, blockOracle, conf, clock.Subscribe(), log.New(instanceSuffix+"/Sync", "", ""))
+	ha := hare.New(app.Config.HARE, swarm, sgn, msh, hareOracle, clock.Subscribe(), log.New(instanceSuffix+"/Hare", "", ""))
+	blockProducer := miner.NewBlockBuilder(instanceName, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, log.New(instanceSuffix+"/Miner", "", ""))
+	blockListener := sync.NewBlockListener(swarm, blockOracle, msh, 2*time.Second, 4, log.New(instanceSuffix+"/BlockListener", "", ""))
 
 	app.blockProducer = &blockProducer
 	app.blockListener = blockListener
