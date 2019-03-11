@@ -40,6 +40,7 @@ jobs:
     name: "Run system tests"
     script:
       - make dockerrun-test
+    if: branch = develop AND type != pull_request
 
 cache:
   directories:
