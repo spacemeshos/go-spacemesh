@@ -5,61 +5,13 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
-	"github.com/spacemeshos/go-spacemesh/crypto/sha3"
-	"github.com/spacemeshos/go-spacemesh/layer"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/rlp"
+	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/trie"
 	"math/big"
 	"sort"
 	"sync"
 )
-
-//todo: this object should be splitted into two parts: one is the actual value serialized into trie, and an containig obj with caches
-type Transaction struct {
-	AccountNonce uint64
-	Price        *big.Int
-	GasLimit     uint64
-	Recipient    *address.Address
-	Origin       address.Address //todo: remove this, should be calculated from sig.
-	Amount       *big.Int
-	Payload      []byte
-
-	//todo: add signatures
-
-	hash *common.Hash
-}
-
-func NewTransaction(nonce uint64, origin address.Address, destination address.Address,
-	amount *big.Int, gasLimit uint64, gasPrice *big.Int) *Transaction {
-	return &Transaction{
-		AccountNonce: nonce,
-		Origin:       origin,
-		Recipient:    &destination,
-		Amount:       amount,
-		GasLimit:     gasLimit,
-		Price:        gasPrice,
-		hash:         nil,
-		Payload:      nil,
-	}
-}
-
-func rlpHash(x interface{}) (h common.Hash) {
-	hw := sha3.NewKeccak256()
-	rlp.Encode(hw, x)
-	hw.Sum(h[:0])
-	return h
-}
-
-func (tx *Transaction) Hash() common.Hash {
-	if tx.hash == nil {
-		hash := rlpHash(tx)
-		tx.hash = &hash
-	}
-	return *tx.hash
-}
-
-type Transactions []*Transaction
 
 type PseudoRandomizer interface {
 	Uint32() uint32
@@ -68,7 +20,7 @@ type PseudoRandomizer interface {
 
 type StatePreImages struct {
 	rootHash  common.Hash
-	preImages Transactions
+	preImages mesh.Transactions
 }
 
 type GasConfig struct {
@@ -85,8 +37,8 @@ type TransactionProcessor struct {
 	log.Log
 	rand         PseudoRandomizer
 	globalState  *StateDB
-	prevStates   map[layer.Id]common.Hash
-	currentLayer layer.Id
+	prevStates   map[mesh.LayerID]common.Hash
+	currentLayer mesh.LayerID
 	rootHash     common.Hash
 	stateQueue   list.List
 	gasCost      GasConfig
@@ -101,27 +53,27 @@ func NewTransactionProcessor(rnd PseudoRandomizer, db *StateDB, gasParams GasCon
 		Log:          logger,
 		rand:         rnd,
 		globalState:  db,
-		prevStates:   make(map[layer.Id]common.Hash),
+		prevStates:   make(map[mesh.LayerID]common.Hash),
 		currentLayer: 0,
 		rootHash:     common.Hash{},
 		stateQueue:   list.List{},
 		gasCost:      gasParams,
 		db:           db.TrieDB(),
-		mu:           sync.Mutex{}, //sync between reset and apply transactions
+		mu:           sync.Mutex{}, //sync between reset and apply mesh.Transactions
 	}
 }
 
 //should receive sort predicate
-func (tp *TransactionProcessor) ApplyTransactions(layer layer.Id, txs Transactions) (uint32, error) {
+func (tp *TransactionProcessor) ApplyTransactions(layer mesh.LayerID, txs mesh.Transactions) (uint32, error) {
 	//todo: need to seed the mersenne twister with random beacon seed
 	if len(txs) == 0 {
 		return 0, nil
 	}
 
-	//txs := MergeDoubles(transactions)
+	//txs := MergeDoubles(mesh.Transactions)
 	tp.mu.Lock()
 	defer tp.mu.Unlock()
-	failed := tp.Process(tp.randomSort(txs), tp.coalesceTransactionsBySender(txs))
+	failed := tp.Process(tp.randomSort(txs), tp.coalescTransactionsBySender(txs))
 	newHash, err := tp.globalState.Commit(false)
 
 	if err != nil {
@@ -130,14 +82,14 @@ func (tp *TransactionProcessor) ApplyTransactions(layer layer.Id, txs Transactio
 	}
 
 	tp.Log.Info("new state root for layer %v is %x", layer, newHash)
-	tp.Log.With().Info("new state", log.Uint32("layer_id", uint32(layer)), log.String("root_hash", newHash.String()))
+	tp.Log.With().Info("new state", log.Uint64("mesh.LayerID", uint64(layer)), log.String("root_hash", newHash.String()))
 
 	tp.addStateToHistory(layer, newHash)
 
 	return failed, nil
 }
 
-func (tp *TransactionProcessor) addStateToHistory(layer layer.Id, newHash common.Hash) {
+func (tp *TransactionProcessor) addStateToHistory(layer mesh.LayerID, newHash common.Hash) {
 	tp.stateQueue.PushBack(newHash)
 	if tp.stateQueue.Len() > maxPastStates {
 		hash := tp.stateQueue.Remove(tp.stateQueue.Back())
@@ -148,7 +100,7 @@ func (tp *TransactionProcessor) addStateToHistory(layer layer.Id, newHash common
 
 }
 
-func (tp *TransactionProcessor) ApplyRewards(layer layer.Id, miners map[string]struct{}, underQuota map[string]struct{}, bonusReward, diminishedReward *big.Int) {
+func (tp *TransactionProcessor) ApplyRewards(layer mesh.LayerID, miners map[string]struct{}, underQuota map[string]struct{}, bonusReward, diminishedReward *big.Int) {
 	for minerId, _ := range miners {
 		if _, ok := underQuota[minerId]; ok {
 			tp.globalState.AddBalance(address.HexToAddress(minerId), diminishedReward)
@@ -168,7 +120,7 @@ func (tp *TransactionProcessor) ApplyRewards(layer layer.Id, miners map[string]s
 
 }
 
-func (tp *TransactionProcessor) Reset(layer layer.Id) {
+func (tp *TransactionProcessor) Reset(layer mesh.LayerID) {
 	tp.mu.Lock()
 	defer tp.mu.Unlock()
 	if state, ok := tp.prevStates[layer]; ok {
@@ -185,7 +137,7 @@ func (tp *TransactionProcessor) Reset(layer layer.Id) {
 	}
 }
 
-func (tp *TransactionProcessor) randomSort(transactions Transactions) Transactions {
+func (tp *TransactionProcessor) randomSort(transactions mesh.Transactions) mesh.Transactions {
 	vecLen := len(transactions)
 	for i := range transactions {
 		swp := int(tp.rand.Uint32()) % vecLen
@@ -194,8 +146,8 @@ func (tp *TransactionProcessor) randomSort(transactions Transactions) Transactio
 	return transactions
 }
 
-func (tp *TransactionProcessor) coalesceTransactionsBySender(transactions Transactions) map[address.Address][]*Transaction {
-	trnsBySender := make(map[address.Address][]*Transaction)
+func (tp *TransactionProcessor) coalescTransactionsBySender(transactions mesh.Transactions) map[address.Address][]*mesh.Transaction {
+	trnsBySender := make(map[address.Address][]*mesh.Transaction)
 	for _, trns := range transactions {
 		trnsBySender[trns.Origin] = append(trnsBySender[trns.Origin], trns)
 	}
@@ -211,11 +163,11 @@ func (tp *TransactionProcessor) coalesceTransactionsBySender(transactions Transa
 	return trnsBySender
 }
 
-func (tp *TransactionProcessor) Process(transactions Transactions, trnsBySender map[address.Address][]*Transaction) (errors uint32) {
+func (tp *TransactionProcessor) Process(transactions mesh.Transactions, trnsBySender map[address.Address][]*mesh.Transaction) (errors uint32) {
 	senderPut := make(map[address.Address]struct{})
 	sortedOriginByTransactions := make([]address.Address, 0, 10)
 	errors = 0
-	// The order of the transactions determines the order addresses by which we take transactions
+	// The order of the mesh.Transactions determines the order addresses by which we take mesh.Transactions
 	// Maybe refactor this
 	for _, trans := range transactions {
 		if _, ok := senderPut[trans.Origin]; !ok {
@@ -238,7 +190,7 @@ func (tp *TransactionProcessor) Process(transactions Transactions, trnsBySender 
 	return errors
 }
 
-func (tp *TransactionProcessor) pruneAfterRevert(targetLayerID layer.Id) {
+func (tp *TransactionProcessor) pruneAfterRevert(targetLayerID mesh.LayerID) {
 	//needs to be called under mutex lock
 	for i := tp.currentLayer; i >= targetLayerID; i-- {
 		if hash, ok := tp.prevStates[i]; ok {
@@ -252,7 +204,7 @@ func (tp *TransactionProcessor) pruneAfterRevert(targetLayerID layer.Id) {
 	}
 }
 
-func (tp *TransactionProcessor) checkNonce(trns *Transaction) bool {
+func (tp *TransactionProcessor) checkNonce(trns *mesh.Transaction) bool {
 	return tp.globalState.GetNonce(trns.Origin) == trns.AccountNonce
 }
 
@@ -262,7 +214,7 @@ var (
 	ErrNonce  = "incorrect nonce"
 )
 
-func (tp *TransactionProcessor) ApplyTransaction(trans *Transaction) error {
+func (tp *TransactionProcessor) ApplyTransaction(trans *mesh.Transaction) error {
 	if !tp.globalState.Exist(trans.Origin) {
 		return fmt.Errorf(ErrOrigin)
 	}

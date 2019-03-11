@@ -3,9 +3,14 @@
 package main
 
 import (
-	"github.com/spacemeshos/go-spacemesh/app"
+	"fmt"
+	"github.com/spacemeshos/go-spacemesh/cmd/node"
+	"os"
 )
 
 func main() { // run the app
-	app.Main()
+	if err := node.Cmd.Execute(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 }

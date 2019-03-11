@@ -16,7 +16,7 @@ type eligibilityValidator struct {
 	log.Log
 }
 
-func newEligibilityValidator(oracle HareRolacle, logger log.Log) *eligibilityValidator {
+func NewEligibilityValidator(oracle HareRolacle, logger log.Log) *eligibilityValidator {
 	return &eligibilityValidator{oracle, logger}
 }
 
@@ -232,7 +232,7 @@ func (validator *syntaxContextValidator) validateSVP(msg *pb.HareMessage) bool {
 	}
 
 	maxKi := int32(-1) // ki>=-1
-	var maxRawSet [][]byte = nil
+	var maxRawSet []uint64 = nil
 	for _, status := range msg.Message.Svp.Messages {
 		// track max
 		if status.Message.Ki > maxKi {
@@ -304,7 +304,7 @@ func (validator *syntaxContextValidator) validateSVPTypeA(m *pb.HareMessage) boo
 	for _, status := range m.Message.Svp.Messages {
 		// build union
 		for _, buff := range status.Message.Values {
-			bid := Value{NewBytes32(buff)}
+			bid := NewValue(buff)
 			unionSet.Add(bid) // assuming add is unique
 		}
 	}
