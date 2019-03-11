@@ -97,7 +97,8 @@ func (p *MessageServer) readLoop() {
 }
 
 func (p *MessageServer) cleanStaleMessages() {
-	for {
+	size := p.queueSize()
+	for i := 0; i < size; i++ {
 		p.pendMutex.RLock()
 		elem := p.pendingQueue.Front()
 		p.pendMutex.RUnlock()
@@ -111,6 +112,13 @@ func (p *MessageServer) cleanStaleMessages() {
 			}
 		}
 	}
+}
+
+func (p *MessageServer) queueSize() int {
+	p.pendMutex.RLock()
+	size := p.pendingQueue.Len()
+	p.pendMutex.RUnlock()
+	return size
 }
 
 func (p *MessageServer) removeFromPending(reqID uint64) {
