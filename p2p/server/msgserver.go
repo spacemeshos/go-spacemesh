@@ -97,8 +97,8 @@ func (p *MessageServer) readLoop() {
 }
 
 func (p *MessageServer) cleanStaleMessages() {
-	size := p.queueSize()
-	for i := 0; i < size; i++ {
+	//size := p.queueSize()
+	for {
 		p.pendMutex.RLock()
 		elem := p.pendingQueue.Front()
 		p.pendMutex.RUnlock()
@@ -107,9 +107,9 @@ func (p *MessageServer) cleanStaleMessages() {
 			if time.Since(item.timestamp) > p.requestLifetime {
 				p.Debug("cleanStaleMessages remove request %v", item.id)
 				p.removeFromPending(item.id)
-			} else {
-				return
 			}
+		} else {
+			return
 		}
 	}
 }
