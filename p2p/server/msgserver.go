@@ -106,9 +106,10 @@ func (p *MessageServer) cleanStaleMessages() {
 			if time.Since(item.timestamp) > p.requestLifetime {
 				p.Debug("cleanStaleMessages remove request ", item.id)
 				p.removeFromPending(item.id)
-			} else {
-				return
 			}
+		} else {
+			p.Debug("cleanStaleMessages queue empty ")
+			return
 		}
 	}
 }
