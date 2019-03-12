@@ -31,6 +31,6 @@ RUN make build
 FROM alpine AS spacemesh
 
 # Finally we copy the statically compiled Go binary.
-COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/go-spacemesh /bin/go-spacemesh
+COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/go-spacemesh /bin/go-spacemesh
 ENTRYPOINT ["/bin/go-spacemesh"]
 EXPOSE 7513

@@ -2,7 +2,7 @@
 # Base build image
 FROM golang:1.11.2-alpine3.8 AS build_base
 RUN apk add bash make git curl unzip rsync libc6-compat gcc musl-dev
-WORKDIR /go/src/github.com/spacemeshos/go-hare
+WORKDIR /go/src/github.com/spacemeshos/go-spacemesh
 
 # Force the go compiler to use modules
 ENV GO111MODULE=on
@@ -31,6 +31,6 @@ RUN make hare
 FROM alpine AS spacemesh
 
 # Finally we copy the statically compiled Go binary.
-COPY --from=server_builder /go/src/github.com/spacemeshos/go-hare/go-hare /bin/go-hare
+COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/go-hare /bin/go-hare
 ENTRYPOINT ["/bin/go-hare"]
 EXPOSE 7513
