@@ -38,7 +38,6 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringVar(&config.OracleServer, "oracle_server",
 		config.OracleServer, "The oracle server url. (temporary) ")
 	cmd.PersistentFlags().IntVar(&config.OracleServerWorldId, "oracle_server_worldid",
-	RootCmd.PersistentFlags().IntVar(&config.OracleServerWorldId, "oracle_server_worldid",
 		config.OracleServerWorldId, "The worldid to use with the oracle server (temporary) ")
 	cmd.PersistentFlags().StringVar(&config.GenesisTime, "genesis-time",
 		config.GenesisTime, "Time of the genesis layer in 2019-13-02T17:02:00+00:00 format")
@@ -111,7 +110,7 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().IntVar(&config.HARE.F, "hare-max-adversaries",
 		config.HARE.F, "Max number of adversaries in the Hare committee")
 	// RoundDuration determines the duration of a round in the Hare protocol
-	RootCmd.PersistentFlags().DurationVar(&config.HARE.RoundDuration, "hare-round-duration-ms",
+	RootCmd.PersistentFlags().IntVar(&config.HARE.RoundDuration, "hare-round-duration-ms",
 		config.HARE.RoundDuration, "Duration of round in the Hare protocol")
 
 	/**========================Consensus Flags ========================== **/

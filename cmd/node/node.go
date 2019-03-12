@@ -49,10 +49,6 @@ var Cmd = &cobra.Command{
 	},
 }
 
-func init() {
-	cmdp.AddCommands(Cmd)
-}
-
 // SpacemeshApp is the cli app singleton
 type SpacemeshApp struct {
 	*cobra.Command
@@ -239,7 +235,7 @@ func (app *SpacemeshApp) setupTestFeatures() {
 	api.ApproveAPIGossipMessages(cmdp.Ctx, app.P2P)
 }
 
-func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service, dbStorepath string, sgn hare.Signing, blockOracle oracle.BlockOracle, hareOracle hare.Rolacle, layerSize uint32) error {
+func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service, dbStorepath string, sgn hare.Signing, blockOracle oracle.BlockOracle, hareOracle hare.Rolacle, layerSize int) error {
 
 	//todo: should we add all components to a single struct?
 	lg := log.New("shmekel_"+instanceName, "", "")
@@ -345,7 +341,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 
 	apiConf := &app.Config.API
 
-	err = app.initServices("x", swarm, "/tmp/", sgn, bo, hareOracle, 50)
+	err = app.initServices("x", swarm, "/tmp/", sgn, bo, hareOracle, app.Config.LayerAvgSize)
 	if err != nil {
 		log.Error("cannot start services %v", err.Error())
 		return
