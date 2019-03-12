@@ -101,11 +101,11 @@ cover:
 	go tool cover -html=cover-all.out
 .PHONY: cover
 
-dockerbuild:
+dockerbuild-go:
 	docker build -t $(DOCKER_IMAGE_NAME):latest .
-.PHONY: dockerbuild
+.PHONY: dockerbuild-go
 
-dockerpush: dockerbuild
+dockerpush: dockerbuild-go
 	echo "$(DOCKER_PASSWORD)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
 	docker tag $(DOCKER_IMAGE_NAME) spacemeshos/$(DOCKER_IMAGE_NAME):$(BRANCH)
 	docker tag $(DOCKER_IMAGE_NAME) spacemeshos/$(DOCKER_IMAGE_NAME):$(SHA)
@@ -113,3 +113,18 @@ dockerpush: dockerbuild
 	#docker push spacemeshos/$(DOCKER_IMAGE_NAME):$(BRANCH)
 	#docker push spacemeshos/$(DOCKER_IMAGE_NAME):$(SHA)
 .PHONY: dockerpush
+
+dockerbuild-test:
+	docker build -f DockerFileTests --build-arg GCLOUD_KEY="$(GCLOUD_KEY)" \
+	             --build-arg PROJECT_NAME="$(PROJECT_NAME)" \
+	             --build-arg CLUSTER_NAME="$(CLUSTER_NAME)" \
+	             --build-arg CLUSTER_ZONE="$(CLUSTER_ZONE)" \
+	             -t go-spacemesh-python:latest .
+.PHONY: dockerbuild-test
+
+dockerrun-test: dockerbuild-test
+ifndef ES_PASSWD
+	$(error ES_PASSWD is not set)
+endif
+	docker run -e ES_PASSWD="$(ES_PASSWD)" -e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json -it go-spacemesh-python pytest -k test_client -s --tc-file=config.yaml --tc-format=yaml
+.PHONY: dockerrun-test
