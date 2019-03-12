@@ -6,7 +6,6 @@ import (
 	"github.com/davecgh/go-xdr/xdr2"
 	"github.com/google/uuid"
 	"github.com/spacemeshos/go-spacemesh/address"
-	"github.com/spacemeshos/go-spacemesh/common"
 	"io"
 	"math/big"
 	"time"
@@ -15,8 +14,6 @@ import (
 type BlockID uint64
 
 type LayerID uint64
-
-func (l LayerID) ToBytes() []byte { return common.Uint64ToBytes(uint64(l)) }
 
 type Block struct {
 	Id         BlockID
