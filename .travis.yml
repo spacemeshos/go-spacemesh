@@ -36,6 +36,11 @@ jobs:
     script: 
       - make dockerpush
     if: branch = develop AND type != pull_request
+  - stage: system-test
+    name: "Run system tests"
+    script:
+      - make dockerrun-test
+    if: branch = develop AND type != pull_request
 
 cache:
   directories:
