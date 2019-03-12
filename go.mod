@@ -7,6 +7,7 @@ require (
 	github.com/btcsuite/btcutil v0.0.0-20180706230648-ab6388e0c60a
 	github.com/davecgh/go-spew v1.1.1
 	github.com/davecgh/go-xdr v0.0.0-20161123171359-e6a2ba005892
+	github.com/fortytw2/leaktest v1.3.0
 	github.com/go-kit/kit v0.8.0
 	github.com/gogo/protobuf v1.2.0
 	github.com/golang-collections/go-datastructures v0.0.0-20150211160725-59788d5eb259

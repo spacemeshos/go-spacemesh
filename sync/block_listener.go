@@ -39,6 +39,7 @@ type TickProvider interface {
 }
 
 func (bl *BlockListener) Close() {
+	bl.Peers.Close()
 	close(bl.exit)
 }
 

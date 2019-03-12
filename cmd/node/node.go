@@ -63,7 +63,6 @@ type SpacemeshApp struct {
 	jsonAPIService   *api.JSONHTTPServer
 	syncer           *sync.Syncer
 	blockListener    *sync.BlockListener
-	db               database.Database
 	state            *state.StateDB
 	blockProducer    *miner.BlockBuilder
 	mesh             *mesh.Mesh
@@ -278,7 +277,6 @@ func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service,
 	app.syncer = syncer
 	app.clock = clock
 	app.state = st
-	app.db = db
 	app.hare = ha
 	app.P2P = swarm
 
@@ -300,22 +298,35 @@ func (app *SpacemeshApp) startServices() {
 }
 
 func (app *SpacemeshApp) stopServices() {
-	if app != nil {
 
-	}
+	go app.P2P.Shutdown()
+
+	log.Info("closing services ")
 	app.clock.Stop()
 	err := app.blockProducer.Stop()
 	if err != nil {
 		log.Error("cannot stop block producer %v", err)
 	}
+
+	log.Info("closing Hare")
 	app.hare.Close() //todo: need to add this
+
+	log.Info("closing blockListener")
 	app.blockListener.Close()
 
-	app.db.Close()
+	log.Info("closing mesh")
+	app.mesh.Close()
 
+	log.Info("closing sync")
+	app.syncer.Stop()
+
+	log.Info("closing p2p")
+
+	log.Info("unregister from oracle")
 	if app.unregisterOracle != nil {
 		app.unregisterOracle()
 	}
+
 }
 
 func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {

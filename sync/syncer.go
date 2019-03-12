@@ -66,6 +66,7 @@ func (s *Syncer) IsSynced() bool {
 }
 
 func (s *Syncer) Stop() {
+	s.Peers.Close()
 	s.exit <- struct{}{}
 }
 

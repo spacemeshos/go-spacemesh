@@ -2,6 +2,7 @@ package node
 
 import (
 	"fmt"
+	"github.com/fortytw2/leaktest"
 	"github.com/spacemeshos/go-spacemesh/address"
 	apiCfg "github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/hare"
@@ -32,10 +33,6 @@ func (app *AppTestSuite) SetupTest() {
 }
 
 func (app *AppTestSuite) TearDownTest() {
-
-	for _, ap := range app.apps {
-		ap.stopServices()
-	}
 
 	for _, dbinst := range app.dbs {
 		err := os.RemoveAll(dbinst)
@@ -110,6 +107,10 @@ func (app *AppTestSuite) TestMultipleNodes() {
 							}
 						}
 						if ok == len(app.apps)-1 {
+							for _, ap := range app.apps {
+								go ap.stopServices()
+							}
+							time.Sleep(10 * time.Second)
 							return
 						}
 					}
@@ -122,5 +123,7 @@ func (app *AppTestSuite) TestMultipleNodes() {
 }
 
 func TestAppTestSuite(t *testing.T) {
+	defer leaktest.Check(t)()
 	suite.Run(t, new(AppTestSuite))
+
 }
