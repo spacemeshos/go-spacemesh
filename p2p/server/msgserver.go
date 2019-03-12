@@ -107,8 +107,12 @@ func (p *MessageServer) cleanStaleMessages() {
 				p.Debug("cleanStaleMessages remove request ", item.id)
 				p.removeFromPending(item.id)
 			} else {
+				p.Debug("cleanStaleMessages no more stale messages ")
 				return
 			}
+		} else {
+			p.Debug("cleanStaleMessages queue empty ")
+			return
 		}
 	}
 }
