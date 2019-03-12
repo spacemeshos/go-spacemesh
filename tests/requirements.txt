@@ -8,7 +8,7 @@ pytest==4.2.0
 pytest-testconfig==0.1.1
 python-dateutil==2.7.5
 pytz==2018.9
-PyYAML==3.13
+PyYAML==4.2b2
 requests==2.21.0
 requests-oauthlib==1.2.0
 toml==0.10.0
