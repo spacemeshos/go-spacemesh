@@ -38,10 +38,13 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringVar(&config.OracleServer, "oracle_server",
 		config.OracleServer, "The oracle server url. (temporary) ")
 	cmd.PersistentFlags().IntVar(&config.OracleServerWorldId, "oracle_server_worldid",
+	RootCmd.PersistentFlags().IntVar(&config.OracleServerWorldId, "oracle_server_worldid",
 		config.OracleServerWorldId, "The worldid to use with the oracle server (temporary) ")
 	cmd.PersistentFlags().StringVar(&config.GenesisTime, "genesis-time",
 		config.GenesisTime, "Time of the genesis layer in 2019-13-02T17:02:00+00:00 format")
 	cmd.PersistentFlags().IntVar(&config.LayerDurationSec, "layer-duration-sec",
+		config.LayerDurationSec, "Duration between layers in seconds")
+	RootCmd.PersistentFlags().IntVar(&config.LayerAvgSize, "layer-average-size",
 		config.LayerDurationSec, "Duration between layers in seconds")
 	/** ======================== P2P Flags ========================== **/
 	cmd.PersistentFlags().IntVar(&config.P2P.SecurityParam, "security-param",
@@ -108,10 +111,13 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().IntVar(&config.HARE.F, "hare-max-adversaries",
 		config.HARE.F, "Max number of adversaries in the Hare committee")
 	// RoundDuration determines the duration of a round in the Hare protocol
-	cmd.PersistentFlags().DurationVar(&config.HARE.RoundDuration, "hare-round-duration-ms",
+	RootCmd.PersistentFlags().DurationVar(&config.HARE.RoundDuration, "hare-round-duration-ms",
 		config.HARE.RoundDuration, "Duration of round in the Hare protocol")
 
 	/**========================Consensus Flags ========================== **/
+	//todo: add this here
+
+	RootCmd.AddCommand(VersionCmd)
 
 	// Bind Flags to config
 	viper.BindPFlags(cmd.PersistentFlags())
