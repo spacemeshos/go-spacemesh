@@ -79,23 +79,25 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 			bl.Log.Info("listening  stopped")
 			return
 		case data := <-bl.receivedGossipBlocks:
-			blk, err := mesh.BytesAsBlock(bytes.NewReader(data.Bytes()))
-			if err != nil {
-				log.Error("received invalid block %v", data.Bytes()[:7])
-				data.ReportValidation(NewBlockProtocol, false)
-				break
-			}
-			bl.Log.With().Info("got new block", log.Uint64("id", uint64(blk.Id)), log.Int("txs", len(blk.Txs)), log.Bool("valid", err == nil))
-			if bl.BlockEligible(blk.LayerIndex, blk.MinerID) {
-				data.ReportValidation(NewBlockProtocol, true)
-				err := bl.AddBlock(&blk)
+			if data != nil {
+				blk, err := mesh.BytesAsBlock(bytes.NewReader(data.Bytes()))
 				if err != nil {
-					log.Info("Block already received")
+					log.Error("received invalid block %v", data.Bytes()[:7])
+					data.ReportValidation(NewBlockProtocol, false)
 					break
 				}
-				bl.addUnknownToQueue(&blk)
-			} else {
-				data.ReportValidation(NewBlockProtocol, false)
+				bl.Log.With().Info("got new block", log.Uint64("id", uint64(blk.Id)), log.Int("txs", len(blk.Txs)), log.Bool("valid", err == nil))
+				if bl.BlockEligible(blk.LayerIndex, blk.MinerID) {
+					data.ReportValidation(NewBlockProtocol, true)
+					err := bl.AddBlock(&blk)
+					if err != nil {
+						log.Info("Block already received")
+						break
+					}
+					bl.addUnknownToQueue(&blk)
+				} else {
+					data.ReportValidation(NewBlockProtocol, false)
+				}
 			}
 		}
 	}
