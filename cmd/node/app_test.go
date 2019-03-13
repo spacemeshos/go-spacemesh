@@ -106,15 +106,7 @@ func (app *AppTestSuite) TestMultipleNodes() {
 								log.Info("%d roots confirmed out of %d", ok, len(app.apps))
 								ok++
 								if ok == len(app.apps)-1 {
-									var wg sync.WaitGroup
-									for _, ap := range app.apps {
-										func(ap SpacemeshApp) {
-											wg.Add(1)
-											defer wg.Done()
-											ap.stopServices()
-										}(*ap)
-									}
-									wg.Wait()
+									app.gracefullShutdown()
 									return
 								}
 							}
@@ -126,6 +118,18 @@ func (app *AppTestSuite) TestMultipleNodes() {
 			time.Sleep(1 * time.Millisecond)
 		}
 	}
+}
+
+func (app *AppTestSuite) gracefullShutdown() {
+	var wg sync.WaitGroup
+	for _, ap := range app.apps {
+		func(ap SpacemeshApp) {
+			wg.Add(1)
+			defer wg.Done()
+			ap.stopServices()
+		}(*ap)
+	}
+	wg.Wait()
 }
 
 func TestAppTestSuite(t *testing.T) {
