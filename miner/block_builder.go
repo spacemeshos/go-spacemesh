@@ -89,14 +89,14 @@ func (t *BlockBuilder) Start() error {
 	return nil
 }
 
-func (t *BlockBuilder) Stop() error {
+func (t *BlockBuilder) Close() error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if !t.started {
 		return fmt.Errorf("already stopped")
 	}
 	t.started = false
-	t.stopChan <- struct{}{}
+	close(t.stopChan)
 	return nil
 }
 

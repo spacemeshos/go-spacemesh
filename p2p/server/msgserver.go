@@ -81,7 +81,7 @@ func (p *MessageServer) readLoop() {
 		case msg, ok := <-p.ingressChannel:
 			if !ok {
 				p.Error("read loop channel was closed")
-				break
+				return
 			}
 
 			p.workerLimiter <- 1

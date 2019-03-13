@@ -48,6 +48,7 @@ func (s *Syncer) ForceSync() {
 }
 
 func (s *Syncer) Close() {
+	s.Peers.Close()
 	close(s.forceSync)
 	close(s.exit)
 }
@@ -63,11 +64,6 @@ const (
 
 func (s *Syncer) IsSynced() bool {
 	return s.VerifiedLayer() == s.maxSyncLayer()
-}
-
-func (s *Syncer) Stop() {
-	s.Peers.Close()
-	s.exit <- struct{}{}
 }
 
 func (s *Syncer) Start() {

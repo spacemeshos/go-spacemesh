@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/suite"
 	"math/big"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -104,14 +105,19 @@ func (app *AppTestSuite) TestMultipleNodes() {
 							if r1 == r2 {
 								log.Info("%d roots confirmed out of %d", ok, len(app.apps))
 								ok++
+								if ok == len(app.apps)-1 {
+									var wg sync.WaitGroup
+									for _, ap := range app.apps {
+										func(ap SpacemeshApp) {
+											wg.Add(1)
+											defer wg.Done()
+											ap.stopServices()
+										}(*ap)
+									}
+									wg.Wait()
+									return
+								}
 							}
-						}
-						if ok == len(app.apps)-1 {
-							for _, ap := range app.apps {
-								go ap.stopServices()
-							}
-							time.Sleep(10 * time.Second)
-							return
 						}
 					}
 

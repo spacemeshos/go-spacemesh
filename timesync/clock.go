@@ -48,7 +48,7 @@ func (t *Ticker) Start() {
 	go t.StartClock()
 }
 
-func (t *Ticker) Stop() {
+func (t *Ticker) Close() {
 	close(t.stop)
 }
 

@@ -63,10 +63,10 @@ func TestBlockBuilder_StartStop(t *testing.T) {
 	err = builder.Start()
 	assert.Error(t, err)
 
-	err = builder.Stop()
+	err = builder.Close()
 	assert.NoError(t, err)
 
-	err = builder.Stop()
+	err = builder.Close()
 	assert.Error(t, err)
 
 	addr1 := address.BytesToAddress([]byte{0x02})
