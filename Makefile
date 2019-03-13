@@ -53,7 +53,7 @@ endif
 .PHONY: build
 
 hare:
-	cd cmd/hare ; go build ; cd ..
+	cd cmd/hare ; go build -o $(CURR_DIR)/go-hare; cd ..
 .PHONY: hare
 
 tidy:
