@@ -64,7 +64,7 @@ func (vp votingPattern) Layer() mesh.LayerID {
 //todo memory optimizations
 type ninjaTortoise struct {
 	log.Log
-	avgLayerSize       uint32
+	avgLayerSize       uint64
 	pBase              votingPattern
 	blocks             map[mesh.BlockID]*mesh.Block                     //block cache
 	tEffective         map[mesh.BlockID]votingPattern                   //Explicit voting pattern of latest layer for a block
@@ -81,10 +81,10 @@ type ninjaTortoise struct {
 	tPatSupport        map[votingPattern]map[mesh.LayerID]votingPattern //pattern support count
 }
 
-func NewNinjaTortoise(layerSize uint32, log log.Log) *ninjaTortoise {
+func NewNinjaTortoise(layerSize int, log log.Log) *ninjaTortoise {
 	return &ninjaTortoise{
 		Log:                log,
-		avgLayerSize:       layerSize,
+		avgLayerSize:       uint64(layerSize),
 		pBase:              votingPattern{},
 		blocks:             map[mesh.BlockID]*mesh.Block{},
 		tEffective:         map[mesh.BlockID]votingPattern{},
@@ -194,7 +194,7 @@ func forBlockInView(blocks map[mesh.BlockID]struct{}, blockCache map[mesh.BlockI
 	return
 }
 
-func globalOpinion(v vec, layerSize uint32, delta float64) vec {
+func globalOpinion(v vec, layerSize uint64, delta float64) vec {
 	threshold := float64(GlobalThreshold*delta) * float64(layerSize)
 	if float64(v[0]) > threshold {
 		return Support

@@ -83,29 +83,32 @@ func (t *Ticker) updateLayerID() {
 
 func (t *Ticker) StartClock() {
 	log.Info("starting global clock")
+
+	var diff time.Duration
 	if t.time.Now().Before(t.startEpoch) {
-		log.Info("global clock sleeping till epoch")
-		sleepTill := t.startEpoch.Sub(t.time.Now())
-		tmr := time.NewTimer(sleepTill)
-		select {
-		case <-tmr.C:
-			break
-		case <-t.stop:
-			return
-		}
+		diff = t.startEpoch.Sub(t.time.Now()) - t.tickInterval
+	} else {
+		t.updateLayerID()
+		diff = ((t.time.Now().Sub(t.startEpoch)) / t.tickInterval) + t.tickInterval
 	}
 
-	t.updateLayerID()
-	diff := ((t.time.Now().Sub(t.startEpoch)) / t.tickInterval) + t.tickInterval
-	time.Sleep(diff)
-	tick := time.NewTimer(t.tickInterval)
+	log.Info("global clock going to sleep for %v", diff)
+	tmr := time.NewTimer(diff)
+	select {
+	case <-tmr.C:
+		break
+	case <-t.stop:
+		return
+	}
+
+	tick := time.NewTicker(t.tickInterval)
+	log.Info("clock waiting on event, tick interval is %v", t.tickInterval)
 	for {
 		select {
 		case <-tick.C:
 			log.Info("released tick mesh.LayerID  %v", t.currentLayer+1)
 			t.currentLayer++
 			t.notifyOnTick()
-			tick.Reset(t.tickInterval)
 		case <-t.stop:
 			return
 		}
