@@ -238,7 +238,9 @@ func (app *SpacemeshApp) setupTestFeatures() {
 func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service, dbStorepath string, sgn hare.Signing, blockOracle oracle.BlockOracle, hareOracle hare.Rolacle, layerSize int) error {
 	app.instanceName = instanceName
 	//todo: should we add all components to a single struct?
-	lg := log.New("shmekel_"+instanceName, "", "")
+
+	lg := log.New("shmekel_"+instanceName[len(instanceName)-5:], "", "")
+
 	db, err := database.NewLDBDatabase(dbStorepath, 0, 0)
 	if err != nil {
 		return err
@@ -248,7 +250,7 @@ func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service,
 		return err
 	}
 	rng := rand.New(mt19937.New())
-	processor := state.NewTransactionProcessor(rng, st, app.Config.GAS, lg)
+	processor := state.NewTransactionProcessor(rng, st, app.Config.GAS, lg.WithName("state"))
 
 	coinToss := consensus.WeakCoin{}
 	gTime, err := time.Parse(time.RFC3339, app.Config.GenesisTime)
@@ -257,16 +259,16 @@ func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service,
 	}
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
 	clock := timesync.NewTicker(timesync.RealClock{}, ld, gTime)
-	trtl := consensus.NewAlgorithm(consensus.NewNinjaTortoise(layerSize, lg))
-	msh := mesh.NewMesh(db, db, db, app.Config.REWARD, trtl, processor, lg) //todo: what to do with the logger?
+	trtl := consensus.NewAlgorithm(consensus.NewNinjaTortoise(layerSize, lg.WithName("trtl")))
+	msh := mesh.NewMesh(db, db, db, app.Config.REWARD, trtl, processor, lg.WithName("mesh")) //todo: what to do with the logger?
 
 	conf := sync.Configuration{SyncInterval: 1 * time.Second, Concurrency: 4, LayerSize: int(layerSize), RequestTimeout: 100 * time.Millisecond}
 	syncer := sync.NewSync(swarm, msh, blockOracle, conf, clock.Subscribe(), lg)
 
-	ha := hare.New(app.Config.HARE, swarm, sgn, msh, hareOracle, clock.Subscribe(), lg)
+	ha := hare.New(app.Config.HARE, swarm, sgn, msh, hareOracle, clock.Subscribe(), lg.WithName("hare"))
 
-	blockProducer := miner.NewBlockBuilder(instanceName, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, lg)
-	blockListener := sync.NewBlockListener(swarm, blockOracle, msh, 2*time.Second, 4, lg)
+	blockProducer := miner.NewBlockBuilder(instanceName, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, lg.WithName("blockProducer"))
+	blockListener := sync.NewBlockListener(swarm, blockOracle, msh, 2*time.Second, 4, lg.WithName("blockListener"))
 
 	app.blockProducer = &blockProducer
 	app.blockListener = blockListener
