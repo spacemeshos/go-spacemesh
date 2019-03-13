@@ -2,6 +2,8 @@ package miner
 
 import (
 	"bytes"
+	"crypto/md5"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/address"
@@ -29,6 +31,7 @@ const IncomingTxProtocol = "TxGossip"
 type BlockBuilder struct {
 	minerID string // could be a pubkey or what ever. the identity we're claiming to be as miners.
 	log.Log
+	rnd              *rand.Rand
 	beginRoundEvent  chan mesh.LayerID
 	stopChan         chan struct{}
 	newTrans         chan *mesh.SerializableTransaction
@@ -45,9 +48,13 @@ type BlockBuilder struct {
 
 func NewBlockBuilder(minerID string, net p2p.Service, beginRoundEvent chan mesh.LayerID, weakCoin WeakCoinProvider,
 	orph OrphanBlockProvider, hare HareResultProvider, blockOracle oracle.BlockOracle, lg log.Log) BlockBuilder {
+
+	seed := binary.BigEndian.Uint64(md5.New().Sum([]byte(minerID)))
+
 	return BlockBuilder{
 		minerID:          minerID,
 		Log:              lg,
+		rnd:              rand.New(rand.NewSource(int64(seed))),
 		beginRoundEvent:  beginRoundEvent,
 		stopChan:         make(chan struct{}),
 		newTrans:         make(chan *mesh.SerializableTransaction),
@@ -142,7 +149,7 @@ func (t *BlockBuilder) createBlock(id mesh.LayerID, txs []mesh.SerializableTrans
 
 	b := mesh.Block{
 		MinerID:    t.minerID,
-		Id:         mesh.BlockID(rand.Int63()),
+		Id:         mesh.BlockID(t.rnd.Int63()),
 		LayerIndex: id,
 		Data:       nil,
 		Coin:       t.weakCoinToss.GetResult(),
