@@ -235,7 +235,7 @@ func (app *SpacemeshApp) setupTestFeatures() {
 	api.ApproveAPIGossipMessages(cmdp.Ctx, app.P2P)
 }
 
-func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service, dbStorepath string, sgn hare.Signing, blockOracle oracle.BlockOracle, hareOracle hare.Rolacle, layerSize uint32) error {
+func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service, dbStorepath string, sgn hare.Signing, blockOracle oracle.BlockOracle, hareOracle hare.Rolacle, layerSize int) error {
 	app.instanceName = instanceName
 	//todo: should we add all components to a single struct?
 	lg := log.New("shmekel_"+instanceName, "", "")
@@ -274,7 +274,6 @@ func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service,
 	app.syncer = syncer
 	app.clock = clock
 	app.state = st
-	app.db = db
 	app.hare = ha
 	app.P2P = swarm
 
