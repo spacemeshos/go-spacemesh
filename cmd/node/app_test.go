@@ -103,8 +103,8 @@ func (app *AppTestSuite) TestMultipleNodes() {
 							r1 := ap.state.IntermediateRoot(false).String()
 							r2 := ap2.state.IntermediateRoot(false).String()
 							if r1 == r2 {
-								log.Info("%d roots confirmed out of %d", clientsDone, len(app.apps))
 								clientsDone++
+								log.Info("%d roots confirmed out of %d", clientsDone, len(app.apps))
 								if clientsDone == len(app.apps)-1 {
 									app.gracefullShutdown()
 									return
