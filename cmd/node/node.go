@@ -302,6 +302,9 @@ func (app SpacemeshApp) stopServices() {
 
 	log.Info("%v closing services ", app.instanceName)
 
+	log.Info("%v closing clock", app.instanceName)
+	app.clock.Close()
+
 	log.Info("%v closing Hare", app.instanceName)
 	app.hare.Close() //todo: need to add this
 
@@ -320,9 +323,6 @@ func (app SpacemeshApp) stopServices() {
 
 	log.Info("%v closing sync", app.instanceName)
 	app.syncer.Close()
-
-	log.Info("%v closing clock", app.instanceName)
-	app.clock.Close()
 
 	log.Info("unregister from oracle")
 	if app.unregisterOracle != nil {

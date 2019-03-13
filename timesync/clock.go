@@ -107,7 +107,7 @@ func (t *Ticker) StartClock() {
 			t.notifyOnTick()
 			tick.Reset(t.tickInterval)
 		case <-t.stop:
-			break
+			return
 		}
 	}
 }
