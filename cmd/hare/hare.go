@@ -80,7 +80,7 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	app.oracle.Register(true, pub.String()) // todo: configure no faulty nodes
 	hareOracle := oracle.NewHareOracleFromClient(app.oracle)
 
-	broker := hare.NewBroker(swarm, hare.NewEligibilityValidator(hare.NewHareOracle(hareOracle, app.Config.HARE.N), lg))
+	broker := hare.NewBroker(swarm, hare.NewEligibilityValidator(hare.NewHareOracle(hareOracle, app.Config.HARE.N), lg), hare.Closer{})
 	app.broker = broker
 	broker.Start()
 	app.p2p.Start()

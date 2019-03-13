@@ -2,6 +2,7 @@ package node
 
 import (
 	"fmt"
+	"github.com/fortytw2/leaktest"
 	"github.com/spacemeshos/go-spacemesh/address"
 	apiCfg "github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/hare"
@@ -13,6 +14,7 @@ import (
 	"github.com/stretchr/testify/suite"
 	"math/big"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -32,10 +34,6 @@ func (app *AppTestSuite) SetupTest() {
 }
 
 func (app *AppTestSuite) TearDownTest() {
-
-	for _, ap := range app.apps {
-		ap.stopServices()
-	}
 
 	for _, dbinst := range app.dbs {
 		err := os.RemoveAll(dbinst)
@@ -99,18 +97,19 @@ func (app *AppTestSuite) TestMultipleNodes() {
 		default:
 			for idx, ap := range app.apps {
 				if big.NewInt(10).Cmp(ap.state.GetBalance(dst)) == 0 {
-					ok := 0
+					clientsDone := 0
 					for idx2, ap2 := range app.apps {
 						if idx != idx2 {
 							r1 := ap.state.IntermediateRoot(false).String()
 							r2 := ap2.state.IntermediateRoot(false).String()
 							if r1 == r2 {
-								log.Info("%d roots confirmed out of %d", ok, len(app.apps))
-								ok++
+								clientsDone++
+								log.Info("%d roots confirmed out of %d", clientsDone, len(app.apps))
+								if clientsDone == len(app.apps)-1 {
+									app.gracefullShutdown()
+									return
+								}
 							}
-						}
-						if ok == len(app.apps)-1 {
-							return
 						}
 					}
 
@@ -121,6 +120,20 @@ func (app *AppTestSuite) TestMultipleNodes() {
 	}
 }
 
+func (app *AppTestSuite) gracefullShutdown() {
+	var wg sync.WaitGroup
+	for _, ap := range app.apps {
+		func(ap SpacemeshApp) {
+			wg.Add(1)
+			defer wg.Done()
+			ap.stopServices()
+		}(*ap)
+	}
+	wg.Wait()
+}
+
 func TestAppTestSuite(t *testing.T) {
+	defer leaktest.Check(t)()
 	suite.Run(t, new(AppTestSuite))
+
 }

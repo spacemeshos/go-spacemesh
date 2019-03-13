@@ -52,6 +52,7 @@ var Cmd = &cobra.Command{
 // SpacemeshApp is the cli app singleton
 type SpacemeshApp struct {
 	*cobra.Command
+	instanceName     string
 	P2P              p2p.Service
 	Config           *cfg.Config
 	NodeInitCallback chan bool
@@ -59,7 +60,6 @@ type SpacemeshApp struct {
 	jsonAPIService   *api.JSONHTTPServer
 	syncer           *sync.Syncer
 	blockListener    *sync.BlockListener
-	db               database.Database
 	state            *state.StateDB
 	blockProducer    *miner.BlockBuilder
 	mesh             *mesh.Mesh
@@ -235,8 +235,8 @@ func (app *SpacemeshApp) setupTestFeatures() {
 	api.ApproveAPIGossipMessages(cmdp.Ctx, app.P2P)
 }
 
-func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service, dbStorepath string, sgn hare.Signing, blockOracle oracle.BlockOracle, hareOracle hare.Rolacle, layerSize int) error {
-
+func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service, dbStorepath string, sgn hare.Signing, blockOracle oracle.BlockOracle, hareOracle hare.Rolacle, layerSize uint32) error {
+	app.instanceName = instanceName
 	//todo: should we add all components to a single struct?
 	lg := log.New("shmekel_"+instanceName, "", "")
 	db, err := database.NewLDBDatabase(dbStorepath, 0, 0)
@@ -295,23 +295,37 @@ func (app *SpacemeshApp) startServices() {
 	app.clock.Start()
 }
 
-func (app *SpacemeshApp) stopServices() {
-	if app != nil {
+func (app SpacemeshApp) stopServices() {
 
-	}
-	app.clock.Stop()
-	err := app.blockProducer.Stop()
-	if err != nil {
+	log.Info("%v closing services ", app.instanceName)
+
+	log.Info("%v closing clock", app.instanceName)
+	app.clock.Close()
+
+	log.Info("%v closing Hare", app.instanceName)
+	app.hare.Close() //todo: need to add this
+
+	log.Info("%v closing p2p", app.instanceName)
+	app.P2P.Shutdown()
+
+	if err := app.blockProducer.Close(); err != nil {
 		log.Error("cannot stop block producer %v", err)
 	}
-	app.hare.Close() //todo: need to add this
+
+	log.Info("%v closing blockListener", app.instanceName)
 	app.blockListener.Close()
 
-	app.db.Close()
+	log.Info("%v closing mesh", app.instanceName)
+	app.mesh.Close()
 
+	log.Info("%v closing sync", app.instanceName)
+	app.syncer.Close()
+
+	log.Info("unregister from oracle")
 	if app.unregisterOracle != nil {
 		app.unregisterOracle()
 	}
+
 }
 
 func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
@@ -341,7 +355,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 
 	apiConf := &app.Config.API
 
-	err = app.initServices("x", swarm, "/tmp/", sgn, bo, hareOracle, app.Config.LayerAvgSize)
+	err = app.initServices("x", swarm, "/tmp/", sgn, bo, hareOracle, 50)
 	if err != nil {
 		log.Error("cannot start services %v", err.Error())
 		return

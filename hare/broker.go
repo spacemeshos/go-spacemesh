@@ -49,9 +49,9 @@ type Broker struct {
 	isStarted  bool
 }
 
-func NewBroker(networkService NetworkService, eValidator Validator) *Broker {
+func NewBroker(networkService NetworkService, eValidator Validator, closer Closer) *Broker {
 	p := new(Broker)
-	p.Closer = NewCloser()
+	p.Closer = closer
 	p.network = networkService
 	p.eValidator = eValidator
 	p.outbox = make(map[InstanceId]chan *pb.HareMessage)
