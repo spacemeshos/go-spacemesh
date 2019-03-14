@@ -5,8 +5,10 @@ import (
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spf13/cobra"
 	"os"
 	"time"
@@ -14,7 +16,7 @@ import (
 
 const defaultSetSize = 200
 
-// VersionCmd returns the current version of spacemesh
+// Hare cmd
 var Cmd = &cobra.Command{
 	Use:   "hare",
 	Short: "start hare",
@@ -31,6 +33,19 @@ var Cmd = &cobra.Command{
 
 func init() {
 	cmdp.AddCommands(Cmd)
+}
+
+type mockBlockProvider struct {
+	isPulled bool
+}
+
+func (mbp *mockBlockProvider) GetUnverifiedLayerBlocks(layerId mesh.LayerID) ([]mesh.BlockID, error) {
+	if mbp.isPulled {
+		return []mesh.BlockID{}, nil
+	}
+
+	mbp.isPulled = true
+	return []mesh.BlockID{1, 2, 3}, nil
 }
 
 type HareApp struct {
@@ -80,17 +95,17 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	app.oracle.Register(true, pub.String()) // todo: configure no faulty nodes
 	hareOracle := oracle.NewHareOracleFromClient(app.oracle)
 
-	broker := hare.NewBroker(swarm, hare.NewEligibilityValidator(hare.NewHareOracle(hareOracle, app.Config.HARE.N), lg), hare.Closer{})
-	app.broker = broker
-	broker.Start()
-	app.p2p.Start()
+	sgn := hare.NewMockSigning()
+	gTime, err := time.Parse(time.RFC3339, app.Config.GenesisTime)
+	if err != nil {
+		log.Error("Could not parse config GT")
+		return
+	}
+	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
+	clock := timesync.NewTicker(timesync.RealClock{}, ld, gTime)
 
-	time.Sleep(10 * time.Second)
-
-	proc := hare.NewConsensusProcess(app.Config.HARE, 1, buildSet(), hareOracle, app.sgn, swarm, make(chan hare.TerminationOutput, 1), lg)
-	app.proc = proc
-	proc.SetInbox(broker.Register(proc.Id()))
-	proc.Start()
+	ha := hare.New(app.Config.HARE, swarm, sgn, &mockBlockProvider{}, hareOracle, clock.Subscribe(), lg)
+	ha.Start()
 }
 
 func main() {
