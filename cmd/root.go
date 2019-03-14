@@ -104,10 +104,7 @@ func AddCommands(cmd *cobra.Command) {
 	/**========================Consensus Flags ========================== **/
 	//todo: add this here
 
-	cmd.AddCommand(VersionCmd)
-
 	// Bind Flags to config
 	viper.BindPFlags(cmd.PersistentFlags())
 
 }
-

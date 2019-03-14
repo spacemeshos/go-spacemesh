@@ -17,6 +17,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/spacemeshos/go-spacemesh/sync"
+	"github.com/spacemeshos/go-spacemesh/version"
 	"math/rand"
 
 	"os"
@@ -49,8 +50,18 @@ var Cmd = &cobra.Command{
 	},
 }
 
+// VersionCmd returns the current version of spacemesh
+var VersionCmd = &cobra.Command{
+	Use:   "version",
+	Short: "Show version info",
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Println(version.Version)
+	},
+}
+
 func init() {
 	cmdp.AddCommands(Cmd)
+	Cmd.AddCommand(VersionCmd)
 }
 
 // SpacemeshApp is the cli app singleton
