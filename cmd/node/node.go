@@ -49,6 +49,10 @@ var Cmd = &cobra.Command{
 	},
 }
 
+func init() {
+	cmdp.AddCommands(Cmd)
+}
+
 // SpacemeshApp is the cli app singleton
 type SpacemeshApp struct {
 	*cobra.Command
@@ -239,7 +243,12 @@ func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service,
 	app.instanceName = instanceName
 	//todo: should we add all components to a single struct?
 
-	lg := log.New("shmekel_"+instanceName[len(instanceName)-5:], "", "")
+	name := instanceName
+	if len(instanceName) > 5 {
+		name = instanceName[len(instanceName)-5:]
+	}
+
+	lg := log.New("shmekel_"+name, "", "")
 
 	db, err := database.NewLDBDatabase(dbStorepath, 0, 0)
 	if err != nil {

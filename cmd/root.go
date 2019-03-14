@@ -18,10 +18,6 @@ var RootCmd = &cobra.Command{
 	Short: "Spacemesh Core ( PoST )",
 }
 
-func init() {
-	AddCommands(RootCmd)
-}
-
 func AddCommands(cmd *cobra.Command) {
 
 	/** ======================== BaseConfig Flags ========================== **/
@@ -110,13 +106,13 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().IntVar(&config.HARE.F, "hare-max-adversaries",
 		config.HARE.F, "Max number of adversaries in the Hare committee")
 	// RoundDuration determines the duration of a round in the Hare protocol
-	RootCmd.PersistentFlags().IntVar(&config.HARE.RoundDuration, "hare-round-duration-ms",
+	cmd.PersistentFlags().IntVar(&config.HARE.RoundDuration, "hare-round-duration-ms",
 		config.HARE.RoundDuration, "Duration of round in the Hare protocol")
 
 	/**========================Consensus Flags ========================== **/
 	//todo: add this here
 
-	RootCmd.AddCommand(VersionCmd)
+	cmd.AddCommand(VersionCmd)
 
 	// Bind Flags to config
 	viper.BindPFlags(cmd.PersistentFlags())

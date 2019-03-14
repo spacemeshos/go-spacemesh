@@ -95,7 +95,6 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	app.oracle.Register(true, pub.String()) // todo: configure no faulty nodes
 	hareOracle := oracle.NewHareOracleFromClient(app.oracle)
 
-	sgn := hare.NewMockSigning()
 	gTime, err := time.Parse(time.RFC3339, app.Config.GenesisTime)
 	if err != nil {
 		log.Error("Could not parse config GT")
@@ -104,7 +103,7 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
 	clock := timesync.NewTicker(timesync.RealClock{}, ld, gTime)
 
-	ha := hare.New(app.Config.HARE, swarm, sgn, &mockBlockProvider{}, hareOracle, clock.Subscribe(), lg)
+	ha := hare.New(app.Config.HARE, swarm, app.sgn, &mockBlockProvider{}, hareOracle, clock.Subscribe(), lg)
 	ha.Start()
 }
 
