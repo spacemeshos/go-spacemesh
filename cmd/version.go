@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/cmd/node"
 	"github.com/spacemeshos/go-spacemesh/version"
 	"github.com/spf13/cobra"
 )
@@ -23,5 +24,5 @@ var VersionCmd = &cobra.Command{
 }
 
 func init() {
-	RootCmd.AddCommand(VersionCmd)
+	node.Cmd.AddCommand(VersionCmd)
 }
