@@ -63,16 +63,38 @@ func TestBlockBuilder_StartStop(t *testing.T) {
 	err = builder.Start()
 	assert.Error(t, err)
 
-	err = builder.Stop()
+	err = builder.Close()
 	assert.NoError(t, err)
 
-	err = builder.Stop()
+	err = builder.Close()
 	assert.Error(t, err)
 
 	addr1 := address.BytesToAddress([]byte{0x02})
 	addr2 := address.BytesToAddress([]byte{0x01})
 	err = builder.AddTransaction(1, addr1, addr2, big.NewInt(1))
 	assert.Error(t, err)
+}
+
+func TestBlockBuilder_BlockIdGeneration(t *testing.T) {
+
+	net := service.NewSimulator()
+	beginRound := make(chan mesh.LayerID)
+	n1 := net.NewNode()
+	n2 := net.NewNode()
+
+	hareRes := []mesh.BlockID{mesh.BlockID(0), mesh.BlockID(1), mesh.BlockID(2), mesh.BlockID(3)}
+	hare := MockHare{res: hareRes}
+
+	builder1 := NewBlockBuilder(n1.Node.String(), n1, beginRound, MockCoin{}, MockOrphans{st: []mesh.BlockID{1, 2, 3}}, hare,
+		mockBlockOracle{}, log.New(n1.Node.String(), "", ""))
+	builder2 := NewBlockBuilder(n2.Node.String(), n2, beginRound, MockCoin{}, MockOrphans{st: []mesh.BlockID{1, 2, 3}}, hare,
+		mockBlockOracle{}, log.New(n2.Node.String(), "", ""))
+
+	b1, _ := builder1.createBlock(1, nil)
+
+	b2, _ := builder2.createBlock(1, nil)
+
+	assert.True(t, b1.ID() != b2.ID(), "ids are identical")
 }
 
 func TestBlockBuilder_CreateBlock(t *testing.T) {

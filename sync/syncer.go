@@ -48,6 +48,7 @@ func (s *Syncer) ForceSync() {
 }
 
 func (s *Syncer) Close() {
+	s.Peers.Close()
 	close(s.forceSync)
 	close(s.exit)
 }
@@ -63,10 +64,6 @@ const (
 
 func (s *Syncer) IsSynced() bool {
 	return s.VerifiedLayer() == s.maxSyncLayer()
-}
-
-func (s *Syncer) Stop() {
-	s.exit <- struct{}{}
 }
 
 func (s *Syncer) Start() {
@@ -96,7 +93,7 @@ func (s *Syncer) run() {
 			s.currentLayerMutex.Lock()
 			s.currentLayer = layer
 			s.currentLayerMutex.Unlock()
-			s.Info("sync got tick for layer %v", layer)
+			s.Debug("sync got tick for layer %v", layer)
 			go syncRoutine()
 		}
 	}
@@ -224,7 +221,7 @@ func (s *Syncer) getLayerBlockIDs(index mesh.LayerID) (chan mesh.BlockID, error)
 	m, err := s.getLayerHashes(index)
 
 	if err != nil {
-		s.Error("could not get LayerHashes for layer: ", index)
+		s.Error("could not get LayerHashes for layer: %v", index)
 		return nil, err
 	}
 	return s.getIdsForHash(m, index)

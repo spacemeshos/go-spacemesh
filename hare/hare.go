@@ -42,7 +42,7 @@ type orphanBlockProvider interface {
 // Hare is an orchestrator that shoots consensus processes and collects their termination output
 type Hare struct {
 	Closer
-
+	log.Log
 	config config.Config
 
 	network    NetworkService
@@ -72,14 +72,17 @@ type Hare struct {
 // New returns a new Hare struct.
 func New(conf config.Config, p2p NetworkService, sign Signing, obp orphanBlockProvider, rolacle Rolacle, beginLayer chan mesh.LayerID, logger log.Log) *Hare {
 	h := new(Hare)
+
 	h.Closer = NewCloser()
+
+	h.Log = logger
 
 	h.config = conf
 
 	h.network = p2p
 	h.beginLayer = beginLayer
 
-	h.broker = NewBroker(p2p, NewEligibilityValidator(NewHareOracle(rolacle, conf.N), logger))
+	h.broker = NewBroker(p2p, NewEligibilityValidator(NewHareOracle(rolacle, conf.N), logger), h.Closer)
 
 	h.sign = sign
 
@@ -149,7 +152,7 @@ func (h *Hare) onTick(id mesh.LayerID) {
 		h.lastLayer = id
 	}
 	h.layerLock.Unlock()
-
+	h.Debug("hare got tick, sleeping for %v", h.networkDelta)
 	ti := time.NewTimer(h.networkDelta)
 	select {
 	case <-ti.C:
@@ -159,14 +162,15 @@ func (h *Hare) onTick(id mesh.LayerID) {
 		return
 	}
 
+	h.Debug("get hare results")
 	// retrieve set form orphan blocks
 	blocks, err := h.obp.GetUnverifiedLayerBlocks(h.lastLayer)
 	if err != nil {
-		log.Error("No blocks for consensus on layer %v %v", id, err)
+		h.Error("No blocks for consensus on layer %v %v", id, err)
 		return
 	}
 
-	log.Info("received %v new blocks ", len(blocks))
+	h.Info("received %v new blocks ", len(blocks))
 	set := NewEmptySet(len(blocks))
 	for _, b := range blocks {
 		// todo: figure out real type of blockid
@@ -179,7 +183,7 @@ func (h *Hare) onTick(id mesh.LayerID) {
 	cp.SetInbox(h.broker.Register(cp.Id()))
 	e := cp.Start()
 	if e != nil {
-		log.Error("Could not start consensus process %v", e.Error())
+		h.Error("Could not start consensus process %v", e.Error())
 	}
 	metrics.TotalConsensusProcesses.Add(1)
 }
@@ -230,7 +234,7 @@ func (h *Hare) outputCollectionLoop() {
 			metrics.TotalConsensusProcesses.Add(-1)
 			err := h.collectOutput(out)
 			if err != nil {
-				log.Warning("Err collecting output from hare err: %v", err)
+				h.Warning("Err collecting output from hare err: %v", err)
 			}
 		case <-h.CloseChannel():
 			return

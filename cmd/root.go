@@ -1,26 +1,14 @@
 package cmd
 
 import (
-	"fmt"
 	cfg "github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"os"
 )
 
 var (
 	config = cfg.DefaultConfig()
 )
-
-// RootCmd is the application root command
-var RootCmd = &cobra.Command{
-	Use:   "spacemesh",
-	Short: "Spacemesh Core ( PoST )",
-}
-
-func init() {
-	AddCommands(RootCmd)
-}
 
 func AddCommands(cmd *cobra.Command) {
 
@@ -42,6 +30,8 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringVar(&config.GenesisTime, "genesis-time",
 		config.GenesisTime, "Time of the genesis layer in 2019-13-02T17:02:00+00:00 format")
 	cmd.PersistentFlags().IntVar(&config.LayerDurationSec, "layer-duration-sec",
+		config.LayerDurationSec, "Duration between layers in seconds")
+	cmd.PersistentFlags().IntVar(&config.LayerAvgSize, "layer-average-size",
 		config.LayerDurationSec, "Duration between layers in seconds")
 	/** ======================== P2P Flags ========================== **/
 	cmd.PersistentFlags().IntVar(&config.P2P.SecurityParam, "security-param",
@@ -108,21 +98,13 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().IntVar(&config.HARE.F, "hare-max-adversaries",
 		config.HARE.F, "Max number of adversaries in the Hare committee")
 	// RoundDuration determines the duration of a round in the Hare protocol
-	cmd.PersistentFlags().DurationVar(&config.HARE.RoundDuration, "hare-round-duration-ms",
+	cmd.PersistentFlags().IntVar(&config.HARE.RoundDuration, "hare-round-duration-ms",
 		config.HARE.RoundDuration, "Duration of round in the Hare protocol")
 
 	/**========================Consensus Flags ========================== **/
+	//todo: add this here
 
 	// Bind Flags to config
 	viper.BindPFlags(cmd.PersistentFlags())
 
-}
-
-// Execute adds all child commands to the root command sets flags appropriately.
-// This is called by main.main(). It only needs to happen once to the rootCmd.
-func Execute() {
-	if err := RootCmd.Execute(); err != nil {
-		fmt.Println(err)
-		os.Exit(-1)
-	}
 }

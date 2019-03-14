@@ -80,7 +80,7 @@ func New(module string, dataFolderPath string, logFileName string) Log {
 
 	log := zap.New(core)
 	log = log.Named(module)
-	return Log{log}
+	return Log{log, log.Sugar()}
 }
 
 func NewDefault(module string) Log {
@@ -130,5 +130,5 @@ func Warning(msg string, args ...interface{}) {
 }
 
 func With() fieldLogger {
-	return fieldLogger{AppLog.Logger}
+	return fieldLogger{AppLog.logger}
 }

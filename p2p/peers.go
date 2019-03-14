@@ -47,7 +47,7 @@ func (pi *PeersImpl) listenToPeers(newPeerC chan p2pcrypto.PublicKey, expiredPee
 	for {
 		select {
 		case <-pi.exit:
-			log.Debug("run stopped")
+			log.Info("run stopped")
 			return
 		case peer := <-newPeerC:
 			peerSet[peer] = true

@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-var cfg = config.Config{N: 10, F: 5, RoundDuration: time.Second * time.Duration(2)}
+var cfg = config.Config{N: 10, F: 5, RoundDuration: 2}
 
 type mockMessageValidator struct {
 	syntaxValid   bool
@@ -122,7 +122,7 @@ func buildMessage(msg *pb.HareMessage) *pb.HareMessage {
 }
 
 func buildBroker(net NetworkService) *Broker {
-	return NewBroker(net, &mockEligibilityValidator{true})
+	return NewBroker(net, &mockEligibilityValidator{true}, Closer{make(chan struct{})})
 }
 
 type mockEligibilityValidator struct {

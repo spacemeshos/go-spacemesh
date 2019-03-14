@@ -32,7 +32,7 @@ func TestTicker_StartClock(t *testing.T) {
 		dur := time.Now().Sub(then)
 		assert.True(t, tick < dur)
 	}
-	ts.Stop()
+	ts.Close()
 }
 
 func TestTicker_StartClock_BeforeEpoch(t *testing.T) {
@@ -53,7 +53,7 @@ func TestTicker_StartClock_BeforeEpoch(t *testing.T) {
 		dur := time.Now().Sub(then)
 		assert.True(t, waitTime < dur)
 	}
-	ts.Stop()
+	ts.Close()
 }
 
 func TestTicker_StartClock_LayerID(t *testing.T) {
@@ -65,5 +65,5 @@ func TestTicker_StartClock_LayerID(t *testing.T) {
 	ts := NewTicker(MockTimer{}, tick, start)
 	ts.updateLayerID()
 	assert.Equal(t, 6, int(ts.currentLayer))
-	ts.Stop()
+	ts.Close()
 }
