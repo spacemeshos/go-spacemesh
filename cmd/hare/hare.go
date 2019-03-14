@@ -27,7 +27,7 @@ var Cmd = &cobra.Command{
 
 		hareApp.Initialize(cmd)
 		hareApp.Start(cmd, args)
-		<-hareApp.proc.CloseChannel()
+		<-hareApp.ha.CloseChannel()
 	},
 }
 
@@ -51,10 +51,10 @@ func (mbp *mockBlockProvider) GetUnverifiedLayerBlocks(layerId mesh.LayerID) ([]
 type HareApp struct {
 	*cmdp.BaseApp
 	p2p    p2p.Service
-	broker *hare.Broker
-	proc   *hare.ConsensusProcess
 	oracle *oracle.OracleClient
 	sgn    hare.Signing
+	ha     *hare.Hare
+	clock  *timesync.Ticker
 }
 
 func NewHareApp() *HareApp {
@@ -97,14 +97,17 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 
 	gTime, err := time.Parse(time.RFC3339, app.Config.GenesisTime)
 	if err != nil {
-		log.Error("Could not parse config GT")
-		return
+		log.Error("Could not parse config GT t=%v err=%v", app.Config.GenesisTime, err)
+		panic("error parsing config")
 	}
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
-	clock := timesync.NewTicker(timesync.RealClock{}, ld, gTime)
+	app.clock = timesync.NewTicker(timesync.RealClock{}, ld, gTime)
 
-	ha := hare.New(app.Config.HARE, swarm, app.sgn, &mockBlockProvider{}, hareOracle, clock.Subscribe(), lg)
-	ha.Start()
+	app.ha = hare.New(app.Config.HARE, swarm, app.sgn, &mockBlockProvider{}, hareOracle, app.clock.Subscribe(), lg)
+	log.Info("Starting hare service")
+	app.ha.Start()
+	app.p2p.Start()
+	app.clock.Start()
 }
 
 func main() {
