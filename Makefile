@@ -8,10 +8,10 @@ BIN_DIR = $(CURR_DIR)/build
 BIN_DIR_WIN = $(CUR_DIR_WIN)/build
 export GO111MODULE = on
 
-ifndef TRAVIS_PULL_REQUEST_BRANCH
+ifdef TRAVIS_BRANCH
 	BRANCH := $(TRAVIS_BRANCH)
 else
-	BRANCH := $(TRAVIS_PULL_REQUEST_BRANCH)
+	BRANCH := $(shell git rev-parse --abbrev-ref HEAD)
 endif
 
 # Setup the -ldflags option to pass vars defined here to app vars
