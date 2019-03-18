@@ -43,7 +43,7 @@ var (
 )
 
 type Pinger interface {
-	RegisterCallback(f func(from net.Addr, ping *pb.Ping) error)
+	OnPing(f func(from net.Addr, ping *pb.Ping) error)
 	Ping(p p2pcrypto.PublicKey) error
 }
 
@@ -86,7 +86,7 @@ func New(ln *node.LocalNode, config config.SwarmConfig, service service.Service)
 	}
 	d.fnp = newFindNodeProtocol(service, d.rt)
 
-	pinger.RegisterCallback(d.PingerCallback)
+	pinger.OnPing(d.PingerCallback)
 
 	return d
 }

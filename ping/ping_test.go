@@ -20,13 +20,13 @@ func TestPing_Ping(t *testing.T) {
 	p := New(node1.Node, node1, log.New("1_"+node1.String(), "", ""))
 	p2 := New(node2.Node, node2, log.New("2_"+node2.String(), "", ""))
 
-	p.RegisterCallback(func(from net.Addr, ping *pb.Ping) error {
+	p.OnPing(func(from net.Addr, ping *pb.Ping) error {
 		//pk, _ := p2pcrypto.NewPubkeyFromBytes(ping.ID)
 		go p.Ping(node3.PublicKey())
 		return nil
 	})
 
-	p2.RegisterCallback(func(from net.Addr, ping *pb.Ping) error {
+	p2.OnPing(func(from net.Addr, ping *pb.Ping) error {
 		go p2.Ping(node3.PublicKey())
 		return nil
 	})

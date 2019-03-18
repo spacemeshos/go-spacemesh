@@ -28,13 +28,6 @@ func extractPayload(m Message) []byte {
 	return data.Payload
 }
 
-func HandlerFromBytesHandler(in func(msg []byte) []byte) func(message Message) []byte {
-	return func(message Message) []byte {
-		payload := extractPayload(message)
-		return in(payload)
-	}
-}
-
 type Item struct {
 	id        uint64
 	timestamp time.Time
@@ -179,6 +172,17 @@ func (p *MessageServer) handleResponseMessage(headers *service.DataMsgWrapper) {
 
 func (p *MessageServer) RegisterMsgHandler(msgType MessageType, reqHandler func(message Message) []byte) {
 	p.msgRequestHandlers[msgType] = reqHandler
+}
+
+func handlerFromBytesHandler(in func(msg []byte) []byte) func(message Message) []byte {
+	return func(message Message) []byte {
+		payload := extractPayload(message)
+		return in(payload)
+	}
+}
+
+func (p *MessageServer) RegisterBytesMsgHandler(msgType MessageType, reqHandler func([]byte) []byte) {
+	p.msgRequestHandlers[msgType] = handlerFromBytesHandler(reqHandler)
 }
 
 func (p *MessageServer) SendRequest(msgType MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte)) error {

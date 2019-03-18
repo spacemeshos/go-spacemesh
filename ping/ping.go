@@ -35,7 +35,7 @@ type Pinger struct {
 	exit   chan struct{}
 }
 
-func (p *Pinger) RegisterCallback(f func(from net.Addr, ping *pb.Ping) error) {
+func (p *Pinger) OnPing(f func(from net.Addr, ping *pb.Ping) error) {
 	p.pingCallbacks = append(p.pingCallbacks, f)
 }
 
