@@ -43,7 +43,9 @@ func (app *P2PApp) Cleanup() {
 }
 
 func (app *P2PApp) Start(cmd *cobra.Command, args []string) {
-	// start p2p services
+	// init p2p services
+	log.JSONLog(true)
+	log.DebugMode(true)
 	log.Info("Initializing P2P services")
 	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P)
 	if err != nil {
@@ -52,9 +54,12 @@ func (app *P2PApp) Start(cmd *cobra.Command, args []string) {
 	}
 	app.p2p = swarm
 
+	// Testing stuff
 	api.ApproveAPIGossipMessages(cmdp.Ctx, app.p2p)
-
 	metrics.StartCollectingMetrics(app.Config.MetricsPort)
+
+
+	// start the node
 
 	err = app.p2p.Start()
 	defer app.p2p.Shutdown()
@@ -62,6 +67,20 @@ func (app *P2PApp) Start(cmd *cobra.Command, args []string) {
 	if err != nil {
 		log.Error("Error starting p2p services, err: %v", err)
 		panic(err)
+	}
+
+	// start api servers
+	if app.Config.API.StartGrpcServer || app.Config.API.StartJSONServer {
+		// start grpc if specified or if json rpc specified
+		log.Info("Started the GRPC Service")
+		grpc := api.NewGrpcService(app.p2p, nil)
+		grpc.StartService(nil)
+	}
+
+	if app.Config.API.StartJSONServer {
+		log.Info("Started the JSON Service")
+		json := api.NewJSONHTTPServer()
+		json.StartService(nil)
 	}
 
 	<-cmdp.Ctx.Done()
