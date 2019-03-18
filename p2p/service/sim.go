@@ -7,6 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"io"
 	"math/rand"
+	"net"
 	"sync"
 	"time"
 )
@@ -118,8 +119,13 @@ func (s *Simulator) NewNodeFrom(n node.Node) *Node {
 }
 
 type simDirectMessage struct {
+	metadata P2PMetadata
 	msg    Data
 	sender p2pcrypto.PublicKey
+}
+
+func (sm simDirectMessage) Metadata() P2PMetadata {
+	return  sm.metadata
 }
 
 // Bytes is the message's binary data in byte array format.
@@ -168,8 +174,19 @@ func (sn *Node) Start() error {
 	return nil
 }
 
+
+// simulator doesn't go through the regular p2p pipes so the metadata won't be available.
+// it's okay since this data doesn't matter to the simulator
+func simulatorMetadata() P2PMetadata {
+	ip, err := net.ResolveIPAddr("ip", "0.0.0.0")
+	if err != nil {
+		panic("cant resolve local ip")
+	}
+	return P2PMetadata{ip}
+}
+
 // ProcessDirectProtocolMessage
-func (sn *Node) ProcessDirectProtocolMessage(sender p2pcrypto.PublicKey, protocol string, payload Data) error {
+func (sn *Node) ProcessDirectProtocolMessage(sender p2pcrypto.PublicKey, protocol string, payload Data, metadata P2PMetadata) error {
 	sn.sleep(sn.rcvDelay)
 	sn.sim.mutex.RLock()
 	c, ok := sn.sim.protocolDirectHandler[sn.PublicKey().String()][protocol]
@@ -177,7 +194,7 @@ func (sn *Node) ProcessDirectProtocolMessage(sender p2pcrypto.PublicKey, protoco
 	if !ok {
 		return errors.New("Unknown protocol")
 	}
-	c <- simDirectMessage{payload, sender}
+	c <- simDirectMessage{simulatorMetadata(),payload, sender}
 	return nil
 }
 
@@ -209,7 +226,7 @@ func (sn *Node) sendMessageImpl(nodeID p2pcrypto.PublicKey, protocol string, pay
 	thec, ok := sn.sim.protocolDirectHandler[nodeID.String()][protocol]
 	sn.sim.mutex.RUnlock()
 	if ok {
-		thec <- simDirectMessage{payload, sn.Node.PublicKey()}
+		thec <- simDirectMessage{simulatorMetadata(), payload, sn.Node.PublicKey()}
 		return nil
 	}
 	log.Debug("%v >> %v (%v)", sn.Node.PublicKey(), nodeID, payload)
