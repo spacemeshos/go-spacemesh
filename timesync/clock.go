@@ -86,7 +86,7 @@ func (t *Ticker) StartClock() {
 
 	var diff time.Duration
 	if t.time.Now().Before(t.startEpoch) {
-		diff = t.startEpoch.Sub(t.time.Now()) - t.tickInterval
+		diff = t.startEpoch.Sub(t.time.Now())
 	} else {
 		t.updateLayerID()
 		diff = ((t.time.Now().Sub(t.startEpoch)) / t.tickInterval) + t.tickInterval
@@ -101,6 +101,7 @@ func (t *Ticker) StartClock() {
 		return
 	}
 
+	t.notifyOnTick()
 	tick := time.NewTicker(t.tickInterval)
 	log.Info("clock waiting on event, tick interval is %v", t.tickInterval)
 	for {
