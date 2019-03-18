@@ -271,7 +271,10 @@ def save_log_on_exit(request):
 #    TESTS
 # ==============================================================================
 
-current_index = 'kubernetes_cluster-2019.03.*'
+
+dt = datetime.now()
+todaydate = dt.strftime("%Y.%m.%d")
+current_index = 'kubernetes_cluster-'+todaydate
 
 
 def test_bootstrap(setup_bootstrap):

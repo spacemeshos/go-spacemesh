@@ -17,6 +17,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/spacemeshos/go-spacemesh/sync"
+	"github.com/spacemeshos/go-spacemesh/version"
 	"math/rand"
 
 	"os"
@@ -49,13 +50,24 @@ var Cmd = &cobra.Command{
 	},
 }
 
+// VersionCmd returns the current version of spacemesh
+var VersionCmd = &cobra.Command{
+	Use:   "version",
+	Short: "Show version info",
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Println(version.Version)
+	},
+}
+
 func init() {
 	cmdp.AddCommands(Cmd)
+	Cmd.AddCommand(VersionCmd)
 }
 
 // SpacemeshApp is the cli app singleton
 type SpacemeshApp struct {
 	*cobra.Command
+	instanceName     string
 	P2P              p2p.Service
 	Config           *cfg.Config
 	NodeInitCallback chan bool
@@ -63,7 +75,6 @@ type SpacemeshApp struct {
 	jsonAPIService   *api.JSONHTTPServer
 	syncer           *sync.Syncer
 	blockListener    *sync.BlockListener
-	db               database.Database
 	state            *state.StateDB
 	blockProducer    *miner.BlockBuilder
 	mesh             *mesh.Mesh
@@ -239,10 +250,17 @@ func (app *SpacemeshApp) setupTestFeatures() {
 	api.ApproveAPIGossipMessages(cmdp.Ctx, app.P2P)
 }
 
-func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service, dbStorepath string, sgn hare.Signing, blockOracle oracle.BlockOracle, hareOracle hare.Rolacle, layerSize uint32) error {
-
+func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service, dbStorepath string, sgn hare.Signing, blockOracle oracle.BlockOracle, hareOracle hare.Rolacle, layerSize int) error {
+	app.instanceName = instanceName
 	//todo: should we add all components to a single struct?
-	lg := log.New("shmekel_"+instanceName, "", "")
+
+	name := instanceName
+	if len(instanceName) > 5 {
+		name = instanceName[len(instanceName)-5:]
+	}
+
+	lg := log.New("shmekel_"+name, "", "")
+
 	db, err := database.NewLDBDatabase(dbStorepath, 0, 0)
 	if err != nil {
 		return err
@@ -252,7 +270,7 @@ func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service,
 		return err
 	}
 	rng := rand.New(mt19937.New())
-	processor := state.NewTransactionProcessor(rng, st, app.Config.GAS, lg)
+	processor := state.NewTransactionProcessor(rng, st, app.Config.GAS, lg.WithName("state"))
 
 	coinToss := consensus.WeakCoin{}
 	gTime, err := time.Parse(time.RFC3339, app.Config.GenesisTime)
@@ -261,16 +279,16 @@ func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service,
 	}
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
 	clock := timesync.NewTicker(timesync.RealClock{}, ld, gTime)
-	trtl := consensus.NewAlgorithm(consensus.NewNinjaTortoise(layerSize, lg))
-	msh := mesh.NewMesh(db, db, db, app.Config.REWARD, trtl, processor, lg) //todo: what to do with the logger?
+	trtl := consensus.NewAlgorithm(consensus.NewNinjaTortoise(layerSize, lg.WithName("trtl")))
+	msh := mesh.NewMesh(db, db, db, app.Config.REWARD, trtl, processor, lg.WithName("mesh")) //todo: what to do with the logger?
 
 	conf := sync.Configuration{SyncInterval: 1 * time.Second, Concurrency: 4, LayerSize: int(layerSize), RequestTimeout: 100 * time.Millisecond}
 	syncer := sync.NewSync(swarm, msh, blockOracle, conf, clock.Subscribe(), lg)
 
-	ha := hare.New(app.Config.HARE, swarm, sgn, msh, hareOracle, clock.Subscribe(), lg)
+	ha := hare.New(app.Config.HARE, swarm, sgn, msh, hareOracle, clock.Subscribe(), lg.WithName("hare"))
 
-	blockProducer := miner.NewBlockBuilder(instanceName, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, lg)
-	blockListener := sync.NewBlockListener(swarm, blockOracle, msh, 2*time.Second, 4, lg)
+	blockProducer := miner.NewBlockBuilder(instanceName, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, lg.WithName("blockProducer"))
+	blockListener := sync.NewBlockListener(swarm, blockOracle, msh, 2*time.Second, 4, lg.WithName("blockListener"))
 
 	app.blockProducer = &blockProducer
 	app.blockListener = blockListener
@@ -278,7 +296,6 @@ func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service,
 	app.syncer = syncer
 	app.clock = clock
 	app.state = st
-	app.db = db
 	app.hare = ha
 	app.P2P = swarm
 
@@ -299,23 +316,37 @@ func (app *SpacemeshApp) startServices() {
 	app.clock.Start()
 }
 
-func (app *SpacemeshApp) stopServices() {
-	if app != nil {
+func (app SpacemeshApp) stopServices() {
 
-	}
-	app.clock.Stop()
-	err := app.blockProducer.Stop()
-	if err != nil {
+	log.Info("%v closing services ", app.instanceName)
+
+	log.Info("%v closing clock", app.instanceName)
+	app.clock.Close()
+
+	log.Info("%v closing Hare", app.instanceName)
+	app.hare.Close() //todo: need to add this
+
+	log.Info("%v closing p2p", app.instanceName)
+	app.P2P.Shutdown()
+
+	if err := app.blockProducer.Close(); err != nil {
 		log.Error("cannot stop block producer %v", err)
 	}
-	app.hare.Close() //todo: need to add this
+
+	log.Info("%v closing blockListener", app.instanceName)
 	app.blockListener.Close()
 
-	app.db.Close()
+	log.Info("%v closing mesh", app.instanceName)
+	app.mesh.Close()
 
+	log.Info("%v closing sync", app.instanceName)
+	app.syncer.Close()
+
+	log.Info("unregister from oracle")
 	if app.unregisterOracle != nil {
 		app.unregisterOracle()
 	}
+
 }
 
 func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {

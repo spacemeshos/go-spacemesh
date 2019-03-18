@@ -31,46 +31,6 @@ import (
 // ConnectingTimeout is the timeout we wait when trying to connect a neighborhood
 const ConnectingTimeout = 20 * time.Second //todo: add to the config
 
-type directProtocolMessage struct {
-	sender p2pcrypto.PublicKey
-	data   service.Data
-}
-
-func (pm directProtocolMessage) Sender() p2pcrypto.PublicKey {
-	return pm.sender
-}
-
-func (pm directProtocolMessage) Data() service.Data {
-	return pm.data
-}
-
-func (pm directProtocolMessage) Bytes() []byte {
-	return pm.data.Bytes()
-}
-
-type gossipProtocolMessage struct {
-	data           service.Data
-	validationChan chan service.MessageValidation
-}
-
-func (pm gossipProtocolMessage) Data() service.Data {
-	return pm.data
-}
-
-func (pm gossipProtocolMessage) Bytes() []byte {
-	return pm.data.Bytes()
-}
-
-func (pm gossipProtocolMessage) ValidationCompletedChan() chan service.MessageValidation {
-	return pm.validationChan
-}
-
-func (pm gossipProtocolMessage) ReportValidation(protocol string, isValid bool) {
-	if pm.validationChan != nil {
-		pm.validationChan <- service.NewMessageValidation(pm.Bytes(), protocol, isValid)
-	}
-}
-
 type cPool interface {
 	GetConnection(address string, pk p2pcrypto.PublicKey) (net.Connection, error)
 	GetConnectionIfExists(pk p2pcrypto.PublicKey) (net.Connection, error)
@@ -239,7 +199,7 @@ func (s *swarm) Start() error {
 			}
 			close(s.bootChan)
 			dhtsize := s.dht.Size()
-			s.lNode.With().Info("discovery_bootstrap", log.Bool("success", dhtsize > s.config.SwarmConfig.RandomConnections && s.bootErr == nil),
+			s.lNode.With().Info("discovery_bootstrap", log.Bool("success", dhtsize >= s.config.SwarmConfig.RandomConnections && s.bootErr == nil),
 				log.Int("dht_size", dhtsize), log.Duration("time_elapsed", time.Since(b)))
 		}()
 	}
@@ -548,12 +508,13 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 		data = &service.DataMsgWrapper{Req: wrap.Req, MsgType: wrap.Type, ReqID: wrap.ReqID, Payload: wrap.Payload}
 	}
 
+	p2pmeta := service.P2PMetadata{msg.Conn.RemoteAddr()}
 	// messages handled here are always processed by direct based protocols, only the gossip protocol calls ProcessGossipProtocolMessage
-	return s.ProcessDirectProtocolMessage(msg.Conn.RemotePublicKey(), pm.Metadata.NextProtocol, data)
+	return s.ProcessDirectProtocolMessage(msg.Conn.RemotePublicKey(), pm.Metadata.NextProtocol, data, p2pmeta)
 }
 
 // ProcessDirectProtocolMessage passes an already decrypted message to a protocol.
-func (s *swarm) ProcessDirectProtocolMessage(sender p2pcrypto.PublicKey, protocol string, data service.Data) error {
+func (s *swarm) ProcessDirectProtocolMessage(sender p2pcrypto.PublicKey, protocol string, data service.Data, metadata service.P2PMetadata) error {
 	// route authenticated message to the registered protocol
 	s.protocolHandlerMutex.RLock()
 	msgchan := s.directProtocolHandlers[protocol]
@@ -563,7 +524,7 @@ func (s *swarm) ProcessDirectProtocolMessage(sender p2pcrypto.PublicKey, protoco
 	}
 	s.lNode.Debug("Forwarding message to %v protocol", protocol)
 
-	msgchan <- directProtocolMessage{sender, data}
+	msgchan <- directProtocolMessage{metadata, sender, data}
 
 	return nil
 }

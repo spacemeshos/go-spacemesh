@@ -140,6 +140,10 @@ type TestMessage struct {
 	data   service.Data
 }
 
+func (tm TestMessage) Metadata() service.P2PMetadata {
+	return service.P2PMetadata{}
+}
+
 func (tm TestMessage) Sender() p2pcrypto.PublicKey {
 	return tm.sender
 }

@@ -2,6 +2,7 @@ package dht
 
 import (
 	"fmt"
+	"github.com/btcsuite/btcutil/base58"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
@@ -78,4 +79,17 @@ func TestFindNodeProtocol_FindNode2(t *testing.T) {
 
 	assert.NoError(t, err, "Should not return error")
 	assert.Equal(t, expected, idarr, "Should be array that contains the node")
+}
+
+func Test_ToNodeInfo(t *testing.T) {
+	many := node.GenerateRandomNodesData(100)
+
+	for i := 0; i < len(many); i++ {
+		nds := toNodeInfo(many, many[i].String())
+		for j := 0; j < len(many)-1; j++ {
+			if base58.Encode(nds[j].NodeId) == many[i].String() {
+				t.Error("it was there")
+			}
+		}
+	}
 }

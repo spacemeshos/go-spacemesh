@@ -2,6 +2,7 @@ package service
 
 import (
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
+	"net"
 )
 
 type MessageValidation struct {
@@ -22,12 +23,19 @@ func (mv MessageValidation) IsValid() bool {
 	return mv.isValid
 }
 
+// Metadata is a generic metadata interface
+type P2PMetadata struct {
+	FromAddress net.Addr
+	// add here more fields that are needed by protocols
+}
+
 func NewMessageValidation(msg []byte, prot string, isValid bool) MessageValidation {
 	return MessageValidation{msg, prot, isValid}
 }
 
 // DirectMessage is an interface that represents a simple direct message structure
 type DirectMessage interface {
+	Metadata() P2PMetadata
 	Sender() p2pcrypto.PublicKey
 	Bytes() []byte
 }
@@ -47,7 +55,7 @@ type Service interface {
 	RegisterDirectProtocolWithChannel(protocol string, ingressChannel chan DirectMessage) chan DirectMessage
 	SendMessage(peerPubkey p2pcrypto.PublicKey, protocol string, payload []byte) error
 	SubscribePeerEvents() (new chan p2pcrypto.PublicKey, del chan p2pcrypto.PublicKey)
-	ProcessDirectProtocolMessage(sender p2pcrypto.PublicKey, protocol string, payload Data) error
+	ProcessDirectProtocolMessage(sender p2pcrypto.PublicKey, protocol string, payload Data, metadata P2PMetadata) error
 	ProcessGossipProtocolMessage(protocol string, data Data, validationCompletedChan chan MessageValidation) error
 	Broadcast(protocol string, payload []byte) error
 	Shutdown()

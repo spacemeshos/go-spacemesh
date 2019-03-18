@@ -171,7 +171,7 @@ func TestNinjaTortoise_Sanity1(t *testing.T) {
 }
 
 func sanity(layers int, layerSize int, patternSize int, badBlks float64) *ninjaTortoise {
-	alg := NewNinjaTortoise(uint32(layerSize), log.New("TestNinjaTortoise_Sanity1", "", ""))
+	alg := NewNinjaTortoise(layerSize, log.New("TestNinjaTortoise_Sanity1", "", ""))
 	l1 := GenesisLayer()
 	alg.handleIncomingLayer(l1)
 	l := createLayerWithRandVoting(l1.Index()+1, []*mesh.Layer{l1}, layerSize, 1)
@@ -191,7 +191,7 @@ func sanity(layers int, layerSize int, patternSize int, badBlks float64) *ninjaT
 //vote explicitly for two previous layers
 //correction vectors compensate for double count
 func TestNinjaTortoise_Sanity2(t *testing.T) {
-	alg := NewNinjaTortoise(uint32(3), log.New("TestNinjaTortoise_Sanity2", "", ""))
+	alg := NewNinjaTortoise(3, log.New("TestNinjaTortoise_Sanity2", "", ""))
 	l := createMulExplicitLayer(0, map[mesh.LayerID]*mesh.Layer{}, nil, 1)
 	l1 := createMulExplicitLayer(1, map[mesh.LayerID]*mesh.Layer{l.Index(): l}, map[mesh.LayerID][]int{0: {0}}, 3)
 	l2 := createMulExplicitLayer(2, map[mesh.LayerID]*mesh.Layer{l1.Index(): l1}, map[mesh.LayerID][]int{1: {0, 1, 2}}, 3)

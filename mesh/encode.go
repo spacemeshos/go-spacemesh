@@ -7,7 +7,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common"
 )
 
-func (b BlockID) ToBytes() []byte { return common.Uint32ToBytes(uint32(b)) }
+func (b BlockID) ToBytes() []byte { return common.Uint64ToBytes(uint64(b)) }
+
+func (l LayerID) ToBytes() []byte { return common.Uint64ToBytes(uint64(l)) }
 
 func blockIdsAsBytes(ids map[BlockID]bool) ([]byte, error) {
 	var w bytes.Buffer

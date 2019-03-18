@@ -39,6 +39,7 @@ type TickProvider interface {
 }
 
 func (bl *BlockListener) Close() {
+	bl.Peers.Close()
 	close(bl.exit)
 }
 
@@ -66,7 +67,7 @@ func NewBlockListener(net server.Service, bv BlockValidator, layers *mesh.Mesh, 
 		exit:                 make(chan struct{}),
 		receivedGossipBlocks: net.RegisterGossipProtocol(NewBlockProtocol),
 	}
-	bl.RegisterMsgHandler(BLOCK, newBlockRequestHandler(layers, logger))
+	bl.RegisterBytesMsgHandler(BLOCK, newBlockRequestHandler(layers, logger))
 
 	return &bl
 }
@@ -78,24 +79,33 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 			bl.Log.Info("listening  stopped")
 			return
 		case data := <-bl.receivedGossipBlocks:
+
+			if data == nil {
+				bl.Error("got empty message while listening to gossip blocks")
+				break
+			}
+
 			blk, err := mesh.BytesAsBlock(bytes.NewReader(data.Bytes()))
 			if err != nil {
-				log.Error("received invalid block %v", data.Bytes()[:7])
+				bl.Error("received invalid block %v", data.Bytes()[:7])
 				data.ReportValidation(NewBlockProtocol, false)
 				break
 			}
-			bl.Log.With().Info("got new block", log.Uint64("id", uint64(blk.Id)), log.Int("txs", len(blk.Txs)), log.Bool("valid", err == nil))
-			if bl.BlockEligible(blk.LayerIndex, blk.MinerID) {
-				data.ReportValidation(NewBlockProtocol, true)
-				err := bl.AddBlock(&blk)
-				if err != nil {
-					log.Info("Block already received")
-					break
-				}
-				bl.addUnknownToQueue(&blk)
-			} else {
+
+			bl.Log.With().Info("got new block", log.Uint64("id", uint64(blk.Id)), log.Int("txs", len(blk.Txs)))
+			if !bl.BlockEligible(blk.LayerIndex, blk.MinerID) {
 				data.ReportValidation(NewBlockProtocol, false)
+				bl.Error("block not eligible")
+				break
 			}
+
+			data.ReportValidation(NewBlockProtocol, true)
+			if err := bl.AddBlock(&blk); err != nil {
+				bl.Info("Block already received")
+				break
+			}
+			bl.Info("added block to database ")
+			bl.addUnknownToQueue(&blk)
 		}
 	}
 }

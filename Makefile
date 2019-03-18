@@ -2,15 +2,16 @@ BINARY := go-spacemesh
 VERSION := 0.0.1
 COMMIT = $(shell git rev-parse HEAD)
 SHA = $(shell git rev-parse --short HEAD)
-BIN_DIR = $(shell pwd)/build
 CURR_DIR = $(shell pwd)
 CURR_DIR_WIN = $(shell cd)
+BIN_DIR = $(CURR_DIR)/build
+BIN_DIR_WIN = $(CUR_DIR_WIN)/build
 export GO111MODULE = on
 
-ifndef TRAVIS_PULL_REQUEST_BRANCH
-	BRANCH := $(shell git rev-parse --abbrev-ref HEAD)
+ifdef TRAVIS_BRANCH
+	BRANCH := $(TRAVIS_BRANCH)
 else
-	BRANCH := $(TRAVIS_PULL_REQUEST_BRANCH)
+	BRANCH := $(shell git rev-parse --abbrev-ref HEAD)
 endif
 
 # Setup the -ldflags option to pass vars defined here to app vars
@@ -45,16 +46,28 @@ endif
 build:
 ifeq ($(OS),Windows_NT)
 	make genproto
-	go build ${LDFLAGS} -o $(CURR_DIR_WIN)/$(BINARY).exe
+	go build ${LDFLAGS} -o $(BIN_DIR_WIN)/$(BINARY).exe
 else
 	make genproto
-	go build ${LDFLAGS} -o $(CURR_DIR)/$(BINARY)
+	go build ${LDFLAGS} -o $(BIN_DIR)/$(BINARY)
 endif
 .PHONY: build
 
 hare:
-	cd cmd/hare ; go build ; cd ..
+ifeq ($(OS),Windows_NT)
+	cd cmd/hare ; go build -o $(BIN_DIR_WIN)/go-hare.exe; cd ..
+else
+	cd cmd/hare ; go build -o $(BIN_DIR)/go-hare; cd ..
+endif
 .PHONY: hare
+
+p2p:
+ifeq ($(OS),WINDOWS_NT)
+	cd cmd/p2p ; go build -o $(BIN_DIR_WIN)/go-p2p.exe; cd ..
+else
+	cd cmd/p2p ; go build -o $(BIN_DIR)/go-p2p; cd ..
+endif
+.PHONY: p2p
 
 tidy:
 	go mod tidy
@@ -109,9 +122,9 @@ dockerpush: dockerbuild-go
 	echo "$(DOCKER_PASSWORD)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
 	docker tag $(DOCKER_IMAGE_NAME) spacemeshos/$(DOCKER_IMAGE_NAME):$(BRANCH)
 	docker tag $(DOCKER_IMAGE_NAME) spacemeshos/$(DOCKER_IMAGE_NAME):$(SHA)
-	# Temporary disable the push
-	#docker push spacemeshos/$(DOCKER_IMAGE_NAME):$(BRANCH)
-	#docker push spacemeshos/$(DOCKER_IMAGE_NAME):$(SHA)
+
+	docker push spacemeshos/$(DOCKER_IMAGE_NAME):$(BRANCH)
+	docker push spacemeshos/$(DOCKER_IMAGE_NAME):$(SHA)
 .PHONY: dockerpush
 
 dockerbuild-test:
