@@ -7,7 +7,10 @@ import (
 	"time"
 )
 
+//todo: decide what does the proof contain
 type proof struct{}
+
+type Round uint64
 
 type postCommitment struct {
 	Root  common.Hash
@@ -39,9 +42,9 @@ func (p *PoetProof) Valid() bool {
 }
 
 type PoetService interface {
-	SendPostProof(root common.Hash, p proof) error
-	GetMembershipProof(root common.Hash, timeout time.Duration) (*MembershipProof, error)
-	GetPoetProof(root common.Hash, timeout time.Duration) (*PoetProof, error)
+	SendPostProof(root common.Hash, p proof) (Round, error)
+	GetMembershipProof(rnd Round, root common.Hash, timeout time.Duration) (*MembershipProof, error)
+	Proof(rnd Round, root common.Hash, timeout time.Duration) (*PoetProof, error)
 }
 
 type PostService interface {
@@ -58,6 +61,7 @@ type Nipst struct {
 	membershipProof *MembershipProof
 	poetProof       *PoetProof
 	secondPost      *postCommitment
+	round           *Round
 }
 
 type NipstBuilder struct {
@@ -190,14 +194,19 @@ func (n *NipstBuilder) waitForPostChallenge(root common.Hash, challenge common.H
 
 func (n *NipstBuilder) waitForMembershipProof(commitment *postCommitment) *MembershipProof {
 	log.Info("Sending post commitment %v to POET", commitment.Root)
-	n.poet.SendPostProof(commitment.Root, commitment.Proof)
+	round, err := n.poet.SendPostProof(commitment.Root, commitment.Proof)
+	if err != nil {
+		return nil
+	}
 	then := time.Now()
 	for {
-		proof, err := n.poet.GetMembershipProof(commitment.Root, 1*time.Second)
+		proof, err := n.poet.GetMembershipProof(round, commitment.Root, 1*time.Second)
+		n.currentNipst.round = &round
 		if n.stopped() {
 			return nil
 		}
 		if err != nil {
+			time.Sleep(1 * time.Second)
 			continue
 		}
 		log.Info("Received %v proof from POET after %v ", commitment.Root, time.Since(then))
@@ -207,7 +216,7 @@ func (n *NipstBuilder) waitForMembershipProof(commitment *postCommitment) *Membe
 
 func (n *NipstBuilder) waitForPoetProof(m *MembershipProof) *PoetProof {
 	for {
-		proof, err := n.poet.GetPoetProof(m.Root, 1*time.Second)
+		proof, err := n.poet.Proof(*n.currentNipst.round, m.Root, 1*time.Second)
 		if n.stopped() {
 			return nil
 		}

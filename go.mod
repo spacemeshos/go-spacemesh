@@ -16,7 +16,6 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway v1.6.3
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/kr/pretty v0.1.0 // indirect
-	github.com/magiconair/properties v1.8.0
 	github.com/onsi/ginkgo v1.7.0 // indirect
 	github.com/onsi/gomega v1.4.3 // indirect
 	github.com/pkg/errors v0.8.1 // indirect
