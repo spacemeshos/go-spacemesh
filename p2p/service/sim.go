@@ -120,12 +120,12 @@ func (s *Simulator) NewNodeFrom(n node.Node) *Node {
 
 type simDirectMessage struct {
 	metadata P2PMetadata
-	msg    Data
-	sender p2pcrypto.PublicKey
+	msg      Data
+	sender   p2pcrypto.PublicKey
 }
 
 func (sm simDirectMessage) Metadata() P2PMetadata {
-	return  sm.metadata
+	return sm.metadata
 }
 
 // Bytes is the message's binary data in byte array format.
@@ -174,7 +174,6 @@ func (sn *Node) Start() error {
 	return nil
 }
 
-
 // simulator doesn't go through the regular p2p pipes so the metadata won't be available.
 // it's okay since this data doesn't matter to the simulator
 func simulatorMetadata() P2PMetadata {
@@ -194,7 +193,7 @@ func (sn *Node) ProcessDirectProtocolMessage(sender p2pcrypto.PublicKey, protoco
 	if !ok {
 		return errors.New("Unknown protocol")
 	}
-	c <- simDirectMessage{simulatorMetadata(),payload, sender}
+	c <- simDirectMessage{simulatorMetadata(), payload, sender}
 	return nil
 }
 

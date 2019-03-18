@@ -18,8 +18,6 @@ func NewProtocolMessageMetadata(author p2pcrypto.PublicKey, protocol string) *pb
 	}
 }
 
-
-
 //type p2pMetadata struct {
 //	data map[string]string // connection address
 //	// todo: anything more ?
@@ -41,11 +39,11 @@ func NewProtocolMessageMetadata(author p2pcrypto.PublicKey, protocol string) *pb
 
 type directProtocolMessage struct {
 	metadata service.P2PMetadata
-	sender p2pcrypto.PublicKey
-	data   service.Data
+	sender   p2pcrypto.PublicKey
+	data     service.Data
 }
 
-func (pm directProtocolMessage) Metadata() service.P2PMetadata{
+func (pm directProtocolMessage) Metadata() service.P2PMetadata {
 	return pm.metadata
 }
 

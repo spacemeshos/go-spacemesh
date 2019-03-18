@@ -58,7 +58,6 @@ func (app *P2PApp) Start(cmd *cobra.Command, args []string) {
 	api.ApproveAPIGossipMessages(cmdp.Ctx, app.p2p)
 	metrics.StartCollectingMetrics(app.Config.MetricsPort)
 
-
 	// start the node
 
 	err = app.p2p.Start()

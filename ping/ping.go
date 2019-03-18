@@ -10,6 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/ping/pb"
+	"net"
 	"time"
 )
 
@@ -27,18 +28,17 @@ var errFailed = errors.New("ping request failed")
 type Pinger struct {
 	localNode node.Node
 
-	pingCallbacks []func(ping *pb.Ping) error
+	pingCallbacks []func(from net.Addr, ping *pb.Ping) error
 
 	*server.MessageServer
 	logger log.Log
 	exit   chan struct{}
 }
 
-func (p *Pinger) RegisterCallback(f func(ping *pb.Ping) error) {
+func (p *Pinger) RegisterCallback(f func(from net.Addr, ping *pb.Ping) error) {
 	p.pingCallbacks = append(p.pingCallbacks, f)
 }
 
-//fires a sync every sm.syncInterval or on force space from outside
 func New(local node.Node, srv server.Service, logger log.Log) *Pinger {
 	p := Pinger{
 		localNode:     local,
@@ -52,11 +52,11 @@ func New(local node.Node, srv server.Service, logger log.Log) *Pinger {
 	return &p
 }
 
-func (p *Pinger) newPingRequestHandler() func(msg []byte) []byte {
-	return func(msg []byte) []byte {
+func (p *Pinger) newPingRequestHandler() func(msg server.Message) []byte {
+	return func(msg server.Message) []byte {
 		p.logger.Info("handle ping request")
 		req := &pb.Ping{}
-		if err := proto.Unmarshal(msg, req); err != nil {
+		if err := proto.Unmarshal(msg.Bytes(), req); err != nil {
 			return nil
 		}
 
@@ -65,7 +65,7 @@ func (p *Pinger) newPingRequestHandler() func(msg []byte) []byte {
 		// the next one won't happen and we won't respond. this should be revisited once we
 		// more callbacks or logic to the callback.
 		for _, f := range p.pingCallbacks {
-			if err := f(req); err != nil {
+			if err := f(msg.Metadata().FromAddress, req); err != nil {
 				return nil
 			}
 		}

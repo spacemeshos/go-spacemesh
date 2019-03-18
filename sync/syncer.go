@@ -115,9 +115,9 @@ func NewSync(srv server.Service, layers *mesh.Mesh, bv BlockValidator, conf Conf
 		exit:           make(chan struct{}),
 	}
 
-	s.RegisterMsgHandler(LAYER_HASH, newLayerHashRequestHandler(layers, logger))
-	s.RegisterMsgHandler(BLOCK, newBlockRequestHandler(layers, logger))
-	s.RegisterMsgHandler(LAYER_IDS, newLayerBlockIdsRequestHandler(layers, logger))
+	s.RegisterMsgHandler(LAYER_HASH, server.HandlerFromBytesHandler(newLayerHashRequestHandler(layers, logger)))
+	s.RegisterMsgHandler(BLOCK, server.HandlerFromBytesHandler(newBlockRequestHandler(layers, logger)))
+	s.RegisterMsgHandler(LAYER_IDS, server.HandlerFromBytesHandler(newLayerBlockIdsRequestHandler(layers, logger)))
 
 	return &s
 }

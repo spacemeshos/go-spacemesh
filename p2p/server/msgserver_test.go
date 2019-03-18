@@ -22,8 +22,8 @@ func TestProtocol_SendRequest(t *testing.T) {
 	handler := func(msg []byte) []byte {
 		return []byte("some value to return")
 	}
-
-	fnd1.RegisterMsgHandler(1, handler)
+	// todo test nonbyte handlers
+	fnd1.RegisterMsgHandler(1, HandlerFromBytesHandler(handler))
 
 	n2 := sim.NewNode()
 	fnd2 := NewMsgServer(n2, protocol, 5*time.Second, make(chan service.DirectMessage, config.ConfigValues.BufferSize), log.New("t2", "", ""))
@@ -54,7 +54,7 @@ func TestProtocol_CleanOldPendingMessages(t *testing.T) {
 		return nil
 	}
 
-	fnd1.RegisterMsgHandler(1, handler)
+	fnd1.RegisterMsgHandler(1, HandlerFromBytesHandler(handler))
 
 	n2 := sim.NewNode()
 	fnd2 := NewMsgServer(n2, protocol, 10*time.Millisecond, make(chan service.DirectMessage, config.ConfigValues.BufferSize), log.New("t4", "", ""))
@@ -98,7 +98,7 @@ func TestProtocol_Close(t *testing.T) {
 		return nil
 	}
 
-	fnd1.RegisterMsgHandler(1, handler)
+	fnd1.RegisterMsgHandler(1, HandlerFromBytesHandler(handler))
 
 	n2 := sim.NewNode()
 	fnd2 := NewMsgServer(n2, protocol, 10*time.Millisecond, make(chan service.DirectMessage, config.ConfigValues.BufferSize), log.New("t6", "", ""))
