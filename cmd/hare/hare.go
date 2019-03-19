@@ -76,6 +76,12 @@ func buildSet() *hare.Set {
 	return s
 }
 
+func (app *HareApp) wait(begin time.Time) {
+	dest := begin.Add(time.Duration(app.Config.HARE.RoundDuration*6) * time.Second)
+	time.Sleep(dest.Sub(time.Now()))
+	app.ha.Close()
+}
+
 func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	// start p2p services
 	log.Info("Initializing P2P services")
@@ -108,6 +114,7 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	app.ha.Start()
 	app.p2p.Start()
 	app.clock.Start()
+	go app.wait(app.clock.Genesis())
 }
 
 func main() {

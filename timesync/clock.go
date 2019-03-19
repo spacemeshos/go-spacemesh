@@ -115,3 +115,7 @@ func (t *Ticker) StartClock() {
 		}
 	}
 }
+
+func (t *Ticker) Genesis() time.Time {
+	return t.startEpoch
+}
