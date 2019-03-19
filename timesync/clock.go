@@ -82,7 +82,7 @@ func (t *Ticker) updateLayerID() {
 }
 
 func (t *Ticker) StartClock() {
-	log.Info("starting global clock")
+	log.Info("starting global clock now=%v genesis=%v", t.time.Now(), t.startEpoch)
 
 	var diff time.Duration
 	if t.time.Now().Before(t.startEpoch) {

@@ -103,7 +103,7 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
 	app.clock = timesync.NewTicker(timesync.RealClock{}, ld, gTime)
 
-	app.ha = hare.New(app.Config.HARE, swarm, app.sgn, &mockBlockProvider{}, hareOracle, app.clock.Subscribe(), lg)
+	app.ha = hare.New(app.Config.HARE, app.p2p, app.sgn, &mockBlockProvider{}, hareOracle, app.clock.Subscribe(), lg)
 	log.Info("Starting hare service")
 	app.ha.Start()
 	app.p2p.Start()

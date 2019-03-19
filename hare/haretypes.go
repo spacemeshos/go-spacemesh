@@ -246,7 +246,7 @@ func (s *Set) String() string {
 	// TODO: should improve
 	b := new(bytes.Buffer)
 	for _, v := range s.values {
-		fmt.Fprintf(b, "%v\r\n", v.Id())
+		fmt.Fprintf(b, "%v, ", v.Id())
 	}
 	return b.String()
 }
