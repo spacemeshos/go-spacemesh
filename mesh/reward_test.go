@@ -118,8 +118,12 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 
 	layers.AccumulateRewards(1, params)
 	remainder := (totalRewards * params.SimpleTxCost.Int64()) % 4
+	adj := 0
+	if remainder >= 2 {
+		adj = 4
+	}
 
-	assert.Equal(t, s.Total, totalRewards*params.SimpleTxCost.Int64()+params.BaseReward.Int64()+remainder)
+	assert.Equal(t, totalRewards*params.SimpleTxCost.Int64()+params.BaseReward.Int64()+int64(adj), s.Total)
 
 }
 
@@ -196,8 +200,10 @@ func TestMesh_integration(t *testing.T) {
 	var rewards int64
 	for i := 0; i < numofLayers; i++ {
 		reward := createLayer(layers, LayerID(i), numofBlocks, maxTxs)
+		// rewards are applied to layers in the past according to the reward maturity param
 		if rewards == 0 {
 			rewards += reward
+			log.Info("reward %v", rewards)
 		}
 	}
 
@@ -210,8 +216,18 @@ func TestMesh_integration(t *testing.T) {
 	layers.ValidateLayer(l4)
 	assert.Equal(t, oldTotal, s.Total)
 
+	//reward maturity is 5, when processing layer 5 rewards will be applied
 	layers.ValidateLayer(l5)
-	assert.Equal(t, rewards*ConfigTst().SimpleTxCost.Int64()+ConfigTst().BaseReward.Int64(), s.Total)
+	//since there can be a difference of up to x lerners where x is the number of blocks due to round up of penalties when distributed among all blocks
+	assert.True(t, rewards*ConfigTst().SimpleTxCost.Int64()+ConfigTst().BaseReward.Int64()-s.Total < int64(numofBlocks))
+}
+
+func TestMesh_calcRewards(t *testing.T) {
+	cfg := RewardConfig{PenaltyPercent: big.NewInt(13)}
+	bonus, penalty := calculateActualRewards(big.NewInt(10000), big.NewInt(10), cfg, 5)
+	assert.Equal(t, int64(10000), bonus.Int64()*5+penalty.Int64()*5)
+	assert.Equal(t, int64(1065), bonus.Int64())
+	assert.Equal(t, int64(935), penalty.Int64())
 }
 
 func TestMesh_MergeDoubles(t *testing.T) {

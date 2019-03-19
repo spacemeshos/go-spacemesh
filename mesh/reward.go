@@ -44,6 +44,7 @@ func MergeDoubles(transactions []*Transaction) []*Transaction {
 }
 
 func calculateActualRewards(rewards *big.Int, numBlocks *big.Int, params RewardConfig, underQuotaBlocks int) (*big.Int, *big.Int) {
+	log.Info("rewards %v blocks %v penalty_percent %v under_quota %v", rewards.Int64(), numBlocks.Int64(), params.PenaltyPercent.Int64(), underQuotaBlocks)
 	mod := new(big.Int)
 	// basic_reward =  total rewards / total_num_of_blocks
 	blockRewardPerMiner, _ := new(big.Int).DivMod(rewards, numBlocks, mod)
@@ -51,9 +52,15 @@ func calculateActualRewards(rewards *big.Int, numBlocks *big.Int, params RewardC
 		blockRewardPerMiner.Add(blockRewardPerMiner, big.NewInt(1))
 	}
 	// penalty = basic_reward / 100 * penalty_percent
-	rewardPenaltyPerMiner := new(big.Int).Mul(new(big.Int).Div(rewards, big.NewInt(100)), params.PenaltyPercent)
+	rewardPenaltyPerMiner, _ := new(big.Int).DivMod(new(big.Int).Mul(blockRewardPerMiner, params.PenaltyPercent), big.NewInt(100), mod)
+	/*if mod.Int64() >= 50 {
+		rewardPenaltyPerMiner.Add(rewardPenaltyPerMiner, big.NewInt(1))
+	}*/
 	// bonus = (penalty * num_of_blocks_with_under_quota_txs) / total_num_of_blocks
-	bonusPerMiner := new(big.Int).Div(new(big.Int).Mul(rewardPenaltyPerMiner, big.NewInt(int64(underQuotaBlocks))), numBlocks)
+	bonusPerMiner, _ := new(big.Int).DivMod(new(big.Int).Mul(rewardPenaltyPerMiner, big.NewInt(int64(underQuotaBlocks))), numBlocks, mod)
+	if mod.Int64() >= numBlocks.Int64()/2 {
+		bonusPerMiner.Add(bonusPerMiner, big.NewInt(1))
+	}
 	// bonus_reward = basic_reward + bonus
 	bonusReward := new(big.Int).Add(blockRewardPerMiner, bonusPerMiner)
 	// diminished_reward = basic_reward - penalty
