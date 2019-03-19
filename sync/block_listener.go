@@ -1,7 +1,6 @@
 package sync
 
 import (
-	"bytes"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -85,7 +84,7 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 				break
 			}
 
-			blk, err := mesh.BytesAsBlock(bytes.NewReader(data.Bytes()))
+			blk, err := mesh.BytesAsBlock(data.Bytes())
 			if err != nil {
 				bl.Error("received invalid block %v", data.Bytes()[:7])
 				data.ReportValidation(NewBlockProtocol, false)

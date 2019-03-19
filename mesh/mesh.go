@@ -6,7 +6,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/crypto/sha3"
-	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/rlp"
 	"math/big"
@@ -48,14 +47,14 @@ type Mesh struct {
 	done          chan struct{}
 }
 
-func NewMesh(layers, blocks, validity database.DB, rewardConfig RewardConfig, mesh MeshValidator, state StateUpdater, logger log.Log) *Mesh {
+func NewMesh(mDb *meshDB, rewardConfig RewardConfig, mesh MeshValidator, state StateUpdater, logger log.Log) *Mesh {
 	//todo add boot from disk
 	ll := &Mesh{
 		Log:          logger,
 		tortoise:     mesh,
 		state:        state,
 		done:         make(chan struct{}),
-		meshDB:       NewMeshDB(layers, blocks, validity, logger),
+		meshDB:       mDb,
 		rewardConfig: rewardConfig,
 	}
 
@@ -176,7 +175,7 @@ func (m *Mesh) ExtractUniqueOrderedTransactions(l *Layer) []*Transaction {
 		}
 		for _, tx := range b.Txs {
 			//todo: think about these conversions.. are they needed?
-			txs = append(txs, SerializableTransaction2StateTransaction(&tx))
+			txs = append(txs, SerializableTransaction2StateTransaction(tx))
 		}
 	}
 
@@ -238,7 +237,7 @@ func (m *Mesh) handleOrphanBlocks(block *Block) {
 		m.orphanBlocks[block.Layer()] = make(map[BlockID]struct{})
 	}
 	m.orphanBlocks[block.Layer()][block.ID()] = struct{}{}
-	m.Info("Added block %d to orphans", block.ID())
+	m.Debug("Added block %d to orphans", block.ID())
 	atomic.AddInt32(&m.orphanBlockCount, 1)
 	for _, b := range block.ViewEdges {
 		for _, layermap := range m.orphanBlocks {

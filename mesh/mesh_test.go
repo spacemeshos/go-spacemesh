@@ -2,6 +2,7 @@ package mesh
 
 import (
 	"bytes"
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/stretchr/testify/assert"
@@ -34,7 +35,10 @@ func getMesh(id string) *Mesh {
 	bdb := database.NewMemDatabase()
 	ldb := database.NewMemDatabase()
 	cdb := database.NewMemDatabase()
-	layers := NewMesh(ldb, bdb, cdb, ConfigTst(), &MeshValidatorMock{}, &MockState{}, log.New(id, "", ""))
+	tdb := database.NewMemDatabase()
+	lg := log.New(id, "", "")
+	mdb := NewMeshDB(ldb, bdb, cdb, tdb, lg)
+	layers := NewMesh(mdb, ConfigTst(), &MeshValidatorMock{}, &MockState{}, lg)
 	return layers
 }
 
@@ -47,6 +51,10 @@ func TestLayers_AddBlock(t *testing.T) {
 	block2 := NewBlock(true, []byte("data2"), time.Now(), 2)
 	block3 := NewBlock(true, []byte("data3"), time.Now(), 3)
 
+	addTransactionsToBlock(block1, 4)
+
+	fmt.Println(block1)
+
 	err := layers.AddBlock(block1)
 	assert.NoError(t, err)
 	err = layers.AddBlock(block2)
@@ -57,6 +65,10 @@ func TestLayers_AddBlock(t *testing.T) {
 	rBlock2, err := layers.GetBlock(block2.Id)
 	assert.NoError(t, err)
 
+	rBlock1, err := layers.GetBlock(block1.Id)
+	assert.NoError(t, err)
+
+	assert.True(t, len(rBlock1.Txs) == len(block1.Txs), "block content was wrong")
 	assert.True(t, bytes.Compare(rBlock2.Data, []byte("data2")) == 0, "block content was wrong")
 }
 

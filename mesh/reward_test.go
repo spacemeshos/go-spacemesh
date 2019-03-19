@@ -1,6 +1,7 @@
 package mesh
 
 import (
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -44,22 +45,23 @@ func ConfigTst() RewardConfig {
 }
 
 func getMeshWithMapState(id string, s StateUpdater) *Mesh {
-
-	//time := time.Now()
 	bdb := database.NewMemDatabase()
 	ldb := database.NewMemDatabase()
 	cdb := database.NewMemDatabase()
-	layers := NewMesh(ldb, bdb, cdb, ConfigTst(), &MeshValidatorMock{}, s, log.New(id, "", ""))
+	tdb := database.NewMemDatabase()
+	lg := log.New(id, "", "")
+	mdb := NewMeshDB(ldb, bdb, cdb, tdb, lg)
+	layers := NewMesh(mdb, ConfigTst(), &MeshValidatorMock{}, s, lg)
 	return layers
 }
 
-func addTransactions(bl *Block, numOfTxs int) int64 {
+func addTransactionsToBlock(bl *Block, numOfTxs int) int64 {
 	var totalRewards int64
 	for i := 0; i < numOfTxs; i++ {
 		gasPrice := rand.Int63n(100)
 		addr := rand.Int63n(10000)
-		//log.Info("adding tx with gas price %v nonce %v", gasPrice, i)
-		bl.Txs = append(bl.Txs, *NewSerializableTransaction(uint64(i), address.HexToAddress("1"),
+		log.Debug("adding tx with gas price %v nonce %v", gasPrice, i)
+		bl.Txs = append(bl.Txs, NewSerializableTransaction(uint64(i), address.HexToAddress("1"),
 			address.HexToAddress(strconv.FormatUint(uint64(addr), 10)),
 			big.NewInt(10),
 			big.NewInt(gasPrice),
@@ -75,7 +77,7 @@ func addTransactionsWithGas(bl *Block, numOfTxs int, gasPrice int64) int64 {
 
 		addr := rand.Int63n(10000)
 		//log.Info("adding tx with gas price %v nonce %v", gasPrice, i)
-		bl.Txs = append(bl.Txs, *NewSerializableTransaction(uint64(i), address.HexToAddress("1"),
+		bl.Txs = append(bl.Txs, NewSerializableTransaction(uint64(i), address.HexToAddress("1"),
 			address.HexToAddress(strconv.FormatUint(uint64(addr), 10)),
 			big.NewInt(10),
 			big.NewInt(gasPrice),
@@ -94,19 +96,19 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 
 	block1 := NewBlock(true, []byte("data1"), time.Now(), 1)
 	block1.MinerID = "1"
-	totalRewards += addTransactions(block1, 15)
+	totalRewards += addTransactionsToBlock(block1, 15)
 
 	block2 := NewBlock(true, []byte("data2"), time.Now(), 1)
 	block2.MinerID = "2"
-	totalRewards += addTransactions(block2, 13)
+	totalRewards += addTransactionsToBlock(block2, 13)
 
 	block3 := NewBlock(true, []byte("data3"), time.Now(), 1)
 	block3.MinerID = "3"
-	totalRewards += addTransactions(block3, 17)
+	totalRewards += addTransactionsToBlock(block3, 17)
 
 	block4 := NewBlock(true, []byte("data3"), time.Now(), 1)
 	block4.MinerID = "4"
-	totalRewards += addTransactions(block4, 16)
+	totalRewards += addTransactionsToBlock(block4, 16)
 
 	log.Info("total fees : %v", totalRewards)
 	layers.AddBlock(block1)
@@ -178,9 +180,10 @@ func createLayer(mesh *Mesh, id LayerID, numOfBlocks, maxTransactions int) (tota
 	for i := 0; i < numOfBlocks; i++ {
 		block1 := NewBlock(true, []byte("data1"), time.Now(), id)
 		block1.MinerID = strconv.Itoa(i)
-		totalRewards += addTransactions(block1, rand.Intn(maxTransactions))
+		totalRewards += addTransactionsToBlock(block1, rand.Intn(maxTransactions))
 		mesh.addBlock(block1)
 	}
+	log.Info(fmt.Sprintf("total rewards for layer %v: %v", id, totalRewards))
 	return totalRewards
 }
 
@@ -193,14 +196,12 @@ func TestMesh_integration(t *testing.T) {
 	layers := getMeshWithMapState("t1", s)
 	defer layers.Close()
 
-	var rewards int64
-	for i := 0; i < numofLayers; i++ {
-		reward := createLayer(layers, LayerID(i), numofBlocks, maxTxs)
-		if rewards == 0 {
-			rewards += reward
-		}
+	rewards := createLayer(layers, LayerID(0), numofBlocks, maxTxs)
+	for i := 1; i < numofLayers; i++ {
+		createLayer(layers, LayerID(i), numofBlocks, maxTxs)
 	}
 
+	log.Info("rewards : %v", rewards)
 	oldTotal := s.Total
 	l4, err := layers.getLayer(4)
 	assert.NoError(t, err)
@@ -211,7 +212,9 @@ func TestMesh_integration(t *testing.T) {
 	assert.Equal(t, oldTotal, s.Total)
 
 	layers.ValidateLayer(l5)
+
 	assert.Equal(t, rewards*ConfigTst().SimpleTxCost.Int64()+ConfigTst().BaseReward.Int64(), s.Total)
+
 }
 
 func TestMesh_MergeDoubles(t *testing.T) {
