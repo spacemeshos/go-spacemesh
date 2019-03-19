@@ -4,9 +4,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/stretchr/testify/assert"
 	"math/big"
-	"math/rand"
 	"strconv"
 	"testing"
 	"time"
@@ -117,13 +117,16 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 	params := NewTestRewardParams()
 
 	layers.AccumulateRewards(1, params)
-	remainder := (totalRewards * params.SimpleTxCost.Int64()) % 4
-	adj := 0
-	if remainder >= 2 {
-		adj = 4
-	}
+	totalRewardsCost := totalRewards*params.SimpleTxCost.Int64() + params.BaseReward.Int64()
+	remainder := (totalRewardsCost) % 4
+	var adj int64
 
-	assert.Equal(t, totalRewards*params.SimpleTxCost.Int64()+params.BaseReward.Int64()+int64(adj), s.Total)
+	//total penalty of blocks with less txs than quota sometimes does not divide equally between all nodes, therefore some Lerners can be lost
+	reward_penalty := (((totalRewardsCost + adj) / 4) * (params.PenaltyPercent.Int64())) / 100
+
+	log.Info("remainder %v reward_penalty %v mod %v reward cost %v", remainder, reward_penalty, (reward_penalty)%4, totalRewardsCost)
+
+	assert.Equal(t, totalRewards*params.SimpleTxCost.Int64()+params.BaseReward.Int64()-(reward_penalty)%4+remainder, s.Total)
 
 }
 

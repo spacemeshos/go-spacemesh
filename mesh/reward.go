@@ -18,7 +18,7 @@ func DefaultRewardConfig() RewardConfig {
 	return RewardConfig{
 		big.NewInt(10),
 		big.NewInt(5000),
-		big.NewInt(15),
+		big.NewInt(19),
 		15,
 		5,
 	}
@@ -58,12 +58,12 @@ func calculateActualRewards(rewards *big.Int, numBlocks *big.Int, params RewardC
 	}*/
 	// bonus = (penalty * num_of_blocks_with_under_quota_txs) / total_num_of_blocks
 	bonusPerMiner, _ := new(big.Int).DivMod(new(big.Int).Mul(rewardPenaltyPerMiner, big.NewInt(int64(underQuotaBlocks))), numBlocks, mod)
-	if mod.Int64() >= numBlocks.Int64()/2 {
+	/*if mod.Int64() >= numBlocks.Int64()/2 {
 		bonusPerMiner.Add(bonusPerMiner, big.NewInt(1))
-	}
+	}*/
 	// bonus_reward = basic_reward + bonus
 	bonusReward := new(big.Int).Add(blockRewardPerMiner, bonusPerMiner)
-	// diminished_reward = basic_reward - penalty
+	// diminished_reward = basic_reward + bonus - penalty
 	diminishedReward := new(big.Int).Sub(bonusReward, rewardPenaltyPerMiner)
 	log.Info(" rewards  %v blockRewardPerMiner: %v rewardPenaltyPerMiner %v bonusPerMiner %v bonusReward %v diminishedReward %v", rewards, blockRewardPerMiner, rewardPenaltyPerMiner, bonusPerMiner, bonusReward, diminishedReward)
 	return bonusReward, diminishedReward

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"math/rand"
+	"github.com/spacemeshos/go-spacemesh/rand"
 	"net"
 	"testing"
 	"time"
