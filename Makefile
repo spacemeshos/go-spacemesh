@@ -120,8 +120,8 @@ dockerbuild-go:
 
 dockerpush: dockerbuild-go
 	echo "$(DOCKER_PASSWORD)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
-	docker tag $(DOCKER_IMAGE_NAME) spacemeshos/$(DOCKER_IMAGE_NAME):$(BRANCH)
-	docker tag $(DOCKER_IMAGE_NAME) spacemeshos/$(DOCKER_IMAGE_NAME):$(SHA)
+	docker tag $(DOCKER_IMAGE_NAME):$(BRANCH) spacemeshos/$(DOCKER_IMAGE_NAME):$(BRANCH)
+	docker tag $(DOCKER_IMAGE_NAME):$(BRANCH) spacemeshos/$(DOCKER_IMAGE_NAME):$(SHA)
 
 	docker push spacemeshos/$(DOCKER_IMAGE_NAME):$(BRANCH)
 	docker push spacemeshos/$(DOCKER_IMAGE_NAME):$(SHA)
