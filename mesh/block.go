@@ -11,8 +11,8 @@ import (
 )
 
 type BlockID uint64
-
 type LayerID uint64
+type TransactionId []byte
 
 type BlockHeader struct {
 	Id         BlockID
@@ -23,7 +23,7 @@ type BlockHeader struct {
 	Timestamp  int64
 	BlockVotes []BlockID
 	ViewEdges  []BlockID
-	TxIds      [][]byte
+	TxIds      []TransactionId
 }
 
 type Block struct {
@@ -75,7 +75,7 @@ func NewBlock(coin bool, data []byte, ts time.Time, LayerID LayerID) *Block {
 }
 
 func newBlockHeader(block *Block) *BlockHeader {
-	tids := make([][]byte, len(block.Txs))
+	tids := make([]TransactionId, len(block.Txs))
 	for idx, tx := range block.Txs {
 		//keep tx's in same order !!!
 		tids[idx] = getTransactionId(tx)

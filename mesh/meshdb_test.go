@@ -19,6 +19,12 @@ func getMeshdb() *meshDB {
 	return mdb
 }
 
+func getMeshWithLevelDB() *meshDB {
+	//time := time.Now()
+	db := database.NewLevelDbStore("close_test", nil, nil)
+	return NewMeshDB(db, db, db, db, log.New("meshDb", "", ""))
+}
+
 func TestNewMeshDB(t *testing.T) {
 	mdb := getMeshdb()
 	id := BlockID(123)
@@ -29,13 +35,10 @@ func TestNewMeshDB(t *testing.T) {
 }
 
 func TestMeshDB_Close(t *testing.T) {
-	defer func() {
-		err := recover()
-		assert.NotNil(t, err)
-	}()
-	mdb := getMeshdb()
+	mdb := getMeshWithLevelDB()
 	mdb.Close()
-	mdb.addBlock(&Block{Id: 123})
+	err := mdb.addBlock(&Block{Id: 123})
+	assert.NotNil(t, err)
 }
 
 func TestMeshDb_Block(t *testing.T) {

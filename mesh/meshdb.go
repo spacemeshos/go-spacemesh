@@ -271,7 +271,7 @@ func (m *meshDB) writeTransactions(block *Block) error {
 	return nil
 }
 
-func (m *meshDB) getTransactions(transactions [][]byte) ([]*SerializableTransaction, error) {
+func (m *meshDB) getTransactions(transactions []TransactionId) ([]*SerializableTransaction, error) {
 	var ts []*SerializableTransaction
 	for _, id := range transactions {
 		tBytes, err := m.getTransactionBytes(id)
@@ -291,7 +291,7 @@ func (m *meshDB) getTransactions(transactions [][]byte) ([]*SerializableTransact
 	return ts, nil
 }
 
-func getTransactionId(t *SerializableTransaction) []byte {
+func getTransactionId(t *SerializableTransaction) TransactionId {
 	return append(append(t.Origin.Bytes(), t.Recipient.Bytes()...), common.Uint64ToBytes(t.AccountNonce)...)
 }
 
