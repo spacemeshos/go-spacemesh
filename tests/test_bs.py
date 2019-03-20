@@ -15,34 +15,15 @@ from pytest_testconfig import config as testconfig
 from elasticsearch import Elasticsearch
 from elasticsearch_dsl import Search, Q
 
-from node_info import NodeInfo
+from misc import NodeInfo, ContainerSpec
 
 BOOT_DEPLOYMENT_FILE = './k8s/bootstrap-w-conf.yml'
 CLIENT_DEPLOYMENT_FILE = './k8s/client-w-conf.yml'
 ORACLE_DEPLOYMENT_FILE = './k8s/oracle.yml'
 
 ELASTICSEARCH_URL = "http://{0}".format(testconfig['elastic']['host'])
-REPLACEABLE_ARGS = ['randcon', 'oracle_server', 'bootnodes', 'genesis_time']
 
 GENESIS_TIME = pytz.utc.localize(datetime.utcnow() + timedelta(seconds=testconfig['genesis_delta']))
-
-
-def update_args_in_deployment_yaml(yml_input, **kwargs):
-    args = yml_input['spec']['template']['spec']['containers'][0]['args']
-    for k in kwargs:
-        if k not in REPLACEABLE_ARGS:
-            raise Exception("Unknown arg: {0} - parsing error")
-        replaced = False
-        for i, arg in enumerate(args):
-            if arg[2:].replace('-', '_') == k:
-                # replace the value
-                args[i + 1] = kwargs[k]
-                replaced = True
-                break
-        if not replaced:
-            args += (['--{0}'.format(k.replace('_', '-')), kwargs[k]])
-    yml_input['spec']['template']['spec']['containers'][0]['args'] = args
-    return yml_input
 
 
 def get_elastic_search_api():
@@ -68,11 +49,11 @@ def wait_to_deployment_to_be_ready(deployment_name, name_space, time_out=None):
             raise Exception("Timeout waiting to deployment to be ready")
 
 
-def create_deployment(file_name, name_space, **kwargs):
+def create_deployment(file_name, name_space, container_specs):
     with open(path.join(path.dirname(__file__), file_name)) as f:
         dep = yaml.safe_load(f)
-        if kwargs:
-            dep = update_args_in_deployment_yaml(dep, **kwargs)
+        if container_specs:
+            dep = container_specs.update_deployment(dep)
 
         k8s_beta = client.ExtensionsV1beta1Api()
         resp1 = k8s_beta.create_namespaced_deployment(body=dep, namespace=name_space)
@@ -137,7 +118,7 @@ def setup_oracle():
     namespaced_pods = client.CoreV1Api().list_namespaced_pod(testconfig['namespace'],
                                                              label_selector="name=oracle").items
     if not namespaced_pods:
-        resp = create_deployment(ORACLE_DEPLOYMENT_FILE, testconfig['namespace'])
+        resp = create_deployment(ORACLE_DEPLOYMENT_FILE, testconfig['namespace'], None)
         namespaced_pods = client.CoreV1Api().list_namespaced_pod(testconfig['namespace'],
                                                                  label_selector="name=oracle").items
         if not namespaced_pods:
@@ -150,9 +131,12 @@ def setup_bootstrap(request, load_config, setup_oracle, create_configmap):
     def _setup_bootstrap_in_namespace(name_space):
         global bs_info
         bs_info = NodeInfo()
-        resp = create_deployment(BOOT_DEPLOYMENT_FILE, name_space,
-                                 oracle_server='http://{0}:3030'.format(setup_oracle),
-                                 genesis_time=GENESIS_TIME.isoformat('T', 'seconds'))
+        cspec = ContainerSpec(cname='bootstrap', cimage=testconfig['bootstrap']['image'],
+                              centry=[testconfig['bootstrap']['command']],
+                              oracle_server='http://{0}:3030'.format(setup_oracle),
+                              genesis_time=GENESIS_TIME.isoformat('T', 'seconds'))
+
+        resp = create_deployment(BOOT_DEPLOYMENT_FILE, name_space, cspec)
 
         bs_info.bs_deployment_name = resp.metadata._name
         namespaced_pods = client.CoreV1Api().list_namespaced_pod(namespace=name_space).items
@@ -184,10 +168,14 @@ def setup_clients(request, setup_oracle, setup_bootstrap):
     def _setup_clients_in_namespace(name_space):
         global bs_info, client_info
         client_info = NodeInfo()
-        resp = create_deployment(CLIENT_DEPLOYMENT_FILE, name_space,
-                                 bootnodes="{0}:{1}/{2}".format(bs_info.bs_pod_ip, '7513', bs_info.bs_key),
-                                 oracle_server='http://{0}:3030'.format(setup_oracle),
-                                 genesis_time=GENESIS_TIME.isoformat('T', 'seconds'))
+        cspec = ContainerSpec(cname='client', cimage=testconfig['client']['image'],
+                              centry=[testconfig['client']['command']],
+                              bootnodes="{0}:{1}/{2}".format(bs_info.bs_pod_ip, '7513', bs_info.bs_key),
+                              oracle_server='http://{0}:3030'.format(setup_oracle),
+                              genesis_time=GENESIS_TIME.isoformat('T', 'seconds'))
+
+        resp = create_deployment(CLIENT_DEPLOYMENT_FILE, name_space, cspec)
+
         client_info.bs_deployment_name = resp.metadata._name
         namespaced_pods = client.CoreV1Api().list_namespaced_pod(namespace=name_space, include_uninitialized=True).items
         client_pods = list(
@@ -263,7 +251,7 @@ def create_configmap(request):
 def save_log_on_exit(request):
     yield
     if testconfig['script_on_exit'] != '' and request.session.testsfailed == 1:
-        p = subprocess.Popen([testconfig['script_on_exit']],
+        p = subprocess.Popen([testconfig['script_on_exit'], testconfig['namespace']],
                              stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         (out, err) = p.communicate()
 
@@ -271,7 +259,10 @@ def save_log_on_exit(request):
 #    TESTS
 # ==============================================================================
 
-current_index = 'kubernetes_cluster-2019.03.*'
+
+dt = datetime.now()
+todaydate = dt.strftime("%Y.%m.%d")
+current_index = 'kubernetes_cluster-'+todaydate
 
 
 def test_bootstrap(setup_bootstrap):

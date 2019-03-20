@@ -23,6 +23,11 @@ type Message interface {
 	Data() service.Data
 }
 
+func extractPayload(m Message) []byte {
+	data := m.Data().(*service.DataMsgWrapper)
+	return data.Payload
+}
+
 type Item struct {
 	id        uint64
 	timestamp time.Time
@@ -34,11 +39,11 @@ type MessageServer struct {
 	name               string //server name
 	network            Service
 	pendMutex          sync.RWMutex
-	pendingQueue       *list.List                              //queue of pending messages
-	resHandlers        map[uint64]func(msg []byte)             //response handlers by request ReqId
-	msgRequestHandlers map[MessageType]func(msg []byte) []byte //request handlers by request type
-	ingressChannel     chan service.DirectMessage              //chan to relay messages into the server
-	requestLifetime    time.Duration                           //time a request can stay in the pending queue until evicted
+	pendingQueue       *list.List                                   //queue of pending messages
+	resHandlers        map[uint64]func(msg []byte)                  //response handlers by request ReqId
+	msgRequestHandlers map[MessageType]func(message Message) []byte //request handlers by request type
+	ingressChannel     chan service.DirectMessage                   //chan to relay messages into the server
+	requestLifetime    time.Duration                                //time a request can stay in the pending queue until evicted
 	workerCount        sync.WaitGroup
 	workerLimiter      chan int
 	exit               chan struct{}
@@ -52,7 +57,7 @@ func NewMsgServer(network Service, name string, requestLifetime time.Duration, c
 		pendingQueue:       list.New(),
 		network:            network,
 		ingressChannel:     network.RegisterDirectProtocolWithChannel(name, c),
-		msgRequestHandlers: make(map[MessageType]func(msg []byte) []byte),
+		msgRequestHandlers: make(map[MessageType]func(message Message) []byte),
 		requestLifetime:    requestLifetime,
 		exit:               make(chan struct{}),
 		workerLimiter:      make(chan int, runtime.NumCPU()),
@@ -133,17 +138,18 @@ func (p *MessageServer) removeFromPending(reqID uint64) {
 
 func (p *MessageServer) handleMessage(msg Message) {
 	data := msg.Data().(*service.DataMsgWrapper)
+
 	if data.Req {
-		p.handleRequestMessage(msg.Sender(), data)
+		p.handleRequestMessage(msg, data)
 	} else {
 		p.handleResponseMessage(data)
 	}
 }
 
-func (p *MessageServer) handleRequestMessage(sender p2pcrypto.PublicKey, headers *service.DataMsgWrapper) {
-	if payload := p.msgRequestHandlers[MessageType(headers.MsgType)](headers.Payload); payload != nil {
-		rmsg := &service.DataMsgWrapper{MsgType: headers.MsgType, ReqID: headers.ReqID, Payload: payload}
-		sendErr := p.network.SendWrappedMessage(sender, p.name, rmsg)
+func (p *MessageServer) handleRequestMessage(msg Message, data *service.DataMsgWrapper) {
+	if payload := p.msgRequestHandlers[MessageType(data.MsgType)](msg); payload != nil {
+		rmsg := &service.DataMsgWrapper{MsgType: data.MsgType, ReqID: data.ReqID, Payload: payload}
+		sendErr := p.network.SendWrappedMessage(msg.Sender(), p.name, rmsg)
 		if sendErr != nil {
 			p.Error("Error sending response message, err:", sendErr)
 		}
@@ -164,8 +170,19 @@ func (p *MessageServer) handleResponseMessage(headers *service.DataMsgWrapper) {
 	}
 }
 
-func (p *MessageServer) RegisterMsgHandler(msgType MessageType, reqHandler func(msg []byte) []byte) {
+func (p *MessageServer) RegisterMsgHandler(msgType MessageType, reqHandler func(message Message) []byte) {
 	p.msgRequestHandlers[msgType] = reqHandler
+}
+
+func handlerFromBytesHandler(in func(msg []byte) []byte) func(message Message) []byte {
+	return func(message Message) []byte {
+		payload := extractPayload(message)
+		return in(payload)
+	}
+}
+
+func (p *MessageServer) RegisterBytesMsgHandler(msgType MessageType, reqHandler func([]byte) []byte) {
+	p.msgRequestHandlers[msgType] = handlerFromBytesHandler(reqHandler)
 }
 
 func (p *MessageServer) SendRequest(msgType MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte)) error {

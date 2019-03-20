@@ -115,7 +115,7 @@ cover:
 .PHONY: cover
 
 dockerbuild-go:
-	docker build -t $(DOCKER_IMAGE_NAME):latest .
+	docker build -t $(DOCKER_IMAGE_NAME):$(BRANCH) .
 .PHONY: dockerbuild-go
 
 dockerpush: dockerbuild-go
