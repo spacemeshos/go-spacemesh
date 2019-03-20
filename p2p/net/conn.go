@@ -177,6 +177,28 @@ func (c *FormattedConnection) shutdown(err error) {
 	c.formatter.Close()
 }
 
+var ErrTriedToSetupExistingConn = errors.New("tried to setup existing connection")
+var RemoteHandshakeTimeout = time.Second * 2
+var ErrIncomingSessionTimeout = errors.New("timeout waiting for handshake message")
+
+func (c *FormattedConnection) setupIncoming() error {
+	timeout := time.NewTimer(RemoteHandshakeTimeout)
+	select {
+	case msg, ok := <-c.formatter.In():
+		if !ok { // chan closed
+			return ErrClosedIncomingChannel
+		}
+
+		if c.session == nil {
+			err := c.networker.HandlePreSessionIncomingMessage(c, msg)
+			return err
+		}
+		return ErrTriedToSetupExistingConn
+	case <-timeout.C:
+		return ErrIncomingSessionTimeout
+	}
+}
+
 // Push outgoing message to the connections
 // Read from the incoming new messages and send down the connection
 func (c *FormattedConnection) beginEventProcessing() {
@@ -193,14 +215,12 @@ Loop:
 			}
 
 			if c.session == nil {
-				err = c.networker.HandlePreSessionIncomingMessage(c, msg)
-				if err != nil {
-					break Loop
-				}
-			} else {
-				metrics.PeerRecv.With(metrics.PeerIdLabel, c.remotePub.String()).Add(float64(len(msg)))
-				c.publish(msg)
+				err = ErrTriedToSetupExistingConn
+				break Loop
 			}
+
+			metrics.PeerRecv.With(metrics.PeerIdLabel, c.remotePub.String()).Add(float64(len(msg)))
+			c.publish(msg)
 
 		case <-c.closeChan:
 			err = ErrConnectionClosed

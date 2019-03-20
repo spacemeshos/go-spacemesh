@@ -24,6 +24,8 @@ const DefaultQueueCount uint = 6
 // DefaultMessageQueueSize is the buffer size of each queue mentioned above. (queues are buffered channels)
 const DefaultMessageQueueSize uint = 256
 
+const MaxPendingConnections = 50
+
 // IncomingMessageEvent is the event reported on new incoming message, it contains the message and the Connection carrying the message
 type IncomingMessageEvent struct {
 	Conn    Connection
@@ -256,7 +258,14 @@ func (n *Net) listen() error {
 
 func (n *Net) acceptTCP() {
 	n.logger.Debug("Waiting for incoming connections...")
+	pending := make(chan struct{}, MaxPendingConnections)
+
+	for i := 0; i < MaxPendingConnections; i++ {
+		pending <- struct{}{}
+	}
+
 	for {
+		<-pending
 		netConn, err := n.tcpListener.Accept()
 		if err != nil {
 
@@ -270,11 +279,20 @@ func (n *Net) acceptTCP() {
 		n.logger.Debug("Got new connection... Remote Address: %s", netConn.RemoteAddr())
 		formatter := delimited.NewChan(10)
 		c := newConnection(netConn, n, formatter, nil, nil, n.logger)
+		go func(con Connection) {
+			defer func() { pending <- struct{}{} }()
+			err := c.setupIncoming()
+			if err != nil {
+				n.logger.Warning("Error handling incoming connection with ", c.remoteAddr.String())
+				return
+			}
+			go c.beginEventProcessing()
+		}(c)
 
-		go c.beginEventProcessing()
 		// network won't publish the connection before it the remote node had established a session
 	}
 }
+
 
 // SubscribeOnNewRemoteConnections registers a callback for a new connection event. all registered callbacks are called before moving.
 func (n *Net) SubscribeOnNewRemoteConnections(f func(event NewConnectionEvent)) {
