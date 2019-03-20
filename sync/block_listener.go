@@ -66,7 +66,7 @@ func NewBlockListener(net server.Service, bv BlockValidator, layers *mesh.Mesh, 
 		exit:                 make(chan struct{}),
 		receivedGossipBlocks: net.RegisterGossipProtocol(NewBlockProtocol),
 	}
-	bl.RegisterMsgHandler(BLOCK, newBlockRequestHandler(layers, logger))
+	bl.RegisterBytesMsgHandler(BLOCK, newBlockRequestHandler(layers, logger))
 
 	return &bl
 }

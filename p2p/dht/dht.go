@@ -12,6 +12,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/ping"
 	"github.com/spacemeshos/go-spacemesh/ping/pb"
+	"net"
+	"strings"
 	"time"
 )
 
@@ -41,7 +43,7 @@ var (
 )
 
 type Pinger interface {
-	RegisterCallback(f func(ping *pb.Ping) error)
+	OnPing(f func(from net.Addr, ping *pb.Ping) error)
 	Ping(p p2pcrypto.PublicKey) error
 }
 
@@ -84,18 +86,37 @@ func New(ln *node.LocalNode, config config.SwarmConfig, service service.Service)
 	}
 	d.fnp = newFindNodeProtocol(service, d.rt)
 
-	pinger.RegisterCallback(func(p *pb.Ping) error {
-		//todo: check the address provided with an extra ping before upading. ( if we haven't checked it for a while )
-		k, err := p2pcrypto.NewPubkeyFromBytes(p.ID)
-
-		if err != nil {
-			return err
-		}
-		d.rt.Update(node.New(k, p.ListenAddress))
-		return nil
-	})
+	pinger.OnPing(d.PingerCallback)
 
 	return d
+}
+
+func (d *KadDHT) PingerCallback(from net.Addr, p *pb.Ping) error {
+	//todo: check the address provided with an extra ping before upading. ( if we haven't checked it for a while )
+	k, err := p2pcrypto.NewPubkeyFromBytes(p.ID)
+
+	if err != nil {
+		return err
+	}
+
+	//extract port
+	_, port, err := net.SplitHostPort(p.ListenAddress)
+	if err != nil {
+		return err
+	}
+	var addr string
+
+	if spl := strings.Split(from.String(), ":"); len(spl) > 1 {
+		addr, _, err = net.SplitHostPort(from.String())
+	}
+
+	if err != nil {
+		return err
+	}
+
+	// todo: decide on best way to know our ext address
+	d.rt.Update(node.New(k, net.JoinHostPort(addr, port)))
+	return nil
 }
 
 // Update insert or updates a node in the routing table.
