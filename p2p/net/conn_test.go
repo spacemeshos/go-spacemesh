@@ -6,6 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/delimited"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"net"
 	"runtime"
 	"sync"
@@ -72,10 +73,23 @@ func TestPreSessionMessage(t *testing.T) {
 	rPub := p2pcrypto.NewRandomPubkey()
 	formatter := delimited.NewChan(10)
 	conn := newConnection(rwcam, netw, formatter, rPub, nil, netw.logger)
-	go conn.beginEventProcessing()
 	rwcam.SetReadResult([]byte{3, 1, 1, 1}, nil)
+	err := conn.setupIncoming()
+	require.NoError(t, err)
+	require.Equal(t, conn.Closed(), false)
+	require.Equal(t, int32(1), netw.PreSessionCount())
+}
+
+func TestPreSessionMessageAfterSession(t *testing.T) {
+	netw := NewNetworkMock()
+	rwcam := NewReadWriteCloseAddresserMock()
+	rPub := p2pcrypto.NewRandomPubkey()
+	formatter := delimited.NewChan(10)
+	conn := newConnection(rwcam, netw, formatter, rPub, nil, netw.logger)
+	rwcam.SetReadResult([]byte{3, 1, 1, 1}, nil)
+	go conn.beginEventProcessing()
 	time.Sleep(50 * time.Millisecond)
-	assert.Equal(t, int32(1), netw.PreSessionCount())
+	assert.Equal(t, conn.Closed(), true)
 }
 
 func TestPreSessionError(t *testing.T) {
@@ -86,17 +100,8 @@ func TestPreSessionError(t *testing.T) {
 	conn := newConnection(rwcam, netw, formatter, rPub, nil, netw.logger)
 	netw.SetPreSessionResult(fmt.Errorf("fail"))
 
-	var wg sync.WaitGroup
-	wg.Add(1)
-	netw.SubscribeClosingConnections(func(closedConn Connection) {
-		assert.Equal(t, conn.id, closedConn.ID())
-		wg.Done()
-	})
-
-	go conn.beginEventProcessing()
-	rwcam.SetReadResult([]byte{3, 1, 1, 1}, nil)
-	wg.Wait()
-	assert.Equal(t, int32(1), netw.PreSessionCount())
+	err := conn.setupIncoming()
+	require.Error(t, err)
 }
 
 func TestErrClose(t *testing.T) {

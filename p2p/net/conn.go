@@ -182,21 +182,30 @@ var RemoteHandshakeTimeout = time.Second * 2
 var ErrIncomingSessionTimeout = errors.New("timeout waiting for handshake message")
 
 func (c *FormattedConnection) setupIncoming() error {
+	var err error
 	timeout := time.NewTimer(RemoteHandshakeTimeout)
 	select {
 	case msg, ok := <-c.formatter.In():
 		if !ok { // chan closed
-			return ErrClosedIncomingChannel
+			err = ErrClosedIncomingChannel
+			break
 		}
 
 		if c.session == nil {
-			err := c.networker.HandlePreSessionIncomingMessage(c, msg)
-			return err
+			err = c.networker.HandlePreSessionIncomingMessage(c, msg)
+			if err != nil {
+				break
+			}
+			return nil
 		}
-		return ErrTriedToSetupExistingConn
+		err = ErrTriedToSetupExistingConn
+		break
 	case <-timeout.C:
-		return ErrIncomingSessionTimeout
+		err = ErrIncomingSessionTimeout
 	}
+
+	c.Close()
+	return err
 }
 
 // Push outgoing message to the connections
