@@ -57,7 +57,7 @@ func addTransactions(bl *Block, numOfTxs int) int64 {
 	var totalRewards int64
 	for i := 0; i < numOfTxs; i++ {
 		gasPrice := rand.Int63n(100)
-		addr := rand.Int63n(10000)
+		addr := rand.Int63n(1000000)
 		//log.Info("adding tx with gas price %v nonce %v", gasPrice, i)
 		bl.Txs = append(bl.Txs, *NewSerializableTransaction(uint64(i), address.HexToAddress("1"),
 			address.HexToAddress(strconv.FormatUint(uint64(addr), 10)),
@@ -222,7 +222,8 @@ func TestMesh_integration(t *testing.T) {
 	//reward maturity is 5, when processing layer 5 rewards will be applied
 	layers.ValidateLayer(l5)
 	//since there can be a difference of up to x lerners where x is the number of blocks due to round up of penalties when distributed among all blocks
-	assert.True(t, rewards*ConfigTst().SimpleTxCost.Int64()+ConfigTst().BaseReward.Int64()-s.Total < int64(numofBlocks))
+	totalPayout := rewards*ConfigTst().SimpleTxCost.Int64() + ConfigTst().BaseReward.Int64()
+	assert.True(t, totalPayout-s.Total < int64(numofBlocks), " rewards : %v, total %v blocks %v", totalPayout, s.Total, int64(numofBlocks))
 }
 
 func TestMesh_calcRewards(t *testing.T) {
