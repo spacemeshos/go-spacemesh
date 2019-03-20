@@ -49,9 +49,12 @@ def wait_to_deployment_to_be_ready(deployment_name, name_space, time_out=None):
             raise Exception("Timeout waiting to deployment to be ready")
 
 
-def create_deployment(file_name, name_space, container_specs):
+def create_deployment(file_name, name_space, replica_size=1, container_specs=None):
     with open(path.join(path.dirname(__file__), file_name)) as f:
         dep = yaml.safe_load(f)
+
+        # Set replica size
+        dep['spec']['replicas'] = replica_size
         if container_specs:
             dep = container_specs.update_deployment(dep)
 
@@ -118,7 +121,7 @@ def setup_oracle():
     namespaced_pods = client.CoreV1Api().list_namespaced_pod(testconfig['namespace'],
                                                              label_selector="name=oracle").items
     if not namespaced_pods:
-        resp = create_deployment(ORACLE_DEPLOYMENT_FILE, testconfig['namespace'], None)
+        resp = create_deployment(ORACLE_DEPLOYMENT_FILE, testconfig['namespace'])
         namespaced_pods = client.CoreV1Api().list_namespaced_pod(testconfig['namespace'],
                                                                  label_selector="name=oracle").items
         if not namespaced_pods:
@@ -136,7 +139,7 @@ def setup_bootstrap(request, load_config, setup_oracle, create_configmap):
                               oracle_server='http://{0}:3030'.format(setup_oracle),
                               genesis_time=GENESIS_TIME.isoformat('T', 'seconds'))
 
-        resp = create_deployment(BOOT_DEPLOYMENT_FILE, name_space, cspec)
+        resp = create_deployment(BOOT_DEPLOYMENT_FILE, name_space, 1, cspec)
 
         bs_info.bs_deployment_name = resp.metadata._name
         namespaced_pods = client.CoreV1Api().list_namespaced_pod(namespace=name_space).items
@@ -174,7 +177,9 @@ def setup_clients(request, setup_oracle, setup_bootstrap):
                               oracle_server='http://{0}:3030'.format(setup_oracle),
                               genesis_time=GENESIS_TIME.isoformat('T', 'seconds'))
 
-        resp = create_deployment(CLIENT_DEPLOYMENT_FILE, name_space, cspec)
+        resp = create_deployment(CLIENT_DEPLOYMENT_FILE, name_space,
+                                 replica_size=testconfig['client']['replicas'],
+                                 container_specs=cspec)
 
         client_info.bs_deployment_name = resp.metadata._name
         namespaced_pods = client.CoreV1Api().list_namespaced_pod(namespace=name_space, include_uninitialized=True).items

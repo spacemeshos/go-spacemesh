@@ -14,6 +14,7 @@ bootstrap:
 client:
   image: 'spacemeshos/go-spacemesh:develop'
   command: '/bin/go-spacemesh'
+  replicas: 10
 
 elastic:
   host: es.spacemesh.io
