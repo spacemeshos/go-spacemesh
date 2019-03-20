@@ -11,11 +11,9 @@ import (
 )
 
 func getMeshdb() *meshDB {
-	blocks := database.NewMemDatabase()
-	layers := database.NewMemDatabase()
-	transactions := database.NewMemDatabase()
-	validty := database.NewMemDatabase()
-	mdb := NewMeshDB(layers, blocks, transactions, validty, log.New("mashDb", "", ""))
+
+	db := database.NewMemDatabase()
+	mdb := NewMeshDB(db, db, db, db, log.New("mashDb", "", ""))
 	return mdb
 }
 

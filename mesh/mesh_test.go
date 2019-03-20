@@ -32,12 +32,9 @@ func (MockState) ApplyRewards(layer LayerID, miners map[string]struct{}, underQu
 func getMesh(id string) *Mesh {
 
 	//time := time.Now()
-	bdb := database.NewMemDatabase()
-	ldb := database.NewMemDatabase()
-	cdb := database.NewMemDatabase()
-	tdb := database.NewMemDatabase()
+	db := database.NewMemDatabase()
 	lg := log.New(id, "", "")
-	mdb := NewMeshDB(ldb, bdb, cdb, tdb, lg)
+	mdb := NewMeshDB(db, db, db, db, lg)
 	layers := NewMesh(mdb, ConfigTst(), &MeshValidatorMock{}, &MockState{}, lg)
 	return layers
 }

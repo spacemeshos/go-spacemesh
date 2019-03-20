@@ -45,12 +45,9 @@ func ConfigTst() RewardConfig {
 }
 
 func getMeshWithMapState(id string, s StateUpdater) *Mesh {
-	bdb := database.NewMemDatabase()
-	ldb := database.NewMemDatabase()
-	cdb := database.NewMemDatabase()
-	tdb := database.NewMemDatabase()
+	db := database.NewMemDatabase()
 	lg := log.New(id, "", "")
-	mdb := NewMeshDB(ldb, bdb, cdb, tdb, lg)
+	mdb := NewMeshDB(db, db, db, db, lg)
 	layers := NewMesh(mdb, ConfigTst(), &MeshValidatorMock{}, s, lg)
 	return layers
 }
