@@ -46,15 +46,14 @@ func TestNet_EnqueueMessage(t *testing.T) {
 	wg.Wait()
 }
 
-
 type mockListener struct {
-	calledCount int32
+	calledCount  int32
 	connReleaser chan struct{}
 	accpetResErr error
 }
 
 func newMockListener() *mockListener {
-	return &mockListener{connReleaser:make(chan struct{})}
+	return &mockListener{connReleaser: make(chan struct{})}
 }
 
 func (ml *mockListener) listenerFunc() (net.Listener, error) {
@@ -63,7 +62,7 @@ func (ml *mockListener) listenerFunc() (net.Listener, error) {
 
 func (ml *mockListener) Accept() (net.Conn, error) {
 	atomic.AddInt32(&ml.calledCount, 1)
-	<- ml.connReleaser
+	<-ml.connReleaser
 	var c net.Conn = nil
 	var c2 net.Conn = nil
 	if ml.accpetResErr == nil {
@@ -79,11 +78,11 @@ func (ml *mockListener) releaseConn() {
 	ml.connReleaser <- struct{}{}
 }
 
-func (ml *mockListener) Close() (error) {
+func (ml *mockListener) Close() error {
 	return nil
 }
-func (ml *mockListener) Addr() (net.Addr) {
-	return &net.IPAddr{IP:net.ParseIP("0.0.0.0"), Zone:"ipv4"}
+func (ml *mockListener) Addr() net.Addr {
+	return &net.IPAddr{IP: net.ParseIP("0.0.0.0"), Zone: "ipv4"}
 }
 
 func Test_Net_LimitedConnections(t *testing.T) {
@@ -105,7 +104,7 @@ func Test_Net_LimitedConnections(t *testing.T) {
 
 	require.Equal(t, atomic.LoadInt32(&listener.calledCount), int32(cfg.MaxPendingConnections))
 	done := make(chan struct{})
-	go func () {
+	go func() {
 		listener.releaseConn()
 		done <- struct{}{}
 	}()
