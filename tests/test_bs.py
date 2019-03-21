@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from fixtures import load_config
+from tests.fixtures import load_config
 import os
 from os import path
 import pytest
@@ -15,7 +15,7 @@ from pytest_testconfig import config as testconfig
 from elasticsearch import Elasticsearch
 from elasticsearch_dsl import Search, Q
 
-from misc import NodeInfo, ContainerSpec
+from tests.misc import NodeInfo, ContainerSpec
 
 BOOT_DEPLOYMENT_FILE = './k8s/bootstrap-w-conf.yml'
 CLIENT_DEPLOYMENT_FILE = './k8s/client-w-conf.yml'
@@ -126,7 +126,7 @@ def setup_oracle():
     return namespaced_pods[0].status.pod_ip
 
 
-@pytest.fixture
+@pytest.fixture(scope='module')
 def setup_bootstrap(request, load_config, setup_oracle, create_configmap):
     def _setup_bootstrap_in_namespace(name_space):
         global bs_info
@@ -163,7 +163,7 @@ def setup_bootstrap(request, load_config, setup_oracle, create_configmap):
     return _setup_bootstrap_in_namespace(testconfig['namespace'])
 
 
-@pytest.fixture
+@pytest.fixture(scope='module')
 def setup_clients(request, setup_oracle, setup_bootstrap):
     def _setup_clients_in_namespace(name_space):
         global bs_info, client_info
@@ -207,7 +207,7 @@ def setup_clients(request, setup_oracle, setup_bootstrap):
     return _setup_clients_in_namespace(testconfig['namespace'])
 
 
-@pytest.fixture
+@pytest.fixture(scope='module')
 def create_configmap(request):
     def _create_configmap_in_namespace(nspace):
         # Configure ConfigMap metadata
@@ -247,7 +247,7 @@ def create_configmap(request):
     return _create_configmap_in_namespace(testconfig['namespace'])
 
 
-@pytest.fixture
+@pytest.fixture(scope='module')
 def save_log_on_exit(request):
     yield
     if testconfig['script_on_exit'] != '' and request.session.testsfailed == 1:
@@ -293,7 +293,10 @@ def test_gossip(load_config, setup_clients):
     (out, err) = p.communicate()
     assert '{"value":"ok"}' in out.decode("utf-8")
 
-    time.sleep(40)
+    gossip_propagation_sleep = len(setup_clients)*2
+    print('sleep for {0} sec to enable gossip propagation'.format(gossip_propagation_sleep))
+    time.sleep(gossip_propagation_sleep)
+
     peers_for_gossip = query_es_gossip_message(current_index, testconfig['namespace'], client_info.bs_deployment_name)
     assert len(setup_clients) == peers_for_gossip
 
