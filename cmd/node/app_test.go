@@ -2,7 +2,6 @@ package node
 
 import (
 	"fmt"
-	"github.com/fortytw2/leaktest"
 	"github.com/spacemeshos/go-spacemesh/address"
 	apiCfg "github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/hare"
@@ -133,7 +132,7 @@ func (app *AppTestSuite) gracefullShutdown() {
 }
 
 func TestAppTestSuite(t *testing.T) {
-	defer leaktest.Check(t)()
+	//defer leaktest.Check(t)()
 	suite.Run(t, new(AppTestSuite))
 
 }

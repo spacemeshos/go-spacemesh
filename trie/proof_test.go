@@ -21,7 +21,7 @@ import (
 	crand "crypto/rand"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/database"
-	mrand "math/rand"
+	mrand "github.com/spacemeshos/go-spacemesh/rand"
 	"testing"
 	"time"
 
