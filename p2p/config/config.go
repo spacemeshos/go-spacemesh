@@ -26,8 +26,6 @@ func duration(duration string) (dur time.Duration) {
 
 // Config defines the configuration options for the Spacemesh peer-to-peer networking layer
 type Config struct {
-	SecurityParam   int           `mapstructure:"security-param"`
-	FastSync        bool          `mapstructure:"fast-sync"`
 	TCPPort         int           `mapstructure:"tcp-port"`
 	NodeID          string        `mapstructure:"node-id"`
 	NewNode         bool          `mapstructure:"new-node"`
@@ -35,6 +33,10 @@ type Config struct {
 	ConnKeepAlive   time.Duration `mapstructure:"conn-keepalive"`
 	NetworkID       int8          `mapstructure:"network-id"`
 	ResponseTimeout time.Duration `mapstructure:"response-timeout"`
+	SessionTimeout time.Duration `mapstructure:"session-timeout"`
+	MaxPendingConnections int `mapstructure:"max-pending-connections"`
+	OutboundPeersTarget int `mapstructure:"outbound-target"`
+	MaxInboundPeers int `mapstructure:"max-inbound"`
 	SwarmConfig     SwarmConfig   `mapstructure:"swarm"`
 	BufferSize      int           `mapstructure:"buffer-size"`
 }
@@ -64,8 +66,6 @@ func DefaultConfig() Config {
 	}
 
 	return Config{
-		SecurityParam:   20,
-		FastSync:        true,
 		TCPPort:         7513,
 		NodeID:          "",
 		NewNode:         false,
@@ -73,6 +73,10 @@ func DefaultConfig() Config {
 		ConnKeepAlive:   duration("48h"),
 		NetworkID:       TestNet,
 		ResponseTimeout: duration("15s"),
+		SessionTimeout: duration("5s"),
+		MaxPendingConnections: 50,
+		OutboundPeersTarget: 10,
+		MaxInboundPeers: 	100,
 		SwarmConfig:     SwarmConfigValues,
 		BufferSize:      100,
 	}
