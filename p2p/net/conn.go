@@ -178,12 +178,11 @@ func (c *FormattedConnection) shutdown(err error) {
 }
 
 var ErrTriedToSetupExistingConn = errors.New("tried to setup existing connection")
-var RemoteHandshakeTimeout = time.Second * 2
 var ErrIncomingSessionTimeout = errors.New("timeout waiting for handshake message")
 
-func (c *FormattedConnection) setupIncoming() error {
+func (c *FormattedConnection) setupIncoming(timeout time.Duration) error {
 	var err error
-	timeout := time.NewTimer(RemoteHandshakeTimeout)
+	tm := time.NewTimer(timeout)
 	select {
 	case msg, ok := <-c.formatter.In():
 		if !ok { // chan closed
@@ -200,7 +199,7 @@ func (c *FormattedConnection) setupIncoming() error {
 		}
 		err = ErrTriedToSetupExistingConn
 		break
-	case <-timeout.C:
+	case <-tm.C:
 		err = ErrIncomingSessionTimeout
 	}
 

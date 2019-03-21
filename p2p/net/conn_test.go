@@ -74,7 +74,7 @@ func TestPreSessionMessage(t *testing.T) {
 	formatter := delimited.NewChan(10)
 	conn := newConnection(rwcam, netw, formatter, rPub, nil, netw.logger)
 	rwcam.SetReadResult([]byte{3, 1, 1, 1}, nil)
-	err := conn.setupIncoming()
+	err := conn.setupIncoming(time.Second)
 	require.NoError(t, err)
 	require.Equal(t, conn.Closed(), false)
 	require.Equal(t, int32(1), netw.PreSessionCount())
@@ -100,7 +100,7 @@ func TestPreSessionError(t *testing.T) {
 	conn := newConnection(rwcam, netw, formatter, rPub, nil, netw.logger)
 	netw.SetPreSessionResult(fmt.Errorf("fail"))
 
-	err := conn.setupIncoming()
+	err := conn.setupIncoming(time.Second)
 	require.Error(t, err)
 }
 

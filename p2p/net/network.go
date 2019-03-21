@@ -24,8 +24,6 @@ const DefaultQueueCount uint = 6
 // DefaultMessageQueueSize is the buffer size of each queue mentioned above. (queues are buffered channels)
 const DefaultMessageQueueSize uint = 256
 
-const MaxPendingConnections = 50
-
 // IncomingMessageEvent is the event reported on new incoming message, it contains the message and the Connection carrying the message
 type IncomingMessageEvent struct {
 	Conn    Connection
@@ -103,15 +101,15 @@ func NewNet(conf config.Config, localEntity *node.LocalNode) (*Net, error) {
 		n.incomingMessagesQueue[imq] = make(chan IncomingMessageEvent, qsize)
 	}
 
-	err = n.listen()
-
-	if err != nil {
-		return nil, err
-	}
 
 	n.logger.Debug("created network with tcp address: %s", n.tcpListenAddress)
 
 	return n, nil
+}
+
+func (n *Net) Start() error { // todo: maybe add context
+	err := n.listen(n.newTcpListener)
+	return err
 }
 
 // Logger returns a reference to logger
@@ -244,29 +242,36 @@ func (n *Net) Shutdown() {
 	n.tcpListener.Close()
 }
 
-// Start network server
-func (n *Net) listen() error {
+func (n *Net) newTcpListener() (net.Listener, error) {
 	n.logger.Info("Starting to listen on %v", n.tcpListenAddress)
 	tcpListener, err := net.Listen("tcp", n.tcpListenAddress.String())
 	if err != nil {
+		return nil, err
+	}
+	return tcpListener, nil
+}
+
+// Start network server
+func (n *Net) listen( lis func() (listener net.Listener, err error)) error {
+	listener, err := lis()
+	if err != nil {
 		return err
 	}
-	n.tcpListener = tcpListener
-	go n.acceptTCP()
+	go n.accept(listener)
 	return nil
 }
 
-func (n *Net) acceptTCP() {
+func (n *Net) accept(listen net.Listener) {
 	n.logger.Debug("Waiting for incoming connections...")
-	pending := make(chan struct{}, MaxPendingConnections)
+	pending := make(chan struct{}, n.config.MaxPendingConnections)
 
-	for i := 0; i < MaxPendingConnections; i++ {
+	for i := 0; i < n.config.MaxPendingConnections; i++ {
 		pending <- struct{}{}
 	}
 
 	for {
 		<-pending
-		netConn, err := n.tcpListener.Accept()
+		netConn, err := listen.Accept()
 		if err != nil {
 
 			if !n.isShuttingDown {
@@ -281,7 +286,7 @@ func (n *Net) acceptTCP() {
 		c := newConnection(netConn, n, formatter, nil, nil, n.logger)
 		go func(con Connection) {
 			defer func() { pending <- struct{}{} }()
-			err := c.setupIncoming()
+			err := c.setupIncoming(n.config.SessionTimeout)
 			if err != nil {
 				n.logger.Warning("Error handling incoming connection with ", c.remoteAddr.String())
 				return
