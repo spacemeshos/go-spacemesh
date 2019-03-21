@@ -7,10 +7,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/sync"
 	"github.com/stretchr/testify/assert"
 	"math/big"
-	"math/rand"
 	"testing"
 	"time"
 )

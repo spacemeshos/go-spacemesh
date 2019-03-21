@@ -2,7 +2,7 @@ package dht
 
 import (
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
-	"math/rand"
+	"github.com/spacemeshos/go-spacemesh/rand"
 	"sync"
 	"testing"
 	"time"
