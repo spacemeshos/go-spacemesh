@@ -46,8 +46,8 @@ type SeqWorkTicks uint64
 
 type Space uint64
 
-// PostProver provides proving functionality for PoST.
-type PostProver interface {
+// PostProverClient provides proving functionality for PoST.
+type PostProverClient interface {
 	// initialize is the process in which the prover commits
 	// to store some data, by having its storage being filled with
 	// pseudo-random data with respect to a specific id.
@@ -62,11 +62,11 @@ type PostProver interface {
 	execute(id []byte, challenge common.Hash, timeout time.Duration) (proof *postProof, err error)
 }
 
-// PoetProvingService provides a trust-less public proving service,
-// which may serve many PoET proving clients, and thus enormously reduce
-// the cost-per-proof for PoET since each additional proof adds
+// PoetProvingServiceClient provides a gateway to a trust-less public proving
+// service, which may serve many PoET proving clients, and thus enormously
+// reduce the cost-per-proof for PoET since each additional proof adds
 // only a small number of hash evaluations to the total cost.
-type PoetProvingService interface {
+type PoetProvingServiceClient interface {
 	// id is the unique id of the service.
 	id() string
 
@@ -174,8 +174,8 @@ type NIPSTBuilder struct {
 	id                []byte
 	space             Space
 	duration          SeqWorkTicks
-	postProver        PostProver
-	poetProver        PoetProvingService
+	postProver        PostProverClient
+	poetProver        PoetProvingServiceClient
 	activationBuilder ActivationBuilder
 	stop              bool
 	stopM             sync.Mutex
@@ -184,8 +184,8 @@ type NIPSTBuilder struct {
 	nipst *NIPST
 }
 
-func NewNIPSTBuilder(id []byte, space Space, duration SeqWorkTicks, postProver PostProver,
-	poetProver PoetProvingService, activationBuilder ActivationBuilder) *NIPSTBuilder {
+func NewNIPSTBuilder(id []byte, space Space, duration SeqWorkTicks, postProver PostProverClient,
+	poetProver PoetProvingServiceClient, activationBuilder ActivationBuilder) *NIPSTBuilder {
 	return &NIPSTBuilder{
 		id:                id,
 		space:             space,

@@ -6,35 +6,35 @@ import (
 	"time"
 )
 
-type PostProverMock struct{}
+type PostProverClientMock struct{}
 
-func (p *PostProverMock) initialize(id []byte, space Space,
+func (p *PostProverClientMock) initialize(id []byte, space Space,
 	timeout time.Duration) (*postProof, error) {
 	return &postProof{255, 255, 255, 255}, nil
 }
 
-func (p *PostProverMock) execute(id []byte, challenge common.Hash,
+func (p *PostProverClientMock) execute(id []byte, challenge common.Hash,
 	timeout time.Duration) (*postProof, error) {
 	return &postProof{255, 255, 255, 255}, nil
 }
 
-type PoetProvingServiceMock struct{}
+type PoetProvingServiceClientMock struct{}
 
-func (p *PoetProvingServiceMock) id() string {
+func (p *PoetProvingServiceClientMock) id() string {
 	return "1"
 }
 
-func (p *PoetProvingServiceMock) submitChallenge(challenge common.Hash,
+func (p *PoetProvingServiceClientMock) submitChallenge(challenge common.Hash,
 	duration SeqWorkTicks) (*PoetRound, error) {
 	return &PoetRound{}, nil
 }
 
-func (p *PoetProvingServiceMock) subscribeMembershipProof(r *PoetRound, challenge common.Hash,
+func (p *PoetProvingServiceClientMock) subscribeMembershipProof(r *PoetRound, challenge common.Hash,
 	timeout time.Duration) (*membershipProof, error) {
 	return &membershipProof{}, nil
 }
 
-func (p *PoetProvingServiceMock) subscribeProof(r *PoetRound, timeout time.Duration) (*poetProof, error) {
+func (p *PoetProvingServiceClientMock) subscribeProof(r *PoetRound, timeout time.Duration) (*poetProof, error) {
 	return &poetProof{}, nil
 }
 
@@ -47,8 +47,8 @@ func (a *ActivationBuilderMock) BuildActivationTx(proof NIPST) {
 }
 
 func TestNIPSTBuilder(t *testing.T) {
-	postProver := &PostProverMock{}
-	poetProver := &PoetProvingServiceMock{}
+	postProver := &PostProverClientMock{}
+	poetProver := &PoetProvingServiceClientMock{}
 
 	nipstChan := make(chan NIPST)
 	activationBuilder := &ActivationBuilderMock{nipst: nipstChan}
