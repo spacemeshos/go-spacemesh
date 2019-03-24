@@ -145,7 +145,6 @@ def setup_oracle(request):
         if namespaced_pods:
             # if oracle already exist -> delete it
             delete_deployment(oracle_deployment_name, name_space)
-            #resp = client.AppsV1Api().read_namespaced_deployment(name=oracle_deployment_name, namespace=name_space)
 
         resp = create_deployment(ORACLE_DEPLOYMENT_FILE, name_space, None)
         namespaced_pods = client.CoreV1Api().list_namespaced_pod(name_space,
