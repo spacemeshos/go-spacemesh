@@ -74,16 +74,16 @@ type PoetProvingService interface {
 	// open round suited for the specified duration.
 	submitChallenge(challenge common.Hash, duration SeqWorkTicks) (*PoetRound, error)
 
-	// membershipProof returns a proof which can convince a verifier
+	// subscribeMembershipProof returns a proof which can convince a verifier
 	// that the prover challenge was included in the proving service
 	// round root commitment.
-	membershipProof(r *PoetRound, challenge common.Hash, timeout time.Duration) (*membershipProof, error)
+	subscribeMembershipProof(r *PoetRound, challenge common.Hash, timeout time.Duration) (*membershipProof, error)
 
 	// proof returns the PoET for a specific round root commitment,
 	// that can convince a verifier that at least T time must have
 	// passed from when the initial challenge (the root commitment)
 	// was learned.
-	proof(r *PoetRound, timeout time.Duration) (*poetProof, error)
+	subscribeProof(r *PoetRound, timeout time.Duration) (*poetProof, error)
 }
 
 // NIPST is Non-Interactive Proof of Space-Time.
@@ -222,7 +222,7 @@ func (nb *NIPSTBuilder) loop() {
 	defTimeout := 1 * time.Second // temporary solution
 	nb.nipst.load()
 
-	// Phase 0
+	// Phase 0: PoST initialization.
 	if nb.nipst.postCommitment == nil {
 		log.Info("starting PoST initialization, id: %x, space: %v",
 			nb.id, nb.space)
@@ -249,7 +249,7 @@ func (nb *NIPSTBuilder) loop() {
 			return
 		}
 
-		// Phase 1
+		// Phase 1: Submit challenge to PoET service.
 		if nb.nipst.poetRound == nil {
 			var poetChallenge common.Hash
 
@@ -286,13 +286,13 @@ func (nb *NIPSTBuilder) loop() {
 			return
 		}
 
-		// Phase 2
+		// Phase 2: Wait for PoET service round membership proof.
 		if nb.nipst.poetMembershipProof == nil {
 			log.Info("querying round membership proof from PoET proving service, "+
 				"service id: %v, round id: %v, challenge: %x",
 				nb.poetProver.id(), nb.nipst.poetRound.id, nb.nipst.poetChallenge)
 
-			proof, err := nb.poetProver.membershipProof(nb.nipst.poetRound, *nb.nipst.poetChallenge, defTimeout)
+			proof, err := nb.poetProver.subscribeMembershipProof(nb.nipst.poetRound, *nb.nipst.poetChallenge, defTimeout)
 			if err != nil {
 				nb.errChan <- fmt.Errorf("failed to receive PoET round membership proof: %v", err)
 				continue
@@ -314,13 +314,13 @@ func (nb *NIPSTBuilder) loop() {
 			return
 		}
 
-		// Phase 3
+		// Phase 3: Wait for PoET service proof.
 		if nb.nipst.poetProof == nil {
 			log.Info("waiting for PoET proof from PoET proving service, "+
 				"service id: %v, round id: %v, round root commitment: %x",
 				nb.poetProver.id(), nb.nipst.poetRound.id, nb.nipst.poetMembershipProof.Root)
 
-			proof, err := nb.poetProver.proof(nb.nipst.poetRound, defTimeout)
+			proof, err := nb.poetProver.subscribeProof(nb.nipst.poetRound, defTimeout)
 			if err != nil {
 				nb.errChan <- fmt.Errorf("failed to receive PoET proof: %v", err)
 				continue
@@ -342,7 +342,7 @@ func (nb *NIPSTBuilder) loop() {
 			return
 		}
 
-		// Phase 4
+		// Phase 4: PoST execution.
 		if nb.nipst.postProof == nil {
 			// TODO(moshababo): check what exactly need to be hashed.
 			postChallenge := crypto.Keccak256Hash((*nb.nipst.poetProof)[:])

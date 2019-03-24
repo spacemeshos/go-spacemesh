@@ -29,12 +29,12 @@ func (p *PoetProvingServiceMock) submitChallenge(challenge common.Hash,
 	return &PoetRound{}, nil
 }
 
-func (p *PoetProvingServiceMock) membershipProof(r *PoetRound, challenge common.Hash,
+func (p *PoetProvingServiceMock) subscribeMembershipProof(r *PoetRound, challenge common.Hash,
 	timeout time.Duration) (*membershipProof, error) {
 	return &membershipProof{}, nil
 }
 
-func (p *PoetProvingServiceMock) proof(r *PoetRound, timeout time.Duration) (*poetProof, error) {
+func (p *PoetProvingServiceMock) subscribeProof(r *PoetRound, timeout time.Duration) (*poetProof, error) {
 	return &poetProof{}, nil
 }
 
