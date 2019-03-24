@@ -16,8 +16,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/stretchr/testify/assert"
-	"math/rand"
 	"sync"
 )
 
@@ -115,7 +115,11 @@ func TestSwarm_Shutdown(t *testing.T) {
 func TestSwarm_ShutdownNoStart(t *testing.T) {
 	s, err := newSwarm(context.TODO(), config.DefaultConfig(), true, false)
 	assert.NoError(t, err)
+	err = s.Start()
+	assert.NoError(t, err)
 	s.Shutdown()
+	_, ok := <-s.shutdown
+	assert.False(t, ok)
 }
 
 func TestSwarm_RegisterProtocolNoStart(t *testing.T) {
@@ -833,4 +837,16 @@ func TestSwarm_AddIncomingPeer(t *testing.T) {
 
 	assert.True(t, ok)
 	assert.NotNil(t, peer)
+
+	nds := node.GenerateRandomNodesData(config.DefaultConfig().MaxInboundPeers)
+	for i := 0; i < len(nds); i++ {
+		p.addIncomingPeer(nds[i].PublicKey())
+	}
+
+	require.Equal(t, len(p.inpeers), config.DefaultConfig().MaxInboundPeers)
+	p.inpeersMutex.RLock()
+	peer, ok = p.inpeers[nds[len(nds)-1].PublicKey().String()]
+	p.inpeersMutex.RUnlock()
+	assert.False(t, ok)
+	assert.Nil(t, peer)
 }
