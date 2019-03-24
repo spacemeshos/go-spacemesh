@@ -50,8 +50,8 @@ type Net struct {
 	localNode *node.LocalNode
 	logger    log.Log
 
-	tcpListener      net.Listener
-	tcpListenAddress *net.TCPAddr // Address to open connection: localhost:9999\
+	listener      net.Listener
+	listenAddress *net.TCPAddr // Address to open connection: localhost:9999\
 
 	isShuttingDown bool
 
@@ -89,7 +89,7 @@ func NewNet(conf config.Config, localEntity *node.LocalNode) (*Net, error) {
 		networkID:             conf.NetworkID,
 		localNode:             localEntity,
 		logger:                localEntity.Log,
-		tcpListenAddress:      tcpAddress,
+		listenAddress:         tcpAddress,
 		regNewRemoteConn:      make([]func(NewConnectionEvent), 0, 3),
 		closingConnections:    make([]func(Connection), 0, 3),
 		queuesCount:           qcount,
@@ -101,15 +101,14 @@ func NewNet(conf config.Config, localEntity *node.LocalNode) (*Net, error) {
 		n.incomingMessagesQueue[imq] = make(chan IncomingMessageEvent, qsize)
 	}
 
-	err = n.listen()
-
-	if err != nil {
-		return nil, err
-	}
-
-	n.logger.Debug("created network with tcp address: %s", n.tcpListenAddress)
+	n.logger.Debug("created network with tcp address: %s", n.listenAddress)
 
 	return n, nil
+}
+
+func (n *Net) Start() error { // todo: maybe add context
+	err := n.listen(n.newTcpListener)
+	return err
 }
 
 // Logger returns a reference to logger
@@ -204,7 +203,7 @@ func (n *Net) createSecuredConnection(address string, remotePubkey p2pcrypto.Pub
 		return nil, err
 	}
 
-	handshakeMessage, err := generateHandshakeMessage(session, n.networkID, n.tcpListenAddress.Port, n.localNode.PublicKey())
+	handshakeMessage, err := generateHandshakeMessage(session, n.networkID, n.listenAddress.Port, n.localNode.PublicKey())
 	if err != nil {
 		conn.Close()
 		return nil, err
@@ -239,25 +238,45 @@ func (n *Net) Dial(address string, remotePubkey p2pcrypto.PublicKey) (Connection
 // Shutdown initiate a graceful closing of the TCP listener and all other internal routines
 func (n *Net) Shutdown() {
 	n.isShuttingDown = true
-	n.tcpListener.Close()
+	if n.listener != nil {
+		err := n.listener.Close()
+		if err != nil {
+			n.logger.Error("Error closing listener err=%v", err)
+		}
+	}
+}
+
+func (n *Net) newTcpListener() (net.Listener, error) {
+	n.logger.Info("Starting to listen on tcp:%v", n.listenAddress)
+	tcpListener, err := net.Listen("tcp", n.listenAddress.String())
+	if err != nil {
+		return nil, err
+	}
+	return tcpListener, nil
 }
 
 // Start network server
-func (n *Net) listen() error {
-	n.logger.Info("Starting to listen on %v", n.tcpListenAddress)
-	tcpListener, err := net.Listen("tcp", n.tcpListenAddress.String())
+func (n *Net) listen(lis func() (listener net.Listener, err error)) error {
+	listener, err := lis()
+	n.listener = listener
 	if err != nil {
 		return err
 	}
-	n.tcpListener = tcpListener
-	go n.acceptTCP()
+	go n.accept(listener)
 	return nil
 }
 
-func (n *Net) acceptTCP() {
+func (n *Net) accept(listen net.Listener) {
 	n.logger.Debug("Waiting for incoming connections...")
+	pending := make(chan struct{}, n.config.MaxPendingConnections)
+
+	for i := 0; i < n.config.MaxPendingConnections; i++ {
+		pending <- struct{}{}
+	}
+
 	for {
-		netConn, err := n.tcpListener.Accept()
+		<-pending
+		netConn, err := listen.Accept()
 		if err != nil {
 
 			if !n.isShuttingDown {
@@ -270,8 +289,16 @@ func (n *Net) acceptTCP() {
 		n.logger.Debug("Got new connection... Remote Address: %s", netConn.RemoteAddr())
 		formatter := delimited.NewChan(10)
 		c := newConnection(netConn, n, formatter, nil, nil, n.logger)
+		go func(con Connection) {
+			defer func() { pending <- struct{}{} }()
+			err := c.setupIncoming(n.config.SessionTimeout)
+			if err != nil {
+				n.logger.Warning("Error handling incoming connection with ", c.remoteAddr.String())
+				return
+			}
+			go c.beginEventProcessing()
+		}(c)
 
-		go c.beginEventProcessing()
 		// network won't publish the connection before it the remote node had established a session
 	}
 }

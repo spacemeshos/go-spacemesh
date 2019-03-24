@@ -34,8 +34,6 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().IntVar(&config.LayerAvgSize, "layer-average-size",
 		config.LayerDurationSec, "Duration between layers in seconds")
 	/** ======================== P2P Flags ========================== **/
-	cmd.PersistentFlags().IntVar(&config.P2P.SecurityParam, "security-param",
-		config.P2P.SecurityParam, "Consensus protocol k security param")
 	cmd.PersistentFlags().IntVar(&config.P2P.TCPPort, "tcp-port",
 		config.P2P.TCPPort, "TCP Port to listen on")
 	cmd.PersistentFlags().DurationVar(&config.P2P.DialTimeout, "dial-timeout",
@@ -46,12 +44,20 @@ func AddCommands(cmd *cobra.Command) {
 		config.P2P.NetworkID, "NetworkID to run on (0 - mainnet, 1 - testnet)")
 	cmd.PersistentFlags().DurationVar(&config.P2P.ResponseTimeout, "response-timeout",
 		config.P2P.ResponseTimeout, "Timeout for waiting on resposne message")
+	cmd.PersistentFlags().DurationVar(&config.P2P.SessionTimeout, "session-timeout",
+		config.P2P.SessionTimeout, "Timeout for waiting on session message")
 	cmd.PersistentFlags().StringVar(&config.P2P.NodeID, "node-id",
 		config.P2P.NodeID, "Load node data by id (pub key) from local store")
 	cmd.PersistentFlags().BoolVar(&config.P2P.NewNode, "new-node",
 		config.P2P.NewNode, "Load node data by id (pub key) from local store")
 	cmd.PersistentFlags().IntVar(&config.P2P.BufferSize, "buffer-size",
 		config.P2P.BufferSize, "Size of the messages handler's buffer")
+	cmd.PersistentFlags().IntVar(&config.P2P.MaxPendingConnections, "max-pending-connections",
+		config.P2P.MaxPendingConnections, "The maximum number of pending connections")
+	cmd.PersistentFlags().IntVar(&config.P2P.OutboundPeersTarget, "outbound-target",
+		config.P2P.OutboundPeersTarget, "The outbound peer target we're trying to connect")
+	cmd.PersistentFlags().IntVar(&config.P2P.MaxInboundPeers, "max-inbound",
+		config.P2P.MaxInboundPeers, "The maximum number of inbound peers ")
 	cmd.PersistentFlags().BoolVar(&config.P2P.SwarmConfig.Gossip, "gossip",
 		config.P2P.SwarmConfig.Gossip, "should we start a gossiping node?")
 	cmd.PersistentFlags().BoolVar(&config.P2P.SwarmConfig.Bootstrap, "bootstrap",

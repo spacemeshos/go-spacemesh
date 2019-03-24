@@ -1,9 +1,9 @@
 package eligibility
 
 import (
+	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"math/rand"
 	"testing"
 )
 
