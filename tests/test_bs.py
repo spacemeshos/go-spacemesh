@@ -139,7 +139,9 @@ def setup_bootstrap(request, load_config, setup_oracle, create_configmap):
                               oracle_server='http://{0}:3030'.format(setup_oracle),
                               genesis_time=GENESIS_TIME.isoformat('T', 'seconds'))
 
-        resp = create_deployment(BOOT_DEPLOYMENT_FILE, name_space, 1, cspec)
+        resp = create_deployment(BOOT_DEPLOYMENT_FILE, name_space,
+                                 replica_size=testconfig['bootstrap']['replicas'],
+                                 container_specs=cspec)
 
         bs_info.bs_deployment_name = resp.metadata._name
         namespaced_pods = client.CoreV1Api().list_namespaced_pod(namespace=name_space).items
