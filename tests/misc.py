@@ -1,12 +1,21 @@
+import string
+import random
 
 
 class NodeInfo():
 
-    def __init__(self):
-        self.bs_pod_name = ''
-        self.bs_pod_ip='0.0.0.0'
-        self.bs_deployment_name = ''
-        self.bs_key = ''
+    def __init__(self, dep_id=None):
+        self.pod_name = ''
+        self.pod_ip= '0.0.0.0'
+        self.deployment_name = ''
+        self.key = ''
+        self.deployment_id = dep_id if dep_id else  NodeInfo.random_deployment_id()
+
+    @staticmethod
+    def random_deployment_id():
+        # Just alphanumeric characters
+        chars = string.ascii_lowercase + string.digits
+        return ''.join((random.choice(chars)) for x in range(4))
 
 
 class ContainerSpec():
