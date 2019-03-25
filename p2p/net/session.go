@@ -1,6 +1,7 @@
 package net
 
 import (
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 )
 
@@ -40,7 +41,7 @@ func (n networkSessionImpl) ID() p2pcrypto.PublicKey {
 // Encrypt encrypts in binary data with the session's sym enc key.
 func (n networkSessionImpl) SealMessage(message []byte) []byte {
 	if n.sharedSecret == nil {
-		panic("tried to seal a message before initializing session with a shared secret")
+		log.Panic("tried to seal a message before initializing session with a shared secret")
 	}
 	return n.sharedSecret.Seal(message)
 }
@@ -48,7 +49,7 @@ func (n networkSessionImpl) SealMessage(message []byte) []byte {
 // Decrypt decrypts in binary data that was encrypted with the session's sym enc key.
 func (n networkSessionImpl) OpenMessage(boxedMessage []byte) (message []byte, err error) {
 	if n.sharedSecret == nil {
-		panic("tried to open a message before initializing session with a shared secret")
+		log.Panic("tried to open a message before initializing session with a shared secret")
 	}
 	return n.sharedSecret.Open(boxedMessage)
 }

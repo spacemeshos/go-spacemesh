@@ -179,7 +179,7 @@ func (sn *Node) Start() error {
 func simulatorMetadata() P2PMetadata {
 	ip, err := net.ResolveIPAddr("ip", "0.0.0.0")
 	if err != nil {
-		panic("cant resolve local ip")
+		log.Panic("cant resolve local ip")
 	}
 	return P2PMetadata{ip}
 }

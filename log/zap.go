@@ -2,6 +2,7 @@ package log
 
 import (
 	"go.uber.org/zap"
+	"runtime/debug"
 	"time"
 )
 
@@ -31,6 +32,11 @@ func (l Log) Error(format string, args ...interface{}) {
 // Warning prints formatted warning level log message.
 func (l Log) Warning(format string, args ...interface{}) {
 	l.sugar.Warnf(format, args...)
+}
+
+func (l Log) Panic(format string, args ...interface{}) {
+	l.sugar.Fatal("Fatal: goroutine panicked. Stacktrace: ", string(debug.Stack()))
+	l.sugar.Panicf(format, args...)
 }
 
 // Wrap and export field logic

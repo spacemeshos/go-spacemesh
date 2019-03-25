@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/davecgh/go-spew/spew"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -21,10 +22,11 @@ var Cmd = &cobra.Command{
 	Use:   "hare",
 	Short: "start hare",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("Starting hare")
+		log.JSONLog(true)
+		log.Info("Starting hare")
+
 		hareApp := NewHareApp()
 		defer hareApp.Cleanup()
-
 		hareApp.Initialize(cmd)
 		hareApp.Start(cmd, args)
 		<-hareApp.ha.CloseChannel()
@@ -76,20 +78,14 @@ func buildSet() *hare.Set {
 	return s
 }
 
-func (app *HareApp) wait(begin time.Time) {
-	dest := begin.Add(time.Duration(app.Config.HARE.RoundDuration*6) * time.Second)
-	time.Sleep(dest.Sub(time.Now()))
-	app.ha.Close()
-}
-
 func (app *HareApp) Start(cmd *cobra.Command, args []string) {
+	spew.Dump(app.Config)
 	// start p2p services
 	log.Info("Initializing P2P services")
 	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P)
 	app.p2p = swarm
 	if err != nil {
-		log.Error("Error starting p2p services, err: %v", err)
-		panic("Error starting p2p services")
+		log.Panic("Error starting p2p services err=%v", err)
 	}
 
 	pub := app.sgn.Verifier()
@@ -103,8 +99,7 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 
 	gTime, err := time.Parse(time.RFC3339, app.Config.GenesisTime)
 	if err != nil {
-		log.Error("Could not parse config GT t=%v err=%v", app.Config.GenesisTime, err)
-		panic("error parsing config")
+		log.Panic("error parsing config err=%v", err)
 	}
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
 	app.clock = timesync.NewTicker(timesync.RealClock{}, ld, gTime)
@@ -114,7 +109,6 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	app.ha.Start()
 	app.p2p.Start()
 	app.clock.Start()
-	go app.wait(app.clock.Genesis())
 }
 
 func main() {

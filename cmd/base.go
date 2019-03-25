@@ -55,7 +55,7 @@ func (app *BaseApp) Initialize(cmd *cobra.Command) {
 	// parse the config file based on flags et al
 	conf, err := parseConfig()
 	if err != nil {
-		panic(err.Error())
+		log.Panic("Panic: ", err.Error())
 	}
 
 	app.Config = conf
@@ -75,8 +75,7 @@ func setupLogging(config *bc.Config) {
 	dataDir, err := filesystem.GetSpacemeshDataDirectoryPath()
 	if err != nil {
 		fmt.Printf("Failed to setup spacemesh data dir")
-		log.Error("Failed to setup spacemesh data dir")
-		panic(err)
+		log.Panic("Failed to setup spacemesh data dir", err)
 	}
 
 	// app-level logging

@@ -19,6 +19,7 @@ package trie
 import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/rlp"
 	"io"
 	"strings"
@@ -119,7 +120,7 @@ func (n valueNode) fstring(ind string) string {
 func mustDecodeNode(hash, buf []byte, cachegen uint16) node {
 	n, err := decodeNode(hash, buf, cachegen)
 	if err != nil {
-		panic(fmt.Sprintf("node %x: %v", hash, err))
+		log.Panic(fmt.Sprintf("node %x: %v", hash, err))
 	}
 	return n
 }

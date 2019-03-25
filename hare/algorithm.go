@@ -270,8 +270,7 @@ func (proc *ConsensusProcess) sendMessage(msg *pb.HareMessage) {
 
 	data, err := proto.Marshal(msg)
 	if err != nil {
-		proc.Error("failed marshaling message")
-		panic("could not marshal message before send")
+		proc.Panic("could not marshal message before send")
 	}
 
 	if err := proc.network.Broadcast(protoName, data); err != nil {
@@ -368,8 +367,7 @@ func (proc *ConsensusProcess) onRoundBegin() {
 	case Round4:
 		proc.beginRound4()
 	default:
-		proc.Error("Current round out of bounds. Expected: 0-4, Found: ", proc.currentRound())
-		panic("Current round out of bounds")
+		proc.Panic("Current round out of bounds. Expected: 0-4, Found: ", proc.currentRound())
 	}
 
 	pendingProcess := proc.pending

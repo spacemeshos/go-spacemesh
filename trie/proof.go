@@ -62,7 +62,7 @@ func (t *Trie) Prove(key []byte, fromLevel uint, proofDb database.Putter) error 
 				return err
 			}
 		default:
-			panic(fmt.Sprintf("%T: invalid node: %v", tn, tn))
+			log.Panic(fmt.Sprintf("%T: invalid node: %v", tn, tn))
 		}
 	}
 	hasher := newHasher(0, 0, nil)
@@ -147,7 +147,7 @@ func get(tn node, key []byte) ([]byte, node) {
 		case valueNode:
 			return nil, n
 		default:
-			panic(fmt.Sprintf("%T: invalid node: %v", tn, tn))
+			log.Panic(fmt.Sprintf("%T: invalid node: %v", tn, tn))
 		}
 	}
 }
