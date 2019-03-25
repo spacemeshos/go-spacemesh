@@ -49,9 +49,13 @@ def wait_to_deployment_to_be_ready(deployment_name, name_space, time_out=None):
             raise Exception("Timeout waiting to deployment to be ready")
 
 
-def create_deployment(file_name, name_space, replica_size=1, container_specs=None):
+def create_deployment(file_name, name_space, deployment_id=None, replica_size=1, container_specs=None):
     with open(path.join(path.dirname(__file__), file_name)) as f:
         dep = yaml.safe_load(f)
+
+        # Set unique deployment id
+        if deployment_id:
+            dep['metadata']['generateName'] += '{0}-'.format(deployment_id)
 
         # Set replica size
         dep['spec']['replicas'] = replica_size
@@ -140,29 +144,30 @@ def setup_bootstrap(request, load_config, setup_oracle, create_configmap):
                               genesis_time=GENESIS_TIME.isoformat('T', 'seconds'))
 
         resp = create_deployment(BOOT_DEPLOYMENT_FILE, name_space,
+                                 deployment_id=bs_info.deployment_id,
                                  replica_size=testconfig['bootstrap']['replicas'],
                                  container_specs=cspec)
 
-        bs_info.bs_deployment_name = resp.metadata._name
+        bs_info.deployment_name = resp.metadata._name
         namespaced_pods = client.CoreV1Api().list_namespaced_pod(namespace=name_space).items
-        bootstrap_pod = next(filter(lambda i: i.metadata.name.startswith(bs_info.bs_deployment_name), namespaced_pods))
-        bs_info.bs_pod_name = bootstrap_pod.metadata.name
+        bootstrap_pod = next(filter(lambda i: i.metadata.name.startswith(bs_info.deployment_name), namespaced_pods))
+        bs_info.pod_name = bootstrap_pod.metadata.name
 
         while True:
-            resp = client.CoreV1Api().read_namespaced_pod(name=bs_info.bs_pod_name, namespace=name_space)
+            resp = client.CoreV1Api().read_namespaced_pod(name=bs_info.pod_name, namespace=name_space)
             if resp.status.phase != 'Pending':
                 break
             time.sleep(1)
 
-        bs_info.bs_pod_ip = resp.status.pod_ip
-        bootstrap_pod_logs = client.CoreV1Api().read_namespaced_pod_log(name=bs_info.bs_pod_name, namespace=name_space)
+        bs_info.pod_ip = resp.status.pod_ip
+        bootstrap_pod_logs = client.CoreV1Api().read_namespaced_pod_log(name=bs_info.pod_name, namespace=name_space)
         match = re.search(r"Local node identity >> (?P<bootstarap_key>\w+)", bootstrap_pod_logs)
-        bs_info.bs_key = match.group('bootstarap_key')
+        bs_info.key = match.group('bootstarap_key')
         return bs_info
 
     def fin():
         global bs_info
-        delete_deployment(bs_info.bs_deployment_name, testconfig['namespace'])
+        delete_deployment(bs_info.deployment_name, testconfig['namespace'])
 
     request.addfinalizer(fin)
     return _setup_bootstrap_in_namespace(testconfig['namespace'])
@@ -172,21 +177,22 @@ def setup_bootstrap(request, load_config, setup_oracle, create_configmap):
 def setup_clients(request, setup_oracle, setup_bootstrap):
     def _setup_clients_in_namespace(name_space):
         global bs_info, client_info
-        client_info = NodeInfo()
+        client_info = NodeInfo(bs_info.deployment_id)
         cspec = ContainerSpec(cname='client', cimage=testconfig['client']['image'],
                               centry=[testconfig['client']['command']],
-                              bootnodes="{0}:{1}/{2}".format(bs_info.bs_pod_ip, '7513', bs_info.bs_key),
+                              bootnodes="{0}:{1}/{2}".format(bs_info.pod_ip, '7513', bs_info.key),
                               oracle_server='http://{0}:3030'.format(setup_oracle),
                               genesis_time=GENESIS_TIME.isoformat('T', 'seconds'))
 
         resp = create_deployment(CLIENT_DEPLOYMENT_FILE, name_space,
+                                 deployment_id=bs_info.deployment_id,
                                  replica_size=testconfig['client']['replicas'],
                                  container_specs=cspec)
 
-        client_info.bs_deployment_name = resp.metadata._name
+        client_info.deployment_name = resp.metadata._name
         namespaced_pods = client.CoreV1Api().list_namespaced_pod(namespace=name_space, include_uninitialized=True).items
         client_pods = list(
-            filter(lambda i: i.metadata.name.startswith(client_info.bs_deployment_name), namespaced_pods))
+            filter(lambda i: i.metadata.name.startswith(client_info.deployment_name), namespaced_pods))
 
         print("Number of client pods: {0}".format(len(client_pods)))
         for c in client_pods:
@@ -208,7 +214,7 @@ def setup_clients(request, setup_oracle, setup_bootstrap):
 
     def fin():
         global client_info
-        delete_deployment(client_info.bs_deployment_name, testconfig['namespace'])
+        delete_deployment(client_info.deployment_name, testconfig['namespace'])
 
     request.addfinalizer(fin)
     return _setup_clients_in_namespace(testconfig['namespace'])
@@ -275,14 +281,14 @@ current_index = 'kubernetes_cluster-'+todaydate
 def test_bootstrap(setup_bootstrap):
     # wait for the bootstrap logs to be available in ElasticSearch
     time.sleep(5)
-    assert setup_bootstrap.bs_key == query_bootstrap_es(current_index,
+    assert setup_bootstrap.key == query_bootstrap_es(current_index,
                                                         testconfig['namespace'],
-                                                        setup_bootstrap.bs_pod_name)
+                                                        setup_bootstrap.pod_name)
 
 
 def test_client(load_config, setup_clients, save_log_on_exit):
     global client_info
-    peers = query_es_client_bootstrap(current_index, testconfig['namespace'], client_info.bs_deployment_name)
+    peers = query_es_client_bootstrap(current_index, testconfig['namespace'], client_info.deployment_name)
     assert peers == len(setup_clients)
 
 
@@ -304,7 +310,7 @@ def test_gossip(load_config, setup_clients):
     print('sleep for {0} sec to enable gossip propagation'.format(gossip_propagation_sleep))
     time.sleep(gossip_propagation_sleep)
 
-    peers_for_gossip = query_es_gossip_message(current_index, testconfig['namespace'], client_info.bs_deployment_name)
+    peers_for_gossip = query_es_gossip_message(current_index, testconfig['namespace'], client_info.deployment_name)
     assert len(setup_clients) == peers_for_gossip
 
 
