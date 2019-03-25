@@ -206,7 +206,8 @@ def setup_clients(request, setup_oracle, setup_bootstrap):
         time_now = pytz.utc.localize(datetime.utcnow())
         delta_from_genesis = (GENESIS_TIME - time_now).total_seconds()
         if delta_from_genesis < 0:
-            raise Exception("genesis_delta time is too short for this deployment")
+            raise Exception("genesis_delta time={0}sec, is too short for this deployment. "
+                            "delta_from_genesis={1}".format(testconfig['genesis_delta'], delta_from_genesis))
         else:
             print('sleep for {0} sec until genesis time'.format(delta_from_genesis))
             time.sleep(delta_from_genesis)
