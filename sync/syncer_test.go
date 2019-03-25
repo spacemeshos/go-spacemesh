@@ -13,7 +13,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
-	"math/big"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -58,36 +57,13 @@ func SyncMockFactory(number int, conf Configuration, name string, dbType string)
 	return nodes, p2ps
 }
 
-type BlockValidatorMock struct {
-}
-
-func (BlockValidatorMock) BlockEligible(id mesh.LayerID, key string) bool {
-	return true
-}
-
-type MeshValidatorMock struct{}
-
-func (m *MeshValidatorMock) HandleIncomingLayer(layer *mesh.Layer) (mesh.LayerID, mesh.LayerID) {
-	return layer.Index() - 1, layer.Index()
-}
-func (m *MeshValidatorMock) HandleLateBlock(bl *mesh.Block)              {}
-func (m *MeshValidatorMock) RegisterLayerCallback(func(id mesh.LayerID)) {}
-func (mlg *MeshValidatorMock) ContextualValidity(id mesh.BlockID) bool   { return true }
-
-type stateMock struct{}
-
-func (s *stateMock) ApplyTransactions(id mesh.LayerID, tx mesh.Transactions) (uint32, error) {
-	return 0, nil
-}
-
-func ConfigTst() mesh.RewardConfig {
-	return mesh.RewardConfig{
-		big.NewInt(10),
-		big.NewInt(5000),
-		big.NewInt(15),
-		15,
-		5,
-	}
+func getMeshWithMemoryDB(id string) *mesh.Mesh {
+	bdb := database.NewMemDatabase()
+	ldb := database.NewMemDatabase()
+	cv := database.NewMemDatabase()
+	//odb := database.NewMemDatabase()
+	layers := mesh.NewMesh(ldb, bdb, cv, ConfigTst(), &MeshValidatorMock{}, &StateMock{}, log.New(id, "", ""))
+	return layers
 }
 
 func getMeshWithLevelDB(id string) *mesh.Mesh {
@@ -96,26 +72,7 @@ func getMeshWithLevelDB(id string) *mesh.Mesh {
 	ldb := database.NewLevelDbStore("layers_test_"+id, nil, nil)
 	cv := database.NewLevelDbStore("contextually_valid_test_"+id, nil, nil)
 	//odb := database.NewLevelDbStore("orphans_test_"+id+"_"+time.String(), nil, nil)
-	layers := mesh.NewMesh(ldb, bdb, cv, ConfigTst(), &MeshValidatorMock{}, &stateMock{}, log.New(id, "", ""))
-	return layers
-}
-
-type MockState struct{}
-
-func (MockState) ApplyTransactions(layer mesh.LayerID, txs mesh.Transactions) (uint32, error) {
-	return 0, nil
-}
-
-func (s *stateMock) ApplyRewards(layer mesh.LayerID, miners map[string]struct{}, underQuota map[string]struct{}, bonusReward, diminishedReward *big.Int) {
-
-}
-
-func getMeshWithMemoryDB(id string) *mesh.Mesh {
-	bdb := database.NewMemDatabase()
-	ldb := database.NewMemDatabase()
-	cv := database.NewMemDatabase()
-	//odb := database.NewMemDatabase()
-	layers := mesh.NewMesh(ldb, bdb, cv, ConfigTst(), &MeshValidatorMock{}, &stateMock{}, log.New(id, "", ""))
+	layers := mesh.NewMesh(ldb, bdb, cv, ConfigTst(), &MeshValidatorMock{}, &StateMock{}, log.New(id, "", ""))
 	return layers
 }
 
