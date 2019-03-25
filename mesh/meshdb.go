@@ -3,7 +3,7 @@ package mesh
 import (
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"sync"
@@ -291,8 +291,15 @@ func (m *meshDB) getTransactions(transactions []TransactionId) ([]*SerializableT
 	return ts, nil
 }
 
+//todo standardized transaction id across project
+//todo replace panic
 func getTransactionId(t *SerializableTransaction) TransactionId {
-	return append(append(t.Origin.Bytes(), t.Recipient.Bytes()...), common.Uint64ToBytes(t.AccountNonce)...)
+	tx, err := TransactionAsBytes(t)
+	if err != nil {
+		panic("could not Serialize transaction")
+	}
+
+	return crypto.Sha256(tx)
 }
 
 func (m *meshDB) getTransactionBytes(id []byte) ([]byte, error) {
