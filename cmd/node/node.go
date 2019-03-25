@@ -188,7 +188,6 @@ func (app *SpacemeshApp) Initialize(cmd *cobra.Command, args []string) (err erro
 func (app *SpacemeshApp) setupLogging() {
 
 	if app.Config.TestMode {
-		log.DebugMode(true)
 		log.JSONLog(true)
 	}
 
