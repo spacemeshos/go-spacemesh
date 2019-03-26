@@ -138,10 +138,15 @@ def setup_bootstrap(request, load_config, setup_oracle, create_configmap):
     def _setup_bootstrap_in_namespace(name_space):
         global bs_info
         bs_info = NodeInfo()
-        cspec = ContainerSpec(cname='bootstrap', cimage=testconfig['bootstrap']['image'],
-                              centry=[testconfig['bootstrap']['command']],
-                              oracle_server='http://{0}:3030'.format(setup_oracle),
-                              genesis_time=GENESIS_TIME.isoformat('T', 'seconds'))
+        bootstrap_args = {} if 'args' not in testconfig['bootstrap'] else testconfig['bootstrap']['args']
+
+        cspec = ContainerSpec(cname='bootstrap',
+                              cimage=testconfig['bootstrap']['image'],
+                              centry=[testconfig['bootstrap']['command']])
+
+        cspec.append_args(oracle_server='http://{0}:3030'.format(setup_oracle),
+                          genesis_time=GENESIS_TIME.isoformat('T', 'seconds'),
+                          **bootstrap_args)
 
         resp = create_deployment(BOOT_DEPLOYMENT_FILE, name_space,
                                  deployment_id=bs_info.deployment_id,
@@ -178,11 +183,17 @@ def setup_clients(request, setup_oracle, setup_bootstrap):
     def _setup_clients_in_namespace(name_space):
         global bs_info, client_info
         client_info = NodeInfo(bs_info.deployment_id)
-        cspec = ContainerSpec(cname='client', cimage=testconfig['client']['image'],
-                              centry=[testconfig['client']['command']],
-                              bootnodes="{0}:{1}/{2}".format(bs_info.pod_ip, '7513', bs_info.key),
-                              oracle_server='http://{0}:3030'.format(setup_oracle),
-                              genesis_time=GENESIS_TIME.isoformat('T', 'seconds'))
+
+        client_args = {} if 'args' not in testconfig['client'] else testconfig['client']['args']
+
+        cspec = ContainerSpec(cname='client',
+                              cimage=testconfig['client']['image'],
+                              centry=[testconfig['client']['command']])
+
+        cspec.append_args(bootnodes="{0}:{1}/{2}".format(bs_info.pod_ip, '7513', bs_info.key),
+                          oracle_server='http://{0}:3030'.format(setup_oracle),
+                          genesis_time=GENESIS_TIME.isoformat('T', 'seconds'),
+                          **client_args)
 
         resp = create_deployment(CLIENT_DEPLOYMENT_FILE, name_space,
                                  deployment_id=bs_info.deployment_id,
