@@ -55,8 +55,8 @@ func (t *Ticker) Close() {
 func (t *Ticker) notifyOnTick() {
 	t.m.Lock()
 	defer t.m.Unlock()
+	t.currentLayer++
 	for _, ch := range t.subscribes {
-
 		ch <- t.currentLayer
 		log.Debug("iv'e notified number : %v", t.ids[ch])
 	}
@@ -108,14 +108,9 @@ func (t *Ticker) StartClock() {
 		select {
 		case <-tick.C:
 			log.Info("released tick mesh.LayerID  %v", t.currentLayer+1)
-			t.currentLayer++
 			t.notifyOnTick()
 		case <-t.stop:
 			return
 		}
 	}
-}
-
-func (t *Ticker) Genesis() time.Time {
-	return t.startEpoch
 }

@@ -1,4 +1,6 @@
 from datetime import datetime, timedelta
+
+from tests import hare
 from tests.fixtures import load_config
 import os
 from os import path
@@ -16,7 +18,8 @@ from elasticsearch import Elasticsearch
 from elasticsearch_dsl import Search, Q
 
 from tests.misc import NodeInfo, ContainerSpec
-import hare.test_hare
+
+from hare import test_hare
 
 BOOT_DEPLOYMENT_FILE = './k8s/bootstrap-w-conf.yml'
 CLIENT_DEPLOYMENT_FILE = './k8s/client-w-conf.yml'
@@ -296,8 +299,8 @@ def test_bootstrap(setup_bootstrap):
     # wait for the bootstrap logs to be available in ElasticSearch
     time.sleep(5)
     assert setup_bootstrap.key == query_bootstrap_es(current_index,
-                                                        testconfig['namespace'],
-                                                        setup_bootstrap.pod_name)
+                                                     testconfig['namespace'],
+                                                     setup_bootstrap.pod_name)
 
 
 def test_client(load_config, setup_clients, save_log_on_exit):
@@ -320,7 +323,7 @@ def test_gossip(load_config, setup_clients):
     (out, err) = p.communicate()
     assert '{"value":"ok"}' in out.decode("utf-8")
 
-    gossip_propagation_sleep = len(setup_clients)*2
+    gossip_propagation_sleep = len(setup_clients) * 2
     print('sleep for {0} sec to enable gossip propagation'.format(gossip_propagation_sleep))
     time.sleep(gossip_propagation_sleep)
 
@@ -370,11 +373,11 @@ def query_hare_output_set(indx, namespace, client_po_name):
     return lst
 
 
-def test_hare(load_config, setup_clients, save_log_on_exit):
+def test_hare_sanity(load_config, setup_clients, save_log_on_exit):
     global client_info
     delay = testconfig['client']['args']['hare-round-duration-sec'] * 7
     print("Going to sleep for {0}".format(delay))
     time.sleep(delay)
-    lst = query_hare_output_set(current_index, testconfig['namespace'], client_info.bs_deployment_name)
-    assert 5 == len(lst)
-    assert hare.test_hare.validate(lst)
+    lst = query_hare_output_set(current_index, testconfig['namespace'], bs_info.deployment_id)
+    assert 6 == len(lst)
+    assert test_hare.validate(lst)

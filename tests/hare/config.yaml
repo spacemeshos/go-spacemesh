@@ -10,6 +10,7 @@ deployment_ready_time_out: 90
 bootstrap:
   image: 'spacemeshos/go-spacemesh-dev:hare19'
   command: '/bin/go-hare'
+  replicas: 1
 
 client:
   image: 'spacemeshos/go-spacemesh-dev:hare19'

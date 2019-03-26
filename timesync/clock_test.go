@@ -71,20 +71,22 @@ func TestTicker_StartClock_LayerID(t *testing.T) {
 	ts.Close()
 }
 
-type MyTimer struct {
-}
-
-func (mt *MyTimer) Now() time.Time {
-	return time.Now()
-}
-
 func TestTicker_StartClock_2(t *testing.T) {
 	destTime := 2 * time.Second
-	tmr := &MyTimer{}
+	tmr := &RealClock{}
 	then := tmr.Now()
 	ticker := NewTicker(tmr, 5*time.Second, then.Add(destTime))
 	ticker.Start()
 	sub := ticker.Subscribe()
 	<-sub
 	assert.True(t, tmr.Now().Sub(then).Seconds() <= float64(2.1))
+}
+
+func TestTicker_Tick(t *testing.T) {
+	tmr := &RealClock{}
+	ticker := NewTicker(tmr, 5*time.Second, tmr.Now())
+	ticker.notifyOnTick()
+	l := ticker.currentLayer
+	ticker.notifyOnTick()
+	assert.Equal(t, ticker.currentLayer, l+1)
 }
