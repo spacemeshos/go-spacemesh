@@ -6,14 +6,25 @@ import (
 	"github.com/davecgh/go-xdr/xdr2"
 	"github.com/google/uuid"
 	"github.com/spacemeshos/go-spacemesh/address"
-	"io"
 	"math/big"
 	"time"
 )
 
 type BlockID uint64
-
 type LayerID uint64
+type TransactionId []byte
+
+type BlockHeader struct {
+	Id         BlockID
+	LayerIndex LayerID
+	MinerID    string
+	Data       []byte
+	Coin       bool
+	Timestamp  int64
+	BlockVotes []BlockID
+	ViewEdges  []BlockID
+	TxIds      []TransactionId
+}
 
 type Block struct {
 	Id         BlockID
@@ -22,17 +33,17 @@ type Block struct {
 	Data       []byte
 	Coin       bool
 	Timestamp  int64
-	Txs        []SerializableTransaction
+	Txs        []*SerializableTransaction
 	BlockVotes []BlockID
 	ViewEdges  []BlockID
 }
 
 type SerializableTransaction struct {
 	AccountNonce uint64
-	Price        []byte
-	GasLimit     uint64
 	Recipient    *address.Address
 	Origin       address.Address //todo: remove this, should be calculated from sig.
+	GasLimit     uint64
+	Price        []byte
 	Amount       []byte
 	Payload      []byte
 }
@@ -55,10 +66,31 @@ func NewBlock(coin bool, data []byte, ts time.Time, LayerID LayerID) *Block {
 		LayerIndex: LayerID,
 		BlockVotes: make([]BlockID, 0, 10),
 		ViewEdges:  make([]BlockID, 0, 10),
-		Txs:        make([]SerializableTransaction, 0, 10),
+		Txs:        make([]*SerializableTransaction, 0, 10),
 		Timestamp:  ts.UnixNano(),
 		Data:       data,
 		Coin:       coin,
+	}
+	return &b
+}
+
+func newBlockHeader(block *Block) *BlockHeader {
+	tids := make([]TransactionId, len(block.Txs))
+	for idx, tx := range block.Txs {
+		//keep tx's in same order !!!
+		tids[idx] = getTransactionId(tx)
+	}
+
+	b := BlockHeader{
+		Id:         block.ID(),
+		LayerIndex: block.Layer(),
+		BlockVotes: block.BlockVotes,
+		ViewEdges:  block.ViewEdges,
+		Timestamp:  block.Timestamp,
+		Data:       block.Data,
+		Coin:       block.Coin,
+		MinerID:    block.MinerID,
+		TxIds:      tids,
 	}
 	return &b
 }
@@ -94,7 +126,7 @@ func (b *Block) AddView(id BlockID) {
 }
 
 func (b *Block) AddTransaction(sr *SerializableTransaction) {
-	b.Txs = append(b.Txs, *sr)
+	b.Txs = append(b.Txs, sr)
 }
 
 type Layer struct {
@@ -131,6 +163,14 @@ func NewExistingLayer(idx LayerID, blocks []*Block) *Layer {
 	return &l
 }
 
+func getBlockHeaderBytes(bheader *BlockHeader) ([]byte, error) {
+	var w bytes.Buffer
+	if _, err := xdr.Marshal(&w, bheader); err != nil {
+		return nil, fmt.Errorf("error marshalling block ids %v", err)
+	}
+	return w.Bytes(), nil
+}
+
 func BlockAsBytes(block Block) ([]byte, error) {
 	var w bytes.Buffer
 	if _, err := xdr.Marshal(&w, &block); err != nil {
@@ -139,9 +179,18 @@ func BlockAsBytes(block Block) ([]byte, error) {
 	return w.Bytes(), nil
 }
 
-func BytesAsBlock(buf io.Reader) (Block, error) {
+func BytesAsBlockHeader(buf []byte) (BlockHeader, error) {
+	b := BlockHeader{}
+	_, err := xdr.Unmarshal(bytes.NewReader(buf), &b)
+	if err != nil {
+		return b, err
+	}
+	return b, nil
+}
+
+func BytesAsBlock(buf []byte) (Block, error) {
 	b := Block{}
-	_, err := xdr.Unmarshal(buf, &b)
+	_, err := xdr.Unmarshal(bytes.NewReader(buf), &b)
 	if err != nil {
 		return b, err
 	}
@@ -156,9 +205,9 @@ func TransactionAsBytes(tx *SerializableTransaction) ([]byte, error) {
 	return w.Bytes(), nil
 }
 
-func BytesAsTransaction(buf io.Reader) (*SerializableTransaction, error) {
+func BytesAsTransaction(buf []byte) (*SerializableTransaction, error) {
 	b := SerializableTransaction{}
-	_, err := xdr.Unmarshal(buf, &b)
+	_, err := xdr.Unmarshal(bytes.NewReader(buf), &b)
 	if err != nil {
 		return &b, err
 	}

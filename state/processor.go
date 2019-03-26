@@ -127,7 +127,7 @@ func (tp *TransactionProcessor) Reset(layer mesh.LayerID) {
 		newState, err := New(state, tp.globalState.db)
 
 		if err != nil {
-			panic("cannot revert- improper state")
+			log.Panic("cannot revert- improper state")
 		}
 		tp.Log.Info("reverted, new root %x", newState.IntermediateRoot(false))
 		tp.Log.With().Info("reverted", log.String("root_hash", newState.IntermediateRoot(false).String()))

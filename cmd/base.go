@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	bc "github.com/spacemeshos/go-spacemesh/config"
+	"github.com/spacemeshos/go-spacemesh/filesystem"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -54,12 +55,31 @@ func (app *BaseApp) Initialize(cmd *cobra.Command) {
 	// parse the config file based on flags et al
 	conf, err := parseConfig()
 	if err != nil {
-		panic(err.Error())
+		log.Panic("Panic: ", err.Error())
 	}
 
 	app.Config = conf
 
 	EnsureCLIFlags(cmd, app.Config)
+	setupLogging(app.Config)
+}
+
+func setupLogging(config *bc.Config) {
+
+	if config.TestMode {
+		log.DebugMode(true)
+		log.JSONLog(true)
+	}
+
+	// setup logging early
+	dataDir, err := filesystem.GetSpacemeshDataDirectoryPath()
+	if err != nil {
+		fmt.Printf("Failed to setup spacemesh data dir")
+		log.Panic("Failed to setup spacemesh data dir", err)
+	}
+
+	// app-level logging
+	log.InitSpacemeshLoggingSystem(dataDir, "spacemesh.log")
 }
 
 func parseConfig() (*bc.Config, error) {

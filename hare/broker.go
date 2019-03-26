@@ -130,7 +130,12 @@ func (broker *Broker) eventLoop() {
 			if exist {
 				// todo: err if chan is full (len)
 				c <- hareMsg
-			} else if futureMsg {
+			} else { // message arrived before registration
+				futureMsg = true
+			}
+
+			if futureMsg {
+				log.Info("Broker identified future message")
 				if _, exist := broker.pending[msgInstId]; !exist {
 					broker.pending[msgInstId] = make([]*pb.HareMessage, 0)
 				}

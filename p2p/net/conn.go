@@ -177,6 +177,36 @@ func (c *FormattedConnection) shutdown(err error) {
 	c.formatter.Close()
 }
 
+var ErrTriedToSetupExistingConn = errors.New("tried to setup existing connection")
+var ErrIncomingSessionTimeout = errors.New("timeout waiting for handshake message")
+
+func (c *FormattedConnection) setupIncoming(timeout time.Duration) error {
+	var err error
+	tm := time.NewTimer(timeout)
+	select {
+	case msg, ok := <-c.formatter.In():
+		if !ok { // chan closed
+			err = ErrClosedIncomingChannel
+			break
+		}
+
+		if c.session == nil {
+			err = c.networker.HandlePreSessionIncomingMessage(c, msg)
+			if err != nil {
+				break
+			}
+			return nil
+		}
+		err = ErrTriedToSetupExistingConn
+		break
+	case <-tm.C:
+		err = ErrIncomingSessionTimeout
+	}
+
+	c.Close()
+	return err
+}
+
 // Push outgoing message to the connections
 // Read from the incoming new messages and send down the connection
 func (c *FormattedConnection) beginEventProcessing() {
@@ -193,14 +223,12 @@ Loop:
 			}
 
 			if c.session == nil {
-				err = c.networker.HandlePreSessionIncomingMessage(c, msg)
-				if err != nil {
-					break Loop
-				}
-			} else {
-				metrics.PeerRecv.With(metrics.PeerIdLabel, c.remotePub.String()).Add(float64(len(msg)))
-				c.publish(msg)
+				err = ErrTriedToSetupExistingConn
+				break Loop
 			}
+
+			metrics.PeerRecv.With(metrics.PeerIdLabel, c.remotePub.String()).Add(float64(len(msg)))
+			c.publish(msg)
 
 		case <-c.closeChan:
 			err = ErrConnectionClosed

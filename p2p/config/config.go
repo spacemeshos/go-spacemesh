@@ -26,17 +26,19 @@ func duration(duration string) (dur time.Duration) {
 
 // Config defines the configuration options for the Spacemesh peer-to-peer networking layer
 type Config struct {
-	SecurityParam   int           `mapstructure:"security-param"`
-	FastSync        bool          `mapstructure:"fast-sync"`
-	TCPPort         int           `mapstructure:"tcp-port"`
-	NodeID          string        `mapstructure:"node-id"`
-	NewNode         bool          `mapstructure:"new-node"`
-	DialTimeout     time.Duration `mapstructure:"dial-timeout"`
-	ConnKeepAlive   time.Duration `mapstructure:"conn-keepalive"`
-	NetworkID       int8          `mapstructure:"network-id"`
-	ResponseTimeout time.Duration `mapstructure:"response-timeout"`
-	SwarmConfig     SwarmConfig   `mapstructure:"swarm"`
-	BufferSize      int           `mapstructure:"buffer-size"`
+	TCPPort               int           `mapstructure:"tcp-port"`
+	NodeID                string        `mapstructure:"node-id"`
+	NewNode               bool          `mapstructure:"new-node"`
+	DialTimeout           time.Duration `mapstructure:"dial-timeout"`
+	ConnKeepAlive         time.Duration `mapstructure:"conn-keepalive"`
+	NetworkID             int8          `mapstructure:"network-id"`
+	ResponseTimeout       time.Duration `mapstructure:"response-timeout"`
+	SessionTimeout        time.Duration `mapstructure:"session-timeout"`
+	MaxPendingConnections int           `mapstructure:"max-pending-connections"`
+	OutboundPeersTarget   int           `mapstructure:"outbound-target"`
+	MaxInboundPeers       int           `mapstructure:"max-inbound"`
+	SwarmConfig           SwarmConfig   `mapstructure:"swarm"`
+	BufferSize            int           `mapstructure:"buffer-size"`
 }
 
 // SwarmConfig specifies swarm config params.
@@ -64,16 +66,18 @@ func DefaultConfig() Config {
 	}
 
 	return Config{
-		SecurityParam:   20,
-		FastSync:        true,
-		TCPPort:         7513,
-		NodeID:          "",
-		NewNode:         false,
-		DialTimeout:     duration("1m"),
-		ConnKeepAlive:   duration("48h"),
-		NetworkID:       TestNet,
-		ResponseTimeout: duration("15s"),
-		SwarmConfig:     SwarmConfigValues,
-		BufferSize:      100,
+		TCPPort:               7513,
+		NodeID:                "",
+		NewNode:               false,
+		DialTimeout:           duration("1m"),
+		ConnKeepAlive:         duration("48h"),
+		NetworkID:             TestNet,
+		ResponseTimeout:       duration("15s"),
+		SessionTimeout:        duration("5s"),
+		MaxPendingConnections: 100,
+		OutboundPeersTarget:   10,
+		MaxInboundPeers:       100,
+		SwarmConfig:           SwarmConfigValues,
+		BufferSize:            100,
 	}
 }

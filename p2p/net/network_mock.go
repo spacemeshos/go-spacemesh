@@ -3,7 +3,7 @@ package net
 import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"math/rand"
+	"github.com/spacemeshos/go-spacemesh/rand"
 	"net"
 	"sync/atomic"
 	"time"
@@ -32,7 +32,7 @@ func (m ReadWriteCloserMock) Close() error {
 func (m ReadWriteCloserMock) RemoteAddr() net.Addr {
 	r, err := net.ResolveTCPAddr("tcp", "127.0.0.0")
 	if err != nil {
-		panic(err)
+		log.Panic("RemoteAddr panicked: ", err)
 	}
 	return r
 }

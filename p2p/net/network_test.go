@@ -6,7 +6,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"math/rand"
+	"net"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -42,6 +44,73 @@ func TestNet_EnqueueMessage(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+}
+
+type mockListener struct {
+	calledCount  int32
+	connReleaser chan struct{}
+	accpetResErr error
+}
+
+func newMockListener() *mockListener {
+	return &mockListener{connReleaser: make(chan struct{})}
+}
+
+func (ml *mockListener) listenerFunc() (net.Listener, error) {
+	return ml, nil
+}
+
+func (ml *mockListener) Accept() (net.Conn, error) {
+	atomic.AddInt32(&ml.calledCount, 1)
+	<-ml.connReleaser
+	var c net.Conn = nil
+	var c2 net.Conn = nil
+	if ml.accpetResErr == nil {
+		c, c2 = net.Pipe() // just for the interface lolz
+		go func(con net.Conn) {
+
+		}(c2)
+	}
+	return c, ml.accpetResErr
+}
+
+func (ml *mockListener) releaseConn() {
+	ml.connReleaser <- struct{}{}
+}
+
+func (ml *mockListener) Close() error {
+	return nil
+}
+func (ml *mockListener) Addr() net.Addr {
+	return &net.IPAddr{IP: net.ParseIP("0.0.0.0"), Zone: "ipv4"}
+}
+
+func Test_Net_LimitedConnections(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.SessionTimeout = 1000 * time.Millisecond
+
+	ln, err := node.NewNodeIdentity(cfg, "0.0.0.0:0000", false)
+	require.NoError(t, err)
+	n, err := NewNet(cfg, ln)
+	//n.SubscribeOnNewRemoteConnections(counter)
+	listener := newMockListener()
+	err = n.listen(listener.listenerFunc)
+	require.NoError(t, err)
+	for i := 0; i < cfg.MaxPendingConnections-1; i++ {
+		listener.releaseConn()
+	}
+	n.config.SessionTimeout = 300 * time.Millisecond
+	listener.releaseConn()
+
+	require.Equal(t, atomic.LoadInt32(&listener.calledCount), int32(cfg.MaxPendingConnections))
+	done := make(chan struct{})
+	go func() {
+		listener.releaseConn()
+		done <- struct{}{}
+	}()
+	require.Equal(t, atomic.LoadInt32(&listener.calledCount), int32(cfg.MaxPendingConnections))
+	<-done
+	require.Equal(t, atomic.LoadInt32(&listener.calledCount), int32(cfg.MaxPendingConnections)+1)
 }
 
 func TestHandlePreSessionIncomingMessage2(t *testing.T) {

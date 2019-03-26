@@ -115,13 +115,13 @@ cover:
 .PHONY: cover
 
 dockerbuild-go:
-	docker build -t $(DOCKER_IMAGE_NAME):latest .
+	docker build -t $(DOCKER_IMAGE_NAME):$(BRANCH) .
 .PHONY: dockerbuild-go
 
 dockerpush: dockerbuild-go
 	echo "$(DOCKER_PASSWORD)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
-	docker tag $(DOCKER_IMAGE_NAME) spacemeshos/$(DOCKER_IMAGE_NAME):$(BRANCH)
-	docker tag $(DOCKER_IMAGE_NAME) spacemeshos/$(DOCKER_IMAGE_NAME):$(SHA)
+	docker tag $(DOCKER_IMAGE_NAME):$(BRANCH) spacemeshos/$(DOCKER_IMAGE_NAME):$(BRANCH)
+	docker tag $(DOCKER_IMAGE_NAME):$(BRANCH) spacemeshos/$(DOCKER_IMAGE_NAME):$(SHA)
 
 	docker push spacemeshos/$(DOCKER_IMAGE_NAME):$(BRANCH)
 	docker push spacemeshos/$(DOCKER_IMAGE_NAME):$(SHA)
@@ -139,5 +139,5 @@ dockerrun-test: dockerbuild-test
 ifndef ES_PASSWD
 	$(error ES_PASSWD is not set)
 endif
-	docker run -e ES_PASSWD="$(ES_PASSWD)" -e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json -it go-spacemesh-python pytest -k test_client -s --tc-file=config.yaml --tc-format=yaml
+	docker run -e ES_PASSWD="$(ES_PASSWD)" -e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json -it go-spacemesh-python pytest -s --tc-file=config.yaml --tc-format=yaml
 .PHONY: dockerrun-test

@@ -2,8 +2,8 @@ package dht
 
 import (
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/stretchr/testify/assert"
-	"math/rand"
 	"testing"
 )
 
