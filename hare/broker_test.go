@@ -14,6 +14,10 @@ var instanceId1 = InstanceId(1)
 var instanceId2 = InstanceId(2)
 var instanceId3 = InstanceId(3)
 
+type mockClient struct {
+	id InstanceId
+}
+
 func createMessage(t *testing.T, instanceId InstanceId) []byte {
 	hareMsg := &pb.HareMessage{}
 	hareMsg.Message = &pb.InnerMessage{InstanceId: uint32(instanceId)}
@@ -225,4 +229,29 @@ func TestBroker_Register2(t *testing.T) {
 	msg = newMockGossipMsg(m)
 	broker.inbox <- msg
 	assertMsg(t, msg, false)
+}
+
+func TestBroker_Register3(t *testing.T) {
+	sim := service.NewSimulator()
+	n1 := sim.NewNode()
+	broker := buildBroker(n1)
+	broker.Start()
+
+	m := BuildPreRoundMsg(NewMockSigning(), NewSetFromValues(value1))
+	m.Message.InstanceId = uint32(instanceId0)
+	msg := newMockGossipMsg(m)
+	broker.inbox <- msg
+	time.Sleep(1)
+	client := mockClient{instanceId0}
+	ch := broker.Register(client.id)
+	timer := time.NewTimer(2 * time.Second)
+	for {
+		select {
+		case <-ch:
+			return
+		case <-timer.C:
+			t.FailNow()
+		}
+
+	}
 }

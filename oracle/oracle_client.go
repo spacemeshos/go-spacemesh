@@ -44,21 +44,21 @@ func (hr *HTTPRequester) Get(api, data string) []byte {
 	log.Debug("Sending oracle request : %s ", jsonStr)
 	req, err := http.NewRequest("POST", hr.url+"/"+api, bytes.NewBuffer(jsonStr))
 	if err != nil {
-		panic(err)
+		log.Panic("HTTPRequester panicked: %v", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := hr.c.Do(req)
 
 	if err != nil {
-		panic(err)
+		log.Panic("HTTPRequester panicked: %v", err)
 	}
 
 	buf := bytes.NewBuffer([]byte{})
 	_, err = io.Copy(buf, resp.Body)
 
 	if err != nil {
-		panic(err)
+		log.Panic("HTTPRequester panicked: %v", err)
 	}
 
 	resp.Body.Close()
@@ -79,7 +79,7 @@ type OracleClient struct {
 func NewOracleClient() *OracleClient {
 	b, err := crypto.GetRandomBytes(4)
 	if err != nil {
-		panic(err)
+		log.Panic("NewOracleClient panicked: %v", err)
 	}
 	world := big.NewInt(0).SetBytes(b).Uint64()
 	return NewOracleClientWithWorldID(world)
@@ -137,7 +137,7 @@ func (oc *OracleClient) ValidateSingle(instanceID []byte, K int, committeeSize i
 	res := &validRes{}
 	err := json.Unmarshal(resp, res)
 	if err != nil {
-		panic(err)
+		log.Panic("ValidateSingle panicked: %v", err)
 	}
 
 	return res.Valid

@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"container/heap"
 	"errors"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/rlp"
 
 	"github.com/spacemeshos/go-spacemesh/common"
@@ -165,7 +166,8 @@ func (it *nodeIterator) LeafKey() []byte {
 			return hexToKeybytes(it.path)
 		}
 	}
-	panic("not at leaf")
+	log.Panic("not at leaf")
+	return nil
 }
 
 func (it *nodeIterator) LeafBlob() []byte {
@@ -174,7 +176,8 @@ func (it *nodeIterator) LeafBlob() []byte {
 			return []byte(node)
 		}
 	}
-	panic("not at leaf")
+	log.Panic("not at leaf")
+	return nil
 }
 
 func (it *nodeIterator) LeafProof() [][]byte {
@@ -195,7 +198,8 @@ func (it *nodeIterator) LeafProof() [][]byte {
 			return proofs
 		}
 	}
-	panic("not at leaf")
+	log.Panic("not at leaf")
+	return nil
 }
 
 func (it *nodeIterator) Path() []byte {

@@ -1,4 +1,6 @@
 from datetime import datetime, timedelta
+
+from tests import hare
 from tests.fixtures import load_config
 import os
 from os import path
@@ -16,6 +18,8 @@ from elasticsearch import Elasticsearch
 from elasticsearch_dsl import Search, Q
 
 from tests.misc import NodeInfo, ContainerSpec
+
+from hare import test_hare
 
 BOOT_DEPLOYMENT_FILE = './k8s/bootstrap-w-conf.yml'
 CLIENT_DEPLOYMENT_FILE = './k8s/client-w-conf.yml'
@@ -280,6 +284,7 @@ def save_log_on_exit(request):
                              stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         (out, err) = p.communicate()
 
+
 # ==============================================================================
 #    TESTS
 # ==============================================================================
@@ -287,15 +292,15 @@ def save_log_on_exit(request):
 
 dt = datetime.now()
 todaydate = dt.strftime("%Y.%m.%d")
-current_index = 'kubernetes_cluster-'+todaydate
+current_index = 'kubernetes_cluster-' + todaydate
 
 
 def test_bootstrap(setup_bootstrap):
     # wait for the bootstrap logs to be available in ElasticSearch
     time.sleep(5)
     assert setup_bootstrap.key == query_bootstrap_es(current_index,
-                                                        testconfig['namespace'],
-                                                        setup_bootstrap.pod_name)
+                                                     testconfig['namespace'],
+                                                     setup_bootstrap.pod_name)
 
 
 def test_client(load_config, setup_clients, save_log_on_exit):
@@ -318,7 +323,7 @@ def test_gossip(load_config, setup_clients):
     (out, err) = p.communicate()
     assert '{"value":"ok"}' in out.decode("utf-8")
 
-    gossip_propagation_sleep = len(setup_clients)*2
+    gossip_propagation_sleep = len(setup_clients) * 2
     print('sleep for {0} sec to enable gossip propagation'.format(gossip_propagation_sleep))
     time.sleep(gossip_propagation_sleep)
 
@@ -349,3 +354,30 @@ def test_transaction(load_config, setup_clients):
                          stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     (out, err) = p.communicate()
     assert '{"value":"ok"}' in out.decode("utf-8")
+
+
+def query_hare_output_set(indx, namespace, client_po_name):
+    es = get_elastic_search_api()
+    fltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
+           Q("match_phrase", kubernetes__pod_name=client_po_name) & \
+           Q("match_phrase", M="Consensus process terminated")
+    s = Search(index=indx, using=es).query('bool', filter=[fltr])
+    hits = list(s.scan())
+
+    lst = []
+    for h in hits:
+        lst.append(h.set_values)
+    #    match = re.search(r"Consensus process terminated \w+ (?P<bootstarap_key>\w+)", h.log)
+    #    if match:
+    #        return match.group('bootstarap_key')
+    return lst
+
+
+def test_hare_sanity(load_config, setup_clients, save_log_on_exit):
+    global client_info
+    delay = int(testconfig['client']['args']['hare-round-duration-sec']) * 7
+    print("Going to sleep for {0}".format(delay))
+    time.sleep(delay)
+    lst = query_hare_output_set(current_index, testconfig['namespace'], bs_info.deployment_id)
+    assert 6 == len(lst)
+    assert test_hare.validate(lst)

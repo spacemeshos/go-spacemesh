@@ -195,8 +195,7 @@ func (app *SpacemeshApp) setupLogging() {
 	dataDir, err := filesystem.GetSpacemeshDataDirectoryPath()
 	if err != nil {
 		fmt.Printf("Failed to setup spacemesh data dir")
-		log.Error("Failed to setup spacemesh data dir")
-		panic(err)
+		log.Panic("Failed to setup spacemesh data dir", err)
 	}
 
 	// app-level logging
@@ -306,11 +305,11 @@ func (app *SpacemeshApp) startServices() {
 	app.syncer.Start()
 	err := app.hare.Start()
 	if err != nil {
-		panic("cannot start hare")
+		log.Panic("cannot start hare")
 	}
 	err = app.blockProducer.Start()
 	if err != nil {
-		panic("cannot start block producer")
+		log.Panic("cannot start block producer")
 	}
 	app.clock.Start()
 }
@@ -356,7 +355,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P)
 	if err != nil {
 		log.Error("Error starting p2p services, err: %v", err)
-		panic("Error starting p2p services")
+		log.Panic("Error starting p2p services")
 	}
 
 	// todo : register all protocols
@@ -390,7 +389,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	}
 
 	if err != nil {
-		panic("got error starting services : " + err.Error())
+		log.Panic("got error starting services : " + err.Error())
 	}
 
 	app.startServices()
@@ -399,7 +398,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 
 	if err != nil {
 		log.Error("Error starting p2p services, err: %v", err)
-		panic("Error starting p2p services")
+		log.Panic("Error starting p2p services")
 	}
 
 	// todo: if there's no loaded account - do the new account interactive flow here
