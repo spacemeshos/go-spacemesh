@@ -232,7 +232,7 @@ func (m *meshDB) endLayerWorker(index LayerID) {
 
 	ll, found := m.layerMutex[index]
 	if !found {
-		panic("trying to double close layer mutex")
+		log.Panic("trying to double close layer mutex")
 	}
 
 	ll.layerWorkers--

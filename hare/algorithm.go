@@ -137,7 +137,7 @@ func (proc *ConsensusProcess) SetInbox(inbox chan *pb.HareMessage) {
 }
 
 func (proc *ConsensusProcess) eventLoop() {
-	proc.With().Info("Consensus Processes Started",
+	proc.With().Info("Consensus Process Started",
 		log.Int("N", proc.cfg.N), log.Int("f", proc.cfg.F), log.String("duration", (time.Duration(proc.cfg.RoundDuration)*time.Second).String()),
 		log.Uint32("instance_id", uint32(proc.instanceId)), log.String("set_values", proc.s.String()))
 
@@ -216,14 +216,15 @@ func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
 		return
 	}
 
+	mType := MessageType(m.Message.Type).String()
 	// validate message for this or next round
 	if !proc.validator.ContextuallyValidateMessage(m, proc.k) {
 		if !proc.validator.ContextuallyValidateMessage(m, proc.k+1) {
 			// TODO: should return error from message validation to indicate what failed, should retry only for contextual failure
-			proc.Warning("Message is not valid for either round, pubkey %v", m.PubKey)
+			proc.Warning("Message of type %v is not valid for either round, pubkey %v", mType, m.PubKey)
 			return
 		} else { // a valid early message, keep it for later
-			proc.Info("Early message detected. Keeping message, pubkey %v", m.PubKey)
+			proc.Info("Early message of type %v detected. Keeping message, pubkey %v", mType, m.PubKey)
 			proc.onEarlyMessage(m)
 			return
 		}
@@ -234,7 +235,7 @@ func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
 }
 
 func (proc *ConsensusProcess) processMsg(m *pb.HareMessage) {
-	proc.Debug("Processing message of type %v", MessageType(m.Message.Type).String())
+	proc.Info("Processing message of type %v", MessageType(m.Message.Type).String())
 
 	metrics.MessageTypeCounter.With("type_id", MessageType(m.Message.Type).String()).Add(1)
 
@@ -269,8 +270,7 @@ func (proc *ConsensusProcess) sendMessage(msg *pb.HareMessage) {
 
 	data, err := proto.Marshal(msg)
 	if err != nil {
-		proc.Error("failed marshaling message")
-		panic("could not marshal message before send")
+		proc.Panic("could not marshal message before send")
 	}
 
 	if err := proc.network.Broadcast(protoName, data); err != nil {
@@ -367,8 +367,7 @@ func (proc *ConsensusProcess) onRoundBegin() {
 	case Round4:
 		proc.beginRound4()
 	default:
-		proc.Error("Current round out of bounds. Expected: 0-4, Found: ", proc.currentRound())
-		panic("Current round out of bounds")
+		proc.Panic("Current round out of bounds. Expected: 0-4, Found: ", proc.currentRound())
 	}
 
 	pendingProcess := proc.pending

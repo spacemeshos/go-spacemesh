@@ -16,6 +16,8 @@ client:
   image: 'spacemeshos/go-spacemesh:develop'
   command: '/bin/go-spacemesh'
   replicas: 10
+  args:
+    randcon: '4'
 
 elastic:
   host: es.spacemesh.io
