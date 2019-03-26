@@ -259,12 +259,15 @@ func (m *meshDB) writeTransactions(block *Block) error {
 	for _, t := range block.Txs {
 		bytes, err := TransactionAsBytes(t)
 		if err != nil {
-			m.Error("could not write tx %v to database ")
+			m.Error("could not write tx %v to database ", err)
+			return err
 		}
 
-		//use AccountNonce Recipient Origin as key
 		id := getTransactionId(t)
-		m.transactions.Put(id, bytes)
+		if err := m.transactions.Put(id, bytes); err != nil {
+			m.Error("could not write tx %v to database ", err)
+			return err
+		}
 		m.Debug("write tx %v to db", t)
 	}
 
