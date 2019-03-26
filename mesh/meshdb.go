@@ -305,7 +305,7 @@ func getTransactionId(t *SerializableTransaction) TransactionId {
 func (m *meshDB) getTransactionBytes(id []byte) ([]byte, error) {
 	b, err := m.transactions.Get(id)
 	if err != nil {
-		return nil, errors.New("could not find transaction in database")
+		return nil, errors.New(fmt.Sprintf("could not find transaction in database %v", id))
 	}
 	return b, nil
 }
