@@ -375,7 +375,7 @@ def query_hare_output_set(indx, namespace, client_po_name):
 
 def test_hare_sanity(load_config, setup_clients, save_log_on_exit):
     global client_info
-    delay = testconfig['client']['args']['hare-round-duration-sec'] * 7
+    delay = int(testconfig['client']['args']['hare-round-duration-sec']) * 7
     print("Going to sleep for {0}".format(delay))
     time.sleep(delay)
     lst = query_hare_output_set(current_index, testconfig['namespace'], bs_info.deployment_id)
