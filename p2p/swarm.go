@@ -62,10 +62,12 @@ type swarm struct {
 	gossipProtocolHandlers map[string]chan service.GossipMessage
 	protocolHandlerMutex   sync.RWMutex
 
+	network *net.Net // (tcp) networking service
+	cPool   cPool    // conenction cache
 	gossip  *gossip.Protocol
-	network *net.Net
-	cPool   cPool
-	dht     dht.DHT
+
+	dht       dht.DHT // peer addresses store
+	udpServer *UDPMux // protocol switch that includes a udp networking service
 
 	//neighborhood
 	initOnce sync.Once
@@ -147,7 +149,16 @@ func newSwarm(ctx context.Context, config config.Config, newNode bool, persist b
 		network:                n,
 	}
 
-	s.dht = dht.New(l, config.SwarmConfig, s)
+	// todo : if discovery on
+	s.dht = dht.New(l, config.SwarmConfig, s) // create table
+
+	err = s.setupUDP()
+
+	if err != nil {
+		return nil, err
+	}
+
+	//todo: set up discovery protocol over network
 
 	cpool := connectionpool.NewConnectionPool(s.network, l.PublicKey())
 
@@ -163,6 +174,17 @@ func newSwarm(ctx context.Context, config config.Config, newNode bool, persist b
 
 	s.lNode.Debug("Created swarm for local node %s, %s", l.Address(), l.Pretty())
 	return s, nil
+}
+
+func (s *swarm) setupUDP() error {
+	//setup network
+	udpnet, err := net.NewUDPNet(s.config, s.lNode)
+	if err != nil {
+		return err
+	}
+	mux := NewUDPMux(s.lNode, s.dht, udpnet, s.lNode.Log)
+	s.udpServer = mux
+	return nil
 }
 
 func (s *swarm) onNewConnection(nce net.NewConnectionEvent) {
@@ -182,15 +204,24 @@ func (s *swarm) Start() error {
 	if atomic.LoadUint32(&s.started) == 1 {
 		return errors.New("swarm already running")
 	}
+
+	var err error
+
 	atomic.StoreUint32(&s.started, 1)
 	s.lNode.Debug("Starting the p2p layer")
 
-	err := s.network.Start()
+	err = s.network.Start()
 	if err != nil {
 		return err
 	}
 
 	s.listenToNetworkMessages() // fires up a goroutine for each queue of messages
+
+	err = s.udpServer.Start()
+	if err != nil {
+		s.Shutdown()
+		return err
+	}
 
 	go s.checkTimeDrifts()
 
@@ -352,6 +383,7 @@ func (s *swarm) Shutdown() {
 	close(s.shutdown)
 	s.network.Shutdown()
 	s.cPool.Shutdown()
+	s.udpServer.Shutdown()
 
 	s.protocolHandlerMutex.Lock()
 	for i, _ := range s.directProtocolHandlers {

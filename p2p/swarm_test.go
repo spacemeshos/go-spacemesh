@@ -127,7 +127,6 @@ func TestSwarm_RegisterProtocolNoStart(t *testing.T) {
 	msgs := s.RegisterDirectProtocol("Anton")
 	assert.NotNil(t, msgs)
 	assert.NoError(t, err)
-	s.Shutdown()
 }
 
 func TestSwarm_processMessage(t *testing.T) {
