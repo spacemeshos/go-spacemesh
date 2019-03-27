@@ -179,13 +179,13 @@ func TestUDPMux_ProcessUDP(t *testing.T) {
 
 	addr, _ := net2.ResolveUDPAddr("udp", gotfrom.Address())
 
-	err = m.processUDPMessage(len(msgbuf), addr, msgbuf)
+	err = m.processUDPMessage(addr, msgbuf)
 
 	require.Error(t, err) // no protocol
 
 	c := make(chan service.DirectMessage, 1)
 	m.RegisterDirectProtocolWithChannel(test_str, c)
-	err = m.processUDPMessage(len(msgbuf), addr, msgbuf)
+	err = m.processUDPMessage(addr, msgbuf)
 	require.NoError(t, err) // no protocol
 
 	select {
@@ -202,14 +202,14 @@ func TestUDPMux_ProcessUDP(t *testing.T) {
 func Test_RoundTrip(t *testing.T) {
 	nd := &node.LocalNode{Node: node.GenerateRandomNodeData()}
 	mockdht := &dht.MockDHT{}
-	udpnet, err := net.NewUDPNet(config.DefaultConfig(), nd)
+	udpnet, err := net.NewUDPNet(config.DefaultConfig(), nd, log.New("", "", ""))
 	require.NoError(t, err)
 	m := NewUDPMux(nd, mockdht, udpnet, log.New(test_str, "", ""))
 	require.NotNil(t, m)
 
 	nd2 := &node.LocalNode{Node: node.GenerateRandomNodeData()}
 	mockdht2 := &dht.MockDHT{}
-	udpnet2, err := net.NewUDPNet(config.DefaultConfig(), nd2)
+	udpnet2, err := net.NewUDPNet(config.DefaultConfig(), nd2, log.New("", "", ""))
 	require.NoError(t, err)
 	m2 := NewUDPMux(nd2, mockdht2, udpnet2, log.New(test_str+"2", "", ""))
 

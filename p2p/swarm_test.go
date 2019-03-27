@@ -112,16 +112,6 @@ func TestSwarm_Shutdown(t *testing.T) {
 	}
 }
 
-func TestSwarm_ShutdownNoStart(t *testing.T) {
-	s, err := newSwarm(context.TODO(), config.DefaultConfig(), true, false)
-	assert.NoError(t, err)
-	err = s.Start()
-	assert.NoError(t, err)
-	s.Shutdown()
-	_, ok := <-s.shutdown
-	assert.False(t, ok)
-}
-
 func TestSwarm_RegisterProtocolNoStart(t *testing.T) {
 	s, err := newSwarm(context.TODO(), config.DefaultConfig(), true, false)
 	msgs := s.RegisterDirectProtocol("Anton")

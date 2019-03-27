@@ -178,7 +178,7 @@ func newSwarm(ctx context.Context, config config.Config, newNode bool, persist b
 
 func (s *swarm) setupUDP() error {
 	//setup network
-	udpnet, err := net.NewUDPNet(s.config, s.lNode)
+	udpnet, err := net.NewUDPNet(s.config, s.lNode, s.lNode.Log)
 	if err != nil {
 		return err
 	}
@@ -219,7 +219,6 @@ func (s *swarm) Start() error {
 
 	err = s.udpServer.Start()
 	if err != nil {
-		s.Shutdown()
 		return err
 	}
 

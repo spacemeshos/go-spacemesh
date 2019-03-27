@@ -100,14 +100,14 @@ func (s *Syncer) run() {
 }
 
 //fires a sync every sm.syncInterval or on force space from outside
-func NewSync(srv server.Service, layers *mesh.Mesh, bv BlockValidator, conf Configuration, clock timesync.LayerTimer, logger log.Log) *Syncer {
+func NewSync(srv service.Service, layers *mesh.Mesh, bv BlockValidator, conf Configuration, clock timesync.LayerTimer, logger log.Log) *Syncer {
 	s := Syncer{
 		BlockValidator: bv,
 		Configuration:  conf,
 		Log:            logger,
 		Mesh:           layers,
 		Peers:          p2p.NewPeers(srv),
-		MessageServer:  server.NewMsgServer(srv, syncProtocol, conf.RequestTimeout-time.Millisecond*30, make(chan service.DirectMessage, config.ConfigValues.BufferSize), logger),
+		MessageServer:  server.NewMsgServer(srv.(server.Service), syncProtocol, conf.RequestTimeout-time.Millisecond*30, make(chan service.DirectMessage, config.ConfigValues.BufferSize), logger),
 		SyncLock:       0,
 		startLock:      0,
 		forceSync:      make(chan bool),

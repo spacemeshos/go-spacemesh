@@ -79,7 +79,7 @@ func (mux *UDPMux) listenToNetworkMessage() {
 				return
 			}
 			go func(event inet.UDPMessageEvent) {
-				err := mux.processUDPMessage(event.Size, event.Addr, event.Message)
+				err := mux.processUDPMessage(event.FromAddr, event.Message)
 				if err != nil {
 					mux.logger.Error("Error handing network message err=%v", err)
 					// todo: blacklist ?
@@ -199,9 +199,9 @@ func (upm *udpProtocolMessage) Bytes() []byte {
 }
 
 // processUDPMessage processes a udp message received and passes it to the protocol, it adds related p2p metadata.
-func (mux *UDPMux) processUDPMessage(size int, fromaddr net.Addr, buf []byte) error {
+func (mux *UDPMux) processUDPMessage(fromaddr net.Addr, buf []byte) error {
 	msg := &pb.ProtocolMessage{}
-	err := proto.Unmarshal(buf[0:size], msg)
+	err := proto.Unmarshal(buf, msg)
 	if err != nil {
 		return errors.New("could'nt deserialize message")
 	}

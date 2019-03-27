@@ -3,6 +3,8 @@ package net
 import (
 	"net"
 
+	"github.com/spacemeshos/go-spacemesh/log"
+
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 )
@@ -10,13 +12,13 @@ import (
 const maxMessageSize = 2048
 
 type UDPMessageEvent struct {
-	Size    int
-	Addr    net.Addr
-	Message []byte
+	FromAddr net.Addr
+	Message  []byte
 }
 
 type UDPNet struct {
 	local      *node.LocalNode
+	logger     log.Log
 	udpAddress *net.UDPAddr
 	config     config.Config
 	msgChan    chan UDPMessageEvent
@@ -24,7 +26,7 @@ type UDPNet struct {
 	shutdown   chan struct{}
 }
 
-func NewUDPNet(config config.Config, local *node.LocalNode) (*UDPNet, error) {
+func NewUDPNet(config config.Config, local *node.LocalNode, log log.Log) (*UDPNet, error) {
 	addr, err := net.ResolveUDPAddr("udp", local.Address())
 	if err != nil {
 		return nil, err
@@ -32,6 +34,7 @@ func NewUDPNet(config config.Config, local *node.LocalNode) (*UDPNet, error) {
 
 	return &UDPNet{
 		local:      local,
+		logger:     log,
 		udpAddress: addr,
 		config:     config,
 		msgChan:    make(chan UDPMessageEvent, config.BufferSize),
@@ -53,7 +56,6 @@ func (n *UDPNet) Start() error {
 // Shutdown stops listening and closes the connection
 func (n *UDPNet) Shutdown() {
 	close(n.shutdown)
-	n.conn.Close()
 }
 
 func newUDPListener(listenAddress *net.UDPAddr) (*net.UDPConn, error) {
@@ -86,19 +88,30 @@ func (n *UDPNet) IncomingMessages() chan UDPMessageEvent {
 
 func (n *UDPNet) listenToUDPNetworkMessages(listener net.PacketConn) {
 	for {
+		select {
+		case <-n.shutdown:
+			if err := listener.Close(); err != nil {
+				n.logger.Error("error closing listener err=", err)
+			}
+			return
+		default:
+			break
+		}
 		buf := make([]byte, maxMessageSize) // todo: buffer pool ?
 		size, addr, err := listener.ReadFrom(buf)
 		if err != nil {
 			if temp, ok := err.(interface {
 				Temporary() bool
 			}); ok && temp.Temporary() {
-				//n.logger.With().Warning("Temporary UDP error", log.Err(err))
+				n.logger.Warning("Temporary UDP error", err)
 				continue
 			} else {
-				//n.logger.With().Error("Listen UDP error, stopping server", log.Err(err))
+				n.logger.With().Error("Listen UDP error, stopping server", log.Err(err))
 				return
 			}
 		}
+		// todo : check size?
+		// todo: check if needs session before passing
 
 		go func(msg UDPMessageEvent) {
 
@@ -108,7 +121,7 @@ func (n *UDPNet) listenToUDPNetworkMessages(listener net.PacketConn) {
 				return
 			}
 
-		}(UDPMessageEvent{size, addr, buf})
+		}(UDPMessageEvent{addr, buf[0:size]})
 
 	}
 }
