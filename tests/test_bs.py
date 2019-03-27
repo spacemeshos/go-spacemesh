@@ -379,5 +379,6 @@ def test_hare_sanity(load_config, setup_clients, save_log_on_exit):
     print("Going to sleep for {0}".format(delay))
     time.sleep(delay)
     lst = query_hare_output_set(current_index, testconfig['namespace'], bs_info.deployment_id)
-    assert 6 == len(lst)
+    total = testconfig['bootstrap']['replicas'] + testconfig['client']['replicas']
+    assert total == len(lst)
     assert test_hare.validate(lst)
