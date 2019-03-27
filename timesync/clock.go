@@ -55,13 +55,12 @@ func (t *Ticker) Close() {
 func (t *Ticker) notifyOnTick() {
 	t.m.Lock()
 	defer t.m.Unlock()
-	t.currentLayer++
 	for _, ch := range t.subscribes {
 		ch <- t.currentLayer
 		log.Debug("iv'e notified number : %v", t.ids[ch])
 	}
 	log.Debug("Ive notified all")
-
+	t.currentLayer++
 }
 
 func (t *Ticker) Subscribe() LayerTimer {
