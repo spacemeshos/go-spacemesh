@@ -151,22 +151,13 @@ func hashInstanceAndK(instanceID []byte, K int) uint32 {
 
 // Eligible checks whether a given ID is in the eligible list or not. it fetches the list once and gives answers locally after that.
 func (oc *OracleClient) Eligible(id uint32, committeeSize int, pubKey string) bool {
-
 	// make special instance ID
 	oc.eMtx.Lock()
-	_, mok := oc.instMtx[id]
-	if !mok {
-		oc.instMtx[id] = &sync.Mutex{}
-	}
-	oc.instMtx[id].Lock()
 	if r, ok := oc.eligibilityMap[id]; ok {
-		oc.eMtx.Unlock()
 		_, valid := r[pubKey]
-		oc.instMtx[id].Unlock()
+		oc.eMtx.Unlock()
 		return valid
 	}
-
-	oc.eMtx.Unlock()
 
 	req := validateQuery(oc.world, id, committeeSize)
 
@@ -186,10 +177,9 @@ func (oc *OracleClient) Eligible(id uint32, committeeSize int, pubKey string) bo
 
 	_, valid := elgmap[pubKey]
 
-	oc.eMtx.Lock()
-	oc.eligibilityMap[id] = elgmap
-	oc.eMtx.Unlock()
-	oc.instMtx[id].Unlock()
 
+	oc.eligibilityMap[id] = elgmap
+
+	oc.eMtx.Unlock()
 	return valid
 }
