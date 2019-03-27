@@ -23,7 +23,7 @@ type ActivationTx struct {
 	LayerIndex     LayerID
 	StartTick      uint64 //whatever
 	PositioningATX Id
-	Nipst          nipst.Nipst
+	Nipst          nipst.NIPST
 	ActiveSetSize  uint32
 	View           []BlockID
 	//todo: add sig

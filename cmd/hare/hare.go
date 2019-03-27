@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/davecgh/go-spew/spew"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -21,13 +22,14 @@ var Cmd = &cobra.Command{
 	Use:   "hare",
 	Short: "start hare",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("Starting hare")
+		log.JSONLog(true)
+		log.Info("Starting hare")
+
 		hareApp := NewHareApp()
 		defer hareApp.Cleanup()
-
 		hareApp.Initialize(cmd)
 		hareApp.Start(cmd, args)
-		<-hareApp.proc.CloseChannel()
+		<-hareApp.ha.CloseChannel()
 	},
 }
 
@@ -51,10 +53,10 @@ func (mbp *mockBlockProvider) GetUnverifiedLayerBlocks(layerId mesh.LayerID) ([]
 type HareApp struct {
 	*cmdp.BaseApp
 	p2p    p2p.Service
-	broker *hare.Broker
-	proc   *hare.ConsensusProcess
 	oracle *oracle.OracleClient
 	sgn    hare.Signing
+	ha     *hare.Hare
+	clock  *timesync.Ticker
 }
 
 func NewHareApp() *HareApp {
@@ -77,13 +79,13 @@ func buildSet() *hare.Set {
 }
 
 func (app *HareApp) Start(cmd *cobra.Command, args []string) {
+	spew.Dump(app.Config)
 	// start p2p services
 	log.Info("Initializing P2P services")
 	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P)
 	app.p2p = swarm
 	if err != nil {
-		log.Error("Error starting p2p services, err: %v", err)
-		panic("Error starting p2p services")
+		log.Panic("Error starting p2p services err=%v", err)
 	}
 
 	pub := app.sgn.Verifier()
@@ -97,14 +99,16 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 
 	gTime, err := time.Parse(time.RFC3339, app.Config.GenesisTime)
 	if err != nil {
-		log.Error("Could not parse config GT")
-		return
+		log.Panic("error parsing config err=%v", err)
 	}
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
-	clock := timesync.NewTicker(timesync.RealClock{}, ld, gTime)
+	app.clock = timesync.NewTicker(timesync.RealClock{}, ld, gTime)
 
-	ha := hare.New(app.Config.HARE, swarm, app.sgn, &mockBlockProvider{}, hareOracle, clock.Subscribe(), lg)
-	ha.Start()
+	app.ha = hare.New(app.Config.HARE, app.p2p, app.sgn, &mockBlockProvider{}, hareOracle, app.clock.Subscribe(), lg)
+	log.Info("Starting hare service")
+	app.ha.Start()
+	app.p2p.Start()
+	app.clock.Start()
 }
 
 func main() {

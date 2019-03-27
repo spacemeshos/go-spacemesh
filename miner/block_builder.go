@@ -41,8 +41,8 @@ type BlockBuilder struct {
 	txGossipChannel  chan service.GossipMessage
 	atxGossipChannel chan service.GossipMessage
 	hareResult       HareResultProvider
-	transactionQueue []mesh.SerializableTransaction
 	AtxQueue         []mesh.ActivationTx
+	transactionQueue []*mesh.SerializableTransaction
 	mu               sync.Mutex
 	network          p2p.Service
 	weakCoinToss     WeakCoinProvider
@@ -67,7 +67,7 @@ func NewBlockBuilder(minerID string, net p2p.Service, beginRoundEvent chan mesh.
 		txGossipChannel:  net.RegisterGossipProtocol(IncomingTxProtocol),
 		atxGossipChannel: net.RegisterGossipProtocol(IncomingAtxProtocol),
 		hareResult:       hare,
-		transactionQueue: make([]mesh.SerializableTransaction, 0, 10),
+		transactionQueue: make([]*mesh.SerializableTransaction, 0, 10),
 		mu:               sync.Mutex{},
 		network:          net,
 		weakCoinToss:     weakCoin,
@@ -78,8 +78,8 @@ func NewBlockBuilder(minerID string, net p2p.Service, beginRoundEvent chan mesh.
 
 }
 
-func Transaction2SerializableTransaction(tx *mesh.Transaction) mesh.SerializableTransaction {
-	return mesh.SerializableTransaction{
+func Transaction2SerializableTransaction(tx *mesh.Transaction) *mesh.SerializableTransaction {
+	return &mesh.SerializableTransaction{
 		AccountNonce: tx.AccountNonce,
 		Origin:       tx.Origin,
 		Recipient:    tx.Recipient,
@@ -136,7 +136,7 @@ func (t *BlockBuilder) AddTransaction(nonce uint64, origin, destination address.
 	return nil
 }
 
-func (t *BlockBuilder) createBlock(id mesh.LayerID, txs []mesh.SerializableTransaction, atx []mesh.ActivationTx) (*mesh.Block, error) {
+func (t *BlockBuilder) createBlock(id mesh.LayerID, txs []*mesh.SerializableTransaction, atx []mesh.ActivationTx) (*mesh.Block, error) {
 	var res []mesh.BlockID = nil
 	var err error
 	if id == config.Genesis {
@@ -180,7 +180,7 @@ func (t *BlockBuilder) listenForTx() {
 			return
 		case data := <-t.txGossipChannel:
 			if data != nil {
-				x, err := mesh.BytesAsTransaction(bytes.NewReader(data.Bytes()))
+				x, err := mesh.BytesAsTransaction(data.Bytes())
 				t.Log.With().Info("got new tx", log.String("sender", x.Origin.String()), log.String("receiver", x.Recipient.String()),
 					log.String("amount", x.AmountAsBigInt().String()), log.Uint64("nonce", x.AccountNonce), log.Bool("valid", err != nil))
 				if err != nil {
@@ -251,7 +251,7 @@ func (t *BlockBuilder) acceptBlockData() {
 			}()
 
 		case tx := <-t.newTrans:
-			t.transactionQueue = append(t.transactionQueue, *tx)
+			t.transactionQueue = append(t.transactionQueue, tx)
 		case atx := <-t.newAtx:
 			t.AtxQueue = append(t.AtxQueue, *atx)
 		}

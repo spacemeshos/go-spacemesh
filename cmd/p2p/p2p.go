@@ -48,8 +48,7 @@ func (app *P2PApp) Start(cmd *cobra.Command, args []string) {
 	log.Info("Initializing P2P services")
 	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P)
 	if err != nil {
-		log.Error("Error init p2p services, err: %v", err)
-		panic(err)
+		log.Panic("Error init p2p services, err: %v", err)
 	}
 	app.p2p = swarm
 
@@ -63,8 +62,7 @@ func (app *P2PApp) Start(cmd *cobra.Command, args []string) {
 	defer app.p2p.Shutdown()
 
 	if err != nil {
-		log.Error("Error starting p2p services, err: %v", err)
-		panic(err)
+		log.Panic("Error starting p2p services, err: %v", err)
 	}
 
 	// start api servers

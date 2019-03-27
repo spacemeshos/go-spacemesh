@@ -133,7 +133,7 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 	addr1 := address.BytesToAddress([]byte{0x02})
 	addr2 := address.BytesToAddress([]byte{0x01})
 
-	trans := []mesh.SerializableTransaction{
+	trans := []*mesh.SerializableTransaction{
 		Transaction2SerializableTransaction(mesh.NewTransaction(1, addr1, addr2, big.NewInt(1), DefaultGasLimit, big.NewInt(DefaultGas))),
 		Transaction2SerializableTransaction(mesh.NewTransaction(1, addr1, addr2, big.NewInt(1), DefaultGasLimit, big.NewInt(DefaultGas))),
 		Transaction2SerializableTransaction(mesh.NewTransaction(2, addr1, addr2, big.NewInt(1), DefaultGasLimit, big.NewInt(DefaultGas))),
@@ -144,9 +144,9 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 	builder.AddTransaction(trans[2].AccountNonce, trans[2].Origin, *trans[2].Recipient, big.NewInt(0).SetBytes(trans[2].Price))
 
 	atxs := []mesh.ActivationTx{
-		{Nipst: nipst.Nipst{}, Id: mesh.Id{"aaaa", "bbb"}, LayerIndex: 1, ActiveSetSize: 5, PositioningATX: mesh.Id{}, PrevATX: mesh.Id{"xxxx", "bbb"}},
-		{Nipst: nipst.Nipst{}, Id: mesh.Id{"aaaa", "bbb"}, LayerIndex: 1, ActiveSetSize: 5, PositioningATX: mesh.Id{}, PrevATX: mesh.Id{"xxxx", "bbb"}},
-		{Nipst: nipst.Nipst{}, Id: mesh.Id{"aaaa", "bbb"}, LayerIndex: 1, ActiveSetSize: 5, PositioningATX: mesh.Id{}, PrevATX: mesh.Id{"xxxx", "bbb"}},
+		{Nipst: nipst.NIPST{}, Id: mesh.Id{"aaaa", "bbb"}, LayerIndex: 1, ActiveSetSize: 5, PositioningATX: mesh.Id{}, PrevATX: mesh.Id{"xxxx", "bbb"}},
+		{Nipst: nipst.NIPST{}, Id: mesh.Id{"aaaa", "bbb"}, LayerIndex: 1, ActiveSetSize: 5, PositioningATX: mesh.Id{}, PrevATX: mesh.Id{"xxxx", "bbb"}},
+		{Nipst: nipst.NIPST{}, Id: mesh.Id{"aaaa", "bbb"}, LayerIndex: 1, ActiveSetSize: 5, PositioningATX: mesh.Id{}, PrevATX: mesh.Id{"xxxx", "bbb"}},
 	}
 
 	for _, atx := range atxs {
@@ -179,7 +179,7 @@ func TestBlockBuilder_SerializeTrans(t *testing.T) {
 	buf, err := mesh.TransactionAsBytes(tx)
 	assert.NoError(t, err)
 
-	ntx, err := mesh.BytesAsTransaction(bytes.NewReader(buf))
+	ntx, err := mesh.BytesAsTransaction(buf)
 	assert.NoError(t, err)
 
 	assert.Equal(t, *tx, *ntx)

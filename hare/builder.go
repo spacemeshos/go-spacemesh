@@ -36,8 +36,7 @@ func (builder *MessageBuilder) SetCertificate(certificate *pb.Certificate) *Mess
 func (builder *MessageBuilder) Sign(signing Signing) *MessageBuilder {
 	buff, err := proto.Marshal(builder.inner)
 	if err != nil {
-		log.Error("could not sign message")
-		panic("marshal failed during signing")
+		log.Panic("marshal failed during signing")
 	}
 
 	builder.outer.InnerSig = signing.Sign(buff)

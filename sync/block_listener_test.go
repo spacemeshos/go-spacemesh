@@ -1,7 +1,6 @@
 package sync
 
 import (
-	"bytes"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -161,12 +160,12 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 	blk := &mesh.Block{Coin: false, Data: nil, Timestamp: time.Now().UnixNano(), LayerIndex: 1}
 	tx := mesh.NewSerializableTransaction(0, address.BytesToAddress([]byte{0x01}), address.BytesToAddress([]byte{0x02}), big.NewInt(10), big.NewInt(10), 10)
 	blk.AddTransaction(tx)
-	blk.AddAtx(&mesh.ActivationTx{Nipst: nipst.Nipst{}, Id: mesh.Id{"aaaa", "bbb"}, LayerIndex: 1, ActiveSetSize: 5, PositioningATX: mesh.Id{}, PrevATX: mesh.Id{"xxxx", "bbb"}})
+	blk.AddAtx(&mesh.ActivationTx{Nipst: nipst.NIPST{}, Id: mesh.Id{"aaaa", "bbb"}, LayerIndex: 1, ActiveSetSize: 5, PositioningATX: mesh.Id{}, PrevATX: mesh.Id{"xxxx", "bbb"}})
 	blk.AddVote(1)
 	blk.AddView(2)
 
 	data, err := mesh.BlockAsBytes(*blk)
-	blk2, ok := mesh.BytesAsBlock(bytes.NewReader(data))
+	blk2, ok := mesh.BytesAsBlock(data)
 	assert.NoError(t, ok)
 	assert.Equal(t, *blk, blk2)
 
