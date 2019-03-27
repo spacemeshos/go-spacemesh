@@ -1,9 +1,9 @@
 package mesh
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"sync"
@@ -18,6 +18,7 @@ type meshDB struct {
 	log.Log
 	layers             database.DB
 	blocks             database.DB
+	transactions       database.DB
 	contextualValidity database.DB //map blockId to contextualValidation state of block
 	orphanBlocks       map[LayerID]map[BlockID]struct{}
 	orphanBlockCount   int32
@@ -25,11 +26,12 @@ type meshDB struct {
 	lhMutex            sync.Mutex
 }
 
-func NewMeshDB(layers, blocks, validity database.DB, log log.Log) *meshDB {
+func NewMeshDB(layers, blocks, transactions, validity database.DB, log log.Log) *meshDB {
 	ll := &meshDB{
 		Log:                log,
 		blocks:             blocks,
 		layers:             layers,
+		transactions:       transactions,
 		contextualValidity: validity,
 		orphanBlocks:       make(map[LayerID]map[BlockID]struct{}),
 		layerMutex:         make(map[LayerID]*layerMutex),
@@ -41,7 +43,7 @@ func (m *meshDB) Close() {
 	m.blocks.Close()
 	m.layers.Close()
 	m.contextualValidity.Close()
-
+	m.transactions.Close()
 }
 
 func (m *meshDB) getLayer(index LayerID) (*Layer, error) {
@@ -73,28 +75,59 @@ func (m *meshDB) getLayer(index LayerID) (*Layer, error) {
 // addBlock adds a new block to block DB and updates the correct layer with the new block
 // if this is the first occurence of the layer a new layer object will be inserted into layerDB as well
 func (m *meshDB) addBlock(block *Block) error {
-	_, err := m.blocks.Get(block.ID().ToBytes())
-	if err == nil {
+	if _, err := m.getBlockHeaderBytes(block.ID()); err == nil {
 		log.Debug("block ", block.ID(), " already exists in database")
 		return errors.New("block " + string(block.ID()) + " already exists in database")
 	}
-	err = m.writeBlock(block)
-	if err != nil {
+	if err := m.writeBlock(block); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (m *meshDB) getBlock(id BlockID) (*Block, error) {
+func (m *meshDB) getBlockHeaderBytes(id BlockID) ([]byte, error) {
 	b, err := m.blocks.Get(id.ToBytes())
 	if err != nil {
 		return nil, errors.New("could not find block in database")
 	}
-	blk, err := BytesAsBlock(bytes.NewReader(b))
+	return b, nil
+}
+
+func (m *meshDB) getBlock(id BlockID) (*Block, error) {
+
+	b, err := m.getBlockHeaderBytes(id)
 	if err != nil {
 		return nil, err
 	}
-	return &blk, nil
+
+	blk, err := BytesAsBlockHeader(b)
+	if err != nil {
+		m.Error("some error 1")
+		return nil, err
+	}
+
+	transactions, err := m.getTransactions(blk.TxIds)
+	if err != nil {
+		m.Error("some error 2")
+		return nil, err
+	}
+
+	return blockFromHeaderAndTxs(blk, transactions), nil
+}
+
+func blockFromHeaderAndTxs(blk BlockHeader, transactions []*SerializableTransaction) *Block {
+	block := Block{
+		Id:         blk.Id,
+		LayerIndex: blk.LayerIndex,
+		MinerID:    blk.MinerID,
+		Data:       blk.Data,
+		Coin:       blk.Coin,
+		Timestamp:  blk.Timestamp,
+		BlockVotes: blk.BlockVotes,
+		ViewEdges:  blk.ViewEdges,
+		Txs:        transactions,
+	}
+	return &block
 }
 
 func (m *meshDB) getContextualValidity(id BlockID) (bool, error) {
@@ -114,7 +147,7 @@ func (m *meshDB) setContextualValidity(id BlockID, valid bool) error {
 }
 
 func (m *meshDB) writeBlock(bl *Block) error {
-	bytes, err := BlockAsBytes(*bl)
+	bytes, err := getBlockHeaderBytes(newBlockHeader(bl))
 	if err != nil {
 		return fmt.Errorf("could not encode bl")
 
@@ -127,7 +160,12 @@ func (m *meshDB) writeBlock(bl *Block) error {
 		return fmt.Errorf("could not add bl to %v databacse %v", bl.ID(), err)
 	}
 
+	if err := m.writeTransactions(bl); err != nil {
+		return fmt.Errorf("could not write transactions of block %v database %v", bl.ID(), err)
+	}
+
 	m.updateLayerWithBlock(bl)
+
 	return nil
 }
 
@@ -163,7 +201,7 @@ func (m *meshDB) updateLayerWithBlock(block *Block) error {
 			return errors.New("could not get all blocks from database ")
 		}
 	}
-	m.Info("added block %v to layer %v", block.ID(), block.LayerIndex)
+	m.Debug("added block %v to layer %v", block.ID(), block.LayerIndex)
 	blockIds[block.ID()] = true
 	w, err := blockIdsAsBytes(blockIds)
 	if err != nil {
@@ -194,7 +232,7 @@ func (m *meshDB) endLayerWorker(index LayerID) {
 
 	ll, found := m.layerMutex[index]
 	if !found {
-		panic("trying to double close layer mutex")
+		log.Panic("trying to double close layer mutex")
 	}
 
 	ll.layerWorkers--
@@ -214,4 +252,63 @@ func (m *meshDB) getLayerMutex(index LayerID) *layerMutex {
 	}
 	ll.layerWorkers++
 	return ll
+}
+
+func (m *meshDB) writeTransactions(block *Block) error {
+
+	for _, t := range block.Txs {
+		bytes, err := TransactionAsBytes(t)
+		if err != nil {
+			m.Error("could not write tx %v to database ", err)
+			return err
+		}
+
+		id := getTransactionId(t)
+		if err := m.transactions.Put(id, bytes); err != nil {
+			m.Error("could not write tx %v to database ", err)
+			return err
+		}
+		m.Debug("write tx %v to db", t)
+	}
+
+	return nil
+}
+
+func (m *meshDB) getTransactions(transactions []TransactionId) ([]*SerializableTransaction, error) {
+	var ts []*SerializableTransaction
+	for _, id := range transactions {
+		tBytes, err := m.getTransactionBytes(id)
+
+		if err != nil {
+			m.Error("error retrieving transaction from database ", err)
+		}
+
+		t, err := BytesAsTransaction(tBytes)
+
+		if err != nil {
+			m.Error("error deserializing transaction")
+		}
+		ts = append(ts, t)
+	}
+
+	return ts, nil
+}
+
+//todo standardized transaction id across project
+//todo replace panic
+func getTransactionId(t *SerializableTransaction) TransactionId {
+	tx, err := TransactionAsBytes(t)
+	if err != nil {
+		panic("could not Serialize transaction")
+	}
+
+	return crypto.Sha256(tx)
+}
+
+func (m *meshDB) getTransactionBytes(id []byte) ([]byte, error) {
+	b, err := m.transactions.Get(id)
+	if err != nil {
+		return nil, errors.New(fmt.Sprintf("could not find transaction in database %v", id))
+	}
+	return b, nil
 }

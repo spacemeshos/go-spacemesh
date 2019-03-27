@@ -55,8 +55,8 @@ func (t *Ticker) Close() {
 func (t *Ticker) notifyOnTick() {
 	t.m.Lock()
 	defer t.m.Unlock()
+	t.currentLayer++
 	for _, ch := range t.subscribes {
-
 		ch <- t.currentLayer
 		log.Debug("iv'e notified number : %v", t.ids[ch])
 	}
@@ -82,11 +82,11 @@ func (t *Ticker) updateLayerID() {
 }
 
 func (t *Ticker) StartClock() {
-	log.Info("starting global clock")
+	log.Info("starting global clock now=%v genesis=%v", t.time.Now(), t.startEpoch)
 
 	var diff time.Duration
 	if t.time.Now().Before(t.startEpoch) {
-		diff = t.startEpoch.Sub(t.time.Now()) - t.tickInterval
+		diff = t.startEpoch.Sub(t.time.Now())
 	} else {
 		t.updateLayerID()
 		diff = ((t.time.Now().Sub(t.startEpoch)) / t.tickInterval) + t.tickInterval
@@ -101,13 +101,13 @@ func (t *Ticker) StartClock() {
 		return
 	}
 
+	t.notifyOnTick()
 	tick := time.NewTicker(t.tickInterval)
 	log.Info("clock waiting on event, tick interval is %v", t.tickInterval)
 	for {
 		select {
 		case <-tick.C:
 			log.Info("released tick mesh.LayerID  %v", t.currentLayer+1)
-			t.currentLayer++
 			t.notifyOnTick()
 		case <-t.stop:
 			return
