@@ -6,6 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -157,9 +158,10 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 	bl1.Start()
 	bl2.Start()
 
-	blk := mesh.NewBlock(false, nil, time.Now(), 1)
+	blk := &mesh.Block{Coin: false, Data: nil, Timestamp: time.Now().UnixNano(), LayerIndex: 1}
 	tx := mesh.NewSerializableTransaction(0, address.BytesToAddress([]byte{0x01}), address.BytesToAddress([]byte{0x02}), big.NewInt(10), big.NewInt(10), 10)
 	blk.AddTransaction(tx)
+	blk.AddAtx(&mesh.ActivationTx{Nipst: nipst.Nipst{}, Id: mesh.Id{"aaaa", "bbb"}, LayerIndex: 1, ActiveSetSize: 5, PositioningATX: mesh.Id{}, PrevATX: mesh.Id{"xxxx", "bbb"}})
 	blk.AddVote(1)
 	blk.AddView(2)
 
