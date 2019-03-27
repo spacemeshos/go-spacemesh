@@ -177,7 +177,6 @@ func (oc *OracleClient) Eligible(id uint32, committeeSize int, pubKey string) bo
 
 	_, valid := elgmap[pubKey]
 
-
 	oc.eligibilityMap[id] = elgmap
 
 	oc.eMtx.Unlock()
