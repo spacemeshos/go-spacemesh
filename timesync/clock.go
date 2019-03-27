@@ -86,7 +86,7 @@ func (t *Ticker) updateLayerID() {
 	tksa := t.time.Now().Sub(t.startEpoch)
 	tks := (tksa / t.tickInterval).Nanoseconds()
 	//todo: need to unify all LayerIDs definitions and set them to uint64
-	t.currentLayer = mesh.LayerID(tks+1)
+	t.currentLayer = mesh.LayerID(tks + 1)
 }
 
 func (t *Ticker) StartClock(diff time.Duration) {
