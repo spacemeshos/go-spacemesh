@@ -145,7 +145,7 @@ func (broker *Broker) eventLoop() {
 		case task := <-broker.tasks:
 			task()
 		case <-broker.CloseChannel():
-			log.Info("Broker exiting")
+			log.Warning("Broker exiting")
 			return
 		}
 	}

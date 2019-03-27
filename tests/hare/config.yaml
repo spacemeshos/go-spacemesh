@@ -8,7 +8,7 @@ genesis_delta: 90
 deployment_ready_time_out: 120
 
 bootstrap:
-  image: 'spacemeshos/go-spacemesh-dev:hare31'
+  image: 'spacemeshos/go-spacemesh:hare'
   command: '/bin/go-hare'
   replicas: 1
   args:
@@ -18,7 +18,7 @@ bootstrap:
     layer-duration-sec: '360'
 
 client:
-  image: 'spacemeshos/go-spacemesh-dev:hare31'
+  image: 'spacemeshos/go-spacemesh:hare'
   command: '/bin/go-hare'
   replicas: 49
   args:
