@@ -115,7 +115,7 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 	addr1 := address.BytesToAddress([]byte{0x02})
 	addr2 := address.BytesToAddress([]byte{0x01})
 
-	trans := []mesh.SerializableTransaction{
+	trans := []*mesh.SerializableTransaction{
 		Transaction2SerializableTransaction(mesh.NewTransaction(1, addr1, addr2, big.NewInt(1), DefaultGasLimit, big.NewInt(DefaultGas))),
 		Transaction2SerializableTransaction(mesh.NewTransaction(1, addr1, addr2, big.NewInt(1), DefaultGasLimit, big.NewInt(DefaultGas))),
 		Transaction2SerializableTransaction(mesh.NewTransaction(2, addr1, addr2, big.NewInt(1), DefaultGasLimit, big.NewInt(DefaultGas))),
@@ -147,7 +147,7 @@ func TestBlockBuilder_SerializeTrans(t *testing.T) {
 	buf, err := mesh.TransactionAsBytes(tx)
 	assert.NoError(t, err)
 
-	ntx, err := mesh.BytesAsTransaction(bytes.NewReader(buf))
+	ntx, err := mesh.BytesAsTransaction(buf)
 	assert.NoError(t, err)
 
 	assert.Equal(t, *tx, *ntx)

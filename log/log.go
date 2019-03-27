@@ -132,3 +132,7 @@ func Warning(msg string, args ...interface{}) {
 func With() fieldLogger {
 	return fieldLogger{AppLog.logger}
 }
+
+func Panic(msg string, args ...interface{}) {
+	AppLog.Panic(msg, args...)
+}

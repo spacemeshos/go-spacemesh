@@ -2,69 +2,66 @@ package nipst
 
 import (
 	"github.com/spacemeshos/go-spacemesh/common"
-	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
 )
 
-type PoetMock struct {
-	membership *MembershipProof
-	poetP      *PoetProof
+type PostProverClientMock struct{}
+
+func (p *PostProverClientMock) initialize(id []byte, space Space,
+	timeout time.Duration) (*postProof, error) {
+	return &postProof{255, 255, 255, 255}, nil
 }
 
-type PostMock struct {
-	firstP  *postCommitment
-	secondP *postCommitment
+func (p *PostProverClientMock) execute(id []byte, challenge common.Hash,
+	timeout time.Duration) (*postProof, error) {
+	return &postProof{255, 255, 255, 255}, nil
 }
 
-type ActivationMock struct {
-	nipst chan Nipst
+type PoetProvingServiceClientMock struct{}
+
+func (p *PoetProvingServiceClientMock) id() string {
+	return "1"
 }
 
-func (a *ActivationMock) BuildActivationTx(proof Nipst) {
+func (p *PoetProvingServiceClientMock) submitChallenge(challenge common.Hash,
+	duration SeqWorkTicks) (*PoetRound, error) {
+	return &PoetRound{}, nil
+}
+
+func (p *PoetProvingServiceClientMock) subscribeMembershipProof(r *PoetRound, challenge common.Hash,
+	timeout time.Duration) (*membershipProof, error) {
+	return &membershipProof{}, nil
+}
+
+func (p *PoetProvingServiceClientMock) subscribeProof(r *PoetRound, timeout time.Duration) (*poetProof, error) {
+	return &poetProof{}, nil
+}
+
+type ActivationBuilderMock struct {
+	nipst chan NIPST
+}
+
+func (a *ActivationBuilderMock) BuildActivationTx(proof NIPST) {
 	a.nipst <- proof
 }
 
-func (*PoetMock) SendPostProof(root common.Hash, p proof) (Round, error) {
-	return 0, nil
-}
-func (p *PoetMock) GetMembershipProof(rnd Round, root common.Hash, timeout time.Duration) (*MembershipProof, error) {
-	return p.membership, nil
-}
-func (p *PoetMock) Proof(rnd Round, root common.Hash, timeout time.Duration) (*PoetProof, error) {
-	return p.poetP, nil
-}
+func TestNIPSTBuilder(t *testing.T) {
+	postProver := &PostProverClientMock{}
+	poetProver := &PoetProvingServiceClientMock{}
 
-func (*PostMock) SendChallenge(root common.Hash, challenge common.Hash) error {
-	return nil
-}
+	nipstChan := make(chan NIPST)
+	activationBuilder := &ActivationBuilderMock{nipst: nipstChan}
 
-func (p *PostMock) ChallengeOutput(root common.Hash, challenge common.Hash, timeout time.Duration) (*postCommitment, error) {
-	return p.firstP, nil
-}
+	nb := NewNIPSTBuilder([]byte("id"), 1024, 600, postProver, poetProver, activationBuilder)
+	nb.Start()
 
-func TestNipstBuilder_Start(t *testing.T) {
-
-}
-
-func TestMembershipProof_loop(t *testing.T) {
-	nipst := Nipst{&postCommitment{}, &MembershipProof{}, &PoetProof{}, &postCommitment{}, nil}
-
-	poet := PoetMock{nipst.membershipProof, nipst.poetProof}
-	post := PostMock{nipst.initialPost, nipst.secondPost}
-	npstChan := make(chan Nipst)
-	activation := ActivationMock{npstChan}
-	builder := NewNipstBuilder(&poet, &post, &activation)
-	builder.Start()
-
-	timer := time.NewTimer(1 * time.Second)
 	select {
-	case recv := <-npstChan:
-		recv.round = nipst.round
-		assert.Equal(t, recv, nipst)
-	case <-timer.C:
+	case <-nipstChan:
+	case <-time.After(1 * time.Second):
 		t.Fail()
 		return
 	}
-	builder.Stop()
+
+	nb.Stop()
 }

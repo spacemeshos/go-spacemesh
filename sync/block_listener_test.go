@@ -1,7 +1,6 @@
 package sync
 
 import (
-	"bytes"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -164,7 +163,7 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 	blk.AddView(2)
 
 	data, err := mesh.BlockAsBytes(*blk)
-	blk2, ok := mesh.BytesAsBlock(bytes.NewReader(data))
+	blk2, ok := mesh.BytesAsBlock(data)
 	assert.NoError(t, ok)
 	assert.Equal(t, *blk, blk2)
 

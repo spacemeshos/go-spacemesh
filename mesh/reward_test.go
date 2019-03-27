@@ -44,22 +44,20 @@ func ConfigTst() RewardConfig {
 }
 
 func getMeshWithMapState(id string, s StateUpdater) *Mesh {
-
-	//time := time.Now()
-	bdb := database.NewMemDatabase()
-	ldb := database.NewMemDatabase()
-	cdb := database.NewMemDatabase()
-	layers := NewMesh(ldb, bdb, cdb, ConfigTst(), &MeshValidatorMock{}, s, log.New(id, "", ""))
+	db := database.NewMemDatabase()
+	lg := log.New(id, "", "")
+	mdb := NewMeshDB(db, db, db, db, lg)
+	layers := NewMesh(mdb, ConfigTst(), &MeshValidatorMock{}, s, lg)
 	return layers
 }
 
-func addTransactions(bl *Block, numOfTxs int) int64 {
+func addTransactionsToBlock(bl *Block, numOfTxs int) int64 {
 	var totalRewards int64
 	for i := 0; i < numOfTxs; i++ {
 		gasPrice := rand.Int63n(100)
 		addr := rand.Int63n(1000000)
 		//log.Info("adding tx with gas price %v nonce %v", gasPrice, i)
-		bl.Txs = append(bl.Txs, *NewSerializableTransaction(uint64(i), address.HexToAddress("1"),
+		bl.Txs = append(bl.Txs, NewSerializableTransaction(uint64(i), address.HexToAddress("1"),
 			address.HexToAddress(strconv.FormatUint(uint64(addr), 10)),
 			big.NewInt(10),
 			big.NewInt(gasPrice),
@@ -75,7 +73,7 @@ func addTransactionsWithGas(bl *Block, numOfTxs int, gasPrice int64) int64 {
 
 		addr := rand.Int63n(10000)
 		//log.Info("adding tx with gas price %v nonce %v", gasPrice, i)
-		bl.Txs = append(bl.Txs, *NewSerializableTransaction(uint64(i), address.HexToAddress("1"),
+		bl.Txs = append(bl.Txs, NewSerializableTransaction(uint64(i), address.HexToAddress("1"),
 			address.HexToAddress(strconv.FormatUint(uint64(addr), 10)),
 			big.NewInt(10),
 			big.NewInt(gasPrice),
@@ -94,19 +92,19 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 
 	block1 := NewBlock(true, []byte("data1"), time.Now(), 1)
 	block1.MinerID = "1"
-	totalRewards += addTransactions(block1, 15)
+	totalRewards += addTransactionsToBlock(block1, 15)
 
 	block2 := NewBlock(true, []byte("data2"), time.Now(), 1)
 	block2.MinerID = "2"
-	totalRewards += addTransactions(block2, 13)
+	totalRewards += addTransactionsToBlock(block2, 13)
 
 	block3 := NewBlock(true, []byte("data3"), time.Now(), 1)
 	block3.MinerID = "3"
-	totalRewards += addTransactions(block3, 17)
+	totalRewards += addTransactionsToBlock(block3, 17)
 
 	block4 := NewBlock(true, []byte("data3"), time.Now(), 1)
 	block4.MinerID = "4"
-	totalRewards += addTransactions(block4, 16)
+	totalRewards += addTransactionsToBlock(block4, 16)
 
 	log.Info("total fees : %v", totalRewards)
 	layers.AddBlock(block1)
@@ -185,7 +183,7 @@ func createLayer(mesh *Mesh, id LayerID, numOfBlocks, maxTransactions int) (tota
 	for i := 0; i < numOfBlocks; i++ {
 		block1 := NewBlock(true, []byte("data1"), time.Now(), id)
 		block1.MinerID = strconv.Itoa(i)
-		totalRewards += addTransactions(block1, rand.Intn(maxTransactions))
+		totalRewards += addTransactionsToBlock(block1, rand.Intn(maxTransactions))
 		mesh.addBlock(block1)
 	}
 	return totalRewards
