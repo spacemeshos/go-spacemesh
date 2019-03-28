@@ -56,6 +56,9 @@ func (n *UDPNet) Start() error {
 // Shutdown stops listening and closes the connection
 func (n *UDPNet) Shutdown() {
 	close(n.shutdown)
+	if n.conn != nil {
+		n.conn.Close()
+	}
 }
 
 func newUDPListener(listenAddress *net.UDPAddr) (*net.UDPConn, error) {
@@ -88,15 +91,6 @@ func (n *UDPNet) IncomingMessages() chan UDPMessageEvent {
 
 func (n *UDPNet) listenToUDPNetworkMessages(listener net.PacketConn) {
 	for {
-		select {
-		case <-n.shutdown:
-			if err := listener.Close(); err != nil {
-				n.logger.Error("error closing listener err=", err)
-			}
-			return
-		default:
-			break
-		}
 		buf := make([]byte, maxMessageSize) // todo: buffer pool ?
 		size, addr, err := listener.ReadFrom(buf)
 		if err != nil {
