@@ -144,9 +144,33 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 	builder.AddTransaction(trans[2].AccountNonce, trans[2].Origin, *trans[2].Recipient, big.NewInt(0).SetBytes(trans[2].Price))
 
 	atxs := []mesh.ActivationTx{
-		{Nipst: nipst.NIPST{}, Id: mesh.Id{"aaaa", "bbb"}, LayerIndex: 1, ActiveSetSize: 5, PositioningATX: mesh.Id{}, PrevATX: mesh.Id{"xxxx", "bbb"}},
-		{Nipst: nipst.NIPST{}, Id: mesh.Id{"aaaa", "bbb"}, LayerIndex: 1, ActiveSetSize: 5, PositioningATX: mesh.Id{}, PrevATX: mesh.Id{"xxxx", "bbb"}},
-		{Nipst: nipst.NIPST{}, Id: mesh.Id{"aaaa", "bbb"}, LayerIndex: 1, ActiveSetSize: 5, PositioningATX: mesh.Id{}, PrevATX: mesh.Id{"xxxx", "bbb"}},
+		*mesh.NewActivationTx(mesh.Id{"aaaa", "bbb"},
+			1,
+			mesh.AtxId{},
+			5,
+			1,
+			mesh.AtxId{},
+			5,
+			[]mesh.BlockID{1, 2, 3},
+			nipst.NIPST{}),
+		*mesh.NewActivationTx(mesh.Id{"aaaa", "bbb"},
+			1,
+			mesh.AtxId{},
+			5,
+			1,
+			mesh.AtxId{},
+			5,
+			[]mesh.BlockID{1, 2, 3},
+			nipst.NIPST{}),
+		*mesh.NewActivationTx(mesh.Id{"aaaa", "bbb"},
+			1,
+			mesh.AtxId{},
+			5,
+			1,
+			mesh.AtxId{},
+			5,
+			[]mesh.BlockID{1, 2, 3},
+			nipst.NIPST{}),
 	}
 
 	for _, atx := range atxs {
