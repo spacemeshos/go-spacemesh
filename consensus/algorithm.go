@@ -1,7 +1,6 @@
 package consensus
 
 import (
-	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 )
@@ -19,7 +18,7 @@ type Tortoise interface {
 
 func NewAlgorithm(trtl Tortoise) *Algorithm {
 	alg := &Algorithm{Tortoise: trtl}
-	alg.HandleIncomingLayer(GenesisLayer())
+	alg.HandleIncomingLayer(mesh.GenesisLayer())
 	return alg
 }
 func (alg *Algorithm) HandleLateBlock(b *mesh.Block) {
@@ -53,19 +52,4 @@ func updateMetrics(alg *Algorithm, ll *mesh.Layer) {
 
 func (alg *Algorithm) ContextualValidity(id mesh.BlockID) bool {
 	return alg.getVote(id) == Support
-}
-
-func CreateGenesisBlock() *mesh.Block {
-	bl := &mesh.Block{
-		Id:         mesh.BlockID(config.GenesisId),
-		LayerIndex: 0,
-		Data:       []byte("genesis"),
-	}
-	return bl
-}
-
-func GenesisLayer() *mesh.Layer {
-	l := mesh.NewLayer(Genesis)
-	l.AddBlock(CreateGenesisBlock())
-	return l
 }

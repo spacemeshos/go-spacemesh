@@ -91,16 +91,16 @@ func TestBlockListener2(t *testing.T) {
 
 	bl2.Start()
 
-	block1 := mesh.NewBlock(true, nil, time.Now(), 0)
-	block2 := mesh.NewBlock(true, nil, time.Now(), 1)
-	block3 := mesh.NewBlock(true, nil, time.Now(), 2)
-	block4 := mesh.NewBlock(true, nil, time.Now(), 2)
-	block5 := mesh.NewBlock(true, nil, time.Now(), 3)
-	block6 := mesh.NewBlock(true, nil, time.Now(), 3)
-	block7 := mesh.NewBlock(true, nil, time.Now(), 4)
-	block8 := mesh.NewBlock(true, nil, time.Now(), 4)
-	block9 := mesh.NewBlock(true, nil, time.Now(), 4)
-	block10 := mesh.NewBlock(true, nil, time.Now(), 5)
+	block1 := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), 0, []byte("data data data"))
+	block2 := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), 0, []byte("data data data"))
+	block3 := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), 0, []byte("data data data"))
+	block4 := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), 0, []byte("data data data"))
+	block5 := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), 0, []byte("data data data"))
+	block6 := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), 0, []byte("data data data"))
+	block7 := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), 0, []byte("data data data"))
+	block8 := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), 0, []byte("data data data"))
+	block9 := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), 0, []byte("data data data"))
+	block10 := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), 0, []byte("data data data"))
 
 	block2.AddView(block1.ID())
 	block3.AddView(block2.ID())
@@ -179,7 +179,8 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 			return
 		default:
 			if b, err := bl1.GetBlock(blk.Id); err == nil {
-				assert.Equal(t, *blk, *b)
+
+				assert.True(t, blk.Compare(b))
 				t.Log("  ", b)
 				t.Log("done!")
 				return

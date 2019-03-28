@@ -1,82 +1,107 @@
 package mesh
 
 import (
-	"bytes"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/google/uuid"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/stretchr/testify/assert"
+	"math"
+	"os"
 	"testing"
 	"time"
 )
 
-func getMeshdb() *meshDB {
+const (
+	Path = "../tmp/sync/"
+)
 
-	db := database.NewMemDatabase()
-	mdb := NewMeshDB(db, db, db, db, log.New("mashDb", "", ""))
-	return mdb
+func teardown() {
+	os.RemoveAll(Path)
 }
 
-func getMeshWithLevelDB() *meshDB {
-	//time := time.Now()
-	db := database.NewLevelDbStore("close_test", nil, nil)
-	return NewMeshDB(db, db, db, db, log.New("meshDb", "", ""))
+func chooseRandomPattern(blocksInLayer int, patternSize int) []int {
+	rand.Seed(time.Now().UnixNano())
+	p := rand.Perm(blocksInLayer)
+	indexes := make([]int, 0, patternSize)
+	for _, r := range p[:patternSize] {
+		indexes = append(indexes, r)
+	}
+	return indexes
 }
 
-func TestNewMeshDB(t *testing.T) {
-	mdb := getMeshdb()
-	id := BlockID(123)
-	mdb.addBlock(&Block{Id: id})
-	block, err := mdb.getBlock(123)
-	assert.NoError(t, err)
-	assert.True(t, id == block.Id)
+func createLayerWithRandVoting(index LayerID, prev []*Layer, blocksInLayer int, patternSize int) *Layer {
+	l := NewLayer(index)
+	var patterns [][]int
+	for _, l := range prev {
+		blocks := l.Blocks()
+		blocksInPrevLayer := len(blocks)
+		patterns = append(patterns, chooseRandomPattern(blocksInPrevLayer, int(math.Min(float64(blocksInPrevLayer), float64(patternSize)))))
+	}
+	layerBlocks := make([]BlockID, 0, blocksInLayer)
+	for i := 0; i < blocksInLayer; i++ {
+		bl := NewExistingBlock(BlockID(uuid.New().ID()), 0, []byte("data data data"))
+		layerBlocks = append(layerBlocks, bl.ID())
+		for idx, pat := range patterns {
+			for _, id := range pat {
+				b := prev[idx].Blocks()[id]
+				bl.AddVote(BlockID(b.Id))
+			}
+		}
+		for _, prevBloc := range prev[0].Blocks() {
+			bl.AddView(BlockID(prevBloc.Id))
+		}
+		l.AddBlock(bl)
+	}
+	log.Info("Created mesh.LayerID %d with blocks %d", l.Index(), layerBlocks)
+	return l
 }
 
-func TestMeshDB_Close(t *testing.T) {
-	mdb := getMeshWithLevelDB()
-	mdb.Close()
-	err := mdb.addBlock(&Block{Id: 123})
-	assert.NotNil(t, err)
+func TestForEachInView_Persistent(t *testing.T) {
+	mdb := NewPersistentMeshDB(Path+"/mesh_db/", log.New("TestForEachInView", "", ""))
+	defer mdb.Close()
+	defer teardown()
+	testForeachInView(mdb, t)
 }
 
-func TestMeshDb_Block(t *testing.T) {
-	mdb := getMeshdb()
-	id := BlockID(123)
-	blk := &Block{Id: id}
-	addTransactionsToBlock(blk, 5)
-	mdb.addBlock(blk)
-	block, err := mdb.getBlock(123)
-
-	assert.NoError(t, err)
-	assert.True(t, id == block.Id)
-
-	fmt.Println(block.Txs[0])
-	fmt.Println(blk.Txs[0])
-
-	assert.True(t, block.Txs[0].Origin == blk.Txs[0].Origin)
-	assert.True(t, bytes.Equal(block.Txs[0].Recipient.Bytes(), blk.Txs[0].Recipient.Bytes()))
-	assert.True(t, bytes.Equal(block.Txs[0].Price, blk.Txs[0].Price))
+func TestForEachInView_InMem(t *testing.T) {
+	mdb := NewMemMeshDB(log.New("TestForEachInView", "", ""))
+	testForeachInView(mdb, t)
 }
 
-func TestMeshDb_Layer(t *testing.T) {
-	layers := getMeshdb()
-	defer layers.Close()
-	id := LayerID(1)
-	data := []byte("data")
-	block1 := NewBlock(true, data, time.Now(), id)
-	block2 := NewBlock(true, data, time.Now(), id)
-	block3 := NewBlock(true, data, time.Now(), id)
-	l, err := layers.getLayer(id)
-	assert.True(t, err != nil, "error: ", err)
+func testForeachInView(mdb *MeshDB, t *testing.T) {
+	blocks := make(map[BlockID]*Block)
+	l := GenesisLayer()
+	gen := l.blocks[0]
+	blocks[gen.ID()] = gen
 
-	err = layers.addBlock(block1)
-	assert.NoError(t, err)
-	err = layers.addBlock(block2)
-	assert.NoError(t, err)
-	err = layers.addBlock(block3)
-	assert.NoError(t, err)
-	l, err = layers.getLayer(id)
-	assert.NoError(t, err)
-	//assert.True(t, layers.VerifiedLayer() == 0, "wrong layer count")
-	assert.True(t, string(l.blocks[1].Data) == "data", "wrong block data ")
+	if err := mdb.AddBlock(gen); err != nil {
+		t.Fail()
+	}
+
+	for i := 0; i < 4; i++ {
+		lyr := createLayerWithRandVoting(l.Index()+1, []*Layer{l}, 2, 2)
+		for _, b := range lyr.Blocks() {
+			blocks[b.ID()] = b
+			mdb.AddBlock(b)
+		}
+		l = lyr
+	}
+	mp := map[BlockID]struct{}{}
+	foo := func(nb *Block) {
+		fmt.Println("process block", "layer", nb.ID(), nb.Layer())
+		mp[nb.ID()] = struct{}{}
+	}
+	errHandler := func(err error) {
+		log.Error("error while traversing view ", err)
+	}
+	ids := map[BlockID]struct{}{}
+	for _, b := range l.Blocks() {
+		ids[b.Id] = struct{}{}
+	}
+	mdb.ForBlockInView(ids, 0, foo, errHandler)
+	for _, bl := range blocks {
+		_, found := mp[bl.ID()]
+		assert.True(t, found, "did not process block  ", bl)
+	}
 }
