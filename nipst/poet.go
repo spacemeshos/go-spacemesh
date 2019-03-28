@@ -42,29 +42,29 @@ type SeqWorkTicks uint64
 
 type Space uint64
 
-// RPCPoetHarnessClient is a poet proving service client
+// RPCPoetHarness is a poet proving service client
 // which utilizes a local self-contained poet server instance
 // in order to exercise functionality.
-type RPCPoetHarnessClient struct {
+type RPCPoetHarness struct {
 	h *integration.Harness
 }
 
-// newRPCPoetHarnessClient returns a new instance of RPCPoetHarnessClient.
-func newRPCPoetHarnessClient() (*RPCPoetHarnessClient, error) {
+// newRPCPoetHarness returns a new instance of RPCPoetHarness.
+func newRPCPoetHarness() (*RPCPoetHarness, error) {
 	h, err := integration.NewHarness()
 	if err != nil {
 		return nil, err
 	}
 
-	return &RPCPoetHarnessClient{h: h}, nil
+	return &RPCPoetHarness{h: h}, nil
 }
 
-func (c *RPCPoetHarnessClient) id() string {
+func (c *RPCPoetHarness) id() string {
 	// TODO(moshababo): implement
 	return "id"
 }
 
-func (c *RPCPoetHarnessClient) submit(challenge common.Hash,
+func (c *RPCPoetHarness) submit(challenge common.Hash,
 	duration SeqWorkTicks) (*poetRound, error) {
 
 	req := api.SubmitRequest{Challenge: challenge[:]}
@@ -76,7 +76,7 @@ func (c *RPCPoetHarnessClient) submit(challenge common.Hash,
 	return &poetRound{id: int(res.RoundId)}, nil
 }
 
-func (c *RPCPoetHarnessClient) subscribeMembershipProof(r *poetRound,
+func (c *RPCPoetHarness) subscribeMembershipProof(r *poetRound,
 	challenge common.Hash, timeout time.Duration) (*membershipProof, error) {
 
 	ctx, _ := context.WithTimeout(context.Background(), timeout)
@@ -92,7 +92,7 @@ func (c *RPCPoetHarnessClient) subscribeMembershipProof(r *poetRound,
 	return &membershipProof{merkleProof: res.MerkleProof}, nil
 }
 
-func (c *RPCPoetHarnessClient) subscribeProof(r *poetRound,
+func (c *RPCPoetHarness) subscribeProof(r *poetRound,
 	timeout time.Duration) (*poetProof, error) {
 
 	ctx, _ := context.WithTimeout(context.Background(), timeout)
@@ -114,7 +114,7 @@ func (c *RPCPoetHarnessClient) subscribeProof(r *poetRound,
 	return p, nil
 }
 
-func (c *RPCPoetHarnessClient) cleanUp() error {
+func (c *RPCPoetHarness) cleanUp() error {
 	return c.h.TearDown()
 }
 

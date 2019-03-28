@@ -76,7 +76,7 @@ func TestNIPSTBuilderWithRPCClients(t *testing.T) {
 
 	assert := require.New(t)
 
-	poetProver, err := newRPCPoetHarnessClient()
+	poetProver, err := newRPCPoetHarness()
 	defer func() {
 		err := poetProver.cleanUp()
 

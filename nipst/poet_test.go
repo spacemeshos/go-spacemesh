@@ -10,12 +10,12 @@ import (
 
 type rpcPoetTestCase struct {
 	name string
-	test func(c *RPCPoetHarnessClient, assert *require.Assertions)
+	test func(c *RPCPoetHarness, assert *require.Assertions)
 }
 
 var rpcPoetTestCases = []*rpcPoetTestCase{
-	{name: "RPCPoetHarnessClient", test: testRPCPoetHarnessClient},
-	{name: "RPCPoetHarnessClientTimeouts", test: testRPCPoetHarnessClientTimeouts},
+	{name: "RPC poet harness", test: testRPCPoetHarness},
+	{name: "RPC poet harness timeouts", test: testRPCPoetHarnessTimeouts},
 }
 
 func TestRPCPoet(t *testing.T) {
@@ -25,7 +25,7 @@ func TestRPCPoet(t *testing.T) {
 
 	assert := require.New(t)
 
-	c, err := newRPCPoetHarnessClient()
+	c, err := newRPCPoetHarness()
 	defer func() {
 		err := c.cleanUp()
 		assert.NoError(err)
@@ -44,7 +44,7 @@ func TestRPCPoet(t *testing.T) {
 	}
 }
 
-func testRPCPoetHarnessClient(c *RPCPoetHarnessClient, assert *require.Assertions) {
+func testRPCPoetHarness(c *RPCPoetHarness, assert *require.Assertions) {
 	var ch common.Hash
 	_, err := rand.Read(ch[:])
 	assert.NoError(err)
@@ -64,7 +64,7 @@ func testRPCPoetHarnessClient(c *RPCPoetHarnessClient, assert *require.Assertion
 	assert.True(proof.valid())
 }
 
-func testRPCPoetHarnessClientTimeouts(c *RPCPoetHarnessClient, assert *require.Assertions) {
+func testRPCPoetHarnessTimeouts(c *RPCPoetHarness, assert *require.Assertions) {
 	var ch common.Hash
 	_, err := rand.Read(ch[:])
 	assert.NoError(err)
