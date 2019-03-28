@@ -23,6 +23,7 @@ var Cmd = &cobra.Command{
 	Short: "start hare",
 	Run: func(cmd *cobra.Command, args []string) {
 		log.JSONLog(true)
+
 		log.Info("Starting hare")
 
 		hareApp := NewHareApp()
@@ -79,8 +80,8 @@ func buildSet() *hare.Set {
 }
 
 func (app *HareApp) Start(cmd *cobra.Command, args []string) {
-	spew.Dump(app.Config)
 	// start p2p services
+	log.Info("Config: %v", spew.Sdump(app.Config))
 	log.Info("Initializing P2P services")
 	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P)
 	app.p2p = swarm
@@ -106,8 +107,14 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 
 	app.ha = hare.New(app.Config.HARE, app.p2p, app.sgn, &mockBlockProvider{}, hareOracle, app.clock.Subscribe(), lg)
 	log.Info("Starting hare service")
-	app.ha.Start()
-	app.p2p.Start()
+	err = app.ha.Start()
+	if err != nil {
+		log.Panic("error starting maatuf err=%v", err)
+	}
+	err = app.p2p.Start()
+	if err != nil {
+		log.Panic("error starting p2p err=%v", err)
+	}
 	app.clock.Start()
 }
 

@@ -138,7 +138,7 @@ func (proc *ConsensusProcess) SetInbox(inbox chan *pb.HareMessage) {
 
 func (proc *ConsensusProcess) eventLoop() {
 	proc.With().Info("Consensus Process Started",
-		log.Int("N", proc.cfg.N), log.Int("f", proc.cfg.F), log.String("duration", (time.Duration(proc.cfg.RoundDuration)*time.Second).String()),
+		log.Int("Hare-N", proc.cfg.N), log.Int("f", proc.cfg.F), log.String("duration", (time.Duration(proc.cfg.RoundDuration)*time.Second).String()),
 		log.Uint32("instance_id", uint32(proc.instanceId)), log.String("set_values", proc.s.String()))
 
 	// set pre-round message and send
