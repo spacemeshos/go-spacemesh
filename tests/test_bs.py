@@ -19,7 +19,7 @@ from elasticsearch_dsl import Search, Q
 
 from tests.misc import NodeInfo, ContainerSpec
 
-from hare import test_hare
+# from tests.hare import test_hare
 
 BOOT_DEPLOYMENT_FILE = './k8s/bootstrap-w-conf.yml'
 CLIENT_DEPLOYMENT_FILE = './k8s/client-w-conf.yml'
@@ -367,17 +367,15 @@ def query_hare_output_set(indx, namespace, client_po_name):
     lst = []
     for h in hits:
         lst.append(h.set_values)
-    #    match = re.search(r"Consensus process terminated \w+ (?P<bootstarap_key>\w+)", h.log)
-    #    if match:
-    #        return match.group('bootstarap_key')
     return lst
 
 
-def test_hare_sanity(load_config, setup_clients, save_log_on_exit):
-    global client_info
-    delay = int(testconfig['client']['args']['hare-round-duration-sec']) * 7
-    print("Going to sleep for {0}".format(delay))
-    time.sleep(delay)
-    lst = query_hare_output_set(current_index, testconfig['namespace'], bs_info.deployment_id)
-    assert 6 == len(lst)
-    assert test_hare.validate(lst)
+# def test_hare_sanity(load_config, setup_clients, save_log_on_exit):
+#     global client_info
+#     delay = int(testconfig['client']['args']['hare-round-duration-sec']) * 7
+#     print("Going to sleep for {0}".format(delay))
+#     time.sleep(delay)
+#     lst = query_hare_output_set(current_index, testconfig['namespace'], bs_info.deployment_id)
+#     total = testconfig['bootstrap']['replicas'] + testconfig['client']['replicas']
+#     assert total == len(lst)
+#     assert test_hare.validate(lst)
