@@ -57,6 +57,7 @@ func NewBroker(networkService NetworkService, eValidator Validator, closer Close
 	p.outbox = make(map[InstanceId]chan *pb.HareMessage)
 	p.pending = make(map[InstanceId][]*pb.HareMessage)
 	p.tasks = make(chan func())
+	p.maxReg = 1
 
 	return p
 }
@@ -130,7 +131,12 @@ func (broker *Broker) eventLoop() {
 			if exist {
 				// todo: err if chan is full (len)
 				c <- hareMsg
-			} else if futureMsg {
+			} else { // message arrived before registration
+				futureMsg = true
+			}
+
+			if futureMsg {
+				log.Info("Broker identified future message")
 				if _, exist := broker.pending[msgInstId]; !exist {
 					broker.pending[msgInstId] = make([]*pb.HareMessage, 0)
 				}
@@ -140,6 +146,7 @@ func (broker *Broker) eventLoop() {
 		case task := <-broker.tasks:
 			task()
 		case <-broker.CloseChannel():
+			log.Warning("Broker exiting")
 			return
 		}
 	}

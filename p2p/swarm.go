@@ -173,7 +173,9 @@ func (s *swarm) onNewConnection(nce net.NewConnectionEvent) {
 func (s *swarm) onClosedConnection(c net.Connection) {
 	// we don't want to block, we know this node's connection was closed.
 	// we'll try connecting again and if not we'll remove it from peers
-	go s.retryOrDisconnect(c.RemotePublicKey())
+	if s.hasOutgoingPeer(c.RemotePublicKey()) {
+		go s.retryOrDisconnect(c.RemotePublicKey())
+	}
 }
 
 func (s *swarm) Start() error {
@@ -182,6 +184,11 @@ func (s *swarm) Start() error {
 	}
 	atomic.StoreUint32(&s.started, 1)
 	s.lNode.Debug("Starting the p2p layer")
+
+	err := s.network.Start()
+	if err != nil {
+		return err
+	}
 
 	s.listenToNetworkMessages() // fires up a goroutine for each queue of messages
 
@@ -760,8 +767,16 @@ func (s *swarm) Disconnect(peer p2pcrypto.PublicKey) {
 
 // AddIncomingPeer inserts a peer to the neighborhood as a remote peer.
 func (s *swarm) addIncomingPeer(n p2pcrypto.PublicKey) {
+	s.inpeersMutex.RLock()
+	amnt := len(s.inpeers)
+	s.inpeersMutex.RUnlock()
+
+	if amnt >= s.config.MaxInboundPeers {
+		s.Disconnect(n) // todo: this will propagate a closed connection message. maybe need to do this in a lower level?
+		return
+	}
+
 	s.inpeersMutex.Lock()
-	// todo limit number of in peers
 	s.inpeers[n.String()] = n
 	s.inpeersMutex.Unlock()
 	s.publishNewPeer(n)

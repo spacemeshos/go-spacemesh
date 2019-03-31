@@ -12,5 +12,8 @@ spec:
       containers:
       - name: oracle
         image: spacemeshos/oracle:latest
+        imagePullPolicy: Always
         ports:
         - containerPort: 3030
+      nodeSelector:
+        role: tests

@@ -25,6 +25,10 @@ dial-timeout = "1m"
 conn-keepalive = "48h"
 network-id = 1 # 0 - MainNet, 1 - TestNet
 response-timeout = "2s"
+session-timeout = "2s"
+max-pending-connections = 50
+target-outbound = 10
+max-inbound = 100
 buffer-size = 100
 
 # Node Swarm Config
@@ -49,6 +53,7 @@ ntp-queries = 5
 default-timeout-latency = "10s"
 
 # Hare Config
+[hare]
 hare-round-duration-sec = "5"
 hare-committee-size = 10
 hare-max-adversaries = 5

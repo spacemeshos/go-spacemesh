@@ -4,9 +4,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/stretchr/testify/assert"
 	"math/big"
-	"math/rand"
 	"strconv"
 	"testing"
 	"time"
@@ -44,22 +44,20 @@ func ConfigTst() RewardConfig {
 }
 
 func getMeshWithMapState(id string, s StateUpdater) *Mesh {
-
-	//time := time.Now()
-	bdb := database.NewMemDatabase()
-	ldb := database.NewMemDatabase()
-	cdb := database.NewMemDatabase()
-	layers := NewMesh(ldb, bdb, cdb, ConfigTst(), &MeshValidatorMock{}, s, log.New(id, "", ""))
+	db := database.NewMemDatabase()
+	lg := log.New(id, "", "")
+	mdb := NewMeshDB(db, db, db, db, lg)
+	layers := NewMesh(mdb, ConfigTst(), &MeshValidatorMock{}, s, lg)
 	return layers
 }
 
-func addTransactions(bl *Block, numOfTxs int) int64 {
+func addTransactionsToBlock(bl *Block, numOfTxs int) int64 {
 	var totalRewards int64
 	for i := 0; i < numOfTxs; i++ {
 		gasPrice := rand.Int63n(100)
-		addr := rand.Int63n(10000)
+		addr := rand.Int63n(1000000)
 		//log.Info("adding tx with gas price %v nonce %v", gasPrice, i)
-		bl.Txs = append(bl.Txs, *NewSerializableTransaction(uint64(i), address.HexToAddress("1"),
+		bl.Txs = append(bl.Txs, NewSerializableTransaction(uint64(i), address.HexToAddress("1"),
 			address.HexToAddress(strconv.FormatUint(uint64(addr), 10)),
 			big.NewInt(10),
 			big.NewInt(gasPrice),
@@ -75,7 +73,7 @@ func addTransactionsWithGas(bl *Block, numOfTxs int, gasPrice int64) int64 {
 
 		addr := rand.Int63n(10000)
 		//log.Info("adding tx with gas price %v nonce %v", gasPrice, i)
-		bl.Txs = append(bl.Txs, *NewSerializableTransaction(uint64(i), address.HexToAddress("1"),
+		bl.Txs = append(bl.Txs, NewSerializableTransaction(uint64(i), address.HexToAddress("1"),
 			address.HexToAddress(strconv.FormatUint(uint64(addr), 10)),
 			big.NewInt(10),
 			big.NewInt(gasPrice),
@@ -94,19 +92,19 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 
 	block1 := NewBlock(true, []byte("data1"), time.Now(), 1)
 	block1.MinerID = "1"
-	totalRewards += addTransactions(block1, 15)
+	totalRewards += addTransactionsToBlock(block1, 15)
 
 	block2 := NewBlock(true, []byte("data2"), time.Now(), 1)
 	block2.MinerID = "2"
-	totalRewards += addTransactions(block2, 13)
+	totalRewards += addTransactionsToBlock(block2, 13)
 
 	block3 := NewBlock(true, []byte("data3"), time.Now(), 1)
 	block3.MinerID = "3"
-	totalRewards += addTransactions(block3, 17)
+	totalRewards += addTransactionsToBlock(block3, 17)
 
 	block4 := NewBlock(true, []byte("data3"), time.Now(), 1)
 	block4.MinerID = "4"
-	totalRewards += addTransactions(block4, 16)
+	totalRewards += addTransactionsToBlock(block4, 16)
 
 	log.Info("total fees : %v", totalRewards)
 	layers.AddBlock(block1)
@@ -117,9 +115,16 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 	params := NewTestRewardParams()
 
 	layers.AccumulateRewards(1, params)
-	remainder := (totalRewards * params.SimpleTxCost.Int64()) % 4
+	totalRewardsCost := totalRewards*params.SimpleTxCost.Int64() + params.BaseReward.Int64()
+	remainder := (totalRewardsCost) % 4
+	var adj int64
 
-	assert.Equal(t, s.Total, totalRewards*params.SimpleTxCost.Int64()+params.BaseReward.Int64()+remainder)
+	//total penalty of blocks with less txs than quota sometimes does not divide equally between all nodes, therefore some Lerners can be lost
+	reward_penalty := (((totalRewardsCost + adj) / 4) * (params.PenaltyPercent.Int64())) / 100
+
+	log.Info("remainder %v reward_penalty %v mod %v reward cost %v", remainder, reward_penalty, (reward_penalty)%4, totalRewardsCost)
+
+	assert.Equal(t, totalRewards*params.SimpleTxCost.Int64()+params.BaseReward.Int64()-(reward_penalty)%4+remainder, s.Total)
 
 }
 
@@ -178,7 +183,7 @@ func createLayer(mesh *Mesh, id LayerID, numOfBlocks, maxTransactions int) (tota
 	for i := 0; i < numOfBlocks; i++ {
 		block1 := NewBlock(true, []byte("data1"), time.Now(), id)
 		block1.MinerID = strconv.Itoa(i)
-		totalRewards += addTransactions(block1, rand.Intn(maxTransactions))
+		totalRewards += addTransactionsToBlock(block1, rand.Intn(maxTransactions))
 		mesh.addBlock(block1)
 	}
 	return totalRewards
@@ -196,8 +201,10 @@ func TestMesh_integration(t *testing.T) {
 	var rewards int64
 	for i := 0; i < numofLayers; i++ {
 		reward := createLayer(layers, LayerID(i), numofBlocks, maxTxs)
+		// rewards are applied to layers in the past according to the reward maturity param
 		if rewards == 0 {
 			rewards += reward
+			log.Info("reward %v", rewards)
 		}
 	}
 
@@ -210,8 +217,19 @@ func TestMesh_integration(t *testing.T) {
 	layers.ValidateLayer(l4)
 	assert.Equal(t, oldTotal, s.Total)
 
+	//reward maturity is 5, when processing layer 5 rewards will be applied
 	layers.ValidateLayer(l5)
-	assert.Equal(t, rewards*ConfigTst().SimpleTxCost.Int64()+ConfigTst().BaseReward.Int64(), s.Total)
+	//since there can be a difference of up to x lerners where x is the number of blocks due to round up of penalties when distributed among all blocks
+	totalPayout := rewards*ConfigTst().SimpleTxCost.Int64() + ConfigTst().BaseReward.Int64()
+	assert.True(t, totalPayout-s.Total < int64(numofBlocks), " rewards : %v, total %v blocks %v", totalPayout, s.Total, int64(numofBlocks))
+}
+
+func TestMesh_calcRewards(t *testing.T) {
+	cfg := RewardConfig{PenaltyPercent: big.NewInt(13)}
+	bonus, penalty := calculateActualRewards(big.NewInt(10000), big.NewInt(10), cfg, 5)
+	assert.Equal(t, int64(10000), bonus.Int64()*5+penalty.Int64()*5)
+	assert.Equal(t, int64(1065), bonus.Int64())
+	assert.Equal(t, int64(935), penalty.Int64())
 }
 
 func TestMesh_MergeDoubles(t *testing.T) {

@@ -1,4 +1,6 @@
 from datetime import datetime, timedelta
+
+from tests import hare
 from tests.fixtures import load_config
 import os
 from os import path
@@ -16,6 +18,8 @@ from elasticsearch import Elasticsearch
 from elasticsearch_dsl import Search, Q
 
 from tests.misc import NodeInfo, ContainerSpec
+
+# from tests.hare import test_hare
 
 BOOT_DEPLOYMENT_FILE = './k8s/bootstrap-w-conf.yml'
 CLIENT_DEPLOYMENT_FILE = './k8s/client-w-conf.yml'
@@ -35,6 +39,22 @@ def get_elastic_search_api():
     return es
 
 
+def wait_to_deployment_to_be_deleted(deployment_name, name_space, time_out=None):
+    total_sleep_time = 0
+    while True:
+        try:
+            resp = client.AppsV1Api().read_namespaced_deployment(name=deployment_name, namespace=name_space)
+        except ApiException as e:
+            if e.status == 404:
+                print("Total time waiting for delete deployment {0}: {1} sec".format(deployment_name, total_sleep_time))
+                break
+        time.sleep(1)
+        total_sleep_time += 1
+
+        if time_out and total_sleep_time > time_out:
+            raise Exception("Timeout waiting to delete deployment")
+
+
 def wait_to_deployment_to_be_ready(deployment_name, name_space, time_out=None):
     total_sleep_time = 0
     while True:
@@ -49,9 +69,16 @@ def wait_to_deployment_to_be_ready(deployment_name, name_space, time_out=None):
             raise Exception("Timeout waiting to deployment to be ready")
 
 
-def create_deployment(file_name, name_space, container_specs):
+def create_deployment(file_name, name_space, deployment_id=None, replica_size=1, container_specs=None):
     with open(path.join(path.dirname(__file__), file_name)) as f:
         dep = yaml.safe_load(f)
+
+        # Set unique deployment id
+        if deployment_id:
+            dep['metadata']['generateName'] += '{0}-'.format(deployment_id)
+
+        # Set replica size
+        dep['spec']['replicas'] = replica_size
         if container_specs:
             dep = container_specs.update_deployment(dep)
 
@@ -64,10 +91,16 @@ def create_deployment(file_name, name_space, container_specs):
 
 def delete_deployment(deployment_name, name_space):
     k8s_beta = client.ExtensionsV1beta1Api()
-    resp = k8s_beta.delete_namespaced_deployment(name=deployment_name,
-                                                 namespace=name_space,
-                                                 body=client.V1DeleteOptions(propagation_policy='Foreground',
-                                                                             grace_period_seconds=5))
+    try:
+        resp = k8s_beta.delete_namespaced_deployment(name=deployment_name,
+                                                     namespace=name_space,
+                                                     body=client.V1DeleteOptions(propagation_policy='Foreground',
+                                                                                 grace_period_seconds=5))
+    except ApiException as e:
+        if e.status == 404:
+            return resp
+
+    wait_to_deployment_to_be_deleted(deployment_name, name_space)
     return resp
 
 
@@ -114,50 +147,69 @@ def query_es_gossip_message(indx, namespace, client_po_name):
 # ==============================================================================
 
 @pytest.fixture(scope='module')
-def setup_oracle():
-    namespaced_pods = client.CoreV1Api().list_namespaced_pod(testconfig['namespace'],
-                                                             label_selector="name=oracle").items
-    if not namespaced_pods:
-        resp = create_deployment(ORACLE_DEPLOYMENT_FILE, testconfig['namespace'], None)
-        namespaced_pods = client.CoreV1Api().list_namespaced_pod(testconfig['namespace'],
+def setup_oracle(request):
+    oracle_deployment_name = 'oracle'
+    def _setup_oracle_in_namespace(name_space):
+
+        namespaced_pods = client.CoreV1Api().list_namespaced_pod(name_space,
+                                                                 label_selector="name=oracle").items
+        if namespaced_pods:
+            # if oracle already exist -> delete it
+            delete_deployment(oracle_deployment_name, name_space)
+
+        resp = create_deployment(ORACLE_DEPLOYMENT_FILE, name_space, None)
+        namespaced_pods = client.CoreV1Api().list_namespaced_pod(name_space,
                                                                  label_selector="name=oracle").items
         if not namespaced_pods:
             raise Exception('Could not setup Oracle Server')
-    return namespaced_pods[0].status.pod_ip
+        return namespaced_pods[0].status.pod_ip
 
+    def fin():
+        delete_deployment(oracle_deployment_name, testconfig['namespace'])
+
+    request.addfinalizer(fin)
+    return _setup_oracle_in_namespace(testconfig['namespace'])
 
 @pytest.fixture(scope='module')
 def setup_bootstrap(request, load_config, setup_oracle, create_configmap):
     def _setup_bootstrap_in_namespace(name_space):
         global bs_info
         bs_info = NodeInfo()
-        cspec = ContainerSpec(cname='bootstrap', cimage=testconfig['bootstrap']['image'],
-                              centry=[testconfig['bootstrap']['command']],
-                              oracle_server='http://{0}:3030'.format(setup_oracle),
-                              genesis_time=GENESIS_TIME.isoformat('T', 'seconds'))
+        bootstrap_args = {} if 'args' not in testconfig['bootstrap'] else testconfig['bootstrap']['args']
 
-        resp = create_deployment(BOOT_DEPLOYMENT_FILE, name_space, cspec)
+        cspec = ContainerSpec(cname='bootstrap',
+                              cimage=testconfig['bootstrap']['image'],
+                              centry=[testconfig['bootstrap']['command']])
 
-        bs_info.bs_deployment_name = resp.metadata._name
+        cspec.append_args(oracle_server='http://{0}:3030'.format(setup_oracle),
+                          genesis_time=GENESIS_TIME.isoformat('T', 'seconds'),
+                          **bootstrap_args)
+
+        resp = create_deployment(BOOT_DEPLOYMENT_FILE, name_space,
+                                 deployment_id=bs_info.deployment_id,
+                                 replica_size=testconfig['bootstrap']['replicas'],
+                                 container_specs=cspec)
+
+        bs_info.deployment_name = resp.metadata._name
         namespaced_pods = client.CoreV1Api().list_namespaced_pod(namespace=name_space).items
-        bootstrap_pod = next(filter(lambda i: i.metadata.name.startswith(bs_info.bs_deployment_name), namespaced_pods))
-        bs_info.bs_pod_name = bootstrap_pod.metadata.name
+        bootstrap_pod = next(filter(lambda i: i.metadata.name.startswith(bs_info.deployment_name), namespaced_pods))
+        bs_info.pod_name = bootstrap_pod.metadata.name
 
         while True:
-            resp = client.CoreV1Api().read_namespaced_pod(name=bs_info.bs_pod_name, namespace=name_space)
+            resp = client.CoreV1Api().read_namespaced_pod(name=bs_info.pod_name, namespace=name_space)
             if resp.status.phase != 'Pending':
                 break
             time.sleep(1)
 
-        bs_info.bs_pod_ip = resp.status.pod_ip
-        bootstrap_pod_logs = client.CoreV1Api().read_namespaced_pod_log(name=bs_info.bs_pod_name, namespace=name_space)
+        bs_info.pod_ip = resp.status.pod_ip
+        bootstrap_pod_logs = client.CoreV1Api().read_namespaced_pod_log(name=bs_info.pod_name, namespace=name_space)
         match = re.search(r"Local node identity >> (?P<bootstarap_key>\w+)", bootstrap_pod_logs)
-        bs_info.bs_key = match.group('bootstarap_key')
+        bs_info.key = match.group('bootstarap_key')
         return bs_info
 
     def fin():
         global bs_info
-        delete_deployment(bs_info.bs_deployment_name, testconfig['namespace'])
+        delete_deployment(bs_info.deployment_name, testconfig['namespace'])
 
     request.addfinalizer(fin)
     return _setup_bootstrap_in_namespace(testconfig['namespace'])
@@ -167,19 +219,28 @@ def setup_bootstrap(request, load_config, setup_oracle, create_configmap):
 def setup_clients(request, setup_oracle, setup_bootstrap):
     def _setup_clients_in_namespace(name_space):
         global bs_info, client_info
-        client_info = NodeInfo()
-        cspec = ContainerSpec(cname='client', cimage=testconfig['client']['image'],
-                              centry=[testconfig['client']['command']],
-                              bootnodes="{0}:{1}/{2}".format(bs_info.bs_pod_ip, '7513', bs_info.bs_key),
-                              oracle_server='http://{0}:3030'.format(setup_oracle),
-                              genesis_time=GENESIS_TIME.isoformat('T', 'seconds'))
+        client_info = NodeInfo(bs_info.deployment_id)
 
-        resp = create_deployment(CLIENT_DEPLOYMENT_FILE, name_space, cspec)
+        client_args = {} if 'args' not in testconfig['client'] else testconfig['client']['args']
 
-        client_info.bs_deployment_name = resp.metadata._name
+        cspec = ContainerSpec(cname='client',
+                              cimage=testconfig['client']['image'],
+                              centry=[testconfig['client']['command']])
+
+        cspec.append_args(bootnodes="{0}:{1}/{2}".format(bs_info.pod_ip, '7513', bs_info.key),
+                          oracle_server='http://{0}:3030'.format(setup_oracle),
+                          genesis_time=GENESIS_TIME.isoformat('T', 'seconds'),
+                          **client_args)
+
+        resp = create_deployment(CLIENT_DEPLOYMENT_FILE, name_space,
+                                 deployment_id=bs_info.deployment_id,
+                                 replica_size=testconfig['client']['replicas'],
+                                 container_specs=cspec)
+
+        client_info.deployment_name = resp.metadata._name
         namespaced_pods = client.CoreV1Api().list_namespaced_pod(namespace=name_space, include_uninitialized=True).items
         client_pods = list(
-            filter(lambda i: i.metadata.name.startswith(client_info.bs_deployment_name), namespaced_pods))
+            filter(lambda i: i.metadata.name.startswith(client_info.deployment_name), namespaced_pods))
 
         print("Number of client pods: {0}".format(len(client_pods)))
         for c in client_pods:
@@ -193,7 +254,8 @@ def setup_clients(request, setup_oracle, setup_bootstrap):
         time_now = pytz.utc.localize(datetime.utcnow())
         delta_from_genesis = (GENESIS_TIME - time_now).total_seconds()
         if delta_from_genesis < 0:
-            raise Exception("genesis_delta time is too short for this deployment")
+            raise Exception("genesis_delta time={0}sec, is too short for this deployment. "
+                            "delta_from_genesis={1}".format(testconfig['genesis_delta'], delta_from_genesis))
         else:
             print('sleep for {0} sec until genesis time'.format(delta_from_genesis))
             time.sleep(delta_from_genesis)
@@ -201,7 +263,7 @@ def setup_clients(request, setup_oracle, setup_bootstrap):
 
     def fin():
         global client_info
-        delete_deployment(client_info.bs_deployment_name, testconfig['namespace'])
+        delete_deployment(client_info.deployment_name, testconfig['namespace'])
 
     request.addfinalizer(fin)
     return _setup_clients_in_namespace(testconfig['namespace'])
@@ -255,6 +317,7 @@ def save_log_on_exit(request):
                              stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         (out, err) = p.communicate()
 
+
 # ==============================================================================
 #    TESTS
 # ==============================================================================
@@ -262,20 +325,20 @@ def save_log_on_exit(request):
 
 dt = datetime.now()
 todaydate = dt.strftime("%Y.%m.%d")
-current_index = 'kubernetes_cluster-'+todaydate
+current_index = 'kubernetes_cluster-' + todaydate
 
 
 def test_bootstrap(setup_bootstrap):
     # wait for the bootstrap logs to be available in ElasticSearch
     time.sleep(5)
-    assert setup_bootstrap.bs_key == query_bootstrap_es(current_index,
-                                                        testconfig['namespace'],
-                                                        setup_bootstrap.bs_pod_name)
+    assert setup_bootstrap.key == query_bootstrap_es(current_index,
+                                                     testconfig['namespace'],
+                                                     setup_bootstrap.pod_name)
 
 
 def test_client(load_config, setup_clients, save_log_on_exit):
     global client_info
-    peers = query_es_client_bootstrap(current_index, testconfig['namespace'], client_info.bs_deployment_name)
+    peers = query_es_client_bootstrap(current_index, testconfig['namespace'], client_info.deployment_name)
     assert peers == len(setup_clients)
 
 
@@ -293,11 +356,11 @@ def test_gossip(load_config, setup_clients):
     (out, err) = p.communicate()
     assert '{"value":"ok"}' in out.decode("utf-8")
 
-    gossip_propagation_sleep = len(setup_clients)*2
+    gossip_propagation_sleep = len(setup_clients) * 2
     print('sleep for {0} sec to enable gossip propagation'.format(gossip_propagation_sleep))
     time.sleep(gossip_propagation_sleep)
 
-    peers_for_gossip = query_es_gossip_message(current_index, testconfig['namespace'], client_info.bs_deployment_name)
+    peers_for_gossip = query_es_gossip_message(current_index, testconfig['namespace'], client_info.deployment_name)
     assert len(setup_clients) == peers_for_gossip
 
 
@@ -324,3 +387,28 @@ def test_transaction(load_config, setup_clients):
                          stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     (out, err) = p.communicate()
     assert '{"value":"ok"}' in out.decode("utf-8")
+
+
+def query_hare_output_set(indx, namespace, client_po_name):
+    es = get_elastic_search_api()
+    fltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
+           Q("match_phrase", kubernetes__pod_name=client_po_name) & \
+           Q("match_phrase", M="Consensus process terminated")
+    s = Search(index=indx, using=es).query('bool', filter=[fltr])
+    hits = list(s.scan())
+
+    lst = []
+    for h in hits:
+        lst.append(h.set_values)
+    return lst
+
+
+# def test_hare_sanity(load_config, setup_clients, save_log_on_exit):
+#     global client_info
+#     delay = int(testconfig['client']['args']['hare-round-duration-sec']) * 7
+#     print("Going to sleep for {0}".format(delay))
+#     time.sleep(delay)
+#     lst = query_hare_output_set(current_index, testconfig['namespace'], bs_info.deployment_id)
+#     total = testconfig['bootstrap']['replicas'] + testconfig['client']['replicas']
+#     assert total == len(lst)
+#     assert test_hare.validate(lst)

@@ -20,7 +20,7 @@ func NewMockSigning() *MockSigning {
 	priv, _, err := crypto.GenerateKeyPair()
 	if err != nil {
 		log.Error("Could not create private key ", err)
-		panic("MockSigning construction failed")
+		log.Panic("MockSigning construction failed")
 	}
 	ms.key = priv
 
@@ -31,7 +31,7 @@ func (ms *MockSigning) Sign(m []byte) []byte {
 	sig, err := ms.key.Sign(m)
 	if err != nil {
 		log.Error("Error signing message: ", err)
-		panic("Could not sign message")
+		log.Panic("Could not sign message")
 	}
 
 	return sig
@@ -40,8 +40,7 @@ func (ms *MockSigning) Sign(m []byte) []byte {
 func (ms *MockSigning) Verifier() Verifier {
 	v, err := NewVerifier(ms.key.GetPublicKey().Bytes())
 	if err != nil {
-		log.Error("Error getting public key", err)
-		panic("Could not get public key")
+		log.Panic("Error getting public key", err.Error())
 	}
 
 	return v
