@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/common/prque"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 // Putter wraps the database write operation supported by both batches and regular databases.
@@ -117,7 +118,7 @@ func (s *Sync) AddSubTrie(root common.Hash, depth int, parent common.Hash, callb
 	if parent != (common.Hash{}) {
 		ancestor := s.requests[parent]
 		if ancestor == nil {
-			panic(fmt.Sprintf("sub-trie ancestor not found: %x", parent))
+			log.Panic(fmt.Sprintf("sub-trie ancestor not found: %x", parent))
 		}
 		ancestor.deps++
 		req.parents = append(req.parents, ancestor)
@@ -150,7 +151,7 @@ func (s *Sync) AddRawEntry(hash common.Hash, depth int, parent common.Hash) {
 	if parent != (common.Hash{}) {
 		ancestor := s.requests[parent]
 		if ancestor == nil {
-			panic(fmt.Sprintf("raw-entry ancestor not found: %x", parent))
+			log.Panic(fmt.Sprintf("raw-entry ancestor not found: %x", parent))
 		}
 		ancestor.deps++
 		req.parents = append(req.parents, ancestor)
@@ -275,7 +276,7 @@ func (s *Sync) children(req *request, object node) ([]*request, error) {
 			}
 		}
 	default:
-		panic(fmt.Sprintf("unknown node: %+v", node))
+		log.Panic(fmt.Sprintf("unknown node: %+v", node))
 	}
 	// Iterate over the children, and request all unknown ones
 	requests := make([]*request, 0, len(children))

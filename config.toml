@@ -53,6 +53,7 @@ ntp-queries = 5
 default-timeout-latency = "10s"
 
 # Hare Config
+[hare]
 hare-round-duration-sec = "5"
 hare-committee-size = 10
 hare-max-adversaries = 5
