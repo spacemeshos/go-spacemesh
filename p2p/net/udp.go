@@ -90,8 +90,8 @@ func (n *UDPNet) IncomingMessages() chan UDPMessageEvent {
 }
 
 func (n *UDPNet) listenToUDPNetworkMessages(listener net.PacketConn) {
+	buf := make([]byte, maxMessageSize) // todo: buffer pool ?
 	for {
-		buf := make([]byte, maxMessageSize) // todo: buffer pool ?
 		size, addr, err := listener.ReadFrom(buf)
 		if err != nil {
 			if temp, ok := err.(interface {
@@ -103,19 +103,17 @@ func (n *UDPNet) listenToUDPNetworkMessages(listener net.PacketConn) {
 				n.logger.With().Error("Listen UDP error, stopping server", log.Err(err))
 				return
 			}
+
 		}
 		// todo : check size?
 		// todo: check if needs session before passing
-
-		go func(msg UDPMessageEvent) {
-
-			select {
-			case n.msgChan <- msg:
-			case <-n.shutdown:
-				return
-			}
-
-		}(UDPMessageEvent{addr, buf[0:size]})
+		copybuf := make([]byte, size)
+		copy(copybuf, buf)
+		select {
+		case n.msgChan <- UDPMessageEvent{addr, copybuf}:
+		case <-n.shutdown:
+			return
+		}
 
 	}
 }

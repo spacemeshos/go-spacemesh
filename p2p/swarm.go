@@ -107,7 +107,7 @@ func (s *swarm) waitForGossip() error {
 func newSwarm(ctx context.Context, config config.Config, newNode bool, persist bool) (*swarm, error) {
 
 	port := config.TCPPort
-	address := inet.JoinHostPort("127.0.0.1", strconv.Itoa(port))
+	address := inet.JoinHostPort("0.0.0.0", strconv.Itoa(port))
 
 	var l *node.LocalNode
 	var err error
@@ -534,19 +534,18 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 		return ErrOutOfSync
 	}
 
-	s.lNode.Debug("Handle %v message from <<  %v", pm.Metadata.NextProtocol, msg.Conn.RemotePublicKey().String())
+	data, err := ExtractData(pm)
 
-	// route authenticated message to the registered protocol
-
-	var data service.Data
-
-	if payload := pm.GetPayload(); payload != nil {
-		data = service.DataBytes{Payload: payload}
-	} else if wrap := pm.GetMsg(); wrap != nil {
-		data = &service.DataMsgWrapper{Req: wrap.Req, MsgType: wrap.Type, ReqID: wrap.ReqID, Payload: wrap.Payload}
+	if err != nil {
+		return err
 	}
 
+	s.lNode.Debug("Handle %v message from <<  %v", pm.Metadata.NextProtocol, msg.Conn.RemotePublicKey().String())
+
+	// Add metadata collected from p2p message (todo: maybe pass sender and protocol inside metadata)
 	p2pmeta := service.P2PMetadata{msg.Conn.RemoteAddr()}
+
+	// route authenticated message to the registered protocol
 	// messages handled here are always processed by direct based protocols, only the gossip protocol calls ProcessGossipProtocolMessage
 	return s.ProcessDirectProtocolMessage(msg.Conn.RemotePublicKey(), pm.Metadata.NextProtocol, data, p2pmeta)
 }

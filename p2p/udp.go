@@ -92,9 +92,9 @@ func (mux *UDPMux) listenToNetworkMessage() {
 }
 
 // Note: for now udp is only direct.
+// todo: no need to return chan, but for now stay consistent with api
 
-// todo: no need to return chan, but stay consistent with api
-// RegisterDirectProtocolWithChannel registers a protocol on a channel
+// RegisterDirectProtocolWithChannel registers a protocol on a channel, should be done before `Start` was called. not thread-safe
 func (mux *UDPMux) RegisterDirectProtocolWithChannel(name string, c chan service.DirectMessage) chan service.DirectMessage {
 	mux.messages[name] = c
 	return c
@@ -213,10 +213,10 @@ func (mux *UDPMux) processUDPMessage(fromaddr net.Addr, buf []byte) error {
 
 	var data service.Data
 
-	if payload := msg.GetPayload(); payload != nil {
-		data = service.DataBytes{Payload: payload}
-	} else if wrap := msg.GetMsg(); wrap != nil {
-		data = &service.DataMsgWrapper{Req: wrap.Req, MsgType: wrap.Type, ReqID: wrap.ReqID, Payload: wrap.Payload}
+	data, err = ExtractData(msg)
+
+	if err != nil {
+		return err
 	}
 
 	p2pmeta := service.P2PMetadata{fromaddr}
