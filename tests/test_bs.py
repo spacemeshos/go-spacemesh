@@ -36,6 +36,22 @@ def get_elastic_search_api():
     return es
 
 
+def wait_to_deployment_to_be_deleted(deployment_name, name_space, time_out=None):
+    total_sleep_time = 0
+    while True:
+        try:
+            resp = client.AppsV1Api().read_namespaced_deployment(name=deployment_name, namespace=name_space)
+        except ApiException as e:
+            if e.status == 404:
+                print("Total time waiting for delete deployment {0}: {1} sec".format(deployment_name, total_sleep_time))
+                break
+        time.sleep(1)
+        total_sleep_time += 1
+
+        if time_out and total_sleep_time > time_out:
+            raise Exception("Timeout waiting to delete deployment")
+
+
 def wait_to_deployment_to_be_ready(deployment_name, name_space, time_out=None):
     total_sleep_time = 0
     while True:
@@ -72,10 +88,16 @@ def create_deployment(file_name, name_space, deployment_id=None, replica_size=1,
 
 def delete_deployment(deployment_name, name_space):
     k8s_beta = client.ExtensionsV1beta1Api()
-    resp = k8s_beta.delete_namespaced_deployment(name=deployment_name,
-                                                 namespace=name_space,
-                                                 body=client.V1DeleteOptions(propagation_policy='Foreground',
-                                                                             grace_period_seconds=5))
+    try:
+        resp = k8s_beta.delete_namespaced_deployment(name=deployment_name,
+                                                     namespace=name_space,
+                                                     body=client.V1DeleteOptions(propagation_policy='Foreground',
+                                                                                 grace_period_seconds=5))
+    except ApiException as e:
+        if e.status == 404:
+            return resp
+
+    wait_to_deployment_to_be_deleted(deployment_name, name_space)
     return resp
 
 
@@ -122,17 +144,28 @@ def query_es_gossip_message(indx, namespace, client_po_name):
 # ==============================================================================
 
 @pytest.fixture(scope='module')
-def setup_oracle():
-    namespaced_pods = client.CoreV1Api().list_namespaced_pod(testconfig['namespace'],
-                                                             label_selector="name=oracle").items
-    if not namespaced_pods:
-        resp = create_deployment(ORACLE_DEPLOYMENT_FILE, testconfig['namespace'])
-        namespaced_pods = client.CoreV1Api().list_namespaced_pod(testconfig['namespace'],
+def setup_oracle(request):
+    oracle_deployment_name = 'oracle'
+    def _setup_oracle_in_namespace(name_space):
+
+        namespaced_pods = client.CoreV1Api().list_namespaced_pod(name_space,
+                                                                 label_selector="name=oracle").items
+        if namespaced_pods:
+            # if oracle already exist -> delete it
+            delete_deployment(oracle_deployment_name, name_space)
+
+        resp = create_deployment(ORACLE_DEPLOYMENT_FILE, name_space, None)
+        namespaced_pods = client.CoreV1Api().list_namespaced_pod(name_space,
                                                                  label_selector="name=oracle").items
         if not namespaced_pods:
             raise Exception('Could not setup Oracle Server')
-    return namespaced_pods[0].status.pod_ip
+        return namespaced_pods[0].status.pod_ip
 
+    def fin():
+        delete_deployment(oracle_deployment_name, testconfig['namespace'])
+
+    request.addfinalizer(fin)
+    return _setup_oracle_in_namespace(testconfig['namespace'])
 
 @pytest.fixture(scope='module')
 def setup_bootstrap(request, load_config, setup_oracle, create_configmap, bootstrap_deployment_info):
