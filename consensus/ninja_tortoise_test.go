@@ -18,7 +18,7 @@ import (
 const Path = "../tmp/tortoise/"
 
 const inmem = 1
-const disc = 2
+const disK = 2
 
 const memType = inmem
 
@@ -42,7 +42,7 @@ func getMeshForBench() *mesh.MeshDB {
 	switch memType {
 	case inmem:
 		return getInMemMesh()
-	case disc:
+	case disK:
 		return getPersistentMash()
 	}
 	return nil
