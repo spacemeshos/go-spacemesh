@@ -84,18 +84,8 @@ func newBlockHeader(id BlockID, layerID LayerID, minerID string, coin bool, data
 	return b
 }
 
-func newMiniBlock(block *Block) *MiniBlock {
-	tids := make([]TransactionId, len(block.Txs))
-	for idx, tx := range block.Txs {
-		//keep tx's in same order !!!
-		tids[idx] = getTransactionId(tx)
-	}
-
-	b := MiniBlock{
-		BlockHeader: *newBlockHeader(block.ID(), block.Layer(), block.MinerID, block.Coin, block.Data, block.Timestamp, block.ViewEdges, block.BlockVotes),
-		TxIds:       tids,
-	}
-	return &b
+func toBlockHeader(block *Block) *BlockHeader {
+	return newBlockHeader(block.ID(), block.Layer(), block.MinerID, block.Coin, block.Data, block.Timestamp, block.ViewEdges, block.BlockVotes)
 }
 
 func NewSerializableTransaction(nonce uint64, origin, recepient address.Address, amount, price *big.Int, gasLimit uint64) *SerializableTransaction {
@@ -135,12 +125,12 @@ func (b *Block) AddTransaction(sr *SerializableTransaction) {
 func (b *Block) Compare(bl *Block) bool {
 	bbytes, err := BlockAsBytes(*b)
 	if err != nil {
-		log.Error("could not compare blocks ", err)
+		log.Error("could not compare blocks %v", err)
 		return false
 	}
 	blbytes, err := BlockAsBytes(*bl)
 	if err != nil {
-		log.Error("could not compare blocks ", err)
+		log.Error("could not compare blocks %v", err)
 		return false
 	}
 	return bytes.Equal(bbytes, blbytes)
@@ -180,7 +170,7 @@ func NewExistingLayer(idx LayerID, blocks []*Block) *Layer {
 	return &l
 }
 
-func getBlockHeaderBytes(bheader *MiniBlock) ([]byte, error) {
+func getMiniBlockBytes(bheader *MiniBlock) ([]byte, error) {
 	var w bytes.Buffer
 	if _, err := xdr.Marshal(&w, bheader); err != nil {
 		return nil, fmt.Errorf("error marshalling block ids %v", err)
@@ -196,7 +186,7 @@ func BlockAsBytes(block Block) ([]byte, error) {
 	return w.Bytes(), nil
 }
 
-func BytesAsBlockHeader(buf []byte) (*MiniBlock, error) {
+func BytesAsMiniBlock(buf []byte) (*MiniBlock, error) {
 	b := MiniBlock{}
 	_, err := xdr.Unmarshal(bytes.NewReader(buf), &b)
 	if err != nil {
@@ -216,7 +206,7 @@ func BytesAsBlock(buf []byte) (Block, error) {
 
 func TransactionAsBytes(tx *SerializableTransaction) ([]byte, error) {
 	var w bytes.Buffer
-	if _, err := xdr.Marshal(&w, &tx); err != nil {
+	if _, err := xdr.Marshal(&w, tx); err != nil {
 		return nil, fmt.Errorf("error marshalling block ids %v", err)
 	}
 	return w.Bytes(), nil

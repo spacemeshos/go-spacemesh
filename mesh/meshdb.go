@@ -17,7 +17,7 @@ type layerMutex struct {
 
 type MeshDB struct {
 	log.Log
-	bHeaderCache       blockCache
+	blockCache         blockCache
 	layers             database.DB
 	blocks             database.DB
 	transactions       database.DB
@@ -35,7 +35,7 @@ func NewPersistentMeshDB(path string, log log.Log) *MeshDB {
 	tdb := database.NewLevelDbStore(path+"transactions", nil, nil)
 	ll := &MeshDB{
 		Log:                log,
-		bHeaderCache:       NewBlockCache(100 * layerSize),
+		blockCache:         NewBlockCache(100 * layerSize),
 		blocks:             bdb,
 		layers:             ldb,
 		transactions:       tdb,
@@ -50,7 +50,7 @@ func NewMemMeshDB(log log.Log) *MeshDB {
 	db := database.NewMemDatabase()
 	ll := &MeshDB{
 		Log:                log,
-		bHeaderCache:       NewBlockCache(100 * layerSize),
+		blockCache:         NewBlockCache(100 * layerSize),
 		blocks:             db,
 		layers:             db,
 		contextualValidity: db,
@@ -70,9 +70,9 @@ func (m *MeshDB) Close() {
 
 func (m *MeshDB) GetBlock(id BlockID) (*Block, error) {
 
-	blk, err := m.GetBlockHeader(id)
+	blk, err := m.GetMiniBlock(id)
 	if err != nil {
-		m.Error("could not retrieve block %v header from database ", id)
+		m.Error("could not retrieve block %v from database ", id)
 		return nil, err
 	}
 
@@ -88,7 +88,7 @@ func (m *MeshDB) GetBlock(id BlockID) (*Block, error) {
 // AddBlock adds a new block to block DB and updates the correct layer with the new block
 // if this is the first occurence of the layer a new layer object will be inserted into layerDB as well
 func (m *MeshDB) AddBlock(block *Block) error {
-	if _, err := m.getBlockHeaderBytes(block.ID()); err == nil {
+	if _, err := m.getMiniBlockBytes(block.ID()); err == nil {
 		log.Debug("block ", block.ID(), " already exists in database")
 		return errors.New("block " + string(block.ID()) + " already exists in database")
 	}
@@ -98,18 +98,18 @@ func (m *MeshDB) AddBlock(block *Block) error {
 	return nil
 }
 
-func (m *MeshDB) GetBlockHeader(id BlockID) (*MiniBlock, error) {
+func (m *MeshDB) GetMiniBlock(id BlockID) (*MiniBlock, error) {
 
-	if blkh := m.bHeaderCache.Get(id); blkh != nil {
+	if blkh := m.blockCache.Get(id); blkh != nil {
 		return blkh, nil
 	}
 
-	b, err := m.getBlockHeaderBytes(id)
+	b, err := m.getMiniBlockBytes(id)
 	if err != nil {
 		return nil, err
 	}
 
-	return BytesAsBlockHeader(b)
+	return BytesAsMiniBlock(b)
 }
 
 //todo this overwrites the previous value if it exists
@@ -173,7 +173,7 @@ func (mc *MeshDB) ForBlockInView(view map[BlockID]struct{}, layer LayerID, foo f
 		foo(block)
 		//push children to bfs queue
 		for _, id := range block.ViewEdges {
-			bChild, err := mc.GetBlockHeader(id)
+			bChild, err := mc.GetMiniBlock(id)
 			if err != nil {
 				errHandler(err)
 			}
@@ -209,21 +209,13 @@ func (m *MeshDB) layerBlockIds(index LayerID) (map[BlockID]bool, error) {
 
 func blockFromMiniAndTxs(blk *MiniBlock, transactions []SerializableTransaction) *Block {
 	block := Block{
-		BlockHeader: BlockHeader{
-			Id:         blk.Id,
-			LayerIndex: blk.LayerIndex,
-			MinerID:    blk.MinerID,
-			Data:       blk.Data,
-			Coin:       blk.Coin,
-			Timestamp:  blk.Timestamp,
-			BlockVotes: blk.BlockVotes,
-			ViewEdges:  blk.ViewEdges},
-		Txs: transactions,
+		BlockHeader: blk.BlockHeader,
+		Txs:         transactions,
 	}
 	return &block
 }
 
-func (m *MeshDB) getBlockHeaderBytes(id BlockID) ([]byte, error) {
+func (m *MeshDB) getMiniBlockBytes(id BlockID) ([]byte, error) {
 	b, err := m.blocks.Get(id.ToBytes())
 	if err != nil {
 		return nil, errors.New("could not find block in database")
@@ -248,9 +240,14 @@ func (m *MeshDB) setContextualValidity(id BlockID, valid bool) error {
 }
 
 func (m *MeshDB) writeBlock(bl *Block) error {
-	blkh := newMiniBlock(bl)
-	m.bHeaderCache.put(blkh)
-	bytes, err := getBlockHeaderBytes(blkh)
+
+	txids, err := m.writeTransactions(bl)
+	if err != nil {
+		return fmt.Errorf("could not write transactions of block %v database %v", bl.ID(), err)
+	}
+
+	minblock := &MiniBlock{*toBlockHeader(bl), txids}
+	bytes, err := getMiniBlockBytes(minblock)
 	if err != nil {
 		return fmt.Errorf("could not encode bl")
 	}
@@ -259,11 +256,9 @@ func (m *MeshDB) writeBlock(bl *Block) error {
 		return fmt.Errorf("could not add bl to %v databacse %v", bl.ID(), err)
 	}
 
-	if err := m.writeTransactions(bl); err != nil {
-		return fmt.Errorf("could not write transactions of block %v database %v", bl.ID(), err)
-	}
-
 	m.updateLayerWithBlock(bl)
+
+	m.blockCache.put(minblock)
 
 	return nil
 }
@@ -338,24 +333,25 @@ func (m *MeshDB) getLayerMutex(index LayerID) *layerMutex {
 	return ll
 }
 
-func (m *MeshDB) writeTransactions(block *Block) error {
-
+func (m *MeshDB) writeTransactions(block *Block) ([]TransactionId, error) {
+	txids := make([]TransactionId, 0, len(block.Txs))
 	for _, t := range block.Txs {
 		bytes, err := TransactionAsBytes(&t)
 		if err != nil {
 			m.Error("could not write tx %v to database ", err)
-			return err
+			return nil, err
 		}
 
 		id := getTransactionId(t)
 		if err := m.transactions.Put(id, bytes); err != nil {
 			m.Error("could not write tx %v to database ", err)
-			return err
+			return nil, err
 		}
+		txids = append(txids, id)
 		m.Debug("write tx %v to db", t)
 	}
 
-	return nil
+	return txids, nil
 }
 
 func (m *MeshDB) getTransactions(transactions []TransactionId) ([]SerializableTransaction, error) {
@@ -370,7 +366,7 @@ func (m *MeshDB) getTransactions(transactions []TransactionId) ([]SerializableTr
 		t, err := BytesAsTransaction(tBytes)
 
 		if err != nil {
-			m.Error("error deserializing transaction")
+			m.Error("error deserializing transaction %v", err)
 		}
 		ts = append(ts, *t)
 	}
