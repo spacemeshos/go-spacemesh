@@ -209,9 +209,9 @@ func TestMesh_integration(t *testing.T) {
 	}
 
 	oldTotal := s.Total
-	l4, err := layers.getLayer(4)
+	l4, err := layers.GetLayer(4)
 	assert.NoError(t, err)
-	l5, err := layers.getLayer(5)
+	l5, err := layers.GetLayer(5)
 	assert.NoError(t, err)
 	//test negative case
 	layers.ValidateLayer(l4)

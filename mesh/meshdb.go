@@ -46,10 +46,10 @@ func (m *meshDB) Close() {
 	m.transactions.Close()
 }
 
-func (m *meshDB) getLayer(index LayerID) (*Layer, error) {
+func (m *meshDB) GetLayer(index LayerID) (*Layer, error) {
 	ids, err := m.layers.Get(index.ToBytes())
 	if err != nil {
-		return nil, fmt.Errorf("error getting layer %v from database ", index)
+		return nil, fmt.Errorf("error getting layer %v from database %v", index, err)
 	}
 
 	l := NewLayer(LayerID(index))
@@ -170,7 +170,7 @@ func (m *meshDB) writeBlock(bl *Block) error {
 }
 
 //todo this overwrites the previous value if it exists
-func (m *meshDB) addLayer(layer *Layer) error {
+func (m *meshDB) AddLayer(layer *Layer) error {
 	if len(layer.blocks) == 0 {
 		m.layers.Put(layer.Index().ToBytes(), []byte{})
 		return nil

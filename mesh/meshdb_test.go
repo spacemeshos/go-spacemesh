@@ -19,7 +19,7 @@ func getMeshdb() *meshDB {
 
 func getMeshWithLevelDB() *meshDB {
 	//time := time.Now()
-	db := database.NewLevelDbStore("close_test", nil, nil)
+	db := database.NewLevelDbStore("meshDb", nil, nil)
 	return NewMeshDB(db, db, db, db, log.New("meshDb", "", ""))
 }
 
@@ -66,7 +66,7 @@ func TestMeshDb_Layer(t *testing.T) {
 	block1 := NewBlock(true, data, time.Now(), id)
 	block2 := NewBlock(true, data, time.Now(), id)
 	block3 := NewBlock(true, data, time.Now(), id)
-	l, err := layers.getLayer(id)
+	l, err := layers.GetLayer(id)
 	assert.True(t, err != nil, "error: ", err)
 
 	err = layers.addBlock(block1)
@@ -75,7 +75,7 @@ func TestMeshDb_Layer(t *testing.T) {
 	assert.NoError(t, err)
 	err = layers.addBlock(block3)
 	assert.NoError(t, err)
-	l, err = layers.getLayer(id)
+	l, err = layers.GetLayer(id)
 	assert.NoError(t, err)
 	//assert.True(t, layers.VerifiedLayer() == 0, "wrong layer count")
 	assert.True(t, string(l.blocks[1].Data) == "data", "wrong block data ")

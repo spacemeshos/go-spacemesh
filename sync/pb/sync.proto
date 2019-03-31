@@ -10,7 +10,7 @@ message FetchBlockReq {
 
 
 message FetchBlockResp {
-    Block block = 3;
+    bytes block = 1;
 }
 
 
@@ -31,12 +31,4 @@ message LayerIdsReq {
 
 message LayerIdsResp {
    repeated  uint64 ids = 1;
-}
-
-
-
-message Block {
-     uint64 Id = 1;
-     uint64 layer = 2;
-     repeated uint64 VisibleMesh = 3;
 }

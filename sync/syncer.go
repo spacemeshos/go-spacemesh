@@ -200,17 +200,15 @@ func sendBlockRequest(msgServ *server.MessageServer, peer p2p.Peer, id mesh.Bloc
 		logger.Info("handle block response")
 		data := &pb.FetchBlockResp{}
 		if err := proto.Unmarshal(msg, data); err != nil {
+			logger.Error("could not unmarshal message data")
+			return
+		}
+		block, err := mesh.BytesAsBlock(data.Block)
+		if err != nil {
 			logger.Error("could not unmarshal block data")
 			return
 		}
-		mp := make([]mesh.BlockID, 0, len(data.Block.VisibleMesh))
-		for _, b := range data.Block.VisibleMesh {
-			mp = append(mp, mesh.BlockID(b))
-		}
-
-		block := mesh.NewExistingBlock(mesh.BlockID(data.Block.GetId()), mesh.LayerID(data.Block.GetLayer()), nil)
-		block.ViewEdges = mp
-		ch <- block
+		ch <- &block
 	}
 
 	return ch, msgServ.SendRequest(BLOCK, payload, peer, foo)
@@ -401,12 +399,13 @@ func newBlockRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg []byte) 
 			return nil
 		}
 
-		vm := make([]uint64, 0, len(block.ViewEdges))
-		for _, b := range block.ViewEdges {
-			vm = append(vm, uint64(b))
+		bbytes, err := mesh.BlockAsBytes(*block)
+		if err != nil {
+			logger.Error("Error marshaling response message (FetchBlockResp), with BlockID: %d, LayerID: %d and err:", block.ID(), block.Layer(), err)
+			return nil
 		}
 
-		payload, err := proto.Marshal(&pb.FetchBlockResp{Block: &pb.Block{Id: uint64(block.ID()), Layer: uint64(block.Layer()), VisibleMesh: vm}})
+		payload, err := proto.Marshal(&pb.FetchBlockResp{Block: bbytes})
 		if err != nil {
 			logger.Error("Error marshaling response message (FetchBlockResp), with BlockID: %d, LayerID: %d and err:", block.ID(), block.Layer(), err)
 			return nil
