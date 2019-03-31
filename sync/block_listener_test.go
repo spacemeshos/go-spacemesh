@@ -179,7 +179,7 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 			return
 		default:
 			if b, err := bl1.GetBlock(blk.Id); err == nil {
-				assert.Equal(t, blk, b)
+				assert.Equal(t, *blk, *b)
 				t.Log("  ", b)
 				t.Log("done!")
 				return
