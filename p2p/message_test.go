@@ -25,7 +25,6 @@ func Test_NewProtocolMessageMeatadata(t *testing.T) {
 	assert.Equal(t, meta.NextProtocol, "EX")
 }
 
-
 func TestExtractData(t *testing.T) {
 	pk := p2pcrypto.NewRandomPubkey()
 
@@ -35,28 +34,28 @@ func TestExtractData(t *testing.T) {
 
 	msg := &pb.ProtocolMessage{
 		Metadata: meta,
-		Data: &pb.ProtocolMessage_Payload{[]byte("test")},
+		Data:     &pb.ProtocolMessage_Payload{[]byte("test")},
 	}
-	data1, err  := ExtractData(msg)
+	data1, err := ExtractData(msg)
 	require.NoError(t, err)
 	_, ok := data1.(*service.DataBytes)
 	require.True(t, ok)
 
 	msg2 := &pb.ProtocolMessage{
 		Metadata: meta,
-		Data: &pb.ProtocolMessage_Msg{&pb.MessageWrapper{Type:0, Req: true, ReqID:0, Payload:[]byte("test")}},
+		Data:     &pb.ProtocolMessage_Msg{&pb.MessageWrapper{Type: 0, Req: true, ReqID: 0, Payload: []byte("test")}},
 	}
-	data2, err  := ExtractData(msg2)
+	data2, err := ExtractData(msg2)
 	require.NoError(t, err)
 	_, ok = data2.(*service.DataMsgWrapper)
 	require.True(t, ok)
 
 	msg3 := &pb.ProtocolMessage{
 		Metadata: meta,
-		Data: nil,
+		Data:     nil,
 	}
 
-	data3, err  := ExtractData(msg3)
+	data3, err := ExtractData(msg3)
 	require.Error(t, err)
 	require.Nil(t, data3)
 }
