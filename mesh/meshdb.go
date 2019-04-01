@@ -57,7 +57,7 @@ func (m *meshDB) GetLayer(index LayerID) (*Layer, error) {
 		return nil, fmt.Errorf("no ids for layer %v in database ", index)
 	}
 
-	blockIds, err := bytesToBlockIds(ids)
+	blockIds, err := BytesToBlockIds(ids)
 	if err != nil {
 		return nil, errors.New("could not get all blocks from database ")
 	}
@@ -147,7 +147,7 @@ func (m *meshDB) setContextualValidity(id BlockID, valid bool) error {
 }
 
 func (m *meshDB) writeBlock(bl *Block) error {
-	bytes, err := getBlockHeaderBytes(newBlockHeader(bl))
+	bytes, err := BlockHeaderToBytes(newBlockHeader(bl))
 	if err != nil {
 		return fmt.Errorf("could not encode bl")
 
@@ -190,20 +190,20 @@ func (m *meshDB) updateLayerWithBlock(block *Block) error {
 	lm.m.Lock()
 	defer lm.m.Unlock()
 	ids, err := m.layers.Get(block.LayerIndex.ToBytes())
-	var blockIds map[BlockID]bool
+	var blockIds []BlockID
 	if err != nil {
 		//layer doesnt exist, need to insert new layer
 		ids = []byte{}
-		blockIds = make(map[BlockID]bool)
+		blockIds = make([]BlockID, 0, layerSize)
 	} else {
-		blockIds, err = bytesToBlockIds(ids)
+		blockIds, err = BytesToBlockIds(ids)
 		if err != nil {
 			return errors.New("could not get all blocks from database ")
 		}
 	}
 	m.Debug("added block %v to layer %v", block.ID(), block.LayerIndex)
-	blockIds[block.ID()] = true
-	w, err := blockIdsAsBytes(blockIds)
+	blockIds = append(blockIds, block.ID())
+	w, err := BlockIdsAsBytes(blockIds)
 	if err != nil {
 		return errors.New("could not encode layer block ids")
 	}
@@ -211,10 +211,10 @@ func (m *meshDB) updateLayerWithBlock(block *Block) error {
 	return nil
 }
 
-func (m *meshDB) getLayerBlocks(ids map[BlockID]bool) ([]*Block, error) {
+func (m *meshDB) getLayerBlocks(ids []BlockID) ([]*Block, error) {
 
 	blocks := make([]*Block, 0, len(ids))
-	for k := range ids {
+	for _, k := range ids {
 		block, err := m.getBlock(k)
 		if err != nil {
 			return nil, errors.New("could not retrieve block " + fmt.Sprint(k) + " " + err.Error())
