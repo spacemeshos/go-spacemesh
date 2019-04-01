@@ -90,6 +90,7 @@ func (n *UDPNet) Send(to node.Node, data []byte) error {
 		return err
 	}
 
+	// TODO: only accept local (unspecified/loopback) IPs from other local ips.
 	if raddr.IP.IsUnspecified() {
 		if ip4 := raddr.IP.To4(); ip4 != nil {
 			raddr.IP = IPv4LoopbackAddress
