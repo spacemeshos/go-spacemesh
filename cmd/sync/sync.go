@@ -49,7 +49,7 @@ func (app *SyncApp) Cleanup() {
 func getMesh() *mesh.Mesh {
 
 	//time := time.Now()
-	db := database.NewLevelDbStore("cmd/sync/data", nil, nil)
+	db := database.NewLevelDbStore("tests/sync/data", nil, nil)
 	mdb := mesh.NewMeshDB(db, db, db, db, lg.WithName("meshDb"))
 	layers := mesh.NewMesh(mdb, sync.ConfigTst(), &sync.MeshValidatorMock{}, sync.MockState{}, lg)
 	return layers
