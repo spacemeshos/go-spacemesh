@@ -31,7 +31,7 @@ func (NetMock) Broadcast(id string, d []byte) error {
 
 func TestBuilder_BuildActivationTx(t *testing.T) {
 	//todo: implement test
-	id := mesh.Id{}
+	id := mesh.NodeId{}
 	b := NewBuilder(id, &database.MemDatabase{}, NetMock{}, ActiveSetProviderMock{}, MeshProviderrMock{})
-	b.BuildActivationTx(nipst.NIPST{})
+	b.BuildActivationTx(&nipst.NIPST{})
 }

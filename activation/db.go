@@ -13,12 +13,13 @@ type ActivationDb struct {
 	Atxs database.DB
 }
 
-func (db *ActivationDb) StoreAtx(atx mesh.ActivationTx) error {
+func (db *ActivationDb) StoreAtx(atx *mesh.ActivationTx) error {
+	//todo: maybe cleanup DB if failed by using defer
 	if b, err := db.Atxs.Get(atx.Id().Bytes()); err == nil && len(b) > 0 {
 		// exists - how should we handle this?
 		return nil
 	}
-	b, err := mesh.AtxAsBytes(&atx)
+	b, err := mesh.AtxAsBytes(atx)
 	if err != nil {
 		return err
 	}
@@ -27,11 +28,19 @@ func (db *ActivationDb) StoreAtx(atx mesh.ActivationTx) error {
 		return err
 	}
 
-	db.addAtxToLayer(atx.LayerIndex, atx.Id())
-	db.addAtxToNodeId(atx.NodeId, atx.Id())
+	err = db.addAtxToLayer(atx.LayerIndex, atx.Id())
+	if err != nil {
+		return err
+	}
+	err = db.addAtxToNodeId(atx.NodeId, atx.Id())
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
+
+//todo: add tx to epoch
 func (db *ActivationDb) addAtxToLayer(l mesh.LayerID, atx mesh.AtxId) error {
 	ids, err := db.Atxs.Get(l.ToBytes())
 	var atxs []mesh.AtxId
@@ -50,11 +59,10 @@ func (db *ActivationDb) addAtxToLayer(l mesh.LayerID, atx mesh.AtxId) error {
 	if err != nil {
 		return errors.New("could not encode layer block ids")
 	}
-	db.Atxs.Put(l.ToBytes(), w)
-	return nil
+	return db.Atxs.Put(l.ToBytes(), w)
 }
 
-func (db *ActivationDb) addAtxToNodeId(nodeId mesh.Id, atx mesh.AtxId) error {
+func (db *ActivationDb) addAtxToNodeId(nodeId mesh.NodeId, atx mesh.AtxId) error {
 	ids, err := db.Atxs.Get(nodeId.ToBytes())
 	var atxs []mesh.AtxId
 	if err != nil {
@@ -72,11 +80,10 @@ func (db *ActivationDb) addAtxToNodeId(nodeId mesh.Id, atx mesh.AtxId) error {
 	if err != nil {
 		return errors.New("could not encode layer block ids")
 	}
-	db.Atxs.Put(nodeId.ToBytes(), w)
-	return nil
+	return db.Atxs.Put(nodeId.ToBytes(), w)
 }
 
-func (db *ActivationDb) GetNodeAtxIds(node mesh.Id) ([]mesh.AtxId, error) {
+func (db *ActivationDb) GetNodeAtxIds(node mesh.NodeId) ([]mesh.AtxId, error) {
 	ids, err := db.Atxs.Get(node.ToBytes())
 	if err != nil {
 		return nil, err
@@ -105,7 +112,7 @@ func (db *ActivationDb) GetAtx(id mesh.AtxId) (*mesh.ActivationTx, error) {
 	if err != nil {
 		return nil, err
 	}
-	atx, err := mesh.BytesAsAtx(bytes.NewReader(b))
+	atx, err := mesh.BytesAsAtx(b)
 	if err != nil {
 		return nil, err
 	}

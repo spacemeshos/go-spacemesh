@@ -30,10 +30,6 @@ type StateUpdater interface {
 	ApplyRewards(layer LayerID, miners map[string]struct{}, underQuota map[string]struct{}, bonusReward, diminishedReward *big.Int)
 }
 
-type AtxDb interface {
-	ProcessBlockATXs(block *Block)
-}
-
 type Mesh struct {
 	log.Log
 	*meshDB

@@ -7,22 +7,21 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/nipst"
-	"io"
 )
 
 //todo: choose which type is VRF
 type Vrf string
 
-type Id struct {
+type NodeId struct {
 	Key string
 	Vrf Vrf
 }
 
-func (id Id) String() string {
+func (id NodeId) String() string {
 	return id.Key + string(id.Vrf)
 }
 
-func (id Id) ToBytes() []byte {
+func (id NodeId) ToBytes() []byte {
 	return common.Hex2Bytes(id.String())
 }
 
@@ -31,11 +30,12 @@ type AtxId struct {
 }
 
 type ActivationTxHeader struct {
-	NodeId         Id
+	NodeId         NodeId
 	Sequence       uint64
-	PrevATX        AtxId
+	PrevATXId      AtxId
 	LayerIndex     LayerID
-	StartTick      uint64 //whatever
+	StartTick      uint64 //implement later
+	EndTick        uint64 //implement later
 	PositioningATX AtxId
 	ActiveSetSize  uint32
 	View           []BlockID
@@ -43,17 +43,17 @@ type ActivationTxHeader struct {
 
 type ActivationTx struct {
 	ActivationTxHeader
-	Nipst nipst.NIPST
+	Nipst *nipst.NIPST
 	//todo: add sig
 }
 
-func NewActivationTx(NodeId Id, Sequence uint64, PrevATX AtxId, LayerIndex LayerID,
-	StartTick uint64, PositioningATX AtxId, ActiveSetSize uint32, View []BlockID, nipst nipst.NIPST) *ActivationTx {
+func NewActivationTx(NodeId NodeId, Sequence uint64, PrevATX AtxId, LayerIndex LayerID,
+	StartTick uint64, PositioningATX AtxId, ActiveSetSize uint32, View []BlockID, nipst *nipst.NIPST) *ActivationTx {
 	return &ActivationTx{
 		ActivationTxHeader: ActivationTxHeader{
 			NodeId:         NodeId,
 			Sequence:       Sequence,
-			PrevATX:        PrevATX,
+			PrevATXId:      PrevATX,
 			LayerIndex:     LayerIndex,
 			StartTick:      StartTick, //todo: whatever
 			PositioningATX: PositioningATX,
@@ -90,11 +90,12 @@ func AtxAsBytes(tx *ActivationTx) ([]byte, error) {
 	return w.Bytes(), nil
 }
 
-func BytesAsAtx(buf io.Reader) (*ActivationTx, error) {
-	b := ActivationTx{}
-	_, err := xdr.Unmarshal(buf, &b)
+func BytesAsAtx(b []byte) (*ActivationTx, error) {
+	buf := bytes.NewReader(b)
+	atx := ActivationTx{}
+	_, err := xdr.Unmarshal(buf, &atx)
 	if err != nil {
-		return &b, err
+		return nil, err
 	}
-	return &b, nil
+	return &atx, nil
 }

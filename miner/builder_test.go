@@ -143,8 +143,8 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 	builder.AddTransaction(trans[1].AccountNonce, trans[1].Origin, *trans[1].Recipient, big.NewInt(0).SetBytes(trans[1].Price))
 	builder.AddTransaction(trans[2].AccountNonce, trans[2].Origin, *trans[2].Recipient, big.NewInt(0).SetBytes(trans[2].Price))
 
-	atxs := []mesh.ActivationTx{
-		*mesh.NewActivationTx(mesh.Id{"aaaa", "bbb"},
+	atxs := []*mesh.ActivationTx{
+		mesh.NewActivationTx(mesh.NodeId{"aaaa", "bbb"},
 			1,
 			mesh.AtxId{},
 			5,
@@ -152,8 +152,8 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 			mesh.AtxId{},
 			5,
 			[]mesh.BlockID{1, 2, 3},
-			nipst.NIPST{}),
-		*mesh.NewActivationTx(mesh.Id{"aaaa", "bbb"},
+			&nipst.NIPST{}),
+		mesh.NewActivationTx(mesh.NodeId{"aaaa", "bbb"},
 			1,
 			mesh.AtxId{},
 			5,
@@ -161,8 +161,8 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 			mesh.AtxId{},
 			5,
 			[]mesh.BlockID{1, 2, 3},
-			nipst.NIPST{}),
-		*mesh.NewActivationTx(mesh.Id{"aaaa", "bbb"},
+			&nipst.NIPST{}),
+		mesh.NewActivationTx(mesh.NodeId{"aaaa", "bbb"},
 			1,
 			mesh.AtxId{},
 			5,
@@ -170,15 +170,17 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 			mesh.AtxId{},
 			5,
 			[]mesh.BlockID{1, 2, 3},
-			nipst.NIPST{}),
+			&nipst.NIPST{}),
 	}
 
-	for _, atx := range atxs {
-		b, e := mesh.AtxAsBytes(&atx)
+	/*for _, atx := range atxs {
+		b, e := mesh.AtxAsBytes(atx)
 		assert.NoError(t, e)
 		msg := mockMsg{msg: b}
-		builder.atxGossipChannel <- &msg
-	}
+		builder.transactionQueue <- atx
+	}*/
+
+	builder.AtxQueue = append(builder.AtxQueue, atxs...)
 
 	go func() { beginRound <- 2 }()
 

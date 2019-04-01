@@ -263,7 +263,7 @@ func createLayerWithCorruptedPattern(index mesh.LayerID, prev *mesh.Layer, block
 		l.AddBlock(bl)
 	}
 
-	log.Info("Created layer Id %d with blocks %d", l.Index(), layerBlocks)
+	log.Info("Created layer NodeId %d with blocks %d", l.Index(), layerBlocks)
 	return l
 }
 

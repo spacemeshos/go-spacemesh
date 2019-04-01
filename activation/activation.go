@@ -20,7 +20,7 @@ type MeshProvider interface {
 }
 
 type Builder struct {
-	nodeId    mesh.Id
+	nodeId    mesh.NodeId
 	db        *ActivationDb
 	net       api.NetworkAPI
 	activeSet ActiveSetProvider
@@ -37,14 +37,14 @@ func (p *Processor) ProcessBlockATXs(block *mesh.Block) {
 	}
 }
 
-func NewBuilder(nodeId mesh.Id, db database.DB, net api.NetworkAPI, activeSet ActiveSetProvider, view MeshProvider) *Builder {
+func NewBuilder(nodeId mesh.NodeId, db database.DB, net api.NetworkAPI, activeSet ActiveSetProvider, view MeshProvider) *Builder {
 	return &Builder{
 		nodeId, &ActivationDb{db}, net, activeSet, view,
 	}
 }
 
-func (b Builder) BuildActivationTx(nipst nipst.NIPST) error {
-	prevAtx, err := b.GetPrevAtx(b.nodeId)
+func (b Builder) BuildActivationTx(nipst *nipst.NIPST) error {
+	prevAtx, err := b.GetPrevAtxId(b.nodeId)
 	if err != nil {
 		return err
 	}
@@ -57,7 +57,7 @@ func (b Builder) BuildActivationTx(nipst nipst.NIPST) error {
 		ActivationTxHeader: mesh.ActivationTxHeader{
 			NodeId:         b.nodeId,
 			Sequence:       b.GetLastSequence(b.nodeId) + 1,
-			PrevATX:        *prevAtx,
+			PrevATXId:      *prevAtx,
 			LayerIndex:     l,
 			StartTick:      0, //todo: whatever
 			PositioningATX: *posAtx,
@@ -72,11 +72,10 @@ func (b Builder) BuildActivationTx(nipst nipst.NIPST) error {
 		return err
 	}
 	//todo: should we do something about it? wait for something?
-	b.net.Broadcast(miner.IncomingAtxProtocol, buf)
-	return nil
+	return b.net.Broadcast(miner.AtxProtocol, buf)
 }
 
-func (b *Builder) GetPrevAtx(node mesh.Id) (*mesh.AtxId, error) {
+func (b *Builder) GetPrevAtxId(node mesh.NodeId) (*mesh.AtxId, error) {
 	ids, err := b.db.GetNodeAtxIds(node)
 	if err != nil {
 		return nil, err
@@ -101,8 +100,8 @@ func (b *Builder) GetPositioningAtx(l mesh.LayerID) (*mesh.AtxId, error) {
 	return &atxId, nil
 }
 
-func (b *Builder) GetLastSequence(node mesh.Id) uint64 {
-	atxId, err := b.GetPrevAtx(node)
+func (b *Builder) GetLastSequence(node mesh.NodeId) uint64 {
+	atxId, err := b.GetPrevAtxId(node)
 	if err != nil {
 		return 0
 	}

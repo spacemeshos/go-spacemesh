@@ -24,7 +24,7 @@ type BlockHeader struct {
 	BlockVotes []BlockID
 	ViewEdges  []BlockID
 	TxIds      []TransactionId
-	ATXs       []ActivationTx
+	ATXs       []*ActivationTx
 }
 
 type Block struct {
@@ -37,7 +37,7 @@ type Block struct {
 	Txs        []*SerializableTransaction
 	BlockVotes []BlockID
 	ViewEdges  []BlockID
-	ATXs       []ActivationTx
+	ATXs       []*ActivationTx
 }
 
 type SerializableTransaction struct {
@@ -69,7 +69,7 @@ func NewBlock(coin bool, data []byte, ts time.Time, LayerID LayerID) *Block {
 		BlockVotes: make([]BlockID, 0, 10),
 		ViewEdges:  make([]BlockID, 0, 10),
 		Txs:        make([]*SerializableTransaction, 0, 10),
-		ATXs:       make([]ActivationTx, 0, 10),
+		ATXs:       make([]*ActivationTx, 0, 10),
 		Timestamp:  ts.UnixNano(),
 		Data:       data,
 		Coin:       coin,
@@ -135,7 +135,7 @@ func (b *Block) AddTransaction(sr *SerializableTransaction) {
 }
 
 func (b *Block) AddAtx(sr *ActivationTx) {
-	b.ATXs = append(b.ATXs, *sr)
+	b.ATXs = append(b.ATXs, sr)
 }
 
 type Layer struct {
