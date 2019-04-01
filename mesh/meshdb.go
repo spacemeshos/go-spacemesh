@@ -85,7 +85,7 @@ func (m *MeshDB) GetBlock(id BlockID) (*Block, error) {
 	return blockFromMiniAndTxs(blk, transactions), nil
 }
 
-// AddBlock adds a new block to block DB and updates the correct layer with the new block
+// addBlock adds a new block to block DB and updates the correct layer with the new block
 // if this is the first occurence of the layer a new layer object will be inserted into layerDB as well
 func (m *MeshDB) AddBlock(block *Block) error {
 	if _, err := m.getMiniBlockBytes(block.ID()); err == nil {
@@ -325,7 +325,7 @@ func (m *MeshDB) endLayerWorker(index LayerID) {
 }
 
 //returns the existing layer Handler (crates one if doesn't exist)
-func (m *MeshDB) getLayerMutex(index LayerID) *layerMutex {
+func (m *meshDB) getLayerMutex(index LayerID) *layerMutex {
 	m.lhMutex.Lock()
 	defer m.lhMutex.Unlock()
 	ll, found := m.layerMutex[index]
@@ -337,42 +337,41 @@ func (m *MeshDB) getLayerMutex(index LayerID) *layerMutex {
 	return ll
 }
 
-func (m *MeshDB) writeTransactions(block *Block) ([]TransactionId, error) {
-	txids := make([]TransactionId, 0, len(block.Txs))
+func (m *meshDB) writeTransactions(block *Block) error {
+
 	for _, t := range block.Txs {
-		bytes, err := TransactionAsBytes(&t)
+		bytes, err := TransactionAsBytes(t)
 		if err != nil {
 			m.Error("could not write tx %v to database ", err)
-			return nil, err
+			return err
 		}
 
 		id := getTransactionId(t)
 		if err := m.transactions.Put(id, bytes); err != nil {
 			m.Error("could not write tx %v to database ", err)
-			return nil, err
+			return err
 		}
-		txids = append(txids, id)
 		m.Debug("write tx %v to db", t)
 	}
 
-	return txids, nil
+	return nil
 }
 
-func (m *MeshDB) getTransactions(transactions []TransactionId) ([]SerializableTransaction, error) {
-	var ts []SerializableTransaction
+func (m *meshDB) getTransactions(transactions []TransactionId) ([]*SerializableTransaction, error) {
+	var ts []*SerializableTransaction
 	for _, id := range transactions {
 		tBytes, err := m.getTransactionBytes(id)
 
 		if err != nil {
-			m.Error("error retrieving transaction from database %v", err)
+			m.Error("error retrieving transaction from database ", err)
 		}
 
 		t, err := BytesAsTransaction(tBytes)
 
 		if err != nil {
-			m.Error("error deserializing transaction %v", err)
+			m.Error("error deserializing transaction")
 		}
-		ts = append(ts, *t)
+		ts = append(ts, t)
 	}
 
 	return ts, nil
@@ -380,8 +379,8 @@ func (m *MeshDB) getTransactions(transactions []TransactionId) ([]SerializableTr
 
 //todo standardized transaction id across project
 //todo replace panic
-func getTransactionId(t SerializableTransaction) TransactionId {
-	tx, err := TransactionAsBytes(&t)
+func getTransactionId(t *SerializableTransaction) TransactionId {
+	tx, err := TransactionAsBytes(t)
 	if err != nil {
 		panic("could not Serialize transaction")
 	}
@@ -389,7 +388,7 @@ func getTransactionId(t SerializableTransaction) TransactionId {
 	return crypto.Sha256(tx)
 }
 
-func (m *MeshDB) getTransactionBytes(id []byte) ([]byte, error) {
+func (m *meshDB) getTransactionBytes(id []byte) ([]byte, error) {
 	b, err := m.transactions.Get(id)
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf("could not find transaction in database %v", id))

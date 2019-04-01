@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/davecgh/go-xdr/xdr2"
+	"github.com/google/uuid"
 	"github.com/spacemeshos/go-spacemesh/address"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"math/big"
 	"time"
 )
@@ -23,6 +23,7 @@ type BlockHeader struct {
 	Timestamp  int64
 	BlockVotes []BlockID
 	ViewEdges  []BlockID
+	ATXs       []*ActivationTx
 }
 
 type MiniBlock struct {
@@ -33,6 +34,7 @@ type MiniBlock struct {
 type Block struct {
 	BlockHeader
 	Txs []SerializableTransaction
+	ATXs       []*ActivationTx
 }
 
 type SerializableTransaction struct {
@@ -134,6 +136,10 @@ func (b *Block) Compare(bl *Block) bool {
 		return false
 	}
 	return bytes.Equal(bbytes, blbytes)
+}
+
+func (b *Block) AddAtx(sr *ActivationTx) {
+	b.ATXs = append(b.ATXs, sr)
 }
 
 type Layer struct {
