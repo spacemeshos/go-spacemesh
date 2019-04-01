@@ -8,9 +8,7 @@ import (
 )
 
 func defaultValidator() *syntaxContextValidator {
-	return newSyntaxContextValidator(NewMockSigning(), lowThresh10, func(m *pb.HareMessage) bool {
-		return true
-	}, log.NewDefault("Validator"))
+	return newSyntaxContextValidator(NewMockSigning(), lowThresh10, log.NewDefault("Validator"))
 }
 
 func TestMessageValidator_CommitStatus(t *testing.T) {
@@ -134,7 +132,7 @@ func TestMessageValidator_ValidateMessage(t *testing.T) {
 }
 
 func TestMessageValidator_SyntacticallyValidateMessage(t *testing.T) {
-	validator := newSyntaxContextValidator(NewMockSigning(), 1, validate, log.NewDefault("Validator"))
+	validator := newSyntaxContextValidator(NewMockSigning(), 1, log.NewDefault("Validator"))
 	m := BuildPreRoundMsg(generateSigning(t), NewSmallEmptySet())
 	assert.False(t, validator.SyntacticallyValidateMessage(m))
 	m = BuildPreRoundMsg(generateSigning(t), NewSetFromValues(value1))
@@ -142,7 +140,7 @@ func TestMessageValidator_SyntacticallyValidateMessage(t *testing.T) {
 }
 
 func TestMessageValidator_ContextuallyValidateMessage(t *testing.T) {
-	validator := newSyntaxContextValidator(NewMockSigning(), 1, validate, log.NewDefault("Validator"))
+	validator := newSyntaxContextValidator(NewMockSigning(), 1, log.NewDefault("Validator"))
 	m := BuildPreRoundMsg(generateSigning(t), NewSmallEmptySet())
 	m.Message = nil
 	assert.False(t, validator.ContextuallyValidateMessage(m, 0))
@@ -179,7 +177,7 @@ func TestMessageValidator_validateSVPTypeB(t *testing.T) {
 }
 
 func TestMessageValidator_validateSVP(t *testing.T) {
-	validator := newSyntaxContextValidator(NewMockSigning(), 1, validate, log.NewDefault("Validator"))
+	validator := newSyntaxContextValidator(NewMockSigning(), 1, log.NewDefault("Validator"))
 	m := buildProposalMsg(NewMockSigning(), NewSetFromValues(value1, value2, value3), []byte{})
 	s1 := NewSetFromValues(value1)
 	m.Message.Svp = buildSVP(-1, s1)

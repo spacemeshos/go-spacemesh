@@ -80,12 +80,11 @@ func (ev *eligibilityValidator) Validate(m *pb.HareMessage) bool {
 type syntaxContextValidator struct {
 	signing         Signing
 	threshold       int
-	statusValidator func(m *pb.HareMessage) bool // used to validate status messages in SVP
 	log.Log
 }
 
-func newSyntaxContextValidator(signing Signing, threshold int, validator func(m *pb.HareMessage) bool, logger log.Log) *syntaxContextValidator {
-	return &syntaxContextValidator{signing, threshold, validator, logger}
+func newSyntaxContextValidator(signing Signing, threshold int, logger log.Log) *syntaxContextValidator {
+	return &syntaxContextValidator{signing, threshold, logger}
 }
 
 // Validates the message is contextually valid
@@ -225,7 +224,7 @@ func (validator *syntaxContextValidator) validateSVP(msg *pb.HareMessage) bool {
 
 		return true
 	}
-	validators := []func(m *pb.HareMessage) bool{validateStatusType, validateSameIteration, validator.statusValidator}
+	validators := []func(m *pb.HareMessage) bool{validateStatusType, validateSameIteration}
 	if !validator.validateAggregatedMessage(msg.Message.Svp, validators) {
 		validator.Warning("Proposal validation failed: failed to validate aggregated message")
 		return false
