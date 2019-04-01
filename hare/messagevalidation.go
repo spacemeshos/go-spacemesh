@@ -78,8 +78,8 @@ func (ev *eligibilityValidator) Validate(m *pb.HareMessage) bool {
 }
 
 type syntaxContextValidator struct {
-	signing         Signing
-	threshold       int
+	signing   Signing
+	threshold int
 	log.Log
 }
 
