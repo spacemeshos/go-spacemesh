@@ -57,6 +57,7 @@ func NewBroker(networkService NetworkService, eValidator Validator, closer Close
 	p.outbox = make(map[InstanceId]chan *pb.HareMessage)
 	p.pending = make(map[InstanceId][]*pb.HareMessage)
 	p.tasks = make(chan func())
+	p.maxReg = 1
 
 	return p
 }
@@ -145,6 +146,7 @@ func (broker *Broker) eventLoop() {
 		case task := <-broker.tasks:
 			task()
 		case <-broker.CloseChannel():
+			log.Warning("Broker exiting")
 			return
 		}
 	}

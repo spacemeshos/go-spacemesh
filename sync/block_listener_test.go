@@ -7,7 +7,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/stretchr/testify/assert"
@@ -34,7 +33,7 @@ func (pm PeersMock) Close() {
 	return
 }
 
-func ListenerFactory(serv server.Service, peers p2p.Peers, name string) *BlockListener {
+func ListenerFactory(serv service.Service, peers p2p.Peers, name string) *BlockListener {
 
 	nbl := NewBlockListener(serv, BlockValidatorMock{}, getMesh(memoryDB, "TestBlockListener_"+name), 1*time.Second, 2, log.New(name, "", ""))
 	nbl.Peers = peers //override peers with mock
@@ -189,7 +188,7 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 			return
 		default:
 			if b, err := bl1.GetBlock(blk.Id); err == nil {
-				assert.Equal(t, blk, b)
+				assert.Equal(t, *blk, *b)
 				t.Log("  ", b)
 				t.Log("done!")
 				return

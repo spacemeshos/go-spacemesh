@@ -134,6 +134,6 @@ func (fl fieldLogger) Error(msg string, fields ...Field) {
 }
 
 // Warningw prints message with fields
-func (fl fieldLogger) Warningw(msg string, fields ...Field) {
+func (fl fieldLogger) Warning(msg string, fields ...Field) {
 	fl.l.Warn(msg, unpack(fields...)...)
 }
