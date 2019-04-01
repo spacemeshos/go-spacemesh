@@ -46,10 +46,9 @@ func (app *SyncApp) Cleanup() {
 
 }
 
-func getMesh() *mesh.Mesh {
-
-	//time := time.Now()
-	db := database.NewLevelDbStore("tests/sync/data", nil, nil)
+func getMesh(path string) *mesh.Mesh {
+	//"tests/sync/data"
+	db := database.NewLevelDbStore(path, nil, nil)
 	mdb := mesh.NewMeshDB(db, db, db, db, lg.WithName("meshDb"))
 	layers := mesh.NewMesh(mdb, sync.ConfigTst(), &sync.MeshValidatorMock{}, sync.MockState{}, lg)
 	return layers
@@ -68,7 +67,7 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	gTime, err := time.Parse(time.RFC3339, app.Config.GenesisTime)
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
 	clock := timesync.NewTicker(timesync.RealClock{}, ld, gTime)
-	msh := getMesh()
+	msh := getMesh(app.Config.DataDir)
 	defer msh.Close()
 	if lyr, err := msh.GetLayer(100); err != nil || lyr == nil {
 		lg.Error("could not load layers from disk ...   shutdown", err)
