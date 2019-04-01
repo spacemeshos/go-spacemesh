@@ -173,7 +173,7 @@ func (mc *MeshDB) ForBlockInView(view map[BlockID]struct{}, layer LayerID, foo f
 		foo(block)
 		//push children to bfs queue
 		for _, id := range block.ViewEdges {
-			bChild, err := mc.GetMiniBlock(id)
+			bChild, err := mc.GetBlock(id)
 			if err != nil {
 				errHandler(err)
 			}
