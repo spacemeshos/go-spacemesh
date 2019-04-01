@@ -3,12 +3,13 @@ package hare
 import (
 	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
 func defaultValidator() *syntaxContextValidator {
-	return newSyntaxContextValidator(NewMockSigning(), lowThresh10, func(m *pb.HareMessage) bool {
+	return newSyntaxContextValidator(signing.NewEdSigner(), lowThresh10, func(m *Msg) bool {
 		return true
 	}, log.NewDefault("Validator"))
 }
@@ -36,7 +37,7 @@ func TestMessageValidator_ValidateCertificate(t *testing.T) {
 
 	msgs = make([]*pb.HareMessage, validator.threshold)
 	for i := 0; i < validator.threshold; i++ {
-		msgs[i] = BuildCommitMsg(generateSigning(t), NewSmallEmptySet())
+		msgs[i] = BuildCommitMsg(generateSigning(t), NewSmallEmptySet()).HareMessage
 	}
 	cert.AggMsgs.Messages = msgs
 	assert.True(t, validator.validateCertificate(cert))
@@ -60,9 +61,9 @@ func TestEligibilityValidator_validateRole(t *testing.T) {
 func TestMessageValidator_IsStructureValid(t *testing.T) {
 	validator := defaultValidator()
 	assert.False(t, validator.SyntacticallyValidateMessage(nil))
-	m := &pb.HareMessage{}
+	m := &Msg{&pb.HareMessage{}, nil}
 	assert.False(t, validator.SyntacticallyValidateMessage(m))
-	m.PubKey = generateSigning(t).Verifier().Bytes()
+	m.PubKey = generateSigning(t).PublicKey().Bytes()
 	assert.False(t, validator.SyntacticallyValidateMessage(m))
 	m.Message = &pb.InnerMessage{}
 	assert.False(t, validator.SyntacticallyValidateMessage(m))
@@ -75,30 +76,28 @@ func TestMessageValidator_IsStructureValid(t *testing.T) {
 func TestMessageValidator_Aggregated(t *testing.T) {
 	validator := defaultValidator()
 	assert.False(t, validator.validateAggregatedMessage(nil, nil))
-	funcs := make([]func(m *pb.HareMessage) bool, 0)
+	funcs := make([]func(m *Msg) bool, 0)
 	assert.False(t, validator.validateAggregatedMessage(nil, funcs))
 
 	agg := &pb.AggregatedMessages{}
 	assert.False(t, validator.validateAggregatedMessage(agg, funcs))
 	msgs := make([]*pb.HareMessage, validator.threshold)
 	for i := 0; i < validator.threshold; i++ {
-		msgs[i] = BuildStatusMsg(generateSigning(t), NewSetFromValues(value1))
+		iMsg := BuildStatusMsg(generateSigning(t), NewSetFromValues(value1))
+		msgs[i] = iMsg.HareMessage
 	}
 	agg.Messages = msgs
 	assert.True(t, validator.validateAggregatedMessage(agg, funcs))
-	tmp := msgs[0].PubKey
-	msgs[0].PubKey = msgs[1].PubKey
+	msgs[0].InnerSig = []byte{1}
 	assert.False(t, validator.validateAggregatedMessage(agg, funcs))
-	msgs[0].PubKey = tmp
 
-	funcs = make([]func(m *pb.HareMessage) bool, 1)
-	funcs[0] = func(m *pb.HareMessage) bool { return false }
+	funcs = make([]func(m *Msg) bool, 1)
+	funcs[0] = func(m *Msg) bool { return false }
 	assert.False(t, validator.validateAggregatedMessage(agg, funcs))
 }
 
 func TestConsensusProcess_isContextuallyValid(t *testing.T) {
 	s := NewEmptySet(defaultSetSize)
-	pub := generateSigning(t)
 	cp := generateConsensusProcess(t)
 
 	msgType := make([]MessageType, 4, 4)
@@ -111,7 +110,7 @@ func TestConsensusProcess_isContextuallyValid(t *testing.T) {
 		for i := 0; i < 4; i++ {
 			builder := NewMessageBuilder()
 			builder.SetType(msgType[j]).SetInstanceId(instanceId1).SetRoundCounter(cp.k).SetKi(ki).SetValues(s)
-			builder = builder.SetPubKey(pub.Verifier().Bytes()).Sign(NewMockSigning())
+			builder = builder.Sign(signing.NewEdSigner())
 			//mt.Printf("%v   j=%v i=%v Exp: %v Actual %v\n", cp.k, j, i, rounds[j][i], ContextuallyValidateMessage(builder.Build(), cp.k))
 			validator := defaultValidator()
 			assert.Equal(t, true, validator.ContextuallyValidateMessage(builder.Build(), cp.k))
@@ -125,16 +124,18 @@ func TestMessageValidator_ValidateMessage(t *testing.T) {
 	proc.advanceToNextRound()
 	v := proc.validator
 	preround := proc.initDefaultBuilder(proc.s).SetType(PreRound).Sign(proc.signing).Build()
+	preround.PubKey = proc.signing.PublicKey().Bytes()
 	assert.True(t, v.SyntacticallyValidateMessage(preround))
 	assert.True(t, v.ContextuallyValidateMessage(preround, 0))
 	status := proc.initDefaultBuilder(proc.s).SetType(Status).Sign(proc.signing).Build()
+	status.PubKey = proc.signing.PublicKey().Bytes()
 	assert.True(t, v.ContextuallyValidateMessage(status, 0))
 	assert.True(t, v.SyntacticallyValidateMessage(status))
 
 }
 
 func TestMessageValidator_SyntacticallyValidateMessage(t *testing.T) {
-	validator := newSyntaxContextValidator(NewMockSigning(), 1, validate, log.NewDefault("Validator"))
+	validator := newSyntaxContextValidator(signing.NewEdSigner(), 1, validate, log.NewDefault("Validator"))
 	m := BuildPreRoundMsg(generateSigning(t), NewSmallEmptySet())
 	assert.False(t, validator.SyntacticallyValidateMessage(m))
 	m = BuildPreRoundMsg(generateSigning(t), NewSetFromValues(value1))
@@ -142,7 +143,7 @@ func TestMessageValidator_SyntacticallyValidateMessage(t *testing.T) {
 }
 
 func TestMessageValidator_ContextuallyValidateMessage(t *testing.T) {
-	validator := newSyntaxContextValidator(NewMockSigning(), 1, validate, log.NewDefault("Validator"))
+	validator := newSyntaxContextValidator(signing.NewEdSigner(), 1, validate, log.NewDefault("Validator"))
 	m := BuildPreRoundMsg(generateSigning(t), NewSmallEmptySet())
 	m.Message = nil
 	assert.False(t, validator.ContextuallyValidateMessage(m, 0))
@@ -154,7 +155,7 @@ func TestMessageValidator_ContextuallyValidateMessage(t *testing.T) {
 }
 
 func TestMessageValidator_validateSVPTypeA(t *testing.T) {
-	m := buildProposalMsg(NewMockSigning(), NewSetFromValues(value1, value2, value3), []byte{})
+	m := buildProposalMsg(signing.NewEdSigner(), NewSetFromValues(value1, value2, value3), []byte{})
 	s1 := NewSetFromValues(value1)
 	s2 := NewSetFromValues(value3)
 	s3 := NewSetFromValues(value1, value5)
@@ -168,7 +169,7 @@ func TestMessageValidator_validateSVPTypeA(t *testing.T) {
 }
 
 func TestMessageValidator_validateSVPTypeB(t *testing.T) {
-	m := buildProposalMsg(NewMockSigning(), NewSetFromValues(value1, value2, value3), []byte{})
+	m := buildProposalMsg(signing.NewEdSigner(), NewSetFromValues(value1, value2, value3), []byte{})
 	s1 := NewSetFromValues(value1)
 	m.Message.Svp = buildSVP(-1, s1)
 	s := NewSetFromValues(value1)
@@ -179,8 +180,8 @@ func TestMessageValidator_validateSVPTypeB(t *testing.T) {
 }
 
 func TestMessageValidator_validateSVP(t *testing.T) {
-	validator := newSyntaxContextValidator(NewMockSigning(), 1, validate, log.NewDefault("Validator"))
-	m := buildProposalMsg(NewMockSigning(), NewSetFromValues(value1, value2, value3), []byte{})
+	validator := newSyntaxContextValidator(signing.NewEdSigner(), 1, validate, log.NewDefault("Validator"))
+	m := buildProposalMsg(signing.NewEdSigner(), NewSetFromValues(value1, value2, value3), []byte{})
 	s1 := NewSetFromValues(value1)
 	m.Message.Svp = buildSVP(-1, s1)
 	m.Message.Svp.Messages[0].Message.Type = int32(Commit)
@@ -202,7 +203,7 @@ func TestMessageValidator_validateSVP(t *testing.T) {
 func buildSVP(ki int32, S ...*Set) *pb.AggregatedMessages {
 	msgs := make([]*pb.HareMessage, 0, len(S))
 	for _, s := range S {
-		msgs = append(msgs, buildStatusMsg(NewMockSigning(), s, ki))
+		msgs = append(msgs, buildStatusMsg(signing.NewEdSigner(), s, ki).HareMessage)
 	}
 
 	svp := &pb.AggregatedMessages{}

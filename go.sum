@@ -127,6 +127,8 @@ github.com/seehuhn/mt19937 v0.0.0-20180715112136-cc7708819361 h1:Nnks5IJM8QjJsF+
 github.com/seehuhn/mt19937 v0.0.0-20180715112136-cc7708819361/go.mod h1:w+IAy13Luqfsp+plFpT1RiqauADylJKmpkrWFwpjbsc=
 github.com/sirupsen/logrus v1.2.0 h1:juTguoYk5qI21pwyTXY3B3Y5cOTH3ZUyZCg1v/mihuo=
 github.com/sirupsen/logrus v1.2.0/go.mod h1:LxeOpSwHxABJmUn/MG1IvRgCAasNZTLOkJPxbbu5VWo=
+github.com/spacemeshos/ed25519 v0.0.0-20190316215305-5878e62449c1 h1:Fw9KqgcXb8mUFo6dnBWpUR7pc5SPDjKzEPDd+Z4elEk=
+github.com/spacemeshos/ed25519 v0.0.0-20190316215305-5878e62449c1/go.mod h1:lyZLUyZXvd7gp6KHwGS5ZgtS2ZvV++lBjdE4MLqmLnU=
 github.com/spacemeshos/go-spacemesh v0.0.0-20190218131258-f9290a04382c/go.mod h1:tY7flNGGFec6jgu03jBYCbFmntvpxOS8dG3dt0Eznl8=
 github.com/spacemeshos/merkle-tree v0.0.0-20190327145446-3651a544f849 h1:RJw90V/KgsE3dKbcec+aFsgTdYzIwRlYwKRwu9DADPY=
 github.com/spacemeshos/merkle-tree v0.0.0-20190327145446-3651a544f849/go.mod h1:mPxjt4RONPxSUhxOq4bhSJyKVGQJ0VMSyRiE51dDLgE=
