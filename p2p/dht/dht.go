@@ -9,11 +9,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"github.com/spacemeshos/go-spacemesh/ping"
-	"github.com/spacemeshos/go-spacemesh/ping/pb"
-	"net"
-	"strings"
 	"time"
 )
 
@@ -23,7 +18,7 @@ type DHT interface {
 	Remove(p node.Node)
 
 	// todo: change lookup to be an internal lookup. (do not expose net lookup)
-	InternalLookup(dhtid node.DhtID) []node.Node
+	InternalLookup(key p2pcrypto.PublicKey) []node.Node
 	Lookup(pubkey p2pcrypto.PublicKey) (node.Node, error)
 
 	SelectPeers(qty int) []node.Node
@@ -42,11 +37,6 @@ var (
 	ErrEmptyRoutingTable = errors.New("no nodes to query - routing table is empty")
 )
 
-type Pinger interface {
-	OnPing(f func(from net.Addr, ping *pb.Ping) error)
-	Ping(p p2pcrypto.PublicKey) error
-}
-
 // KadDHT represents the Distributed Hash Table, it holds the Routing Table local node cache. and a FindNode kademlia protocol.
 // KadDHT Is created with a localNode identity as base. (DhtID)
 type KadDHT struct {
@@ -56,10 +46,9 @@ type KadDHT struct {
 
 	rt RoutingTable
 
-	fnp  *findNodeProtocol
-	ping Pinger
-
-	service service.Service
+	disc DiscoveryProtocol
+	//fnp  *findNodeProtocol
+	//ping Pinger
 }
 
 // Size returns the size of the routing table.
@@ -74,49 +63,22 @@ func (d *KadDHT) SelectPeers(qty int) []node.Node {
 	return d.rt.SelectPeers(qty)
 }
 
-// New creates a new dht
-func New(ln *node.LocalNode, config config.SwarmConfig, service service.Service) *KadDHT {
-	pinger := ping.New(ln.Node, service.(server.Service), ln.Log) // TODO : get from outside
-	d := &KadDHT{
-		config:  config,
-		local:   ln,
-		rt:      NewRoutingTable(config.RoutingTableBucketSize, ln.DhtID(), ln.Log),
-		ping:    pinger,
-		service: service,
-	}
-	d.fnp = newFindNodeProtocol(service, d.rt)
-
-	pinger.OnPing(d.PingerCallback)
-
-	return d
+type DiscoveryProtocol interface {
+	Ping(p p2pcrypto.PublicKey) error
+	FindNode(server p2pcrypto.PublicKey, target p2pcrypto.PublicKey) ([]node.Node, error)
 }
 
-func (d *KadDHT) PingerCallback(from net.Addr, p *pb.Ping) error {
-	//todo: check the address provided with an extra ping before upading. ( if we haven't checked it for a while )
-	k, err := p2pcrypto.NewPubkeyFromBytes(p.ID)
-
-	if err != nil {
-		return err
+// New creates a new dht
+func New(ln *node.LocalNode, config config.SwarmConfig, service server.Service) *KadDHT {
+	d := &KadDHT{
+		config: config,
+		local:  ln,
+		rt:     NewRoutingTable(config.RoutingTableBucketSize, ln.DhtID(), ln.Log),
 	}
 
-	//extract port
-	_, port, err := net.SplitHostPort(p.ListenAddress)
-	if err != nil {
-		return err
-	}
-	var addr string
+	d.disc = NewDiscoveryProtocol(ln.Node, d, service, ln.Log)
 
-	if spl := strings.Split(from.String(), ":"); len(spl) > 1 {
-		addr, _, err = net.SplitHostPort(from.String())
-	}
-
-	if err != nil {
-		return err
-	}
-
-	// todo: decide on best way to know our ext address
-	d.rt.Update(node.New(k, net.JoinHostPort(addr, port)))
-	return nil
+	return d
 }
 
 // Update insert or updates a node in the routing table.
@@ -132,15 +94,13 @@ func (d *KadDHT) Remove(p node.Node) {
 // Lookup finds a node in the dht by its public key, it issues a search inside the local routing table,
 // if the node can't be found there it sends a query to the network.
 func (d *KadDHT) Lookup(pubkey p2pcrypto.PublicKey) (node.Node, error) {
-	dhtid := node.NewDhtID(pubkey.Bytes())
-
-	res := d.InternalLookup(dhtid)
+	res := d.InternalLookup(pubkey)
 
 	if res == nil {
 		return node.EmptyNode, errors.New("no peers found in routing table")
 	}
 
-	if res[0].DhtID().Equals(dhtid) {
+	if res[0].PublicKey().String() == pubkey.String() {
 		return res[0], nil
 	}
 
@@ -148,8 +108,9 @@ func (d *KadDHT) Lookup(pubkey p2pcrypto.PublicKey) (node.Node, error) {
 }
 
 // InternalLookup finds a node in the dht by its public key, it issues a search inside the local routing table
-func (d *KadDHT) InternalLookup(dhtid node.DhtID) []node.Node {
+func (d *KadDHT) InternalLookup(key p2pcrypto.PublicKey) []node.Node {
 	poc := make(PeersOpChannel)
+	dhtid := node.NewDhtID(key.Bytes())
 	d.rt.NearestPeers(NearestPeersReq{dhtid, d.config.RoutingTableAlpha, poc})
 	res := (<-poc).Peers
 	if len(res) == 0 {
@@ -294,12 +255,12 @@ func (d *KadDHT) findNodeOp(servers []node.Node, queried map[string]bool, id p2p
 				}
 			}()
 
-			err = d.ping.Ping(server.PublicKey())
+			err = d.disc.Ping(server.PublicKey())
 			if err != nil {
 				return
 			}
 
-			fnd, err := d.fnp.FindNode(server, idx)
+			fnd, err := d.disc.FindNode(server.PublicKey(), idx)
 			if err != nil {
 				return
 			}
