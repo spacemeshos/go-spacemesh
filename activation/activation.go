@@ -53,21 +53,9 @@ func (b Builder) BuildActivationTx(nipst *nipst.NIPST) error {
 	if err != nil {
 		return err
 	}
-	atx := mesh.ActivationTx{
-		ActivationTxHeader: mesh.ActivationTxHeader{
-			NodeId:         b.nodeId,
-			Sequence:       b.GetLastSequence(b.nodeId) + 1,
-			PrevATXId:      *prevAtx,
-			LayerIndex:     l,
-			StartTick:      0, //todo: whatever
-			PositioningATX: *posAtx,
-			ActiveSetSize:  b.activeSet.GetActiveSetSize(l - 1),
-			View:           b.mesh.GetLatestView(),
-		},
-		Nipst: nipst,
-	}
+	atx := mesh.NewActivationTx(b.nodeId, b.GetLastSequence(b.nodeId)+1, *prevAtx, l, 0, *posAtx, b.activeSet.GetActiveSetSize(l-1), b.mesh.GetLatestView(), nipst)
 
-	buf, err := mesh.AtxAsBytes(&atx)
+	buf, err := mesh.AtxAsBytes(atx)
 	if err != nil {
 		return err
 	}

@@ -55,7 +55,7 @@ func NewActivationTx(NodeId NodeId, Sequence uint64, PrevATX AtxId, LayerIndex L
 			Sequence:       Sequence,
 			PrevATXId:      PrevATX,
 			LayerIndex:     LayerIndex,
-			StartTick:      StartTick, //todo: whatever
+			StartTick:      StartTick, //todo: this is still a
 			PositioningATX: PositioningATX,
 			ActiveSetSize:  ActiveSetSize,
 			View:           View,

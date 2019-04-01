@@ -208,10 +208,10 @@ func (t *BlockBuilder) listenForAtx() {
 				log.String("amount", x.AmountAsBigInt().String()), log.Uint64("nonce", x.AccountNonce), log.Bool("valid", err != nil))*/
 				if err != nil {
 					t.Log.Error("cannot parse incoming ATX")
-					data.ReportValidation(IncomingTxProtocol, false)
+					data.ReportValidation(AtxProtocol, false)
 					break
 				}
-				data.ReportValidation(IncomingTxProtocol, true)
+				data.ReportValidation(AtxProtocol, true)
 				t.newAtx <- x
 			}
 		}

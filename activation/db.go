@@ -39,7 +39,6 @@ func (db *ActivationDb) StoreAtx(atx *mesh.ActivationTx) error {
 	return nil
 }
 
-
 //todo: add tx to epoch
 func (db *ActivationDb) addAtxToLayer(l mesh.LayerID, atx mesh.AtxId) error {
 	ids, err := db.Atxs.Get(l.ToBytes())
@@ -51,13 +50,13 @@ func (db *ActivationDb) addAtxToLayer(l mesh.LayerID, atx mesh.AtxId) error {
 	} else {
 		atxs, err = decodeAtxIds(ids)
 		if err != nil {
-			return errors.New("could not get all blocks from database ")
+			return errors.New("could not get all atxs from database ")
 		}
 	}
 	atxs = append(atxs, atx)
 	w, err := encodeAtxIds(atxs)
 	if err != nil {
-		return errors.New("could not encode layer block ids")
+		return errors.New("could not encode layer atx ids")
 	}
 	return db.Atxs.Put(l.ToBytes(), w)
 }
@@ -72,13 +71,13 @@ func (db *ActivationDb) addAtxToNodeId(nodeId mesh.NodeId, atx mesh.AtxId) error
 	} else {
 		atxs, err = decodeAtxIds(ids)
 		if err != nil {
-			return errors.New("could not get all blocks from database ")
+			return errors.New("could not get all atxs from database ")
 		}
 	}
 	atxs = append(atxs, atx)
 	w, err := encodeAtxIds(atxs)
 	if err != nil {
-		return errors.New("could not encode layer block ids")
+		return errors.New("could not encode layer atx ids")
 	}
 	return db.Atxs.Put(nodeId.ToBytes(), w)
 }
@@ -130,7 +129,7 @@ func decodeAtxIds(idsBytes []byte) ([]mesh.AtxId, error) {
 func encodeAtxIds(ids []mesh.AtxId) ([]byte, error) {
 	var w bytes.Buffer
 	if _, err := xdr.Marshal(&w, &ids); err != nil {
-		return nil, errors.New("error marshalling block ids ")
+		return nil, errors.New("error marshalling atx ids ")
 	}
 	return w.Bytes(), nil
 }
