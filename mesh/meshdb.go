@@ -158,7 +158,7 @@ func (m *MeshDB) GetLayer(index LayerID) (*Layer, error) {
 	return l, nil
 }
 
-func (mc *MeshDB) ForBlockInView(view map[BlockID]struct{}, layer LayerID, foo func(block *Block), errHandler func(err error)) {
+func (mc *MeshDB) ForBlockInView(view map[BlockID]struct{}, layer LayerID, blockHandler func(block *BlockHeader), errHandler func(err error)) {
 	stack := list.New()
 	for b := range view {
 		stack.PushFront(b)
@@ -166,14 +166,18 @@ func (mc *MeshDB) ForBlockInView(view map[BlockID]struct{}, layer LayerID, foo f
 	set := make(map[BlockID]struct{})
 	for b := stack.Front(); b != nil; b = stack.Front() {
 		a := stack.Remove(stack.Front()).(BlockID)
-		block, err := mc.GetBlock(a)
+
+		block, err := mc.GetMiniBlock(a)
 		if err != nil {
 			errHandler(err)
 		}
-		foo(block)
+
+		//execute handler
+		blockHandler(&block.BlockHeader)
+
 		//push children to bfs queue
 		for _, id := range block.ViewEdges {
-			bChild, err := mc.GetBlock(id)
+			bChild, err := mc.GetMiniBlock(id)
 			if err != nil {
 				errHandler(err)
 			}
