@@ -64,7 +64,7 @@ func (vp votingPattern) Layer() mesh.LayerID {
 type BlockCache interface {
 	GetBlock(id mesh.BlockID) (*mesh.Block, error)
 	LayerBlockIds(id mesh.LayerID) ([]mesh.BlockID, error)
-	ForBlockInView(view map[mesh.BlockID]struct{}, layer mesh.LayerID, foo func(block *mesh.Block), errHandler func(err error))
+	ForBlockInView(view map[mesh.BlockID]struct{}, layer mesh.LayerID, foo func(block *mesh.BlockHeader), errHandler func(err error))
 }
 
 //todo memory optimizations
@@ -211,7 +211,7 @@ func globalOpinion(v vec, layerSize uint64, delta float64) vec {
 }
 
 func (ni *ninjaTortoise) updateCorrectionVectors(p votingPattern, bottomOfWindow mesh.LayerID) {
-	foo := func(x *mesh.Block) {
+	foo := func(x *mesh.BlockHeader) {
 		for _, bid := range ni.tEffectiveToBlocks[p] { //for all b who's effective vote is p
 			b, err := ni.GetBlock(bid)
 			if err != nil {
@@ -254,10 +254,10 @@ func (ni *ninjaTortoise) updatePatternTally(newMinGood votingPattern, botomOfWin
 	}
 }
 
-func (ni *ninjaTortoise) getCorrEffCounter() (map[mesh.BlockID]vec, map[mesh.LayerID]int, func(b *mesh.Block)) {
+func (ni *ninjaTortoise) getCorrEffCounter() (map[mesh.BlockID]vec, map[mesh.LayerID]int, func(b *mesh.BlockHeader)) {
 	correctionMap := make(map[mesh.BlockID]vec)
 	effCountMap := make(map[mesh.LayerID]int)
-	foo := func(b *mesh.Block) {
+	foo := func(b *mesh.BlockHeader) {
 		if b.Layer() > ni.pBase.Layer() { //because we already copied pbase's votes
 			if eff, found := ni.tEffective[b.ID()]; found {
 				if p, found := ni.tGood[eff.Layer()]; found && eff == p {
@@ -459,7 +459,7 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *mesh.Layer) { //i most rece
 			view := make(map[mesh.BlockID]struct{})
 			lCntr := make(map[mesh.LayerID]int)
 			correctionMap, effCountMap, getCrrEffCnt := ni.getCorrEffCounter()
-			foo := func(block *mesh.Block) {
+			foo := func(block *mesh.BlockHeader) {
 				view[block.ID()] = struct{}{} //all blocks in view
 				for _, id := range block.BlockVotes {
 					view[id] = struct{}{}

@@ -88,9 +88,9 @@ func testForeachInView(mdb *MeshDB, t *testing.T) {
 		l = lyr
 	}
 	mp := map[BlockID]struct{}{}
-	foo := func(nb *Block) {
-		fmt.Println("process block", "layer", nb.ID(), nb.Layer())
-		mp[nb.ID()] = struct{}{}
+	foo := func(nb *BlockHeader) {
+		fmt.Println("process block", "layer", nb.Id, nb.LayerIndex)
+		mp[nb.Id] = struct{}{}
 	}
 	errHandler := func(err error) {
 		log.Error("error while traversing view ", err)

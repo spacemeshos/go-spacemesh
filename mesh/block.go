@@ -100,11 +100,11 @@ func NewSerializableTransaction(nonce uint64, origin, recepient address.Address,
 	}
 }
 
-func (b Block) ID() BlockID {
+func (b BlockHeader) ID() BlockID {
 	return b.Id
 }
 
-func (b Block) Layer() LayerID {
+func (b BlockHeader) Layer() LayerID {
 	return b.LayerIndex
 }
 
