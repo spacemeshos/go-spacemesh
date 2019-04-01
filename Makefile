@@ -84,7 +84,7 @@ endif
 .PHONY: $(PLATFORMS)
 
 test:
-	ulimit -n 400; go test -short -p 1 ./...
+	ulimit -n 500; go test -short -p 1 ./...
 .PHONY: test
 
 test-tidy:
