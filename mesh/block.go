@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/davecgh/go-xdr/xdr2"
-	"github.com/google/uuid"
 	"github.com/spacemeshos/go-spacemesh/address"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"math/big"
 	"time"
 )
@@ -33,8 +33,7 @@ type MiniBlock struct {
 
 type Block struct {
 	BlockHeader
-	Txs []SerializableTransaction
-	ATXs       []*ActivationTx
+	Txs []*SerializableTransaction
 }
 
 type SerializableTransaction struct {
@@ -60,9 +59,9 @@ func (t *SerializableTransaction) PriceAsBigInt() *big.Int {
 }
 
 func NewBlock(id BlockID, layerID LayerID, minerID string, coin bool, data []byte, ts time.Time, viewEdges []BlockID, blockVotes []BlockID, txs []*SerializableTransaction) *Block {
-	transactions := make([]SerializableTransaction, 0, len(txs))
+	transactions := make([]*SerializableTransaction, 0, len(txs))
 	for _, tx := range txs {
-		transactions = append(transactions, *tx)
+		transactions = append(transactions, tx)
 	}
 
 	b := Block{
@@ -121,7 +120,7 @@ func (b *Block) AddView(id BlockID) {
 }
 
 func (b *Block) AddTransaction(sr *SerializableTransaction) {
-	b.Txs = append(b.Txs, *sr)
+	b.Txs = append(b.Txs, sr)
 }
 
 func (b *Block) Compare(bl *Block) bool {

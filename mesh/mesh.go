@@ -207,7 +207,7 @@ func (m *Mesh) ExtractUniqueOrderedTransactions(l *Layer) []*Transaction {
 		}
 		for _, tx := range b.Txs {
 			//todo: think about these conversions.. are they needed?
-			txs = append(txs, SerializableTransaction2StateTransaction(&tx))
+			txs = append(txs, SerializableTransaction2StateTransaction(tx))
 		}
 	}
 

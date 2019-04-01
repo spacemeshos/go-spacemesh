@@ -211,7 +211,7 @@ func (m *MeshDB) layerBlockIds(index LayerID) (map[BlockID]bool, error) {
 	return idSet, nil
 }
 
-func blockFromMiniAndTxs(blk *MiniBlock, transactions []SerializableTransaction) *Block {
+func blockFromMiniAndTxs(blk *MiniBlock, transactions []*SerializableTransaction) *Block {
 	block := Block{
 		BlockHeader: blk.BlockHeader,
 		Txs:         transactions,
@@ -251,6 +251,7 @@ func (m *MeshDB) writeBlock(bl *Block) error {
 	}
 
 	minblock := &MiniBlock{*toBlockHeader(bl), txids}
+	minblock.ATXs = bl.ATXs
 	bytes, err := getMiniBlockBytes(minblock)
 	if err != nil {
 		return fmt.Errorf("could not encode bl")
@@ -325,7 +326,7 @@ func (m *MeshDB) endLayerWorker(index LayerID) {
 }
 
 //returns the existing layer Handler (crates one if doesn't exist)
-func (m *meshDB) getLayerMutex(index LayerID) *layerMutex {
+func (m *MeshDB) getLayerMutex(index LayerID) *layerMutex {
 	m.lhMutex.Lock()
 	defer m.lhMutex.Unlock()
 	ll, found := m.layerMutex[index]
@@ -337,27 +338,28 @@ func (m *meshDB) getLayerMutex(index LayerID) *layerMutex {
 	return ll
 }
 
-func (m *meshDB) writeTransactions(block *Block) error {
-
+func (m *MeshDB) writeTransactions(block *Block) ([]TransactionId, error) {
+	txids := make([]TransactionId, 0, len(block.Txs))
 	for _, t := range block.Txs {
 		bytes, err := TransactionAsBytes(t)
 		if err != nil {
 			m.Error("could not write tx %v to database ", err)
-			return err
+			return nil, err
 		}
 
 		id := getTransactionId(t)
 		if err := m.transactions.Put(id, bytes); err != nil {
 			m.Error("could not write tx %v to database ", err)
-			return err
+			return nil, err
 		}
+		txids = append(txids, id)
 		m.Debug("write tx %v to db", t)
 	}
 
-	return nil
+	return txids, nil
 }
 
-func (m *meshDB) getTransactions(transactions []TransactionId) ([]*SerializableTransaction, error) {
+func (m *MeshDB) getTransactions(transactions []TransactionId) ([]*SerializableTransaction, error) {
 	var ts []*SerializableTransaction
 	for _, id := range transactions {
 		tBytes, err := m.getTransactionBytes(id)
@@ -388,7 +390,7 @@ func getTransactionId(t *SerializableTransaction) TransactionId {
 	return crypto.Sha256(tx)
 }
 
-func (m *meshDB) getTransactionBytes(id []byte) ([]byte, error) {
+func (m *MeshDB) getTransactionBytes(id []byte) ([]byte, error) {
 	b, err := m.transactions.Get(id)
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf("could not find transaction in database %v", id))

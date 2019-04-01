@@ -2,9 +2,11 @@ package sync
 
 import (
 	"fmt"
+	"github.com/google/uuid"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/timesync"
@@ -155,7 +157,6 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 	bl1.Start()
 	bl2.Start()
 
-
 	blk := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), 1, []byte("data1"))
 	tx := mesh.NewSerializableTransaction(0, address.BytesToAddress([]byte{0x01}), address.BytesToAddress([]byte{0x02}), big.NewInt(10), big.NewInt(10), 10)
 	blk.AddTransaction(tx)
@@ -168,8 +169,6 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 		5,
 		[]mesh.BlockID{1, 2, 3},
 		&nipst.NIPST{}))
-	blk.AddVote(1)
-	blk.AddView(2)
 
 	data, err := mesh.BlockAsBytes(*blk)
 	blk2, ok := mesh.BytesAsBlock(data)

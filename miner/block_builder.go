@@ -156,16 +156,16 @@ func (t *BlockBuilder) createBlock(id mesh.LayerID, txs []*mesh.SerializableTran
 	}
 
 	b := mesh.Block{
-		MinerID:    t.minerID,
-		Id:         mesh.BlockID(t.rnd.Int63()),
-		LayerIndex: id,
-		Data:       nil,
-		Coin:       t.weakCoinToss.GetResult(),
-		Timestamp:  time.Now().UnixNano(),
-		Txs:        txs,
-		ATXs:       atx,
-		BlockVotes: res,
-		ViewEdges:  viewEdges,
+		BlockHeader: mesh.BlockHeader{
+			MinerID:    t.minerID,
+			Id:         mesh.BlockID(t.rnd.Int63()),
+			LayerIndex: id,
+			Data:       nil,
+			Coin:       t.weakCoinToss.GetResult(),
+			Timestamp:  time.Now().UnixNano(),
+			BlockVotes: res,
+			ViewEdges:  viewEdges, ATXs: atx},
+		Txs: txs,
 	}
 
 	t.Log.Info("Iv'e created block in layer %v id %v, num of transactions %v votes %d viewEdges %d", b.LayerIndex, b.Id, len(b.Txs), len(b.BlockVotes), len(b.ViewEdges))

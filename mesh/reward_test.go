@@ -53,7 +53,7 @@ func addTransactionsToBlock(bl *Block, numOfTxs int) int64 {
 		gasPrice := rand.Int63n(100)
 		addr := rand.Int63n(1000000)
 		//log.Info("adding tx with gas price %v nonce %v", gasPrice, i)
-		bl.Txs = append(bl.Txs, *NewSerializableTransaction(uint64(i), address.HexToAddress("1"),
+		bl.Txs = append(bl.Txs, NewSerializableTransaction(uint64(i), address.HexToAddress("1"),
 			address.HexToAddress(strconv.FormatUint(uint64(addr), 10)),
 			big.NewInt(10),
 			big.NewInt(gasPrice),
@@ -69,7 +69,7 @@ func addTransactionsWithGas(bl *Block, numOfTxs int, gasPrice int64) int64 {
 
 		addr := rand.Int63n(10000)
 		//log.Info("adding tx with gas price %v nonce %v", gasPrice, i)
-		bl.Txs = append(bl.Txs, *NewSerializableTransaction(uint64(i), address.HexToAddress("1"),
+		bl.Txs = append(bl.Txs, NewSerializableTransaction(uint64(i), address.HexToAddress("1"),
 			address.HexToAddress(strconv.FormatUint(uint64(addr), 10)),
 			big.NewInt(10),
 			big.NewInt(gasPrice),
