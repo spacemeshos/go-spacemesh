@@ -197,8 +197,8 @@ func (alg *tortoise) assignIdForBlock(blk *TortoiseBlock) uint32 {
 
 		return newId
 	} else {
-		log.Error("Cannot find Id for block, something went wrong")
-		panic("Cannot find Id for block, something went wrong")
+		log.Error("Cannot find NodeId for block, something went wrong")
+		panic("Cannot find NodeId for block, something went wrong")
 		return 0
 	}
 

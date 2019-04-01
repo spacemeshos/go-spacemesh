@@ -126,6 +126,7 @@ func blockFromHeaderAndTxs(blk BlockHeader, transactions []*SerializableTransact
 		BlockVotes: blk.BlockVotes,
 		ViewEdges:  blk.ViewEdges,
 		Txs:        transactions,
+		ATXs:       blk.ATXs,
 	}
 	return &block
 }
