@@ -23,6 +23,7 @@ PLATFORMS := windows linux darwin
 os = $(word 1, $@)
 
 DOCKER_IMAGE_NAME=go-spacemesh
+TESTS_DOCKER_IMAGE_NAME=go-spacemesh-test
 
 all: install build
 .PHONY: all
@@ -125,6 +126,8 @@ dockerpush: dockerbuild-go
 
 	docker push spacemeshos/$(DOCKER_IMAGE_NAME):$(BRANCH)
 	docker push spacemeshos/$(DOCKER_IMAGE_NAME):$(SHA)
+	docker tag $(DOCKER_IMAGE_NAME):$(BRANCH) spacemeshos/$(TESTS_DOCKER_IMAGE_NAME):$(BRANCH)
+	docker push spacemeshos/$(TESTS_DOCKER_IMAGE_NAME):$(BRANCH)
 .PHONY: dockerpush
 
 dockerbuild-test:
@@ -140,4 +143,5 @@ ifndef ES_PASSWD
 	$(error ES_PASSWD is not set)
 endif
 	docker run -e ES_PASSWD="$(ES_PASSWD)" -e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json -it go-spacemesh-python pytest -s test_bs.py --tc-file=config.yaml --tc-format=yaml
+	docker run -e ES_PASSWD="$(ES_PASSWD)" -e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json -it go-spacemesh-python pytest -s hare/test_hare.py --tc-file=hare/config.yaml --tc-format=yaml
 .PHONY: dockerrun-test
