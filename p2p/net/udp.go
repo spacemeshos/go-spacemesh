@@ -49,7 +49,6 @@ func NewUDPNet(config config.Config, local *node.LocalNode, log log.Log) (*UDPNe
 func (n *UDPNet) Start() error {
 	n.logger.Info("Starting to listen on udp:%v", n.udpAddress)
 	listener, err := newUDPListener(n.udpAddress)
-	n.logger.Info("REALD LISTEN ON ", listener.LocalAddr())
 	if err != nil {
 		return err
 	}
