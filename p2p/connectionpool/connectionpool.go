@@ -97,9 +97,11 @@ func (cp *ConnectionPool) Shutdown() {
 func (cp *ConnectionPool) closeConnections() {
 	cp.connMutex.Lock()
 	// there should be no new connections arriving at this point
-	for _, c := range cp.connections {
+	for i, c := range cp.connections {
 		c.Close()
+		delete(cp.connections, i)
 	}
+
 	cp.connMutex.Unlock()
 }
 
