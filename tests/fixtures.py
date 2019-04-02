@@ -3,7 +3,7 @@ import pytest
 import string
 import random
 from kubernetes import config
-
+from pytest_testconfig import config as testconfig
 
 class DeploymentInfo():
     def __init__(self, dep_id=None):
@@ -18,6 +18,13 @@ class DeploymentInfo():
         return ''.join((random.choice(chars)) for x in range(4))
 
 
+@pytest.fixture(scope='session')
+def set_namespace():
+    k8s_namespace = os.getenv('K_NAMESPACE', '')
+    if k8s_namespace != '':
+        testconfig['namespace'] = k8s_namespace
+
+
 @pytest.fixture(scope='module')
 def load_config():
     kube_config_var = os.getenv('KUBECONFIG', '~/.kube/config')
@@ -26,7 +33,6 @@ def load_config():
         config.load_kube_config(kube_config_path)
     else:
         raise Exception("KUBECONFIG file not found: {0}".format(kube_config_path))
-
 
 @pytest.fixture(scope='module')
 def bootstrap_deployment_info():

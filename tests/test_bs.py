@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 
-from tests.fixtures import load_config, bootstrap_deployment_info, client_deployment_info
+from tests.fixtures import load_config, bootstrap_deployment_info, client_deployment_info, set_namespace
 import os
 from os import path
 import pytest
@@ -325,7 +325,7 @@ todaydate = dt.strftime("%Y.%m.%d")
 current_index = 'kubernetes_cluster-' + todaydate
 
 
-def test_bootstrap(setup_bootstrap):
+def test_bootstrap(set_namespace, setup_bootstrap):
     # wait for the bootstrap logs to be available in ElasticSearch
     time.sleep(5)
     assert setup_bootstrap.pods[0]['key'] == query_bootstrap_es(current_index,
@@ -381,6 +381,5 @@ def test_transaction(load_config, setup_clients):
                          stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     (out, err) = p.communicate()
     assert '{"value":"ok"}' in out.decode("utf-8")
-
 
 
