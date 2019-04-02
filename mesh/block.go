@@ -28,7 +28,7 @@ type BlockHeader struct {
 type MiniBlock struct {
 	BlockHeader
 	TxIds []TransactionId
-	ATXs  []ActivationTx
+	ATXs  []*ActivationTx
 }
 
 type Block struct {
@@ -176,7 +176,7 @@ func NewExistingLayer(idx LayerID, blocks []*Block) *Layer {
 	return &l
 }
 
-func getMiniBlockBytes(mini MiniBlock) ([]byte, error) {
+func MiniBlockToBytes(mini MiniBlock) ([]byte, error) {
 	var w bytes.Buffer
 	if _, err := xdr.Marshal(&w, &mini); err != nil {
 		return nil, fmt.Errorf("error marshalling block ids %v", err)

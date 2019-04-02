@@ -81,8 +81,8 @@ func (m *MeshDB) GetBlock(id BlockID) (*Block, error) {
 		m.Error("could not retrieve block %v transactions from database ")
 		return nil, err
 	}
-
-	return blockFromMiniAndTxs(blk, transactions), nil
+	res := blockFromMiniAndTxs(blk, transactions)
+	return res, nil
 }
 
 // addBlock adds a new block to block DB and updates the correct layer with the new block
@@ -215,6 +215,7 @@ func blockFromMiniAndTxs(blk *MiniBlock, transactions []*SerializableTransaction
 	block := Block{
 		BlockHeader: blk.BlockHeader,
 		Txs:         transactions,
+		ATXs:        blk.ATXs,
 	}
 	return &block
 }
@@ -250,14 +251,8 @@ func (m *MeshDB) writeBlock(bl *Block) error {
 		return fmt.Errorf("could not write transactions of block %v database %v", bl.ID(), err)
 	}
 
-	atxs := make([]ActivationTx, 0, len(bl.ATXs))
-
-	for _, atx := range bl.ATXs {
-		atxs = append(atxs, *atx)
-	}
-
-	minblock := &MiniBlock{*toBlockHeader(bl), txids, atxs}
-	bytes, err := getMiniBlockBytes(*minblock)
+	minblock := &MiniBlock{bl.BlockHeader, txids, bl.ATXs}
+	bytes, err := MiniBlockToBytes(*minblock)
 	if err != nil {
 		return fmt.Errorf("could not encode bl")
 	}
