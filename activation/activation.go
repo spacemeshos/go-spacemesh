@@ -1,7 +1,6 @@
 package activation
 
 import (
-	"fmt"
 	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -58,7 +57,7 @@ func NewBuilder(nodeId mesh.NodeId, db database.DB, net api.NetworkAPI, activeSe
 	}
 }
 
-func (b *Builder) BuildActivationTx(nipst *nipst.NIPST) error {
+func (b *Builder) PublishActivationTx(nipst *nipst.NIPST) error {
 	seq := b.GetLastSequence(b.nodeId)
 	prevAtx, err := b.GetPrevAtxId(b.nodeId)
 	if seq > 0 && err != nil {
@@ -73,14 +72,15 @@ func (b *Builder) BuildActivationTx(nipst *nipst.NIPST) error {
 		if err != nil {
 			return err
 		}
-	}
-	if prevAtx == nil {
-		return fmt.Errorf("previous ATX not found")
+	} else {
+		posAtx = &mesh.EmptyAtx
 	}
 
-	if posAtx == nil {
-		return fmt.Errorf("positioning ATX not found")
+	if prevAtx == nil {
+		log.Info("previous ATX not found")
+		prevAtx = &mesh.EmptyAtx
 	}
+
 	atx := mesh.NewActivationTx(b.nodeId, seq+1, *prevAtx, l, 0, *posAtx, b.activeSet.GetActiveSetSize(l-1), b.mesh.GetLatestView(), nipst)
 
 	buf, err := mesh.AtxAsBytes(atx)
@@ -94,8 +94,8 @@ func (b *Builder) BuildActivationTx(nipst *nipst.NIPST) error {
 func (b *Builder) GetPrevAtxId(node mesh.NodeId) (*mesh.AtxId, error) {
 	ids, err := b.db.GetNodeAtxIds(node)
 
-	if len(ids) == 0 || err != nil {
-		return &mesh.EmptyAtx, err
+	if err != nil || len(ids) == 0 {
+		return nil, err
 	}
 	return &ids[len(ids)-1], nil
 }
@@ -112,9 +112,6 @@ func (b *Builder) GetPositioningAtxId(epochId EpochId) (*mesh.AtxId, error) {
 
 func (b *Builder) GetLastSequence(node mesh.NodeId) uint64 {
 	atxId, err := b.GetPrevAtxId(node)
-	if *atxId == mesh.EmptyAtx {
-		return 0
-	}
 	if err != nil {
 		return 0
 	}

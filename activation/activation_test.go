@@ -40,10 +40,6 @@ func (n *NetMock) Broadcast(id string, d []byte) error {
 	return nil
 }
 
-func createDB() {
-
-}
-
 func TestBuilder_BuildActivationTx(t *testing.T) {
 	//todo: implement test
 	id := mesh.NodeId{"aaaa", "bbb"}
@@ -65,7 +61,7 @@ func TestBuilder_BuildActivationTx(t *testing.T) {
 		&npst)
 	adb.StoreAtx(echp.Epoch(atx.LayerIndex), atx)
 	act := mesh.NewActivationTx(b.nodeId, b.GetLastSequence(b.nodeId)+1, atx.Id(), layers.LatestLayerId(), 0, atx.Id(), b.activeSet.GetActiveSetSize(1), b.mesh.GetLatestView(), &npst)
-	err := b.BuildActivationTx(&nipst.NIPST{})
+	err := b.PublishActivationTx(&nipst.NIPST{})
 	assert.NoError(t, err)
 	bts, err := mesh.AtxAsBytes(act)
 	assert.NoError(t, err)
@@ -79,7 +75,7 @@ func TestBuilder_NoPrevATX(t *testing.T) {
 	echp := &EchProvider{}
 	layers := MeshProviderrMock{}
 	b := NewBuilder(id, database.NewMemDatabase(), net, ActiveSetProviderMock{}, layers, echp)
-	err := b.BuildActivationTx(&nipst.NIPST{})
+	err := b.PublishActivationTx(&nipst.NIPST{})
 	assert.Error(t, err)
 
 }
