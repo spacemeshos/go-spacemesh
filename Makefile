@@ -22,7 +22,11 @@ PKGS = $(shell go list ./...)
 PLATFORMS := windows linux darwin
 os = $(word 1, $@)
 
-DOCKER_IMAGE_NAME=go-spacemesh
+ifeq ($(BRANCH),develop)
+        DOCKER_IMAGE_REPO := go-spacemesh
+else
+        DOCKER_IMAGE_REPO := go-spacemesh-dev
+endif
 
 all: install build
 .PHONY: all
@@ -84,7 +88,7 @@ endif
 .PHONY: $(PLATFORMS)
 
 test:
-	ulimit -n 400; go test -short -p 1 ./...
+	ulimit -n 500; go test -short -p 1 ./...
 .PHONY: test
 
 test-tidy:
@@ -115,16 +119,17 @@ cover:
 .PHONY: cover
 
 dockerbuild-go:
-	docker build -t $(DOCKER_IMAGE_NAME):$(BRANCH) .
+	docker build -t $(DOCKER_IMAGE_REPO):$(BRANCH) .
 .PHONY: dockerbuild-go
 
 dockerpush: dockerbuild-go
 	echo "$(DOCKER_PASSWORD)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
-	docker tag $(DOCKER_IMAGE_NAME):$(BRANCH) spacemeshos/$(DOCKER_IMAGE_NAME):$(BRANCH)
-	docker tag $(DOCKER_IMAGE_NAME):$(BRANCH) spacemeshos/$(DOCKER_IMAGE_NAME):$(SHA)
-
-	docker push spacemeshos/$(DOCKER_IMAGE_NAME):$(BRANCH)
-	docker push spacemeshos/$(DOCKER_IMAGE_NAME):$(SHA)
+	docker tag $(DOCKER_IMAGE_REPO):$(BRANCH) spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)
+	docker push spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)
+ifeq ($(BRANCH),develop)
+	docker tag $(DOCKER_IMAGE_REPO):$(BRANCH) spacemeshos/$(DOCKER_IMAGE_REPO):$(SHA)
+	docker push spacemeshos/$(DOCKER_IMAGE_REPO):$(SHA)
+endif
 .PHONY: dockerpush
 
 dockerbuild-test:
@@ -139,5 +144,6 @@ dockerrun-test: dockerbuild-test
 ifndef ES_PASSWD
 	$(error ES_PASSWD is not set)
 endif
-	docker run -e ES_PASSWD="$(ES_PASSWD)" -e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json -it go-spacemesh-python pytest -s --tc-file=config.yaml --tc-format=yaml
+	docker run -e ES_PASSWD="$(ES_PASSWD)" -e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json -it go-spacemesh-python pytest -s test_bs.py --tc-file=config.yaml --tc-format=yaml
 .PHONY: dockerrun-test
+

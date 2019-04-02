@@ -21,11 +21,13 @@ import (
 )
 
 const MaxTransactionsPerBlock = 200 //todo: move to config
+const MaxAtxPerBlock = 200          //todo: move to config
 
 const DefaultGasLimit = 10
 const DefaultGas = 1
 
 const IncomingTxProtocol = "TxGossip"
+const AtxProtocol = "AtxGossip"
 
 type BlockBuilder struct {
 	minerID string // could be a pubkey or what ever. the identity we're claiming to be as miners.
@@ -34,8 +36,11 @@ type BlockBuilder struct {
 	beginRoundEvent  chan mesh.LayerID
 	stopChan         chan struct{}
 	newTrans         chan *mesh.SerializableTransaction
+	newAtx           chan *mesh.ActivationTx
 	txGossipChannel  chan service.GossipMessage
+	atxGossipChannel chan service.GossipMessage
 	hareResult       HareResultProvider
+	AtxQueue         []*mesh.ActivationTx
 	transactionQueue []*mesh.SerializableTransaction
 	mu               sync.Mutex
 	network          p2p.Service
@@ -57,8 +62,11 @@ func NewBlockBuilder(minerID string, net p2p.Service, beginRoundEvent chan mesh.
 		beginRoundEvent:  beginRoundEvent,
 		stopChan:         make(chan struct{}),
 		newTrans:         make(chan *mesh.SerializableTransaction),
+		newAtx:           make(chan *mesh.ActivationTx),
 		txGossipChannel:  net.RegisterGossipProtocol(IncomingTxProtocol),
+		atxGossipChannel: net.RegisterGossipProtocol(AtxProtocol),
 		hareResult:       hare,
+		AtxQueue:         make([]*mesh.ActivationTx, 0, 10),
 		transactionQueue: make([]*mesh.SerializableTransaction, 0, 10),
 		mu:               sync.Mutex{},
 		network:          net,
@@ -92,6 +100,7 @@ func (t *BlockBuilder) Start() error {
 	t.started = true
 	go t.acceptBlockData()
 	go t.listenForTx()
+	go t.listenForAtx()
 	return nil
 }
 
@@ -127,7 +136,7 @@ func (t *BlockBuilder) AddTransaction(nonce uint64, origin, destination address.
 	return nil
 }
 
-func (t *BlockBuilder) createBlock(id mesh.LayerID, txs []*mesh.SerializableTransaction) (*mesh.Block, error) {
+func (t *BlockBuilder) createBlock(id mesh.LayerID, txs []*mesh.SerializableTransaction, atx []*mesh.ActivationTx) (*mesh.Block, error) {
 	var res []mesh.BlockID = nil
 	var err error
 	if id == config.Genesis {
@@ -147,15 +156,18 @@ func (t *BlockBuilder) createBlock(id mesh.LayerID, txs []*mesh.SerializableTran
 	}
 
 	b := mesh.Block{
-		MinerID:    t.minerID,
-		Id:         mesh.BlockID(t.rnd.Int63()),
-		LayerIndex: id,
-		Data:       nil,
-		Coin:       t.weakCoinToss.GetResult(),
-		Timestamp:  time.Now().UnixNano(),
-		Txs:        txs,
-		BlockVotes: res,
-		ViewEdges:  viewEdges,
+		BlockHeader: mesh.BlockHeader{
+			MinerID:    t.minerID,
+			Id:         mesh.BlockID(t.rnd.Int63()),
+			LayerIndex: id,
+			Data:       nil,
+			Coin:       t.weakCoinToss.GetResult(),
+			Timestamp:  time.Now().UnixNano(),
+			BlockVotes: res,
+			ViewEdges:  viewEdges,
+		},
+		ATXs: atx,
+		Txs:  txs,
 	}
 
 	t.Log.Info("Iv'e created block in layer %v id %v, num of transactions %v votes %d viewEdges %d", b.LayerIndex, b.Id, len(b.Txs), len(b.BlockVotes), len(b.ViewEdges))
@@ -185,6 +197,29 @@ func (t *BlockBuilder) listenForTx() {
 	}
 }
 
+func (t *BlockBuilder) listenForAtx() {
+	t.Log.Info("start listening for atxs")
+	for {
+		select {
+		case <-t.stopChan:
+			return
+		case data := <-t.atxGossipChannel:
+			if data != nil {
+				x, err := mesh.BytesAsAtx(data.Bytes())
+				/*t.Log.With().Info("got new atx", log.String("sender", x., log.String("receiver", x.Recipient.String()),
+				log.String("amount", x.AmountAsBigInt().String()), log.Uint64("nonce", x.AccountNonce), log.Bool("valid", err != nil))*/
+				if err != nil {
+					t.Log.Error("cannot parse incoming ATX")
+					data.ReportValidation(AtxProtocol, false)
+					break
+				}
+				data.ReportValidation(AtxProtocol, true)
+				t.newAtx <- x
+			}
+		}
+	}
+}
+
 func (t *BlockBuilder) acceptBlockData() {
 	for {
 		select {
@@ -193,13 +228,18 @@ func (t *BlockBuilder) acceptBlockData() {
 			return
 
 		case id := <-t.beginRoundEvent:
+			//todo: eligibility needs to return an int since we can mine 2 blocks in same layer
 			if !t.blockOracle.BlockEligible(mesh.LayerID(id), t.minerID) {
 				break
 			}
 
 			txList := t.transactionQueue[:common.Min(len(t.transactionQueue), MaxTransactionsPerBlock)]
 			t.transactionQueue = t.transactionQueue[common.Min(len(t.transactionQueue), MaxTransactionsPerBlock):]
-			blk, err := t.createBlock(mesh.LayerID(id), txList)
+
+			atxList := t.AtxQueue[:common.Min(len(t.AtxQueue), MaxAtxPerBlock)]
+			t.AtxQueue = t.AtxQueue[common.Min(len(t.AtxQueue), MaxAtxPerBlock):]
+
+			blk, err := t.createBlock(mesh.LayerID(id), txList, atxList)
 			if err != nil {
 				t.Error("cannot create new block, %v ", err)
 				continue
@@ -215,6 +255,8 @@ func (t *BlockBuilder) acceptBlockData() {
 
 		case tx := <-t.newTrans:
 			t.transactionQueue = append(t.transactionQueue, tx)
+		case atx := <-t.newAtx:
+			t.AtxQueue = append(t.AtxQueue, atx)
 		}
 	}
 }
