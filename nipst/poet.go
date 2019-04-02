@@ -112,7 +112,9 @@ func (c *RPCPoetClient) submit(challenge common.Hash,
 func (c *RPCPoetClient) subscribeMembershipProof(r *poetRound,
 	challenge common.Hash, timeout time.Duration) (*membershipProof, error) {
 
-	ctx, _ := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
 	req := api.GetMembershipProofRequest{RoundId: int32(r.id), Commitment: challenge[:], Wait: true}
 	res, err := c.client.GetMembershipProof(ctx, &req)
 	if err != nil {
@@ -128,9 +130,10 @@ func (c *RPCPoetClient) subscribeMembershipProof(r *poetRound,
 func (c *RPCPoetClient) subscribeProof(r *poetRound,
 	timeout time.Duration) (*poetProof, error) {
 
-	ctx, _ := context.WithTimeout(context.Background(), timeout)
-	req := api.GetProofRequest{RoundId: int32(r.id), Wait: true}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
 
+	req := api.GetProofRequest{RoundId: int32(r.id), Wait: true}
 	res, err := c.client.GetProof(ctx, &req)
 	if err != nil {
 		if e := ctx.Err(); e == context.DeadlineExceeded {
