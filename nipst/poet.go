@@ -142,21 +142,32 @@ func (c *RPCPoetClient) subscribeProof(r *poetRound,
 		return nil, err
 	}
 
+	labels, err := wireLabelsToNative(res.Proof.L)
+	if err != nil {
+		return nil, err
+	}
+
 	p := &poetProof{
 		Phi: res.Proof.Phi,
-		L:   wireLabelsToNative(res.Proof.L),
+		L:   *labels,
 	}
 
 	return p, nil
 }
 
-func wireLabelsToNative(in []*api.Labels) (native [shared.T]shared.Labels) {
-	for i, inLabels := range in {
+func wireLabelsToNative(wire []*api.Labels) (native *[shared.T]shared.Labels, err error) {
+	if len(wire) != shared.T {
+		return nil, fmt.Errorf("invalid number of labels, expected: %v, found: %v", shared.T, len(wire))
+	}
+
+	native = new([shared.T]shared.Labels)
+	for i, inLabels := range wire {
 		var outLabels shared.Labels
 		for _, inLabel := range inLabels.Labels {
 			outLabels = append(outLabels, inLabel)
 		}
 		native[i] = outLabels
 	}
-	return native
+
+	return native, nil
 }
