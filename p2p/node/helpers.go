@@ -52,7 +52,7 @@ func GenerateRandomNodeData() Node {
 	rand.Seed(time.Now().UnixNano())
 	port := rand.Int31n(48127) + 1024
 
-	address := fmt.Sprintf("0.0.0.0:%d", port)
+	address := fmt.Sprintf("127.0.0.1:%d", port)
 	pub := p2pcrypto.NewRandomPubkey()
 	return Node{pub, address}
 }

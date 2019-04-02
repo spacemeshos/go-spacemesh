@@ -84,7 +84,7 @@ endif
 .PHONY: $(PLATFORMS)
 
 test:
-	ulimit -n 400; go test -short -p 1 ./...
+	ulimit -n 500; go test -short -p 1 ./...
 .PHONY: test
 
 test-tidy:
@@ -139,5 +139,5 @@ dockerrun-test: dockerbuild-test
 ifndef ES_PASSWD
 	$(error ES_PASSWD is not set)
 endif
-	docker run -e ES_PASSWD="$(ES_PASSWD)" -e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json -it go-spacemesh-python pytest -s --tc-file=config.yaml --tc-format=yaml
+	docker run -e ES_PASSWD="$(ES_PASSWD)" -e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json -it go-spacemesh-python pytest -s test_bs.py --tc-file=config.yaml --tc-format=yaml
 .PHONY: dockerrun-test

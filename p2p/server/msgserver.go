@@ -13,11 +13,6 @@ import (
 
 type MessageType uint32
 
-type Service interface {
-	service.Service
-	SendWrappedMessage(nodeID p2pcrypto.PublicKey, protocol string, payload *service.DataMsgWrapper) error
-}
-
 type Message interface {
 	service.DirectMessage
 	Data() service.Data
@@ -47,6 +42,11 @@ type MessageServer struct {
 	workerCount        sync.WaitGroup
 	workerLimiter      chan int
 	exit               chan struct{}
+}
+
+type Service interface {
+	RegisterDirectProtocolWithChannel(protocol string, ingressChannel chan service.DirectMessage) chan service.DirectMessage
+	SendWrappedMessage(nodeID p2pcrypto.PublicKey, protocol string, payload *service.DataMsgWrapper) error
 }
 
 func NewMsgServer(network Service, name string, requestLifetime time.Duration, c chan service.DirectMessage, logger log.Log) *MessageServer {

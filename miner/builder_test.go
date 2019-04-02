@@ -6,6 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/sync"
@@ -42,6 +43,23 @@ type mockBlockOracle struct {
 
 func (mbo mockBlockOracle) BlockEligible(id mesh.LayerID, pubkey string) bool {
 	return true
+}
+
+type mockMsg struct {
+	msg []byte
+	c   chan service.MessageValidation
+}
+
+func (m *mockMsg) Bytes() []byte {
+	return m.msg
+}
+
+func (m *mockMsg) ValidationCompletedChan() chan service.MessageValidation {
+	return m.c
+}
+
+func (m *mockMsg) ReportValidation(protocol string, isValid bool) {
+	//m.c <- service.NewMessageValidation(m.msg, protocol, isValid)
 }
 
 func TestBlockBuilder_StartStop(t *testing.T) {
@@ -90,9 +108,9 @@ func TestBlockBuilder_BlockIdGeneration(t *testing.T) {
 	builder2 := NewBlockBuilder(n2.Node.String(), n2, beginRound, MockCoin{}, MockOrphans{st: []mesh.BlockID{1, 2, 3}}, hare,
 		mockBlockOracle{}, log.New(n2.Node.String(), "", ""))
 
-	b1, _ := builder1.createBlock(1, nil)
+	b1, _ := builder1.createBlock(1, nil, nil)
 
-	b2, _ := builder2.createBlock(1, nil)
+	b2, _ := builder2.createBlock(1, nil, nil)
 
 	assert.True(t, b1.ID() != b2.ID(), "ids are identical")
 }
@@ -125,6 +143,45 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 	builder.AddTransaction(trans[1].AccountNonce, trans[1].Origin, *trans[1].Recipient, big.NewInt(0).SetBytes(trans[1].Price))
 	builder.AddTransaction(trans[2].AccountNonce, trans[2].Origin, *trans[2].Recipient, big.NewInt(0).SetBytes(trans[2].Price))
 
+	atxs := []*mesh.ActivationTx{
+		mesh.NewActivationTx(mesh.NodeId{"aaaa", "bbb"},
+			1,
+			mesh.AtxId{},
+			5,
+			1,
+			mesh.AtxId{},
+			5,
+			[]mesh.BlockID{1, 2, 3},
+			&nipst.NIPST{}),
+		mesh.NewActivationTx(mesh.NodeId{"aaaa", "bbb"},
+			1,
+			mesh.AtxId{},
+			5,
+			1,
+			mesh.AtxId{},
+			5,
+			[]mesh.BlockID{1, 2, 3},
+			&nipst.NIPST{}),
+		mesh.NewActivationTx(mesh.NodeId{"aaaa", "bbb"},
+			1,
+			mesh.AtxId{},
+			5,
+			1,
+			mesh.AtxId{},
+			5,
+			[]mesh.BlockID{1, 2, 3},
+			&nipst.NIPST{}),
+	}
+
+	/*for _, atx := range atxs {
+		b, e := mesh.AtxAsBytes(atx)
+		assert.NoError(t, e)
+		msg := mockMsg{msg: b}
+		builder.transactionQueue <- atx
+	}*/
+
+	builder.AtxQueue = append(builder.AtxQueue, atxs...)
+
 	go func() { beginRound <- 2 }()
 
 	select {
@@ -134,6 +191,7 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 		assert.Equal(t, hareRes, b.BlockVotes)
 		assert.Equal(t, trans, b.Txs)
 		assert.Equal(t, []mesh.BlockID{1, 2, 3}, b.ViewEdges)
+		assert.Equal(t, atxs, b.ATXs)
 
 	case <-time.After(1 * time.Second):
 		assert.Fail(t, "timeout on receiving block")
