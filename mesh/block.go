@@ -176,9 +176,9 @@ func NewExistingLayer(idx LayerID, blocks []*Block) *Layer {
 	return &l
 }
 
-func getMiniBlockBytes(bheader MiniBlock) ([]byte, error) {
+func getMiniBlockBytes(mini MiniBlock) ([]byte, error) {
 	var w bytes.Buffer
-	if _, err := xdr.Marshal(&w, &bheader); err != nil {
+	if _, err := xdr.Marshal(&w, &mini); err != nil {
 		return nil, fmt.Errorf("error marshalling block ids %v", err)
 	}
 	return w.Bytes(), nil

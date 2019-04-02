@@ -347,7 +347,10 @@ func (ni *ninjaTortoise) addPatternVote(p votingPattern, view map[mesh.BlockID]s
 			panic(fmt.Sprintf("block %d has no explicit voting, something went wrong ", b))
 		}
 		for _, ex := range vp {
-			blocks, _ := ni.LayerBlockIds(ex.Layer()) //todo handle error
+			blocks, err := ni.LayerBlockIds(ex.Layer()) //todo handle error
+			if err != nil {
+				panic("could not retrieve layer block ids")
+			}
 			for _, bl := range blocks {
 				if _, found := ni.tPattern[ex][bl]; found {
 					ni.tTally[p][bl] = ni.tTally[p][bl].Add(Support)
