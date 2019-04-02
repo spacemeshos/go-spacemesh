@@ -73,6 +73,8 @@ func TestPing_Ping_Concurrency(t *testing.T) {
 	<-done
 }
 
+//todo : test verifypinger
+
 func TestFindNodeProtocol_FindNode(t *testing.T) {
 
 	sim := service.NewSimulator()

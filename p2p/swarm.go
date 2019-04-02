@@ -304,7 +304,6 @@ func (s *swarm) sendMessageImpl(peerPubKey p2pcrypto.PublicKey, protocol string,
 	var conn net.Connection
 
 	if peerPubKey.String() == s.lNode.PublicKey().String() {
-		panic("catch it")
 		return errors.New("can't send message to self")
 	}
 
@@ -447,7 +446,7 @@ func (s *swarm) retryOrDisconnect(key p2pcrypto.PublicKey) {
 		s.Disconnect(key) // if we didn't find then we can't try replacing
 		return
 	}
-
+	// GetConnection will try to achieve a new connection if closed
 	_, err = s.cPool.GetConnection(peer.Address(), peer.PublicKey())
 	if err != nil { // we could'nt connect :/
 		s.Disconnect(key)

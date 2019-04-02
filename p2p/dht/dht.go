@@ -47,8 +47,6 @@ type KadDHT struct {
 	rt RoutingTable
 
 	disc DiscoveryProtocol
-	//fnp  *findNodeProtocol
-	//ping Pinger
 }
 
 // Size returns the size of the routing table.
@@ -96,7 +94,7 @@ func (d *KadDHT) Remove(p node.Node) {
 func (d *KadDHT) Lookup(pubkey p2pcrypto.PublicKey) (node.Node, error) {
 	res := d.InternalLookup(pubkey)
 
-	if res == nil {
+	if res == nil || len(res) < 1 {
 		return node.EmptyNode, errors.New("no peers found in routing table")
 	}
 

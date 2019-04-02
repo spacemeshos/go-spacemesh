@@ -9,7 +9,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/ping/pb"
 	"net"
-	"strings"
 	"time"
 )
 
@@ -22,7 +21,7 @@ func (p *discovery) newPingRequestHandler() func(msg server.Message) []byte {
 			return nil
 		}
 
-		if err := p.pingerCallback(msg.Metadata().FromAddress, req); err != nil {
+		if err := p.verifyPinger(msg.Metadata().FromAddress, req); err != nil {
 			p.logger.Error("msg contents were not valid err=", err)
 			return nil
 		}
@@ -39,7 +38,7 @@ func (p *discovery) newPingRequestHandler() func(msg server.Message) []byte {
 	}
 }
 
-func (p *discovery) pingerCallback(from net.Addr, pi *pb.Ping) error {
+func (p *discovery) verifyPinger(from net.Addr, pi *pb.Ping) error {
 	//todo: check the address provided with an extra ping before upading. ( if we haven't checked it for a while )
 	k, err := p2pcrypto.NewPubkeyFromBytes(pi.ID)
 
@@ -52,15 +51,18 @@ func (p *discovery) pingerCallback(from net.Addr, pi *pb.Ping) error {
 	if err != nil {
 		return err
 	}
-	var addr string
 
-	if spl := strings.Split(from.String(), ":"); len(spl) > 1 {
-		addr, _, err = net.SplitHostPort(from.String())
-	}
-
+	addr, _, err := net.SplitHostPort(from.String())
 	if err != nil {
-		return err
+		addr = from.String()
 	}
+
+	ip := net.ParseIP(addr)
+	if ip == nil {
+		return errors.New("canno't parse incoming ip")
+	}
+
+	//todo : verify the listening address. ping it and get result from it
 
 	// todo: decide on best way to know our ext address
 	p.table.Update(node.New(k, net.JoinHostPort(addr, port)))
