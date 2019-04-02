@@ -1,9 +1,11 @@
 package mesh
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/stretchr/testify/assert"
 	"math"
@@ -13,11 +15,100 @@ import (
 )
 
 const (
-	Path = "../tmp/sync/"
+	Path = "../tmp/mdb"
 )
 
 func teardown() {
 	os.RemoveAll(Path)
+}
+
+func getMeshdb() *MeshDB {
+	return NewPersistentMeshDB(fmt.Sprintf(Path), log.New("mdb", "", ""))
+}
+
+func TestNewMeshDB(t *testing.T) {
+	mdb := getMeshdb()
+	id := BlockID(123)
+	mdb.AddBlock(NewExistingBlock(1, 1, nil))
+	block, err := mdb.GetBlock(123)
+	assert.NoError(t, err)
+	assert.True(t, id == block.Id)
+}
+
+func TestMeshDB_Close(t *testing.T) {
+	mdb := getMeshdb()
+	mdb.Close()
+	err := mdb.AddBlock(NewExistingBlock(1, 1, nil))
+	assert.NotNil(t, err)
+}
+
+func TestMeshDb_Block(t *testing.T) {
+	mdb := getMeshdb()
+	blk := NewExistingBlock(123, 1, nil)
+	addTransactionsToBlock(blk, 5)
+	blk.AddAtx(NewActivationTx(NodeId{"aaaa", "bbb"},
+		1,
+		AtxId{},
+		5,
+		1,
+		AtxId{},
+		5,
+		[]BlockID{1, 2, 3},
+		&nipst.NIPST{}))
+	mdb.AddBlock(blk)
+	block, err := mdb.GetBlock(123)
+
+	assert.NoError(t, err)
+	assert.True(t, 123 == block.Id)
+
+	assert.True(t, block.Txs[0].Origin == blk.Txs[0].Origin)
+	assert.True(t, bytes.Equal(block.Txs[0].Recipient.Bytes(), blk.Txs[0].Recipient.Bytes()))
+	assert.True(t, bytes.Equal(block.Txs[0].Price, blk.Txs[0].Price))
+	assert.True(t, len(block.ATXs) == len(blk.ATXs))
+}
+
+func TestMeshDb_Layer(t *testing.T) {
+	layers := getMeshdb()
+	defer layers.Close()
+	id := LayerID(1)
+	data := []byte("data")
+	block1 := NewExistingBlock(123, 1, data)
+	block2 := NewExistingBlock(123, 1, data)
+	block3 := NewExistingBlock(123, 1, data)
+	l, err := layers.GetLayer(id)
+	assert.True(t, err != nil, "error: ", err)
+
+	err = layers.AddBlock(block1)
+	assert.NoError(t, err)
+	err = layers.AddBlock(block2)
+	assert.NoError(t, err)
+	err = layers.AddBlock(block3)
+	assert.NoError(t, err)
+	l, err = layers.GetLayer(id)
+	assert.NoError(t, err)
+	//assert.True(t, layers.VerifiedLayer() == 0, "wrong layer count")
+	assert.True(t, string(l.blocks[1].Data) == "data", "wrong block data ")
+}
+
+func TestMeshDB_AddBlock(t *testing.T) {
+
+	mdb := NewMemMeshDB(log.New("TestForEachInView", "", ""))
+	defer mdb.Close()
+
+	block1 := NewExistingBlock(BlockID(uuid.New().ID()), 1, []byte("data1"))
+
+	addTransactionsToBlock(block1, 4)
+
+	block1.AddAtx(NewActivationTx(NodeId{"aaaa", "bbb"}, 1, AtxId{}, 5, 1, AtxId{}, 5, []BlockID{1, 2, 3}, &nipst.NIPST{}))
+	err := mdb.AddBlock(block1)
+	assert.NoError(t, err)
+
+	rBlock1, err := mdb.GetBlock(block1.Id)
+	assert.NoError(t, err)
+
+	assert.True(t, len(rBlock1.Txs) == len(block1.Txs), "block content was wrong")
+	assert.True(t, len(rBlock1.ATXs) == len(block1.ATXs), "block content was wrong")
+	//assert.True(t, bytes.Compare(rBlock2.Data, []byte("data2")) == 0, "block content was wrong")
 }
 
 func chooseRandomPattern(blocksInLayer int, patternSize int) []int {

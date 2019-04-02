@@ -23,17 +23,18 @@ type BlockHeader struct {
 	Timestamp  int64
 	BlockVotes []BlockID
 	ViewEdges  []BlockID
-	ATXs       []*ActivationTx
 }
 
 type MiniBlock struct {
 	BlockHeader
 	TxIds []TransactionId
+	ATXs  []ActivationTx
 }
 
 type Block struct {
 	BlockHeader
-	Txs []*SerializableTransaction
+	Txs  []*SerializableTransaction
+	ATXs []*ActivationTx
 }
 
 type SerializableTransaction struct {
@@ -175,9 +176,9 @@ func NewExistingLayer(idx LayerID, blocks []*Block) *Layer {
 	return &l
 }
 
-func getMiniBlockBytes(bheader *MiniBlock) ([]byte, error) {
+func getMiniBlockBytes(bheader MiniBlock) ([]byte, error) {
 	var w bytes.Buffer
-	if _, err := xdr.Marshal(&w, bheader); err != nil {
+	if _, err := xdr.Marshal(&w, &bheader); err != nil {
 		return nil, fmt.Errorf("error marshalling block ids %v", err)
 	}
 	return w.Bytes(), nil

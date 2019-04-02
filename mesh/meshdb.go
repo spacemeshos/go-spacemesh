@@ -250,9 +250,14 @@ func (m *MeshDB) writeBlock(bl *Block) error {
 		return fmt.Errorf("could not write transactions of block %v database %v", bl.ID(), err)
 	}
 
-	minblock := &MiniBlock{*toBlockHeader(bl), txids}
-	minblock.ATXs = bl.ATXs
-	bytes, err := getMiniBlockBytes(minblock)
+	atxs := make([]ActivationTx, 0, len(bl.ATXs))
+
+	for _, atx := range bl.ATXs {
+		atxs = append(atxs, *atx)
+	}
+
+	minblock := &MiniBlock{*toBlockHeader(bl), txids, atxs}
+	bytes, err := getMiniBlockBytes(*minblock)
 	if err != nil {
 		return fmt.Errorf("could not encode bl")
 	}
