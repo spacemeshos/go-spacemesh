@@ -3,31 +3,43 @@ package nipst
 import (
 	"crypto/rand"
 	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/poet-ref/integration"
 	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
 )
 
+// newRPCPoetHarnessClient returns a new instance of RPCPoetClient
+// which utilizes a local self-contained poet server instance
+// in order to exercise functionality.
+func newRPCPoetHarnessClient() (*RPCPoetClient, error) {
+	h, err := integration.NewHarness()
+	if err != nil {
+		return nil, err
+	}
+
+	return newRPCPoetClient(h.PoetClient, h.TearDown), nil
+}
+
 type rpcPoetTestCase struct {
 	name string
-	test func(c *RPCPoetHarness, assert *require.Assertions)
+	test func(c *RPCPoetClient, assert *require.Assertions)
 }
 
 var rpcPoetTestCases = []*rpcPoetTestCase{
-	{name: "RPC poet harness", test: testRPCPoetHarness},
-	{name: "RPC poet harness timeouts", test: testRPCPoetHarnessTimeouts},
+	{name: "RPC poet client", test: testRPCPoetClient},
+	{name: "RPC poet client timeouts", test: testRPCPoetClientTimeouts},
 }
 
 func TestRPCPoet(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
-
 	assert := require.New(t)
 
-	c, err := newRPCPoetHarness()
+	c, err := newRPCPoetHarnessClient()
 	defer func() {
-		err := c.cleanUp()
+		err := c.CleanUp()
 		assert.NoError(err)
 	}()
 	assert.NoError(err)
@@ -44,7 +56,7 @@ func TestRPCPoet(t *testing.T) {
 	}
 }
 
-func testRPCPoetHarness(c *RPCPoetHarness, assert *require.Assertions) {
+func testRPCPoetClient(c *RPCPoetClient, assert *require.Assertions) {
 	var ch common.Hash
 	_, err := rand.Read(ch[:])
 	assert.NoError(err)
@@ -64,7 +76,7 @@ func testRPCPoetHarness(c *RPCPoetHarness, assert *require.Assertions) {
 	assert.True(proof.valid())
 }
 
-func testRPCPoetHarnessTimeouts(c *RPCPoetHarness, assert *require.Assertions) {
+func testRPCPoetClientTimeouts(c *RPCPoetClient, assert *require.Assertions) {
 	var ch common.Hash
 	_, err := rand.Read(ch[:])
 	assert.NoError(err)
