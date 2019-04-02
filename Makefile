@@ -22,7 +22,11 @@ PKGS = $(shell go list ./...)
 PLATFORMS := windows linux darwin
 os = $(word 1, $@)
 
-DOCKER_IMAGE_NAME=go-spacemesh
+ifeq ($(BRANCH),develop)
+        DOCKER_IMAGE_NAME := go-spacemesh
+else
+        DOCKER_IMAGE_NAME := go-spacemesh-dev
+endif
 
 all: install build
 .PHONY: all
@@ -121,10 +125,11 @@ dockerbuild-go:
 dockerpush: dockerbuild-go
 	echo "$(DOCKER_PASSWORD)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
 	docker tag $(DOCKER_IMAGE_NAME):$(BRANCH) spacemeshos/$(DOCKER_IMAGE_NAME):$(BRANCH)
-	docker tag $(DOCKER_IMAGE_NAME):$(BRANCH) spacemeshos/$(DOCKER_IMAGE_NAME):$(SHA)
-
 	docker push spacemeshos/$(DOCKER_IMAGE_NAME):$(BRANCH)
+ifeq ($(BRANCH),develop)
+	docker tag $(DOCKER_IMAGE_NAME):$(BRANCH) spacemeshos/$(DOCKER_IMAGE_NAME):$(SHA)
 	docker push spacemeshos/$(DOCKER_IMAGE_NAME):$(SHA)
+endif
 .PHONY: dockerpush
 
 dockerbuild-test:
@@ -141,3 +146,4 @@ ifndef ES_PASSWD
 endif
 	docker run -e ES_PASSWD="$(ES_PASSWD)" -e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json -it go-spacemesh-python pytest -s test_bs.py --tc-file=config.yaml --tc-format=yaml
 .PHONY: dockerrun-test
+
