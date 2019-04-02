@@ -79,23 +79,7 @@ func TestBuilder_NoPrevATX(t *testing.T) {
 	echp := &EchProvider{}
 	layers := MeshProviderrMock{}
 	b := NewBuilder(id, database.NewMemDatabase(), net, ActiveSetProviderMock{}, layers, echp)
-	//adb := b.db
-	prevAtx := mesh.AtxId{Hash: common.HexToHash("0x111")}
-	npst := nipst.NIPST{}
-	atx := mesh.NewActivationTx(mesh.NodeId{"aaaa", "bbb"},
-		1,
-		prevAtx,
-		5,
-		1,
-		prevAtx,
-		5,
-		[]mesh.BlockID{1, 2, 3},
-		&npst)
-	//adb.StoreAtx(echp.Epoch(atx.LayerIndex), atx)
-	act := mesh.NewActivationTx(b.nodeId, b.GetLastSequence(b.nodeId)+1, atx.Id(), layers.LatestLayerId(), 0, atx.Id(), b.activeSet.GetActiveSetSize(1), b.mesh.GetLatestView(), &npst)
 	err := b.BuildActivationTx(&nipst.NIPST{})
-	assert.NoError(t, err)
-	bts, err := mesh.AtxAsBytes(act)
-	assert.NoError(t, err)
-	assert.Equal(t, bts, net.bt)
+	assert.Error(t, err)
+
 }
