@@ -4,8 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/google/uuid"
-	"github.com/spacemeshos/go-spacemesh/consensus"
-	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -14,6 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 	"math/big"
+	"os"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -24,6 +23,7 @@ var conf = Configuration{2 * time.Second, 1, 300, 100 * time.Millisecond}
 const (
 	levelDB  = "LevelDB"
 	memoryDB = "MemoryDB"
+	Path     = "../tmp/sync/"
 )
 
 type MockTimer struct {
@@ -50,7 +50,7 @@ func SyncMockFactory(number int, conf Configuration, name string, dbType string)
 		net := sim.NewNode()
 		name := fmt.Sprintf(name+"_%d", i)
 		l := log.New(name, "", "")
-		sync := NewSync(net, getMesh(name+"_"+time.Now().String(), dbType), BlockValidatorMock{}, conf, tk, l)
+		sync := NewSync(net, getMesh(dbType, name+"_"+time.Now().String()), BlockValidatorMock{}, conf, tk, l)
 		ts.Start()
 		nodes = append(nodes, sync)
 		p2ps = append(p2ps, net)
@@ -76,51 +76,32 @@ func (mlg *MeshValidatorMock) ContextualValidity(id mesh.BlockID) bool   { retur
 
 type stateMock struct{}
 
-func (s *stateMock) ApplyTransactions(id mesh.LayerID, tx mesh.Transactions) (uint32, error) {
-	return 0, nil
-}
-
-func ConfigTst() mesh.RewardConfig {
-	return mesh.RewardConfig{
-		big.NewInt(10),
-		big.NewInt(5000),
-		big.NewInt(15),
-		15,
-		5,
-	}
-}
-
-func getMeshWithLevelDB(id string) *mesh.Mesh {
-	//time := time.Now()
-	bdb := database.NewLevelDbStore("blocks_test_"+id, nil, nil)
-	ldb := database.NewLevelDbStore("layers_test_"+id, nil, nil)
-	cv := database.NewLevelDbStore("contextually_valid_test_"+id, nil, nil)
-	txs := database.NewLevelDbStore("transactions_"+id, nil, nil)
-	lg := log.New(id, "", "")
-	mdb := mesh.NewMeshDB(ldb, bdb, cv, txs, lg)
-	layers := mesh.NewMesh(mdb, ConfigTst(), &MeshValidatorMock{}, &stateMock{}, lg)
-	return layers
-}
-
-type MockState struct{}
-
-func (MockState) ApplyTransactions(layer mesh.LayerID, txs mesh.Transactions) (uint32, error) {
-	return 0, nil
-}
-
 func (s *stateMock) ApplyRewards(layer mesh.LayerID, miners map[string]struct{}, underQuota map[string]struct{}, bonusReward, diminishedReward *big.Int) {
 
 }
 
+func (s *stateMock) ApplyTransactions(id mesh.LayerID, tx mesh.Transactions) (uint32, error) {
+	return 0, nil
+}
+
+var rewardConf = mesh.RewardConfig{
+	big.NewInt(10),
+	big.NewInt(5000),
+	big.NewInt(15),
+	15,
+	5,
+}
+
+func getMeshWithLevelDB(id string) *mesh.Mesh {
+	return mesh.NewPersistentMesh(fmt.Sprintf(Path+"%v/", id), rewardConf, &MeshValidatorMock{}, &stateMock{}, log.New(id, "", ""))
+}
+
+func persistenceTeardown() {
+	os.RemoveAll(Path)
+}
+
 func getMeshWithMemoryDB(id string) *mesh.Mesh {
-	bdb := database.NewMemDatabase()
-	ldb := database.NewMemDatabase()
-	cv := database.NewMemDatabase()
-	txs := database.NewMemDatabase()
-	lg := log.New(id, "", "")
-	mdb := mesh.NewMeshDB(ldb, bdb, cv, txs, lg)
-	layers := mesh.NewMesh(mdb, ConfigTst(), &MeshValidatorMock{}, &stateMock{}, lg)
-	return layers
+	return mesh.NewMemMesh(rewardConf, &MeshValidatorMock{}, &stateMock{}, log.New(id, "", ""))
 }
 
 func getMesh(dbType, id string) *mesh.Mesh {
@@ -413,10 +394,10 @@ func syncTest(dpType string, t *testing.T) {
 	block9 := mesh.NewExistingBlock(mesh.BlockID(999), 4, nil)
 	block10 := mesh.NewExistingBlock(mesh.BlockID(101), 4, nil)
 
-	syncObj1.Mesh.ValidateLayer(consensus.GenesisLayer())
-	syncObj2.Mesh.ValidateLayer(consensus.GenesisLayer())
-	syncObj3.Mesh.ValidateLayer(consensus.GenesisLayer())
-	syncObj4.Mesh.ValidateLayer(consensus.GenesisLayer())
+	syncObj1.Mesh.ValidateLayer(mesh.GenesisLayer())
+	syncObj2.Mesh.ValidateLayer(mesh.GenesisLayer())
+	syncObj3.Mesh.ValidateLayer(mesh.GenesisLayer())
+	syncObj4.Mesh.ValidateLayer(mesh.GenesisLayer())
 	syncObj1.AddBlock(block3)
 	syncObj1.AddBlock(block4)
 	syncObj1.AddBlock(block5)

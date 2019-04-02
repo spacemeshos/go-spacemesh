@@ -1,6 +1,7 @@
 package p2p
 
 import (
+	"errors"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
@@ -18,24 +19,17 @@ func NewProtocolMessageMetadata(author p2pcrypto.PublicKey, protocol string) *pb
 	}
 }
 
-//type p2pMetadata struct {
-//	data map[string]string // connection address
-//	// todo: anything more ?
-//}
-//
-//func (m p2pMetadata) set(k, v string) {
-//	m.data[k] = v
-//}
-//
-//// Address is the address on which a connection
-//func (m p2pMetadata) Get(k string) (string, bool) {
-//	v, ok := m.data[k]
-//	return v, ok
-//}
-//
-//func newP2PMetadata() p2pMetadata {
-//	return p2pMetadata{make(map[string]string)}
-//}
+func ExtractData(pm *pb.ProtocolMessage) (service.Data, error) {
+	var data service.Data
+	if payload := pm.GetPayload(); payload != nil {
+		data = &service.DataBytes{Payload: payload}
+	} else if wrap := pm.GetMsg(); wrap != nil {
+		data = &service.DataMsgWrapper{Req: wrap.Req, MsgType: wrap.Type, ReqID: wrap.ReqID, Payload: wrap.Payload}
+	} else {
+		return nil, errors.New("not valid data type")
+	}
+	return data, nil
+}
 
 type directProtocolMessage struct {
 	metadata service.P2PMetadata
