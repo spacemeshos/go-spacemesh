@@ -12,9 +12,10 @@ bootstrap:
   command: '/bin/go-hare'
   replicas: 1
   args:
+    randcon: '8'
     hare-committee-size: '50'
     hare-max-adversaries: '24'
-    hare-round-duration-sec: '5'
+    hare-round-duration-sec: '10'
     layer-duration-sec: '360'
 
 client:
@@ -22,9 +23,10 @@ client:
   command: '/bin/go-hare'
   replicas: 49
   args:
+    randcon: '8'
     hare-committee-size: '50'
     hare-max-adversaries: '24'
-    hare-round-duration-sec: '5'
+    hare-round-duration-sec: '10'
     layer-duration-sec: '360'
 
 elastic:
