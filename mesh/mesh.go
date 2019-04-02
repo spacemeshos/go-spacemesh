@@ -344,14 +344,14 @@ func (m *Mesh) AccumulateRewards(rewardLayer LayerID, params RewardConfig) {
 
 	//todo: check if block producer was eligible?
 	for _, bl := range l.blocks {
-		if _, found := ids[bl.MinerID]; found {
+		if _, found := ids[bl.MinerID.Key]; found {
 			log.Error("two blocks found from same miner %v in layer %v", bl.MinerID, bl.LayerIndex)
 			continue
 		}
-		ids[bl.MinerID] = struct{}{}
+		ids[bl.MinerID.Key] = struct{}{}
 		if uint32(len(bl.Txs)) < params.TxQuota {
 			//todo: think of giving out reward for unique txs as well
-			uq[bl.MinerID] = struct{}{}
+			uq[bl.MinerID.Key] = struct{}{}
 		}
 	}
 	//accumulate all blocks rewards
