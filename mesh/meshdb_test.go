@@ -67,28 +67,6 @@ func TestMeshDb_Block(t *testing.T) {
 	assert.True(t, len(block.ATXs) == len(blk.ATXs))
 }
 
-func TestMeshDb_Sirialize(t *testing.T) {
-	blk := NewExistingBlock(123, 1, nil)
-	addTransactionsToBlock(blk, 5)
-	blk.AddAtx(NewActivationTx(NodeId{"aaaa", "bbb"},
-		1,
-		AtxId{},
-		5,
-		1,
-		AtxId{},
-		5,
-		[]BlockID{1, 2, 3},
-		&nipst.NIPST{}))
-	b, _ := BlockAsBytes(*blk)
-	blk2, _ := BytesAsBlock(b)
-
-	getMiniBlockBytes()
-
-	fmt.Println(blk2)
-	fmt.Println(blk)
-
-}
-
 func TestMeshDb_Layer(t *testing.T) {
 	layers := getMeshdb()
 	defer layers.Close()
