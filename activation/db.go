@@ -13,7 +13,7 @@ type ActivationDb struct {
 	Atxs database.DB
 }
 
-func (db *ActivationDb) StoreAtx(atx *mesh.ActivationTx) error {
+func (db *ActivationDb) StoreAtx(ech EpochId, atx *mesh.ActivationTx) error {
 	//todo: maybe cleanup DB if failed by using defer
 	if b, err := db.Atxs.Get(atx.Id().Bytes()); err == nil && len(b) > 0 {
 		// exists - how should we handle this?
@@ -28,7 +28,7 @@ func (db *ActivationDb) StoreAtx(atx *mesh.ActivationTx) error {
 		return err
 	}
 
-	err = db.addAtxToLayer(atx.LayerIndex, atx.Id())
+	err = db.addAtxToEpoch(ech, atx.Id())
 	if err != nil {
 		return err
 	}
@@ -40,8 +40,8 @@ func (db *ActivationDb) StoreAtx(atx *mesh.ActivationTx) error {
 }
 
 //todo: add tx to epoch
-func (db *ActivationDb) addAtxToLayer(l mesh.LayerID, atx mesh.AtxId) error {
-	ids, err := db.Atxs.Get(l.ToBytes())
+func (db *ActivationDb) addAtxToEpoch(epochId EpochId, atx mesh.AtxId) error {
+	ids, err := db.Atxs.Get(epochId.ToBytes())
 	var atxs []mesh.AtxId
 	if err != nil {
 		//layer doesnt exist, need to insert new layer
@@ -58,7 +58,7 @@ func (db *ActivationDb) addAtxToLayer(l mesh.LayerID, atx mesh.AtxId) error {
 	if err != nil {
 		return errors.New("could not encode layer atx ids")
 	}
-	return db.Atxs.Put(l.ToBytes(), w)
+	return db.Atxs.Put(epochId.ToBytes(), w)
 }
 
 func (db *ActivationDb) addAtxToNodeId(nodeId mesh.NodeId, atx mesh.AtxId) error {
@@ -94,8 +94,8 @@ func (db *ActivationDb) GetNodeAtxIds(node mesh.NodeId) ([]mesh.AtxId, error) {
 	return atxs, nil
 }
 
-func (db *ActivationDb) GetLayerAtxIds(l mesh.LayerID) ([]mesh.AtxId, error) {
-	ids, err := db.Atxs.Get(l.ToBytes())
+func (db *ActivationDb) GetEpochAtxIds(epochId EpochId) ([]mesh.AtxId, error) {
+	ids, err := db.Atxs.Get(epochId.ToBytes())
 	if err != nil {
 		return nil, err
 	}
