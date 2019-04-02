@@ -40,10 +40,10 @@ func (p *PoetProvingServiceClientMock) subscribeProof(r *poetRound, timeout time
 }
 
 type ActivationBuilderMock struct {
-	nipst chan NIPST
+	nipst chan *NIPST
 }
 
-func (a *ActivationBuilderMock) BuildActivationTx(proof NIPST) {
+func (a *ActivationBuilderMock) BuildActivationTx(proof *NIPST) {
 	a.nipst <- proof
 }
 
@@ -53,14 +53,15 @@ func TestNIPSTBuilderWithMockClients(t *testing.T) {
 	postProver := &PostProverClientMock{}
 	poetProver := &PoetProvingServiceClientMock{}
 
-	nipstChan := make(chan NIPST)
+	nipstChan := make(chan *NIPST)
 	activationBuilder := &ActivationBuilderMock{nipst: nipstChan}
 
 	nb := NewNIPSTBuilder([]byte("id"), 1024, 600, postProver, poetProver, activationBuilder)
 	nb.Start()
 
 	select {
-	case <-nipstChan:
+	case nipst := <-nipstChan:
+		assert.True(nipst.Valid())
 	case <-time.After(5 * time.Second):
 		assert.Fail("timeout")
 		return
@@ -87,7 +88,7 @@ func TestNIPSTBuilderWithRPCClients(t *testing.T) {
 	// TODO(moshababo): replace post client mock to a package client or rpc client.
 	postProver := &PostProverClientMock{}
 
-	nipstChan := make(chan NIPST)
+	nipstChan := make(chan *NIPST)
 	activationBuilder := &ActivationBuilderMock{nipst: nipstChan}
 
 	nb := NewNIPSTBuilder([]byte("id"), 1024, 600, postProver, poetProver, activationBuilder)
@@ -104,7 +105,8 @@ func TestNIPSTBuilderWithRPCClients(t *testing.T) {
 	nb.Start()
 
 	select {
-	case <-nipstChan:
+	case nipst := <-nipstChan:
+		assert.True(nipst.Valid())
 	case <-time.After(5 * time.Second):
 		assert.Fail("timeout")
 	}

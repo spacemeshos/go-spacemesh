@@ -131,7 +131,7 @@ func (n *NIPST) Valid() bool {
 }
 
 type ActivationBuilder interface {
-	BuildActivationTx(proof NIPST)
+	BuildActivationTx(proof *NIPST)
 }
 
 type NIPSTBuilder struct {
@@ -335,7 +335,7 @@ func (nb *NIPSTBuilder) loop() {
 		log.Info("finished NIPST construction")
 
 		// build the ATX from the NIPST.
-		nb.activationBuilder.BuildActivationTx(*nb.nipst)
+		nb.activationBuilder.BuildActivationTx(nb.nipst)
 
 		// create and set a new NIPST instance for the next iteration.
 		nb.nipst = initialNIPST(nb.id, nb.space, nb.duration, nb.nipst)
