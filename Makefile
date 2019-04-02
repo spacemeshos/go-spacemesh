@@ -23,9 +23,9 @@ PLATFORMS := windows linux darwin
 os = $(word 1, $@)
 
 ifeq ($(BRANCH),develop)
-        DOCKER_IMAGE_NAME := go-spacemesh
+        DOCKER_IMAGE_REPO := go-spacemesh
 else
-        DOCKER_IMAGE_NAME := go-spacemesh-dev
+        DOCKER_IMAGE_REPO := go-spacemesh-dev
 endif
 
 all: install build
@@ -119,16 +119,16 @@ cover:
 .PHONY: cover
 
 dockerbuild-go:
-	docker build -t $(DOCKER_IMAGE_NAME):$(BRANCH) .
+	docker build -t $(DOCKER_IMAGE_REPO):$(BRANCH) .
 .PHONY: dockerbuild-go
 
 dockerpush: dockerbuild-go
 	echo "$(DOCKER_PASSWORD)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
-	docker tag $(DOCKER_IMAGE_NAME):$(BRANCH) spacemeshos/$(DOCKER_IMAGE_NAME):$(BRANCH)
-	docker push spacemeshos/$(DOCKER_IMAGE_NAME):$(BRANCH)
+	docker tag $(DOCKER_IMAGE_REPO):$(BRANCH) spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)
+	docker push spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)
 ifeq ($(BRANCH),develop)
-	docker tag $(DOCKER_IMAGE_NAME):$(BRANCH) spacemeshos/$(DOCKER_IMAGE_NAME):$(SHA)
-	docker push spacemeshos/$(DOCKER_IMAGE_NAME):$(SHA)
+	docker tag $(DOCKER_IMAGE_REPO):$(BRANCH) spacemeshos/$(DOCKER_IMAGE_REPO):$(SHA)
+	docker push spacemeshos/$(DOCKER_IMAGE_REPO):$(SHA)
 endif
 .PHONY: dockerpush
 
