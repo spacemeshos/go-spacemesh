@@ -322,19 +322,19 @@ func chooseRandomPattern(blocksInLayer int, patternSize int) []int {
 
 //this is  a util function to manufacture mesh files for the test
 func TestSyncer_MakeMeshFile(t *testing.T) {
-	//t.Skip()
+	t.Skip()
 	db := database.NewLevelDbStore("sync", nil, nil)
 	defer db.Close()
 	lg := log.New("sync", "", "")
 	mdb := mesh.NewMeshDB(db, db, db, db, lg)
 	l, _ := mdb.GetLayer(5)
 	assert.True(t, len(l.Blocks()) == 200)
-	////todo add 10 layers of 200 blocks
-	//l1 := GenesisLayer()
-	//l := createLayerWithRandVoting(l1.Index()+1, []*mesh.Layer{l1}, 200, 1)
-	//for i := 0; i < 100; i++ {
-	//	lyr := createLayerWithCorruptedPattern(l.Index()+1, l, 200, 180, 0.1)
-	//	mdb.AddLayer(lyr)
-	//	l = lyr
-	//}
+	l1 := GenesisLayer()
+	l = createLayerWithRandVoting(l1.Index()+1, []*mesh.Layer{l1}, 200, 1)
+	mdb.AddLayer(l)
+	for i := 0; i < 100; i++ {
+		lyr := createLayerWithCorruptedPattern(l.Index()+1, l, 200, 180, 0.1)
+		mdb.AddLayer(lyr)
+		l = lyr
+	}
 }
