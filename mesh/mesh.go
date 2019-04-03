@@ -15,9 +15,10 @@ import (
 )
 
 const (
-	layerSize = 200
-	Genesis   = 0
-	GenesisId = 420
+	layerSize     = 200
+	Genesis       = 0
+	GenesisId     = 420
+	LayersInEpoch = 1000
 )
 
 var TRUE = []byte{1}
@@ -34,9 +35,14 @@ type StateUpdater interface {
 	ApplyRewards(layer LayerID, miners map[string]struct{}, underQuota map[string]struct{}, bonusReward, diminishedReward *big.Int)
 }
 
+type AtxDB interface {
+	StoreAtx(ech EpochId, atx *ActivationTx) error
+}
+
 type Mesh struct {
 	log.Log
 	mdb           *MeshDB
+	AtxDB         AtxDB
 	rewardConfig  RewardConfig
 	verifiedLayer LayerID
 	latestLayer   LayerID
@@ -188,7 +194,47 @@ func (m *Mesh) ValidateLayer(lyr *Layer) {
 	m.lvMutex.Unlock()
 	if newPbase > oldPbase {
 		m.PushTransactions(oldPbase, newPbase)
+		m.addAtxs(oldPbase, newPbase)
 	}
+}
+
+func (m *Mesh) addAtxs(oldBase, newBase LayerID) {
+	for i := oldBase; i < newBase; i++ {
+
+		l, err := m.mdb.GetLayer(i)
+		if err != nil || l == nil {
+			m.Error("") //todo handle error
+			return
+		}
+		for _, blk := range l.Blocks() {
+			m.processBlockATXs(blk)
+		}
+
+	}
+}
+func (m *Mesh) processBlockATXs(block *Block) {
+	for _, atx := range block.ATXs {
+		activeSet, err := m.CalcActiveSetFromView(atx)
+		if err != nil {
+			log.Error("could not calculate active set for %v", atx.Id())
+		}
+		atx.VerifiedActiveSet = activeSet
+		err = m.AtxDB.StoreAtx(EpochId(atx.LayerIndex/LayersInEpoch), atx)
+		if err != nil {
+			log.Error("cannot store atx: %v", atx)
+		}
+	}
+}
+
+func (m *Mesh) UniqueAtxs(lyr *Layer) map[*ActivationTx]struct{} {
+	atxMap := make(map[*ActivationTx]struct{})
+	for _, blk := range lyr.blocks {
+		for _, atx := range blk.ATXs {
+			atxMap[atx] = struct{}{}
+		}
+
+	}
+	return atxMap
 }
 
 func SortBlocks(blocks []*Block) []*Block {

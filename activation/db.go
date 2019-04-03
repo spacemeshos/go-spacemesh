@@ -4,18 +4,28 @@ import (
 	"bytes"
 	"errors"
 	"github.com/davecgh/go-xdr/xdr2"
+	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 )
 
+const CounterKey = 0xaaaa
+
 type ActivationDb struct {
 	//todo: think about whether we need one db or several
-	Atxs database.DB
+	atxs database.DB
 }
 
-func (db *ActivationDb) StoreAtx(ech EpochId, atx *mesh.ActivationTx) error {
+func NewActivationDb(dbstore database.DB) *ActivationDb {
+	return &ActivationDb{atxs: dbstore}
+}
+
+func (db *ActivationDb) StoreAtx(ech mesh.EpochId, atx *mesh.ActivationTx) error {
+	log.Debug("storing atx %v, in epoch %v", atx, ech)
+
 	//todo: maybe cleanup DB if failed by using defer
-	if b, err := db.Atxs.Get(atx.Id().Bytes()); err == nil && len(b) > 0 {
+	if b, err := db.atxs.Get(atx.Id().Bytes()); err == nil && len(b) > 0 {
 		// exists - how should we handle this?
 		return nil
 	}
@@ -23,7 +33,7 @@ func (db *ActivationDb) StoreAtx(ech EpochId, atx *mesh.ActivationTx) error {
 	if err != nil {
 		return err
 	}
-	err = db.Atxs.Put(atx.Id().Bytes(), b)
+	err = db.atxs.Put(atx.Id().Bytes(), b)
 	if err != nil {
 		return err
 	}
@@ -32,6 +42,9 @@ func (db *ActivationDb) StoreAtx(ech EpochId, atx *mesh.ActivationTx) error {
 	if err != nil {
 		return err
 	}
+	if atx.Valid() {
+		db.incValidAtxCounter(ech)
+	}
 	err = db.addAtxToNodeId(atx.NodeId, atx.Id())
 	if err != nil {
 		return err
@@ -39,12 +52,33 @@ func (db *ActivationDb) StoreAtx(ech EpochId, atx *mesh.ActivationTx) error {
 	return nil
 }
 
-//todo: add tx to epoch
-func (db *ActivationDb) addAtxToEpoch(epochId EpochId, atx mesh.AtxId) error {
-	ids, err := db.Atxs.Get(epochId.ToBytes())
+func epochCounterKey(ech mesh.EpochId) []byte {
+	return append(ech.ToBytes(), common.Uint64ToBytes(uint64(CounterKey))...)
+}
+
+func (db *ActivationDb) incValidAtxCounter(ech mesh.EpochId) error {
+	key := epochCounterKey(ech)
+	val, err := db.atxs.Get(key)
+	if err == nil {
+		return db.atxs.Put(key, common.Uint64ToBytes(common.BytesToUint64(val)+1))
+	}
+	return db.atxs.Put(key, common.Uint64ToBytes(1))
+}
+
+func (db *ActivationDb) ActiveIds(ech mesh.EpochId) uint64 {
+	key := epochCounterKey(ech)
+	val, err := db.atxs.Get(key)
+	if err != nil {
+		return 0
+	}
+	return common.BytesToUint64(val)
+}
+
+func (db *ActivationDb) addAtxToEpoch(epochId mesh.EpochId, atx mesh.AtxId) error {
+	ids, err := db.atxs.Get(epochId.ToBytes())
 	var atxs []mesh.AtxId
 	if err != nil {
-		//layer doesnt exist, need to insert new layer
+		//epoch doesnt exist, need to insert new layer
 		ids = []byte{}
 		atxs = make([]mesh.AtxId, 0, 0)
 	} else {
@@ -58,11 +92,11 @@ func (db *ActivationDb) addAtxToEpoch(epochId EpochId, atx mesh.AtxId) error {
 	if err != nil {
 		return errors.New("could not encode layer atx ids")
 	}
-	return db.Atxs.Put(epochId.ToBytes(), w)
+	return db.atxs.Put(epochId.ToBytes(), w)
 }
 
 func (db *ActivationDb) addAtxToNodeId(nodeId mesh.NodeId, atx mesh.AtxId) error {
-	ids, err := db.Atxs.Get(nodeId.ToBytes())
+	ids, err := db.atxs.Get(nodeId.ToBytes())
 	var atxs []mesh.AtxId
 	if err != nil {
 		//layer doesnt exist, need to insert new layer
@@ -79,11 +113,11 @@ func (db *ActivationDb) addAtxToNodeId(nodeId mesh.NodeId, atx mesh.AtxId) error
 	if err != nil {
 		return errors.New("could not encode layer atx ids")
 	}
-	return db.Atxs.Put(nodeId.ToBytes(), w)
+	return db.atxs.Put(nodeId.ToBytes(), w)
 }
 
 func (db *ActivationDb) GetNodeAtxIds(node mesh.NodeId) ([]mesh.AtxId, error) {
-	ids, err := db.Atxs.Get(node.ToBytes())
+	ids, err := db.atxs.Get(node.ToBytes())
 	if err != nil {
 		return nil, err
 	}
@@ -94,8 +128,8 @@ func (db *ActivationDb) GetNodeAtxIds(node mesh.NodeId) ([]mesh.AtxId, error) {
 	return atxs, nil
 }
 
-func (db *ActivationDb) GetEpochAtxIds(epochId EpochId) ([]mesh.AtxId, error) {
-	ids, err := db.Atxs.Get(epochId.ToBytes())
+func (db *ActivationDb) GetEpochAtxIds(epochId mesh.EpochId) ([]mesh.AtxId, error) {
+	ids, err := db.atxs.Get(epochId.ToBytes())
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +141,7 @@ func (db *ActivationDb) GetEpochAtxIds(epochId EpochId) ([]mesh.AtxId, error) {
 }
 
 func (db *ActivationDb) GetAtx(id mesh.AtxId) (*mesh.ActivationTx, error) {
-	b, err := db.Atxs.Get(id.Bytes())
+	b, err := db.atxs.Get(id.Bytes())
 	if err != nil {
 		return nil, err
 	}

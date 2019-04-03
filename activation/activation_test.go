@@ -11,8 +11,8 @@ import (
 
 type EchProvider struct{}
 
-func (EchProvider) Epoch(l mesh.LayerID) EpochId {
-	return EpochId(l / 10)
+func (EchProvider) Epoch(l mesh.LayerID) mesh.EpochId {
+	return mesh.EpochId(l / 10)
 }
 
 type ActiveSetProviderMock struct{}

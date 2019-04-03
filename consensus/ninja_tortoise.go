@@ -64,7 +64,7 @@ func (vp votingPattern) Layer() mesh.LayerID {
 type BlockCache interface {
 	GetBlock(id mesh.BlockID) (*mesh.Block, error)
 	LayerBlockIds(id mesh.LayerID) ([]mesh.BlockID, error)
-	ForBlockInView(view map[mesh.BlockID]struct{}, layer mesh.LayerID, foo func(block *mesh.BlockHeader), errHandler func(err error))
+	ForBlockInView(view map[mesh.BlockID]struct{}, layer mesh.LayerID, foo mesh.TraversalFunc, errHandler func(err error)) error
 }
 
 //todo memory optimizations
@@ -211,7 +211,7 @@ func globalOpinion(v vec, layerSize uint64, delta float64) vec {
 }
 
 func (ni *ninjaTortoise) updateCorrectionVectors(p votingPattern, bottomOfWindow mesh.LayerID) {
-	foo := func(x *mesh.BlockHeader) {
+	foo := func(x *mesh.BlockHeader) error {
 		for _, bid := range ni.tEffectiveToBlocks[p] { //for all b who's effective vote is p
 			b, err := ni.GetBlock(bid)
 			if err != nil {
@@ -231,6 +231,7 @@ func (ni *ninjaTortoise) updateCorrectionVectors(p votingPattern, bottomOfWindow
 				ni.Debug("block %d from layer %d dose'nt explicitly vote for layer %d", b.ID(), b.Layer(), x.Layer())
 			}
 		}
+		return nil
 	}
 
 	ni.ForBlockInView(ni.tPattern[p], bottomOfWindow, foo, func(err error) {})
@@ -462,13 +463,14 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *mesh.Layer) { //i most rece
 			view := make(map[mesh.BlockID]struct{})
 			lCntr := make(map[mesh.LayerID]int)
 			correctionMap, effCountMap, getCrrEffCnt := ni.getCorrEffCounter()
-			foo := func(block *mesh.BlockHeader) {
+			foo := func(block *mesh.BlockHeader) error {
 				view[block.ID()] = struct{}{} //all blocks in view
 				for _, id := range block.BlockVotes {
 					view[id] = struct{}{}
 				}
 				lCntr[block.Layer()]++ //amount of blocks for each layer in view
 				getCrrEffCnt(block)    //calc correction and eff count
+				return nil
 			}
 
 			ni.ForBlockInView(ni.tPattern[p], ni.pBase.Layer()+1, foo, func(err error) {})

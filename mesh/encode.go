@@ -26,3 +26,19 @@ func bytesToBlockIds(blockIds []byte) (map[BlockID]bool, error) {
 	}
 	return ids, nil
 }
+
+func viewAsBytes(ids []BlockID) ([]byte, error) {
+	var w bytes.Buffer
+	if _, err := xdr.Marshal(&w, &ids); err != nil {
+		return nil, errors.New("error marshalling block ids ")
+	}
+	return w.Bytes(), nil
+}
+
+func bytesToView(blockIds []byte) ([]BlockID, error) {
+	var ids []BlockID
+	if _, err := xdr.Unmarshal(bytes.NewReader(blockIds), &ids); err != nil {
+		return nil, errors.New("error marshaling layer ")
+	}
+	return ids, nil
+}

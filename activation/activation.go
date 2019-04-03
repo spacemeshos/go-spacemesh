@@ -2,7 +2,6 @@ package activation
 
 import (
 	"github.com/spacemeshos/go-spacemesh/api"
-	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -20,12 +19,8 @@ type MeshProvider interface {
 	LatestLayerId() mesh.LayerID
 }
 
-type EpochId uint64
-
-func (l EpochId) ToBytes() []byte { return common.Uint64ToBytes(uint64(l)) }
-
 type EpochProvider interface {
-	Epoch(l mesh.LayerID) EpochId
+	Epoch(l mesh.LayerID) mesh.EpochId
 }
 
 type Builder struct {
@@ -42,18 +37,9 @@ type Processor struct {
 	epochProvider EpochProvider
 }
 
-func (p *Processor) ProcessBlockATXs(block *mesh.Block) {
-	for _, atx := range block.ATXs {
-		err := p.db.StoreAtx(p.epochProvider.Epoch(atx.LayerIndex), atx)
-		if err != nil {
-			log.Error("cannot store atx: %v", atx)
-		}
-	}
-}
-
 func NewBuilder(nodeId mesh.NodeId, db database.DB, net api.NetworkAPI, activeSet ActiveSetProvider, view MeshProvider, epochDuration EpochProvider) *Builder {
 	return &Builder{
-		nodeId, &ActivationDb{db}, net, activeSet, view, epochDuration,
+		nodeId, NewActivationDb(db), net, activeSet, view, epochDuration,
 	}
 }
 
@@ -100,7 +86,7 @@ func (b *Builder) GetPrevAtxId(node mesh.NodeId) (*mesh.AtxId, error) {
 	return &ids[len(ids)-1], nil
 }
 
-func (b *Builder) GetPositioningAtxId(epochId EpochId) (*mesh.AtxId, error) {
+func (b *Builder) GetPositioningAtxId(epochId mesh.EpochId) (*mesh.AtxId, error) {
 	atxs, err := b.db.GetEpochAtxIds(epochId)
 	if err != nil {
 		return nil, err
