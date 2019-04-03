@@ -19,9 +19,7 @@ const maxMessageSize = 2048
 // todo : calculate real udp max message size
 
 // Lookuper is a service used to lookup for nodes we know already
-type Lookuper interface {
-	InternalLookup(key node.DhtID) []node.Node
-}
+type Lookuper func(key p2pcrypto.PublicKey) (node.Node, error)
 
 type udpNetwork interface {
 	Start() error
@@ -109,22 +107,9 @@ func (mux *UDPMux) ProcessDirectProtocolMessage(sender p2pcrypto.PublicKey, prot
 		return errors.New("no protocol")
 	}
 
-	msgchan <- &udpProtocolMessage{metadata, sender, data.Bytes()}
+	msgchan <- &udpProtocolMessage{metadata, sender, data}
 
 	return nil
-}
-
-func (mux *UDPMux) localLookup(key p2pcrypto.PublicKey) (node.Node, error) {
-	res := mux.lookuper.InternalLookup(node.NewDhtID(key.Bytes()))
-	if res == nil || len(res) == 0 {
-		return node.EmptyNode, errors.New("coudld'nt find requested key node")
-	}
-
-	if res[0].PublicKey().String() != key.String() {
-		return node.EmptyNode, errors.New("coudld'nt find requested key node")
-	}
-
-	return res[0], nil
 }
 
 // SendWrappedMessage is a proxy method to the sendMessageImpl. it sends a wrapped message and used within MessageServer
@@ -142,7 +127,7 @@ func (mux *UDPMux) sendMessageImpl(peerPubkey p2pcrypto.PublicKey, protocol stri
 	var err error
 	var peer node.Node
 
-	peer, err = mux.localLookup(peerPubkey)
+	peer, err = mux.lookuper(peerPubkey)
 
 	if err != nil {
 		return err
@@ -183,7 +168,7 @@ func (mux *UDPMux) sendMessageImpl(peerPubkey p2pcrypto.PublicKey, protocol stri
 type udpProtocolMessage struct {
 	meta   service.P2PMetadata
 	sender p2pcrypto.PublicKey
-	msg    []byte
+	msg    service.Data
 }
 
 func (upm *udpProtocolMessage) Sender() p2pcrypto.PublicKey {
@@ -195,6 +180,10 @@ func (upm *udpProtocolMessage) Metadata() service.P2PMetadata {
 }
 
 func (upm *udpProtocolMessage) Bytes() []byte {
+	return upm.msg.Bytes()
+}
+
+func (upm *udpProtocolMessage) Data() service.Data {
 	return upm.msg
 }
 

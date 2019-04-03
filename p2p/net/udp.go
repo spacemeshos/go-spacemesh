@@ -11,11 +11,13 @@ import (
 
 const maxMessageSize = 2048
 
+// UDPMessageEvent is an event about a udp message. passed through a channel
 type UDPMessageEvent struct {
 	FromAddr net.Addr
 	Message  []byte
 }
 
+// UDPNet is used to listen on or send udp messages
 type UDPNet struct {
 	local      *node.LocalNode
 	logger     log.Log
@@ -26,6 +28,7 @@ type UDPNet struct {
 	shutdown   chan struct{}
 }
 
+// NewUDPNet creates a UDPNet. returns error if the listening can't be resolved
 func NewUDPNet(config config.Config, local *node.LocalNode, log log.Log) (*UDPNet, error) {
 	addr, err := net.ResolveUDPAddr("udp", local.Address())
 	if err != nil {
@@ -42,7 +45,9 @@ func NewUDPNet(config config.Config, local *node.LocalNode, log log.Log) (*UDPNe
 	}, nil
 }
 
+// Start will trigger listening on the configured port
 func (n *UDPNet) Start() error {
+	n.logger.Info("Starting to listen on udp:%v", n.udpAddress)
 	listener, err := newUDPListener(n.udpAddress)
 	if err != nil {
 		return err
@@ -74,21 +79,36 @@ func newUDPListener(listenAddress *net.UDPAddr) (*net.UDPConn, error) {
 	return listen, nil
 }
 
+var IPv4LoopbackAddress = net.IP{127, 0, 0, 1}
+
+// Send writes a udp packet to the target with the given data
 func (n *UDPNet) Send(to node.Node, data []byte) error {
 	// todo : handle session if not exist
-	addr, err := net.ResolveUDPAddr("udp", to.Address())
+	raddr, err := net.ResolveUDPAddr("udp", to.Address())
 	if err != nil {
 		return err
 	}
-	_, err = n.conn.WriteToUDP(data, addr) // todo: use i to retransmit ?
+
+	// TODO: only accept local (unspecified/loopback) IPs from other local ips.
+	if raddr.IP.IsUnspecified() {
+		if ip4 := raddr.IP.To4(); ip4 != nil {
+			raddr.IP = IPv4LoopbackAddress
+		} else if ip6 := raddr.IP.To16(); ip6 != nil {
+			raddr.IP = net.IPv6loopback
+		}
+	}
+
+	_, err = n.conn.WriteToUDP(data, raddr) // todo: use i to retransmit ?
 
 	return err
 }
 
+// IncomingMessages is a channel where incoming UDPMessagesEvents will stream
 func (n *UDPNet) IncomingMessages() chan UDPMessageEvent {
 	return n.msgChan
 }
 
+// main listening loop
 func (n *UDPNet) listenToUDPNetworkMessages(listener net.PacketConn) {
 	buf := make([]byte, maxMessageSize) // todo: buffer pool ?
 	for {
