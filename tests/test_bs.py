@@ -351,7 +351,8 @@ def test_gossip(load_config, setup_clients):
     (out, err) = p.communicate()
     assert '{"value":"ok"}' in out.decode("utf-8")
 
-    gossip_propagation_sleep = len(setup_clients.pods) * 2
+    # Need to sleep for a while in order to enable the propagation of the gossip message - 1 sec for each node
+    gossip_propagation_sleep = len(setup_clients.pods)
     print('sleep for {0} sec to enable gossip propagation'.format(gossip_propagation_sleep))
     time.sleep(gossip_propagation_sleep)
 

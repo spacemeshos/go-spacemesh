@@ -145,5 +145,6 @@ ifndef ES_PASSWD
 	$(error ES_PASSWD is not set)
 endif
 	docker run -e ES_PASSWD="$(ES_PASSWD)" -e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json -it go-spacemesh-python pytest -s test_bs.py --tc-file=config.yaml --tc-format=yaml
+	docker run -e ES_PASSWD="$(ES_PASSWD)" -e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json -it go-spacemesh-python pytest -s hare/test_hare.py --tc-file=hare/config.yaml --tc-format=yaml
 .PHONY: dockerrun-test
 
