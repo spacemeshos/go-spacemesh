@@ -22,6 +22,7 @@ require (
 	github.com/prometheus/procfs v0.0.0-20190203183350-488faf799f86 // indirect
 	github.com/seehuhn/mt19937 v0.0.0-20180715112136-cc7708819361
 	github.com/spacemeshos/poet-ref v0.0.0-20190328115118-4a8d0d8b9b36
+	github.com/spacemeshos/sha256-simd v0.0.0-20190111104731-8575aafc88c9
 	github.com/spf13/afero v1.2.0 // indirect
 	github.com/spf13/cobra v0.0.3
 	github.com/spf13/pflag v1.0.3

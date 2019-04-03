@@ -1,11 +1,11 @@
 package oracle
 
 import (
-	"crypto/sha256"
 	"encoding/binary"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/sha256-simd"
 )
 
 type ActivationDb interface {
@@ -56,18 +56,10 @@ func (bo *MinerBlockOracle) BlockEligible(layerID mesh.LayerID) ([]mesh.BlockEli
 func (bo *MinerBlockOracle) calcEligibilityProofs(epochNumber uint64) error {
 	epochBeacon := bo.beaconProvider.GetBeacon(epochNumber)
 
-	atxIDs, err := bo.activationDb.GetNodeAtxIds(bo.nodeID)
+	numberOfEligibleBlocks, err := getNumberOfEligibleBlocks(bo.nodeID, bo.activationDb, bo.committeeSize, bo.layersPerEpoch)
 	if err != nil {
-		log.Error("getting previous atx id failed: %v", err)
+		log.Error("failed to get number of eligible blocks: %v", err)
 		return err
-	}
-	atxId := atxIDs[len(atxIDs)-1]
-	atx, err := bo.activationDb.GetAtx(atxId)
-	activeSetSize := atx.ActiveSetSize
-
-	numberOfEligibleBlocks := uint32(bo.committeeSize) * uint32(bo.layersPerEpoch) / activeSetSize
-	if numberOfEligibleBlocks == 0 {
-		numberOfEligibleBlocks = 1
 	}
 
 	bo.eligibilityProofs = map[mesh.LayerID][]mesh.BlockEligibilityProof{}
@@ -85,4 +77,26 @@ func (bo *MinerBlockOracle) calcEligibilityProofs(epochNumber uint64) error {
 		})
 	}
 	return nil
+}
+
+func getNumberOfEligibleBlocks(nodeID mesh.NodeId, activationDb ActivationDb, committeeSize int32,
+	layersPerEpoch uint16) (uint32, error) {
+
+	atxIDs, err := activationDb.GetNodeAtxIds(nodeID)
+	if err != nil {
+		log.Error("getting previous atx id failed: %v", err)
+		return 0, err
+	}
+	atxId := atxIDs[len(atxIDs)-1]
+	atx, err := activationDb.GetAtx(atxId)
+	if err != nil {
+		log.Error("getting previous atx failed: %v", err)
+		return 0, err
+	}
+	activeSetSize := atx.ActiveSetSize
+	numberOfEligibleBlocks := uint32(committeeSize) * uint32(layersPerEpoch) / activeSetSize
+	if numberOfEligibleBlocks == 0 {
+		numberOfEligibleBlocks = 1
+	}
+	return numberOfEligibleBlocks, nil
 }
