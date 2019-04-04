@@ -1,6 +1,9 @@
 package net
 
 import (
+	"github.com/gogo/protobuf/proto"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
+	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"net"
 
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -25,6 +28,7 @@ type UDPNet struct {
 	config     config.Config
 	msgChan    chan UDPMessageEvent
 	conn       *net.UDPConn
+	cache      *sessionCache
 	shutdown   chan struct{}
 }
 
@@ -35,14 +39,18 @@ func NewUDPNet(config config.Config, local *node.LocalNode, log log.Log) (*UDPNe
 		return nil, err
 	}
 
-	return &UDPNet{
+	n := &UDPNet{
 		local:      local,
 		logger:     log,
 		udpAddress: addr,
 		config:     config,
 		msgChan:    make(chan UDPMessageEvent, config.BufferSize),
 		shutdown:   make(chan struct{}),
-	}, nil
+	}
+
+	n.cache = newSessionCache(n.initSession)
+
+	return n, nil
 }
 
 // Start will trigger listening on the configured port
@@ -53,6 +61,7 @@ func (n *UDPNet) Start() error {
 		return err
 	}
 	n.conn = listener
+
 	go n.listenToUDPNetworkMessages(listener)
 
 	return nil
@@ -81,12 +90,74 @@ func newUDPListener(listenAddress *net.UDPAddr) (*net.UDPConn, error) {
 
 var IPv4LoopbackAddress = net.IP{127, 0, 0, 1}
 
+func (n *UDPNet) initSession(to string, remote p2pcrypto.PublicKey) (NetworkSession, error) {
+	raddr, err := resolveUDPAddr(to)
+	if err != nil {
+		return nil, err
+	}
+
+	session := createSession(n.local.PrivateKey(), remote)
+	handshakeMessage, err := generateHandshakeMessage(session, n.config.NetworkID, 1010, n.local.PublicKey())
+	if err != nil {
+		return nil, err
+	}
+	_, err = n.conn.WriteToUDP(handshakeMessage, raddr)
+
+	return session, nil
+}
+
+func (n *UDPNet) handleSession(message []byte) (NetworkSession, error) {
+	message, remotePubkey, err := p2pcrypto.ExtractPubkey(message)
+	if err != nil {
+		return nil, err
+	}
+	session := createSession(n.local.PrivateKey(), remotePubkey)
+
+	// open message
+	protoMessage, err := session.OpenMessage(message)
+	if err != nil {
+		return nil, err
+	}
+
+	handshakeData := &pb.HandshakeData{}
+	err = proto.Unmarshal(protoMessage, handshakeData)
+	if err != nil {
+		return nil, err
+	}
+
+	err = verifyNetworkIDAndClientVersion(n.config.NetworkID, handshakeData)
+	if err != nil {
+		return nil, err
+	}
+
+	return session, nil
+}
+
 // Send writes a udp packet to the target with the given data
 func (n *UDPNet) Send(to node.Node, data []byte) error {
-	// todo : handle session if not exist
-	raddr, err := net.ResolveUDPAddr("udp", to.Address())
+
+	raddr, err := resolveUDPAddr(to.Address())
 	if err != nil {
 		return err
+	}
+
+	ns, err := n.cache.GetOrCreate(raddr.String(), to.PublicKey())
+
+	if err != nil {
+		return err
+	}
+
+	sealed := ns.SealMessage(data)
+
+	_, err = n.conn.WriteToUDP(sealed, raddr)
+
+	return err
+}
+
+func resolveUDPAddr(addr string) (*net.UDPAddr, error) {
+	raddr, err := net.ResolveUDPAddr("udp", addr)
+	if err != nil {
+		return nil, err
 	}
 
 	// TODO: only accept local (unspecified/loopback) IPs from other local ips.
@@ -98,9 +169,7 @@ func (n *UDPNet) Send(to node.Node, data []byte) error {
 		}
 	}
 
-	_, err = n.conn.WriteToUDP(data, raddr) // todo: use i to retransmit ?
-
-	return err
+	return raddr, nil
 }
 
 // IncomingMessages is a channel where incoming UDPMessagesEvents will stream
@@ -125,12 +194,33 @@ func (n *UDPNet) listenToUDPNetworkMessages(listener net.PacketConn) {
 			}
 
 		}
+
 		// todo : check size?
-		// todo: check if needs session before passing
 		copybuf := make([]byte, size)
 		copy(copybuf, buf)
+
+		ns, err := n.cache.GetIfExist(addr.String())
+		if err != nil {
+			ns, err = n.handleSession(copybuf)
+			if err != nil {
+				n.logger.Warning("Couldn't create session from UDP message. skipping err=%v msg=", err, copybuf)
+				//todo: count and block bad addresses to avoid flooding?
+				continue // this wasn't a session msg but we had no session
+			}
+			n.cache.handleIncoming(addr.String(), ns)
+			n.logger.Debug("Created udp session with ", addr.String())
+			continue
+		}
+
+		final, err := ns.OpenMessage(copybuf)
+		if err != nil {
+			n.logger.Warning("skipping udp with session message err=%v msg=", err, copybuf)
+			// todo: remove malfunctioning session, ban ip ?
+			continue
+		}
+
 		select {
-		case n.msgChan <- UDPMessageEvent{addr, copybuf}:
+		case n.msgChan <- UDPMessageEvent{addr, final}:
 		case <-n.shutdown:
 			return
 		}

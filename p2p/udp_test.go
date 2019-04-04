@@ -197,13 +197,13 @@ func TestUDPMux_ProcessUDP(t *testing.T) {
 }
 
 func Test_RoundTrip(t *testing.T) {
-	nd := &node.LocalNode{Node: node.GenerateRandomNodeData()}
+	nd, _ := node.GenerateTestNode(t)
 	udpnet, err := net.NewUDPNet(config.DefaultConfig(), nd, log.New("", "", ""))
 	require.NoError(t, err)
 	m := NewUDPMux(nd, nil, udpnet, log.New(test_str, "", ""))
 	require.NotNil(t, m)
 
-	nd2 := &node.LocalNode{Node: node.GenerateRandomNodeData()}
+	nd2, _ := node.GenerateTestNode(t)
 	udpnet2, err := net.NewUDPNet(config.DefaultConfig(), nd2, log.New("", "", ""))
 	require.NoError(t, err)
 	m2 := NewUDPMux(nd2, nil, udpnet2, log.New(test_str+"2", "", ""))
@@ -235,7 +235,6 @@ func Test_RoundTrip(t *testing.T) {
 
 	select {
 	case msg := <-c2:
-		require.Equal(t, msg.Metadata().FromAddress.String(), nd.Address())
 		require.Equal(t, msg.Sender(), nd.PublicKey())
 		require.Equal(t, msg.Bytes(), []byte(test_str))
 	case <-tm.C:
