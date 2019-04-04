@@ -14,7 +14,7 @@ const (
 	// HashLength is the expected length of the hash
 	HashLength = 32
 	// AddressLength is the expected length of the address
-	AddressLength = 32
+	AddressLength = 20
 )
 
 func BytesToUint32(i []byte) uint32 { return binary.LittleEndian.Uint32(i) }
