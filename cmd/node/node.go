@@ -3,7 +3,6 @@ package node
 import (
 	"fmt"
 	"github.com/seehuhn/mt19937"
-	"github.com/spacemeshos/go-spacemesh/mesh/activation"
 	apiCfg "github.com/spacemeshos/go-spacemesh/api/config"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common"
@@ -281,13 +280,13 @@ func (app *SpacemeshApp) initServices(instanceName string, swarm service.Service
 	mdb := mesh.NewPersistentMeshDB(dbStorepath, lg.WithName("meshdb"))
 	trtl := consensus.NewAlgorithm(consensus.NewNinjaTortoise(layerSize, mdb, lg.WithName("trtl")))
 
-	atxdbstore, err := database.NewLDBDatabase(dbStorepath + "atx", 0, 0)
+	atxdbstore, err := database.NewLDBDatabase(dbStorepath+"atx", 0, 0)
 	if err != nil {
 		return err
 	}
 
 	atxdb := mesh.NewActivationDb(atxdbstore)
-	msh := mesh.NewMesh(mdb,atxdb, app.Config.REWARD, trtl, processor, lg.WithName("mesh")) //todo: what to do with the logger?
+	msh := mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, processor, lg.WithName("mesh")) //todo: what to do with the logger?
 
 	conf := sync.Configuration{SyncInterval: 1 * time.Second, Concurrency: 4, LayerSize: int(layerSize), RequestTimeout: 100 * time.Millisecond}
 	syncer := sync.NewSync(swarm, msh, blockOracle, conf, clock.Subscribe(), lg)

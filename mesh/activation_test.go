@@ -77,4 +77,3 @@ func TestBuilder_NoPrevATX(t *testing.T) {
 	err := b.PublishActivationTx(&nipst.NIPST{})
 	assert.Error(t, err)
 }
-

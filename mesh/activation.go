@@ -230,6 +230,3 @@ func (b *Builder) GetLastSequence(node NodeId) uint64 {
 	}
 	return atx.Sequence
 }
-
-
-

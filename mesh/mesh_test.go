@@ -34,7 +34,7 @@ func (MockState) ApplyRewards(layer LayerID, miners map[string]struct{}, underQu
 
 func getMesh(id string) *Mesh {
 	lg := log.New(id, "", "")
-	layers := NewMesh(NewMemMeshDB(lg), NewActivationDb(database.NewMemDatabase()),ConfigTst(), &MeshValidatorMock{}, &MockState{}, lg)
+	layers := NewMesh(NewMemMeshDB(lg), NewActivationDb(database.NewMemDatabase()), ConfigTst(), &MeshValidatorMock{}, &MockState{}, lg)
 	return layers
 }
 
@@ -146,7 +146,7 @@ func TestLayers_WakeUp(t *testing.T) {
 	//assert.True(t, layers.LocalLayerCount() == 10, "wrong layer")
 }
 
-func createLayerWithAtx(mesh *Mesh, id LayerID, numOfBlocks int, atxs []*ActivationTx, votes []BlockID, views[]BlockID)  (created []BlockID){
+func createLayerWithAtx(mesh *Mesh, id LayerID, numOfBlocks int, atxs []*ActivationTx, votes []BlockID, views []BlockID) (created []BlockID) {
 	for i := 0; i < numOfBlocks; i++ {
 		block1 := NewExistingBlock(BlockID(uuid.New().ID()), id, []byte("data1"))
 		block1.MinerID = strconv.Itoa(i)
@@ -159,7 +159,7 @@ func createLayerWithAtx(mesh *Mesh, id LayerID, numOfBlocks int, atxs []*Activat
 	return
 }
 
-func TestMesh_CalcActiveSetFromView(t *testing.T){
+func TestMesh_CalcActiveSetFromView(t *testing.T) {
 	//todo: test addAtxs
 	layers := getMesh("t6")
 
@@ -177,13 +177,13 @@ func TestMesh_CalcActiveSetFromView(t *testing.T){
 	blocks = createLayerWithAtx(layers, 100, 10, []*ActivationTx{}, blocks, blocks)
 
 	atx := NewActivationTx(id1, 1, atxs[0].Id(), 1000, 0, atxs[0].Id(), 3, blocks, &nipst.NIPST{})
-	num , err := layers.CalcActiveSetFromView(atx)
+	num, err := layers.CalcActiveSetFromView(atx)
 	assert.NoError(t, err)
 	assert.Equal(t, 3, int(num))
 
 }
 
-func TestMesh_Wrong_CalcActiveSetFromView(t *testing.T){
+func TestMesh_Wrong_CalcActiveSetFromView(t *testing.T) {
 	//todo: test addAtxs
 	layers := getMesh("t6")
 
@@ -201,13 +201,13 @@ func TestMesh_Wrong_CalcActiveSetFromView(t *testing.T){
 	blocks = createLayerWithAtx(layers, 100, 10, []*ActivationTx{}, blocks, blocks)
 
 	atx := NewActivationTx(id1, 1, atxs[0].Id(), 1000, 0, atxs[0].Id(), 20, blocks, &nipst.NIPST{})
-	num , err := layers.CalcActiveSetFromView(atx)
+	num, err := layers.CalcActiveSetFromView(atx)
 	assert.NoError(t, err)
 	assert.NotEqual(t, 20, int(num))
 
 }
 
-func TestMesh_processBlockATXs(t *testing.T){
+func TestMesh_processBlockATXs(t *testing.T) {
 	//todo: test addAtxs
 	layers := getMesh("t6")
 
@@ -224,11 +224,23 @@ func TestMesh_processBlockATXs(t *testing.T){
 	block1.MinerID = strconv.Itoa(1)
 	block1.ATXs = append(block1.ATXs, atxs...)
 
-
-	//atx := NewActivationTx(id1, 1, atxs[0].Id(), 1000, 0, atxs[0].Id(), 20, blocks, &nipst.NIPST{})
 	layers.processBlockATXs(block1)
-	assert.Equal(t,3, int(layers.AtxDB.ActiveIds(1)))
+	assert.Equal(t, 3, int(layers.AtxDB.ActiveIds(1)))
 
+	// check that further atxs dont affect current epoch count
+	atxs2 := []*ActivationTx{
+		NewActivationTx(id1, 0, EmptyAtx, 2012, 0, EmptyAtx, 3, []BlockID{}, &nipst.NIPST{}),
+		NewActivationTx(id2, 0, EmptyAtx, 2300, 0, EmptyAtx, 3, []BlockID{}, &nipst.NIPST{}),
+		NewActivationTx(id3, 0, EmptyAtx, 2435, 0, EmptyAtx, 3, []BlockID{}, &nipst.NIPST{}),
+	}
+
+	block2 := NewExistingBlock(BlockID(uuid.New().ID()), 2000, []byte("data1"))
+	block2.MinerID = strconv.Itoa(1)
+	block2.ATXs = append(block1.ATXs, atxs2...)
+	layers.processBlockATXs(block2)
+
+	assert.Equal(t, 3, int(layers.AtxDB.ActiveIds(1)))
+	assert.Equal(t, 3, int(layers.AtxDB.ActiveIds(2)))
 }
 
 func TestLayers_OrphanBlocks(t *testing.T) {

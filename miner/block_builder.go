@@ -28,7 +28,6 @@ const DefaultGas = 1
 
 const IncomingTxProtocol = "TxGossip"
 
-
 type BlockBuilder struct {
 	minerID string // could be a pubkey or what ever. the identity we're claiming to be as miners.
 	log.Log

@@ -96,7 +96,7 @@ func NewMesh(db *MeshDB, atxDb AtxDB, rewardConfig RewardConfig, mesh MeshValida
 		done:         make(chan struct{}),
 		mdb:          db,
 		rewardConfig: rewardConfig,
-		AtxDB:atxDb,
+		AtxDB:        atxDb,
 	}
 
 	return ll
@@ -446,7 +446,7 @@ func (m *Mesh) CalcActiveSetFromView(a *ActivationTx) (uint32, error) {
 			return err
 		}
 		for _, atx := range blk.ATXs {
-			if _,found := set[atx.Id()]; found {
+			if _, found := set[atx.Id()]; found {
 				continue
 			}
 			set[atx.Id()] = struct{}{}
