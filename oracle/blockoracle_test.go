@@ -2,6 +2,7 @@ package oracle
 
 import (
 	"errors"
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/stretchr/testify/require"
@@ -93,7 +94,7 @@ func TestBlockOracleEmptyActiveSet(t *testing.T) {
 func TestBlockOracleEmptyActiveSetValidation(t *testing.T) {
 	r := require.New(t)
 
-	activeSetSize := uint32(0)
+	activeSetSize := uint32(0) // Nobody is active 😱
 	committeeSize := int32(200)
 	layersPerEpoch := uint16(10)
 
@@ -133,7 +134,7 @@ func TestBlockOracleValidatorInvalidProof(t *testing.T) {
 	r.NotNil(proofs)
 
 	proof := proofs[0]
-	proof.J += 1
+	proof.J += 1 // Messing with the proof 😈
 
 	validator := &MinerBlockEligibilityValidator{
 		committeeSize:  committeeSize,
@@ -145,4 +146,40 @@ func TestBlockOracleValidatorInvalidProof(t *testing.T) {
 	eligible, err := validator.BlockEligible(layerID, nodeID, proof)
 	r.False(eligible)
 	r.EqualError(err, "VRF validation failed")
+}
+
+func TestBlockOracleValidatorInvalidProof2(t *testing.T) {
+	r := require.New(t)
+
+	committeeSize := int32(10)
+	layersPerEpoch := uint16(1)
+	minerActivationDB := &mockActivationDB{activeSetSize: 1}
+	validatorActivationDB := &mockActivationDB{activeSetSize: 10} // Use different active set size to get more blocks 🤫
+
+	beaconProvider := &EpochBeaconProvider{}
+	vrfSigner := &crypto.VRFSigner{}
+	nodeID := mesh.NodeId{}
+	blockOracle := NewMinerBlockOracle(committeeSize, layersPerEpoch, minerActivationDB, beaconProvider, vrfSigner, nodeID)
+
+	layerID := mesh.LayerID(0)
+
+	proofs, err := blockOracle.BlockEligible(layerID)
+	r.NoError(err)
+	r.NotNil(proofs)
+
+	proof := proofs[0]
+	for i := 1; proof.J == 0; i++ {
+		proof = proofs[i]
+	}
+
+	validator := &MinerBlockEligibilityValidator{
+		committeeSize:  committeeSize,
+		layersPerEpoch: layersPerEpoch,
+		activationDb:   validatorActivationDB,
+		beaconProvider: beaconProvider,
+		validateVRF:    crypto.ValidateVRF,
+	}
+	eligible, err := validator.BlockEligible(layerID, nodeID, proof)
+	r.False(eligible)
+	r.EqualError(err, fmt.Sprintf("proof counter (%d) must be less than number of eligible blocks (1)", proof.J))
 }
