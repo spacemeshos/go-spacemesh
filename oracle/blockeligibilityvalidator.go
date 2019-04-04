@@ -52,10 +52,7 @@ func (v MinerBlockEligibilityValidator) BlockEligible(layerID mesh.LayerID, node
 	}
 
 	epochBeacon := v.beaconProvider.GetBeacon(epochNumber)
-	message := make([]byte, len(epochBeacon)+binary.Size(epochNumber)+binary.Size(counter))
-	copy(message, epochBeacon)
-	binary.LittleEndian.PutUint64(message[len(epochBeacon):], epochNumber)
-	binary.LittleEndian.PutUint32(message[len(epochBeacon)+binary.Size(epochNumber):], counter)
+	message := serializeVRFMessage(epochBeacon, epochNumber, counter)
 	sig := proof.Sig
 	err = v.validateVRF(message, sig, []byte(nodeID.Vrf))
 	if err != nil {

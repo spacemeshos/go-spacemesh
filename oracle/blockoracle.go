@@ -77,10 +77,7 @@ func (bo *MinerBlockOracle) calcEligibilityProofs(epochNumber uint64) error {
 
 	bo.eligibilityProofs = map[mesh.LayerID][]mesh.BlockEligibilityProof{}
 	for counter := uint32(0); counter < numberOfEligibleBlocks; counter++ {
-		message := make([]byte, len(epochBeacon)+binary.Size(epochNumber)+binary.Size(counter))
-		copy(message, epochBeacon)
-		binary.LittleEndian.PutUint64(message[len(epochBeacon):], epochNumber)
-		binary.LittleEndian.PutUint32(message[len(epochBeacon)+binary.Size(epochNumber):], counter)
+		message := serializeVRFMessage(epochBeacon, epochNumber, counter)
 		sig := bo.vrfSigner.Sign(message)
 		hash := sha256.Sum256(sig)
 		epochOffset := epochNumber * uint64(bo.layersPerEpoch)
@@ -118,4 +115,12 @@ func getLatestATXID(activationDb ActivationDb, nodeID mesh.NodeId) (mesh.AtxId, 
 	}
 	latestATXID := atxIDs[numOfActivations-1]
 	return latestATXID, err
+}
+
+func serializeVRFMessage(epochBeacon []byte, epochNumber uint64, counter uint32) []byte {
+	message := make([]byte, len(epochBeacon)+binary.Size(epochNumber)+binary.Size(counter))
+	copy(message, epochBeacon)
+	binary.LittleEndian.PutUint64(message[len(epochBeacon):], epochNumber)
+	binary.LittleEndian.PutUint32(message[len(epochBeacon)+binary.Size(epochNumber):], counter)
+	return message
 }
