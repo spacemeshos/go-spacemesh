@@ -288,12 +288,12 @@ func (m *Mesh) GetUnverifiedLayerBlocks(l LayerID) ([]BlockID, error) {
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf("could not retrive layer = %d blocks ", l))
 	}
-	blockIds, err := bytesToBlockIds(x)
+	blockIds, err := BytesToBlockIds(x)
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf("could not desirialize layer to id array for layer %d ", l))
 	}
 	arr := make([]BlockID, 0, len(blockIds))
-	for bid := range blockIds {
+	for _, bid := range blockIds {
 		arr = append(arr, bid)
 	}
 	return arr, nil

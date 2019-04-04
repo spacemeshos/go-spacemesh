@@ -29,11 +29,11 @@ func (s *StateMock) ApplyTransactions(id mesh.LayerID, tx mesh.Transactions) (ui
 
 func ConfigTst() mesh.RewardConfig {
 	return mesh.RewardConfig{
-		big.NewInt(10),
-		big.NewInt(5000),
-		big.NewInt(15),
-		15,
-		5,
+		SimpleTxCost:   big.NewInt(10),
+		BaseReward:     big.NewInt(5000),
+		PenaltyPercent: big.NewInt(15),
+		TxQuota:        15,
+		RewardMaturity: 5,
 	}
 }
 

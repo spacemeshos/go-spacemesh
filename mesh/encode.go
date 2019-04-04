@@ -13,6 +13,23 @@ func (b BlockID) ToBytes() []byte { return common.Uint64ToBytes(uint64(b)) }
 
 func (l LayerID) ToBytes() []byte { return common.Uint64ToBytes(uint64(l)) }
 
+func BlockAsBytes(block Block) ([]byte, error) {
+	var w bytes.Buffer
+	if _, err := xdr.Marshal(&w, &block); err != nil {
+		return nil, fmt.Errorf("error marshalling block ids %v", err)
+	}
+	return w.Bytes(), nil
+}
+
+func BytesAsBlock(buf []byte) (Block, error) {
+	b := Block{}
+	_, err := xdr.Unmarshal(bytes.NewReader(buf), &b)
+	if err != nil {
+		return b, err
+	}
+	return b, nil
+}
+
 func BlockIdsAsBytes(ids []BlockID) ([]byte, error) {
 	var w bytes.Buffer
 	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
@@ -38,25 +55,8 @@ func BlockHeaderToBytes(bheader *BlockHeader) ([]byte, error) {
 	return w.Bytes(), nil
 }
 
-func BlockAsBytes(block Block) ([]byte, error) {
-	var w bytes.Buffer
-	if _, err := xdr.Marshal(&w, &block); err != nil {
-		return nil, fmt.Errorf("error marshalling block ids %v", err)
-	}
-	return w.Bytes(), nil
-}
-
 func BytesAsBlockHeader(buf []byte) (BlockHeader, error) {
 	b := BlockHeader{}
-	_, err := xdr.Unmarshal(bytes.NewReader(buf), &b)
-	if err != nil {
-		return b, err
-	}
-	return b, nil
-}
-
-func BytesAsBlock(buf []byte) (Block, error) {
-	b := Block{}
 	_, err := xdr.Unmarshal(bytes.NewReader(buf), &b)
 	if err != nil {
 		return b, err
@@ -74,6 +74,23 @@ func TransactionAsBytes(tx *SerializableTransaction) ([]byte, error) {
 
 func BytesAsTransaction(buf []byte) (*SerializableTransaction, error) {
 	b := SerializableTransaction{}
+	_, err := xdr.Unmarshal(bytes.NewReader(buf), &b)
+	if err != nil {
+		return &b, err
+	}
+	return &b, nil
+}
+
+func MiniBlockToBytes(mini MiniBlock) ([]byte, error) {
+	var w bytes.Buffer
+	if _, err := xdr.Marshal(&w, &mini); err != nil {
+		return nil, fmt.Errorf("error marshalling block ids %v", err)
+	}
+	return w.Bytes(), nil
+}
+
+func BytesAsMiniBlock(buf []byte) (*MiniBlock, error) {
+	b := MiniBlock{}
 	_, err := xdr.Unmarshal(bytes.NewReader(buf), &b)
 	if err != nil {
 		return &b, err

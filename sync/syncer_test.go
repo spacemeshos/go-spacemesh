@@ -58,22 +58,6 @@ func SyncMockFactory(number int, conf Configuration, name string, dbType string)
 	return nodes, p2ps
 }
 
-type BlockValidatorMock struct {
-}
-
-func (BlockValidatorMock) BlockEligible(id mesh.LayerID, key string) bool {
-	return true
-}
-
-type MeshValidatorMock struct{}
-
-func (m *MeshValidatorMock) HandleIncomingLayer(layer *mesh.Layer) (mesh.LayerID, mesh.LayerID) {
-	return layer.Index() - 1, layer.Index()
-}
-func (m *MeshValidatorMock) HandleLateBlock(bl *mesh.Block)              {}
-func (m *MeshValidatorMock) RegisterLayerCallback(func(id mesh.LayerID)) {}
-func (mlg *MeshValidatorMock) ContextualValidity(id mesh.BlockID) bool   { return true }
-
 type stateMock struct{}
 
 func (s *stateMock) ApplyRewards(layer mesh.LayerID, miners map[string]struct{}, underQuota map[string]struct{}, bonusReward, diminishedReward *big.Int) {
@@ -85,11 +69,11 @@ func (s *stateMock) ApplyTransactions(id mesh.LayerID, tx mesh.Transactions) (ui
 }
 
 var rewardConf = mesh.RewardConfig{
-	big.NewInt(10),
-	big.NewInt(5000),
-	big.NewInt(15),
-	15,
-	5,
+	SimpleTxCost:   big.NewInt(10),
+	BaseReward:     big.NewInt(5000),
+	PenaltyPercent: big.NewInt(15),
+	TxQuota:        15,
+	RewardMaturity: 5,
 }
 
 func getMeshWithLevelDB(id string) *mesh.Mesh {
