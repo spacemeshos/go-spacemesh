@@ -76,6 +76,10 @@ func (t ActivationTx) Id() AtxId {
 	return AtxId{crypto.Keccak256Hash(tx)}
 }
 
+func (t ActivationTx) Validate() error {
+	return nil // TODO: implement
+}
+
 func AtxHeaderAsBytes(tx *ActivationTxHeader) ([]byte, error) {
 	var w bytes.Buffer
 	if _, err := xdr.Marshal(&w, &tx); err != nil {
