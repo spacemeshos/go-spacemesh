@@ -8,6 +8,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/crypto/sha3"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/rlp"
+	"io"
 	"math/big"
 	"sort"
 	"sync"
@@ -37,6 +38,7 @@ type StateUpdater interface {
 
 type AtxDB interface {
 	StoreAtx(ech EpochId, atx *ActivationTx) error
+	ActiveIds(ech EpochId) uint64
 }
 
 type Mesh struct {
@@ -85,7 +87,7 @@ func NewMemMesh(rewardConfig RewardConfig, mesh MeshValidator, state StateUpdate
 	return ll
 }
 
-func NewMesh(db *MeshDB, rewardConfig RewardConfig, mesh MeshValidator, state StateUpdater, logger log.Log) *Mesh {
+func NewMesh(db *MeshDB, atxDb AtxDB, rewardConfig RewardConfig, mesh MeshValidator, state StateUpdater, logger log.Log) *Mesh {
 	//todo add boot from disk
 	ll := &Mesh{
 		Log:          logger,
@@ -94,6 +96,7 @@ func NewMesh(db *MeshDB, rewardConfig RewardConfig, mesh MeshValidator, state St
 		done:         make(chan struct{}),
 		mdb:          db,
 		rewardConfig: rewardConfig,
+		AtxDB:atxDb,
 	}
 
 	return ll
@@ -203,7 +206,7 @@ func (m *Mesh) addAtxs(oldBase, newBase LayerID) {
 
 		l, err := m.mdb.GetLayer(i)
 		if err != nil || l == nil {
-			m.Error("") //todo handle error
+			m.Error("cannot find layer %v in db", i) //todo handle error
 			return
 		}
 		for _, blk := range l.Blocks() {
@@ -420,6 +423,55 @@ func (m *Mesh) AccumulateRewards(rewardLayer LayerID, params RewardConfig) {
 	bonusReward, diminishedReward := calculateActualRewards(rewards, numBlocks, params, len(uq))
 	m.state.ApplyRewards(LayerID(rewardLayer), ids, uq, bonusReward, diminishedReward)
 	//todo: should miner id be sorted in a deterministic order prior to applying rewards?
+
+}
+
+func (m *Mesh) CalcActiveSetFromView(a *ActivationTx) (uint32, error) {
+	bytes, err := viewAsBytes(a.View)
+	if err != nil {
+		return 0, err
+	}
+
+	count, found := activesetCache.Get(common.BytesToHash(bytes))
+	if found {
+		return count, nil
+	}
+
+	var counter uint32 = 0
+	set := make(map[AtxId]struct{})
+	traversalFunc := func(block *BlockHeader) error {
+		blk, err := m.GetBlock(block.Id)
+		if err != nil {
+			log.Error("cannot validate atx, block %v not found", block.Id)
+			return err
+		}
+		for _, atx := range blk.ATXs {
+			if _,found := set[atx.Id()]; found {
+				continue
+			}
+			set[atx.Id()] = struct{}{}
+			if atx.Valid() {
+				counter++
+				if counter >= a.ActiveSetSize {
+					return io.EOF
+				}
+			}
+		}
+		return nil
+	}
+
+	errHandler := func(er error) {}
+
+	mp := map[BlockID]struct{}{}
+	for _, blk := range a.View {
+		mp[blk] = struct{}{}
+	}
+
+	firstLayerOfLastEpoch := a.LayerIndex - LayersInEpoch - ((a.LayerIndex) % LayersInEpoch)
+	m.mdb.ForBlockInView(mp, firstLayerOfLastEpoch, traversalFunc, errHandler)
+	activesetCache.Add(common.BytesToHash(bytes), counter)
+
+	return counter, nil
 
 }
 

@@ -27,7 +27,7 @@ const DefaultGasLimit = 10
 const DefaultGas = 1
 
 const IncomingTxProtocol = "TxGossip"
-const AtxProtocol = "AtxGossip"
+
 
 type BlockBuilder struct {
 	minerID string // could be a pubkey or what ever. the identity we're claiming to be as miners.
@@ -64,7 +64,7 @@ func NewBlockBuilder(minerID string, net p2p.Service, beginRoundEvent chan mesh.
 		newTrans:         make(chan *mesh.SerializableTransaction),
 		newAtx:           make(chan *mesh.ActivationTx),
 		txGossipChannel:  net.RegisterGossipProtocol(IncomingTxProtocol),
-		atxGossipChannel: net.RegisterGossipProtocol(AtxProtocol),
+		atxGossipChannel: net.RegisterGossipProtocol(mesh.AtxProtocol),
 		hareResult:       hare,
 		AtxQueue:         make([]*mesh.ActivationTx, 0, 10),
 		transactionQueue: make([]*mesh.SerializableTransaction, 0, 10),
@@ -210,10 +210,10 @@ func (t *BlockBuilder) listenForAtx() {
 				log.String("amount", x.AmountAsBigInt().String()), log.Uint64("nonce", x.AccountNonce), log.Bool("valid", err != nil))*/
 				if err != nil {
 					t.Log.Error("cannot parse incoming ATX")
-					data.ReportValidation(AtxProtocol, false)
+					data.ReportValidation(mesh.AtxProtocol, false)
 					break
 				}
-				data.ReportValidation(AtxProtocol, true)
+				data.ReportValidation(mesh.AtxProtocol, true)
 				t.newAtx <- x
 			}
 		}

@@ -1,4 +1,4 @@
-package activation
+package mesh
 
 import (
 	"bytes"
@@ -7,7 +7,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 )
 
 const CounterKey = 0xaaaa
@@ -21,7 +20,7 @@ func NewActivationDb(dbstore database.DB) *ActivationDb {
 	return &ActivationDb{atxs: dbstore}
 }
 
-func (db *ActivationDb) StoreAtx(ech mesh.EpochId, atx *mesh.ActivationTx) error {
+func (db *ActivationDb) StoreAtx(ech EpochId, atx *ActivationTx) error {
 	log.Debug("storing atx %v, in epoch %v", atx, ech)
 
 	//todo: maybe cleanup DB if failed by using defer
@@ -29,7 +28,7 @@ func (db *ActivationDb) StoreAtx(ech mesh.EpochId, atx *mesh.ActivationTx) error
 		// exists - how should we handle this?
 		return nil
 	}
-	b, err := mesh.AtxAsBytes(atx)
+	b, err := AtxAsBytes(atx)
 	if err != nil {
 		return err
 	}
@@ -52,11 +51,11 @@ func (db *ActivationDb) StoreAtx(ech mesh.EpochId, atx *mesh.ActivationTx) error
 	return nil
 }
 
-func epochCounterKey(ech mesh.EpochId) []byte {
+func epochCounterKey(ech EpochId) []byte {
 	return append(ech.ToBytes(), common.Uint64ToBytes(uint64(CounterKey))...)
 }
 
-func (db *ActivationDb) incValidAtxCounter(ech mesh.EpochId) error {
+func (db *ActivationDb) incValidAtxCounter(ech EpochId) error {
 	key := epochCounterKey(ech)
 	val, err := db.atxs.Get(key)
 	if err == nil {
@@ -65,7 +64,7 @@ func (db *ActivationDb) incValidAtxCounter(ech mesh.EpochId) error {
 	return db.atxs.Put(key, common.Uint64ToBytes(1))
 }
 
-func (db *ActivationDb) ActiveIds(ech mesh.EpochId) uint64 {
+func (db *ActivationDb) ActiveIds(ech EpochId) uint64 {
 	key := epochCounterKey(ech)
 	val, err := db.atxs.Get(key)
 	if err != nil {
@@ -74,13 +73,13 @@ func (db *ActivationDb) ActiveIds(ech mesh.EpochId) uint64 {
 	return common.BytesToUint64(val)
 }
 
-func (db *ActivationDb) addAtxToEpoch(epochId mesh.EpochId, atx mesh.AtxId) error {
+func (db *ActivationDb) addAtxToEpoch(epochId EpochId, atx AtxId) error {
 	ids, err := db.atxs.Get(epochId.ToBytes())
-	var atxs []mesh.AtxId
+	var atxs []AtxId
 	if err != nil {
 		//epoch doesnt exist, need to insert new layer
 		ids = []byte{}
-		atxs = make([]mesh.AtxId, 0, 0)
+		atxs = make([]AtxId, 0, 0)
 	} else {
 		atxs, err = decodeAtxIds(ids)
 		if err != nil {
@@ -95,13 +94,13 @@ func (db *ActivationDb) addAtxToEpoch(epochId mesh.EpochId, atx mesh.AtxId) erro
 	return db.atxs.Put(epochId.ToBytes(), w)
 }
 
-func (db *ActivationDb) addAtxToNodeId(nodeId mesh.NodeId, atx mesh.AtxId) error {
+func (db *ActivationDb) addAtxToNodeId(nodeId NodeId, atx AtxId) error {
 	ids, err := db.atxs.Get(nodeId.ToBytes())
-	var atxs []mesh.AtxId
+	var atxs []AtxId
 	if err != nil {
 		//layer doesnt exist, need to insert new layer
 		ids = []byte{}
-		atxs = make([]mesh.AtxId, 0, 0)
+		atxs = make([]AtxId, 0, 0)
 	} else {
 		atxs, err = decodeAtxIds(ids)
 		if err != nil {
@@ -116,7 +115,7 @@ func (db *ActivationDb) addAtxToNodeId(nodeId mesh.NodeId, atx mesh.AtxId) error
 	return db.atxs.Put(nodeId.ToBytes(), w)
 }
 
-func (db *ActivationDb) GetNodeAtxIds(node mesh.NodeId) ([]mesh.AtxId, error) {
+func (db *ActivationDb) GetNodeAtxIds(node NodeId) ([]AtxId, error) {
 	ids, err := db.atxs.Get(node.ToBytes())
 	if err != nil {
 		return nil, err
@@ -128,7 +127,7 @@ func (db *ActivationDb) GetNodeAtxIds(node mesh.NodeId) ([]mesh.AtxId, error) {
 	return atxs, nil
 }
 
-func (db *ActivationDb) GetEpochAtxIds(epochId mesh.EpochId) ([]mesh.AtxId, error) {
+func (db *ActivationDb) GetEpochAtxIds(epochId EpochId) ([]AtxId, error) {
 	ids, err := db.atxs.Get(epochId.ToBytes())
 	if err != nil {
 		return nil, err
@@ -140,27 +139,27 @@ func (db *ActivationDb) GetEpochAtxIds(epochId mesh.EpochId) ([]mesh.AtxId, erro
 	return atxs, nil
 }
 
-func (db *ActivationDb) GetAtx(id mesh.AtxId) (*mesh.ActivationTx, error) {
+func (db *ActivationDb) GetAtx(id AtxId) (*ActivationTx, error) {
 	b, err := db.atxs.Get(id.Bytes())
 	if err != nil {
 		return nil, err
 	}
-	atx, err := mesh.BytesAsAtx(b)
+	atx, err := BytesAsAtx(b)
 	if err != nil {
 		return nil, err
 	}
 	return atx, nil
 }
 
-func decodeAtxIds(idsBytes []byte) ([]mesh.AtxId, error) {
-	var ids []mesh.AtxId
+func decodeAtxIds(idsBytes []byte) ([]AtxId, error) {
+	var ids []AtxId
 	if _, err := xdr.Unmarshal(bytes.NewReader(idsBytes), &ids); err != nil {
 		return nil, errors.New("error marshaling layer ")
 	}
 	return ids, nil
 }
 
-func encodeAtxIds(ids []mesh.AtxId) ([]byte, error) {
+func encodeAtxIds(ids []AtxId) ([]byte, error) {
 	var w bytes.Buffer
 	if _, err := xdr.Marshal(&w, &ids); err != nil {
 		return nil, errors.New("error marshalling atx ids ")
