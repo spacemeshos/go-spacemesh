@@ -11,8 +11,13 @@ import (
 )
 
 type BlockID uint64
-type LayerID uint64
 type TransactionId []byte
+type LayerID uint64
+
+func (l LayerID) GetEpoch(layersPerEpoch uint16) uint64 {
+	return uint64(l) / uint64(layersPerEpoch)
+}
+
 
 type BlockHeader struct {
 	Id         BlockID

@@ -21,7 +21,7 @@ type MinerBlockEligibilityValidator struct {
 func (v MinerBlockEligibilityValidator) BlockEligible(layerID mesh.LayerID, nodeID mesh.NodeId,
 	proof mesh.BlockEligibilityProof, atxID mesh.AtxId) (bool, error) {
 
-	epochNumber := uint64(layerID) / uint64(v.layersPerEpoch)
+	epochNumber := layerID.GetEpoch(v.layersPerEpoch)
 
 	atx, err := v.activationDb.GetAtx(atxID)
 	if err != nil {
@@ -33,7 +33,7 @@ func (v MinerBlockEligibilityValidator) BlockEligible(layerID mesh.LayerID, node
 		log.Error("ATX is invalid: %v", err)
 		return false, err
 	}
-	if atxEpochNumber := uint64(atx.LayerIndex) / uint64(v.layersPerEpoch); epochNumber != atxEpochNumber {
+	if atxEpochNumber := atx.LayerIndex.GetEpoch(v.layersPerEpoch); epochNumber != atxEpochNumber {
 		log.Error("ATX epoch (%d) doesn't match layer ID epoch (%d)", atxEpochNumber, epochNumber)
 		return false, fmt.Errorf("activation epoch (%d) mismatch with layer epoch (%d)", atxEpochNumber,
 			epochNumber)

@@ -42,7 +42,7 @@ func NewMinerBlockOracle(committeeSize int32, layersPerEpoch uint16, activationD
 
 func (bo *MinerBlockOracle) BlockEligible(layerID mesh.LayerID) ([]mesh.BlockEligibilityProof, error) {
 
-	epochNumber := uint64(layerID) / uint64(bo.layersPerEpoch)
+	epochNumber := layerID.GetEpoch(bo.layersPerEpoch)
 
 	if bo.proofsEpoch != epochNumber {
 		err := bo.calcEligibilityProofs(epochNumber)
