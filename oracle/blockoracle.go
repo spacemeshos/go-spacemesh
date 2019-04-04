@@ -111,6 +111,11 @@ func getLatestATXID(activationDb ActivationDb, nodeID mesh.NodeId) (mesh.AtxId, 
 		log.Error("getting node ATX IDs failed: %v", err)
 		return mesh.AtxId{}, err
 	}
-	latestATXID := atxIDs[len(atxIDs)-1]
+	numOfActivations := len(atxIDs)
+	if numOfActivations < 1 {
+		log.Error("no activations found for node id \"%v\"", nodeID.Key)
+		return mesh.AtxId{}, errors.New("no activations found")
+	}
+	latestATXID := atxIDs[numOfActivations-1]
 	return latestATXID, err
 }

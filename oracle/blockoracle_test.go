@@ -10,6 +10,10 @@ import (
 )
 
 var atxID = mesh.AtxId{Hash: [32]byte{1, 3, 3, 7}}
+var nodeID = mesh.NodeId{
+	Key: "key",
+	Vrf: "vrf",
+}
 
 type mockActivationDB struct {
 	activeSetSize uint32
@@ -17,6 +21,9 @@ type mockActivationDB struct {
 }
 
 func (a mockActivationDB) GetNodeAtxIds(node mesh.NodeId) ([]mesh.AtxId, error) {
+	if node != nodeID {
+		return []mesh.AtxId{}, nil
+	}
 	return []mesh.AtxId{atxID}, nil
 }
 
@@ -43,7 +50,6 @@ func testBlockOracleAndValidator(r *require.Assertions, activeSetSize uint32, co
 	activationDB := &mockActivationDB{activeSetSize: activeSetSize}
 	beaconProvider := &EpochBeaconProvider{}
 	vrfSigner := &crypto.VRFSigner{}
-	nodeID := mesh.NodeId{}
 	blockOracle := NewMinerBlockOracle(committeeSize, layersPerEpoch, activationDB, beaconProvider, vrfSigner, nodeID)
 	validator := &MinerBlockEligibilityValidator{
 		committeeSize:  committeeSize,
@@ -82,14 +88,13 @@ func testBlockOracleAndValidator(r *require.Assertions, activeSetSize uint32, co
 func TestBlockOracleEmptyActiveSet(t *testing.T) {
 	r := require.New(t)
 
-	activeSetSize := uint32(0)
+	activeSetSize := uint32(0) // Nobody is active 😱
 	committeeSize := int32(200)
 	layersPerEpoch := uint16(10)
 
 	activationDB := &mockActivationDB{activeSetSize: activeSetSize}
 	beaconProvider := &EpochBeaconProvider{}
 	vrfSigner := &crypto.VRFSigner{}
-	nodeID := mesh.NodeId{}
 	blockOracle := NewMinerBlockOracle(committeeSize, layersPerEpoch, activationDB, beaconProvider, vrfSigner, nodeID)
 
 	proofs, err := blockOracle.BlockEligible(0)
@@ -100,13 +105,12 @@ func TestBlockOracleEmptyActiveSet(t *testing.T) {
 func TestBlockOracleEmptyActiveSetValidation(t *testing.T) {
 	r := require.New(t)
 
-	activeSetSize := uint32(0) // Nobody is active 😱
+	activeSetSize := uint32(0) // Nobody is active 😰
 	committeeSize := int32(200)
 	layersPerEpoch := uint16(10)
 
 	activationDB := &mockActivationDB{activeSetSize: activeSetSize}
 	beaconProvider := &EpochBeaconProvider{}
-	nodeID := mesh.NodeId{}
 
 	validator := &MinerBlockEligibilityValidator{
 		committeeSize:  committeeSize,
@@ -120,6 +124,27 @@ func TestBlockOracleEmptyActiveSetValidation(t *testing.T) {
 	r.False(eligible)
 }
 
+func TestBlockOracleNoActivationsForNode(t *testing.T) {
+	r := require.New(t)
+
+	activeSetSize := uint32(20)
+	committeeSize := int32(200)
+	layersPerEpoch := uint16(10)
+	nodeID := mesh.NodeId{
+		Key: "other key",
+		Vrf: "other vrf",
+	} // This guy has no activations 🧐
+
+	activationDB := &mockActivationDB{activeSetSize: activeSetSize}
+	beaconProvider := &EpochBeaconProvider{}
+	vrfSigner := &crypto.VRFSigner{}
+	blockOracle := NewMinerBlockOracle(committeeSize, layersPerEpoch, activationDB, beaconProvider, vrfSigner, nodeID)
+
+	proofs, err := blockOracle.BlockEligible(0)
+	r.EqualError(err, "no activations found")
+	r.Nil(proofs)
+}
+
 func TestBlockOracleValidatorInvalidProof(t *testing.T) {
 	r := require.New(t)
 
@@ -130,7 +155,6 @@ func TestBlockOracleValidatorInvalidProof(t *testing.T) {
 	activationDB := &mockActivationDB{activeSetSize: activeSetSize}
 	beaconProvider := &EpochBeaconProvider{}
 	vrfSigner := &crypto.VRFSigner{}
-	nodeID := mesh.NodeId{}
 	blockOracle := NewMinerBlockOracle(committeeSize, layersPerEpoch, activationDB, beaconProvider, vrfSigner, nodeID)
 
 	layerID := mesh.LayerID(0)
@@ -164,7 +188,6 @@ func TestBlockOracleValidatorInvalidProof2(t *testing.T) {
 
 	beaconProvider := &EpochBeaconProvider{}
 	vrfSigner := &crypto.VRFSigner{}
-	nodeID := mesh.NodeId{}
 	blockOracle := NewMinerBlockOracle(committeeSize, layersPerEpoch, minerActivationDB, beaconProvider, vrfSigner, nodeID)
 
 	layerID := mesh.LayerID(0)
@@ -200,7 +223,6 @@ func TestBlockOracleValidatorInvalidProof3(t *testing.T) {
 	activationDB := &mockActivationDB{activeSetSize: activeSetSize}
 	beaconProvider := &EpochBeaconProvider{}
 	vrfSigner := &crypto.VRFSigner{}
-	nodeID := mesh.NodeId{}
 	blockOracle := NewMinerBlockOracle(committeeSize, layersPerEpoch, activationDB, beaconProvider, vrfSigner, nodeID)
 
 	layerID := mesh.LayerID(20)
