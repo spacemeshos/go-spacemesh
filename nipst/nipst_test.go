@@ -47,30 +47,43 @@ func (a *ActivationBuilderMock) BuildActivationTx(proof *NIPST) {
 	a.nipst <- proof
 }
 
-func TestNIPSTBuilderWithMockClients(t *testing.T) {
+func TestNIPSTBuilderWithMocks(t *testing.T) {
 	assert := require.New(t)
 
-	postProver := &PostProverClientMock{}
-	poetProver := &PoetProvingServiceClientMock{}
+	postProverMock := &PostProverClientMock{}
+	poetProverMock := &PoetProvingServiceClientMock{}
+	verifyMembershipMock := func(*common.Hash, *membershipProof) bool { return true }
+	verifyPoetMock := func(*poetProof) bool { return true }
+	verifyPoetMembershipMock := func(*membershipProof, *poetProof) bool { return true }
 
 	nipstChan := make(chan *NIPST)
 	activationBuilder := &ActivationBuilderMock{nipst: nipstChan}
 
-	nb := NewNIPSTBuilder([]byte("id"), 1024, 600, postProver, poetProver, activationBuilder)
+	nb := NewNIPSTBuilder(
+		[]byte("id"),
+		1024,
+		600,
+		postProverMock,
+		poetProverMock,
+		verifyMembershipMock,
+		verifyPoetMock,
+		verifyPoetMembershipMock,
+		activationBuilder,
+	)
 	nb.Start()
 
 	select {
 	case nipst := <-nipstChan:
 		assert.True(nipst.Valid())
 	case <-time.After(5 * time.Second):
-		assert.Fail("timeout")
+		assert.Fail("nipst creation timeout")
 		return
 	}
 
 	nb.Stop()
 }
 
-func TestNIPSTBuilderWithRPCClients(t *testing.T) {
+func TestNIPSTBuilderWithClients(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
@@ -85,19 +98,28 @@ func TestNIPSTBuilderWithRPCClients(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(poetProver)
 
-	// TODO(moshababo): replace post client mock to a package client or rpc client.
-	postProver := &PostProverClientMock{}
+	postProverMock := &PostProverClientMock{}
 
 	nipstChan := make(chan *NIPST)
 	activationBuilder := &ActivationBuilderMock{nipst: nipstChan}
 
-	nb := NewNIPSTBuilder([]byte("id"), 1024, 600, postProver, poetProver, activationBuilder)
+	nb := NewNIPSTBuilder(
+		[]byte("id"),
+		1024,
+		600,
+		postProverMock,
+		poetProver,
+		verifyMembership,
+		verifyPoet,
+		verifyPoetMembership,
+		activationBuilder,
+	)
 
 	done := make(chan struct{})
 	go func() {
 		select {
 		case err := <-nb.errChan:
-			assert.NoError(err)
+			assert.Fail(err.Error())
 		case <-done:
 		}
 	}()

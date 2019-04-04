@@ -1,12 +1,16 @@
 package nipst
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/merkle-tree"
+	"github.com/spacemeshos/poet-ref/rpc"
 	"github.com/spacemeshos/poet-ref/rpc/api"
 	"github.com/spacemeshos/poet-ref/shared"
+	"github.com/spacemeshos/poet-ref/verifier"
 	"google.golang.org/grpc"
 	"time"
 )
@@ -16,27 +20,58 @@ type poetRound struct {
 }
 
 type membershipProof struct {
-	root        common.Hash
-	merkleProof [][]byte
-}
-
-func (p *membershipProof) valid() bool {
-	// TODO(moshababo): implement
-	return true
+	index int
+	root  common.Hash
+	proof [][]byte
 }
 
 // poetProof can convince a verifier that at least T time must have passed
-// from the time the initial challenge was learned.
-type poetProof shared.Proof
-
-func (p *poetProof) valid() bool {
-	// TODO(moshababo): implement
-	return true
+// from the time the initial member was learned.
+type poetProof struct {
+	commitment []byte
+	n          uint
+	proof      *shared.Proof
 }
 
 func (p *poetProof) serialize() []byte {
 	// TODO(moshababo): implement
-	return []byte(p.Phi)
+	return []byte("")
+}
+
+func verifyMembership(member *common.Hash, proof *membershipProof) bool {
+	valid, err := merkle.ValidatePartialTree(
+		[]uint64{uint64(proof.index)},
+		[][]byte{member[:]},
+		proof.proof,
+		proof.root[:],
+		merkle.GetSha256Parent,
+	)
+
+	if err != nil {
+		return false
+	}
+
+	return valid
+}
+
+func verifyPoet(p *poetProof) bool {
+	v, err := verifier.New(p.commitment, p.n, shared.NewHashFunc(p.commitment))
+	if err != nil {
+		return false
+	}
+
+	res, err := v.VerifyNIP(*p.proof)
+	if err != nil {
+		return false
+	}
+
+	return res
+}
+
+// verifyPoetMembership verifies that the poet proof commitment
+// is the root in which the membership was proven to.
+func verifyPoetMembership(m *membershipProof, p *poetProof) bool {
+	return bytes.Equal(m.root[:], p.commitment)
 }
 
 type SeqWorkTicks uint64
@@ -115,7 +150,7 @@ func (c *RPCPoetClient) subscribeMembershipProof(r *poetRound,
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	req := api.GetMembershipProofRequest{RoundId: int32(r.id), Commitment: challenge[:], Wait: true}
+	req := api.GetMembershipProofRequest{RoundId: int32(r.id), Challenge: challenge[:], Wait: true}
 	res, err := c.client.GetMembershipProof(ctx, &req)
 	if err != nil {
 		if e := ctx.Err(); e == context.DeadlineExceeded {
@@ -124,7 +159,14 @@ func (c *RPCPoetClient) subscribeMembershipProof(r *poetRound,
 		return nil, err
 	}
 
-	return &membershipProof{merkleProof: res.MerkleProof}, nil
+	mproof := new(membershipProof)
+	mproof.index = int(res.Mproof.Index)
+	mproof.proof = res.Mproof.Proof
+
+	// TODO(moshababo): verify length
+	copy(mproof.root[:], res.Mproof.Root[:common.HashLength])
+
+	return mproof, nil
 }
 
 func (c *RPCPoetClient) subscribeProof(r *poetRound,
@@ -142,32 +184,17 @@ func (c *RPCPoetClient) subscribeProof(r *poetRound,
 		return nil, err
 	}
 
-	labels, err := wireLabelsToNative(res.Proof.L)
+	labels, err := rpc.WireLabelsToNative(res.Proof.L)
 	if err != nil {
 		return nil, err
 	}
 
-	p := &poetProof{
-		Phi: res.Proof.Phi,
-		L:   *labels,
-	}
+	p := new(poetProof)
+	p.n = uint(res.N)
+	p.commitment = res.Commitment
+	p.proof = new(shared.Proof)
+	p.proof.Phi = res.Proof.Phi
+	p.proof.L = *labels
 
 	return p, nil
-}
-
-func wireLabelsToNative(wire []*api.Labels) (native *[shared.T]shared.Labels, err error) {
-	if len(wire) != shared.T {
-		return nil, fmt.Errorf("invalid number of labels, expected: %v, found: %v", shared.T, len(wire))
-	}
-
-	native = new([shared.T]shared.Labels)
-	for i, inLabels := range wire {
-		var outLabels shared.Labels
-		for _, inLabel := range inLabels.Labels {
-			outLabels = append(outLabels, inLabel)
-		}
-		native[i] = outLabels
-	}
-
-	return native, nil
 }
