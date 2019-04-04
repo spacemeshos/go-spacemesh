@@ -52,8 +52,8 @@ func TestNIPSTBuilderWithMocks(t *testing.T) {
 
 	postProverMock := &PostProverClientMock{}
 	poetProverMock := &PoetProvingServiceClientMock{}
-	verifyMembershipMock := func(*common.Hash, *membershipProof) bool { return true }
-	verifyPoetMock := func(*poetProof) bool { return true }
+	verifyMembershipMock := func(*common.Hash, *membershipProof) (bool, error) { return true, nil }
+	verifyPoetMock := func(*poetProof) (bool, error) { return true, nil }
 	verifyPoetMembershipMock := func(*membershipProof, *poetProof) bool { return true }
 
 	nipstChan := make(chan *NIPST)

@@ -38,7 +38,7 @@ func (p *poetProof) serialize() []byte {
 	return []byte("")
 }
 
-func verifyMembership(member *common.Hash, proof *membershipProof) bool {
+func verifyMembership(member *common.Hash, proof *membershipProof) (bool, error) {
 	valid, err := merkle.ValidatePartialTree(
 		[]uint64{uint64(proof.index)},
 		[][]byte{member[:]},
@@ -48,24 +48,24 @@ func verifyMembership(member *common.Hash, proof *membershipProof) bool {
 	)
 
 	if err != nil {
-		return false
+		return false, fmt.Errorf("failed to validate merkle proof: %v", err)
 	}
 
-	return valid
+	return valid, nil
 }
 
-func verifyPoet(p *poetProof) bool {
+func verifyPoet(p *poetProof) (bool, error) {
 	v, err := verifier.New(p.commitment, p.n, shared.NewHashFunc(p.commitment))
 	if err != nil {
-		return false
+		return false, fmt.Errorf("failed to create a new verifier: %v", err)
 	}
 
 	res, err := v.VerifyNIP(*p.proof)
 	if err != nil {
-		return false
+		return false, fmt.Errorf("failed to verify proof: %v", err)
 	}
 
-	return res
+	return res, nil
 }
 
 // verifyPoetMembership verifies that the poet proof commitment
@@ -106,7 +106,7 @@ func newClientConn(target string, timeout time.Duration) (*grpc.ClientConn, erro
 
 	conn, err := grpc.DialContext(ctx, target, opts...)
 	if err != nil {
-		return nil, fmt.Errorf("unable to connect to RPC server: %v", err)
+		return nil, fmt.Errorf("failed to connect to rpc server: %v", err)
 	}
 
 	return conn, nil
@@ -138,7 +138,7 @@ func (c *RPCPoetClient) submit(challenge common.Hash,
 	req := api.SubmitRequest{Challenge: challenge[:]}
 	res, err := c.client.Submit(context.Background(), &req)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("rpc failure: %v", err)
 	}
 
 	return &poetRound{id: int(res.RoundId)}, nil
@@ -156,7 +156,7 @@ func (c *RPCPoetClient) subscribeMembershipProof(r *poetRound,
 		if e := ctx.Err(); e == context.DeadlineExceeded {
 			return nil, errors.New("deadline exceeded")
 		}
-		return nil, err
+		return nil, fmt.Errorf("rpc failure: %v", err)
 	}
 
 	mproof := new(membershipProof)
@@ -181,12 +181,12 @@ func (c *RPCPoetClient) subscribeProof(r *poetRound,
 		if e := ctx.Err(); e == context.DeadlineExceeded {
 			return nil, errors.New("deadline exceeded")
 		}
-		return nil, err
+		return nil, fmt.Errorf("rpc failure: %v", err)
 	}
 
 	labels, err := rpc.WireLabelsToNative(res.Proof.L)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to deserialize proof: %v", err)
 	}
 
 	p := new(poetProof)
