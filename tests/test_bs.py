@@ -146,6 +146,7 @@ def query_es_gossip_message(indx, namespace, client_po_name):
 @pytest.fixture(scope='module')
 def setup_oracle(request):
     oracle_deployment_name = 'oracle'
+
     def _setup_oracle_in_namespace(name_space):
 
         namespaced_pods = client.CoreV1Api().list_namespaced_pod(name_space,
@@ -166,6 +167,7 @@ def setup_oracle(request):
 
     request.addfinalizer(fin)
     return _setup_oracle_in_namespace(testconfig['namespace'])
+
 
 @pytest.fixture(scope='module')
 def setup_bootstrap(request, load_config, setup_oracle, create_configmap, bootstrap_deployment_info):
@@ -333,12 +335,12 @@ def test_bootstrap(set_namespace, setup_bootstrap):
                                                                 setup_bootstrap.pods[0]['name'])
 
 
-def test_client(load_config, setup_clients, save_log_on_exit):
+def test_client(set_namespace, setup_clients, save_log_on_exit):
     peers = query_es_client_bootstrap(current_index, testconfig['namespace'], setup_clients.deployment_name)
     assert peers == len(setup_clients.pods)
 
 
-def test_gossip(load_config, setup_clients):
+def test_gossip(set_namespace, setup_clients):
 
     # send message to client via rpc
     client_ip = setup_clients.pods[0]['pod_ip']
@@ -360,7 +362,7 @@ def test_gossip(load_config, setup_clients):
     assert len(setup_clients.pods) == peers_for_gossip
 
 
-def test_transaction(load_config, setup_clients):
+def test_transaction(set_namespace, setup_clients):
 
     # choose client to run on
     client_ip = setup_clients.pods[0]['pod_ip']
