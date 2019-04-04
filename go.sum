@@ -122,16 +122,8 @@ github.com/seehuhn/mt19937 v0.0.0-20180715112136-cc7708819361 h1:Nnks5IJM8QjJsF+
 github.com/seehuhn/mt19937 v0.0.0-20180715112136-cc7708819361/go.mod h1:w+IAy13Luqfsp+plFpT1RiqauADylJKmpkrWFwpjbsc=
 github.com/sirupsen/logrus v1.2.0 h1:juTguoYk5qI21pwyTXY3B3Y5cOTH3ZUyZCg1v/mihuo=
 github.com/sirupsen/logrus v1.2.0/go.mod h1:LxeOpSwHxABJmUn/MG1IvRgCAasNZTLOkJPxbbu5VWo=
-github.com/spacemeshos/merkle-tree v0.0.0-20190303120439-11079fe33c42 h1:rCf5SLMolpeg1yCaCK6v5fM2RSterniXkt7S5UkzpMY=
-github.com/spacemeshos/merkle-tree v0.0.0-20190303120439-11079fe33c42/go.mod h1:mPxjt4RONPxSUhxOq4bhSJyKVGQJ0VMSyRiE51dDLgE=
 github.com/spacemeshos/merkle-tree v0.0.0-20190327145446-3651a544f849 h1:RJw90V/KgsE3dKbcec+aFsgTdYzIwRlYwKRwu9DADPY=
 github.com/spacemeshos/merkle-tree v0.0.0-20190327145446-3651a544f849/go.mod h1:mPxjt4RONPxSUhxOq4bhSJyKVGQJ0VMSyRiE51dDLgE=
-github.com/spacemeshos/poet-ref v0.0.0-20190328115118-4a8d0d8b9b36 h1:IzD1BaF7svsoctzIYzHLX//cpDe3TXasYZIUZYF/CMM=
-github.com/spacemeshos/poet-ref v0.0.0-20190328115118-4a8d0d8b9b36/go.mod h1:G5EK3xH6qRybTTfk+kXLGAsC55pqgMa5b/MfvowhbWU=
-github.com/spacemeshos/poet-ref v0.0.0-20190403140808-6e02b73e8c1a h1:fOnPHijkejT3skvtIS57TDtwud23Fv9c+J037/Gad+Y=
-github.com/spacemeshos/poet-ref v0.0.0-20190403140808-6e02b73e8c1a/go.mod h1:mQDOJ2bhXYw7a30aPgtzOJGj1tRG+dkmcnfG5RsMONw=
-github.com/spacemeshos/poet-ref v0.0.0-20190404064416-cf975df52bd4 h1:m6k4GALCa+1ZvaXXyci2B/6fOqg38JHb/lBvKKrElnQ=
-github.com/spacemeshos/poet-ref v0.0.0-20190404064416-cf975df52bd4/go.mod h1:mQDOJ2bhXYw7a30aPgtzOJGj1tRG+dkmcnfG5RsMONw=
 github.com/spacemeshos/poet-ref v0.0.0-20190404082615-4bb5581dbcba h1:SD7ogYNWvANB0hZhDSsBeOpfOTujfJokCf5PcouJCHk=
 github.com/spacemeshos/poet-ref v0.0.0-20190404082615-4bb5581dbcba/go.mod h1:mQDOJ2bhXYw7a30aPgtzOJGj1tRG+dkmcnfG5RsMONw=
 github.com/spacemeshos/sha256-simd v0.0.0-20190111104731-8575aafc88c9 h1:Cc+np6ORem5wrvO+YHQ1sdu71ItiQVRiYB4ugazpgxM=
