@@ -41,6 +41,11 @@ func (v MinerBlockEligibilityValidator) BlockEligible(layerID mesh.LayerID, node
 	binary.LittleEndian.PutUint64(message[len(epochBeacon):], epochNumber)
 	binary.LittleEndian.PutUint32(message[len(epochBeacon)+binary.Size(epochNumber):], counter)
 	sig := proof.Sig
+	err = v.validateVRF(message, sig, []byte(nodeID.Vrf))
+	if err != nil {
+		log.Error("eligibility VRF validation failed: %v", err)
+		return false, err
+	}
 	hash := sha256.Sum256(sig)
 	eligibleLayer := mesh.LayerID(binary.LittleEndian.Uint64(hash[:]) % uint64(v.layersPerEpoch))
 

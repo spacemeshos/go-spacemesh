@@ -112,3 +112,37 @@ func TestBlockOracleEmptyActiveSetValidation(t *testing.T) {
 	r.EqualError(err, "empty active set not allowed")
 	r.False(eligible)
 }
+
+func TestBlockOracleValidatorInvalidProof(t *testing.T) {
+	r := require.New(t)
+
+	activeSetSize := uint32(5)
+	committeeSize := int32(10)
+	layersPerEpoch := uint16(20)
+
+	activationDB := &mockActivationDB{activeSetSize: activeSetSize}
+	beaconProvider := &EpochBeaconProvider{}
+	vrfSigner := &crypto.VRFSigner{}
+	nodeID := mesh.NodeId{}
+	blockOracle := NewMinerBlockOracle(committeeSize, layersPerEpoch, activationDB, beaconProvider, vrfSigner, nodeID)
+
+	layerID := mesh.LayerID(0)
+
+	proofs, err := blockOracle.BlockEligible(layerID)
+	r.NoError(err)
+	r.NotNil(proofs)
+
+	proof := proofs[0]
+	proof.J += 1
+
+	validator := &MinerBlockEligibilityValidator{
+		committeeSize:  committeeSize,
+		layersPerEpoch: layersPerEpoch,
+		activationDb:   activationDB,
+		beaconProvider: beaconProvider,
+		validateVRF:    crypto.ValidateVRF,
+	}
+	eligible, err := validator.BlockEligible(layerID, nodeID, proof)
+	r.False(eligible)
+	r.EqualError(err, "VRF validation failed")
+}
