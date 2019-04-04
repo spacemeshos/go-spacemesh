@@ -57,7 +57,19 @@ func (bo *MinerBlockOracle) BlockEligible(layerID mesh.LayerID) ([]mesh.BlockEli
 func (bo *MinerBlockOracle) calcEligibilityProofs(epochNumber uint64) error {
 	epochBeacon := bo.beaconProvider.GetBeacon(epochNumber)
 
-	numberOfEligibleBlocks, err := getNumberOfEligibleBlocks(bo.nodeID, bo.activationDb, bo.committeeSize, bo.layersPerEpoch)
+	latestATXID, err := getLatestATXID(bo.activationDb, bo.nodeID)
+	if err != nil {
+		log.Error("failed to get latest ATX: %v", err)
+		return err
+	}
+
+	atx, err := bo.activationDb.GetAtx(latestATXID)
+	if err != nil {
+		log.Error("getting ATX failed: %v", err)
+		return err
+	}
+
+	numberOfEligibleBlocks, err := getNumberOfEligibleBlocks(atx.ActiveSetSize, bo.committeeSize, bo.layersPerEpoch)
 	if err != nil {
 		log.Error("failed to get number of eligible blocks: %v", err)
 		return err
@@ -71,7 +83,8 @@ func (bo *MinerBlockOracle) calcEligibilityProofs(epochNumber uint64) error {
 		binary.LittleEndian.PutUint32(message[len(epochBeacon)+binary.Size(epochNumber):], counter)
 		sig := bo.vrfSigner.Sign(message)
 		hash := sha256.Sum256(sig)
-		eligibleLayer := mesh.LayerID(binary.LittleEndian.Uint64(hash[:]) % uint64(bo.layersPerEpoch))
+		epochOffset := epochNumber * uint64(bo.layersPerEpoch)
+		eligibleLayer := mesh.LayerID(binary.LittleEndian.Uint64(hash[:])%uint64(bo.layersPerEpoch) + epochOffset)
 		bo.eligibilityProofs[eligibleLayer] = append(bo.eligibilityProofs[eligibleLayer], mesh.BlockEligibilityProof{
 			J:   counter,
 			Sig: sig,
@@ -80,21 +93,7 @@ func (bo *MinerBlockOracle) calcEligibilityProofs(epochNumber uint64) error {
 	return nil
 }
 
-func getNumberOfEligibleBlocks(nodeID mesh.NodeId, activationDb ActivationDb, committeeSize int32,
-	layersPerEpoch uint16) (uint32, error) {
-
-	atxIDs, err := activationDb.GetNodeAtxIds(nodeID)
-	if err != nil {
-		log.Error("getting previous atx id failed: %v", err)
-		return 0, err
-	}
-	atxId := atxIDs[len(atxIDs)-1]
-	atx, err := activationDb.GetAtx(atxId)
-	if err != nil {
-		log.Error("getting previous atx failed: %v", err)
-		return 0, err
-	}
-	activeSetSize := atx.ActiveSetSize
+func getNumberOfEligibleBlocks(activeSetSize uint32, committeeSize int32, layersPerEpoch uint16) (uint32, error) {
 	if activeSetSize == 0 {
 		log.Error("empty active set detected in activation transaction")
 		return 0, errors.New("empty active set not allowed")
@@ -104,4 +103,14 @@ func getNumberOfEligibleBlocks(nodeID mesh.NodeId, activationDb ActivationDb, co
 		numberOfEligibleBlocks = 1
 	}
 	return numberOfEligibleBlocks, nil
+}
+
+func getLatestATXID(activationDb ActivationDb, nodeID mesh.NodeId) (mesh.AtxId, error) {
+	atxIDs, err := activationDb.GetNodeAtxIds(nodeID)
+	if err != nil {
+		log.Error("getting node ATX IDs failed: %v", err)
+		return mesh.AtxId{}, err
+	}
+	latestATXID := atxIDs[len(atxIDs)-1]
+	return latestATXID, err
 }
