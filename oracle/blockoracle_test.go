@@ -10,15 +10,17 @@ import (
 
 var atxID = mesh.AtxId{Hash: [32]byte{1, 3, 3, 7}}
 
-type mockActivationDB struct{}
+type mockActivationDB struct {
+	activeSetSize uint32
+}
 
-func (mockActivationDB) GetNodeAtxIds(node mesh.NodeId) ([]mesh.AtxId, error) {
+func (a mockActivationDB) GetNodeAtxIds(node mesh.NodeId) ([]mesh.AtxId, error) {
 	return []mesh.AtxId{atxID}, nil
 }
 
-func (mockActivationDB) GetAtx(id mesh.AtxId) (*mesh.ActivationTx, error) {
+func (a mockActivationDB) GetAtx(id mesh.AtxId) (*mesh.ActivationTx, error) {
 	if id == atxID {
-		return &mesh.ActivationTx{ActivationTxHeader: mesh.ActivationTxHeader{ActiveSetSize: 5}}, nil
+		return &mesh.ActivationTx{ActivationTxHeader: mesh.ActivationTxHeader{ActiveSetSize: a.activeSetSize}}, nil
 	}
 	return nil, errors.New("wrong atx id")
 }
@@ -26,15 +28,20 @@ func (mockActivationDB) GetAtx(id mesh.AtxId) (*mesh.ActivationTx, error) {
 func TestBlockOracle(t *testing.T) {
 	r := require.New(t)
 
-	activationDB := &mockActivationDB{}
+	// Happy flow with small numbers that can be inspected manually
+	testBlockOracleAndValidator(r, 5, 10, 20)
+	// Big, realistic numbers
+	testBlockOracleAndValidator(r, 3000, 200, 4032)
+	// More miners than blocks (ensure at least one block per activation)
+	testBlockOracleAndValidator(r, 5, 2, 2)
+}
+
+func testBlockOracleAndValidator(r *require.Assertions, activeSetSize uint32, committeeSize int32, layersPerEpoch uint16) {
+	activationDB := &mockActivationDB{activeSetSize: activeSetSize}
 	beaconProvider := &EpochBeaconProvider{}
 	vrfSigner := &crypto.VRFSigner{}
 	nodeID := mesh.NodeId{}
-	layersPerEpoch := uint16(20)
-	committeeSize := int32(10)
-
 	blockOracle := NewMinerBlockOracle(committeeSize, layersPerEpoch, activationDB, beaconProvider, vrfSigner, nodeID)
-
 	validator := &MinerBlockEligibilityValidator{
 		committeeSize:  committeeSize,
 		layersPerEpoch: layersPerEpoch,
@@ -42,7 +49,6 @@ func TestBlockOracle(t *testing.T) {
 		beaconProvider: beaconProvider,
 		validateVRF:    crypto.ValidateVRF,
 	}
-
 	counterValuesSeen := map[uint32]bool{}
 	for layer := uint16(0); layer < layersPerEpoch; layer++ {
 		layerID := mesh.LayerID(layer)
@@ -56,12 +62,53 @@ func TestBlockOracle(t *testing.T) {
 			counterValuesSeen[proof.J] = true
 		}
 	}
-
-	numberOfEligibleBlocks := 40 // committeeSize * layersPerEpoch / activeSetSize = 10 * 20 / 5
-	for c := 0; c < numberOfEligibleBlocks; c++ {
-		r.True(counterValuesSeen[uint32(c)], "counter value %d expected, but not received", c)
+	numberOfEligibleBlocks := uint32(committeeSize) * uint32(layersPerEpoch) / activeSetSize
+	if numberOfEligibleBlocks == 0 {
+		numberOfEligibleBlocks = 1
 	}
-	r.Len(counterValuesSeen, numberOfEligibleBlocks)
+	for c := uint32(0); c < numberOfEligibleBlocks; c++ {
+		r.True(counterValuesSeen[c], "counter value %d expected, but not received", c)
+	}
+	r.Len(counterValuesSeen, int(numberOfEligibleBlocks))
 }
 
-// TODO: test empty active set (currently panics)
+func TestBlockOracleEmptyActiveSet(t *testing.T) {
+	r := require.New(t)
+
+	activeSetSize := uint32(0)
+	committeeSize := int32(200)
+	layersPerEpoch := uint16(10)
+
+	activationDB := &mockActivationDB{activeSetSize: activeSetSize}
+	beaconProvider := &EpochBeaconProvider{}
+	vrfSigner := &crypto.VRFSigner{}
+	nodeID := mesh.NodeId{}
+	blockOracle := NewMinerBlockOracle(committeeSize, layersPerEpoch, activationDB, beaconProvider, vrfSigner, nodeID)
+
+	proofs, err := blockOracle.BlockEligible(0)
+	r.EqualError(err, "empty active set not allowed")
+	r.Nil(proofs)
+}
+
+func TestBlockOracleEmptyActiveSetValidation(t *testing.T) {
+	r := require.New(t)
+
+	activeSetSize := uint32(0)
+	committeeSize := int32(200)
+	layersPerEpoch := uint16(10)
+
+	activationDB := &mockActivationDB{activeSetSize: activeSetSize}
+	beaconProvider := &EpochBeaconProvider{}
+	nodeID := mesh.NodeId{}
+
+	validator := &MinerBlockEligibilityValidator{
+		committeeSize:  committeeSize,
+		layersPerEpoch: layersPerEpoch,
+		activationDb:   activationDB,
+		beaconProvider: beaconProvider,
+		validateVRF:    crypto.ValidateVRF,
+	}
+	eligible, err := validator.BlockEligible(0, nodeID, mesh.BlockEligibilityProof{})
+	r.EqualError(err, "empty active set not allowed")
+	r.False(eligible)
+}

@@ -2,6 +2,7 @@ package oracle
 
 import (
 	"encoding/binary"
+	"errors"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -94,6 +95,10 @@ func getNumberOfEligibleBlocks(nodeID mesh.NodeId, activationDb ActivationDb, co
 		return 0, err
 	}
 	activeSetSize := atx.ActiveSetSize
+	if activeSetSize == 0 {
+		log.Error("empty active set detected in activation transaction")
+		return 0, errors.New("empty active set not allowed")
+	}
 	numberOfEligibleBlocks := uint32(committeeSize) * uint32(layersPerEpoch) / activeSetSize
 	if numberOfEligibleBlocks == 0 {
 		numberOfEligibleBlocks = 1
