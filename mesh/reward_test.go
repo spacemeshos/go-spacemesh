@@ -86,19 +86,19 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 
 	var totalRewards int64
 	block1 := NewExistingBlock(BlockID(uuid.New().ID()), 1, []byte("data1"))
-	block1.MinerID = "1"
+	block1.MinerID.Key = "1"
 	totalRewards += addTransactionsToBlock(block1, 15)
 
 	block2 := NewExistingBlock(BlockID(uuid.New().ID()), 1, []byte("data2"))
-	block2.MinerID = "2"
+	block2.MinerID.Key = "2"
 	totalRewards += addTransactionsToBlock(block2, 13)
 
 	block3 := NewExistingBlock(BlockID(uuid.New().ID()), 1, []byte("data3"))
-	block3.MinerID = "3"
+	block3.MinerID.Key = "3"
 	totalRewards += addTransactionsToBlock(block3, 17)
 
 	block4 := NewExistingBlock(BlockID(uuid.New().ID()), 1, []byte("data4"))
-	block4.MinerID = "4"
+	block4.MinerID.Key = "4"
 	totalRewards += addTransactionsToBlock(block4, 16)
 
 	log.Info("total fees : %v", totalRewards)
@@ -141,19 +141,19 @@ func TestMesh_AccumulateRewards_underQuota(t *testing.T) {
 	var totalRewards int64
 
 	block1 := NewExistingBlock(BlockID(uuid.New().ID()), 1, []byte("data1"))
-	block1.MinerID = "1"
+	block1.MinerID.Key = "1"
 	totalRewards += addTransactionsWithGas(block1, 10, 8)
 
 	block2 := NewExistingBlock(BlockID(uuid.New().ID()), 1, []byte("data2"))
-	block2.MinerID = "2"
+	block2.MinerID.Key = "2"
 	totalRewards += addTransactionsWithGas(block2, 10, 9)
 
 	block3 := NewExistingBlock(BlockID(uuid.New().ID()), 1, []byte("data3"))
-	block3.MinerID = "3"
+	block3.MinerID.Key = "3"
 	totalRewards += addTransactionsWithGas(block3, 17, 10)
 
 	block4 := NewExistingBlock(BlockID(uuid.New().ID()), 1, []byte("data4"))
-	block4.MinerID = "4"
+	block4.MinerID.Key = "4"
 	totalRewards += addTransactionsWithGas(block4, 16, 11)
 
 	log.Info("total fees : %v", totalRewards)
@@ -168,16 +168,16 @@ func TestMesh_AccumulateRewards_underQuota(t *testing.T) {
 	remainder := (totalRewards * params.SimpleTxCost.Int64()) % 4
 
 	assert.Equal(t, s.Total, totalRewards*params.SimpleTxCost.Int64()+params.BaseReward.Int64()+remainder)
-	assert.Equal(t, s.Rewards[block1.MinerID], s.Rewards[block2.MinerID])
-	assert.Equal(t, s.Rewards[block3.MinerID], s.Rewards[block4.MinerID])
-	assert.NotEqual(t, s.Rewards[block1.MinerID], s.Rewards[block3.MinerID])
+	assert.Equal(t, s.Rewards[block1.MinerID.Key], s.Rewards[block2.MinerID.Key])
+	assert.Equal(t, s.Rewards[block3.MinerID.Key], s.Rewards[block4.MinerID.Key])
+	assert.NotEqual(t, s.Rewards[block1.MinerID.Key], s.Rewards[block3.MinerID.Key])
 
 }
 
 func createLayer(mesh *Mesh, id LayerID, numOfBlocks, maxTransactions int) (totalRewards int64) {
 	for i := 0; i < numOfBlocks; i++ {
 		block1 := NewExistingBlock(BlockID(uuid.New().ID()), id, []byte("data1"))
-		block1.MinerID = strconv.Itoa(i)
+		block1.MinerID.Key = strconv.Itoa(i)
 		totalRewards += addTransactionsToBlock(block1, rand.Intn(maxTransactions))
 		mesh.AddBlock(block1)
 	}

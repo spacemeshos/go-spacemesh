@@ -1,7 +1,6 @@
 package activation
 
 import (
-	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -10,6 +9,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/rand"
 )
+
+type Network interface {
+	Broadcast(channel string, data []byte) error
+}
 
 type ActiveSetProvider interface {
 	GetActiveSetSize(l mesh.LayerID) uint32
@@ -31,7 +34,7 @@ type EpochProvider interface {
 type Builder struct {
 	nodeId        mesh.NodeId
 	db            *ActivationDb
-	net           api.NetworkAPI
+	net           Network
 	activeSet     ActiveSetProvider
 	mesh          MeshProvider
 	epochProvider EpochProvider
@@ -51,7 +54,7 @@ func (p *Processor) ProcessBlockATXs(block *mesh.Block) {
 	}
 }
 
-func NewBuilder(nodeId mesh.NodeId, db database.DB, net api.NetworkAPI, activeSet ActiveSetProvider, view MeshProvider, epochDuration EpochProvider) *Builder {
+func NewBuilder(nodeId mesh.NodeId, db database.DB, net Network, activeSet ActiveSetProvider, view MeshProvider, epochDuration EpochProvider) *Builder {
 	return &Builder{
 		nodeId, &ActivationDb{db}, net, activeSet, view, epochDuration,
 	}

@@ -3,6 +3,7 @@ package node
 import (
 	"fmt"
 	"github.com/seehuhn/mt19937"
+	"github.com/spacemeshos/go-spacemesh/activation"
 	apiCfg "github.com/spacemeshos/go-spacemesh/api/config"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common"
@@ -248,7 +249,9 @@ func (app *SpacemeshApp) setupTestFeatures() {
 	api.ApproveAPIGossipMessages(cmdp.Ctx, app.P2P)
 }
 
-func (app *SpacemeshApp) initServices(instanceName string, swarm service.Service, dbStorepath string, sgn hare.Signing, blockOracle oracle.BlockOracle, hareOracle hare.Rolacle, layerSize int) error {
+func (app *SpacemeshApp) initServices(instanceName string, swarm service.Service, dbStorepath string, sgn hare.Signing,
+	blockOracle oracle.BlockOracle, blockValidator sync.BlockValidator, hareOracle hare.Rolacle, layerSize int) error {
+
 	app.instanceName = instanceName
 	//todo: should we add all components to a single struct?
 
@@ -282,12 +285,13 @@ func (app *SpacemeshApp) initServices(instanceName string, swarm service.Service
 	msh := mesh.NewMesh(mdb, app.Config.REWARD, trtl, processor, lg.WithName("mesh")) //todo: what to do with the logger?
 
 	conf := sync.Configuration{SyncInterval: 1 * time.Second, Concurrency: 4, LayerSize: int(layerSize), RequestTimeout: 100 * time.Millisecond}
-	syncer := sync.NewSync(swarm, msh, blockOracle, conf, clock.Subscribe(), lg)
+	syncer := sync.NewSync(swarm, msh, blockValidator, conf, clock.Subscribe(), lg)
 
 	ha := hare.New(app.Config.HARE, swarm, sgn, msh, hareOracle, clock.Subscribe(), lg.WithName("hare"))
 
-	blockProducer := miner.NewBlockBuilder(instanceName, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, lg.WithName("blockProducer"))
-	blockListener := sync.NewBlockListener(swarm, blockOracle, msh, 2*time.Second, 4, lg.WithName("blockListener"))
+	nodeID := mesh.NodeId{Key: instanceName} // TODO: where does this come from?
+	blockProducer := miner.NewBlockBuilder(nodeID, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, lg.WithName("blockProducer"))
+	blockListener := sync.NewBlockListener(swarm, blockValidator, msh, 2*time.Second, 4, lg.WithName("blockListener"))
 
 	app.blockProducer = &blockProducer
 	app.blockListener = blockListener
@@ -370,12 +374,19 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 
 	app.unregisterOracle = func() { oracleClient.Unregister(true, pub.String()) }
 
-	bo := oracle.NewBlockOracleFromClient(oracleClient, int(app.Config.CONSENSUS.NodesPerLayer))
+	//bo := oracle.NewBlockOracleFromClient(oracleClient, int(app.Config.CONSENSUS.NodesPerLayer))
+	nodesPerLayer := app.Config.CONSENSUS.NodesPerLayer
+	layersPerEpoch := app.Config.CONSENSUS.LayersPerEpoch
+	activationDb := &activation.ActivationDb{}      // TODO: initialize properly
+	beaconProvider := &oracle.EpochBeaconProvider{} // TODO: initialize properly
+	vrfSigner := crypto.NewVRFSigner(nil)           // TODO: use VRF private key
+	nodeID := mesh.NodeId{Key: "x"}
+	bo := oracle.NewMinerBlockOracle(nodesPerLayer, layersPerEpoch, activationDb, beaconProvider, vrfSigner, nodeID)
 	hareOracle := oracle.NewHareOracleFromClient(oracleClient)
 
 	apiConf := &app.Config.API
 
-	err = app.initServices("x", swarm, "/tmp/", sgn, bo, hareOracle, 50)
+	err = app.initServices("x", swarm, "/tmp/", sgn, bo, nil, hareOracle, 50)
 	if err != nil {
 		log.Error("cannot start services %v", err.Error())
 		return
