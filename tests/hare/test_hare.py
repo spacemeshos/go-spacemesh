@@ -71,8 +71,14 @@ def query_hare_output_set(indx, namespace, client_po_name):
 # ==============================================================================
 
 
+NUM_OF_EXPECTED_ROUNDS = 5
+EFK_LOG_PROPAGATION_DELAY = 10
+
+
 def test_hare_sanity(load_config, setup_clients, save_log_on_exit):
-    delay = int(testconfig['client']['args']['hare-round-duration-sec']) * 7
+    # Need to wait for 1 full iteration + the time it takes the logs to propagate to ES
+    delay = int(testconfig['client']['args']['hare-round-duration-sec']) * NUM_OF_EXPECTED_ROUNDS + \
+            EFK_LOG_PROPAGATION_DELAY
     print("Going to sleep for {0}".format(delay))
     time.sleep(delay)
     lst = query_hare_output_set(current_index, testconfig['namespace'], setup_clients.deployment_id)
