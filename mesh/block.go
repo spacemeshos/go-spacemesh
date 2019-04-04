@@ -1,8 +1,11 @@
 package mesh
 
 import (
-	"github.com/google/uuid"
+	"bytes"
+	"fmt"
+	"github.com/davecgh/go-xdr/xdr2"
 	"github.com/spacemeshos/go-spacemesh/address"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"math/big"
 	"time"
 )
@@ -20,19 +23,18 @@ type BlockHeader struct {
 	Timestamp  int64
 	BlockVotes []BlockID
 	ViewEdges  []BlockID
-	TxIds      []TransactionId
+}
+
+type MiniBlock struct {
+	BlockHeader
+	TxIds []TransactionId
+	ATXs  []*ActivationTx
 }
 
 type Block struct {
-	Id         BlockID
-	LayerIndex LayerID
-	MinerID    string
-	Data       []byte
-	Coin       bool
-	Timestamp  int64
-	Txs        []*SerializableTransaction
-	BlockVotes []BlockID
-	ViewEdges  []BlockID
+	BlockHeader
+	Txs  []*SerializableTransaction
+	ATXs []*ActivationTx
 }
 
 type SerializableTransaction struct {
@@ -57,39 +59,35 @@ func (t *SerializableTransaction) PriceAsBigInt() *big.Int {
 	return a
 }
 
-func NewBlock(coin bool, data []byte, ts time.Time, LayerID LayerID) *Block {
+func NewBlock(id BlockID, layerID LayerID, minerID string, coin bool, data []byte, ts time.Time, viewEdges []BlockID, blockVotes []BlockID, txs []*SerializableTransaction) *Block {
+	transactions := make([]*SerializableTransaction, 0, len(txs))
+	for _, tx := range txs {
+		transactions = append(transactions, tx)
+	}
+
 	b := Block{
-		Id:         BlockID(uuid.New().ID()),
-		LayerIndex: LayerID,
-		BlockVotes: make([]BlockID, 0, 10),
-		ViewEdges:  make([]BlockID, 0, 10),
-		Txs:        make([]*SerializableTransaction, 0, 10),
-		Timestamp:  ts.UnixNano(),
-		Data:       data,
-		Coin:       coin,
+		BlockHeader: *newBlockHeader(id, layerID, minerID, coin, data, ts.UnixNano(), viewEdges, blockVotes),
+		Txs:         transactions,
 	}
 	return &b
 }
 
-func newBlockHeader(block *Block) *BlockHeader {
-	tids := make([]TransactionId, len(block.Txs))
-	for idx, tx := range block.Txs {
-		//keep tx's in same order !!!
-		tids[idx] = getTransactionId(tx)
+func newBlockHeader(id BlockID, layerID LayerID, minerID string, coin bool, data []byte, ts int64, viewEdges []BlockID, blockVotes []BlockID) *BlockHeader {
+	b := &BlockHeader{
+		Id:         id,
+		LayerIndex: layerID,
+		MinerID:    minerID,
+		BlockVotes: blockVotes,
+		ViewEdges:  viewEdges,
+		Timestamp:  ts,
+		Data:       data,
+		Coin:       coin,
 	}
+	return b
+}
 
-	b := BlockHeader{
-		Id:         block.ID(),
-		LayerIndex: block.Layer(),
-		BlockVotes: block.BlockVotes,
-		ViewEdges:  block.ViewEdges,
-		Timestamp:  block.Timestamp,
-		Data:       block.Data,
-		Coin:       block.Coin,
-		MinerID:    block.MinerID,
-		TxIds:      tids,
-	}
-	return &b
+func toBlockHeader(block *Block) *BlockHeader {
+	return newBlockHeader(block.ID(), block.Layer(), block.MinerID, block.Coin, block.Data, block.Timestamp, block.ViewEdges, block.BlockVotes)
 }
 
 func NewSerializableTransaction(nonce uint64, origin, recepient address.Address, amount, price *big.Int, gasLimit uint64) *SerializableTransaction {
@@ -104,11 +102,11 @@ func NewSerializableTransaction(nonce uint64, origin, recepient address.Address,
 	}
 }
 
-func (b Block) ID() BlockID {
+func (b BlockHeader) ID() BlockID {
 	return b.Id
 }
 
-func (b Block) Layer() LayerID {
+func (b BlockHeader) Layer() LayerID {
 	return b.LayerIndex
 }
 
@@ -124,6 +122,24 @@ func (b *Block) AddView(id BlockID) {
 
 func (b *Block) AddTransaction(sr *SerializableTransaction) {
 	b.Txs = append(b.Txs, sr)
+}
+
+func (b *Block) Compare(bl *Block) bool {
+	bbytes, err := BlockAsBytes(*b)
+	if err != nil {
+		log.Error("could not compare blocks %v", err)
+		return false
+	}
+	blbytes, err := BlockAsBytes(*bl)
+	if err != nil {
+		log.Error("could not compare blocks %v", err)
+		return false
+	}
+	return bytes.Equal(bbytes, blbytes)
+}
+
+func (b *Block) AddAtx(sr *ActivationTx) {
+	b.ATXs = append(b.ATXs, sr)
 }
 
 type Layer struct {
@@ -160,13 +176,65 @@ func NewExistingLayer(idx LayerID, blocks []*Block) *Layer {
 	return &l
 }
 
+func MiniBlockToBytes(mini MiniBlock) ([]byte, error) {
+	var w bytes.Buffer
+	if _, err := xdr.Marshal(&w, &mini); err != nil {
+		return nil, fmt.Errorf("error marshalling block ids %v", err)
+	}
+	return w.Bytes(), nil
+}
+
+func BlockAsBytes(block Block) ([]byte, error) {
+	var w bytes.Buffer
+	if _, err := xdr.Marshal(&w, &block); err != nil {
+		return nil, fmt.Errorf("error marshalling block ids %v", err)
+	}
+	return w.Bytes(), nil
+}
+
+func BytesAsMiniBlock(buf []byte) (*MiniBlock, error) {
+	b := MiniBlock{}
+	_, err := xdr.Unmarshal(bytes.NewReader(buf), &b)
+	if err != nil {
+		return &b, err
+	}
+	return &b, nil
+}
+
+func BytesAsBlock(buf []byte) (Block, error) {
+	b := Block{}
+	_, err := xdr.Unmarshal(bytes.NewReader(buf), &b)
+	if err != nil {
+		return b, err
+	}
+	return b, nil
+}
+
+func TransactionAsBytes(tx *SerializableTransaction) ([]byte, error) {
+	var w bytes.Buffer
+	if _, err := xdr.Marshal(&w, tx); err != nil {
+		return nil, fmt.Errorf("error marshalling block ids %v", err)
+	}
+	return w.Bytes(), nil
+}
+
+func BytesAsTransaction(buf []byte) (*SerializableTransaction, error) {
+	b := SerializableTransaction{}
+	_, err := xdr.Unmarshal(bytes.NewReader(buf), &b)
+	if err != nil {
+		return &b, err
+	}
+	return &b, nil
+}
+
 func NewExistingBlock(id BlockID, layerIndex LayerID, data []byte) *Block {
 	b := Block{
-		Id:         BlockID(id),
-		BlockVotes: make([]BlockID, 0, 10),
-		ViewEdges:  make([]BlockID, 0, 10),
-		LayerIndex: LayerID(layerIndex),
-		Data:       data,
+		BlockHeader: BlockHeader{
+			Id:         BlockID(id),
+			BlockVotes: make([]BlockID, 0, 10),
+			ViewEdges:  make([]BlockID, 0, 10),
+			LayerIndex: LayerID(layerIndex),
+			Data:       data},
 	}
 	return &b
 }

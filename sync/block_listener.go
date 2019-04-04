@@ -53,13 +53,13 @@ func (bl *BlockListener) OnNewBlock(b *mesh.Block) {
 	bl.addUnknownToQueue(b)
 }
 
-func NewBlockListener(net server.Service, bv BlockValidator, layers *mesh.Mesh, timeout time.Duration, concurrency int, logger log.Log) *BlockListener {
+func NewBlockListener(net service.Service, bv BlockValidator, layers *mesh.Mesh, timeout time.Duration, concurrency int, logger log.Log) *BlockListener {
 
 	bl := BlockListener{
 		BlockValidator:       bv,
 		Mesh:                 layers,
 		Peers:                p2p.NewPeers(net),
-		MessageServer:        server.NewMsgServer(net, BlockProtocol, timeout, make(chan service.DirectMessage, config.ConfigValues.BufferSize), logger),
+		MessageServer:        server.NewMsgServer(net.(server.Service), BlockProtocol, timeout, make(chan service.DirectMessage, config.ConfigValues.BufferSize), logger),
 		Log:                  logger,
 		semaphore:            make(chan struct{}, concurrency),
 		unknownQueue:         make(chan mesh.BlockID, 200), //todo tune buffer size + get buffer from config

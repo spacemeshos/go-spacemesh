@@ -14,7 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/oracle"
-	"github.com/spacemeshos/go-spacemesh/p2p/server"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/spacemeshos/go-spacemesh/sync"
 	"github.com/spacemeshos/go-spacemesh/version"
@@ -238,7 +238,7 @@ func (app *SpacemeshApp) setupGenesis(cfg *apiCfg.GenesisConfig) {
 		app.state.SetNonce(id, acc.Nonce)
 	}
 
-	genesis := consensus.CreateGenesisBlock()
+	genesis := mesh.CreateGenesisBlock()
 	app.state.Commit(false)
 	app.mesh.AddBlock(genesis)
 }
@@ -248,7 +248,7 @@ func (app *SpacemeshApp) setupTestFeatures() {
 	api.ApproveAPIGossipMessages(cmdp.Ctx, app.P2P)
 }
 
-func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service, dbStorepath string, sgn hare.Signing, blockOracle oracle.BlockOracle, hareOracle hare.Rolacle, layerSize int) error {
+func (app *SpacemeshApp) initServices(instanceName string, swarm service.Service, dbStorepath string, sgn hare.Signing, blockOracle oracle.BlockOracle, hareOracle hare.Rolacle, layerSize int) error {
 	app.instanceName = instanceName
 	//todo: should we add all components to a single struct?
 
@@ -277,8 +277,8 @@ func (app *SpacemeshApp) initServices(instanceName string, swarm server.Service,
 	}
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
 	clock := timesync.NewTicker(timesync.RealClock{}, ld, gTime)
-	trtl := consensus.NewAlgorithm(consensus.NewNinjaTortoise(layerSize, lg.WithName("trtl")))
-	mdb := mesh.NewMeshDB(db, db, db, db, lg.WithName("meshDb"))
+	mdb := mesh.NewPersistentMeshDB(dbStorepath, lg.WithName("meshdb"))
+	trtl := consensus.NewAlgorithm(consensus.NewNinjaTortoise(layerSize, mdb, lg.WithName("trtl")))
 	msh := mesh.NewMesh(mdb, app.Config.REWARD, trtl, processor, lg.WithName("mesh")) //todo: what to do with the logger?
 
 	conf := sync.Configuration{SyncInterval: 1 * time.Second, Concurrency: 4, LayerSize: int(layerSize), RequestTimeout: 100 * time.Millisecond}

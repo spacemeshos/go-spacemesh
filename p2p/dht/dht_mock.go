@@ -29,7 +29,7 @@ type MockDHT struct {
 	SelectPeersFunc    func(qty int) []node.Node
 	bsres              error
 	bsCount            int
-	InternalLookupFunc func(dhtid node.DhtID) []node.Node
+	InternalLookupFunc func(p2pcrypto.PublicKey) []node.Node
 	LookupFunc         func(p2pcrypto.PublicKey) (node.Node, error)
 	lookupRes          node.Node
 	lookupErr          error
@@ -77,9 +77,9 @@ func (m *MockDHT) Lookup(pubkey p2pcrypto.PublicKey) (node.Node, error) {
 }
 
 // InternalLookup is a lookup only in the local routing table
-func (m *MockDHT) InternalLookup(dhtid node.DhtID) []node.Node {
+func (m *MockDHT) InternalLookup(key p2pcrypto.PublicKey) []node.Node {
 	if m.InternalLookupFunc != nil {
-		return m.InternalLookupFunc(dhtid)
+		return m.InternalLookupFunc(key)
 	}
 	return nil
 }

@@ -14,7 +14,11 @@ import (
 	"sync/atomic"
 )
 
-const layerSize = 200
+const (
+	layerSize = 200
+	Genesis   = 0
+	GenesisId = 420
+)
 
 var TRUE = []byte{1}
 var FALSE = []byte{0}
@@ -32,7 +36,7 @@ type StateUpdater interface {
 
 type Mesh struct {
 	log.Log
-	*meshDB
+	mdb           *MeshDB
 	rewardConfig  RewardConfig
 	verifiedLayer LayerID
 	latestLayer   LayerID
@@ -47,14 +51,42 @@ type Mesh struct {
 	done          chan struct{}
 }
 
-func NewMesh(mDb *meshDB, rewardConfig RewardConfig, mesh MeshValidator, state StateUpdater, logger log.Log) *Mesh {
+func NewPersistentMesh(path string, rewardConfig RewardConfig, mesh MeshValidator, state StateUpdater, logger log.Log) *Mesh {
 	//todo add boot from disk
 	ll := &Mesh{
 		Log:          logger,
 		tortoise:     mesh,
 		state:        state,
 		done:         make(chan struct{}),
-		meshDB:       mDb,
+		mdb:          NewPersistentMeshDB(path, logger),
+		rewardConfig: rewardConfig,
+	}
+
+	return ll
+}
+
+func NewMemMesh(rewardConfig RewardConfig, mesh MeshValidator, state StateUpdater, logger log.Log) *Mesh {
+	//todo add boot from disk
+	ll := &Mesh{
+		Log:          logger,
+		tortoise:     mesh,
+		state:        state,
+		done:         make(chan struct{}),
+		mdb:          NewMemMeshDB(logger),
+		rewardConfig: rewardConfig,
+	}
+
+	return ll
+}
+
+func NewMesh(db *MeshDB, rewardConfig RewardConfig, mesh MeshValidator, state StateUpdater, logger log.Log) *Mesh {
+	//todo add boot from disk
+	ll := &Mesh{
+		Log:          logger,
+		tortoise:     mesh,
+		state:        state,
+		done:         make(chan struct{}),
+		mdb:          db,
 		rewardConfig: rewardConfig,
 	}
 
@@ -185,7 +217,7 @@ func (m *Mesh) ExtractUniqueOrderedTransactions(l *Layer) []*Transaction {
 func (m *Mesh) PushTransactions(oldBase LayerID, newBase LayerID) {
 	for i := oldBase; i < newBase; i++ {
 
-		l, err := m.GetLayer(i)
+		l, err := m.mdb.GetLayer(i)
 		if err != nil || l == nil {
 			m.Error("") //todo handle error
 			return
@@ -209,16 +241,16 @@ func (m *Mesh) GetVerifiedLayer(i LayerID) (*Layer, error) {
 		return nil, errors.New("layer not verified yet")
 	}
 	m.lMutex.RUnlock()
-	return m.GetLayer(i)
+	return m.mdb.GetLayer(i)
 }
 
 func (m *Mesh) GetLayer(i LayerID) (*Layer, error) {
-	return m.meshDB.GetLayer(i)
+	return m.mdb.GetLayer(i)
 }
 
 func (m *Mesh) AddBlock(block *Block) error {
 	m.Debug("add block %d", block.ID())
-	if err := m.addBlock(block); err != nil {
+	if err := m.mdb.AddBlock(block); err != nil {
 		m.Error("failed to add block %v  %v", block.ID(), err)
 		return err
 	}
@@ -233,18 +265,18 @@ func (m *Mesh) AddBlock(block *Block) error {
 func (m *Mesh) handleOrphanBlocks(block *Block) {
 	m.orphMutex.Lock()
 	defer m.orphMutex.Unlock()
-	if _, ok := m.orphanBlocks[block.Layer()]; !ok {
-		m.orphanBlocks[block.Layer()] = make(map[BlockID]struct{})
+	if _, ok := m.mdb.orphanBlocks[block.Layer()]; !ok {
+		m.mdb.orphanBlocks[block.Layer()] = make(map[BlockID]struct{})
 	}
-	m.orphanBlocks[block.Layer()][block.ID()] = struct{}{}
-	m.Debug("Added block %d to orphans", block.ID())
-	atomic.AddInt32(&m.orphanBlockCount, 1)
+	m.mdb.orphanBlocks[block.Layer()][block.ID()] = struct{}{}
+	m.Info("Added block %d to orphans", block.ID())
+	atomic.AddInt32(&m.mdb.orphanBlockCount, 1)
 	for _, b := range block.ViewEdges {
-		for _, layermap := range m.orphanBlocks {
+		for _, layermap := range m.mdb.orphanBlocks {
 			if _, has := layermap[b]; has {
 				m.Log.Debug("delete block ", b, "from orphans")
 				delete(layermap, b)
-				atomic.AddInt32(&m.orphanBlockCount, -1)
+				atomic.AddInt32(&m.mdb.orphanBlockCount, -1)
 				break
 			}
 		}
@@ -252,23 +284,26 @@ func (m *Mesh) handleOrphanBlocks(block *Block) {
 }
 
 func (m *Mesh) GetUnverifiedLayerBlocks(l LayerID) ([]BlockID, error) {
-	x, err := m.meshDB.layers.Get(l.ToBytes())
+	x, err := m.mdb.layers.Get(l.ToBytes())
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf("could not retrive layer = %d blocks ", l))
 	}
-	blockIds, err := BytesToBlockIds(x)
+	blockIds, err := bytesToBlockIds(x)
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf("could not desirialize layer to id array for layer %d ", l))
 	}
-
-	return blockIds, nil
+	arr := make([]BlockID, 0, len(blockIds))
+	for bid := range blockIds {
+		arr = append(arr, bid)
+	}
+	return arr, nil
 }
 
 func (m *Mesh) GetOrphanBlocksBefore(l LayerID) ([]BlockID, error) {
 	m.orphMutex.RLock()
 	defer m.orphMutex.RUnlock()
 	ids := map[BlockID]struct{}{}
-	for key, val := range m.orphanBlocks {
+	for key, val := range m.mdb.orphanBlocks {
 		if key < l {
 			for bid := range val {
 				ids[bid] = struct{}{}
@@ -298,7 +333,7 @@ func (m *Mesh) GetOrphanBlocksBefore(l LayerID) ([]BlockID, error) {
 }
 
 func (m *Mesh) AccumulateRewards(rewardLayer LayerID, params RewardConfig) {
-	l, err := m.GetLayer(rewardLayer)
+	l, err := m.mdb.GetLayer(rewardLayer)
 	if err != nil || l == nil {
 		m.Error("") //todo handle error
 		return
@@ -344,14 +379,29 @@ func (m *Mesh) AccumulateRewards(rewardLayer LayerID, params RewardConfig) {
 
 func (m *Mesh) GetBlock(id BlockID) (*Block, error) {
 	m.Debug("get block %d", id)
-	return m.getBlock(id)
+	return m.mdb.GetBlock(id)
 }
 
 func (m *Mesh) GetContextualValidity(id BlockID) (bool, error) {
-	return m.getContextualValidity(id)
+	return m.mdb.getContextualValidity(id)
 }
 
 func (m *Mesh) Close() {
 	m.Debug("closing mDB")
-	m.meshDB.Close()
+	m.mdb.Close()
+}
+
+func CreateGenesisBlock() *Block {
+	bl := &Block{
+		BlockHeader: BlockHeader{Id: BlockID(GenesisId),
+			LayerIndex: 0,
+			Data:       []byte("genesis")},
+	}
+	return bl
+}
+
+func GenesisLayer() *Layer {
+	l := NewLayer(Genesis)
+	l.AddBlock(CreateGenesisBlock())
+	return l
 }

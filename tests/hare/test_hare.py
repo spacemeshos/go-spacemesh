@@ -1,3 +1,13 @@
+import time
+from elasticsearch_dsl import Search, Q
+from pytest_testconfig import config as testconfig
+
+from tests.fixtures import load_config, bootstrap_deployment_info, client_deployment_info
+from tests.test_bs import setup_clients, save_log_on_exit, setup_oracle, setup_bootstrap, create_configmap
+from tests.test_bs import get_elastic_search_api
+from tests.test_bs import current_index
+
+
 class Set:
     def __init__(self, values):
         self.values = {}
@@ -34,14 +44,44 @@ def v1(outputs, intersection):
     return True
 
 
-# def v2(outputs, ):
-
-
 def validate(outputs):
     sets = [Set.from_str(o) for o in outputs]
 
     if not consistency(sets):
         print("consistency failed")
         return False
-
     return True
+
+
+def query_hare_output_set(indx, namespace, client_po_name):
+    es = get_elastic_search_api()
+    fltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
+           Q("match_phrase", kubernetes__pod_name=client_po_name) & \
+           Q("match_phrase", M="Consensus process terminated")
+    s = Search(index=indx, using=es).query('bool', filter=[fltr])
+    hits = list(s.scan())
+
+    lst = []
+    for h in hits:
+        lst.append(h.set_values)
+    return lst
+
+# ==============================================================================
+#    TESTS
+# ==============================================================================
+
+
+NUM_OF_EXPECTED_ROUNDS = 5
+EFK_LOG_PROPAGATION_DELAY = 10
+
+
+def test_hare_sanity(load_config, setup_clients, save_log_on_exit):
+    # Need to wait for 1 full iteration + the time it takes the logs to propagate to ES
+    delay = int(testconfig['client']['args']['hare-round-duration-sec']) * NUM_OF_EXPECTED_ROUNDS + \
+            EFK_LOG_PROPAGATION_DELAY
+    print("Going to sleep for {0}".format(delay))
+    time.sleep(delay)
+    lst = query_hare_output_set(current_index, testconfig['namespace'], setup_clients.deployment_id)
+    total = testconfig['bootstrap']['replicas'] + testconfig['client']['replicas']
+    assert total == len(lst)
+    assert validate(lst)

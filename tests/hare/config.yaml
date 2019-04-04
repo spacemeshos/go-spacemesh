@@ -1,30 +1,32 @@
-namespace: gavrad
+namespace: sm
 
 config_map_name: conf
 
-script_on_exit: './k8s/log-client-pods.sh'
+script_on_exit: '' #'./k8s/log-client-pods.sh'
 
 genesis_delta: 90
 deployment_ready_time_out: 120
 
 bootstrap:
-  image: 'spacemeshos/go-spacemesh:hare'
+  image: 'spacemeshos/go-spacemesh-test:develop'
   command: '/bin/go-hare'
   replicas: 1
   args:
+    randcon: '8'
     hare-committee-size: '50'
-    hare-max-adversaries: '25'
-    hare-round-duration-sec: '60'
+    hare-max-adversaries: '24'
+    hare-round-duration-sec: '10'
     layer-duration-sec: '360'
 
 client:
-  image: 'spacemeshos/go-spacemesh:hare'
+  image: 'spacemeshos/go-spacemesh-test:develop'
   command: '/bin/go-hare'
   replicas: 49
   args:
+    randcon: '8'
     hare-committee-size: '50'
-    hare-max-adversaries: '25'
-    hare-round-duration-sec: '60'
+    hare-max-adversaries: '24'
+    hare-round-duration-sec: '10'
     layer-duration-sec: '360'
 
 elastic:

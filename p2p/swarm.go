@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-
 	"github.com/davecgh/go-spew/spew"
 	"github.com/golang/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -62,10 +61,12 @@ type swarm struct {
 	gossipProtocolHandlers map[string]chan service.GossipMessage
 	protocolHandlerMutex   sync.RWMutex
 
+	network *net.Net // (tcp) networking service
+	cPool   cPool    // conenction cache
 	gossip  *gossip.Protocol
-	network *net.Net
-	cPool   cPool
-	dht     dht.DHT
+
+	dht       dht.DHT // peer addresses store
+	udpServer *UDPMux // protocol switch that includes a udp networking service
 
 	//neighborhood
 	initOnce sync.Once
@@ -147,7 +148,13 @@ func newSwarm(ctx context.Context, config config.Config, newNode bool, persist b
 		network:                n,
 	}
 
-	s.dht = dht.New(l, config.SwarmConfig, s)
+	err = s.setupUDP()
+
+	if err != nil {
+		return nil, err
+	}
+	// todo : if discovery on
+	s.dht = dht.New(l, config.SwarmConfig, s.udpServer) // create table and discovery protocol
 
 	cpool := connectionpool.NewConnectionPool(s.network, l.PublicKey())
 
@@ -165,6 +172,29 @@ func newSwarm(ctx context.Context, config config.Config, newNode bool, persist b
 	return s, nil
 }
 
+func (s *swarm) setupUDP() error {
+	//setup network
+	udpnet, err := net.NewUDPNet(s.config, s.lNode, s.lNode.Log)
+	if err != nil {
+		return err
+	}
+	mux := NewUDPMux(s.lNode, s.lookupFunc, udpnet, s.lNode.Log)
+	s.udpServer = mux
+	return nil
+}
+
+func (s *swarm) lookupFunc(target p2pcrypto.PublicKey) (node.Node, error) {
+	res := s.dht.InternalLookup(target)
+	if res == nil || len(res) == 0 {
+		return node.EmptyNode, errors.New("coudld'nt find requested key node")
+	}
+
+	if res[0].PublicKey().String() != target.String() {
+		return node.EmptyNode, errors.New("coudld'nt find requested key node")
+	}
+	return res[0], nil
+}
+
 func (s *swarm) onNewConnection(nce net.NewConnectionEvent) {
 	// todo: consider doing cpool actions from here instead of registering cpool as well.
 	s.addIncomingPeer(nce.Node.PublicKey())
@@ -178,19 +208,29 @@ func (s *swarm) onClosedConnection(c net.Connection) {
 	}
 }
 
+// Start starts the p2p service. if configured, bootstrap is started in the background.
+// returns error if the swarm is already running or there was an error starting one of the needed services.
 func (s *swarm) Start() error {
 	if atomic.LoadUint32(&s.started) == 1 {
 		return errors.New("swarm already running")
 	}
+
+	var err error
+
 	atomic.StoreUint32(&s.started, 1)
 	s.lNode.Debug("Starting the p2p layer")
 
-	err := s.network.Start()
+	err = s.network.Start()
 	if err != nil {
 		return err
 	}
 
 	s.listenToNetworkMessages() // fires up a goroutine for each queue of messages
+
+	err = s.udpServer.Start()
+	if err != nil {
+		return err
+	}
 
 	go s.checkTimeDrifts()
 
@@ -250,20 +290,6 @@ func (s *swarm) SendMessage(peerPubkey p2pcrypto.PublicKey, protocol string, pay
 	return s.sendMessageImpl(peerPubkey, protocol, service.DataBytes{Payload: payload})
 }
 
-func (s *swarm) localLookup(peerPubKey p2pcrypto.PublicKey) (node.Node, error) {
-	peers := s.dht.InternalLookup(node.NewDhtID(peerPubKey.Bytes())) // blocking, might issue a network lookup that'll take time.
-
-	if peers == nil || len(peers) == 0 {
-		return node.EmptyNode, errors.New("failed to find node address")
-	}
-
-	if peers[0].PublicKey().String() != peerPubKey.String() {
-		return node.EmptyNode, errors.New("failed to find node address")
-	}
-
-	return peers[0], nil
-}
-
 // SendMessage Sends a message to a remote node
 // swarm will establish session if needed or use an existing session and open connection
 // Designed to be used by any high level protocol
@@ -277,11 +303,15 @@ func (s *swarm) sendMessageImpl(peerPubKey p2pcrypto.PublicKey, protocol string,
 	var peer node.Node
 	var conn net.Connection
 
+	if peerPubKey.String() == s.lNode.PublicKey().String() {
+		return errors.New("can't send message to self")
+	}
+
 	conn, err = s.cPool.GetConnectionIfExists(peerPubKey)
 
 	if err != nil {
 		// currently we never want to issue a network lookup for that
-		peer, err = s.localLookup(peerPubKey)
+		peer, err = s.lookupFunc(peerPubKey)
 
 		if err != nil {
 			return err
@@ -352,6 +382,7 @@ func (s *swarm) Shutdown() {
 	close(s.shutdown)
 	s.network.Shutdown()
 	s.cPool.Shutdown()
+	s.udpServer.Shutdown()
 
 	s.protocolHandlerMutex.Lock()
 	for i, _ := range s.directProtocolHandlers {
@@ -409,20 +440,14 @@ func (s *swarm) listenToNetworkMessages() {
 }
 
 func (s *swarm) retryOrDisconnect(key p2pcrypto.PublicKey) {
-	getpeer := s.dht.InternalLookup(node.NewDhtID(key.Bytes()))
+	peer, err := s.lookupFunc(key)
 
-	if getpeer == nil {
+	if err != nil {
 		s.Disconnect(key) // if we didn't find then we can't try replacing
 		return
 	}
-	peer := getpeer[0]
-
-	if peer.PublicKey().String() != key.String() {
-		s.Disconnect(key)
-		return
-	}
-
-	_, err := s.cPool.GetConnection(peer.Address(), peer.PublicKey())
+	// GetConnection will try to achieve a new connection if closed
+	_, err = s.cPool.GetConnection(peer.Address(), peer.PublicKey())
 	if err != nil { // we could'nt connect :/
 		s.Disconnect(key)
 	}
@@ -503,19 +528,18 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 		return ErrOutOfSync
 	}
 
-	s.lNode.Debug("Handle %v message from <<  %v", pm.Metadata.NextProtocol, msg.Conn.RemotePublicKey().String())
+	data, err := ExtractData(pm)
 
-	// route authenticated message to the registered protocol
-
-	var data service.Data
-
-	if payload := pm.GetPayload(); payload != nil {
-		data = service.DataBytes{Payload: payload}
-	} else if wrap := pm.GetMsg(); wrap != nil {
-		data = &service.DataMsgWrapper{Req: wrap.Req, MsgType: wrap.Type, ReqID: wrap.ReqID, Payload: wrap.Payload}
+	if err != nil {
+		return err
 	}
 
+	s.lNode.Debug("Handle %v message from <<  %v", pm.Metadata.NextProtocol, msg.Conn.RemotePublicKey().String())
+
+	// Add metadata collected from p2p message (todo: maybe pass sender and protocol inside metadata)
 	p2pmeta := service.P2PMetadata{msg.Conn.RemoteAddr()}
+
+	// route authenticated message to the registered protocol
 	// messages handled here are always processed by direct based protocols, only the gossip protocol calls ProcessGossipProtocolMessage
 	return s.ProcessDirectProtocolMessage(msg.Conn.RemotePublicKey(), pm.Metadata.NextProtocol, data, p2pmeta)
 }
@@ -681,6 +705,10 @@ func (s *swarm) getMorePeers(numpeers int) int {
 	// TODO: try splitting the load and don't connect to more than X at a time
 	for i := 0; i < ndsLen; i++ {
 		go func(nd node.Node, reportChan chan cnErr) {
+			if nd.String() == s.lNode.String() {
+				reportChan <- cnErr{nd, errors.New("connection to self")}
+				return
+			}
 			_, err := s.cPool.GetConnection(nd.Address(), nd.PublicKey())
 			reportChan <- cnErr{nd, err}
 		}(nds[i], res)
