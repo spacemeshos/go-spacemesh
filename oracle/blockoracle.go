@@ -86,6 +86,7 @@ func (bo *MinerBlockOracle) calcEligibilityProofs(epochNumber uint64) error {
 			Sig: vrfSig,
 		})
 	}
+	bo.proofsEpoch = epochNumber
 	return nil
 }
 

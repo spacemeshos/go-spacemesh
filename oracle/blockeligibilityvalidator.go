@@ -53,7 +53,7 @@ func (v MinerBlockEligibilityValidator) BlockEligible(layerID mesh.LayerID, node
 	epochBeacon := v.beaconProvider.GetBeacon(epochNumber)
 	message := serializeVRFMessage(epochBeacon, epochNumber, counter)
 	vrfSig := proof.Sig
-	err = v.validateVRF(message, vrfSig, []byte(nodeID.Vrf))
+	err = v.validateVRF(message, vrfSig, []byte(nodeID.VRFPublicKey))
 	if err != nil {
 		log.Error("eligibility VRF validation failed: %v", err)
 		return false, err
