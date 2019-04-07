@@ -144,7 +144,7 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 	builder.AddTransaction(trans[2].AccountNonce, trans[2].Origin, *trans[2].Recipient, big.NewInt(0).SetBytes(trans[2].Price))
 
 	atxs := []*mesh.ActivationTx{
-		mesh.NewActivationTx(mesh.NodeId{"aaaa", "bbb"},
+		mesh.NewActivationTx(mesh.NodeId{"aaaa", []byte("bbb")},
 			1,
 			mesh.AtxId{},
 			5,
@@ -153,7 +153,7 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 			5,
 			[]mesh.BlockID{1, 2, 3},
 			&nipst.NIPST{}),
-		mesh.NewActivationTx(mesh.NodeId{"aaaa", "bbb"},
+		mesh.NewActivationTx(mesh.NodeId{"aaaa", []byte("bbb")},
 			1,
 			mesh.AtxId{},
 			5,
@@ -162,7 +162,7 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 			5,
 			[]mesh.BlockID{1, 2, 3},
 			&nipst.NIPST{}),
-		mesh.NewActivationTx(mesh.NodeId{"aaaa", "bbb"},
+		mesh.NewActivationTx(mesh.NodeId{"aaaa", []byte("bbb")},
 			1,
 			mesh.AtxId{},
 			5,
