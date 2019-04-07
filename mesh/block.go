@@ -2,8 +2,6 @@ package mesh
 
 import (
 	"bytes"
-	"fmt"
-	"github.com/davecgh/go-xdr/xdr2"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"math/big"
@@ -183,57 +181,6 @@ func NewExistingLayer(idx LayerID, blocks []*Block) *Layer {
 		index:  idx,
 	}
 	return &l
-}
-
-func MiniBlockToBytes(mini MiniBlock) ([]byte, error) {
-	var w bytes.Buffer
-	if _, err := xdr.Marshal(&w, &mini); err != nil {
-		return nil, fmt.Errorf("error marshalling block ids %v", err)
-	}
-	return w.Bytes(), nil
-}
-
-func BlockAsBytes(block Block) ([]byte, error) {
-	var w bytes.Buffer
-	if _, err := xdr.Marshal(&w, &block); err != nil {
-		return nil, fmt.Errorf("error marshalling block ids %v", err)
-	}
-	return w.Bytes(), nil
-}
-
-func BytesAsMiniBlock(buf []byte) (*MiniBlock, error) {
-	b := MiniBlock{}
-	_, err := xdr.Unmarshal(bytes.NewReader(buf), &b)
-	if err != nil {
-		return &b, err
-	}
-	return &b, nil
-}
-
-func BytesAsBlock(buf []byte) (Block, error) {
-	b := Block{}
-	_, err := xdr.Unmarshal(bytes.NewReader(buf), &b)
-	if err != nil {
-		return b, err
-	}
-	return b, nil
-}
-
-func TransactionAsBytes(tx *SerializableTransaction) ([]byte, error) {
-	var w bytes.Buffer
-	if _, err := xdr.Marshal(&w, tx); err != nil {
-		return nil, fmt.Errorf("error marshalling block ids %v", err)
-	}
-	return w.Bytes(), nil
-}
-
-func BytesAsTransaction(buf []byte) (*SerializableTransaction, error) {
-	b := SerializableTransaction{}
-	_, err := xdr.Unmarshal(bytes.NewReader(buf), &b)
-	if err != nil {
-		return &b, err
-	}
-	return &b, nil
 }
 
 func NewExistingBlock(id BlockID, layerIndex LayerID, data []byte) *Block {
