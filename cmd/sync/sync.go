@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
-	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -47,10 +46,7 @@ func (app *SyncApp) Cleanup() {
 }
 
 func getMesh(path string) *mesh.Mesh {
-	//"tests/sync/data"
-	db := database.NewLevelDbStore(path, nil, nil)
-	mdb := mesh.NewMeshDB(db, db, db, db, lg.WithName("meshDb"))
-	layers := mesh.NewMesh(mdb, sync.ConfigTst(), &sync.MeshValidatorMock{}, sync.MockState{}, lg)
+	layers := mesh.NewPersistentMesh(path, sync.ConfigTst(), &sync.MeshValidatorMock{}, sync.MockState{}, lg)
 	return layers
 }
 
