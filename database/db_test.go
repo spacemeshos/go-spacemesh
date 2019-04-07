@@ -1,8 +1,10 @@
 package database
 
 import (
+	"flag"
 	"fmt"
 	"github.com/stretchr/testify/assert"
+	"os"
 	"testing"
 )
 
@@ -37,4 +39,15 @@ func TestDB_delete(t *testing.T) {
 	str, err = db.Get(key)
 	fmt.Println(string(str))
 	assert.True(t, err != nil, "wrong layer")
+}
+
+func TestMain(m *testing.M) {
+	flag.Parse()
+	res := m.Run()
+	cleanup()
+	os.Exit(res)
+}
+
+func cleanup() {
+	_ = os.RemoveAll("test")
 }

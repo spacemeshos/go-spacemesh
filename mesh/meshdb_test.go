@@ -39,7 +39,7 @@ func TestMeshDb_Block(t *testing.T) {
 	mdb := getMeshdb()
 	blk := NewExistingBlock(123, 1, nil)
 	addTransactionsToBlock(blk, 5)
-	blk.AddAtx(NewActivationTx(NodeId{"aaaa", "bbb"},
+	blk.AddAtx(NewActivationTx(NodeId{"aaaa", []byte("bbb")},
 		1,
 		AtxId{},
 		5,
@@ -69,7 +69,7 @@ func TestMeshDB_AddBlock(t *testing.T) {
 
 	addTransactionsToBlock(block1, 4)
 
-	block1.AddAtx(NewActivationTx(NodeId{"aaaa", "bbb"}, 1, AtxId{}, 5, 1, AtxId{}, 5, []BlockID{1, 2, 3}, &nipst.NIPST{}))
+	block1.AddAtx(NewActivationTx(NodeId{"aaaa", []byte("bbb")}, 1, AtxId{}, 5, 1, AtxId{}, 5, []BlockID{1, 2, 3}, &nipst.NIPST{}))
 	err := mdb.AddBlock(block1)
 	assert.NoError(t, err)
 
