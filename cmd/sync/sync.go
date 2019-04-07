@@ -13,8 +13,6 @@ import (
 	"time"
 )
 
-var lg = log.New("sync_test", "", "")
-
 // Sync cmd
 var Cmd = &cobra.Command{
 	Use:   "sync",
@@ -45,13 +43,9 @@ func (app *SyncApp) Cleanup() {
 
 }
 
-func getMesh(path string) *mesh.Mesh {
-	layers := mesh.NewPersistentMesh(path, sync.ConfigTst(), &sync.MeshValidatorMock{}, sync.MockState{}, lg)
-	return layers
-}
-
 func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	// start p2p services
+	lg := log.New("sync_test", "", "")
 	lg.Info("Initializing P2P services")
 	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P)
 
@@ -63,7 +57,7 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	gTime, err := time.Parse(time.RFC3339, app.Config.GenesisTime)
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
 	clock := timesync.NewTicker(timesync.RealClock{}, ld, gTime)
-	msh := getMesh(app.Config.DataDir)
+	msh := mesh.NewPersistentMesh(app.Config.DataDir, sync.ConfigTst(), &sync.MeshValidatorMock{}, sync.MockState{}, lg)
 	defer msh.Close()
 	if lyr, err := msh.GetLayer(100); err != nil || lyr == nil {
 		lg.Error("could not load layers from disk ...   shutdown", err)
