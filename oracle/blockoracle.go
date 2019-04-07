@@ -78,16 +78,23 @@ func (bo *MinerBlockOracle) calcEligibilityProofs(epochNumber uint64) error {
 	bo.eligibilityProofs = map[mesh.LayerID][]mesh.BlockEligibilityProof{}
 	for counter := uint32(0); counter < numberOfEligibleBlocks; counter++ {
 		message := serializeVRFMessage(epochBeacon, epochNumber, counter)
-		sig := bo.vrfSigner.Sign(message)
-		hash := sha256.Sum256(sig)
-		epochOffset := epochNumber * uint64(bo.layersPerEpoch)
-		eligibleLayer := mesh.LayerID(binary.LittleEndian.Uint64(hash[:])%uint64(bo.layersPerEpoch) + epochOffset)
+		vrfSig := bo.vrfSigner.Sign(message)
+		vrfHash := sha256.Sum256(vrfSig)
+		eligibleLayer := calcEligibleLayer(epochNumber, bo.layersPerEpoch, vrfHash)
 		bo.eligibilityProofs[eligibleLayer] = append(bo.eligibilityProofs[eligibleLayer], mesh.BlockEligibilityProof{
 			J:   counter,
-			Sig: sig,
+			Sig: vrfSig,
 		})
 	}
+	bo.proofsEpoch = epochNumber
 	return nil
+}
+
+func calcEligibleLayer(epochNumber uint64, layersPerEpoch uint16, vrfHash [32]byte) mesh.LayerID {
+	epochOffset := epochNumber * uint64(layersPerEpoch)
+	vrfInteger := binary.LittleEndian.Uint64(vrfHash[:8])
+	eligibleLayerRelativeToEpochStart := vrfInteger % uint64(layersPerEpoch)
+	return mesh.LayerID(eligibleLayerRelativeToEpochStart + epochOffset)
 }
 
 func getNumberOfEligibleBlocks(activeSetSize uint32, committeeSize int32, layersPerEpoch uint16) (uint32, error) {
