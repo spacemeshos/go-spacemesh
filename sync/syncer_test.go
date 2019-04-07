@@ -58,18 +58,6 @@ func SyncMockFactory(number int, conf Configuration, name string, dbType string)
 	return nodes, p2ps
 }
 
-type BlockValidatorMock struct {
-}
-
-func (BlockValidatorMock) BlockEligible(layerID mesh.LayerID, nodeID mesh.NodeId, proof mesh.BlockEligibilityProof) (bool, error) {
-	return true, nil
-}
-
-type MeshValidatorMock struct{}
-
-func (m *MeshValidatorMock) HandleIncomingLayer(layer *mesh.Layer) (mesh.LayerID, mesh.LayerID) {
-	return layer.Index() - 1, layer.Index()
-}
 func (m *MeshValidatorMock) HandleLateBlock(bl *mesh.Block)              {}
 func (m *MeshValidatorMock) RegisterLayerCallback(func(id mesh.LayerID)) {}
 func (mlg *MeshValidatorMock) ContextualValidity(id mesh.BlockID) bool   { return true }
