@@ -9,13 +9,17 @@ import (
 )
 
 type BlockID uint64
-type LayerID uint64
 type TransactionId []byte
+type LayerID uint64
+
+func (l LayerID) GetEpoch(layersPerEpoch uint16) uint64 {
+	return uint64(l) / uint64(layersPerEpoch)
+}
 
 type BlockHeader struct {
 	Id         BlockID
 	LayerIndex LayerID
-	MinerID    string
+	MinerID    NodeId
 	Data       []byte
 	Coin       bool
 	Timestamp  int64
@@ -33,6 +37,11 @@ type Block struct {
 	BlockHeader
 	Txs  []*SerializableTransaction
 	ATXs []*ActivationTx
+}
+
+type BlockEligibilityProof struct {
+	J   uint32
+	Sig []byte
 }
 
 type SerializableTransaction struct {
@@ -57,7 +66,7 @@ func (t *SerializableTransaction) PriceAsBigInt() *big.Int {
 	return a
 }
 
-func NewBlock(id BlockID, layerID LayerID, minerID string, coin bool, data []byte, ts time.Time, viewEdges []BlockID, blockVotes []BlockID, txs []*SerializableTransaction) *Block {
+func NewBlock(id BlockID, layerID LayerID, minerID NodeId, coin bool, data []byte, ts time.Time, viewEdges []BlockID, blockVotes []BlockID, txs []*SerializableTransaction) *Block {
 	transactions := make([]*SerializableTransaction, 0, len(txs))
 	for _, tx := range txs {
 		transactions = append(transactions, tx)
@@ -70,7 +79,7 @@ func NewBlock(id BlockID, layerID LayerID, minerID string, coin bool, data []byt
 	return &b
 }
 
-func newBlockHeader(id BlockID, layerID LayerID, minerID string, coin bool, data []byte, ts int64, viewEdges []BlockID, blockVotes []BlockID) *BlockHeader {
+func newBlockHeader(id BlockID, layerID LayerID, minerID NodeId, coin bool, data []byte, ts int64, viewEdges []BlockID, blockVotes []BlockID) *BlockHeader {
 	b := &BlockHeader{
 		Id:         id,
 		LayerIndex: layerID,

@@ -342,16 +342,17 @@ func (m *Mesh) AccumulateRewards(rewardLayer LayerID, params RewardConfig) {
 	ids := make(map[string]struct{})
 	uq := make(map[string]struct{})
 
-	//todo: check if block producer was eligible?
+	// TODO: instead of the following code we need to validate the eligibility of each block individually using the
+	//  proof included in each block
 	for _, bl := range l.blocks {
-		if _, found := ids[bl.MinerID]; found {
+		if _, found := ids[bl.MinerID.Key]; found {
 			log.Error("two blocks found from same miner %v in layer %v", bl.MinerID, bl.LayerIndex)
 			continue
 		}
-		ids[bl.MinerID] = struct{}{}
+		ids[bl.MinerID.Key] = struct{}{}
 		if uint32(len(bl.Txs)) < params.TxQuota {
 			//todo: think of giving out reward for unique txs as well
-			uq[bl.MinerID] = struct{}{}
+			uq[bl.MinerID.Key] = struct{}{}
 		}
 	}
 	//accumulate all blocks rewards
