@@ -19,7 +19,6 @@ const (
 	layerSize     = 200
 	Genesis       = 0
 	GenesisId     = 420
-	LayersInEpoch = 1000
 )
 
 var TRUE = []byte{1}
@@ -45,7 +44,7 @@ type Mesh struct {
 	log.Log
 	mdb           *MeshDB
 	AtxDB         AtxDB
-	rewardConfig  RewardConfig
+	config        Config
 	verifiedLayer LayerID
 	latestLayer   LayerID
 	lastSeenLayer LayerID
@@ -59,44 +58,44 @@ type Mesh struct {
 	done          chan struct{}
 }
 
-func NewPersistentMesh(path string, rewardConfig RewardConfig, mesh MeshValidator, state StateUpdater, logger log.Log) *Mesh {
+func NewPersistentMesh(path string, rewardConfig Config, mesh MeshValidator, state StateUpdater, logger log.Log) *Mesh {
 	//todo add boot from disk
 	ll := &Mesh{
-		Log:          logger,
-		tortoise:     mesh,
-		state:        state,
-		done:         make(chan struct{}),
-		mdb:          NewPersistentMeshDB(path, logger),
-		rewardConfig: rewardConfig,
+		Log:      logger,
+		tortoise: mesh,
+		state:    state,
+		done:     make(chan struct{}),
+		mdb:      NewPersistentMeshDB(path, logger),
+		config:   rewardConfig,
 	}
 
 	return ll
 }
 
-func NewMemMesh(rewardConfig RewardConfig, mesh MeshValidator, state StateUpdater, logger log.Log) *Mesh {
+func NewMemMesh(rewardConfig Config, mesh MeshValidator, state StateUpdater, logger log.Log) *Mesh {
 	//todo add boot from disk
 	ll := &Mesh{
-		Log:          logger,
-		tortoise:     mesh,
-		state:        state,
-		done:         make(chan struct{}),
-		mdb:          NewMemMeshDB(logger),
-		rewardConfig: rewardConfig,
+		Log:      logger,
+		tortoise: mesh,
+		state:    state,
+		done:     make(chan struct{}),
+		mdb:      NewMemMeshDB(logger),
+		config:   rewardConfig,
 	}
 
 	return ll
 }
 
-func NewMesh(db *MeshDB, atxDb AtxDB, rewardConfig RewardConfig, mesh MeshValidator, state StateUpdater, logger log.Log) *Mesh {
+func NewMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh MeshValidator, state StateUpdater, logger log.Log) *Mesh {
 	//todo add boot from disk
 	ll := &Mesh{
-		Log:          logger,
-		tortoise:     mesh,
-		state:        state,
-		done:         make(chan struct{}),
-		mdb:          db,
-		rewardConfig: rewardConfig,
-		AtxDB:        atxDb,
+		Log:      logger,
+		tortoise: mesh,
+		state:    state,
+		done:     make(chan struct{}),
+		mdb:      db,
+		config:   rewardConfig,
+		AtxDB:    atxDb,
 	}
 
 	return ll
@@ -187,8 +186,8 @@ func (m *Mesh) SetLatestLayer(idx LayerID) {
 func (m *Mesh) ValidateLayer(lyr *Layer) {
 	m.Info("Validate layer %d", lyr.Index())
 
-	if lyr.index >= m.rewardConfig.RewardMaturity {
-		m.AccumulateRewards(lyr.index-m.rewardConfig.RewardMaturity, m.rewardConfig)
+	if lyr.index >= m.config.RewardMaturity {
+		m.AccumulateRewards(lyr.index-m.config.RewardMaturity, m.config)
 	}
 
 	oldPbase, newPbase := m.tortoise.HandleIncomingLayer(lyr)
@@ -222,7 +221,7 @@ func (m *Mesh) processBlockATXs(block *Block) {
 			log.Error("could not calculate active set for %v", atx.Id())
 		}
 		atx.VerifiedActiveSet = activeSet
-		err = m.AtxDB.StoreAtx(EpochId(atx.LayerIndex/LayersInEpoch), atx)
+		err = m.AtxDB.StoreAtx(EpochId(atx.LayerIndex/m.config.LayersPerEpoch), atx)
 		if err != nil {
 			log.Error("cannot store atx: %v", atx)
 		}
@@ -295,6 +294,18 @@ func (m *Mesh) GetVerifiedLayer(i LayerID) (*Layer, error) {
 
 func (m *Mesh) GetLayer(i LayerID) (*Layer, error) {
 	return m.mdb.GetLayer(i)
+}
+
+func (m *Mesh) GetLatestVerified() []BlockID{
+	layer, err := m.mdb.GetLayer(m.VerifiedLayer())
+	if err != nil {
+		panic("got an error trying to read verified layer")
+	}
+	view := make([]BlockID, 0, len(layer.Blocks()))
+	for _, blk := range layer.Blocks() {
+		view = append(view, blk.Id)
+	}
+	return view
 }
 
 func (m *Mesh) AddBlock(block *Block) error {
@@ -381,7 +392,7 @@ func (m *Mesh) GetOrphanBlocksBefore(l LayerID) ([]BlockID, error) {
 	return idArr, nil
 }
 
-func (m *Mesh) AccumulateRewards(rewardLayer LayerID, params RewardConfig) {
+func (m *Mesh) AccumulateRewards(rewardLayer LayerID, params Config) {
 	l, err := m.mdb.GetLayer(rewardLayer)
 	if err != nil || l == nil {
 		m.Error("") //todo handle error
@@ -439,11 +450,18 @@ func (m *Mesh) CalcActiveSetFromView(a *ActivationTx) (uint32, error) {
 
 	var counter uint32 = 0
 	set := make(map[AtxId]struct{})
+	firstLayerOfLastEpoch := a.LayerIndex - m.config.LayersPerEpoch - (a.LayerIndex % m.config.LayersPerEpoch)
+	lastLayerOfLastEpoch :=firstLayerOfLastEpoch + m.config.LayersPerEpoch
+
 	traversalFunc := func(block *BlockHeader) error {
 		blk, err := m.GetBlock(block.Id)
 		if err != nil {
 			log.Error("cannot validate atx, block %v not found", block.Id)
 			return err
+		}
+		//skip blocks not from atx epoch
+		if blk.LayerIndex > lastLayerOfLastEpoch {
+			return nil
 		}
 		for _, atx := range blk.ATXs {
 			if _, found := set[atx.Id()]; found {
@@ -467,7 +485,7 @@ func (m *Mesh) CalcActiveSetFromView(a *ActivationTx) (uint32, error) {
 		mp[blk] = struct{}{}
 	}
 
-	firstLayerOfLastEpoch := a.LayerIndex - LayersInEpoch - ((a.LayerIndex) % LayersInEpoch)
+
 	m.mdb.ForBlockInView(mp, firstLayerOfLastEpoch, traversalFunc, errHandler)
 	activesetCache.Add(common.BytesToHash(bytes), counter)
 

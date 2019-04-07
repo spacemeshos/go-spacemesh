@@ -84,7 +84,7 @@ func (s *stateMock) ApplyTransactions(id mesh.LayerID, tx mesh.Transactions) (ui
 	return 0, nil
 }
 
-var rewardConf = mesh.RewardConfig{
+var rewardConf = mesh.Config{
 	big.NewInt(10),
 	big.NewInt(5000),
 	big.NewInt(15),

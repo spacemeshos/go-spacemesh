@@ -160,7 +160,6 @@ func createLayerWithAtx(mesh *Mesh, id LayerID, numOfBlocks int, atxs []*Activat
 }
 
 func TestMesh_CalcActiveSetFromView(t *testing.T) {
-	//todo: test addAtxs
 	layers := getMesh("t6")
 
 	id1 := NodeId{Key: uuid.New().String()}
@@ -188,7 +187,7 @@ func TestMesh_CalcActiveSetFromView(t *testing.T) {
 		NewActivationTx(id3, 0, EmptyAtx, 1435, 0, EmptyAtx, 3, []BlockID{}, &nipst.NIPST{}),
 	}
 
-	block2 := NewExistingBlock(BlockID(uuid.New().ID()), 1000, []byte("data1"))
+	block2 := NewExistingBlock(BlockID(uuid.New().ID()), 1200, []byte("data1"))
 	block2.MinerID = strconv.Itoa(1)
 	block2.ATXs = append(block2.ATXs, atxs2...)
 	block2.ViewEdges = blocks
@@ -201,7 +200,6 @@ func TestMesh_CalcActiveSetFromView(t *testing.T) {
 }
 
 func TestMesh_Wrong_CalcActiveSetFromView(t *testing.T) {
-	//todo: test addAtxs
 	layers := getMesh("t6")
 
 	id1 := NodeId{Key: uuid.New().String()}
@@ -225,7 +223,6 @@ func TestMesh_Wrong_CalcActiveSetFromView(t *testing.T) {
 }
 
 func TestMesh_processBlockATXs(t *testing.T) {
-	//todo: test addAtxs
 	layers := getMesh("t6")
 
 	id1 := NodeId{Key: uuid.New().String()}

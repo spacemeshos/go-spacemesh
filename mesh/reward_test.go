@@ -32,13 +32,14 @@ func (s *MockMapState) ApplyRewards(layer LayerID, miners map[string]struct{}, u
 
 }
 
-func ConfigTst() RewardConfig {
-	return RewardConfig{
+func ConfigTst() Config {
+	return Config{
 		big.NewInt(10),
 		big.NewInt(5000),
 		big.NewInt(15),
 		15,
 		5,
+		1000,
 	}
 }
 
@@ -123,13 +124,14 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 
 }
 
-func NewTestRewardParams() RewardConfig {
-	return RewardConfig{
+func NewTestRewardParams() Config {
+	return Config{
 		big.NewInt(10),
 		big.NewInt(5000),
 		big.NewInt(20),
 		15,
 		10,
+		1000,
 	}
 }
 
@@ -220,7 +222,7 @@ func TestMesh_integration(t *testing.T) {
 }
 
 func TestMesh_calcRewards(t *testing.T) {
-	cfg := RewardConfig{PenaltyPercent: big.NewInt(13)}
+	cfg := Config{PenaltyPercent: big.NewInt(13)}
 	bonus, penalty := calculateActualRewards(big.NewInt(10000), big.NewInt(10), cfg, 5)
 	assert.Equal(t, int64(10000), bonus.Int64()*5+penalty.Int64()*5)
 	assert.Equal(t, int64(1065), bonus.Int64())

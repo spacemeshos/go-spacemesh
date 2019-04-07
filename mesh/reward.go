@@ -6,25 +6,29 @@ import (
 	"math/big"
 )
 
-type RewardConfig struct {
+type Config struct {
+	// reward config
 	SimpleTxCost   *big.Int
 	BaseReward     *big.Int
 	PenaltyPercent *big.Int
 	TxQuota        uint32
 	RewardMaturity LayerID
+	// global mesh config
+	LayersPerEpoch LayerID
 }
 
-func DefaultRewardConfig() RewardConfig {
-	return RewardConfig{
+func DefaultMeshConfig() Config {
+	return Config{
 		big.NewInt(10),
 		big.NewInt(5000),
 		big.NewInt(19),
 		15,
 		5,
+		1000,
 	}
 }
 
-func CalculateLayerReward(id LayerID, params RewardConfig) *big.Int {
+func CalculateLayerReward(id LayerID, params Config) *big.Int {
 	//todo: add inflation rules here
 	return params.BaseReward
 }
@@ -43,7 +47,7 @@ func MergeDoubles(transactions []*Transaction) []*Transaction {
 	return merged
 }
 
-func calculateActualRewards(rewards *big.Int, numBlocks *big.Int, params RewardConfig, underQuotaBlocks int) (*big.Int, *big.Int) {
+func calculateActualRewards(rewards *big.Int, numBlocks *big.Int, params Config, underQuotaBlocks int) (*big.Int, *big.Int) {
 	log.Info("rewards %v blocks %v penalty_percent %v under_quota %v", rewards.Int64(), numBlocks.Int64(), params.PenaltyPercent.Int64(), underQuotaBlocks)
 	mod := new(big.Int)
 	// basic_reward =  total rewards / total_num_of_blocks
