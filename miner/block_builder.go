@@ -30,8 +30,8 @@ const IncomingTxProtocol = "TxGossip"
 const AtxProtocol = "AtxGossip"
 
 type BlockBuilder struct {
-	minerID string // could be a pubkey or what ever. the identity we're claiming to be as miners.
 	log.Log
+	minerID          mesh.NodeId
 	rnd              *rand.Rand
 	beginRoundEvent  chan mesh.LayerID
 	stopChan         chan struct{}
@@ -50,10 +50,10 @@ type BlockBuilder struct {
 	started          bool
 }
 
-func NewBlockBuilder(minerID string, net p2p.Service, beginRoundEvent chan mesh.LayerID, weakCoin WeakCoinProvider,
+func NewBlockBuilder(minerID mesh.NodeId, net p2p.Service, beginRoundEvent chan mesh.LayerID, weakCoin WeakCoinProvider,
 	orph OrphanBlockProvider, hare HareResultProvider, blockOracle oracle.BlockOracle, lg log.Log) BlockBuilder {
 
-	seed := binary.BigEndian.Uint64(md5.New().Sum([]byte(minerID)))
+	seed := binary.BigEndian.Uint64(md5.New().Sum([]byte(minerID.Key)))
 
 	return BlockBuilder{
 		minerID:          minerID,
@@ -228,10 +228,17 @@ func (t *BlockBuilder) acceptBlockData() {
 			return
 
 		case id := <-t.beginRoundEvent:
-			//todo: eligibility needs to return an int since we can mine 2 blocks in same layer
-			if !t.blockOracle.BlockEligible(mesh.LayerID(id), t.minerID) {
+			proofs, err := t.blockOracle.BlockEligible(mesh.LayerID(id))
+			if err != nil {
+				t.Error("failed to check for block eligibility: %v ", err)
+				continue
+			}
+			if len(proofs) == 0 {
 				break
 			}
+			// TODO: include eligibility proof in block
+			// TODO: create block per proof
+			// TODO: include multiple proofs in each block and weigh blocks where applicable
 
 			txList := t.transactionQueue[:common.Min(len(t.transactionQueue), MaxTransactionsPerBlock)]
 			t.transactionQueue = t.transactionQueue[common.Min(len(t.transactionQueue), MaxTransactionsPerBlock):]
