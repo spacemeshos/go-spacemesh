@@ -19,14 +19,16 @@ func (l LayerID) GetEpoch(layersPerEpoch uint16) uint64 {
 }
 
 type BlockHeader struct {
-	Id         BlockID
-	LayerIndex LayerID
-	MinerID    NodeId
-	Data       []byte
-	Coin       bool
-	Timestamp  int64
-	BlockVotes []BlockID
-	ViewEdges  []BlockID
+	Id               BlockID
+	LayerIndex       LayerID
+	MinerID          NodeId
+	ATXID            AtxId
+	EligibilityProof BlockEligibilityProof
+	Data             []byte
+	Coin             bool
+	Timestamp        int64
+	BlockVotes       []BlockID
+	ViewEdges        []BlockID
 }
 
 type MiniBlock struct {

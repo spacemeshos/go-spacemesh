@@ -92,7 +92,7 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 			}
 
 			bl.Log.With().Info("got new block", log.Uint64("id", uint64(blk.Id)), log.Int("txs", len(blk.Txs)))
-			eligible, err := bl.BlockEligible(blk.LayerIndex, blk.MinerID, mesh.BlockEligibilityProof{}) // TODO: use nodeID and eligibilityProof from block
+			eligible, err := bl.BlockEligible(&blk)
 			if err != nil {
 				bl.Error("block eligible check failed")
 				break
@@ -135,18 +135,17 @@ func (bl *BlockListener) run() {
 func (bl *BlockListener) FetchBlock(id mesh.BlockID) {
 	for _, p := range bl.GetPeers() {
 		if ch, err := sendBlockRequest(bl.MessageServer, p, id, bl.Log); err == nil {
-			eligibilityProof := mesh.BlockEligibilityProof{} // TODO: take from the block
-			b := <-ch
-			if b == nil {
+			block := <-ch
+			if block == nil {
 				continue
 			}
-			eligible, err := bl.BlockEligible(b.LayerIndex, b.MinerID, eligibilityProof)
+			eligible, err := bl.BlockEligible(block)
 			if err != nil {
 				panic("return error!") // TODO: return error
 			}
 			if eligible {
-				bl.AddBlock(b)
-				bl.addUnknownToQueue(b) //add all child blocks to unknown queue
+				bl.AddBlock(block)
+				bl.addUnknownToQueue(block) //add all child blocks to unknown queue
 				return
 			}
 		}

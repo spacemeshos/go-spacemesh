@@ -8,7 +8,7 @@ import (
 // todo: configure oracle test constants like committee size and honesty.
 
 type BlockOracle interface {
-	BlockEligible(layerID mesh.LayerID) ([]mesh.BlockEligibilityProof, error)
+	BlockEligible(layerID mesh.LayerID) (mesh.AtxId, []mesh.BlockEligibilityProof, error)
 }
 
 type HareOracle interface {
@@ -36,41 +36,17 @@ func (bo *localBlockOracle) Register(isHonest bool, pubkey string) {
 }
 
 // Eligible checks whether we're eligible to mine a block in layer i
-func (bo *localBlockOracle) BlockEligible(layerID mesh.LayerID) ([]mesh.BlockEligibilityProof, error) {
+func (bo *localBlockOracle) BlockEligible(layerID mesh.LayerID) (mesh.AtxId, []mesh.BlockEligibilityProof, error) {
 	eligible := bo.oc.Eligible(uint32(layerID), bo.committeeSize, bo.nodeID.Key, nil)
 	var proofs []mesh.BlockEligibilityProof
 	if eligible {
 		proofs = []mesh.BlockEligibilityProof{}
 	}
-	return proofs, nil
+	return mesh.AtxId{}, proofs, nil
 }
 
 func (bo *localBlockOracle) Eligible(instanceID uint32, committeeSize int, pubKey string, proof []byte) bool {
 	return bo.oc.Eligible(instanceID, committeeSize, pubKey, proof)
-}
-
-type blockOracle struct {
-	committeeSize int
-	oc            *OracleClient
-	nodeID        mesh.NodeId
-}
-
-func NewBlockOracleFromClient(oc *OracleClient, committeeSize int, nodeID mesh.NodeId) *blockOracle {
-	return &blockOracle{
-		committeeSize: committeeSize,
-		oc:            oc,
-		nodeID:        nodeID,
-	}
-}
-
-// Eligible checks whether we're eligible to mine a block in layer i
-func (bo *blockOracle) BlockEligible(layerID mesh.LayerID) ([]mesh.BlockEligibilityProof, error) {
-	eligible := bo.oc.Eligible(uint32(layerID), bo.committeeSize, bo.nodeID.Key)
-	var proofs []mesh.BlockEligibilityProof
-	if eligible {
-		proofs = []mesh.BlockEligibilityProof{}
-	}
-	return proofs, nil
 }
 
 type hareOracle struct {

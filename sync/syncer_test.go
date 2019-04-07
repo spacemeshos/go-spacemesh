@@ -61,7 +61,7 @@ func SyncMockFactory(number int, conf Configuration, name string, dbType string)
 type BlockValidatorMock struct {
 }
 
-func (BlockValidatorMock) BlockEligible(layerID mesh.LayerID, nodeID mesh.NodeId, proof mesh.BlockEligibilityProof) (bool, error) {
+func (BlockValidatorMock) BlockEligible(block *mesh.Block) (bool, error) {
 	return true, nil
 }
 

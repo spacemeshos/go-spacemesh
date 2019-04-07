@@ -41,8 +41,8 @@ func (m MockOrphans) GetOrphanBlocksBefore(l mesh.LayerID) ([]mesh.BlockID, erro
 type mockBlockOracle struct {
 }
 
-func (mbo mockBlockOracle) BlockEligible(layerID mesh.LayerID) ([]mesh.BlockEligibilityProof, error) {
-	return []mesh.BlockEligibilityProof{{J: 0, Sig: []byte{1}}}, nil
+func (mbo mockBlockOracle) BlockEligible(layerID mesh.LayerID) (mesh.AtxId, []mesh.BlockEligibilityProof, error) {
+	return mesh.AtxId{}, []mesh.BlockEligibilityProof{{J: 0, Sig: []byte{1}}}, nil
 }
 
 type mockMsg struct {
@@ -108,9 +108,9 @@ func TestBlockBuilder_BlockIdGeneration(t *testing.T) {
 	builder2 := NewBlockBuilder(mesh.NodeId{Key: "b"}, n2, beginRound, MockCoin{}, MockOrphans{st: []mesh.BlockID{1, 2, 3}}, hare,
 		mockBlockOracle{}, log.New(n2.Node.String(), "", ""))
 
-	b1, _ := builder1.createBlock(1, nil, nil)
+	b1, _ := builder1.createBlock(1, mesh.AtxId{}, mesh.BlockEligibilityProof{}, nil, nil)
 
-	b2, _ := builder2.createBlock(1, nil, nil)
+	b2, _ := builder2.createBlock(1, mesh.AtxId{}, mesh.BlockEligibilityProof{}, nil, nil)
 
 	assert.True(t, b1.ID() != b2.ID(), "ids are identical")
 }

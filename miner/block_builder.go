@@ -136,7 +136,9 @@ func (t *BlockBuilder) AddTransaction(nonce uint64, origin, destination address.
 	return nil
 }
 
-func (t *BlockBuilder) createBlock(id mesh.LayerID, txs []*mesh.SerializableTransaction, atx []*mesh.ActivationTx) (*mesh.Block, error) {
+func (t *BlockBuilder) createBlock(id mesh.LayerID, atxID mesh.AtxId, eligibilityProof mesh.BlockEligibilityProof,
+	txs []*mesh.SerializableTransaction, atx []*mesh.ActivationTx) (*mesh.Block, error) {
+
 	var res []mesh.BlockID = nil
 	var err error
 	if id == config.Genesis {
@@ -157,14 +159,16 @@ func (t *BlockBuilder) createBlock(id mesh.LayerID, txs []*mesh.SerializableTran
 
 	b := mesh.Block{
 		BlockHeader: mesh.BlockHeader{
-			MinerID:    t.minerID,
-			Id:         mesh.BlockID(t.rnd.Int63()),
-			LayerIndex: id,
-			Data:       nil,
-			Coin:       t.weakCoinToss.GetResult(),
-			Timestamp:  time.Now().UnixNano(),
-			BlockVotes: res,
-			ViewEdges:  viewEdges,
+			Id:               mesh.BlockID(t.rnd.Int63()),
+			LayerIndex:       id,
+			MinerID:          t.minerID,
+			ATXID:            atxID,
+			EligibilityProof: eligibilityProof,
+			Data:             nil,
+			Coin:             t.weakCoinToss.GetResult(),
+			Timestamp:        time.Now().UnixNano(),
+			BlockVotes:       res,
+			ViewEdges:        viewEdges,
 		},
 		ATXs: atx,
 		Txs:  txs,
@@ -228,7 +232,7 @@ func (t *BlockBuilder) acceptBlockData() {
 			return
 
 		case id := <-t.beginRoundEvent:
-			proofs, err := t.blockOracle.BlockEligible(mesh.LayerID(id))
+			atxID, proofs, err := t.blockOracle.BlockEligible(mesh.LayerID(id))
 			if err != nil {
 				t.Error("failed to check for block eligibility: %v ", err)
 				continue
@@ -236,8 +240,6 @@ func (t *BlockBuilder) acceptBlockData() {
 			if len(proofs) == 0 {
 				break
 			}
-			// TODO: include eligibility proof in block
-			// TODO: create block per proof
 			// TODO: include multiple proofs in each block and weigh blocks where applicable
 
 			txList := t.transactionQueue[:common.Min(len(t.transactionQueue), MaxTransactionsPerBlock)]
@@ -246,19 +248,21 @@ func (t *BlockBuilder) acceptBlockData() {
 			atxList := t.AtxQueue[:common.Min(len(t.AtxQueue), MaxAtxPerBlock)]
 			t.AtxQueue = t.AtxQueue[common.Min(len(t.AtxQueue), MaxAtxPerBlock):]
 
-			blk, err := t.createBlock(mesh.LayerID(id), txList, atxList)
-			if err != nil {
-				t.Error("cannot create new block, %v ", err)
-				continue
-			}
-			go func() {
-				bytes, err := mesh.BlockAsBytes(*blk)
+			for _, eligibilityProof := range proofs {
+				blk, err := t.createBlock(mesh.LayerID(id), atxID, eligibilityProof, txList, atxList)
 				if err != nil {
-					t.Log.Error("cannot serialize block %v", err)
-					return
+					t.Error("cannot create new block, %v ", err)
+					continue
 				}
-				t.network.Broadcast(meshSync.NewBlockProtocol, bytes)
-			}()
+				go func() {
+					bytes, err := mesh.BlockAsBytes(*blk)
+					if err != nil {
+						t.Log.Error("cannot serialize block %v", err)
+						return
+					}
+					t.network.Broadcast(meshSync.NewBlockProtocol, bytes)
+				}()
+			}
 
 		case tx := <-t.newTrans:
 			t.transactionQueue = append(t.transactionQueue, tx)
