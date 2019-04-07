@@ -169,7 +169,9 @@ func (mc *MeshDB) ForBlockInView(view map[BlockID]struct{}, layer LayerID, block
 
 		block, err := mc.GetMiniBlock(a)
 		if err != nil {
+			//todo: add err returned from handler, if error is returned return it, if not - keep going
 			errHandler(err)
+			return err
 		}
 
 		//execute handler
@@ -183,6 +185,7 @@ func (mc *MeshDB) ForBlockInView(view map[BlockID]struct{}, layer LayerID, block
 			bChild, err := mc.GetMiniBlock(id)
 			if err != nil {
 				errHandler(err)
+				return err
 			}
 			if bChild.LayerIndex >= layer { //dont traverse too deep
 				if _, found := set[bChild.Id]; !found {

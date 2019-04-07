@@ -181,6 +181,23 @@ func TestMesh_CalcActiveSetFromView(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 3, int(num))
 
+	// check that further atxs dont affect current epoch count
+	atxs2 := []*ActivationTx{
+		NewActivationTx(id1, 0, EmptyAtx, 1012, 0, EmptyAtx, 3, []BlockID{}, &nipst.NIPST{}),
+		NewActivationTx(id2, 0, EmptyAtx, 1300, 0, EmptyAtx, 3, []BlockID{}, &nipst.NIPST{}),
+		NewActivationTx(id3, 0, EmptyAtx, 1435, 0, EmptyAtx, 3, []BlockID{}, &nipst.NIPST{}),
+	}
+
+	block2 := NewExistingBlock(BlockID(uuid.New().ID()), 1000, []byte("data1"))
+	block2.MinerID = strconv.Itoa(1)
+	block2.ATXs = append(block2.ATXs, atxs2...)
+	block2.ViewEdges = blocks
+	layers.AddBlock(block2)
+
+	atx2 := NewActivationTx(id3, 0, EmptyAtx, 1435, 0, EmptyAtx, 6, []BlockID {block2.Id}, &nipst.NIPST{})
+	num, err = layers.CalcActiveSetFromView(atx2)
+	assert.NoError(t, err)
+	assert.Equal(t, 3, int(num))
 }
 
 func TestMesh_Wrong_CalcActiveSetFromView(t *testing.T) {
@@ -242,6 +259,7 @@ func TestMesh_processBlockATXs(t *testing.T) {
 	assert.Equal(t, 3, int(layers.AtxDB.ActiveIds(1)))
 	assert.Equal(t, 3, int(layers.AtxDB.ActiveIds(2)))
 }
+
 
 func TestLayers_OrphanBlocks(t *testing.T) {
 	layers := getMesh("t6")
