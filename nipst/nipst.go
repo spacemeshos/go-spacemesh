@@ -372,11 +372,11 @@ func (nb *NIPSTBuilder) loop() {
 			res, err := nb.verifyPost(proof, nb.space, nb.numberOfProvenLabels, nb.difficulty)
 			if err != nil {
 				nb.error("received an invalid PoST proof: %v", err)
-				return
+				break
 			}
 			if !res {
 				nb.error("received an invalid PoST proof")
-				return
+				break
 			}
 
 			log.Info("finished PoST execution (proof: %x)", proof.serialize())
