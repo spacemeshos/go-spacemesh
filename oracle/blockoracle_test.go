@@ -153,7 +153,7 @@ func TestBlockOracleNoActivationsForNode(t *testing.T) {
 func TestBlockOracleValidatorInvalidProof(t *testing.T) {
 	r := require.New(t)
 
-	activeSetSize := uint32(5)
+	activeSetSize := uint32(1)
 	committeeSize := int32(10)
 	layersPerEpoch := uint16(20)
 
@@ -168,7 +168,7 @@ func TestBlockOracleValidatorInvalidProof(t *testing.T) {
 	r.NotNil(proofs)
 
 	proof := proofs[0]
-	proof.J += 1 // Messing with the proof 😈
+	proof.Sig[0] += 1 // Messing with the proof 😈
 
 	validator := &MinerBlockEligibilityValidator{
 		committeeSize:  committeeSize,
