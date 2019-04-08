@@ -34,6 +34,7 @@ func TestPostClient(t *testing.T) {
 	proof, err := c.execute(id, challenge, numberOfProvenLabels, difficulty, 0)
 	assert.NoError(err)
 	assert.NotNil(proof)
+	assert.Equal([]byte(proof.Challenge), challenge[:])
 
 	res, err = verifyPost(proof, space, numberOfProvenLabels, difficulty)
 	assert.NoError(err)
