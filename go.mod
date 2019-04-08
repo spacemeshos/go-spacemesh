@@ -28,6 +28,7 @@ require (
 	github.com/spf13/cobra v0.0.3
 	github.com/spf13/pflag v1.0.3
 	github.com/spf13/viper v1.3.1
+	github.com/stellar/go-xdr v0.0.0-20180917104419-0bc96f33a18e
 	github.com/stretchr/testify v1.3.0
 	github.com/syndtr/goleveldb v0.0.0-20181128100959-b001fa50d6b2
 	go.uber.org/atomic v1.3.2 // indirect
