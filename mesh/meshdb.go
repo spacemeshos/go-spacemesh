@@ -135,7 +135,7 @@ func (m *MeshDB) LayerBlockIds(index block.LayerID) ([]block.BlockID, error) {
 	}
 
 	blockids := make([]block.BlockID, 0, len(idSet))
-	for k := range idSet {
+	for _, k := range idSet {
 		blockids = append(blockids, k)
 	}
 
@@ -199,7 +199,7 @@ func (mc *MeshDB) ForBlockInView(view map[block.BlockID]struct{}, layer block.La
 	return nil
 }
 
-func (m *MeshDB) layerBlockIds(index block.LayerID) (map[block.BlockID]bool, error) {
+func (m *MeshDB) layerBlockIds(index block.LayerID) ([]block.BlockID, error) {
 
 	ids, err := m.layers.Get(index.ToBytes())
 	if err != nil {
@@ -281,19 +281,18 @@ func (m *MeshDB) updateLayerWithBlock(blk *block.Block) error {
 	lm.m.Lock()
 	defer lm.m.Unlock()
 	ids, err := m.layers.Get(blk.LayerIndex.ToBytes())
-	var blockIds map[block.BlockID]bool
+	var blockIds []block.BlockID
 	if err != nil {
 		//layer doesnt exist, need to insert new layer
-		ids = []byte{}
-		blockIds = make(map[block.BlockID]bool)
+		blockIds = make([]block.BlockID, 0, 1)
 	} else {
-		blockIds, err =block.BytesToBlockIds(ids)
+		blockIds, err = block.BytesToBlockIds(ids)
 		if err != nil {
 			return errors.New("could not get all blocks from database ")
 		}
 	}
-	m.Debug("added blk %v to layer %v", blk.ID(), blk.LayerIndex)
-	blockIds[blk.ID()] = true
+	m.Debug("added block %v to layer %v", blk.ID(), blk.LayerIndex)
+	blockIds = append(blockIds, blk.ID())
 	w, err := block.BlockIdsAsBytes(blockIds)
 	if err != nil {
 		return errors.New("could not encode layer blk ids")
@@ -302,10 +301,10 @@ func (m *MeshDB) updateLayerWithBlock(blk *block.Block) error {
 	return nil
 }
 
-func (m *MeshDB) getLayerBlocks(ids map[block.BlockID]bool) ([]*block.Block, error) {
+func (m *MeshDB) getLayerBlocks(ids []block.BlockID) ([]*block.Block, error) {
 
 	blocks := make([]*block.Block, 0, len(ids))
-	for k := range ids {
+	for _, k := range ids {
 		block, err := m.GetBlock(k)
 		if err != nil {
 			return nil, errors.New("could not retrieve block " + fmt.Sprint(k) + " " + err.Error())

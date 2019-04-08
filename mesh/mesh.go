@@ -331,7 +331,7 @@ func (m *Mesh) GetUnverifiedLayerBlocks(l block.LayerID) ([]block.BlockID, error
 		return nil, errors.New(fmt.Sprintf("could not desirialize layer to id array for layer %d ", l))
 	}
 	arr := make([]block.BlockID, 0, len(blockIds))
-	for bid := range blockIds {
+	for _, bid := range blockIds {
 		arr = append(arr, bid)
 	}
 	return arr, nil
@@ -380,16 +380,17 @@ func (m *Mesh) AccumulateRewards(rewardLayer block.LayerID, params Config) {
 	ids := make(map[string]struct{})
 	uq := make(map[string]struct{})
 
-	//todo: check if block producer was eligible?
+	// TODO: instead of the following code we need to validate the eligibility of each block individually using the
+	//  proof included in each block
 	for _, bl := range l.Blocks() {
-		if _, found := ids[bl.MinerID]; found {
+		if _, found := ids[bl.MinerID.Key]; found {
 			log.Error("two blocks found from same miner %v in layer %v", bl.MinerID, bl.LayerIndex)
 			continue
 		}
-		ids[bl.MinerID] = struct{}{}
+		ids[bl.MinerID.Key] = struct{}{}
 		if uint32(len(bl.Txs)) < params.TxQuota {
 			//todo: think of giving out reward for unique txs as well
-			uq[bl.MinerID] = struct{}{}
+			uq[bl.MinerID.Key] = struct{}{}
 		}
 	}
 	//accumulate all blocks rewards

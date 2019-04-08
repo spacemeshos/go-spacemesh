@@ -9,7 +9,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/stretchr/testify/assert"
 	"math/big"
 	"testing"
@@ -18,12 +17,6 @@ import (
 
 type PeersMock struct {
 	getPeers func() []p2p.Peer
-}
-
-type ClockMock struct{}
-
-func (t *ClockMock) Subscribe() timesync.LayerTimer {
-	return make(timesync.LayerTimer)
 }
 
 func (pm PeersMock) GetPeers() []p2p.Peer {
@@ -160,7 +153,7 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 	blk := block.NewExistingBlock(block.BlockID(uuid.New().ID()), 1, []byte("data1"))
 	tx := block.NewSerializableTransaction(0, address.BytesToAddress([]byte{0x01}), address.BytesToAddress([]byte{0x02}), big.NewInt(10), big.NewInt(10), 10)
 	blk.AddTransaction(tx)
-	blk.AddAtx(block.NewActivationTx(block.NodeId{"aaaa", "bbb"},
+	blk.AddAtx(block.NewActivationTx(block.NodeId{"aaaa", []byte("bbb")},
 		1,
 		block.AtxId{},
 		5,

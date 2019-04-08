@@ -42,8 +42,8 @@ func (m MockOrphans) GetOrphanBlocksBefore(l block.LayerID) ([]block.BlockID, er
 type mockBlockOracle struct {
 }
 
-func (mbo mockBlockOracle) BlockEligible(id block.LayerID, pubkey string) bool {
-	return true
+func (mbo mockBlockOracle) BlockEligible(layerID block.LayerID) ([]block.BlockEligibilityProof, error) {
+	return []block.BlockEligibilityProof{{J: 0, Sig: []byte{1}}}, nil
 }
 
 type mockMsg struct {
@@ -73,7 +73,7 @@ func TestBlockBuilder_StartStop(t *testing.T) {
 	hareRes := []block.BlockID{block.BlockID(0), block.BlockID(1), block.BlockID(2), block.BlockID(3)}
 	hare := MockHare{res: hareRes}
 
-	builder := NewBlockBuilder(n.Node.String(), n, beginRound, MockCoin{}, MockOrphans{st: []block.BlockID{1, 2, 3}}, hare, mockBlockOracle{},
+	builder := NewBlockBuilder(block.NodeId{}, n, beginRound, MockCoin{}, MockOrphans{st: []block.BlockID{1, 2, 3}}, hare, mockBlockOracle{},
 		log.New(n.Node.String(), "", ""))
 
 	err := builder.Start()
@@ -104,9 +104,9 @@ func TestBlockBuilder_BlockIdGeneration(t *testing.T) {
 	hareRes := []block.BlockID{block.BlockID(0), block.BlockID(1), block.BlockID(2), block.BlockID(3)}
 	hare := MockHare{res: hareRes}
 
-	builder1 := NewBlockBuilder(n1.Node.String(), n1, beginRound, MockCoin{}, MockOrphans{st: []block.BlockID{1, 2, 3}}, hare,
+	builder1 := NewBlockBuilder(block.NodeId{Key: "a"}, n1, beginRound, MockCoin{}, MockOrphans{st: []mesh.BlockID{1, 2, 3}}, hare,
 		mockBlockOracle{}, log.New(n1.Node.String(), "", ""))
-	builder2 := NewBlockBuilder(n2.Node.String(), n2, beginRound, MockCoin{}, MockOrphans{st: []block.BlockID{1, 2, 3}}, hare,
+	builder2 := NewBlockBuilder(block.NodeId{Key: "b"}, n2, beginRound, MockCoin{}, MockOrphans{st: []mesh.BlockID{1, 2, 3}}, hare,
 		mockBlockOracle{}, log.New(n2.Node.String(), "", ""))
 
 	b1, _ := builder1.createBlock(1, nil, nil)
@@ -125,7 +125,7 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 	hareRes := []block.BlockID{block.BlockID(0), block.BlockID(1), block.BlockID(2), block.BlockID(3)}
 	hare := MockHare{res: hareRes}
 
-	builder := NewBlockBuilder(n.Node.String(), n, beginRound, MockCoin{}, MockOrphans{st: []block.BlockID{1, 2, 3}}, hare,
+	builder := NewBlockBuilder(block.NodeId{}, n, beginRound, MockCoin{}, MockOrphans{st: []mesh.BlockID{1, 2, 3}}, hare,
 		mockBlockOracle{}, log.New(n.Node.String(), "", ""))
 
 	err := builder.Start()
@@ -145,7 +145,7 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 	builder.AddTransaction(trans[2].AccountNonce, trans[2].Origin, *trans[2].Recipient, big.NewInt(0).SetBytes(trans[2].Price))
 
 	atxs := []*block.ActivationTx{
-		block.NewActivationTx(block.NodeId{"aaaa", "bbb"},
+		block.NewActivationTx(block.NodeId{"aaaa", []byte("bbb")},
 			1,
 			block.AtxId{},
 			5,
@@ -154,7 +154,7 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 			5,
 			[]block.BlockID{1, 2, 3},
 			&nipst.NIPST{}),
-		block.NewActivationTx(block.NodeId{"aaaa", "bbb"},
+		block.NewActivationTx(block.NodeId{"aaaa", []byte("bbb")},
 			1,
 			block.AtxId{},
 			5,
@@ -163,7 +163,7 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 			5,
 			[]block.BlockID{1, 2, 3},
 			&nipst.NIPST{}),
-		block.NewActivationTx(block.NodeId{"aaaa", "bbb"},
+		block.NewActivationTx(block.NodeId{"aaaa", []byte("bbb")},
 			1,
 			block.AtxId{},
 			5,

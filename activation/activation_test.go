@@ -44,7 +44,7 @@ func (n *NetMock) Broadcast(id string, d []byte) error {
 
 func TestBuilder_BuildActivationTx(t *testing.T) {
 	//todo: implement test
-	id := block.NodeId{"aaaa", "bbb"}
+	id := block.NodeId{"aaaa", []byte("bbb")}
 	net := &NetMock{}
 	echp := &EchProvider{}
 	layers := MeshProviderrMock{}
@@ -52,7 +52,7 @@ func TestBuilder_BuildActivationTx(t *testing.T) {
 	adb := b.db
 	prevAtx := block.AtxId{Hash: common.HexToHash("0x111")}
 	npst := nipst.NIPST{}
-	atx := block.NewActivationTx(block.NodeId{"aaaa", "bbb"},
+	atx := block.NewActivationTx(block.NodeId{"aaaa", []byte("bbb")},
 		1,
 		prevAtx,
 		5,
@@ -72,7 +72,7 @@ func TestBuilder_BuildActivationTx(t *testing.T) {
 
 func TestBuilder_NoPrevATX(t *testing.T) {
 	//todo: implement test
-	id := block.NodeId{"aaaa", "bbb"}
+	id := block.NodeId{"aaaa", []byte("bbb")}
 	net := &NetMock{}
 	echp := &EchProvider{}
 	layers := MeshProviderrMock{}

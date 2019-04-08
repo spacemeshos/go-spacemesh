@@ -3,6 +3,7 @@ package api
 
 import (
 	"fmt"
+	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/api/pb"
@@ -145,4 +146,28 @@ func (s SpacemeshGrpcService) startServiceInternal(status chan bool) {
 		status <- true
 	}
 
+}
+
+func (s SpacemeshGrpcService) SetCommitmentSize(ctx context.Context, message *pb.CommitmentSizeMessage) (*pb.SimpleMessage, error) {
+	return &pb.SimpleMessage{Value: "ok"}, nil
+}
+
+func (s SpacemeshGrpcService) SetLogicalDrive(ctx context.Context, message *pb.LogicalDriveMessage) (*pb.SimpleMessage, error) {
+	return &pb.SimpleMessage{Value: "ok"}, nil
+}
+
+func (s SpacemeshGrpcService) SetAwardsAddress(ctx context.Context, id *pb.AccountId) (*pb.SimpleMessage, error) {
+	return &pb.SimpleMessage{Value: "ok"}, nil
+}
+
+func (s SpacemeshGrpcService) GetInitProgress(ctx context.Context, empty *empty.Empty) (*pb.SimpleMessage, error) {
+	return &pb.SimpleMessage{Value: "80"}, nil
+}
+
+func (s SpacemeshGrpcService) GetTotalAwards(ctx context.Context, empty *empty.Empty) (*pb.SimpleMessage, error) {
+	return &pb.SimpleMessage{Value: "1234"}, nil
+}
+
+func (s SpacemeshGrpcService) GetUpcomingAwards(ctx context.Context, empty *empty.Empty) (*pb.SimpleMessage, error) {
+	return &pb.SimpleMessage{Value: "43221"}, nil
 }

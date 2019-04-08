@@ -4,8 +4,8 @@ config_map_name: conf
 
 script_on_exit: '' # Uncomment this to save logs './k8s/log-client-pods.sh'
 
-genesis_delta: 60
-deployment_ready_time_out: 90
+genesis_delta: 90
+deployment_ready_time_out: 120
 
 bootstrap:
   image: 'spacemeshos/go-spacemesh:develop'
@@ -15,9 +15,9 @@ bootstrap:
 client:
   image: 'spacemeshos/go-spacemesh:develop'
   command: '/bin/go-spacemesh'
-  replicas: 10
+  replicas: 49
   args:
-    randcon: '4'
+    randcon: '8'
 
 elastic:
   host: es.spacemesh.io

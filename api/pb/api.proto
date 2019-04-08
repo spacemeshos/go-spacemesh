@@ -2,6 +2,7 @@ syntax = "proto3";
 package pb;
 
 import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
 
 message SimpleMessage {
     string value = 1;
@@ -27,6 +28,14 @@ message SignedTransaction {
 
 message BroadcastMessage {
     string Data = 1;
+}
+
+message CommitmentSizeMessage {
+    uint64 mbCommitted = 1;
+}
+
+message LogicalDriveMessage {
+    string logicalDrive = 1;
 }
 
 service SpacemeshService {
@@ -57,6 +66,42 @@ service SpacemeshService {
     rpc Broadcast(BroadcastMessage) returns (SimpleMessage) {
         option (google.api.http) = {
           post: "/v1/broadcast"
+          body: "*"
+        };
+    }
+    rpc SetCommitmentSize(CommitmentSizeMessage) returns (SimpleMessage) {
+        option (google.api.http) = {
+          post: "/v1/setcommitmentsize"
+          body: "*"
+        };
+    }
+    rpc SetLogicalDrive(LogicalDriveMessage) returns (SimpleMessage) {
+        option (google.api.http) = {
+          post: "/v1/setcommitmentsize"
+          body: "*"
+        };
+    }
+    rpc SetAwardsAddress(AccountId) returns (SimpleMessage) {
+        option (google.api.http) = {
+          post: "/v1/setawardsaddr"
+          body: "*"
+        };
+    }
+    rpc GetInitProgress(google.protobuf.Empty) returns (SimpleMessage) {
+        option (google.api.http) = {
+          post: "/v1/getprogress"
+          body: "*"
+        };
+    }
+    rpc GetTotalAwards(google.protobuf.Empty) returns (SimpleMessage) {
+        option (google.api.http) = {
+          post: "/v1/gettotalawards"
+          body: "*"
+        };
+    }
+    rpc GetUpcomingAwards(google.protobuf.Empty) returns (SimpleMessage) {
+        option (google.api.http) = {
+          post: "/v1/gettotalawards"
           body: "*"
         };
     }
