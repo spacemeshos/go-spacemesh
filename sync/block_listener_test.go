@@ -9,7 +9,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/stretchr/testify/assert"
 	"math/big"
 	"testing"
@@ -18,12 +17,6 @@ import (
 
 type PeersMock struct {
 	getPeers func() []p2p.Peer
-}
-
-type ClockMock struct{}
-
-func (t *ClockMock) Subscribe() timesync.LayerTimer {
-	return make(timesync.LayerTimer)
 }
 
 func (pm PeersMock) GetPeers() []p2p.Peer {
