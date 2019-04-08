@@ -30,7 +30,7 @@ func (MockState) ApplyTransactions(layer block.LayerID, txs Transactions) (uint3
 func (MockState) ApplyRewards(layer block.LayerID, miners map[string]struct{}, underQuota map[string]struct{}, bonusReward, diminishedReward *big.Int) {
 }
 
-type AtxDbMock struct {}
+type AtxDbMock struct{}
 
 func (AtxDbMock) ProcessBlockATXs(block *block.Block) {
 
@@ -149,8 +149,6 @@ func TestLayers_WakeUp(t *testing.T) {
 	//layers.SetLatestLayer(10)
 	//assert.True(t, layers.LocalLayerCount() == 10, "wrong layer")
 }
-
-
 
 func TestLayers_OrphanBlocks(t *testing.T) {
 	layers := getMesh("t6")

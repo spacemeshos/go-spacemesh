@@ -48,7 +48,7 @@ func TestBuilder_BuildActivationTx(t *testing.T) {
 	net := &NetMock{}
 	echp := &EchProvider{}
 	layers := MeshProviderrMock{}
-	b := NewBuilder(id, database.NewMemDatabase(),mesh.NewMemMeshDB(log.NewDefault("")) ,net, ActiveSetProviderMock{}, layers, echp, 10)
+	b := NewBuilder(id, database.NewMemDatabase(), mesh.NewMemMeshDB(log.NewDefault("")), net, ActiveSetProviderMock{}, layers, echp, 10)
 	adb := b.db
 	prevAtx := block.AtxId{Hash: common.HexToHash("0x111")}
 	npst := nipst.NIPST{}
@@ -76,7 +76,7 @@ func TestBuilder_NoPrevATX(t *testing.T) {
 	net := &NetMock{}
 	echp := &EchProvider{}
 	layers := MeshProviderrMock{}
-	b := NewBuilder(id, database.NewMemDatabase(),mesh.NewMemMeshDB(log.NewDefault("")), net, ActiveSetProviderMock{}, layers, echp,10)
+	b := NewBuilder(id, database.NewMemDatabase(), mesh.NewMemMeshDB(log.NewDefault("")), net, ActiveSetProviderMock{}, layers, echp, 10)
 	err := b.PublishActivationTx(&nipst.NIPST{})
 	assert.Error(t, err)
 }

@@ -13,7 +13,6 @@ const AtxProtocol = "AtxGossip"
 
 var activesetCache = NewActivesetCache(1000)
 
-
 type ActiveSetProvider interface {
 	GetActiveSetSize(l block.LayerID) uint32
 }
@@ -47,7 +46,7 @@ type Processor struct {
 
 func NewBuilder(nodeId block.NodeId, db database.DB, meshdb *mesh.MeshDB, net Broadcaster, activeSet ActiveSetProvider, view MeshProvider, epochDuration EpochProvider, layersPerEpoch uint64) *Builder {
 	return &Builder{
-		nodeId, NewActivationDb(db,meshdb, layersPerEpoch), net, activeSet, view, epochDuration,
+		nodeId, NewActivationDb(db, meshdb, layersPerEpoch), net, activeSet, view, epochDuration,
 	}
 }
 
@@ -58,7 +57,7 @@ func (b *Builder) PublishActivationTx(nipst *nipst.NIPST) error {
 		log.Info("previous ATX not found")
 		prevAtx = &block.EmptyAtx
 		seq = 0
-	} else  {
+	} else {
 		seq = b.GetLastSequence(b.nodeId)
 		if seq > 0 && prevAtx == nil {
 			log.Error("cannot find prev ATX for nodeid %v ", b.nodeId)
@@ -78,8 +77,6 @@ func (b *Builder) PublishActivationTx(nipst *nipst.NIPST) error {
 	} else {
 		posAtx = &block.EmptyAtx
 	}
-
-
 
 	atx := block.NewActivationTx(b.nodeId, seq, *prevAtx, l, 0, *posAtx, b.activeSet.GetActiveSetSize(l-1), b.mesh.GetLatestView(), nipst)
 
@@ -123,7 +120,6 @@ func (b *Builder) GetLastSequence(node block.NodeId) uint64 {
 	return atx.Sequence
 }
 
-
 /*func (m *Mesh) UniqueAtxs(lyr *Layer) map[*ActivationTx]struct{} {
 	atxMap := make(map[*ActivationTx]struct{})
 	for _, blk := range lyr.blocks {
@@ -134,5 +130,3 @@ func (b *Builder) GetLastSequence(node block.NodeId) uint64 {
 	}
 	return atxMap
 }*/
-
-

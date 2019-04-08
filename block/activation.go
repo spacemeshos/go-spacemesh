@@ -16,7 +16,6 @@ type AtxId struct {
 
 var EmptyAtx = AtxId{common.Hash{0}}
 
-
 type ActivationTxHeader struct {
 	NodeId            NodeId
 	Sequence          uint64
@@ -53,7 +52,6 @@ func NewActivationTx(NodeId NodeId, Sequence uint64, PrevATX AtxId, LayerIndex L
 	}
 
 }
-
 
 func (t ActivationTx) Id() AtxId {
 	tx, err := AtxHeaderAsBytes(&t.ActivationTxHeader)

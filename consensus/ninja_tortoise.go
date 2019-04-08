@@ -74,11 +74,11 @@ type ninjaTortoise struct {
 	avgLayerSize       uint64
 	pBase              votingPattern
 	tEffective         map[block.BlockID]votingPattern                   //Explicit voting pattern of latest layer for a block
-	tCorrect           map[block.BlockID]map[block.BlockID]vec            //correction vectors
-	tExplicit          map[block.BlockID]map[block.LayerID]votingPattern  //explict votes from block to layer pattern
+	tCorrect           map[block.BlockID]map[block.BlockID]vec           //correction vectors
+	tExplicit          map[block.BlockID]map[block.LayerID]votingPattern //explict votes from block to layer pattern
 	tGood              map[block.LayerID]votingPattern                   //good pattern for layer i
-	tSupport           map[votingPattern]int                            //for pattern p the number of blocks that support p
-	tComplete          map[votingPattern]struct{}                       //complete voting patterns
+	tSupport           map[votingPattern]int                             //for pattern p the number of blocks that support p
+	tComplete          map[votingPattern]struct{}                        //complete voting patterns
 	tEffectiveToBlocks map[votingPattern][]block.BlockID                 //inverse blocks effective pattern
 	tVote              map[votingPattern]map[block.BlockID]vec           //global opinion
 	tTally             map[votingPattern]map[block.BlockID]vec           //for pattern p and block b count votes for b according to p

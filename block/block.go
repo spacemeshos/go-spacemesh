@@ -20,9 +20,8 @@ func (l LayerID) GetEpoch(layersPerEpoch uint16) uint64 {
 //todo: choose which type is VRF
 type Vrf string
 
-
 type NodeId struct {
-	Key string
+	Key          string
 	VRFPublicKey []byte
 }
 

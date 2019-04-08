@@ -16,9 +16,9 @@ import (
 )
 
 const (
-	layerSize     = 200
-	Genesis       = 0
-	GenesisId     = 420
+	layerSize = 200
+	Genesis   = 0
+	GenesisId = 420
 )
 
 var TRUE = []byte{1}
@@ -66,13 +66,13 @@ func NewPersistentMesh(path string, rewardConfig Config, mesh MeshValidator, sta
 		done:     make(chan struct{}),
 		mdb:      NewPersistentMeshDB(path, logger),
 		config:   rewardConfig,
-		AtxDB: atxdb,
+		AtxDB:    atxdb,
 	}
 
 	return ll
 }
 
-func NewMemMesh(rewardConfig Config, mesh MeshValidator, state StateUpdater,atxdb AtxDB, logger log.Log) *Mesh {
+func NewMemMesh(rewardConfig Config, mesh MeshValidator, state StateUpdater, atxdb AtxDB, logger log.Log) *Mesh {
 	//todo add boot from disk
 	ll := &Mesh{
 		Log:      logger,
@@ -81,7 +81,7 @@ func NewMemMesh(rewardConfig Config, mesh MeshValidator, state StateUpdater,atxd
 		done:     make(chan struct{}),
 		mdb:      NewMemMeshDB(logger),
 		config:   rewardConfig,
-		AtxDB: atxdb,
+		AtxDB:    atxdb,
 	}
 
 	return ll
@@ -216,7 +216,6 @@ func (m *Mesh) addAtxs(oldBase, newBase block.LayerID) {
 	}
 }
 
-
 func SortBlocks(blocks []*block.Block) []*block.Block {
 	//not final sorting method, need to talk about this
 	sort.Slice(blocks, func(i, j int) bool { return blocks[i].ID() < blocks[j].ID() })
@@ -274,7 +273,7 @@ func (m *Mesh) GetLayer(i block.LayerID) (*block.Layer, error) {
 	return m.mdb.GetLayer(i)
 }
 
-func (m *Mesh) GetLatestVerified() []block.BlockID{
+func (m *Mesh) GetLatestVerified() []block.BlockID {
 	layer, err := m.mdb.GetLayer(m.VerifiedLayer())
 	if err != nil {
 		panic("got an error trying to read verified layer")
@@ -415,8 +414,6 @@ func (m *Mesh) AccumulateRewards(rewardLayer block.LayerID, params Config) {
 	//todo: should miner id be sorted in a deterministic order prior to applying rewards?
 
 }
-
-
 
 func (m *Mesh) GetBlock(id block.BlockID) (*block.Block, error) {
 	m.Debug("get block %d", id)

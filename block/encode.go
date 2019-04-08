@@ -146,4 +146,3 @@ func BytesAsBlock(buf []byte) (Block, error) {
 	}
 	return b, nil
 }
-

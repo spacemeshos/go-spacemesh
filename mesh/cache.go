@@ -37,4 +37,3 @@ func (bc BlockCache) Get(id block.BlockID) *block.MiniBlock {
 	blk := item.(block.MiniBlock)
 	return &blk
 }
-

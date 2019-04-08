@@ -44,7 +44,7 @@ func (MockState) ApplyTransactions(layer block.LayerID, txs mesh.Transactions) (
 func (MockState) ApplyRewards(layer block.LayerID, miners map[string]struct{}, underQuota map[string]struct{}, bonusReward, diminishedReward *big.Int) {
 }
 
-type AtxDbMock struct {}
+type AtxDbMock struct{}
 
 func (AtxDbMock) ProcessBlockATXs(block *block.Block) {
 
@@ -60,17 +60,16 @@ func ConfigTst() mesh.Config {
 	}
 }
 
-func getAtxDb(id string) (*ActivationDb,  *mesh.Mesh){
+func getAtxDb(id string) (*ActivationDb, *mesh.Mesh) {
 	lg := log.New(id, "", "")
 	memesh := mesh.NewMemMeshDB(lg)
-	atxdb := NewActivationDb(database.NewMemDatabase(),memesh,1000)
+	atxdb := NewActivationDb(database.NewMemDatabase(), memesh, 1000)
 	layers := mesh.NewMesh(memesh, atxdb, ConfigTst(), &MeshValidatorMock{}, &MockState{}, lg)
 	return atxdb, layers
 }
 
 func Test_CalcActiveSetFromView(t *testing.T) {
-	atxdb ,layers := getAtxDb("t6")
-
+	atxdb, layers := getAtxDb("t6")
 
 	id1 := block.NodeId{Key: uuid.New().String()}
 	id2 := block.NodeId{Key: uuid.New().String()}
@@ -103,14 +102,14 @@ func Test_CalcActiveSetFromView(t *testing.T) {
 	block2.ViewEdges = blocks
 	layers.AddBlock(block2)
 
-	atx2 := block.NewActivationTx(id3, 0, block.EmptyAtx, 1435, 0, block.EmptyAtx, 6, []block.BlockID {block2.Id}, &nipst.NIPST{})
+	atx2 := block.NewActivationTx(id3, 0, block.EmptyAtx, 1435, 0, block.EmptyAtx, 6, []block.BlockID{block2.Id}, &nipst.NIPST{})
 	num, err = atxdb.CalcActiveSetFromView(atx2)
 	assert.NoError(t, err)
 	assert.Equal(t, 3, int(num))
 }
 
 func Test_Wrong_CalcActiveSetFromView(t *testing.T) {
-	atxdb ,layers := getAtxDb("t6")
+	atxdb, layers := getAtxDb("t6")
 
 	id1 := block.NodeId{Key: uuid.New().String()}
 	id2 := block.NodeId{Key: uuid.New().String()}
@@ -133,7 +132,7 @@ func Test_Wrong_CalcActiveSetFromView(t *testing.T) {
 }
 
 func TestMesh_processBlockATXs(t *testing.T) {
-	atxdb ,_ := getAtxDb("t6")
+	atxdb, _ := getAtxDb("t6")
 
 	id1 := block.NodeId{Key: uuid.New().String()}
 	id2 := block.NodeId{Key: uuid.New().String()}
@@ -166,4 +165,3 @@ func TestMesh_processBlockATXs(t *testing.T) {
 	assert.Equal(t, 3, int(atxdb.ActiveIds(1)))
 	assert.Equal(t, 3, int(atxdb.ActiveIds(2)))
 }
-

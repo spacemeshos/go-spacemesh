@@ -16,15 +16,14 @@ const CounterKey = 0xaaaa
 
 type ActivationDb struct {
 	//todo: think about whether we need one db or several
-	atxs database.DB
-	meshDb *mesh.MeshDB
+	atxs           database.DB
+	meshDb         *mesh.MeshDB
 	LayersPerEpoch block.LayerID
 }
 
 func NewActivationDb(dbstore database.DB, meshDb *mesh.MeshDB, layersPerEpoch uint64) *ActivationDb {
-	return &ActivationDb{atxs: dbstore, meshDb:meshDb, LayersPerEpoch:block.LayerID(layersPerEpoch)}
+	return &ActivationDb{atxs: dbstore, meshDb: meshDb, LayersPerEpoch: block.LayerID(layersPerEpoch)}
 }
-
 
 func (m *ActivationDb) ProcessBlockATXs(blk *block.Block) {
 	for _, atx := range blk.ATXs {
@@ -54,7 +53,7 @@ func (m *ActivationDb) CalcActiveSetFromView(a *block.ActivationTx) (uint32, err
 	var counter uint32 = 0
 	set := make(map[block.AtxId]struct{})
 	firstLayerOfLastEpoch := a.LayerIndex - m.LayersPerEpoch - (a.LayerIndex % m.LayersPerEpoch)
-	lastLayerOfLastEpoch :=firstLayerOfLastEpoch + m.LayersPerEpoch
+	lastLayerOfLastEpoch := firstLayerOfLastEpoch + m.LayersPerEpoch
 
 	traversalFunc := func(blkh *block.BlockHeader) error {
 		blk, err := m.meshDb.GetBlock(blkh.Id)
@@ -87,7 +86,6 @@ func (m *ActivationDb) CalcActiveSetFromView(a *block.ActivationTx) (uint32, err
 	for _, blk := range a.View {
 		mp[blk] = struct{}{}
 	}
-
 
 	m.meshDb.ForBlockInView(mp, firstLayerOfLastEpoch, traversalFunc, errHandler)
 	activesetCache.Add(common.BytesToHash(bytes), counter)

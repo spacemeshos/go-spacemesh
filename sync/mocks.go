@@ -52,7 +52,7 @@ func (s *StateMock) ApplyRewards(layer block.LayerID, miners map[string]struct{}
 
 }
 
-type AtxDbMock struct {}
+type AtxDbMock struct{}
 
 func (AtxDbMock) ProcessBlockATXs(block *block.Block) {
 

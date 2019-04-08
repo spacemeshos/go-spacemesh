@@ -59,10 +59,6 @@ func SyncMockFactory(number int, conf Configuration, name string, dbType string)
 	return nodes, p2ps
 }
 
-
-
-
-
 type stateMock struct{}
 
 func (s *stateMock) ApplyRewards(layer block.LayerID, miners map[string]struct{}, underQuota map[string]struct{}, bonusReward, diminishedReward *big.Int) {
@@ -73,8 +69,6 @@ func (s *stateMock) ApplyTransactions(id block.LayerID, tx mesh.Transactions) (u
 	return 0, nil
 }
 
-
-
 var rewardConf = mesh.Config{
 	big.NewInt(10),
 	big.NewInt(5000),
@@ -84,7 +78,7 @@ var rewardConf = mesh.Config{
 }
 
 func getMeshWithLevelDB(id string) *mesh.Mesh {
-	return mesh.NewPersistentMesh(fmt.Sprintf(Path+"%v/", id), rewardConf, &MeshValidatorMock{}, &stateMock{}, AtxDbMock{} ,log.New(id, "", ""))
+	return mesh.NewPersistentMesh(fmt.Sprintf(Path+"%v/", id), rewardConf, &MeshValidatorMock{}, &stateMock{}, AtxDbMock{}, log.New(id, "", ""))
 }
 
 func persistenceTeardown() {
