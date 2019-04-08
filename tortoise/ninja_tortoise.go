@@ -8,6 +8,7 @@ import (
 	"hash/fnv"
 	"math"
 	"sort"
+	"sync"
 )
 
 type vec [2]int
@@ -72,8 +73,7 @@ type ninjaTortoise struct {
 	BlockCache         //block cache
 	avgLayerSize       uint64
 	pBase              votingPattern
-	patterns           map[mesh.LayerID][]votingPattern
-	layerBlocks        map[mesh.LayerID][]mesh.BlockID
+	patterns           map[mesh.LayerID][]votingPattern                 //map patterns by layer for eviction purposes
 	tEffective         map[mesh.BlockID]votingPattern                   //Explicit voting pattern of latest layer for a block
 	tCorrect           map[mesh.BlockID]map[mesh.BlockID]vec            //correction vectors
 	tExplicit          map[mesh.BlockID]map[mesh.LayerID]votingPattern  //explict votes from block to layer pattern
@@ -93,7 +93,6 @@ func NewNinjaTortoise(layerSize int, blocks BlockCache, log log.Log) *ninjaTorto
 		BlockCache:         blocks,
 		avgLayerSize:       uint64(layerSize),
 		pBase:              votingPattern{},
-		layerBlocks:        map[mesh.LayerID][]mesh.BlockID{},
 		patterns:           map[mesh.LayerID][]votingPattern{},
 		tGood:              map[mesh.LayerID]votingPattern{},
 		tEffective:         map[mesh.BlockID]votingPattern{},
@@ -110,33 +109,44 @@ func NewNinjaTortoise(layerSize int, blocks BlockCache, log log.Log) *ninjaTorto
 }
 
 func (ni *ninjaTortoise) evictOutOfWindow(idx mesh.LayerID) {
-	if idx-Window > 0 {
-		for _, i := range ni.patterns[idx-Window-1] {
-			delete(ni.tSupport, i)
-			delete(ni.tComplete, i)
-			delete(ni.tEffectiveToBlocks, i)
-			delete(ni.tVote, i)
-			delete(ni.tTally, i)
-			delete(ni.tPattern, i)
-			delete(ni.tPatSupport, i)
-			delete(ni.tSupport, i)
-			ni.Debug("evict pattern %v from maps ", i)
-		}
-		for _, i := range ni.layerBlocks[idx-Window-1] {
-			delete(ni.tEffective, i)
-			delete(ni.tCorrect, i)
-			delete(ni.tExplicit, i)
-			ni.Debug("evict block %v from maps ", i)
-		}
+	wg := sync.WaitGroup{}
+	if idx > Window {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for _, i := range ni.patterns[idx-Window-1] {
+				delete(ni.tSupport, i)
+				delete(ni.tComplete, i)
+				delete(ni.tEffectiveToBlocks, i)
+				delete(ni.tVote, i)
+				delete(ni.tTally, i)
+				delete(ni.tPattern, i)
+				delete(ni.tPatSupport, i)
+				delete(ni.tSupport, i)
+				ni.Debug("evict pattern %v from maps ", i)
+			}
+		}()
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			ids, err := ni.LayerBlockIds(idx - Window - 1)
+			if err != nil {
+				ni.Error("could not get layer ids for layer ", idx-Window-1, err)
+			}
+			for _, i := range ids {
+				delete(ni.tEffective, i)
+				delete(ni.tCorrect, i)
+				delete(ni.tExplicit, i)
+				ni.Debug("evict block %v from maps ", i)
+			}
+		}()
 	}
+	wg.Wait()
 }
 
 func (ni *ninjaTortoise) processBlock(b *mesh.Block) {
 
 	ni.Debug("process block: %d layer: %d  ", b.Id, b.Layer())
-	arr, _ := ni.layerBlocks[b.Layer()]
-	ni.layerBlocks[b.Layer()] = append(arr, b.ID())
-
 	if b.Layer() == Genesis {
 		return
 	}

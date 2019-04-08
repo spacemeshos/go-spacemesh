@@ -112,7 +112,8 @@ func TestNinjaTortoise_evict(t *testing.T) {
 				t.Fail()
 			}
 		}
-		for _, i := range ni.layerBlocks[49] {
+		ids, _ := ni.LayerBlockIds(49)
+		for _, i := range ids {
 			if _, ok := ni.tEffective[i]; ok {
 				t.Fail()
 			}
