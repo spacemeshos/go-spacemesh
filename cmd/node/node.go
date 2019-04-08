@@ -18,6 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/spacemeshos/go-spacemesh/sync"
+	"github.com/spacemeshos/go-spacemesh/tortoise"
 	"github.com/spacemeshos/go-spacemesh/version"
 	"math/rand"
 
@@ -281,7 +282,7 @@ func (app *SpacemeshApp) initServices(instanceName string, swarm service.Service
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
 	clock := timesync.NewTicker(timesync.RealClock{}, ld, gTime)
 	mdb := mesh.NewPersistentMeshDB(dbStorepath, lg.WithName("meshdb"))
-	trtl := consensus.NewAlgorithm(consensus.NewNinjaTortoise(layerSize, mdb, lg.WithName("trtl")))
+	trtl := tortoise.NewAlgorithm(tortoise.NewNinjaTortoise(layerSize, mdb, lg.WithName("trtl")))
 	msh := mesh.NewMesh(mdb, app.Config.REWARD, trtl, processor, lg.WithName("mesh")) //todo: what to do with the logger?
 
 	conf := sync.Configuration{SyncInterval: 1 * time.Second, Concurrency: 4, LayerSize: int(layerSize), RequestTimeout: 100 * time.Millisecond}

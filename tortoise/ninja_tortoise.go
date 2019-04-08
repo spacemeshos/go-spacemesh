@@ -1,7 +1,6 @@
-package consensus
+package tortoise
 
 import (
-	"container/list"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -73,6 +72,8 @@ type ninjaTortoise struct {
 	BlockCache         //block cache
 	avgLayerSize       uint64
 	pBase              votingPattern
+	patterns           map[mesh.LayerID][]votingPattern
+	layerBlocks        map[mesh.LayerID][]mesh.BlockID
 	tEffective         map[mesh.BlockID]votingPattern                   //Explicit voting pattern of latest layer for a block
 	tCorrect           map[mesh.BlockID]map[mesh.BlockID]vec            //correction vectors
 	tExplicit          map[mesh.BlockID]map[mesh.LayerID]votingPattern  //explict votes from block to layer pattern
@@ -92,10 +93,12 @@ func NewNinjaTortoise(layerSize int, blocks BlockCache, log log.Log) *ninjaTorto
 		BlockCache:         blocks,
 		avgLayerSize:       uint64(layerSize),
 		pBase:              votingPattern{},
+		layerBlocks:        map[mesh.LayerID][]mesh.BlockID{},
+		patterns:           map[mesh.LayerID][]votingPattern{},
+		tGood:              map[mesh.LayerID]votingPattern{},
 		tEffective:         map[mesh.BlockID]votingPattern{},
 		tCorrect:           map[mesh.BlockID]map[mesh.BlockID]vec{},
 		tExplicit:          map[mesh.BlockID]map[mesh.LayerID]votingPattern{},
-		tGood:              map[mesh.LayerID]votingPattern{},
 		tSupport:           map[votingPattern]int{},
 		tPattern:           map[votingPattern]map[mesh.BlockID]struct{}{},
 		tVote:              map[votingPattern]map[mesh.BlockID]vec{},
@@ -106,9 +109,33 @@ func NewNinjaTortoise(layerSize int, blocks BlockCache, log log.Log) *ninjaTorto
 	}
 }
 
+func (ni *ninjaTortoise) evictOutOfWindow(idx mesh.LayerID) {
+	if idx-Window > 0 {
+		for _, i := range ni.patterns[idx-Window-1] {
+			delete(ni.tSupport, i)
+			delete(ni.tComplete, i)
+			delete(ni.tEffectiveToBlocks, i)
+			delete(ni.tVote, i)
+			delete(ni.tTally, i)
+			delete(ni.tPattern, i)
+			delete(ni.tPatSupport, i)
+			delete(ni.tSupport, i)
+			ni.Debug("evict pattern %v from maps ", i)
+		}
+		for _, i := range ni.layerBlocks[idx-Window-1] {
+			delete(ni.tEffective, i)
+			delete(ni.tCorrect, i)
+			delete(ni.tExplicit, i)
+			ni.Debug("evict block %v from maps ", i)
+		}
+	}
+}
+
 func (ni *ninjaTortoise) processBlock(b *mesh.Block) {
 
 	ni.Debug("process block: %d layer: %d  ", b.Id, b.Layer())
+	arr, _ := ni.layerBlocks[b.Layer()]
+	ni.layerBlocks[b.Layer()] = append(arr, b.ID())
 
 	if b.Layer() == Genesis {
 		return
@@ -133,6 +160,8 @@ func (ni *ninjaTortoise) processBlock(b *mesh.Block) {
 	for layerId, v := range patternMap {
 		vp := votingPattern{id: getIdsFromSet(v), LayerID: layerId}
 		ni.tPattern[vp] = v
+		arr, _ := ni.patterns[vp.Layer()]
+		ni.patterns[vp.Layer()] = append(arr, vp)
 		ni.tExplicit[b.ID()][layerId] = vp
 		if layerId >= effective.Layer() {
 			effective = vp
@@ -171,32 +200,6 @@ func getIdsFromSet(bids map[mesh.BlockID]struct{}) PatternId {
 		keys = append(keys, k)
 	}
 	return getId(keys)
-}
-
-func forBlockInView(blocks map[mesh.BlockID]struct{}, blockCache map[mesh.BlockID]*mesh.Block, layer mesh.LayerID, foo func(block *mesh.Block)) {
-	stack := list.New()
-	for b := range blocks {
-		stack.PushFront(b)
-	}
-	set := make(map[mesh.BlockID]struct{})
-	for b := stack.Front(); b != nil; b = stack.Front() {
-		a := stack.Remove(stack.Front()).(mesh.BlockID)
-		block, found := blockCache[a]
-		if !found {
-			panic(fmt.Sprintf("error block not found ID %d", block.ID()))
-		}
-		foo(block)
-		//push children to bfs queue
-		for _, bChild := range block.ViewEdges {
-			if blockCache[bChild].Layer() >= layer { //dont traverse too deep
-				if _, found := set[bChild]; !found {
-					set[bChild] = struct{}{}
-					stack.PushBack(bChild)
-				}
-			}
-		}
-	}
-	return
 }
 
 func globalOpinion(v vec, layerSize uint64, delta float64) vec {
@@ -375,7 +378,6 @@ func (ni *ninjaTortoise) processBlocks(layer *mesh.Layer) {
 	for _, block := range layer.Blocks() {
 		ni.processBlock(block)
 	}
-
 }
 
 func (ni *ninjaTortoise) handleGenesis(genesis *mesh.Layer) {
@@ -521,5 +523,6 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *mesh.Layer) { //i most rece
 		}
 	}
 	ni.Info("finished layer %d pbase is %d", newlyr.Index(), ni.pBase.Layer())
+	ni.evictOutOfWindow(newlyr.Index())
 	return
 }

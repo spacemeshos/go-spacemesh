@@ -1,4 +1,4 @@
-package consensus
+package tortoise
 
 import (
 	"fmt"
@@ -84,41 +84,47 @@ func TestNinjaTortoise_GlobalOpinion(t *testing.T) {
 	assert.True(t, glo == Against, "vec was wrong %d", glo)
 }
 
-func TestForEachInView(t *testing.T) {
-	blocks := make(map[mesh.BlockID]*mesh.Block)
-	mdb := getInMemMesh()
+func TestNinjaTortoise_evict(t *testing.T) {
+	defer persistenceTeardown()
+	ni := sanity(getMeshForBench(), 150, 10, 100, badblocks)
 
-	defer mdb.Close()
-	l := mesh.GenesisLayer()
-	for _, b := range l.Blocks() {
-		blocks[b.ID()] = b
-	}
-	for i := 0; i < 4; i++ {
-		lyr := createLayerWithRandVoting(l.Index()+1, []*mesh.Layer{l}, 2, 2)
-		for _, b := range lyr.Blocks() {
-			blocks[b.ID()] = b
+	for i := 0; i < 50; i++ {
+		for _, i := range ni.patterns[49] {
+			if _, ok := ni.tSupport[i]; ok {
+				t.Fail()
+			}
+			if _, ok := ni.tPattern[i]; ok {
+				t.Fail()
+			}
+			if _, ok := ni.tTally[i]; ok {
+				t.Fail()
+			}
+			if _, ok := ni.tVote[i]; ok {
+				t.Fail()
+			}
+			if _, ok := ni.tEffectiveToBlocks[i]; ok {
+				t.Fail()
+			}
+			if _, ok := ni.tComplete[i]; ok {
+				t.Fail()
+			}
+			if _, ok := ni.tPatSupport[i]; ok {
+				t.Fail()
+			}
 		}
-		l = lyr
+		for _, i := range ni.layerBlocks[49] {
+			if _, ok := ni.tEffective[i]; ok {
+				t.Fail()
+			}
+			if _, ok := ni.tCorrect[i]; ok {
+				t.Fail()
+			}
+			if _, ok := ni.tExplicit[i]; ok {
+				t.Fail()
+			}
+
+		}
 	}
-	mp := map[mesh.BlockID]struct{}{}
-
-	foo := func(nb *mesh.Block) {
-		log.Debug("process block %d layer %d", nb.ID(), nb.Layer())
-		mp[nb.ID()] = struct{}{}
-	}
-
-	ids := map[mesh.BlockID]struct{}{}
-	for _, b := range l.Blocks() {
-		ids[b.ID()] = struct{}{}
-	}
-
-	forBlockInView(ids, blocks, 0, foo)
-
-	for _, bl := range blocks {
-		_, found := mp[bl.ID()]
-		assert.True(t, found, "did not process block  ", bl)
-	}
-
 }
 
 func bToMb(b uint64) uint64 {
@@ -151,7 +157,7 @@ func TestNinjaTortoise_S50P49(t *testing.T) {
 		t.Skip()
 	}
 	defer persistenceTeardown()
-	sanity(getMeshForBench(), 40, 50, 50, badblocks)
+	sanity(getMeshForBench(), 110, 50, 50, badblocks)
 }
 func TestNinjaTortoise_S100P99(t *testing.T) {
 	if testing.Short() {

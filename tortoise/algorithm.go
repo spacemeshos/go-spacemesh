@@ -1,4 +1,4 @@
-package consensus
+package tortoise
 
 import (
 	"github.com/spacemeshos/go-spacemesh/log"
