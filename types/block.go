@@ -36,7 +36,7 @@ func (id NodeId) ToBytes() []byte {
 type BlockHeader struct {
 	Id         BlockID
 	LayerIndex LayerID
-	MinerID    NodeId
+	MinerID    NodeId // TODO: store only one ID in the block
 	Data       []byte
 	Coin       bool
 	Timestamp  int64

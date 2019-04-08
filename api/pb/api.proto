@@ -77,7 +77,7 @@ service SpacemeshService {
     }
     rpc SetLogicalDrive(LogicalDriveMessage) returns (SimpleMessage) {
         option (google.api.http) = {
-          post: "/v1/setcommitmentsize"
+          post: "/v1/setlogicaldrive"
           body: "*"
         };
     }
@@ -101,7 +101,7 @@ service SpacemeshService {
     }
     rpc GetUpcomingAwards(google.protobuf.Empty) returns (SimpleMessage) {
         option (google.api.http) = {
-          post: "/v1/gettotalawards"
+          post: "/v1/getupcomingawards"
           body: "*"
         };
     }
