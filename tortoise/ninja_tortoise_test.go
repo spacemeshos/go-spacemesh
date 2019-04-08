@@ -289,12 +289,12 @@ func createMulExplicitLayer(index mesh.LayerID, prev map[mesh.LayerID]*mesh.Laye
 		for lyrId, pat := range patterns {
 			for _, id := range pat {
 				b := prev[lyrId].Blocks()[id]
-				bl.AddVote(mesh.BlockID(b.Id))
+				bl.AddVote(mesh.BlockID(b.ID()))
 			}
 		}
 		if index > 0 {
 			for _, prevBloc := range prev[index-1].Blocks() {
-				bl.AddView(mesh.BlockID(prevBloc.Id))
+				bl.AddView(mesh.BlockID(prevBloc.ID()))
 			}
 		}
 		l.AddBlock(bl)
@@ -332,10 +332,10 @@ func createLayerWithCorruptedPattern(index mesh.LayerID, prev *mesh.Layer, block
 func addPattern(bl *mesh.Block, goodPattern []int, prev *mesh.Layer) *mesh.Block {
 	for _, id := range goodPattern {
 		b := prev.Blocks()[id]
-		bl.AddVote(mesh.BlockID(b.Id))
+		bl.AddVote(mesh.BlockID(b.ID()))
 	}
 	for _, prevBloc := range prev.Blocks() {
-		bl.AddView(mesh.BlockID(prevBloc.Id))
+		bl.AddView(mesh.BlockID(prevBloc.ID()))
 	}
 	return bl
 }
@@ -355,11 +355,11 @@ func createLayerWithRandVoting(index mesh.LayerID, prev []*mesh.Layer, blocksInL
 		for idx, pat := range patterns {
 			for _, id := range pat {
 				b := prev[idx].Blocks()[id]
-				bl.AddVote(mesh.BlockID(b.Id))
+				bl.AddVote(mesh.BlockID(b.ID()))
 			}
 		}
 		for _, prevBloc := range prev[0].Blocks() {
-			bl.AddView(mesh.BlockID(prevBloc.Id))
+			bl.AddView(mesh.BlockID(prevBloc.ID()))
 		}
 		l.AddBlock(bl)
 	}

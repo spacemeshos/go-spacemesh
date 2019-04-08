@@ -146,7 +146,7 @@ func (ni *ninjaTortoise) evictOutOfWindow(idx mesh.LayerID) {
 
 func (ni *ninjaTortoise) processBlock(b *mesh.Block) {
 
-	ni.Debug("process block: %d layer: %d  ", b.Id, b.Layer())
+	ni.Debug("process block: %d layer: %d  ", b.ID(), b.Layer())
 	if b.Layer() == Genesis {
 		return
 	}
@@ -231,15 +231,15 @@ func (ni *ninjaTortoise) updateCorrectionVectors(p votingPattern, bottomOfWindow
 				panic(fmt.Sprintf("error block not found ID %d", bid))
 			}
 
-			if _, found := ni.tExplicit[b.Id][x.Layer()]; found { //if Texplicit[b][x]!=0 check correctness of x.layer and found
+			if _, found := ni.tExplicit[b.ID()][x.Layer()]; found { //if Texplicit[b][x]!=0 check correctness of x.layer and found
 				ni.Debug(" blocks pattern %d block %d layer %d", p, b.ID(), b.Layer())
-				if _, found := ni.tCorrect[b.Id]; !found {
-					ni.tCorrect[b.Id] = make(map[mesh.BlockID]vec)
+				if _, found := ni.tCorrect[b.ID()]; !found {
+					ni.tCorrect[b.ID()] = make(map[mesh.BlockID]vec)
 				}
 				vo := ni.tVote[p][x.ID()]
 				ni.Debug("vote from pattern %d to block %d layer %d vote %d ", p, x.ID(), x.Layer(), vo)
-				ni.tCorrect[b.Id][x.ID()] = vo.Negate() //Tcorrect[b][x] = -Tvote[p][x]
-				ni.Debug("update correction vector for block %d layer %d , pattern %d vote %d for block %d ", b.ID(), b.Layer(), p, ni.tCorrect[b.Id][x.ID()], x.ID())
+				ni.tCorrect[b.ID()][x.ID()] = vo.Negate() //Tcorrect[b][x] = -Tvote[p][x]
+				ni.Debug("update correction vector for block %d layer %d , pattern %d vote %d for block %d ", b.ID(), b.Layer(), p, ni.tCorrect[b.ID()][x.ID()], x.ID())
 			} else {
 				ni.Debug("block %d from layer %d dose'nt explicitly vote for layer %d", b.ID(), b.Layer(), x.Layer())
 			}
