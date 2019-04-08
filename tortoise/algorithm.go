@@ -16,8 +16,8 @@ type Tortoise interface {
 	getVotes() map[mesh.BlockID]vec
 }
 
-func NewAlgorithm(trtl Tortoise) *Algorithm {
-	alg := &Algorithm{Tortoise: trtl}
+func NewAlgorithm(layerSize int, mdb *mesh.MeshDB, lg log.Log) *Algorithm {
+	alg := &Algorithm{Tortoise: NewNinjaTortoise(layerSize, mdb, lg)}
 	alg.HandleIncomingLayer(mesh.GenesisLayer())
 	return alg
 }

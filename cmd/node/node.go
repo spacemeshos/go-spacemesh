@@ -282,14 +282,13 @@ func (app *SpacemeshApp) initServices(instanceName string, swarm service.Service
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
 	clock := timesync.NewTicker(timesync.RealClock{}, ld, gTime)
 	mdb := mesh.NewPersistentMeshDB(dbStorepath, lg.WithName("meshdb"))
-	trtl := tortoise.NewAlgorithm(tortoise.NewNinjaTortoise(layerSize, mdb, lg.WithName("trtl")))
+	trtl := tortoise.NewAlgorithm(layerSize, mdb, lg.WithName("trtl"))
 	msh := mesh.NewMesh(mdb, app.Config.REWARD, trtl, processor, lg.WithName("mesh")) //todo: what to do with the logger?
 
 	conf := sync.Configuration{SyncInterval: 1 * time.Second, Concurrency: 4, LayerSize: int(layerSize), RequestTimeout: 100 * time.Millisecond}
 	syncer := sync.NewSync(swarm, msh, blockValidator, conf, clock.Subscribe(), lg)
 
 	ha := hare.New(app.Config.HARE, swarm, sgn, msh, hareOracle, clock.Subscribe(), lg.WithName("hare"))
-
 	nodeID := mesh.NodeId{Key: instanceName} // TODO: where does this come from?
 	blockProducer := miner.NewBlockBuilder(nodeID, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, lg.WithName("blockProducer"))
 	blockListener := sync.NewBlockListener(swarm, blockValidator, msh, 2*time.Second, 4, lg.WithName("blockListener"))
