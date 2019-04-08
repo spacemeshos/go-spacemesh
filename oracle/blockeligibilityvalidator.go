@@ -21,11 +21,11 @@ func NewBlockEligibilityValidator(committeeSize int32, layersPerEpoch uint16, ac
 	beaconProvider *EpochBeaconProvider, validateVRF VRFValidationFunction) *BlockEligibilityValidator {
 
 	return &BlockEligibilityValidator{
-		committeeSize: committeeSize,
+		committeeSize:  committeeSize,
 		layersPerEpoch: layersPerEpoch,
-		activationDb: activationDb,
+		activationDb:   activationDb,
 		beaconProvider: beaconProvider,
-		validateVRF: validateVRF,
+		validateVRF:    validateVRF,
 	}
 }
 

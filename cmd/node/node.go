@@ -387,7 +387,6 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 
 	apiConf := &app.Config.API
 
-
 	err = app.initServices("x", swarm, "/tmp/", sgn, bo, bv, hareOracle, 50)
 	if err != nil {
 		log.Error("cannot start services %v", err.Error())
