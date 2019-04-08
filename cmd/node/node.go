@@ -377,9 +377,9 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	//bo := oracle.NewBlockOracleFromClient(oracleClient, int(app.Config.CONSENSUS.NodesPerLayer))
 	nodesPerLayer := app.Config.CONSENSUS.NodesPerLayer
 	layersPerEpoch := app.Config.CONSENSUS.LayersPerEpoch
-	activationDb := &activation.ActivationDb{}      // TODO: initialize properly
-	beaconProvider := &oracle.EpochBeaconProvider{} // TODO: initialize properly
-	vrfSigner := crypto.NewVRFSigner(nil)           // TODO: use VRF private key
+	activationDb := &activation.ActivationDb{Atxs: database.NewMemDatabase()} // TODO: initialize properly
+	beaconProvider := &oracle.EpochBeaconProvider{}                           // TODO: initialize properly
+	vrfSigner := crypto.NewVRFSigner(nil)                                     // TODO: use VRF private key
 	nodeID := mesh.NodeId{Key: "x"}
 	bo := oracle.NewMinerBlockOracle(nodesPerLayer, layersPerEpoch, activationDb, beaconProvider, vrfSigner, nodeID)
 	hareOracle := oracle.NewHareOracleFromClient(oracleClient)
