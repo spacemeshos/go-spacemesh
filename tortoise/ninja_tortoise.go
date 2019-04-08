@@ -231,7 +231,7 @@ func (ni *ninjaTortoise) updateCorrectionVectors(p votingPattern, bottomOfWindow
 				panic(fmt.Sprintf("error block not found ID %d", bid))
 			}
 
-			if _, found := ni.tExplicit[b.ID()][x.Layer()]; found { //if Texplicit[b][x]!=0 check correctness of x.layer and found
+			if _, found := ni.tExplicit[b.ID()][x.Layer()]; found { //if Texplicit[b][x.layer]!=0 check correctness of x.layer and found
 				ni.Debug(" blocks pattern %d block %d layer %d", p, b.ID(), b.Layer())
 				if _, found := ni.tCorrect[b.ID()]; !found {
 					ni.tCorrect[b.ID()] = make(map[mesh.BlockID]vec)
