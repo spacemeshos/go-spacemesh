@@ -66,7 +66,6 @@ func addTransactionsToBlock(bl *Block, numOfTxs int) int64 {
 func addTransactionsWithGas(bl *Block, numOfTxs int, gasPrice int64) int64 {
 	var totalRewards int64
 	for i := 0; i < numOfTxs; i++ {
-
 		addr := rand.Int63n(10000)
 		//log.Info("adding tx with gas price %v nonce %v", gasPrice, i)
 		bl.Txs = append(bl.Txs, NewSerializableTransaction(uint64(i), address.HexToAddress("1"),
