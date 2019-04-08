@@ -3,6 +3,7 @@ package consensus
 import (
 	"fmt"
 	"github.com/google/uuid"
+	"github.com/spacemeshos/go-spacemesh/block"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -85,7 +86,7 @@ func TestNinjaTortoise_GlobalOpinion(t *testing.T) {
 }
 
 func TestForEachInView(t *testing.T) {
-	blocks := make(map[mesh.BlockID]*mesh.Block)
+	blocks := make(map[block.BlockID]*block.Block)
 	mdb := getInMemMesh()
 
 	defer mdb.Close()
@@ -94,20 +95,20 @@ func TestForEachInView(t *testing.T) {
 		blocks[b.ID()] = b
 	}
 	for i := 0; i < 4; i++ {
-		lyr := createLayerWithRandVoting(l.Index()+1, []*mesh.Layer{l}, 2, 2)
+		lyr := createLayerWithRandVoting(l.Index()+1, []*block.Layer{l}, 2, 2)
 		for _, b := range lyr.Blocks() {
 			blocks[b.ID()] = b
 		}
 		l = lyr
 	}
-	mp := map[mesh.BlockID]struct{}{}
+	mp := map[block.BlockID]struct{}{}
 
-	foo := func(nb *mesh.Block) {
+	foo := func(nb *block.Block) {
 		log.Debug("process block %d layer %d", nb.ID(), nb.Layer())
 		mp[nb.ID()] = struct{}{}
 	}
 
-	ids := map[mesh.BlockID]struct{}{}
+	ids := map[block.BlockID]struct{}{}
 	for _, b := range l.Blocks() {
 		ids[b.ID()] = struct{}{}
 	}
@@ -214,7 +215,7 @@ func sanity(mdb *mesh.MeshDB, layers int, layerSize int, patternSize int, badBlk
 	lg := log.New("tortoise_test", "", "")
 	l1 := mesh.GenesisLayer()
 	mdb.AddLayer(l1)
-	l := createLayerWithRandVoting(l1.Index()+1, []*mesh.Layer{l1}, layerSize, 1)
+	l := createLayerWithRandVoting(l1.Index()+1, []*block.Layer{l1}, layerSize, 1)
 	mdb.AddLayer(l)
 
 	for i := 0; i < layers-1; i++ {
@@ -228,7 +229,7 @@ func sanity(mdb *mesh.MeshDB, layers int, layerSize int, patternSize int, badBlk
 	alg := NewNinjaTortoise(layerSize, mdb, lg)
 
 	for i := 0; i <= layers; i++ {
-		lyr, err := mdb.GetLayer(mesh.LayerID(i))
+		lyr, err := mdb.GetLayer(block.LayerID(i))
 		if err != nil {
 			alg.Error("could not get layer ", err)
 		}
@@ -249,11 +250,11 @@ func TestNinjaTortoise_Sanity2(t *testing.T) {
 	defer persistenceTeardown()
 	mdb := getInMemMesh()
 	alg := NewNinjaTortoise(3, mdb, log.New("TestNinjaTortoise_Sanity2", "", ""))
-	l := createMulExplicitLayer(0, map[mesh.LayerID]*mesh.Layer{}, nil, 1)
-	l1 := createMulExplicitLayer(1, map[mesh.LayerID]*mesh.Layer{l.Index(): l}, map[mesh.LayerID][]int{0: {0}}, 3)
-	l2 := createMulExplicitLayer(2, map[mesh.LayerID]*mesh.Layer{l1.Index(): l1}, map[mesh.LayerID][]int{1: {0, 1, 2}}, 3)
-	l3 := createMulExplicitLayer(3, map[mesh.LayerID]*mesh.Layer{l2.Index(): l2}, map[mesh.LayerID][]int{l2.Index(): {0}}, 3)
-	l4 := createMulExplicitLayer(4, map[mesh.LayerID]*mesh.Layer{l2.Index(): l2, l3.Index(): l3}, map[mesh.LayerID][]int{l2.Index(): {1, 2}, l3.Index(): {1, 2}}, 4)
+	l := createMulExplicitLayer(0, map[block.LayerID]*block.Layer{}, nil, 1)
+	l1 := createMulExplicitLayer(1, map[block.LayerID]*block.Layer{l.Index(): l}, map[block.LayerID][]int{0: {0}}, 3)
+	l2 := createMulExplicitLayer(2, map[block.LayerID]*block.Layer{l1.Index(): l1}, map[block.LayerID][]int{1: {0, 1, 2}}, 3)
+	l3 := createMulExplicitLayer(3, map[block.LayerID]*block.Layer{l2.Index(): l2}, map[block.LayerID][]int{l2.Index(): {0}}, 3)
+	l4 := createMulExplicitLayer(4, map[block.LayerID]*block.Layer{l2.Index(): l2, l3.Index(): l3}, map[block.LayerID][]int{l2.Index(): {1, 2}, l3.Index(): {1, 2}}, 4)
 
 	mdb.AddLayer(l)
 	mdb.AddLayer(l1)
@@ -272,33 +273,33 @@ func TestNinjaTortoise_Sanity2(t *testing.T) {
 	assert.True(t, alg.tTally[alg.pBase][l.Blocks()[0].ID()] == vec{5, 0}, "lyr %d tally was %d insted of %d", 0, alg.tTally[alg.pBase][l.Blocks()[0].ID()], vec{5, 0})
 }
 
-func createMulExplicitLayer(index mesh.LayerID, prev map[mesh.LayerID]*mesh.Layer, patterns map[mesh.LayerID][]int, blocksInLayer int) *mesh.Layer {
-	l := mesh.NewLayer(index)
-	layerBlocks := make([]mesh.BlockID, 0, blocksInLayer)
+func createMulExplicitLayer(index block.LayerID, prev map[block.LayerID]*block.Layer, patterns map[block.LayerID][]int, blocksInLayer int) *block.Layer {
+	l := block.NewLayer(index)
+	layerBlocks := make([]block.BlockID, 0, blocksInLayer)
 	for i := 0; i < blocksInLayer; i++ {
-		bl := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), index, []byte("data data data"))
+		bl := block.NewExistingBlock(block.BlockID(uuid.New().ID()), index, []byte("data data data"))
 		layerBlocks = append(layerBlocks, bl.ID())
 
 		for lyrId, pat := range patterns {
 			for _, id := range pat {
 				b := prev[lyrId].Blocks()[id]
-				bl.AddVote(mesh.BlockID(b.Id))
+				bl.AddVote(block.BlockID(b.Id))
 			}
 		}
 		if index > 0 {
 			for _, prevBloc := range prev[index-1].Blocks() {
-				bl.AddView(mesh.BlockID(prevBloc.Id))
+				bl.AddView(block.BlockID(prevBloc.Id))
 			}
 		}
 		l.AddBlock(bl)
 	}
-	log.Debug("Created mesh.LayerID %d with blocks %d", l.Index(), layerBlocks)
+	log.Debug("Created block.LayerID %d with blocks %d", l.Index(), layerBlocks)
 
 	return l
 }
 
-func createLayerWithCorruptedPattern(index mesh.LayerID, prev *mesh.Layer, blocksInLayer int, patternSize int, badBlocks float64) *mesh.Layer {
-	l := mesh.NewLayer(index)
+func createLayerWithCorruptedPattern(index block.LayerID, prev *block.Layer, blocksInLayer int, patternSize int, badBlocks float64) *block.Layer {
+	l := block.NewLayer(index)
 
 	blocks := prev.Blocks()
 	blocksInPrevLayer := len(blocks)
@@ -306,14 +307,14 @@ func createLayerWithCorruptedPattern(index mesh.LayerID, prev *mesh.Layer, block
 	badPattern := chooseRandomPattern(blocksInPrevLayer, int(math.Min(float64(blocksInPrevLayer), float64(patternSize))))
 
 	gbs := int(float64(blocksInLayer) * (1 - badBlocks))
-	layerBlocks := make([]mesh.BlockID, 0, blocksInLayer)
+	layerBlocks := make([]block.BlockID, 0, blocksInLayer)
 	for i := 0; i < gbs; i++ {
-		bl := addPattern(mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), index, []byte("data data data")), goodPattern, prev)
+		bl := addPattern(block.NewExistingBlock(block.BlockID(uuid.New().ID()), index, []byte("data data data")), goodPattern, prev)
 		layerBlocks = append(layerBlocks, bl.ID())
 		l.AddBlock(bl)
 	}
 	for i := 0; i < blocksInLayer-gbs; i++ {
-		bl := addPattern(mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), index, []byte("data data data")), badPattern, prev)
+		bl := addPattern(block.NewExistingBlock(block.BlockID(uuid.New().ID()), index, []byte("data data data")), badPattern, prev)
 		layerBlocks = append(layerBlocks, bl.ID())
 		l.AddBlock(bl)
 	}
@@ -322,41 +323,41 @@ func createLayerWithCorruptedPattern(index mesh.LayerID, prev *mesh.Layer, block
 	return l
 }
 
-func addPattern(bl *mesh.Block, goodPattern []int, prev *mesh.Layer) *mesh.Block {
+func addPattern(bl *block.Block, goodPattern []int, prev *block.Layer) *block.Block {
 	for _, id := range goodPattern {
 		b := prev.Blocks()[id]
-		bl.AddVote(mesh.BlockID(b.Id))
+		bl.AddVote(block.BlockID(b.Id))
 	}
 	for _, prevBloc := range prev.Blocks() {
-		bl.AddView(mesh.BlockID(prevBloc.Id))
+		bl.AddView(block.BlockID(prevBloc.Id))
 	}
 	return bl
 }
 
-func createLayerWithRandVoting(index mesh.LayerID, prev []*mesh.Layer, blocksInLayer int, patternSize int) *mesh.Layer {
-	l := mesh.NewLayer(index)
+func createLayerWithRandVoting(index block.LayerID, prev []*block.Layer, blocksInLayer int, patternSize int) *block.Layer {
+	l := block.NewLayer(index)
 	var patterns [][]int
 	for _, l := range prev {
 		blocks := l.Blocks()
 		blocksInPrevLayer := len(blocks)
 		patterns = append(patterns, chooseRandomPattern(blocksInPrevLayer, int(math.Min(float64(blocksInPrevLayer), float64(patternSize)))))
 	}
-	layerBlocks := make([]mesh.BlockID, 0, blocksInLayer)
+	layerBlocks := make([]block.BlockID, 0, blocksInLayer)
 	for i := 0; i < blocksInLayer; i++ {
-		bl := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), index, []byte("data data data"))
+		bl := block.NewExistingBlock(block.BlockID(uuid.New().ID()), index, []byte("data data data"))
 		layerBlocks = append(layerBlocks, bl.ID())
 		for idx, pat := range patterns {
 			for _, id := range pat {
 				b := prev[idx].Blocks()[id]
-				bl.AddVote(mesh.BlockID(b.Id))
+				bl.AddVote(block.BlockID(b.Id))
 			}
 		}
 		for _, prevBloc := range prev[0].Blocks() {
-			bl.AddView(mesh.BlockID(prevBloc.Id))
+			bl.AddView(block.BlockID(prevBloc.Id))
 		}
 		l.AddBlock(bl)
 	}
-	log.Debug("Created mesh.LayerID %d with blocks %d", l.Index(), layerBlocks)
+	log.Debug("Created block.LayerID %d with blocks %d", l.Index(), layerBlocks)
 	return l
 }
 

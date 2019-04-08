@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"github.com/golang/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/address"
+	"github.com/spacemeshos/go-spacemesh/block"
 	"github.com/spacemeshos/go-spacemesh/common"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/stretchr/testify/require"
 	"io/ioutil"
@@ -302,7 +302,7 @@ func TestJsonWalletApi(t *testing.T) {
 	_, err = proto.Marshal(&txParams)
 	assert.NoError(t, err)
 
-	tx := mesh.SerializableTransaction{}
+	tx := block.SerializableTransaction{}
 	rec := address.HexToAddress(txParams.DstAddress)
 	tx.Recipient = &rec
 	tx.Origin = address.HexToAddress(txParams.SrcAddress)
@@ -315,7 +315,7 @@ func TestJsonWalletApi(t *testing.T) {
 	tx.GasLimit = 10
 	tx.Price = big.NewInt(10).Bytes()
 
-	val, err := mesh.TransactionAsBytes(&tx)
+	val, err := block.TransactionAsBytes(&tx)
 
 	assert.Equal(t, val, net.broadcasted)
 

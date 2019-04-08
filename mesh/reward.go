@@ -1,6 +1,7 @@
 package mesh
 
 import (
+	"github.com/spacemeshos/go-spacemesh/block"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"math/big"
@@ -12,9 +13,7 @@ type Config struct {
 	BaseReward     *big.Int
 	PenaltyPercent *big.Int
 	TxQuota        uint32
-	RewardMaturity LayerID
-	// global mesh config
-	LayersPerEpoch LayerID
+	RewardMaturity block.LayerID
 }
 
 func DefaultMeshConfig() Config {
@@ -24,11 +23,10 @@ func DefaultMeshConfig() Config {
 		big.NewInt(19),
 		15,
 		5,
-		1000,
 	}
 }
 
-func CalculateLayerReward(id LayerID, params Config) *big.Int {
+func CalculateLayerReward(id block.LayerID, params Config) *big.Int {
 	//todo: add inflation rules here
 	return params.BaseReward
 }

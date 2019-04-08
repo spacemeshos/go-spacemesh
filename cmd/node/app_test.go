@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/address"
 	apiCfg "github.com/spacemeshos/go-spacemesh/api/config"
+	"github.com/spacemeshos/go-spacemesh/block"
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -71,14 +71,14 @@ func (app *AppTestSuite) TestMultipleNodes() {
 
 	addr := address.BytesToAddress([]byte{0x01})
 	dst := address.BytesToAddress([]byte{0x02})
-	tx := mesh.SerializableTransaction{}
+	tx := block.SerializableTransaction{}
 	tx.Amount = big.NewInt(10).Bytes()
 	tx.GasLimit = 1
 	tx.Origin = addr
 	tx.Recipient = &dst
 	tx.Price = big.NewInt(1).Bytes()
 
-	txbytes, _ := mesh.TransactionAsBytes(&tx)
+	txbytes, _ := block.TransactionAsBytes(&tx)
 	path := "../tmp/test/state_" + time.Now().String()
 	app.initMultipleInstances(app.T(), 10, path)
 	for _, a := range app.apps {

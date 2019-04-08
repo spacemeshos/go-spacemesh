@@ -1,6 +1,7 @@
 package consensus
 
 import (
+	"github.com/spacemeshos/go-spacemesh/block"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 )
@@ -10,10 +11,10 @@ type Algorithm struct {
 }
 
 type Tortoise interface {
-	handleIncomingLayer(ll *mesh.Layer)
-	latestComplete() mesh.LayerID
-	getVote(id mesh.BlockID) vec
-	getVotes() map[mesh.BlockID]vec
+	handleIncomingLayer(ll *block.Layer)
+	latestComplete() block.LayerID
+	getVote(id block.BlockID) vec
+	getVotes() map[block.BlockID]vec
 }
 
 func NewAlgorithm(trtl Tortoise) *Algorithm {
@@ -21,12 +22,12 @@ func NewAlgorithm(trtl Tortoise) *Algorithm {
 	alg.HandleIncomingLayer(mesh.GenesisLayer())
 	return alg
 }
-func (alg *Algorithm) HandleLateBlock(b *mesh.Block) {
+func (alg *Algorithm) HandleLateBlock(b *block.Block) {
 	//todo feed all layers from b's layer to tortoise
 	log.Info("received block with mesh.LayerID %v block id: %v ", b.Layer(), b.ID())
 }
 
-func (alg *Algorithm) HandleIncomingLayer(ll *mesh.Layer) (mesh.LayerID, mesh.LayerID) {
+func (alg *Algorithm) HandleIncomingLayer(ll *block.Layer) (block.LayerID, block.LayerID) {
 	oldPbase := alg.latestComplete()
 	alg.Tortoise.handleIncomingLayer(ll)
 	newPbase := alg.latestComplete()
@@ -34,7 +35,7 @@ func (alg *Algorithm) HandleIncomingLayer(ll *mesh.Layer) (mesh.LayerID, mesh.La
 	return oldPbase, newPbase
 }
 
-func updateMetrics(alg *Algorithm, ll *mesh.Layer) {
+func updateMetrics(alg *Algorithm, ll *block.Layer) {
 	pbaseCount.Set(float64(alg.latestComplete()))
 	processedCount.Set(float64(ll.Index()))
 	var valid float64
@@ -50,6 +51,6 @@ func updateMetrics(alg *Algorithm, ll *mesh.Layer) {
 	invalidBlocks.Set(invalid)
 }
 
-func (alg *Algorithm) ContextualValidity(id mesh.BlockID) bool {
+func (alg *Algorithm) ContextualValidity(id block.BlockID) bool {
 	return alg.getVote(id) == Support
 }

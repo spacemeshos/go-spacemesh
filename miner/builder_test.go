@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"github.com/davecgh/go-xdr/xdr2"
 	"github.com/spacemeshos/go-spacemesh/address"
+	"github.com/spacemeshos/go-spacemesh/block"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/nipst"
@@ -23,25 +24,25 @@ func (m MockCoin) GetResult() bool {
 }
 
 type MockHare struct {
-	res []mesh.BlockID
+	res []block.BlockID
 }
 
-func (m MockHare) GetResult(id mesh.LayerID) ([]mesh.BlockID, error) {
+func (m MockHare) GetResult(id block.LayerID) ([]block.BlockID, error) {
 	return m.res, nil
 }
 
 type MockOrphans struct {
-	st []mesh.BlockID
+	st []block.BlockID
 }
 
-func (m MockOrphans) GetOrphanBlocksBefore(l mesh.LayerID) ([]mesh.BlockID, error) {
+func (m MockOrphans) GetOrphanBlocksBefore(l block.LayerID) ([]block.BlockID, error) {
 	return m.st, nil
 }
 
 type mockBlockOracle struct {
 }
 
-func (mbo mockBlockOracle) BlockEligible(id mesh.LayerID, pubkey string) bool {
+func (mbo mockBlockOracle) BlockEligible(id block.LayerID, pubkey string) bool {
 	return true
 }
 
@@ -65,14 +66,14 @@ func (m *mockMsg) ReportValidation(protocol string, isValid bool) {
 func TestBlockBuilder_StartStop(t *testing.T) {
 
 	net := service.NewSimulator()
-	beginRound := make(chan mesh.LayerID)
+	beginRound := make(chan block.LayerID)
 	n := net.NewNode()
 	//receiver := net.NewNode()
 
-	hareRes := []mesh.BlockID{mesh.BlockID(0), mesh.BlockID(1), mesh.BlockID(2), mesh.BlockID(3)}
+	hareRes := []block.BlockID{block.BlockID(0), block.BlockID(1), block.BlockID(2), block.BlockID(3)}
 	hare := MockHare{res: hareRes}
 
-	builder := NewBlockBuilder(n.Node.String(), n, beginRound, MockCoin{}, MockOrphans{st: []mesh.BlockID{1, 2, 3}}, hare, mockBlockOracle{},
+	builder := NewBlockBuilder(n.Node.String(), n, beginRound, MockCoin{}, MockOrphans{st: []block.BlockID{1, 2, 3}}, hare, mockBlockOracle{},
 		log.New(n.Node.String(), "", ""))
 
 	err := builder.Start()
@@ -96,16 +97,16 @@ func TestBlockBuilder_StartStop(t *testing.T) {
 func TestBlockBuilder_BlockIdGeneration(t *testing.T) {
 
 	net := service.NewSimulator()
-	beginRound := make(chan mesh.LayerID)
+	beginRound := make(chan block.LayerID)
 	n1 := net.NewNode()
 	n2 := net.NewNode()
 
-	hareRes := []mesh.BlockID{mesh.BlockID(0), mesh.BlockID(1), mesh.BlockID(2), mesh.BlockID(3)}
+	hareRes := []block.BlockID{block.BlockID(0), block.BlockID(1), block.BlockID(2), block.BlockID(3)}
 	hare := MockHare{res: hareRes}
 
-	builder1 := NewBlockBuilder(n1.Node.String(), n1, beginRound, MockCoin{}, MockOrphans{st: []mesh.BlockID{1, 2, 3}}, hare,
+	builder1 := NewBlockBuilder(n1.Node.String(), n1, beginRound, MockCoin{}, MockOrphans{st: []block.BlockID{1, 2, 3}}, hare,
 		mockBlockOracle{}, log.New(n1.Node.String(), "", ""))
-	builder2 := NewBlockBuilder(n2.Node.String(), n2, beginRound, MockCoin{}, MockOrphans{st: []mesh.BlockID{1, 2, 3}}, hare,
+	builder2 := NewBlockBuilder(n2.Node.String(), n2, beginRound, MockCoin{}, MockOrphans{st: []block.BlockID{1, 2, 3}}, hare,
 		mockBlockOracle{}, log.New(n2.Node.String(), "", ""))
 
 	b1, _ := builder1.createBlock(1, nil, nil)
@@ -117,14 +118,14 @@ func TestBlockBuilder_BlockIdGeneration(t *testing.T) {
 
 func TestBlockBuilder_CreateBlock(t *testing.T) {
 	net := service.NewSimulator()
-	beginRound := make(chan mesh.LayerID)
+	beginRound := make(chan block.LayerID)
 	n := net.NewNode()
 	receiver := net.NewNode()
 
-	hareRes := []mesh.BlockID{mesh.BlockID(0), mesh.BlockID(1), mesh.BlockID(2), mesh.BlockID(3)}
+	hareRes := []block.BlockID{block.BlockID(0), block.BlockID(1), block.BlockID(2), block.BlockID(3)}
 	hare := MockHare{res: hareRes}
 
-	builder := NewBlockBuilder(n.Node.String(), n, beginRound, MockCoin{}, MockOrphans{st: []mesh.BlockID{1, 2, 3}}, hare,
+	builder := NewBlockBuilder(n.Node.String(), n, beginRound, MockCoin{}, MockOrphans{st: []block.BlockID{1, 2, 3}}, hare,
 		mockBlockOracle{}, log.New(n.Node.String(), "", ""))
 
 	err := builder.Start()
@@ -133,7 +134,7 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 	addr1 := address.BytesToAddress([]byte{0x02})
 	addr2 := address.BytesToAddress([]byte{0x01})
 
-	trans := []*mesh.SerializableTransaction{
+	trans := []*block.SerializableTransaction{
 		Transaction2SerializableTransaction(mesh.NewTransaction(1, addr1, addr2, big.NewInt(1), DefaultGasLimit, big.NewInt(DefaultGas))),
 		Transaction2SerializableTransaction(mesh.NewTransaction(1, addr1, addr2, big.NewInt(1), DefaultGasLimit, big.NewInt(DefaultGas))),
 		Transaction2SerializableTransaction(mesh.NewTransaction(2, addr1, addr2, big.NewInt(1), DefaultGasLimit, big.NewInt(DefaultGas))),
@@ -143,38 +144,38 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 	builder.AddTransaction(trans[1].AccountNonce, trans[1].Origin, *trans[1].Recipient, big.NewInt(0).SetBytes(trans[1].Price))
 	builder.AddTransaction(trans[2].AccountNonce, trans[2].Origin, *trans[2].Recipient, big.NewInt(0).SetBytes(trans[2].Price))
 
-	atxs := []*mesh.ActivationTx{
-		mesh.NewActivationTx(mesh.NodeId{"aaaa", "bbb"},
+	atxs := []*block.ActivationTx{
+		block.NewActivationTx(block.NodeId{"aaaa", "bbb"},
 			1,
-			mesh.AtxId{},
+			block.AtxId{},
 			5,
 			1,
-			mesh.AtxId{},
+			block.AtxId{},
 			5,
-			[]mesh.BlockID{1, 2, 3},
+			[]block.BlockID{1, 2, 3},
 			&nipst.NIPST{}),
-		mesh.NewActivationTx(mesh.NodeId{"aaaa", "bbb"},
+		block.NewActivationTx(block.NodeId{"aaaa", "bbb"},
 			1,
-			mesh.AtxId{},
+			block.AtxId{},
 			5,
 			1,
-			mesh.AtxId{},
+			block.AtxId{},
 			5,
-			[]mesh.BlockID{1, 2, 3},
+			[]block.BlockID{1, 2, 3},
 			&nipst.NIPST{}),
-		mesh.NewActivationTx(mesh.NodeId{"aaaa", "bbb"},
+		block.NewActivationTx(block.NodeId{"aaaa", "bbb"},
 			1,
-			mesh.AtxId{},
+			block.AtxId{},
 			5,
 			1,
-			mesh.AtxId{},
+			block.AtxId{},
 			5,
-			[]mesh.BlockID{1, 2, 3},
+			[]block.BlockID{1, 2, 3},
 			&nipst.NIPST{}),
 	}
 
 	/*for _, atx := range atxs {
-		b, e := mesh.AtxAsBytes(atx)
+		b, e := block.AtxAsBytes(atx)
 		assert.NoError(t, e)
 		msg := mockMsg{msg: b}
 		builder.transactionQueue <- atx
@@ -186,11 +187,11 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 
 	select {
 	case output := <-receiver.RegisterGossipProtocol(sync.NewBlockProtocol):
-		b := mesh.Block{}
+		b := block.Block{}
 		xdr.Unmarshal(bytes.NewBuffer(output.Bytes()), &b)
 		assert.Equal(t, hareRes, b.BlockVotes)
 		assert.Equal(t, trans, b.Txs)
-		assert.Equal(t, []mesh.BlockID{1, 2, 3}, b.ViewEdges)
+		assert.Equal(t, []block.BlockID{1, 2, 3}, b.ViewEdges)
 		assert.Equal(t, atxs, b.ATXs)
 
 	case <-time.After(1 * time.Second):
@@ -201,11 +202,11 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 }
 
 func TestBlockBuilder_SerializeTrans(t *testing.T) {
-	tx := mesh.NewSerializableTransaction(0, address.BytesToAddress([]byte{0x01}), address.BytesToAddress([]byte{0x02}), big.NewInt(10), big.NewInt(10), 10)
-	buf, err := mesh.TransactionAsBytes(tx)
+	tx := block.NewSerializableTransaction(0, address.BytesToAddress([]byte{0x01}), address.BytesToAddress([]byte{0x02}), big.NewInt(10), big.NewInt(10), 10)
+	buf, err := block.TransactionAsBytes(tx)
 	assert.NoError(t, err)
 
-	ntx, err := mesh.BytesAsTransaction(buf)
+	ntx, err := block.BytesAsTransaction(buf)
 	assert.NoError(t, err)
 
 	assert.Equal(t, *tx, *ntx)

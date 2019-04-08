@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/spacemeshos/go-spacemesh/address"
+	"github.com/spacemeshos/go-spacemesh/block"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -51,9 +51,9 @@ func TestBlockListener(t *testing.T) {
 	bl2 := ListenerFactory(n2, PeersMock{func() []p2p.Peer { return []p2p.Peer{n1.PublicKey()} }}, "2")
 	bl2.Start()
 
-	block1 := mesh.NewExistingBlock(mesh.BlockID(123), 0, nil)
-	block2 := mesh.NewExistingBlock(mesh.BlockID(321), 1, nil)
-	block3 := mesh.NewExistingBlock(mesh.BlockID(222), 2, nil)
+	block1 := block.NewExistingBlock(block.BlockID(123), 0, nil)
+	block2 := block.NewExistingBlock(block.BlockID(321), 1, nil)
+	block3 := block.NewExistingBlock(block.BlockID(222), 2, nil)
 
 	block1.AddView(block2.ID())
 	block1.AddView(block3.ID())
@@ -92,16 +92,16 @@ func TestBlockListener2(t *testing.T) {
 
 	bl2.Start()
 
-	block1 := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), 0, []byte("data data data"))
-	block2 := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), 0, []byte("data data data"))
-	block3 := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), 0, []byte("data data data"))
-	block4 := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), 0, []byte("data data data"))
-	block5 := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), 0, []byte("data data data"))
-	block6 := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), 0, []byte("data data data"))
-	block7 := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), 0, []byte("data data data"))
-	block8 := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), 0, []byte("data data data"))
-	block9 := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), 0, []byte("data data data"))
-	block10 := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), 0, []byte("data data data"))
+	block1 := block.NewExistingBlock(block.BlockID(uuid.New().ID()), 0, []byte("data data data"))
+	block2 := block.NewExistingBlock(block.BlockID(uuid.New().ID()), 0, []byte("data data data"))
+	block3 := block.NewExistingBlock(block.BlockID(uuid.New().ID()), 0, []byte("data data data"))
+	block4 := block.NewExistingBlock(block.BlockID(uuid.New().ID()), 0, []byte("data data data"))
+	block5 := block.NewExistingBlock(block.BlockID(uuid.New().ID()), 0, []byte("data data data"))
+	block6 := block.NewExistingBlock(block.BlockID(uuid.New().ID()), 0, []byte("data data data"))
+	block7 := block.NewExistingBlock(block.BlockID(uuid.New().ID()), 0, []byte("data data data"))
+	block8 := block.NewExistingBlock(block.BlockID(uuid.New().ID()), 0, []byte("data data data"))
+	block9 := block.NewExistingBlock(block.BlockID(uuid.New().ID()), 0, []byte("data data data"))
+	block10 := block.NewExistingBlock(block.BlockID(uuid.New().ID()), 0, []byte("data data data"))
 
 	block2.AddView(block1.ID())
 	block3.AddView(block2.ID())
@@ -157,21 +157,21 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 	bl1.Start()
 	bl2.Start()
 
-	blk := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), 1, []byte("data1"))
-	tx := mesh.NewSerializableTransaction(0, address.BytesToAddress([]byte{0x01}), address.BytesToAddress([]byte{0x02}), big.NewInt(10), big.NewInt(10), 10)
+	blk := block.NewExistingBlock(block.BlockID(uuid.New().ID()), 1, []byte("data1"))
+	tx := block.NewSerializableTransaction(0, address.BytesToAddress([]byte{0x01}), address.BytesToAddress([]byte{0x02}), big.NewInt(10), big.NewInt(10), 10)
 	blk.AddTransaction(tx)
-	blk.AddAtx(mesh.NewActivationTx(mesh.NodeId{"aaaa", "bbb"},
+	blk.AddAtx(block.NewActivationTx(block.NodeId{"aaaa", "bbb"},
 		1,
-		mesh.AtxId{},
+		block.AtxId{},
 		5,
 		1,
-		mesh.AtxId{},
+		block.AtxId{},
 		5,
-		[]mesh.BlockID{1, 2, 3},
+		[]block.BlockID{1, 2, 3},
 		&nipst.NIPST{}))
 
-	data, err := mesh.BlockAsBytes(*blk)
-	blk2, ok := mesh.BytesAsBlock(data)
+	data, err := block.BlockAsBytes(*blk)
+	blk2, ok := block.BytesAsBlock(data)
 	assert.NoError(t, ok)
 	assert.True(t, blk.Compare(&blk2))
 

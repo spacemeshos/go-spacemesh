@@ -2,7 +2,7 @@ package timesync
 
 import (
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/block"
 	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
@@ -68,7 +68,7 @@ func TestTicker_StartClock_LayerID(t *testing.T) {
 
 	ts := NewTicker(MockTimer{}, tick, start)
 	ts.updateLayerID()
-	assert.Equal(t, mesh.LayerID(7), ts.currentLayer)
+	assert.Equal(t, block.LayerID(7), ts.currentLayer)
 	ts.Close()
 }
 
@@ -98,9 +98,9 @@ func TestTicker_TickFutureGenesis(t *testing.T) {
 	sub := ticker.Subscribe()
 	ticker.Start()
 	x := <-sub
-	assert.Equal(t, mesh.LayerID(1), x)
+	assert.Equal(t, block.LayerID(1), x)
 	x = <-sub
-	assert.Equal(t, mesh.LayerID(2), x)
+	assert.Equal(t, block.LayerID(2), x)
 }
 
 func TestTicker_TickPastGenesis(t *testing.T) {
@@ -109,5 +109,5 @@ func TestTicker_TickPastGenesis(t *testing.T) {
 	sub := ticker.Subscribe()
 	ticker.Start()
 	x := <-sub
-	assert.Equal(t, mesh.LayerID(3), x)
+	assert.Equal(t, block.LayerID(3), x)
 }

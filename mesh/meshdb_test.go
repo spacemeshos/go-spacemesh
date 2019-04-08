@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/google/uuid"
+	"github.com/spacemeshos/go-spacemesh/block"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/rand"
@@ -28,8 +29,8 @@ func getMeshdb() *MeshDB {
 
 func TestNewMeshDB(t *testing.T) {
 	mdb := getMeshdb()
-	id := BlockID(123)
-	mdb.AddBlock(NewExistingBlock(123, 1, nil))
+	id := block.BlockID(123)
+	mdb.AddBlock(block.NewExistingBlock(123, 1, nil))
 	block, err := mdb.GetBlock(123)
 	assert.NoError(t, err)
 	assert.True(t, id == block.Id)
@@ -37,16 +38,16 @@ func TestNewMeshDB(t *testing.T) {
 
 func TestMeshDb_Block(t *testing.T) {
 	mdb := getMeshdb()
-	blk := NewExistingBlock(123, 1, nil)
+	blk := block.NewExistingBlock(123, 1, nil)
 	addTransactionsToBlock(blk, 5)
-	blk.AddAtx(NewActivationTx(NodeId{"aaaa", "bbb"},
+	blk.AddAtx(block.NewActivationTx(block.NodeId{"aaaa", "bbb"},
 		1,
-		AtxId{},
+		block.AtxId{},
 		5,
 		1,
-		AtxId{},
+		block.AtxId{},
 		5,
-		[]BlockID{1, 2, 3},
+		[]block.BlockID{1, 2, 3},
 		&nipst.NIPST{}))
 	mdb.AddBlock(blk)
 	block, err := mdb.GetBlock(123)
@@ -65,11 +66,11 @@ func TestMeshDB_AddBlock(t *testing.T) {
 	mdb := NewMemMeshDB(log.New("TestForEachInView", "", ""))
 	defer mdb.Close()
 
-	block1 := NewExistingBlock(BlockID(uuid.New().ID()), 1, []byte("data1"))
+	block1 := block.NewExistingBlock(block.BlockID(uuid.New().ID()), 1, []byte("data1"))
 
 	addTransactionsToBlock(block1, 4)
 
-	block1.AddAtx(NewActivationTx(NodeId{"aaaa", "bbb"}, 1, AtxId{}, 5, 1, AtxId{}, 5, []BlockID{1, 2, 3}, &nipst.NIPST{}))
+	block1.AddAtx(block.NewActivationTx(block.NodeId{"aaaa", "bbb"}, 1, block.AtxId{}, 5, 1, block.AtxId{}, 5, []block.BlockID{1, 2, 3}, &nipst.NIPST{}))
 	err := mdb.AddBlock(block1)
 	assert.NoError(t, err)
 
@@ -91,26 +92,26 @@ func chooseRandomPattern(blocksInLayer int, patternSize int) []int {
 	return indexes
 }
 
-func createLayerWithRandVoting(index LayerID, prev []*Layer, blocksInLayer int, patternSize int) *Layer {
-	l := NewLayer(index)
+func createLayerWithRandVoting(index block.LayerID, prev []*block.Layer, blocksInLayer int, patternSize int) *block.Layer {
+	l := block.NewLayer(index)
 	var patterns [][]int
 	for _, l := range prev {
 		blocks := l.Blocks()
 		blocksInPrevLayer := len(blocks)
 		patterns = append(patterns, chooseRandomPattern(blocksInPrevLayer, int(math.Min(float64(blocksInPrevLayer), float64(patternSize)))))
 	}
-	layerBlocks := make([]BlockID, 0, blocksInLayer)
+	layerBlocks := make([]block.BlockID, 0, blocksInLayer)
 	for i := 0; i < blocksInLayer; i++ {
-		bl := NewExistingBlock(BlockID(uuid.New().ID()), 0, []byte("data data data"))
+		bl := block.NewExistingBlock(block.BlockID(uuid.New().ID()), 0, []byte("data data data"))
 		layerBlocks = append(layerBlocks, bl.ID())
 		for idx, pat := range patterns {
 			for _, id := range pat {
 				b := prev[idx].Blocks()[id]
-				bl.AddVote(BlockID(b.Id))
+				bl.AddVote(block.BlockID(b.Id))
 			}
 		}
 		for _, prevBloc := range prev[0].Blocks() {
-			bl.AddView(BlockID(prevBloc.Id))
+			bl.AddView(block.BlockID(prevBloc.Id))
 		}
 		l.AddBlock(bl)
 	}
@@ -131,9 +132,9 @@ func TestForEachInView_InMem(t *testing.T) {
 }
 
 func testForeachInView(mdb *MeshDB, t *testing.T) {
-	blocks := make(map[BlockID]*Block)
+	blocks := make(map[block.BlockID]*block.Block)
 	l := GenesisLayer()
-	gen := l.blocks[0]
+	gen := l.Blocks()[0]
 	blocks[gen.ID()] = gen
 
 	if err := mdb.AddBlock(gen); err != nil {
@@ -141,15 +142,15 @@ func testForeachInView(mdb *MeshDB, t *testing.T) {
 	}
 
 	for i := 0; i < 4; i++ {
-		lyr := createLayerWithRandVoting(l.Index()+1, []*Layer{l}, 2, 2)
+		lyr := createLayerWithRandVoting(l.Index()+1, []*block.Layer{l}, 2, 2)
 		for _, b := range lyr.Blocks() {
 			blocks[b.ID()] = b
 			mdb.AddBlock(b)
 		}
 		l = lyr
 	}
-	mp := map[BlockID]struct{}{}
-	foo := func(nb *BlockHeader) error {
+	mp := map[block.BlockID]struct{}{}
+	foo := func(nb *block.BlockHeader) error {
 		fmt.Println("process block", "layer", nb.Id, nb.LayerIndex)
 		mp[nb.Id] = struct{}{}
 		return nil
@@ -157,7 +158,7 @@ func testForeachInView(mdb *MeshDB, t *testing.T) {
 	errHandler := func(err error) {
 		log.Error("error while traversing view ", err)
 	}
-	ids := map[BlockID]struct{}{}
+	ids := map[block.BlockID]struct{}{}
 	for _, b := range l.Blocks() {
 		ids[b.Id] = struct{}{}
 	}

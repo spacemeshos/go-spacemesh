@@ -3,6 +3,7 @@ package node
 import (
 	"fmt"
 	"github.com/seehuhn/mt19937"
+	"github.com/spacemeshos/go-spacemesh/activation"
 	apiCfg "github.com/spacemeshos/go-spacemesh/api/config"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common"
@@ -285,7 +286,8 @@ func (app *SpacemeshApp) initServices(instanceName string, swarm service.Service
 		return err
 	}
 
-	atxdb := mesh.NewActivationDb(atxdbstore)
+	//todo: put in config
+	atxdb := activation.NewActivationDb(atxdbstore, mdb, 1000)
 	msh := mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, processor, lg.WithName("mesh")) //todo: what to do with the logger?
 
 	conf := sync.Configuration{SyncInterval: 1 * time.Second, Concurrency: 4, LayerSize: int(layerSize), RequestTimeout: 100 * time.Millisecond}

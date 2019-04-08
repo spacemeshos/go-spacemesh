@@ -1,10 +1,11 @@
-package mesh
+package block
 
 import (
 	"bytes"
 	"fmt"
 	"github.com/davecgh/go-xdr/xdr2"
 	"github.com/spacemeshos/go-spacemesh/address"
+	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"math/big"
 	"time"
@@ -13,6 +14,23 @@ import (
 type BlockID uint64
 type LayerID uint64
 type TransactionId []byte
+
+//todo: choose which type is VRF
+type Vrf string
+
+
+type NodeId struct {
+	Key string
+	Vrf Vrf
+}
+
+func (id NodeId) String() string {
+	return id.Key + string(id.Vrf)
+}
+
+func (id NodeId) ToBytes() []byte {
+	return common.Hex2Bytes(id.String())
+}
 
 type BlockHeader struct {
 	Id         BlockID

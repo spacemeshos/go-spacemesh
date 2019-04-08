@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"github.com/spacemeshos/go-spacemesh/block"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -25,12 +26,12 @@ type BlockListener struct {
 	log.Log
 	bufferSize           int
 	semaphore            chan struct{}
-	unknownQueue         chan mesh.BlockID //todo consider benefits of changing to stack
+	unknownQueue         chan block.BlockID //todo consider benefits of changing to stack
 	receivedGossipBlocks chan service.GossipMessage
 	startLock            uint32
 	timeout              time.Duration
 	exit                 chan struct{}
-	tick                 chan mesh.LayerID
+	tick                 chan block.LayerID
 }
 
 type TickProvider interface {
@@ -49,7 +50,7 @@ func (bl *BlockListener) Start() {
 	}
 }
 
-func (bl *BlockListener) OnNewBlock(b *mesh.Block) {
+func (bl *BlockListener) OnNewBlock(b *block.Block) {
 	bl.addUnknownToQueue(b)
 }
 
@@ -62,7 +63,7 @@ func NewBlockListener(net service.Service, bv BlockValidator, layers *mesh.Mesh,
 		MessageServer:        server.NewMsgServer(net.(server.Service), BlockProtocol, timeout, make(chan service.DirectMessage, config.ConfigValues.BufferSize), logger),
 		Log:                  logger,
 		semaphore:            make(chan struct{}, concurrency),
-		unknownQueue:         make(chan mesh.BlockID, 200), //todo tune buffer size + get buffer from config
+		unknownQueue:         make(chan block.BlockID, 200), //todo tune buffer size + get buffer from config
 		exit:                 make(chan struct{}),
 		receivedGossipBlocks: net.RegisterGossipProtocol(NewBlockProtocol),
 	}
@@ -84,7 +85,7 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 				break
 			}
 
-			blk, err := mesh.BytesAsBlock(data.Bytes())
+			blk, err := block.BytesAsBlock(data.Bytes())
 			if err != nil {
 				bl.Error("received invalid block %v", data.Bytes()[:7])
 				data.ReportValidation(NewBlockProtocol, false)
@@ -127,7 +128,7 @@ func (bl *BlockListener) run() {
 }
 
 //todo handle case where no peer knows the block
-func (bl *BlockListener) FetchBlock(id mesh.BlockID) {
+func (bl *BlockListener) FetchBlock(id block.BlockID) {
 	for _, p := range bl.GetPeers() {
 		if ch, err := sendBlockRequest(bl.MessageServer, p, id, bl.Log); err == nil {
 			if b := <-ch; b != nil && bl.BlockEligible(b.LayerIndex, b.MinerID) {
@@ -139,7 +140,7 @@ func (bl *BlockListener) FetchBlock(id mesh.BlockID) {
 	}
 }
 
-func (bl *BlockListener) addUnknownToQueue(b *mesh.Block) {
+func (bl *BlockListener) addUnknownToQueue(b *block.Block) {
 	for _, block := range b.ViewEdges {
 		//if unknown block
 		if _, err := bl.GetBlock(block); err != nil {
