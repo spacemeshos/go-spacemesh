@@ -52,12 +52,21 @@ func NewBuilder(nodeId block.NodeId, db database.DB, meshdb *mesh.MeshDB, net Br
 }
 
 func (b *Builder) PublishActivationTx(nipst *nipst.NIPST) error {
-	seq := b.GetLastSequence(b.nodeId)
+	var seq uint64
 	prevAtx, err := b.GetPrevAtxId(b.nodeId)
-	if seq > 0 && err != nil {
-		log.Error("cannot find prev ATX for nodeid %v ", b.nodeId)
-		return err
+	if prevAtx == nil {
+		log.Info("previous ATX not found")
+		prevAtx = &block.EmptyAtx
+		seq = 0
+	} else  {
+		seq = b.GetLastSequence(b.nodeId)
+		if seq > 0 && prevAtx == nil {
+			log.Error("cannot find prev ATX for nodeid %v ", b.nodeId)
+			return err
+		}
+		seq++
 	}
+
 	l := b.mesh.LatestLayerId()
 	ech := b.epochProvider.Epoch(l)
 	var posAtx *block.AtxId = nil
@@ -70,12 +79,9 @@ func (b *Builder) PublishActivationTx(nipst *nipst.NIPST) error {
 		posAtx = &block.EmptyAtx
 	}
 
-	if prevAtx == nil {
-		log.Info("previous ATX not found")
-		prevAtx = &block.EmptyAtx
-	}
 
-	atx := block.NewActivationTx(b.nodeId, seq+1, *prevAtx, l, 0, *posAtx, b.activeSet.GetActiveSetSize(l-1), b.mesh.GetLatestView(), nipst)
+
+	atx := block.NewActivationTx(b.nodeId, seq, *prevAtx, l, 0, *posAtx, b.activeSet.GetActiveSetSize(l-1), b.mesh.GetLatestView(), nipst)
 
 	buf, err := block.AtxAsBytes(atx)
 	if err != nil {

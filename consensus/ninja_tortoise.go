@@ -211,30 +211,30 @@ func globalOpinion(v vec, layerSize uint64, delta float64) vec {
 }
 
 func (ni *ninjaTortoise) updateCorrectionVectors(p votingPattern, bottomOfWindow block.LayerID) {
-	foo := func(x *block.BlockHeader) error {
+	traversalFunc := func(blk *block.BlockHeader) error {
 		for _, bid := range ni.tEffectiveToBlocks[p] { //for all b who's effective vote is p
 			b, err := ni.GetBlock(bid)
 			if err != nil {
 				panic(fmt.Sprintf("error block not found ID %d", bid))
 			}
 
-			if _, found := ni.tExplicit[b.Id][x.Layer()]; found { //if Texplicit[b][x]!=0 check correctness of x.layer and found
+			if _, found := ni.tExplicit[b.Id][blk.Layer()]; found { //if Texplicit[b][blk]!=0 check correctness of blk.layer and found
 				ni.Debug(" blocks pattern %d block %d layer %d", p, b.ID(), b.Layer())
 				if _, found := ni.tCorrect[b.Id]; !found {
 					ni.tCorrect[b.Id] = make(map[block.BlockID]vec)
 				}
-				vo := ni.tVote[p][x.ID()]
-				ni.Debug("vote from pattern %d to block %d layer %d vote %d ", p, x.ID(), x.Layer(), vo)
-				ni.tCorrect[b.Id][x.ID()] = vo.Negate() //Tcorrect[b][x] = -Tvote[p][x]
-				ni.Debug("update correction vector for block %d layer %d , pattern %d vote %d for block %d ", b.ID(), b.Layer(), p, ni.tCorrect[b.Id][x.ID()], x.ID())
+				vo := ni.tVote[p][blk.ID()]
+				ni.Debug("vote from pattern %d to block %d layer %d vote %d ", p, blk.ID(), blk.Layer(), vo)
+				ni.tCorrect[b.Id][blk.ID()] = vo.Negate() //Tcorrect[b][blk] = -Tvote[p][blk]
+				ni.Debug("update correction vector for block %d layer %d , pattern %d vote %d for block %d ", b.ID(), b.Layer(), p, ni.tCorrect[b.Id][blk.ID()], blk.ID())
 			} else {
-				ni.Debug("block %d from layer %d dose'nt explicitly vote for layer %d", b.ID(), b.Layer(), x.Layer())
+				ni.Debug("block %d from layer %d dose'nt explicitly vote for layer %d", b.ID(), b.Layer(), blk.Layer())
 			}
 		}
 		return nil
 	}
 
-	ni.ForBlockInView(ni.tPattern[p], bottomOfWindow, foo, func(err error) {})
+	ni.ForBlockInView(ni.tPattern[p], bottomOfWindow, traversalFunc, func(err error) {})
 }
 
 func (ni *ninjaTortoise) updatePatternTally(newMinGood votingPattern, botomOfWindow block.LayerID, correctionMap map[block.BlockID]vec, effCountMap map[block.LayerID]int) {
@@ -461,7 +461,7 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *block.Layer) { //i most rec
 			view := make(map[block.BlockID]struct{})
 			lCntr := make(map[block.LayerID]int)
 			correctionMap, effCountMap, getCrrEffCnt := ni.getCorrEffCounter()
-			foo := func(block *block.BlockHeader) error {
+			traversalFunc := func(block *block.BlockHeader) error {
 				view[block.ID()] = struct{}{} //all blocks in view
 				for _, id := range block.BlockVotes {
 					view[id] = struct{}{}
@@ -471,7 +471,7 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *block.Layer) { //i most rec
 				return nil
 			}
 
-			ni.ForBlockInView(ni.tPattern[p], ni.pBase.Layer()+1, foo, func(err error) {})
+			ni.ForBlockInView(ni.tPattern[p], ni.pBase.Layer()+1, traversalFunc, func(err error) {})
 
 			//add corrected implicit votes
 			ni.updatePatternTally(p, windowStart, correctionMap, effCountMap)
