@@ -34,13 +34,14 @@ def load_config():
 @pytest.fixture(scope='session')
 def set_namespace(request, load_config):
 
+    v1 = client.CoreV1Api()
+
     def _setup_namespace():
         k8s_namespace = os.getenv('K8S_NAMESPACE', '')
         if k8s_namespace != '':
             testconfig['namespace'] = k8s_namespace
 
         print("Run tests in namespace: {0}".format(testconfig['namespace']))
-        v1 = client.CoreV1Api()
         namespaces_list = [ns.metadata.name for ns in v1.list_namespace().items]
         if testconfig['namespace'] in namespaces_list:
             return
@@ -50,7 +51,6 @@ def set_namespace(request, load_config):
         v1.create_namespace(body)
 
     def fin():
-        v1 = client.CoreV1Api()
         v1.delete_namespace(name=testconfig['namespace'], body=client.V1DeleteOptions())
 
     request.addfinalizer(fin)
