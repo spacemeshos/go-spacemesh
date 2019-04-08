@@ -7,7 +7,6 @@ from kubernetes import client
 from pytest_testconfig import config as testconfig
 
 
-
 class DeploymentInfo():
     def __init__(self, dep_id=None):
         self.deployment_name = ''
@@ -29,6 +28,15 @@ def load_config():
         config.load_kube_config(kube_config_path)
     else:
         raise Exception("KUBECONFIG file not found: {0}".format(kube_config_path))
+
+
+@pytest.fixture(scope='session')
+def set_docker_images():
+    docker_image = os.getenv('CLIENT_DOCKER_IMAGE', '')
+    if docker_image:
+        print("Set docker images to: {0}".format(docker_image))
+        testconfig['bootstrap']['image'] = docker_image
+        testconfig['client']['image'] = docker_image
 
 
 @pytest.fixture(scope='session')
@@ -56,6 +64,9 @@ def set_namespace(request, load_config):
     request.addfinalizer(fin)
     return _setup_namespace()
 
+@pytest.fixture(scope='session')
+def init_session(request, load_config, set_namespace, set_docker_images):
+    pass
 
 @pytest.fixture(scope='module')
 def bootstrap_deployment_info():

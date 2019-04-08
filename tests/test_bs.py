@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 
-from tests.fixtures import load_config, bootstrap_deployment_info, client_deployment_info, set_namespace
+from tests.fixtures import load_config, bootstrap_deployment_info, client_deployment_info
+from tests.fixtures import init_session, set_namespace, set_docker_images
 import os
 from os import path
 import pytest
@@ -170,7 +171,7 @@ def setup_oracle(request):
 
 
 @pytest.fixture(scope='module')
-def setup_bootstrap(request, load_config, setup_oracle, create_configmap, bootstrap_deployment_info):
+def setup_bootstrap(request, init_session, setup_oracle, create_configmap, bootstrap_deployment_info):
     def _setup_bootstrap_in_namespace(name_space):
         bootstrap_args = {} if 'args' not in testconfig['bootstrap'] else testconfig['bootstrap']['args']
 
