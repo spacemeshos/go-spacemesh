@@ -2,7 +2,6 @@ package sync
 
 import (
 	"errors"
-	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/block"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -204,7 +203,7 @@ func sendBlockRequest(msgServ *server.MessageServer, peer p2p.Peer, id block.Blo
 	foo := func(msg []byte) {
 		defer close(ch)
 		logger.Info("handle block response")
-		block, err := mesh.BytesAsBlock(msg)
+		block, err := block.BytesAsBlock(msg)
 		if err != nil {
 			logger.Error("could not unmarshal block data")
 			return
@@ -349,7 +348,7 @@ func (s *Syncer) sendLayerBlockIDsRequest(peer p2p.Peer, idx block.LayerID) (cha
 	ch := make(chan []block.BlockID)
 	foo := func(msg []byte) {
 		defer close(ch)
-		ids, err := mesh.BytesToBlockIds(msg)
+		ids, err := block.BytesToBlockIds(msg)
 		if err != nil {
 			s.Error("could not unmarshal mesh.LayerIDs response")
 			return
@@ -369,19 +368,19 @@ func newBlockRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg []byte) 
 	return func(msg []byte) []byte {
 		logger.Debug("handle block request")
 		blockid := block.BlockID(common.BytesToUint64(msg))
-		block, err := layers.GetBlock(blockid)
+		blk, err := layers.GetBlock(blockid)
 		if err != nil {
 			logger.Error("Error handling Block request message, with BlockID: %d and err: %v", blockid, err)
 			return nil
 		}
 
-		bbytes, err := mesh.BlockAsBytes(*block)
+		bbytes, err := block.BlockAsBytes(*blk)
 		if err != nil {
-			logger.Error("Error marshaling response message (FetchBlockResp), with BlockID: %d, LayerID: %d and err:", block.ID(), block.Layer(), err)
+			logger.Error("Error marshaling response message (FetchBlockResp), with BlockID: %d, LayerID: %d and err:", blk.ID(), blk.Layer(), err)
 			return nil
 		}
 
-		logger.Debug("return block %v", block)
+		logger.Debug("return block %v", blk)
 
 		return bbytes
 	}
@@ -416,7 +415,7 @@ func newLayerBlockIdsRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg 
 			ids = append(ids, b.ID())
 		}
 
-		idbytes, err := mesh.BlockIdsAsBytes(ids)
+		idbytes, err := block.BlockIdsAsBytes(ids)
 		if err != nil {
 			logger.Error("Error marshaling response message, with blocks IDs: %v and error:", ids, err)
 			return nil

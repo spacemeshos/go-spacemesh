@@ -59,21 +59,9 @@ func SyncMockFactory(number int, conf Configuration, name string, dbType string)
 	return nodes, p2ps
 }
 
-type BlockValidatorMock struct {
-}
 
-func (BlockValidatorMock) BlockEligible(id block.LayerID, key string) bool {
-	return true
-}
 
-type MeshValidatorMock struct{}
 
-func (m *MeshValidatorMock) HandleIncomingLayer(layer *block.Layer) (block.LayerID, block.LayerID) {
-	return layer.Index() - 1, layer.Index()
-}
-func (m *MeshValidatorMock) HandleLateBlock(bl *block.Block)              {}
-func (m *MeshValidatorMock) RegisterLayerCallback(func(id block.LayerID)) {}
-func (mlg *MeshValidatorMock) ContextualValidity(id block.BlockID) bool   { return true }
 
 type stateMock struct{}
 
@@ -85,11 +73,7 @@ func (s *stateMock) ApplyTransactions(id block.LayerID, tx mesh.Transactions) (u
 	return 0, nil
 }
 
-type AtxDbMock struct {}
 
-func (AtxDbMock) ProcessBlockATXs(block *block.Block) {
-
-}
 
 var rewardConf = mesh.Config{
 	big.NewInt(10),

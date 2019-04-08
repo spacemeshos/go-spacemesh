@@ -176,7 +176,7 @@ func TestMesh_AccumulateRewards_underQuota(t *testing.T) {
 
 func createLayer(mesh *Mesh, id block.LayerID, numOfBlocks, maxTransactions int) (totalRewards int64) {
 	for i := 0; i < numOfBlocks; i++ {
-		block1 := NewExistingBlock(BlockID(uuid.New().ID()), id, []byte("data1"))
+		block1 := block.NewExistingBlock(block.BlockID(uuid.New().ID()), id, []byte("data1"))
 		block1.MinerID.Key = strconv.Itoa(i)
 		totalRewards += addTransactionsToBlock(block1, rand.Intn(maxTransactions))
 		mesh.AddBlock(block1)

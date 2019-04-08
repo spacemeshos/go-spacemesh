@@ -5,6 +5,7 @@ import (
 	"github.com/seehuhn/mt19937"
 	"github.com/spacemeshos/go-spacemesh/activation"
 	apiCfg "github.com/spacemeshos/go-spacemesh/api/config"
+	"github.com/spacemeshos/go-spacemesh/block"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/consensus"
@@ -297,7 +298,7 @@ func (app *SpacemeshApp) initServices(instanceName string, swarm service.Service
 
 	ha := hare.New(app.Config.HARE, swarm, sgn, msh, hareOracle, clock.Subscribe(), lg.WithName("hare"))
 
-	nodeID := mesh.NodeId{Key: instanceName} // TODO: where does this come from?
+	nodeID := block.NodeId{Key: instanceName} // TODO: where does this come from?
 	blockProducer := miner.NewBlockBuilder(nodeID, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, lg.WithName("blockProducer"))
 	blockListener := sync.NewBlockListener(swarm, blockValidator, msh, 2*time.Second, 4, lg.WithName("blockListener"))
 
@@ -388,7 +389,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	activationDb := &activation.ActivationDb{}      // TODO: initialize properly
 	beaconProvider := &oracle.EpochBeaconProvider{} // TODO: initialize properly
 	vrfSigner := crypto.NewVRFSigner(nil)           // TODO: use VRF private key
-	nodeID := mesh.NodeId{Key: "x"}
+	nodeID := block.NodeId{Key: "x"}
 	bo := oracle.NewMinerBlockOracle(nodesPerLayer, layersPerEpoch, activationDb, beaconProvider, vrfSigner, nodeID)
 	hareOracle := oracle.NewHareOracleFromClient(oracleClient)
 

@@ -16,7 +16,7 @@ import (
 func createLayerWithAtx(msh *mesh.Mesh, id block.LayerID, numOfBlocks int, atxs []*block.ActivationTx, votes []block.BlockID, views []block.BlockID) (created []block.BlockID) {
 	for i := 0; i < numOfBlocks; i++ {
 		block1 := block.NewExistingBlock(block.BlockID(uuid.New().ID()), id, []byte("data1"))
-		block1.MinerID = strconv.Itoa(i)
+		block1.MinerID.Key = strconv.Itoa(i)
 		block1.ATXs = append(block1.ATXs, atxs...)
 		block1.BlockVotes = append(block1.BlockVotes, votes...)
 		block1.ViewEdges = append(block1.ViewEdges, views...)
@@ -98,7 +98,7 @@ func Test_CalcActiveSetFromView(t *testing.T) {
 	}
 
 	block2 := block.NewExistingBlock(block.BlockID(uuid.New().ID()), 1200, []byte("data1"))
-	block2.MinerID = strconv.Itoa(1)
+	block2.MinerID.Key = strconv.Itoa(1)
 	block2.ATXs = append(block2.ATXs, atxs2...)
 	block2.ViewEdges = blocks
 	layers.AddBlock(block2)
@@ -145,7 +145,7 @@ func TestMesh_processBlockATXs(t *testing.T) {
 	}
 
 	block1 := block.NewExistingBlock(block.BlockID(uuid.New().ID()), 1, []byte("data1"))
-	block1.MinerID = strconv.Itoa(1)
+	block1.MinerID.Key = strconv.Itoa(1)
 	block1.ATXs = append(block1.ATXs, atxs...)
 
 	atxdb.ProcessBlockATXs(block1)
@@ -159,7 +159,7 @@ func TestMesh_processBlockATXs(t *testing.T) {
 	}
 
 	block2 := block.NewExistingBlock(block.BlockID(uuid.New().ID()), 2000, []byte("data1"))
-	block2.MinerID = strconv.Itoa(1)
+	block2.MinerID.Key = strconv.Itoa(1)
 	block2.ATXs = append(block1.ATXs, atxs2...)
 	atxdb.ProcessBlockATXs(block2)
 

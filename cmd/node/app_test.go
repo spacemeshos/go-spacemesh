@@ -55,7 +55,7 @@ func (app *AppTestSuite) initMultipleInstances(t *testing.T, numOfInstances int,
 
 		sgn := hare.NewMockSigning() //todo: shouldn't be any mock code here
 		pub := sgn.Verifier()
-		bo := oracle.NewLocalOracle(numOfInstances, mesh.NodeId{Key: pub.String()})
+		bo := oracle.NewLocalOracle(numOfInstances, block.NodeId{Key: pub.String()})
 		bo.Register(true, pub.String())
 
 		err := app.apps[i].initServices(pub.String(), n, store, sgn, bo, nil, bo, numOfInstances) // TODO: pass blockValidator and hareOracle

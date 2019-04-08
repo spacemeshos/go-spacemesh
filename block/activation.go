@@ -64,7 +64,7 @@ func (t ActivationTx) Id() AtxId {
 	return AtxId{crypto.Keccak256Hash(tx)}
 }
 
-func (t ActivationTx) Valid() bool {
+func (t ActivationTx) Validate() error {
 	//todo: implement
-	return true
+	return nil
 }

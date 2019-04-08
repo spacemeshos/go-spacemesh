@@ -104,9 +104,9 @@ func TestBlockBuilder_BlockIdGeneration(t *testing.T) {
 	hareRes := []block.BlockID{block.BlockID(0), block.BlockID(1), block.BlockID(2), block.BlockID(3)}
 	hare := MockHare{res: hareRes}
 
-	builder1 := NewBlockBuilder(block.NodeId{Key: "a"}, n1, beginRound, MockCoin{}, MockOrphans{st: []mesh.BlockID{1, 2, 3}}, hare,
+	builder1 := NewBlockBuilder(block.NodeId{Key: "a"}, n1, beginRound, MockCoin{}, MockOrphans{st: []block.BlockID{1, 2, 3}}, hare,
 		mockBlockOracle{}, log.New(n1.Node.String(), "", ""))
-	builder2 := NewBlockBuilder(block.NodeId{Key: "b"}, n2, beginRound, MockCoin{}, MockOrphans{st: []mesh.BlockID{1, 2, 3}}, hare,
+	builder2 := NewBlockBuilder(block.NodeId{Key: "b"}, n2, beginRound, MockCoin{}, MockOrphans{st: []block.BlockID{1, 2, 3}}, hare,
 		mockBlockOracle{}, log.New(n2.Node.String(), "", ""))
 
 	b1, _ := builder1.createBlock(1, nil, nil)
@@ -125,7 +125,7 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 	hareRes := []block.BlockID{block.BlockID(0), block.BlockID(1), block.BlockID(2), block.BlockID(3)}
 	hare := MockHare{res: hareRes}
 
-	builder := NewBlockBuilder(block.NodeId{}, n, beginRound, MockCoin{}, MockOrphans{st: []mesh.BlockID{1, 2, 3}}, hare,
+	builder := NewBlockBuilder(block.NodeId{}, n, beginRound, MockCoin{}, MockOrphans{st: []block.BlockID{1, 2, 3}}, hare,
 		mockBlockOracle{}, log.New(n.Node.String(), "", ""))
 
 	err := builder.Start()

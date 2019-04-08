@@ -71,7 +71,7 @@ func (m *ActivationDb) CalcActiveSetFromView(a *block.ActivationTx) (uint32, err
 				continue
 			}
 			set[atx.Id()] = struct{}{}
-			if atx.Valid() {
+			if atx.Validate() == nil {
 				counter++
 				if counter >= a.ActiveSetSize {
 					return io.EOF
@@ -117,7 +117,7 @@ func (db *ActivationDb) StoreAtx(ech block.EpochId, atx *block.ActivationTx) err
 	if err != nil {
 		return err
 	}
-	if atx.Valid() {
+	if atx.Validate() == nil {
 		db.incValidAtxCounter(ech)
 	}
 	err = db.addAtxToNodeId(atx.NodeId, atx.Id())
