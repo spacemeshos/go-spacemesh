@@ -9,16 +9,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/nipst"
 )
 
-//todo: choose which type is VRF
-type Vrf string
-
 type NodeId struct {
-	Key string
-	Vrf Vrf
+	Key          string
+	VRFPublicKey []byte
 }
 
 func (id NodeId) String() string {
-	return id.Key + string(id.Vrf)
+	return id.Key + string(id.VRFPublicKey)
 }
 
 func (id NodeId) ToBytes() []byte {
@@ -74,6 +71,10 @@ func (t ActivationTx) Id() AtxId {
 	}
 
 	return AtxId{crypto.Keccak256Hash(tx)}
+}
+
+func (t ActivationTx) Validate() error {
+	return nil // TODO: implement
 }
 
 func AtxHeaderAsBytes(tx *ActivationTxHeader) ([]byte, error) {

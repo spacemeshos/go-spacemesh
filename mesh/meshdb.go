@@ -134,7 +134,7 @@ func (m *MeshDB) LayerBlockIds(index LayerID) ([]BlockID, error) {
 	}
 
 	blockids := make([]BlockID, 0, len(idSet))
-	for k := range idSet {
+	for _, k := range idSet {
 		blockids = append(blockids, k)
 	}
 
@@ -192,7 +192,7 @@ func (mc *MeshDB) ForBlockInView(view map[BlockID]struct{}, layer LayerID, block
 	return
 }
 
-func (m *MeshDB) layerBlockIds(index LayerID) (map[BlockID]bool, error) {
+func (m *MeshDB) layerBlockIds(index LayerID) ([]BlockID, error) {
 
 	ids, err := m.layers.Get(index.ToBytes())
 	if err != nil {
@@ -203,7 +203,7 @@ func (m *MeshDB) layerBlockIds(index LayerID) (map[BlockID]bool, error) {
 		return nil, fmt.Errorf("no ids for layer %v in database ", index)
 	}
 
-	idSet, err := bytesToBlockIds(ids)
+	idSet, err := BytesToBlockIds(ids)
 	if err != nil {
 		return nil, errors.New("could not get all blocks from database ")
 	}
@@ -274,20 +274,19 @@ func (m *MeshDB) updateLayerWithBlock(block *Block) error {
 	lm.m.Lock()
 	defer lm.m.Unlock()
 	ids, err := m.layers.Get(block.LayerIndex.ToBytes())
-	var blockIds map[BlockID]bool
+	var blockIds []BlockID
 	if err != nil {
 		//layer doesnt exist, need to insert new layer
-		ids = []byte{}
-		blockIds = make(map[BlockID]bool)
+		blockIds = make([]BlockID, 0, 1)
 	} else {
-		blockIds, err = bytesToBlockIds(ids)
+		blockIds, err = BytesToBlockIds(ids)
 		if err != nil {
 			return errors.New("could not get all blocks from database ")
 		}
 	}
 	m.Debug("added block %v to layer %v", block.ID(), block.LayerIndex)
-	blockIds[block.ID()] = true
-	w, err := blockIdsAsBytes(blockIds)
+	blockIds = append(blockIds, block.ID())
+	w, err := BlockIdsAsBytes(blockIds)
 	if err != nil {
 		return errors.New("could not encode layer block ids")
 	}
@@ -295,10 +294,10 @@ func (m *MeshDB) updateLayerWithBlock(block *Block) error {
 	return nil
 }
 
-func (m *MeshDB) getLayerBlocks(ids map[BlockID]bool) ([]*Block, error) {
+func (m *MeshDB) getLayerBlocks(ids []BlockID) ([]*Block, error) {
 
 	blocks := make([]*Block, 0, len(ids))
-	for k := range ids {
+	for _, k := range ids {
 		block, err := m.GetBlock(k)
 		if err != nil {
 			return nil, errors.New("could not retrieve block " + fmt.Sprint(k) + " " + err.Error())

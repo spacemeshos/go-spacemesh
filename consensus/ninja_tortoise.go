@@ -374,8 +374,6 @@ func sumNodesInView(layerBlockCounter map[mesh.LayerID]int, layer mesh.LayerID, 
 func (ni *ninjaTortoise) processBlocks(layer *mesh.Layer) {
 	for _, block := range layer.Blocks() {
 		ni.processBlock(block)
-		//ni.blocks[block.ID()] = block
-		//ni.layerBlocks[layer.Index()] = append(ni.layerBlocks[layer.Index()], block.ID())
 	}
 
 }
