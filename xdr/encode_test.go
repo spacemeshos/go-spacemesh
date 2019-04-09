@@ -91,43 +91,40 @@ var encTests = []encTest{
 	{val: uint64(0xFFFFFFFFFFFFFFFF), output: "FFFFFFFFFFFFFFFF"},
 
 	// big integers (should match uint for small values)
-	{val: big.NewInt(0), output: "80"},
-	{val: big.NewInt(1), output: "01"},
-	{val: big.NewInt(127), output: "7F"},
-	{val: big.NewInt(128), output: "8180"},
-	{val: big.NewInt(256), output: "820100"},
-	{val: big.NewInt(1024), output: "820400"},
-	{val: big.NewInt(0xFFFFFF), output: "83FFFFFF"},
-	{val: big.NewInt(0xFFFFFFFF), output: "84FFFFFFFF"},
-	{val: big.NewInt(0xFFFFFFFFFF), output: "85FFFFFFFFFF"},
-	{val: big.NewInt(0xFFFFFFFFFFFF), output: "86FFFFFFFFFFFF"},
-	{val: big.NewInt(0xFFFFFFFFFFFFFF), output: "87FFFFFFFFFFFFFF"},
+	{val: big.NewInt(0), output: "00000000"},
+	{val: big.NewInt(1), output: "0000000101000000"},
+	{val: big.NewInt(127), output: "000000017F000000"},
+	{val: big.NewInt(128), output: "0000000180000000"},
+	{val: big.NewInt(256), output: "0000000201000000"},
+	{val: big.NewInt(1024), output: "0000000204000000"},
+	{val: big.NewInt(0xFFFFFF), output: "00000003FFFFFF00"},
+	{val: big.NewInt(0xFFFFFFFF), output: "00000004FFFFFFFF"},
+	{val: big.NewInt(0xFFFFFFFFFF), output: "00000005FFFFFFFFFF000000"},
+	{val: big.NewInt(0xFFFFFFFFFFFF), output: "00000006FFFFFFFFFFFF0000"},
+	{val: big.NewInt(0xFFFFFFFFFFFFFF), output: "00000007FFFFFFFFFFFFFF00"},
 	{
 		val:    big.NewInt(0).SetBytes(unhex("102030405060708090A0B0C0D0E0F2")),
-		output: "8F102030405060708090A0B0C0D0E0F2",
+		output: "0000000F102030405060708090A0B0C0D0E0F200",
 	},
 	{
 		val:    big.NewInt(0).SetBytes(unhex("0100020003000400050006000700080009000A000B000C000D000E01")),
-		output: "9C0100020003000400050006000700080009000A000B000C000D000E01",
+		output: "0000001C0100020003000400050006000700080009000A000B000C000D000E01",
 	},
 	{
 		val:    big.NewInt(0).SetBytes(unhex("010000000000000000000000000000000000000000000000000000000000000000")),
-		output: "A1010000000000000000000000000000000000000000000000000000000000000000",
+		output: "00000021010000000000000000000000000000000000000000000000000000000000000000000000",
 	},
 
 	// non-pointer big.Int
-	{val: *big.NewInt(0), output: "80"},
-	{val: *big.NewInt(0xFFFFFF), output: "83FFFFFF"},
-
-	// negative ints are not supported
-	{val: big.NewInt(-1), error: "rlp: cannot encode negative *big.Int"},
+	{val: *big.NewInt(0), output: "00000000"},
+	{val: *big.NewInt(0xFFFFFF), output: "00000003FFFFFF00"},
 
 	// byte slices, strings
-	{val: []byte{}, output: "80"},
-	{val: []byte{0x7E}, output: "7E"},
-	{val: []byte{0x7F}, output: "7F"},
-	{val: []byte{0x80}, output: "8180"},
-	{val: []byte{1, 2, 3}, output: "83010203"},
+	{val: []byte{}, output: "00000000"},
+	{val: []byte{0x7E}, output: "000000017E000000"},
+	{val: []byte{0x7F}, output: "000000017F000000"},
+	{val: []byte{0x80}, output: "0000000180000000"},
+	{val: []byte{1, 2, 3}, output: "0000000301020300"},
 
 	{val: []namedByteType{1, 2, 3}, output: "83010203"},
 	{val: [...]namedByteType{1, 2, 3}, output: "83010203"},
@@ -277,7 +274,9 @@ func TestEncode(t *testing.T) {
 	runEncTests(t, func(val interface{}) ([]byte, error) {
 		b := new(bytes.Buffer) // Initialize buffer
 
-		err := Encode(b, val) // Encode
+		fmt.Println(val)
+
+		err := Marshal(b, val) // Encode
 
 		return b.Bytes(), err // Return encoded
 	})
