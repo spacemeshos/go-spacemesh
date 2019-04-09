@@ -173,7 +173,7 @@ func newTestMessageData(t testing.TB, authPubkey p2pcrypto.PublicKey, payload []
 			ClientVersion: protocolVer,
 			AuthPubkey:    authPubkey.Bytes(),
 		},
-		Data: &pb.ProtocolMessage_Payload{payload},
+		Payload: &pb.Payload{Data:&pb.Payload_Payload{payload}},
 	}
 
 	return makePayload(t, pm).Bytes(), pm
@@ -240,7 +240,7 @@ func TestNeighborhood_Relay(t *testing.T) {
 			ClientVersion: protocolVer,
 			AuthPubkey:    newPubkey(t).Bytes(),
 		},
-		Data: &pb.ProtocolMessage_Payload{[]byte("LOL")},
+		Payload: &pb.Payload{Data: &pb.Payload_Payload{[]byte("LOL")}},
 	}
 
 	payload := makePayload(t, pm)

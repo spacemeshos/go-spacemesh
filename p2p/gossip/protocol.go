@@ -196,7 +196,7 @@ func (prot *Protocol) propagateMessage(payload []byte, h hash, nextProt string) 
 
 	msg := &pb.ProtocolMessage{
 		Metadata: header,
-		Data:     &pb.ProtocolMessage_Payload{Payload: payload},
+		Payload:  &pb.Payload{Data: &pb.Payload_Payload{payload}},
 	}
 
 	data, err := proto.Marshal(msg)
@@ -232,9 +232,10 @@ func (prot *Protocol) Broadcast(payload []byte, nextProt string) error {
 		AuthPubkey:    prot.localNodePubkey.Bytes(), // TODO: @noam consider replacing this with another reply mechanism
 	}
 
+	fmt.Println("PAYLOAD : ", payload)
 	msg := &pb.ProtocolMessage{
 		Metadata: header,
-		Data:     &pb.ProtocolMessage_Payload{Payload: payload},
+		Payload:  &pb.Payload{Data: &pb.Payload_Payload{payload}},
 	}
 
 	prot.processMessage(msg)
@@ -261,15 +262,16 @@ func (prot *Protocol) removePeer(peer p2pcrypto.PublicKey) {
 }
 
 func (prot *Protocol) processMessage(msg *pb.ProtocolMessage) {
-	var data service.Data
-	if payload := msg.GetPayload(); payload != nil {
-		data = service.DataBytes{Payload: payload}
-	} else if wrap := msg.GetMsg(); wrap != nil {
+	fmt.Println("############ WTF ", msg.Payload)
+	data, err := pb.ExtractData(msg.Payload)
+	if err != nil {
+		prot.Log.Warning("could'nt extract payload from message err=", err)
+	} else if _, ok := data.(*service.DataMsgWrapper); ok {
 		prot.Log.Warning("unexpected usage of request-response framework over Gossip - WAS IT IN PURPOSE? ")
-		data = &service.DataMsgWrapper{Req: wrap.Req, MsgType: wrap.Type, ReqID: wrap.ReqID, Payload: wrap.Payload}
 	}
 
 	protocol := msg.Metadata.NextProtocol
+	fmt.Printf("############# CALCING %v proto with %v ############\r\n", protocol, data.Bytes())
 	h := calcHash(data.Bytes(), protocol)
 
 	isOld := prot.markMessageAsOld(h)

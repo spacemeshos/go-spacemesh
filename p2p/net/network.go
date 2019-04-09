@@ -13,7 +13,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/version"
 	"net"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 )
@@ -356,14 +355,8 @@ func (n *Net) HandlePreSessionIncomingMessage(c Connection, message []byte) erro
 }
 
 func verifyNetworkIDAndClientVersion(networkID int8, handshakeData *pb.HandshakeData) error {
-	// check that received clientversion is valid client string
-	reqVersion := strings.Split(handshakeData.ClientVersion, "/")
-	if len(reqVersion) != 2 {
-		return errors.New("invalid client version")
-	}
-
 	// compare that version to the min client version in config
-	ok, err := version.CheckNodeVersion(reqVersion[1], config.MinClientVersion)
+	ok, err := version.CheckNodeVersion(handshakeData.ClientVersion, config.MinClientVersion)
 	if err == nil && !ok {
 		return errors.New("unsupported client version")
 	}

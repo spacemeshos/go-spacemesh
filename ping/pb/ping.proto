@@ -4,6 +4,9 @@ package pb;
 option go_package = "pb";
 
 message Ping {
-	bytes ID = 1;
-	string listenAddress = 2;
+	int32 NetworkID = 1;
+	string ClientVersion = 2;
+	bytes ID = 3;
+	string ListenAddress = 4; // maybe break to IP-Port
+	string ToAddr = 5;
 }

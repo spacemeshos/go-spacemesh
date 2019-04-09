@@ -1,9 +1,7 @@
 package net
 
 import (
-	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"net"
 
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -16,6 +14,7 @@ const maxMessageSize = 2048
 
 // UDPMessageEvent is an event about a udp message. passed through a channel
 type UDPMessageEvent struct {
+	From     p2pcrypto.PublicKey
 	FromAddr net.Addr
 	Message  []byte
 }
@@ -90,47 +89,9 @@ func newUDPListener(listenAddress *net.UDPAddr) (*net.UDPConn, error) {
 
 var IPv4LoopbackAddress = net.IP{127, 0, 0, 1}
 
-func (n *UDPNet) initSession(to string, remote p2pcrypto.PublicKey) (NetworkSession, error) {
-	raddr, err := resolveUDPAddr(to)
-	if err != nil {
-		return nil, err
-	}
-
+func (n *UDPNet) initSession(remote p2pcrypto.PublicKey) NetworkSession {
 	session := createSession(n.local.PrivateKey(), remote)
-	handshakeMessage, err := generateHandshakeMessage(session, n.config.NetworkID, 1010, n.local.PublicKey())
-	if err != nil {
-		return nil, err
-	}
-	_, err = n.conn.WriteToUDP(handshakeMessage, raddr)
-
-	return session, nil
-}
-
-func (n *UDPNet) handleSession(message []byte) (NetworkSession, error) {
-	message, remotePubkey, err := p2pcrypto.ExtractPubkey(message)
-	if err != nil {
-		return nil, err
-	}
-	session := createSession(n.local.PrivateKey(), remotePubkey)
-
-	// open message
-	protoMessage, err := session.OpenMessage(message)
-	if err != nil {
-		return nil, err
-	}
-
-	handshakeData := &pb.HandshakeData{}
-	err = proto.Unmarshal(protoMessage, handshakeData)
-	if err != nil {
-		return nil, err
-	}
-
-	err = verifyNetworkIDAndClientVersion(n.config.NetworkID, handshakeData)
-	if err != nil {
-		return nil, err
-	}
-
-	return session, nil
+	return session
 }
 
 // Send writes a udp packet to the target with the given data
@@ -141,15 +102,16 @@ func (n *UDPNet) Send(to node.Node, data []byte) error {
 		return err
 	}
 
-	ns, err := n.cache.GetOrCreate(raddr.String(), to.PublicKey())
+	ns := n.cache.GetOrCreate(to.PublicKey())
 
 	if err != nil {
 		return err
 	}
 
 	sealed := ns.SealMessage(data)
+	final := p2pcrypto.PrependPubkey(sealed, n.local.PublicKey()) // todo: prepend verison+networkid
 
-	_, err = n.conn.WriteToUDP(sealed, raddr)
+	_, err = n.conn.WriteToUDP(final, raddr)
 
 	return err
 }
@@ -199,20 +161,21 @@ func (n *UDPNet) listenToUDPNetworkMessages(listener net.PacketConn) {
 		copybuf := make([]byte, size)
 		copy(copybuf, buf)
 
-		ns, err := n.cache.GetIfExist(addr.String())
+		msg, pk, err := p2pcrypto.ExtractPubkey(copybuf)
+
 		if err != nil {
-			ns, err = n.handleSession(copybuf)
-			if err != nil {
-				n.logger.Warning("Couldn't create session from UDP message. skipping err=%v msg=", err, copybuf)
-				//todo: count and block bad addresses to avoid flooding?
-				continue // this wasn't a session msg but we had no session
-			}
-			n.cache.handleIncoming(addr.String(), ns)
-			n.logger.Debug("Created udp session with ", addr.String())
+			n.logger.Warning("error can't extract public key from udp message. (addr=%v), err=%v", addr.String(), err)
 			continue
 		}
 
-		final, err := ns.OpenMessage(copybuf)
+		ns := n.cache.GetOrCreate(pk)
+
+		if ns == nil {
+			n.logger.Warning("coul'd not create session with %v:%v skipping message..", addr.String(), pk.String())
+			continue
+		}
+
+		final, err := ns.OpenMessage(msg)
 		if err != nil {
 			n.logger.Warning("skipping udp with session message err=%v msg=", err, copybuf)
 			// todo: remove malfunctioning session, ban ip ?
@@ -220,7 +183,7 @@ func (n *UDPNet) listenToUDPNetworkMessages(listener net.PacketConn) {
 		}
 
 		select {
-		case n.msgChan <- UDPMessageEvent{addr, final}:
+		case n.msgChan <- UDPMessageEvent{pk, addr, final}:
 		case <-n.shutdown:
 			return
 		}

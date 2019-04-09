@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package pb;
+option go_package = "pb";
+
+message Ping {
+	bytes ID = 1;
+	string ListenAddress = 2; // maybe break to IP-Port
+	string ToAddr = 3;
+}

@@ -4,6 +4,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/stretchr/testify/require"
 	"net"
 	"sync/atomic"
@@ -78,7 +79,6 @@ func TestUDPNet_Sanity(t *testing.T) {
 	require.NoError(t, err)
 
 	session := createSession(other.PrivateKey(), local.PublicKey())
-	hdmsg, err := generateHandshakeMessage(session, config.DefaultConfig().NetworkID, 0, other.PublicKey())
 
 	require.NoError(t, err)
 
@@ -89,26 +89,28 @@ func TestUDPNet_Sanity(t *testing.T) {
 		n    int
 		addr net.Addr
 		err  error
-	}{buf: hdmsg, n: len([]byte(hdmsg)), addr: addr2, err: nil}
+	}{buf: []byte(testMsg), n: len([]byte(testMsg)), addr: addr2, err: nil}
 
 	go udpnet.listenToUDPNetworkMessages(mockconn)
 
 	mockconn.releaseCount <- struct{}{}
 
 	sealed := session.SealMessage([]byte(testMsg))
+	final := p2pcrypto.PrependPubkey(sealed, other.PublicKey())
 
 	mockconn.readResult = struct {
 		buf  []byte
 		n    int
 		addr net.Addr
 		err  error
-	}{buf: sealed, n: len(sealed), addr: addr2, err: nil}
+	}{buf: final, n: len(final), addr: addr2, err: nil}
 
 	mockconn.releaseCount <- struct{}{}
 
 	i := 0
 	for msg := range udpnet.IncomingMessages() {
 		require.Equal(t, msg.FromAddr, addr2)
+		require.Equal(t, msg.From, other.PublicKey())
 		require.Equal(t, msg.Message, []byte(testMsg))
 		i++
 		if i == 1 {

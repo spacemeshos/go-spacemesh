@@ -164,25 +164,25 @@ func TestUDPMux_ProcessUDP(t *testing.T) {
 	m := NewUDPMux(nd, nil, udpMock, log.New(test_str, "", ""))
 	require.NotNil(t, m)
 	data := service.DataBytes{[]byte(test_str)}
-	msg := &pb.ProtocolMessage{}
+	msg := &pb.UDPProtocolMessage{}
 
 	gotfrom := node.GenerateRandomNodeData()
 
-	msg.Metadata = NewProtocolMessageMetadata(gotfrom.PublicKey(), test_str)
-	msg.Data = &pb.ProtocolMessage_Payload{Payload: data.Bytes()}
+	msg.Metadata = pb.NewUDPProtocolMessageMetadata(gotfrom.PublicKey(), int8(nd.NetworkID()), test_str)
+	msg.Payload = &pb.Payload{Data: &pb.Payload_Payload{data.Bytes()}}
 
 	msgbuf, err := proto.Marshal(msg)
 	require.NoError(t, err)
 
 	addr, _ := net2.ResolveUDPAddr("udp", gotfrom.Address())
 
-	err = m.processUDPMessage(addr, msgbuf)
+	err = m.processUDPMessage(gotfrom.PublicKey(), addr, msgbuf)
 
 	require.Error(t, err) // no protocol
 
 	c := make(chan service.DirectMessage, 1)
 	m.RegisterDirectProtocolWithChannel(test_str, c)
-	err = m.processUDPMessage(addr, msgbuf)
+	err = m.processUDPMessage(gotfrom.PublicKey(), addr, msgbuf)
 	require.NoError(t, err) // no protocol
 
 	select {
