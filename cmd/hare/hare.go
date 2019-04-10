@@ -6,10 +6,10 @@ import (
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/timesync"
+	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spf13/cobra"
 	"os"
 	"time"
@@ -42,13 +42,13 @@ type mockBlockProvider struct {
 	isPulled bool
 }
 
-func (mbp *mockBlockProvider) GetUnverifiedLayerBlocks(layerId mesh.LayerID) ([]mesh.BlockID, error) {
+func (mbp *mockBlockProvider) GetUnverifiedLayerBlocks(layerId types.LayerID) ([]types.BlockID, error) {
 	if mbp.isPulled {
-		return []mesh.BlockID{}, nil
+		return []types.BlockID{}, nil
 	}
 
 	mbp.isPulled = true
-	return []mesh.BlockID{1, 2, 3}, nil
+	return []types.BlockID{1, 2, 3}, nil
 }
 
 type HareApp struct {
