@@ -109,7 +109,7 @@ func (n *UDPNet) Send(to node.Node, data []byte) error {
 	}
 
 	sealed := ns.SealMessage(data)
-	final := p2pcrypto.PrependPubkey(sealed, n.local.PublicKey()) // todo: prepend verison+networkid
+	final := p2pcrypto.PrependPubkey(sealed, n.local.PublicKey())
 
 	_, err = n.conn.WriteToUDP(final, raddr)
 

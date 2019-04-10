@@ -262,7 +262,6 @@ func (prot *Protocol) removePeer(peer p2pcrypto.PublicKey) {
 }
 
 func (prot *Protocol) processMessage(msg *pb.ProtocolMessage) {
-	fmt.Println("############ WTF ", msg.Payload)
 	data, err := pb.ExtractData(msg.Payload)
 	if err != nil {
 		prot.Log.Warning("could'nt extract payload from message err=", err)
@@ -271,7 +270,6 @@ func (prot *Protocol) processMessage(msg *pb.ProtocolMessage) {
 	}
 
 	protocol := msg.Metadata.NextProtocol
-	fmt.Printf("############# CALCING %v proto with %v ############\r\n", protocol, data.Bytes())
 	h := calcHash(data.Bytes(), protocol)
 
 	isOld := prot.markMessageAsOld(h)

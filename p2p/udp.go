@@ -141,16 +141,12 @@ func (mux *UDPMux) sendMessageImpl(peerPubkey p2pcrypto.PublicKey, protocol stri
 		Metadata: pb.NewUDPProtocolMessageMetadata(mux.local.PublicKey(), mux.local.NetworkID(), protocol), // todo : config
 	}
 
-	switch x := payload.(type) {
-	case service.DataBytes:
-		protomessage.Payload = &pb.Payload{Data: &pb.Payload_Payload{x.Bytes()}}
-	case *service.DataMsgWrapper:
-		protomessage.Payload = &pb.Payload{Data: &pb.Payload_Msg{&pb.MessageWrapper{Type: x.MsgType, Req: x.Req, ReqID: x.ReqID, Payload: x.Payload}}}
-	case nil:
-		// The field is not set.
-	default:
-		return fmt.Errorf("protocolMsg has unexpected type %T", x)
+	realpayload, err := pb.CreatePayload(payload)
+	if err != nil {
+		return fmt.Errorf("can't create payload from message %v", err)
 	}
+
+	protomessage.Payload = realpayload
 
 	data, err := proto.Marshal(protomessage)
 	if err != nil {
