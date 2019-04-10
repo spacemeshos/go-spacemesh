@@ -115,7 +115,7 @@ def query_bootstrap_es(indx, namespace, bootstrap_po_name):
     return None
 
 
-def query_message(indx, namespace, client_po_name, msg):
+def query_message(indx, namespace, client_po_name, msg, findFails=False):
     # TODO : break this to smaller functions ?
     es = get_elastic_search_api()
     fltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
@@ -134,26 +134,25 @@ def query_message(indx, namespace, client_po_name, msg):
     last = datetime.strptime(max(ts).replace("T", " ",).replace("Z", ""), "%Y-%m-%d %H:%M:%S.%f")
 
     delta = last - first
-    print("First: ", first)
-    print("Last: ", last)
-    print("Delta: ", delta)
+    print("First: {0}, Last: {1}, Delta: {2}".format(first, last, delta))
     # TODO: compare to previous runs.
     print("====================================================================")
-    print("Pods that didn't hit:")
-    podnames = [hit.kubernetes.pod_name for hit in hits]
-    newfltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
-              Q("match_phrase", kubernetes__pod_name=client_po_name)
+    if findFails:
+        print("Looking for pods that didn't hit:")
+        podnames = [hit.kubernetes.pod_name for hit in hits]
+        newfltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
+                  Q("match_phrase", kubernetes__pod_name=client_po_name)
 
-    for p in podnames:
-        newfltr = newfltr & ~Q("match_phrase", kubernetes__pod_name=p)
-    s2 = Search(index=current_index, using=es).query('bool', filter=[newfltr])
-    hits2 = list(s2.scan())
-    unsecpods = set([hit.kubernetes.pod_name for hit in hits2])
-    if len(unsecpods) == 0:
-        print("None. yay!")
-    else:
-        print(unsecpods)
-    print("====================================================================")
+        for p in podnames:
+            newfltr = newfltr & ~Q("match_phrase", kubernetes__pod_name=p)
+        s2 = Search(index=current_index, using=es).query('bool', filter=[newfltr])
+        hits2 = list(s2.scan())
+        unsecpods = set([hit.kubernetes.pod_name for hit in hits2])
+        if len(unsecpods) == 0:
+            print("None. yay!")
+        else:
+            print(unsecpods)
+        print("====================================================================")
     s = set([h.N for h in hits])
     return len(s)
 
@@ -355,16 +354,17 @@ def test_bootstrap(setup_bootstrap):
 
 
 def test_client(load_config, setup_clients):
+    MESSAGE = "discovery_bootstrap"
     timetowait = len(setup_clients.pods)/2
     print("Sleeping " + str(timetowait) + "before checking out bootstrap results")
     time.sleep(timetowait)
-    peers = query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, "discovery_bootstrap")
+    peers = query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, MESSAGE, True)
     assert peers == len(setup_clients.pods)
 
 
 
 def test_gossip(load_config, setup_clients):
-    GOSSIP_MESSAGE = "new_gossip_message"
+    MESSAGE = "new_gossip_message"
     # *note*: this already waits for bootstrap so we can send the msg right away.
     # send message to client via rpc
     client_ip = setup_clients.pods[0]['pod_ip']
@@ -381,11 +381,11 @@ def test_gossip(load_config, setup_clients):
 
     # Need to sleep for a while in order to enable the propagation of the gossip message - 0.5 sec for each node
     # TODO: check frequently before timeout so we might be able to finish earlier.
-    gossip_propagation_sleep = len(setup_clients.pods) / 2
+    gossip_propagation_sleep = len(setup_clients.pods) / 2 # currently we expect short propagation times.
     print('sleep for {0} sec to enable gossip propagation'.format(gossip_propagation_sleep))
     time.sleep(gossip_propagation_sleep)
 
-    peers_for_gossip = query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, GOSSIP_MESSAGE)
+    peers_for_gossip = query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, MESSAGE, True)
     assert len(setup_clients.pods) == peers_for_gossip
 
 

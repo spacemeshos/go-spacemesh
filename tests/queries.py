@@ -9,6 +9,7 @@ todaydate = dt.strftime("%Y.%m.%d")
 current_index = 'kubernetes_cluster-'+todaydate
 
 def get_elastic_search_api():
+    # TODO: convert to a singleton, preferably from main test runner. (maybe just get the api as param for queries?)
     ES_PASSWD = os.getenv("ES_PASSWD")
     if not ES_PASSWD:
         raise Exception("Unknown Elasticsearch password. Please check 'ES_PASSWD' environment variable")
@@ -36,9 +37,9 @@ def get_pod_logs(namespace, pod_name):
     hits = list(res.hits)
     print("Writing ${0} log lines for pod {1} ".format(len(hits), pod_name))
     f = open('./logs/' + pod_name + '.txt', 'w')
-    for i in hits:
-        f.write(i.log)
-    f.close()
+    with open('./logs/' + pod_name + '.txt', 'w') as f:
+        for i in hits:
+            f.write(i.log)
 
 
 def get_podlist_logs(namespace, podlist):
