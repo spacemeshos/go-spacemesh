@@ -32,7 +32,7 @@ func (m *ActivationDb) ProcessBlockATXs(blk *types.Block) {
 			log.Error("could not calculate active set for %v", atx.Id())
 		}
 		atx.VerifiedActiveSet = activeSet
-		err = m.StoreAtx(types.EpochId(atx.LayerIndex/m.LayersPerEpoch), atx)
+		err = m.StoreAtx(types.EpochId(atx.LayerIdx/m.LayersPerEpoch), atx)
 		if err != nil {
 			log.Error("cannot store atx: %v", atx)
 		}
@@ -52,7 +52,7 @@ func (m *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, err
 
 	var counter uint32 = 0
 	set := make(map[types.AtxId]struct{})
-	firstLayerOfLastEpoch := a.LayerIndex - m.LayersPerEpoch - (a.LayerIndex % m.LayersPerEpoch)
+	firstLayerOfLastEpoch := a.LayerIdx - m.LayersPerEpoch - (a.LayerIdx % m.LayersPerEpoch)
 	lastLayerOfLastEpoch := firstLayerOfLastEpoch + m.LayersPerEpoch
 
 	traversalFunc := func(blkh *types.BlockHeader) error {

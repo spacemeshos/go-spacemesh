@@ -1,6 +1,7 @@
 package activation
 
 import (
+	"github.com/davecgh/go-xdr/xdr"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -30,13 +31,27 @@ type Broadcaster interface {
 	Broadcast(channel string, data []byte) error
 }
 
+type PoETNumberOfTickProvider struct {
+}
+
+func (provider *PoETNumberOfTickProvider) NumOfTicks() uint64 {
+	return 0
+}
+
+type NipstBuilder interface {
+	BuildNIPST(challange []byte) (*nipst.NIPST, error)
+}
+
 type Builder struct {
-	nodeId        types.NodeId
-	db            *ActivationDb
-	net           Broadcaster
-	activeSet     ActiveSetProvider
-	mesh          MeshProvider
-	epochProvider EpochProvider
+	nodeId         types.NodeId
+	db             *ActivationDb
+	net            Broadcaster
+	activeSet      ActiveSetProvider
+	mesh           MeshProvider
+	epochProvider  EpochProvider
+	layersPerEpoch uint64
+	tickProvider   PoETNumberOfTickProvider
+	nipstBuilder   NipstBuilder
 }
 
 type Processor struct {
@@ -44,9 +59,24 @@ type Processor struct {
 	epochProvider EpochProvider
 }
 
-func NewBuilder(nodeId types.NodeId, db database.DB, meshdb *mesh.MeshDB, net Broadcaster, activeSet ActiveSetProvider, view MeshProvider, epochDuration EpochProvider, layersPerEpoch uint64) *Builder {
+func NewBuilder(nodeId types.NodeId, db database.DB,
+	meshdb *mesh.MeshDB,
+	net Broadcaster,
+	activeSet ActiveSetProvider,
+	view MeshProvider,
+	epochDuration EpochProvider,
+	layersPerEpoch uint64,
+	nipstBuilder NipstBuilder) *Builder {
 	return &Builder{
-		nodeId, NewActivationDb(db, meshdb, layersPerEpoch), net, activeSet, view, epochDuration,
+		nodeId,
+		NewActivationDb(db, meshdb, layersPerEpoch),
+		net,
+		activeSet,
+		view,
+		epochDuration,
+		layersPerEpoch,
+		PoETNumberOfTickProvider{},
+		nipstBuilder,
 	}
 }
 
@@ -88,6 +118,42 @@ func (b *Builder) PublishActivationTx(nipst *nipst.NIPST) error {
 	return b.net.Broadcast(AtxProtocol, buf)
 }
 
+
+
+func (b *Builder) CreatePoETChallenge(epoch types.EpochId) (error) {
+	prevAtx, err := b.GetPrevAtxId(b.nodeId)
+	seq := uint64(0)
+	if err == nil {
+		atx, err := b.db.GetAtx(*prevAtx)
+		if err != nil {
+			return err
+		}
+		seq = atx.Sequence + 1
+	}
+	posAtxId, err := b.GetPositioningAtxId(epoch)
+	if err != nil {
+		return err
+	}
+	posAtx, err := b.db.GetAtx(*prevAtx)
+
+	challenge := types.POeTChallange{
+		Sequence:       seq,
+		PrevATXId:        *prevAtx,
+		LayerIdx:       types.LayerID(uint64(posAtx.LayerIdx) + b.layersPerEpoch),
+		StartTick:      posAtx.EndTick,
+		EndTick:        b.tickProvider.NumOfTicks(), //todo: add provider when
+		PositioningAtx: *posAtxId,
+	}
+
+	bytes, err := xdr.Marshal(challenge)
+	npst, err := b.nipstBuilder.BuildNIPST(bytes)
+	if err != nil {
+		return err
+	}
+	b.PublishActivationTx(npst)
+	return err
+}
+
 func (b *Builder) GetPrevAtxId(node types.NodeId) (*types.AtxId, error) {
 	ids, err := b.db.GetNodeAtxIds(node)
 
@@ -98,6 +164,7 @@ func (b *Builder) GetPrevAtxId(node types.NodeId) (*types.AtxId, error) {
 }
 
 func (b *Builder) GetPositioningAtxId(epochId types.EpochId) (*types.AtxId, error) {
+	//todo: make this on blocking until an atx is received
 	atxs, err := b.db.GetEpochAtxIds(epochId)
 	if err != nil {
 		return nil, err
@@ -119,14 +186,3 @@ func (b *Builder) GetLastSequence(node types.NodeId) uint64 {
 	}
 	return atx.Sequence
 }
-
-/*func (m *Mesh) UniqueAtxs(lyr *Layer) map[*ActivationTx]struct{} {
-	atxMap := make(map[*ActivationTx]struct{})
-	for _, blk := range lyr.blocks {
-		for _, atx := range blk.ATXs {
-			atxMap[atx] = struct{}{}
-		}
-
-	}
-	return atxMap
-}*/

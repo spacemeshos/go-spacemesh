@@ -42,13 +42,21 @@ func (n *NetMock) Broadcast(id string, d []byte) error {
 	return nil
 }
 
+type NipstBuilderMock struct {
+
+}
+
+func (np *NipstBuilderMock) BuildNIPST(challange []byte) (*nipst.NIPST, error){
+	return &nipst.NIPST{}, nil
+}
+
 func TestBuilder_BuildActivationTx(t *testing.T) {
 	//todo: implement test
 	id := types.NodeId{"aaaa", []byte("bbb")}
 	net := &NetMock{}
 	echp := &EchProvider{}
 	layers := MeshProviderrMock{}
-	b := NewBuilder(id, database.NewMemDatabase(), mesh.NewMemMeshDB(log.NewDefault("")), net, ActiveSetProviderMock{}, layers, echp, 10)
+	b := NewBuilder(id, database.NewMemDatabase(), mesh.NewMemMeshDB(log.NewDefault("")), net, ActiveSetProviderMock{}, layers, echp, 10, &NipstBuilderMock{})
 	adb := b.db
 	prevAtx := types.AtxId{Hash: common.HexToHash("0x111")}
 	npst := nipst.NIPST{}
@@ -61,7 +69,7 @@ func TestBuilder_BuildActivationTx(t *testing.T) {
 		5,
 		[]types.BlockID{1, 2, 3},
 		&npst)
-	adb.StoreAtx(echp.Epoch(atx.LayerIndex), atx)
+	adb.StoreAtx(echp.Epoch(atx.LayerIdx), atx)
 	act := types.NewActivationTx(b.nodeId, b.GetLastSequence(b.nodeId)+1, atx.Id(), layers.LatestLayerId(), 0, atx.Id(), b.activeSet.GetActiveSetSize(1), b.mesh.GetLatestView(), &npst)
 	err := b.PublishActivationTx(&nipst.NIPST{})
 	assert.NoError(t, err)
@@ -76,7 +84,11 @@ func TestBuilder_NoPrevATX(t *testing.T) {
 	net := &NetMock{}
 	echp := &EchProvider{}
 	layers := MeshProviderrMock{}
-	b := NewBuilder(id, database.NewMemDatabase(), mesh.NewMemMeshDB(log.NewDefault("")), net, ActiveSetProviderMock{}, layers, echp, 10)
+	b := NewBuilder(id, database.NewMemDatabase(), mesh.NewMemMeshDB(log.NewDefault("")), net, ActiveSetProviderMock{}, layers, echp, 10,&NipstBuilderMock{})
 	err := b.PublishActivationTx(&nipst.NIPST{})
 	assert.Error(t, err)
+}
+
+func TestBuilder_CreatePoETChallenge(t *testing.T) {
+
 }

@@ -56,8 +56,6 @@ func TestNIPSTBuilderWithMocks(t *testing.T) {
 	verifyPoetMock := func(*poetProof) (bool, error) { return true, nil }
 	verifyPoetMembershipMock := func(*membershipProof, *poetProof) bool { return true }
 
-	nipstChan := make(chan *NIPST)
-	activationBuilder := &ActivationBuilderMock{nipst: nipstChan}
 
 	nb := NewNIPSTBuilder(
 		[]byte("id"),
@@ -71,19 +69,12 @@ func TestNIPSTBuilderWithMocks(t *testing.T) {
 		verifyMembershipMock,
 		verifyPoetMock,
 		verifyPoetMembershipMock,
-		activationBuilder,
 	)
-	nb.Start()
+	npst, err := nb.BuildNIPST([]byte("anton"))
+	assert.NoError(err)
 
-	select {
-	case nipst := <-nipstChan:
-		assert.True(nipst.Valid())
-	case <-time.After(5 * time.Second):
-		assert.Fail("nipst creation timeout")
-		return
-	}
+	assert.True(npst.Valid())
 
-	nb.Stop()
 }
 
 func TestNIPSTBuilderWithClients(t *testing.T) {
@@ -103,9 +94,6 @@ func TestNIPSTBuilderWithClients(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(poetProver)
 
-	nipstChan := make(chan *NIPST)
-	activationBuilder := &ActivationBuilderMock{nipst: nipstChan}
-
 	nb := NewNIPSTBuilder(
 		[]byte("id"),
 		1024,
@@ -118,27 +106,10 @@ func TestNIPSTBuilderWithClients(t *testing.T) {
 		verifyMembership,
 		verifyPoet,
 		verifyPoetMembership,
-		activationBuilder,
 	)
 
-	done := make(chan struct{})
-	go func() {
-		select {
-		case err := <-nb.errChan:
-			assert.Fail(err.Error())
-		case <-done:
-		}
-	}()
+	npst, err := nb.BuildNIPST([]byte("anton"))
+	assert.NoError(err)
 
-	nb.Start()
-
-	select {
-	case nipst := <-nipstChan:
-		assert.True(nipst.Valid())
-	case <-time.After(5 * time.Second):
-		assert.Fail("timeout")
-	}
-
-	nb.Stop()
-	close(done)
+	assert.True(npst.Valid())
 }

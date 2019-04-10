@@ -147,8 +147,6 @@ type NIPSTBuilder struct {
 	verifyPoet           func(p *poetProof) (bool, error)
 	verifyPoetMembership func(*membershipProof, *poetProof) bool
 
-	activationBuilder ActivationBuilder
-
 	stop    bool
 	stopM   sync.Mutex
 	errChan chan error
@@ -168,7 +166,6 @@ func NewNIPSTBuilder(
 	verifyMembership func(member *common.Hash, proof *membershipProof) (bool, error),
 	verifyPoet func(p *poetProof) (bool, error),
 	verifyPoetMembership func(*membershipProof, *poetProof) bool,
-	activationBuilder ActivationBuilder,
 ) *NIPSTBuilder {
 	return &NIPSTBuilder{
 		id:                   id,
@@ -182,33 +179,14 @@ func NewNIPSTBuilder(
 		verifyMembership:     verifyMembership,
 		verifyPoet:           verifyPoet,
 		verifyPoetMembership: verifyPoetMembership,
-		activationBuilder:    activationBuilder,
 		stop:                 false,
 		errChan:              make(chan error),
 		nipst:                initialNIPST(id, space, duration, nil),
 	}
 }
 
-func (nb *NIPSTBuilder) stopped() bool {
-	nb.stopM.Lock()
-	defer nb.stopM.Unlock()
-	return nb.stop
-}
 
-func (nb *NIPSTBuilder) Stop() {
-	nb.stopM.Lock()
-	nb.stop = true
-	defer nb.stopM.Unlock()
-}
-
-func (nb *NIPSTBuilder) Start() {
-	nb.stopM.Lock()
-	nb.stop = false
-	go nb.loop()
-	defer nb.stopM.Unlock()
-}
-
-func (nb *NIPSTBuilder) loop() {
+func (nb *NIPSTBuilder) BuildNIPST(challange []byte) (*NIPST, error){
 	defTimeout := 5 * time.Second // temporary solution
 	nb.nipst.load()
 
@@ -219,18 +197,15 @@ func (nb *NIPSTBuilder) loop() {
 
 		commitment, err := nb.postProver.initialize(nb.id, nb.space, nb.numberOfProvenLabels, nb.difficulty, defTimeout)
 		if err != nil {
-			nb.error("failed to initialize PoST: %v", err)
-			return
+			return nil, fmt.Errorf("failed to initialize PoST: %v", err)
 		}
 
 		res, err := nb.verifyPost(commitment, nb.space, nb.numberOfProvenLabels, nb.difficulty)
 		if err != nil {
-			nb.error("received an invalid PoST commitment: %v", err)
-			return
+			return nil, fmt.Errorf("received an invalid PoST commitment: %v", err)
 		}
 		if !res {
-			nb.error("received an invalid PoST commitment")
-			return
+			return nil, fmt.Errorf("received an invalid PoST commitment")
 		}
 
 		log.Info("finished PoST initialization (commitment: %x)", commitment.serialize())
@@ -239,166 +214,139 @@ func (nb *NIPSTBuilder) loop() {
 		nb.nipst.persist()
 	}
 
-	for {
-		if nb.stopped() {
-			return
-		}
 
-		// Phase 1: Submit challenge to PoET service.
-		if nb.nipst.poetRound == nil {
-			var poetChallenge common.Hash
 
-			// If it's the first NIPST in the chain, use the PoST commitment as
-			// the PoET challenge. Otherwise, use the previous NIPST/ATX hash.
-			if nb.nipst.prev == nil {
-				// TODO(moshababo): check what exactly need to be hashed.
-				poetChallenge = crypto.Keccak256Hash(nb.id, nb.nipst.postCommitment.serialize())
-			} else {
-				// TODO(moshababo): check what exactly need to be hashed.
-				poetChallenge = crypto.Keccak256Hash(nb.nipst.prev.postProof.serialize())
-			}
+	// Phase 1: Submit challenge to PoET service.
+	if nb.nipst.poetRound == nil {
+		var poetChallenge common.Hash
 
-			log.Info("submitting challenge to PoET proving service "+
-				"(service id: %v, challenge: %x)",
-				nb.poetProver.id(), poetChallenge)
-
-			round, err := nb.poetProver.submit(poetChallenge, nb.duration)
-			if err != nil {
-				nb.error("failed to submit challenge to poet service: %v", err)
-				break
-			}
-
-			log.Info("challenge submitted to PoET proving service "+
-				"(service id: %v, round id: %v)",
-				nb.poetProver.id(), round.id)
-
-			nb.nipst.poetChallenge = &poetChallenge
-			nb.nipst.poetRound = round
-			nb.nipst.persist()
-		}
-
-		if nb.stopped() {
-			return
-		}
-
-		// Phase 2: Wait for PoET service round membership proof.
-		if nb.nipst.poetMembershipProof == nil {
-			log.Info("querying round membership proof from PoET proving service "+
-				"(service id: %v, round id: %v, challenge: %x)",
-				nb.poetProver.id(), nb.nipst.poetRound.id, nb.nipst.poetChallenge)
-
-			mproof, err := nb.poetProver.subscribeMembershipProof(nb.nipst.poetRound, *nb.nipst.poetChallenge, defTimeout)
-			if err != nil {
-				nb.error("failed to receive PoET round membership proof: %v", err)
-				break
-			}
-
-			res, err := nb.verifyMembership(nb.nipst.poetChallenge, mproof)
-			if err != nil {
-				nb.error("received an invalid PoET round membership proof: %v", err)
-				break
-			}
-			if !res {
-				nb.error("received an invalid PoET round membership proof")
-				break
-			}
-
-			log.Info("received a valid round membership proof from PoET proving service "+
-				"(service id: %v, round id: %v, challenge: %x)",
-				nb.poetProver.id(), nb.nipst.poetRound.id, nb.nipst.poetChallenge)
-
-			nb.nipst.poetMembershipProof = mproof
-			nb.nipst.persist()
-		}
-
-		if nb.stopped() {
-			return
-		}
-
-		// Phase 3: Wait for PoET service proof.
-		if nb.nipst.poetProof == nil {
-			log.Info("waiting for PoET proof from PoET proving service "+
-				"(service id: %v, round id: %v, round root commitment: %x)",
-				nb.poetProver.id(), nb.nipst.poetRound.id, nb.nipst.poetMembershipProof.root)
-
-			proof, err := nb.poetProver.subscribeProof(nb.nipst.poetRound, defTimeout)
-			if err != nil {
-				nb.error("failed to receive PoET proof: %v", err)
-				break
-			}
-
-			if !nb.verifyPoetMembership(nb.nipst.poetMembershipProof, proof) {
-				nb.error("received an invalid PoET proof due to "+
-					"commitment value (expected: %x, found: %x)",
-					nb.nipst.poetMembershipProof.root, proof.commitment)
-			}
-
-			res, err := nb.verifyPoet(proof)
-			if err != nil {
-				nb.error("received an invalid PoET proof: %v", err)
-				break
-			}
-			if !res {
-				nb.error("received an invalid PoET proof")
-				break
-			}
-
-			log.Info("received a valid PoET proof from PoET proving service "+
-				"(service id: %v, round id: %v)",
-				nb.poetProver.id(), nb.nipst.poetRound.id)
-
-			nb.nipst.poetProof = proof
-			nb.nipst.persist()
-		}
-
-		if nb.stopped() {
-			return
-		}
-
-		// Phase 4: PoST execution.
-		if nb.nipst.postProof == nil {
+		// If it's the first NIPST in the chain, use the PoST commitment as
+		// the PoET challenge. Otherwise, use the previous NIPST/ATX hash.
+		if nb.nipst.prev == nil {
 			// TODO(moshababo): check what exactly need to be hashed.
-			postChallenge := crypto.Keccak256Hash(nb.nipst.poetProof.serialize())
-
-			log.Info("starting PoST execution (challenge: %x)",
-				postChallenge)
-
-			proof, err := nb.postProver.execute(nb.id, postChallenge, nb.numberOfProvenLabels, nb.difficulty, defTimeout)
-			if err != nil {
-				nb.error("failed to execute PoST: %v", err)
-				break
-			}
-
-			res, err := nb.verifyPost(proof, nb.space, nb.numberOfProvenLabels, nb.difficulty)
-			if err != nil {
-				nb.error("received an invalid PoST proof: %v", err)
-				break
-			}
-			if !res {
-				nb.error("received an invalid PoST proof")
-				break
-			}
-
-			log.Info("finished PoST execution (proof: %x)", proof.serialize())
-
-			nb.nipst.postChallenge = &postChallenge
-			nb.nipst.postProof = proof
-			nb.nipst.persist()
+			poetChallenge = crypto.Keccak256Hash(nb.id, nb.nipst.postCommitment.serialize())
+		} else {
+			// TODO(moshababo): check what exactly need to be hashed.
+			poetChallenge = crypto.Keccak256Hash(nb.nipst.prev.postProof.serialize())
 		}
 
-		log.Info("finished NIPST construction")
+		log.Info("submitting challenge to PoET proving service "+
+			"(service id: %v, challenge: %x)",
+			nb.poetProver.id(), poetChallenge)
 
-		// build the ATX from the NIPST.
-		nb.activationBuilder.BuildActivationTx(nb.nipst)
+		round, err := nb.poetProver.submit(poetChallenge, nb.duration)
+		if err != nil {
+			return nil, fmt.Errorf("failed to submit challenge to poet service: %v", err)
+		}
 
-		// create and set a new NIPST instance for the next iteration.
-		nb.nipst = initialNIPST(nb.id, nb.space, nb.duration, nb.nipst)
+		log.Info("challenge submitted to PoET proving service "+
+			"(service id: %v, round id: %v)",
+			nb.poetProver.id(), round.id)
+
+		nb.nipst.poetChallenge = &poetChallenge
+		nb.nipst.poetRound = round
 		nb.nipst.persist()
 	}
+
+
+
+	// Phase 2: Wait for PoET service round membership proof.
+	if nb.nipst.poetMembershipProof == nil {
+		log.Info("querying round membership proof from PoET proving service "+
+			"(service id: %v, round id: %v, challenge: %x)",
+			nb.poetProver.id(), nb.nipst.poetRound.id, nb.nipst.poetChallenge)
+
+		mproof, err := nb.poetProver.subscribeMembershipProof(nb.nipst.poetRound, *nb.nipst.poetChallenge, defTimeout)
+		if err != nil {
+			return nil, fmt.Errorf("failed to receive PoET round membership proof: %v", err)
+		}
+
+		res, err := nb.verifyMembership(nb.nipst.poetChallenge, mproof)
+		if err != nil {
+			return nil, fmt.Errorf("received an invalid PoET round membership proof: %v", err)
+		}
+		if !res {
+			return nil, fmt.Errorf("received an invalid PoET round membership proof")
+		}
+
+		log.Info("received a valid round membership proof from PoET proving service "+
+			"(service id: %v, round id: %v, challenge: %x)",
+			nb.poetProver.id(), nb.nipst.poetRound.id, nb.nipst.poetChallenge)
+
+		nb.nipst.poetMembershipProof = mproof
+		nb.nipst.persist()
+	}
+
+
+	// Phase 3: Wait for PoET service proof.
+	if nb.nipst.poetProof == nil {
+		log.Info("waiting for PoET proof from PoET proving service "+
+			"(service id: %v, round id: %v, round root commitment: %x)",
+			nb.poetProver.id(), nb.nipst.poetRound.id, nb.nipst.poetMembershipProof.root)
+
+		proof, err := nb.poetProver.subscribeProof(nb.nipst.poetRound, defTimeout)
+		if err != nil {
+			return nil, fmt.Errorf("failed to receive PoET proof: %v", err)
+
+		}
+
+		if !nb.verifyPoetMembership(nb.nipst.poetMembershipProof, proof) {
+			return nil, fmt.Errorf("received an invalid PoET proof due to "+
+				"commitment value (expected: %x, found: %x)",
+				nb.nipst.poetMembershipProof.root, proof.commitment)
+		}
+
+		res, err := nb.verifyPoet(proof)
+		if err != nil {
+			return nil, fmt.Errorf("received an invalid PoET proof: %v", err)
+		}
+		if !res {
+			return nil, fmt.Errorf("received an invalid PoET proof")
+		}
+
+		log.Info("received a valid PoET proof from PoET proving service "+
+			"(service id: %v, round id: %v)",
+			nb.poetProver.id(), nb.nipst.poetRound.id)
+
+		nb.nipst.poetProof = proof
+		nb.nipst.persist()
+	}
+
+
+	// Phase 4: PoST execution.
+	if nb.nipst.postProof == nil {
+		// TODO(moshababo): check what exactly need to be hashed.
+		postChallenge := crypto.Keccak256Hash(nb.nipst.poetProof.serialize())
+
+		log.Info("starting PoST execution (challenge: %x)",
+			postChallenge)
+
+		proof, err := nb.postProver.execute(nb.id, postChallenge, nb.numberOfProvenLabels, nb.difficulty, defTimeout)
+		if err != nil {
+			return nil, fmt.Errorf("failed to execute PoST: %v", err)
+		}
+
+		res, err := nb.verifyPost(proof, nb.space, nb.numberOfProvenLabels, nb.difficulty)
+		if err != nil {
+			return nil, fmt.Errorf("received an invalid PoST proof: %v", err)
+		}
+		if !res {
+			return nil, fmt.Errorf("received an invalid PoST proof")
+		}
+
+		log.Info("finished PoST execution (proof: %x)", proof.serialize())
+
+		nb.nipst.postChallenge = &postChallenge
+		nb.nipst.postProof = proof
+		nb.nipst.persist()
+	}
+
+	log.Info("finished NIPST construction")
+
+
+	// create and set a new NIPST instance for the next iteration.
+	nb.nipst = initialNIPST(nb.id, nb.space, nb.duration, nb.nipst)
+	nb.nipst.persist()
+	return nb.nipst, nil
 }
 
-func (nb *NIPSTBuilder) error(format string, a ...interface{}) {
-	err := fmt.Errorf(format, a...)
-	log.Error(err.Error())
-	nb.errChan <- err
-}
