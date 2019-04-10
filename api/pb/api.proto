@@ -15,8 +15,8 @@ message AccountId {
 message TransferFunds {
     AccountId sender =1;
     AccountId receiver =2;
-    uint64 Nonce =3;
-    uint64 Amount =4;
+    uint64 nonce =3;
+    uint64 amount =4;
 }
 
 message SignedTransaction {
@@ -27,7 +27,7 @@ message SignedTransaction {
 }
 
 message BroadcastMessage {
-    string Data = 1;
+    string data = 1;
 }
 
 message CommitmentSizeMessage {
