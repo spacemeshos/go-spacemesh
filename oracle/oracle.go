@@ -21,12 +21,11 @@ type localBlockOracle struct {
 	nodeID        block.NodeId
 }
 
-func NewLocalOracle(committeeSize int, nodeID block.NodeId) *localBlockOracle {
-	oc := eligibility.New()
+func NewLocalOracle(rolacle *eligibility.FixedRolacle, committeeSize int, nodeID block.NodeId) *localBlockOracle {
 	//oc.Register(true, pubKey)
 	return &localBlockOracle{
 		committeeSize: committeeSize,
-		oc:            oc,
+		oc:            rolacle,
 		nodeID:        nodeID,
 	}
 }
@@ -40,7 +39,10 @@ func (bo *localBlockOracle) BlockEligible(layerID block.LayerID) ([]block.BlockE
 	eligible := bo.oc.Eligible(uint32(layerID), bo.committeeSize, bo.nodeID.Key, nil)
 	var proofs []block.BlockEligibilityProof
 	if eligible {
-		proofs = []block.BlockEligibilityProof{}
+		proofs = []block.BlockEligibilityProof{{
+			J:   0,
+			Sig: nil,
+		}}
 	}
 	return proofs, nil
 }
@@ -68,7 +70,10 @@ func (bo *blockOracle) BlockEligible(layerID block.LayerID) ([]block.BlockEligib
 	eligible := bo.oc.Eligible(uint32(layerID), bo.committeeSize, bo.nodeID.Key)
 	var proofs []block.BlockEligibilityProof
 	if eligible {
-		proofs = []block.BlockEligibilityProof{}
+		proofs = []block.BlockEligibilityProof{{
+			J:   0,
+			Sig: []byte{1, 2, 3},
+		}}
 	}
 	return proofs, nil
 }
