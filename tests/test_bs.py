@@ -362,7 +362,6 @@ def test_client(load_config, setup_clients):
     assert peers == len(setup_clients.pods)
 
 
-
 def test_gossip(load_config, setup_clients):
     MESSAGE = "new_gossip_message"
     # *note*: this already waits for bootstrap so we can send the msg right away.
@@ -374,7 +373,8 @@ def test_gossip(load_config, setup_clients):
     # todo: take out broadcast and rpcs to helper methods.
     api = 'v1/broadcast'
     data = '{"data":"foo"}'
-    p = subprocess.Popen(['./kubectl-cmd.sh', '%s' % client_ip, "%s" % data, api],
+    namespace = testconfig['namespace']
+    p = subprocess.Popen(['./kubectl-cmd.sh', '%s' % client_ip, "%s" % data, api, namespace],
                          stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     (out, err) = p.communicate()
     assert '{"value":"ok"}' in out.decode("utf-8")
@@ -396,7 +396,8 @@ def test_transaction(load_config, setup_clients):
 
     api = 'v1/nonce'
     data = '{"address":"1"}'
-    p = subprocess.Popen(['./kubectl-cmd.sh', '%s' % client_ip, "%s" % data, api], stdin=subprocess.PIPE,
+    namespace = testconfig['namespace']
+    p = subprocess.Popen(['./kubectl-cmd.sh', '%s' % client_ip, "%s" % data, api, namespace], stdin=subprocess.PIPE,
                          stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     (out, err) = p.communicate()
     assert '{"value":"0"}' in out.decode("utf-8")
@@ -407,7 +408,7 @@ def test_transaction(load_config, setup_clients):
 
     api = 'v1/submittransaction'
     data = '{"sender":"1","reciever":"222","nonce":"0","amount":"100"}'
-    p = subprocess.Popen(['./kubectl-cmd.sh', '%s' % client_ip, "%s" % data, api], stdin=subprocess.PIPE,
+    p = subprocess.Popen(['./kubectl-cmd.sh', '%s' % client_ip, "%s" % data, api, namespace], stdin=subprocess.PIPE,
                          stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     (out, err) = p.communicate()
     assert '{"value":"ok"}' in out.decode("utf-8")
