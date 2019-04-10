@@ -383,7 +383,6 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 
 	app.unregisterOracle = func() { oracleClient.Unregister(true, pub.String()) }
 
-	//bo := oracle.NewBlockOracleFromClient(oracleClient, int(app.Config.CONSENSUS.NodesPerLayer))
 	nodesPerLayer := app.Config.CONSENSUS.NodesPerLayer
 	layersPerEpoch := app.Config.CONSENSUS.LayersPerEpoch
 	activationDb := &activation.ActivationDb{}      // TODO: initialize properly
@@ -391,11 +390,13 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	vrfSigner := crypto.NewVRFSigner(nil)           // TODO: use VRF private key
 	nodeID := types.NodeId{Key: "x"}
 	bo := oracle.NewMinerBlockOracle(nodesPerLayer, layersPerEpoch, activationDb, beaconProvider, vrfSigner, nodeID)
+	bv := oracle.NewBlockEligibilityValidator(nodesPerLayer, layersPerEpoch, activationDb, beaconProvider,
+		crypto.ValidateVRF)
 	hareOracle := oracle.NewHareOracleFromClient(oracleClient)
 
 	apiConf := &app.Config.API
 
-	err = app.initServices("x", swarm, "/tmp/", sgn, bo, nil, hareOracle, 50)
+	err = app.initServices("x", swarm, "/tmp/", sgn, bo, bv, hareOracle, 50)
 	if err != nil {
 		log.Error("cannot start services %v", err.Error())
 		return
