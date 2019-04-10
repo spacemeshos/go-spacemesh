@@ -62,7 +62,7 @@ func (app *AppTestSuite) initMultipleInstances(t *testing.T, numOfInstances int,
 		bo.Register(true, pub.String())
 
 		bv := sync2.BlockValidatorMock{}
-		err := app.apps[i].initServices(pub.String(), n, store, sgn, bo, bv, bo, numOfInstances)
+		err := app.apps[i].initServices(types.NodeId{Key: pub.String()}, n, store, sgn, bo, bv, bo, numOfInstances)
 		assert.NoError(t, err)
 		app.apps[i].setupGenesis(apiCfg.DefaultGenesisConfig())
 		app.dbs = append(app.dbs, store)
