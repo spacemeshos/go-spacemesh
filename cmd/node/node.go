@@ -396,7 +396,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	apiConf := &app.Config.API
 
 	validatorMock := sync.BlockValidatorMock{}
-	err = app.initServices(nodeID, swarm, "/tmp/", sgn, bo, validatorMock, hareOracle, 50)
+	err = app.initServices(nodeID, swarm, "/tmp/", sgn, bo, validatorMock, hareOracle, app.Config.LayerAvgSize)
 	if err != nil {
 		log.Error("cannot start services %v", err.Error())
 		return
