@@ -173,7 +173,7 @@ func newTestMessageData(t testing.TB, authPubkey p2pcrypto.PublicKey, payload []
 			ClientVersion: protocolVer,
 			AuthPubkey:    authPubkey.Bytes(),
 		},
-		Payload: &pb.Payload{Data:&pb.Payload_Payload{payload}},
+		Payload: &pb.Payload{Data: &pb.Payload_Payload{payload}},
 	}
 
 	return makePayload(t, pm).Bytes(), pm
