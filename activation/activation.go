@@ -154,8 +154,7 @@ func (b *Builder) CreatePoETChallenge(epoch types.EpochId) error {
 	if err != nil {
 		return err
 	}
-	b.PublishActivationTx(npst)
-	return err
+	return b.PublishActivationTx(npst)
 }
 
 func (b *Builder) GetPrevAtxId(node types.NodeId) (*types.AtxId, error) {
