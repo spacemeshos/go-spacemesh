@@ -185,8 +185,7 @@ func NewNIPSTBuilder(
 	}
 }
 
-
-func (nb *NIPSTBuilder) BuildNIPST(challange []byte) (*NIPST, error){
+func (nb *NIPSTBuilder) BuildNIPST(challange []byte) (*NIPST, error) {
 	defTimeout := 5 * time.Second // temporary solution
 	nb.nipst.load()
 
@@ -213,8 +212,6 @@ func (nb *NIPSTBuilder) BuildNIPST(challange []byte) (*NIPST, error){
 		nb.nipst.postCommitment = commitment
 		nb.nipst.persist()
 	}
-
-
 
 	// Phase 1: Submit challenge to PoET service.
 	if nb.nipst.poetRound == nil {
@@ -248,8 +245,6 @@ func (nb *NIPSTBuilder) BuildNIPST(challange []byte) (*NIPST, error){
 		nb.nipst.persist()
 	}
 
-
-
 	// Phase 2: Wait for PoET service round membership proof.
 	if nb.nipst.poetMembershipProof == nil {
 		log.Info("querying round membership proof from PoET proving service "+
@@ -276,7 +271,6 @@ func (nb *NIPSTBuilder) BuildNIPST(challange []byte) (*NIPST, error){
 		nb.nipst.poetMembershipProof = mproof
 		nb.nipst.persist()
 	}
-
 
 	// Phase 3: Wait for PoET service proof.
 	if nb.nipst.poetProof == nil {
@@ -312,7 +306,6 @@ func (nb *NIPSTBuilder) BuildNIPST(challange []byte) (*NIPST, error){
 		nb.nipst.persist()
 	}
 
-
 	// Phase 4: PoST execution.
 	if nb.nipst.postProof == nil {
 		// TODO(moshababo): check what exactly need to be hashed.
@@ -343,10 +336,8 @@ func (nb *NIPSTBuilder) BuildNIPST(challange []byte) (*NIPST, error){
 
 	log.Info("finished NIPST construction")
 
-
 	// create and set a new NIPST instance for the next iteration.
 	nb.nipst = initialNIPST(nb.id, nb.space, nb.duration, nb.nipst)
 	nb.nipst.persist()
 	return nb.nipst, nil
 }
-

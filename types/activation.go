@@ -19,20 +19,19 @@ var EmptyAtx = AtxId{common.Hash{0}}
 type ActivationTxHeader struct {
 	POeTChallange
 	VerifiedActiveSet uint32
-	ActiveSetSize uint32
+	ActiveSetSize     uint32
 	View              []BlockID
 }
 
 type POeTChallange struct {
-	NodeId NodeId
+	NodeId         NodeId
 	Sequence       uint64
-	PrevATXId        AtxId
+	PrevATXId      AtxId
 	LayerIdx       LayerID
 	StartTick      uint64
 	EndTick        uint64
 	PositioningAtx AtxId
 }
-
 
 type ActivationTx struct {
 	ActivationTxHeader

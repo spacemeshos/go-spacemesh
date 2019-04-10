@@ -1,6 +1,7 @@
 package activation
 
 import (
+	"fmt"
 	"github.com/davecgh/go-xdr/xdr"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -118,9 +119,7 @@ func (b *Builder) PublishActivationTx(nipst *nipst.NIPST) error {
 	return b.net.Broadcast(AtxProtocol, buf)
 }
 
-
-
-func (b *Builder) CreatePoETChallenge(epoch types.EpochId) (error) {
+func (b *Builder) CreatePoETChallenge(epoch types.EpochId) error {
 	prevAtx, err := b.GetPrevAtxId(b.nodeId)
 	seq := uint64(0)
 	if err == nil {
@@ -129,16 +128,18 @@ func (b *Builder) CreatePoETChallenge(epoch types.EpochId) (error) {
 			return err
 		}
 		seq = atx.Sequence + 1
+	} else {
+		prevAtx = &types.EmptyAtx
 	}
 	posAtxId, err := b.GetPositioningAtxId(epoch)
 	if err != nil {
 		return err
 	}
-	posAtx, err := b.db.GetAtx(*prevAtx)
+	posAtx, err := b.db.GetAtx(*posAtxId)
 
 	challenge := types.POeTChallange{
 		Sequence:       seq,
-		PrevATXId:        *prevAtx,
+		PrevATXId:      *prevAtx,
 		LayerIdx:       types.LayerID(uint64(posAtx.LayerIdx) + b.layersPerEpoch),
 		StartTick:      posAtx.EndTick,
 		EndTick:        b.tickProvider.NumOfTicks(), //todo: add provider when
@@ -146,6 +147,9 @@ func (b *Builder) CreatePoETChallenge(epoch types.EpochId) (error) {
 	}
 
 	bytes, err := xdr.Marshal(challenge)
+	if err != nil {
+		return err
+	}
 	npst, err := b.nipstBuilder.BuildNIPST(bytes)
 	if err != nil {
 		return err
@@ -156,9 +160,11 @@ func (b *Builder) CreatePoETChallenge(epoch types.EpochId) (error) {
 
 func (b *Builder) GetPrevAtxId(node types.NodeId) (*types.AtxId, error) {
 	ids, err := b.db.GetNodeAtxIds(node)
-
-	if err != nil || len(ids) == 0 {
+	if err != nil {
 		return nil, err
+	}
+	if len(ids) == 0 {
+		return nil, fmt.Errorf("no prev atxs for node %v", node.Key)
 	}
 	return &ids[len(ids)-1], nil
 }

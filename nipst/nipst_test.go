@@ -56,7 +56,6 @@ func TestNIPSTBuilderWithMocks(t *testing.T) {
 	verifyPoetMock := func(*poetProof) (bool, error) { return true, nil }
 	verifyPoetMembershipMock := func(*membershipProof, *poetProof) bool { return true }
 
-
 	nb := NewNIPSTBuilder(
 		[]byte("id"),
 		1024,

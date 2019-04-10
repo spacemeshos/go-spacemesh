@@ -1,6 +1,7 @@
 package activation
 
 import (
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -43,11 +44,16 @@ func (n *NetMock) Broadcast(id string, d []byte) error {
 }
 
 type NipstBuilderMock struct {
-
 }
 
-func (np *NipstBuilderMock) BuildNIPST(challange []byte) (*nipst.NIPST, error){
+func (np *NipstBuilderMock) BuildNIPST(challange []byte) (*nipst.NIPST, error) {
 	return &nipst.NIPST{}, nil
+}
+
+type NipstErrBuilderMock struct{}
+
+func (np *NipstErrBuilderMock) BuildNIPST(challange []byte) (*nipst.NIPST, error) {
+	return nil, fmt.Errorf("error")
 }
 
 func TestBuilder_BuildActivationTx(t *testing.T) {
@@ -84,11 +90,44 @@ func TestBuilder_NoPrevATX(t *testing.T) {
 	net := &NetMock{}
 	echp := &EchProvider{}
 	layers := MeshProviderrMock{}
-	b := NewBuilder(id, database.NewMemDatabase(), mesh.NewMemMeshDB(log.NewDefault("")), net, ActiveSetProviderMock{}, layers, echp, 10,&NipstBuilderMock{})
+	b := NewBuilder(id, database.NewMemDatabase(), mesh.NewMemMeshDB(log.NewDefault("")), net, ActiveSetProviderMock{}, layers, echp, 10, &NipstBuilderMock{})
 	err := b.PublishActivationTx(&nipst.NIPST{})
 	assert.Error(t, err)
 }
 
 func TestBuilder_CreatePoETChallenge(t *testing.T) {
+	id := types.NodeId{"aaaa", []byte("bbb")}
+	net := &NetMock{}
+	echp := &EchProvider{}
+	layers := MeshProviderrMock{}
+	b := NewBuilder(id, database.NewMemDatabase(), mesh.NewMemMeshDB(log.NewDefault("")), net, ActiveSetProviderMock{}, layers, echp, 10, &NipstBuilderMock{})
+	adb := b.db
+	prevAtx := types.AtxId{Hash: common.HexToHash("0x111")}
+	npst := nipst.NIPST{}
+	atx := types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")},
+		1,
+		prevAtx,
+		5,
+		1,
+		prevAtx,
+		5,
+		[]types.BlockID{1, 2, 3},
+		&npst)
+	adb.StoreAtx(echp.Epoch(atx.LayerIdx), atx)
+	act := types.NewActivationTx(b.nodeId, b.GetLastSequence(b.nodeId)+1, atx.Id(), layers.LatestLayerId(), 0, atx.Id(), b.activeSet.GetActiveSetSize(1), b.mesh.GetLatestView(), &npst)
+	err := b.CreatePoETChallenge(echp.Epoch(atx.LayerIdx))
+	assert.NoError(t, err)
+	bts, err := types.AtxAsBytes(act)
+	assert.NoError(t, err)
+	assert.Equal(t, bts, net.bt)
+
+	b.nipstBuilder = &NipstErrBuilderMock{}
+	err = b.CreatePoETChallenge(echp.Epoch(atx.LayerIdx))
+	assert.Error(t, err)
+	assert.Equal(t, err.Error(), "error")
+
+	bt := NewBuilder(id, database.NewMemDatabase(), mesh.NewMemMeshDB(log.NewDefault("")), net, ActiveSetProviderMock{}, layers, echp, 10, &NipstBuilderMock{})
+	err = bt.CreatePoETChallenge(echp.Epoch(atx.LayerIdx))
+	assert.Error(t, err)
 
 }
