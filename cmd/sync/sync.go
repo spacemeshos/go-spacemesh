@@ -42,7 +42,6 @@ func NewSyncApp() *SyncApp {
 func (app *SyncApp) Cleanup() {
 
 }
-
 func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	// start p2p services
 	lg := log.New("sync_test", "", "")
@@ -57,7 +56,7 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	gTime, err := time.Parse(time.RFC3339, app.Config.GenesisTime)
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
 	clock := timesync.NewTicker(timesync.RealClock{}, ld, gTime)
-	msh := mesh.NewPersistentMesh(app.Config.DataDir, sync.ConfigTst(), &sync.MeshValidatorMock{}, sync.MockState{}, lg)
+	msh := mesh.NewPersistentMesh(app.Config.DataDir, sync.ConfigTst(), &sync.MeshValidatorMock{}, sync.MockState{}, sync.AtxDbMock{}, lg)
 	defer msh.Close()
 	if lyr, err := msh.GetLayer(100); err != nil || lyr == nil {
 		lg.Error("could not load layers from disk ...   shutdown", err)

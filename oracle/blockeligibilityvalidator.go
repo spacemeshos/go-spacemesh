@@ -3,7 +3,7 @@ package oracle
 import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spacemeshos/sha256-simd"
 )
 
@@ -17,8 +17,8 @@ type MinerBlockEligibilityValidator struct {
 	validateVRF    VRFValidationFunction
 }
 
-func (v MinerBlockEligibilityValidator) BlockEligible(layerID mesh.LayerID, nodeID mesh.NodeId,
-	proof mesh.BlockEligibilityProof, atxID mesh.AtxId) (bool, error) {
+func (v MinerBlockEligibilityValidator) BlockEligible(layerID types.LayerID, nodeID types.NodeId,
+	proof types.BlockEligibilityProof, atxID types.AtxId) (bool, error) {
 
 	epochNumber := layerID.GetEpoch(v.layersPerEpoch)
 

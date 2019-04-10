@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"github.com/golang-collections/go-datastructures/bitarray"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/types"
 	"sync"
 )
 
@@ -13,37 +13,37 @@ type NewIdQueue chan uint32
 
 type BlockPosition struct {
 	visibility bitarray.BitArray
-	layer      mesh.LayerID
+	layer      types.LayerID
 }
 
 type tortoise struct {
-	block2Id           map[mesh.BlockID]uint32
-	allBlocks          map[mesh.BlockID]*TortoiseBlock
+	block2Id           map[types.BlockID]uint32
+	allBlocks          map[types.BlockID]*TortoiseBlock
 	layerQueue         LayerQueue
 	idQueue            NewIdQueue
 	posVotes           []bitarray.BitArray
 	visibilityMap      [20000]BlockPosition
-	layers             map[mesh.LayerID]*Layer
+	layers             map[types.LayerID]*Layer
 	layerSize          uint32
 	cachedLayers       uint32
 	remainingBlockIds  uint32
 	totalBlocks        uint32
-	layerReadyCallback func(layerId mesh.LayerID)
+	layerReadyCallback func(layerId types.LayerID)
 	mu                 sync.Mutex
 }
 
 func NewTortoise(layerSize uint32, cachedLayers uint32) *tortoise {
 	totBlocks := layerSize * cachedLayers
 	trtl := tortoise{
-		block2Id:          make(map[mesh.BlockID]uint32),
-		allBlocks:         make(map[mesh.BlockID]*TortoiseBlock),
+		block2Id:          make(map[types.BlockID]uint32),
+		allBlocks:         make(map[types.BlockID]*TortoiseBlock),
 		layerQueue:        make(LayerQueue, cachedLayers+1),
 		idQueue:           make(NewIdQueue, layerSize),
 		remainingBlockIds: totBlocks,
 		totalBlocks:       totBlocks,
 		posVotes:          make([]bitarray.BitArray, totBlocks),
 		//visibilityMap:     make([20000]BlockPosition),
-		layers:             make(map[mesh.LayerID]*Layer),
+		layers:             make(map[types.LayerID]*Layer),
 		layerSize:          layerSize,
 		cachedLayers:       cachedLayers,
 		layerReadyCallback: nil,
@@ -51,7 +51,7 @@ func NewTortoise(layerSize uint32, cachedLayers uint32) *tortoise {
 	return &trtl
 }
 
-func (alg *tortoise) RegisterLayerCallback(callback func(mesh.LayerID)) {
+func (alg *tortoise) RegisterLayerCallback(callback func(types.LayerID)) {
 	alg.layerReadyCallback = callback
 }
 
@@ -63,7 +63,7 @@ func (alg *tortoise) LayerVotingAvg() uint64 {
 	return 30
 }
 
-func (alg *tortoise) IsTortoiseValid(originBlock *TortoiseBlock, targetBlock mesh.BlockID, targetBlockIdx uint64, visibleBlocks bitarray.BitArray) bool {
+func (alg *tortoise) IsTortoiseValid(originBlock *TortoiseBlock, targetBlock types.BlockID, targetBlockIdx uint64, visibleBlocks bitarray.BitArray) bool {
 	voteFor, voteAgainst := alg.countTotalVotesForBlock(targetBlockIdx, visibleBlocks)
 
 	if voteFor > alg.GlobalVotingAvg() {
@@ -85,9 +85,9 @@ func (alg *tortoise) IsTortoiseValid(originBlock *TortoiseBlock, targetBlock mes
 	return originBlock.Coin
 }
 
-func (alg *tortoise) getLayerById(layerId mesh.LayerID) (*Layer, error) {
+func (alg *tortoise) getLayerById(layerId types.LayerID) (*Layer, error) {
 	if _, ok := alg.layers[layerId]; !ok {
-		return nil, fmt.Errorf("mesh.LayerID not found %v", layerId)
+		return nil, fmt.Errorf("block..LayerID not found %v", layerId)
 	}
 	return alg.layers[layerId], nil
 }
@@ -204,7 +204,7 @@ func (alg *tortoise) assignIdForBlock(blk *TortoiseBlock) uint32 {
 
 }
 
-func (alg *tortoise) HandleIncomingLayer(ll *mesh.Layer) {
+func (alg *tortoise) HandleIncomingLayer(ll *types.Layer) {
 	l := FromLayerToTortoiseLayer(ll)
 	alg.mu.Lock()
 	alg.layers[l.index] = l
@@ -226,11 +226,11 @@ func (alg *tortoise) HandleIncomingLayer(ll *mesh.Layer) {
 	}
 	alg.mu.Lock()
 	if _, exist := alg.layers[l.index-1]; exist {
-		alg.layerReadyCallback(mesh.LayerID(l.index - 1))
+		alg.layerReadyCallback(types.LayerID(l.index - 1))
 	}
 	alg.mu.Unlock()
 }
 
-func (alg *tortoise) HandleLateBlock(b *mesh.Block) {
-	log.Info("received block with mesh.LayerID %v block id: %v ", b.Layer(), b.ID())
+func (alg *tortoise) HandleLateBlock(b *types.Block) {
+	log.Info("received block with block..LayerID %v block id: %v ", b.Layer(), b.ID())
 }
