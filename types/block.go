@@ -1,8 +1,9 @@
-package mesh
+package types
 
 import (
 	"bytes"
 	"github.com/spacemeshos/go-spacemesh/address"
+	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"math/big"
 	"time"
@@ -14,6 +15,22 @@ type LayerID uint64
 
 func (l LayerID) GetEpoch(layersPerEpoch uint16) uint64 {
 	return uint64(l) / uint64(layersPerEpoch)
+}
+
+//todo: choose which type is VRF
+type Vrf string
+
+type NodeId struct {
+	Key          string
+	VRFPublicKey []byte
+}
+
+func (id NodeId) String() string {
+	return id.Key + string(id.VRFPublicKey)
+}
+
+func (id NodeId) ToBytes() []byte {
+	return common.Hex2Bytes(id.String())
 }
 
 type BlockHeader struct {
