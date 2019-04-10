@@ -18,6 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/spacemeshos/go-spacemesh/sync"
+	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spacemeshos/go-spacemesh/version"
 	"math/rand"
 
@@ -282,14 +283,22 @@ func (app *SpacemeshApp) initServices(instanceName string, swarm service.Service
 	clock := timesync.NewTicker(timesync.RealClock{}, ld, gTime)
 	mdb := mesh.NewPersistentMeshDB(dbStorepath, lg.WithName("meshdb"))
 	trtl := consensus.NewAlgorithm(consensus.NewNinjaTortoise(layerSize, mdb, lg.WithName("trtl")))
-	msh := mesh.NewMesh(mdb, app.Config.REWARD, trtl, processor, lg.WithName("mesh")) //todo: what to do with the logger?
+
+	atxdbstore, err := database.NewLDBDatabase(dbStorepath+"atx", 0, 0)
+	if err != nil {
+		return err
+	}
+
+	//todo: put in config
+	atxdb := activation.NewActivationDb(atxdbstore, mdb, 1000)
+	msh := mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, processor, lg.WithName("mesh")) //todo: what to do with the logger?
 
 	conf := sync.Configuration{SyncInterval: 1 * time.Second, Concurrency: 4, LayerSize: int(layerSize), RequestTimeout: 100 * time.Millisecond}
 	syncer := sync.NewSync(swarm, msh, blockValidator, conf, clock.Subscribe(), lg)
 
 	ha := hare.New(app.Config.HARE, swarm, sgn, msh, hareOracle, clock.Subscribe(), lg.WithName("hare"))
 
-	nodeID := mesh.NodeId{Key: instanceName} // TODO: where does this come from?
+	nodeID := types.NodeId{Key: instanceName} // TODO: where does this come from?
 	blockProducer := miner.NewBlockBuilder(nodeID, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, lg.WithName("blockProducer"))
 	blockListener := sync.NewBlockListener(swarm, blockValidator, msh, 2*time.Second, 4, lg.WithName("blockListener"))
 
@@ -379,7 +388,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	activationDb := &activation.ActivationDb{}      // TODO: initialize properly
 	beaconProvider := &oracle.EpochBeaconProvider{} // TODO: initialize properly
 	vrfSigner := crypto.NewVRFSigner(nil)           // TODO: use VRF private key
-	nodeID := mesh.NodeId{Key: "x"}
+	nodeID := types.NodeId{Key: "x"}
 	bo := oracle.NewMinerBlockOracle(nodesPerLayer, layersPerEpoch, activationDb, beaconProvider, vrfSigner, nodeID)
 	bv := oracle.NewBlockEligibilityValidator(nodesPerLayer, layersPerEpoch, activationDb, beaconProvider,
 		crypto.ValidateVRF)

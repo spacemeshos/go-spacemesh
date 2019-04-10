@@ -3,7 +3,7 @@ package oracle
 import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spacemeshos/sha256-simd"
 )
 
@@ -29,7 +29,7 @@ func NewBlockEligibilityValidator(committeeSize int32, layersPerEpoch uint16, ac
 	}
 }
 
-func (v BlockEligibilityValidator) BlockEligible(block *mesh.Block) (bool, error) {
+func (v BlockEligibilityValidator) BlockEligible(block *types.Block) (bool, error) {
 	epochNumber := block.LayerIndex.GetEpoch(v.layersPerEpoch)
 
 	atx, err := v.activationDb.GetAtx(block.ATXID)

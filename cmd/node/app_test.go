@@ -4,12 +4,14 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/address"
 	apiCfg "github.com/spacemeshos/go-spacemesh/api/config"
+	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	sync2 "github.com/spacemeshos/go-spacemesh/sync"
+	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/suite"
 	"math/big"
 	"os"
@@ -45,6 +47,7 @@ func (app *AppTestSuite) TearDownTest() {
 func (app *AppTestSuite) initMultipleInstances(t *testing.T, numOfInstances int, storeFormat string) {
 	net := service.NewSimulator()
 	runningName := 'a'
+	rolacle := eligibility.New()
 	for i := 0; i < numOfInstances; i++ {
 		smapp := NewSpacemeshApp()
 		smapp.Config.HARE.N = numOfInstances
@@ -55,10 +58,11 @@ func (app *AppTestSuite) initMultipleInstances(t *testing.T, numOfInstances int,
 
 		sgn := hare.NewMockSigning() //todo: shouldn't be any mock code here
 		pub := sgn.Verifier()
-		bo := oracle.NewLocalOracle(numOfInstances, mesh.NodeId{Key: pub.String()})
+		bo := oracle.NewLocalOracle(rolacle, numOfInstances, types.NodeId{Key: pub.String()})
 		bo.Register(true, pub.String())
 
-		err := app.apps[i].initServices(pub.String(), n, store, sgn, bo, nil, bo, numOfInstances) // TODO: pass blockValidator and hareOracle
+		bv := sync2.BlockValidatorMock{}
+		err := app.apps[i].initServices(pub.String(), n, store, sgn, bo, bv, bo, numOfInstances)
 		assert.NoError(t, err)
 		app.apps[i].setupGenesis(apiCfg.DefaultGenesisConfig())
 		app.dbs = append(app.dbs, store)
@@ -67,19 +71,18 @@ func (app *AppTestSuite) initMultipleInstances(t *testing.T, numOfInstances int,
 }
 
 func (app *AppTestSuite) TestMultipleNodes() {
-	app.T().Skip() // TODO: FIX!
 	//EntryPointCreated <- true
 
 	addr := address.BytesToAddress([]byte{0x01})
 	dst := address.BytesToAddress([]byte{0x02})
-	tx := mesh.SerializableTransaction{}
+	tx := types.SerializableTransaction{}
 	tx.Amount = big.NewInt(10).Bytes()
 	tx.GasLimit = 1
 	tx.Origin = addr
 	tx.Recipient = &dst
 	tx.Price = big.NewInt(1).Bytes()
 
-	txbytes, _ := mesh.TransactionAsBytes(&tx)
+	txbytes, _ := types.TransactionAsBytes(&tx)
 	path := "../tmp/test/state_" + time.Now().String()
 	app.initMultipleInstances(app.T(), 10, path)
 	for _, a := range app.apps {

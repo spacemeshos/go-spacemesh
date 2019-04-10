@@ -4,17 +4,17 @@ import (
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/crypto"
-	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/require"
 	"testing"
 )
 
-var atxID = mesh.AtxId{Hash: [32]byte{1, 3, 3, 7}}
+var atxID = types.AtxId{Hash: [32]byte{1, 3, 3, 7}}
 var nodeID, vrfSigner = generateNodeIDAndSigner()
 
-func generateNodeIDAndSigner() (mesh.NodeId, *crypto.VRFSigner) {
+func generateNodeIDAndSigner() (types.NodeId, *crypto.VRFSigner) {
 	publicKey, privateKey, _ := crypto.GenerateVRFKeys()
-	return mesh.NodeId{
+	return types.NodeId{
 		Key:          "key",
 		VRFPublicKey: publicKey,
 	}, crypto.NewVRFSigner(privateKey)
@@ -22,19 +22,19 @@ func generateNodeIDAndSigner() (mesh.NodeId, *crypto.VRFSigner) {
 
 type mockActivationDB struct {
 	activeSetSize uint32
-	layerIndex    mesh.LayerID
+	layerIndex    types.LayerID
 }
 
-func (a mockActivationDB) GetNodeAtxIds(node mesh.NodeId) ([]mesh.AtxId, error) {
+func (a mockActivationDB) GetNodeAtxIds(node types.NodeId) ([]types.AtxId, error) {
 	if node.Key != nodeID.Key {
-		return []mesh.AtxId{}, nil
+		return []types.AtxId{}, nil
 	}
-	return []mesh.AtxId{atxID}, nil
+	return []types.AtxId{atxID}, nil
 }
 
-func (a mockActivationDB) GetAtx(id mesh.AtxId) (*mesh.ActivationTx, error) {
+func (a mockActivationDB) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
 	if id == atxID {
-		return &mesh.ActivationTx{ActivationTxHeader: mesh.ActivationTxHeader{ActiveSetSize: a.activeSetSize,
+		return &types.ActivationTx{ActivationTxHeader: types.ActivationTxHeader{ActiveSetSize: a.activeSetSize,
 			LayerIndex: a.layerIndex}}, nil
 	}
 	return nil, errors.New("wrong atx id")
@@ -60,8 +60,8 @@ func testBlockOracleAndValidator(r *require.Assertions, activeSetSize uint32, co
 	numberOfEpochsToTest := 2
 	counterValuesSeen := map[uint32]int{}
 	for layer := uint16(0); layer < layersPerEpoch*uint16(numberOfEpochsToTest); layer++ {
-		activationDB.layerIndex = mesh.LayerID((layer / layersPerEpoch) * layersPerEpoch)
-		layerID := mesh.LayerID(layer)
+		activationDB.layerIndex = types.LayerID((layer / layersPerEpoch) * layersPerEpoch)
+		layerID := types.LayerID(layer)
 		_, proofs, err := blockOracle.BlockEligible(layerID)
 		r.NoError(err)
 
@@ -113,7 +113,7 @@ func TestBlockOracleEmptyActiveSetValidation(t *testing.T) {
 
 	validator := NewBlockEligibilityValidator(committeeSize, layersPerEpoch, activationDB, beaconProvider,
 		crypto.ValidateVRF)
-	block := newBlockWithEligibility(0, nodeID, atxID, mesh.BlockEligibilityProof{})
+	block := newBlockWithEligibility(0, nodeID, atxID, types.BlockEligibilityProof{})
 	eligible, err := validator.BlockEligible(block)
 	r.EqualError(err, "empty active set not allowed")
 	r.False(eligible)
@@ -127,7 +127,7 @@ func TestBlockOracleNoActivationsForNode(t *testing.T) {
 	layersPerEpoch := uint16(10)
 	publicKey, privateKey, err := crypto.GenerateVRFKeys()
 	r.NoError(err)
-	nodeID := mesh.NodeId{
+	nodeID := types.NodeId{
 		Key:          "other key",
 		VRFPublicKey: publicKey,
 	} // This guy has no activations 🧐
@@ -145,7 +145,7 @@ func TestBlockOracleNoActivationsForNode(t *testing.T) {
 func TestBlockOracleValidatorInvalidProof(t *testing.T) {
 	r := require.New(t)
 
-	activeSetSize := uint32(5)
+	activeSetSize := uint32(1)
 	committeeSize := int32(10)
 	layersPerEpoch := uint16(20)
 
@@ -153,14 +153,14 @@ func TestBlockOracleValidatorInvalidProof(t *testing.T) {
 	beaconProvider := &EpochBeaconProvider{}
 	blockOracle := NewMinerBlockOracle(committeeSize, layersPerEpoch, activationDB, beaconProvider, vrfSigner, nodeID)
 
-	layerID := mesh.LayerID(0)
+	layerID := types.LayerID(0)
 
 	_, proofs, err := blockOracle.BlockEligible(layerID)
 	r.NoError(err)
 	r.NotNil(proofs)
 
 	proof := proofs[0]
-	proof.J += 1 // Messing with the proof 😈
+	proof.Sig[0] += 1 // Messing with the proof 😈
 
 	validator := NewBlockEligibilityValidator(committeeSize, layersPerEpoch, activationDB, beaconProvider,
 		crypto.ValidateVRF)
@@ -181,7 +181,7 @@ func TestBlockOracleValidatorInvalidProof2(t *testing.T) {
 	beaconProvider := &EpochBeaconProvider{}
 	blockOracle := NewMinerBlockOracle(committeeSize, layersPerEpoch, minerActivationDB, beaconProvider, vrfSigner, nodeID)
 
-	layerID := mesh.LayerID(0)
+	layerID := types.LayerID(0)
 
 	_, proofs, err := blockOracle.BlockEligible(layerID)
 	r.NoError(err)
@@ -211,7 +211,7 @@ func TestBlockOracleValidatorInvalidProof3(t *testing.T) {
 	beaconProvider := &EpochBeaconProvider{}
 	blockOracle := NewMinerBlockOracle(committeeSize, layersPerEpoch, activationDB, beaconProvider, vrfSigner, nodeID)
 
-	layerID := mesh.LayerID(20)
+	layerID := types.LayerID(20)
 
 	_, proofs, err := blockOracle.BlockEligible(layerID)
 	r.NoError(err)
@@ -230,9 +230,9 @@ func TestBlockOracleValidatorInvalidProof3(t *testing.T) {
 	r.EqualError(err, "activation epoch (0) mismatch with layer epoch (1)")
 }
 
-func newBlockWithEligibility(layerID mesh.LayerID, nodeID mesh.NodeId, atxID mesh.AtxId,
-	proof mesh.BlockEligibilityProof) *mesh.Block {
+func newBlockWithEligibility(layerID types.LayerID, nodeID types.NodeId, atxID types.AtxId,
+	proof types.BlockEligibilityProof) *types.Block {
 
-	return &mesh.Block{BlockHeader: mesh.BlockHeader{LayerIndex: layerID, MinerID: nodeID, ATXID: atxID,
+	return &types.Block{BlockHeader: types.BlockHeader{LayerIndex: layerID, MinerID: nodeID, ATXID: atxID,
 		EligibilityProof: proof}}
 }

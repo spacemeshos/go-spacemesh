@@ -5,8 +5,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/require"
 	"sort"
 	"sync"
@@ -65,7 +65,7 @@ func TestNew(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 
-	layerTicker := make(chan mesh.LayerID)
+	layerTicker := make(chan types.LayerID)
 
 	oracle := NewMockHashOracle(numOfClients)
 	signing := NewMockSigning()
@@ -83,7 +83,7 @@ func TestHare_Start(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 
-	layerTicker := make(chan mesh.LayerID)
+	layerTicker := make(chan types.LayerID)
 
 	oracle := NewMockHashOracle(numOfClients)
 	signing := NewMockSigning()
@@ -105,7 +105,7 @@ func TestHare_GetResult(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 
-	layerTicker := make(chan mesh.LayerID)
+	layerTicker := make(chan types.LayerID)
 
 	oracle := NewMockHashOracle(numOfClients)
 	signing := NewMockSigning()
@@ -114,7 +114,7 @@ func TestHare_GetResult(t *testing.T) {
 
 	h := New(cfg, n1, signing, om, oracle, layerTicker, log.NewDefault("Hare"))
 
-	res, err := h.GetResult(mesh.LayerID(0))
+	res, err := h.GetResult(types.LayerID(0))
 
 	require.Error(t, err)
 	require.Nil(t, res)
@@ -124,7 +124,7 @@ func TestHare_GetResult(t *testing.T) {
 
 	h.collectOutput(mockOutput{mockid, set})
 
-	res, err = h.GetResult(mesh.LayerID(0))
+	res, err = h.GetResult(types.LayerID(0))
 
 	require.NoError(t, err)
 	require.True(t, uint32(res[0]) == uint32(set.values[value1.Id()].Bytes()[0]))
@@ -134,14 +134,14 @@ func TestHare_GetResult2(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 
-	layerTicker := make(chan mesh.LayerID)
+	layerTicker := make(chan types.LayerID)
 
 	oracle := NewMockHashOracle(numOfClients)
 	signing := NewMockSigning()
 
 	om := new(orphanMock)
-	om.f = func() []mesh.BlockID {
-		return []mesh.BlockID{1}
+	om.f = func() []types.BlockID {
+		return []types.BlockID{1}
 	}
 
 	h := New(cfg, n1, signing, om, oracle, layerTicker, log.NewDefault("Hare"))
@@ -155,14 +155,14 @@ func TestHare_GetResult2(t *testing.T) {
 	h.Start()
 
 	for i := 0; i < h.bufferSize+1; i++ {
-		h.beginLayer <- mesh.LayerID(i)
+		h.beginLayer <- types.LayerID(i)
 	}
 	time.Sleep(100 * time.Millisecond)
 
-	_, err := h.GetResult(mesh.LayerID(h.bufferSize))
+	_, err := h.GetResult(types.LayerID(h.bufferSize))
 	require.NoError(t, err)
 
-	h.beginLayer <- mesh.LayerID(h.bufferSize + 1)
+	h.beginLayer <- types.LayerID(h.bufferSize + 1)
 
 	time.Sleep(100 * time.Millisecond)
 
@@ -174,7 +174,7 @@ func TestHare_collectOutput(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 
-	layerTicker := make(chan mesh.LayerID)
+	layerTicker := make(chan types.LayerID)
 
 	oracle := NewMockHashOracle(numOfClients)
 	signing := NewMockSigning()
@@ -187,13 +187,13 @@ func TestHare_collectOutput(t *testing.T) {
 	set := NewSetFromValues(Value{0})
 
 	h.collectOutput(mockOutput{mockid, set})
-	output, ok := h.outputs[mesh.LayerID(mockid)]
+	output, ok := h.outputs[types.LayerID(mockid)]
 	require.True(t, ok)
-	require.Equal(t, output[0], mesh.BlockID(common.BytesToUint32(set.values[0].Bytes())))
+	require.Equal(t, output[0], types.BlockID(common.BytesToUint32(set.values[0].Bytes())))
 
 	mockid = instanceId2
 
-	output, ok = h.outputs[mesh.LayerID(mockid)] // todo : replace with getresult if this is yields a race
+	output, ok = h.outputs[types.LayerID(mockid)] // todo : replace with getresult if this is yields a race
 	require.False(t, ok)
 	require.Nil(t, output)
 
@@ -203,7 +203,7 @@ func TestHare_collectOutput2(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 
-	layerTicker := make(chan mesh.LayerID)
+	layerTicker := make(chan types.LayerID)
 
 	oracle := NewMockHashOracle(numOfClients)
 	signing := NewMockSigning()
@@ -217,9 +217,9 @@ func TestHare_collectOutput2(t *testing.T) {
 	set := NewSetFromValues(Value{0})
 
 	h.collectOutput(mockOutput{mockid, set})
-	output, ok := h.outputs[mesh.LayerID(mockid)]
+	output, ok := h.outputs[types.LayerID(mockid)]
 	require.True(t, ok)
-	require.Equal(t, output[0], mesh.BlockID(common.BytesToUint32(set.values[0].Bytes())))
+	require.Equal(t, output[0], types.BlockID(common.BytesToUint32(set.values[0].Bytes())))
 
 	h.lastLayer = 3
 	newmockid := instanceId1
@@ -245,14 +245,14 @@ func TestHare_onTick(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 
-	layerTicker := make(chan mesh.LayerID)
+	layerTicker := make(chan types.LayerID)
 
 	oracle := NewMockHashOracle(numOfClients)
 	signing := NewMockSigning()
 
-	blockset := []mesh.BlockID{mesh.BlockID(0), mesh.BlockID(1), mesh.BlockID(2)}
+	blockset := []types.BlockID{types.BlockID(0), types.BlockID(1), types.BlockID(2)}
 	om := new(orphanMock)
-	om.f = func() []mesh.BlockID {
+	om.f = func() []types.BlockID {
 		return blockset
 	}
 
@@ -284,7 +284,7 @@ func TestHare_onTick(t *testing.T) {
 	//collect output one more time
 	wg.Wait()
 	time.Sleep(100 * time.Millisecond)
-	res2, err := h.GetResult(mesh.LayerID(0))
+	res2, err := h.GetResult(types.LayerID(0))
 	require.NoError(t, err)
 
 	SortBlockIDs(res2)
@@ -302,12 +302,12 @@ func TestHare_onTick(t *testing.T) {
 
 	//collect output one more time
 	wg.Wait()
-	_, err = h.GetResult(mesh.LayerID(1))
+	_, err = h.GetResult(types.LayerID(1))
 	require.Error(t, err)
 
 }
 
-type BlockIDSlice []mesh.BlockID
+type BlockIDSlice []types.BlockID
 
 func (p BlockIDSlice) Len() int           { return len(p) }
 func (p BlockIDSlice) Less(i, j int) bool { return p[i] < p[j] }
@@ -316,6 +316,6 @@ func (p BlockIDSlice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 // Sort is a convenience method.
 func (p BlockIDSlice) Sort() { sort.Sort(p) }
 
-func SortBlockIDs(slice []mesh.BlockID) {
+func SortBlockIDs(slice []types.BlockID) {
 	sort.Sort(BlockIDSlice(slice))
 }

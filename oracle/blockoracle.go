@@ -5,13 +5,13 @@ import (
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spacemeshos/sha256-simd"
 )
 
 type ActivationDb interface {
-	GetNodeAtxIds(node mesh.NodeId) ([]mesh.AtxId, error)
-	GetAtx(id mesh.AtxId) (*mesh.ActivationTx, error)
+	GetNodeAtxIds(node types.NodeId) ([]types.AtxId, error)
+	GetAtx(id types.AtxId) (*types.ActivationTx, error)
 }
 
 type MinerBlockOracle struct {
@@ -20,15 +20,15 @@ type MinerBlockOracle struct {
 	activationDb   ActivationDb
 	beaconProvider *EpochBeaconProvider
 	vrfSigner      *crypto.VRFSigner
-	nodeID         mesh.NodeId
+	nodeID         types.NodeId
 
 	proofsEpoch       uint64
-	eligibilityProofs map[mesh.LayerID][]mesh.BlockEligibilityProof
-	atxID             mesh.AtxId
+	eligibilityProofs map[types.LayerID][]types.BlockEligibilityProof
+	atxID             types.AtxId
 }
 
 func NewMinerBlockOracle(committeeSize int32, layersPerEpoch uint16, activationDb ActivationDb,
-	beaconProvider *EpochBeaconProvider, vrfSigner *crypto.VRFSigner, nodeId mesh.NodeId) *MinerBlockOracle {
+	beaconProvider *EpochBeaconProvider, vrfSigner *crypto.VRFSigner, nodeId types.NodeId) *MinerBlockOracle {
 
 	return &MinerBlockOracle{
 		committeeSize:  committeeSize,
@@ -41,14 +41,14 @@ func NewMinerBlockOracle(committeeSize int32, layersPerEpoch uint16, activationD
 	}
 }
 
-func (bo *MinerBlockOracle) BlockEligible(layerID mesh.LayerID) (mesh.AtxId, []mesh.BlockEligibilityProof, error) {
+func (bo *MinerBlockOracle) BlockEligible(layerID types.LayerID) (types.AtxId, []types.BlockEligibilityProof, error) {
 
 	epochNumber := layerID.GetEpoch(bo.layersPerEpoch)
 
 	if bo.proofsEpoch != epochNumber {
 		err := bo.calcEligibilityProofs(epochNumber)
 		if err != nil {
-			return mesh.AtxId{}, nil, err
+			return types.AtxId{}, nil, err
 		}
 	}
 
@@ -77,13 +77,13 @@ func (bo *MinerBlockOracle) calcEligibilityProofs(epochNumber uint64) error {
 		return err
 	}
 
-	bo.eligibilityProofs = map[mesh.LayerID][]mesh.BlockEligibilityProof{}
+	bo.eligibilityProofs = map[types.LayerID][]types.BlockEligibilityProof{}
 	for counter := uint32(0); counter < numberOfEligibleBlocks; counter++ {
 		message := serializeVRFMessage(epochBeacon, epochNumber, counter)
 		vrfSig := bo.vrfSigner.Sign(message)
 		vrfHash := sha256.Sum256(vrfSig)
 		eligibleLayer := calcEligibleLayer(epochNumber, bo.layersPerEpoch, vrfHash)
-		bo.eligibilityProofs[eligibleLayer] = append(bo.eligibilityProofs[eligibleLayer], mesh.BlockEligibilityProof{
+		bo.eligibilityProofs[eligibleLayer] = append(bo.eligibilityProofs[eligibleLayer], types.BlockEligibilityProof{
 			J:   counter,
 			Sig: vrfSig,
 		})
@@ -92,11 +92,11 @@ func (bo *MinerBlockOracle) calcEligibilityProofs(epochNumber uint64) error {
 	return nil
 }
 
-func calcEligibleLayer(epochNumber uint64, layersPerEpoch uint16, vrfHash [32]byte) mesh.LayerID {
+func calcEligibleLayer(epochNumber uint64, layersPerEpoch uint16, vrfHash [32]byte) types.LayerID {
 	epochOffset := epochNumber * uint64(layersPerEpoch)
 	vrfInteger := binary.LittleEndian.Uint64(vrfHash[:8])
 	eligibleLayerRelativeToEpochStart := vrfInteger % uint64(layersPerEpoch)
-	return mesh.LayerID(eligibleLayerRelativeToEpochStart + epochOffset)
+	return types.LayerID(eligibleLayerRelativeToEpochStart + epochOffset)
 }
 
 func getNumberOfEligibleBlocks(activeSetSize uint32, committeeSize int32, layersPerEpoch uint16) (uint32, error) {
@@ -111,16 +111,16 @@ func getNumberOfEligibleBlocks(activeSetSize uint32, committeeSize int32, layers
 	return numberOfEligibleBlocks, nil
 }
 
-func getLatestATXID(activationDb ActivationDb, nodeID mesh.NodeId) (mesh.AtxId, error) {
+func getLatestATXID(activationDb ActivationDb, nodeID types.NodeId) (types.AtxId, error) {
 	atxIDs, err := activationDb.GetNodeAtxIds(nodeID)
 	if err != nil {
 		log.Error("getting node ATX IDs failed: %v", err)
-		return mesh.AtxId{}, err
+		return types.AtxId{}, err
 	}
 	numOfActivations := len(atxIDs)
 	if numOfActivations < 1 {
 		log.Error("no activations found for node id \"%v\"", nodeID.Key)
-		return mesh.AtxId{}, errors.New("no activations found")
+		return types.AtxId{}, errors.New("no activations found")
 	}
 	latestATXID := atxIDs[numOfActivations-1]
 	return latestATXID, err
