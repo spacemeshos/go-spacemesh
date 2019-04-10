@@ -9,7 +9,7 @@ import (
 type BlockValidatorMock struct {
 }
 
-func (BlockValidatorMock) BlockEligible(layerID types.LayerID, nodeID types.NodeId, proof types.BlockEligibilityProof) (bool, error) {
+func (BlockValidatorMock) BlockEligible(block *types.Block) (bool, error) {
 	return true, nil
 }
 

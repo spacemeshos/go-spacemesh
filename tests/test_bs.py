@@ -125,7 +125,7 @@ def query_message(indx, namespace, client_po_name, msg, findFails=False):
 
     print("====================================================================")
     print("Report for `{0}` in deployment -  {1}  ".format(msg, client_po_name))
-    print("Number of hits: {0}", len(hits))
+    print("Number of hits: {0}".format(len(hits)))
     print("====================================================================")
     print("Benchmark results:")
     ts = [hit["T"] for hit in hits]
@@ -277,7 +277,7 @@ def setup_clients(request, setup_oracle, setup_bootstrap, client_deployment_info
 
 
 def wait_genesis():
-# Make sure genesis time has not passed yet and sleep for the rest
+    # Make sure genesis time has not passed yet and sleep for the rest
     time_now = pytz.utc.localize(datetime.utcnow())
     delta_from_genesis = (GENESIS_TIME - time_now).total_seconds()
     if delta_from_genesis < 0:
@@ -286,6 +286,15 @@ def wait_genesis():
     else:
         print('sleep for {0} sec until genesis time'.format(delta_from_genesis))
         time.sleep(delta_from_genesis)
+
+
+def api_call(client_ip, data, api, namespace):
+    p = subprocess.Popen(['./kubectl-cmd.sh', '%s' % client_ip, "%s" % data, api, namespace], stdin=subprocess.PIPE,
+                         stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    (out, err) = p.communicate()
+    if p.returncode != 0:
+        raise Exception('An Error raised on api_call')
+    return out
 
 
 @pytest.fixture(scope='module')
@@ -373,9 +382,7 @@ def test_gossip(set_namespace, setup_clients):
     # todo: take out broadcast and rpcs to helper methods.
     api = 'v1/broadcast'
     data = '{"data":"foo"}'
-    p = subprocess.Popen(['./kubectl-cmd.sh', '%s' % client_ip, "%s" % data, api],
-                         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    (out, err) = p.communicate()
+    out = api_call(client_ip, data, api, testconfig['namespace'])
     assert '{"value":"ok"}' in out.decode("utf-8")
 
     # Need to sleep for a while in order to enable the propagation of the gossip message - 0.5 sec for each node
@@ -395,10 +402,9 @@ def test_transaction(set_namespace, setup_clients):
 
     api = 'v1/nonce'
     data = '{"address":"1"}'
-    p = subprocess.Popen(['./kubectl-cmd.sh', '%s' % client_ip, "%s" % data, api], stdin=subprocess.PIPE,
-                         stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    (out, err) = p.communicate()
+    out = api_call(client_ip, data, api, testconfig['namespace'])
     assert '{"value":"0"}' in out.decode("utf-8")
+
     match = re.search(r"{\"value\":\"(?P<nonce_val>\d+)\"}", out.decode("utf-8"))
     assert match
     nonce_val = int(match.group("nonce_val"))
@@ -406,9 +412,8 @@ def test_transaction(set_namespace, setup_clients):
 
     api = 'v1/submittransaction'
     data = '{"sender":"1","reciever":"222","nonce":"0","amount":"100"}'
-    p = subprocess.Popen(['./kubectl-cmd.sh', '%s' % client_ip, "%s" % data, api], stdin=subprocess.PIPE,
-                         stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    (out, err) = p.communicate()
+
+    out = api_call(client_ip, data, api, testconfig['namespace'])
     assert '{"value":"ok"}' in out.decode("utf-8")
 
 

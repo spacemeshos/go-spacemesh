@@ -2,6 +2,7 @@ package nipst
 
 import (
 	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/post/proving"
 	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
@@ -9,14 +10,12 @@ import (
 
 type PostProverClientMock struct{}
 
-func (p *PostProverClientMock) initialize(id []byte, space Space,
-	timeout time.Duration) (*postProof, error) {
-	return &postProof{255, 255, 255, 255}, nil
+func (p *PostProverClientMock) initialize(id []byte, space uint64, numberOfProvenLabels uint8, difficulty proving.Difficulty, timeout time.Duration) (*postProof, error) {
+	return &postProof{}, nil
 }
 
-func (p *PostProverClientMock) execute(id []byte, challenge common.Hash,
-	timeout time.Duration) (*postProof, error) {
-	return &postProof{255, 255, 255, 255}, nil
+func (p *PostProverClientMock) execute(id []byte, challenge common.Hash, numberOfProvenLabels uint8, difficulty proving.Difficulty, timeout time.Duration) (*postProof, error) {
+	return &postProof{}, nil
 }
 
 type PoetProvingServiceClientMock struct{}
@@ -52,6 +51,7 @@ func TestNIPSTBuilderWithMocks(t *testing.T) {
 
 	postProverMock := &PostProverClientMock{}
 	poetProverMock := &PoetProvingServiceClientMock{}
+	verifyPostMock := func(*postProof, uint64, uint8, proving.Difficulty) (bool, error) { return true, nil }
 	verifyMembershipMock := func(*common.Hash, *membershipProof) (bool, error) { return true, nil }
 	verifyPoetMock := func(*poetProof) (bool, error) { return true, nil }
 	verifyPoetMembershipMock := func(*membershipProof, *poetProof) bool { return true }
@@ -62,9 +62,12 @@ func TestNIPSTBuilderWithMocks(t *testing.T) {
 	nb := NewNIPSTBuilder(
 		[]byte("id"),
 		1024,
+		5,
+		proving.NumberOfProvenLabels,
 		600,
 		postProverMock,
 		poetProverMock,
+		verifyPostMock,
 		verifyMembershipMock,
 		verifyPoetMock,
 		verifyPoetMembershipMock,
@@ -90,6 +93,8 @@ func TestNIPSTBuilderWithClients(t *testing.T) {
 
 	assert := require.New(t)
 
+	postProver := newPostClient()
+
 	poetProver, err := newRPCPoetHarnessClient()
 	defer func() {
 		err := poetProver.CleanUp()
@@ -98,17 +103,18 @@ func TestNIPSTBuilderWithClients(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(poetProver)
 
-	postProverMock := &PostProverClientMock{}
-
 	nipstChan := make(chan *NIPST)
 	activationBuilder := &ActivationBuilderMock{nipst: nipstChan}
 
 	nb := NewNIPSTBuilder(
 		[]byte("id"),
 		1024,
+		5,
+		proving.NumberOfProvenLabels,
 		600,
-		postProverMock,
+		postProver,
 		poetProver,
+		verifyPost,
 		verifyMembership,
 		verifyPoet,
 		verifyPoetMembership,

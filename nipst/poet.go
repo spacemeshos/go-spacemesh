@@ -76,8 +76,6 @@ func verifyPoetMembership(m *membershipProof, p *poetProof) bool {
 
 type SeqWorkTicks uint64
 
-type Space uint64
-
 // newRemoteRPCPoetClient returns a new instance of
 // RPCPoetClient for the specified target.
 func newRemoteRPCPoetClient(target string, timeout time.Duration) (*RPCPoetClient, error) {

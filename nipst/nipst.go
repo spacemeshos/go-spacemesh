@@ -5,6 +5,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/post/proving"
 	"sync"
 	"time"
 )
@@ -15,14 +16,14 @@ type PostProverClient interface {
 	// to store some data, by having its storage being filled with
 	// pseudo-random data with respect to a specific id.
 	// This data is the result of a computationally-expensive operation.
-	initialize(id []byte, space Space, timeout time.Duration) (commitment *postProof, err error)
+	initialize(id []byte, space uint64, numberOfProvenLabels uint8, difficulty proving.Difficulty, timeout time.Duration) (commitment *postProof, err error)
 
 	// execute is the phase in which the prover received a challenge,
 	// and proves that his data is still stored (or was recomputed).
 	// This phase can be repeated arbitrarily many times without repeating initialization;
 	// thus despite the initialization essentially serving as a proof-of-work,
 	// the amortized computational complexity can be made arbitrarily small.
-	execute(id []byte, challenge common.Hash, timeout time.Duration) (proof *postProof, err error)
+	execute(id []byte, challenge common.Hash, numberOfProvenLabels uint8, difficulty proving.Difficulty, timeout time.Duration) (proof *postProof, err error)
 }
 
 // PoetProvingServiceClient provides a gateway to a trust-less public proving
@@ -61,7 +62,7 @@ type NIPST struct {
 
 	// space is the amount of storage which the prover
 	// requires to dedicate for generating the NIPST.
-	space Space
+	space uint64
 
 	// duration is a the amount of sequential work ticks
 	// which is used as a proxy for time since an actual clock time
@@ -107,7 +108,7 @@ type NIPST struct {
 }
 
 // initialNIPST returns an initial NIPST instance to be used in the NIPST construction.
-func initialNIPST(id []byte, space Space, duration SeqWorkTicks, prev *NIPST) *NIPST {
+func initialNIPST(id []byte, space uint64, duration SeqWorkTicks, prev *NIPST) *NIPST {
 	return &NIPST{
 		id:       id,
 		space:    space,
@@ -135,10 +136,13 @@ type ActivationBuilder interface {
 
 type NIPSTBuilder struct {
 	id                   []byte
-	space                Space
+	space                uint64
+	difficulty           proving.Difficulty
+	numberOfProvenLabels uint8
 	duration             SeqWorkTicks
 	postProver           PostProverClient
 	poetProver           PoetProvingServiceClient
+	verifyPost           func(proof *postProof, leafCount uint64, numberOfProvenLabels uint8, difficulty proving.Difficulty) (bool, error)
 	verifyMembership     func(member *common.Hash, proof *membershipProof) (bool, error)
 	verifyPoet           func(p *poetProof) (bool, error)
 	verifyPoetMembership func(*membershipProof, *poetProof) bool
@@ -154,10 +158,13 @@ type NIPSTBuilder struct {
 
 func NewNIPSTBuilder(
 	id []byte,
-	space Space,
+	space uint64,
+	difficulty proving.Difficulty,
+	numberOfProvenLabels uint8,
 	duration SeqWorkTicks,
 	postProver PostProverClient,
 	poetProver PoetProvingServiceClient,
+	verifyPost func(proof *postProof, leafCount uint64, numberOfProvenLabels uint8, difficulty proving.Difficulty) (bool, error),
 	verifyMembership func(member *common.Hash, proof *membershipProof) (bool, error),
 	verifyPoet func(p *poetProof) (bool, error),
 	verifyPoetMembership func(*membershipProof, *poetProof) bool,
@@ -167,8 +174,11 @@ func NewNIPSTBuilder(
 		id:                   id,
 		space:                space,
 		duration:             duration,
+		difficulty:           difficulty,
+		numberOfProvenLabels: numberOfProvenLabels,
 		postProver:           postProver,
 		poetProver:           poetProver,
+		verifyPost:           verifyPost,
 		verifyMembership:     verifyMembership,
 		verifyPoet:           verifyPoet,
 		verifyPoetMembership: verifyPoetMembership,
@@ -207,20 +217,25 @@ func (nb *NIPSTBuilder) loop() {
 		log.Info("starting PoST initialization (id: %x, space: %v)",
 			nb.id, nb.space)
 
-		com, err := nb.postProver.initialize(nb.id, nb.space, defTimeout)
+		commitment, err := nb.postProver.initialize(nb.id, nb.space, nb.numberOfProvenLabels, nb.difficulty, defTimeout)
 		if err != nil {
 			nb.error("failed to initialize PoST: %v", err)
 			return
 		}
-		if !com.valid() {
+
+		res, err := nb.verifyPost(commitment, nb.space, nb.numberOfProvenLabels, nb.difficulty)
+		if err != nil {
+			nb.error("received an invalid PoST commitment: %v", err)
+			return
+		}
+		if !res {
 			nb.error("received an invalid PoST commitment")
 			return
 		}
 
-		log.Info("finished PoST initialization (commitment: %x)",
-			*com)
+		log.Info("finished PoST initialization (commitment: %x)", commitment.serialize())
 
-		nb.nipst.postCommitment = com
+		nb.nipst.postCommitment = commitment
 		nb.nipst.persist()
 	}
 
@@ -348,18 +363,23 @@ func (nb *NIPSTBuilder) loop() {
 			log.Info("starting PoST execution (challenge: %x)",
 				postChallenge)
 
-			proof, err := nb.postProver.execute(nb.id, postChallenge, defTimeout)
+			proof, err := nb.postProver.execute(nb.id, postChallenge, nb.numberOfProvenLabels, nb.difficulty, defTimeout)
 			if err != nil {
 				nb.error("failed to execute PoST: %v", err)
 				break
 			}
-			if !proof.valid() {
+
+			res, err := nb.verifyPost(proof, nb.space, nb.numberOfProvenLabels, nb.difficulty)
+			if err != nil {
+				nb.error("received an invalid PoST proof: %v", err)
+				break
+			}
+			if !res {
 				nb.error("received an invalid PoST proof")
 				break
 			}
 
-			log.Info("finished PoST execution (proof: %x)",
-				*proof)
+			log.Info("finished PoST execution (proof: %x)", proof.serialize())
 
 			nb.nipst.postChallenge = &postChallenge
 			nb.nipst.postProof = proof
