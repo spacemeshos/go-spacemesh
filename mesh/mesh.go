@@ -4,11 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/address"
-	"github.com/spacemeshos/go-spacemesh/block"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/crypto/sha3"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/rlp"
+	"github.com/spacemeshos/go-spacemesh/types"
 	"math/big"
 	"sort"
 	"sync"
@@ -25,18 +25,18 @@ var TRUE = []byte{1}
 var FALSE = []byte{0}
 
 type MeshValidator interface {
-	HandleIncomingLayer(layer *block.Layer) (block.LayerID, block.LayerID)
-	HandleLateBlock(bl *block.Block)
-	ContextualValidity(id block.BlockID) bool
+	HandleIncomingLayer(layer *types.Layer) (types.LayerID, types.LayerID)
+	HandleLateBlock(bl *types.Block)
+	ContextualValidity(id types.BlockID) bool
 }
 
 type StateUpdater interface {
-	ApplyTransactions(layer block.LayerID, transactions Transactions) (uint32, error)
-	ApplyRewards(layer block.LayerID, miners map[string]struct{}, underQuota map[string]struct{}, bonusReward, diminishedReward *big.Int)
+	ApplyTransactions(layer types.LayerID, transactions Transactions) (uint32, error)
+	ApplyRewards(layer types.LayerID, miners map[string]struct{}, underQuota map[string]struct{}, bonusReward, diminishedReward *big.Int)
 }
 
 type AtxDB interface {
-	ProcessBlockATXs(block *block.Block)
+	ProcessBlockATXs(block *types.Block)
 }
 
 type Mesh struct {
@@ -44,9 +44,9 @@ type Mesh struct {
 	mdb           *MeshDB
 	AtxDB         AtxDB
 	config        Config
-	verifiedLayer block.LayerID
-	latestLayer   block.LayerID
-	lastSeenLayer block.LayerID
+	verifiedLayer types.LayerID
+	latestLayer   types.LayerID
+	lastSeenLayer types.LayerID
 	lMutex        sync.RWMutex
 	lkMutex       sync.RWMutex
 	lcMutex       sync.RWMutex
@@ -148,7 +148,7 @@ func rlpHash(x interface{}) (h common.Hash) {
 	return h
 }
 
-func SerializableTransaction2StateTransaction(tx *block.SerializableTransaction) *Transaction {
+func SerializableTransaction2StateTransaction(tx *types.SerializableTransaction) *Transaction {
 	price := big.Int{}
 	price.SetBytes(tx.Price)
 
@@ -158,24 +158,24 @@ func SerializableTransaction2StateTransaction(tx *block.SerializableTransaction)
 	return NewTransaction(tx.AccountNonce, tx.Origin, *tx.Recipient, &amount, tx.GasLimit, &price)
 }
 
-func (m *Mesh) IsContexuallyValid(b block.BlockID) bool {
+func (m *Mesh) IsContexuallyValid(b types.BlockID) bool {
 	//todo implement
 	return true
 }
 
-func (m *Mesh) VerifiedLayer() block.LayerID {
+func (m *Mesh) VerifiedLayer() types.LayerID {
 	defer m.lvMutex.RUnlock()
 	m.lvMutex.RLock()
 	return m.verifiedLayer
 }
 
-func (m *Mesh) LatestLayer() block.LayerID {
+func (m *Mesh) LatestLayer() types.LayerID {
 	defer m.lkMutex.RUnlock()
 	m.lkMutex.RLock()
 	return m.latestLayer
 }
 
-func (m *Mesh) SetLatestLayer(idx block.LayerID) {
+func (m *Mesh) SetLatestLayer(idx types.LayerID) {
 	defer m.lkMutex.Unlock()
 	m.lkMutex.Lock()
 	if idx > m.latestLayer {
@@ -184,7 +184,7 @@ func (m *Mesh) SetLatestLayer(idx block.LayerID) {
 	}
 }
 
-func (m *Mesh) ValidateLayer(lyr *block.Layer) {
+func (m *Mesh) ValidateLayer(lyr *types.Layer) {
 	m.Info("Validate layer %d", lyr.Index())
 
 	if lyr.Index() >= m.config.RewardMaturity {
@@ -201,7 +201,7 @@ func (m *Mesh) ValidateLayer(lyr *block.Layer) {
 	}
 }
 
-func (m *Mesh) addAtxs(oldBase, newBase block.LayerID) {
+func (m *Mesh) addAtxs(oldBase, newBase types.LayerID) {
 	for i := oldBase; i < newBase; i++ {
 
 		l, err := m.mdb.GetLayer(i)
@@ -216,13 +216,13 @@ func (m *Mesh) addAtxs(oldBase, newBase block.LayerID) {
 	}
 }
 
-func SortBlocks(blocks []*block.Block) []*block.Block {
+func SortBlocks(blocks []*types.Block) []*types.Block {
 	//not final sorting method, need to talk about this
 	sort.Slice(blocks, func(i, j int) bool { return blocks[i].ID() < blocks[j].ID() })
 	return blocks
 }
 
-func (m *Mesh) ExtractUniqueOrderedTransactions(l *block.Layer) []*Transaction {
+func (m *Mesh) ExtractUniqueOrderedTransactions(l *types.Layer) []*Transaction {
 	txs := make([]*Transaction, 0, layerSize)
 	sortedBlocks := SortBlocks(l.Blocks())
 
@@ -239,7 +239,7 @@ func (m *Mesh) ExtractUniqueOrderedTransactions(l *block.Layer) []*Transaction {
 	return MergeDoubles(txs)
 }
 
-func (m *Mesh) PushTransactions(oldBase block.LayerID, newBase block.LayerID) {
+func (m *Mesh) PushTransactions(oldBase types.LayerID, newBase types.LayerID) {
 	for i := oldBase; i < newBase; i++ {
 
 		l, err := m.mdb.GetLayer(i)
@@ -249,7 +249,7 @@ func (m *Mesh) PushTransactions(oldBase block.LayerID, newBase block.LayerID) {
 		}
 
 		merged := m.ExtractUniqueOrderedTransactions(l)
-		x, err := m.state.ApplyTransactions(block.LayerID(i), merged)
+		x, err := m.state.ApplyTransactions(types.LayerID(i), merged)
 		if err != nil {
 			m.Log.Error("cannot apply transactions %v", err)
 		}
@@ -258,9 +258,9 @@ func (m *Mesh) PushTransactions(oldBase block.LayerID, newBase block.LayerID) {
 }
 
 //todo consider adding a boolean for layer validity instead error
-func (m *Mesh) GetVerifiedLayer(i block.LayerID) (*block.Layer, error) {
+func (m *Mesh) GetVerifiedLayer(i types.LayerID) (*types.Layer, error) {
 	m.lMutex.RLock()
-	if i > block.LayerID(m.verifiedLayer) {
+	if i > types.LayerID(m.verifiedLayer) {
 		m.lMutex.RUnlock()
 		m.Debug("failed to get layer  ", i, " layer not verified yet")
 		return nil, errors.New("layer not verified yet")
@@ -269,23 +269,23 @@ func (m *Mesh) GetVerifiedLayer(i block.LayerID) (*block.Layer, error) {
 	return m.mdb.GetLayer(i)
 }
 
-func (m *Mesh) GetLayer(i block.LayerID) (*block.Layer, error) {
+func (m *Mesh) GetLayer(i types.LayerID) (*types.Layer, error) {
 	return m.mdb.GetLayer(i)
 }
 
-func (m *Mesh) GetLatestVerified() []block.BlockID {
+func (m *Mesh) GetLatestVerified() []types.BlockID {
 	layer, err := m.mdb.GetLayer(m.VerifiedLayer())
 	if err != nil {
 		panic("got an error trying to read verified layer")
 	}
-	view := make([]block.BlockID, 0, len(layer.Blocks()))
+	view := make([]types.BlockID, 0, len(layer.Blocks()))
 	for _, blk := range layer.Blocks() {
 		view = append(view, blk.Id)
 	}
 	return view
 }
 
-func (m *Mesh) AddBlock(blk *block.Block) error {
+func (m *Mesh) AddBlock(blk *types.Block) error {
 	m.Debug("add block %d", blk.ID())
 	if err := m.mdb.AddBlock(blk); err != nil {
 		m.Error("failed to add block %v  %v", blk.ID(), err)
@@ -299,11 +299,11 @@ func (m *Mesh) AddBlock(blk *block.Block) error {
 }
 
 //todo better thread safety
-func (m *Mesh) handleOrphanBlocks(blk *block.Block) {
+func (m *Mesh) handleOrphanBlocks(blk *types.Block) {
 	m.orphMutex.Lock()
 	defer m.orphMutex.Unlock()
 	if _, ok := m.mdb.orphanBlocks[blk.Layer()]; !ok {
-		m.mdb.orphanBlocks[blk.Layer()] = make(map[block.BlockID]struct{})
+		m.mdb.orphanBlocks[blk.Layer()] = make(map[types.BlockID]struct{})
 	}
 	m.mdb.orphanBlocks[blk.Layer()][blk.ID()] = struct{}{}
 	m.Info("Added block %d to orphans", blk.ID())
@@ -320,26 +320,26 @@ func (m *Mesh) handleOrphanBlocks(blk *block.Block) {
 	}
 }
 
-func (m *Mesh) GetUnverifiedLayerBlocks(l block.LayerID) ([]block.BlockID, error) {
+func (m *Mesh) GetUnverifiedLayerBlocks(l types.LayerID) ([]types.BlockID, error) {
 	x, err := m.mdb.layers.Get(l.ToBytes())
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf("could not retrive layer = %d blocks ", l))
 	}
-	blockIds, err := block.BytesToBlockIds(x)
+	blockIds, err := types.BytesToBlockIds(x)
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf("could not desirialize layer to id array for layer %d ", l))
 	}
-	arr := make([]block.BlockID, 0, len(blockIds))
+	arr := make([]types.BlockID, 0, len(blockIds))
 	for _, bid := range blockIds {
 		arr = append(arr, bid)
 	}
 	return arr, nil
 }
 
-func (m *Mesh) GetOrphanBlocksBefore(l block.LayerID) ([]block.BlockID, error) {
+func (m *Mesh) GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error) {
 	m.orphMutex.RLock()
 	defer m.orphMutex.RUnlock()
-	ids := map[block.BlockID]struct{}{}
+	ids := map[types.BlockID]struct{}{}
 	for key, val := range m.mdb.orphanBlocks {
 		if key < l {
 			for bid := range val {
@@ -358,7 +358,7 @@ func (m *Mesh) GetOrphanBlocksBefore(l block.LayerID) ([]block.BlockID, error) {
 		ids[b] = struct{}{}
 	}
 
-	idArr := make([]block.BlockID, 0, len(ids))
+	idArr := make([]types.BlockID, 0, len(ids))
 	for i := range ids {
 		idArr = append(idArr, i)
 	}
@@ -369,7 +369,7 @@ func (m *Mesh) GetOrphanBlocksBefore(l block.LayerID) ([]block.BlockID, error) {
 	return idArr, nil
 }
 
-func (m *Mesh) AccumulateRewards(rewardLayer block.LayerID, params Config) {
+func (m *Mesh) AccumulateRewards(rewardLayer types.LayerID, params Config) {
 	l, err := m.mdb.GetLayer(rewardLayer)
 	if err != nil || l == nil {
 		m.Error("") //todo handle error
@@ -410,17 +410,17 @@ func (m *Mesh) AccumulateRewards(rewardLayer block.LayerID, params Config) {
 	log.Info("fees reward: %v total processed %v total txs %v merged %v blocks: %v", rewards.Int64(), processed, len(merged), len(merged), numBlocks)
 
 	bonusReward, diminishedReward := calculateActualRewards(rewards, numBlocks, params, len(uq))
-	m.state.ApplyRewards(block.LayerID(rewardLayer), ids, uq, bonusReward, diminishedReward)
+	m.state.ApplyRewards(types.LayerID(rewardLayer), ids, uq, bonusReward, diminishedReward)
 	//todo: should miner id be sorted in a deterministic order prior to applying rewards?
 
 }
 
-func (m *Mesh) GetBlock(id block.BlockID) (*block.Block, error) {
+func (m *Mesh) GetBlock(id types.BlockID) (*types.Block, error) {
 	m.Debug("get block %d", id)
 	return m.mdb.GetBlock(id)
 }
 
-func (m *Mesh) GetContextualValidity(id block.BlockID) (bool, error) {
+func (m *Mesh) GetContextualValidity(id types.BlockID) (bool, error) {
 	return m.mdb.getContextualValidity(id)
 }
 
@@ -429,17 +429,17 @@ func (m *Mesh) Close() {
 	m.mdb.Close()
 }
 
-func CreateGenesisBlock() *block.Block {
-	bl := &block.Block{
-		BlockHeader: block.BlockHeader{Id: block.BlockID(GenesisId),
+func CreateGenesisBlock() *types.Block {
+	bl := &types.Block{
+		BlockHeader: types.BlockHeader{Id: types.BlockID(GenesisId),
 			LayerIndex: 0,
 			Data:       []byte("genesis")},
 	}
 	return bl
 }
 
-func GenesisLayer() *block.Layer {
-	l := block.NewLayer(Genesis)
+func GenesisLayer() *types.Layer {
+	l := types.NewLayer(Genesis)
 	l.AddBlock(CreateGenesisBlock())
 	return l
 }

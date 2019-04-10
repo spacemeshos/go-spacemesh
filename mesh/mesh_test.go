@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/google/uuid"
-	"github.com/spacemeshos/go-spacemesh/block"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
 	"math/big"
 	"testing"
@@ -14,25 +14,25 @@ import (
 
 type MeshValidatorMock struct{}
 
-func (m *MeshValidatorMock) HandleIncomingLayer(layer *block.Layer) (block.LayerID, block.LayerID) {
+func (m *MeshValidatorMock) HandleIncomingLayer(layer *types.Layer) (types.LayerID, types.LayerID) {
 	return layer.Index() - 1, layer.Index()
 }
-func (m *MeshValidatorMock) HandleLateBlock(bl *block.Block)              {}
-func (m *MeshValidatorMock) RegisterLayerCallback(func(id block.LayerID)) {}
-func (mlg *MeshValidatorMock) ContextualValidity(id block.BlockID) bool   { return true }
+func (m *MeshValidatorMock) HandleLateBlock(bl *types.Block)              {}
+func (m *MeshValidatorMock) RegisterLayerCallback(func(id types.LayerID)) {}
+func (mlg *MeshValidatorMock) ContextualValidity(id types.BlockID) bool   { return true }
 
 type MockState struct{}
 
-func (MockState) ApplyTransactions(layer block.LayerID, txs Transactions) (uint32, error) {
+func (MockState) ApplyTransactions(layer types.LayerID, txs Transactions) (uint32, error) {
 	return 0, nil
 }
 
-func (MockState) ApplyRewards(layer block.LayerID, miners map[string]struct{}, underQuota map[string]struct{}, bonusReward, diminishedReward *big.Int) {
+func (MockState) ApplyRewards(layer types.LayerID, miners map[string]struct{}, underQuota map[string]struct{}, bonusReward, diminishedReward *big.Int) {
 }
 
 type AtxDbMock struct{}
 
-func (AtxDbMock) ProcessBlockATXs(block *block.Block) {
+func (AtxDbMock) ProcessBlockATXs(block *types.Block) {
 
 }
 
@@ -47,9 +47,9 @@ func TestLayers_AddBlock(t *testing.T) {
 	layers := getMesh("t1")
 	defer layers.Close()
 
-	block1 := block.NewExistingBlock(block.BlockID(uuid.New().ID()), 1, []byte("data1"))
-	block2 := block.NewExistingBlock(block.BlockID(uuid.New().ID()), 2, []byte("data2"))
-	block3 := block.NewExistingBlock(block.BlockID(uuid.New().ID()), 3, []byte("data3"))
+	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data1"))
+	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 2, []byte("data2"))
+	block3 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 3, []byte("data3"))
 
 	addTransactionsToBlock(block1, 4)
 
@@ -75,10 +75,10 @@ func TestLayers_AddBlock(t *testing.T) {
 func TestLayers_AddLayer(t *testing.T) {
 	layers := getMesh("t2")
 	defer layers.Close()
-	id := block.LayerID(1)
-	block1 := block.NewExistingBlock(block.BlockID(uuid.New().ID()), id, []byte("data"))
-	block2 := block.NewExistingBlock(block.BlockID(uuid.New().ID()), id, []byte("data"))
-	block3 := block.NewExistingBlock(block.BlockID(uuid.New().ID()), id, []byte("data"))
+	id := types.LayerID(1)
+	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), id, []byte("data"))
+	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), id, []byte("data"))
+	block3 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), id, []byte("data"))
 	l, err := layers.GetLayer(id)
 	assert.True(t, err != nil, "error: ", err)
 
@@ -97,13 +97,13 @@ func TestLayers_AddLayer(t *testing.T) {
 func TestLayers_AddWrongLayer(t *testing.T) {
 	layers := getMesh("t3")
 	defer layers.Close()
-	block1 := block.NewExistingBlock(block.BlockID(uuid.New().ID()), 1, []byte("data data data"))
-	block2 := block.NewExistingBlock(block.BlockID(uuid.New().ID()), 2, []byte("data data data"))
-	block3 := block.NewExistingBlock(block.BlockID(uuid.New().ID()), 4, []byte("data data data"))
-	l1 := block.NewExistingLayer(1, []*block.Block{block1})
+	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 2, []byte("data data data"))
+	block3 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 4, []byte("data data data"))
+	l1 := types.NewExistingLayer(1, []*types.Block{block1})
 	layers.AddBlock(block1)
 	layers.ValidateLayer(l1)
-	l2 := block.NewExistingLayer(2, []*block.Block{block2})
+	l2 := types.NewExistingLayer(2, []*types.Block{block2})
 	layers.AddBlock(block2)
 	layers.ValidateLayer(l2)
 	layers.AddBlock(block3)
@@ -118,10 +118,10 @@ func TestLayers_AddWrongLayer(t *testing.T) {
 func TestLayers_GetLayer(t *testing.T) {
 	layers := getMesh("t4")
 	defer layers.Close()
-	block1 := block.NewExistingBlock(block.BlockID(uuid.New().ID()), 1, []byte("data data data"))
-	block2 := block.NewExistingBlock(block.BlockID(uuid.New().ID()), 1, []byte("data data data"))
-	block3 := block.NewExistingBlock(block.BlockID(uuid.New().ID()), 1, []byte("data data data"))
-	l1 := block.NewExistingLayer(1, []*block.Block{block1})
+	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block3 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	l1 := types.NewExistingLayer(1, []*types.Block{block1})
 	layers.AddBlock(block1)
 	layers.ValidateLayer(l1)
 	l, err := layers.GetVerifiedLayer(0)
@@ -153,11 +153,11 @@ func TestLayers_WakeUp(t *testing.T) {
 func TestLayers_OrphanBlocks(t *testing.T) {
 	layers := getMesh("t6")
 	defer layers.Close()
-	block1 := block.NewExistingBlock(block.BlockID(uuid.New().ID()), 1, []byte("data data data"))
-	block2 := block.NewExistingBlock(block.BlockID(uuid.New().ID()), 1, []byte("data data data"))
-	block3 := block.NewExistingBlock(block.BlockID(uuid.New().ID()), 2, []byte("data data data"))
-	block4 := block.NewExistingBlock(block.BlockID(uuid.New().ID()), 2, []byte("data data data"))
-	block5 := block.NewExistingBlock(block.BlockID(uuid.New().ID()), 3, []byte("data data data"))
+	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block3 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 2, []byte("data data data"))
+	block4 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 2, []byte("data data data"))
+	block5 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 3, []byte("data data data"))
 	block5.AddView(block1.ID())
 	block5.AddView(block2.ID())
 	block5.AddView(block3.ID())

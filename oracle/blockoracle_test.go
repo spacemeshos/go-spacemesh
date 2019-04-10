@@ -3,18 +3,18 @@ package oracle
 import (
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/block"
 	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/require"
 	"testing"
 )
 
-var atxID = block.AtxId{Hash: [32]byte{1, 3, 3, 7}}
+var atxID = types.AtxId{Hash: [32]byte{1, 3, 3, 7}}
 var nodeID, vrfSigner = generateNodeIDAndSigner()
 
-func generateNodeIDAndSigner() (block.NodeId, *crypto.VRFSigner) {
+func generateNodeIDAndSigner() (types.NodeId, *crypto.VRFSigner) {
 	publicKey, privateKey, _ := crypto.GenerateVRFKeys()
-	return block.NodeId{
+	return types.NodeId{
 		Key:          "key",
 		VRFPublicKey: publicKey,
 	}, crypto.NewVRFSigner(privateKey)
@@ -22,19 +22,19 @@ func generateNodeIDAndSigner() (block.NodeId, *crypto.VRFSigner) {
 
 type mockActivationDB struct {
 	activeSetSize uint32
-	layerIndex    block.LayerID
+	layerIndex    types.LayerID
 }
 
-func (a mockActivationDB) GetNodeAtxIds(node block.NodeId) ([]block.AtxId, error) {
+func (a mockActivationDB) GetNodeAtxIds(node types.NodeId) ([]types.AtxId, error) {
 	if node.Key != nodeID.Key {
-		return []block.AtxId{}, nil
+		return []types.AtxId{}, nil
 	}
-	return []block.AtxId{atxID}, nil
+	return []types.AtxId{atxID}, nil
 }
 
-func (a mockActivationDB) GetAtx(id block.AtxId) (*block.ActivationTx, error) {
+func (a mockActivationDB) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
 	if id == atxID {
-		return &block.ActivationTx{ActivationTxHeader: block.ActivationTxHeader{ActiveSetSize: a.activeSetSize,
+		return &types.ActivationTx{ActivationTxHeader: types.ActivationTxHeader{ActiveSetSize: a.activeSetSize,
 			LayerIndex: a.layerIndex}}, nil
 	}
 	return nil, errors.New("wrong atx id")
@@ -65,8 +65,8 @@ func testBlockOracleAndValidator(r *require.Assertions, activeSetSize uint32, co
 	numberOfEpochsToTest := 2
 	counterValuesSeen := map[uint32]int{}
 	for layer := uint16(0); layer < layersPerEpoch*uint16(numberOfEpochsToTest); layer++ {
-		activationDB.layerIndex = block.LayerID((layer / layersPerEpoch) * layersPerEpoch)
-		layerID := block.LayerID(layer)
+		activationDB.layerIndex = types.LayerID((layer / layersPerEpoch) * layersPerEpoch)
+		layerID := types.LayerID(layer)
 		proofs, err := blockOracle.BlockEligible(layerID)
 		r.NoError(err)
 
@@ -122,7 +122,7 @@ func TestBlockOracleEmptyActiveSetValidation(t *testing.T) {
 		beaconProvider: beaconProvider,
 		validateVRF:    crypto.ValidateVRF,
 	}
-	eligible, err := validator.BlockEligible(0, nodeID, block.BlockEligibilityProof{}, atxID)
+	eligible, err := validator.BlockEligible(0, nodeID, types.BlockEligibilityProof{}, atxID)
 	r.EqualError(err, "empty active set not allowed")
 	r.False(eligible)
 }
@@ -135,7 +135,7 @@ func TestBlockOracleNoActivationsForNode(t *testing.T) {
 	layersPerEpoch := uint16(10)
 	publicKey, privateKey, err := crypto.GenerateVRFKeys()
 	r.NoError(err)
-	nodeID := block.NodeId{
+	nodeID := types.NodeId{
 		Key:          "other key",
 		VRFPublicKey: publicKey,
 	} // This guy has no activations 🧐
@@ -161,7 +161,7 @@ func TestBlockOracleValidatorInvalidProof(t *testing.T) {
 	beaconProvider := &EpochBeaconProvider{}
 	blockOracle := NewMinerBlockOracle(committeeSize, layersPerEpoch, activationDB, beaconProvider, vrfSigner, nodeID)
 
-	layerID := block.LayerID(0)
+	layerID := types.LayerID(0)
 
 	proofs, err := blockOracle.BlockEligible(layerID)
 	r.NoError(err)
@@ -193,7 +193,7 @@ func TestBlockOracleValidatorInvalidProof2(t *testing.T) {
 	beaconProvider := &EpochBeaconProvider{}
 	blockOracle := NewMinerBlockOracle(committeeSize, layersPerEpoch, minerActivationDB, beaconProvider, vrfSigner, nodeID)
 
-	layerID := block.LayerID(0)
+	layerID := types.LayerID(0)
 
 	proofs, err := blockOracle.BlockEligible(layerID)
 	r.NoError(err)
@@ -227,7 +227,7 @@ func TestBlockOracleValidatorInvalidProof3(t *testing.T) {
 	beaconProvider := &EpochBeaconProvider{}
 	blockOracle := NewMinerBlockOracle(committeeSize, layersPerEpoch, activationDB, beaconProvider, vrfSigner, nodeID)
 
-	layerID := block.LayerID(20)
+	layerID := types.LayerID(20)
 
 	proofs, err := blockOracle.BlockEligible(layerID)
 	r.NoError(err)

@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/block"
+	"github.com/spacemeshos/go-spacemesh/types"
 	"hash/fnv"
 	"sort"
 	"strconv"
@@ -14,9 +14,9 @@ type Bytes32 [32]byte
 type Signature []byte
 
 type Value struct {
-	block.BlockID
+	types.BlockID
 }
-type InstanceId block.LayerID
+type InstanceId types.LayerID
 
 type MessageType byte
 
@@ -62,7 +62,7 @@ func (id InstanceId) Bytes() []byte {
 }
 
 func NewValue(value uint64) Value {
-	return Value{block.BlockID(value)}
+	return Value{types.BlockID(value)}
 }
 
 func (v Value) Id() objectId {

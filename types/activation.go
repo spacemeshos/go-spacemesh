@@ -1,4 +1,4 @@
-package block
+package types
 
 import (
 	"github.com/spacemeshos/go-spacemesh/common"

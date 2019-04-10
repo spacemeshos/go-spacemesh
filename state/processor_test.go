@@ -3,11 +3,11 @@ package state
 import (
 	"github.com/seehuhn/mt19937"
 	"github.com/spacemeshos/go-spacemesh/address"
-	"github.com/spacemeshos/go-spacemesh/block"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 	"math/big"
@@ -345,7 +345,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 
 			log.Info("transaction %v nonce %v amount %v", t.Origin.Hex(), t.AccountNonce, t.Amount)
 		}
-		failed, err := s.processor.ApplyTransactions(block.LayerID(i), trns)
+		failed, err := s.processor.ApplyTransactions(types.LayerID(i), trns)
 		assert.NoError(s.T(), err)
 		assert.True(s.T(), failed == 0)
 
@@ -355,7 +355,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 		}
 
 		if i == revertToLayer+revertAfterLayer {
-			s.processor.Reset(block.LayerID(revertToLayer))
+			s.processor.Reset(types.LayerID(revertToLayer))
 			got := string(s.processor.globalState.Dump())
 
 			if got != want {

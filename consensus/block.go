@@ -2,38 +2,38 @@ package consensus
 
 import (
 	"github.com/google/uuid"
-	"github.com/spacemeshos/go-spacemesh/block"
+	"github.com/spacemeshos/go-spacemesh/types"
 	"time"
 )
 
-var layerCounter block.LayerID = 0
+var layerCounter types.LayerID = 0
 
 type TortoiseBlock struct {
-	Id         block.BlockID
-	LayerIndex block.LayerID
+	Id         types.BlockID
+	LayerIndex types.LayerID
 	Data       []byte
 	Coin       bool
 	Timestamp  int64
 	ProVotes   uint64
 	ConVotes   uint64
-	BlockVotes map[block.BlockID]bool
-	ViewEdges  map[block.BlockID]struct{}
+	BlockVotes map[types.BlockID]bool
+	ViewEdges  map[types.BlockID]struct{}
 }
 
-func (b TortoiseBlock) ID() block.BlockID {
+func (b TortoiseBlock) ID() types.BlockID {
 	return b.Id
 }
 
-func (b TortoiseBlock) Layer() block.LayerID {
+func (b TortoiseBlock) Layer() types.LayerID {
 	return b.LayerIndex
 }
 
-func NewBlock(coin bool, data []byte, ts time.Time, LayerID block.LayerID) *TortoiseBlock {
+func NewBlock(coin bool, data []byte, ts time.Time, LayerID types.LayerID) *TortoiseBlock {
 	b := TortoiseBlock{
-		Id:         block.BlockID(uuid.New().ID()),
+		Id:         types.BlockID(uuid.New().ID()),
 		LayerIndex: LayerID,
-		BlockVotes: make(map[block.BlockID]bool),
-		ViewEdges:  make(map[block.BlockID]struct{}),
+		BlockVotes: make(map[types.BlockID]bool),
+		ViewEdges:  make(map[types.BlockID]struct{}),
 		Timestamp:  ts.UnixNano(),
 		Data:       data,
 		Coin:       coin,
@@ -45,10 +45,10 @@ func NewBlock(coin bool, data []byte, ts time.Time, LayerID block.LayerID) *Tort
 
 type Layer struct {
 	blocks []*TortoiseBlock
-	index  block.LayerID
+	index  types.LayerID
 }
 
-func (l *Layer) Index() block.LayerID {
+func (l *Layer) Index() types.LayerID {
 	return l.index
 }
 
@@ -74,12 +74,12 @@ func NewLayer() *Layer {
 	return &l
 }
 
-func FromBlockToTortoiseBlock(blk *block.Block) *TortoiseBlock {
+func FromBlockToTortoiseBlock(blk *types.Block) *TortoiseBlock {
 	bl := TortoiseBlock{
-		Id:         block.BlockID(blk.Id),
-		LayerIndex: block.LayerID(blk.LayerIndex),
-		BlockVotes: make(map[block.BlockID]bool),
-		ViewEdges:  make(map[block.BlockID]struct{}),
+		Id:         types.BlockID(blk.Id),
+		LayerIndex: types.LayerID(blk.LayerIndex),
+		BlockVotes: make(map[types.BlockID]bool),
+		ViewEdges:  make(map[types.BlockID]struct{}),
 		Timestamp:  blk.Timestamp,
 		Data:       blk.Data,
 		Coin:       blk.Coin,
@@ -88,14 +88,14 @@ func FromBlockToTortoiseBlock(blk *block.Block) *TortoiseBlock {
 	}
 
 	for _, id := range blk.BlockVotes {
-		bl.BlockVotes[block.BlockID(id)] = true
+		bl.BlockVotes[types.BlockID(id)] = true
 	}
 	return &bl
 }
 
-func FromLayerToTortoiseLayer(lyr *block.Layer) *Layer {
+func FromLayerToTortoiseLayer(lyr *types.Layer) *Layer {
 	l := Layer{
-		index:  block.LayerID(lyr.Index()),
+		index:  types.LayerID(lyr.Index()),
 		blocks: make([]*TortoiseBlock, 0, len(lyr.Blocks())),
 	}
 	for _, block := range lyr.Blocks() {
@@ -104,7 +104,7 @@ func FromLayerToTortoiseLayer(lyr *block.Layer) *Layer {
 	return &l
 }
 
-func NewExistingLayer(idx block.LayerID, blocks []*TortoiseBlock) *Layer {
+func NewExistingLayer(idx types.LayerID, blocks []*TortoiseBlock) *Layer {
 	l := Layer{
 		blocks: blocks,
 		index:  idx,

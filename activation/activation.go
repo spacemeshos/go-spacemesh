@@ -1,12 +1,12 @@
 package activation
 
 import (
-	"github.com/spacemeshos/go-spacemesh/block"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/rand"
+	"github.com/spacemeshos/go-spacemesh/types"
 )
 
 const AtxProtocol = "AtxGossip"
@@ -14,16 +14,16 @@ const AtxProtocol = "AtxGossip"
 var activesetCache = NewActivesetCache(1000)
 
 type ActiveSetProvider interface {
-	GetActiveSetSize(l block.LayerID) uint32
+	GetActiveSetSize(l types.LayerID) uint32
 }
 
 type MeshProvider interface {
-	GetLatestView() []block.BlockID
-	LatestLayerId() block.LayerID
+	GetLatestView() []types.BlockID
+	LatestLayerId() types.LayerID
 }
 
 type EpochProvider interface {
-	Epoch(l block.LayerID) block.EpochId
+	Epoch(l types.LayerID) types.EpochId
 }
 
 type Broadcaster interface {
@@ -31,7 +31,7 @@ type Broadcaster interface {
 }
 
 type Builder struct {
-	nodeId        block.NodeId
+	nodeId        types.NodeId
 	db            *ActivationDb
 	net           Broadcaster
 	activeSet     ActiveSetProvider
@@ -44,7 +44,7 @@ type Processor struct {
 	epochProvider EpochProvider
 }
 
-func NewBuilder(nodeId block.NodeId, db database.DB, meshdb *mesh.MeshDB, net Broadcaster, activeSet ActiveSetProvider, view MeshProvider, epochDuration EpochProvider, layersPerEpoch uint64) *Builder {
+func NewBuilder(nodeId types.NodeId, db database.DB, meshdb *mesh.MeshDB, net Broadcaster, activeSet ActiveSetProvider, view MeshProvider, epochDuration EpochProvider, layersPerEpoch uint64) *Builder {
 	return &Builder{
 		nodeId, NewActivationDb(db, meshdb, layersPerEpoch), net, activeSet, view, epochDuration,
 	}
@@ -55,7 +55,7 @@ func (b *Builder) PublishActivationTx(nipst *nipst.NIPST) error {
 	prevAtx, err := b.GetPrevAtxId(b.nodeId)
 	if prevAtx == nil {
 		log.Info("previous ATX not found")
-		prevAtx = &block.EmptyAtx
+		prevAtx = &types.EmptyAtx
 		seq = 0
 	} else {
 		seq = b.GetLastSequence(b.nodeId)
@@ -68,19 +68,19 @@ func (b *Builder) PublishActivationTx(nipst *nipst.NIPST) error {
 
 	l := b.mesh.LatestLayerId()
 	ech := b.epochProvider.Epoch(l)
-	var posAtx *block.AtxId = nil
+	var posAtx *types.AtxId = nil
 	if ech > 0 {
 		posAtx, err = b.GetPositioningAtxId(ech - 1)
 		if err != nil {
 			return err
 		}
 	} else {
-		posAtx = &block.EmptyAtx
+		posAtx = &types.EmptyAtx
 	}
 
-	atx := block.NewActivationTx(b.nodeId, seq, *prevAtx, l, 0, *posAtx, b.activeSet.GetActiveSetSize(l-1), b.mesh.GetLatestView(), nipst)
+	atx := types.NewActivationTx(b.nodeId, seq, *prevAtx, l, 0, *posAtx, b.activeSet.GetActiveSetSize(l-1), b.mesh.GetLatestView(), nipst)
 
-	buf, err := block.AtxAsBytes(atx)
+	buf, err := types.AtxAsBytes(atx)
 	if err != nil {
 		return err
 	}
@@ -88,7 +88,7 @@ func (b *Builder) PublishActivationTx(nipst *nipst.NIPST) error {
 	return b.net.Broadcast(AtxProtocol, buf)
 }
 
-func (b *Builder) GetPrevAtxId(node block.NodeId) (*block.AtxId, error) {
+func (b *Builder) GetPrevAtxId(node types.NodeId) (*types.AtxId, error) {
 	ids, err := b.db.GetNodeAtxIds(node)
 
 	if err != nil || len(ids) == 0 {
@@ -97,7 +97,7 @@ func (b *Builder) GetPrevAtxId(node block.NodeId) (*block.AtxId, error) {
 	return &ids[len(ids)-1], nil
 }
 
-func (b *Builder) GetPositioningAtxId(epochId block.EpochId) (*block.AtxId, error) {
+func (b *Builder) GetPositioningAtxId(epochId types.EpochId) (*types.AtxId, error) {
 	atxs, err := b.db.GetEpochAtxIds(epochId)
 	if err != nil {
 		return nil, err
@@ -107,7 +107,7 @@ func (b *Builder) GetPositioningAtxId(epochId block.EpochId) (*block.AtxId, erro
 	return &atxId, nil
 }
 
-func (b *Builder) GetLastSequence(node block.NodeId) uint64 {
+func (b *Builder) GetLastSequence(node types.NodeId) uint64 {
 	atxId, err := b.GetPrevAtxId(node)
 	if err != nil {
 		return 0

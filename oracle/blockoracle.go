@@ -3,15 +3,15 @@ package oracle
 import (
 	"encoding/binary"
 	"errors"
-	"github.com/spacemeshos/go-spacemesh/block"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spacemeshos/sha256-simd"
 )
 
 type ActivationDb interface {
-	GetNodeAtxIds(node block.NodeId) ([]block.AtxId, error)
-	GetAtx(id block.AtxId) (*block.ActivationTx, error)
+	GetNodeAtxIds(node types.NodeId) ([]types.AtxId, error)
+	GetAtx(id types.AtxId) (*types.ActivationTx, error)
 }
 
 type MinerBlockOracle struct {
@@ -20,14 +20,14 @@ type MinerBlockOracle struct {
 	activationDb   ActivationDb
 	beaconProvider *EpochBeaconProvider
 	vrfSigner      *crypto.VRFSigner
-	nodeID         block.NodeId
+	nodeID         types.NodeId
 
-	eligibilityProofs map[block.LayerID][]block.BlockEligibilityProof
+	eligibilityProofs map[types.LayerID][]types.BlockEligibilityProof
 	proofsEpoch       uint64
 }
 
 func NewMinerBlockOracle(committeeSize int32, layersPerEpoch uint16, activationDb ActivationDb,
-	beaconProvider *EpochBeaconProvider, vrfSigner *crypto.VRFSigner, nodeId block.NodeId) *MinerBlockOracle {
+	beaconProvider *EpochBeaconProvider, vrfSigner *crypto.VRFSigner, nodeId types.NodeId) *MinerBlockOracle {
 
 	return &MinerBlockOracle{
 		committeeSize:  committeeSize,
@@ -40,7 +40,7 @@ func NewMinerBlockOracle(committeeSize int32, layersPerEpoch uint16, activationD
 	}
 }
 
-func (bo *MinerBlockOracle) BlockEligible(layerID block.LayerID) ([]block.BlockEligibilityProof, error) {
+func (bo *MinerBlockOracle) BlockEligible(layerID types.LayerID) ([]types.BlockEligibilityProof, error) {
 
 	epochNumber := layerID.GetEpoch(bo.layersPerEpoch)
 
@@ -75,13 +75,13 @@ func (bo *MinerBlockOracle) calcEligibilityProofs(epochNumber uint64) error {
 		return err
 	}
 
-	bo.eligibilityProofs = map[block.LayerID][]block.BlockEligibilityProof{}
+	bo.eligibilityProofs = map[types.LayerID][]types.BlockEligibilityProof{}
 	for counter := uint32(0); counter < numberOfEligibleBlocks; counter++ {
 		message := serializeVRFMessage(epochBeacon, epochNumber, counter)
 		vrfSig := bo.vrfSigner.Sign(message)
 		vrfHash := sha256.Sum256(vrfSig)
 		eligibleLayer := calcEligibleLayer(epochNumber, bo.layersPerEpoch, vrfHash)
-		bo.eligibilityProofs[eligibleLayer] = append(bo.eligibilityProofs[eligibleLayer], block.BlockEligibilityProof{
+		bo.eligibilityProofs[eligibleLayer] = append(bo.eligibilityProofs[eligibleLayer], types.BlockEligibilityProof{
 			J:   counter,
 			Sig: vrfSig,
 		})
@@ -90,11 +90,11 @@ func (bo *MinerBlockOracle) calcEligibilityProofs(epochNumber uint64) error {
 	return nil
 }
 
-func calcEligibleLayer(epochNumber uint64, layersPerEpoch uint16, vrfHash [32]byte) block.LayerID {
+func calcEligibleLayer(epochNumber uint64, layersPerEpoch uint16, vrfHash [32]byte) types.LayerID {
 	epochOffset := epochNumber * uint64(layersPerEpoch)
 	vrfInteger := binary.LittleEndian.Uint64(vrfHash[:8])
 	eligibleLayerRelativeToEpochStart := vrfInteger % uint64(layersPerEpoch)
-	return block.LayerID(eligibleLayerRelativeToEpochStart + epochOffset)
+	return types.LayerID(eligibleLayerRelativeToEpochStart + epochOffset)
 }
 
 func getNumberOfEligibleBlocks(activeSetSize uint32, committeeSize int32, layersPerEpoch uint16) (uint32, error) {
@@ -109,16 +109,16 @@ func getNumberOfEligibleBlocks(activeSetSize uint32, committeeSize int32, layers
 	return numberOfEligibleBlocks, nil
 }
 
-func getLatestATXID(activationDb ActivationDb, nodeID block.NodeId) (block.AtxId, error) {
+func getLatestATXID(activationDb ActivationDb, nodeID types.NodeId) (types.AtxId, error) {
 	atxIDs, err := activationDb.GetNodeAtxIds(nodeID)
 	if err != nil {
 		log.Error("getting node ATX IDs failed: %v", err)
-		return block.AtxId{}, err
+		return types.AtxId{}, err
 	}
 	numOfActivations := len(atxIDs)
 	if numOfActivations < 1 {
 		log.Error("no activations found for node id \"%v\"", nodeID.Key)
-		return block.AtxId{}, errors.New("no activations found")
+		return types.AtxId{}, errors.New("no activations found")
 	}
 	latestATXID := atxIDs[numOfActivations-1]
 	return latestATXID, err

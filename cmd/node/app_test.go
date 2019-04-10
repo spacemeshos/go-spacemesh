@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/address"
 	apiCfg "github.com/spacemeshos/go-spacemesh/api/config"
-	"github.com/spacemeshos/go-spacemesh/block"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -12,6 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	sync2 "github.com/spacemeshos/go-spacemesh/sync"
+	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/suite"
 	"math/big"
 	"os"
@@ -58,7 +58,7 @@ func (app *AppTestSuite) initMultipleInstances(t *testing.T, numOfInstances int,
 
 		sgn := hare.NewMockSigning() //todo: shouldn't be any mock code here
 		pub := sgn.Verifier()
-		bo := oracle.NewLocalOracle(rolacle, numOfInstances, block.NodeId{Key: pub.String()})
+		bo := oracle.NewLocalOracle(rolacle, numOfInstances, types.NodeId{Key: pub.String()})
 		bo.Register(true, pub.String())
 
 		bv := sync2.BlockValidatorMock{}
@@ -75,14 +75,14 @@ func (app *AppTestSuite) TestMultipleNodes() {
 
 	addr := address.BytesToAddress([]byte{0x01})
 	dst := address.BytesToAddress([]byte{0x02})
-	tx := block.SerializableTransaction{}
+	tx := types.SerializableTransaction{}
 	tx.Amount = big.NewInt(10).Bytes()
 	tx.GasLimit = 1
 	tx.Origin = addr
 	tx.Recipient = &dst
 	tx.Price = big.NewInt(1).Bytes()
 
-	txbytes, _ := block.TransactionAsBytes(&tx)
+	txbytes, _ := types.TransactionAsBytes(&tx)
 	path := "../tmp/test/state_" + time.Now().String()
 	app.initMultipleInstances(app.T(), 10, path)
 	for _, a := range app.apps {

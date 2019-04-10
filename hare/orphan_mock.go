@@ -1,23 +1,23 @@
 package hare
 
 import (
-	"github.com/spacemeshos/go-spacemesh/block"
+	"github.com/spacemeshos/go-spacemesh/types"
 )
 
 type orphanMock struct {
-	f func() []block.BlockID
+	f func() []types.BlockID
 }
 
-func (op *orphanMock) GetOrphanBlocks() []block.BlockID {
+func (op *orphanMock) GetOrphanBlocks() []types.BlockID {
 	if op.f != nil {
 		return op.f()
 	}
-	return []block.BlockID{}
+	return []types.BlockID{}
 }
 
-func (op *orphanMock) GetUnverifiedLayerBlocks(l block.LayerID) ([]block.BlockID, error) {
+func (op *orphanMock) GetUnverifiedLayerBlocks(l types.LayerID) ([]types.BlockID, error) {
 	if op.f != nil {
 		return op.f(), nil
 	}
-	return []block.BlockID{}, nil
+	return []types.BlockID{}, nil
 }

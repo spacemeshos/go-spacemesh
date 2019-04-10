@@ -7,9 +7,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/api/pb"
-	"github.com/spacemeshos/go-spacemesh/block"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/miner"
+	"github.com/spacemeshos/go-spacemesh/types"
 	"math/big"
 	"net"
 	"strconv"
@@ -60,7 +60,7 @@ func (s SpacemeshGrpcService) GetNonce(ctx context.Context, in *pb.AccountId) (*
 
 func (s SpacemeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.SignedTransaction) (*pb.SimpleMessage, error) {
 
-	tx := block.SerializableTransaction{}
+	tx := types.SerializableTransaction{}
 	addr := address.HexToAddress(in.DstAddress)
 	tx.Recipient = &addr
 	tx.Origin = address.HexToAddress(in.SrcAddress)
@@ -73,7 +73,7 @@ func (s SpacemeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.Sign
 	tx.GasLimit = 10
 	tx.Price = big.NewInt(10).Bytes()
 
-	val, err := block.TransactionAsBytes(&tx)
+	val, err := types.TransactionAsBytes(&tx)
 	if err != nil {
 		return nil, err
 	}

@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/spacemeshos/go-spacemesh/address"
-	"github.com/spacemeshos/go-spacemesh/block"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
 	"math/big"
 	"testing"
@@ -44,9 +44,9 @@ func TestBlockListener(t *testing.T) {
 	bl2 := ListenerFactory(n2, PeersMock{func() []p2p.Peer { return []p2p.Peer{n1.PublicKey()} }}, "2")
 	bl2.Start()
 
-	block1 := block.NewExistingBlock(block.BlockID(123), 0, nil)
-	block2 := block.NewExistingBlock(block.BlockID(321), 1, nil)
-	block3 := block.NewExistingBlock(block.BlockID(222), 2, nil)
+	block1 := types.NewExistingBlock(types.BlockID(123), 0, nil)
+	block2 := types.NewExistingBlock(types.BlockID(321), 1, nil)
+	block3 := types.NewExistingBlock(types.BlockID(222), 2, nil)
 
 	block1.AddView(block2.ID())
 	block1.AddView(block3.ID())
@@ -85,16 +85,16 @@ func TestBlockListener2(t *testing.T) {
 
 	bl2.Start()
 
-	block1 := block.NewExistingBlock(block.BlockID(uuid.New().ID()), 0, []byte("data data data"))
-	block2 := block.NewExistingBlock(block.BlockID(uuid.New().ID()), 0, []byte("data data data"))
-	block3 := block.NewExistingBlock(block.BlockID(uuid.New().ID()), 0, []byte("data data data"))
-	block4 := block.NewExistingBlock(block.BlockID(uuid.New().ID()), 0, []byte("data data data"))
-	block5 := block.NewExistingBlock(block.BlockID(uuid.New().ID()), 0, []byte("data data data"))
-	block6 := block.NewExistingBlock(block.BlockID(uuid.New().ID()), 0, []byte("data data data"))
-	block7 := block.NewExistingBlock(block.BlockID(uuid.New().ID()), 0, []byte("data data data"))
-	block8 := block.NewExistingBlock(block.BlockID(uuid.New().ID()), 0, []byte("data data data"))
-	block9 := block.NewExistingBlock(block.BlockID(uuid.New().ID()), 0, []byte("data data data"))
-	block10 := block.NewExistingBlock(block.BlockID(uuid.New().ID()), 0, []byte("data data data"))
+	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 0, []byte("data data data"))
+	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 0, []byte("data data data"))
+	block3 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 0, []byte("data data data"))
+	block4 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 0, []byte("data data data"))
+	block5 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 0, []byte("data data data"))
+	block6 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 0, []byte("data data data"))
+	block7 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 0, []byte("data data data"))
+	block8 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 0, []byte("data data data"))
+	block9 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 0, []byte("data data data"))
+	block10 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 0, []byte("data data data"))
 
 	block2.AddView(block1.ID())
 	block3.AddView(block2.ID())
@@ -150,21 +150,21 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 	bl1.Start()
 	bl2.Start()
 
-	blk := block.NewExistingBlock(block.BlockID(uuid.New().ID()), 1, []byte("data1"))
-	tx := block.NewSerializableTransaction(0, address.BytesToAddress([]byte{0x01}), address.BytesToAddress([]byte{0x02}), big.NewInt(10), big.NewInt(10), 10)
+	blk := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data1"))
+	tx := types.NewSerializableTransaction(0, address.BytesToAddress([]byte{0x01}), address.BytesToAddress([]byte{0x02}), big.NewInt(10), big.NewInt(10), 10)
 	blk.AddTransaction(tx)
-	blk.AddAtx(block.NewActivationTx(block.NodeId{"aaaa", []byte("bbb")},
+	blk.AddAtx(types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")},
 		1,
-		block.AtxId{},
+		types.AtxId{},
 		5,
 		1,
-		block.AtxId{},
+		types.AtxId{},
 		5,
-		[]block.BlockID{1, 2, 3},
+		[]types.BlockID{1, 2, 3},
 		&nipst.NIPST{}))
 
-	data, err := block.BlockAsBytes(*blk)
-	blk2, ok := block.BytesAsBlock(data)
+	data, err := types.BlockAsBytes(*blk)
+	blk2, ok := types.BytesAsBlock(data)
 	assert.NoError(t, ok)
 	assert.True(t, blk.Compare(&blk2))
 
