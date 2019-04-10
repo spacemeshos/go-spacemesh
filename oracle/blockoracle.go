@@ -22,8 +22,9 @@ type MinerBlockOracle struct {
 	vrfSigner      *crypto.VRFSigner
 	nodeID         types.NodeId
 
-	eligibilityProofs map[types.LayerID][]types.BlockEligibilityProof
 	proofsEpoch       uint64
+	eligibilityProofs map[types.LayerID][]types.BlockEligibilityProof
+	atxID             types.AtxId
 }
 
 func NewMinerBlockOracle(committeeSize int32, layersPerEpoch uint16, activationDb ActivationDb,
@@ -40,18 +41,18 @@ func NewMinerBlockOracle(committeeSize int32, layersPerEpoch uint16, activationD
 	}
 }
 
-func (bo *MinerBlockOracle) BlockEligible(layerID types.LayerID) ([]types.BlockEligibilityProof, error) {
+func (bo *MinerBlockOracle) BlockEligible(layerID types.LayerID) (types.AtxId, []types.BlockEligibilityProof, error) {
 
 	epochNumber := layerID.GetEpoch(bo.layersPerEpoch)
 
 	if bo.proofsEpoch != epochNumber {
 		err := bo.calcEligibilityProofs(epochNumber)
 		if err != nil {
-			return nil, err
+			return types.AtxId{}, nil, err
 		}
 	}
 
-	return bo.eligibilityProofs[layerID], nil
+	return bo.atxID, bo.eligibilityProofs[layerID], nil
 }
 
 func (bo *MinerBlockOracle) calcEligibilityProofs(epochNumber uint64) error {
@@ -62,6 +63,7 @@ func (bo *MinerBlockOracle) calcEligibilityProofs(epochNumber uint64) error {
 		log.Error("failed to get latest ATX: %v", err)
 		return err
 	}
+	bo.atxID = latestATXID
 
 	atx, err := bo.activationDb.GetAtx(latestATXID)
 	if err != nil {

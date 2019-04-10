@@ -55,23 +55,19 @@ func testBlockOracleAndValidator(r *require.Assertions, activeSetSize uint32, co
 	activationDB := &mockActivationDB{activeSetSize: activeSetSize}
 	beaconProvider := &EpochBeaconProvider{}
 	blockOracle := NewMinerBlockOracle(committeeSize, layersPerEpoch, activationDB, beaconProvider, vrfSigner, nodeID)
-	validator := &MinerBlockEligibilityValidator{
-		committeeSize:  committeeSize,
-		layersPerEpoch: layersPerEpoch,
-		activationDb:   activationDB,
-		beaconProvider: beaconProvider,
-		validateVRF:    crypto.ValidateVRF,
-	}
+	validator := NewBlockEligibilityValidator(committeeSize, layersPerEpoch, activationDB, beaconProvider,
+		crypto.ValidateVRF)
 	numberOfEpochsToTest := 2
 	counterValuesSeen := map[uint32]int{}
 	for layer := uint16(0); layer < layersPerEpoch*uint16(numberOfEpochsToTest); layer++ {
 		activationDB.layerIndex = types.LayerID((layer / layersPerEpoch) * layersPerEpoch)
 		layerID := types.LayerID(layer)
-		proofs, err := blockOracle.BlockEligible(layerID)
+		_, proofs, err := blockOracle.BlockEligible(layerID)
 		r.NoError(err)
 
 		for _, proof := range proofs {
-			eligible, err := validator.BlockEligible(layerID, nodeID, proof, atxID)
+			block := newBlockWithEligibility(layerID, nodeID, atxID, proof)
+			eligible, err := validator.BlockEligible(block)
 			r.NoError(err, "at layer %d, with layersPerEpoch %d", layer, layersPerEpoch)
 			r.True(eligible, "should be eligible at layer %d, but isn't", layer)
 			counterValuesSeen[proof.J] += 1
@@ -100,7 +96,7 @@ func TestBlockOracleEmptyActiveSet(t *testing.T) {
 	beaconProvider := &EpochBeaconProvider{}
 	blockOracle := NewMinerBlockOracle(committeeSize, layersPerEpoch, activationDB, beaconProvider, vrfSigner, nodeID)
 
-	proofs, err := blockOracle.BlockEligible(0)
+	_, proofs, err := blockOracle.BlockEligible(0)
 	r.EqualError(err, "empty active set not allowed")
 	r.Nil(proofs)
 }
@@ -115,14 +111,10 @@ func TestBlockOracleEmptyActiveSetValidation(t *testing.T) {
 	activationDB := &mockActivationDB{activeSetSize: activeSetSize}
 	beaconProvider := &EpochBeaconProvider{}
 
-	validator := &MinerBlockEligibilityValidator{
-		committeeSize:  committeeSize,
-		layersPerEpoch: layersPerEpoch,
-		activationDb:   activationDB,
-		beaconProvider: beaconProvider,
-		validateVRF:    crypto.ValidateVRF,
-	}
-	eligible, err := validator.BlockEligible(0, nodeID, types.BlockEligibilityProof{}, atxID)
+	validator := NewBlockEligibilityValidator(committeeSize, layersPerEpoch, activationDB, beaconProvider,
+		crypto.ValidateVRF)
+	block := newBlockWithEligibility(0, nodeID, atxID, types.BlockEligibilityProof{})
+	eligible, err := validator.BlockEligible(block)
 	r.EqualError(err, "empty active set not allowed")
 	r.False(eligible)
 }
@@ -145,7 +137,7 @@ func TestBlockOracleNoActivationsForNode(t *testing.T) {
 	vrfSigner := crypto.NewVRFSigner(privateKey)
 	blockOracle := NewMinerBlockOracle(committeeSize, layersPerEpoch, activationDB, beaconProvider, vrfSigner, nodeID)
 
-	proofs, err := blockOracle.BlockEligible(0)
+	_, proofs, err := blockOracle.BlockEligible(0)
 	r.EqualError(err, "no activations found")
 	r.Nil(proofs)
 }
@@ -163,21 +155,17 @@ func TestBlockOracleValidatorInvalidProof(t *testing.T) {
 
 	layerID := types.LayerID(0)
 
-	proofs, err := blockOracle.BlockEligible(layerID)
+	_, proofs, err := blockOracle.BlockEligible(layerID)
 	r.NoError(err)
 	r.NotNil(proofs)
 
 	proof := proofs[0]
 	proof.Sig[0] += 1 // Messing with the proof 😈
 
-	validator := &MinerBlockEligibilityValidator{
-		committeeSize:  committeeSize,
-		layersPerEpoch: layersPerEpoch,
-		activationDb:   activationDB,
-		beaconProvider: beaconProvider,
-		validateVRF:    crypto.ValidateVRF,
-	}
-	eligible, err := validator.BlockEligible(layerID, nodeID, proof, atxID)
+	validator := NewBlockEligibilityValidator(committeeSize, layersPerEpoch, activationDB, beaconProvider,
+		crypto.ValidateVRF)
+	block := newBlockWithEligibility(layerID, nodeID, atxID, proof)
+	eligible, err := validator.BlockEligible(block)
 	r.False(eligible)
 	r.EqualError(err, "VRF validation failed")
 }
@@ -195,7 +183,7 @@ func TestBlockOracleValidatorInvalidProof2(t *testing.T) {
 
 	layerID := types.LayerID(0)
 
-	proofs, err := blockOracle.BlockEligible(layerID)
+	_, proofs, err := blockOracle.BlockEligible(layerID)
 	r.NoError(err)
 	r.NotNil(proofs)
 
@@ -204,14 +192,10 @@ func TestBlockOracleValidatorInvalidProof2(t *testing.T) {
 		proof = proofs[i]
 	}
 
-	validator := &MinerBlockEligibilityValidator{
-		committeeSize:  committeeSize,
-		layersPerEpoch: layersPerEpoch,
-		activationDb:   validatorActivationDB,
-		beaconProvider: beaconProvider,
-		validateVRF:    crypto.ValidateVRF,
-	}
-	eligible, err := validator.BlockEligible(layerID, nodeID, proof, atxID)
+	validator := NewBlockEligibilityValidator(committeeSize, layersPerEpoch, validatorActivationDB, beaconProvider,
+		crypto.ValidateVRF)
+	block := newBlockWithEligibility(layerID, nodeID, atxID, proof)
+	eligible, err := validator.BlockEligible(block)
 	r.False(eligible)
 	r.EqualError(err, fmt.Sprintf("proof counter (%d) must be less than number of eligible blocks (1)", proof.J))
 }
@@ -229,7 +213,7 @@ func TestBlockOracleValidatorInvalidProof3(t *testing.T) {
 
 	layerID := types.LayerID(20)
 
-	proofs, err := blockOracle.BlockEligible(layerID)
+	_, proofs, err := blockOracle.BlockEligible(layerID)
 	r.NoError(err)
 	r.NotNil(proofs)
 
@@ -238,14 +222,17 @@ func TestBlockOracleValidatorInvalidProof3(t *testing.T) {
 		proof = proofs[i]
 	}
 
-	validator := &MinerBlockEligibilityValidator{
-		committeeSize:  committeeSize,
-		layersPerEpoch: layersPerEpoch,
-		activationDb:   activationDB,
-		beaconProvider: beaconProvider,
-		validateVRF:    crypto.ValidateVRF,
-	}
-	eligible, err := validator.BlockEligible(layerID, nodeID, proof, atxID)
+	validator := NewBlockEligibilityValidator(committeeSize, layersPerEpoch, activationDB, beaconProvider,
+		crypto.ValidateVRF)
+	block := newBlockWithEligibility(layerID, nodeID, atxID, proof)
+	eligible, err := validator.BlockEligible(block)
 	r.False(eligible)
 	r.EqualError(err, "activation epoch (0) mismatch with layer epoch (1)")
+}
+
+func newBlockWithEligibility(layerID types.LayerID, nodeID types.NodeId, atxID types.AtxId,
+	proof types.BlockEligibilityProof) *types.Block {
+
+	return &types.Block{BlockHeader: types.BlockHeader{LayerIndex: layerID, MinerID: nodeID, ATXID: atxID,
+		EligibilityProof: proof}}
 }
