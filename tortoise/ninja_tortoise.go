@@ -108,13 +108,13 @@ func NewNinjaTortoise(layerSize int, blocks BlockCache, log log.Log) *ninjaTorto
 	}
 }
 
-func (ni *ninjaTortoise) evictOutOfWindow(idx types.LayerID) {
+func (ni *ninjaTortoise) evictOutOfPbase(old types.LayerID) {
 	wg := sync.WaitGroup{}
-	if idx > Window {
-		wg.Add(1)
+	wg.Add(1)
+	for i := old; i < ni.pBase.Layer(); i++ {
 		go func() {
 			defer wg.Done()
-			for _, i := range ni.patterns[idx-Window-1] {
+			for _, i := range ni.patterns[i] {
 				delete(ni.tSupport, i)
 				delete(ni.tComplete, i)
 				delete(ni.tEffectiveToBlocks, i)
@@ -129,9 +129,9 @@ func (ni *ninjaTortoise) evictOutOfWindow(idx types.LayerID) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			ids, err := ni.LayerBlockIds(idx - Window - 1)
+			ids, err := ni.LayerBlockIds(i)
 			if err != nil {
-				ni.Error("could not get layer ids for layer ", idx-Window-1, err)
+				ni.Error("could not get layer ids for layer ", i, err)
 			}
 			for _, i := range ids {
 				delete(ni.tEffective, i)
@@ -140,8 +140,8 @@ func (ni *ninjaTortoise) evictOutOfWindow(idx types.LayerID) {
 				ni.Debug("evict block %v from maps ", i)
 			}
 		}()
+		wg.Wait()
 	}
-	wg.Wait()
 }
 
 func (ni *ninjaTortoise) processBlock(b *types.Block) {
@@ -454,7 +454,7 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) { //i most rec
 	}
 
 	l := ni.findMinimalNewlyGoodLayer(newlyr)
-
+	defer ni.evictOutOfPbase(ni.pBase.Layer())
 	//from minimal newly good pattern to current layer
 	//update pattern tally for all good layers
 	for j := l; j > 0 && j < newlyr.Index(); j++ {
@@ -535,6 +535,5 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) { //i most rec
 		}
 	}
 	ni.Info("finished layer %d pbase is %d", newlyr.Index(), ni.pBase.Layer())
-	ni.evictOutOfWindow(newlyr.Index())
 	return
 }
