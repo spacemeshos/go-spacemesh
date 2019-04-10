@@ -3,7 +3,7 @@ package config
 // params are non-configurable (hard-coded) consts. To create a configurable param use Config.
 // add all node params here (non-configurable consts) - ideally most node params should be configurable.
 const (
-	ClientVersion      = "go-spacemesh-identity/0.0.1"
+	ClientVersion      = "go-spacemesh/0.0.1"
 	MinClientVersion   = "0.0.1"
 	NodesDirectoryName = "nodes"
 	NodeDataFileName   = "id.json"
