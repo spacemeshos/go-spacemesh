@@ -17,7 +17,7 @@ import (
 )
 
 type BlockValidator interface {
-	BlockEligible(layerID types.LayerID, nodeID types.NodeId, proof types.BlockEligibilityProof) (bool, error)
+	BlockEligible(block *types.Block) (bool, error)
 }
 
 type Configuration struct {
@@ -160,18 +160,18 @@ func (s *Syncer) getLayerFromNeighbors(currenSyncLayer types.LayerID) (*types.La
 			for id := range blockIds {
 				for _, p := range s.GetPeers() {
 					if bCh, err := sendBlockRequest(s.MessageServer, p, types.BlockID(id), s.Log); err == nil {
-						b := <-bCh
-						if b == nil {
+						block := <-bCh
+						if block == nil {
 							continue
 						}
-						eligible, err := s.BlockEligible(b.LayerIndex, b.MinerID, types.BlockEligibilityProof{}) // TODO: use nodeID and eligibilityProof from block
+						eligible, err := s.BlockEligible(block)
 						if err != nil {
 							s.Error("block eligibility check failed: %v", err)
 							continue
 						}
 						if eligible { //some validation testing
-							s.Debug("received block", b)
-							output <- b
+							s.Debug("received block", block)
+							output <- block
 							break
 						}
 					}
