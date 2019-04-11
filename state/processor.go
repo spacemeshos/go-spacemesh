@@ -107,7 +107,7 @@ func (tp *TransactionProcessor) ApplyRewards(layer types.LayerID, miners []strin
 		if val, ok := underQuota[minerId]; ok {
 			if val > 0 {
 				tp.globalState.AddBalance(address.HexToAddress(minerId), diminishedReward)
-				underQuota[minerId] = underQuota[minerId] -1
+				underQuota[minerId] = underQuota[minerId] - 1
 			} else {
 				tp.globalState.AddBalance(address.HexToAddress(minerId), bonusReward)
 			}

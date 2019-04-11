@@ -30,7 +30,7 @@ func (MockState) ApplyTransactions(layer types.LayerID, txs Transactions) (uint3
 func (MockState) ApplyRewards(layer types.LayerID, miners []string, underQuota map[string]int, bonusReward, diminishedReward *big.Int) {
 }
 
-type AtxDbMock struct{
+type AtxDbMock struct {
 	db map[types.AtxId]*types.ActivationTx
 }
 

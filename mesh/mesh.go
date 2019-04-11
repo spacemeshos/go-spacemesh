@@ -391,7 +391,7 @@ func (m *Mesh) AccumulateRewards(rewardLayer types.LayerID, params Config) {
 		ids = append(ids, atx.NodeId.Key)
 		if uint32(len(bl.Txs)) < params.TxQuota {
 			//todo: think of giving out reward for unique txs as well
-			uq[bl.MinerID.Key] = uq[bl.MinerID.Key] +1
+			uq[bl.MinerID.Key] = uq[bl.MinerID.Key] + 1
 		}
 	}
 	//accumulate all blocks rewards

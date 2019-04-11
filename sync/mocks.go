@@ -54,6 +54,10 @@ func (s *StateMock) ApplyRewards(layer types.LayerID, miners []string, underQuot
 
 type AtxDbMock struct{}
 
+func (AtxDbMock) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
+	return nil, nil
+}
+
 func (AtxDbMock) ProcessBlockATXs(block *types.Block) {
 
 }
