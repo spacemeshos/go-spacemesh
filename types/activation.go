@@ -17,13 +17,13 @@ type AtxId struct {
 var EmptyAtx = AtxId{common.Hash{0}}
 
 type ActivationTxHeader struct {
-	POeTChallange
+	PoETChallenge
 	VerifiedActiveSet uint32
 	ActiveSetSize     uint32
 	View              []BlockID
 }
 
-type POeTChallange struct {
+type PoETChallenge struct {
 	NodeId         NodeId
 	Sequence       uint64
 	PrevATXId      AtxId
@@ -43,7 +43,7 @@ func NewActivationTx(NodeId NodeId, Sequence uint64, PrevATX AtxId, LayerIndex L
 	StartTick uint64, PositioningATX AtxId, ActiveSetSize uint32, View []BlockID, nipst *nipst.NIPST) *ActivationTx {
 	return &ActivationTx{
 		ActivationTxHeader: ActivationTxHeader{
-			POeTChallange: POeTChallange{
+			PoETChallenge: PoETChallenge{
 				NodeId:         NodeId,
 				Sequence:       Sequence,
 				PrevATXId:      PrevATX,

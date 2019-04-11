@@ -137,7 +137,7 @@ func (b *Builder) CreatePoETChallenge(epoch types.EpochId) error {
 	}
 	posAtx, err := b.db.GetAtx(*posAtxId)
 
-	challenge := types.POeTChallange{
+	challenge := types.PoETChallenge{
 		Sequence:       seq,
 		PrevATXId:      *prevAtx,
 		LayerIdx:       types.LayerID(uint64(posAtx.LayerIdx) + b.layersPerEpoch),

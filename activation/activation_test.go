@@ -119,7 +119,7 @@ func TestBuilder_CreatePoETChallenge(t *testing.T) {
 		[]types.BlockID{1, 2, 3},
 		&npst)
 
-	challenge := types.POeTChallange{
+	challenge := types.PoETChallenge{
 		Sequence:       2,
 		PrevATXId:      atx.Id(),
 		LayerIdx:       types.LayerID(uint64(atx.LayerIdx) + b.layersPerEpoch),
