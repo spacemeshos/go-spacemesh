@@ -119,7 +119,6 @@ func TestBuilder_CreatePoETChallenge(t *testing.T) {
 		[]types.BlockID{1, 2, 3},
 		&npst)
 
-
 	challenge := types.POeTChallange{
 		Sequence:       2,
 		PrevATXId:      atx.Id(),

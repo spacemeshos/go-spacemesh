@@ -68,7 +68,7 @@ func testRPCPoetClient(c *RPCPoetClient, assert *require.Assertions) {
 	mProof, err := c.subscribeMembershipProof(poetRound, ch, 10*time.Second)
 	assert.NoError(err)
 	assert.NotNil(mProof)
-	res, err := verifyMembership(&ch, mProof)
+	res, err := verifyPoetMembership(&ch, mProof)
 	assert.NoError(err)
 	assert.True(res)
 
@@ -79,7 +79,7 @@ func testRPCPoetClient(c *RPCPoetClient, assert *require.Assertions) {
 	assert.NoError(err)
 	assert.True(res)
 
-	assert.True(verifyPoetMembership(mProof, proof))
+	assert.True(verifyPoetMatchesMembership(mProof, proof))
 }
 
 func testRPCPoetClientTimeouts(c *RPCPoetClient, assert *require.Assertions) {

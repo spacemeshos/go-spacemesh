@@ -1,7 +1,9 @@
 package nipst
 
 import (
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/merkle-tree"
 	"github.com/spacemeshos/post/initialization"
 	"github.com/spacemeshos/post/proving"
 	"github.com/spacemeshos/post/validation"
@@ -16,7 +18,11 @@ func (p *postProof) serialize() []byte {
 	return []byte("")
 }
 
-func verifyPost(proof *postProof, leafCount uint64, numberOfProvenLabels uint8, difficulty proving.Difficulty) (bool, error) {
+func verifyPost(proof *postProof, space uint64, numberOfProvenLabels uint8, difficulty proving.Difficulty) (bool, error) {
+	if space%merkle.NodeSize != 0 {
+		return false, fmt.Errorf("space (%d) is not a multiple of merkle.NodeSize (%d)", space, merkle.NodeSize)
+	}
+	leafCount := space / merkle.NodeSize
 	err := validation.Validate(proving.Proof(*proof), leafCount, numberOfProvenLabels, difficulty)
 	if err != nil {
 		return false, err
@@ -33,7 +39,11 @@ func newPostClient() *PostClient {
 
 func (c *PostClient) initialize(id []byte, space uint64, numberOfProvenLabels uint8, difficulty proving.Difficulty, timeout time.Duration) (commitment *postProof, err error) {
 	// TODO(moshababo): implement timeout
-	proof, err := initialization.Initialize(id, space, numberOfProvenLabels, difficulty)
+	if space%merkle.NodeSize != 0 {
+		return nil, fmt.Errorf("space (%d) is not a multiple of merkle.NodeSize (%d)", space, merkle.NodeSize)
+	}
+	leafCount := space / merkle.NodeSize
+	proof, err := initialization.Initialize(id, leafCount, numberOfProvenLabels, difficulty)
 	return (*postProof)(&proof), err
 }
 

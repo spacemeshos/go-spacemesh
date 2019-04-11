@@ -38,14 +38,6 @@ func (p *PoetProvingServiceClientMock) subscribeProof(r *poetRound, timeout time
 	return &poetProof{}, nil
 }
 
-type ActivationBuilderMock struct {
-	nipst chan *NIPST
-}
-
-func (a *ActivationBuilderMock) BuildActivationTx(proof *NIPST) {
-	a.nipst <- proof
-}
-
 func TestNIPSTBuilderWithMocks(t *testing.T) {
 	assert := require.New(t)
 
@@ -69,11 +61,10 @@ func TestNIPSTBuilderWithMocks(t *testing.T) {
 		verifyPoetMock,
 		verifyPoetMembershipMock,
 	)
-	npst, err := nb.BuildNIPST([]byte("anton"))
+	npst, err := nb.BuildNIPST(common.BytesToHash([]byte("anton")))
 	assert.NoError(err)
 
 	assert.True(npst.Valid())
-
 }
 
 func TestNIPSTBuilderWithClients(t *testing.T) {
@@ -81,34 +72,52 @@ func TestNIPSTBuilderWithClients(t *testing.T) {
 		t.Skip()
 	}
 
-	assert := require.New(t)
+	r := require.New(t)
 
 	postProver := newPostClient()
 
 	poetProver, err := newRPCPoetHarnessClient()
 	defer func() {
 		err := poetProver.CleanUp()
-		assert.NoError(err)
+		r.NoError(err)
 	}()
-	assert.NoError(err)
-	assert.NotNil(poetProver)
+	r.NoError(err)
+	r.NotNil(poetProver)
+
+	spaceUnit := uint64(1024)
+	difficulty := proving.Difficulty(5)
+	numberOfProvenLabels := uint8(proving.NumberOfProvenLabels)
 
 	nb := NewNIPSTBuilder(
 		[]byte("id"),
-		1024,
-		5,
-		proving.NumberOfProvenLabels,
+		spaceUnit,
+		difficulty,
+		numberOfProvenLabels,
 		600,
 		postProver,
 		poetProver,
 		verifyPost,
-		verifyMembership,
-		verifyPoet,
 		verifyPoetMembership,
+		verifyPoet,
+		verifyPoetMatchesMembership,
 	)
 
-	npst, err := nb.BuildNIPST([]byte("anton"))
-	assert.NoError(err)
+	nipstChallenge := common.BytesToHash([]byte("anton"))
+	npst, err := nb.BuildNIPST(nipstChallenge)
+	r.NoError(err)
 
-	assert.True(npst.Valid())
+	v := &Validator{
+		PostParams: PostParams{
+			Difficulty:           difficulty,
+			NumberOfProvenLabels: numberOfProvenLabels,
+			SpaceUnit:            spaceUnit,
+		},
+		verifyPost:                  verifyPost,
+		verifyPoetMembership:        verifyPoetMembership,
+		verifyPoet:                  verifyPoet,
+		verifyPoetMatchesMembership: verifyPoetMatchesMembership,
+	}
+
+	err = v.Validate(npst, nipstChallenge)
+	r.NoError(err)
 }
