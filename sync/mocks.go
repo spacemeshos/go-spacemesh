@@ -45,10 +45,10 @@ func (MockState) ApplyTransactions(layer types.LayerID, txs mesh.Transactions) (
 	return 0, nil
 }
 
-func (MockState) ApplyRewards(layer types.LayerID, miners map[string]struct{}, underQuota map[string]struct{}, bonusReward, diminishedReward *big.Int) {
+func (MockState) ApplyRewards(layer types.LayerID, miners []string, underQuota map[string]int, bonusReward, diminishedReward *big.Int) {
 }
 
-func (s *StateMock) ApplyRewards(layer types.LayerID, miners map[string]struct{}, underQuota map[string]struct{}, bonusReward, diminishedReward *big.Int) {
+func (s *StateMock) ApplyRewards(layer types.LayerID, miners []string, underQuota map[string]int, bonusReward, diminishedReward *big.Int) {
 
 }
 

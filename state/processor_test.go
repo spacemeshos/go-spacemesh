@@ -177,6 +177,14 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_Errors()
 	assert.Equal(s.T(), err.Error(), ErrOrigin)
 }
 
+func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyRewards() {
+	s.processor.ApplyRewards(1, []string{"aaa","bbb","ccc","ddd","bbb","aaa"}, map[string]int{"aaa": 1, "bbb": 2}, big.NewInt(1000), big.NewInt(300) )
+	assert.Equal(s.T(), s.state.GetBalance(address.HexToAddress("aaa")),  big.NewInt(1300))
+	assert.Equal(s.T(), s.state.GetBalance(address.HexToAddress("bbb")),  big.NewInt(600))
+	assert.Equal(s.T(), s.state.GetBalance(address.HexToAddress("ccc")),  big.NewInt(1000))
+	assert.Equal(s.T(), s.state.GetBalance(address.HexToAddress("ddd")),  big.NewInt(1000))
+}
+
 func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_OrderByNonce() {
 	obj1 := createAccount(s.state, []byte{0x01}, 25, 0)
 	obj2 := createAccount(s.state, []byte{0x01, 02}, 1, 10)

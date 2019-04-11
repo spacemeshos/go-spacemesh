@@ -32,11 +32,12 @@ type MeshValidator interface {
 
 type StateUpdater interface {
 	ApplyTransactions(layer types.LayerID, transactions Transactions) (uint32, error)
-	ApplyRewards(layer types.LayerID, miners map[string]struct{}, underQuota map[string]struct{}, bonusReward, diminishedReward *big.Int)
+	ApplyRewards(layer types.LayerID, miners []string, underQuota map[string]int, bonusReward, diminishedReward *big.Int)
 }
 
 type AtxDB interface {
 	ProcessBlockATXs(block *types.Block)
+	GetAtx(id types.AtxId) (*types.ActivationTx, error)
 }
 
 type Mesh struct {
@@ -376,20 +377,21 @@ func (m *Mesh) AccumulateRewards(rewardLayer types.LayerID, params Config) {
 		return
 	}
 
-	ids := make(map[string]struct{})
-	uq := make(map[string]struct{})
+	var ids []string
+	uq := make(map[string]int)
 
 	// TODO: instead of the following code we need to validate the eligibility of each block individually using the
 	//  proof included in each block
 	for _, bl := range l.Blocks() {
-		if _, found := ids[bl.MinerID.Key]; found {
-			log.Error("two blocks found from same miner %v in layer %v", bl.MinerID, bl.LayerIndex)
+		atx, err := m.AtxDB.GetAtx(bl.ATXID)
+		if err != nil {
+			m.Log.Error("Atx not found %v", bl.ATXID)
 			continue
 		}
-		ids[bl.MinerID.Key] = struct{}{}
+		ids = append(ids, atx.NodeId.Key)
 		if uint32(len(bl.Txs)) < params.TxQuota {
 			//todo: think of giving out reward for unique txs as well
-			uq[bl.MinerID.Key] = struct{}{}
+			uq[bl.MinerID.Key] = uq[bl.MinerID.Key] +1
 		}
 	}
 	//accumulate all blocks rewards

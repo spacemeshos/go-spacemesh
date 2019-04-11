@@ -61,7 +61,7 @@ func SyncMockFactory(number int, conf Configuration, name string, dbType string)
 
 type stateMock struct{}
 
-func (s *stateMock) ApplyRewards(layer types.LayerID, miners map[string]struct{}, underQuota map[string]struct{}, bonusReward, diminishedReward *big.Int) {
+func (s *stateMock) ApplyRewards(layer types.LayerID, miners []string, underQuota map[string]int, bonusReward, diminishedReward *big.Int) {
 
 }
 

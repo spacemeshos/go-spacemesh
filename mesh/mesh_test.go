@@ -27,10 +27,23 @@ func (MockState) ApplyTransactions(layer types.LayerID, txs Transactions) (uint3
 	return 0, nil
 }
 
-func (MockState) ApplyRewards(layer types.LayerID, miners map[string]struct{}, underQuota map[string]struct{}, bonusReward, diminishedReward *big.Int) {
+func (MockState) ApplyRewards(layer types.LayerID, miners []string, underQuota map[string]int, bonusReward, diminishedReward *big.Int) {
 }
 
-type AtxDbMock struct{}
+type AtxDbMock struct{
+	db map[types.AtxId]*types.ActivationTx
+}
+
+func (t *AtxDbMock) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
+	if atx, ok := t.db[id]; ok {
+		return atx, nil
+	}
+	return nil, fmt.Errorf("cannot find atx")
+}
+
+func (t *AtxDbMock) AddAtx(id types.AtxId, atx *types.ActivationTx) {
+	t.db[id] = atx
+}
 
 func (AtxDbMock) ProcessBlockATXs(block *types.Block) {
 
