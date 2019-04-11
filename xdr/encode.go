@@ -10,28 +10,49 @@ import (
 )
 
 // Marshal writes the XDR encoding of val to w.
-func Marshal(w io.Writer, val interface{}) error {
+// Returns the number of bytes, n, written to writer w.
+func Marshal(w io.Writer, val interface{}) (int, error) {
 	encoder := xdr.NewEncoder(w) // Initialize encoder
 
 	realVal := getPtrValue(val) // Deserialize pointer
+
+	if realVal.Kind() == reflect.Chan || realVal.Kind() == reflect.Func || realVal.Kind() == reflect.Interface || realVal.Kind() == reflect.Map || realVal.Kind() == reflect.Ptr || realVal.Kind() == reflect.Slice && realVal.IsNil() || !realVal.IsValid() { // Check no value
+		realVal = reflect.ValueOf([]byte{}) // Set to nil byte array
+	}
 
 	if sliceValue := getBigSliceValue(realVal); sliceValue != nil { // Check big value can be encoded
 		_, err := encoder.EncodeOpaque(sliceValue) // Encode
 
 		if err != nil { // Check for errors
-			return err // Return found error
+			return 0, err // Return found error
 		}
 
-		return nil // No error occurred, return nil
+		return 0, nil // No error occurred, return nil
 	}
 
 	_, err := encoder.Encode(realVal.Interface()) // Encode
 
 	if err != nil { // Check for errors
-		return err // Return found error
+		return 0, err // Return found error
 	}
 
-	return nil // No error occurred, return nil
+	return 0, nil // No error occurred, return nil
+}
+
+// isBigValue determines if a given value is a *big.Int, big.Int, *big.Float, or big.Float.
+func isBigValue(val interface{}) (int, bool) {
+	realVal := getPtrValue(val) // Dereference pointer
+
+	_, isBigInt := realVal.Interface().(big.Int)     // Check is bigInt
+	_, isBigFloat := realVal.Interface().(big.Float) // Check is bigInt
+
+	if isBigInt { // Check is big int
+		return 0, true // Is big value
+	} else if isBigFloat { // Check is big float
+		return 1, true // Is big value
+	}
+
+	return -1, false // Not big value
 }
 
 // getPtrValue fetches the value of a given pointer interface. If the value is not a pointer,
@@ -55,10 +76,10 @@ func getBigSliceValue(val reflect.Value) []byte {
 		return bigIntVal.Bytes() // Return byte slice encoding
 	}
 
-	bigFloatVal, isBigFloat := val.Interface().(big.Int) // Get big float val
+	bigFloatVal, isBigFloat := val.Interface().(big.Float) // Get big float val
 
 	if isBigFloat { // Is big float
-		return bigFloatVal.Bytes() // Set to big float byte encoding
+		return []byte(bigFloatVal.String()) // Set to big float byte encoding
 	}
 
 	return nil // Not big float or int
