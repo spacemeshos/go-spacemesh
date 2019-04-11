@@ -377,7 +377,7 @@ func (m *Mesh) AccumulateRewards(rewardLayer types.LayerID, params Config) {
 		return
 	}
 
-	var ids []string
+	ids := make([]string,0,len(l.Blocks()))
 	uq := make(map[string]int)
 
 	// TODO: instead of the following code we need to validate the eligibility of each block individually using the
