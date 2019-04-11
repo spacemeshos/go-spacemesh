@@ -13,7 +13,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/version"
 	"net"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 )
@@ -340,7 +339,7 @@ func (n *Net) HandlePreSessionIncomingMessage(c Connection, message []byte) erro
 		return err
 	}
 
-	err = n.verifyNetworkIDAndClientVersion(handshakeData)
+	err = verifyNetworkIDAndClientVersion(n.networkID, handshakeData)
 	if err != nil {
 		return err
 	}
@@ -355,15 +354,9 @@ func (n *Net) HandlePreSessionIncomingMessage(c Connection, message []byte) erro
 	return nil
 }
 
-func (n *Net) verifyNetworkIDAndClientVersion(handshakeData *pb.HandshakeData) error {
-	// check that received clientversion is valid client string
-	reqVersion := strings.Split(handshakeData.ClientVersion, "/")
-	if len(reqVersion) != 2 {
-		return errors.New("invalid client version")
-	}
-
+func verifyNetworkIDAndClientVersion(networkID int8, handshakeData *pb.HandshakeData) error {
 	// compare that version to the min client version in config
-	ok, err := version.CheckNodeVersion(reqVersion[1], config.MinClientVersion)
+	ok, err := version.CheckNodeVersion(handshakeData.ClientVersion, config.MinClientVersion)
 	if err == nil && !ok {
 		return errors.New("unsupported client version")
 	}
@@ -372,8 +365,8 @@ func (n *Net) verifyNetworkIDAndClientVersion(handshakeData *pb.HandshakeData) e
 	}
 
 	// make sure we're on the same network
-	if handshakeData.NetworkID != int32(n.networkID) {
-		return fmt.Errorf("request net id (%d) is different than local net id (%d)", handshakeData.NetworkID, n.networkID)
+	if handshakeData.NetworkID != int32(networkID) {
+		return fmt.Errorf("request net id (%d) is different than local net id (%d)", handshakeData.NetworkID, networkID)
 		//TODO : drop and blacklist this sender
 	}
 	return nil

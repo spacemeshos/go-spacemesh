@@ -445,8 +445,8 @@ func TestSwarm_onRemoteClientMessage(t *testing.T) {
 	assert.Equal(t, err, ErrBadFormat2)
 
 	goodmsg := &pb.ProtocolMessage{
-		Metadata: NewProtocolMessageMetadata(id.PublicKey(), exampleProtocol), // not signed
-		Data:     &pb.ProtocolMessage_Payload{[]byte(examplePayload)},
+		Metadata: pb.NewProtocolMessageMetadata(id.PublicKey(), exampleProtocol), // not signed
+		Payload:  &pb.Payload{Data: &pb.Payload_Payload{[]byte(examplePayload)}},
 	}
 
 	goodbin, _ := proto.Marshal(goodmsg)

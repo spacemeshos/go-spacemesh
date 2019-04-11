@@ -115,17 +115,19 @@ def query_bootstrap_es(indx, namespace, bootstrap_po_name):
     return None
 
 
-def query_message(indx, namespace, client_po_name, msg, findFails=False):
+def query_message(indx, namespace, client_po_name, fields, findFails=False):
     # TODO : break this to smaller functions ?
     es = get_elastic_search_api()
     fltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
-           Q("match_phrase", kubernetes__pod_name=client_po_name) & Q("match_phrase", M=msg)
+           Q("match_phrase", kubernetes__pod_name=client_po_name)
+    for f in fields:
+        fltr = fltr & Q("match_phrase", **{f: fields[f]})
     s = Search(index=indx, using=es).query('bool', filter=[fltr])
     hits = list(s.scan())
 
     print("====================================================================")
-    print("Report for `{0}` in deployment -  {1}  ".format(msg, client_po_name))
-    print("Number of hits: {0}".format(len(hits)))
+    print("Report for `{0}` in deployment -  {1}  ".format(fields, client_po_name))
+    print("Number of hits: ", len(hits))
     print("====================================================================")
     print("Benchmark results:")
     ts = [hit["T"] for hit in hits]
@@ -363,16 +365,18 @@ def test_bootstrap(set_namespace, setup_bootstrap):
                                                                 testconfig['namespace'],
                                                                 setup_bootstrap.pods[0]['name'])
 
+
 def test_client(set_namespace, setup_clients, save_log_on_exit):
-    MESSAGE = "discovery_bootstrap"
+    fields = {'M':'discovery_bootstrap'}
     timetowait = len(setup_clients.pods)/2
     print("Sleeping " + str(timetowait) + "before checking out bootstrap results")
     time.sleep(timetowait)
-    peers = query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, MESSAGE, True)
+    peers = query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, fields, True)
     assert peers == len(setup_clients.pods)
 
+    
 def test_gossip(set_namespace, setup_clients):
-    MESSAGE = "new_gossip_message"
+    fields = {'M':'new_gossip_message', 'protocol': 'api_test_gossip'}
     # *note*: this already waits for bootstrap so we can send the msg right away.
     # send message to client via rpc
     client_ip = setup_clients.pods[0]['pod_ip']
@@ -391,7 +395,7 @@ def test_gossip(set_namespace, setup_clients):
     print('sleep for {0} sec to enable gossip propagation'.format(gossip_propagation_sleep))
     time.sleep(gossip_propagation_sleep)
 
-    peers_for_gossip = query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, MESSAGE, True)
+    peers_for_gossip = query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, fields, True)
     assert len(setup_clients.pods) == peers_for_gossip
 
 
