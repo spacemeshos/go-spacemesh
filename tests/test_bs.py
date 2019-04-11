@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 
-from tests.fixtures import load_config, bootstrap_deployment_info, client_deployment_info
+from tests.fixtures import load_config, bootstrap_deployment_info, client_deployment_info, set_namespace
 import os
 from os import path
 import pytest
@@ -358,7 +358,7 @@ todaydate = dt.strftime("%Y.%m.%d")
 current_index = 'kubernetes_cluster-' + todaydate
 
 
-def test_bootstrap(setup_bootstrap):
+def test_bootstrap(set_namespace, setup_bootstrap):
     # wait for the bootstrap logs to be available in ElasticSearch
     time.sleep(5)
     assert setup_bootstrap.pods[0]['key'] == query_bootstrap_es(current_index,
@@ -366,7 +366,7 @@ def test_bootstrap(setup_bootstrap):
                                                                 setup_bootstrap.pods[0]['name'])
 
 
-def test_client(load_config, setup_clients):
+def test_client(set_namespace, setup_clients, save_log_on_exit):
     fields = {'M':'discovery_bootstrap'}
     timetowait = len(setup_clients.pods)/2
     print("Sleeping " + str(timetowait) + "before checking out bootstrap results")
@@ -374,8 +374,8 @@ def test_client(load_config, setup_clients):
     peers = query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, fields, True)
     assert peers == len(setup_clients.pods)
 
-
-def test_gossip(load_config, setup_clients):
+    
+def test_gossip(set_namespace, setup_clients):
     fields = {'M':'new_gossip_message', 'protocol': 'api_test_gossip'}
     # *note*: this already waits for bootstrap so we can send the msg right away.
     # send message to client via rpc
@@ -399,8 +399,8 @@ def test_gossip(load_config, setup_clients):
     assert len(setup_clients.pods) == peers_for_gossip
 
 
-def test_transaction(load_config, setup_clients):
-    wait_genesis()
+def test_transaction(set_namespace, setup_clients):
+
     # choose client to run on
     client_ip = setup_clients.pods[0]['pod_ip']
 
@@ -419,6 +419,5 @@ def test_transaction(load_config, setup_clients):
 
     out = api_call(client_ip, data, api, testconfig['namespace'])
     assert '{"value":"ok"}' in out.decode("utf-8")
-
 
 
