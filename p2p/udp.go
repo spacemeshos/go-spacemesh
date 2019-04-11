@@ -3,6 +3,8 @@ package p2p
 import (
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/p2p/config"
+	"github.com/spacemeshos/go-spacemesh/p2p/version"
 	"net"
 
 	"github.com/golang/protobuf/proto"
@@ -19,9 +21,7 @@ const maxMessageSize = 2048
 // todo : calculate real udp max message size
 
 // Lookuper is a service used to lookup for nodes we know already
-type Lookuper interface {
-	InternalLookup(key node.DhtID) []node.Node
-}
+type Lookuper func(key p2pcrypto.PublicKey) (node.Node, error)
 
 type udpNetwork interface {
 	Start() error
@@ -79,7 +79,7 @@ func (mux *UDPMux) listenToNetworkMessage() {
 				return
 			}
 			go func(event inet.UDPMessageEvent) {
-				err := mux.processUDPMessage(event.FromAddr, event.Message)
+				err := mux.processUDPMessage(event.From, event.FromAddr, event.Message)
 				if err != nil {
 					mux.logger.Error("Error handing network message err=%v", err)
 					// todo: blacklist ?
@@ -109,22 +109,9 @@ func (mux *UDPMux) ProcessDirectProtocolMessage(sender p2pcrypto.PublicKey, prot
 		return errors.New("no protocol")
 	}
 
-	msgchan <- &udpProtocolMessage{metadata, sender, data.Bytes()}
+	msgchan <- &udpProtocolMessage{metadata, sender, data}
 
 	return nil
-}
-
-func (mux *UDPMux) localLookup(key p2pcrypto.PublicKey) (node.Node, error) {
-	res := mux.lookuper.InternalLookup(node.NewDhtID(key.Bytes()))
-	if res == nil || len(res) == 0 {
-		return node.EmptyNode, errors.New("coudld'nt find requested key node")
-	}
-
-	if res[0].PublicKey().String() != key.String() {
-		return node.EmptyNode, errors.New("coudld'nt find requested key node")
-	}
-
-	return res[0], nil
 }
 
 // SendWrappedMessage is a proxy method to the sendMessageImpl. it sends a wrapped message and used within MessageServer
@@ -142,7 +129,7 @@ func (mux *UDPMux) sendMessageImpl(peerPubkey p2pcrypto.PublicKey, protocol stri
 	var err error
 	var peer node.Node
 
-	peer, err = mux.localLookup(peerPubkey)
+	peer, err = mux.lookuper(peerPubkey)
 
 	if err != nil {
 		return err
@@ -150,20 +137,16 @@ func (mux *UDPMux) sendMessageImpl(peerPubkey p2pcrypto.PublicKey, protocol stri
 
 	//todo: Session (maybe use cpool ?)
 
-	protomessage := &pb.ProtocolMessage{
-		Metadata: NewProtocolMessageMetadata(mux.local.PublicKey(), protocol),
+	protomessage := &pb.UDPProtocolMessage{
+		Metadata: pb.NewUDPProtocolMessageMetadata(mux.local.PublicKey(), mux.local.NetworkID(), protocol), // todo : config
 	}
 
-	switch x := payload.(type) {
-	case service.DataBytes:
-		protomessage.Data = &pb.ProtocolMessage_Payload{Payload: x.Bytes()}
-	case *service.DataMsgWrapper:
-		protomessage.Data = &pb.ProtocolMessage_Msg{Msg: &pb.MessageWrapper{Type: x.MsgType, Req: x.Req, ReqID: x.ReqID, Payload: x.Payload}}
-	case nil:
-		// The field is not set.
-	default:
-		return fmt.Errorf("protocolMsg has unexpected type %T", x)
+	realpayload, err := pb.CreatePayload(payload)
+	if err != nil {
+		return fmt.Errorf("can't create payload from message %v", err)
 	}
+
+	protomessage.Payload = realpayload
 
 	data, err := proto.Marshal(protomessage)
 	if err != nil {
@@ -183,7 +166,7 @@ func (mux *UDPMux) sendMessageImpl(peerPubkey p2pcrypto.PublicKey, protocol stri
 type udpProtocolMessage struct {
 	meta   service.P2PMetadata
 	sender p2pcrypto.PublicKey
-	msg    []byte
+	msg    service.Data
 }
 
 func (upm *udpProtocolMessage) Sender() p2pcrypto.PublicKey {
@@ -195,25 +178,33 @@ func (upm *udpProtocolMessage) Metadata() service.P2PMetadata {
 }
 
 func (upm *udpProtocolMessage) Bytes() []byte {
+	return upm.msg.Bytes()
+}
+
+func (upm *udpProtocolMessage) Data() service.Data {
 	return upm.msg
 }
 
 // processUDPMessage processes a udp message received and passes it to the protocol, it adds related p2p metadata.
-func (mux *UDPMux) processUDPMessage(fromaddr net.Addr, buf []byte) error {
-	msg := &pb.ProtocolMessage{}
+func (mux *UDPMux) processUDPMessage(sender p2pcrypto.PublicKey, fromaddr net.Addr, buf []byte) error {
+	msg := &pb.UDPProtocolMessage{}
 	err := proto.Unmarshal(buf, msg)
 	if err != nil {
 		return errors.New("could'nt deserialize message")
 	}
-	sender, err := p2pcrypto.NewPubkeyFromBytes(msg.Metadata.AuthPubkey)
-	if err != nil {
-		return errors.New("no valid pubkey in message")
+
+	if msg.Metadata.NetworkID != int32(mux.local.NetworkID()) {
+		// todo: tell net to blacklist the ip or sender ?
+		return fmt.Errorf("wrong NetworkID, want: %v, got: %v", mux.local.NetworkID(), msg.Metadata.NetworkID)
 	}
-	//mux.logger.Debug("Received %v from %s at %s", sender, fromaddr)
+
+	if t, err := version.CheckNodeVersion(msg.Metadata.ClientVersion, config.MinClientVersion); err != nil || !t {
+		return fmt.Errorf("wrong client version want atleast: %v, got: %v, err=%v", config.MinClientVersion, msg.Metadata.ClientVersion, err)
+	}
 
 	var data service.Data
 
-	data, err = ExtractData(msg)
+	data, err = pb.ExtractData(msg.Payload)
 
 	if err != nil {
 		return err

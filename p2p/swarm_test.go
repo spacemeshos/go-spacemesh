@@ -393,28 +393,21 @@ func TestSwarm_MultipleMessagesFromMultipleSendersToMultipleProtocols(t *testing
 
 func TestSwarm_RegisterProtocol(t *testing.T) {
 	const numPeers = 100
-	nodechan := make(chan *swarm)
+	nods := make([]*swarm, 0, numPeers)
 	cfg := config.DefaultConfig()
 	for i := 0; i < numPeers; i++ {
-		go func() { // protocols are registered before starting the node and read after that.
-			// there ins't an actual need to sync them.
-			nod := p2pTestInstance(t, cfg)
-			nod.RegisterDirectProtocol(exampleProtocol) // this is example
-			nodechan <- nod
-		}()
+		nod := p2pTestNoStart(t, cfg)
+		nod.RegisterDirectProtocol(exampleProtocol) // this is example
+		nods = append(nods, nod)
 	}
-	i := 0
-	for r := range nodechan {
-		defer r.Shutdown()
-		_, ok := r.directProtocolHandlers[exampleProtocol]
-		assert.True(t, ok)
-		_, ok = r.directProtocolHandlers["/dht/1.0/find-node/"]
-		assert.True(t, ok)
-		i++
-		if i == numPeers {
-			close(nodechan)
-		}
+	count := 0
+	for i := range nods {
+		_, ok := nods[i].directProtocolHandlers[exampleProtocol]
+		require.True(t, ok)
+		count++
 	}
+
+	require.Equal(t, count, numPeers)
 }
 
 func TestSwarm_onRemoteClientMessage(t *testing.T) {
@@ -452,8 +445,8 @@ func TestSwarm_onRemoteClientMessage(t *testing.T) {
 	assert.Equal(t, err, ErrBadFormat2)
 
 	goodmsg := &pb.ProtocolMessage{
-		Metadata: NewProtocolMessageMetadata(id.PublicKey(), exampleProtocol), // not signed
-		Data:     &pb.ProtocolMessage_Payload{[]byte(examplePayload)},
+		Metadata: pb.NewProtocolMessageMetadata(id.PublicKey(), exampleProtocol), // not signed
+		Payload:  &pb.Payload{Data: &pb.Payload_Payload{[]byte(examplePayload)}},
 	}
 
 	goodbin, _ := proto.Marshal(goodmsg)

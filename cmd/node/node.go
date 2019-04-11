@@ -3,6 +3,7 @@ package node
 import (
 	"fmt"
 	"github.com/seehuhn/mt19937"
+	"github.com/spacemeshos/go-spacemesh/activation"
 	apiCfg "github.com/spacemeshos/go-spacemesh/api/config"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common"
@@ -17,6 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/spacemeshos/go-spacemesh/sync"
+	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spacemeshos/go-spacemesh/version"
 	"math/rand"
 
@@ -238,7 +240,7 @@ func (app *SpacemeshApp) setupGenesis(cfg *apiCfg.GenesisConfig) {
 		app.state.SetNonce(id, acc.Nonce)
 	}
 
-	genesis := consensus.CreateGenesisBlock()
+	genesis := mesh.CreateGenesisBlock()
 	app.state.Commit(false)
 	app.mesh.AddBlock(genesis)
 }
@@ -248,13 +250,15 @@ func (app *SpacemeshApp) setupTestFeatures() {
 	api.ApproveAPIGossipMessages(cmdp.Ctx, app.P2P)
 }
 
-func (app *SpacemeshApp) initServices(instanceName string, swarm service.Service, dbStorepath string, sgn hare.Signing, blockOracle oracle.BlockOracle, hareOracle hare.Rolacle, layerSize int) error {
-	app.instanceName = instanceName
+func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service, dbStorepath string, sgn hare.Signing,
+	blockOracle oracle.BlockOracle, blockValidator sync.BlockValidator, hareOracle hare.Rolacle, layerSize int) error {
+
+	app.instanceName = nodeID.Key
 	//todo: should we add all components to a single struct?
 
-	name := instanceName
-	if len(instanceName) > 5 {
-		name = instanceName[len(instanceName)-5:]
+	name := nodeID.Key
+	if len(name) > 5 {
+		name = name[:5]
 	}
 
 	lg := log.New("shmekel_"+name, "", "")
@@ -277,17 +281,25 @@ func (app *SpacemeshApp) initServices(instanceName string, swarm service.Service
 	}
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
 	clock := timesync.NewTicker(timesync.RealClock{}, ld, gTime)
-	trtl := consensus.NewAlgorithm(consensus.NewNinjaTortoise(layerSize, lg.WithName("trtl")))
-	mdb := mesh.NewMeshDB(db, db, db, db, lg.WithName("meshDb"))
-	msh := mesh.NewMesh(mdb, app.Config.REWARD, trtl, processor, lg.WithName("mesh")) //todo: what to do with the logger?
+	mdb := mesh.NewPersistentMeshDB(dbStorepath, lg.WithName("meshdb"))
+	trtl := consensus.NewAlgorithm(consensus.NewNinjaTortoise(layerSize, mdb, lg.WithName("trtl")))
+
+	atxdbstore, err := database.NewLDBDatabase(dbStorepath+"atx", 0, 0)
+	if err != nil {
+		return err
+	}
+
+	//todo: put in config
+	atxdb := activation.NewActivationDb(atxdbstore, mdb, 1000)
+	msh := mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, processor, lg.WithName("mesh")) //todo: what to do with the logger?
 
 	conf := sync.Configuration{SyncInterval: 1 * time.Second, Concurrency: 4, LayerSize: int(layerSize), RequestTimeout: 100 * time.Millisecond}
-	syncer := sync.NewSync(swarm, msh, blockOracle, conf, clock.Subscribe(), lg)
+	syncer := sync.NewSync(swarm, msh, blockValidator, conf, clock.Subscribe(), lg)
 
 	ha := hare.New(app.Config.HARE, swarm, sgn, msh, hareOracle, clock.Subscribe(), lg.WithName("hare"))
 
-	blockProducer := miner.NewBlockBuilder(instanceName, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, lg.WithName("blockProducer"))
-	blockListener := sync.NewBlockListener(swarm, blockOracle, msh, 2*time.Second, 4, lg.WithName("blockListener"))
+	blockProducer := miner.NewBlockBuilder(nodeID, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, lg.WithName("blockProducer"))
+	blockListener := sync.NewBlockListener(swarm, blockValidator, msh, 2*time.Second, 4, lg.WithName("blockListener"))
 
 	app.blockProducer = &blockProducer
 	app.blockListener = blockListener
@@ -370,12 +382,23 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 
 	app.unregisterOracle = func() { oracleClient.Unregister(true, pub.String()) }
 
-	bo := oracle.NewBlockOracleFromClient(oracleClient, int(app.Config.CONSENSUS.NodesPerLayer))
+	nodeID := types.NodeId{Key: pub.String()}
+	bo := oracle.NewBlockOracleFromClient(oracleClient, int(app.Config.CONSENSUS.NodesPerLayer), nodeID)
+	//nodesPerLayer := app.Config.CONSENSUS.NodesPerLayer
+	//layersPerEpoch := app.Config.CONSENSUS.LayersPerEpoch
+	//activationDb := &activation.ActivationDb{Atxs: database.NewMemDatabase()} // TODO: initialize properly
+	//beaconProvider := &oracle.EpochBeaconProvider{}                           // TODO: initialize properly
+	//vrfSigner := crypto.NewVRFSigner(nil)                                     // TODO: use VRF private key
+	//nodeID := types.NodeId{Key: "x"}
+	//bo := oracle.NewMinerBlockOracle(nodesPerLayer, layersPerEpoch, activationDb, beaconProvider, vrfSigner, nodeID)
+	//bv := oracle.NewBlockEligibilityValidator(nodesPerLayer, layersPerEpoch, activationDb, beaconProvider,
+	//	crypto.ValidateVRF)
 	hareOracle := oracle.NewHareOracleFromClient(oracleClient)
 
 	apiConf := &app.Config.API
 
-	err = app.initServices("x", swarm, "/tmp/", sgn, bo, hareOracle, 50)
+	validatorMock := sync.BlockValidatorMock{}
+	err = app.initServices(nodeID, swarm, "/tmp/", sgn, bo, validatorMock, hareOracle, app.Config.LayerAvgSize)
 	if err != nil {
 		log.Error("cannot start services %v", err.Error())
 		return

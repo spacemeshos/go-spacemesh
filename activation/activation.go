@@ -1,99 +1,115 @@
 package activation
 
 import (
-	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
-	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/rand"
+	"github.com/spacemeshos/go-spacemesh/types"
 )
 
+const AtxProtocol = "AtxGossip"
+
+var activesetCache = NewActivesetCache(1000)
+
 type ActiveSetProvider interface {
-	GetActiveSetSize(l mesh.LayerID) uint32
+	GetActiveSetSize(l types.LayerID) uint32
 }
 
 type MeshProvider interface {
-	GetLatestView() []mesh.BlockID
-	LatestLayerId() mesh.LayerID
+	GetLatestView() []types.BlockID
+	LatestLayerId() types.LayerID
+}
+
+type EpochProvider interface {
+	Epoch(l types.LayerID) types.EpochId
+}
+
+type Broadcaster interface {
+	Broadcast(channel string, data []byte) error
 }
 
 type Builder struct {
-	nodeId    mesh.NodeId
-	db        *ActivationDb
-	net       api.NetworkAPI
-	activeSet ActiveSetProvider
-	mesh      MeshProvider
+	nodeId        types.NodeId
+	db            *ActivationDb
+	net           Broadcaster
+	activeSet     ActiveSetProvider
+	mesh          MeshProvider
+	epochProvider EpochProvider
 }
 
 type Processor struct {
-	db *ActivationDb
+	db            *ActivationDb
+	epochProvider EpochProvider
 }
 
-func (p *Processor) ProcessBlockATXs(block *mesh.Block) {
-	for _, atx := range block.ATXs {
-		p.db.StoreAtx(atx)
-	}
-}
-
-func NewBuilder(nodeId mesh.NodeId, db database.DB, net api.NetworkAPI, activeSet ActiveSetProvider, view MeshProvider) *Builder {
+func NewBuilder(nodeId types.NodeId, db database.DB, meshdb *mesh.MeshDB, net Broadcaster, activeSet ActiveSetProvider, view MeshProvider, epochDuration EpochProvider, layersPerEpoch uint64) *Builder {
 	return &Builder{
-		nodeId, &ActivationDb{db}, net, activeSet, view,
+		nodeId, NewActivationDb(db, meshdb, layersPerEpoch), net, activeSet, view, epochDuration,
 	}
 }
 
-func (b Builder) BuildActivationTx(nipst *nipst.NIPST) error {
+func (b *Builder) PublishActivationTx(nipst *nipst.NIPST) error {
+	var seq uint64
 	prevAtx, err := b.GetPrevAtxId(b.nodeId)
-	if err != nil {
-		return err
+	if prevAtx == nil {
+		log.Info("previous ATX not found")
+		prevAtx = &types.EmptyAtx
+		seq = 0
+	} else {
+		seq = b.GetLastSequence(b.nodeId)
+		if seq > 0 && prevAtx == nil {
+			log.Error("cannot find prev ATX for nodeid %v ", b.nodeId)
+			return err
+		}
+		seq++
 	}
-	l := b.mesh.LatestLayerId()
-	posAtx, err := b.GetPositioningAtx(l - 1)
-	if err != nil {
-		return err
-	}
-	atx := mesh.NewActivationTx(b.nodeId, b.GetLastSequence(b.nodeId)+1, *prevAtx, l, 0, *posAtx, b.activeSet.GetActiveSetSize(l-1), b.mesh.GetLatestView(), nipst)
 
-	buf, err := mesh.AtxAsBytes(atx)
+	l := b.mesh.LatestLayerId()
+	ech := b.epochProvider.Epoch(l)
+	var posAtx *types.AtxId = nil
+	if ech > 0 {
+		posAtx, err = b.GetPositioningAtxId(ech - 1)
+		if err != nil {
+			return err
+		}
+	} else {
+		posAtx = &types.EmptyAtx
+	}
+
+	atx := types.NewActivationTx(b.nodeId, seq, *prevAtx, l, 0, *posAtx, b.activeSet.GetActiveSetSize(l-1), b.mesh.GetLatestView(), nipst)
+
+	buf, err := types.AtxAsBytes(atx)
 	if err != nil {
 		return err
 	}
 	//todo: should we do something about it? wait for something?
-	return b.net.Broadcast(miner.AtxProtocol, buf)
+	return b.net.Broadcast(AtxProtocol, buf)
 }
 
-func (b *Builder) GetPrevAtxId(node mesh.NodeId) (*mesh.AtxId, error) {
+func (b *Builder) GetPrevAtxId(node types.NodeId) (*types.AtxId, error) {
 	ids, err := b.db.GetNodeAtxIds(node)
-	if err != nil {
+
+	if err != nil || len(ids) == 0 {
 		return nil, err
-	}
-	if len(ids) == 0 {
-		return nil, nil
 	}
 	return &ids[len(ids)-1], nil
 }
 
-func (b *Builder) GetPositioningAtx(l mesh.LayerID) (*mesh.AtxId, error) {
-	atxs, err := b.db.GetLayerAtxIds(l)
+func (b *Builder) GetPositioningAtxId(epochId types.EpochId) (*types.AtxId, error) {
+	atxs, err := b.db.GetEpochAtxIds(epochId)
 	if err != nil {
 		return nil, err
-	}
-	if len(atxs) == 0 {
-		//is this so?
-		return nil, nil
 	}
 	atxId := atxs[rand.Int31n(int32(len(atxs)))]
 
 	return &atxId, nil
 }
 
-func (b *Builder) GetLastSequence(node mesh.NodeId) uint64 {
+func (b *Builder) GetLastSequence(node types.NodeId) uint64 {
 	atxId, err := b.GetPrevAtxId(node)
 	if err != nil {
-		return 0
-	}
-	if atxId == nil {
 		return 0
 	}
 	atx, err := b.db.GetAtx(*atxId)
@@ -103,3 +119,14 @@ func (b *Builder) GetLastSequence(node mesh.NodeId) uint64 {
 	}
 	return atx.Sequence
 }
+
+/*func (m *Mesh) UniqueAtxs(lyr *Layer) map[*ActivationTx]struct{} {
+	atxMap := make(map[*ActivationTx]struct{})
+	for _, blk := range lyr.blocks {
+		for _, atx := range blk.ATXs {
+			atxMap[atx] = struct{}{}
+		}
+
+	}
+	return atxMap
+}*/

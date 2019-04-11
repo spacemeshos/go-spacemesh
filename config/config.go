@@ -21,8 +21,8 @@ const (
 	defaultLogFileName     = "spacemesh.log"
 	defaultAccountFileName = "accounts"
 	defaultDataDirName     = "spacemesh"
-	Genesis                = 0
-	GenesisId              = 420
+	Genesis                = mesh.Genesis
+	GenesisId              = mesh.GenesisId
 )
 
 var (
@@ -43,7 +43,7 @@ type Config struct {
 	HARE       hareConfig.Config      `mapstructure:"hare"`
 	TIME       timeConfig.TimeConfig  `mapstructure:"time"`
 	GAS        state.GasConfig        `mapstructure:"gas"`
-	REWARD     mesh.RewardConfig      `mapstructure:"reward"`
+	REWARD     mesh.Config            `mapstructure:"reward"`
 }
 
 // BaseConfig defines the default configuration options for spacemesh app
@@ -81,7 +81,7 @@ func DefaultConfig() Config {
 		HARE:       hareConfig.DefaultConfig(),
 		TIME:       timeConfig.DefaultConfig(),
 		GAS:        state.DefaultConfig(),
-		REWARD:     mesh.DefaultRewardConfig(),
+		REWARD:     mesh.DefaultMeshConfig(),
 	}
 }
 
