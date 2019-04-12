@@ -18,11 +18,13 @@ package trie
 
 import (
 	"fmt"
+	"io"
+	"strings"
+
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/rlp"
-	"io"
-	"strings"
+	"github.com/spacemeshos/go-spacemesh/xdr"
 )
 
 var indices = []string{"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "a", "b", "c", "d", "e", "f", "[17]"}
@@ -50,6 +52,23 @@ type (
 // nilValueNode is used when collapsing internal trie nodes for hashing, since
 // unset children need to serialize correctly.
 var nilValueNode = valueNode(nil)
+
+// EncodeXDR encodes a full node into the consensus XDR format.
+func (n *fullNode) EncodeXDR(w io.Writer) error {
+	var nodes [17]node
+
+	for i, child := range &n.Children {
+		if child != nil {
+			nodes[i] = child
+		} else {
+			nodes[i] = nilValueNode
+		}
+	}
+
+	_, err := xdr.Marshal(w, nodes) // Marshal
+
+	return err // Return possible errors
+}
 
 // EncodeRLP encodes a full node into the consensus RLP format.
 func (n *fullNode) EncodeRLP(w io.Writer) error {

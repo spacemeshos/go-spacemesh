@@ -262,8 +262,8 @@ func runEncTests(t *testing.T, f func(val interface{}) ([]byte, error)) {
 	}
 }
 
-// TestEncode tests the functionality of the Encode() method,
-func TestEncode(t *testing.T) {
+// TestMarshal tests the functionality of the Marshal() method,
+func TestMarshal(t *testing.T) {
 	runEncTests(t, func(val interface{}) ([]byte, error) {
 		b := new(bytes.Buffer) // Initialize buffer
 

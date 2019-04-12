@@ -13,20 +13,24 @@ import (
 func Unmarshal(r io.Reader, val interface{}) (int, error) {
 	decoder := xdr.NewDecoder(r) // Initialize decoder
 
-	var valBuffer interface{} // Init value buffer
+	bigValueType, isBigValue := isBigValue(val) // Check is decoding into big value
 
-	n, err := decoder.Decode(valBuffer) // Decode
+	if isBigValue { // Check is big value
+		val = []byte{} // Set to empty byte array
+	}
+
+	n, err := decoder.Decode(val) // Decode
 
 	if err != nil { // Check for errors
 		return n, err // Return found error
 	}
 
-	if bigValueType, isBigValue := isBigValue(val); isBigValue { // Check is decoding into big value
+	if isBigValue { // Check is decoding into big value
 		switch bigValueType { // Switch value
 		case 0:
 			bigIntBuffer := new(big.Int) // Initialize big int
 
-			bigIntBuffer.SetBytes(valBuffer.([]byte)) // Decode bytes
+			bigIntBuffer.SetBytes(val.([]byte)) // Decode bytes
 
 			if isPtr := getPtrValue(val); isPtr != val { // Check is pointer
 				val = bigIntBuffer // Set value
@@ -40,7 +44,7 @@ func Unmarshal(r io.Reader, val interface{}) (int, error) {
 		case 1:
 			bigFloatBuffer := new(big.Float) // Initialize big float
 
-			bigFloatBuffer.SetString(string(valBuffer.([]byte))) // Decode string value
+			bigFloatBuffer.SetString(string(val.([]byte))) // Decode string value
 
 			if isPtr := getPtrValue(val); isPtr != val { // Check is pointer
 				val = bigFloatBuffer // Set value
