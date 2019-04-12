@@ -69,6 +69,9 @@ func (k key) Seal(message []byte) (out []byte) {
 }
 
 func (k key) Open(encryptedMessage []byte) (out []byte, err error) {
+	if len(encryptedMessage) <= nonceSize {
+		return nil, errors.New("message was too small")
+	}
 	nonce := &[nonceSize]byte{}
 	copy(nonce[:], encryptedMessage[:nonceSize])
 	message, ok := box.OpenAfterPrecomputation(nil, encryptedMessage[nonceSize:], nonce, k.raw())

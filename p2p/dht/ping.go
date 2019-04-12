@@ -3,13 +3,14 @@ package dht
 import (
 	"bytes"
 	"errors"
+	"net"
+	"time"
+
 	"github.com/golang/protobuf/proto"
+	"github.com/spacemeshos/go-spacemesh/p2p/dht/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
-	"github.com/spacemeshos/go-spacemesh/ping/pb"
-	"net"
-	"time"
 )
 
 func (p *discovery) newPingRequestHandler() func(msg server.Message) []byte {
@@ -39,7 +40,6 @@ func (p *discovery) newPingRequestHandler() func(msg server.Message) []byte {
 }
 
 func (p *discovery) verifyPinger(from net.Addr, pi *pb.Ping) error {
-	//todo: check the address provided with an extra ping before upading. ( if we haven't checked it for a while )
 	k, err := p2pcrypto.NewPubkeyFromBytes(pi.ID)
 
 	if err != nil {
@@ -62,8 +62,7 @@ func (p *discovery) verifyPinger(from net.Addr, pi *pb.Ping) error {
 		return errors.New("canno't parse incoming ip")
 	}
 
-	//todo : verify the listening address. ping it and get result from it
-
+	//todo: check the address provided with an extra ping before updating. ( if we haven't checked it for a while )
 	// todo: decide on best way to know our ext address
 	p.table.Update(node.New(k, net.JoinHostPort(addr, port)))
 	return nil

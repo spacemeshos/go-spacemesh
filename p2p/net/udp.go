@@ -1,6 +1,7 @@
 package net
 
 import (
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"net"
 
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -13,6 +14,7 @@ const maxMessageSize = 2048
 
 // UDPMessageEvent is an event about a udp message. passed through a channel
 type UDPMessageEvent struct {
+	From     p2pcrypto.PublicKey
 	FromAddr net.Addr
 	Message  []byte
 }
@@ -25,6 +27,7 @@ type UDPNet struct {
 	config     config.Config
 	msgChan    chan UDPMessageEvent
 	conn       *net.UDPConn
+	cache      *sessionCache
 	shutdown   chan struct{}
 }
 
@@ -35,14 +38,18 @@ func NewUDPNet(config config.Config, local *node.LocalNode, log log.Log) (*UDPNe
 		return nil, err
 	}
 
-	return &UDPNet{
+	n := &UDPNet{
 		local:      local,
 		logger:     log,
 		udpAddress: addr,
 		config:     config,
 		msgChan:    make(chan UDPMessageEvent, config.BufferSize),
 		shutdown:   make(chan struct{}),
-	}, nil
+	}
+
+	n.cache = newSessionCache(n.initSession)
+
+	return n, nil
 }
 
 // Start will trigger listening on the configured port
@@ -53,6 +60,7 @@ func (n *UDPNet) Start() error {
 		return err
 	}
 	n.conn = listener
+
 	go n.listenToUDPNetworkMessages(listener)
 
 	return nil
@@ -81,12 +89,37 @@ func newUDPListener(listenAddress *net.UDPAddr) (*net.UDPConn, error) {
 
 var IPv4LoopbackAddress = net.IP{127, 0, 0, 1}
 
+func (n *UDPNet) initSession(remote p2pcrypto.PublicKey) NetworkSession {
+	session := createSession(n.local.PrivateKey(), remote)
+	return session
+}
+
 // Send writes a udp packet to the target with the given data
 func (n *UDPNet) Send(to node.Node, data []byte) error {
-	// todo : handle session if not exist
-	raddr, err := net.ResolveUDPAddr("udp", to.Address())
+
+	raddr, err := resolveUDPAddr(to.Address())
 	if err != nil {
 		return err
+	}
+
+	ns := n.cache.GetOrCreate(to.PublicKey())
+
+	if err != nil {
+		return err
+	}
+
+	sealed := ns.SealMessage(data)
+	final := p2pcrypto.PrependPubkey(sealed, n.local.PublicKey())
+
+	_, err = n.conn.WriteToUDP(final, raddr)
+
+	return err
+}
+
+func resolveUDPAddr(addr string) (*net.UDPAddr, error) {
+	raddr, err := net.ResolveUDPAddr("udp", addr)
+	if err != nil {
+		return nil, err
 	}
 
 	// TODO: only accept local (unspecified/loopback) IPs from other local ips.
@@ -98,9 +131,7 @@ func (n *UDPNet) Send(to node.Node, data []byte) error {
 		}
 	}
 
-	_, err = n.conn.WriteToUDP(data, raddr) // todo: use i to retransmit ?
-
-	return err
+	return raddr, nil
 }
 
 // IncomingMessages is a channel where incoming UDPMessagesEvents will stream
@@ -125,12 +156,34 @@ func (n *UDPNet) listenToUDPNetworkMessages(listener net.PacketConn) {
 			}
 
 		}
+
 		// todo : check size?
-		// todo: check if needs session before passing
 		copybuf := make([]byte, size)
 		copy(copybuf, buf)
+
+		msg, pk, err := p2pcrypto.ExtractPubkey(copybuf)
+
+		if err != nil {
+			n.logger.Warning("error can't extract public key from udp message. (addr=%v), err=%v", addr.String(), err)
+			continue
+		}
+
+		ns := n.cache.GetOrCreate(pk)
+
+		if ns == nil {
+			n.logger.Warning("coul'd not create session with %v:%v skipping message..", addr.String(), pk.String())
+			continue
+		}
+
+		final, err := ns.OpenMessage(msg)
+		if err != nil {
+			n.logger.Warning("skipping udp with session message err=%v msg=", err, copybuf)
+			// todo: remove malfunctioning session, ban ip ?
+			continue
+		}
+
 		select {
-		case n.msgChan <- UDPMessageEvent{addr, copybuf}:
+		case n.msgChan <- UDPMessageEvent{pk, addr, final}:
 		case <-n.shutdown:
 			return
 		}

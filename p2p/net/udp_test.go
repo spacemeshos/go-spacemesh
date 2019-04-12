@@ -4,6 +4,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/stretchr/testify/require"
 	"net"
 	"sync/atomic"
@@ -21,6 +22,8 @@ type mockCon struct {
 		err  error
 	}
 
+	releaseCount chan struct{}
+
 	writeResult struct {
 		n   int
 		err error
@@ -28,6 +31,9 @@ type mockCon struct {
 }
 
 func (mc *mockCon) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
+	if mc.releaseCount != nil {
+		<-mc.releaseCount
+	}
 	copy(p, mc.readResult.buf)
 	atomic.AddInt32(&mc.readCount, 1)
 	return mc.readResult.n, mc.readResult.addr, mc.readResult.err
@@ -59,7 +65,7 @@ func (mc *mockCon) SetWriteDeadline(t time.Time) error {
 const testMsg = "TEST"
 
 func TestUDPNet_Sanity(t *testing.T) {
-	local := &node.LocalNode{Node: node.GenerateRandomNodeData()}
+	local, _ := node.GenerateTestNode(t)
 	udpnet, err := NewUDPNet(config.DefaultConfig(), local, log.New("", "", ""))
 	require.NoError(t, err)
 	require.NotNil(t, udpnet)
@@ -68,9 +74,15 @@ func TestUDPNet_Sanity(t *testing.T) {
 	require.NoError(t, err)
 	mockconn := &mockCon{local: addr}
 
-	other := node.GenerateRandomNodeData()
+	other, _ := node.GenerateTestNode(t)
 	addr2, err := net.ResolveUDPAddr("udp", other.Address())
 	require.NoError(t, err)
+
+	session := createSession(other.PrivateKey(), local.PublicKey())
+
+	require.NoError(t, err)
+
+	mockconn.releaseCount = make(chan struct{})
 
 	mockconn.readResult = struct {
 		buf  []byte
@@ -81,12 +93,27 @@ func TestUDPNet_Sanity(t *testing.T) {
 
 	go udpnet.listenToUDPNetworkMessages(mockconn)
 
+	mockconn.releaseCount <- struct{}{}
+
+	sealed := session.SealMessage([]byte(testMsg))
+	final := p2pcrypto.PrependPubkey(sealed, other.PublicKey())
+
+	mockconn.readResult = struct {
+		buf  []byte
+		n    int
+		addr net.Addr
+		err  error
+	}{buf: final, n: len(final), addr: addr2, err: nil}
+
+	mockconn.releaseCount <- struct{}{}
+
 	i := 0
 	for msg := range udpnet.IncomingMessages() {
 		require.Equal(t, msg.FromAddr, addr2)
+		require.Equal(t, msg.From, other.PublicKey())
 		require.Equal(t, msg.Message, []byte(testMsg))
 		i++
-		if i == 10 {
+		if i == 1 {
 			udpnet.Shutdown()
 			return
 		}
