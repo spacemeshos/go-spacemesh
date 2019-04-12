@@ -3,6 +3,7 @@ package hare
 import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/hare/pb"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/stretchr/testify/assert"
 	"testing"
@@ -132,9 +133,9 @@ func TestBroker_RegisterUnregister(t *testing.T) {
 }
 
 type mockGossipMessage struct {
-	msg            *pb.HareMessage
-	lastValidation bool
-	vComp          chan service.MessageValidation
+	msg    *pb.HareMessage
+	sender p2pcrypto.PublicKey
+	vComp  chan service.MessageValidation
 }
 
 func (mgm *mockGossipMessage) Bytes() []byte {
@@ -150,13 +151,16 @@ func (mgm *mockGossipMessage) ValidationCompletedChan() chan service.MessageVali
 	return mgm.vComp
 }
 
-func (mgm *mockGossipMessage) ReportValidation(protocol string, isValid bool) {
-	mgm.lastValidation = isValid
-	mgm.vComp <- service.NewMessageValidation(nil, "", isValid)
+func (mgm *mockGossipMessage) Sender() p2pcrypto.PublicKey {
+	return mgm.sender
+}
+
+func (mgm *mockGossipMessage) ReportValidation(protocol string) {
+	mgm.vComp <- service.NewMessageValidation(mgm.sender, nil, "")
 }
 
 func newMockGossipMsg(msg *pb.HareMessage) *mockGossipMessage {
-	return &mockGossipMessage{msg, false, make(chan service.MessageValidation, 10)}
+	return &mockGossipMessage{msg, p2pcrypto.NewRandomPubkey(), make(chan service.MessageValidation, 10)}
 }
 
 func TestBroker_Send(t *testing.T) {
@@ -169,22 +173,20 @@ func TestBroker_Send(t *testing.T) {
 
 	m := newMockGossipMsg(nil)
 	broker.inbox <- m
-	assertMsg(t, m, false)
 
 	msg := BuildPreRoundMsg(NewMockSigning(), NewSetFromValues(value1))
 	msg.Message.InstanceId = 2
 	m = newMockGossipMsg(msg)
 	broker.inbox <- m
-	assertMsg(t, m, false)
 
 	msg.Message.InstanceId = 1
 	m = newMockGossipMsg(msg)
 	broker.inbox <- m
-	assertMsg(t, m, false)
+	// nothing happens since this is an  invalid message
 
 	mev.valid = true
 	broker.inbox <- m
-	assertMsg(t, m, true)
+	assertMsg(t, m)
 }
 
 func TestBroker_Register(t *testing.T) {
@@ -199,14 +201,14 @@ func TestBroker_Register(t *testing.T) {
 	assert.Equal(t, 0, len(broker.pending[instanceId1]))
 }
 
-func assertMsg(t *testing.T, msg *mockGossipMessage, expected bool) {
+func assertMsg(t *testing.T, msg *mockGossipMessage) {
 	tm := time.NewTimer(2 * time.Second)
 	select {
 	case <-tm.C:
 		t.Error("Timeout")
 		t.FailNow()
-	case res := <-msg.ValidationCompletedChan():
-		assert.Equal(t, expected, res.IsValid())
+	case <-msg.ValidationCompletedChan():
+		return
 	}
 }
 
@@ -220,15 +222,11 @@ func TestBroker_Register2(t *testing.T) {
 	m.Message.InstanceId = uint32(instanceId1)
 	msg := newMockGossipMsg(m)
 	broker.inbox <- msg
-	assertMsg(t, msg, true)
+	assertMsg(t, msg)
 	m.Message.InstanceId = uint32(instanceId2)
 	msg = newMockGossipMsg(m)
 	broker.inbox <- msg
-	assertMsg(t, msg, true)
-	m.Message.InstanceId = uint32(instanceId3)
-	msg = newMockGossipMsg(m)
-	broker.inbox <- msg
-	assertMsg(t, msg, false)
+	assertMsg(t, msg)
 }
 
 func TestBroker_Register3(t *testing.T) {
