@@ -109,7 +109,7 @@ type routingTableImpl struct {
 	// Local peer ID that holds this routing table
 	local node.DhtID
 
-	// Operations activation channels
+	// Operations mesh channels
 	findReqs         chan PeerByIDRequest
 	nearestPeerReqs  chan PeerByIDRequest
 	nearestPeersReqs chan NearestPeersReq

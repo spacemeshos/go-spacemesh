@@ -1,14 +1,15 @@
 package oracle
 
 import (
+	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
-	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/types"
 )
 
 // todo: configure oracle test constants like committee size and honesty.
 
 type BlockOracle interface {
-	BlockEligible(layerID mesh.LayerID) ([]mesh.BlockEligibilityProof, error)
+	BlockEligible(layerID types.LayerID) (types.AtxId, []types.BlockEligibilityProof, error)
 }
 
 type HareOracle interface {
@@ -18,15 +19,14 @@ type HareOracle interface {
 type localBlockOracle struct {
 	committeeSize int
 	oc            *eligibility.FixedRolacle
-	nodeID        mesh.NodeId
+	nodeID        types.NodeId
 }
 
-func NewLocalOracle(committeeSize int, nodeID mesh.NodeId) *localBlockOracle {
-	oc := eligibility.New()
+func NewLocalOracle(rolacle *eligibility.FixedRolacle, committeeSize int, nodeID types.NodeId) *localBlockOracle {
 	//oc.Register(true, pubKey)
 	return &localBlockOracle{
 		committeeSize: committeeSize,
-		oc:            oc,
+		oc:            rolacle,
 		nodeID:        nodeID,
 	}
 }
@@ -36,13 +36,16 @@ func (bo *localBlockOracle) Register(isHonest bool, pubkey string) {
 }
 
 // Eligible checks whether we're eligible to mine a block in layer i
-func (bo *localBlockOracle) BlockEligible(layerID mesh.LayerID) ([]mesh.BlockEligibilityProof, error) {
+func (bo *localBlockOracle) BlockEligible(layerID types.LayerID) (types.AtxId, []types.BlockEligibilityProof, error) {
 	eligible := bo.oc.Eligible(uint32(layerID), bo.committeeSize, bo.nodeID.Key, nil)
-	var proofs []mesh.BlockEligibilityProof
+	var proofs []types.BlockEligibilityProof
 	if eligible {
-		proofs = []mesh.BlockEligibilityProof{}
+		proofs = []types.BlockEligibilityProof{{
+			J:   0,
+			Sig: nil,
+		}}
 	}
-	return proofs, nil
+	return types.AtxId{}, proofs, nil
 }
 
 func (bo *localBlockOracle) Eligible(instanceID uint32, committeeSize int, pubKey string, proof []byte) bool {
@@ -52,10 +55,10 @@ func (bo *localBlockOracle) Eligible(instanceID uint32, committeeSize int, pubKe
 type blockOracle struct {
 	committeeSize int
 	oc            *OracleClient
-	nodeID        mesh.NodeId
+	nodeID        types.NodeId
 }
 
-func NewBlockOracleFromClient(oc *OracleClient, committeeSize int, nodeID mesh.NodeId) *blockOracle {
+func NewBlockOracleFromClient(oc *OracleClient, committeeSize int, nodeID types.NodeId) *blockOracle {
 	return &blockOracle{
 		committeeSize: committeeSize,
 		oc:            oc,
@@ -64,13 +67,16 @@ func NewBlockOracleFromClient(oc *OracleClient, committeeSize int, nodeID mesh.N
 }
 
 // Eligible checks whether we're eligible to mine a block in layer i
-func (bo *blockOracle) BlockEligible(layerID mesh.LayerID) ([]mesh.BlockEligibilityProof, error) {
+func (bo *blockOracle) BlockEligible(layerID types.LayerID) (types.AtxId, []types.BlockEligibilityProof, error) {
 	eligible := bo.oc.Eligible(uint32(layerID), bo.committeeSize, bo.nodeID.Key)
-	var proofs []mesh.BlockEligibilityProof
+	var proofs []types.BlockEligibilityProof
 	if eligible {
-		proofs = []mesh.BlockEligibilityProof{}
+		proofs = []types.BlockEligibilityProof{{
+			J:   0,
+			Sig: []byte{1, 2, 3},
+		}}
 	}
-	return proofs, nil
+	return types.AtxId{Hash: common.Hash{}}, proofs, nil
 }
 
 type hareOracle struct {
