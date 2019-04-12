@@ -70,20 +70,6 @@ func (n *fullNode) EncodeXDR(w io.Writer) error {
 	return err // Return possible errors
 }
 
-// EncodeRLP encodes a full node into the consensus RLP format.
-func (n *fullNode) EncodeRLP(w io.Writer) error {
-	var nodes [17]node
-
-	for i, child := range &n.Children {
-		if child != nil {
-			nodes[i] = child
-		} else {
-			nodes[i] = nilValueNode
-		}
-	}
-	return rlp.Encode(w, nodes)
-}
-
 func (n *fullNode) copy() *fullNode   { copy := *n; return &copy }
 func (n *shortNode) copy() *shortNode { copy := *n; return &copy }
 
