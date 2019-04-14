@@ -35,8 +35,8 @@ func (v *Validator) Validate(nipst *NIPST, expectedChallenge common.Hash) error 
 	}
 
 	if valid, err := v.verifyPoetMembership(nipst.poetChallenge, nipst.poetMembershipProof); err != nil || !valid {
-		log.Warning("PoET membership proof invalid %v", err)
-		return fmt.Errorf("PoET membership proof invalid %v", err)
+		log.Warning("PoET membership proof invalid: %v", err)
+		return fmt.Errorf("PoET membership proof invalid: %v", err)
 	}
 
 	if valid := v.verifyPoetMatchesMembership(nipst.poetMembershipProof, nipst.poetProof); !valid {
@@ -45,8 +45,8 @@ func (v *Validator) Validate(nipst *NIPST, expectedChallenge common.Hash) error 
 	}
 
 	if valid, err := v.verifyPoet(nipst.poetProof); err != nil || !valid {
-		log.Warning("PoET proof invalid %v", err)
-		return fmt.Errorf("PoET proof invalid %v", err)
+		log.Warning("PoET proof invalid: %v", err)
+		return fmt.Errorf("PoET proof invalid: %v", err)
 	}
 
 	if !bytes.Equal(nipst.postChallenge[:], nipst.postProof.Challenge) {
@@ -71,8 +71,8 @@ func (v *Validator) Validate(nipst *NIPST, expectedChallenge common.Hash) error 
 
 	if valid, err := v.verifyPost(nipst.postProof, nipst.space, v.NumberOfProvenLabels, v.Difficulty); err != nil || !valid {
 
-		log.Warning("PoST proof invalid %v", err)
-		return fmt.Errorf("PoST proof invalid %v", err)
+		log.Warning("PoST proof invalid: %v", err)
+		return fmt.Errorf("PoST proof invalid: %v", err)
 	}
 
 	return nil

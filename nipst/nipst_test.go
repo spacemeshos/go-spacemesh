@@ -18,7 +18,7 @@ var minerID = []byte("id")
 var idsToCleanup [][]byte
 var spaceUnit = uint64(1024)
 var difficulty = proving.Difficulty(5)
-var numberOfProvenLabels = uint8(proving.NumberOfProvenLabels)
+var numberOfProvenLabels = uint8(10)
 
 type PostProverClientMock struct{}
 
@@ -90,7 +90,8 @@ func TestNIPSTBuilderWithClients(t *testing.T) {
 
 	npst := buildNIPST(r, spaceUnit, difficulty, numberOfProvenLabels, nipstChallenge)
 
-	validateNIPST(r, npst, nipstChallenge)
+	err := validateNIPST(npst, spaceUnit, difficulty, numberOfProvenLabels, nipstChallenge)
+	r.NoError(err)
 }
 
 func buildNIPST(r *require.Assertions, spaceUnit uint64, difficulty proving.Difficulty, numberOfProvenLabels uint8, nipstChallenge common.Hash) *NIPST {
@@ -118,22 +119,6 @@ func buildNIPST(r *require.Assertions, spaceUnit uint64, difficulty proving.Diff
 	npst, err := nb.BuildNIPST(nipstChallenge)
 	r.NoError(err)
 	return npst
-}
-
-func validateNIPST(r *require.Assertions, npst *NIPST, nipstChallenge common.Hash) {
-	v := &Validator{
-		PostParams: PostParams{
-			Difficulty:           difficulty,
-			NumberOfProvenLabels: numberOfProvenLabels,
-			SpaceUnit:            spaceUnit,
-		},
-		verifyPost:                  verifyPost,
-		verifyPoetMembership:        verifyPoetMembership,
-		verifyPoet:                  verifyPoet,
-		verifyPoetMatchesMembership: verifyPoetMatchesMembership,
-	}
-	err := v.Validate(npst, nipstChallenge)
-	r.NoError(err)
 }
 
 func TestNewNIPSTBuilderNotInitialized(t *testing.T) {
@@ -181,10 +166,53 @@ func TestNewNIPSTBuilderNotInitialized(t *testing.T) {
 	r.NoError(err)
 	r.NotNil(npst)
 
-	validateNIPST(r, npst, nipstChallenge)
+	err = validateNIPST(npst, spaceUnit, difficulty, numberOfProvenLabels, nipstChallenge)
+	r.NoError(err)
 }
 
-// TODO test validation failures
+func TestValidator_Validate(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	r := require.New(t)
+
+	nipstChallenge := common.BytesToHash([]byte("anton"))
+
+	npst := buildNIPST(r, spaceUnit, difficulty, numberOfProvenLabels, nipstChallenge)
+
+	err := validateNIPST(npst, spaceUnit, difficulty, numberOfProvenLabels, nipstChallenge)
+	r.NoError(err)
+
+	err = validateNIPST(npst, spaceUnit+1, difficulty, numberOfProvenLabels, nipstChallenge)
+	r.EqualError(err, "PoST space (1024) is less than a single space unit (1025)")
+
+	err = validateNIPST(npst, spaceUnit, difficulty+1, numberOfProvenLabels, nipstChallenge)
+	r.EqualError(err, "PoST proof invalid: validation failed: number of derived leaf indices (9) doesn't match number of included proven leaves (8)")
+
+	err = validateNIPST(npst, spaceUnit, difficulty, numberOfProvenLabels+5, nipstChallenge)
+	r.EqualError(err, "PoST proof invalid: validation failed: number of derived leaf indices (10) doesn't match number of included proven leaves (8)")
+
+	err = validateNIPST(npst, spaceUnit, difficulty, numberOfProvenLabels, common.BytesToHash([]byte("lerner")))
+	r.EqualError(err, "NIPST challenge is not equal to expected challenge")
+}
+
+func validateNIPST(npst *NIPST, spaceUnit uint64, difficulty proving.Difficulty, numberOfProvenLabels uint8,
+	nipstChallenge common.Hash) error {
+
+	v := &Validator{
+		PostParams: PostParams{
+			Difficulty:           difficulty,
+			NumberOfProvenLabels: numberOfProvenLabels,
+			SpaceUnit:            spaceUnit,
+		},
+		verifyPost:                  verifyPost,
+		verifyPoetMembership:        verifyPoetMembership,
+		verifyPoet:                  verifyPoet,
+		verifyPoetMatchesMembership: verifyPoetMatchesMembership,
+	}
+	return v.Validate(npst, nipstChallenge)
+}
 
 func TestMain(m *testing.M) {
 	flag.Parse()
