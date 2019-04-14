@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 
-from tests.fixtures import load_config, bootstrap_deployment_info, client_deployment_info
+from tests.fixtures import load_config, bootstrap_deployment_info, client_deployment_info, set_namespace
 import os
 from os import path
 import pytest
@@ -115,17 +115,19 @@ def query_bootstrap_es(indx, namespace, bootstrap_po_name):
     return None
 
 
-def query_message(indx, namespace, client_po_name, msg, findFails=False):
+def query_message(indx, namespace, client_po_name, fields, findFails=False):
     # TODO : break this to smaller functions ?
     es = get_elastic_search_api()
     fltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
-           Q("match_phrase", kubernetes__pod_name=client_po_name) & Q("match_phrase", M=msg)
+           Q("match_phrase", kubernetes__pod_name=client_po_name)
+    for f in fields:
+        fltr = fltr & Q("match_phrase", **{f: fields[f]})
     s = Search(index=indx, using=es).query('bool', filter=[fltr])
     hits = list(s.scan())
 
     print("====================================================================")
-    print("Report for `{0}` in deployment -  {1}  ".format(msg, client_po_name))
-    print("Number of hits: {0}", len(hits))
+    print("Report for `{0}` in deployment -  {1}  ".format(fields, client_po_name))
+    print("Number of hits: ", len(hits))
     print("====================================================================")
     print("Benchmark results:")
     ts = [hit["T"] for hit in hits]
@@ -164,6 +166,7 @@ def query_message(indx, namespace, client_po_name, msg, findFails=False):
 @pytest.fixture(scope='module')
 def setup_oracle(request):
     oracle_deployment_name = 'oracle'
+
     def _setup_oracle_in_namespace(name_space):
 
         namespaced_pods = client.CoreV1Api().list_namespaced_pod(name_space,
@@ -184,6 +187,7 @@ def setup_oracle(request):
 
     request.addfinalizer(fin)
     return _setup_oracle_in_namespace(testconfig['namespace'])
+
 
 @pytest.fixture(scope='module')
 def setup_bootstrap(request, load_config, setup_oracle, create_configmap, bootstrap_deployment_info):
@@ -275,7 +279,7 @@ def setup_clients(request, setup_oracle, setup_bootstrap, client_deployment_info
 
 
 def wait_genesis():
-# Make sure genesis time has not passed yet and sleep for the rest
+    # Make sure genesis time has not passed yet and sleep for the rest
     time_now = pytz.utc.localize(datetime.utcnow())
     delta_from_genesis = (GENESIS_TIME - time_now).total_seconds()
     if delta_from_genesis < 0:
@@ -284,6 +288,15 @@ def wait_genesis():
     else:
         print('sleep for {0} sec until genesis time'.format(delta_from_genesis))
         time.sleep(delta_from_genesis)
+
+
+def api_call(client_ip, data, api, namespace):
+    p = subprocess.Popen(['./kubectl-cmd.sh', '%s' % client_ip, "%s" % data, api, namespace], stdin=subprocess.PIPE,
+                         stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    (out, err) = p.communicate()
+    if p.returncode != 0:
+        raise Exception('An Error raised on api_call')
+    return out
 
 
 @pytest.fixture(scope='module')
@@ -345,7 +358,7 @@ todaydate = dt.strftime("%Y.%m.%d")
 current_index = 'kubernetes_cluster-' + todaydate
 
 
-def test_bootstrap(setup_bootstrap):
+def test_bootstrap(set_namespace, setup_bootstrap):
     # wait for the bootstrap logs to be available in ElasticSearch
     time.sleep(5)
     assert setup_bootstrap.pods[0]['key'] == query_bootstrap_es(current_index,
@@ -353,18 +366,17 @@ def test_bootstrap(setup_bootstrap):
                                                                 setup_bootstrap.pods[0]['name'])
 
 
-def test_client(load_config, setup_clients):
-    MESSAGE = "discovery_bootstrap"
+def test_client(set_namespace, setup_clients, save_log_on_exit):
+    fields = {'M':'discovery_bootstrap'}
     timetowait = len(setup_clients.pods)/2
     print("Sleeping " + str(timetowait) + "before checking out bootstrap results")
     time.sleep(timetowait)
-    peers = query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, MESSAGE, True)
+    peers = query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, fields, True)
     assert peers == len(setup_clients.pods)
 
-
-
-def test_gossip(load_config, setup_clients):
-    MESSAGE = "new_gossip_message"
+    
+def test_gossip(set_namespace, setup_clients):
+    fields = {'M':'new_gossip_message', 'protocol': 'api_test_gossip'}
     # *note*: this already waits for bootstrap so we can send the msg right away.
     # send message to client via rpc
     client_ip = setup_clients.pods[0]['pod_ip']
@@ -374,9 +386,7 @@ def test_gossip(load_config, setup_clients):
     # todo: take out broadcast and rpcs to helper methods.
     api = 'v1/broadcast'
     data = '{"data":"foo"}'
-    p = subprocess.Popen(['./kubectl-cmd.sh', '%s' % client_ip, "%s" % data, api],
-                         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    (out, err) = p.communicate()
+    out = api_call(client_ip, data, api, testconfig['namespace'])
     assert '{"value":"ok"}' in out.decode("utf-8")
 
     # Need to sleep for a while in order to enable the propagation of the gossip message - 0.5 sec for each node
@@ -385,21 +395,20 @@ def test_gossip(load_config, setup_clients):
     print('sleep for {0} sec to enable gossip propagation'.format(gossip_propagation_sleep))
     time.sleep(gossip_propagation_sleep)
 
-    peers_for_gossip = query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, MESSAGE, True)
+    peers_for_gossip = query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, fields, True)
     assert len(setup_clients.pods) == peers_for_gossip
 
 
-def test_transaction(load_config, setup_clients):
-    wait_genesis()
+def test_transaction(set_namespace, setup_clients):
+
     # choose client to run on
     client_ip = setup_clients.pods[0]['pod_ip']
 
     api = 'v1/nonce'
     data = '{"address":"1"}'
-    p = subprocess.Popen(['./kubectl-cmd.sh', '%s' % client_ip, "%s" % data, api], stdin=subprocess.PIPE,
-                         stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    (out, err) = p.communicate()
+    out = api_call(client_ip, data, api, testconfig['namespace'])
     assert '{"value":"0"}' in out.decode("utf-8")
+
     match = re.search(r"{\"value\":\"(?P<nonce_val>\d+)\"}", out.decode("utf-8"))
     assert match
     nonce_val = int(match.group("nonce_val"))
@@ -407,10 +416,8 @@ def test_transaction(load_config, setup_clients):
 
     api = 'v1/submittransaction'
     data = '{"sender":"1","reciever":"222","nonce":"0","amount":"100"}'
-    p = subprocess.Popen(['./kubectl-cmd.sh', '%s' % client_ip, "%s" % data, api], stdin=subprocess.PIPE,
-                         stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    (out, err) = p.communicate()
-    assert '{"value":"ok"}' in out.decode("utf-8")
 
+    out = api_call(client_ip, data, api, testconfig['namespace'])
+    assert '{"value":"ok"}' in out.decode("utf-8")
 
 

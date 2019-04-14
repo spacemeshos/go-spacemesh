@@ -81,45 +81,7 @@ func NewBuilder(nodeId types.NodeId, db database.DB,
 	}
 }
 
-func (b *Builder) PublishActivationTx(nipst *nipst.NIPST) error {
-	var seq uint64
-	prevAtx, err := b.GetPrevAtxId(b.nodeId)
-	if prevAtx == nil {
-		log.Info("previous ATX not found")
-		prevAtx = &types.EmptyAtx
-		seq = 0
-	} else {
-		seq = b.GetLastSequence(b.nodeId)
-		if seq > 0 && prevAtx == nil {
-			log.Error("cannot find prev ATX for nodeid %v ", b.nodeId)
-			return err
-		}
-		seq++
-	}
-
-	l := b.mesh.LatestLayerId()
-	ech := b.epochProvider.Epoch(l)
-	var posAtx *types.AtxId = nil
-	if ech > 0 {
-		posAtx, err = b.GetPositioningAtxId(ech - 1)
-		if err != nil {
-			return err
-		}
-	} else {
-		posAtx = &types.EmptyAtx
-	}
-
-	atx := types.NewActivationTx(b.nodeId, seq, *prevAtx, l, 0, *posAtx, b.activeSet.GetActiveSetSize(l-1), b.mesh.GetLatestView(), nipst)
-
-	buf, err := types.AtxAsBytes(atx)
-	if err != nil {
-		return err
-	}
-	//todo: should we do something about it? wait for something?
-	return b.net.Broadcast(AtxProtocol, buf)
-}
-
-func (b *Builder) CreatePoETChallenge(epoch types.EpochId) error {
+func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 	prevAtx, err := b.GetPrevAtxId(b.nodeId)
 	seq := uint64(0)
 	if err == nil {
@@ -131,17 +93,28 @@ func (b *Builder) CreatePoETChallenge(epoch types.EpochId) error {
 	} else {
 		prevAtx = &types.EmptyAtx
 	}
-	posAtxId, err := b.GetPositioningAtxId(epoch)
-	if err != nil {
-		return err
+	posAtxId := &types.EmptyAtx
+	endTick := uint64(0)
+	LayerIdx := b.mesh.LatestLayerId()
+	if epoch > 0 {
+		//positioning atx is from the last epoch
+		posAtxId, err = b.GetPositioningAtxId(epoch - 1)
+		if err != nil {
+			return err
+		}
+		posAtx, err := b.db.GetAtx(*posAtxId)
+		if err != nil {
+			return err
+		}
+		endTick = posAtx.EndTick
 	}
-	posAtx, err := b.db.GetAtx(*posAtxId)
 
 	challenge := types.PoETChallenge{
+		NodeId:         b.nodeId,
 		Sequence:       seq,
 		PrevATXId:      *prevAtx,
-		LayerIdx:       types.LayerID(uint64(posAtx.LayerIdx) + b.layersPerEpoch),
-		StartTick:      posAtx.EndTick,
+		LayerIdx:       types.LayerID(uint64(LayerIdx) + b.layersPerEpoch),
+		StartTick:      endTick,
 		EndTick:        b.tickProvider.NumOfTicks(), //todo: add provider when
 		PositioningAtx: *posAtxId,
 	}
@@ -154,7 +127,25 @@ func (b *Builder) CreatePoETChallenge(epoch types.EpochId) error {
 	if err != nil {
 		return err
 	}
-	return b.PublishActivationTx(npst)
+	//todo: check if view should be latest layer -1
+	atx := types.NewActivationTxWithcChallenge(challenge, b.activeSet.GetActiveSetSize(b.mesh.LatestLayerId()-1), b.mesh.GetLatestView(), npst)
+
+	buf, err := types.AtxAsBytes(atx)
+	if err != nil {
+		return err
+	}
+	//todo: should we do something about it? wait for something?
+	return b.net.Broadcast(AtxProtocol, buf)
+
+}
+
+func (b *Builder) Persist(c *types.PoETChallenge) {
+	//todo: implement storing to persistent media
+}
+
+func (b *Builder) Load() *types.PoETChallenge {
+	//todo: implement loading from persistent media
+	return nil
 }
 
 func (b *Builder) GetPrevAtxId(node types.NodeId) (*types.AtxId, error) {

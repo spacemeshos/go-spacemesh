@@ -3,6 +3,7 @@ package activation
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"github.com/davecgh/go-xdr/xdr2"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -31,6 +32,7 @@ func (m *ActivationDb) ProcessBlockATXs(blk *types.Block) {
 		if err != nil {
 			log.Error("could not calculate active set for %v", atx.Id())
 		}
+		//todo: maybe there is a potential bug in this case if count for the view can change between calls to this function
 		atx.VerifiedActiveSet = activeSet
 		err = m.StoreAtx(types.EpochId(atx.LayerIdx/m.LayersPerEpoch), atx)
 		if err != nil {
@@ -92,6 +94,50 @@ func (m *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, err
 
 	return counter, nil
 
+}
+
+const NIPST_LAYERTIME = 1000
+
+func (db *ActivationDb) ValidateAtx(atx *types.ActivationTx) error {
+	// validation rules: no other atx with same id and sequence number
+	// if s != 0 the prevAtx is valid and it's seq num is s -1
+	// positioning atx is valid
+	// validate nipst duration?
+	// fields 1-7 of the atx are the challenge of the poet
+	// layer index i^ satisfies i -i^ < (layers_passed during nipst creation) ANTON: maybe should be ==?
+	// the atx view contains d active Ids
+
+	eatx, _ := db.GetAtx(atx.Id())
+	if eatx != nil {
+		return fmt.Errorf("Found atx with same id")
+	}
+	prevAtxIds, err := db.GetNodeAtxIds(atx.NodeId)
+	if err == nil && len(prevAtxIds) > 0 {
+		prevAtx, err := db.GetAtx(prevAtxIds[len(prevAtxIds)])
+		if err == nil {
+			if prevAtx.Sequence == atx.Sequence {
+				return fmt.Errorf("Found atx with same seq")
+			}
+		}
+	}
+	if atx.PositioningAtx != types.EmptyAtx {
+		posAtx, err := db.GetAtx(atx.PositioningAtx)
+		if err != nil {
+			return fmt.Errorf("positioning atx not found")
+		}
+		if !posAtx.Valid {
+			return fmt.Errorf("positioning atx is not valid")
+		}
+		if atx.LayerIdx-posAtx.LayerIdx > NIPST_LAYERTIME {
+			return fmt.Errorf("distance between pos atx invalid %v ", atx.LayerIdx-posAtx.LayerIdx)
+		}
+	}
+
+	//todo: verify NIPST challange
+	if atx.VerifiedActiveSet > uint32(db.ActiveIds(types.EpochId(uint64(atx.LayerIdx)/uint64(db.LayersPerEpoch)))) {
+		return fmt.Errorf("positioning atx conatins view with more active ids than seen %v %v", atx.VerifiedActiveSet, uint64(atx.LayerIdx)/uint64(db.LayersPerEpoch))
+	}
+	return nil
 }
 
 func (db *ActivationDb) StoreAtx(ech types.EpochId, atx *types.ActivationTx) error {
