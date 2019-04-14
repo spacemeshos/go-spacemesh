@@ -149,7 +149,7 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 	} else {
 		res, err = t.hareResult.GetResult(id - 1)
 		if err != nil {
-			return nil, errors.New(fmt.Sprintf("didnt receive hare result for layer %v", id-1))
+			return nil, errors.New(fmt.Sprintf("didnt receive hare result for layer %v %v", id-1, err))
 		}
 	}
 
