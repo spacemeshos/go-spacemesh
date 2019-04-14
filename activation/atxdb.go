@@ -95,7 +95,7 @@ func (m *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, err
 	return counter, nil
 
 }
-
+//todo: move to config
 const NIPST_LAYERTIME = 1000
 
 func (db *ActivationDb) ValidateAtx(atx *types.ActivationTx) error {
@@ -109,15 +109,19 @@ func (db *ActivationDb) ValidateAtx(atx *types.ActivationTx) error {
 
 	eatx, _ := db.GetAtx(atx.Id())
 	if eatx != nil {
-		return fmt.Errorf("Found atx with same id")
+		return fmt.Errorf("found atx with same id")
 	}
 	prevAtxIds, err := db.GetNodeAtxIds(atx.NodeId)
 	if err == nil && len(prevAtxIds) > 0 {
-		prevAtx, err := db.GetAtx(prevAtxIds[len(prevAtxIds)])
+		prevAtx, err := db.GetAtx(prevAtxIds[len(prevAtxIds) -1])
 		if err == nil {
-			if prevAtx.Sequence == atx.Sequence {
-				return fmt.Errorf("Found atx with same seq")
+			if prevAtx.Sequence >= atx.Sequence {
+				return fmt.Errorf("found atx with same seq or greater")
 			}
+		}
+	} else {
+		if prevAtxIds == nil && atx.PrevATXId != types.EmptyAtx {
+			return fmt.Errorf("found atx with invalid prev atx %v", atx.PrevATXId)
 		}
 	}
 	if atx.PositioningAtx != types.EmptyAtx {
@@ -131,10 +135,14 @@ func (db *ActivationDb) ValidateAtx(atx *types.ActivationTx) error {
 		if atx.LayerIdx-posAtx.LayerIdx > NIPST_LAYERTIME {
 			return fmt.Errorf("distance between pos atx invalid %v ", atx.LayerIdx-posAtx.LayerIdx)
 		}
+	} else {
+		if atx.LayerIdx / db.LayersPerEpoch != 0 {
+			return fmt.Errorf("no positioning atx found")
+		}
 	}
 
 	//todo: verify NIPST challange
-	if atx.VerifiedActiveSet > uint32(db.ActiveIds(types.EpochId(uint64(atx.LayerIdx)/uint64(db.LayersPerEpoch)))) {
+	if atx.VerifiedActiveSet <= uint32(db.ActiveIds(types.EpochId(uint64(atx.LayerIdx)/uint64(db.LayersPerEpoch)))) {
 		return fmt.Errorf("positioning atx conatins view with more active ids than seen %v %v", atx.VerifiedActiveSet, uint64(atx.LayerIdx)/uint64(db.LayersPerEpoch))
 	}
 	return nil
