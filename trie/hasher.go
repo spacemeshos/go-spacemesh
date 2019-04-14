@@ -17,11 +17,12 @@
 package trie
 
 import (
-	"github.com/spacemeshos/go-spacemesh/common"
-	"github.com/spacemeshos/go-spacemesh/crypto/sha3"
-	"github.com/spacemeshos/go-spacemesh/rlp"
 	"hash"
 	"sync"
+
+	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/crypto/sha3"
+	"github.com/spacemeshos/go-spacemesh/xdr"
 )
 
 type hasher struct {
@@ -169,7 +170,7 @@ func (h *hasher) store(n node, db *Database, force bool) (node, error) {
 	}
 	// Generate the RLP encoding of the node
 	h.tmp.Reset()
-	if err := rlp.Encode(&h.tmp, n); err != nil { //  xdr_encoder.EncodeXDR(&h.tmp, n); err != nil {//
+	if _, err := xdr.Marshal(&h.tmp, n); err != nil { //  xdr_encoder.EncodeXDR(&h.tmp, n); err != nil {//
 		panic("encode error: " + err.Error())
 	}
 	if len(h.tmp) < 32 && !force {

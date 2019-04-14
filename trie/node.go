@@ -17,6 +17,7 @@
 package trie
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"strings"
@@ -130,25 +131,23 @@ func mustDecodeNode(hash, buf []byte, cachegen uint16) node {
 	return n
 }
 
-// decodeNode parses the RLP encoding of a trie node.
+// decodeNode parses the XDR encoding of a trie node.
 func decodeNode(hash, buf []byte, cachegen uint16) (node, error) {
-	if len(buf) == 0 {
-		return nil, io.ErrUnexpectedEOF
+	if len(buf) == 0 { // Check cannot unmarshal
+		return nil, io.ErrUnexpectedEOF // Return error
 	}
-	elems, _, err := rlp.SplitList(buf)
-	if err != nil {
-		return nil, fmt.Errorf("decode error: %v", err)
+
+	var nodeBuf *node // Init node buffer
+
+	reader := bytes.NewReader(buf) // Init reader
+
+	_, err := xdr.Unmarshal(reader, nodeBuf)
+
+	if err != nil { // Check for errors
+		return nil, err // Return found error
 	}
-	switch c, _ := rlp.CountValues(elems); c {
-	case 2:
-		n, err := decodeShort(hash, elems, cachegen)
-		return n, wrapError(err, "short")
-	case 17:
-		n, err := decodeFull(hash, elems, cachegen)
-		return n, wrapError(err, "full")
-	default:
-		return nil, fmt.Errorf("invalid number of list elements: %v", c)
-	}
+
+	return *nodeBuf, nil // Return unmarshaled value
 }
 
 func decodeShort(hash, elems []byte, cachegen uint16) (node, error) {

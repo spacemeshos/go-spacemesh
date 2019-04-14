@@ -17,14 +17,16 @@
 package trie
 
 import (
+	"bytes"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common"
-	"github.com/spacemeshos/go-spacemesh/database"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/rlp"
 	"io"
 	"sync"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/xdr"
 )
 
 // secureKeyPrefix is the database key prefix used to store trie node preimages.
@@ -97,7 +99,9 @@ func (n rawFullNode) EncodeRLP(w io.Writer) error {
 			nodes[i] = nilValueNode
 		}
 	}
-	return rlp.Encode(w, nodes)
+	_, err := xdr.Marshal(w, nodes) // Marshal
+
+	return err // Return possible error
 }
 
 // rawShortNode represents only the useful data content of a short node, with the
@@ -131,11 +135,12 @@ func (n *cachedNode) rlp() []byte {
 	if node, ok := n.node.(rawNode); ok {
 		return node
 	}
-	blob, err := rlp.EncodeToBytes(n.node)
+	var buffer bytes.Buffer                // Initialize buffer
+	_, err := xdr.Marshal(&buffer, n.node) // Marshal
 	if err != nil {
 		panic(err)
 	}
-	return blob
+	return buffer.Bytes()
 }
 
 // obj returns the decoded and expanded trie node, either directly from the cache,

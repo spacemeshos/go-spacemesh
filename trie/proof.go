@@ -19,12 +19,13 @@ package trie
 import (
 	"bytes"
 	"fmt"
+
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/xdr"
 
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/rlp"
 )
 
 // Prove constructs a merkle proof for key. The result contains all encoded nodes
@@ -77,11 +78,12 @@ func (t *Trie) Prove(key []byte, fromLevel uint, proofDb database.Putter) error 
 			if fromLevel > 0 {
 				fromLevel--
 			} else {
-				enc, _ := rlp.EncodeToBytes(n)
+				var buffer bytes.Buffer // Initialize buffer
+				xdr.Marshal(&buffer, n) // Marshal
 				if !ok {
-					hash = crypto.Keccak256(enc)
+					hash = crypto.Keccak256(buffer.Bytes())
 				}
-				proofDb.Put(hash, enc)
+				proofDb.Put(hash, buffer.Bytes())
 			}
 		}
 	}

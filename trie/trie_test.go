@@ -21,8 +21,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/crypto"
-	"github.com/spacemeshos/go-spacemesh/database"
 	"io/ioutil"
 	"math/big"
 	"math/rand"
@@ -31,8 +29,11 @@ import (
 	"testing"
 	"testing/quick"
 
+	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/xdr"
+
 	"github.com/spacemeshos/go-spacemesh/common"
-	"github.com/spacemeshos/go-spacemesh/rlp"
 )
 
 func init() {
@@ -577,7 +578,9 @@ func BenchmarkHash(b *testing.B) {
 			root    = emptyRoot
 			code    = crypto.Keccak256(nil)
 		)
-		accounts[i], _ = rlp.EncodeToBytes([]interface{}{nonce, balance, root, code})
+		var buffer bytes.Buffer // Initialize buffer
+		xdr.Marshal(&buffer, []interface{}{nonce, balance, root, code})
+		accounts[i] = buffer.Bytes() // Write from buffer
 	}
 	// Insert the accounts into the trie and hash it
 	trie := newEmpty()

@@ -20,8 +20,9 @@ import (
 	"bytes"
 	"container/heap"
 	"errors"
+
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/rlp"
+	"github.com/spacemeshos/go-spacemesh/xdr"
 
 	"github.com/spacemeshos/go-spacemesh/common"
 )
@@ -191,8 +192,9 @@ func (it *nodeIterator) LeafProof() [][]byte {
 				node, _, _ := hasher.hashChildren(item.node, nil)
 				hashed, _ := hasher.store(node, nil, false)
 				if _, ok := hashed.(hashNode); ok || i == 0 {
-					enc, _ := rlp.EncodeToBytes(node)
-					proofs = append(proofs, enc)
+					var buffer bytes.Buffer // Initialize buffer
+					xdr.Marshal(&buffer, node)
+					proofs = append(proofs, buffer.Bytes())
 				}
 			}
 			return proofs
