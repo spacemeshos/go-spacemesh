@@ -21,6 +21,7 @@ type ActivationTxHeader struct {
 	VerifiedActiveSet uint32
 	ActiveSetSize     uint32
 	View              []BlockID
+	Valid             bool
 }
 
 type PoETChallenge struct {
@@ -60,6 +61,19 @@ func NewActivationTx(NodeId NodeId, Sequence uint64, PrevATX AtxId, LayerIndex L
 
 }
 
+func NewActivationTxWithcChallenge(poetChallenge PoETChallenge, ActiveSetSize uint32, View []BlockID, nipst *nipst.NIPST) *ActivationTx {
+	return &ActivationTx{
+		ActivationTxHeader: ActivationTxHeader{
+			PoETChallenge: poetChallenge,
+			ActiveSetSize: ActiveSetSize,
+			View:          View,
+		},
+
+		Nipst: nipst,
+	}
+
+}
+
 func (t ActivationTx) Id() AtxId {
 	tx, err := AtxHeaderAsBytes(&t.ActivationTxHeader)
 	if err != nil {
@@ -72,6 +86,12 @@ func (t ActivationTx) Id() AtxId {
 func (t ActivationTx) Validate() error {
 	//todo: implement
 	// valid signature
-	//
+	// no other atx with same id and sequence number
+	// if s != 0 the prevAtx is valid and it's seq num is s -1
+	// positioning atx is valid
+	// validate nipst duration?
+	// fields 1-7 of the atx are the challenge of the poet
+	// layer index i^ satisfies i -i^ < (layers_passed during nipst creation) ANTON: maybe should be ==?
+	// the atx view contains d active Ids
 	return nil
 }
