@@ -189,6 +189,7 @@ func TestActivationDB_ValidateAtx(t *testing.T) {
 	prevAtx.Valid = true
 
 	atx := types.NewActivationTx(idx1, 1, prevAtx.Id(), 1012, 0, prevAtx.Id(), 3, []types.BlockID{}, &nipst.NIPST{})
+	atx.VerifiedActiveSet = 3
 	err := atxdb.StoreAtx(1, prevAtx)
 	assert.NoError(t, err)
 

@@ -60,7 +60,7 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 	traversalFunc := func(blkh *types.BlockHeader) error {
 		blk, err := db.meshDb.GetBlock(blkh.Id)
 		if err != nil {
-			log.Error("cannot validate atx, block %v not found", blk.Id)
+			log.Error("cannot validate atx, block %v not found", blkh.Id)
 			return err
 		}
 		//skip blocks not from atx epoch
@@ -144,7 +144,7 @@ func (db *ActivationDb) ValidateAtx(atx *types.ActivationTx) error {
 
 	//todo: verify NIPST challange
 	if atx.VerifiedActiveSet <= uint32(db.ActiveIds(types.EpochId(uint64(atx.LayerIdx)/uint64(db.LayersPerEpoch)))) {
-		return fmt.Errorf("positioning atx conatins view with more active ids than seen %v %v", atx.VerifiedActiveSet, uint64(atx.LayerIdx)/uint64(db.LayersPerEpoch))
+		return fmt.Errorf("positioning atx conatins view with more active ids than seen %v %v", atx.VerifiedActiveSet, db.ActiveIds(types.EpochId(uint64(atx.LayerIdx)/uint64(db.LayersPerEpoch))))
 	}
 	return nil
 }
