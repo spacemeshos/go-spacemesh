@@ -20,6 +20,10 @@ func Marshal(w io.Writer, val interface{}) (int, error) {
 		realVal = reflect.ValueOf([]byte{}) // Set to nil byte array
 	}
 
+	if realVal.Kind() == reflect.Interface && realVal.IsNil() { // Check is nil
+		realVal = reflect.ValueOf([]byte{}) // Set to nil byte array
+	}
+
 	if sliceValue := getBigSliceValue(realVal); sliceValue != nil { // Check big value can be encoded
 		_, err := encoder.EncodeOpaque(sliceValue) // Encode
 
