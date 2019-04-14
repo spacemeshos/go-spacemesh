@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"github.com/davecgh/go-spew/spew"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -81,7 +80,6 @@ func buildSet() *hare.Set {
 
 func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	// start p2p services
-	log.Info("Config: %v", spew.Sdump(app.Config))
 	log.Info("Initializing P2P services")
 	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P)
 	app.p2p = swarm
