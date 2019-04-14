@@ -1,4 +1,4 @@
-namespace: gavrad
+namespace: sm
 
 config_map_name: conf
 
