@@ -9,7 +9,7 @@ import (
 type BlockValidatorMock struct {
 }
 
-func (BlockValidatorMock) BlockEligible(layerID types.LayerID, nodeID types.NodeId, proof types.BlockEligibilityProof) (bool, error) {
+func (BlockValidatorMock) BlockEligible(block *types.Block) (bool, error) {
 	return true, nil
 }
 
@@ -45,14 +45,18 @@ func (MockState) ApplyTransactions(layer types.LayerID, txs mesh.Transactions) (
 	return 0, nil
 }
 
-func (MockState) ApplyRewards(layer types.LayerID, miners map[string]struct{}, underQuota map[string]struct{}, bonusReward, diminishedReward *big.Int) {
+func (MockState) ApplyRewards(layer types.LayerID, miners []string, underQuota map[string]int, bonusReward, diminishedReward *big.Int) {
 }
 
-func (s *StateMock) ApplyRewards(layer types.LayerID, miners map[string]struct{}, underQuota map[string]struct{}, bonusReward, diminishedReward *big.Int) {
+func (s *StateMock) ApplyRewards(layer types.LayerID, miners []string, underQuota map[string]int, bonusReward, diminishedReward *big.Int) {
 
 }
 
 type AtxDbMock struct{}
+
+func (AtxDbMock) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
+	return nil, nil
+}
 
 func (AtxDbMock) ProcessBlockATXs(block *types.Block) {
 

@@ -4,6 +4,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
@@ -21,8 +22,8 @@ func (MockMapState) ApplyTransactions(layer types.LayerID, txs Transactions) (ui
 	return 0, nil
 }
 
-func (s *MockMapState) ApplyRewards(layer types.LayerID, miners map[string]struct{}, underQuota map[string]struct{}, bonusReward, diminishedReward *big.Int) {
-	for minerId := range miners {
+func (s *MockMapState) ApplyRewards(layer types.LayerID, miners []string, underQuota map[string]int, bonusReward, diminishedReward *big.Int) {
+	for _, minerId := range miners {
 		if _, has := underQuota[minerId]; !has {
 			s.Rewards[minerId] = bonusReward
 		} else {
@@ -43,9 +44,12 @@ func ConfigTst() Config {
 	}
 }
 
-func getMeshWithMapState(id string, s StateUpdater) *Mesh {
-	layers := NewMemMesh(ConfigTst(), &MeshValidatorMock{}, s, AtxDbMock{}, log.New(id, "", ""))
-	return layers
+func getMeshWithMapState(id string, s StateUpdater) (*Mesh, *AtxDbMock) {
+	atxDb := &AtxDbMock{
+		db: make(map[types.AtxId]*types.ActivationTx),
+	}
+	layers := NewMemMesh(ConfigTst(), &MeshValidatorMock{}, s, atxDb, log.New(id, "", ""))
+	return layers, atxDb
 }
 
 func addTransactionsToBlock(bl *types.Block, numOfTxs int) int64 {
@@ -81,24 +85,37 @@ func addTransactionsWithGas(bl *types.Block, numOfTxs int, gasPrice int64) int64
 
 func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 	s := &MockMapState{Rewards: make(map[string]*big.Int)}
-	layers := getMeshWithMapState("t1", s)
+	layers, atxdb := getMeshWithMapState("t1", s)
 	defer layers.Close()
 
 	var totalRewards int64
 	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data1"))
 	block1.MinerID.Key = "1"
+	atx := types.NewActivationTx(block1.MinerID, 0, types.EmptyAtx, 1, 0, types.EmptyAtx, 10, []types.BlockID{}, &nipst.NIPST{})
+	atxdb.AddAtx(atx.Id(), atx)
+	block1.ATXID = atx.Id()
+
 	totalRewards += addTransactionsToBlock(block1, 15)
 
 	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data2"))
 	block2.MinerID.Key = "2"
+	atx = types.NewActivationTx(block2.MinerID, 0, types.EmptyAtx, 1, 0, types.EmptyAtx, 10, []types.BlockID{}, &nipst.NIPST{})
+	atxdb.AddAtx(atx.Id(), atx)
+	block2.ATXID = atx.Id()
 	totalRewards += addTransactionsToBlock(block2, 13)
 
 	block3 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data3"))
 	block3.MinerID.Key = "3"
+	atx = types.NewActivationTx(block3.MinerID, 0, types.EmptyAtx, 1, 0, types.EmptyAtx, 10, []types.BlockID{}, &nipst.NIPST{})
+	atxdb.AddAtx(atx.Id(), atx)
+	block3.ATXID = atx.Id()
 	totalRewards += addTransactionsToBlock(block3, 17)
 
 	block4 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data4"))
 	block4.MinerID.Key = "4"
+	atx = types.NewActivationTx(block4.MinerID, 0, types.EmptyAtx, 1, 0, types.EmptyAtx, 10, []types.BlockID{}, &nipst.NIPST{})
+	atxdb.AddAtx(atx.Id(), atx)
+	block4.ATXID = atx.Id()
 	totalRewards += addTransactionsToBlock(block4, 16)
 
 	log.Info("total fees : %v", totalRewards)
@@ -135,7 +152,7 @@ func NewTestRewardParams() Config {
 
 func TestMesh_AccumulateRewards_underQuota(t *testing.T) {
 	s := &MockMapState{Rewards: make(map[string]*big.Int)}
-	layers := getMeshWithMapState("t1", s)
+	layers, atxdb := getMeshWithMapState("t1", s)
 	defer layers.Close()
 
 	var totalRewards int64
@@ -143,18 +160,30 @@ func TestMesh_AccumulateRewards_underQuota(t *testing.T) {
 	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data1"))
 	block1.MinerID.Key = "1"
 	totalRewards += addTransactionsWithGas(block1, 10, 8)
+	atx := types.NewActivationTx(block1.MinerID, 0, types.EmptyAtx, 1, 0, types.EmptyAtx, 10, []types.BlockID{}, &nipst.NIPST{})
+	atxdb.AddAtx(atx.Id(), atx)
+	block1.ATXID = atx.Id()
 
 	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data2"))
 	block2.MinerID.Key = "2"
 	totalRewards += addTransactionsWithGas(block2, 10, 9)
+	atx = types.NewActivationTx(block2.MinerID, 0, types.EmptyAtx, 1, 0, types.EmptyAtx, 10, []types.BlockID{}, &nipst.NIPST{})
+	atxdb.AddAtx(atx.Id(), atx)
+	block2.ATXID = atx.Id()
 
 	block3 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data3"))
 	block3.MinerID.Key = "3"
 	totalRewards += addTransactionsWithGas(block3, 17, 10)
+	atx = types.NewActivationTx(block3.MinerID, 0, types.EmptyAtx, 1, 0, types.EmptyAtx, 10, []types.BlockID{}, &nipst.NIPST{})
+	atxdb.AddAtx(atx.Id(), atx)
+	block3.ATXID = atx.Id()
 
 	block4 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data4"))
 	block4.MinerID.Key = "4"
 	totalRewards += addTransactionsWithGas(block4, 16, 11)
+	atx = types.NewActivationTx(block4.MinerID, 0, types.EmptyAtx, 1, 0, types.EmptyAtx, 10, []types.BlockID{}, &nipst.NIPST{})
+	atxdb.AddAtx(atx.Id(), atx)
+	block4.ATXID = atx.Id()
 
 	log.Info("total fees : %v", totalRewards)
 	layers.AddBlock(block1)
@@ -174,10 +203,13 @@ func TestMesh_AccumulateRewards_underQuota(t *testing.T) {
 
 }
 
-func createLayer(mesh *Mesh, id types.LayerID, numOfBlocks, maxTransactions int) (totalRewards int64) {
+func createLayer(mesh *Mesh, id types.LayerID, numOfBlocks, maxTransactions int, atxdb *AtxDbMock) (totalRewards int64) {
 	for i := 0; i < numOfBlocks; i++ {
 		block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), id, []byte("data1"))
 		block1.MinerID.Key = strconv.Itoa(i)
+		atx := types.NewActivationTx(block1.MinerID, 0, types.EmptyAtx, 1, 0, types.EmptyAtx, 10, []types.BlockID{}, &nipst.NIPST{})
+		atxdb.AddAtx(atx.Id(), atx)
+		block1.ATXID = atx.Id()
 		totalRewards += addTransactionsToBlock(block1, rand.Intn(maxTransactions))
 		mesh.AddBlock(block1)
 	}
@@ -190,12 +222,12 @@ func TestMesh_integration(t *testing.T) {
 	maxTxs := 20
 
 	s := &MockMapState{Rewards: make(map[string]*big.Int)}
-	layers := getMeshWithMapState("t1", s)
+	layers, atxdb := getMeshWithMapState("t1", s)
 	defer layers.Close()
 
 	var rewards int64
 	for i := 0; i < numofLayers; i++ {
-		reward := createLayer(layers, types.LayerID(i), numofBlocks, maxTxs)
+		reward := createLayer(layers, types.LayerID(i), numofBlocks, maxTxs, atxdb)
 		// rewards are applied to layers in the past according to the reward maturity param
 		if rewards == 0 {
 			rewards += reward
@@ -229,7 +261,7 @@ func TestMesh_calcRewards(t *testing.T) {
 
 func TestMesh_MergeDoubles(t *testing.T) {
 	s := &MockMapState{Rewards: make(map[string]*big.Int)}
-	layers := getMeshWithMapState("t1", s)
+	layers, _ := getMeshWithMapState("t1", s)
 	defer layers.Close()
 	dst := address.HexToAddress("2")
 	transactions := []*Transaction{
