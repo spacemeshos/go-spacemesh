@@ -1,35 +1,9 @@
 package p2p
 
 import (
-	"errors"
-	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"time"
 )
-
-// NewProtocolMessageMetadata creates meta-data for an outgoing protocol message authored by this node.
-func NewProtocolMessageMetadata(author p2pcrypto.PublicKey, protocol string) *pb.Metadata {
-	return &pb.Metadata{
-		NextProtocol:  protocol,
-		ClientVersion: config.ClientVersion,
-		Timestamp:     time.Now().Unix(),
-		AuthPubkey:    author.Bytes(),
-	}
-}
-
-func ExtractData(pm *pb.ProtocolMessage) (service.Data, error) {
-	var data service.Data
-	if payload := pm.GetPayload(); payload != nil {
-		data = &service.DataBytes{Payload: payload}
-	} else if wrap := pm.GetMsg(); wrap != nil {
-		data = &service.DataMsgWrapper{Req: wrap.Req, MsgType: wrap.Type, ReqID: wrap.ReqID, Payload: wrap.Payload}
-	} else {
-		return nil, errors.New("not valid data type")
-	}
-	return data, nil
-}
 
 type directProtocolMessage struct {
 	metadata service.P2PMetadata

@@ -101,15 +101,21 @@ func (tp *TransactionProcessor) addStateToHistory(layer types.LayerID, newHash c
 
 }
 
-func (tp *TransactionProcessor) ApplyRewards(layer types.LayerID, miners map[string]struct{}, underQuota map[string]struct{}, bonusReward, diminishedReward *big.Int) {
-	for minerId, _ := range miners {
-		if _, ok := underQuota[minerId]; ok {
-			tp.globalState.AddBalance(address.HexToAddress(minerId), diminishedReward)
+func (tp *TransactionProcessor) ApplyRewards(layer types.LayerID, miners []string, underQuota map[string]int, bonusReward, diminishedReward *big.Int) {
+	for _, minerId := range miners {
+		//if we have 2 blocks in same layer, one of them can receive a diminished reward and the other cannot
+		if val, ok := underQuota[minerId]; ok {
+			if val > 0 {
+				tp.globalState.AddBalance(address.HexToAddress(minerId), diminishedReward)
+				underQuota[minerId] = underQuota[minerId] - 1
+				if underQuota[minerId] == 0 {
+					delete(underQuota, minerId)
+				}
+			}
 		} else {
 			tp.globalState.AddBalance(address.HexToAddress(minerId), bonusReward)
 		}
 	}
-	tp.globalState.Commit(false)
 	newHash, err := tp.globalState.Commit(false)
 
 	if err != nil {
@@ -156,7 +162,9 @@ func (tp *TransactionProcessor) coalescTransactionsBySender(transactions mesh.Tr
 	for key := range trnsBySender {
 		sort.Slice(trnsBySender[key], func(i, j int) bool {
 			//todo: add fix here:
-			// if trnsBySender[key][i].AccountNonce == trnsBySender[key][j].AccountNonce { return trnsBySender[key][i].Hash() < trnsBySender[key][j].AccountNonce.Hash() }
+			if trnsBySender[key][i].AccountNonce == trnsBySender[key][j].AccountNonce {
+				return trnsBySender[key][i].Hash().Big().Cmp(trnsBySender[key][j].Hash().Big()) > 1
+			}
 			return trnsBySender[key][i].AccountNonce < trnsBySender[key][j].AccountNonce
 		})
 	}

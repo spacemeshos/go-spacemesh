@@ -331,19 +331,15 @@ func (s *swarm) sendMessageImpl(peerPubKey p2pcrypto.PublicKey, protocol string,
 	}
 
 	protomessage := &pb.ProtocolMessage{
-		Metadata: NewProtocolMessageMetadata(s.lNode.PublicKey(), protocol),
+		Metadata: pb.NewProtocolMessageMetadata(s.lNode.PublicKey(), protocol),
 	}
 
-	switch x := payload.(type) {
-	case service.DataBytes:
-		protomessage.Data = &pb.ProtocolMessage_Payload{Payload: x.Bytes()}
-	case *service.DataMsgWrapper:
-		protomessage.Data = &pb.ProtocolMessage_Msg{Msg: &pb.MessageWrapper{Type: x.MsgType, Req: x.Req, ReqID: x.ReqID, Payload: x.Payload}}
-	case nil:
-		// The field is not set.
-	default:
-		return fmt.Errorf("protocolMsg has unexpected type %T", x)
+	realpayload, err := pb.CreatePayload(payload)
+	if err != nil {
+		return err
 	}
+
+	protomessage.Payload = realpayload
 
 	data, err := proto.Marshal(protomessage)
 	if err != nil {
@@ -528,7 +524,7 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 		return ErrOutOfSync
 	}
 
-	data, err := ExtractData(pm)
+	data, err := pb.ExtractData(pm.Payload)
 
 	if err != nil {
 		return err

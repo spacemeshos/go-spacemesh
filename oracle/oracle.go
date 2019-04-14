@@ -1,6 +1,7 @@
 package oracle
 
 import (
+	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/types"
 )
@@ -66,7 +67,7 @@ func NewBlockOracleFromClient(oc *OracleClient, committeeSize int, nodeID types.
 }
 
 // Eligible checks whether we're eligible to mine a block in layer i
-func (bo *blockOracle) BlockEligible(layerID types.LayerID) ([]types.BlockEligibilityProof, error) {
+func (bo *blockOracle) BlockEligible(layerID types.LayerID) (types.AtxId, []types.BlockEligibilityProof, error) {
 	eligible := bo.oc.Eligible(uint32(layerID), bo.committeeSize, bo.nodeID.Key)
 	var proofs []types.BlockEligibilityProof
 	if eligible {
@@ -75,7 +76,7 @@ func (bo *blockOracle) BlockEligible(layerID types.LayerID) ([]types.BlockEligib
 			Sig: []byte{1, 2, 3},
 		}}
 	}
-	return proofs, nil
+	return types.AtxId{Hash: common.Hash{}}, proofs, nil
 }
 
 type hareOracle struct {
