@@ -26,22 +26,22 @@ func NewActivationDb(dbstore database.DB, meshDb *mesh.MeshDB, layersPerEpoch ui
 	return &ActivationDb{atxs: dbstore, meshDb: meshDb, LayersPerEpoch: types.LayerID(layersPerEpoch)}
 }
 
-func (m *ActivationDb) ProcessBlockATXs(blk *types.Block) {
+func (db *ActivationDb) ProcessBlockATXs(blk *types.Block) {
 	for _, atx := range blk.ATXs {
-		activeSet, err := m.CalcActiveSetFromView(atx)
+		activeSet, err := db.CalcActiveSetFromView(atx)
 		if err != nil {
 			log.Error("could not calculate active set for %v", atx.Id())
 		}
 		//todo: maybe there is a potential bug in this case if count for the view can change between calls to this function
 		atx.VerifiedActiveSet = activeSet
-		err = m.StoreAtx(types.EpochId(atx.LayerIdx/m.LayersPerEpoch), atx)
+		err = db.StoreAtx(types.EpochId(atx.LayerIdx/db.LayersPerEpoch), atx)
 		if err != nil {
 			log.Error("cannot store atx: %v", atx)
 		}
 	}
 }
 
-func (m *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, error) {
+func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, error) {
 	bytes, err := types.ViewAsBytes(a.View)
 	if err != nil {
 		return 0, err
@@ -54,11 +54,11 @@ func (m *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, err
 
 	var counter uint32 = 0
 	set := make(map[types.AtxId]struct{})
-	firstLayerOfLastEpoch := a.LayerIdx - m.LayersPerEpoch - (a.LayerIdx % m.LayersPerEpoch)
-	lastLayerOfLastEpoch := firstLayerOfLastEpoch + m.LayersPerEpoch
+	firstLayerOfLastEpoch := a.LayerIdx - db.LayersPerEpoch - (a.LayerIdx % db.LayersPerEpoch)
+	lastLayerOfLastEpoch := firstLayerOfLastEpoch + db.LayersPerEpoch
 
 	traversalFunc := func(blkh *types.BlockHeader) error {
-		blk, err := m.meshDb.GetBlock(blkh.Id)
+		blk, err := db.meshDb.GetBlock(blkh.Id)
 		if err != nil {
 			log.Error("cannot validate atx, block %v not found", blk.Id)
 			return err
@@ -89,12 +89,13 @@ func (m *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, err
 		mp[blk] = struct{}{}
 	}
 
-	m.meshDb.ForBlockInView(mp, firstLayerOfLastEpoch, traversalFunc, errHandler)
+	db.meshDb.ForBlockInView(mp, firstLayerOfLastEpoch, traversalFunc, errHandler)
 	activesetCache.Add(common.BytesToHash(bytes), counter)
 
 	return counter, nil
 
 }
+
 //todo: move to config
 const NIPST_LAYERTIME = 1000
 
@@ -113,7 +114,7 @@ func (db *ActivationDb) ValidateAtx(atx *types.ActivationTx) error {
 	}
 	prevAtxIds, err := db.GetNodeAtxIds(atx.NodeId)
 	if err == nil && len(prevAtxIds) > 0 {
-		prevAtx, err := db.GetAtx(prevAtxIds[len(prevAtxIds) -1])
+		prevAtx, err := db.GetAtx(prevAtxIds[len(prevAtxIds)-1])
 		if err == nil {
 			if prevAtx.Sequence >= atx.Sequence {
 				return fmt.Errorf("found atx with same seq or greater")
@@ -136,7 +137,7 @@ func (db *ActivationDb) ValidateAtx(atx *types.ActivationTx) error {
 			return fmt.Errorf("distance between pos atx invalid %v ", atx.LayerIdx-posAtx.LayerIdx)
 		}
 	} else {
-		if atx.LayerIdx / db.LayersPerEpoch != 0 {
+		if atx.LayerIdx/db.LayersPerEpoch != 0 {
 			return fmt.Errorf("no positioning atx found")
 		}
 	}
