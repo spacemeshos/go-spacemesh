@@ -273,7 +273,6 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge common.Hash) (*NIPST, error) {
 
 	// Phase 3: PoST execution.
 	if nb.nipst.postProof == nil {
-		// TODO(moshababo): check what exactly need to be hashed.
 		postChallenge := common.BytesToHash(nb.nipst.poetProof.commitment)
 
 		log.Info("starting PoST execution (challenge: %x)",
