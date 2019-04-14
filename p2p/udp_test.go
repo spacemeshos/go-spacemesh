@@ -164,25 +164,25 @@ func TestUDPMux_ProcessUDP(t *testing.T) {
 	m := NewUDPMux(nd, nil, udpMock, log.New(test_str, "", ""))
 	require.NotNil(t, m)
 	data := service.DataBytes{[]byte(test_str)}
-	msg := &pb.ProtocolMessage{}
+	msg := &pb.UDPProtocolMessage{}
 
 	gotfrom := node.GenerateRandomNodeData()
 
-	msg.Metadata = NewProtocolMessageMetadata(gotfrom.PublicKey(), test_str)
-	msg.Data = &pb.ProtocolMessage_Payload{Payload: data.Bytes()}
+	msg.Metadata = pb.NewUDPProtocolMessageMetadata(gotfrom.PublicKey(), int8(nd.NetworkID()), test_str)
+	msg.Payload = &pb.Payload{Data: &pb.Payload_Payload{data.Bytes()}}
 
 	msgbuf, err := proto.Marshal(msg)
 	require.NoError(t, err)
 
 	addr, _ := net2.ResolveUDPAddr("udp", gotfrom.Address())
 
-	err = m.processUDPMessage(addr, msgbuf)
+	err = m.processUDPMessage(gotfrom.PublicKey(), addr, msgbuf)
 
 	require.Error(t, err) // no protocol
 
 	c := make(chan service.DirectMessage, 1)
 	m.RegisterDirectProtocolWithChannel(test_str, c)
-	err = m.processUDPMessage(addr, msgbuf)
+	err = m.processUDPMessage(gotfrom.PublicKey(), addr, msgbuf)
 	require.NoError(t, err) // no protocol
 
 	select {
@@ -197,13 +197,13 @@ func TestUDPMux_ProcessUDP(t *testing.T) {
 }
 
 func Test_RoundTrip(t *testing.T) {
-	nd := &node.LocalNode{Node: node.GenerateRandomNodeData()}
+	nd, _ := node.GenerateTestNode(t)
 	udpnet, err := net.NewUDPNet(config.DefaultConfig(), nd, log.New("", "", ""))
 	require.NoError(t, err)
 	m := NewUDPMux(nd, nil, udpnet, log.New(test_str, "", ""))
 	require.NotNil(t, m)
 
-	nd2 := &node.LocalNode{Node: node.GenerateRandomNodeData()}
+	nd2, _ := node.GenerateTestNode(t)
 	udpnet2, err := net.NewUDPNet(config.DefaultConfig(), nd2, log.New("", "", ""))
 	require.NoError(t, err)
 	m2 := NewUDPMux(nd2, nil, udpnet2, log.New(test_str+"2", "", ""))
@@ -235,7 +235,6 @@ func Test_RoundTrip(t *testing.T) {
 
 	select {
 	case msg := <-c2:
-		require.Equal(t, msg.Metadata().FromAddress.String(), nd.Address())
 		require.Equal(t, msg.Sender(), nd.PublicKey())
 		require.Equal(t, msg.Bytes(), []byte(test_str))
 	case <-tm.C:
