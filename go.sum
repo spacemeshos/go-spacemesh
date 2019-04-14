@@ -134,6 +134,8 @@ github.com/spacemeshos/poet-ref v0.0.0-20190404082615-4bb5581dbcba h1:SD7ogYNWvA
 github.com/spacemeshos/poet-ref v0.0.0-20190404082615-4bb5581dbcba/go.mod h1:mQDOJ2bhXYw7a30aPgtzOJGj1tRG+dkmcnfG5RsMONw=
 github.com/spacemeshos/post v0.0.0-20190407095053-5f62914e669a h1:qne3iaKPpPWDFqyWlqd5tDowQDm738RkU/Ew0tyE1Qo=
 github.com/spacemeshos/post v0.0.0-20190407095053-5f62914e669a/go.mod h1:2FA26QXziszAuvENyHv6pjld6adNW24q8Ls96yZPX60=
+github.com/spacemeshos/post v0.0.0-20190414091440-9e41a560833b h1:/R/ocumeVdnFDoLMjLiElMx6K+basPVWOENLvxf/nFc=
+github.com/spacemeshos/post v0.0.0-20190414091440-9e41a560833b/go.mod h1:2FA26QXziszAuvENyHv6pjld6adNW24q8Ls96yZPX60=
 github.com/spacemeshos/sha256-simd v0.0.0-20190111104731-8575aafc88c9 h1:Cc+np6ORem5wrvO+YHQ1sdu71ItiQVRiYB4ugazpgxM=
 github.com/spacemeshos/sha256-simd v0.0.0-20190111104731-8575aafc88c9/go.mod h1:Pz5LyRghtiEuSixOVGO0da5AxKBZa6+Yq8ZJfjTAPI0=
 github.com/spf13/afero v1.1.2/go.mod h1:j4pytiNVoe2o6bmDsKpLACNPDBIoEAkihy7loJ1B0CQ=
