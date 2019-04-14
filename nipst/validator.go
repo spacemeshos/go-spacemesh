@@ -9,7 +9,7 @@ import (
 	"github.com/spacemeshos/post/proving"
 )
 
-type verifyPostFunc func(proof *postProof, space uint64, numberOfProvenLabels uint8, difficulty proving.Difficulty) (bool, error)
+type verifyPostFunc func(proof *PostProof, space uint64, numberOfProvenLabels uint8, difficulty proving.Difficulty) (bool, error)
 type verifyPoetMembershipFunc func(member *common.Hash, proof *membershipProof) (bool, error)
 type verifyPoetFunc func(p *poetProof) (bool, error)
 type verifyPoetMatchesMembershipFunc func(*membershipProof, *poetProof) bool

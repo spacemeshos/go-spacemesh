@@ -1,10 +1,16 @@
 package nipst
 
 import (
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/filesystem"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/proving"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 )
@@ -15,14 +21,14 @@ type PostProverClient interface {
 	// to store some data, by having its storage being filled with
 	// pseudo-random data with respect to a specific id.
 	// This data is the result of a computationally-expensive operation.
-	initialize(id []byte, space uint64, numberOfProvenLabels uint8, difficulty proving.Difficulty, timeout time.Duration) (commitment *postProof, err error)
+	initialize(id []byte, space uint64, numberOfProvenLabels uint8, difficulty proving.Difficulty, timeout time.Duration) (commitment *PostProof, err error)
 
 	// execute is the phase in which the prover received a challenge,
 	// and proves that his data is still stored (or was recomputed).
 	// This phase can be repeated arbitrarily many times without repeating initialization;
 	// thus despite the initialization essentially serving as a proof-of-work,
 	// the amortized computational complexity can be made arbitrarily small.
-	execute(id []byte, challenge common.Hash, numberOfProvenLabels uint8, difficulty proving.Difficulty, timeout time.Duration) (proof *postProof, err error)
+	execute(id []byte, challenge common.Hash, numberOfProvenLabels uint8, difficulty proving.Difficulty, timeout time.Duration) (proof *PostProof, err error)
 }
 
 // PoetProvingServiceClient provides a gateway to a trust-less public proving
@@ -94,7 +100,7 @@ type NIPST struct {
 
 	// postProof is the proof that the prover data
 	// is still stored (or was recomputed).
-	postProof *postProof
+	postProof *PostProof
 }
 
 // initialNIPST returns an initial NIPST instance to be used in the NIPST construction.
@@ -175,8 +181,12 @@ func NewNIPSTBuilder(
 }
 
 func (nb *NIPSTBuilder) BuildNIPST(challenge common.Hash) (*NIPST, error) {
-	defTimeout := 5 * time.Second // temporary solution
+	defTimeout := 5 * time.Second // TODO: replace temporary solution
 	nb.nipst.load()
+
+	if !nb.IsPostInitialized() {
+		return nil, errors.New("PoST not initialized")
+	}
 
 	// Phase 0: Submit challenge to PoET service.
 	if nb.nipst.poetRound == nil {
@@ -282,7 +292,7 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge common.Hash) (*NIPST, error) {
 			return nil, fmt.Errorf("received an invalid PoST proof")
 		}
 
-		log.Info("finished PoST execution (proof: %x)", proof.serialize())
+		log.Info("finished PoST execution (proof: %v)", proof)
 
 		nb.nipst.postChallenge = &postChallenge
 		nb.nipst.postProof = proof
@@ -292,4 +302,32 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge common.Hash) (*NIPST, error) {
 	log.Info("finished NIPST construction")
 
 	return nb.nipst, nil
+}
+
+func (nb *NIPSTBuilder) IsPostInitialized() bool {
+	postDataPath := filesystem.GetCanonicalPath(config.Post.DataFolder)
+	labelsPath := filepath.Join(postDataPath, hex.EncodeToString(nb.id))
+	_, err := os.Stat(labelsPath)
+	if os.IsNotExist(err) {
+		log.Info("could not find labels path at %v", labelsPath)
+		return false
+	}
+	return true
+}
+
+func (nb *NIPSTBuilder) InitializePost() (*PostProof, error) {
+	defTimeout := 5 * time.Second // TODO: replace temporary solution
+
+	if nb.IsPostInitialized() {
+		return nil, errors.New("PoST already initialized")
+	}
+
+	commitment, err := nb.postProver.initialize(nb.id, nb.space, nb.numberOfProvenLabels, nb.difficulty, defTimeout)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize PoST: %v", err)
+	}
+
+	log.Info("finished PoST initialization (commitment: %v)", commitment)
+
+	return commitment, nil
 }
