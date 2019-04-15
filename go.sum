@@ -34,8 +34,6 @@ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-xdr v0.0.0-20161123171359-e6a2ba005892 h1:qg9VbHo1TlL0KDM0vYvBG9EY0X0Yku5WYIPoFWt8f6o=
 github.com/davecgh/go-xdr v0.0.0-20161123171359-e6a2ba005892/go.mod h1:CTDl0pzVzE5DEzZhPfvhY/9sPFMQIxaJ9VAMs9AagrE=
-github.com/dowlandaiello/go-xdr v0.0.0-20180917104419-0bc96f33a18e h1:gOILAAwsiWGZgCd8mVBP5g7lDF8du3HrFYBaGztoORU=
-github.com/dowlandaiello/go-xdr v0.0.0-20180917104419-0bc96f33a18e/go.mod h1:GmJIHbtios0YadptW+CsAMwi2VGZNUQPcmLBs4uQg1Q=
 github.com/dowlandaiello/go-xdr v0.0.0-20190415001900-563240c01a22 h1:SLSMxcJ/HJhXYc/HW73on3s1puvEQQl+lzZ9PVdWY50=
 github.com/dowlandaiello/go-xdr v0.0.0-20190415001900-563240c01a22/go.mod h1:arS7Y5ByMAt7jFkB9At37T0kCjkvu1knmKBltaoQDOk=
 github.com/fsnotify/fsnotify v1.4.7 h1:IXs+QLmnXW2CcXuY+8Mzv/fWEsPGWxqefPtCP5CnV9I=
