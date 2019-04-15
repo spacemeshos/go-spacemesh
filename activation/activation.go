@@ -91,9 +91,9 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 		}
 		seq = atx.Sequence + 1
 	} else {
-		prevAtx = &types.EmptyAtx
+		prevAtx = &types.EmptyAtxId
 	}
-	posAtxId := &types.EmptyAtx
+	posAtxId := &types.EmptyAtxId
 	endTick := uint64(0)
 	LayerIdx := b.mesh.LatestLayerId()
 	if epoch > 0 {

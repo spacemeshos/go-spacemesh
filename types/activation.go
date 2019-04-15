@@ -14,7 +14,7 @@ type AtxId struct {
 	common.Hash
 }
 
-var EmptyAtx = AtxId{common.Hash{0}}
+var EmptyAtxId = AtxId{common.Hash{0}}
 
 type ActivationTxHeader struct {
 	PoETChallenge

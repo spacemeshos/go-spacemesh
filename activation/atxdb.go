@@ -37,7 +37,9 @@ func (db *ActivationDb) ProcessBlockATXs(blk *types.Block) {
 
 		err = db.ValidateAtx(atx)
 		//todo: should we store invalid atxs
-		log.Warning("ATX failed validation: %v", err)
+		if err != nil {
+			log.Warning("ATX failed validation: %v", err)
+		}
 		atx.Valid = err == nil
 		err = db.StoreAtx(types.EpochId(atx.LayerIdx/db.LayersPerEpoch), atx)
 		if err != nil {
@@ -120,20 +122,29 @@ func (db *ActivationDb) ValidateAtx(atx *types.ActivationTx) error {
 	if eatx != nil {
 		return fmt.Errorf("found atx with same id")
 	}
-	prevAtxIds, err := db.GetNodeAtxIds(atx.NodeId)
-	if err == nil && len(prevAtxIds) > 0 {
-		prevAtx, err := db.GetAtx(prevAtxIds[len(prevAtxIds)-1])
-		if err == nil {
-			if prevAtx.Sequence+1 != atx.Sequence {
-				return fmt.Errorf("found atx with same seq or greater")
-			}
+
+	if atx.PrevATXId != types.EmptyAtxId {
+		prevATX, err := db.GetAtx(atx.PrevATXId)
+		if err != nil {
+			return fmt.Errorf("prevATX not found")
+		}
+		if !prevATX.Valid {
+			return fmt.Errorf("prevATX not valid")
+		}
+		if prevATX.Sequence+1 != atx.Sequence {
+			return fmt.Errorf("sequence number is not one more than prev sequence number")
 		}
 	} else {
-		if prevAtxIds == nil && atx.PrevATXId != types.EmptyAtx {
-			return fmt.Errorf("found atx with invalid prev atx %v", atx.PrevATXId)
+		if atx.Sequence != 0 {
+			return fmt.Errorf("no prevATX reported, but sequence number not zero")
+		}
+		prevAtxIds, err := db.GetNodeAtxIds(atx.NodeId)
+		if err == nil || len(prevAtxIds) > 0 {
+			return fmt.Errorf("no prevATX reported, but other ATXs with same nodeID found")
 		}
 	}
-	if atx.PositioningAtx != types.EmptyAtx {
+
+	if atx.PositioningAtx != types.EmptyAtxId {
 		posAtx, err := db.GetAtx(atx.PositioningAtx)
 		if err != nil {
 			return fmt.Errorf("positioning atx not found")
@@ -141,7 +152,7 @@ func (db *ActivationDb) ValidateAtx(atx *types.ActivationTx) error {
 		if !posAtx.Valid {
 			return fmt.Errorf("positioning atx is not valid")
 		}
-		if atx.LayerIdx-posAtx.LayerIdx >= NipstLayerTime {
+		if atx.LayerIdx-posAtx.LayerIdx > NipstLayerTime {
 			return fmt.Errorf("distance between pos atx invalid %v ", atx.LayerIdx-posAtx.LayerIdx)
 		}
 	} else {
@@ -150,9 +161,9 @@ func (db *ActivationDb) ValidateAtx(atx *types.ActivationTx) error {
 		}
 	}
 
-	//todo: verify NIPST challange
-	if atx.VerifiedActiveSet <= uint32(db.ActiveIds(types.EpochId(uint64(atx.LayerIdx)/uint64(db.LayersPerEpoch)))) {
-		return fmt.Errorf("positioning atx conatins view with more active ids than seen %v %v", atx.VerifiedActiveSet, db.ActiveIds(types.EpochId(uint64(atx.LayerIdx)/uint64(db.LayersPerEpoch))))
+	//todo: verify NIPST challenge
+	if atx.ActiveSetSize != atx.VerifiedActiveSet {
+		return fmt.Errorf("positioning atx conatins view with more active ids (%v) than seen (%v)", atx.ActiveSetSize, atx.VerifiedActiveSet)
 	}
 	return nil
 }
