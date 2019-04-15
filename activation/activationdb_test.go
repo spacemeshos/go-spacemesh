@@ -13,7 +13,7 @@ import (
 	"testing"
 )
 
-func createLayerWithAtx(msh *mesh.Mesh, id types.LayerID, numOfBlocks int, atxs []*types.ActivationTx, votes []types.BlockID, views []types.BlockID) (created []types.BlockID) {
+func createLayerWithAtx(msh *mesh.Mesh, atxdb *ActivationDb, id types.LayerID, numOfBlocks int, atxs []*types.ActivationTx, votes []types.BlockID, views []types.BlockID) (created []types.BlockID) {
 	for i := 0; i < numOfBlocks; i++ {
 		block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), id, []byte("data1"))
 		block1.MinerID.Key = strconv.Itoa(i)
@@ -22,6 +22,9 @@ func createLayerWithAtx(msh *mesh.Mesh, id types.LayerID, numOfBlocks int, atxs 
 		block1.ViewEdges = append(block1.ViewEdges, views...)
 		msh.AddBlock(block1)
 		created = append(created, block1.Id)
+		for _, atx := range block1.ATXs {
+			atxdb.StoreAtx(atx.LayerIdx.GetEpoch(1000), atx)
+		}
 	}
 	return
 }
@@ -75,14 +78,20 @@ func Test_CalcActiveSetFromView(t *testing.T) {
 	id2 := types.NodeId{Key: uuid.New().String()}
 	id3 := types.NodeId{Key: uuid.New().String()}
 	atxs := []*types.ActivationTx{
-		types.NewActivationTx(id1, 0, types.EmptyAtxId, 1, 0, types.EmptyAtxId, 3, []types.BlockID{}, &nipst.NIPST{}, true),
-		types.NewActivationTx(id2, 0, types.EmptyAtxId, 1, 0, types.EmptyAtxId, 3, []types.BlockID{}, &nipst.NIPST{}, true),
-		types.NewActivationTx(id3, 0, types.EmptyAtxId, 1, 0, types.EmptyAtxId, 3, []types.BlockID{}, &nipst.NIPST{}, true),
+		types.NewActivationTx(id1, 0, types.EmptyAtxId, 12, 0, types.EmptyAtxId, 3, []types.BlockID{}, &nipst.NIPST{}, true),
+		types.NewActivationTx(id2, 0, types.EmptyAtxId, 300, 0, types.EmptyAtxId, 3, []types.BlockID{}, &nipst.NIPST{}, true),
+		types.NewActivationTx(id3, 0, types.EmptyAtxId, 435, 0, types.EmptyAtxId, 3, []types.BlockID{}, &nipst.NIPST{}, true),
 	}
 
-	blocks := createLayerWithAtx(layers, 1, 10, atxs, []types.BlockID{}, []types.BlockID{})
-	blocks = createLayerWithAtx(layers, 10, 10, []*types.ActivationTx{}, blocks, blocks)
-	blocks = createLayerWithAtx(layers, 100, 10, []*types.ActivationTx{}, blocks, blocks)
+	for _, atx := range atxs {
+		hash, err := atx.NIPSTChallenge.Hash()
+		assert.NoError(t, err)
+		atx.Nipst = nipst.NewNIPSTWithChallenge(hash)
+	}
+
+	blocks := createLayerWithAtx(layers, atxdb, 1, 10, atxs, []types.BlockID{}, []types.BlockID{})
+	blocks = createLayerWithAtx(layers, atxdb, 10, 10, []*types.ActivationTx{}, blocks, blocks)
+	blocks = createLayerWithAtx(layers, atxdb, 100, 10, []*types.ActivationTx{}, blocks, blocks)
 
 	atx := types.NewActivationTx(id1, 1, atxs[0].Id(), 1000, 0, atxs[0].Id(), 3, blocks, &nipst.NIPST{}, true)
 	num, err := atxdb.CalcActiveSetFromView(atx)
@@ -91,9 +100,15 @@ func Test_CalcActiveSetFromView(t *testing.T) {
 
 	// check that further atxs dont affect current epoch count
 	atxs2 := []*types.ActivationTx{
-		types.NewActivationTx(id1, 0, types.EmptyAtxId, 1012, 0, types.EmptyAtxId, 3, []types.BlockID{}, &nipst.NIPST{}, true),
-		types.NewActivationTx(id2, 0, types.EmptyAtxId, 1300, 0, types.EmptyAtxId, 3, []types.BlockID{}, &nipst.NIPST{}, true),
-		types.NewActivationTx(id3, 0, types.EmptyAtxId, 1435, 0, types.EmptyAtxId, 3, []types.BlockID{}, &nipst.NIPST{}, true),
+		types.NewActivationTx(types.NodeId{Key: uuid.New().String()}, 0, types.EmptyAtxId, 1012, 0, atxs[0].Id(), 0, []types.BlockID{}, &nipst.NIPST{}, true),
+		types.NewActivationTx(types.NodeId{Key: uuid.New().String()}, 0, types.EmptyAtxId, 1300, 0, atxs[1].Id(), 0, []types.BlockID{}, &nipst.NIPST{}, true),
+		types.NewActivationTx(types.NodeId{Key: uuid.New().String()}, 0, types.EmptyAtxId, 1435, 0, atxs[2].Id(), 0, []types.BlockID{}, &nipst.NIPST{}, true),
+	}
+
+	for _, atx := range atxs2 {
+		hash, err := atx.NIPSTChallenge.Hash()
+		assert.NoError(t, err)
+		atx.Nipst = nipst.NewNIPSTWithChallenge(hash)
 	}
 
 	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1200, []byte("data1"))
@@ -101,6 +116,7 @@ func Test_CalcActiveSetFromView(t *testing.T) {
 	block2.ATXs = append(block2.ATXs, atxs2...)
 	block2.ViewEdges = blocks
 	layers.AddBlock(block2)
+	atxdb.ProcessBlockATXs(block2)
 
 	atx2 := types.NewActivationTx(id3, 0, types.EmptyAtxId, 1435, 0, types.EmptyAtxId, 6, []types.BlockID{block2.Id}, &nipst.NIPST{}, true)
 	num, err = atxdb.CalcActiveSetFromView(atx2)
@@ -120,9 +136,9 @@ func Test_Wrong_CalcActiveSetFromView(t *testing.T) {
 		types.NewActivationTx(id3, 0, types.EmptyAtxId, 1, 0, types.EmptyAtxId, 3, []types.BlockID{}, &nipst.NIPST{}, true),
 	}
 
-	blocks := createLayerWithAtx(layers, 1, 10, atxs, []types.BlockID{}, []types.BlockID{})
-	blocks = createLayerWithAtx(layers, 10, 10, []*types.ActivationTx{}, blocks, blocks)
-	blocks = createLayerWithAtx(layers, 100, 10, []*types.ActivationTx{}, blocks, blocks)
+	blocks := createLayerWithAtx(layers, atxdb, 1, 10, atxs, []types.BlockID{}, []types.BlockID{})
+	blocks = createLayerWithAtx(layers, atxdb, 10, 10, []*types.ActivationTx{}, blocks, blocks)
+	blocks = createLayerWithAtx(layers, atxdb, 100, 10, []*types.ActivationTx{}, blocks, blocks)
 
 	atx := types.NewActivationTx(id1, 1, atxs[0].Id(), 1000, 0, atxs[0].Id(), 20, blocks, &nipst.NIPST{}, true)
 	num, err := atxdb.CalcActiveSetFromView(atx)
@@ -198,9 +214,9 @@ func TestActivationDB_ValidateAtx(t *testing.T) {
 		atx.Nipst = nipst.NewNIPSTWithChallenge(hash)
 	}
 
-	blocks := createLayerWithAtx(layers, 1, 10, atxs, []types.BlockID{}, []types.BlockID{})
-	blocks = createLayerWithAtx(layers, 10, 10, []*types.ActivationTx{}, blocks, blocks)
-	blocks = createLayerWithAtx(layers, 100, 10, []*types.ActivationTx{}, blocks, blocks)
+	blocks := createLayerWithAtx(layers, atxdb, 1, 10, atxs, []types.BlockID{}, []types.BlockID{})
+	blocks = createLayerWithAtx(layers, atxdb, 10, 10, []*types.ActivationTx{}, blocks, blocks)
+	blocks = createLayerWithAtx(layers, atxdb, 100, 10, []*types.ActivationTx{}, blocks, blocks)
 
 	//atx := types.NewActivationTx(id1, 1, atxs[0].Id(), 1000, 0, atxs[0].Id(), 3, blocks, &nipst.NIPST{})
 	prevAtx := types.NewActivationTx(idx1, 0, types.EmptyAtxId, 100, 0, types.EmptyAtxId, 3, blocks, &nipst.NIPST{}, true)
@@ -235,9 +251,9 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 		types.NewActivationTx(id3, 0, types.EmptyAtxId, 1, 0, types.EmptyAtxId, 3, []types.BlockID{}, &nipst.NIPST{}, true),
 	}
 
-	blocks := createLayerWithAtx(layers, 1, 10, atxs, []types.BlockID{}, []types.BlockID{})
-	blocks = createLayerWithAtx(layers, 10, 10, []*types.ActivationTx{}, blocks, blocks)
-	blocks = createLayerWithAtx(layers, 100, 10, []*types.ActivationTx{}, blocks, blocks)
+	blocks := createLayerWithAtx(layers, atxdb, 1, 10, atxs, []types.BlockID{}, []types.BlockID{})
+	blocks = createLayerWithAtx(layers, atxdb, 10, 10, []*types.ActivationTx{}, blocks, blocks)
+	blocks = createLayerWithAtx(layers, atxdb, 100, 10, []*types.ActivationTx{}, blocks, blocks)
 
 	//atx := types.NewActivationTx(id1, 1, atxs[0].Id(), 1000, 0, atxs[0].Id(), 3, blocks, &nipst.NIPST{})
 	prevAtx := types.NewActivationTx(idx1, 0, types.EmptyAtxId, 100, 0, types.EmptyAtxId, 3, blocks, &nipst.NIPST{}, true)

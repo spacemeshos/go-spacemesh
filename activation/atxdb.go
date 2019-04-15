@@ -79,7 +79,8 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 				continue
 			}
 			set[atx.Id()] = struct{}{}
-			if atx.Valid {
+			atx, err := db.GetAtx(atx.Id())
+			if err == nil && atx.Valid {
 				counter++
 				if counter >= a.ActiveSetSize {
 					return io.EOF
@@ -162,7 +163,7 @@ func (db *ActivationDb) ValidateAtx(atx *types.ActivationTx) error {
 	}
 
 	if atx.ActiveSetSize != atx.VerifiedActiveSet {
-		return fmt.Errorf("positioning atx conatins view with more active ids (%v) than seen (%v)", atx.ActiveSetSize, atx.VerifiedActiveSet)
+		return fmt.Errorf("atx conatins view with more active ids (%v) than seen (%v)", atx.ActiveSetSize, atx.VerifiedActiveSet)
 	}
 
 	hash, err := atx.NIPSTChallenge.Hash()
