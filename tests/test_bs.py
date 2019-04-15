@@ -374,7 +374,7 @@ def test_client(set_namespace, setup_clients, save_log_on_exit):
     peers = query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, fields, True)
     assert peers == len(setup_clients.pods)
 
-
+    
 def test_gossip(set_namespace, setup_clients):
     fields = {'M':'new_gossip_message', 'protocol': 'api_test_gossip'}
     # *note*: this already waits for bootstrap so we can send the msg right away.
@@ -400,6 +400,7 @@ def test_gossip(set_namespace, setup_clients):
 
 
 def test_transaction(set_namespace, setup_clients):
+
     # choose client to run on
     client_ip = setup_clients.pods[0]['pod_ip']
 
