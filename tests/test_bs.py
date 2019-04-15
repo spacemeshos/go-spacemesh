@@ -422,8 +422,5 @@ def test_transaction(set_namespace, setup_clients):
 
     api = 'v1/balance'
     data = '{"address":"222"}'
-    p = subprocess.Popen(['./kubectl-cmd.sh', '%s' % client_ip, "%s" % data, api], stdin=subprocess.PIPE,
-                         stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    (out, err) = p.communicate()
-    print(out.decode("utf-8"))
+    out = api_call(client_ip, data, api, testconfig['namespace'])
     assert '{"value":"100"}' in out.decode("utf-8")
