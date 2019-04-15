@@ -17,12 +17,13 @@
 package state
 
 import (
+	"math/big"
+	"testing"
+
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/stretchr/testify/assert"
-	"math/big"
-	"testing"
 	//	checker "gopkg.in/check.v1"
 )
 
@@ -53,7 +54,7 @@ func TestDump(t *testing.T) {
 	// check that dump contains the state objects that are in trie
 	got := string(s.state.Dump())
 	want := `{
-	"root": "ba94994b7d4b6590b615f0a8ab543445312fd303fdab013f0b0fba920f8f228b",
+	"root": "15f6365b271140b0fe69be1668e185d3d88b95cda793915d6172c61bf907b2b5",
 	"accounts": {
 		"0000000000000000000000000000000000000001": {
 			"balance": "22",
