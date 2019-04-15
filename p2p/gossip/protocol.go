@@ -52,12 +52,13 @@ type Protocol struct {
 	net             baseNetwork
 	localNodePubkey p2pcrypto.PublicKey
 
-	peers    map[string]*peer
+	peers      map[string]*peer
+	peersMutex sync.RWMutex
+
 	shutdown chan struct{}
 
-	oldMessageMu sync.RWMutex
 	oldMessageQ  map[hash]struct{}
-	peersMutex   sync.RWMutex
+	oldMessageMu sync.RWMutex
 
 	relayQ     chan service.DirectMessage
 	messageQ   chan protocolMessage
@@ -76,11 +77,9 @@ func NewProtocol(config config.SwarmConfig, base baseNetwork, localNodePubkey p2
 		peers:           make(map[string]*peer),
 		shutdown:        make(chan struct{}),
 		oldMessageQ:     make(map[hash]struct{}), // todo : remember to drain this
-		//invalidMessageQ: make(map[hash]bool),     // todo : remember to drain this
-		peersMutex: sync.RWMutex{},
-		relayQ:     relayChan,
-		messageQ:   make(chan protocolMessage, messageQBufferSize),
-		propagateQ: make(chan service.MessageValidation, propagateHandleBufferSize),
+		relayQ:          relayChan,
+		messageQ:        make(chan protocolMessage, messageQBufferSize),
+		propagateQ:      make(chan service.MessageValidation, propagateHandleBufferSize),
 	}
 }
 
@@ -109,15 +108,15 @@ func (p *peer) send(msg []byte, checksum hash) {
 	p.Debug("sending message to peer %v, hash %d", p.pubkey, checksum)
 	err := p.net.SendMessage(p.pubkey, ProtocolName, msg)
 	if err != nil {
-		p.Log.Info("Gossip protocol failed to send msg (calcHash %d) to peer %v, first attempt. err=%v", checksum, p.pubkey, err)
+		p.Log.Error("Gossip protocol failed to send msg (calcHash %d) to peer %v, first attempt. err=%v", checksum, p.pubkey, err)
 		// doing one retry before giving up
+		// TODO: find out if this is really needed
 		err = p.net.SendMessage(p.pubkey, "", msg)
 		if err != nil {
-			p.Log.Info("Gossip protocol failed to send msg (calcHash %d) to peer %v, second attempt. err=%v", checksum, p.pubkey, err)
+			p.Log.Error("Gossip protocol failed to send msg (calcHash %d) to peer %v, second attempt. err=%v", checksum, p.pubkey, err)
 			return
 		}
 	}
-	return
 }
 
 func (prot *Protocol) Close() {
@@ -139,7 +138,7 @@ func (prot *Protocol) markMessageAsOld(h hash) bool {
 	return ok
 }
 
-func (prot *Protocol) propagateMessage(payload []byte, h hash, nextProt string, exclude ...p2pcrypto.PublicKey) {
+func (prot *Protocol) propagateMessage(payload []byte, h hash, nextProt string, exclude p2pcrypto.PublicKey) {
 	// add gossip header
 	header := &pb.Metadata{
 		NextProtocol:  nextProt,
@@ -162,10 +161,8 @@ func (prot *Protocol) propagateMessage(payload []byte, h hash, nextProt string, 
 	prot.peersMutex.RLock()
 peerLoop:
 	for p := range prot.peers {
-		for e := range exclude {
-			if exclude[e].String() == p {
-				continue peerLoop
-			}
+		if exclude.String() == p {
+			continue peerLoop
 		}
 		go prot.peers[p].send(data, h) // non blocking
 	}
@@ -196,7 +193,7 @@ func (prot *Protocol) Broadcast(payload []byte, nextProt string) error {
 		Payload:  &pb.Payload{Data: &pb.Payload_Payload{payload}},
 	}
 
-	prot.processMessage(prot.localNodePubkey, msg) // todo: pass sender
+	prot.processMessage(prot.localNodePubkey, msg)
 	return nil
 }
 
