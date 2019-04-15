@@ -8,10 +8,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/miner"
+	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	sync2 "github.com/spacemeshos/go-spacemesh/sync"
 	"github.com/spacemeshos/go-spacemesh/types"
+	"github.com/spacemeshos/poet-ref/integration"
 	"github.com/stretchr/testify/suite"
 	"math/big"
 	"os"
@@ -34,6 +36,18 @@ func (app *AppTestSuite) SetupTest() {
 	app.dbs = make([]string, 0, 0)
 }
 
+// NewRPCPoetHarnessClient returns a new instance of RPCPoetClient
+// which utilizes a local self-contained poet server instance
+// in order to exercise functionality.
+func NewRPCPoetHarnessClient() (*nipst.RPCPoetClient, error) {
+	h, err := integration.NewHarness()
+	if err != nil {
+		return nil, err
+	}
+
+	return nipst.NewRPCPoetClient(h.PoetClient, h.TearDown), nil
+}
+
 func (app *AppTestSuite) TearDownTest() {
 	for _, dbinst := range app.dbs {
 		err := os.RemoveAll(dbinst)
@@ -51,6 +65,8 @@ func (app *AppTestSuite) initMultipleInstances(t *testing.T, numOfInstances int,
 	net := service.NewSimulator()
 	runningName := 'a'
 	rolacle := eligibility.New()
+	poet, err := NewRPCPoetHarnessClient()
+	assert.NoError(t, err)
 	for i := 0; i < numOfInstances; i++ {
 		smApp := NewSpacemeshApp()
 		smApp.Config.HARE.N = numOfInstances
@@ -70,7 +86,7 @@ func (app *AppTestSuite) initMultipleInstances(t *testing.T, numOfInstances int,
 		hareOracle := blockOracle
 		layerSize := numOfInstances
 
-		err := smApp.initServices(nodeId, swarm, dbStorepath, sgn, blockOracle, blockValidator, hareOracle, layerSize)
+		err := smApp.initServices(nodeId, swarm, dbStorepath, sgn, blockOracle, blockValidator, hareOracle, layerSize, nipst.NewPostClient(), poet)
 		assert.NoError(t, err)
 		smApp.setupGenesis(apiCfg.DefaultGenesisConfig())
 

@@ -18,7 +18,6 @@ var minerID = []byte("id")
 var idsToCleanup [][]byte
 var spaceUnit = uint64(1024)
 var difficulty = proving.Difficulty(5)
-var numberOfProvenLabels = uint8(10)
 
 type PostProverClientMock struct{}
 
@@ -96,7 +95,7 @@ func TestNIPSTBuilderWithClients(t *testing.T) {
 }
 
 func buildNIPST(r *require.Assertions, spaceUnit uint64, difficulty proving.Difficulty, numberOfProvenLabels uint8, nipstChallenge common.Hash) *NIPST {
-	postProver := newPostClient()
+	postProver := NewPostClient()
 	poetProver, err := newRPCPoetHarnessClient()
 	r.NotNil(poetProver)
 	defer func() {
@@ -132,7 +131,7 @@ func TestNewNIPSTBuilderNotInitialized(t *testing.T) {
 	minerIDNotInitialized := []byte("not initialized")
 	nipstChallenge := common.BytesToHash([]byte("anton"))
 
-	postProver := newPostClient()
+	postProver := NewPostClient()
 	poetProver, err := newRPCPoetHarnessClient()
 	r.NotNil(poetProver)
 	defer func() {
@@ -226,7 +225,7 @@ func TestMain(m *testing.M) {
 func initPost(id []byte, space uint64, numberOfProvenLabels uint8, difficulty proving.Difficulty) {
 	defTimeout := 5 * time.Second
 	idsToCleanup = append(idsToCleanup, id)
-	_, err := newPostClient().initialize(id, space, numberOfProvenLabels, difficulty, defTimeout)
+	_, err := NewPostClient().initialize(id, space, numberOfProvenLabels, difficulty, defTimeout)
 	logIfError(err)
 }
 

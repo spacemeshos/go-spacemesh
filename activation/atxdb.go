@@ -215,18 +215,18 @@ func (db *ActivationDb) incValidAtxCounter(ech types.EpochId) error {
 	key := epochCounterKey(ech)
 	val, err := db.atxs.Get(key)
 	if err == nil {
-		return db.atxs.Put(key, common.Uint64ToBytes(common.BytesToUint64(val)+1))
+		return db.atxs.Put(key, common.Uint32ToBytes(common.BytesToUint32(val)+1))
 	}
-	return db.atxs.Put(key, common.Uint64ToBytes(1))
+	return db.atxs.Put(key, common.Uint32ToBytes(1))
 }
 
-func (db *ActivationDb) ActiveIds(ech types.EpochId) uint64 {
+func (db *ActivationDb) ActiveSetIds(ech types.EpochId) uint32 {
 	key := epochCounterKey(ech)
 	val, err := db.atxs.Get(key)
 	if err != nil {
 		return 0
 	}
-	return common.BytesToUint64(val)
+	return common.BytesToUint32(val)
 }
 
 func (db *ActivationDb) addAtxToEpoch(epochId types.EpochId, atx types.AtxId) error {

@@ -82,9 +82,9 @@ func verifyPoetMatchesMembership(m *membershipProof, p *poetProof) bool {
 
 type SeqWorkTicks uint64
 
-// newRemoteRPCPoetClient returns a new instance of
+// NewRemoteRPCPoetClient returns a new instance of
 // RPCPoetClient for the specified target.
-func newRemoteRPCPoetClient(target string, timeout time.Duration) (*RPCPoetClient, error) {
+func NewRemoteRPCPoetClient(target string, timeout time.Duration) (*RPCPoetClient, error) {
 	conn, err := newClientConn(target, timeout)
 	if err != nil {
 		return nil, err
@@ -95,7 +95,7 @@ func newRemoteRPCPoetClient(target string, timeout time.Duration) (*RPCPoetClien
 		return conn.Close()
 	}
 
-	return newRPCPoetClient(client, cleanUp), nil
+	return NewRPCPoetClient(client, cleanUp), nil
 }
 
 // newClientConn returns a new gRPC client
@@ -122,9 +122,9 @@ type RPCPoetClient struct {
 	CleanUp func() error
 }
 
-// newRPCPoetClient returns a new RPCPoetClient instance for the provided
+// NewRPCPoetClient returns a new RPCPoetClient instance for the provided
 // and already-connected gRPC PoetClient instance.
-func newRPCPoetClient(client api.PoetClient, cleanUp func() error) *RPCPoetClient {
+func NewRPCPoetClient(client api.PoetClient, cleanUp func() error) *RPCPoetClient {
 	return &RPCPoetClient{
 		client:  client,
 		CleanUp: cleanUp,

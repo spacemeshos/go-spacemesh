@@ -16,12 +16,13 @@ const AtxProtocol = "AtxGossip"
 var activesetCache = NewActivesetCache(1000)
 
 type ActiveSetProvider interface {
-	GetActiveSetSize(l types.LayerID) uint32
+	ActiveSetIds(l types.EpochId) uint32
 }
 
+//GetLatestVerified() []types.BlockID
+
 type MeshProvider interface {
-	GetLatestView() []types.BlockID
-	LatestLayerId() types.LayerID
+	GetLatestVerified() []types.BlockID
 }
 
 type EpochProvider interface {
@@ -49,10 +50,13 @@ type Builder struct {
 	net            Broadcaster
 	activeSet      ActiveSetProvider
 	mesh           MeshProvider
-	epochProvider  EpochProvider
 	layersPerEpoch uint64
 	tickProvider   PoETNumberOfTickProvider
 	nipstBuilder   NipstBuilder
+	timer          chan types.LayerID
+	stop           chan struct{}
+	finished       chan struct{}
+	working        bool
 }
 
 type Processor struct {
@@ -60,24 +64,51 @@ type Processor struct {
 	epochProvider EpochProvider
 }
 
-func NewBuilder(nodeId types.NodeId, db database.DB,
-	meshdb *mesh.MeshDB,
-	net Broadcaster,
-	activeSet ActiveSetProvider,
-	view MeshProvider,
-	epochDuration EpochProvider,
-	layersPerEpoch uint64,
-	nipstBuilder NipstBuilder) *Builder {
+func NewBuilder(nodeId types.NodeId, db database.DB, meshdb *mesh.MeshDB, net Broadcaster, activeSet ActiveSetProvider, view MeshProvider, layersPerEpoch uint64, nipstBuilder NipstBuilder, layerClock chan types.LayerID) *Builder {
 	return &Builder{
 		nodeId,
 		NewActivationDb(db, meshdb, layersPerEpoch),
 		net,
 		activeSet,
 		view,
-		epochDuration,
 		layersPerEpoch,
 		PoETNumberOfTickProvider{},
 		nipstBuilder,
+		layerClock,
+		make(chan struct{}),
+		make(chan struct{}),
+		false,
+	}
+}
+
+func (b *Builder) Start(){
+	go b.loop()
+}
+
+func (b *Builder) Stop() {
+	b.finished <- struct{}{}
+}
+
+func (b *Builder) loop() {
+	for {
+		select {
+		case <-b.stop:
+			return
+		case layer := <-b.timer:
+			if b.working {
+				break
+			}
+			b.working = true
+			go func() {
+				err := b.PublishActivationTx(types.EpochId(uint64(layer) / b.layersPerEpoch))
+				if err != nil {
+					log.Error("cannot create atx : %v", err)
+				}
+				b.finished <- struct{}{}
+			}()
+		case <-b.finished:
+			b.working = false
+		}
 	}
 }
 
@@ -95,7 +126,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 	}
 	posAtxId := &types.EmptyAtxId
 	endTick := uint64(0)
-	LayerIdx := b.mesh.LatestLayerId()
+	LayerIdx := uint64(0)
 	if epoch > 0 {
 		//positioning atx is from the last epoch
 		posAtxId, err = b.GetPositioningAtxId(epoch - 1)
@@ -107,6 +138,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 			return err
 		}
 		endTick = posAtx.EndTick
+		LayerIdx = uint64(posAtx.LayerIdx)
 	}
 
 	challenge := types.NIPSTChallenge{
@@ -127,9 +159,8 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 	if err != nil {
 		return err
 	}
-	//todo: check if view should be latest layer -1
-	atx := types.NewActivationTxWithChallenge(challenge, b.activeSet.GetActiveSetSize(b.mesh.LatestLayerId()-1),
-		b.mesh.GetLatestView(), npst, true)
+	atx := types.NewActivationTxWithChallenge(challenge, uint32(b.activeSet.ActiveSetIds(types.EpochId(LayerIdx / b.layersPerEpoch))),
+		b.mesh.GetLatestVerified(), npst, true)
 
 	buf, err := types.AtxAsBytes(atx)
 	if err != nil {

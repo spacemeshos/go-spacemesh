@@ -19,7 +19,7 @@ func TestPostClient(t *testing.T) {
 	numberOfProvenLabels := uint8(proving.NumberOfProvenLabels)
 	difficulty := proving.Difficulty(5)
 
-	c := newPostClient()
+	c := NewPostClient()
 	assert.NotNil(c)
 
 	idsToCleanup = append(idsToCleanup, id)

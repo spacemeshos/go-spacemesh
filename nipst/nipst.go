@@ -185,6 +185,27 @@ func NewNIPSTBuilder(
 	}
 }
 
+var numberOfProvenLabels = uint8(10)
+
+func NewNipstBuilder(id []byte,spaceUnit uint64, difficulty proving.Difficulty, duration SeqWorkTicks, postProver PostProverClient, poetProver PoetProvingServiceClient) *NIPSTBuilder{
+	return &NIPSTBuilder{
+		id:                          id,
+		space:                       spaceUnit,
+		duration:                    duration,
+		difficulty:                  difficulty,
+		numberOfProvenLabels:        numberOfProvenLabels,
+		postProver:                  postProver,
+		poetProver:                  poetProver,
+		verifyPost:                  verifyPost,
+		verifyPoetMembership:        verifyPoetMembership,
+		verifyPoet:                  verifyPoet,
+		verifyPoetMatchesMembership: verifyPoetMatchesMembership,
+		stop:                        false,
+		errChan:                     make(chan error),
+		nipst:                       initialNIPST(id, spaceUnit, duration),
+	}
+}
+
 func (nb *NIPSTBuilder) BuildNIPST(challenge *common.Hash) (*NIPST, error) {
 	defTimeout := 5 * time.Second // TODO: replace temporary solution
 	nb.nipst.load()

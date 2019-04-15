@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/miner"
+	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/state"
@@ -82,6 +83,7 @@ type SpacemeshApp struct {
 	mesh             *mesh.Mesh
 	clock            *timesync.Ticker
 	hare             *hare.Hare
+	atxBuilder       *activation.Builder
 	unregisterOracle func()
 }
 
@@ -251,7 +253,9 @@ func (app *SpacemeshApp) setupTestFeatures() {
 }
 
 func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service, dbStorepath string, sgn hare.Signing,
-	blockOracle oracle.BlockOracle, blockValidator sync.BlockValidator, hareOracle hare.Rolacle, layerSize int) error {
+	blockOracle oracle.BlockOracle, blockValidator sync.BlockValidator, hareOracle hare.Rolacle, layerSize int,
+	postClient nipst.PostProverClient,
+	poetClient nipst.PoetProvingServiceClient) error {
 
 	app.instanceName = nodeID.Key
 	//todo: should we add all components to a single struct?
@@ -290,7 +294,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	}
 
 	//todo: put in config
-	atxdb := activation.NewActivationDb(atxdbstore, mdb, 1000)
+	atxdb := activation.NewActivationDb(atxdbstore, mdb, uint64(app.Config.CONSENSUS.LayersPerEpoch))
 	msh := mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, processor, lg.WithName("mesh")) //todo: what to do with the logger?
 
 	conf := sync.Configuration{SyncInterval: 1 * time.Second, Concurrency: 4, LayerSize: int(layerSize), RequestTimeout: 100 * time.Millisecond}
@@ -301,6 +305,10 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	blockProducer := miner.NewBlockBuilder(nodeID, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, lg.WithName("blockProducer"))
 	blockListener := sync.NewBlockListener(swarm, blockValidator, msh, 2*time.Second, 4, lg.WithName("blockListener"))
 
+	nipstBuilder := nipst.NewNipstBuilder(nodeID.ToBytes(), 1024,100,100,postClient, poetClient)
+	atxBuilder := activation.NewBuilder(nodeID, atxdbstore, mdb, swarm, atxdb, msh, uint64(app.Config.CONSENSUS.LayersPerEpoch), nipstBuilder, clock.Subscribe())
+
+
 	app.blockProducer = &blockProducer
 	app.blockListener = blockListener
 	app.mesh = msh
@@ -309,7 +317,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	app.state = st
 	app.hare = ha
 	app.P2P = swarm
-
+	app.atxBuilder =atxBuilder
 	return nil
 }
 
@@ -324,6 +332,7 @@ func (app *SpacemeshApp) startServices() {
 	if err != nil {
 		log.Panic("cannot start block producer")
 	}
+	app.atxBuilder.Start()
 	app.clock.Start()
 }
 
@@ -333,6 +342,9 @@ func (app SpacemeshApp) stopServices() {
 
 	log.Info("%v closing clock", app.instanceName)
 	app.clock.Close()
+
+	log.Info("%v closing atx builder", app.instanceName)
+	app.atxBuilder.Stop()
 
 	log.Info("%v closing Hare", app.instanceName)
 	app.hare.Close() //todo: need to add this
@@ -398,7 +410,11 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	apiConf := &app.Config.API
 
 	validatorMock := sync.BlockValidatorMock{}
-	err = app.initServices(nodeID, swarm, "/tmp/", sgn, bo, validatorMock, hareOracle, app.Config.LayerAvgSize)
+	poet, err := nipst.NewRemoteRPCPoetClient("127.0.0.1", 10)
+	if err != nil {
+		log.Error("poet server not found")
+	}
+	err = app.initServices(nodeID, swarm, "/tmp/", sgn, bo, validatorMock, hareOracle, app.Config.LayerAvgSize, nipst.NewPostClient(), poet)
 	if err != nil {
 		log.Error("cannot start services %v", err.Error())
 		return
