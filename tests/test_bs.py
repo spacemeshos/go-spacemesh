@@ -374,7 +374,7 @@ def test_client(set_namespace, setup_clients, save_log_on_exit):
     peers = query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, fields, True)
     assert peers == len(setup_clients.pods)
 
-
+    
 def test_gossip(set_namespace, setup_clients):
     fields = {'M':'new_gossip_message', 'protocol': 'api_test_gossip'}
     # *note*: this already waits for bootstrap so we can send the msg right away.
@@ -400,27 +400,37 @@ def test_gossip(set_namespace, setup_clients):
 
 
 def test_transaction(set_namespace, setup_clients):
+
     # choose client to run on
     client_ip = setup_clients.pods[0]['pod_ip']
 
     api = 'v1/nonce'
     data = '{"address":"1"}'
+    print("checking nonce")
     out = api_call(client_ip, data, api, testconfig['namespace'])
     assert '{"value":"0"}' in out.decode("utf-8")
-
-    match = re.search(r"{\"value\":\"(?P<nonce_val>\d+)\"}", out.decode("utf-8"))
-    assert match
-    nonce_val = int(match.group("nonce_val"))
-    assert 0 == nonce_val
+    print("nonce ok")
 
     api = 'v1/submittransaction'
     data = '{"srcAddress":"1","dstAddress":"222","nonce":"0","amount":"100"}'
-
+    print("submitting transaction")
     out = api_call(client_ip, data, api, testconfig['namespace'])
     assert '{"value":"ok"}' in out.decode("utf-8")
-    time.sleep(60 * 10)
+    print("submit transaction ok")
+    print("wait for confirmation ")
 
     api = 'v1/balance'
     data = '{"address":"222"}'
-    out = api_call(client_ip, data, api, testconfig['namespace'])
+    start = time.time()
+
+    for x in range(10):
+        time.sleep(60)
+        print("... ")
+        out = api_call(client_ip, data, api, testconfig['namespace'])
+        if '{"value":"100"}' in out.decode("utf-8"):
+            end = time.time()
+            break
+
+    print("test took ", end - start, "seconds ")
     assert '{"value":"100"}' in out.decode("utf-8")
+    print("balance ok")
