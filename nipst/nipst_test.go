@@ -73,7 +73,8 @@ func TestNIPSTBuilderWithMocks(t *testing.T) {
 		verifyPoetMock,
 		verifyPoetMembershipMock,
 	)
-	npst, err := nb.BuildNIPST(common.BytesToHash([]byte("anton")))
+	hash := common.BytesToHash([]byte("anton"))
+	npst, err := nb.BuildNIPST(&hash)
 	assert.NoError(err)
 
 	assert.True(npst.Valid())
@@ -116,7 +117,7 @@ func buildNIPST(r *require.Assertions, spaceUnit uint64, difficulty proving.Diff
 		verifyPoet,
 		verifyPoetMatchesMembership,
 	)
-	npst, err := nb.BuildNIPST(nipstChallenge)
+	npst, err := nb.BuildNIPST(&nipstChallenge)
 	r.NoError(err)
 	return npst
 }
@@ -153,7 +154,7 @@ func TestNewNIPSTBuilderNotInitialized(t *testing.T) {
 		verifyPoetMatchesMembership,
 	)
 
-	npst, err := nb.BuildNIPST(nipstChallenge)
+	npst, err := nb.BuildNIPST(&nipstChallenge)
 	r.EqualError(err, "PoST not initialized")
 	r.Nil(npst)
 
@@ -162,7 +163,7 @@ func TestNewNIPSTBuilderNotInitialized(t *testing.T) {
 	r.NoError(err)
 	r.NotNil(initialProof)
 
-	npst, err = nb.BuildNIPST(nipstChallenge)
+	npst, err = nb.BuildNIPST(&nipstChallenge)
 	r.NoError(err)
 	r.NotNil(npst)
 

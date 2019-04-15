@@ -161,9 +161,16 @@ func (db *ActivationDb) ValidateAtx(atx *types.ActivationTx) error {
 		}
 	}
 
-	//todo: verify NIPST challenge
 	if atx.ActiveSetSize != atx.VerifiedActiveSet {
 		return fmt.Errorf("positioning atx conatins view with more active ids (%v) than seen (%v)", atx.ActiveSetSize, atx.VerifiedActiveSet)
+	}
+
+	hash, err := atx.NIPSTChallenge.Hash()
+	if err != nil {
+		return fmt.Errorf("cannot get NIPST Challenge hash: %v", err)
+	}
+	if !atx.Nipst.ValidateNipstChallenge(hash) {
+		return fmt.Errorf("nipst challenge hash mismatch")
 	}
 	return nil
 }

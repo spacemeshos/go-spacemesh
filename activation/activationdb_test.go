@@ -145,6 +145,11 @@ func TestMesh_processBlockATXs(t *testing.T) {
 		types.NewActivationTx(id2, 0, types.EmptyAtxId, 1300, 0, posATX.Id(), 0, []types.BlockID{}, &nipst.NIPST{}, true),
 		types.NewActivationTx(id3, 0, types.EmptyAtxId, 1435, 0, posATX.Id(), 0, []types.BlockID{}, &nipst.NIPST{}, true),
 	}
+	for _, atx := range atxs {
+		hash, err := atx.NIPSTChallenge.Hash()
+		assert.NoError(t, err)
+		atx.Nipst = nipst.NewNIPSTWithChallenge(hash)
+	}
 
 	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data1"))
 	block1.MinerID.Key = strconv.Itoa(1)
@@ -158,6 +163,11 @@ func TestMesh_processBlockATXs(t *testing.T) {
 		types.NewActivationTx(id1, 1, atxs[0].Id(), 2012, 0, atxs[0].Id(), 0, []types.BlockID{}, &nipst.NIPST{}, true),
 		types.NewActivationTx(id2, 1, atxs[1].Id(), 2300, 0, atxs[1].Id(), 0, []types.BlockID{}, &nipst.NIPST{}, true),
 		types.NewActivationTx(id3, 1, atxs[2].Id(), 2435, 0, atxs[2].Id(), 0, []types.BlockID{}, &nipst.NIPST{}, true),
+	}
+	for _, atx := range atxs2 {
+		hash, err := atx.NIPSTChallenge.Hash()
+		assert.NoError(t, err)
+		atx.Nipst = nipst.NewNIPSTWithChallenge(hash)
 	}
 
 	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 2000, []byte("data1"))
@@ -182,6 +192,11 @@ func TestActivationDB_ValidateAtx(t *testing.T) {
 		types.NewActivationTx(id2, 0, types.EmptyAtxId, 1, 0, types.EmptyAtxId, 3, []types.BlockID{}, &nipst.NIPST{}, true),
 		types.NewActivationTx(id3, 0, types.EmptyAtxId, 1, 0, types.EmptyAtxId, 3, []types.BlockID{}, &nipst.NIPST{}, true),
 	}
+	for _, atx := range atxs {
+		hash, err := atx.NIPSTChallenge.Hash()
+		assert.NoError(t, err)
+		atx.Nipst = nipst.NewNIPSTWithChallenge(hash)
+	}
 
 	blocks := createLayerWithAtx(layers, 1, 10, atxs, []types.BlockID{}, []types.BlockID{})
 	blocks = createLayerWithAtx(layers, 10, 10, []*types.ActivationTx{}, blocks, blocks)
@@ -190,10 +205,16 @@ func TestActivationDB_ValidateAtx(t *testing.T) {
 	//atx := types.NewActivationTx(id1, 1, atxs[0].Id(), 1000, 0, atxs[0].Id(), 3, blocks, &nipst.NIPST{})
 	prevAtx := types.NewActivationTx(idx1, 0, types.EmptyAtxId, 100, 0, types.EmptyAtxId, 3, blocks, &nipst.NIPST{}, true)
 	prevAtx.Valid = true
+	hash, err := prevAtx.NIPSTChallenge.Hash()
+	assert.NoError(t, err)
+	prevAtx.Nipst = nipst.NewNIPSTWithChallenge(hash)
 
 	atx := types.NewActivationTx(idx1, 1, prevAtx.Id(), 1012, 0, prevAtx.Id(), 3, []types.BlockID{}, &nipst.NIPST{}, true)
 	atx.VerifiedActiveSet = 3
-	err := atxdb.StoreAtx(1, prevAtx)
+	hash, err = atx.NIPSTChallenge.Hash()
+	assert.NoError(t, err)
+	atx.Nipst = nipst.NewNIPSTWithChallenge(hash)
+	err = atxdb.StoreAtx(1, prevAtx)
 	assert.NoError(t, err)
 
 	err = atxdb.ValidateAtx(atx)

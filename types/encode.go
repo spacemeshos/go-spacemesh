@@ -79,6 +79,14 @@ func BytesAsAtx(b []byte) (*ActivationTx, error) {
 	return &atx, nil
 }
 
+func NIPSTChallengeAsBytes(challenge *NIPSTChallenge) ([]byte, error) {
+	var w bytes.Buffer
+	if _, err := xdr.Marshal(&w, challenge); err != nil {
+		return nil, fmt.Errorf("error marshalling NIPST Challenge: %v", err)
+	}
+	return w.Bytes(), nil
+}
+
 func BlockHeaderToBytes(bheader *BlockHeader) ([]byte, error) {
 	var w bytes.Buffer
 	if _, err := xdr.Marshal(&w, bheader); err != nil {

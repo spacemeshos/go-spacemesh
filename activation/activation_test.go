@@ -2,7 +2,6 @@ package activation
 
 import (
 	"fmt"
-	"github.com/davecgh/go-xdr/xdr"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -45,17 +44,17 @@ func (n *NetMock) Broadcast(id string, d []byte) error {
 }
 
 type NipstBuilderMock struct {
-	Challenge []byte
+	Challenge *common.Hash
 }
 
-func (np *NipstBuilderMock) BuildNIPST(challange []byte) (*nipst.NIPST, error) {
-	np.Challenge = challange
+func (np *NipstBuilderMock) BuildNIPST(challenge *common.Hash) (*nipst.NIPST, error) {
+	np.Challenge = challenge
 	return &nipst.NIPST{}, nil
 }
 
 type NipstErrBuilderMock struct{}
 
-func (np *NipstErrBuilderMock) BuildNIPST(challange []byte) (*nipst.NIPST, error) {
+func (np *NipstErrBuilderMock) BuildNIPST(challenge *common.Hash) (*nipst.NIPST, error) {
 	return nil, fmt.Errorf("error")
 }
 
@@ -108,7 +107,7 @@ func TestBuilder_PublishActivationTx(t *testing.T) {
 	err := adb.StoreAtx(echp.Epoch(types.LayerID(uint64(atx.LayerIdx)/layersPerEpcoh)), atx)
 	assert.NoError(t, err)
 
-	challenge := types.PoETChallenge{
+	challenge := types.NIPSTChallenge{
 		NodeId:         b.nodeId,
 		Sequence:       b.GetLastSequence(b.nodeId) + 1,
 		PrevATXId:      atx.Id(),
@@ -118,7 +117,7 @@ func TestBuilder_PublishActivationTx(t *testing.T) {
 		PositioningAtx: atx.Id(),
 	}
 
-	bytes, err := xdr.Marshal(challenge)
+	bytes, err := challenge.Hash()
 	assert.NoError(t, err)
 
 	act := types.NewActivationTx(b.nodeId, b.GetLastSequence(b.nodeId)+1, atx.Id(), layers.LatestLayerId()+10, 0, atx.Id(), b.activeSet.GetActiveSetSize(1), b.mesh.GetLatestView(), &npst, true)

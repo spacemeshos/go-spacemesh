@@ -29,12 +29,12 @@ type PostParams struct {
 }
 
 func (v *Validator) Validate(nipst *NIPST, expectedChallenge common.Hash) error {
-	if !bytes.Equal(nipst.poetChallenge[:], expectedChallenge[:]) {
+	if !bytes.Equal(nipst.nipstChallenge[:], expectedChallenge[:]) {
 		log.Warning("NIPST challenge is not equal to expected challenge")
 		return errors.New("NIPST challenge is not equal to expected challenge")
 	}
 
-	if valid, err := v.verifyPoetMembership(nipst.poetChallenge, nipst.poetMembershipProof); err != nil || !valid {
+	if valid, err := v.verifyPoetMembership(nipst.nipstChallenge, nipst.poetMembershipProof); err != nil || !valid {
 		log.Warning("PoET membership proof invalid: %v", err)
 		return fmt.Errorf("PoET membership proof invalid: %v", err)
 	}

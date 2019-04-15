@@ -2,7 +2,7 @@ package activation
 
 import (
 	"fmt"
-	"github.com/davecgh/go-xdr/xdr"
+	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -40,7 +40,7 @@ func (provider *PoETNumberOfTickProvider) NumOfTicks() uint64 {
 }
 
 type NipstBuilder interface {
-	BuildNIPST(challange []byte) (*nipst.NIPST, error)
+	BuildNIPST(challenge *common.Hash) (*nipst.NIPST, error)
 }
 
 type Builder struct {
@@ -109,7 +109,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 		endTick = posAtx.EndTick
 	}
 
-	challenge := types.PoETChallenge{
+	challenge := types.NIPSTChallenge{
 		NodeId:         b.nodeId,
 		Sequence:       seq,
 		PrevATXId:      *prevAtx,
@@ -119,11 +119,11 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 		PositioningAtx: *posAtxId,
 	}
 
-	bytes, err := xdr.Marshal(challenge)
+	hash, err := challenge.Hash()
 	if err != nil {
-		return err
+		return fmt.Errorf("getting challenge hash failed: %v", err)
 	}
-	npst, err := b.nipstBuilder.BuildNIPST(bytes)
+	npst, err := b.nipstBuilder.BuildNIPST(hash)
 	if err != nil {
 		return err
 	}
@@ -140,11 +140,11 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 
 }
 
-func (b *Builder) Persist(c *types.PoETChallenge) {
+func (b *Builder) Persist(c *types.NIPSTChallenge) {
 	//todo: implement storing to persistent media
 }
 
-func (b *Builder) Load() *types.PoETChallenge {
+func (b *Builder) Load() *types.NIPSTChallenge {
 	//todo: implement loading from persistent media
 	return nil
 }
