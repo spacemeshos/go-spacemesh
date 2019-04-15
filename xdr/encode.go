@@ -6,7 +6,7 @@ import (
 	"math/big"
 	"reflect"
 
-	xdr "github.com/stellar/go-xdr/xdr3"
+	xdr "github.com/dowlandaiello/go-xdr/xdr3"
 )
 
 // Marshal writes the XDR encoding of val to w.
@@ -20,7 +20,7 @@ func Marshal(w io.Writer, val interface{}) (int, error) {
 		realVal = reflect.ValueOf([]byte{}) // Set to nil byte array
 	}
 
-	if realVal.Kind() == reflect.Interface && realVal.IsNil() { // Check is nil
+	if realVal.Kind() == reflect.Interface && (realVal.IsNil() || !realVal.CanInterface()) { // Check is nil
 		realVal = reflect.ValueOf([]byte{}) // Set to nil byte array
 	}
 

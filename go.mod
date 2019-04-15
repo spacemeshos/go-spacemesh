@@ -5,6 +5,7 @@ require (
 	github.com/btcsuite/btcutil v0.0.0-20190207003914-4c204d697803
 	github.com/davecgh/go-spew v1.1.1
 	github.com/davecgh/go-xdr v0.0.0-20161123171359-e6a2ba005892
+	github.com/dowlandaiello/go-xdr v0.0.0-20190415001900-563240c01a22
 	github.com/go-kit/kit v0.8.0
 	github.com/gogo/protobuf v1.2.0
 	github.com/golang-collections/go-datastructures v0.0.0-20150211160725-59788d5eb259
@@ -13,7 +14,6 @@ require (
 	github.com/google/uuid v1.1.0
 	github.com/grpc-ecosystem/grpc-gateway v1.8.4
 	github.com/hashicorp/golang-lru v0.5.1
-	github.com/nullstyle/go-xdr v0.0.0-20180726165426-f4c839f75077 // indirect
 	github.com/prometheus/client_golang v0.9.2
 	github.com/prometheus/common v0.2.0
 	github.com/seehuhn/mt19937 v0.0.0-20180715112136-cc7708819361
@@ -24,7 +24,6 @@ require (
 	github.com/spf13/cobra v0.0.3
 	github.com/spf13/pflag v1.0.3
 	github.com/spf13/viper v1.3.1
-	github.com/stellar/go-xdr v0.0.0-20180917104419-0bc96f33a18e
 	github.com/stretchr/testify v1.3.0
 	github.com/syndtr/goleveldb v0.0.0-20181128100959-b001fa50d6b2
 	go.uber.org/zap v1.9.1

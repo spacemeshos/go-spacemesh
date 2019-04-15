@@ -5,7 +5,7 @@ import (
 	"io"
 	"math/big"
 
-	xdr "github.com/stellar/go-xdr/xdr3"
+	xdr "github.com/dowlandaiello/go-xdr/xdr3"
 )
 
 // Unmarshal unmarshals data read from reader r into the interface buffer val.
