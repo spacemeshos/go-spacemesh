@@ -1,4 +1,4 @@
-namespace: almog
+namespace: sm
 
 config_map_name: conf
 
