@@ -234,6 +234,7 @@ func (prot *Protocol) processMessage(sender p2pcrypto.PublicKey, msg *pb.Protoco
 		// todo : - have some more metrics for termination
 		// todo	: - maybe tell the peer we got this message already?
 		// todo : - maybe block this peer since he sends us old messages
+		prot.Log.Warning("gossip_old_message", log.String("from", sender.String()), log.String("protocol", protocol))
 	} else {
 		prot.Log.With().Info("new_gossip_message", log.String("from", sender.String()), log.String("auth", base58.Encode(msg.Metadata.AuthPubkey)), log.String("protocol", protocol))
 		metrics.NewGossipMessages.With("protocol", protocol).Add(1)
