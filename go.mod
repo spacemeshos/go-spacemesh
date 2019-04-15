@@ -5,7 +5,7 @@ require (
 	github.com/btcsuite/btcutil v0.0.0-20190207003914-4c204d697803
 	github.com/davecgh/go-spew v1.1.1
 	github.com/davecgh/go-xdr v0.0.0-20161123171359-e6a2ba005892
-	github.com/dowlandaiello/go-xdr v0.0.0-20190415001900-563240c01a22
+	github.com/dowlandaiello/go-xdr v0.0.0-20190415171000-756b0995c08b
 	github.com/go-kit/kit v0.8.0
 	github.com/gogo/protobuf v1.2.0
 	github.com/golang-collections/go-datastructures v0.0.0-20150211160725-59788d5eb259
