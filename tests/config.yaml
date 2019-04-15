@@ -8,7 +8,7 @@ genesis_delta: 120
 deployment_ready_time_out: 120
 
 bootstrap:
-  image: 'spacemeshos/go-spacemesh-dev:develop'
+  image: 'spacemeshos/go-spacemesh:develop'
   command: '/bin/go-spacemesh'
   replicas: 1
 args:
@@ -19,7 +19,7 @@ args:
   layer-duration-sec: '120'
   layer-average-size: '20'
 client:
-  image: 'spacemeshos/go-spacemesh-dev:develop'
+  image: 'spacemeshos/go-spacemesh:develop'
   command: '/bin/go-spacemesh'
   replicas: 19
   args:
