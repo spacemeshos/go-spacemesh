@@ -6,6 +6,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/require"
@@ -538,8 +539,9 @@ func (m *mockSrv) RegisterGossipProtocol(string) chan service.GossipMessage {
 }
 
 type mockMsg struct {
-	msg []byte
-	c   chan service.MessageValidation
+	sender p2pcrypto.PublicKey
+	msg    []byte
+	c      chan service.MessageValidation
 }
 
 func (m *mockMsg) Bytes() []byte {
@@ -550,8 +552,12 @@ func (m *mockMsg) ValidationCompletedChan() chan service.MessageValidation {
 	return m.c
 }
 
-func (m *mockMsg) ReportValidation(protocol string, isValid bool) {
-	m.c <- service.NewMessageValidation(m.msg, protocol, isValid)
+func (m *mockMsg) Sender() p2pcrypto.PublicKey {
+	return m.sender
+}
+
+func (m *mockMsg) ReportValidation(protocol string) {
+	m.c <- service.NewMessageValidation(m.sender, m.msg, protocol)
 }
 
 func TestApproveAPIGossipMessages(t *testing.T) {
@@ -559,9 +565,13 @@ func TestApproveAPIGossipMessages(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	ApproveAPIGossipMessages(ctx, m)
 	require.True(t, m.called)
-	msg := &mockMsg{[]byte("TEST"), make(chan service.MessageValidation, 1)}
+	somekey := p2pcrypto.NewRandomPubkey()
+	msg := &mockMsg{somekey, []byte("TEST"), make(chan service.MessageValidation, 1)}
 	m.c <- msg
-	valid := <-msg.ValidationCompletedChan()
-	require.True(t, valid.IsValid())
+	res := <-msg.ValidationCompletedChan()
+	require.NotNil(t, res)
+	require.Equal(t, res.Sender(), somekey)
+	require.Equal(t, res.Message(), []byte("TEST"))
+	require.Equal(t, res.Protocol(), APIGossipProtocol)
 	cancel()
 }

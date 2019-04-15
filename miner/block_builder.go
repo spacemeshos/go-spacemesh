@@ -192,10 +192,9 @@ func (t *BlockBuilder) listenForTx() {
 					log.String("amount", x.AmountAsBigInt().String()), log.Uint64("nonce", x.AccountNonce), log.Bool("valid", err != nil))
 				if err != nil {
 					t.Log.Error("cannot parse incoming TX")
-					data.ReportValidation(IncomingTxProtocol, false)
 					break
 				}
-				data.ReportValidation(IncomingTxProtocol, true)
+				data.ReportValidation(IncomingTxProtocol)
 				t.newTrans <- x
 			}
 		}
@@ -215,10 +214,9 @@ func (t *BlockBuilder) listenForAtx() {
 				log.String("amount", x.AmountAsBigInt().String()), log.Uint64("nonce", x.AccountNonce), log.Bool("valid", err != nil))*/
 				if err != nil {
 					t.Log.Error("cannot parse incoming ATX")
-					data.ReportValidation(activation.AtxProtocol, false)
 					break
 				}
-				data.ReportValidation(activation.AtxProtocol, true)
+				data.ReportValidation(activation.AtxProtocol)
 				t.newAtx <- x
 			}
 		}
