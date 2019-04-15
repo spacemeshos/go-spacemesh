@@ -374,7 +374,7 @@ def test_client(set_namespace, setup_clients, save_log_on_exit):
     peers = query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, fields, True)
     assert peers == len(setup_clients.pods)
 
-    
+
 def test_gossip(set_namespace, setup_clients):
     fields = {'M':'new_gossip_message', 'protocol': 'api_test_gossip'}
     # *note*: this already waits for bootstrap so we can send the msg right away.
@@ -400,7 +400,6 @@ def test_gossip(set_namespace, setup_clients):
 
 
 def test_transaction(set_namespace, setup_clients):
-
     # choose client to run on
     client_ip = setup_clients.pods[0]['pod_ip']
 
@@ -415,9 +414,13 @@ def test_transaction(set_namespace, setup_clients):
     assert 0 == nonce_val
 
     api = 'v1/submittransaction'
-    data = '{"sender":"1","reciever":"222","nonce":"0","amount":"100"}'
+    data = '{"srcAddress":"1","dstAddress":"222","nonce":"0","amount":"100"}'
 
     out = api_call(client_ip, data, api, testconfig['namespace'])
     assert '{"value":"ok"}' in out.decode("utf-8")
+    time.sleep(60 * 10)
 
-
+    api = 'v1/balance'
+    data = '{"address":"222"}'
+    out = api_call(client_ip, data, api, testconfig['namespace'])
+    assert '{"value":"100"}' in out.decode("utf-8")
