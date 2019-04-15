@@ -17,16 +17,21 @@ type AtxId struct {
 var EmptyAtx = AtxId{common.Hash{0}}
 
 type ActivationTxHeader struct {
-	NodeId            NodeId
-	Sequence          uint64
-	PrevATXId         AtxId
-	LayerIndex        LayerID
-	StartTick         uint64 //implement later
-	EndTick           uint64 //implement later
-	PositioningATX    AtxId
-	ActiveSetSize     uint32
+	PoETChallenge
 	VerifiedActiveSet uint32
+	ActiveSetSize     uint32
 	View              []BlockID
+	Valid             bool
+}
+
+type PoETChallenge struct {
+	NodeId         NodeId
+	Sequence       uint64
+	PrevATXId      AtxId
+	LayerIdx       LayerID
+	StartTick      uint64
+	EndTick        uint64
+	PositioningAtx AtxId
 }
 
 type ActivationTx struct {
@@ -39,15 +44,31 @@ func NewActivationTx(NodeId NodeId, Sequence uint64, PrevATX AtxId, LayerIndex L
 	StartTick uint64, PositioningATX AtxId, ActiveSetSize uint32, View []BlockID, nipst *nipst.NIPST) *ActivationTx {
 	return &ActivationTx{
 		ActivationTxHeader: ActivationTxHeader{
-			NodeId:         NodeId,
-			Sequence:       Sequence,
-			PrevATXId:      PrevATX,
-			LayerIndex:     LayerIndex,
-			StartTick:      StartTick,
-			PositioningATX: PositioningATX,
-			ActiveSetSize:  ActiveSetSize,
-			View:           View,
+			PoETChallenge: PoETChallenge{
+				NodeId:         NodeId,
+				Sequence:       Sequence,
+				PrevATXId:      PrevATX,
+				LayerIdx:       LayerIndex,
+				StartTick:      StartTick,
+				PositioningAtx: PositioningATX,
+			},
+			ActiveSetSize: ActiveSetSize,
+			View:          View,
 		},
+
+		Nipst: nipst,
+	}
+
+}
+
+func NewActivationTxWithcChallenge(poetChallenge PoETChallenge, ActiveSetSize uint32, View []BlockID, nipst *nipst.NIPST) *ActivationTx {
+	return &ActivationTx{
+		ActivationTxHeader: ActivationTxHeader{
+			PoETChallenge: poetChallenge,
+			ActiveSetSize: ActiveSetSize,
+			View:          View,
+		},
+
 		Nipst: nipst,
 	}
 
@@ -64,5 +85,13 @@ func (t ActivationTx) Id() AtxId {
 
 func (t ActivationTx) Validate() error {
 	//todo: implement
+	// valid signature
+	// no other atx with same id and sequence number
+	// if s != 0 the prevAtx is valid and it's seq num is s -1
+	// positioning atx is valid
+	// validate nipst duration?
+	// fields 1-7 of the atx are the challenge of the poet
+	// layer index i^ satisfies i -i^ < (layers_passed during nipst creation) ANTON: maybe should be ==?
+	// the atx view contains d active Ids
 	return nil
 }

@@ -22,6 +22,7 @@ func TestPostClient(t *testing.T) {
 	c := newPostClient()
 	assert.NotNil(c)
 
+	idsToCleanup = append(idsToCleanup, id)
 	commitment, err := c.initialize(id, space, numberOfProvenLabels, difficulty, 0)
 	assert.NoError(err)
 	assert.NotNil(commitment)
