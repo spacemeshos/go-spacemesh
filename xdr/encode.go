@@ -47,6 +47,10 @@ func Marshal(w io.Writer, val interface{}) (int, error) {
 func isBigValue(val interface{}) (int, bool) {
 	realVal := getPtrValue(val) // Dereference pointer
 
+	if reflect.Zero(reflect.TypeOf(val)) == reflect.ValueOf(val) { // Check is zero
+		return 0, false // Not big value
+	}
+
 	_, isBigInt := realVal.Interface().(big.Int)     // Check is bigInt
 	_, isBigFloat := realVal.Interface().(big.Float) // Check is bigInt
 
