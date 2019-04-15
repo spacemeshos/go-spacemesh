@@ -145,33 +145,9 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 	builder.AddTransaction(trans[2].AccountNonce, trans[2].Origin, *trans[2].Recipient, big.NewInt(0).SetBytes(trans[2].Price))
 
 	atxs := []*types.ActivationTx{
-		types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")},
-			1,
-			types.AtxId{},
-			5,
-			1,
-			types.AtxId{},
-			5,
-			[]types.BlockID{1, 2, 3},
-			&nipst.NIPST{}),
-		types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")},
-			1,
-			types.AtxId{},
-			5,
-			1,
-			types.AtxId{},
-			5,
-			[]types.BlockID{1, 2, 3},
-			&nipst.NIPST{}),
-		types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")},
-			1,
-			types.AtxId{},
-			5,
-			1,
-			types.AtxId{},
-			5,
-			[]types.BlockID{1, 2, 3},
-			&nipst.NIPST{}),
+		types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")}, 1, types.AtxId{}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, &nipst.NIPST{}, true),
+		types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")}, 1, types.AtxId{}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, &nipst.NIPST{}, true),
+		types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")}, 1, types.AtxId{}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, &nipst.NIPST{}, true),
 	}
 
 	/*for _, atx := range atxs {

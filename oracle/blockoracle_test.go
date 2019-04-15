@@ -34,8 +34,9 @@ func (a mockActivationDB) GetNodeAtxIds(node types.NodeId) ([]types.AtxId, error
 
 func (a mockActivationDB) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
 	if id == atxID {
-		return &types.ActivationTx{ActivationTxHeader: types.ActivationTxHeader{ActiveSetSize: a.activeSetSize,
-			PoETChallenge: types.PoETChallenge{LayerIdx: a.layerIndex}}}, nil
+		return &types.ActivationTx{ActivationTxHeader: types.ActivationTxHeader{
+			PoETChallenge: types.PoETChallenge{LayerIdx: a.layerIndex}, ActiveSetSize: a.activeSetSize, Valid: true}},
+			nil
 	}
 	return nil, errors.New("wrong atx id")
 }

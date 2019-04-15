@@ -70,17 +70,9 @@ func TestBuilder_BuildActivationTx(t *testing.T) {
 	adb := b.db
 	prevAtx := types.AtxId{Hash: common.HexToHash("0x111")}
 	npst := nipst.NIPST{}
-	atx := types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")},
-		1,
-		prevAtx,
-		5,
-		1,
-		prevAtx,
-		5,
-		[]types.BlockID{1, 2, 3},
-		&npst)
+	atx := types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")}, 1, prevAtx, 5, 1, prevAtx, 5, []types.BlockID{1, 2, 3}, &npst, true)
 	adb.StoreAtx(echp.Epoch(atx.LayerIdx), atx)
-	act := types.NewActivationTx(b.nodeId, b.GetLastSequence(b.nodeId)+1, atx.Id(), layers.LatestLayerId()+layersPerEpcoh, 0, atx.Id(), b.activeSet.GetActiveSetSize(1), b.mesh.GetLatestView(), &npst)
+	act := types.NewActivationTx(b.nodeId, b.GetLastSequence(b.nodeId)+1, atx.Id(), layers.LatestLayerId()+layersPerEpcoh, 0, atx.Id(), b.activeSet.GetActiveSetSize(1), b.mesh.GetLatestView(), &npst, true)
 	err := b.PublishActivationTx(types.EpochId(layers.LatestLayerId() / layersPerEpcoh))
 	assert.NoError(t, err)
 	bts, err := types.AtxAsBytes(act)
@@ -111,15 +103,7 @@ func TestBuilder_PublishActivationTx(t *testing.T) {
 	prevAtx := types.AtxId{Hash: common.HexToHash("0x111")}
 	npst := nipst.NIPST{}
 
-	atx := types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")},
-		1,
-		prevAtx,
-		5,
-		1,
-		prevAtx,
-		5,
-		[]types.BlockID{1, 2, 3},
-		&npst)
+	atx := types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")}, 1, prevAtx, 5, 1, prevAtx, 5, []types.BlockID{1, 2, 3}, &npst, true)
 
 	err := adb.StoreAtx(echp.Epoch(types.LayerID(uint64(atx.LayerIdx)/layersPerEpcoh)), atx)
 	assert.NoError(t, err)
@@ -137,7 +121,7 @@ func TestBuilder_PublishActivationTx(t *testing.T) {
 	bytes, err := xdr.Marshal(challenge)
 	assert.NoError(t, err)
 
-	act := types.NewActivationTx(b.nodeId, b.GetLastSequence(b.nodeId)+1, atx.Id(), layers.LatestLayerId()+10, 0, atx.Id(), b.activeSet.GetActiveSetSize(1), b.mesh.GetLatestView(), &npst)
+	act := types.NewActivationTx(b.nodeId, b.GetLastSequence(b.nodeId)+1, atx.Id(), layers.LatestLayerId()+10, 0, atx.Id(), b.activeSet.GetActiveSetSize(1), b.mesh.GetLatestView(), &npst, true)
 	err = b.PublishActivationTx(1)
 	assert.NoError(t, err)
 	bts, err := types.AtxAsBytes(act)

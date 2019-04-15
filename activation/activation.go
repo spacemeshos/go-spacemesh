@@ -128,7 +128,8 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 		return err
 	}
 	//todo: check if view should be latest layer -1
-	atx := types.NewActivationTxWithcChallenge(challenge, b.activeSet.GetActiveSetSize(b.mesh.LatestLayerId()-1), b.mesh.GetLatestView(), npst)
+	atx := types.NewActivationTxWithChallenge(challenge, b.activeSet.GetActiveSetSize(b.mesh.LatestLayerId()-1),
+		b.mesh.GetLatestView(), npst, true)
 
 	buf, err := types.AtxAsBytes(atx)
 	if err != nil {

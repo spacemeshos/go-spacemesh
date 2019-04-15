@@ -40,8 +40,8 @@ type ActivationTx struct {
 	//todo: add sig
 }
 
-func NewActivationTx(NodeId NodeId, Sequence uint64, PrevATX AtxId, LayerIndex LayerID,
-	StartTick uint64, PositioningATX AtxId, ActiveSetSize uint32, View []BlockID, nipst *nipst.NIPST) *ActivationTx {
+func NewActivationTx(NodeId NodeId, Sequence uint64, PrevATX AtxId, LayerIndex LayerID, StartTick uint64,
+	PositioningATX AtxId, ActiveSetSize uint32, View []BlockID, nipst *nipst.NIPST, isValid bool) *ActivationTx {
 	return &ActivationTx{
 		ActivationTxHeader: ActivationTxHeader{
 			PoETChallenge: PoETChallenge{
@@ -54,6 +54,7 @@ func NewActivationTx(NodeId NodeId, Sequence uint64, PrevATX AtxId, LayerIndex L
 			},
 			ActiveSetSize: ActiveSetSize,
 			View:          View,
+			Valid:         isValid,
 		},
 
 		Nipst: nipst,
@@ -61,12 +62,15 @@ func NewActivationTx(NodeId NodeId, Sequence uint64, PrevATX AtxId, LayerIndex L
 
 }
 
-func NewActivationTxWithcChallenge(poetChallenge PoETChallenge, ActiveSetSize uint32, View []BlockID, nipst *nipst.NIPST) *ActivationTx {
+func NewActivationTxWithChallenge(poetChallenge PoETChallenge, ActiveSetSize uint32, View []BlockID, nipst *nipst.NIPST,
+	isValid bool) *ActivationTx {
+
 	return &ActivationTx{
 		ActivationTxHeader: ActivationTxHeader{
 			PoETChallenge: poetChallenge,
 			ActiveSetSize: ActiveSetSize,
 			View:          View,
+			Valid:         isValid,
 		},
 
 		Nipst: nipst,
@@ -75,23 +79,11 @@ func NewActivationTxWithcChallenge(poetChallenge PoETChallenge, ActiveSetSize ui
 }
 
 func (t ActivationTx) Id() AtxId {
+	//todo: revise id function, add cache
 	tx, err := AtxHeaderAsBytes(&t.ActivationTxHeader)
 	if err != nil {
 		panic("could not Serialize atx")
 	}
 
 	return AtxId{crypto.Keccak256Hash(tx)}
-}
-
-func (t ActivationTx) Validate() error {
-	//todo: implement
-	// valid signature
-	// no other atx with same id and sequence number
-	// if s != 0 the prevAtx is valid and it's seq num is s -1
-	// positioning atx is valid
-	// validate nipst duration?
-	// fields 1-7 of the atx are the challenge of the poet
-	// layer index i^ satisfies i -i^ < (layers_passed during nipst creation) ANTON: maybe should be ==?
-	// the atx view contains d active Ids
-	return nil
 }

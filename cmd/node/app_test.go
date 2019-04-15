@@ -35,12 +35,15 @@ func (app *AppTestSuite) SetupTest() {
 }
 
 func (app *AppTestSuite) TearDownTest() {
-
 	for _, dbinst := range app.dbs {
 		err := os.RemoveAll(dbinst)
 		if err != nil {
 			panic(fmt.Sprintf("what happened : %v", err))
 		}
+	}
+	err := os.RemoveAll("../tmp")
+	if err != nil {
+		log.Error("error while cleaning up: %v", err)
 	}
 }
 
@@ -49,23 +52,31 @@ func (app *AppTestSuite) initMultipleInstances(t *testing.T, numOfInstances int,
 	runningName := 'a'
 	rolacle := eligibility.New()
 	for i := 0; i < numOfInstances; i++ {
-		smapp := NewSpacemeshApp()
-		smapp.Config.HARE.N = numOfInstances
-		smapp.Config.HARE.F = numOfInstances / 2
-		app.apps = append(app.apps, smapp)
-		store := storeFormat + string(runningName)
-		n := net.NewNode()
+		smApp := NewSpacemeshApp()
+		smApp.Config.HARE.N = numOfInstances
+		smApp.Config.HARE.F = numOfInstances / 2
 
 		sgn := hare.NewMockSigning() //todo: shouldn't be any mock code here
 		pub := sgn.Verifier()
-		bo := oracle.NewLocalOracle(rolacle, numOfInstances, types.NodeId{Key: pub.String()})
-		bo.Register(true, pub.String())
 
-		bv := sync2.BlockValidatorMock{}
-		err := app.apps[i].initServices(types.NodeId{Key: pub.String()}, n, store, sgn, bo, bv, bo, numOfInstances)
+		nodeId := types.NodeId{Key: pub.String()}
+		swarm := net.NewNode()
+		dbStorepath := storeFormat + string(runningName)
+
+		blockOracle := oracle.NewLocalOracle(rolacle, numOfInstances, nodeId)
+		blockOracle.Register(true, pub.String())
+
+		blockValidator := sync2.BlockValidatorMock{}
+		hareOracle := blockOracle
+		layerSize := numOfInstances
+
+		err := smApp.initServices(nodeId, swarm, dbStorepath, sgn, blockOracle, blockValidator, hareOracle, layerSize)
 		assert.NoError(t, err)
-		app.apps[i].setupGenesis(apiCfg.DefaultGenesisConfig())
-		app.dbs = append(app.dbs, store)
+		smApp.setupGenesis(apiCfg.DefaultGenesisConfig())
+
+		app.apps = append(app.apps, smApp)
+		app.dbs = append(app.dbs, dbStorepath)
+
 		runningName++
 	}
 }
@@ -89,7 +100,7 @@ func (app *AppTestSuite) TestMultipleNodes() {
 		a.startServices()
 	}
 
-	app.apps[0].P2P.Broadcast(miner.IncomingTxProtocol, txbytes)
+	_ = app.apps[0].P2P.Broadcast(miner.IncomingTxProtocol, txbytes)
 	timeout := time.After(2 * 60 * time.Second)
 
 	for {
@@ -109,7 +120,7 @@ func (app *AppTestSuite) TestMultipleNodes() {
 								clientsDone++
 								log.Info("%d roots confirmed out of %d", clientsDone, len(app.apps))
 								if clientsDone == len(app.apps)-1 {
-									app.gracefullShutdown()
+									app.gracefulShutdown()
 									return
 								}
 							}
@@ -123,7 +134,7 @@ func (app *AppTestSuite) TestMultipleNodes() {
 	}
 }
 
-func (app *AppTestSuite) gracefullShutdown() {
+func (app *AppTestSuite) gracefulShutdown() {
 	var wg sync.WaitGroup
 	for _, ap := range app.apps {
 		func(ap SpacemeshApp) {
@@ -138,5 +149,4 @@ func (app *AppTestSuite) gracefullShutdown() {
 func TestAppTestSuite(t *testing.T) {
 	//defer leaktest.Check(t)()
 	suite.Run(t, new(AppTestSuite))
-
 }

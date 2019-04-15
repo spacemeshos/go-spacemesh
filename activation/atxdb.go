@@ -34,6 +34,11 @@ func (db *ActivationDb) ProcessBlockATXs(blk *types.Block) {
 		}
 		//todo: maybe there is a potential bug in this case if count for the view can change between calls to this function
 		atx.VerifiedActiveSet = activeSet
+
+		err = db.ValidateAtx(atx)
+		//todo: should we store invalid atxs
+		log.Warning("ATX failed validation: %v", err)
+		atx.Valid = err == nil
 		err = db.StoreAtx(types.EpochId(atx.LayerIdx/db.LayersPerEpoch), atx)
 		if err != nil {
 			log.Error("cannot store atx: %v", atx)
@@ -72,7 +77,7 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 				continue
 			}
 			set[atx.Id()] = struct{}{}
-			if atx.Validate() == nil {
+			if atx.Valid {
 				counter++
 				if counter >= a.ActiveSetSize {
 					return io.EOF
@@ -97,17 +102,20 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 }
 
 //todo: move to config
-const NIPST_LAYERTIME = 1000
+const NipstLayerTime = 1000
 
+// ValidateAtx ensures the following conditions apply, otherwise it returns an error.
+//
+// - No other ATX exists with the same MinerID and sequence number.
+// - If the sequence number is non-zero: PrevATX points to a valid ATX whose sequence number is one less than the
+//   current ATX's sequence number.
+// - If the sequence number is zero: PrevATX is empty.
+// - Positioning ATX points to a valid ATX.
+// - NIPST challenge is a hash of the serialization of the following fields:
+//   NodeID, SequenceNumber, PrevATXID, LayerID, StartTick, PositioningATX.
+// - ATX LayerID is NipstLayerTime or more after the PositioningATX LayerID.
+// - The ATX view of the previous epoch contains ActiveSetSize activations
 func (db *ActivationDb) ValidateAtx(atx *types.ActivationTx) error {
-	// validation rules: no other atx with same id and sequence number
-	// if s != 0 the prevAtx is valid and it's seq num is s -1
-	// positioning atx is valid
-	// validate nipst duration?
-	// fields 1-7 of the atx are the challenge of the poet
-	// layer index i^ satisfies i -i^ < (layers_passed during nipst creation) ANTON: maybe should be ==?
-	// the atx view contains d active Ids
-
 	eatx, _ := db.GetAtx(atx.Id())
 	if eatx != nil {
 		return fmt.Errorf("found atx with same id")
@@ -116,7 +124,7 @@ func (db *ActivationDb) ValidateAtx(atx *types.ActivationTx) error {
 	if err == nil && len(prevAtxIds) > 0 {
 		prevAtx, err := db.GetAtx(prevAtxIds[len(prevAtxIds)-1])
 		if err == nil {
-			if prevAtx.Sequence >= atx.Sequence {
+			if prevAtx.Sequence+1 != atx.Sequence {
 				return fmt.Errorf("found atx with same seq or greater")
 			}
 		}
@@ -133,7 +141,7 @@ func (db *ActivationDb) ValidateAtx(atx *types.ActivationTx) error {
 		if !posAtx.Valid {
 			return fmt.Errorf("positioning atx is not valid")
 		}
-		if atx.LayerIdx-posAtx.LayerIdx > NIPST_LAYERTIME {
+		if atx.LayerIdx-posAtx.LayerIdx >= NipstLayerTime {
 			return fmt.Errorf("distance between pos atx invalid %v ", atx.LayerIdx-posAtx.LayerIdx)
 		}
 	} else {
@@ -170,7 +178,7 @@ func (db *ActivationDb) StoreAtx(ech types.EpochId, atx *types.ActivationTx) err
 	if err != nil {
 		return err
 	}
-	if atx.Validate() == nil {
+	if atx.Valid {
 		db.incValidAtxCounter(ech)
 	}
 	err = db.addAtxToNodeId(atx.NodeId, atx.Id())

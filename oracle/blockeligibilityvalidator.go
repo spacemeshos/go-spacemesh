@@ -38,7 +38,7 @@ func (v BlockEligibilityValidator) BlockEligible(block *types.Block) (bool, erro
 		return false, err
 	}
 
-	if err := atx.Validate(); err != nil {
+	if !atx.Valid {
 		log.Error("ATX is invalid: %v", err)
 		return false, err
 	}
