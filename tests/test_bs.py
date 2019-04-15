@@ -298,7 +298,6 @@ def wait_genesis():
 def api_call(client_ip, data, api, namespace):
     p = subprocess.Popen(['./kubectl-cmd.sh', '%s' % client_ip, "%s" % data, api, namespace], stdin=subprocess.PIPE,
                          stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    print("api call")
     (out, err) = p.communicate()
     if p.returncode != 0:
         raise Exception('An Error raised on api_call')
@@ -414,7 +413,7 @@ def test_transaction(load_config, setup_clients):
     api = 'v1/nonce'
     data = '{"address":"1"}'
     out = api_call(client_ip, data, api, testconfig['namespace'])
-    assert '{"value":"0"}' in out.decode("utf-8")
+    assert '{"value":"ok"}' in out.decode("utf-8")
 
     match = re.search(r"{\"value\":\"(?P<nonce_val>\d+)\"}", out.decode("utf-8"))
     assert match
