@@ -22,7 +22,7 @@ type MinerBlockOracle struct {
 	vrfSigner      *crypto.VRFSigner
 	nodeID         types.NodeId
 
-	proofsEpoch       uint64
+	proofsEpoch       types.EpochId
 	eligibilityProofs map[types.LayerID][]types.BlockEligibilityProof
 	atxID             types.AtxId
 }
@@ -37,7 +37,7 @@ func NewMinerBlockOracle(committeeSize int32, layersPerEpoch uint16, activationD
 		beaconProvider: beaconProvider,
 		vrfSigner:      vrfSigner,
 		nodeID:         nodeId,
-		proofsEpoch:    ^uint64(0),
+		proofsEpoch:    ^types.EpochId(0),
 	}
 }
 
@@ -55,7 +55,7 @@ func (bo *MinerBlockOracle) BlockEligible(layerID types.LayerID) (types.AtxId, [
 	return bo.atxID, bo.eligibilityProofs[layerID], nil
 }
 
-func (bo *MinerBlockOracle) calcEligibilityProofs(epochNumber uint64) error {
+func (bo *MinerBlockOracle) calcEligibilityProofs(epochNumber types.EpochId) error {
 	epochBeacon := bo.beaconProvider.GetBeacon(epochNumber)
 
 	latestATXID, err := getLatestATXID(bo.activationDb, bo.nodeID)
@@ -92,8 +92,8 @@ func (bo *MinerBlockOracle) calcEligibilityProofs(epochNumber uint64) error {
 	return nil
 }
 
-func calcEligibleLayer(epochNumber uint64, layersPerEpoch uint16, vrfHash [32]byte) types.LayerID {
-	epochOffset := epochNumber * uint64(layersPerEpoch)
+func calcEligibleLayer(epochNumber types.EpochId, layersPerEpoch uint16, vrfHash [32]byte) types.LayerID {
+	epochOffset := uint64(epochNumber) * uint64(layersPerEpoch)
 	vrfInteger := binary.LittleEndian.Uint64(vrfHash[:8])
 	eligibleLayerRelativeToEpochStart := vrfInteger % uint64(layersPerEpoch)
 	return types.LayerID(eligibleLayerRelativeToEpochStart + epochOffset)
@@ -126,10 +126,10 @@ func getLatestATXID(activationDb ActivationDb, nodeID types.NodeId) (types.AtxId
 	return latestATXID, err
 }
 
-func serializeVRFMessage(epochBeacon []byte, epochNumber uint64, counter uint32) []byte {
+func serializeVRFMessage(epochBeacon []byte, epochNumber types.EpochId, counter uint32) []byte {
 	message := make([]byte, len(epochBeacon)+binary.Size(epochNumber)+binary.Size(counter))
 	copy(message, epochBeacon)
-	binary.LittleEndian.PutUint64(message[len(epochBeacon):], epochNumber)
+	binary.LittleEndian.PutUint64(message[len(epochBeacon):], uint64(epochNumber))
 	binary.LittleEndian.PutUint32(message[len(epochBeacon)+binary.Size(epochNumber):], counter)
 	return message
 }

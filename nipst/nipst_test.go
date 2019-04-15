@@ -1,21 +1,33 @@
 package nipst
 
 import (
+	"encoding/hex"
+	"flag"
 	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/filesystem"
+	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/proving"
 	"github.com/stretchr/testify/require"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
 
+var minerID = []byte("id")
+var idsToCleanup [][]byte
+var spaceUnit = uint64(1024)
+var difficulty = proving.Difficulty(5)
+var numberOfProvenLabels = uint8(10)
+
 type PostProverClientMock struct{}
 
-func (p *PostProverClientMock) initialize(id []byte, space uint64, numberOfProvenLabels uint8, difficulty proving.Difficulty, timeout time.Duration) (*postProof, error) {
-	return &postProof{}, nil
+func (p *PostProverClientMock) initialize(id []byte, space uint64, numberOfProvenLabels uint8, difficulty proving.Difficulty, timeout time.Duration) (*PostProof, error) {
+	return &PostProof{}, nil
 }
 
-func (p *PostProverClientMock) execute(id []byte, challenge common.Hash, numberOfProvenLabels uint8, difficulty proving.Difficulty, timeout time.Duration) (*postProof, error) {
-	return &postProof{}, nil
+func (p *PostProverClientMock) execute(id []byte, challenge common.Hash, numberOfProvenLabels uint8, difficulty proving.Difficulty, timeout time.Duration) (*PostProof, error) {
+	return &PostProof{}, nil
 }
 
 type PoetProvingServiceClientMock struct{}
@@ -38,29 +50,18 @@ func (p *PoetProvingServiceClientMock) subscribeProof(r *poetRound, timeout time
 	return &poetProof{}, nil
 }
 
-type ActivationBuilderMock struct {
-	nipst chan *NIPST
-}
-
-func (a *ActivationBuilderMock) BuildActivationTx(proof *NIPST) {
-	a.nipst <- proof
-}
-
 func TestNIPSTBuilderWithMocks(t *testing.T) {
 	assert := require.New(t)
 
 	postProverMock := &PostProverClientMock{}
 	poetProverMock := &PoetProvingServiceClientMock{}
-	verifyPostMock := func(*postProof, uint64, uint8, proving.Difficulty) (bool, error) { return true, nil }
+	verifyPostMock := func(*PostProof, uint64, uint8, proving.Difficulty) (bool, error) { return true, nil }
 	verifyMembershipMock := func(*common.Hash, *membershipProof) (bool, error) { return true, nil }
 	verifyPoetMock := func(*poetProof) (bool, error) { return true, nil }
 	verifyPoetMembershipMock := func(*membershipProof, *poetProof) bool { return true }
 
-	nipstChan := make(chan *NIPST)
-	activationBuilder := &ActivationBuilderMock{nipst: nipstChan}
-
 	nb := NewNIPSTBuilder(
-		[]byte("id"),
+		minerID,
 		1024,
 		5,
 		proving.NumberOfProvenLabels,
@@ -71,19 +72,11 @@ func TestNIPSTBuilderWithMocks(t *testing.T) {
 		verifyMembershipMock,
 		verifyPoetMock,
 		verifyPoetMembershipMock,
-		activationBuilder,
 	)
-	nb.Start()
+	npst, err := nb.BuildNIPST(common.BytesToHash([]byte("anton")))
+	assert.NoError(err)
 
-	select {
-	case nipst := <-nipstChan:
-		assert.True(nipst.Valid())
-	case <-time.After(5 * time.Second):
-		assert.Fail("nipst creation timeout")
-		return
-	}
-
-	nb.Stop()
+	assert.True(npst.Valid())
 }
 
 func TestNIPSTBuilderWithClients(t *testing.T) {
@@ -91,54 +84,169 @@ func TestNIPSTBuilderWithClients(t *testing.T) {
 		t.Skip()
 	}
 
-	assert := require.New(t)
+	r := require.New(t)
 
+	nipstChallenge := common.BytesToHash([]byte("anton"))
+
+	npst := buildNIPST(r, spaceUnit, difficulty, numberOfProvenLabels, nipstChallenge)
+
+	err := validateNIPST(npst, spaceUnit, difficulty, numberOfProvenLabels, nipstChallenge)
+	r.NoError(err)
+}
+
+func buildNIPST(r *require.Assertions, spaceUnit uint64, difficulty proving.Difficulty, numberOfProvenLabels uint8, nipstChallenge common.Hash) *NIPST {
 	postProver := newPostClient()
-
 	poetProver, err := newRPCPoetHarnessClient()
+	r.NotNil(poetProver)
 	defer func() {
-		err := poetProver.CleanUp()
-		assert.NoError(err)
+		err = poetProver.CleanUp()
+		r.NoError(err)
 	}()
-	assert.NoError(err)
-	assert.NotNil(poetProver)
-
-	nipstChan := make(chan *NIPST)
-	activationBuilder := &ActivationBuilderMock{nipst: nipstChan}
-
+	r.NoError(err)
 	nb := NewNIPSTBuilder(
-		[]byte("id"),
-		1024,
-		5,
-		proving.NumberOfProvenLabels,
+		minerID,
+		spaceUnit,
+		difficulty,
+		numberOfProvenLabels,
 		600,
 		postProver,
 		poetProver,
 		verifyPost,
-		verifyMembership,
-		verifyPoet,
 		verifyPoetMembership,
-		activationBuilder,
+		verifyPoet,
+		verifyPoetMatchesMembership,
 	)
+	npst, err := nb.BuildNIPST(nipstChallenge)
+	r.NoError(err)
+	return npst
+}
 
-	done := make(chan struct{})
-	go func() {
-		select {
-		case err := <-nb.errChan:
-			assert.Fail(err.Error())
-		case <-done:
-		}
-	}()
-
-	nb.Start()
-
-	select {
-	case nipst := <-nipstChan:
-		assert.True(nipst.Valid())
-	case <-time.After(5 * time.Second):
-		assert.Fail("timeout")
+func TestNewNIPSTBuilderNotInitialized(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
 	}
 
-	nb.Stop()
-	close(done)
+	r := require.New(t)
+
+	minerIDNotInitialized := []byte("not initialized")
+	nipstChallenge := common.BytesToHash([]byte("anton"))
+
+	postProver := newPostClient()
+	poetProver, err := newRPCPoetHarnessClient()
+	r.NotNil(poetProver)
+	defer func() {
+		err = poetProver.CleanUp()
+		r.NoError(err)
+	}()
+	r.NoError(err)
+	nb := NewNIPSTBuilder(
+		minerIDNotInitialized,
+		spaceUnit,
+		difficulty,
+		numberOfProvenLabels,
+		600,
+		postProver,
+		poetProver,
+		verifyPost,
+		verifyPoetMembership,
+		verifyPoet,
+		verifyPoetMatchesMembership,
+	)
+
+	npst, err := nb.BuildNIPST(nipstChallenge)
+	r.EqualError(err, "PoST not initialized")
+	r.Nil(npst)
+
+	idsToCleanup = append(idsToCleanup, minerIDNotInitialized)
+	initialProof, err := nb.InitializePost()
+	r.NoError(err)
+	r.NotNil(initialProof)
+
+	npst, err = nb.BuildNIPST(nipstChallenge)
+	r.NoError(err)
+	r.NotNil(npst)
+
+	err = validateNIPST(npst, spaceUnit, difficulty, numberOfProvenLabels, nipstChallenge)
+	r.NoError(err)
+}
+
+func TestValidator_Validate(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	r := require.New(t)
+
+	nipstChallenge := common.BytesToHash([]byte("anton"))
+
+	npst := buildNIPST(r, spaceUnit, difficulty, numberOfProvenLabels, nipstChallenge)
+
+	err := validateNIPST(npst, spaceUnit, difficulty, numberOfProvenLabels, nipstChallenge)
+	r.NoError(err)
+
+	err = validateNIPST(npst, spaceUnit+1, difficulty, numberOfProvenLabels, nipstChallenge)
+	r.EqualError(err, "PoST space (1024) is less than a single space unit (1025)")
+
+	err = validateNIPST(npst, spaceUnit, difficulty+1, numberOfProvenLabels, nipstChallenge)
+	r.EqualError(err, "PoST proof invalid: validation failed: number of derived leaf indices (9) doesn't match number of included proven leaves (8)")
+
+	err = validateNIPST(npst, spaceUnit, difficulty, numberOfProvenLabels+5, nipstChallenge)
+	r.EqualError(err, "PoST proof invalid: validation failed: number of derived leaf indices (10) doesn't match number of included proven leaves (8)")
+
+	err = validateNIPST(npst, spaceUnit, difficulty, numberOfProvenLabels, common.BytesToHash([]byte("lerner")))
+	r.EqualError(err, "NIPST challenge is not equal to expected challenge")
+}
+
+func validateNIPST(npst *NIPST, spaceUnit uint64, difficulty proving.Difficulty, numberOfProvenLabels uint8,
+	nipstChallenge common.Hash) error {
+
+	v := &Validator{
+		PostParams: PostParams{
+			Difficulty:           difficulty,
+			NumberOfProvenLabels: numberOfProvenLabels,
+			SpaceUnit:            spaceUnit,
+		},
+		verifyPost:                  verifyPost,
+		verifyPoetMembership:        verifyPoetMembership,
+		verifyPoet:                  verifyPoet,
+		verifyPoetMatchesMembership: verifyPoetMatchesMembership,
+	}
+	return v.Validate(npst, nipstChallenge)
+}
+
+func TestMain(m *testing.M) {
+	flag.Parse()
+	initPost(minerID, spaceUnit, 0, difficulty)
+	res := m.Run()
+	cleanup()
+	os.Exit(res)
+}
+
+func initPost(id []byte, space uint64, numberOfProvenLabels uint8, difficulty proving.Difficulty) {
+	defTimeout := 5 * time.Second
+	idsToCleanup = append(idsToCleanup, id)
+	_, err := newPostClient().initialize(id, space, numberOfProvenLabels, difficulty, defTimeout)
+	logIfError(err)
+}
+
+func cleanup() {
+	matches, err := filepath.Glob("*.bin")
+	logIfError(err)
+	for _, f := range matches {
+		err = os.Remove(f)
+		logIfError(err)
+	}
+
+	postDataPath := filesystem.GetCanonicalPath(config.Post.DataFolder)
+	for _, id := range idsToCleanup {
+		labelsPath := filepath.Join(postDataPath, hex.EncodeToString(id))
+		err = os.RemoveAll(labelsPath)
+		logIfError(err)
+	}
+}
+
+func logIfError(err error) {
+	if err != nil {
+		_, _ = os.Stderr.WriteString(err.Error())
+	}
 }

@@ -42,7 +42,7 @@ func (v BlockEligibilityValidator) BlockEligible(block *types.Block) (bool, erro
 		log.Error("ATX is invalid: %v", err)
 		return false, err
 	}
-	if atxEpochNumber := atx.LayerIndex.GetEpoch(v.layersPerEpoch); epochNumber != atxEpochNumber {
+	if atxEpochNumber := atx.LayerIdx.GetEpoch(v.layersPerEpoch); epochNumber != atxEpochNumber {
 		log.Error("ATX epoch (%d) doesn't match layer ID epoch (%d)", atxEpochNumber, epochNumber)
 		return false, fmt.Errorf("activation epoch (%d) mismatch with layer epoch (%d)", atxEpochNumber,
 			epochNumber)
