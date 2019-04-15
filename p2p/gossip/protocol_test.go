@@ -342,7 +342,8 @@ func TestNeighborhood_Broadcast3(t *testing.T) {
 	// todo : Fix this test, because the first message is broadcasted `Broadcast` attaches metadata to it with the current authoring timestamp
 	// to test that the the next message doesn't get processed by the protocol we must create an exact copy of the message produced at `Broadcast`
 	net := newMockBaseNetwork()
-	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newPubkey(t), log.New("tesT", "", ""))
+	pk := p2pcrypto.NewRandomPubkey()
+	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, pk, log.New("tesT", "", ""))
 	n.Start()
 
 	addPeersAndTest(t, 20, n, net, true)
@@ -356,9 +357,9 @@ func TestNeighborhood_Broadcast3(t *testing.T) {
 	passOrDeadlock(t, net.msgwg)
 	assert.Equal(t, 1, net.processProtocolCount)
 	assert.Equal(t, 20, net.totalMessageSent())
-
-	payload, _ := newTestMessageData(t, newPubkey(t), msgB, "protocol")
-	var msg service.DirectMessage = TestMessage{nil, service.DataBytes{payload}}
+	pk2 := newPubkey(t)
+	payload, _ := newTestMessageData(t, pk2, msgB, "protocol")
+	var msg service.DirectMessage = TestMessage{pk2, service.DataBytes{payload}}
 	net.directInbox <- msg
 	passOrDeadlock(t, net.msgwg)
 	assert.Equal(t, 1, net.processProtocolCount)
