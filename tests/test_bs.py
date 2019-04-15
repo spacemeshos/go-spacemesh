@@ -399,16 +399,14 @@ def test_gossip(set_namespace, setup_clients):
     assert len(setup_clients.pods) == peers_for_gossip
 
 
-
-def test_transaction(load_config, setup_clients):
-    wait_genesis()
+def test_transaction(set_namespace, setup_clients):
     # choose client to run on
     client_ip = setup_clients.pods[0]['pod_ip']
 
     api = 'v1/nonce'
     data = '{"address":"1"}'
     out = api_call(client_ip, data, api, testconfig['namespace'])
-    assert '{"value":"ok"}' in out.decode("utf-8")
+    assert '{"value":"0"}' in out.decode("utf-8")
 
     match = re.search(r"{\"value\":\"(?P<nonce_val>\d+)\"}", out.decode("utf-8"))
     assert match
@@ -416,12 +414,11 @@ def test_transaction(load_config, setup_clients):
     assert 0 == nonce_val
 
     api = 'v1/submittransaction'
-    data = '{"sender":"1","reciever":"222","nonce":"0","amount":"100"}'
+    data = '{"srcAddress":"1","dstAddress":"222","nonce":"0","amount":"100"}'
 
     out = api_call(client_ip, data, api, testconfig['namespace'])
     assert '{"value":"ok"}' in out.decode("utf-8")
-
-    time.sleep(60 * 7)
+    time.sleep(60 * 10)
 
     api = 'v1/balance'
     data = '{"address":"222"}'
@@ -429,4 +426,4 @@ def test_transaction(load_config, setup_clients):
                          stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     (out, err) = p.communicate()
     print(out.decode("utf-8"))
-    assert '{"value":"ok"}' in out.decode("utf-8")
+    assert '{"value":"100"}' in out.decode("utf-8")
