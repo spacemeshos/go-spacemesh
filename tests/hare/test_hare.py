@@ -5,7 +5,7 @@ from pytest_testconfig import config as testconfig
 from tests.fixtures import set_namespace, load_config, bootstrap_deployment_info, client_deployment_info
 from tests.test_bs import setup_clients, save_log_on_exit, setup_oracle, setup_bootstrap, create_configmap
 from tests.test_bs import get_elastic_search_api
-from tests.test_bs import current_index
+from tests.test_bs import current_index, wait_genesis
 
 
 class Set:
@@ -76,6 +76,7 @@ EFK_LOG_PROPAGATION_DELAY = 10
 
 
 def test_hare_sanity(set_namespace, setup_clients, save_log_on_exit):
+    wait_genesis()
     # Need to wait for 1 full iteration + the time it takes the logs to propagate to ES
     delay = int(testconfig['client']['args']['hare-round-duration-sec']) * NUM_OF_EXPECTED_ROUNDS + \
             EFK_LOG_PROPAGATION_DELAY
