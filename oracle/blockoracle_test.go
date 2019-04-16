@@ -35,7 +35,7 @@ func (a mockActivationDB) GetNodeAtxIds(node types.NodeId) ([]types.AtxId, error
 func (a mockActivationDB) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
 	if id == atxID {
 		return &types.ActivationTx{ActivationTxHeader: types.ActivationTxHeader{
-				NIPSTChallenge: types.NIPSTChallenge{LayerIdx: a.layerIndex}, ActiveSetSize: a.activeSetSize, Valid: true}},
+			NIPSTChallenge: types.NIPSTChallenge{LayerIdx: a.layerIndex}, ActiveSetSize: a.activeSetSize, Valid: true}},
 			nil
 	}
 	return nil, errors.New("wrong atx id")
@@ -209,7 +209,7 @@ func TestBlockOracleValidatorInvalidProof3(t *testing.T) {
 	committeeSize := int32(10)
 	layersPerEpoch := uint16(20)
 
-	activationDB := &mockActivationDB{activeSetSize: activeSetSize, layerIndex: types.LayerID(layersPerEpoch)}
+	activationDB := &mockActivationDB{activeSetSize: activeSetSize, layerIndex: types.LayerID(layersPerEpoch * 2)}
 	beaconProvider := &EpochBeaconProvider{}
 	blockOracle := NewMinerBlockOracle(committeeSize, layersPerEpoch, activationDB, beaconProvider, vrfSigner, nodeID)
 
@@ -224,7 +224,8 @@ func TestBlockOracleValidatorInvalidProof3(t *testing.T) {
 		proof = proofs[i]
 	}
 
-	validator := NewBlockEligibilityValidator(committeeSize, layersPerEpoch, activationDB, beaconProvider,
+	validatorActivationDB := &mockActivationDB{activeSetSize: activeSetSize, layerIndex: types.LayerID(layersPerEpoch)}
+	validator := NewBlockEligibilityValidator(committeeSize, layersPerEpoch, validatorActivationDB, beaconProvider,
 		crypto.ValidateVRF)
 	block := newBlockWithEligibility(layerID, nodeID, atxID, proof)
 	eligible, err := validator.BlockEligible(block)
