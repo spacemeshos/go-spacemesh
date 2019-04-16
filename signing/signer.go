@@ -30,12 +30,12 @@ type EdSigner struct {
 }
 
 func NewEdSignerFromBuffer(buff []byte) (*EdSigner, error) {
-	if len(buff) < 32 {
+	if len(buff) != ed25519.PrivateKeySize {
 		log.Error("Could not create EdSigner from the provided buffer: buffer too small")
 		return nil, errors.New("buffer too small")
 	}
 
-	sgn := &EdSigner{privKey: buff, pubKey: buff[:32]}
+	sgn := &EdSigner{privKey: buff, pubKey: buff[32:]}
 	m := make([]byte, 4)
 	rand.Read(m)
 	sig := ed25519.Sign2(sgn.privKey, m)
