@@ -64,7 +64,7 @@ func AtxHeaderAsBytes(tx *ActivationTxHeader) ([]byte, error) {
 func AtxAsBytes(tx *ActivationTx) ([]byte, error) {
 	var w bytes.Buffer
 	if _, err := xdr.Marshal(&w, &tx); err != nil {
-		return nil, fmt.Errorf("error marshalling block ids %v", err)
+		return nil, fmt.Errorf("error marshalling atx %v", err)
 	}
 	return w.Bytes(), nil
 }

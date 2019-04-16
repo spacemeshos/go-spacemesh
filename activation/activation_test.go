@@ -57,7 +57,7 @@ func (np *NipstBuilderMock) InitializePost() (*nipst.PostProof, error) {
 
 func (np *NipstBuilderMock) BuildNIPST(challenge *common.Hash) (*nipst.NIPST, error) {
 	np.Challenge = challenge
-	return &nipst.NIPST{}, nil
+	return nipst.NewNIPSTWithChallenge(challenge), nil
 }
 
 type NipstErrBuilderMock struct{}
@@ -157,5 +157,35 @@ func TestBuilder_PublishActivationTx(t *testing.T) {
 	bt := NewBuilder(id, database.NewMemDatabase(), mesh.NewMemMeshDB(log.NewDefault("")), net, ActiveSetProviderMock{}, layers, layersPerEpcoh, &NipstBuilderMock{}, nil)
 	err = bt.PublishActivationTx(1)
 	assert.Error(t, err)
+
+}
+
+func TestBuilder_PublishActivationTxSerialize(t *testing.T) {
+	id := types.NodeId{"aaaa", []byte("bbb")}
+	net := &NetMock{}
+	echp := &EchProvider{}
+	layers := MeshProviderrMock{}
+	nipstBuilder := &NipstBuilderMock{}
+	layersPerEpcoh := uint64(10)
+	b := NewBuilder(id, database.NewMemDatabase(), mesh.NewMemMeshDB(log.NewDefault("")), net, ActiveSetProviderMock{}, layers, layersPerEpcoh, nipstBuilder, nil)
+	adb := b.db
+	prevAtx := types.AtxId{Hash: common.HexToHash("0x111")}
+	challenge1 := common.HexToHash("0x222222")
+	npst := nipst.NewNIPSTWithChallenge(&challenge1)
+
+	atx := types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")}, 1, prevAtx, 5, 1, prevAtx, 5, []types.BlockID{1, 2, 3}, npst, true)
+
+	err := adb.StoreAtx(echp.Epoch(types.LayerID(uint64(atx.LayerIdx)/layersPerEpcoh)), atx)
+	assert.NoError(t, err)
+
+	assert.NoError(t, err)
+
+	act := types.NewActivationTx(b.nodeId, b.GetLastSequence(b.nodeId)+1, atx.Id(), atx.LayerIdx+10, 0, atx.Id(), b.activeSet.ActiveSetIds(1), b.mesh.GetLatestVerified(), npst, true)
+
+	bt, err := types.AtxAsBytes(act)
+	assert.NoError(t, err)
+	a, err := types.BytesAsAtx(bt)
+	assert.NoError(t, err)
+	assert.Equal(t,  act.Nipst, a.Nipst)
 
 }

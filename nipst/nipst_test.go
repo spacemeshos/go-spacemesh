@@ -36,17 +36,17 @@ func (p *PoetProvingServiceClientMock) id() string {
 }
 
 func (p *PoetProvingServiceClientMock) submit(challenge common.Hash,
-	duration SeqWorkTicks) (*poetRound, error) {
-	return &poetRound{}, nil
+	duration SeqWorkTicks) (*PoetRound, error) {
+	return &PoetRound{}, nil
 }
 
-func (p *PoetProvingServiceClientMock) subscribeMembershipProof(r *poetRound, challenge common.Hash,
-	timeout time.Duration) (*membershipProof, error) {
-	return &membershipProof{}, nil
+func (p *PoetProvingServiceClientMock) subscribeMembershipProof(r *PoetRound, challenge common.Hash,
+	timeout time.Duration) (*MembershipProof, error) {
+	return &MembershipProof{}, nil
 }
 
-func (p *PoetProvingServiceClientMock) subscribeProof(r *poetRound, timeout time.Duration) (*poetProof, error) {
-	return &poetProof{}, nil
+func (p *PoetProvingServiceClientMock) subscribeProof(r *PoetRound, timeout time.Duration) (*PoetProof, error) {
+	return &PoetProof{}, nil
 }
 
 func TestNIPSTBuilderWithMocks(t *testing.T) {
@@ -55,9 +55,9 @@ func TestNIPSTBuilderWithMocks(t *testing.T) {
 	postProverMock := &PostProverClientMock{}
 	poetProverMock := &PoetProvingServiceClientMock{}
 	verifyPostMock := func(*PostProof, uint64, uint8, proving.Difficulty) (bool, error) { return true, nil }
-	verifyMembershipMock := func(*common.Hash, *membershipProof) (bool, error) { return true, nil }
-	verifyPoetMock := func(*poetProof) (bool, error) { return true, nil }
-	verifyPoetMembershipMock := func(*membershipProof, *poetProof) bool { return true }
+	verifyMembershipMock := func(*common.Hash, *MembershipProof) (bool, error) { return true, nil }
+	verifyPoetMock := func(*PoetProof) (bool, error) { return true, nil }
+	verifyPoetMembershipMock := func(*MembershipProof, *PoetProof) bool { return true }
 
 	nb := NewNIPSTBuilder(
 		minerID,

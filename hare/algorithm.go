@@ -278,11 +278,11 @@ func (proc *ConsensusProcess) sendMessage(msg *pb.HareMessage) {
 		return
 	}
 
-	proc.Info("Message of type %v sent", MessageType(msg.Message.Type).String())
+	//proc.Info("Message of type %v sent", MessageType(msg.Message.Type).String())
 }
 
 func (proc *ConsensusProcess) onRoundEnd() {
-	proc.With().Info("End of round", log.Int32("k", proc.k))
+	//proc.With().Info("End of round", log.Int32("k", proc.k))
 
 	// reset trackers
 	switch proc.currentRound() {

@@ -178,8 +178,8 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 		return err
 	}
 	//todo: should we do something about it? wait for something?
-	log.Info("atx published! id: %v, prevATXID: %v, posATXID: %v", atx.Id().String()[:5],
-		atx.PrevATXId.String()[:5], atx.PositioningAtx.String()[:5])
+	log.Info("atx published! id: %v, prevATXID: %v, posATXID: %v layer: %v epoch: %v", atx.Id().String()[:5],
+		atx.PrevATXId.String()[:5], atx.PositioningAtx.String()[:5], atx.LayerIdx ,atx.LayerIdx.GetEpoch(uint16(b.layersPerEpoch)))
 	return b.net.Broadcast(AtxProtocol, buf)
 
 }
