@@ -97,7 +97,7 @@ func (bo *MinerBlockOracle) calcActiveSetSize(epochNumber types.EpochId) (uint32
 
 	latestATXID, err := getLatestATXID(bo.activationDb, bo.nodeID)
 	if err != nil {
-		log.Error("failed to get latest ATX: %v", err)
+		log.Error("failed to get latest ATX: %v for epoch %v", err, epochNumber)
 		return 0, err
 	}
 	bo.atxID = latestATXID

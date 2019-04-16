@@ -107,9 +107,10 @@ func (b *Builder) loop() {
 			}
 			b.working = true
 			go func() {
-				err := b.PublishActivationTx(types.EpochId(uint64(layer) / b.layersPerEpoch))
+				epoch := types.EpochId(uint64(layer) / b.layersPerEpoch)
+				err := b.PublishActivationTx(epoch)
 				if err != nil {
-					log.Error("cannot create atx : %v", err)
+					log.Error("cannot create atx : %v in epoch %v", err, epoch)
 				}
 				b.finished <- struct{}{}
 			}()
@@ -125,7 +126,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 	if err == nil {
 		atx, err := b.db.GetAtx(*prevAtx)
 		if err != nil {
-			return err
+			return fmt.Errorf("cannot find prev atx " +err.Error())
 		}
 		if types.EpochId(uint64(atx.LayerIdx) / b.layersPerEpoch) == epoch {
 			return fmt.Errorf("atx already created for epoch %v", epoch)
@@ -141,11 +142,11 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 		//positioning atx is from the last epoch
 		posAtxId, err = b.GetPositioningAtxId(epoch - 1)
 		if err != nil {
-			return err
+			return fmt.Errorf("cannot find pos atx id " +err.Error())
 		}
 		posAtx, err := b.db.GetAtx(*posAtxId)
 		if err != nil {
-			return err
+			return fmt.Errorf("cannot find prev atx " +err.Error())
 		}
 		endTick = posAtx.EndTick
 		LayerIdx = uint64(posAtx.LayerIdx)
@@ -167,7 +168,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 	}
 	npst, err := b.nipstBuilder.BuildNIPST(hash)
 	if err != nil {
-		return err
+		return fmt.Errorf("cannot create nipst " +err.Error())
 	}
 	atx := types.NewActivationTxWithChallenge(challenge, uint32(b.activeSet.ActiveSetIds(types.EpochId(LayerIdx/b.layersPerEpoch))),
 		b.mesh.GetLatestVerified(), npst, true)

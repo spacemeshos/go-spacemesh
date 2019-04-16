@@ -47,12 +47,29 @@ type NipstBuilderMock struct {
 	Challenge *common.Hash
 }
 
+func (np *NipstBuilderMock) IsPostInitialized() bool {
+	return true
+}
+
+func (np *NipstBuilderMock) InitializePost() (*nipst.PostProof, error) {
+	return nil, nil
+}
+
 func (np *NipstBuilderMock) BuildNIPST(challenge *common.Hash) (*nipst.NIPST, error) {
 	np.Challenge = challenge
 	return &nipst.NIPST{}, nil
 }
 
 type NipstErrBuilderMock struct{}
+
+func (np *NipstErrBuilderMock) IsPostInitialized() bool {
+
+	return true
+}
+
+func (np *NipstErrBuilderMock) InitializePost() (*nipst.PostProof, error) {
+	return nil, nil
+}
 
 func (np *NipstErrBuilderMock) BuildNIPST(challenge *common.Hash) (*nipst.NIPST, error) {
 	return nil, fmt.Errorf("error")
@@ -135,7 +152,7 @@ func TestBuilder_PublishActivationTx(t *testing.T) {
 	b.nipstBuilder = &NipstErrBuilderMock{}
 	err = b.PublishActivationTx(0)
 	assert.Error(t, err)
-	assert.Equal(t, err.Error(), "error")
+	assert.Equal(t, err.Error(), "cannot create nipst error")
 
 	bt := NewBuilder(id, database.NewMemDatabase(), mesh.NewMemMeshDB(log.NewDefault("")), net, ActiveSetProviderMock{}, layers, layersPerEpcoh, &NipstBuilderMock{}, nil)
 	err = bt.PublishActivationTx(1)
