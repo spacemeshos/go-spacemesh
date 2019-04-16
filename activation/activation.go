@@ -120,6 +120,9 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 		if err != nil {
 			return err
 		}
+		if types.EpochId(uint64(atx.LayerIdx) / b.layersPerEpoch) == epoch {
+			return fmt.Errorf("atx already created for epoch %v", epoch)
+		}
 		seq = atx.Sequence + 1
 	} else {
 		prevAtx = &types.EmptyAtxId

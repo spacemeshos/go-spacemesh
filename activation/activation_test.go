@@ -127,8 +127,13 @@ func TestBuilder_PublishActivationTx(t *testing.T) {
 	assert.Equal(t, bts, net.bt)
 	assert.Equal(t, bytes, nipstBuilder.Challenge)
 
+	//test publish 2 transaction in same epoch
+	err = b.PublishActivationTx(0)
+	assert.Error(t, err)
+
+	b = NewBuilder(id, database.NewMemDatabase(), mesh.NewMemMeshDB(log.NewDefault("")), net, ActiveSetProviderMock{}, layers, layersPerEpcoh, nipstBuilder, nil)
 	b.nipstBuilder = &NipstErrBuilderMock{}
-	err = b.PublishActivationTx(echp.Epoch(1))
+	err = b.PublishActivationTx(0)
 	assert.Error(t, err)
 	assert.Equal(t, err.Error(), "error")
 
