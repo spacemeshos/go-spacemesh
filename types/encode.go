@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"github.com/davecgh/go-xdr/xdr2"
 	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/nipst"
+	"github.com/spacemeshos/poet-ref/shared"
 	"sort"
 )
 
@@ -71,7 +73,60 @@ func AtxAsBytes(tx *ActivationTx) ([]byte, error) {
 
 func BytesAsAtx(b []byte) (*ActivationTx, error) {
 	buf := bytes.NewReader(b)
-	atx := ActivationTx{}
+	atx := ActivationTx{
+		ActivationTxHeader: ActivationTxHeader{
+			NIPSTChallenge: NIPSTChallenge{
+				NodeId: NodeId{
+					Key:          "",
+					VRFPublicKey: nil,
+				},
+				Sequence: 0,
+				PrevATXId: AtxId{
+					Hash: common.Hash{},
+				},
+				LayerIdx:  0,
+				StartTick: 0,
+				EndTick:   0,
+				PositioningAtx: AtxId{
+					Hash: common.Hash{},
+				},
+			},
+			VerifiedActiveSet: 0,
+			ActiveSetSize:     0,
+			View:              nil,
+			Valid:             false,
+		},
+		Nipst: &nipst.NIPST{
+			Id:             nil,
+			Space:          0,
+			Duration:       0,
+			NipstChallenge: nil,
+			PoetRound: &nipst.PoetRound{
+				Id: 0,
+			},
+			PoetMembershipProof: &nipst.MembershipProof{
+				Index: 0,
+				Root:  common.Hash{},
+				Proof: nil,
+			},
+			PoetProof: &nipst.PoetProof{
+				Commitment: nil,
+				N:          0,
+				Proof: &shared.Proof{
+					Phi: nil,
+					L:   [150]shared.Labels{},
+				},
+			},
+			PostChallenge: nil,
+			PostProof: &nipst.PostProof{
+				Identity:     nil,
+				Challenge:    nil,
+				MerkleRoot:   nil,
+				ProofNodes:   nil,
+				ProvenLeaves: nil,
+			},
+		},
+	}
 	_, err := xdr.Unmarshal(buf, &atx)
 	if err != nil {
 		return nil, err

@@ -8,6 +8,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/poet-ref/shared"
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/proving"
 	"os"
@@ -362,6 +363,33 @@ func (nb *NIPSTBuilder) InitializePost() (*PostProof, error) {
 
 func NewNIPSTWithChallenge(challenge *common.Hash) *NIPST {
 	return &NIPST{
+		Id:             []byte{},
+		Space:          0,
+		Duration:       0,
+		NipstChallenge: challenge,
+		PoetRound: &PoetRound{
+			Id: 0,
+		},
+		PoetMembershipProof: &MembershipProof{
+			Index: 0,
+			Root:  common.Hash{},
+			Proof: [][]byte{},
+		},
+		PoetProof: &PoetProof{
+			Commitment: []byte{},
+			N:          0,
+			Proof: &shared.Proof{
+				Phi: []byte{},
+				L:   [150]shared.Labels{},
+			},
+		},
 		PostChallenge: challenge,
+		PostProof: &PostProof{
+			Identity: []byte{},
+			Challenge: []byte{},
+			MerkleRoot: []byte{},
+			ProofNodes: [][]byte{},
+			ProvenLeaves: [][]byte{},
+		},
 	}
 }

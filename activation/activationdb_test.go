@@ -2,6 +2,7 @@ package activation
 
 import (
 	"github.com/google/uuid"
+	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -153,7 +154,9 @@ func TestMesh_processBlockATXs(t *testing.T) {
 	id1 := types.NodeId{Key: uuid.New().String()}
 	id2 := types.NodeId{Key: uuid.New().String()}
 	id3 := types.NodeId{Key: uuid.New().String()}
-	posATX := types.NewActivationTx(types.NodeId{}, 0, types.EmptyAtxId, 1000, 0, types.EmptyAtxId, 0, []types.BlockID{}, &nipst.NIPST{}, true)
+	chlng := common.HexToHash("0x3333")
+	npst := nipst.NewNIPSTWithChallenge(&chlng)
+	posATX := types.NewActivationTx(types.NodeId{}, 0, types.EmptyAtxId, 1000, 0, types.EmptyAtxId, 0, []types.BlockID{}, npst, true)
 	err := atxdb.StoreAtx(0, posATX)
 	assert.NoError(t, err)
 	atxs := []*types.ActivationTx{
@@ -256,7 +259,9 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	blocks = createLayerWithAtx(layers, atxdb, 100, 10, []*types.ActivationTx{}, blocks, blocks)
 
 	//atx := types.NewActivationTx(id1, 1, atxs[0].Id(), 1000, 0, atxs[0].Id(), 3, blocks, &nipst.NIPST{})
-	prevAtx := types.NewActivationTx(idx1, 0, types.EmptyAtxId, 100, 0, types.EmptyAtxId, 3, blocks, &nipst.NIPST{}, true)
+	chlng := common.HexToHash("0x3333")
+	npst := nipst.NewNIPSTWithChallenge(&chlng)
+	prevAtx := types.NewActivationTx(idx1, 0, types.EmptyAtxId, 100, 0, types.EmptyAtxId, 3, blocks, npst, true)
 	prevAtx.Valid = true
 
 	err := atxdb.StoreAtx(1, prevAtx)
@@ -284,7 +289,7 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	assert.Error(t, err)
 
 	//wrong layerId
-	atx = types.NewActivationTx(idx1, 1, prevAtx.Id(), 12, 0, prevAtx.Id(), 3, []types.BlockID{}, &nipst.NIPST{}, true)
+	atx = types.NewActivationTx(idx1, 1, prevAtx.Id(), 12, 0, prevAtx.Id(), 3, []types.BlockID{}, npst, true)
 	err = atxdb.ValidateAtx(atx)
 	assert.Error(t, err)
 
