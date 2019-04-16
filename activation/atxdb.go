@@ -28,23 +28,26 @@ func NewActivationDb(dbstore database.DB, meshDb *mesh.MeshDB, layersPerEpoch ui
 
 func (db *ActivationDb) ProcessBlockATXs(blk *types.Block) {
 	for _, atx := range blk.ATXs {
-		activeSet, err := db.CalcActiveSetFromView(atx)
-		if err != nil {
-			log.Error("could not calculate active set for %v", atx.Id())
-		}
-		//todo: maybe there is a potential bug in this case if count for the view can change between calls to this function
-		atx.VerifiedActiveSet = activeSet
+		db.ProcessAtx(atx)
+	}
+}
 
-		err = db.ValidateAtx(atx)
-		//todo: should we store invalid atxs
-		if err != nil {
-			log.Warning("ATX failed validation: %v", err)
-		}
-		atx.Valid = err == nil
-		err = db.StoreAtx(types.EpochId(atx.LayerIdx/db.LayersPerEpoch), atx)
-		if err != nil {
-			log.Error("cannot store atx: %v", atx)
-		}
+func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx) {
+	activeSet, err := db.CalcActiveSetFromView(atx)
+	if err != nil {
+		log.Error("could not calculate active set for %v", atx.Id())
+	}
+	//todo: maybe there is a potential bug in this case if count for the view can change between calls to this function
+	atx.VerifiedActiveSet = activeSet
+	err = db.ValidateAtx(atx)
+	//todo: should we store invalid atxs
+	if err != nil {
+		log.Warning("ATX failed validation: %v", err)
+	}
+	atx.Valid = err == nil
+	err = db.StoreAtx(types.EpochId(atx.LayerIdx/db.LayersPerEpoch), atx)
+	if err != nil {
+		log.Error("cannot store atx: %v", atx)
 	}
 }
 

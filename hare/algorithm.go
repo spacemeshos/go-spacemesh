@@ -235,7 +235,7 @@ func (proc *ConsensusProcess) handleMessage(m *pb.HareMessage) {
 }
 
 func (proc *ConsensusProcess) processMsg(m *pb.HareMessage) {
-	proc.Info("Processing message of type %v", MessageType(m.Message.Type).String())
+	//proc.Info("Processing message of type %v", MessageType(m.Message.Type).String())
 
 	metrics.MessageTypeCounter.With("type_id", MessageType(m.Message.Type).String()).Add(1)
 
