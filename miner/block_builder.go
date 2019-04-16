@@ -143,13 +143,13 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 	var res []types.BlockID = nil
 	var err error
 	if id == config.Genesis {
-		return nil, errors.New("cannot create block in genesis layer ")
+		return nil, errors.New("cannot create block in genesis layer")
 	} else if id == config.Genesis+1 {
 		res = append(res, config.GenesisId)
 	} else {
 		res, err = t.hareResult.GetResult(id - 1)
 		if err != nil {
-			return nil, errors.New(fmt.Sprintf("didnt receive hare result for layer %v", id-1))
+			return nil, errors.New(fmt.Sprintf("didn't receive hare result for layer %v %v", id-1, err))
 		}
 	}
 
@@ -175,7 +175,8 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 		Txs:  txs,
 	}
 
-	t.Log.Info("Iv'e created block in layer %v id %v, num of transactions %v votes %d viewEdges %d", b.LayerIndex, b.Id, len(b.Txs), len(b.BlockVotes), len(b.ViewEdges))
+	t.Log.Info("I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d, viewEdges: %d",
+		b.LayerIndex, b.Id, len(b.Txs), len(b.BlockVotes), len(b.ViewEdges))
 	return &b, nil
 }
 
@@ -192,10 +193,9 @@ func (t *BlockBuilder) listenForTx() {
 					log.String("amount", x.AmountAsBigInt().String()), log.Uint64("nonce", x.AccountNonce), log.Bool("valid", err != nil))
 				if err != nil {
 					t.Log.Error("cannot parse incoming TX")
-					data.ReportValidation(IncomingTxProtocol, false)
 					break
 				}
-				data.ReportValidation(IncomingTxProtocol, true)
+				data.ReportValidation(IncomingTxProtocol)
 				t.newTrans <- x
 			}
 		}
@@ -215,10 +215,9 @@ func (t *BlockBuilder) listenForAtx() {
 				log.String("amount", x.AmountAsBigInt().String()), log.Uint64("nonce", x.AccountNonce), log.Bool("valid", err != nil))*/
 				if err != nil {
 					t.Log.Error("cannot parse incoming ATX")
-					data.ReportValidation(activation.AtxProtocol, false)
 					break
 				}
-				data.ReportValidation(activation.AtxProtocol, true)
+				data.ReportValidation(activation.AtxProtocol)
 				t.newAtx <- x
 			}
 		}

@@ -42,6 +42,8 @@ func (provider *PoETNumberOfTickProvider) NumOfTicks() uint64 {
 
 type NipstBuilder interface {
 	BuildNIPST(challenge *common.Hash) (*nipst.NIPST, error)
+	IsPostInitialized() bool
+	InitializePost() (*nipst.PostProof, error)
 }
 
 type Builder struct {
@@ -66,22 +68,20 @@ type Processor struct {
 
 func NewBuilder(nodeId types.NodeId, db database.DB, meshdb *mesh.MeshDB, net Broadcaster, activeSet ActiveSetProvider, view MeshProvider, layersPerEpoch uint64, nipstBuilder NipstBuilder, layerClock chan types.LayerID) *Builder {
 	return &Builder{
-		nodeId,
-		NewActivationDb(db, meshdb, layersPerEpoch),
-		net,
-		activeSet,
-		view,
-		layersPerEpoch,
-		PoETNumberOfTickProvider{},
-		nipstBuilder,
-		layerClock,
-		make(chan struct{}),
-		make(chan struct{}),
-		false,
+		nodeId:         nodeId,
+		db:             NewActivationDb(db, meshdb, layersPerEpoch),
+		net:            net,
+		activeSet:      activeSet,
+		mesh:           view,
+		layersPerEpoch: layersPerEpoch,
+		nipstBuilder:   nipstBuilder,
+		timer:          layerClock,
+		stop:           make(chan struct{}),
+		finished:       make(chan struct{}),
 	}
 }
 
-func (b *Builder) Start(){
+func (b *Builder) Start() {
 	go b.loop()
 }
 
@@ -90,6 +90,13 @@ func (b *Builder) Stop() {
 }
 
 func (b *Builder) loop() {
+	if !b.nipstBuilder.IsPostInitialized() {
+		_, err := b.nipstBuilder.InitializePost() // TODO: add proof to first ATX
+		if err != nil {
+			log.Error("PoST initialization failed: %v", err)
+			return
+		}
+	}
 	for {
 		select {
 		case <-b.stop:
@@ -162,7 +169,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 	if err != nil {
 		return err
 	}
-	atx := types.NewActivationTxWithChallenge(challenge, uint32(b.activeSet.ActiveSetIds(types.EpochId(LayerIdx / b.layersPerEpoch))),
+	atx := types.NewActivationTxWithChallenge(challenge, uint32(b.activeSet.ActiveSetIds(types.EpochId(LayerIdx/b.layersPerEpoch))),
 		b.mesh.GetLatestVerified(), npst, true)
 
 	buf, err := types.AtxAsBytes(atx)
@@ -170,6 +177,8 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 		return err
 	}
 	//todo: should we do something about it? wait for something?
+	log.Info("atx published! id: %v, prevATXID: %v, posATXID: %v", atx.Id().String()[:5],
+		atx.PrevATXId.String()[:5], atx.PositioningAtx.String()[:5])
 	return b.net.Broadcast(AtxProtocol, buf)
 
 }

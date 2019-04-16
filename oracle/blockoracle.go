@@ -3,11 +3,14 @@ package oracle
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spacemeshos/sha256-simd"
 )
+
+const GenesisActiveSetSize = 10
 
 type ActivationDb interface {
 	GetNodeAtxIds(node types.NodeId) ([]types.AtxId, error)
@@ -44,34 +47,27 @@ func NewMinerBlockOracle(committeeSize int32, layersPerEpoch uint16, activationD
 func (bo *MinerBlockOracle) BlockEligible(layerID types.LayerID) (types.AtxId, []types.BlockEligibilityProof, error) {
 
 	epochNumber := layerID.GetEpoch(bo.layersPerEpoch)
-
+	log.Info("asked for eligibility for epoch %d (cached: %d)", epochNumber, bo.proofsEpoch)
 	if bo.proofsEpoch != epochNumber {
 		err := bo.calcEligibilityProofs(epochNumber)
 		if err != nil {
+			log.Error("failed to calculate eligibility proofs: %v", err)
 			return types.AtxId{}, nil, err
 		}
 	}
-
+	log.Info("miner \"%v…\" found eligible for %d blocks in layer %d", bo.nodeID.Key[:5], len(bo.eligibilityProofs[layerID]), layerID)
 	return bo.atxID, bo.eligibilityProofs[layerID], nil
 }
 
 func (bo *MinerBlockOracle) calcEligibilityProofs(epochNumber types.EpochId) error {
 	epochBeacon := bo.beaconProvider.GetBeacon(epochNumber)
 
-	latestATXID, err := getLatestATXID(bo.activationDb, bo.nodeID)
+	activeSetSize, err := bo.calcActiveSetSize(epochNumber)
 	if err != nil {
-		log.Error("failed to get latest ATX: %v", err)
-		return err
+		log.Error("failed to calculate active set size: %v", err)
+		return fmt.Errorf("failed to calculate active set size: %v", err)
 	}
-	bo.atxID = latestATXID
-
-	atx, err := bo.activationDb.GetAtx(latestATXID)
-	if err != nil {
-		log.Error("getting ATX failed: %v", err)
-		return err
-	}
-
-	numberOfEligibleBlocks, err := getNumberOfEligibleBlocks(atx.ActiveSetSize, bo.committeeSize, bo.layersPerEpoch)
+	numberOfEligibleBlocks, err := getNumberOfEligibleBlocks(activeSetSize, bo.committeeSize, bo.layersPerEpoch)
 	if err != nil {
 		log.Error("failed to get number of eligible blocks: %v", err)
 		return err
@@ -89,7 +85,29 @@ func (bo *MinerBlockOracle) calcEligibilityProofs(epochNumber types.EpochId) err
 		})
 	}
 	bo.proofsEpoch = epochNumber
+	log.Info("miner \"%v…\" is eligible for blocks on %d layers in epoch %d", bo.nodeID.Key[:5], len(bo.eligibilityProofs), epochNumber)
 	return nil
+}
+
+func (bo *MinerBlockOracle) calcActiveSetSize(epochNumber types.EpochId) (uint32, error) {
+	if epochNumber.IsGenesis() {
+		log.Warning("genesis epoch detected, using GenesisActiveSetSize (%d)", GenesisActiveSetSize)
+		return GenesisActiveSetSize, nil
+	}
+
+	latestATXID, err := getLatestATXID(bo.activationDb, bo.nodeID)
+	if err != nil {
+		log.Error("failed to get latest ATX: %v", err)
+		return 0, err
+	}
+	bo.atxID = latestATXID
+	atx, err := bo.activationDb.GetAtx(latestATXID)
+	if err != nil {
+		log.Error("getting ATX failed: %v", err)
+		return 0, err
+	}
+	activeSetSize := atx.ActiveSetSize
+	return activeSetSize, nil
 }
 
 func calcEligibleLayer(epochNumber types.EpochId, layersPerEpoch uint16, vrfHash [32]byte) types.LayerID {

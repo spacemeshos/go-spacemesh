@@ -12,6 +12,10 @@ type EpochId uint64
 
 func (l EpochId) ToBytes() []byte { return common.Uint64ToBytes(uint64(l)) }
 
+func (l EpochId) IsGenesis() bool {
+	return l == 0
+}
+
 type AtxId struct {
 	common.Hash
 }

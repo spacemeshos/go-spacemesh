@@ -2,33 +2,37 @@ package node
 
 import (
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/address"
 	apiCfg "github.com/spacemeshos/go-spacemesh/api/config"
+	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	sync2 "github.com/spacemeshos/go-spacemesh/sync"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spacemeshos/poet-ref/integration"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	"math/big"
 	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/stretchr/testify/assert"
 )
 
 type AppTestSuite struct {
 	suite.Suite
 
-	apps []*SpacemeshApp
-	dbs  []string
+	apps        []*SpacemeshApp
+	dbs         []string
+	poetCleanup func() error
 }
 
 func (app *AppTestSuite) SetupTest() {
@@ -49,24 +53,37 @@ func NewRPCPoetHarnessClient() (*nipst.RPCPoetClient, error) {
 }
 
 func (app *AppTestSuite) TearDownTest() {
+	if err := app.poetCleanup(); err != nil {
+		log.Error("error while cleaning up PoET: %v", err)
+	}
 	for _, dbinst := range app.dbs {
-		err := os.RemoveAll(dbinst)
-		if err != nil {
+		if err := os.RemoveAll(dbinst); err != nil {
 			panic(fmt.Sprintf("what happened : %v", err))
 		}
 	}
-	err := os.RemoveAll("../tmp")
-	if err != nil {
-		log.Error("error while cleaning up: %v", err)
+	if err := os.RemoveAll("../tmp"); err != nil {
+		log.Error("error while cleaning up tmp dir: %v", err)
+	}
+	if matches, err := filepath.Glob("*.bin"); err != nil {
+		log.Error("error while finding PoET bin files: %v", err)
+	} else {
+		for _, f := range matches {
+			if err = os.Remove(f); err != nil {
+				log.Error("error while cleaning up PoET bin files: %v", err)
+			}
+		}
 	}
 }
 
-func (app *AppTestSuite) initMultipleInstances(t *testing.T, numOfInstances int, storeFormat string) {
+func (app *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat string) {
+	r := require.New(app.T())
+
 	net := service.NewSimulator()
 	runningName := 'a'
 	rolacle := eligibility.New()
 	poet, err := NewRPCPoetHarnessClient()
-	assert.NoError(t, err)
+	r.NoError(err)
+	app.poetCleanup = poet.CleanUp
 	for i := 0; i < numOfInstances; i++ {
 		smApp := NewSpacemeshApp()
 		smApp.Config.HARE.N = numOfInstances
@@ -75,19 +92,28 @@ func (app *AppTestSuite) initMultipleInstances(t *testing.T, numOfInstances int,
 		sgn := hare.NewMockSigning() //todo: shouldn't be any mock code here
 		pub := sgn.Verifier()
 
-		nodeId := types.NodeId{Key: pub.String()}
+		vrfPublicKey, vrfPrivateKey, err := crypto.GenerateVRFKeys()
+		r.NoError(err)
+		nodeID := types.NodeId{Key: pub.String(), VRFPublicKey: vrfPublicKey}
+		vrfSigner := crypto.NewVRFSigner(vrfPrivateKey)
 		swarm := net.NewNode()
 		dbStorepath := storeFormat + string(runningName)
 
-		blockOracle := oracle.NewLocalOracle(rolacle, numOfInstances, nodeId)
-		blockOracle.Register(true, pub.String())
+		dbStore := database.NewMemDatabase()
+		meshDB := mesh.NewMemMeshDB(log.Log{})
+		layersPerEpoch := smApp.Config.CONSENSUS.LayersPerEpoch
+		activationDB := activation.NewActivationDb(dbStore, meshDB, uint64(layersPerEpoch))
+		beaconProvider := &oracle.EpochBeaconProvider{}
+		blockOracle := oracle.NewMinerBlockOracle(int32(numOfInstances), layersPerEpoch, activationDB, beaconProvider, vrfSigner, nodeID)
+		blockValidator := oracle.NewBlockEligibilityValidator(int32(numOfInstances), layersPerEpoch, activationDB, beaconProvider, crypto.ValidateVRF)
 
-		blockValidator := sync2.BlockValidatorMock{}
-		hareOracle := blockOracle
+		hareOracle := oracle.NewLocalOracle(rolacle, numOfInstances, nodeID)
+		hareOracle.Register(true, pub.String())
+
 		layerSize := numOfInstances
 
-		err := smApp.initServices(nodeId, swarm, dbStorepath, sgn, blockOracle, blockValidator, hareOracle, layerSize, nipst.NewPostClient(), poet)
-		assert.NoError(t, err)
+		err = smApp.initServices(nodeID, swarm, dbStorepath, sgn, blockOracle, blockValidator, hareOracle, layerSize, nipst.NewPostClient(), poet)
+		r.NoError(err)
 		smApp.setupGenesis(apiCfg.DefaultGenesisConfig())
 
 		app.apps = append(app.apps, smApp)
@@ -111,7 +137,7 @@ func (app *AppTestSuite) TestMultipleNodes() {
 
 	txbytes, _ := types.TransactionAsBytes(&tx)
 	path := "../tmp/test/state_" + time.Now().String()
-	app.initMultipleInstances(app.T(), 10, path)
+	app.initMultipleInstances(10, path)
 	for _, a := range app.apps {
 		a.startServices()
 	}
@@ -119,12 +145,14 @@ func (app *AppTestSuite) TestMultipleNodes() {
 	_ = app.apps[0].P2P.Broadcast(miner.IncomingTxProtocol, txbytes)
 	timeout := time.After(2 * 60 * time.Second)
 
+	stickyClientsDone := 0
 	for {
 		select {
 		// Got a timeout! fail with a timeout error
 		case <-timeout:
-			app.T().Fatal("timed out ")
+			app.T().Fatal("timed out")
 		default:
+			maxClientsDone := 0
 			for idx, ap := range app.apps {
 				if big.NewInt(10).Cmp(ap.state.GetBalance(dst)) == 0 {
 					clientsDone := 0
@@ -134,16 +162,22 @@ func (app *AppTestSuite) TestMultipleNodes() {
 							r2 := ap2.state.IntermediateRoot(false).String()
 							if r1 == r2 {
 								clientsDone++
-								log.Info("%d roots confirmed out of %d", clientsDone, len(app.apps))
 								if clientsDone == len(app.apps)-1 {
+									log.Info("%d roots confirmed out of %d", clientsDone, len(app.apps))
 									app.gracefulShutdown()
 									return
 								}
 							}
 						}
 					}
-
+					if clientsDone > maxClientsDone {
+						maxClientsDone = clientsDone
+					}
 				}
+			}
+			if maxClientsDone != stickyClientsDone {
+				stickyClientsDone = maxClientsDone
+				log.Info("%d roots confirmed out of %d", maxClientsDone, len(app.apps))
 			}
 			time.Sleep(1 * time.Millisecond)
 		}
