@@ -295,6 +295,11 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	//todo: put in config
 	atxdb := activation.NewActivationDb(atxdbstore, mdb, 1000)
 	trtl := tortoise.NewAlgorithm(layerSize, mdb, lg.WithName("trtl"))
+	iddbstore, err := database.NewLDBDatabase(dbStorepath+"ids", 0, 0)
+	if err != nil {
+		return err
+	}
+	idStore := activation.NewIdentityStore(iddbstore)
 	msh := mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, processor, lg.WithName("mesh")) //todo: what to do with the logger?
 
 	conf := sync.Configuration{SyncInterval: 1 * time.Second, Concurrency: 4, LayerSize: int(layerSize), RequestTimeout: 100 * time.Millisecond}

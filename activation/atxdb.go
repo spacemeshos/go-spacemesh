@@ -20,10 +20,11 @@ type ActivationDb struct {
 	atxs           database.DB
 	meshDb         *mesh.MeshDB
 	LayersPerEpoch types.LayerID
+	ids IdStore
 }
 
-func NewActivationDb(dbstore database.DB, meshDb *mesh.MeshDB, layersPerEpoch uint64) *ActivationDb {
-	return &ActivationDb{atxs: dbstore, meshDb: meshDb, LayersPerEpoch: types.LayerID(layersPerEpoch)}
+func NewActivationDb(dbstore database.DB, idstore IdStore, meshDb *mesh.MeshDB, layersPerEpoch uint64) *ActivationDb {
+	return &ActivationDb{atxs: dbstore, meshDb: meshDb, LayersPerEpoch: types.LayerID(layersPerEpoch), ids:idstore}
 }
 
 func (db *ActivationDb) ProcessBlockATXs(blk *types.Block) {
@@ -37,6 +38,12 @@ func (db *ActivationDb) ProcessBlockATXs(blk *types.Block) {
 		err = db.StoreAtx(types.EpochId(atx.LayerIdx/db.LayersPerEpoch), atx)
 		if err != nil {
 			log.Error("cannot store atx: %v", atx)
+			continue
+		}
+		err = db.ids.StoreNodeIdentity(atx.NodeId)
+		if err != nil {
+			log.Error("cannot store id: %v", atx.NodeId.String())
+			continue
 		}
 	}
 }
@@ -276,6 +283,26 @@ func (db *ActivationDb) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
 		return nil, err
 	}
 	return atx, nil
+}
+
+func (db *ActivationDb) IsIdentityActive(edsig string, layer types.LayerID) (bool, error){
+	epoch := layer.GetEpoch(uint16(db.LayersPerEpoch))
+	nodeId, err := db.ids.GetIdentity(edsig)
+	if err != nil {
+		return false, err
+	}
+	ids, err := db.GetNodeAtxIds(nodeId)
+	if err != nil {
+		return false, err
+	}
+	if len(ids) == 0 {
+		return false, fmt.Errorf("no active IDs")
+	}
+	atx, err := db.GetAtx(ids[len(ids)-1])
+	if err != nil {
+		return false, nil
+	}
+	return atx.Valid && atx.LayerIdx.GetEpoch(uint16(db.LayersPerEpoch)) == epoch, err
 }
 
 func decodeAtxIds(idsBytes []byte) ([]types.AtxId, error) {
