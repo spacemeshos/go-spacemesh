@@ -34,7 +34,7 @@ func (db *ActivationDb) ProcessBlockATXs(blk *types.Block) {
 
 func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx) {
 	epoch := types.EpochId(atx.LayerIdx / db.LayersPerEpoch)
-	log.Info("processing atx id %v, epoch %v", atx.Id().String()[:5], epoch)
+	log.Info("processing atx id %v, epoch %v", atx.Id().String()[2:7], epoch)
 	activeSet, err := db.CalcActiveSetFromView(atx)
 	if err != nil {
 		log.Error("could not calculate active set for %v", atx.Id())
@@ -44,7 +44,7 @@ func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx) {
 	err = db.ValidateAtx(atx)
 	//todo: should we store invalid atxs
 	if err != nil {
-		log.Warning("ATX failed validation: %v", err)
+		log.Warning("ATX %v failed validation: %v", atx.Id().String()[2:7], err)
 	}
 	atx.Valid = err == nil
 	err = db.StoreAtx(epoch, atx)

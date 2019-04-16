@@ -307,7 +307,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 
 	postDifficulty := proving.Difficulty(5) // TODO: put this in config (long term - make it dynamically calculated)
 	nipstBuilder := nipst.NewNipstBuilder([]byte(nodeID.Key), 1024, postDifficulty, 100, postClient, poetClient)
-	atxBuilder := activation.NewBuilder(nodeID, atxdbstore, mdb, swarm, atxdb, msh, uint64(app.Config.CONSENSUS.LayersPerEpoch), nipstBuilder, clock.Subscribe())
+	atxBuilder := activation.NewBuilder(nodeID, atxdbstore, mdb, swarm, atxdb, msh, app.Config.CONSENSUS.LayersPerEpoch, nipstBuilder, clock.Subscribe())
 
 	app.blockProducer = &blockProducer
 	app.blockListener = blockListener
