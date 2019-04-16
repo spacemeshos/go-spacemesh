@@ -33,8 +33,8 @@ func (db *ActivationDb) ProcessBlockATXs(blk *types.Block) {
 }
 
 func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx) {
-	epoch := types.EpochId(atx.LayerIdx/db.LayersPerEpoch)
-	log.Info("processing atx id %v, epoch %v", atx.Id().String()[:5],epoch)
+	epoch := types.EpochId(atx.LayerIdx / db.LayersPerEpoch)
+	log.Info("processing atx id %v, epoch %v", atx.Id().String()[:5], epoch)
 	activeSet, err := db.CalcActiveSetFromView(atx)
 	if err != nil {
 		log.Error("could not calculate active set for %v", atx.Id())
@@ -162,7 +162,11 @@ func (db *ActivationDb) ValidateAtx(atx *types.ActivationTx) error {
 			return fmt.Errorf("distance between pos atx invalid %v ", atx.LayerIdx-posAtx.LayerIdx)
 		}
 	} else {
-		if atx.LayerIdx/db.LayersPerEpoch != 0 {
+		epoch := atx.LayerIdx.GetEpoch(uint16(db.LayersPerEpoch))
+		if epoch == 0 {
+			return fmt.Errorf("atx epoch cannot be 0")
+		}
+		if !(epoch - 1).IsGenesis() {
 			return fmt.Errorf("no positioning atx found")
 		}
 	}

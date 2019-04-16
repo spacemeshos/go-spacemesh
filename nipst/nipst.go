@@ -78,8 +78,7 @@ type NIPST struct {
 	Duration SeqWorkTicks
 
 	// nipstChallenge is the challenge for PoET which is
-	// constructed from the PoST commitment for the initial NIPST (per id),
-	// and from the previous NIPSTs chain for all the following.
+	// constructed from fields in the activation transaction.
 	NipstChallenge *common.Hash
 
 	// poetRound is the round of the PoET proving service
@@ -127,7 +126,11 @@ func (n *NIPST) Valid() bool {
 }
 
 func (n *NIPST) ValidateNipstChallenge(expectedChallenge *common.Hash) bool {
-	return bytes.Equal(expectedChallenge[:], n.NipstChallenge[:])
+	ret := bytes.Equal(expectedChallenge[:], n.NipstChallenge[:])
+	if !ret {
+		log.Warning("expectedChallenge: %x, n.nipstChallenge: %x", expectedChallenge, n.NipstChallenge)
+	}
+	return ret
 }
 
 type ActivationBuilder interface {
