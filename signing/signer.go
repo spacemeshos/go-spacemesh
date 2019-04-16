@@ -1,11 +1,11 @@
 package signing
 
 import (
+	"bytes"
 	"errors"
 	"github.com/btcsuite/btcutil/base58"
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/rand"
 )
 
 type PublicKey struct {
@@ -36,10 +36,8 @@ func NewEdSignerFromBuffer(buff []byte) (*EdSigner, error) {
 	}
 
 	sgn := &EdSigner{privKey: buff, pubKey: buff[32:]}
-	m := make([]byte, 4)
-	rand.Read(m)
-	sig := ed25519.Sign2(sgn.privKey, m)
-	if !ed25519.Verify2(sgn.pubKey, m, sig) {
+	priv := ed25519.NewKeyFromSeed(sgn.privKey[:32])
+	if !bytes.Equal(priv[32:], sgn.pubKey) {
 		log.Error("Public key and private key does not match. Could not verify the signed message")
 		return nil, errors.New("private and public does not match")
 	}
