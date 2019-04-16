@@ -170,7 +170,6 @@ func (mc *MeshDB) ForBlockInView(view map[types.BlockID]struct{}, layer types.La
 
 		block, err := mc.GetMiniBlock(a)
 		if err != nil {
-			//todo: add err returned from handler, if error is returned return it, if not - keep going
 			return err
 		}
 
