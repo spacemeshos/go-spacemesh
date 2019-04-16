@@ -2,33 +2,34 @@ namespace: almog
 
 config_map_name: conf
 
-script_on_exit: '' # Uncomment this to save logs './k8s/log-client-pods.sh'
+script_on_exit: '' #'./k8s/log-client-pods.sh'
 
-genesis_delta: 120
+genesis_delta: 90
 deployment_ready_time_out: 120
 
 bootstrap:
-  image: 'spacemeshos/go-spacemesh-dev:almog128'
-  command: '/bin/go-spacemesh'
+  image: 'spacemeshos/go-spacemesh-dev:develop'
+  command: '/bin/go-sync'
   replicas: 1
   args:
     randcon: '8'
     hare-committee-size: '20'
-    hare-max-adversaries: '9'
+    hare-max-adversaries: '12'
     hare-round-duration-sec: '10'
     layer-duration-sec: '60'
-    layer-average-size: '20'
+    data-folder: 'data'
+
 client:
-  image: 'spacemeshos/go-spacemesh-dev:almog128'
-  command: '/bin/go-spacemesh'
-  replicas: 19
+  image: 'spacemeshos/go-spacemesh-test:develop'
+  command: '/bin/go-sync'
+  replicas: 29
   args:
     randcon: '8'
     hare-committee-size: '20'
     hare-max-adversaries: '9'
     hare-round-duration-sec: '10'
     layer-duration-sec: '60'
-    layer-average-size: '20'
+
 elastic:
   host: es.spacemesh.io
   port: 9200
