@@ -21,6 +21,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sync"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spacemeshos/go-spacemesh/version"
+	"github.com/spacemeshos/post/proving"
 	"math/rand"
 
 	"os"
@@ -304,7 +305,8 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	blockProducer := miner.NewBlockBuilder(nodeID, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, lg.WithName("blockProducer"))
 	blockListener := sync.NewBlockListener(swarm, blockValidator, msh, 2*time.Second, 4, lg.WithName("blockListener"))
 
-	nipstBuilder := nipst.NewNipstBuilder(nodeID.ToBytes(), 1024, 100, 100, postClient, poetClient)
+	postDifficulty := proving.Difficulty(5) // TODO: put this in config (long term - make it dynamically calculated)
+	nipstBuilder := nipst.NewNipstBuilder([]byte(nodeID.Key), 1024, postDifficulty, 100, postClient, poetClient)
 	atxBuilder := activation.NewBuilder(nodeID, atxdbstore, mdb, swarm, atxdb, msh, uint64(app.Config.CONSENSUS.LayersPerEpoch), nipstBuilder, clock.Subscribe())
 
 	app.blockProducer = &blockProducer
