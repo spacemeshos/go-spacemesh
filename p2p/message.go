@@ -28,8 +28,13 @@ func (pm directProtocolMessage) Bytes() []byte {
 }
 
 type gossipProtocolMessage struct {
+	sender         p2pcrypto.PublicKey
 	data           service.Data
 	validationChan chan service.MessageValidation
+}
+
+func (pm gossipProtocolMessage) Sender() p2pcrypto.PublicKey {
+	return pm.sender // DirectSender
 }
 
 func (pm gossipProtocolMessage) Data() service.Data {
@@ -44,8 +49,8 @@ func (pm gossipProtocolMessage) ValidationCompletedChan() chan service.MessageVa
 	return pm.validationChan
 }
 
-func (pm gossipProtocolMessage) ReportValidation(protocol string, isValid bool) {
+func (pm gossipProtocolMessage) ReportValidation(protocol string) {
 	if pm.validationChan != nil {
-		pm.validationChan <- service.NewMessageValidation(pm.Bytes(), protocol, isValid)
+		pm.validationChan <- service.NewMessageValidation(pm.sender, pm.Bytes(), protocol)
 	}
 }

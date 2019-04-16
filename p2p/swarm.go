@@ -558,7 +558,7 @@ func (s *swarm) ProcessDirectProtocolMessage(sender p2pcrypto.PublicKey, protoco
 
 // ProcessGossipProtocolMessage passes an already decrypted message to a protocol. It is expected that the protocol will send
 // the message syntactic validation result on the validationCompletedChan ASAP
-func (s *swarm) ProcessGossipProtocolMessage(protocol string, data service.Data, validationCompletedChan chan service.MessageValidation) error {
+func (s *swarm) ProcessGossipProtocolMessage(sender p2pcrypto.PublicKey, protocol string, data service.Data, validationCompletedChan chan service.MessageValidation) error {
 	// route authenticated message to the registered protocol
 	s.protocolHandlerMutex.RLock()
 	msgchan := s.gossipProtocolHandlers[protocol]
@@ -568,7 +568,7 @@ func (s *swarm) ProcessGossipProtocolMessage(protocol string, data service.Data,
 	}
 	s.lNode.Debug("Forwarding message to %v protocol", protocol)
 
-	msgchan <- gossipProtocolMessage{data, validationCompletedChan}
+	msgchan <- gossipProtocolMessage{sender, data, validationCompletedChan}
 
 	return nil
 }

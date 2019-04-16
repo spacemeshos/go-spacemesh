@@ -38,7 +38,9 @@ func (p *poetProof) serialize() []byte {
 	return []byte("")
 }
 
-func verifyMembership(member *common.Hash, proof *membershipProof) (bool, error) {
+var _ verifyPoetMembershipFunc = verifyPoetMembership
+
+func verifyPoetMembership(member *common.Hash, proof *membershipProof) (bool, error) {
 	valid, err := merkle.ValidatePartialTree(
 		[]uint64{uint64(proof.index)},
 		[][]byte{member[:]},
@@ -54,6 +56,8 @@ func verifyMembership(member *common.Hash, proof *membershipProof) (bool, error)
 	return valid, nil
 }
 
+var _ verifyPoetFunc = verifyPoet
+
 func verifyPoet(p *poetProof) (bool, error) {
 	v, err := verifier.New(p.commitment, p.n, shared.NewHashFunc(p.commitment))
 	if err != nil {
@@ -68,9 +72,11 @@ func verifyPoet(p *poetProof) (bool, error) {
 	return res, nil
 }
 
-// verifyPoetMembership verifies that the poet proof commitment
+var _ verifyPoetMatchesMembershipFunc = verifyPoetMatchesMembership
+
+// verifyPoetMatchesMembership verifies that the poet proof commitment
 // is the root in which the membership was proven to.
-func verifyPoetMembership(m *membershipProof, p *poetProof) bool {
+func verifyPoetMatchesMembership(m *membershipProof, p *poetProof) bool {
 	return bytes.Equal(m.root[:], p.commitment)
 }
 

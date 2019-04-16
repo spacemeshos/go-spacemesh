@@ -13,8 +13,8 @@ type BlockID uint64
 type TransactionId []byte
 type LayerID uint64
 
-func (l LayerID) GetEpoch(layersPerEpoch uint16) uint64 {
-	return uint64(l) / uint64(layersPerEpoch)
+func (l LayerID) GetEpoch(layersPerEpoch uint16) EpochId {
+	return EpochId(uint64(l) / uint64(layersPerEpoch))
 }
 
 //todo: choose which type is VRF
