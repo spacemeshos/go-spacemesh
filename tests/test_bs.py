@@ -406,18 +406,31 @@ def test_transaction(set_namespace, setup_clients):
 
     api = 'v1/nonce'
     data = '{"address":"1"}'
+    print("checking nonce")
     out = api_call(client_ip, data, api, testconfig['namespace'])
     assert '{"value":"0"}' in out.decode("utf-8")
-
-    match = re.search(r"{\"value\":\"(?P<nonce_val>\d+)\"}", out.decode("utf-8"))
-    assert match
-    nonce_val = int(match.group("nonce_val"))
-    assert 0 == nonce_val
+    print("nonce ok")
 
     api = 'v1/submittransaction'
-    data = '{"sender":"1","reciever":"222","nonce":"0","amount":"100"}'
-
+    data = '{"srcAddress":"1","dstAddress":"222","nonce":"0","amount":"100"}'
+    print("submitting transaction")
     out = api_call(client_ip, data, api, testconfig['namespace'])
     assert '{"value":"ok"}' in out.decode("utf-8")
+    print("submit transaction ok")
+    print("wait for confirmation ")
 
+    api = 'v1/balance'
+    data = '{"address":"222"}'
+    start = time.time()
 
+    for x in range(10):
+        time.sleep(60)
+        print("... ")
+        out = api_call(client_ip, data, api, testconfig['namespace'])
+        if '{"value":"100"}' in out.decode("utf-8"):
+            end = time.time()
+            break
+
+    print("test took ", end - start, "seconds ")
+    assert '{"value":"100"}' in out.decode("utf-8")
+    print("balance ok")

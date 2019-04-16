@@ -88,7 +88,6 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 			blk, err := types.BytesAsBlock(data.Bytes())
 			if err != nil {
 				bl.Error("received invalid block %v", data.Bytes()[:7])
-				data.ReportValidation(NewBlockProtocol, false)
 				break
 			}
 
@@ -99,17 +98,16 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 				break
 			}
 			if !eligible {
-				data.ReportValidation(NewBlockProtocol, false)
 				bl.Error("block not eligible")
 				break
 			}
 
-			data.ReportValidation(NewBlockProtocol, true)
 			if err := bl.AddBlock(&blk); err != nil {
 				bl.Info("Block already received")
 				break
 			}
 			bl.Info("added block to database ")
+			data.ReportValidation(NewBlockProtocol)
 			bl.addUnknownToQueue(&blk)
 		}
 	}

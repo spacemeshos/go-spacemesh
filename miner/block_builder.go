@@ -149,7 +149,7 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 	} else {
 		res, err = t.hareResult.GetResult(id - 1)
 		if err != nil {
-			return nil, errors.New(fmt.Sprintf("didn't receive hare result for layer %v", id-1))
+			return nil, errors.New(fmt.Sprintf("didn't receive hare result for layer %v %v", id-1, err))
 		}
 	}
 
@@ -193,10 +193,9 @@ func (t *BlockBuilder) listenForTx() {
 					log.String("amount", x.AmountAsBigInt().String()), log.Uint64("nonce", x.AccountNonce), log.Bool("valid", err != nil))
 				if err != nil {
 					t.Log.Error("cannot parse incoming TX")
-					data.ReportValidation(IncomingTxProtocol, false)
 					break
 				}
-				data.ReportValidation(IncomingTxProtocol, true)
+				data.ReportValidation(IncomingTxProtocol)
 				t.newTrans <- x
 			}
 		}
@@ -216,10 +215,9 @@ func (t *BlockBuilder) listenForAtx() {
 				log.String("amount", x.AmountAsBigInt().String()), log.Uint64("nonce", x.AccountNonce), log.Bool("valid", err != nil))*/
 				if err != nil {
 					t.Log.Error("cannot parse incoming ATX")
-					data.ReportValidation(activation.AtxProtocol, false)
 					break
 				}
-				data.ReportValidation(activation.AtxProtocol, true)
+				data.ReportValidation(activation.AtxProtocol)
 				t.newAtx <- x
 			}
 		}
