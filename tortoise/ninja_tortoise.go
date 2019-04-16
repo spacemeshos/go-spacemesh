@@ -110,34 +110,34 @@ func NewNinjaTortoise(layerSize int, blocks BlockCache, log log.Log) *ninjaTorto
 
 func (ni *ninjaTortoise) evictOutOfPbase(old types.LayerID) {
 	wg := sync.WaitGroup{}
-	for i := old; i < ni.pBase.Layer(); i++ {
+	for lyr := old; lyr < ni.pBase.Layer(); lyr++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for _, i := range ni.patterns[i] {
-				delete(ni.tSupport, i)
-				delete(ni.tComplete, i)
-				delete(ni.tEffectiveToBlocks, i)
-				delete(ni.tVote, i)
-				delete(ni.tTally, i)
-				delete(ni.tPattern, i)
-				delete(ni.tPatSupport, i)
-				delete(ni.tSupport, i)
-				ni.Debug("evict pattern %v from maps ", i)
+			for _, p := range ni.patterns[lyr] {
+				delete(ni.tSupport, p)
+				delete(ni.tComplete, p)
+				delete(ni.tEffectiveToBlocks, p)
+				delete(ni.tVote, p)
+				delete(ni.tTally, p)
+				delete(ni.tPattern, p)
+				delete(ni.tPatSupport, p)
+				delete(ni.tSupport, p)
+				ni.Debug("evict pattern %v from maps ", p)
 			}
 		}()
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			ids, err := ni.LayerBlockIds(i)
+			ids, err := ni.LayerBlockIds(lyr)
 			if err != nil {
-				ni.Error("could not get layer ids for layer ", i, err)
+				ni.Error("could not get layer ids for layer ", lyr, err)
 			}
-			for _, i := range ids {
-				delete(ni.tEffective, i)
-				delete(ni.tCorrect, i)
-				delete(ni.tExplicit, i)
-				ni.Debug("evict block %v from maps ", i)
+			for _, id := range ids {
+				delete(ni.tEffective, id)
+				delete(ni.tCorrect, id)
+				delete(ni.tExplicit, id)
+				ni.Debug("evict block %v from maps ", id)
 			}
 		}()
 		wg.Wait()
@@ -156,7 +156,7 @@ func (ni *ninjaTortoise) processBlock(b *types.Block) {
 		ni.Debug("block votes %d", bid)
 		bl, err := ni.GetBlock(bid)
 		if err != nil || bl == nil {
-			ni.Error(fmt.Sprintf("error block not found ID %d !!!!!", bid))
+			ni.Error(fmt.Sprintf("error block not found ID %d , %v!!!!!", bid, err))
 			return
 		}
 		if _, found := patternMap[bl.Layer()]; !found {
@@ -432,7 +432,7 @@ func (ni *ninjaTortoise) getVotes() map[types.BlockID]vec {
 func (ni *ninjaTortoise) getVote(id types.BlockID) vec {
 	block, err := ni.GetBlock(id)
 	if err != nil {
-		panic(fmt.Sprintf("error block not found ID %d", id))
+		panic(fmt.Sprintf("error block not found ID %d, %v", id, err))
 	}
 
 	if block.Layer() > ni.pBase.Layer() {
