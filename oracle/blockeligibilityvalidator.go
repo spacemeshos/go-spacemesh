@@ -32,23 +32,12 @@ func NewBlockEligibilityValidator(committeeSize int32, layersPerEpoch uint16, ac
 func (v BlockEligibilityValidator) BlockEligible(block *types.Block) (bool, error) {
 	epochNumber := block.LayerIndex.GetEpoch(v.layersPerEpoch)
 
-	atx, err := v.activationDb.GetAtx(block.ATXID)
+	activeSetSize, err := v.getActiveSetSize(epochNumber, block)
 	if err != nil {
-		log.Error("getting ATX failed: %v", err)
 		return false, err
 	}
 
-	if !atx.Valid {
-		log.Error("ATX is invalid: %v", err)
-		return false, err
-	}
-	if atxEpochNumber := atx.LayerIdx.GetEpoch(v.layersPerEpoch); epochNumber != atxEpochNumber {
-		log.Error("ATX epoch (%d) doesn't match layer ID epoch (%d)", atxEpochNumber, epochNumber)
-		return false, fmt.Errorf("activation epoch (%d) mismatch with layer epoch (%d)", atxEpochNumber,
-			epochNumber)
-	}
-
-	numberOfEligibleBlocks, err := getNumberOfEligibleBlocks(atx.ActiveSetSize, v.committeeSize, v.layersPerEpoch)
+	numberOfEligibleBlocks, err := getNumberOfEligibleBlocks(activeSetSize, v.committeeSize, v.layersPerEpoch)
 	if err != nil {
 		log.Error("failed to get number of eligible blocks: %v", err)
 		return false, err
@@ -72,4 +61,26 @@ func (v BlockEligibilityValidator) BlockEligible(block *types.Block) (bool, erro
 	eligibleLayer := calcEligibleLayer(epochNumber, v.layersPerEpoch, vrfHash)
 
 	return block.LayerIndex == eligibleLayer, nil
+}
+
+func (v BlockEligibilityValidator) getActiveSetSize(epochNumber types.EpochId, block *types.Block) (uint32, error) {
+	if epochNumber.IsGenesis() {
+		return GenesisActiveSetSize, nil
+	}
+	atx, err := v.activationDb.GetAtx(block.ATXID)
+	if err != nil {
+		log.Error("getting ATX failed: %v", err)
+		return 0, err
+	}
+	if !atx.Valid {
+		log.Error("ATX is invalid: %v", err)
+		return 0, err
+	}
+	if atxEpochNumber := atx.LayerIdx.GetEpoch(v.layersPerEpoch); epochNumber != atxEpochNumber {
+		log.Error("ATX epoch (%d) doesn't match layer ID epoch (%d)", atxEpochNumber, epochNumber)
+		return 0, fmt.Errorf("activation epoch (%d) mismatch with layer epoch (%d)", atxEpochNumber,
+			epochNumber)
+	}
+	activeSetSize := atx.ActiveSetSize
+	return activeSetSize, err
 }

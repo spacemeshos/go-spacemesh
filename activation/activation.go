@@ -81,7 +81,7 @@ func NewBuilder(nodeId types.NodeId, db database.DB, meshdb *mesh.MeshDB, net Br
 	}
 }
 
-func (b *Builder) Start(){
+func (b *Builder) Start() {
 	go b.loop()
 }
 
@@ -159,7 +159,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 	if err != nil {
 		return err
 	}
-	atx := types.NewActivationTxWithChallenge(challenge, uint32(b.activeSet.ActiveSetIds(types.EpochId(LayerIdx / b.layersPerEpoch))),
+	atx := types.NewActivationTxWithChallenge(challenge, uint32(b.activeSet.ActiveSetIds(types.EpochId(LayerIdx/b.layersPerEpoch))),
 		b.mesh.GetLatestVerified(), npst, true)
 
 	buf, err := types.AtxAsBytes(atx)

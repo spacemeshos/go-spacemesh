@@ -143,13 +143,13 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 	var res []types.BlockID = nil
 	var err error
 	if id == config.Genesis {
-		return nil, errors.New("cannot create block in genesis layer ")
+		return nil, errors.New("cannot create block in genesis layer")
 	} else if id == config.Genesis+1 {
 		res = append(res, config.GenesisId)
 	} else {
 		res, err = t.hareResult.GetResult(id - 1)
 		if err != nil {
-			return nil, errors.New(fmt.Sprintf("didnt receive hare result for layer %v", id-1))
+			return nil, errors.New(fmt.Sprintf("didn't receive hare result for layer %v", id-1))
 		}
 	}
 
@@ -175,7 +175,8 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 		Txs:  txs,
 	}
 
-	t.Log.Info("Iv'e created block in layer %v id %v, num of transactions %v votes %d viewEdges %d", b.LayerIndex, b.Id, len(b.Txs), len(b.BlockVotes), len(b.ViewEdges))
+	t.Log.Info("I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d, viewEdges: %d",
+		b.LayerIndex, b.Id, len(b.Txs), len(b.BlockVotes), len(b.ViewEdges))
 	return &b, nil
 }
 

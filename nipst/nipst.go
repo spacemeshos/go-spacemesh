@@ -187,7 +187,7 @@ func NewNIPSTBuilder(
 
 var numberOfProvenLabels = uint8(10)
 
-func NewNipstBuilder(id []byte,spaceUnit uint64, difficulty proving.Difficulty, duration SeqWorkTicks, postProver PostProverClient, poetProver PoetProvingServiceClient) *NIPSTBuilder{
+func NewNipstBuilder(id []byte, spaceUnit uint64, difficulty proving.Difficulty, duration SeqWorkTicks, postProver PostProverClient, poetProver PoetProvingServiceClient) *NIPSTBuilder {
 	return &NIPSTBuilder{
 		id:                          id,
 		space:                       spaceUnit,

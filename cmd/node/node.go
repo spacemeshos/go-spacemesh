@@ -254,8 +254,7 @@ func (app *SpacemeshApp) setupTestFeatures() {
 
 func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service, dbStorepath string, sgn hare.Signing,
 	blockOracle oracle.BlockOracle, blockValidator sync.BlockValidator, hareOracle hare.Rolacle, layerSize int,
-	postClient nipst.PostProverClient,
-	poetClient nipst.PoetProvingServiceClient) error {
+	postClient nipst.PostProverClient, poetClient nipst.PoetProvingServiceClient) error {
 
 	app.instanceName = nodeID.Key
 	//todo: should we add all components to a single struct?
@@ -305,9 +304,8 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	blockProducer := miner.NewBlockBuilder(nodeID, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, lg.WithName("blockProducer"))
 	blockListener := sync.NewBlockListener(swarm, blockValidator, msh, 2*time.Second, 4, lg.WithName("blockListener"))
 
-	nipstBuilder := nipst.NewNipstBuilder(nodeID.ToBytes(), 1024,100,100,postClient, poetClient)
+	nipstBuilder := nipst.NewNipstBuilder(nodeID.ToBytes(), 1024, 100, 100, postClient, poetClient)
 	atxBuilder := activation.NewBuilder(nodeID, atxdbstore, mdb, swarm, atxdb, msh, uint64(app.Config.CONSENSUS.LayersPerEpoch), nipstBuilder, clock.Subscribe())
-
 
 	app.blockProducer = &blockProducer
 	app.blockListener = blockListener
@@ -317,7 +315,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	app.state = st
 	app.hare = ha
 	app.P2P = swarm
-	app.atxBuilder =atxBuilder
+	app.atxBuilder = atxBuilder
 	return nil
 }
 
