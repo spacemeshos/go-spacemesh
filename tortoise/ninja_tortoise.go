@@ -12,7 +12,7 @@ import (
 )
 
 type vec [2]int
-type PatternId uint32
+type PatternId uint32 //this hash dose not include the layer id
 
 const ( //Threshold
 	K               = 5 //number of explicit layers to vote for
@@ -110,8 +110,8 @@ func NewNinjaTortoise(layerSize int, blocks BlockCache, log log.Log) *ninjaTorto
 
 func (ni *ninjaTortoise) evictOutOfPbase(old types.LayerID) {
 	wg := sync.WaitGroup{}
-	wg.Add(1)
 	for i := old; i < ni.pBase.Layer(); i++ {
+		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			for _, i := range ni.patterns[i] {
