@@ -222,6 +222,7 @@ func (t *BlockBuilder) listenForAtx() {
 					t.Log.Error("cannot parse incoming ATX")
 					break
 				}
+				t.processAtx(x)
 				data.ReportValidation(activation.AtxProtocol)
 				t.newAtx <- x
 			}
