@@ -222,15 +222,18 @@ func (s *swarm) Start() error {
 
 	err = s.network.Start()
 	if err != nil {
+		s.lNode.Error("Error creating swarm")
 		return err
 	}
-
+	s.lNode.Debug("Starting to listen for network messages")
 	s.listenToNetworkMessages() // fires up a goroutine for each queue of messages
-
+	s.lNode.Debug("starting the udp server")
 	err = s.udpServer.Start()
 	if err != nil {
 		return err
 	}
+
+	s.lNode.Debug("beggining bootstrap")
 
 	go s.checkTimeDrifts()
 

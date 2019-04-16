@@ -81,7 +81,7 @@ func NewNet(conf config.Config, localEntity *node.LocalNode) (*Net, error) {
 
 	tcpAddress, err := net.ResolveTCPAddr("tcp", localEntity.Address())
 	if err != nil {
-		fmt.Errorf("can't resolve local address: %v, err:%v", localEntity.Address(), err)
+		return nil, fmt.Errorf("can't resolve local address: %v, err:%v", localEntity.Address(), err)
 	}
 
 	n := &Net{
@@ -249,8 +249,10 @@ func (n *Net) newTcpListener() (net.Listener, error) {
 	n.logger.Info("Starting to listen on tcp:%v", n.listenAddress)
 	tcpListener, err := net.Listen("tcp", n.listenAddress.String())
 	if err != nil {
+		n.logger.Info("EERRR CREATING listenere ", err)
 		return nil, err
 	}
+	n.logger.Info("Created listener successfully")
 	return tcpListener, nil
 }
 
@@ -261,6 +263,7 @@ func (n *Net) listen(lis func() (listener net.Listener, err error)) error {
 	if err != nil {
 		return err
 	}
+	n.logger.Info("Beggining to accept connections")
 	go n.accept(listener)
 	return nil
 }

@@ -68,12 +68,13 @@ func (its *IntegrationTestSuite) SetupSuite() {
 
 	tm := time.Now()
 	testLog("Started up %d swarms", its.BootstrappedNodeCount)
-	var wg sync.WaitGroup
-
+	//var wg sync.WaitGroup
+	totalTimeout := time.NewTimer((time.Second * 5) * time.Duration(len(swarm)))
+	finchan := make(chan error)
 	for i := 0; i < len(swarm); i++ {
 		swarm[i] = createP2pInstance(its.T(), cfg)
 		i := i
-		wg.Add(1)
+	//	wg.Add(1)
 		go func() {
 			// we add a timeout before starting to reduce the possibility or trying to connect at the same time
 			// pretty rare occasion in real life (which we handle anyway), but happens a lot when running everything in 1 binary.
@@ -82,23 +83,42 @@ func (its *IntegrationTestSuite) SetupSuite() {
 				its.BeforeHook(i, swarm[i])
 			}
 
-		_:
-			swarm[i].Start() // ignore error?
-
-			err := swarm[i].waitForBoot()
+		err := swarm[i].Start() // ignore error?
+		if err != nil {
+			finchan <- err
+			return
+			//its.T().Fatal(fmt.Sprintf("failed to start a node, %v", err))
+		}
+			err = swarm[i].waitForBoot()
 			if err != nil {
-				its.Require().NoError(err)
+				finchan <- err
+				return
 			}
 			if its.AfterHook != nil {
 				its.AfterHook(i, swarm[i])
 			}
-			wg.Done()
+			finchan <- nil
 		}()
 	}
 
 	testLog("Launched all processes 🎉, now waiting...")
 
-	wg.Wait()
+	i := 0
+	lop:
+	for {
+		select {
+		case err := <-finchan:
+			i++
+			if err != nil {
+				its.T().Fatal(err)
+			}
+			if i == len(swarm){
+			 break lop
+			}
+		case <-totalTimeout.C:
+			its.T().Fatal("timeout")
+		}
+	}
 	testLog("Took %s for all swarms to boot up", time.Now().Sub(tm))
 
 	// go interfaces suck with slices
