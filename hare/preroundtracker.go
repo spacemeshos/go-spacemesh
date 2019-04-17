@@ -2,8 +2,8 @@ package hare
 
 import (
 	"github.com/spacemeshos/go-spacemesh/hare/metrics"
-	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 // Tracks pre-round messages
@@ -23,18 +23,13 @@ func NewPreRoundTracker(threshold int, expectedSize int) *PreRoundTracker {
 }
 
 // Tracks a pre-round message
-func (pre *PreRoundTracker) OnPreRound(msg *pb.HareMessage) {
-	verifier, err := NewVerifier(msg.PubKey)
-	if err != nil {
-		log.Warning("Could not construct verifier: ", err)
-		return
-	}
-
+func (pre *PreRoundTracker) OnPreRound(msg *Msg) {
+	pub := signing.NewPublicKey(msg.PubKey)
 	sToTrack := NewSet(msg.Message.Values) // assume track all values
 	alreadyTracked := NewSmallEmptySet()   // assume nothing tracked so far
 
-	if set, exist := pre.preRound[verifier.String()]; exist { // not first pre-round msg from this sender
-		log.Debug("Duplicate sender %v", verifier.String())
+	if set, exist := pre.preRound[pub.String()]; exist { // not first pre-round msg from this sender
+		log.Debug("Duplicate sender %v", pub.String())
 		alreadyTracked = set              // update already tracked values
 		sToTrack.Subtract(alreadyTracked) // subtract the already tracked values
 	}
@@ -46,7 +41,7 @@ func (pre *PreRoundTracker) OnPreRound(msg *pb.HareMessage) {
 	}
 
 	// update the union to include new values
-	pre.preRound[verifier.String()] = alreadyTracked.Union(sToTrack)
+	pre.preRound[pub.String()] = alreadyTracked.Union(sToTrack)
 }
 
 // Returns true if the given value is provable, false otherwise

@@ -5,10 +5,8 @@ option go_package = "pb";
 
 // top message of the protocol
 message HareMessage {
-    bytes pubKey = 1;
-    bytes innerSig = 2; // sign inner message
-    InnerMessage message = 3;
-    Certificate cert = 4; // optional
+    bytes innerSig = 1; // sign inner message
+    InnerMessage message = 2;
 }
 
 // the certificate
@@ -32,4 +30,5 @@ message InnerMessage {
     repeated uint64 values = 5; // the set S. optional for commit message in a certificate
     bytes roleProof = 6; // role is implicit by message type, this is the proof
     AggregatedMessages svp = 7; // optional. only for proposal messages
+    Certificate cert = 8; // optional
 }

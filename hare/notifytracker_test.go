@@ -6,14 +6,14 @@ import (
 	"testing"
 )
 
-func BuildNotifyMsg(signing Signing, s *Set) *pb.HareMessage {
+func BuildNotifyMsg(signing Signer, s *Set) *Msg {
 	builder := NewMessageBuilder()
 	builder.SetType(PreRound).SetInstanceId(instanceId1).SetRoundCounter(Round4).SetKi(ki).SetValues(s)
-	builder = builder.SetPubKey(signing.Verifier().Bytes()).Sign(signing)
+	builder = builder.SetPubKey(signing.PublicKey().Bytes()).Sign(signing)
 	cert := &pb.Certificate{}
 	cert.Values = NewSetFromValues(value1).To2DSlice()
 	cert.AggMsgs = &pb.AggregatedMessages{}
-	cert.AggMsgs.Messages = []*pb.HareMessage{BuildCommitMsg(signing, s)}
+	cert.AggMsgs.Messages = []*pb.HareMessage{BuildCommitMsg(signing, s).HareMessage}
 	builder.SetCertificate(cert)
 
 	return builder.Build()

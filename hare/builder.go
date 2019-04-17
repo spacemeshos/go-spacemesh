@@ -8,39 +8,39 @@ import (
 
 // Used to build proto messages
 type MessageBuilder struct {
-	outer *pb.HareMessage
+	msg   *Msg
 	inner *pb.InnerMessage
 }
 
 func NewMessageBuilder() *MessageBuilder {
-	m := &MessageBuilder{&pb.HareMessage{}, &pb.InnerMessage{}}
-	m.outer.Message = m.inner
+	m := &MessageBuilder{&Msg{&pb.HareMessage{}, nil}, &pb.InnerMessage{}}
+	m.msg.Message = m.inner
 
 	return m
 }
 
-func (builder *MessageBuilder) Build() *pb.HareMessage {
-	return builder.outer
-}
-
-func (builder *MessageBuilder) SetPubKey(pub []byte) *MessageBuilder {
-	builder.outer.PubKey = pub
-	return builder
+func (builder *MessageBuilder) Build() *Msg {
+	return builder.msg
 }
 
 func (builder *MessageBuilder) SetCertificate(certificate *pb.Certificate) *MessageBuilder {
-	builder.outer.Cert = certificate
+	builder.msg.Message.Cert = certificate
 	return builder
 }
 
-func (builder *MessageBuilder) Sign(signing Signing) *MessageBuilder {
+func (builder *MessageBuilder) Sign(signing Signer) *MessageBuilder {
 	buff, err := proto.Marshal(builder.inner)
 	if err != nil {
 		log.Panic("marshal failed during signing")
 	}
 
-	builder.outer.InnerSig = signing.Sign(buff)
+	builder.msg.InnerSig = signing.Sign(buff)
 
+	return builder
+}
+
+func (builder *MessageBuilder) SetPubKey(pub []byte) *MessageBuilder {
+	builder.msg.PubKey = pub
 	return builder
 }
 

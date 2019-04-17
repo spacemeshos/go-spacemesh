@@ -14,7 +14,7 @@ const InboxCapacity = 100
 type StartInstanceError error
 
 type Validator interface {
-	Validate(m *pb.HareMessage) bool
+	Validate(m *Msg) bool
 }
 
 // Closer is used to add closeability to an object
@@ -42,8 +42,8 @@ type Broker struct {
 	network    NetworkService
 	eValidator Validator
 	inbox      chan service.GossipMessage
-	outbox     map[InstanceId]chan *pb.HareMessage
-	pending    map[InstanceId][]*pb.HareMessage
+	outbox     map[InstanceId]chan *Msg
+	pending    map[InstanceId][]*Msg
 	tasks      chan func()
 	maxReg     InstanceId
 	isStarted  bool
@@ -54,8 +54,8 @@ func NewBroker(networkService NetworkService, eValidator Validator, closer Close
 	p.Closer = closer
 	p.network = networkService
 	p.eValidator = eValidator
-	p.outbox = make(map[InstanceId]chan *pb.HareMessage)
-	p.pending = make(map[InstanceId][]*pb.HareMessage)
+	p.outbox = make(map[InstanceId]chan *Msg)
+	p.pending = make(map[InstanceId][]*Msg)
 	p.tasks = make(chan func())
 	p.maxReg = 1
 
@@ -115,7 +115,14 @@ func (broker *Broker) eventLoop() {
 				futureMsg = true
 			}
 
-			if !broker.eValidator.Validate(hareMsg) {
+			// TODO: should receive the state querier or have a msg constructor
+			iMsg, err := newMsg(hareMsg, mockStateQuerier{})
+			if err != nil {
+				log.Warning("Message validation failed: could not construct msg err=%v", err)
+				continue
+			}
+
+			if !broker.eValidator.Validate(iMsg) {
 				log.Warning("Message validation failed: eValidator returned false %v", hareMsg)
 				continue
 			}
@@ -126,7 +133,8 @@ func (broker *Broker) eventLoop() {
 			c, exist := broker.outbox[msgInstId]
 			if exist {
 				// todo: err if chan is full (len)
-				c <- hareMsg
+				c <- iMsg
+				continue
 			} else { // message arrived before registration
 				futureMsg = true
 			}
@@ -134,9 +142,9 @@ func (broker *Broker) eventLoop() {
 			if futureMsg {
 				log.Info("Broker identified future message")
 				if _, exist := broker.pending[msgInstId]; !exist {
-					broker.pending[msgInstId] = make([]*pb.HareMessage, 0)
+					broker.pending[msgInstId] = make([]*Msg, 0)
 				}
-				broker.pending[msgInstId] = append(broker.pending[msgInstId], hareMsg)
+				broker.pending[msgInstId] = append(broker.pending[msgInstId], iMsg)
 			}
 
 		case task := <-broker.tasks:
@@ -150,8 +158,8 @@ func (broker *Broker) eventLoop() {
 
 // Register a listener to messages
 // Note: the registering instance is assumed to be started and accepting messages
-func (broker *Broker) Register(id InstanceId) chan *pb.HareMessage {
-	inbox := make(chan *pb.HareMessage, InboxCapacity)
+func (broker *Broker) Register(id InstanceId) chan *Msg {
+	inbox := make(chan *Msg, InboxCapacity)
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)

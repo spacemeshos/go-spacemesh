@@ -4,8 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/hare/metrics"
-	"github.com/spacemeshos/go-spacemesh/hare/pb"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"hash/fnv"
 )
 
@@ -27,23 +26,18 @@ func NewNotifyTracker(expectedSize int) *NotifyTracker {
 
 // Track the provided notification message
 // Returns true if the message didn't affect the state, false otherwise
-func (nt *NotifyTracker) OnNotify(msg *pb.HareMessage) bool {
-	verifier, err := NewVerifier(msg.PubKey)
-	if err != nil {
-		log.Warning("Could not construct verifier: ", err)
-		return true
-	}
-
-	if _, exist := nt.notifies[verifier.String()]; exist { // already seenSenders
+func (nt *NotifyTracker) OnNotify(msg *Msg) bool {
+	pub := signing.NewPublicKey(msg.PubKey)
+	if _, exist := nt.notifies[pub.String()]; exist { // already seenSenders
 		return true // ignored
 	}
 
 	// keep msg for pub
-	nt.notifies[verifier.String()] = struct{}{}
+	nt.notifies[pub.String()] = struct{}{}
 
 	// track that set
 	s := NewSet(msg.Message.Values)
-	nt.onCertificate(msg.Cert.AggMsgs.Messages[0].Message.K, s)
+	nt.onCertificate(msg.Message.Cert.AggMsgs.Messages[0].Message.K, s)
 	nt.tracker.Track(s.Id())
 	metrics.NotifyCounter.With("set_id", fmt.Sprint(s.Id())).Add(1)
 
