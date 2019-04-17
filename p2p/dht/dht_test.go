@@ -33,7 +33,7 @@ func TestDHT_Update(t *testing.T) {
 
 	dht := New(ln, cfg.SwarmConfig, n1)
 
-	randnode := node.GenerateRandomNodeData()
+	randnode := generateDiscNode()
 	dht.Update(randnode)
 
 	req := make(chan int)
@@ -42,7 +42,7 @@ func TestDHT_Update(t *testing.T) {
 
 	assert.Equal(t, 1, size, "Routing table filled")
 
-	morenodes := node.GenerateRandomNodesData(config.DefaultConfig().SwarmConfig.RoutingTableBucketSize - 2) // more than bucketsize might result is some nodes not getting in
+	morenodes := generateDiscNodes(config.DefaultConfig().SwarmConfig.RoutingTableBucketSize - 2) // more than bucketsize might result is some nodes not getting in
 
 	for i := range morenodes {
 		dht.Update(morenodes[i])
@@ -53,7 +53,7 @@ func TestDHT_Update(t *testing.T) {
 
 	assert.Equal(t, config.DefaultConfig().SwarmConfig.RoutingTableBucketSize-1, size)
 
-	evenmorenodes := node.GenerateRandomNodesData(30) // more than bucketsize might result is some nodes not getting in
+	evenmorenodes := generateDiscNodes(30) // more than bucketsize might result is some nodes not getting in
 
 	for i := range evenmorenodes {
 		dht.Update(evenmorenodes[i])
@@ -66,7 +66,7 @@ func TestDHT_Update(t *testing.T) {
 
 	lastnode := evenmorenodes[0]
 
-	looked, err := dht.Lookup(lastnode.PublicKey())
+	looked, err := dht.netLookup(lastnode.PublicKey())
 
 	assert.NoError(t, err, "error finding existing node ")
 
@@ -85,11 +85,11 @@ func TestDHT_Lookup(t *testing.T) {
 
 	dht := New(ln, cfg.SwarmConfig, n1)
 
-	randnode := node.GenerateRandomNodeData()
+	randnode := generateDiscNode()
 
 	dht.Update(randnode)
 
-	node, err := dht.Lookup(randnode.PublicKey())
+	node, err := dht.netLookup(randnode.PublicKey())
 
 	assert.NoError(t, err, "Should not return an error")
 
@@ -106,7 +106,7 @@ func TestDHT_Lookup2(t *testing.T) {
 
 	dht := New(ln, cfg.SwarmConfig, n1)
 
-	randnode := node.GenerateRandomNodeData()
+	randnode := generateDiscNode()
 
 	dht.Update(randnode)
 
@@ -116,12 +116,12 @@ func TestDHT_Lookup2(t *testing.T) {
 
 	dht2 := New(ln2, cfg.SwarmConfig, n2)
 
-	dht2.Update(dht.local.Node)
+	dht2.Update(discNode{dht.local.Node, dht.local.Address()})
 
-	node, err := dht2.Lookup(randnode.PublicKey())
-	assert.NoError(t, err, "error finding node ", err)
+	node, err := dht2.netLookup(randnode.PublicKey())
+	require.NoError(t, err, "error finding node ", err)
 
-	assert.Equal(t, node.String(), randnode.String(), "not the same node")
+	require.Equal(t, node.String(), randnode.String(), "not the same node")
 
 }
 
@@ -129,7 +129,7 @@ func simNodeWithDHT(t *testing.T, sc config.SwarmConfig, sim *service.Simulator)
 	ln, _ := node.GenerateTestNode(t)
 	n := sim.NewNodeFrom(ln.Node)
 	dht := New(ln, sc, n)
-	n.AttachDHT(dht)
+	//n.AttachDHT(dht)
 
 	return n, dht
 }
@@ -151,19 +151,16 @@ func TestDHT_BootstrapAbort(t *testing.T) {
 	// Create a bootstrap node to abort
 	Ctx, Cancel := context.WithCancel(context.Background())
 	// Abort bootstrap after 500 milliseconds
-	go func() {
-		time.Sleep(500 * time.Millisecond)
-		Cancel()
-	}()
+	Cancel()
 	// Should return error after 2 seconds
 	err := dht.Bootstrap(Ctx)
-	assert.EqualError(t, err, ErrBootAbort.Error(), "Should be able to abort bootstrap")
+	require.EqualError(t, err, ErrBootAbort.Error(), "Should be able to abort bootstrap")
 }
 
 func Test_filterFindNodeServers(t *testing.T) {
 	//func filterFindNodeServers(nodes []node.Node, queried map[string]struct{}, alpha int) []node.Node {
 
-	nodes := node.GenerateRandomNodesData(20)
+	nodes := generateDiscNodes(20)
 
 	q := make(map[string]bool)
 	// filterFindNodeServer doesn't care about activeness (the bool)
@@ -216,7 +213,8 @@ func TestKadDHT_VerySmallBootstrap(t *testing.T) {
 	cb2 := make(PeerOpChannel)
 	dht.rt.NearestPeer(PeerByIDRequest{ID: bn.DhtID(), Callback: cb2})
 	res = <-cb2
-	require.Equal(t, res.Peer.String(), bn.String())
+	//bootstrap nodes are removed at the end of bootstrap
+	require.Equal(t, res.Peer, emptyDiscNode)
 
 }
 
@@ -275,7 +273,7 @@ func testDHTs(t *testing.T, dhts []*KadDHT, min, avg int) {
 		size := <-cb
 		all += size
 		if min > 0 && size < min {
-			t.Fatalf("dht %d has %d peers min is %d", i, size, min)
+			t.Fatalf("dht %d (%v) has %d peers min is %d", i, dht.local.String(), size, min)
 		}
 	}
 	avgSize := all / len(dhts)

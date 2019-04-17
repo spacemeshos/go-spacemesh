@@ -65,12 +65,12 @@ func (d *KadDHT) Bootstrap(ctx context.Context) error {
 
 	d.local.Debug("netLookup using %d preloaded bootnodes ", bn)
 
-	err := d.tryBoot(ctx, c)
+	err := d.tryBoot(ctx, bn, c)
 
 	return err
 }
 
-func (d *KadDHT) tryBoot(ctx context.Context, minPeers int) error {
+func (d *KadDHT) tryBoot(ctx context.Context, bootnodecount int, minPeers int) error {
 
 	searchFor := d.local.PublicKey()
 	tries := 0
@@ -107,7 +107,7 @@ loop:
 			d.rt.Size(req)
 			size = <-req
 
-			if size >= minPeers {
+			if size+bootnodecount >= minPeers {
 				break loop
 			}
 		}

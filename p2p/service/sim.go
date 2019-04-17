@@ -29,15 +29,12 @@ type Simulator struct {
 
 var _ Service = new(Node)
 
-type dht interface {
-	Update(node2 node.Node)
-}
 
 // Node is a simulated p2p node that can be used as a p2p service
 type Node struct {
 	sim *Simulator
 	node.Node
-	dht           dht
+	//dht           dht
 	sndDelay      uint32
 	rcvDelay      uint32
 	randBehaviour bool
@@ -183,9 +180,9 @@ func (sn *Node) Start() error {
 // simulator doesn't go through the regular p2p pipes so the metadata won't be available.
 // it's okay since this data doesn't matter to the simulator
 func simulatorMetadata() P2PMetadata {
-	ip, err := net.ResolveIPAddr("ip", "0.0.0.0")
+	ip, err := net.ResolveTCPAddr("tcp", "127.0.0.1:1234")
 	if err != nil {
-		log.Panic("cant resolve local ip")
+		panic("simulator error")
 	}
 	return P2PMetadata{ip}
 }
@@ -294,11 +291,6 @@ func (sn *Node) RegisterDirectProtocolWithChannel(protocol string, ingressChanne
 	sn.sim.protocolDirectHandler[sn.Node.String()][protocol] = ingressChannel
 	sn.sim.mutex.Unlock()
 	return ingressChannel
-}
-
-// AttachDHT attaches a dht for the update function of the simulation node
-func (sn *Node) AttachDHT(dht dht) {
-	sn.dht = dht
 }
 
 // Shutdown closes all node channels are remove it from the Simulator map
