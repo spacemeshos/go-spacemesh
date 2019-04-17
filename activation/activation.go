@@ -138,7 +138,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 	posAtxId := &types.EmptyAtxId
 	endTick := uint64(0)
 	LayerIdx := types.LayerID(0)
-	if epoch > 0 {
+	if !epoch.IsGenesis() {
 		//positioning atx is from the last epoch
 		posAtxId, err = b.GetPositioningAtxId(epoch - 1)
 		if err != nil {

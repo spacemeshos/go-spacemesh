@@ -27,7 +27,7 @@ func BlockIdsAsBytes(ids []BlockID) ([]byte, error) {
 func BytesToBlockIds(blockIds []byte) ([]BlockID, error) {
 	var ids []BlockID
 	if _, err := xdr.Unmarshal(bytes.NewReader(blockIds), &ids); err != nil {
-		return nil, errors.New("error marshaling layer ")
+		return nil, fmt.Errorf("error marshaling layer: %v", err)
 	}
 	return ids, nil
 }
@@ -35,7 +35,7 @@ func BytesToBlockIds(blockIds []byte) ([]BlockID, error) {
 func ViewAsBytes(ids []BlockID) ([]byte, error) {
 	var w bytes.Buffer
 	if _, err := xdr.Marshal(&w, &ids); err != nil {
-		return nil, errors.New("error marshalling block ids ")
+		return nil, fmt.Errorf("error marshalling view: %v", err)
 	}
 	return w.Bytes(), nil
 }
@@ -58,7 +58,7 @@ func (t ActivationTx) ActivesetValid() bool {
 func AtxHeaderAsBytes(tx *ActivationTxHeader) ([]byte, error) {
 	var w bytes.Buffer
 	if _, err := xdr.Marshal(&w, &tx); err != nil {
-		return nil, fmt.Errorf("error atx header %v", err)
+		return nil, fmt.Errorf("error marshalling atx header: %v", err)
 	}
 	return w.Bytes(), nil
 }
@@ -66,7 +66,7 @@ func AtxHeaderAsBytes(tx *ActivationTxHeader) ([]byte, error) {
 func AtxAsBytes(tx *ActivationTx) ([]byte, error) {
 	var w bytes.Buffer
 	if _, err := xdr.Marshal(&w, &tx); err != nil {
-		return nil, fmt.Errorf("error marshalling atx %v", err)
+		return nil, fmt.Errorf("error marshalling atx: %v", err)
 	}
 	return w.Bytes(), nil
 }
@@ -145,7 +145,7 @@ func NIPSTChallengeAsBytes(challenge *NIPSTChallenge) ([]byte, error) {
 func BlockHeaderToBytes(bheader *BlockHeader) ([]byte, error) {
 	var w bytes.Buffer
 	if _, err := xdr.Marshal(&w, bheader); err != nil {
-		return nil, fmt.Errorf("error marshalling block ids %v", err)
+		return nil, fmt.Errorf("error marshalling block header: %v", err)
 	}
 	return w.Bytes(), nil
 }
@@ -162,7 +162,7 @@ func BytesAsBlockHeader(buf []byte) (BlockHeader, error) {
 func TransactionAsBytes(tx *SerializableTransaction) ([]byte, error) {
 	var w bytes.Buffer
 	if _, err := xdr.Marshal(&w, &tx); err != nil {
-		return nil, fmt.Errorf("error marshalling block ids %v", err)
+		return nil, fmt.Errorf("error marshalling transaction: %v", err)
 	}
 	return w.Bytes(), nil
 }
@@ -179,7 +179,7 @@ func BytesAsTransaction(buf []byte) (*SerializableTransaction, error) {
 func MiniBlockToBytes(mini MiniBlock) ([]byte, error) {
 	var w bytes.Buffer
 	if _, err := xdr.Marshal(&w, &mini); err != nil {
-		return nil, fmt.Errorf("error marshalling block ids %v", err)
+		return nil, fmt.Errorf("error marshalling mini block: %v", err)
 	}
 	return w.Bytes(), nil
 }
@@ -196,7 +196,7 @@ func BytesAsMiniBlock(buf []byte) (*MiniBlock, error) {
 func BlockAsBytes(block Block) ([]byte, error) {
 	var w bytes.Buffer
 	if _, err := xdr.Marshal(&w, &block); err != nil {
-		return nil, fmt.Errorf("error marshalling block ids %v", err)
+		return nil, fmt.Errorf("error marshalling block: %v", err)
 	}
 	return w.Bytes(), nil
 }

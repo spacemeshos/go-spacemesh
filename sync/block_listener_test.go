@@ -4,12 +4,14 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/spacemeshos/go-spacemesh/address"
+	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"math/big"
 	"testing"
 	"time"
@@ -153,15 +155,16 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 	blk := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data1"))
 	tx := types.NewSerializableTransaction(0, address.BytesToAddress([]byte{0x01}), address.BytesToAddress([]byte{0x02}), big.NewInt(10), big.NewInt(10), 10)
 	blk.AddTransaction(tx)
-	blk.AddAtx(types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")}, 1, types.AtxId{}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, &nipst.NIPST{}, true))
+	blk.AddAtx(types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")}, 1, types.AtxId{}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{}), true))
 
 	data, err := types.BlockAsBytes(*blk)
+	require.NoError(t, err)
 	blk2, ok := types.BytesAsBlock(data)
-	assert.NoError(t, ok)
-	assert.True(t, blk.Compare(&blk2))
+	require.NoError(t, ok)
+	require.True(t, blk.Compare(&blk2))
 
+	err = n2.Broadcast(NewBlockProtocol, data)
 	assert.NoError(t, err)
-	n2.Broadcast(NewBlockProtocol, data)
 
 	timeout := time.After(5 * time.Second)
 	for {
