@@ -102,7 +102,7 @@ func (app *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat s
 		dbStore := database.NewMemDatabase()
 		meshDB := mesh.NewMemMeshDB(log.Log{})
 		layersPerEpoch := smApp.Config.CONSENSUS.LayersPerEpoch
-		activationDB := activation.NewActivationDb(dbStore, meshDB, uint64(layersPerEpoch))
+		activationDB := activation.NewActivationDb(dbStore, meshDB, uint64(layersPerEpoch), nodeID)
 		beaconProvider := &oracle.EpochBeaconProvider{}
 		blockOracle := oracle.NewMinerBlockOracle(int32(numOfInstances), layersPerEpoch, activationDB, beaconProvider, vrfSigner, nodeID)
 		blockValidator := oracle.NewBlockEligibilityValidator(int32(numOfInstances), layersPerEpoch, activationDB, beaconProvider, crypto.ValidateVRF)

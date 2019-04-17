@@ -69,7 +69,7 @@ type Processor struct {
 func NewBuilder(nodeId types.NodeId, db database.DB, meshdb *mesh.MeshDB, net Broadcaster, activeSet ActiveSetProvider, view MeshProvider, layersPerEpoch uint16, nipstBuilder NipstBuilder, layerClock chan types.LayerID) *Builder {
 	return &Builder{
 		nodeId:         nodeId,
-		db:             NewActivationDb(db, meshdb, uint64(layersPerEpoch)),
+		db:             NewActivationDb(db, meshdb, uint64(layersPerEpoch), nodeId),
 		net:            net,
 		activeSet:      activeSet,
 		mesh:           view,

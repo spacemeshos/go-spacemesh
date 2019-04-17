@@ -294,7 +294,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	}
 
 	//todo: put in config
-	atxdb := activation.NewActivationDb(atxdbstore, mdb, uint64(app.Config.CONSENSUS.LayersPerEpoch))
+	atxdb := activation.NewActivationDb(atxdbstore, mdb, uint64(app.Config.CONSENSUS.LayersPerEpoch), nodeID)
 	msh := mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, processor, lg.WithName("mesh")) //todo: what to do with the logger?
 
 	conf := sync.Configuration{SyncInterval: 1 * time.Second, Concurrency: 4, LayerSize: int(layerSize), RequestTimeout: 100 * time.Millisecond}

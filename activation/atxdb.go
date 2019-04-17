@@ -20,10 +20,12 @@ type ActivationDb struct {
 	atxs           database.DB
 	meshDb         *mesh.MeshDB
 	LayersPerEpoch types.LayerID
+	log            log.Log
 }
 
-func NewActivationDb(dbstore database.DB, meshDb *mesh.MeshDB, layersPerEpoch uint64) *ActivationDb {
-	return &ActivationDb{atxs: dbstore, meshDb: meshDb, LayersPerEpoch: types.LayerID(layersPerEpoch)}
+func NewActivationDb(dbstore database.DB, meshDb *mesh.MeshDB, layersPerEpoch uint64, nodeID types.NodeId) *ActivationDb {
+	lg := log.NewDefault(nodeID.Key[:5] + ".activation")
+	return &ActivationDb{atxs: dbstore, meshDb: meshDb, LayersPerEpoch: types.LayerID(layersPerEpoch), log: lg}
 }
 
 func (db *ActivationDb) ProcessBlockATXs(blk *types.Block) {
@@ -34,22 +36,22 @@ func (db *ActivationDb) ProcessBlockATXs(blk *types.Block) {
 
 func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx) {
 	epoch := types.EpochId(atx.LayerIdx / db.LayersPerEpoch)
-	log.Info("processing atx id %v, epoch %v", atx.Id().String()[2:7], epoch)
+	db.log.Info("processing atx id %v, epoch %v", atx.Id().String()[2:7], epoch)
 	activeSet, err := db.CalcActiveSetFromView(atx)
 	if err != nil {
-		log.Error("could not calculate active set for %v", atx.Id())
+		db.log.Error("could not calculate active set for %v", atx.Id())
 	}
 	//todo: maybe there is a potential bug in this case if count for the view can change between calls to this function
 	atx.VerifiedActiveSet = activeSet
 	err = db.ValidateAtx(atx)
 	//todo: should we store invalid atxs
 	if err != nil {
-		log.Warning("ATX %v failed validation: %v", atx.Id().String()[2:7], err)
+		db.log.Warning("ATX %v failed validation: %v", atx.Id().String()[2:7], err)
 	}
 	atx.Valid = err == nil
 	err = db.StoreAtx(epoch, atx)
 	if err != nil {
-		log.Error("cannot store atx: %v", atx)
+		db.log.Error("cannot store atx: %v", atx)
 	}
 }
 
@@ -72,7 +74,7 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 	traversalFunc := func(blkh *types.BlockHeader) error {
 		blk, err := db.meshDb.GetBlock(blkh.Id)
 		if err != nil {
-			log.Error("cannot validate atx, block %v not found", blkh.Id)
+			db.log.Error("cannot validate atx, block %v not found", blkh.Id)
 			return err
 		}
 		//skip blocks not from atx epoch
@@ -186,7 +188,7 @@ func (db *ActivationDb) ValidateAtx(atx *types.ActivationTx) error {
 }
 
 func (db *ActivationDb) StoreAtx(ech types.EpochId, atx *types.ActivationTx) error {
-	log.Debug("storing atx %v, in epoch %v", atx, ech)
+	db.log.Debug("storing atx %v, in epoch %v", atx, ech)
 
 	//todo: maybe cleanup DB if failed by using defer
 	if b, err := db.atxs.Get(atx.Id().Bytes()); err == nil && len(b) > 0 {
