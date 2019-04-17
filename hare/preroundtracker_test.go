@@ -1,7 +1,6 @@
 package hare
 
 import (
-	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
@@ -24,10 +23,10 @@ var value8 = Value{8}
 var value9 = Value{9}
 var value10 = Value{10}
 
-func BuildPreRoundMsg(signing Signing, s *Set) *pb.HareMessage {
+func BuildPreRoundMsg(signing Signer, s *Set) *Msg {
 	builder := NewMessageBuilder()
 	builder.SetType(PreRound).SetInstanceId(instanceId1).SetRoundCounter(k).SetKi(ki).SetValues(s)
-	builder = builder.SetPubKey(signing.Verifier().Bytes()).Sign(signing)
+	builder = builder.SetPubKey(signing.PublicKey().Bytes()).Sign(signing)
 
 	return builder.Build()
 }
@@ -43,19 +42,19 @@ func TestPreRoundTracker_OnPreRound(t *testing.T) {
 	tracker.OnPreRound(m1)
 	assert.Equal(t, 1, len(tracker.preRound))      // one msg
 	assert.Equal(t, 2, len(tracker.tracker.table)) // two values
-	g, _ := tracker.preRound[verifier.Verifier().String()]
+	g, _ := tracker.preRound[verifier.PublicKey().String()]
 	assert.True(t, s.Equals(g))
 	assert.Equal(t, uint32(1), tracker.tracker.CountStatus(value1.Id()))
 	nSet := NewSetFromValues(value3, value4)
 	m2 := BuildPreRoundMsg(verifier, nSet)
 	tracker.OnPreRound(m2)
-	h, _ := tracker.preRound[verifier.Verifier().String()]
+	h, _ := tracker.preRound[verifier.PublicKey().String()]
 	assert.True(t, h.Equals(s.Union(nSet)))
 
 	interSet := NewSetFromValues(value1, value2, value5)
 	m3 := BuildPreRoundMsg(verifier, interSet)
 	tracker.OnPreRound(m3)
-	h, _ = tracker.preRound[verifier.Verifier().String()]
+	h, _ = tracker.preRound[verifier.PublicKey().String()]
 	assert.True(t, h.Equals(s.Union(nSet).Union(interSet)))
 	assert.Equal(t, uint32(1), tracker.tracker.CountStatus(value1.Id()))
 	assert.Equal(t, uint32(1), tracker.tracker.CountStatus(value2.Id()))

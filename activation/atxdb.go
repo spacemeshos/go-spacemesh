@@ -3,6 +3,7 @@ package activation
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"github.com/davecgh/go-xdr/xdr2"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -25,21 +26,22 @@ func NewActivationDb(dbstore database.DB, meshDb *mesh.MeshDB, layersPerEpoch ui
 	return &ActivationDb{atxs: dbstore, meshDb: meshDb, LayersPerEpoch: types.LayerID(layersPerEpoch)}
 }
 
-func (m *ActivationDb) ProcessBlockATXs(blk *types.Block) {
+func (db *ActivationDb) ProcessBlockATXs(blk *types.Block) {
 	for _, atx := range blk.ATXs {
-		activeSet, err := m.CalcActiveSetFromView(atx)
+		activeSet, err := db.CalcActiveSetFromView(atx)
 		if err != nil {
 			log.Error("could not calculate active set for %v", atx.Id())
 		}
+		//todo: maybe there is a potential bug in this case if count for the view can change between calls to this function
 		atx.VerifiedActiveSet = activeSet
-		err = m.StoreAtx(types.EpochId(atx.LayerIndex/m.LayersPerEpoch), atx)
+		err = db.StoreAtx(types.EpochId(atx.LayerIdx/db.LayersPerEpoch), atx)
 		if err != nil {
 			log.Error("cannot store atx: %v", atx)
 		}
 	}
 }
 
-func (m *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, error) {
+func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, error) {
 	bytes, err := types.ViewAsBytes(a.View)
 	if err != nil {
 		return 0, err
@@ -52,13 +54,13 @@ func (m *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, err
 
 	var counter uint32 = 0
 	set := make(map[types.AtxId]struct{})
-	firstLayerOfLastEpoch := a.LayerIndex - m.LayersPerEpoch - (a.LayerIndex % m.LayersPerEpoch)
-	lastLayerOfLastEpoch := firstLayerOfLastEpoch + m.LayersPerEpoch
+	firstLayerOfLastEpoch := a.LayerIdx - db.LayersPerEpoch - (a.LayerIdx % db.LayersPerEpoch)
+	lastLayerOfLastEpoch := firstLayerOfLastEpoch + db.LayersPerEpoch
 
 	traversalFunc := func(blkh *types.BlockHeader) error {
-		blk, err := m.meshDb.GetBlock(blkh.Id)
+		blk, err := db.meshDb.GetBlock(blkh.Id)
 		if err != nil {
-			log.Error("cannot validate atx, block %v not found", blk.Id)
+			log.Error("cannot validate atx, block %v not found", blkh.Id)
 			return err
 		}
 		//skip blocks not from atx epoch
@@ -80,18 +82,69 @@ func (m *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, err
 		return nil
 	}
 
-	errHandler := func(er error) {}
-
 	mp := map[types.BlockID]struct{}{}
 	for _, blk := range a.View {
 		mp[blk] = struct{}{}
 	}
 
-	m.meshDb.ForBlockInView(mp, firstLayerOfLastEpoch, traversalFunc, errHandler)
+	db.meshDb.ForBlockInView(mp, firstLayerOfLastEpoch, traversalFunc)
 	activesetCache.Add(common.BytesToHash(bytes), counter)
 
 	return counter, nil
 
+}
+
+//todo: move to config
+const NIPST_LAYERTIME = 1000
+
+func (db *ActivationDb) ValidateAtx(atx *types.ActivationTx) error {
+	// validation rules: no other atx with same id and sequence number
+	// if s != 0 the prevAtx is valid and it's seq num is s -1
+	// positioning atx is valid
+	// validate nipst duration?
+	// fields 1-7 of the atx are the challenge of the poet
+	// layer index i^ satisfies i -i^ < (layers_passed during nipst creation) ANTON: maybe should be ==?
+	// the atx view contains d active Ids
+
+	eatx, _ := db.GetAtx(atx.Id())
+	if eatx != nil {
+		return fmt.Errorf("found atx with same id")
+	}
+	prevAtxIds, err := db.GetNodeAtxIds(atx.NodeId)
+	if err == nil && len(prevAtxIds) > 0 {
+		prevAtx, err := db.GetAtx(prevAtxIds[len(prevAtxIds)-1])
+		if err == nil {
+			if prevAtx.Sequence >= atx.Sequence {
+				return fmt.Errorf("found atx with same seq or greater")
+			}
+		}
+	} else {
+		if prevAtxIds == nil && atx.PrevATXId != types.EmptyAtx {
+			return fmt.Errorf("found atx with invalid prev atx %v", atx.PrevATXId)
+		}
+	}
+	if atx.PositioningAtx != types.EmptyAtx {
+		posAtx, err := db.GetAtx(atx.PositioningAtx)
+		if err != nil {
+			return fmt.Errorf("positioning atx not found")
+		}
+		if !posAtx.Valid {
+			return fmt.Errorf("positioning atx is not valid")
+		}
+		if atx.LayerIdx-posAtx.LayerIdx > NIPST_LAYERTIME {
+			return fmt.Errorf("distance between pos atx invalid %v ", atx.LayerIdx-posAtx.LayerIdx)
+		}
+	} else {
+		if atx.LayerIdx/db.LayersPerEpoch != 0 {
+			return fmt.Errorf("no positioning atx found")
+		}
+	}
+
+	//todo: verify NIPST challange
+	if atx.VerifiedActiveSet <= uint32(db.ActiveIds(types.EpochId(uint64(atx.LayerIdx)/uint64(db.LayersPerEpoch)))) {
+		return fmt.Errorf("positioning atx conatins view with more active ids than seen %v %v", atx.VerifiedActiveSet, db.ActiveIds(types.EpochId(uint64(atx.LayerIdx)/uint64(db.LayersPerEpoch))))
+	}
+	return nil
 }
 
 func (db *ActivationDb) StoreAtx(ech types.EpochId, atx *types.ActivationTx) error {

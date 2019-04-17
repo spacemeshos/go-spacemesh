@@ -165,3 +165,94 @@ func TestMesh_processBlockATXs(t *testing.T) {
 	assert.Equal(t, 3, int(atxdb.ActiveIds(1)))
 	assert.Equal(t, 3, int(atxdb.ActiveIds(2)))
 }
+
+func TestActivationDB_ValidateAtx(t *testing.T) {
+	atxdb, layers := getAtxDb("t8")
+
+	idx1 := types.NodeId{Key: uuid.New().String()}
+
+	id1 := types.NodeId{Key: uuid.New().String()}
+	id2 := types.NodeId{Key: uuid.New().String()}
+	id3 := types.NodeId{Key: uuid.New().String()}
+	atxs := []*types.ActivationTx{
+		types.NewActivationTx(id1, 0, types.EmptyAtx, 1, 0, types.EmptyAtx, 3, []types.BlockID{}, &nipst.NIPST{}),
+		types.NewActivationTx(id2, 0, types.EmptyAtx, 1, 0, types.EmptyAtx, 3, []types.BlockID{}, &nipst.NIPST{}),
+		types.NewActivationTx(id3, 0, types.EmptyAtx, 1, 0, types.EmptyAtx, 3, []types.BlockID{}, &nipst.NIPST{}),
+	}
+
+	blocks := createLayerWithAtx(layers, 1, 10, atxs, []types.BlockID{}, []types.BlockID{})
+	blocks = createLayerWithAtx(layers, 10, 10, []*types.ActivationTx{}, blocks, blocks)
+	blocks = createLayerWithAtx(layers, 100, 10, []*types.ActivationTx{}, blocks, blocks)
+
+	//atx := types.NewActivationTx(id1, 1, atxs[0].Id(), 1000, 0, atxs[0].Id(), 3, blocks, &nipst.NIPST{})
+	prevAtx := types.NewActivationTx(idx1, 0, types.EmptyAtx, 100, 0, types.EmptyAtx, 3, blocks, &nipst.NIPST{})
+	prevAtx.Valid = true
+
+	atx := types.NewActivationTx(idx1, 1, prevAtx.Id(), 1012, 0, prevAtx.Id(), 3, []types.BlockID{}, &nipst.NIPST{})
+	atx.VerifiedActiveSet = 3
+	err := atxdb.StoreAtx(1, prevAtx)
+	assert.NoError(t, err)
+
+	err = atxdb.ValidateAtx(atx)
+	assert.NoError(t, err)
+}
+
+func TestActivationDB_ValidateAtxErrors(t *testing.T) {
+	atxdb, layers := getAtxDb("t8")
+
+	idx1 := types.NodeId{Key: uuid.New().String()}
+
+	id1 := types.NodeId{Key: uuid.New().String()}
+	id2 := types.NodeId{Key: uuid.New().String()}
+	id3 := types.NodeId{Key: uuid.New().String()}
+	atxs := []*types.ActivationTx{
+		types.NewActivationTx(id1, 0, types.EmptyAtx, 1, 0, types.EmptyAtx, 3, []types.BlockID{}, &nipst.NIPST{}),
+		types.NewActivationTx(id2, 0, types.EmptyAtx, 1, 0, types.EmptyAtx, 3, []types.BlockID{}, &nipst.NIPST{}),
+		types.NewActivationTx(id3, 0, types.EmptyAtx, 1, 0, types.EmptyAtx, 3, []types.BlockID{}, &nipst.NIPST{}),
+	}
+
+	blocks := createLayerWithAtx(layers, 1, 10, atxs, []types.BlockID{}, []types.BlockID{})
+	blocks = createLayerWithAtx(layers, 10, 10, []*types.ActivationTx{}, blocks, blocks)
+	blocks = createLayerWithAtx(layers, 100, 10, []*types.ActivationTx{}, blocks, blocks)
+
+	//atx := types.NewActivationTx(id1, 1, atxs[0].Id(), 1000, 0, atxs[0].Id(), 3, blocks, &nipst.NIPST{})
+	prevAtx := types.NewActivationTx(idx1, 0, types.EmptyAtx, 100, 0, types.EmptyAtx, 3, blocks, &nipst.NIPST{})
+	prevAtx.Valid = true
+
+	err := atxdb.StoreAtx(1, prevAtx)
+	assert.NoError(t, err)
+
+	//todo: can test against exact error strings
+	//wrong sequnce
+	atx := types.NewActivationTx(idx1, 0, prevAtx.Id(), 1012, 0, prevAtx.Id(), 3, []types.BlockID{}, &nipst.NIPST{})
+	err = atxdb.ValidateAtx(atx)
+	assert.Error(t, err)
+
+	//wrong active set
+	atx = types.NewActivationTx(idx1, 1, prevAtx.Id(), 1012, 0, prevAtx.Id(), 10, []types.BlockID{}, &nipst.NIPST{})
+	err = atxdb.ValidateAtx(atx)
+	assert.Error(t, err)
+
+	//wrong positioning atx
+	atx = types.NewActivationTx(idx1, 1, prevAtx.Id(), 1012, 0, atxs[0].Id(), 3, []types.BlockID{}, &nipst.NIPST{})
+	err = atxdb.ValidateAtx(atx)
+	assert.Error(t, err)
+
+	//wrong prevATx
+	atx = types.NewActivationTx(idx1, 1, atxs[0].Id(), 1012, 0, prevAtx.Id(), 3, []types.BlockID{}, &nipst.NIPST{})
+	err = atxdb.ValidateAtx(atx)
+	assert.Error(t, err)
+
+	//wrong layerId
+	atx = types.NewActivationTx(idx1, 1, prevAtx.Id(), 12, 0, prevAtx.Id(), 3, []types.BlockID{}, &nipst.NIPST{})
+	err = atxdb.ValidateAtx(atx)
+	assert.Error(t, err)
+
+	//atx already exists
+	err = atxdb.StoreAtx(1, atx)
+	assert.NoError(t, err)
+	atx = types.NewActivationTx(idx1, 1, prevAtx.Id(), 12, 0, prevAtx.Id(), 3, []types.BlockID{}, &nipst.NIPST{})
+	err = atxdb.ValidateAtx(atx)
+	assert.Error(t, err)
+	//atx = types.NewActivationTx(idx1, 1, prevAtx.Id(), 1012, 0, prevAtx.Id(), 3, []types.BlockID{}, &nipst.NIPST{})
+}
