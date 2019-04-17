@@ -28,6 +28,10 @@ var InfoLevel = zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
 	return lvl >= zapcore.InfoLevel
 })
 
+var ErrorLevel = zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
+	return lvl >= zapcore.ErrorLevel
+})
+
 func logLevel() zap.LevelEnablerFunc {
 	if debugMode {
 		return DebugLevel
@@ -69,6 +73,28 @@ func New(module string, dataFolderPath string, logFileName string) Log {
 	enc := encoder()
 
 	cores = append(cores, zapcore.NewCore(enc, consoleSyncer, logLevel()))
+
+	if dataFolderPath != "" && logFileName != "" {
+		wr := getFileWriter(dataFolderPath, logFileName)
+		fs := zapcore.AddSync(wr)
+		cores = append(cores, zapcore.NewCore(enc, fs, DebugLevel))
+	}
+
+	core := zapcore.NewTee(cores...)
+
+	log := zap.New(core)
+	log = log.Named(module)
+	return Log{log, log.Sugar()}
+}
+
+// New creates a logger for a module. e.g. p2p instance logger.
+func NewWithErrorLevel(module string, dataFolderPath string, logFileName string) Log {
+	var cores []zapcore.Core
+
+	consoleSyncer := zapcore.AddSync(os.Stdout)
+	enc := encoder()
+
+	cores = append(cores, zapcore.NewCore(enc, consoleSyncer, ErrorLevel))
 
 	if dataFolderPath != "" && logFileName != "" {
 		wr := getFileWriter(dataFolderPath, logFileName)

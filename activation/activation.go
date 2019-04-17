@@ -3,9 +3,7 @@ package activation
 import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common"
-	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/types"
@@ -66,10 +64,12 @@ type Processor struct {
 	epochProvider EpochProvider
 }
 
-func NewBuilder(nodeId types.NodeId, db database.DB, meshdb *mesh.MeshDB, net Broadcaster, activeSet ActiveSetProvider, view MeshProvider, layersPerEpoch uint16, nipstBuilder NipstBuilder, layerClock chan types.LayerID) *Builder {
+func NewBuilder(nodeId types.NodeId, db *ActivationDb, net Broadcaster, activeSet ActiveSetProvider, view MeshProvider,
+	layersPerEpoch uint16, nipstBuilder NipstBuilder, layerClock chan types.LayerID) *Builder {
+
 	return &Builder{
 		nodeId:         nodeId,
-		db:             NewActivationDb(db, meshdb, uint64(layersPerEpoch), nodeId),
+		db:             db,
 		net:            net,
 		activeSet:      activeSet,
 		mesh:           view,

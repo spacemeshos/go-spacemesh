@@ -11,11 +11,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"io"
+	"sync"
 )
 
 const CounterKey = 0xaaaa
 
 type ActivationDb struct {
+	sync.RWMutex
 	//todo: think about whether we need one db or several
 	atxs           database.DB
 	meshDb         *mesh.MeshDB
@@ -24,7 +26,7 @@ type ActivationDb struct {
 }
 
 func NewActivationDb(dbstore database.DB, meshDb *mesh.MeshDB, layersPerEpoch uint64, nodeID types.NodeId) *ActivationDb {
-	lg := log.NewDefault(nodeID.Key[:5] + ".activation")
+	lg := log.NewDefault("activation")
 	return &ActivationDb{atxs: dbstore, meshDb: meshDb, LayersPerEpoch: types.LayerID(layersPerEpoch), log: lg}
 }
 
@@ -36,7 +38,7 @@ func (db *ActivationDb) ProcessBlockATXs(blk *types.Block) {
 
 func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx) {
 	epoch := types.EpochId(atx.LayerIdx / db.LayersPerEpoch)
-	db.log.Info("processing atx id %v, epoch %v", atx.Id().String()[2:7], epoch)
+	db.log.Info("processing atx id %v, epoch %v node: %v", atx.Id().String()[2:7], epoch, atx.NodeId.Key[:5])
 	activeSet, err := db.CalcActiveSetFromView(atx)
 	if err != nil {
 		db.log.Error("could not calculate active set for %v", atx.Id())
@@ -147,8 +149,12 @@ func (db *ActivationDb) ValidateAtx(atx *types.ActivationTx) error {
 			return fmt.Errorf("no prevATX reported, but sequence number not zero")
 		}
 		prevAtxIds, err := db.GetNodeAtxIds(atx.NodeId)
-		if err == nil || len(prevAtxIds) > 0 {
-			return fmt.Errorf("no prevATX reported, but other ATXs with same nodeID found")
+		if err == nil && len(prevAtxIds) > 0 {
+			var ids []string
+			for _, x := range prevAtxIds {
+				ids = append(ids,x.String()[2:7])
+			}
+			return fmt.Errorf("no prevATX reported, but other ATXs with same nodeID (%v) found, atxs: %v", atx.NodeId.Key[:5], ids)
 		}
 	}
 
@@ -188,6 +194,8 @@ func (db *ActivationDb) ValidateAtx(atx *types.ActivationTx) error {
 }
 
 func (db *ActivationDb) StoreAtx(ech types.EpochId, atx *types.ActivationTx) error {
+	db.Lock()
+	defer db.Unlock()
 	db.log.Debug("storing atx %v, in epoch %v", atx, ech)
 
 	//todo: maybe cleanup DB if failed by using defer
@@ -233,7 +241,9 @@ func (db *ActivationDb) incValidAtxCounter(ech types.EpochId) error {
 
 func (db *ActivationDb) ActiveSetIds(ech types.EpochId) uint32 {
 	key := epochCounterKey(ech)
+	db.RLock()
 	val, err := db.atxs.Get(key)
+	db.RUnlock()
 	if err != nil {
 		return 0
 	}
@@ -261,8 +271,14 @@ func (db *ActivationDb) addAtxToEpoch(epochId types.EpochId, atx types.AtxId) er
 	return db.atxs.Put(epochId.ToBytes(), w)
 }
 
+func getNodeIdKey(id types.NodeId) []byte {
+	return []byte(id.Key)
+}
+
 func (db *ActivationDb) addAtxToNodeId(nodeId types.NodeId, atx types.AtxId) error {
-	ids, err := db.atxs.Get(nodeId.ToBytes())
+	key := getNodeIdKey(nodeId)
+	db.log.Info("adding atx %v to nodeId %v", atx.String()[2:7], nodeId.Key[:5])
+	ids, err := db.atxs.Get(key)
 	var atxs []types.AtxId
 	if err != nil {
 		//layer doesnt exist, need to insert new layer
@@ -279,11 +295,16 @@ func (db *ActivationDb) addAtxToNodeId(nodeId types.NodeId, atx types.AtxId) err
 	if err != nil {
 		return errors.New("could not encode layer atx ids")
 	}
-	return db.atxs.Put(nodeId.ToBytes(), w)
+	return db.atxs.Put(key, w)
 }
 
-func (db *ActivationDb) GetNodeAtxIds(node types.NodeId) ([]types.AtxId, error) {
-	ids, err := db.atxs.Get(node.ToBytes())
+func (db *ActivationDb) GetNodeAtxIds(nodeId types.NodeId) ([]types.AtxId, error) {
+	key := getNodeIdKey(nodeId)
+	db.log.Info("fetching atxIDs for node %v", nodeId.Key[:5])
+
+	db.RLock()
+	ids, err := db.atxs.Get(key)
+	db.RUnlock()
 	if err != nil {
 		return nil, err
 	}
@@ -295,7 +316,9 @@ func (db *ActivationDb) GetNodeAtxIds(node types.NodeId) ([]types.AtxId, error) 
 }
 
 func (db *ActivationDb) GetEpochAtxIds(epochId types.EpochId) ([]types.AtxId, error) {
+	db.RLock()
 	ids, err := db.atxs.Get(epochId.ToBytes())
+	db.RUnlock()
 	if err != nil {
 		return nil, err
 	}
@@ -307,7 +330,9 @@ func (db *ActivationDb) GetEpochAtxIds(epochId types.EpochId) ([]types.AtxId, er
 }
 
 func (db *ActivationDb) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
+	db.RLock()
 	b, err := db.atxs.Get(id.Bytes())
+	db.RUnlock()
 	if err != nil {
 		return nil, err
 	}

@@ -2,6 +2,7 @@ package activation
 
 import (
 	"fmt"
+	"github.com/google/uuid"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -71,16 +72,17 @@ func (np *NipstErrBuilderMock) BuildNIPST(challenge *common.Hash) (*nipst.NIPST,
 
 func TestBuilder_BuildActivationTx(t *testing.T) {
 	//todo: implement test
-	id := types.NodeId{"aaaaa", []byte("bbb")}
+	id := types.NodeId{"aaaaaa", []byte("bbb")}
 	net := &NetMock{}
 	layers := MeshProviderrMock{}
 	layersPerEpoch := uint16(10)
-	b := NewBuilder(id, database.NewMemDatabase(), mesh.NewMemMeshDB(log.NewDefault("")), net, ActiveSetProviderMock{}, layers, 10, &NipstBuilderMock{}, nil)
+	activationDb := NewActivationDb(database.NewMemDatabase(), mesh.NewMemMeshDB(log.NewDefault("")), uint64(layersPerEpoch), id)
+	b := NewBuilder(id, activationDb, net, ActiveSetProviderMock{}, layers, 10, &NipstBuilderMock{}, nil)
 	adb := b.db
 	prevAtx := types.AtxId{Hash: common.HexToHash("0x111")}
 	chlng := common.HexToHash("0x3333")
 	npst := nipst.NewNIPSTWithChallenge(&chlng)
-	atx := types.NewActivationTx(types.NodeId{"aaaaa", []byte("bbb")}, 1, prevAtx, 5, 1, prevAtx, 5, []types.BlockID{1, 2, 3}, npst, true)
+	atx := types.NewActivationTx(types.NodeId{"aaaaaa", []byte("bbb")}, 1, prevAtx, 5, 1, prevAtx, 5, []types.BlockID{1, 2, 3}, npst, true)
 	err := adb.StoreAtx(atx.LayerIdx.GetEpoch(layersPerEpoch), atx)
 	assert.NoError(t, err)
 
@@ -107,21 +109,24 @@ func TestBuilder_BuildActivationTx(t *testing.T) {
 
 func TestBuilder_NoPrevATX(t *testing.T) {
 	//todo: implement test
-	id := types.NodeId{"aaaa", []byte("bbb")}
+	id := types.NodeId{uuid.New().String(), []byte("bbb")}
 	net := &NetMock{}
 	layers := MeshProviderrMock{}
-	b := NewBuilder(id, database.NewMemDatabase(), mesh.NewMemMeshDB(log.NewDefault("")), net, ActiveSetProviderMock{}, layers, 10, &NipstBuilderMock{}, nil)
+	layersPerEpoch := uint16(10)
+	activationDb := NewActivationDb(database.NewMemDatabase(), mesh.NewMemMeshDB(log.NewDefault("")), uint64(layersPerEpoch), id)
+	b := NewBuilder(id, activationDb, net, ActiveSetProviderMock{}, layers, layersPerEpoch, &NipstBuilderMock{}, nil)
 	err := b.PublishActivationTx(1)
 	assert.Error(t, err)
 }
 
 func TestBuilder_PublishActivationTx(t *testing.T) {
-	id := types.NodeId{"aaaaa", []byte("bbb")}
+	id := types.NodeId{uuid.New().String(), []byte("bbb")}
 	net := &NetMock{}
 	layers := MeshProviderrMock{}
 	nipstBuilder := &NipstBuilderMock{}
 	layersPerEpoch := uint16(10)
-	b := NewBuilder(id, database.NewMemDatabase(), mesh.NewMemMeshDB(log.NewDefault("")), net, ActiveSetProviderMock{}, layers, layersPerEpoch, nipstBuilder, nil)
+	activationDb := NewActivationDb(database.NewMemDatabase(), mesh.NewMemMeshDB(log.NewDefault("")), uint64(layersPerEpoch), id)
+	b := NewBuilder(id, activationDb, net, ActiveSetProviderMock{}, layers, layersPerEpoch, nipstBuilder, nil)
 	adb := b.db
 	prevAtx := types.AtxId{Hash: common.HexToHash("0x111")}
 	chlng := common.HexToHash("0x3333")
@@ -159,25 +164,28 @@ func TestBuilder_PublishActivationTx(t *testing.T) {
 	err = b.PublishActivationTx(2)
 	assert.Error(t, err)
 
-	b = NewBuilder(id, database.NewMemDatabase(), mesh.NewMemMeshDB(log.NewDefault("")), net, ActiveSetProviderMock{}, layers, layersPerEpoch, nipstBuilder, nil)
+	activationDb2 := NewActivationDb(database.NewMemDatabase(), mesh.NewMemMeshDB(log.NewDefault("")), uint64(layersPerEpoch), id)
+	b = NewBuilder(id, activationDb2, net, ActiveSetProviderMock{}, layers, layersPerEpoch, nipstBuilder, nil)
 	b.nipstBuilder = &NipstErrBuilderMock{}
 	err = b.PublishActivationTx(0)
 	assert.Error(t, err)
 	assert.Equal(t, err.Error(), "cannot create nipst error")
 
-	bt := NewBuilder(id, database.NewMemDatabase(), mesh.NewMemMeshDB(log.NewDefault("")), net, ActiveSetProviderMock{}, layers, layersPerEpoch, &NipstBuilderMock{}, nil)
+	activationDb3 := NewActivationDb(database.NewMemDatabase(), mesh.NewMemMeshDB(log.NewDefault("")), uint64(layersPerEpoch), id)
+	bt := NewBuilder(id, activationDb3, net, ActiveSetProviderMock{}, layers, layersPerEpoch, &NipstBuilderMock{}, nil)
 	err = bt.PublishActivationTx(1)
 	assert.Error(t, err)
 
 }
 
 func TestBuilder_PublishActivationTxSerialize(t *testing.T) {
-	id := types.NodeId{"aaaa", []byte("bbb")}
+	id := types.NodeId{uuid.New().String(), []byte("bbb")}
 	net := &NetMock{}
 	layers := MeshProviderrMock{}
 	nipstBuilder := &NipstBuilderMock{}
 	layersPerEpoch := uint16(10)
-	b := NewBuilder(id, database.NewMemDatabase(), mesh.NewMemMeshDB(log.NewDefault("")), net, ActiveSetProviderMock{}, layers, layersPerEpoch, nipstBuilder, nil)
+	activationDb := NewActivationDb(database.NewMemDatabase(), mesh.NewMemMeshDB(log.NewDefault("")), uint64(layersPerEpoch), id)
+	b := NewBuilder(id, activationDb, net, ActiveSetProviderMock{}, layers, layersPerEpoch, nipstBuilder, nil)
 	adb := b.db
 	prevAtx := types.AtxId{Hash: common.HexToHash("0x111")}
 	challenge1 := common.HexToHash("0x222222")

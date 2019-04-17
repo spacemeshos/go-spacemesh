@@ -125,6 +125,49 @@ func Test_CalcActiveSetFromView(t *testing.T) {
 	assert.Equal(t, 3, int(num))
 }
 
+func Test_DBSanity(t *testing.T) {
+	atxdb, _ := getAtxDb("t6")
+
+	id1 := types.NodeId{Key: uuid.New().String()}
+	id2 := types.NodeId{Key: uuid.New().String()}
+	id3 := types.NodeId{Key: uuid.New().String()}
+
+
+	atx1 := types.AtxId{common.HexToHash("0x1234")}
+	atx2 := types.AtxId{common.HexToHash("0x5679")}
+	atx3 := types.AtxId{common.HexToHash("0x5699")}
+
+	err := atxdb.addAtxToNodeId(id1, atx1)
+	assert.NoError(t, err)
+	ids, err := atxdb.GetNodeAtxIds(id1)
+	assert.NoError(t, err)
+	assert.Equal(t,1,len(ids))
+	assert.Equal(t, atx1, ids[0])
+
+	err = atxdb.addAtxToNodeId(id2, atx2)
+	assert.NoError(t, err)
+
+	err = atxdb.addAtxToNodeId(id1, atx3)
+	assert.NoError(t, err)
+
+	ids, err = atxdb.GetNodeAtxIds(id2)
+	assert.NoError(t, err)
+	assert.Equal(t,1,len(ids))
+	assert.Equal(t, atx2, ids[0])
+
+	ids, err = atxdb.GetNodeAtxIds(id1)
+	assert.NoError(t, err)
+	assert.Equal(t,2,len(ids))
+	assert.Equal(t, atx1, ids[0])
+
+	ids, err = atxdb.GetNodeAtxIds(id3)
+	assert.Error(t, err)
+	assert.Equal(t, 0, len(ids))
+
+
+
+}
+
 func Test_Wrong_CalcActiveSetFromView(t *testing.T) {
 	atxdb, layers := getAtxDb("t6")
 
