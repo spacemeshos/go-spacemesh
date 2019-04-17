@@ -199,7 +199,7 @@ func TestMesh_processBlockATXs(t *testing.T) {
 	id3 := types.NodeId{Key: uuid.New().String()}
 	chlng := common.HexToHash("0x3333")
 	npst := nipst.NewNIPSTWithChallenge(&chlng)
-	posATX := types.NewActivationTx(types.NodeId{}, 0, types.EmptyAtxId, 1000, 0, types.EmptyAtxId, 0, []types.BlockID{}, npst, true)
+	posATX := types.NewActivationTx(types.NodeId{"aaaaaa",[]byte{}}, 0, types.EmptyAtxId, 1000, 0, types.EmptyAtxId, 0, []types.BlockID{}, npst, true)
 	err := atxdb.StoreAtx(0, posATX)
 	assert.NoError(t, err)
 	atxs := []*types.ActivationTx{

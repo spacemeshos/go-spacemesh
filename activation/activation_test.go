@@ -120,7 +120,7 @@ func TestBuilder_NoPrevATX(t *testing.T) {
 }
 
 func TestBuilder_PublishActivationTx(t *testing.T) {
-	id := types.NodeId{uuid.New().String(), []byte("bbb")}
+	id := types.NodeId{"aaaaaa", []byte("bbb")}
 	net := &NetMock{}
 	layers := MeshProviderrMock{}
 	nipstBuilder := &NipstBuilderMock{}
@@ -132,7 +132,7 @@ func TestBuilder_PublishActivationTx(t *testing.T) {
 	chlng := common.HexToHash("0x3333")
 	npst := nipst.NewNIPSTWithChallenge(&chlng)
 
-	atx := types.NewActivationTx(types.NodeId{"aaaaa", []byte("bbb")}, 1, prevAtx, 5, 1, prevAtx, 5, []types.BlockID{1, 2, 3}, npst, true)
+	atx := types.NewActivationTx(types.NodeId{"aaaaaa", []byte("bbb")}, 1, prevAtx, 5, 1, prevAtx, 5, []types.BlockID{1, 2, 3}, npst, true)
 
 	err := adb.StoreAtx(atx.LayerIdx.GetEpoch(layersPerEpoch), atx)
 	assert.NoError(t, err)
@@ -179,7 +179,7 @@ func TestBuilder_PublishActivationTx(t *testing.T) {
 }
 
 func TestBuilder_PublishActivationTxSerialize(t *testing.T) {
-	id := types.NodeId{uuid.New().String(), []byte("bbb")}
+	id := types.NodeId{"aaaaaa", []byte("bbb")}
 	net := &NetMock{}
 	layers := MeshProviderrMock{}
 	nipstBuilder := &NipstBuilderMock{}
@@ -191,7 +191,7 @@ func TestBuilder_PublishActivationTxSerialize(t *testing.T) {
 	challenge1 := common.HexToHash("0x222222")
 	npst := nipst.NewNIPSTWithChallenge(&challenge1)
 
-	atx := types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")}, 1, prevAtx, 5, 1, prevAtx, 5, []types.BlockID{1, 2, 3}, npst, true)
+	atx := types.NewActivationTx(types.NodeId{"aaaaaa", []byte("bbb")}, 1, prevAtx, 5, 1, prevAtx, 5, []types.BlockID{1, 2, 3}, npst, true)
 
 	err := adb.StoreAtx(atx.LayerIdx.GetEpoch(layersPerEpoch), atx)
 	assert.NoError(t, err)
