@@ -363,7 +363,7 @@ func (nb *NIPSTBuilder) InitializePost() (*PostProof, error) {
 
 func NewNIPSTWithChallenge(challenge *common.Hash) *NIPST {
 	return &NIPST{
-		Id:             []byte{},
+		Id:             []byte(nil),
 		Space:          0,
 		Duration:       0,
 		NipstChallenge: challenge,
@@ -373,23 +373,23 @@ func NewNIPSTWithChallenge(challenge *common.Hash) *NIPST {
 		PoetMembershipProof: &MembershipProof{
 			Index: 0,
 			Root:  common.Hash{},
-			Proof: [][]byte{},
+			Proof: [][]byte(nil),
 		},
 		PoetProof: &PoetProof{
-			Commitment: []byte{},
+			Commitment: []byte(nil),
 			N:          0,
 			Proof: &shared.Proof{
-				Phi: []byte{},
+				Phi: []byte(nil),
 				L:   [150]shared.Labels{},
 			},
 		},
 		PostChallenge: challenge,
 		PostProof: &PostProof{
-			Identity:     []byte{},
-			Challenge:    []byte{},
-			MerkleRoot:   []byte{},
-			ProofNodes:   [][]byte{},
-			ProvenLeaves: [][]byte{},
+			Identity:     []byte(nil),
+			Challenge:    []byte(nil),
+			MerkleRoot:   []byte(nil),
+			ProofNodes:   [][]byte(nil),
+			ProvenLeaves: [][]byte(nil),
 		},
 	}
 }
