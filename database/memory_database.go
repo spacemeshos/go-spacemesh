@@ -47,7 +47,7 @@ func (db *MemDatabase) Put(key []byte, value []byte) error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
-	db.db[common.Bytes2Hex(key)] = common.CopyBytes(value)
+	db.db[string(key)] = common.CopyBytes(value)
 	return nil
 }
 
@@ -55,7 +55,7 @@ func (db *MemDatabase) Has(key []byte) (bool, error) {
 	db.lock.RLock()
 	defer db.lock.RUnlock()
 
-	_, ok := db.db[common.Bytes2Hex(key)]
+	_, ok := db.db[string(key)]
 	return ok, nil
 }
 
@@ -63,7 +63,7 @@ func (db *MemDatabase) Get(key []byte) ([]byte, error) {
 	db.lock.RLock()
 	defer db.lock.RUnlock()
 
-	if entry, ok := db.db[common.Bytes2Hex(key)]; ok {
+	if entry, ok := db.db[string(key)]; ok {
 		return common.CopyBytes(entry), nil
 	}
 	return nil, errors.New("not found")
@@ -84,7 +84,7 @@ func (db *MemDatabase) Delete(key []byte) error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
-	delete(db.db, common.Bytes2Hex(key))
+	delete(db.db, string(key))
 	return nil
 }
 
@@ -102,7 +102,7 @@ func (db *MemDatabase) NewMemDatabaseIterator() *MemDatabaseIterator {
 		keys = append(keys, []byte(k))
 	}
 	sort.Slice(keys, func(i, j int) bool {
-		return common.Bytes2Hex(keys[i]) < common.Bytes2Hex(keys[j])
+		return string(keys[i]) < string(keys[j])
 	})
 	return &MemDatabaseIterator{
 		keys:  keys,
@@ -144,10 +144,10 @@ func (b *memBatch) Write() error {
 
 	for _, kv := range b.writes {
 		if kv.del {
-			delete(b.db.db, common.Bytes2Hex(kv.k))
+			delete(b.db.db, string(kv.k))
 			continue
 		}
-		b.db.db[common.Bytes2Hex(kv.k)] = kv.v
+		b.db.db[string(kv.k)] = kv.v
 	}
 	return nil
 }
