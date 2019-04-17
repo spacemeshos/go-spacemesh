@@ -385,10 +385,10 @@ func NewNIPSTWithChallenge(challenge *common.Hash) *NIPST {
 		},
 		PostChallenge: challenge,
 		PostProof: &PostProof{
-			Identity: []byte{},
-			Challenge: []byte{},
-			MerkleRoot: []byte{},
-			ProofNodes: [][]byte{},
+			Identity:     []byte{},
+			Challenge:    []byte{},
+			MerkleRoot:   []byte{},
+			ProofNodes:   [][]byte{},
 			ProvenLeaves: [][]byte{},
 		},
 	}

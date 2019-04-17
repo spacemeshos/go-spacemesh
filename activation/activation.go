@@ -128,7 +128,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 		if err != nil {
 			return fmt.Errorf("cannot find prev atx " + err.Error())
 		}
-		if atx.LayerIdx.GetEpoch(b.layersPerEpoch) == epoch + 1 {
+		if atx.LayerIdx.GetEpoch(b.layersPerEpoch) == epoch+1 {
 			return fmt.Errorf("atx already created for epoch %v", epoch)
 		}
 		seq = atx.Sequence + 1

@@ -96,7 +96,7 @@ func TestBuilder_BuildActivationTx(t *testing.T) {
 
 	bytes, err := challenge.Hash()
 	npst2 := nipst.NewNIPSTWithChallenge(bytes)
-	act := types.NewActivationTxWithChallenge(challenge,  b.activeSet.ActiveSetIds(1), b.mesh.GetLatestVerified(), npst2, true)
+	act := types.NewActivationTxWithChallenge(challenge, b.activeSet.ActiveSetIds(1), b.mesh.GetLatestVerified(), npst2, true)
 
 	err = b.PublishActivationTx(layers.LatestLayerId().GetEpoch(layersPerEpoch))
 	assert.NoError(t, err)
@@ -197,5 +197,5 @@ func TestBuilder_PublishActivationTxSerialize(t *testing.T) {
 	a, err := types.BytesAsAtx(bt)
 	assert.NoError(t, err)
 	bt2, err := types.AtxAsBytes(a)
-	assert.Equal(t, bt,bt2)
+	assert.Equal(t, bt, bt2)
 }
