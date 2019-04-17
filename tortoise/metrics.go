@@ -1,4 +1,4 @@
-package consensus
+package tortoise
 
 import (
 	"github.com/go-kit/kit/metrics"

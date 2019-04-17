@@ -1,4 +1,4 @@
-package consensus
+package tortoise
 
 import (
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -17,8 +17,8 @@ type Tortoise interface {
 	getVotes() map[types.BlockID]vec
 }
 
-func NewAlgorithm(trtl Tortoise) *Algorithm {
-	alg := &Algorithm{Tortoise: trtl}
+func NewAlgorithm(layerSize int, mdb *mesh.MeshDB, lg log.Log) *Algorithm {
+	alg := &Algorithm{Tortoise: NewNinjaTortoise(layerSize, mdb, lg)}
 	alg.HandleIncomingLayer(mesh.GenesisLayer())
 	return alg
 }
