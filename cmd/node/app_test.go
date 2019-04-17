@@ -5,11 +5,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/address"
 	apiCfg "github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
-	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	sync2 "github.com/spacemeshos/go-spacemesh/sync"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/suite"
@@ -56,13 +56,13 @@ func (app *AppTestSuite) initMultipleInstances(t *testing.T, numOfInstances int,
 		store := storeFormat + string(runningName)
 		n := net.NewNode()
 
-		sgn := hare.NewMockSigning() //todo: shouldn't be any mock code here
-		pub := sgn.Verifier()
+		edSgn := signing.NewEdSigner()
+		pub := edSgn.PublicKey()
 		bo := oracle.NewLocalOracle(rolacle, numOfInstances, types.NodeId{Key: pub.String()})
 		bo.Register(true, pub.String())
 
 		bv := sync2.BlockValidatorMock{}
-		err := app.apps[i].initServices(types.NodeId{Key: pub.String()}, n, store, sgn, bo, bv, bo, numOfInstances)
+		err := app.apps[i].initServices(types.NodeId{Key: pub.String()}, n, store, edSgn, bo, bv, bo, numOfInstances)
 		assert.NoError(t, err)
 		app.apps[i].setupGenesis(apiCfg.DefaultGenesisConfig())
 		app.dbs = append(app.dbs, store)

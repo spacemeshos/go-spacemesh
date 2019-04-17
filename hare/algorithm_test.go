@@ -7,6 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
@@ -23,12 +24,12 @@ type mockMessageValidator struct {
 	firstK        int32
 }
 
-func (mmv *mockMessageValidator) SyntacticallyValidateMessage(m *pb.HareMessage) bool {
+func (mmv *mockMessageValidator) SyntacticallyValidateMessage(m *Msg) bool {
 	mmv.countSyntax++
 	return mmv.syntaxValid
 }
 
-func (mmv *mockMessageValidator) ContextuallyValidateMessage(m *pb.HareMessage, expectedK int32) bool {
+func (mmv *mockMessageValidator) ContextuallyValidateMessage(m *Msg, expectedK int32) bool {
 	mmv.countContext++
 	if mmv.firstK == expectedK {
 		return mmv.contextValid
@@ -73,11 +74,11 @@ type mockProposalTracker struct {
 	countProposedSet    int
 }
 
-func (mpt *mockProposalTracker) OnProposal(msg *pb.HareMessage) {
+func (mpt *mockProposalTracker) OnProposal(msg *Msg) {
 	mpt.countOnProposal++
 }
 
-func (mpt *mockProposalTracker) OnLateProposal(msg *pb.HareMessage) {
+func (mpt *mockProposalTracker) OnLateProposal(msg *Msg) {
 	mpt.countOnLateProposal++
 }
 
@@ -99,7 +100,7 @@ type mockCommitTracker struct {
 	certificate           *pb.Certificate
 }
 
-func (mct *mockCommitTracker) OnCommit(msg *pb.HareMessage) {
+func (mct *mockCommitTracker) OnCommit(msg *Msg) {
 	mct.countOnCommit++
 }
 
@@ -113,12 +114,12 @@ func (mct *mockCommitTracker) BuildCertificate() *pb.Certificate {
 	return mct.certificate
 }
 
-func generateSigning(t *testing.T) Signing {
-	return NewMockSigning()
+func generateSigning(t *testing.T) Signer {
+	return signing.NewEdSigner()
 }
 
-func buildMessage(msg *pb.HareMessage) *pb.HareMessage {
-	return msg
+func buildMessage(msg *pb.HareMessage) *Msg {
+	return &Msg{msg, nil}
 }
 
 func buildBroker(net NetworkService) *Broker {
@@ -129,7 +130,7 @@ type mockEligibilityValidator struct {
 	valid bool
 }
 
-func (mev *mockEligibilityValidator) Validate(m *pb.HareMessage) bool {
+func (mev *mockEligibilityValidator) Validate(m *Msg) bool {
 	return mev.valid
 }
 
@@ -192,8 +193,7 @@ func TestConsensusProcess_handleMessage(t *testing.T) {
 	mValidator.firstK = proc.k
 	proc.validator = mValidator
 	proc.inbox = broker.Register(proc.Id())
-	m := BuildPreRoundMsg(generateSigning(t), NewSetFromValues(value1))
-	msg := buildMessage(m)
+	msg := BuildPreRoundMsg(generateSigning(t), NewSetFromValues(value1))
 	oracle.isEligible = true
 	mValidator.syntaxValid = false
 	proc.handleMessage(msg)
@@ -234,11 +234,11 @@ func generateConsensusProcess(t *testing.T) *ConsensusProcess {
 
 	s := NewSetFromValues(value1)
 	oracle := NewMockHashOracle(numOfClients)
-	signing := NewMockSigning()
-	oracle.Register(signing.Verifier().String())
+	signing := signing.NewEdSigner()
+	oracle.Register(signing.PublicKey().String())
 	output := make(chan TerminationOutput, 1)
 
-	return NewConsensusProcess(cfg, instanceId1, s, oracle, signing, n1, output, log.NewDefault(signing.Verifier().String()))
+	return NewConsensusProcess(cfg, instanceId1, s, oracle, signing, n1, output, log.NewDefault(signing.PublicKey().String()))
 }
 
 func TestConsensusProcess_Id(t *testing.T) {
@@ -256,7 +256,7 @@ func TestNewConsensusProcess_AdvanceToNextRound(t *testing.T) {
 
 func TestConsensusProcess_CreateInbox(t *testing.T) {
 	proc := generateConsensusProcess(t)
-	inbox := make(chan *pb.HareMessage, 100)
+	inbox := make(chan *Msg, 100)
 	proc.SetInbox(inbox)
 	assert.NotNil(t, proc.inbox)
 	assert.Equal(t, 100, cap(proc.inbox))
@@ -268,8 +268,8 @@ func TestConsensusProcess_InitDefaultBuilder(t *testing.T) {
 	s.Add(value1)
 	builder := proc.initDefaultBuilder(s)
 	assert.True(t, NewSet(builder.inner.Values).Equals(s))
-	verifier, _ := NewVerifier(builder.outer.PubKey)
-	assert.Equal(t, verifier.Bytes(), proc.signing.Verifier().Bytes())
+	verifier := signing.NewPublicKey(builder.msg.PubKey)
+	assert.Equal(t, []byte(nil), verifier.Bytes())
 	assert.Equal(t, builder.inner.K, proc.k)
 	assert.Equal(t, builder.inner.Ki, proc.ki)
 	assert.Equal(t, InstanceId(builder.inner.InstanceId), proc.instanceId)
@@ -411,8 +411,7 @@ func TestConsensusProcess_currentRound(t *testing.T) {
 
 func TestConsensusProcess_onEarlyMessage(t *testing.T) {
 	proc := generateConsensusProcess(t)
-	msg := BuildPreRoundMsg(generateSigning(t), NewSmallEmptySet())
-	m := buildMessage(msg)
+	m := BuildPreRoundMsg(generateSigning(t), NewSmallEmptySet())
 	proc.advanceToNextRound()
 	proc.onEarlyMessage(buildMessage(nil))
 	assert.Equal(t, 0, len(proc.pending))
@@ -474,7 +473,7 @@ func TestConsensusProcess_beginRound2(t *testing.T) {
 	proc.statusesTracker = statusTracker
 
 	proc.k = 1
-	proc.SetInbox(make(chan *pb.HareMessage, 1))
+	proc.SetInbox(make(chan *Msg, 1))
 	proc.beginRound2()
 
 	assert.Equal(t, 1, network.count)
@@ -498,7 +497,7 @@ func TestConsensusProcess_beginRound3(t *testing.T) {
 	mpt.isConflicting = false
 	mpt.proposedSet = NewSetFromValues(value1)
 	oracle.isEligible = true
-	proc.SetInbox(make(chan *pb.HareMessage, 1))
+	proc.SetInbox(make(chan *Msg, 1))
 	proc.beginRound3()
 	assert.Equal(t, 1, network.count)
 }
@@ -517,14 +516,13 @@ func TestConsensusProcess_beginRound4(t *testing.T) {
 
 func TestConsensusProcess_handlePending(t *testing.T) {
 	proc := generateConsensusProcess(t)
-	proc.SetInbox(make(chan *pb.HareMessage, 100))
+	proc.SetInbox(make(chan *Msg, 100))
 	const count = 5
-	pending := make(map[string]*pb.HareMessage)
+	pending := make(map[string]*Msg)
 	for i := 0; i < count; i++ {
 		v := generateSigning(t)
-		msg := BuildStatusMsg(v, NewSetFromValues(value1))
-		m := buildMessage(msg)
-		pending[v.Verifier().String()] = m
+		m := BuildStatusMsg(v, NewSetFromValues(value1))
+		pending[v.PublicKey().String()] = m
 	}
 	proc.handlePending(pending)
 	assert.Equal(t, count, len(proc.inbox))
