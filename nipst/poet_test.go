@@ -38,12 +38,12 @@ func TestRPCPoet(t *testing.T) {
 	assert := require.New(t)
 
 	c, err := newRPCPoetHarnessClient()
+	assert.NotNil(c)
 	defer func() {
 		err := c.CleanUp()
 		assert.NoError(err)
 	}()
 	assert.NoError(err)
-	assert.NotNil(c)
 
 	for _, testCase := range rpcPoetTestCases {
 		success := t.Run(testCase.name, func(t1 *testing.T) {
@@ -68,12 +68,18 @@ func testRPCPoetClient(c *RPCPoetClient, assert *require.Assertions) {
 	mProof, err := c.subscribeMembershipProof(poetRound, ch, 10*time.Second)
 	assert.NoError(err)
 	assert.NotNil(mProof)
-	assert.True(mProof.valid())
+	res, err := verifyPoetMembership(&ch, mProof)
+	assert.NoError(err)
+	assert.True(res)
 
 	proof, err := c.subscribeProof(poetRound, 10*time.Second)
 	assert.NoError(err)
 	assert.NotNil(proof)
-	assert.True(proof.valid())
+	res, err = verifyPoet(proof)
+	assert.NoError(err)
+	assert.True(res)
+
+	assert.True(verifyPoetMatchesMembership(mProof, proof))
 }
 
 func testRPCPoetClientTimeouts(c *RPCPoetClient, assert *require.Assertions) {

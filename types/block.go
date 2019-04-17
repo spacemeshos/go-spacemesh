@@ -1,28 +1,49 @@
-package mesh
+package types
 
 import (
 	"bytes"
-	"fmt"
-	"github.com/davecgh/go-xdr/xdr2"
 	"github.com/spacemeshos/go-spacemesh/address"
+	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"math/big"
 	"time"
 )
 
 type BlockID uint64
-type LayerID uint64
 type TransactionId []byte
+type LayerID uint64
+
+func (l LayerID) GetEpoch(layersPerEpoch uint16) EpochId {
+	return EpochId(uint64(l) / uint64(layersPerEpoch))
+}
+
+//todo: choose which type is VRF
+type Vrf string
+
+type NodeId struct {
+	Key          string
+	VRFPublicKey []byte
+}
+
+func (id NodeId) String() string {
+	return id.Key + string(id.VRFPublicKey)
+}
+
+func (id NodeId) ToBytes() []byte {
+	return common.Hex2Bytes(id.String())
+}
 
 type BlockHeader struct {
-	Id         BlockID
-	LayerIndex LayerID
-	MinerID    string
-	Data       []byte
-	Coin       bool
-	Timestamp  int64
-	BlockVotes []BlockID
-	ViewEdges  []BlockID
+	Id               BlockID
+	LayerIndex       LayerID
+	MinerID          NodeId // TODO: store only one ID in the block
+	ATXID            AtxId
+	EligibilityProof BlockEligibilityProof
+	Data             []byte
+	Coin             bool
+	Timestamp        int64
+	BlockVotes       []BlockID
+	ViewEdges        []BlockID
 }
 
 type MiniBlock struct {
@@ -35,6 +56,11 @@ type Block struct {
 	BlockHeader
 	Txs  []*SerializableTransaction
 	ATXs []*ActivationTx
+}
+
+type BlockEligibilityProof struct {
+	J   uint32
+	Sig []byte
 }
 
 type SerializableTransaction struct {
@@ -59,7 +85,7 @@ func (t *SerializableTransaction) PriceAsBigInt() *big.Int {
 	return a
 }
 
-func NewBlock(id BlockID, layerID LayerID, minerID string, coin bool, data []byte, ts time.Time, viewEdges []BlockID, blockVotes []BlockID, txs []*SerializableTransaction) *Block {
+func NewBlock(id BlockID, layerID LayerID, minerID NodeId, coin bool, data []byte, ts time.Time, viewEdges []BlockID, blockVotes []BlockID, txs []*SerializableTransaction) *Block {
 	transactions := make([]*SerializableTransaction, 0, len(txs))
 	for _, tx := range txs {
 		transactions = append(transactions, tx)
@@ -72,7 +98,7 @@ func NewBlock(id BlockID, layerID LayerID, minerID string, coin bool, data []byt
 	return &b
 }
 
-func newBlockHeader(id BlockID, layerID LayerID, minerID string, coin bool, data []byte, ts int64, viewEdges []BlockID, blockVotes []BlockID) *BlockHeader {
+func newBlockHeader(id BlockID, layerID LayerID, minerID NodeId, coin bool, data []byte, ts int64, viewEdges []BlockID, blockVotes []BlockID) *BlockHeader {
 	b := &BlockHeader{
 		Id:         id,
 		LayerIndex: layerID,
@@ -174,57 +200,6 @@ func NewExistingLayer(idx LayerID, blocks []*Block) *Layer {
 		index:  idx,
 	}
 	return &l
-}
-
-func MiniBlockToBytes(mini MiniBlock) ([]byte, error) {
-	var w bytes.Buffer
-	if _, err := xdr.Marshal(&w, &mini); err != nil {
-		return nil, fmt.Errorf("error marshalling block ids %v", err)
-	}
-	return w.Bytes(), nil
-}
-
-func BlockAsBytes(block Block) ([]byte, error) {
-	var w bytes.Buffer
-	if _, err := xdr.Marshal(&w, &block); err != nil {
-		return nil, fmt.Errorf("error marshalling block ids %v", err)
-	}
-	return w.Bytes(), nil
-}
-
-func BytesAsMiniBlock(buf []byte) (*MiniBlock, error) {
-	b := MiniBlock{}
-	_, err := xdr.Unmarshal(bytes.NewReader(buf), &b)
-	if err != nil {
-		return &b, err
-	}
-	return &b, nil
-}
-
-func BytesAsBlock(buf []byte) (Block, error) {
-	b := Block{}
-	_, err := xdr.Unmarshal(bytes.NewReader(buf), &b)
-	if err != nil {
-		return b, err
-	}
-	return b, nil
-}
-
-func TransactionAsBytes(tx *SerializableTransaction) ([]byte, error) {
-	var w bytes.Buffer
-	if _, err := xdr.Marshal(&w, tx); err != nil {
-		return nil, fmt.Errorf("error marshalling block ids %v", err)
-	}
-	return w.Bytes(), nil
-}
-
-func BytesAsTransaction(buf []byte) (*SerializableTransaction, error) {
-	b := SerializableTransaction{}
-	_, err := xdr.Unmarshal(bytes.NewReader(buf), &b)
-	if err != nil {
-		return &b, err
-	}
-	return &b, nil
 }
 
 func NewExistingBlock(id BlockID, layerIndex LayerID, data []byte) *Block {

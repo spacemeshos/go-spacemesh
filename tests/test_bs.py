@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 
-from tests.fixtures import load_config, bootstrap_deployment_info, client_deployment_info
+from tests.fixtures import load_config, bootstrap_deployment_info, client_deployment_info, set_namespace
 from tests.fixtures import init_session, set_namespace, set_docker_images
 import os
 from os import path
@@ -116,26 +116,46 @@ def query_bootstrap_es(indx, namespace, bootstrap_po_name):
     return None
 
 
-def query_es_client_bootstrap(indx, namespace, client_po_name):
+def query_message(indx, namespace, client_po_name, fields, findFails=False):
+    # TODO : break this to smaller functions ?
     es = get_elastic_search_api()
     fltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
-           Q("match_phrase", kubernetes__pod_name=client_po_name) & Q("match_phrase", M='discovery_bootstrap')
+           Q("match_phrase", kubernetes__pod_name=client_po_name)
+    for f in fields:
+        fltr = fltr & Q("match_phrase", **{f: fields[f]})
     s = Search(index=indx, using=es).query('bool', filter=[fltr])
     hits = list(s.scan())
 
-    print("Number of Hits in ES: {0}".format(len(hits)))
-    s = set([h.N for h in hits])
-    return len(s)
+    print("====================================================================")
+    print("Report for `{0}` in deployment -  {1}  ".format(fields, client_po_name))
+    print("Number of hits: ", len(hits))
+    print("====================================================================")
+    print("Benchmark results:")
+    ts = [hit["T"] for hit in hits]
 
+    first = datetime.strptime(min(ts).replace("T", " ",).replace("Z", ""), "%Y-%m-%d %H:%M:%S.%f")
+    last = datetime.strptime(max(ts).replace("T", " ",).replace("Z", ""), "%Y-%m-%d %H:%M:%S.%f")
 
-def query_es_gossip_message(indx, namespace, client_po_name):
-    es = get_elastic_search_api()
-    fltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
-           Q("match_phrase", kubernetes__pod_name=client_po_name) & Q("match_phrase", M='new_gossip_message')
-    s = Search(index=indx, using=es).query('bool', filter=[fltr])
-    hits = list(s.scan())
+    delta = last - first
+    print("First: {0}, Last: {1}, Delta: {2}".format(first, last, delta))
+    # TODO: compare to previous runs.
+    print("====================================================================")
+    if findFails:
+        print("Looking for pods that didn't hit:")
+        podnames = [hit.kubernetes.pod_name for hit in hits]
+        newfltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
+                  Q("match_phrase", kubernetes__pod_name=client_po_name)
 
-    print("Number of gossip Hits: {0}".format(len(hits)))
+        for p in podnames:
+            newfltr = newfltr & ~Q("match_phrase", kubernetes__pod_name=p)
+        s2 = Search(index=current_index, using=es).query('bool', filter=[newfltr])
+        hits2 = list(s2.scan())
+        unsecpods = set([hit.kubernetes.pod_name for hit in hits2])
+        if len(unsecpods) == 0:
+            print("None. yay!")
+        else:
+            print(unsecpods)
+        print("====================================================================")
     s = set([h.N for h in hits])
     return len(s)
 
@@ -250,16 +270,6 @@ def setup_clients(request, setup_oracle, setup_bootstrap, client_deployment_info
                 if resp.status.phase != 'Pending':
                     break
                 time.sleep(1)
-
-        # Make sure genesis time has not passed yet and sleep for the rest
-        time_now = pytz.utc.localize(datetime.utcnow())
-        delta_from_genesis = (GENESIS_TIME - time_now).total_seconds()
-        if delta_from_genesis < 0:
-            raise Exception("genesis_delta time={0}sec, is too short for this deployment. "
-                            "delta_from_genesis={1}".format(testconfig['genesis_delta'], delta_from_genesis))
-        else:
-            print('sleep for {0} sec until genesis time'.format(delta_from_genesis))
-            time.sleep(delta_from_genesis)
         return client_info
 
     def fin():
@@ -267,6 +277,27 @@ def setup_clients(request, setup_oracle, setup_bootstrap, client_deployment_info
 
     request.addfinalizer(fin)
     return _setup_clients_in_namespace(testconfig['namespace'])
+
+
+def wait_genesis():
+    # Make sure genesis time has not passed yet and sleep for the rest
+    time_now = pytz.utc.localize(datetime.utcnow())
+    delta_from_genesis = (GENESIS_TIME - time_now).total_seconds()
+    if delta_from_genesis < 0:
+        raise Exception("genesis_delta time={0}sec, is too short for this deployment. "
+                        "delta_from_genesis={1}".format(testconfig['genesis_delta'], delta_from_genesis))
+    else:
+        print('sleep for {0} sec until genesis time'.format(delta_from_genesis))
+        time.sleep(delta_from_genesis)
+
+
+def api_call(client_ip, data, api, namespace):
+    p = subprocess.Popen(['./kubectl-cmd.sh', '%s' % client_ip, "%s" % data, api, namespace], stdin=subprocess.PIPE,
+                         stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    (out, err) = p.communicate()
+    if p.returncode != 0:
+        raise Exception('An Error raised on api_call')
+    return out
 
 
 @pytest.fixture(scope='module')
@@ -337,29 +368,35 @@ def test_bootstrap(set_namespace, setup_bootstrap):
 
 
 def test_client(set_namespace, setup_clients, save_log_on_exit):
-    peers = query_es_client_bootstrap(current_index, testconfig['namespace'], setup_clients.deployment_name)
+    fields = {'M':'discovery_bootstrap'}
+    timetowait = len(setup_clients.pods)/2
+    print("Sleeping " + str(timetowait) + "before checking out bootstrap results")
+    time.sleep(timetowait)
+    peers = query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, fields, True)
     assert peers == len(setup_clients.pods)
 
-
+    
 def test_gossip(set_namespace, setup_clients):
-
+    fields = {'M':'new_gossip_message', 'protocol': 'api_test_gossip'}
+    # *note*: this already waits for bootstrap so we can send the msg right away.
     # send message to client via rpc
     client_ip = setup_clients.pods[0]['pod_ip']
-    print("Sending gossip from client ip: {0}".format(client_ip))
+    podname = setup_clients.pods[0]['name']
+    print("Sending gossip from client ip: {0}/{1}".format(podname, client_ip))
 
+    # todo: take out broadcast and rpcs to helper methods.
     api = 'v1/broadcast'
     data = '{"data":"foo"}'
-    p = subprocess.Popen(['./kubectl-cmd.sh', '%s' % client_ip, "%s" % data, api],
-                         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    (out, err) = p.communicate()
+    out = api_call(client_ip, data, api, testconfig['namespace'])
     assert '{"value":"ok"}' in out.decode("utf-8")
 
-    # Need to sleep for a while in order to enable the propagation of the gossip message - 1 sec for each node
-    gossip_propagation_sleep = len(setup_clients.pods)
+    # Need to sleep for a while in order to enable the propagation of the gossip message - 0.5 sec for each node
+    # TODO: check frequently before timeout so we might be able to finish earlier.
+    gossip_propagation_sleep = len(setup_clients.pods) / 2 # currently we expect short propagation times.
     print('sleep for {0} sec to enable gossip propagation'.format(gossip_propagation_sleep))
     time.sleep(gossip_propagation_sleep)
 
-    peers_for_gossip = query_es_gossip_message(current_index, testconfig['namespace'], setup_clients.deployment_name)
+    peers_for_gossip = query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, fields, True)
     assert len(setup_clients.pods) == peers_for_gossip
 
 
@@ -370,20 +407,30 @@ def test_transaction(set_namespace, setup_clients):
 
     api = 'v1/nonce'
     data = '{"address":"1"}'
-    p = subprocess.Popen(['./kubectl-cmd.sh', '%s' % client_ip, "%s" % data, api], stdin=subprocess.PIPE,
-                         stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    (out, err) = p.communicate()
+    print("checking nonce")
+    out = api_call(client_ip, data, api, testconfig['namespace'])
     assert '{"value":"0"}' in out.decode("utf-8")
-    match = re.search(r"{\"value\":\"(?P<nonce_val>\d+)\"}", out.decode("utf-8"))
-    assert match
-    nonce_val = int(match.group("nonce_val"))
-    assert 0 == nonce_val
+    print("nonce ok")
 
     api = 'v1/submittransaction'
-    data = '{"sender":"1","reciever":"222","nonce":"0","amount":"100"}'
-    p = subprocess.Popen(['./kubectl-cmd.sh', '%s' % client_ip, "%s" % data, api], stdin=subprocess.PIPE,
-                         stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    (out, err) = p.communicate()
+    data = '{"srcAddress":"1","dstAddress":"222","nonce":"0","amount":"100"}'
+    print("submitting transaction")
+    out = api_call(client_ip, data, api, testconfig['namespace'])
     assert '{"value":"ok"}' in out.decode("utf-8")
+    print("submit transaction ok")
+    print("wait for confirmation ")
+    api = 'v1/balance'
+    data = '{"address":"222"}'
+    start = time.time()
 
+    for x in range(10):
+        time.sleep(60)
+        print("... ")
+        out = api_call(client_ip, data, api, testconfig['namespace'])
+        if '{"value":"100"}' in out.decode("utf-8"):
+            end = time.time()
+            break
 
+    print("test took ", end - start, "seconds ")
+    assert '{"value":"100"}' in out.decode("utf-8")
+    print("balance ok")

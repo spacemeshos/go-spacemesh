@@ -4,23 +4,7 @@ import (
 	"context"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/spacemeshos/go-spacemesh/ping/pb"
-	"sync/atomic"
 )
-
-type mockPing struct {
-	called uint32
-	res    error
-}
-
-func (mp *mockPing) Ping(key p2pcrypto.PublicKey) error {
-	atomic.AddUint32(&mp.called, 1)
-	return mp.res
-}
-
-func (mp *mockPing) RegisterCallback(func(pb *pb.Ping) error) {
-
-}
 
 // MockDHT is a mocked dht
 type MockDHT struct {

@@ -37,7 +37,7 @@ type baseNetwork interface {
 	SendMessage(peerPubkey p2pcrypto.PublicKey, protocol string, payload []byte) error
 	RegisterDirectProtocol(protocol string) chan service.DirectMessage
 	SubscribePeerEvents() (conn chan p2pcrypto.PublicKey, disc chan p2pcrypto.PublicKey)
-	ProcessGossipProtocolMessage(protocol string, data service.Data, validationChan chan service.MessageValidation) error
+	ProcessGossipProtocolMessage(sender p2pcrypto.PublicKey, protocol string, data service.Data, validationCompletedChan chan service.MessageValidation) error
 }
 
 type protocolMessage struct {
@@ -52,13 +52,13 @@ type Protocol struct {
 	net             baseNetwork
 	localNodePubkey p2pcrypto.PublicKey
 
-	peers    map[string]*peer
+	peers      map[string]*peer
+	peersMutex sync.RWMutex
+
 	shutdown chan struct{}
 
-	oldMessageMu    sync.RWMutex
-	oldMessageQ     map[hash]struct{}
-	invalidMessageQ map[hash]bool
-	peersMutex      sync.RWMutex
+	oldMessageQ  map[hash]struct{}
+	oldMessageMu sync.RWMutex
 
 	relayQ     chan service.DirectMessage
 	messageQ   chan protocolMessage
@@ -77,8 +77,6 @@ func NewProtocol(config config.SwarmConfig, base baseNetwork, localNodePubkey p2
 		peers:           make(map[string]*peer),
 		shutdown:        make(chan struct{}),
 		oldMessageQ:     make(map[hash]struct{}), // todo : remember to drain this
-		invalidMessageQ: make(map[hash]bool),     // todo : remember to drain this
-		peersMutex:      sync.RWMutex{},
 		relayQ:          relayChan,
 		messageQ:        make(chan protocolMessage, messageQBufferSize),
 		propagateQ:      make(chan service.MessageValidation, propagateHandleBufferSize),
@@ -93,48 +91,32 @@ type sender interface {
 // peer is a struct storing peer's state
 type peer struct {
 	log.Log
-	pubkey        p2pcrypto.PublicKey
-	msgMutex      sync.RWMutex
-	knownMessages map[hash]struct{}
-	net           sender
+	pubkey p2pcrypto.PublicKey
+	net    sender
 }
 
 func newPeer(net sender, pubkey p2pcrypto.PublicKey, log log.Log) *peer {
 	return &peer{
 		log,
 		pubkey,
-		sync.RWMutex{},
-		make(map[hash]struct{}),
 		net,
 	}
 }
 
 // send sends a gossip message to the peer
-func (p *peer) send(msg []byte, checksum hash) error {
-	// don't do anything if this peer know this msg
-	p.msgMutex.RLock()
-	if _, ok := p.knownMessages[checksum]; ok {
-		p.msgMutex.RUnlock()
-		return errors.New("already got this msg")
-	}
-	p.msgMutex.RUnlock()
-	go func() {
-		p.Debug("sending message to peer %v, hash %d", p.pubkey, checksum)
-		err := p.net.SendMessage(p.pubkey, ProtocolName, msg)
+func (p *peer) send(msg []byte, checksum hash) {
+	p.Debug("sending message to peer %v, hash %d", p.pubkey, checksum)
+	err := p.net.SendMessage(p.pubkey, ProtocolName, msg)
+	if err != nil {
+		p.Log.Error("Gossip protocol failed to send msg (calcHash %d) to peer %v, first attempt. err=%v", checksum, p.pubkey, err)
+		// doing one retry before giving up
+		// TODO: find out if this is really needed
+		err = p.net.SendMessage(p.pubkey, "", msg)
 		if err != nil {
-			p.Log.Info("Gossip protocol failed to send msg (calcHash %d) to peer %v, first attempt. err=%v", checksum, p.pubkey, err)
-			// doing one retry before giving up
-			err = p.net.SendMessage(p.pubkey, "", msg)
-			if err != nil {
-				p.Log.Info("Gossip protocol failed to send msg (calcHash %d) to peer %v, second attempt. err=%v", checksum, p.pubkey, err)
-				return
-			}
+			p.Log.Error("Gossip protocol failed to send msg (calcHash %d) to peer %v, second attempt. err=%v", checksum, p.pubkey, err)
+			return
 		}
-		p.msgMutex.Lock()
-		p.knownMessages[checksum] = struct{}{}
-		p.msgMutex.Unlock()
-	}()
-	return nil
+	}
 }
 
 func (prot *Protocol) Close() {
@@ -156,36 +138,7 @@ func (prot *Protocol) markMessageAsOld(h hash) bool {
 	return ok
 }
 
-type Validity int
-
-const (
-	Valid Validity = iota
-	Invalid
-	Unknown
-)
-
-func (prot *Protocol) isMessageValid(h hash) Validity {
-	prot.oldMessageMu.RLock()
-	res, ok := prot.invalidMessageQ[h]
-	prot.oldMessageMu.RUnlock()
-	if !ok {
-		return Unknown
-	}
-	if !res {
-		return Invalid
-	}
-	return Valid
-
-}
-
-// markMessageValidity stores the message's validity so that invalid messages won't be propagated in case received again.
-func (prot *Protocol) markMessageValidity(h hash, isValid bool) {
-	prot.oldMessageMu.Lock()
-	prot.invalidMessageQ[h] = isValid
-	prot.oldMessageMu.Unlock()
-}
-
-func (prot *Protocol) propagateMessage(payload []byte, h hash, nextProt string) {
+func (prot *Protocol) propagateMessage(payload []byte, h hash, nextProt string, exclude p2pcrypto.PublicKey) {
 	// add gossip header
 	header := &pb.Metadata{
 		NextProtocol:  nextProt,
@@ -196,7 +149,7 @@ func (prot *Protocol) propagateMessage(payload []byte, h hash, nextProt string) 
 
 	msg := &pb.ProtocolMessage{
 		Metadata: header,
-		Data:     &pb.ProtocolMessage_Payload{Payload: payload},
+		Payload:  &pb.Payload{Data: &pb.Payload_Payload{payload}},
 	}
 
 	data, err := proto.Marshal(msg)
@@ -206,9 +159,12 @@ func (prot *Protocol) propagateMessage(payload []byte, h hash, nextProt string) 
 	}
 
 	prot.peersMutex.RLock()
+peerLoop:
 	for p := range prot.peers {
-		peer := prot.peers[p]
-		peer.send(data, h) // non blocking
+		if exclude.String() == p {
+			continue peerLoop
+		}
+		go prot.peers[p].send(data, h) // non blocking
 	}
 	prot.peersMutex.RUnlock()
 }
@@ -229,15 +185,15 @@ func (prot *Protocol) Broadcast(payload []byte, nextProt string) error {
 		NextProtocol:  nextProt,
 		ClientVersion: protocolVer,
 		Timestamp:     time.Now().Unix(),
-		AuthPubkey:    prot.localNodePubkey.Bytes(), // TODO: @noam consider replacing this with another reply mechanism
+		AuthPubkey:    prot.localNodePubkey.Bytes(), // TODO: @noam consider replacing this with another reply mechanism. get sender from swarm
 	}
 
 	msg := &pb.ProtocolMessage{
 		Metadata: header,
-		Data:     &pb.ProtocolMessage_Payload{Payload: payload},
+		Payload:  &pb.Payload{Data: &pb.Payload_Payload{payload}},
 	}
 
-	prot.processMessage(msg)
+	prot.processMessage(prot.localNodePubkey, msg)
 	return nil
 }
 
@@ -260,13 +216,13 @@ func (prot *Protocol) removePeer(peer p2pcrypto.PublicKey) {
 	prot.peersMutex.Unlock()
 }
 
-func (prot *Protocol) processMessage(msg *pb.ProtocolMessage) {
-	var data service.Data
-	if payload := msg.GetPayload(); payload != nil {
-		data = service.DataBytes{Payload: payload}
-	} else if wrap := msg.GetMsg(); wrap != nil {
+func (prot *Protocol) processMessage(sender p2pcrypto.PublicKey, msg *pb.ProtocolMessage) {
+	data, err := pb.ExtractData(msg.Payload)
+	if err != nil {
+		prot.Log.Warning("could'nt extract payload from message err=", err)
+	} else if _, ok := data.(*service.DataMsgWrapper); ok {
 		prot.Log.Warning("unexpected usage of request-response framework over Gossip - WAS IT IN PURPOSE? ")
-		data = &service.DataMsgWrapper{Req: wrap.Req, MsgType: wrap.Type, ReqID: wrap.ReqID, Payload: wrap.Payload}
+		return
 	}
 
 	protocol := msg.Metadata.NextProtocol
@@ -277,29 +233,19 @@ func (prot *Protocol) processMessage(msg *pb.ProtocolMessage) {
 		metrics.OldGossipMessages.With(metrics.ProtocolLabel, protocol).Add(1)
 		// todo : - have some more metrics for termination
 		// todo	: - maybe tell the peer we got this message already?
-		validity := prot.isMessageValid(h)
-		prot.Log.Debug("got old message, hash %d validity %v", h, validity)
-		if validity == Valid {
-			prot.propagateMessage(data.Bytes(), h, protocol)
-		} else {
-			metrics.InvalidGossipMessages.With(metrics.ProtocolLabel, protocol).Add(1)
-			// if the message is invalid we don't want to propagate it and we can return. If the message's validity is unknown,
-			// since the message is marked as old we can assume that there is another context that currently process this
-			// message and will determine its validity, therefore we can return in such case as well
-			return
-		}
+		// todo : - maybe block this peer since he sends us old messages
+		prot.Log.Warning("gossip_old_message", log.String("from", sender.String()), log.String("protocol", protocol))
 	} else {
-		prot.Log.With().Info("new_gossip_message", log.String("from", base58.Encode(msg.Metadata.AuthPubkey)), log.String("protocol", protocol))
+		prot.Log.With().Info("new_gossip_message", log.String("from", sender.String()), log.String("auth", base58.Encode(msg.Metadata.AuthPubkey)), log.String("protocol", protocol))
 		metrics.NewGossipMessages.With("protocol", protocol).Add(1)
-		err := prot.net.ProcessGossipProtocolMessage(protocol, data, prot.propagateQ)
+		err := prot.net.ProcessGossipProtocolMessage(sender, protocol, data, prot.propagateQ)
 		if err != nil {
-			prot.Log.Error("failed to process protocol message. protocol = %v err = %v", protocol, err)
-			prot.markMessageValidity(h, false)
+			prot.Log.Warning("failed to process protocol message. protocol = %v err = %v", protocol, err)
 		}
 	}
 }
 
-func (prot *Protocol) handleRelayMessage(msgB []byte) {
+func (prot *Protocol) handleRelayMessage(sender p2pcrypto.PublicKey, msgB []byte) {
 	msg := &pb.ProtocolMessage{}
 	err := proto.Unmarshal(msgB, msg)
 	if err != nil {
@@ -307,7 +253,7 @@ func (prot *Protocol) handleRelayMessage(msgB []byte) {
 		return
 	}
 
-	prot.processMessage(msg)
+	prot.processMessage(sender, msg)
 }
 
 func (prot *Protocol) propagationEventLoop() {
@@ -316,15 +262,7 @@ loop:
 	for {
 		select {
 		case msgV := <-prot.propagateQ:
-			h := calcHash(msgV.Message(), msgV.Protocol())
-			if prot.isMessageValid(h) != Unknown {
-				prot.Log.Error("got validation result on message that was already tested for validity. hash %v protocol %s", h, msgV.Protocol())
-				break
-			}
-			prot.markMessageValidity(h, msgV.IsValid())
-			if msgV.IsValid() {
-				prot.propagateMessage(msgV.Message(), h, msgV.Protocol())
-			}
+			prot.propagateMessage(msgV.Message(), calcHash(msgV.Message(), msgV.Protocol()), msgV.Protocol(), msgV.Sender())
 		case <-prot.shutdown:
 			err = errors.New("protocol shutdown")
 			break loop
@@ -345,7 +283,7 @@ loop:
 			}
 			// incoming messages from p2p layer for process and relay
 			go func() {
-				prot.handleRelayMessage(msg.Bytes())
+				prot.handleRelayMessage(msg.Sender(), msg.Bytes())
 			}()
 		case peer := <-peerConn:
 			go prot.addPeer(peer)

@@ -13,23 +13,23 @@ bootstrap:
   replicas: 1
   args:
     randcon: '8'
-    hare-committee-size: '50'
-    hare-max-adversaries: '24'
+    hare-committee-size: '30'
+    hare-max-adversaries: '14'
     hare-round-duration-sec: '10'
     layer-duration-sec: '360'
 
 client:
   image: 'spacemeshos/go-spacemesh-test:develop'
   command: '/bin/go-hare'
-  replicas: 49
+  replicas: 29
   args:
     randcon: '8'
-    hare-committee-size: '50'
-    hare-max-adversaries: '24'
+    hare-committee-size: '30'
+    hare-max-adversaries: '14'
     hare-round-duration-sec: '10'
     layer-duration-sec: '360'
 
 elastic:
-  host: es.spacemesh.io
+  host: elastic.spacemesh.io
   port: 9200
   username: spacemesh

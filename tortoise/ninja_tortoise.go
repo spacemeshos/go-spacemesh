@@ -1,18 +1,18 @@
-package consensus
+package tortoise
 
 import (
-	"container/list"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/types"
 	"hash/fnv"
 	"math"
 	"sort"
+	"sync"
 )
 
 type vec [2]int
-type PatternId uint32
+type PatternId uint32 //this hash dose not include the layer id
 
 const ( //Threshold
 	K               = 5 //number of explicit layers to vote for
@@ -29,7 +29,7 @@ var ( //correction vectors type
 	Abstain = vec{0, 0}
 )
 
-func Max(i mesh.LayerID, j mesh.LayerID) mesh.LayerID {
+func Max(i types.LayerID, j types.LayerID) types.LayerID {
 	if i > j {
 		return i
 	}
@@ -54,17 +54,17 @@ func (a vec) Multiply(x int) vec {
 
 type votingPattern struct {
 	id PatternId //cant put a slice here wont work well with maps, we need to hash the blockids
-	mesh.LayerID
+	types.LayerID
 }
 
-func (vp votingPattern) Layer() mesh.LayerID {
+func (vp votingPattern) Layer() types.LayerID {
 	return vp.LayerID
 }
 
 type BlockCache interface {
-	GetBlock(id mesh.BlockID) (*mesh.Block, error)
-	LayerBlockIds(id mesh.LayerID) ([]mesh.BlockID, error)
-	ForBlockInView(view map[mesh.BlockID]struct{}, layer mesh.LayerID, foo func(block *mesh.BlockHeader), errHandler func(err error))
+	GetBlock(id types.BlockID) (*types.Block, error)
+	LayerBlockIds(id types.LayerID) ([]types.BlockID, error)
+	ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, foo func(block *types.BlockHeader) error) error
 }
 
 //todo memory optimizations
@@ -73,17 +73,18 @@ type ninjaTortoise struct {
 	BlockCache         //block cache
 	avgLayerSize       uint64
 	pBase              votingPattern
-	tEffective         map[mesh.BlockID]votingPattern                   //Explicit voting pattern of latest layer for a block
-	tCorrect           map[mesh.BlockID]map[mesh.BlockID]vec            //correction vectors
-	tExplicit          map[mesh.BlockID]map[mesh.LayerID]votingPattern  //explict votes from block to layer pattern
-	tGood              map[mesh.LayerID]votingPattern                   //good pattern for layer i
-	tSupport           map[votingPattern]int                            //for pattern p the number of blocks that support p
-	tComplete          map[votingPattern]struct{}                       //complete voting patterns
-	tEffectiveToBlocks map[votingPattern][]mesh.BlockID                 //inverse blocks effective pattern
-	tVote              map[votingPattern]map[mesh.BlockID]vec           //global opinion
-	tTally             map[votingPattern]map[mesh.BlockID]vec           //for pattern p and block b count votes for b according to p
-	tPattern           map[votingPattern]map[mesh.BlockID]struct{}      //set of blocks that comprise pattern p
-	tPatSupport        map[votingPattern]map[mesh.LayerID]votingPattern //pattern support count
+	patterns           map[types.LayerID][]votingPattern                 //map patterns by layer for eviction purposes
+	tEffective         map[types.BlockID]votingPattern                   //Explicit voting pattern of latest layer for a block
+	tCorrect           map[types.BlockID]map[types.BlockID]vec           //correction vectors
+	tExplicit          map[types.BlockID]map[types.LayerID]votingPattern //explict votes from block to layer pattern
+	tGood              map[types.LayerID]votingPattern                   //good pattern for layer i
+	tSupport           map[votingPattern]int                             //for pattern p the number of blocks that support p
+	tComplete          map[votingPattern]struct{}                        //complete voting patterns
+	tEffectiveToBlocks map[votingPattern][]types.BlockID                 //inverse blocks effective pattern
+	tVote              map[votingPattern]map[types.BlockID]vec           //global opinion
+	tTally             map[votingPattern]map[types.BlockID]vec           //for pattern p and block b count votes for b according to p
+	tPattern           map[votingPattern]map[types.BlockID]struct{}      //set of blocks that comprise pattern p
+	tPatSupport        map[votingPattern]map[types.LayerID]votingPattern //pattern support count
 }
 
 func NewNinjaTortoise(layerSize int, blocks BlockCache, log log.Log) *ninjaTortoise {
@@ -92,47 +93,85 @@ func NewNinjaTortoise(layerSize int, blocks BlockCache, log log.Log) *ninjaTorto
 		BlockCache:         blocks,
 		avgLayerSize:       uint64(layerSize),
 		pBase:              votingPattern{},
-		tEffective:         map[mesh.BlockID]votingPattern{},
-		tCorrect:           map[mesh.BlockID]map[mesh.BlockID]vec{},
-		tExplicit:          map[mesh.BlockID]map[mesh.LayerID]votingPattern{},
-		tGood:              map[mesh.LayerID]votingPattern{},
+		patterns:           map[types.LayerID][]votingPattern{},
+		tGood:              map[types.LayerID]votingPattern{},
+		tEffective:         map[types.BlockID]votingPattern{},
+		tCorrect:           map[types.BlockID]map[types.BlockID]vec{},
+		tExplicit:          map[types.BlockID]map[types.LayerID]votingPattern{},
 		tSupport:           map[votingPattern]int{},
-		tPattern:           map[votingPattern]map[mesh.BlockID]struct{}{},
-		tVote:              map[votingPattern]map[mesh.BlockID]vec{},
-		tTally:             map[votingPattern]map[mesh.BlockID]vec{},
+		tPattern:           map[votingPattern]map[types.BlockID]struct{}{},
+		tVote:              map[votingPattern]map[types.BlockID]vec{},
+		tTally:             map[votingPattern]map[types.BlockID]vec{},
 		tComplete:          map[votingPattern]struct{}{},
-		tEffectiveToBlocks: map[votingPattern][]mesh.BlockID{},
-		tPatSupport:        map[votingPattern]map[mesh.LayerID]votingPattern{},
+		tEffectiveToBlocks: map[votingPattern][]types.BlockID{},
+		tPatSupport:        map[votingPattern]map[types.LayerID]votingPattern{},
 	}
 }
 
-func (ni *ninjaTortoise) processBlock(b *mesh.Block) {
+func (ni *ninjaTortoise) evictOutOfPbase(old types.LayerID) {
+	wg := sync.WaitGroup{}
+	for lyr := old; lyr < ni.pBase.Layer(); lyr++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for _, p := range ni.patterns[lyr] {
+				delete(ni.tSupport, p)
+				delete(ni.tComplete, p)
+				delete(ni.tEffectiveToBlocks, p)
+				delete(ni.tVote, p)
+				delete(ni.tTally, p)
+				delete(ni.tPattern, p)
+				delete(ni.tPatSupport, p)
+				delete(ni.tSupport, p)
+				ni.Debug("evict pattern %v from maps ", p)
+			}
+		}()
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			ids, err := ni.LayerBlockIds(lyr)
+			if err != nil {
+				ni.Error("could not get layer ids for layer ", lyr, err)
+			}
+			for _, id := range ids {
+				delete(ni.tEffective, id)
+				delete(ni.tCorrect, id)
+				delete(ni.tExplicit, id)
+				ni.Debug("evict block %v from maps ", id)
+			}
+		}()
+		wg.Wait()
+	}
+}
 
-	ni.Debug("process block: %d layer: %d  ", b.Id, b.Layer())
+func (ni *ninjaTortoise) processBlock(b *types.Block) {
 
+	ni.Debug("process block: %d layer: %d  ", b.ID(), b.Layer())
 	if b.Layer() == Genesis {
 		return
 	}
 
-	patternMap := make(map[mesh.LayerID]map[mesh.BlockID]struct{})
+	patternMap := make(map[types.LayerID]map[types.BlockID]struct{})
 	for _, bid := range b.BlockVotes {
 		ni.Debug("block votes %d", bid)
 		bl, err := ni.GetBlock(bid)
 		if err != nil || bl == nil {
-			ni.Error(fmt.Sprintf("error block not found ID %d !!!!!", bid))
+			ni.Error(fmt.Sprintf("error block not found ID %d , %v!!!!!", bid, err))
 			return
 		}
 		if _, found := patternMap[bl.Layer()]; !found {
-			patternMap[bl.Layer()] = map[mesh.BlockID]struct{}{}
+			patternMap[bl.Layer()] = map[types.BlockID]struct{}{}
 		}
 		patternMap[bl.Layer()][bl.ID()] = struct{}{}
 	}
 
 	var effective votingPattern
-	ni.tExplicit[b.ID()] = make(map[mesh.LayerID]votingPattern, K)
+	ni.tExplicit[b.ID()] = make(map[types.LayerID]votingPattern, K)
 	for layerId, v := range patternMap {
 		vp := votingPattern{id: getIdsFromSet(v), LayerID: layerId}
 		ni.tPattern[vp] = v
+		arr, _ := ni.patterns[vp.Layer()]
+		ni.patterns[vp.Layer()] = append(arr, vp)
 		ni.tExplicit[b.ID()][layerId] = vp
 		if layerId >= effective.Layer() {
 			effective = vp
@@ -143,9 +182,9 @@ func (ni *ninjaTortoise) processBlock(b *mesh.Block) {
 
 	v, found := ni.tEffectiveToBlocks[effective]
 	if !found {
-		v = make([]mesh.BlockID, 0, ni.avgLayerSize)
+		v = make([]types.BlockID, 0, ni.avgLayerSize)
 	}
-	var pattern []mesh.BlockID = nil
+	var pattern []types.BlockID = nil
 	pattern = append(v, b.ID())
 	ni.tEffectiveToBlocks[effective] = pattern
 	ni.Debug("effective pattern to blocks %d %d", effective, pattern)
@@ -153,7 +192,7 @@ func (ni *ninjaTortoise) processBlock(b *mesh.Block) {
 	return
 }
 
-func getId(bids []mesh.BlockID) PatternId {
+func getId(bids []types.BlockID) PatternId {
 	sort.Slice(bids, func(i, j int) bool { return bids[i] < bids[j] })
 	// calc
 	h := fnv.New32()
@@ -165,38 +204,12 @@ func getId(bids []mesh.BlockID) PatternId {
 	return PatternId(sum)
 }
 
-func getIdsFromSet(bids map[mesh.BlockID]struct{}) PatternId {
-	keys := make([]mesh.BlockID, 0, len(bids))
+func getIdsFromSet(bids map[types.BlockID]struct{}) PatternId {
+	keys := make([]types.BlockID, 0, len(bids))
 	for k := range bids {
 		keys = append(keys, k)
 	}
 	return getId(keys)
-}
-
-func forBlockInView(blocks map[mesh.BlockID]struct{}, blockCache map[mesh.BlockID]*mesh.Block, layer mesh.LayerID, foo func(block *mesh.Block)) {
-	stack := list.New()
-	for b := range blocks {
-		stack.PushFront(b)
-	}
-	set := make(map[mesh.BlockID]struct{})
-	for b := stack.Front(); b != nil; b = stack.Front() {
-		a := stack.Remove(stack.Front()).(mesh.BlockID)
-		block, found := blockCache[a]
-		if !found {
-			panic(fmt.Sprintf("error block not found ID %d", block.ID()))
-		}
-		foo(block)
-		//push children to bfs queue
-		for _, bChild := range block.ViewEdges {
-			if blockCache[bChild].Layer() >= layer { //dont traverse too deep
-				if _, found := set[bChild]; !found {
-					set[bChild] = struct{}{}
-					stack.PushBack(bChild)
-				}
-			}
-		}
-	}
-	return
 }
 
 func globalOpinion(v vec, layerSize uint64, delta float64) vec {
@@ -210,33 +223,34 @@ func globalOpinion(v vec, layerSize uint64, delta float64) vec {
 	}
 }
 
-func (ni *ninjaTortoise) updateCorrectionVectors(p votingPattern, bottomOfWindow mesh.LayerID) {
-	foo := func(x *mesh.BlockHeader) {
+func (ni *ninjaTortoise) updateCorrectionVectors(p votingPattern, bottomOfWindow types.LayerID) {
+	foo := func(x *types.BlockHeader) error {
 		for _, bid := range ni.tEffectiveToBlocks[p] { //for all b who's effective vote is p
 			b, err := ni.GetBlock(bid)
 			if err != nil {
 				panic(fmt.Sprintf("error block not found ID %d", bid))
 			}
 
-			if _, found := ni.tExplicit[b.Id][x.Layer()]; found { //if Texplicit[b][x]!=0 check correctness of x.layer and found
+			if _, found := ni.tExplicit[b.ID()][x.Layer()]; found { //if Texplicit[b][x.layer]!=0 check correctness of x.layer and found
 				ni.Debug(" blocks pattern %d block %d layer %d", p, b.ID(), b.Layer())
-				if _, found := ni.tCorrect[b.Id]; !found {
-					ni.tCorrect[b.Id] = make(map[mesh.BlockID]vec)
+				if _, found := ni.tCorrect[b.ID()]; !found {
+					ni.tCorrect[b.ID()] = make(map[types.BlockID]vec)
 				}
 				vo := ni.tVote[p][x.ID()]
 				ni.Debug("vote from pattern %d to block %d layer %d vote %d ", p, x.ID(), x.Layer(), vo)
-				ni.tCorrect[b.Id][x.ID()] = vo.Negate() //Tcorrect[b][x] = -Tvote[p][x]
-				ni.Debug("update correction vector for block %d layer %d , pattern %d vote %d for block %d ", b.ID(), b.Layer(), p, ni.tCorrect[b.Id][x.ID()], x.ID())
+				ni.tCorrect[b.ID()][x.ID()] = vo.Negate() //Tcorrect[b][x] = -Tvote[p][x]
+				ni.Debug("update correction vector for block %d layer %d , pattern %d vote %d for block %d ", b.ID(), b.Layer(), p, ni.tCorrect[b.ID()][x.ID()], x.ID())
 			} else {
 				ni.Debug("block %d from layer %d dose'nt explicitly vote for layer %d", b.ID(), b.Layer(), x.Layer())
 			}
 		}
+		return nil
 	}
 
-	ni.ForBlockInView(ni.tPattern[p], bottomOfWindow, foo, func(err error) {})
+	ni.ForBlockInView(ni.tPattern[p], bottomOfWindow, foo)
 }
 
-func (ni *ninjaTortoise) updatePatternTally(newMinGood votingPattern, botomOfWindow mesh.LayerID, correctionMap map[mesh.BlockID]vec, effCountMap map[mesh.LayerID]int) {
+func (ni *ninjaTortoise) updatePatternTally(newMinGood votingPattern, botomOfWindow types.LayerID, correctionMap map[types.BlockID]vec, effCountMap map[types.LayerID]int) {
 	ni.Debug("update tally pbase id:%d layer:%d p id:%d layer:%d", ni.pBase.id, ni.pBase.Layer(), newMinGood.id, newMinGood.Layer())
 	for idx, effc := range effCountMap {
 		g := ni.tGood[idx]
@@ -254,10 +268,10 @@ func (ni *ninjaTortoise) updatePatternTally(newMinGood votingPattern, botomOfWin
 	}
 }
 
-func (ni *ninjaTortoise) getCorrEffCounter() (map[mesh.BlockID]vec, map[mesh.LayerID]int, func(b *mesh.BlockHeader)) {
-	correctionMap := make(map[mesh.BlockID]vec)
-	effCountMap := make(map[mesh.LayerID]int)
-	foo := func(b *mesh.BlockHeader) {
+func (ni *ninjaTortoise) getCorrEffCounter() (map[types.BlockID]vec, map[types.LayerID]int, func(b *types.BlockHeader)) {
+	correctionMap := make(map[types.BlockID]vec)
+	effCountMap := make(map[types.LayerID]int)
+	foo := func(b *types.BlockHeader) {
 		if b.Layer() > ni.pBase.Layer() { //because we already copied pbase's votes
 			if eff, found := ni.tEffective[b.ID()]; found {
 				if p, found := ni.tGood[eff.Layer()]; found && eff == p {
@@ -274,10 +288,10 @@ func (ni *ninjaTortoise) getCorrEffCounter() (map[mesh.BlockID]vec, map[mesh.Lay
 
 //for all layers from pBase to i add b's votes, mark good layers
 // return new minimal good layer
-func (ni *ninjaTortoise) findMinimalNewlyGoodLayer(lyr *mesh.Layer) mesh.LayerID {
-	minGood := mesh.LayerID(math.MaxUint64)
+func (ni *ninjaTortoise) findMinimalNewlyGoodLayer(lyr *types.Layer) types.LayerID {
+	minGood := types.LayerID(math.MaxUint64)
 
-	var j mesh.LayerID
+	var j types.LayerID
 	if Window > lyr.Index() {
 		j = ni.pBase.Layer() + 1
 	} else {
@@ -293,7 +307,7 @@ func (ni *ninjaTortoise) findMinimalNewlyGoodLayer(lyr *mesh.Layer) mesh.LayerID
 			//if a majority supports p (p is good)
 			//according to tal we dont have to know the exact amount, we can multiply layer size by number of layers
 			jGood, found := ni.tGood[j]
-			threshold := 0.5 * float64(mesh.LayerID(ni.avgLayerSize)*(lyr.Index()-p.Layer()))
+			threshold := 0.5 * float64(types.LayerID(ni.avgLayerSize)*(lyr.Index()-p.Layer()))
 
 			if (jGood != p || !found) && float64(ni.tSupport[p]) > threshold {
 				ni.tGood[p.Layer()] = p
@@ -309,7 +323,7 @@ func (ni *ninjaTortoise) findMinimalNewlyGoodLayer(lyr *mesh.Layer) mesh.LayerID
 }
 
 //update block support for pattern in layer j
-func (ni *ninjaTortoise) updateBlocksSupport(b []*mesh.Block, j mesh.LayerID) map[votingPattern]struct{} {
+func (ni *ninjaTortoise) updateBlocksSupport(b []*types.Block, j types.LayerID) map[votingPattern]struct{} {
 	sUpdated := map[votingPattern]struct{}{}
 	for _, block := range b {
 		//check if block votes for layer j explicitly or implicitly
@@ -331,9 +345,9 @@ func (ni *ninjaTortoise) updateBlocksSupport(b []*mesh.Block, j mesh.LayerID) ma
 	return sUpdated
 }
 
-func (ni *ninjaTortoise) addPatternVote(p votingPattern, view map[mesh.BlockID]struct{}) func(b mesh.BlockID) {
-	addPatternVote := func(b mesh.BlockID) {
-		var vp map[mesh.LayerID]votingPattern
+func (ni *ninjaTortoise) addPatternVote(p votingPattern, view map[types.BlockID]struct{}) func(b types.BlockID) {
+	addPatternVote := func(b types.BlockID) {
+		var vp map[types.LayerID]votingPattern
 		var found bool
 		bl, err := ni.GetBlock(b)
 		if err != nil {
@@ -363,7 +377,7 @@ func (ni *ninjaTortoise) addPatternVote(p votingPattern, view map[mesh.BlockID]s
 	return addPatternVote
 }
 
-func sumNodesInView(layerBlockCounter map[mesh.LayerID]int, layer mesh.LayerID, pLayer mesh.LayerID) vec {
+func sumNodesInView(layerBlockCounter map[types.LayerID]int, layer types.LayerID, pLayer types.LayerID) vec {
 	var sum int
 	for sum = 0; layer <= pLayer; layer++ {
 		sum = sum + layerBlockCounter[layer]
@@ -371,57 +385,54 @@ func sumNodesInView(layerBlockCounter map[mesh.LayerID]int, layer mesh.LayerID, 
 	return Against.Multiply(sum)
 }
 
-func (ni *ninjaTortoise) processBlocks(layer *mesh.Layer) {
+func (ni *ninjaTortoise) processBlocks(layer *types.Layer) {
 	for _, block := range layer.Blocks() {
 		ni.processBlock(block)
-		//ni.blocks[block.ID()] = block
-		//ni.layerBlocks[layer.Index()] = append(ni.layerBlocks[layer.Index()], block.ID())
 	}
-
 }
 
-func (ni *ninjaTortoise) handleGenesis(genesis *mesh.Layer) {
-	blkIds := make([]mesh.BlockID, 0, len(genesis.Blocks()))
+func (ni *ninjaTortoise) handleGenesis(genesis *types.Layer) {
+	blkIds := make([]types.BlockID, 0, len(genesis.Blocks()))
 	for _, blk := range genesis.Blocks() {
 		blkIds = append(blkIds, blk.ID())
 	}
 	vp := votingPattern{id: getId(blkIds), LayerID: Genesis}
 	ni.pBase = vp
 	ni.tGood[Genesis] = vp
-	ni.tExplicit[genesis.Blocks()[0].ID()] = make(map[mesh.LayerID]votingPattern, K*ni.avgLayerSize)
+	ni.tExplicit[genesis.Blocks()[0].ID()] = make(map[types.LayerID]votingPattern, K*ni.avgLayerSize)
 }
 
 //todo send map instead of ni
-func updatePatSupport(ni *ninjaTortoise, p votingPattern, bids []mesh.BlockID, idx mesh.LayerID) {
+func updatePatSupport(ni *ninjaTortoise, p votingPattern, bids []types.BlockID, idx types.LayerID) {
 	if val, found := ni.tPatSupport[p]; !found || val == nil {
-		ni.tPatSupport[p] = make(map[mesh.LayerID]votingPattern)
+		ni.tPatSupport[p] = make(map[types.LayerID]votingPattern)
 	}
 	pid := getId(bids)
 	ni.Debug("update support for %d layer %d supported pattern %d", p, idx, pid)
 	ni.tPatSupport[p][idx] = votingPattern{id: pid, LayerID: idx}
 }
 
-func initTallyToBase(tally map[votingPattern]map[mesh.BlockID]vec, base votingPattern, p votingPattern) {
+func initTallyToBase(tally map[votingPattern]map[types.BlockID]vec, base votingPattern, p votingPattern) {
 	if _, found := tally[p]; !found {
-		tally[p] = make(map[mesh.BlockID]vec)
+		tally[p] = make(map[types.BlockID]vec)
 	}
 	for k, v := range tally[base] {
 		tally[p][k] = v
 	}
 }
 
-func (ni *ninjaTortoise) latestComplete() mesh.LayerID {
+func (ni *ninjaTortoise) latestComplete() types.LayerID {
 	return ni.pBase.Layer()
 }
 
-func (ni *ninjaTortoise) getVotes() map[mesh.BlockID]vec {
+func (ni *ninjaTortoise) getVotes() map[types.BlockID]vec {
 	return ni.tVote[ni.pBase]
 }
 
-func (ni *ninjaTortoise) getVote(id mesh.BlockID) vec {
+func (ni *ninjaTortoise) getVote(id types.BlockID) vec {
 	block, err := ni.GetBlock(id)
 	if err != nil {
-		panic(fmt.Sprintf("error block not found ID %d", id))
+		panic(fmt.Sprintf("error block not found ID %d, %v", id, err))
 	}
 
 	if block.Layer() > ni.pBase.Layer() {
@@ -432,7 +443,7 @@ func (ni *ninjaTortoise) getVote(id mesh.BlockID) vec {
 	return ni.tVote[ni.pBase][id]
 }
 
-func (ni *ninjaTortoise) handleIncomingLayer(newlyr *mesh.Layer) { //i most recent layer
+func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) { //i most recent layer
 	ni.Info("update tables layer %d with %d blocks", newlyr.Index(), len(newlyr.Blocks()))
 
 	ni.processBlocks(newlyr)
@@ -443,7 +454,7 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *mesh.Layer) { //i most rece
 	}
 
 	l := ni.findMinimalNewlyGoodLayer(newlyr)
-
+	defer ni.evictOutOfPbase(ni.pBase.Layer())
 	//from minimal newly good pattern to current layer
 	//update pattern tally for all good layers
 	for j := l; j > 0 && j < newlyr.Index(); j++ {
@@ -452,26 +463,27 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *mesh.Layer) { //i most rece
 			initTallyToBase(ni.tTally, ni.pBase, p)
 
 			//find bottom of window
-			var windowStart mesh.LayerID
+			var windowStart types.LayerID
 			if Window > newlyr.Index() {
 				windowStart = 0
 			} else {
 				windowStart = newlyr.Index() - Window + 1
 			}
 
-			view := make(map[mesh.BlockID]struct{})
-			lCntr := make(map[mesh.LayerID]int)
+			view := make(map[types.BlockID]struct{})
+			lCntr := make(map[types.LayerID]int)
 			correctionMap, effCountMap, getCrrEffCnt := ni.getCorrEffCounter()
-			foo := func(block *mesh.BlockHeader) {
+			foo := func(block *types.BlockHeader) error {
 				view[block.ID()] = struct{}{} //all blocks in view
 				for _, id := range block.BlockVotes {
 					view[id] = struct{}{}
 				}
 				lCntr[block.Layer()]++ //amount of blocks for each layer in view
 				getCrrEffCnt(block)    //calc correction and eff count
+				return nil
 			}
 
-			ni.ForBlockInView(ni.tPattern[p], ni.pBase.Layer()+1, foo, func(err error) {})
+			ni.ForBlockInView(ni.tPattern[p], ni.pBase.Layer()+1, foo)
 
 			//add corrected implicit votes
 			ni.updatePatternTally(p, windowStart, correctionMap, effCountMap)
@@ -485,7 +497,7 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *mesh.Layer) { //i most rece
 			complete := true
 			for idx := windowStart; idx < j; idx++ {
 				layer, _ := ni.LayerBlockIds(idx) //todo handle error
-				bids := make([]mesh.BlockID, 0, ni.avgLayerSize)
+				bids := make([]types.BlockID, 0, ni.avgLayerSize)
 				for _, bid := range layer {
 					//if bid is not in p's view.
 					//add negative vote multiplied by the amount of blocks in the view
@@ -495,7 +507,7 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *mesh.Layer) { //i most rece
 					}
 
 					if val, found := ni.tVote[p]; !found || val == nil {
-						ni.tVote[p] = make(map[mesh.BlockID]vec)
+						ni.tVote[p] = make(map[types.BlockID]vec)
 					}
 
 					if vote := globalOpinion(ni.tTally[p][bid], ni.avgLayerSize, float64(p.LayerID-idx)); vote != Abstain {

@@ -8,6 +8,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/trie"
+	"github.com/spacemeshos/go-spacemesh/types"
 	"math/big"
 	"sort"
 	"sync"
@@ -37,8 +38,8 @@ type TransactionProcessor struct {
 	log.Log
 	rand         PseudoRandomizer
 	globalState  *StateDB
-	prevStates   map[mesh.LayerID]common.Hash
-	currentLayer mesh.LayerID
+	prevStates   map[types.LayerID]common.Hash
+	currentLayer types.LayerID
 	rootHash     common.Hash
 	stateQueue   list.List
 	gasCost      GasConfig
@@ -53,7 +54,7 @@ func NewTransactionProcessor(rnd PseudoRandomizer, db *StateDB, gasParams GasCon
 		Log:          logger,
 		rand:         rnd,
 		globalState:  db,
-		prevStates:   make(map[mesh.LayerID]common.Hash),
+		prevStates:   make(map[types.LayerID]common.Hash),
 		currentLayer: 0,
 		rootHash:     common.Hash{},
 		stateQueue:   list.List{},
@@ -64,7 +65,7 @@ func NewTransactionProcessor(rnd PseudoRandomizer, db *StateDB, gasParams GasCon
 }
 
 //should receive sort predicate
-func (tp *TransactionProcessor) ApplyTransactions(layer mesh.LayerID, txs mesh.Transactions) (uint32, error) {
+func (tp *TransactionProcessor) ApplyTransactions(layer types.LayerID, txs mesh.Transactions) (uint32, error) {
 	//todo: need to seed the mersenne twister with random beacon seed
 	if len(txs) == 0 {
 		return 0, nil
@@ -89,7 +90,7 @@ func (tp *TransactionProcessor) ApplyTransactions(layer mesh.LayerID, txs mesh.T
 	return failed, nil
 }
 
-func (tp *TransactionProcessor) addStateToHistory(layer mesh.LayerID, newHash common.Hash) {
+func (tp *TransactionProcessor) addStateToHistory(layer types.LayerID, newHash common.Hash) {
 	tp.stateQueue.PushBack(newHash)
 	if tp.stateQueue.Len() > maxPastStates {
 		hash := tp.stateQueue.Remove(tp.stateQueue.Back())
@@ -100,15 +101,21 @@ func (tp *TransactionProcessor) addStateToHistory(layer mesh.LayerID, newHash co
 
 }
 
-func (tp *TransactionProcessor) ApplyRewards(layer mesh.LayerID, miners map[string]struct{}, underQuota map[string]struct{}, bonusReward, diminishedReward *big.Int) {
-	for minerId, _ := range miners {
-		if _, ok := underQuota[minerId]; ok {
-			tp.globalState.AddBalance(address.HexToAddress(minerId), diminishedReward)
+func (tp *TransactionProcessor) ApplyRewards(layer types.LayerID, miners []string, underQuota map[string]int, bonusReward, diminishedReward *big.Int) {
+	for _, minerId := range miners {
+		//if we have 2 blocks in same layer, one of them can receive a diminished reward and the other cannot
+		if val, ok := underQuota[minerId]; ok {
+			if val > 0 {
+				tp.globalState.AddBalance(address.HexToAddress(minerId), diminishedReward)
+				underQuota[minerId] = underQuota[minerId] - 1
+				if underQuota[minerId] == 0 {
+					delete(underQuota, minerId)
+				}
+			}
 		} else {
 			tp.globalState.AddBalance(address.HexToAddress(minerId), bonusReward)
 		}
 	}
-	tp.globalState.Commit(false)
 	newHash, err := tp.globalState.Commit(false)
 
 	if err != nil {
@@ -120,7 +127,7 @@ func (tp *TransactionProcessor) ApplyRewards(layer mesh.LayerID, miners map[stri
 
 }
 
-func (tp *TransactionProcessor) Reset(layer mesh.LayerID) {
+func (tp *TransactionProcessor) Reset(layer types.LayerID) {
 	tp.mu.Lock()
 	defer tp.mu.Unlock()
 	if state, ok := tp.prevStates[layer]; ok {
@@ -155,7 +162,9 @@ func (tp *TransactionProcessor) coalescTransactionsBySender(transactions mesh.Tr
 	for key := range trnsBySender {
 		sort.Slice(trnsBySender[key], func(i, j int) bool {
 			//todo: add fix here:
-			// if trnsBySender[key][i].AccountNonce == trnsBySender[key][j].AccountNonce { return trnsBySender[key][i].Hash() < trnsBySender[key][j].AccountNonce.Hash() }
+			if trnsBySender[key][i].AccountNonce == trnsBySender[key][j].AccountNonce {
+				return trnsBySender[key][i].Hash().Big().Cmp(trnsBySender[key][j].Hash().Big()) > 1
+			}
 			return trnsBySender[key][i].AccountNonce < trnsBySender[key][j].AccountNonce
 		})
 	}
@@ -190,7 +199,7 @@ func (tp *TransactionProcessor) Process(transactions mesh.Transactions, trnsBySe
 	return errors
 }
 
-func (tp *TransactionProcessor) pruneAfterRevert(targetLayerID mesh.LayerID) {
+func (tp *TransactionProcessor) pruneAfterRevert(targetLayerID types.LayerID) {
 	//needs to be called under mutex lock
 	for i := tp.currentLayer; i >= targetLayerID; i-- {
 		if hash, ok := tp.prevStates[i]; ok {

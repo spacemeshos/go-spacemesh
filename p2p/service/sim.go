@@ -144,6 +144,7 @@ func (sm simDirectMessage) Sender() p2pcrypto.PublicKey {
 }
 
 type simGossipMessage struct {
+	sender                  p2pcrypto.PublicKey
 	msg                     Data
 	validationCompletedChan chan MessageValidation
 }
@@ -151,6 +152,11 @@ type simGossipMessage struct {
 // Bytes is the message's binary data in byte array format.
 func (sm simGossipMessage) Data() Data {
 	return sm.msg
+}
+
+// Sender
+func (sm simGossipMessage) Sender() p2pcrypto.PublicKey {
+	return sm.sender
 }
 
 // Bytes is the message's binary data in byte array format.
@@ -163,9 +169,9 @@ func (sm simGossipMessage) ValidationCompletedChan() chan MessageValidation {
 	return sm.validationCompletedChan
 }
 
-func (sm simGossipMessage) ReportValidation(protocol string, isValid bool) {
+func (sm simGossipMessage) ReportValidation(protocol string) {
 	if sm.validationCompletedChan != nil {
-		sm.validationCompletedChan <- NewMessageValidation(sm.Bytes(), protocol, isValid)
+		sm.validationCompletedChan <- NewMessageValidation(sm.sender, sm.Bytes(), protocol)
 	}
 }
 
@@ -198,14 +204,14 @@ func (sn *Node) ProcessDirectProtocolMessage(sender p2pcrypto.PublicKey, protoco
 }
 
 // ProcessGossipProtocolMessage
-func (sn *Node) ProcessGossipProtocolMessage(protocol string, payload Data, validationCompletedChan chan MessageValidation) error {
+func (sn *Node) ProcessGossipProtocolMessage(sender p2pcrypto.PublicKey, protocol string, data Data, validationCompletedChan chan MessageValidation) error {
 	sn.sim.mutex.RLock()
 	c, ok := sn.sim.protocolGossipHandler[sn.PublicKey().String()][protocol]
 	sn.sim.mutex.RUnlock()
 	if !ok {
 		return errors.New("Unknown protocol")
 	}
-	c <- simGossipMessage{payload, validationCompletedChan}
+	c <- simGossipMessage{sender, data, validationCompletedChan}
 	return nil
 }
 
@@ -251,7 +257,7 @@ func (sn *Node) Broadcast(protocol string, payload []byte) error {
 		sn.sim.mutex.RLock()
 		for n := range sn.sim.protocolGossipHandler {
 			if c, ok := sn.sim.protocolGossipHandler[n][protocol]; ok {
-				c <- simGossipMessage{DataBytes{Payload: payload}, nil}
+				c <- simGossipMessage{sn.Node.PublicKey(), DataBytes{Payload: payload}, nil}
 			}
 		}
 		sn.sim.mutex.RUnlock()

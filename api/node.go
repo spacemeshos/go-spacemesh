@@ -20,7 +20,7 @@ func ApproveAPIGossipMessages(ctx context.Context, s Service) {
 		for {
 			select {
 			case m := <-gm:
-				m.ReportValidation(APIGossipProtocol, true)
+				m.ReportValidation(APIGossipProtocol)
 			case <-ctx.Done():
 				return
 			}

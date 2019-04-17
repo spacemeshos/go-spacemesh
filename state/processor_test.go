@@ -7,6 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 	"math/big"
@@ -174,6 +175,14 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_Errors()
 	err = s.processor.ApplyTransaction(createTransaction(obj1.Nonce(), addr, obj2.address, 21))
 	assert.Error(s.T(), err)
 	assert.Equal(s.T(), err.Error(), ErrOrigin)
+}
+
+func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyRewards() {
+	s.processor.ApplyRewards(1, []string{"aaa", "bbb", "ccc", "ddd", "bbb", "aaa"}, map[string]int{"aaa": 1, "bbb": 2}, big.NewInt(1000), big.NewInt(300))
+	assert.Equal(s.T(), s.state.GetBalance(address.HexToAddress("aaa")), big.NewInt(1300))
+	assert.Equal(s.T(), s.state.GetBalance(address.HexToAddress("bbb")), big.NewInt(600))
+	assert.Equal(s.T(), s.state.GetBalance(address.HexToAddress("ccc")), big.NewInt(1000))
+	assert.Equal(s.T(), s.state.GetBalance(address.HexToAddress("ddd")), big.NewInt(1000))
 }
 
 func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_OrderByNonce() {
@@ -344,7 +353,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 
 			log.Info("transaction %v nonce %v amount %v", t.Origin.Hex(), t.AccountNonce, t.Amount)
 		}
-		failed, err := s.processor.ApplyTransactions(mesh.LayerID(i), trns)
+		failed, err := s.processor.ApplyTransactions(types.LayerID(i), trns)
 		assert.NoError(s.T(), err)
 		assert.True(s.T(), failed == 0)
 
@@ -354,7 +363,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 		}
 
 		if i == revertToLayer+revertAfterLayer {
-			s.processor.Reset(mesh.LayerID(revertToLayer))
+			s.processor.Reset(types.LayerID(revertToLayer))
 			got := string(s.processor.globalState.Dump())
 
 			if got != want {

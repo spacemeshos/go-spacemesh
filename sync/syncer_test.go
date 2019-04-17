@@ -9,6 +9,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/timesync"
+	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 	"math/big"
@@ -58,33 +59,17 @@ func SyncMockFactory(number int, conf Configuration, name string, dbType string)
 	return nodes, p2ps
 }
 
-type BlockValidatorMock struct {
-}
-
-func (BlockValidatorMock) BlockEligible(id mesh.LayerID, key string) bool {
-	return true
-}
-
-type MeshValidatorMock struct{}
-
-func (m *MeshValidatorMock) HandleIncomingLayer(layer *mesh.Layer) (mesh.LayerID, mesh.LayerID) {
-	return layer.Index() - 1, layer.Index()
-}
-func (m *MeshValidatorMock) HandleLateBlock(bl *mesh.Block)              {}
-func (m *MeshValidatorMock) RegisterLayerCallback(func(id mesh.LayerID)) {}
-func (mlg *MeshValidatorMock) ContextualValidity(id mesh.BlockID) bool   { return true }
-
 type stateMock struct{}
 
-func (s *stateMock) ApplyRewards(layer mesh.LayerID, miners map[string]struct{}, underQuota map[string]struct{}, bonusReward, diminishedReward *big.Int) {
+func (s *stateMock) ApplyRewards(layer types.LayerID, miners []string, underQuota map[string]int, bonusReward, diminishedReward *big.Int) {
 
 }
 
-func (s *stateMock) ApplyTransactions(id mesh.LayerID, tx mesh.Transactions) (uint32, error) {
+func (s *stateMock) ApplyTransactions(id types.LayerID, tx mesh.Transactions) (uint32, error) {
 	return 0, nil
 }
 
-var rewardConf = mesh.RewardConfig{
+var rewardConf = mesh.Config{
 	big.NewInt(10),
 	big.NewInt(5000),
 	big.NewInt(15),
@@ -93,7 +78,7 @@ var rewardConf = mesh.RewardConfig{
 }
 
 func getMeshWithLevelDB(id string) *mesh.Mesh {
-	return mesh.NewPersistentMesh(fmt.Sprintf(Path+"%v/", id), rewardConf, &MeshValidatorMock{}, &stateMock{}, log.New(id, "", ""))
+	return mesh.NewPersistentMesh(fmt.Sprintf(Path+"%v/", id), rewardConf, &MeshValidatorMock{}, &stateMock{}, AtxDbMock{}, log.New(id, "", ""))
 }
 
 func persistenceTeardown() {
@@ -101,7 +86,7 @@ func persistenceTeardown() {
 }
 
 func getMeshWithMemoryDB(id string) *mesh.Mesh {
-	return mesh.NewMemMesh(rewardConf, &MeshValidatorMock{}, &stateMock{}, log.New(id, "", ""))
+	return mesh.NewMemMesh(rewardConf, &MeshValidatorMock{}, &stateMock{}, AtxDbMock{}, log.New(id, "", ""))
 }
 
 func getMesh(dbType, id string) *mesh.Mesh {
@@ -150,8 +135,8 @@ func TestSyncProtocol_BlockRequest(t *testing.T) {
 	syncObj := syncs[0]
 	syncObj2 := syncs[1]
 	defer syncObj.Close()
-	lid := mesh.LayerID(1)
-	block := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), lid, []byte("data data data"))
+	lid := types.LayerID(1)
+	block := types.NewExistingBlock(types.BlockID(uuid.New().ID()), lid, []byte("data data data"))
 	syncObj.AddBlock(block)
 	ch, err := sendBlockRequest(syncObj2.MessageServer, nodes[0].Node.PublicKey(), block.ID(), syncObj.Log)
 	timeout := time.NewTimer(2 * time.Second)
@@ -172,8 +157,8 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 	defer syncObj1.Close()
 	syncObj2 := syncs[1]
 	defer syncObj2.Close()
-	lid := mesh.LayerID(1)
-	syncObj1.AddBlock(mesh.NewExistingBlock(mesh.BlockID(123), lid, nil))
+	lid := types.LayerID(1)
+	syncObj1.AddBlock(types.NewExistingBlock(types.BlockID(123), lid, nil))
 	//syncObj1.ValidateLayer(l) //this is to simulate the approval of the tortoise...
 	timeout := time.NewTimer(2 * time.Second)
 	ch, err := syncObj2.sendLayerHashRequest(nodes[0].Node.PublicKey(), lid)
@@ -193,17 +178,17 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 	defer syncObj.Close()
 	syncObj1 := syncs[1]
 	defer syncObj1.Close()
-	lid := mesh.LayerID(1)
-	layer := mesh.NewExistingLayer(lid, make([]*mesh.Block, 0, 10))
-	layer.AddBlock(mesh.NewExistingBlock(mesh.BlockID(123), lid, nil))
-	layer.AddBlock(mesh.NewExistingBlock(mesh.BlockID(132), lid, nil))
-	layer.AddBlock(mesh.NewExistingBlock(mesh.BlockID(111), lid, nil))
-	layer.AddBlock(mesh.NewExistingBlock(mesh.BlockID(222), lid, nil))
+	lid := types.LayerID(1)
+	layer := types.NewExistingLayer(lid, make([]*types.Block, 0, 10))
+	layer.AddBlock(types.NewExistingBlock(types.BlockID(123), lid, nil))
+	layer.AddBlock(types.NewExistingBlock(types.BlockID(132), lid, nil))
+	layer.AddBlock(types.NewExistingBlock(types.BlockID(111), lid, nil))
+	layer.AddBlock(types.NewExistingBlock(types.BlockID(222), lid, nil))
 
-	syncObj1.AddBlock(mesh.NewExistingBlock(mesh.BlockID(123), lid, nil))
-	syncObj1.AddBlock(mesh.NewExistingBlock(mesh.BlockID(132), lid, nil))
-	syncObj1.AddBlock(mesh.NewExistingBlock(mesh.BlockID(111), lid, nil))
-	syncObj1.AddBlock(mesh.NewExistingBlock(mesh.BlockID(222), lid, nil))
+	syncObj1.AddBlock(types.NewExistingBlock(types.BlockID(123), lid, nil))
+	syncObj1.AddBlock(types.NewExistingBlock(types.BlockID(132), lid, nil))
+	syncObj1.AddBlock(types.NewExistingBlock(types.BlockID(111), lid, nil))
+	syncObj1.AddBlock(types.NewExistingBlock(types.BlockID(222), lid, nil))
 
 	ch, err := syncObj.sendLayerBlockIDsRequest(nodes[1].Node.PublicKey(), lid)
 	timeout := time.NewTimer(2 * time.Second)
@@ -215,7 +200,7 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 		for _, a := range layer.Blocks() {
 			found := false
 			for _, id := range ids {
-				if a.ID() == mesh.BlockID(id) {
+				if a.ID() == types.BlockID(id) {
 					found = true
 					break
 				}
@@ -239,9 +224,9 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	n1 := nodes[0]
 	syncObj1.Log.Info("started fetch_blocks")
 
-	block1 := mesh.NewExistingBlock(mesh.BlockID(123), 0, nil)
-	block2 := mesh.NewExistingBlock(mesh.BlockID(321), 1, nil)
-	block3 := mesh.NewExistingBlock(mesh.BlockID(222), 2, nil)
+	block1 := types.NewExistingBlock(types.BlockID(123), 0, nil)
+	block2 := types.NewExistingBlock(types.BlockID(321), 1, nil)
+	block3 := types.NewExistingBlock(types.BlockID(222), 2, nil)
 
 	syncObj1.AddBlock(block1)
 	syncObj1.AddBlock(block2)
@@ -320,14 +305,14 @@ func TestSyncProtocol_SyncTwoNodes(t *testing.T) {
 	syncObj2.Peers = pm2 //override peers with mock
 	defer syncObj2.Close()
 
-	block3 := mesh.NewExistingBlock(mesh.BlockID(333), 1, nil)
-	block4 := mesh.NewExistingBlock(mesh.BlockID(444), 1, nil)
-	block5 := mesh.NewExistingBlock(mesh.BlockID(555), 2, nil)
-	block6 := mesh.NewExistingBlock(mesh.BlockID(666), 2, nil)
-	block7 := mesh.NewExistingBlock(mesh.BlockID(777), 3, nil)
-	block8 := mesh.NewExistingBlock(mesh.BlockID(888), 3, nil)
-	block9 := mesh.NewExistingBlock(mesh.BlockID(999), 4, nil)
-	block10 := mesh.NewExistingBlock(mesh.BlockID(101), 5, nil)
+	block3 := types.NewExistingBlock(types.BlockID(333), 1, nil)
+	block4 := types.NewExistingBlock(types.BlockID(444), 1, nil)
+	block5 := types.NewExistingBlock(types.BlockID(555), 2, nil)
+	block6 := types.NewExistingBlock(types.BlockID(666), 2, nil)
+	block7 := types.NewExistingBlock(types.BlockID(777), 3, nil)
+	block8 := types.NewExistingBlock(types.BlockID(888), 3, nil)
+	block9 := types.NewExistingBlock(types.BlockID(999), 4, nil)
+	block10 := types.NewExistingBlock(types.BlockID(101), 5, nil)
 	syncObj1.AddBlock(block3)
 	syncObj1.AddBlock(block4)
 	syncObj1.AddBlock(block5)
@@ -385,14 +370,14 @@ func syncTest(dpType string, t *testing.T) {
 	syncObj3.Peers = getPeersMock([]p2p.Peer{n1.PublicKey(), n2.PublicKey(), n4.PublicKey()})
 	syncObj4.Peers = getPeersMock([]p2p.Peer{n1.PublicKey(), n2.PublicKey()})
 
-	block3 := mesh.NewExistingBlock(mesh.BlockID(333), 1, nil)
-	block4 := mesh.NewExistingBlock(mesh.BlockID(444), 1, nil)
-	block5 := mesh.NewExistingBlock(mesh.BlockID(555), 2, nil)
-	block6 := mesh.NewExistingBlock(mesh.BlockID(666), 2, nil)
-	block7 := mesh.NewExistingBlock(mesh.BlockID(777), 3, nil)
-	block8 := mesh.NewExistingBlock(mesh.BlockID(888), 3, nil)
-	block9 := mesh.NewExistingBlock(mesh.BlockID(999), 4, nil)
-	block10 := mesh.NewExistingBlock(mesh.BlockID(101), 4, nil)
+	block3 := types.NewExistingBlock(types.BlockID(333), 1, nil)
+	block4 := types.NewExistingBlock(types.BlockID(444), 1, nil)
+	block5 := types.NewExistingBlock(types.BlockID(555), 2, nil)
+	block6 := types.NewExistingBlock(types.BlockID(666), 2, nil)
+	block7 := types.NewExistingBlock(types.BlockID(777), 3, nil)
+	block8 := types.NewExistingBlock(types.BlockID(888), 3, nil)
+	block9 := types.NewExistingBlock(types.BlockID(999), 4, nil)
+	block10 := types.NewExistingBlock(types.BlockID(101), 4, nil)
 
 	syncObj1.Mesh.ValidateLayer(mesh.GenesisLayer())
 	syncObj2.Mesh.ValidateLayer(mesh.GenesisLayer())
@@ -482,16 +467,16 @@ func Test_TwoNodes_SyncIntegrationSuite(t *testing.T) {
 
 func (sis *syncIntegrationTwoNodes) TestSyncProtocol_TwoNodes() {
 	t := sis.T()
-	block1 := mesh.NewExistingBlock(mesh.BlockID(111), 1, nil)
-	block2 := mesh.NewExistingBlock(mesh.BlockID(222), 1, nil)
-	block3 := mesh.NewExistingBlock(mesh.BlockID(333), 2, nil)
-	block4 := mesh.NewExistingBlock(mesh.BlockID(444), 2, nil)
-	block5 := mesh.NewExistingBlock(mesh.BlockID(555), 3, nil)
-	block6 := mesh.NewExistingBlock(mesh.BlockID(666), 3, nil)
-	block7 := mesh.NewExistingBlock(mesh.BlockID(777), 4, nil)
-	block8 := mesh.NewExistingBlock(mesh.BlockID(888), 4, nil)
-	block9 := mesh.NewExistingBlock(mesh.BlockID(999), 5, nil)
-	block10 := mesh.NewExistingBlock(mesh.BlockID(101), 5, nil)
+	block1 := types.NewExistingBlock(types.BlockID(111), 1, nil)
+	block2 := types.NewExistingBlock(types.BlockID(222), 1, nil)
+	block3 := types.NewExistingBlock(types.BlockID(333), 2, nil)
+	block4 := types.NewExistingBlock(types.BlockID(444), 2, nil)
+	block5 := types.NewExistingBlock(types.BlockID(555), 3, nil)
+	block6 := types.NewExistingBlock(types.BlockID(666), 3, nil)
+	block7 := types.NewExistingBlock(types.BlockID(777), 4, nil)
+	block8 := types.NewExistingBlock(types.BlockID(888), 4, nil)
+	block9 := types.NewExistingBlock(types.BlockID(999), 5, nil)
+	block10 := types.NewExistingBlock(types.BlockID(101), 5, nil)
 
 	syncObj0 := sis.syncers[0]
 	defer syncObj0.Close()
@@ -564,13 +549,13 @@ func Test_Multiple_SyncIntegrationSuite(t *testing.T) {
 func (sis *syncIntegrationMultipleNodes) TestSyncProtocol_MultipleNodes() {
 	t := sis.T()
 
-	block2 := mesh.NewExistingBlock(mesh.BlockID(222), 1, nil)
-	block3 := mesh.NewExistingBlock(mesh.BlockID(333), 2, nil)
-	block4 := mesh.NewExistingBlock(mesh.BlockID(444), 2, nil)
-	block5 := mesh.NewExistingBlock(mesh.BlockID(555), 3, nil)
-	block6 := mesh.NewExistingBlock(mesh.BlockID(666), 3, nil)
-	block7 := mesh.NewExistingBlock(mesh.BlockID(777), 4, nil)
-	block8 := mesh.NewExistingBlock(mesh.BlockID(888), 4, nil)
+	block2 := types.NewExistingBlock(types.BlockID(222), 1, nil)
+	block3 := types.NewExistingBlock(types.BlockID(333), 2, nil)
+	block4 := types.NewExistingBlock(types.BlockID(444), 2, nil)
+	block5 := types.NewExistingBlock(types.BlockID(555), 3, nil)
+	block6 := types.NewExistingBlock(types.BlockID(666), 3, nil)
+	block7 := types.NewExistingBlock(types.BlockID(777), 4, nil)
+	block8 := types.NewExistingBlock(types.BlockID(888), 4, nil)
 
 	syncObj1 := sis.syncers[0]
 	defer syncObj1.Close()

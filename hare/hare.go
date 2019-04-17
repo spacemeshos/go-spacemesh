@@ -4,9 +4,8 @@ import (
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/hare/metrics"
-	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/types"
 	"sync"
 	"time"
 )
@@ -17,7 +16,7 @@ const Delta = time.Second // todo: add to config
 // LayerBuffer is the number of layer results we keep at a given time.
 const LayerBuffer = 20
 
-type consensusFactory func(cfg config.Config, instanceId InstanceId, s *Set, oracle Rolacle, signing Signing, p2p NetworkService, terminationReport chan TerminationOutput) Consensus
+type consensusFactory func(cfg config.Config, instanceId InstanceId, s *Set, oracle Rolacle, signing Signer, p2p NetworkService, terminationReport chan TerminationOutput) Consensus
 
 // Consensus represents a consensus
 type Consensus interface {
@@ -26,7 +25,7 @@ type Consensus interface {
 	CloseChannel() chan struct{}
 
 	Start() error
-	SetInbox(chan *pb.HareMessage)
+	SetInbox(chan *Msg)
 }
 
 // TerminationOutput is a result of a process terminated with output.
@@ -36,7 +35,7 @@ type TerminationOutput interface {
 }
 
 type orphanBlockProvider interface {
-	GetUnverifiedLayerBlocks(layerId mesh.LayerID) ([]mesh.BlockID, error)
+	GetUnverifiedLayerBlocks(layerId types.LayerID) ([]types.BlockID, error)
 }
 
 // Hare is an orchestrator that shoots consensus processes and collects their termination output
@@ -46,11 +45,11 @@ type Hare struct {
 	config config.Config
 
 	network    NetworkService
-	beginLayer chan mesh.LayerID
+	beginLayer chan types.LayerID
 
 	broker *Broker
 
-	sign Signing
+	sign Signer
 
 	obp     orphanBlockProvider
 	rolacle Rolacle
@@ -58,19 +57,19 @@ type Hare struct {
 	networkDelta time.Duration
 
 	layerLock sync.RWMutex
-	lastLayer mesh.LayerID
+	lastLayer types.LayerID
 
 	bufferSize int
 
 	outputChan chan TerminationOutput
 	mu         sync.RWMutex
-	outputs    map[mesh.LayerID][]mesh.BlockID
+	outputs    map[types.LayerID][]types.BlockID
 
 	factory consensusFactory
 }
 
 // New returns a new Hare struct.
-func New(conf config.Config, p2p NetworkService, sign Signing, obp orphanBlockProvider, rolacle Rolacle, beginLayer chan mesh.LayerID, logger log.Log) *Hare {
+func New(conf config.Config, p2p NetworkService, sign Signer, obp orphanBlockProvider, rolacle Rolacle, beginLayer chan types.LayerID, logger log.Log) *Hare {
 	h := new(Hare)
 
 	h.Closer = NewCloser()
@@ -96,9 +95,9 @@ func New(conf config.Config, p2p NetworkService, sign Signing, obp orphanBlockPr
 	h.lastLayer = 0
 
 	h.outputChan = make(chan TerminationOutput, h.bufferSize)
-	h.outputs = make(map[mesh.LayerID][]mesh.BlockID, h.bufferSize) //  we keep results about LayerBuffer past layers
+	h.outputs = make(map[types.LayerID][]types.BlockID, h.bufferSize) //  we keep results about LayerBuffer past layers
 
-	h.factory = func(conf config.Config, instanceId InstanceId, s *Set, oracle Rolacle, signing Signing, p2p NetworkService, terminationReport chan TerminationOutput) Consensus {
+	h.factory = func(conf config.Config, instanceId InstanceId, s *Set, oracle Rolacle, signing Signer, p2p NetworkService, terminationReport chan TerminationOutput) Consensus {
 		return NewConsensusProcess(conf, instanceId, s, oracle, signing, p2p, terminationReport, logger)
 	}
 
@@ -126,7 +125,7 @@ func (h *Hare) collectOutput(output TerminationOutput) error {
 	}
 
 	set := output.Set()
-	blocks := make([]mesh.BlockID, len(set.values))
+	blocks := make([]types.BlockID, len(set.values))
 	i := 0
 	for _, v := range set.values {
 		blocks[i] = v.BlockID
@@ -140,13 +139,13 @@ func (h *Hare) collectOutput(output TerminationOutput) error {
 			}
 		}
 	}
-	h.outputs[mesh.LayerID(id)] = blocks
+	h.outputs[types.LayerID(id)] = blocks
 	h.mu.Unlock()
 
 	return nil
 }
 
-func (h *Hare) onTick(id mesh.LayerID) {
+func (h *Hare) onTick(id types.LayerID) {
 	h.layerLock.Lock()
 	if id > h.lastLayer {
 		h.lastLayer = id
@@ -196,7 +195,7 @@ var (
 )
 
 // GetResults returns the hare output for a given LayerID. returns error if we don't have results yet.
-func (h *Hare) BlockingGetResult(id mesh.LayerID) ([]mesh.BlockID, error) {
+func (h *Hare) BlockingGetResult(id types.LayerID) ([]types.BlockID, error) {
 	if h.isTooLate(InstanceId(id)) {
 		return nil, ErrTooOld
 	}
@@ -212,7 +211,7 @@ func (h *Hare) BlockingGetResult(id mesh.LayerID) ([]mesh.BlockID, error) {
 }
 
 // GetResults returns the hare output for a given LayerID. returns error if we don't have results yet.
-func (h *Hare) GetResult(id mesh.LayerID) ([]mesh.BlockID, error) {
+func (h *Hare) GetResult(id types.LayerID) ([]types.BlockID, error) {
 	if h.isTooLate(InstanceId(id)) {
 		return nil, ErrTooOld
 	}

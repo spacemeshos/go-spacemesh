@@ -2,13 +2,12 @@ package hare
 
 import (
 	"bytes"
-	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 type proposalTracker interface {
-	OnProposal(msg *pb.HareMessage)
-	OnLateProposal(msg *pb.HareMessage)
+	OnProposal(msg *Msg)
+	OnLateProposal(msg *Msg)
 	IsConflicting() bool
 	ProposedSet() *Set
 }
@@ -16,8 +15,8 @@ type proposalTracker interface {
 // Tracks proposal messages
 type ProposalTracker struct {
 	log.Log
-	proposal      *pb.HareMessage // maps PubKey->Proposal
-	isConflicting bool            // maps PubKey->ConflictStatus
+	proposal      *Msg // maps PubKey->Proposal
+	isConflicting bool // maps PubKey->ConflictStatus
 }
 
 func NewProposalTracker(log log.Log) *ProposalTracker {
@@ -30,7 +29,7 @@ func NewProposalTracker(log log.Log) *ProposalTracker {
 }
 
 // Tracks the provided proposal message assuming it was received on the expected round
-func (pt *ProposalTracker) OnProposal(msg *pb.HareMessage) {
+func (pt *ProposalTracker) OnProposal(msg *Msg) {
 	if pt.proposal == nil { // first leader
 		pt.proposal = msg // just update
 		return
@@ -59,7 +58,7 @@ func (pt *ProposalTracker) OnProposal(msg *pb.HareMessage) {
 }
 
 // Tracks the provided proposal message assuming it was late
-func (pt *ProposalTracker) OnLateProposal(msg *pb.HareMessage) {
+func (pt *ProposalTracker) OnLateProposal(msg *Msg) {
 	if pt.proposal == nil {
 		return
 	}
