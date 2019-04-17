@@ -100,14 +100,17 @@ func NewNet(conf config.Config, localEntity *node.LocalNode) (*Net, error) {
 		n.incomingMessagesQueue[imq] = make(chan IncomingMessageEvent, qsize)
 	}
 
-	n.logger.Debug("created network with tcp address: %s", n.listenAddress)
-
 	return n, nil
 }
 
 func (n *Net) Start() error { // todo: maybe add context
 	err := n.listen(n.newTcpListener)
 	return err
+}
+
+// LocalAddr returns the local listening address. panics before calling Start or if Start errored
+func (n *Net) LocalAddr() net.Addr {
+	return n.listener.Addr()
 }
 
 // Logger returns a reference to logger
@@ -246,13 +249,10 @@ func (n *Net) Shutdown() {
 }
 
 func (n *Net) newTcpListener() (net.Listener, error) {
-	n.logger.Info("Starting to listen on tcp:%v", n.listenAddress)
 	tcpListener, err := net.Listen("tcp", n.listenAddress.String())
 	if err != nil {
-		n.logger.Info("EERRR CREATING listenere ", err)
 		return nil, err
 	}
-	n.logger.Info("Created listener successfully")
 	return tcpListener, nil
 }
 
@@ -263,7 +263,7 @@ func (n *Net) listen(lis func() (listener net.Listener, err error)) error {
 	if err != nil {
 		return err
 	}
-	n.logger.Info("Beggining to accept connections")
+	n.logger.Info("Started listening on address tcp:%v", listener.Addr().String())
 	go n.accept(listener)
 	return nil
 }

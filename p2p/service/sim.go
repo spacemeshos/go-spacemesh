@@ -29,7 +29,6 @@ type Simulator struct {
 
 var _ Service = new(Node)
 
-
 // Node is a simulated p2p node that can be used as a p2p service
 type Node struct {
 	sim *Simulator

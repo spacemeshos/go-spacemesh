@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	"golang.org/x/sync/errgroup"
 	"sync"
@@ -74,7 +74,7 @@ func (its *IntegrationTestSuite) SetupSuite() {
 	for i := 0; i < len(swarm); i++ {
 		swarm[i] = createP2pInstance(its.T(), cfg)
 		i := i
-	//	wg.Add(1)
+		//	wg.Add(1)
 		go func() {
 			// we add a timeout before starting to reduce the possibility or trying to connect at the same time
 			// pretty rare occasion in real life (which we handle anyway), but happens a lot when running everything in 1 binary.
@@ -83,12 +83,12 @@ func (its *IntegrationTestSuite) SetupSuite() {
 				its.BeforeHook(i, swarm[i])
 			}
 
-		err := swarm[i].Start() // ignore error?
-		if err != nil {
-			finchan <- err
-			return
-			//its.T().Fatal(fmt.Sprintf("failed to start a node, %v", err))
-		}
+			err := swarm[i].Start() // ignore error?
+			if err != nil {
+				finchan <- err
+				return
+				//its.T().Fatal(fmt.Sprintf("failed to start a node, %v", err))
+			}
 			err = swarm[i].waitForBoot()
 			if err != nil {
 				finchan <- err
@@ -104,7 +104,7 @@ func (its *IntegrationTestSuite) SetupSuite() {
 	testLog("Launched all processes 🎉, now waiting...")
 
 	i := 0
-	lop:
+lop:
 	for {
 		select {
 		case err := <-finchan:
@@ -112,8 +112,8 @@ func (its *IntegrationTestSuite) SetupSuite() {
 			if err != nil {
 				its.T().Fatal(err)
 			}
-			if i == len(swarm){
-			 break lop
+			if i == len(swarm) {
+				break lop
 			}
 		case <-totalTimeout.C:
 			its.T().Fatal("timeout")
@@ -134,12 +134,10 @@ func (its *IntegrationTestSuite) TearDownSuite() {
 }
 
 func createP2pInstance(t testing.TB, config config.Config) *swarm {
-	port, err := node.GetUnboundedPort()
-	assert.Nil(t, err)
-	config.TCPPort = port
+	config.TCPPort = 0
 	p, err := newSwarm(context.TODO(), config, true, saveResults)
-	assert.NoError(t, err)
-	assert.NotNil(t, p)
+	require.NoError(t, err)
+	require.NotNil(t, p)
 	return p
 }
 
@@ -207,7 +205,7 @@ func Errors(arr []error) []int {
 func StringIdentifiers(boot ...*swarm) []string {
 	s := make([]string, len(boot))
 	for i := 0; i < len(s); i++ {
-		s[i] = node.StringFromNode(boot[i].LocalNode().Node)
+		s[i] = node.StringFromNode(node.New(boot[i].LocalNode().Node.PublicKey(), boot[i].udpnetwork.LocalAddr().String()))
 	}
 
 	return s
