@@ -156,6 +156,8 @@ type NIPSTBuilder struct {
 	errChan chan error
 
 	nipst *NIPST
+
+	log log.Log
 }
 
 func NewNIPSTBuilder(
@@ -170,6 +172,7 @@ func NewNIPSTBuilder(
 	verifyPoetMembership verifyPoetMembershipFunc,
 	verifyPoet verifyPoetFunc,
 	verifyPoetMatchesMembership verifyPoetMatchesMembershipFunc,
+	log log.Log,
 ) *NIPSTBuilder {
 	return &NIPSTBuilder{
 		id:                          id,
@@ -186,12 +189,21 @@ func NewNIPSTBuilder(
 		stop:                        false,
 		errChan:                     make(chan error),
 		nipst:                       initialNIPST(id, space, duration),
+		log:                         log,
 	}
 }
 
 var numberOfProvenLabels = uint8(10)
 
-func NewNipstBuilder(id []byte, spaceUnit uint64, difficulty proving.Difficulty, duration SeqWorkTicks, postProver PostProverClient, poetProver PoetProvingServiceClient) *NIPSTBuilder {
+func NewNipstBuilder(
+	id []byte,
+	spaceUnit uint64,
+	difficulty proving.Difficulty,
+	duration SeqWorkTicks,
+	postProver PostProverClient,
+	poetProver PoetProvingServiceClient,
+	log log.Log,
+) *NIPSTBuilder {
 	return &NIPSTBuilder{
 		id:                          id,
 		space:                       spaceUnit,
@@ -207,6 +219,7 @@ func NewNipstBuilder(id []byte, spaceUnit uint64, difficulty proving.Difficulty,
 		stop:                        false,
 		errChan:                     make(chan error),
 		nipst:                       initialNIPST(id, spaceUnit, duration),
+		log:                         log,
 	}
 }
 
@@ -222,7 +235,7 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *common.Hash) (*NIPST, error) {
 	if nb.nipst.PoetRound == nil {
 		poetChallenge := challenge
 
-		log.Info("submitting challenge to PoET proving service "+
+		nb.log.Info("submitting challenge to PoET proving service "+
 			"(service id: %v, challenge: %x)",
 			nb.poetProver.id(), poetChallenge)
 
@@ -231,7 +244,7 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *common.Hash) (*NIPST, error) {
 			return nil, fmt.Errorf("failed to submit challenge to poet service: %v", err)
 		}
 
-		log.Info("challenge submitted to PoET proving service "+
+		nb.log.Info("challenge submitted to PoET proving service "+
 			"(service id: %v, round id: %v)",
 			nb.poetProver.id(), round.Id)
 
@@ -242,7 +255,7 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *common.Hash) (*NIPST, error) {
 
 	// Phase 1: Wait for PoET service round membership proof.
 	if nb.nipst.PoetMembershipProof == nil {
-		log.Info("querying round membership proof from PoET proving service "+
+		nb.log.Info("querying round membership proof from PoET proving service "+
 			"(service id: %v, round id: %v, challenge: %x)",
 			nb.poetProver.id(), nb.nipst.PoetRound.Id, nb.nipst.NipstChallenge)
 
@@ -259,7 +272,7 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *common.Hash) (*NIPST, error) {
 			return nil, fmt.Errorf("received an invalid PoET round membership proof")
 		}
 
-		log.Info("received a valid round membership proof from PoET proving service "+
+		nb.log.Info("received a valid round membership proof from PoET proving service "+
 			"(service id: %v, round id: %v, challenge: %x)",
 			nb.poetProver.id(), nb.nipst.PoetRound.Id, nb.nipst.NipstChallenge)
 
@@ -269,7 +282,7 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *common.Hash) (*NIPST, error) {
 
 	// Phase 2: Wait for PoET service proof.
 	if nb.nipst.PoetProof == nil {
-		log.Info("waiting for PoET proof from PoET proving service "+
+		nb.log.Info("waiting for PoET proof from PoET proving service "+
 			"(service id: %v, round id: %v, round root commitment: %x)",
 			nb.poetProver.id(), nb.nipst.PoetRound.Id, nb.nipst.PoetMembershipProof.Root)
 
@@ -293,7 +306,7 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *common.Hash) (*NIPST, error) {
 			return nil, fmt.Errorf("received an invalid PoET proof")
 		}
 
-		log.Info("received a valid PoET proof from PoET proving service "+
+		nb.log.Info("received a valid PoET proof from PoET proving service "+
 			"(service id: %v, round id: %v)",
 			nb.poetProver.id(), nb.nipst.PoetRound.Id)
 
@@ -305,7 +318,7 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *common.Hash) (*NIPST, error) {
 	if nb.nipst.PostProof == nil {
 		postChallenge := common.BytesToHash(nb.nipst.PoetProof.Commitment)
 
-		log.Info("starting PoST execution (challenge: %x)",
+		nb.log.Info("starting PoST execution (challenge: %x)",
 			postChallenge)
 
 		proof, err := nb.postProver.execute(nb.id, postChallenge, nb.numberOfProvenLabels, nb.difficulty, defTimeout)
@@ -321,14 +334,14 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *common.Hash) (*NIPST, error) {
 			return nil, fmt.Errorf("received an invalid PoST proof")
 		}
 
-		log.Info("finished PoST execution (proof: %v)", proof)
+		nb.log.Info("finished PoST execution (proof: %v)", proof)
 
 		nb.nipst.PostChallenge = &postChallenge
 		nb.nipst.PostProof = proof
 		nb.nipst.persist()
 	}
 
-	log.Info("finished NIPST construction")
+	nb.log.Info("finished NIPST construction")
 
 	return nb.nipst, nil
 }
@@ -338,7 +351,7 @@ func (nb *NIPSTBuilder) IsPostInitialized() bool {
 	labelsPath := filepath.Join(postDataPath, hex.EncodeToString(nb.id))
 	_, err := os.Stat(labelsPath)
 	if os.IsNotExist(err) {
-		log.Info("could not find labels path at %v", labelsPath)
+		nb.log.Info("could not find labels path at %v", labelsPath)
 		return false
 	}
 	return true
@@ -356,7 +369,7 @@ func (nb *NIPSTBuilder) InitializePost() (*PostProof, error) {
 		return nil, fmt.Errorf("failed to initialize PoST: %v", err)
 	}
 
-	log.Info("finished PoST initialization (commitment: %v)", commitment)
+	nb.log.Info("finished PoST initialization (commitment: %v)", commitment)
 
 	return commitment, nil
 }

@@ -65,10 +65,10 @@ func ConfigTst() mesh.Config {
 }
 
 func getAtxDb(id string) (*ActivationDb, *mesh.Mesh) {
-	lg := log.New(id, "", "")
-	memesh := mesh.NewMemMeshDB(lg)
-	atxdb := NewActivationDb(database.NewMemDatabase(), memesh, 1000, types.NodeId{Key: id})
-	layers := mesh.NewMesh(memesh, atxdb, ConfigTst(), &MeshValidatorMock{}, &MockState{}, lg)
+	lg := log.NewDefault(id)
+	memesh := mesh.NewMemMeshDB(lg.WithName("meshDB"))
+	atxdb := NewActivationDb(database.NewMemDatabase(), memesh, 1000, lg.WithName("atxDB"))
+	layers := mesh.NewMesh(memesh, atxdb, ConfigTst(), &MeshValidatorMock{}, &MockState{}, lg.WithName("mesh"))
 	return atxdb, layers
 }
 

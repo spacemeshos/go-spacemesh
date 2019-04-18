@@ -5,6 +5,7 @@ import (
 	"flag"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/proving"
 	"github.com/stretchr/testify/require"
@@ -71,6 +72,7 @@ func TestNIPSTBuilderWithMocks(t *testing.T) {
 		verifyMembershipMock,
 		verifyPoetMock,
 		verifyPoetMembershipMock,
+		log.NewDefault(string(minerID)),
 	)
 	hash := common.BytesToHash([]byte("anton"))
 	npst, err := nb.BuildNIPST(&hash)
@@ -115,6 +117,7 @@ func buildNIPST(r *require.Assertions, spaceUnit uint64, difficulty proving.Diff
 		verifyPoetMembership,
 		verifyPoet,
 		verifyPoetMatchesMembership,
+		log.NewDefault(string(minerID)),
 	)
 	npst, err := nb.BuildNIPST(&nipstChallenge)
 	r.NoError(err)
@@ -151,6 +154,7 @@ func TestNewNIPSTBuilderNotInitialized(t *testing.T) {
 		verifyPoetMembership,
 		verifyPoet,
 		verifyPoetMatchesMembership,
+		log.NewDefault(string(minerID)),
 	)
 
 	npst, err := nb.BuildNIPST(&nipstChallenge)

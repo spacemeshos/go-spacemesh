@@ -76,8 +76,9 @@ func TestBuilder_BuildActivationTx(t *testing.T) {
 	net := &NetMock{}
 	layers := MeshProviderrMock{}
 	layersPerEpoch := uint16(10)
-	activationDb := NewActivationDb(database.NewMemDatabase(), mesh.NewMemMeshDB(log.NewDefault("")), uint64(layersPerEpoch), id)
-	b := NewBuilder(id, activationDb, net, ActiveSetProviderMock{}, layers, 10, &NipstBuilderMock{}, nil)
+	lg := log.NewDefault(id.Key[:5])
+	activationDb := NewActivationDb(database.NewMemDatabase(), mesh.NewMemMeshDB(log.NewDefault("")), uint64(layersPerEpoch), lg.WithName("atxDB"))
+	b := NewBuilder(id, activationDb, net, ActiveSetProviderMock{}, layers, 10, &NipstBuilderMock{}, nil, lg.WithName("atxBuilder"))
 	adb := b.db
 	prevAtx := types.AtxId{Hash: common.HexToHash("0x111")}
 	chlng := common.HexToHash("0x3333")
@@ -90,7 +91,7 @@ func TestBuilder_BuildActivationTx(t *testing.T) {
 		NodeId:         b.nodeId,
 		Sequence:       b.GetLastSequence(b.nodeId) + 1,
 		PrevATXId:      atx.Id(),
-		LayerIdx:       types.LayerID(uint64(atx.LayerIdx) + uint64(b.layersPerEpoch)),
+		LayerIdx:       atx.LayerIdx.Add(b.layersPerEpoch),
 		StartTick:      atx.EndTick,
 		EndTick:        b.tickProvider.NumOfTicks(), //todo: add provider when
 		PositioningAtx: atx.Id(),
@@ -113,8 +114,9 @@ func TestBuilder_NoPrevATX(t *testing.T) {
 	net := &NetMock{}
 	layers := MeshProviderrMock{}
 	layersPerEpoch := uint16(10)
-	activationDb := NewActivationDb(database.NewMemDatabase(), mesh.NewMemMeshDB(log.NewDefault("")), uint64(layersPerEpoch), id)
-	b := NewBuilder(id, activationDb, net, ActiveSetProviderMock{}, layers, layersPerEpoch, &NipstBuilderMock{}, nil)
+	lg := log.NewDefault(id.Key[:5])
+	activationDb := NewActivationDb(database.NewMemDatabase(), mesh.NewMemMeshDB(log.NewDefault("")), uint64(layersPerEpoch), lg.WithName("atxDB"))
+	b := NewBuilder(id, activationDb, net, ActiveSetProviderMock{}, layers, layersPerEpoch, &NipstBuilderMock{}, nil, lg.WithName("atxBuilder"))
 	err := b.PublishActivationTx(1)
 	assert.Error(t, err)
 }
@@ -125,8 +127,9 @@ func TestBuilder_PublishActivationTx(t *testing.T) {
 	layers := MeshProviderrMock{}
 	nipstBuilder := &NipstBuilderMock{}
 	layersPerEpoch := uint16(10)
-	activationDb := NewActivationDb(database.NewMemDatabase(), mesh.NewMemMeshDB(log.NewDefault("")), uint64(layersPerEpoch), id)
-	b := NewBuilder(id, activationDb, net, ActiveSetProviderMock{}, layers, layersPerEpoch, nipstBuilder, nil)
+	lg := log.NewDefault(id.Key[:5])
+	activationDb := NewActivationDb(database.NewMemDatabase(), mesh.NewMemMeshDB(log.NewDefault("")), uint64(layersPerEpoch), lg.WithName("atxDB1"))
+	b := NewBuilder(id, activationDb, net, ActiveSetProviderMock{}, layers, layersPerEpoch, nipstBuilder, nil, lg.WithName("atxBuilder"))
 	adb := b.db
 	prevAtx := types.AtxId{Hash: common.HexToHash("0x111")}
 	chlng := common.HexToHash("0x3333")
@@ -141,7 +144,7 @@ func TestBuilder_PublishActivationTx(t *testing.T) {
 		NodeId:         b.nodeId,
 		Sequence:       b.GetLastSequence(b.nodeId) + 1,
 		PrevATXId:      atx.Id(),
-		LayerIdx:       types.LayerID(uint64(atx.LayerIdx) + uint64(b.layersPerEpoch)),
+		LayerIdx:       atx.LayerIdx.Add(b.layersPerEpoch),
 		StartTick:      atx.EndTick,
 		EndTick:        b.tickProvider.NumOfTicks(), //todo: add provider when
 		PositioningAtx: atx.Id(),
@@ -164,15 +167,15 @@ func TestBuilder_PublishActivationTx(t *testing.T) {
 	err = b.PublishActivationTx(2)
 	assert.Error(t, err)
 
-	activationDb2 := NewActivationDb(database.NewMemDatabase(), mesh.NewMemMeshDB(log.NewDefault("")), uint64(layersPerEpoch), id)
-	b = NewBuilder(id, activationDb2, net, ActiveSetProviderMock{}, layers, layersPerEpoch, nipstBuilder, nil)
+	activationDb2 := NewActivationDb(database.NewMemDatabase(), mesh.NewMemMeshDB(log.NewDefault("")), uint64(layersPerEpoch), lg.WithName("atxDB2"))
+	b = NewBuilder(id, activationDb2, net, ActiveSetProviderMock{}, layers, layersPerEpoch, nipstBuilder, nil, lg.WithName("atxBuilder"))
 	b.nipstBuilder = &NipstErrBuilderMock{}
 	err = b.PublishActivationTx(0)
 	assert.Error(t, err)
 	assert.Equal(t, err.Error(), "cannot create nipst error")
 
-	activationDb3 := NewActivationDb(database.NewMemDatabase(), mesh.NewMemMeshDB(log.NewDefault("")), uint64(layersPerEpoch), id)
-	bt := NewBuilder(id, activationDb3, net, ActiveSetProviderMock{}, layers, layersPerEpoch, &NipstBuilderMock{}, nil)
+	activationDb3 := NewActivationDb(database.NewMemDatabase(), mesh.NewMemMeshDB(log.NewDefault("")), uint64(layersPerEpoch), lg.WithName("atxDB3"))
+	bt := NewBuilder(id, activationDb3, net, ActiveSetProviderMock{}, layers, layersPerEpoch, &NipstBuilderMock{}, nil, lg.WithName("atxBuilder"))
 	err = bt.PublishActivationTx(1)
 	assert.Error(t, err)
 
@@ -184,8 +187,10 @@ func TestBuilder_PublishActivationTxSerialize(t *testing.T) {
 	layers := MeshProviderrMock{}
 	nipstBuilder := &NipstBuilderMock{}
 	layersPerEpoch := uint16(10)
-	activationDb := NewActivationDb(database.NewMemDatabase(), mesh.NewMemMeshDB(log.NewDefault("")), uint64(layersPerEpoch), id)
-	b := NewBuilder(id, activationDb, net, ActiveSetProviderMock{}, layers, layersPerEpoch, nipstBuilder, nil)
+	lg := log.NewDefault(id.Key[:5])
+	activationDb := NewActivationDb(database.NewMemDatabase(), mesh.NewMemMeshDB(log.NewDefault("")),
+		uint64(layersPerEpoch), lg.WithName("atxDB"))
+	b := NewBuilder(id, activationDb, net, ActiveSetProviderMock{}, layers, layersPerEpoch, nipstBuilder, nil, lg.WithName("atxBuilder"))
 	adb := b.db
 	prevAtx := types.AtxId{Hash: common.HexToHash("0x111")}
 	challenge1 := common.HexToHash("0x222222")

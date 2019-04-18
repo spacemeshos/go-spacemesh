@@ -196,24 +196,17 @@ func (m *Mesh) ValidateLayer(lyr *types.Layer) {
 	m.lvMutex.Lock()
 	m.verifiedLayer = lyr.Index()
 	m.lvMutex.Unlock()
+
+	m.addAtxs(lyr)
 	if newPbase > oldPbase {
 		m.PushTransactions(oldPbase, newPbase)
-		m.addAtxs(oldPbase, newPbase)
+
 	}
 }
 
-func (m *Mesh) addAtxs(oldBase, newBase types.LayerID) {
-	for i := oldBase; i < newBase; i++ {
-
-		l, err := m.mdb.GetLayer(i)
-		if err != nil || l == nil {
-			m.Error("cannot find layer %v in db", i) //todo handle error
-			return
-		}
-		for _, blk := range l.Blocks() {
-			m.AtxDB.ProcessBlockATXs(blk)
-		}
-
+func (m *Mesh) addAtxs(l *types.Layer) {
+	for _, blk := range l.Blocks() {
+		m.AtxDB.ProcessBlockATXs(blk)
 	}
 }
 

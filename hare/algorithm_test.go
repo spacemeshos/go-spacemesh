@@ -122,7 +122,8 @@ func buildMessage(msg *pb.HareMessage) *pb.HareMessage {
 }
 
 func buildBroker(net NetworkService) *Broker {
-	return NewBroker(net, &mockEligibilityValidator{true}, Closer{make(chan struct{})})
+	return NewBroker(net, &mockEligibilityValidator{true}, Closer{make(chan struct{})},
+		log.NewDefault("sm").WithName("broker"))
 }
 
 type mockEligibilityValidator struct {

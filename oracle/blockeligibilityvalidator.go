@@ -15,10 +15,11 @@ type BlockEligibilityValidator struct {
 	activationDb   ActivationDb
 	beaconProvider *EpochBeaconProvider
 	validateVRF    VRFValidationFunction
+	log            log.Log
 }
 
 func NewBlockEligibilityValidator(committeeSize int32, layersPerEpoch uint16, activationDb ActivationDb,
-	beaconProvider *EpochBeaconProvider, validateVRF VRFValidationFunction) *BlockEligibilityValidator {
+	beaconProvider *EpochBeaconProvider, validateVRF VRFValidationFunction, log log.Log) *BlockEligibilityValidator {
 
 	return &BlockEligibilityValidator{
 		committeeSize:  committeeSize,
@@ -26,6 +27,7 @@ func NewBlockEligibilityValidator(committeeSize int32, layersPerEpoch uint16, ac
 		activationDb:   activationDb,
 		beaconProvider: beaconProvider,
 		validateVRF:    validateVRF,
+		log:            log,
 	}
 }
 
@@ -37,9 +39,9 @@ func (v BlockEligibilityValidator) BlockEligible(block *types.Block) (bool, erro
 		return false, err
 	}
 
-	numberOfEligibleBlocks, err := getNumberOfEligibleBlocks(activeSetSize, v.committeeSize, v.layersPerEpoch)
+	numberOfEligibleBlocks, err := getNumberOfEligibleBlocks(activeSetSize, v.committeeSize, v.layersPerEpoch, v.log)
 	if err != nil {
-		log.Error("failed to get number of eligible blocks: %v", err)
+		v.log.Error("failed to get number of eligible blocks: %v", err)
 		return false, err
 	}
 
@@ -54,7 +56,7 @@ func (v BlockEligibilityValidator) BlockEligible(block *types.Block) (bool, erro
 	vrfSig := block.EligibilityProof.Sig
 	err = v.validateVRF(message, vrfSig, []byte(block.MinerID.VRFPublicKey))
 	if err != nil {
-		log.Error("eligibility VRF validation failed: %v", err)
+		v.log.Error("eligibility VRF validation failed: %v", err)
 		return false, err
 	}
 	vrfHash := sha256.Sum256(vrfSig)
@@ -69,15 +71,15 @@ func (v BlockEligibilityValidator) getActiveSetSize(epochNumber types.EpochId, b
 	}
 	atx, err := v.activationDb.GetAtx(block.ATXID)
 	if err != nil {
-		log.Error("getting ATX failed: %v", err)
+		v.log.Error("getting ATX failed: %v", err)
 		return 0, err
 	}
 	if !atx.Valid {
-		log.Error("ATX is invalid: %v", err)
+		v.log.Error("ATX is invalid: %v", err)
 		return 0, err
 	}
 	if atxEpochNumber := atx.LayerIdx.GetEpoch(v.layersPerEpoch); epochNumber != atxEpochNumber {
-		log.Error("ATX epoch (%d) doesn't match layer ID epoch (%d)", atxEpochNumber, epochNumber)
+		v.log.Error("ATX epoch (%d) doesn't match layer ID epoch (%d)", atxEpochNumber, epochNumber)
 		return 0, fmt.Errorf("activation epoch (%d) mismatch with layer epoch (%d)", atxEpochNumber,
 			epochNumber)
 	}

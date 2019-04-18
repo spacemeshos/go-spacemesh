@@ -102,10 +102,11 @@ func (app *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat s
 		dbStore := database.NewMemDatabase()
 		meshDB := mesh.NewMemMeshDB(log.Log{})
 		layersPerEpoch := smApp.Config.CONSENSUS.LayersPerEpoch
-		activationDB := activation.NewActivationDb(dbStore, meshDB, uint64(layersPerEpoch), nodeID)
+		lg := log.NewDefault(nodeID.Key[:5])
+		activationDB := activation.NewActivationDb(dbStore, meshDB, uint64(layersPerEpoch), lg.WithName("atxDB"))
 		beaconProvider := &oracle.EpochBeaconProvider{}
-		blockOracle := oracle.NewMinerBlockOracle(int32(numOfInstances), layersPerEpoch, activationDB, beaconProvider, vrfSigner, nodeID)
-		blockValidator := oracle.NewBlockEligibilityValidator(int32(numOfInstances), layersPerEpoch, activationDB, beaconProvider, crypto.ValidateVRF)
+		blockOracle := oracle.NewMinerBlockOracle(int32(numOfInstances), layersPerEpoch, activationDB, beaconProvider, vrfSigner, nodeID, lg.WithName("blockOracle"))
+		blockValidator := oracle.NewBlockEligibilityValidator(int32(numOfInstances), layersPerEpoch, activationDB, beaconProvider, crypto.ValidateVRF, lg.WithName("blkElgValidator"))
 
 		hareOracle := oracle.NewLocalOracle(rolacle, numOfInstances, nodeID)
 		hareOracle.Register(true, pub.String())
@@ -145,6 +146,7 @@ func (app *AppTestSuite) TestMultipleNodes() {
 	_ = app.apps[0].P2P.Broadcast(miner.IncomingTxProtocol, txbytes)
 	timeout := time.After(2 * 60 * time.Second)
 
+
 	stickyClientsDone := 0
 	for {
 		select {
@@ -154,7 +156,8 @@ func (app *AppTestSuite) TestMultipleNodes() {
 		default:
 			maxClientsDone := 0
 			for idx, ap := range app.apps {
-				if big.NewInt(10).Cmp(ap.state.GetBalance(dst)) == 0 {
+				if big.NewInt(10).Cmp(ap.state.GetBalance(dst)) == 0 &&
+					app.apps[0].mesh.LatestLayer() > types.LayerID(app.apps[0].Config.CONSENSUS.LayersPerEpoch){
 					clientsDone := 0
 					for idx2, ap2 := range app.apps {
 						if idx != idx2 {

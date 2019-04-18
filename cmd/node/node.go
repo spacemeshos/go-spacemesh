@@ -265,8 +265,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 		name = name[:5]
 	}
 
-	lg := log.New("shmekel_"+name, "", "")
-	hrLog := log.NewWithErrorLevel("shmekel_"+name, "", "")
+	lg := log.NewDefault(name).WithFields(log.String("nodeID", name))
 
 	db, err := database.NewLDBDatabase(dbStorepath, 0, 0)
 	if err != nil {
@@ -290,20 +289,22 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	trtl := consensus.NewAlgorithm(consensus.NewNinjaTortoise(layerSize, mdb, lg.WithName("trtl")))
 
 	//todo: put in config
-	atxdb := activation.NewActivationDb(atxdbstore, mdb, uint64(app.Config.CONSENSUS.LayersPerEpoch), nodeID)
+	atxdb := activation.NewActivationDb(atxdbstore, mdb, uint64(app.Config.CONSENSUS.LayersPerEpoch), lg.WithName("atxDB"))
 	msh := mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, processor, lg.WithName("mesh")) //todo: what to do with the logger?
 
 	conf := sync.Configuration{SyncInterval: 1 * time.Second, Concurrency: 4, LayerSize: int(layerSize), RequestTimeout: 100 * time.Millisecond}
 	syncer := sync.NewSync(swarm, msh, blockValidator, conf, clock.Subscribe(), lg)
 
-	ha := hare.New(app.Config.HARE, swarm, sgn, msh, hareOracle, clock.Subscribe(), hrLog.WithName("hare"))
+	// TODO: turn log level back to normal:
+	ha := hare.New(app.Config.HARE, swarm, sgn, msh, hareOracle, clock.Subscribe(), lg.WithName("hare").WithOptions(log.EnableLevelOption(log.ErrorLevel)))
 
 	blockProducer := miner.NewBlockBuilder(nodeID, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, atxdb.ProcessAtx, lg.WithName("blockProducer"))
 	blockListener := sync.NewBlockListener(swarm, blockValidator, msh, 2*time.Second, 4, lg.WithName("blockListener"))
 
 	postDifficulty := proving.Difficulty(5) // TODO: put this in config (long term - make it dynamically calculated)
-	nipstBuilder := nipst.NewNipstBuilder([]byte(nodeID.Key), 1024, postDifficulty, 100, postClient, poetClient)
-	atxBuilder := activation.NewBuilder(nodeID, atxdb, swarm, atxdb, msh, app.Config.CONSENSUS.LayersPerEpoch, nipstBuilder, clock.Subscribe())
+	nipstBuilder := nipst.NewNipstBuilder([]byte(nodeID.Key), 1024, postDifficulty, 100, postClient, poetClient, lg.WithName("nipstBuilder"))
+	atxBuilder := activation.NewBuilder(nodeID, atxdb, swarm, atxdb, msh, app.Config.CONSENSUS.LayersPerEpoch,
+		nipstBuilder, clock.Subscribe(), lg.WithName("atxBuilder"))
 
 	app.blockProducer = &blockProducer
 	app.blockListener = blockListener
