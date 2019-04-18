@@ -93,13 +93,12 @@ func (o *Oracle) IsEligible(id types.NodeId, layer types.LayerID, msg, sig []byt
 		return false, errors.New("active set size is zero")
 	}
 
-	threshold := o.committeeSize / activeSetSize * math.MaxUint32
-
-	// check threshold
+	// calc hash & check threshold
 	h := fnv.New32()
 	h.Write(sig)
-	if h.Sum32() > threshold {
-		log.Error("identity %v did not pass eligibility threshold %v", id, threshold)
+	// avoid division (no floating point) & do operations on uint64 to avoid flow
+	if uint64(activeSetSize)*uint64(h.Sum32()) > uint64(o.committeeSize)*uint64(math.MaxUint32) {
+		log.Error("identity %v did not pass eligibility committeeSize=%v activeSetSize=%v", id, o.committeeSize, activeSetSize)
 		return false, errors.New("did not pass eligibility threshold")
 	}
 
