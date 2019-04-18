@@ -117,7 +117,7 @@ func (b *Builder) loop() {
 				epoch := layer.GetEpoch(b.layersPerEpoch)
 				err := b.PublishActivationTx(epoch)
 				if err != nil {
-					b.log.Error("cannot create atx : %v in epoch %v", err, epoch)
+					b.log.Error("cannot create atx : %v in current epoch %v", err, epoch)
 				}
 				b.finished <- struct{}{}
 			}()
@@ -163,7 +163,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 			endTick = posAtx.EndTick
 			b.posLayerID = posAtx.PubLayerIdx
 		} else {
-			if !epoch.IsGenesis() {
+			if !epoch.IsGenesis() || b.prevATX != nil {
 				return fmt.Errorf("cannot find pos atx id " + err.Error())
 			}
 			// During genesis posAtx is optional
@@ -192,7 +192,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 		b.log.Info("re-entering atx creation in epoch %v", epoch)
 	}
 	if b.mesh.LatestLayer().GetEpoch(b.layersPerEpoch) < b.challenge.PubLayerIdx.GetEpoch(b.layersPerEpoch) {
-		return fmt.Errorf("an epoch has not passed during nipst creation")
+		return fmt.Errorf("an epoch has not passed during nipst creation, current: %v wanted: %v", b.mesh.LatestLayer().GetEpoch(b.layersPerEpoch), b.challenge.PubLayerIdx.GetEpoch(b.layersPerEpoch))
 	}
 	////////////////////////////////////////////
 	// an epoch has passed!!!!!!!!!!!
@@ -207,7 +207,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 		return err
 	}
 	b.prevATX = atx
-	b.log.Info("atx published! id: %v, prevATXID: %v, posATXID: %v, layer: %v, active in epoch: %v, active set: %v miner: %v",
+	b.log.Info("atx published! id: %v, prevATXID: %v, posATXID: %v, layer: %v, published in epoch: %v, active set: %v miner: %v",
 		atx.Id().String()[2:7], atx.PrevATXId.String()[2:7], atx.PositioningAtx.String()[2:7], atx.PubLayerIdx,
 		atx.PubLayerIdx.GetEpoch(b.layersPerEpoch), atx.ActiveSetSize, b.nodeId.Key[:5])
 	// cleanup state

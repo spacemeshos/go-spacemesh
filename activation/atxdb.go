@@ -36,8 +36,13 @@ func (db *ActivationDb) ProcessBlockATXs(blk *types.Block) {
 }
 
 func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx, fromBlock bool) {
+	eatx, _ := db.GetAtx(atx.Id())
+	if eatx != nil {
+		return
+	}
+
 	epoch := atx.PubLayerIdx.GetEpoch(uint16(db.LayersPerEpoch))
-	db.log.Info("processing atx id %v, epoch %v node: %v", atx.Id().String()[2:7], epoch, atx.NodeId.Key[:5])
+	db.log.Info("processing atx id %v, pub-epoch %v node: %v", atx.Id().String()[2:7], epoch, atx.NodeId.Key[:5])
 	activeSet, err := db.CalcActiveSetFromView(atx)
 	if err != nil {
 		db.log.Error("could not calculate active set for %v", atx.Id())
@@ -72,7 +77,7 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 	var counter uint32 = 0
 	set := make(map[types.AtxId]struct{})
 	firstLayerOfLastEpoch := a.PubLayerIdx - db.LayersPerEpoch - (a.PubLayerIdx % db.LayersPerEpoch)
-	lastLayerOfLastEpoch := firstLayerOfLastEpoch + db.LayersPerEpoch
+	lastLayerOfLastEpoch := firstLayerOfLastEpoch + db.LayersPerEpoch -1
 
 	traversalFunc := func(blkh *types.BlockHeader) error {
 		blk, err := db.meshDb.GetBlock(blkh.Id)
@@ -92,8 +97,13 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 			atx, err := db.GetAtx(atx.Id())
 			if err == nil && atx.Valid {
 				counter++
+				db.log.Info("atx found traversing %v in block in layer %v", atx.ShortId(), blk.LayerIndex)
 				if counter >= a.ActiveSetSize {
 					return io.EOF
+				}
+			} else {
+				if err == nil {
+					db.log.Error("atx found %v, but not valid", atx.Id().String()[:5])
 				}
 			}
 		}
@@ -127,11 +137,6 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 // - ATX LayerID is NipstLayerTime or more after the PositioningATX LayerID.
 // - The ATX view of the previous epoch contains ActiveSetSize activations
 func (db *ActivationDb) ValidateAtx(atx *types.ActivationTx) error {
-	eatx, _ := db.GetAtx(atx.Id())
-	if eatx != nil {
-		return fmt.Errorf("found atx with same id") // TODO: should this validation be here?
-	}
-
 	if atx.PrevATXId != types.EmptyAtxId {
 		prevATX, err := db.GetAtx(atx.PrevATXId)
 		if err != nil {
@@ -182,26 +187,31 @@ func (db *ActivationDb) ValidateAtx(atx *types.ActivationTx) error {
 		return fmt.Errorf("atx conatins view with unequal active ids (%v) than seen (%v)", atx.ActiveSetSize, atx.VerifiedActiveSet)
 	}
 
+	/*
 	hash, err := atx.NIPSTChallenge.Hash()
 	if err != nil {
 		return fmt.Errorf("cannot get NIPST Challenge hash: %v", err)
 	}
+	//todo: add validation of nipst
+	if !atx.Nipst.Valid(){
+		return fmt.Errorf("nipst not valid ")
+	}
 	if !atx.Nipst.ValidateNipstChallenge(hash) {
 		return fmt.Errorf("nipst challenge hash mismatch")
-	}
+	}*/
 	return nil
 }
 
 func (db *ActivationDb) StoreAtx(ech types.EpochId, atx *types.ActivationTx) error {
 	db.Lock()
 	defer db.Unlock()
-	db.log.Debug("storing atx %v, in epoch %v", atx, ech)
 
 	//todo: maybe cleanup DB if failed by using defer
 	if b, err := db.atxs.Get(atx.Id().Bytes()); err == nil && len(b) > 0 {
 		// exists - how should we handle this?
 		return nil
 	}
+
 	b, err := types.AtxAsBytes(atx)
 	if err != nil {
 		return err
@@ -210,18 +220,25 @@ func (db *ActivationDb) StoreAtx(ech types.EpochId, atx *types.ActivationTx) err
 	if err != nil {
 		return err
 	}
-
 	err = db.addAtxToEpoch(ech, atx.Id())
 	if err != nil {
 		return err
 	}
+
 	if atx.Valid {
-		db.incValidAtxCounter(ech)
+		err := db.incValidAtxCounter(ech)
+		if err != nil {
+			return err
+		}
+		db.log.Info("after incrementing epoch counter ech (%v)", ech)
 	}
+	db.log.Info("storing atx %v, in epoch %v", atx.ShortId(), ech)
 	err = db.addAtxToNodeId(atx.NodeId, atx.Id())
 	if err != nil {
 		return err
 	}
+	db.log.Info("finished storing atx %v, in epoch %v", atx.ShortId(), ech)
+
 	return nil
 }
 
@@ -230,12 +247,12 @@ func epochCounterKey(ech types.EpochId) []byte {
 }
 
 func (db *ActivationDb) incValidAtxCounter(ech types.EpochId) error {
-	key := epochCounterKey(ech - 1)
+	key := epochCounterKey(ech)
 	val, err := db.atxs.Get(key)
-	if err == nil {
-		return db.atxs.Put(key, common.Uint32ToBytes(common.BytesToUint32(val)+1))
+	if err != nil {
+		return db.atxs.Put(key, common.Uint32ToBytes(1))
 	}
-	return db.atxs.Put(key, common.Uint32ToBytes(1))
+	return db.atxs.Put(key, common.Uint32ToBytes(common.BytesToUint32(val)+1))
 }
 
 func (db *ActivationDb) ActiveSetIds(ech types.EpochId) uint32 {

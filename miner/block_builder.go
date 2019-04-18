@@ -179,9 +179,13 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 		ATXs: atx,
 		Txs:  txs,
 	}
+	atxs := " "
+	for _, x := range b.ATXs {
+		atxs +=  "," + x.ShortId()
+	}
 
-	t.Log.Info("I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d, viewEdges: %d",
-		b.LayerIndex, b.Id, len(b.Txs), len(b.BlockVotes), len(b.ViewEdges))
+	t.Log.Info("I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d, viewEdges: %d atx %v, atxs:%v",
+		b.LayerIndex, b.Id, len(b.Txs), len(b.BlockVotes), len(b.ViewEdges), atxID.String()[:5], atxs)
 	return &b, nil
 }
 
@@ -244,6 +248,7 @@ func (t *BlockBuilder) acceptBlockData() {
 				continue
 			}
 			if len(proofs) == 0 {
+				t.Error("no PROOFFSSSS detected")
 				break
 			}
 			// TODO: include multiple proofs in each block and weigh blocks where applicable

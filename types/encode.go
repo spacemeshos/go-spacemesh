@@ -91,10 +91,8 @@ func BytesAsAtx(b []byte) (*ActivationTx, error) {
 					Hash: common.Hash{},
 				},
 			},
-			VerifiedActiveSet: 0,
 			ActiveSetSize:     0,
 			View:              nil,
-			Valid:             false,
 		},
 		Nipst: &nipst.NIPST{
 			Id:             nil,

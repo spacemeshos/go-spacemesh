@@ -24,10 +24,8 @@ var EmptyAtxId = AtxId{common.Hash{0}}
 
 type ActivationTxHeader struct {
 	NIPSTChallenge
-	VerifiedActiveSet uint32
 	ActiveSetSize     uint32
 	View              []BlockID
-	Valid             bool
 }
 
 type NIPSTChallenge struct {
@@ -51,6 +49,8 @@ func (challenge *NIPSTChallenge) Hash() (*common.Hash, error) {
 
 type ActivationTx struct {
 	ActivationTxHeader
+	VerifiedActiveSet uint32
+	Valid             bool
 	Nipst *nipst.NIPST
 	//todo: add sig
 }
@@ -69,9 +69,9 @@ func NewActivationTx(NodeId NodeId, Sequence uint64, PrevATX AtxId, LayerIndex L
 			},
 			ActiveSetSize: ActiveSetSize,
 			View:          View,
-			Valid:         isValid,
-		},
 
+		},
+		Valid:         isValid,
 		Nipst: nipst,
 	}
 
@@ -85,9 +85,9 @@ func NewActivationTxWithChallenge(poetChallenge NIPSTChallenge, ActiveSetSize ui
 			NIPSTChallenge: poetChallenge,
 			ActiveSetSize:  ActiveSetSize,
 			View:           View,
-			Valid:          isValid,
-		},
 
+		},
+		Valid:          isValid,
 		Nipst: nipst,
 	}
 
@@ -101,4 +101,8 @@ func (t ActivationTx) Id() AtxId {
 	}
 
 	return AtxId{crypto.Keccak256Hash(tx)}
+}
+
+func (t ActivationTx) ShortId() string {
+	return t.Id().String()[2:7]
 }

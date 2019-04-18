@@ -34,9 +34,14 @@ func NewBlockEligibilityValidator(committeeSize int32, layersPerEpoch uint16, ac
 func (v BlockEligibilityValidator) BlockEligible(block *types.Block) (bool, error) {
 	epochNumber := block.LayerIndex.GetEpoch(v.layersPerEpoch)
 
-	activeSetSize, err := v.getActiveSetSize(epochNumber, block)
-	if err != nil {
-		return false, err
+	// need to get active set size from previous epoch
+	activeSetSize := uint32(GenesisActiveSetSize)
+	if !epochNumber.IsGenesis() {
+		var err error
+		activeSetSize, err = v.getActiveSetSize(epochNumber - 1, block)
+		if err != nil {
+			return false, err
+		}
 	}
 
 	numberOfEligibleBlocks, err := getNumberOfEligibleBlocks(activeSetSize, v.committeeSize, v.layersPerEpoch, v.log)
@@ -66,12 +71,9 @@ func (v BlockEligibilityValidator) BlockEligible(block *types.Block) (bool, erro
 }
 
 func (v BlockEligibilityValidator) getActiveSetSize(epochNumber types.EpochId, block *types.Block) (uint32, error) {
-	if epochNumber.IsGenesis() {
-		return GenesisActiveSetSize, nil
-	}
 	atx, err := v.activationDb.GetAtx(block.ATXID)
 	if err != nil {
-		v.log.Error("getting ATX failed: %v", err)
+		v.log.Error("getting ATX failed: %v %v ep(%v)", err, block.ATXID.String()[:5], epochNumber)
 		return 0, err
 	}
 	if !atx.Valid {
@@ -83,6 +85,10 @@ func (v BlockEligibilityValidator) getActiveSetSize(epochNumber types.EpochId, b
 		return 0, fmt.Errorf("activation epoch (%d) mismatch with layer epoch (%d)", atxEpochNumber,
 			epochNumber)
 	}
+	if atx.PubLayerIdx.GetEpoch(v.layersPerEpoch).IsGenesis() {
+		return GenesisActiveSetSize, nil
+	}
+	log.Info("active set as seen by atx %v is %v", atx.ShortId(), atx.ActiveSetSize)
 	activeSetSize := atx.ActiveSetSize
 	return activeSetSize, err
 }

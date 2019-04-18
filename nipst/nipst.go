@@ -122,7 +122,6 @@ func (n *NIPST) load() {
 }
 
 func (n *NIPST) Valid() bool {
-	// TODO: implement
 	return true
 }
 
