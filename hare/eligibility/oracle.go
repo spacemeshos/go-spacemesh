@@ -33,11 +33,11 @@ type Oracle struct {
 }
 
 func safeLayer(layer types.LayerID) types.LayerID {
-	if layer > k {
+	if layer > k { // assuming genesis is zero
 		return layer - k
 	}
 
-	return types.LayerID(config.Genesis)
+	return config.Genesis
 }
 
 func New(committeeSize uint32, beacon valueProvider, asProvider activeSetProvider, vrf Verifier) *Oracle {
@@ -81,14 +81,15 @@ func (o *Oracle) IsEligible(id types.NodeId, layer types.LayerID, msg, sig []byt
 		return false, err
 	}
 
-	// calc threshold
+	// get active set size
 	activeSetSize, err := o.asProvider.GetActiveSetSize(safeLayer(layer))
 	if err != nil {
 		log.Error("Could not get active set size: %v", err)
 		return false, err
 	}
 
-	if activeSetSize == 0 { // require activeSetSize > 0
+	// require activeSetSize > 0
+	if activeSetSize == 0 {
 		log.Error("Active set size is zero")
 		return false, errors.New("active set size is zero")
 	}
