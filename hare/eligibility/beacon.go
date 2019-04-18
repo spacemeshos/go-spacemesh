@@ -8,7 +8,7 @@ import (
 const nilVal = 0
 
 type patternProvider interface {
-	GetPatternId(layer types.LayerID) (int, error)
+	GetPatternId(layer types.LayerID) (uint32, error)
 }
 
 type beacon struct {
@@ -21,7 +21,7 @@ func newBeacon(patternProvider patternProvider) *beacon {
 	}
 }
 
-func (b *beacon) Value(layer types.LayerID) (int, error) {
+func (b *beacon) Value(layer types.LayerID) (uint32, error) {
 	v, err := b.patternProvider.GetPatternId(layer)
 	if err != nil {
 		log.Error("Could not get pattern id: %v", err)

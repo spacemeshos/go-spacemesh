@@ -7,11 +7,11 @@ import (
 )
 
 type mockPatternProvider struct {
-	val int
+	val uint32
 	err error
 }
 
-func (mpp *mockPatternProvider) GetPatternId(layer types.LayerID) (int, error) {
+func (mpp *mockPatternProvider) GetPatternId(layer types.LayerID) (uint32, error) {
 	return mpp.val, mpp.err
 }
 
@@ -23,5 +23,5 @@ func TestBeacon_Value(t *testing.T) {
 	b.patternProvider = &mockPatternProvider{3, nil}
 	val, err := b.Value(5)
 	assert.Nil(t, err)
-	assert.Equal(t, 3, val)
+	assert.Equal(t, uint32(3), val)
 }
