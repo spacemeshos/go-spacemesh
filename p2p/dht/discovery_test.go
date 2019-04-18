@@ -34,21 +34,21 @@ func TestPing_Ping(t *testing.T) {
 	//	return []discNode{{p2.svc.Node, p2.svc.Node.Address()}}
 	//}
 
-	err := p1.dscv.Ping(p2.svc.PublicKey())
+	err := p1.dscv.Ping(p2.svc.Address(), p2.svc.PublicKey())
 	require.NoError(t, err)
 
 	//p2.d.InternalLookupFunc = func(key p2pcrypto.PublicKey) []discNode {
 	//	return []discNode{{p1.svc.Node, p1.svc.Node.Address()}}
 	//}
 
-	err = p2.dscv.Ping(p1.svc.PublicKey())
+	err = p2.dscv.Ping(p1.svc.Address(), p1.svc.PublicKey())
 	require.NoError(t, err)
 
 	//p1.d.InternalLookupFunc = func(key p2pcrypto.PublicKey) []discNode {
 	//	return []discNode{{p3.Node, p3.Node.Address()}}
 	//}
 
-	err = p1.dscv.Ping(p3.PublicKey())
+	err = p1.dscv.Ping(p3.Address(), p3.PublicKey())
 	require.Error(t, err)
 }
 
@@ -63,19 +63,19 @@ func TestPing_Ping_Concurrency(t *testing.T) {
 	done := make(chan struct{})
 
 	go func() {
-		err := node1.dscv.Ping(node2.svc.PublicKey())
+		err := node1.dscv.Ping(node2.svc.Address(), node2.svc.PublicKey())
 		require.NoError(t, err)
 		done <- struct{}{}
 	}()
 
 	go func() {
-		err := node1.dscv.Ping(node3.svc.PublicKey())
+		err := node1.dscv.Ping(node3.svc.Address(), node3.svc.PublicKey())
 		require.NoError(t, err)
 		done <- struct{}{}
 	}()
 
 	go func() {
-		err := node1.dscv.Ping(node4.svc.PublicKey())
+		err := node1.dscv.Ping(node2.svc.Address(), node4.svc.PublicKey())
 		require.NoError(t, err)
 		done <- struct{}{}
 	}()

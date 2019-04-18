@@ -86,16 +86,10 @@ func (p *discovery) verifyPinger(from net.Addr, pi *pb.Ping) error {
 	return nil
 }
 
-func (p *discovery) Ping(peer p2pcrypto.PublicKey) error {
+func (p *discovery) Ping(toAddr string, peer p2pcrypto.PublicKey) error {
 	p.logger.Info("send ping request Peer: %v", peer)
 
-	//addresses := p.table.internalLookup(peer)
-	//if len(addresses) == 0 || addresses[0].String() != peer.String() {
-	//	return errors.New("Cant find node in routing table")
-	//}
-	//toAddr := addresses[0].udpAddress
-
-	data := &pb.Ping{Me: &pb.NodeInfo{NodeId: p.local.PublicKey().Bytes(), TCPAddress: p.localTcpAddress, UDPAddress: p.localUdpAddress}, ToAddr: ""}
+	data := &pb.Ping{Me: &pb.NodeInfo{NodeId: p.local.PublicKey().Bytes(), TCPAddress: p.localTcpAddress, UDPAddress: p.localUdpAddress}, ToAddr: toAddr}
 	payload, err := proto.Marshal(data)
 	if err != nil {
 		return err
