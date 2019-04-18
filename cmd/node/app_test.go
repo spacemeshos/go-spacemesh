@@ -157,7 +157,7 @@ func (app *AppTestSuite) TestMultipleNodes() {
 			maxClientsDone := 0
 			for idx, ap := range app.apps {
 				if big.NewInt(10).Cmp(ap.state.GetBalance(dst)) == 0 &&
-					app.apps[0].mesh.LatestLayer() > types.LayerID(app.apps[0].Config.CONSENSUS.LayersPerEpoch){
+					!app.apps[0].mesh.LatestLayer().GetEpoch(app.apps[0].Config.CONSENSUS.LayersPerEpoch).IsGenesis() {
 					clientsDone := 0
 					for idx2, ap2 := range app.apps {
 						if idx != idx2 {
