@@ -129,6 +129,7 @@ func (b *Builder) loop() {
 
 func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 	if b.nipst == nil {
+		b.log.Info("starting build atx in epoch %v", epoch)
 		if b.prevATX == nil {
 			prevAtxId, err := b.GetPrevAtxId(b.nodeId)
 			if err == nil {
@@ -185,7 +186,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 			return fmt.Errorf("cannot create nipst " + err.Error())
 		}
 	} else {
-		log.Info("re-entering atx creation in epoch %v", epoch)
+		b.log.Info("re-entering atx creation in epoch %v", epoch)
 	}
 	if b.mesh.LatestLayer().GetEpoch(b.layersPerEpoch) < b.challenge.PubLayerIdx.GetEpoch(b.layersPerEpoch) {
 		return fmt.Errorf("an epoch has not passed during nipst creation")
@@ -202,6 +203,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 	if err != nil {
 		return err
 	}
+	b.prevATX = atx
 	b.log.Info("atx published! id: %v, prevATXID: %v, posATXID: %v, layer: %v, active in epoch: %v, active set: %v miner: %v",
 		atx.Id().String()[2:7], atx.PrevATXId.String()[2:7], atx.PositioningAtx.String()[2:7], atx.PubLayerIdx,
 		atx.PubLayerIdx.GetEpoch(b.layersPerEpoch), atx.ActiveSetSize, b.nodeId.Key[:5])
@@ -209,7 +211,6 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 	b.nipst = nil
 	b.challenge = nil
 	b.posLayerID = 0
-	b.prevATX = atx
 	// TODO what happens if broadcast fails?
 	return b.net.Broadcast(AtxProtocol, buf)
 

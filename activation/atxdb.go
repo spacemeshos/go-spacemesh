@@ -179,7 +179,7 @@ func (db *ActivationDb) ValidateAtx(atx *types.ActivationTx) error {
 	}
 
 	if atx.ActiveSetSize != atx.VerifiedActiveSet {
-		return fmt.Errorf("atx conatins view with more active ids (%v) than seen (%v)", atx.ActiveSetSize, atx.VerifiedActiveSet)
+		return fmt.Errorf("atx conatins view with unequal active ids (%v) than seen (%v)", atx.ActiveSetSize, atx.VerifiedActiveSet)
 	}
 
 	hash, err := atx.NIPSTChallenge.Hash()
