@@ -25,13 +25,15 @@ type Verifier interface {
 	Verify(msg, sig []byte) (bool, error)
 }
 
+// Hare eligibility oracle
 type Oracle struct {
-	committeeSize uint32
-	beacon        valueProvider
-	asProvider    activeSetProvider
-	vrf           Verifier
+	beacon            valueProvider
+	activeSetProvider activeSetProvider
+	vrf               Verifier
 }
 
+// Returns the relative layer that w.h.p. we have agreement on its view
+// safe is defined to be k layers prior to the provided layer
 func safeLayer(layer types.LayerID) types.LayerID {
 	if layer > k { // assuming genesis is zero
 		return layer - k
@@ -40,12 +42,11 @@ func safeLayer(layer types.LayerID) types.LayerID {
 	return config.Genesis
 }
 
-func New(committeeSize uint32, beacon valueProvider, asProvider activeSetProvider, vrf Verifier) *Oracle {
+func New(beacon valueProvider, asProvider activeSetProvider, vrf Verifier) *Oracle {
 	return &Oracle{
-		committeeSize: committeeSize,
-		beacon:        beacon,
-		asProvider:    asProvider,
-		vrf:           vrf,
+		beacon:            beacon,
+		activeSetProvider: asProvider,
+		vrf:               vrf,
 	}
 }
 
@@ -56,6 +57,7 @@ type vrfMessage struct {
 	round  int32
 }
 
+// Builds the VRF message used as input for the BLS (msg=beacon##id##layer##round)
 func (o *Oracle) BuildVRFMessage(id types.NodeId, layer types.LayerID, round int32) ([]byte, error) {
 	v, err := o.beacon.Value(safeLayer(layer))
 	if err != nil {
@@ -74,7 +76,8 @@ func (o *Oracle) BuildVRFMessage(id types.NodeId, layer types.LayerID, round int
 	return w.Bytes(), nil
 }
 
-func (o *Oracle) IsEligible(id types.NodeId, layer types.LayerID, msg, sig []byte) (bool, error) {
+// Checks if id is eligible on the given layer where msg is the VRF message, sig is the role proof and assuming commSize as the expected committee size
+func (o *Oracle) IsEligible(commSize uint32, id types.NodeId, layer types.LayerID, msg, sig []byte) (bool, error) {
 	// validate message
 	if res, err := o.vrf.Verify(msg, sig); !res {
 		log.Error("VRF verification failed: %v", err)
@@ -82,7 +85,7 @@ func (o *Oracle) IsEligible(id types.NodeId, layer types.LayerID, msg, sig []byt
 	}
 
 	// get active set size
-	activeSetSize, err := o.asProvider.GetActiveSetSize(safeLayer(layer))
+	activeSetSize, err := o.activeSetProvider.GetActiveSetSize(safeLayer(layer))
 	if err != nil {
 		log.Error("Could not get active set size: %v", err)
 		return false, err
@@ -98,8 +101,8 @@ func (o *Oracle) IsEligible(id types.NodeId, layer types.LayerID, msg, sig []byt
 	h := fnv.New32()
 	h.Write(sig)
 	// avoid division (no floating point) & do operations on uint64 to avoid flow
-	if uint64(activeSetSize)*uint64(h.Sum32()) > uint64(o.committeeSize)*uint64(math.MaxUint32) {
-		log.Error("identity %v did not pass eligibility committeeSize=%v activeSetSize=%v", id, o.committeeSize, activeSetSize)
+	if uint64(activeSetSize)*uint64(h.Sum32()) > uint64(commSize)*uint64(math.MaxUint32) {
+		log.Error("identity %v did not pass eligibility committeeSize=%v activeSetSize=%v", id, commSize, activeSetSize)
 		return false, errors.New("did not pass eligibility threshold")
 	}
 

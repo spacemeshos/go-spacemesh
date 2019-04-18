@@ -47,32 +47,30 @@ func TestOracle_BuildVRFMessage(t *testing.T) {
 func TestOracle_IsEligible(t *testing.T) {
 	o := &Oracle{}
 	o.vrf = &mockVerifier{false, someErr}
-	res, err := o.IsEligible(types.NodeId{}, types.LayerID(1), []byte{}, []byte{})
+	res, err := o.IsEligible(0, types.NodeId{}, types.LayerID(1), []byte{}, []byte{})
 	assert.NotNil(t, err)
 	assert.False(t, res)
 
 	o.vrf = &mockVerifier{true, nil}
-	o.asProvider = &mockActiveSetProvider{5, someErr}
-	res, err = o.IsEligible(types.NodeId{}, types.LayerID(1), []byte{}, []byte{})
+	o.activeSetProvider = &mockActiveSetProvider{5, someErr}
+	res, err = o.IsEligible(0, types.NodeId{}, types.LayerID(1), []byte{}, []byte{})
 	assert.NotNil(t, err)
 	assert.False(t, res)
 
-	o.committeeSize = 0
-	o.asProvider = &mockActiveSetProvider{10, nil}
-	res, err = o.IsEligible(types.NodeId{}, types.LayerID(1), []byte{}, []byte{})
+	o.activeSetProvider = &mockActiveSetProvider{10, nil}
+	res, err = o.IsEligible(0, types.NodeId{}, types.LayerID(1), []byte{}, []byte{})
 	assert.NotNil(t, err)
 	assert.Equal(t, "did not pass eligibility threshold", err.Error())
 	assert.False(t, res)
 
-	o.asProvider = &mockActiveSetProvider{0, nil}
-	res, err = o.IsEligible(types.NodeId{}, types.LayerID(1), []byte{}, []byte{})
+	o.activeSetProvider = &mockActiveSetProvider{0, nil}
+	res, err = o.IsEligible(0, types.NodeId{}, types.LayerID(1), []byte{}, []byte{})
 	assert.NotNil(t, err)
 	assert.Equal(t, "active set size is zero", err.Error())
 	assert.False(t, res)
 
-	o.committeeSize = 10
-	o.asProvider = &mockActiveSetProvider{10, nil}
-	res, err = o.IsEligible(types.NodeId{}, types.LayerID(1), []byte{}, []byte{})
+	o.activeSetProvider = &mockActiveSetProvider{10, nil}
+	res, err = o.IsEligible(10, types.NodeId{}, types.LayerID(1), []byte{}, []byte{})
 	assert.Nil(t, err)
 	assert.True(t, res)
 }

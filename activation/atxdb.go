@@ -42,7 +42,7 @@ func (db *ActivationDb) ProcessBlockATXs(blk *types.Block) {
 		}
 		err = db.ids.StoreNodeIdentity(atx.NodeId)
 		if err != nil {
-			log.Error("cannot store id: %v", atx.NodeId.String())
+			log.Error("cannot store id: %v err=%v", atx.NodeId.String(), err)
 			continue
 		}
 	}
