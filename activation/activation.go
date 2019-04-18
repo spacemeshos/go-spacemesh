@@ -45,7 +45,7 @@ type NipstBuilder interface {
 
 type IdStore interface {
 	StoreNodeIdentity(id types.NodeId) error
-	GetIdentity(id string) (types.NodeId,error)
+	GetIdentity(id string) (types.NodeId, error)
 }
 
 type Builder struct {

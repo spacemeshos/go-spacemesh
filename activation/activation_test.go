@@ -60,7 +60,6 @@ func (np *NipstErrBuilderMock) BuildNIPST(challange []byte) (*nipst.NIPST, error
 }
 
 type MockIStore struct {
-
 }
 
 func (*MockIStore) StoreNodeIdentity(id types.NodeId) error {

@@ -20,11 +20,11 @@ type ActivationDb struct {
 	atxs           database.DB
 	meshDb         *mesh.MeshDB
 	LayersPerEpoch types.LayerID
-	ids IdStore
+	ids            IdStore
 }
 
 func NewActivationDb(dbstore database.DB, idstore IdStore, meshDb *mesh.MeshDB, layersPerEpoch uint64) *ActivationDb {
-	return &ActivationDb{atxs: dbstore, meshDb: meshDb, LayersPerEpoch: types.LayerID(layersPerEpoch), ids:idstore}
+	return &ActivationDb{atxs: dbstore, meshDb: meshDb, LayersPerEpoch: types.LayerID(layersPerEpoch), ids: idstore}
 }
 
 func (db *ActivationDb) ProcessBlockATXs(blk *types.Block) {
@@ -285,7 +285,7 @@ func (db *ActivationDb) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
 	return atx, nil
 }
 
-func (db *ActivationDb) IsIdentityActive(edsig string, layer types.LayerID) (bool, error){
+func (db *ActivationDb) IsIdentityActive(edsig string, layer types.LayerID) (bool, error) {
 	epoch := layer.GetEpoch(uint16(db.LayersPerEpoch))
 	nodeId, err := db.ids.GetIdentity(edsig)
 	if err != nil {
