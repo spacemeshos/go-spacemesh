@@ -30,6 +30,6 @@ client:
     layer-duration-sec: '60'
     layer-average-size: '20'
 elastic:
-  host: es.spacemesh.io
+  host: elastic.spacemesh.io
   port: 9200
   username: spacemesh

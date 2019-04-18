@@ -159,7 +159,7 @@ func (m *MeshDB) GetLayer(index types.LayerID) (*types.Layer, error) {
 	return l, nil
 }
 
-func (mc *MeshDB) ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.BlockHeader) error, errHandler func(err error)) error {
+func (mc *MeshDB) ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.BlockHeader) error) error {
 	stack := list.New()
 	for b := range view {
 		stack.PushFront(b)
@@ -170,28 +170,24 @@ func (mc *MeshDB) ForBlockInView(view map[types.BlockID]struct{}, layer types.La
 
 		block, err := mc.GetMiniBlock(a)
 		if err != nil {
-			//todo: add err returned from handler, if error is returned return it, if not - keep going
-			errHandler(err)
 			return err
 		}
 
 		//execute handler
-		err = blockHandler(&block.BlockHeader)
-		if err != nil {
+		if err = blockHandler(&block.BlockHeader); err != nil {
 			return err
 		}
 
 		//push children to bfs queue
 		for _, id := range block.ViewEdges {
-			bChild, err := mc.GetMiniBlock(id)
-			if err != nil {
-				errHandler(err)
+			if bChild, err := mc.GetMiniBlock(id); err != nil {
 				return err
-			}
-			if bChild.LayerIndex >= layer { //dont traverse too deep
-				if _, found := set[bChild.Id]; !found {
-					set[bChild.Id] = struct{}{}
-					stack.PushBack(bChild.Id)
+			} else {
+				if bChild.LayerIndex >= layer { //dont traverse too deep
+					if _, found := set[bChild.Id]; !found {
+						set[bChild.Id] = struct{}{}
+						stack.PushBack(bChild.Id)
+					}
 				}
 			}
 		}

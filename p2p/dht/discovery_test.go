@@ -30,11 +30,23 @@ func TestPing_Ping(t *testing.T) {
 	p2 := newTestNode(sim)
 	p3 := sim.NewNode()
 
+	//p1.d.InternalLookupFunc = func(key p2pcrypto.PublicKey) []discNode {
+	//	return []discNode{{p2.svc.Node, p2.svc.Node.Address()}}
+	//}
+
 	err := p1.dscv.Ping(p2.svc.PublicKey())
 	require.NoError(t, err)
 
+	//p2.d.InternalLookupFunc = func(key p2pcrypto.PublicKey) []discNode {
+	//	return []discNode{{p1.svc.Node, p1.svc.Node.Address()}}
+	//}
+
 	err = p2.dscv.Ping(p1.svc.PublicKey())
 	require.NoError(t, err)
+
+	//p1.d.InternalLookupFunc = func(key p2pcrypto.PublicKey) []discNode {
+	//	return []discNode{{p3.Node, p3.Node.Address()}}
+	//}
 
 	err = p1.dscv.Ping(p3.PublicKey())
 	require.Error(t, err)
@@ -86,37 +98,37 @@ func TestFindNodeProtocol_FindNode(t *testing.T) {
 	require.NoError(t, err, "Should not return error")
 	// when routing table is empty we get an empty result
 	// todo: maybe this should error ?
-	require.Equal(t, []node.Node{}, idarr, "Should be an empty array")
+	require.Equal(t, []discNode{}, idarr, "Should be an empty array")
 }
 
 func TestFindNodeProtocol_FindNode2(t *testing.T) {
-	randnode := node.GenerateRandomNodeData()
+	randnode := generateDiscNode()
 
 	sim := service.NewSimulator()
 
 	n1 := newTestNode(sim)
 	n2 := newTestNode(sim)
 
-	n2.d.InternalLookupFunc = func(key p2pcrypto.PublicKey) []node.Node {
-		return []node.Node{randnode}
+	n2.d.InternalLookupFunc = func(key p2pcrypto.PublicKey) []discNode {
+		return []discNode{randnode}
 	}
 
 	n2.dscv.table = n2.d
 
 	idarr, err := n1.dscv.FindNode(n2.svc.Node.PublicKey(), randnode.PublicKey())
 
-	expected := []node.Node{randnode}
+	expected := []discNode{randnode}
 
 	require.NoError(t, err, "Should not return error")
 	require.Equal(t, expected, idarr, "Should be array that contains the node")
 	//
-	for _, n := range node.GenerateRandomNodesData(10) {
+	for _, n := range generateDiscNodes(10) {
 		expected = append(expected, n)
 	}
 	// sort because this is how its returned
-	expected = node.SortByDhtID(expected, randnode.DhtID())
+	expected = SortByDhtID(expected, randnode.DhtID())
 
-	n2.d.InternalLookupFunc = func(key p2pcrypto.PublicKey) []node.Node {
+	n2.d.InternalLookupFunc = func(key p2pcrypto.PublicKey) []discNode {
 		return expected
 	}
 
@@ -129,7 +141,7 @@ func TestFindNodeProtocol_FindNode2(t *testing.T) {
 }
 
 func Test_ToNodeInfo(t *testing.T) {
-	many := node.GenerateRandomNodesData(100)
+	many := generateDiscNodes(100)
 
 	for i := 0; i < len(many); i++ {
 		nds := toNodeInfo(many, many[i].String())

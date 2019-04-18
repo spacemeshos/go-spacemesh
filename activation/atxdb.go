@@ -82,14 +82,12 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 		return nil
 	}
 
-	errHandler := func(er error) {}
-
 	mp := map[types.BlockID]struct{}{}
 	for _, blk := range a.View {
 		mp[blk] = struct{}{}
 	}
 
-	db.meshDb.ForBlockInView(mp, firstLayerOfLastEpoch, traversalFunc, errHandler)
+	db.meshDb.ForBlockInView(mp, firstLayerOfLastEpoch, traversalFunc)
 	activesetCache.Add(common.BytesToHash(bytes), counter)
 
 	return counter, nil

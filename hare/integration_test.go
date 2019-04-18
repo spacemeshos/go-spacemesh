@@ -5,6 +5,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	signing2 "github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/suite"
 	"testing"
 	"time"
@@ -51,11 +52,11 @@ func Test_16Nodes_HareIntegrationSuite(t *testing.T) {
 	his.honestSets = []*Set{set1}
 	oracle := eligibility.New()
 	his.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
-		signing := NewMockSigning()
-		lg := log.NewDefault(signing.Verifier().String())
+		signing := signing2.NewEdSigner()
+		lg := log.NewDefault(signing.PublicKey().String())
 		broker := NewBroker(s, NewEligibilityValidator(NewHareOracle(oracle, cfg.N), lg), Closer{})
 		output := make(chan TerminationOutput, 1)
-		oracle.Register(true, signing.Verifier().String())
+		oracle.Register(true, signing.PublicKey().String())
 		proc := NewConsensusProcess(cfg, instanceId1, his.initialSets[idx], oracle, signing, s, output, lg)
 		proc.SetInbox(broker.Register(proc.Id()))
 		broker.Start()
@@ -104,12 +105,12 @@ func Test_20Nodes_HareIntegrationSuite(t *testing.T) {
 	his.honestSets = []*Set{set1, set2, set3}
 	oracle := eligibility.New()
 	his.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
-		signing := NewMockSigning()
-		lg := log.NewDefault(signing.Verifier().String())
+		signing := signing2.NewEdSigner()
+		lg := log.NewDefault(signing.PublicKey().String())
 		broker := NewBroker(s, NewEligibilityValidator(NewHareOracle(oracle, cfg.N), lg), Closer{})
 		output := make(chan TerminationOutput, 1)
-		oracle.Register(true, signing.Verifier().String())
-		proc := NewConsensusProcess(cfg, instanceId1, his.initialSets[idx], oracle, signing, s, output, log.NewDefault(signing.Verifier().String()))
+		oracle.Register(true, signing.PublicKey().String())
+		proc := NewConsensusProcess(cfg, instanceId1, his.initialSets[idx], oracle, signing, s, output, log.NewDefault(signing.PublicKey().String()))
 		proc.SetInbox(broker.Register(proc.Id()))
 		broker.Start()
 		his.procs = append(his.procs, proc)
