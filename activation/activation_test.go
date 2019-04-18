@@ -21,7 +21,7 @@ func (ActiveSetProviderMock) ActiveSetIds(l types.EpochId) uint32 {
 
 type MeshProviderrMock struct{}
 
-func (MeshProviderrMock) GetLatestVerified() []types.BlockID {
+func (MeshProviderrMock) GetLatestView() []types.BlockID {
 	return []types.BlockID{1, 2, 3}
 }
 
@@ -84,14 +84,14 @@ func TestBuilder_BuildActivationTx(t *testing.T) {
 	chlng := common.HexToHash("0x3333")
 	npst := nipst.NewNIPSTWithChallenge(&chlng)
 	atx := types.NewActivationTx(types.NodeId{"aaaaaa", []byte("bbb")}, 1, prevAtx, 5, 1, prevAtx, 5, []types.BlockID{1, 2, 3}, npst, true)
-	err := adb.StoreAtx(atx.LayerIdx.GetEpoch(layersPerEpoch), atx)
+	err := adb.StoreAtx(atx.PubLayerIdx.GetEpoch(layersPerEpoch), atx)
 	assert.NoError(t, err)
 
 	challenge := types.NIPSTChallenge{
 		NodeId:         b.nodeId,
 		Sequence:       b.GetLastSequence(b.nodeId) + 1,
 		PrevATXId:      atx.Id(),
-		LayerIdx:       atx.LayerIdx.Add(b.layersPerEpoch),
+		PubLayerIdx:    atx.PubLayerIdx.Add(b.layersPerEpoch),
 		StartTick:      atx.EndTick,
 		EndTick:        b.tickProvider.NumOfTicks(), //todo: add provider when
 		PositioningAtx: atx.Id(),
@@ -99,7 +99,7 @@ func TestBuilder_BuildActivationTx(t *testing.T) {
 
 	bytes, err := challenge.Hash()
 	npst2 := nipst.NewNIPSTWithChallenge(bytes)
-	act := types.NewActivationTxWithChallenge(challenge, b.activeSet.ActiveSetIds(1), b.mesh.GetLatestVerified(), npst2, true)
+	act := types.NewActivationTxWithChallenge(challenge, b.activeSet.ActiveSetIds(1), b.mesh.GetLatestView(), npst2, true)
 
 	err = b.PublishActivationTx(layers.LatestLayerId().GetEpoch(layersPerEpoch))
 	assert.NoError(t, err)
@@ -137,14 +137,14 @@ func TestBuilder_PublishActivationTx(t *testing.T) {
 
 	atx := types.NewActivationTx(types.NodeId{"aaaaaa", []byte("bbb")}, 1, prevAtx, 5, 1, prevAtx, 5, []types.BlockID{1, 2, 3}, npst, true)
 
-	err := adb.StoreAtx(atx.LayerIdx.GetEpoch(layersPerEpoch), atx)
+	err := adb.StoreAtx(atx.PubLayerIdx.GetEpoch(layersPerEpoch), atx)
 	assert.NoError(t, err)
 
 	challenge := types.NIPSTChallenge{
 		NodeId:         b.nodeId,
 		Sequence:       b.GetLastSequence(b.nodeId) + 1,
 		PrevATXId:      atx.Id(),
-		LayerIdx:       atx.LayerIdx.Add(b.layersPerEpoch),
+		PubLayerIdx:    atx.PubLayerIdx.Add(b.layersPerEpoch),
 		StartTick:      atx.EndTick,
 		EndTick:        b.tickProvider.NumOfTicks(), //todo: add provider when
 		PositioningAtx: atx.Id(),
@@ -154,7 +154,7 @@ func TestBuilder_PublishActivationTx(t *testing.T) {
 	npst2 := nipst.NewNIPSTWithChallenge(bytes)
 	assert.NoError(t, err)
 
-	act := types.NewActivationTx(b.nodeId, b.GetLastSequence(b.nodeId)+1, atx.Id(), atx.LayerIdx+10, 0, atx.Id(), b.activeSet.ActiveSetIds(1), b.mesh.GetLatestVerified(), npst2, true)
+	act := types.NewActivationTx(b.nodeId, b.GetLastSequence(b.nodeId)+1, atx.Id(), atx.PubLayerIdx+10, 0, atx.Id(), b.activeSet.ActiveSetIds(1), b.mesh.GetLatestView(), npst2, true)
 	err = b.PublishActivationTx(1)
 	assert.NoError(t, err)
 
@@ -198,12 +198,12 @@ func TestBuilder_PublishActivationTxSerialize(t *testing.T) {
 
 	atx := types.NewActivationTx(types.NodeId{"aaaaaa", []byte("bbb")}, 1, prevAtx, 5, 1, prevAtx, 5, []types.BlockID{1, 2, 3}, npst, true)
 
-	err := adb.StoreAtx(atx.LayerIdx.GetEpoch(layersPerEpoch), atx)
+	err := adb.StoreAtx(atx.PubLayerIdx.GetEpoch(layersPerEpoch), atx)
 	assert.NoError(t, err)
 
 	assert.NoError(t, err)
 
-	act := types.NewActivationTx(b.nodeId, b.GetLastSequence(b.nodeId)+1, atx.Id(), atx.LayerIdx+10, 0, atx.Id(), b.activeSet.ActiveSetIds(1), b.mesh.GetLatestVerified(), npst, true)
+	act := types.NewActivationTx(b.nodeId, b.GetLastSequence(b.nodeId)+1, atx.Id(), atx.PubLayerIdx+10, 0, atx.Id(), b.activeSet.ActiveSetIds(1), b.mesh.GetLatestView(), npst, true)
 
 	bt, err := types.AtxAsBytes(act)
 	assert.NoError(t, err)

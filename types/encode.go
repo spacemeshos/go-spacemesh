@@ -84,9 +84,9 @@ func BytesAsAtx(b []byte) (*ActivationTx, error) {
 				PrevATXId: AtxId{
 					Hash: common.Hash{},
 				},
-				LayerIdx:  0,
-				StartTick: 0,
-				EndTick:   0,
+				PubLayerIdx: 0,
+				StartTick:   0,
+				EndTick:     0,
 				PositioningAtx: AtxId{
 					Hash: common.Hash{},
 				},

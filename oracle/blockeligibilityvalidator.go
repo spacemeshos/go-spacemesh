@@ -78,7 +78,7 @@ func (v BlockEligibilityValidator) getActiveSetSize(epochNumber types.EpochId, b
 		v.log.Error("ATX is invalid: %v", err)
 		return 0, err
 	}
-	if atxEpochNumber := atx.LayerIdx.GetEpoch(v.layersPerEpoch); epochNumber != atxEpochNumber {
+	if atxEpochNumber := atx.PubLayerIdx.GetEpoch(v.layersPerEpoch); epochNumber != atxEpochNumber {
 		v.log.Error("ATX epoch (%d) doesn't match layer ID epoch (%d)", atxEpochNumber, epochNumber)
 		return 0, fmt.Errorf("activation epoch (%d) mismatch with layer epoch (%d)", atxEpochNumber,
 			epochNumber)

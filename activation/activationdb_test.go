@@ -24,7 +24,7 @@ func createLayerWithAtx(msh *mesh.Mesh, atxdb *ActivationDb, id types.LayerID, n
 		msh.AddBlock(block1)
 		created = append(created, block1.Id)
 		for _, atx := range block1.ATXs {
-			atxdb.StoreAtx(atx.LayerIdx.GetEpoch(1000), atx)
+			atxdb.StoreAtx(atx.PubLayerIdx.GetEpoch(1000), atx)
 		}
 	}
 	return

@@ -36,7 +36,7 @@ func (db *ActivationDb) ProcessBlockATXs(blk *types.Block) {
 }
 
 func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx, fromBlock bool) {
-	epoch := types.EpochId(atx.LayerIdx / db.LayersPerEpoch)
+	epoch := atx.PubLayerIdx.GetEpoch(uint16(db.LayersPerEpoch))
 	db.log.Info("processing atx id %v, epoch %v node: %v", atx.Id().String()[2:7], epoch, atx.NodeId.Key[:5])
 	activeSet, err := db.CalcActiveSetFromView(atx)
 	if err != nil {
@@ -71,7 +71,7 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 
 	var counter uint32 = 0
 	set := make(map[types.AtxId]struct{})
-	firstLayerOfLastEpoch := a.LayerIdx - db.LayersPerEpoch - (a.LayerIdx % db.LayersPerEpoch)
+	firstLayerOfLastEpoch := a.PubLayerIdx - db.LayersPerEpoch - (a.PubLayerIdx % db.LayersPerEpoch)
 	lastLayerOfLastEpoch := firstLayerOfLastEpoch + db.LayersPerEpoch
 
 	traversalFunc := func(blkh *types.BlockHeader) error {
@@ -165,11 +165,11 @@ func (db *ActivationDb) ValidateAtx(atx *types.ActivationTx) error {
 		if !posAtx.Valid {
 			return fmt.Errorf("positioning atx is not valid")
 		}
-		if atx.LayerIdx-posAtx.LayerIdx > db.LayersPerEpoch {
-			return fmt.Errorf("distance between pos atx invalid %v ", atx.LayerIdx-posAtx.LayerIdx)
+		if atx.PubLayerIdx-posAtx.PubLayerIdx > db.LayersPerEpoch {
+			return fmt.Errorf("distance between pos atx invalid %v ", atx.PubLayerIdx-posAtx.PubLayerIdx)
 		}
 	} else {
-		epoch := atx.LayerIdx.GetEpoch(uint16(db.LayersPerEpoch))
+		epoch := atx.PubLayerIdx.GetEpoch(uint16(db.LayersPerEpoch))
 		if epoch == 0 {
 			return fmt.Errorf("atx epoch cannot be 0")
 		}

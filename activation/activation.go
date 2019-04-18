@@ -17,10 +17,11 @@ type ActiveSetProvider interface {
 	ActiveSetIds(l types.EpochId) uint32
 }
 
-//GetLatestVerified() []types.BlockID
+//GetLatestView() []types.BlockID
 
 type MeshProvider interface {
-	GetLatestVerified() []types.BlockID
+	GetLatestView() []types.BlockID
+	LatestLayer() types.LayerID
 }
 
 type EpochProvider interface {
@@ -53,6 +54,9 @@ type Builder struct {
 	layersPerEpoch uint16
 	tickProvider   PoETNumberOfTickProvider
 	nipstBuilder   NipstBuilder
+	challenge      *types.NIPSTChallenge
+	nipst          *nipst.NIPST
+	posLayerID     types.LayerID
 	timer          chan types.LayerID
 	stop           chan struct{}
 	finished       chan struct{}
@@ -123,73 +127,83 @@ func (b *Builder) loop() {
 }
 
 func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
-	prevAtx, err := b.GetPrevAtxId(b.nodeId)
-	seq := uint64(0)
-	if err == nil {
-		atx, err := b.db.GetAtx(*prevAtx)
+	if b.nipst == nil {
+		prevAtx, err := b.GetPrevAtxId(b.nodeId)
+		seq := uint64(0)
+		if err == nil {
+			atx, err := b.db.GetAtx(*prevAtx)
+			if err != nil {
+				return fmt.Errorf("cannot find prev atx " + err.Error())
+			}
+			//check if this node hasn't published an activation already
+			if atx.PubLayerIdx.GetEpoch(b.layersPerEpoch) == epoch+1 {
+				return fmt.Errorf("atx already created for epoch %v", epoch)
+			}
+			seq = atx.Sequence + 1
+		} else {
+			prevAtx = &types.EmptyAtxId
+		}
+		posAtxId := &types.EmptyAtxId
+		endTick := uint64(0)
+		b.posLayerID = types.LayerID(0)
+		if !epoch.IsGenesis() {
+			//positioning atx is from this epoch as well, since we will be publishing the atx in the next epoch
+			//todo: what if no other atx was received in this epoch yet?
+			posAtxId, err = b.GetPositioningAtxId(epoch)
+			if err != nil {
+				return fmt.Errorf("cannot find pos atx id " + err.Error())
+			}
+			posAtx, err := b.db.GetAtx(*posAtxId)
+			if err != nil {
+				return fmt.Errorf("cannot find prev atx " + err.Error())
+			}
+			endTick = posAtx.EndTick
+			b.posLayerID = posAtx.PubLayerIdx
+		}
+
+		b.challenge = &types.NIPSTChallenge{
+			NodeId:         b.nodeId,
+			Sequence:       seq,
+			PrevATXId:      *prevAtx,
+			PubLayerIdx:    b.posLayerID.Add(b.layersPerEpoch),
+			StartTick:      endTick,
+			EndTick:        b.tickProvider.NumOfTicks(), //todo: add provider when
+			PositioningAtx: *posAtxId,
+		}
+
+		hash, err := b.challenge.Hash()
 		if err != nil {
-			return fmt.Errorf("cannot find prev atx " + err.Error())
+			return fmt.Errorf("getting challenge hash failed: %v", err)
 		}
-		//check if this node hasn't published an activation already
-		if atx.LayerIdx.GetEpoch(b.layersPerEpoch) == epoch+1 {
-			return fmt.Errorf("atx already created for epoch %v", epoch)
+		b.nipst, err = b.nipstBuilder.BuildNIPST(hash)
+		if err != nil {
+			return fmt.Errorf("cannot create nipst " + err.Error())
 		}
-		seq = atx.Sequence + 1
 	} else {
-		prevAtx = &types.EmptyAtxId
+		log.Info("re-entering atx creation in epoch %v", epoch)
 	}
-	posAtxId := &types.EmptyAtxId
-	endTick := uint64(0)
-	posLayerID := types.LayerID(0)
-	if !epoch.IsGenesis() {
-		//positioning atx is from this epoch as well, since we will be publishing the atx in the next epoch
-		//todo: what if no other atx was received in this epoch yet?
-		posAtxId, err = b.GetPositioningAtxId(epoch)
-		if err != nil {
-			return fmt.Errorf("cannot find pos atx id " + err.Error())
-		}
-		posAtx, err := b.db.GetAtx(*posAtxId)
-		if err != nil {
-			return fmt.Errorf("cannot find prev atx " + err.Error())
-		}
-		endTick = posAtx.EndTick
-		posLayerID = posAtx.LayerIdx
+	if b.mesh.LatestLayer().GetEpoch(b.layersPerEpoch) < b.challenge.PubLayerIdx.GetEpoch(b.layersPerEpoch){
+		return fmt.Errorf("an epoch has not passed during nipst creation")
 	}
-
-	challenge := types.NIPSTChallenge{
-		NodeId:         b.nodeId,
-		Sequence:       seq,
-		PrevATXId:      *prevAtx,
-		LayerIdx:       posLayerID.Add(b.layersPerEpoch),
-		StartTick:      endTick,
-		EndTick:        b.tickProvider.NumOfTicks(), //todo: add provider when
-		PositioningAtx: *posAtxId,
-	}
-
-	hash, err := challenge.Hash()
-	if err != nil {
-		return fmt.Errorf("getting challenge hash failed: %v", err)
-	}
-	npst, err := b.nipstBuilder.BuildNIPST(hash)
-
 	////////////////////////////////////////////
 	// an epoch has passed!!!!!!!!!!!
-	if err != nil {
-		return fmt.Errorf("cannot create nipst " + err.Error())
-	}
 	// we've completed the sequential work, now before publishing the atx,
 	// we need to provide number of atx seen in the epoch of the positioning atx.
-	activeIds := uint32(b.activeSet.ActiveSetIds(posLayerID.GetEpoch(b.layersPerEpoch)))
-	b.log.Info("active ids seen for epoch of the pos atx (epoch: %v) is %v", posLayerID.GetEpoch(b.layersPerEpoch), activeIds)
-	atx := types.NewActivationTxWithChallenge(challenge, activeIds, b.mesh.GetLatestVerified(), npst, true)
+	activeIds := uint32(b.activeSet.ActiveSetIds(b.posLayerID.GetEpoch(b.layersPerEpoch)))
+	b.log.Info("active ids seen for epoch of the pos atx (epoch: %v) is %v", b.posLayerID.GetEpoch(b.layersPerEpoch), activeIds)
+	atx := types.NewActivationTxWithChallenge(*b.challenge, activeIds, b.mesh.GetLatestView(), b.nipst, true)
 
 	buf, err := types.AtxAsBytes(atx)
 	if err != nil {
 		return err
 	}
 	b.log.Info("atx published! id: %v, prevATXID: %v, posATXID: %v, layer: %v, active in epoch: %v, active set: %v miner: %v",
-		atx.Id().String()[2:7], atx.PrevATXId.String()[2:7], atx.PositioningAtx.String()[2:7], atx.LayerIdx,
-		atx.LayerIdx.GetEpoch(b.layersPerEpoch), atx.ActiveSetSize, b.nodeId.Key[:5])
+		atx.Id().String()[2:7], atx.PrevATXId.String()[2:7], atx.PositioningAtx.String()[2:7], atx.PubLayerIdx,
+		atx.PubLayerIdx.GetEpoch(b.layersPerEpoch), atx.ActiveSetSize, b.nodeId.Key[:5])
+	// cleanup state
+	b.nipst = nil
+	b.challenge = nil
+	b.posLayerID = 0
 	return b.net.Broadcast(AtxProtocol, buf)
 
 }

@@ -108,9 +108,9 @@ func (bo *MinerBlockOracle) calcActiveSetSize(epochNumber types.EpochId) (uint32
 		bo.log.Error("getting ATX failed: %v", err)
 		return 0, err
 	}
-	if epochNumber != atx.LayerIdx.GetEpoch(bo.layersPerEpoch) {
+	if epochNumber != atx.PubLayerIdx.GetEpoch(bo.layersPerEpoch) {
 		bo.log.Warning("latest ATX (epoch %d) not valid in current epoch (%d), miner not eligible",
-			atx.LayerIdx.GetEpoch(bo.layersPerEpoch), epochNumber)
+			atx.PubLayerIdx.GetEpoch(bo.layersPerEpoch), epochNumber)
 		return 0, fmt.Errorf("latest ATX not valid in current epoch")
 	}
 	bo.atxID = latestATXID

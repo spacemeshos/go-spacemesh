@@ -267,8 +267,9 @@ func (m *Mesh) GetLayer(i types.LayerID) (*types.Layer, error) {
 	return m.mdb.GetLayer(i)
 }
 
-func (m *Mesh) GetLatestVerified() []types.BlockID {
-	layer, err := m.mdb.GetLayer(m.VerifiedLayer())
+func (m *Mesh) GetLatestView() []types.BlockID {
+	//todo: think about whether we want to use the most recent layer or the recent verified layer
+	layer, err := m.mdb.GetLayer(m.LatestLayer())
 	if err != nil {
 		panic("got an error trying to read verified layer")
 	}

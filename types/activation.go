@@ -34,7 +34,7 @@ type NIPSTChallenge struct {
 	NodeId         NodeId
 	Sequence       uint64
 	PrevATXId      AtxId
-	LayerIdx       LayerID
+	PubLayerIdx    LayerID
 	StartTick      uint64
 	EndTick        uint64
 	PositioningAtx AtxId
@@ -63,7 +63,7 @@ func NewActivationTx(NodeId NodeId, Sequence uint64, PrevATX AtxId, LayerIndex L
 				NodeId:         NodeId,
 				Sequence:       Sequence,
 				PrevATXId:      PrevATX,
-				LayerIdx:       LayerIndex,
+				PubLayerIdx:    LayerIndex,
 				StartTick:      StartTick,
 				PositioningAtx: PositioningATX,
 			},
