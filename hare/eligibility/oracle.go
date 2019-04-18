@@ -25,7 +25,7 @@ type Verifier interface {
 	Verify(msg, sig []byte) (bool, error)
 }
 
-// Hare eligibility oracle
+// Oracle is the hare eligibility oracle
 type Oracle struct {
 	beacon            valueProvider
 	activeSetProvider activeSetProvider
@@ -57,7 +57,7 @@ type vrfMessage struct {
 	round  int32
 }
 
-// Builds the VRF message used as input for the BLS (msg=beacon##id##layer##round)
+// BuildVRFMessage builds the VRF message used as input for the BLS (msg=beacon##id##layer##round)
 func (o *Oracle) BuildVRFMessage(id types.NodeId, layer types.LayerID, round int32) ([]byte, error) {
 	v, err := o.beacon.Value(safeLayer(layer))
 	if err != nil {
@@ -76,7 +76,7 @@ func (o *Oracle) BuildVRFMessage(id types.NodeId, layer types.LayerID, round int
 	return w.Bytes(), nil
 }
 
-// Checks if id is eligible on the given layer where msg is the VRF message, sig is the role proof and assuming commSize as the expected committee size
+// IsEligible checks if id is eligible on the given layer where msg is the VRF message, sig is the role proof and assuming commSize as the expected committee size
 func (o *Oracle) IsEligible(commSize uint32, id types.NodeId, layer types.LayerID, msg, sig []byte) (bool, error) {
 	// validate message
 	if res, err := o.vrf.Verify(msg, sig); !res {
