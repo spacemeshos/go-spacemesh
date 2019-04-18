@@ -61,9 +61,11 @@ type swarm struct {
 	gossipProtocolHandlers map[string]chan service.GossipMessage
 	protocolHandlerMutex   sync.RWMutex
 
-	network *net.Net // (tcp) networking service
-	cPool   cPool    // conenction cache
-	gossip  *gossip.Protocol
+	network    *net.Net    // (tcp) networking service
+	udpnetwork *net.UDPNet // (udp) networking service
+
+	cPool  cPool // conenction cache
+	gossip *gossip.Protocol
 
 	dht       dht.DHT // peer addresses store
 	udpServer *UDPMux // protocol switch that includes a udp networking service
@@ -148,7 +150,15 @@ func newSwarm(ctx context.Context, config config.Config, newNode bool, persist b
 		network:                n,
 	}
 
-	err = s.setupUDP()
+	udpnet, err := net.NewUDPNet(s.config, s.lNode, s.lNode.Log)
+	if err != nil {
+		return nil, err
+	}
+
+	s.udpnetwork = udpnet
+
+	mux := NewUDPMux(s.lNode, s.lookupFunc, udpnet, s.lNode.Log)
+	s.udpServer = mux
 
 	if err != nil {
 		return nil, err
@@ -172,27 +182,8 @@ func newSwarm(ctx context.Context, config config.Config, newNode bool, persist b
 	return s, nil
 }
 
-func (s *swarm) setupUDP() error {
-	//setup network
-	udpnet, err := net.NewUDPNet(s.config, s.lNode, s.lNode.Log)
-	if err != nil {
-		return err
-	}
-	mux := NewUDPMux(s.lNode, s.lookupFunc, udpnet, s.lNode.Log)
-	s.udpServer = mux
-	return nil
-}
-
 func (s *swarm) lookupFunc(target p2pcrypto.PublicKey) (node.Node, error) {
-	res := s.dht.InternalLookup(target)
-	if res == nil || len(res) == 0 {
-		return node.EmptyNode, errors.New("coudld'nt find requested key node")
-	}
-
-	if res[0].PublicKey().String() != target.String() {
-		return node.EmptyNode, errors.New("coudld'nt find requested key node")
-	}
-	return res[0], nil
+	return s.dht.Lookup(target)
 }
 
 func (s *swarm) onNewConnection(nce net.NewConnectionEvent) {
@@ -202,9 +193,9 @@ func (s *swarm) onNewConnection(nce net.NewConnectionEvent) {
 
 func (s *swarm) onClosedConnection(c net.Connection) {
 	// we don't want to block, we know this node's connection was closed.
-	// we'll try connecting again and if not we'll remove it from peers
+	// todo: consider recconnecting
 	if s.hasOutgoingPeer(c.RemotePublicKey()) {
-		go s.retryOrDisconnect(c.RemotePublicKey())
+		go s.Disconnect(c.RemotePublicKey())
 	}
 }
 
@@ -222,15 +213,31 @@ func (s *swarm) Start() error {
 
 	err = s.network.Start()
 	if err != nil {
+		s.lNode.Error("Error creating swarm")
 		return err
 	}
 
-	s.listenToNetworkMessages() // fires up a goroutine for each queue of messages
+	if err := s.udpnetwork.Start(); err != nil {
+		return err
+	}
+
+	tcpAddress := s.network.LocalAddr()
+	udpAddress := s.udpnetwork.LocalAddr()
+
+	s.dht.SetLocalAddresses(tcpAddress.String(), udpAddress.String()) // todo: pass net.Addr and convert in dht
 
 	err = s.udpServer.Start()
 	if err != nil {
 		return err
 	}
+
+	s.lNode.Debug("Starting to listen for network messages")
+	s.listenToNetworkMessages() // fires up a goroutine for each queue of messages
+	s.lNode.Debug("starting the udp server")
+
+	// TODO : insert new addresses to discovery
+
+	s.lNode.Debug("beggining bootstrap")
 
 	go s.checkTimeDrifts()
 
@@ -252,15 +259,17 @@ func (s *swarm) Start() error {
 	}
 
 	// start gossip before starting to collect peers
-
-	s.gossip.Start() // non-blocking
+	s.gossip.Start()
 
 	// wait for neighborhood
 	go func() {
 		if s.config.SwarmConfig.Bootstrap {
-			s.waitForBoot()
+			if err := s.waitForBoot(); err != nil {
+				return
+			}
 		}
-		err := s.startNeighborhood()
+		err := s.startNeighborhood() // non blocking
+		//todo:maybe start listening only after we got enough outbound neighbors?
 		if err != nil {
 			s.gossipErr = err
 			close(s.gossipC)
@@ -298,9 +307,7 @@ func (s *swarm) SendMessage(peerPubkey p2pcrypto.PublicKey, protocol string, pay
 // req.destId: receiver remote node public key/id
 // Local request to send a message to a remote node
 func (s *swarm) sendMessageImpl(peerPubKey p2pcrypto.PublicKey, protocol string, payload service.Data) error {
-	//s.lNode.Info("Sending message to %v", peerPubKey)
 	var err error
-	var peer node.Node
 	var conn net.Connection
 
 	if peerPubKey.String() == s.lNode.PublicKey().String() {
@@ -310,18 +317,7 @@ func (s *swarm) sendMessageImpl(peerPubKey p2pcrypto.PublicKey, protocol string,
 	conn, err = s.cPool.GetConnectionIfExists(peerPubKey)
 
 	if err != nil {
-		// currently we never want to issue a network lookup for that
-		peer, err = s.lookupFunc(peerPubKey)
-
-		if err != nil {
-			return err
-		}
-
-		conn, err = s.cPool.GetConnection(peer.Address(), peer.PublicKey()) // blocking, might take some time in case there is no connection
-		if err != nil {
-			s.lNode.Warning("failed to send message to %v, no valid connection. err: %v", peer.String(), err)
-			return err
-		}
+		return errors.New("this peers isn't a neighbor or lost connection")
 	}
 
 	session := conn.Session()
@@ -433,20 +429,6 @@ func (s *swarm) listenToNetworkMessages() {
 		}(netqueues[nq])
 	}
 
-}
-
-func (s *swarm) retryOrDisconnect(key p2pcrypto.PublicKey) {
-	peer, err := s.lookupFunc(key)
-
-	if err != nil {
-		s.Disconnect(key) // if we didn't find then we can't try replacing
-		return
-	}
-	// GetConnection will try to achieve a new connection if closed
-	_, err = s.cPool.GetConnection(peer.Address(), peer.PublicKey())
-	if err != nil { // we could'nt connect :/
-		s.Disconnect(key)
-	}
 }
 
 // periodically checks that our clock is sync
