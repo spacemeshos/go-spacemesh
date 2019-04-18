@@ -29,7 +29,7 @@ type PostParams struct {
 }
 
 func (v *Validator) Validate(nipst *NIPST, expectedChallenge common.Hash) error {
-	return nil
+	return nil // TODO: fix
 	if !bytes.Equal(nipst.NipstChallenge[:], expectedChallenge[:]) {
 		log.Warning("NIPST challenge is not equal to expected challenge")
 		return errors.New("NIPST challenge is not equal to expected challenge")

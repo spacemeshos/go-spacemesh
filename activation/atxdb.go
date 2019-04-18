@@ -129,7 +129,7 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 func (db *ActivationDb) ValidateAtx(atx *types.ActivationTx) error {
 	eatx, _ := db.GetAtx(atx.Id())
 	if eatx != nil {
-		return fmt.Errorf("found atx with same id")
+		return fmt.Errorf("found atx with same id") // TODO: should this validation be here?
 	}
 
 	if atx.PrevATXId != types.EmptyAtxId {

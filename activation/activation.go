@@ -149,22 +149,25 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 			}
 			atxId = b.prevATX.Id()
 		}
-		posAtxId := &types.EmptyAtxId
 		endTick := uint64(0)
 		b.posLayerID = types.LayerID(0)
-		if !epoch.IsGenesis() {
-			//positioning atx is from this epoch as well, since we will be publishing the atx in the next epoch
-			//todo: what if no other atx was received in this epoch yet?
-			posAtxId, err := b.GetPositioningAtxId(epoch)
-			if err != nil {
-				return fmt.Errorf("cannot find pos atx id " + err.Error())
-			}
+
+		//positioning atx is from this epoch as well, since we will be publishing the atx in the next epoch
+		//todo: what if no other atx was received in this epoch yet?
+		posAtxId, err := b.GetPositioningAtxId(epoch)
+		if err == nil {
 			posAtx, err := b.db.GetAtx(*posAtxId)
 			if err != nil {
-				return fmt.Errorf("cannot find prev atx " + err.Error())
+				return fmt.Errorf("cannot find pos atx " + err.Error())
 			}
 			endTick = posAtx.EndTick
 			b.posLayerID = posAtx.PubLayerIdx
+		} else {
+			if !epoch.IsGenesis() {
+				return fmt.Errorf("cannot find pos atx id " + err.Error())
+			}
+			// During genesis posAtx is optional
+			posAtxId = &types.EmptyAtxId
 		}
 
 		b.challenge = &types.NIPSTChallenge{
