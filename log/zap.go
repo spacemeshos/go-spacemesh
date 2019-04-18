@@ -2,6 +2,8 @@ package log
 
 import (
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"os"
 	"runtime/debug"
 	"time"
 )
@@ -105,12 +107,12 @@ type fieldLogger struct {
 }
 
 // With returns a logger object that logs fields
-func (l *Log) With() fieldLogger {
+func (l Log) With() fieldLogger {
 	return fieldLogger{l.logger}
 }
 
 // LogWith returns a logger the given fields
-func (l *Log) WithName(prefix string) Log {
+func (l Log) WithName(prefix string) Log {
 	lgr := l.logger.Named(prefix)
 	return Log{
 		lgr,
@@ -118,22 +120,49 @@ func (l *Log) WithName(prefix string) Log {
 	}
 }
 
-// Infow prints message with fields
+func (l Log) WithFields(fields ...Field) Log {
+	lgr := l.logger.With(unpack(fields...)...)
+	return Log{
+		logger: lgr,
+		sugar:  lgr.Sugar(),
+	}
+}
+
+func EnableLevelOption(enabler zapcore.LevelEnabler) zap.Option {
+	return zap.WrapCore(func(core zapcore.Core) zapcore.Core {
+		consoleSyncer := zapcore.AddSync(os.Stdout)
+		return zapcore.NewCore(encoder(), consoleSyncer, enabler)
+	})
+}
+
+var Nop = zap.WrapCore(func(zapcore.Core) zapcore.Core {
+	return zapcore.NewNopCore()
+})
+
+func (l Log) WithOptions(opts ...zap.Option) Log {
+	lgr := l.logger.WithOptions(opts...)
+	return Log{
+		logger: lgr,
+		sugar:  lgr.Sugar(),
+	}
+}
+
+// Info prints message with fields
 func (fl fieldLogger) Info(msg string, fields ...Field) {
 	fl.l.Info(msg, unpack(fields...)...)
 }
 
-// Debugw prints message with fields
+// Debug prints message with fields
 func (fl fieldLogger) Debug(msg string, fields ...Field) {
 	fl.l.Debug(msg, unpack(fields...)...)
 }
 
-// Errorw prints message with fields
+// Error prints message with fields
 func (fl fieldLogger) Error(msg string, fields ...Field) {
 	fl.l.Error(msg, unpack(fields...)...)
 }
 
-// Warningw prints message with fields
+// Warning prints message with fields
 func (fl fieldLogger) Warning(msg string, fields ...Field) {
 	fl.l.Warn(msg, unpack(fields...)...)
 }

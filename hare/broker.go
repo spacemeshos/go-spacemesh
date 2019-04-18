@@ -47,9 +47,10 @@ type Broker struct {
 	tasks      chan func()
 	maxReg     InstanceId
 	isStarted  bool
+	log        log.Log
 }
 
-func NewBroker(networkService NetworkService, eValidator Validator, closer Closer) *Broker {
+func NewBroker(networkService NetworkService, eValidator Validator, closer Closer, log log.Log) *Broker {
 	p := new(Broker)
 	p.Closer = closer
 	p.network = networkService
@@ -58,6 +59,7 @@ func NewBroker(networkService NetworkService, eValidator Validator, closer Close
 	p.pending = make(map[InstanceId][]*pb.HareMessage)
 	p.tasks = make(chan func())
 	p.maxReg = 1
+	p.log = log
 
 	return p
 }
@@ -65,7 +67,7 @@ func NewBroker(networkService NetworkService, eValidator Validator, closer Close
 // Start listening to protocol messages and dispatch messages (non-blocking)
 func (broker *Broker) Start() error {
 	if broker.isStarted { // Start has been called at least twice
-		log.Error("Could not start instance")
+		broker.log.Error("Could not start instance")
 		return StartInstanceError(errors.New("instance already started"))
 	}
 
@@ -85,20 +87,20 @@ func (broker *Broker) eventLoop() {
 			futureMsg := false
 
 			if msg == nil {
-				log.Error("Message validation failed: called with nil")
+				broker.log.Error("Message validation failed: called with nil")
 				continue
 			}
 
 			hareMsg := &pb.HareMessage{}
 			err := proto.Unmarshal(msg.Bytes(), hareMsg)
 			if err != nil {
-				log.Error("Could not unmarshal message: ", err)
+				broker.log.Error("Could not unmarshal message: ", err)
 				continue
 			}
 
 			// message validation
 			if hareMsg.Message == nil {
-				log.Warning("Message validation failed: message is nil")
+				broker.log.Warning("Message validation failed: message is nil")
 				continue
 			}
 
@@ -106,7 +108,7 @@ func (broker *Broker) eventLoop() {
 			msgInstId := InstanceId(hareMsg.Message.InstanceId)
 			// far future unregistered instance
 			if msgInstId > expInstId {
-				log.Warning("Message validation failed: instanceId. Max: %v Actual: %v", expInstId, msgInstId)
+				broker.log.Warning("Message validation failed: instanceId. Max: %v Actual: %v", expInstId, msgInstId)
 				continue
 			}
 
@@ -116,7 +118,7 @@ func (broker *Broker) eventLoop() {
 			}
 
 			if !broker.eValidator.Validate(hareMsg) {
-				log.Warning("Message validation failed: eValidator returned false %v", hareMsg)
+				broker.log.Warning("Message validation failed: eValidator returned false %v", hareMsg)
 				continue
 			}
 
@@ -132,7 +134,7 @@ func (broker *Broker) eventLoop() {
 			}
 
 			if futureMsg {
-				log.Info("Broker identified future message")
+				broker.log.Info("Broker identified future message")
 				if _, exist := broker.pending[msgInstId]; !exist {
 					broker.pending[msgInstId] = make([]*pb.HareMessage, 0)
 				}
@@ -142,7 +144,7 @@ func (broker *Broker) eventLoop() {
 		case task := <-broker.tasks:
 			task()
 		case <-broker.CloseChannel():
-			log.Warning("Broker exiting")
+			broker.log.Warning("Broker exiting")
 			return
 		}
 	}

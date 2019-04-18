@@ -57,6 +57,7 @@ type Builder struct {
 	stop           chan struct{}
 	finished       chan struct{}
 	working        bool
+	log            log.Log
 }
 
 type Processor struct {
@@ -65,7 +66,7 @@ type Processor struct {
 }
 
 func NewBuilder(nodeId types.NodeId, db *ActivationDb, net Broadcaster, activeSet ActiveSetProvider, view MeshProvider,
-	layersPerEpoch uint16, nipstBuilder NipstBuilder, layerClock chan types.LayerID) *Builder {
+	layersPerEpoch uint16, nipstBuilder NipstBuilder, layerClock chan types.LayerID, log log.Log) *Builder {
 
 	return &Builder{
 		nodeId:         nodeId,
@@ -78,6 +79,7 @@ func NewBuilder(nodeId types.NodeId, db *ActivationDb, net Broadcaster, activeSe
 		timer:          layerClock,
 		stop:           make(chan struct{}),
 		finished:       make(chan struct{}),
+		log:            log,
 	}
 }
 
@@ -93,7 +95,7 @@ func (b *Builder) loop() {
 	if !b.nipstBuilder.IsPostInitialized() {
 		_, err := b.nipstBuilder.InitializePost() // TODO: add proof to first ATX
 		if err != nil {
-			log.Error("PoST initialization failed: %v", err)
+			b.log.Error("PoST initialization failed: %v", err)
 			return
 		}
 	}
@@ -110,7 +112,7 @@ func (b *Builder) loop() {
 				epoch := layer.GetEpoch(b.layersPerEpoch)
 				err := b.PublishActivationTx(epoch)
 				if err != nil {
-					log.Error("cannot create atx : %v in epoch %v", err, epoch)
+					b.log.Error("cannot create atx : %v in epoch %v", err, epoch)
 				}
 				b.finished <- struct{}{}
 			}()
@@ -128,6 +130,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 		if err != nil {
 			return fmt.Errorf("cannot find prev atx " + err.Error())
 		}
+		//check if this node hasn't published an activation already
 		if atx.LayerIdx.GetEpoch(b.layersPerEpoch) == epoch+1 {
 			return fmt.Errorf("atx already created for epoch %v", epoch)
 		}
@@ -137,10 +140,11 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 	}
 	posAtxId := &types.EmptyAtxId
 	endTick := uint64(0)
-	LayerIdx := types.LayerID(0)
+	posLayerID := types.LayerID(0)
 	if !epoch.IsGenesis() {
-		//positioning atx is from the last epoch
-		posAtxId, err = b.GetPositioningAtxId(epoch - 1)
+		//positioning atx is from this epoch as well, since we will be publishing the atx in the next epoch
+		//todo: what if no other atx was received in this epoch yet?
+		posAtxId, err = b.GetPositioningAtxId(epoch)
 		if err != nil {
 			return fmt.Errorf("cannot find pos atx id " + err.Error())
 		}
@@ -149,14 +153,14 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 			return fmt.Errorf("cannot find prev atx " + err.Error())
 		}
 		endTick = posAtx.EndTick
-		LayerIdx = posAtx.LayerIdx
+		posLayerID = posAtx.LayerIdx
 	}
 
 	challenge := types.NIPSTChallenge{
 		NodeId:         b.nodeId,
 		Sequence:       seq,
 		PrevATXId:      *prevAtx,
-		LayerIdx:       types.LayerID(uint64(LayerIdx) + uint64(b.layersPerEpoch)),
+		LayerIdx:       posLayerID.Add(b.layersPerEpoch),
 		StartTick:      endTick,
 		EndTick:        b.tickProvider.NumOfTicks(), //todo: add provider when
 		PositioningAtx: *posAtxId,
@@ -167,20 +171,25 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 		return fmt.Errorf("getting challenge hash failed: %v", err)
 	}
 	npst, err := b.nipstBuilder.BuildNIPST(hash)
+
+	////////////////////////////////////////////
+	// an epoch has passed!!!!!!!!!!!
 	if err != nil {
 		return fmt.Errorf("cannot create nipst " + err.Error())
 	}
-	atx := types.NewActivationTxWithChallenge(challenge, uint32(b.activeSet.ActiveSetIds(LayerIdx.GetEpoch(b.layersPerEpoch))),
-		b.mesh.GetLatestVerified(), npst, true)
+	// we've completed the sequential work, now before publishing the atx,
+	// we need to provide number of atx seen in the epoch of the positioning atx.
+	activeIds := uint32(b.activeSet.ActiveSetIds(posLayerID.GetEpoch(b.layersPerEpoch)))
+	b.log.Info("active ids seen for epoch of the pos atx (epoch: %v) is %v", posLayerID.GetEpoch(b.layersPerEpoch), activeIds)
+	atx := types.NewActivationTxWithChallenge(challenge, activeIds, b.mesh.GetLatestVerified(), npst, true)
 
 	buf, err := types.AtxAsBytes(atx)
 	if err != nil {
 		return err
 	}
-	//todo: should we do something about it? wait for something?
-	log.Info("atx published! id: %v, prevATXID: %v, posATXID: %v, layer: %v, epoch: %v, miner: %v",
+	b.log.Info("atx published! id: %v, prevATXID: %v, posATXID: %v, layer: %v, active in epoch: %v, active set: %v miner: %v",
 		atx.Id().String()[2:7], atx.PrevATXId.String()[2:7], atx.PositioningAtx.String()[2:7], atx.LayerIdx,
-		atx.LayerIdx.GetEpoch(b.layersPerEpoch), b.nodeId.Key[:5])
+		atx.LayerIdx.GetEpoch(b.layersPerEpoch), atx.ActiveSetSize, b.nodeId.Key[:5])
 	return b.net.Broadcast(AtxProtocol, buf)
 
 }
@@ -223,7 +232,7 @@ func (b *Builder) GetLastSequence(node types.NodeId) uint64 {
 	}
 	atx, err := b.db.GetAtx(*atxId)
 	if err != nil {
-		log.Error("wtf no atx in db %v", *atxId)
+		b.log.Error("wtf no atx in db %v", *atxId)
 		return 0
 	}
 	return atx.Sequence

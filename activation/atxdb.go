@@ -25,18 +25,17 @@ type ActivationDb struct {
 	log            log.Log
 }
 
-func NewActivationDb(dbstore database.DB, meshDb *mesh.MeshDB, layersPerEpoch uint64, nodeID types.NodeId) *ActivationDb {
-	lg := log.NewDefault("activation")
-	return &ActivationDb{atxs: dbstore, meshDb: meshDb, LayersPerEpoch: types.LayerID(layersPerEpoch), log: lg}
+func NewActivationDb(dbstore database.DB, meshDb *mesh.MeshDB, layersPerEpoch uint64, log log.Log) *ActivationDb {
+	return &ActivationDb{atxs: dbstore, meshDb: meshDb, LayersPerEpoch: types.LayerID(layersPerEpoch), log: log}
 }
 
 func (db *ActivationDb) ProcessBlockATXs(blk *types.Block) {
 	for _, atx := range blk.ATXs {
-		db.ProcessAtx(atx)
+		db.ProcessAtx(atx, true)
 	}
 }
 
-func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx) {
+func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx, fromBlock bool) {
 	epoch := types.EpochId(atx.LayerIdx / db.LayersPerEpoch)
 	db.log.Info("processing atx id %v, epoch %v node: %v", atx.Id().String()[2:7], epoch, atx.NodeId.Key[:5])
 	activeSet, err := db.CalcActiveSetFromView(atx)
@@ -49,6 +48,8 @@ func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx) {
 	//todo: should we store invalid atxs
 	if err != nil {
 		db.log.Warning("ATX %v failed validation: %v", atx.Id().String()[2:7], err)
+	} else {
+		db.log.Info("ATX %v is valid", atx.Id().String()[2:7])
 	}
 	atx.Valid = err == nil
 	err = db.StoreAtx(epoch, atx)
@@ -113,8 +114,6 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 
 }
 
-//todo: move to config
-const NipstLayerTime = 1000
 
 // ValidateAtx ensures the following conditions apply, otherwise it returns an error.
 //
@@ -166,7 +165,7 @@ func (db *ActivationDb) ValidateAtx(atx *types.ActivationTx) error {
 		if !posAtx.Valid {
 			return fmt.Errorf("positioning atx is not valid")
 		}
-		if atx.LayerIdx-posAtx.LayerIdx > NipstLayerTime {
+		if atx.LayerIdx-posAtx.LayerIdx > db.LayersPerEpoch {
 			return fmt.Errorf("distance between pos atx invalid %v ", atx.LayerIdx-posAtx.LayerIdx)
 		}
 	} else {
@@ -231,7 +230,7 @@ func epochCounterKey(ech types.EpochId) []byte {
 }
 
 func (db *ActivationDb) incValidAtxCounter(ech types.EpochId) error {
-	key := epochCounterKey(ech)
+	key := epochCounterKey(ech - 1)
 	val, err := db.atxs.Get(key)
 	if err == nil {
 		return db.atxs.Put(key, common.Uint32ToBytes(common.BytesToUint32(val)+1))
