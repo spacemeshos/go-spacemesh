@@ -24,7 +24,8 @@ import (
 const debug = false
 
 type cpoolMock struct {
-	f func(address string, pk p2pcrypto.PublicKey) (net.Connection, error)
+	f       func(address string, pk p2pcrypto.PublicKey) (net.Connection, error)
+	fExists func(pk p2pcrypto.PublicKey) (net.Connection, error)
 }
 
 func (cp *cpoolMock) GetConnection(address string, pk p2pcrypto.PublicKey) (net.Connection, error) {
@@ -34,7 +35,9 @@ func (cp *cpoolMock) GetConnection(address string, pk p2pcrypto.PublicKey) (net.
 	return net.NewConnectionMock(pk), nil
 }
 func (cp *cpoolMock) GetConnectionIfExists(pk p2pcrypto.PublicKey) (net.Connection, error) {
-	// todo : test swarm with this
+	if cp.fExists != nil {
+		return cp.fExists(pk)
+	}
 	return net.NewConnectionMock(pk), nil
 }
 
@@ -53,11 +56,7 @@ func p2pTestInstance(t testing.TB, config config.Config) *swarm {
 }
 
 func p2pTestNoStart(t testing.TB, config config.Config) *swarm {
-	port, err := node.GetUnboundedPort()
-	if err != nil {
-		t.Fatal("port err ", err)
-	}
-	config.TCPPort = port
+	config.TCPPort = 0
 	p, err := newSwarm(context.TODO(), config, true, debug)
 	if err != nil {
 		t.Fatal("err creating a swarm", err)
@@ -82,9 +81,7 @@ func TestNew(t *testing.T) {
 
 func Test_newSwarm(t *testing.T) {
 	cfg := config.DefaultConfig()
-	port, err := node.GetUnboundedPort()
-	assert.NoError(t, err)
-	cfg.TCPPort = port
+	cfg.TCPPort = 0
 	s, err := newSwarm(context.TODO(), cfg, true, false)
 	assert.NoError(t, err)
 	err = s.Start()
@@ -95,9 +92,7 @@ func Test_newSwarm(t *testing.T) {
 
 func TestSwarm_Shutdown(t *testing.T) {
 	cfg := config.DefaultConfig()
-	port, err := node.GetUnboundedPort()
-	assert.NoError(t, err)
-	cfg.TCPPort = port
+	cfg.TCPPort = 0
 	s, err := newSwarm(context.TODO(), cfg, true, false)
 	assert.NoError(t, err)
 	err = s.Start()
@@ -138,14 +133,15 @@ func Test_ConnectionBeforeMessage(t *testing.T) {
 	numNodes := 5
 	var wg sync.WaitGroup
 
-	p2 := p2pTestInstance(t, config.DefaultConfig())
-	defer p2.Shutdown()
+	p2 := p2pTestNoStart(t, config.DefaultConfig())
 	c2 := p2.RegisterDirectProtocol(exampleProtocol)
+	require.NoError(t, p2.Start())
+	defer p2.Shutdown()
 
 	go func() {
 		for {
 			msg := <-c2 // immediate response will probably trigger GetConnection fast
-			p2.SendMessage(msg.Sender(), exampleProtocol, []byte("RESP"))
+			require.NoError(t, p2.SendMessage(msg.Sender(), exampleProtocol, []byte("RESP")))
 			wg.Done()
 		}
 	}()
@@ -171,11 +167,13 @@ func Test_ConnectionBeforeMessage(t *testing.T) {
 	for i := 0; i < numNodes; i++ {
 		wg.Add(1)
 		go func() {
-			p1 := p2pTestInstance(t, config.DefaultConfig())
-			sa.add(p1)
+			p1 := p2pTestNoStart(t, config.DefaultConfig())
 			_ = p1.RegisterDirectProtocol(exampleProtocol)
-			p1.dht.Update(p2.lNode.Node)
-			p1.SendMessage(p2.lNode.PublicKey(), exampleProtocol, payload)
+			require.NoError(t, p1.Start())
+			sa.add(p1)
+			_, err := p1.cPool.GetConnection(p2.network.LocalAddr().String(), p2.lNode.PublicKey())
+			require.NoError(t, err)
+			require.NoError(t, p1.SendMessage(p2.lNode.PublicKey(), exampleProtocol, payload))
 		}()
 	}
 
@@ -210,15 +208,19 @@ func sendDirectMessage(t *testing.T, sender *swarm, recvPub p2pcrypto.PublicKey,
 }
 
 func TestSwarm_RoundTrip(t *testing.T) {
-	p1 := p2pTestInstance(t, config.DefaultConfig())
-	p2 := p2pTestInstance(t, config.DefaultConfig())
+	p1 := p2pTestNoStart(t, config.DefaultConfig())
+	p2 := p2pTestNoStart(t, config.DefaultConfig())
 
 	exchan1 := p1.RegisterDirectProtocol(exampleProtocol)
-	assert.Equal(t, exchan1, p1.directProtocolHandlers[exampleProtocol])
+	require.Equal(t, exchan1, p1.directProtocolHandlers[exampleProtocol])
 	exchan2 := p2.RegisterDirectProtocol(exampleProtocol)
-	assert.Equal(t, exchan2, p2.directProtocolHandlers[exampleProtocol])
+	require.Equal(t, exchan2, p2.directProtocolHandlers[exampleProtocol])
 
-	p2.dht.Update(p1.lNode.Node)
+	require.NoError(t, p1.Start())
+	require.NoError(t, p2.Start())
+
+	_, err := p2.cPool.GetConnection(p1.network.LocalAddr().String(), p1.lNode.PublicKey())
+	require.NoError(t, err)
 
 	sendDirectMessage(t, p2, p1.lNode.PublicKey(), exchan1, true)
 	sendDirectMessage(t, p1, p2.lNode.PublicKey(), exchan2, true)
@@ -228,17 +230,22 @@ func TestSwarm_RoundTrip(t *testing.T) {
 }
 
 func TestSwarm_MultipleMessages(t *testing.T) {
-	p1 := p2pTestInstance(t, config.DefaultConfig())
-	p2 := p2pTestInstance(t, config.DefaultConfig())
+	p1 := p2pTestNoStart(t, config.DefaultConfig())
+	p2 := p2pTestNoStart(t, config.DefaultConfig())
 
 	exchan1 := p1.RegisterDirectProtocol(exampleProtocol)
-	assert.Equal(t, exchan1, p1.directProtocolHandlers[exampleProtocol])
+	require.Equal(t, exchan1, p1.directProtocolHandlers[exampleProtocol])
 	exchan2 := p2.RegisterDirectProtocol(exampleProtocol)
-	assert.Equal(t, exchan2, p2.directProtocolHandlers[exampleProtocol])
+	require.Equal(t, exchan2, p2.directProtocolHandlers[exampleProtocol])
+
+	require.NoError(t, p1.Start())
+	require.NoError(t, p2.Start())
 
 	err := p2.SendMessage(p1.lNode.PublicKey(), exampleProtocol, []byte(examplePayload))
-	assert.Error(t, err, "ERR") // should'nt be in routing table
-	p2.dht.Update(p1.lNode.Node)
+	require.Error(t, err, "ERR") // should'nt be in routing table
+
+	_, err = p2.cPool.GetConnection(p1.network.LocalAddr().String(), p1.lNode.PublicKey())
+	require.NoError(t, err)
 
 	var wg sync.WaitGroup
 	for i := 0; i < 500; i++ {
@@ -306,9 +313,10 @@ func TestSwarm_MultipleMessagesFromMultipleSenders(t *testing.T) {
 	for i := 0; i < Senders; i++ {
 		wg.Add(1)
 		go func() {
-			p := p2pTestInstance(t, cfg)
+			p := p2pTestNoStart(t, cfg)
+			require.NoError(t, p.Start())
 			sa.add(p)
-			p.dht.Update(p1.LocalNode().Node)
+			p.cPool.GetConnection(p1.network.LocalAddr().String(), p1.lNode.PublicKey())
 			mychan := make(chan struct{})
 			mu.Lock()
 			pend[p.lNode.Node.PublicKey().String()] = mychan
@@ -316,7 +324,7 @@ func TestSwarm_MultipleMessagesFromMultipleSenders(t *testing.T) {
 
 			payload := []byte(RandString(10))
 			err := p.SendMessage(p1.lNode.PublicKey(), exampleProtocol, payload)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 		}()
 	}
 	wg.Wait()
@@ -337,7 +345,7 @@ func TestSwarm_MultipleMessagesFromMultipleSendersToMultipleProtocols(t *testing
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 
-	p1 := p2pTestInstance(t, cfg)
+	p1 := p2pTestNoStart(t, cfg)
 
 	var protos []string
 
@@ -364,13 +372,15 @@ func TestSwarm_MultipleMessagesFromMultipleSendersToMultipleProtocols(t *testing
 
 	}
 
+	require.NoError(t, p1.Start())
+
 	sa := &swarmArray{}
 	for i := 0; i < Senders; i++ {
 		wg.Add(1)
 		go func() {
-			p := p2pTestInstance(t, cfg)
+			p := p2pTestNoStart(t, cfg)
+			require.NoError(t, p.Start())
 			sa.add(p)
-			p.dht.Update(p1.LocalNode().Node)
 			mychan := make(chan struct{})
 			mu.Lock()
 			pend[p.lNode.Node.PublicKey().String()] = mychan
@@ -382,8 +392,10 @@ func TestSwarm_MultipleMessagesFromMultipleSendersToMultipleProtocols(t *testing
 			}
 
 			payload := []byte(RandString(10))
-			err := p.SendMessage(p1.lNode.PublicKey(), protos[randProto], payload)
-			assert.NoError(t, err)
+			_, err := p.cPool.GetConnection(p1.network.LocalAddr().String(), p1.lNode.PublicKey())
+			require.NoError(t, err)
+			err = p.SendMessage(p1.lNode.PublicKey(), protos[randProto], payload)
+			require.NoError(t, err)
 		}()
 	}
 	wg.Wait()

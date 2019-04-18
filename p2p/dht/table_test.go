@@ -3,6 +3,7 @@ package dht
 import (
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/rand"
+	"github.com/stretchr/testify/require"
 	"sync"
 	"testing"
 	"time"
@@ -14,6 +15,20 @@ import (
 
 var defaultBucketSize = config.DefaultConfig().SwarmConfig.RoutingTableBucketSize
 
+func generateDiscNode() discNode {
+	n := node.GenerateRandomNodeData()
+	return discNode{n, n.Address()}
+}
+
+func generateDiscNodes(n int) []discNode {
+	discs := make([]discNode, n)
+	notdiscs := node.GenerateRandomNodesData(n)
+	for i := 0; i < n; i++ {
+		discs[i] = discNode{notdiscs[i], notdiscs[i].Address()}
+	}
+	return discs
+}
+
 func GetTestLogger(name string) log.Log {
 	return log.New(name, "", "")
 }
@@ -24,7 +39,7 @@ func TestTableCallbacks(t *testing.T) {
 	local := node.GenerateRandomNodeData()
 	localID := local.DhtID()
 
-	nodes := node.GenerateRandomNodesData(n)
+	nodes := generateDiscNodes(n)
 
 	tlog := GetTestLogger(localID.Pretty())
 
@@ -52,13 +67,13 @@ func TestTableCallbacks(t *testing.T) {
 func TestTableUpdate(t *testing.T) {
 
 	const n = 100
-	local := node.GenerateRandomNodeData()
+	local := generateDiscNode()
 
 	localID := local.DhtID()
 
 	rt := NewRoutingTable(defaultBucketSize, localID, GetTestLogger(localID.Pretty()))
 
-	nodes := node.GenerateRandomNodesData(n)
+	nodes := generateDiscNodes(n)
 
 	// Testing Update
 	for i := 0; i < 10000; i++ {
@@ -91,13 +106,13 @@ func TestTableFind(t *testing.T) {
 
 	const n = 100
 
-	local := node.GenerateRandomNodeData()
+	local := generateDiscNode()
 
 	localID := local.DhtID()
 
 	rt := NewRoutingTable(defaultBucketSize, localID, GetTestLogger(localID.Pretty()))
 
-	nodes := node.GenerateRandomNodesData(n)
+	nodes := generateDiscNodes(n)
 
 	for i := 0; i < 5; i++ {
 		rt.Update(nodes[i])
@@ -113,7 +128,7 @@ func TestTableFind(t *testing.T) {
 
 		select {
 		case c := <-callback:
-			if c.Peer == node.EmptyNode || c.Peer != n {
+			if c.Peer == emptyDiscNode || c.Peer != n {
 				t.Fatalf("Failed to lookup known identity...")
 			}
 		case <-time.After(time.Second * 5):
@@ -125,7 +140,7 @@ func TestTableFind(t *testing.T) {
 
 		select {
 		case c := <-callback1:
-			if c.Peer == node.EmptyNode || c.Peer != n {
+			if c.Peer == emptyDiscNode || c.Peer != n {
 				t.Fatalf("Failed to find identity...")
 			}
 		case <-time.After(time.Second * 5):
@@ -139,11 +154,11 @@ func TestTableFindCount(t *testing.T) {
 	const n = 100
 	const i = 15
 
-	local := node.GenerateRandomNodeData()
+	local := generateDiscNode()
 
 	localID := local.DhtID()
 	rt := NewRoutingTable(defaultBucketSize, localID, GetTestLogger(localID.Pretty()))
-	nodes := node.GenerateRandomNodesData(n)
+	nodes := generateDiscNodes(n)
 	for i := 0; i < n; i++ {
 		rt.Update(nodes[i])
 	}
@@ -169,10 +184,10 @@ func TestTableMultiThreaded(t *testing.T) {
 
 	const n = 5000
 
-	local := node.GenerateRandomNodeData()
+	local := generateDiscNode()
 	localID := local.DhtID()
 	rt := NewRoutingTable(defaultBucketSize, localID, GetTestLogger(localID.Pretty()))
-	nodes := node.GenerateRandomNodesData(n)
+	nodes := generateDiscNodes(n)
 
 	go func() {
 		for i := 0; i < 1000; i++ {
@@ -202,13 +217,13 @@ func TestRoutingTableImpl_SelectPeersDuplicates(t *testing.T) {
 
 	test := func(t *testing.T) {
 
-		local := node.GenerateRandomNodeData()
+		local := generateDiscNode()
 		localID := local.DhtID()
 
 		rt := NewRoutingTable(defaultBucketSize, localID, GetTestLogger(localID.Pretty()))
 
 		fillRT := func() {
-			nodes := node.GenerateRandomNodesData(n)
+			nodes := generateDiscNodes(n)
 			for n := range nodes {
 				rt.Update(nodes[n])
 			}
@@ -240,12 +255,12 @@ func TestRoutingTableImpl_SelectPeers_EnoughPeers(t *testing.T) {
 	const n = 100
 	const random = 5
 
-	ids := make(map[string]node.Node)
+	ids := make(map[string]discNode)
 	sids := make(map[string]RoutingTable)
 	toselect := make(map[string]struct{})
 
 	for i := 0; i < n; i++ {
-		local := node.GenerateRandomNodeData()
+		local := generateDiscNode()
 		localID := local.DhtID()
 
 		rt := NewRoutingTable(defaultBucketSize, localID, GetTestLogger(localID.Pretty()))
@@ -264,7 +279,7 @@ func TestRoutingTableImpl_SelectPeers_EnoughPeers(t *testing.T) {
 				continue
 			}
 			wg.Add(1)
-			go func(id, secondID node.Node) {
+			go func(id, secondID discNode) {
 				sids[id.String()].Update(secondID)
 				wg.Done()
 			}(id, secondID)
@@ -297,29 +312,29 @@ func TestRoutingTableImpl_Remove(t *testing.T) {
 	localID := local.DhtID()
 	rt := NewRoutingTable(defaultBucketSize, localID, GetTestLogger(localID.Pretty()))
 
-	rnode := node.GenerateRandomNodeData()
+	rnode := generateDiscNode()
 
 	rt.Update(rnode)
 
 	cnode := make(PeerOpChannel)
 	rt.Find(PeerByIDRequest{rnode.DhtID(), cnode})
 	n := <-cnode
-	assert.NotEqual(t, n.Peer, node.EmptyNode)
+	require.NotEqual(t, n.Peer, emptyDiscNode)
 
 	rt.Remove(rnode)
 
 	rt.Find(PeerByIDRequest{rnode.DhtID(), cnode})
 	n = <-cnode
-	assert.Equal(t, n.Peer, node.EmptyNode)
+	require.Equal(t, n.Peer, emptyDiscNode)
 }
 
 func BenchmarkUpdates(b *testing.B) {
 	b.StopTimer()
-	local := node.GenerateRandomNodeData()
+	local := generateDiscNode()
 
 	localID := local.DhtID()
 	rt := NewRoutingTable(defaultBucketSize, localID, GetTestLogger(localID.Pretty()))
-	nodes := node.GenerateRandomNodesData(b.N)
+	nodes := generateDiscNodes(b.N)
 
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
@@ -330,11 +345,11 @@ func BenchmarkUpdates(b *testing.B) {
 func BenchmarkFinds(b *testing.B) {
 	b.StopTimer()
 
-	local := node.GenerateRandomNodeData()
+	local := generateDiscNode()
 
 	localID := local.DhtID()
 	rt := NewRoutingTable(defaultBucketSize, localID, GetTestLogger(localID.Pretty()))
-	nodes := node.GenerateRandomNodesData(b.N)
+	nodes := generateDiscNodes(b.N)
 
 	for i := 0; i < b.N; i++ {
 		rt.Update(nodes[i])

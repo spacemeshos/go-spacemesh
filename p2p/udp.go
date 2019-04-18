@@ -55,10 +55,6 @@ func NewUDPMux(localNode *node.LocalNode, lookuper Lookuper, udpNet udpNetwork, 
 
 // Start starts the UDPMux
 func (mux *UDPMux) Start() error {
-	err := mux.network.Start()
-	if err != nil {
-		return err
-	}
 	go mux.listenToNetworkMessage()
 	return nil
 }
