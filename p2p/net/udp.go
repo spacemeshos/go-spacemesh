@@ -54,16 +54,20 @@ func NewUDPNet(config config.Config, local *node.LocalNode, log log.Log) (*UDPNe
 
 // Start will trigger listening on the configured port
 func (n *UDPNet) Start() error {
-	n.logger.Info("Starting to listen on udp:%v", n.udpAddress)
 	listener, err := newUDPListener(n.udpAddress)
 	if err != nil {
 		return err
 	}
 	n.conn = listener
-
+	n.logger.Info("Started listening on udp:%v", listener.LocalAddr().String())
 	go n.listenToUDPNetworkMessages(listener)
 
 	return nil
+}
+
+// LocalAddr returns the local listening addr, will panic before running Start. or if start errored
+func (n *UDPNet) LocalAddr() net.Addr {
+	return n.conn.LocalAddr()
 }
 
 // Shutdown stops listening and closes the connection

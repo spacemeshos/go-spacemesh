@@ -47,7 +47,7 @@ func (p *discovery) newFindNodeRequestHandler() func(msg server.Message) []byte 
 		count := int(crypto.MinInt32(req.MaxResults, maxNearestNodesResults))
 
 		// get up to count nearest peers to nodeDhtId
-		results := p.table.InternalLookup(nodeID)
+		results := p.table.internalLookup(nodeID)
 
 		if len(results) > count {
 			results = results[:count]
@@ -67,7 +67,7 @@ func (p *discovery) newFindNodeRequestHandler() func(msg server.Message) []byte 
 }
 
 // FindNode Send a single find node request to a remote node
-func (p *discovery) FindNode(serverNode p2pcrypto.PublicKey, target p2pcrypto.PublicKey) ([]node.Node, error) {
+func (p *discovery) FindNode(serverNode p2pcrypto.PublicKey, target p2pcrypto.PublicKey) ([]discNode, error) {
 	var err error
 
 	nodeID := target.Bytes()
@@ -82,7 +82,7 @@ func (p *discovery) FindNode(serverNode p2pcrypto.PublicKey, target p2pcrypto.Pu
 	}
 
 	// response handler
-	ch := make(chan []node.Node)
+	ch := make(chan []discNode)
 	foo := func(msg []byte) {
 		defer close(ch)
 		p.logger.Info("handle find_node response")
@@ -117,7 +117,7 @@ func (p *discovery) FindNode(serverNode p2pcrypto.PublicKey, target p2pcrypto.Pu
 
 // ToNodeInfo returns marshaled protobufs identity infos slice from a slice of RemoteNodeData.
 // filterId: identity id to exclude from the result
-func toNodeInfo(nodes []node.Node, filterID string) []*pb.NodeInfo {
+func toNodeInfo(nodes []discNode, filterID string) []*pb.NodeInfo {
 	// init empty slice
 	var res []*pb.NodeInfo
 	for _, n := range nodes {
@@ -127,16 +127,17 @@ func toNodeInfo(nodes []node.Node, filterID string) []*pb.NodeInfo {
 		}
 
 		res = append(res, &pb.NodeInfo{
-			NodeId:  n.PublicKey().Bytes(),
-			Address: n.Address(),
+			NodeId:     n.PublicKey().Bytes(),
+			TCPAddress: n.Address(),
+			UDPAddress: n.udpAddress,
 		})
 	}
 	return res
 }
 
 // FromNodeInfos converts a list of NodeInfo to a list of Node.
-func fromNodeInfos(nodes []*pb.NodeInfo) []node.Node {
-	res := make([]node.Node, len(nodes))
+func fromNodeInfos(nodes []*pb.NodeInfo) []discNode {
+	res := make([]discNode, len(nodes))
 	for i, n := range nodes {
 		pubk, err := p2pcrypto.NewPubkeyFromBytes(n.NodeId)
 		if err != nil {
@@ -144,7 +145,7 @@ func fromNodeInfos(nodes []*pb.NodeInfo) []node.Node {
 			log.Error("There was an error parsing nodeid : ", n.NodeId, ", skipping it. err: ", err)
 			continue
 		}
-		node := node.New(pubk, n.Address)
+		node := discNode{node.New(pubk, n.TCPAddress), n.UDPAddress}
 		res[i] = node
 
 	}
