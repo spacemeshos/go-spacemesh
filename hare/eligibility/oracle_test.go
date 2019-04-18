@@ -2,6 +2,7 @@ package eligibility
 
 import (
 	"errors"
+	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
 	"testing"
@@ -77,6 +78,6 @@ func TestOracle_IsEligible(t *testing.T) {
 }
 
 func Test_safeLayer(t *testing.T) {
-	assert.Equal(t, genesisLayer, safeLayer(1))
+	assert.Equal(t, config.Genesis, safeLayer(1))
 	assert.Equal(t, 100-k, safeLayer(100))
 }

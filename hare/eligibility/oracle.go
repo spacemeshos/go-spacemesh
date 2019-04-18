@@ -4,14 +4,14 @@ import (
 	"bytes"
 	"errors"
 	"github.com/davecgh/go-xdr/xdr2"
+	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"hash/fnv"
 	"math"
 )
 
-const genesisLayer = types.LayerID(0) // TODO: read from conf
-const k = types.LayerID(25)           // the confidence interval // TODO: read from config
+const k = types.LayerID(25) // the confidence interval // TODO: read from config
 
 type valueProvider interface {
 	Value(layer types.LayerID) (int, error)
@@ -33,11 +33,11 @@ type Oracle struct {
 }
 
 func safeLayer(layer types.LayerID) types.LayerID {
-	if layer >= k {
+	if layer > k {
 		return layer - k
 	}
 
-	return types.LayerID(genesisLayer)
+	return types.LayerID(config.Genesis)
 }
 
 func New(committeeSize uint32, beacon valueProvider, asProvider activeSetProvider, vrf Verifier) *Oracle {
