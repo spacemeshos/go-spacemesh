@@ -37,11 +37,11 @@ func (v BlockEligibilityValidator) BlockEligible(block *types.Block) (bool, erro
 	// need to get active set size from previous epoch
 	activeSetSize := uint32(GenesisActiveSetSize)
 	if !epochNumber.IsGenesis() {
-		var err error
-		activeSetSize, err = v.getActiveSetSize(epochNumber-1, block)
+		atx, err := v.getAndValidateATX(epochNumber, block)
 		if err != nil {
 			return false, err
 		}
+		activeSetSize = atx.ActiveSetSize
 	}
 
 	numberOfEligibleBlocks, err := getNumberOfEligibleBlocks(activeSetSize, v.committeeSize, v.layersPerEpoch, v.log)
@@ -62,7 +62,7 @@ func (v BlockEligibilityValidator) BlockEligible(block *types.Block) (bool, erro
 	err = v.validateVRF(message, vrfSig, []byte(block.MinerID.VRFPublicKey))
 	if err != nil {
 		v.log.Error("eligibility VRF validation failed: %v", err)
-		return false, err
+		return false, fmt.Errorf("eligibility VRF validation failed: %v", err)
 	}
 	vrfHash := sha256.Sum256(vrfSig)
 	eligibleLayer := calcEligibleLayer(epochNumber, v.layersPerEpoch, vrfHash)
@@ -70,25 +70,21 @@ func (v BlockEligibilityValidator) BlockEligible(block *types.Block) (bool, erro
 	return block.LayerIndex == eligibleLayer, nil
 }
 
-func (v BlockEligibilityValidator) getActiveSetSize(epochNumber types.EpochId, block *types.Block) (uint32, error) {
+func (v BlockEligibilityValidator) getAndValidateATX(blockEpoch types.EpochId, block *types.Block) (*types.ActivationTx, error) {
 	atx, err := v.activationDb.GetAtx(block.ATXID)
 	if err != nil {
-		v.log.Error("getting ATX failed: %v %v ep(%v)", err, block.ATXID.String()[:5], epochNumber)
-		return 0, err
+		v.log.Error("getting ATX failed: %v %v ep(%v)", err, block.ATXID.String()[:5], blockEpoch)
+		return nil, fmt.Errorf("getting ATX failed: %v %v ep(%v)", err, block.ATXID.String()[:5], blockEpoch)
 	}
 	if !atx.Valid {
-		v.log.Error("ATX %v is invalid: %v", atx.Id().String()[:5], err)
-		return 0, err
+		v.log.Error("ATX %v is invalid", atx.Id().String()[:5])
+		return nil, fmt.Errorf("ATX %v is invalid", atx.Id().String()[:5])
 	}
-	if atxEpochNumber := atx.PubLayerIdx.GetEpoch(v.layersPerEpoch); epochNumber != atxEpochNumber {
-		v.log.Error("ATX epoch (%d) doesn't match layer ID epoch (%d)", atxEpochNumber, epochNumber)
-		return 0, fmt.Errorf("activation epoch (%d) mismatch with layer epoch (%d)", atxEpochNumber,
-			epochNumber)
+	if atxTargetEpoch := atx.PubLayerIdx.GetEpoch(v.layersPerEpoch) + 1; atxTargetEpoch != blockEpoch {
+		v.log.Error("ATX target epoch (%d) doesn't match block publication epoch (%d)",
+			atxTargetEpoch, blockEpoch)
+		return nil, fmt.Errorf("ATX target epoch (%d) doesn't match block publication epoch (%d)",
+			atxTargetEpoch, blockEpoch)
 	}
-	if atx.PubLayerIdx.GetEpoch(v.layersPerEpoch).IsGenesis() {
-		return GenesisActiveSetSize, nil
-	}
-	log.Info("active set as seen by atx %v is %v", atx.ShortId(), atx.ActiveSetSize)
-	activeSetSize := atx.ActiveSetSize
-	return activeSetSize, err
+	return atx, nil
 }
