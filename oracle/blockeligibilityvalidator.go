@@ -38,7 +38,7 @@ func (v BlockEligibilityValidator) BlockEligible(block *types.Block) (bool, erro
 	activeSetSize := uint32(GenesisActiveSetSize)
 	if !epochNumber.IsGenesis() {
 		var err error
-		activeSetSize, err = v.getActiveSetSize(epochNumber - 1, block)
+		activeSetSize, err = v.getActiveSetSize(epochNumber-1, block)
 		if err != nil {
 			return false, err
 		}

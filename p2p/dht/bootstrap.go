@@ -31,7 +31,7 @@ var (
 )
 
 // Bootstrap issues a bootstrap by inserting the preloaded nodes to the routing table then querying them with our
-// ID with a FindNode (using `dht.Lookup`). the process involves updating all returned nodes to the routing table
+// ID with a FindNode (using `dht.netLookup`). the process involves updating all returned nodes to the routing table
 // while all the nodes that receive our query will add us to their routing tables and send us as response to a `FindNode`.
 func (d *KadDHT) Bootstrap(ctx context.Context) error {
 
@@ -51,7 +51,10 @@ func (d *KadDHT) Bootstrap(ctx context.Context) error {
 			// TODO : handle errors
 			continue
 		}
-		d.rt.Update(nd)
+
+		d.rt.Update(discNode{nd, nd.Address()})
+		defer d.rt.Remove(discNode{nd, nd.Address()})
+
 		bn++
 		d.local.Info("added new bootstrap node %v", nd)
 	}
@@ -60,14 +63,14 @@ func (d *KadDHT) Bootstrap(ctx context.Context) error {
 		return ErrConnectToBootNode
 	}
 
-	d.local.Debug("Lookup using %d preloaded bootnodes ", bn)
+	d.local.Debug("netLookup using %d preloaded bootnodes ", bn)
 
-	err := d.tryBoot(ctx, c)
+	err := d.tryBoot(ctx, bn, c)
 
 	return err
 }
 
-func (d *KadDHT) tryBoot(ctx context.Context, minPeers int) error {
+func (d *KadDHT) tryBoot(ctx context.Context, bootnodecount int, minPeers int) error {
 
 	searchFor := d.local.PublicKey()
 	tries := 0
@@ -85,7 +88,7 @@ loop:
 				searchFor = p2pcrypto.NewRandomPubkey()
 				d.local.Debug("BOOTSTRAP: Running kademlia lookup for random peer")
 			}
-			_, err := d.Lookup(searchFor)
+			_, err := d.netLookup(searchFor)
 			reschan <- err
 		}()
 
@@ -104,7 +107,7 @@ loop:
 			d.rt.Size(req)
 			size = <-req
 
-			if size >= minPeers {
+			if size+bootnodecount >= minPeers {
 				break loop
 			}
 		}

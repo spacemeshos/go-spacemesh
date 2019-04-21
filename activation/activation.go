@@ -45,6 +45,11 @@ type NipstBuilder interface {
 	InitializePost() (*nipst.PostProof, error)
 }
 
+type IdStore interface {
+	StoreNodeIdentity(id types.NodeId) error
+	GetIdentity(id string) (types.NodeId, error)
+}
+
 type Builder struct {
 	nodeId         types.NodeId
 	db             *ActivationDb
@@ -133,14 +138,14 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 		if b.prevATX == nil {
 			prevAtxId, err := b.GetPrevAtxId(b.nodeId)
 			if err == nil {
-				b.prevATX, err = b.db.GetAtx(prevAtxId)
+				b.prevATX, err = b.db.GetAtx(*prevAtxId)
 				if err != nil {
 					b.log.Info("no prev ATX found, starting fresh")
 				}
 			}
 		}
 		seq := uint64(0)
-		atxId := types.EmptyAtxId
+		atxId := *types.EmptyAtxId
 		if b.prevATX != nil {
 			seq = b.prevATX.Sequence + 1
 			//check if this node hasn't published an activation already
@@ -154,7 +159,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 
 		//positioning atx is from this epoch as well, since we will be publishing the atx in the next epoch
 		//todo: what if no other atx was received in this epoch yet?
-		posAtxId := types.EmptyAtxId
+		posAtxId := *types.EmptyAtxId
 		posAtx, err := b.GetPositioningAtx(epoch)
 		if err == nil {
 			endTick = posAtx.EndTick
@@ -169,11 +174,11 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 		b.challenge = &types.NIPSTChallenge{
 			NodeId:         b.nodeId,
 			Sequence:       seq,
-			PrevATXId:      *atxId,
+			PrevATXId:      atxId,
 			PubLayerIdx:    b.posLayerID.Add(b.layersPerEpoch),
 			StartTick:      endTick,
 			EndTick:        b.tickProvider.NumOfTicks(), //todo: add provider when
-			PositioningAtx: *posAtxId,
+			PositioningAtx: posAtxId,
 		}
 
 		hash, err := b.challenge.Hash()
@@ -250,7 +255,7 @@ func (b *Builder) GetLastSequence(node types.NodeId) uint64 {
 	if err != nil {
 		return 0
 	}
-	atx, err := b.db.GetAtx(atxId)
+	atx, err := b.db.GetAtx(*atxId)
 	if err != nil {
 		b.log.Error("wtf no atx in db %v", *atxId)
 		return 0
@@ -261,7 +266,7 @@ func (b *Builder) GetLastSequence(node types.NodeId) uint64 {
 func (b *Builder) GetPositioningAtx(epochId types.EpochId) (*types.ActivationTx, error) {
 	posAtxId, err := b.GetPositioningAtxId(epochId)
 	if err == nil {
-		posAtx, err := b.db.GetAtx(posAtxId)
+		posAtx, err := b.db.GetAtx(*posAtxId)
 		if err != nil {
 			return nil, fmt.Errorf("cannot find pos atx: %v", err.Error())
 		}

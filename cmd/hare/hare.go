@@ -7,6 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spf13/cobra"
@@ -22,9 +23,6 @@ var Cmd = &cobra.Command{
 	Short: "start hare",
 	Run: func(cmd *cobra.Command, args []string) {
 		log.JSONLog(true)
-
-		log.Info("Starting hare")
-
 		hareApp := NewHareApp()
 		defer hareApp.Cleanup()
 		hareApp.Initialize(cmd)
@@ -54,18 +52,18 @@ type HareApp struct {
 	*cmdp.BaseApp
 	p2p    p2p.Service
 	oracle *oracle.OracleClient
-	sgn    hare.Signing
+	sgn    hare.Signer
 	ha     *hare.Hare
 	clock  *timesync.Ticker
 }
 
 func NewHareApp() *HareApp {
-	return &HareApp{BaseApp: cmdp.NewBaseApp(), sgn: hare.NewMockSigning()}
+	return &HareApp{BaseApp: cmdp.NewBaseApp(), sgn: signing.NewEdSigner()}
 }
 
 func (app *HareApp) Cleanup() {
 	// TODO: move to array of cleanup functions and execute all here
-	app.oracle.Unregister(true, app.sgn.Verifier().String())
+	app.oracle.Unregister(true, app.sgn.PublicKey().String())
 }
 
 func buildSet() *hare.Set {
@@ -79,7 +77,7 @@ func buildSet() *hare.Set {
 }
 
 func (app *HareApp) Start(cmd *cobra.Command, args []string) {
-	// start p2p services
+	log.Info("Starting hare main")
 	log.Info("Initializing P2P services")
 	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P)
 	app.p2p = swarm
@@ -87,7 +85,7 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 		log.Panic("Error starting p2p services err=%v", err)
 	}
 
-	pub := app.sgn.Verifier()
+	pub := app.sgn.PublicKey()
 
 	lg := log.NewDefault(pub.String())
 

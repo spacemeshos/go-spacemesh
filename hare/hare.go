@@ -4,7 +4,6 @@ import (
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/hare/metrics"
-	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"sync"
@@ -17,7 +16,7 @@ const Delta = time.Second // todo: add to config
 // LayerBuffer is the number of layer results we keep at a given time.
 const LayerBuffer = 20
 
-type consensusFactory func(cfg config.Config, instanceId InstanceId, s *Set, oracle Rolacle, signing Signing, p2p NetworkService, terminationReport chan TerminationOutput) Consensus
+type consensusFactory func(cfg config.Config, instanceId InstanceId, s *Set, oracle Rolacle, signing Signer, p2p NetworkService, terminationReport chan TerminationOutput) Consensus
 
 // Consensus represents a consensus
 type Consensus interface {
@@ -26,7 +25,7 @@ type Consensus interface {
 	CloseChannel() chan struct{}
 
 	Start() error
-	SetInbox(chan *pb.HareMessage)
+	SetInbox(chan *Msg)
 }
 
 // TerminationOutput is a result of a process terminated with output.
@@ -50,7 +49,7 @@ type Hare struct {
 
 	broker *Broker
 
-	sign Signing
+	sign Signer
 
 	obp     orphanBlockProvider
 	rolacle Rolacle
@@ -70,7 +69,7 @@ type Hare struct {
 }
 
 // New returns a new Hare struct.
-func New(conf config.Config, p2p NetworkService, sign Signing, obp orphanBlockProvider, rolacle Rolacle, beginLayer chan types.LayerID, logger log.Log) *Hare {
+func New(conf config.Config, p2p NetworkService, sign Signer, obp orphanBlockProvider, rolacle Rolacle, beginLayer chan types.LayerID, logger log.Log) *Hare {
 	h := new(Hare)
 
 	h.Closer = NewCloser()
@@ -98,7 +97,7 @@ func New(conf config.Config, p2p NetworkService, sign Signing, obp orphanBlockPr
 	h.outputChan = make(chan TerminationOutput, h.bufferSize)
 	h.outputs = make(map[types.LayerID][]types.BlockID, h.bufferSize) //  we keep results about LayerBuffer past layers
 
-	h.factory = func(conf config.Config, instanceId InstanceId, s *Set, oracle Rolacle, signing Signing, p2p NetworkService, terminationReport chan TerminationOutput) Consensus {
+	h.factory = func(conf config.Config, instanceId InstanceId, s *Set, oracle Rolacle, signing Signer, p2p NetworkService, terminationReport chan TerminationOutput) Consensus {
 		return NewConsensusProcess(conf, instanceId, s, oracle, signing, p2p, terminationReport, logger)
 	}
 

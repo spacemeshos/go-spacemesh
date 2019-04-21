@@ -1,4 +1,4 @@
-package consensus
+package tortoise
 
 import (
 	"fmt"
@@ -85,41 +85,48 @@ func TestNinjaTortoise_GlobalOpinion(t *testing.T) {
 	assert.True(t, glo == Against, "vec was wrong %d", glo)
 }
 
-func TestForEachInView(t *testing.T) {
-	blocks := make(map[types.BlockID]*types.Block)
-	mdb := getInMemMesh()
+func TestNinjaTortoise_evict(t *testing.T) {
+	defer persistenceTeardown()
+	ni := sanity(getMeshForBench(), 150, 10, 100, badblocks)
 
-	defer mdb.Close()
-	l := mesh.GenesisLayer()
-	for _, b := range l.Blocks() {
-		blocks[b.ID()] = b
-	}
-	for i := 0; i < 4; i++ {
-		lyr := createLayerWithRandVoting(l.Index()+1, []*types.Layer{l}, 2, 2)
-		for _, b := range lyr.Blocks() {
-			blocks[b.ID()] = b
+	for i := 0; i < 50; i++ {
+		for _, i := range ni.patterns[49] {
+			if _, ok := ni.tSupport[i]; ok {
+				t.Fail()
+			}
+			if _, ok := ni.tPattern[i]; ok {
+				t.Fail()
+			}
+			if _, ok := ni.tTally[i]; ok {
+				t.Fail()
+			}
+			if _, ok := ni.tVote[i]; ok {
+				t.Fail()
+			}
+			if _, ok := ni.tEffectiveToBlocks[i]; ok {
+				t.Fail()
+			}
+			if _, ok := ni.tComplete[i]; ok {
+				t.Fail()
+			}
+			if _, ok := ni.tPatSupport[i]; ok {
+				t.Fail()
+			}
 		}
-		l = lyr
+		ids, _ := ni.LayerBlockIds(49)
+		for _, i := range ids {
+			if _, ok := ni.tEffective[i]; ok {
+				t.Fail()
+			}
+			if _, ok := ni.tCorrect[i]; ok {
+				t.Fail()
+			}
+			if _, ok := ni.tExplicit[i]; ok {
+				t.Fail()
+			}
+
+		}
 	}
-	mp := map[types.BlockID]struct{}{}
-
-	foo := func(nb *types.Block) {
-		log.Debug("process block %d layer %d", nb.ID(), nb.Layer())
-		mp[nb.ID()] = struct{}{}
-	}
-
-	ids := map[types.BlockID]struct{}{}
-	for _, b := range l.Blocks() {
-		ids[b.ID()] = struct{}{}
-	}
-
-	forBlockInView(ids, blocks, 0, foo)
-
-	for _, bl := range blocks {
-		_, found := mp[bl.ID()]
-		assert.True(t, found, "did not process block  ", bl)
-	}
-
 }
 
 func bToMb(b uint64) uint64 {
@@ -152,7 +159,7 @@ func TestNinjaTortoise_S50P49(t *testing.T) {
 		t.Skip()
 	}
 	defer persistenceTeardown()
-	sanity(getMeshForBench(), 40, 50, 50, badblocks)
+	sanity(getMeshForBench(), 110, 50, 50, badblocks)
 }
 func TestNinjaTortoise_S100P99(t *testing.T) {
 	if testing.Short() {
@@ -283,17 +290,17 @@ func createMulExplicitLayer(index types.LayerID, prev map[types.LayerID]*types.L
 		for lyrId, pat := range patterns {
 			for _, id := range pat {
 				b := prev[lyrId].Blocks()[id]
-				bl.AddVote(types.BlockID(b.Id))
+				bl.AddVote(types.BlockID(b.ID()))
 			}
 		}
 		if index > 0 {
 			for _, prevBloc := range prev[index-1].Blocks() {
-				bl.AddView(types.BlockID(prevBloc.Id))
+				bl.AddView(types.BlockID(prevBloc.ID()))
 			}
 		}
 		l.AddBlock(bl)
 	}
-	log.Debug("Created block.LayerID %d with blocks %d", l.Index(), layerBlocks)
+	log.Debug("Created mesh.LayerID %d with blocks %d", l.Index(), layerBlocks)
 
 	return l
 }
@@ -326,10 +333,10 @@ func createLayerWithCorruptedPattern(index types.LayerID, prev *types.Layer, blo
 func addPattern(bl *types.Block, goodPattern []int, prev *types.Layer) *types.Block {
 	for _, id := range goodPattern {
 		b := prev.Blocks()[id]
-		bl.AddVote(types.BlockID(b.Id))
+		bl.AddVote(types.BlockID(b.ID()))
 	}
 	for _, prevBloc := range prev.Blocks() {
-		bl.AddView(types.BlockID(prevBloc.Id))
+		bl.AddView(types.BlockID(prevBloc.ID()))
 	}
 	return bl
 }
@@ -349,15 +356,15 @@ func createLayerWithRandVoting(index types.LayerID, prev []*types.Layer, blocksI
 		for idx, pat := range patterns {
 			for _, id := range pat {
 				b := prev[idx].Blocks()[id]
-				bl.AddVote(types.BlockID(b.Id))
+				bl.AddVote(types.BlockID(b.ID()))
 			}
 		}
 		for _, prevBloc := range prev[0].Blocks() {
-			bl.AddView(types.BlockID(prevBloc.Id))
+			bl.AddView(types.BlockID(prevBloc.ID()))
 		}
 		l.AddBlock(bl)
 	}
-	log.Debug("Created block.LayerID %d with blocks %d", l.Index(), layerBlocks)
+	log.Debug("Created mesh.LayerID %d with blocks %d", l.Index(), layerBlocks)
 	return l
 }
 

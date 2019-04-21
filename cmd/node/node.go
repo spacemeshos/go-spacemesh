@@ -8,7 +8,6 @@ import (
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/consensus"
-	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -17,11 +16,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/spacemeshos/go-spacemesh/sync"
+	"github.com/spacemeshos/go-spacemesh/tortoise"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spacemeshos/go-spacemesh/version"
 	"github.com/spacemeshos/post/proving"
+	"io/ioutil"
 	"math/rand"
 
 	"os"
@@ -40,6 +42,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
+
+const identityFile = "identity.ed"
 
 // VersionCmd returns the current version of spacemesh
 var Cmd = &cobra.Command{
@@ -86,6 +90,7 @@ type SpacemeshApp struct {
 	hare             *hare.Hare
 	atxBuilder       *activation.Builder
 	unregisterOracle func()
+	edSgn            *signing.EdSigner
 }
 
 type MiningEnabler interface {
@@ -253,7 +258,7 @@ func (app *SpacemeshApp) setupTestFeatures() {
 	api.ApproveAPIGossipMessages(cmdp.Ctx, app.P2P)
 }
 
-func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service, dbStorepath string, sgn hare.Signing,
+func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service, dbStorepath string, sgn hare.Signer,
 	blockOracle oracle.BlockOracle, blockValidator sync.BlockValidator, hareOracle hare.Rolacle, layerSize int,
 	postClient nipst.PostProverClient, poetClient nipst.PoetProvingServiceClient, atxdbstore database.DB) error {
 
@@ -289,7 +294,13 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	trtl := consensus.NewAlgorithm(consensus.NewNinjaTortoise(layerSize, mdb, lg.WithName("trtl")))
 
 	//todo: put in config
-	atxdb := activation.NewActivationDb(atxdbstore, mdb, uint64(app.Config.CONSENSUS.LayersPerEpoch), lg.WithName("atxDB"))
+	iddbstore, err := database.NewLDBDatabase(dbStorepath+"ids", 0, 0)
+	if err != nil {
+		return err
+	}
+	idStore := activation.NewIdentityStore(iddbstore)
+	atxdb := activation.NewActivationDb(atxdbstore, idStore, mdb, uint64(app.Config.CONSENSUS.LayersPerEpoch), lg.WithName("atxDB"))
+	trtl := tortoise.NewAlgorithm(layerSize, mdb, lg.WithName("trtl"))
 	msh := mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, processor, lg.WithName("mesh")) //todo: what to do with the logger?
 
 	conf := sync.Configuration{SyncInterval: 1 * time.Second, Concurrency: 4, LayerSize: int(layerSize), RequestTimeout: 100 * time.Millisecond}
@@ -298,6 +309,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	// TODO: turn log level back to normal:
 	ha := hare.New(app.Config.HARE, swarm, sgn, msh, hareOracle, clock.Subscribe(), lg.WithName("hare").WithOptions(log.EnableLevelOption(log.ErrorLevel)))
 
+	nodeID = types.NodeId{Key: sgn.PublicKey().String()} // TODO: where does this come from?
 	blockProducer := miner.NewBlockBuilder(nodeID, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, atxdb.ProcessAtx, lg.WithName("blockProducer"))
 	blockListener := sync.NewBlockListener(swarm, blockValidator, msh, 2*time.Second, 4, lg.WithName("blockListener"))
 
@@ -369,6 +381,40 @@ func (app SpacemeshApp) stopServices() {
 
 }
 
+func getEdIdentity() (*signing.EdSigner, error) {
+	dataDir, err := filesystem.GetSpacemeshDataDirectoryPath()
+	if err != nil {
+		log.Error("Could not get data path err=%v", err)
+		return nil, err
+	}
+
+	f := dataDir + "/" + identityFile
+	buff, err := ioutil.ReadFile(f)
+	if os.IsNotExist(err) {
+		edSgn := signing.NewEdSigner()
+		log.Warning("Identity file not found. Public key of new identity is %v", edSgn.PublicKey())
+		err := ioutil.WriteFile(f, edSgn.ToBuffer(), 0644)
+		if err != nil {
+			log.Error("Could not write the identity to file err=%v", err)
+			return nil, err
+		}
+		return edSgn, nil
+	}
+
+	if err != nil {
+		log.Error("Could not read identity from file err=%v", err)
+		return nil, err
+	}
+
+	edSgn, err := signing.NewEdSignerFromBuffer(buff)
+	if err != nil {
+		log.Error("Could not construct identity from data file err=%v", err)
+		return nil, err
+	}
+
+	return edSgn, nil
+}
+
 func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	log.Info("Starting Spacemesh")
 
@@ -382,16 +428,21 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 
 	// todo : register all protocols
 
-	sgn := hare.NewMockSigning() //todo: shouldn't be any mock code here
-	pub, _ := crypto.NewPublicKey(sgn.Verifier().Bytes())
+	app.edSgn, err = getEdIdentity()
+	if err != nil {
+		log.Panic("Could not retrieve identity err=%v", err)
+	}
+
+	//crypto.NewPublicKey(sgn.Verifier().Bytes())
+	// TODO ADD KEY
 
 	oracle.SetServerAddress(app.Config.OracleServer)
 	oracleClient := oracle.NewOracleClientWithWorldID(uint64(app.Config.OracleServerWorldId))
-	oracleClient.Register(true, pub.String()) // todo: configure no faulty nodes
+	oracleClient.Register(true, app.edSgn.PublicKey().String()) // todo: configure no faulty nodes
 
-	app.unregisterOracle = func() { oracleClient.Unregister(true, pub.String()) }
+	app.unregisterOracle = func() { oracleClient.Unregister(true, app.edSgn.PublicKey().String()) }
 
-	nodeID := types.NodeId{Key: pub.String()}
+	nodeID := types.NodeId{Key: app.edSgn.PublicKey().String()}
 	bo := oracle.NewBlockOracleFromClient(oracleClient, int(app.Config.CONSENSUS.NodesPerLayer), nodeID)
 	//nodesPerLayer := app.Config.CONSENSUS.NodesPerLayer
 	//layersPerEpoch := app.Config.CONSENSUS.LayersPerEpoch
@@ -418,7 +469,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 		log.Panic("error starting atx db: %v", err)
 	}
 
-	err = app.initServices(nodeID, swarm, dbStorepath, sgn, bo, validatorMock, hareOracle, app.Config.LayerAvgSize, nipst.NewPostClient(), poet, atxdbstore)
+	err = app.initServices(nodeID, swarm, dbStorepath, app.edSgn, bo, validatorMock, hareOracle, app.Config.LayerAvgSize, nipst.NewPostClient(), poet, atxdbstore)
 	if err != nil {
 		log.Error("cannot start services %v", err.Error())
 		return

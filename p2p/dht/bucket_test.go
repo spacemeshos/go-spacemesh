@@ -1,7 +1,6 @@
 package dht
 
 import (
-	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/stretchr/testify/assert"
 	"testing"
@@ -11,13 +10,13 @@ import (
 func TestBucket(t *testing.T) {
 	const n = 100
 
-	local := node.GenerateRandomNodeData()
+	local := generateDiscNode()
 
 	localID := local.DhtID()
 
 	// add 100 nodes to the table
 	b := NewBucket()
-	nodes := node.GenerateRandomNodesData(n)
+	nodes := generateDiscNodes(n)
 
 	for i := 0; i < n; i++ {
 		b.PushFront(nodes[i])
@@ -50,7 +49,7 @@ func TestBucket(t *testing.T) {
 	items := b.List()
 
 	for e := items.Front(); e != nil; e = e.Next() {
-		id := e.Value.(node.Node).DhtID()
+		id := e.Value.(discNode).DhtID()
 		cpl := id.CommonPrefixLen(localID)
 		if cpl > 0 {
 			t.Fatalf("Split failed. found id with cpl > 0 in bucket. Should all be with cpl of 0")
@@ -59,7 +58,7 @@ func TestBucket(t *testing.T) {
 
 	items = newBucket.List()
 	for e := items.Front(); e != nil; e = e.Next() {
-		id := e.Value.(node.Node).DhtID()
+		id := e.Value.(discNode).DhtID()
 		cpl := id.CommonPrefixLen(localID)
 		if cpl == 0 {
 			t.Fatalf("Split failed. found id with cpl == 0 in non 0 bucket, should all be with cpl > 0")

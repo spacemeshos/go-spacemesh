@@ -28,7 +28,10 @@ func (p *discovery) newPingRequestHandler() func(msg server.Message) []byte {
 		}
 
 		//pong
-		payload, err := proto.Marshal(&pb.Ping{ID: p.local.PublicKey().Bytes(), ListenAddress: p.local.Address()})
+		payload, err := proto.Marshal(&pb.Ping{
+			Me:     &pb.NodeInfo{NodeId: p.local.PublicKey().Bytes(), TCPAddress: p.localTcpAddress, UDPAddress: p.localUdpAddress},
+			ToAddr: msg.Metadata().FromAddress.String()})
+		// TODO: include the resolve To address
 
 		if err != nil {
 			p.logger.Error("Error marshaling response message (Ping)")
@@ -39,17 +42,11 @@ func (p *discovery) newPingRequestHandler() func(msg server.Message) []byte {
 	}
 }
 
-func (p *discovery) verifyPinger(from net.Addr, pi *pb.Ping) error {
-	k, err := p2pcrypto.NewPubkeyFromBytes(pi.ID)
-
-	if err != nil {
-		return err
-	}
-
+func extractAddress(from net.Addr, addrString string) (string, error) {
 	//extract port
-	_, port, err := net.SplitHostPort(pi.ListenAddress)
+	_, port, err := net.SplitHostPort(addrString)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	addr, _, err := net.SplitHostPort(from.String())
@@ -59,18 +56,46 @@ func (p *discovery) verifyPinger(from net.Addr, pi *pb.Ping) error {
 
 	ip := net.ParseIP(addr)
 	if ip == nil {
-		return errors.New("canno't parse incoming ip")
+		return "", errors.New("canno't parse incoming ip")
 	}
+
+	return net.JoinHostPort(addr, port), nil
+}
+
+func (p *discovery) verifyPinger(from net.Addr, pi *pb.Ping) error {
+	k, err := p2pcrypto.NewPubkeyFromBytes(pi.Me.NodeId)
+
+	if err != nil {
+		return err
+	}
+
+	tcp, err := extractAddress(from, pi.Me.TCPAddress)
+	if err != nil {
+		return err
+	}
+	udp, err := extractAddress(from, pi.Me.UDPAddress)
+	if err != nil {
+		return nil
+	}
+
+	// todo : Validate ToAddr or drop it.
 
 	//todo: check the address provided with an extra ping before updating. ( if we haven't checked it for a while )
 	// todo: decide on best way to know our ext address
-	p.table.Update(node.New(k, net.JoinHostPort(addr, port)))
+	p.table.Update(discNode{node.New(k, tcp), udp})
 	return nil
 }
 
 func (p *discovery) Ping(peer p2pcrypto.PublicKey) error {
 	p.logger.Info("send ping request Peer: %v", peer)
-	data := &pb.Ping{ID: p.local.PublicKey().Bytes(), ListenAddress: p.local.Address()}
+
+	//addresses := p.table.internalLookup(peer)
+	//if len(addresses) == 0 || addresses[0].String() != peer.String() {
+	//	return errors.New("Cant find node in routing table")
+	//}
+	//toAddr := addresses[0].udpAddress
+
+	data := &pb.Ping{Me: &pb.NodeInfo{NodeId: p.local.PublicKey().Bytes(), TCPAddress: p.localTcpAddress, UDPAddress: p.localUdpAddress}, ToAddr: ""}
 	payload, err := proto.Marshal(data)
 	if err != nil {
 		return err
@@ -88,7 +113,7 @@ func (p *discovery) Ping(peer p2pcrypto.PublicKey) error {
 		// todo: if we pinged it we already have id so no need to update
 		// todo : but what if id or listen address has changed ?
 
-		ch <- data.ID
+		ch <- data.Me.NodeId
 	}
 
 	err = p.msgServer.SendRequest(PINGPONG, payload, peer, foo)

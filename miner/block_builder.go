@@ -181,7 +181,7 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 	}
 	atxs := " "
 	for _, x := range b.ATXs {
-		atxs +=  "," + x.ShortId()
+		atxs += "," + x.ShortId()
 	}
 
 	t.Log.Info("I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d, viewEdges: %d atx %v, atxs:%v",

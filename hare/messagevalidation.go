@@ -1,14 +1,14 @@
 package hare
 
 import (
-	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 type messageValidator interface {
-	SyntacticallyValidateMessage(m *pb.HareMessage) bool
-	ContextuallyValidateMessage(m *pb.HareMessage, expectedK int32) bool
+	SyntacticallyValidateMessage(m *Msg) bool
+	ContextuallyValidateMessage(m *Msg, expectedK int32) bool
 }
 
 type eligibilityValidator struct {
@@ -20,7 +20,7 @@ func NewEligibilityValidator(oracle HareRolacle, logger log.Log) *eligibilityVal
 	return &eligibilityValidator{oracle, logger}
 }
 
-func (ev *eligibilityValidator) validateRole(m *pb.HareMessage) bool {
+func (ev *eligibilityValidator) validateRole(m *Msg) bool {
 	if m == nil {
 		ev.Error("Eligibility validator: called with nil")
 		return false
@@ -33,14 +33,9 @@ func (ev *eligibilityValidator) validateRole(m *pb.HareMessage) bool {
 
 	// TODO: validate role proof sig
 
-	verifier, err := NewVerifier(m.PubKey)
-	if err != nil {
-		ev.Error("Could not build verifier")
-		return false
-	}
-
+	pub := signing.NewPublicKey(m.PubKey)
 	// validate role
-	if !ev.oracle.Eligible(InstanceId(m.Message.InstanceId), m.Message.K, verifier.String(), Signature(m.Message.RoleProof)) {
+	if !ev.oracle.Eligible(InstanceId(m.Message.InstanceId), m.Message.K, pub.String(), Signature(m.Message.RoleProof)) {
 		ev.Warning("Role validation failed")
 		return false
 	}
@@ -49,25 +44,7 @@ func (ev *eligibilityValidator) validateRole(m *pb.HareMessage) bool {
 }
 
 // Validates eligibility and signature of the provided message
-func (ev *eligibilityValidator) Validate(m *pb.HareMessage) bool {
-	data, err := proto.Marshal(m.Message)
-	if err != nil {
-		ev.Error("Validate message failed: failed marshaling inner message")
-		return false
-	}
-
-	// verify signature
-	verifier, err := NewVerifier(m.PubKey)
-	if err != nil {
-		ev.Warning("Validate message failed: Could not construct verifier ", err)
-		return false
-	}
-	res, _ := verifier.Verify(data, m.InnerSig)
-	if !res {
-		ev.Warning("Validate message failed: invalid message signature detected ")
-		return false
-	}
-
+func (ev *eligibilityValidator) Validate(m *Msg) bool {
 	// verify role
 	if !ev.validateRole(m) {
 		ev.Warning("Validate message failed: role is invalid")
@@ -78,18 +55,18 @@ func (ev *eligibilityValidator) Validate(m *pb.HareMessage) bool {
 }
 
 type syntaxContextValidator struct {
-	signing         Signing
+	signing         Signer
 	threshold       int
-	statusValidator func(m *pb.HareMessage) bool // used to validate status messages in SVP
+	statusValidator func(m *Msg) bool // used to validate status messages in SVP
 	log.Log
 }
 
-func newSyntaxContextValidator(signing Signing, threshold int, validator func(m *pb.HareMessage) bool, logger log.Log) *syntaxContextValidator {
+func newSyntaxContextValidator(signing Signer, threshold int, validator func(m *Msg) bool, logger log.Log) *syntaxContextValidator {
 	return &syntaxContextValidator{signing, threshold, validator, logger}
 }
 
 // Validates the message is contextually valid
-func (validator *syntaxContextValidator) ContextuallyValidateMessage(m *pb.HareMessage, expectedK int32) bool {
+func (validator *syntaxContextValidator) ContextuallyValidateMessage(m *Msg, expectedK int32) bool {
 	if m.Message == nil {
 		validator.Warning("Contextual validation failed: m.Message is nil")
 		return false
@@ -113,7 +90,7 @@ func (validator *syntaxContextValidator) ContextuallyValidateMessage(m *pb.HareM
 }
 
 // Validates the syntax of the provided message
-func (validator *syntaxContextValidator) SyntacticallyValidateMessage(m *pb.HareMessage) bool {
+func (validator *syntaxContextValidator) SyntacticallyValidateMessage(m *Msg) bool {
 	if m == nil {
 		validator.Warning("Syntax validation failed: m is nil")
 		return false
@@ -150,14 +127,14 @@ func (validator *syntaxContextValidator) SyntacticallyValidateMessage(m *pb.Hare
 	case Commit:
 		return claimedRound == Round3
 	case Notify:
-		return validator.validateCertificate(m.Cert)
+		return validator.validateCertificate(m.Message.Cert)
 	default:
 		validator.Error("Unknown message type encountered during syntactic validator: ", m.Message.Type)
 		return false
 	}
 }
 
-func (validator *syntaxContextValidator) validateAggregatedMessage(aggMsg *pb.AggregatedMessages, validators []func(m *pb.HareMessage) bool) bool {
+func (validator *syntaxContextValidator) validateAggregatedMessage(aggMsg *pb.AggregatedMessages, validators []func(m *Msg) bool) bool {
 	if validators == nil {
 		validator.Error("Aggregated validation failed: validators param is nil")
 		return false
@@ -179,31 +156,39 @@ func (validator *syntaxContextValidator) validateAggregatedMessage(aggMsg *pb.Ag
 		return false
 	}
 
-	// TODO: refill values in commit on certificate
 	// TODO: validate agg sig
 
 	senders := make(map[string]struct{})
 	for _, innerMsg := range aggMsg.Messages {
-		if !validator.SyntacticallyValidateMessage(innerMsg) {
+		// TODO: refill values in commit on certificate
+
+		// TODO: should receive the state querier
+		iMsg, err := newMsg(innerMsg, mockStateQuerier{})
+		if err != nil {
+			validator.Warning("Aggregated validation failed: could not construct msg")
+			return false
+		}
+
+		if !validator.SyntacticallyValidateMessage(iMsg) {
 			validator.Warning("Aggregated validation failed: identified an invalid inner message")
 			return false
 		}
 
 		// validate unique sender
-		verifier, err := NewVerifier(innerMsg.PubKey)
+		pub := signing.NewPublicKey(iMsg.PubKey)
 		if err != nil {
-			validator.Warning("Aggregated validation failed: could not construct verifier: ", err)
+			validator.Warning("Aggregated validation failed: could not construct pub: %v", err)
 			return false
 		}
-		if _, exist := senders[verifier.String()]; exist { // pub already exist
+		if _, exist := senders[pub.String()]; exist { // pub already exist
 			validator.Warning("Aggregated validation failed: detected same pubKey for different messages")
 			return false
 		}
-		senders[verifier.String()] = struct{}{} // mark sender as exist
+		senders[pub.String()] = struct{}{} // mark sender as exist
 
 		// validate with attached validators
 		for _, vFunc := range validators {
-			if !vFunc(innerMsg) {
+			if !vFunc(iMsg) {
 				validator.Warning("Aggregated validation failed: attached vFunc failed")
 				return false
 			}
@@ -213,8 +198,8 @@ func (validator *syntaxContextValidator) validateAggregatedMessage(aggMsg *pb.Ag
 	return true
 }
 
-func (validator *syntaxContextValidator) validateSVP(msg *pb.HareMessage) bool {
-	validateSameIteration := func(m *pb.HareMessage) bool {
+func (validator *syntaxContextValidator) validateSVP(msg *Msg) bool {
+	validateSameIteration := func(m *Msg) bool {
 		proposalIter := iterationFromCounter(msg.Message.K)
 		statusIter := iterationFromCounter(m.Message.K)
 		if proposalIter != statusIter { // not same iteration
@@ -225,7 +210,7 @@ func (validator *syntaxContextValidator) validateSVP(msg *pb.HareMessage) bool {
 
 		return true
 	}
-	validators := []func(m *pb.HareMessage) bool{validateStatusType, validateSameIteration, validator.statusValidator}
+	validators := []func(m *Msg) bool{validateStatusType, validateSameIteration, validator.statusValidator}
 	if !validator.validateAggregatedMessage(msg.Message.Svp, validators) {
 		validator.Warning("Proposal validation failed: failed to validate aggregated message")
 		return false
@@ -279,8 +264,8 @@ func (validator *syntaxContextValidator) validateCertificate(cert *pb.Certificat
 	}
 
 	// Note: no need to validate notify.values=commits.values because we refill the message with notify.values
-	validateSameK := func(m *pb.HareMessage) bool { return m.Message.K == cert.AggMsgs.Messages[0].Message.K }
-	validators := []func(m *pb.HareMessage) bool{validateCommitType, validateSameK}
+	validateSameK := func(m *Msg) bool { return m.Message.K == cert.AggMsgs.Messages[0].Message.K }
+	validators := []func(m *Msg) bool{validateCommitType, validateSameK}
 	if !validator.validateAggregatedMessage(cert.AggMsgs, validators) {
 		validator.Warning("Certificate validation failed: aggregated messages validation failed")
 		return false
@@ -289,16 +274,16 @@ func (validator *syntaxContextValidator) validateCertificate(cert *pb.Certificat
 	return true
 }
 
-func validateCommitType(m *pb.HareMessage) bool {
+func validateCommitType(m *Msg) bool {
 	return MessageType(m.Message.Type) == Commit
 }
 
-func validateStatusType(m *pb.HareMessage) bool {
+func validateStatusType(m *Msg) bool {
 	return MessageType(m.Message.Type) == Status
 }
 
 // validate SVP for type A (where all ki=-1)
-func (validator *syntaxContextValidator) validateSVPTypeA(m *pb.HareMessage) bool {
+func (validator *syntaxContextValidator) validateSVPTypeA(m *Msg) bool {
 	s := NewSet(m.Message.Values)
 	unionSet := NewEmptySet(cap(m.Message.Values))
 	for _, status := range m.Message.Svp.Messages {
@@ -318,7 +303,7 @@ func (validator *syntaxContextValidator) validateSVPTypeA(m *pb.HareMessage) boo
 }
 
 // validate SVP for type B (where exist ki>=0)
-func (validator *syntaxContextValidator) validateSVPTypeB(msg *pb.HareMessage, maxSet *Set) bool {
+func (validator *syntaxContextValidator) validateSVPTypeB(msg *Msg, maxSet *Set) bool {
 	// max set should be equal to the claimed set
 	s := NewSet(msg.Message.Values)
 	if !s.Equals(maxSet) {

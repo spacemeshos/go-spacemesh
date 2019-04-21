@@ -8,13 +8,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
-	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/signing"
+	sync2 "github.com/spacemeshos/go-spacemesh/sync"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spacemeshos/poet-ref/integration"
 	"github.com/stretchr/testify/require"
@@ -89,8 +90,8 @@ func (app *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat s
 		smApp.Config.HARE.N = numOfInstances
 		smApp.Config.HARE.F = numOfInstances / 2
 
-		sgn := hare.NewMockSigning() //todo: shouldn't be any mock code here
-		pub := sgn.Verifier()
+		edSgn := signing.NewEdSigner()
+		pub := edSgn.PublicKey()
 
 		vrfPublicKey, vrfPrivateKey, err := crypto.GenerateVRFKeys()
 		r.NoError(err)
@@ -113,13 +114,12 @@ func (app *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat s
 
 		layerSize := numOfInstances
 
-		err = smApp.initServices(nodeID, swarm, dbStorepath, sgn, blockOracle, blockValidator, hareOracle, layerSize, nipst.NewPostClient(), poet, dbStore)
+		err = smApp.initServices(nodeID, swarm, dbStorepath, edSgn, blockOracle, blockValidator, hareOracle, layerSize, nipst.NewPostClient(), poet, dbStore)
 		r.NoError(err)
 		smApp.setupGenesis(apiCfg.DefaultGenesisConfig())
 
 		app.apps = append(app.apps, smApp)
 		app.dbs = append(app.dbs, dbStorepath)
-
 		runningName++
 	}
 }
@@ -145,7 +145,6 @@ func (app *AppTestSuite) TestMultipleNodes() {
 
 	_ = app.apps[0].P2P.Broadcast(miner.IncomingTxProtocol, txbytes)
 	timeout := time.After(2.5 * 60 * time.Second)
-
 
 	stickyClientsDone := 0
 	for {

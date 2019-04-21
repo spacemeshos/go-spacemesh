@@ -148,14 +148,11 @@ func testForeachInView(mdb *MeshDB, t *testing.T) {
 		mp[nb.Id] = struct{}{}
 		return nil
 	}
-	errHandler := func(err error) {
-		log.Error("error while traversing view ", err)
-	}
 	ids := map[types.BlockID]struct{}{}
 	for _, b := range l.Blocks() {
 		ids[b.Id] = struct{}{}
 	}
-	mdb.ForBlockInView(ids, 0, foo, errHandler)
+	mdb.ForBlockInView(ids, 0, foo)
 	for _, bl := range blocks {
 		_, found := mp[bl.ID()]
 		assert.True(t, found, "did not process block  ", bl)

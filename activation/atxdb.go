@@ -22,11 +22,12 @@ type ActivationDb struct {
 	atxs           database.DB
 	meshDb         *mesh.MeshDB
 	LayersPerEpoch types.LayerID
+	ids            IdStore
 	log            log.Log
 }
 
-func NewActivationDb(dbstore database.DB, meshDb *mesh.MeshDB, layersPerEpoch uint64, log log.Log) *ActivationDb {
-	return &ActivationDb{atxs: dbstore, meshDb: meshDb, LayersPerEpoch: types.LayerID(layersPerEpoch), log: log}
+func NewActivationDb(dbstore database.DB, idstore IdStore, meshDb *mesh.MeshDB, layersPerEpoch uint64, log log.Log) *ActivationDb {
+	return &ActivationDb{atxs: dbstore, meshDb: meshDb, LayersPerEpoch: types.LayerID(layersPerEpoch), ids: idstore, log: log}
 }
 
 func (db *ActivationDb) ProcessBlockATXs(blk *types.Block) {
@@ -75,9 +76,9 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 	}
 
 	var counter uint32 = 0
-	set := make(map[*types.AtxId]struct{})
+	set := make(map[types.AtxId]struct{})
 	firstLayerOfLastEpoch := a.PubLayerIdx - db.LayersPerEpoch - (a.PubLayerIdx % db.LayersPerEpoch)
-	lastLayerOfLastEpoch := firstLayerOfLastEpoch + db.LayersPerEpoch -1
+	lastLayerOfLastEpoch := firstLayerOfLastEpoch + db.LayersPerEpoch - 1
 
 	traversalFunc := func(blkh *types.BlockHeader) error {
 		blk, err := db.meshDb.GetBlock(blkh.Id)
@@ -110,20 +111,17 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 		return nil
 	}
 
-	errHandler := func(er error) {}
-
 	mp := map[types.BlockID]struct{}{}
 	for _, blk := range a.View {
 		mp[blk] = struct{}{}
 	}
 
-	db.meshDb.ForBlockInView(mp, firstLayerOfLastEpoch, traversalFunc, errHandler)
+	db.meshDb.ForBlockInView(mp, firstLayerOfLastEpoch, traversalFunc)
 	activesetCache.Add(common.BytesToHash(bytes), counter)
 
 	return counter, nil
 
 }
-
 
 // ValidateAtx ensures the following conditions apply, otherwise it returns an error.
 //
@@ -138,7 +136,7 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 // - The ATX view of the previous epoch contains ActiveSetSize activations
 func (db *ActivationDb) ValidateAtx(atx *types.ActivationTx) error {
 	if atx.PrevATXId != *types.EmptyAtxId {
-		prevATX, err := db.GetAtx(&atx.PrevATXId)
+		prevATX, err := db.GetAtx(atx.PrevATXId)
 		if err != nil {
 			return fmt.Errorf("prevATX not found")
 		}
@@ -156,14 +154,14 @@ func (db *ActivationDb) ValidateAtx(atx *types.ActivationTx) error {
 		if err == nil && len(prevAtxIds) > 0 {
 			var ids []string
 			for _, x := range prevAtxIds {
-				ids = append(ids,x.String()[2:7])
+				ids = append(ids, x.String()[2:7])
 			}
 			return fmt.Errorf("no prevATX reported, but other ATXs with same nodeID (%v) found, atxs: %v", atx.NodeId.Key[:5], ids)
 		}
 	}
 
 	if atx.PositioningAtx != *types.EmptyAtxId {
-		posAtx, err := db.GetAtx(&atx.PositioningAtx)
+		posAtx, err := db.GetAtx(atx.PositioningAtx)
 		if err != nil {
 			return fmt.Errorf("positioning atx not found")
 		}
@@ -188,17 +186,17 @@ func (db *ActivationDb) ValidateAtx(atx *types.ActivationTx) error {
 	}
 
 	/*
-	hash, err := atx.NIPSTChallenge.Hash()
-	if err != nil {
-		return fmt.Errorf("cannot get NIPST Challenge hash: %v", err)
-	}
-	//todo: add validation of nipst
-	if !atx.Nipst.Valid(){
-		return fmt.Errorf("nipst not valid ")
-	}
-	if !atx.Nipst.ValidateNipstChallenge(hash) {
-		return fmt.Errorf("nipst challenge hash mismatch")
-	}*/
+		hash, err := atx.NIPSTChallenge.Hash()
+		if err != nil {
+			return fmt.Errorf("cannot get NIPST Challenge hash: %v", err)
+		}
+		//todo: add validation of nipst
+		if !atx.Nipst.Valid(){
+			return fmt.Errorf("nipst not valid ")
+		}
+		if !atx.Nipst.ValidateNipstChallenge(hash) {
+			return fmt.Errorf("nipst challenge hash mismatch")
+		}*/
 	return nil
 }
 
@@ -266,7 +264,7 @@ func (db *ActivationDb) ActiveSetIds(ech types.EpochId) uint32 {
 	return common.BytesToUint32(val)
 }
 
-func (db *ActivationDb) addAtxToEpoch(epochId types.EpochId, atx *types.AtxId) error {
+func (db *ActivationDb) addAtxToEpoch(epochId types.EpochId, atx types.AtxId) error {
 	ids, err := db.atxs.Get(epochId.ToBytes())
 	var atxs []types.AtxId
 	if err != nil {
@@ -279,7 +277,7 @@ func (db *ActivationDb) addAtxToEpoch(epochId types.EpochId, atx *types.AtxId) e
 			return errors.New("could not get all atxs from database ")
 		}
 	}
-	atxs = append(atxs, *atx)
+	atxs = append(atxs, atx)
 	w, err := encodeAtxIds(atxs)
 	if err != nil {
 		return errors.New("could not encode layer atx ids")
@@ -291,7 +289,7 @@ func getNodeIdKey(id types.NodeId) []byte {
 	return []byte(id.Key)
 }
 
-func (db *ActivationDb) addAtxToNodeId(nodeId types.NodeId, atx *types.AtxId) error {
+func (db *ActivationDb) addAtxToNodeId(nodeId types.NodeId, atx types.AtxId) error {
 	key := getNodeIdKey(nodeId)
 	db.log.Info("adding atx %v to nodeId %v", atx.String()[2:7], nodeId.Key[:5])
 	ids, err := db.atxs.Get(key)
@@ -306,7 +304,7 @@ func (db *ActivationDb) addAtxToNodeId(nodeId types.NodeId, atx *types.AtxId) er
 			return errors.New("could not get all atxs from database ")
 		}
 	}
-	atxs = append(atxs, *atx)
+	atxs = append(atxs, atx)
 	w, err := encodeAtxIds(atxs)
 	if err != nil {
 		return errors.New("could not encode layer atx ids")
@@ -345,7 +343,7 @@ func (db *ActivationDb) GetEpochAtxIds(epochId types.EpochId) ([]types.AtxId, er
 	return atxs, nil
 }
 
-func (db *ActivationDb) GetAtx(id *types.AtxId) (*types.ActivationTx, error) {
+func (db *ActivationDb) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
 	db.RLock()
 	b, err := db.atxs.Get(id.Bytes())
 	db.RUnlock()
@@ -357,6 +355,26 @@ func (db *ActivationDb) GetAtx(id *types.AtxId) (*types.ActivationTx, error) {
 		return nil, err
 	}
 	return atx, nil
+}
+
+func (db *ActivationDb) IsIdentityActive(edsig string, layer types.LayerID) (bool, error) {
+	epoch := layer.GetEpoch(uint16(db.LayersPerEpoch))
+	nodeId, err := db.ids.GetIdentity(edsig)
+	if err != nil {
+		return false, err
+	}
+	ids, err := db.GetNodeAtxIds(nodeId)
+	if err != nil {
+		return false, err
+	}
+	if len(ids) == 0 {
+		return false, fmt.Errorf("no active IDs")
+	}
+	atx, err := db.GetAtx(ids[len(ids)-1])
+	if err != nil {
+		return false, nil
+	}
+	return atx.Valid && atx.PubLayerIdx.GetEpoch(uint16(db.LayersPerEpoch)) == epoch, err
 }
 
 func decodeAtxIds(idsBytes []byte) ([]types.AtxId, error) {

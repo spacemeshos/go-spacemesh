@@ -10,9 +10,9 @@ import (
 )
 
 type protocolRoutingTable interface {
-	//Lookup(k p2pcrypto.PublicKey) []node.Node // todo: use for bootstrap ?
-	InternalLookup(k p2pcrypto.PublicKey) []node.Node
-	Update(n node.Node)
+	//netLookup(k p2pcrypto.PublicKey) []node.Node // todo: use for bootstrap ?
+	internalLookup(k p2pcrypto.PublicKey) []discNode
+	Update(n discNode)
 }
 
 type discovery struct {
@@ -20,6 +20,14 @@ type discovery struct {
 	table     protocolRoutingTable
 	logger    log.Log
 	msgServer *server.MessageServer
+
+	localTcpAddress string
+	localUdpAddress string
+}
+
+func (d *discovery) SetLocalAddresses(tcp, udp string) {
+	d.localTcpAddress = tcp
+	d.localUdpAddress = udp
 }
 
 // Name is the name if the protocol.
@@ -46,6 +54,8 @@ func NewDiscoveryProtocol(local node.Node, rt protocolRoutingTable, svc server.S
 		msgServer: s,
 		logger:    log,
 	}
+
+	d.SetLocalAddresses(local.Address(), local.Address())
 
 	d.msgServer.RegisterMsgHandler(PINGPONG, d.newPingRequestHandler())
 	d.msgServer.RegisterMsgHandler(FIND_NODE, d.newFindNodeRequestHandler())
