@@ -190,11 +190,18 @@ func TestKadDHT_VerySmallBootstrap(t *testing.T) {
 	b1 := sim.NewNodeFrom(bn.Node)
 	bdht := New(bn, bncfg.SwarmConfig, b1)
 
+	extra, _ := node.GenerateTestNode(t)
+	extrasvc := sim.NewNodeFrom(extra.Node)
+	edht := New(extra, bncfg.SwarmConfig, extrasvc)
+	edht.Update(generateDiscNode())
+
+	bdht.Update(discNode{extra.Node, extra.Address()})
+
 	cfg := config.DefaultConfig().SwarmConfig
 	cfg.Gossip = false
 	cfg.Bootstrap = true
 	cfg.RandomConnections = connections
-	cfg.RoutingTableBucketSize = 1
+	cfg.RoutingTableBucketSize = 2
 	cfg.BootstrapNodes = append(cfg.BootstrapNodes, node.StringFromNode(bn.Node))
 
 	ln, _ := node.GenerateTestNode(t)
@@ -214,7 +221,7 @@ func TestKadDHT_VerySmallBootstrap(t *testing.T) {
 	dht.rt.NearestPeer(PeerByIDRequest{ID: bn.DhtID(), Callback: cb2})
 	res = <-cb2
 	//bootstrap nodes are removed at the end of bootstrap
-	require.Equal(t, res.Peer, emptyDiscNode)
+	require.NotEqual(t, res.Peer.String(), bn.Node.String())
 
 }
 

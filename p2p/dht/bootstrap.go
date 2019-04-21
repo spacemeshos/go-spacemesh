@@ -78,13 +78,6 @@ func (d *KadDHT) tryBoot(ctx context.Context, bootnodes []discNode, minPeers int
 
 loop:
 	for {
-
-		// *NOTE*: this has to be done here incase we removed the bootstrap nodes during one of the tries
-		// if we stay without any nodes we won't be able to proceed
-		for _, b := range bootnodes {
-			d.rt.Update(b)
-		}
-
 		reschan := make(chan error)
 
 		go func() {
@@ -92,7 +85,15 @@ loop:
 				//TODO: consider choosing a random key that is close to the local id
 				//or TODO: implement real kademlia refreshes - #241
 				searchFor = p2pcrypto.NewRandomPubkey()
-				servers = Union(bootnodes, d.internalLookup(searchFor))
+				if size < len(bootnodes) {
+					// *NOTE*: this has to be done here incase we removed the bootstrap nodes during one of the tries
+					// if we stay without any nodes we won't be able to proceed
+					for i := range bootnodes {
+						d.rt.Update(bootnodes[i])
+					}
+				}
+				servers = d.internalLookup(searchFor)
+
 				d.local.Debug("BOOTSTRAP: Running kademlia lookup for random peer")
 			}
 			_, err := d.kadLookup(searchFor, servers)
@@ -118,7 +119,6 @@ loop:
 				break loop
 			}
 		}
-
 		d.local.Warning("%d lookup didn't bootstrap the routing table. RT now has %d peers", tries, size)
 
 		timer := time.NewTimer(LookupIntervals)

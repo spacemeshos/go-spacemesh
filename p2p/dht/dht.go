@@ -169,10 +169,6 @@ func (d *KadDHT) kadLookup(id p2pcrypto.PublicKey, searchList []discNode) (discN
 			if active {
 				probed++
 			}
-			//else if len(queried) > 1 {
-			//		d.rt.Remove(nd)
-			//}
-
 			if probed >= d.config.RoutingTableBucketSize {
 				return emptyDiscNode, ErrLookupFailed // todo: maybe just return what we have
 			}
