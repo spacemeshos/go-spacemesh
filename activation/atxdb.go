@@ -172,11 +172,8 @@ func (db *ActivationDb) ValidateAtx(atx *types.ActivationTx) error {
 			return fmt.Errorf("distance between pos atx invalid %v ", atx.PubLayerIdx-posAtx.PubLayerIdx)
 		}
 	} else {
-		epoch := atx.PubLayerIdx.GetEpoch(uint16(db.LayersPerEpoch))
-		if epoch == 0 {
-			return fmt.Errorf("atx epoch cannot be 0")
-		}
-		if !(epoch - 1).IsGenesis() {
+		publicationEpoch := atx.PubLayerIdx.GetEpoch(uint16(db.LayersPerEpoch))
+		if !publicationEpoch.IsGenesis() {
 			return fmt.Errorf("no positioning atx found")
 		}
 	}

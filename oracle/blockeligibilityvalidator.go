@@ -37,7 +37,7 @@ func (v BlockEligibilityValidator) BlockEligible(block *types.Block) (bool, erro
 	// need to get active set size from previous epoch
 	activeSetSize := uint32(GenesisActiveSetSize)
 	if !epochNumber.IsGenesis() {
-		atx, err := v.getAndValidateATX(epochNumber, block)
+		atx, err := v.getValidATX(epochNumber, block)
 		if err != nil {
 			return false, err
 		}
@@ -70,7 +70,7 @@ func (v BlockEligibilityValidator) BlockEligible(block *types.Block) (bool, erro
 	return block.LayerIndex == eligibleLayer, nil
 }
 
-func (v BlockEligibilityValidator) getAndValidateATX(blockEpoch types.EpochId, block *types.Block) (*types.ActivationTx, error) {
+func (v BlockEligibilityValidator) getValidATX(blockEpoch types.EpochId, block *types.Block) (*types.ActivationTx, error) {
 	atx, err := v.activationDb.GetAtx(block.ATXID)
 	if err != nil {
 		v.log.Error("getting ATX failed: %v %v ep(%v)", err, block.ATXID.String()[:5], blockEpoch)

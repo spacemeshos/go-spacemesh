@@ -72,7 +72,7 @@ func (bo *MinerBlockOracle) calcEligibilityProofs(epochNumber types.EpochId) err
 		bo.log.Warning("genesis epoch detected, using GenesisActiveSetSize (%d)", GenesisActiveSetSize)
 		activeSetSize = GenesisActiveSetSize
 	} else {
-		atx, err := bo.getAndValidateLatestATX(epochNumber)
+		atx, err := bo.getValidLatestATX(epochNumber)
 		if err != nil {
 			return fmt.Errorf("failed to get latest ATX: %v", err)
 		}
@@ -101,7 +101,7 @@ func (bo *MinerBlockOracle) calcEligibilityProofs(epochNumber types.EpochId) err
 	return nil
 }
 
-func (bo *MinerBlockOracle) getAndValidateLatestATX(validForEpoch types.EpochId) (*types.ActivationTx, error) {
+func (bo *MinerBlockOracle) getValidLatestATX(validForEpoch types.EpochId) (*types.ActivationTx, error) {
 	latestATXID, err := bo.getLatestATXID()
 	if err != nil {
 		return nil, fmt.Errorf("not in genesis (epoch %v) yet failed to get atx: %v", validForEpoch, err)

@@ -161,9 +161,11 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 		//todo: what if no other atx was received in this epoch yet?
 		posAtxId := *types.EmptyAtxId
 		posAtx, err := b.GetPositioningAtx(epoch)
+		atxPubLayerID := types.LayerID(0)
 		if err == nil {
 			endTick = posAtx.EndTick
 			b.posLayerID = posAtx.PubLayerIdx
+			atxPubLayerID = b.posLayerID.Add(b.layersPerEpoch)
 			posAtxId = posAtx.Id()
 		} else {
 			if !epoch.IsGenesis() {
@@ -175,7 +177,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 			NodeId:         b.nodeId,
 			Sequence:       seq,
 			PrevATXId:      atxId,
-			PubLayerIdx:    b.posLayerID.Add(b.layersPerEpoch),
+			PubLayerIdx:    atxPubLayerID,
 			StartTick:      endTick,
 			EndTick:        b.tickProvider.NumOfTicks(), //todo: add provider when
 			PositioningAtx: posAtxId,

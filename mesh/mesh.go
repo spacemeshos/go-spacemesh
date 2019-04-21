@@ -379,7 +379,7 @@ func (m *Mesh) AccumulateRewards(rewardLayer types.LayerID, params Config) {
 	for _, bl := range l.Blocks() {
 		atx, err := m.AtxDB.GetAtx(bl.ATXID)
 		if err != nil {
-			m.Log.Error("Atx not found %v", bl.ATXID)
+			m.Log.Error("Atx not found %v layer %v", bl.ATXID, bl.LayerIndex)
 			continue
 		}
 		ids = append(ids, atx.NodeId.Key)
