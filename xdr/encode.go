@@ -16,7 +16,7 @@ func Marshal(w io.Writer, val interface{}) (int, error) {
 
 	realVal := getPtrValue(val) // Deserialize pointer
 
-	if realVal.Kind() == reflect.Chan || realVal.Kind() == reflect.Func || realVal.Kind() == reflect.Interface || realVal.Kind() == reflect.Map || realVal.Kind() == reflect.Ptr || realVal.Kind() == reflect.Slice && realVal.IsNil() || !realVal.IsValid() { // Check no value
+	if realVal.Kind() == reflect.Chan || realVal.Kind() == reflect.Func || realVal.Kind() == reflect.Interface || realVal.Kind() == reflect.Map || realVal.Kind() == reflect.Ptr || realVal.Kind() == reflect.Slice && (realVal.IsNil() || !realVal.IsValid()) { // Check no value
 		realVal = reflect.ValueOf([]byte{}) // Set to nil byte array
 	}
 
