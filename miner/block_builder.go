@@ -185,7 +185,7 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 	}
 
 	t.Log.Info("I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d, viewEdges: %d atx %v, atxs:%v",
-		b.LayerIndex, b.Id, len(b.Txs), len(b.BlockVotes), len(b.ViewEdges), atxID.String()[:5], atxs)
+		b.LayerIndex, b.Id, len(b.Txs), len(b.BlockVotes), len(b.ViewEdges), b.ATXID.String()[:5], atxs)
 	return &b, nil
 }
 

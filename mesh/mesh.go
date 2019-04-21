@@ -200,7 +200,6 @@ func (m *Mesh) ValidateLayer(lyr *types.Layer) {
 	m.addAtxs(lyr)
 	if newPbase > oldPbase {
 		m.PushTransactions(oldPbase, newPbase)
-
 	}
 }
 
@@ -379,7 +378,7 @@ func (m *Mesh) AccumulateRewards(rewardLayer types.LayerID, params Config) {
 	for _, bl := range l.Blocks() {
 		atx, err := m.AtxDB.GetAtx(bl.ATXID)
 		if err != nil {
-			m.Log.Error("Atx not found %v layer %v", bl.ATXID, bl.LayerIndex)
+			m.Log.Error("Atx not found %v layer %v block %v", bl.ATXID.String()[:5], bl.LayerIndex, bl.Id)
 			continue
 		}
 		ids = append(ids, atx.NodeId.Key)

@@ -52,13 +52,13 @@ func (bo *MinerBlockOracle) BlockEligible(layerID types.LayerID) (types.AtxId, [
 
 	epochNumber := layerID.GetEpoch(bo.layersPerEpoch)
 	bo.log.Info("asked for eligibility for epoch %d (cached: %d)", epochNumber, bo.proofsEpoch)
-	if bo.proofsEpoch != epochNumber {
-		err := bo.calcEligibilityProofs(epochNumber)
-		if err != nil {
-			bo.log.Error("failed to calculate eligibility proofs: %v", err)
-			return types.AtxId{common.HexToHash("EEEEEEEE")}, nil, err
-		}
+	//if bo.proofsEpoch != epochNumber {
+	err := bo.calcEligibilityProofs(epochNumber)
+	if err != nil {
+		bo.log.Error("failed to calculate eligibility proofs: %v", err)
+		return types.AtxId{common.HexToHash("EEEEEEEE")}, nil, err
 	}
+	//}
 	bo.log.Info("miner \"%v…\" found eligible for %d blocks in layer %d", bo.nodeID.Key[:5], len(bo.eligibilityProofs[layerID]), layerID)
 	return bo.atxID, bo.eligibilityProofs[layerID], nil
 }
@@ -68,7 +68,7 @@ func (bo *MinerBlockOracle) calcEligibilityProofs(epochNumber types.EpochId) err
 	epochBeacon := bo.beaconProvider.GetBeacon(epochNumber)
 
 	var activeSetSize uint32
-	if epochNumber.IsGenesis() {
+	if epochNumber == 0 {
 		bo.log.Warning("genesis epoch detected, using GenesisActiveSetSize (%d)", GenesisActiveSetSize)
 		activeSetSize = GenesisActiveSetSize
 	} else {
@@ -76,7 +76,11 @@ func (bo *MinerBlockOracle) calcEligibilityProofs(epochNumber types.EpochId) err
 		if err != nil {
 			return fmt.Errorf("failed to get latest ATX: %v", err)
 		}
-		activeSetSize = atx.ActiveSetSize
+		if epochNumber == 1 {
+			activeSetSize = GenesisActiveSetSize
+		} else {
+			activeSetSize = atx.ActiveSetSize
+		}
 		bo.atxID = atx.Id()
 	}
 	numberOfEligibleBlocks, err := getNumberOfEligibleBlocks(activeSetSize, bo.committeeSize, bo.layersPerEpoch, bo.log)
@@ -151,6 +155,7 @@ func (bo *MinerBlockOracle) getLatestATXID() (types.AtxId, error) {
 		return types.AtxId{common.HexToHash("22222222")}, errors.New("no activations found")
 	}
 	latestATXID := atxIDs[numOfActivations-1]
+	bo.log.Info("latest atx id is: %v", latestATXID.String()[:5])
 	return latestATXID, err
 }
 

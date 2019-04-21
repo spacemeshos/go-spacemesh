@@ -301,7 +301,8 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 		return err
 	}
 	idStore := activation.NewIdentityStore(iddbstore)
-	atxdb := activation.NewActivationDb(atxdbstore, idStore, mdb, 1000, lg.WithName("atxDb"))
+	//todo: this is initialized twice, need to refactor
+	atxdb := activation.NewActivationDb(atxdbstore, idStore, mdb, uint64(app.Config.CONSENSUS.LayersPerEpoch), lg.WithName("atxDb"))
 	trtl := tortoise.NewAlgorithm(layerSize, mdb, lg.WithName("trtl"))
 	msh := mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, processor, lg.WithName("mesh")) //todo: what to do with the logger?
 

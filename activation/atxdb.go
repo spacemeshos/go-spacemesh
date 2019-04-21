@@ -41,9 +41,8 @@ func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx) {
 	if eatx != nil {
 		return
 	}
-
 	epoch := atx.PubLayerIdx.GetEpoch(uint16(db.LayersPerEpoch))
-	db.log.Info("processing atx id %v, pub-epoch %v node: %v", atx.Id().String()[2:7], epoch, atx.NodeId.Key[:5])
+	db.log.Info("processing atx id %v, pub-epoch %v node: %v layer %v", atx.Id().String()[2:7], epoch, atx.NodeId.Key[:5], atx.PubLayerIdx)
 	activeSet, err := db.CalcActiveSetFromView(atx)
 	if err != nil {
 		db.log.Error("could not calculate active set for %v", atx.Id())
