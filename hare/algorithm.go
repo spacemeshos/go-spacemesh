@@ -11,6 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/types"
 	"hash/fnv"
 	"time"
 )
@@ -55,7 +56,7 @@ type State struct {
 }
 
 type StateQuerier interface {
-	IsIdentityActive(id []byte) (bool, error)
+	IsIdentityActive(edId string, layer types.LayerID) (bool, error)
 }
 
 type Msg struct {
@@ -63,11 +64,14 @@ type Msg struct {
 	PubKey []byte
 }
 
+// TODO: move to unit test
 type mockStateQuerier struct {
+	res bool
+	err error
 }
 
-func (msq mockStateQuerier) IsIdentityActive(id []byte) (bool, error) {
-	return true, nil
+func (msq mockStateQuerier) IsIdentityActive(edId string, layer types.LayerID) (bool, error) {
+	return msq.res, msq.err
 }
 
 func newMsg(hareMsg *pb.HareMessage, querier StateQuerier) (*Msg, error) {
@@ -81,14 +85,21 @@ func newMsg(hareMsg *pb.HareMessage, querier StateQuerier) (*Msg, error) {
 	// extract pub key
 	pubKey, err := ed25519.ExtractPublicKey(data, hareMsg.InnerSig)
 	if err != nil {
-		log.Error("newMsg constrcution failed: err=%v", err, len(hareMsg.InnerSig))
+		log.Error("newMsg construction failed: could not extract public key err=%v", err, len(hareMsg.InnerSig))
 		return nil, err
 	}
 
-	// check identity is active
+	// query if identity is active
 	pub := signing.NewPublicKey(pubKey)
-	if res, err := querier.IsIdentityActive(pub.Bytes()); !res {
-		log.Error("extracetd identity %v is not active err=%v", pub.String(), err)
+	res, err := querier.IsIdentityActive(pub.String(), types.LayerID(hareMsg.Message.InstanceId))
+	if err != nil {
+		log.Error("error while checking if identity is active for %v err=%v", pub.String(), err)
+		return nil, errors.New("is identity active query failed")
+	}
+
+	// check query result
+	if !res {
+		log.Error("identity %v is not active", pub.String())
 		return nil, errors.New("inactive identity")
 	}
 

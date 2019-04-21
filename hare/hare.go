@@ -69,7 +69,7 @@ type Hare struct {
 }
 
 // New returns a new Hare struct.
-func New(conf config.Config, p2p NetworkService, sign Signer, obp orphanBlockProvider, rolacle Rolacle, beginLayer chan types.LayerID, logger log.Log) *Hare {
+func New(conf config.Config, p2p NetworkService, sign Signer, obp orphanBlockProvider, rolacle Rolacle, stateQ StateQuerier, beginLayer chan types.LayerID, logger log.Log) *Hare {
 	h := new(Hare)
 
 	h.Closer = NewCloser()
@@ -81,7 +81,7 @@ func New(conf config.Config, p2p NetworkService, sign Signer, obp orphanBlockPro
 	h.network = p2p
 	h.beginLayer = beginLayer
 
-	h.broker = NewBroker(p2p, NewEligibilityValidator(NewHareOracle(rolacle, conf.N), logger), h.Closer)
+	h.broker = NewBroker(p2p, NewEligibilityValidator(NewHareOracle(rolacle, conf.N), logger), stateQ, h.Closer, logger)
 
 	h.sign = sign
 

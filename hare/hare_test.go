@@ -61,6 +61,10 @@ func NewMockConsensusProcess(cfg config.Config, instanceId InstanceId, s *Set, o
 
 var _ Consensus = (*mockConsensusProcess)(nil)
 
+func newMockStateQuerier() mockStateQuerier {
+	return mockStateQuerier{true, nil}
+}
+
 func TestNew(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
@@ -72,7 +76,7 @@ func TestNew(t *testing.T) {
 
 	om := new(orphanMock)
 
-	h := New(cfg, n1, signing, om, oracle, layerTicker, log.NewDefault("Hare"))
+	h := New(cfg, n1, signing, om, oracle, newMockStateQuerier(), layerTicker, log.NewDefault("Hare"))
 
 	if h == nil {
 		t.Fatal()
@@ -90,14 +94,14 @@ func TestHare_Start(t *testing.T) {
 
 	om := new(orphanMock)
 
-	h := New(cfg, n1, signing, om, oracle, layerTicker, log.NewDefault("Hare"))
+	h := New(cfg, n1, signing, om, oracle, newMockStateQuerier(), layerTicker, log.NewDefault("Hare"))
 
 	h.broker.Start() // todo: fix that hack. this will cause h.Start to return err
 
 	/*err := h.Start()
 	require.Error(t, err)*/
 
-	h2 := New(cfg, n1, signing, om, oracle, layerTicker, log.NewDefault("Hare"))
+	h2 := New(cfg, n1, signing, om, oracle, newMockStateQuerier(), layerTicker, log.NewDefault("Hare"))
 	require.NoError(t, h2.Start())
 }
 
@@ -112,7 +116,7 @@ func TestHare_GetResult(t *testing.T) {
 
 	om := new(orphanMock)
 
-	h := New(cfg, n1, signing, om, oracle, layerTicker, log.NewDefault("Hare"))
+	h := New(cfg, n1, signing, om, oracle, newMockStateQuerier(), layerTicker, log.NewDefault("Hare"))
 
 	res, err := h.GetResult(types.LayerID(0))
 
@@ -144,7 +148,7 @@ func TestHare_GetResult2(t *testing.T) {
 		return []types.BlockID{1}
 	}
 
-	h := New(cfg, n1, signing, om, oracle, layerTicker, log.NewDefault("Hare"))
+	h := New(cfg, n1, signing, om, oracle, newMockStateQuerier(), layerTicker, log.NewDefault("Hare"))
 
 	h.networkDelta = 0
 
@@ -181,7 +185,7 @@ func TestHare_collectOutput(t *testing.T) {
 
 	om := new(orphanMock)
 
-	h := New(cfg, n1, signing, om, oracle, layerTicker, log.NewDefault("Hare"))
+	h := New(cfg, n1, signing, om, oracle, newMockStateQuerier(), layerTicker, log.NewDefault("Hare"))
 
 	mockid := instanceId1
 	set := NewSetFromValues(Value{0})
@@ -210,7 +214,7 @@ func TestHare_collectOutput2(t *testing.T) {
 
 	om := new(orphanMock)
 
-	h := New(cfg, n1, signing, om, oracle, layerTicker, log.NewDefault("Hare"))
+	h := New(cfg, n1, signing, om, oracle, newMockStateQuerier(), layerTicker, log.NewDefault("Hare"))
 	h.bufferSize = 1
 	h.lastLayer = 0
 	mockid := instanceId0
@@ -256,7 +260,7 @@ func TestHare_onTick(t *testing.T) {
 		return blockset
 	}
 
-	h := New(cfg, n1, signing, om, oracle, layerTicker, log.NewDefault("Hare"))
+	h := New(cfg, n1, signing, om, oracle, newMockStateQuerier(), layerTicker, log.NewDefault("Hare"))
 	h.networkDelta = 0
 	h.bufferSize = 1
 

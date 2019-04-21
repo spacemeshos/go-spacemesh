@@ -1,6 +1,7 @@
 package hare
 
 import (
+	"errors"
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -98,7 +99,7 @@ func waitForMessages(t *testing.T, inbox chan *Msg, instanceId InstanceId, msgCo
 		for {
 			select {
 			case x := <-inbox:
-				assert.True(t, x.Message.InstanceId == uint32(instanceId))
+				assert.True(t, x.Message.InstanceId == uint64(instanceId))
 				i++
 				if i >= msgCount {
 					return
@@ -237,11 +238,11 @@ func TestBroker_Register2(t *testing.T) {
 	broker.Start()
 	broker.Register(instanceId1)
 	m := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1)).HareMessage
-	m.Message.InstanceId = uint32(instanceId1)
+	m.Message.InstanceId = uint64(instanceId1)
 	msg := newMockGossipMsg(m)
 	broker.inbox <- msg
 	assertMsg(t, msg)
-	m.Message.InstanceId = uint32(instanceId2)
+	m.Message.InstanceId = uint64(instanceId2)
 	msg = newMockGossipMsg(m)
 	broker.inbox <- msg
 	assertMsg(t, msg)
@@ -254,7 +255,7 @@ func TestBroker_Register3(t *testing.T) {
 	broker.Start()
 
 	m := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1)).HareMessage
-	m.Message.InstanceId = uint32(instanceId0)
+	m.Message.InstanceId = uint64(instanceId0)
 	msg := newMockGossipMsg(m)
 	broker.inbox <- msg
 	time.Sleep(1)
@@ -280,7 +281,7 @@ func TestBroker_PubkeyExtraction(t *testing.T) {
 	inbox := broker.Register(instanceId1)
 	sgn := signing.NewEdSigner()
 	m := BuildPreRoundMsg(sgn, NewSetFromValues(value1)).HareMessage
-	m.Message.InstanceId = uint32(instanceId1)
+	m.Message.InstanceId = uint64(instanceId1)
 	msg := newMockGossipMsg(m)
 	broker.inbox <- msg
 	tm := time.NewTimer(2 * time.Second)
@@ -295,4 +296,12 @@ func TestBroker_PubkeyExtraction(t *testing.T) {
 			return
 		}
 	}
+}
+
+func Test_newMsg(t *testing.T) {
+	m := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1)).HareMessage
+	_, e := newMsg(m, mockStateQuerier{false, errors.New("my err")})
+	assert.NotNil(t, e)
+	_, e = newMsg(m, mockStateQuerier{true, nil})
+	assert.Nil(t, e)
 }
