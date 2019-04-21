@@ -1,4 +1,4 @@
-namespace: almog
+namespace: sm
 
 config_map_name: conf
 
@@ -8,18 +8,18 @@ genesis_delta: 120
 deployment_ready_time_out: 120
 
 bootstrap:
-  image: 'spacemeshos/go-spacemesh-dev:almog128'
+  image: 'spacemeshos/go-spacemesh:develop'
   command: '/bin/go-spacemesh'
   replicas: 1
-  args:
-    randcon: '8'
-    hare-committee-size: '20'
-    hare-max-adversaries: '9'
-    hare-round-duration-sec: '10'
-    layer-duration-sec: '60'
-    layer-average-size: '20'
+args:
+  randcon: '8'
+  hare-committee-size: '20'
+  hare-max-adversaries: '9'
+  hare-round-duration-sec: '10'
+  layer-duration-sec: '60'
+  layer-average-size: '20'
 client:
-  image: 'spacemeshos/go-spacemesh-dev:almog128'
+  image: 'spacemeshos/go-spacemesh:develop'
   command: '/bin/go-spacemesh'
   replicas: 19
   args:
