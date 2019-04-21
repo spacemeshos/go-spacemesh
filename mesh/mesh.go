@@ -37,7 +37,7 @@ type StateUpdater interface {
 
 type AtxDB interface {
 	ProcessBlockATXs(block *types.Block)
-	GetAtx(id types.AtxId) (*types.ActivationTx, error)
+	GetAtx(id *types.AtxId) (*types.ActivationTx, error)
 }
 
 type Mesh struct {
@@ -377,7 +377,7 @@ func (m *Mesh) AccumulateRewards(rewardLayer types.LayerID, params Config) {
 	// TODO: instead of the following code we need to validate the eligibility of each block individually using the
 	//  proof included in each block
 	for _, bl := range l.Blocks() {
-		atx, err := m.AtxDB.GetAtx(bl.ATXID)
+		atx, err := m.AtxDB.GetAtx(&bl.ATXID)
 		if err != nil {
 			m.Log.Error("Atx not found %v", bl.ATXID)
 			continue

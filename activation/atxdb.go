@@ -75,7 +75,7 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 	}
 
 	var counter uint32 = 0
-	set := make(map[types.AtxId]struct{})
+	set := make(map[*types.AtxId]struct{})
 	firstLayerOfLastEpoch := a.PubLayerIdx - db.LayersPerEpoch - (a.PubLayerIdx % db.LayersPerEpoch)
 	lastLayerOfLastEpoch := firstLayerOfLastEpoch + db.LayersPerEpoch -1
 
@@ -137,8 +137,8 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 // - ATX LayerID is NipstLayerTime or more after the PositioningATX LayerID.
 // - The ATX view of the previous epoch contains ActiveSetSize activations
 func (db *ActivationDb) ValidateAtx(atx *types.ActivationTx) error {
-	if atx.PrevATXId != types.EmptyAtxId {
-		prevATX, err := db.GetAtx(atx.PrevATXId)
+	if atx.PrevATXId != *types.EmptyAtxId {
+		prevATX, err := db.GetAtx(&atx.PrevATXId)
 		if err != nil {
 			return fmt.Errorf("prevATX not found")
 		}
@@ -162,8 +162,8 @@ func (db *ActivationDb) ValidateAtx(atx *types.ActivationTx) error {
 		}
 	}
 
-	if atx.PositioningAtx != types.EmptyAtxId {
-		posAtx, err := db.GetAtx(atx.PositioningAtx)
+	if atx.PositioningAtx != *types.EmptyAtxId {
+		posAtx, err := db.GetAtx(&atx.PositioningAtx)
 		if err != nil {
 			return fmt.Errorf("positioning atx not found")
 		}
@@ -266,7 +266,7 @@ func (db *ActivationDb) ActiveSetIds(ech types.EpochId) uint32 {
 	return common.BytesToUint32(val)
 }
 
-func (db *ActivationDb) addAtxToEpoch(epochId types.EpochId, atx types.AtxId) error {
+func (db *ActivationDb) addAtxToEpoch(epochId types.EpochId, atx *types.AtxId) error {
 	ids, err := db.atxs.Get(epochId.ToBytes())
 	var atxs []types.AtxId
 	if err != nil {
@@ -279,7 +279,7 @@ func (db *ActivationDb) addAtxToEpoch(epochId types.EpochId, atx types.AtxId) er
 			return errors.New("could not get all atxs from database ")
 		}
 	}
-	atxs = append(atxs, atx)
+	atxs = append(atxs, *atx)
 	w, err := encodeAtxIds(atxs)
 	if err != nil {
 		return errors.New("could not encode layer atx ids")
@@ -291,7 +291,7 @@ func getNodeIdKey(id types.NodeId) []byte {
 	return []byte(id.Key)
 }
 
-func (db *ActivationDb) addAtxToNodeId(nodeId types.NodeId, atx types.AtxId) error {
+func (db *ActivationDb) addAtxToNodeId(nodeId types.NodeId, atx *types.AtxId) error {
 	key := getNodeIdKey(nodeId)
 	db.log.Info("adding atx %v to nodeId %v", atx.String()[2:7], nodeId.Key[:5])
 	ids, err := db.atxs.Get(key)
@@ -306,7 +306,7 @@ func (db *ActivationDb) addAtxToNodeId(nodeId types.NodeId, atx types.AtxId) err
 			return errors.New("could not get all atxs from database ")
 		}
 	}
-	atxs = append(atxs, atx)
+	atxs = append(atxs, *atx)
 	w, err := encodeAtxIds(atxs)
 	if err != nil {
 		return errors.New("could not encode layer atx ids")
@@ -345,7 +345,7 @@ func (db *ActivationDb) GetEpochAtxIds(epochId types.EpochId) ([]types.AtxId, er
 	return atxs, nil
 }
 
-func (db *ActivationDb) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
+func (db *ActivationDb) GetAtx(id *types.AtxId) (*types.ActivationTx, error) {
 	db.RLock()
 	b, err := db.atxs.Get(id.Bytes())
 	db.RUnlock()

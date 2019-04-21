@@ -133,7 +133,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 		if b.prevATX == nil {
 			prevAtxId, err := b.GetPrevAtxId(b.nodeId)
 			if err == nil {
-				b.prevATX, err = b.db.GetAtx(*prevAtxId)
+				b.prevATX, err = b.db.GetAtx(prevAtxId)
 				if err != nil {
 					b.log.Info("no prev ATX found, starting fresh")
 				}
@@ -154,26 +154,22 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 
 		//positioning atx is from this epoch as well, since we will be publishing the atx in the next epoch
 		//todo: what if no other atx was received in this epoch yet?
-		posAtxId, err := b.GetPositioningAtxId(epoch)
+		posAtxId := types.EmptyAtxId
+		posAtx, err := b.GetPositioningAtx(epoch)
 		if err == nil {
-			posAtx, err := b.db.GetAtx(*posAtxId)
-			if err != nil {
-				return fmt.Errorf("cannot find pos atx " + err.Error())
-			}
 			endTick = posAtx.EndTick
 			b.posLayerID = posAtx.PubLayerIdx
+			posAtxId = posAtx.Id()
 		} else {
-			if !epoch.IsGenesis() || b.prevATX != nil {
-				return fmt.Errorf("cannot find pos atx id " + err.Error())
+			if !epoch.IsGenesis() {
+				return fmt.Errorf("cannot find pos atx: %v", err)
 			}
-			// During genesis posAtx is optional
-			posAtxId = &types.EmptyAtxId
 		}
 
 		b.challenge = &types.NIPSTChallenge{
 			NodeId:         b.nodeId,
 			Sequence:       seq,
-			PrevATXId:      atxId,
+			PrevATXId:      *atxId,
 			PubLayerIdx:    b.posLayerID.Add(b.layersPerEpoch),
 			StartTick:      endTick,
 			EndTick:        b.tickProvider.NumOfTicks(), //todo: add provider when
@@ -216,7 +212,6 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 	b.posLayerID = 0
 	// TODO what happens if broadcast fails?
 	return b.net.Broadcast(AtxProtocol, buf)
-
 }
 
 func (b *Builder) Persist(c *types.NIPSTChallenge) {
@@ -255,10 +250,25 @@ func (b *Builder) GetLastSequence(node types.NodeId) uint64 {
 	if err != nil {
 		return 0
 	}
-	atx, err := b.db.GetAtx(*atxId)
+	atx, err := b.db.GetAtx(atxId)
 	if err != nil {
 		b.log.Error("wtf no atx in db %v", *atxId)
 		return 0
 	}
 	return atx.Sequence
+}
+
+func (b *Builder) GetPositioningAtx(epochId types.EpochId) (*types.ActivationTx, error) {
+	posAtxId, err := b.GetPositioningAtxId(epochId)
+	if err == nil {
+		posAtx, err := b.db.GetAtx(posAtxId)
+		if err != nil {
+			return nil, fmt.Errorf("cannot find pos atx: %v", err.Error())
+		}
+		return posAtx, nil
+	} else if b.prevATX != nil {
+		return b.prevATX, nil
+	} else {
+		return nil, fmt.Errorf("cannot find pos atx id: %v", err)
+	}
 }

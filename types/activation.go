@@ -20,7 +20,7 @@ type AtxId struct {
 	common.Hash
 }
 
-var EmptyAtxId = AtxId{common.Hash{0}}
+var EmptyAtxId = &AtxId{common.Hash{0}}
 
 type ActivationTxHeader struct {
 	NIPSTChallenge
@@ -55,17 +55,17 @@ type ActivationTx struct {
 	//todo: add sig
 }
 
-func NewActivationTx(NodeId NodeId, Sequence uint64, PrevATX AtxId, LayerIndex LayerID, StartTick uint64,
-	PositioningATX AtxId, ActiveSetSize uint32, View []BlockID, nipst *nipst.NIPST, isValid bool) *ActivationTx {
+func NewActivationTx(NodeId NodeId, Sequence uint64, PrevATX *AtxId, LayerIndex LayerID, StartTick uint64,
+	PositioningATX *AtxId, ActiveSetSize uint32, View []BlockID, nipst *nipst.NIPST, isValid bool) *ActivationTx {
 	return &ActivationTx{
 		ActivationTxHeader: ActivationTxHeader{
 			NIPSTChallenge: NIPSTChallenge{
 				NodeId:         NodeId,
 				Sequence:       Sequence,
-				PrevATXId:      PrevATX,
+				PrevATXId:      *PrevATX,
 				PubLayerIdx:    LayerIndex,
 				StartTick:      StartTick,
-				PositioningAtx: PositioningATX,
+				PositioningAtx: *PositioningATX,
 			},
 			ActiveSetSize: ActiveSetSize,
 			View:          View,
@@ -93,14 +93,14 @@ func NewActivationTxWithChallenge(poetChallenge NIPSTChallenge, ActiveSetSize ui
 
 }
 
-func (t ActivationTx) Id() AtxId {
+func (t ActivationTx) Id() *AtxId {
 	//todo: revise id function, add cache
 	tx, err := AtxHeaderAsBytes(&t.ActivationTxHeader)
 	if err != nil {
 		panic("could not Serialize atx")
 	}
 
-	return AtxId{crypto.Keccak256Hash(tx)}
+	return &AtxId{crypto.Keccak256Hash(tx)}
 }
 
 func (t ActivationTx) ShortId() string {

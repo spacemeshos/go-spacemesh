@@ -26,6 +26,10 @@ type mockActivationDB struct {
 	layerIndex    types.LayerID
 }
 
+func (a mockActivationDB) ActiveSetIds(epoch types.EpochId) uint32 {
+	panic("implement me")
+}
+
 func (a mockActivationDB) GetNodeAtxIds(node types.NodeId) ([]types.AtxId, error) {
 	if node.Key != nodeID.Key {
 		return []types.AtxId{}, nil
@@ -33,10 +37,10 @@ func (a mockActivationDB) GetNodeAtxIds(node types.NodeId) ([]types.AtxId, error
 	return []types.AtxId{atxID}, nil
 }
 
-func (a mockActivationDB) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
+func (a mockActivationDB) GetAtx(id *types.AtxId) (*types.ActivationTx, error) {
 	if id == atxID {
 		return &types.ActivationTx{ActivationTxHeader: types.ActivationTxHeader{
-				NIPSTChallenge: types.NIPSTChallenge{PubLayerIdx: a.layerIndex}, ActiveSetSize: a.activeSetSize, Valid: true}},
+				NIPSTChallenge: types.NIPSTChallenge{PubLayerIdx: a.layerIndex}, ActiveSetSize: a.activeSetSize}},
 			nil
 	}
 	return nil, errors.New("wrong atx id")

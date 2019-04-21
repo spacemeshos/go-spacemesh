@@ -71,7 +71,7 @@ func (v BlockEligibilityValidator) BlockEligible(block *types.Block) (bool, erro
 }
 
 func (v BlockEligibilityValidator) getActiveSetSize(epochNumber types.EpochId, block *types.Block) (uint32, error) {
-	atx, err := v.activationDb.GetAtx(block.ATXID)
+	atx, err := v.activationDb.GetAtx(&block.ATXID)
 	if err != nil {
 		v.log.Error("getting ATX failed: %v %v ep(%v)", err, block.ATXID.String()[:5], epochNumber)
 		return 0, err

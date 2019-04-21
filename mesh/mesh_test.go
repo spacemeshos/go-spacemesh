@@ -34,15 +34,15 @@ type AtxDbMock struct {
 	db map[types.AtxId]*types.ActivationTx
 }
 
-func (t *AtxDbMock) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
+func (t *AtxDbMock) GetAtx(id *types.AtxId) (*types.ActivationTx, error) {
 	if atx, ok := t.db[id]; ok {
 		return atx, nil
 	}
 	return nil, fmt.Errorf("cannot find atx")
 }
 
-func (t *AtxDbMock) AddAtx(id types.AtxId, atx *types.ActivationTx) {
-	t.db[id] = atx
+func (t *AtxDbMock) AddAtx(id *types.AtxId, atx *types.ActivationTx) {
+	t.db[*id] = atx
 }
 
 func (AtxDbMock) ProcessBlockATXs(block *types.Block) {
