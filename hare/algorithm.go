@@ -65,12 +65,16 @@ type Msg struct {
 }
 
 // TODO: move to unit test
-type mockStateQuerier struct {
+type MockStateQuerier struct {
 	res bool
 	err error
 }
 
-func (msq mockStateQuerier) IsIdentityActive(edId string, layer types.LayerID) (bool, error) {
+func NewMockStateQuerier() MockStateQuerier {
+	return MockStateQuerier{true, nil}
+}
+
+func (msq MockStateQuerier) IsIdentityActive(edId string, layer types.LayerID) (bool, error) {
 	return msq.res, msq.err
 }
 

@@ -120,7 +120,7 @@ func (b *Broker) eventLoop() {
 			}
 
 			// TODO: should receive the state querier or have a msg constructor
-			iMsg, err := newMsg(hareMsg, mockStateQuerier{true, nil})
+			iMsg, err := newMsg(hareMsg, MockStateQuerier{true, nil})
 			if err != nil {
 				b.Warning("Message validation failed: could not construct msg err=%v", err)
 				continue

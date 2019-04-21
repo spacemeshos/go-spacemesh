@@ -123,7 +123,7 @@ func buildMessage(msg *pb.HareMessage) *Msg {
 }
 
 func buildBroker(net NetworkService) *Broker {
-	return NewBroker(net, &mockEligibilityValidator{true}, mockStateQuerier{true, nil},
+	return NewBroker(net, &mockEligibilityValidator{true}, MockStateQuerier{true, nil},
 		Closer{make(chan struct{})}, log.NewDefault("broker"))
 }
 

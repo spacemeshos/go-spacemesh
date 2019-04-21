@@ -300,8 +300,8 @@ func TestBroker_PubkeyExtraction(t *testing.T) {
 
 func Test_newMsg(t *testing.T) {
 	m := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1)).HareMessage
-	_, e := newMsg(m, mockStateQuerier{false, errors.New("my err")})
+	_, e := newMsg(m, MockStateQuerier{false, errors.New("my err")})
 	assert.NotNil(t, e)
-	_, e = newMsg(m, mockStateQuerier{true, nil})
+	_, e = newMsg(m, MockStateQuerier{true, nil})
 	assert.Nil(t, e)
 }
