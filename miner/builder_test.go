@@ -127,7 +127,7 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 	hareRes := []types.BlockID{types.BlockID(0), types.BlockID(1), types.BlockID(2), types.BlockID(3)}
 	hare := MockHare{res: hareRes}
 
-	builder := NewBlockBuilder(types.NodeId{}, n, beginRound, MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, nil, log.New(n.Node.String(), "", ""))
+	builder := NewBlockBuilder(types.NodeId{"anton", []byte("anton")}, n, beginRound, MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, nil, log.New(n.Node.String(), "", ""))
 
 	err := builder.Start()
 	assert.NoError(t, err)

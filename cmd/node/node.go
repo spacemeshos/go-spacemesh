@@ -311,7 +311,6 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	// TODO: turn log level back to normal:
 	ha := hare.New(app.Config.HARE, swarm, sgn, msh, hareOracle, clock.Subscribe(), lg.WithName("hare").WithOptions(log.EnableLevelOption(log.ErrorLevel)))
 
-	nodeID = types.NodeId{Key: sgn.PublicKey().String()} // TODO: where does this come from?
 	blockProducer := miner.NewBlockBuilder(nodeID, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle,atxdb.ProcessAtx, lg.WithName("blockProducer"))
 	blockListener := sync.NewBlockListener(swarm, blockValidator, msh, 2*time.Second, 4, lg.WithName("blockListener"))
 
