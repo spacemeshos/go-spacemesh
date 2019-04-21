@@ -15,7 +15,7 @@ const GenesisActiveSetSize = 10
 
 type ActivationDb interface {
 	GetNodeAtxIds(node types.NodeId) ([]types.AtxId, error)
-	GetAtx(id *types.AtxId) (*types.ActivationTx, error)
+	GetAtx(id types.AtxId) (*types.ActivationTx, error)
 	ActiveSetIds(epoch types.EpochId) uint32
 }
 

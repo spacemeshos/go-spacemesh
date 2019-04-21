@@ -91,31 +91,31 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 	var totalRewards int64
 	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data1"))
 	block1.MinerID.Key = "1"
-	atx := types.NewActivationTx(block1.MinerID, 0, types.EmptyAtxId, 1, 0, types.EmptyAtxId, 10, []types.BlockID{}, &nipst.NIPST{}, true)
+	atx := types.NewActivationTx(block1.MinerID, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &nipst.NIPST{}, true)
 	atxdb.AddAtx(atx.Id(), atx)
-	block1.ATXID = *atx.Id()
+	block1.ATXID = atx.Id()
 
 	totalRewards += addTransactionsToBlock(block1, 15)
 
 	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data2"))
 	block2.MinerID.Key = "2"
-	atx = types.NewActivationTx(block2.MinerID, 0, types.EmptyAtxId, 1, 0, types.EmptyAtxId, 10, []types.BlockID{}, &nipst.NIPST{}, true)
+	atx = types.NewActivationTx(block2.MinerID, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &nipst.NIPST{}, true)
 	atxdb.AddAtx(atx.Id(), atx)
-	block2.ATXID = *atx.Id()
+	block2.ATXID = atx.Id()
 	totalRewards += addTransactionsToBlock(block2, 13)
 
 	block3 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data3"))
 	block3.MinerID.Key = "3"
-	atx = types.NewActivationTx(block3.MinerID, 0, types.EmptyAtxId, 1, 0, types.EmptyAtxId, 10, []types.BlockID{}, &nipst.NIPST{}, true)
+	atx = types.NewActivationTx(block3.MinerID, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &nipst.NIPST{}, true)
 	atxdb.AddAtx(atx.Id(), atx)
-	block3.ATXID = *atx.Id()
+	block3.ATXID = atx.Id()
 	totalRewards += addTransactionsToBlock(block3, 17)
 
 	block4 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data4"))
 	block4.MinerID.Key = "4"
-	atx = types.NewActivationTx(block4.MinerID, 0, types.EmptyAtxId, 1, 0, types.EmptyAtxId, 10, []types.BlockID{}, &nipst.NIPST{}, true)
+	atx = types.NewActivationTx(block4.MinerID, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &nipst.NIPST{}, true)
 	atxdb.AddAtx(atx.Id(), atx)
-	block4.ATXID = *atx.Id()
+	block4.ATXID = atx.Id()
 	totalRewards += addTransactionsToBlock(block4, 16)
 
 	log.Info("total fees : %v", totalRewards)
@@ -160,30 +160,30 @@ func TestMesh_AccumulateRewards_underQuota(t *testing.T) {
 	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data1"))
 	block1.MinerID.Key = "1"
 	totalRewards += addTransactionsWithGas(block1, 10, 8)
-	atx := types.NewActivationTx(block1.MinerID, 0, types.EmptyAtxId, 1, 0, types.EmptyAtxId, 10, []types.BlockID{}, &nipst.NIPST{}, true)
+	atx := types.NewActivationTx(block1.MinerID, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &nipst.NIPST{}, true)
 	atxdb.AddAtx(atx.Id(), atx)
-	block1.ATXID = *atx.Id()
+	block1.ATXID = atx.Id()
 
 	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data2"))
 	block2.MinerID.Key = "2"
 	totalRewards += addTransactionsWithGas(block2, 10, 9)
-	atx = types.NewActivationTx(block2.MinerID, 0, types.EmptyAtxId, 1, 0, types.EmptyAtxId, 10, []types.BlockID{}, &nipst.NIPST{}, true)
+	atx = types.NewActivationTx(block2.MinerID, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &nipst.NIPST{}, true)
 	atxdb.AddAtx(atx.Id(), atx)
-	block2.ATXID = *atx.Id()
+	block2.ATXID = atx.Id()
 
 	block3 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data3"))
 	block3.MinerID.Key = "3"
 	totalRewards += addTransactionsWithGas(block3, 17, 10)
-	atx = types.NewActivationTx(block3.MinerID, 0, types.EmptyAtxId, 1, 0, types.EmptyAtxId, 10, []types.BlockID{}, &nipst.NIPST{}, true)
+	atx = types.NewActivationTx(block3.MinerID, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &nipst.NIPST{}, true)
 	atxdb.AddAtx(atx.Id(), atx)
-	block3.ATXID = *atx.Id()
+	block3.ATXID = atx.Id()
 
 	block4 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data4"))
 	block4.MinerID.Key = "4"
 	totalRewards += addTransactionsWithGas(block4, 16, 11)
-	atx = types.NewActivationTx(block4.MinerID, 0, types.EmptyAtxId, 1, 0, types.EmptyAtxId, 10, []types.BlockID{}, &nipst.NIPST{}, true)
+	atx = types.NewActivationTx(block4.MinerID, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &nipst.NIPST{}, true)
 	atxdb.AddAtx(atx.Id(), atx)
-	block4.ATXID = *atx.Id()
+	block4.ATXID = atx.Id()
 
 	log.Info("total fees : %v", totalRewards)
 	layers.AddBlock(block1)
@@ -207,9 +207,9 @@ func createLayer(mesh *Mesh, id types.LayerID, numOfBlocks, maxTransactions int,
 	for i := 0; i < numOfBlocks; i++ {
 		block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), id, []byte("data1"))
 		block1.MinerID.Key = strconv.Itoa(i)
-		atx := types.NewActivationTx(block1.MinerID, 0, types.EmptyAtxId, 1, 0, types.EmptyAtxId, 10, []types.BlockID{}, &nipst.NIPST{}, true)
+		atx := types.NewActivationTx(block1.MinerID, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &nipst.NIPST{}, true)
 		atxdb.AddAtx(atx.Id(), atx)
-		block1.ATXID = *atx.Id()
+		block1.ATXID = atx.Id()
 		totalRewards += addTransactionsToBlock(block1, rand.Intn(maxTransactions))
 		mesh.AddBlock(block1)
 	}

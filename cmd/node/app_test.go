@@ -15,7 +15,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	sync2 "github.com/spacemeshos/go-spacemesh/sync"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spacemeshos/poet-ref/integration"
 	"github.com/stretchr/testify/require"
@@ -104,7 +103,7 @@ func (app *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat s
 		meshDB := mesh.NewMemMeshDB(log.Log{})
 		layersPerEpoch := smApp.Config.CONSENSUS.LayersPerEpoch
 		lg := log.NewDefault(nodeID.Key[:5])
-		activationDB := activation.NewActivationDb(dbStore, meshDB, uint64(layersPerEpoch), lg.WithName("atxDB"))
+		activationDB := activation.NewActivationDb(dbStore, activation.NewIdentityStore(database.NewMemDatabase()), meshDB, uint64(layersPerEpoch), lg.WithName("atxDB"))
 		beaconProvider := &oracle.EpochBeaconProvider{}
 		blockOracle := oracle.NewMinerBlockOracle(int32(numOfInstances), layersPerEpoch, activationDB, beaconProvider, vrfSigner, nodeID, lg.WithName("blockOracle"))
 		blockValidator := oracle.NewBlockEligibilityValidator(int32(numOfInstances), layersPerEpoch, activationDB, beaconProvider, crypto.ValidateVRF, lg.WithName("blkElgValidator"))

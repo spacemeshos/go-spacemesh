@@ -31,7 +31,7 @@ const DefaultGas = 1
 const IncomingTxProtocol = "TxGossip"
 
 type AtxProcessor interface {
-	ProcessAtx(atx *types.ActivationTx, fromBlock bool)
+	ProcessAtx(atx *types.ActivationTx)
 }
 
 type BlockBuilder struct {
@@ -52,11 +52,11 @@ type BlockBuilder struct {
 	weakCoinToss     WeakCoinProvider
 	orphans          OrphanBlockProvider
 	blockOracle      oracle.BlockOracle
-	processAtx       func(atx *types.ActivationTx, isfromBlock bool)
+	processAtx       func(atx *types.ActivationTx)
 	started          bool
 }
 
-func NewBlockBuilder(minerID types.NodeId, net p2p.Service, beginRoundEvent chan types.LayerID, weakCoin WeakCoinProvider, orph OrphanBlockProvider, hare HareResultProvider, blockOracle oracle.BlockOracle, processAtx func(atx *types.ActivationTx, isFromBLock bool), lg log.Log) BlockBuilder {
+func NewBlockBuilder(minerID types.NodeId, net p2p.Service, beginRoundEvent chan types.LayerID, weakCoin WeakCoinProvider, orph OrphanBlockProvider, hare HareResultProvider, blockOracle oracle.BlockOracle, processAtx func(atx *types.ActivationTx), lg log.Log) BlockBuilder {
 
 	seed := binary.BigEndian.Uint64(md5.New().Sum([]byte(minerID.Key)))
 

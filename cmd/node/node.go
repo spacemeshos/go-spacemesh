@@ -291,7 +291,9 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
 	clock := timesync.NewTicker(timesync.RealClock{}, ld, gTime)
 	mdb := mesh.NewPersistentMeshDB(dbStorepath, lg.WithName("meshdb"))
-	trtl := consensus.NewAlgorithm(consensus.NewNinjaTortoise(layerSize, mdb, lg.WithName("trtl")))
+	if err != nil {
+		return err
+	}
 
 	//todo: put in config
 	iddbstore, err := database.NewLDBDatabase(dbStorepath+"ids", 0, 0)
@@ -299,7 +301,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 		return err
 	}
 	idStore := activation.NewIdentityStore(iddbstore)
-	atxdb := activation.NewActivationDb(atxdbstore, idStore, mdb, uint64(app.Config.CONSENSUS.LayersPerEpoch), lg.WithName("atxDB"))
+	atxdb := activation.NewActivationDb(atxdbstore, idStore, mdb, 1000, lg.WithName("atxDb"))
 	trtl := tortoise.NewAlgorithm(layerSize, mdb, lg.WithName("trtl"))
 	msh := mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, processor, lg.WithName("mesh")) //todo: what to do with the logger?
 
@@ -310,7 +312,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	ha := hare.New(app.Config.HARE, swarm, sgn, msh, hareOracle, clock.Subscribe(), lg.WithName("hare").WithOptions(log.EnableLevelOption(log.ErrorLevel)))
 
 	nodeID = types.NodeId{Key: sgn.PublicKey().String()} // TODO: where does this come from?
-	blockProducer := miner.NewBlockBuilder(nodeID, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, atxdb.ProcessAtx, lg.WithName("blockProducer"))
+	blockProducer := miner.NewBlockBuilder(nodeID, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle,atxdb.ProcessAtx, lg.WithName("blockProducer"))
 	blockListener := sync.NewBlockListener(swarm, blockValidator, msh, 2*time.Second, 4, lg.WithName("blockListener"))
 
 	postDifficulty := proving.Difficulty(5) // TODO: put this in config (long term - make it dynamically calculated)

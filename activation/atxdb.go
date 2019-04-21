@@ -32,11 +32,11 @@ func NewActivationDb(dbstore database.DB, idstore IdStore, meshDb *mesh.MeshDB, 
 
 func (db *ActivationDb) ProcessBlockATXs(blk *types.Block) {
 	for _, atx := range blk.ATXs {
-		db.ProcessAtx(atx, true)
+		db.ProcessAtx(atx)
 	}
 }
 
-func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx, fromBlock bool) {
+func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx) {
 	eatx, _ := db.GetAtx(atx.Id())
 	if eatx != nil {
 		return
