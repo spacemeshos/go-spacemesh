@@ -59,6 +59,17 @@ func (np *NipstErrBuilderMock) BuildNIPST(challange []byte) (*nipst.NIPST, error
 	return nil, fmt.Errorf("error")
 }
 
+type MockIStore struct {
+}
+
+func (*MockIStore) StoreNodeIdentity(id types.NodeId) error {
+	return nil
+}
+
+func (*MockIStore) GetIdentity(id string) (types.NodeId, error) {
+	return types.NodeId{}, nil
+}
+
 func TestBuilder_BuildActivationTx(t *testing.T) {
 	//todo: implement test
 	id := types.NodeId{"aaaa", []byte("bbb")}
@@ -66,7 +77,7 @@ func TestBuilder_BuildActivationTx(t *testing.T) {
 	echp := &EchProvider{}
 	layers := MeshProviderrMock{}
 	layersPerEpcoh := types.LayerID(10)
-	b := NewBuilder(id, database.NewMemDatabase(), mesh.NewMemMeshDB(log.NewDefault("")), net, ActiveSetProviderMock{}, layers, echp, 10, &NipstBuilderMock{})
+	b := NewBuilder(id, database.NewMemDatabase(), mesh.NewMemMeshDB(log.NewDefault("")), net, ActiveSetProviderMock{}, layers, echp, 10, &NipstBuilderMock{}, &MockIStore{})
 	adb := b.db
 	prevAtx := types.AtxId{Hash: common.HexToHash("0x111")}
 	npst := nipst.NIPST{}
@@ -94,7 +105,7 @@ func TestBuilder_NoPrevATX(t *testing.T) {
 	net := &NetMock{}
 	echp := &EchProvider{}
 	layers := MeshProviderrMock{}
-	b := NewBuilder(id, database.NewMemDatabase(), mesh.NewMemMeshDB(log.NewDefault("")), net, ActiveSetProviderMock{}, layers, echp, 10, &NipstBuilderMock{})
+	b := NewBuilder(id, database.NewMemDatabase(), mesh.NewMemMeshDB(log.NewDefault("")), net, ActiveSetProviderMock{}, layers, echp, 10, &NipstBuilderMock{}, &MockIStore{})
 	err := b.PublishActivationTx(1)
 	assert.Error(t, err)
 }
@@ -106,7 +117,7 @@ func TestBuilder_PublishActivationTx(t *testing.T) {
 	layers := MeshProviderrMock{}
 	nipstBuilder := &NipstBuilderMock{}
 	layersPerEpcoh := uint64(10)
-	b := NewBuilder(id, database.NewMemDatabase(), mesh.NewMemMeshDB(log.NewDefault("")), net, ActiveSetProviderMock{}, layers, echp, layersPerEpcoh, nipstBuilder)
+	b := NewBuilder(id, database.NewMemDatabase(), mesh.NewMemMeshDB(log.NewDefault("")), net, ActiveSetProviderMock{}, layers, echp, layersPerEpcoh, nipstBuilder, &MockIStore{})
 	adb := b.db
 	prevAtx := types.AtxId{Hash: common.HexToHash("0x111")}
 	npst := nipst.NIPST{}
@@ -150,7 +161,7 @@ func TestBuilder_PublishActivationTx(t *testing.T) {
 	assert.Error(t, err)
 	assert.Equal(t, err.Error(), "error")
 
-	bt := NewBuilder(id, database.NewMemDatabase(), mesh.NewMemMeshDB(log.NewDefault("")), net, ActiveSetProviderMock{}, layers, echp, layersPerEpcoh, &NipstBuilderMock{})
+	bt := NewBuilder(id, database.NewMemDatabase(), mesh.NewMemMeshDB(log.NewDefault("")), net, ActiveSetProviderMock{}, layers, echp, layersPerEpcoh, &NipstBuilderMock{}, &MockIStore{})
 	err = bt.PublishActivationTx(1)
 	assert.Error(t, err)
 
