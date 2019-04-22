@@ -204,15 +204,18 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 	activeIds := uint32(b.activeSet.ActiveSetIds(b.posLayerID.GetEpoch(b.layersPerEpoch)))
 	b.log.Info("active ids seen for epoch of the pos atx (epoch: %v) is %v", b.posLayerID.GetEpoch(b.layersPerEpoch), activeIds)
 	atx := types.NewActivationTxWithChallenge(*b.challenge, activeIds, b.mesh.GetLatestView(), b.nipst, true)
-
+	activeSetSize, err := b.db.CalcActiveSetFromView(atx)
+	if epoch != 0 && (activeSetSize == 0 || activeSetSize != atx.ActiveSetSize) {
+		b.log.Panic("empty active set size found! len(view): %d, view: %v", len(atx.View), atx.View)
+	}
 	buf, err := types.AtxAsBytes(atx)
 	if err != nil {
 		return err
 	}
 	b.prevATX = atx
-	b.log.Info("atx published! id: %v, prevATXID: %v, posATXID: %v, layer: %v, published in epoch: %v, active set: %v miner: %v",
+	b.log.Info("atx published! id: %v, prevATXID: %v, posATXID: %v, layer: %v, published in epoch: %v, active set: %v miner: %v view %v",
 		atx.Id().String()[2:7], atx.PrevATXId.String()[2:7], atx.PositioningAtx.String()[2:7], atx.PubLayerIdx,
-		atx.PubLayerIdx.GetEpoch(b.layersPerEpoch), atx.ActiveSetSize, b.nodeId.Key[:5])
+		atx.PubLayerIdx.GetEpoch(b.layersPerEpoch), atx.ActiveSetSize, b.nodeId.Key[:5], len(atx.View))
 	// cleanup state
 	b.nipst = nil
 	b.challenge = nil
