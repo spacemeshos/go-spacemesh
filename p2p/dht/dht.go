@@ -23,7 +23,7 @@ type DHT interface {
 }
 
 // LookupTimeout is the timelimit we give to a single lookup operation
-const LookupTimeout = 15 * time.Second
+const LookupTimeout = 1 * time.Second
 
 var (
 	// ErrLookupFailed determines that we could'nt find this node in the routing table or network
@@ -149,7 +149,7 @@ func (d *KadDHT) internalLookup(key p2pcrypto.PublicKey) []discNode {
 func (d *KadDHT) kadLookup(id p2pcrypto.PublicKey, searchList []discNode) (discNode, error) {
 	// save queried node ids for the operation
 	queried := make(map[discNode]bool)
-
+	seen := make(map[discNode]struct{})
 	// iterative lookups for nodeId using searchList
 
 	for {
@@ -179,14 +179,13 @@ func (d *KadDHT) kadLookup(id p2pcrypto.PublicKey, searchList []discNode) (discN
 			if active {
 				probed++
 			}
-
-			if probed >= d.config.RoutingTableBucketSize {
-				return emptyDiscNode, ErrLookupFailed // todo: maybe just return what we have
-			}
+		}
+		if probed >= d.config.RoutingTableBucketSize {
+			return emptyDiscNode, ErrLookupFailed // todo: maybe just return what we have
 		}
 
 		// lookup nodeId using the target servers
-		res := d.findNodeOp(servers, queried, id)
+		res := d.findNodeOp(servers, seen, queried, id)
 		if len(res) > 0 {
 			// merge newly found nodes
 			searchList = Union(searchList, res)
@@ -238,7 +237,7 @@ type findNodeOpRes struct {
 // findNodeOp a target node on one or more servers
 // returns closest nodes which are closers than closestNode to targetId
 // if node found it will be in top of results list
-func (d *KadDHT) findNodeOp(servers []discNode, queried map[discNode]bool, id p2pcrypto.PublicKey) []discNode {
+func (d *KadDHT) findNodeOp(servers []discNode, seen map[discNode]struct{}, queried map[discNode]bool, id p2pcrypto.PublicKey) []discNode {
 
 	var out []discNode
 	startTime := time.Now()
@@ -291,8 +290,7 @@ func (d *KadDHT) findNodeOp(servers []discNode, queried map[discNode]bool, id p2
 		}(servers[i], id)
 	}
 
-	done := 0                          // To know when all operations finished
-	idSet := make(map[string]struct{}) // to remove duplicates
+	done := 0 // To know when all operations finished
 
 	timeout := time.NewTimer(LookupTimeout)
 Loop:
@@ -302,18 +300,18 @@ Loop:
 
 			// we mark active nodes
 			queried[qres.server] = qres.res != nil
-
 			res := qres.res
 			for _, n := range res {
-
-				if _, ok := idSet[n.PublicKey().String()]; ok {
-					continue
-				}
-				idSet[n.PublicKey().String()] = struct{}{}
-
 				if _, ok := queried[n]; ok {
 					continue
 				}
+
+				if _, ok := seen[n]; ok {
+					continue
+				}
+
+				seen[n] = struct{}{}
+
 				out = append(out, n)
 			}
 

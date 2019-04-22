@@ -12,7 +12,7 @@ const (
 	// BootstrapTimeout is the maximum time we allow the bootstrap process to extend
 	BootstrapTimeout = 5 * time.Minute
 	// LookupIntervals is the time we wait between another kad lookup if bootstrap failed.
-	LookupIntervals = 3 * time.Second
+	LookupIntervals = 100 * time.Millisecond
 	// RefreshInterval is the time we wait between dht refreshes
 	RefreshInterval = 5 * time.Minute
 )
@@ -59,7 +59,7 @@ func (d *KadDHT) Bootstrap(ctx context.Context) error {
 		return ErrConnectToBootNode
 	}
 
-	d.local.Debug("lookup using %d preloaded bootnodes ", bn)
+	d.local.Debug("lookup using %d preloaded bootnodes ", len(bn))
 
 	err := d.tryBoot(ctx, bn, c)
 	return err
@@ -84,6 +84,7 @@ loop:
 				//or TODO: implement real kademlia refreshes - #241
 				searchFor = p2pcrypto.NewRandomPubkey()
 				servers = d.internalLookup(searchFor)
+				// TODO: prioritize new nodes to reduce double checking
 				if len(servers) == 0 {
 					servers = append(servers, bootnodes...)
 				}
@@ -114,8 +115,7 @@ loop:
 		}
 
 		d.local.Warning("%d lookup didn't bootstrap the routing table. RT now has %d peers", tries, size)
-
-		timer := time.NewTimer(LookupIntervals)
+		timer := time.NewTimer(time.Duration(tries) * LookupIntervals) // todo: maybe wait only when size didn't increased. (to let nodes populate)
 		select {
 		case <-ctx.Done():
 			return ErrBootAbort

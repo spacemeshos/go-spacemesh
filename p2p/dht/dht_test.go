@@ -269,7 +269,7 @@ func TestKadDHT_Bootstrap(t *testing.T) {
 		}
 	}
 
-	testDHTs(t, dhts, cfg.RoutingTableBucketSize, cfg.RoutingTableBucketSize)
+	testDHTs(t, dhts, 8, cfg.RoutingTableBucketSize)
 }
 
 func testDHTs(t *testing.T, dhts []*KadDHT, min, avg int) {
@@ -301,7 +301,7 @@ func Test_findNodeFailure(t *testing.T) {
 	_, dht2 := simNodeWithDHT(t, cfg, sim)
 
 	go func() {
-		<-time.After(time.Second)
+		<-time.After(time.Second / 2)
 		realnode := sim.NewNodeFrom(bsinfo)
 		d := New(bsnode, config.DefaultConfig().SwarmConfig, realnode)
 		<-time.After(time.Second)
