@@ -258,27 +258,29 @@ func (s *swarm) Start() error {
 		}()
 	}
 
-	// start gossip before starting to collect peers
-	s.gossip.Start()
-
+	// todo: maybe reset peers that connected us while bootstrapping
 	// wait for neighborhood
-	go func() {
-		if s.config.SwarmConfig.Bootstrap {
-			if err := s.waitForBoot(); err != nil {
+	if s.config.SwarmConfig.Gossip {
+		// start gossip before starting to collect peers
+		s.gossip.Start()
+		go func() {
+			if s.config.SwarmConfig.Bootstrap {
+				if err := s.waitForBoot(); err != nil {
+					return
+				}
+			}
+			err := s.startNeighborhood() // non blocking
+			//todo:maybe start listening only after we got enough outbound neighbors?
+			if err != nil {
+				s.gossipErr = err
+				close(s.gossipC)
+				s.Shutdown()
 				return
 			}
-		}
-		err := s.startNeighborhood() // non blocking
-		//todo:maybe start listening only after we got enough outbound neighbors?
-		if err != nil {
-			s.gossipErr = err
+			<-s.initial
 			close(s.gossipC)
-			s.Shutdown()
-			return
-		}
-		<-s.initial
-		close(s.gossipC)
-	}() // todo handle error async
+		}() // todo handle error async
+	}
 
 	return nil
 }
@@ -760,6 +762,9 @@ func (s *swarm) Disconnect(peer p2pcrypto.PublicKey) {
 	s.outpeersMutex.Lock()
 	if _, ok := s.outpeers[peer.String()]; ok {
 		delete(s.outpeers, peer.String())
+	} else {
+		s.outpeersMutex.Unlock()
+		return
 	}
 	s.outpeersMutex.Unlock()
 	s.publishDelPeer(peer)
@@ -778,6 +783,7 @@ func (s *swarm) addIncomingPeer(n p2pcrypto.PublicKey) {
 	s.inpeersMutex.RUnlock()
 
 	if amnt >= s.config.MaxInboundPeers {
+		// todo: close connection with CPOOL
 		s.Disconnect(n) // todo: this will propagate a closed connection message. maybe need to do this in a lower level?
 		return
 	}
