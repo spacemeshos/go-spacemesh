@@ -69,6 +69,7 @@ def set_namespace(request, session_id, load_config):
     request.addfinalizer(fin)
     return _setup_namespace()
 
+
 @pytest.fixture(scope='session')
-def init_session(request, load_config, set_namespace, set_docker_images):
-    pass
+def init_session(request, load_config, set_namespace, set_docker_images, session_id):
+    return session_id
