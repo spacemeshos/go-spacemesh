@@ -50,7 +50,7 @@ func (mType MessageType) String() string {
 	case PreRound:
 		return "PreRound"
 	default:
-		return "Unknown message type"
+		return "Unknown Message type"
 	}
 }
 
@@ -103,7 +103,7 @@ func (b32 Bytes32) String() string {
 	return string(b32.Id())
 }
 
-// Represents a unique set of values
+// Represents a unique set of Values
 type Set struct {
 	values    map[objectId]Value
 	id        objectId

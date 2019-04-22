@@ -1,7 +1,6 @@
 package hare
 
 import (
-	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
@@ -22,22 +21,22 @@ func TestMessageValidator_CommitStatus(t *testing.T) {
 func TestMessageValidator_ValidateCertificate(t *testing.T) {
 	validator := defaultValidator()
 	assert.False(t, validator.validateCertificate(nil))
-	cert := &pb.Certificate{}
+	cert := &Certificate{}
 	assert.False(t, validator.validateCertificate(cert))
-	cert.AggMsgs = &pb.AggregatedMessages{}
+	cert.AggMsgs = &AggregatedMessages{}
 	assert.False(t, validator.validateCertificate(cert))
-	msgs := make([]*pb.HareMessage, 0, validator.threshold)
+	msgs := make([]*XDRMessage, 0, validator.threshold)
 	cert.AggMsgs.Messages = msgs
 	assert.False(t, validator.validateCertificate(cert))
-	msgs = append(msgs, &pb.HareMessage{})
+	msgs = append(msgs, &XDRMessage{})
 	cert.AggMsgs.Messages = msgs
 	assert.False(t, validator.validateCertificate(cert))
 	cert.Values = NewSetFromValues(value1).To2DSlice()
 	assert.False(t, validator.validateCertificate(cert))
 
-	msgs = make([]*pb.HareMessage, validator.threshold)
+	msgs = make([]*XDRMessage, validator.threshold)
 	for i := 0; i < validator.threshold; i++ {
-		msgs[i] = BuildCommitMsg(generateSigning(t), NewSmallEmptySet()).HareMessage
+		msgs[i] = BuildCommitMsg(generateSigning(t), NewSmallEmptySet()).XDRMessage
 	}
 	cert.AggMsgs.Messages = msgs
 	assert.True(t, validator.validateCertificate(cert))
@@ -61,11 +60,11 @@ func TestEligibilityValidator_validateRole(t *testing.T) {
 func TestMessageValidator_IsStructureValid(t *testing.T) {
 	validator := defaultValidator()
 	assert.False(t, validator.SyntacticallyValidateMessage(nil))
-	m := &Msg{&pb.HareMessage{}, nil}
+	m := &Msg{&XDRMessage{}, nil}
 	assert.False(t, validator.SyntacticallyValidateMessage(m))
 	m.PubKey = generateSigning(t).PublicKey().Bytes()
 	assert.False(t, validator.SyntacticallyValidateMessage(m))
-	m.Message = &pb.InnerMessage{}
+	m.Message = &InnerMessage{}
 	assert.False(t, validator.SyntacticallyValidateMessage(m))
 	m.Message.Values = nil
 	assert.False(t, validator.SyntacticallyValidateMessage(m))
@@ -79,12 +78,12 @@ func TestMessageValidator_Aggregated(t *testing.T) {
 	funcs := make([]func(m *Msg) bool, 0)
 	assert.False(t, validator.validateAggregatedMessage(nil, funcs))
 
-	agg := &pb.AggregatedMessages{}
+	agg := &AggregatedMessages{}
 	assert.False(t, validator.validateAggregatedMessage(agg, funcs))
-	msgs := make([]*pb.HareMessage, validator.threshold)
+	msgs := make([]*XDRMessage, validator.threshold)
 	for i := 0; i < validator.threshold; i++ {
 		iMsg := BuildStatusMsg(generateSigning(t), NewSetFromValues(value1))
-		msgs[i] = iMsg.HareMessage
+		msgs[i] = iMsg.XDRMessage
 	}
 	agg.Messages = msgs
 	assert.True(t, validator.validateAggregatedMessage(agg, funcs))
@@ -111,7 +110,7 @@ func TestConsensusProcess_isContextuallyValid(t *testing.T) {
 			builder := NewMessageBuilder()
 			builder.SetType(msgType[j]).SetInstanceId(instanceId1).SetRoundCounter(cp.k).SetKi(ki).SetValues(s)
 			builder = builder.Sign(signing.NewEdSigner())
-			//mt.Printf("%v   j=%v i=%v Exp: %v Actual %v\n", cp.k, j, i, rounds[j][i], ContextuallyValidateMessage(builder.Build(), cp.k))
+			//mt.Printf("%v   j=%v i=%v Exp: %v Actual %v\n", cp.K, j, i, rounds[j][i], ContextuallyValidateMessage(builder.Build(), cp.K))
 			validator := defaultValidator()
 			assert.Equal(t, true, validator.ContextuallyValidateMessage(builder.Build(), cp.k))
 			cp.advanceToNextRound()
@@ -184,7 +183,7 @@ func TestMessageValidator_validateSVP(t *testing.T) {
 	m := buildProposalMsg(signing.NewEdSigner(), NewSetFromValues(value1, value2, value3), []byte{})
 	s1 := NewSetFromValues(value1)
 	m.Message.Svp = buildSVP(-1, s1)
-	m.Message.Svp.Messages[0].Message.Type = int32(Commit)
+	m.Message.Svp.Messages[0].Message.Type = Commit
 	assert.False(t, validator.validateSVP(m))
 	m.Message.Svp = buildSVP(-1, s1)
 	m.Message.Svp.Messages[0].Message.K = 4
@@ -200,13 +199,13 @@ func TestMessageValidator_validateSVP(t *testing.T) {
 	assert.True(t, validator.validateSVP(m))
 }
 
-func buildSVP(ki int32, S ...*Set) *pb.AggregatedMessages {
-	msgs := make([]*pb.HareMessage, 0, len(S))
+func buildSVP(ki int32, S ...*Set) *AggregatedMessages {
+	msgs := make([]*XDRMessage, 0, len(S))
 	for _, s := range S {
-		msgs = append(msgs, buildStatusMsg(signing.NewEdSigner(), s, ki).HareMessage)
+		msgs = append(msgs, buildStatusMsg(signing.NewEdSigner(), s, ki).XDRMessage)
 	}
 
-	svp := &pb.AggregatedMessages{}
+	svp := &AggregatedMessages{}
 	svp.Messages = msgs
 	return svp
 }

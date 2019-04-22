@@ -67,7 +67,7 @@ func (his *HareSuite) WaitForTimedTermination(t *testing.T, timeout time.Duratio
 }
 
 func (his *HareSuite) checkResult(t *testing.T) {
-	// build world of values (U)
+	// build world of Values (U)
 	u := his.initialSets[0]
 	for i := 1; i < len(his.initialSets); i++ {
 		u = u.Union(his.initialSets[i])

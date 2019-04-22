@@ -1,9 +1,9 @@
 package hare
 
 import (
+	"bytes"
 	"errors"
-	"github.com/gogo/protobuf/proto"
-	"github.com/spacemeshos/go-spacemesh/hare/pb"
+	"github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"sync"
@@ -36,7 +36,7 @@ func (closer *Closer) CloseChannel() chan struct{} {
 	return closer.channel
 }
 
-// Broker is responsible for dispatching hare messages to the matching set objectId listener
+// Broker is responsible for dispatching hare Messages to the matching set objectId listener
 type Broker struct {
 	Closer
 	log.Log
@@ -66,7 +66,7 @@ func NewBroker(networkService NetworkService, eValidator Validator, stateQuerier
 	return p
 }
 
-// Start listening to protocol messages and dispatch messages (non-blocking)
+// Start listening to protocol Messages and dispatch Messages (non-blocking)
 func (b *Broker) Start() error {
 	if b.isStarted { // Start has been called at least twice
 		b.Error("Could not start instance")
@@ -81,7 +81,7 @@ func (b *Broker) Start() error {
 	return nil
 }
 
-// Dispatch incoming messages to the matching set objectId instance
+// Dispatch incoming Messages to the matching set objectId instance
 func (b *Broker) eventLoop() {
 	for {
 		select {
@@ -93,16 +93,17 @@ func (b *Broker) eventLoop() {
 				continue
 			}
 
-			hareMsg := &pb.HareMessage{}
-			err := proto.Unmarshal(msg.Bytes(), hareMsg)
+			rdr := bytes.NewReader(msg.Bytes())
+			hareMsg := &XDRMessage{}
+			_, err := xdr.Unmarshal(rdr, hareMsg)
 			if err != nil {
-				b.Error("Could not unmarshal message: ", err)
+				b.Error("Could not unmarshal Message: %v", err)
 				continue
 			}
 
-			// message validation
+			// Message validation
 			if hareMsg.Message == nil {
-				b.Warning("Message validation failed: message is nil")
+				b.Warning("Message validation failed: Message is nil")
 				continue
 			}
 
@@ -110,7 +111,7 @@ func (b *Broker) eventLoop() {
 			msgInstId := InstanceId(hareMsg.Message.InstanceId)
 			// far future unregistered instance
 			if msgInstId > expInstId {
-				b.Warning("Message validation failed: instanceId. Max: %v Actual: %v", expInstId, msgInstId)
+				b.Warning("Message validation failed: InstanceId. Max: %v Actual: %v", expInstId, msgInstId)
 				continue
 			}
 
@@ -139,12 +140,12 @@ func (b *Broker) eventLoop() {
 				// todo: err if chan is full (len)
 				c <- iMsg
 				continue
-			} else { // message arrived before registration
+			} else { // Message arrived before registration
 				futureMsg = true
 			}
 
 			if futureMsg {
-				b.Info("Broker identified future message")
+				b.Info("Broker identified future Message")
 				if _, exist := b.pending[msgInstId]; !exist {
 					b.pending[msgInstId] = make([]*Msg, 0)
 				}
@@ -160,8 +161,8 @@ func (b *Broker) eventLoop() {
 	}
 }
 
-// Register a listener to messages
-// Note: the registering instance is assumed to be started and accepting messages
+// Register a listener to Messages
+// Note: the registering instance is assumed to be started and accepting Messages
 func (b *Broker) Register(id InstanceId) chan *Msg {
 	inbox := make(chan *Msg, InboxCapacity)
 

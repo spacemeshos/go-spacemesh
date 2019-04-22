@@ -1,13 +1,13 @@
 package hare
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
-	"github.com/gogo/protobuf/proto"
+	"github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/hare/metrics"
-	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -49,10 +49,10 @@ var _ TerminationOutput = (*procOutput)(nil)
 
 // Represents the state of the participant
 type State struct {
-	k           int32           // the round counter (r%4 is the round number)
-	ki          int32           // indicates when S was first committed upon
-	s           *Set            // the set of values
-	certificate *pb.Certificate // the certificate
+	k           int32        // the round counter (r%4 is the round number)
+	ki          int32        // indicates when S was first committed upon
+	s           *Set         // the set of Values
+	certificate *Certificate // the certificate
 }
 
 type StateQuerier interface {
@@ -60,7 +60,7 @@ type StateQuerier interface {
 }
 
 type Msg struct {
-	*pb.HareMessage
+	*XDRMessage
 	PubKey []byte
 }
 
@@ -78,16 +78,17 @@ func (msq MockStateQuerier) IsIdentityActive(edId string, layer types.LayerID) (
 	return msq.res, msq.err
 }
 
-func newMsg(hareMsg *pb.HareMessage, querier StateQuerier) (*Msg, error) {
+func newMsg(hareMsg *XDRMessage, querier StateQuerier) (*Msg, error) {
 	// data msg to bytes
-	data, err := proto.Marshal(hareMsg.Message)
+	var w bytes.Buffer
+	_, err := xdr.Marshal(&w, hareMsg.Message)
 	if err != nil {
 		log.Error("Could not marshal err=%v", err)
 		return nil, err
 	}
 
 	// extract pub key
-	pubKey, err := ed25519.ExtractPublicKey(data, hareMsg.InnerSig)
+	pubKey, err := ed25519.ExtractPublicKey(w.Bytes(), hareMsg.InnerSig)
 	if err != nil {
 		log.Error("newMsg construction failed: could not extract public key err=%v", err, len(hareMsg.InnerSig))
 		return nil, err
@@ -204,11 +205,11 @@ func (proc *ConsensusProcess) eventLoop() {
 		log.Int("Hare-N", proc.cfg.N), log.Int("f", proc.cfg.F), log.String("duration", (time.Duration(proc.cfg.RoundDuration)*time.Second).String()),
 		log.Uint32("instance_id", uint32(proc.instanceId)), log.String("set_values", proc.s.String()))
 
-	// set pre-round message and send
+	// set pre-round Message and send
 	m := proc.initDefaultBuilder(proc.s).SetType(PreRound).Sign(proc.signing).Build()
 	proc.sendMessage(m)
 
-	// listen to pre-round messages
+	// listen to pre-round Messages
 	timer := time.NewTimer(time.Duration(proc.cfg.RoundDuration) * time.Second)
 PreRound:
 	for {
@@ -225,7 +226,7 @@ PreRound:
 	if proc.s.Size() == 0 {
 		proc.Error("Fatal: PreRound ended with empty set")
 	}
-	proc.advanceToNextRound() // k was initialized to -1, k should be 0
+	proc.advanceToNextRound() // K was initialized to -1, K should be 0
 
 	// start first iteration
 	proc.onRoundBegin()
@@ -255,14 +256,19 @@ func (proc *ConsensusProcess) onEarlyMessage(m *Msg) {
 		return
 	}
 
-	if m.HareMessage == nil {
-		proc.Error("onEarlyMessage called with nil message")
+	if m.XDRMessage == nil {
+		proc.Error("onEarlyMessage called with nil Message")
+		return
+	}
+
+	if m.Message == nil {
+		proc.Error("onEarlyMessage called with nil inner message")
 		return
 	}
 
 	pub := signing.NewPublicKey(m.PubKey)
 	if _, exist := proc.pending[pub.String()]; exist { // ignore, already received
-		proc.Warning("Already received message from sender %v", pub.String())
+		proc.Warning("Already received Message from sender %v", pub.String())
 		return
 	}
 
@@ -270,9 +276,9 @@ func (proc *ConsensusProcess) onEarlyMessage(m *Msg) {
 }
 
 func (proc *ConsensusProcess) handleMessage(m *Msg) {
-	// Note: instanceId is already verified by the broker
+	// Note: InstanceId is already verified by the broker
 
-	proc.Debug("Received message %v", m)
+	proc.Debug("Received Message %v", m)
 
 	if !proc.validator.SyntacticallyValidateMessage(m) {
 		proc.Warning("Syntactically validation failed, pubkey %v", m.PubKey)
@@ -280,14 +286,14 @@ func (proc *ConsensusProcess) handleMessage(m *Msg) {
 	}
 
 	mType := MessageType(m.Message.Type).String()
-	// validate message for this or next round
+	// validate Message for this or next round
 	if !proc.validator.ContextuallyValidateMessage(m, proc.k) {
 		if !proc.validator.ContextuallyValidateMessage(m, proc.k+1) {
-			// TODO: should return error from message validation to indicate what failed, should retry only for contextual failure
+			// TODO: should return error from Message validation to indicate what failed, should retry only for contextual failure
 			proc.Warning("Message of type %v is not valid for either round, pubkey %v", mType, m.PubKey)
 			return
-		} else { // a valid early message, keep it for later
-			proc.Info("Early message of type %v detected. Keeping message, pubkey %v", mType, m.PubKey)
+		} else { // a valid early Message, keep it for later
+			proc.Info("Early Message of type %v detected. Keeping Message, pubkey %v", mType, m.PubKey)
 			proc.onEarlyMessage(m)
 			return
 		}
@@ -298,9 +304,9 @@ func (proc *ConsensusProcess) handleMessage(m *Msg) {
 }
 
 func (proc *ConsensusProcess) processMsg(m *Msg) {
-	proc.Info("Processing message of type %v", MessageType(m.Message.Type).String())
+	proc.Info("Processing Message of type %v", m.Message.Type.String())
 
-	metrics.MessageTypeCounter.With("type_id", MessageType(m.Message.Type).String()).Add(1)
+	metrics.MessageTypeCounter.With("type_id", m.Message.Type.String()).Add(1)
 
 	switch MessageType(m.Message.Type) {
 	case PreRound:
@@ -314,7 +320,7 @@ func (proc *ConsensusProcess) processMsg(m *Msg) {
 	case Notify: // end of round 4
 		proc.processNotifyMsg(m)
 	default:
-		proc.Warning("Unknown message type: %v , pubkey %v", m.Message.Type, m.PubKey)
+		proc.Warning("Unknown Message type: %v , pubkey %v", m.Message.Type, m.PubKey)
 	}
 }
 
@@ -331,21 +337,22 @@ func (proc *ConsensusProcess) sendMessage(msg *Msg) {
 		return
 	}
 
-	data, err := proto.Marshal(msg.HareMessage)
+	var w bytes.Buffer
+	_, err := xdr.Marshal(&w, msg.XDRMessage)
 	if err != nil {
-		proc.Panic("could not marshal message before send")
+		proc.Panic("could not marshal Message before send")
 	}
 
-	if err := proc.network.Broadcast(protoName, data); err != nil {
-		proc.Error("Could not broadcast round message ", err.Error())
+	if err := proc.network.Broadcast(protoName, w.Bytes()); err != nil {
+		proc.Error("Could not broadcast round Message ", err.Error())
 		return
 	}
 
-	proc.Info("Message of type %v sent", MessageType(msg.Message.Type).String())
+	proc.Info("Message of type %v sent", msg.Message.Type.String())
 }
 
 func (proc *ConsensusProcess) onRoundEnd() {
-	proc.With().Info("End of round", log.Int32("k", proc.k))
+	proc.With().Info("End of round", log.Int32("K", proc.k))
 
 	// reset trackers
 	switch proc.currentRound() {
@@ -397,7 +404,7 @@ func (proc *ConsensusProcess) beginRound2() {
 func (proc *ConsensusProcess) beginRound3() {
 	proposedSet := proc.proposalTracker.ProposedSet()
 
-	// proposedSet may be nil, in such case the tracker will ignore messages
+	// proposedSet may be nil, in such case the tracker will ignore Messages
 	proc.commitTracker = NewCommitTracker(proc.cfg.F+1, proc.cfg.N, proposedSet) // track commits for proposed set
 
 	if proposedSet != nil { // has proposal to send
@@ -490,7 +497,7 @@ func (proc *ConsensusProcess) processNotifyMsg(msg *Msg) {
 
 	if proc.currentRound() == Round4 { // not necessary to update otherwise
 		// we assume that this expression was checked before
-		if int32(msg.Message.Cert.AggMsgs.Messages[0].Message.K) >= proc.ki { // update state iff K >= ki
+		if int32(msg.Message.Cert.AggMsgs.Messages[0].Message.K) >= proc.ki { // update state iff K >= Ki
 			proc.s = s
 			proc.certificate = msg.Message.Cert
 			proc.ki = msg.Message.Ki
@@ -522,7 +529,7 @@ func (proc *ConsensusProcess) statusValidator() func(m *Msg) bool {
 			if proc.preRoundTracker.CanProveSet(s) { // can prove s
 				return true
 			}
-		} else { // ki>=0, we should have received a certificate for that set
+		} else { // Ki>=0, we should have received a certificate for that set
 			if proc.notifyTracker.HasCertificate(m.Message.Ki, s) { // can prove s
 				return true
 			}
@@ -567,8 +574,8 @@ func (proc *ConsensusProcess) endOfRound3() {
 		return
 	}
 
-	// commit & send notification message
-	proc.Debug("end of round 3: committing on %v and sending notification message", s)
+	// commit & send notification Message
+	proc.Debug("end of round 3: committing on %v and sending notification Message", s)
 	proc.s = s
 	proc.certificate = cert
 	builder := proc.initDefaultBuilder(proc.s).SetType(Notify).SetCertificate(proc.certificate).Sign(proc.signing)

@@ -6,10 +6,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
-// Tracks pre-round messages
+// Tracks pre-round Messages
 type PreRoundTracker struct {
-	preRound  map[string]*Set  // maps PubKey->Set of already tracked values
-	tracker   *RefCountTracker // keeps track of seen values
+	preRound  map[string]*Set  // maps PubKey->Set of already tracked Values
+	tracker   *RefCountTracker // keeps track of seen Values
 	threshold uint32           // the threshold to prove a single value
 }
 
@@ -22,25 +22,25 @@ func NewPreRoundTracker(threshold int, expectedSize int) *PreRoundTracker {
 	return pre
 }
 
-// Tracks a pre-round message
+// Tracks a pre-round Message
 func (pre *PreRoundTracker) OnPreRound(msg *Msg) {
 	pub := signing.NewPublicKey(msg.PubKey)
-	sToTrack := NewSet(msg.Message.Values) // assume track all values
+	sToTrack := NewSet(msg.Message.Values) // assume track all Values
 	alreadyTracked := NewSmallEmptySet()   // assume nothing tracked so far
 
 	if set, exist := pre.preRound[pub.String()]; exist { // not first pre-round msg from this sender
 		log.Debug("Duplicate sender %v", pub.String())
-		alreadyTracked = set              // update already tracked values
-		sToTrack.Subtract(alreadyTracked) // subtract the already tracked values
+		alreadyTracked = set              // update already tracked Values
+		sToTrack.Subtract(alreadyTracked) // subtract the already tracked Values
 	}
 
-	// record values
+	// record Values
 	for _, v := range sToTrack.values {
 		pre.tracker.Track(v.Id())
 		metrics.PreRoundCounter.With("value", v.String()).Add(1)
 	}
 
-	// update the union to include new values
+	// update the union to include new Values
 	pre.preRound[pub.String()] = alreadyTracked.Union(sToTrack)
 }
 
@@ -52,7 +52,7 @@ func (pre *PreRoundTracker) CanProveValue(value Value) bool {
 
 // Returns true if the given set is provable, false otherwise
 func (pre *PreRoundTracker) CanProveSet(set *Set) bool {
-	// a set is provable iff all its values are provable
+	// a set is provable iff all its Values are provable
 	for _, bid := range set.values {
 		if !pre.CanProveValue(bid) {
 			return false
@@ -62,7 +62,7 @@ func (pre *PreRoundTracker) CanProveSet(set *Set) bool {
 	return true
 }
 
-// Filters out the given set from non-provable values
+// Filters out the given set from non-provable Values
 func (pre *PreRoundTracker) FilterSet(set *Set) {
 	for _, v := range set.values {
 		if !pre.CanProveValue(v) { // not enough witnesses

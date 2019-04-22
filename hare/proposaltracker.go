@@ -12,7 +12,7 @@ type proposalTracker interface {
 	ProposedSet() *Set
 }
 
-// Tracks proposal messages
+// Tracks proposal Messages
 type ProposalTracker struct {
 	log.Log
 	proposal      *Msg // maps PubKey->Proposal
@@ -28,7 +28,7 @@ func NewProposalTracker(log log.Log) *ProposalTracker {
 	return pt
 }
 
-// Tracks the provided proposal message assuming it was received on the expected round
+// Tracks the provided proposal Message assuming it was received on the expected round
 func (pt *ProposalTracker) OnProposal(msg *Msg) {
 	if pt.proposal == nil { // first leader
 		pt.proposal = msg // just update
@@ -57,7 +57,7 @@ func (pt *ProposalTracker) OnProposal(msg *Msg) {
 	pt.isConflicting = false // assume no conflict
 }
 
-// Tracks the provided proposal message assuming it was late
+// Tracks the provided proposal Message assuming it was late
 func (pt *ProposalTracker) OnLateProposal(msg *Msg) {
 	if pt.proposal == nil {
 		return

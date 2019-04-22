@@ -25,8 +25,8 @@ func NewMockSigning() *MockSigning {
 func (ms *MockSigning) Sign(m []byte) []byte {
 	sig, err := ms.key.Sign(m)
 	if err != nil {
-		log.Error("Error signing message: ", err)
-		log.Panic("Could not sign message")
+		log.Error("Error signing Message: ", err)
+		log.Panic("Could not sign Message")
 	}
 
 	return sig

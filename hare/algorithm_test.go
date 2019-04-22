@@ -3,7 +3,6 @@ package hare
 import (
 	"bytes"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
-	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -97,7 +96,7 @@ type mockCommitTracker struct {
 	countHasEnoughCommits int
 	countBuildCertificate int
 	hasEnoughCommits      bool
-	certificate           *pb.Certificate
+	certificate           *Certificate
 }
 
 func (mct *mockCommitTracker) OnCommit(msg *Msg) {
@@ -109,7 +108,7 @@ func (mct *mockCommitTracker) HasEnoughCommits() bool {
 	return mct.hasEnoughCommits
 }
 
-func (mct *mockCommitTracker) BuildCertificate() *pb.Certificate {
+func (mct *mockCommitTracker) BuildCertificate() *Certificate {
 	mct.countBuildCertificate++
 	return mct.certificate
 }
@@ -118,7 +117,7 @@ func generateSigning(t *testing.T) Signer {
 	return signing.NewEdSigner()
 }
 
-func buildMessage(msg *pb.HareMessage) *Msg {
+func buildMessage(msg *XDRMessage) *Msg {
 	return &Msg{msg, nil}
 }
 
@@ -146,7 +145,7 @@ func buildOracle(oracle Rolacle) *hareRolacle {
 	return NewHareOracle(oracle, cfg.N)
 }
 
-// test that a message to a specific set objectId is delivered by the broker
+// test that a Message to a specific set objectId is delivered by the broker
 func TestConsensusProcess_Start(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
@@ -554,7 +553,7 @@ func TestConsensusProcess_endOfRound3(t *testing.T) {
 	proc.endOfRound3()
 	assert.Equal(t, 1, mct.countBuildCertificate)
 	assert.Equal(t, 0, mpt.countProposedSet)
-	mct.certificate = &pb.Certificate{}
+	mct.certificate = &Certificate{}
 	proc.endOfRound3()
 	mpt.proposedSet = nil
 	proc.s = NewSmallEmptySet()

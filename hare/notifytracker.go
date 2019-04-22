@@ -8,7 +8,7 @@ import (
 	"hash/fnv"
 )
 
-// Tracks notify messages
+// Tracks notify Messages
 type NotifyTracker struct {
 	notifies     map[string]struct{} // tracks PubKey->Notification
 	tracker      *RefCountTracker    // tracks ref count to each seen set
@@ -24,8 +24,8 @@ func NewNotifyTracker(expectedSize int) *NotifyTracker {
 	return nt
 }
 
-// Track the provided notification message
-// Returns true if the message didn't affect the state, false otherwise
+// Track the provided notification Message
+// Returns true if the Message didn't affect the state, false otherwise
 func (nt *NotifyTracker) OnNotify(msg *Msg) bool {
 	pub := signing.NewPublicKey(msg.PubKey)
 	if _, exist := nt.notifies[pub.String()]; exist { // already seenSenders
@@ -52,9 +52,9 @@ func (nt *NotifyTracker) NotificationsCount(s *Set) int {
 func calcId(k int32, set *Set) uint32 {
 	hash := fnv.New32()
 
-	// write k
+	// write K
 	buff := make([]byte, 4)
-	binary.LittleEndian.PutUint32(buff, uint32(k)) // k>=0 because this not pre-round
+	binary.LittleEndian.PutUint32(buff, uint32(k)) // K>=0 because this not pre-round
 	hash.Write(buff)
 
 	// write set objectId
@@ -69,7 +69,7 @@ func (nt *NotifyTracker) onCertificate(k int32, set *Set) {
 	nt.certificates[calcId(k, set)] = struct{}{}
 }
 
-// Checks if a certificates exist for the provided set in round k
+// Checks if a certificates exist for the provided set in round K
 func (nt *NotifyTracker) HasCertificate(k int32, set *Set) bool {
 	_, exist := nt.certificates[calcId(k, set)]
 	return exist

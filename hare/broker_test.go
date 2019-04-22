@@ -1,9 +1,9 @@
 package hare
 
 import (
+	"bytes"
 	"errors"
-	"github.com/gogo/protobuf/proto"
-	"github.com/spacemeshos/go-spacemesh/hare/pb"
+	"github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -27,13 +27,14 @@ func createMessage(t *testing.T, instanceId InstanceId) []byte {
 	b := NewMessageBuilder()
 	msg := b.SetPubKey(sr.PublicKey().Bytes()).SetInstanceId(instanceId).Sign(sr).Build()
 
-	serMsg, err := proto.Marshal(msg)
+	var w bytes.Buffer
+	_, err := xdr.Marshal(&w, msg.XDRMessage)
 
 	if err != nil {
 		assert.Fail(t, "Failed to marshal data")
 	}
 
-	return serMsg
+	return w.Bytes()
 }
 
 func TestBroker_Start(t *testing.T) {
@@ -49,7 +50,7 @@ func TestBroker_Start(t *testing.T) {
 	assert.Equal(t, "instance already started", err.Error())
 }
 
-// test that a message to a specific set Id is delivered by the broker
+// test that a Message to a specific set Id is delivered by the broker
 func TestBroker_Received(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
@@ -99,7 +100,7 @@ func waitForMessages(t *testing.T, inbox chan *Msg, instanceId InstanceId, msgCo
 		for {
 			select {
 			case x := <-inbox:
-				assert.True(t, x.Message.InstanceId == uint64(instanceId))
+				assert.True(t, x.Message.InstanceId == instanceId)
 				i++
 				if i >= msgCount {
 					return
@@ -157,13 +158,14 @@ type mockGossipMessage struct {
 }
 
 func (mgm *mockGossipMessage) Bytes() []byte {
-	data, err := proto.Marshal(mgm.msg.HareMessage)
+	var w bytes.Buffer
+	_, err := xdr.Marshal(&w, mgm.msg.XDRMessage)
 	if err != nil {
 		log.Error("Could not marshal err=%v", err)
 		return nil
 	}
 
-	return data
+	return w.Bytes()
 }
 
 func (mgm *mockGossipMessage) ValidationCompletedChan() chan service.MessageValidation {
@@ -178,7 +180,7 @@ func (mgm *mockGossipMessage) ReportValidation(protocol string) {
 	mgm.vComp <- service.NewMessageValidation(mgm.sender, nil, "")
 }
 
-func newMockGossipMsg(msg *pb.HareMessage) *mockGossipMessage {
+func newMockGossipMsg(msg *XDRMessage) *mockGossipMessage {
 	return &mockGossipMessage{&Msg{msg, nil}, p2pcrypto.NewRandomPubkey(), make(chan service.MessageValidation, 10)}
 }
 
@@ -193,7 +195,7 @@ func TestBroker_Send(t *testing.T) {
 	m := newMockGossipMsg(nil)
 	broker.inbox <- m
 
-	msg := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1)).HareMessage
+	msg := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1)).XDRMessage
 	msg.Message.InstanceId = 2
 	m = newMockGossipMsg(msg)
 	broker.inbox <- m
@@ -201,7 +203,7 @@ func TestBroker_Send(t *testing.T) {
 	msg.Message.InstanceId = 1
 	m = newMockGossipMsg(msg)
 	broker.inbox <- m
-	// nothing happens since this is an  invalid message
+	// nothing happens since this is an  invalid Message
 
 	mev.valid = true
 	broker.inbox <- m
@@ -237,12 +239,12 @@ func TestBroker_Register2(t *testing.T) {
 	broker := buildBroker(n1)
 	broker.Start()
 	broker.Register(instanceId1)
-	m := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1)).HareMessage
-	m.Message.InstanceId = uint64(instanceId1)
+	m := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1)).XDRMessage
+	m.Message.InstanceId = instanceId1
 	msg := newMockGossipMsg(m)
 	broker.inbox <- msg
 	assertMsg(t, msg)
-	m.Message.InstanceId = uint64(instanceId2)
+	m.Message.InstanceId = instanceId2
 	msg = newMockGossipMsg(m)
 	broker.inbox <- msg
 	assertMsg(t, msg)
@@ -254,8 +256,8 @@ func TestBroker_Register3(t *testing.T) {
 	broker := buildBroker(n1)
 	broker.Start()
 
-	m := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1)).HareMessage
-	m.Message.InstanceId = uint64(instanceId0)
+	m := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1)).XDRMessage
+	m.Message.InstanceId = instanceId0
 	msg := newMockGossipMsg(m)
 	broker.inbox <- msg
 	time.Sleep(1)
@@ -280,8 +282,8 @@ func TestBroker_PubkeyExtraction(t *testing.T) {
 	broker.Start()
 	inbox := broker.Register(instanceId1)
 	sgn := signing.NewEdSigner()
-	m := BuildPreRoundMsg(sgn, NewSetFromValues(value1)).HareMessage
-	m.Message.InstanceId = uint64(instanceId1)
+	m := BuildPreRoundMsg(sgn, NewSetFromValues(value1)).XDRMessage
+	m.Message.InstanceId = instanceId1
 	msg := newMockGossipMsg(m)
 	broker.inbox <- msg
 	tm := time.NewTimer(2 * time.Second)
@@ -299,7 +301,7 @@ func TestBroker_PubkeyExtraction(t *testing.T) {
 }
 
 func Test_newMsg(t *testing.T) {
-	m := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1)).HareMessage
+	m := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1)).XDRMessage
 	_, e := newMsg(m, MockStateQuerier{false, errors.New("my err")})
 	assert.NotNil(t, e)
 	_, e = newMsg(m, MockStateQuerier{true, nil})

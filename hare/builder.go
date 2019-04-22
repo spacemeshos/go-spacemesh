@@ -1,19 +1,49 @@
 package hare
 
 import (
-	"github.com/gogo/protobuf/proto"
-	"github.com/spacemeshos/go-spacemesh/hare/pb"
+	"bytes"
+	"github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-// Used to build proto messages
+// top Message of the protocol
+type XDRMessage struct {
+	InnerSig []byte
+	Message  *InnerMessage
+}
+
+// the certificate
+type Certificate struct {
+	Values  []uint64 // the committed set S
+	AggMsgs *AggregatedMessages
+}
+
+// Aggregated Messages
+type AggregatedMessages struct {
+	Messages []*XDRMessage // a collection of Messages
+	AggSig   []byte
+}
+
+// basic Message
+type InnerMessage struct {
+	Type       MessageType
+	InstanceId InstanceId
+	K          int32 // the round counter
+	Ki         int32
+	Values     []uint64            // the set S. optional for commit Message in a certificate
+	RoleProof  []byte              // role is implicit by Message type, this is the proof
+	Svp        *AggregatedMessages // optional. only for proposal Messages
+	Cert       *Certificate        // optional
+}
+
+// Used to build proto Messages
 type MessageBuilder struct {
 	msg   *Msg
-	inner *pb.InnerMessage
+	inner *InnerMessage
 }
 
 func NewMessageBuilder() *MessageBuilder {
-	m := &MessageBuilder{&Msg{&pb.HareMessage{}, nil}, &pb.InnerMessage{}}
+	m := &MessageBuilder{&Msg{&XDRMessage{}, nil}, &InnerMessage{}}
 	m.msg.Message = m.inner
 
 	return m
@@ -23,18 +53,20 @@ func (builder *MessageBuilder) Build() *Msg {
 	return builder.msg
 }
 
-func (builder *MessageBuilder) SetCertificate(certificate *pb.Certificate) *MessageBuilder {
+func (builder *MessageBuilder) SetCertificate(certificate *Certificate) *MessageBuilder {
 	builder.msg.Message.Cert = certificate
 	return builder
 }
 
 func (builder *MessageBuilder) Sign(signing Signer) *MessageBuilder {
-	buff, err := proto.Marshal(builder.inner)
+	var w bytes.Buffer
+	_, err := xdr.Marshal(&w, builder.inner)
 	if err != nil {
 		log.Panic("marshal failed during signing")
 	}
 
-	builder.msg.InnerSig = signing.Sign(buff)
+	// TODO: do we always sign the same Message? order of Values (set)?
+	builder.msg.InnerSig = signing.Sign(w.Bytes())
 
 	return builder
 }
@@ -45,12 +77,12 @@ func (builder *MessageBuilder) SetPubKey(pub []byte) *MessageBuilder {
 }
 
 func (builder *MessageBuilder) SetType(msgType MessageType) *MessageBuilder {
-	builder.inner.Type = int32(msgType)
+	builder.inner.Type = msgType
 	return builder
 }
 
 func (builder *MessageBuilder) SetInstanceId(id InstanceId) *MessageBuilder {
-	builder.inner.InstanceId = uint64(id)
+	builder.inner.InstanceId = id
 	return builder
 }
 
@@ -74,11 +106,7 @@ func (builder *MessageBuilder) SetRoleProof(sig Signature) *MessageBuilder {
 	return builder
 }
 
-func (builder *MessageBuilder) SetSVP(svp *pb.AggregatedMessages) *MessageBuilder {
+func (builder *MessageBuilder) SetSVP(svp *AggregatedMessages) *MessageBuilder {
 	builder.inner.Svp = svp
 	return builder
-}
-
-type AggregatedBuilder struct {
-	m *pb.AggregatedMessages
 }
