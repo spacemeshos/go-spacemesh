@@ -322,9 +322,8 @@ func TestSyncProtocol_SyncTwoNodes(t *testing.T) {
 	syncObj1.AddBlock(block9)
 	syncObj1.AddBlock(block10)
 	timeout := time.After(12 * time.Second)
-	//syncObj1.Start()
+	syncObj2.SetLatestLayer(6)
 	syncObj2.Start()
-
 	// Keep trying until we're timed out or got a result or got an error
 loop:
 	for {
@@ -379,10 +378,10 @@ func syncTest(dpType string, t *testing.T) {
 	block9 := types.NewExistingBlock(types.BlockID(999), 4, nil)
 	block10 := types.NewExistingBlock(types.BlockID(101), 4, nil)
 
-	syncObj1.Mesh.ValidateLayer(mesh.GenesisLayer())
-	syncObj2.Mesh.ValidateLayer(mesh.GenesisLayer())
-	syncObj3.Mesh.ValidateLayer(mesh.GenesisLayer())
-	syncObj4.Mesh.ValidateLayer(mesh.GenesisLayer())
+	syncObj1.ValidateLayer(mesh.GenesisLayer())
+	syncObj2.ValidateLayer(mesh.GenesisLayer())
+	syncObj3.ValidateLayer(mesh.GenesisLayer())
+	syncObj4.ValidateLayer(mesh.GenesisLayer())
 	syncObj1.AddBlock(block3)
 	syncObj1.AddBlock(block4)
 	syncObj1.AddBlock(block5)
@@ -393,8 +392,11 @@ func syncTest(dpType string, t *testing.T) {
 	syncObj1.AddBlock(block10)
 
 	syncObj2.Start()
+	syncObj2.SetLatestLayer(5)
 	syncObj3.Start()
+	syncObj3.SetLatestLayer(5)
 	syncObj4.Start()
+	syncObj4.SetLatestLayer(5)
 
 	// Keep trying until we're timed out or got a result or got an error
 	timeout := time.After(30 * time.Second)
@@ -496,7 +498,7 @@ func (sis *syncIntegrationTwoNodes) TestSyncProtocol_TwoNodes() {
 	syncObj2.AddBlock(block9)
 	syncObj2.AddBlock(block10)
 	timeout := time.After(60 * time.Second)
-	syncObj1.SetLatestLayer(5)
+	syncObj1.SetLatestLayer(6)
 	syncObj1.Start()
 
 	// Keep trying until we're timed out or got a result or got an error
@@ -578,10 +580,15 @@ func (sis *syncIntegrationMultipleNodes) TestSyncProtocol_MultipleNodes() {
 
 	timeout := time.After(30 * time.Second)
 	syncObj1.Start()
+	syncObj1.SetLatestLayer(5)
 	syncObj2.Start()
+	syncObj2.SetLatestLayer(5)
 	syncObj3.Start()
+	syncObj3.SetLatestLayer(5)
 	syncObj4.Start()
+	syncObj4.SetLatestLayer(5)
 	syncObj5.Start()
+	syncObj5.SetLatestLayer(5)
 
 	// Keep trying until we're timed out or got a result or got an error
 	for {
