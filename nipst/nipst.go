@@ -342,7 +342,9 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *common.Hash) (*NIPST, error) {
 
 	nb.log.Info("finished NIPST construction")
 
-	return nb.nipst, nil
+	ret := nb.nipst
+	nb.nipst = &NIPST{}
+	return ret, nil
 }
 
 func (nb *NIPSTBuilder) IsPostInitialized() bool {

@@ -181,18 +181,18 @@ func (db *ActivationDb) ValidateAtx(atx *types.ActivationTx) error {
 		return fmt.Errorf("atx conatins view with unequal active ids (%v) than seen (%v)", atx.ActiveSetSize, atx.VerifiedActiveSet)
 	}
 
-	/*
-		hash, err := atx.NIPSTChallenge.Hash()
-		if err != nil {
-			return fmt.Errorf("cannot get NIPST Challenge hash: %v", err)
-		}
-		//todo: add validation of nipst
-		if !atx.Nipst.Valid(){
-			return fmt.Errorf("nipst not valid ")
-		}
-		if !atx.Nipst.ValidateNipstChallenge(hash) {
-			return fmt.Errorf("nipst challenge hash mismatch")
-		}*/
+	hash, err := atx.NIPSTChallenge.Hash()
+	if err != nil {
+		return fmt.Errorf("cannot get NIPST Challenge hash: %v", err)
+	}
+	db.log.Info("NIPST challenge: %v, OK nipst %v", hash.ShortString(), atx.NIPSTChallenge.String())
+	//todo: add validation of nipst
+	if !atx.Nipst.Valid() {
+		return fmt.Errorf("NIPST not valid ")
+	}
+	if !atx.Nipst.ValidateNipstChallenge(hash) {
+		return fmt.Errorf("NIPST challenge hash mismatch")
+	}
 	return nil
 }
 

@@ -197,7 +197,6 @@ func (m *Mesh) ValidateLayer(lyr *types.Layer) {
 	m.verifiedLayer = lyr.Index()
 	m.lvMutex.Unlock()
 
-	m.addAtxs(lyr)
 	if newPbase > oldPbase {
 		m.PushTransactions(oldPbase, newPbase)
 	}
@@ -285,6 +284,7 @@ func (m *Mesh) AddBlock(blk *types.Block) error {
 		m.Error("failed to add block %v  %v", blk.ID(), err)
 		return err
 	}
+	m.AtxDB.ProcessBlockATXs(blk)
 	m.SetLatestLayer(blk.Layer())
 	//new block add to orphans
 	m.handleOrphanBlocks(blk)

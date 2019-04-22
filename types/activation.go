@@ -20,6 +20,10 @@ type AtxId struct {
 	common.Hash
 }
 
+func (t AtxId) ShortId() string {
+	return t.String()[2:7]
+}
+
 var EmptyAtxId = &AtxId{common.Hash{0}}
 
 type ActivationTxHeader struct {
@@ -45,6 +49,19 @@ func (challenge *NIPSTChallenge) Hash() (*common.Hash, error) {
 	}
 	hash := common.Hash(sha256.Sum256(ncBytes))
 	return &hash, nil
+}
+
+func (challenge *NIPSTChallenge) String() string {
+	return fmt.Sprintf("<id: [vrf: %v ed: %v], seq: %v, prevAtx: %v, PubLayer: %v, s tick: %v, e tick: %v, "+
+		"posAtx: %v>",
+		common.Bytes2Hex(challenge.NodeId.VRFPublicKey)[:5],
+		challenge.NodeId.Key[:5],
+		challenge.Sequence,
+		challenge.PrevATXId.ShortId(),
+		challenge.PubLayerIdx,
+		challenge.StartTick,
+		challenge.EndTick,
+		challenge.PositioningAtx.ShortId())
 }
 
 type ActivationTx struct {
