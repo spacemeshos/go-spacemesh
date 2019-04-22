@@ -31,7 +31,6 @@ type BlockListener struct {
 	startLock            uint32
 	timeout              time.Duration
 	exit                 chan struct{}
-	tick                 chan types.LayerID
 }
 
 type TickProvider interface {
