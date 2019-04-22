@@ -39,76 +39,78 @@ func (closer *Closer) CloseChannel() chan struct{} {
 // Broker is responsible for dispatching hare messages to the matching set objectId listener
 type Broker struct {
 	Closer
-	network    NetworkService
-	eValidator Validator
-	inbox      chan service.GossipMessage
-	outbox     map[InstanceId]chan *Msg
-	pending    map[InstanceId][]*Msg
-	tasks      chan func()
-	maxReg     InstanceId
-	isStarted  bool
-	log        log.Log
+	log.Log
+	network      NetworkService
+	eValidator   Validator
+	stateQuerier StateQuerier
+	inbox        chan service.GossipMessage
+	outbox       map[InstanceId]chan *Msg
+	pending      map[InstanceId][]*Msg
+	tasks        chan func()
+	maxReg       InstanceId
+	isStarted    bool
 }
 
-func NewBroker(networkService NetworkService, eValidator Validator, closer Closer, log log.Log) *Broker {
+func NewBroker(networkService NetworkService, eValidator Validator, stateQuerier StateQuerier, closer Closer, log log.Log) *Broker {
 	p := new(Broker)
 	p.Closer = closer
+	p.Log = log
 	p.network = networkService
 	p.eValidator = eValidator
+	p.stateQuerier = stateQuerier
 	p.outbox = make(map[InstanceId]chan *Msg)
 	p.pending = make(map[InstanceId][]*Msg)
 	p.tasks = make(chan func())
 	p.maxReg = 1
-	p.log = log
 
 	return p
 }
 
 // Start listening to protocol messages and dispatch messages (non-blocking)
-func (broker *Broker) Start() error {
-	if broker.isStarted { // Start has been called at least twice
-		broker.log.Error("Could not start instance")
+func (b *Broker) Start() error {
+	if b.isStarted { // Start has been called at least twice
+		b.Error("Could not start instance")
 		return StartInstanceError(errors.New("instance already started"))
 	}
 
-	broker.isStarted = true
+	b.isStarted = true
 
-	broker.inbox = broker.network.RegisterGossipProtocol(protoName)
-	go broker.eventLoop()
+	b.inbox = b.network.RegisterGossipProtocol(protoName)
+	go b.eventLoop()
 
 	return nil
 }
 
 // Dispatch incoming messages to the matching set objectId instance
-func (broker *Broker) eventLoop() {
+func (b *Broker) eventLoop() {
 	for {
 		select {
-		case msg := <-broker.inbox:
+		case msg := <-b.inbox:
 			futureMsg := false
 
 			if msg == nil {
-				broker.log.Error("Message validation failed: called with nil")
+				b.Error("Message validation failed: called with nil")
 				continue
 			}
 
 			hareMsg := &pb.HareMessage{}
 			err := proto.Unmarshal(msg.Bytes(), hareMsg)
 			if err != nil {
-				broker.log.Error("Could not unmarshal message: ", err)
+				b.Error("Could not unmarshal message: ", err)
 				continue
 			}
 
 			// message validation
 			if hareMsg.Message == nil {
-				broker.log.Warning("Message validation failed: message is nil")
+				b.Warning("Message validation failed: message is nil")
 				continue
 			}
 
-			expInstId := broker.maxReg + 1 //  max expect current max + 1
+			expInstId := b.maxReg + 1 //  max expect current max + 1
 			msgInstId := InstanceId(hareMsg.Message.InstanceId)
 			// far future unregistered instance
 			if msgInstId > expInstId {
-				broker.log.Warning("Message validation failed: instanceId. Max: %v Actual: %v", expInstId, msgInstId)
+				b.Warning("Message validation failed: instanceId. Max: %v Actual: %v", expInstId, msgInstId)
 				continue
 			}
 
@@ -118,21 +120,21 @@ func (broker *Broker) eventLoop() {
 			}
 
 			// TODO: should receive the state querier or have a msg constructor
-			iMsg, err := newMsg(hareMsg, mockStateQuerier{})
+			iMsg, err := newMsg(hareMsg, MockStateQuerier{true, nil})
 			if err != nil {
-				log.Warning("Message validation failed: could not construct msg err=%v", err)
+				b.Warning("Message validation failed: could not construct msg err=%v", err)
 				continue
 			}
 
-			if !broker.eValidator.Validate(iMsg) {
-				broker.log.Warning("Message validation failed: eValidator returned false %v", hareMsg)
+			if !b.eValidator.Validate(iMsg) {
+				b.Warning("Message validation failed: eValidator returned false %v", hareMsg)
 				continue
 			}
 
 			// validation passed
 			msg.ReportValidation(protoName)
 
-			c, exist := broker.outbox[msgInstId]
+			c, exist := b.outbox[msgInstId]
 			if exist {
 				// todo: err if chan is full (len)
 				c <- iMsg
@@ -142,17 +144,17 @@ func (broker *Broker) eventLoop() {
 			}
 
 			if futureMsg {
-				broker.log.Info("Broker identified future message")
-				if _, exist := broker.pending[msgInstId]; !exist {
-					broker.pending[msgInstId] = make([]*Msg, 0)
+				b.Info("Broker identified future message")
+				if _, exist := b.pending[msgInstId]; !exist {
+					b.pending[msgInstId] = make([]*Msg, 0)
 				}
-				broker.pending[msgInstId] = append(broker.pending[msgInstId], iMsg)
+				b.pending[msgInstId] = append(b.pending[msgInstId], iMsg)
 			}
 
-		case task := <-broker.tasks:
+		case task := <-b.tasks:
 			task()
-		case <-broker.CloseChannel():
-			broker.log.Warning("Broker exiting")
+		case <-b.CloseChannel():
+			b.Warning("Broker exiting")
 			return
 		}
 	}
@@ -160,41 +162,41 @@ func (broker *Broker) eventLoop() {
 
 // Register a listener to messages
 // Note: the registering instance is assumed to be started and accepting messages
-func (broker *Broker) Register(id InstanceId) chan *Msg {
+func (b *Broker) Register(id InstanceId) chan *Msg {
 	inbox := make(chan *Msg, InboxCapacity)
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	regRequest := func() {
-		if id > broker.maxReg {
-			broker.maxReg = id
+		if id > b.maxReg {
+			b.maxReg = id
 		}
 
-		broker.outbox[id] = inbox
+		b.outbox[id] = inbox
 
-		pendingForInstance := broker.pending[id]
+		pendingForInstance := b.pending[id]
 		if pendingForInstance != nil {
 			for _, mOut := range pendingForInstance {
-				broker.outbox[id] <- mOut
+				b.outbox[id] <- mOut
 			}
-			delete(broker.pending, id)
+			delete(b.pending, id)
 		}
 
 		wg.Done()
 	}
-	broker.tasks <- regRequest
+	b.tasks <- regRequest
 	wg.Wait()
 
 	return inbox
 }
 
 // Unregister a listener
-func (broker *Broker) Unregister(id InstanceId) {
+func (b *Broker) Unregister(id InstanceId) {
 	wg := sync.WaitGroup{}
 
 	wg.Add(1)
-	broker.tasks <- func() {
-		delete(broker.outbox, id)
+	b.tasks <- func() {
+		delete(b.outbox, id)
 		wg.Done()
 	}
 
