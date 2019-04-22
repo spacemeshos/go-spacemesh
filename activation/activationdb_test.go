@@ -73,15 +73,16 @@ func getAtxDb(id string) (*ActivationDb, *mesh.Mesh) {
 }
 
 func Test_CalcActiveSetFromView(t *testing.T) {
+	activesetCache.Purge()
 	atxdb, layers := getAtxDb("t6")
 
-	id1 := types.NodeId{Key: uuid.New().String()}
-	id2 := types.NodeId{Key: uuid.New().String()}
-	id3 := types.NodeId{Key: uuid.New().String()}
+	id1 := types.NodeId{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}
+	id2 := types.NodeId{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}
+	id3 := types.NodeId{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}
 	atxs := []*types.ActivationTx{
-		types.NewActivationTx(id1, 0, *types.EmptyAtxId, 12, 0, *types.EmptyAtxId, 3, []types.BlockID{}, &nipst.NIPST{}, true),
-		types.NewActivationTx(id2, 0, *types.EmptyAtxId, 300, 0, *types.EmptyAtxId, 3, []types.BlockID{}, &nipst.NIPST{}, true),
-		types.NewActivationTx(id3, 0, *types.EmptyAtxId, 435, 0, *types.EmptyAtxId, 3, []types.BlockID{}, &nipst.NIPST{}, true),
+		types.NewActivationTx(id1, 0, *types.EmptyAtxId, 12, 0, *types.EmptyAtxId, 0, []types.BlockID{}, &nipst.NIPST{}, true),
+		types.NewActivationTx(id2, 0, *types.EmptyAtxId, 300, 0, *types.EmptyAtxId, 0, []types.BlockID{}, &nipst.NIPST{}, true),
+		types.NewActivationTx(id3, 0, *types.EmptyAtxId, 435, 0, *types.EmptyAtxId, 0, []types.BlockID{}, &nipst.NIPST{}, true),
 	}
 
 	for _, atx := range atxs {
@@ -101,9 +102,9 @@ func Test_CalcActiveSetFromView(t *testing.T) {
 
 	// check that further atxs dont affect current epoch count
 	atxs2 := []*types.ActivationTx{
-		types.NewActivationTx(types.NodeId{Key: uuid.New().String()}, 0, *types.EmptyAtxId, 1012, 0, atxs[0].Id(), 0, []types.BlockID{}, &nipst.NIPST{}, true),
-		types.NewActivationTx(types.NodeId{Key: uuid.New().String()}, 0, *types.EmptyAtxId, 1300, 0, atxs[1].Id(), 0, []types.BlockID{}, &nipst.NIPST{}, true),
-		types.NewActivationTx(types.NodeId{Key: uuid.New().String()}, 0, *types.EmptyAtxId, 1435, 0, atxs[2].Id(), 0, []types.BlockID{}, &nipst.NIPST{}, true),
+		types.NewActivationTx(types.NodeId{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}, 0, *types.EmptyAtxId, 1012, 0, atxs[0].Id(), 0, []types.BlockID{}, &nipst.NIPST{}, true),
+		types.NewActivationTx(types.NodeId{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}, 0, *types.EmptyAtxId, 1300, 0, atxs[1].Id(), 0, []types.BlockID{}, &nipst.NIPST{}, true),
+		types.NewActivationTx(types.NodeId{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}, 0, *types.EmptyAtxId, 1435, 0, atxs[2].Id(), 0, []types.BlockID{}, &nipst.NIPST{}, true),
 	}
 
 	for _, atx := range atxs2 {
@@ -188,14 +189,15 @@ func Test_Wrong_CalcActiveSetFromView(t *testing.T) {
 }
 
 func TestMesh_processBlockATXs(t *testing.T) {
+	activesetCache.Purge()
 	atxdb, _ := getAtxDb("t6")
 
-	id1 := types.NodeId{Key: uuid.New().String()}
-	id2 := types.NodeId{Key: uuid.New().String()}
-	id3 := types.NodeId{Key: uuid.New().String()}
+	id1 := types.NodeId{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}
+	id2 := types.NodeId{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}
+	id3 := types.NodeId{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}
 	chlng := common.HexToHash("0x3333")
 	npst := nipst.NewNIPSTWithChallenge(&chlng)
-	posATX := types.NewActivationTx(types.NodeId{"aaaaaa", []byte{}}, 0, *types.EmptyAtxId, 1000, 0, *types.EmptyAtxId, 0, []types.BlockID{}, npst, true)
+	posATX := types.NewActivationTx(types.NodeId{"aaaaaa", []byte("anton")}, 0, *types.EmptyAtxId, 1000, 0, *types.EmptyAtxId, 0, []types.BlockID{}, npst, true)
 	err := atxdb.StoreAtx(0, posATX)
 	assert.NoError(t, err)
 	atxs := []*types.ActivationTx{
@@ -240,11 +242,11 @@ func TestMesh_processBlockATXs(t *testing.T) {
 func TestActivationDB_ValidateAtx(t *testing.T) {
 	atxdb, layers := getAtxDb("t8")
 
-	idx1 := types.NodeId{Key: uuid.New().String()}
+	idx1 := types.NodeId{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}
 
-	id1 := types.NodeId{Key: uuid.New().String()}
-	id2 := types.NodeId{Key: uuid.New().String()}
-	id3 := types.NodeId{Key: uuid.New().String()}
+	id1 := types.NodeId{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}
+	id2 := types.NodeId{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}
+	id3 := types.NodeId{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}
 	atxs := []*types.ActivationTx{
 		types.NewActivationTx(id1, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 3, []types.BlockID{}, &nipst.NIPST{}, true),
 		types.NewActivationTx(id2, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 3, []types.BlockID{}, &nipst.NIPST{}, true),

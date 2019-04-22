@@ -89,13 +89,16 @@ func TestBuilder_BuildActivationTx(t *testing.T) {
 	layersPerEpoch := uint16(10)
 	lg := log.NewDefault(id.Key[:5])
 	activationDb := NewActivationDb(database.NewMemDatabase(), &MockIStore{}, mesh.NewMemMeshDB(log.NewDefault("")), uint64(layersPerEpoch), lg.WithName("atxDB"))
+	bt, err := types.ViewAsBytes(layers.GetLatestView())
+	assert.NoError(t, err)
+	activesetCache.put(common.BytesToHash(bt), 10)
 	b := NewBuilder(id, activationDb, net, ActiveSetProviderMock{}, layers, 10, &NipstBuilderMock{}, nil, lg.WithName("atxBuilder"))
 	adb := b.db
 	prevAtx := types.AtxId{Hash: common.HexToHash("0x111")}
 	chlng := common.HexToHash("0x3333")
 	npst := nipst.NewNIPSTWithChallenge(&chlng)
 	atx := types.NewActivationTx(types.NodeId{"aaaaaa", []byte("bbb")}, 1, prevAtx, 5, 1, prevAtx, 5, []types.BlockID{1, 2, 3}, npst, true)
-	err := adb.StoreAtx(atx.PubLayerIdx.GetEpoch(layersPerEpoch), atx)
+	err = adb.StoreAtx(atx.PubLayerIdx.GetEpoch(layersPerEpoch), atx)
 	assert.NoError(t, err)
 
 	challenge := types.NIPSTChallenge{
@@ -117,6 +120,7 @@ func TestBuilder_BuildActivationTx(t *testing.T) {
 	bts, err := types.AtxAsBytes(act)
 	assert.NoError(t, err)
 	assert.Equal(t, bts, net.bt)
+	activesetCache.Purge()
 }
 
 func TestBuilder_NoPrevATX(t *testing.T) {
@@ -165,6 +169,11 @@ func TestBuilder_PublishActivationTx(t *testing.T) {
 	npst2 := nipst.NewNIPSTWithChallenge(bytes)
 	assert.NoError(t, err)
 
+	//ugly hack to set view size in db
+	v, err := types.ViewAsBytes(layers.GetLatestView())
+	assert.NoError(t, err)
+	activesetCache.put(common.BytesToHash(v), 10)
+
 	act := types.NewActivationTx(b.nodeId, b.GetLastSequence(b.nodeId)+1, atx.Id(), atx.PubLayerIdx+10, 0, atx.Id(), b.activeSet.ActiveSetIds(1), b.mesh.GetLatestView(), npst2, true)
 	err = b.PublishActivationTx(1)
 	assert.NoError(t, err)
@@ -189,6 +198,7 @@ func TestBuilder_PublishActivationTx(t *testing.T) {
 	bt := NewBuilder(id, activationDb3, net, ActiveSetProviderMock{}, layers, layersPerEpoch, &NipstBuilderMock{}, nil, lg.WithName("atxBuilder"))
 	err = bt.PublishActivationTx(2)
 	assert.EqualError(t, err, "cannot find pos atx: cannot find pos atx id: not found")
+	activesetCache.Purge()
 }
 
 func TestBuilder_PublishActivationTxSerialize(t *testing.T) {
