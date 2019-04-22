@@ -7,18 +7,17 @@ from kubernetes import client
 from pytest_testconfig import config as testconfig
 
 
+def random_id(length):
+    # Just alphanumeric characters
+    chars = string.ascii_lowercase + string.digits
+    return ''.join((random.choice(chars)) for x in range(length))
+
 
 class DeploymentInfo():
     def __init__(self, dep_id=None):
         self.deployment_name = ''
-        self.deployment_id = dep_id if dep_id else DeploymentInfo.random_deployment_id()
+        self.deployment_id = dep_id if dep_id else random_id(length=4)
         self.pods = []
-
-    @staticmethod
-    def random_deployment_id():
-        # Just alphanumeric characters
-        chars = string.ascii_lowercase + string.digits
-        return ''.join((random.choice(chars)) for x in range(4))
 
 
 @pytest.fixture(scope='session')
@@ -41,16 +40,21 @@ def set_docker_images():
 
 
 @pytest.fixture(scope='session')
-def set_namespace(request, load_config):
+def session_id():
+    return random_id(length=5)
+
+
+@pytest.fixture(scope='session')
+def set_namespace(request, session_id, load_config):
 
     v1 = client.CoreV1Api()
 
     def _setup_namespace():
-        k8s_namespace = os.getenv('K8S_NAMESPACE', '')
-        if k8s_namespace != '':
-            testconfig['namespace'] = k8s_namespace
 
-        print("Run tests in namespace: {0}".format(testconfig['namespace']))
+        if testconfig['namespace'] == '':
+            testconfig['namespace'] = session_id
+
+        print("\nRun tests in namespace: {0}".format(testconfig['namespace']))
         namespaces_list = [ns.metadata.name for ns in v1.list_namespace().items]
         if testconfig['namespace'] in namespaces_list:
             return
@@ -68,14 +72,3 @@ def set_namespace(request, load_config):
 @pytest.fixture(scope='session')
 def init_session(request, load_config, set_namespace, set_docker_images):
     pass
-
-@pytest.fixture(scope='module')
-def bootstrap_deployment_info():
-    return DeploymentInfo()
-
-
-@pytest.fixture(scope='module')
-def client_deployment_info():
-    def _create_client_info(boot_info):
-        return DeploymentInfo(boot_info.deployment_id)
-    return _create_client_info
