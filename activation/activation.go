@@ -43,6 +43,11 @@ type NipstBuilder interface {
 	BuildNIPST(challange []byte) (*nipst.NIPST, error)
 }
 
+type IdStore interface {
+	StoreNodeIdentity(id types.NodeId) error
+	GetIdentity(id string) (types.NodeId, error)
+}
+
 type Builder struct {
 	nodeId         types.NodeId
 	db             *ActivationDb
@@ -60,17 +65,10 @@ type Processor struct {
 	epochProvider EpochProvider
 }
 
-func NewBuilder(nodeId types.NodeId, db database.DB,
-	meshdb *mesh.MeshDB,
-	net Broadcaster,
-	activeSet ActiveSetProvider,
-	view MeshProvider,
-	epochDuration EpochProvider,
-	layersPerEpoch uint64,
-	nipstBuilder NipstBuilder) *Builder {
+func NewBuilder(nodeId types.NodeId, db database.DB, meshdb *mesh.MeshDB, net Broadcaster, activeSet ActiveSetProvider, view MeshProvider, epochDuration EpochProvider, layersPerEpoch uint64, nipstBuilder NipstBuilder, identityStore IdStore) *Builder {
 	return &Builder{
 		nodeId,
-		NewActivationDb(db, meshdb, layersPerEpoch),
+		NewActivationDb(db, identityStore, meshdb, layersPerEpoch),
 		net,
 		activeSet,
 		view,
