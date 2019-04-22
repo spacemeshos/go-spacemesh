@@ -297,7 +297,7 @@ func (db *ActivationDb) IsIdentityActive(edId string, layer types.LayerID) (bool
 		return false, err
 	}
 	if len(ids) == 0 { // GetIdentity succeeded but no ATXs, this is a fatal error
-		return false, fmt.Errorf("no active IDs")
+		return false, fmt.Errorf("no active IDs for known node")
 	}
 	atx, err := db.GetAtx(ids[len(ids)-1])
 	if err != nil {
