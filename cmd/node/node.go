@@ -291,9 +291,6 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
 	clock := timesync.NewTicker(timesync.RealClock{}, ld, gTime)
 	mdb := mesh.NewPersistentMeshDB(dbStorepath, lg.WithName("meshdb"))
-	if err != nil {
-		return err
-	}
 
 	//todo: put in config
 	iddbstore, err := database.NewLDBDatabase(dbStorepath+"ids", 0, 0)
