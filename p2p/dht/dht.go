@@ -133,7 +133,7 @@ func (d *KadDHT) netLookup(pubkey p2pcrypto.PublicKey) (node.Node, error) {
 func (d *KadDHT) internalLookup(key p2pcrypto.PublicKey) []discNode {
 	poc := make(PeersOpChannel)
 	dhtid := node.NewDhtID(key.Bytes())
-	d.rt.NearestPeers(NearestPeersReq{dhtid, d.config.RoutingTableAlpha, poc})
+	d.rt.NearestPeers(NearestPeersReq{dhtid, d.config.RoutingTableBucketSize, poc})
 	res := (<-poc).Peers
 	if len(res) == 0 {
 		return nil
@@ -148,7 +148,7 @@ func (d *KadDHT) internalLookup(key p2pcrypto.PublicKey) []discNode {
 // Also used as a bootstrap function to populate the routing table with the results.
 func (d *KadDHT) kadLookup(id p2pcrypto.PublicKey, searchList []discNode) (discNode, error) {
 	// save queried node ids for the operation
-	queried := make(map[string]bool)
+	queried := make(map[discNode]bool)
 
 	// iterative lookups for nodeId using searchList
 
@@ -200,7 +200,7 @@ func (d *KadDHT) kadLookup(id p2pcrypto.PublicKey, searchList []discNode) (discN
 }
 
 // filterFindNodeServers picks up to count server who haven't been queried recently.
-func filterFindNodeServers(nodes []discNode, queried map[string]bool, alpha int) []discNode {
+func filterFindNodeServers(nodes []discNode, queried map[discNode]bool, alpha int) []discNode {
 
 	// If no server have been queried already, just make sure the list len is alpha
 	if len(queried) == 0 {
@@ -215,7 +215,7 @@ func filterFindNodeServers(nodes []discNode, queried map[string]bool, alpha int)
 	// filter out queried servers.
 	i := 0
 	for _, v := range nodes {
-		if _, exist := queried[v.PublicKey().String()]; exist {
+		if _, exist := queried[v]; exist {
 			continue
 		}
 
@@ -238,7 +238,7 @@ type findNodeOpRes struct {
 // findNodeOp a target node on one or more servers
 // returns closest nodes which are closers than closestNode to targetId
 // if node found it will be in top of results list
-func (d *KadDHT) findNodeOp(servers []discNode, queried map[string]bool, id p2pcrypto.PublicKey) []discNode {
+func (d *KadDHT) findNodeOp(servers []discNode, queried map[discNode]bool, id p2pcrypto.PublicKey) []discNode {
 
 	var out []discNode
 	startTime := time.Now()
@@ -301,7 +301,7 @@ Loop:
 		case qres := <-results:
 
 			// we mark active nodes
-			queried[qres.server.String()] = qres.res != nil
+			queried[qres.server] = qres.res != nil
 
 			res := qres.res
 			for _, n := range res {
@@ -311,7 +311,7 @@ Loop:
 				}
 				idSet[n.PublicKey().String()] = struct{}{}
 
-				if _, ok := queried[n.PublicKey().String()]; ok {
+				if _, ok := queried[n]; ok {
 					continue
 				}
 				out = append(out, n)

@@ -44,38 +44,35 @@ func (d *KadDHT) Bootstrap(ctx context.Context) error {
 		return ErrZeroConnections
 	}
 	// register bootstrap nodes
-	bn := 0
+	bn := make([]discNode, 0, len(d.config.BootstrapNodes))
 	for _, n := range d.config.BootstrapNodes {
 		nd, err := node.NewNodeFromString(n)
 		if err != nil {
 			// TODO : handle errors
 			continue
 		}
-
-		d.rt.Update(discNode{nd, nd.Address()})
-		defer d.rt.Remove(discNode{nd, nd.Address()})
-
-		bn++
+		bn = append(bn, discNode{nd, nd.Address()})
 		d.local.Info("added new bootstrap node %v", nd)
 	}
 
-	if bn == 0 {
+	if len(bn) == 0 {
 		return ErrConnectToBootNode
 	}
 
-	d.local.Debug("netLookup using %d preloaded bootnodes ", bn)
+	d.local.Debug("lookup using %d preloaded bootnodes ", bn)
 
 	err := d.tryBoot(ctx, bn, c)
-
 	return err
 }
 
-func (d *KadDHT) tryBoot(ctx context.Context, bootnodecount int, minPeers int) error {
+func (d *KadDHT) tryBoot(ctx context.Context, bootnodes []discNode, minPeers int) error {
 
 	searchFor := d.local.PublicKey()
+	servers := make([]discNode, len(bootnodes))
+	copy(servers, bootnodes)
+
 	tries := 0
-	var size int
-	d.local.Debug("BOOTSTRAP: Running kademlia lookup for ourselves")
+	size := 0
 
 loop:
 	for {
@@ -86,9 +83,13 @@ loop:
 				//TODO: consider choosing a random key that is close to the local id
 				//or TODO: implement real kademlia refreshes - #241
 				searchFor = p2pcrypto.NewRandomPubkey()
-				d.local.Debug("BOOTSTRAP: Running kademlia lookup for random peer")
+				servers = d.internalLookup(searchFor)
+				if len(servers) == 0 {
+					servers = append(servers, bootnodes...)
+				}
 			}
-			_, err := d.netLookup(searchFor)
+			d.local.Info("BOOTSTRAP: peer lookup w/ %v servers", len(servers))
+			_, err := d.kadLookup(searchFor, servers)
 			reschan <- err
 		}()
 
@@ -98,16 +99,16 @@ loop:
 		case err := <-reschan:
 			tries++
 			if err == nil {
+				d.local.Log.Warning("Found node in bootstrap lookup (%v)", searchFor.String())
 				// if we got the peer we were looking for (us or random)
 				// the best thing we can do is just try again or try another random peer.
 				// hence we continue here.
-				continue
 			}
 			req := make(chan int)
 			d.rt.Size(req)
 			size = <-req
 
-			if size+bootnodecount >= minPeers {
+			if size > 0 && size-len(bootnodes) >= minPeers {
 				break loop
 			}
 		}
@@ -122,6 +123,11 @@ loop:
 			continue loop
 		}
 
+	}
+
+	// we don't need bootstrap node anymore
+	for i := 0; i < len(bootnodes); i++ {
+		d.rt.Remove(bootnodes[i])
 	}
 
 	return nil
