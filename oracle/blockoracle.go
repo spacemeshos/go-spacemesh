@@ -11,7 +11,7 @@ import (
 	"github.com/spacemeshos/sha256-simd"
 )
 
-const GenesisActiveSetSize = 10
+const GenesisActiveSetSize = 5
 
 type ActivationDb interface {
 	GetNodeAtxIds(node types.NodeId) ([]types.AtxId, error)
