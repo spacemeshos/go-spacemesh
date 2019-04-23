@@ -3,8 +3,8 @@ package signing
 import (
 	"bytes"
 	"errors"
-	"github.com/btcsuite/btcutil/base58"
 	"github.com/spacemeshos/ed25519"
+	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -21,7 +21,20 @@ func (p *PublicKey) Bytes() []byte {
 }
 
 func (p *PublicKey) String() string {
-	return base58.Encode(p.Bytes())
+	return common.Bytes2Hex(p.Bytes())
+}
+
+func (p *PublicKey) ShortString() string {
+	s := p.String()
+	if len(s) < 5 {
+		return s
+	}
+
+	return s[:5]
+}
+
+func (p *PublicKey) Equals(o *PublicKey) bool {
+	return bytes.Equal(p.Bytes(), o.Bytes())
 }
 
 type EdSigner struct {

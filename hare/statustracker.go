@@ -2,7 +2,6 @@ package hare
 
 import (
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 // Tracks status Messages
@@ -26,12 +25,12 @@ func NewStatusTracker(threshold int, expectedSize int) *StatusTracker {
 	return st
 }
 
-// Records the given status Message
+// Records the given status InnerMsg
 func (st *StatusTracker) RecordStatus(msg *Msg) {
-	pub := signing.NewPublicKey(msg.PubKey)
+	pub := msg.PubKey
 	_, exist := st.statuses[pub.String()]
 	if exist { // already handled this sender's status msg
-		st.Warning("Duplicated status Message detected %v", pub.String())
+		st.Warning("Duplicated status message detected %v", pub.String())
 		return
 	}
 
@@ -46,9 +45,9 @@ func (st *StatusTracker) AnalyzeStatuses(isValid func(m *Msg) bool) {
 			delete(st.statuses, key)
 		} else {
 			count++
-			if m.Message.Ki >= st.maxKi { // track max Ki & matching raw set
-				st.maxKi = m.Message.Ki
-				st.maxSet = NewSet(m.Message.Values)
+			if m.InnerMsg.Ki >= st.maxKi { // track max Ki & matching raw set
+				st.maxKi = m.InnerMsg.Ki
+				st.maxSet = NewSet(m.InnerMsg.Values)
 			}
 		}
 	}
@@ -78,7 +77,7 @@ func (st *StatusTracker) ProposalSet(expectedSize int) *Set {
 func (st *StatusTracker) buildUnionSet(expectedSize int) *Set {
 	unionSet := NewEmptySet(expectedSize)
 	for _, m := range st.statuses {
-		for _, bid := range NewSet(m.Message.Values).values {
+		for _, bid := range NewSet(m.InnerMsg.Values).values {
 			unionSet.Add(bid) // assuming add is unique
 		}
 	}
@@ -95,7 +94,7 @@ func (st *StatusTracker) BuildSVP() *AggregatedMessages {
 
 	svp := &AggregatedMessages{}
 	for _, m := range st.statuses {
-		svp.Messages = append(svp.Messages, m.XDRMessage)
+		svp.Messages = append(svp.Messages, m.Message)
 	}
 
 	// TODO: set aggregated signature

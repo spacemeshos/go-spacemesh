@@ -1,9 +1,7 @@
 package hare
 
 import (
-	"bytes"
 	"errors"
-	"github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"sync"
@@ -93,22 +91,20 @@ func (b *Broker) eventLoop() {
 				continue
 			}
 
-			rdr := bytes.NewReader(msg.Bytes())
-			hareMsg := &XDRMessage{}
-			_, err := xdr.Unmarshal(rdr, hareMsg)
+			hareMsg, err := MessageFromBuffer(msg.Bytes())
 			if err != nil {
-				b.Error("Could not unmarshal Message: %v", err)
+				b.Error("Could not build message err=%v", err)
 				continue
 			}
 
-			// Message validation
-			if hareMsg.Message == nil {
-				b.Warning("Message validation failed: Message is nil")
+			// InnerMsg validation
+			if hareMsg.InnerMsg == nil {
+				b.Warning("Message validation failed: InnerMsg is nil")
 				continue
 			}
 
 			expInstId := b.maxReg + 1 //  max expect current max + 1
-			msgInstId := InstanceId(hareMsg.Message.InstanceId)
+			msgInstId := InstanceId(hareMsg.InnerMsg.InstanceId)
 			// far future unregistered instance
 			if msgInstId > expInstId {
 				b.Warning("Message validation failed: InstanceId. Max: %v Actual: %v", expInstId, msgInstId)
@@ -140,12 +136,11 @@ func (b *Broker) eventLoop() {
 				// todo: err if chan is full (len)
 				c <- iMsg
 				continue
-			} else { // Message arrived before registration
+			} else { // InnerMsg arrived before registration
 				futureMsg = true
 			}
 
 			if futureMsg {
-				b.Info("Broker identified future Message")
 				if _, exist := b.pending[msgInstId]; !exist {
 					b.pending[msgInstId] = make([]*Msg, 0)
 				}

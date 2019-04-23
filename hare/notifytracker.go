@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/hare/metrics"
-	"github.com/spacemeshos/go-spacemesh/signing"
 	"hash/fnv"
 )
 
@@ -24,10 +23,10 @@ func NewNotifyTracker(expectedSize int) *NotifyTracker {
 	return nt
 }
 
-// Track the provided notification Message
-// Returns true if the Message didn't affect the state, false otherwise
+// Track the provided notification InnerMsg
+// Returns true if the InnerMsg didn't affect the state, false otherwise
 func (nt *NotifyTracker) OnNotify(msg *Msg) bool {
-	pub := signing.NewPublicKey(msg.PubKey)
+	pub := msg.PubKey
 	if _, exist := nt.notifies[pub.String()]; exist { // already seenSenders
 		return true // ignored
 	}
@@ -36,8 +35,8 @@ func (nt *NotifyTracker) OnNotify(msg *Msg) bool {
 	nt.notifies[pub.String()] = struct{}{}
 
 	// track that set
-	s := NewSet(msg.Message.Values)
-	nt.onCertificate(msg.Message.Cert.AggMsgs.Messages[0].Message.K, s)
+	s := NewSet(msg.InnerMsg.Values)
+	nt.onCertificate(msg.InnerMsg.Cert.AggMsgs.Messages[0].InnerMsg.K, s)
 	nt.tracker.Track(s.Id())
 	metrics.NotifyCounter.With("set_id", fmt.Sprint(s.Id())).Add(1)
 

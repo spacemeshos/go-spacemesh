@@ -8,11 +8,11 @@ import (
 func BuildNotifyMsg(signing Signer, s *Set) *Msg {
 	builder := NewMessageBuilder()
 	builder.SetType(PreRound).SetInstanceId(instanceId1).SetRoundCounter(Round4).SetKi(ki).SetValues(s)
-	builder = builder.SetPubKey(signing.PublicKey().Bytes()).Sign(signing)
+	builder = builder.SetPubKey(signing.PublicKey()).Sign(signing)
 	cert := &Certificate{}
 	cert.Values = NewSetFromValues(value1).To2DSlice()
 	cert.AggMsgs = &AggregatedMessages{}
-	cert.AggMsgs.Messages = []*XDRMessage{BuildCommitMsg(signing, s).XDRMessage}
+	cert.AggMsgs.Messages = []*Message{BuildCommitMsg(signing, s).Message}
 	builder.SetCertificate(cert)
 
 	return builder.Build()

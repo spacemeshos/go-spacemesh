@@ -2,7 +2,6 @@ package hare
 
 import (
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 type messageValidator interface {
@@ -25,16 +24,16 @@ func (ev *eligibilityValidator) validateRole(m *Msg) bool {
 		return false
 	}
 
-	if m.Message == nil {
-		ev.Warning("Eligibility validator: Message is nil")
+	if m.InnerMsg == nil {
+		ev.Warning("Eligibility validator: InnerMsg is nil")
 		return false
 	}
 
 	// TODO: validate role proof sig
 
-	pub := signing.NewPublicKey(m.PubKey)
+	pub := m.PubKey
 	// validate role
-	if !ev.oracle.Eligible(InstanceId(m.Message.InstanceId), m.Message.K, pub.String(), Signature(m.Message.RoleProof)) {
+	if !ev.oracle.Eligible(InstanceId(m.InnerMsg.InstanceId), m.InnerMsg.K, pub.String(), Signature(m.InnerMsg.RoleProof)) {
 		ev.Warning("Role validation failed")
 		return false
 	}
@@ -42,11 +41,11 @@ func (ev *eligibilityValidator) validateRole(m *Msg) bool {
 	return true
 }
 
-// Validates eligibility and signature of the provided Message
+// Validates eligibility and signature of the provided InnerMsg
 func (ev *eligibilityValidator) Validate(m *Msg) bool {
 	// verify role
 	if !ev.validateRole(m) {
-		ev.Warning("Validate Message failed: role is invalid")
+		ev.Warning("Validate message failed: role is invalid for pub %v", m.PubKey.ShortString())
 		return false
 	}
 
@@ -64,15 +63,15 @@ func newSyntaxContextValidator(signing Signer, threshold int, validator func(m *
 	return &syntaxContextValidator{signing, threshold, validator, logger}
 }
 
-// Validates the Message is contextually valid
+// Validates the InnerMsg is contextually valid
 func (validator *syntaxContextValidator) ContextuallyValidateMessage(m *Msg, expectedK int32) bool {
-	if m.Message == nil {
-		validator.Warning("Contextual validation failed: m.Message is nil")
+	if m.InnerMsg == nil {
+		validator.Warning("Contextual validation failed: m.InnerMsg is nil")
 		return false
 	}
 
 	// PreRound & Notify are always contextually valid
-	switch m.Message.Type {
+	switch m.InnerMsg.Type {
 	case PreRound:
 		return true
 	case Notify:
@@ -80,15 +79,15 @@ func (validator *syntaxContextValidator) ContextuallyValidateMessage(m *Msg, exp
 	}
 
 	// Status, Proposal, Commit Messages should match the expected K
-	if expectedK == m.Message.K {
+	if expectedK == m.InnerMsg.K {
 		return true
 	}
 
-	validator.Info("Contextual validation failed: not same iteration. Expected: %v, Actual: %v", expectedK, m.Message.K)
+	validator.Info("Contextual validation failed: not same iteration. Expected: %v, Actual: %v", expectedK, m.InnerMsg.K)
 	return false
 }
 
-// Validates the syntax of the provided Message
+// Validates the syntax of the provided InnerMsg
 func (validator *syntaxContextValidator) SyntacticallyValidateMessage(m *Msg) bool {
 	if m == nil {
 		validator.Warning("Syntax validation failed: m is nil")
@@ -100,23 +99,23 @@ func (validator *syntaxContextValidator) SyntacticallyValidateMessage(m *Msg) bo
 		return false
 	}
 
-	if m.Message == nil {
-		validator.Warning("Syntax validation failed: inner Message is nil")
+	if m.InnerMsg == nil {
+		validator.Warning("Syntax validation failed: inner message is nil")
 		return false
 	}
 
-	if m.Message.Values == nil {
+	if m.InnerMsg.Values == nil {
 		validator.Warning("Syntax validation failed: Values is nil in msg: %v", m)
 		return false
 	}
 
-	if len(m.Message.Values) == 0 {
+	if len(m.InnerMsg.Values) == 0 {
 		validator.Warning("Syntax validation failed: Values is empty: %v", m)
 		return false
 	}
 
-	claimedRound := m.Message.K % 4
-	switch m.Message.Type {
+	claimedRound := m.InnerMsg.K % 4
+	switch m.InnerMsg.Type {
 	case PreRound:
 		return true
 	case Status:
@@ -126,9 +125,9 @@ func (validator *syntaxContextValidator) SyntacticallyValidateMessage(m *Msg) bo
 	case Commit:
 		return claimedRound == Round3
 	case Notify:
-		return validator.validateCertificate(m.Message.Cert)
+		return validator.validateCertificate(m.InnerMsg.Cert)
 	default:
-		validator.Error("Unknown Message type encountered during syntactic validator: ", m.Message.Type)
+		validator.Error("Unknown message type encountered during syntactic validator: ", m.InnerMsg.Type)
 		return false
 	}
 }
@@ -169,12 +168,12 @@ func (validator *syntaxContextValidator) validateAggregatedMessage(aggMsg *Aggre
 		}
 
 		if !validator.SyntacticallyValidateMessage(iMsg) {
-			validator.Warning("Aggregated validation failed: identified an invalid inner Message %v", iMsg)
+			validator.Warning("Aggregated validation failed: identified an invalid inner message %v", iMsg)
 			return false
 		}
 
 		// validate unique sender
-		pub := signing.NewPublicKey(iMsg.PubKey)
+		pub := iMsg.PubKey
 		if err != nil {
 			validator.Warning("Aggregated validation failed: could not construct pub: %v", err)
 			return false
@@ -199,8 +198,8 @@ func (validator *syntaxContextValidator) validateAggregatedMessage(aggMsg *Aggre
 
 func (validator *syntaxContextValidator) validateSVP(msg *Msg) bool {
 	validateSameIteration := func(m *Msg) bool {
-		proposalIter := iterationFromCounter(msg.Message.K)
-		statusIter := iterationFromCounter(m.Message.K)
+		proposalIter := iterationFromCounter(msg.InnerMsg.K)
+		statusIter := iterationFromCounter(m.InnerMsg.K)
 		if proposalIter != statusIter { // not same iteration
 			validator.Warning("Proposal validation failed: not same iteration. Expected: %v Actual: %v",
 				proposalIter, statusIter)
@@ -210,18 +209,18 @@ func (validator *syntaxContextValidator) validateSVP(msg *Msg) bool {
 		return true
 	}
 	validators := []func(m *Msg) bool{validateStatusType, validateSameIteration, validator.statusValidator}
-	if !validator.validateAggregatedMessage(msg.Message.Svp, validators) {
-		validator.Warning("Proposal validation failed: failed to validate aggregated Message")
+	if !validator.validateAggregatedMessage(msg.InnerMsg.Svp, validators) {
+		validator.Warning("Proposal validation failed: failed to validate aggregated message")
 		return false
 	}
 
 	maxKi := int32(-1) // Ki>=-1
 	var maxSet []uint64 = nil
-	for _, status := range msg.Message.Svp.Messages {
+	for _, status := range msg.InnerMsg.Svp.Messages {
 		// track max
-		if status.Message.Ki > maxKi {
-			maxKi = status.Message.Ki
-			maxSet = status.Message.Values
+		if status.InnerMsg.Ki > maxKi {
+			maxKi = status.InnerMsg.Ki
+			maxSet = status.InnerMsg.Values
 		}
 	}
 
@@ -254,16 +253,16 @@ func (validator *syntaxContextValidator) validateCertificate(cert *Certificate) 
 
 	// refill Values
 	for _, commit := range cert.AggMsgs.Messages {
-		if commit.Message == nil {
-			validator.Warning("Certificate validation failed: inner commit Message is nil")
+		if commit.InnerMsg == nil {
+			validator.Warning("Certificate validation failed: inner commit message is nil")
 			return false
 		}
 
-		commit.Message.Values = cert.Values
+		commit.InnerMsg.Values = cert.Values
 	}
 
-	// Note: no need to validate notify.Values=commits.Values because we refill the Message with notify.Values
-	validateSameK := func(m *Msg) bool { return m.Message.K == cert.AggMsgs.Messages[0].Message.K }
+	// Note: no need to validate notify.Values=commits.Values because we refill the InnerMsg with notify.Values
+	validateSameK := func(m *Msg) bool { return m.InnerMsg.K == cert.AggMsgs.Messages[0].InnerMsg.K }
 	validators := []func(m *Msg) bool{validateCommitType, validateSameK}
 	if !validator.validateAggregatedMessage(cert.AggMsgs, validators) {
 		validator.Warning("Certificate validation failed: aggregated Messages validation failed")
@@ -274,19 +273,19 @@ func (validator *syntaxContextValidator) validateCertificate(cert *Certificate) 
 }
 
 func validateCommitType(m *Msg) bool {
-	return MessageType(m.Message.Type) == Commit
+	return MessageType(m.InnerMsg.Type) == Commit
 }
 
 func validateStatusType(m *Msg) bool {
-	return MessageType(m.Message.Type) == Status
+	return MessageType(m.InnerMsg.Type) == Status
 }
 
 // validate SVP for type A (where all Ki=-1)
 func (validator *syntaxContextValidator) validateSVPTypeA(m *Msg) bool {
-	s := NewSet(m.Message.Values)
-	unionSet := NewEmptySet(len(m.Message.Values))
-	for _, status := range m.Message.Svp.Messages {
-		statusSet := NewSet(status.Message.Values)
+	s := NewSet(m.InnerMsg.Values)
+	unionSet := NewEmptySet(len(m.InnerMsg.Values))
+	for _, status := range m.InnerMsg.Svp.Messages {
+		statusSet := NewSet(status.InnerMsg.Values)
 		// build union
 		for _, buff := range statusSet.values {
 			bid := buff
@@ -305,7 +304,7 @@ func (validator *syntaxContextValidator) validateSVPTypeA(m *Msg) bool {
 // validate SVP for type B (where exist Ki>=0)
 func (validator *syntaxContextValidator) validateSVPTypeB(msg *Msg, maxSet *Set) bool {
 	// max set should be equal to the claimed set
-	s := NewSet(msg.Message.Values)
+	s := NewSet(msg.InnerMsg.Values)
 	if !s.Equals(maxSet) {
 		validator.Warning("Proposal type B validation failed: max set not equal to proposed set. Expected: %v Actual: %v", s, maxSet)
 		return false

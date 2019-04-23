@@ -39,3 +39,12 @@ func TestEdSigner_ToBuffer(t *testing.T) {
 	assert.Equal(t, ed.privKey, ed2.privKey)
 	assert.Equal(t, ed.pubKey, ed2.pubKey)
 }
+
+func TestPublicKey_ShortString(t *testing.T) {
+	pub := NewPublicKey([]byte{1, 2, 3})
+	assert.Equal(t, "010203", pub.String())
+	assert.Equal(t, "01020", pub.ShortString())
+
+	pub = NewPublicKey([]byte{1, 2})
+	assert.Equal(t, pub.String(), pub.ShortString())
+}

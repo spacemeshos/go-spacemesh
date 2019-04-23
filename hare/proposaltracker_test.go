@@ -9,7 +9,7 @@ import (
 func buildProposalMsg(signing Signer, s *Set, signature Signature) *Msg {
 	builder := NewMessageBuilder().SetRoleProof(signature)
 	builder.SetType(Proposal).SetInstanceId(instanceId1).SetRoundCounter(Round2).SetKi(ki).SetValues(s)
-	builder = builder.SetPubKey(signing.PublicKey().Bytes()).Sign(signing)
+	builder = builder.SetPubKey(signing.PublicKey()).Sign(signing)
 
 	return builder.Build()
 }

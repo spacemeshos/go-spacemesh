@@ -26,7 +26,7 @@ var value10 = Value{10}
 func BuildPreRoundMsg(signing Signer, s *Set) *Msg {
 	builder := NewMessageBuilder()
 	builder.SetType(PreRound).SetInstanceId(instanceId1).SetRoundCounter(k).SetKi(ki).SetValues(s)
-	builder = builder.SetPubKey(signing.PublicKey().Bytes()).Sign(signing)
+	builder = builder.SetPubKey(signing.PublicKey()).Sign(signing)
 
 	return builder.Build()
 }

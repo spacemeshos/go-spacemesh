@@ -28,7 +28,7 @@ func NewProposalTracker(log log.Log) *ProposalTracker {
 	return pt
 }
 
-// Tracks the provided proposal Message assuming it was received on the expected round
+// Tracks the provided proposal InnerMsg assuming it was received on the expected round
 func (pt *ProposalTracker) OnProposal(msg *Msg) {
 	if pt.proposal == nil { // first leader
 		pt.proposal = msg // just update
@@ -36,11 +36,11 @@ func (pt *ProposalTracker) OnProposal(msg *Msg) {
 	}
 
 	// if same sender then we should check for equivocation
-	if bytes.Equal(pt.proposal.PubKey, msg.PubKey) {
-		s := NewSet(msg.Message.Values)
-		g := NewSet(pt.proposal.Message.Values)
+	if pt.proposal.PubKey.Equals(msg.PubKey) {
+		s := NewSet(msg.InnerMsg.Values)
+		g := NewSet(pt.proposal.InnerMsg.Values)
 		if !s.Equals(g) { // equivocation detected
-			pt.With().Info("Equivocation detected", log.String("id_malicious", string(msg.PubKey)),
+			pt.With().Info("Equivocation detected", log.String("id_malicious", msg.PubKey.String()),
 				log.String("current_set", g.String()), log.String("conflicting_set", s.String()))
 			pt.isConflicting = true
 		}
@@ -49,7 +49,7 @@ func (pt *ProposalTracker) OnProposal(msg *Msg) {
 	}
 
 	// ignore msgs with higher ranked role proof
-	if bytes.Compare(msg.Message.RoleProof, pt.proposal.Message.RoleProof) > 0 {
+	if bytes.Compare(msg.InnerMsg.RoleProof, pt.proposal.InnerMsg.RoleProof) > 0 {
 		return
 	}
 
@@ -57,18 +57,18 @@ func (pt *ProposalTracker) OnProposal(msg *Msg) {
 	pt.isConflicting = false // assume no conflict
 }
 
-// Tracks the provided proposal Message assuming it was late
+// Tracks the provided proposal InnerMsg assuming it was late
 func (pt *ProposalTracker) OnLateProposal(msg *Msg) {
 	if pt.proposal == nil {
 		return
 	}
 
 	// if same sender then we should check for equivocation
-	if bytes.Equal(pt.proposal.PubKey, msg.PubKey) {
-		s := NewSet(msg.Message.Values)
-		g := NewSet(pt.proposal.Message.Values)
+	if pt.proposal.PubKey.Equals(msg.PubKey) {
+		s := NewSet(msg.InnerMsg.Values)
+		g := NewSet(pt.proposal.InnerMsg.Values)
 		if !s.Equals(g) { // equivocation detected
-			pt.With().Info("Equivocation detected", log.String("id_malicious", string(msg.PubKey)),
+			pt.With().Info("Equivocation detected", log.String("id_malicious", msg.PubKey.String()),
 				log.String("current_set", g.String()), log.String("conflicting_set", s.String()))
 			pt.isConflicting = true
 		}
@@ -76,8 +76,8 @@ func (pt *ProposalTracker) OnLateProposal(msg *Msg) {
 
 	// not equal check rank
 	// lower ranked proposal on late proposal is a conflict
-	if bytes.Compare(msg.Message.RoleProof, pt.proposal.Message.RoleProof) < 0 {
-		pt.With().Info("late lower rank detected", log.String("id_malicious", string(msg.PubKey)))
+	if bytes.Compare(msg.InnerMsg.RoleProof, pt.proposal.InnerMsg.RoleProof) < 0 {
+		pt.With().Info("late lower rank detected", log.String("id_malicious", msg.PubKey.String()))
 		pt.isConflicting = true
 	}
 }
@@ -98,5 +98,5 @@ func (pt *ProposalTracker) ProposedSet() *Set {
 		return nil
 	}
 
-	return NewSet(pt.proposal.Message.Values)
+	return NewSet(pt.proposal.InnerMsg.Values)
 }

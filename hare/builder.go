@@ -2,14 +2,32 @@ package hare
 
 import (
 	"bytes"
+	"fmt"
 	"github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
-// top Message of the protocol
-type XDRMessage struct {
-	InnerSig []byte
-	Message  *InnerMessage
+// top InnerMsg of the protocol
+type Message struct {
+	Sig      []byte
+	InnerMsg *InnerMessage
+}
+
+func MessageFromBuffer(buffer []byte) (*Message, error) {
+	rdr := bytes.NewReader(buffer)
+	hareMsg := &Message{}
+	_, err := xdr.Unmarshal(rdr, hareMsg)
+	if err != nil {
+		log.Error("Could not unmarshal message: %v", err)
+		return nil, err
+	}
+
+	return hareMsg, nil
+}
+
+func (m *Message) String() string {
+	return fmt.Sprintf("Sig: %v InnerMsg: %v", m.Sig, m.InnerMsg.String())
 }
 
 // the certificate
@@ -20,20 +38,24 @@ type Certificate struct {
 
 // Aggregated Messages
 type AggregatedMessages struct {
-	Messages []*XDRMessage // a collection of Messages
+	Messages []*Message // a collection of Messages
 	AggSig   []byte
 }
 
-// basic Message
+// basic InnerMsg
 type InnerMessage struct {
 	Type       MessageType
 	InstanceId InstanceId
 	K          int32 // the round counter
 	Ki         int32
-	Values     []uint64            // the set S. optional for commit Message in a certificate
-	RoleProof  []byte              // role is implicit by Message type, this is the proof
+	Values     []uint64            // the set S. optional for commit InnerMsg in a certificate
+	RoleProof  []byte              // role is implicit by InnerMsg type, this is the proof
 	Svp        *AggregatedMessages // optional. only for proposal Messages
 	Cert       *Certificate        // optional
+}
+
+func (im *InnerMessage) String() string {
+	return fmt.Sprintf("Type: %v InstanceId: %v K: %v Ki: %v", im.Type, im.InstanceId, im.K, im.Ki)
 }
 
 // Used to build proto Messages
@@ -43,8 +65,8 @@ type MessageBuilder struct {
 }
 
 func NewMessageBuilder() *MessageBuilder {
-	m := &MessageBuilder{&Msg{&XDRMessage{}, nil}, &InnerMessage{}}
-	m.msg.Message = m.inner
+	m := &MessageBuilder{&Msg{&Message{}, nil}, &InnerMessage{}}
+	m.msg.InnerMsg = m.inner
 
 	return m
 }
@@ -54,7 +76,7 @@ func (builder *MessageBuilder) Build() *Msg {
 }
 
 func (builder *MessageBuilder) SetCertificate(certificate *Certificate) *MessageBuilder {
-	builder.msg.Message.Cert = certificate
+	builder.msg.InnerMsg.Cert = certificate
 	return builder
 }
 
@@ -65,13 +87,13 @@ func (builder *MessageBuilder) Sign(signing Signer) *MessageBuilder {
 		log.Panic("marshal failed during signing")
 	}
 
-	// TODO: do we always sign the same Message? order of Values (set)?
-	builder.msg.InnerSig = signing.Sign(w.Bytes())
+	// TODO: do we always sign the same InnerMsg? order of Values (set)?
+	builder.msg.Sig = signing.Sign(w.Bytes())
 
 	return builder
 }
 
-func (builder *MessageBuilder) SetPubKey(pub []byte) *MessageBuilder {
+func (builder *MessageBuilder) SetPubKey(pub *signing.PublicKey) *MessageBuilder {
 	builder.msg.PubKey = pub
 	return builder
 }

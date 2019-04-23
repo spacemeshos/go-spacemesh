@@ -50,7 +50,7 @@ func (mType MessageType) String() string {
 	case PreRound:
 		return "PreRound"
 	default:
-		return "Unknown Message type"
+		return "Unknown message type"
 	}
 }
 

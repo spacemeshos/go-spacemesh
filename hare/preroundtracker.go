@@ -3,7 +3,6 @@ package hare
 import (
 	"github.com/spacemeshos/go-spacemesh/hare/metrics"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 // Tracks pre-round Messages
@@ -22,11 +21,11 @@ func NewPreRoundTracker(threshold int, expectedSize int) *PreRoundTracker {
 	return pre
 }
 
-// Tracks a pre-round Message
+// Tracks a pre-round InnerMsg
 func (pre *PreRoundTracker) OnPreRound(msg *Msg) {
-	pub := signing.NewPublicKey(msg.PubKey)
-	sToTrack := NewSet(msg.Message.Values) // assume track all Values
-	alreadyTracked := NewSmallEmptySet()   // assume nothing tracked so far
+	pub := msg.PubKey
+	sToTrack := NewSet(msg.InnerMsg.Values) // assume track all Values
+	alreadyTracked := NewSmallEmptySet()    // assume nothing tracked so far
 
 	if set, exist := pre.preRound[pub.String()]; exist { // not first pre-round msg from this sender
 		log.Debug("Duplicate sender %v", pub.String())

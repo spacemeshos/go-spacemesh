@@ -8,14 +8,14 @@ import (
 	"testing"
 )
 
-func marshallUnmarshall(t *testing.T, msg *XDRMessage) *XDRMessage {
+func marshallUnmarshall(t *testing.T, msg *Message) *Message {
 	var w bytes.Buffer
 	_, err := xdr.Marshal(&w, &msg)
 	if err != nil {
 		assert.Fail(t, "Failed to marshal data")
 	}
 
-	m := &XDRMessage{}
+	m := &Message{}
 	r := bytes.NewReader(w.Bytes())
 	_, err = xdr.Unmarshal(r, m)
 	if err != nil {
@@ -28,19 +28,19 @@ func marshallUnmarshall(t *testing.T, msg *XDRMessage) *XDRMessage {
 func TestBuilder_TestBuild(t *testing.T) {
 	b := NewMessageBuilder()
 	sgn := signing.NewEdSigner()
-	msg := b.SetPubKey(sgn.PublicKey().Bytes()).SetInstanceId(instanceId1).Sign(sgn).Build()
+	msg := b.SetPubKey(sgn.PublicKey()).SetInstanceId(instanceId1).Sign(sgn).Build()
 
-	m := marshallUnmarshall(t, msg.XDRMessage)
-	assert.Equal(t, m, msg.XDRMessage)
+	m := marshallUnmarshall(t, msg.Message)
+	assert.Equal(t, m, msg.Message)
 }
 
 func TestMessageBuilder_SetValues(t *testing.T) {
 	s := NewSetFromValues(value5)
-	msg := NewMessageBuilder().SetValues(s).Build().XDRMessage
+	msg := NewMessageBuilder().SetValues(s).Build().Message
 
 	m := marshallUnmarshall(t, msg)
-	s1 := NewSet(m.Message.Values)
-	s2 := NewSet(msg.Message.Values)
+	s1 := NewSet(m.InnerMsg.Values)
+	s2 := NewSet(msg.InnerMsg.Values)
 	assert.True(t, s1.Equals(s2))
 }
 
@@ -50,7 +50,7 @@ func TestMessageBuilder_SetCertificate(t *testing.T) {
 	tr.OnCommit(BuildCommitMsg(signing.NewEdSigner(), s))
 	cert := tr.BuildCertificate()
 	assert.NotNil(t, cert)
-	c := NewMessageBuilder().SetCertificate(cert).Build().XDRMessage
-	cert2 := marshallUnmarshall(t, c).Message.Cert
+	c := NewMessageBuilder().SetCertificate(cert).Build().Message
+	cert2 := marshallUnmarshall(t, c).InnerMsg.Cert
 	assert.Equal(t, cert.Values, cert2.Values)
 }

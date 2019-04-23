@@ -3,7 +3,6 @@ package hare
 import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/hare/metrics"
-	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 type commitTracker interface {
@@ -15,7 +14,7 @@ type commitTracker interface {
 // Tracks commit Messages
 type CommitTracker struct {
 	seenSenders map[string]bool // tracks seen senders
-	commits     []*XDRMessage   // tracks Set->Commits
+	commits     []*Message      // tracks Set->Commits
 	proposedSet *Set            // follows the set who has max number of commits
 	threshold   int             // the number of required commits
 }
@@ -23,14 +22,14 @@ type CommitTracker struct {
 func NewCommitTracker(threshold int, expectedSize int, proposedSet *Set) *CommitTracker {
 	ct := &CommitTracker{}
 	ct.seenSenders = make(map[string]bool, expectedSize)
-	ct.commits = make([]*XDRMessage, 0, threshold)
+	ct.commits = make([]*Message, 0, threshold)
 	ct.proposedSet = proposedSet
 	ct.threshold = threshold
 
 	return ct
 }
 
-// Tracks the provided commit Message
+// Tracks the provided commit InnerMsg
 func (ct *CommitTracker) OnCommit(msg *Msg) {
 	if ct.proposedSet == nil { // no valid proposed set
 		return
@@ -40,21 +39,21 @@ func (ct *CommitTracker) OnCommit(msg *Msg) {
 		return
 	}
 
-	pub := signing.NewPublicKey(msg.PubKey)
+	pub := msg.PubKey
 	if ct.seenSenders[pub.String()] {
 		return
 	}
 
 	ct.seenSenders[pub.String()] = true
 
-	s := NewSet(msg.Message.Values)
+	s := NewSet(msg.InnerMsg.Values)
 	if !ct.proposedSet.Equals(s) { // ignore commit on different set
 		return
 	}
 
 	// add msg
 	metrics.CommitCounter.With("set_id", fmt.Sprint(s.Id())).Add(1)
-	ct.commits = append(ct.commits, msg.XDRMessage)
+	ct.commits = append(ct.commits, msg.Message)
 }
 
 // Checks if the tracker received enough commits to build a certificate
@@ -80,7 +79,7 @@ func (ct *CommitTracker) BuildCertificate() *Certificate {
 
 	// optimize msg size by setting Values to nil
 	for _, commit := range c.AggMsgs.Messages {
-		commit.Message.Values = nil
+		commit.InnerMsg.Values = nil
 	}
 
 	// TODO: set c.AggMsgs.AggSig

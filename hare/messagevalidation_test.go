@@ -25,18 +25,18 @@ func TestMessageValidator_ValidateCertificate(t *testing.T) {
 	assert.False(t, validator.validateCertificate(cert))
 	cert.AggMsgs = &AggregatedMessages{}
 	assert.False(t, validator.validateCertificate(cert))
-	msgs := make([]*XDRMessage, 0, validator.threshold)
+	msgs := make([]*Message, 0, validator.threshold)
 	cert.AggMsgs.Messages = msgs
 	assert.False(t, validator.validateCertificate(cert))
-	msgs = append(msgs, &XDRMessage{})
+	msgs = append(msgs, &Message{})
 	cert.AggMsgs.Messages = msgs
 	assert.False(t, validator.validateCertificate(cert))
 	cert.Values = NewSetFromValues(value1).To2DSlice()
 	assert.False(t, validator.validateCertificate(cert))
 
-	msgs = make([]*XDRMessage, validator.threshold)
+	msgs = make([]*Message, validator.threshold)
 	for i := 0; i < validator.threshold; i++ {
-		msgs[i] = BuildCommitMsg(generateSigning(t), NewSmallEmptySet()).XDRMessage
+		msgs[i] = BuildCommitMsg(generateSigning(t), NewSmallEmptySet()).Message
 	}
 	cert.AggMsgs.Messages = msgs
 	assert.True(t, validator.validateCertificate(cert))
@@ -48,7 +48,7 @@ func TestEligibilityValidator_validateRole(t *testing.T) {
 	ev.oracle = oracle
 	assert.False(t, ev.validateRole(nil))
 	m := BuildPreRoundMsg(generateSigning(t), NewSmallEmptySet())
-	m.Message = nil
+	m.InnerMsg = nil
 	assert.False(t, ev.validateRole(m))
 	m = BuildPreRoundMsg(generateSigning(t), NewSmallEmptySet())
 	oracle.isEligible = false
@@ -60,15 +60,15 @@ func TestEligibilityValidator_validateRole(t *testing.T) {
 func TestMessageValidator_IsStructureValid(t *testing.T) {
 	validator := defaultValidator()
 	assert.False(t, validator.SyntacticallyValidateMessage(nil))
-	m := &Msg{&XDRMessage{}, nil}
+	m := &Msg{&Message{}, nil}
 	assert.False(t, validator.SyntacticallyValidateMessage(m))
-	m.PubKey = generateSigning(t).PublicKey().Bytes()
+	m.PubKey = generateSigning(t).PublicKey()
 	assert.False(t, validator.SyntacticallyValidateMessage(m))
-	m.Message = &InnerMessage{}
+	m.InnerMsg = &InnerMessage{}
 	assert.False(t, validator.SyntacticallyValidateMessage(m))
-	m.Message.Values = nil
+	m.InnerMsg.Values = nil
 	assert.False(t, validator.SyntacticallyValidateMessage(m))
-	m.Message.Values = NewSmallEmptySet().To2DSlice()
+	m.InnerMsg.Values = NewSmallEmptySet().To2DSlice()
 	assert.False(t, validator.SyntacticallyValidateMessage(m))
 }
 
@@ -80,14 +80,14 @@ func TestMessageValidator_Aggregated(t *testing.T) {
 
 	agg := &AggregatedMessages{}
 	assert.False(t, validator.validateAggregatedMessage(agg, funcs))
-	msgs := make([]*XDRMessage, validator.threshold)
+	msgs := make([]*Message, validator.threshold)
 	for i := 0; i < validator.threshold; i++ {
 		iMsg := BuildStatusMsg(generateSigning(t), NewSetFromValues(value1))
-		msgs[i] = iMsg.XDRMessage
+		msgs[i] = iMsg.Message
 	}
 	agg.Messages = msgs
 	assert.True(t, validator.validateAggregatedMessage(agg, funcs))
-	msgs[0].InnerSig = []byte{1}
+	msgs[0].Sig = []byte{1}
 	assert.False(t, validator.validateAggregatedMessage(agg, funcs))
 
 	funcs = make([]func(m *Msg) bool, 1)
@@ -123,11 +123,11 @@ func TestMessageValidator_ValidateMessage(t *testing.T) {
 	proc.advanceToNextRound()
 	v := proc.validator
 	preround := proc.initDefaultBuilder(proc.s).SetType(PreRound).Sign(proc.signing).Build()
-	preround.PubKey = proc.signing.PublicKey().Bytes()
+	preround.PubKey = proc.signing.PublicKey()
 	assert.True(t, v.SyntacticallyValidateMessage(preround))
 	assert.True(t, v.ContextuallyValidateMessage(preround, 0))
 	status := proc.initDefaultBuilder(proc.s).SetType(Status).Sign(proc.signing).Build()
-	status.PubKey = proc.signing.PublicKey().Bytes()
+	status.PubKey = proc.signing.PublicKey()
 	assert.True(t, v.ContextuallyValidateMessage(status, 0))
 	assert.True(t, v.SyntacticallyValidateMessage(status))
 
@@ -144,7 +144,7 @@ func TestMessageValidator_SyntacticallyValidateMessage(t *testing.T) {
 func TestMessageValidator_ContextuallyValidateMessage(t *testing.T) {
 	validator := newSyntaxContextValidator(signing.NewEdSigner(), 1, validate, log.NewDefault("Validator"))
 	m := BuildPreRoundMsg(generateSigning(t), NewSmallEmptySet())
-	m.Message = nil
+	m.InnerMsg = nil
 	assert.False(t, validator.ContextuallyValidateMessage(m, 0))
 	m = BuildPreRoundMsg(generateSigning(t), NewSetFromValues(value1))
 	assert.True(t, validator.ContextuallyValidateMessage(m, 0))
@@ -160,19 +160,19 @@ func TestMessageValidator_validateSVPTypeA(t *testing.T) {
 	s3 := NewSetFromValues(value1, value5)
 	s4 := NewSetFromValues(value1, value4)
 	v := defaultValidator()
-	m.Message.Svp = buildSVP(-1, s1, s2, s3, s4)
+	m.InnerMsg.Svp = buildSVP(-1, s1, s2, s3, s4)
 	assert.False(t, v.validateSVPTypeA(m))
 	s3 = NewSetFromValues(value2)
-	m.Message.Svp = buildSVP(-1, s1, s2, s3)
+	m.InnerMsg.Svp = buildSVP(-1, s1, s2, s3)
 	assert.True(t, v.validateSVPTypeA(m))
 }
 
 func TestMessageValidator_validateSVPTypeB(t *testing.T) {
 	m := buildProposalMsg(signing.NewEdSigner(), NewSetFromValues(value1, value2, value3), []byte{})
 	s1 := NewSetFromValues(value1)
-	m.Message.Svp = buildSVP(-1, s1)
+	m.InnerMsg.Svp = buildSVP(-1, s1)
 	s := NewSetFromValues(value1)
-	m.Message.Values = s.To2DSlice()
+	m.InnerMsg.Values = s.To2DSlice()
 	v := defaultValidator()
 	assert.False(t, v.validateSVPTypeB(m, NewSetFromValues(value5)))
 	assert.True(t, v.validateSVPTypeB(m, NewSetFromValues(value1)))
@@ -182,27 +182,27 @@ func TestMessageValidator_validateSVP(t *testing.T) {
 	validator := newSyntaxContextValidator(signing.NewEdSigner(), 1, validate, log.NewDefault("Validator"))
 	m := buildProposalMsg(signing.NewEdSigner(), NewSetFromValues(value1, value2, value3), []byte{})
 	s1 := NewSetFromValues(value1)
-	m.Message.Svp = buildSVP(-1, s1)
-	m.Message.Svp.Messages[0].Message.Type = Commit
+	m.InnerMsg.Svp = buildSVP(-1, s1)
+	m.InnerMsg.Svp.Messages[0].InnerMsg.Type = Commit
 	assert.False(t, validator.validateSVP(m))
-	m.Message.Svp = buildSVP(-1, s1)
-	m.Message.Svp.Messages[0].Message.K = 4
+	m.InnerMsg.Svp = buildSVP(-1, s1)
+	m.InnerMsg.Svp.Messages[0].InnerMsg.K = 4
 	assert.False(t, validator.validateSVP(m))
-	m.Message.Svp = buildSVP(-1, s1)
+	m.InnerMsg.Svp = buildSVP(-1, s1)
 	assert.False(t, validator.validateSVP(m))
 	s2 := NewSetFromValues(value1, value2, value3)
-	m.Message.Svp = buildSVP(-1, s2)
+	m.InnerMsg.Svp = buildSVP(-1, s2)
 	assert.True(t, validator.validateSVP(m))
-	m.Message.Svp = buildSVP(0, s1)
+	m.InnerMsg.Svp = buildSVP(0, s1)
 	assert.False(t, validator.validateSVP(m))
-	m.Message.Svp = buildSVP(0, s2)
+	m.InnerMsg.Svp = buildSVP(0, s2)
 	assert.True(t, validator.validateSVP(m))
 }
 
 func buildSVP(ki int32, S ...*Set) *AggregatedMessages {
-	msgs := make([]*XDRMessage, 0, len(S))
+	msgs := make([]*Message, 0, len(S))
 	for _, s := range S {
-		msgs = append(msgs, buildStatusMsg(signing.NewEdSigner(), s, ki).XDRMessage)
+		msgs = append(msgs, buildStatusMsg(signing.NewEdSigner(), s, ki).Message)
 	}
 
 	svp := &AggregatedMessages{}
