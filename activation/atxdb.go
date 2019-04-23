@@ -28,7 +28,7 @@ type ActivationDb struct {
 }
 
 func NewActivationDb(dbstore database.DB, idstore IdStore, meshDb *mesh.MeshDB, layersPerEpoch uint64, nipstValidator NipstValidator, log log.Log) *ActivationDb {
-	return &ActivationDb{atxs: dbstore, meshDb: meshDb, nipstValidator:nipstValidator, LayersPerEpoch: types.LayerID(layersPerEpoch), ids: idstore, log: log}
+	return &ActivationDb{atxs: dbstore, meshDb: meshDb, nipstValidator: nipstValidator, LayersPerEpoch: types.LayerID(layersPerEpoch), ids: idstore, log: log}
 }
 
 func (db *ActivationDb) ProcessBlockATXs(blk *types.Block) {

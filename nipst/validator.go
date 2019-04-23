@@ -28,9 +28,9 @@ type PostParams struct {
 	SpaceUnit            uint64
 }
 
-func NewValidator(params PostParams) *Validator{
+func NewValidator(params PostParams) *Validator {
 	return &Validator{
-		PostParams: params,
+		PostParams:                  params,
 		verifyPost:                  verifyPost,
 		verifyPoetMembership:        verifyPoetMembership,
 		verifyPoet:                  verifyPoet,
