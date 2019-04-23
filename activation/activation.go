@@ -50,6 +50,10 @@ type IdStore interface {
 	GetIdentity(id string) (types.NodeId, error)
 }
 
+type NipstValidator interface {
+	Validate(nipst *nipst.NIPST, expectedChallenge common.Hash) error
+}
+
 type Builder struct {
 	nodeId         types.NodeId
 	db             *ActivationDb

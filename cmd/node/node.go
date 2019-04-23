@@ -299,7 +299,12 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	}
 	idStore := activation.NewIdentityStore(iddbstore)
 	//todo: this is initialized twice, need to refactor
-	atxdb := activation.NewActivationDb(atxdbstore, idStore, mdb, uint64(app.Config.CONSENSUS.LayersPerEpoch), lg.WithName("atxDb"))
+	validator := nipst.NewValidator(nipst.PostParams{
+		Difficulty:           5,
+		NumberOfProvenLabels: 10,
+		SpaceUnit:            1024,
+	})
+	atxdb := activation.NewActivationDb(atxdbstore, idStore, mdb, uint64(app.Config.CONSENSUS.LayersPerEpoch), validator, lg.WithName("atxDb"))
 	trtl := tortoise.NewAlgorithm(layerSize, mdb, lg.WithName("trtl"))
 	msh := mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, processor, lg.WithName("mesh")) //todo: what to do with the logger?
 
@@ -312,7 +317,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	blockListener := sync.NewBlockListener(swarm, blockValidator, msh, 2*time.Second, 4, lg.WithName("blockListener"))
 
 	postDifficulty := proving.Difficulty(5) // TODO: put this in config (long term - make it dynamically calculated)
-	nipstBuilder := nipst.NewNipstBuilder([]byte(nodeID.Key), 1024, postDifficulty, 100, postClient, poetClient, lg.WithName("nipstBuilder"))
+	nipstBuilder := nipst.NewNipstBuilder([]byte(nodeID.Key), 1024, postDifficulty, 100, postClient, poetClient, lg.WithName("nipstBuilder")) // TODO: use both keys in the nodeID
 	atxBuilder := activation.NewBuilder(nodeID, atxdb, swarm, atxdb, msh, app.Config.CONSENSUS.LayersPerEpoch,
 		nipstBuilder, clock.Subscribe(), lg.WithName("atxBuilder"))
 

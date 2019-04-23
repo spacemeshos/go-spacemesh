@@ -320,6 +320,8 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *common.Hash) (*NIPST, error) {
 		nb.log.Info("starting PoST execution (challenge: %x)",
 			postChallenge)
 
+		nb.nipst.Id = nb.id
+		nb.nipst.Space = nb.space
 		proof, err := nb.postProver.execute(nb.id, postChallenge, nb.numberOfProvenLabels, nb.difficulty, defTimeout)
 		if err != nil {
 			return nil, fmt.Errorf("failed to execute PoST: %v", err)

@@ -103,7 +103,12 @@ func (app *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat s
 		meshDB := mesh.NewMemMeshDB(log.Log{})
 		layersPerEpoch := smApp.Config.CONSENSUS.LayersPerEpoch
 		lg := log.NewDefault(nodeID.Key[:5])
-		activationDB := activation.NewActivationDb(dbStore, activation.NewIdentityStore(database.NewMemDatabase()), meshDB, uint64(layersPerEpoch), lg.WithName("atxDB"))
+		validator := nipst.NewValidator(nipst.PostParams{
+			Difficulty:           5,
+			NumberOfProvenLabels: 10,
+			SpaceUnit:            1024,
+		})
+		activationDB := activation.NewActivationDb(dbStore, activation.NewIdentityStore(database.NewMemDatabase()), meshDB, uint64(layersPerEpoch), validator, lg.WithName("atxDB"))
 		beaconProvider := &oracle.EpochBeaconProvider{}
 		blockOracle := oracle.NewMinerBlockOracle(int32(numOfInstances), layersPerEpoch, activationDB, beaconProvider, vrfSigner, nodeID, lg.WithName("blockOracle"))
 		blockValidator := oracle.NewBlockEligibilityValidator(int32(numOfInstances), layersPerEpoch, activationDB, beaconProvider, crypto.ValidateVRF, lg.WithName("blkElgValidator"))

@@ -22,12 +22,13 @@ type ActivationDb struct {
 	atxs           database.DB
 	meshDb         *mesh.MeshDB
 	LayersPerEpoch types.LayerID
+	nipstValidator NipstValidator
 	ids            IdStore
 	log            log.Log
 }
 
-func NewActivationDb(dbstore database.DB, idstore IdStore, meshDb *mesh.MeshDB, layersPerEpoch uint64, log log.Log) *ActivationDb {
-	return &ActivationDb{atxs: dbstore, meshDb: meshDb, LayersPerEpoch: types.LayerID(layersPerEpoch), ids: idstore, log: log}
+func NewActivationDb(dbstore database.DB, idstore IdStore, meshDb *mesh.MeshDB, layersPerEpoch uint64, nipstValidator NipstValidator, log log.Log) *ActivationDb {
+	return &ActivationDb{atxs: dbstore, meshDb: meshDb, nipstValidator:nipstValidator, LayersPerEpoch: types.LayerID(layersPerEpoch), ids: idstore, log: log}
 }
 
 func (db *ActivationDb) ProcessBlockATXs(blk *types.Block) {
@@ -187,8 +188,8 @@ func (db *ActivationDb) ValidateAtx(atx *types.ActivationTx) error {
 	}
 	db.log.Info("NIPST challenge: %v, OK nipst %v", hash.ShortString(), atx.NIPSTChallenge.String())
 	//todo: add validation of nipst
-	if !atx.Nipst.Valid() {
-		return fmt.Errorf("NIPST not valid ")
+	if err = db.nipstValidator.Validate(atx.Nipst, *atx.Nipst.NipstChallenge); err != nil {
+		return fmt.Errorf("NIPST not valid: %v", err)
 	}
 	if !atx.Nipst.ValidateNipstChallenge(hash) {
 		return fmt.Errorf("NIPST challenge hash mismatch")

@@ -28,6 +28,16 @@ type PostParams struct {
 	SpaceUnit            uint64
 }
 
+func NewValidator(params PostParams) *Validator{
+	return &Validator{
+		PostParams: params,
+		verifyPost:                  verifyPost,
+		verifyPoetMembership:        verifyPoetMembership,
+		verifyPoet:                  verifyPoet,
+		verifyPoetMatchesMembership: verifyPoetMatchesMembership,
+	}
+}
+
 func (v *Validator) Validate(nipst *NIPST, expectedChallenge common.Hash) error {
 	if !bytes.Equal(nipst.NipstChallenge[:], expectedChallenge[:]) {
 		log.Warning("NIPST challenge is not equal to expected challenge")
