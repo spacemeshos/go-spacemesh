@@ -68,8 +68,7 @@ func (d *KadDHT) Bootstrap(ctx context.Context) error {
 func (d *KadDHT) tryBoot(ctx context.Context, bootnodes []discNode, minPeers int) error {
 
 	searchFor := d.local.PublicKey()
-	servers := make([]discNode, len(bootnodes))
-	copy(servers, bootnodes)
+	servers := bootnodes
 
 	tries := 0
 	size := 0
@@ -77,16 +76,20 @@ func (d *KadDHT) tryBoot(ctx context.Context, bootnodes []discNode, minPeers int
 loop:
 	for {
 		reschan := make(chan error)
-
+		// NOTE: this go-routine only run once per lookup. (lookup may fire up to alpha concurrent queries)
+		// it is run in goroutine in order to be able to cancel it with ctx.
 		go func() {
 			if tries > 0 {
 				//TODO: consider choosing a random key that is close to the local id
 				//or TODO: implement real kademlia refreshes - #241
+
 				searchFor = p2pcrypto.NewRandomPubkey()
-				servers = d.internalLookup(searchFor)
-				// TODO: prioritize new nodes to reduce double checking
-				if len(servers) == 0 {
-					servers = append(servers, bootnodes...)
+				newservers := filterNodes(d.internalLookup(searchFor), servers)
+
+				if len(newservers) == 0 {
+					servers = bootnodes
+				} else {
+					servers = newservers
 				}
 			}
 			d.local.Info("BOOTSTRAP: peer lookup w/ %v servers", len(servers))
@@ -105,10 +108,8 @@ loop:
 				// the best thing we can do is just try again or try another random peer.
 				// hence we continue here.
 			}
-			req := make(chan int)
-			d.rt.Size(req)
-			size = <-req
 
+			size = d.Size()
 			if size > 0 && size-len(bootnodes) >= minPeers {
 				break loop
 			}
