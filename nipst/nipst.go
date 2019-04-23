@@ -223,7 +223,7 @@ func NewNipstBuilder(
 }
 
 func (nb *NIPSTBuilder) BuildNIPST(challenge *common.Hash) (*NIPST, error) {
-	defTimeout := 5 * time.Second // TODO: replace temporary solution
+	defTimeout := 10 * time.Second // TODO: replace temporary solution
 	nb.nipst.load()
 
 	if !nb.IsPostInitialized() {
