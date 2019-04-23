@@ -99,7 +99,7 @@ func defaultBaseConfig() BaseConfig {
 		OracleServer:        "http://localhost:3030",
 		OracleServerWorldId: 0,
 		GenesisTime:         time.Now().Format(time.RFC3339),
-		LayerDurationSec:    15,
+		LayerDurationSec:    20,
 	}
 }
 

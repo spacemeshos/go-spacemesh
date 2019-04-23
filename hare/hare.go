@@ -11,7 +11,7 @@ import (
 )
 
 // Delta is the time we wait before we start processing hare messages gor the round
-const Delta = 4 * time.Second // todo: add to config
+const Delta = 5 * time.Second // todo: add to config
 
 // LayerBuffer is the number of layer results we keep at a given time.
 const LayerBuffer = 20

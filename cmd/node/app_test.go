@@ -142,13 +142,13 @@ func (app *AppTestSuite) TestMultipleNodes() {
 
 	txbytes, _ := types.TransactionAsBytes(&tx)
 	path := "../tmp/test/state_" + time.Now().String()
-	app.initMultipleInstances(10, path)
+	app.initMultipleInstances(5, path)
 	for _, a := range app.apps {
 		a.startServices()
 	}
 
 	_ = app.apps[0].P2P.Broadcast(miner.IncomingTxProtocol, txbytes)
-	timeout := time.After(2.5 * 60 * time.Second)
+	timeout := time.After(3.5 * 60 * time.Second)
 
 	stickyClientsDone := 0
 	for {
