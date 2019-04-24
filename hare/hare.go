@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-// Delta is the time we wait before we start processing hare messages gor the round
+// Delta is the time we wait before we start processing hare Messages gor the round
 const Delta = time.Second // todo: add to config
 
 // LayerBuffer is the number of layer results we keep at a given time.
