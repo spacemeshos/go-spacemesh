@@ -34,6 +34,7 @@ type Syncer struct {
 	Configuration
 	log.Log
 	*server.MessageServer
+	currentLayer      types.LayerID
 	SyncLock          uint32
 	startLock         uint32
 	forceSync         chan bool
@@ -89,9 +90,9 @@ func (s *Syncer) run() {
 		case <-s.forceSync:
 			go syncRoutine()
 		case layer := <-s.clock:
-			//s.currentLayerMutex.Lock()
-			//s.currentLayer = layer
-			//s.currentLayerMutex.Unlock()
+			s.currentLayerMutex.Lock()
+			s.currentLayer = layer
+			s.currentLayerMutex.Unlock()
 			s.Debug("sync got tick for layer %v", layer)
 			go syncRoutine()
 		}
@@ -122,7 +123,9 @@ func NewSync(srv service.Service, layers *mesh.Mesh, bv BlockValidator, conf Con
 }
 
 func (s *Syncer) maxSyncLayer() types.LayerID {
-	return s.Mesh.LatestLayer()
+	defer s.currentLayerMutex.RUnlock()
+	s.currentLayerMutex.RLock()
+	return s.currentLayer
 }
 
 func (s *Syncer) Synchronise() {

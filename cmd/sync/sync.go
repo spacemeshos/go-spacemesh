@@ -64,7 +64,6 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	// start p2p services
 	lg := log.New("sync_test", "", "")
 	lg.Info("Start!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-	lg.Info("Initializing P2P services")
 	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P)
 
 	files, _ := IOReadDir(app.Config.DataDir)
@@ -74,9 +73,6 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	if err != nil {
 		panic("something got fudged while creating p2p service ")
 	}
-	gTime, err := time.Parse(time.RFC3339, app.Config.GenesisTime)
-	app.clock = timesync.NewTicker(timesync.RealClock{}, time.Duration(app.Config.LayerDurationSec)*time.Second, gTime)
-	lg.Info("Genesis %v", gTime)
 
 	mshDb := mesh.NewPersistentMeshDB(app.Config.DataDir, lg)
 	msh := mesh.NewMesh(mshDb,
@@ -85,21 +81,7 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 		&sync.MeshValidatorMock{},
 		&sync.MockState{},
 		lg)
-
 	defer msh.Close()
-	i := 0
-	for ; ; i++ {
-		if lyr, err := mshDb.GetLayer(types.LayerID(i)); err != nil || lyr == nil {
-			lg.Info("loaded %v layers from disk %v", i-1, err)
-			break
-		} else {
-			lg.Info("loaded layer %v from disk ", i)
-			mshDb.AddLayer(lyr)
-		}
-	}
-	msh.SetLatestLayer(types.LayerID(i - 1))
-	app.clock.Start()
-
 	conf := sync.Configuration{
 		SyncInterval:   1 * time.Second,
 		Concurrency:    4,
@@ -107,20 +89,32 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 		RequestTimeout: 100 * time.Millisecond,
 	}
 
-	app.sync = sync.NewSync(swarm, msh, sync.BlockValidatorMock{}, conf, make(chan types.LayerID), lg)
-	if err != nil {
-		log.Error("Error starting p2p services, err: %v", err)
-		panic("Error starting p2p services")
+	ch := make(chan types.LayerID, 1)
+	app.sync = sync.NewSync(swarm, msh, sync.BlockValidatorMock{}, conf, ch, lg.WithName("syncer"))
+	ch <- 100
+	if err = swarm.Start(); err != nil {
+		log.Panic("error starting p2p err=%v", err)
 	}
-	app.sync.Start()
-	lg.Info("wait %v sec", time.Duration(app.Config.LayerDurationSec)*time.Second)
-	time.Sleep(time.Duration(app.Config.LayerDurationSec) * time.Second)
-	lg.Info("is synced = %v ", app.sync.IsSynced())
 
-	for !app.sync.IsSynced() {
-		lg.Info("waiting for sync to finish before shutting down")
+	i := 0
+	for ; ; i++ {
+		if lyr, err := mshDb.GetLayer(types.LayerID(i)); err != nil || lyr == nil {
+			lg.Info("loaded %v layers from disk %v", i-1, err)
+			break
+		} else {
+			lg.Info("loaded layer %v from disk ", i)
+			msh.ValidateLayer(lyr)
+		}
+	}
+
+	lg.Info("wait %v sec", 10)
+	time.Sleep(10 * time.Second)
+
+	app.sync.Start()
+	for app.sync.VerifiedLayer() < 101 {
 		lg.Info("sleep for %v sec", 20)
-		time.Sleep(20 * time.Second)
+		time.Sleep(5 * time.Second)
+		ch <- 100
 	}
 
 	lg.Info("node %v done with %v verified layers", app.BaseApp.Config.P2P.NodeID, app.sync.VerifiedLayer())
