@@ -141,7 +141,7 @@ def query_message(indx, namespace, client_po_name, fields, findFails=False):
     print("====================================================================")
     if findFails:
         print("Looking for pods that didn't hit:")
-        podnames = [hit.kubernetes.pod_name for hit in hits]
+        podnames = set([hit.kubernetes.pod_name for hit in hits])
         newfltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
                   Q("match_phrase", kubernetes__pod_name=client_po_name)
 
@@ -311,7 +311,7 @@ def create_configmap(request):
                                        name=configmap_name,
                                        namespace=nspace)
         # Get File Content
-        with open('../config.toml', 'r') as f:
+        with open(testconfig['config_path'], 'r') as f:
             file_content = f.read()
         # Instantiate the configmap object
         d = {'config.toml': file_content}
