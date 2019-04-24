@@ -1,8 +1,9 @@
 package activation
 
 import (
+	bytes2 "bytes"
 	"fmt"
-	"github.com/davecgh/go-xdr/xdr"
+	"github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -117,11 +118,12 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 		PositioningAtx: *posAtxId,
 	}
 
-	bytes, err := xdr.Marshal(challenge)
+	var w bytes2.Buffer
+	_, err = xdr.Marshal(&w, &challenge)
 	if err != nil {
 		return err
 	}
-	npst, err := b.nipstBuilder.BuildNIPST(bytes)
+	npst, err := b.nipstBuilder.BuildNIPST(w.Bytes())
 	if err != nil {
 		return err
 	}

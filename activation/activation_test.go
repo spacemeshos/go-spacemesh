@@ -1,8 +1,9 @@
 package activation
 
 import (
+	bytes2 "bytes"
 	"fmt"
-	"github.com/davecgh/go-xdr/xdr"
+	"github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -145,7 +146,8 @@ func TestBuilder_PublishActivationTx(t *testing.T) {
 		PositioningAtx: atx.Id(),
 	}
 
-	bytes, err := xdr.Marshal(challenge)
+	var w bytes2.Buffer
+	_, err = xdr.Marshal(&w, &challenge)
 	assert.NoError(t, err)
 
 	act := types.NewActivationTx(b.nodeId, b.GetLastSequence(b.nodeId)+1, atx.Id(), layers.LatestLayerId()+10, 0, atx.Id(), b.activeSet.GetActiveSetSize(1), b.mesh.GetLatestView(), &npst)
@@ -154,7 +156,7 @@ func TestBuilder_PublishActivationTx(t *testing.T) {
 	bts, err := types.AtxAsBytes(act)
 	assert.NoError(t, err)
 	assert.Equal(t, bts, net.bt)
-	assert.Equal(t, bytes, nipstBuilder.Challenge)
+	assert.Equal(t, w.Bytes(), nipstBuilder.Challenge)
 
 	b.nipstBuilder = &NipstErrBuilderMock{}
 	err = b.PublishActivationTx(echp.Epoch(1))
