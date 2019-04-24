@@ -6,9 +6,11 @@ script_on_exit: '' #'./k8s/log-client-pods.sh'
 
 genesis_delta: -1000
 deployment_ready_time_out: 120
+config_path: '../../config.toml'
+
 
 bootstrap:
-  image: 'spacemeshos/go-spacemesh-dev:almog147'
+  image: 'spacemeshos/go-spacemesh-dev:almog183'
   command: '/bin/go-sync'
   replicas: 1
   args:
@@ -19,9 +21,9 @@ bootstrap:
     layer-duration-sec: '10'
     layer-average-size: '20'
 client:
-  image: 'spacemeshos/go-spacemesh-dev:almog147'
+  image: 'spacemeshos/go-spacemesh-dev:almog183'
   command: '/bin/go-sync'
-  replicas: 1
+  replicas: 9
   args:
     randcon: '8'
     hare-committee-size: '20'
