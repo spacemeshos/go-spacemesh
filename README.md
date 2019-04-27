@@ -1,5 +1,5 @@
 <h1 align="center">
-  <a href="https://spacemesh.io"><img width="400" src="https://spacemesh.io/content/images/2018/05/logo-black-on-white-trimmed.png" alt="Spacemesh logo" /></a>
+  <a href="https://spacemesh.io"><img width="400" src="https://spacemesh.io/content/images/2019/04/black_text_logo@2x.png" alt="Spacemesh logo" /></a>
   <p align="center">Blockmesh Operating System</p>
 </h1>
 
