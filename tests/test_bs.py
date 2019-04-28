@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
-
-from tests.fixtures import DeploymentInfo, load_config, set_namespace, session_id
+from tests.fixtures import load_config, DeploymentInfo
+from tests.fixtures import init_session, set_namespace, set_docker_images, session_id
 import os
 from os import path
 import pytest
@@ -202,9 +202,9 @@ def setup_oracle(request):
 
 
 @pytest.fixture(scope='module')
-def setup_bootstrap(request, load_config, setup_oracle, setup_poet, create_configmap, session_id):
+def setup_bootstrap(request, init_session, setup_oracle, setup_poet, create_configmap):
 
-    bootstrap_deployment_info = DeploymentInfo(dep_id=session_id)
+    bootstrap_deployment_info = DeploymentInfo(dep_id=init_session)
 
     def _setup_bootstrap_in_namespace(name_space):
         bootstrap_args = {} if 'args' not in testconfig['bootstrap'] else testconfig['bootstrap']['args']
@@ -375,7 +375,7 @@ todaydate = dt.strftime("%Y.%m.%d")
 current_index = 'kubernetes_cluster-' + todaydate
 
 
-def test_bootstrap(set_namespace, setup_bootstrap):
+def test_bootstrap(setup_bootstrap):
     # wait for the bootstrap logs to be available in ElasticSearch
     time.sleep(5)
     assert setup_bootstrap.pods[0]['key'] == query_bootstrap_es(current_index,
@@ -383,7 +383,7 @@ def test_bootstrap(set_namespace, setup_bootstrap):
                                                                 setup_bootstrap.pods[0]['name'])
 
 
-def test_client(set_namespace, setup_clients, save_log_on_exit):
+def test_client(setup_clients, save_log_on_exit):
     fields = {'M':'discovery_bootstrap'}
     timetowait = len(setup_clients.pods)/2
     print("Sleeping " + str(timetowait) + " before checking out bootstrap results")
@@ -392,7 +392,7 @@ def test_client(set_namespace, setup_clients, save_log_on_exit):
     assert peers == len(setup_clients.pods)
 
     
-def test_gossip(set_namespace, setup_clients):
+def test_gossip(setup_clients):
     fields = {'M':'new_gossip_message', 'protocol': 'api_test_gossip'}
     # *note*: this already waits for bootstrap so we can send the msg right away.
     # send message to client via rpc
@@ -416,7 +416,7 @@ def test_gossip(set_namespace, setup_clients):
     assert len(setup_clients.pods) == peers_for_gossip
 
 
-def test_transaction(set_namespace, setup_clients):
+def test_transaction(setup_clients):
 
     # Make sure the genesis time is over
     wait_genesis()
@@ -438,10 +438,9 @@ def test_transaction(set_namespace, setup_clients):
     assert '{"value":"ok"}' in out.decode("utf-8")
     print("submit transaction ok")
     print("wait for confirmation ")
-
     api = 'v1/balance'
     data = '{"address":"222"}'
-    start = time.time()
+    end = start = time.time()
 
     for x in range(10):
         time.sleep(60)
@@ -451,6 +450,6 @@ def test_transaction(set_namespace, setup_clients):
             end = time.time()
             break
 
-    print("test took ", end - start, "seconds ")
+    print("test took {:.3f} seconds ".format(end-start))
     assert '{"value":"100"}' in out.decode("utf-8")
     print("balance ok")
