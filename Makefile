@@ -8,9 +8,6 @@ BIN_DIR = $(CURR_DIR)/build
 BIN_DIR_WIN = $(CUR_DIR_WIN)/build
 export GO111MODULE = on
 
-# Generate random alphanumeric string to act as K8S namespace for testing
-K8S_NAMESPACE = $(shell LC_ALL=C; cat /dev/urandom | tr -dc 'a-z0-9' | fold -w 5 | head -n 1)
-
 ifdef TRAVIS_BRANCH
 	BRANCH := $(TRAVIS_BRANCH)
 else
@@ -155,7 +152,7 @@ dockerrun-test: dockerbuild-test
 ifndef ES_PASSWD
 	$(error ES_PASSWD is not set)
 endif
-	docker run -e ES_PASSWD="$(ES_PASSWD)" -e K8S_NAMESPACE="$(K8S_NAMESPACE)" -e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json -it go-spacemesh-python pytest -s test_bs.py --tc-file=config.yaml --tc-format=yaml
-	docker run -e ES_PASSWD="$(ES_PASSWD)" -e K8S_NAMESPACE="$(K8S_NAMESPACE)" -e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json -it go-spacemesh-python pytest -s hare/test_hare.py --tc-file=hare/config.yaml --tc-format=yaml
+	docker run -e ES_PASSWD="$(ES_PASSWD)" -e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json -it go-spacemesh-python pytest -s test_bs.py --tc-file=config.yaml --tc-format=yaml
+	docker run -e ES_PASSWD="$(ES_PASSWD)" -e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json -it go-spacemesh-python pytest -s hare/test_hare.py --tc-file=hare/config.yaml --tc-format=yaml
 .PHONY: dockerrun-test
 

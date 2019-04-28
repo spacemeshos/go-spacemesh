@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-// Delta is the time we wait before we start processing hare messages gor the round
+// Delta is the time we wait before we start processing hare Messages gor the round
 const Delta = time.Second // todo: add to config
 
 // LayerBuffer is the number of layer results we keep at a given time.
@@ -69,7 +69,7 @@ type Hare struct {
 }
 
 // New returns a new Hare struct.
-func New(conf config.Config, p2p NetworkService, sign Signer, obp orphanBlockProvider, rolacle Rolacle, beginLayer chan types.LayerID, logger log.Log) *Hare {
+func New(conf config.Config, p2p NetworkService, sign Signer, obp orphanBlockProvider, rolacle Rolacle, stateQ StateQuerier, beginLayer chan types.LayerID, logger log.Log) *Hare {
 	h := new(Hare)
 
 	h.Closer = NewCloser()
@@ -81,7 +81,7 @@ func New(conf config.Config, p2p NetworkService, sign Signer, obp orphanBlockPro
 	h.network = p2p
 	h.beginLayer = beginLayer
 
-	h.broker = NewBroker(p2p, NewEligibilityValidator(NewHareOracle(rolacle, conf.N), logger), h.Closer)
+	h.broker = NewBroker(p2p, NewEligibilityValidator(NewHareOracle(rolacle, conf.N), logger), stateQ, h.Closer, logger)
 
 	h.sign = sign
 

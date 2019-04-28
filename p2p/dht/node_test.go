@@ -1,6 +1,9 @@
 package dht
 
-import "testing"
+import (
+	"github.com/stretchr/testify/require"
+	"testing"
+)
 
 func TestUnion(t *testing.T) {
 	nodes := generateDiscNodes(10)
@@ -47,6 +50,40 @@ func TestSortByDhtID(t *testing.T) {
 	for i := 1; i < len(sorted); i++ {
 		if target.DhtID().Closer(sorted[i].DhtID(), first.DhtID()) {
 			t.Fail()
+		}
+	}
+}
+
+func Test_filterNodes(t *testing.T) {
+	num := 100
+	filternum := 10
+	//todo: tabletest?
+
+	list := generateDiscNodes(num)
+
+	filter := make([]discNode, filternum)
+	for i := 0; i < filternum; i++ {
+		if i == len(list) {
+			break
+		}
+		filter[i] = list[i]
+	}
+
+	last := filterNodes(list, filter)
+
+	check := len(list) - filternum
+
+	if check < 0 {
+		check = 0
+	}
+
+	require.Equal(t, len(last), check)
+
+	for i := 0; i < len(last); i++ {
+		for f := 0; f < len(filter); f++ {
+			if filter[f] == last[i] {
+				t.Fatal("it was there")
+			}
 		}
 	}
 }

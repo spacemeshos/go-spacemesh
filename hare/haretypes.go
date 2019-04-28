@@ -103,7 +103,7 @@ func (b32 Bytes32) String() string {
 	return string(b32.Id())
 }
 
-// Represents a unique set of values
+// Represents a unique set of Values
 type Set struct {
 	values    map[objectId]Value
 	id        objectId

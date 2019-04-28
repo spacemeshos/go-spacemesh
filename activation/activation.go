@@ -2,7 +2,6 @@ package activation
 
 import (
 	"fmt"
-	"github.com/davecgh/go-xdr/xdr"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -43,6 +42,11 @@ type NipstBuilder interface {
 	BuildNIPST(challange []byte) (*nipst.NIPST, error)
 }
 
+type IdStore interface {
+	StoreNodeIdentity(id types.NodeId) error
+	GetIdentity(id string) (types.NodeId, error)
+}
+
 type Builder struct {
 	nodeId         types.NodeId
 	db             *ActivationDb
@@ -60,17 +64,10 @@ type Processor struct {
 	epochProvider EpochProvider
 }
 
-func NewBuilder(nodeId types.NodeId, db database.DB,
-	meshdb *mesh.MeshDB,
-	net Broadcaster,
-	activeSet ActiveSetProvider,
-	view MeshProvider,
-	epochDuration EpochProvider,
-	layersPerEpoch uint64,
-	nipstBuilder NipstBuilder) *Builder {
+func NewBuilder(nodeId types.NodeId, db database.DB, meshdb *mesh.MeshDB, net Broadcaster, activeSet ActiveSetProvider, view MeshProvider, epochDuration EpochProvider, layersPerEpoch uint64, nipstBuilder NipstBuilder, identityStore IdStore) *Builder {
 	return &Builder{
 		nodeId,
-		NewActivationDb(db, meshdb, layersPerEpoch),
+		NewActivationDb(db, identityStore, meshdb, layersPerEpoch),
 		net,
 		activeSet,
 		view,
@@ -119,11 +116,11 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 		PositioningAtx: *posAtxId,
 	}
 
-	bytes, err := xdr.Marshal(challenge)
+	data, err := challenge.ToBytes()
 	if err != nil {
 		return err
 	}
-	npst, err := b.nipstBuilder.BuildNIPST(bytes)
+	npst, err := b.nipstBuilder.BuildNIPST(data)
 	if err != nil {
 		return err
 	}

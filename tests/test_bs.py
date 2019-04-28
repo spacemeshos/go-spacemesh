@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 
-from tests.fixtures import load_config, bootstrap_deployment_info, client_deployment_info, set_namespace
+from tests.fixtures import DeploymentInfo, load_config, set_namespace, session_id
 import os
 from os import path
 import pytest
@@ -190,7 +190,10 @@ def setup_oracle(request):
 
 
 @pytest.fixture(scope='module')
-def setup_bootstrap(request, load_config, setup_oracle, create_configmap, bootstrap_deployment_info):
+def setup_bootstrap(request, load_config, setup_oracle, create_configmap, session_id):
+
+    bootstrap_deployment_info = DeploymentInfo(dep_id=session_id)
+
     def _setup_bootstrap_in_namespace(name_space):
         bootstrap_args = {} if 'args' not in testconfig['bootstrap'] else testconfig['bootstrap']['args']
 
@@ -206,6 +209,7 @@ def setup_bootstrap(request, load_config, setup_oracle, create_configmap, bootst
                                  deployment_id=bootstrap_deployment_info.deployment_id,
                                  replica_size=testconfig['bootstrap']['replicas'],
                                  container_specs=cspec)
+
 
         bootstrap_deployment_info.deployment_name = resp.metadata._name
         namespaced_pods = client.CoreV1Api().list_namespaced_pod(namespace=name_space).items
@@ -234,8 +238,9 @@ def setup_bootstrap(request, load_config, setup_oracle, create_configmap, bootst
 
 
 @pytest.fixture(scope='module')
-def setup_clients(request, setup_oracle, setup_bootstrap, client_deployment_info):
-    client_info = client_deployment_info(setup_bootstrap)
+def setup_clients(request, setup_oracle, setup_bootstrap):
+
+    client_info = DeploymentInfo(dep_id=setup_bootstrap.deployment_id)
 
     def _setup_clients_in_namespace(name_space):
         bs_info = setup_bootstrap.pods[0]
@@ -369,7 +374,7 @@ def test_bootstrap(set_namespace, setup_bootstrap):
 def test_client(set_namespace, setup_clients, save_log_on_exit):
     fields = {'M':'discovery_bootstrap'}
     timetowait = len(setup_clients.pods)/2
-    print("Sleeping " + str(timetowait) + "before checking out bootstrap results")
+    print("Sleeping " + str(timetowait) + " before checking out bootstrap results")
     time.sleep(timetowait)
     peers = query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, fields, True)
     assert peers == len(setup_clients.pods)
@@ -400,6 +405,9 @@ def test_gossip(set_namespace, setup_clients):
 
 
 def test_transaction(set_namespace, setup_clients):
+
+    # Make sure the genesis time is over
+    wait_genesis()
 
     # choose client to run on
     client_ip = setup_clients.pods[0]['pod_ip']

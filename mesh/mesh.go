@@ -17,7 +17,7 @@ import (
 
 const (
 	layerSize = 200
-	Genesis   = 0
+	Genesis   = types.LayerID(0)
 	GenesisId = 420
 )
 

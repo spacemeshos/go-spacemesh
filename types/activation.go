@@ -1,6 +1,8 @@
 package types
 
 import (
+	"bytes"
+	"github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/nipst"
@@ -32,6 +34,16 @@ type PoETChallenge struct {
 	StartTick      uint64
 	EndTick        uint64
 	PositioningAtx AtxId
+}
+
+func (p *PoETChallenge) ToBytes() ([]byte, error) {
+	var w bytes.Buffer
+	_, err := xdr.Marshal(&w, &p)
+	if err != nil {
+		return nil, err
+	}
+
+	return w.Bytes(), nil
 }
 
 type ActivationTx struct {
