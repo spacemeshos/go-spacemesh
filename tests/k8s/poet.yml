@@ -1,0 +1,19 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: poet
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        name: poet
+    spec:
+      containers:
+      - name: oracle
+        image: spacemeshos/poet:develop
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 50002
+      nodeSelector:
+        role: tests

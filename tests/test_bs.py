@@ -21,6 +21,7 @@ from tests.misc import ContainerSpec
 BOOT_DEPLOYMENT_FILE = './k8s/bootstrap-w-conf.yml'
 CLIENT_DEPLOYMENT_FILE = './k8s/client-w-conf.yml'
 ORACLE_DEPLOYMENT_FILE = './k8s/oracle.yml'
+POET_DEPLOYMENT_FILE = './k8s/poet.yml'
 
 ELASTICSEARCH_URL = "http://{0}".format(testconfig['elastic']['host'])
 
@@ -163,34 +164,45 @@ def query_message(indx, namespace, client_po_name, fields, findFails=False):
 #    Fixtures
 # ==============================================================================
 
+def setup_server(deployment_name, deployment_file, namespace):
+    namespaced_pods = client.CoreV1Api().list_namespaced_pod(namespace,
+                                                             label_selector="name={0}".format(deployment_name)).items
+    if namespaced_pods:
+        # if server already exist -> delete it
+        delete_deployment(deployment_name, namespace)
+
+    resp = create_deployment(deployment_file, namespace, None)
+    namespaced_pods = client.CoreV1Api().list_namespaced_pod(namespace,
+                                                             label_selector="name={0}".format(deployment_name)).items
+    if not namespaced_pods:
+        raise Exception('Could not setup Server: {0}'.format(deployment_name))
+    return namespaced_pods[0].status.pod_ip
+
+
+@pytest.fixture(scope='module')
+def setup_poet(request):
+    poet_deployment_name = 'poet'
+
+    def fin():
+        delete_deployment(poet_deployment_name, testconfig['namespace'])
+
+    request.addfinalizer(fin)
+    return setup_server(poet_deployment_name, POET_DEPLOYMENT_FILE, testconfig['namespace'])
+
+
 @pytest.fixture(scope='module')
 def setup_oracle(request):
     oracle_deployment_name = 'oracle'
-
-    def _setup_oracle_in_namespace(name_space):
-
-        namespaced_pods = client.CoreV1Api().list_namespaced_pod(name_space,
-                                                                 label_selector="name=oracle").items
-        if namespaced_pods:
-            # if oracle already exist -> delete it
-            delete_deployment(oracle_deployment_name, name_space)
-
-        resp = create_deployment(ORACLE_DEPLOYMENT_FILE, name_space, None)
-        namespaced_pods = client.CoreV1Api().list_namespaced_pod(name_space,
-                                                                 label_selector="name=oracle").items
-        if not namespaced_pods:
-            raise Exception('Could not setup Oracle Server')
-        return namespaced_pods[0].status.pod_ip
 
     def fin():
         delete_deployment(oracle_deployment_name, testconfig['namespace'])
 
     request.addfinalizer(fin)
-    return _setup_oracle_in_namespace(testconfig['namespace'])
+    return setup_server(oracle_deployment_name, ORACLE_DEPLOYMENT_FILE, testconfig['namespace'])
 
 
 @pytest.fixture(scope='module')
-def setup_bootstrap(request, load_config, setup_oracle, create_configmap, session_id):
+def setup_bootstrap(request, load_config, setup_oracle, setup_poet, create_configmap, session_id):
 
     bootstrap_deployment_info = DeploymentInfo(dep_id=session_id)
 
