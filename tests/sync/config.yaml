@@ -10,7 +10,7 @@ config_path: '../../config.toml'
 
 
 bootstrap:
-  image: 'spacemeshos/go-spacemesh-dev:almog183'
+  image: 'spacemeshos/go-spacemesh-test:develop'
   command: '/bin/go-sync'
   replicas: 1
   args:
@@ -21,7 +21,7 @@ bootstrap:
     layer-duration-sec: '10'
     layer-average-size: '20'
 client:
-  image: 'spacemeshos/go-spacemesh-dev:almog183'
+  image: 'spacemeshos/go-spacemesh-test:develop'
   command: '/bin/go-sync'
   replicas: 9
   args:
@@ -33,6 +33,6 @@ client:
     layer-average-size: '20'
     data-folder: '/bin/data/'
 elastic:
-  host: es.spacemesh.io
+  host: elastic.spacemesh.io
   port: 9200
   username: spacemesh
