@@ -31,6 +31,15 @@ def load_config():
 
 
 @pytest.fixture(scope='session')
+def set_docker_images():
+    docker_image = os.getenv('CLIENT_DOCKER_IMAGE', '')
+    if docker_image:
+        print("Set docker images to: {0}".format(docker_image))
+        testconfig['bootstrap']['image'] = docker_image
+        testconfig['client']['image'] = docker_image
+
+
+@pytest.fixture(scope='session')
 def session_id():
     return random_id(length=5)
 
@@ -60,3 +69,7 @@ def set_namespace(request, session_id, load_config):
     request.addfinalizer(fin)
     return _setup_namespace()
 
+
+@pytest.fixture(scope='session')
+def init_session(request, load_config, set_namespace, set_docker_images, session_id):
+    return session_id
