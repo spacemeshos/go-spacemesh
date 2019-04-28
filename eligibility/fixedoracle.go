@@ -114,7 +114,7 @@ func (fo *FixedRolacle) generateEligibility(expCom int) map[string]struct{} {
 	hon := cloneMap(fo.honest)
 	pickUnique(expHonest, hon, emap)
 
-	expFaulty := expCom/2 - 1
+	expFaulty := expCom - expHonest
 	if expFaulty > len(fo.faulty) {
 		if len(fo.faulty) > 0 { // not enough
 			log.Warning("Not enough registered dishonest to pick from. Expected %v<=%v. Picking %v instead", expFaulty, len(fo.faulty), len(fo.faulty))
@@ -129,7 +129,7 @@ func (fo *FixedRolacle) generateEligibility(expCom int) map[string]struct{} {
 		pickUnique(expFaulty, fau, emap)
 	}
 
-	rem := expCom/2 - 1 - len(fo.faulty)
+	rem := expCom - expHonest - expFaulty
 	if rem > 0 { // need to pickUnique the remaining from honest
 		pickUnique(rem, hon, emap)
 	}

@@ -1,8 +1,11 @@
 package miner
 
 import (
-	"bytes"
+	"crypto/md5"
+	"encoding/binary"
+	"errors"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/config"
@@ -11,8 +14,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"github.com/spacemeshos/go-spacemesh/state"
 	meshSync "github.com/spacemeshos/go-spacemesh/sync"
+	"github.com/spacemeshos/go-spacemesh/types"
 	"math/big"
 	"math/rand"
 	"sync"
@@ -20,6 +23,7 @@ import (
 )
 
 const MaxTransactionsPerBlock = 200 //todo: move to config
+const MaxAtxPerBlock = 200          //todo: move to config
 
 const DefaultGasLimit = 10
 const DefaultGas = 1
@@ -27,14 +31,18 @@ const DefaultGas = 1
 const IncomingTxProtocol = "TxGossip"
 
 type BlockBuilder struct {
-	minerID string // could be a pubkey or what ever. the identity we're claiming to be as miners.
 	log.Log
-	beginRoundEvent  chan mesh.LayerID
+	minerID          types.NodeId
+	rnd              *rand.Rand
+	beginRoundEvent  chan types.LayerID
 	stopChan         chan struct{}
-	newTrans         chan *mesh.SerializableTransaction
+	newTrans         chan *types.SerializableTransaction
+	newAtx           chan *types.ActivationTx
 	txGossipChannel  chan service.GossipMessage
+	atxGossipChannel chan service.GossipMessage
 	hareResult       HareResultProvider
-	transactionQueue []mesh.SerializableTransaction
+	AtxQueue         []*types.ActivationTx
+	transactionQueue []*types.SerializableTransaction
 	mu               sync.Mutex
 	network          p2p.Service
 	weakCoinToss     WeakCoinProvider
@@ -43,17 +51,24 @@ type BlockBuilder struct {
 	started          bool
 }
 
-func NewBlockBuilder(minerID string, net p2p.Service, beginRoundEvent chan mesh.LayerID, weakCoin WeakCoinProvider,
+func NewBlockBuilder(minerID types.NodeId, net p2p.Service, beginRoundEvent chan types.LayerID, weakCoin WeakCoinProvider,
 	orph OrphanBlockProvider, hare HareResultProvider, blockOracle oracle.BlockOracle, lg log.Log) BlockBuilder {
+
+	seed := binary.BigEndian.Uint64(md5.New().Sum([]byte(minerID.Key)))
+
 	return BlockBuilder{
 		minerID:          minerID,
 		Log:              lg,
+		rnd:              rand.New(rand.NewSource(int64(seed))),
 		beginRoundEvent:  beginRoundEvent,
 		stopChan:         make(chan struct{}),
-		newTrans:         make(chan *mesh.SerializableTransaction),
+		newTrans:         make(chan *types.SerializableTransaction),
+		newAtx:           make(chan *types.ActivationTx),
 		txGossipChannel:  net.RegisterGossipProtocol(IncomingTxProtocol),
+		atxGossipChannel: net.RegisterGossipProtocol(activation.AtxProtocol),
 		hareResult:       hare,
-		transactionQueue: make([]mesh.SerializableTransaction, 0, 10),
+		AtxQueue:         make([]*types.ActivationTx, 0, 10),
+		transactionQueue: make([]*types.SerializableTransaction, 0, 10),
 		mu:               sync.Mutex{},
 		network:          net,
 		weakCoinToss:     weakCoin,
@@ -64,8 +79,8 @@ func NewBlockBuilder(minerID string, net p2p.Service, beginRoundEvent chan mesh.
 
 }
 
-func Transaction2SerializableTransaction(tx *state.Transaction) mesh.SerializableTransaction {
-	return mesh.SerializableTransaction{
+func Transaction2SerializableTransaction(tx *mesh.Transaction) *types.SerializableTransaction {
+	return &types.SerializableTransaction{
 		AccountNonce: tx.AccountNonce,
 		Origin:       tx.Origin,
 		Recipient:    tx.Recipient,
@@ -86,22 +101,23 @@ func (t *BlockBuilder) Start() error {
 	t.started = true
 	go t.acceptBlockData()
 	go t.listenForTx()
+	go t.listenForAtx()
 	return nil
 }
 
-func (t *BlockBuilder) Stop() error {
+func (t *BlockBuilder) Close() error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if !t.started {
 		return fmt.Errorf("already stopped")
 	}
 	t.started = false
-	t.stopChan <- struct{}{}
+	close(t.stopChan)
 	return nil
 }
 
 type HareResultProvider interface {
-	GetResult(id mesh.LayerID) ([]mesh.BlockID, error)
+	GetResult(id types.LayerID) ([]types.BlockID, error)
 }
 
 type WeakCoinProvider interface {
@@ -109,7 +125,7 @@ type WeakCoinProvider interface {
 }
 
 type OrphanBlockProvider interface {
-	GetUnverifiedLayerBlocks(l mesh.LayerID) []mesh.BlockID
+	GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error)
 }
 
 //used from external API call?
@@ -117,40 +133,50 @@ func (t *BlockBuilder) AddTransaction(nonce uint64, origin, destination address.
 	if !t.started {
 		return fmt.Errorf("BlockBuilderStopped")
 	}
-	t.newTrans <- mesh.NewSerializableTransaction(nonce, origin, destination, amount, big.NewInt(DefaultGas), DefaultGasLimit)
+	t.newTrans <- types.NewSerializableTransaction(nonce, origin, destination, amount, big.NewInt(DefaultGas), DefaultGasLimit)
 	return nil
 }
 
-func (t *BlockBuilder) createBlock(id mesh.LayerID, txs []mesh.SerializableTransaction) mesh.Block {
-	var res []mesh.BlockID = nil
+func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibilityProof types.BlockEligibilityProof,
+	txs []*types.SerializableTransaction, atx []*types.ActivationTx) (*types.Block, error) {
+
+	var res []types.BlockID = nil
 	var err error
-
-	if id == 0 {
-		panic("cannot create block in layer 0")
-	}
-
-	if id == 1 {
+	if id == config.Genesis {
+		return nil, errors.New("cannot create block in genesis layer ")
+	} else if id == config.Genesis+1 {
 		res = append(res, config.GenesisId)
 	} else {
 		res, err = t.hareResult.GetResult(id - 1)
 		if err != nil {
-			t.Log.Error("didnt receive hare result for layer %v", id-1)
+			return nil, errors.New(fmt.Sprintf("didnt receive hare result for layer %v %v", id-1, err))
 		}
 	}
-	b := mesh.Block{
-		MinerID:    t.minerID,
-		Id:         mesh.BlockID(rand.Int63()),
-		LayerIndex: id,
-		Data:       nil,
-		Coin:       t.weakCoinToss.GetResult(),
-		Timestamp:  time.Now().UnixNano(),
-		Txs:        txs,
-		BlockVotes: res,
-		ViewEdges:  t.orphans.GetUnverifiedLayerBlocks(id - 1),
+
+	viewEdges, err := t.orphans.GetOrphanBlocksBefore(id)
+	if err != nil {
+		return nil, err
+	}
+
+	b := types.Block{
+		BlockHeader: types.BlockHeader{
+			Id:               types.BlockID(t.rnd.Int63()),
+			LayerIndex:       id,
+			MinerID:          t.minerID,
+			ATXID:            atxID,
+			EligibilityProof: eligibilityProof,
+			Data:             nil,
+			Coin:             t.weakCoinToss.GetResult(),
+			Timestamp:        time.Now().UnixNano(),
+			BlockVotes:       res,
+			ViewEdges:        viewEdges,
+		},
+		ATXs: atx,
+		Txs:  txs,
 	}
 
 	t.Log.Info("Iv'e created block in layer %v id %v, num of transactions %v votes %d viewEdges %d", b.LayerIndex, b.Id, len(b.Txs), len(b.BlockVotes), len(b.ViewEdges))
-	return b
+	return &b, nil
 }
 
 func (t *BlockBuilder) listenForTx() {
@@ -160,16 +186,39 @@ func (t *BlockBuilder) listenForTx() {
 		case <-t.stopChan:
 			return
 		case data := <-t.txGossipChannel:
-			x, err := mesh.BytesAsTransaction(bytes.NewReader(data.Bytes()))
-			t.Log.With().Info("got new tx", log.String("sender", x.Origin.String()), log.String("receiver", x.Recipient.String()),
-				log.String("amount", x.AmountAsBigInt().String()), log.Uint64("nonce", x.AccountNonce), log.Bool("valid", err != nil))
-			if err != nil {
-				t.Log.Error("cannot parse incoming TX")
-				data.ReportValidation(IncomingTxProtocol, false)
-				break
+			if data != nil {
+				x, err := types.BytesAsTransaction(data.Bytes())
+				t.Log.With().Info("got new tx", log.String("sender", x.Origin.String()), log.String("receiver", x.Recipient.String()),
+					log.String("amount", x.AmountAsBigInt().String()), log.Uint64("nonce", x.AccountNonce), log.Bool("valid", err != nil))
+				if err != nil {
+					t.Log.Error("cannot parse incoming TX")
+					break
+				}
+				data.ReportValidation(IncomingTxProtocol)
+				t.newTrans <- x
 			}
-			data.ReportValidation(IncomingTxProtocol, true)
-			t.newTrans <- x
+		}
+	}
+}
+
+func (t *BlockBuilder) listenForAtx() {
+	t.Log.Info("start listening for atxs")
+	for {
+		select {
+		case <-t.stopChan:
+			return
+		case data := <-t.atxGossipChannel:
+			if data != nil {
+				x, err := types.BytesAsAtx(data.Bytes())
+				/*t.Log.With().Info("got new atx", log.String("sender", x., log.String("receiver", x.Recipient.String()),
+				log.String("amount", x.AmountAsBigInt().String()), log.Uint64("nonce", x.AccountNonce), log.Bool("valid", err != nil))*/
+				if err != nil {
+					t.Log.Error("cannot parse incoming ATX")
+					break
+				}
+				data.ReportValidation(activation.AtxProtocol)
+				t.newAtx <- x
+			}
 		}
 	}
 }
@@ -182,24 +231,42 @@ func (t *BlockBuilder) acceptBlockData() {
 			return
 
 		case id := <-t.beginRoundEvent:
-			if !t.blockOracle.BlockEligible(id, t.minerID) {
+			atxID, proofs, err := t.blockOracle.BlockEligible(types.LayerID(id))
+			if err != nil {
+				t.Error("failed to check for block eligibility: %v ", err)
+				continue
+			}
+			if len(proofs) == 0 {
 				break
 			}
+			// TODO: include multiple proofs in each block and weigh blocks where applicable
 
 			txList := t.transactionQueue[:common.Min(len(t.transactionQueue), MaxTransactionsPerBlock)]
 			t.transactionQueue = t.transactionQueue[common.Min(len(t.transactionQueue), MaxTransactionsPerBlock):]
-			blk := t.createBlock(id, txList)
-			go func() {
-				bytes, err := mesh.BlockAsBytes(blk)
+
+			atxList := t.AtxQueue[:common.Min(len(t.AtxQueue), MaxAtxPerBlock)]
+			t.AtxQueue = t.AtxQueue[common.Min(len(t.AtxQueue), MaxAtxPerBlock):]
+
+			for _, eligibilityProof := range proofs {
+				blk, err := t.createBlock(types.LayerID(id), atxID, eligibilityProof, txList, atxList)
 				if err != nil {
-					t.Log.Error("cannot serialize block %v", err)
-					return
+					t.Error("cannot create new block, %v ", err)
+					continue
 				}
-				t.network.Broadcast(meshSync.NewBlockProtocol, bytes)
-			}()
+				go func() {
+					bytes, err := types.BlockAsBytes(*blk)
+					if err != nil {
+						t.Log.Error("cannot serialize block %v", err)
+						return
+					}
+					t.network.Broadcast(meshSync.NewBlockProtocol, bytes)
+				}()
+			}
 
 		case tx := <-t.newTrans:
-			t.transactionQueue = append(t.transactionQueue, *tx)
+			t.transactionQueue = append(t.transactionQueue, tx)
+		case atx := <-t.newAtx:
+			t.AtxQueue = append(t.AtxQueue, atx)
 		}
 	}
 }

@@ -1,15 +1,14 @@
 package sync
 
 import (
-	"bytes"
 	"fmt"
+	"github.com/google/uuid"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"github.com/spacemeshos/go-spacemesh/timesync"
+	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
 	"math/big"
 	"testing"
@@ -20,12 +19,6 @@ type PeersMock struct {
 	getPeers func() []p2p.Peer
 }
 
-type ClockMock struct{}
-
-func (t *ClockMock) Subscribe() timesync.LayerTimer {
-	return make(timesync.LayerTimer)
-}
-
 func (pm PeersMock) GetPeers() []p2p.Peer {
 	return pm.getPeers()
 }
@@ -33,9 +26,10 @@ func (pm PeersMock) GetPeers() []p2p.Peer {
 func (pm PeersMock) Close() {
 	return
 }
-func ListenerFactory(serv server.Service, peers p2p.Peers, name string) *BlockListener {
 
-	nbl := NewBlockListener(serv, BlockValidatorMock{}, getMesh(memoryDB, "TestBlockListener_"+name), 1*time.Second, 2, &ClockMock{}, log.New(name, "", ""))
+func ListenerFactory(serv service.Service, peers p2p.Peers, name string) *BlockListener {
+
+	nbl := NewBlockListener(serv, BlockValidatorMock{}, getMesh(memoryDB, "TestBlockListener_"+name), 1*time.Second, 2, log.New(name, "", ""))
 	nbl.Peers = peers //override peers with mock
 	return nbl
 }
@@ -50,9 +44,9 @@ func TestBlockListener(t *testing.T) {
 	bl2 := ListenerFactory(n2, PeersMock{func() []p2p.Peer { return []p2p.Peer{n1.PublicKey()} }}, "2")
 	bl2.Start()
 
-	block1 := mesh.NewExistingBlock(mesh.BlockID(123), 0, nil)
-	block2 := mesh.NewExistingBlock(mesh.BlockID(321), 1, nil)
-	block3 := mesh.NewExistingBlock(mesh.BlockID(222), 2, nil)
+	block1 := types.NewExistingBlock(types.BlockID(123), 0, nil)
+	block2 := types.NewExistingBlock(types.BlockID(321), 1, nil)
+	block3 := types.NewExistingBlock(types.BlockID(222), 2, nil)
 
 	block1.AddView(block2.ID())
 	block1.AddView(block3.ID())
@@ -91,16 +85,16 @@ func TestBlockListener2(t *testing.T) {
 
 	bl2.Start()
 
-	block1 := mesh.NewBlock(true, nil, time.Now(), 0)
-	block2 := mesh.NewBlock(true, nil, time.Now(), 1)
-	block3 := mesh.NewBlock(true, nil, time.Now(), 2)
-	block4 := mesh.NewBlock(true, nil, time.Now(), 2)
-	block5 := mesh.NewBlock(true, nil, time.Now(), 3)
-	block6 := mesh.NewBlock(true, nil, time.Now(), 3)
-	block7 := mesh.NewBlock(true, nil, time.Now(), 4)
-	block8 := mesh.NewBlock(true, nil, time.Now(), 4)
-	block9 := mesh.NewBlock(true, nil, time.Now(), 4)
-	block10 := mesh.NewBlock(true, nil, time.Now(), 5)
+	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 0, []byte("data data data"))
+	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 0, []byte("data data data"))
+	block3 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 0, []byte("data data data"))
+	block4 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 0, []byte("data data data"))
+	block5 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 0, []byte("data data data"))
+	block6 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 0, []byte("data data data"))
+	block7 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 0, []byte("data data data"))
+	block8 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 0, []byte("data data data"))
+	block9 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 0, []byte("data data data"))
+	block10 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 0, []byte("data data data"))
 
 	block2.AddView(block1.ID())
 	block3.AddView(block2.ID())
@@ -156,16 +150,23 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 	bl1.Start()
 	bl2.Start()
 
-	blk := mesh.NewBlock(false, nil, time.Now(), 1)
-	tx := mesh.NewSerializableTransaction(0, address.BytesToAddress([]byte{0x01}), address.BytesToAddress([]byte{0x02}), big.NewInt(10), big.NewInt(10), 10)
+	blk := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data1"))
+	tx := types.NewSerializableTransaction(0, address.BytesToAddress([]byte{0x01}), address.BytesToAddress([]byte{0x02}), big.NewInt(10), big.NewInt(10), 10)
 	blk.AddTransaction(tx)
-	blk.AddVote(1)
-	blk.AddView(2)
+	blk.AddAtx(types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")},
+		1,
+		types.AtxId{},
+		5,
+		1,
+		types.AtxId{},
+		5,
+		[]types.BlockID{1, 2, 3},
+		&nipst.NIPST{}))
 
-	data, err := mesh.BlockAsBytes(*blk)
-	blk2, ok := mesh.BytesAsBlock(bytes.NewReader(data))
+	data, err := types.BlockAsBytes(*blk)
+	blk2, ok := types.BytesAsBlock(data)
 	assert.NoError(t, ok)
-	assert.Equal(t, *blk, blk2)
+	assert.True(t, blk.Compare(&blk2))
 
 	assert.NoError(t, err)
 	n2.Broadcast(NewBlockProtocol, data)
@@ -179,7 +180,7 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 			return
 		default:
 			if b, err := bl1.GetBlock(blk.Id); err == nil {
-				assert.Equal(t, blk, b)
+				assert.True(t, blk.Compare(b))
 				t.Log("  ", b)
 				t.Log("done!")
 				return

@@ -1,24 +1,23 @@
 package hare
 
 import (
-	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
-func buildStatusMsg(signing Signing, s *Set, ki int32) *pb.HareMessage {
+func buildStatusMsg(signing Signer, s *Set, ki int32) *Msg {
 	builder := NewMessageBuilder()
-	builder.SetType(Status).SetInstanceId(*instanceId1).SetRoundCounter(Round1).SetKi(ki).SetValues(s)
-	builder = builder.SetPubKey(signing.Verifier().Bytes()).Sign(signing)
+	builder.SetType(Status).SetInstanceId(instanceId1).SetRoundCounter(Round1).SetKi(ki).SetValues(s)
+	builder = builder.SetPubKey(signing.PublicKey()).Sign(signing)
 
 	return builder.Build()
 }
 
-func BuildStatusMsg(signing Signing, s *Set) *pb.HareMessage {
+func BuildStatusMsg(signing Signer, s *Set) *Msg {
 	return buildStatusMsg(signing, s, -1)
 }
 
-func validate(m *pb.HareMessage) bool {
+func validate(m *Msg) bool {
 	return true
 }
 

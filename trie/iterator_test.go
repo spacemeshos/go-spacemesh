@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/database"
-	"math/rand"
+	"github.com/spacemeshos/go-spacemesh/rand"
 	"testing"
 
 	"github.com/spacemeshos/go-spacemesh/common"

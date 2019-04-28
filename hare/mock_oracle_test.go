@@ -13,29 +13,29 @@ const numOfClients = 100
 
 func TestMockHashOracle_Register(t *testing.T) {
 	oracle := NewMockHashOracle(numOfClients)
-	oracle.Register(generateSigning(t).Verifier().String())
-	oracle.Register(generateSigning(t).Verifier().String())
+	oracle.Register(generateSigning(t).PublicKey().String())
+	oracle.Register(generateSigning(t).PublicKey().String())
 	assert.Equal(t, 2, len(oracle.clients))
 }
 
 func TestMockHashOracle_Unregister(t *testing.T) {
 	oracle := NewMockHashOracle(numOfClients)
 	pub := generateSigning(t)
-	oracle.Register(pub.Verifier().String())
+	oracle.Register(pub.PublicKey().String())
 	assert.Equal(t, 1, len(oracle.clients))
-	oracle.Unregister(pub.Verifier().String())
+	oracle.Unregister(pub.PublicKey().String())
 	assert.Equal(t, 0, len(oracle.clients))
 }
 
 func TestMockHashOracle_Concurrency(t *testing.T) {
 	oracle := NewMockHashOracle(numOfClients)
-	c := make(chan Signing, 1000)
+	c := make(chan Signer, 1000)
 	done := make(chan int, 2)
 
 	go func() {
 		for i := 0; i < 500; i++ {
 			pub := generateSigning(t)
-			oracle.Register(pub.Verifier().String())
+			oracle.Register(pub.PublicKey().String())
 			c <- pub
 		}
 		done <- 1
@@ -44,7 +44,7 @@ func TestMockHashOracle_Concurrency(t *testing.T) {
 	go func() {
 		for i := 0; i < 400; i++ {
 			s := <-c
-			oracle.Unregister(s.Verifier().String())
+			oracle.Unregister(s.PublicKey().String())
 		}
 		done <- 1
 	}()
@@ -67,13 +67,13 @@ func TestMockHashOracle_Role(t *testing.T) {
 	oracle := NewMockHashOracle(numOfClients)
 	for i := 0; i < numOfClients; i++ {
 		pub := generateSigning(t)
-		oracle.Register(pub.Verifier().String())
+		oracle.Register(pub.PublicKey().String())
 	}
 
 	committeeSize := 20
 	counter := 0
 	for i := 0; i < numOfClients; i++ {
-		if oracle.Eligible(0, committeeSize, generateSigning(t).Verifier().String(), []byte(genSig())) {
+		if oracle.Eligible(0, committeeSize, generateSigning(t).PublicKey().String(), []byte(genSig())) {
 			counter++
 		}
 	}
@@ -86,8 +86,8 @@ func TestMockHashOracle_Role(t *testing.T) {
 
 func TestMockHashOracle_calcThreshold(t *testing.T) {
 	oracle := NewMockHashOracle(2)
-	oracle.Register(generateSigning(t).Verifier().String())
-	oracle.Register(generateSigning(t).Verifier().String())
+	oracle.Register(generateSigning(t).PublicKey().String())
+	oracle.Register(generateSigning(t).PublicKey().String())
 	assert.Equal(t, uint32(math.MaxUint32/2), oracle.calcThreshold(1))
 	assert.Equal(t, uint32(math.MaxUint32), oracle.calcThreshold(2))
 }

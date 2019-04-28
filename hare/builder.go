@@ -1,56 +1,110 @@
 package hare
 
 import (
-	"github.com/gogo/protobuf/proto"
-	"github.com/spacemeshos/go-spacemesh/hare/pb"
+	"bytes"
+	"fmt"
+	"github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
+// top InnerMsg of the protocol
+type Message struct {
+	Sig      []byte
+	InnerMsg *InnerMessage
+}
+
+func MessageFromBuffer(buffer []byte) (*Message, error) {
+	rdr := bytes.NewReader(buffer)
+	hareMsg := &Message{}
+	_, err := xdr.Unmarshal(rdr, hareMsg)
+	if err != nil {
+		log.Error("Could not unmarshal message: %v", err)
+		return nil, err
+	}
+
+	return hareMsg, nil
+}
+
+func (m *Message) String() string {
+	return fmt.Sprintf("Sig: %v InnerMsg: %v", m.Sig, m.InnerMsg.String())
+}
+
+// the certificate
+type Certificate struct {
+	Values  []uint64 // the committed set S
+	AggMsgs *AggregatedMessages
+}
+
+// Aggregated Messages
+type AggregatedMessages struct {
+	Messages []*Message // a collection of Messages
+	AggSig   []byte
+}
+
+// basic InnerMsg
+type InnerMessage struct {
+	Type       MessageType
+	InstanceId InstanceId
+	K          int32 // the round counter
+	Ki         int32
+	Values     []uint64            // the set S. optional for commit InnerMsg in a certificate
+	RoleProof  []byte              // role is implicit by InnerMsg type, this is the proof
+	Svp        *AggregatedMessages // optional. only for proposal Messages
+	Cert       *Certificate        // optional
+}
+
+func (im *InnerMessage) String() string {
+	return fmt.Sprintf("Type: %v InstanceId: %v K: %v Ki: %v", im.Type, im.InstanceId, im.K, im.Ki)
+}
+
+// Used to build proto Messages
 type MessageBuilder struct {
-	outer *pb.HareMessage
-	inner *pb.InnerMessage
+	msg   *Msg
+	inner *InnerMessage
 }
 
 func NewMessageBuilder() *MessageBuilder {
-	m := &MessageBuilder{&pb.HareMessage{}, &pb.InnerMessage{}}
-	m.outer.Message = m.inner
+	m := &MessageBuilder{&Msg{&Message{}, nil}, &InnerMessage{}}
+	m.msg.InnerMsg = m.inner
 
 	return m
 }
 
-func (builder *MessageBuilder) Build() *pb.HareMessage {
-	return builder.outer
+func (builder *MessageBuilder) Build() *Msg {
+	return builder.msg
 }
 
-func (builder *MessageBuilder) SetPubKey(pub []byte) *MessageBuilder {
-	builder.outer.PubKey = pub
+func (builder *MessageBuilder) SetCertificate(certificate *Certificate) *MessageBuilder {
+	builder.msg.InnerMsg.Cert = certificate
 	return builder
 }
 
-func (builder *MessageBuilder) SetCertificate(certificate *pb.Certificate) *MessageBuilder {
-	builder.outer.Cert = certificate
-	return builder
-}
-
-func (builder *MessageBuilder) Sign(signing Signing) *MessageBuilder {
-	buff, err := proto.Marshal(builder.inner)
+func (builder *MessageBuilder) Sign(signing Signer) *MessageBuilder {
+	var w bytes.Buffer
+	_, err := xdr.Marshal(&w, builder.inner)
 	if err != nil {
-		log.Error("could not sign message")
-		panic("marshal failed during signing")
+		log.Panic("marshal failed during signing")
 	}
 
-	builder.outer.InnerSig = signing.Sign(buff)
+	// TODO: do we always sign the same InnerMsg? order of Values (set)?
+	builder.msg.Sig = signing.Sign(w.Bytes())
 
+	return builder
+}
+
+func (builder *MessageBuilder) SetPubKey(pub *signing.PublicKey) *MessageBuilder {
+	builder.msg.PubKey = pub
 	return builder
 }
 
 func (builder *MessageBuilder) SetType(msgType MessageType) *MessageBuilder {
-	builder.inner.Type = int32(msgType)
+	builder.inner.Type = msgType
 	return builder
 }
 
 func (builder *MessageBuilder) SetInstanceId(id InstanceId) *MessageBuilder {
-	builder.inner.InstanceId = id.Bytes()
+	builder.inner.InstanceId = id
 	return builder
 }
 
@@ -74,11 +128,7 @@ func (builder *MessageBuilder) SetRoleProof(sig Signature) *MessageBuilder {
 	return builder
 }
 
-func (builder *MessageBuilder) SetSVP(svp *pb.AggregatedMessages) *MessageBuilder {
+func (builder *MessageBuilder) SetSVP(svp *AggregatedMessages) *MessageBuilder {
 	builder.inner.Svp = svp
 	return builder
-}
-
-type AggregatedBuilder struct {
-	m *pb.AggregatedMessages
 }

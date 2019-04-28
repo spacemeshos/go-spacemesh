@@ -8,6 +8,7 @@ import (
 // Config is the main configuration of the dolev strong parameters
 type Config struct {
 	NodesPerLayer    int32         `mapstructure:"nodes-per-layer"`
+	LayersPerEpoch   uint16        `mapstructure:"layers-per-epoch"`
 	RoundTime        time.Duration `mapstructure:"phase-time"`
 	StartTime        time.Time     `mapstructure:"start-time"`
 	NetworkDelayMax  time.Duration `mapstructure:"network-delay-time"`
@@ -26,10 +27,11 @@ func duration(duration string) (dur time.Duration) {
 // DefaultConfig returns the default values of dolev strong configuration
 func DefaultConfig() Config {
 	return Config{
-		RoundTime:        duration("1s"),
 		NodesPerLayer:    200,
-		NetworkDelayMax:  duration("500ms"),
+		LayersPerEpoch:   4032, // 12 layers/hr * 24 hrs/day * 14 days/epoch TODO: make it 4096 so it's 2^12?
+		RoundTime:        duration("1s"),
 		StartTime:        time.Now(),
+		NetworkDelayMax:  duration("500ms"),
 		NumOfAdversaries: 10,
 	}
 }

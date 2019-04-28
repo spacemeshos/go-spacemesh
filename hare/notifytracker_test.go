@@ -1,19 +1,18 @@
 package hare
 
 import (
-	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
-func BuildNotifyMsg(signing Signing, s *Set) *pb.HareMessage {
+func BuildNotifyMsg(signing Signer, s *Set) *Msg {
 	builder := NewMessageBuilder()
-	builder.SetType(PreRound).SetInstanceId(*instanceId1).SetRoundCounter(Round4).SetKi(ki).SetValues(s)
-	builder = builder.SetPubKey(signing.Verifier().Bytes()).Sign(signing)
-	cert := &pb.Certificate{}
+	builder.SetType(PreRound).SetInstanceId(instanceId1).SetRoundCounter(Round4).SetKi(ki).SetValues(s)
+	builder = builder.SetPubKey(signing.PublicKey()).Sign(signing)
+	cert := &Certificate{}
 	cert.Values = NewSetFromValues(value1).To2DSlice()
-	cert.AggMsgs = &pb.AggregatedMessages{}
-	cert.AggMsgs.Messages = []*pb.HareMessage{BuildCommitMsg(signing, s)}
+	cert.AggMsgs = &AggregatedMessages{}
+	cert.AggMsgs.Messages = []*Message{BuildCommitMsg(signing, s).Message}
 	builder.SetCertificate(cert)
 
 	return builder.Build()

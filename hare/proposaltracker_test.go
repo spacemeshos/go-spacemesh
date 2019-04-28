@@ -1,21 +1,20 @@
 package hare
 
 import (
-	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
-func buildProposalMsg(signing Signing, s *Set, signature Signature) *pb.HareMessage {
+func buildProposalMsg(signing Signer, s *Set, signature Signature) *Msg {
 	builder := NewMessageBuilder().SetRoleProof(signature)
-	builder.SetType(Proposal).SetInstanceId(*instanceId1).SetRoundCounter(Round2).SetKi(ki).SetValues(s)
-	builder = builder.SetPubKey(signing.Verifier().Bytes()).Sign(signing)
+	builder.SetType(Proposal).SetInstanceId(instanceId1).SetRoundCounter(Round2).SetKi(ki).SetValues(s)
+	builder = builder.SetPubKey(signing.PublicKey()).Sign(signing)
 
 	return builder.Build()
 }
 
-func BuildProposalMsg(signing Signing, s *Set) *pb.HareMessage {
+func BuildProposalMsg(signing Signer, s *Set) *Msg {
 	return buildProposalMsg(signing, s, Signature{})
 }
 
@@ -24,11 +23,11 @@ func TestProposalTracker_OnProposalConflict(t *testing.T) {
 	verifier := generateSigning(t)
 
 	m1 := BuildProposalMsg(verifier, s)
-	tracker := NewProposalTracker(log.NewDefault(verifier.Verifier().String()))
+	tracker := NewProposalTracker(log.NewDefault(verifier.PublicKey().String()))
 	tracker.OnProposal(m1)
 	assert.False(t, tracker.IsConflicting())
-	s.Add(value3)
-	m2 := BuildProposalMsg(verifier, s)
+	g := NewSetFromValues(value3)
+	m2 := BuildProposalMsg(verifier, g)
 	tracker.OnProposal(m2)
 	assert.True(t, tracker.IsConflicting())
 }
@@ -48,11 +47,11 @@ func TestProposalTracker_OnLateProposal(t *testing.T) {
 	s := NewSetFromValues(value1, value2)
 	verifier := generateSigning(t)
 	m1 := BuildProposalMsg(verifier, s)
-	tracker := NewProposalTracker(log.NewDefault(verifier.Verifier().String()))
+	tracker := NewProposalTracker(log.NewDefault(verifier.PublicKey().String()))
 	tracker.OnProposal(m1)
 	assert.False(t, tracker.IsConflicting())
-	s.Add(value3)
-	m2 := BuildProposalMsg(verifier, s)
+	g := NewSetFromValues(value3)
+	m2 := BuildProposalMsg(verifier, g)
 	tracker.OnLateProposal(m2)
 	assert.True(t, tracker.IsConflicting())
 }

@@ -2,14 +2,13 @@ package dht
 
 import (
 	"errors"
-	"github.com/gogo/protobuf/proto"
+	"github.com/golang/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"sync"
+	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"time"
 )
 
@@ -19,90 +18,56 @@ const tableQueryTimeout = time.Second * 3
 const findNodeTimeout = 1 * time.Minute
 
 // Protocol name
-const protocol = "/dht/1.0/find-node/"
+//const protocol = "/dht/1.0/find-node/"
 
 // ErrEncodeFailed is returned when we failed to encode data to byte array
 var ErrEncodeFailed = errors.New("failed to encode data")
 
-type findNodeResults struct {
-	results []node.Node
-	err     error
-}
+func (p *discovery) newFindNodeRequestHandler() func(msg server.Message) []byte {
+	return func(msg server.Message) []byte {
+		// TODO: if we don't know who is that peer (a.k.a first time we hear from this address)
+		// 		 we must ensure that he's indeed listening on that address.
 
-type findNodeProtocol struct {
-	service service.Service
+		req := &pb.FindNodeReq{}
+		err := proto.Unmarshal(msg.Bytes(), req)
 
-	pending      map[crypto.UUID]chan findNodeResults
-	pendingMutex sync.RWMutex
+		if err != nil {
+			p.logger.Error("Error opening FIND_NODE message")
+			return nil
+		}
 
-	ingressChannel chan service.DirectMessage
+		// use the dht table to generate the response
+		nodeID, err := p2pcrypto.NewPubkeyFromBytes(req.NodeID)
 
-	log log.Log
+		if err != nil {
+			p.logger.Error("Error reading public key from FIND_NODE message")
+			return nil
+		}
 
-	rt RoutingTable
-}
+		count := int(crypto.MinInt32(req.MaxResults, maxNearestNodesResults))
 
-type localService interface {
-	LocalNode() *node.LocalNode
-}
+		// get up to count nearest peers to nodeDhtId
+		results := p.table.internalLookup(nodeID)
 
-// NewFindNodeProtocol creates a new FindNodeProtocol instance.
-func newFindNodeProtocol(service service.Service, rt RoutingTable) *findNodeProtocol {
+		if len(results) > count {
+			results = results[:count]
+		}
 
-	p := &findNodeProtocol{
-		rt:             rt,
-		pending:        make(map[crypto.UUID]chan findNodeResults),
-		ingressChannel: service.RegisterDirectProtocol(protocol),
-		service:        service,
+		resp := &pb.FindNodeResp{NodeInfos: toNodeInfo(results, msg.Sender().String())}
+
+		payload, err := proto.Marshal(resp)
+
+		if err != nil {
+			p.logger.Error("Error marshaling response message (Ping)")
+			return nil
+		}
+
+		return payload
 	}
-
-	if srv, ok := service.(localService); ok {
-		p.log = srv.LocalNode().Log
-	} else {
-		p.log = log.AppLog
-	}
-
-	go p.readLoop()
-
-	return p
-}
-
-func (p *findNodeProtocol) sendRequestMessage(server p2pcrypto.PublicKey, payload []byte, reqID crypto.UUID,
-	responseChan chan findNodeResults) (bool, error) {
-
-	findnode := &pb.FindNode{}
-	findnode.Req = true
-	findnode.ReqID = reqID[:]
-	findnode.Payload = payload
-
-	msg, err := proto.Marshal(findnode)
-	if err != nil {
-		return false, err
-	}
-
-	p.pendingMutex.Lock()
-	p.pending[reqID] = responseChan
-	p.pendingMutex.Unlock()
-
-	return true, p.service.SendMessage(server, protocol, msg)
-}
-
-func (p *findNodeProtocol) sendResponseMessage(server p2pcrypto.PublicKey, reqID, payload []byte) error {
-	findnode := &pb.FindNode{}
-	findnode.Req = false
-	findnode.ReqID = reqID
-	findnode.Payload = payload
-
-	msg, err := proto.Marshal(findnode)
-	if err != nil {
-		return err
-	}
-	return p.service.SendMessage(server, protocol, msg)
 }
 
 // FindNode Send a single find node request to a remote node
-func (p *findNodeProtocol) FindNode(serverNode node.Node, target p2pcrypto.PublicKey) ([]node.Node, error) {
-
+func (p *discovery) FindNode(serverNode p2pcrypto.PublicKey, target p2pcrypto.PublicKey) ([]discNode, error) {
 	var err error
 
 	nodeID := target.Bytes()
@@ -116,142 +81,43 @@ func (p *findNodeProtocol) FindNode(serverNode node.Node, target p2pcrypto.Publi
 		return nil, err
 	}
 
-	reqID := crypto.NewUUID()
-	respc := make(chan findNodeResults)
+	// response handler
+	ch := make(chan []discNode)
+	foo := func(msg []byte) {
+		defer close(ch)
+		p.logger.Info("handle find_node response")
+		data := &pb.FindNodeResp{}
+		if err := proto.Unmarshal(msg, data); err != nil {
+			p.logger.Error("could not unmarshal block data")
+			return
+		}
 
-	pending, err := p.sendRequestMessage(serverNode.PublicKey(), payload, reqID, respc)
+		//todo: check that we're not pass max results ?
+
+		ch <- fromNodeInfos(data.NodeInfos)
+	}
+
+	err = p.msgServer.SendRequest(FIND_NODE, payload, serverNode, foo)
 
 	if err != nil {
-		if pending {
-			p.pendingMutex.Lock()
-			delete(p.pending, reqID)
-			p.pendingMutex.Unlock()
-		}
 		return nil, err
 	}
 
 	timeout := time.NewTimer(findNodeTimeout)
-
 	select {
-	case response := <-respc:
-		if response.err != nil {
-			return nil, response.err
+	case nodes := <-ch:
+		if nodes == nil {
+			return nil, errors.New("empty result set")
 		}
-
-		for _, n := range response.results {
-			p.rt.Update(n)
-		}
-
-		return response.results, nil
+		return nodes, nil
 	case <-timeout.C:
-		err = errors.New("findnode took too long to respond")
-	}
-
-	return nil, err
-}
-
-func (p *findNodeProtocol) readLoop() {
-	for {
-		msg, ok := <-p.ingressChannel
-		if !ok {
-			// Channel is closed.
-			break
-		}
-
-		go func(msg service.DirectMessage) {
-
-			headers := &pb.FindNode{}
-			err := proto.Unmarshal(msg.Bytes(), headers)
-			if err != nil {
-				log.Error("Error handling incoming FindNode ", err)
-				return
-			}
-
-			if headers.Req {
-				p.handleIncomingRequest(msg.Sender(), headers.ReqID, headers.Payload)
-				return
-			}
-			reqid := headers.ReqID
-			var creqid crypto.UUID
-			copy(creqid[:], reqid) // ugly way to copy slice to array. todo : find better way ?
-			p.handleIncomingResponse(creqid, headers.Payload)
-		}(msg)
-	}
-
-}
-
-// Handles a find node request from a remote node
-// Process the request and send back the response to the remote node
-func (p *findNodeProtocol) handleIncomingRequest(sender p2pcrypto.PublicKey, reqID, msg []byte) {
-	req := &pb.FindNodeReq{}
-	err := proto.Unmarshal(msg, req)
-	if err != nil {
-		return
-	}
-
-	// use the dht table to generate the response
-	nodeDhtID := node.NewDhtID(req.NodeID)
-
-	callback := make(PeersOpChannel)
-
-	count := int(crypto.MinInt32(req.MaxResults, maxNearestNodesResults))
-
-	// get up to count nearest peers to nodeDhtId
-	p.rt.NearestPeers(NearestPeersReq{ID: nodeDhtID, Count: count, Callback: callback})
-
-	var results []*pb.NodeInfo
-	timer := time.NewTimer(tableQueryTimeout)
-	select { // block until we got results from the  routing table or timeout
-	case c := <-callback:
-		results = toNodeInfo(c.Peers, sender.String())
-	case <-timer.C:
-		results = []*pb.NodeInfo{} // an empty slice
-	}
-
-	respData := &pb.FindNodeResp{NodeInfos: results}
-	payload, err := proto.Marshal(respData)
-	if err != nil {
-		return
-	}
-
-	err = p.sendResponseMessage(sender, reqID, payload)
-	if err != nil {
-		p.log.Error("failed sending response message to %v, err:%v", sender.String(), err)
-	}
-}
-
-// Handle an incoming pong message from a remote node
-func (p *findNodeProtocol) handleIncomingResponse(reqID crypto.UUID, msg []byte) {
-	// process request
-	data := &pb.FindNodeResp{}
-	err := proto.Unmarshal(msg, data)
-	if err != nil {
-		p.sendResponse(reqID, findNodeResults{nil, err})
-		return
-	}
-
-	// update routing table with newly found nodes
-	nodes := fromNodeInfos(data.NodeInfos)
-
-	p.sendResponse(reqID, findNodeResults{nodes, nil})
-}
-
-func (p *findNodeProtocol) sendResponse(reqID crypto.UUID, results findNodeResults) {
-	p.pendingMutex.RLock()
-	pend, ok := p.pending[reqID]
-	p.pendingMutex.RUnlock()
-
-	if ok {
-		p.pendingMutex.Lock()
-		delete(p.pending, reqID)
-		p.pendingMutex.Unlock()
-		pend <- results
+		return nil, errors.New("request timed out")
 	}
 }
 
 // ToNodeInfo returns marshaled protobufs identity infos slice from a slice of RemoteNodeData.
 // filterId: identity id to exclude from the result
-func toNodeInfo(nodes []node.Node, filterID string) []*pb.NodeInfo {
+func toNodeInfo(nodes []discNode, filterID string) []*pb.NodeInfo {
 	// init empty slice
 	var res []*pb.NodeInfo
 	for _, n := range nodes {
@@ -261,16 +127,17 @@ func toNodeInfo(nodes []node.Node, filterID string) []*pb.NodeInfo {
 		}
 
 		res = append(res, &pb.NodeInfo{
-			NodeId:  n.PublicKey().Bytes(),
-			Address: n.Address(),
+			NodeId:     n.PublicKey().Bytes(),
+			TCPAddress: n.Address(),
+			UDPAddress: n.udpAddress,
 		})
 	}
 	return res
 }
 
 // FromNodeInfos converts a list of NodeInfo to a list of Node.
-func fromNodeInfos(nodes []*pb.NodeInfo) []node.Node {
-	res := make([]node.Node, len(nodes))
+func fromNodeInfos(nodes []*pb.NodeInfo) []discNode {
+	res := make([]discNode, len(nodes))
 	for i, n := range nodes {
 		pubk, err := p2pcrypto.NewPubkeyFromBytes(n.NodeId)
 		if err != nil {
@@ -278,7 +145,7 @@ func fromNodeInfos(nodes []*pb.NodeInfo) []node.Node {
 			log.Error("There was an error parsing nodeid : ", n.NodeId, ", skipping it. err: ", err)
 			continue
 		}
-		node := node.New(pubk, n.Address)
+		node := discNode{node.New(pubk, n.TCPAddress), n.UDPAddress}
 		res[i] = node
 
 	}

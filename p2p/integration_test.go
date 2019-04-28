@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	"golang.org/x/sync/errgroup"
 	"sync/atomic"
@@ -22,11 +23,10 @@ func (its *IntegrationTestSuite) Test_SendingMessage() {
 
 	_ = node1.RegisterDirectProtocol(exProto)
 	ch2 := node2.RegisterDirectProtocol(exProto)
-
-	err := node1.SendMessage(node2.LocalNode().Node.PublicKey(), exProto, []byte(exMsg))
-	if err != nil {
-		its.T().Fatal("", err)
-	}
+	conn, err := node1.cPool.GetConnection(node2.network.LocalAddr().String(), node2.lNode.PublicKey())
+	require.NoError(its.T(), err)
+	err = node1.SendMessage(node2.LocalNode().Node.PublicKey(), exProto, []byte(exMsg))
+	require.NoError(its.T(), err)
 
 	tm := time.After(1 * time.Second)
 
@@ -38,6 +38,7 @@ func (its *IntegrationTestSuite) Test_SendingMessage() {
 	case <-tm:
 		its.T().Fatal("failed to deliver message within second")
 	}
+	conn.Close()
 }
 
 func (its *IntegrationTestSuite) Test_Gossiping() {
@@ -53,6 +54,7 @@ func (its *IntegrationTestSuite) Test_Gossiping() {
 	}, nil)
 
 	msg := []byte(RandString(10))
+	time.Sleep(1 * time.Second)
 
 	_ = node1.Broadcast(exProto, []byte(msg))
 	numgot := int32(0)
@@ -69,7 +71,7 @@ func (its *IntegrationTestSuite) Test_Gossiping() {
 				if !bytes.Equal(got.Bytes(), msg) {
 					return fmt.Errorf("wrong msg, got: %s, want: %s", got, msg)
 				}
-				got.ValidationCompletedChan() <- service.NewMessageValidation(got.Bytes(), exProto, true)
+				got.ReportValidation(exProto)
 				atomic.AddInt32(numgot, 1)
 				return nil
 			case <-ctx.Done():
@@ -84,6 +86,20 @@ func (its *IntegrationTestSuite) Test_Gossiping() {
 	its.Equal(int(numgot), its.BootstrappedNodeCount+its.BootstrapNodesCount)
 }
 
+func Test_ReallySmallP2PIntegrationSuite(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	s := new(IntegrationTestSuite)
+
+	s.BootstrappedNodeCount = 2
+	s.BootstrapNodesCount = 1
+	s.NeighborsCount = 1
+
+	suite.Run(t, s)
+}
+
 func Test_SmallP2PIntegrationSuite(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
@@ -91,9 +107,9 @@ func Test_SmallP2PIntegrationSuite(t *testing.T) {
 
 	s := new(IntegrationTestSuite)
 
-	s.BootstrappedNodeCount = 10
+	s.BootstrappedNodeCount = 19
 	s.BootstrapNodesCount = 1
-	s.NeighborsCount = 3
+	s.NeighborsCount = 8
 
 	suite.Run(t, s)
 }

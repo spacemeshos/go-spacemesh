@@ -3,12 +3,13 @@ package api
 
 import (
 	"fmt"
+	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/api/pb"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/miner"
+	"github.com/spacemeshos/go-spacemesh/types"
 	"math/big"
 	"net"
 	"strconv"
@@ -59,7 +60,7 @@ func (s SpacemeshGrpcService) GetNonce(ctx context.Context, in *pb.AccountId) (*
 
 func (s SpacemeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.SignedTransaction) (*pb.SimpleMessage, error) {
 
-	tx := mesh.SerializableTransaction{}
+	tx := types.SerializableTransaction{}
 	addr := address.HexToAddress(in.DstAddress)
 	tx.Recipient = &addr
 	tx.Origin = address.HexToAddress(in.SrcAddress)
@@ -72,7 +73,7 @@ func (s SpacemeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.Sign
 	tx.GasLimit = 10
 	tx.Price = big.NewInt(10).Bytes()
 
-	val, err := mesh.TransactionAsBytes(&tx)
+	val, err := types.TransactionAsBytes(&tx)
 	if err != nil {
 		return nil, err
 	}
@@ -145,4 +146,28 @@ func (s SpacemeshGrpcService) startServiceInternal(status chan bool) {
 		status <- true
 	}
 
+}
+
+func (s SpacemeshGrpcService) SetCommitmentSize(ctx context.Context, message *pb.CommitmentSizeMessage) (*pb.SimpleMessage, error) {
+	return &pb.SimpleMessage{Value: "ok"}, nil
+}
+
+func (s SpacemeshGrpcService) SetLogicalDrive(ctx context.Context, message *pb.LogicalDriveMessage) (*pb.SimpleMessage, error) {
+	return &pb.SimpleMessage{Value: "ok"}, nil
+}
+
+func (s SpacemeshGrpcService) SetAwardsAddress(ctx context.Context, id *pb.AccountId) (*pb.SimpleMessage, error) {
+	return &pb.SimpleMessage{Value: "ok"}, nil
+}
+
+func (s SpacemeshGrpcService) GetInitProgress(ctx context.Context, empty *empty.Empty) (*pb.SimpleMessage, error) {
+	return &pb.SimpleMessage{Value: "80"}, nil
+}
+
+func (s SpacemeshGrpcService) GetTotalAwards(ctx context.Context, empty *empty.Empty) (*pb.SimpleMessage, error) {
+	return &pb.SimpleMessage{Value: "1234"}, nil
+}
+
+func (s SpacemeshGrpcService) GetUpcomingAwards(ctx context.Context, empty *empty.Empty) (*pb.SimpleMessage, error) {
+	return &pb.SimpleMessage{Value: "43221"}, nil
 }

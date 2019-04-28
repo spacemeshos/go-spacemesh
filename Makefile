@@ -2,16 +2,16 @@ BINARY := go-spacemesh
 VERSION := 0.0.1
 COMMIT = $(shell git rev-parse HEAD)
 SHA = $(shell git rev-parse --short HEAD)
-# BRANCH = $(shell git symbolic-ref --short HEAD)
-BIN_DIR = $(shell pwd)/build
 CURR_DIR = $(shell pwd)
 CURR_DIR_WIN = $(shell cd)
+BIN_DIR = $(CURR_DIR)/build
+BIN_DIR_WIN = $(CUR_DIR_WIN)/build
 export GO111MODULE = on
 
-ifndef TRAVIS_PULL_REQUEST_BRANCH
-	BRANCH := $(shell git rev-parse --abbrev-ref HEAD)
+ifdef TRAVIS_BRANCH
+	BRANCH := $(TRAVIS_BRANCH)
 else
-	BRANCH := $(TRAVIS_PULL_REQUEST_BRANCH)
+	BRANCH := $(shell git rev-parse --abbrev-ref HEAD)
 endif
 
 # Setup the -ldflags option to pass vars defined here to app vars
@@ -22,7 +22,11 @@ PKGS = $(shell go list ./...)
 PLATFORMS := windows linux darwin
 os = $(word 1, $@)
 
-DOCKER_IMAGE_NAME=go-spacemesh
+ifeq ($(BRANCH),develop)
+        DOCKER_IMAGE_REPO := go-spacemesh
+else
+        DOCKER_IMAGE_REPO := go-spacemesh-dev
+endif
 
 all: install build
 .PHONY: all
@@ -46,12 +50,28 @@ endif
 build:
 ifeq ($(OS),Windows_NT)
 	make genproto
-	go build ${LDFLAGS} -o $(CURR_DIR_WIN)/$(BINARY).exe
+	go build ${LDFLAGS} -o $(BIN_DIR_WIN)/$(BINARY).exe
 else
 	make genproto
-	go build ${LDFLAGS} -o $(CURR_DIR)/$(BINARY)
+	go build ${LDFLAGS} -o $(BIN_DIR)/$(BINARY)
 endif
 .PHONY: build
+
+hare:
+ifeq ($(OS),Windows_NT)
+	cd cmd/hare ; go build -o $(BIN_DIR_WIN)/go-hare.exe; cd ..
+else
+	cd cmd/hare ; go build -o $(BIN_DIR)/go-hare; cd ..
+endif
+.PHONY: hare
+
+p2p:
+ifeq ($(OS),WINDOWS_NT)
+	cd cmd/p2p ; go build -o $(BIN_DIR_WIN)/go-p2p.exe; cd ..
+else
+	cd cmd/p2p ; go build -o $(BIN_DIR)/go-p2p; cd ..
+endif
+.PHONY: p2p
 
 tidy:
 	go mod tidy
@@ -68,7 +88,7 @@ endif
 .PHONY: $(PLATFORMS)
 
 test:
-	go test -short -p 1 ./...
+	ulimit -n 500; go test -short -p 1 ./...
 .PHONY: test
 
 test-tidy:
@@ -98,14 +118,33 @@ cover:
 	go tool cover -html=cover-all.out
 .PHONY: cover
 
-dockerbuild:
-	docker build -t $(DOCKER_IMAGE_NAME):latest .
-.PHONY: dockerbuild
+dockerbuild-go:
+	docker build -t $(DOCKER_IMAGE_REPO):$(BRANCH) .
+.PHONY: dockerbuild-go
 
-dockerpush: dockerbuild
+dockerpush: dockerbuild-go
 	echo "$(DOCKER_PASSWORD)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
-	docker tag $(DOCKER_IMAGE_NAME) spacemeshos/$(DOCKER_IMAGE_NAME):$(BRANCH)
-	docker tag $(DOCKER_IMAGE_NAME) spacemeshos/$(DOCKER_IMAGE_NAME):$(SHA)
-	docker push spacemeshos/$(DOCKER_IMAGE_NAME):$(BRANCH)
-	docker push spacemeshos/$(DOCKER_IMAGE_NAME):$(SHA)
+	docker tag $(DOCKER_IMAGE_REPO):$(BRANCH) spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)
+	docker push spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)
+ifeq ($(BRANCH),develop)
+	docker tag $(DOCKER_IMAGE_REPO):$(BRANCH) spacemeshos/$(DOCKER_IMAGE_REPO):$(SHA)
+	docker push spacemeshos/$(DOCKER_IMAGE_REPO):$(SHA)
+endif
 .PHONY: dockerpush
+
+dockerbuild-test:
+	docker build -f DockerFileTests --build-arg GCLOUD_KEY="$(GCLOUD_KEY)" \
+	             --build-arg PROJECT_NAME="$(PROJECT_NAME)" \
+	             --build-arg CLUSTER_NAME="$(CLUSTER_NAME)" \
+	             --build-arg CLUSTER_ZONE="$(CLUSTER_ZONE)" \
+	             -t go-spacemesh-python:latest .
+.PHONY: dockerbuild-test
+
+dockerrun-test: dockerbuild-test
+ifndef ES_PASSWD
+	$(error ES_PASSWD is not set)
+endif
+	docker run -e ES_PASSWD="$(ES_PASSWD)" -e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json -it go-spacemesh-python pytest -s test_bs.py --tc-file=config.yaml --tc-format=yaml
+	docker run -e ES_PASSWD="$(ES_PASSWD)" -e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json -it go-spacemesh-python pytest -s hare/test_hare.py --tc-file=hare/config.yaml --tc-format=yaml
+.PHONY: dockerrun-test
+

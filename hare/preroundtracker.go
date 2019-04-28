@@ -2,58 +2,56 @@ package hare
 
 import (
 	"github.com/spacemeshos/go-spacemesh/hare/metrics"
-	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
+// Tracks pre-round Messages
 type PreRoundTracker struct {
-	preRound  map[string]struct{} // maps PubKey->Pre-Round msg (unique)
-	tracker   *RefCountTracker    // keeps track of seen values
-	threshold uint32              // the threshold to prove a single value
+	preRound  map[string]*Set  // maps PubKey->Set of already tracked Values
+	tracker   *RefCountTracker // keeps track of seen Values
+	threshold uint32           // the threshold to prove a single value
 }
 
 func NewPreRoundTracker(threshold int, expectedSize int) *PreRoundTracker {
 	pre := &PreRoundTracker{}
-	pre.preRound = make(map[string]struct{}, expectedSize)
-	pre.tracker = NewRefCountTracker(expectedSize)
+	pre.preRound = make(map[string]*Set, expectedSize)
+	pre.tracker = NewRefCountTracker()
 	pre.threshold = uint32(threshold)
 
 	return pre
 }
 
-// Tracks a pre-round message
-func (pre *PreRoundTracker) OnPreRound(msg *pb.HareMessage) {
-	verifier, err := NewVerifier(msg.PubKey)
-	if err != nil {
-		log.Warning("Could not construct verifier: ", err)
-		return
+// Tracks a pre-round InnerMsg
+func (pre *PreRoundTracker) OnPreRound(msg *Msg) {
+	pub := msg.PubKey
+	sToTrack := NewSet(msg.InnerMsg.Values) // assume track all Values
+	alreadyTracked := NewSmallEmptySet()    // assume nothing tracked so far
+
+	if set, exist := pre.preRound[pub.String()]; exist { // not first pre-round msg from this sender
+		log.Debug("Duplicate sender %v", pub.String())
+		alreadyTracked = set              // update already tracked Values
+		sToTrack.Subtract(alreadyTracked) // subtract the already tracked Values
 	}
 
-	// only handle first pre-round msg
-	if _, exist := pre.preRound[verifier.String()]; exist {
-		log.Debug("Duplicate sender %v", verifier.String())
-		return
-	}
-
-	// record values from msg
-	s := NewSet(msg.Message.Values)
-	for _, v := range s.values {
-		pre.tracker.Track(v)
+	// record Values
+	for _, v := range sToTrack.values {
+		pre.tracker.Track(v.Id())
 		metrics.PreRoundCounter.With("value", v.String()).Add(1)
 	}
 
-	pre.preRound[verifier.String()] = struct{}{}
+	// update the union to include new Values
+	pre.preRound[pub.String()] = alreadyTracked.Union(sToTrack)
 }
 
 // Returns true if the given value is provable, false otherwise
 func (pre *PreRoundTracker) CanProveValue(value Value) bool {
 	// at least threshold occurrences of a given value
-	return pre.tracker.CountStatus(value) >= pre.threshold
+	return pre.tracker.CountStatus(value.Id()) >= pre.threshold
 }
 
 // Returns true if the given set is provable, false otherwise
 func (pre *PreRoundTracker) CanProveSet(set *Set) bool {
-	// a set is provable iff all its values are provable
+	// a set is provable iff all its Values are provable
 	for _, bid := range set.values {
 		if !pre.CanProveValue(bid) {
 			return false
@@ -63,7 +61,7 @@ func (pre *PreRoundTracker) CanProveSet(set *Set) bool {
 	return true
 }
 
-// Filters the given set according to collected proofs
+// Filters out the given set from non-provable Values
 func (pre *PreRoundTracker) FilterSet(set *Set) {
 	for _, v := range set.values {
 		if !pre.CanProveValue(v) { // not enough witnesses

@@ -5,11 +5,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-type Signing interface {
-	Sign(m []byte) []byte
-	Verifier() Verifier
-}
-
 type MockSigning struct {
 	key crypto.PrivateKey
 }
@@ -20,7 +15,7 @@ func NewMockSigning() *MockSigning {
 	priv, _, err := crypto.GenerateKeyPair()
 	if err != nil {
 		log.Error("Could not create private key ", err)
-		panic("MockSigning construction failed")
+		log.Panic("MockSigning construction failed")
 	}
 	ms.key = priv
 
@@ -30,27 +25,20 @@ func NewMockSigning() *MockSigning {
 func (ms *MockSigning) Sign(m []byte) []byte {
 	sig, err := ms.key.Sign(m)
 	if err != nil {
-		log.Error("Error signing message: ", err)
-		panic("Could not sign message")
+		log.Error("Error signing InnerMsg: ", err)
+		log.Panic("Could not sign InnerMsg")
 	}
 
 	return sig
 }
 
-func (ms *MockSigning) Verifier() Verifier {
+func (ms *MockSigning) Verifier() *PubVerifier {
 	v, err := NewVerifier(ms.key.GetPublicKey().Bytes())
 	if err != nil {
-		log.Error("Error getting public key", err)
-		panic("Could not get public key")
+		log.Panic("Error getting public key", err.Error())
 	}
 
 	return v
-}
-
-type Verifier interface {
-	Verify(data []byte, sig []byte) (bool, error)
-	Bytes() []byte
-	String() string
 }
 
 type PubVerifier struct {

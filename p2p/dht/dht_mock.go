@@ -8,19 +8,23 @@ import (
 
 // MockDHT is a mocked dht
 type MockDHT struct {
-	UpdateFunc         func(n node.Node)
+	UpdateFunc         func(n discNode)
 	updateCount        int
 	SelectPeersFunc    func(qty int) []node.Node
 	bsres              error
 	bsCount            int
-	InternalLookupFunc func(dhtid node.DhtID) []node.Node
+	InternalLookupFunc func(p2pcrypto.PublicKey) []discNode
 	LookupFunc         func(p2pcrypto.PublicKey) (node.Node, error)
 	lookupRes          node.Node
 	lookupErr          error
 }
 
+func (m *MockDHT) Remove(p node.Node) {
+
+}
+
 // SetUpdate sets the function to run on an issued update
-func (m *MockDHT) SetUpdate(f func(n node.Node)) {
+func (m *MockDHT) SetUpdate(f func(n discNode)) {
 	m.UpdateFunc = f
 }
 
@@ -31,9 +35,9 @@ func (m *MockDHT) SetLookupResult(node node.Node, err error) {
 }
 
 // Update is a dht update operation it updates the updatecount
-func (m *MockDHT) Update(node node.Node) {
+func (m *MockDHT) Update(n discNode) {
 	if m.UpdateFunc != nil {
-		m.UpdateFunc(node)
+		m.UpdateFunc(n)
 	}
 	m.updateCount++
 }
@@ -48,7 +52,7 @@ func (m *MockDHT) BootstrapCount() int {
 	return m.bsCount
 }
 
-// Lookup is a dht lookup operation
+// netLookup is a dht lookup operation
 func (m *MockDHT) Lookup(pubkey p2pcrypto.PublicKey) (node.Node, error) {
 	if m.LookupFunc != nil {
 		return m.LookupFunc(pubkey)
@@ -56,10 +60,10 @@ func (m *MockDHT) Lookup(pubkey p2pcrypto.PublicKey) (node.Node, error) {
 	return m.lookupRes, m.lookupErr
 }
 
-// InternalLookup is a lookup only in the local routing table
-func (m *MockDHT) InternalLookup(dhtid node.DhtID) []node.Node {
+// internalLookup is a lookup only in the local routing table
+func (m *MockDHT) internalLookup(key p2pcrypto.PublicKey) []discNode {
 	if m.InternalLookupFunc != nil {
-		return m.InternalLookupFunc(dhtid)
+		return m.InternalLookupFunc(key)
 	}
 	return nil
 }
@@ -81,6 +85,11 @@ func (m *MockDHT) SelectPeers(qty int) []node.Node {
 		return m.SelectPeersFunc(qty)
 	}
 	return []node.Node{}
+}
+
+// to satisfy the iface
+func (m *MockDHT) SetLocalAddresses(tcp, udp string) {
+
 }
 
 // Size returns the size of peers in the dht

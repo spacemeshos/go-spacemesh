@@ -2,34 +2,41 @@ package log
 
 import (
 	"go.uber.org/zap"
+	"runtime/debug"
 	"time"
 )
 
 // Log is an exported type that embeds our logger.
 type Log struct {
-	Logger *zap.Logger
+	logger *zap.Logger
+	sugar  *zap.SugaredLogger
 }
 
 // Exported from Log basic logging options.
 
 // Info prints formatted info level log message.
 func (l Log) Info(format string, args ...interface{}) {
-	l.Logger.Sugar().Infof(format, args...)
+	l.sugar.Infof(format, args...)
 }
 
 // Debug prints formatted debug level log message.
 func (l Log) Debug(format string, args ...interface{}) {
-	l.Logger.Sugar().Debugf(format, args...)
+	l.sugar.Debugf(format, args...)
 }
 
 // Error prints formatted error level log message.
 func (l Log) Error(format string, args ...interface{}) {
-	l.Logger.Sugar().Errorf(format, args...)
+	l.sugar.Errorf(format, args...)
 }
 
 // Warning prints formatted warning level log message.
 func (l Log) Warning(format string, args ...interface{}) {
-	l.Logger.Sugar().Warnf(format, args...)
+	l.sugar.Warnf(format, args...)
+}
+
+func (l Log) Panic(format string, args ...interface{}) {
+	l.sugar.Fatal("Fatal: goroutine panicked. Stacktrace: ", string(debug.Stack()))
+	l.sugar.Panicf(format, args...)
 }
 
 // Wrap and export field logic
@@ -97,8 +104,18 @@ type fieldLogger struct {
 	l *zap.Logger
 }
 
-func (l Log) With() fieldLogger {
-	return fieldLogger{l.Logger}
+// With returns a logger object that logs fields
+func (l *Log) With() fieldLogger {
+	return fieldLogger{l.logger}
+}
+
+// LogWith returns a logger the given fields
+func (l *Log) WithName(prefix string) Log {
+	lgr := l.logger.Named(prefix)
+	return Log{
+		lgr,
+		lgr.Sugar(),
+	}
 }
 
 // Infow prints message with fields
@@ -117,6 +134,6 @@ func (fl fieldLogger) Error(msg string, fields ...Field) {
 }
 
 // Warningw prints message with fields
-func (fl fieldLogger) Warningw(msg string, fields ...Field) {
+func (fl fieldLogger) Warning(msg string, fields ...Field) {
 	fl.l.Warn(msg, unpack(fields...)...)
 }

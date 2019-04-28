@@ -5,8 +5,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
+	"github.com/spacemeshos/go-spacemesh/rand"
 	"io"
-	"math/rand"
+	"net"
 	"sync"
 	"time"
 )
@@ -28,15 +29,11 @@ type Simulator struct {
 
 var _ Service = new(Node)
 
-type dht interface {
-	Update(node2 node.Node)
-}
-
 // Node is a simulated p2p node that can be used as a p2p service
 type Node struct {
 	sim *Simulator
 	node.Node
-	dht           dht
+	//dht           dht
 	sndDelay      uint32
 	rcvDelay      uint32
 	randBehaviour bool
@@ -117,20 +114,14 @@ func (s *Simulator) NewNodeFrom(n node.Node) *Node {
 	return sn
 }
 
-func (s *Simulator) updateNode(node p2pcrypto.PublicKey, sender *Node) {
-	s.mutex.Lock()
-	n, ok := s.nodes[node.String()]
-	if ok {
-		if n.dht != nil {
-			n.Update(sender.Node)
-		}
-	}
-	s.mutex.Unlock()
+type simDirectMessage struct {
+	metadata P2PMetadata
+	msg      Data
+	sender   p2pcrypto.PublicKey
 }
 
-type simDirectMessage struct {
-	msg    Data
-	sender p2pcrypto.PublicKey
+func (sm simDirectMessage) Metadata() P2PMetadata {
+	return sm.metadata
 }
 
 // Bytes is the message's binary data in byte array format.
@@ -149,6 +140,7 @@ func (sm simDirectMessage) Sender() p2pcrypto.PublicKey {
 }
 
 type simGossipMessage struct {
+	sender                  p2pcrypto.PublicKey
 	msg                     Data
 	validationCompletedChan chan MessageValidation
 }
@@ -156,6 +148,11 @@ type simGossipMessage struct {
 // Bytes is the message's binary data in byte array format.
 func (sm simGossipMessage) Data() Data {
 	return sm.msg
+}
+
+// Sender
+func (sm simGossipMessage) Sender() p2pcrypto.PublicKey {
+	return sm.sender
 }
 
 // Bytes is the message's binary data in byte array format.
@@ -168,9 +165,9 @@ func (sm simGossipMessage) ValidationCompletedChan() chan MessageValidation {
 	return sm.validationCompletedChan
 }
 
-func (sm simGossipMessage) ReportValidation(protocol string, isValid bool) {
+func (sm simGossipMessage) ReportValidation(protocol string) {
 	if sm.validationCompletedChan != nil {
-		sm.validationCompletedChan <- NewMessageValidation(sm.Bytes(), protocol, isValid)
+		sm.validationCompletedChan <- NewMessageValidation(sm.sender, sm.Bytes(), protocol)
 	}
 }
 
@@ -179,8 +176,18 @@ func (sn *Node) Start() error {
 	return nil
 }
 
+// simulator doesn't go through the regular p2p pipes so the metadata won't be available.
+// it's okay since this data doesn't matter to the simulator
+func simulatorMetadata() P2PMetadata {
+	ip, err := net.ResolveTCPAddr("tcp", "127.0.0.1:1234")
+	if err != nil {
+		panic("simulator error")
+	}
+	return P2PMetadata{ip}
+}
+
 // ProcessDirectProtocolMessage
-func (sn *Node) ProcessDirectProtocolMessage(sender p2pcrypto.PublicKey, protocol string, payload Data) error {
+func (sn *Node) ProcessDirectProtocolMessage(sender p2pcrypto.PublicKey, protocol string, payload Data, metadata P2PMetadata) error {
 	sn.sleep(sn.rcvDelay)
 	sn.sim.mutex.RLock()
 	c, ok := sn.sim.protocolDirectHandler[sn.PublicKey().String()][protocol]
@@ -188,19 +195,19 @@ func (sn *Node) ProcessDirectProtocolMessage(sender p2pcrypto.PublicKey, protoco
 	if !ok {
 		return errors.New("Unknown protocol")
 	}
-	c <- simDirectMessage{payload, sender}
+	c <- simDirectMessage{simulatorMetadata(), payload, sender}
 	return nil
 }
 
 // ProcessGossipProtocolMessage
-func (sn *Node) ProcessGossipProtocolMessage(protocol string, payload Data, validationCompletedChan chan MessageValidation) error {
+func (sn *Node) ProcessGossipProtocolMessage(sender p2pcrypto.PublicKey, protocol string, data Data, validationCompletedChan chan MessageValidation) error {
 	sn.sim.mutex.RLock()
 	c, ok := sn.sim.protocolGossipHandler[sn.PublicKey().String()][protocol]
 	sn.sim.mutex.RUnlock()
 	if !ok {
 		return errors.New("Unknown protocol")
 	}
-	c <- simGossipMessage{payload, validationCompletedChan}
+	c <- simGossipMessage{sender, data, validationCompletedChan}
 	return nil
 }
 
@@ -220,8 +227,7 @@ func (sn *Node) sendMessageImpl(nodeID p2pcrypto.PublicKey, protocol string, pay
 	thec, ok := sn.sim.protocolDirectHandler[nodeID.String()][protocol]
 	sn.sim.mutex.RUnlock()
 	if ok {
-		thec <- simDirectMessage{payload, sn.Node.PublicKey()}
-		sn.sim.updateNode(nodeID, sn)
+		thec <- simDirectMessage{simulatorMetadata(), payload, sn.Node.PublicKey()}
 		return nil
 	}
 	log.Debug("%v >> %v (%v)", sn.Node.PublicKey(), nodeID, payload)
@@ -247,7 +253,7 @@ func (sn *Node) Broadcast(protocol string, payload []byte) error {
 		sn.sim.mutex.RLock()
 		for n := range sn.sim.protocolGossipHandler {
 			if c, ok := sn.sim.protocolGossipHandler[n][protocol]; ok {
-				c <- simGossipMessage{DataBytes{Payload: payload}, nil}
+				c <- simGossipMessage{sn.Node.PublicKey(), DataBytes{Payload: payload}, nil}
 			}
 		}
 		sn.sim.mutex.RUnlock()
@@ -284,19 +290,6 @@ func (sn *Node) RegisterDirectProtocolWithChannel(protocol string, ingressChanne
 	sn.sim.protocolDirectHandler[sn.Node.String()][protocol] = ingressChannel
 	sn.sim.mutex.Unlock()
 	return ingressChannel
-}
-
-// AttachDHT attaches a dht for the update function of the simulation node
-func (sn *Node) AttachDHT(dht dht) {
-	sn.dht = dht
-}
-
-// Update updates a node in the dht, it panics if no dht was declared
-func (sn *Node) Update(node2 node.Node) {
-	if sn.dht == nil {
-		panic("Tried to update without attaching dht")
-	}
-	sn.dht.Update(node2)
 }
 
 // Shutdown closes all node channels are remove it from the Simulator map

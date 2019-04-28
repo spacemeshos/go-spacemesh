@@ -7,7 +7,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	hareConfig "github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/mesh"
 	p2pConfig "github.com/spacemeshos/go-spacemesh/p2p/config"
+	"github.com/spacemeshos/go-spacemesh/state"
 	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spf13/viper"
 	"path/filepath"
@@ -19,8 +21,8 @@ const (
 	defaultLogFileName     = "spacemesh.log"
 	defaultAccountFileName = "accounts"
 	defaultDataDirName     = "spacemesh"
-	Genesis                = 0
-	GenesisId              = 420
+	Genesis                = mesh.Genesis
+	GenesisId              = mesh.GenesisId
 )
 
 var (
@@ -40,6 +42,8 @@ type Config struct {
 	CONSENSUS  consensusConfig.Config `mapstructure:"consensus"`
 	HARE       hareConfig.Config      `mapstructure:"hare"`
 	TIME       timeConfig.TimeConfig  `mapstructure:"time"`
+	GAS        state.GasConfig        `mapstructure:"gas"`
+	REWARD     mesh.Config            `mapstructure:"reward"`
 }
 
 // BaseConfig defines the default configuration options for spacemesh app
@@ -60,10 +64,11 @@ type BaseConfig struct {
 	MetricsPort    int  `mapstructure:"metrics-port"`
 
 	OracleServer        string `mapstructure:"oracle_server"`
-	OracleServerWorldId uint64 `mapstructure:"oracle_server_worldid"`
+	OracleServerWorldId int    `mapstructure:"oracle_server_worldid"`
 
 	GenesisTime      string `mapstructure:"genesis-time"`
-	LayerDurationSec uint32 `mapstructure:"layer-duration-sec"`
+	LayerDurationSec int    `mapstructure:"layer-duration-sec"`
+	LayerAvgSize     int    `mapstructure:"layer-average-size"`
 }
 
 // DefaultConfig returns the default configuration for a spacemesh node
@@ -75,6 +80,8 @@ func DefaultConfig() Config {
 		CONSENSUS:  consensusConfig.DefaultConfig(),
 		HARE:       hareConfig.DefaultConfig(),
 		TIME:       timeConfig.DefaultConfig(),
+		GAS:        state.DefaultConfig(),
+		REWARD:     mesh.DefaultMeshConfig(),
 	}
 }
 

@@ -25,6 +25,14 @@ func Uint32ToBytes(i uint32) []byte {
 	return a
 }
 
+func BytesToUint64(i []byte) uint64 { return binary.LittleEndian.Uint64(i) }
+
+func Uint64ToBytes(i uint64) []byte {
+	a := make([]byte, 8)
+	binary.LittleEndian.PutUint64(a, i)
+	return a
+}
+
 // Hash represents the 32 byte Keccak256 hash of arbitrary data.
 type Hash [HashLength]byte
 

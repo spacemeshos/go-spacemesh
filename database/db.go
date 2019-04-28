@@ -44,11 +44,10 @@ func (db LevelDB) Delete(key []byte) error {
 	return db.DB.Delete(key, db.wo)
 }
 
-func NewLevelDbStore(name string, wo *opt.WriteOptions, ro *opt.ReadOptions) DB {
-	blocks, err := leveldb.OpenFile("../database/data/"+name, nil)
+func NewLevelDbStore(path string, wo *opt.WriteOptions, ro *opt.ReadOptions) DB {
+	blocks, err := leveldb.OpenFile(path, nil)
 	if err != nil {
-		log.Error("could not create "+name+" database ", err)
-		panic("failed to open database")
+		log.Panic("could not create "+path+" database ", err)
 	}
 	return LevelDB{blocks, wo, ro}
 }

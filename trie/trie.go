@@ -92,7 +92,7 @@ func (t *Trie) newFlag() nodeFlag {
 // not exist in the database. Accessing the trie loads nodes from db on demand.
 func New(root common.Hash, db *Database) (*Trie, error) {
 	if db == nil {
-		panic("trie.New called without a database")
+		log.Panic("trie.New called without a database")
 	}
 	trie := &Trie{
 		db: db,
@@ -169,7 +169,8 @@ func (t *Trie) tryGet(origNode node, key []byte, pos int) (value []byte, newnode
 		value, newnode, _, err := t.tryGet(child, key, pos)
 		return value, newnode, true, err
 	default:
-		panic(fmt.Sprintf("%T: invalid node: %v", origNode, origNode))
+		log.Panic(fmt.Sprintf("%T: invalid node: %v", origNode, origNode))
+		return nil, nil, false, nil
 	}
 }
 
@@ -276,7 +277,8 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 		return true, nn, nil
 
 	default:
-		panic(fmt.Sprintf("%T: invalid node: %v", n, n))
+		log.Panic(fmt.Sprintf("%T: invalid node: %v", n, n))
+		return false, nil, nil
 	}
 }
 
@@ -407,7 +409,8 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 		return true, nn, nil
 
 	default:
-		panic(fmt.Sprintf("%T: invalid node: %v (%v)", n, n, key))
+		log.Panic(fmt.Sprintf("%T: invalid node: %v (%v)", n, n, key))
+		return false, nil, nil
 	}
 }
 
@@ -449,7 +452,7 @@ func (t *Trie) Hash() common.Hash {
 // and external (for account tries) references.
 func (t *Trie) Commit(onleaf LeafCallback) (root common.Hash, err error) {
 	if t.db == nil {
-		panic("commit called on trie with nil database")
+		log.Panic("commit called on trie with nil database")
 	}
 	hash, cached, err := t.hashRoot(t.db, onleaf)
 	if err != nil {

@@ -4,91 +4,89 @@ import (
 	"errors"
 	"fmt"
 	"github.com/google/uuid"
-	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"github.com/spacemeshos/go-spacemesh/state"
+	"github.com/spacemeshos/go-spacemesh/timesync"
+	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
+	"math/big"
+	"os"
 	"sync/atomic"
 	"testing"
 	"time"
 )
 
-var conf = Configuration{2, 1 * time.Second, 1, 300, 10 * time.Millisecond}
+var conf = Configuration{2 * time.Second, 1, 300, 100 * time.Millisecond}
 
 const (
 	levelDB  = "LevelDB"
 	memoryDB = "MemoryDB"
+	Path     = "../tmp/sync/"
 )
+
+type MockTimer struct {
+}
+
+func (MockTimer) Now() time.Time {
+	layout := "2006-01-02T15:04:05.000Z"
+	str := "2018-11-12T11:45:26.371Z"
+	start, _ := time.Parse(layout, str)
+	return start
+}
 
 func SyncMockFactory(number int, conf Configuration, name string, dbType string) (syncs []*Syncer, p2ps []*service.Node) {
 	nodes := make([]*Syncer, 0, number)
 	p2ps = make([]*service.Node, 0, number)
 	sim := service.NewSimulator()
+	tick := 200 * time.Millisecond
+	layout := "2006-01-02T15:04:05.000Z"
+	str := "2018-11-12T11:45:26.371Z"
+	start, _ := time.Parse(layout, str)
+	ts := timesync.NewTicker(MockTimer{}, tick, start)
+	tk := ts.Subscribe()
 	for i := 0; i < number; i++ {
 		net := sim.NewNode()
 		name := fmt.Sprintf(name+"_%d", i)
 		l := log.New(name, "", "")
-
-		sync := NewSync(net, getMesh(name+"_"+time.Now().String(), dbType), BlockValidatorMock{}, conf, l)
-
-		//sync := NewSync(net, getMesh(name+"_"+time.Now().String()),conf, l)
-
+		sync := NewSync(net, getMesh(dbType, name+"_"+time.Now().String()), BlockValidatorMock{}, conf, tk, l)
+		ts.Start()
 		nodes = append(nodes, sync)
 		p2ps = append(p2ps, net)
 	}
 	return nodes, p2ps
 }
 
-type BlockValidatorMock struct {
-}
-
-func (BlockValidatorMock) BlockEligible(id mesh.LayerID, key string) bool {
-	return true
-}
-
-type MeshValidatorMock struct{}
-
-func (m *MeshValidatorMock) HandleIncomingLayer(layer *mesh.Layer) (mesh.LayerID, mesh.LayerID) {
-	return layer.Index() - 1, layer.Index()
-}
-func (m *MeshValidatorMock) HandleLateBlock(bl *mesh.Block)              {}
-func (m *MeshValidatorMock) RegisterLayerCallback(func(id mesh.LayerID)) {}
-func (mlg *MeshValidatorMock) ContextualValidity(id mesh.BlockID) bool   { return true }
-
 type stateMock struct{}
 
-func (s *stateMock) ApplyTransactions(id state.LayerID, tx state.Transactions) (uint32, error) {
+func (s *stateMock) ApplyRewards(layer types.LayerID, miners []string, underQuota map[string]int, bonusReward, diminishedReward *big.Int) {
+
+}
+
+func (s *stateMock) ApplyTransactions(id types.LayerID, tx mesh.Transactions) (uint32, error) {
 	return 0, nil
+}
+
+var rewardConf = mesh.Config{
+	big.NewInt(10),
+	big.NewInt(5000),
+	big.NewInt(15),
+	15,
+	5,
 }
 
 func getMeshWithLevelDB(id string) *mesh.Mesh {
-	//time := time.Now()
-	bdb := database.NewLevelDbStore("blocks_test_"+id, nil, nil)
-	ldb := database.NewLevelDbStore("layers_test_"+id, nil, nil)
-	cv := database.NewLevelDbStore("contextually_valid_test_"+id, nil, nil)
-	//odb := database.NewLevelDbStore("orphans_test_"+id+"_"+time.String(), nil, nil)
-
-	layers := mesh.NewMesh(ldb, bdb, cv, &MeshValidatorMock{}, &stateMock{}, log.New(id, "", ""))
-	return layers
+	return mesh.NewPersistentMesh(fmt.Sprintf(Path+"%v/", id), rewardConf, &MeshValidatorMock{}, &stateMock{}, AtxDbMock{}, log.New(id, "", ""))
 }
 
-type MockState struct{}
-
-func (MockState) ApplyTransactions(layer state.LayerID, txs state.Transactions) (uint32, error) {
-	return 0, nil
+func persistenceTeardown() {
+	os.RemoveAll(Path)
 }
 
 func getMeshWithMemoryDB(id string) *mesh.Mesh {
-	bdb := database.NewMemDatabase()
-	ldb := database.NewMemDatabase()
-	cv := database.NewMemDatabase()
-	//odb := database.NewMemDatabase()
-	layers := mesh.NewMesh(ldb, bdb, cv, &MeshValidatorMock{}, &stateMock{}, log.New(id, "", ""))
-	return layers
+	return mesh.NewMemMesh(rewardConf, &MeshValidatorMock{}, &stateMock{}, AtxDbMock{}, log.New(id, "", ""))
 }
 
 func getMesh(dbType, id string) *mesh.Mesh {
@@ -137,9 +135,9 @@ func TestSyncProtocol_BlockRequest(t *testing.T) {
 	syncObj := syncs[0]
 	syncObj2 := syncs[1]
 	defer syncObj.Close()
-	lid := mesh.LayerID(1)
-	block := mesh.NewExistingBlock(mesh.BlockID(uuid.New().ID()), lid, []byte("data data data"))
-	syncObj.AddLayer(mesh.NewExistingLayer(lid, []*mesh.Block{block}))
+	lid := types.LayerID(1)
+	block := types.NewExistingBlock(types.BlockID(uuid.New().ID()), lid, []byte("data data data"))
+	syncObj.AddBlock(block)
 	ch, err := sendBlockRequest(syncObj2.MessageServer, nodes[0].Node.PublicKey(), block.ID(), syncObj.Log)
 	timeout := time.NewTimer(2 * time.Second)
 
@@ -159,10 +157,8 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 	defer syncObj1.Close()
 	syncObj2 := syncs[1]
 	defer syncObj2.Close()
-	lid := mesh.LayerID(1)
-	l := mesh.NewExistingLayer(lid, make([]*mesh.Block, 0, 10))
-	l.AddBlock(mesh.NewExistingBlock(mesh.BlockID(123), lid, nil))
-	syncObj1.AddLayer(l)
+	lid := types.LayerID(1)
+	syncObj1.AddBlock(types.NewExistingBlock(types.BlockID(123), lid, nil))
 	//syncObj1.ValidateLayer(l) //this is to simulate the approval of the tortoise...
 	timeout := time.NewTimer(2 * time.Second)
 	ch, err := syncObj2.sendLayerHashRequest(nodes[0].Node.PublicKey(), lid)
@@ -182,14 +178,19 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 	defer syncObj.Close()
 	syncObj1 := syncs[1]
 	defer syncObj1.Close()
-	lid := mesh.LayerID(1)
-	layer := mesh.NewExistingLayer(lid, make([]*mesh.Block, 0, 10))
-	layer.AddBlock(mesh.NewExistingBlock(mesh.BlockID(123), lid, nil))
-	layer.AddBlock(mesh.NewExistingBlock(mesh.BlockID(132), lid, nil))
-	layer.AddBlock(mesh.NewExistingBlock(mesh.BlockID(111), lid, nil))
-	layer.AddBlock(mesh.NewExistingBlock(mesh.BlockID(222), lid, nil))
-	syncObj1.AddLayer(layer)
-	ch, err := syncObj.sendLayerIDsRequest(nodes[1].Node.PublicKey(), lid)
+	lid := types.LayerID(1)
+	layer := types.NewExistingLayer(lid, make([]*types.Block, 0, 10))
+	layer.AddBlock(types.NewExistingBlock(types.BlockID(123), lid, nil))
+	layer.AddBlock(types.NewExistingBlock(types.BlockID(132), lid, nil))
+	layer.AddBlock(types.NewExistingBlock(types.BlockID(111), lid, nil))
+	layer.AddBlock(types.NewExistingBlock(types.BlockID(222), lid, nil))
+
+	syncObj1.AddBlock(types.NewExistingBlock(types.BlockID(123), lid, nil))
+	syncObj1.AddBlock(types.NewExistingBlock(types.BlockID(132), lid, nil))
+	syncObj1.AddBlock(types.NewExistingBlock(types.BlockID(111), lid, nil))
+	syncObj1.AddBlock(types.NewExistingBlock(types.BlockID(222), lid, nil))
+
+	ch, err := syncObj.sendLayerBlockIDsRequest(nodes[1].Node.PublicKey(), lid)
 	timeout := time.NewTimer(2 * time.Second)
 
 	select {
@@ -199,7 +200,7 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 		for _, a := range layer.Blocks() {
 			found := false
 			for _, id := range ids {
-				if a.ID() == mesh.BlockID(id) {
+				if a.ID() == types.BlockID(id) {
 					found = true
 					break
 				}
@@ -214,19 +215,6 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 
 }
 
-func verifyChannelReadWithTimeout(t *testing.T, ch chan interface{}) interface{} {
-	timeout := time.NewTimer(3 * time.Second)
-	select {
-
-	case <-timeout.C:
-		t.Error("timed out ")
-		return nil
-	case val := <-ch:
-		return val
-
-	}
-}
-
 func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_FetchBlocks_", memoryDB)
 	syncObj1 := syncs[0]
@@ -236,17 +224,17 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	n1 := nodes[0]
 	syncObj1.Log.Info("started fetch_blocks")
 
-	block1 := mesh.NewExistingBlock(mesh.BlockID(123), 0, nil)
-	block2 := mesh.NewExistingBlock(mesh.BlockID(321), 1, nil)
-	block3 := mesh.NewExistingBlock(mesh.BlockID(222), 2, nil)
+	block1 := types.NewExistingBlock(types.BlockID(123), 0, nil)
+	block2 := types.NewExistingBlock(types.BlockID(321), 1, nil)
+	block3 := types.NewExistingBlock(types.BlockID(222), 2, nil)
 
-	syncObj1.AddLayer(mesh.NewExistingLayer(0, []*mesh.Block{block1}))
-	syncObj1.AddLayer(mesh.NewExistingLayer(1, []*mesh.Block{block2}))
-	syncObj1.AddLayer(mesh.NewExistingLayer(2, []*mesh.Block{block3}))
+	syncObj1.AddBlock(block1)
+	syncObj1.AddBlock(block2)
+	syncObj1.AddBlock(block3)
 
 	ch, err := syncObj2.sendLayerHashRequest(n1.PublicKey(), 0)
 	timeout := time.NewTimer(3 * time.Second)
-	var hash peerHashPair
+	var hash *peerHashPair
 	select {
 
 	case <-timeout.C:
@@ -317,26 +305,24 @@ func TestSyncProtocol_SyncTwoNodes(t *testing.T) {
 	syncObj2.Peers = pm2 //override peers with mock
 	defer syncObj2.Close()
 
-	block1 := mesh.NewExistingBlock(mesh.BlockID(111), 0, nil)
-	block2 := mesh.NewExistingBlock(mesh.BlockID(222), 0, nil)
-	block3 := mesh.NewExistingBlock(mesh.BlockID(333), 1, nil)
-	block4 := mesh.NewExistingBlock(mesh.BlockID(444), 1, nil)
-	block5 := mesh.NewExistingBlock(mesh.BlockID(555), 2, nil)
-	block6 := mesh.NewExistingBlock(mesh.BlockID(666), 2, nil)
-	block7 := mesh.NewExistingBlock(mesh.BlockID(777), 3, nil)
-	block8 := mesh.NewExistingBlock(mesh.BlockID(888), 3, nil)
-	block9 := mesh.NewExistingBlock(mesh.BlockID(999), 4, nil)
-	block10 := mesh.NewExistingBlock(mesh.BlockID(101), 5, nil)
-	syncObj1.AddLayer(mesh.NewExistingLayer(0, []*mesh.Block{block1, block2}))
-	syncObj1.AddLayer(mesh.NewExistingLayer(1, []*mesh.Block{block3, block4}))
-	syncObj1.AddLayer(mesh.NewExistingLayer(2, []*mesh.Block{block5, block6}))
-	syncObj1.AddLayer(mesh.NewExistingLayer(3, []*mesh.Block{block7, block8}))
-	syncObj1.AddLayer(mesh.NewExistingLayer(4, []*mesh.Block{block9}))
-	syncObj1.AddLayer(mesh.NewExistingLayer(5, []*mesh.Block{block10}))
-
-	timeout := time.After(5 * time.Second)
-	syncObj2.SetLatestLayer(5)
-	syncObj1.Start()
+	block3 := types.NewExistingBlock(types.BlockID(333), 1, nil)
+	block4 := types.NewExistingBlock(types.BlockID(444), 1, nil)
+	block5 := types.NewExistingBlock(types.BlockID(555), 2, nil)
+	block6 := types.NewExistingBlock(types.BlockID(666), 2, nil)
+	block7 := types.NewExistingBlock(types.BlockID(777), 3, nil)
+	block8 := types.NewExistingBlock(types.BlockID(888), 3, nil)
+	block9 := types.NewExistingBlock(types.BlockID(999), 4, nil)
+	block10 := types.NewExistingBlock(types.BlockID(101), 5, nil)
+	syncObj1.AddBlock(block3)
+	syncObj1.AddBlock(block4)
+	syncObj1.AddBlock(block5)
+	syncObj1.AddBlock(block6)
+	syncObj1.AddBlock(block7)
+	syncObj1.AddBlock(block8)
+	syncObj1.AddBlock(block9)
+	syncObj1.AddBlock(block10)
+	timeout := time.After(12 * time.Second)
+	//syncObj1.Start()
 	syncObj2.Start()
 
 	// Keep trying until we're timed out or got a result or got an error
@@ -348,11 +334,9 @@ loop:
 			t.Error("timed out ")
 			return
 		default:
-			if syncObj2.LatestReceivedLayer() == 3 {
+			if syncObj2.VerifiedLayer() == 5 {
 				t.Log("done!")
 				break loop
-			} else {
-				syncObj2.LatestReceivedLayer()
 			}
 			time.Sleep(100 * time.Millisecond)
 		}
@@ -362,7 +346,7 @@ loop:
 func getPeersMock(peers []p2p.Peer) p2p.PeersImpl {
 	value := atomic.Value{}
 	value.Store(peers)
-	pm1 := p2p.NewPeersImpl(&value, nil)
+	pm1 := p2p.NewPeersImpl(&value, make(chan struct{}))
 	return *pm1
 }
 
@@ -386,28 +370,30 @@ func syncTest(dpType string, t *testing.T) {
 	syncObj3.Peers = getPeersMock([]p2p.Peer{n1.PublicKey(), n2.PublicKey(), n4.PublicKey()})
 	syncObj4.Peers = getPeersMock([]p2p.Peer{n1.PublicKey(), n2.PublicKey()})
 
-	block1 := mesh.NewExistingBlock(mesh.BlockID(111), 0, nil)
-	block2 := mesh.NewExistingBlock(mesh.BlockID(222), 0, nil)
-	block3 := mesh.NewExistingBlock(mesh.BlockID(333), 1, nil)
-	block4 := mesh.NewExistingBlock(mesh.BlockID(444), 1, nil)
-	block5 := mesh.NewExistingBlock(mesh.BlockID(555), 2, nil)
-	block6 := mesh.NewExistingBlock(mesh.BlockID(666), 2, nil)
-	block7 := mesh.NewExistingBlock(mesh.BlockID(777), 3, nil)
-	block8 := mesh.NewExistingBlock(mesh.BlockID(888), 3, nil)
-	block9 := mesh.NewExistingBlock(mesh.BlockID(999), 4, nil)
-	block10 := mesh.NewExistingBlock(mesh.BlockID(101), 4, nil)
+	block3 := types.NewExistingBlock(types.BlockID(333), 1, nil)
+	block4 := types.NewExistingBlock(types.BlockID(444), 1, nil)
+	block5 := types.NewExistingBlock(types.BlockID(555), 2, nil)
+	block6 := types.NewExistingBlock(types.BlockID(666), 2, nil)
+	block7 := types.NewExistingBlock(types.BlockID(777), 3, nil)
+	block8 := types.NewExistingBlock(types.BlockID(888), 3, nil)
+	block9 := types.NewExistingBlock(types.BlockID(999), 4, nil)
+	block10 := types.NewExistingBlock(types.BlockID(101), 4, nil)
 
-	syncObj1.AddLayer(mesh.NewExistingLayer(0, []*mesh.Block{block1, block2}))
-	syncObj1.AddLayer(mesh.NewExistingLayer(1, []*mesh.Block{block3, block4}))
-	syncObj1.AddLayer(mesh.NewExistingLayer(2, []*mesh.Block{block5, block6}))
-	syncObj1.AddLayer(mesh.NewExistingLayer(3, []*mesh.Block{block7, block8}))
-	syncObj1.AddLayer(mesh.NewExistingLayer(4, []*mesh.Block{block9, block10}))
+	syncObj1.Mesh.ValidateLayer(mesh.GenesisLayer())
+	syncObj2.Mesh.ValidateLayer(mesh.GenesisLayer())
+	syncObj3.Mesh.ValidateLayer(mesh.GenesisLayer())
+	syncObj4.Mesh.ValidateLayer(mesh.GenesisLayer())
+	syncObj1.AddBlock(block3)
+	syncObj1.AddBlock(block4)
+	syncObj1.AddBlock(block5)
+	syncObj1.AddBlock(block6)
+	syncObj1.AddBlock(block7)
+	syncObj1.AddBlock(block8)
+	syncObj1.AddBlock(block9)
+	syncObj1.AddBlock(block10)
 
-	syncObj2.SetLatestLayer(5)
 	syncObj2.Start()
-	syncObj3.SetLatestLayer(5)
 	syncObj3.Start()
-	syncObj4.SetLatestLayer(5)
 	syncObj4.Start()
 
 	// Keep trying until we're timed out or got a result or got an error
@@ -420,9 +406,9 @@ loop:
 		case <-timeout:
 			t.Error("timed out ")
 		default:
-			if syncObj2.LatestReceivedLayer() == 3 && syncObj3.LatestReceivedLayer() == 3 {
+			if syncObj2.VerifiedLayer() == 4 && syncObj3.VerifiedLayer() == 4 {
 				t.Log("done!")
-				t.Log(syncObj2.LatestReceivedLayer(), " ", syncObj3.LatestReceivedLayer())
+				t.Log(syncObj2.VerifiedLayer(), " ", syncObj3.VerifiedLayer())
 				break loop
 			}
 		}
@@ -463,10 +449,17 @@ func Test_TwoNodes_SyncIntegrationSuite(t *testing.T) {
 	sis.NeighborsCount = 2
 	sis.name = t.Name()
 	i := uint32(1)
+	tick := 200 * time.Millisecond
+	layout := "2006-01-02T15:04:05.000Z"
+	str := "2018-11-12T11:45:26.371Z"
+	start, _ := time.Parse(layout, str)
+	ts := timesync.NewTicker(MockTimer{}, tick, start)
+	tk := ts.Subscribe()
 	sis.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
 		l := log.New(fmt.Sprintf("%s_%d", sis.name, atomic.LoadUint32(&i)), "", "")
-		sync := NewSync(s, getMesh(memoryDB, fmt.Sprintf("%s_%s", sis.name, time.Now())), BlockValidatorMock{}, conf, l)
+		sync := NewSync(s, getMesh(memoryDB, fmt.Sprintf("%s_%s", sis.name, time.Now())), BlockValidatorMock{}, conf, tk, l)
 		sis.syncers = append(sis.syncers, sync)
+		ts.Start()
 		atomic.AddUint32(&i, 1)
 	}
 	suite.Run(t, sis)
@@ -474,16 +467,16 @@ func Test_TwoNodes_SyncIntegrationSuite(t *testing.T) {
 
 func (sis *syncIntegrationTwoNodes) TestSyncProtocol_TwoNodes() {
 	t := sis.T()
-	block1 := mesh.NewExistingBlock(mesh.BlockID(111), 1, nil)
-	block2 := mesh.NewExistingBlock(mesh.BlockID(222), 1, nil)
-	block3 := mesh.NewExistingBlock(mesh.BlockID(333), 2, nil)
-	block4 := mesh.NewExistingBlock(mesh.BlockID(444), 2, nil)
-	block5 := mesh.NewExistingBlock(mesh.BlockID(555), 3, nil)
-	block6 := mesh.NewExistingBlock(mesh.BlockID(666), 3, nil)
-	block7 := mesh.NewExistingBlock(mesh.BlockID(777), 4, nil)
-	block8 := mesh.NewExistingBlock(mesh.BlockID(888), 4, nil)
-	block9 := mesh.NewExistingBlock(mesh.BlockID(999), 5, nil)
-	block10 := mesh.NewExistingBlock(mesh.BlockID(101), 5, nil)
+	block1 := types.NewExistingBlock(types.BlockID(111), 1, nil)
+	block2 := types.NewExistingBlock(types.BlockID(222), 1, nil)
+	block3 := types.NewExistingBlock(types.BlockID(333), 2, nil)
+	block4 := types.NewExistingBlock(types.BlockID(444), 2, nil)
+	block5 := types.NewExistingBlock(types.BlockID(555), 3, nil)
+	block6 := types.NewExistingBlock(types.BlockID(666), 3, nil)
+	block7 := types.NewExistingBlock(types.BlockID(777), 4, nil)
+	block8 := types.NewExistingBlock(types.BlockID(888), 4, nil)
+	block9 := types.NewExistingBlock(types.BlockID(999), 5, nil)
+	block10 := types.NewExistingBlock(types.BlockID(101), 5, nil)
 
 	syncObj0 := sis.syncers[0]
 	defer syncObj0.Close()
@@ -492,11 +485,16 @@ func (sis *syncIntegrationTwoNodes) TestSyncProtocol_TwoNodes() {
 	syncObj2 := sis.syncers[2]
 	defer syncObj2.Close()
 
-	syncObj2.AddLayer(mesh.NewExistingLayer(0, []*mesh.Block{block1, block2}))
-	syncObj2.AddLayer(mesh.NewExistingLayer(1, []*mesh.Block{block3, block4}))
-	syncObj2.AddLayer(mesh.NewExistingLayer(2, []*mesh.Block{block5, block6}))
-	syncObj2.AddLayer(mesh.NewExistingLayer(3, []*mesh.Block{block7, block8}))
-	syncObj2.AddLayer(mesh.NewExistingLayer(4, []*mesh.Block{block9, block10}))
+	syncObj2.AddBlock(block1)
+	syncObj2.AddBlock(block2)
+	syncObj2.AddBlock(block3)
+	syncObj2.AddBlock(block4)
+	syncObj2.AddBlock(block5)
+	syncObj2.AddBlock(block6)
+	syncObj2.AddBlock(block7)
+	syncObj2.AddBlock(block8)
+	syncObj2.AddBlock(block9)
+	syncObj2.AddBlock(block10)
 	timeout := time.After(60 * time.Second)
 	syncObj1.SetLatestLayer(5)
 	syncObj1.Start()
@@ -509,10 +507,11 @@ func (sis *syncIntegrationTwoNodes) TestSyncProtocol_TwoNodes() {
 			t.Error("timed out ")
 			return
 		default:
-			if syncObj1.LatestReceivedLayer() == 3 {
+			if syncObj1.VerifiedLayer() == 5 {
 				t.Log("done!")
 				return
 			}
+			time.Sleep(100 * time.Millisecond)
 		}
 	}
 }
@@ -531,9 +530,16 @@ func Test_Multiple_SyncIntegrationSuite(t *testing.T) {
 	sis.NeighborsCount = 3
 	sis.name = t.Name()
 	i := uint32(1)
+	tick := 2 * time.Second
+	layout := "2006-01-02T15:04:05.000Z"
+	str := "2018-11-12T11:45:26.371Z"
+	start, _ := time.Parse(layout, str)
+	ts := timesync.NewTicker(MockTimer{}, tick, start)
+	tk := ts.Subscribe()
 	sis.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
 		l := log.New(fmt.Sprintf("%s_%d", sis.name, atomic.LoadUint32(&i)), "", "")
-		sync := NewSync(s, getMesh(memoryDB, fmt.Sprintf("%s_%d_%s", sis.name, atomic.LoadUint32(&i), time.Now())), BlockValidatorMock{}, conf, l)
+		sync := NewSync(s, getMesh(memoryDB, fmt.Sprintf("%s_%d_%s", sis.name, atomic.LoadUint32(&i), time.Now())), BlockValidatorMock{}, conf, tk, l)
+		ts.Start()
 		sis.syncers = append(sis.syncers, sync)
 		atomic.AddUint32(&i, 1)
 	}
@@ -543,16 +549,13 @@ func Test_Multiple_SyncIntegrationSuite(t *testing.T) {
 func (sis *syncIntegrationMultipleNodes) TestSyncProtocol_MultipleNodes() {
 	t := sis.T()
 
-	block1 := mesh.NewExistingBlock(mesh.BlockID(111), 0, nil)
-	block2 := mesh.NewExistingBlock(mesh.BlockID(222), 1, nil)
-	block3 := mesh.NewExistingBlock(mesh.BlockID(333), 2, nil)
-	block4 := mesh.NewExistingBlock(mesh.BlockID(444), 2, nil)
-	block5 := mesh.NewExistingBlock(mesh.BlockID(555), 3, nil)
-	block6 := mesh.NewExistingBlock(mesh.BlockID(666), 3, nil)
-	//block7 := mesh.NewExistingBlock(mesh.BlockID(777), 4, nil)
-	//block8 := mesh.NewExistingBlock(mesh.BlockID(888), 4, nil)
-	//block9 := mesh.NewExistingBlock(mesh.BlockID(999), 5, nil)
-	//block10 := mesh.NewExistingBlock(mesh.BlockID(101), 5, nil)
+	block2 := types.NewExistingBlock(types.BlockID(222), 1, nil)
+	block3 := types.NewExistingBlock(types.BlockID(333), 2, nil)
+	block4 := types.NewExistingBlock(types.BlockID(444), 2, nil)
+	block5 := types.NewExistingBlock(types.BlockID(555), 3, nil)
+	block6 := types.NewExistingBlock(types.BlockID(666), 3, nil)
+	block7 := types.NewExistingBlock(types.BlockID(777), 4, nil)
+	block8 := types.NewExistingBlock(types.BlockID(888), 4, nil)
 
 	syncObj1 := sis.syncers[0]
 	defer syncObj1.Close()
@@ -565,17 +568,15 @@ func (sis *syncIntegrationMultipleNodes) TestSyncProtocol_MultipleNodes() {
 	syncObj5 := sis.syncers[4]
 	defer syncObj5.Close()
 
-	syncObj4.AddLayer(mesh.NewExistingLayer(0, []*mesh.Block{block1}))
-	syncObj4.AddLayer(mesh.NewExistingLayer(1, []*mesh.Block{block2}))
-	syncObj4.AddLayer(mesh.NewExistingLayer(2, []*mesh.Block{block3, block4}))
-	syncObj4.AddLayer(mesh.NewExistingLayer(3, []*mesh.Block{block5, block6}))
+	syncObj4.AddBlock(block2)
+	syncObj4.AddBlock(block3)
+	syncObj4.AddBlock(block4)
+	syncObj4.AddBlock(block5)
+	syncObj4.AddBlock(block6)
+	syncObj4.AddBlock(block7)
+	syncObj4.AddBlock(block8)
 
-	timeout := time.After(2 * 60 * time.Second)
-	syncObj2.SetLatestLayer(5)
-	syncObj3.SetLatestLayer(5)
-	syncObj1.SetLatestLayer(5)
-	syncObj5.SetLatestLayer(5)
-
+	timeout := time.After(30 * time.Second)
 	syncObj1.Start()
 	syncObj2.Start()
 	syncObj3.Start()
@@ -590,17 +591,18 @@ func (sis *syncIntegrationMultipleNodes) TestSyncProtocol_MultipleNodes() {
 			t.Error("timed out ")
 			goto end
 		default:
-			if syncObj2.LatestReceivedLayer() == 3 || syncObj4.LatestReceivedLayer() == 3 {
+			if syncObj1.VerifiedLayer() >= 3 || syncObj2.VerifiedLayer() >= 3 || syncObj3.VerifiedLayer() >= 3 || syncObj5.VerifiedLayer() >= 3 {
 				t.Log("done!")
 				goto end
 			}
+			time.Sleep(1 * time.Millisecond)
 		}
 	}
 end:
-	log.Debug("sync 1 ", syncObj1.LatestReceivedLayer())
-	log.Debug("sync 2 ", syncObj2.LatestReceivedLayer())
-	log.Debug("sync 3 ", syncObj3.LatestReceivedLayer())
-	log.Debug("sync 4 ", syncObj4.LatestReceivedLayer())
-	log.Debug("sync 5 ", syncObj5.LatestReceivedLayer())
+	log.Debug("sync 1 ", syncObj1.VerifiedLayer())
+	log.Debug("sync 2 ", syncObj2.VerifiedLayer())
+	log.Debug("sync 3 ", syncObj3.VerifiedLayer())
+	log.Debug("sync 4 ", syncObj4.VerifiedLayer())
+	log.Debug("sync 5 ", syncObj5.VerifiedLayer())
 	return
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/btcsuite/btcutil/base58"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"golang.org/x/crypto/nacl/box"
 	"io"
 )
@@ -57,7 +58,7 @@ func (k key) String() string {
 func getRandomNonce() [nonceSize]byte {
 	nonce := [nonceSize]byte{}
 	if _, err := io.ReadFull(rand.Reader, nonce[:]); err != nil {
-		panic(err)
+		log.Panic("Panic: ", err)
 	}
 	return nonce
 }
@@ -68,6 +69,9 @@ func (k key) Seal(message []byte) (out []byte) {
 }
 
 func (k key) Open(encryptedMessage []byte) (out []byte, err error) {
+	if len(encryptedMessage) <= nonceSize {
+		return nil, errors.New("message was too small")
+	}
 	nonce := &[nonceSize]byte{}
 	copy(nonce[:], encryptedMessage[:nonceSize])
 	message, ok := box.OpenAfterPrecomputation(nil, encryptedMessage[nonceSize:], nonce, k.raw())
@@ -102,7 +106,7 @@ func ExtractPubkey(message []byte) ([]byte, PublicKey, error) {
 	}
 	pubkey, err := NewPubkeyFromBytes(message[:keySize])
 	if err != nil {
-		panic(err) // this should never happen as we control the key size
+		log.Panic("Panic: ", err) // this should never happen as we control the key size
 	}
 	return message[keySize:], pubkey, nil
 }
@@ -145,7 +149,7 @@ func NewPublicKeyFromBase58(s string) (PublicKey, error) {
 func NewRandomPubkey() PublicKey {
 	k := newKey()
 	if _, err := io.ReadFull(rand.Reader, k.bytes[:]); err != nil {
-		panic(err)
+		log.Panic("Panic: ", err)
 	}
 	return k
 }
