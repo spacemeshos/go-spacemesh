@@ -1,6 +1,8 @@
 <h1 align="center">
   <a href="https://spacemesh.io"><img width="400" src="https://spacemesh.io/content/images/2019/04/black_text_logo@2x.png" alt="Spacemesh logo" /></a>
-  <p align="center">Blockmesh Operating System</p>
+  <p align="center">Spacemesh is a fair programmable cryptocurrency
+                                   which is permissionless, open source, trustless secure, highly-decentralized and incentive-compatible.
+</p>
 </h1>
 
 <p align="center">
