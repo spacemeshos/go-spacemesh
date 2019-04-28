@@ -3,7 +3,7 @@ package nipst
 import (
 	"crypto/rand"
 	"github.com/spacemeshos/go-spacemesh/common"
-	"github.com/spacemeshos/poet-ref/integration"
+	"github.com/spacemeshos/poet/integration"
 	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
