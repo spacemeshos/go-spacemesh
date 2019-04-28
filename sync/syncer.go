@@ -160,9 +160,9 @@ func (s *Syncer) getLayerFromNeighbors(currenSyncLayer types.LayerID) (*types.La
 			for id := range blockIds {
 				for _, p := range s.GetPeers() {
 					if bCh, err := sendBlockRequest(s.MessageServer, p, types.BlockID(id), s.Log); err == nil {
-						start := time.Now()
+						timer := newMilliTimer(blockTime)
 						block := <-bCh
-						elapsed := time.Now().Sub(start)
+						elapsed := timer.ObserveDuration()
 						if block == nil {
 							continue
 						}
@@ -202,7 +202,6 @@ type peerHashPair struct {
 
 func sendBlockRequest(msgServ *server.MessageServer, peer p2p.Peer, id types.BlockID, logger log.Log) (chan *types.Block, error) {
 	logger.Info("send block request Peer: %v id: %v", peer, id)
-
 	ch := make(chan *types.Block)
 	foo := func(msg []byte) {
 		defer close(ch)
