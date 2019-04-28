@@ -10,7 +10,7 @@ spec:
         name: poet
     spec:
       containers:
-      - name: oracle
+      - name: poet
         image: spacemeshos/poet:develop
         imagePullPolicy: Always
         ports:
