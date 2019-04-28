@@ -66,17 +66,27 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	lg.Info("Start!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P)
 
-	files, _ := IOReadDir(app.Config.DataDir)
-
-	lg.Info("path %v", app.Config.DataDir)
-	lg.Info("files %v", files)
 	if err != nil {
 		panic("something got fudged while creating p2p service ")
 	}
 
+	mdb := mesh.NewPersistentMeshDB(app.Config.DataDir, lg.WithName("meshdb"))
+	atxdbstore, err := database.NewLDBDatabase(app.Config.DataDir+"atx", 0, 0)
+	if err != nil {
+		return
+	}
+
+	//todo: put in config
+	iddbstore, err := database.NewLDBDatabase(app.Config.DataDir+"ids", 0, 0)
+	if err != nil {
+		return
+	}
+	idStore := activation.NewIdentityStore(iddbstore)
+	atxdb := activation.NewActivationDb(atxdbstore, idStore, mdb, 1000)
+
 	mshDb := mesh.NewPersistentMeshDB(app.Config.DataDir, lg)
 	msh := mesh.NewMesh(mshDb,
-		activation.NewActivationDb(database.NewMemDatabase(), mshDb, 1000),
+		atxdb,
 		sync.ConfigTst(),
 		&sync.MeshValidatorMock{},
 		&sync.MockState{},
