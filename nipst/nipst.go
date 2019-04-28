@@ -8,7 +8,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/poet-ref/shared"
+	"github.com/spacemeshos/poet/shared"
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/proving"
 	"os"

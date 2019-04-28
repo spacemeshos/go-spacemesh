@@ -16,7 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/types"
-	"github.com/spacemeshos/poet-ref/integration"
+	"github.com/spacemeshos/poet/integration"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	"math/big"

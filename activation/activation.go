@@ -17,8 +17,6 @@ type ActiveSetProvider interface {
 	ActiveSetIds(l types.EpochId) uint32
 }
 
-//GetLatestView() []types.BlockID
-
 type MeshProvider interface {
 	GetLatestView() []types.BlockID
 	LatestLayer() types.LayerID

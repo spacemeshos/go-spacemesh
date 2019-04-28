@@ -4,7 +4,6 @@ require (
 	github.com/btcsuite/btcd v0.0.0-20190213025234-306aecffea32
 	github.com/btcsuite/btcutil v0.0.0-20190207003914-4c204d697803
 	github.com/davecgh/go-spew v1.1.1
-	github.com/davecgh/go-xdr v0.0.0-20161123171359-e6a2ba005892
 	github.com/go-kit/kit v0.8.0
 	github.com/gogo/protobuf v1.2.0
 	github.com/golang-collections/go-datastructures v0.0.0-20150211160725-59788d5eb259
@@ -13,12 +12,13 @@ require (
 	github.com/google/uuid v1.1.0
 	github.com/grpc-ecosystem/grpc-gateway v1.8.4
 	github.com/hashicorp/golang-lru v0.5.1
+	github.com/nullstyle/go-xdr v0.0.0-20180726165426-f4c839f75077
 	github.com/prometheus/client_golang v0.9.2
 	github.com/prometheus/common v0.2.0
 	github.com/seehuhn/mt19937 v0.0.0-20180715112136-cc7708819361
 	github.com/spacemeshos/ed25519 v0.0.0-20190316215305-5878e62449c1
 	github.com/spacemeshos/merkle-tree v0.0.0-20190327145446-3651a544f849
-	github.com/spacemeshos/poet-ref v0.0.0-20190404082615-4bb5581dbcba
+	github.com/spacemeshos/poet v0.0.0-20190428110109-b14e3f4011e5
 	github.com/spacemeshos/post v0.0.0-20190414091440-9e41a560833b
 	github.com/spacemeshos/sha256-simd v0.0.0-20190111104731-8575aafc88c9
 	github.com/spf13/cobra v0.0.3

@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/davecgh/go-xdr/xdr2"
+	"github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/nipst"
-	"github.com/spacemeshos/poet-ref/shared"
+	"github.com/spacemeshos/poet/shared"
 	"sort"
 )
 

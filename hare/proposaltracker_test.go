@@ -9,7 +9,7 @@ import (
 func buildProposalMsg(signing Signer, s *Set, signature Signature) *Msg {
 	builder := NewMessageBuilder().SetRoleProof(signature)
 	builder.SetType(Proposal).SetInstanceId(instanceId1).SetRoundCounter(Round2).SetKi(ki).SetValues(s)
-	builder = builder.SetPubKey(signing.PublicKey().Bytes()).Sign(signing)
+	builder = builder.SetPubKey(signing.PublicKey()).Sign(signing)
 
 	return builder.Build()
 }
@@ -26,8 +26,8 @@ func TestProposalTracker_OnProposalConflict(t *testing.T) {
 	tracker := NewProposalTracker(log.NewDefault(verifier.PublicKey().String()))
 	tracker.OnProposal(m1)
 	assert.False(t, tracker.IsConflicting())
-	s.Add(value3)
-	m2 := BuildProposalMsg(verifier, s)
+	g := NewSetFromValues(value3)
+	m2 := BuildProposalMsg(verifier, g)
 	tracker.OnProposal(m2)
 	assert.True(t, tracker.IsConflicting())
 }
@@ -50,8 +50,8 @@ func TestProposalTracker_OnLateProposal(t *testing.T) {
 	tracker := NewProposalTracker(log.NewDefault(verifier.PublicKey().String()))
 	tracker.OnProposal(m1)
 	assert.False(t, tracker.IsConflicting())
-	s.Add(value3)
-	m2 := BuildProposalMsg(verifier, s)
+	g := NewSetFromValues(value3)
+	m2 := BuildProposalMsg(verifier, g)
 	tracker.OnLateProposal(m2)
 	assert.True(t, tracker.IsConflicting())
 }

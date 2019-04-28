@@ -56,7 +56,7 @@ func DefaultConfig() Config {
 
 	// SwarmConfigValues defines default values for swarm config params.
 	var SwarmConfigValues = SwarmConfig{
-		Gossip:                 false,
+		Gossip:                 true,
 		Bootstrap:              false,
 		RoutingTableBucketSize: 20,
 		RoutingTableAlpha:      3,
