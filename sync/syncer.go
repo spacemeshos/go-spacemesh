@@ -134,10 +134,10 @@ func (s *Syncer) Synchronise() {
 
 		lyr, err := s.GetLayer(types.LayerID(currenSyncLayer))
 		if err != nil {
-			lyr, err = s.getLayerFromNeighbors(currenSyncLayer)
-		}
-
-		if err != nil {
+			s.Info("could not get layer %v from database %v", currenSyncLayer, err)
+		} else if lyr, err = s.getLayerFromNeighbors(currenSyncLayer); err == nil {
+			layerCount.Add(1)
+		} else {
 			s.Info("could not get layer %v from neighbors %v", currenSyncLayer, err)
 			return
 		}
@@ -160,10 +160,14 @@ func (s *Syncer) getLayerFromNeighbors(currenSyncLayer types.LayerID) (*types.La
 			for id := range blockIds {
 				for _, p := range s.GetPeers() {
 					if bCh, err := sendBlockRequest(s.MessageServer, p, types.BlockID(id), s.Log); err == nil {
+						start := time.Now()
 						block := <-bCh
+						elapsed := time.Now().Sub(start)
 						if block == nil {
 							continue
 						}
+						s.Debug("fetching block %v took %v ", block.ID(), elapsed)
+						blockCount.Add(1)
 						eligible, err := s.BlockEligible(block)
 						if err != nil {
 							s.Error("block eligibility check failed: %v", err)
