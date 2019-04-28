@@ -56,3 +56,17 @@ func Union(list1 []discNode, list2 []discNode) []discNode {
 
 	return res
 }
+
+func filterNodes(list []discNode, filter []discNode) []discNode {
+	newlist := make([]discNode, 0, len(list))
+loop:
+	for i := 0; i < len(list); i++ {
+		for j := 0; j < len(filter); j++ {
+			if filter[j] == list[i] {
+				continue loop
+			}
+		}
+		newlist = append(newlist, list[i])
+	}
+	return newlist
+}

@@ -26,7 +26,7 @@ var value10 = Value{10}
 func BuildPreRoundMsg(signing Signer, s *Set) *Msg {
 	builder := NewMessageBuilder()
 	builder.SetType(PreRound).SetInstanceId(instanceId1).SetRoundCounter(k).SetKi(ki).SetValues(s)
-	builder = builder.SetPubKey(signing.PublicKey().Bytes()).Sign(signing)
+	builder = builder.SetPubKey(signing.PublicKey()).Sign(signing)
 
 	return builder.Build()
 }
@@ -41,7 +41,7 @@ func TestPreRoundTracker_OnPreRound(t *testing.T) {
 	tracker := NewPreRoundTracker(lowThresh10, lowThresh10)
 	tracker.OnPreRound(m1)
 	assert.Equal(t, 1, len(tracker.preRound))      // one msg
-	assert.Equal(t, 2, len(tracker.tracker.table)) // two values
+	assert.Equal(t, 2, len(tracker.tracker.table)) // two Values
 	g, _ := tracker.preRound[verifier.PublicKey().String()]
 	assert.True(t, s.Equals(g))
 	assert.Equal(t, uint32(1), tracker.tracker.CountStatus(value1.Id()))

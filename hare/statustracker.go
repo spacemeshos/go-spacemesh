@@ -1,18 +1,16 @@
 package hare
 
 import (
-	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
-// Tracks status messages
+// Tracks status Messages
 type StatusTracker struct {
 	statuses  map[string]*Msg // maps PubKey->StatusMsg
 	threshold int             // threshold to indicate a set can be proved
-	maxKi     int32           // tracks max ki in tracked status messages
-	maxRawSet []uint64        // tracks the max raw set in the tracked status messages
-	analyzed  bool            // indicates if the messages have already been analyzed
+	maxKi     int32           // tracks max Ki in tracked status Messages
+	maxSet    *Set            // tracks the max raw set in the tracked status Messages
+	analyzed  bool            // indicates if the Messages have already been analyzed
 	log.Log
 }
 
@@ -20,16 +18,16 @@ func NewStatusTracker(threshold int, expectedSize int) *StatusTracker {
 	st := &StatusTracker{}
 	st.statuses = make(map[string]*Msg, expectedSize)
 	st.threshold = threshold
-	st.maxKi = -1 // since ki>=-1
-	st.maxRawSet = nil
+	st.maxKi = -1 // since Ki>=-1
+	st.maxSet = nil
 	st.analyzed = false
 
 	return st
 }
 
-// Records the given status message
+// Records the given status InnerMsg
 func (st *StatusTracker) RecordStatus(msg *Msg) {
-	pub := signing.NewPublicKey(msg.PubKey)
+	pub := msg.PubKey
 	_, exist := st.statuses[pub.String()]
 	if exist { // already handled this sender's status msg
 		st.Warning("Duplicated status message detected %v", pub.String())
@@ -39,17 +37,17 @@ func (st *StatusTracker) RecordStatus(msg *Msg) {
 	st.statuses[pub.String()] = msg
 }
 
-// Analyzes the recorded status messages according to the validation function
+// Analyzes the recorded status Messages according to the validation function
 func (st *StatusTracker) AnalyzeStatuses(isValid func(m *Msg) bool) {
 	count := 0
 	for key, m := range st.statuses {
-		if !isValid(m) || count == st.threshold { // only keep valid messages
+		if !isValid(m) || count == st.threshold { // only keep valid Messages
 			delete(st.statuses, key)
 		} else {
 			count++
-			if m.Message.Ki >= st.maxKi { // track max ki & matching raw set
-				st.maxKi = m.Message.Ki
-				st.maxRawSet = m.Message.Values
+			if m.InnerMsg.Ki >= st.maxKi { // track max Ki & matching raw set
+				st.maxKi = m.InnerMsg.Ki
+				st.maxSet = NewSet(m.InnerMsg.Values)
 			}
 		}
 	}
@@ -68,19 +66,18 @@ func (st *StatusTracker) ProposalSet(expectedSize int) *Set {
 		return st.buildUnionSet(expectedSize)
 	}
 
-	if st.maxRawSet == nil { // should be impossible to reach
-		panic("maxRawSet is unexpectedly nil")
+	if st.maxSet == nil { // should be impossible to reach
+		panic("maxSet is unexpectedly nil")
 	}
 
-	return NewSet(st.maxRawSet)
+	return st.maxSet
 }
 
-// Returns the union set of all status messages collected
+// Returns the union set of all status Messages collected
 func (st *StatusTracker) buildUnionSet(expectedSize int) *Set {
 	unionSet := NewEmptySet(expectedSize)
 	for _, m := range st.statuses {
-		for _, buff := range m.Message.Values {
-			bid := NewValue(buff)
+		for _, bid := range NewSet(m.InnerMsg.Values).values {
 			unionSet.Add(bid) // assuming add is unique
 		}
 	}
@@ -90,14 +87,14 @@ func (st *StatusTracker) buildUnionSet(expectedSize int) *Set {
 
 // Builds the SVP
 // Returns the SVP if available, nil otherwise
-func (st *StatusTracker) BuildSVP() *pb.AggregatedMessages {
+func (st *StatusTracker) BuildSVP() *AggregatedMessages {
 	if !st.IsSVPReady() {
 		return nil
 	}
 
-	svp := &pb.AggregatedMessages{}
+	svp := &AggregatedMessages{}
 	for _, m := range st.statuses {
-		svp.Messages = append(svp.Messages, m.HareMessage)
+		svp.Messages = append(svp.Messages, m.Message)
 	}
 
 	// TODO: set aggregated signature

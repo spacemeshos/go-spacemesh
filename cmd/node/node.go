@@ -305,7 +305,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	conf := sync.Configuration{SyncInterval: 1 * time.Second, Concurrency: 4, LayerSize: int(layerSize), RequestTimeout: 100 * time.Millisecond}
 	syncer := sync.NewSync(swarm, msh, blockValidator, conf, clock.Subscribe(), lg)
 
-	ha := hare.New(app.Config.HARE, swarm, sgn, msh, hareOracle, clock.Subscribe(), lg.WithName("hare"))
+	ha := hare.New(app.Config.HARE, swarm, sgn, msh, hareOracle, atxdb, clock.Subscribe(), lg.WithName("hare"))
 
 	nodeID = types.NodeId{Key: sgn.PublicKey().String()} // TODO: where does this come from?
 	blockProducer := miner.NewBlockBuilder(nodeID, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, lg.WithName("blockProducer"))

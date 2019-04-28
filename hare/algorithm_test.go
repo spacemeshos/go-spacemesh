@@ -3,7 +3,6 @@ package hare
 import (
 	"bytes"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
-	"github.com/spacemeshos/go-spacemesh/hare/pb"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -97,7 +96,7 @@ type mockCommitTracker struct {
 	countHasEnoughCommits int
 	countBuildCertificate int
 	hasEnoughCommits      bool
-	certificate           *pb.Certificate
+	certificate           *Certificate
 }
 
 func (mct *mockCommitTracker) OnCommit(msg *Msg) {
@@ -109,7 +108,7 @@ func (mct *mockCommitTracker) HasEnoughCommits() bool {
 	return mct.hasEnoughCommits
 }
 
-func (mct *mockCommitTracker) BuildCertificate() *pb.Certificate {
+func (mct *mockCommitTracker) BuildCertificate() *Certificate {
 	mct.countBuildCertificate++
 	return mct.certificate
 }
@@ -118,12 +117,13 @@ func generateSigning(t *testing.T) Signer {
 	return signing.NewEdSigner()
 }
 
-func buildMessage(msg *pb.HareMessage) *Msg {
+func buildMessage(msg *Message) *Msg {
 	return &Msg{msg, nil}
 }
 
 func buildBroker(net NetworkService) *Broker {
-	return NewBroker(net, &mockEligibilityValidator{true}, Closer{make(chan struct{})})
+	return NewBroker(net, &mockEligibilityValidator{true}, MockStateQuerier{true, nil},
+		Closer{make(chan struct{})}, log.NewDefault("broker"))
 }
 
 type mockEligibilityValidator struct {
@@ -145,7 +145,7 @@ func buildOracle(oracle Rolacle) *hareRolacle {
 	return NewHareOracle(oracle, cfg.N)
 }
 
-// test that a message to a specific set objectId is delivered by the broker
+// test that a InnerMsg to a specific set objectId is delivered by the broker
 func TestConsensusProcess_Start(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
@@ -268,8 +268,8 @@ func TestConsensusProcess_InitDefaultBuilder(t *testing.T) {
 	s.Add(value1)
 	builder := proc.initDefaultBuilder(s)
 	assert.True(t, NewSet(builder.inner.Values).Equals(s))
-	verifier := signing.NewPublicKey(builder.msg.PubKey)
-	assert.Equal(t, []byte(nil), verifier.Bytes())
+	verifier := builder.msg.PubKey
+	assert.Nil(t, verifier)
 	assert.Equal(t, builder.inner.K, proc.k)
 	assert.Equal(t, builder.inner.Ki, proc.ki)
 	assert.Equal(t, InstanceId(builder.inner.InstanceId), proc.instanceId)
@@ -369,7 +369,7 @@ func TestConsensusProcess_procNotify(t *testing.T) {
 	assert.Equal(t, 1, len(proc.notifyTracker.notifies))
 	m = BuildNotifyMsg(generateSigning(t), s)
 	proc.ki = 0
-	m.Message.K = proc.ki
+	m.InnerMsg.K = proc.ki
 	proc.s.Add(value5)
 	proc.k = Round4
 	proc.processNotifyMsg(m)
@@ -553,7 +553,7 @@ func TestConsensusProcess_endOfRound3(t *testing.T) {
 	proc.endOfRound3()
 	assert.Equal(t, 1, mct.countBuildCertificate)
 	assert.Equal(t, 0, mpt.countProposedSet)
-	mct.certificate = &pb.Certificate{}
+	mct.certificate = &Certificate{}
 	proc.endOfRound3()
 	mpt.proposedSet = nil
 	proc.s = NewSmallEmptySet()

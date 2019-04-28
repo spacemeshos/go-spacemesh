@@ -1,5 +1,5 @@
 <h1 align="center">
-  <a href="https://spacemesh.io"><img width="400" src="https://spacemesh.io/content/images/2018/05/logo-black-on-white-trimmed.png" alt="Spacemesh logo" /></a>
+  <a href="https://spacemesh.io"><img width="400" src="https://spacemesh.io/content/images/2019/04/black_text_logo@2x.png" alt="Spacemesh logo" /></a>
   <p align="center">Blockmesh Operating System</p>
 </h1>
 
@@ -140,6 +140,9 @@ You can then run the command `make install` followed by `make build` as on unix 
 - Spacemesh Protocol [first AMA session](https://spacemesh.io/tal-m-deep-dive/)
 
 ### Status
+
+Please install the Zenhub browser extension to view the go-spacemesh workspaces below.
+
 [P2P](https://github.com/spacemeshos/go-spacemesh#workspaces/go-spacemesh-59f1e073ac463071b57d474f/boards?labels=p2p&repos=108372143)
 
 [Sync Protocol](https://github.com/spacemeshos/go-spacemesh#workspaces/go-spacemesh-59f1e073ac463071b57d474f/boards?labels=sync&repos=108372143)
