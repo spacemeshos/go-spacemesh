@@ -134,10 +134,10 @@ func (s *Syncer) Synchronise() {
 
 		lyr, err := s.GetLayer(types.LayerID(currenSyncLayer))
 		if err != nil {
-			s.Info("could not get layer %v from database %v", currenSyncLayer, err)
-		} else if lyr, err = s.getLayerFromNeighbors(currenSyncLayer); err == nil {
-			layerCount.Add(1)
-		} else {
+			lyr, err = s.getLayerFromNeighbors(currenSyncLayer)
+		}
+
+		if err != nil {
 			s.Info("could not get layer %v from neighbors %v", currenSyncLayer, err)
 			return
 		}
