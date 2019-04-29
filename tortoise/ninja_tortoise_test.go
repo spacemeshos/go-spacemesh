@@ -24,7 +24,7 @@ const Path = "../tmp/tortoise/"
 const inmem = 1
 const disK = 2
 
-const memType = disK
+const memType = inmem
 
 func init() {
 	persistenceTeardown()
@@ -168,7 +168,7 @@ func TestNinjaTortoise_S100P99(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
-	//defer persistenceTeardown()
+	defer persistenceTeardown()
 	sanity(getMeshForBench(), 100, 100, 100, badblocks)
 }
 func TestNinjaTortoise_S10P7(t *testing.T) {
