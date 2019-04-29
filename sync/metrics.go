@@ -25,8 +25,6 @@ func newMilliTimer(sum prometheus.Summary) *prometheus.Timer {
 var (
 	blockCount = newCounter("block_counter", "amount of blocks synced", []string{})
 
-	layerCount = newCounter("layer_counter", "amount of layers synced", []string{})
-
 	blockTime = prometheus.NewSummary(prometheus.SummaryOpts{Name: "block_request_durations",
 		Help:       "block requests duration in milliseconds",
 		Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001}})

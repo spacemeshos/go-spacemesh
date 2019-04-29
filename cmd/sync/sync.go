@@ -70,20 +70,8 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 		panic("something got fudged while creating p2p service ")
 	}
 
-	mdb := mesh.NewPersistentMeshDB(app.Config.DataDir, lg.WithName("meshdb"))
-	atxdbstore, err := database.NewLDBDatabase(app.Config.DataDir+"atx", 0, 0)
-	if err != nil {
-		return
-	}
-
-	//todo: put in config
-	iddbstore, err := database.NewLDBDatabase(app.Config.DataDir+"ids", 0, 0)
-	if err != nil {
-		return
-	}
-	idStore := activation.NewIdentityStore(iddbstore)
-	atxdb := activation.NewActivationDb(atxdbstore, idStore, mdb, 1000)
-
+	memesh := mesh.NewMemMeshDB(lg)
+	atxdb := activation.NewActivationDb(database.NewMemDatabase(), activation.NewIdentityStore(database.NewMemDatabase()), memesh, 1000)
 	mshDb := mesh.NewPersistentMeshDB(app.Config.DataDir, lg)
 	msh := mesh.NewMesh(mshDb,
 		atxdb,
