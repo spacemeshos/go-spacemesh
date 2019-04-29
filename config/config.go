@@ -69,6 +69,8 @@ type BaseConfig struct {
 	GenesisTime      string `mapstructure:"genesis-time"`
 	LayerDurationSec int    `mapstructure:"layer-duration-sec"`
 	LayerAvgSize     int    `mapstructure:"layer-average-size"`
+
+	PoETServer string `mapstructure:"poet_server"`
 }
 
 // DefaultConfig returns the default configuration for a spacemesh node
@@ -100,6 +102,7 @@ func defaultBaseConfig() BaseConfig {
 		OracleServerWorldId: 0,
 		GenesisTime:         time.Now().Format(time.RFC3339),
 		LayerDurationSec:    20,
+		PoETServer:          "127.0.0.1",
 	}
 }
 

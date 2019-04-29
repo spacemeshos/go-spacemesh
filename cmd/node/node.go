@@ -8,6 +8,7 @@ import (
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/consensus"
+	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -22,7 +23,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spacemeshos/go-spacemesh/version"
-	"github.com/spacemeshos/post/proving"
 	"io/ioutil"
 	"math/rand"
 
@@ -258,9 +258,16 @@ func (app *SpacemeshApp) setupTestFeatures() {
 	api.ApproveAPIGossipMessages(cmdp.Ctx, app.P2P)
 }
 
-func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service, dbStorepath string, sgn hare.Signer,
-	blockOracle oracle.BlockOracle, blockValidator sync.BlockValidator, hareOracle hare.Rolacle, layerSize int,
-	postClient nipst.PostProverClient, poetClient nipst.PoetProvingServiceClient, atxdbstore database.DB) error {
+func (app *SpacemeshApp) initServices(nodeID types.NodeId,
+	swarm service.Service,
+	dbStorepath string,
+	sgn hare.Signer,
+	hareOracle hare.Rolacle,
+	layerSize int,
+	postClient nipst.PostProverClient,
+	poetClient nipst.PoetProvingServiceClient,
+	atxdbstore database.DB, vrfSigner *crypto.VRFSigner,
+	commitmentConfig nipst.PostParams) error {
 
 	app.instanceName = nodeID.Key
 	//todo: should we add all components to a single struct?
@@ -299,12 +306,14 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	}
 	idStore := activation.NewIdentityStore(iddbstore)
 	//todo: this is initialized twice, need to refactor
-	validator := nipst.NewValidator(nipst.PostParams{
-		Difficulty:           5,
-		NumberOfProvenLabels: 10,
-		SpaceUnit:            1024,
-	})
+	validator := nipst.NewValidator(commitmentConfig)
+	numOfInstances := 10
+	layersPerEpoch := uint16(5)
 	atxdb := activation.NewActivationDb(atxdbstore, idStore, mdb, uint64(app.Config.CONSENSUS.LayersPerEpoch), validator, lg.WithName("atxDb"))
+	beaconProvider := &oracle.EpochBeaconProvider{}
+	blockOracle := oracle.NewMinerBlockOracle(int32(numOfInstances), layersPerEpoch, atxdb, beaconProvider, vrfSigner, nodeID, lg.WithName("blockOracle"))
+	blockValidator := oracle.NewBlockEligibilityValidator(int32(numOfInstances), layersPerEpoch, atxdb, beaconProvider, crypto.ValidateVRF, lg.WithName("blkElgValidator"))
+
 	trtl := tortoise.NewAlgorithm(layerSize, mdb, lg.WithName("trtl"))
 	msh := mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, processor, lg.WithName("mesh")) //todo: what to do with the logger?
 
@@ -316,8 +325,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	blockProducer := miner.NewBlockBuilder(nodeID, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, atxdb.ProcessAtx, lg.WithName("blockProducer"))
 	blockListener := sync.NewBlockListener(swarm, blockValidator, msh, 2*time.Second, 4, lg.WithName("blockListener"))
 
-	postDifficulty := proving.Difficulty(5)                                                                                                   // TODO: put this in config (long term - make it dynamically calculated)
-	nipstBuilder := nipst.NewNipstBuilder([]byte(nodeID.Key), 1024, postDifficulty, 100, postClient, poetClient, lg.WithName("nipstBuilder")) // TODO: use both keys in the nodeID
+	nipstBuilder := nipst.NewNipstBuilder([]byte(nodeID.Key), commitmentConfig.SpaceUnit, commitmentConfig.Difficulty, 100, postClient, poetClient, lg.WithName("nipstBuilder")) // TODO: use both keys in the nodeID
 	atxBuilder := activation.NewBuilder(nodeID, atxdb, swarm, atxdb, msh, app.Config.CONSENSUS.LayersPerEpoch,
 		nipstBuilder, clock.Subscribe(), lg.WithName("atxBuilder"))
 
@@ -436,9 +444,6 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 		log.Panic("Could not retrieve identity err=%v", err)
 	}
 
-	//crypto.NewPublicKey(sgn.Verifier().Bytes())
-	// TODO ADD KEY
-
 	oracle.SetServerAddress(app.Config.OracleServer)
 	oracleClient := oracle.NewOracleClientWithWorldID(uint64(app.Config.OracleServerWorldId))
 	oracleClient.Register(true, app.edSgn.PublicKey().String()) // todo: configure no faulty nodes
@@ -446,22 +451,11 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	app.unregisterOracle = func() { oracleClient.Unregister(true, app.edSgn.PublicKey().String()) }
 
 	nodeID := types.NodeId{Key: app.edSgn.PublicKey().String()}
-	bo := oracle.NewBlockOracleFromClient(oracleClient, int(app.Config.CONSENSUS.NodesPerLayer), nodeID)
-	//nodesPerLayer := app.Config.CONSENSUS.NodesPerLayer
-	//layersPerEpoch := app.Config.CONSENSUS.LayersPerEpoch
-	//activationDb := &activation.ActivationDb{Atxs: database.NewMemDatabase()} // TODO: initialize properly
-	//beaconProvider := &oracle.EpochBeaconProvider{}                           // TODO: initialize properly
-	//vrfSigner := crypto.NewVRFSigner(nil)                                     // TODO: use VRF private key
-	//nodeID := types.NodeId{Key: "x"}
-	//bo := oracle.NewMinerBlockOracle(nodesPerLayer, layersPerEpoch, activationDb, beaconProvider, vrfSigner, nodeID)
-	//bv := oracle.NewBlockEligibilityValidator(nodesPerLayer, layersPerEpoch, activationDb, beaconProvider,
-	//	crypto.ValidateVRF)
-	hareOracle := oracle.NewHareOracleFromClient(oracleClient)
 
+	hareOracle := oracle.NewHareOracleFromClient(oracleClient)
 	apiConf := &app.Config.API
 
-	validatorMock := sync.BlockValidatorMock{}
-	poet, err := nipst.NewRemoteRPCPoetClient("127.0.0.1", 10)
+	poet, err := nipst.NewRemoteRPCPoetClient(app.Config.PoETServer, 10)
 	if err != nil {
 		log.Error("poet server not found")
 	}
@@ -472,7 +466,15 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 		log.Panic("error starting atx db: %v", err)
 	}
 
-	err = app.initServices(nodeID, swarm, dbStorepath, app.edSgn, bo, validatorMock, hareOracle, app.Config.LayerAvgSize, nipst.NewPostClient(), poet, atxdbstore)
+	npstCfg := nipst.PostParams{
+		Difficulty:           5,
+		NumberOfProvenLabels: 10,
+		SpaceUnit:            1024,
+	}
+
+	vrfSigner := crypto.NewVRFSigner(app.edSgn.ToBuffer())
+
+	err = app.initServices(nodeID, swarm, dbStorepath, app.edSgn, hareOracle, app.Config.LayerAvgSize, nipst.NewPostClient(), poet, atxdbstore, vrfSigner, npstCfg)
 	if err != nil {
 		log.Error("cannot start services %v", err.Error())
 		return

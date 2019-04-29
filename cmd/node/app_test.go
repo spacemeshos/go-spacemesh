@@ -2,14 +2,12 @@ package node
 
 import (
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/address"
 	apiCfg "github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/oracle"
@@ -101,25 +99,17 @@ func (app *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat s
 		dbStorepath := storeFormat + string(runningName)
 
 		dbStore := database.NewMemDatabase()
-		meshDB := mesh.NewMemMeshDB(log.Log{})
-		layersPerEpoch := smApp.Config.CONSENSUS.LayersPerEpoch
-		lg := log.NewDefault(nodeID.Key[:5])
-		validator := nipst.NewValidator(nipst.PostParams{
-			Difficulty:           5,
-			NumberOfProvenLabels: 10,
-			SpaceUnit:            1024,
-		})
-		activationDB := activation.NewActivationDb(dbStore, activation.NewIdentityStore(database.NewMemDatabase()), meshDB, uint64(layersPerEpoch), validator, lg.WithName("atxDB"))
-		beaconProvider := &oracle.EpochBeaconProvider{}
-		blockOracle := oracle.NewMinerBlockOracle(int32(numOfInstances), layersPerEpoch, activationDB, beaconProvider, vrfSigner, nodeID, lg.WithName("blockOracle"))
-		blockValidator := oracle.NewBlockEligibilityValidator(int32(numOfInstances), layersPerEpoch, activationDB, beaconProvider, crypto.ValidateVRF, lg.WithName("blkElgValidator"))
 
 		hareOracle := oracle.NewLocalOracle(rolacle, numOfInstances, nodeID)
 		hareOracle.Register(true, pub.String())
 
 		layerSize := numOfInstances
-
-		err = smApp.initServices(nodeID, swarm, dbStorepath, edSgn, blockOracle, blockValidator, hareOracle, layerSize, nipst.NewPostClient(), poet, dbStore)
+		npstCfg := nipst.PostParams{
+			Difficulty:           5,
+			NumberOfProvenLabels: 10,
+			SpaceUnit:            1024,
+		}
+		err = smApp.initServices(nodeID, swarm, dbStorepath, edSgn, hareOracle, layerSize, nipst.NewPostClient(), poet, dbStore, vrfSigner, npstCfg)
 		r.NoError(err)
 		smApp.setupGenesis(apiCfg.DefaultGenesisConfig())
 
