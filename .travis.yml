@@ -2,13 +2,20 @@ language: go
 sudo: false
 go: 1.11.x
 
-env: GO111MODULE=on
+env:
+        global:
+                - GO111MODULE=on
+                - LD_LIBRARY_PATH=$GOPATH/src/github.com/spacemeshos/go-bls/external/mcl/lib
+                - LIBRARY_PATH=$GOPATH/src/github.com/spacemeshos/go-bls/external/mcl/lib
 
 services:
   - docker
 
 # for some reason /usr/local is owned by a different user in travis, so we transfer ownership to the current user:
-before_install: sudo chown -R $(whoami) /usr/local
+before_install:
+        - sudo chown -R $(whoami) /usr/local
+        - sudo apt-get update
+        - sudo apt-get install gcc musl-dev git
 
 install: make install
 
@@ -24,6 +31,7 @@ jobs:
     script: make lint
   - name: test
     script:
+      - make bls
       - make genproto
       - make test
   - name: test-tidy-fmt

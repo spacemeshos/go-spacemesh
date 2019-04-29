@@ -17,6 +17,7 @@ require (
 	github.com/prometheus/common v0.2.0
 	github.com/seehuhn/mt19937 v0.0.0-20180715112136-cc7708819361
 	github.com/spacemeshos/ed25519 v0.0.0-20190316215305-5878e62449c1
+	github.com/spacemeshos/go-bls v0.0.0-20190501135049-3477b11cba67
 	github.com/spacemeshos/merkle-tree v0.0.0-20190508113057-1a71b988924a
 	github.com/spacemeshos/poet v0.0.0-20190508113556-f56ec5e8f063
 	github.com/spacemeshos/post v0.0.0-20190508113329-07bdc2589d98

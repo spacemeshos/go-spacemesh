@@ -2,6 +2,7 @@ package signing
 
 import (
 	"github.com/spacemeshos/ed25519"
+	"github.com/spacemeshos/go-bls"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/stretchr/testify/assert"
 	"testing"
@@ -47,4 +48,8 @@ func TestPublicKey_ShortString(t *testing.T) {
 
 	pub = NewPublicKey([]byte{1, 2})
 	assert.Equal(t, pub.String(), pub.ShortString())
+}
+
+func Test_BLS(t *testing.T) {
+	bls.NewSecretKey()
 }

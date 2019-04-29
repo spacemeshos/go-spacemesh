@@ -39,6 +39,10 @@ else
 endif
 .PHONY: install
 
+bls:
+	./scripts/make-bls.sh
+.PHONY: bls
+
 genproto:
 ifeq ($(OS),Windows_NT) 
 	scripts\win\genproto.bat
