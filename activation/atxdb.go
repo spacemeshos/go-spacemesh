@@ -187,12 +187,12 @@ func (db *ActivationDb) ValidateAtx(atx *types.ActivationTx) error {
 		return fmt.Errorf("cannot get NIPST Challenge hash: %v", err)
 	}
 	db.log.Info("NIPST challenge: %v, OK nipst %v", hash.ShortString(), atx.NIPSTChallenge.String())
-	//todo: add validation of nipst
+
 	if err = db.nipstValidator.Validate(atx.Nipst, *atx.Nipst.NipstChallenge); err != nil {
 		return fmt.Errorf("NIPST not valid: %v", err)
 	}
 	if !atx.Nipst.ValidateNipstChallenge(hash) {
-		return fmt.Errorf("NIPST challenge hash mismatch")
+		return fmt.Errorf("expectedChallenge: %x, n.nipstChallenge: %x", hash, atx.Nipst)
 	}
 	return nil
 }
@@ -250,12 +250,13 @@ func (db *ActivationDb) incValidAtxCounter(ech types.EpochId) error {
 	return db.atxs.Put(key, common.Uint32ToBytes(common.BytesToUint32(val)+1))
 }
 
-func (db *ActivationDb) ActiveSetIds(ech types.EpochId) uint32 {
+func (db *ActivationDb) ActiveSetSize(ech types.EpochId) uint32 {
 	key := epochCounterKey(ech)
 	db.RLock()
 	val, err := db.atxs.Get(key)
 	db.RUnlock()
 	if err != nil {
+		//0 is not a valid active set size
 		return 0
 	}
 	return common.BytesToUint32(val)

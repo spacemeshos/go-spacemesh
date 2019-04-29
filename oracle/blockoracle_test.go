@@ -26,7 +26,7 @@ type mockActivationDB struct {
 	atxPublicationLayer types.LayerID
 }
 
-func (a mockActivationDB) ActiveSetIds(epoch types.EpochId) uint32 {
+func (a mockActivationDB) ActiveSetSize(epoch types.EpochId) uint32 {
 	return a.activeSetSize
 }
 

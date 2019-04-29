@@ -216,7 +216,7 @@ func TestMesh_processBlockATXs(t *testing.T) {
 	block1.ATXs = append(block1.ATXs, atxs...)
 
 	atxdb.ProcessBlockATXs(block1)
-	assert.Equal(t, 3, int(atxdb.ActiveSetIds(1)))
+	assert.Equal(t, 3, int(atxdb.ActiveSetSize(1)))
 
 	// check that further atxs dont affect current epoch count
 	atxs2 := []*types.ActivationTx{
@@ -235,8 +235,8 @@ func TestMesh_processBlockATXs(t *testing.T) {
 	block2.ATXs = append(block2.ATXs, atxs2...)
 	atxdb.ProcessBlockATXs(block2)
 
-	assert.Equal(t, 3, int(atxdb.ActiveSetIds(1)))
-	assert.Equal(t, 3, int(atxdb.ActiveSetIds(2)))
+	assert.Equal(t, 3, int(atxdb.ActiveSetSize(1)))
+	assert.Equal(t, 3, int(atxdb.ActiveSetSize(2)))
 }
 
 func TestActivationDB_ValidateAtx(t *testing.T) {

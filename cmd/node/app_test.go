@@ -64,6 +64,7 @@ func (app *AppTestSuite) TearDownTest() {
 	if err := os.RemoveAll("../tmp"); err != nil {
 		log.Error("error while cleaning up tmp dir: %v", err)
 	}
+	//poet should clean up after himself
 	if matches, err := filepath.Glob("*.bin"); err != nil {
 		log.Error("error while finding PoET bin files: %v", err)
 	} else {

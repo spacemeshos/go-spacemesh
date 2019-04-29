@@ -42,9 +42,6 @@ func (v BlockEligibilityValidator) BlockEligible(block *types.Block) (bool, erro
 			return false, err
 		}
 		activeSetSize = atx.ActiveSetSize
-		if epochNumber.IsGenesis() && activeSetSize < GenesisActiveSetSize {
-			activeSetSize = GenesisActiveSetSize
-		}
 	}
 
 	numberOfEligibleBlocks, err := getNumberOfEligibleBlocks(activeSetSize, v.committeeSize, v.layersPerEpoch, v.log)

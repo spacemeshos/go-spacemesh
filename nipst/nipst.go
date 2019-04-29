@@ -127,9 +127,6 @@ func (n *NIPST) Valid() bool {
 
 func (n *NIPST) ValidateNipstChallenge(expectedChallenge *common.Hash) bool {
 	ret := bytes.Equal(expectedChallenge[:], n.NipstChallenge[:])
-	if !ret {
-		log.Warning("expectedChallenge: %x, n.nipstChallenge: %x", expectedChallenge, n.NipstChallenge)
-	}
 	return ret
 }
 

@@ -45,7 +45,7 @@ type NIPSTChallenge struct {
 func (challenge *NIPSTChallenge) Hash() (*common.Hash, error) {
 	ncBytes, err := NIPSTChallengeAsBytes(challenge)
 	if err != nil {
-		return nil, fmt.Errorf("marshaling NIPST Challenge failed: %v: ", err)
+		return nil, err
 	}
 	hash := common.Hash(sha256.Sum256(ncBytes))
 	return &hash, nil
@@ -119,5 +119,5 @@ func (t ActivationTx) Id() AtxId {
 }
 
 func (t ActivationTx) ShortId() string {
-	return t.Id().String()[2:7]
+	return t.Id().ShortId()
 }

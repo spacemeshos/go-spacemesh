@@ -78,7 +78,8 @@ func (h Hash) String() string {
 }
 
 func (h Hash) ShortString() string {
-	return h.Hex()[2:7]
+	l := len(h.Hex())
+	return h.Hex()[Min(2, l):Min(7, l)]
 }
 
 // Format implements fmt.Formatter, forcing the byte slice to be formatted as is,

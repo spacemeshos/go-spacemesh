@@ -466,7 +466,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 		log.Error("poet server not found")
 	}
 
-	dbStorepath := "/tmp/"
+	dbStorepath := app.Config.DataDir
 	atxdbstore, err := database.NewLDBDatabase(dbStorepath+"atx", 0, 0)
 	if err != nil {
 		log.Panic("error starting atx db: %v", err)

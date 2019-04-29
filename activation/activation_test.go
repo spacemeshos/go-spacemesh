@@ -15,7 +15,7 @@ import (
 
 type ActiveSetProviderMock struct{}
 
-func (ActiveSetProviderMock) ActiveSetIds(l types.EpochId) uint32 {
+func (ActiveSetProviderMock) ActiveSetSize(l types.EpochId) uint32 {
 	return 10
 }
 
@@ -119,7 +119,7 @@ func TestBuilder_BuildActivationTx(t *testing.T) {
 
 	bytes, err := challenge.Hash()
 	npst2 := nipst.NewNIPSTWithChallenge(bytes)
-	act := types.NewActivationTxWithChallenge(challenge, b.activeSet.ActiveSetIds(1), b.mesh.GetLatestView(), npst2, true)
+	act := types.NewActivationTxWithChallenge(challenge, b.activeSet.ActiveSetSize(1), b.mesh.GetLatestView(), npst2, true)
 
 	err = b.PublishActivationTx(layers.LatestLayer().GetEpoch(layersPerEpoch))
 	assert.NoError(t, err)
@@ -180,7 +180,7 @@ func TestBuilder_PublishActivationTx(t *testing.T) {
 	assert.NoError(t, err)
 	activesetCache.put(common.BytesToHash(v), 10)
 
-	act := types.NewActivationTx(b.nodeId, b.GetLastSequence(b.nodeId)+1, atx.Id(), atx.PubLayerIdx+10, 0, atx.Id(), b.activeSet.ActiveSetIds(1), b.mesh.GetLatestView(), npst2, true)
+	act := types.NewActivationTx(b.nodeId, b.GetLastSequence(b.nodeId)+1, atx.Id(), atx.PubLayerIdx+10, 0, atx.Id(), b.activeSet.ActiveSetSize(1), b.mesh.GetLatestView(), npst2, true)
 	err = b.PublishActivationTx(1)
 	assert.NoError(t, err)
 
@@ -228,7 +228,7 @@ func TestBuilder_PublishActivationTxSerialize(t *testing.T) {
 
 	assert.NoError(t, err)
 
-	act := types.NewActivationTx(b.nodeId, b.GetLastSequence(b.nodeId)+1, atx.Id(), atx.PubLayerIdx+10, 0, atx.Id(), b.activeSet.ActiveSetIds(1), b.mesh.GetLatestView(), npst, true)
+	act := types.NewActivationTx(b.nodeId, b.GetLastSequence(b.nodeId)+1, atx.Id(), atx.PubLayerIdx+10, 0, atx.Id(), b.activeSet.ActiveSetSize(1), b.mesh.GetLatestView(), npst, true)
 
 	bt, err := types.AtxAsBytes(act)
 	assert.NoError(t, err)
