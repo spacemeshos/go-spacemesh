@@ -188,12 +188,10 @@ func (db *ActivationDb) ValidateAtx(atx *types.ActivationTx) error {
 	}
 	db.log.Info("NIPST challenge: %v, OK nipst %v", hash.ShortString(), atx.NIPSTChallenge.String())
 
-	if err = db.nipstValidator.Validate(atx.Nipst, *atx.Nipst.NipstChallenge); err != nil {
+	if err = db.nipstValidator.Validate(atx.Nipst, *hash); err != nil {
 		return fmt.Errorf("NIPST not valid: %v", err)
 	}
-	if !atx.Nipst.ValidateNipstChallenge(hash) {
-		return fmt.Errorf("expectedChallenge: %x, n.nipstChallenge: %x", hash, atx.Nipst)
-	}
+
 	return nil
 }
 
@@ -262,6 +260,7 @@ func (db *ActivationDb) ActiveSetSize(ech types.EpochId) uint32 {
 	return common.BytesToUint32(val)
 }
 
+//this function is not thread safe and needs to be called under a global lock
 func (db *ActivationDb) addAtxToEpoch(epochId types.EpochId, atx types.AtxId) error {
 	ids, err := db.atxs.Get(epochId.ToBytes())
 	var atxs []types.AtxId
@@ -287,6 +286,7 @@ func getNodeIdKey(id types.NodeId) []byte {
 	return []byte(id.Key)
 }
 
+//this function is not thread safe and needs to be called under a global lock
 func (db *ActivationDb) addAtxToNodeId(nodeId types.NodeId, atx types.AtxId) error {
 	key := getNodeIdKey(nodeId)
 	db.log.Info("adding atx %v to nodeId %v", atx.String()[2:7], nodeId.Key[:5])

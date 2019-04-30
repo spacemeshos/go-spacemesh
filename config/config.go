@@ -70,7 +70,7 @@ type BaseConfig struct {
 	LayerDurationSec int    `mapstructure:"layer-duration-sec"`
 	LayerAvgSize     int    `mapstructure:"layer-average-size"`
 
-	PoETServer string `mapstructure:"poet_server"`
+	PoETServer string `mapstructure:"poet-server"`
 }
 
 // DefaultConfig returns the default configuration for a spacemesh node
