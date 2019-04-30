@@ -1,12 +1,14 @@
 package nipst
 
 import (
+	"bytes"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/poet/shared"
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/proving"
 	"os"
@@ -41,18 +43,18 @@ type PoetProvingServiceClient interface {
 
 	// submit registers a challenge in the proving service
 	// open round suited for the specified duration.
-	submit(challenge common.Hash, duration SeqWorkTicks) (*poetRound, error)
+	submit(challenge common.Hash, duration SeqWorkTicks) (*PoetRound, error)
 
 	// subscribeMembershipProof returns a proof which can convince a verifier
 	// that the prover challenge was included in the proving service
 	// round root commitment.
-	subscribeMembershipProof(r *poetRound, challenge common.Hash, timeout time.Duration) (*membershipProof, error)
+	subscribeMembershipProof(r *PoetRound, challenge common.Hash, timeout time.Duration) (*MembershipProof, error)
 
 	// proof returns the PoET for a specific round root commitment,
 	// that can convince a verifier that at least T time must have
 	// passed from when the initial challenge (the root commitment)
 	// was learned.
-	subscribeProof(r *poetRound, timeout time.Duration) (*poetProof, error)
+	subscribeProof(r *PoetRound, timeout time.Duration) (*PoetProof, error)
 }
 
 // NIPST is Non-Interactive Proof of Space-Time.
@@ -63,52 +65,51 @@ type PoetProvingServiceClient interface {
 type NIPST struct {
 	// id is the unique identifier which
 	// the entire NIPST chain is bound to.
-	id []byte
+	Id []byte
 
 	// space is the amount of storage which the prover
 	// requires to dedicate for generating the NIPST.
-	space uint64
+	Space uint64
 
 	// duration is a the amount of sequential work ticks
 	// which is used as a proxy for time since an actual clock time
 	// cannot be verified. The duration implies time unit
 	// which the prover need to reserve the PoST space/data for, and is
 	// a part of PoET.
-	duration SeqWorkTicks
+	Duration SeqWorkTicks
 
-	// poetChallenge is the challenge for PoET which is
-	// constructed from the PoST commitment for the initial NIPST (per id),
-	// and from the previous NIPSTs chain for all the following.
-	poetChallenge *common.Hash
+	// nipstChallenge is the challenge for PoET which is
+	// constructed from fields in the activation transaction.
+	NipstChallenge *common.Hash
 
 	// poetRound is the round of the PoET proving service
 	// in which the PoET challenge was included in.
-	poetRound *poetRound
+	PoetRound *PoetRound
 
 	// poetMembershipProof is the proof that the PoET challenge
 	// was included in the proving service round root commitment.
-	poetMembershipProof *membershipProof
+	PoetMembershipProof *MembershipProof
 
 	// poetProof is the proof that at least T time must have
 	// passed from when the initial challenge (the root commitment)
 	// was learned.
-	poetProof *poetProof
+	PoetProof *PoetProof
 
 	// postChallenge is the challenge for PoST which is
 	// constructed from the PoET proof.
-	postChallenge *common.Hash
+	PostChallenge *common.Hash
 
 	// postProof is the proof that the prover data
 	// is still stored (or was recomputed).
-	postProof *PostProof
+	PostProof *PostProof
 }
 
 // initialNIPST returns an initial NIPST instance to be used in the NIPST construction.
 func initialNIPST(id []byte, space uint64, duration SeqWorkTicks) *NIPST {
 	return &NIPST{
-		id:       id,
-		space:    space,
-		duration: duration,
+		Id:       id,
+		Space:    space,
+		Duration: duration,
 	}
 }
 
@@ -121,8 +122,12 @@ func (n *NIPST) load() {
 }
 
 func (n *NIPST) Valid() bool {
-	// TODO: implement
 	return true
+}
+
+func (n *NIPST) ValidateNipstChallenge(expectedChallenge *common.Hash) bool {
+	ret := bytes.Equal(expectedChallenge[:], n.NipstChallenge[:])
+	return ret
 }
 
 type ActivationBuilder interface {
@@ -147,6 +152,8 @@ type NIPSTBuilder struct {
 	errChan chan error
 
 	nipst *NIPST
+
+	log log.Log
 }
 
 func NewNIPSTBuilder(
@@ -161,6 +168,7 @@ func NewNIPSTBuilder(
 	verifyPoetMembership verifyPoetMembershipFunc,
 	verifyPoet verifyPoetFunc,
 	verifyPoetMatchesMembership verifyPoetMatchesMembershipFunc,
+	log log.Log,
 ) *NIPSTBuilder {
 	return &NIPSTBuilder{
 		id:                          id,
@@ -177,11 +185,42 @@ func NewNIPSTBuilder(
 		stop:                        false,
 		errChan:                     make(chan error),
 		nipst:                       initialNIPST(id, space, duration),
+		log:                         log,
 	}
 }
 
-func (nb *NIPSTBuilder) BuildNIPST(challenge common.Hash) (*NIPST, error) {
-	defTimeout := 5 * time.Second // TODO: replace temporary solution
+var numberOfProvenLabels = uint8(10)
+
+func NewNipstBuilder(
+	id []byte,
+	spaceUnit uint64,
+	difficulty proving.Difficulty,
+	duration SeqWorkTicks,
+	postProver PostProverClient,
+	poetProver PoetProvingServiceClient,
+	log log.Log,
+) *NIPSTBuilder {
+	return &NIPSTBuilder{
+		id:                          id,
+		space:                       spaceUnit,
+		duration:                    duration,
+		difficulty:                  difficulty,
+		numberOfProvenLabels:        numberOfProvenLabels,
+		postProver:                  postProver,
+		poetProver:                  poetProver,
+		verifyPost:                  verifyPost,
+		verifyPoetMembership:        verifyPoetMembership,
+		verifyPoet:                  verifyPoet,
+		verifyPoetMatchesMembership: verifyPoetMatchesMembership,
+		stop:                        false,
+		errChan:                     make(chan error),
+		nipst:                       initialNIPST(id, spaceUnit, duration),
+		log:                         log,
+	}
+}
+
+func (nb *NIPSTBuilder) BuildNIPST(challenge *common.Hash) (*NIPST, error) {
+	defTimeout := 10 * time.Second // TODO: replace temporary solution
 	nb.nipst.load()
 
 	if !nb.IsPostInitialized() {
@@ -189,39 +228,39 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge common.Hash) (*NIPST, error) {
 	}
 
 	// Phase 0: Submit challenge to PoET service.
-	if nb.nipst.poetRound == nil {
+	if nb.nipst.PoetRound == nil {
 		poetChallenge := challenge
 
-		log.Info("submitting challenge to PoET proving service "+
+		nb.log.Info("submitting challenge to PoET proving service "+
 			"(service id: %v, challenge: %x)",
 			nb.poetProver.id(), poetChallenge)
 
-		round, err := nb.poetProver.submit(poetChallenge, nb.duration)
+		round, err := nb.poetProver.submit(*poetChallenge, nb.duration)
 		if err != nil {
 			return nil, fmt.Errorf("failed to submit challenge to poet service: %v", err)
 		}
 
-		log.Info("challenge submitted to PoET proving service "+
+		nb.log.Info("challenge submitted to PoET proving service "+
 			"(service id: %v, round id: %v)",
-			nb.poetProver.id(), round.id)
+			nb.poetProver.id(), round.Id)
 
-		nb.nipst.poetChallenge = &poetChallenge
-		nb.nipst.poetRound = round
+		nb.nipst.NipstChallenge = poetChallenge
+		nb.nipst.PoetRound = round
 		nb.nipst.persist()
 	}
 
 	// Phase 1: Wait for PoET service round membership proof.
-	if nb.nipst.poetMembershipProof == nil {
-		log.Info("querying round membership proof from PoET proving service "+
+	if nb.nipst.PoetMembershipProof == nil {
+		nb.log.Info("querying round membership proof from PoET proving service "+
 			"(service id: %v, round id: %v, challenge: %x)",
-			nb.poetProver.id(), nb.nipst.poetRound.id, nb.nipst.poetChallenge)
+			nb.poetProver.id(), nb.nipst.PoetRound.Id, nb.nipst.NipstChallenge)
 
-		mproof, err := nb.poetProver.subscribeMembershipProof(nb.nipst.poetRound, *nb.nipst.poetChallenge, defTimeout)
+		mproof, err := nb.poetProver.subscribeMembershipProof(nb.nipst.PoetRound, *nb.nipst.NipstChallenge, defTimeout)
 		if err != nil {
 			return nil, fmt.Errorf("failed to receive PoET round membership proof: %v", err)
 		}
 
-		res, err := nb.verifyPoetMembership(nb.nipst.poetChallenge, mproof)
+		res, err := nb.verifyPoetMembership(nb.nipst.NipstChallenge, mproof)
 		if err != nil {
 			return nil, fmt.Errorf("received an invalid PoET round membership proof: %v", err)
 		}
@@ -229,30 +268,30 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge common.Hash) (*NIPST, error) {
 			return nil, fmt.Errorf("received an invalid PoET round membership proof")
 		}
 
-		log.Info("received a valid round membership proof from PoET proving service "+
+		nb.log.Info("received a valid round membership proof from PoET proving service "+
 			"(service id: %v, round id: %v, challenge: %x)",
-			nb.poetProver.id(), nb.nipst.poetRound.id, nb.nipst.poetChallenge)
+			nb.poetProver.id(), nb.nipst.PoetRound.Id, nb.nipst.NipstChallenge)
 
-		nb.nipst.poetMembershipProof = mproof
+		nb.nipst.PoetMembershipProof = mproof
 		nb.nipst.persist()
 	}
 
 	// Phase 2: Wait for PoET service proof.
-	if nb.nipst.poetProof == nil {
-		log.Info("waiting for PoET proof from PoET proving service "+
+	if nb.nipst.PoetProof == nil {
+		nb.log.Info("waiting for PoET proof from PoET proving service "+
 			"(service id: %v, round id: %v, round root commitment: %x)",
-			nb.poetProver.id(), nb.nipst.poetRound.id, nb.nipst.poetMembershipProof.root)
+			nb.poetProver.id(), nb.nipst.PoetRound.Id, nb.nipst.PoetMembershipProof.Root)
 
-		proof, err := nb.poetProver.subscribeProof(nb.nipst.poetRound, defTimeout)
+		proof, err := nb.poetProver.subscribeProof(nb.nipst.PoetRound, defTimeout)
 		if err != nil {
 			return nil, fmt.Errorf("failed to receive PoET proof: %v", err)
 
 		}
 
-		if !nb.verifyPoetMatchesMembership(nb.nipst.poetMembershipProof, proof) {
+		if !nb.verifyPoetMatchesMembership(nb.nipst.PoetMembershipProof, proof) {
 			return nil, fmt.Errorf("received an invalid PoET proof due to "+
 				"commitment value (expected: %x, found: %x)",
-				nb.nipst.poetMembershipProof.root, proof.commitment)
+				nb.nipst.PoetMembershipProof.Root, proof.Commitment)
 		}
 
 		res, err := nb.verifyPoet(proof)
@@ -263,21 +302,23 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge common.Hash) (*NIPST, error) {
 			return nil, fmt.Errorf("received an invalid PoET proof")
 		}
 
-		log.Info("received a valid PoET proof from PoET proving service "+
+		nb.log.Info("received a valid PoET proof from PoET proving service "+
 			"(service id: %v, round id: %v)",
-			nb.poetProver.id(), nb.nipst.poetRound.id)
+			nb.poetProver.id(), nb.nipst.PoetRound.Id)
 
-		nb.nipst.poetProof = proof
+		nb.nipst.PoetProof = proof
 		nb.nipst.persist()
 	}
 
 	// Phase 3: PoST execution.
-	if nb.nipst.postProof == nil {
-		postChallenge := common.BytesToHash(nb.nipst.poetProof.commitment)
+	if nb.nipst.PostProof == nil {
+		postChallenge := common.BytesToHash(nb.nipst.PoetProof.Commitment)
 
-		log.Info("starting PoST execution (challenge: %x)",
+		nb.log.Info("starting PoST execution (challenge: %x)",
 			postChallenge)
 
+		nb.nipst.Id = nb.id
+		nb.nipst.Space = nb.space
 		proof, err := nb.postProver.execute(nb.id, postChallenge, nb.numberOfProvenLabels, nb.difficulty, defTimeout)
 		if err != nil {
 			return nil, fmt.Errorf("failed to execute PoST: %v", err)
@@ -291,16 +332,18 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge common.Hash) (*NIPST, error) {
 			return nil, fmt.Errorf("received an invalid PoST proof")
 		}
 
-		log.Info("finished PoST execution (proof: %v)", proof)
+		nb.log.Info("finished PoST execution (proof: %v)", proof)
 
-		nb.nipst.postChallenge = &postChallenge
-		nb.nipst.postProof = proof
+		nb.nipst.PostChallenge = &postChallenge
+		nb.nipst.PostProof = proof
 		nb.nipst.persist()
 	}
 
-	log.Info("finished NIPST construction")
+	nb.log.Info("finished NIPST construction")
 
-	return nb.nipst, nil
+	ret := nb.nipst
+	nb.nipst = &NIPST{}
+	return ret, nil
 }
 
 func (nb *NIPSTBuilder) IsPostInitialized() bool {
@@ -308,7 +351,7 @@ func (nb *NIPSTBuilder) IsPostInitialized() bool {
 	labelsPath := filepath.Join(postDataPath, hex.EncodeToString(nb.id))
 	_, err := os.Stat(labelsPath)
 	if os.IsNotExist(err) {
-		log.Info("could not find labels path at %v", labelsPath)
+		nb.log.Info("could not find labels path at %v", labelsPath)
 		return false
 	}
 	return true
@@ -326,7 +369,40 @@ func (nb *NIPSTBuilder) InitializePost() (*PostProof, error) {
 		return nil, fmt.Errorf("failed to initialize PoST: %v", err)
 	}
 
-	log.Info("finished PoST initialization (commitment: %v)", commitment)
+	nb.log.Info("finished PoST initialization (commitment: %v)", commitment)
 
 	return commitment, nil
+}
+
+func NewNIPSTWithChallenge(challenge *common.Hash) *NIPST {
+	return &NIPST{
+		Id:             []byte(nil),
+		Space:          0,
+		Duration:       0,
+		NipstChallenge: challenge,
+		PoetRound: &PoetRound{
+			Id: 0,
+		},
+		PoetMembershipProof: &MembershipProof{
+			Index: 0,
+			Root:  common.Hash{},
+			Proof: [][]byte(nil),
+		},
+		PoetProof: &PoetProof{
+			Commitment: []byte(nil),
+			N:          0,
+			Proof: &shared.Proof{
+				Phi: []byte(nil),
+				L:   [150]shared.Labels{},
+			},
+		},
+		PostChallenge: challenge,
+		PostProof: &PostProof{
+			Identity:     []byte(nil),
+			Challenge:    []byte(nil),
+			MerkleRoot:   []byte(nil),
+			ProofNodes:   [][]byte(nil),
+			ProvenLeaves: [][]byte(nil),
+		},
+	}
 }

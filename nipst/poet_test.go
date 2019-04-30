@@ -18,7 +18,7 @@ func newRPCPoetHarnessClient() (*RPCPoetClient, error) {
 		return nil, err
 	}
 
-	return newRPCPoetClient(h.PoetClient, h.TearDown), nil
+	return NewRPCPoetClient(h.PoetClient, h.TearDown), nil
 }
 
 type rpcPoetTestCase struct {

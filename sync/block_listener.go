@@ -87,7 +87,7 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 
 			blk, err := types.BytesAsBlock(data.Bytes())
 			if err != nil {
-				bl.Error("received invalid block %v", data.Bytes()[:7])
+				bl.Error("received invalid block %v", data.Bytes())
 				break
 			}
 

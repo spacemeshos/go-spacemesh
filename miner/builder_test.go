@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/address"
+	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/nipst"
@@ -73,8 +74,9 @@ func TestBlockBuilder_StartStop(t *testing.T) {
 	hareRes := []types.BlockID{types.BlockID(0), types.BlockID(1), types.BlockID(2), types.BlockID(3)}
 	hare := MockHare{res: hareRes}
 
-	builder := NewBlockBuilder(types.NodeId{}, n, beginRound, MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{},
-		log.New(n.Node.String(), "", ""))
+	atxprocesing := func(tx *types.ActivationTx) {}
+	orphans := MockOrphans{st: []types.BlockID{1, 2, 3}}
+	builder := NewBlockBuilder(types.NodeId{}, n, beginRound, MockCoin{}, orphans, hare, mockBlockOracle{}, atxprocesing, log.New(n.Node.String(), "", ""))
 
 	err := builder.Start()
 	assert.NoError(t, err)
@@ -104,10 +106,10 @@ func TestBlockBuilder_BlockIdGeneration(t *testing.T) {
 	hareRes := []types.BlockID{types.BlockID(0), types.BlockID(1), types.BlockID(2), types.BlockID(3)}
 	hare := MockHare{res: hareRes}
 
-	builder1 := NewBlockBuilder(types.NodeId{Key: "a"}, n1, beginRound, MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare,
-		mockBlockOracle{}, log.New(n1.Node.String(), "", ""))
-	builder2 := NewBlockBuilder(types.NodeId{Key: "b"}, n2, beginRound, MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare,
-		mockBlockOracle{}, log.New(n2.Node.String(), "", ""))
+	atxprocesing := func(tx *types.ActivationTx) {}
+
+	builder1 := NewBlockBuilder(types.NodeId{Key: "a"}, n1, beginRound, MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, atxprocesing, log.New(n1.Node.String(), "", ""))
+	builder2 := NewBlockBuilder(types.NodeId{Key: "b"}, n2, beginRound, MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, atxprocesing, log.New(n2.Node.String(), "", ""))
 
 	b1, _ := builder1.createBlock(1, types.AtxId{}, types.BlockEligibilityProof{}, nil, nil)
 
@@ -125,8 +127,7 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 	hareRes := []types.BlockID{types.BlockID(0), types.BlockID(1), types.BlockID(2), types.BlockID(3)}
 	hare := MockHare{res: hareRes}
 
-	builder := NewBlockBuilder(types.NodeId{}, n, beginRound, MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare,
-		mockBlockOracle{}, log.New(n.Node.String(), "", ""))
+	builder := NewBlockBuilder(types.NodeId{"anton", []byte("anton")}, n, beginRound, MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, nil, log.New(n.Node.String(), "", ""))
 
 	err := builder.Start()
 	assert.NoError(t, err)
@@ -145,33 +146,9 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 	builder.AddTransaction(trans[2].AccountNonce, trans[2].Origin, *trans[2].Recipient, big.NewInt(0).SetBytes(trans[2].Price))
 
 	atxs := []*types.ActivationTx{
-		types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")},
-			1,
-			types.AtxId{},
-			5,
-			1,
-			types.AtxId{},
-			5,
-			[]types.BlockID{1, 2, 3},
-			&nipst.NIPST{}),
-		types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")},
-			1,
-			types.AtxId{},
-			5,
-			1,
-			types.AtxId{},
-			5,
-			[]types.BlockID{1, 2, 3},
-			&nipst.NIPST{}),
-		types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")},
-			1,
-			types.AtxId{},
-			5,
-			1,
-			types.AtxId{},
-			5,
-			[]types.BlockID{1, 2, 3},
-			&nipst.NIPST{}),
+		types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")}, 1, types.AtxId{}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{}), true),
+		types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")}, 1, types.AtxId{}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{}), true),
+		types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")}, 1, types.AtxId{}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{}), true),
 	}
 
 	/*for _, atx := range atxs {
