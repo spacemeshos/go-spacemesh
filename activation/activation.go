@@ -287,16 +287,17 @@ func (b *Builder) GetLastSequence(node types.NodeId) uint64 {
 
 func (b *Builder) GetPositioningAtx(epochId types.EpochId) (*types.ActivationTx, error) {
 	posAtxId, err := b.GetPositioningAtxId(epochId)
-	if err == nil {
-		posAtx, err := b.db.GetAtx(*posAtxId)
-		if err != nil {
-			return nil, fmt.Errorf("cannot find pos atx: %v", err.Error())
+	if err != nil {
+		if b.prevATX != nil {
+			//if the atx was created by this miner but have not propagated as an atx to the notwork yet, use the cached atx
+			return b.prevATX, nil
+		} else {
+			return nil, fmt.Errorf("cannot find pos atx id: %v", err)
 		}
-		return posAtx, nil
-	} else if b.prevATX != nil {
-		//if the atx was created by this miner but have not propagated as an atx to the notwork yet, use the cached atx
-		return b.prevATX, nil
-	} else {
-		return nil, fmt.Errorf("cannot find pos atx id: %v", err)
 	}
+	posAtx, err := b.db.GetAtx(*posAtxId)
+	if err != nil {
+		return nil, fmt.Errorf("cannot find pos atx: %v", err.Error())
+	}
+	return posAtx, nil
 }
