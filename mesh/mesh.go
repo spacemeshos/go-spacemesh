@@ -196,24 +196,15 @@ func (m *Mesh) ValidateLayer(lyr *types.Layer) {
 	m.lvMutex.Lock()
 	m.verifiedLayer = lyr.Index()
 	m.lvMutex.Unlock()
+
 	if newPbase > oldPbase {
 		m.PushTransactions(oldPbase, newPbase)
-		m.addAtxs(oldPbase, newPbase)
 	}
 }
 
-func (m *Mesh) addAtxs(oldBase, newBase types.LayerID) {
-	for i := oldBase; i < newBase; i++ {
-
-		l, err := m.mdb.GetLayer(i)
-		if err != nil || l == nil {
-			m.Error("cannot find layer %v in db", i) //todo handle error
-			return
-		}
-		for _, blk := range l.Blocks() {
-			m.AtxDB.ProcessBlockATXs(blk)
-		}
-
+func (m *Mesh) addAtxs(l *types.Layer) {
+	for _, blk := range l.Blocks() {
+		m.AtxDB.ProcessBlockATXs(blk)
 	}
 }
 
@@ -274,8 +265,9 @@ func (m *Mesh) GetLayer(i types.LayerID) (*types.Layer, error) {
 	return m.mdb.GetLayer(i)
 }
 
-func (m *Mesh) GetLatestVerified() []types.BlockID {
-	layer, err := m.mdb.GetLayer(m.VerifiedLayer())
+func (m *Mesh) GetLatestView() []types.BlockID {
+	//todo: think about whether we want to use the most recent layer or the recent verified layer
+	layer, err := m.mdb.GetLayer(m.LatestLayer())
 	if err != nil {
 		panic("got an error trying to read verified layer")
 	}
@@ -292,6 +284,7 @@ func (m *Mesh) AddBlock(blk *types.Block) error {
 		m.Error("failed to add block %v  %v", blk.ID(), err)
 		return err
 	}
+	m.AtxDB.ProcessBlockATXs(blk)
 	m.SetLatestLayer(blk.Layer())
 	//new block add to orphans
 	m.handleOrphanBlocks(blk)
@@ -385,7 +378,7 @@ func (m *Mesh) AccumulateRewards(rewardLayer types.LayerID, params Config) {
 	for _, bl := range l.Blocks() {
 		atx, err := m.AtxDB.GetAtx(bl.ATXID)
 		if err != nil {
-			m.Log.Error("Atx not found %v", bl.ATXID)
+			m.Log.Error("Atx not found %v layer %v block %v", bl.ATXID.String()[:5], bl.LayerIndex, bl.Id)
 			continue
 		}
 		ids = append(ids, atx.NodeId.Key)

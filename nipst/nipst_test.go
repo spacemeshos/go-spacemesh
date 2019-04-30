@@ -5,6 +5,7 @@ import (
 	"flag"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/proving"
 	"github.com/stretchr/testify/require"
@@ -18,7 +19,6 @@ var minerID = []byte("id")
 var idsToCleanup [][]byte
 var spaceUnit = uint64(1024)
 var difficulty = proving.Difficulty(5)
-var numberOfProvenLabels = uint8(10)
 
 type PostProverClientMock struct{}
 
@@ -37,17 +37,17 @@ func (p *PoetProvingServiceClientMock) id() string {
 }
 
 func (p *PoetProvingServiceClientMock) submit(challenge common.Hash,
-	duration SeqWorkTicks) (*poetRound, error) {
-	return &poetRound{}, nil
+	duration SeqWorkTicks) (*PoetRound, error) {
+	return &PoetRound{}, nil
 }
 
-func (p *PoetProvingServiceClientMock) subscribeMembershipProof(r *poetRound, challenge common.Hash,
-	timeout time.Duration) (*membershipProof, error) {
-	return &membershipProof{}, nil
+func (p *PoetProvingServiceClientMock) subscribeMembershipProof(r *PoetRound, challenge common.Hash,
+	timeout time.Duration) (*MembershipProof, error) {
+	return &MembershipProof{}, nil
 }
 
-func (p *PoetProvingServiceClientMock) subscribeProof(r *poetRound, timeout time.Duration) (*poetProof, error) {
-	return &poetProof{}, nil
+func (p *PoetProvingServiceClientMock) subscribeProof(r *PoetRound, timeout time.Duration) (*PoetProof, error) {
+	return &PoetProof{}, nil
 }
 
 func TestNIPSTBuilderWithMocks(t *testing.T) {
@@ -56,9 +56,9 @@ func TestNIPSTBuilderWithMocks(t *testing.T) {
 	postProverMock := &PostProverClientMock{}
 	poetProverMock := &PoetProvingServiceClientMock{}
 	verifyPostMock := func(*PostProof, uint64, uint8, proving.Difficulty) (bool, error) { return true, nil }
-	verifyMembershipMock := func(*common.Hash, *membershipProof) (bool, error) { return true, nil }
-	verifyPoetMock := func(*poetProof) (bool, error) { return true, nil }
-	verifyPoetMembershipMock := func(*membershipProof, *poetProof) bool { return true }
+	verifyMembershipMock := func(*common.Hash, *MembershipProof) (bool, error) { return true, nil }
+	verifyPoetMock := func(*PoetProof) (bool, error) { return true, nil }
+	verifyPoetMembershipMock := func(*MembershipProof, *PoetProof) bool { return true }
 
 	nb := NewNIPSTBuilder(
 		minerID,
@@ -72,8 +72,10 @@ func TestNIPSTBuilderWithMocks(t *testing.T) {
 		verifyMembershipMock,
 		verifyPoetMock,
 		verifyPoetMembershipMock,
+		log.NewDefault(string(minerID)),
 	)
-	npst, err := nb.BuildNIPST(common.BytesToHash([]byte("anton")))
+	hash := common.BytesToHash([]byte("anton"))
+	npst, err := nb.BuildNIPST(&hash)
 	assert.NoError(err)
 
 	assert.True(npst.Valid())
@@ -95,7 +97,7 @@ func TestNIPSTBuilderWithClients(t *testing.T) {
 }
 
 func buildNIPST(r *require.Assertions, spaceUnit uint64, difficulty proving.Difficulty, numberOfProvenLabels uint8, nipstChallenge common.Hash) *NIPST {
-	postProver := newPostClient()
+	postProver := NewPostClient()
 	poetProver, err := newRPCPoetHarnessClient()
 	r.NotNil(poetProver)
 	defer func() {
@@ -115,8 +117,9 @@ func buildNIPST(r *require.Assertions, spaceUnit uint64, difficulty proving.Diff
 		verifyPoetMembership,
 		verifyPoet,
 		verifyPoetMatchesMembership,
+		log.NewDefault(string(minerID)),
 	)
-	npst, err := nb.BuildNIPST(nipstChallenge)
+	npst, err := nb.BuildNIPST(&nipstChallenge)
 	r.NoError(err)
 	return npst
 }
@@ -131,7 +134,7 @@ func TestNewNIPSTBuilderNotInitialized(t *testing.T) {
 	minerIDNotInitialized := []byte("not initialized")
 	nipstChallenge := common.BytesToHash([]byte("anton"))
 
-	postProver := newPostClient()
+	postProver := NewPostClient()
 	poetProver, err := newRPCPoetHarnessClient()
 	r.NotNil(poetProver)
 	defer func() {
@@ -151,9 +154,10 @@ func TestNewNIPSTBuilderNotInitialized(t *testing.T) {
 		verifyPoetMembership,
 		verifyPoet,
 		verifyPoetMatchesMembership,
+		log.NewDefault(string(minerID)),
 	)
 
-	npst, err := nb.BuildNIPST(nipstChallenge)
+	npst, err := nb.BuildNIPST(&nipstChallenge)
 	r.EqualError(err, "PoST not initialized")
 	r.Nil(npst)
 
@@ -162,7 +166,7 @@ func TestNewNIPSTBuilderNotInitialized(t *testing.T) {
 	r.NoError(err)
 	r.NotNil(initialProof)
 
-	npst, err = nb.BuildNIPST(nipstChallenge)
+	npst, err = nb.BuildNIPST(&nipstChallenge)
 	r.NoError(err)
 	r.NotNil(npst)
 
@@ -225,7 +229,7 @@ func TestMain(m *testing.M) {
 func initPost(id []byte, space uint64, numberOfProvenLabels uint8, difficulty proving.Difficulty) {
 	defTimeout := 5 * time.Second
 	idsToCleanup = append(idsToCleanup, id)
-	_, err := newPostClient().initialize(id, space, numberOfProvenLabels, difficulty, defTimeout)
+	_, err := NewPostClient().initialize(id, space, numberOfProvenLabels, difficulty, defTimeout)
 	logIfError(err)
 }
 

@@ -28,7 +28,7 @@ func duration(duration string) (dur time.Duration) {
 func DefaultConfig() Config {
 	return Config{
 		NodesPerLayer:    200,
-		LayersPerEpoch:   4032, // 12 layers/hr * 24 hrs/day * 14 days/epoch TODO: make it 4096 so it's 2^12?
+		LayersPerEpoch:   3, // 12 layers/hr * 24 hrs/day * 14 days/epoch TODO: make it 4096 so it's 2^12?
 		RoundTime:        duration("1s"),
 		StartTime:        time.Now(),
 		NetworkDelayMax:  duration("500ms"),

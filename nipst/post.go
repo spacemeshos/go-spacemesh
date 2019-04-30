@@ -50,12 +50,13 @@ func verifyPost(proof *PostProof, space uint64, numberOfProvenLabels uint8, diff
 
 type PostClient struct{}
 
-func newPostClient() *PostClient {
+func NewPostClient() *PostClient {
 	return &PostClient{}
 }
 
 func (c *PostClient) initialize(id []byte, space uint64, numberOfProvenLabels uint8, difficulty proving.Difficulty, timeout time.Duration) (commitment *PostProof, err error) {
 	// TODO(moshababo): implement timeout
+	//TODO: implement persistence
 	if space%merkle.NodeSize != 0 {
 		return nil, fmt.Errorf("space (%d) is not a multiple of merkle.NodeSize (%d)", space, merkle.NodeSize)
 	}

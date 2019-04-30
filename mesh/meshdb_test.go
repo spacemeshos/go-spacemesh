@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/google/uuid"
+	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/rand"
@@ -40,15 +41,7 @@ func TestMeshDb_Block(t *testing.T) {
 	mdb := getMeshdb()
 	blk := types.NewExistingBlock(123, 1, nil)
 	addTransactionsToBlock(blk, 5)
-	blk.AddAtx(types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")},
-		1,
-		types.AtxId{},
-		5,
-		1,
-		types.AtxId{},
-		5,
-		[]types.BlockID{1, 2, 3},
-		&nipst.NIPST{}))
+	blk.AddAtx(types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")}, 1, types.AtxId{}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{}), true))
 	mdb.AddBlock(blk)
 	block, err := mdb.GetBlock(123)
 
@@ -70,7 +63,7 @@ func TestMeshDB_AddBlock(t *testing.T) {
 
 	addTransactionsToBlock(block1, 4)
 
-	block1.AddAtx(types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")}, 1, types.AtxId{}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, &nipst.NIPST{}))
+	block1.AddAtx(types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")}, 1, types.AtxId{}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{}), true))
 	err := mdb.AddBlock(block1)
 	assert.NoError(t, err)
 

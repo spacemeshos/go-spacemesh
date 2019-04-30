@@ -27,6 +27,8 @@ func AddCommands(cmd *cobra.Command) {
 		config.OracleServer, "The oracle server url. (temporary) ")
 	cmd.PersistentFlags().IntVar(&config.OracleServerWorldId, "oracle_server_worldid",
 		config.OracleServerWorldId, "The worldid to use with the oracle server (temporary) ")
+	cmd.PersistentFlags().StringVar(&config.PoETServer, "poet-server",
+		config.OracleServer, "The poet server url. (temporary) ")
 	cmd.PersistentFlags().StringVar(&config.GenesisTime, "genesis-time",
 		config.GenesisTime, "Time of the genesis layer in 2019-13-02T17:02:00+00:00 format")
 	cmd.PersistentFlags().IntVar(&config.LayerDurationSec, "layer-duration-sec",
