@@ -13,7 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 )
 
-func (p *discovery) newPingRequestHandler() func(msg server.Message) []byte {
+func (p *protocol) newPingRequestHandler() func(msg server.Message) []byte {
 	return func(msg server.Message) []byte {
 		p.logger.Info("handle ping request")
 		req := &pb.Ping{}
@@ -62,7 +62,7 @@ func extractAddress(from net.Addr, addrString string) (string, error) {
 	return net.JoinHostPort(addr, port), nil
 }
 
-func (p *discovery) verifyPinger(from net.Addr, pi *pb.Ping) error {
+func (p *protocol) verifyPinger(from net.Addr, pi *pb.Ping) error {
 	k, err := p2pcrypto.NewPubkeyFromBytes(pi.Me.NodeId)
 
 	if err != nil {
@@ -79,21 +79,18 @@ func (p *discovery) verifyPinger(from net.Addr, pi *pb.Ping) error {
 	}
 
 	// todo : Validate ToAddr or drop it.
-
-	//todo: check the address provided with an extra ping before updating. ( if we haven't checked it for a while )
+	// todo: check the address provided with an extra ping before updating. ( if we haven't checked it for a while )
 	// todo: decide on best way to know our ext address
-	p.table.Update(discNode{node.New(k, tcp), udp})
+
+	dn := discNodeFromNode(node.New(k, tcp), udp)
+	// inbound ping is the actual source of this node info
+	p.table.AddAddress(dn, dn)
 	return nil
 }
 
-func (p *discovery) Ping(peer p2pcrypto.PublicKey) error {
+// Ping notifies `peer` about our p2p identity.
+func (p *protocol) Ping(peer p2pcrypto.PublicKey) error {
 	p.logger.Info("send ping request Peer: %v", peer)
-
-	//addresses := p.table.internalLookup(peer)
-	//if len(addresses) == 0 || addresses[0].String() != peer.String() {
-	//	return errors.New("Cant find node in routing table")
-	//}
-	//toAddr := addresses[0].udpAddress
 
 	data := &pb.Ping{Me: &pb.NodeInfo{NodeId: p.local.PublicKey().Bytes(), TCPAddress: p.localTcpAddress, UDPAddress: p.localUdpAddress}, ToAddr: ""}
 	payload, err := proto.Marshal(data)
@@ -103,7 +100,7 @@ func (p *discovery) Ping(peer p2pcrypto.PublicKey) error {
 	ch := make(chan []byte)
 	foo := func(msg []byte) {
 		defer close(ch)
-		p.logger.Info("handle ping response")
+		p.logger.Info("handle ping response from %v", peer.String())
 		data := &pb.Ping{}
 		if err := proto.Unmarshal(msg, data); err != nil {
 			p.logger.Error("could not unmarshal block data")

@@ -1,154 +1,236 @@
 package dht
 
 import (
-	"github.com/btcsuite/btcutil/base58"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"context"
+	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"testing"
+	"time"
 )
 
-type testNode struct {
-	svc  *service.Node
-	d    *MockDHT
-	dscv *discovery
-}
+const tstBootstrapTimeout = 5 * time.Minute
 
-func newTestNode(simulator *service.Simulator) *testNode {
-	nd := simulator.NewNode()
-	d := &MockDHT{}
-	disc := NewDiscoveryProtocol(nd.Node, d, nd, log.New(nd.String(), "", ""))
-	return &testNode{nd, &MockDHT{}, disc}
-}
+func TestNew(t *testing.T) {
+	ln, _ := node.GenerateTestNode(t)
 
-func TestPing_Ping(t *testing.T) {
-
+	cfg := config.DefaultConfig()
 	sim := service.NewSimulator()
-	p1 := newTestNode(sim)
-	p2 := newTestNode(sim)
-	p3 := sim.NewNode()
 
-	//p1.d.InternalLookupFunc = func(key p2pcrypto.PublicKey) []discNode {
-	//	return []discNode{{p2.svc.Node, p2.svc.Node.Address()}}
-	//}
+	n1 := sim.NewNodeFrom(ln.Node)
 
-	err := p1.dscv.Ping(p2.svc.PublicKey())
+	d := New(ln, cfg.SwarmConfig, n1)
+	assert.NotNil(t, d, "D is not nil")
+}
+
+func simNodeWithDHT(t *testing.T, sc config.SwarmConfig, sim *service.Simulator) (*service.Node, *Discovery) {
+	ln, _ := node.GenerateTestNode(t)
+	n := sim.NewNodeFrom(ln.Node)
+	dht := New(ln, sc, n)
+	//n.AttachDHT(dht)
+
+	return n, dht
+}
+
+func TestDHT_BootstrapAbort(t *testing.T) {
+	// Create a bootstrap node
+	sim := service.NewSimulator()
+	bn, _ := simNodeWithDHT(t, config.DefaultConfig().SwarmConfig, sim)
+	// config for other nodes
+	cfg2 := config.DefaultConfig()
+	cfg2.SwarmConfig.RandomConnections = 2
+	cfg2.SwarmConfig.BootstrapNodes = []string{node.StringFromNode(bn.Node)}
+	_, dht := simNodeWithDHT(t, cfg2.SwarmConfig, sim)
+	// Create a bootstrap node to abort
+	Ctx, Cancel := context.WithCancel(context.Background())
+	// Abort bootstrap after 500 milliseconds
+	Cancel()
+	// Should return error after 2 seconds
+	err := dht.Bootstrap(Ctx)
+	require.EqualError(t, err, ErrBootAbort.Error(), "Should be able to abort bootstrap")
+}
+
+func TestKadDHT_VerySmallBootstrap(t *testing.T) {
+	connections := 1
+
+	bncfg := config.DefaultConfig()
+	sim := service.NewSimulator()
+
+	bn, _ := node.GenerateTestNode(t)
+	b1 := sim.NewNodeFrom(bn.Node)
+	bdht := New(bn, bncfg.SwarmConfig, b1)
+
+	extra, _ := node.GenerateTestNode(t)
+	extrasvc := sim.NewNodeFrom(extra.Node)
+	edht := New(extra, bncfg.SwarmConfig, extrasvc)
+	edht.rt.AddAddress(generateDiscNode(), discNodeFromNode(extra.Node, extra.Node.Address()))
+
+	bdht.rt.AddAddress(discNodeFromNode(extra.Node, extra.Address()), discNodeFromNode(bn.Node, bn.Address()))
+
+	cfg := config.DefaultConfig().SwarmConfig
+	cfg.Gossip = false
+	cfg.Bootstrap = true
+	cfg.RandomConnections = connections
+	//cfg.RoutingTableBucketSize = 2
+	cfg.BootstrapNodes = append(cfg.BootstrapNodes, node.StringFromNode(bn.Node))
+
+	ln, _ := node.GenerateTestNode(t)
+	n := sim.NewNodeFrom(ln.Node)
+	dht := New(ln, cfg, n)
+	err := dht.Bootstrap(context.TODO())
+
 	require.NoError(t, err)
 
-	//p2.d.InternalLookupFunc = func(key p2pcrypto.PublicKey) []discNode {
-	//	return []discNode{{p1.svc.Node, p1.svc.Node.Address()}}
-	//}
-
-	err = p2.dscv.Ping(p1.svc.PublicKey())
+	res, err := bdht.rt.Lookup(ln.PublicKey())
 	require.NoError(t, err)
+	require.Equal(t, res.String(), ln.String())
 
-	//p1.d.InternalLookupFunc = func(key p2pcrypto.PublicKey) []discNode {
-	//	return []discNode{{p3.Node, p3.Node.Address()}}
-	//}
+	res2, _ := dht.rt.Lookup(bn.PublicKey())
+	//require.Error(t, err2)
+	require.NotEqual(t, res2.Node, bn.Node)
+	//bootstrap nodes are removed at the end of bootstrap
 
-	err = p1.dscv.Ping(p3.PublicKey())
-	require.Error(t, err)
 }
 
-func TestPing_Ping_Concurrency(t *testing.T) {
-	//TODO : bigger concurrency test
-	sim := service.NewSimulator()
-	node1 := newTestNode(sim)
-	node2 := newTestNode(sim)
-	node3 := newTestNode(sim)
-	node4 := newTestNode(sim)
+func TestKadDHT_BootstrapSingleBoot(t *testing.T) {
+	numPeers := 500
 
-	done := make(chan struct{})
-
-	go func() {
-		err := node1.dscv.Ping(node2.svc.PublicKey())
-		require.NoError(t, err)
-		done <- struct{}{}
-	}()
-
-	go func() {
-		err := node1.dscv.Ping(node3.svc.PublicKey())
-		require.NoError(t, err)
-		done <- struct{}{}
-	}()
-
-	go func() {
-		err := node1.dscv.Ping(node4.svc.PublicKey())
-		require.NoError(t, err)
-		done <- struct{}{}
-	}()
-
-	<-done
-	<-done
-	<-done
-}
-
-//todo : test verifypinger
-
-func TestFindNodeProtocol_FindNode(t *testing.T) {
-
-	sim := service.NewSimulator()
-	n1 := newTestNode(sim)
-	n2 := newTestNode(sim)
-
-	idarr, err := n1.dscv.FindNode(n2.svc.Node.PublicKey(), node.GenerateRandomNodeData().PublicKey())
-
-	require.NoError(t, err, "Should not return error")
-	// when routing table is empty we get an empty result
-	// todo: maybe this should error ?
-	require.Equal(t, []discNode{}, idarr, "Should be an empty array")
-}
-
-func TestFindNodeProtocol_FindNode2(t *testing.T) {
-	randnode := generateDiscNode()
-
+	bncfg := config.DefaultConfig()
 	sim := service.NewSimulator()
 
-	n1 := newTestNode(sim)
-	n2 := newTestNode(sim)
+	bn, _ := node.GenerateTestNode(t)
+	b1 := sim.NewNodeFrom(bn.Node)
+	_ = New(bn, bncfg.SwarmConfig, b1)
 
-	n2.d.InternalLookupFunc = func(key p2pcrypto.PublicKey) []discNode {
-		return []discNode{randnode}
+	cfg := config.DefaultConfig().SwarmConfig
+	cfg.Gossip = false
+	cfg.Bootstrap = true
+	cfg.BootstrapNodes = append(cfg.BootstrapNodes, node.StringFromNode(bn.Node))
+	cfg.RandomConnections = 8
+
+	donech := make(chan struct{}, numPeers)
+
+	nods, dhts := make([]node.Node, numPeers), make([]*Discovery, numPeers)
+
+	for i := 0; i < numPeers; i++ {
+		ln, _ := node.GenerateTestNode(t)
+		n := sim.NewNodeFrom(ln.Node)
+		dht := New(ln, cfg, n)
+		nods[i] = ln.Node
+		dhts[i] = dht
+		go func() {
+			err := dht.Bootstrap(context.TODO())
+			require.NoError(t, err)
+			donech <- struct{}{}
+		}()
 	}
 
-	n2.dscv.table = n2.d
+	tm := time.NewTimer(tstBootstrapTimeout)
 
-	idarr, err := n1.dscv.FindNode(n2.svc.Node.PublicKey(), randnode.PublicKey())
-
-	expected := []discNode{randnode}
-
-	require.NoError(t, err, "Should not return error")
-	require.Equal(t, expected, idarr, "Should be array that contains the node")
-	//
-	for _, n := range generateDiscNodes(10) {
-		expected = append(expected, n)
-	}
-	// sort because this is how its returned
-	expected = SortByDhtID(expected, randnode.DhtID())
-
-	n2.d.InternalLookupFunc = func(key p2pcrypto.PublicKey) []discNode {
-		return expected
-	}
-
-	n2.dscv.table = n2.d
-
-	idarr, err = n1.dscv.FindNode(n2.svc.Node.PublicKey(), randnode.PublicKey())
-
-	require.NoError(t, err, "Should not return error")
-	require.Equal(t, expected, idarr, "Should be same array")
-}
-
-func Test_ToNodeInfo(t *testing.T) {
-	many := generateDiscNodes(100)
-
-	for i := 0; i < len(many); i++ {
-		nds := toNodeInfo(many, many[i].String())
-		for j := 0; j < len(many)-1; j++ {
-			if base58.Encode(nds[j].NodeId) == many[i].String() {
-				t.Error("it was there")
-			}
+	for i := 0; i < numPeers; i++ {
+		select {
+		case <-donech:
+			break
+		case <-tm.C:
+			t.Fatal("didn't boot successfully")
 		}
 	}
+
+	testDHTs(t, dhts, 8, 15)
+}
+
+func TestKadDHT_Bootstrap(t *testing.T) {
+	numPeers := 500
+	min := 8
+	bootnum := 5
+
+	sim := service.NewSimulator()
+
+	bncfg := config.DefaultConfig()
+
+	cfg := config.DefaultConfig().SwarmConfig
+	cfg.Gossip = false
+	cfg.Bootstrap = true
+
+	for b := 0; b < bootnum; b++ {
+		bn, _ := node.GenerateTestNode(t)
+		b1 := sim.NewNodeFrom(bn.Node)
+		_ = New(bn, bncfg.SwarmConfig, b1)
+		cfg.BootstrapNodes = append(cfg.BootstrapNodes, node.StringFromNode(bn.Node))
+	}
+
+	cfg.RandomConnections = min
+
+	donech := make(chan struct{}, numPeers)
+
+	nods, dhts := make([]node.Node, numPeers), make([]*Discovery, numPeers)
+
+	for i := 0; i < numPeers; i++ {
+		ln, _ := node.GenerateTestNode(t)
+		n := sim.NewNodeFrom(ln.Node)
+		dht := New(ln, cfg, n)
+		nods[i] = ln.Node
+		dhts[i] = dht
+		go func() {
+			err := dht.Bootstrap(context.TODO())
+			require.NoError(t, err)
+			donech <- struct{}{}
+		}()
+	}
+
+	tm := time.NewTimer(tstBootstrapTimeout)
+
+	for i := 0; i < numPeers; i++ {
+		select {
+		case <-donech:
+			break
+		case <-tm.C:
+			t.Fatal("didn't boot successfully")
+		}
+	}
+
+	testDHTs(t, dhts, 8, 15)
+}
+
+func testDHTs(t *testing.T, dhts []*Discovery, min, avg int) {
+	all := 0
+	for i, dht := range dhts {
+		size := dht.rt.NumAddresses()
+		all += size
+		if min > 0 && size < min {
+			t.Fatalf("dht %d (%v) has %d peers min is %d", i, dht.local.String(), size, min)
+		}
+	}
+	avgSize := all / len(dhts)
+	if avg > 0 && avgSize < avg {
+		t.Fatalf("avg rt size is %d, was expecting %d", avgSize, avg)
+	}
+}
+
+func Test_findNodeFailure(t *testing.T) {
+	sim := service.NewSimulator()
+
+	bsnode, bsinfo := node.GenerateTestNode(t)
+
+	cfg := config.DefaultConfig().SwarmConfig
+	cfg.RandomConnections = 1
+	cfg.RoutingTableBucketSize = 2
+	cfg.BootstrapNodes = []string{node.StringFromNode(bsinfo)}
+	_, dht2 := simNodeWithDHT(t, cfg, sim)
+
+	go func() {
+		<-time.After(time.Second / 2)
+		realnode := sim.NewNodeFrom(bsinfo)
+		d := New(bsnode, config.DefaultConfig().SwarmConfig, realnode)
+		<-time.After(time.Second)
+		nd, _ := simNodeWithDHT(t, config.DefaultConfig().SwarmConfig, sim)
+		d.rt.AddAddress(discNodeFromNode(nd.Node, nd.Node.Address()), discNodeFromNode(d.local.Node, d.local.Address()))
+	}()
+
+	err := dht2.Bootstrap(context.TODO())
+	require.NoError(t, err)
+	sz := dht2.Size()
+	require.Equal(t, sz, 1)
 }

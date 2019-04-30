@@ -3,7 +3,6 @@ package dht
 import (
 	"errors"
 	"github.com/golang/protobuf/proto"
-	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/dht/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
@@ -12,48 +11,18 @@ import (
 	"time"
 )
 
-// todo: should be a kad param and configurable
-const maxNearestNodesResults = 20
-const tableQueryTimeout = time.Second * 3
-const findNodeTimeout = 1 * time.Minute
-
-// Protocol name
-//const protocol = "/dht/1.0/find-node/"
-
-// ErrEncodeFailed is returned when we failed to encode data to byte array
-var ErrEncodeFailed = errors.New("failed to encode data")
-
-func (p *discovery) newFindNodeRequestHandler() func(msg server.Message) []byte {
+func (p *protocol) newGetAddressesRequestHandler() func(msg server.Message) []byte {
 	return func(msg server.Message) []byte {
+		start := time.Now()
+		p.logger.Info("Got a find_node request at from ", msg.Sender().String())
+
 		// TODO: if we don't know who is that peer (a.k.a first time we hear from this address)
-		// 		 we must ensure that he's indeed listening on that address.
+		// 		 we must ensure that he's indeed listening on that address = check last pong
 
-		req := &pb.FindNodeReq{}
-		err := proto.Unmarshal(msg.Bytes(), req)
+		results := p.table.AddressCache()
+		//todo: limit results to message size
 
-		if err != nil {
-			p.logger.Error("Error opening FIND_NODE message")
-			return nil
-		}
-
-		// use the dht table to generate the response
-		nodeID, err := p2pcrypto.NewPubkeyFromBytes(req.NodeID)
-
-		if err != nil {
-			p.logger.Error("Error reading public key from FIND_NODE message")
-			return nil
-		}
-
-		count := int(crypto.MinInt32(req.MaxResults, maxNearestNodesResults))
-
-		// get up to count nearest peers to nodeDhtId
-		results := p.table.internalLookup(nodeID)
-
-		if len(results) > count {
-			results = results[:count]
-		}
-
-		resp := &pb.FindNodeResp{NodeInfos: toNodeInfo(results, msg.Sender().String())}
+		resp := &pb.Addresses{NodeInfos: toNodeInfo(results, msg.Sender().String())}
 
 		payload, err := proto.Marshal(resp)
 
@@ -62,31 +31,23 @@ func (p *discovery) newFindNodeRequestHandler() func(msg server.Message) []byte 
 			return nil
 		}
 
+		p.logger.Info("responding a find_node request at from after", msg.Sender().String(), time.Now().Sub(start))
+
 		return payload
 	}
 }
 
-// FindNode Send a single find node request to a remote node
-func (p *discovery) FindNode(serverNode p2pcrypto.PublicKey, target p2pcrypto.PublicKey) ([]discNode, error) {
+// GetAddresses Send a single find node request to a remote node
+func (p *protocol) GetAddresses(server p2pcrypto.PublicKey) ([]discNode, error) {
+	start := time.Now()
 	var err error
-
-	nodeID := target.Bytes()
-	data := &pb.FindNodeReq{
-		NodeID:     nodeID,
-		MaxResults: maxNearestNodesResults,
-	}
-
-	payload, err := proto.Marshal(data)
-	if err != nil {
-		return nil, err
-	}
 
 	// response handler
 	ch := make(chan []discNode)
 	foo := func(msg []byte) {
 		defer close(ch)
-		p.logger.Info("handle find_node response")
-		data := &pb.FindNodeResp{}
+		//p.logger.Info("handle find_node response from %v", serverNode.String())
+		data := &pb.Addresses{}
 		if err := proto.Unmarshal(msg, data); err != nil {
 			p.logger.Error("could not unmarshal block data")
 			return
@@ -97,18 +58,19 @@ func (p *discovery) FindNode(serverNode p2pcrypto.PublicKey, target p2pcrypto.Pu
 		ch <- fromNodeInfos(data.NodeInfos)
 	}
 
-	err = p.msgServer.SendRequest(FIND_NODE, payload, serverNode, foo)
+	err = p.msgServer.SendRequest(GET_ADDRESSES, []byte(""), server, foo)
 
 	if err != nil {
 		return nil, err
 	}
 
-	timeout := time.NewTimer(findNodeTimeout)
+	timeout := time.NewTimer(MessageTimeout)
 	select {
 	case nodes := <-ch:
 		if nodes == nil {
 			return nil, errors.New("empty result set")
 		}
+		p.logger.With().Debug("find_node_time_to_recv", log.String("from", server.String()), log.Duration("time_elapsed", time.Now().Sub(start)))
 		return nodes, nil
 	case <-timeout.C:
 		return nil, errors.New("request timed out")
@@ -145,7 +107,8 @@ func fromNodeInfos(nodes []*pb.NodeInfo) []discNode {
 			log.Error("There was an error parsing nodeid : ", n.NodeId, ", skipping it. err: ", err)
 			continue
 		}
-		node := discNode{node.New(pubk, n.TCPAddress), n.UDPAddress}
+		nd := node.New(pubk, n.TCPAddress)
+		node := discNodeFromNode(nd, n.UDPAddress)
 		res[i] = node
 
 	}

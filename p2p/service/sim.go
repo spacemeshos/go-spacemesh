@@ -188,7 +188,7 @@ func simulatorMetadata() P2PMetadata {
 
 // ProcessDirectProtocolMessage
 func (sn *Node) ProcessDirectProtocolMessage(sender p2pcrypto.PublicKey, protocol string, payload Data, metadata P2PMetadata) error {
-	sn.sleep(sn.rcvDelay)
+	//sn.sleep(sn.rcvDelay)
 	sn.sim.mutex.RLock()
 	c, ok := sn.sim.protocolDirectHandler[sn.PublicKey().String()][protocol]
 	sn.sim.mutex.RUnlock()
@@ -223,14 +223,16 @@ func (sn *Node) SendMessage(peerPubkey p2pcrypto.PublicKey, protocol string, pay
 }
 
 func (sn *Node) sendMessageImpl(nodeID p2pcrypto.PublicKey, protocol string, payload Data) error {
+	start := time.Now()
 	sn.sim.mutex.RLock()
 	thec, ok := sn.sim.protocolDirectHandler[nodeID.String()][protocol]
 	sn.sim.mutex.RUnlock()
+	log.Info("simulator mutex delay was : %v", time.Now().Sub(start))
 	if ok {
 		thec <- simDirectMessage{simulatorMetadata(), payload, sn.Node.PublicKey()}
+		log.Info("simulator sending delay was : %v", time.Now().Sub(start))
 		return nil
 	}
-	log.Debug("%v >> %v (%v)", sn.Node.PublicKey(), nodeID, payload)
 	return errors.New("could not find " + protocol + " handler for node: " + nodeID.String())
 }
 

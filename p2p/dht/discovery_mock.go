@@ -8,7 +8,7 @@ import (
 
 // MockDHT is a mocked dht
 type MockDHT struct {
-	UpdateFunc         func(n discNode)
+	UpdateFunc         func(n, src node.Node)
 	updateCount        int
 	SelectPeersFunc    func(qty int) []node.Node
 	bsres              error
@@ -19,12 +19,12 @@ type MockDHT struct {
 	lookupErr          error
 }
 
-func (m *MockDHT) Remove(p node.Node) {
+func (m *MockDHT) Remove(key p2pcrypto.PublicKey) {
 
 }
 
 // SetUpdate sets the function to run on an issued update
-func (m *MockDHT) SetUpdate(f func(n discNode)) {
+func (m *MockDHT) SetUpdate(f func(n, addr node.Node)) {
 	m.UpdateFunc = f
 }
 
@@ -35,9 +35,9 @@ func (m *MockDHT) SetLookupResult(node node.Node, err error) {
 }
 
 // Update is a dht update operation it updates the updatecount
-func (m *MockDHT) Update(n discNode) {
+func (m *MockDHT) Update(n, src node.Node) {
 	if m.UpdateFunc != nil {
-		m.UpdateFunc(n)
+		m.UpdateFunc(n, src)
 	}
 	m.updateCount++
 }
@@ -96,4 +96,84 @@ func (m *MockDHT) SetLocalAddresses(tcp, udp string) {
 func (m *MockDHT) Size() int {
 	//todo: set size
 	return m.updateCount
+}
+
+// mockAddrBook
+type mockAddrBook struct {
+	addAddressFunc func(n, src discNode)
+	addressCount   int
+
+	LookupFunc func(p2pcrypto.PublicKey) (discNode, error)
+	lookupRes  discNode
+	lookupErr  error
+
+	GetAddressFunc func() *KnownAddress
+	GetAddressRes  *KnownAddress
+
+	AddressCacheResult []discNode
+}
+
+func (m *mockAddrBook) RemoveAddress(key p2pcrypto.PublicKey) {
+
+}
+
+// SetUpdate sets the function to run on an issued update
+func (m *mockAddrBook) SetUpdate(f func(n, addr discNode)) {
+	m.addAddressFunc = f
+}
+
+// SetLookupResult sets the result ok a lookup operation
+func (m *mockAddrBook) SetLookupResult(node discNode, err error) {
+	m.lookupRes = node
+	m.lookupErr = err
+}
+
+// AddAddress mock
+func (m *mockAddrBook) AddAddress(n, src discNode) {
+	if m.addAddressFunc != nil {
+		m.addAddressFunc(n, src)
+	}
+	m.addressCount++
+}
+
+// AddAddresses mock
+func (m *mockAddrBook) AddAddresses(n []discNode, src discNode) {
+	if m.addAddressFunc != nil {
+		for _, addr := range n {
+			m.addAddressFunc(addr, src)
+			m.addressCount++
+		}
+	}
+}
+
+// AddAddressCount counts AddAddress calls
+func (m *mockAddrBook) AddAddressCount() int {
+	return m.addressCount
+}
+
+// AddressCache mock
+func (m *mockAddrBook) AddressCache() []discNode {
+	return m.AddressCacheResult
+}
+
+// Lookup mock
+func (m *mockAddrBook) Lookup(pubkey p2pcrypto.PublicKey) (discNode, error) {
+	if m.LookupFunc != nil {
+		return m.LookupFunc(pubkey)
+	}
+	return m.lookupRes, m.lookupErr
+}
+
+// GetAddress mock
+func (m *mockAddrBook) GetAddress() *KnownAddress {
+	if m.GetAddressFunc != nil {
+		return m.GetAddressFunc()
+	}
+	return m.GetAddressRes
+}
+
+// NumAddresses mock
+func (m *mockAddrBook) NumAddresses() int {
+	//todo: mockAddrBook size
+	return m.addressCount
 }

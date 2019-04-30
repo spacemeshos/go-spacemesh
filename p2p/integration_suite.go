@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-const saveResults = false
+const saveResults = true
 
 type NodeTestInstance interface {
 	Service
@@ -43,7 +43,7 @@ func (its *IntegrationTestSuite) SetupSuite() {
 
 	bootcfg := config.DefaultConfig()
 	bootcfg.SwarmConfig.Bootstrap = false
-	bootcfg.SwarmConfig.Gossip = true
+	bootcfg.SwarmConfig.Gossip = false
 	bootcfg.SwarmConfig.RandomConnections = its.NeighborsCount
 
 	// start boot
@@ -60,9 +60,20 @@ func (its *IntegrationTestSuite) SetupSuite() {
 		testLog("BOOTNODE : %v", boot[i].LocalNode().String())
 	}
 
+	for i := 0; i < len(boot); i++ {
+		for j := 0; j < len(boot); j++ {
+			if j == i {
+				continue
+			}
+			udpAddr := boot[j].udpnetwork.LocalAddr()
+			pk := boot[j].lNode.PublicKey()
+			boot[i].dht.Update(node.New(pk, udpAddr.String()), boot[i].lNode.Node)
+		}
+	}
+
 	cfg := config.DefaultConfig()
 	cfg.SwarmConfig.Bootstrap = true
-	cfg.SwarmConfig.Gossip = true
+	cfg.SwarmConfig.Gossip = false
 	cfg.SwarmConfig.RandomConnections = its.NeighborsCount
 	cfg.SwarmConfig.BootstrapNodes = StringIdentifiers(boot...)
 

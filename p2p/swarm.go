@@ -237,8 +237,6 @@ func (s *swarm) Start() error {
 
 	// TODO : insert new addresses to discovery
 
-	s.lNode.Debug("beggining bootstrap")
-
 	go s.checkTimeDrifts()
 
 	if s.config.SwarmConfig.Bootstrap {
@@ -771,7 +769,7 @@ func (s *swarm) Disconnect(peer p2pcrypto.PublicKey) {
 	metrics.OutboundPeers.Add(-1)
 
 	// todo: don't remove if we know this is a valid peer for later
-	s.dht.Remove(node.New(peer, "")) // address doesn't matter because we only check dhtid
+	s.dht.Remove(peer) // address doesn't matter because we only check dhtid
 
 	s.morePeersReq <- struct{}{}
 }
