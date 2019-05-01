@@ -25,7 +25,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/version"
 	"io/ioutil"
 	"math/rand"
-
 	"os"
 	"os/signal"
 	"runtime"
@@ -444,21 +443,29 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 		log.Panic("Could not retrieve identity err=%v", err)
 	}
 
+	vrfPublicKey, vrfPrivateKey, err := crypto.GenerateVRFKeys()
+	if err != nil {
+		log.Panic("Could not retrieve vrf err=%v", err)
+	}
+
+	poet, err := nipst.NewRemoteRPCPoetClient(app.Config.PoETServer, 2 *time.Second)
+	if err != nil {
+		log.Error("poet server not found on addr %v, err: %v", app.Config.PoETServer, err)
+		return
+	}
+
 	oracle.SetServerAddress(app.Config.OracleServer)
 	oracleClient := oracle.NewOracleClientWithWorldID(uint64(app.Config.OracleServerWorldId))
 	oracleClient.Register(true, app.edSgn.PublicKey().String()) // todo: configure no faulty nodes
 
 	app.unregisterOracle = func() { oracleClient.Unregister(true, app.edSgn.PublicKey().String()) }
 
-	nodeID := types.NodeId{Key: app.edSgn.PublicKey().String()}
+	nodeID := types.NodeId{Key: app.edSgn.PublicKey().String(), VRFPublicKey:vrfPublicKey}
 
 	hareOracle := oracle.NewHareOracleFromClient(oracleClient)
 	apiConf := &app.Config.API
 
-	poet, err := nipst.NewRemoteRPCPoetClient(app.Config.PoETServer, 10)
-	if err != nil {
-		log.Error("poet server not found")
-	}
+
 
 	dbStorepath := app.Config.DataDir
 	atxdbstore, err := database.NewLDBDatabase(dbStorepath+"atx", 0, 0)
@@ -472,7 +479,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 		SpaceUnit:            1024,
 	}
 
-	vrfSigner := crypto.NewVRFSigner(app.edSgn.ToBuffer())
+	vrfSigner := crypto.NewVRFSigner(vrfPrivateKey)
 
 	err = app.initServices(nodeID, swarm, dbStorepath, app.edSgn, hareOracle, app.Config.LayerAvgSize, nipst.NewPostClient(), poet, atxdbstore, vrfSigner, npstCfg)
 	if err != nil {
