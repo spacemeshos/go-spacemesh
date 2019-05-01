@@ -214,6 +214,7 @@ def setup_bootstrap(request, init_session, setup_oracle, setup_poet, create_conf
                               centry=[testconfig['bootstrap']['command']])
 
         cspec.append_args(oracle_server='http://{0}:3030'.format(setup_oracle),
+                          poet_server='{0}:50002'.format(setup_poet),
                           genesis_time=GENESIS_TIME.isoformat('T', 'seconds'),
                           **bootstrap_args)
 
@@ -221,7 +222,6 @@ def setup_bootstrap(request, init_session, setup_oracle, setup_poet, create_conf
                                  deployment_id=bootstrap_deployment_info.deployment_id,
                                  replica_size=testconfig['bootstrap']['replicas'],
                                  container_specs=cspec)
-
 
         bootstrap_deployment_info.deployment_name = resp.metadata._name
         namespaced_pods = client.CoreV1Api().list_namespaced_pod(namespace=name_space).items
@@ -250,7 +250,7 @@ def setup_bootstrap(request, init_session, setup_oracle, setup_poet, create_conf
 
 
 @pytest.fixture(scope='module')
-def setup_clients(request, setup_oracle, setup_bootstrap):
+def setup_clients(request, setup_oracle, setup_poet, setup_bootstrap):
 
     client_info = DeploymentInfo(dep_id=setup_bootstrap.deployment_id)
 
@@ -265,6 +265,7 @@ def setup_clients(request, setup_oracle, setup_bootstrap):
 
         cspec.append_args(bootnodes="{0}:{1}/{2}".format(bs_info['pod_ip'], '7513', bs_info['key']),
                           oracle_server='http://{0}:3030'.format(setup_oracle),
+                          poet_server='{0}:50002'.format(setup_poet),
                           genesis_time=GENESIS_TIME.isoformat('T', 'seconds'),
                           **client_args)
 
