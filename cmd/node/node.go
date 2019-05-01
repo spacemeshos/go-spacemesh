@@ -448,6 +448,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 		log.Panic("Could not retrieve vrf err=%v", err)
 	}
 
+	log.Info("connecting to POET on IP %v", app.Config.PoETServer)
 	poet, err := nipst.NewRemoteRPCPoetClient(app.Config.PoETServer, 2 *time.Second)
 	if err != nil {
 		log.Error("poet server not found on addr %v, err: %v", app.Config.PoETServer, err)
