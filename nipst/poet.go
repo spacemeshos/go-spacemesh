@@ -15,37 +15,37 @@ import (
 	"time"
 )
 
-type poetRound struct {
-	id int
+type PoetRound struct {
+	Id int
 }
 
-type membershipProof struct {
-	index int
-	root  common.Hash
-	proof [][]byte
+type MembershipProof struct {
+	Index int
+	Root  common.Hash
+	Proof [][]byte
 }
 
 // poetProof can convince a verifier that at least T time must have passed
 // from the time the initial member was learned.
-type poetProof struct {
-	commitment []byte
-	n          uint
-	proof      *shared.Proof
+type PoetProof struct {
+	Commitment []byte
+	N          uint
+	Proof      *shared.Proof
 }
 
-func (p *poetProof) serialize() []byte {
+func (p *PoetProof) serialize() []byte {
 	// TODO(moshababo): implement
 	return []byte("")
 }
 
 var _ verifyPoetMembershipFunc = verifyPoetMembership
 
-func verifyPoetMembership(member *common.Hash, proof *membershipProof) (bool, error) {
+func verifyPoetMembership(member *common.Hash, proof *MembershipProof) (bool, error) {
 	valid, err := merkle.ValidatePartialTree(
-		[]uint64{uint64(proof.index)},
+		[]uint64{uint64(proof.Index)},
 		[][]byte{member[:]},
-		proof.proof,
-		proof.root[:],
+		proof.Proof,
+		proof.Root[:],
 		merkle.GetSha256Parent,
 	)
 
@@ -58,13 +58,13 @@ func verifyPoetMembership(member *common.Hash, proof *membershipProof) (bool, er
 
 var _ verifyPoetFunc = verifyPoet
 
-func verifyPoet(p *poetProof) (bool, error) {
-	v, err := verifier.New(p.commitment, p.n, shared.NewHashFunc(p.commitment))
+func verifyPoet(p *PoetProof) (bool, error) {
+	v, err := verifier.New(p.Commitment, p.N, shared.NewHashFunc(p.Commitment))
 	if err != nil {
 		return false, fmt.Errorf("failed to create a new verifier: %v", err)
 	}
 
-	res, err := v.VerifyNIP(*p.proof)
+	res, err := v.VerifyNIP(*p.Proof)
 	if err != nil {
 		return false, fmt.Errorf("failed to verify proof: %v", err)
 	}
@@ -76,15 +76,15 @@ var _ verifyPoetMatchesMembershipFunc = verifyPoetMatchesMembership
 
 // verifyPoetMatchesMembership verifies that the poet proof commitment
 // is the root in which the membership was proven to.
-func verifyPoetMatchesMembership(m *membershipProof, p *poetProof) bool {
-	return bytes.Equal(m.root[:], p.commitment)
+func verifyPoetMatchesMembership(m *MembershipProof, p *PoetProof) bool {
+	return bytes.Equal(m.Root[:], p.Commitment)
 }
 
 type SeqWorkTicks uint64
 
-// newRemoteRPCPoetClient returns a new instance of
+// NewRemoteRPCPoetClient returns a new instance of
 // RPCPoetClient for the specified target.
-func newRemoteRPCPoetClient(target string, timeout time.Duration) (*RPCPoetClient, error) {
+func NewRemoteRPCPoetClient(target string, timeout time.Duration) (*RPCPoetClient, error) {
 	conn, err := newClientConn(target, timeout)
 	if err != nil {
 		return nil, err
@@ -95,7 +95,7 @@ func newRemoteRPCPoetClient(target string, timeout time.Duration) (*RPCPoetClien
 		return conn.Close()
 	}
 
-	return newRPCPoetClient(client, cleanUp), nil
+	return NewRPCPoetClient(client, cleanUp), nil
 }
 
 // newClientConn returns a new gRPC client
@@ -122,9 +122,9 @@ type RPCPoetClient struct {
 	CleanUp func() error
 }
 
-// newRPCPoetClient returns a new RPCPoetClient instance for the provided
+// NewRPCPoetClient returns a new RPCPoetClient instance for the provided
 // and already-connected gRPC PoetClient instance.
-func newRPCPoetClient(client api.PoetClient, cleanUp func() error) *RPCPoetClient {
+func NewRPCPoetClient(client api.PoetClient, cleanUp func() error) *RPCPoetClient {
 	return &RPCPoetClient{
 		client:  client,
 		CleanUp: cleanUp,
@@ -137,7 +137,7 @@ func (c *RPCPoetClient) id() string {
 }
 
 func (c *RPCPoetClient) submit(challenge common.Hash,
-	duration SeqWorkTicks) (*poetRound, error) {
+	duration SeqWorkTicks) (*PoetRound, error) {
 
 	req := api.SubmitRequest{Challenge: challenge[:]}
 	res, err := c.client.Submit(context.Background(), &req)
@@ -145,16 +145,16 @@ func (c *RPCPoetClient) submit(challenge common.Hash,
 		return nil, fmt.Errorf("rpc failure: %v", err)
 	}
 
-	return &poetRound{id: int(res.RoundId)}, nil
+	return &PoetRound{Id: int(res.RoundId)}, nil
 }
 
-func (c *RPCPoetClient) subscribeMembershipProof(r *poetRound,
-	challenge common.Hash, timeout time.Duration) (*membershipProof, error) {
+func (c *RPCPoetClient) subscribeMembershipProof(r *PoetRound,
+	challenge common.Hash, timeout time.Duration) (*MembershipProof, error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	req := api.GetMembershipProofRequest{RoundId: int32(r.id), Challenge: challenge[:], Wait: true}
+	req := api.GetMembershipProofRequest{RoundId: int32(r.Id), Challenge: challenge[:], Wait: true}
 	res, err := c.client.GetMembershipProof(ctx, &req)
 	if err != nil {
 		if e := ctx.Err(); e == context.DeadlineExceeded {
@@ -163,23 +163,23 @@ func (c *RPCPoetClient) subscribeMembershipProof(r *poetRound,
 		return nil, fmt.Errorf("rpc failure: %v", err)
 	}
 
-	mproof := new(membershipProof)
-	mproof.index = int(res.Mproof.Index)
-	mproof.proof = res.Mproof.Proof
+	mproof := new(MembershipProof)
+	mproof.Index = int(res.Mproof.Index)
+	mproof.Proof = res.Mproof.Proof
 
 	// TODO(moshababo): verify length
-	copy(mproof.root[:], res.Mproof.Root[:common.HashLength])
+	copy(mproof.Root[:], res.Mproof.Root[:common.HashLength])
 
 	return mproof, nil
 }
 
-func (c *RPCPoetClient) subscribeProof(r *poetRound,
-	timeout time.Duration) (*poetProof, error) {
+func (c *RPCPoetClient) subscribeProof(r *PoetRound,
+	timeout time.Duration) (*PoetProof, error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	req := api.GetProofRequest{RoundId: int32(r.id), Wait: true}
+	req := api.GetProofRequest{RoundId: int32(r.Id), Wait: true}
 	res, err := c.client.GetProof(ctx, &req)
 	if err != nil {
 		if e := ctx.Err(); e == context.DeadlineExceeded {
@@ -193,12 +193,12 @@ func (c *RPCPoetClient) subscribeProof(r *poetRound,
 		return nil, fmt.Errorf("failed to deserialize proof: %v", err)
 	}
 
-	p := new(poetProof)
-	p.n = uint(res.N)
-	p.commitment = res.Commitment
-	p.proof = new(shared.Proof)
-	p.proof.Phi = res.Proof.Phi
-	p.proof.L = *labels
+	p := new(PoetProof)
+	p.N = uint(res.N)
+	p.Commitment = res.Commitment
+	p.Proof = new(shared.Proof)
+	p.Proof.Phi = res.Proof.Phi
+	p.Proof.L = *labels
 
 	return p, nil
 }

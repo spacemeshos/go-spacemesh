@@ -15,10 +15,11 @@ type BlockEligibilityValidator struct {
 	activationDb   ActivationDb
 	beaconProvider *EpochBeaconProvider
 	validateVRF    VRFValidationFunction
+	log            log.Log
 }
 
 func NewBlockEligibilityValidator(committeeSize int32, layersPerEpoch uint16, activationDb ActivationDb,
-	beaconProvider *EpochBeaconProvider, validateVRF VRFValidationFunction) *BlockEligibilityValidator {
+	beaconProvider *EpochBeaconProvider, validateVRF VRFValidationFunction, log log.Log) *BlockEligibilityValidator {
 
 	return &BlockEligibilityValidator{
 		committeeSize:  committeeSize,
@@ -26,31 +27,26 @@ func NewBlockEligibilityValidator(committeeSize int32, layersPerEpoch uint16, ac
 		activationDb:   activationDb,
 		beaconProvider: beaconProvider,
 		validateVRF:    validateVRF,
+		log:            log,
 	}
 }
 
 func (v BlockEligibilityValidator) BlockEligible(block *types.Block) (bool, error) {
 	epochNumber := block.LayerIndex.GetEpoch(v.layersPerEpoch)
 
-	atx, err := v.activationDb.GetAtx(block.ATXID)
-	if err != nil {
-		log.Error("getting ATX failed: %v", err)
-		return false, err
+	// need to get active set size from previous epoch
+	activeSetSize := uint32(GenesisActiveSetSize)
+	if !epochNumber.IsGenesis() {
+		atx, err := v.getValidATX(epochNumber, block)
+		if err != nil {
+			return false, err
+		}
+		activeSetSize = atx.ActiveSetSize
 	}
 
-	if err := atx.Validate(); err != nil {
-		log.Error("ATX is invalid: %v", err)
-		return false, err
-	}
-	if atxEpochNumber := atx.LayerIdx.GetEpoch(v.layersPerEpoch); epochNumber != atxEpochNumber {
-		log.Error("ATX epoch (%d) doesn't match layer ID epoch (%d)", atxEpochNumber, epochNumber)
-		return false, fmt.Errorf("activation epoch (%d) mismatch with layer epoch (%d)", atxEpochNumber,
-			epochNumber)
-	}
-
-	numberOfEligibleBlocks, err := getNumberOfEligibleBlocks(atx.ActiveSetSize, v.committeeSize, v.layersPerEpoch)
+	numberOfEligibleBlocks, err := getNumberOfEligibleBlocks(activeSetSize, v.committeeSize, v.layersPerEpoch, v.log)
 	if err != nil {
-		log.Error("failed to get number of eligible blocks: %v", err)
+		v.log.Error("failed to get number of eligible blocks: %v", err)
 		return false, err
 	}
 
@@ -65,11 +61,30 @@ func (v BlockEligibilityValidator) BlockEligible(block *types.Block) (bool, erro
 	vrfSig := block.EligibilityProof.Sig
 	err = v.validateVRF(message, vrfSig, []byte(block.MinerID.VRFPublicKey))
 	if err != nil {
-		log.Error("eligibility VRF validation failed: %v", err)
-		return false, err
+		v.log.Error("eligibility VRF validation failed: %v", err)
+		return false, fmt.Errorf("eligibility VRF validation failed: %v", err)
 	}
 	vrfHash := sha256.Sum256(vrfSig)
 	eligibleLayer := calcEligibleLayer(epochNumber, v.layersPerEpoch, vrfHash)
 
 	return block.LayerIndex == eligibleLayer, nil
+}
+
+func (v BlockEligibilityValidator) getValidATX(blockEpoch types.EpochId, block *types.Block) (*types.ActivationTx, error) {
+	atx, err := v.activationDb.GetAtx(block.ATXID)
+	if err != nil {
+		v.log.Error("getting ATX failed: %v %v ep(%v)", err, block.ATXID.String()[:5], blockEpoch)
+		return nil, fmt.Errorf("getting ATX failed: %v %v ep(%v)", err, block.ATXID.String()[:5], blockEpoch)
+	}
+	if !atx.Valid {
+		v.log.Error("ATX %v is invalid", atx.Id().String()[:5])
+		return nil, fmt.Errorf("ATX %v is invalid", atx.Id().String()[:5])
+	}
+	if atxTargetEpoch := atx.PubLayerIdx.GetEpoch(v.layersPerEpoch) + 1; atxTargetEpoch != blockEpoch {
+		v.log.Error("ATX target epoch (%d) doesn't match block publication epoch (%d)",
+			atxTargetEpoch, blockEpoch)
+		return nil, fmt.Errorf("ATX target epoch (%d) doesn't match block publication epoch (%d)",
+			atxTargetEpoch, blockEpoch)
+	}
+	return atx, nil
 }

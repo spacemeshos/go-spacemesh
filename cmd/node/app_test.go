@@ -4,29 +4,33 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/address"
 	apiCfg "github.com/spacemeshos/go-spacemesh/api/config"
+	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/miner"
+	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	sync2 "github.com/spacemeshos/go-spacemesh/sync"
 	"github.com/spacemeshos/go-spacemesh/types"
+	"github.com/spacemeshos/poet/integration"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	"math/big"
 	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/stretchr/testify/assert"
 )
 
 type AppTestSuite struct {
 	suite.Suite
 
-	apps []*SpacemeshApp
-	dbs  []string
+	apps        []*SpacemeshApp
+	dbs         []string
+	poetCleanup func() error
 }
 
 func (app *AppTestSuite) SetupTest() {
@@ -34,38 +38,83 @@ func (app *AppTestSuite) SetupTest() {
 	app.dbs = make([]string, 0, 0)
 }
 
-func (app *AppTestSuite) TearDownTest() {
+// NewRPCPoetHarnessClient returns a new instance of RPCPoetClient
+// which utilizes a local self-contained poet server instance
+// in order to exercise functionality.
+func NewRPCPoetHarnessClient() (*nipst.RPCPoetClient, error) {
+	h, err := integration.NewHarness()
+	if err != nil {
+		return nil, err
+	}
 
+	return nipst.NewRPCPoetClient(h.PoetClient, h.TearDown), nil
+}
+
+func (app *AppTestSuite) TearDownTest() {
+	if err := app.poetCleanup(); err != nil {
+		log.Error("error while cleaning up PoET: %v", err)
+	}
 	for _, dbinst := range app.dbs {
-		err := os.RemoveAll(dbinst)
-		if err != nil {
+		if err := os.RemoveAll(dbinst); err != nil {
 			panic(fmt.Sprintf("what happened : %v", err))
+		}
+	}
+	if err := os.RemoveAll("../tmp"); err != nil {
+		log.Error("error while cleaning up tmp dir: %v", err)
+	}
+	//poet should clean up after himself
+	if matches, err := filepath.Glob("*.bin"); err != nil {
+		log.Error("error while finding PoET bin files: %v", err)
+	} else {
+		for _, f := range matches {
+			if err = os.Remove(f); err != nil {
+				log.Error("error while cleaning up PoET bin files: %v", err)
+			}
 		}
 	}
 }
 
-func (app *AppTestSuite) initMultipleInstances(t *testing.T, numOfInstances int, storeFormat string) {
+func (app *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat string) {
+	r := require.New(app.T())
+
 	net := service.NewSimulator()
 	runningName := 'a'
 	rolacle := eligibility.New()
+	poet, err := NewRPCPoetHarnessClient()
+	r.NoError(err)
+	app.poetCleanup = poet.CleanUp
 	for i := 0; i < numOfInstances; i++ {
-		smapp := NewSpacemeshApp()
-		smapp.Config.HARE.N = numOfInstances
-		smapp.Config.HARE.F = numOfInstances / 2
-		app.apps = append(app.apps, smapp)
-		store := storeFormat + string(runningName)
-		n := net.NewNode()
+		smApp := NewSpacemeshApp()
+		smApp.Config.HARE.N = numOfInstances
+		smApp.Config.HARE.F = numOfInstances / 2
 
 		edSgn := signing.NewEdSigner()
 		pub := edSgn.PublicKey()
-		bo := oracle.NewLocalOracle(rolacle, numOfInstances, types.NodeId{Key: pub.String()})
-		bo.Register(true, pub.String())
 
-		bv := sync2.BlockValidatorMock{}
-		err := app.apps[i].initServices(types.NodeId{Key: pub.String()}, n, store, edSgn, bo, bv, bo, numOfInstances)
-		assert.NoError(t, err)
-		app.apps[i].setupGenesis(apiCfg.DefaultGenesisConfig())
-		app.dbs = append(app.dbs, store)
+		vrfPublicKey, vrfPrivateKey, err := crypto.GenerateVRFKeys()
+		r.NoError(err)
+		nodeID := types.NodeId{Key: pub.String(), VRFPublicKey: vrfPublicKey}
+		vrfSigner := crypto.NewVRFSigner(vrfPrivateKey)
+		swarm := net.NewNode()
+		dbStorepath := storeFormat + string(runningName)
+
+		dbStore := database.NewMemDatabase()
+
+		hareOracle := oracle.NewLocalOracle(rolacle, numOfInstances, nodeID)
+		hareOracle.Register(true, pub.String())
+
+		layerSize := numOfInstances
+		npstCfg := nipst.PostParams{
+			Difficulty:           5,
+			NumberOfProvenLabels: 10,
+			SpaceUnit:            1024,
+		}
+		err = smApp.initServices(nodeID, swarm, dbStorepath, edSgn, hareOracle, layerSize, nipst.NewPostClient(), poet, dbStore, vrfSigner, npstCfg)
+		r.NoError(err)
+		smApp.setupGenesis(apiCfg.DefaultGenesisConfig())
+
+		app.apps = append(app.apps, smApp)
+		app.dbs = append(app.dbs, dbStorepath)
 		runningName++
 	}
 }
@@ -84,22 +133,25 @@ func (app *AppTestSuite) TestMultipleNodes() {
 
 	txbytes, _ := types.TransactionAsBytes(&tx)
 	path := "../tmp/test/state_" + time.Now().String()
-	app.initMultipleInstances(app.T(), 10, path)
+	app.initMultipleInstances(5, path)
 	for _, a := range app.apps {
 		a.startServices()
 	}
 
-	app.apps[0].P2P.Broadcast(miner.IncomingTxProtocol, txbytes)
-	timeout := time.After(2 * 60 * time.Second)
+	_ = app.apps[0].P2P.Broadcast(miner.IncomingTxProtocol, txbytes)
+	timeout := time.After(3.5 * 60 * time.Second)
 
+	stickyClientsDone := 0
 	for {
 		select {
 		// Got a timeout! fail with a timeout error
 		case <-timeout:
-			app.T().Fatal("timed out ")
+			app.T().Fatal("timed out")
 		default:
+			maxClientsDone := 0
 			for idx, ap := range app.apps {
-				if big.NewInt(10).Cmp(ap.state.GetBalance(dst)) == 0 {
+				if big.NewInt(10).Cmp(ap.state.GetBalance(dst)) == 0 &&
+					!app.apps[0].mesh.LatestLayer().GetEpoch(app.apps[0].Config.CONSENSUS.LayersPerEpoch).IsGenesis() {
 					clientsDone := 0
 					for idx2, ap2 := range app.apps {
 						if idx != idx2 {
@@ -107,23 +159,29 @@ func (app *AppTestSuite) TestMultipleNodes() {
 							r2 := ap2.state.IntermediateRoot(false).String()
 							if r1 == r2 {
 								clientsDone++
-								log.Info("%d roots confirmed out of %d", clientsDone, len(app.apps))
 								if clientsDone == len(app.apps)-1 {
-									app.gracefullShutdown()
+									log.Info("%d roots confirmed out of %d", clientsDone, len(app.apps))
+									app.gracefulShutdown()
 									return
 								}
 							}
 						}
 					}
-
+					if clientsDone > maxClientsDone {
+						maxClientsDone = clientsDone
+					}
 				}
+			}
+			if maxClientsDone != stickyClientsDone {
+				stickyClientsDone = maxClientsDone
+				log.Info("%d roots confirmed out of %d", maxClientsDone, len(app.apps))
 			}
 			time.Sleep(1 * time.Millisecond)
 		}
 	}
 }
 
-func (app *AppTestSuite) gracefullShutdown() {
+func (app *AppTestSuite) gracefulShutdown() {
 	var wg sync.WaitGroup
 	for _, ap := range app.apps {
 		func(ap SpacemeshApp) {
@@ -138,5 +196,4 @@ func (app *AppTestSuite) gracefullShutdown() {
 func TestAppTestSuite(t *testing.T) {
 	//defer leaktest.Check(t)()
 	suite.Run(t, new(AppTestSuite))
-
 }

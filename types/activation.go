@@ -1,92 +1,115 @@
 package types
 
 import (
-	"bytes"
-	"github.com/nullstyle/go-xdr/xdr3"
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/nipst"
+	"github.com/spacemeshos/sha256-simd"
 )
 
 type EpochId uint64
 
 func (l EpochId) ToBytes() []byte { return common.Uint64ToBytes(uint64(l)) }
 
+func (l EpochId) IsGenesis() bool {
+	return l < 2
+}
+
 type AtxId struct {
 	common.Hash
 }
 
-var EmptyAtx = AtxId{common.Hash{0}}
-
-type ActivationTxHeader struct {
-	PoETChallenge
-	VerifiedActiveSet uint32
-	ActiveSetSize     uint32
-	View              []BlockID
-	Valid             bool
+func (t AtxId) ShortId() string {
+	return t.String()[2:7]
 }
 
-type PoETChallenge struct {
+var EmptyAtxId = &AtxId{common.Hash{0}}
+
+type ActivationTxHeader struct {
+	NIPSTChallenge
+	ActiveSetSize uint32
+	View          []BlockID
+}
+
+type NIPSTChallenge struct {
 	NodeId         NodeId
 	Sequence       uint64
 	PrevATXId      AtxId
-	LayerIdx       LayerID
+	PubLayerIdx    LayerID
 	StartTick      uint64
 	EndTick        uint64
 	PositioningAtx AtxId
 }
 
-func (p *PoETChallenge) ToBytes() ([]byte, error) {
-	var w bytes.Buffer
-	_, err := xdr.Marshal(&w, &p)
+func (challenge *NIPSTChallenge) Hash() (*common.Hash, error) {
+	ncBytes, err := NIPSTChallengeAsBytes(challenge)
 	if err != nil {
 		return nil, err
 	}
+	hash := common.Hash(sha256.Sum256(ncBytes))
+	return &hash, nil
+}
 
-	return w.Bytes(), nil
+func (challenge *NIPSTChallenge) String() string {
+	return fmt.Sprintf("<id: [vrf: %v ed: %v], seq: %v, prevAtx: %v, PubLayer: %v, s tick: %v, e tick: %v, "+
+		"posAtx: %v>",
+		common.Bytes2Hex(challenge.NodeId.VRFPublicKey)[:5],
+		challenge.NodeId.Key[:5],
+		challenge.Sequence,
+		challenge.PrevATXId.ShortId(),
+		challenge.PubLayerIdx,
+		challenge.StartTick,
+		challenge.EndTick,
+		challenge.PositioningAtx.ShortId())
 }
 
 type ActivationTx struct {
 	ActivationTxHeader
-	Nipst *nipst.NIPST
+	VerifiedActiveSet uint32
+	Valid             bool
+	Nipst             *nipst.NIPST
 	//todo: add sig
 }
 
-func NewActivationTx(NodeId NodeId, Sequence uint64, PrevATX AtxId, LayerIndex LayerID,
-	StartTick uint64, PositioningATX AtxId, ActiveSetSize uint32, View []BlockID, nipst *nipst.NIPST) *ActivationTx {
+func NewActivationTx(NodeId NodeId, Sequence uint64, PrevATX AtxId, LayerIndex LayerID, StartTick uint64,
+	PositioningATX AtxId, ActiveSetSize uint32, View []BlockID, nipst *nipst.NIPST, isValid bool) *ActivationTx {
 	return &ActivationTx{
 		ActivationTxHeader: ActivationTxHeader{
-			PoETChallenge: PoETChallenge{
+			NIPSTChallenge: NIPSTChallenge{
 				NodeId:         NodeId,
 				Sequence:       Sequence,
 				PrevATXId:      PrevATX,
-				LayerIdx:       LayerIndex,
+				PubLayerIdx:    LayerIndex,
 				StartTick:      StartTick,
 				PositioningAtx: PositioningATX,
 			},
 			ActiveSetSize: ActiveSetSize,
 			View:          View,
 		},
-
+		Valid: isValid,
 		Nipst: nipst,
 	}
 
 }
 
-func NewActivationTxWithcChallenge(poetChallenge PoETChallenge, ActiveSetSize uint32, View []BlockID, nipst *nipst.NIPST) *ActivationTx {
+func NewActivationTxWithChallenge(poetChallenge NIPSTChallenge, ActiveSetSize uint32, View []BlockID, nipst *nipst.NIPST,
+	isValid bool) *ActivationTx {
+
 	return &ActivationTx{
 		ActivationTxHeader: ActivationTxHeader{
-			PoETChallenge: poetChallenge,
-			ActiveSetSize: ActiveSetSize,
-			View:          View,
+			NIPSTChallenge: poetChallenge,
+			ActiveSetSize:  ActiveSetSize,
+			View:           View,
 		},
-
+		Valid: isValid,
 		Nipst: nipst,
 	}
 
 }
 
 func (t ActivationTx) Id() AtxId {
+	//todo: revise id function, add cache
 	tx, err := AtxHeaderAsBytes(&t.ActivationTxHeader)
 	if err != nil {
 		panic("could not Serialize atx")
@@ -95,15 +118,6 @@ func (t ActivationTx) Id() AtxId {
 	return AtxId{crypto.Keccak256Hash(tx)}
 }
 
-func (t ActivationTx) Validate() error {
-	//todo: implement
-	// valid signature
-	// no other atx with same id and sequence number
-	// if s != 0 the prevAtx is valid and it's seq num is s -1
-	// positioning atx is valid
-	// validate nipst duration?
-	// fields 1-7 of the atx are the challenge of the poet
-	// layer index i^ satisfies i -i^ < (layers_passed during nipst creation) ANTON: maybe should be ==?
-	// the atx view contains d active Ids
-	return nil
+func (t ActivationTx) ShortId() string {
+	return t.Id().ShortId()
 }
