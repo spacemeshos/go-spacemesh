@@ -30,6 +30,10 @@ const DefaultGas = 1
 
 const IncomingTxProtocol = "TxGossip"
 
+type AtxProcessor interface {
+	ProcessAtx(atx *types.ActivationTx)
+}
+
 type BlockBuilder struct {
 	log.Log
 	minerID          types.NodeId
@@ -48,11 +52,11 @@ type BlockBuilder struct {
 	weakCoinToss     WeakCoinProvider
 	orphans          OrphanBlockProvider
 	blockOracle      oracle.BlockOracle
+	processAtx       func(atx *types.ActivationTx)
 	started          bool
 }
 
-func NewBlockBuilder(minerID types.NodeId, net p2p.Service, beginRoundEvent chan types.LayerID, weakCoin WeakCoinProvider,
-	orph OrphanBlockProvider, hare HareResultProvider, blockOracle oracle.BlockOracle, lg log.Log) BlockBuilder {
+func NewBlockBuilder(minerID types.NodeId, net p2p.Service, beginRoundEvent chan types.LayerID, weakCoin WeakCoinProvider, orph OrphanBlockProvider, hare HareResultProvider, blockOracle oracle.BlockOracle, processAtx func(atx *types.ActivationTx), lg log.Log) BlockBuilder {
 
 	seed := binary.BigEndian.Uint64(md5.New().Sum([]byte(minerID.Key)))
 
@@ -74,6 +78,7 @@ func NewBlockBuilder(minerID types.NodeId, net p2p.Service, beginRoundEvent chan
 		weakCoinToss:     weakCoin,
 		orphans:          orph,
 		blockOracle:      blockOracle,
+		processAtx:       processAtx,
 		started:          false,
 	}
 
@@ -143,13 +148,13 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 	var res []types.BlockID = nil
 	var err error
 	if id == config.Genesis {
-		return nil, errors.New("cannot create block in genesis layer ")
+		return nil, errors.New("cannot create block in genesis layer")
 	} else if id == config.Genesis+1 {
 		res = append(res, config.GenesisId)
 	} else {
 		res, err = t.hareResult.GetResult(id - 1)
 		if err != nil {
-			return nil, errors.New(fmt.Sprintf("didnt receive hare result for layer %v %v", id-1, err))
+			return nil, errors.New(fmt.Sprintf("didn't receive hare result for layer %v %v", id-1, err))
 		}
 	}
 
@@ -174,8 +179,13 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 		ATXs: atx,
 		Txs:  txs,
 	}
+	atxs := " "
+	for _, x := range b.ATXs {
+		atxs += "," + x.ShortId()
+	}
 
-	t.Log.Info("Iv'e created block in layer %v id %v, num of transactions %v votes %d viewEdges %d", b.LayerIndex, b.Id, len(b.Txs), len(b.BlockVotes), len(b.ViewEdges))
+	t.Log.Info("I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d, viewEdges: %d atx %v, atxs:%v",
+		b.LayerIndex, b.Id, len(b.Txs), len(b.BlockVotes), len(b.ViewEdges), b.ATXID.String()[:5], atxs)
 	return &b, nil
 }
 
@@ -216,6 +226,7 @@ func (t *BlockBuilder) listenForAtx() {
 					t.Log.Error("cannot parse incoming ATX")
 					break
 				}
+				//t.processAtx(x)
 				data.ReportValidation(activation.AtxProtocol)
 				t.newAtx <- x
 			}
@@ -237,6 +248,7 @@ func (t *BlockBuilder) acceptBlockData() {
 				continue
 			}
 			if len(proofs) == 0 {
+				t.Error("no PROOFFSSSS detected")
 				break
 			}
 			// TODO: include multiple proofs in each block and weigh blocks where applicable

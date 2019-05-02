@@ -17,6 +17,10 @@ func (l LayerID) GetEpoch(layersPerEpoch uint16) EpochId {
 	return EpochId(uint64(l) / uint64(layersPerEpoch))
 }
 
+func (l LayerID) Add(layers uint16) LayerID {
+	return LayerID(uint64(l) + uint64(layers))
+}
+
 //todo: choose which type is VRF
 type Vrf string
 
