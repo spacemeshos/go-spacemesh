@@ -109,7 +109,7 @@ func (app *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat s
 			NumberOfProvenLabels: 10,
 			SpaceUnit:            1024,
 		}
-		err = smApp.initServices(nodeID, swarm, dbStorepath, edSgn, hareOracle, layerSize, nipst.NewPostClient(), poet, dbStore, vrfSigner, npstCfg)
+		err = smApp.initServices(nodeID, swarm, dbStorepath, edSgn, hareOracle, uint32(layerSize), nipst.NewPostClient(), poet, dbStore, vrfSigner, npstCfg, 3)
 		r.NoError(err)
 		smApp.setupGenesis(apiCfg.DefaultGenesisConfig())
 

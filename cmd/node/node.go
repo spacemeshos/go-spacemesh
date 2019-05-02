@@ -257,16 +257,7 @@ func (app *SpacemeshApp) setupTestFeatures() {
 	api.ApproveAPIGossipMessages(cmdp.Ctx, app.P2P)
 }
 
-func (app *SpacemeshApp) initServices(nodeID types.NodeId,
-	swarm service.Service,
-	dbStorepath string,
-	sgn hare.Signer,
-	hareOracle hare.Rolacle,
-	layerSize int,
-	postClient nipst.PostProverClient,
-	poetClient nipst.PoetProvingServiceClient,
-	atxdbstore database.DB, vrfSigner *crypto.VRFSigner,
-	commitmentConfig nipst.PostParams) error {
+func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service, dbStorepath string, sgn hare.Signer, hareOracle hare.Rolacle, layerSize uint32, postClient nipst.PostProverClient, poetClient nipst.PoetProvingServiceClient, atxdbstore database.DB, vrfSigner *crypto.VRFSigner, commitmentConfig nipst.PostParams, layersPerEpoch uint32) error {
 
 	app.instanceName = nodeID.Key
 	//todo: should we add all components to a single struct?
@@ -306,14 +297,12 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId,
 	idStore := activation.NewIdentityStore(iddbstore)
 	//todo: this is initialized twice, need to refactor
 	validator := nipst.NewValidator(commitmentConfig)
-	numOfInstances := 10
-	layersPerEpoch := uint16(5)
 	atxdb := activation.NewActivationDb(atxdbstore, idStore, mdb, uint64(app.Config.CONSENSUS.LayersPerEpoch), validator, lg.WithName("atxDb"))
 	beaconProvider := &oracle.EpochBeaconProvider{}
-	blockOracle := oracle.NewMinerBlockOracle(int32(numOfInstances), layersPerEpoch, atxdb, beaconProvider, vrfSigner, nodeID, lg.WithName("blockOracle"))
-	blockValidator := oracle.NewBlockEligibilityValidator(int32(numOfInstances), layersPerEpoch, atxdb, beaconProvider, crypto.ValidateVRF, lg.WithName("blkElgValidator"))
+	blockOracle := oracle.NewMinerBlockOracle(int32(layerSize), uint16(layersPerEpoch), atxdb, beaconProvider, vrfSigner, nodeID, lg.WithName("blockOracle"))
+	blockValidator := oracle.NewBlockEligibilityValidator(int32(layerSize), uint16(layersPerEpoch), atxdb, beaconProvider, crypto.ValidateVRF, lg.WithName("blkElgValidator"))
 
-	trtl := tortoise.NewAlgorithm(layerSize, mdb, lg.WithName("trtl"))
+	trtl := tortoise.NewAlgorithm(int(layerSize), mdb, lg.WithName("trtl"))
 	msh := mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, processor, lg.WithName("mesh")) //todo: what to do with the logger?
 
 	conf := sync.Configuration{SyncInterval: 1 * time.Second, Concurrency: 4, LayerSize: int(layerSize), RequestTimeout: 100 * time.Millisecond}
@@ -482,7 +471,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 
 	vrfSigner := crypto.NewVRFSigner(vrfPrivateKey)
 
-	err = app.initServices(nodeID, swarm, dbStorepath, app.edSgn, hareOracle, app.Config.LayerAvgSize, nipst.NewPostClient(), poet, atxdbstore, vrfSigner, npstCfg)
+	err = app.initServices(nodeID, swarm, dbStorepath, app.edSgn, hareOracle, uint32(app.Config.LayerAvgSize), nipst.NewPostClient(), poet, atxdbstore, vrfSigner, npstCfg, uint32(app.Config.CONSENSUS.LayersPerEpoch))
 	if err != nil {
 		log.Error("cannot start services %v", err.Error())
 		return
