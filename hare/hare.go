@@ -10,9 +10,6 @@ import (
 	"time"
 )
 
-// Delta is the time we wait before we start processing hare messages gor the round
-const Delta = 25 * time.Second // todo: add to config
-
 // LayerBuffer is the number of layer results we keep at a given time.
 const LayerBuffer = 20
 
@@ -88,7 +85,7 @@ func New(conf config.Config, p2p NetworkService, sign Signer, obp orphanBlockPro
 	h.obp = obp
 	h.rolacle = rolacle
 
-	h.networkDelta = Delta
+	h.networkDelta = time.Duration(conf.WakeupDelta) * time.Second
 	// todo: this should be loaded from global config
 	h.bufferSize = LayerBuffer
 
