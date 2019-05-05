@@ -11,7 +11,7 @@ import (
 )
 
 // Delta is the time we wait before we start processing hare messages gor the round
-const Delta = 10 * time.Second // todo: add to config
+const Delta = 25 * time.Second // todo: add to config
 
 // LayerBuffer is the number of layer results we keep at a given time.
 const LayerBuffer = 20
@@ -151,7 +151,7 @@ func (h *Hare) onTick(id types.LayerID) {
 		h.lastLayer = id
 	}
 	h.layerLock.Unlock()
-	h.Debug("hare got tick, sleeping for %v", h.networkDelta)
+	h.Info("hare got tick, sleeping for %v", h.networkDelta)
 	ti := time.NewTimer(h.networkDelta)
 	select {
 	case <-ti.C:
@@ -254,6 +254,7 @@ func (h *Hare) tickLoop() {
 
 // Start starts listening on layers to participate in.
 func (h *Hare) Start() error {
+	h.Log.Info("Starting hare")
 	err := h.broker.Start()
 	if err != nil {
 		return err
