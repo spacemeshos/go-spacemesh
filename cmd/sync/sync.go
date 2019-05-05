@@ -7,6 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/sync"
 	"github.com/spacemeshos/go-spacemesh/timesync"
@@ -71,7 +72,19 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	}
 
 	memesh := mesh.NewMemMeshDB(lg)
-	atxdb := activation.NewActivationDb(database.NewMemDatabase(), activation.NewIdentityStore(database.NewMemDatabase()), memesh, 1000)
+	iddbstore, err := database.NewLDBDatabase(app.Config.DataDir+"ids", 0, 0)
+	if err != nil {
+		lg.Error("error: ", err)
+		return
+	}
+	idStore := activation.NewIdentityStore(iddbstore)
+	npstCfg := nipst.PostParams{
+		Difficulty:           5,
+		NumberOfProvenLabels: 10,
+		SpaceUnit:            1024,
+	}
+	validator := nipst.NewValidator(npstCfg)
+	atxdb := activation.NewActivationDb(database.NewMemDatabase(), idStore, memesh, uint64(app.Config.CONSENSUS.LayersPerEpoch), validator, lg.WithName("atxDb"))
 	mshDb := mesh.NewPersistentMeshDB(app.Config.DataDir, lg)
 	msh := mesh.NewMesh(mshDb,
 		atxdb,
@@ -84,12 +97,12 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 		SyncInterval:   1 * time.Second,
 		Concurrency:    4,
 		LayerSize:      int(5),
-		RequestTimeout: 100 * time.Millisecond,
+		RequestTimeout: 500 * time.Millisecond,
 	}
 
 	ch := make(chan types.LayerID, 1)
 	app.sync = sync.NewSync(swarm, msh, sync.BlockValidatorMock{}, conf, ch, lg.WithName("syncer"))
-	ch <- 100
+	ch <- 101
 	if err = swarm.Start(); err != nil {
 		log.Panic("error starting p2p err=%v", err)
 	}
@@ -109,13 +122,18 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	time.Sleep(10 * time.Second)
 
 	app.sync.Start()
-	for app.sync.VerifiedLayer() < 101 {
+	for app.sync.VerifiedLayer() < 100 {
 		lg.Info("sleep for %v sec", 20)
 		time.Sleep(5 * time.Second)
-		ch <- 100
+		ch <- 101
 	}
 
-	lg.Info("node %v done with %v verified layers", app.BaseApp.Config.P2P.NodeID, app.sync.VerifiedLayer())
+	lg.Info("%v verified layers", app.BaseApp.Config.P2P.NodeID, app.sync.VerifiedLayer())
+	lg.Info("sync done")
+	for {
+		lg.Info("keep busy sleep for %v sec", 60)
+		time.Sleep(60 * time.Second)
+	}
 }
 
 func main() {

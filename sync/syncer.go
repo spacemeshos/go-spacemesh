@@ -107,7 +107,7 @@ func NewSync(srv service.Service, layers *mesh.Mesh, bv BlockValidator, conf Con
 		Log:            logger,
 		Mesh:           layers,
 		Peers:          p2p.NewPeers(srv),
-		MessageServer:  server.NewMsgServer(srv.(server.Service), syncProtocol, conf.RequestTimeout-time.Millisecond*30, make(chan service.DirectMessage, config.ConfigValues.BufferSize), logger),
+		MessageServer:  server.NewMsgServer(srv.(server.Service), syncProtocol, conf.RequestTimeout, make(chan service.DirectMessage, config.ConfigValues.BufferSize), logger),
 		SyncLock:       0,
 		startLock:      0,
 		forceSync:      make(chan bool),
@@ -225,47 +225,46 @@ func (s *Syncer) getLayerBlockIDs(index types.LayerID) (chan types.BlockID, erro
 }
 
 func (s *Syncer) getIdsForHash(m map[string]p2p.Peer, index types.LayerID) (chan types.BlockID, error) {
-	reqCounter := 0
 
 	ch := make(chan []types.BlockID, len(m))
-	wg := sync.WaitGroup{}
-	for _, v := range m {
-		c, err := s.sendLayerBlockIDsRequest(v, index)
+	kill := make(chan struct{})
+	for _, peer := range m {
+		c, err := s.sendLayerBlockIDsRequest(peer, index)
 		if err != nil {
-			s.Error("could not fetch layer ", index, " block ids from peer ", v) // todo recover from this
+			s.Error("could not send layer %v ids ", index, " from peer ", peer) // todo recover from this
 			continue
 		}
-		reqCounter++
-		wg.Add(1)
-		go func() {
-			if v := <-c; v != nil {
-				ch <- v
+		go func(p p2p.Peer) {
+			select {
+			case v := <-c:
+				if v != nil {
+					ch <- v
+				}
+			case <-kill:
+				s.Debug("ids request to %v timed out", p)
+				return
 			}
-			wg.Done()
-		}()
+		}(peer)
 	}
 
-	go func() { wg.Wait(); close(ch) }()
 	idSet := make(map[types.BlockID]bool, s.LayerSize)
 	timeout := time.After(s.RequestTimeout)
-	for reqCounter > 0 {
-		select {
-		case b := <-ch:
-			for _, id := range b {
-				bid := types.BlockID(id)
-				if _, exists := idSet[bid]; !exists {
-					idSet[bid] = true
-				}
-			}
-			reqCounter--
-		case <-timeout:
-			if len(idSet) > 0 {
-				s.Error("not all peers responded to hash request")
-				return keysAsChan(idSet), nil
-			}
-			return nil, errors.New("could not get block ids from any peer")
 
+	go func() {
+		<-timeout
+		s.Info("timeout, not all peers responded to hash request")
+		close(kill)
+		close(ch)
+	}()
+
+	for _, bid := range <-ch {
+		if _, exists := idSet[bid]; !exists {
+			idSet[bid] = true
 		}
+	}
+
+	if len(m) == 0 {
+		return nil, errors.New("could not get layer hashes id from any peer")
 	}
 
 	return keysAsChan(idSet), nil
@@ -288,44 +287,48 @@ func (s *Syncer) getLayerHashes(index types.LayerID) (map[string]p2p.Peer, error
 		return nil, errors.New("no peers")
 	}
 	// request hash from all
-	wg := sync.WaitGroup{}
 	ch := make(chan *peerHashPair, len(peers))
+	kill := make(chan struct{})
 
-	resCounter := len(peers)
-	for _, p := range peers {
-		c, err := s.sendLayerHashRequest(p, index)
+	for _, peer := range peers {
+		c, err := s.sendLayerHashRequest(peer, index)
 		if err != nil {
-			s.Error("could not get layer ", index, " hash from peer ", p)
+			s.Error("could not get layer ", index, " hash from peer ", peer)
 			continue
 		}
 		//merge channels and close when done
-		wg.Add(1)
-		go func() {
-			if v := <-c; v != nil {
-				ch <- v
+		go func(p p2p.Peer) {
+			select {
+			case v := <-c:
+				if v != nil {
+					ch <- v
+				}
+			case <-kill:
+				s.Debug("ids request to %v timed out", p)
+				return
 			}
-			wg.Done()
-		}()
+		}(peer)
 	}
-	go func() { wg.Wait(); close(ch) }()
+
 	timeout := time.After(s.RequestTimeout)
-	for resCounter > 0 {
-		// Got a timeout! fail with a timeout error
-		select {
-		case pair := <-ch:
-			if pair == nil { //do nothing on close channel
-				continue
-			}
-			m[string(pair.hash)] = pair.peer
-			resCounter--
-		case <-timeout:
-			if len(m) > 0 {
-				s.Error("not all peers responded to hash request")
-				return m, nil //todo
-			}
-			return nil, errors.New("no peers responded to hash request")
+	go func() {
+		<-timeout
+		s.Info("timeout, not all peers responded to hash request")
+		close(kill)
+		close(ch)
+	}()
+
+	for pair := range ch {
+		if pair == nil { //do nothing on close channel
+			continue
 		}
+		m[string(pair.hash)] = pair.peer
 	}
+
+	if len(m) == 0 {
+		return nil, errors.New("could not get layer hashes from any peer")
+	}
+
 	return m, nil
 }
 
