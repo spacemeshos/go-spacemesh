@@ -438,7 +438,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	}
 
 	log.Info("connecting to POET on IP %v", app.Config.PoETServer)
-	poet, err := nipst.NewRemoteRPCPoetClient(app.Config.PoETServer, 2 *time.Second)
+	poet, err := nipst.NewRemoteRPCPoetClient(app.Config.PoETServer, 2*time.Second)
 	if err != nil {
 		log.Error("poet server not found on addr %v, err: %v", app.Config.PoETServer, err)
 		return
@@ -450,12 +450,10 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 
 	app.unregisterOracle = func() { oracleClient.Unregister(true, app.edSgn.PublicKey().String()) }
 
-	nodeID := types.NodeId{Key: app.edSgn.PublicKey().String(), VRFPublicKey:vrfPublicKey}
+	nodeID := types.NodeId{Key: app.edSgn.PublicKey().String(), VRFPublicKey: vrfPublicKey}
 
 	hareOracle := oracle.NewHareOracleFromClient(oracleClient)
 	apiConf := &app.Config.API
-
-
 
 	dbStorepath := app.Config.DataDir
 	atxdbstore, err := database.NewLDBDatabase(dbStorepath+"atx", 0, 0)
@@ -484,7 +482,6 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	if app.Config.CollectMetrics {
 		metrics.StartCollectingMetrics(app.Config.MetricsPort)
 	}
-
 
 	app.startServices()
 

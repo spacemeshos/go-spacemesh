@@ -11,7 +11,6 @@ import (
 	"github.com/spacemeshos/sha256-simd"
 )
 
-
 type ActivationDb interface {
 	GetNodeAtxIds(node types.NodeId) ([]types.AtxId, error)
 	GetAtx(id types.AtxId) (*types.ActivationTx, error)
