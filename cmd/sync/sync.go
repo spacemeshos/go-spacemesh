@@ -105,8 +105,8 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 
 	app.sync.Start()
 	for app.sync.VerifiedLayer() < 100 {
-		lg.Info("sleep for %v sec", 20)
-		time.Sleep(5 * time.Second)
+		lg.Info("sleep for %v sec", 30)
+		time.Sleep(30 * time.Second)
 		ch <- 101
 	}
 

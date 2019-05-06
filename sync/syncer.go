@@ -93,7 +93,7 @@ func (s *Syncer) run() {
 			s.currentLayerMutex.Lock()
 			s.currentLayer = layer
 			s.currentLayerMutex.Unlock()
-			s.Debug("sync got tick for layer %v", layer)
+			s.Info("sync got tick for layer %v", layer)
 			go syncRoutine()
 		}
 	}
@@ -131,14 +131,12 @@ func (s *Syncer) maxSyncLayer() types.LayerID {
 func (s *Syncer) Synchronise() {
 	for currenSyncLayer := s.VerifiedLayer() + 1; currenSyncLayer < s.maxSyncLayer(); currenSyncLayer++ {
 		s.Info("syncing layer %v to layer %v current consensus layer is %d", s.VerifiedLayer(), currenSyncLayer, s.maxSyncLayer())
-		lyr, err := s.GetLayer(types.LayerID(currenSyncLayer)) //todo add check for ids in this case also
-		if err != nil {
-			if lyr, err = s.getLayerFromNeighbors(currenSyncLayer); err != nil {
-				s.Info("could not get layer %v from neighbors %v", currenSyncLayer, err)
-				return
-			}
+		if lyr, err := s.getLayerFromNeighbors(currenSyncLayer); err == nil {
+			s.ValidateLayer(lyr)
+		} else {
+			s.Info("could not get layer %v from neighbors %v", currenSyncLayer, err)
+			return
 		}
-		s.ValidateLayer(lyr)
 	}
 }
 
@@ -162,7 +160,7 @@ func (s *Syncer) getLayerFromNeighbors(currenSyncLayer types.LayerID) (*types.La
 						if block == nil {
 							continue
 						}
-						s.Debug("fetching block %v took %v ", block.ID(), elapsed)
+						s.Info("fetching block %v took %v ", block.ID(), elapsed)
 						blockCount.Add(1)
 						eligible, err := s.BlockEligible(block)
 						if err != nil {
@@ -240,7 +238,7 @@ func (s *Syncer) getIdsForHash(m map[string]p2p.Peer, index types.LayerID) (chan
 					ch <- v
 				}
 			case <-kill:
-				s.Debug("ids request to %v timed out", p)
+				s.Info("ids request to %v timed out", p)
 				return
 			}
 		}(peer)
@@ -332,19 +330,19 @@ func (s *Syncer) getLayerHashes(index types.LayerID) (map[string]p2p.Peer, error
 }
 
 func (s *Syncer) sendLayerHashRequest(peer p2p.Peer, layer types.LayerID) (chan *peerHashPair, error) {
-	s.Debug("send layer hash request Peer: %v layer: %v", peer, layer)
+	s.Info("send layer hash request Peer: %v layer: %v", peer, layer)
 	ch := make(chan *peerHashPair)
 
 	foo := func(msg []byte) {
 		defer close(ch)
-		s.Debug("got hash response from %v hash: %v  layer: %d", peer, msg, layer)
+		s.Info("got hash response from %v hash: %v  layer: %d", peer, msg, layer)
 		ch <- &peerHashPair{peer: peer, hash: msg}
 	}
 	return ch, s.SendRequest(LAYER_HASH, layer.ToBytes(), peer, foo)
 }
 
 func (s *Syncer) sendLayerBlockIDsRequest(peer p2p.Peer, idx types.LayerID) (chan []types.BlockID, error) {
-	s.Debug("send block.LayerIDs request Peer: ", peer, " layer: ", idx)
+	s.Info("send block.LayerIDs request Peer: ", peer, " layer: ", idx)
 
 	ch := make(chan []types.BlockID)
 	foo := func(msg []byte) {
