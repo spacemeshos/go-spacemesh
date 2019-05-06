@@ -436,6 +436,7 @@ def test_transaction(setup_clients):
     data = '{"srcAddress":"1","dstAddress":"222","nonce":"0","amount":"100"}'
     print("submitting transaction")
     out = api_call(client_ip, data, api, testconfig['namespace'])
+    print(out.decode("utf-8"))
     assert '{"value":"ok"}' in out.decode("utf-8")
     print("submit transaction ok")
     print("wait for confirmation ")
@@ -443,7 +444,7 @@ def test_transaction(setup_clients):
     data = '{"address":"222"}'
     end = start = time.time()
 
-    for x in range(10):
+    for x in range(7):
         time.sleep(60)
         print("... ")
         out = api_call(client_ip, data, api, testconfig['namespace'])
