@@ -87,7 +87,7 @@ func (app *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat s
 		smApp := NewSpacemeshApp()
 		smApp.Config.HARE.N = numOfInstances
 		smApp.Config.HARE.F = numOfInstances / 2
-		smApp.Config.HARE.WakeupDelta = 12
+		smApp.Config.HARE.WakeupDelta = 15
 
 		edSgn := signing.NewEdSigner()
 		pub := edSgn.PublicKey()
@@ -140,7 +140,7 @@ func (app *AppTestSuite) TestMultipleNodes() {
 	}
 
 	_ = app.apps[0].P2P.Broadcast(miner.IncomingTxProtocol, txbytes)
-	timeout := time.After(3.5 * 60 * time.Second)
+	timeout := time.After(4.5 * 60 * time.Second)
 
 	stickyClientsDone := 0
 	for {

@@ -302,7 +302,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	blockOracle := oracle.NewMinerBlockOracle(int32(layerSize), uint16(layersPerEpoch), atxdb, beaconProvider, vrfSigner, nodeID, lg.WithName("blockOracle"))
 	blockValidator := oracle.NewBlockEligibilityValidator(int32(layerSize), uint16(layersPerEpoch), atxdb, beaconProvider, crypto.ValidateVRF, lg.WithName("blkElgValidator"))
 
-	trtl := tortoise.NewAlgorithm(int(layerSize), mdb, lg.WithName("trtl"))
+	trtl := tortoise.NewAlgorithm(int(1), mdb, lg.WithName("trtl"))
 	msh := mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, processor, lg.WithName("mesh")) //todo: what to do with the logger?
 
 	conf := sync.Configuration{SyncInterval: 1 * time.Second, Concurrency: 4, LayerSize: int(layerSize), RequestTimeout: 100 * time.Millisecond}
