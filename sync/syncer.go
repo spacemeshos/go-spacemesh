@@ -107,7 +107,7 @@ func NewSync(srv service.Service, layers *mesh.Mesh, bv BlockValidator, conf Con
 		Log:            logger,
 		Mesh:           layers,
 		Peers:          p2p.NewPeers(srv),
-		MessageServer:  server.NewMsgServer(srv.(server.Service), syncProtocol, conf.RequestTimeout, make(chan service.DirectMessage, config.ConfigValues.BufferSize), logger),
+		MessageServer:  server.NewMsgServer(srv.(server.Service), syncProtocol, conf.RequestTimeout, make(chan service.DirectMessage, config.ConfigValues.BufferSize), logger.WithName("server")),
 		SyncLock:       0,
 		startLock:      0,
 		forceSync:      make(chan bool),
@@ -131,7 +131,7 @@ func (s *Syncer) maxSyncLayer() types.LayerID {
 func (s *Syncer) Synchronise() {
 	for currenSyncLayer := s.VerifiedLayer() + 1; currenSyncLayer < s.maxSyncLayer(); currenSyncLayer++ {
 		s.Info("syncing layer %v to layer %v current consensus layer is %d", s.VerifiedLayer(), currenSyncLayer, s.maxSyncLayer())
-		lyr, err := s.GetLayer(types.LayerID(currenSyncLayer))
+		lyr, err := s.GetLayer(types.LayerID(currenSyncLayer)) //todo add check for ids in this case also
 		if err != nil {
 			if lyr, err = s.getLayerFromNeighbors(currenSyncLayer); err != nil {
 				s.Info("could not get layer %v from neighbors %v", currenSyncLayer, err)
@@ -170,7 +170,6 @@ func (s *Syncer) getLayerFromNeighbors(currenSyncLayer types.LayerID) (*types.La
 							continue
 						}
 						if eligible { //some validation testing
-							s.Debug("received block", block)
 							output <- block
 							break
 						}
@@ -304,7 +303,7 @@ func (s *Syncer) getLayerHashes(index types.LayerID) (map[string]p2p.Peer, error
 					ch <- v
 				}
 			case <-kill:
-				s.Debug("ids request to %v timed out", p)
+				s.Error("ids request to %v timed out", p)
 				return
 			}
 		}(peer)

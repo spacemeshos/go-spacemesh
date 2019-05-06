@@ -13,7 +13,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spf13/cobra"
-	"io/ioutil"
 	"os"
 	"time"
 )
@@ -49,18 +48,6 @@ func (app *SyncApp) Cleanup() {
 
 }
 
-func IOReadDir(root string) ([]string, error) {
-	var files []string
-	fileInfo, err := ioutil.ReadDir(root)
-	if err != nil {
-		return files, err
-	}
-	for _, file := range fileInfo {
-		files = append(files, file.Name())
-	}
-	return files, nil
-}
-
 func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	// start p2p services
 	lg := log.New("sync_test", "", "")
@@ -71,7 +58,6 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 		panic("something got fudged while creating p2p service ")
 	}
 
-	memesh := mesh.NewMemMeshDB(lg)
 	iddbstore, err := database.NewLDBDatabase(app.Config.DataDir+"ids", 0, 0)
 	if err != nil {
 		lg.Error("error: ", err)
@@ -84,15 +70,11 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 		SpaceUnit:            1024,
 	}
 	validator := nipst.NewValidator(npstCfg)
-	atxdb := activation.NewActivationDb(database.NewMemDatabase(), idStore, memesh, uint64(app.Config.CONSENSUS.LayersPerEpoch), validator, lg.WithName("atxDb"))
-	mshDb := mesh.NewPersistentMeshDB(app.Config.DataDir, lg)
-	msh := mesh.NewMesh(mshDb,
-		atxdb,
-		sync.ConfigTst(),
-		&sync.MeshValidatorMock{},
-		&sync.MockState{},
-		lg)
+	mshDb := mesh.NewPersistentMeshDB(app.Config.DataDir, lg.WithOptions(log.Nop))
+	atxdb := activation.NewActivationDb(database.NewMemDatabase(), idStore, mshDb, uint64(app.Config.CONSENSUS.LayersPerEpoch), validator, lg.WithName("atxDb").WithOptions(log.Nop))
+	msh := mesh.NewMesh(mshDb, atxdb, sync.ConfigTst(), &sync.MeshValidatorMock{}, &sync.MockState{}, lg.WithOptions(log.Nop))
 	defer msh.Close()
+
 	conf := sync.Configuration{
 		SyncInterval:   1 * time.Second,
 		Concurrency:    4,
@@ -128,7 +110,7 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 		ch <- 101
 	}
 
-	lg.Info("%v verified layers", app.BaseApp.Config.P2P.NodeID, app.sync.VerifiedLayer())
+	lg.Info("%v verified layers %v", app.BaseApp.Config.P2P.NodeID, app.sync.VerifiedLayer())
 	lg.Info("sync done")
 	for {
 		lg.Info("keep busy sleep for %v sec", 60)

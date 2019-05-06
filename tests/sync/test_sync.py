@@ -88,21 +88,18 @@ def test_sync_gradually_add_nodes(set_namespace, setup_bootstrap, save_log_on_ex
     inf3 = new_client_in_namespace(testconfig['namespace'], setup_bootstrap, cspec, 1)
     time.sleep(20)
     inf4 = new_client_in_namespace(testconfig['namespace'], setup_bootstrap, cspec, 1)
-    time.sleep(10)
-    inf5 = new_client_in_namespace(testconfig['namespace'], setup_bootstrap, cspec, 1)
-    time.sleep(2*60)
 
-    fields = {"M": "Validate layer 99"}
+    time.sleep(3*60)
+
+    fields = {"M": "sync done"}
     res1 = query_message(current_index, testconfig['namespace'], inf1.pods[0]['name'], fields, False)
     res2 = query_message(current_index, testconfig['namespace'], inf2.pods[0]['name'], fields, False)
     res3 = query_message(current_index, testconfig['namespace'], inf3.pods[0]['name'], fields, False)
     res4 = query_message(current_index, testconfig['namespace'], inf4.pods[0]['name'], fields, False)
-    res5 = query_message(current_index, testconfig['namespace'], inf5.pods[0]['name'], fields, False)
     assert res1
     assert res2
     assert res3
     assert res4
-    # assert res5
 
     delete_deployment(inf.deployment_name, testconfig['namespace'])
 
