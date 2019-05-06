@@ -105,12 +105,12 @@ func (validator *syntaxContextValidator) SyntacticallyValidateMessage(m *Msg) bo
 	}
 
 	if m.InnerMsg.Values == nil {
-		validator.Warning("Syntax validation failed: Values is nil in msg: %v", m)
+		validator.Warning("Syntax validation failed: Values is nil in msg: %v", m.String())
 		return false
 	}
 
 	if len(m.InnerMsg.Values) == 0 {
-		validator.Warning("Syntax validation failed: Values is empty: %v", m)
+		validator.Warning("Syntax validation failed: Values is empty: %v", m.String())
 		return false
 	}
 

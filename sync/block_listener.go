@@ -106,7 +106,7 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 				bl.Info("Block already received")
 				break
 			}
-			bl.Info("added block to database ")
+			bl.Info("added block to database %v", blk.Id)
 			data.ReportValidation(NewBlockProtocol)
 			bl.addUnknownToQueue(&blk)
 		}
