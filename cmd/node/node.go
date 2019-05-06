@@ -299,7 +299,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	validator := nipst.NewValidator(commitmentConfig)
 	atxdb := activation.NewActivationDb(atxdbstore, idStore, mdb, uint64(app.Config.CONSENSUS.LayersPerEpoch), validator, lg.WithName("atxDb"))
 	beaconProvider := &oracle.EpochBeaconProvider{}
-	blockOracle := oracle.NewMinerBlockOracle(int32(layerSize), uint16(layersPerEpoch), atxdb, beaconProvider, vrfSigner, nodeID, lg.WithName("blockOracle"))
+	blockOracle := oracle.NewMinerBlockOracle(layerSize, uint16(layersPerEpoch), atxdb, beaconProvider, vrfSigner, nodeID, lg.WithName("blockOracle"))
 	blockValidator := oracle.NewBlockEligibilityValidator(int32(layerSize), uint16(layersPerEpoch), atxdb, beaconProvider, crypto.ValidateVRF, lg.WithName("blkElgValidator"))
 
 	trtl := tortoise.NewAlgorithm(int(1), mdb, lg.WithName("trtl"))

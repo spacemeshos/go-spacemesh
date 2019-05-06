@@ -30,12 +30,14 @@ type MinerBlockOracle struct {
 	log               log.Log
 }
 
-func NewMinerBlockOracle(committeeSize int32, layersPerEpoch uint16, activationDb ActivationDb,
-	beaconProvider *EpochBeaconProvider, vrfSigner *crypto.VRFSigner, nodeId types.NodeId,
-	log log.Log) *MinerBlockOracle {
+func NewMinerBlockOracle(committeeSize uint32,
+	layersPerEpoch uint16,
+	activationDb ActivationDb,
+	beaconProvider *EpochBeaconProvider,
+	vrfSigner *crypto.VRFSigner, nodeId types.NodeId, log log.Log) *MinerBlockOracle {
 
 	return &MinerBlockOracle{
-		committeeSize:  uint32(committeeSize),
+		committeeSize:  committeeSize,
 		layersPerEpoch: layersPerEpoch,
 		activationDb:   activationDb,
 		beaconProvider: beaconProvider,
