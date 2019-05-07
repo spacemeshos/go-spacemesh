@@ -143,6 +143,7 @@ func (s *Syncer) Synchronise() {
 func (s *Syncer) getLayerFromNeighbors(currenSyncLayer types.LayerID) (*types.Layer, error) {
 	blockIds, err := s.getLayerBlockIDs(types.LayerID(currenSyncLayer))
 	if err != nil {
+		s.Error("could not get layer block ids %v", currenSyncLayer, err)
 		return nil, err
 	}
 	blocksArr := make([]*types.Block, 0, len(blockIds))
@@ -245,11 +246,10 @@ func (s *Syncer) getIdsForHash(m map[string]p2p.Peer, index types.LayerID) (chan
 	}
 
 	idSet := make(map[types.BlockID]bool, s.LayerSize)
-	timeout := time.After(s.RequestTimeout)
 
 	go func() {
-		<-timeout
-		s.Info("timeout, not all peers responded to hash request")
+		<-time.After(s.RequestTimeout)
+		s.Info("timeout, not all peers responded to ids request")
 		close(kill)
 		close(ch)
 	}()
@@ -301,15 +301,14 @@ func (s *Syncer) getLayerHashes(index types.LayerID) (map[string]p2p.Peer, error
 					ch <- v
 				}
 			case <-kill:
-				s.Error("ids request to %v timed out", p)
+				s.Error("hash request to %v timed out", p)
 				return
 			}
 		}(peer)
 	}
 
-	timeout := time.After(s.RequestTimeout)
 	go func() {
-		<-timeout
+		<-time.After(s.RequestTimeout)
 		s.Info("timeout, not all peers responded to hash request")
 		close(kill)
 		close(ch)
@@ -331,7 +330,7 @@ func (s *Syncer) getLayerHashes(index types.LayerID) (map[string]p2p.Peer, error
 
 func (s *Syncer) sendLayerHashRequest(peer p2p.Peer, layer types.LayerID) (chan *peerHashPair, error) {
 	s.Info("send layer hash request Peer: %v layer: %v", peer, layer)
-	ch := make(chan *peerHashPair)
+	ch := make(chan *peerHashPair, 1)
 
 	foo := func(msg []byte) {
 		defer close(ch)
@@ -342,9 +341,8 @@ func (s *Syncer) sendLayerHashRequest(peer p2p.Peer, layer types.LayerID) (chan 
 }
 
 func (s *Syncer) sendLayerBlockIDsRequest(peer p2p.Peer, idx types.LayerID) (chan []types.BlockID, error) {
-	s.Info("send block.LayerIDs request Peer: ", peer, " layer: ", idx)
-
-	ch := make(chan []types.BlockID)
+	s.Info("send blockIds request Peer: ", peer, " layer: ", idx)
+	ch := make(chan []types.BlockID, 1)
 	foo := func(msg []byte) {
 		defer close(ch)
 		ids, err := types.BytesToBlockIds(msg)
@@ -387,6 +385,7 @@ func newBlockRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg []byte) 
 
 func newLayerHashRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg []byte) []byte {
 	return func(msg []byte) []byte {
+		logger.Debug("handle layer hash request")
 		lyrid := common.BytesToUint64(msg)
 		layer, err := layers.GetLayer(types.LayerID(lyrid))
 		if err != nil {
@@ -399,11 +398,11 @@ func newLayerHashRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg []by
 
 func newLayerBlockIdsRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg []byte) []byte {
 	return func(msg []byte) []byte {
+		logger.Debug("handle blockIds request")
 		lyrid := common.BytesToUint64(msg)
-
 		layer, err := layers.GetLayer(types.LayerID(lyrid))
 		if err != nil {
-			logger.Error("Error handling mesh.LayerIDs request message with LayerID: %d and error: %s", lyrid, err.Error())
+			logger.Error("Error handling ids request message with LayerID: %d and error: %s", lyrid, err.Error())
 			return nil
 		}
 

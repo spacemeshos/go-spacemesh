@@ -78,7 +78,7 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	conf := sync.Configuration{
 		SyncInterval:   1 * time.Second,
 		Concurrency:    4,
-		LayerSize:      int(5),
+		LayerSize:      int(100),
 		RequestTimeout: 500 * time.Millisecond,
 	}
 
