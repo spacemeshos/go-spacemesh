@@ -57,3 +57,4 @@ default-timeout-latency = "10s"
 hare-round-duration-sec = "5"
 hare-committee-size = 10
 hare-max-adversaries = 5
+hare-wakeup-delta = 5

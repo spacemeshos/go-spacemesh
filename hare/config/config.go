@@ -4,7 +4,7 @@ type Config struct {
 	N             int `mapstructure:"hare-committee-size"`     // total number of active parties
 	F             int `mapstructure:"hare-max-adversaries"`    // number of dishonest parties
 	RoundDuration int `mapstructure:"hare-round-duration-sec"` // the duration of a single round
-	WakeupDelta   int
+	WakeupDelta   int `mapstructure:"hare-wakeup-delta"` // the wakeup delta after tick
 }
 
 func DefaultConfig() Config {
