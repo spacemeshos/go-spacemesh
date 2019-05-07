@@ -16,7 +16,7 @@ bootstrap:
     hare-committee-size: '20'
     hare-max-adversaries: '9'
     hare-round-duration-sec: '10'
-    layer-duration-sec: '60'
+    layer-duration-sec: '80'
     layer-average-size: '20'
 client:
   image: 'spacemeshos/go-spacemesh:develop'
@@ -27,7 +27,7 @@ client:
     hare-committee-size: '20'
     hare-max-adversaries: '9'
     hare-round-duration-sec: '10'
-    layer-duration-sec: '60'
+    layer-duration-sec: '80'
     layer-average-size: '20'
 elastic:
   host: elastic.spacemesh.io

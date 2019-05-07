@@ -11,15 +11,13 @@ import (
 	"github.com/spacemeshos/sha256-simd"
 )
 
-const GenesisActiveSetSize = 5
-
 type ActivationDb interface {
 	GetNodeAtxIds(node types.NodeId) ([]types.AtxId, error)
 	GetAtx(id types.AtxId) (*types.ActivationTx, error)
 }
 
 type MinerBlockOracle struct {
-	committeeSize  int32
+	committeeSize  uint32
 	layersPerEpoch uint16
 	activationDb   ActivationDb
 	beaconProvider *EpochBeaconProvider
@@ -32,9 +30,11 @@ type MinerBlockOracle struct {
 	log               log.Log
 }
 
-func NewMinerBlockOracle(committeeSize int32, layersPerEpoch uint16, activationDb ActivationDb,
-	beaconProvider *EpochBeaconProvider, vrfSigner *crypto.VRFSigner, nodeId types.NodeId,
-	log log.Log) *MinerBlockOracle {
+func NewMinerBlockOracle(committeeSize uint32,
+	layersPerEpoch uint16,
+	activationDb ActivationDb,
+	beaconProvider *EpochBeaconProvider,
+	vrfSigner *crypto.VRFSigner, nodeId types.NodeId, log log.Log) *MinerBlockOracle {
 
 	return &MinerBlockOracle{
 		committeeSize:  committeeSize,
@@ -73,12 +73,12 @@ func (bo *MinerBlockOracle) calcEligibilityProofs(epochNumber types.EpochId) err
 		if !epochNumber.IsGenesis() {
 			return fmt.Errorf("failed to get latest ATX: %v", err)
 		}
-		bo.log.Warning("genesis epoch detected, using GenesisActiveSetSize (%d)", GenesisActiveSetSize)
-		activeSetSize = GenesisActiveSetSize
+		bo.log.Warning("genesis epoch detected, using GenesisActiveSetSize (%d)", bo.committeeSize)
+		activeSetSize = bo.committeeSize
 	} else {
 		activeSetSize = atx.ActiveSetSize
-		if epochNumber.IsGenesis() && activeSetSize < GenesisActiveSetSize {
-			activeSetSize = GenesisActiveSetSize
+		if epochNumber.IsGenesis() && activeSetSize < bo.committeeSize {
+			activeSetSize = bo.committeeSize
 		}
 		bo.atxID = atx.Id()
 	}
@@ -131,7 +131,7 @@ func calcEligibleLayer(epochNumber types.EpochId, layersPerEpoch uint16, vrfHash
 	return types.LayerID(eligibleLayerRelativeToEpochStart + epochOffset)
 }
 
-func getNumberOfEligibleBlocks(activeSetSize uint32, committeeSize int32, layersPerEpoch uint16, lg log.Log) (uint32, error) {
+func getNumberOfEligibleBlocks(activeSetSize uint32, committeeSize uint32, layersPerEpoch uint16, lg log.Log) (uint32, error) {
 	if activeSetSize == 0 {
 		return 0, errors.New("empty active set not allowed")
 	}

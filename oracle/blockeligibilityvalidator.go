@@ -10,7 +10,7 @@ import (
 type VRFValidationFunction func(message, signature, publicKey []byte) error
 
 type BlockEligibilityValidator struct {
-	committeeSize  int32
+	committeeSize  uint32
 	layersPerEpoch uint16
 	activationDb   ActivationDb
 	beaconProvider *EpochBeaconProvider
@@ -22,7 +22,7 @@ func NewBlockEligibilityValidator(committeeSize int32, layersPerEpoch uint16, ac
 	beaconProvider *EpochBeaconProvider, validateVRF VRFValidationFunction, log log.Log) *BlockEligibilityValidator {
 
 	return &BlockEligibilityValidator{
-		committeeSize:  committeeSize,
+		committeeSize:  uint32(committeeSize),
 		layersPerEpoch: layersPerEpoch,
 		activationDb:   activationDb,
 		beaconProvider: beaconProvider,
@@ -35,7 +35,7 @@ func (v BlockEligibilityValidator) BlockEligible(block *types.Block) (bool, erro
 	epochNumber := block.LayerIndex.GetEpoch(v.layersPerEpoch)
 
 	// need to get active set size from previous epoch
-	activeSetSize := uint32(GenesisActiveSetSize)
+	activeSetSize := uint32(v.committeeSize)
 	if !epochNumber.IsGenesis() {
 		atx, err := v.getValidATX(epochNumber, block)
 		if err != nil {
