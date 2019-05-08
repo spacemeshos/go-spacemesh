@@ -31,7 +31,6 @@ type BlockListener struct {
 	startLock            uint32
 	timeout              time.Duration
 	exit                 chan struct{}
-	tick                 chan types.LayerID
 }
 
 type TickProvider interface {
@@ -59,8 +58,8 @@ func NewBlockListener(net service.Service, bv BlockValidator, layers *mesh.Mesh,
 	bl := BlockListener{
 		BlockValidator:       bv,
 		Mesh:                 layers,
-		Peers:                p2p.NewPeers(net),
-		MessageServer:        server.NewMsgServer(net.(server.Service), BlockProtocol, timeout, make(chan service.DirectMessage, config.ConfigValues.BufferSize), logger),
+		Peers:                p2p.NewPeers(net, logger.WithName("peers")),
+		MessageServer:        server.NewMsgServer(net.(server.Service), BlockProtocol, timeout, make(chan service.DirectMessage, config.ConfigValues.BufferSize), logger.WithName("srv")),
 		Log:                  logger,
 		semaphore:            make(chan struct{}, concurrency),
 		unknownQueue:         make(chan types.BlockID, 200), //todo tune buffer size + get buffer from config

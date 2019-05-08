@@ -73,6 +73,14 @@ else
 endif
 .PHONY: p2p
 
+sync:
+ifeq ($(OS),WINDOWS_NT)
+	cd cmd/sync ; go build -o $(BIN_DIR_WIN)/go-sync.exe; cd ..
+else
+	cd cmd/sync ; go build -o $(BIN_DIR)/go-sync; cd ..
+endif
+.PHONY: sync
+
 tidy:
 	go mod tidy
 .PHONY: tidy

@@ -36,7 +36,6 @@ def get_pod_logs(namespace, pod_name):
     res = full.execute()
     hits = list(res.hits)
     print("Writing ${0} log lines for pod {1} ".format(len(hits), pod_name))
-    f = open('./logs/' + pod_name + '.txt', 'w')
     with open('./logs/' + pod_name + '.txt', 'w') as f:
         for i in hits:
             f.write(i.log)

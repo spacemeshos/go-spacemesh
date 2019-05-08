@@ -1,6 +1,7 @@
 package p2p
 
 import (
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/stretchr/testify/assert"
@@ -12,7 +13,7 @@ import (
 func getPeers(p Service) (Peers, chan p2pcrypto.PublicKey, chan p2pcrypto.PublicKey) {
 	value := atomic.Value{}
 	value.Store(make([]Peer, 0, 20))
-	pi := &PeersImpl{snapshot: &value, exit: make(chan struct{})}
+	pi := &PeersImpl{snapshot: &value, exit: make(chan struct{}), Log: log.NewDefault("peers")}
 	n, expired := p.SubscribePeerEvents()
 	go pi.listenToPeers(n, expired)
 	return pi, n, expired
