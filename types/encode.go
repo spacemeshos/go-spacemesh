@@ -110,9 +110,10 @@ func BytesAsAtx(b []byte) (*ActivationTx, error) {
 			PoetProof: &nipst.PoetProof{
 				Commitment: nil,
 				N:          0,
-				Proof: &shared.Proof{
-					Phi: nil,
-					L:   [150]shared.Labels{},
+				Proof: &shared.MerkleProof{
+					Root:         nil,
+					ProvenLeaves: nil,
+					ProofNodes:   nil,
 				},
 			},
 			PostChallenge: nil,

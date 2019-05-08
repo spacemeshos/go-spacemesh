@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/merkle-tree"
-	"github.com/spacemeshos/poet/rpc"
+	"github.com/spacemeshos/poet/hash"
 	"github.com/spacemeshos/poet/rpc/api"
 	"github.com/spacemeshos/poet/shared"
 	"github.com/spacemeshos/poet/verifier"
@@ -30,7 +30,7 @@ type MembershipProof struct {
 type PoetProof struct {
 	Commitment []byte
 	N          uint
-	Proof      *shared.Proof
+	Proof      *shared.MerkleProof
 }
 
 func (p *PoetProof) serialize() []byte {
@@ -59,17 +59,13 @@ func verifyPoetMembership(member *common.Hash, proof *MembershipProof) (bool, er
 var _ verifyPoetFunc = verifyPoet
 
 func verifyPoet(p *PoetProof) (bool, error) {
-	v, err := verifier.New(p.Commitment, p.N, shared.NewHashFunc(p.Commitment))
-	if err != nil {
-		return false, fmt.Errorf("failed to create a new verifier: %v", err)
-	}
-
-	res, err := v.VerifyNIP(*p.Proof)
+	leafCount := uint64(1) << p.N
+	err := verifier.Validate(*p.Proof, hash.GenLabelHashFunc(p.Commitment), hash.GenMerkleHashFunc(p.Commitment), leafCount, shared.T)
 	if err != nil {
 		return false, fmt.Errorf("failed to verify proof: %v", err)
 	}
 
-	return res, nil
+	return true, nil
 }
 
 var _ verifyPoetMatchesMembershipFunc = verifyPoetMatchesMembership
@@ -188,17 +184,13 @@ func (c *RPCPoetClient) subscribeProof(r *PoetRound,
 		return nil, fmt.Errorf("rpc failure: %v", err)
 	}
 
-	labels, err := rpc.WireLabelsToNative(res.Proof.L)
-	if err != nil {
-		return nil, fmt.Errorf("failed to deserialize proof: %v", err)
-	}
-
 	p := new(PoetProof)
 	p.N = uint(res.N)
 	p.Commitment = res.Commitment
-	p.Proof = new(shared.Proof)
-	p.Proof.Phi = res.Proof.Phi
-	p.Proof.L = *labels
+	p.Proof = new(shared.MerkleProof)
+	p.Proof.Root = res.Proof.Phi
+	p.Proof.ProofNodes = res.Proof.ProofNodes
+	p.Proof.ProvenLeaves = res.Proof.ProvenLeaves
 
 	return p, nil
 }
