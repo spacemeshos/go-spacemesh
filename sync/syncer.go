@@ -131,12 +131,15 @@ func (s *Syncer) maxSyncLayer() types.LayerID {
 func (s *Syncer) Synchronise() {
 	for currentSyncLayer := s.VerifiedLayer() + 1; currentSyncLayer < s.maxSyncLayer(); currentSyncLayer++ {
 		s.Info("syncing layer %v to layer %v current consensus layer is %d", s.VerifiedLayer(), currentSyncLayer, s.maxSyncLayer())
-		if lyr, err := s.getLayerFromNeighbors(currentSyncLayer); err == nil {
-			s.ValidateLayer(lyr)
-		} else {
-			s.Info("could not get layer %v from neighbors %v", currentSyncLayer, err)
-			return
+		lyr, err := s.GetLayer(types.LayerID(currentSyncLayer))
+		if err != nil {
+			s.Info("layer %v is not in the database", currentSyncLayer)
+			if lyr, err = s.getLayerFromNeighbors(currentSyncLayer); err != nil {
+				s.Info("could not get layer %v from neighbors %v", currentSyncLayer, err)
+				return
+			}
 		}
+		s.ValidateLayer(lyr)
 	}
 }
 
