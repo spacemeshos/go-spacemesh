@@ -143,6 +143,7 @@ func (s *Syncer) Synchronise() {
 	}
 }
 
+//todo add handling of failure
 func (s *Syncer) getLayerFromNeighbors(currenSyncLayer types.LayerID) (*types.Layer, error) {
 	blockIds, err := s.getLayerBlockIDs(types.LayerID(currenSyncLayer))
 	if err != nil {
@@ -197,23 +198,6 @@ type peerHashPair struct {
 	hash []byte
 }
 
-func sendBlockRequest(msgServ *server.MessageServer, peer p2p.Peer, id types.BlockID, logger log.Log) (chan *types.Block, error) {
-	logger.Info("send block request Peer: %v id: %v", peer, id)
-	ch := make(chan *types.Block)
-	foo := func(msg []byte) {
-		defer close(ch)
-		logger.Info("handle block response")
-		block, err := types.BytesAsBlock(msg)
-		if err != nil {
-			logger.Error("could not unmarshal block data")
-			return
-		}
-		ch <- &block
-	}
-
-	return ch, msgServ.SendRequest(BLOCK, id.ToBytes(), peer, foo)
-}
-
 func (s *Syncer) getLayerBlockIDs(index types.LayerID) (chan types.BlockID, error) {
 
 	m, err := s.getLayerHashes(index)
@@ -252,7 +236,6 @@ func (s *Syncer) getIdsForHash(m map[string]p2p.Peer, index types.LayerID) (chan
 
 	go func() {
 		<-time.After(s.RequestTimeout)
-		s.Info("timeout, not all peers responded to ids request")
 		close(kill)
 		close(ch)
 	}()
@@ -312,7 +295,6 @@ func (s *Syncer) getLayerHashes(index types.LayerID) (map[string]p2p.Peer, error
 
 	go func() {
 		<-time.After(s.RequestTimeout)
-		s.Info("timeout, not all peers responded to hash request")
 		close(kill)
 		close(ch)
 	}()
@@ -344,9 +326,10 @@ func (s *Syncer) sendLayerHashRequest(peer p2p.Peer, layer types.LayerID) (chan 
 }
 
 func (s *Syncer) sendLayerBlockIDsRequest(peer p2p.Peer, idx types.LayerID) (chan []types.BlockID, error) {
-	s.Info("send blockIds request Peer: ", peer, " layer: ", idx)
+	s.Debug("send blockIds request Peer: %v layer:  %v", peer, idx)
 	ch := make(chan []types.BlockID, 1)
 	foo := func(msg []byte) {
+		s.Debug("handle blockIds response Peer: %v layer:  %v", peer, idx)
 		defer close(ch)
 		ids, err := types.BytesToBlockIds(msg)
 		if err != nil {
@@ -362,6 +345,24 @@ func (s *Syncer) sendLayerBlockIDsRequest(peer p2p.Peer, idx types.LayerID) (cha
 	}
 
 	return ch, s.SendRequest(LAYER_IDS, idx.ToBytes(), peer, foo)
+}
+
+func sendBlockRequest(msgServ *server.MessageServer, peer p2p.Peer, id types.BlockID, logger log.Log) (chan *types.Block, error) {
+	logger.Debug("send block request Peer: %v id: %v", peer, id)
+	ch := make(chan *types.Block, 1)
+	foo := func(msg []byte) {
+		logger.Debug("handle block response Peer: %v id: %v", peer, id)
+		defer close(ch)
+		logger.Info("handle block response")
+		block, err := types.BytesAsBlock(msg)
+		if err != nil {
+			logger.Error("could not unmarshal block data")
+			return
+		}
+		ch <- &block
+	}
+
+	return ch, msgServ.SendRequest(BLOCK, id.ToBytes(), peer, foo)
 }
 
 func newBlockRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg []byte) []byte {
