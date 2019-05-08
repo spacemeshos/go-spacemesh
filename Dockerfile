@@ -28,6 +28,7 @@ COPY . .
 RUN make build
 RUN make hare
 RUN make p2p
+RUN make sync
 
 #In this last stage, we start from a fresh Alpine image, to reduce the image size and not ship the Go compiler in our production artifacts.
 FROM alpine AS spacemesh
@@ -36,6 +37,9 @@ FROM alpine AS spacemesh
 COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/go-spacemesh /bin/go-spacemesh
 COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/go-hare /bin/go-hare
 COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/go-p2p /bin/go-p2p
+COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/go-sync /bin/go-sync
+COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/tests/sync/data /bin/data
+
 
 ENTRYPOINT ["/bin/go-spacemesh"]
 EXPOSE 7513
