@@ -16,7 +16,7 @@ func TestPostClient(t *testing.T) {
 	assert.NoError(err)
 
 	space := uint64(1024)
-	numberOfProvenLabels := uint8(proving.NumberOfProvenLabels)
+	numberOfProvenLabels := uint8(proving.NumOfProvenLabels)
 	difficulty := proving.Difficulty(5)
 
 	c := NewPostClient()
