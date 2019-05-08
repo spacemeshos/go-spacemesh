@@ -64,7 +64,7 @@ func TestNIPSTBuilderWithMocks(t *testing.T) {
 		minerID,
 		1024,
 		5,
-		proving.NumberOfProvenLabels,
+		proving.NumOfProvenLabels,
 		600,
 		postProverMock,
 		poetProverMock,

@@ -39,8 +39,7 @@ func verifyPost(proof *PostProof, space uint64, numberOfProvenLabels uint8, diff
 	if space%merkle.NodeSize != 0 {
 		return false, fmt.Errorf("space (%d) is not a multiple of merkle.NodeSize (%d)", space, merkle.NodeSize)
 	}
-	leafCount := space / merkle.NodeSize
-	err := validation.Validate(proving.Proof(*proof), leafCount, numberOfProvenLabels, difficulty)
+	err := validation.Validate(proving.Proof(*proof), proving.Space(space), numberOfProvenLabels, difficulty)
 	if err != nil {
 		return false, err
 	}
@@ -60,8 +59,7 @@ func (c *PostClient) initialize(id []byte, space uint64, numberOfProvenLabels ui
 	if space%merkle.NodeSize != 0 {
 		return nil, fmt.Errorf("space (%d) is not a multiple of merkle.NodeSize (%d)", space, merkle.NodeSize)
 	}
-	leafCount := space / merkle.NodeSize
-	proof, err := initialization.Initialize(id, leafCount, numberOfProvenLabels, difficulty)
+	proof, err := initialization.Initialize(id, proving.Space(space), numberOfProvenLabels, difficulty)
 	return (*PostProof)(&proof), err
 }
 
