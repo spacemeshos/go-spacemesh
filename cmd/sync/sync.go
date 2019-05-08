@@ -30,6 +30,25 @@ var Cmd = &cobra.Command{
 	},
 }
 
+//conf
+//////////////////////////////
+//todo get from configuration
+var npstCfg = nipst.PostParams{
+	Difficulty:           5,
+	NumberOfProvenLabels: 10,
+	SpaceUnit:            1024,
+}
+
+//todo get from configuration
+var conf = sync.Configuration{
+	SyncInterval:   1 * time.Second,
+	Concurrency:    4,
+	LayerSize:      int(100),
+	RequestTimeout: 500 * time.Millisecond,
+}
+
+//////////////////////////////
+
 func init() {
 	cmdp.AddCommands(Cmd)
 }
@@ -51,7 +70,7 @@ func (app *SyncApp) Cleanup() {
 func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	// start p2p services
 	lg := log.New("sync_test", "", "")
-	lg.Info("Start!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+	lg.Info("------------ Start sync test -----------")
 	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P)
 
 	if err != nil {
@@ -63,24 +82,12 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 		lg.Error("error: ", err)
 		return
 	}
-	idStore := activation.NewIdentityStore(iddbstore)
-	npstCfg := nipst.PostParams{
-		Difficulty:           5,
-		NumberOfProvenLabels: 10,
-		SpaceUnit:            1024,
-	}
+
 	validator := nipst.NewValidator(npstCfg)
 	mshDb := mesh.NewPersistentMeshDB(app.Config.DataDir, lg.WithOptions(log.Nop))
-	atxdb := activation.NewActivationDb(database.NewMemDatabase(), idStore, mshDb, uint64(app.Config.CONSENSUS.LayersPerEpoch), validator, lg.WithName("atxDb").WithOptions(log.Nop))
+	atxdb := activation.NewActivationDb(database.NewMemDatabase(), activation.NewIdentityStore(iddbstore), mshDb, uint64(app.Config.CONSENSUS.LayersPerEpoch), validator, lg.WithName("atxDb").WithOptions(log.Nop))
 	msh := mesh.NewMesh(mshDb, atxdb, sync.ConfigTst(), &sync.MeshValidatorMock{}, &sync.MockState{}, lg.WithOptions(log.Nop))
 	defer msh.Close()
-
-	conf := sync.Configuration{
-		SyncInterval:   1 * time.Second,
-		Concurrency:    4,
-		LayerSize:      int(100),
-		RequestTimeout: 500 * time.Millisecond,
-	}
 
 	ch := make(chan types.LayerID, 1)
 	app.sync = sync.NewSync(swarm, msh, sync.BlockValidatorMock{}, conf, ch, lg.WithName("syncer"))

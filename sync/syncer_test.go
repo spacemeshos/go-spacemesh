@@ -345,7 +345,7 @@ loop:
 func getPeersMock(peers []p2p.Peer) p2p.PeersImpl {
 	value := atomic.Value{}
 	value.Store(peers)
-	pm1 := p2p.NewPeersImpl(&value, make(chan struct{}))
+	pm1 := p2p.NewPeersImpl(&value, make(chan struct{}), log.NewDefault("peers"))
 	return *pm1
 }
 

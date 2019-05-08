@@ -93,7 +93,7 @@ func (s *Syncer) run() {
 			s.currentLayerMutex.Lock()
 			s.currentLayer = layer
 			s.currentLayerMutex.Unlock()
-			s.Info("sync got tick for layer %v", layer)
+			s.Debug("sync got tick for layer %v", layer)
 			go syncRoutine()
 		}
 	}
@@ -106,8 +106,8 @@ func NewSync(srv service.Service, layers *mesh.Mesh, bv BlockValidator, conf Con
 		Configuration:  conf,
 		Log:            logger,
 		Mesh:           layers,
-		Peers:          p2p.NewPeers(srv),
-		MessageServer:  server.NewMsgServer(srv.(server.Service), syncProtocol, conf.RequestTimeout, make(chan service.DirectMessage, config.ConfigValues.BufferSize), logger.WithName("server")),
+		Peers:          p2p.NewPeers(srv, logger.WithName("peers")),
+		MessageServer:  server.NewMsgServer(srv.(server.Service), syncProtocol, conf.RequestTimeout, make(chan service.DirectMessage, config.ConfigValues.BufferSize), logger.WithName("srv")),
 		SyncLock:       0,
 		startLock:      0,
 		forceSync:      make(chan bool),
@@ -129,12 +129,12 @@ func (s *Syncer) maxSyncLayer() types.LayerID {
 }
 
 func (s *Syncer) Synchronise() {
-	for currenSyncLayer := s.VerifiedLayer() + 1; currenSyncLayer < s.maxSyncLayer(); currenSyncLayer++ {
-		s.Info("syncing layer %v to layer %v current consensus layer is %d", s.VerifiedLayer(), currenSyncLayer, s.maxSyncLayer())
-		if lyr, err := s.getLayerFromNeighbors(currenSyncLayer); err == nil {
+	for currentSyncLayer := s.VerifiedLayer() + 1; currentSyncLayer < s.maxSyncLayer(); currentSyncLayer++ {
+		s.Info("syncing layer %v to layer %v current consensus layer is %d", s.VerifiedLayer(), currentSyncLayer, s.maxSyncLayer())
+		if lyr, err := s.getLayerFromNeighbors(currentSyncLayer); err == nil {
 			s.ValidateLayer(lyr)
 		} else {
-			s.Info("could not get layer %v from neighbors %v", currenSyncLayer, err)
+			s.Info("could not get layer %v from neighbors %v", currentSyncLayer, err)
 			return
 		}
 	}

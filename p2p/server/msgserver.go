@@ -149,19 +149,24 @@ func (p *MessageServer) handleMessage(msg Message) {
 
 func (p *MessageServer) handleRequestMessage(msg Message, data *service.DataMsgWrapper) {
 	p.Debug("handleRequestMessage start")
-	if foo, okFoo := p.msgRequestHandlers[MessageType(data.MsgType)]; okFoo {
-		if payload := foo(msg); payload != nil {
-			p.Debug("handle request type %v", data.MsgType)
-			rmsg := &service.DataMsgWrapper{MsgType: data.MsgType, ReqID: data.ReqID, Payload: payload}
-			sendErr := p.network.SendWrappedMessage(msg.Sender(), p.name, rmsg)
-			if sendErr != nil {
-				p.Error("Error sending response message, err:", sendErr)
-			}
-		} else {
-			p.Error("handler returned this request type: %v payload %v", data.MsgType, msg.Data())
-		}
-	} else {
+
+	foo, okFoo := p.msgRequestHandlers[MessageType(data.MsgType)]
+	if !okFoo {
 		p.Error("handler missing for request %v payload %v", data.ReqID)
+		return
+	}
+
+	payload := foo(msg)
+
+	if payload == nil {
+		p.Error("handler returned this request type: %v payload %v", data.MsgType, msg.Data())
+		return
+	}
+
+	p.Debug("handle request type %v", data.MsgType)
+	rmsg := &service.DataMsgWrapper{MsgType: data.MsgType, ReqID: data.ReqID, Payload: payload}
+	if sendErr := p.network.SendWrappedMessage(msg.Sender(), p.name, rmsg); sendErr != nil {
+		p.Error("Error sending response message, err:", sendErr)
 	}
 	p.Debug("handleRequestMessage close")
 }
