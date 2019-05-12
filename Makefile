@@ -156,12 +156,20 @@ endif
              -e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
              -e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
              -it go-spacemesh-python pytest -s test_bs.py --tc-file=config.yaml --tc-format=yaml
+
 	docker run -e ES_PASSWD="$(ES_PASSWD)" \
              -e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
              -e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
              -it go-spacemesh-python pytest -s hare/test_hare.py --tc-file=hare/config.yaml --tc-format=yaml
-.PHONY: dockerrun-test
 
+	docker run -e ES_PASSWD="$(ES_PASSWD)" \
+             -e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
+             -e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
+             -it go-spacemesh-python pytest -s sync/test_sync.py --tc-file=sync/config.yaml --tc-format=yaml
+
+
+
+.PHONY: dockerrun-test
 dockerrun-all: dockerpush dockerrun-test
 .PHONY: dockerrun-all
 

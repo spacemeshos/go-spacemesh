@@ -12,14 +12,14 @@ bootstrap:
   image: 'spacemeshos/go-spacemesh:develop'
   command: '/bin/go-spacemesh'
   replicas: 1
-args:
-  randcon: '8'
-  hare-committee-size: '20'
-  hare-max-adversaries: '9'
-  hare-round-duration-sec: '10'
-  layer-duration-sec: '60'
-  layer-average-size: '20'
-  hare-wakeup-delta: '10'
+  args:
+    randcon: '8'
+    hare-committee-size: '20'
+    hare-max-adversaries: '9'
+    hare-round-duration-sec: '10'
+    layer-duration-sec: '60'
+    layer-average-size: '20'
+    hare-wakeup-delta: '10'
 client:
   image: 'spacemeshos/go-spacemesh:develop'
   command: '/bin/go-spacemesh'
