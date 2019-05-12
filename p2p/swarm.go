@@ -188,15 +188,17 @@ func (s *swarm) lookupFunc(target p2pcrypto.PublicKey) (node.Node, error) {
 
 func (s *swarm) onNewConnection(nce net.NewConnectionEvent) {
 	// todo: consider doing cpool actions from here instead of registering cpool as well.
-	s.addIncomingPeer(nce.Node.PublicKey())
+	err := s.addIncomingPeer(nce.Node.PublicKey())
+	if err != nil {
+		// todo: send rejection reason
+		nce.Conn.Close()
+	}
 }
 
 func (s *swarm) onClosedConnection(c net.Connection) {
 	// we don't want to block, we know this node's connection was closed.
 	// todo: consider recconnecting
-	if s.hasOutgoingPeer(c.RemotePublicKey()) {
-		go s.Disconnect(c.RemotePublicKey())
-	}
+	s.Disconnect(c.RemotePublicKey())
 }
 
 // Start starts the p2p service. if configured, bootstrap is started in the background.
@@ -769,28 +771,31 @@ func (s *swarm) Disconnect(peer p2pcrypto.PublicKey) {
 	metrics.OutboundPeers.Add(-1)
 
 	// todo: don't remove if we know this is a valid peer for later
-	s.dht.Remove(peer) // address doesn't matter because we only check dhtid
+	//s.dht.Remove(peer) // address doesn't matter because we only check dhtid
 
 	s.morePeersReq <- struct{}{}
 }
 
 // AddIncomingPeer inserts a peer to the neighborhood as a remote peer.
-func (s *swarm) addIncomingPeer(n p2pcrypto.PublicKey) {
+func (s *swarm) addIncomingPeer(n p2pcrypto.PublicKey) error {
 	s.inpeersMutex.RLock()
 	amnt := len(s.inpeers)
+	_, exist := s.inpeers[n.String()]
 	s.inpeersMutex.RUnlock()
 
 	if amnt >= s.config.MaxInboundPeers {
 		// todo: close connection with CPOOL
-		s.Disconnect(n) // todo: this will propagate a closed connection message. maybe need to do this in a lower level?
-		return
+		return errors.New("Reached max connectionsd")
 	}
 
 	s.inpeersMutex.Lock()
 	s.inpeers[n.String()] = n
 	s.inpeersMutex.Unlock()
-	s.publishNewPeer(n)
-	metrics.InboundPeers.Add(1)
+	if !exist {
+		s.publishNewPeer(n)
+		metrics.InboundPeers.Add(1)
+	}
+	return nil
 }
 
 func (s *swarm) hasIncomingPeer(peer p2pcrypto.PublicKey) bool {
