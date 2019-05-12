@@ -95,7 +95,7 @@ func TestKadDHT_VerySmallBootstrap(t *testing.T) {
 }
 
 func TestKadDHT_BootstrapSingleBoot(t *testing.T) {
-	numPeers := 500
+	numPeers := 100
 
 	bncfg := config.DefaultConfig()
 	sim := service.NewSimulator()
@@ -142,7 +142,7 @@ func TestKadDHT_BootstrapSingleBoot(t *testing.T) {
 }
 
 func TestKadDHT_Bootstrap(t *testing.T) {
-	numPeers := 500
+	numPeers := 100
 	min := 8
 	bootnum := 5
 
