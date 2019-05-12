@@ -8,5 +8,5 @@ type Config struct {
 }
 
 func DefaultConfig() Config {
-	return Config{10, 5, 2, 25}
+	return Config{10, 5, 2, 10}
 }

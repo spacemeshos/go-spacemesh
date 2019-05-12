@@ -1,4 +1,4 @@
-namespace: ''
+namespace: 'almog'
 
 config_map_name: conf
 
@@ -19,6 +19,7 @@ args:
   hare-round-duration-sec: '10'
   layer-duration-sec: '60'
   layer-average-size: '20'
+  hare-wakeup-delta: '10'
 client:
   image: 'spacemeshos/go-spacemesh:develop'
   command: '/bin/go-spacemesh'
@@ -30,6 +31,7 @@ client:
     hare-round-duration-sec: '10'
     layer-duration-sec: '60'
     layer-average-size: '20'
+    hare-wakeup-delta: '10'
 elastic:
   host: elastic.spacemesh.io
   port: 9200
