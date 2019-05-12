@@ -20,6 +20,7 @@ from tests.misc import ContainerSpec
 
 BOOT_DEPLOYMENT_FILE = './k8s/bootstrap-w-conf.yml'
 CLIENT_DEPLOYMENT_FILE = './k8s/client-w-conf.yml'
+CLIENT_POD_FILE = './k8s/single-client-w-conf.yml'
 ORACLE_DEPLOYMENT_FILE = './k8s/oracle.yml'
 POET_DEPLOYMENT_FILE = './k8s/poet.yml'
 
@@ -65,6 +66,37 @@ def wait_to_deployment_to_be_ready(deployment_name, name_space, time_out=None):
 
         if time_out and total_sleep_time > time_out:
             raise Exception("Timeout waiting to deployment to be ready")
+
+
+def wait_for_pod_to_be_ready(pod_name, name_space, time_out=None):
+    total_sleep_time = 0
+    while True:
+        resp = client.CoreV1Api().read_namespaced_pod(name=pod_name, namespace=name_space)
+        if resp.status.phase == 'Running':
+            print("Total time waiting for pod {0}: {1} sec".format(pod_name, total_sleep_time))
+            break
+        time.sleep(1)
+        total_sleep_time += 1
+
+        if time_out and total_sleep_time > time_out:
+            raise Exception("Timeout waiting to pod to be ready")
+
+
+def create_pod(file_name, name_space, deployment_id=None, container_specs=None):
+    with open(path.join(path.dirname(__file__), file_name)) as f:
+        dep = yaml.safe_load(f)
+
+        # Set unique deployment id
+        if deployment_id:
+            dep['metadata']['generateName'] += '{0}-'.format(deployment_id)
+
+        if container_specs:
+            dep = container_specs.update_deployment(dep)
+
+        k8s_api = client.CoreV1Api()
+        resp = k8s_api.create_namespaced_pod(namespace=name_space, body=dep)
+        wait_for_pod_to_be_ready(resp.metadata._name, name_space, time_out=testconfig['deployment_ready_time_out'])
+        return resp
 
 
 def create_deployment(file_name, name_space, deployment_id=None, replica_size=1, container_specs=None):
@@ -296,6 +328,34 @@ def setup_clients(request, setup_oracle, setup_poet, setup_bootstrap):
     return _setup_clients_in_namespace(testconfig['namespace'])
 
 
+@pytest.fixture(scope='module')
+def add_client(request, setup_oracle, setup_poet, setup_bootstrap):
+
+    def _add_single_client():
+        bs_info = setup_bootstrap.pods[0]
+
+        client_args = {} if 'args' not in testconfig['client'] else testconfig['client']['args']
+
+        cspec = ContainerSpec(cname='client',
+                              cimage=testconfig['client']['image'],
+                              centry=[testconfig['client']['command']])
+
+        cspec.append_args(bootnodes="{0}:{1}/{2}".format(bs_info['pod_ip'], '7513', bs_info['key']),
+                          oracle_server='http://{0}:3030'.format(setup_oracle),
+                          poet_server='{0}:50002'.format(setup_poet),
+                          genesis_time=GENESIS_TIME.isoformat('T', 'seconds'),
+                          **client_args)
+
+        resp = create_pod(CLIENT_POD_FILE,
+                          testconfig['namespace'],
+                          deployment_id=setup_bootstrap.deployment_id,
+                          container_specs=cspec)
+        print("Add new client: {0}".format(resp.metadata.name))
+        return resp
+
+    return _add_single_client
+
+
 def wait_genesis():
     # Make sure genesis time has not passed yet and sleep for the rest
     time_now = pytz.utc.localize(datetime.utcnow())
@@ -392,7 +452,15 @@ def test_client(setup_clients, save_log_on_exit):
     peers = query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, fields, True)
     assert peers == len(setup_clients.pods)
 
-    
+
+def test_add_client(add_client, setup_clients):
+    new_client = add_client()
+    time.sleep(20)
+    fields = {'M': 'discovery_bootstrap'}
+    hits = query_message(current_index, testconfig['namespace'], new_client.metadata.name, fields, True)
+    assert hits == 1, "Could not find new Client bootstrap message"
+
+
 def test_gossip(setup_clients):
     fields = {'M':'new_gossip_message', 'protocol': 'api_test_gossip'}
     # *note*: this already waits for bootstrap so we can send the msg right away.
