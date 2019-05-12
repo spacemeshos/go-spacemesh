@@ -1,4 +1,4 @@
-package dht
+package discovery
 
 import (
 	"context"
@@ -29,7 +29,7 @@ func simNodeWithDHT(t *testing.T, sc config.SwarmConfig, sim *service.Simulator)
 	ln, _ := node.GenerateTestNode(t)
 	n := sim.NewNodeFrom(ln.Node)
 	dht := New(ln, sc, n)
-	//n.AttachDHT(dht)
+	//n.AttachDHT(discovery)
 
 	return n, dht
 }
@@ -138,7 +138,7 @@ func TestKadDHT_BootstrapSingleBoot(t *testing.T) {
 		}
 	}
 
-	testDHTs(t, dhts, 8, 15)
+	testTables(t, dhts, 8, 15)
 }
 
 func TestKadDHT_Bootstrap(t *testing.T) {
@@ -191,16 +191,16 @@ func TestKadDHT_Bootstrap(t *testing.T) {
 		}
 	}
 
-	testDHTs(t, dhts, 8, 15)
+	testTables(t, dhts, 8, 15)
 }
 
-func testDHTs(t *testing.T, dhts []*Discovery, min, avg int) {
+func testTables(t *testing.T, dhts []*Discovery, min, avg int) {
 	all := 0
 	for i, dht := range dhts {
 		size := dht.rt.NumAddresses()
 		all += size
 		if min > 0 && size < min {
-			t.Fatalf("dht %d (%v) has %d peers min is %d", i, dht.local.String(), size, min)
+			t.Fatalf("discovery %d (%v) has %d peers min is %d", i, dht.local.String(), size, min)
 		}
 	}
 	avgSize := all / len(dhts)

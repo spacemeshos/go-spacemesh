@@ -9,7 +9,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/connectionpool"
-	"github.com/spacemeshos/go-spacemesh/p2p/dht"
+	"github.com/spacemeshos/go-spacemesh/p2p/discovery"
 	"github.com/spacemeshos/go-spacemesh/p2p/gossip"
 	"github.com/spacemeshos/go-spacemesh/p2p/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
@@ -67,8 +67,8 @@ type swarm struct {
 	cPool  cPool // conenction cache
 	gossip *gossip.Protocol
 
-	dht       dht.DHT // peer addresses store
-	udpServer *UDPMux // protocol switch that includes a udp networking service
+	discover  discovery.Interface // peer addresses store
+	udpServer *UDPMux             // protocol switch that includes a udp networking service
 
 	//neighborhood
 	initOnce sync.Once
@@ -104,7 +104,7 @@ func (s *swarm) waitForGossip() error {
 }
 
 // newSwarm creates a new P2P instance, configured by config, if newNode is true it will create a new node identity
-// and not load from disk. it creates a new `net`, connection pool and dht.
+// and not load from disk. it creates a new `net`, connection pool and discovery.
 func newSwarm(ctx context.Context, config config.Config, newNode bool, persist bool) (*swarm, error) {
 
 	port := config.TCPPort
@@ -164,7 +164,7 @@ func newSwarm(ctx context.Context, config config.Config, newNode bool, persist b
 		return nil, err
 	}
 	// todo : if discovery on
-	s.dht = dht.New(l, config.SwarmConfig, s.udpServer) // create table and discovery protocol
+	s.discover = discovery.New(l, config.SwarmConfig, s.udpServer) // create table and discovery protocol
 
 	cpool := connectionpool.NewConnectionPool(s.network, l.PublicKey())
 
@@ -183,7 +183,7 @@ func newSwarm(ctx context.Context, config config.Config, newNode bool, persist b
 }
 
 func (s *swarm) lookupFunc(target p2pcrypto.PublicKey) (node.Node, error) {
-	return s.dht.Lookup(target)
+	return s.discover.Lookup(target)
 }
 
 func (s *swarm) onNewConnection(nce net.NewConnectionEvent) {
@@ -226,7 +226,7 @@ func (s *swarm) Start() error {
 	tcpAddress := s.network.LocalAddr()
 	udpAddress := s.udpnetwork.LocalAddr()
 
-	s.dht.SetLocalAddresses(tcpAddress.String(), udpAddress.String()) // todo: pass net.Addr and convert in dht
+	s.discover.SetLocalAddresses(tcpAddress.String(), udpAddress.String()) // todo: pass net.Addr and convert in discovery
 
 	err = s.udpServer.Start()
 	if err != nil {
@@ -244,7 +244,7 @@ func (s *swarm) Start() error {
 	if s.config.SwarmConfig.Bootstrap {
 		go func() {
 			b := time.Now()
-			err := s.dht.Bootstrap(s.ctx)
+			err := s.discover.Bootstrap(s.ctx)
 			if err != nil {
 				s.bootErr = err
 				close(s.bootChan)
@@ -252,9 +252,9 @@ func (s *swarm) Start() error {
 				return
 			}
 			close(s.bootChan)
-			dhtsize := s.dht.Size()
-			s.lNode.With().Info("discovery_bootstrap", log.Bool("success", dhtsize >= s.config.SwarmConfig.RandomConnections && s.bootErr == nil),
-				log.Int("dht_size", dhtsize), log.Duration("time_elapsed", time.Since(b)))
+			size := s.discover.Size()
+			s.lNode.With().Info("discovery_bootstrap", log.Bool("success", size >= s.config.SwarmConfig.RandomConnections && s.bootErr == nil),
+				log.Int("size", size), log.Duration("time_elapsed", time.Since(b)))
 		}()
 	}
 
@@ -658,15 +658,15 @@ func (s *swarm) askForMorePeers() {
 	s.morePeersReq <- struct{}{}
 }
 
-// getMorePeers tries to fill the `peers` slice with dialed outbound peers that we selected from the dht.
+// getMorePeers tries to fill the `peers` slice with dialed outbound peers that we selected from the discovery.
 func (s *swarm) getMorePeers(numpeers int) int {
 
 	if numpeers == 0 {
 		return 0
 	}
 
-	// dht should provide us with random peers to connect to
-	nds := s.dht.SelectPeers(numpeers)
+	// discovery should provide us with random peers to connect to
+	nds := s.discover.SelectPeers(numpeers)
 	ndsLen := len(nds)
 	if ndsLen == 0 {
 		s.lNode.Debug("Peer sampler returned nothing.")
@@ -706,7 +706,7 @@ loop:
 			if cne.err != nil {
 				s.lNode.Debug("can't establish connection with sampled peer %v, %v", cne.n.String(), cne.err)
 				bad++
-				break // this peer didn't work, todo: tell dht
+				break // this peer didn't work, todo: tell discovery
 			}
 
 			pkstr := cne.n.PublicKey().String()
@@ -771,7 +771,7 @@ func (s *swarm) Disconnect(peer p2pcrypto.PublicKey) {
 	metrics.OutboundPeers.Add(-1)
 
 	// todo: don't remove if we know this is a valid peer for later
-	//s.dht.Remove(peer) // address doesn't matter because we only check dhtid
+	//s.discovery.Remove(peer) // address doesn't matter because we only check dhtid
 
 	s.morePeersReq <- struct{}{}
 }

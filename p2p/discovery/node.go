@@ -1,4 +1,4 @@
-package dht
+package discovery
 
 import (
 	"github.com/spacemeshos/go-spacemesh/p2p/node"

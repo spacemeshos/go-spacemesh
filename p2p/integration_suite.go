@@ -67,7 +67,7 @@ func (its *IntegrationTestSuite) SetupSuite() {
 			}
 			udpAddr := boot[j].udpnetwork.LocalAddr()
 			pk := boot[j].lNode.PublicKey()
-			boot[i].dht.Update(node.New(pk, udpAddr.String()), boot[i].lNode.Node)
+			boot[i].discover.Update(node.New(pk, udpAddr.String()), boot[i].lNode.Node)
 		}
 	}
 

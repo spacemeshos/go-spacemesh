@@ -1,4 +1,4 @@
-package dht
+package discovery
 
 import (
 	"time"
@@ -17,8 +17,6 @@ type KnownAddress struct {
 	refs        int // reference count of new buckets
 }
 
-// NetAddress returns the underlying wire.NetAddress associated with the
-// known address.
 func (ka *KnownAddress) DiscNode() discNode {
 	return ka.na
 }

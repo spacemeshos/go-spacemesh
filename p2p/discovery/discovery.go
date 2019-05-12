@@ -1,5 +1,5 @@
-// Package dht implements a Distributed Hash Table based on Kademlia protocol.
-package dht
+// Package discovery implements a Distributed Hash Table based on Kademlia protocol.
+package discovery
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 )
 
 // DHT is an interface to a general distributed hash table.
-type Discover interface {
+type Interface interface {
 	Remove(pubkey p2pcrypto.PublicKey)
 	Lookup(pubkey p2pcrypto.PublicKey) (node.Node, error)
 	Update(addr, src node.Node)
