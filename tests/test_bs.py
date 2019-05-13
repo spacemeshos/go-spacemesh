@@ -412,7 +412,7 @@ def test_transaction(setup_clients, wait_genesis):
     print("balance ok")
 
 
-def test_mining(setup_clients, wait_genesis):
+def test_mining(setup_clients, wait_genesis, setup_bootstrap):
     # choose client to run on
     client_ip = setup_clients.pods[0]['pod_ip']
 
@@ -469,6 +469,8 @@ def test_mining(setup_clients, wait_genesis):
         for blk in atxmap[node]:
             mp.add(blk[4])
         assert len(atxmap[node]) / int((last_layer / layers_per_epoch) + 1) == 1
+        if len(mp) != int((last_layer / layers_per_epoch) + 1):
+            print("mp " + ','.join(mp) + " node " + node + " atxmap " + str(atxmap[node]))
         assert len(mp) == int((last_layer / layers_per_epoch) + 1)
 
     # assert that each node has created layer_avg/number_of_nodes
