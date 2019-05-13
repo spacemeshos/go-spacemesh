@@ -43,7 +43,7 @@ func (its *IntegrationTestSuite) SetupSuite() {
 
 	bootcfg := config.DefaultConfig()
 	bootcfg.SwarmConfig.Bootstrap = false
-	bootcfg.SwarmConfig.Gossip = false
+	bootcfg.SwarmConfig.Gossip = true
 	bootcfg.SwarmConfig.RandomConnections = its.NeighborsCount
 
 	// start boot
@@ -73,7 +73,7 @@ func (its *IntegrationTestSuite) SetupSuite() {
 
 	cfg := config.DefaultConfig()
 	cfg.SwarmConfig.Bootstrap = true
-	cfg.SwarmConfig.Gossip = false
+	cfg.SwarmConfig.Gossip = true
 	cfg.SwarmConfig.RandomConnections = its.NeighborsCount
 	cfg.SwarmConfig.BootstrapNodes = StringIdentifiers(boot...)
 
