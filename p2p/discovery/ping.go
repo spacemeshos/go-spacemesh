@@ -90,7 +90,7 @@ func (p *protocol) verifyPinger(from net.Addr, pi *pb.Ping) error {
 
 // Ping notifies `peer` about our p2p identity.
 func (p *protocol) Ping(peer p2pcrypto.PublicKey) error {
-	p.logger.Info("send ping request Peer: %v", peer)
+	p.logger.Debug("send ping request Peer: %v", peer)
 
 	data := &pb.Ping{Me: &pb.NodeInfo{NodeId: p.local.PublicKey().Bytes(), TCPAddress: p.localTcpAddress, UDPAddress: p.localUdpAddress}, ToAddr: ""}
 	payload, err := proto.Marshal(data)
@@ -100,7 +100,7 @@ func (p *protocol) Ping(peer p2pcrypto.PublicKey) error {
 	ch := make(chan []byte)
 	foo := func(msg []byte) {
 		defer close(ch)
-		p.logger.Info("handle ping response from %v", peer.String())
+		p.logger.Debug("handle ping response from %v", peer.String())
 		data := &pb.Ping{}
 		if err := proto.Unmarshal(msg, data); err != nil {
 			p.logger.Error("could not unmarshal block data")

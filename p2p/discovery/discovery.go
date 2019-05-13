@@ -10,7 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 )
 
-// DHT is an interface to a general distributed hash table.
+// Interface is an interface to the discovery protocol
 type Interface interface {
 	Remove(pubkey p2pcrypto.PublicKey)
 	Lookup(pubkey p2pcrypto.PublicKey) (node.Node, error)

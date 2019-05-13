@@ -14,7 +14,7 @@ import (
 func (p *protocol) newGetAddressesRequestHandler() func(msg server.Message) []byte {
 	return func(msg server.Message) []byte {
 		start := time.Now()
-		p.logger.Info("Got a find_node request at from ", msg.Sender().String())
+		p.logger.Debug("Got a find_node request at from ", msg.Sender().String())
 
 		// TODO: if we don't know who is that peer (a.k.a first time we hear from this address)
 		// 		 we must ensure that he's indeed listening on that address = check last pong
@@ -31,7 +31,7 @@ func (p *protocol) newGetAddressesRequestHandler() func(msg server.Message) []by
 			return nil
 		}
 
-		p.logger.Info("responding a find_node request at from after", msg.Sender().String(), time.Now().Sub(start))
+		p.logger.Debug("responding a find_node request at from after", msg.Sender().String(), time.Now().Sub(start))
 
 		return payload
 	}
@@ -70,7 +70,7 @@ func (p *protocol) GetAddresses(server p2pcrypto.PublicKey) ([]discNode, error) 
 		if nodes == nil {
 			return nil, errors.New("empty result set")
 		}
-		p.logger.With().Debug("find_node_time_to_recv", log.String("from", server.String()), log.Duration("time_elapsed", time.Now().Sub(start)))
+		p.logger.With().Debug("getaddress_time_to_recv", log.String("from", server.String()), log.Duration("time_elapsed", time.Now().Sub(start)))
 		return nodes, nil
 	case <-timeout.C:
 		return nil, errors.New("request timed out")
