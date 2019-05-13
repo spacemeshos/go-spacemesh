@@ -3,7 +3,7 @@ from elasticsearch_dsl import Search, Q
 from pytest_testconfig import config as testconfig
 
 from tests.fixtures import set_namespace, load_config, init_session, set_docker_images, session_id
-from tests.test_bs import  setup_poet, setup_clients, save_log_on_exit, setup_oracle, setup_bootstrap, create_configmap
+from tests.test_bs import setup_poet, setup_clients, save_log_on_exit, setup_oracle, setup_bootstrap, create_configmap
 from tests.test_bs import get_elastic_search_api
 from tests.test_bs import current_index, wait_genesis
 
@@ -66,6 +66,7 @@ def query_hare_output_set(indx, namespace, client_po_name):
         lst.append(h.set_values)
     return lst
 
+
 # ==============================================================================
 #    TESTS
 # ==============================================================================
@@ -79,7 +80,7 @@ def test_hare_sanity(setup_clients, save_log_on_exit):
     wait_genesis()
     # Need to wait for 1 full iteration + the time it takes the logs to propagate to ES
     delay = int(testconfig['client']['args']['hare-round-duration-sec']) * NUM_OF_EXPECTED_ROUNDS + \
-            EFK_LOG_PROPAGATION_DELAY
+            EFK_LOG_PROPAGATION_DELAY + int(testconfig['client']['args']['hare-wakeup-delta'])
     print("Going to sleep for {0}".format(delay))
     time.sleep(delay)
     lst = query_hare_output_set(current_index, testconfig['namespace'], setup_clients.deployment_id)

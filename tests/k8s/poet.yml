@@ -22,4 +22,4 @@ spec:
         ports:
         - containerPort: 50002
       nodeSelector:
-        role: tests
+        role: poet

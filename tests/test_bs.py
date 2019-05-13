@@ -288,7 +288,7 @@ def create_configmap(request):
                                        name=configmap_name,
                                        namespace=nspace)
         # Get File Content
-        with open('../config.toml', 'r') as f:
+        with open(testconfig['config_path'], 'r') as f:
             file_content = f.read()
         # Instantiate the configmap object
         d = {'config.toml': file_content}

@@ -108,6 +108,8 @@ func AddCommands(cmd *cobra.Command) {
 	// RoundDuration determines the duration of a round in the Hare protocol
 	cmd.PersistentFlags().IntVar(&config.HARE.RoundDuration, "hare-round-duration-sec",
 		config.HARE.RoundDuration, "Duration of round in the Hare protocol")
+	cmd.PersistentFlags().IntVar(&config.HARE.WakeupDelta, "hare-wakeup-delta",
+		config.HARE.WakeupDelta, "Wakeup delta after tick for hare protocol")
 
 	/**========================Consensus Flags ========================== **/
 	//todo: add this here

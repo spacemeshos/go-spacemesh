@@ -8,7 +8,7 @@
 data-folder = "~/.spacemesh-data"
 test-mode = false
 metrics = false
-metrics-port = 1010
+metrics-port = 2020
 oracle_server = "http://localhost:3030"
 oracle_server_worldid = 0
 genesis-time = "2019-02-13T17:02:00+00:00"
@@ -57,3 +57,4 @@ default-timeout-latency = "10s"
 hare-round-duration-sec = "5"
 hare-committee-size = 10
 hare-max-adversaries = 5
+hare-wakeup-delta = 5
