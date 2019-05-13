@@ -413,11 +413,6 @@ def test_transaction(setup_clients, wait_genesis):
 
 
 def test_mining(setup_clients, wait_genesis):
-    timetowait = len(setup_clients.pods)/2
-    print("Sleeping " + str(timetowait) + " before checking out bootstrap results")
-    time.sleep(timetowait)
-
-
     # choose client to run on
     client_ip = setup_clients.pods[0]['pod_ip']
 
@@ -459,7 +454,7 @@ def test_mining(setup_clients, wait_genesis):
     atxmap = queries.get_atx_per_node(testconfig["namespace"])
     total_atxs = sum([len(atxmap[x]) for x in atxmap ])
 
-    total_pods = len(setup_clients.pods) + 1
+    total_pods = len(setup_clients.pods) + len(setup_bootstrap.pods)
 
     print("atx created " + str(total_atxs))
     print("blocks created " + str(total_blocks))
@@ -469,11 +464,12 @@ def test_mining(setup_clients, wait_genesis):
     assert total_atxs == int((last_layer / layers_per_epoch) + 1) * total_pods
 
     # assert that a node has created one atx per epoch
-    mp = set()
     for node in atxmap:
+        mp = set()
         for blk in atxmap[node]:
             mp.add(blk[4])
         assert len(atxmap[node]) / int((last_layer / layers_per_epoch) + 1) == 1
+        assert len(mp) == int((last_layer / layers_per_epoch) + 1)
 
     # assert that each node has created layer_avg/number_of_nodes
     mp.clear()
