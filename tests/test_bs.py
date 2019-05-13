@@ -24,6 +24,11 @@ CLIENT_POD_FILE = './k8s/single-client-w-conf.yml'
 ORACLE_DEPLOYMENT_FILE = './k8s/oracle.yml'
 POET_DEPLOYMENT_FILE = './k8s/poet.yml'
 
+BOOTSTRAP_PORT = 7513
+ORACLE_SERVER_PORT = 3030
+POET_SERVER_PORT = 50002
+
+
 ELASTICSEARCH_URL = "http://{0}".format(testconfig['elastic']['host'])
 
 GENESIS_TIME = pytz.utc.localize(datetime.utcnow() + timedelta(seconds=testconfig['genesis_delta']))
@@ -245,8 +250,8 @@ def setup_bootstrap(request, init_session, setup_oracle, setup_poet, create_conf
                               cimage=testconfig['bootstrap']['image'],
                               centry=[testconfig['bootstrap']['command']])
 
-        cspec.append_args(oracle_server='http://{0}:3030'.format(setup_oracle),
-                          poet_server='{0}:50002'.format(setup_poet),
+        cspec.append_args(oracle_server='http://{0}:{1}'.format(setup_oracle, ORACLE_SERVER_PORT),
+                          poet_server='{0}:{1}'.format(setup_poet, POET_SERVER_PORT),
                           genesis_time=GENESIS_TIME.isoformat('T', 'seconds'),
                           **bootstrap_args)
 
@@ -295,9 +300,9 @@ def setup_clients(request, setup_oracle, setup_poet, setup_bootstrap):
                               cimage=testconfig['client']['image'],
                               centry=[testconfig['client']['command']])
 
-        cspec.append_args(bootnodes="{0}:{1}/{2}".format(bs_info['pod_ip'], '7513', bs_info['key']),
-                          oracle_server='http://{0}:3030'.format(setup_oracle),
-                          poet_server='{0}:50002'.format(setup_poet),
+        cspec.append_args(bootnodes="{0}:{1}/{2}".format(bs_info['pod_ip'], BOOTSTRAP_PORT, bs_info['key']),
+                          oracle_server='http://{0}:{1}'.format(setup_oracle, ORACLE_SERVER_PORT),
+                          poet_server='{0}:{1}'.format(setup_poet, POET_SERVER_PORT),
                           genesis_time=GENESIS_TIME.isoformat('T', 'seconds'),
                           **client_args)
 
@@ -332,6 +337,9 @@ def setup_clients(request, setup_oracle, setup_poet, setup_bootstrap):
 def add_client(request, setup_oracle, setup_poet, setup_bootstrap):
 
     def _add_single_client():
+        if not setup_bootstrap.pods:
+            raise Exception("Could not find bootstrap node")
+
         bs_info = setup_bootstrap.pods[0]
 
         client_args = {} if 'args' not in testconfig['client'] else testconfig['client']['args']
@@ -340,9 +348,9 @@ def add_client(request, setup_oracle, setup_poet, setup_bootstrap):
                               cimage=testconfig['client']['image'],
                               centry=[testconfig['client']['command']])
 
-        cspec.append_args(bootnodes="{0}:{1}/{2}".format(bs_info['pod_ip'], '7513', bs_info['key']),
-                          oracle_server='http://{0}:3030'.format(setup_oracle),
-                          poet_server='{0}:50002'.format(setup_poet),
+        cspec.append_args(bootnodes="{0}:{1}/{2}".format(bs_info['pod_ip'], BOOTSTRAP_PORT, bs_info['key']),
+                          oracle_server='http://{0}:{1}'.format(setup_oracle, ORACLE_SERVER_PORT),
+                          poet_server='{0}:{1}'.format(setup_poet, POET_SERVER_PORT),
                           genesis_time=GENESIS_TIME.isoformat('T', 'seconds'),
                           **client_args)
 
@@ -455,6 +463,8 @@ def test_client(setup_clients, save_log_on_exit):
 
 def test_add_client(add_client, setup_clients):
     new_client = add_client()
+
+    # Sleep a while before checking the node is bootstarped
     time.sleep(20)
     fields = {'M': 'discovery_bootstrap'}
     hits = query_message(current_index, testconfig['namespace'], new_client.metadata.name, fields, True)
