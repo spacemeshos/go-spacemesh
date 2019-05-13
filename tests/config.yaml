@@ -6,6 +6,7 @@ script_on_exit: '' # Uncomment this to save logs './k8s/log-client-pods.sh'
 
 genesis_delta: 120
 deployment_ready_time_out: 120
+config_path: '../config.toml'
 
 bootstrap:
   image: 'spacemeshos/go-spacemesh:develop'
@@ -16,8 +17,9 @@ bootstrap:
     hare-committee-size: '20'
     hare-max-adversaries: '9'
     hare-round-duration-sec: '10'
-    layer-duration-sec: '80'
+    layer-duration-sec: '60'
     layer-average-size: '20'
+    hare-wakeup-delta: '10'
 client:
   image: 'spacemeshos/go-spacemesh:develop'
   command: '/bin/go-spacemesh'
@@ -27,8 +29,9 @@ client:
     hare-committee-size: '20'
     hare-max-adversaries: '9'
     hare-round-duration-sec: '10'
-    layer-duration-sec: '80'
+    layer-duration-sec: '60'
     layer-average-size: '20'
+    hare-wakeup-delta: '10'
 elastic:
   host: elastic.spacemesh.io
   port: 9200

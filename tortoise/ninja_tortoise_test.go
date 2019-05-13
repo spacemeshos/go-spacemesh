@@ -3,6 +3,7 @@ package tortoise
 import (
 	"fmt"
 	"github.com/google/uuid"
+	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -10,8 +11,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
 	"math"
+	"math/big"
 	"os"
 	"runtime"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -352,6 +355,7 @@ func createLayerWithRandVoting(index types.LayerID, prev []*types.Layer, blocksI
 	layerBlocks := make([]types.BlockID, 0, blocksInLayer)
 	for i := 0; i < blocksInLayer; i++ {
 		bl := types.NewExistingBlock(types.BlockID(uuid.New().ID()), index, []byte("data data data"))
+		addTransactionsToBlock(bl, 100)
 		layerBlocks = append(layerBlocks, bl.ID())
 		for idx, pat := range patterns {
 			for _, id := range pat {
@@ -376,4 +380,20 @@ func chooseRandomPattern(blocksInLayer int, patternSize int) []int {
 		indexes = append(indexes, r)
 	}
 	return indexes
+}
+
+func addTransactionsToBlock(bl *types.Block, numOfTxs int) int64 {
+	var totalRewards int64
+	for i := 0; i < numOfTxs; i++ {
+		gasPrice := rand.Int63n(100)
+		addr := rand.Int63n(1000000)
+		//log.Info("adding tx with gas price %v nonce %v", gasPrice, i)
+		bl.Txs = append(bl.Txs, types.NewSerializableTransaction(uint64(i), address.HexToAddress("1"),
+			address.HexToAddress(strconv.FormatUint(uint64(addr), 10)),
+			big.NewInt(10),
+			big.NewInt(gasPrice),
+			100))
+		totalRewards += gasPrice
+	}
+	return totalRewards
 }

@@ -391,9 +391,10 @@ func NewNIPSTWithChallenge(challenge *common.Hash) *NIPST {
 		PoetProof: &PoetProof{
 			Commitment: []byte(nil),
 			N:          0,
-			Proof: &shared.Proof{
-				Phi: []byte(nil),
-				L:   [150]shared.Labels{},
+			Proof: &shared.MerkleProof{
+				Root:         []byte(nil),
+				ProvenLeaves: [][]byte(nil),
+				ProofNodes:   [][]byte(nil),
 			},
 		},
 		PostChallenge: challenge,
