@@ -53,14 +53,6 @@ def search_pod_logs(namespace, pod_name, term):
     return False
 
 
-def test_sync_sanity(set_namespace, setup_clients, setup_bootstrap, save_log_on_exit):
-    time.sleep(40)
-    fields = {"M": "Validate layer 99"}
-    res = query_message(current_index, testconfig['namespace'], setup_bootstrap.pods[0]['name'], fields, False)
-    assert res
-
-    print("done!!")
-
 
 def get_conf(bs_info):
     client_args = {} if 'args' not in testconfig['client'] else testconfig['client']['args']
