@@ -107,7 +107,7 @@ def parseAtx(log_messages):
     node2blocks = {}
     for x in log_messages:
         nid = re.split(r'\.', x[0])[0]
-        m = re.findall(r'(?:[0-9][^, ]*[A-Za-z][^, ]*)|(?:[A-Za-z][^, ]*[0-9][^, ]*)|(?:\d+)', x[1])
+        m = re.findall(r'(?<=\b:\s)(\w+)|(?<=view\s)(\w+)', x[1])
         if nid in node2blocks:
             node2blocks[nid].append(m)
         else:
