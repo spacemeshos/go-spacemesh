@@ -138,7 +138,7 @@ func TestKadDHT_BootstrapSingleBoot(t *testing.T) {
 		}
 	}
 
-	testTables(t, dhts, 8, 15)
+	testTables(t, dhts, 8, 10)
 }
 
 func TestKadDHT_Bootstrap(t *testing.T) {
@@ -191,7 +191,7 @@ func TestKadDHT_Bootstrap(t *testing.T) {
 		}
 	}
 
-	testTables(t, dhts, 8, 15)
+	testTables(t, dhts, 8, 10)
 }
 
 func testTables(t *testing.T, dhts []*Discovery, min, avg int) {
