@@ -103,6 +103,17 @@ def query_message(indx, namespace, client_po_name, fields, findFails=False):
     return s
 
 
+def parseAtx(log_messages):
+    node2blocks = {}
+    for x in log_messages:
+        nid = re.split(r'\.', x[0])[0]
+        m = re.findall(r'(?:[0-9][^, ]*[A-Za-z][^, ]*)|(?:[A-Za-z][^, ]*[0-9][^, ]*)|(?:\d+)', x[1])
+        if nid in node2blocks:
+            node2blocks[nid].append(m)
+        else:
+            node2blocks[nid] = [m]
+    return node2blocks
+
 def sort_by_nodeid(log_messages):
     node2blocks = {}
     for x in log_messages:
@@ -152,9 +163,9 @@ def wait_for_latest_layer(deployment, layer_id):
 def get_atx_per_node(deployment):
     # based on log: atx published! id: %v, prevATXID: %v, posATXID: %v, layer: %v, published in epoch: %v, active set: %v miner: %v view %v
     block_fields = {"M": "atx published"}
-    blocks = query_message(current_index, deployment, deployment, block_fields, True)
-    print("found " + str(len(blocks)) + " atxs")
-    nodes = sort_by_nodeid(blocks)
+    atx_logs = query_message(current_index, deployment, deployment, block_fields, True)
+    print("found " + str(len(atx_logs)) + " atxs")
+    nodes = parseAtx(atx_logs)
 
     return nodes
 
