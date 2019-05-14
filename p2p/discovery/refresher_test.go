@@ -13,7 +13,7 @@ import (
 
 type mockDisc struct {
 	pingres     error
-	findnoderes []discNode
+	findnoderes []NodeInfo
 	findnoderr  error
 }
 
@@ -21,7 +21,7 @@ func (md *mockDisc) Ping(key p2pcrypto.PublicKey) error {
 	return md.pingres
 }
 
-func (md *mockDisc) GetAddresses(key p2pcrypto.PublicKey) ([]discNode, error) {
+func (md *mockDisc) GetAddresses(key p2pcrypto.PublicKey) ([]NodeInfo, error) {
 	return md.findnoderes, md.findnoderr
 }
 
@@ -70,22 +70,22 @@ func Test_pingThenFindNode(t *testing.T) {
 	p := &mockDisc{pingErr, nil, findnodeErr}
 
 	c := make(chan queryResult, 1)
-	pingThenFindNode(p, n, c)
+	pingThenGetAddresses(p, n, c)
 
 	require.Equal(t, len(c), 1)
 	res := <-c
 	require.Equal(t, res.err, pingErr)
 
 	p.pingres = nil
-	pingThenFindNode(p, n, c)
+	pingThenGetAddresses(p, n, c)
 	require.Equal(t, len(c), 1)
 	res = <-c
 	require.Equal(t, res.err, findnodeErr)
 
 	p.findnoderr = nil
-	p.findnoderes = []discNode{generateDiscNode()}
+	p.findnoderes = []NodeInfo{generateDiscNode()}
 
-	pingThenFindNode(p, n, c)
+	pingThenGetAddresses(p, n, c)
 
 	require.Equal(t, len(c), 1)
 	res = <-c
@@ -102,14 +102,14 @@ func TestRefresher_refresh(t *testing.T) {
 
 	boot := generateDiscNode()
 
-	addrbk.AddAddresses([]discNode{boot}, local)
+	addrbk.AddAddresses([]NodeInfo{boot}, local)
 
 	some := generateDiscNodes(10)
 	disc.pingres = nil
 	disc.findnoderr = nil
 	disc.findnoderes = some
 
-	res := ref.refresh([]discNode{boot})
+	res := ref.requestAddresses([]NodeInfo{boot})
 
 	require.Equal(t, some, res)
 
@@ -136,14 +136,14 @@ func TestRefresher_refresh2(t *testing.T) {
 	disc.findnoderr = nil
 	disc.findnoderes = some
 
-	res := ref.refresh(boot)
+	res := ref.requestAddresses(boot)
 
 	require.Equal(t, len(res), 0)
 
 	for _, s := range some {
 		d, err := addrbk.Lookup(s.PublicKey())
 		require.Error(t, err)
-		require.Equal(t, d, emptyDiscNode)
+		require.Equal(t, d, emptyNodeInfo)
 	}
 }
 
@@ -164,7 +164,7 @@ func TestRefresher_refresh3(t *testing.T) {
 	disc.findnoderr = nil
 	disc.findnoderes = some
 
-	res := ref.refresh(boot)
+	res := ref.requestAddresses(boot)
 
 	require.Equal(t, res, some)
 

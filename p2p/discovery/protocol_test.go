@@ -11,27 +11,27 @@ import (
 	"testing"
 )
 
-func generateDiscNode() discNode {
+func generateDiscNode() NodeInfo {
 	n := node.GenerateRandomNodeData()
-	return discNodeFromNode(n, n.Address())
+	return NodeInfoFromNode(n, n.Address())
 }
 
-func generateDiscNodes(n int) []discNode {
-	discs := make([]discNode, n)
+func generateDiscNodes(n int) []NodeInfo {
+	discs := make([]NodeInfo, n)
 	notdiscs := node.GenerateRandomNodesData(n)
 	for i := 0; i < n; i++ {
-		discs[i] = discNodeFromNode(notdiscs[i], notdiscs[i].Address())
+		discs[i] = NodeInfoFromNode(notdiscs[i], notdiscs[i].Address())
 	}
 	return discs
 }
 
-func generateDiscNodesFakeIPs(n int) []discNode {
-	discs := make([]discNode, n)
+func generateDiscNodesFakeIPs(n int) []NodeInfo {
+	discs := make([]NodeInfo, n)
 	//notdiscs := node.GenerateRandomNodesData(n)
 	for i := 0; i < n; i++ {
 		s := fmt.Sprintf("%d.%d.173.147:7513", i/128+60, i%128+60)
 		nd := node.New(p2pcrypto.NewRandomPubkey(), s)
-		discs[i] = discNodeFromNode(nd, s)
+		discs[i] = NodeInfoFromNode(nd, s)
 	}
 	return discs
 }
@@ -60,21 +60,21 @@ func TestPing_Ping(t *testing.T) {
 	p2 := newTestNode(sim)
 	p3 := sim.NewNode()
 
-	p1.d.LookupFunc = func(key p2pcrypto.PublicKey) (d discNode, e error) {
-		return discNodeFromNode(p2.svc.Node, p2.svc.Node.Address()), nil
+	p1.d.LookupFunc = func(key p2pcrypto.PublicKey) (d NodeInfo, e error) {
+		return NodeInfoFromNode(p2.svc.Node, p2.svc.Node.Address()), nil
 	}
 
 	err := p1.dscv.Ping(p2.svc.PublicKey())
 	require.NoError(t, err)
 
-	p2.d.LookupFunc = func(key p2pcrypto.PublicKey) (d discNode, e error) {
-		return discNodeFromNode(p1.svc.Node, p1.svc.Node.Address()), nil
+	p2.d.LookupFunc = func(key p2pcrypto.PublicKey) (d NodeInfo, e error) {
+		return NodeInfoFromNode(p1.svc.Node, p1.svc.Node.Address()), nil
 	}
 	err = p2.dscv.Ping(p1.svc.PublicKey())
 	require.NoError(t, err)
 
-	p1.d.LookupFunc = func(key p2pcrypto.PublicKey) (d discNode, e error) {
-		return discNodeFromNode(p3.Node, p3.Node.Address()), nil
+	p1.d.LookupFunc = func(key p2pcrypto.PublicKey) (d NodeInfo, e error) {
+		return NodeInfoFromNode(p3.Node, p3.Node.Address()), nil
 	}
 
 	err = p1.dscv.Ping(p3.PublicKey())
@@ -127,7 +127,7 @@ func TestFindNodeProtocol_FindNode(t *testing.T) {
 	require.NoError(t, err, "Should not return error")
 	// when routing table is empty we get an empty result
 	// todo: maybe this should error ?
-	require.Equal(t, []discNode{}, idarr, "Should be an empty array")
+	require.Equal(t, []NodeInfo{}, idarr, "Should be an empty array")
 }
 
 //
@@ -176,8 +176,8 @@ func TestFindNodeProtocol_FindNode_Concurrency(t *testing.T) {
 	for i := 0; i < concurrency; i++ {
 		go func() {
 			nx := newTestNode(sim)
-			nx.d.LookupFunc = func(key p2pcrypto.PublicKey) (d discNode, e error) {
-				return discNodeFromNode(n1.svc.Node, n1.svc.Node.Address()), nil
+			nx.d.LookupFunc = func(key p2pcrypto.PublicKey) (d NodeInfo, e error) {
+				return NodeInfoFromNode(n1.svc.Node, n1.svc.Node.Address()), nil
 			}
 			nx.dscv.table = nx.d
 			res, err := nx.dscv.GetAddresses(n1.svc.PublicKey())
@@ -198,7 +198,7 @@ func Test_ToNodeInfo(t *testing.T) {
 	many := generateDiscNodes(100)
 
 	for i := 0; i < len(many); i++ {
-		nds := toNodeInfo(many, many[i].String())
+		nds := marshalNodeInfo(many, many[i].String())
 		for j := 0; j < len(many)-1; j++ {
 			if base58.Encode(nds[j].NodeId) == many[i].String() {
 				t.Error("it was there")

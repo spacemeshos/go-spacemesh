@@ -82,7 +82,7 @@ func (p *protocol) verifyPinger(from net.Addr, pi *pb.Ping) error {
 	// todo: check the address provided with an extra ping before updating. ( if we haven't checked it for a while )
 	// todo: decide on best way to know our ext address
 
-	dn := discNodeFromNode(node.New(k, tcp), udp)
+	dn := NodeInfoFromNode(node.New(k, tcp), udp)
 	// inbound ping is the actual source of this node info
 	p.table.AddAddress(dn, dn)
 	return nil

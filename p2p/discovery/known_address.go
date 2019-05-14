@@ -1,14 +1,15 @@
 package discovery
 
 import (
+	"math"
 	"time"
 )
 
 // KnownAddress tracks information about a known network address that is used
 // to determine how viable an address is.
 type KnownAddress struct {
-	na          discNode
-	srcAddr     discNode
+	na          NodeInfo
+	srcAddr     NodeInfo
 	attempts    int
 	lastSeen    time.Time
 	lastattempt time.Time
@@ -17,7 +18,7 @@ type KnownAddress struct {
 	refs        int // reference count of new buckets
 }
 
-func (ka *KnownAddress) DiscNode() discNode {
+func (ka *KnownAddress) DiscNode() NodeInfo {
 	return ka.na
 }
 
@@ -44,10 +45,10 @@ func (ka *KnownAddress) chance() float64 {
 		c *= 0.01
 	}
 
-	// Failed attempts deprioritise.
-	for i := ka.attempts; i > 0; i-- {
-		c /= 1.5
-	}
+	// deprioritize 66% after each failed attempt, but at most 1/28th to avoid the search taking forever or overly penalizing outages.
+	c *= math.Pow(0.66, math.Min(float64(ka.attempts), 8))
+
+	// TODO : do this without floats ?
 
 	return c
 }

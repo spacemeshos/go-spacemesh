@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-const saveResults = true
+const saveResults = false
 
 type NodeTestInstance interface {
 	Service

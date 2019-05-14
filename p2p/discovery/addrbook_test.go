@@ -51,7 +51,7 @@ func TestNeedMoreAddresses(t *testing.T) {
 	}
 
 	//randnode := generateDiscNode()
-	//rds := discNodeFromNode(randnode.Node173, 144, 173, 111), 8333
+	//rds := NodeInfoFromNode(randnode.Node173, 144, 173, 111), 8333
 
 	n.AddAddresses(generateDiscNodesFakeIPs(1500), n.localAddress)
 	numAddrs := n.NumAddresses()
@@ -132,7 +132,7 @@ func Test_Lookup(t *testing.T) {
 
 	c, err := n.Lookup(n2.PublicKey())
 	require.Error(t, err)
-	require.Equal(t, c, emptyDiscNode)
+	require.Equal(t, c, emptyNodeInfo)
 
 	// Add a new address and get it
 	n.AddAddress(n2, n.localAddress)

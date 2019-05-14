@@ -6,8 +6,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 )
 
-// MockDiscovery is a mocked discovery
-type MockDiscovery struct {
+// MockPeerStore is a mocked discovery
+type MockPeerStore struct {
 	UpdateFunc      func(n, src node.Node)
 	updateCount     int
 	SelectPeersFunc func(qty int) []node.Node
@@ -18,23 +18,23 @@ type MockDiscovery struct {
 	lookupErr       error
 }
 
-func (m *MockDiscovery) Remove(key p2pcrypto.PublicKey) {
+func (m *MockPeerStore) Remove(key p2pcrypto.PublicKey) {
 
 }
 
 // SetUpdate sets the function to run on an issued update
-func (m *MockDiscovery) SetUpdate(f func(n, addr node.Node)) {
+func (m *MockPeerStore) SetUpdate(f func(n, addr node.Node)) {
 	m.UpdateFunc = f
 }
 
 // SetLookupResult sets the result ok a lookup operation
-func (m *MockDiscovery) SetLookupResult(node node.Node, err error) {
+func (m *MockPeerStore) SetLookupResult(node node.Node, err error) {
 	m.lookupRes = node
 	m.lookupErr = err
 }
 
 // Update is a discovery update operation it updates the updatecount
-func (m *MockDiscovery) Update(n, src node.Node) {
+func (m *MockPeerStore) Update(n, src node.Node) {
 	if m.UpdateFunc != nil {
 		m.UpdateFunc(n, src)
 	}
@@ -42,17 +42,17 @@ func (m *MockDiscovery) Update(n, src node.Node) {
 }
 
 // UpdateCount returns the number of times update was called
-func (m *MockDiscovery) UpdateCount() int {
+func (m *MockPeerStore) UpdateCount() int {
 	return m.updateCount
 }
 
 // BootstrapCount returns the number of times bootstrap was called
-func (m *MockDiscovery) BootstrapCount() int {
+func (m *MockPeerStore) BootstrapCount() int {
 	return m.bsCount
 }
 
 // netLookup is a discovery lookup operation
-func (m *MockDiscovery) Lookup(pubkey p2pcrypto.PublicKey) (node.Node, error) {
+func (m *MockPeerStore) Lookup(pubkey p2pcrypto.PublicKey) (node.Node, error) {
 	if m.LookupFunc != nil {
 		return m.LookupFunc(pubkey)
 	}
@@ -60,18 +60,18 @@ func (m *MockDiscovery) Lookup(pubkey p2pcrypto.PublicKey) (node.Node, error) {
 }
 
 // SetBootstrap set the bootstrap result
-func (m *MockDiscovery) SetBootstrap(err error) {
+func (m *MockPeerStore) SetBootstrap(err error) {
 	m.bsres = err
 }
 
 // Bootstrap is a discovery bootstrap operation function it update the bootstrap count
-func (m *MockDiscovery) Bootstrap(ctx context.Context) error {
+func (m *MockPeerStore) Bootstrap(ctx context.Context) error {
 	m.bsCount++
 	return m.bsres
 }
 
 // SelectPeers mocks selecting peers.
-func (m *MockDiscovery) SelectPeers(qty int) []node.Node {
+func (m *MockPeerStore) SelectPeers(qty int) []node.Node {
 	if m.SelectPeersFunc != nil {
 		return m.SelectPeersFunc(qty)
 	}
@@ -79,29 +79,29 @@ func (m *MockDiscovery) SelectPeers(qty int) []node.Node {
 }
 
 // to satisfy the iface
-func (m *MockDiscovery) SetLocalAddresses(tcp, udp string) {
+func (m *MockPeerStore) SetLocalAddresses(tcp, udp string) {
 
 }
 
 // Size returns the size of peers in the discovery
-func (m *MockDiscovery) Size() int {
+func (m *MockPeerStore) Size() int {
 	//todo: set size
 	return m.updateCount
 }
 
 // mockAddrBook
 type mockAddrBook struct {
-	addAddressFunc func(n, src discNode)
+	addAddressFunc func(n, src NodeInfo)
 	addressCount   int
 
-	LookupFunc func(p2pcrypto.PublicKey) (discNode, error)
-	lookupRes  discNode
+	LookupFunc func(p2pcrypto.PublicKey) (NodeInfo, error)
+	lookupRes  NodeInfo
 	lookupErr  error
 
 	GetAddressFunc func() *KnownAddress
 	GetAddressRes  *KnownAddress
 
-	AddressCacheResult []discNode
+	AddressCacheResult []NodeInfo
 }
 
 func (m *mockAddrBook) RemoveAddress(key p2pcrypto.PublicKey) {
@@ -109,18 +109,18 @@ func (m *mockAddrBook) RemoveAddress(key p2pcrypto.PublicKey) {
 }
 
 // SetUpdate sets the function to run on an issued update
-func (m *mockAddrBook) SetUpdate(f func(n, addr discNode)) {
+func (m *mockAddrBook) SetUpdate(f func(n, addr NodeInfo)) {
 	m.addAddressFunc = f
 }
 
 // SetLookupResult sets the result ok a lookup operation
-func (m *mockAddrBook) SetLookupResult(node discNode, err error) {
+func (m *mockAddrBook) SetLookupResult(node NodeInfo, err error) {
 	m.lookupRes = node
 	m.lookupErr = err
 }
 
 // AddAddress mock
-func (m *mockAddrBook) AddAddress(n, src discNode) {
+func (m *mockAddrBook) AddAddress(n, src NodeInfo) {
 	if m.addAddressFunc != nil {
 		m.addAddressFunc(n, src)
 	}
@@ -128,7 +128,7 @@ func (m *mockAddrBook) AddAddress(n, src discNode) {
 }
 
 // AddAddresses mock
-func (m *mockAddrBook) AddAddresses(n []discNode, src discNode) {
+func (m *mockAddrBook) AddAddresses(n []NodeInfo, src NodeInfo) {
 	if m.addAddressFunc != nil {
 		for _, addr := range n {
 			m.addAddressFunc(addr, src)
@@ -143,12 +143,12 @@ func (m *mockAddrBook) AddAddressCount() int {
 }
 
 // AddressCache mock
-func (m *mockAddrBook) AddressCache() []discNode {
+func (m *mockAddrBook) AddressCache() []NodeInfo {
 	return m.AddressCacheResult
 }
 
 // Lookup mock
-func (m *mockAddrBook) Lookup(pubkey p2pcrypto.PublicKey) (discNode, error) {
+func (m *mockAddrBook) Lookup(pubkey p2pcrypto.PublicKey) (NodeInfo, error) {
 	if m.LookupFunc != nil {
 		return m.LookupFunc(pubkey)
 	}

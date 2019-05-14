@@ -22,7 +22,7 @@ func (p *protocol) newGetAddressesRequestHandler() func(msg server.Message) []by
 		results := p.table.AddressCache()
 		//todo: limit results to message size
 
-		resp := &pb.Addresses{NodeInfos: toNodeInfo(results, msg.Sender().String())}
+		resp := &pb.Addresses{NodeInfos: marshalNodeInfo(results, msg.Sender().String())}
 
 		payload, err := proto.Marshal(resp)
 
@@ -38,27 +38,27 @@ func (p *protocol) newGetAddressesRequestHandler() func(msg server.Message) []by
 }
 
 // GetAddresses Send a single find node request to a remote node
-func (p *protocol) GetAddresses(server p2pcrypto.PublicKey) ([]discNode, error) {
+func (p *protocol) GetAddresses(server p2pcrypto.PublicKey) ([]NodeInfo, error) {
 	start := time.Now()
 	var err error
 
 	// response handler
-	ch := make(chan []discNode)
-	foo := func(msg []byte) {
+	ch := make(chan []NodeInfo)
+	resHandler := func(msg []byte) {
 		defer close(ch)
 		//p.logger.Info("handle find_node response from %v", serverNode.String())
 		data := &pb.Addresses{}
 		if err := proto.Unmarshal(msg, data); err != nil {
-			p.logger.Error("could not unmarshal block data")
+			p.logger.Error("could not unmarshal Addresses message")
 			return
 		}
 
 		//todo: check that we're not pass max results ?
 
-		ch <- fromNodeInfos(data.NodeInfos)
+		ch <- unmarshalNodeInfo(data.NodeInfos)
 	}
 
-	err = p.msgServer.SendRequest(GET_ADDRESSES, []byte(""), server, foo)
+	err = p.msgServer.SendRequest(GET_ADDRESSES, []byte(""), server, resHandler)
 
 	if err != nil {
 		return nil, err
@@ -79,7 +79,7 @@ func (p *protocol) GetAddresses(server p2pcrypto.PublicKey) ([]discNode, error) 
 
 // ToNodeInfo returns marshaled protobufs identity infos slice from a slice of RemoteNodeData.
 // filterId: identity id to exclude from the result
-func toNodeInfo(nodes []discNode, filterID string) []*pb.NodeInfo {
+func marshalNodeInfo(nodes []NodeInfo, filterID string) []*pb.NodeInfo {
 	// init empty slice
 	var res []*pb.NodeInfo
 	for _, n := range nodes {
@@ -98,8 +98,8 @@ func toNodeInfo(nodes []discNode, filterID string) []*pb.NodeInfo {
 }
 
 // FromNodeInfos converts a list of NodeInfo to a list of Node.
-func fromNodeInfos(nodes []*pb.NodeInfo) []discNode {
-	res := make([]discNode, len(nodes))
+func unmarshalNodeInfo(nodes []*pb.NodeInfo) []NodeInfo {
+	res := make([]NodeInfo, len(nodes))
 	for i, n := range nodes {
 		pubk, err := p2pcrypto.NewPubkeyFromBytes(n.NodeId)
 		if err != nil {
@@ -108,7 +108,7 @@ func fromNodeInfos(nodes []*pb.NodeInfo) []discNode {
 			continue
 		}
 		nd := node.New(pubk, n.TCPAddress)
-		node := discNodeFromNode(nd, n.UDPAddress)
+		node := NodeInfoFromNode(nd, n.UDPAddress)
 		res[i] = node
 
 	}

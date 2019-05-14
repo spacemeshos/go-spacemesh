@@ -65,9 +65,9 @@ func TestKadDHT_VerySmallBootstrap(t *testing.T) {
 	extra, _ := node.GenerateTestNode(t)
 	extrasvc := sim.NewNodeFrom(extra.Node)
 	edht := New(extra, bncfg.SwarmConfig, extrasvc)
-	edht.rt.AddAddress(generateDiscNode(), discNodeFromNode(extra.Node, extra.Node.Address()))
+	edht.rt.AddAddress(generateDiscNode(), NodeInfoFromNode(extra.Node, extra.Node.Address()))
 
-	bdht.rt.AddAddress(discNodeFromNode(extra.Node, extra.Address()), discNodeFromNode(bn.Node, bn.Address()))
+	bdht.rt.AddAddress(NodeInfoFromNode(extra.Node, extra.Address()), NodeInfoFromNode(bn.Node, bn.Address()))
 
 	cfg := config.DefaultConfig().SwarmConfig
 	cfg.Gossip = false
@@ -226,7 +226,7 @@ func Test_findNodeFailure(t *testing.T) {
 		d := New(bsnode, config.DefaultConfig().SwarmConfig, realnode)
 		<-time.After(time.Second)
 		nd, _ := simNodeWithDHT(t, config.DefaultConfig().SwarmConfig, sim)
-		d.rt.AddAddress(discNodeFromNode(nd.Node, nd.Node.Address()), discNodeFromNode(d.local.Node, d.local.Address()))
+		d.rt.AddAddress(NodeInfoFromNode(nd.Node, nd.Node.Address()), NodeInfoFromNode(d.local.Node, d.local.Address()))
 	}()
 
 	err := dht2.Bootstrap(context.TODO())

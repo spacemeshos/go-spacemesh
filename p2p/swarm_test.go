@@ -587,7 +587,7 @@ func Test_Swarm_getMorePeers2(t *testing.T) {
 
 	conn, _ := n.SubscribePeerEvents()
 
-	mdht := new(discovery.MockDiscovery)
+	mdht := new(discovery.MockPeerStore)
 	n.discover = mdht
 	// this will return 0 peers because SelectPeers returns empty array when not set
 
@@ -607,7 +607,7 @@ func Test_Swarm_getMorePeers3(t *testing.T) {
 
 	conn, _ := n.SubscribePeerEvents()
 
-	mdht := new(discovery.MockDiscovery)
+	mdht := new(discovery.MockPeerStore)
 	n.discover = mdht
 	testNode := node.GenerateRandomNodeData()
 	mdht.SelectPeersFunc = func(qty int) []node.Node {
@@ -638,7 +638,7 @@ func Test_Swarm_getMorePeers4(t *testing.T) {
 
 	conn, _ := n.SubscribePeerEvents()
 
-	mdht := new(discovery.MockDiscovery)
+	mdht := new(discovery.MockPeerStore)
 	n.discover = mdht
 
 	testNode := node.GenerateRandomNodeData()
@@ -675,7 +675,7 @@ func Test_Swarm_getMorePeers5(t *testing.T) {
 	//assert.Equal(t, res, 0)
 	//assertNoNewPeerEvent(t, conn)
 
-	mdht := new(discovery.MockDiscovery)
+	mdht := new(discovery.MockPeerStore)
 	n.discover = mdht
 
 	cpm := new(cpoolMock)
@@ -708,7 +708,7 @@ func Test_Swarm_getMorePeers6(t *testing.T) {
 	//assert.Equal(t, res, 0)
 	//assertNoNewPeerEvent(t, conn)
 
-	mdht := new(discovery.MockDiscovery)
+	mdht := new(discovery.MockPeerStore)
 	n.discover = mdht
 
 	cpm := new(cpoolMock)
@@ -748,7 +748,7 @@ func TestNeighborhood_Initial(t *testing.T) {
 	cfg.SwarmConfig.Bootstrap = false
 
 	p := p2pTestNoStart(t, cfg)
-	mdht := new(discovery.MockDiscovery)
+	mdht := new(discovery.MockPeerStore)
 	mdht.SelectPeersFunc = func(qty int) []node.Node {
 		return node.GenerateRandomNodesData(qty)
 	}

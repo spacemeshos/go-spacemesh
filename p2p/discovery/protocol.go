@@ -10,9 +10,9 @@ import (
 
 type protocolRoutingTable interface {
 	GetAddress() *KnownAddress
-	AddAddresses(n []discNode, src discNode)
-	AddAddress(n discNode, src discNode)
-	AddressCache() []discNode
+	AddAddresses(n []NodeInfo, src NodeInfo)
+	AddAddress(n NodeInfo, src NodeInfo)
+	AddressCache() []NodeInfo
 }
 
 type protocol struct {
@@ -31,7 +31,7 @@ func (d *protocol) SetLocalAddresses(tcp, udp string) {
 }
 
 // Name is the name if the protocol.
-const Name = "/udp/v2/protocol"
+const Name = "/udp/v2/discovery"
 
 // MessageBufSize is the buf size we give to the messages channel
 const MessageBufSize = 100

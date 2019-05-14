@@ -18,17 +18,19 @@ const (
 	minTimeBetweenQueries = 500 * time.Millisecond
 	// lastQueriesCacheSize is the maximum size of the query cache map
 	lastQueriesCacheSize = 100
+
+	maxConcurrentRequests = 3
 )
 
 // ErrBootAbort is returned when when bootstrap is canceled by context cancel
 var ErrBootAbort = errors.New("bootstrap canceled by signal")
 
-// refresher is used to bootstrap and refresh peers in the addrbook
+// refresher is used to bootstrap and requestAddresses peers in the addrbook
 type refresher struct {
 	logger log.Log
 	config config.SwarmConfig
 
-	bootNodes []discNode
+	bootNodes []NodeInfo
 
 	book *addrBook
 
@@ -40,17 +42,17 @@ type refresher struct {
 }
 
 func newRefresher(book *addrBook, disc Protocol, config config.SwarmConfig, logger log.Log) *refresher {
-	bn := make([]discNode, 0, len(config.BootstrapNodes))
+	bn := make([]NodeInfo, 0, len(config.BootstrapNodes))
 	for _, n := range config.BootstrapNodes {
 		nd, err := node.NewNodeFromString(n)
 		if err != nil {
 			// TODO : handle errors
 			continue
 		}
-		bn = append(bn, discNodeFromNode(nd, nd.Address()))
+		bn = append(bn, NodeInfoFromNode(nd, nd.Address()))
 	}
 
-	//todo: trigger refresh every X with random nodes
+	//todo: trigger requestAddresses every X with random nodes
 
 	return &refresher{
 		logger:      logger,
@@ -62,10 +64,16 @@ func newRefresher(book *addrBook, disc Protocol, config config.SwarmConfig, logg
 	}
 }
 
-func (r *refresher) Bootstrap(ctx context.Context, num int) error {
+func (r *refresher) Bootstrap(ctx context.Context, minPeers int) error {
 	var err error
 	tries := 0
-	servers := make([]discNode, 0, len(r.bootNodes))
+	servers := make([]NodeInfo, 0, len(r.bootNodes))
+
+	// The following loop will add the pre-set bootstrap nodes and query them for results
+	// if there were any results but we didn't reach minPeers it will try the same procedure
+	// using the results as servers to query. every failed loop will wait a backoff
+	// to let other nodes populate before flooding with queries.
+
 loop:
 	for {
 		size := r.book.NumAddresses()
@@ -74,9 +82,9 @@ loop:
 			servers = r.bootNodes
 		}
 
-		if size-len(r.bootNodes) < num {
+		if size < minPeers+len(r.bootNodes) {
 			r.logger.Info("Bootstrap: starting with %v sized table", size)
-			res := r.refresh(servers)
+			res := r.requestAddresses(servers)
 			if len(res) > 0 {
 				servers = res
 			}
@@ -84,9 +92,9 @@ loop:
 			r.logger.Info("Bootstrap : %d try gave %v results", tries, len(res))
 		}
 
-		newsize := r.book.NumAddresses() - len(r.bootNodes)
-		if newsize >= num {
-			r.logger.Info("Stopping bootstrap, achieved %v need %v", newsize, num)
+		newsize := r.book.NumAddresses()
+		if newsize >= minPeers+len(r.bootNodes) {
+			r.logger.Info("Stopping bootstrap, achieved %v need %v", newsize-len(r.bootNodes), minPeers)
 			break
 		}
 
@@ -103,6 +111,7 @@ loop:
 
 	}
 
+	// Don't keep bootstrap nodes in the table after bootstrap
 	for _, b := range r.bootNodes {
 		r.book.RemoveAddress(b.PublicKey())
 	}
@@ -129,13 +138,13 @@ func expire(m map[p2pcrypto.PublicKey]time.Time) {
 }
 
 type queryResult struct {
-	src discNode
-	res []discNode
+	src NodeInfo
+	res []NodeInfo
 	err error
 }
 
-// pingThenFindNode is sending a ping, then find node, then return results on given chan.
-func pingThenFindNode(p Protocol, addr discNode, qr chan queryResult) {
+// pingThenGetAddresses is sending a ping, then find node, then return results on given chan.
+func pingThenGetAddresses(p Protocol, addr NodeInfo, qr chan queryResult) {
 	// TODO: check whether we pinged recently and maybe skip pinging
 	err := p.Ping(addr.PublicKey())
 
@@ -152,25 +161,23 @@ func pingThenFindNode(p Protocol, addr discNode, qr chan queryResult) {
 	qr <- queryResult{addr, res, nil}
 }
 
-// refresh will crawl the network looking for new peer addresses.
-func (r *refresher) refresh(addrs []discNode) []discNode {
+// requestAddresses will crawl the network looking for new peer addresses.
+func (r *refresher) requestAddresses(servers []NodeInfo) []NodeInfo {
 
 	// todo: here we stop only after we've tried querying or queried all addrs
 	// 	maybe we should stop after we've reached a certain amount ? (needMoreAddresses..)
-	var out []discNode
+	var out []NodeInfo
 
 	seen := make(map[p2pcrypto.PublicKey]struct{})
 	seen[r.book.localAddress.PublicKey()] = struct{}{}
 
 	now := time.Now()
-
-	maxPending := 3
 	pending := 0
 
 	reschan := make(chan queryResult)
 	for {
-		for i := 0; i < len(addrs) && pending < maxPending; i++ {
-			addr := addrs[i]
+		for i := 0; i < len(servers) && pending < maxConcurrentRequests; i++ {
+			addr := servers[i]
 			lastQuery, ok := r.lastQueries[addr.PublicKey()]
 			// Do not attempt to connect query peers we recently queried
 			if ok && now.Sub(lastQuery) < minTimeBetweenQueries {
@@ -185,7 +192,7 @@ func (r *refresher) refresh(addrs []discNode) []discNode {
 
 			r.lastQueries[addr.PublicKey()] = time.Now()
 
-			go pingThenFindNode(r.disc, addr, reschan)
+			go pingThenGetAddresses(r.disc, addr, reschan)
 		}
 
 		if pending == 0 {

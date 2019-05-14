@@ -89,7 +89,7 @@ type addrBook struct {
 	addrTried [triedBucketCount]map[string]*KnownAddress
 
 	//todo: lock local for updates
-	localAddress discNode
+	localAddress NodeInfo
 
 	nTried int
 	nNew   int
@@ -103,7 +103,7 @@ type addrBook struct {
 
 // updateAddress is a helper function to either update an address already known
 // to the address manager, or to add the address if not already known.
-func (a *addrBook) updateAddress(netAddr, srcAddr discNode) {
+func (a *addrBook) updateAddress(netAddr, srcAddr NodeInfo) {
 
 	//Filter out non-routable addresses. Note that non-routable
 	//also includes invalid and local addresses.
@@ -240,13 +240,13 @@ func (a *addrBook) GetAddress() *KnownAddress {
 	}
 }
 
-func (a *addrBook) Lookup(addr p2pcrypto.PublicKey) (discNode, error) {
+func (a *addrBook) Lookup(addr p2pcrypto.PublicKey) (NodeInfo, error) {
 	a.mtx.Lock()
 	d, ok := a.addrIndex[addr.String()]
 	a.mtx.Unlock()
 	if !ok {
 		// Todo: just return empty without error ?
-		return emptyDiscNode, ErrLookupFailed
+		return emptyNodeInfo, ErrLookupFailed
 	}
 	return d.na, nil
 }
@@ -257,7 +257,7 @@ func (a *addrBook) find(addr p2pcrypto.PublicKey) *KnownAddress {
 
 // Attempt increases the given address' attempt counter and updates
 // the last attempt time.
-func (a *addrBook) Attempt(addr discNode) {
+func (a *addrBook) Attempt(addr NodeInfo) {
 	a.mtx.Lock()
 	defer a.mtx.Unlock()
 
@@ -399,7 +399,7 @@ func (a *addrBook) NeedMoreAddresses() bool {
 
 // AddressCache returns the current address cache.  It must be treated as
 // read-only (but since it is a copy now, this is not as dangerous).
-func (a *addrBook) AddressCache() []discNode {
+func (a *addrBook) AddressCache() []NodeInfo {
 
 	// TODO : take from buckets
 
@@ -426,7 +426,7 @@ func (a *addrBook) AddressCache() []discNode {
 
 // getAddresses returns all of the addresses currently found within the
 // manager's address cache.
-func (a *addrBook) getAddresses() []discNode {
+func (a *addrBook) getAddresses() []NodeInfo {
 	a.mtx.Lock()
 	defer a.mtx.Unlock()
 
@@ -435,7 +435,7 @@ func (a *addrBook) getAddresses() []discNode {
 		return nil
 	}
 
-	addrs := make([]discNode, 0, addrIndexLen)
+	addrs := make([]NodeInfo, 0, addrIndexLen)
 	for _, v := range a.addrIndex {
 		addrs = append(addrs, v.na)
 	}
@@ -564,7 +564,7 @@ func (a *addrBook) getTriedBucket(netAddr net.IP) int {
 // AddAddresses adds new addresses to the address manager.  It enforces a max
 // number of addresses and silently ignores duplicate addresses.  It is
 // safe for concurrent access.
-func (a *addrBook) AddAddresses(addrs []discNode, srcAddr discNode) {
+func (a *addrBook) AddAddresses(addrs []NodeInfo, srcAddr NodeInfo) {
 	a.mtx.Lock()
 	defer a.mtx.Unlock()
 
@@ -576,7 +576,7 @@ func (a *addrBook) AddAddresses(addrs []discNode, srcAddr discNode) {
 // AddAddress adds a new address to the address manager.  It enforces a max
 // number of addresses and silently ignores duplicate addresses.  It is
 // safe for concurrent access.
-func (a *addrBook) AddAddress(addr, srcAddr discNode) {
+func (a *addrBook) AddAddress(addr, srcAddr NodeInfo) {
 	a.mtx.Lock()
 	defer a.mtx.Unlock()
 
@@ -632,7 +632,7 @@ func (a *addrBook) reset() {
 
 // New returns a new bitcoin address manager.
 // Use Start to begin processing asynchronous address updates.
-func NewAddrBook(localAddress discNode, config config.SwarmConfig, logger log.Log) *addrBook {
+func NewAddrBook(localAddress NodeInfo, config config.SwarmConfig, logger log.Log) *addrBook {
 	//TODO use config for const params.
 	am := addrBook{
 		logger: logger,

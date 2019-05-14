@@ -5,19 +5,20 @@ import (
 	"net"
 )
 
-type discNode struct {
+// NodeInfo is a discovery parsed structure to store a node's address and key.
+type NodeInfo struct {
 	node.Node
 	udpAddress string
 	parsedIP   net.IP
 }
 
-func discNodeFromNode(nd node.Node, udpAddress string) discNode {
+func NodeInfoFromNode(nd node.Node, udpAddress string) NodeInfo {
 	raw := nd.Address()
 	ip, _, err := net.SplitHostPort(raw)
 	if err != nil {
-		return emptyDiscNode
+		return emptyNodeInfo
 	}
-	return discNode{nd, udpAddress, net.ParseIP(ip)}
+	return NodeInfo{nd, udpAddress, net.ParseIP(ip)}
 }
 
-var emptyDiscNode = discNode{node.EmptyNode, "", nil}
+var emptyNodeInfo = NodeInfo{node.EmptyNode, "", nil}

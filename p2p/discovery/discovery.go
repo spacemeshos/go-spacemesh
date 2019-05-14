@@ -10,8 +10,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 )
 
-// Interface is an interface to the discovery protocol
-type Interface interface {
+// PeerStore is an interface to the discovery protocol
+type PeerStore interface {
 	Remove(pubkey p2pcrypto.PublicKey)
 	Lookup(pubkey p2pcrypto.PublicKey) (node.Node, error)
 	Update(addr, src node.Node)
@@ -23,7 +23,7 @@ type Interface interface {
 
 type Protocol interface {
 	Ping(p p2pcrypto.PublicKey) error
-	GetAddresses(server p2pcrypto.PublicKey) ([]discNode, error)
+	GetAddresses(server p2pcrypto.PublicKey) ([]NodeInfo, error)
 	SetLocalAddresses(tcp, udp string)
 }
 
@@ -82,7 +82,7 @@ func (d *Discovery) Lookup(key p2pcrypto.PublicKey) (node.Node, error) {
 
 // Update adds an addr to the addrBook
 func (d *Discovery) Update(addr, src node.Node) {
-	d.rt.AddAddress(discNodeFromNode(addr, addr.Address()), discNodeFromNode(src, src.Address()))
+	d.rt.AddAddress(NodeInfoFromNode(addr, addr.Address()), NodeInfoFromNode(src, src.Address()))
 }
 
 // New creates a new Discovery
@@ -90,7 +90,7 @@ func New(ln *node.LocalNode, config config.SwarmConfig, service server.Service) 
 	d := &Discovery{
 		config: config,
 		local:  ln,
-		rt:     NewAddrBook(discNodeFromNode(ln.Node, ln.Node.Address()), config, ln.Log),
+		rt:     NewAddrBook(NodeInfoFromNode(ln.Node, ln.Node.Address()), config, ln.Log),
 	}
 
 	d.disc = NewDiscoveryProtocol(ln.Node, d.rt, service, ln.Log)

@@ -67,7 +67,7 @@ type swarm struct {
 	cPool  cPool // conenction cache
 	gossip *gossip.Protocol
 
-	discover  discovery.Interface // peer addresses store
+	discover  discovery.PeerStore // peer addresses store
 	udpServer *UDPMux             // protocol switch that includes a udp networking service
 
 	//neighborhood

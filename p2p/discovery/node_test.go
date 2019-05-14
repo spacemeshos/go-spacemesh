@@ -11,6 +11,6 @@ func Test_discNodeFromNode(t *testing.T) {
 	ip := "225.31.23.51"
 	ipport := ip + ":7513"
 	nr := node.New(p2pcrypto.NewRandomPubkey(), ipport)
-	d := discNodeFromNode(nr, ipport)
+	d := NodeInfoFromNode(nr, ipport)
 	require.Equal(t, d.parsedIP.String(), ip)
 }
