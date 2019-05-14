@@ -51,7 +51,7 @@ func SyncMockFactory(number int, conf Configuration, name string, dbType string)
 		net := sim.NewNode()
 		name := fmt.Sprintf(name+"_%d", i)
 		l := log.New(name, "", "")
-		sync := NewSync(net, getMesh(dbType, name+"_"+time.Now().String()), BlockValidatorMock{}, conf, tk, l)
+		sync := NewSync(net, getMesh(dbType, name+"_"+time.Now().String()), BlockValidatorMock{}, TxValidatorMock{}, conf, tk, l)
 		ts.Start()
 		nodes = append(nodes, sync)
 		p2ps = append(p2ps, net)
@@ -334,6 +334,7 @@ loop:
 			return
 		default:
 			if syncObj2.VerifiedLayer() == 5 {
+
 				t.Log("done!")
 				break loop
 			}
@@ -459,7 +460,8 @@ func Test_TwoNodes_SyncIntegrationSuite(t *testing.T) {
 	tk := ts.Subscribe()
 	sis.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
 		l := log.New(fmt.Sprintf("%s_%d", sis.name, atomic.LoadUint32(&i)), "", "")
-		sync := NewSync(s, getMesh(memoryDB, fmt.Sprintf("%s_%s", sis.name, time.Now())), BlockValidatorMock{}, conf, tk, l)
+		msh := getMesh(memoryDB, fmt.Sprintf("%s_%s", sis.name, time.Now()))
+		sync := NewSync(s, msh, BlockValidatorMock{}, TxValidatorMock{}, conf, tk, l)
 		sis.syncers = append(sis.syncers, sync)
 		ts.Start()
 		atomic.AddUint32(&i, 1)
@@ -540,7 +542,8 @@ func Test_Multiple_SyncIntegrationSuite(t *testing.T) {
 	tk := ts.Subscribe()
 	sis.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
 		l := log.New(fmt.Sprintf("%s_%d", sis.name, atomic.LoadUint32(&i)), "", "")
-		sync := NewSync(s, getMesh(memoryDB, fmt.Sprintf("%s_%d_%s", sis.name, atomic.LoadUint32(&i), time.Now())), BlockValidatorMock{}, conf, tk, l)
+		msh := getMesh(memoryDB, fmt.Sprintf("%s_%d_%s", sis.name, atomic.LoadUint32(&i), time.Now()))
+		sync := NewSync(s, msh, BlockValidatorMock{}, TxValidatorMock{}, conf, tk, l)
 		ts.Start()
 		sis.syncers = append(sis.syncers, sync)
 		atomic.AddUint32(&i, 1)

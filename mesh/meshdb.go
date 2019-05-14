@@ -4,7 +4,6 @@ import (
 	"container/list"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/types"
@@ -77,7 +76,7 @@ func (m *MeshDB) GetBlock(id types.BlockID) (*types.Block, error) {
 		return nil, err
 	}
 
-	transactions, err := m.getTransactions(blk.TxIds)
+	transactions, err := m.GetTransactions(blk.TxIds)
 	if err != nil {
 		m.Error("could not retrieve block %v transactions from database ")
 		return nil, err
@@ -349,7 +348,7 @@ func (m *MeshDB) writeTransactions(blk *types.Block) ([]types.TransactionId, err
 			return nil, err
 		}
 
-		id := getTransactionId(t)
+		id := types.GetTransactionId(t)
 		if err := m.transactions.Put(id, bytes); err != nil {
 			m.Error("could not write tx %v to database ", err)
 			return nil, err
@@ -361,7 +360,7 @@ func (m *MeshDB) writeTransactions(blk *types.Block) ([]types.TransactionId, err
 	return txids, nil
 }
 
-func (m *MeshDB) getTransactions(transactions []types.TransactionId) ([]*types.SerializableTransaction, error) {
+func (m *MeshDB) GetTransactions(transactions []types.TransactionId) ([]*types.SerializableTransaction, error) {
 	var ts []*types.SerializableTransaction
 	for _, id := range transactions {
 		tBytes, err := m.getTransactionBytes(id)
@@ -379,17 +378,6 @@ func (m *MeshDB) getTransactions(transactions []types.TransactionId) ([]*types.S
 	}
 
 	return ts, nil
-}
-
-//todo standardized transaction id across project
-//todo replace panic
-func getTransactionId(t *types.SerializableTransaction) types.TransactionId {
-	tx, err := types.TransactionAsBytes(t)
-	if err != nil {
-		panic("could not Serialize transaction")
-	}
-
-	return crypto.Sha256(tx)
 }
 
 func (m *MeshDB) getTransactionBytes(id []byte) ([]byte, error) {

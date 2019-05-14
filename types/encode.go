@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/poet/shared"
 	"sort"
@@ -207,4 +208,31 @@ func BytesAsBlock(buf []byte) (Block, error) {
 		return b, err
 	}
 	return b, nil
+}
+
+func BytesAsInterface(buf []byte, i interface{}) error {
+	_, err := xdr.Unmarshal(bytes.NewReader(buf), &i)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func InterfaceAsBytes(i interface{}) ([]byte, error) {
+	var w bytes.Buffer
+	if _, err := xdr.Marshal(&w, &i); err != nil {
+		return nil, err
+	}
+	return w.Bytes(), nil
+}
+
+//todo standardized transaction id across project
+//todo replace panic
+func GetTransactionId(t *SerializableTransaction) TransactionId {
+	tx, err := TransactionAsBytes(t)
+	if err != nil {
+		panic("could not Serialize transaction")
+	}
+
+	return crypto.Sha256(tx)
 }

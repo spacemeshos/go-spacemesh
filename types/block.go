@@ -6,7 +6,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"math/big"
-	"time"
 )
 
 type BlockID uint64
@@ -87,19 +86,6 @@ func (t *SerializableTransaction) PriceAsBigInt() *big.Int {
 	a := &big.Int{}
 	a.SetBytes(t.Price)
 	return a
-}
-
-func NewBlock(id BlockID, layerID LayerID, minerID NodeId, coin bool, data []byte, ts time.Time, viewEdges []BlockID, blockVotes []BlockID, txs []*SerializableTransaction) *Block {
-	transactions := make([]*SerializableTransaction, 0, len(txs))
-	for _, tx := range txs {
-		transactions = append(transactions, tx)
-	}
-
-	b := Block{
-		BlockHeader: *newBlockHeader(id, layerID, minerID, coin, data, ts.UnixNano(), viewEdges, blockVotes),
-		Txs:         transactions,
-	}
-	return &b
 }
 
 func newBlockHeader(id BlockID, layerID LayerID, minerID NodeId, coin bool, data []byte, ts int64, viewEdges []BlockID, blockVotes []BlockID) *BlockHeader {

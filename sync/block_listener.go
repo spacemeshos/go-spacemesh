@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -91,7 +92,7 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 			}
 
 			bl.Log.With().Info("got new block", log.Uint64("id", uint64(blk.Id)), log.Int("txs", len(blk.Txs)))
-			eligible, err := bl.BlockEligible(&blk)
+			eligible, err := bl.BlockEligible(&blk.BlockHeader)
 			if err != nil {
 				bl.Error("block eligible check failed")
 				break
@@ -116,7 +117,7 @@ func (bl *BlockListener) run() {
 	for {
 		select {
 		case <-bl.exit:
-			bl.Log.Info("run stopped")
+			bl.Log.Info("Work stopped")
 			return
 		case id := <-bl.unknownQueue:
 			bl.Log.Debug("fetch block ", id, "buffer is at ", len(bl.unknownQueue)/cap(bl.unknownQueue), " capacity")
@@ -137,7 +138,7 @@ func (bl *BlockListener) FetchBlock(id types.BlockID) {
 			if block == nil {
 				continue
 			}
-			eligible, err := bl.BlockEligible(block)
+			eligible, err := bl.BlockEligible(&block.BlockHeader)
 			if err != nil {
 				panic("return error!") // TODO: return error
 			}
@@ -156,5 +157,27 @@ func (bl *BlockListener) addUnknownToQueue(b *types.Block) {
 		if _, err := bl.GetBlock(block); err != nil {
 			bl.unknownQueue <- block
 		}
+	}
+}
+
+func newBlockRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg []byte) []byte {
+	return func(msg []byte) []byte {
+		logger.Debug("handle block request")
+		blockid := types.BlockID(common.BytesToUint64(msg))
+		blk, err := layers.GetBlock(blockid)
+		if err != nil {
+			logger.Error("Error handling Block request message, with BlockID: %d and err: %v", blockid, err)
+			return nil
+		}
+
+		bbytes, err := types.BlockAsBytes(*blk)
+		if err != nil {
+			logger.Error("Error marshaling response message (FetchBlockResp), with BlockID: %d, LayerID: %d and err:", blk.ID(), blk.Layer(), err)
+			return nil
+		}
+
+		logger.Debug("return block %v", blk)
+
+		return bbytes
 	}
 }
