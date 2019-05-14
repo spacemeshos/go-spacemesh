@@ -221,13 +221,13 @@ func (s *Syncer) getIdsForHash(m map[string]p2p.Peer, index types.LayerID) (chan
 		}
 		go func(p p2p.Peer) {
 			select {
+			case <-kill:
+				s.Info("ids request to %v timed out", p)
+				return
 			case v := <-c:
 				if v != nil {
 					ch <- v
 				}
-			case <-kill:
-				s.Info("ids request to %v timed out", p)
-				return
 			}
 		}(peer)
 	}
@@ -282,13 +282,13 @@ func (s *Syncer) getLayerHashes(index types.LayerID) (map[string]p2p.Peer, error
 		//merge channels and close when done
 		go func(p p2p.Peer) {
 			select {
+			case <-kill:
+				s.Error("hash request to %v timed out", p)
+				return
 			case v := <-c:
 				if v != nil {
 					ch <- v
 				}
-			case <-kill:
-				s.Error("hash request to %v timed out", p)
-				return
 			}
 		}(peer)
 	}
