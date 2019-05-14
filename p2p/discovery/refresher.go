@@ -111,7 +111,7 @@ loop:
 
 	}
 
-	// Don't keep bootstrap nodes in the table after bootstrap
+	// currently we only have  the discovery address of bootnodes in the configuration so let them pick their own neighbors.
 	for _, b := range r.bootNodes {
 		r.book.RemoveAddress(b.PublicKey())
 	}
