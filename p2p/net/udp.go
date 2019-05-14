@@ -1,10 +1,9 @@
 package net
 
 import (
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"net"
-
-	"github.com/spacemeshos/go-spacemesh/log"
 
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
@@ -84,10 +83,6 @@ func newUDPListener(listenAddress *net.UDPAddr) (*net.UDPConn, error) {
 	if err != nil {
 		return nil, err
 	}
-	err = listen.SetReadBuffer(maxMessageSize)
-	if err != nil {
-		return nil, err
-	}
 	return listen, nil
 }
 
@@ -116,6 +111,8 @@ func (n *UDPNet) Send(to node.Node, data []byte) error {
 	final := p2pcrypto.PrependPubkey(sealed, n.local.PublicKey())
 
 	_, err = n.conn.WriteToUDP(final, raddr)
+
+	n.logger.Debug("UDP MESSAGE to %v SENT ? %v", to.PublicKey().String(), err)
 
 	return err
 }

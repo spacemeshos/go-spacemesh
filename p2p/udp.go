@@ -156,6 +156,8 @@ func (mux *UDPMux) sendMessageImpl(peerPubkey p2pcrypto.PublicKey, protocol stri
 	// TODO: node.address should have IP address, UDP and TCP PORT.
 	// 		 for now assuming it's the same port for both.
 
+	mux.logger.Debug("Sending udp message to %v, %v", peerPubkey, peer.Address())
+
 	return mux.network.Send(peer, data)
 }
 
@@ -183,6 +185,7 @@ func (upm *udpProtocolMessage) Data() service.Data {
 
 // processUDPMessage processes a udp message received and passes it to the protocol, it adds related p2p metadata.
 func (mux *UDPMux) processUDPMessage(sender p2pcrypto.PublicKey, fromaddr net.Addr, buf []byte) error {
+	mux.logger.Debug("Processing message from %v, %v, len:%v", sender.String(), fromaddr.String(), len(buf))
 	msg := &pb.UDPProtocolMessage{}
 	err := proto.Unmarshal(buf, msg)
 	if err != nil {

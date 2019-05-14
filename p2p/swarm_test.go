@@ -2,7 +2,7 @@ package p2p
 
 import (
 	"github.com/spacemeshos/go-spacemesh/p2p/connectionpool"
-	"github.com/spacemeshos/go-spacemesh/p2p/dht"
+	"github.com/spacemeshos/go-spacemesh/p2p/discovery"
 	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
@@ -587,8 +587,8 @@ func Test_Swarm_getMorePeers2(t *testing.T) {
 
 	conn, _ := n.SubscribePeerEvents()
 
-	mdht := new(dht.MockDHT)
-	n.dht = mdht
+	mdht := new(discovery.MockPeerStore)
+	n.discover = mdht
 	// this will return 0 peers because SelectPeers returns empty array when not set
 
 	res := n.getMorePeers(10)
@@ -607,8 +607,8 @@ func Test_Swarm_getMorePeers3(t *testing.T) {
 
 	conn, _ := n.SubscribePeerEvents()
 
-	mdht := new(dht.MockDHT)
-	n.dht = mdht
+	mdht := new(discovery.MockPeerStore)
+	n.discover = mdht
 	testNode := node.GenerateRandomNodeData()
 	mdht.SelectPeersFunc = func(qty int) []node.Node {
 		return []node.Node{testNode}
@@ -638,8 +638,8 @@ func Test_Swarm_getMorePeers4(t *testing.T) {
 
 	conn, _ := n.SubscribePeerEvents()
 
-	mdht := new(dht.MockDHT)
-	n.dht = mdht
+	mdht := new(discovery.MockPeerStore)
+	n.discover = mdht
 
 	testNode := node.GenerateRandomNodeData()
 	mdht.SelectPeersFunc = func(qty int) []node.Node {
@@ -675,8 +675,8 @@ func Test_Swarm_getMorePeers5(t *testing.T) {
 	//assert.Equal(t, res, 0)
 	//assertNoNewPeerEvent(t, conn)
 
-	mdht := new(dht.MockDHT)
-	n.dht = mdht
+	mdht := new(discovery.MockPeerStore)
+	n.discover = mdht
 
 	cpm := new(cpoolMock)
 
@@ -708,8 +708,8 @@ func Test_Swarm_getMorePeers6(t *testing.T) {
 	//assert.Equal(t, res, 0)
 	//assertNoNewPeerEvent(t, conn)
 
-	mdht := new(dht.MockDHT)
-	n.dht = mdht
+	mdht := new(discovery.MockPeerStore)
+	n.discover = mdht
 
 	cpm := new(cpoolMock)
 
@@ -748,12 +748,12 @@ func TestNeighborhood_Initial(t *testing.T) {
 	cfg.SwarmConfig.Bootstrap = false
 
 	p := p2pTestNoStart(t, cfg)
-	mdht := new(dht.MockDHT)
+	mdht := new(discovery.MockPeerStore)
 	mdht.SelectPeersFunc = func(qty int) []node.Node {
 		return node.GenerateRandomNodesData(qty)
 	}
 
-	p.dht = mdht
+	p.discover = mdht
 
 	err := p.Start()
 	assert.NoError(t, err)
@@ -768,7 +768,7 @@ func TestNeighborhood_Initial(t *testing.T) {
 	p.Shutdown()
 
 	p = p2pTestNoStart(t, cfg)
-	p.dht = mdht
+	p.discover = mdht
 	cpm := new(cpoolMock)
 	cpm.f = func(address string, pk p2pcrypto.PublicKey) (net.Connection, error) {
 		return net.NewConnectionMock(pk), nil

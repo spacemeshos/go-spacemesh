@@ -9,12 +9,7 @@ message NodeInfo {
     string UDPAddress = 3;
 }
 
-message FindNodeReq {
-    bytes nodeID =1;
-    int32 maxResults = 2;
-}
-
-message FindNodeResp {
+message Addresses {
     repeated NodeInfo nodeInfos = 1;
 }
 
