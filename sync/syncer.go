@@ -222,7 +222,7 @@ func (s *Syncer) getIdsForHash(m map[string]p2p.Peer, index types.LayerID) (chan
 		go func(p p2p.Peer) {
 			select {
 			case <-kill:
-				s.Info("ids request to %v timed out", p)
+				s.Error("ids request to %v timed out", p)
 				return
 			case v := <-c:
 				if v != nil {
