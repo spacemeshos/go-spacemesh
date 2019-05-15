@@ -273,7 +273,8 @@ def add_single_client(deployment_id, container_specs):
     print("Add new client: {0}".format(client_name))
     return client_name
 
-
+# The following fixture should not be used if you wish to add many clients during test.
+# Instead you should call add_single_client directly
 @pytest.fixture()
 def add_client(request, setup_oracle, setup_poet, setup_bootstrap, setup_clients):
 
