@@ -1,8 +1,9 @@
 package hare
 
 import (
-	"encoding/binary"
+	"errors"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/types"
 	"hash/fnv"
 	"math"
 	"sync"
@@ -26,32 +27,7 @@ type Registrable interface {
 }
 
 type Rolacle interface {
-	Eligible(instanceID uint32, committeeSize int, pubKey string, proof []byte) bool
-}
-
-type HareRolacle interface {
-	Eligible(instanceId InstanceId, k int32, pubKey string, proof []byte) bool
-}
-
-type hareRolacle struct {
-	oracle        Rolacle
-	committeeSize int
-}
-
-func NewHareOracle(oracle Rolacle, committeeSize int) *hareRolacle {
-	return &hareRolacle{oracle, committeeSize}
-}
-
-func (hr *hareRolacle) Eligible(instanceId InstanceId, k int32, pubKey string, proof []byte) bool {
-	return hr.oracle.Eligible(hashInstanceAndK(instanceId, k), expectedCommitteeSize(k, hr.committeeSize), pubKey, proof)
-}
-
-func hashInstanceAndK(instanceID InstanceId, K int32) uint32 {
-	kInBytes := make([]byte, 4)
-	binary.LittleEndian.PutUint32(kInBytes, uint32(K))
-	h := newHasherU32()
-	val := h.Hash(instanceID.Bytes(), kInBytes)
-	return val
+	Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeId, sig []byte) (bool, error)
 }
 
 // Returns the expected committee size for the given round assuming n is the default size
@@ -139,17 +115,17 @@ func (mock *MockHashOracle) calcThreshold(committeeSize int) uint32 {
 }
 
 // Eligible if a proof is valid for a given committee size
-func (mock *MockHashOracle) Eligible(instanceID uint32, committeeSize int, pubKey string, proof []byte) bool {
-	if proof == nil {
+func (mock *MockHashOracle) Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeId, sig []byte) (bool, error) {
+	if sig == nil {
 		log.Warning("Oracle query with proof=nil. Returning false")
-		return false
+		return false, errors.New("sig is nil")
 	}
 
 	// calculate hash of proof
-	proofHash := mock.hasher.Hash(proof)
+	proofHash := mock.hasher.Hash(sig)
 	if proofHash <= mock.calcThreshold(committeeSize) { // check threshold
-		return true
+		return true, nil
 	}
 
-	return false
+	return false, nil
 }

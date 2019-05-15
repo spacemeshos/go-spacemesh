@@ -58,7 +58,7 @@ type vrfMessage struct {
 }
 
 // BuildVRFMessage builds the VRF message used as input for the BLS (msg=beacon##id##layer##round)
-func (o *Oracle) BuildVRFMessage(id types.NodeId, layer types.LayerID, round int32) ([]byte, error) {
+func (o *Oracle) buildVRFMessage(id types.NodeId, layer types.LayerID, round int32) ([]byte, error) {
 	v, err := o.beacon.Value(safeLayer(layer))
 	if err != nil {
 		log.Error("Could not get beacon value: %v", err)
@@ -76,8 +76,15 @@ func (o *Oracle) BuildVRFMessage(id types.NodeId, layer types.LayerID, round int
 	return w.Bytes(), nil
 }
 
-// IsEligible checks if id is eligible on the given layer where msg is the VRF message, sig is the role proof and assuming commSize as the expected committee size
-func (o *Oracle) IsEligible(commSize uint32, id types.NodeId, layer types.LayerID, msg, sig []byte) (bool, error) {
+// Eligible checks if id is eligible on the given layer where msg is the VRF message, sig is the role proof and assuming commSize as the expected committee size
+func (o *Oracle) Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeId, sig []byte) (bool, error) {
+	msg, err := o.buildVRFMessage(id, layer, round)
+
+	if err != nil {
+		log.Error("Could not build VRF message")
+		return false, err
+	}
+
 	// validate message
 	if res, err := o.vrf.Verify(msg, sig); !res {
 		log.Error("VRF verification failed: %v", err)
@@ -101,8 +108,8 @@ func (o *Oracle) IsEligible(commSize uint32, id types.NodeId, layer types.LayerI
 	h := fnv.New32()
 	h.Write(sig)
 	// avoid division (no floating point) & do operations on uint64 to avoid flow
-	if uint64(activeSetSize)*uint64(h.Sum32()) > uint64(commSize)*uint64(math.MaxUint32) {
-		log.Error("identity %v did not pass eligibility committeeSize=%v activeSetSize=%v", id, commSize, activeSetSize)
+	if uint64(activeSetSize)*uint64(h.Sum32()) > uint64(committeeSize)*uint64(math.MaxUint32) {
+		log.Error("identity %v did not pass eligibility committeeSize=%v activeSetSize=%v", id, committeeSize, activeSetSize)
 		return false, errors.New("did not pass eligibility threshold")
 	}
 
