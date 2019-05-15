@@ -262,10 +262,25 @@ def setup_clients(request, setup_oracle, setup_poet, setup_bootstrap):
     return _setup_clients_in_namespace(testconfig['namespace'])
 
 
+def add_single_client(deployment_id, container_specs):
+
+    resp = pod.create_pod(CLIENT_POD_FILE,
+                          testconfig['namespace'],
+                          deployment_id=deployment_id,
+                          container_specs=container_specs)
+
+    client_name = resp.metadata.name
+    print("Add new client: {0}".format(client_name))
+    return client_name
+
+
 @pytest.fixture()
-def add_client(request, setup_oracle, setup_poet, setup_bootstrap):
+def add_client(request, setup_oracle, setup_poet, setup_bootstrap, setup_clients):
+
+    global client_name
 
     def _add_single_client():
+        global client_name
         if not setup_bootstrap.pods:
             raise Exception("Could not find bootstrap node")
 
@@ -283,21 +298,15 @@ def add_client(request, setup_oracle, setup_poet, setup_bootstrap):
                           genesis_time=GENESIS_TIME.isoformat('T', 'seconds'),
                           **client_args)
 
-        resp = pod.create_pod(CLIENT_POD_FILE,
-                              testconfig['namespace'],
-                              deployment_id=setup_bootstrap.deployment_id,
-                              container_specs=cspec)
-
-        client_name = resp.metadata.name
-        setattr(request, 'client', client_name)
-        print("Add new client: {0}".format(client_name))
-        return resp
+        client_name = add_single_client(setup_bootstrap.deployment_id, cspec)
+        return client_name
 
     def fin():
-        pod.delete_pod(request.client, testconfig['namespace'])
+        global client_name
+        pod.delete_pod(client_name, testconfig['namespace'])
 
     request.addfinalizer(fin)
-    return _add_single_client
+    return _add_single_client()
 
 
 @pytest.fixture(scope='module')
@@ -398,13 +407,12 @@ def test_client(setup_clients, save_log_on_exit):
     assert len(set(peers)) == len(setup_clients.pods)
 
 
-def test_add_client(add_client, setup_clients):
-    new_client = add_client()
+def test_add_client(add_client):
 
     # Sleep a while before checking the node is bootstarped
     time.sleep(20)
     fields = {'M': 'discovery_bootstrap'}
-    hits = query_message(current_index, testconfig['namespace'], new_client.metadata.name, fields, True)
+    hits = query_message(current_index, testconfig['namespace'], add_client, fields, True)
     assert len(hits) == 1, "Could not find new Client bootstrap message"
 
 
