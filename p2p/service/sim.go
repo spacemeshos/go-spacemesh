@@ -33,7 +33,6 @@ var _ Service = new(Node)
 type Node struct {
 	sim *Simulator
 	node.Node
-	//dht           dht
 	sndDelay      uint32
 	rcvDelay      uint32
 	randBehaviour bool
@@ -188,7 +187,7 @@ func simulatorMetadata() P2PMetadata {
 
 // ProcessDirectProtocolMessage
 func (sn *Node) ProcessDirectProtocolMessage(sender p2pcrypto.PublicKey, protocol string, payload Data, metadata P2PMetadata) error {
-	sn.sleep(sn.rcvDelay)
+	//sn.sleep(sn.rcvDelay)
 	sn.sim.mutex.RLock()
 	c, ok := sn.sim.protocolDirectHandler[sn.PublicKey().String()][protocol]
 	sn.sim.mutex.RUnlock()
@@ -230,7 +229,6 @@ func (sn *Node) sendMessageImpl(nodeID p2pcrypto.PublicKey, protocol string, pay
 		thec <- simDirectMessage{simulatorMetadata(), payload, sn.Node.PublicKey()}
 		return nil
 	}
-	log.Debug("%v >> %v (%v)", sn.Node.PublicKey(), nodeID, payload)
 	return errors.New("could not find " + protocol + " handler for node: " + nodeID.String())
 }
 

@@ -30,14 +30,9 @@ func (n Node) Address() string {
 	return n.address
 }
 
-// DhtID creates a dhtid from the public key
-func (n Node) DhtID() DhtID {
-	return NewDhtID(n.pubKey.Bytes())
-}
-
 // Pretty returns a pretty string from the node's info
 func (n Node) Pretty() string {
-	return fmt.Sprintf("Node : %v , Address: %v, DhtID: %v", n.pubKey.String(), n.address, n.DhtID().Pretty())
+	return fmt.Sprintf("Node : %v , Address: %v", n.pubKey.String(), n.address)
 }
 
 // New creates a new remotenode identity from a public key and an address

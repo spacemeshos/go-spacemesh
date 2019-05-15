@@ -107,7 +107,7 @@ func Test_SmallP2PIntegrationSuite(t *testing.T) {
 
 	s := new(IntegrationTestSuite)
 
-	s.BootstrappedNodeCount = 19
+	s.BootstrappedNodeCount = 70
 	s.BootstrapNodesCount = 1
 	s.NeighborsCount = 8
 

@@ -1,21 +1,21 @@
-package dht
+package discovery
 
 import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"time"
 )
 
 type protocolRoutingTable interface {
-	//netLookup(k p2pcrypto.PublicKey) []node.Node // todo: use for bootstrap ?
-	internalLookup(k p2pcrypto.PublicKey) []discNode
-	Update(n discNode)
+	GetAddress() *KnownAddress
+	AddAddresses(n []NodeInfo, src NodeInfo)
+	AddAddress(n NodeInfo, src NodeInfo)
+	AddressCache() []NodeInfo
 }
 
-type discovery struct {
+type protocol struct {
 	local     node.Node
 	table     protocolRoutingTable
 	logger    log.Log
@@ -25,7 +25,7 @@ type discovery struct {
 	localUdpAddress string
 }
 
-func (d *discovery) SetLocalAddresses(tcp, udp string) {
+func (d *protocol) SetLocalAddresses(tcp, udp string) {
 	d.localTcpAddress = tcp
 	d.localUdpAddress = udp
 }
@@ -42,13 +42,13 @@ const MessageTimeout = time.Second * 1 // TODO: Parametrize
 // PINGPONG is the ping protocol ID
 const PINGPONG = 0
 
-// FIND_NODE is the findnode protocol ID
-const FIND_NODE = 1
+// GET_ADDRESSES is the findnode protocol ID
+const GET_ADDRESSES = 1
 
-// NewDiscoveryProtocol is a constructor for a discovery protocol provider.
-func NewDiscoveryProtocol(local node.Node, rt protocolRoutingTable, svc server.Service, log log.Log) *discovery {
-	s := server.NewMsgServer(svc, Name, time.Second, make(chan service.DirectMessage, MessageBufSize), log)
-	d := &discovery{
+// NewDiscoveryProtocol is a constructor for a protocol protocol provider.
+func NewDiscoveryProtocol(local node.Node, rt protocolRoutingTable, svc server.Service, log log.Log) *protocol {
+	s := server.NewMsgServer(svc, Name, MessageTimeout, make(chan service.DirectMessage, MessageBufSize), log)
+	d := &protocol{
 		local:     local,
 		table:     rt,
 		msgServer: s,
@@ -58,6 +58,6 @@ func NewDiscoveryProtocol(local node.Node, rt protocolRoutingTable, svc server.S
 	d.SetLocalAddresses(local.Address(), local.Address())
 
 	d.msgServer.RegisterMsgHandler(PINGPONG, d.newPingRequestHandler())
-	d.msgServer.RegisterMsgHandler(FIND_NODE, d.newFindNodeRequestHandler())
+	d.msgServer.RegisterMsgHandler(GET_ADDRESSES, d.newGetAddressesRequestHandler())
 	return d
 }

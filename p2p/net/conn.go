@@ -171,12 +171,11 @@ func (c *FormattedConnection) Closed() bool {
 
 func (c *FormattedConnection) shutdown(err error) {
 	c.closed = true
-	c.logger.Error("Shutting down %v ", err)
+	c.logger.Warning("Shutting down conn with %v err=%v", c.RemotePublicKey().String(), err)
 	if err != ErrConnectionClosed {
 		c.networker.publishClosingConnection(c)
 	}
 	c.formatter.Close()
-	c.logger.Info("Shutting down - all callbacks called")
 }
 
 var ErrTriedToSetupExistingConn = errors.New("tried to setup existing connection")
