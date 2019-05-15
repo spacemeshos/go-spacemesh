@@ -79,6 +79,7 @@ type Processor struct {
 	epochProvider EpochProvider
 }
 
+// NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
 func NewBuilder(nodeId types.NodeId, db *ActivationDb, net Broadcaster, activeSet ActiveSetProvider, view MeshProvider,
 	layersPerEpoch uint16, nipstBuilder NipstBuilder, layerClock chan types.LayerID, log log.Log) *Builder {
 
@@ -97,6 +98,8 @@ func NewBuilder(nodeId types.NodeId, db *ActivationDb, net Broadcaster, activeSe
 	}
 }
 
+
+// Start is the main entry point of the atx builder. it runs the main loop of the builder and shouldn't be called more than once
 func (b *Builder) Start() {
 	if atomic.LoadUint32(&b.started) == 1 {
 		return
@@ -105,11 +108,15 @@ func (b *Builder) Start() {
 	go b.loop()
 }
 
+// Stop stops the atx builder.
 func (b *Builder) Stop() {
 	b.finished <- struct{}{}
 }
 
+
+// loop is the main loop that tries to create an atx per tick received from the global clock
 func (b *Builder) loop() {
+	// post is initialized here, consider moving it to another location.
 	if !b.nipstBuilder.IsPostInitialized() {
 		_, err := b.nipstBuilder.InitializePost() // TODO: add proof to first ATX
 		if err != nil {
@@ -140,6 +147,8 @@ func (b *Builder) loop() {
 	}
 }
 
+// PublishActivationTx attempts to publish an atx for the given epoch ech, it returns an error if an atx cannot be created
+// publish atx may not produce an atx each time it is called, that is expected behaviour as well.
 func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 	if b.nipst != nil {
 		b.log.Info("re-entering atx creation in epoch %v", epoch)
@@ -261,6 +270,8 @@ func (b *Builder) GetPrevAtxId(node types.NodeId) (*types.AtxId, error) {
 	return &ids[len(ids)-1], nil
 }
 
+// GetPositioningAtxId returns a randomly selected atx from the provided epoch epochId
+// it returns an error if epochs were not found in db
 func (b *Builder) GetPositioningAtxId(epochId types.EpochId) (*types.AtxId, error) {
 	//todo: make this on blocking until an atx is received
 	atxs, err := b.db.GetEpochAtxIds(epochId)
@@ -272,6 +283,8 @@ func (b *Builder) GetPositioningAtxId(epochId types.EpochId) (*types.AtxId, erro
 	return &atxId, nil
 }
 
+// GetLastSequence retruns the last sequence number of atx reported by node id node
+// it will return 0 if no previous atx was found for the requested nod
 func (b *Builder) GetLastSequence(node types.NodeId) uint64 {
 	atxId, err := b.GetPrevAtxId(node)
 	if err != nil {
@@ -285,6 +298,7 @@ func (b *Builder) GetLastSequence(node types.NodeId) uint64 {
 	return atx.Sequence
 }
 
+// GetPositioningAtx return the atx object for the positioning atx according to requested epochId
 func (b *Builder) GetPositioningAtx(epochId types.EpochId) (*types.ActivationTx, error) {
 	posAtxId, err := b.GetPositioningAtxId(epochId)
 	if err != nil {
