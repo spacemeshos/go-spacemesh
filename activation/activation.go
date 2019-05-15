@@ -98,7 +98,6 @@ func NewBuilder(nodeId types.NodeId, db *ActivationDb, net Broadcaster, activeSe
 	}
 }
 
-
 // Start is the main entry point of the atx builder. it runs the main loop of the builder and shouldn't be called more than once
 func (b *Builder) Start() {
 	if atomic.LoadUint32(&b.started) == 1 {
@@ -112,7 +111,6 @@ func (b *Builder) Start() {
 func (b *Builder) Stop() {
 	b.finished <- struct{}{}
 }
-
 
 // loop is the main loop that tries to create an atx per tick received from the global clock
 func (b *Builder) loop() {

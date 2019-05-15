@@ -66,6 +66,7 @@ func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx) {
 		db.log.Error("cannot store atx: %v", atx)
 	}
 }
+
 // CalcActiveSetFromView traverses the view found in a - the activation tx and counts number of active ids published
 // in the epoch prior to the epoch that a was published at, this number is the number of active ids in the next epoch
 // the function returns error if the view is not found
@@ -155,9 +156,9 @@ func (db *ActivationDb) ValidateAtx(atx *types.ActivationTx) error {
 
 		prevAtxIds, err := db.GetNodeAtxIds(atx.NodeId)
 		if len(prevAtxIds) > 0 {
-			lastAtx := prevAtxIds[len(prevAtxIds) -1]
+			lastAtx := prevAtxIds[len(prevAtxIds)-1]
 			// last atx is not the one referenced
-			if lastAtx != atx.PrevATXId{
+			if lastAtx != atx.PrevATXId {
 				return fmt.Errorf("last atx is not the one referenced")
 			}
 		}
@@ -250,7 +251,7 @@ func (db *ActivationDb) StoreAtx(ech types.EpochId, atx *types.ActivationTx) err
 	return nil
 }
 
-func (db *ActivationDb) storeAtxUnlocked( atx *types.ActivationTx) error{
+func (db *ActivationDb) storeAtxUnlocked(atx *types.ActivationTx) error {
 	b, err := types.AtxAsBytes(atx)
 	if err != nil {
 		return err
@@ -340,7 +341,7 @@ func (db *ActivationDb) addAtxToNodeIdSorted(nodeId types.NodeId, atx *types.Act
 		if err != nil {
 			return errors.New("could not get all atxs from database ")
 		}
-		if lastAtx.Sequence +1 != atx.Sequence {
+		if lastAtx.Sequence+1 != atx.Sequence {
 			sort.Slice(atxs, func(i, j int) bool {
 				atx1, err := db.getAtxUnlocked(atxs[i])
 				if err != nil {

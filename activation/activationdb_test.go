@@ -394,9 +394,8 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 
 	atx = types.NewActivationTx(idx1, 4, atx.Id(), 1012, 0, prevAtx.Id(), 0, []types.BlockID{}, &nipst.NIPST{}, true)
 	err = atxdb.ValidateAtx(atx)
-	assert.Error(t ,err)
-	assert.Equal(t,"sequence number is not one more than prev sequence number", err.Error())
-
+	assert.Error(t, err)
+	assert.Equal(t, "sequence number is not one more than prev sequence number", err.Error())
 
 	err = atxdb.StoreAtx(1, atx)
 	assert.NoError(t, err)
@@ -404,7 +403,7 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 
 	atx = types.NewActivationTx(idx1, 3, atx2id, 1012, 0, prevAtx.Id(), 3, []types.BlockID{}, &nipst.NIPST{}, true)
 	err = atxdb.ValidateAtx(atx)
-	assert.Error(t ,err)
+	assert.Error(t, err)
 	assert.Equal(t, "last atx is not the one referenced", err.Error())
 
 	err = atxdb.StoreAtx(1, atx)
@@ -419,7 +418,7 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 	_, err = atxdb.GetAtx(ids[len(ids)-1])
 	assert.NoError(t, err)
 
-	_, err = atxdb.GetAtx(ids[len(ids) -2])
+	_, err = atxdb.GetAtx(ids[len(ids)-2])
 	assert.NoError(t, err)
 
 	//test same sequence
@@ -441,8 +440,8 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 
 	atx = types.NewActivationTx(idx2, 2, atxId, 1013, 0, atx.Id(), 3, []types.BlockID{}, &nipst.NIPST{}, true)
 	err = atxdb.ValidateAtx(atx)
-	assert.Error(t ,err)
-	assert.Equal(t,"last atx is not the one referenced", err.Error())
+	assert.Error(t, err)
+	assert.Equal(t, "last atx is not the one referenced", err.Error())
 
 	err = atxdb.StoreAtx(1, atx)
 	assert.NoError(t, err)
