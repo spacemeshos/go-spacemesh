@@ -337,7 +337,7 @@ func (db *ActivationDb) addAtxToNodeIdSorted(nodeId types.NodeId, atx *types.Act
 	atxs = append(atxs, atx.Id())
 	l := len(atxs)
 	if l > 1 {
-		lastAtx, err := db.getAtxUnlocked(atxs[l -2])
+		lastAtx, err := db.getAtxUnlocked(atxs[l-2])
 		if err != nil {
 			return errors.New("could not get atx from database ")
 		}
