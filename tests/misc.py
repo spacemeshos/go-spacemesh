@@ -13,7 +13,10 @@ class ContainerSpec():
         self.args.update(kwargs)
 
     def update_deployment(self, dep):
-        containers = dep['spec']['template']['spec']['containers']
+        if dep['kind']=='Pod':
+            containers = dep['spec']['containers']
+        else:
+            containers = dep['spec']['template']['spec']['containers']
         for c in containers:
             if c['name'] == self.name:
                 #update the container specs
