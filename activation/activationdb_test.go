@@ -133,32 +133,39 @@ func Test_DBSanity(t *testing.T) {
 	id2 := types.NodeId{Key: uuid.New().String()}
 	id3 := types.NodeId{Key: uuid.New().String()}
 
-	atx1 := types.AtxId{common.HexToHash("0x1234")}
-	atx2 := types.AtxId{common.HexToHash("0x5679")}
-	atx3 := types.AtxId{common.HexToHash("0x5699")}
+	atx1 := types.NewActivationTx(id1, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 3, []types.BlockID{}, &nipst.NIPST{}, true)
+	atx2 := types.NewActivationTx(id1, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 3, []types.BlockID{}, &nipst.NIPST{}, true)
+	atx3 := types.NewActivationTx(id1, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 3, []types.BlockID{}, &nipst.NIPST{}, true)
 
-	err := atxdb.addAtxToNodeId(id1, atx1)
+	err := atxdb.storeAtxUnlocked(atx1)
+	assert.NoError(t, err)
+	err = atxdb.storeAtxUnlocked(atx2)
+	assert.NoError(t, err)
+	err = atxdb.storeAtxUnlocked(atx3)
+	assert.NoError(t, err)
+
+	err = atxdb.addAtxToNodeIdSorted(id1, atx1)
 	assert.NoError(t, err)
 	ids, err := atxdb.GetNodeAtxIds(id1)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(ids))
-	assert.Equal(t, atx1, ids[0])
+	assert.Equal(t, atx1.Id(), ids[0])
 
-	err = atxdb.addAtxToNodeId(id2, atx2)
+	err = atxdb.addAtxToNodeIdSorted(id2, atx2)
 	assert.NoError(t, err)
 
-	err = atxdb.addAtxToNodeId(id1, atx3)
+	err = atxdb.addAtxToNodeIdSorted(id1, atx3)
 	assert.NoError(t, err)
 
 	ids, err = atxdb.GetNodeAtxIds(id2)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(ids))
-	assert.Equal(t, atx2, ids[0])
+	assert.Equal(t, atx2.Id(), ids[0])
 
 	ids, err = atxdb.GetNodeAtxIds(id1)
 	assert.NoError(t, err)
 	assert.Equal(t, 2, len(ids))
-	assert.Equal(t, atx1, ids[0])
+	assert.Equal(t, atx1.Id(), ids[0])
 
 	ids, err = atxdb.GetNodeAtxIds(id3)
 	assert.Error(t, err)
@@ -341,4 +348,103 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	err = atxdb.ValidateAtx(atx)
 	assert.Error(t, err)
 	//atx = types.NewActivationTx(idx1, 1, prevAtx.Id(), 1012, 0, prevAtx.Id(), 3, []types.BlockID{}, &nipst.NIPST{})
+}
+
+func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
+	atxdb, layers := getAtxDb("t8")
+
+	idx1 := types.NodeId{Key: uuid.New().String()}
+
+	id1 := types.NodeId{Key: uuid.New().String()}
+	id2 := types.NodeId{Key: uuid.New().String()}
+	id3 := types.NodeId{Key: uuid.New().String()}
+	atxs := []*types.ActivationTx{
+		types.NewActivationTx(id1, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 3, []types.BlockID{}, &nipst.NIPST{}, true),
+		types.NewActivationTx(id2, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 3, []types.BlockID{}, &nipst.NIPST{}, true),
+		types.NewActivationTx(id3, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 3, []types.BlockID{}, &nipst.NIPST{}, true),
+	}
+
+	blocks := createLayerWithAtx(layers, atxdb, 1, 10, atxs, []types.BlockID{}, []types.BlockID{})
+	blocks = createLayerWithAtx(layers, atxdb, 10, 10, []*types.ActivationTx{}, blocks, blocks)
+	blocks = createLayerWithAtx(layers, atxdb, 100, 10, []*types.ActivationTx{}, blocks, blocks)
+
+	//atx := types.NewActivationTx(id1, 1, atxs[0].Id(), 1000, 0, atxs[0].Id(), 3, blocks, &nipst.NIPST{})
+	chlng := common.HexToHash("0x3333")
+	npst := nipst.NewNIPSTWithChallenge(&chlng)
+	prevAtx := types.NewActivationTx(idx1, 0, *types.EmptyAtxId, 100, 0, *types.EmptyAtxId, 3, blocks, npst, true)
+	prevAtx.Valid = true
+
+	var nodeAtxIds []types.AtxId
+
+	err := atxdb.StoreAtx(1, prevAtx)
+	assert.NoError(t, err)
+	nodeAtxIds = append(nodeAtxIds, prevAtx.Id())
+
+	//wrong sequnce
+	atx := types.NewActivationTx(idx1, 1, prevAtx.Id(), 1012, 0, prevAtx.Id(), 0, []types.BlockID{}, &nipst.NIPST{}, true)
+	err = atxdb.StoreAtx(1, atx)
+	assert.NoError(t, err)
+	nodeAtxIds = append(nodeAtxIds, atx.Id())
+
+	atx = types.NewActivationTx(idx1, 2, atx.Id(), 1012, 0, atx.Id(), 0, []types.BlockID{}, &nipst.NIPST{}, true)
+	err = atxdb.StoreAtx(1, atx)
+	assert.NoError(t, err)
+	nodeAtxIds = append(nodeAtxIds, atx.Id())
+	atx2id := atx.Id()
+
+	atx = types.NewActivationTx(idx1, 4, atx.Id(), 1012, 0, prevAtx.Id(), 0, []types.BlockID{}, &nipst.NIPST{}, true)
+	err = atxdb.ValidateAtx(atx)
+	assert.Error(t ,err)
+	assert.Equal(t,"sequence number is not one more than prev sequence number", err.Error())
+
+
+	err = atxdb.StoreAtx(1, atx)
+	assert.NoError(t, err)
+	id4 := atx.Id()
+
+	atx = types.NewActivationTx(idx1, 3, atx2id, 1012, 0, prevAtx.Id(), 3, []types.BlockID{}, &nipst.NIPST{}, true)
+	err = atxdb.ValidateAtx(atx)
+	assert.Error(t ,err)
+	assert.Equal(t, "last atx is not the one referenced", err.Error())
+
+	err = atxdb.StoreAtx(1, atx)
+	assert.NoError(t, err)
+	nodeAtxIds = append(nodeAtxIds, atx.Id())
+	nodeAtxIds = append(nodeAtxIds, id4)
+
+	ids, err := atxdb.GetNodeAtxIds(idx1)
+	assert.True(t, len(ids) == 5)
+	assert.Equal(t, ids, nodeAtxIds)
+
+	_, err = atxdb.GetAtx(ids[len(ids)-1])
+	assert.NoError(t, err)
+
+	_, err = atxdb.GetAtx(ids[len(ids) -2])
+	assert.NoError(t, err)
+
+	//test same sequence
+	idx2 := types.NodeId{Key: uuid.New().String()}
+
+	prevAtx = types.NewActivationTx(idx2, 0, *types.EmptyAtxId, 100, 0, *types.EmptyAtxId, 3, blocks, npst, true)
+	prevAtx.Valid = true
+	err = atxdb.StoreAtx(1, prevAtx)
+	assert.NoError(t, err)
+
+	atx = types.NewActivationTx(idx2, 1, prevAtx.Id(), 1012, 0, prevAtx.Id(), 3, []types.BlockID{}, &nipst.NIPST{}, true)
+	err = atxdb.StoreAtx(1, atx)
+	assert.NoError(t, err)
+	atxId := atx.Id()
+
+	atx = types.NewActivationTx(idx2, 2, atxId, 1012, 0, atx.Id(), 3, []types.BlockID{}, &nipst.NIPST{}, true)
+	err = atxdb.StoreAtx(1, atx)
+	assert.NoError(t, err)
+
+	atx = types.NewActivationTx(idx2, 2, atxId, 1013, 0, atx.Id(), 3, []types.BlockID{}, &nipst.NIPST{}, true)
+	err = atxdb.ValidateAtx(atx)
+	assert.Error(t ,err)
+	assert.Equal(t,"last atx is not the one referenced", err.Error())
+
+	err = atxdb.StoreAtx(1, atx)
+	assert.NoError(t, err)
+
 }
