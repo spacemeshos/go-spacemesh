@@ -145,7 +145,7 @@ func (b *Builder) loop() {
 	}
 }
 
-// PublishActivationTx attempts to publish an atx for the given epoch ech, it returns an error if an atx cannot be created
+// PublishActivationTx attempts to publish an atx for the given epoch, it returns an error if an atx cannot be created
 // publish atx may not produce an atx each time it is called, that is expected behaviour as well.
 func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 	if b.nipst != nil {
@@ -282,7 +282,7 @@ func (b *Builder) GetPositioningAtxId(epochId types.EpochId) (*types.AtxId, erro
 }
 
 // GetLastSequence retruns the last sequence number of atx reported by node id node
-// it will return 0 if no previous atx was found for the requested nod
+// it will return 0 if no previous atx was found for the requested node
 func (b *Builder) GetLastSequence(node types.NodeId) uint64 {
 	atxId, err := b.GetPrevAtxId(node)
 	if err != nil {

@@ -145,7 +145,7 @@ func (db *ActivationDb) ValidateAtx(atx *types.ActivationTx) error {
 	if atx.PrevATXId != *types.EmptyAtxId {
 		prevATX, err := db.GetAtx(atx.PrevATXId)
 		if err != nil {
-			return fmt.Errorf("validation failed: prevATX not found")
+			return fmt.Errorf("validation failed: prevATX not found: %v", err)
 		}
 		if !prevATX.Valid {
 			return fmt.Errorf("validation failed: prevATX not valid")
@@ -337,11 +337,11 @@ func (db *ActivationDb) addAtxToNodeIdSorted(nodeId types.NodeId, atx *types.Act
 	atxs = append(atxs, atx.Id())
 	l := len(atxs)
 	if l > 1 {
-		lastAtx, err := db.getAtxUnlocked(atxs[0])
+		lastAtx, err := db.getAtxUnlocked(atxs[l -2])
 		if err != nil {
-			return errors.New("could not get all atxs from database ")
+			return errors.New("could not get atx from database ")
 		}
-		if lastAtx.Sequence+1 != atx.Sequence {
+		if atx.Sequence < lastAtx.Sequence {
 			sort.Slice(atxs, func(i, j int) bool {
 				atx1, err := db.getAtxUnlocked(atxs[i])
 				if err != nil {
@@ -398,7 +398,7 @@ func (db *ActivationDb) GetEpochAtxIds(epochId types.EpochId) ([]types.AtxId, er
 }
 
 // getAtxUnlocked gets the atx from db, this function is not thread safe and should be called under db lock
-// this function returns a pointer and
+// this function returns a pointer to an atx and an error if failed to retrieve it
 func (db *ActivationDb) getAtxUnlocked(id types.AtxId) (*types.ActivationTx, error) {
 	b, err := db.atxs.Get(id.Bytes())
 	if err != nil {
