@@ -1,7 +1,10 @@
 package eligibility
 
 import (
+	"encoding/binary"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/types"
+	"hash/fnv"
 	"sync"
 )
 
@@ -137,9 +140,19 @@ func (fo *FixedRolacle) generateEligibility(expCom int) map[string]struct{} {
 	return emap
 }
 
-func (fo *FixedRolacle) Eligible(id uint32, committeeSize int, pubKey string, proof []byte) bool {
+func hashLayerAndRound(instanceID types.LayerID, round int32) uint32 {
+	kInBytes := make([]byte, 4)
+	binary.LittleEndian.PutUint32(kInBytes, uint32(round))
+	h := fnv.New32()
+	h.Write(instanceID.ToBytes())
+	h.Write(kInBytes)
+
+	return h.Sum32()
+}
+
+func (fo *FixedRolacle) Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeId, sig []byte) (bool, error) {
 	fo.mapRW.RLock()
-	total := len(fo.honest) + len(fo.faulty)
+	total := len(fo.honest) + len(fo.faulty) // safe since len >= 0
 	fo.mapRW.RUnlock()
 
 	// normalize committee size
@@ -149,14 +162,16 @@ func (fo *FixedRolacle) Eligible(id uint32, committeeSize int, pubKey string, pr
 		size = total
 	}
 
+	instId := hashLayerAndRound(layer, round)
+
 	fo.mapRW.Lock()
 	// generate if not exist for the requested K
-	if _, exist := fo.emaps[id]; !exist {
-		fo.emaps[id] = fo.generateEligibility(size)
+	if _, exist := fo.emaps[instId]; !exist {
+		fo.emaps[instId] = fo.generateEligibility(int(size))
 	}
 	fo.mapRW.Unlock()
 	// get eligibility result
-	_, exist := fo.emaps[id][pubKey]
+	_, exist := fo.emaps[instId][id.Key]
 
-	return exist
+	return exist, nil
 }

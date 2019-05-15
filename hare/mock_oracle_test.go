@@ -2,6 +2,7 @@ package hare
 
 import (
 	"encoding/binary"
+	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
 	"math"
 	"math/rand"
@@ -73,7 +74,8 @@ func TestMockHashOracle_Role(t *testing.T) {
 	committeeSize := 20
 	counter := 0
 	for i := 0; i < numOfClients; i++ {
-		if oracle.Eligible(0, committeeSize, generateSigning(t).PublicKey().String(), []byte(genSig())) {
+		res , _ := oracle.Eligible(0, 1, committeeSize, types.NodeId{Key:generateSigning(t).PublicKey().String()}, []byte(genSig()))
+		if res {
 			counter++
 		}
 	}

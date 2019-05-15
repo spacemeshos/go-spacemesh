@@ -2,10 +2,12 @@ package oracle
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/types"
 	"io"
 	"math/big"
 	"net/http"
@@ -143,23 +145,27 @@ func (oc *OracleClient) ValidateSingle(instanceID []byte, K int, committeeSize i
 	return res.Valid
 }
 
-func hashInstanceAndK(instanceID []byte, K int) uint32 {
+
+func hashInstanceAndK(instanceID types.LayerID, K int32) uint32 {
+	kInBytes := make([]byte, 4)
+	binary.LittleEndian.PutUint32(kInBytes, uint32(K))
 	h := newHasherU32()
-	val := h.Hash(append(instanceID, byte(K)))
+	val := h.Hash(instanceID.ToBytes(), kInBytes)
 	return val
 }
 
 // Eligible checks whether a given ID is in the eligible list or not. it fetches the list once and gives answers locally after that.
-func (oc *OracleClient) Eligible(id uint32, committeeSize int, pubKey string) bool {
+func (oc *OracleClient) Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeId, sig []byte) (bool, error) {
+	instId := hashInstanceAndK(layer, round)
 	// make special instance ID
 	oc.eMtx.Lock()
-	if r, ok := oc.eligibilityMap[id]; ok {
-		_, valid := r[pubKey]
+	if r, ok := oc.eligibilityMap[instId]; ok {
+		_, valid := r[id.Key]
 		oc.eMtx.Unlock()
-		return valid
+		return valid, nil
 	}
 
-	req := validateQuery(oc.world, id, committeeSize)
+	req := validateQuery(oc.world, instId, committeeSize)
 
 	resp := oc.client.Get(Validate, req)
 
@@ -175,10 +181,10 @@ func (oc *OracleClient) Eligible(id uint32, committeeSize int, pubKey string) bo
 		elgmap[v] = struct{}{}
 	}
 
-	_, valid := elgmap[pubKey]
+	_, valid := elgmap[id.Key]
 
-	oc.eligibilityMap[id] = elgmap
+	oc.eligibilityMap[instId] = elgmap
 
 	oc.eMtx.Unlock()
-	return valid
+	return valid, nil
 }

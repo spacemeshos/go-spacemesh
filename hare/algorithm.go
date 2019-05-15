@@ -130,8 +130,8 @@ type ConsensusProcess struct {
 	log.Log
 	State
 	Closer
-	instanceId        InstanceId  // the id of this consensus instance
-	oracle            HareRolacle // roles oracle
+	instanceId        InstanceId // the id of this consensus instance
+	oracle            Rolacle    // roles oracle
 	signing           Signer
 	network           NetworkService
 	isStarted         bool
@@ -155,7 +155,7 @@ func NewConsensusProcess(cfg config.Config, instanceId InstanceId, s *Set, oracl
 	proc.State = State{-1, -1, s.Clone(), nil}
 	proc.Closer = NewCloser()
 	proc.instanceId = instanceId
-	proc.oracle = NewHareOracle(oracle, cfg.N)
+	proc.oracle = oracle
 	proc.signing = signing
 	proc.network = p2p
 	proc.validator = newSyntaxContextValidator(signing, cfg.F+1, proc.statusValidator(), logger)
@@ -217,7 +217,7 @@ func (proc *ConsensusProcess) SetInbox(inbox chan *Msg) {
 
 func (proc *ConsensusProcess) eventLoop() {
 	proc.With().Info("Consensus Process Started",
-		log.Int("Hare-N", proc.cfg.N), log.Int("f", proc.cfg.F), log.String("duration", (time.Duration(proc.cfg.RoundDuration)*time.Second).String()),
+		log.Int("Hare-N", proc.cfg.N), log.Int("f", proc.cfg.F), log.String("duration", (time.Duration(proc.cfg.RoundDuration) * time.Second).String()),
 		log.Uint32("instance_id", uint32(proc.instanceId)), log.String("set_values", proc.s.String()))
 
 	// set pre-round InnerMsg and send
@@ -599,7 +599,13 @@ func (proc *ConsensusProcess) isEligible() bool {
 
 // Returns the role matching the current round if eligible for this round, false otherwise
 func (proc *ConsensusProcess) currentRole() Role {
-	if proc.oracle.Eligible(proc.instanceId, proc.k, proc.signing.PublicKey().String(), proc.roleProof()) {
+	res, err := proc.oracle.Eligible(types.LayerID(proc.instanceId), proc.k, expectedCommitteeSize(proc.k, proc.cfg.N), types.NodeId{Key: proc.signing.PublicKey().String()}, proc.roleProof())
+	if err != nil {
+		proc.Error("Error checking eligibility: %v", err)
+		return Passive
+	}
+
+	if res { // eligible
 		if proc.currentRound() == Round2 {
 			return Leader
 		}

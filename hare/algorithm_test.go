@@ -2,11 +2,13 @@ package hare
 
 import (
 	"bytes"
+	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
@@ -41,8 +43,8 @@ type mockRolacle struct {
 	isEligible bool
 }
 
-func (mr *mockRolacle) Eligible(instanceId InstanceId, k int32, pubKey string, proof []byte) bool {
-	return mr.isEligible
+func (mr *mockRolacle) Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeId, sig []byte) (bool, error) {
+	return mr.isEligible, nil
 }
 
 func (mr *mockRolacle) Register(id string) {
@@ -141,8 +143,8 @@ func (mo *mockOracle) Eligible(instanceId InstanceId, k int32, pubKey string, pr
 	return true
 }
 
-func buildOracle(oracle Rolacle) *hareRolacle {
-	return NewHareOracle(oracle, cfg.N)
+func buildOracle(oracle Rolacle) Rolacle {
+	return oracle
 }
 
 // test that a InnerMsg to a specific set objectId is delivered by the broker
@@ -233,9 +235,9 @@ func generateConsensusProcess(t *testing.T) *ConsensusProcess {
 	n1 := sim.NewNodeFrom(bn.Node)
 
 	s := NewSetFromValues(value1)
-	oracle := NewMockHashOracle(numOfClients)
+	oracle := eligibility.New()
 	signing := signing.NewEdSigner()
-	oracle.Register(signing.PublicKey().String())
+	oracle.Register(true, signing.PublicKey().String())
 	output := make(chan TerminationOutput, 1)
 
 	return NewConsensusProcess(cfg, instanceId1, s, oracle, signing, n1, output, log.NewDefault(signing.PublicKey().String()))

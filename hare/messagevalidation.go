@@ -2,6 +2,7 @@ package hare
 
 import (
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/types"
 )
 
 type messageValidator interface {
@@ -10,12 +11,13 @@ type messageValidator interface {
 }
 
 type eligibilityValidator struct {
-	oracle HareRolacle
+	oracle Rolacle
+	n      int
 	log.Log
 }
 
-func NewEligibilityValidator(oracle HareRolacle, logger log.Log) *eligibilityValidator {
-	return &eligibilityValidator{oracle, logger}
+func NewEligibilityValidator(oracle Rolacle, n int, logger log.Log) *eligibilityValidator {
+	return &eligibilityValidator{oracle, n, logger}
 }
 
 func (ev *eligibilityValidator) validateRole(m *Msg) bool {
@@ -32,9 +34,17 @@ func (ev *eligibilityValidator) validateRole(m *Msg) bool {
 	// TODO: validate role proof sig
 
 	pub := m.PubKey
+	layer := types.LayerID(m.InnerMsg.InstanceId)
+	nId := types.NodeId{Key: pub.String()}
+
 	// validate role
-	if !ev.oracle.Eligible(InstanceId(m.InnerMsg.InstanceId), m.InnerMsg.K, pub.String(), Signature(m.InnerMsg.RoleProof)) {
-		ev.Warning("Role validation failed")
+	res, err := ev.oracle.Eligible(layer, m.InnerMsg.K, expectedCommitteeSize(m.InnerMsg.K, ev.n), nId, m.InnerMsg.RoleProof)
+	if err != nil {
+		ev.Error("Could not retrieve eligibility result err=%v", err)
+		return false
+	}
+	if !res {
+		ev.Warning("Role validation failed for %v", pub.ShortString())
 		return false
 	}
 

@@ -2,6 +2,7 @@ package hare
 
 import (
 	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -67,7 +68,7 @@ func TestNew(t *testing.T) {
 
 	layerTicker := make(chan types.LayerID)
 
-	oracle := NewMockHashOracle(numOfClients)
+	oracle := eligibility.New()
 	signing := signing2.NewEdSigner()
 
 	om := new(orphanMock)

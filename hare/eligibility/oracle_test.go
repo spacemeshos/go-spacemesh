@@ -40,37 +40,37 @@ func (mv *mockVerifier) Verify(msg, sig []byte) (bool, error) {
 func TestOracle_BuildVRFMessage(t *testing.T) {
 	o := Oracle{}
 	o.beacon = &mockValueProvider{1, someErr}
-	_, err := o.BuildVRFMessage(types.NodeId{}, types.LayerID(1), 1)
+	_, err := o.buildVRFMessage(types.NodeId{}, types.LayerID(1), 1)
 	assert.NotNil(t, err)
 }
 
 func TestOracle_IsEligible(t *testing.T) {
-	o := &Oracle{}
+	o := &Oracle{beacon: &mockValueProvider{1, nil}}
 	o.vrf = &mockVerifier{false, someErr}
-	res, err := o.IsEligible(0, types.NodeId{}, types.LayerID(1), []byte{}, []byte{})
+	res, err := o.Eligible(types.LayerID(1), 0, 1, types.NodeId{}, []byte{})
 	assert.NotNil(t, err)
 	assert.False(t, res)
 
 	o.vrf = &mockVerifier{true, nil}
 	o.activeSetProvider = &mockActiveSetProvider{5, someErr}
-	res, err = o.IsEligible(0, types.NodeId{}, types.LayerID(1), []byte{}, []byte{})
+	res, err = o.Eligible(types.LayerID(1), 1, 0, types.NodeId{}, []byte{})
 	assert.NotNil(t, err)
 	assert.False(t, res)
 
 	o.activeSetProvider = &mockActiveSetProvider{10, nil}
-	res, err = o.IsEligible(0, types.NodeId{}, types.LayerID(1), []byte{}, []byte{})
+	res, err = o.Eligible(types.LayerID(1), 1, 0, types.NodeId{}, []byte{})
 	assert.NotNil(t, err)
 	assert.Equal(t, "did not pass eligibility threshold", err.Error())
 	assert.False(t, res)
 
 	o.activeSetProvider = &mockActiveSetProvider{0, nil}
-	res, err = o.IsEligible(0, types.NodeId{}, types.LayerID(1), []byte{}, []byte{})
+	res, err = o.Eligible(types.LayerID(1), 1, 0, types.NodeId{}, []byte{})
 	assert.NotNil(t, err)
 	assert.Equal(t, "active set size is zero", err.Error())
 	assert.False(t, res)
 
 	o.activeSetProvider = &mockActiveSetProvider{10, nil}
-	res, err = o.IsEligible(10, types.NodeId{}, types.LayerID(1), []byte{}, []byte{})
+	res, err = o.Eligible(types.LayerID(1), 1, 10, types.NodeId{}, []byte{})
 	assert.Nil(t, err)
 	assert.True(t, res)
 }
