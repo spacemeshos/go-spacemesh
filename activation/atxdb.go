@@ -11,6 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"io"
+	"sort"
 	"sync"
 )
 
@@ -37,6 +38,8 @@ func (db *ActivationDb) ProcessBlockATXs(blk *types.Block) {
 	}
 }
 
+// ProcessAtx validates the active set size declared in the atx, and validates the atx according to atx validation rules
+// it then stores the atx with flag set to validity of the atx
 func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx) {
 	eatx, _ := db.GetAtx(atx.Id())
 	if eatx != nil {
@@ -64,6 +67,9 @@ func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx) {
 	}
 }
 
+// CalcActiveSetFromView traverses the view found in a - the activation tx and counts number of active ids published
+// in the epoch prior to the epoch that a was published at, this number is the number of active ids in the next epoch
+// the function returns error if the view is not found
 func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, error) {
 	bytes, err := types.ViewAsBytes(a.View)
 	if err != nil {
@@ -99,6 +105,7 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 			if err == nil && atx.Valid {
 				counter++
 				db.log.Info("atx found traversing %v in block in layer %v", atx.ShortId(), blk.LayerIndex)
+				// return eof to signal that enough active ids were found
 				if counter >= a.ActiveSetSize {
 					return io.EOF
 				}
@@ -138,14 +145,24 @@ func (db *ActivationDb) ValidateAtx(atx *types.ActivationTx) error {
 	if atx.PrevATXId != *types.EmptyAtxId {
 		prevATX, err := db.GetAtx(atx.PrevATXId)
 		if err != nil {
-			return fmt.Errorf("prevATX not found")
+			return fmt.Errorf("validation failed: prevATX not found: %v", err)
 		}
 		if !prevATX.Valid {
-			return fmt.Errorf("prevATX not valid")
+			return fmt.Errorf("validation failed: prevATX not valid")
 		}
 		if prevATX.Sequence+1 != atx.Sequence {
 			return fmt.Errorf("sequence number is not one more than prev sequence number")
 		}
+
+		prevAtxIds, err := db.GetNodeAtxIds(atx.NodeId)
+		if len(prevAtxIds) > 0 {
+			lastAtx := prevAtxIds[len(prevAtxIds)-1]
+			// last atx is not the one referenced
+			if lastAtx != atx.PrevATXId {
+				return fmt.Errorf("last atx is not the one referenced")
+			}
+		}
+
 	} else {
 		if atx.Sequence != 0 {
 			return fmt.Errorf("no prevATX reported, but sequence number not zero")
@@ -195,6 +212,9 @@ func (db *ActivationDb) ValidateAtx(atx *types.ActivationTx) error {
 	return nil
 }
 
+// StoreAtx stores an atx for epoh ech, it stores atx for the current epoch and adds the atx for the nodeid
+// that created it in a sorted manner by the sequence id. this function does not validate the atx and assumes all data is correct
+// and that all associated atx exist in the db. will return error if writing to db failed
 func (db *ActivationDb) StoreAtx(ech types.EpochId, atx *types.ActivationTx) error {
 	db.Lock()
 	defer db.Unlock()
@@ -205,14 +225,11 @@ func (db *ActivationDb) StoreAtx(ech types.EpochId, atx *types.ActivationTx) err
 		return nil
 	}
 
-	b, err := types.AtxAsBytes(atx)
+	err := db.storeAtxUnlocked(atx)
 	if err != nil {
 		return err
 	}
-	err = db.atxs.Put(atx.Id().Bytes(), b)
-	if err != nil {
-		return err
-	}
+
 	err = db.addAtxToEpoch(ech, atx.Id())
 	if err != nil {
 		return err
@@ -223,15 +240,26 @@ func (db *ActivationDb) StoreAtx(ech types.EpochId, atx *types.ActivationTx) err
 		if err != nil {
 			return err
 		}
-		db.log.Info("after incrementing epoch counter ech (%v)", ech)
+		db.log.Debug("after incrementing epoch counter ech (%v)", ech)
 	}
-	db.log.Info("storing atx %v, in epoch %v", atx.ShortId(), ech)
-	err = db.addAtxToNodeId(atx.NodeId, atx.Id())
+	err = db.addAtxToNodeIdSorted(atx.NodeId, atx)
 	if err != nil {
 		return err
 	}
-	db.log.Info("finished storing atx %v, in epoch %v", atx.ShortId(), ech)
+	db.log.Debug("finished storing atx %v, in epoch %v", atx.ShortId(), ech)
 
+	return nil
+}
+
+func (db *ActivationDb) storeAtxUnlocked(atx *types.ActivationTx) error {
+	b, err := types.AtxAsBytes(atx)
+	if err != nil {
+		return err
+	}
+	err = db.atxs.Put(atx.Id().Bytes(), b)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -239,6 +267,7 @@ func epochCounterKey(ech types.EpochId) []byte {
 	return append(ech.ToBytes(), common.Uint64ToBytes(uint64(CounterKey))...)
 }
 
+// incValidAtxCounter increases the number of active ids seen for epoch ech
 func (db *ActivationDb) incValidAtxCounter(ech types.EpochId) error {
 	key := epochCounterKey(ech)
 	val, err := db.atxs.Get(key)
@@ -248,6 +277,7 @@ func (db *ActivationDb) incValidAtxCounter(ech types.EpochId) error {
 	return db.atxs.Put(key, common.Uint32ToBytes(common.BytesToUint32(val)+1))
 }
 
+// ActiveSetSize returns the active set size stored in db for epoch ech
 func (db *ActivationDb) ActiveSetSize(ech types.EpochId) uint32 {
 	key := epochCounterKey(ech)
 	db.RLock()
@@ -260,7 +290,8 @@ func (db *ActivationDb) ActiveSetSize(ech types.EpochId) uint32 {
 	return common.BytesToUint32(val)
 }
 
-//this function is not thread safe and needs to be called under a global lock
+// addAtxToEpoch adds atx to epoch epochId
+// this function is not thread safe and needs to be called under a global lock
 func (db *ActivationDb) addAtxToEpoch(epochId types.EpochId, atx types.AtxId) error {
 	ids, err := db.atxs.Get(epochId.ToBytes())
 	var atxs []types.AtxId
@@ -286,10 +317,9 @@ func getNodeIdKey(id types.NodeId) []byte {
 	return []byte(id.Key)
 }
 
-//this function is not thread safe and needs to be called under a global lock
-func (db *ActivationDb) addAtxToNodeId(nodeId types.NodeId, atx types.AtxId) error {
+// addAtxToNodeIdSorted inserts activation atx id by node it is not thread safe and needs to be called under a global lock
+func (db *ActivationDb) addAtxToNodeIdSorted(nodeId types.NodeId, atx *types.ActivationTx) error {
 	key := getNodeIdKey(nodeId)
-	db.log.Info("adding atx %v to nodeId %v", atx.String()[2:7], nodeId.Key[:5])
 	ids, err := db.atxs.Get(key)
 	var atxs []types.AtxId
 	if err != nil {
@@ -302,7 +332,31 @@ func (db *ActivationDb) addAtxToNodeId(nodeId types.NodeId, atx types.AtxId) err
 			return errors.New("could not get all atxs from database ")
 		}
 	}
-	atxs = append(atxs, atx)
+
+	// append needs to be sorted
+	atxs = append(atxs, atx.Id())
+	l := len(atxs)
+	if l > 1 {
+		lastAtx, err := db.getAtxUnlocked(atxs[l-2])
+		if err != nil {
+			return errors.New("could not get atx from database ")
+		}
+		if atx.Sequence < lastAtx.Sequence {
+			sort.Slice(atxs, func(i, j int) bool {
+				atx1, err := db.getAtxUnlocked(atxs[i])
+				if err != nil {
+					panic("inconsistent db")
+				}
+				atx2, err := db.getAtxUnlocked(atxs[j])
+				if err != nil {
+					panic("inconsistent db")
+				}
+
+				return atx1.Sequence < atx2.Sequence
+			})
+		}
+	}
+
 	w, err := encodeAtxIds(atxs)
 	if err != nil {
 		return errors.New("could not encode layer atx ids")
@@ -310,6 +364,7 @@ func (db *ActivationDb) addAtxToNodeId(nodeId types.NodeId, atx types.AtxId) err
 	return db.atxs.Put(key, w)
 }
 
+// GetNodeAtxIds returns the atx ids that were received for node nodeId
 func (db *ActivationDb) GetNodeAtxIds(nodeId types.NodeId) ([]types.AtxId, error) {
 	key := getNodeIdKey(nodeId)
 	db.log.Info("fetching atxIDs for node %v", nodeId.Key[:5])
@@ -327,6 +382,7 @@ func (db *ActivationDb) GetNodeAtxIds(nodeId types.NodeId) ([]types.AtxId, error
 	return atxs, nil
 }
 
+// GetEpochAtxIds returns all atx id's created in this epoch as seen by this node
 func (db *ActivationDb) GetEpochAtxIds(epochId types.EpochId) ([]types.AtxId, error) {
 	db.RLock()
 	ids, err := db.atxs.Get(epochId.ToBytes())
@@ -341,6 +397,22 @@ func (db *ActivationDb) GetEpochAtxIds(epochId types.EpochId) ([]types.AtxId, er
 	return atxs, nil
 }
 
+// getAtxUnlocked gets the atx from db, this function is not thread safe and should be called under db lock
+// this function returns a pointer to an atx and an error if failed to retrieve it
+func (db *ActivationDb) getAtxUnlocked(id types.AtxId) (*types.ActivationTx, error) {
+	b, err := db.atxs.Get(id.Bytes())
+	if err != nil {
+		return nil, err
+	}
+	atx, err := types.BytesAsAtx(b)
+	if err != nil {
+		return nil, err
+	}
+	return atx, nil
+}
+
+// GetAtx returns the atx by the given id. this function is thread safe and will return error if the id is not found in the
+// atx db
 func (db *ActivationDb) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
 	db.RLock()
 	b, err := db.atxs.Get(id.Bytes())
@@ -355,6 +427,8 @@ func (db *ActivationDb) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
 	return atx, nil
 }
 
+// IsIdentityActive returns whether edId is active for the epoch of layer layer.
+// it returns error if no associated atx is found in db
 func (db *ActivationDb) IsIdentityActive(edId string, layer types.LayerID) (bool, error) {
 	epoch := layer.GetEpoch(uint16(db.LayersPerEpoch))
 	nodeId, err := db.ids.GetIdentity(edId)
