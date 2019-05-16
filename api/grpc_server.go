@@ -34,32 +34,37 @@ func (s SpacemeshGrpcService) Echo(ctx context.Context, in *pb.SimpleMessage) (*
 
 // Echo returns the response for an echo api request
 func (s SpacemeshGrpcService) GetBalance(ctx context.Context, in *pb.AccountId) (*pb.SimpleMessage, error) {
+	log.Info("GRPC GetBalance msg")
 	addr := address.HexToAddress(in.Address)
 
 	if s.StateApi.Exist(addr) != true {
+		log.Error("GRPC GetBalance returned error msg: account does not exist")
 		return nil, fmt.Errorf("account does not exist")
 	}
 
 	val := s.StateApi.GetBalance(addr)
-
+	log.Info("GRPC GetBalance returned msg %v", val.String())
 	return &pb.SimpleMessage{Value: val.String()}, nil
 }
 
 // Echo returns the response for an echo api request
 func (s SpacemeshGrpcService) GetNonce(ctx context.Context, in *pb.AccountId) (*pb.SimpleMessage, error) {
+	log.Info("GRPC GetNonce msg")
 	addr := address.HexToAddress(in.Address)
 
 	if s.StateApi.Exist(addr) != true {
+		log.Error("GRPC GetNonce got error msg: account does not exist")
 		return nil, fmt.Errorf("account does not exist")
 	}
 
 	val := s.StateApi.GetNonce(addr)
 	msg := pb.SimpleMessage{Value: strconv.FormatUint(val, 10)}
+	log.Error("GRPC GetNonce returned msg %v", strconv.FormatUint(val, 10))
 	return &msg, nil
 }
 
 func (s SpacemeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.SignedTransaction) (*pb.SimpleMessage, error) {
-
+	log.Info("GRPC SubmitTransaction msg")
 	tx := types.SerializableTransaction{}
 	addr := address.HexToAddress(in.DstAddress)
 	tx.Recipient = &addr
@@ -80,18 +85,20 @@ func (s SpacemeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.Sign
 
 	//todo" should this be in a go routine?
 	s.Network.Broadcast(miner.IncomingTxProtocol, val)
-
+	log.Info("GRPC SubmitTransaction returned msg ok")
 	return &pb.SimpleMessage{Value: "ok"}, nil
 }
 
 // P2P API
 
 func (s SpacemeshGrpcService) Broadcast(ctx context.Context, in *pb.BroadcastMessage) (*pb.SimpleMessage, error) {
+	log.Info("GRPC Broadcast msg")
 	err := s.Network.Broadcast(APIGossipProtocol, []byte(in.Data))
 	if err != nil {
 		log.Warning("RPC Broadcast failed please check that `test-mode` is on in order to use RPC Broadcast.")
 		return &pb.SimpleMessage{Value: err.Error()}, err
 	}
+	log.Info("GRPC Broadcast msg ok")
 	return &pb.SimpleMessage{Value: "ok"}, nil
 }
 
@@ -149,25 +156,32 @@ func (s SpacemeshGrpcService) startServiceInternal(status chan bool) {
 }
 
 func (s SpacemeshGrpcService) SetCommitmentSize(ctx context.Context, message *pb.CommitmentSizeMessage) (*pb.SimpleMessage, error) {
+	log.Info("GRPC SetCommitmentSize msg")
+
 	return &pb.SimpleMessage{Value: "ok"}, nil
 }
 
 func (s SpacemeshGrpcService) SetLogicalDrive(ctx context.Context, message *pb.LogicalDriveMessage) (*pb.SimpleMessage, error) {
+	log.Info("GRPC SetLogicalDrive msg")
 	return &pb.SimpleMessage{Value: "ok"}, nil
 }
 
 func (s SpacemeshGrpcService) SetAwardsAddress(ctx context.Context, id *pb.AccountId) (*pb.SimpleMessage, error) {
+	log.Info("GRPC SetAwardsAddress msg")
 	return &pb.SimpleMessage{Value: "ok"}, nil
 }
 
 func (s SpacemeshGrpcService) GetInitProgress(ctx context.Context, empty *empty.Empty) (*pb.SimpleMessage, error) {
+	log.Info("GRPC GetInitProgress msg")
 	return &pb.SimpleMessage{Value: "80"}, nil
 }
 
 func (s SpacemeshGrpcService) GetTotalAwards(ctx context.Context, empty *empty.Empty) (*pb.SimpleMessage, error) {
+	log.Info("GRPC GetTotalAwards msg")
 	return &pb.SimpleMessage{Value: "1234"}, nil
 }
 
 func (s SpacemeshGrpcService) GetUpcomingAwards(ctx context.Context, empty *empty.Empty) (*pb.SimpleMessage, error) {
+	log.Info("GRPC GetUpcomingAwards msg")
 	return &pb.SimpleMessage{Value: "43221"}, nil
 }
