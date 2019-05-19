@@ -70,11 +70,11 @@ var (
 	// InvalidGossipMessages is a metric for invalid messages received
 	InvalidGossipMessages = totalGossipMessages.With(messageTypeLabel, "invalid")
 
-	// DHTSize is the current size of the dht
-	DHTSize = prometheus.NewGaugeFrom(stdprometheus.GaugeOpts{
+	// AddrbookSize is the current size of the discovery
+	AddrbookSize = prometheus.NewGaugeFrom(stdprometheus.GaugeOpts{
 		Namespace: Namespace,
 		Subsystem: MetricsSubsystem,
-		Name:      "dht_size",
-		Help:      "Number of peers in the dht",
+		Name:      "addrbook_size",
+		Help:      "Number of peers in the discovery",
 	}, []string{})
 )

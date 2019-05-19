@@ -1,4 +1,7 @@
 from datetime import datetime, timedelta
+
+from tests import queries
+from tests import pod
 from tests.fixtures import load_config, DeploymentInfo
 from tests.fixtures import init_session, set_namespace, set_docker_images, session_id
 import os
@@ -17,11 +20,18 @@ from elasticsearch import Elasticsearch
 from elasticsearch_dsl import Search, Q
 
 from tests.misc import ContainerSpec
+from tests.queries import query_message
 
 BOOT_DEPLOYMENT_FILE = './k8s/bootstrap-w-conf.yml'
 CLIENT_DEPLOYMENT_FILE = './k8s/client-w-conf.yml'
+CLIENT_POD_FILE = './k8s/single-client-w-conf.yml'
 ORACLE_DEPLOYMENT_FILE = './k8s/oracle.yml'
 POET_DEPLOYMENT_FILE = './k8s/poet.yml'
+
+BOOTSTRAP_PORT = 7513
+ORACLE_SERVER_PORT = 3030
+POET_SERVER_PORT = 50002
+
 
 ELASTICSEARCH_URL = "http://{0}".format(testconfig['elastic']['host'])
 
@@ -116,50 +126,6 @@ def query_bootstrap_es(indx, namespace, bootstrap_po_name):
     return None
 
 
-def query_message(indx, namespace, client_po_name, fields, findFails=False):
-    # TODO : break this to smaller functions ?
-    es = get_elastic_search_api()
-    fltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
-           Q("match_phrase", kubernetes__pod_name=client_po_name)
-    for f in fields:
-        fltr = fltr & Q("match_phrase", **{f: fields[f]})
-    s = Search(index=indx, using=es).query('bool', filter=[fltr])
-    hits = list(s.scan())
-
-    print("====================================================================")
-    print("Report for `{0}` in deployment -  {1}  ".format(fields, client_po_name))
-    print("Number of hits: ", len(hits))
-    print("====================================================================")
-    print("Benchmark results:")
-    ts = [hit["T"] for hit in hits]
-
-    first = datetime.strptime(min(ts).replace("T", " ",).replace("Z", ""), "%Y-%m-%d %H:%M:%S.%f")
-    last = datetime.strptime(max(ts).replace("T", " ",).replace("Z", ""), "%Y-%m-%d %H:%M:%S.%f")
-
-    delta = last - first
-    print("First: {0}, Last: {1}, Delta: {2}".format(first, last, delta))
-    # TODO: compare to previous runs.
-    print("====================================================================")
-    if findFails:
-        print("Looking for pods that didn't hit:")
-        podnames = set([hit.kubernetes.pod_name for hit in hits])
-        newfltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
-                  Q("match_phrase", kubernetes__pod_name=client_po_name)
-
-        for p in podnames:
-            newfltr = newfltr & ~Q("match_phrase", kubernetes__pod_name=p)
-        s2 = Search(index=current_index, using=es).query('bool', filter=[newfltr])
-        hits2 = list(s2.scan())
-        unsecpods = set([hit.kubernetes.pod_name for hit in hits2])
-        if len(unsecpods) == 0:
-            print("None. yay!")
-        else:
-            print(unsecpods)
-        print("====================================================================")
-    s = set([h.N for h in hits])
-    return len(s)
-
-
 # ==============================================================================
 #    Fixtures
 # ==============================================================================
@@ -213,8 +179,8 @@ def setup_bootstrap(request, init_session, setup_oracle, setup_poet, create_conf
                               cimage=testconfig['bootstrap']['image'],
                               centry=[testconfig['bootstrap']['command']])
 
-        cspec.append_args(oracle_server='http://{0}:3030'.format(setup_oracle),
-                          poet_server='{0}:50002'.format(setup_poet),
+        cspec.append_args(oracle_server='http://{0}:{1}'.format(setup_oracle, ORACLE_SERVER_PORT),
+                          poet_server='{0}:{1}'.format(setup_poet, POET_SERVER_PORT),
                           genesis_time=GENESIS_TIME.isoformat('T', 'seconds'),
                           **bootstrap_args)
 
@@ -263,9 +229,9 @@ def setup_clients(request, setup_oracle, setup_poet, setup_bootstrap):
                               cimage=testconfig['client']['image'],
                               centry=[testconfig['client']['command']])
 
-        cspec.append_args(bootnodes="{0}:{1}/{2}".format(bs_info['pod_ip'], '7513', bs_info['key']),
-                          oracle_server='http://{0}:3030'.format(setup_oracle),
-                          poet_server='{0}:50002'.format(setup_poet),
+        cspec.append_args(bootnodes="{0}:{1}/{2}".format(bs_info['pod_ip'], BOOTSTRAP_PORT, bs_info['key']),
+                          oracle_server='http://{0}:{1}'.format(setup_oracle, ORACLE_SERVER_PORT),
+                          poet_server='{0}:{1}'.format(setup_poet, POET_SERVER_PORT),
                           genesis_time=GENESIS_TIME.isoformat('T', 'seconds'),
                           **client_args)
 
@@ -296,6 +262,55 @@ def setup_clients(request, setup_oracle, setup_poet, setup_bootstrap):
     return _setup_clients_in_namespace(testconfig['namespace'])
 
 
+def add_single_client(deployment_id, container_specs):
+
+    resp = pod.create_pod(CLIENT_POD_FILE,
+                          testconfig['namespace'],
+                          deployment_id=deployment_id,
+                          container_specs=container_specs)
+
+    client_name = resp.metadata.name
+    print("Add new client: {0}".format(client_name))
+    return client_name
+
+# The following fixture should not be used if you wish to add many clients during test.
+# Instead you should call add_single_client directly
+@pytest.fixture()
+def add_client(request, setup_oracle, setup_poet, setup_bootstrap, setup_clients):
+
+    global client_name
+
+    def _add_single_client():
+        global client_name
+        if not setup_bootstrap.pods:
+            raise Exception("Could not find bootstrap node")
+
+        bs_info = setup_bootstrap.pods[0]
+
+        client_args = {} if 'args' not in testconfig['client'] else testconfig['client']['args']
+
+        cspec = ContainerSpec(cname='client',
+                              cimage=testconfig['client']['image'],
+                              centry=[testconfig['client']['command']])
+
+        cspec.append_args(bootnodes="{0}:{1}/{2}".format(bs_info['pod_ip'], BOOTSTRAP_PORT, bs_info['key']),
+                          oracle_server='http://{0}:{1}'.format(setup_oracle, ORACLE_SERVER_PORT),
+                          poet_server='{0}:{1}'.format(setup_poet, POET_SERVER_PORT),
+                          genesis_time=GENESIS_TIME.isoformat('T', 'seconds'),
+                          **client_args)
+
+        client_name = add_single_client(setup_bootstrap.deployment_id, cspec)
+        return client_name
+
+    def fin():
+        global client_name
+        pod.delete_pod(client_name, testconfig['namespace'])
+
+    request.addfinalizer(fin)
+    return _add_single_client()
+
+
+@pytest.fixture(scope='module')
 def wait_genesis():
     # Make sure genesis time has not passed yet and sleep for the rest
     time_now = pytz.utc.localize(datetime.utcnow())
@@ -390,9 +405,18 @@ def test_client(setup_clients, save_log_on_exit):
     print("Sleeping " + str(timetowait) + " before checking out bootstrap results")
     time.sleep(timetowait)
     peers = query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, fields, True)
-    assert peers == len(setup_clients.pods)
+    assert len(set(peers)) == len(setup_clients.pods)
 
-    
+
+def test_add_client(add_client):
+
+    # Sleep a while before checking the node is bootstarped
+    time.sleep(20)
+    fields = {'M': 'discovery_bootstrap'}
+    hits = query_message(current_index, testconfig['namespace'], add_client, fields, True)
+    assert len(hits) == 1, "Could not find new Client bootstrap message"
+
+
 def test_gossip(setup_clients):
     fields = {'M':'new_gossip_message', 'protocol': 'api_test_gossip'}
     # *note*: this already waits for bootstrap so we can send the msg right away.
@@ -414,14 +438,10 @@ def test_gossip(setup_clients):
     time.sleep(gossip_propagation_sleep)
 
     peers_for_gossip = query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, fields, True)
-    assert len(setup_clients.pods) == peers_for_gossip
+    assert len(setup_clients.pods) == len(set(peers_for_gossip))
 
 
-def test_transaction(setup_clients):
-
-    # Make sure the genesis time is over
-    wait_genesis()
-
+def test_transaction(setup_clients, wait_genesis):
     # choose client to run on
     client_ip = setup_clients.pods[0]['pod_ip']
 
@@ -455,3 +475,73 @@ def test_transaction(setup_clients):
     print("test took {:.3f} seconds ".format(end-start))
     assert '{"value":"100"}' in out.decode("utf-8")
     print("balance ok")
+
+
+def test_mining(setup_clients, wait_genesis, setup_bootstrap):
+    # choose client to run on
+    client_ip = setup_clients.pods[0]['pod_ip']
+
+    api = 'v1/nonce'
+    data = '{"address":"1"}'
+    print("checking nonce")
+    out = api_call(client_ip, data, api, testconfig['namespace'])
+    # assert '{"value":"0"}' in out.decode("utf-8")
+    # print("nonce ok")
+
+    api = 'v1/submittransaction'
+    data = '{"srcAddress":"1","dstAddress":"222","nonce":"0","amount":"100"}'
+    print("submitting transaction")
+    out = api_call(client_ip, data, api, testconfig['namespace'])
+    print(out.decode("utf-8"))
+    assert '{"value":"ok"}' in out.decode("utf-8")
+    print("submit transaction ok")
+    print("wait for confirmation ")
+    api = 'v1/balance'
+    data = '{"address":"222"}'
+    end = start = time.time()
+    layer_avg_size = 20
+    last_layer = 8
+    layers_per_epoch = 3
+    deviation = 0.2
+    last_epoch = last_layer / layers_per_epoch
+
+    queries.wait_for_latest_layer(testconfig["namespace"], last_layer)
+
+    # out = api_call(client_ip, data, api, testconfig['namespace'])
+    print("test took {:.3f} seconds ".format(end-start))
+    # assert '{"value":"100"}' in out.decode("utf-8")
+    # print("balance ok")
+
+    # need to filter out blocks that have come from last layer
+    blockmap = queries.get_blocks_per_node(testconfig["namespace"])
+    # count all blocks arrived in relevant layers
+    total_blocks = sum([len(blockmap[x]) for x in blockmap ])
+    atxmap = queries.get_atx_per_node(testconfig["namespace"])
+    total_atxs = sum([len(atxmap[x]) for x in atxmap ])
+
+    total_pods = len(setup_clients.pods) + len(setup_bootstrap.pods)
+
+    print("atx created " + str(total_atxs))
+    print("blocks created " + str(total_blocks))
+
+    assert total_pods == len(blockmap)
+    assert (1 - deviation) < (total_blocks / last_layer) / layer_avg_size < (1 + deviation)
+    assert total_atxs == int((last_layer / layers_per_epoch) + 1) * total_pods
+
+    # assert that a node has created one atx per epoch
+    for node in atxmap:
+        mp = set()
+        for blk in atxmap[node]:
+            mp.add(blk[4])
+        assert len(atxmap[node]) / int((last_layer / layers_per_epoch) + 1) == 1
+        if len(mp) != int((last_layer / layers_per_epoch) + 1):
+            print("mp " + ','.join(mp) + " node " + node + " atxmap " + str(atxmap[node]))
+        assert len(mp) == int((last_layer / layers_per_epoch) + 1)
+
+    # assert that each node has created layer_avg/number_of_nodes
+    mp.clear()
+    for node in blockmap:
+        for blk in blockmap[node]:
+          mp.add(blk[0])
+        print("blocks:" + str(len(blockmap[node])) + "in layers" + str(len(mp)) + " " + str(layer_avg_size / total_pods))
+        assert (len(blockmap[node]) / last_layer) / int(layer_avg_size / total_pods) <= 1.5
