@@ -116,8 +116,9 @@ func (m *MeshDB) GetMiniBlock(id types.BlockID) (*types.MiniBlock, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	return types.BytesAsMiniBlock(b)
+	mbk := &types.MiniBlock{}
+	err = types.BytesToInterface(b, mbk)
+	return mbk, err
 }
 
 //todo this overwrites the previous value if it exists
@@ -259,7 +260,7 @@ func (m *MeshDB) writeBlock(bl *types.Block) error {
 
 	minblock := &types.MiniBlock{BlockHeader: bl.BlockHeader, TxIds: txids, ATXs: bl.ATXs}
 
-	bytes, err := types.MiniBlockToBytes(*minblock)
+	bytes, err := types.InterfaceToBytes(*minblock)
 	if err != nil {
 		return fmt.Errorf("could not encode bl")
 	}

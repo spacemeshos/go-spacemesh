@@ -84,8 +84,8 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 				bl.Error("got empty message while listening to gossip blocks")
 				break
 			}
-
-			blk, err := types.BytesAsBlock(data.Bytes())
+			blk := &types.Block{}
+			err := types.BytesToInterface(data.Bytes(), blk)
 			if err != nil {
 				bl.Error("received invalid block %v", data.Bytes())
 				break
@@ -102,13 +102,13 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 				break
 			}
 
-			if err := bl.AddBlock(&blk); err != nil {
+			if err := bl.AddBlock(blk); err != nil {
 				bl.Info("Block already received")
 				break
 			}
 			bl.Info("added block to database %v", blk.Id)
 			data.ReportValidation(NewBlockProtocol)
-			bl.addUnknownToQueue(&blk)
+			bl.addUnknownToQueue(blk)
 		}
 	}
 }
@@ -170,7 +170,7 @@ func newBlockRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg []byte) 
 			return nil
 		}
 
-		bbytes, err := types.BlockAsBytes(*blk)
+		bbytes, err := types.InterfaceToBytes(*blk)
 		if err != nil {
 			logger.Error("Error marshaling response message (FetchBlockResp), with BlockID: %d, LayerID: %d and err:", blk.ID(), blk.Layer(), err)
 			return nil

@@ -141,12 +141,12 @@ func (b *Block) AddTransaction(sr *SerializableTransaction) {
 }
 
 func (b *Block) Compare(bl *Block) bool {
-	bbytes, err := BlockAsBytes(*b)
+	bbytes, err := InterfaceToBytes(*b)
 	if err != nil {
 		log.Error("could not compare blocks %v", err)
 		return false
 	}
-	blbytes, err := BlockAsBytes(*bl)
+	blbytes, err := InterfaceToBytes(*bl)
 	if err != nil {
 		log.Error("could not compare blocks %v", err)
 		return false

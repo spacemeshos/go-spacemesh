@@ -347,12 +347,13 @@ func sendBlockRequest(msgServ *server.MessageServer, peer p2p.Peer, id types.Blo
 		logger.Debug("handle block response Peer: %v id: %v", peer, id)
 		defer close(ch)
 		logger.Info("handle block response")
-		block, err := types.BytesAsBlock(msg)
+		block := &types.Block{}
+		err := types.BytesToInterface(msg, block)
 		if err != nil {
 			logger.Error("could not unmarshal block data")
 			return
 		}
-		ch <- &block
+		ch <- block
 	}
 
 	return ch, msgServ.SendRequest(BLOCK, id.ToBytes(), peer, foo)
@@ -365,7 +366,9 @@ func (s *Syncer) sendMiniBlockRequest(peer p2p.Peer, id types.BlockID) (chan *ty
 	foo := func(msg []byte) {
 		defer close(ch)
 		s.Info("handle block response")
-		block, err := types.BytesAsMiniBlock(msg)
+
+		block := &types.MiniBlock{}
+		err := types.BytesToInterface(msg, block)
 		if err != nil {
 			s.Error("could not unmarshal block data")
 			return
@@ -382,7 +385,8 @@ func (s *Syncer) sendTxRequest(peer p2p.Peer, id types.TransactionId) (chan *typ
 	foo := func(msg []byte) {
 		defer close(ch)
 		s.Debug("handle tx response %v", hex.EncodeToString(msg))
-		tx, err := types.BytesAsTransaction(msg)
+		tx := &types.SerializableTransaction{}
+		err := types.BytesToInterface(msg, tx)
 		if err != nil {
 			s.Error("could not unmarshal tx data %v", err)
 			return

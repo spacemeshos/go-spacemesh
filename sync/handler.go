@@ -58,7 +58,7 @@ func newMiniBlockRequestHandler(msh *mesh.Mesh, logger log.Log) func(msg []byte)
 			return nil
 		}
 
-		bbytes, err := types.MiniBlockToBytes(*blk)
+		bbytes, err := types.InterfaceToBytes(*blk)
 		if err != nil {
 			logger.Error("Error marshaling response message (FetchBlockResp), with BlockID: %d, LayerID: %d and err:", blk.ID(), blk.Layer(), err)
 			return nil
@@ -86,7 +86,7 @@ func newTxsRequestHandler(msh *mesh.Mesh, logger log.Log) func(msg []byte) []byt
 		//	transactions = append(transactions, value)
 		//}
 
-		bbytes, err := types.TransactionAsBytes(txs[txid])
+		bbytes, err := types.InterfaceToBytes(txs[txid])
 		if err != nil {
 			logger.Error("Error marshaling transactions response message , with ids %v and err:", txs, err)
 			return nil

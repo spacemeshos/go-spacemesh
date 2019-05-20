@@ -142,23 +142,6 @@ func NIPSTChallengeAsBytes(challenge *NIPSTChallenge) ([]byte, error) {
 	return w.Bytes(), nil
 }
 
-func BlockHeaderToBytes(bheader *BlockHeader) ([]byte, error) {
-	var w bytes.Buffer
-	if _, err := xdr.Marshal(&w, bheader); err != nil {
-		return nil, fmt.Errorf("error marshalling block header: %v", err)
-	}
-	return w.Bytes(), nil
-}
-
-func BytesAsBlockHeader(buf []byte) (BlockHeader, error) {
-	b := BlockHeader{}
-	_, err := xdr.Unmarshal(bytes.NewReader(buf), &b)
-	if err != nil {
-		return b, err
-	}
-	return b, nil
-}
-
 func TransactionAsBytes(tx *SerializableTransaction) ([]byte, error) {
 	var w bytes.Buffer
 	if _, err := xdr.Marshal(&w, &tx); err != nil {
@@ -176,49 +159,16 @@ func BytesAsTransaction(buf []byte) (*SerializableTransaction, error) {
 	return &b, nil
 }
 
-func MiniBlockToBytes(mini MiniBlock) ([]byte, error) {
-	var w bytes.Buffer
-	if _, err := xdr.Marshal(&w, &mini); err != nil {
-		return nil, fmt.Errorf("error marshalling mini block: %v", err)
-	}
-	return w.Bytes(), nil
-}
-
-func BytesAsMiniBlock(buf []byte) (*MiniBlock, error) {
-	b := MiniBlock{}
-	_, err := xdr.Unmarshal(bytes.NewReader(buf), &b)
-	if err != nil {
-		return &b, err
-	}
-	return &b, nil
-}
-
-func BlockAsBytes(block Block) ([]byte, error) {
-	var w bytes.Buffer
-	if _, err := xdr.Marshal(&w, &block); err != nil {
-		return nil, fmt.Errorf("error marshalling block: %v", err)
-	}
-	return w.Bytes(), nil
-}
-
-func BytesAsBlock(buf []byte) (Block, error) {
-	b := Block{}
-	_, err := xdr.Unmarshal(bytes.NewReader(buf), &b)
-	if err != nil {
-		return b, err
-	}
-	return b, nil
-}
-
-func BytesAsInterface(buf []byte, i interface{}) error {
-	_, err := xdr.Unmarshal(bytes.NewReader(buf), &i)
+//!!! Pass the interface by reference
+func BytesToInterface(buf []byte, i interface{}) error {
+	_, err := xdr.Unmarshal(bytes.NewReader(buf), i)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func InterfaceAsBytes(i interface{}) ([]byte, error) {
+func InterfaceToBytes(i interface{}) ([]byte, error) {
 	var w bytes.Buffer
 	if _, err := xdr.Marshal(&w, &i); err != nil {
 		return nil, err
