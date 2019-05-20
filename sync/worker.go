@@ -50,7 +50,47 @@ func NewWorker(s *server.MessageServer,
 			log.Error("layer ids request to %v timed out", peer)
 			return
 		case v := <-ch:
-			output <- v
+			if v != nil {
+				output <- v
+			} else {
+				log.Error("peer %v responded with nil", peer)
+			}
+		}
+	}
+
+	return worker{
+		Log:    s.Log,
+		Once:   mu,
+		count:  count,
+		output: output,
+		action: workFunc,
+	}
+
+}
+
+func NewNeighborhoodWorker(s *server.MessageServer,
+	requestTimeout time.Duration,
+	peers []p2p.Peer,
+	mu *sync.Once,
+	count *int32,
+	output chan interface{},
+	reqFactory RequestFactory) worker {
+	workFunc := func() {
+		for _, peer := range peers {
+			log.Debug("send request Peer: %v", peer)
+			ch, _ := reqFactory(s, peer)
+			timeout := time.After(requestTimeout)
+			select {
+			case <-timeout:
+				log.Error("request to %v timed out", peer)
+			case v := <-ch:
+				if v != nil {
+					output <- v
+					return
+				} else {
+					log.Error("peer %v responded with nil", peer)
+				}
+			}
 		}
 	}
 
@@ -90,46 +130,30 @@ func HashReqFactory(lyr types.LayerID) RequestFactory {
 }
 
 //todo handle blocks in retry queue
-func NewBlockWorker(s *Syncer, blockIds chan types.BlockID, retry chan types.BlockID, output chan interface{}, mu *sync.Once, count *int32) worker {
-	foo := func() {
-		for id := range blockIds {
-			//todo check peers not empty
-			for _, p := range s.GetPeers() {
-				timer := newMilliTimer(blockTime)
-				log.Info("send block request Peer: %v id: %v", p, id)
-				bCh, foo := miniBlockRequest()
-				if err := s.SendRequest(BLOCK, id.ToBytes(), p, foo); err == nil {
-					timeout := time.After(s.RequestTimeout)
-					select {
-					case <-timeout:
-						s.Error("block request to %v timed out move to retry queue", id)
-						retry <- id
-					case block := <-bCh:
-						if block != nil {
-							elapsed := timer.ObserveDuration()
-							s.Info("fetching block %v took %v ", block.ID(), elapsed)
-							blockCount.Add(1)
-							if eligible, err := s.BlockEligible(&block.BlockHeader); err != nil {
-								s.Error("block eligibility check failed: %v", err) //todo leave block out of layer ?
-							} else if eligible { //some validation testing
-								output <- block
-							}
-						} else {
-							s.Info("fetching block %d failed move to retry queue", id)
-							retry <- id
-						}
-					}
-				}
-			}
+func BlocReqFactory(id types.BlockID) RequestFactory {
+	return func(s *server.MessageServer, peer p2p.Peer) (chan interface{}, error) {
+		log.Info("send block request Peer: %v layer: %v", peer, id)
+		ch, foo := miniBlockRequest()
+		if err := s.SendRequest(BLOCK, id.ToBytes(), peer, foo); err != nil {
+			s.Error("could not get block ", id, " hash from peer ", peer)
+			return nil, errors.New("error ")
 		}
-	}
 
-	return worker{
-		Log:    s.Log,
-		Once:   mu,
-		output: output,
-		action: foo,
-		count:  count,
+		return ch, nil
+	}
+}
+
+//todo batch requests
+func TxReqFactory(id types.TransactionId) RequestFactory {
+	return func(s *server.MessageServer, peer p2p.Peer) (chan interface{}, error) {
+		log.Info("send block request Peer: %v layer: %v", peer, id)
+		ch, foo := txRequest()
+		if err := s.SendRequest(TX, id[:], peer, foo); err != nil {
+			s.Error("could not get transaction ", id, "  from peer ", peer)
+			return nil, errors.New("error ")
+		}
+
+		return ch, nil
 	}
 }
 

@@ -35,8 +35,8 @@ func layerBlockIDsRequest() (chan interface{}, func(msg []byte)) {
 	return ch, foo
 }
 
-func miniBlockRequest() (chan *types.MiniBlock, func(msg []byte)) {
-	ch := make(chan *types.MiniBlock, 1)
+func miniBlockRequest() (chan interface{}, func(msg []byte)) {
+	ch := make(chan interface{}, 1)
 	foo := func(msg []byte) {
 		defer close(ch)
 		log.Info("handle block response")
@@ -52,8 +52,8 @@ func miniBlockRequest() (chan *types.MiniBlock, func(msg []byte)) {
 	return ch, foo
 }
 
-func txRequest() (chan *types.SerializableTransaction, func(msg []byte)) {
-	ch := make(chan *types.SerializableTransaction, 1)
+func txRequest() (chan interface{}, func(msg []byte)) {
+	ch := make(chan interface{}, 1)
 	foo := func(msg []byte) {
 		defer close(ch)
 		log.Debug("handle tx response %v", hex.EncodeToString(msg))

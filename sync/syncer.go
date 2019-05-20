@@ -2,7 +2,6 @@ package sync
 
 import (
 	"errors"
-	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -280,13 +279,11 @@ func (s *Syncer) fetchLayerHashes(lyr types.LayerID) (map[string]p2p.Peer, error
 
 func FetchBlocks(s *Syncer, blockIds chan types.BlockID) chan interface{} {
 	// each worker goroutine tries to fetch a block iteratively from each peer
-	num := common.Min(s.Concurrency, len(blockIds))
-	count := int32(num)
+	count := int32(len(blockIds))
 	output := make(chan interface{})
-	retry := make(chan types.BlockID, len(blockIds))
 	mu := &sync.Once{}
-	for j := 0; j < num; j++ {
-		wrk := NewBlockWorker(s, blockIds, retry, output, mu, &count)
+	for id := range blockIds {
+		wrk := NewNeighborhoodWorker(s.MessageServer, s.RequestTimeout, s.GetPeers(), mu, &count, output, BlocReqFactory(id))
 		go wrk.Work()
 	}
 	return output
@@ -297,13 +294,11 @@ func (s *Syncer) fetchTxs(txids []types.TransactionId) (map[types.TransactionId]
 	if len(txids) == 0 {
 		return nil, nil
 	}
-	num := common.Min(s.Concurrency, len(txids))
 	output := make(chan interface{})
-	retry := make(chan types.TransactionId, len(txids))
 	mu := &sync.Once{}
-	count := int32(num)
-	for j := 0; j < s.Concurrency; j++ {
-		wrk := NewTxWorker(s, txids, retry, output, mu, &count)
+	count := int32(len(txids))
+	for _, id := range txids {
+		wrk := NewNeighborhoodWorker(s.MessageServer, s.RequestTimeout, s.GetPeers(), mu, &count, output, TxReqFactory(id))
 		go wrk.Work()
 	}
 
