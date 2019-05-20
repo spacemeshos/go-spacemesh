@@ -42,10 +42,9 @@ func TestMeshDb_Block(t *testing.T) {
 	blk := types.NewExistingBlock(123, 1, nil)
 	addTransactionsToBlock(blk, 5)
 	blk.AddAtx(types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")}, 1, types.AtxId{}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{}), true))
-
+	mdb.AddBlock(blk)
 	block, err := mdb.GetBlock(123)
 
-	mdb.AddBlock(blk)
 	assert.NoError(t, err)
 	assert.True(t, 123 == block.Id)
 
