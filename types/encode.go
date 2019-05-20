@@ -168,6 +168,7 @@ func BytesToInterface(buf []byte, i interface{}) error {
 	return nil
 }
 
+//!!! Pass the interface by reference
 func InterfaceToBytes(i interface{}) ([]byte, error) {
 	var w bytes.Buffer
 	if _, err := xdr.Marshal(&w, &i); err != nil {

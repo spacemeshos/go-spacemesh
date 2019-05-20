@@ -260,7 +260,7 @@ func (m *MeshDB) writeBlock(bl *types.Block) error {
 
 	minblock := &types.MiniBlock{BlockHeader: bl.BlockHeader, TxIds: txids, ATXs: bl.ATXs}
 
-	bytes, err := types.InterfaceToBytes(*minblock)
+	bytes, err := types.InterfaceToBytes(minblock)
 	if err != nil {
 		return fmt.Errorf("could not encode bl")
 	}
