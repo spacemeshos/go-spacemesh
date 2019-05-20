@@ -1,7 +1,6 @@
 package sync
 
 import (
-	"encoding/hex"
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -154,47 +153,5 @@ func TxReqFactory(id types.TransactionId) RequestFactory {
 		}
 
 		return ch, nil
-	}
-}
-
-//todo batch requests
-func NewTxWorker(s *Syncer, txIds []types.TransactionId, retry chan types.TransactionId, output chan interface{}, mu *sync.Once, count *int32) worker {
-
-	foo := func() {
-		for _, id := range txIds {
-			//todo check peers not empty
-			for _, p := range s.GetPeers() {
-				timer := newMilliTimer(txTime)
-				log.Info("send tx request to Peer: %v id: %v", p, hex.EncodeToString(id[:]))
-				tCh, foo := txRequest()
-				if err := s.SendRequest(TX, id[:], p, foo); err == nil {
-					timeout := time.After(s.RequestTimeout)
-					select {
-					case <-timeout:
-						s.Error("tx request to %v timed out move to retry queue", hex.EncodeToString(id[:]))
-						retry <- id
-					case tx := <-tCh:
-						if tx != nil {
-							elapsed := timer.ObserveDuration()
-							s.Info("fetching tx %v took %v ", hex.EncodeToString(id[:]), elapsed)
-							txCount.Add(1)
-							output <- tx
-							s.Info("after chan")
-						} else {
-							s.Info("fetching block %v failed move to retry queue", hex.EncodeToString(id[:]))
-							retry <- id
-						}
-					}
-				}
-			}
-		}
-	}
-
-	return worker{
-		Log:    s.Log,
-		Once:   mu,
-		count:  count,
-		output: output,
-		action: foo,
 	}
 }
