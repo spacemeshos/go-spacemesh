@@ -1,7 +1,9 @@
 package sync
 
 import (
+	"encoding/hex"
 	"errors"
+	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -157,14 +159,28 @@ func (s *Syncer) getLayerFromNeighbors(currenSyncLayer types.LayerID) (*types.La
 		s.Error("could not get layer block ids %v", currenSyncLayer, err)
 		return nil, err
 	}
-	output := fetchBlocks(s, blockIds)
+	output := FetchBlocks(s, blockIds)
 	blocksArr := make([]*types.Block, 0, len(blockIds))
 	for mb := range output {
-		txs, err := s.fetchTxs(mb.TxIds)
+
+		foundTxs, missing := s.GetTransactions(mb.TxIds)
+		fetchedTxs, err := s.fetchTxs(missing)
 		if err != nil {
 			s.Error("could not get all txs for block %v", mb.ID(), err)
 			//todo handle error
+			return nil, err
 		}
+
+		txs := make([]*types.SerializableTransaction, len(mb.TxIds))
+
+		for _, t := range mb.TxIds {
+			if tx, ok := foundTxs[t]; ok {
+				txs = append(txs, tx)
+			} else {
+				txs = append(txs, fetchedTxs[t])
+			}
+		}
+
 		block := &types.Block{BlockHeader: mb.BlockHeader, Txs: txs, ATXs: mb.ATXs}
 		s.Debug("add block to layer %v", block)
 		s.AddBlock(block)
@@ -256,12 +272,13 @@ func (s *Syncer) fetchLayerHashes(lyr types.LayerID) (map[string]p2p.Peer, error
 	return m, nil
 }
 
-func fetchBlocks(s *Syncer, blockIds chan types.BlockID) chan *types.MiniBlock {
+func FetchBlocks(s *Syncer, blockIds chan types.BlockID) chan *types.MiniBlock {
 	// each worker goroutine tries to fetch a block iteratively from each peer
-	count := int32(s.Concurrency)
+	num := common.Min(s.Concurrency, len(blockIds))
+	count := int32(num)
 	output := make(chan *types.MiniBlock)
 	retry := make(chan types.BlockID, len(blockIds))
-	for j := 0; j < s.Concurrency; j++ {
+	for j := 0; j < num; j++ {
 		wrk := NewBlockWorker(s, blockIds, retry, output, &count)
 		go wrk.Work()
 	}
@@ -269,7 +286,7 @@ func fetchBlocks(s *Syncer, blockIds chan types.BlockID) chan *types.MiniBlock {
 }
 
 //todo error handelig
-func (s *Syncer) fetchTxs(txids []types.TransactionId) ([]*types.SerializableTransaction, error) {
+func (s *Syncer) fetchTxs(txids []types.TransactionId) (map[types.TransactionId]*types.SerializableTransaction, error) {
 	if len(txids) == 0 {
 		return nil, nil
 	}
@@ -281,17 +298,17 @@ func (s *Syncer) fetchTxs(txids []types.TransactionId) ([]*types.SerializableTra
 		go wrk.Work()
 	}
 
-	txs := make([]*types.SerializableTransaction, 0, len(txids))
+	txs := make(map[types.TransactionId]*types.SerializableTransaction)
 	for tx := range output {
-		txs = append(txs, tx)
+		txs[types.GetTransactionId(tx)] = tx
 	}
 	return txs, nil
 }
 
 func (s *Syncer) sendLayerHashRequest(peer p2p.Peer, layer types.LayerID) (chan *peerHashPair, error) {
+
 	s.Info("send layer hash request Peer: %v layer: %v", peer, layer)
 	ch := make(chan *peerHashPair, 1)
-
 	foo := func(msg []byte) {
 		defer close(ch)
 		s.Info("got hash response from %v hash: %v  layer: %d", peer, msg, layer)
@@ -359,20 +376,19 @@ func (s *Syncer) sendMiniBlockRequest(peer p2p.Peer, id types.BlockID) (chan *ty
 	return ch, s.SendRequest(BLOCK, id.ToBytes(), peer, foo)
 }
 
-func (s *Syncer) sendTxRequest(peer p2p.Peer, id types.TransactionId) (chan []types.SerializableTransaction, error) {
-	s.Info("send block request Peer: %v id: %v", peer, id)
-	ch := make(chan []types.SerializableTransaction, 1)
+func (s *Syncer) sendTxRequest(peer p2p.Peer, id types.TransactionId) (chan *types.SerializableTransaction, error) {
+	s.Info("send tx request to Peer: %v id: %v", peer, hex.EncodeToString(id[:]))
+	ch := make(chan *types.SerializableTransaction, 1)
 	foo := func(msg []byte) {
 		defer close(ch)
-		s.Info("handle block response")
-		var tids []types.SerializableTransaction
-		err := types.BytesAsInterface(msg, tids)
+		s.Debug("handle tx response %v", hex.EncodeToString(msg))
+		tx, err := types.BytesAsTransaction(msg)
 		if err != nil {
-			s.Error("could not unmarshal block data")
+			s.Error("could not unmarshal tx data %v", err)
 			return
 		}
-		ch <- tids
+		ch <- tx
 	}
 
-	return ch, s.SendRequest(BLOCK, id, peer, foo)
+	return ch, s.SendRequest(TX, id[:], peer, foo)
 }

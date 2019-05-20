@@ -261,10 +261,11 @@ func (m *Mesh) GetVerifiedLayer(i types.LayerID) (*types.Layer, error) {
 	return m.GetLayer(i)
 }
 
-func (m *Mesh) GetLatestVerified() []types.BlockID {
-	layer, err := m.GetLayer(m.VerifiedLayer())
+func (m *Mesh) GetLatestView() []types.BlockID {
+	//todo: think about whether we want to use the most recent layer or the recent verified layer
+	layer, err := m.GetLayer(m.LatestLayer())
 	if err != nil {
-		panic("got an error trying to read verified layer")
+		panic("got an error trying to read latest view")
 	}
 	view := make([]types.BlockID, 0, len(layer.Blocks()))
 	for _, blk := range layer.Blocks() {

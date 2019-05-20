@@ -4,16 +4,19 @@ import (
 	"errors"
 	"fmt"
 	"github.com/google/uuid"
+	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 	"math/big"
 	"os"
+	"strconv"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -215,7 +218,7 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 
 }
 
-func TestSyncProtocol_FetchBlocks(t *testing.T) {
+func TestSyncProtocol_Requests(t *testing.T) {
 	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_FetchBlocks_", memoryDB)
 	syncObj1 := syncs[0]
 	defer syncObj1.Close()
@@ -292,6 +295,75 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	case msg2 := <-ch2:
 		assert.Equal(t, msg2.ID(), block3.ID(), "wrong block")
 	}
+}
+
+func TestSyncProtocol_FetchBlocks(t *testing.T) {
+	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_FetchBlocks_", memoryDB)
+	syncObj1 := syncs[0]
+	defer syncObj1.Close()
+	syncObj2 := syncs[1]
+	defer syncObj2.Close()
+	pm1 := getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
+	syncObj1.Log.Info("started fetch_blocks")
+	syncObj2.Peers = pm1 //override peers with
+
+	block1 := types.NewExistingBlock(types.BlockID(123), 0, nil)
+	block2 := types.NewExistingBlock(types.BlockID(321), 1, nil)
+	block3 := types.NewExistingBlock(types.BlockID(222), 2, nil)
+
+	tx1 := tx()
+	tx2 := tx()
+	tx3 := tx()
+	tx4 := tx()
+	tx5 := tx()
+	tx6 := tx()
+	tx7 := tx()
+	tx8 := tx()
+
+	addTransactionToBlock(block1, []*types.SerializableTransaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8})
+	addTransactionToBlock(block2, []*types.SerializableTransaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8})
+	addTransactionToBlock(block3, []*types.SerializableTransaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8})
+
+	syncObj1.AddBlock(block1)
+	syncObj1.AddBlock(block2)
+	syncObj1.AddBlock(block3)
+
+	res := make(chan types.BlockID, 3)
+	res <- block1.ID()
+	res <- block2.ID()
+	res <- block3.ID()
+	close(res)
+	totalMisses := 0
+	output := FetchBlocks(syncObj2, res)
+	for mb := range output {
+
+		foundTxs, missing := syncObj2.GetTransactions(mb.TxIds)
+		totalMisses += len(missing)
+		fetchedTxs, err := syncObj2.fetchTxs(missing)
+
+		if len(fetchedTxs) == 0 && len(foundTxs) == 0 {
+			panic("fuuuuck")
+		}
+
+		if err != nil {
+			t.Error("could not get all txs for block ", mb.ID(), err)
+		}
+
+		txs := make([]*types.SerializableTransaction, 0, len(mb.TxIds))
+
+		for _, t := range mb.TxIds {
+			if tx, ok := foundTxs[t]; ok {
+				txs = append(txs, tx)
+			} else {
+				txs = append(txs, fetchedTxs[t])
+			}
+		}
+
+		block := &types.Block{BlockHeader: mb.BlockHeader, Txs: txs, ATXs: mb.ATXs}
+		syncObj2.Debug("add block to layer %v", block)
+		syncObj2.AddBlock(block)
+	}
+	assert.True(t, totalMisses == 8, "to many misses ")
 }
 
 func TestSyncProtocol_SyncTwoNodes(t *testing.T) {
@@ -443,9 +515,9 @@ type syncIntegrationTwoNodes struct {
 }
 
 func Test_TwoNodes_SyncIntegrationSuite(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
+
+	t.Skip()
+
 	sis := &syncIntegrationTwoNodes{}
 	sis.BootstrappedNodeCount = 2
 	sis.BootstrapNodesCount = 1
@@ -525,9 +597,9 @@ type syncIntegrationMultipleNodes struct {
 }
 
 func Test_Multiple_SyncIntegrationSuite(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
+
+	t.Skip()
+
 	sis := &syncIntegrationMultipleNodes{}
 	sis.BootstrappedNodeCount = 3
 	sis.BootstrapNodesCount = 2
@@ -615,4 +687,22 @@ end:
 	log.Debug("sync 4 ", syncObj4.VerifiedLayer())
 	log.Debug("sync 5 ", syncObj5.VerifiedLayer())
 	return
+}
+
+func addTransactionToBlock(bl *types.Block, txs []*types.SerializableTransaction) {
+	for i := 0; i < len(txs); i++ {
+		//log.Info("adding tx with gas price %v nonce %v", gasPrice, i)
+		bl.Txs = append(bl.Txs, txs[i])
+	}
+}
+
+func tx() *types.SerializableTransaction {
+	gasPrice := rand.Int63n(100)
+	addr := rand.Int63n(1000000)
+	tx := types.NewSerializableTransaction(1, address.HexToAddress("1"),
+		address.HexToAddress(strconv.FormatUint(uint64(addr), 10)),
+		big.NewInt(10),
+		big.NewInt(gasPrice),
+		100)
+	return tx
 }

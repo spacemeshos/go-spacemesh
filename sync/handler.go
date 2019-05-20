@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"encoding/hex"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -71,25 +72,27 @@ func newMiniBlockRequestHandler(msh *mesh.Mesh, logger log.Log) func(msg []byte)
 
 func newTxsRequestHandler(msh *mesh.Mesh, logger log.Log) func(msg []byte) []byte {
 	return func(msg []byte) []byte {
-		logger.Debug("handle block request")
-		var i []types.TransactionId
-		if err := types.BytesAsInterface(msg, i); err != nil {
-			logger.Error("Error marshalling request err: %v", msg, err)
-			return nil
-		}
-		txs, err := msh.GetTransactions(i)
-		if err != nil {
-			logger.Error("Error handling transactions request message, with ids: %d and err: %v", msg, err)
+		var txid types.TransactionId
+		copy(txid[:], msg[:32])
+		logger.Info("handle tx request %v", hex.EncodeToString(txid[:]))
+		txs, _ := msh.GetTransactions([]types.TransactionId{txid})
+		if txs == nil {
+			logger.Error("Error handling transactions request message, with ids: %d", msg)
 			return nil
 		}
 
-		bbytes, err := types.InterfaceAsBytes(txs)
+		//var transactions []*types.SerializableTransaction
+		//for _, value := range txs {
+		//	transactions = append(transactions, value)
+		//}
+
+		bbytes, err := types.TransactionAsBytes(txs[txid])
 		if err != nil {
 			logger.Error("Error marshaling transactions response message , with ids %v and err:", txs, err)
 			return nil
 		}
 
-		logger.Debug("return block %v", bbytes)
+		logger.Debug("tx %v", hex.EncodeToString(bbytes))
 
 		return bbytes
 	}

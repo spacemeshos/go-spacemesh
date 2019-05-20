@@ -2,6 +2,7 @@ package mesh
 
 import (
 	"container/list"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -76,11 +77,18 @@ func (m *MeshDB) GetBlock(id types.BlockID) (*types.Block, error) {
 		return nil, err
 	}
 
-	transactions, err := m.GetTransactions(blk.TxIds)
-	if err != nil {
+	txs, missing := m.GetTransactions(blk.TxIds)
+
+	if missing != nil {
 		m.Error("could not retrieve block %v transactions from database ")
 		return nil, err
 	}
+
+	transactions := []*types.SerializableTransaction{}
+	for _, value := range txs {
+		transactions = append(transactions, value)
+	}
+
 	res := blockFromMiniAndTxs(blk, transactions)
 	return res, nil
 }
@@ -223,11 +231,7 @@ func blockFromMiniAndTxs(blk *types.MiniBlock, transactions []*types.Serializabl
 }
 
 func (m *MeshDB) getMiniBlockBytes(id types.BlockID) ([]byte, error) {
-	b, err := m.blocks.Get(id.ToBytes())
-	if err != nil {
-		return nil, errors.New("could not find block in database")
-	}
-	return b, nil
+	return m.blocks.Get(id.ToBytes())
 }
 
 func (m *MeshDB) getContextualValidity(id types.BlockID) (bool, error) {
@@ -253,7 +257,8 @@ func (m *MeshDB) writeBlock(bl *types.Block) error {
 		return fmt.Errorf("could not write transactions of block %v database %v", bl.ID(), err)
 	}
 
-	minblock := &types.MiniBlock{bl.BlockHeader, txids, bl.ATXs}
+	minblock := &types.MiniBlock{BlockHeader: bl.BlockHeader, TxIds: txids, ATXs: bl.ATXs}
+
 	bytes, err := types.MiniBlockToBytes(*minblock)
 	if err != nil {
 		return fmt.Errorf("could not encode bl")
@@ -349,7 +354,7 @@ func (m *MeshDB) writeTransactions(blk *types.Block) ([]types.TransactionId, err
 		}
 
 		id := types.GetTransactionId(t)
-		if err := m.transactions.Put(id, bytes); err != nil {
+		if err := m.transactions.Put(id[:], bytes); err != nil {
 			m.Error("could not write tx %v to database ", err)
 			return nil, err
 		}
@@ -360,30 +365,39 @@ func (m *MeshDB) writeTransactions(blk *types.Block) ([]types.TransactionId, err
 	return txids, nil
 }
 
-func (m *MeshDB) GetTransactions(transactions []types.TransactionId) ([]*types.SerializableTransaction, error) {
-	var ts []*types.SerializableTransaction
+func (m *MeshDB) GetTransactions(transactions []types.TransactionId) (
+	ts map[types.TransactionId]*types.SerializableTransaction,
+	mIds []types.TransactionId) {
+
+	ts = make(map[types.TransactionId]*types.SerializableTransaction, len(transactions))
 	for _, id := range transactions {
-		tBytes, err := m.getTransactionBytes(id)
-
+		t, err := m.GetTransaction(id)
 		if err != nil {
-			m.Error("error retrieving transaction from database ", err)
+			m.Debug("could not fetch tx %v %v", hex.EncodeToString(id[:]), err)
+			mIds = append(mIds, id)
+		} else {
+			ts[id] = t
 		}
-
-		t, err := types.BytesAsTransaction(tBytes)
-
-		if err != nil {
-			m.Error("error deserializing transaction")
-		}
-		ts = append(ts, t)
 	}
-
-	return ts, nil
+	return ts, mIds
 }
 
-func (m *MeshDB) getTransactionBytes(id []byte) ([]byte, error) {
-	b, err := m.transactions.Get(id)
+func (m *MeshDB) GetTransaction(id types.TransactionId) (*types.SerializableTransaction, error) {
+	tBytes, err := m.getTransactionBytes(id)
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf("could not find transaction in database %v", id))
+		return nil, err
+	}
+	t, err := types.BytesAsTransaction(tBytes)
+	if err != nil {
+		return nil, err
+	}
+	return t, nil
+}
+
+func (m *MeshDB) getTransactionBytes(id types.TransactionId) ([]byte, error) {
+	b, err := m.transactions.Get(id[:])
+	if err != nil {
+		return nil, errors.New(fmt.Sprintf("could not find transaction in database %v", hex.EncodeToString(id[:])))
 	}
 	return b, nil
 }

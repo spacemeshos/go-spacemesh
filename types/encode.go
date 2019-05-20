@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/common"
-	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/crypto/sha3"
 	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/poet/shared"
 	"sort"
@@ -234,5 +234,5 @@ func GetTransactionId(t *SerializableTransaction) TransactionId {
 		panic("could not Serialize transaction")
 	}
 
-	return crypto.Sha256(tx)
+	return sha3.Sum256(tx)
 }

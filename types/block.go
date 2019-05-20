@@ -9,7 +9,7 @@ import (
 )
 
 type BlockID uint64
-type TransactionId []byte
+type TransactionId [32]byte
 type LayerID uint64
 
 func (l LayerID) GetEpoch(layersPerEpoch uint16) EpochId {

@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"encoding/hex"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/types"
@@ -21,6 +22,7 @@ func (w *worker) Work() {
 	w.action()
 	atomic.AddInt32(w.count, -1)
 	if atomic.LoadInt32(w.count) == 0 { //close once everyone is finished
+		w.Debug("worker teardown")
 		w.Do(w.teardown)
 	}
 }
@@ -84,14 +86,14 @@ func NewBlockWorker(s *Syncer, blockIds chan types.BlockID, retry chan types.Blo
 	foo := func() {
 		for id := range blockIds {
 			//todo check peers not empty
-		lop:
 			for _, p := range s.GetPeers() {
 				timer := newMilliTimer(blockTime)
 				if bCh, err := s.sendMiniBlockRequest(p, types.BlockID(id)); err == nil {
 					timeout := time.After(s.RequestTimeout)
 					select {
 					case <-timeout:
-						s.Error("block request to %v timed out")
+						s.Error("block request to %v timed out move to retry queue", id)
+						retry <- id
 					case block := <-bCh:
 						if block != nil {
 							elapsed := timer.ObserveDuration()
@@ -102,9 +104,8 @@ func NewBlockWorker(s *Syncer, blockIds chan types.BlockID, retry chan types.Blo
 							} else if eligible { //some validation testing
 								output <- block
 							}
-							break lop
 						} else {
-							s.Info("fetching block %v failed move to retry queue", id)
+							s.Info("fetching block %d failed move to retry queue", id)
 							retry <- id
 						}
 					}
@@ -121,27 +122,29 @@ func NewBlockWorker(s *Syncer, blockIds chan types.BlockID, retry chan types.Blo
 	}
 }
 
+//todo batch requests
 func NewTxWorker(s *Syncer, txIds []types.TransactionId, retry chan types.TransactionId, output chan *types.SerializableTransaction, count *int32) worker {
 
 	foo := func() {
 		for _, id := range txIds {
 			//todo check peers not empty
-		lop:
 			for _, p := range s.GetPeers() {
 				timer := newMilliTimer(txTime)
 				if tCh, err := s.sendTxRequest(p, id); err == nil {
 					timeout := time.After(s.RequestTimeout)
 					select {
 					case <-timeout:
-						s.Error("block request to %v timed out")
+						s.Error("tx request to %v timed out move to retry queue", hex.EncodeToString(id[:]))
+						retry <- id
 					case tx := <-tCh:
 						if tx != nil {
 							elapsed := timer.ObserveDuration()
-							s.Info("fetching tx %v took %v ", id, elapsed)
+							s.Info("fetching tx %v took %v ", hex.EncodeToString(id[:]), elapsed)
 							txCount.Add(1)
-							break lop
+							output <- tx
+							s.Info("after chan")
 						} else {
-							s.Info("fetching block %v failed move to retry queue", id)
+							s.Info("fetching block %v failed move to retry queue", hex.EncodeToString(id[:]))
 							retry <- id
 						}
 					}
