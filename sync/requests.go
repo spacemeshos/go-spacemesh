@@ -7,8 +7,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/types"
 )
 
-func layerHashRequest(peer p2p.Peer, layer types.LayerID) (chan *peerHashPair, func(msg []byte)) {
-	ch := make(chan *peerHashPair, 1)
+func layerHashRequest(peer p2p.Peer) (chan interface{}, func(msg []byte)) {
+	ch := make(chan interface{}, 1)
 	foo := func(msg []byte) {
 		defer close(ch)
 		ch <- &peerHashPair{peer: peer, hash: msg}
@@ -16,8 +16,8 @@ func layerHashRequest(peer p2p.Peer, layer types.LayerID) (chan *peerHashPair, f
 	return ch, foo
 }
 
-func layerBlockIDsRequest() (chan []types.BlockID, func(msg []byte)) {
-	ch := make(chan []types.BlockID, 1)
+func layerBlockIDsRequest() (chan interface{}, func(msg []byte)) {
+	ch := make(chan interface{}, 1)
 	foo := func(msg []byte) {
 		defer close(ch)
 		ids, err := types.BytesToBlockIds(msg)

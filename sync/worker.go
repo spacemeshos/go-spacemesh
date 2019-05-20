@@ -2,44 +2,52 @@ package sync
 
 import (
 	"encoding/hex"
+	"errors"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"sync"
 	"sync/atomic"
 	"time"
 )
 
+type RequestFactory func(s *server.MessageServer, peer p2p.Peer) (chan interface{}, error)
+
 type worker struct {
-	sync.Once
-	count    *int32
-	teardown func()
-	action   func()
+	*sync.Once
+	sync.WaitGroup
+	output chan interface{}
+	count  *int32
+	action func()
 	log.Log
 }
 
 func (w *worker) Work() {
+	w.Info("worker work")
 	w.action()
 	atomic.AddInt32(w.count, -1)
+	w.Info("worker done")
 	if atomic.LoadInt32(w.count) == 0 { //close once everyone is finished
-		w.Debug("worker teardown")
-		w.Do(w.teardown)
+		w.Info("worker teardown")
+		w.Do(func() { close(w.output) })
 	}
 }
 
-func NewLayerIdsWorker(s *Syncer, lyr types.LayerID, peer p2p.Peer, output chan []types.BlockID, count *int32) worker {
-
-	foo := func() {
-		log.Debug("send blockIds request Peer: %v layer:  %v", peer, lyr)
-		ch, foo := layerBlockIDsRequest()
-		if err := s.SendRequest(LAYER_IDS, lyr.ToBytes(), peer, foo); err != nil {
-			s.Error("could not get layer ", lyr, " hash from peer ", peer)
-			return
-		}
-		timeout := time.After(s.RequestTimeout)
+func NewWorker(s *server.MessageServer,
+	requestTimeout time.Duration,
+	peer p2p.Peer,
+	mu *sync.Once,
+	count *int32,
+	output chan interface{},
+	reqFactory RequestFactory) worker {
+	workFunc := func() {
+		log.Debug("send request Peer: %v", peer)
+		ch, _ := reqFactory(s, peer)
+		timeout := time.After(requestTimeout)
 		select {
 		case <-timeout:
-			s.Error("layer ids request to %v timed out", peer)
+			log.Error("layer ids request to %v timed out", peer)
 			return
 		case v := <-ch:
 			output <- v
@@ -47,44 +55,42 @@ func NewLayerIdsWorker(s *Syncer, lyr types.LayerID, peer p2p.Peer, output chan 
 	}
 
 	return worker{
-		Log:      s.Log,
-		count:    count,
-		teardown: func() { close(output) },
-		action:   foo,
+		Log:    s.Log,
+		Once:   mu,
+		count:  count,
+		output: output,
+		action: workFunc,
 	}
 
 }
 
-func NewHashWorker(s *Syncer, lyr types.LayerID, peer p2p.Peer, output chan *peerHashPair, count *int32) worker {
-	foo := func() {
+func LayerIdsReqFactory(lyr types.LayerID) RequestFactory {
+	return func(s *server.MessageServer, peer p2p.Peer) (chan interface{}, error) {
+		ch, foo := layerBlockIDsRequest()
+		if err := s.SendRequest(LAYER_IDS, lyr.ToBytes(), peer, foo); err != nil {
+			log.Error("could not get layer ", lyr, " hash from peer ", peer)
+			return nil, errors.New("error ")
+		}
+		return ch, nil
+	}
+}
+
+func HashReqFactory(lyr types.LayerID) RequestFactory {
+	return func(s *server.MessageServer, peer p2p.Peer) (chan interface{}, error) {
 		log.Info("send layer hash request Peer: %v layer: %v", peer, lyr)
-		c, foo := layerHashRequest(peer, lyr)
+		ch, foo := layerHashRequest(peer)
 		if err := s.SendRequest(LAYER_HASH, lyr.ToBytes(), peer, foo); err != nil {
 			s.Error("could not get layer ", lyr, " hash from peer ", peer)
-			return
+			return nil, errors.New("error ")
 		}
 
-		timeout := time.After(s.RequestTimeout)
-		select {
-		case <-timeout:
-			s.Error("hash request to %v timed out", peer)
-			return
-		case v := <-c:
-			output <- v
-		}
-	}
-	return worker{
-		Log:      s.Log,
-		count:    count,
-		teardown: func() { close(output) },
-		action:   foo,
+		return ch, nil
 	}
 
 }
 
 //todo handle blocks in retry queue
-func NewBlockWorker(s *Syncer, blockIds chan types.BlockID, retry chan types.BlockID, output chan *types.MiniBlock, count *int32) worker {
-
+func NewBlockWorker(s *Syncer, blockIds chan types.BlockID, retry chan types.BlockID, output chan interface{}, mu *sync.Once, count *int32) worker {
 	foo := func() {
 		for id := range blockIds {
 			//todo check peers not empty
@@ -119,15 +125,16 @@ func NewBlockWorker(s *Syncer, blockIds chan types.BlockID, retry chan types.Blo
 	}
 
 	return worker{
-		Log:      s.Log,
-		count:    count,
-		teardown: func() { close(output) },
-		action:   foo,
+		Log:    s.Log,
+		Once:   mu,
+		output: output,
+		action: foo,
+		count:  count,
 	}
 }
 
 //todo batch requests
-func NewTxWorker(s *Syncer, txIds []types.TransactionId, retry chan types.TransactionId, output chan *types.SerializableTransaction, count *int32) worker {
+func NewTxWorker(s *Syncer, txIds []types.TransactionId, retry chan types.TransactionId, output chan interface{}, mu *sync.Once, count *int32) worker {
 
 	foo := func() {
 		for _, id := range txIds {
@@ -160,9 +167,10 @@ func NewTxWorker(s *Syncer, txIds []types.TransactionId, retry chan types.Transa
 	}
 
 	return worker{
-		Log:      s.Log,
-		count:    count,
-		teardown: func() { close(output) },
-		action:   foo,
+		Log:    s.Log,
+		Once:   mu,
+		count:  count,
+		output: output,
+		action: foo,
 	}
 }
