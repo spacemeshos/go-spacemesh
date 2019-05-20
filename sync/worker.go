@@ -30,8 +30,9 @@ func (w *worker) Work() {
 func NewLayerIdsWorker(s *Syncer, lyr types.LayerID, peer p2p.Peer, output chan []types.BlockID, count *int32) worker {
 
 	foo := func() {
-		c, err := s.sendLayerBlockIDsRequest(peer, lyr)
-		if err != nil {
+		log.Debug("send blockIds request Peer: %v layer:  %v", peer, lyr)
+		ch, foo := layerBlockIDsRequest()
+		if err := s.SendRequest(LAYER_IDS, lyr.ToBytes(), peer, foo); err != nil {
 			s.Error("could not get layer ", lyr, " hash from peer ", peer)
 			return
 		}
@@ -40,7 +41,7 @@ func NewLayerIdsWorker(s *Syncer, lyr types.LayerID, peer p2p.Peer, output chan 
 		case <-timeout:
 			s.Error("layer ids request to %v timed out", peer)
 			return
-		case v := <-c:
+		case v := <-ch:
 			output <- v
 		}
 	}
@@ -56,8 +57,9 @@ func NewLayerIdsWorker(s *Syncer, lyr types.LayerID, peer p2p.Peer, output chan 
 
 func NewHashWorker(s *Syncer, lyr types.LayerID, peer p2p.Peer, output chan *peerHashPair, count *int32) worker {
 	foo := func() {
-		c, err := s.sendLayerHashRequest(peer, lyr)
-		if err != nil {
+		log.Info("send layer hash request Peer: %v layer: %v", peer, lyr)
+		c, foo := layerHashRequest(peer, lyr)
+		if err := s.SendRequest(LAYER_HASH, lyr.ToBytes(), peer, foo); err != nil {
 			s.Error("could not get layer ", lyr, " hash from peer ", peer)
 			return
 		}
@@ -88,7 +90,9 @@ func NewBlockWorker(s *Syncer, blockIds chan types.BlockID, retry chan types.Blo
 			//todo check peers not empty
 			for _, p := range s.GetPeers() {
 				timer := newMilliTimer(blockTime)
-				if bCh, err := s.sendMiniBlockRequest(p, types.BlockID(id)); err == nil {
+				log.Info("send block request Peer: %v id: %v", p, id)
+				bCh, foo := miniBlockRequest()
+				if err := s.SendRequest(BLOCK, id.ToBytes(), p, foo); err == nil {
 					timeout := time.After(s.RequestTimeout)
 					select {
 					case <-timeout:
@@ -130,7 +134,9 @@ func NewTxWorker(s *Syncer, txIds []types.TransactionId, retry chan types.Transa
 			//todo check peers not empty
 			for _, p := range s.GetPeers() {
 				timer := newMilliTimer(txTime)
-				if tCh, err := s.sendTxRequest(p, id); err == nil {
+				log.Info("send tx request to Peer: %v id: %v", p, hex.EncodeToString(id[:]))
+				tCh, foo := txRequest()
+				if err := s.SendRequest(TX, id[:], p, foo); err == nil {
 					timeout := time.After(s.RequestTimeout)
 					select {
 					case <-timeout:

@@ -133,7 +133,8 @@ func (bl *BlockListener) run() {
 //todo handle case where no peer knows the block
 func (bl *BlockListener) FetchBlock(id types.BlockID) {
 	for _, p := range bl.GetPeers() {
-		if ch, err := sendBlockRequest(bl.MessageServer, p, id, bl.Log); err == nil {
+		ch, foo := blockRequest()
+		if err := bl.SendRequest(BLOCK, id.ToBytes(), p, foo); err == nil {
 			block := <-ch
 			if block == nil {
 				continue

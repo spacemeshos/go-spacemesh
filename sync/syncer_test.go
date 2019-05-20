@@ -141,7 +141,9 @@ func TestSyncProtocol_BlockRequest(t *testing.T) {
 	lid := types.LayerID(1)
 	block := types.NewExistingBlock(types.BlockID(uuid.New().ID()), lid, []byte("data data data"))
 	syncObj.AddBlock(block)
-	ch, err := sendBlockRequest(syncObj2.MessageServer, nodes[0].Node.PublicKey(), block.ID(), syncObj.Log)
+	p := nodes[0].Node.PublicKey()
+	ch, foo := blockRequest()
+	err := syncObj2.SendRequest(BLOCK, block.ID().ToBytes(), p, foo)
 	timeout := time.NewTimer(2 * time.Second)
 
 	select {
@@ -164,10 +166,14 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 	syncObj1.AddBlock(types.NewExistingBlock(types.BlockID(123), lid, nil))
 	//syncObj1.ValidateLayer(l) //this is to simulate the approval of the tortoise...
 	timeout := time.NewTimer(2 * time.Second)
-	ch, err := syncObj2.sendLayerHashRequest(nodes[0].Node.PublicKey(), lid)
+
+	ch, foo := layerHashRequest(nodes[0].Node.PublicKey(), lid)
+	if err := syncObj2.SendRequest(LAYER_HASH, lid.ToBytes(), nodes[0].Node.PublicKey(), foo); err != nil {
+		t.Error("could not get layer ", lid, " hash from peer ", nodes[0].Node.PublicKey())
+	}
+
 	select {
 	case hash := <-ch:
-		assert.NoError(t, err, "Should not return error")
 		assert.Equal(t, "some hash representing the layer", string(hash.hash), "wrong block")
 	case <-timeout.C:
 		assert.Fail(t, "no message received on channel")
@@ -193,7 +199,8 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 	syncObj1.AddBlock(types.NewExistingBlock(types.BlockID(111), lid, nil))
 	syncObj1.AddBlock(types.NewExistingBlock(types.BlockID(222), lid, nil))
 
-	ch, err := syncObj.sendLayerBlockIDsRequest(nodes[1].Node.PublicKey(), lid)
+	ch, foo := layerBlockIDsRequest()
+	err := syncObj.SendRequest(LAYER_IDS, lid.ToBytes(), nodes[1].Node.PublicKey(), foo)
 	timeout := time.NewTimer(2 * time.Second)
 
 	select {
@@ -235,7 +242,10 @@ func TestSyncProtocol_Requests(t *testing.T) {
 	syncObj1.AddBlock(block2)
 	syncObj1.AddBlock(block3)
 
-	ch, err := syncObj2.sendLayerHashRequest(n1.PublicKey(), 0)
+	lid := types.LayerID(0)
+	ch, foo := layerHashRequest(nodes[0].Node.PublicKey(), lid)
+	err := syncObj2.SendRequest(LAYER_HASH, lid.ToBytes(), nodes[0].Node.PublicKey(), foo)
+
 	timeout := time.NewTimer(3 * time.Second)
 	var hash *peerHashPair
 	select {
@@ -246,7 +256,10 @@ func TestSyncProtocol_Requests(t *testing.T) {
 		assert.NoError(t, err, "Should not return error")
 		assert.Equal(t, "some hash representing the layer", string(hash.hash), "wrong block")
 	}
-	ch2, err2 := sendBlockRequest(syncObj2.MessageServer, n1.PublicKey(), block1.ID(), syncObj2.Log)
+
+	ch2, foo := blockRequest()
+	err2 := syncObj2.SendRequest(BLOCK, block1.ID().ToBytes(), n1.PublicKey(), foo)
+
 	assert.NoError(t, err2, "Should not return error")
 	timeout = time.NewTimer(3 * time.Second)
 	select {
@@ -256,7 +269,9 @@ func TestSyncProtocol_Requests(t *testing.T) {
 	case msg2 := <-ch2:
 		assert.Equal(t, msg2.ID(), block1.ID(), "wrong block")
 	}
-	ch, err = syncObj2.sendLayerHashRequest(n1.PublicKey(), 1)
+	lid1 := types.LayerID(1)
+	ch, foo = layerHashRequest(nodes[0].Node.PublicKey(), lid1)
+	err = syncObj2.SendRequest(LAYER_HASH, lid1.ToBytes(), nodes[0].Node.PublicKey(), foo)
 	assert.NoError(t, err, "Should not return error")
 	assert.Equal(t, "some hash representing the layer", string(hash.hash), "wrong block")
 	select {
@@ -266,7 +281,9 @@ func TestSyncProtocol_Requests(t *testing.T) {
 	case <-ch:
 	}
 
-	ch2, err2 = sendBlockRequest(syncObj2.MessageServer, n1.PublicKey(), block2.ID(), syncObj2.Log)
+	ch2, foo = blockRequest()
+	err2 = syncObj2.SendRequest(BLOCK, block2.ID().ToBytes(), n1.PublicKey(), foo)
+
 	assert.NoError(t, err2, "Should not return error")
 	timeout = time.NewTimer(3 * time.Second)
 	select {
@@ -276,23 +293,28 @@ func TestSyncProtocol_Requests(t *testing.T) {
 	case msg2 := <-ch2:
 		assert.Equal(t, msg2.ID(), block2.ID(), "wrong block")
 	}
-	ch, err = syncObj2.sendLayerHashRequest(n1.PublicKey(), 2)
+
+	lid2 := types.LayerID(2)
+	ch3, foo := layerHashRequest(nodes[0].Node.PublicKey(), lid2)
+	err = syncObj2.SendRequest(LAYER_HASH, lid2.ToBytes(), nodes[0].Node.PublicKey(), foo)
+
 	assert.NoError(t, err, "Should not return error")
 	assert.Equal(t, "some hash representing the layer", string(hash.hash), "wrong block")
 	select {
 
 	case <-timeout.C:
 		t.Error("timed out ")
-	case <-ch:
+	case <-ch3:
 	}
 
-	ch2, err2 = sendBlockRequest(syncObj2.MessageServer, n1.PublicKey(), block3.ID(), syncObj2.Log)
+	ch4, foo := blockRequest()
+	err2 = syncObj2.SendRequest(BLOCK, block3.ID().ToBytes(), n1.PublicKey(), foo)
 	assert.NoError(t, err2, "Should not return error")
 	timeout = time.NewTimer(5 * time.Second)
 	select {
 	case <-timeout.C:
 		t.Error("timed out ")
-	case msg2 := <-ch2:
+	case msg2 := <-ch4:
 		assert.Equal(t, msg2.ID(), block3.ID(), "wrong block")
 	}
 }

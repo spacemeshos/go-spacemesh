@@ -1,7 +1,6 @@
 package sync
 
 import (
-	"encoding/hex"
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -127,7 +126,6 @@ func NewSync(srv service.Service, layers *mesh.Mesh, bv BlockValidator, tv TxVal
 	s.RegisterBytesMsgHandler(BLOCK, newMiniBlockRequestHandler(layers, logger))
 	s.RegisterBytesMsgHandler(LAYER_IDS, newLayerBlockIdsRequestHandler(layers, logger))
 	s.RegisterBytesMsgHandler(TX, newTxsRequestHandler(layers, logger))
-
 	return &s
 }
 
@@ -303,96 +301,4 @@ func (s *Syncer) fetchTxs(txids []types.TransactionId) (map[types.TransactionId]
 		txs[types.GetTransactionId(tx)] = tx
 	}
 	return txs, nil
-}
-
-func (s *Syncer) sendLayerHashRequest(peer p2p.Peer, layer types.LayerID) (chan *peerHashPair, error) {
-
-	s.Info("send layer hash request Peer: %v layer: %v", peer, layer)
-	ch := make(chan *peerHashPair, 1)
-	foo := func(msg []byte) {
-		defer close(ch)
-		s.Info("got hash response from %v hash: %v  layer: %d", peer, msg, layer)
-		ch <- &peerHashPair{peer: peer, hash: msg}
-	}
-
-	return ch, s.SendRequest(LAYER_HASH, layer.ToBytes(), peer, foo)
-}
-
-func (s *Syncer) sendLayerBlockIDsRequest(peer p2p.Peer, idx types.LayerID) (chan []types.BlockID, error) {
-	s.Debug("send blockIds request Peer: %v layer:  %v", peer, idx)
-	ch := make(chan []types.BlockID, 1)
-	foo := func(msg []byte) {
-		s.Debug("handle blockIds response Peer: %v layer:  %v", peer, idx)
-		defer close(ch)
-		ids, err := types.BytesToBlockIds(msg)
-		if err != nil {
-			s.Error("could not unmarshal mesh.LayerIDs response")
-			return
-		}
-		lyrIds := make([]types.BlockID, 0, len(ids))
-		for _, id := range ids {
-			lyrIds = append(lyrIds, id)
-		}
-
-		ch <- lyrIds
-	}
-
-	return ch, s.SendRequest(LAYER_IDS, idx.ToBytes(), peer, foo)
-}
-
-func sendBlockRequest(msgServ *server.MessageServer, peer p2p.Peer, id types.BlockID, logger log.Log) (chan *types.Block, error) {
-	logger.Debug("send block request Peer: %v id: %v", peer, id)
-	ch := make(chan *types.Block, 1)
-	foo := func(msg []byte) {
-		logger.Debug("handle block response Peer: %v id: %v", peer, id)
-		defer close(ch)
-		logger.Info("handle block response")
-		block := &types.Block{}
-		err := types.BytesToInterface(msg, block)
-		if err != nil {
-			logger.Error("could not unmarshal block data")
-			return
-		}
-		ch <- block
-	}
-
-	return ch, msgServ.SendRequest(BLOCK, id.ToBytes(), peer, foo)
-}
-
-func (s *Syncer) sendMiniBlockRequest(peer p2p.Peer, id types.BlockID) (chan *types.MiniBlock, error) {
-	s.Info("send block request Peer: %v id: %v", peer, id)
-
-	ch := make(chan *types.MiniBlock, 1)
-	foo := func(msg []byte) {
-		defer close(ch)
-		s.Info("handle block response")
-
-		block := &types.MiniBlock{}
-		err := types.BytesToInterface(msg, block)
-		if err != nil {
-			s.Error("could not unmarshal block data")
-			return
-		}
-		ch <- block
-	}
-
-	return ch, s.SendRequest(BLOCK, id.ToBytes(), peer, foo)
-}
-
-func (s *Syncer) sendTxRequest(peer p2p.Peer, id types.TransactionId) (chan *types.SerializableTransaction, error) {
-	s.Info("send tx request to Peer: %v id: %v", peer, hex.EncodeToString(id[:]))
-	ch := make(chan *types.SerializableTransaction, 1)
-	foo := func(msg []byte) {
-		defer close(ch)
-		s.Debug("handle tx response %v", hex.EncodeToString(msg))
-		tx := &types.SerializableTransaction{}
-		err := types.BytesToInterface(msg, tx)
-		if err != nil {
-			s.Error("could not unmarshal tx data %v", err)
-			return
-		}
-		ch <- tx
-	}
-
-	return ch, s.SendRequest(TX, id[:], peer, foo)
 }
