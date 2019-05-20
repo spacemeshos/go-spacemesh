@@ -363,10 +363,6 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 		totalMisses += len(missing)
 		fetchedTxs, err := syncObj2.fetchTxs(missing)
 
-		if len(fetchedTxs) == 0 && len(foundTxs) == 0 {
-			panic("fuuuuck")
-		}
-
 		if err != nil {
 			t.Error("could not get all txs for block ", mb.ID(), err)
 		}
