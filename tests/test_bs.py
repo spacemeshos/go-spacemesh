@@ -25,6 +25,7 @@ from tests.queries import query_message
 BOOT_DEPLOYMENT_FILE = './k8s/bootstrap-w-conf.yml'
 CLIENT_DEPLOYMENT_FILE = './k8s/client-w-conf.yml'
 CLIENT_POD_FILE = './k8s/single-client-w-conf.yml'
+CURL_POD_FILE = './k8s/curl.yml'
 ORACLE_DEPLOYMENT_FILE = './k8s/oracle.yml'
 POET_DEPLOYMENT_FILE = './k8s/poet.yml'
 
@@ -381,6 +382,25 @@ def save_log_on_exit(request):
         (out, err) = p.communicate()
 
 
+@pytest.fixture()
+def add_curl(request, setup_bootstrap):
+
+    def _run_curl_pod():
+
+        if not setup_bootstrap.pods:
+            raise Exception("Could not find bootstrap node")
+
+        resp = pod.create_pod(CURL_POD_FILE,
+                              testconfig['namespace'])
+        return True
+
+    def fin():
+        pod.delete_pod('curl', testconfig['namespace'])
+
+    request.addfinalizer(fin)
+    return _run_curl_pod()
+
+
 # ==============================================================================
 #    TESTS
 # ==============================================================================
@@ -417,7 +437,7 @@ def test_add_client(add_client):
     assert len(hits) == 1, "Could not find new Client bootstrap message"
 
 
-def test_gossip(setup_clients):
+def test_gossip(setup_clients, add_curl):
     fields = {'M':'new_gossip_message', 'protocol': 'api_test_gossip'}
     # *note*: this already waits for bootstrap so we can send the msg right away.
     # send message to client via rpc
@@ -441,7 +461,7 @@ def test_gossip(setup_clients):
     assert len(setup_clients.pods) == len(set(peers_for_gossip))
 
 
-def test_transaction(setup_clients, wait_genesis):
+def test_transaction(setup_clients, add_curl, wait_genesis):
     # choose client to run on
     client_ip = setup_clients.pods[0]['pod_ip']
 
@@ -477,7 +497,7 @@ def test_transaction(setup_clients, wait_genesis):
     print("balance ok")
 
 
-def test_mining(setup_clients, wait_genesis, setup_bootstrap):
+def test_mining(setup_bootstrap, setup_clients, add_curl, wait_genesis):
     # choose client to run on
     client_ip = setup_clients.pods[0]['pod_ip']
 
