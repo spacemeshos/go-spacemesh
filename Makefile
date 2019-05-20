@@ -148,16 +148,19 @@ dockerbuild-test:
 	             -t go-spacemesh-python:latest .
 .PHONY: dockerbuild-test
 
+ifdef TEST
+DELIM=::
+endif
+
 dockerrun-test: dockerbuild-test
 ifndef ES_PASSWD
 	$(error ES_PASSWD is not set)
 endif
 
-ifndef TEST
 	docker run -e ES_PASSWD="$(ES_PASSWD)" \
              -e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
              -e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
-             -it go-spacemesh-python pytest -s test_bs.py --tc-file=config.yaml --tc-format=yaml
+             -it go-spacemesh-python pytest -s test_bs.py$(DELIM)$(TEST) --tc-file=config.yaml --tc-format=yaml
 
 	docker run -e ES_PASSWD="$(ES_PASSWD)" \
              -e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
@@ -168,14 +171,9 @@ ifndef TEST
              -e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
              -e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
              -it go-spacemesh-python pytest -s sync/test_sync.py --tc-file=sync/config.yaml --tc-format=yaml
-else
-	docker run -e ES_PASSWD="$(ES_PASSWD)" \
-             -e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
-             -e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
-             -it go-spacemesh-python pytest -s test_bs.py::$(TEST) --tc-file=config.yaml --tc-format=yaml
-endif
 
 .PHONY: dockerrun-test
+
 dockerrun-all: dockerpush dockerrun-test
 .PHONY: dockerrun-all
 
