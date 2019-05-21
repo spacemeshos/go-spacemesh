@@ -111,7 +111,6 @@ func HashReqFactory(lyr types.LayerID) RequestFactory {
 
 }
 
-//todo handle blocks in retry queue
 func BlocReqFactory(id types.BlockID) RequestFactory {
 	return func(s *server.MessageServer, peer p2p.Peer) (chan interface{}, error) {
 		log.Info("send block request Peer: %v layer: %v", peer, id)

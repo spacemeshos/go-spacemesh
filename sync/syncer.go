@@ -149,7 +149,6 @@ func (s *Syncer) Synchronise() {
 	}
 }
 
-//todo add handling of failure
 func (s *Syncer) getLayerFromNeighbors(currenSyncLayer types.LayerID) (*types.Layer, error) {
 	blockIds, err := s.getLayerBlockIDs(types.LayerID(currenSyncLayer))
 	if err != nil {
@@ -164,7 +163,6 @@ func (s *Syncer) getLayerFromNeighbors(currenSyncLayer types.LayerID) (*types.La
 		fetchedTxs, err := s.fetchTxs(missing)
 		if err != nil {
 			s.Error("could not get all txs for block %v", mb.ID(), err)
-			//todo handle error
 			return nil, err
 		}
 
@@ -215,7 +213,6 @@ func keysAsChan(idSet map[types.BlockID]bool) chan types.BlockID {
 
 func (s *Syncer) fetchLayerBlockIds(m map[string]p2p.Peer, lyr types.LayerID) (chan types.BlockID, error) {
 	// each worker goroutine tries to fetch a block iteratively from each peer
-	//todo make sure
 	peers := s.GetPeers()
 	if len(peers) == 0 {
 		return nil, errors.New("no peers")
@@ -261,7 +258,7 @@ func (s *Syncer) fetchLayerHashes(lyr types.LayerID) (map[string]p2p.Peer, error
 		go wrk.Work()
 	}
 
-	m := make(map[string]p2p.Peer, 20) //todo need to get this from p2p service
+	m := make(map[string]p2p.Peer, numOfpeers)
 	for out := range output {
 		pair := out.(*peerHashPair)
 		if pair == nil { //do nothing on close channel
@@ -289,10 +286,9 @@ func FetchBlocks(s *Syncer, blockIds chan types.BlockID) chan interface{} {
 	return output
 }
 
-//todo error handelig
 func (s *Syncer) fetchTxs(txids []types.TransactionId) (map[types.TransactionId]*types.SerializableTransaction, error) {
 	if len(txids) == 0 {
-		return nil, nil
+		return nil, errors.New("empty txids")
 	}
 	output := make(chan interface{})
 	mu := &sync.Once{}

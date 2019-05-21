@@ -21,12 +21,12 @@ type worker struct {
 }
 
 func (w *worker) Work() {
-	w.Info("worker work")
+	w.Debug("worker work")
 	w.action()
 	atomic.AddInt32(w.count, -1)
-	w.Info("worker done")
+	w.Debug("worker done")
 	if atomic.LoadInt32(w.count) == 0 { //close once everyone is finished
-		w.Info("worker teardown")
+		w.Debug("worker teardown")
 		w.Do(func() { close(w.output) })
 	}
 }
