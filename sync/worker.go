@@ -39,18 +39,18 @@ func NewWorker(s *server.MessageServer,
 	output chan interface{},
 	reqFactory RequestFactory) worker {
 	workFunc := func() {
-		log.Debug("send request Peer: %v", peer)
+		s.Debug("send request Peer: %v", peer)
 		ch, _ := reqFactory(s, peer)
 		timeout := time.After(requestTimeout)
 		select {
 		case <-timeout:
-			log.Error("layer ids request to %v timed out", peer)
+			s.Error("request to %v timed out", peer)
 			return
 		case v := <-ch:
 			if v != nil {
 				output <- v
 			} else {
-				log.Error("peer %v responded with nil", peer)
+				s.Error("peer %v responded with nil", peer)
 			}
 		}
 	}
