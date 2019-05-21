@@ -437,8 +437,17 @@ def test_client(setup_clients, save_log_on_exit):
     peers = query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, fields, True)
     assert len(set(peers)) == len(setup_clients.pods)
 
-    
-def test_gossip(setup_clients):
+
+def test_add_client(add_client):
+
+    # Sleep a while before checking the node is bootstarped
+    time.sleep(20)
+    fields = {'M': 'discovery_bootstrap'}
+    hits = query_message(current_index, testconfig['namespace'], add_client, fields, True)
+    assert len(hits) == 1, "Could not find new Client bootstrap message"
+
+
+def test_gossip(setup_clients, add_curl):
     fields = {'M':'new_gossip_message', 'protocol': 'api_test_gossip'}
     # *note*: this already waits for bootstrap so we can send the msg right away.
     # send message to client via rpc
@@ -462,7 +471,7 @@ def test_gossip(setup_clients):
     assert len(setup_clients.pods) == len(set(peers_for_gossip))
 
 
-def test_transaction(setup_clients, wait_genesis):
+def test_transaction(setup_clients, add_curl, wait_genesis):
     # choose client to run on
     client_ip = setup_clients.pods[0]['pod_ip']
 
@@ -498,7 +507,7 @@ def test_transaction(setup_clients, wait_genesis):
     print("balance ok")
 
 
-def test_mining(setup_clients, wait_genesis, setup_bootstrap):
+def test_mining(setup_bootstrap, setup_clients, add_curl, wait_genesis):
     # choose client to run on
     client_ip = setup_clients.pods[0]['pod_ip']
 

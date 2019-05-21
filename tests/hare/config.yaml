@@ -6,6 +6,7 @@ script_on_exit: '' #'./k8s/log-client-pods.sh'
 
 genesis_delta: 120
 deployment_ready_time_out: 120
+single_pod_ready_time_out: 20
 config_path: '../../config.toml'
 
 bootstrap:
