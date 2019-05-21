@@ -88,6 +88,7 @@ type SpacemeshApp struct {
 	clock            *timesync.Ticker
 	hare             *hare.Hare
 	atxBuilder       *activation.Builder
+	poetListener     *activation.PoetListener
 	unregisterOracle func()
 	edSgn            *signing.EdSigner
 }
@@ -257,7 +258,10 @@ func (app *SpacemeshApp) setupTestFeatures() {
 	api.ApproveAPIGossipMessages(cmdp.Ctx, app.P2P)
 }
 
-func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service, dbStorepath string, sgn hare.Signer, hareOracle hare.Rolacle, layerSize uint32, postClient nipst.PostProverClient, poetClient nipst.PoetProvingServiceClient, atxdbstore database.DB, vrfSigner *crypto.VRFSigner, commitmentConfig nipst.PostParams, layersPerEpoch uint32) error {
+func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service, dbStorepath string, sgn hare.Signer,
+	hareOracle hare.Rolacle, layerSize uint32, postClient nipst.PostProverClient,
+	poetClient nipst.PoetProvingServiceClient, atxdbstore database.DB, vrfSigner *crypto.VRFSigner,
+	commitmentConfig nipst.PostParams, layersPerEpoch uint32) error {
 
 	app.instanceName = nodeID.Key
 	//todo: should we add all components to a single struct?
@@ -295,8 +299,9 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 		return err
 	}
 	idStore := activation.NewIdentityStore(iddbstore)
+	poetDb := activation.NewPoetDb()
 	//todo: this is initialized twice, need to refactor
-	validator := nipst.NewValidator(commitmentConfig)
+	validator := nipst.NewValidator(commitmentConfig, poetDb)
 	atxdb := activation.NewActivationDb(atxdbstore, idStore, mdb, uint64(app.Config.CONSENSUS.LayersPerEpoch), validator, lg.WithName("atxDb"))
 	beaconProvider := &oracle.EpochBeaconProvider{}
 	blockOracle := oracle.NewMinerBlockOracle(layerSize, uint16(layersPerEpoch), atxdb, beaconProvider, vrfSigner, nodeID, lg.WithName("blockOracle"))
@@ -313,7 +318,18 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	blockProducer := miner.NewBlockBuilder(nodeID, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, atxdb.ProcessAtx, lg.WithName("blockProducer"))
 	blockListener := sync.NewBlockListener(swarm, blockValidator, msh, 2*time.Second, 4, lg.WithName("blockListener"))
 
-	nipstBuilder := nipst.NewNipstBuilder([]byte(nodeID.Key), commitmentConfig.SpaceUnit, commitmentConfig.Difficulty, 100, postClient, poetClient, lg.WithName("nipstBuilder")) // TODO: use both keys in the nodeID
+	poetListener := activation.NewPoetListener(swarm, poetDb, lg.WithName("poetListener"))
+
+	nipstBuilder := nipst.NewNipstBuilder(
+		[]byte(nodeID.Key), // TODO: use both keys in the nodeID
+		commitmentConfig.SpaceUnit,
+		commitmentConfig.Difficulty,
+		100,
+		postClient,
+		poetClient,
+		poetDb,
+		lg.WithName("nipstBuilder"),
+	)
 	atxBuilder := activation.NewBuilder(nodeID, atxdb, swarm, atxdb, msh, app.Config.CONSENSUS.LayersPerEpoch,
 		nipstBuilder, clock.Subscribe(), lg.WithName("atxBuilder"))
 
@@ -325,6 +341,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	app.state = st
 	app.hare = ha
 	app.P2P = swarm
+	app.poetListener = poetListener
 	app.atxBuilder = atxBuilder
 	return nil
 }
@@ -340,6 +357,7 @@ func (app *SpacemeshApp) startServices() {
 	if err != nil {
 		log.Panic("cannot start block producer")
 	}
+	app.poetListener.Start()
 	app.atxBuilder.Start()
 	app.clock.Start()
 }
@@ -350,6 +368,9 @@ func (app SpacemeshApp) stopServices() {
 
 	log.Info("%v closing clock", app.instanceName)
 	app.clock.Close()
+
+	log.Info("%v closing PoET listener", app.instanceName)
+	app.poetListener.Close()
 
 	log.Info("%v closing atx builder", app.instanceName)
 	app.atxBuilder.Stop()
@@ -469,7 +490,8 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 
 	vrfSigner := crypto.NewVRFSigner(vrfPrivateKey)
 
-	err = app.initServices(nodeID, swarm, dbStorepath, app.edSgn, hareOracle, uint32(app.Config.LayerAvgSize), nipst.NewPostClient(), poet, atxdbstore, vrfSigner, npstCfg, uint32(app.Config.CONSENSUS.LayersPerEpoch))
+	err = app.initServices(nodeID, swarm, dbStorepath, app.edSgn, hareOracle, uint32(app.Config.LayerAvgSize),
+		nipst.NewPostClient(), poet, atxdbstore, vrfSigner, npstCfg, uint32(app.Config.CONSENSUS.LayersPerEpoch))
 	if err != nil {
 		log.Error("cannot start services %v", err.Error())
 		return

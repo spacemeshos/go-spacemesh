@@ -46,11 +46,11 @@ func (np *NipstBuilderMock) IsPostInitialized() bool {
 	return true
 }
 
-func (np *NipstBuilderMock) InitializePost() (*nipst.PostProof, error) {
+func (np *NipstBuilderMock) InitializePost() (*types.PostProof, error) {
 	return nil, nil
 }
 
-func (np *NipstBuilderMock) BuildNIPST(challenge *common.Hash) (*nipst.NIPST, error) {
+func (np *NipstBuilderMock) BuildNIPST(challenge *common.Hash) (*types.NIPST, error) {
 	np.Challenge = challenge
 	return nipst.NewNIPSTWithChallenge(challenge), nil
 }
@@ -62,11 +62,11 @@ func (np *NipstErrBuilderMock) IsPostInitialized() bool {
 	return true
 }
 
-func (np *NipstErrBuilderMock) InitializePost() (*nipst.PostProof, error) {
+func (np *NipstErrBuilderMock) InitializePost() (*types.PostProof, error) {
 	return nil, nil
 }
 
-func (np *NipstErrBuilderMock) BuildNIPST(challenge *common.Hash) (*nipst.NIPST, error) {
+func (np *NipstErrBuilderMock) BuildNIPST(challenge *common.Hash) (*types.NIPST, error) {
 	return nil, fmt.Errorf("error")
 }
 
@@ -83,7 +83,7 @@ func (*MockIStore) GetIdentity(id string) (types.NodeId, error) {
 
 type ValidatorMock struct{}
 
-func (*ValidatorMock) Validate(nipst *nipst.NIPST, expectedChallenge common.Hash) error {
+func (*ValidatorMock) Validate(nipst *types.NIPST, expectedChallenge common.Hash) error {
 	return nil
 }
 

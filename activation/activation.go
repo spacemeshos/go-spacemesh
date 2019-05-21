@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"sync/atomic"
@@ -39,9 +38,9 @@ func (provider *PoETNumberOfTickProvider) NumOfTicks() uint64 {
 }
 
 type NipstBuilder interface {
-	BuildNIPST(challenge *common.Hash) (*nipst.NIPST, error)
+	BuildNIPST(challenge *common.Hash) (*types.NIPST, error)
 	IsPostInitialized() bool
-	InitializePost() (*nipst.PostProof, error)
+	InitializePost() (*types.PostProof, error)
 }
 
 type IdStore interface {
@@ -50,7 +49,7 @@ type IdStore interface {
 }
 
 type NipstValidator interface {
-	Validate(nipst *nipst.NIPST, expectedChallenge common.Hash) error
+	Validate(nipst *types.NIPST, expectedChallenge common.Hash) error
 }
 
 type Builder struct {
@@ -63,7 +62,7 @@ type Builder struct {
 	tickProvider   PoETNumberOfTickProvider
 	nipstBuilder   NipstBuilder
 	challenge      *types.NIPSTChallenge
-	nipst          *nipst.NIPST
+	nipst          *types.NIPST
 	posLayerID     types.LayerID
 	prevATX        *types.ActivationTx
 	timer          chan types.LayerID
