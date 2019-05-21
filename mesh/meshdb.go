@@ -374,7 +374,7 @@ func (m *MeshDB) GetTransactions(transactions []types.TransactionId) (
 	for _, id := range transactions {
 		t, err := m.GetTransaction(id)
 		if err != nil {
-			m.Debug("could not fetch tx %v %v", hex.EncodeToString(id[:]), err)
+			m.Error("could not fetch tx %v %v", hex.EncodeToString(id[:]), err)
 			mIds = append(mIds, id)
 		} else {
 			ts[id] = t
@@ -384,21 +384,12 @@ func (m *MeshDB) GetTransactions(transactions []types.TransactionId) (
 }
 
 func (m *MeshDB) GetTransaction(id types.TransactionId) (*types.SerializableTransaction, error) {
-	tBytes, err := m.getTransactionBytes(id)
-	if err != nil {
-		return nil, err
-	}
-	t, err := types.BytesAsTransaction(tBytes)
-	if err != nil {
-		return nil, err
-	}
-	return t, nil
-}
-
-func (m *MeshDB) getTransactionBytes(id types.TransactionId) ([]byte, error) {
-	b, err := m.transactions.Get(id[:])
+	tBytes, err := m.transactions.Get(id[:])
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf("could not find transaction in database %v", hex.EncodeToString(id[:])))
 	}
-	return b, nil
+	if err != nil {
+		return nil, err
+	}
+	return types.BytesAsTransaction(tBytes)
 }

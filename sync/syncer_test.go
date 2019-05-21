@@ -530,9 +530,9 @@ type syncIntegrationTwoNodes struct {
 }
 
 func Test_TwoNodes_SyncIntegrationSuite(t *testing.T) {
-
-	t.Skip()
-
+	if testing.Short() {
+		t.Skip()
+	}
 	sis := &syncIntegrationTwoNodes{}
 	sis.BootstrappedNodeCount = 2
 	sis.BootstrapNodesCount = 1
@@ -612,9 +612,9 @@ type syncIntegrationMultipleNodes struct {
 }
 
 func Test_Multiple_SyncIntegrationSuite(t *testing.T) {
-
-	t.Skip()
-
+	if testing.Short() {
+		t.Skip()
+	}
 	sis := &syncIntegrationMultipleNodes{}
 	sis.BootstrappedNodeCount = 3
 	sis.BootstrapNodesCount = 2

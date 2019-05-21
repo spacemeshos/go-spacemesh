@@ -196,7 +196,7 @@ func (s *Syncer) getLayerBlockIDs(index types.LayerID) (chan types.BlockID, erro
 	return s.fetchLayerBlockIds(m, index)
 }
 
-func keysAsChan(idSet map[types.BlockID]bool) chan types.BlockID {
+func keysAsChan(idSet map[types.BlockID]struct{}) chan types.BlockID {
 	res := make(chan types.BlockID, len(idSet))
 	defer close(res)
 	for id := range idSet {
@@ -215,11 +215,11 @@ func (s *Syncer) fetchLayerBlockIds(m map[string]p2p.Peer, lyr types.LayerID) (c
 	wrk, output := NewPeerWorker(s, LayerIdsReqFactory(lyr))
 	go wrk.Work()
 
-	idSet := make(map[types.BlockID]bool, s.LayerSize)
+	idSet := make(map[types.BlockID]struct{}, s.LayerSize)
 	out := <-output
 	for _, bid := range out.([]types.BlockID) {
 		if _, exists := idSet[bid]; !exists {
-			idSet[bid] = true
+			idSet[bid] = struct{}{}
 		}
 	}
 
