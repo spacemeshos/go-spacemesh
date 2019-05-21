@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"errors"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
@@ -33,12 +34,7 @@ func LayerIdsReqFactory(lyr types.LayerID) RequestFactory {
 				s.Error("could not unmarshal mesh.LayerIDs response")
 				return
 			}
-			lyrIds := make([]types.BlockID, 0, len(ids))
-			for _, id := range ids {
-				lyrIds = append(lyrIds, id)
-			}
-
-			ch <- lyrIds
+			ch <- ids
 		}
 		if err := s.SendRequest(LAYER_IDS, lyr.ToBytes(), peer, foo); err != nil {
 			return nil, err
@@ -63,8 +59,7 @@ func HashReqFactory(lyr types.LayerID) RequestFactory {
 
 }
 
-func BlocReqFactory(blockIds chan types.BlockID) RequestFactory {
-
+func BlockReqFactory(blockIds chan types.BlockID) RequestFactory {
 	return func(s *server.MessageServer, peer p2p.Peer) (chan interface{}, error) {
 		ch := make(chan interface{}, 1)
 		foo := func(msg []byte) {
@@ -77,7 +72,11 @@ func BlocReqFactory(blockIds chan types.BlockID) RequestFactory {
 			}
 			ch <- block
 		}
-		id := <-blockIds
+		id, ok := <-blockIds
+		if !ok {
+			return nil, errors.New("chan was closed, job done!")
+		}
+
 		if err := s.SendRequest(BLOCK, id.ToBytes(), peer, foo); err != nil {
 			return nil, err
 		}

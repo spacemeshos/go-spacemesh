@@ -14,18 +14,18 @@ type RequestFactory func(s *server.MessageServer, peer p2p.Peer) (chan interface
 type worker struct {
 	*sync.Once
 	sync.WaitGroup
-	output chan interface{}
-	count  *int32
-	work   func()
+	work      func()
+	workCount *int32
+	output    chan interface{}
 	log.Log
 }
 
 func (w *worker) Work() {
 	w.Info("worker work")
 	w.work()
-	atomic.AddInt32(w.count, -1)
+	atomic.AddInt32(w.workCount, -1)
 	w.Info("worker done")
-	if atomic.LoadInt32(w.count) == 0 { //close once everyone is finished
+	if atomic.LoadInt32(w.workCount) == 0 { //close once everyone is finished
 		w.Info("worker teardown")
 		w.Do(func() { close(w.output) })
 	}
@@ -71,12 +71,12 @@ func NewPeerWorker(s *Syncer, reqFactory RequestFactory) (worker, chan interface
 	wrkFunc := func() {
 		for _, p := range peerfuncs {
 			wg.Add(1)
-			p()
+			go p()
 		}
 		wg.Wait()
 	}
 
-	worker := worker{Log: s.Log, Once: mu, count: &count, output: output, work: wrkFunc}
+	worker := worker{Log: s.Log, Once: mu, workCount: &count, output: output, work: wrkFunc}
 
 	return worker, output
 
@@ -106,6 +106,6 @@ func NewNeighborhoodWorker(s *Syncer,
 		}
 	}
 
-	return worker{Log: s.Log, Once: mu, count: count, output: output, work: workFunc}
+	return worker{Log: s.Log, Once: mu, workCount: count, output: output, work: workFunc}
 
 }

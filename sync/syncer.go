@@ -258,7 +258,7 @@ func FetchBlocks(s *Syncer, blockIds chan types.BlockID) chan interface{} {
 	output := make(chan interface{})
 	mu := &sync.Once{}
 	for i := 0; i < s.Concurrency; i++ {
-		wrk := NewNeighborhoodWorker(s, mu, &count, output, BlocReqFactory(blockIds))
+		wrk := NewNeighborhoodWorker(s, mu, &count, output, BlockReqFactory(blockIds))
 		go wrk.Work()
 	}
 
