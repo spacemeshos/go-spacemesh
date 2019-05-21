@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 
 from tests import queries
+from tests import pod
 from tests.fixtures import load_config, DeploymentInfo
 from tests.fixtures import init_session, set_namespace, set_docker_images, session_id
 import os
@@ -23,8 +24,15 @@ from tests.queries import query_message
 
 BOOT_DEPLOYMENT_FILE = './k8s/bootstrap-w-conf.yml'
 CLIENT_DEPLOYMENT_FILE = './k8s/client-w-conf.yml'
+CLIENT_POD_FILE = './k8s/single-client-w-conf.yml'
+CURL_POD_FILE = './k8s/curl.yml'
 ORACLE_DEPLOYMENT_FILE = './k8s/oracle.yml'
 POET_DEPLOYMENT_FILE = './k8s/poet.yml'
+
+BOOTSTRAP_PORT = 7513
+ORACLE_SERVER_PORT = 3030
+POET_SERVER_PORT = 50002
+
 
 ELASTICSEARCH_URL = "http://{0}".format(testconfig['elastic']['host'])
 
@@ -172,8 +180,8 @@ def setup_bootstrap(request, init_session, setup_oracle, setup_poet, create_conf
                               cimage=testconfig['bootstrap']['image'],
                               centry=[testconfig['bootstrap']['command']])
 
-        cspec.append_args(oracle_server='http://{0}:3030'.format(setup_oracle),
-                          poet_server='{0}:50002'.format(setup_poet),
+        cspec.append_args(oracle_server='http://{0}:{1}'.format(setup_oracle, ORACLE_SERVER_PORT),
+                          poet_server='{0}:{1}'.format(setup_poet, POET_SERVER_PORT),
                           genesis_time=GENESIS_TIME.isoformat('T', 'seconds'),
                           **bootstrap_args)
 
@@ -222,9 +230,9 @@ def setup_clients(request, setup_oracle, setup_poet, setup_bootstrap):
                               cimage=testconfig['client']['image'],
                               centry=[testconfig['client']['command']])
 
-        cspec.append_args(bootnodes="{0}:{1}/{2}".format(bs_info['pod_ip'], '7513', bs_info['key']),
-                          oracle_server='http://{0}:3030'.format(setup_oracle),
-                          poet_server='{0}:50002'.format(setup_poet),
+        cspec.append_args(bootnodes="{0}:{1}/{2}".format(bs_info['pod_ip'], BOOTSTRAP_PORT, bs_info['key']),
+                          oracle_server='http://{0}:{1}'.format(setup_oracle, ORACLE_SERVER_PORT),
+                          poet_server='{0}:{1}'.format(setup_poet, POET_SERVER_PORT),
                           genesis_time=GENESIS_TIME.isoformat('T', 'seconds'),
                           **client_args)
 
@@ -253,6 +261,65 @@ def setup_clients(request, setup_oracle, setup_poet, setup_bootstrap):
 
     request.addfinalizer(fin)
     return _setup_clients_in_namespace(testconfig['namespace'])
+
+
+def add_single_client(deployment_id, container_specs):
+
+    resp = pod.create_pod(CLIENT_POD_FILE,
+                          testconfig['namespace'],
+                          deployment_id=deployment_id,
+                          container_specs=container_specs)
+
+    client_name = resp.metadata.name
+    print("Add new client: {0}".format(client_name))
+    return client_name
+
+
+def get_conf(bs_info, setup_poet, setup_oracle, args=None):
+    client_args = {} if 'args' not in testconfig['client'] else testconfig['client']['args']
+
+    if args is not None:
+        for arg in args:
+            client_args[arg] = args[arg]
+
+    cspec = ContainerSpec(cname='client',
+                          cimage=testconfig['client']['image'],
+                          centry=[testconfig['client']['command']])
+    cspec.append_args(bootnodes="{0}:{1}/{2}".format(bs_info['pod_ip'], BOOTSTRAP_PORT, bs_info['key']),
+                      oracle_server='http://{0}:{1}'.format(setup_oracle, ORACLE_SERVER_PORT),
+                      poet_server='{0}:{1}'.format(setup_poet, POET_SERVER_PORT),
+                      genesis_time=GENESIS_TIME.isoformat('T', 'seconds'),
+                      **client_args)
+
+
+    return cspec
+
+# The following fixture should not be used if you wish to add many clients during test.
+# Instead you should call add_single_client directly
+@pytest.fixture()
+def add_client(request, setup_oracle, setup_poet, setup_bootstrap, setup_clients):
+
+    global client_name
+
+    def _add_single_client():
+        global client_name
+        if not setup_bootstrap.pods:
+            raise Exception("Could not find bootstrap node")
+
+        bs_info = setup_bootstrap.pods[0]
+
+        cspec = get_conf(bs_info, setup_poet, setup_oracle)
+
+        client_name = add_single_client(setup_bootstrap.deployment_id, cspec)
+        return client_name
+
+    def fin():
+        global client_name
+        pod.delete_pod(client_name, testconfig['namespace'])
+
+    request.addfinalizer(fin)
+    return _add_single_client()
+
 
 @pytest.fixture(scope='module')
 def wait_genesis():
@@ -323,6 +390,25 @@ def save_log_on_exit(request):
         p = subprocess.Popen([testconfig['script_on_exit'], testconfig['namespace']],
                              stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         (out, err) = p.communicate()
+
+
+@pytest.fixture()
+def add_curl(request, setup_bootstrap):
+
+    def _run_curl_pod():
+
+        if not setup_bootstrap.pods:
+            raise Exception("Could not find bootstrap node")
+
+        resp = pod.create_pod(CURL_POD_FILE,
+                              testconfig['namespace'])
+        return True
+
+    def fin():
+        pod.delete_pod('curl', testconfig['namespace'])
+
+    request.addfinalizer(fin)
+    return _run_curl_pod()
 
 
 # ==============================================================================
