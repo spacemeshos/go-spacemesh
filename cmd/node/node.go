@@ -260,7 +260,7 @@ func (app *SpacemeshApp) setupTestFeatures() {
 
 func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service, dbStorepath string, sgn hare.Signer,
 	hareOracle hare.Rolacle, layerSize uint32, postClient nipst.PostProverClient,
-	poetClient nipst.PoetProvingServiceClient, atxdbstore database.DB, vrfSigner *crypto.VRFSigner,
+	poetClient nipst.PoetProvingServiceClient, poetDbStore, atxdbstore database.DB, vrfSigner *crypto.VRFSigner,
 	commitmentConfig nipst.PostParams, layersPerEpoch uint32) error {
 
 	app.instanceName = nodeID.Key
@@ -299,7 +299,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 		return err
 	}
 	idStore := activation.NewIdentityStore(iddbstore)
-	poetDb := activation.NewPoetDb()
+	poetDb := activation.NewPoetDb(poetDbStore)
 	//todo: this is initialized twice, need to refactor
 	validator := nipst.NewValidator(commitmentConfig, poetDb)
 	atxdb := activation.NewActivationDb(atxdbstore, idStore, mdb, uint64(app.Config.CONSENSUS.LayersPerEpoch), validator, lg.WithName("atxDb"))
@@ -481,6 +481,10 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	if err != nil {
 		log.Panic("error starting atx db: %v", err)
 	}
+	poetDbStore, err := database.NewLDBDatabase(dbStorepath+"poet", 0, 0)
+	if err != nil {
+		log.Panic("error starting poet db: %v", err)
+	}
 
 	npstCfg := nipst.PostParams{
 		Difficulty:           5,
@@ -491,7 +495,8 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	vrfSigner := crypto.NewVRFSigner(vrfPrivateKey)
 
 	err = app.initServices(nodeID, swarm, dbStorepath, app.edSgn, hareOracle, uint32(app.Config.LayerAvgSize),
-		nipst.NewPostClient(), poet, atxdbstore, vrfSigner, npstCfg, uint32(app.Config.CONSENSUS.LayersPerEpoch))
+		nipst.NewPostClient(), poet, poetDbStore, atxdbstore, vrfSigner, npstCfg,
+		uint32(app.Config.CONSENSUS.LayersPerEpoch))
 	if err != nil {
 		log.Error("cannot start services %v", err.Error())
 		return

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/types"
@@ -29,7 +28,7 @@ type PostParams struct {
 	SpaceUnit            uint64
 }
 
-func NewValidator(params PostParams, poetDb *activation.PoetDb) *Validator {
+func NewValidator(params PostParams, poetDb PoetDb) *Validator {
 	return &Validator{
 		PostParams:                  params,
 		poetDb:                      poetDb,

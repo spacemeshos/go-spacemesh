@@ -119,7 +119,7 @@ func (c *RPCPoetClient) submit(challenge common.Hash,
 		return nil, fmt.Errorf("rpc failure: %v", err)
 	}
 
-	return &types.PoetRound{Id: int(res.RoundId)}, nil
+	return &types.PoetRound{Id: uint64(res.RoundId)}, nil
 }
 
 func (c *RPCPoetClient) subscribeMembershipProof(r *types.PoetRound,

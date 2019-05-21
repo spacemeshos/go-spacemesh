@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/poet/shared"
 	"github.com/spacemeshos/post/proving"
 	"github.com/spacemeshos/sha256-simd"
 )
@@ -124,15 +125,19 @@ func (t ActivationTx) ShortId() string {
 }
 
 type PoetMembershipProof struct {
-	// TODO
+	Members [][]byte
 }
 
 type PoetProof struct {
-	// TODO
+	shared.MerkleProof
+	MembershipRoot []byte
+	LeafCount      uint64
+	PoetId         []byte
+	RoundId        uint64
 }
 
 type PoetRound struct {
-	Id int
+	Id uint64
 }
 
 // NIPST is Non-Interactive Proof of Space-Time.

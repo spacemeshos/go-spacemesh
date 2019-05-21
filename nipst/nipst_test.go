@@ -3,7 +3,6 @@ package nipst
 import (
 	"encoding/hex"
 	"flag"
-	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -82,14 +81,14 @@ func TestNIPSTBuilderWithMocks(t *testing.T) {
 	assert.NotNil(npst)
 }
 
-func _TestNIPSTBuilderWithClients(t *testing.T) {
+func TestNIPSTBuilderWithClients(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
 
 	r := require.New(t)
 
-	poetDb := activation.NewPoetDb()
+	poetDb := &MockPoetDb{}
 
 	nipstChallenge := common.BytesToHash([]byte("anton"))
 
