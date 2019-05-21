@@ -1,7 +1,6 @@
 package sync
 
 import (
-	"errors"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
@@ -42,8 +41,7 @@ func LayerIdsReqFactory(lyr types.LayerID) RequestFactory {
 			ch <- lyrIds
 		}
 		if err := s.SendRequest(LAYER_IDS, lyr.ToBytes(), peer, foo); err != nil {
-			s.Error("could not get layer ", lyr, " hash from peer ", peer)
-			return nil, errors.New("error ")
+			return nil, err
 		}
 		return ch, nil
 	}
@@ -57,8 +55,7 @@ func HashReqFactory(lyr types.LayerID) RequestFactory {
 			ch <- &peerHashPair{peer: peer, hash: msg}
 		}
 		if err := s.SendRequest(LAYER_HASH, lyr.ToBytes(), peer, foo); err != nil {
-			s.Error("could not get layer ", lyr, " hash from peer ", peer)
-			return nil, errors.New("error ")
+			return nil, err
 		}
 
 		return ch, nil
@@ -66,7 +63,8 @@ func HashReqFactory(lyr types.LayerID) RequestFactory {
 
 }
 
-func BlocReqFactory(id types.BlockID) RequestFactory {
+func BlocReqFactory(blockIds chan types.BlockID) RequestFactory {
+
 	return func(s *server.MessageServer, peer p2p.Peer) (chan interface{}, error) {
 		ch := make(chan interface{}, 1)
 		foo := func(msg []byte) {
@@ -79,9 +77,9 @@ func BlocReqFactory(id types.BlockID) RequestFactory {
 			}
 			ch <- block
 		}
+		id := <-blockIds
 		if err := s.SendRequest(BLOCK, id.ToBytes(), peer, foo); err != nil {
-			s.Error("could not get block ", id, " hash from peer ", peer)
-			return nil, errors.New("error ")
+			return nil, err
 		}
 
 		return ch, nil
@@ -103,8 +101,7 @@ func TxReqFactory(id types.TransactionId) RequestFactory {
 			ch <- tx
 		}
 		if err := s.SendRequest(TX, id[:], peer, foo); err != nil {
-			s.Error("could not get transaction ", id, "  from peer ", peer)
-			return nil, errors.New("error ")
+			return nil, err
 		}
 
 		return ch, nil

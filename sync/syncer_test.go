@@ -166,14 +166,14 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 	syncObj1.AddBlock(types.NewExistingBlock(types.BlockID(123), lid, nil))
 	//syncObj1.ValidateLayer(l) //this is to simulate the approval of the tortoise...
 	timeout := time.NewTimer(2 * time.Second)
+	pm1 := getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
+	syncObj2.Peers = pm1
 
-	ch, foo := layerHashRequest(nodes[0].Node.PublicKey())
-	if err := syncObj2.SendRequest(LAYER_HASH, lid.ToBytes(), nodes[0].Node.PublicKey(), foo); err != nil {
-		t.Error("could not get layer ", lid, " hash from peer ", nodes[0].Node.PublicKey())
-	}
+	wrk, output := NewPeerWorker(syncObj2, HashReqFactory(lid))
+	go wrk.Work()
 
 	select {
-	case hash := <-ch:
+	case hash := <-output:
 		assert.Equal(t, "some hash representing the layer", string(hash.(*peerHashPair).hash), "wrong block")
 	case <-timeout.C:
 		assert.Fail(t, "no message received on channel")
@@ -199,14 +199,17 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 	syncObj1.AddBlock(types.NewExistingBlock(types.BlockID(111), lid, nil))
 	syncObj1.AddBlock(types.NewExistingBlock(types.BlockID(222), lid, nil))
 
-	ch, foo := layerBlockIDsRequest()
-	err := syncObj.SendRequest(LAYER_IDS, lid.ToBytes(), nodes[1].Node.PublicKey(), foo)
 	timeout := time.NewTimer(2 * time.Second)
 
+	pm1 := getPeersMock([]p2p.Peer{nodes[1].Node.PublicKey()})
+	syncObj.Peers = pm1
+
+	wrk, output := NewPeerWorker(syncObj, LayerIdsReqFactory(lid))
+	go wrk.Work()
+
 	select {
-	case intr := <-ch:
+	case intr := <-output:
 		ids := intr.([]types.BlockID)
-		assert.NoError(t, err, "Should not return error")
 		assert.Equal(t, len(layer.Blocks()), len(ids), "wrong block")
 		for _, a := range layer.Blocks() {
 			found := false
@@ -243,9 +246,13 @@ func TestSyncProtocol_Requests(t *testing.T) {
 	syncObj1.AddBlock(block2)
 	syncObj1.AddBlock(block3)
 
+	pm1 := getPeersMock([]p2p.Peer{nodes[0].Node.PublicKey()})
+	syncObj2.Peers = pm1
+
 	lid := types.LayerID(0)
-	ch, foo := layerHashRequest(nodes[0].Node.PublicKey())
-	err := syncObj2.SendRequest(LAYER_HASH, lid.ToBytes(), nodes[0].Node.PublicKey(), foo)
+
+	wrk, ch := NewPeerWorker(syncObj2, HashReqFactory(lid))
+	go wrk.Work()
 
 	timeout := time.NewTimer(3 * time.Second)
 	select {
@@ -253,7 +260,6 @@ func TestSyncProtocol_Requests(t *testing.T) {
 	case <-timeout.C:
 		t.Error("timed out ")
 	case hash := <-ch:
-		assert.NoError(t, err, "Should not return error")
 		assert.Equal(t, "some hash representing the layer", string(hash.(*peerHashPair).hash), "wrong block")
 	}
 
@@ -270,9 +276,8 @@ func TestSyncProtocol_Requests(t *testing.T) {
 	}
 
 	lid1 := types.LayerID(1)
-	ch, foo = layerHashRequest(nodes[0].Node.PublicKey())
-	err = syncObj2.SendRequest(LAYER_HASH, lid1.ToBytes(), nodes[0].Node.PublicKey(), foo)
-	assert.NoError(t, err, "Should not return error")
+	wrk, ch = NewPeerWorker(syncObj2, HashReqFactory(lid1))
+	go wrk.Work()
 	select {
 	case <-timeout.C:
 		t.Error("timed out ")
@@ -293,8 +298,8 @@ func TestSyncProtocol_Requests(t *testing.T) {
 	}
 
 	lid2 := types.LayerID(2)
-	ch3, foo := layerHashRequest(nodes[0].Node.PublicKey())
-	err = syncObj2.SendRequest(LAYER_HASH, lid2.ToBytes(), nodes[0].Node.PublicKey(), foo)
+	wrk, ch3 := NewPeerWorker(syncObj2, HashReqFactory(lid2))
+	go wrk.Work()
 	select {
 	case <-timeout.C:
 		t.Error("timed out ")
@@ -356,11 +361,8 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 		mb := out.(*types.MiniBlock)
 		foundTxs, missing := syncObj2.GetTransactions(mb.TxIds)
 		totalMisses += len(missing)
-		fetchedTxs, err := syncObj2.fetchTxs(missing)
 
-		if err != nil {
-			t.Error("could not get all txs for block ", mb.ID(), err)
-		}
+		fetchedTxs := syncObj2.fetchTxs(missing)
 
 		txs := make([]*types.SerializableTransaction, 0, len(mb.TxIds))
 
