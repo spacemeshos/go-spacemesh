@@ -98,9 +98,9 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 
 	i := 0
 	for ; ; i++ {
-		if lyr, err := mshDb.GetLayer(types.LayerID(i)); err != nil || lyr == nil {
-			lg.Info("loaded %v layers from disk %v", i-1, err)
-			break
+		if lyr, err2 := mshDb.GetLayer(types.LayerID(i)); err2 != nil || lyr == nil {
+			lg.Info("loaded %v layers from disk %v", i-1, err2)
+			return
 		} else {
 			lg.Info("loaded layer %v from disk ", i)
 			msh.ValidateLayer(lyr)
