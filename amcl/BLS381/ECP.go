@@ -32,7 +32,6 @@ package BLS381
 //const POSITIVEX int = 0
 //const NEGATIVEX int = 1
 
-
 //const CURVETYPE int = @CT@
 //const CURVE_PAIRING_TYPE int = @PF@
 //const SEXTIC_TWIST int = @ST@

@@ -75,14 +75,14 @@ func Verify(SIG []byte, m string, W []byte) int {
 	PK := ECP2_fromBytes(W)
 	D.neg()
 
-// Use new multi-pairing mechanism 
-	r:=initmp()
-	another(r,G,D)
-	another(r,PK,HM)
-	v:=miller(r)
+	// Use new multi-pairing mechanism
+	r := initmp()
+	another(r, G, D)
+	another(r, PK, HM)
+	v := miller(r)
 
-//.. or alternatively
-//	v := Ate2(G, D, PK, HM)
+	//.. or alternatively
+	//	v := Ate2(G, D, PK, HM)
 
 	v = Fexp(v)
 	if v.Isunity() {

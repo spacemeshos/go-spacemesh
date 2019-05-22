@@ -38,7 +38,6 @@ func NewLocalOracle(rolacle *eligibility.FixedRolacle, committeeSize int, nodeID
 	}
 }
 
-
 type hareOracle struct {
 	oc *OracleClient
 }

@@ -145,7 +145,6 @@ func (oc *OracleClient) ValidateSingle(instanceID []byte, K int, committeeSize i
 	return res.Valid
 }
 
-
 func hashInstanceAndK(instanceID types.LayerID, K int32) uint32 {
 	kInBytes := make([]byte, 4)
 	binary.LittleEndian.PutUint32(kInBytes, uint32(K))

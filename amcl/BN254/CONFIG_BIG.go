@@ -13,4 +13,3 @@ const HMASK Chunk = ((Chunk(1) << HBITS) - 1)
 const NEXCESS int = (1 << (uint(CHUNK) - BASEBITS - 1))
 
 const BIGBITS int = int(MODBYTES * 8)
-

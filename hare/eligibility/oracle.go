@@ -78,7 +78,7 @@ func (o *Oracle) buildVRFMessage(id types.NodeId, layer types.LayerID, round int
 }
 
 // Eligible checks if id is eligible on the given layer where msg is the VRF message, sig is the role proof and assuming commSize as the expected committee size
-func (o *Oracle)  Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeId, sig []byte) (bool, error) {
+func (o *Oracle) Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeId, sig []byte) (bool, error) {
 	msg, err := o.buildVRFMessage(id, layer, round)
 
 	if err != nil {

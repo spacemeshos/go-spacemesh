@@ -1,4 +1,3 @@
-
 package BLS381
 
 // Modulus types
@@ -8,13 +7,12 @@ const MONTGOMERY_FRIENDLY int = 2
 const GENERALISED_MERSENNE int = 3
 
 // Modulus details
-const MODBITS uint = 381 /* Number of bits in Modulus */
-const MOD8 uint = 3  /* Modulus mod 8 */
+const MODBITS uint = 381        /* Number of bits in Modulus */
+const MOD8 uint = 3             /* Modulus mod 8 */
 const MODTYPE int = NOT_SPECIAL //NOT_SPECIAL
-const FEXCESS int32=((int32(1)<<25)-1)
+const FEXCESS int32 = ((int32(1) << 25) - 1)
 
 // Modulus Masks
 const OMASK Chunk = ((Chunk(-1)) << (MODBITS % BASEBITS))
 const TBITS uint = MODBITS % BASEBITS // Number of active bits in top word
 const TMASK Chunk = (Chunk(1) << TBITS) - 1
-

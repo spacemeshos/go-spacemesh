@@ -35,7 +35,7 @@ func TestFixedRolacle_Eligible(t *testing.T) {
 	v := genStr()
 	oracle.Register(true, v)
 
-	res, _ := oracle.Eligible(1, 1, 10, types.NodeId{Key: v},nil)
+	res, _ := oracle.Eligible(1, 1, 10, types.NodeId{Key: v}, nil)
 	res2, _ := oracle.Eligible(1, 1, 10, types.NodeId{Key: v}, nil)
 	assert.True(t, res == res2)
 }

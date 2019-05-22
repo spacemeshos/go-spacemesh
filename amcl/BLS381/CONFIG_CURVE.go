@@ -46,4 +46,3 @@ const AESKEY int = 16
 const USE_GLV bool = true
 const USE_GS_G2 bool = true
 const USE_GS_GT bool = true
-

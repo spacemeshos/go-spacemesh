@@ -120,4 +120,3 @@ func Test_ExpectedCommitteeSize(t *testing.T) {
 	cond := count > commSize-dev && count < commSize+dev
 	assert.True(t, cond)
 }
-
