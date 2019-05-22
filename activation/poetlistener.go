@@ -32,17 +32,26 @@ func (l *PoetListener) Close() {
 	l.started = false
 }
 
+type poetProofMessage struct {
+	types.PoetProof
+	PoetId    []byte
+	RoundId   uint64
+	Signature []byte
+}
+
 func (l *PoetListener) loop() {
 	for {
 		select {
 		case poetProof := <-l.poetProofMessages:
-			var proof types.PoetProof
-			_, err := xdr.Unmarshal(bytes.NewReader(poetProof.Bytes()), proof)
+			var proofMessage poetProofMessage
+			_, err := xdr.Unmarshal(bytes.NewReader(poetProof.Bytes()), proofMessage)
 			if err != nil {
 				l.Log.Error("failed to unmarshal PoET membership proof: %v", err)
 				continue
 			}
-			if err := l.poetDb.ValidateAndStorePoetProof(proof); err != nil {
+			if err := l.poetDb.ValidateAndStorePoetProof(proofMessage.PoetProof, proofMessage.PoetId,
+				proofMessage.RoundId, proofMessage.Signature); err != nil {
+
 				l.Log.Warning("PoET proof not persisted: %v", err)
 				continue
 			}

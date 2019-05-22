@@ -25,13 +25,13 @@ func TestPoetDbHappyFlow(t *testing.T) {
 	_, err = xdr.Unmarshal(file, &poetProof)
 	r.NoError(err)
 	r.EqualValues([][]byte{[]byte("1"), []byte("2"), []byte("3")}, poetProof.Members)
-	poetProof.PoetId = []byte("poet id")
-	poetProof.RoundId = 1337
+	poetId := []byte("poet id")
+	roundId := uint64(1337)
 
-	err = poetDb.ValidateAndStorePoetProof(poetProof)
+	err = poetDb.ValidateAndStorePoetProof(poetProof, poetId, roundId, nil)
 	r.NoError(err)
 
-	ref, err := poetDb.GetPoetProofRef(poetProof.PoetId, &types.PoetRound{Id: poetProof.RoundId})
+	ref, err := poetDb.GetPoetProofRef(poetId, &types.PoetRound{Id: roundId})
 	r.NoError(err)
 
 	var proofBuf bytes.Buffer
@@ -58,11 +58,11 @@ func TestPoetDbInvalidPoetProof(t *testing.T) {
 	_, err = xdr.Unmarshal(file, &poetProof)
 	r.NoError(err)
 	r.EqualValues([][]byte{[]byte("1"), []byte("2"), []byte("3")}, poetProof.Members)
-	poetProof.PoetId = []byte("poet id")
-	poetProof.RoundId = 1337
+	poetId := []byte("poet id")
+	roundId := uint64(1337)
 	poetProof.Root = []byte("some other root")
 
-	err = poetDb.ValidateAndStorePoetProof(poetProof)
+	err = poetDb.ValidateAndStorePoetProof(poetProof, poetId, roundId, nil)
 	r.EqualError(err, "failed to validate poet proof: merkle proof not valid")
 }
 

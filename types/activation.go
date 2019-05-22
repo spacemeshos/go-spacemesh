@@ -128,8 +128,6 @@ type PoetProof struct {
 	shared.MerkleProof
 	Members   [][]byte
 	LeafCount uint64
-	PoetId    []byte
-	RoundId   uint64
 }
 
 type PoetRound struct {

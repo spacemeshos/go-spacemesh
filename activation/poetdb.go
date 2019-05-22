@@ -23,7 +23,7 @@ func NewPoetDb(store database.Database) *PoetDb {
 	return &PoetDb{store: store}
 }
 
-func (db *PoetDb) ValidateAndStorePoetProof(proof types.PoetProof) error {
+func (db *PoetDb) ValidateAndStorePoetProof(proof types.PoetProof, poetId []byte, roundId uint64, signature []byte) error {
 	root, err := calcRoot(proof.Members)
 	if err != nil {
 		return fmt.Errorf("failed to calculate membership root: %v", err)
@@ -37,13 +37,15 @@ func (db *PoetDb) ValidateAndStorePoetProof(proof types.PoetProof) error {
 		return fmt.Errorf("failed to marshal poet proof: %v", err)
 	}
 
+	// TODO(noamnelke): validate signature (or extract public key and use for salting merkle hashes)
+
 	ref := sha256.Sum256(poetProof.Bytes())
 
 	batch := db.store.NewBatch()
 	if err := batch.Put(ref[:], poetProof.Bytes()); err != nil {
 		return fmt.Errorf("failed to store poet proof: %v", err)
 	}
-	if err := batch.Put(makeKey(proof.PoetId, proof.RoundId), ref[:]); err != nil {
+	if err := batch.Put(makeKey(poetId, roundId), ref[:]); err != nil {
 		return fmt.Errorf("failed to store poet proof index entry: %v", err)
 	}
 	if err := batch.Write(); err != nil {
