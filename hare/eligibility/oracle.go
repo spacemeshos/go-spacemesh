@@ -20,7 +20,7 @@ type valueProvider interface {
 }
 
 type activeSetProvider interface {
-	GetActiveSetSize(layer types.LayerID) (uint32, error)
+	ActiveSetSize(ech types.EpochId) uint32
 }
 
 type VerifierFunc = func(msg, sig []byte, pub []byte) (bool, error)
@@ -34,6 +34,7 @@ type Oracle struct {
 	beacon            valueProvider
 	activeSetProvider activeSetProvider
 	vrf               VerifierFunc
+	layersPerEpoch    uint16
 }
 
 // Returns the relative layer that w.h.p. we have agreement on its view
@@ -46,11 +47,12 @@ func safeLayer(layer types.LayerID) types.LayerID {
 	return config.Genesis
 }
 
-func New(beacon valueProvider, asProvider activeSetProvider, vrf VerifierFunc) *Oracle {
+func New(beacon valueProvider, asProvider activeSetProvider, vrf VerifierFunc, layersPerEpoch uint16) *Oracle {
 	return &Oracle{
 		beacon:            beacon,
 		activeSetProvider: asProvider,
 		vrf:               vrf,
+		layersPerEpoch:    layersPerEpoch,
 	}
 }
 
@@ -96,11 +98,7 @@ func (o *Oracle) Eligible(layer types.LayerID, round int32, committeeSize int, i
 	}
 
 	// get active set size
-	activeSetSize, err := o.activeSetProvider.GetActiveSetSize(safeLayer(layer))
-	if err != nil {
-		log.Error("Could not get active set size: %v", err)
-		return false, err
-	}
+	activeSetSize := o.activeSetProvider.ActiveSetSize(safeLayer(layer).GetEpoch(o.layersPerEpoch) - 1)
 
 	// require activeSetSize > 0
 	if activeSetSize == 0 {
