@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/amcl/BLS381"
 	"github.com/spacemeshos/go-spacemesh/config"
@@ -82,6 +83,11 @@ func (o *Oracle) buildVRFMessage(id types.NodeId, layer types.LayerID, round int
 	return w.Bytes(), nil
 }
 
+func (o *Oracle) activeSetSize(layer types.LayerID) uint32 {
+	fmt.Println("the epoc is: ", safeLayer(layer).GetEpoch(o.layersPerEpoch))
+	return o.activeSetProvider.ActiveSetSize(safeLayer(layer).GetEpoch(o.layersPerEpoch) - 1)
+}
+
 // Eligible checks if id is eligible on the given layer where msg is the VRF message, sig is the role proof and assuming commSize as the expected committee size
 func (o *Oracle) Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeId, sig []byte) (bool, error) {
 	msg, err := o.buildVRFMessage(id, layer, round)
@@ -98,7 +104,7 @@ func (o *Oracle) Eligible(layer types.LayerID, round int32, committeeSize int, i
 	}
 
 	// get active set size
-	activeSetSize := o.activeSetProvider.ActiveSetSize(safeLayer(layer).GetEpoch(o.layersPerEpoch) - 1)
+	activeSetSize := o.activeSetSize(layer)
 
 	// require activeSetSize > 0
 	if activeSetSize == 0 {

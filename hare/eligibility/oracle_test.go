@@ -112,3 +112,28 @@ func Test_ExpectedCommitteeSize(t *testing.T) {
 	cond := count > commSize-dev && count < commSize+dev
 	assert.True(t, cond)
 }
+
+type mockBufferedActiveSetProvider struct {
+	size map[types.EpochId]uint32
+}
+
+func (m *mockBufferedActiveSetProvider) ActiveSetSize(eph types.EpochId) uint32 {
+	v, ok := m.size[eph]
+	if !ok {
+		return 0
+	}
+
+	return v
+}
+
+func Test_ActiveSetSize(t *testing.T) {
+	m := make(map[types.EpochId]uint32)
+	m[types.EpochId(0)] = 2
+	m[types.EpochId(1)] = 3
+	m[types.EpochId(2)] = 5
+	o := New(&mockValueProvider{1, nil}, &mockBufferedActiveSetProvider{m}, buildVerifier(true, nil), 10)
+	l := 19 + k
+	assert.Equal(t, uint32(2), o.activeSetSize(l))
+	assert.Equal(t, uint32(3), o.activeSetSize(l+10))
+	assert.Equal(t, uint32(5), o.activeSetSize(l+20))
+}
