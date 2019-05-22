@@ -266,7 +266,7 @@ func (t *BlockBuilder) acceptBlockData() {
 					continue
 				}
 				go func() {
-					bytes, err := types.BlockAsBytes(*blk)
+					bytes, err := types.InterfaceToBytes(*blk)
 					if err != nil {
 						t.Log.Error("cannot serialize block %v", err)
 						return

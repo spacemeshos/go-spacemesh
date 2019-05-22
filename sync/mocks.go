@@ -9,8 +9,15 @@ import (
 type BlockValidatorMock struct {
 }
 
-func (BlockValidatorMock) BlockEligible(block *types.Block) (bool, error) {
+func (BlockValidatorMock) BlockEligible(block *types.BlockHeader) (bool, error) {
 	return true, nil
+}
+
+type TxValidatorMock struct {
+}
+
+func (TxValidatorMock) TxValid(tx types.SerializableTransaction) bool {
+	return true
 }
 
 type MeshValidatorMock struct{}

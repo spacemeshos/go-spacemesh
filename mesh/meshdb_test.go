@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/google/uuid"
+	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/nipst"
@@ -11,7 +12,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
 	"math"
+	"math/big"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -40,7 +43,20 @@ func TestNewMeshDB(t *testing.T) {
 func TestMeshDb_Block(t *testing.T) {
 	mdb := getMeshdb()
 	blk := types.NewExistingBlock(123, 1, nil)
-	addTransactionsToBlock(blk, 5)
+
+	nonce := uint64(1)
+	addr := address.HexToAddress("1111")
+	recipient := address.HexToAddress(strconv.FormatUint(uint64(123), 10))
+	amount := big.NewInt(10)
+	price := big.NewInt(124)
+	gaslim := uint64(100)
+
+	blk.Txs = append(blk.Txs, types.NewSerializableTransaction(nonce, addr,
+		recipient,
+		amount,
+		price,
+		gaslim))
+
 	blk.AddAtx(types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")}, 1, types.AtxId{}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{}), true))
 	mdb.AddBlock(blk)
 	block, err := mdb.GetBlock(123)
@@ -48,9 +64,9 @@ func TestMeshDb_Block(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, 123 == block.Id)
 
-	assert.True(t, block.Txs[0].Origin == blk.Txs[0].Origin)
-	assert.True(t, bytes.Equal(block.Txs[0].Recipient.Bytes(), blk.Txs[0].Recipient.Bytes()))
-	assert.True(t, bytes.Equal(block.Txs[0].Price, blk.Txs[0].Price))
+	assert.True(t, block.Txs[0].Origin == addr)
+	assert.True(t, bytes.Equal(block.Txs[0].Recipient.Bytes(), recipient.Bytes()))
+	assert.True(t, bytes.Equal(block.Txs[0].Price, price.Bytes()))
 	assert.True(t, len(block.ATXs) == len(blk.ATXs))
 }
 

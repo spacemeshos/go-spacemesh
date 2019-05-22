@@ -42,7 +42,7 @@ type AtxDB interface {
 
 type Mesh struct {
 	log.Log
-	mdb           *MeshDB
+	*MeshDB
 	AtxDB         AtxDB
 	config        Config
 	verifiedLayer types.LayerID
@@ -65,7 +65,7 @@ func NewPersistentMesh(path string, rewardConfig Config, mesh MeshValidator, sta
 		tortoise: mesh,
 		state:    state,
 		done:     make(chan struct{}),
-		mdb:      NewPersistentMeshDB(path, logger),
+		MeshDB:   NewPersistentMeshDB(path, logger),
 		config:   rewardConfig,
 		AtxDB:    atxdb,
 	}
@@ -80,7 +80,7 @@ func NewMemMesh(rewardConfig Config, mesh MeshValidator, state StateUpdater, atx
 		tortoise: mesh,
 		state:    state,
 		done:     make(chan struct{}),
-		mdb:      NewMemMeshDB(logger),
+		MeshDB:   NewMemMeshDB(logger),
 		config:   rewardConfig,
 		AtxDB:    atxdb,
 	}
@@ -95,7 +95,7 @@ func NewMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh MeshValidator, s
 		tortoise: mesh,
 		state:    state,
 		done:     make(chan struct{}),
-		mdb:      db,
+		MeshDB:   db,
 		config:   rewardConfig,
 		AtxDB:    atxDb,
 	}
@@ -234,7 +234,7 @@ func (m *Mesh) ExtractUniqueOrderedTransactions(l *types.Layer) []*Transaction {
 func (m *Mesh) PushTransactions(oldBase types.LayerID, newBase types.LayerID) {
 	for i := oldBase; i < newBase; i++ {
 
-		l, err := m.mdb.GetLayer(i)
+		l, err := m.GetLayer(i)
 		if err != nil || l == nil {
 			m.Error("") //todo handle error
 			return
@@ -258,18 +258,14 @@ func (m *Mesh) GetVerifiedLayer(i types.LayerID) (*types.Layer, error) {
 		return nil, errors.New("layer not verified yet")
 	}
 	m.lMutex.RUnlock()
-	return m.mdb.GetLayer(i)
-}
-
-func (m *Mesh) GetLayer(i types.LayerID) (*types.Layer, error) {
-	return m.mdb.GetLayer(i)
+	return m.GetLayer(i)
 }
 
 func (m *Mesh) GetLatestView() []types.BlockID {
 	//todo: think about whether we want to use the most recent layer or the recent verified layer
-	layer, err := m.mdb.GetLayer(m.LatestLayer())
+	layer, err := m.GetLayer(m.LatestLayer())
 	if err != nil {
-		panic("got an error trying to read verified layer")
+		panic("got an error trying to read latest view")
 	}
 	view := make([]types.BlockID, 0, len(layer.Blocks()))
 	for _, blk := range layer.Blocks() {
@@ -280,7 +276,7 @@ func (m *Mesh) GetLatestView() []types.BlockID {
 
 func (m *Mesh) AddBlock(blk *types.Block) error {
 	m.Debug("add block %d", blk.ID())
-	if err := m.mdb.AddBlock(blk); err != nil {
+	if err := m.MeshDB.AddBlock(blk); err != nil {
 		m.Error("failed to add block %v  %v", blk.ID(), err)
 		return err
 	}
@@ -296,18 +292,18 @@ func (m *Mesh) AddBlock(blk *types.Block) error {
 func (m *Mesh) handleOrphanBlocks(blk *types.Block) {
 	m.orphMutex.Lock()
 	defer m.orphMutex.Unlock()
-	if _, ok := m.mdb.orphanBlocks[blk.Layer()]; !ok {
-		m.mdb.orphanBlocks[blk.Layer()] = make(map[types.BlockID]struct{})
+	if _, ok := m.orphanBlocks[blk.Layer()]; !ok {
+		m.orphanBlocks[blk.Layer()] = make(map[types.BlockID]struct{})
 	}
-	m.mdb.orphanBlocks[blk.Layer()][blk.ID()] = struct{}{}
+	m.orphanBlocks[blk.Layer()][blk.ID()] = struct{}{}
 	m.Info("Added block %d to orphans", blk.ID())
-	atomic.AddInt32(&m.mdb.orphanBlockCount, 1)
+	atomic.AddInt32(&m.orphanBlockCount, 1)
 	for _, b := range blk.ViewEdges {
-		for _, layermap := range m.mdb.orphanBlocks {
+		for _, layermap := range m.orphanBlocks {
 			if _, has := layermap[b]; has {
 				m.Log.Debug("delete block ", b, "from orphans")
 				delete(layermap, b)
-				atomic.AddInt32(&m.mdb.orphanBlockCount, -1)
+				atomic.AddInt32(&m.orphanBlockCount, -1)
 				break
 			}
 		}
@@ -315,7 +311,7 @@ func (m *Mesh) handleOrphanBlocks(blk *types.Block) {
 }
 
 func (m *Mesh) GetUnverifiedLayerBlocks(l types.LayerID) ([]types.BlockID, error) {
-	x, err := m.mdb.layers.Get(l.ToBytes())
+	x, err := m.layers.Get(l.ToBytes())
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf("could not retrive layer = %d blocks ", l))
 	}
@@ -334,7 +330,7 @@ func (m *Mesh) GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error) {
 	m.orphMutex.RLock()
 	defer m.orphMutex.RUnlock()
 	ids := map[types.BlockID]struct{}{}
-	for key, val := range m.mdb.orphanBlocks {
+	for key, val := range m.orphanBlocks {
 		if key < l {
 			for bid := range val {
 				ids[bid] = struct{}{}
@@ -364,7 +360,7 @@ func (m *Mesh) GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error) {
 }
 
 func (m *Mesh) AccumulateRewards(rewardLayer types.LayerID, params Config) {
-	l, err := m.mdb.GetLayer(rewardLayer)
+	l, err := m.GetLayer(rewardLayer)
 	if err != nil || l == nil {
 		m.Error("") //todo handle error
 		return
@@ -410,18 +406,13 @@ func (m *Mesh) AccumulateRewards(rewardLayer types.LayerID, params Config) {
 
 }
 
-func (m *Mesh) GetBlock(id types.BlockID) (*types.Block, error) {
-	m.Debug("get block %d", id)
-	return m.mdb.GetBlock(id)
-}
-
 func (m *Mesh) GetContextualValidity(id types.BlockID) (bool, error) {
-	return m.mdb.getContextualValidity(id)
+	return m.getContextualValidity(id)
 }
 
 func (m *Mesh) Close() {
 	m.Debug("closing mDB")
-	m.mdb.Close()
+	m.MeshDB.Close()
 }
 
 func CreateGenesisBlock() *types.Block {
