@@ -32,6 +32,8 @@ We are designing and coding a modern blockchain platform from the ground up for 
 
 To learn more about Spacemesh head over to [https://spacemesh.io](https://spacemesh.io).
 
+To learn more about the Spacemesh protocol [watch this video](https://www.youtube.com/watch?v=jvtHFOlA1GI).
+
 ### Motivation
 Spacemesh is designed to create a decentralized blockchain smart contracts computer and a cryptocurrency that is formed by connecting the home PCs of people from around the world into one virtual computer without incurring massive energy waste and mining pools issues that are inherent in other blockchain computers, and provide a provably-secure and incentive-compatible smart contracts execution environment.
 
@@ -144,7 +146,7 @@ You can then run the command `make install` followed by `make build` as on unix 
 #### Next Steps...
 - Please visit our [wiki](https://github.com/spacemeshos/go-spacemesh/wiki)
 - Browse project [go docs](https://godoc.org/github.com/spacemeshos/go-spacemesh)
-- Spacemesh Protocol [first AMA session](https://spacemesh.io/tal-m-deep-dive/)
+- Spacemesh Protocol [video overview](https://www.youtube.com/watch?v=jvtHFOlA1GI)
 
 ### Status
 
