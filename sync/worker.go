@@ -40,10 +40,13 @@ func NewPeerWorker(s *Syncer, reqFactory RequestFactory) (worker, chan interface
 	peerfuncs := []func(){}
 	wg := sync.WaitGroup{}
 	wg.Add(len(peers))
-	for _, peer := range peers {
-		peerfunc := func() {
+
+	for _, p := range peers {
+		peer := p
+		s.Info("creat func peer: %v", peer)
+		peerFunc := func() {
 			defer wg.Done()
-			s.Debug("send request Peer: %v", peer)
+			s.Info("send request Peer: %v", peer)
 			ch, err := reqFactory(s.MessageServer, peer)
 			if err != nil {
 				s.Error("RequestFactory failed, ", err)
@@ -65,7 +68,7 @@ func NewPeerWorker(s *Syncer, reqFactory RequestFactory) (worker, chan interface
 			}
 		}
 
-		peerfuncs = append(peerfuncs, peerfunc)
+		peerfuncs = append(peerfuncs, peerFunc)
 	}
 
 	wrkFunc := func() {
@@ -87,8 +90,9 @@ func NewNeighborhoodWorker(s *Syncer,
 	output chan interface{},
 	reqFactory RequestFactory) worker {
 	workFunc := func() {
-		for _, peer := range s.GetPeers() {
-			s.Debug("send request Peer: %v", peer)
+		for _, p := range s.GetPeers() {
+			peer := p
+			s.Info("send request Peer: %v", peer)
 			ch, _ := reqFactory(s.MessageServer, peer)
 			timeout := time.After(s.RequestTimeout)
 			select {
