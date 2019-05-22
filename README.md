@@ -1,5 +1,5 @@
 <h1 align="center">
-  <a href="https://spacemesh.io"><img width="400" src="https://spacemesh.io/content/images/2019/04/black_text_logo@2x.png" alt="Spacemesh logo" /></a>
+  <a href="https://spacemesh.io"><img width="400" src="https://spacemesh.io/content/images/2019/05/black_logo_hp.png" alt="Spacemesh logo" /></a>
   <p align="center">A programmable Cryptocurrency</p>
 </h1>
 
