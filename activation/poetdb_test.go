@@ -7,6 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/require"
 	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -25,7 +26,7 @@ func TestPoetDbHappyFlow(t *testing.T) {
 	membershipRoot, err := calcRoot(membershipProof.Members)
 	r.NoError(err)
 
-	file, err := os.Open("poet.proof")
+	file, err := os.Open(filepath.Join("test_resources", "poet.proof"))
 	r.NoError(err)
 
 	var poetProof types.PoetProof
@@ -53,7 +54,7 @@ func TestPoetDbMissingMembershipProof(t *testing.T) {
 
 	poetDb := NewPoetDb(database.NewMemDatabase())
 
-	file, err := os.Open("poet.proof")
+	file, err := os.Open(filepath.Join("test_resources", "poet.proof"))
 	r.NoError(err)
 
 	var poetProof types.PoetProof
@@ -81,7 +82,7 @@ func TestPoetDbInvalidPoetProof(t *testing.T) {
 	membershipRoot, err := calcRoot(membershipProof.Members)
 	r.NoError(err)
 
-	file, err := os.Open("poet.proof")
+	file, err := os.Open(filepath.Join("test_resources", "poet.proof"))
 	r.NoError(err)
 
 	var poetProof types.PoetProof
