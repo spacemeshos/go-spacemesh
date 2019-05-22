@@ -75,8 +75,8 @@ type builderState struct {
 	// PoetId is the public key of the PoET proving service.
 	PoetId []byte
 
-	// PoetProofRoot is the root of the proof received from the PoET service.
-	PoetProofRoot []byte
+	// PoetProofRef is the root of the proof received from the PoET service.
+	PoetProofRef []byte
 }
 
 func (s *builderState) load() {
@@ -110,8 +110,8 @@ type NIPSTBuilder struct {
 }
 
 type PoetDb interface {
-	GetPoetProofRoot(poetId []byte, round *types.PoetRound) ([]byte, error)
-	GetMembershipByPoetProofRoot(poetRoot []byte) (map[common.Hash]bool, error)
+	GetPoetProofRef(poetId []byte, round *types.PoetRound) ([]byte, error)
+	GetMembershipByPoetProofRef(poetRoot []byte) (map[common.Hash]bool, error)
 }
 
 func NewNIPSTBuilder(
@@ -215,30 +215,30 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *common.Hash) (*types.NIPST, error)
 	}
 
 	// Phase 1: receive proofs from PoET service
-	if nb.state.PoetProofRoot == nil {
-		poetProofRoot, err := nb.poetDb.GetPoetProofRoot(nb.state.PoetId, nb.state.PoetRound)
+	if nb.state.PoetProofRef == nil {
+		poetProofRef, err := nb.poetDb.GetPoetProofRef(nb.state.PoetId, nb.state.PoetRound)
 		if err != nil {
 			// TODO(noamnelke): handle timeout
 			return nil, fmt.Errorf("failed to find PoET proof for round: %d and id: %x",
 				nb.state.PoetRound.Id, nb.state.PoetId)
 		}
 
-		membership, err := nb.poetDb.GetMembershipByPoetProofRoot(poetProofRoot)
+		membership, err := nb.poetDb.GetMembershipByPoetProofRef(poetProofRef)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch membership for PoET proof") // inconsistent state
 		}
 		if !membership[*nipst.NipstChallenge] {
 			return nil, fmt.Errorf("not a member of this round") // TODO(noamnelke): handle this case!
 		}
-		nb.state.PoetProofRoot = poetProofRoot
+		nb.state.PoetProofRef = poetProofRef
 		nb.state.persist()
 	}
 
 	// Phase 2: PoST execution.
 	if nipst.PostProof == nil {
-		nb.log.Info("starting PoST execution (challenge: %x)", nb.state.PoetProofRoot)
+		nb.log.Info("starting PoST execution (challenge: %x)", nb.state.PoetProofRef)
 
-		proof, err := nb.postProver.execute(nb.id, nb.state.PoetProofRoot, nb.numberOfProvenLabels, nb.difficulty, defTimeout)
+		proof, err := nb.postProver.execute(nb.id, nb.state.PoetProofRef, nb.numberOfProvenLabels, nb.difficulty, defTimeout)
 		if err != nil {
 			return nil, fmt.Errorf("failed to execute PoST: %v", err)
 		}

@@ -16,36 +16,19 @@ import (
 )
 
 type PoetDb struct {
-	store database.DB
+	store database.Database
 }
 
-func NewPoetDb(store database.DB) *PoetDb {
+func NewPoetDb(store database.Database) *PoetDb {
 	return &PoetDb{store: store}
 }
 
-func (db *PoetDb) AddMembershipProof(proof types.PoetMembershipProof) error {
+func (db *PoetDb) ValidateAndStorePoetProof(proof types.PoetProof) error {
 	root, err := calcRoot(proof.Members)
 	if err != nil {
 		return fmt.Errorf("failed to calculate membership root: %v", err)
 	}
-
-	var members bytes.Buffer
-	if _, err := xdr.Marshal(&members, proof.Members); err != nil {
-		return fmt.Errorf("failed to marshal members: %v", err)
-	}
-
-	if err := db.store.Put(root, members.Bytes()); err != nil {
-		return fmt.Errorf("failed to store membership proof: %v", err)
-	}
-
-	return nil
-}
-
-func (db *PoetDb) AddPoetProof(proof types.PoetProof) error {
-	if _, err := db.store.Get(proof.MembershipRoot); err != nil {
-		return fmt.Errorf("failed to fetch matching membership proof: %v", err)
-	}
-	if err := validatePoet(proof.MembershipRoot, proof.MerkleProof, proof.LeafCount); err != nil {
+	if err := validatePoet(root, proof.MerkleProof, proof.LeafCount); err != nil {
 		return fmt.Errorf("failed to validate poet proof: %v", err)
 	}
 
@@ -54,27 +37,32 @@ func (db *PoetDb) AddPoetProof(proof types.PoetProof) error {
 		return fmt.Errorf("failed to marshal poet proof: %v", err)
 	}
 
-	if err := db.store.Put(proof.Root, poetProof.Bytes()); err != nil {
+	ref := sha256.Sum256(poetProof.Bytes())
+
+	batch := db.store.NewBatch()
+	if err := batch.Put(ref[:], poetProof.Bytes()); err != nil {
 		return fmt.Errorf("failed to store poet proof: %v", err)
 	}
-
-	if err := db.store.Put(makeKey(proof.PoetId, proof.RoundId), proof.Root); err != nil {
+	if err := batch.Put(makeKey(proof.PoetId, proof.RoundId), ref[:]); err != nil {
 		return fmt.Errorf("failed to store poet proof index entry: %v", err)
+	}
+	if err := batch.Write(); err != nil {
+		return fmt.Errorf("failed to store poet proof and index: %v", err)
 	}
 
 	return nil
 }
 
-func (db *PoetDb) GetPoetProofRoot(poetId []byte, round *types.PoetRound) ([]byte, error) {
-	poetRoot, err := db.store.Get(makeKey(poetId, round.Id))
+func (db *PoetDb) GetPoetProofRef(poetId []byte, round *types.PoetRound) ([]byte, error) {
+	poetRef, err := db.store.Get(makeKey(poetId, round.Id))
 	if err != nil {
 		return nil, err
 	}
-	return poetRoot, nil
+	return poetRef, nil
 }
 
-func (db *PoetDb) GetMembershipByPoetProofRoot(poetRoot []byte) (map[common.Hash]bool, error) {
-	poetProofBytes, err := db.store.Get(poetRoot)
+func (db *PoetDb) GetMembershipByPoetProofRef(poetRef []byte) (map[common.Hash]bool, error) {
+	poetProofBytes, err := db.store.Get(poetRef)
 	if err != nil {
 		return nil, err
 	}
@@ -82,15 +70,7 @@ func (db *PoetDb) GetMembershipByPoetProofRoot(poetRoot []byte) (map[common.Hash
 	if _, err := xdr.Unmarshal(bytes.NewReader(poetProofBytes), &poetProof); err != nil {
 		return nil, err
 	}
-	membershipBytes, err := db.store.Get(poetProof.MembershipRoot)
-	if err != nil {
-		return nil, err
-	}
-	var membership [][]byte
-	if _, err := xdr.Unmarshal(bytes.NewReader(membershipBytes), &membership); err != nil {
-		return nil, err
-	}
-	return membershipSliceToMap(membership), nil
+	return membershipSliceToMap(poetProof.Members), nil
 }
 
 func makeKey(poetId []byte, roundId uint64) []byte {

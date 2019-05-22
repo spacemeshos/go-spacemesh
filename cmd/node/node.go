@@ -260,7 +260,7 @@ func (app *SpacemeshApp) setupTestFeatures() {
 
 func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service, dbStorepath string, sgn hare.Signer,
 	hareOracle hare.Rolacle, layerSize uint32, postClient nipst.PostProverClient,
-	poetClient nipst.PoetProvingServiceClient, poetDbStore, atxdbstore database.DB, vrfSigner *crypto.VRFSigner,
+	poetClient nipst.PoetProvingServiceClient, poetDbStore database.Database, atxdbstore database.DB, vrfSigner *crypto.VRFSigner,
 	commitmentConfig nipst.PostParams, layersPerEpoch uint32) error {
 
 	app.instanceName = nodeID.Key

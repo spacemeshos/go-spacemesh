@@ -8,19 +8,15 @@ import (
 	"github.com/spacemeshos/go-spacemesh/types"
 )
 
-const (
-	PoetMembershipProofProtocol = "PoetMembershipProof"
-	PoetProofProtocol           = "PoetProof"
-)
+const PoetProofProtocol = "PoetProof"
 
 type PoetListener struct {
-	Log                     log.Log
-	net                     service.Service
-	poetDb                  *PoetDb
-	membershipProofMessages chan service.GossipMessage
-	poetProofMessages       chan service.GossipMessage
-	started                 bool
-	exit                    chan struct{}
+	Log               log.Log
+	net               service.Service
+	poetDb            *PoetDb
+	poetProofMessages chan service.GossipMessage
+	started           bool
+	exit              chan struct{}
 }
 
 func (l *PoetListener) Start() {
@@ -39,18 +35,6 @@ func (l *PoetListener) Close() {
 func (l *PoetListener) loop() {
 	for {
 		select {
-		case membershipProof := <-l.membershipProofMessages:
-			var proof types.PoetMembershipProof
-			if _, err := xdr.Unmarshal(bytes.NewReader(membershipProof.Bytes()), proof); err != nil {
-				l.Log.Error("failed to unmarshal PoET membership proof: %v", err)
-				continue
-			}
-			// TODO(noamnelke): validate proof
-			if err := l.poetDb.AddMembershipProof(proof); err != nil {
-				l.Log.Warning("PoET membership proof not persisted: %v", err)
-				continue
-			}
-			membershipProof.ReportValidation(PoetMembershipProofProtocol)
 		case poetProof := <-l.poetProofMessages:
 			var proof types.PoetProof
 			_, err := xdr.Unmarshal(bytes.NewReader(poetProof.Bytes()), proof)
@@ -58,8 +42,7 @@ func (l *PoetListener) loop() {
 				l.Log.Error("failed to unmarshal PoET membership proof: %v", err)
 				continue
 			}
-			// TODO(noamnelke): validate proof
-			if err := l.poetDb.AddPoetProof(proof); err != nil {
+			if err := l.poetDb.ValidateAndStorePoetProof(proof); err != nil {
 				l.Log.Warning("PoET proof not persisted: %v", err)
 				continue
 			}
@@ -73,11 +56,10 @@ func (l *PoetListener) loop() {
 
 func NewPoetListener(net service.Service, poetDb *PoetDb, logger log.Log) *PoetListener {
 	return &PoetListener{
-		Log:                     logger,
-		net:                     net,
-		poetDb:                  poetDb,
-		membershipProofMessages: net.RegisterGossipProtocol(PoetMembershipProofProtocol),
-		poetProofMessages:       net.RegisterGossipProtocol(PoetProofProtocol),
-		exit:                    make(chan struct{}),
+		Log:               logger,
+		net:               net,
+		poetDb:            poetDb,
+		poetProofMessages: net.RegisterGossipProtocol(PoetProofProtocol),
+		exit:              make(chan struct{}),
 	}
 }

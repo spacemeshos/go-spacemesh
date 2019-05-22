@@ -124,16 +124,12 @@ func (t ActivationTx) ShortId() string {
 	return t.Id().ShortId()
 }
 
-type PoetMembershipProof struct {
-	Members [][]byte
-}
-
 type PoetProof struct {
 	shared.MerkleProof
-	MembershipRoot []byte
-	LeafCount      uint64
-	PoetId         []byte
-	RoundId        uint64
+	Members   [][]byte
+	LeafCount uint64
+	PoetId    []byte
+	RoundId   uint64
 }
 
 type PoetRound struct {
