@@ -44,7 +44,7 @@ var conf = sync.Configuration{
 	SyncInterval:   1 * time.Second,
 	Concurrency:    4,
 	LayerSize:      int(100),
-	RequestTimeout: 500 * time.Millisecond,
+	RequestTimeout: 150 * time.Millisecond,
 }
 
 //////////////////////////////
@@ -100,7 +100,7 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	for ; ; i++ {
 		if lyr, err2 := mshDb.GetLayer(types.LayerID(i)); err2 != nil || lyr == nil {
 			lg.Info("loaded %v layers from disk %v", i-1, err2)
-			return
+			break
 		} else {
 			lg.Info("loaded layer %v from disk ", i)
 			msh.ValidateLayer(lyr)

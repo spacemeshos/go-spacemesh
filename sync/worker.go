@@ -21,12 +21,12 @@ type worker struct {
 }
 
 func (w *worker) Work() {
-	w.Info("worker work")
+	w.Debug("worker work")
 	w.work()
 	atomic.AddInt32(w.workCount, -1)
-	w.Info("worker done")
+	w.Debug("worker done")
 	if atomic.LoadInt32(w.workCount) == 0 { //close once everyone is finished
-		w.Info("worker teardown")
+		w.Debug("worker teardown")
 		w.Do(func() { close(w.output) })
 	}
 }
@@ -43,10 +43,9 @@ func NewPeerWorker(s *Syncer, reqFactory RequestFactory) (worker, chan interface
 
 	for _, p := range peers {
 		peer := p
-		s.Info("creat func peer: %v", peer)
 		peerFunc := func() {
 			defer wg.Done()
-			s.Debug("send request Peer: %v", peer)
+			s.Info("send request Peer: %v", peer)
 			ch, err := reqFactory(s.MessageServer, peer)
 			if err != nil {
 				s.Error("RequestFactory failed, ", err)
@@ -60,7 +59,7 @@ func NewPeerWorker(s *Syncer, reqFactory RequestFactory) (worker, chan interface
 				return
 			case v := <-ch:
 				if v != nil {
-					s.Debug("Peer: %v responded", peer)
+					s.Info("Peer: %v responded", peer)
 					output <- v
 				} else {
 					s.Error("peer %v responded with nil", peer)
@@ -92,7 +91,7 @@ func NewNeighborhoodWorker(s *Syncer,
 	workFunc := func() {
 		for _, p := range s.GetPeers() {
 			peer := p
-			s.Debug("send request Peer: %v", peer)
+			s.Info("send request Peer: %v", peer)
 			ch, _ := reqFactory(s.MessageServer, peer)
 			timeout := time.After(s.RequestTimeout)
 			select {
@@ -100,6 +99,7 @@ func NewNeighborhoodWorker(s *Syncer,
 				s.Error("request to %v timed out", peer)
 			case v := <-ch:
 				if v != nil {
+					s.Info("Peer: %v responded", peer)
 					output <- v
 					return
 				}
