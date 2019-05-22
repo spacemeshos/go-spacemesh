@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"github.com/nullstyle/go-xdr/xdr3"
+	"github.com/spacemeshos/go-spacemesh/amcl/BLS381"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/types"
@@ -15,22 +16,24 @@ import (
 const k = types.LayerID(25) // the confidence interval // TODO: read from config
 
 type valueProvider interface {
-	Value(layer types.LayerID) (int, error)
+	Value(layer types.LayerID) (uint32, error)
 }
 
 type activeSetProvider interface {
 	GetActiveSetSize(layer types.LayerID) (uint32, error)
 }
 
-type Verifier interface {
-	Verify(msg, sig []byte) (bool, error)
+type VerifierFunc = func(msg, sig []byte, pub []byte) (bool, error)
+
+func Verify(msg, sig []byte, pub []byte) (bool, error) {
+	return BLS381.Verify(sig, string(msg), pub) == BLS381.BLS_OK, nil
 }
 
 // Oracle is the hare eligibility oracle
 type Oracle struct {
 	beacon            valueProvider
 	activeSetProvider activeSetProvider
-	vrf               Verifier
+	vrf               VerifierFunc
 }
 
 // Returns the relative layer that w.h.p. we have agreement on its view
@@ -43,7 +46,7 @@ func safeLayer(layer types.LayerID) types.LayerID {
 	return config.Genesis
 }
 
-func New(beacon valueProvider, asProvider activeSetProvider, vrf Verifier) *Oracle {
+func New(beacon valueProvider, asProvider activeSetProvider, vrf VerifierFunc) *Oracle {
 	return &Oracle{
 		beacon:            beacon,
 		activeSetProvider: asProvider,
@@ -52,7 +55,7 @@ func New(beacon valueProvider, asProvider activeSetProvider, vrf Verifier) *Orac
 }
 
 type vrfMessage struct {
-	beacon int
+	beacon uint32
 	id     types.NodeId
 	layer  types.LayerID
 	round  int32
@@ -87,7 +90,7 @@ func (o *Oracle) Eligible(layer types.LayerID, round int32, committeeSize int, i
 	}
 
 	// validate message
-	if res, err := o.vrf.Verify(msg, sig); !res {
+	if res, err := o.vrf(msg, sig, id.VRFPublicKey); !res {
 		log.Error("VRF verification failed: %v", err)
 		return false, err
 	}

@@ -13,11 +13,11 @@ import (
 var someErr = errors.New("some error")
 
 type mockValueProvider struct {
-	val int
+	val uint32
 	err error
 }
 
-func (mvp *mockValueProvider) Value(layer types.LayerID) (int, error) {
+func (mvp *mockValueProvider) Value(layer types.LayerID) (uint32, error) {
 	return mvp.val, mvp.err
 }
 
@@ -30,13 +30,10 @@ func (m *mockActiveSetProvider) GetActiveSetSize(layer types.LayerID) (uint32, e
 	return m.size, m.err
 }
 
-type mockVerifier struct {
-	result bool
-	err    error
-}
-
-func (mv *mockVerifier) Verify(msg, sig []byte) (bool, error) {
-	return mv.result, mv.err
+func buildVerifier(result bool, err error) VerifierFunc {
+	return func(msg, sig []byte, pub []byte) (bool, error) {
+		return result, err
+	}
 }
 
 func TestOracle_BuildVRFMessage(t *testing.T) {
@@ -48,12 +45,12 @@ func TestOracle_BuildVRFMessage(t *testing.T) {
 
 func TestOracle_IsEligible(t *testing.T) {
 	o := &Oracle{beacon: &mockValueProvider{1, nil}}
-	o.vrf = &mockVerifier{false, someErr}
+	o.vrf = buildVerifier(false, someErr)
 	res, err := o.Eligible(types.LayerID(1), 0, 1, types.NodeId{}, []byte{})
 	assert.NotNil(t, err)
 	assert.False(t, res)
 
-	o.vrf = &mockVerifier{true, nil}
+	o.vrf = buildVerifier(true, nil)
 	o.activeSetProvider = &mockActiveSetProvider{5, someErr}
 	res, err = o.Eligible(types.LayerID(1), 1, 0, types.NodeId{}, []byte{})
 	assert.NotNil(t, err)
@@ -82,14 +79,14 @@ func Test_safeLayer(t *testing.T) {
 }
 
 func Test_ZeroParticipants(t *testing.T) {
-	o := New(&mockValueProvider{1, nil}, &mockActiveSetProvider{5, nil}, &mockVerifier{true, nil})
+	o := New(&mockValueProvider{1, nil}, &mockActiveSetProvider{5, nil}, buildVerifier(true, nil))
 	res, err := o.Eligible(0, 0, 0, types.NodeId{Key: ""}, []byte{1})
 	assert.Nil(t, err)
 	assert.False(t, res)
 }
 
 func Test_AllParticipants(t *testing.T) {
-	o := New(&mockValueProvider{1, nil}, &mockActiveSetProvider{5, nil}, &mockVerifier{true, nil})
+	o := New(&mockValueProvider{1, nil}, &mockActiveSetProvider{5, nil}, buildVerifier(true, nil))
 	res, err := o.Eligible(0, 0, 5, types.NodeId{Key: ""}, []byte{1})
 	assert.Nil(t, err)
 	assert.True(t, res)
@@ -106,7 +103,7 @@ func genBytes() []byte {
 func Test_ExpectedCommitteeSize(t *testing.T) {
 	setSize := uint32(1024)
 	commSize := 1000
-	o := New(&mockValueProvider{1, nil}, &mockActiveSetProvider{setSize, nil}, &mockVerifier{true, nil})
+	o := New(&mockValueProvider{1, nil}, &mockActiveSetProvider{setSize, nil}, buildVerifier(true, nil))
 	count := 0
 	for i := uint32(0); i < setSize; i++ {
 		res, err := o.Eligible(0, 0, commSize, types.NodeId{Key: ""}, genBytes())

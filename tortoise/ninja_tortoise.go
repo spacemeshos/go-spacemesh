@@ -1,6 +1,7 @@
 package tortoise
 
 import (
+	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -536,4 +537,18 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) { //i most rec
 	}
 	ni.Info("finished layer %d pbase is %d", newlyr.Index(), ni.pBase.Layer())
 	return
+}
+
+func (ni *ninjaTortoise) GetGoodPattern(layer types.LayerID) (uint32, error) {
+	if layer >= ni.pBase.LayerID {
+		return 0, errors.New("pbase is lower than provided layer")
+	}
+
+	val, ok := ni.tGood[layer]
+
+	if !ok {
+		return 0, errors.New("no good layer")
+	}
+
+	return uint32(val.id), nil
 }
