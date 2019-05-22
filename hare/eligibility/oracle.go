@@ -2,6 +2,7 @@ package eligibility
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"errors"
 	"github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/config"
@@ -77,7 +78,7 @@ func (o *Oracle) buildVRFMessage(id types.NodeId, layer types.LayerID, round int
 }
 
 // Eligible checks if id is eligible on the given layer where msg is the VRF message, sig is the role proof and assuming commSize as the expected committee size
-func (o *Oracle) Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeId, sig []byte) (bool, error) {
+func (o *Oracle)  Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeId, sig []byte) (bool, error) {
 	msg, err := o.buildVRFMessage(id, layer, round)
 
 	if err != nil {
@@ -105,13 +106,16 @@ func (o *Oracle) Eligible(layer types.LayerID, round int32, committeeSize int, i
 	}
 
 	// calc hash & check threshold
+	sha := sha256.New()
+	sha.Write(sig)
 	h := fnv.New32()
-	h.Write(sig)
+	h.Write(sha.Sum(nil))
 	// avoid division (no floating point) & do operations on uint64 to avoid flow
 	if uint64(activeSetSize)*uint64(h.Sum32()) > uint64(committeeSize)*uint64(math.MaxUint32) {
 		log.Error("identity %v did not pass eligibility committeeSize=%v activeSetSize=%v", id, committeeSize, activeSetSize)
-		return false, errors.New("did not pass eligibility threshold")
+		return false, nil
 	}
 
+	// lower or equal
 	return true, nil
 }

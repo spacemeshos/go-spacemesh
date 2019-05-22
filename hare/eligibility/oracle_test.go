@@ -5,7 +5,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
+	"math/rand"
 	"testing"
+	"time"
 )
 
 var someErr = errors.New("some error")
@@ -59,8 +61,7 @@ func TestOracle_IsEligible(t *testing.T) {
 
 	o.activeSetProvider = &mockActiveSetProvider{10, nil}
 	res, err = o.Eligible(types.LayerID(1), 1, 0, types.NodeId{}, []byte{})
-	assert.NotNil(t, err)
-	assert.Equal(t, "did not pass eligibility threshold", err.Error())
+	assert.Nil(t, err)
 	assert.False(t, res)
 
 	o.activeSetProvider = &mockActiveSetProvider{0, nil}
@@ -79,3 +80,44 @@ func Test_safeLayer(t *testing.T) {
 	assert.Equal(t, config.Genesis, safeLayer(1))
 	assert.Equal(t, 100-k, safeLayer(100))
 }
+
+func Test_ZeroParticipants(t *testing.T) {
+	o := New(&mockValueProvider{1, nil}, &mockActiveSetProvider{5, nil}, &mockVerifier{true, nil})
+	res, err := o.Eligible(0, 0, 0, types.NodeId{Key: ""}, []byte{1})
+	assert.Nil(t, err)
+	assert.False(t, res)
+}
+
+func Test_AllParticipants(t *testing.T) {
+	o := New(&mockValueProvider{1, nil}, &mockActiveSetProvider{5, nil}, &mockVerifier{true, nil})
+	res, err := o.Eligible(0, 0, 5, types.NodeId{Key: ""}, []byte{1})
+	assert.Nil(t, err)
+	assert.True(t, res)
+}
+
+func genBytes() []byte {
+	rnd := make([]byte, 1000)
+	rand.Seed(time.Now().UnixNano())
+	rand.Read(rnd)
+
+	return rnd
+}
+
+func Test_ExpectedCommitteeSize(t *testing.T) {
+	setSize := uint32(1024)
+	commSize := 1000
+	o := New(&mockValueProvider{1, nil}, &mockActiveSetProvider{setSize, nil}, &mockVerifier{true, nil})
+	count := 0
+	for i := uint32(0); i < setSize; i++ {
+		res, err := o.Eligible(0, 0, commSize, types.NodeId{Key: ""}, genBytes())
+		assert.Nil(t, err)
+		if res {
+			count++
+		}
+	}
+
+	dev := 10 * commSize / 100
+	cond := count > commSize-dev && count < commSize+dev
+	assert.True(t, cond)
+}
+
