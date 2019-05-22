@@ -228,7 +228,8 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *common.Hash) (*types.NIPST, error)
 			return nil, fmt.Errorf("failed to fetch membership for PoET proof") // inconsistent state
 		}
 		if !membership[*nipst.NipstChallenge] {
-			return nil, fmt.Errorf("not a member of this round") // TODO(noamnelke): handle this case!
+			return nil, fmt.Errorf("not a member of this round (poetId: %x, roundId: %d)",
+				nb.state.PoetId, nb.state.PoetRound.Id) // TODO(noamnelke): handle this case!
 		}
 		nb.state.PoetProofRef = poetProofRef
 		nb.state.persist()
