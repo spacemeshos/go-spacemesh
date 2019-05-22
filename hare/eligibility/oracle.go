@@ -3,12 +3,12 @@ package eligibility
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/binary"
 	"errors"
 	"github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/types"
-	"hash/fnv"
 	"math"
 )
 
@@ -106,12 +106,10 @@ func (o *Oracle) Eligible(layer types.LayerID, round int32, committeeSize int, i
 	}
 
 	// calc hash & check threshold
-	sha := sha256.New()
-	sha.Write(sig)
-	h := fnv.New32()
-	h.Write(sha.Sum(nil))
-	// avoid division (no floating point) & do operations on uint64 to avoid flow
-	if uint64(activeSetSize)*uint64(h.Sum32()) > uint64(committeeSize)*uint64(math.MaxUint32) {
+	sha := sha256.Sum256(sig)
+	shaUint32 := binary.LittleEndian.Uint32(sha[:4])
+	// avoid division (no floating point) & do operations on uint64 to avoid overflow
+	if uint64(activeSetSize)*uint64(shaUint32) > uint64(committeeSize)*uint64(math.MaxUint32) {
 		log.Error("identity %v did not pass eligibility committeeSize=%v activeSetSize=%v", id, committeeSize, activeSetSize)
 		return false, nil
 	}
