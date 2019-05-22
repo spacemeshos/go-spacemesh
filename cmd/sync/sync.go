@@ -83,7 +83,7 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	poetDb := activation.NewPoetDb(database.NewMemDatabase())
+	poetDb := activation.NewPoetDb(database.NewMemDatabase(), lg.WithName("poetDb"))
 	validator := nipst.NewValidator(npstCfg, poetDb)
 	mshDb := mesh.NewPersistentMeshDB(app.Config.DataDir, lg.WithOptions(log.Nop))
 	atxdb := activation.NewActivationDb(database.NewMemDatabase(), activation.NewIdentityStore(iddbstore), mshDb, uint64(app.Config.CONSENSUS.LayersPerEpoch), validator, lg.WithName("atxDb").WithOptions(log.Nop))

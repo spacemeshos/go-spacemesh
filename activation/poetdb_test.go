@@ -5,6 +5,7 @@ import (
 	xdr "github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spacemeshos/sha256-simd"
 	"github.com/stretchr/testify/require"
@@ -16,7 +17,7 @@ import (
 func TestPoetDbHappyFlow(t *testing.T) {
 	r := require.New(t)
 
-	poetDb := NewPoetDb(database.NewMemDatabase())
+	poetDb := NewPoetDb(database.NewMemDatabase(), log.NewDefault("poetdb_test"))
 
 	file, err := os.Open(filepath.Join("test_resources", "poet.proof"))
 	r.NoError(err)
@@ -49,7 +50,7 @@ func TestPoetDbHappyFlow(t *testing.T) {
 func TestPoetDbInvalidPoetProof(t *testing.T) {
 	r := require.New(t)
 
-	poetDb := NewPoetDb(database.NewMemDatabase())
+	poetDb := NewPoetDb(database.NewMemDatabase(), log.NewDefault("poetdb_test"))
 
 	file, err := os.Open(filepath.Join("test_resources", "poet.proof"))
 	r.NoError(err)
@@ -69,11 +70,11 @@ func TestPoetDbInvalidPoetProof(t *testing.T) {
 func TestPoetDbNonExistingKeys(t *testing.T) {
 	r := require.New(t)
 
-	poetDb := NewPoetDb(database.NewMemDatabase())
+	poetDb := NewPoetDb(database.NewMemDatabase(), log.NewDefault("poetdb_test"))
 
 	_, err := poetDb.GetPoetProofRef(nil, &types.PoetRound{})
-	r.EqualError(err, "not found")
+	r.EqualError(err, "could not fetch poet proof: not found")
 
 	_, err = poetDb.GetMembershipByPoetProofRef(nil)
-	r.EqualError(err, "not found")
+	r.EqualError(err, "could not fetch poet proof: not found")
 }
