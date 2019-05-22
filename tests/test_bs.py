@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 
 from tests import queries
 from tests import pod
-from tests.fixtures import load_config, DeploymentInfo
+from tests.fixtures import load_config, DeploymentInfo, NetworkDeploymentInfo
 from tests.fixtures import init_session, set_namespace, set_docker_images, session_id
 import os
 from os import path
@@ -263,6 +263,17 @@ def setup_clients(request, setup_oracle, setup_poet, setup_bootstrap):
     return _setup_clients_in_namespace(testconfig['namespace'])
 
 
+@pytest.fixture(scope='module')
+def setup_network(request, init_session, setup_oracle, setup_poet,
+                  setup_bootstrap, setup_clients, add_curl, wait_genesis):
+
+    # This fixture deploy a complete Spacemesh network and returns only after genesis time is over
+    network_deployment = NetworkDeploymentInfo(dep_id=init_session,
+                                               bs_deployment_info = setup_bootstrap,
+                                               cl_deployment_info = setup_clients)
+    return network_deployment
+
+
 def add_single_client(deployment_id, container_specs):
 
     resp = pod.create_pod(CLIENT_POD_FILE,
@@ -382,7 +393,7 @@ def save_log_on_exit(request):
         (out, err) = p.communicate()
 
 
-@pytest.fixture()
+@pytest.fixture(scope='module')
 def add_curl(request, setup_bootstrap):
 
     def _run_curl_pod():
@@ -461,9 +472,9 @@ def test_gossip(setup_clients, add_curl):
     assert len(setup_clients.pods) == len(set(peers_for_gossip))
 
 
-def test_transaction(setup_clients, add_curl, wait_genesis):
+def test_transaction(setup_network):
     # choose client to run on
-    client_ip = setup_clients.pods[0]['pod_ip']
+    client_ip = setup_network.clients.pods[0]['pod_ip']
 
     api = 'v1/nonce'
     data = '{"address":"1"}'
@@ -497,9 +508,9 @@ def test_transaction(setup_clients, add_curl, wait_genesis):
     print("balance ok")
 
 
-def test_mining(setup_bootstrap, setup_clients, add_curl, wait_genesis):
+def test_mining(setup_network):
     # choose client to run on
-    client_ip = setup_clients.pods[0]['pod_ip']
+    client_ip = setup_network.clients.pods[0]['pod_ip']
 
     api = 'v1/nonce'
     data = '{"address":"1"}'
@@ -539,7 +550,7 @@ def test_mining(setup_bootstrap, setup_clients, add_curl, wait_genesis):
     atxmap = queries.get_atx_per_node(testconfig["namespace"])
     total_atxs = sum([len(atxmap[x]) for x in atxmap ])
 
-    total_pods = len(setup_clients.pods) + len(setup_bootstrap.pods)
+    total_pods = len(setup_network.clients.pods) + len(setup_network.bootstrap.pods)
 
     print("atx created " + str(total_atxs))
     print("blocks created " + str(total_blocks))
