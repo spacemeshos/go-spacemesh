@@ -155,22 +155,34 @@ func (s *Syncer) getLayerFromNeighbors(currenSyncLayer types.LayerID) (*types.La
 		s.Error("could not get layer block ids %v", currenSyncLayer, err)
 		return nil, err
 	}
-	output := FetchBlocks(s, blockIds)
+	output := s.fetchBlocks(blockIds)
 	blocksArr := make([]*types.Block, 0, len(blockIds))
+
+	//todo figure out all missing and batch request from
 	for out := range output {
 		mb := out.(*types.MiniBlock)
 		foundTxs, missing := s.GetTransactions(mb.TxIds)
-		fetchedTxs := s.fetchTxs(missing)
+
+		//map and sort txs
+		txMap := make(map[types.TransactionId]*types.SerializableTransaction)
+		if len(missing) > 0 {
+			for out := range s.fetchTxs(missing) {
+				ntxs := out.([]types.SerializableTransaction)
+				for _, tx := range ntxs {
+					txMap[types.GetTransactionId(&tx)] = &tx
+				}
+			}
+		}
 		txs := make([]*types.SerializableTransaction, len(mb.TxIds))
 		for _, t := range mb.TxIds {
 			if tx, ok := foundTxs[t]; ok {
 				txs = append(txs, tx)
 			} else {
-				txs = append(txs, fetchedTxs[t])
+				txs = append(txs, txMap[t])
 			}
 		}
 
-		block := &types.Block{BlockHeader: mb.BlockHeader, Txs: txs, ATXs: mb.ATXs}
+		block := &types.Block{BlockHeader: mb.BlockHeader, Txs: txs, ATXs: nil}
 		s.Debug("add block to layer %v", block)
 		s.AddBlock(block)
 		blocksArr = append(blocksArr, block)
@@ -252,7 +264,7 @@ func (s *Syncer) fetchLayerHashes(lyr types.LayerID) (map[string]p2p.Peer, error
 	return m, nil
 }
 
-func FetchBlocks(s *Syncer, blockIds chan types.BlockID) chan interface{} {
+func (s *Syncer) fetchBlocks(blockIds chan types.BlockID) chan interface{} {
 	// each worker goroutine tries to fetch a block iteratively from each peer
 	count := int32(s.Concurrency)
 	output := make(chan interface{})
@@ -265,23 +277,41 @@ func FetchBlocks(s *Syncer, blockIds chan types.BlockID) chan interface{} {
 	return output
 }
 
-func (s *Syncer) fetchTxs(txids []types.TransactionId) map[types.TransactionId]*types.SerializableTransaction {
+func (s *Syncer) fetchTxs(txids []types.TransactionId) chan interface{} {
+	if len(txids) == 0 {
+		panic("empty txids")
+	}
+	output := make(chan interface{})
+	mu := &sync.Once{}
+	count := int32(s.Concurrency)
+
+	//for i := 0; i < s.Concurrency; i++ {
+	wrk := NewNeighborhoodWorker(s, mu, &count, output, TxReqFactory(txids))
+	go wrk.Work()
+	//}
+	return output
+}
+
+func (s *Syncer) fetchATxs(txids []types.TransactionId) map[types.TransactionId]*types.SerializableTransaction {
 	if len(txids) == 0 {
 		s.Error("empty txids")
 		return nil
 	}
 	output := make(chan interface{})
 	mu := &sync.Once{}
-	count := int32(len(txids))
-	for _, id := range txids {
-		wrk := NewNeighborhoodWorker(s, mu, &count, output, TxReqFactory(id))
-		go wrk.Work()
-	}
+	count := int32(s.Concurrency)
+
+	//for i := 0; i < s.Concurrency; i++ {
+	wrk := NewNeighborhoodWorker(s, mu, &count, output, TxReqFactory(txids))
+	go wrk.Work()
+	//}
 
 	txs := make(map[types.TransactionId]*types.SerializableTransaction)
 	for out := range output {
-		tx := out.(*types.SerializableTransaction)
-		txs[types.GetTransactionId(tx)] = tx
+		ntxs := out.([]types.SerializableTransaction)
+		for _, tx := range ntxs {
+			txs[types.GetTransactionId(&tx)] = &tx
+		}
 	}
 	return txs
 }

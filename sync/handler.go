@@ -72,21 +72,25 @@ func newMiniBlockRequestHandler(msh *mesh.Mesh, logger log.Log) func(msg []byte)
 
 func newTxsRequestHandler(msh *mesh.Mesh, logger log.Log) func(msg []byte) []byte {
 	return func(msg []byte) []byte {
-		var txid types.TransactionId
-		copy(txid[:], msg[:32])
-		logger.Info("handle tx request %v", hex.EncodeToString(txid[:]))
-		txs, _ := msh.GetTransactions([]types.TransactionId{txid})
+		var txids []types.TransactionId
+		err := types.BytesToInterface(msg, &txids)
+		if err != nil {
+			logger.Error("Error marshalling request", err)
+			return nil
+		}
+		logger.Info("handle tx request ")
+		txs, _ := msh.GetTransactions(txids)
 		if txs == nil {
 			logger.Error("Error handling transactions request message, with ids: %d", msg)
 			return nil
 		}
 
-		//var transactions []*types.SerializableTransaction
-		//for _, value := range txs {
-		//	transactions = append(transactions, value)
-		//}
+		var transactions []types.SerializableTransaction
+		for _, value := range txs {
+			transactions = append(transactions, *value)
+		}
 
-		bbytes, err := types.InterfaceToBytes(txs[txid])
+		bbytes, err := types.InterfaceToBytes(transactions)
 		if err != nil {
 			logger.Error("Error marshaling transactions response message , with ids %v and err:", txs, err)
 			return nil

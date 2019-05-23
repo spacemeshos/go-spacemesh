@@ -86,20 +86,23 @@ func BlockReqFactory(blockIds chan types.BlockID) RequestFactory {
 }
 
 //todo batch requests
-func TxReqFactory(id types.TransactionId) RequestFactory {
+func TxReqFactory(ids []types.TransactionId) RequestFactory {
 	return func(s *server.MessageServer, peer p2p.Peer) (chan interface{}, error) {
 		ch := make(chan interface{}, 1)
 		foo := func(msg []byte) {
 			defer close(ch)
-			tx := &types.SerializableTransaction{}
-			err := types.BytesToInterface(msg, tx)
+			var tx []types.SerializableTransaction
+			err := types.BytesToInterface(msg, &tx)
 			if err != nil {
 				s.Error("could not unmarshal tx data %v", err)
 				return
 			}
 			ch <- tx
 		}
-		if err := s.SendRequest(TX, id[:], peer, foo); err != nil {
+
+		bts, _ := types.InterfaceToBytes(ids) //handle error
+
+		if err := s.SendRequest(TX, bts, peer, foo); err != nil {
 			return nil, err
 		}
 

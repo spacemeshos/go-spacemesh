@@ -4,9 +4,13 @@ import (
 	"errors"
 	"fmt"
 	"github.com/google/uuid"
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/address"
+	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/rand"
@@ -80,8 +84,28 @@ var rewardConf = mesh.Config{
 	5,
 }
 
+type MockIStore struct {
+}
+
+func (*MockIStore) StoreNodeIdentity(id types.NodeId) error {
+	return nil
+}
+
+func (*MockIStore) GetIdentity(id string) (types.NodeId, error) {
+	return types.NodeId{}, nil
+}
+
+type ValidatorMock struct{}
+
+func (*ValidatorMock) Validate(nipst *nipst.NIPST, expectedChallenge common.Hash) error {
+	return nil
+}
+
 func getMeshWithLevelDB(id string) *mesh.Mesh {
-	return mesh.NewPersistentMesh(fmt.Sprintf(Path+"%v/", id), rewardConf, &MeshValidatorMock{}, &stateMock{}, AtxDbMock{}, log.New(id, "", ""))
+	lg := log.New(id, "", "")
+	mshdb := mesh.NewMemMeshDB(lg)
+	atxdb := activation.NewActivationDb(database.NewMemDatabase(), &MockIStore{}, mshdb, uint64(10), &ValidatorMock{}, lg.WithName("atxDB"))
+	return mesh.NewPersistentMesh(fmt.Sprintf(Path+"%v/", id), rewardConf, &MeshValidatorMock{}, &stateMock{}, atxdb, lg)
 }
 
 func persistenceTeardown() {
@@ -89,7 +113,10 @@ func persistenceTeardown() {
 }
 
 func getMeshWithMemoryDB(id string) *mesh.Mesh {
-	return mesh.NewMemMesh(rewardConf, &MeshValidatorMock{}, &stateMock{}, AtxDbMock{}, log.New(id, "", ""))
+	lg := log.New(id, "", "")
+	mshdb := mesh.NewMemMeshDB(lg)
+	atxdb := activation.NewActivationDb(database.NewMemDatabase(), &MockIStore{}, mshdb, uint64(10), &ValidatorMock{}, lg.WithName("atxDB"))
+	return mesh.NewMemMesh(rewardConf, &MeshValidatorMock{}, &stateMock{}, atxdb, lg)
 }
 
 func getMesh(dbType, id string) *mesh.Mesh {
@@ -356,25 +383,31 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	res <- block3.ID()
 	close(res)
 	totalMisses := 0
-	output := FetchBlocks(syncObj2, res)
+	output := syncObj2.fetchBlocks(res)
 	for out := range output {
 		mb := out.(*types.MiniBlock)
 		foundTxs, missing := syncObj2.GetTransactions(mb.TxIds)
 		totalMisses += len(missing)
 
-		fetchedTxs := syncObj2.fetchTxs(missing)
+		txMap := make(map[types.TransactionId]*types.SerializableTransaction)
 
-		txs := make([]*types.SerializableTransaction, 0, len(mb.TxIds))
+		for out := range syncObj2.fetchTxs(missing) {
+			ntxs := out.([]types.SerializableTransaction)
+			for _, tx := range ntxs {
+				txMap[types.GetTransactionId(&tx)] = &tx
+			}
+		}
 
+		txs := make([]*types.SerializableTransaction, len(mb.TxIds))
 		for _, t := range mb.TxIds {
 			if tx, ok := foundTxs[t]; ok {
 				txs = append(txs, tx)
 			} else {
-				txs = append(txs, fetchedTxs[t])
+				txs = append(txs, txMap[t])
 			}
 		}
 
-		block := &types.Block{BlockHeader: mb.BlockHeader, Txs: txs, ATXs: mb.ATXs}
+		block := &types.Block{BlockHeader: mb.BlockHeader, Txs: txs}
 		syncObj2.Debug("add block to layer %v", block)
 		syncObj2.AddBlock(block)
 	}

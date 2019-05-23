@@ -51,8 +51,8 @@ type BlockHeader struct {
 
 type MiniBlock struct {
 	BlockHeader
-	TxIds []TransactionId
-	ATXs  []*ActivationTx
+	TxIds  []TransactionId
+	ATxIds []AtxId
 }
 
 type Block struct {

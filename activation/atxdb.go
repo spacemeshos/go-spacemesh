@@ -87,7 +87,7 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 	lastLayerOfLastEpoch := firstLayerOfLastEpoch + db.LayersPerEpoch - 1
 
 	traversalFunc := func(blkh *types.BlockHeader) error {
-		blk, err := db.meshDb.GetBlock(blkh.Id)
+		blk, err := db.meshDb.GetMiniBlock(blkh.Id)
 		if err != nil {
 			db.log.Error("cannot validate atx, block %v not found", blkh.Id)
 			return err
@@ -96,12 +96,12 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 		if blk.LayerIndex > lastLayerOfLastEpoch {
 			return nil
 		}
-		for _, atx := range blk.ATXs {
-			if _, found := set[atx.Id()]; found {
+		for _, id := range blk.ATxIds {
+			if _, found := set[id]; found {
 				continue
 			}
-			set[atx.Id()] = struct{}{}
-			atx, err := db.GetAtx(atx.Id())
+			set[id] = struct{}{}
+			atx, err := db.GetAtx(id)
 			if err == nil && atx.Valid {
 				counter++
 				db.log.Info("atx found traversing %v in block in layer %v", atx.ShortId(), blk.LayerIndex)
