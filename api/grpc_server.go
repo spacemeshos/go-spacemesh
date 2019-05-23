@@ -107,7 +107,7 @@ func (s SpacemeshGrpcService) BroadcastPoet(ctx context.Context, in *pb.BinaryMe
 	log.Info("GRPC Broadcast PoET msg")
 	err := s.Network.Broadcast(activation.PoetProofProtocol, in.Data)
 	if err != nil {
-		log.Warning("failed to broadcast PoET message")
+		log.Error("failed to broadcast PoET message: %v", err.Error())
 		return &pb.SimpleMessage{Value: err.Error()}, err
 	}
 	log.Info("PoET message broadcast succeeded")
