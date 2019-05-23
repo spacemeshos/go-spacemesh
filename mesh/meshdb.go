@@ -111,6 +111,25 @@ func (m *MeshDB) AddLayer(layer *types.Layer) error {
 	return nil
 }
 
+func (m *MeshDB) LayerMiniBlocks(index types.LayerID) ([]*types.MiniBlock, error) {
+	ids, err := m.layerBlockIds(index)
+	if err != nil {
+		return nil, err
+	}
+
+	blocks := make([]*types.MiniBlock, 0, len(ids))
+	for _, k := range ids {
+		block, err := m.GetMiniBlock(k)
+		if err != nil {
+			return nil, errors.New("could not retrieve block " + fmt.Sprint(k) + " " + err.Error())
+		}
+		blocks = append(blocks, block)
+	}
+
+	return blocks, nil
+
+}
+
 func (m *MeshDB) LayerBlockIds(index types.LayerID) ([]types.BlockID, error) {
 
 	idSet, err := m.layerBlockIds(index)

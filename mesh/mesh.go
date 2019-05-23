@@ -193,40 +193,46 @@ func (m *Mesh) GetBlock(id types.BlockID) (*types.Block, error) {
 		return nil, err
 	}
 
+	return m.MiniBlockToBlock(blk)
+}
+
+func (m *Mesh) MiniBlockToBlock(blk *types.MiniBlock) (*types.Block, error) {
 	txs, missingTxs := m.GetTransactions(blk.TxIds)
 	if missingTxs != nil {
-		m.Error("could not retrieve block %v transactions from database ")
-		return nil, err
+		return nil, errors.New("could not retrieve block %v transactions from database ")
 	}
 
 	var transactions []*types.SerializableTransaction
-	for _, value := range txs {
-		transactions = append(transactions, value)
+	for _, value := range blk.TxIds {
+		transactions = append(transactions, txs[value])
 	}
 
 	atxs := make([]*types.ActivationTx, 0, len(blk.ATxIds))
 	for _, id := range blk.ATxIds {
 		t, err := m.AtxDB.GetAtx(id)
 		if err != nil {
-			m.Error("could not retrieve block %v activation transactions from database ", blk.Id)
 			return nil, err
 		}
 		atxs = append(atxs, t)
 	}
-
 	res := blockFromMiniAndTxs(blk, transactions, atxs)
 	return res, nil
 }
 
 func (m *Mesh) GetLayer(index types.LayerID) (*types.Layer, error) {
-	bids, err := m.layerBlockIds(index)
+
+	mBlocks, err := m.LayerMiniBlocks(index)
 	if err != nil {
 		return nil, err
 	}
 
-	blocks, err := m.getLayerBlocks(bids)
-	if err != nil {
-		return nil, err
+	blocks := make([]*types.Block, 0, len(mBlocks))
+	for _, k := range mBlocks {
+		block, err := m.MiniBlockToBlock(k)
+		if err != nil {
+			return nil, errors.New("could not retrieve block " + fmt.Sprint(k) + " " + err.Error())
+		}
+		blocks = append(blocks, block)
 	}
 
 	l := types.NewLayer(types.LayerID(index))
@@ -236,7 +242,6 @@ func (m *Mesh) GetLayer(index types.LayerID) (*types.Layer, error) {
 }
 
 func (m *Mesh) getLayerBlocks(ids []types.BlockID) ([]*types.Block, error) {
-
 	blocks := make([]*types.Block, 0, len(ids))
 	for _, k := range ids {
 		block, err := m.GetBlock(k)
@@ -263,12 +268,6 @@ func (m *Mesh) ValidateLayer(lyr *types.Layer) {
 
 	if newPbase > oldPbase {
 		m.PushTransactions(oldPbase, newPbase)
-	}
-}
-
-func (m *Mesh) addAtxs(l *types.Layer) {
-	for _, blk := range l.Blocks() {
-		m.AtxDB.ProcessBlockATXs(blk)
 	}
 }
 

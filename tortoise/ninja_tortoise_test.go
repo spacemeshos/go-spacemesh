@@ -224,25 +224,24 @@ func TestNinjaTortoise_Sanity1(t *testing.T) {
 func sanity(mdb *mesh.MeshDB, layers int, layerSize int, patternSize int, badBlks float64) *ninjaTortoise {
 	lg := log.New("tortoise_test", "", "")
 	l1 := mesh.GenesisLayer()
+	var lyrs []*types.Layer
 	mdb.AddLayer(l1)
+	lyrs = append(lyrs, l1)
 	l := createLayerWithRandVoting(l1.Index()+1, []*types.Layer{l1}, layerSize, 1)
 	mdb.AddLayer(l)
-
+	lyrs = append(lyrs, l)
 	for i := 0; i < layers-1; i++ {
 		lyr := createLayerWithCorruptedPattern(l.Index()+1, l, layerSize, patternSize, badBlks)
 		start := time.Now()
 		mdb.AddLayer(lyr)
+		lyrs = append(lyrs, lyr)
 		lg.Debug("Time inserting layer into db: %v ", time.Since(start))
 		l = lyr
 	}
 
 	alg := NewNinjaTortoise(layerSize, mdb, lg)
 
-	for i := 0; i <= layers; i++ {
-		lyr, err := mdb.GetLayer(types.LayerID(i))
-		if err != nil {
-			alg.Error("could not get layer ", err)
-		}
+	for _, lyr := range lyrs {
 		start := time.Now()
 		alg.handleIncomingLayer(lyr)
 		alg.Debug("Time to process layer: %v ", time.Since(start))
