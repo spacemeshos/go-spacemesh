@@ -6,11 +6,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"math/big"
-	"time"
 )
 
 type BlockID uint64
-type TransactionId []byte
+type TransactionId [32]byte
 type LayerID uint64
 
 func (l LayerID) GetEpoch(layersPerEpoch uint16) EpochId {
@@ -89,19 +88,6 @@ func (t *SerializableTransaction) PriceAsBigInt() *big.Int {
 	return a
 }
 
-func NewBlock(id BlockID, layerID LayerID, minerID NodeId, coin bool, data []byte, ts time.Time, viewEdges []BlockID, blockVotes []BlockID, txs []*SerializableTransaction) *Block {
-	transactions := make([]*SerializableTransaction, 0, len(txs))
-	for _, tx := range txs {
-		transactions = append(transactions, tx)
-	}
-
-	b := Block{
-		BlockHeader: *newBlockHeader(id, layerID, minerID, coin, data, ts.UnixNano(), viewEdges, blockVotes),
-		Txs:         transactions,
-	}
-	return &b
-}
-
 func newBlockHeader(id BlockID, layerID LayerID, minerID NodeId, coin bool, data []byte, ts int64, viewEdges []BlockID, blockVotes []BlockID) *BlockHeader {
 	b := &BlockHeader{
 		Id:         id,
@@ -155,12 +141,12 @@ func (b *Block) AddTransaction(sr *SerializableTransaction) {
 }
 
 func (b *Block) Compare(bl *Block) bool {
-	bbytes, err := BlockAsBytes(*b)
+	bbytes, err := InterfaceToBytes(*b)
 	if err != nil {
 		log.Error("could not compare blocks %v", err)
 		return false
 	}
-	blbytes, err := BlockAsBytes(*bl)
+	blbytes, err := InterfaceToBytes(*bl)
 	if err != nil {
 		log.Error("could not compare blocks %v", err)
 		return false

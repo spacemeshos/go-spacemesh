@@ -4,16 +4,19 @@ import (
 	"errors"
 	"fmt"
 	"github.com/google/uuid"
+	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 	"math/big"
 	"os"
+	"strconv"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -51,7 +54,7 @@ func SyncMockFactory(number int, conf Configuration, name string, dbType string)
 		net := sim.NewNode()
 		name := fmt.Sprintf(name+"_%d", i)
 		l := log.New(name, "", "")
-		sync := NewSync(net, getMesh(dbType, name+"_"+time.Now().String()), BlockValidatorMock{}, conf, tk, l)
+		sync := NewSync(net, getMesh(dbType, name+"_"+time.Now().String()), BlockValidatorMock{}, TxValidatorMock{}, conf, tk, l)
 		ts.Start()
 		nodes = append(nodes, sync)
 		p2ps = append(p2ps, net)
@@ -138,7 +141,9 @@ func TestSyncProtocol_BlockRequest(t *testing.T) {
 	lid := types.LayerID(1)
 	block := types.NewExistingBlock(types.BlockID(uuid.New().ID()), lid, []byte("data data data"))
 	syncObj.AddBlock(block)
-	ch, err := sendBlockRequest(syncObj2.MessageServer, nodes[0].Node.PublicKey(), block.ID(), syncObj.Log)
+	p := nodes[0].Node.PublicKey()
+	ch, foo := blockRequest()
+	err := syncObj2.SendRequest(BLOCK, block.ID().ToBytes(), p, foo)
 	timeout := time.NewTimer(2 * time.Second)
 
 	select {
@@ -161,11 +166,15 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 	syncObj1.AddBlock(types.NewExistingBlock(types.BlockID(123), lid, nil))
 	//syncObj1.ValidateLayer(l) //this is to simulate the approval of the tortoise...
 	timeout := time.NewTimer(2 * time.Second)
-	ch, err := syncObj2.sendLayerHashRequest(nodes[0].Node.PublicKey(), lid)
+	pm1 := getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
+	syncObj2.Peers = pm1
+
+	wrk, output := NewPeerWorker(syncObj2, HashReqFactory(lid))
+	go wrk.Work()
+
 	select {
-	case hash := <-ch:
-		assert.NoError(t, err, "Should not return error")
-		assert.Equal(t, "some hash representing the layer", string(hash.hash), "wrong block")
+	case hash := <-output:
+		assert.Equal(t, "some hash representing the layer", string(hash.(*peerHashPair).hash), "wrong block")
 	case <-timeout.C:
 		assert.Fail(t, "no message received on channel")
 	}
@@ -190,12 +199,17 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 	syncObj1.AddBlock(types.NewExistingBlock(types.BlockID(111), lid, nil))
 	syncObj1.AddBlock(types.NewExistingBlock(types.BlockID(222), lid, nil))
 
-	ch, err := syncObj.sendLayerBlockIDsRequest(nodes[1].Node.PublicKey(), lid)
 	timeout := time.NewTimer(2 * time.Second)
 
+	pm1 := getPeersMock([]p2p.Peer{nodes[1].Node.PublicKey()})
+	syncObj.Peers = pm1
+
+	wrk, output := NewPeerWorker(syncObj, LayerIdsReqFactory(lid))
+	go wrk.Work()
+
 	select {
-	case ids := <-ch:
-		assert.NoError(t, err, "Should not return error")
+	case intr := <-output:
+		ids := intr.([]types.BlockID)
 		assert.Equal(t, len(layer.Blocks()), len(ids), "wrong block")
 		for _, a := range layer.Blocks() {
 			found := false
@@ -215,7 +229,7 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 
 }
 
-func TestSyncProtocol_FetchBlocks(t *testing.T) {
+func TestSyncProtocol_Requests(t *testing.T) {
 	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_FetchBlocks_", memoryDB)
 	syncObj1 := syncs[0]
 	defer syncObj1.Close()
@@ -232,66 +246,139 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	syncObj1.AddBlock(block2)
 	syncObj1.AddBlock(block3)
 
-	ch, err := syncObj2.sendLayerHashRequest(n1.PublicKey(), 0)
+	pm1 := getPeersMock([]p2p.Peer{nodes[0].Node.PublicKey()})
+	syncObj2.Peers = pm1
+
+	lid := types.LayerID(0)
+
+	wrk, ch := NewPeerWorker(syncObj2, HashReqFactory(lid))
+	go wrk.Work()
+
 	timeout := time.NewTimer(3 * time.Second)
-	var hash *peerHashPair
 	select {
 
 	case <-timeout.C:
 		t.Error("timed out ")
-	case hash = <-ch:
-		assert.NoError(t, err, "Should not return error")
-		assert.Equal(t, "some hash representing the layer", string(hash.hash), "wrong block")
+	case hash := <-ch:
+		assert.Equal(t, "some hash representing the layer", string(hash.(*peerHashPair).hash), "wrong block")
 	}
-	ch2, err2 := sendBlockRequest(syncObj2.MessageServer, n1.PublicKey(), block1.ID(), syncObj2.Log)
+
+	ch2, foo := blockRequest()
+	err2 := syncObj2.SendRequest(BLOCK, block1.ID().ToBytes(), n1.PublicKey(), foo)
+
 	assert.NoError(t, err2, "Should not return error")
 	timeout = time.NewTimer(3 * time.Second)
 	select {
-
 	case <-timeout.C:
 		t.Error("timed out ")
 	case msg2 := <-ch2:
 		assert.Equal(t, msg2.ID(), block1.ID(), "wrong block")
 	}
-	ch, err = syncObj2.sendLayerHashRequest(n1.PublicKey(), 1)
-	assert.NoError(t, err, "Should not return error")
-	assert.Equal(t, "some hash representing the layer", string(hash.hash), "wrong block")
-	select {
 
+	lid1 := types.LayerID(1)
+	wrk, ch = NewPeerWorker(syncObj2, HashReqFactory(lid1))
+	go wrk.Work()
+	select {
 	case <-timeout.C:
 		t.Error("timed out ")
-	case <-ch:
+	case hash := <-ch:
+		assert.Equal(t, "some hash representing the layer", string(hash.(*peerHashPair).hash), "wrong block")
 	}
 
-	ch2, err2 = sendBlockRequest(syncObj2.MessageServer, n1.PublicKey(), block2.ID(), syncObj2.Log)
+	ch2, foo = blockRequest()
+	err2 = syncObj2.SendRequest(BLOCK, block2.ID().ToBytes(), n1.PublicKey(), foo)
+
 	assert.NoError(t, err2, "Should not return error")
 	timeout = time.NewTimer(3 * time.Second)
 	select {
-
 	case <-timeout.C:
 		t.Error("timed out ")
 	case msg2 := <-ch2:
 		assert.Equal(t, msg2.ID(), block2.ID(), "wrong block")
 	}
-	ch, err = syncObj2.sendLayerHashRequest(n1.PublicKey(), 2)
-	assert.NoError(t, err, "Should not return error")
-	assert.Equal(t, "some hash representing the layer", string(hash.hash), "wrong block")
-	select {
 
+	lid2 := types.LayerID(2)
+	wrk, ch3 := NewPeerWorker(syncObj2, HashReqFactory(lid2))
+	go wrk.Work()
+	select {
 	case <-timeout.C:
 		t.Error("timed out ")
-	case <-ch:
+	case hash := <-ch3:
+		assert.Equal(t, "some hash representing the layer", string(hash.(*peerHashPair).hash), "wrong block")
 	}
 
-	ch2, err2 = sendBlockRequest(syncObj2.MessageServer, n1.PublicKey(), block3.ID(), syncObj2.Log)
+	ch4, foo := blockRequest()
+	err2 = syncObj2.SendRequest(BLOCK, block3.ID().ToBytes(), n1.PublicKey(), foo)
 	assert.NoError(t, err2, "Should not return error")
 	timeout = time.NewTimer(5 * time.Second)
 	select {
 	case <-timeout.C:
 		t.Error("timed out ")
-	case msg2 := <-ch2:
-		assert.Equal(t, msg2.ID(), block3.ID(), "wrong block")
+	case bk := <-ch4:
+		assert.Equal(t, bk.ID(), block3.ID(), "wrong block")
 	}
+}
+
+func TestSyncProtocol_FetchBlocks(t *testing.T) {
+	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_FetchBlocks_", memoryDB)
+	syncObj1 := syncs[0]
+	defer syncObj1.Close()
+	syncObj2 := syncs[1]
+	defer syncObj2.Close()
+	pm1 := getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
+	syncObj1.Log.Info("started fetch_blocks")
+	syncObj2.Peers = pm1 //override peers with
+
+	block1 := types.NewExistingBlock(types.BlockID(123), 0, nil)
+	block2 := types.NewExistingBlock(types.BlockID(321), 1, nil)
+	block3 := types.NewExistingBlock(types.BlockID(222), 2, nil)
+
+	tx1 := tx()
+	tx2 := tx()
+	tx3 := tx()
+	tx4 := tx()
+	tx5 := tx()
+	tx6 := tx()
+	tx7 := tx()
+	tx8 := tx()
+
+	addTransactionToBlock(block1, []*types.SerializableTransaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8})
+	addTransactionToBlock(block2, []*types.SerializableTransaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8})
+	addTransactionToBlock(block3, []*types.SerializableTransaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8})
+
+	syncObj1.AddBlock(block1)
+	syncObj1.AddBlock(block2)
+	syncObj1.AddBlock(block3)
+
+	res := make(chan types.BlockID, 3)
+	res <- block1.ID()
+	res <- block2.ID()
+	res <- block3.ID()
+	close(res)
+	totalMisses := 0
+	output := FetchBlocks(syncObj2, res)
+	for out := range output {
+		mb := out.(*types.MiniBlock)
+		foundTxs, missing := syncObj2.GetTransactions(mb.TxIds)
+		totalMisses += len(missing)
+
+		fetchedTxs := syncObj2.fetchTxs(missing)
+
+		txs := make([]*types.SerializableTransaction, 0, len(mb.TxIds))
+
+		for _, t := range mb.TxIds {
+			if tx, ok := foundTxs[t]; ok {
+				txs = append(txs, tx)
+			} else {
+				txs = append(txs, fetchedTxs[t])
+			}
+		}
+
+		block := &types.Block{BlockHeader: mb.BlockHeader, Txs: txs, ATXs: mb.ATXs}
+		syncObj2.Debug("add block to layer %v", block)
+		syncObj2.AddBlock(block)
+	}
+	assert.True(t, totalMisses == 8, "to many misses ")
 }
 
 func TestSyncProtocol_SyncTwoNodes(t *testing.T) {
@@ -334,6 +421,7 @@ loop:
 			return
 		default:
 			if syncObj2.VerifiedLayer() == 5 {
+
 				t.Log("done!")
 				break loop
 			}
@@ -459,7 +547,8 @@ func Test_TwoNodes_SyncIntegrationSuite(t *testing.T) {
 	tk := ts.Subscribe()
 	sis.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
 		l := log.New(fmt.Sprintf("%s_%d", sis.name, atomic.LoadUint32(&i)), "", "")
-		sync := NewSync(s, getMesh(memoryDB, fmt.Sprintf("%s_%s", sis.name, time.Now())), BlockValidatorMock{}, conf, tk, l)
+		msh := getMesh(memoryDB, fmt.Sprintf("%s_%s", sis.name, time.Now()))
+		sync := NewSync(s, msh, BlockValidatorMock{}, TxValidatorMock{}, conf, tk, l)
 		sis.syncers = append(sis.syncers, sync)
 		ts.Start()
 		atomic.AddUint32(&i, 1)
@@ -540,7 +629,8 @@ func Test_Multiple_SyncIntegrationSuite(t *testing.T) {
 	tk := ts.Subscribe()
 	sis.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
 		l := log.New(fmt.Sprintf("%s_%d", sis.name, atomic.LoadUint32(&i)), "", "")
-		sync := NewSync(s, getMesh(memoryDB, fmt.Sprintf("%s_%d_%s", sis.name, atomic.LoadUint32(&i), time.Now())), BlockValidatorMock{}, conf, tk, l)
+		msh := getMesh(memoryDB, fmt.Sprintf("%s_%d_%s", sis.name, atomic.LoadUint32(&i), time.Now()))
+		sync := NewSync(s, msh, BlockValidatorMock{}, TxValidatorMock{}, conf, tk, l)
 		ts.Start()
 		sis.syncers = append(sis.syncers, sync)
 		atomic.AddUint32(&i, 1)
@@ -612,4 +702,22 @@ end:
 	log.Debug("sync 4 ", syncObj4.VerifiedLayer())
 	log.Debug("sync 5 ", syncObj5.VerifiedLayer())
 	return
+}
+
+func addTransactionToBlock(bl *types.Block, txs []*types.SerializableTransaction) {
+	for i := 0; i < len(txs); i++ {
+		//log.Info("adding tx with gas price %v nonce %v", gasPrice, i)
+		bl.Txs = append(bl.Txs, txs[i])
+	}
+}
+
+func tx() *types.SerializableTransaction {
+	gasPrice := rand.Int63n(100)
+	addr := rand.Int63n(1000000)
+	tx := types.NewSerializableTransaction(1, address.HexToAddress("1"),
+		address.HexToAddress(strconv.FormatUint(uint64(addr), 10)),
+		big.NewInt(10),
+		big.NewInt(gasPrice),
+		100)
+	return tx
 }

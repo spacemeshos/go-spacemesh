@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -83,15 +84,15 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 				bl.Error("got empty message while listening to gossip blocks")
 				break
 			}
-
-			blk, err := types.BytesAsBlock(data.Bytes())
+			blk := &types.Block{}
+			err := types.BytesToInterface(data.Bytes(), blk)
 			if err != nil {
 				bl.Error("received invalid block %v", data.Bytes())
 				break
 			}
 
 			bl.Log.With().Info("got new block", log.Uint64("id", uint64(blk.Id)), log.Int("txs", len(blk.Txs)))
-			eligible, err := bl.BlockEligible(&blk)
+			eligible, err := bl.BlockEligible(&blk.BlockHeader)
 			if err != nil {
 				bl.Error("block eligible check failed")
 				break
@@ -101,13 +102,13 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 				break
 			}
 
-			if err := bl.AddBlock(&blk); err != nil {
+			if err := bl.AddBlock(blk); err != nil {
 				bl.Info("Block already received")
 				break
 			}
 			bl.Info("added block to database %v", blk.Id)
 			data.ReportValidation(NewBlockProtocol)
-			bl.addUnknownToQueue(&blk)
+			bl.addUnknownToQueue(blk)
 		}
 	}
 }
@@ -116,7 +117,7 @@ func (bl *BlockListener) run() {
 	for {
 		select {
 		case <-bl.exit:
-			bl.Log.Info("run stopped")
+			bl.Log.Info("Work stopped")
 			return
 		case id := <-bl.unknownQueue:
 			bl.Log.Debug("fetch block ", id, "buffer is at ", len(bl.unknownQueue)/cap(bl.unknownQueue), " capacity")
@@ -132,12 +133,13 @@ func (bl *BlockListener) run() {
 //todo handle case where no peer knows the block
 func (bl *BlockListener) FetchBlock(id types.BlockID) {
 	for _, p := range bl.GetPeers() {
-		if ch, err := sendBlockRequest(bl.MessageServer, p, id, bl.Log); err == nil {
+		ch, foo := blockRequest()
+		if err := bl.SendRequest(BLOCK, id.ToBytes(), p, foo); err == nil {
 			block := <-ch
 			if block == nil {
 				continue
 			}
-			eligible, err := bl.BlockEligible(block)
+			eligible, err := bl.BlockEligible(&block.BlockHeader)
 			if err != nil {
 				panic("return error!") // TODO: return error
 			}
@@ -156,5 +158,27 @@ func (bl *BlockListener) addUnknownToQueue(b *types.Block) {
 		if _, err := bl.GetBlock(block); err != nil {
 			bl.unknownQueue <- block
 		}
+	}
+}
+
+func newBlockRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg []byte) []byte {
+	return func(msg []byte) []byte {
+		logger.Debug("handle block request")
+		blockid := types.BlockID(common.BytesToUint64(msg))
+		blk, err := layers.GetBlock(blockid)
+		if err != nil {
+			logger.Error("Error handling Block request message, with BlockID: %d and err: %v", blockid, err)
+			return nil
+		}
+
+		bbytes, err := types.InterfaceToBytes(*blk)
+		if err != nil {
+			logger.Error("Error marshaling response message (FetchBlockResp), with BlockID: %d, LayerID: %d and err:", blk.ID(), blk.Layer(), err)
+			return nil
+		}
+
+		logger.Debug("return block %v", blk)
+
+		return bbytes
 	}
 }
