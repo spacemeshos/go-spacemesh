@@ -128,7 +128,7 @@ func (cp *ConnectionPool) handleNewConnection(rPub p2pcrypto.PublicKey, newConn 
 		srcPub = rPub.String()
 		dstPub = cp.localPub.String()
 	}
-	cp.net.Logger().Info("new connection %s -> %s. id=%s, sessionID=%v", srcPub, dstPub, newConn.ID(), newConn.Session().ID())
+	cp.net.Logger().With().Info("new_connection", log.String("src",  srcPub), log.String("dst", dstPub))
 	// check if there isn't already same connection (possible if the second connection is a Remote connection)
 	curConn, ok := cp.connections[rPub.String()]
 	if ok {
@@ -141,12 +141,12 @@ func (cp *ConnectionPool) handleNewConnection(rPub p2pcrypto.PublicKey, newConn 
 				// TODO Is it a potential threat (session hijacking)? Should we keep the existing connection?
 				cp.net.Logger().Warning("new connection was created with same session ID as an existing connection, keeping the new connection (assuming existing connection is stale). existing session ID=%v, new session ID=%v, remote=%s", curConn.Session().ID(), newConn.Session().ID(), rPub)
 			} else {
-				cp.net.Logger().Info("connection created while connection already exists between peers, closing existing connection. existing session ID=%v, new session ID=%v, remote=%s", curConn.Session().ID(), newConn.Session().ID(), rPub)
+				cp.net.Logger().Warning("connection created while connection already exists between peers, closing existing connection. existing session ID=%v, new session ID=%v, remote=%s", curConn.Session().ID(), newConn.Session().ID(), rPub)
 			}
 			closeConn = curConn
 			cp.connections[rPub.String()] = newConn
 		} else { // newConn < curConn
-			cp.net.Logger().Info("connection created while connection already exists between peers, closing new connection. existing session ID=%v, new session ID=%v, remote=%s", curConn.Session().ID(), newConn.Session().ID(), rPub)
+			cp.net.Logger().Warning("connection created while connection already exists between peers, closing new connection. existing session ID=%v, new session ID=%v, remote=%s", curConn.Session().ID(), newConn.Session().ID(), rPub)
 			closeConn = newConn
 		}
 		cp.connMutex.Unlock()
@@ -166,7 +166,7 @@ func (cp *ConnectionPool) handleNewConnection(rPub p2pcrypto.PublicKey, newConn 
 }
 
 func (cp *ConnectionPool) handleClosedConnection(conn net.Connection) {
-	cp.net.Logger().Debug("connection %v with %v was closed (sessionID: %v)", conn.String(), conn.RemotePublicKey().String(), conn.Session().ID())
+	cp.net.Logger().Info("connection_closed", log.String("id", conn.String()), log.String("remote", conn.RemotePublicKey().String()))
 	cp.connMutex.Lock()
 	rPub := conn.RemotePublicKey().String()
 	cur, ok := cp.connections[rPub]

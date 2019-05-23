@@ -171,7 +171,7 @@ func (c *FormattedConnection) Closed() bool {
 
 func (c *FormattedConnection) shutdown(err error) {
 	c.closed = true
-	c.logger.Warning("Shutting down conn with %v err=%v", c.RemotePublicKey().String(), err)
+	c.logger.Debug("Shutting down conn with %v err=%v", c.RemotePublicKey().String(), err)
 	if err != ErrConnectionClosed {
 		c.networker.publishClosingConnection(c)
 	}
