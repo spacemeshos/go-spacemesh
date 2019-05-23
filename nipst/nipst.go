@@ -110,7 +110,7 @@ type NIPSTBuilder struct {
 }
 
 type PoetDb interface {
-	GetPoetProofRef(poetId []byte, round *types.PoetRound) ([]byte, error)
+	GetPoetProofRef(poetId []byte, roundId uint64) ([]byte, error)
 	GetMembershipByPoetProofRef(poetRoot []byte) (map[common.Hash]bool, error)
 }
 
@@ -216,7 +216,7 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *common.Hash) (*types.NIPST, error)
 
 	// Phase 1: receive proofs from PoET service
 	if nb.state.PoetProofRef == nil {
-		poetProofRef, err := nb.poetDb.GetPoetProofRef(nb.state.PoetId, nb.state.PoetRound)
+		poetProofRef, err := nb.poetDb.GetPoetProofRef(nb.state.PoetId, nb.state.PoetRound.Id)
 		if err != nil {
 			// TODO(noamnelke): handle timeout
 			return nil, fmt.Errorf("failed to find PoET proof for round: %d and id: %x",

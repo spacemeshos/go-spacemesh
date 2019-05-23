@@ -32,7 +32,7 @@ func TestPoetDbHappyFlow(t *testing.T) {
 	err = poetDb.ValidateAndStorePoetProof(poetProof, poetId, roundId, nil)
 	r.NoError(err)
 
-	ref, err := poetDb.GetPoetProofRef(poetId, &types.PoetRound{Id: roundId})
+	ref, err := poetDb.GetPoetProofRef(poetId, roundId)
 	r.NoError(err)
 
 	var proofBuf bytes.Buffer
@@ -72,7 +72,7 @@ func TestPoetDbNonExistingKeys(t *testing.T) {
 
 	poetDb := NewPoetDb(database.NewMemDatabase(), log.NewDefault("poetdb_test"))
 
-	_, err := poetDb.GetPoetProofRef(nil, &types.PoetRound{})
+	_, err := poetDb.GetPoetProofRef(nil, 0)
 	r.EqualError(err, "could not fetch poet proof: not found")
 
 	_, err = poetDb.GetMembershipByPoetProofRef(nil)
