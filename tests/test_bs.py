@@ -269,8 +269,10 @@ def setup_network(request, init_session, setup_oracle, setup_poet,
 
     # This fixture deploy a complete Spacemesh network and returns only after genesis time is over
     network_deployment = NetworkDeploymentInfo(dep_id=init_session,
-                                               bs_deployment_info = setup_bootstrap,
-                                               cl_deployment_info = setup_clients)
+                                               oracle_deployment_info=setup_oracle,
+                                               poet_deployment_info=setup_poet,
+                                               bs_deployment_info=setup_bootstrap,
+                                               cl_deployment_info=setup_clients)
     return network_deployment
 
 
