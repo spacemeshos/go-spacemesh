@@ -569,7 +569,7 @@ func Test_TwoNodes_SyncIntegrationSuite(t *testing.T) {
 	sis := &syncIntegrationTwoNodes{}
 	sis.BootstrappedNodeCount = 2
 	sis.BootstrapNodesCount = 1
-	sis.NeighborsCount = 2
+	sis.NeighborsCount = 1
 	sis.name = t.Name()
 	i := uint32(1)
 	tick := 200 * time.Millisecond
@@ -651,7 +651,7 @@ func Test_Multiple_SyncIntegrationSuite(t *testing.T) {
 	sis := &syncIntegrationMultipleNodes{}
 	sis.BootstrappedNodeCount = 3
 	sis.BootstrapNodesCount = 2
-	sis.NeighborsCount = 3
+	sis.NeighborsCount = 2
 	sis.name = t.Name()
 	i := uint32(1)
 	tick := 2 * time.Second
