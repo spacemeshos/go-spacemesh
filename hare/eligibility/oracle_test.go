@@ -132,6 +132,7 @@ func Test_ActiveSetSize(t *testing.T) {
 	m[types.EpochId(1)] = 3
 	m[types.EpochId(2)] = 5
 	o := New(&mockValueProvider{1, nil}, &mockBufferedActiveSetProvider{m}, buildVerifier(true, nil), 10)
+	assert.Equal(t, o.activeSetProvider.ActiveSetSize(0), o.activeSetSize(1))
 	l := 19 + k
 	assert.Equal(t, uint32(2), o.activeSetSize(l))
 	assert.Equal(t, uint32(3), o.activeSetSize(l+10))

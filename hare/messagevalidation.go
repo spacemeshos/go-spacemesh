@@ -12,7 +12,7 @@ type messageValidator interface {
 
 type eligibilityValidator struct {
 	oracle Rolacle
-	n      int
+	n      int // the maximal expected committee size
 	log.Log
 }
 

@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/amcl/BLS381"
 	"github.com/spacemeshos/go-spacemesh/config"
@@ -48,6 +47,7 @@ func safeLayer(layer types.LayerID) types.LayerID {
 	return config.Genesis
 }
 
+// New returns a new eligibility oracle instance
 func New(beacon valueProvider, asProvider activeSetProvider, vrf VerifierFunc, layersPerEpoch uint16) *Oracle {
 	return &Oracle{
 		beacon:            beacon,
@@ -84,22 +84,30 @@ func (o *Oracle) buildVRFMessage(id types.NodeId, layer types.LayerID, round int
 }
 
 func (o *Oracle) activeSetSize(layer types.LayerID) uint32 {
-	fmt.Println("the epoc is: ", safeLayer(layer).GetEpoch(o.layersPerEpoch))
-	return o.activeSetProvider.ActiveSetSize(safeLayer(layer).GetEpoch(o.layersPerEpoch) - 1)
+	// TODO: make sure min(ep)=0
+	ep := safeLayer(layer).GetEpoch(o.layersPerEpoch)
+	if ep == 0 {
+		return o.activeSetProvider.ActiveSetSize(0)
+	}
+	return o.activeSetProvider.ActiveSetSize(ep - 1)
 }
 
 // Eligible checks if id is eligible on the given layer where msg is the VRF message, sig is the role proof and assuming commSize as the expected committee size
 func (o *Oracle) Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeId, sig []byte) (bool, error) {
 	msg, err := o.buildVRFMessage(id, layer, round)
-
 	if err != nil {
 		log.Error("Could not build VRF message")
 		return false, err
 	}
 
 	// validate message
-	if res, err := o.vrf(msg, sig, id.VRFPublicKey); !res {
+	res, err := o.vrf(msg, sig, id.VRFPublicKey)
+	if err != nil {
 		log.Error("VRF verification failed: %v", err)
+		return false, err
+	}
+	if !res {
+		log.Warning("id %v did not pass VRF verification", id.Key)
 		return false, err
 	}
 

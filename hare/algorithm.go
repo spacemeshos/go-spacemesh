@@ -601,7 +601,7 @@ func (proc *ConsensusProcess) isEligible() bool {
 func (proc *ConsensusProcess) currentRole() Role {
 	res, err := proc.oracle.Eligible(types.LayerID(proc.instanceId), proc.k, expectedCommitteeSize(proc.k, proc.cfg.N), types.NodeId{Key: proc.signing.PublicKey().String()}, proc.roleProof())
 	if err != nil {
-		proc.Error("Error checking eligibility: %v", err)
+		proc.Error("Error checking our eligibility: %v", err)
 		return Passive
 	}
 
