@@ -30,7 +30,7 @@ func (fo *FixedRolacle) Export(id uint32, committeeSize int) map[string]struct{}
 	// normalize committee size
 	size := committeeSize
 	if committeeSize > total {
-		log.Error("committee size bigger than the number of clients. Expected %v<=%v", committeeSize, total)
+		log.Warning("committee size bigger than the number of clients. Expected %v<=%v", committeeSize, total)
 		size = total
 	}
 
@@ -107,7 +107,7 @@ func (fo *FixedRolacle) generateEligibility(expCom int) map[string]struct{} {
 
 	expHonest := expCom/2 + 1
 	if expHonest > len(fo.honest) {
-		log.Error("Not enough registered honest. Expected %v<=%v", expHonest, len(fo.honest))
+		log.Warning("Not enough registered honest. Expected %v<=%v", expHonest, len(fo.honest))
 		expHonest = len(fo.honest)
 	}
 
@@ -117,9 +117,9 @@ func (fo *FixedRolacle) generateEligibility(expCom int) map[string]struct{} {
 	expFaulty := expCom - expHonest
 	if expFaulty > len(fo.faulty) {
 		if len(fo.faulty) > 0 { // not enough
-			log.Warning("Not enough registered dishonest to pick from. Expected %v<=%v. Picking %v instead", expFaulty, len(fo.faulty), len(fo.faulty))
+			log.Debug("Not enough registered dishonest to pick from. Expected %v<=%v. Picking %v instead", expFaulty, len(fo.faulty), len(fo.faulty))
 		} else { // no faulty at all - acceptable
-			log.Info("No registered dishonest to pick from. Picking honest instead")
+			log.Debug("No registered dishonest to pick from. Picking honest instead")
 		}
 		expFaulty = len(fo.faulty)
 	}
@@ -145,7 +145,7 @@ func (fo *FixedRolacle) Eligible(id uint32, committeeSize int, pubKey string, pr
 	// normalize committee size
 	size := committeeSize
 	if committeeSize > total {
-		log.Error("committee size bigger than the number of clients. Expected %v<=%v", committeeSize, total)
+		log.Warning("committee size bigger than the number of clients. Expected %v<=%v", committeeSize, total)
 		size = total
 	}
 
