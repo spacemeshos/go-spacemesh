@@ -149,7 +149,7 @@ func (n *UDPNet) listenToUDPNetworkMessages(listener net.PacketConn) {
 			if temp, ok := err.(interface {
 				Temporary() bool
 			}); ok && temp.Temporary() {
-				n.logger.Warning("Temporary UDP error", err)
+				n.logger.Debug("Temporary UDP error", err)
 				continue
 			} else {
 				n.logger.With().Error("Listen UDP error, stopping server", log.Err(err))
@@ -165,20 +165,20 @@ func (n *UDPNet) listenToUDPNetworkMessages(listener net.PacketConn) {
 		msg, pk, err := p2pcrypto.ExtractPubkey(copybuf)
 
 		if err != nil {
-			n.logger.Warning("error can't extract public key from udp message. (addr=%v), err=%v", addr.String(), err)
+			n.logger.Debug("error can't extract public key from udp message. (addr=%v), err=%v", addr.String(), err)
 			continue
 		}
 
 		ns := n.cache.GetOrCreate(pk)
 
 		if ns == nil {
-			n.logger.Warning("coul'd not create session with %v:%v skipping message..", addr.String(), pk.String())
+			n.logger.Debug("coul'd not create session with %v:%v skipping message..", addr.String(), pk.String())
 			continue
 		}
 
 		final, err := ns.OpenMessage(msg)
 		if err != nil {
-			n.logger.Warning("skipping udp with session message err=%v msg=", err, copybuf)
+			n.logger.Debug("skipping udp with session message err=%v msg=", err, copybuf)
 			// todo: remove malfunctioning session, ban ip ?
 			continue
 		}

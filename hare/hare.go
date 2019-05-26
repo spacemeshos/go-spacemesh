@@ -251,7 +251,7 @@ func (h *Hare) tickLoop() {
 
 // Start starts listening on layers to participate in.
 func (h *Hare) Start() error {
-	h.Log.Info("Starting hare")
+	h.Log.Info("Starting %v", protoName)
 	err := h.broker.Start()
 	if err != nil {
 		return err
