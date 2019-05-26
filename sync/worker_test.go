@@ -19,13 +19,15 @@ func TestNewPeerWorker(t *testing.T) {
 	syncObj1.AddBlock(types.NewExistingBlock(types.BlockID(123), lid, nil))
 	//syncObj1.ValidateLayer(l) //this is to simulate the approval of the tortoise...
 	timeout := time.NewTimer(2 * time.Second)
-	pm1 := getPeersMock([]p2p.Peer{nodes[3].PublicKey(), nodes[2].PublicKey(), nodes[0].PublicKey()})
-	syncObj2.Peers = pm1
 
 	ch := make(chan types.BlockID, 1)
 	ch <- types.BlockID(123)
-	wrk, output := NewPeerWorker(syncObj2, BlockReqFactory(ch))
-	go wrk.Work()
+	wrk, output := NewPeersWorker(syncObj2, []p2p.Peer{nodes[3].PublicKey(), nodes[2].PublicKey(), nodes[0].PublicKey()}, BlockReqFactory(ch))
+	w := sync.WaitGroup{}
+	go func() {
+		wrk.Work()
+		w.Done()
+	}()
 
 	select {
 	case item := <-output:
@@ -33,7 +35,7 @@ func TestNewPeerWorker(t *testing.T) {
 	case <-timeout.C:
 		assert.Fail(t, "no message received on channel")
 	}
-
+	w.Wait()
 }
 
 func TestNewNeighborhoodWorker(t *testing.T) {
@@ -56,7 +58,12 @@ func TestNewNeighborhoodWorker(t *testing.T) {
 	ch := make(chan types.BlockID, 1)
 	ch <- types.BlockID(123)
 	wrk := NewNeighborhoodWorker(syncObj2, mu, &count, output, BlockReqFactory(ch))
-	go wrk.Work()
+	w := sync.WaitGroup{}
+	w.Add(1)
+	go func() {
+		wrk.Work()
+		w.Done()
+	}()
 
 	select {
 	case item := <-output:
@@ -64,5 +71,5 @@ func TestNewNeighborhoodWorker(t *testing.T) {
 	case <-timeout.C:
 		assert.Fail(t, "no message received on channel")
 	}
-
+	w.Wait()
 }

@@ -109,3 +109,27 @@ func TxReqFactory(ids []types.TransactionId) RequestFactory {
 		return ch, nil
 	}
 }
+
+func ATxReqFactory(ids []types.AtxId) RequestFactory {
+	return func(s *server.MessageServer, peer p2p.Peer) (chan interface{}, error) {
+		ch := make(chan interface{}, 1)
+		foo := func(msg []byte) {
+			defer close(ch)
+			var tx []types.ActivationTx
+			err := types.BytesToInterface(msg, &tx)
+			if err != nil {
+				s.Error("could not unmarshal tx data %v", err)
+				return
+			}
+			ch <- tx
+		}
+
+		bts, _ := types.InterfaceToBytes(ids) //handle error
+
+		if err := s.SendRequest(ATX, bts, peer, foo); err != nil {
+			return nil, err
+		}
+
+		return ch, nil
+	}
+}

@@ -2,6 +2,7 @@ package sync
 
 import (
 	"errors"
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -64,6 +65,7 @@ const (
 	LAYER_HASH   server.MessageType = 2
 	LAYER_IDS    server.MessageType = 3
 	TX           server.MessageType = 4
+	ATX          server.MessageType = 5
 	syncProtocol                    = "/sync/1.0/"
 )
 
@@ -150,39 +152,43 @@ func (s *Syncer) Synchronise() {
 }
 
 func (s *Syncer) getLayerFromNeighbors(currenSyncLayer types.LayerID) (*types.Layer, error) {
-	blockIds, err := s.getLayerBlockIDs(types.LayerID(currenSyncLayer))
+
+	//fetch layer hash from each peer
+	m, err := s.fetchLayerHashes(currenSyncLayer)
+
+	if err != nil {
+		s.Error("could not get LayerHashes for layer: %v", currenSyncLayer)
+		return nil, err
+	}
+
+	//fetch ids for each hash
+	blockIds, err := s.fetchLayerBlockIds(m, currenSyncLayer)
 	if err != nil {
 		s.Error("could not get layer block ids %v", currenSyncLayer, err)
 		return nil, err
 	}
-	output := s.fetchBlocks(blockIds)
+
+	//todo dont fetch blocks we know from gossip ?
+	output := s.fetchWithFactory(BlockReqFactory(blockIds), s.Concurrency)
 	blocksArr := make([]*types.Block, 0, len(blockIds))
 
 	//todo figure out all missing and batch request from
 	for out := range output {
 		mb := out.(*types.MiniBlock)
-		foundTxs, missing := s.GetTransactions(mb.TxIds)
 
-		//map and sort txs
-		txMap := make(map[types.TransactionId]*types.SerializableTransaction)
-		if len(missing) > 0 {
-			for out := range s.fetchTxs(missing) {
-				ntxs := out.([]types.SerializableTransaction)
-				for _, tx := range ntxs {
-					txMap[types.GetTransactionId(&tx)] = &tx
-				}
-			}
-		}
-		txs := make([]*types.SerializableTransaction, len(mb.TxIds))
-		for _, t := range mb.TxIds {
-			if tx, ok := foundTxs[t]; ok {
-				txs = append(txs, tx)
-			} else {
-				txs = append(txs, txMap[t])
-			}
+		//sync Transactions
+		txs, err := s.Txs(mb)
+		if err != nil {
+			return nil, err
 		}
 
-		block := &types.Block{BlockHeader: mb.BlockHeader, Txs: txs, ATXs: nil}
+		//sync ATxs
+		atxs, err := s.ATXs(mb)
+		if err != nil {
+			return nil, err
+		}
+
+		block := &types.Block{BlockHeader: mb.BlockHeader, Txs: txs, ATXs: atxs}
 		s.Debug("add block to layer %v", block)
 		s.AddBlock(block)
 		blocksArr = append(blocksArr, block)
@@ -192,39 +198,66 @@ func (s *Syncer) getLayerFromNeighbors(currenSyncLayer types.LayerID) (*types.La
 	return types.NewExistingLayer(types.LayerID(currenSyncLayer), blocksArr), nil
 }
 
-type peerHashPair struct {
-	peer p2p.Peer
-	hash []byte
+func (s *Syncer) Txs(mb *types.MiniBlock) ([]*types.SerializableTransaction, error) {
+	foundTxs, missing := s.GetTransactions(mb.TxIds)
+	//map and sort txs
+	txMap := make(map[types.TransactionId]*types.SerializableTransaction)
+	if len(missing) > 0 {
+		for out := range s.fetchWithFactory(TxReqFactory(missing), 1) {
+			ntxs := out.([]types.SerializableTransaction)
+			for _, tx := range ntxs {
+				txMap[types.GetTransactionId(&tx)] = &tx
+			}
+		}
+	}
+
+	txs := make([]*types.SerializableTransaction, len(mb.TxIds))
+	for _, t := range mb.TxIds {
+		if tx, ok := foundTxs[t]; ok {
+			txs = append(txs, tx)
+		} else if tx, ok := txMap[t]; ok {
+			txs = append(txs, tx)
+		} else {
+			return nil, errors.New(fmt.Sprintf("could not fetch tx %v", t))
+		}
+	}
+	return txs, nil
 }
 
-func (s *Syncer) getLayerBlockIDs(index types.LayerID) (chan types.BlockID, error) {
-
-	m, err := s.fetchLayerHashes(index)
-
-	if err != nil {
-		s.Error("could not get LayerHashes for layer: %v", index)
-		return nil, err
+func (s *Syncer) ATXs(mb *types.MiniBlock) ([]*types.ActivationTx, error) {
+	foundTxs, missing := s.GetATXs(mb.ATxIds)
+	//map and sort txs
+	txMap := make(map[types.AtxId]*types.ActivationTx)
+	if len(missing) > 0 {
+		for out := range s.fetchWithFactory(ATxReqFactory(missing), 1) {
+			ntxs := out.([]types.ActivationTx)
+			for _, atx := range ntxs {
+				txMap[atx.Id()] = &atx
+			}
+		}
 	}
-	return s.fetchLayerBlockIds(m, index)
-}
 
-func keysAsChan(idSet map[types.BlockID]struct{}) chan types.BlockID {
-	res := make(chan types.BlockID, len(idSet))
-	defer close(res)
-	for id := range idSet {
-		res <- id
+	atxs := make([]*types.ActivationTx, len(mb.TxIds))
+	for _, t := range mb.ATxIds {
+		if tx, ok := foundTxs[t]; ok {
+			atxs = append(atxs, tx)
+		} else if tx, ok := txMap[t]; ok {
+			atxs = append(atxs, tx)
+		} else {
+			return nil, errors.New(fmt.Sprintf("could not fetch atx %v", t))
+		}
 	}
-	return res
+	return atxs, nil
 }
 
 func (s *Syncer) fetchLayerBlockIds(m map[string]p2p.Peer, lyr types.LayerID) (chan types.BlockID, error) {
-	// each worker goroutine tries to fetch a block iteratively from each peer
-	peers := s.GetPeers()
-	if len(peers) == 0 {
-		return nil, errors.New("no peers")
+	//send request to different users according to returned hashes
+	v := make([]p2p.Peer, 0, len(m))
+	for _, value := range m {
+		v = append(v, value)
 	}
 
-	wrk, output := NewPeerWorker(s, LayerIdsReqFactory(lyr))
+	wrk, output := NewPeersWorker(s, v, LayerIdsReqFactory(lyr))
 	go wrk.Work()
 
 	idSet := make(map[types.BlockID]struct{}, s.LayerSize)
@@ -235,19 +268,28 @@ func (s *Syncer) fetchLayerBlockIds(m map[string]p2p.Peer, lyr types.LayerID) (c
 		}
 	}
 
-	if len(m) == 0 {
-		return nil, errors.New("could not get layer hashes id from any peer")
+	if len(idSet) == 0 {
+		return nil, errors.New("could not get layer ids from any peer")
 	}
 
-	return keysAsChan(idSet), nil
+	//convert to chan
+	res := make(chan types.BlockID, len(idSet))
+	defer close(res)
+	for id := range idSet {
+		res <- id
+	}
+	return res, nil
+}
+
+type peerHashPair struct {
+	peer p2p.Peer
+	hash []byte
 }
 
 func (s *Syncer) fetchLayerHashes(lyr types.LayerID) (map[string]p2p.Peer, error) {
-	// each worker goroutine tries to fetch a block iteratively from each peer
-
-	wrk, output := NewPeerWorker(s, HashReqFactory(lyr))
+	// get layer hash from each peer
+	wrk, output := NewPeersWorker(s, s.GetPeers(), HashReqFactory(lyr))
 	go wrk.Work()
-
 	m := make(map[string]p2p.Peer)
 	for out := range output {
 		pair := out.(*peerHashPair)
@@ -256,62 +298,21 @@ func (s *Syncer) fetchLayerHashes(lyr types.LayerID) (map[string]p2p.Peer, error
 		}
 		m[string(pair.hash)] = pair.peer
 	}
-
 	if len(m) == 0 {
 		return nil, errors.New("could not get layer hashes from any peer")
 	}
-
 	return m, nil
 }
 
-func (s *Syncer) fetchBlocks(blockIds chan types.BlockID) chan interface{} {
+func (s *Syncer) fetchWithFactory(refac RequestFactory, workers int) chan interface{} {
 	// each worker goroutine tries to fetch a block iteratively from each peer
-	count := int32(s.Concurrency)
+	count := int32(workers)
 	output := make(chan interface{})
 	mu := &sync.Once{}
-	for i := 0; i < s.Concurrency; i++ {
-		wrk := NewNeighborhoodWorker(s, mu, &count, output, BlockReqFactory(blockIds))
+	for i := 0; i < workers; i++ {
+		wrk := NewNeighborhoodWorker(s, mu, &count, output, refac)
 		go wrk.Work()
 	}
 
 	return output
-}
-
-func (s *Syncer) fetchTxs(txids []types.TransactionId) chan interface{} {
-	if len(txids) == 0 {
-		panic("empty txids")
-	}
-	output := make(chan interface{})
-	mu := &sync.Once{}
-	count := int32(s.Concurrency)
-
-	//for i := 0; i < s.Concurrency; i++ {
-	wrk := NewNeighborhoodWorker(s, mu, &count, output, TxReqFactory(txids))
-	go wrk.Work()
-	//}
-	return output
-}
-
-func (s *Syncer) fetchATxs(txids []types.TransactionId) map[types.TransactionId]*types.SerializableTransaction {
-	if len(txids) == 0 {
-		s.Error("empty txids")
-		return nil
-	}
-	output := make(chan interface{})
-	mu := &sync.Once{}
-	count := int32(s.Concurrency)
-
-	//for i := 0; i < s.Concurrency; i++ {
-	wrk := NewNeighborhoodWorker(s, mu, &count, output, TxReqFactory(txids))
-	go wrk.Work()
-	//}
-
-	txs := make(map[types.TransactionId]*types.SerializableTransaction)
-	for out := range output {
-		ntxs := out.([]types.SerializableTransaction)
-		for _, tx := range ntxs {
-			txs[types.GetTransactionId(&tx)] = &tx
-		}
-	}
-	return txs
 }

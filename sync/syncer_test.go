@@ -193,10 +193,8 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 	syncObj1.AddBlock(types.NewExistingBlock(types.BlockID(123), lid, nil))
 	//syncObj1.ValidateLayer(l) //this is to simulate the approval of the tortoise...
 	timeout := time.NewTimer(2 * time.Second)
-	pm1 := getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
-	syncObj2.Peers = pm1
 
-	wrk, output := NewPeerWorker(syncObj2, HashReqFactory(lid))
+	wrk, output := NewPeersWorker(syncObj2, []p2p.Peer{nodes[0].PublicKey()}, HashReqFactory(lid))
 	go wrk.Work()
 
 	select {
@@ -228,10 +226,7 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 
 	timeout := time.NewTimer(2 * time.Second)
 
-	pm1 := getPeersMock([]p2p.Peer{nodes[1].Node.PublicKey()})
-	syncObj.Peers = pm1
-
-	wrk, output := NewPeerWorker(syncObj, LayerIdsReqFactory(lid))
+	wrk, output := NewPeersWorker(syncObj, []p2p.Peer{nodes[1].Node.PublicKey()}, LayerIdsReqFactory(lid))
 	go wrk.Work()
 
 	select {
@@ -273,12 +268,9 @@ func TestSyncProtocol_Requests(t *testing.T) {
 	syncObj1.AddBlock(block2)
 	syncObj1.AddBlock(block3)
 
-	pm1 := getPeersMock([]p2p.Peer{nodes[0].Node.PublicKey()})
-	syncObj2.Peers = pm1
-
 	lid := types.LayerID(0)
 
-	wrk, ch := NewPeerWorker(syncObj2, HashReqFactory(lid))
+	wrk, ch := NewPeersWorker(syncObj2, []p2p.Peer{nodes[0].Node.PublicKey()}, HashReqFactory(lid))
 	go wrk.Work()
 
 	timeout := time.NewTimer(3 * time.Second)
@@ -303,7 +295,7 @@ func TestSyncProtocol_Requests(t *testing.T) {
 	}
 
 	lid1 := types.LayerID(1)
-	wrk, ch = NewPeerWorker(syncObj2, HashReqFactory(lid1))
+	wrk, ch = NewPeersWorker(syncObj2, []p2p.Peer{nodes[0].Node.PublicKey()}, HashReqFactory(lid1))
 	go wrk.Work()
 	select {
 	case <-timeout.C:
@@ -325,7 +317,7 @@ func TestSyncProtocol_Requests(t *testing.T) {
 	}
 
 	lid2 := types.LayerID(2)
-	wrk, ch3 := NewPeerWorker(syncObj2, HashReqFactory(lid2))
+	wrk, ch3 := NewPeersWorker(syncObj2, []p2p.Peer{nodes[0].Node.PublicKey()}, HashReqFactory(lid2))
 	go wrk.Work()
 	select {
 	case <-timeout.C:
@@ -383,7 +375,7 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	res <- block3.ID()
 	close(res)
 	totalMisses := 0
-	output := syncObj2.fetchBlocks(res)
+	output := syncObj2.fetchWithFactory(BlockReqFactory(res), 1)
 	for out := range output {
 		mb := out.(*types.MiniBlock)
 		foundTxs, missing := syncObj2.GetTransactions(mb.TxIds)
@@ -391,7 +383,7 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 
 		txMap := make(map[types.TransactionId]*types.SerializableTransaction)
 
-		for out := range syncObj2.fetchTxs(missing) {
+		for out := range syncObj2.fetchWithFactory(TxReqFactory(missing), 1) {
 			ntxs := out.([]types.SerializableTransaction)
 			for _, tx := range ntxs {
 				txMap[types.GetTransactionId(&tx)] = &tx

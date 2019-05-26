@@ -1,6 +1,7 @@
 package mesh
 
 import (
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/address"
@@ -207,15 +208,17 @@ func (m *Mesh) MiniBlockToBlock(blk *types.MiniBlock) (*types.Block, error) {
 		transactions = append(transactions, txs[value])
 	}
 
-	atxs := make([]*types.ActivationTx, 0, len(blk.ATxIds))
-	for _, id := range blk.ATxIds {
-		t, err := m.AtxDB.GetAtx(id)
-		if err != nil {
-			return nil, err
-		}
-		atxs = append(atxs, t)
+	atxs, missingATxs := m.GetATXs(blk.ATxIds)
+	if missingATxs != nil {
+		return nil, errors.New("could not retrieve block %v transactions from database ")
 	}
-	res := blockFromMiniAndTxs(blk, transactions, atxs)
+
+	var activations []*types.ActivationTx
+	for _, value := range blk.ATxIds {
+		activations = append(activations, atxs[value])
+	}
+
+	res := blockFromMiniAndTxs(blk, transactions, activations)
 	return res, nil
 }
 
@@ -339,11 +342,11 @@ func (m *Mesh) GetLatestView() []types.BlockID {
 
 func (m *Mesh) AddBlock(blk *types.Block) error {
 	m.Debug("add block %d", blk.ID())
+	m.AtxDB.ProcessBlockATXs(blk)
 	if err := m.MeshDB.AddBlock(blk); err != nil {
 		m.Error("failed to add block %v  %v", blk.ID(), err)
 		return err
 	}
-	m.AtxDB.ProcessBlockATXs(blk)
 	m.SetLatestLayer(blk.Layer())
 	//new block add to orphans
 	m.handleOrphanBlocks(blk)
@@ -491,4 +494,18 @@ func GenesisLayer() *types.Layer {
 	l := types.NewLayer(Genesis)
 	l.AddBlock(CreateGenesisBlock())
 	return l
+}
+
+func (m *Mesh) GetATXs(atxIds []types.AtxId) (map[types.AtxId]*types.ActivationTx, []types.AtxId) {
+	var mIds []types.AtxId
+	atxs := make(map[types.AtxId]*types.ActivationTx, len(atxIds))
+	for _, id := range atxIds {
+		t, err := m.AtxDB.GetAtx(id)
+		if err != nil {
+			m.Error("could not fetch atx %v %v", hex.EncodeToString(id.Bytes()), err)
+			mIds = append(mIds, id)
+		}
+		atxs[t.Id()] = t
+	}
+	return atxs, nil
 }
