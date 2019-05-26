@@ -127,6 +127,7 @@ func NewSync(srv service.Service, layers *mesh.Mesh, bv BlockValidator, tv TxVal
 	s.RegisterBytesMsgHandler(BLOCK, newMiniBlockRequestHandler(layers, logger))
 	s.RegisterBytesMsgHandler(LAYER_IDS, newLayerBlockIdsRequestHandler(layers, logger))
 	s.RegisterBytesMsgHandler(TX, newTxsRequestHandler(layers, logger))
+	s.RegisterBytesMsgHandler(ATX, newATxsRequestHandler(layers, logger))
 	return &s
 }
 
@@ -211,7 +212,7 @@ func (s *Syncer) Txs(mb *types.MiniBlock) ([]*types.SerializableTransaction, err
 		}
 	}
 
-	txs := make([]*types.SerializableTransaction, len(mb.TxIds))
+	txs := make([]*types.SerializableTransaction, 0, len(mb.TxIds))
 	for _, t := range mb.TxIds {
 		if tx, ok := foundTxs[t]; ok {
 			txs = append(txs, tx)
@@ -229,7 +230,8 @@ func (s *Syncer) ATXs(mb *types.MiniBlock) ([]*types.ActivationTx, error) {
 	//map and sort txs
 	txMap := make(map[types.AtxId]*types.ActivationTx)
 	if len(missing) > 0 {
-		for out := range s.fetchWithFactory(ATxReqFactory(missing), 1) {
+		output := s.fetchWithFactory(ATxReqFactory(missing), 1)
+		for out := range output {
 			ntxs := out.([]types.ActivationTx)
 			for _, atx := range ntxs {
 				txMap[atx.Id()] = &atx
@@ -237,7 +239,7 @@ func (s *Syncer) ATXs(mb *types.MiniBlock) ([]*types.ActivationTx, error) {
 		}
 	}
 
-	atxs := make([]*types.ActivationTx, len(mb.TxIds))
+	atxs := make([]*types.ActivationTx, 0, len(mb.TxIds))
 	for _, t := range mb.ATxIds {
 		if tx, ok := foundTxs[t]; ok {
 			atxs = append(atxs, tx)

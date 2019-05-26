@@ -125,7 +125,6 @@ func ATxReqFactory(ids []types.AtxId) RequestFactory {
 		}
 
 		bts, _ := types.InterfaceToBytes(ids) //handle error
-
 		if err := s.SendRequest(ATX, bts, peer, foo); err != nil {
 			return nil, err
 		}

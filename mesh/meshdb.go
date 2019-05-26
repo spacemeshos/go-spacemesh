@@ -319,7 +319,7 @@ func (m *MeshDB) writeTransactions(blk *types.Block) ([]types.TransactionId, err
 	for _, t := range blk.Txs {
 		bytes, err := types.TransactionAsBytes(t)
 		if err != nil {
-			m.Error("could not write tx %v to database ", err)
+			m.Error("could not marshall tx %v to bytes ", err)
 			return nil, err
 		}
 
@@ -336,10 +336,11 @@ func (m *MeshDB) writeTransactions(blk *types.Block) ([]types.TransactionId, err
 }
 
 func (m *MeshDB) GetTransactions(transactions []types.TransactionId) (
-	ts map[types.TransactionId]*types.SerializableTransaction,
-	mIds []types.TransactionId) {
+	map[types.TransactionId]*types.SerializableTransaction,
+	[]types.TransactionId) {
 
-	ts = make(map[types.TransactionId]*types.SerializableTransaction, len(transactions))
+	var mIds []types.TransactionId
+	ts := make(map[types.TransactionId]*types.SerializableTransaction, len(transactions))
 	for _, id := range transactions {
 		t, err := m.GetTransaction(id)
 		if err != nil {

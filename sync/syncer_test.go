@@ -352,6 +352,18 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	block2 := types.NewExistingBlock(types.BlockID(321), 1, nil)
 	block3 := types.NewExistingBlock(types.BlockID(222), 2, nil)
 
+	atx := types.NewActivationTx(
+		types.NodeId{"whatwhatwhatwhat", []byte("bbb")},
+		1,
+		types.AtxId{},
+		5,
+		1,
+		types.AtxId{},
+		5,
+		[]types.BlockID{1, 2, 3},
+		nipst.NewNIPSTWithChallenge(&common.Hash{}),
+		false)
+
 	tx1 := tx()
 	tx2 := tx()
 	tx3 := tx()
@@ -361,6 +373,9 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	tx7 := tx()
 	tx8 := tx()
 
+	block1.AddAtx(atx)
+	block2.AddAtx(atx)
+	block3.AddAtx(atx)
 	addTransactionToBlock(block1, []*types.SerializableTransaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8})
 	addTransactionToBlock(block2, []*types.SerializableTransaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8})
 	addTransactionToBlock(block3, []*types.SerializableTransaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8})
@@ -374,36 +389,21 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	res <- block2.ID()
 	res <- block3.ID()
 	close(res)
-	totalMisses := 0
 	output := syncObj2.fetchWithFactory(BlockReqFactory(res), 1)
 	for out := range output {
 		mb := out.(*types.MiniBlock)
-		foundTxs, missing := syncObj2.GetTransactions(mb.TxIds)
-		totalMisses += len(missing)
-
-		txMap := make(map[types.TransactionId]*types.SerializableTransaction)
-
-		for out := range syncObj2.fetchWithFactory(TxReqFactory(missing), 1) {
-			ntxs := out.([]types.SerializableTransaction)
-			for _, tx := range ntxs {
-				txMap[types.GetTransactionId(&tx)] = &tx
-			}
+		txs, err := syncObj2.Txs(mb)
+		if err != nil {
+			t.Error("could not fetch all txs", err)
 		}
-
-		txs := make([]*types.SerializableTransaction, len(mb.TxIds))
-		for _, t := range mb.TxIds {
-			if tx, ok := foundTxs[t]; ok {
-				txs = append(txs, tx)
-			} else {
-				txs = append(txs, txMap[t])
-			}
+		atxs, err := syncObj2.ATXs(mb)
+		if err != nil {
+			t.Error("could not fetch all atxs", err)
 		}
-
-		block := &types.Block{BlockHeader: mb.BlockHeader, Txs: txs}
+		block := &types.Block{BlockHeader: mb.BlockHeader, Txs: txs, ATXs: atxs}
 		syncObj2.Debug("add block to layer %v", block)
 		syncObj2.AddBlock(block)
 	}
-	assert.True(t, totalMisses == 8, "to many misses ")
 }
 
 func TestSyncProtocol_SyncTwoNodes(t *testing.T) {

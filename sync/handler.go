@@ -101,3 +101,35 @@ func newTxsRequestHandler(msh *mesh.Mesh, logger log.Log) func(msg []byte) []byt
 		return bbytes
 	}
 }
+
+func newATxsRequestHandler(msh *mesh.Mesh, logger log.Log) func(msg []byte) []byte {
+	return func(msg []byte) []byte {
+		var txids []types.AtxId
+		err := types.BytesToInterface(msg, &txids)
+		if err != nil {
+			logger.Error("Error marshalling request", err)
+			return nil
+		}
+		logger.Info("handle tx request ")
+		txs, _ := msh.GetATXs(txids)
+		if txs == nil {
+			logger.Error("Error handling transactions request message, with ids: %d", msg)
+			return nil
+		}
+
+		var transactions []types.ActivationTx
+		for _, value := range txs {
+			transactions = append(transactions, *value)
+		}
+
+		bbytes, err := types.InterfaceToBytes(transactions)
+		if err != nil {
+			logger.Error("Error marshaling transactions response message , with ids %v and err:", txs, err)
+			return nil
+		}
+
+		logger.Debug("tx %v", hex.EncodeToString(bbytes))
+
+		return bbytes
+	}
+}

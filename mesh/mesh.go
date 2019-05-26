@@ -342,7 +342,7 @@ func (m *Mesh) GetLatestView() []types.BlockID {
 
 func (m *Mesh) AddBlock(blk *types.Block) error {
 	m.Debug("add block %d", blk.ID())
-	m.AtxDB.ProcessBlockATXs(blk)
+	m.AtxDB.ProcessBlockATXs(blk) // change this to return error if process failed
 	if err := m.MeshDB.AddBlock(blk); err != nil {
 		m.Error("failed to add block %v  %v", blk.ID(), err)
 		return err
@@ -502,10 +502,12 @@ func (m *Mesh) GetATXs(atxIds []types.AtxId) (map[types.AtxId]*types.ActivationT
 	for _, id := range atxIds {
 		t, err := m.AtxDB.GetAtx(id)
 		if err != nil {
-			m.Error("could not fetch atx %v %v", hex.EncodeToString(id.Bytes()), err)
+			m.Error("could not get atx %v %v from database ", hex.EncodeToString(id.Bytes()), err)
 			mIds = append(mIds, id)
+		} else {
+			atxs[t.Id()] = t
 		}
-		atxs[t.Id()] = t
+
 	}
-	return atxs, nil
+	return atxs, mIds
 }
