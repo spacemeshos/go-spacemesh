@@ -128,7 +128,7 @@ func (cp *ConnectionPool) handleNewConnection(rPub p2pcrypto.PublicKey, newConn 
 		srcPub = rPub.String()
 		dstPub = cp.localPub.String()
 	}
-	cp.net.Logger().With().Info("new_connection", log.String("src",  srcPub), log.String("dst", dstPub))
+	cp.net.Logger().With().Info("new_connection", log.String("src", srcPub), log.String("dst", dstPub))
 	// check if there isn't already same connection (possible if the second connection is a Remote connection)
 	curConn, ok := cp.connections[rPub.String()]
 	if ok {
