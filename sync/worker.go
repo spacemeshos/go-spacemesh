@@ -31,9 +31,8 @@ func (w *worker) Work() {
 	}
 }
 
-func NewPeersWorker(s *Syncer, peers []p2p.Peer, reqFactory RequestFactory) (worker, chan interface{}) {
+func NewPeersWorker(s *Syncer, peers []p2p.Peer, mu *sync.Once, reqFactory RequestFactory) (worker, chan interface{}) {
 	count := int32(1)
-	mu := &sync.Once{}
 	numOfpeers := len(peers)
 	output := make(chan interface{}, numOfpeers)
 	peerfuncs := []func(){}
@@ -47,7 +46,7 @@ func NewPeersWorker(s *Syncer, peers []p2p.Peer, reqFactory RequestFactory) (wor
 			s.Info("send request Peer: %v", peer)
 			ch, err := reqFactory(s.MessageServer, peer)
 			if err != nil {
-				s.Error("RequestFactory failed, ", err)
+				s.Error("request failed, ", err)
 				return
 			}
 

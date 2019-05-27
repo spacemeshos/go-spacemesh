@@ -10,7 +10,7 @@ import (
 )
 
 func TestNewPeerWorker(t *testing.T) {
-	syncs, nodes := SyncMockFactory(4, conf, "TestSyncProtocol_LayerHashRequest_", memoryDB)
+	syncs, nodes := SyncMockFactory(4, conf, "TestNewPeerWorker", memoryDB)
 	syncObj1 := syncs[0]
 	defer syncObj1.Close()
 	syncObj2 := syncs[1]
@@ -22,12 +22,9 @@ func TestNewPeerWorker(t *testing.T) {
 
 	ch := make(chan types.BlockID, 1)
 	ch <- types.BlockID(123)
-	wrk, output := NewPeersWorker(syncObj2, []p2p.Peer{nodes[3].PublicKey(), nodes[2].PublicKey(), nodes[0].PublicKey()}, BlockReqFactory(ch))
-	w := sync.WaitGroup{}
-	go func() {
-		wrk.Work()
-		w.Done()
-	}()
+	wrk, output := NewPeersWorker(syncObj2, []p2p.Peer{nodes[3].PublicKey(), nodes[2].PublicKey(), nodes[0].PublicKey()}, &sync.Once{}, BlockReqFactory(ch))
+
+	go wrk.Work()
 
 	select {
 	case item := <-output:
@@ -35,11 +32,11 @@ func TestNewPeerWorker(t *testing.T) {
 	case <-timeout.C:
 		assert.Fail(t, "no message received on channel")
 	}
-	w.Wait()
+	wrk.Wait()
 }
 
 func TestNewNeighborhoodWorker(t *testing.T) {
-	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_LayerHashRequest_", memoryDB)
+	syncs, nodes := SyncMockFactory(2, conf, "TestNewNeighborhoodWorker", memoryDB)
 	syncObj1 := syncs[0]
 	defer syncObj1.Close()
 	syncObj2 := syncs[1]
@@ -53,17 +50,11 @@ func TestNewNeighborhoodWorker(t *testing.T) {
 
 	count := int32(1)
 	output := make(chan interface{})
-	mu := &sync.Once{}
 
 	ch := make(chan types.BlockID, 1)
 	ch <- types.BlockID(123)
-	wrk := NewNeighborhoodWorker(syncObj2, mu, &count, output, BlockReqFactory(ch))
-	w := sync.WaitGroup{}
-	w.Add(1)
-	go func() {
-		wrk.Work()
-		w.Done()
-	}()
+	wrk := NewNeighborhoodWorker(syncObj2, &sync.Once{}, &count, output, BlockReqFactory(ch))
+	go wrk.Work()
 
 	select {
 	case item := <-output:
@@ -71,5 +62,5 @@ func TestNewNeighborhoodWorker(t *testing.T) {
 	case <-timeout.C:
 		assert.Fail(t, "no message received on channel")
 	}
-	w.Wait()
+	wrk.Wait()
 }

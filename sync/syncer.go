@@ -61,7 +61,7 @@ func (s *Syncer) Close() {
 const (
 	IDLE         uint32             = 0
 	RUNNING      uint32             = 1
-	BLOCK        server.MessageType = 1
+	MiniBLOCK    server.MessageType = 1
 	LAYER_HASH   server.MessageType = 2
 	LAYER_IDS    server.MessageType = 3
 	TX           server.MessageType = 4
@@ -124,7 +124,7 @@ func NewSync(srv service.Service, layers *mesh.Mesh, bv BlockValidator, tv TxVal
 	}
 
 	s.RegisterBytesMsgHandler(LAYER_HASH, newLayerHashRequestHandler(layers, logger))
-	s.RegisterBytesMsgHandler(BLOCK, newMiniBlockRequestHandler(layers, logger))
+	s.RegisterBytesMsgHandler(MiniBLOCK, newMiniBlockRequestHandler(layers, logger))
 	s.RegisterBytesMsgHandler(LAYER_IDS, newLayerBlockIdsRequestHandler(layers, logger))
 	s.RegisterBytesMsgHandler(TX, newTxsRequestHandler(layers, logger))
 	s.RegisterBytesMsgHandler(ATX, newATxsRequestHandler(layers, logger))
@@ -259,11 +259,15 @@ func (s *Syncer) fetchLayerBlockIds(m map[string]p2p.Peer, lyr types.LayerID) (c
 		v = append(v, value)
 	}
 
-	wrk, output := NewPeersWorker(s, v, LayerIdsReqFactory(lyr))
+	wrk, output := NewPeersWorker(s, v, &sync.Once{}, LayerIdsReqFactory(lyr))
 	go wrk.Work()
 
 	idSet := make(map[types.BlockID]struct{}, s.LayerSize)
 	out := <-output
+	if out == nil {
+		return nil, errors.New("could not get layer ids from any peer")
+	}
+
 	for _, bid := range out.([]types.BlockID) {
 		if _, exists := idSet[bid]; !exists {
 			idSet[bid] = struct{}{}
@@ -290,7 +294,7 @@ type peerHashPair struct {
 
 func (s *Syncer) fetchLayerHashes(lyr types.LayerID) (map[string]p2p.Peer, error) {
 	// get layer hash from each peer
-	wrk, output := NewPeersWorker(s, s.GetPeers(), HashReqFactory(lyr))
+	wrk, output := NewPeersWorker(s, s.GetPeers(), &sync.Once{}, HashReqFactory(lyr))
 	go wrk.Work()
 	m := make(map[string]p2p.Peer)
 	for out := range output {

@@ -97,20 +97,6 @@ func (m *MeshDB) GetMiniBlock(id types.BlockID) (*types.MiniBlock, error) {
 	return mbk, err
 }
 
-//todo this overwrites the previous value if it exists
-func (m *MeshDB) AddLayer(layer *types.Layer) error {
-	if len(layer.Blocks()) == 0 {
-		m.layers.Put(layer.Index().ToBytes(), []byte{})
-		return nil
-	}
-
-	//add blocks to mDB
-	for _, bl := range layer.Blocks() {
-		m.writeBlock(bl)
-	}
-	return nil
-}
-
 func (m *MeshDB) LayerMiniBlocks(index types.LayerID) ([]*types.MiniBlock, error) {
 	ids, err := m.layerBlockIds(index)
 	if err != nil {
@@ -325,11 +311,11 @@ func (m *MeshDB) writeTransactions(blk *types.Block) ([]types.TransactionId, err
 
 		id := types.GetTransactionId(t)
 		if err := m.transactions.Put(id[:], bytes); err != nil {
-			m.Error("could not write tx %v to database ", err)
+			m.Error("could not write tx %v to database ", hex.EncodeToString(id[:]), err)
 			return nil, err
 		}
 		txids = append(txids, id)
-		m.Debug("write tx %v to db", t)
+		m.Debug("write tx %v to db", hex.EncodeToString(id[:]))
 	}
 
 	return txids, nil

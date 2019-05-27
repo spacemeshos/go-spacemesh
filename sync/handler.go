@@ -54,7 +54,7 @@ func newMiniBlockRequestHandler(msh *mesh.Mesh, logger log.Log) func(msg []byte)
 		blockid := types.BlockID(common.BytesToUint64(msg))
 		blk, err := msh.GetMiniBlock(blockid)
 		if err != nil {
-			logger.Error("Error handling Block request message, with BlockID: %d and err: %v", blockid, err)
+			logger.Error("Error handling MiniBlock request message, with BlockID: %d and err: %v", blockid, err)
 			return nil
 		}
 
@@ -64,7 +64,7 @@ func newMiniBlockRequestHandler(msh *mesh.Mesh, logger log.Log) func(msg []byte)
 			return nil
 		}
 
-		logger.Debug("return block %v", blk)
+		logger.Debug("return block %v", blk.ID())
 
 		return bbytes
 	}

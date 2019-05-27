@@ -18,6 +18,7 @@ type MessageServer server.MessageServer
 
 const BlockProtocol = "/blocks/1.0/"
 const NewBlockProtocol = "newBlock"
+const BLOCK server.MessageType = 1
 
 type BlockListener struct {
 	*server.MessageServer
@@ -134,7 +135,7 @@ func (bl *BlockListener) run() {
 func (bl *BlockListener) FetchBlock(id types.BlockID) {
 	for _, p := range bl.GetPeers() {
 		ch, foo := blockRequest()
-		if err := bl.SendRequest(BLOCK, id.ToBytes(), p, foo); err == nil {
+		if err := bl.SendRequest(MiniBLOCK, id.ToBytes(), p, foo); err == nil {
 			block := <-ch
 			if block == nil {
 				continue
@@ -177,7 +178,7 @@ func newBlockRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg []byte) 
 			return nil
 		}
 
-		logger.Debug("return block %v", blk)
+		logger.Debug("return block %v", blk.ID())
 
 		return bbytes
 	}

@@ -354,6 +354,22 @@ func (m *Mesh) AddBlock(blk *types.Block) error {
 	return nil
 }
 
+//todo this overwrites the previous value if it exists
+func (m *Mesh) AddLayer(layer *types.Layer) error {
+	if len(layer.Blocks()) == 0 {
+		m.layers.Put(layer.Index().ToBytes(), []byte{})
+		return nil
+	}
+
+	//add blocks to mDB
+	for _, bl := range layer.Blocks() {
+		if err := m.AddBlock(bl); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 //todo better thread safety
 func (m *Mesh) handleOrphanBlocks(blk *types.Block) {
 	m.orphMutex.Lock()

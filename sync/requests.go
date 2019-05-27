@@ -77,7 +77,7 @@ func BlockReqFactory(blockIds chan types.BlockID) RequestFactory {
 			return nil, errors.New("chan was closed, job done!")
 		}
 
-		if err := s.SendRequest(BLOCK, id.ToBytes(), peer, foo); err != nil {
+		if err := s.SendRequest(MiniBLOCK, id.ToBytes(), peer, foo); err != nil {
 			return nil, err
 		}
 
@@ -105,7 +105,6 @@ func TxReqFactory(ids []types.TransactionId) RequestFactory {
 		if err := s.SendRequest(TX, bts, peer, foo); err != nil {
 			return nil, err
 		}
-
 		return ch, nil
 	}
 }
