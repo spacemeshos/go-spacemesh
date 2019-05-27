@@ -55,7 +55,7 @@ def get_deployment_logs(namespace, depname):
     get_podlist_logs(namespace, lst)
 
 
-def query_message(indx, namespace, client_po_name, fields, findFails=False):
+def query_message(indx, namespace, client_po_name, fields, findFails=False, startTime=None):
     # TODO : break this to smaller functions ?
     es = get_elastic_search_api()
     fltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
@@ -73,7 +73,7 @@ def query_message(indx, namespace, client_po_name, fields, findFails=False):
     if len(hits) > 0:
         ts = [hit["T"] for hit in hits]
 
-        first = datetime.strptime(min(ts).replace("T", " ", ).replace("Z", ""), "%Y-%m-%d %H:%M:%S.%f")
+        first = startTime if startTime is not None else datetime.strptime(min(ts).replace("T", " ", ).replace("Z", ""), "%Y-%m-%d %H:%M:%S.%f")
         last = datetime.strptime(max(ts).replace("T", " ", ).replace("Z", ""), "%Y-%m-%d %H:%M:%S.%f")
 
         delta = last - first
@@ -170,3 +170,35 @@ def get_atx_per_node(deployment):
     return nodes
 
 
+# find_dups finds elasticsearch hits that are duplicates per kubernetes_pod_name. the max field represents the number of times the message
+# should show up if the indexing was functioning well.
+
+def find_dups(indx, namespace, client_po_name, fields, max=1):
+
+    # Usage : find_dups(current_index, "t7t9e", "client-t7t9e-28qj7",
+    # {'M':'new_gossip_message', 'protocol': 'api_test_gossip'}, 10)
+
+    es = get_elastic_search_api()
+    fltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
+           Q("match_phrase", kubernetes__pod_name=client_po_name)
+    for f in fields:
+        fltr = fltr & Q("match_phrase", **{f: fields[f]})
+    s = Search(index=indx, using=es).query('bool', filter=[fltr])
+    hits = list(s.scan())
+
+    print("Total hits: {0}".format(len(hits)))
+
+    dups = []
+    counting = {}
+
+    for hit in hits:
+        if hit.kubernetes.pod_name not in counting:
+            counting[hit.kubernetes.pod_name] = 1
+        else:
+            counting[hit.kubernetes.pod_name] = counting[hit.kubernetes.pod_name] + 1
+            if counting[hit.kubernetes.pod_name] > max:
+                dups.append(hit.kubernetes.pod_name)
+
+    print("Duplicate count {0}".format(len(dups)))
+    for d in dups:
+        print(d)

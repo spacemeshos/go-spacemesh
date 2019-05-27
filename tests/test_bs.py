@@ -65,14 +65,15 @@ def wait_to_deployment_to_be_deleted(deployment_name, name_space, time_out=None)
 
 
 def wait_to_deployment_to_be_ready(deployment_name, name_space, time_out=None):
-    total_sleep_time = 0
+    start = datetime.now()
     while True:
         resp = client.AppsV1Api().read_namespaced_deployment(name=deployment_name, namespace=name_space)
+        total_sleep_time = (datetime.now()-start).total_seconds()
         if not resp.status.unavailable_replicas:
             print("Total time waiting for deployment {0}: {1} sec".format(deployment_name, total_sleep_time))
             break
+        print("{0}/{1} pods ready {2} sec               ".format(resp.status.available_replicas, resp.status.replicas, total_sleep_time), end="\r")
         time.sleep(1)
-        total_sleep_time += 1
 
         if time_out and total_sleep_time > time_out:
             raise Exception("Timeout waiting to deployment to be ready")
@@ -121,9 +122,9 @@ def query_bootstrap_es(indx, namespace, bootstrap_po_name):
     s = Search(index=indx, using=es).query('bool', filter=[fltr])
     hits = list(s.scan())
     for h in hits:
-        match = re.search(r"Local node identity \w+ (?P<bootstarap_key>\w+)", h.log)
+        match = re.search(r"Local node identity \w+ (?P<bootstrap_key>\w+)", h.log)
         if match:
-            return match.group('bootstarap_key')
+            return match.group('bootstrap_key')
     return None
 
 
@@ -204,8 +205,8 @@ def setup_bootstrap(request, init_session, setup_oracle, setup_poet, create_conf
 
         bs_pod['pod_ip'] = resp.status.pod_ip
         bootstrap_pod_logs = client.CoreV1Api().read_namespaced_pod_log(name=bs_pod['name'], namespace=name_space)
-        match = re.search(r"Local node identity >> (?P<bootstarap_key>\w+)", bootstrap_pod_logs)
-        bs_pod['key'] = match.group('bootstarap_key')
+        match = re.search(r"Local node identity >> (?P<bootstrap_key>\w+)", bootstrap_pod_logs)
+        bs_pod['key'] = match.group('bootstrap_key')
         bootstrap_deployment_info.pods = [bs_pod]
         return bootstrap_deployment_info
 
