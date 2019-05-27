@@ -170,7 +170,7 @@ def get_atx_per_node(deployment):
     return nodes
 
 
-# this function finds elasticsearch hits that are duplicates. the max field represents the number of times the message
+# find_dups finds elasticsearch hits that are duplicates per kubernetes_pod_name. the max field represents the number of times the message
 # should show up if the indexing was functioning well.
 
 def find_dups(indx, namespace, client_po_name, fields, max=1):
