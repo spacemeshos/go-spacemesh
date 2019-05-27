@@ -20,6 +20,16 @@ class DeploymentInfo():
         self.pods = []
 
 
+class NetworkDeploymentInfo():
+    def __init__(self, dep_id, oracle_deployment_info, poet_deployment_info, bs_deployment_info, cl_deployment_info):
+        self.deployment_name = ''
+        self.deployment_id = dep_id
+        self.oracle = oracle_deployment_info
+        self.poet = poet_deployment_info
+        self.bootstrap = bs_deployment_info
+        self.clients = cl_deployment_info
+
+
 @pytest.fixture(scope='session')
 def load_config():
     kube_config_var = os.getenv('KUBECONFIG', '~/.kube/config')
