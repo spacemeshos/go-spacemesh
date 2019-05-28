@@ -46,15 +46,23 @@ func TestEligibilityValidator_validateRole(t *testing.T) {
 	oracle := &mockRolacle{}
 	ev := NewEligibilityValidator(oracle, 1, 5, log.NewDefault(""))
 	ev.oracle = oracle
-	assert.False(t, ev.validateRole(nil))
+	res, err := ev.validateRole(nil)
+	assert.NotNil(t, err)
+	assert.False(t, res)
 	m := BuildPreRoundMsg(generateSigning(t), NewSmallEmptySet())
 	m.InnerMsg = nil
-	assert.False(t, ev.validateRole(m))
+	res, err = ev.validateRole(m)
+	assert.NotNil(t, err)
+	assert.False(t, res)
 	m = BuildPreRoundMsg(generateSigning(t), NewSmallEmptySet())
 	oracle.isEligible = false
-	assert.False(t, ev.validateRole(m))
+	res, err = ev.validateRole(m)
+	assert.Nil(t, err)
+	assert.False(t, res)
 	oracle.isEligible = true
-	assert.True(t, ev.validateRole(m))
+	res, err = ev.validateRole(m)
+	assert.Nil(t, err)
+	assert.True(t, res)
 }
 
 func TestMessageValidator_IsStructureValid(t *testing.T) {
