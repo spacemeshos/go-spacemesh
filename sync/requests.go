@@ -59,7 +59,13 @@ func HashReqFactory(lyr types.LayerID) RequestFactory {
 
 }
 
-func BlockReqFactory(blockIds chan types.BlockID) RequestFactory {
+func BlockReqFactory(blockIds []types.BlockID) RequestFactory {
+	//convert to chan
+	blockIdsCh := make(chan types.BlockID, len(blockIds))
+	for _, id := range blockIds {
+		blockIdsCh <- id
+	}
+
 	return func(s *server.MessageServer, peer p2p.Peer) (chan interface{}, error) {
 		ch := make(chan interface{}, 1)
 		foo := func(msg []byte) {
@@ -67,14 +73,14 @@ func BlockReqFactory(blockIds chan types.BlockID) RequestFactory {
 			block := &types.MiniBlock{}
 			err := types.BytesToInterface(msg, block)
 			if err != nil {
-				s.Error("could not unmarshal block data")
+				s.Error("could not unmarshal Miniblock data")
 				return
 			}
 			ch <- block
 		}
-		id, ok := <-blockIds
+		id, ok := <-blockIdsCh
 		if !ok {
-			return nil, errors.New("chan was closed, job done!")
+			return nil, errors.New("chan was closed, job done")
 		}
 
 		if err := s.SendRequest(MiniBLOCK, id.ToBytes(), peer, foo); err != nil {

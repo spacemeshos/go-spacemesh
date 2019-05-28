@@ -27,7 +27,7 @@ import (
 	"time"
 )
 
-var conf = Configuration{2 * time.Second, 1, 300, 100 * time.Millisecond}
+var conf = Configuration{1, 300, 150 * time.Millisecond}
 
 const (
 	levelDB  = "LevelDB"
@@ -231,10 +231,8 @@ func TestSyncProtocol_BlockRequest(t *testing.T) {
 	block.AddAtx(atx1)
 	syncObj.AddBlock(block)
 	syncObj2.Peers = getPeersMock([]p2p.Peer{nodes[0].Node.PublicKey()})
-	blockIds := make(chan types.BlockID, 1)
-	blockIds <- block.ID()
 
-	output := syncObj2.fetchWithFactory(BlockReqFactory(blockIds), 1)
+	output := syncObj2.fetchWithFactory(BlockReqFactory([]types.BlockID{block.ID()}), 1)
 	timeout := time.NewTimer(2 * time.Second)
 
 	select {
@@ -354,11 +352,7 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	syncObj1.AddBlock(block2)
 	syncObj1.AddBlock(block3)
 
-	res := make(chan types.BlockID, 3)
-	res <- block1.ID()
-	res <- block2.ID()
-	res <- block3.ID()
-	output := syncObj2.fetchWithFactory(BlockReqFactory(res), 1)
+	output := syncObj2.fetchWithFactory(BlockReqFactory([]types.BlockID{block1.ID(), block2.ID(), block3.ID()}), 1)
 	for out := range output {
 		mb := out.(*types.MiniBlock)
 		txs, err := syncObj2.Txs(mb)

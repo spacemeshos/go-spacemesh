@@ -492,11 +492,6 @@ func (m *Mesh) GetContextualValidity(id types.BlockID) (bool, error) {
 	return m.getContextualValidity(id)
 }
 
-func (m *Mesh) Close() {
-	m.Debug("closing mDB")
-	m.MeshDB.Close()
-}
-
 func CreateGenesisBlock() *types.Block {
 	bl := &types.Block{
 		BlockHeader: types.BlockHeader{Id: types.BlockID(GenesisId),

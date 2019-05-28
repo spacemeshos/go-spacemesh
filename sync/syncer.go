@@ -25,7 +25,6 @@ type TxValidator interface {
 }
 
 type Configuration struct {
-	SyncInterval   time.Duration
 	Concurrency    int //number of workers for sync method
 	LayerSize      int
 	RequestTimeout time.Duration
@@ -169,34 +168,56 @@ func (s *Syncer) getLayerFromNeighbors(currenSyncLayer types.LayerID) (*types.La
 		return nil, err
 	}
 
-	//todo dont fetch blocks we know from gossip ?
+	blocksArr, err := s.fetchFullBlocks(blockIds)
+	if err != nil {
+		s.Error("could not get layer blocks %v", currenSyncLayer, err)
+		return nil, err
+	}
+
+	return types.NewExistingLayer(types.LayerID(currenSyncLayer), blocksArr), nil
+}
+
+func (s *Syncer) fetchFullBlocks(blockIds []types.BlockID) ([]*types.Block, error) {
 	output := s.fetchWithFactory(BlockReqFactory(blockIds), s.Concurrency)
 	blocksArr := make([]*types.Block, 0, len(blockIds))
-
-	//todo figure out all missing and batch request from
 	for out := range output {
 		mb := out.(*types.MiniBlock)
 
 		//sync Transactions
 		txs, err := s.Txs(mb)
 		if err != nil {
-			return nil, err
+			s.Warning(fmt.Sprintf("failed fetching block %v transactions ", err))
+			continue
 		}
 
 		//sync ATxs
 		atxs, err := s.ATXs(mb)
 		if err != nil {
-			return nil, err
+			s.Warning(fmt.Sprintf("failed fetching block %v activation transactions ", err))
+			continue
 		}
 
 		block := &types.Block{BlockHeader: mb.BlockHeader, Txs: txs, ATXs: atxs}
-		s.Debug("add block to layer %v", block)
-		s.AddBlock(block)
+		eligible, err := s.BlockEligible(&block.BlockHeader)
+		if err != nil {
+			s.Warning(fmt.Sprintf("failed checking eligiblety %v", block.ID()), err)
+			continue
+		}
+		if !eligible {
+			s.Warning(fmt.Sprintf("block %v not eligible", block.ID()), err)
+			continue
+		}
+		s.Info("add block to layer %v", block)
+		if err := s.AddBlock(block); err != nil {
+			s.Warning(fmt.Sprintf("could not add %v", block.ID()), err)
+			continue
+		}
+		s.Info("added block to layer %v", block)
 		blocksArr = append(blocksArr, block)
 
 	}
 
-	return types.NewExistingLayer(types.LayerID(currenSyncLayer), blocksArr), nil
+	return blocksArr, nil
 }
 
 func (s *Syncer) Txs(mb *types.MiniBlock) ([]*types.SerializableTransaction, error) {
@@ -252,7 +273,7 @@ func (s *Syncer) ATXs(mb *types.MiniBlock) ([]*types.ActivationTx, error) {
 	return atxs, nil
 }
 
-func (s *Syncer) fetchLayerBlockIds(m map[string]p2p.Peer, lyr types.LayerID) (chan types.BlockID, error) {
+func (s *Syncer) fetchLayerBlockIds(m map[string]p2p.Peer, lyr types.LayerID) ([]types.BlockID, error) {
 	//send request to different users according to returned hashes
 	v := make([]p2p.Peer, 0, len(m))
 	for _, value := range m {
@@ -262,29 +283,23 @@ func (s *Syncer) fetchLayerBlockIds(m map[string]p2p.Peer, lyr types.LayerID) (c
 	wrk, output := NewPeersWorker(s, v, &sync.Once{}, LayerIdsReqFactory(lyr))
 	go wrk.Work()
 
-	idSet := make(map[types.BlockID]struct{}, s.LayerSize)
 	out := <-output
 	if out == nil {
 		return nil, errors.New("could not get layer ids from any peer")
 	}
 
+	idSet := make(map[types.BlockID]struct{}, s.LayerSize)
+	ids := make([]types.BlockID, 0, s.LayerSize)
+
+	//filter double ids
 	for _, bid := range out.([]types.BlockID) {
 		if _, exists := idSet[bid]; !exists {
 			idSet[bid] = struct{}{}
+			ids = append(ids, bid)
 		}
 	}
 
-	if len(idSet) == 0 {
-		return nil, errors.New("could not get layer ids from any peer")
-	}
-
-	//convert to chan
-	res := make(chan types.BlockID, len(idSet))
-	defer close(res)
-	for id := range idSet {
-		res <- id
-	}
-	return res, nil
+	return ids, nil
 }
 
 type peerHashPair struct {
@@ -312,13 +327,13 @@ func (s *Syncer) fetchLayerHashes(lyr types.LayerID) (map[string]p2p.Peer, error
 
 func (s *Syncer) fetchWithFactory(refac RequestFactory, workers int) chan interface{} {
 	// each worker goroutine tries to fetch a block iteratively from each peer
-	count := int32(workers)
-	output := make(chan interface{})
-	mu := &sync.Once{}
-	for i := 0; i < workers; i++ {
-		wrk := NewNeighborhoodWorker(s, mu, &count, output, refac)
-		go wrk.Work()
+
+	wrk := NewNeighborhoodWorker(s, workers, refac)
+	wrk.Work()
+	for i := 0; i < workers-1; i++ {
+		cloneWrk := wrk.Clone()
+		go cloneWrk.Work()
 	}
 
-	return output
+	return wrk.output
 }

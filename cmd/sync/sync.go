@@ -41,7 +41,6 @@ var npstCfg = nipst.PostParams{
 
 //todo get from configuration
 var conf = sync.Configuration{
-	SyncInterval:   1 * time.Second,
 	Concurrency:    4,
 	LayerSize:      int(100),
 	RequestTimeout: 150 * time.Millisecond,
