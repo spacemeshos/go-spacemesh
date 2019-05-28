@@ -160,7 +160,7 @@ endif
 	docker run -e ES_PASSWD="$(ES_PASSWD)" \
              -e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
              -e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
-             -it go-spacemesh-python pytest -s p2p/test_p2p.py$(DELIM)$(TEST) --tc-file=config.yaml --tc-format=yaml
+             -it go-spacemesh-python pytest -s p2p/test_p2p.py --tc-file=config.yaml --tc-format=yaml
 
 	docker run -e ES_PASSWD="$(ES_PASSWD)" \
              -e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
