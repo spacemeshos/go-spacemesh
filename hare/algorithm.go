@@ -19,8 +19,8 @@ import (
 
 const protoName = "HARE_PROTOCOL"
 
-type Byteable interface {
-	Bytes() []byte
+type Rolacle interface {
+	Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeId, sig []byte) (bool, error)
 }
 
 type NetworkService interface {
@@ -599,7 +599,7 @@ func (proc *ConsensusProcess) isEligible() bool {
 
 // Returns the role matching the current round if eligible for this round, false otherwise
 func (proc *ConsensusProcess) currentRole() Role {
-	res, err := proc.oracle.Eligible(types.LayerID(proc.instanceId), proc.k, expectedCommitteeSize(proc.k, proc.cfg.N), types.NodeId{Key: proc.signing.PublicKey().String()}, proc.roleProof())
+	res, err := proc.oracle.Eligible(types.LayerID(proc.instanceId), proc.k, expectedCommitteeSize(proc.k, proc.cfg.N, proc.cfg.ExpectedLeaders), types.NodeId{Key: proc.signing.PublicKey().String()}, proc.roleProof())
 	if err != nil {
 		proc.Error("Error checking our eligibility: %v", err)
 		return Passive
@@ -613,4 +613,14 @@ func (proc *ConsensusProcess) currentRole() Role {
 	}
 
 	return Passive
+}
+
+// Returns the expected committee size for the given round assuming maxExpActives is the default size
+func expectedCommitteeSize(k int32, maxExpActive, expLeaders int) int {
+	if k%4 == Round2 {
+		return expLeaders // expected number of leaders
+	}
+
+	// N actives in any other case
+	return maxExpActive
 }

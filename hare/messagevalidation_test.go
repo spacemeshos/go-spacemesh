@@ -44,7 +44,7 @@ func TestMessageValidator_ValidateCertificate(t *testing.T) {
 
 func TestEligibilityValidator_validateRole(t *testing.T) {
 	oracle := &mockRolacle{}
-	ev := NewEligibilityValidator(oracle, 1, log.NewDefault(""))
+	ev := NewEligibilityValidator(oracle, 1, 5, log.NewDefault(""))
 	ev.oracle = oracle
 	assert.False(t, ev.validateRole(nil))
 	m := BuildPreRoundMsg(generateSigning(t), NewSmallEmptySet())
@@ -110,7 +110,7 @@ func TestConsensusProcess_isContextuallyValid(t *testing.T) {
 			builder := NewMessageBuilder()
 			builder.SetType(msgType[j]).SetInstanceId(instanceId1).SetRoundCounter(cp.k).SetKi(ki).SetValues(s)
 			builder = builder.Sign(signing.NewEdSigner())
-			//mt.Printf("%v   j=%v i=%v Exp: %v Actual %v\n", cp.K, j, i, rounds[j][i], ContextuallyValidateMessage(builder.Build(), cp.K))
+			//mt.Printf("%v   j=%v i=%v Exp: %v Actual %v\maxExpActives", cp.K, j, i, rounds[j][i], ContextuallyValidateMessage(builder.Build(), cp.K))
 			validator := defaultValidator()
 			assert.Equal(t, true, validator.ContextuallyValidateMessage(builder.Build(), cp.k))
 			cp.advanceToNextRound()

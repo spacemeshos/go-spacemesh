@@ -11,13 +11,14 @@ type messageValidator interface {
 }
 
 type eligibilityValidator struct {
-	oracle Rolacle
-	n      int // the maximal expected committee size
+	oracle        Rolacle
+	maxExpActives int // the maximal expected committee size
+	expLeaders    int // the expected number of leaders
 	log.Log
 }
 
-func NewEligibilityValidator(oracle Rolacle, n int, logger log.Log) *eligibilityValidator {
-	return &eligibilityValidator{oracle, n, logger}
+func NewEligibilityValidator(oracle Rolacle, maxExpActives, expLeaders int, logger log.Log) *eligibilityValidator {
+	return &eligibilityValidator{oracle, maxExpActives, expLeaders, logger}
 }
 
 func (ev *eligibilityValidator) validateRole(m *Msg) bool {
@@ -38,7 +39,7 @@ func (ev *eligibilityValidator) validateRole(m *Msg) bool {
 	nId := types.NodeId{Key: pub.String()}
 
 	// validate role
-	res, err := ev.oracle.Eligible(layer, m.InnerMsg.K, expectedCommitteeSize(m.InnerMsg.K, ev.n), nId, m.InnerMsg.RoleProof)
+	res, err := ev.oracle.Eligible(layer, m.InnerMsg.K, expectedCommitteeSize(m.InnerMsg.K, ev.maxExpActives, ev.expLeaders), nId, m.InnerMsg.RoleProof)
 	if err != nil {
 		ev.Error("Could not retrieve eligibility result err=%v", err)
 		return false

@@ -167,7 +167,7 @@ func (fo *FixedRolacle) Eligible(layer types.LayerID, round int32, committeeSize
 	fo.mapRW.Lock()
 	// generate if not exist for the requested K
 	if _, exist := fo.emaps[instId]; !exist {
-		fo.emaps[instId] = fo.generateEligibility(int(size))
+		fo.emaps[instId] = fo.generateEligibility(size)
 	}
 	fo.mapRW.Unlock()
 	// get eligibility result

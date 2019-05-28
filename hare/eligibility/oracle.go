@@ -84,7 +84,6 @@ func (o *Oracle) buildVRFMessage(id types.NodeId, layer types.LayerID, round int
 }
 
 func (o *Oracle) activeSetSize(layer types.LayerID) uint32 {
-	// TODO: make sure min(ep)=0
 	ep := safeLayer(layer).GetEpoch(o.layersPerEpoch)
 	if ep == 0 {
 		return o.activeSetProvider.ActiveSetSize(0)

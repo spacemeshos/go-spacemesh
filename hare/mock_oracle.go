@@ -26,20 +26,6 @@ type Registrable interface {
 	Unregister(isHonest bool, id string)
 }
 
-type Rolacle interface {
-	Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeId, sig []byte) (bool, error)
-}
-
-// Returns the expected committee size for the given round assuming n is the default size
-func expectedCommitteeSize(k int32, n int) int {
-	if k%4 == Round2 {
-		return 1 // 1 leader
-	}
-
-	// N actives in any other case
-	return n
-}
-
 type hasherU32 struct {
 }
 
