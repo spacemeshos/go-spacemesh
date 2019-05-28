@@ -2,8 +2,10 @@
 package api
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/golang/protobuf/ptypes/empty"
+	"github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/api/pb"
@@ -25,6 +27,7 @@ type SpacemeshGrpcService struct {
 	Port     uint
 	StateApi StateAPI
 	Network  NetworkAPI
+	Tx       TxAPI
 }
 
 // Echo returns the response for an echo api request
@@ -59,32 +62,44 @@ func (s SpacemeshGrpcService) GetNonce(ctx context.Context, in *pb.AccountId) (*
 
 	val := s.StateApi.GetNonce(addr)
 	msg := pb.SimpleMessage{Value: strconv.FormatUint(val, 10)}
-	log.Error("GRPC GetNonce returned msg %v", strconv.FormatUint(val, 10))
+	log.Info("GRPC GetNonce returned msg %v", strconv.FormatUint(val, 10))
 	return &msg, nil
 }
 
 func (s SpacemeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.SignedTransaction) (*pb.SimpleMessage, error) {
 	log.Info("GRPC SubmitTransaction msg")
-	tx := types.SerializableTransaction{}
-	addr := address.HexToAddress(in.DstAddress)
-	tx.Recipient = &addr
-	tx.Origin = address.HexToAddress(in.SrcAddress)
 
-	num, _ := strconv.ParseInt(in.Nonce, 10, 64)
-	tx.AccountNonce = uint64(num)
+	signedTx := &types.SerializableSignedTransaction{}
+	rdr := bytes.NewReader(in.Tx)
+	_, err := xdr.Unmarshal(rdr, signedTx)
+	if err != nil {
+		log.Error("failed to deserialize tx, error %v", err)
+		return nil, err
+	}
+
+	src, err := s.Tx.ValidateTransactionSignature(*signedTx)
+	if err != nil {
+		log.Error("tx failed to validate signature, error %v", err)
+		return nil, err
+	}
+
+	// TODO once the node will support signed txs we should only use types.SerializableSignedTransaction instead of types.SerializableTransaction
+	tx := types.SerializableTransaction{}
+	tx.Recipient = &signedTx.Recipient
+	tx.Origin = src
+
+	tx.AccountNonce = signedTx.AccountNonce
 	amount := big.Int{}
-	amount.SetString(in.Amount, 10)
+	amount.SetBytes(signedTx.Amount)
 	tx.Amount = amount.Bytes()
-	tx.GasLimit = 10
-	tx.Price = big.NewInt(10).Bytes()
+	tx.GasLimit = signedTx.GasLimit
+	tx.Price = signedTx.Price
 
 	val, err := types.TransactionAsBytes(&tx)
 	if err != nil {
 		return nil, err
 	}
-
-	//todo" should this be in a go routine?
-	s.Network.Broadcast(miner.IncomingTxProtocol, val)
+	go s.Network.Broadcast(miner.IncomingTxProtocol, val)
 	log.Info("GRPC SubmitTransaction returned msg ok")
 	return &pb.SimpleMessage{Value: "ok"}, nil
 }
@@ -110,11 +125,15 @@ func (s SpacemeshGrpcService) StopService() {
 
 }
 
+type TxAPI interface {
+	ValidateTransactionSignature(tx types.SerializableSignedTransaction) (address.Address, error)
+}
+
 // NewGrpcService create a new grpc service using config data.
-func NewGrpcService(net NetworkAPI, state StateAPI) *SpacemeshGrpcService {
+func NewGrpcService(net NetworkAPI, state StateAPI, tx TxAPI) *SpacemeshGrpcService {
 	port := config.ConfigValues.GrpcServerPort
 	server := grpc.NewServer()
-	return &SpacemeshGrpcService{Server: server, Port: uint(port), StateApi: state, Network: net}
+	return &SpacemeshGrpcService{Server: server, Port: uint(port), StateApi: state, Network: net, Tx: tx}
 }
 
 // StartService starts the grpc service.

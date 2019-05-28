@@ -1,13 +1,17 @@
 package api
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
-	"github.com/golang/protobuf/proto"
+	"github.com/nullstyle/go-xdr/xdr3"
+	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/require"
 	"io/ioutil"
@@ -25,6 +29,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+
+	crand "crypto/rand"
 )
 
 // Better a small code duplication than a small dependency
@@ -67,6 +73,18 @@ func (n NodeAPIMock) Exist(address address.Address) bool {
 	return ok
 }
 
+type TxAPIMock struct {
+	mockOrigin address.Address
+}
+
+func (t *TxAPIMock) setMockOrigin(orig address.Address) {
+	t.mockOrigin = orig
+}
+
+func (t *TxAPIMock) ValidateTransactionSignature(tx types.SerializableSignedTransaction) (address.Address, error) {
+	return t.mockOrigin, nil
+}
+
 func TestServersConfig(t *testing.T) {
 
 	port1, err := node.GetUnboundedPort()
@@ -77,7 +95,8 @@ func TestServersConfig(t *testing.T) {
 	config.ConfigValues.GrpcServerPort = port2
 	ap := NodeAPIMock{}
 	net := NetworkMock{}
-	grpcService := NewGrpcService(&net, ap)
+	tx := TxAPIMock{}
+	grpcService := NewGrpcService(&net, ap, &tx)
 	jsonService := NewJSONHTTPServer()
 
 	assert.Equal(t, grpcService.Port, uint(config.ConfigValues.GrpcServerPort), "Expected same port")
@@ -96,8 +115,9 @@ func TestGrpcApi(t *testing.T) {
 	const message = "Hello World"
 	ap := NodeAPIMock{}
 	net := NetworkMock{}
+	tx := TxAPIMock{}
 
-	grpcService := NewGrpcService(&net, ap)
+	grpcService := NewGrpcService(&net, ap, &tx)
 	grpcStatus := make(chan bool, 2)
 
 	// start a server
@@ -138,7 +158,8 @@ func TestJsonApi(t *testing.T) {
 	config.ConfigValues.GrpcServerPort = port2
 	ap := NodeAPIMock{}
 	net := NetworkMock{}
-	grpcService := NewGrpcService(&net, ap)
+	tx := TxAPIMock{}
+	grpcService := NewGrpcService(&net, ap, &tx)
 	jsonService := NewJSONHTTPServer()
 
 	jsonStatus := make(chan bool, 2)
@@ -197,6 +218,26 @@ func TestJsonApi(t *testing.T) {
 	<-grpcStatus
 }
 
+func createXdrSignedTransaction(params types.SerializableTransaction, key ed25519.PrivateKey) []byte {
+	tx := types.SerializableSignedTransaction{}
+	tx.AccountNonce = params.AccountNonce
+	tx.Amount = params.Amount
+	tx.Recipient = *params.Recipient
+	tx.GasLimit = params.GasLimit
+	tx.Price = params.Price
+
+	var w bytes.Buffer
+	_, err := xdr.Marshal(&w, tx.InnerSerializableSignedTransaction)
+	if err != nil {
+		log.Error("failed to marshal tx")
+	}
+	tx.Signature = ed25519.Sign2(key, w.Bytes())
+
+	var w2 bytes.Buffer
+	xdr.Marshal(&w2, tx)
+	return w2.Bytes()
+}
+
 func TestJsonWalletApi(t *testing.T) {
 
 	port1, err := node.GetUnboundedPort()
@@ -212,7 +253,8 @@ func TestJsonWalletApi(t *testing.T) {
 	net := NetworkMock{broadcasted: []byte{0x00}}
 	ap.nonces[addr] = 10
 	ap.balances[addr] = big.NewInt(100)
-	grpcService := NewGrpcService(&net, ap)
+	txApi := TxAPIMock{}
+	grpcService := NewGrpcService(&net, ap, &txApi)
 	jsonService := NewJSONHTTPServer()
 
 	jsonStatus := make(chan bool, 2)
@@ -280,10 +322,26 @@ func TestJsonWalletApi(t *testing.T) {
 	value = resp.Header.Get("Content-Type")
 	assert.Equal(t, value, contentType)
 
-	txParams := pb.SignedTransaction{SrcAddress: "01020304", DstAddress: "01", Amount: "10", Nonce: "12"}
-	payload, err = m.MarshalToString(&txParams)
+	txParams := types.SerializableTransaction{}
+	sPub, key, _ := ed25519.GenerateKey(crand.Reader)
+	sAddr := state.PublicKeyToAccountAddress(sPub)
+	txApi.setMockOrigin(sAddr)
+	txParams.Origin = sAddr
+	rec := address.BytesToAddress([]byte{0xde})
+	txParams.Recipient = &rec
+	txParams.AccountNonce = 1111
+	txParams.Amount = []byte{0x01}
+	txParams.GasLimit = 11
+	txParams.Price = []byte{0x11}
+	xdrTx := createXdrSignedTransaction(txParams, key) //string(createXdrSignedTransaction(txParams, key))
+	txToSend := pb.SignedTransaction{Tx: xdrTx}        //SrcAddress: "01020304", DstAddress: "01", Amount: "10", Nonce: "12"}
+	var buf2 bytes.Buffer
+	if err := m.Marshal(&buf2, &txToSend); err != nil {
+		log.Error("failed to marshal %v", err)
+	}
+
 	url = fmt.Sprintf("http://127.0.0.1:%d/v1/submittransaction", config.ConfigValues.JSONServerPort)
-	resp, err = http.Post(url, contentType, strings.NewReader(payload)) //todo: we currently accept all kinds of payloads
+	resp, err = http.Post(url, contentType, strings.NewReader(buf2.String())) //string(payload2))) //todo: we currently accept all kinds of payloads
 	assert.NoError(t, err, "failed to http post to api endpoint")
 
 	defer resp.Body.Close()
@@ -300,24 +358,7 @@ func TestJsonWalletApi(t *testing.T) {
 	gotV, wantV = msg.Value, "ok"
 	assert.Equal(t, wantV, gotV)
 
-	_, err = proto.Marshal(&txParams)
-	assert.NoError(t, err)
-
-	tx := types.SerializableTransaction{}
-	rec := address.HexToAddress(txParams.DstAddress)
-	tx.Recipient = &rec
-	tx.Origin = address.HexToAddress(txParams.SrcAddress)
-
-	num, _ := strconv.ParseInt(txParams.Nonce, 10, 64)
-	tx.AccountNonce = uint64(num)
-	amount := big.Int{}
-	amount.SetString(txParams.Amount, 10)
-	tx.Amount = amount.Bytes()
-	tx.GasLimit = 10
-	tx.Price = big.NewInt(10).Bytes()
-
-	val, err := types.TransactionAsBytes(&tx)
-
+	val, err := types.TransactionAsBytes(&txParams)
 	assert.Equal(t, val, net.broadcasted)
 
 	value = resp.Header.Get("Content-Type")
@@ -340,8 +381,8 @@ func TestJsonWalletApi_Errors(t *testing.T) {
 	config.ConfigValues.GrpcServerPort = port2
 	ap := NewNodeAPIMock()
 	net := NetworkMock{}
-
-	grpcService := NewGrpcService(&net, ap)
+	tx := TxAPIMock{}
+	grpcService := NewGrpcService(&net, ap, &tx)
 	jsonService := NewJSONHTTPServer()
 
 	jsonStatus := make(chan bool, 2)
@@ -412,8 +453,8 @@ func TestSpaceMeshGrpcService_Broadcast(t *testing.T) {
 	}
 	ap := NewNodeAPIMock()
 	net := NetworkMock{broadcasted: []byte{0x00}}
-
-	grpcService := NewGrpcService(&net, ap)
+	tx := TxAPIMock{}
+	grpcService := NewGrpcService(&net, ap, &tx)
 	jsonService := NewJSONHTTPServer()
 
 	jsonStatus := make(chan bool, 2)
@@ -481,8 +522,8 @@ func TestSpaceMeshGrpcService_BroadcastErrors(t *testing.T) {
 	ap := NewNodeAPIMock()
 	net := NetworkMock{broadcasted: []byte{0x00}}
 	net.broadCastErr = true
-
-	grpcService := NewGrpcService(&net, ap)
+	tx := TxAPIMock{}
+	grpcService := NewGrpcService(&net, ap, &tx)
 	jsonService := NewJSONHTTPServer()
 
 	jsonStatus := make(chan bool, 2)
