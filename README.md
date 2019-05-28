@@ -68,6 +68,9 @@ We welcome contributions large and small and we actively accept contributions.
 ### Diggin' Deeper
 Please read the Spacemesh [full FAQ](https://github.com/spacemeshos/go-spacemesh/wiki/Spacemesh-FAQ).
 
+### go-spacemesh Architecture
+![](https://raw.githubusercontent.com/spacemeshos/product/master/resources/go-spacemesh-architecture.png)
+
 ### High Level Design
 ![](https://raw.githubusercontent.com/spacemeshos/go-spacemesh/master/research/sp_arch_3.png)
 

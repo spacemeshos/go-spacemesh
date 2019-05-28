@@ -75,7 +75,7 @@ Loop:
 	for {
 		buf, err := mr.Next()
 		if err != nil {
-			log.Error("conn: Read chan closed err: %v", err)
+			log.Debug("conn: Read chan closed err: %v", err)
 			break Loop
 		}
 
