@@ -169,7 +169,6 @@ func (h *Hare) onTick(id types.LayerID) {
 	h.Info("received %v new blocks ", len(blocks))
 	set := NewEmptySet(len(blocks))
 	for _, b := range blocks {
-		// todo: figure out real type of blockid
 		set.Add(Value{b})
 	}
 

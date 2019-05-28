@@ -1,6 +1,7 @@
 package hare
 
 import (
+	"errors"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/types"
 )
@@ -21,15 +22,15 @@ func NewEligibilityValidator(oracle Rolacle, maxExpActives, expLeaders int, logg
 	return &eligibilityValidator{oracle, maxExpActives, expLeaders, logger}
 }
 
-func (ev *eligibilityValidator) validateRole(m *Msg) bool {
+func (ev *eligibilityValidator) validateRole(m *Msg) (bool, error) {
 	if m == nil {
 		ev.Error("Eligibility validator: called with nil")
-		return false
+		return false, errors.New("fatal: nil message")
 	}
 
 	if m.InnerMsg == nil {
 		ev.Warning("Eligibility validator: InnerMsg is nil")
-		return false
+		return false, errors.New("fatal: nil inner message")
 	}
 
 	// TODO: validate role proof sig
@@ -42,20 +43,25 @@ func (ev *eligibilityValidator) validateRole(m *Msg) bool {
 	res, err := ev.oracle.Eligible(layer, m.InnerMsg.K, expectedCommitteeSize(m.InnerMsg.K, ev.maxExpActives, ev.expLeaders), nId, m.InnerMsg.RoleProof)
 	if err != nil {
 		ev.Error("Could not retrieve eligibility result err=%v", err)
-		return false
+		return false, err
 	}
 	if !res {
 		ev.Warning("Role validation failed for %v", pub.ShortString())
-		return false
+		return false, nil
 	}
 
-	return true
+	return true, nil
 }
 
 // Validates eligibility and signature of the provided InnerMsg
 func (ev *eligibilityValidator) Validate(m *Msg) bool {
+	res, err := ev.validateRole(m)
+	if err != nil {
+		ev.Error("Error occurred while validating role err=%v", err)
+		return false
+	}
 	// verify role
-	if !ev.validateRole(m) {
+	if !res {
 		ev.Warning("Validate message failed: role is invalid for pub %v", m.PubKey.ShortString())
 		return false
 	}

@@ -446,7 +446,7 @@ func (proc *ConsensusProcess) onRoundBegin() {
 	case Round4:
 		proc.beginRound4()
 	default:
-		proc.Panic("Current round out of bounds. Expected: 0-4, Found: ", proc.currentRound())
+		proc.Panic("Current round out of bounds. Expected: 0-3, Found: ", proc.currentRound())
 	}
 
 	pendingProcess := proc.pending
