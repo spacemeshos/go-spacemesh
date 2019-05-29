@@ -66,6 +66,11 @@ func (s *Syncer) IsSynced() bool {
 	return s.VerifiedLayer() == s.maxSyncLayer()
 }
 
+func (s *Syncer) IsLatest() bool {
+	s.Log.Info("latest: %v, maxSynced %v", s.LatestLayer(), s.maxSyncLayer())
+	return s.LatestLayer() + 1 >= s.maxSyncLayer()
+}
+
 func (s *Syncer) Start() {
 	if atomic.CompareAndSwapUint32(&s.startLock, 0, 1) {
 		go s.run()

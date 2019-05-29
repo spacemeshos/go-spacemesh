@@ -66,8 +66,8 @@ func ConfigTst() mesh.Config {
 
 func getAtxDb(id string) (*ActivationDb, *mesh.Mesh) {
 	lg := log.NewDefault(id)
-	memesh := mesh.NewMemMeshDB(lg.WithName("meshDB"))
-	atxdb := NewActivationDb(database.NewMemDatabase(), NewIdentityStore(database.NewMemDatabase()), memesh, 1000, &ValidatorMock{}, lg.WithName("atxDB"))
+	atxdb := NewActivationDb(database.NewMemDatabase(), NewIdentityStore(database.NewMemDatabase()), database.NewMemDatabase(), 1000, &ValidatorMock{}, lg.WithName("atxDB"))
+	memesh := mesh.NewMemMeshDB(atxdb, lg.WithName("meshDB"))
 	layers := mesh.NewMesh(memesh, atxdb, ConfigTst(), &MeshValidatorMock{}, &MockState{}, lg.WithName("mesh"))
 	return atxdb, layers
 }
@@ -96,7 +96,7 @@ func Test_CalcActiveSetFromView(t *testing.T) {
 	blocks = createLayerWithAtx(layers, atxdb, 100, 10, []*types.ActivationTx{}, blocks, blocks)
 
 	atx := types.NewActivationTx(id1, 1, atxs[0].Id(), 1000, 0, atxs[0].Id(), 3, blocks, &nipst.NIPST{}, true)
-	num, err := atxdb.CalcActiveSetFromView(atx)
+	num, err := atxdb.CalcActiveSetFromView(atx, layers)
 	assert.NoError(t, err)
 	assert.Equal(t, 3, int(num))
 
@@ -118,10 +118,13 @@ func Test_CalcActiveSetFromView(t *testing.T) {
 	block2.ATXs = append(block2.ATXs, atxs2...)
 	block2.ViewEdges = blocks
 	layers.AddBlock(block2)
-	atxdb.ProcessBlockATXs(block2)
+
+	for _, atx := range block2.ATXs {
+		atxdb.PutAtx(atx, layers)
+	}
 
 	atx2 := types.NewActivationTx(id3, 0, *types.EmptyAtxId, 1435, 0, *types.EmptyAtxId, 6, []types.BlockID{block2.Id}, &nipst.NIPST{}, true)
-	num, err = atxdb.CalcActiveSetFromView(atx2)
+	num, err = atxdb.CalcActiveSetFromView(atx2, layers)
 	assert.NoError(t, err)
 	assert.Equal(t, 3, int(num))
 }
@@ -189,7 +192,7 @@ func Test_Wrong_CalcActiveSetFromView(t *testing.T) {
 	blocks = createLayerWithAtx(layers, atxdb, 100, 10, []*types.ActivationTx{}, blocks, blocks)
 
 	atx := types.NewActivationTx(id1, 1, atxs[0].Id(), 1000, 0, atxs[0].Id(), 20, blocks, &nipst.NIPST{}, true)
-	num, err := atxdb.CalcActiveSetFromView(atx)
+	num, err := atxdb.CalcActiveSetFromView(atx, layers)
 	assert.NoError(t, err)
 	assert.NotEqual(t, 20, int(num))
 
@@ -197,7 +200,7 @@ func Test_Wrong_CalcActiveSetFromView(t *testing.T) {
 
 func TestMesh_processBlockATXs(t *testing.T) {
 	activesetCache.Purge()
-	atxdb, _ := getAtxDb("t6")
+	atxdb, layers := getAtxDb("t6")
 
 	id1 := types.NodeId{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}
 	id2 := types.NodeId{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}
@@ -222,7 +225,9 @@ func TestMesh_processBlockATXs(t *testing.T) {
 	block1.MinerID.Key = strconv.Itoa(1)
 	block1.ATXs = append(block1.ATXs, atxs...)
 
-	atxdb.ProcessBlockATXs(block1)
+	for _, atx := range block1.ATXs {
+		atxdb.PutAtx(atx, layers)
+	}
 	assert.Equal(t, 3, int(atxdb.ActiveSetSize(1)))
 
 	// check that further atxs dont affect current epoch count
@@ -240,7 +245,9 @@ func TestMesh_processBlockATXs(t *testing.T) {
 	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 2000, []byte("data1"))
 	block2.MinerID.Key = strconv.Itoa(1)
 	block2.ATXs = append(block2.ATXs, atxs2...)
-	atxdb.ProcessBlockATXs(block2)
+	for _, atx := range block2.ATXs {
+		atxdb.PutAtx(atx, layers)
+	}
 
 	assert.Equal(t, 3, int(atxdb.ActiveSetSize(1)))
 	assert.Equal(t, 3, int(atxdb.ActiveSetSize(2)))

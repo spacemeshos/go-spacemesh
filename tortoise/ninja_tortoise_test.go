@@ -8,6 +8,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/rand"
+	"github.com/spacemeshos/go-spacemesh/sync"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
 	"math"
@@ -31,7 +32,7 @@ func init() {
 }
 
 func getPersistentMash() *mesh.MeshDB {
-	return mesh.NewPersistentMeshDB(fmt.Sprintf(Path+"ninje_tortoise/"), log.New("ninje_tortoise", "", ""))
+	return mesh.NewPersistentMeshDB(fmt.Sprintf(Path+"ninje_tortoise/"), nil, log.New("ninje_tortoise", "", ""))
 }
 
 func persistenceTeardown() {
@@ -39,7 +40,7 @@ func persistenceTeardown() {
 }
 
 func getInMemMesh() *mesh.MeshDB {
-	return mesh.NewMemMeshDB(log.New("", "", ""))
+	return mesh.NewMemMeshDB(&sync.AtxDbMock{},log.New("", "", ""))
 }
 
 func getMeshForBench() *mesh.MeshDB {

@@ -5,7 +5,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/address"
 	apiCfg "github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/crypto"
-	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/miner"
@@ -99,8 +98,6 @@ func (app *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat s
 		swarm := net.NewNode()
 		dbStorepath := storeFormat + string(runningName)
 
-		dbStore := database.NewMemDatabase()
-
 		hareOracle := oracle.NewLocalOracle(rolacle, numOfInstances, nodeID)
 		hareOracle.Register(true, pub.String())
 
@@ -110,7 +107,7 @@ func (app *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat s
 			NumberOfProvenLabels: 10,
 			SpaceUnit:            1024,
 		}
-		err = smApp.initServices(nodeID, swarm, dbStorepath, edSgn, hareOracle, uint32(layerSize), nipst.NewPostClient(), poet, dbStore, vrfSigner, npstCfg, 3)
+		err = smApp.initServices(nodeID, swarm, dbStorepath, edSgn, hareOracle, uint32(layerSize), nipst.NewPostClient(), poet, vrfSigner, npstCfg, 3)
 		r.NoError(err)
 		smApp.setupGenesis(apiCfg.DefaultGenesisConfig())
 
@@ -134,7 +131,7 @@ func (app *AppTestSuite) TestMultipleNodes() {
 
 	txbytes, _ := types.TransactionAsBytes(&tx)
 	path := "../tmp/test/state_" + time.Now().String()
-	app.initMultipleInstances(5, path)
+	app.initMultipleInstances(15, path)
 	for _, a := range app.apps {
 		a.startServices()
 	}

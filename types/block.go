@@ -21,6 +21,11 @@ func (l LayerID) Add(layers uint16) LayerID {
 	return LayerID(uint64(l) + uint64(layers))
 }
 
+type MeshTraverser interface {
+	ForBlockInView(view map[BlockID]struct{}, layer LayerID, blockHandler func(block *BlockHeader) error) error
+	GetBlock(id BlockID) (*Block, error)
+}
+
 //todo: choose which type is VRF
 type Vrf string
 
@@ -53,7 +58,7 @@ type BlockHeader struct {
 type MiniBlock struct {
 	BlockHeader
 	TxIds []TransactionId
-	ATXs  []*ActivationTx
+	ATXs  []AtxId
 }
 
 type Block struct {

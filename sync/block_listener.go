@@ -18,6 +18,8 @@ type MessageServer server.MessageServer
 const BlockProtocol = "/blocks/1.0/"
 const NewBlockProtocol = "newBlock"
 
+type IsSyncedFunc = func() bool
+
 type BlockListener struct {
 	*server.MessageServer
 	p2p.Peers
@@ -30,6 +32,7 @@ type BlockListener struct {
 	receivedGossipBlocks chan service.GossipMessage
 	startLock            uint32
 	timeout              time.Duration
+	synced IsSyncedFunc
 	exit                 chan struct{}
 }
 
@@ -53,7 +56,7 @@ func (bl *BlockListener) OnNewBlock(b *types.Block) {
 	bl.addUnknownToQueue(b)
 }
 
-func NewBlockListener(net service.Service, bv BlockValidator, layers *mesh.Mesh, timeout time.Duration, concurrency int, logger log.Log) *BlockListener {
+func NewBlockListener(net service.Service, bv BlockValidator, layers *mesh.Mesh, timeout time.Duration, concurrency int, logger log.Log, isSyncedFunc IsSyncedFunc) *BlockListener {
 
 	bl := BlockListener{
 		BlockValidator:       bv,
@@ -65,6 +68,7 @@ func NewBlockListener(net service.Service, bv BlockValidator, layers *mesh.Mesh,
 		unknownQueue:         make(chan types.BlockID, 200), //todo tune buffer size + get buffer from config
 		exit:                 make(chan struct{}),
 		receivedGossipBlocks: net.RegisterGossipProtocol(NewBlockProtocol),
+		synced:isSyncedFunc,
 	}
 	bl.RegisterBytesMsgHandler(BLOCK, newBlockRequestHandler(layers, logger))
 
@@ -78,6 +82,10 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 			bl.Log.Info("listening  stopped")
 			return
 		case data := <-bl.receivedGossipBlocks:
+			if !bl.synced() {
+				bl.Info("ignoring gossip blocks - not synced yet")
+				break
+			}
 
 			if data == nil {
 				bl.Error("got empty message while listening to gossip blocks")

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/nullstyle/go-xdr/xdr3"
+	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
@@ -27,7 +28,7 @@ func MessageFromBuffer(buffer []byte) (*Message, error) {
 }
 
 func (m *Message) String() string {
-	return fmt.Sprintf("Sig: %v InnerMsg: %v", m.Sig, m.InnerMsg.String())
+	return fmt.Sprintf("Sig: %v InnerMsg: %v", common.Bytes2Hex(m.Sig), m.InnerMsg.String())
 }
 
 // the certificate

@@ -21,6 +21,8 @@ type ActiveSetProvider interface {
 type MeshProvider interface {
 	GetLatestView() []types.BlockID
 	LatestLayer() types.LayerID
+	GetBlock(id types.BlockID) (*types.Block, error)
+	ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.BlockHeader) error) error
 }
 
 type EpochProvider interface {
@@ -221,9 +223,10 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 	activeIds := uint32(b.activeSet.ActiveSetSize(b.posLayerID.GetEpoch(b.layersPerEpoch)))
 	b.log.Info("active ids seen for epoch of the pos atx (epoch: %v) is %v", b.posLayerID.GetEpoch(b.layersPerEpoch), activeIds)
 	atx := types.NewActivationTxWithChallenge(*b.challenge, activeIds, b.mesh.GetLatestView(), b.nipst, true)
-	activeSetSize, err := b.db.CalcActiveSetFromView(atx)
+	activeSetSize, err := b.db.CalcActiveSetFromView(atx, b.mesh)
 	if epoch != 0 && (activeSetSize == 0 || activeSetSize != atx.ActiveSetSize) {
-		b.log.Panic("empty active set size found! len(view): %d, view: %v", len(atx.View), atx.View)
+		b.log.Error("empty active set size found! len(view): %d, view: %v", len(atx.View), atx.View)
+		return fmt.Errorf("cannot create nipst: empty active set size found" )
 	}
 	buf, err := types.AtxAsBytes(atx)
 	if err != nil {

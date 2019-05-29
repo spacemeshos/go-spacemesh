@@ -52,12 +52,16 @@ func (s *StateMock) ApplyRewards(layer types.LayerID, miners []string, underQuot
 
 }
 
-type AtxDbMock struct{}
+type AtxDbMock map[types.AtxId]*types.ActivationTx
 
-func (AtxDbMock) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
-	return nil, nil
+func (m AtxDbMock) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
+	return m[id], nil
 }
 
-func (AtxDbMock) ProcessBlockATXs(block *types.Block) {
+func (m AtxDbMock) PutAtx(atx *types.ActivationTx, mesh types.MeshTraverser) {
+	m[atx.Id()] = atx
+}
+
+func (AtxDbMock) ProcessBlockATXs(atxs []*types.ActivationTx) {
 
 }

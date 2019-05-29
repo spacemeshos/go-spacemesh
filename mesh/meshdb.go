@@ -16,6 +16,11 @@ type layerMutex struct {
 	layerWorkers uint32
 }
 
+type AtxDb interface {
+	GetAtx(id types.AtxId) (*types.ActivationTx, error)
+	PutAtx(atx *types.ActivationTx, traverser types.MeshTraverser)
+}
+
 type MeshDB struct {
 	log.Log
 	blockCache         blockCache
@@ -23,39 +28,42 @@ type MeshDB struct {
 	blocks             database.DB
 	transactions       database.DB
 	contextualValidity database.DB //map blockId to contextualValidation state of block
-	orphanBlocks       map[types.LayerID]map[types.BlockID]struct{}
+	atxDb              AtxDb
+	orphanBlocks       map[types.LayerID]map[types.BlockID]struct {}
 	orphanBlockCount   int32
 	layerMutex         map[types.LayerID]*layerMutex
 	lhMutex            sync.Mutex
 }
 
-func NewPersistentMeshDB(path string, log log.Log) *MeshDB {
+func NewPersistentMeshDB(path string, atxDb AtxDb, log log.Log) *MeshDB {
 	bdb := database.NewLevelDbStore(path+"blocks", nil, nil)
 	ldb := database.NewLevelDbStore(path+"layers", nil, nil)
 	vdb := database.NewLevelDbStore(path+"validity", nil, nil)
 	tdb := database.NewLevelDbStore(path+"transactions", nil, nil)
 	ll := &MeshDB{
 		Log:                log,
-		blockCache:         NewBlockCache(100 * layerSize),
+		blockCache:         NewBlockCache(layerSize),
 		blocks:             bdb,
 		layers:             ldb,
 		transactions:       tdb,
 		contextualValidity: vdb,
+		atxDb:              atxDb,
 		orphanBlocks:       make(map[types.LayerID]map[types.BlockID]struct{}),
 		layerMutex:         make(map[types.LayerID]*layerMutex),
 	}
 	return ll
 }
 
-func NewMemMeshDB(log log.Log) *MeshDB {
+func NewMemMeshDB(atxDb AtxDb, log log.Log) *MeshDB {
 	db := database.NewMemDatabase()
 	ll := &MeshDB{
 		Log:                log,
-		blockCache:         NewBlockCache(100 * layerSize),
+		blockCache:         NewBlockCache(10 * layerSize),
 		blocks:             db,
 		layers:             db,
 		contextualValidity: db,
 		transactions:       db,
+		atxDb:              atxDb,
 		orphanBlocks:       make(map[types.LayerID]map[types.BlockID]struct{}),
 		layerMutex:         make(map[types.LayerID]*layerMutex),
 	}
@@ -82,7 +90,14 @@ func (m *MeshDB) GetBlock(id types.BlockID) (*types.Block, error) {
 		m.Error("could not retrieve block %v transactions from database ")
 		return nil, err
 	}
-	res := blockFromMiniAndTxs(blk, transactions)
+
+	atxs, err := m.getATXs(blk.ATXs)
+	if err != nil {
+		m.Error("could not retrieve block %v atxs from database ")
+		return nil, err
+	}
+
+	res := m.composeFullBlock(blk, transactions, atxs)
 	return res, nil
 }
 
@@ -116,13 +131,15 @@ func (m *MeshDB) GetMiniBlock(id types.BlockID) (*types.MiniBlock, error) {
 //todo this overwrites the previous value if it exists
 func (m *MeshDB) AddLayer(layer *types.Layer) error {
 	if len(layer.Blocks()) == 0 {
-		m.layers.Put(layer.Index().ToBytes(), []byte{})
-		return nil
+		return m.layers.Put(layer.Index().ToBytes(), []byte{})
 	}
 
 	//add blocks to mDB
 	for _, bl := range layer.Blocks() {
-		m.writeBlock(bl)
+		err := m.writeBlock(bl)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -214,11 +231,12 @@ func (m *MeshDB) layerBlockIds(index types.LayerID) ([]types.BlockID, error) {
 	return idSet, nil
 }
 
-func blockFromMiniAndTxs(blk *types.MiniBlock, transactions []*types.SerializableTransaction) *types.Block {
+func (m *MeshDB) composeFullBlock(blk *types.MiniBlock, transactions []*types.SerializableTransaction, atxs []*types.ActivationTx) *types.Block {
+
 	block := types.Block{
 		BlockHeader: blk.BlockHeader,
 		Txs:         transactions,
-		ATXs:        blk.ATXs,
+		ATXs:        atxs,
 	}
 	return &block
 }
@@ -243,8 +261,7 @@ func (m *MeshDB) setContextualValidity(id types.BlockID, valid bool) error {
 	if valid {
 		v = TRUE
 	}
-	m.contextualValidity.Put(id.ToBytes(), v)
-	return nil
+	return m.contextualValidity.Put(id.ToBytes(), v)
 }
 
 func (m *MeshDB) writeBlock(bl *types.Block) error {
@@ -254,7 +271,13 @@ func (m *MeshDB) writeBlock(bl *types.Block) error {
 		return fmt.Errorf("could not write transactions of block %v database %v", bl.ID(), err)
 	}
 
-	minblock := &types.MiniBlock{bl.BlockHeader, txids, bl.ATXs}
+	atxs := make([]types.AtxId, len(bl.ATXs))
+	for i, atx := range bl.ATXs {
+		atxs[i] = atx.Id()
+		m.atxDb.PutAtx(atx, m)
+	}
+
+	minblock := &types.MiniBlock{bl.BlockHeader, txids, atxs}
 	bytes, err := types.MiniBlockToBytes(*minblock)
 	if err != nil {
 		return fmt.Errorf("could not encode bl")
@@ -264,7 +287,10 @@ func (m *MeshDB) writeBlock(bl *types.Block) error {
 		return fmt.Errorf("could not add bl to %v databacse %v", bl.ID(), err)
 	}
 
-	m.updateLayerWithBlock(bl)
+	err = m.updateLayerWithBlock(bl)
+	if err != nil {
+		return err
+	}
 
 	m.blockCache.put(minblock)
 
@@ -379,6 +405,18 @@ func (m *MeshDB) getTransactions(transactions []types.TransactionId) ([]*types.S
 	}
 
 	return ts, nil
+}
+
+func (m *MeshDB) getATXs(atxIds []types.AtxId) ([]*types.ActivationTx, error) {
+	atxs := make([]*types.ActivationTx, 0,len(atxIds))
+	for _, id := range atxIds {
+		atx, err := m.atxDb.GetAtx(id)
+		if err != nil {
+			return nil, err
+		}
+		atxs = append(atxs,atx)
+	}
+	return atxs, nil
 }
 
 //todo standardized transaction id across project

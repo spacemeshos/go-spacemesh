@@ -24,14 +24,18 @@ func teardown() {
 	os.RemoveAll(Path)
 }
 
+
+
+
 func getMeshdb() *MeshDB {
-	return NewMemMeshDB(log.New("mdb", "", ""))
+	return NewMemMeshDB(&AtxDbMock{}, log.New("mdb", "", ""))
 }
 
 func TestNewMeshDB(t *testing.T) {
 	mdb := getMeshdb()
 	id := types.BlockID(123)
-	mdb.AddBlock(types.NewExistingBlock(123, 1, nil))
+	err := mdb.AddBlock(types.NewExistingBlock(123, 1, nil))
+	assert.NoError(t, err)
 	block, err := mdb.GetBlock(123)
 	assert.NoError(t, err)
 	assert.True(t, id == block.Id)
@@ -42,7 +46,8 @@ func TestMeshDb_Block(t *testing.T) {
 	blk := types.NewExistingBlock(123, 1, nil)
 	addTransactionsToBlock(blk, 5)
 	blk.AddAtx(types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")}, 1, types.AtxId{}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{}), true))
-	mdb.AddBlock(blk)
+	err := mdb.AddBlock(blk)
+	assert.NoError(t, err)
 	block, err := mdb.GetBlock(123)
 
 	assert.NoError(t, err)
@@ -55,8 +60,7 @@ func TestMeshDb_Block(t *testing.T) {
 }
 
 func TestMeshDB_AddBlock(t *testing.T) {
-
-	mdb := NewMemMeshDB(log.New("TestForEachInView", "", ""))
+	mdb := NewMemMeshDB(&AtxDbMock{}, log.New("TestForEachInView", "", ""))
 	defer mdb.Close()
 
 	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data1"))
@@ -113,14 +117,14 @@ func createLayerWithRandVoting(index types.LayerID, prev []*types.Layer, blocksI
 }
 
 func TestForEachInView_Persistent(t *testing.T) {
-	mdb := NewPersistentMeshDB(Path+"/mesh_db/", log.New("TestForEachInView", "", ""))
+	mdb := NewPersistentMeshDB(Path+"/mesh_db/", nil, log.New("TestForEachInView", "", ""))
 	defer mdb.Close()
 	defer teardown()
 	testForeachInView(mdb, t)
 }
 
 func TestForEachInView_InMem(t *testing.T) {
-	mdb := NewMemMeshDB(log.New("TestForEachInView", "", ""))
+	mdb := NewMemMeshDB(&AtxDbMock{}, log.New("TestForEachInView", "", ""))
 	testForeachInView(mdb, t)
 }
 

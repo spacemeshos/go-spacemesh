@@ -36,8 +36,8 @@ type StateUpdater interface {
 }
 
 type AtxDB interface {
-	ProcessBlockATXs(block *types.Block)
 	GetAtx(id types.AtxId) (*types.ActivationTx, error)
+	PutAtx(atx *types.ActivationTx, traverser types.MeshTraverser)
 }
 
 type Mesh struct {
@@ -65,7 +65,7 @@ func NewPersistentMesh(path string, rewardConfig Config, mesh MeshValidator, sta
 		tortoise: mesh,
 		state:    state,
 		done:     make(chan struct{}),
-		mdb:      NewPersistentMeshDB(path, logger),
+		mdb:      NewPersistentMeshDB(path, atxdb, logger),
 		config:   rewardConfig,
 		AtxDB:    atxdb,
 	}
@@ -80,7 +80,7 @@ func NewMemMesh(rewardConfig Config, mesh MeshValidator, state StateUpdater, atx
 		tortoise: mesh,
 		state:    state,
 		done:     make(chan struct{}),
-		mdb:      NewMemMeshDB(logger),
+		mdb:      NewMemMeshDB(atxdb,logger),
 		config:   rewardConfig,
 		AtxDB:    atxdb,
 	}
@@ -202,11 +202,6 @@ func (m *Mesh) ValidateLayer(lyr *types.Layer) {
 	}
 }
 
-func (m *Mesh) addAtxs(l *types.Layer) {
-	for _, blk := range l.Blocks() {
-		m.AtxDB.ProcessBlockATXs(blk)
-	}
-}
 
 func SortBlocks(blocks []*types.Block) []*types.Block {
 	//not final sorting method, need to talk about this
@@ -284,7 +279,6 @@ func (m *Mesh) AddBlock(blk *types.Block) error {
 		m.Error("failed to add block %v  %v", blk.ID(), err)
 		return err
 	}
-	m.AtxDB.ProcessBlockATXs(blk)
 	m.SetLatestLayer(blk.Layer())
 	//new block add to orphans
 	m.handleOrphanBlocks(blk)
@@ -437,4 +431,8 @@ func GenesisLayer() *types.Layer {
 	l := types.NewLayer(Genesis)
 	l.AddBlock(CreateGenesisBlock())
 	return l
+}
+
+func (m *Mesh) ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.BlockHeader) error) error {
+	return m.mdb.ForBlockInView(view, layer, blockHandler)
 }

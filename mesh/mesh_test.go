@@ -30,28 +30,32 @@ func (MockState) ApplyTransactions(layer types.LayerID, txs Transactions) (uint3
 func (MockState) ApplyRewards(layer types.LayerID, miners []string, underQuota map[string]int, bonusReward, diminishedReward *big.Int) {
 }
 
-type AtxDbMock struct {
-	db map[types.AtxId]*types.ActivationTx
-}
+type AtxDbMock map[types.AtxId]*types.ActivationTx
 
-func (t *AtxDbMock) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
-	if atx, ok := t.db[id]; ok {
+
+func (t AtxDbMock) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
+	if atx, ok := t[id]; ok {
 		return atx, nil
 	}
 	return nil, fmt.Errorf("cannot find atx")
 }
 
-func (t *AtxDbMock) AddAtx(id types.AtxId, atx *types.ActivationTx) {
-	t.db[id] = atx
+func (t AtxDbMock) PutAtx(atx *types.ActivationTx, traverser types.MeshTraverser) {
+	t[atx.Id()] = atx
 }
 
-func (AtxDbMock) ProcessBlockATXs(block *types.Block) {
+func (t AtxDbMock) AddAtx(id types.AtxId, atx *types.ActivationTx) {
+	t[id] = atx
+}
+
+func (AtxDbMock) ProcessBlockATXs(atxs []*types.ActivationTx) {
 
 }
 
 func getMesh(id string) *Mesh {
 	lg := log.New(id, "", "")
-	layers := NewMesh(NewMemMeshDB(lg), &AtxDbMock{}, ConfigTst(), &MeshValidatorMock{}, &MockState{}, lg)
+	mk := &AtxDbMock{}
+	layers := NewMesh(NewMemMeshDB(mk, lg), mk, ConfigTst(), &MeshValidatorMock{}, &MockState{}, lg)
 	return layers
 }
 

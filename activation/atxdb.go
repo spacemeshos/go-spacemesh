@@ -8,7 +8,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"io"
 	"sort"
@@ -21,38 +20,39 @@ type ActivationDb struct {
 	sync.RWMutex
 	//todo: think about whether we need one db or several
 	atxs           database.DB
-	meshDb         *mesh.MeshDB
+	nipsts         database.DB
 	LayersPerEpoch types.LayerID
 	nipstValidator NipstValidator
 	ids            IdStore
 	log            log.Log
 }
 
-func NewActivationDb(dbstore database.DB, idstore IdStore, meshDb *mesh.MeshDB, layersPerEpoch uint64, nipstValidator NipstValidator, log log.Log) *ActivationDb {
-	return &ActivationDb{atxs: dbstore, meshDb: meshDb, nipstValidator: nipstValidator, LayersPerEpoch: types.LayerID(layersPerEpoch), ids: idstore, log: log}
+func NewActivationDb(dbstore database.DB, idstore IdStore, nipstStore database.DB, layersPerEpoch uint64, nipstValidator NipstValidator, log log.Log) *ActivationDb {
+	return &ActivationDb{atxs: dbstore, nipsts: nipstStore, nipstValidator: nipstValidator, LayersPerEpoch: types.LayerID(layersPerEpoch), ids: idstore, log: log}
 }
 
-func (db *ActivationDb) ProcessBlockATXs(blk *types.Block) {
-	for _, atx := range blk.ATXs {
-		db.ProcessAtx(atx)
+/*func (db *ActivationDb) ProcessBlockATXs(atxs []*types.ActivationTx) {
+	for _, atx := range atxs {
+		db.PutAtx(atx)
 	}
-}
+}*/
 
-// ProcessAtx validates the active set size declared in the atx, and validates the atx according to atx validation rules
+// PutAtx validates the active set size declared in the atx, and validates the atx according to atx validation rules
 // it then stores the atx with flag set to validity of the atx
-func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx) {
+func (db *ActivationDb) PutAtx(atx *types.ActivationTx, mesh types.MeshTraverser) {
 	eatx, _ := db.GetAtx(atx.Id())
 	if eatx != nil {
 		return
 	}
 	epoch := atx.PubLayerIdx.GetEpoch(uint16(db.LayersPerEpoch))
 	db.log.Info("processing atx id %v, pub-epoch %v node: %v layer %v", atx.Id().String()[2:7], epoch, atx.NodeId.Key[:5], atx.PubLayerIdx)
-	activeSet, err := db.CalcActiveSetFromView(atx)
+
+	//todo: maybe there is a potential bug in this case if count for the view can change between calls to this function
+	activeSetSize, err := db.CalcActiveSetFromView(atx, mesh)
 	if err != nil {
 		db.log.Error("could not calculate active set for %v", atx.Id())
 	}
-	//todo: maybe there is a potential bug in this case if count for the view can change between calls to this function
-	atx.VerifiedActiveSet = activeSet
+	atx.VerifiedActiveSet = activeSetSize
 	err = db.ValidateAtx(atx)
 	//todo: should we store invalid atxs
 	if err != nil {
@@ -67,10 +67,11 @@ func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx) {
 	}
 }
 
+
 // CalcActiveSetFromView traverses the view found in a - the activation tx and counts number of active ids published
 // in the epoch prior to the epoch that a was published at, this number is the number of active ids in the next epoch
 // the function returns error if the view is not found
-func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, error) {
+func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx, mesh types.MeshTraverser) (uint32, error) {
 	bytes, err := types.ViewAsBytes(a.View)
 	if err != nil {
 		return 0, err
@@ -87,7 +88,7 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 	lastLayerOfLastEpoch := firstLayerOfLastEpoch + db.LayersPerEpoch - 1
 
 	traversalFunc := func(blkh *types.BlockHeader) error {
-		blk, err := db.meshDb.GetBlock(blkh.Id)
+		blk, err := mesh.GetBlock(blkh.Id)
 		if err != nil {
 			db.log.Error("cannot validate atx, block %v not found", blkh.Id)
 			return err
@@ -123,7 +124,7 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 		mp[blk] = struct{}{}
 	}
 
-	db.meshDb.ForBlockInView(mp, firstLayerOfLastEpoch, traversalFunc)
+	mesh.ForBlockInView(mp, firstLayerOfLastEpoch, traversalFunc)
 	activesetCache.Add(common.BytesToHash(bytes), counter)
 
 	return counter, nil
@@ -252,10 +253,23 @@ func (db *ActivationDb) StoreAtx(ech types.EpochId, atx *types.ActivationTx) err
 }
 
 func (db *ActivationDb) storeAtxUnlocked(atx *types.ActivationTx) error {
-	b, err := types.AtxAsBytes(atx)
+	b, err := types.AsBytes(atx.Nipst)
 	if err != nil {
 		return err
 	}
+
+	err = db.nipsts.Put(atx.Id().Bytes(), b)
+	if err != nil {
+		return err
+	}
+	//todo: think of how to break down the object better
+	atx.Nipst = nil
+
+	b, err = types.AtxAsBytes(atx)
+	if err != nil {
+		return err
+	}
+
 	err = db.atxs.Put(atx.Id().Bytes(), b)
 	if err != nil {
 		return err

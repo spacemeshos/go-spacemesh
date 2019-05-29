@@ -30,9 +30,6 @@ const DefaultGas = 1
 
 const IncomingTxProtocol = "TxGossip"
 
-type AtxProcessor interface {
-	ProcessAtx(atx *types.ActivationTx)
-}
 
 type BlockBuilder struct {
 	log.Log
@@ -56,7 +53,7 @@ type BlockBuilder struct {
 	started          bool
 }
 
-func NewBlockBuilder(minerID types.NodeId, net p2p.Service, beginRoundEvent chan types.LayerID, weakCoin WeakCoinProvider, orph OrphanBlockProvider, hare HareResultProvider, blockOracle oracle.BlockOracle, processAtx func(atx *types.ActivationTx), lg log.Log) BlockBuilder {
+func NewBlockBuilder(minerID types.NodeId, net p2p.Service, beginRoundEvent chan types.LayerID, weakCoin WeakCoinProvider, orph OrphanBlockProvider, hare HareResultProvider, blockOracle oracle.BlockOracle, lg log.Log) BlockBuilder {
 
 	seed := binary.BigEndian.Uint64(md5.New().Sum([]byte(minerID.Key)))
 
@@ -78,7 +75,6 @@ func NewBlockBuilder(minerID types.NodeId, net p2p.Service, beginRoundEvent chan
 		weakCoinToss:     weakCoin,
 		orphans:          orph,
 		blockOracle:      blockOracle,
-		processAtx:       processAtx,
 		started:          false,
 	}
 
@@ -248,7 +244,7 @@ func (t *BlockBuilder) acceptBlockData() {
 				continue
 			}
 			if len(proofs) == 0 {
-				t.Error("no PROOFFSSSS detected")
+				//t.Error("no PROOFFSSSS detected")
 				break
 			}
 			// TODO: include multiple proofs in each block and weigh blocks where applicable

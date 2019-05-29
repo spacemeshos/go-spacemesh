@@ -29,9 +29,13 @@ func (pm PeersMock) Close() {
 	return
 }
 
+func isSynced() bool {
+	return true
+}
+
 func ListenerFactory(serv service.Service, peers p2p.Peers, name string) *BlockListener {
 
-	nbl := NewBlockListener(serv, BlockValidatorMock{}, getMesh(memoryDB, "TestBlockListener_"+name), 1*time.Second, 2, log.New(name, "", ""))
+	nbl := NewBlockListener(serv, BlockValidatorMock{}, getMesh(memoryDB, "TestBlockListener_"+name), 1*time.Second, 2, log.New(name, "", ""), isSynced)
 	nbl.Peers = peers //override peers with mock
 	return nbl
 }
@@ -175,6 +179,9 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 			return
 		default:
 			if b, err := bl1.GetBlock(blk.Id); err == nil {
+				for _, atx := range b.ATXs {
+					atx.Nipst = nipst.NewNIPSTWithChallenge(&common.Hash{})
+				}
 				assert.True(t, blk.Compare(b))
 				t.Log("  ", b)
 				t.Log("done!")
