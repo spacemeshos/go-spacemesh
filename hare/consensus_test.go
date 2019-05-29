@@ -179,7 +179,7 @@ func TestSingleValueForHonestSet(t *testing.T) {
 
 	test := newConsensusTest()
 
-	cfg := config.Config{N: 50, F: 25, RoundDuration: 1, ExpectedLeaders: 5}
+	cfg := config.Config{N: 50, F: 25, RoundDuration: 2, ExpectedLeaders: 5}
 	totalNodes := 50
 	sim := service.NewSimulator()
 	test.initialSets = make([]*Set, totalNodes)

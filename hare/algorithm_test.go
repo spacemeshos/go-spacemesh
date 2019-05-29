@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-var cfg = config.Config{N: 10, F: 5, RoundDuration: 2}
+var cfg = config.Config{N: 10, F: 5, RoundDuration: 2, ExpectedLeaders: 5}
 
 type mockMessageValidator struct {
 	syntaxValid   bool
