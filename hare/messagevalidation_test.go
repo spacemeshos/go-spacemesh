@@ -44,7 +44,7 @@ func TestMessageValidator_ValidateCertificate(t *testing.T) {
 
 func TestEligibilityValidator_validateRole(t *testing.T) {
 	oracle := &mockRolacle{}
-	ev := NewEligibilityValidator(oracle, 1, 5, log.NewDefault(""))
+	ev := NewEligibilityValidator(oracle, &mockIdProvider{}, 1, 5, log.NewDefault(""))
 	ev.oracle = oracle
 	res, err := ev.validateRole(nil)
 	assert.NotNil(t, err)

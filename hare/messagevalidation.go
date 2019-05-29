@@ -11,15 +11,20 @@ type messageValidator interface {
 	ContextuallyValidateMessage(m *Msg, expectedK int32) bool
 }
 
+type IdentityProvider interface {
+	GetIdentity(edId string) (types.NodeId, error)
+}
+
 type eligibilityValidator struct {
-	oracle        Rolacle
-	maxExpActives int // the maximal expected committee size
-	expLeaders    int // the expected number of leaders
+	oracle           Rolacle
+	identityProvider IdentityProvider
+	maxExpActives    int // the maximal expected committee size
+	expLeaders       int // the expected number of leaders
 	log.Log
 }
 
-func NewEligibilityValidator(oracle Rolacle, maxExpActives, expLeaders int, logger log.Log) *eligibilityValidator {
-	return &eligibilityValidator{oracle, maxExpActives, expLeaders, logger}
+func NewEligibilityValidator(oracle Rolacle, idProvider IdentityProvider, maxExpActives, expLeaders int, logger log.Log) *eligibilityValidator {
+	return &eligibilityValidator{oracle, idProvider, maxExpActives, expLeaders, logger}
 }
 
 func (ev *eligibilityValidator) validateRole(m *Msg) (bool, error) {
@@ -37,7 +42,11 @@ func (ev *eligibilityValidator) validateRole(m *Msg) (bool, error) {
 
 	pub := m.PubKey
 	layer := types.LayerID(m.InnerMsg.InstanceId)
-	nId := types.NodeId{Key: pub.String()}
+	nId, err := ev.identityProvider.GetIdentity(pub.String())
+	if err != nil {
+		ev.Error("Eligibility validator: could not validate role err=%v", err)
+		return false, err
+	}
 
 	// validate role
 	res, err := ev.oracle.Eligible(layer, m.InnerMsg.K, expectedCommitteeSize(m.InnerMsg.K, ev.maxExpActives, ev.expLeaders), nId, m.InnerMsg.RoleProof)
