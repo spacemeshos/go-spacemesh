@@ -1,3 +1,7 @@
+import os
+import re
+import subprocess
+import time
 from datetime import datetime, timedelta
 
 from tests import queries
@@ -6,6 +10,7 @@ from tests.fixtures import load_config, DeploymentInfo
 from tests.fixtures import init_session, set_namespace, set_docker_images, session_id
 import os
 from os import path
+
 import pytest
 import pytz
 import re
@@ -26,13 +31,13 @@ BOOT_DEPLOYMENT_FILE = './k8s/bootstrap-w-conf.yml'
 CLIENT_DEPLOYMENT_FILE = './k8s/client-w-conf.yml'
 CLIENT_POD_FILE = './k8s/single-client-w-conf.yml'
 CURL_POD_FILE = './k8s/curl.yml'
+GO_POD_FILE = './k8s/golang.yml'
 ORACLE_DEPLOYMENT_FILE = './k8s/oracle.yml'
 POET_DEPLOYMENT_FILE = './k8s/poet.yml'
 
 BOOTSTRAP_PORT = 7513
 ORACLE_SERVER_PORT = 3030
 POET_SERVER_PORT = 50002
-
 
 ELASTICSEARCH_URL = "http://{0}".format(testconfig['elastic']['host'])
 
@@ -170,7 +175,6 @@ def setup_oracle(request):
 
 @pytest.fixture(scope='module')
 def setup_bootstrap(request, init_session, setup_oracle, setup_poet, create_configmap):
-
     bootstrap_deployment_info = DeploymentInfo(dep_id=init_session)
 
     def _setup_bootstrap_in_namespace(name_space):
@@ -218,7 +222,6 @@ def setup_bootstrap(request, init_session, setup_oracle, setup_poet, create_conf
 
 @pytest.fixture(scope='module')
 def setup_clients(request, setup_oracle, setup_poet, setup_bootstrap):
-
     client_info = DeploymentInfo(dep_id=setup_bootstrap.deployment_id)
 
     def _setup_clients_in_namespace(name_space):
@@ -264,11 +267,11 @@ def setup_clients(request, setup_oracle, setup_poet, setup_bootstrap):
 
 
 def add_single_client(deployment_id, container_specs):
-
     resp = pod.create_pod(CLIENT_POD_FILE,
                           testconfig['namespace'],
                           deployment_id=deployment_id,
                           container_specs=container_specs)
+    print(str(resp))
 
     client_name = resp.metadata.name
     print("Add new client: {0}".format(client_name))
@@ -289,16 +292,16 @@ def get_conf(bs_info, setup_poet, setup_oracle, args=None):
                       oracle_server='http://{0}:{1}'.format(setup_oracle, ORACLE_SERVER_PORT),
                       poet_server='{0}:{1}'.format(setup_poet, POET_SERVER_PORT),
                       genesis_time=GENESIS_TIME.isoformat('T', 'seconds'),
+                      mem_profile="mem.out",
                       **client_args)
 
-
     return cspec
+
 
 # The following fixture should not be used if you wish to add many clients during test.
 # Instead you should call add_single_client directly
 @pytest.fixture()
 def add_client(request, setup_oracle, setup_poet, setup_bootstrap, setup_clients):
-
     global client_name
 
     def _add_single_client():
@@ -341,6 +344,22 @@ def api_call(client_ip, data, api, namespace):
     if p.returncode != 0:
         raise Exception('An Error raised on api_call')
     return out
+
+
+def run_cmd(namespace, cmd):
+    p = subprocess.Popen(['./cluster_cmd.sh', namespace, cmd], stdin=subprocess.PIPE,
+                         stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    (out, err) = p.communicate()
+    if p.returncode != 0:
+        print(str(out))
+        print(str(err))
+        raise Exception('An Error raised on api_call %s' % err)
+    return out
+
+
+def run_pprof(namespace, client_ip):
+    print(str(client_ip))
+    return run_cmd(namespace, "go tool pprof http://%s:6060/debug/pprof/heap" % client_ip)
 
 
 @pytest.fixture(scope='module')
@@ -394,9 +413,7 @@ def save_log_on_exit(request):
 
 @pytest.fixture()
 def add_curl(request, setup_bootstrap):
-
     def _run_curl_pod():
-
         if not setup_bootstrap.pods:
             raise Exception("Could not find bootstrap node")
 
@@ -410,6 +427,19 @@ def add_curl(request, setup_bootstrap):
     request.addfinalizer(fin)
     return _run_curl_pod()
 
+@pytest.fixture()
+def add_go(request):
+    def _run_curl_pod():
+
+        resp = pod.create_pod(GO_POD_FILE,
+                              testconfig['namespace'])
+        return True
+
+    def fin():
+        pod.delete_pod('golang', testconfig['namespace'])
+
+    request.addfinalizer(fin)
+    return _run_curl_pod()
 
 # ==============================================================================
 #    TESTS
@@ -430,16 +460,18 @@ def test_bootstrap(setup_bootstrap):
 
 
 def test_client(setup_clients, save_log_on_exit):
-    fields = {'M':'discovery_bootstrap'}
-    timetowait = len(setup_clients.pods)/2
+    fields = {'M': 'discovery_bootstrap'}
+    timetowait = len(setup_clients.pods) / 2
     print("Sleeping " + str(timetowait) + " before checking out bootstrap results")
     time.sleep(timetowait)
     peers = query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, fields, True)
+    client_ip = setup_clients.pods[0]['pod_ip']
+    mem = run_pprof(testconfig['namespace'], client_ip)
+    print(mem)
     assert len(set(peers)) == len(setup_clients.pods)
 
 
 def test_add_client(add_client):
-
     # Sleep a while before checking the node is bootstarped
     time.sleep(20)
     fields = {'M': 'discovery_bootstrap'}
@@ -448,7 +480,7 @@ def test_add_client(add_client):
 
 
 def test_gossip(setup_clients, add_curl):
-    fields = {'M':'new_gossip_message', 'protocol': 'api_test_gossip'}
+    fields = {'M': 'new_gossip_message', 'protocol': 'api_test_gossip'}
     # *note*: this already waits for bootstrap so we can send the msg right away.
     # send message to client via rpc
     client_ip = setup_clients.pods[0]['pod_ip']
@@ -463,11 +495,12 @@ def test_gossip(setup_clients, add_curl):
 
     # Need to sleep for a while in order to enable the propagation of the gossip message - 0.5 sec for each node
     # TODO: check frequently before timeout so we might be able to finish earlier.
-    gossip_propagation_sleep = len(setup_clients.pods) / 2 # currently we expect short propagation times.
+    gossip_propagation_sleep = len(setup_clients.pods) / 2  # currently we expect short propagation times.
     print('sleep for {0} sec to enable gossip propagation'.format(gossip_propagation_sleep))
     time.sleep(gossip_propagation_sleep)
 
-    peers_for_gossip = query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, fields, True)
+    peers_for_gossip = query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, fields,
+                                     True)
     assert len(setup_clients.pods) == len(set(peers_for_gossip))
 
 
@@ -502,7 +535,7 @@ def test_transaction(setup_clients, add_curl, wait_genesis):
             end = time.time()
             break
 
-    print("test took {:.3f} seconds ".format(end-start))
+    print("test took {:.3f} seconds ".format(end - start))
     assert '{"value":"100"}' in out.decode("utf-8")
     print("balance ok")
 
@@ -530,7 +563,7 @@ def test_mining(setup_bootstrap, setup_clients, add_curl, wait_genesis):
     data = '{"address":"222"}'
     end = start = time.time()
     layer_avg_size = 20
-    last_layer = 8
+    last_layer = 12
     layers_per_epoch = 3
     deviation = 0.2
     last_epoch = last_layer / layers_per_epoch
@@ -538,16 +571,16 @@ def test_mining(setup_bootstrap, setup_clients, add_curl, wait_genesis):
     queries.wait_for_latest_layer(testconfig["namespace"], last_layer)
 
     # out = api_call(client_ip, data, api, testconfig['namespace'])
-    print("test took {:.3f} seconds ".format(end-start))
+    print("test took {:.3f} seconds ".format(end - start))
     # assert '{"value":"100"}' in out.decode("utf-8")
     # print("balance ok")
 
     # need to filter out blocks that have come from last layer
     blockmap = queries.get_blocks_per_node(testconfig["namespace"])
     # count all blocks arrived in relevant layers
-    total_blocks = sum([len(blockmap[x]) for x in blockmap ])
+    total_blocks = sum([len(blockmap[x]) for x in blockmap])
     atxmap = queries.get_atx_per_node(testconfig["namespace"])
-    total_atxs = sum([len(atxmap[x]) for x in atxmap ])
+    total_atxs = sum([len(atxmap[x]) for x in atxmap])
 
     total_pods = len(setup_clients.pods) + len(setup_bootstrap.pods)
 
@@ -572,6 +605,88 @@ def test_mining(setup_bootstrap, setup_clients, add_curl, wait_genesis):
     mp.clear()
     for node in blockmap:
         for blk in blockmap[node]:
-          mp.add(blk[0])
+            mp.add(blk[0])
+        print(
+            "blocks:" + str(len(blockmap[node])) + "in layers" + str(len(mp)) + " " + str(layer_avg_size / total_pods))
+        assert (len(blockmap[node]) / last_layer) / int(layer_avg_size / total_pods) <= 1.5
+
+
+def test_atxs_nodes_up(setup_bootstrap, setup_clients, add_curl, wait_genesis, setup_poet, setup_oracle):
+    # choose client to run on
+    client_ip = setup_clients.pods[0]['pod_ip']
+
+    api = 'v1/nonce'
+    data = '{"address":"1"}'
+    print("checking nonce")
+    out = api_call(client_ip, data, api, testconfig['namespace'])
+
+    mem = run_pprof(testconfig['namespace'], client_ip)
+    print(mem)
+
+    api = 'v1/submittransaction'
+    data = '{"srcAddress":"1","dstAddress":"222","nonce":"0","amount":"100"}'
+    print("submitting transaction")
+    out = api_call(client_ip, data, api, testconfig['namespace'])
+    print(out.decode("utf-8"))
+    assert '{"value":"ok"}' in out.decode("utf-8")
+    print("submit transaction ok")
+
+    end = start = time.time()
+    layer_avg_size = 20
+    last_layer = 8
+    layers_per_epoch = 3
+    deviation = 0.2
+    extra_nodes = 20
+    last_epoch = last_layer / layers_per_epoch
+
+    queries.wait_for_latest_layer(testconfig["namespace"], layers_per_epoch)
+
+    added_clients = []
+    for i in range(0, extra_nodes):
+        c = add_single_client(setup_bootstrap.deployment_id,
+                              get_conf(setup_bootstrap.pods[0], setup_poet, setup_oracle))
+        added_clients.append(c)
+
+    queries.wait_for_latest_layer(testconfig["namespace"], last_layer)
+
+    print("test took {:.3f} seconds ".format(end - start))
+
+    # need to filter out blocks that have come from last layer
+    blockmap = queries.get_blocks_per_node(testconfig["namespace"])
+    # count all blocks arrived in relevant layers
+    total_blocks = sum([len(blockmap[x]) for x in blockmap])
+    atxmap = queries.get_atx_per_node(testconfig["namespace"])
+    total_atxs = sum([len(atxmap[x]) for x in atxmap])
+
+    total_pods = len(setup_clients.pods) + len(setup_bootstrap.pods) + extra_nodes
+
+    print("atx created " + str(total_atxs))
+    print("blocks created " + str(total_blocks))
+
+    assert total_pods == len(blockmap)
+    # assert (1 - deviation) < (total_blocks / last_layer) / layer_avg_size < (1 + deviation)
+    # assert total_atxs == int((last_layer / layers_per_epoch) + 1) * total_pods
+
+    # assert that a node has created one atx per epoch
+    for node in atxmap:
+        mp = set()
+        for blk in atxmap[node]:
+            mp.add(blk[4])
+        if node not in added_clients:
+            assert len(atxmap[node]) / int((last_layer / layers_per_epoch) + 1) == 1
+        else:
+            assert len(atxmap[node]) / int((last_layer / layers_per_epoch)) == 1
+
+        print("mp " + ','.join(mp) + " node " + node + " atxmap " + str(atxmap[node]))
+        if node not in added_clients:
+            assert len(mp) == int((last_layer / layers_per_epoch) + 1)
+        else:
+            assert len(mp) == int((last_layer / layers_per_epoch))
+
+    # assert that each node has created layer_avg/number_of_nodes
+    mp = set()
+    for node in blockmap:
+        for blk in blockmap[node]:
+            mp.add(blk[0])
         print("blocks:" + str(len(blockmap[node])) + "in layers" + str(len(mp)) + " " + str(layer_avg_size / total_pods))
         assert (len(blockmap[node]) / last_layer) / int(layer_avg_size / total_pods) <= 1.5
