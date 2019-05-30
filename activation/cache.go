@@ -44,7 +44,7 @@ func NewAtxCache(size int) AtxCache {
 	return AtxCache{Cache: cache}
 }
 
-func (bc *AtxCache) put(id types2.AtxId, tx *types2.ActivationTx ) {
+func (bc *AtxCache) put(id types2.AtxId, tx *types2.ActivationTx) {
 	bc.Cache.Add(id, tx)
 }
 

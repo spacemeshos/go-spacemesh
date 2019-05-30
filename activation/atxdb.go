@@ -15,12 +15,14 @@ import (
 )
 
 const CounterKey = 0xaaaa
+const AtxCacheSize = 100
 
 type ActivationDb struct {
 	sync.RWMutex
 	//todo: think about whether we need one db or several
 	atxs           database.DB
 	nipsts         database.DB
+	atxCache       AtxCache
 	LayersPerEpoch types.LayerID
 	nipstValidator NipstValidator
 	ids            IdStore
@@ -28,7 +30,14 @@ type ActivationDb struct {
 }
 
 func NewActivationDb(dbstore database.DB, idstore IdStore, nipstStore database.DB, layersPerEpoch uint64, nipstValidator NipstValidator, log log.Log) *ActivationDb {
-	return &ActivationDb{atxs: dbstore, nipsts: nipstStore, nipstValidator: nipstValidator, LayersPerEpoch: types.LayerID(layersPerEpoch), ids: idstore, log: log}
+	return &ActivationDb{atxs: dbstore,
+		nipsts:         nipstStore,
+		nipstValidator: nipstValidator,
+		LayersPerEpoch: types.LayerID(layersPerEpoch),
+		ids:            idstore,
+		atxCache:       NewAtxCache(AtxCacheSize),
+		log:            log,
+	}
 }
 
 /*func (db *ActivationDb) ProcessBlockATXs(atxs []*types.ActivationTx) {
@@ -427,6 +436,9 @@ func (db *ActivationDb) getAtxUnlocked(id types.AtxId) (*types.ActivationTx, err
 // GetAtx returns the atx by the given id. this function is thread safe and will return error if the id is not found in the
 // atx db
 func (db *ActivationDb) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
+	if atx, gotIt := db.atxCache.Get(id); gotIt {
+		return atx, nil
+	}
 	db.RLock()
 	b, err := db.atxs.Get(id.Bytes())
 	db.RUnlock()
@@ -437,6 +449,7 @@ func (db *ActivationDb) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
 	if err != nil {
 		return nil, err
 	}
+	db.atxCache.Add(id, atx)
 	return atx, nil
 }
 
