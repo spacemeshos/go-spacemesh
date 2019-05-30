@@ -32,7 +32,7 @@ type BlockListener struct {
 	receivedGossipBlocks chan service.GossipMessage
 	startLock            uint32
 	timeout              time.Duration
-	synced IsSyncedFunc
+	synced               IsSyncedFunc
 	exit                 chan struct{}
 }
 
@@ -68,7 +68,7 @@ func NewBlockListener(net service.Service, bv BlockValidator, layers *mesh.Mesh,
 		unknownQueue:         make(chan types.BlockID, 200), //todo tune buffer size + get buffer from config
 		exit:                 make(chan struct{}),
 		receivedGossipBlocks: net.RegisterGossipProtocol(NewBlockProtocol),
-		synced:isSyncedFunc,
+		synced:               isSyncedFunc,
 	}
 	bl.RegisterBytesMsgHandler(BLOCK, newBlockRequestHandler(layers, logger))
 

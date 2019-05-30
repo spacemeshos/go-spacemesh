@@ -68,7 +68,7 @@ func (s *Syncer) IsSynced() bool {
 
 func (s *Syncer) IsLatest() bool {
 	s.Log.Info("latest: %v, maxSynced %v", s.LatestLayer(), s.maxSyncLayer())
-	return s.LatestLayer() + 1 >= s.maxSyncLayer()
+	return s.LatestLayer()+1 >= s.maxSyncLayer()
 }
 
 func (s *Syncer) Start() {

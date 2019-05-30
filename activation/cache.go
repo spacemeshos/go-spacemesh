@@ -4,6 +4,7 @@ import (
 	"github.com/hashicorp/golang-lru"
 	"github.com/prometheus/common/log"
 	"github.com/spacemeshos/go-spacemesh/common"
+	types2 "github.com/spacemeshos/go-spacemesh/types"
 )
 
 type ActivesetCache struct {
@@ -29,4 +30,29 @@ func (bc ActivesetCache) Get(view common.Hash) (uint32, bool) {
 	}
 	blk := item.(uint32)
 	return blk, true
+}
+
+type AtxCache struct {
+	*lru.Cache
+}
+
+func NewAtxCache(size int) AtxCache {
+	cache, err := lru.New(size)
+	if err != nil {
+		log.Fatal("could not initialize cache ", err)
+	}
+	return AtxCache{Cache: cache}
+}
+
+func (bc *AtxCache) put(id types2.AtxId, tx *types2.ActivationTx ) {
+	bc.Cache.Add(id, tx)
+}
+
+func (bc AtxCache) Get(id types2.AtxId) (*types2.ActivationTx, bool) {
+	item, found := bc.Cache.Get(id)
+	if !found {
+		return nil, false
+	}
+	atx := item.(*types2.ActivationTx)
+	return atx, true
 }

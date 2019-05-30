@@ -29,7 +29,7 @@ type MeshDB struct {
 	transactions       database.DB
 	contextualValidity database.DB //map blockId to contextualValidation state of block
 	atxDb              AtxDb
-	orphanBlocks       map[types.LayerID]map[types.BlockID]struct {}
+	orphanBlocks       map[types.LayerID]map[types.BlockID]struct{}
 	orphanBlockCount   int32
 	layerMutex         map[types.LayerID]*layerMutex
 	lhMutex            sync.Mutex
@@ -408,13 +408,13 @@ func (m *MeshDB) getTransactions(transactions []types.TransactionId) ([]*types.S
 }
 
 func (m *MeshDB) getATXs(atxIds []types.AtxId) ([]*types.ActivationTx, error) {
-	atxs := make([]*types.ActivationTx, 0,len(atxIds))
+	atxs := make([]*types.ActivationTx, 0, len(atxIds))
 	for _, id := range atxIds {
 		atx, err := m.atxDb.GetAtx(id)
 		if err != nil {
 			return nil, err
 		}
-		atxs = append(atxs,atx)
+		atxs = append(atxs, atx)
 	}
 	return atxs, nil
 }

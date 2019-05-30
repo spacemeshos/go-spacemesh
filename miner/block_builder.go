@@ -30,7 +30,6 @@ const DefaultGas = 1
 
 const IncomingTxProtocol = "TxGossip"
 
-
 type BlockBuilder struct {
 	log.Log
 	minerID          types.NodeId

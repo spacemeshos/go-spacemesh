@@ -226,7 +226,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 	activeSetSize, err := b.db.CalcActiveSetFromView(atx, b.mesh)
 	if epoch != 0 && (activeSetSize == 0 || activeSetSize != atx.ActiveSetSize) {
 		b.log.Error("empty active set size found! len(view): %d, view: %v", len(atx.View), atx.View)
-		return fmt.Errorf("cannot create nipst: empty active set size found" )
+		return fmt.Errorf("cannot create nipst: empty active set size found")
 	}
 	buf, err := types.AtxAsBytes(atx)
 	if err != nil {

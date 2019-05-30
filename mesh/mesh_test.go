@@ -32,7 +32,6 @@ func (MockState) ApplyRewards(layer types.LayerID, miners []string, underQuota m
 
 type AtxDbMock map[types.AtxId]*types.ActivationTx
 
-
 func (t AtxDbMock) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
 	if atx, ok := t[id]; ok {
 		return atx, nil

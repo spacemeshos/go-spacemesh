@@ -40,7 +40,7 @@ func persistenceTeardown() {
 }
 
 func getInMemMesh() *mesh.MeshDB {
-	return mesh.NewMemMeshDB(&sync.AtxDbMock{},log.New("", "", ""))
+	return mesh.NewMemMeshDB(&sync.AtxDbMock{}, log.New("", "", ""))
 }
 
 func getMeshForBench() *mesh.MeshDB {

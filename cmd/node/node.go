@@ -292,7 +292,6 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
 	clock := timesync.NewTicker(timesync.RealClock{}, ld, gTime)
 
-
 	atxdbstore, err := database.NewLDBDatabase(dbStorepath+"atx", 0, 0)
 	if err != nil {
 		return err
@@ -431,7 +430,7 @@ func getEdIdentity() (*signing.EdSigner, error) {
 
 func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	log.Info("Starting Spacemesh")
-	if app.Config.MemProfile != ""{
+	if app.Config.MemProfile != "" {
 		log.Info("Starting mem profiling")
 		f, err := os.Create(app.Config.MemProfile)
 		if err != nil {

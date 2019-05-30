@@ -80,7 +80,7 @@ func NewMemMesh(rewardConfig Config, mesh MeshValidator, state StateUpdater, atx
 		tortoise: mesh,
 		state:    state,
 		done:     make(chan struct{}),
-		mdb:      NewMemMeshDB(atxdb,logger),
+		mdb:      NewMemMeshDB(atxdb, logger),
 		config:   rewardConfig,
 		AtxDB:    atxdb,
 	}
@@ -201,7 +201,6 @@ func (m *Mesh) ValidateLayer(lyr *types.Layer) {
 		m.PushTransactions(oldPbase, newPbase)
 	}
 }
-
 
 func SortBlocks(blocks []*types.Block) []*types.Block {
 	//not final sorting method, need to talk about this

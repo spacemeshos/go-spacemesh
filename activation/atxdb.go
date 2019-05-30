@@ -67,7 +67,6 @@ func (db *ActivationDb) PutAtx(atx *types.ActivationTx, mesh types.MeshTraverser
 	}
 }
 
-
 // CalcActiveSetFromView traverses the view found in a - the activation tx and counts number of active ids published
 // in the epoch prior to the epoch that a was published at, this number is the number of active ids in the next epoch
 // the function returns error if the view is not found

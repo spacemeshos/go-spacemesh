@@ -35,7 +35,7 @@ func (m MeshProviderMock) PutBlock(blk *types.Block) error {
 func (m MeshProviderMock) GetBlock(id types.BlockID) (*types.Block, error) {
 	return m[id], nil
 }
-func ( m* MeshProviderMock )ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.BlockHeader) error) error {
+func (m *MeshProviderMock) ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.BlockHeader) error) error {
 	return nil
 }
 

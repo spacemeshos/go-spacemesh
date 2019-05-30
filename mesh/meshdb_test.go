@@ -24,9 +24,6 @@ func teardown() {
 	os.RemoveAll(Path)
 }
 
-
-
-
 func getMeshdb() *MeshDB {
 	return NewMemMeshDB(&AtxDbMock{}, log.New("mdb", "", ""))
 }

@@ -63,7 +63,7 @@ func AtxHeaderAsBytes(tx *ActivationTxHeader) ([]byte, error) {
 	return w.Bytes(), nil
 }
 
-func AsBytes(f interface{}) ([]byte, error){
+func AsBytes(f interface{}) ([]byte, error) {
 	var w bytes.Buffer
 	if _, err := xdr.Marshal(&w, &f); err != nil {
 		return nil, fmt.Errorf("error marshalling atx: %v", err)
