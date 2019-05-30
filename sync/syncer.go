@@ -137,6 +137,7 @@ func (s *Syncer) maxSyncLayer() types.LayerID {
 }
 
 func (s *Syncer) Synchronise() {
+	mu := sync.Mutex{}
 	for currentSyncLayer := s.VerifiedLayer() + 1; currentSyncLayer < s.maxSyncLayer(); currentSyncLayer++ {
 		s.Info("syncing layer %v to layer %v current consensus layer is %d", s.VerifiedLayer(), currentSyncLayer, s.currentLayer)
 		lyr, err := s.GetLayer(types.LayerID(currentSyncLayer))
@@ -147,7 +148,12 @@ func (s *Syncer) Synchronise() {
 				return
 			}
 		}
-		s.ValidateLayer(lyr)
+
+		mu.Lock()
+		go func() {
+			s.ValidateLayer(lyr) //run one at a time
+			mu.Unlock()
+		}()
 	}
 }
 
