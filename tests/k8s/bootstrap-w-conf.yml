@@ -20,10 +20,10 @@ spec:
         args: ['--config', '/etc/config/config.toml', '--oracle_server', 'http://10.12.3.110:3030', '--test-mode', '--metrics', '--metrics-port', '2020']
         resources:
           requests:
-            memory: "512M"
+            memory: "1024M"
             cpu: "0.5"
           limits:
-            memory: "1024M"
+            memory: "2048M"
             cpu: "1"
         ports:
         - containerPort: 9999
