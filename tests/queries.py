@@ -186,22 +186,17 @@ def find_dups(indx, namespace, client_po_name, fields, max=1):
     s = Search(index=indx, using=es).query('bool', filter=[fltr])
     hits = list(s.scan())
 
-    print("Total hits: {0}".format(len(hits)))
-
     dups = []
     counting = {}
 
     for hit in hits:
-        if hit.kubernetes.pod_name not in counting:
-            counting[hit.kubernetes.pod_name] = 1
-        else:
-            counting[hit.kubernetes.pod_name] = counting[hit.kubernetes.pod_name] + 1
-            if counting[hit.kubernetes.pod_name] > max:
-                dups.append(hit.kubernetes.pod_name)
+        counting[hit.kubernetes.pod_name] = 1 if hit.kubernetes.pod_name not in counting else counting[hit.kubernetes.pod_name] + 1
+        if counting[hit.kubernetes.pod_name] > max and hit.kubernetes.pod_name not in counting:
+            dups.append(hit.kubernetes.pod_name)
 
+    print("Total hits: {0}".format(len(hits)))
     print("Duplicate count {0}".format(len(dups)))
-    for d in dups:
-        print(d)
+    print(dups)
 
 
 def find_missing(indx, namespace, client_po_name, fields, min=1):
@@ -217,21 +212,16 @@ def find_missing(indx, namespace, client_po_name, fields, min=1):
     s = Search(index=indx, using=es).query('bool', filter=[fltr])
     hits = list(s.scan())
 
-    print("Total hits: {0}".format(len(hits)))
-
     miss = []
     counting = {}
 
     for hit in hits:
-        if hit.kubernetes.pod_name not in counting:
-            counting[hit.kubernetes.pod_name] = 1
-        else:
-            counting[hit.kubernetes.pod_name] = counting[hit.kubernetes.pod_name] + 1
+        counting[hit.kubernetes.pod_name] = 1 if hit.kubernetes.pod_name not in counting else counting[hit.kubernetes.pod_name] + 1
 
     for pod in counting:
         if counting[pod] < min:
             miss.append(pod)
 
+    print("Total hits: {0}".format(len(hits)))
     print("Missing count {0}".format(len(miss)))
-    for d in miss:
-        print(d)
+    print(miss)
