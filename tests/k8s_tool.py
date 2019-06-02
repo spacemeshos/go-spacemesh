@@ -20,9 +20,8 @@ def find_restarted_pods(namespace):
     for pod in namespaced_pods:
         if pod is not None and pod.status is not None and pod.status.container_statuses is not None:
             for stat in pod.status.container_statuses:
-                pods[pod.metadata.name] = stat.restart_count
                 if stat.restart_count != 0:
-                    print(pod.metadata.name + " " + str(stat.restart_count))
+                    pods[pod.metadata.name] = stat.restart_count
                 break
     return pods
 
@@ -32,8 +31,19 @@ if __name__ == '__main__':
     load_config()
     args = sys.argv[1:]
     if args[0] == "restarts":
-        if args[1] is None:
+        if len(args) < 2:
             raise Exception("no namespace given")
+        sleeptime = 5
+        if len(args) >= 3:
+            sleeptime = int(args[2])
+        print("Checking pods every {0} sec".format(sleeptime))
         while True:
-            time.sleep(5)
-            find_restarted_pods(args[1])
+            time.sleep(sleeptime)
+            pods = find_restarted_pods(args[1])
+            if len(pods) > 0:
+                print("Restarted!")
+                for p in pods:
+                    print(p + " - " + str(pods[p]))
+            else:
+                sys.stdout.write('.')
+                sys.stdout.flush()
