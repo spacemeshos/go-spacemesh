@@ -13,7 +13,7 @@ def load_config():
     else:
         raise Exception("KUBECONFIG file not found: {0}".format(kube_config_path))
 
-
+# Usage : python3.7 k8s_tool.py restarts namespace_name 10
 def find_restarted_pods(namespace):
     namespaced_pods = client.CoreV1Api().list_namespaced_pod(namespace=namespace, include_uninitialized=True).items
     pods = {}
@@ -25,7 +25,8 @@ def find_restarted_pods(namespace):
                 break
     return pods
 
-
+# todo,we can use find_restarted_pods in out testing code.
+# todo: make this a better cli experience (help.. usage)
 if __name__ == '__main__':
     print("loading config")
     load_config()
