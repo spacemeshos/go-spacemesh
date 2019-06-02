@@ -30,8 +30,9 @@ func TestPoetDbHappyFlow(t *testing.T) {
 	copy(poetId[:], "poet id")
 	roundId := uint64(1337)
 
-	err = poetDb.ValidateAndStorePoetProof(poetProof, poetId, roundId, nil)
+	processingIssue, err := poetDb.ValidateAndStorePoetProof(poetProof, poetId, roundId, nil)
 	r.NoError(err)
+	r.False(processingIssue)
 
 	ref, err := poetDb.GetPoetProofRef(poetId, roundId)
 	r.NoError(err)
@@ -64,9 +65,10 @@ func TestPoetDbInvalidPoetProof(t *testing.T) {
 	roundId := uint64(1337)
 	poetProof.Root = []byte("some other root")
 
-	err = poetDb.ValidateAndStorePoetProof(poetProof, poetId, roundId, nil)
+	processingIssue, err := poetDb.ValidateAndStorePoetProof(poetProof, poetId, roundId, nil)
 	r.EqualError(err, fmt.Sprintf("failed to validate poet proof for poetId %x round 1337: merkle proof not valid",
 		poetId))
+	r.False(processingIssue)
 }
 
 func TestPoetDbNonExistingKeys(t *testing.T) {

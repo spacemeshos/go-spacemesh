@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spacemeshos/post/proving"
 )
@@ -40,25 +39,20 @@ func NewValidator(params PostParams, poetDb PoetDb) *Validator {
 
 func (v *Validator) Validate(nipst *types.NIPST, expectedChallenge common.Hash) error {
 	if !bytes.Equal(nipst.NipstChallenge[:], expectedChallenge[:]) {
-		return logWarning(errors.New("NIPST challenge is not equal to expected challenge"))
+		return errors.New("NIPST challenge is not equal to expected challenge")
 	}
 
 	if membership, err := v.poetDb.GetMembershipByPoetProofRef(nipst.PostProof.Challenge); err != nil || !membership[*nipst.NipstChallenge] {
-		return logWarning(fmt.Errorf("PoET proof chain invalid: %v", err))
+		return fmt.Errorf("PoET proof chain invalid: %v", err)
 	}
 
 	if nipst.Space < v.SpaceUnit {
-		return logWarning(fmt.Errorf("PoST space (%d) is less than a single space unit (%d)", nipst.Space, v.SpaceUnit))
+		return fmt.Errorf("PoST space (%d) is less than a single space unit (%d)", nipst.Space, v.SpaceUnit)
 	}
 
 	if valid, err := v.verifyPost(nipst.PostProof, nipst.Space, v.NumberOfProvenLabels, v.Difficulty); err != nil || !valid {
-		return logWarning(fmt.Errorf("PoST proof invalid: %v", err))
+		return fmt.Errorf("PoST proof invalid: %v", err)
 	}
 
 	return nil
-}
-
-func logWarning(err error) error {
-	log.Warning(err.Error())
-	return err
 }

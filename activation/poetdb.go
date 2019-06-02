@@ -23,21 +23,23 @@ func NewPoetDb(store database.Database, log log.Log) *PoetDb {
 	return &PoetDb{store: store, log: log}
 }
 
-func (db *PoetDb) ValidateAndStorePoetProof(proof types.PoetProof, poetId [types.PoetIdLength]byte, roundId uint64, signature []byte) error {
+func (db *PoetDb) ValidateAndStorePoetProof(proof types.PoetProof, poetId [types.PoetIdLength]byte, roundId uint64,
+	signature []byte) (processingIssue bool, err error) {
+
 	root, err := calcRoot(proof.Members)
 	if err != nil {
-		return db.logError(fmt.Errorf("failed to calculate membership root for poetId %x round %d: %v",
-			poetId, roundId, err))
+		return true, fmt.Errorf("failed to calculate membership root for poetId %x round %d: %v",
+			poetId, roundId, err)
 	}
 	if err := validatePoet(root, proof.MerkleProof, proof.LeafCount); err != nil {
-		return db.logWarning(fmt.Errorf("failed to validate poet proof for poetId %x round %d: %v",
-			poetId, roundId, err))
+		return false, fmt.Errorf("failed to validate poet proof for poetId %x round %d: %v",
+			poetId, roundId, err)
 	}
 
 	poetProof, err := types.InterfaceToBytes(&proof)
 	if err != nil {
-		return db.logError(fmt.Errorf("failed to marshal poet proof for poetId %x round %d: %v",
-			poetId, roundId, err))
+		return true, fmt.Errorf("failed to marshal poet proof for poetId %x round %d: %v",
+			poetId, roundId, err)
 	}
 
 	// TODO(noamnelke): validate signature (or extract public key and use for salting merkle hashes)
@@ -46,26 +48,26 @@ func (db *PoetDb) ValidateAndStorePoetProof(proof types.PoetProof, poetId [types
 
 	batch := db.store.NewBatch()
 	if err := batch.Put(ref[:], poetProof); err != nil {
-		return db.logError(fmt.Errorf("failed to store poet proof for poetId %x round %d: %v",
-			poetId, roundId, err))
+		return true, fmt.Errorf("failed to store poet proof for poetId %x round %d: %v",
+			poetId, roundId, err)
 	}
 	if err := batch.Put(makeKey(poetId, roundId), ref[:]); err != nil {
-		return db.logError(fmt.Errorf("failed to store poet proof index entry for poetId %x round %d: %v",
-			poetId, roundId, err))
+		return true, fmt.Errorf("failed to store poet proof index entry for poetId %x round %d: %v",
+			poetId, roundId, err)
 	}
 	if err := batch.Write(); err != nil {
-		return db.logError(fmt.Errorf("failed to store poet proof and index for poetId %x round %d: %v",
-			poetId, roundId, err))
+		return true, fmt.Errorf("failed to store poet proof and index for poetId %x round %d: %v",
+			poetId, roundId, err)
 	}
 
-	return nil
+	return false, nil
 }
 
 func (db *PoetDb) GetPoetProofRef(poetId [types.PoetIdLength]byte, roundId uint64) ([]byte, error) {
 	poetRef, err := db.store.Get(makeKey(poetId, roundId))
 	if err != nil {
-		return nil, db.logInfo(fmt.Errorf("could not fetch poet proof for poetId %x round %d: %v",
-			poetId, roundId, err))
+		return nil, fmt.Errorf("could not fetch poet proof for poetId %x round %d: %v",
+			poetId, roundId, err)
 	}
 	return poetRef, nil
 }
@@ -73,28 +75,13 @@ func (db *PoetDb) GetPoetProofRef(poetId [types.PoetIdLength]byte, roundId uint6
 func (db *PoetDb) GetMembershipByPoetProofRef(poetRef []byte) (map[common.Hash]bool, error) {
 	poetProofBytes, err := db.store.Get(poetRef)
 	if err != nil {
-		return nil, db.logWarning(fmt.Errorf("could not fetch poet proof for ref %x: %v", poetRef, err))
+		return nil, fmt.Errorf("could not fetch poet proof for ref %x: %v", poetRef, err)
 	}
 	var poetProof types.PoetProof
 	if err := types.BytesToInterface(poetProofBytes, &poetProof); err != nil {
-		return nil, db.logError(fmt.Errorf("failed to unmarshal poet proof for ref %x: %v", poetRef, err))
+		return nil, fmt.Errorf("failed to unmarshal poet proof for ref %x: %v", poetRef, err)
 	}
 	return membershipSliceToMap(poetProof.Members), nil
-}
-
-func (db *PoetDb) logInfo(err error) error {
-	db.log.Info(err.Error())
-	return err
-}
-
-func (db *PoetDb) logWarning(err error) error {
-	db.log.Warning(err.Error())
-	return err
-}
-
-func (db *PoetDb) logError(err error) error {
-	db.log.Error(err.Error())
-	return err
 }
 
 func makeKey(poetId [types.PoetIdLength]byte, roundId uint64) []byte {
