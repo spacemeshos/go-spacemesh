@@ -15,12 +15,14 @@ import yaml
 from kubernetes import client
 from kubernetes.client.rest import ApiException
 from pytest_testconfig import config as testconfig
-
 from elasticsearch import Elasticsearch
 from elasticsearch_dsl import Search, Q
 
 from tests.misc import ContainerSpec
 from tests.queries import query_message
+
+from kubernetes.stream import stream
+
 
 BOOT_DEPLOYMENT_FILE = './k8s/bootstrap-w-conf.yml'
 CLIENT_DEPLOYMENT_FILE = './k8s/client-w-conf.yml'
@@ -150,22 +152,12 @@ def setup_server(deployment_name, deployment_file, namespace):
 @pytest.fixture(scope='module')
 def setup_poet(request):
     poet_deployment_name = 'poet'
-
-    def fin():
-        delete_deployment(poet_deployment_name, testconfig['namespace'])
-
-    request.addfinalizer(fin)
     return setup_server(poet_deployment_name, POET_DEPLOYMENT_FILE, testconfig['namespace'])
 
 
 @pytest.fixture(scope='module')
 def setup_oracle(request):
     oracle_deployment_name = 'oracle'
-
-    def fin():
-        delete_deployment(oracle_deployment_name, testconfig['namespace'])
-
-    request.addfinalizer(fin)
     return setup_server(oracle_deployment_name, ORACLE_DEPLOYMENT_FILE, testconfig['namespace'])
 
 
@@ -209,11 +201,6 @@ def setup_bootstrap(request, init_session, setup_oracle, setup_poet, create_conf
         bs_pod['key'] = match.group('bootstrap_key')
         bootstrap_deployment_info.pods = [bs_pod]
         return bootstrap_deployment_info
-
-    def fin():
-        delete_deployment(bootstrap_deployment_info.deployment_name, testconfig['namespace'])
-
-    request.addfinalizer(fin)
     return _setup_bootstrap_in_namespace(testconfig['namespace'])
 
 
@@ -247,20 +234,7 @@ def setup_clients(request, setup_oracle, setup_poet, setup_bootstrap):
         client_pods = list(filter(lambda i: i.metadata.name.startswith(client_info.deployment_name), namespaced_pods))
 
         client_info.pods = [{'name': c.metadata.name, 'pod_ip': c.status.pod_ip} for c in client_pods]
-        print("Number of client pods: {0}".format(len(client_info.pods)))
-
-        for c in client_info.pods:
-            while True:
-                resp = client.CoreV1Api().read_namespaced_pod(name=c['name'], namespace=name_space)
-                if resp.status.phase != 'Pending':
-                    break
-                time.sleep(1)
         return client_info
-
-    def fin():
-        delete_deployment(client_info.deployment_name, testconfig['namespace'])
-
-    request.addfinalizer(fin)
     return _setup_clients_in_namespace(testconfig['namespace'])
 
 
@@ -288,6 +262,26 @@ def add_single_client(deployment_id, container_specs):
     print("Add new client: {0}".format(client_name))
     return client_name
 
+
+def get_conf(bs_info, setup_poet, setup_oracle, args=None):
+    client_args = {} if 'args' not in testconfig['client'] else testconfig['client']['args']
+
+    if args is not None:
+        for arg in args:
+            client_args[arg] = args[arg]
+
+    cspec = ContainerSpec(cname='client',
+                          cimage=testconfig['client']['image'],
+                          centry=[testconfig['client']['command']])
+    cspec.append_args(bootnodes="{0}:{1}/{2}".format(bs_info['pod_ip'], BOOTSTRAP_PORT, bs_info['key']),
+                      oracle_server='http://{0}:{1}'.format(setup_oracle, ORACLE_SERVER_PORT),
+                      poet_server='{0}:{1}'.format(setup_poet, POET_SERVER_PORT),
+                      genesis_time=GENESIS_TIME.isoformat('T', 'seconds'),
+                      **client_args)
+
+
+    return cspec
+
 # The following fixture should not be used if you wish to add many clients during test.
 # Instead you should call add_single_client directly
 @pytest.fixture()
@@ -302,26 +296,11 @@ def add_client(request, setup_oracle, setup_poet, setup_bootstrap, setup_clients
 
         bs_info = setup_bootstrap.pods[0]
 
-        client_args = {} if 'args' not in testconfig['client'] else testconfig['client']['args']
-
-        cspec = ContainerSpec(cname='client',
-                              cimage=testconfig['client']['image'],
-                              centry=[testconfig['client']['command']])
-
-        cspec.append_args(bootnodes="{0}:{1}/{2}".format(bs_info['pod_ip'], BOOTSTRAP_PORT, bs_info['key']),
-                          oracle_server='http://{0}:{1}'.format(setup_oracle, ORACLE_SERVER_PORT),
-                          poet_server='{0}:{1}'.format(setup_poet, POET_SERVER_PORT),
-                          genesis_time=GENESIS_TIME.isoformat('T', 'seconds'),
-                          **client_args)
+        cspec = get_conf(bs_info, setup_poet, setup_oracle)
 
         client_name = add_single_client(setup_bootstrap.deployment_id, cspec)
         return client_name
 
-    def fin():
-        global client_name
-        pod.delete_pod(client_name, testconfig['namespace'])
-
-    request.addfinalizer(fin)
     return _add_single_client()
 
 
@@ -339,13 +318,9 @@ def wait_genesis():
 
 
 def api_call(client_ip, data, api, namespace):
-    p = subprocess.Popen(['./kubectl-cmd.sh', '%s' % client_ip, "%s" % data, api, namespace], stdin=subprocess.PIPE,
-                         stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    (out, err) = p.communicate()
-    if p.returncode != 0:
-        raise Exception('An Error raised on api_call')
-    return out
-
+    # todo: this won't work with long payloads - ( `Argument list too long` ). try port-forward ?
+    res = stream(client.CoreV1Api().connect_post_namespaced_pod_exec, name="curl", namespace=namespace, command=["curl", "-s", "--request",  "POST", "--data", data, "http://" + client_ip + ":9090/" + api], stderr=True, stdin=False, stdout=True, tty=False)
+    return res
 
 @pytest.fixture(scope='module')
 def create_configmap(request):
@@ -377,13 +352,6 @@ def create_configmap(request):
             raise e
         return configmap_name
 
-    def fin():
-        client.CoreV1Api().delete_namespaced_config_map(testconfig['config_map_name'],
-                                                        testconfig['namespace'],
-                                                        body=client.V1DeleteOptions(propagation_policy='Foreground',
-                                                                                    grace_period_seconds=5))
-
-    request.addfinalizer(fin)
     return _create_configmap_in_namespace(testconfig['namespace'])
 
 
@@ -407,11 +375,6 @@ def add_curl(request, setup_bootstrap):
         resp = pod.create_pod(CURL_POD_FILE,
                               testconfig['namespace'])
         return True
-
-    def fin():
-        pod.delete_pod('curl', testconfig['namespace'])
-
-    request.addfinalizer(fin)
     return _run_curl_pod()
 
 

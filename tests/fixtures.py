@@ -74,6 +74,7 @@ def set_namespace(request, session_id, load_config):
         v1.create_namespace(body)
 
     def fin():
+        print("Deleting test namespace {0}".format(testconfig['namespace']))
         v1.delete_namespace(name=testconfig['namespace'], body=client.V1DeleteOptions())
 
     request.addfinalizer(fin)
