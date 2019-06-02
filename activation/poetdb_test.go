@@ -64,7 +64,7 @@ func TestPoetDbInvalidPoetProof(t *testing.T) {
 	poetProof.Root = []byte("some other root")
 
 	err = poetDb.ValidateAndStorePoetProof(poetProof, poetId, roundId, nil)
-	r.EqualError(err, "failed to validate poet proof: merkle proof not valid")
+	r.EqualError(err, "failed to validate poet proof for poetId 706f6574206964 round 1337: merkle proof not valid")
 }
 
 func TestPoetDbNonExistingKeys(t *testing.T) {
@@ -72,9 +72,9 @@ func TestPoetDbNonExistingKeys(t *testing.T) {
 
 	poetDb := NewPoetDb(database.NewMemDatabase(), log.NewDefault("poetdb_test"))
 
-	_, err := poetDb.GetPoetProofRef(nil, 0)
-	r.EqualError(err, "could not fetch poet proof: not found")
+	_, err := poetDb.GetPoetProofRef([]byte("abc"), 0)
+	r.EqualError(err, "could not fetch poet proof for poetId 616263 round 0: not found")
 
-	_, err = poetDb.GetMembershipByPoetProofRef(nil)
-	r.EqualError(err, "could not fetch poet proof: not found")
+	_, err = poetDb.GetMembershipByPoetProofRef([]byte("abc"))
+	r.EqualError(err, "could not fetch poet proof for ref 616263: not found")
 }
