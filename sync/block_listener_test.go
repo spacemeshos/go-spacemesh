@@ -157,11 +157,12 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 	blk.AddTransaction(tx)
 	blk.AddAtx(types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")}, 1, types.AtxId{}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{}), true))
 
-	data, err := types.BlockAsBytes(*blk)
+	data, err := types.InterfaceToBytes(*blk)
 	require.NoError(t, err)
-	blk2, ok := types.BytesAsBlock(data)
-	require.NoError(t, ok)
-	require.True(t, blk.Compare(&blk2))
+	blk2 := &types.Block{}
+	err = types.BytesToInterface(data, blk2)
+	require.NoError(t, err)
+	require.True(t, blk.Compare(blk2))
 
 	err = n2.Broadcast(NewBlockProtocol, data)
 	assert.NoError(t, err)

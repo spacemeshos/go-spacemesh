@@ -219,9 +219,10 @@ func (prot *Protocol) removePeer(peer p2pcrypto.PublicKey) {
 func (prot *Protocol) processMessage(sender p2pcrypto.PublicKey, msg *pb.ProtocolMessage) {
 	data, err := pb.ExtractData(msg.Payload)
 	if err != nil {
-		prot.Log.Warning("could'nt extract payload from message err=", err)
+		prot.Log.Debug("could'nt extract payload from message err=", err)
+		return
 	} else if _, ok := data.(*service.DataMsgWrapper); ok {
-		prot.Log.Warning("unexpected usage of request-response framework over Gossip - WAS IT IN PURPOSE? ")
+		prot.Log.Debug("unexpected usage of request-response framework over Gossip - WAS IT IN PURPOSE? ")
 		return
 	}
 
@@ -234,7 +235,7 @@ func (prot *Protocol) processMessage(sender p2pcrypto.PublicKey, msg *pb.Protoco
 		// todo : - have some more metrics for termination
 		// todo	: - maybe tell the peer we got this message already?
 		// todo : - maybe block this peer since he sends us old messages
-		prot.Log.With().Warning("old_gossip_message", log.String("from", sender.String()), log.String("protocol", protocol))
+		prot.Log.With().Debug("old_gossip_message", log.String("from", sender.String()), log.String("protocol", protocol))
 	} else {
 		prot.Log.With().Info("new_gossip_message", log.String("from", sender.String()), log.String("auth", base58.Encode(msg.Metadata.AuthPubkey)), log.String("protocol", protocol))
 		metrics.NewGossipMessages.With("protocol", protocol).Add(1)
@@ -268,7 +269,7 @@ loop:
 			break loop
 		}
 	}
-	prot.Warning("propagate event loop stopped. err: %v", err)
+	prot.Error("propagate event loop stopped. err: %v", err)
 }
 
 func (prot *Protocol) eventLoop(peerConn chan p2pcrypto.PublicKey, peerDisc chan p2pcrypto.PublicKey) {
@@ -294,7 +295,7 @@ loop:
 			break loop
 		}
 	}
-	prot.Warning("Gossip protocol event loop stopped. err: %v", err)
+	prot.Error("Gossip protocol event loop stopped. err: %v", err)
 }
 
 // peersCount returns the number of peers known to the protocol, used for testing only

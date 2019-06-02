@@ -31,7 +31,7 @@ func NewBlockEligibilityValidator(committeeSize int32, layersPerEpoch uint16, ac
 	}
 }
 
-func (v BlockEligibilityValidator) BlockEligible(block *types.Block) (bool, error) {
+func (v BlockEligibilityValidator) BlockEligible(block *types.BlockHeader) (bool, error) {
 	epochNumber := block.LayerIndex.GetEpoch(v.layersPerEpoch)
 
 	// need to get active set size from previous epoch
@@ -70,7 +70,7 @@ func (v BlockEligibilityValidator) BlockEligible(block *types.Block) (bool, erro
 	return block.LayerIndex == eligibleLayer, nil
 }
 
-func (v BlockEligibilityValidator) getValidATX(blockEpoch types.EpochId, block *types.Block) (*types.ActivationTx, error) {
+func (v BlockEligibilityValidator) getValidATX(blockEpoch types.EpochId, block *types.BlockHeader) (*types.ActivationTx, error) {
 	atx, err := v.activationDb.GetAtx(block.ATXID)
 	if err != nil {
 		v.log.Error("getting ATX failed: %v %v ep(%v)", err, block.ATXID.String()[:5], blockEpoch)

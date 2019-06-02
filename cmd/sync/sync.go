@@ -44,7 +44,7 @@ var conf = sync.Configuration{
 	SyncInterval:   1 * time.Second,
 	Concurrency:    4,
 	LayerSize:      int(100),
-	RequestTimeout: 500 * time.Millisecond,
+	RequestTimeout: 150 * time.Millisecond,
 }
 
 //////////////////////////////
@@ -91,7 +91,7 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	defer msh.Close()
 
 	ch := make(chan types.LayerID, 1)
-	app.sync = sync.NewSync(swarm, msh, sync.BlockValidatorMock{}, conf, ch, lg.WithName("syncer"))
+	app.sync = sync.NewSync(swarm, msh, sync.BlockValidatorMock{}, sync.TxValidatorMock{}, conf, ch, lg.WithName("sync"))
 	ch <- 101
 	if err = swarm.Start(); err != nil {
 		log.Panic("error starting p2p err=%v", err)
@@ -99,8 +99,8 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 
 	i := 0
 	for ; ; i++ {
-		if lyr, err := mshDb.GetLayer(types.LayerID(i)); err != nil || lyr == nil {
-			lg.Info("loaded %v layers from disk %v", i-1, err)
+		if lyr, err2 := mshDb.GetLayer(types.LayerID(i)); err2 != nil || lyr == nil {
+			lg.Info("loaded %v layers from disk %v", i-1, err2)
 			break
 		} else {
 			lg.Info("loaded layer %v from disk ", i)

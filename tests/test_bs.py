@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 
 from tests import queries
 from tests import pod
-from tests.fixtures import load_config, DeploymentInfo
+from tests.fixtures import load_config, DeploymentInfo, NetworkDeploymentInfo
 from tests.fixtures import init_session, set_namespace, set_docker_images, session_id
 import os
 from os import path
@@ -65,14 +65,15 @@ def wait_to_deployment_to_be_deleted(deployment_name, name_space, time_out=None)
 
 
 def wait_to_deployment_to_be_ready(deployment_name, name_space, time_out=None):
-    total_sleep_time = 0
+    start = datetime.now()
     while True:
         resp = client.AppsV1Api().read_namespaced_deployment(name=deployment_name, namespace=name_space)
+        total_sleep_time = (datetime.now()-start).total_seconds()
         if not resp.status.unavailable_replicas:
             print("Total time waiting for deployment {0}: {1} sec".format(deployment_name, total_sleep_time))
             break
+        print("{0}/{1} pods ready {2} sec               ".format(resp.status.available_replicas, resp.status.replicas, total_sleep_time), end="\r")
         time.sleep(1)
-        total_sleep_time += 1
 
         if time_out and total_sleep_time > time_out:
             raise Exception("Timeout waiting to deployment to be ready")
@@ -121,9 +122,9 @@ def query_bootstrap_es(indx, namespace, bootstrap_po_name):
     s = Search(index=indx, using=es).query('bool', filter=[fltr])
     hits = list(s.scan())
     for h in hits:
-        match = re.search(r"Local node identity \w+ (?P<bootstarap_key>\w+)", h.log)
+        match = re.search(r"Local node identity \w+ (?P<bootstrap_key>\w+)", h.log)
         if match:
-            return match.group('bootstarap_key')
+            return match.group('bootstrap_key')
     return None
 
 
@@ -204,8 +205,8 @@ def setup_bootstrap(request, init_session, setup_oracle, setup_poet, create_conf
 
         bs_pod['pod_ip'] = resp.status.pod_ip
         bootstrap_pod_logs = client.CoreV1Api().read_namespaced_pod_log(name=bs_pod['name'], namespace=name_space)
-        match = re.search(r"Local node identity >> (?P<bootstarap_key>\w+)", bootstrap_pod_logs)
-        bs_pod['key'] = match.group('bootstarap_key')
+        match = re.search(r"Local node identity >> (?P<bootstrap_key>\w+)", bootstrap_pod_logs)
+        bs_pod['key'] = match.group('bootstrap_key')
         bootstrap_deployment_info.pods = [bs_pod]
         return bootstrap_deployment_info
 
@@ -261,6 +262,19 @@ def setup_clients(request, setup_oracle, setup_poet, setup_bootstrap):
 
     request.addfinalizer(fin)
     return _setup_clients_in_namespace(testconfig['namespace'])
+
+
+@pytest.fixture(scope='module')
+def setup_network(request, init_session, setup_oracle, setup_poet,
+                  setup_bootstrap, setup_clients, add_curl, wait_genesis):
+
+    # This fixture deploy a complete Spacemesh network and returns only after genesis time is over
+    network_deployment = NetworkDeploymentInfo(dep_id=init_session,
+                                               oracle_deployment_info=setup_oracle,
+                                               poet_deployment_info=setup_poet,
+                                               bs_deployment_info=setup_bootstrap,
+                                               cl_deployment_info=setup_clients)
+    return network_deployment
 
 
 def add_single_client(deployment_id, container_specs):
@@ -382,7 +396,7 @@ def save_log_on_exit(request):
         (out, err) = p.communicate()
 
 
-@pytest.fixture()
+@pytest.fixture(scope='module')
 def add_curl(request, setup_bootstrap):
 
     def _run_curl_pod():
@@ -411,59 +425,9 @@ todaydate = dt.strftime("%Y.%m.%d")
 current_index = 'kubernetes_cluster-' + todaydate
 
 
-def test_bootstrap(setup_bootstrap):
-    # wait for the bootstrap logs to be available in ElasticSearch
-    time.sleep(5)
-    assert setup_bootstrap.pods[0]['key'] == query_bootstrap_es(current_index,
-                                                                testconfig['namespace'],
-                                                                setup_bootstrap.pods[0]['name'])
-
-
-def test_client(setup_clients, save_log_on_exit):
-    fields = {'M':'discovery_bootstrap'}
-    timetowait = len(setup_clients.pods)/2
-    print("Sleeping " + str(timetowait) + " before checking out bootstrap results")
-    time.sleep(timetowait)
-    peers = query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, fields, True)
-    assert len(set(peers)) == len(setup_clients.pods)
-
-
-def test_add_client(add_client):
-
-    # Sleep a while before checking the node is bootstarped
-    time.sleep(20)
-    fields = {'M': 'discovery_bootstrap'}
-    hits = query_message(current_index, testconfig['namespace'], add_client, fields, True)
-    assert len(hits) == 1, "Could not find new Client bootstrap message"
-
-
-def test_gossip(setup_clients, add_curl):
-    fields = {'M':'new_gossip_message', 'protocol': 'api_test_gossip'}
-    # *note*: this already waits for bootstrap so we can send the msg right away.
-    # send message to client via rpc
-    client_ip = setup_clients.pods[0]['pod_ip']
-    podname = setup_clients.pods[0]['name']
-    print("Sending gossip from client ip: {0}/{1}".format(podname, client_ip))
-
-    # todo: take out broadcast and rpcs to helper methods.
-    api = 'v1/broadcast'
-    data = '{"data":"foo"}'
-    out = api_call(client_ip, data, api, testconfig['namespace'])
-    assert '{"value":"ok"}' in out.decode("utf-8")
-
-    # Need to sleep for a while in order to enable the propagation of the gossip message - 0.5 sec for each node
-    # TODO: check frequently before timeout so we might be able to finish earlier.
-    gossip_propagation_sleep = len(setup_clients.pods) / 2 # currently we expect short propagation times.
-    print('sleep for {0} sec to enable gossip propagation'.format(gossip_propagation_sleep))
-    time.sleep(gossip_propagation_sleep)
-
-    peers_for_gossip = query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, fields, True)
-    assert len(setup_clients.pods) == len(set(peers_for_gossip))
-
-
-def test_transaction(setup_clients, add_curl, wait_genesis):
+def test_transaction(setup_network):
     # choose client to run on
-    client_ip = setup_clients.pods[0]['pod_ip']
+    client_ip = setup_network.clients.pods[0]['pod_ip']
 
     api = 'v1/nonce'
     data = '{"address":"1"}'
@@ -497,9 +461,9 @@ def test_transaction(setup_clients, add_curl, wait_genesis):
     print("balance ok")
 
 
-def test_mining(setup_bootstrap, setup_clients, add_curl, wait_genesis):
+def test_mining(setup_network):
     # choose client to run on
-    client_ip = setup_clients.pods[0]['pod_ip']
+    client_ip = setup_network.clients.pods[0]['pod_ip']
 
     api = 'v1/nonce'
     data = '{"address":"1"}'
@@ -539,7 +503,7 @@ def test_mining(setup_bootstrap, setup_clients, add_curl, wait_genesis):
     atxmap = queries.get_atx_per_node(testconfig["namespace"])
     total_atxs = sum([len(atxmap[x]) for x in atxmap ])
 
-    total_pods = len(setup_clients.pods) + len(setup_bootstrap.pods)
+    total_pods = len(setup_network.clients.pods) + len(setup_network.bootstrap.pods)
 
     print("atx created " + str(total_atxs))
     print("blocks created " + str(total_blocks))

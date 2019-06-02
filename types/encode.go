@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/crypto/sha3"
 	"sort"
 )
 
@@ -119,23 +120,6 @@ func NIPSTChallengeAsBytes(challenge *NIPSTChallenge) ([]byte, error) {
 	return w.Bytes(), nil
 }
 
-func BlockHeaderToBytes(bheader *BlockHeader) ([]byte, error) {
-	var w bytes.Buffer
-	if _, err := xdr.Marshal(&w, bheader); err != nil {
-		return nil, fmt.Errorf("error marshalling block header: %v", err)
-	}
-	return w.Bytes(), nil
-}
-
-func BytesAsBlockHeader(buf []byte) (BlockHeader, error) {
-	b := BlockHeader{}
-	_, err := xdr.Unmarshal(bytes.NewReader(buf), &b)
-	if err != nil {
-		return b, err
-	}
-	return b, nil
-}
-
 func TransactionAsBytes(tx *SerializableTransaction) ([]byte, error) {
 	var w bytes.Buffer
 	if _, err := xdr.Marshal(&w, &tx); err != nil {
@@ -153,36 +137,31 @@ func BytesAsTransaction(buf []byte) (*SerializableTransaction, error) {
 	return &b, nil
 }
 
-func MiniBlockToBytes(mini MiniBlock) ([]byte, error) {
+//!!! Pass the interface by reference
+func BytesToInterface(buf []byte, i interface{}) error {
+	_, err := xdr.Unmarshal(bytes.NewReader(buf), i)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+//!!! Pass the interface by reference
+func InterfaceToBytes(i interface{}) ([]byte, error) {
 	var w bytes.Buffer
-	if _, err := xdr.Marshal(&w, &mini); err != nil {
-		return nil, fmt.Errorf("error marshalling mini block: %v", err)
+	if _, err := xdr.Marshal(&w, &i); err != nil {
+		return nil, err
 	}
 	return w.Bytes(), nil
 }
 
-func BytesAsMiniBlock(buf []byte) (*MiniBlock, error) {
-	b := MiniBlock{}
-	_, err := xdr.Unmarshal(bytes.NewReader(buf), &b)
+//todo standardized transaction id across project
+//todo replace panic
+func GetTransactionId(t *SerializableTransaction) TransactionId {
+	tx, err := TransactionAsBytes(t)
 	if err != nil {
-		return &b, err
+		panic("could not Serialize transaction")
 	}
-	return &b, nil
-}
 
-func BlockAsBytes(block Block) ([]byte, error) {
-	var w bytes.Buffer
-	if _, err := xdr.Marshal(&w, &block); err != nil {
-		return nil, fmt.Errorf("error marshalling block: %v", err)
-	}
-	return w.Bytes(), nil
-}
-
-func BytesAsBlock(buf []byte) (Block, error) {
-	b := Block{}
-	_, err := xdr.Unmarshal(bytes.NewReader(buf), &b)
-	if err != nil {
-		return b, err
-	}
-	return b, nil
+	return sha3.Sum256(tx)
 }
