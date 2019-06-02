@@ -118,7 +118,7 @@ func SyncMockFactory(number int, conf Configuration, name string, dbType string)
 		net := sim.NewNode()
 		name := fmt.Sprintf(name+"_%d", i)
 		l := log.New(name, "", "")
-		sync := NewSync(net, getMesh(dbType, name+"_"+time.Now().String()), BlockValidatorMock{}, TxValidatorMock{}, conf, tk, l)
+		sync := NewSync(net, getMesh(dbType, Path+name+"_"+time.Now().String()), BlockValidatorMock{}, TxValidatorMock{}, conf, tk, l)
 		ts.Start()
 		nodes = append(nodes, sync)
 		p2ps = append(p2ps, net)
@@ -146,8 +146,8 @@ var rewardConf = mesh.Config{
 
 func getMeshWithLevelDB(id string) *mesh.Mesh {
 	lg := log.New(id, "", "")
-	mshdb := mesh.NewPersistentMeshDB(Path, lg)
-	atxdbStore, _ := database.NewLDBDatabase(Path+"atx", 0, 0)
+	mshdb := mesh.NewPersistentMeshDB(id, lg)
+	atxdbStore, _ := database.NewLDBDatabase(id+"atx", 0, 0)
 	atxdb := activation.NewActivationDb(atxdbStore, &MockIStore{}, mshdb, uint64(10), &ValidatorMock{}, lg.WithName("atxDB"))
 	return mesh.NewMesh(mshdb, atxdb, rewardConf, &MeshValidatorMock{}, &stateMock{}, lg)
 }
@@ -611,8 +611,8 @@ func Test_Multiple_SyncIntegrationSuite(t *testing.T) {
 		t.Skip()
 	}
 	sis := &syncIntegrationMultipleNodes{}
-	sis.BootstrappedNodeCount = 3
-	sis.BootstrapNodesCount = 2
+	sis.BootstrappedNodeCount = 4
+	sis.BootstrapNodesCount = 1
 	sis.NeighborsCount = 2
 	sis.name = t.Name()
 	i := uint32(1)
