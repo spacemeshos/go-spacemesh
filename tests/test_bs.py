@@ -396,15 +396,15 @@ def test_transaction(setup_network):
     data = '{"address":"1"}'
     print("checking nonce")
     out = api_call(client_ip, data, api, testconfig['namespace'])
-    assert '{"value":"0"}' in out.decode("utf-8")
+    assert '{"value":"0"}' in out
     print("nonce ok")
 
     api = 'v1/submittransaction'
     data = '{"srcAddress":"1","dstAddress":"222","nonce":"0","amount":"100"}'
     print("submitting transaction")
     out = api_call(client_ip, data, api, testconfig['namespace'])
-    print(out.decode("utf-8"))
-    assert '{"value":"ok"}' in out.decode("utf-8")
+    print(out)
+    assert '{"value":"ok"}' in out
     print("submit transaction ok")
     print("wait for confirmation ")
     api = 'v1/balance'
@@ -415,12 +415,12 @@ def test_transaction(setup_network):
         time.sleep(60)
         print("... ")
         out = api_call(client_ip, data, api, testconfig['namespace'])
-        if '{"value":"100"}' in out.decode("utf-8"):
+        if '{"value":"100"}' in out:
             end = time.time()
             break
 
     print("test took {:.3f} seconds ".format(end-start))
-    assert '{"value":"100"}' in out.decode("utf-8")
+    assert '{"value":"100"}' in out
     print("balance ok")
 
 
@@ -432,15 +432,15 @@ def test_mining(setup_network):
     data = '{"address":"1"}'
     print("checking nonce")
     out = api_call(client_ip, data, api, testconfig['namespace'])
-    # assert '{"value":"0"}' in out.decode("utf-8")
+    # assert '{"value":"0"}' in out
     # print("nonce ok")
 
     api = 'v1/submittransaction'
     data = '{"srcAddress":"1","dstAddress":"222","nonce":"0","amount":"100"}'
     print("submitting transaction")
     out = api_call(client_ip, data, api, testconfig['namespace'])
-    print(out.decode("utf-8"))
-    assert '{"value":"ok"}' in out.decode("utf-8")
+    print(out)
+    assert '{"value":"ok"}' in out
     print("submit transaction ok")
     print("wait for confirmation ")
     api = 'v1/balance'
@@ -456,7 +456,7 @@ def test_mining(setup_network):
 
     # out = api_call(client_ip, data, api, testconfig['namespace'])
     print("test took {:.3f} seconds ".format(end-start))
-    # assert '{"value":"100"}' in out.decode("utf-8")
+    # assert '{"value":"100"}' in out
     # print("balance ok")
 
     # need to filter out blocks that have come from last layer
