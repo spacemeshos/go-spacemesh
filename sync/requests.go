@@ -66,7 +66,7 @@ func BlockReqFactory(blockIds []types.BlockID) RequestFactory {
 			return nil, errors.New("chan was closed, job done")
 		}
 
-		if err := s.SendRequest(MiniBLOCK, id.ToBytes(), peer, foo); err != nil {
+		if err := s.SendRequest(MINI_BLOCK, id.ToBytes(), peer, foo); err != nil {
 			return nil, err
 		}
 

@@ -60,7 +60,7 @@ func (s *Syncer) Close() {
 const (
 	IDLE         uint32             = 0
 	RUNNING      uint32             = 1
-	MiniBLOCK    server.MessageType = 1
+	MINI_BLOCK   server.MessageType = 1
 	LAYER_HASH   server.MessageType = 2
 	LAYER_IDS    server.MessageType = 3
 	TX           server.MessageType = 4
@@ -123,7 +123,7 @@ func NewSync(srv service.Service, layers *mesh.Mesh, bv BlockValidator, tv TxVal
 	}
 
 	s.RegisterBytesMsgHandler(LAYER_HASH, newLayerHashRequestHandler(layers, logger))
-	s.RegisterBytesMsgHandler(MiniBLOCK, newMiniBlockRequestHandler(layers, logger))
+	s.RegisterBytesMsgHandler(MINI_BLOCK, newMiniBlockRequestHandler(layers, logger))
 	s.RegisterBytesMsgHandler(LAYER_IDS, newLayerBlockIdsRequestHandler(layers, logger))
 	s.RegisterBytesMsgHandler(TX, newTxsRequestHandler(layers, logger))
 	s.RegisterBytesMsgHandler(ATX, newATxsRequestHandler(layers, logger))
