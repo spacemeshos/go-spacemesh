@@ -324,7 +324,6 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 		[]byte(nodeID.Key), // TODO: use both keys in the nodeID
 		commitmentConfig.SpaceUnit,
 		commitmentConfig.Difficulty,
-		100,
 		postClient,
 		poetClient,
 		poetDb,

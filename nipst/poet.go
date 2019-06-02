@@ -110,8 +110,7 @@ func (c *RPCPoetClient) id() []byte {
 	return []byte("id")
 }
 
-func (c *RPCPoetClient) submit(challenge common.Hash,
-	duration SeqWorkTicks) (*types.PoetRound, error) {
+func (c *RPCPoetClient) submit(challenge common.Hash) (*types.PoetRound, error) {
 
 	req := api.SubmitRequest{Challenge: challenge[:]}
 	res, err := c.client.Submit(context.Background(), &req)

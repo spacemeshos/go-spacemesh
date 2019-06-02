@@ -37,8 +37,7 @@ func (p *PoetProvingServiceClientMock) id() []byte {
 	return []byte("1")
 }
 
-func (p *PoetProvingServiceClientMock) submit(challenge common.Hash,
-	duration SeqWorkTicks) (*types.PoetRound, error) {
+func (p *PoetProvingServiceClientMock) submit(challenge common.Hash) (*types.PoetRound, error) {
 	return &types.PoetRound{}, nil
 }
 
@@ -72,9 +71,8 @@ func TestNIPSTBuilderWithMocks(t *testing.T) {
 	verifyPoetMembershipMock := func(membershipRoot *common.Hash, poetProof *PoetProof) bool { return true }
 
 	poetDb := &MockPoetDb{}
-	nb := NewNIPSTBuilder(minerID, 1024, 5, proving.NumOfProvenLabels, 600, postProverMock,
-		poetProverMock, poetDb, verifyPostMock, verifyPoetMock, verifyPoetMembershipMock,
-		log.NewDefault(string(minerID)))
+	nb := NewNIPSTBuilder(minerID, 1024, 5, proving.NumOfProvenLabels, postProverMock, poetProverMock,
+		poetDb, verifyPostMock, verifyPoetMock, verifyPoetMembershipMock, log.NewDefault(string(minerID)))
 	hash := common.BytesToHash([]byte("anton"))
 	npst, err := nb.BuildNIPST(&hash)
 	assert.NoError(err)
@@ -107,8 +105,8 @@ func buildNIPST(r *require.Assertions, spaceUnit uint64, difficulty proving.Diff
 		r.NoError(err)
 	}()
 	r.NoError(err)
-	nb := NewNIPSTBuilder(minerID, spaceUnit, difficulty, numberOfProvenLabels, 600, postProver, poetProver,
-		poetDb, verifyPost, verifyPoet, verifyPoetMatchesMembership, log.NewDefault(string(minerID)))
+	nb := NewNIPSTBuilder(minerID, spaceUnit, difficulty, numberOfProvenLabels, postProver, poetProver, poetDb,
+		verifyPost, verifyPoet, verifyPoetMatchesMembership, log.NewDefault(string(minerID)))
 	npst, err := nb.BuildNIPST(&nipstChallenge)
 	r.NoError(err)
 	return npst
@@ -133,8 +131,8 @@ func TestNewNIPSTBuilderNotInitialized(t *testing.T) {
 	}()
 	r.NoError(err)
 	poetDb := &MockPoetDb{}
-	nb := NewNIPSTBuilder(minerIDNotInitialized, spaceUnit, difficulty, numberOfProvenLabels, 600, postProver,
-		poetProver, poetDb, verifyPost, verifyPoet, verifyPoetMatchesMembership, log.NewDefault(string(minerID)))
+	nb := NewNIPSTBuilder(minerIDNotInitialized, spaceUnit, difficulty, numberOfProvenLabels, postProver, poetProver,
+		poetDb, verifyPost, verifyPoet, verifyPoetMatchesMembership, log.NewDefault(string(minerID)))
 
 	npst, err := nb.BuildNIPST(&nipstChallenge)
 	r.EqualError(err, "PoST not initialized")

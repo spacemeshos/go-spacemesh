@@ -42,7 +42,7 @@ type PoetProvingServiceClient interface {
 
 	// submit registers a challenge in the proving service
 	// open round suited for the specified duration.
-	submit(challenge common.Hash, duration SeqWorkTicks) (*types.PoetRound, error)
+	submit(challenge common.Hash) (*types.PoetRound, error)
 
 	// subscribeMembershipProof returns a proof which can convince a verifier
 	// that the prover challenge was included in the proving service
@@ -92,7 +92,6 @@ type NIPSTBuilder struct {
 	space                       uint64
 	difficulty                  proving.Difficulty
 	numberOfProvenLabels        uint8
-	duration                    SeqWorkTicks
 	postProver                  PostProverClient
 	poetProver                  PoetProvingServiceClient
 	poetDb                      PoetDb
@@ -119,7 +118,6 @@ func NewNIPSTBuilder(
 	space uint64,
 	difficulty proving.Difficulty,
 	numberOfProvenLabels uint8,
-	duration SeqWorkTicks,
 	postProver PostProverClient,
 	poetProver PoetProvingServiceClient,
 	poetDb PoetDb,
@@ -131,7 +129,6 @@ func NewNIPSTBuilder(
 	return &NIPSTBuilder{
 		id:                          id,
 		space:                       space,
-		duration:                    duration,
 		difficulty:                  difficulty,
 		numberOfProvenLabels:        numberOfProvenLabels,
 		postProver:                  postProver,
@@ -155,7 +152,6 @@ func NewNipstBuilder(
 	id []byte,
 	space uint64,
 	difficulty proving.Difficulty,
-	duration SeqWorkTicks,
 	postProver PostProverClient,
 	poetProver PoetProvingServiceClient,
 	poetDb PoetDb,
@@ -164,7 +160,6 @@ func NewNipstBuilder(
 	return &NIPSTBuilder{
 		id:                          id,
 		space:                       space,
-		duration:                    duration,
 		difficulty:                  difficulty,
 		numberOfProvenLabels:        numberOfProvenLabels,
 		postProver:                  postProver,
@@ -200,7 +195,7 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *common.Hash) (*types.NIPST, error)
 			"(service id: %v, challenge: %x)",
 			nb.poetProver.id(), poetChallenge)
 
-		round, err := nb.poetProver.submit(*poetChallenge, nb.duration)
+		round, err := nb.poetProver.submit(*poetChallenge)
 		if err != nil {
 			return nil, fmt.Errorf("failed to submit challenge to poet service: %v", err)
 		}

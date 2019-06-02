@@ -61,7 +61,7 @@ func testRPCPoetClient(c *RPCPoetClient, assert *require.Assertions) {
 	_, err := rand.Read(ch[:])
 	assert.NoError(err)
 
-	poetRound, err := c.submit(ch, 10)
+	poetRound, err := c.submit(ch)
 	assert.NoError(err)
 	assert.NotNil(poetRound)
 
@@ -84,7 +84,7 @@ func testRPCPoetClientTimeouts(c *RPCPoetClient, assert *require.Assertions) {
 	_, err := rand.Read(ch[:])
 	assert.NoError(err)
 
-	poetRound, err := c.submit(ch, 10)
+	poetRound, err := c.submit(ch)
 	assert.NoError(err)
 	assert.NotNil(poetRound)
 
