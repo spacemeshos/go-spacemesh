@@ -144,28 +144,12 @@ var rewardConf = mesh.Config{
 	5,
 }
 
-type MockIStore struct {
-}
-
-func (*MockIStore) StoreNodeIdentity(id types.NodeId) error {
-	return nil
-}
-
-func (*MockIStore) GetIdentity(id string) (types.NodeId, error) {
-	return types.NodeId{}, nil
-}
-
-type ValidatorMock struct{}
-
-func (*ValidatorMock) Validate(nipst *nipst.NIPST, expectedChallenge common.Hash) error {
-	return nil
-}
-
 func getMeshWithLevelDB(id string) *mesh.Mesh {
 	lg := log.New(id, "", "")
-	mshdb := mesh.NewMemMeshDB(lg)
-	atxdb := activation.NewActivationDb(database.NewMemDatabase(), &MockIStore{}, mshdb, uint64(10), &ValidatorMock{}, lg.WithName("atxDB"))
-	return mesh.NewPersistentMesh(fmt.Sprintf(Path+"%v/", id), rewardConf, &MeshValidatorMock{}, &stateMock{}, atxdb, lg)
+	mshdb := mesh.NewPersistentMeshDB(Path, lg)
+	atxdbStore, _ := database.NewLDBDatabase(Path+"atx", 0, 0)
+	atxdb := activation.NewActivationDb(atxdbStore, &MockIStore{}, mshdb, uint64(10), &ValidatorMock{}, lg.WithName("atxDB"))
+	return mesh.NewMesh(mshdb, atxdb, rewardConf, &MeshValidatorMock{}, &stateMock{}, lg)
 }
 
 func persistenceTeardown() {

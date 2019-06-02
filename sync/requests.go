@@ -2,27 +2,10 @@ package sync
 
 import (
 	"errors"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/types"
 )
-
-func blockRequest() (chan *types.Block, func(msg []byte)) {
-	ch := make(chan *types.Block, 1)
-	foo := func(msg []byte) {
-		defer close(ch)
-		block := &types.Block{}
-		err := types.BytesToInterface(msg, block)
-		if err != nil {
-			log.Error("could not unmarshal block data")
-			return
-		}
-		ch <- block
-	}
-
-	return ch, foo
-}
 
 func LayerIdsReqFactory(lyr types.LayerID) RequestFactory {
 	return func(s *server.MessageServer, peer p2p.Peer) (chan interface{}, error) {
@@ -106,7 +89,10 @@ func TxReqFactory(ids []types.TransactionId) RequestFactory {
 			ch <- tx
 		}
 
-		bts, _ := types.InterfaceToBytes(ids) //handle error
+		bts, err := types.InterfaceToBytes(ids)
+		if err != nil {
+			return nil, err
+		}
 
 		if err := s.SendRequest(TX, bts, peer, foo); err != nil {
 			return nil, err
@@ -129,7 +115,11 @@ func ATxReqFactory(ids []types.AtxId) RequestFactory {
 			ch <- tx
 		}
 
-		bts, _ := types.InterfaceToBytes(ids) //handle error
+		bts, err := types.InterfaceToBytes(ids)
+		if err != nil {
+			return nil, err
+		}
+
 		if err := s.SendRequest(ATX, bts, peer, foo); err != nil {
 			return nil, err
 		}
