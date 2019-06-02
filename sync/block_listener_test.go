@@ -1,7 +1,6 @@
 package sync
 
 import (
-	"fmt"
 	"github.com/google/uuid"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
@@ -46,8 +45,6 @@ func ListenerFactory(serv service.Service, peers p2p.Peers, name string) *BlockL
 }
 
 func TestBlockListener(t *testing.T) {
-
-	fmt.Println("test sync start")
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
@@ -167,6 +164,7 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 	err = n2.Broadcast(NewBlockProtocol, data)
 	assert.NoError(t, err)
 
+	time.Sleep(3 * time.Second)
 	timeout := time.After(5 * time.Second)
 	for {
 		select {
