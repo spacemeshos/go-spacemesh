@@ -41,7 +41,8 @@ def test_bootstrap(setup_bootstrap):
     assert setup_bootstrap.pods[0]['key'] == query_bootstrap_es(current_index,
                                                                 testconfig['namespace'],
                                                                 setup_bootstrap.pods[0]['name'])
-def test_client(setup_clients, save_log_on_exit):
+
+def test_client(setup_clients,add_curl, save_log_on_exit):
     fields = {'M':'discovery_bootstrap'}
     timetowait = len(setup_clients.pods)/2
     print("Sleeping " + str(timetowait) + " before checking out bootstrap results")
@@ -56,7 +57,7 @@ def test_add_client(add_client):
     time.sleep(20)
     fields = {'M': 'discovery_bootstrap'}
     hits = query_message(current_index, testconfig['namespace'], add_client, fields, True)
-    assert len(hits) == 1, "Could not find new Client bootstrap message"
+    assert len(hits) == 1, "Could not find new Client bootstrap message pod:{0}".format(add_client)
 
 
 def test_gossip(setup_clients, add_curl):
@@ -72,6 +73,7 @@ def test_gossip(setup_clients, add_curl):
     api = 'v1/broadcast'
     data = '{"data":"foo"}'
     out = api_call(client_ip, data, api, testconfig['namespace'])
+
     assert "{'value': 'ok'}" in out
 
     # Need to sleep for a while in order to enable the propagation of the gossip message - 0.5 sec for each node
@@ -83,27 +85,6 @@ def test_gossip(setup_clients, add_curl):
     after = query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, fields, False)
     assert initial+len(setup_clients.pods) == len(after)
 
-
-# NOTE : this test is ran in the end because it affects the network structure,
-# it creates more pods and bootstrap them which will affect final query results
-# an alternative to that would be to kill the pods when the test ends.
-def test_late_bootstraps(setup_poet, setup_oracle, setup_bootstrap, setup_clients):
-    # Sleep a while before checking the node is bootstarped
-    TEST_NUM = 10
-
-    testnames = list()
-
-    for i in range(TEST_NUM):
-        client = add_single_client(setup_bootstrap.deployment_id, get_conf(setup_bootstrap.pods[0], setup_poet, setup_oracle))
-        testnames.append((client, datetime.now()))
-        time.sleep(5)
-
-    time.sleep(TEST_NUM)
-
-    fields = {'M': 'discovery_bootstrap'}
-    for i in testnames:
-        hits = query_message(current_index, testconfig['namespace'], i[0], fields, False)
-        assert len(hits) == 1, "Could not find new Client bootstrap message"
 
 def test_many_gossip_messages(setup_clients, add_curl):
     fields = {'M':'new_gossip_message', 'protocol': 'api_test_gossip'}
@@ -122,7 +103,7 @@ def test_many_gossip_messages(setup_clients, add_curl):
         api = 'v1/broadcast'
         data = '{"data":"foo' + str(i) + '"}'
         out = api_call(client_ip, data, api, testconfig['namespace'])
-        assert '{"value":"ok"}' in out.decode("utf-8")
+        assert "{'value': 'ok'}" in out
 
         # Need to sleep for a while in order to enable the propagation of the gossip message - 0.5 sec for each node
         # TODO: check frequently before timeout so we might be able to finish earlier.
@@ -135,7 +116,7 @@ def test_many_gossip_messages(setup_clients, add_curl):
 
 
 def test_many_gossip_sim(setup_clients, add_curl):
-    msg_size = 100000 # 100k msg
+    msg_size = 10000 #1kb todo: increase up to 2mb
     fields = {'M':'new_gossip_message', 'protocol': 'api_test_gossip'}
     TEST_MESSAGES = 100
 
@@ -153,7 +134,7 @@ def test_many_gossip_sim(setup_clients, add_curl):
         msg = "".join(choice(ascii_lowercase) for i in range(msg_size))
         data = '{"data":"' + msg + '"}'
         out = api_call(client_ip, data, api, testconfig['namespace'])
-        assert '{"value":"ok"}' in out.decode("utf-8")
+        assert "{'value': 'ok'}" in out
 
     gossip_propagation_sleep = TEST_MESSAGES # currently we expect short propagation times.
     print('sleep for {0} sec to enable gossip propagation'.format(gossip_propagation_sleep))
@@ -161,3 +142,24 @@ def test_many_gossip_sim(setup_clients, add_curl):
 
     after = query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, fields, False)
     assert initial+len(setup_clients.pods)*TEST_MESSAGES == len(after)
+
+
+# NOTE : this test is ran in the end because it affects the network structure,
+# it creates more pods and bootstrap them which will affect final query results
+# an alternative to that would be to kill the pods when the test ends.
+def test_late_bootstraps(setup_poet, setup_oracle, setup_bootstrap, setup_clients):
+    # Sleep a while before checking the node is bootstarped
+    TEST_NUM = 10
+
+    testnames = list()
+
+    for i in range(TEST_NUM):
+        client = add_single_client(setup_bootstrap.deployment_id, get_conf(setup_bootstrap.pods[0], setup_poet, setup_oracle))
+        testnames.append((client, datetime.now()))
+
+    time.sleep(TEST_NUM)
+
+    fields = {'M': 'discovery_bootstrap'}
+    for i in testnames:
+        hits = query_message(current_index, testconfig['namespace'], i[0], fields, False)
+        assert len(hits) == 1, "Could not find new Client bootstrap message"
