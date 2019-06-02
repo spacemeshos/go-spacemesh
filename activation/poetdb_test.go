@@ -2,6 +2,7 @@ package activation
 
 import (
 	"bytes"
+	"fmt"
 	xdr "github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -26,7 +27,8 @@ func TestPoetDbHappyFlow(t *testing.T) {
 	_, err = xdr.Unmarshal(file, &poetProof)
 	r.NoError(err)
 	r.EqualValues([][]byte{[]byte("1"), []byte("2"), []byte("3")}, poetProof.Members)
-	poetId := []byte("poet id")
+	var poetId [types.PoetIdLength]byte
+	copy(poetId[:], "poet id")
 	roundId := uint64(1337)
 
 	err = poetDb.ValidateAndStorePoetProof(poetProof, poetId, roundId, nil)
@@ -59,12 +61,14 @@ func TestPoetDbInvalidPoetProof(t *testing.T) {
 	_, err = xdr.Unmarshal(file, &poetProof)
 	r.NoError(err)
 	r.EqualValues([][]byte{[]byte("1"), []byte("2"), []byte("3")}, poetProof.Members)
-	poetId := []byte("poet id")
+	var poetId [types.PoetIdLength]byte
+	copy(poetId[:], "poet id")
 	roundId := uint64(1337)
 	poetProof.Root = []byte("some other root")
 
 	err = poetDb.ValidateAndStorePoetProof(poetProof, poetId, roundId, nil)
-	r.EqualError(err, "failed to validate poet proof for poetId 706f6574206964 round 1337: merkle proof not valid")
+	r.EqualError(err, fmt.Sprintf("failed to validate poet proof for poetId %x round 1337: merkle proof not valid",
+		poetId))
 }
 
 func TestPoetDbNonExistingKeys(t *testing.T) {
@@ -72,8 +76,11 @@ func TestPoetDbNonExistingKeys(t *testing.T) {
 
 	poetDb := NewPoetDb(database.NewMemDatabase(), log.NewDefault("poetdb_test"))
 
-	_, err := poetDb.GetPoetProofRef([]byte("abc"), 0)
-	r.EqualError(err, "could not fetch poet proof for poetId 616263 round 0: not found")
+	var poetId [types.PoetIdLength]byte
+	copy(poetId[:], "abc")
+
+	_, err := poetDb.GetPoetProofRef(poetId, 0)
+	r.EqualError(err, fmt.Sprintf("could not fetch poet proof for poetId %x round 0: not found", poetId))
 
 	_, err = poetDb.GetMembershipByPoetProofRef([]byte("abc"))
 	r.EqualError(err, "could not fetch poet proof for ref 616263: not found")

@@ -34,7 +34,7 @@ func (l *PoetListener) Close() {
 
 type poetProofMessage struct {
 	types.PoetProof
-	PoetId    []byte
+	PoetId    [types.PoetIdLength]byte
 	RoundId   uint64
 	Signature []byte
 }

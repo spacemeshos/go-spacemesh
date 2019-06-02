@@ -73,7 +73,7 @@ type builderState struct {
 	PoetRound *types.PoetRound
 
 	// PoetId is the public key of the PoET proving service.
-	PoetId []byte
+	PoetId [types.PoetIdLength]byte
 
 	// PoetProofRef is the root of the proof received from the PoET service.
 	PoetProofRef []byte
@@ -109,7 +109,7 @@ type NIPSTBuilder struct {
 }
 
 type PoetDb interface {
-	GetPoetProofRef(poetId []byte, roundId uint64) ([]byte, error)
+	GetPoetProofRef(poetId [types.PoetIdLength]byte, roundId uint64) ([]byte, error)
 	GetMembershipByPoetProofRef(poetRoot []byte) (map[common.Hash]bool, error)
 }
 

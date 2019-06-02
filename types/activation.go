@@ -10,6 +10,8 @@ import (
 	"github.com/spacemeshos/sha256-simd"
 )
 
+const PoetIdLength = 32
+
 type EpochId uint64
 
 func (l EpochId) ToBytes() []byte { return common.Uint64ToBytes(uint64(l)) }

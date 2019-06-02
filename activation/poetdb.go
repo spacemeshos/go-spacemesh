@@ -25,7 +25,7 @@ func NewPoetDb(store database.Database, log log.Log) *PoetDb {
 	return &PoetDb{store: store, log: log}
 }
 
-func (db *PoetDb) ValidateAndStorePoetProof(proof types.PoetProof, poetId []byte, roundId uint64, signature []byte) error {
+func (db *PoetDb) ValidateAndStorePoetProof(proof types.PoetProof, poetId [types.PoetIdLength]byte, roundId uint64, signature []byte) error {
 	root, err := calcRoot(proof.Members)
 	if err != nil {
 		return db.logError(fmt.Errorf("failed to calculate membership root for poetId %x round %d: %v",
@@ -63,7 +63,7 @@ func (db *PoetDb) ValidateAndStorePoetProof(proof types.PoetProof, poetId []byte
 	return nil
 }
 
-func (db *PoetDb) GetPoetProofRef(poetId []byte, roundId uint64) ([]byte, error) {
+func (db *PoetDb) GetPoetProofRef(poetId [types.PoetIdLength]byte, roundId uint64) ([]byte, error) {
 	poetRef, err := db.store.Get(makeKey(poetId, roundId))
 	if err != nil {
 		return nil, db.logInfo(fmt.Errorf("could not fetch poet proof for poetId %x round %d: %v",
@@ -99,10 +99,10 @@ func (db *PoetDb) logError(err error) error {
 	return err
 }
 
-func makeKey(poetId []byte, roundId uint64) []byte {
+func makeKey(poetId [types.PoetIdLength]byte, roundId uint64) []byte {
 	roundIdBytes := make([]byte, 8)
 	binary.LittleEndian.PutUint64(roundIdBytes, roundId)
-	sum := sha256.Sum256(append(poetId, roundIdBytes...))
+	sum := sha256.Sum256(append(poetId[:], roundIdBytes...))
 	return sum[:]
 }
 

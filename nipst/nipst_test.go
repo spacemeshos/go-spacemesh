@@ -52,7 +52,7 @@ func (p *PoetProvingServiceClientMock) subscribeProof(r *types.PoetRound, timeou
 
 type MockPoetDb struct{}
 
-func (*MockPoetDb) GetPoetProofRef(poetId []byte, roundId uint64) ([]byte, error) {
+func (*MockPoetDb) GetPoetProofRef(poetId [types.PoetIdLength]byte, roundId uint64) ([]byte, error) {
 	return []byte("hello there"), nil
 }
 
