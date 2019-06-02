@@ -186,19 +186,42 @@ def find_dups(indx, namespace, client_po_name, fields, max=1):
     s = Search(index=indx, using=es).query('bool', filter=[fltr])
     hits = list(s.scan())
 
-    print("Total hits: {0}".format(len(hits)))
-
     dups = []
     counting = {}
 
     for hit in hits:
-        if hit.kubernetes.pod_name not in counting:
-            counting[hit.kubernetes.pod_name] = 1
-        else:
-            counting[hit.kubernetes.pod_name] = counting[hit.kubernetes.pod_name] + 1
-            if counting[hit.kubernetes.pod_name] > max:
-                dups.append(hit.kubernetes.pod_name)
+        counting[hit.kubernetes.pod_name] = 1 if hit.kubernetes.pod_name not in counting else counting[hit.kubernetes.pod_name] + 1
+        if counting[hit.kubernetes.pod_name] > max and hit.kubernetes.pod_name not in counting:
+            dups.append(hit.kubernetes.pod_name)
 
+    print("Total hits: {0}".format(len(hits)))
     print("Duplicate count {0}".format(len(dups)))
-    for d in dups:
-        print(d)
+    print(dups)
+
+
+def find_missing(indx, namespace, client_po_name, fields, min=1):
+
+    # Usage : find_dups(current_index, "t7t9e", "client-t7t9e-28qj7",
+    # {'M':'new_gossip_message', 'protocol': 'api_test_gossip'}, 10)
+
+    es = get_elastic_search_api()
+    fltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
+           Q("match_phrase", kubernetes__pod_name=client_po_name)
+    for f in fields:
+        fltr = fltr & Q("match_phrase", **{f: fields[f]})
+    s = Search(index=indx, using=es).query('bool', filter=[fltr])
+    hits = list(s.scan())
+
+    miss = []
+    counting = {}
+
+    for hit in hits:
+        counting[hit.kubernetes.pod_name] = 1 if hit.kubernetes.pod_name not in counting else counting[hit.kubernetes.pod_name] + 1
+
+    for pod in counting:
+        if counting[pod] < min:
+            miss.append(pod)
+
+    print("Total hits: {0}".format(len(hits)))
+    print("Missing count {0}".format(len(miss)))
+    print(miss)
