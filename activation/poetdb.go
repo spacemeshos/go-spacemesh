@@ -1,10 +1,8 @@
 package activation
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
-	xdr "github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -36,18 +34,18 @@ func (db *PoetDb) ValidateAndStorePoetProof(proof types.PoetProof, poetId [types
 			poetId, roundId, err))
 	}
 
-	var poetProof bytes.Buffer
-	if _, err := xdr.Marshal(&poetProof, proof); err != nil {
+	poetProof, err := types.InterfaceToBytes(&proof)
+	if err != nil {
 		return db.logError(fmt.Errorf("failed to marshal poet proof for poetId %x round %d: %v",
 			poetId, roundId, err))
 	}
 
 	// TODO(noamnelke): validate signature (or extract public key and use for salting merkle hashes)
 
-	ref := sha256.Sum256(poetProof.Bytes())
+	ref := sha256.Sum256(poetProof)
 
 	batch := db.store.NewBatch()
-	if err := batch.Put(ref[:], poetProof.Bytes()); err != nil {
+	if err := batch.Put(ref[:], poetProof); err != nil {
 		return db.logError(fmt.Errorf("failed to store poet proof for poetId %x round %d: %v",
 			poetId, roundId, err))
 	}
@@ -78,7 +76,7 @@ func (db *PoetDb) GetMembershipByPoetProofRef(poetRef []byte) (map[common.Hash]b
 		return nil, db.logWarning(fmt.Errorf("could not fetch poet proof for ref %x: %v", poetRef, err))
 	}
 	var poetProof types.PoetProof
-	if _, err := xdr.Unmarshal(bytes.NewReader(poetProofBytes), &poetProof); err != nil {
+	if err := types.BytesToInterface(poetProofBytes, &poetProof); err != nil {
 		return nil, db.logError(fmt.Errorf("failed to unmarshal poet proof for ref %x: %v", poetRef, err))
 	}
 	return membershipSliceToMap(poetProof.Members), nil

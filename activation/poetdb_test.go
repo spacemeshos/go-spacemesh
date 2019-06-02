@@ -1,9 +1,8 @@
 package activation
 
 import (
-	"bytes"
 	"fmt"
-	xdr "github.com/nullstyle/go-xdr/xdr3"
+	"github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -37,10 +36,9 @@ func TestPoetDbHappyFlow(t *testing.T) {
 	ref, err := poetDb.GetPoetProofRef(poetId, roundId)
 	r.NoError(err)
 
-	var proofBuf bytes.Buffer
-	_, err = xdr.Marshal(&proofBuf, poetProof)
+	proofBytes, err := types.InterfaceToBytes(poetProof)
 	r.NoError(err)
-	expectedRef := sha256.Sum256(proofBuf.Bytes())
+	expectedRef := sha256.Sum256(proofBytes)
 	r.Equal(expectedRef[:], ref)
 
 	membership, err := poetDb.GetMembershipByPoetProofRef(ref)

@@ -1,8 +1,6 @@
 package activation
 
 import (
-	"bytes"
-	xdr "github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/types"
@@ -44,8 +42,7 @@ func (l *PoetListener) loop() {
 		select {
 		case poetProof := <-l.poetProofMessages:
 			var proofMessage poetProofMessage
-			_, err := xdr.Unmarshal(bytes.NewReader(poetProof.Bytes()), proofMessage)
-			if err != nil {
+			if err := types.BytesToInterface(poetProof.Bytes(), proofMessage); err != nil {
 				l.Log.Error("failed to unmarshal PoET membership proof: %v", err)
 				continue
 			}
