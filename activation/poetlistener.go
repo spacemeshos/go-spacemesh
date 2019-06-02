@@ -41,23 +41,27 @@ func (l *PoetListener) loop() {
 	for {
 		select {
 		case poetProof := <-l.poetProofMessages:
-			var proofMessage poetProofMessage
-			if err := types.BytesToInterface(poetProof.Bytes(), proofMessage); err != nil {
-				l.Log.Error("failed to unmarshal PoET membership proof: %v", err)
-				continue
-			}
-			if err := l.poetDb.ValidateAndStorePoetProof(proofMessage.PoetProof, proofMessage.PoetId,
-				proofMessage.RoundId, proofMessage.Signature); err != nil {
-
-				l.Log.Warning("PoET proof not persisted: %v", err)
-				continue
-			}
-			poetProof.ReportValidation(PoetProofProtocol)
+			go l.handlePoetProofMessage(poetProof)
 		case <-l.exit:
 			l.Log.Info("listening stopped")
 			return
 		}
 	}
+}
+
+func (l *PoetListener) handlePoetProofMessage(poetProof service.GossipMessage) {
+	var proofMessage poetProofMessage
+	if err := types.BytesToInterface(poetProof.Bytes(), proofMessage); err != nil {
+		l.Log.Error("failed to unmarshal PoET membership proof: %v", err)
+		return
+	}
+	if err := l.poetDb.ValidateAndStorePoetProof(proofMessage.PoetProof, proofMessage.PoetId,
+		proofMessage.RoundId, proofMessage.Signature); err != nil {
+
+		l.Log.Warning("PoET proof not persisted: %v", err)
+		return
+	}
+	poetProof.ReportValidation(PoetProofProtocol)
 }
 
 func NewPoetListener(net service.Service, poetDb *PoetDb, logger log.Log) *PoetListener {
