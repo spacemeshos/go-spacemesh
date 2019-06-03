@@ -396,7 +396,7 @@ def test_transaction(setup_network):
     data = '{"address":"1"}'
     print("checking nonce")
     out = api_call(client_ip, data, api, testconfig['namespace'])
-    assert '{"value":"0"}' in out
+    assert "{'value': '0'}" in out
     print("nonce ok")
 
     api = 'v1/submittransaction'
