@@ -225,6 +225,7 @@ func makePayload(t testing.TB, message *pb.ProtocolMessage) service.Data {
 
 func TestNeighborhood_Relay(t *testing.T) {
 	net := newMockBaseNetwork()
+	_ = net.RegisterGossipProtocol("Someproto")
 	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newPubkey(t), log.New("tesT", "", ""))
 	n.Start()
 
@@ -232,7 +233,7 @@ func TestNeighborhood_Relay(t *testing.T) {
 	pk := p2pcrypto.NewRandomPubkey()
 	pm := &pb.ProtocolMessage{
 		Metadata: &pb.Metadata{
-			NextProtocol:  ProtocolName,
+			NextProtocol:  "Someproto",
 			Timestamp:     time.Now().Unix(),
 			ClientVersion: protocolVer,
 			AuthPubkey:    pk.Bytes(),
@@ -242,10 +243,10 @@ func TestNeighborhood_Relay(t *testing.T) {
 
 	payload := makePayload(t, pm)
 
-	var msg service.DirectMessage = TestMessage{pk, payload}
+	//var msg service.DirectMessage = TestMessage{pk, payload}
 	net.pcountwg.Add(1)
 	net.msgwg.Add(20)
-	net.directInbox <- msg
+	require.NoError(t, n.Relay(pk, "Someproto", payload))
 	passOrDeadlock(t, net.pcountwg)
 	passOrDeadlock(t, net.msgwg)
 	assert.Equal(t, 1, net.processProtocolCount)
@@ -284,10 +285,8 @@ func TestNeighborhood_Relay2(t *testing.T) {
 		n.peersMutex.RUnlock()
 		pk = rnd
 	}
-	msgB, _ := newTestMessageData(t, pk, []byte("LOL1"), "protocol")
-	var msg service.DirectMessage = TestMessage{pk, service.DataBytes{msgB}}
 	net.pcountwg.Add(1)
-	net.directInbox <- msg
+	require.NoError(t, n.Relay(pk, "protocol", service.DataBytes{[]byte("LOLZ")}))
 	passOrDeadlock(t, net.pcountwg)
 	assert.Equal(t, 1, net.processProtocolCount)
 	assert.Equal(t, 0, net.totalMessageSent())
@@ -297,10 +296,7 @@ func TestNeighborhood_Relay2(t *testing.T) {
 
 	addPeersAndTest(t, 20, n, net, true)
 
-	newmsg, _ := newTestMessageData(t, pk, []byte("LOL2"), "protocol")
-	var ready service.DirectMessage = TestMessage{pk, service.DataBytes{newmsg}}
-
-	net.directInbox <- ready
+	require.NoError(t, n.Relay(pk, "protocol", service.DataBytes{[]byte("LOL2")}))
 	passOrDeadlock(t, net.msgwg)
 	passOrDeadlock(t, net.pcountwg)
 	assert.Equal(t, 2, net.processProtocolCount)
@@ -400,17 +396,15 @@ func TestNeighborhood_Relay3(t *testing.T) {
 	n.Start()
 
 	pk := p2pcrypto.NewRandomPubkey()
-	payload, _ := newTestMessageData(t, pk, []byte("LOL"), "protocol")
-	var msg service.DirectMessage = TestMessage{pk, service.DataBytes{payload}}
 	net.pcountwg.Add(1)
-	net.directInbox <- msg
+	require.NoError(t, n.Relay(pk, "protocol", service.DataBytes{[]byte("LOL")}))
 	passOrDeadlock(t, net.pcountwg)
 	assert.Equal(t, 1, net.processProtocolCount)
 	assert.Equal(t, 0, net.totalMessageSent())
 
 	addPeersAndTest(t, 20, n, net, true)
 
-	net.directInbox <- msg
+	require.NoError(t, n.Relay(pk, "protocol", service.DataBytes{[]byte("LOL")}))
 
 	assert.Equal(t, 1, net.processProtocolCount)
 	assert.Equal(t, 0, net.totalMessageSent())
@@ -451,23 +445,23 @@ func TestNeighborhood_Disconnect(t *testing.T) {
 	assert.Equal(t, 2, n.peersCount())
 
 	pk := p2pcrypto.NewRandomPubkey()
-	msg, _ := newTestMessageData(t, pk, []byte("LOL"), "protocol")
+	//msg, _ := newTestMessageData(t, pk, []byte("LOL"), "protocol")
 
 	net.pcountwg.Add(1)
 	net.msgwg.Add(2)
-	net.directInbox <- TestMessage{pk, service.DataBytes{msg}}
+	require.NoError(t, n.Relay(pk, "protocol", service.DataBytes{[]byte("LOL")}))
 	passOrDeadlock(t, net.pcountwg)
 	passOrDeadlock(t, net.msgwg)
 	assert.Equal(t, 1, net.processProtocolCount)
 	assert.Equal(t, 2, net.totalMessageSent())
 
 	pk2 := p2pcrypto.NewRandomPubkey()
-	msg2, _ := newTestMessageData(t, pk2, []byte("LOL2"), "protocol")
 
 	n.removePeer(pub1)
 	net.pcountwg.Add(1)
 	net.msgwg.Add(1)
-	net.directInbox <- TestMessage{pk2, service.DataBytes{msg2}}
+	require.NoError(t, n.Relay(pk2, "protocol", service.DataBytes{[]byte("LOL2")}))
+
 	passOrDeadlock(t, net.pcountwg)
 	passOrDeadlock(t, net.msgwg)
 	assert.Equal(t, 2, net.processProtocolCount)
@@ -475,7 +469,7 @@ func TestNeighborhood_Disconnect(t *testing.T) {
 
 	n.addPeer(pub1)
 	net.msgwg.Add(1)
-	net.directInbox <- TestMessage{pk2, service.DataBytes{msg2}}
+	require.NoError(t, n.Relay(pk2, "protocol", service.DataBytes{[]byte("LOL2")}))
 	assert.Equal(t, 2, net.processProtocolCount)
 	assert.Equal(t, 3, net.totalMessageSent())
 }
