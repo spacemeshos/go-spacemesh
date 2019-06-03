@@ -5,12 +5,12 @@ metadata:
 spec:
   selector:
     matchLabels:
-       run: client
+       name: client
   replicas: 5
   template:
     metadata:
       labels:
-        run : client
+        name: client
       annotations:
         prometheus.io/scrape: 'true'
         prometheus.io/port: '2020'

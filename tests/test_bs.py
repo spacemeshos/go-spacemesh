@@ -102,8 +102,8 @@ def create_deployment(file_name, name_space, deployment_id=None, replica_size=1,
 
 
 def delete_deployment(deployment_name, name_space):
-    k8s_beta = client.ExtensionsV1beta1Api()
     try:
+        k8s_beta = client.ExtensionsV1beta1Api()
         resp = k8s_beta.delete_namespaced_deployment(name=deployment_name,
                                                      namespace=name_space,
                                                      body=client.V1DeleteOptions(propagation_policy='Foreground',
@@ -135,15 +135,18 @@ def query_bootstrap_es(indx, namespace, bootstrap_po_name):
 # ==============================================================================
 
 def setup_server(deployment_name, deployment_file, namespace):
+    deployment_name_prefix = deployment_name.split('-')[0]
     namespaced_pods = client.CoreV1Api().list_namespaced_pod(namespace,
-                                                             label_selector="name={0}".format(deployment_name)).items
+                                                             label_selector=(
+                                                                 "name={0}".format(deployment_name_prefix))).items
     if namespaced_pods:
         # if server already exist -> delete it
         delete_deployment(deployment_name, namespace)
 
     resp = create_deployment(deployment_file, namespace, None)
     namespaced_pods = client.CoreV1Api().list_namespaced_pod(namespace,
-                                                             label_selector="name={0}".format(deployment_name)).items
+                                                             label_selector=(
+                                                                 "name={0}".format(deployment_name_prefix))).items
     if not namespaced_pods:
         raise Exception('Could not setup Server: {0}'.format(deployment_name))
     return namespaced_pods[0].status.pod_ip
@@ -184,9 +187,12 @@ def setup_bootstrap(request, init_session, setup_oracle, setup_poet, create_conf
                                  container_specs=cspec)
 
         bootstrap_deployment_info.deployment_name = resp.metadata._name
-        namespaced_pods = client.CoreV1Api().list_namespaced_pod(namespace=name_space).items
-        bootstrap_pod_json = next(filter(lambda i: i.metadata.name.startswith(bootstrap_deployment_info.deployment_name),
-                                         namespaced_pods))
+        # The tests assume we deploy only 1 bootstrap
+        bootstrap_pod_json = (
+            client.CoreV1Api().list_namespaced_pod(namespace=name_space,
+                                                   label_selector=(
+                                                       "name={0}".format(
+                                                           bootstrap_deployment_info.deployment_name.split('-')[0]))).items[0])
         bs_pod = {'name': bootstrap_pod_json.metadata.name}
 
         while True:
@@ -230,11 +236,23 @@ def setup_clients(request, setup_oracle, setup_poet, setup_bootstrap):
                                  container_specs=cspec)
 
         client_info.deployment_name = resp.metadata._name
-        namespaced_pods = client.CoreV1Api().list_namespaced_pod(namespace=name_space, include_uninitialized=True).items
-        client_pods = list(filter(lambda i: i.metadata.name.startswith(client_info.deployment_name), namespaced_pods))
+        client_pods = (
+            client.CoreV1Api().list_namespaced_pod(name_space,
+                                                   include_uninitialized=True,
+                                                   label_selector=(
+                                                       "name={0}".format(
+                                                           client_info.deployment_name.split('-')[0]))).items)
 
         client_info.pods = [{'name': c.metadata.name, 'pod_ip': c.status.pod_ip} for c in client_pods]
         return client_info
+
+    def fin():
+        # On teardown we wish to report on pods that were restarted by k8s during the test
+        restarted_pods = pod.check_for_restarted_pods(testconfig['namespace'])
+        if restarted_pods:
+            print('\n\nAttention!!! The following pods were restarted during test: {0}\n\n'.format(restarted_pods))
+
+    request.addfinalizer(fin)
     return _setup_clients_in_namespace(testconfig['namespace'])
 
 
