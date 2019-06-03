@@ -305,7 +305,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	trtl := tortoise.NewAlgorithm(int(1), mdb, lg.WithName("trtl"))
 	msh := mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, processor, lg.WithName("mesh")) //todo: what to do with the logger?
 
-	conf := sync.Configuration{SyncInterval: 1 * time.Second, Concurrency: 4, LayerSize: int(layerSize), RequestTimeout: 100 * time.Millisecond}
+	conf := sync.Configuration{Concurrency: 4, LayerSize: int(layerSize), RequestTimeout: 100 * time.Millisecond}
 	syncer := sync.NewSync(swarm, msh, blockValidator, sync.TxValidatorMock{}, conf, clock.Subscribe(), lg.WithName("sync"))
 
 	ha := hare.New(app.Config.HARE, swarm, sgn, msh, hareOracle, atxdb, clock.Subscribe(), lg.WithName("hare"))

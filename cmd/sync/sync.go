@@ -41,7 +41,6 @@ var npstCfg = nipst.PostParams{
 
 //todo get from configuration
 var conf = sync.Configuration{
-	SyncInterval:   1 * time.Second,
 	Concurrency:    4,
 	LayerSize:      int(100),
 	RequestTimeout: 150 * time.Millisecond,
@@ -98,7 +97,7 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 
 	i := 0
 	for ; ; i++ {
-		if lyr, err2 := mshDb.GetLayer(types.LayerID(i)); err2 != nil || lyr == nil {
+		if lyr, err2 := msh.GetLayer(types.LayerID(i)); err2 != nil || lyr == nil {
 			lg.Info("loaded %v layers from disk %v", i-1, err2)
 			break
 		} else {

@@ -66,8 +66,6 @@ func TestLayers_AddBlock(t *testing.T) {
 
 	addTransactionsToBlock(block1, 4)
 
-	fmt.Println(block1)
-
 	err := layers.AddBlock(block1)
 	assert.NoError(t, err)
 	err = layers.AddBlock(block2)
@@ -83,6 +81,11 @@ func TestLayers_AddBlock(t *testing.T) {
 
 	assert.True(t, len(rBlock1.Txs) == len(block1.Txs), "block content was wrong")
 	assert.True(t, bytes.Compare(rBlock2.Data, []byte("data2")) == 0, "block content was wrong")
+	assert.True(t, rBlock1.Txs[0].Origin == block1.Txs[0].Origin)
+
+	assert.True(t, bytes.Equal(rBlock1.Txs[0].Recipient.Bytes(), block1.Txs[0].Recipient.Bytes()))
+	assert.True(t, bytes.Equal(rBlock1.Txs[0].Price, block1.Txs[0].Price))
+	assert.True(t, len(rBlock1.ATXs) == len(block1.ATXs))
 }
 
 func TestLayers_AddLayer(t *testing.T) {
