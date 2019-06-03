@@ -55,7 +55,7 @@ def test_gossip(setup_clients, add_curl):
     api = 'v1/broadcast'
     data = '{"data":"foo"}'
     out = api_call(client_ip, data, api, testconfig['namespace'])
-    assert '{"value":"ok"}' in out.decode("utf-8")
+    assert "{'value': 'ok'}" in out
 
     # Need to sleep for a while in order to enable the propagation of the gossip message - 0.5 sec for each node
     # TODO: check frequently before timeout so we might be able to finish earlier.
