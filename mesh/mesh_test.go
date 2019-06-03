@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
 	"math/big"
@@ -32,6 +33,7 @@ func (MockState) ApplyRewards(layer types.LayerID, miners []string, underQuota m
 
 type AtxDbMock struct {
 	db map[types.AtxId]*types.ActivationTx
+	nipsts map[types.AtxId]*nipst.NIPST
 }
 
 func (t *AtxDbMock) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
@@ -43,10 +45,17 @@ func (t *AtxDbMock) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
 
 func (t *AtxDbMock) AddAtx(id types.AtxId, atx *types.ActivationTx) {
 	t.db[id] = atx
+	t.nipsts[id] = atx.Nipst
 }
 
-func (AtxDbMock) ProcessBlockATXs(block *types.Block) {
+func (t *AtxDbMock) GetNipst(id types.AtxId)  (*nipst.NIPST, error) {
+	return t.nipsts[id], nil
+}
 
+func (t *AtxDbMock) ProcessBlockATXs(block *types.Block) {
+	for _, atx := range block.ATXs {
+		t.AddAtx(atx.Id(), atx)
+	}
 }
 
 func getMesh(id string) *Mesh {

@@ -68,6 +68,7 @@ type ActivationTx struct {
 	ActivationTxHeader
 	VerifiedActiveSet uint32
 	Valid             bool
+	id                *AtxId
 	Nipst             *nipst.NIPST
 	//todo: add sig
 }
@@ -109,13 +110,17 @@ func NewActivationTxWithChallenge(poetChallenge NIPSTChallenge, ActiveSetSize ui
 }
 
 func (t ActivationTx) Id() AtxId {
+	if t.id != nil {
+		return *t.id
+	}
 	//todo: revise id function, add cache
 	tx, err := AtxHeaderAsBytes(&t.ActivationTxHeader)
 	if err != nil {
 		panic("could not Serialize atx")
 	}
 
-	return AtxId{crypto.Keccak256Hash(tx)}
+	t.id = &AtxId{crypto.Keccak256Hash(tx)}
+	return *t.id
 }
 
 func (t ActivationTx) ShortId() string {

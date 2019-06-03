@@ -9,6 +9,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"io"
 	"sort"
@@ -21,6 +22,9 @@ type ActivationDb struct {
 	sync.RWMutex
 	//todo: think about whether we need one db or several
 	atxs           database.DB
+	nipsts         database.DB
+	nipstLock      sync.RWMutex
+	atxCache       AtxCache
 	meshDb         *mesh.MeshDB
 	LayersPerEpoch types.LayerID
 	nipstValidator NipstValidator
@@ -28,8 +32,8 @@ type ActivationDb struct {
 	log            log.Log
 }
 
-func NewActivationDb(dbstore database.DB, idstore IdStore, meshDb *mesh.MeshDB, layersPerEpoch uint64, nipstValidator NipstValidator, log log.Log) *ActivationDb {
-	return &ActivationDb{atxs: dbstore, meshDb: meshDb, nipstValidator: nipstValidator, LayersPerEpoch: types.LayerID(layersPerEpoch), ids: idstore, log: log}
+func NewActivationDb(dbstore database.DB, nipstStore database.DB,idstore IdStore, meshDb *mesh.MeshDB, layersPerEpoch uint64, nipstValidator NipstValidator, log log.Log) *ActivationDb {
+	return &ActivationDb{atxs: dbstore, nipsts: nipstStore, atxCache:NewAtxCache(20), meshDb: meshDb, nipstValidator: nipstValidator, LayersPerEpoch: types.LayerID(layersPerEpoch), ids: idstore, log: log}
 }
 
 func (db *ActivationDb) ProcessBlockATXs(blk *types.Block) {
@@ -252,15 +256,44 @@ func (db *ActivationDb) StoreAtx(ech types.EpochId, atx *types.ActivationTx) err
 }
 
 func (db *ActivationDb) storeAtxUnlocked(atx *types.ActivationTx) error {
-	b, err := types.AtxAsBytes(atx)
+	b, err := types.InterfaceToBytes(atx.Nipst)
 	if err != nil {
 		return err
 	}
+	db.nipstLock.Lock()
+	err = db.nipsts.Put(atx.Id().Bytes(), b)
+	db.nipstLock.Unlock()
+	if err != nil {
+		return err
+	}
+	//todo: think of how to break down the object better
+	atx.Nipst = nil
+
+	b, err = types.AtxAsBytes(atx)
+	if err != nil {
+		return err
+	}
+
 	err = db.atxs.Put(atx.Id().Bytes(), b)
 	if err != nil {
 		return err
 	}
 	return nil
+}
+
+func (db *ActivationDb) GetNipst(atxId types.AtxId) (*nipst.NIPST, error) {
+	db.nipstLock.RLock()
+	bts, err := db.nipsts.Get(atxId.Bytes())
+	db.nipstLock.RUnlock()
+	if err != nil {
+		return nil, err
+	}
+	npst := nipst.NIPST{}
+	err = types.BytesToInterface(bts, &npst)
+	if err != nil {
+		return nil, err
+	}
+	return &npst, nil
 }
 
 func epochCounterKey(ech types.EpochId) []byte {
@@ -414,6 +447,9 @@ func (db *ActivationDb) getAtxUnlocked(id types.AtxId) (*types.ActivationTx, err
 // GetAtx returns the atx by the given id. this function is thread safe and will return error if the id is not found in the
 // atx db
 func (db *ActivationDb) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
+	if atx, gotIt := db.atxCache.Get(id); gotIt {
+		return atx, nil
+	}
 	db.RLock()
 	b, err := db.atxs.Get(id.Bytes())
 	db.RUnlock()
@@ -424,6 +460,7 @@ func (db *ActivationDb) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
 	if err != nil {
 		return nil, err
 	}
+	db.atxCache.Add(id, atx)
 	return atx, nil
 }
 

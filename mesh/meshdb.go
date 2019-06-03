@@ -36,7 +36,7 @@ func NewPersistentMeshDB(path string, log log.Log) *MeshDB {
 	tdb := database.NewLevelDbStore(path+"transactions", nil, nil)
 	ll := &MeshDB{
 		Log:                log,
-		blockCache:         NewBlockCache(100 * layerSize),
+		blockCache:         NewBlockCache(10 * layerSize),
 		blocks:             bdb,
 		layers:             ldb,
 		transactions:       tdb,

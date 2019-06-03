@@ -58,6 +58,14 @@ func newMiniBlockRequestHandler(msh *mesh.Mesh, logger log.Log) func(msg []byte)
 			return nil
 		}
 
+		for _,atx := range blk.ATXs {
+			atx.Nipst, err = msh.AtxDB.GetNipst(atx.Id())
+			if err != nil {
+				logger.Error("Error getting nipst for atx %v", atx.Id())
+				return nil
+			}
+		}
+
 		bbytes, err := types.InterfaceToBytes(*blk)
 		if err != nil {
 			logger.Error("Error marshaling response message (FetchBlockResp), with BlockID: %d, LayerID: %d and err:", blk.ID(), blk.Layer(), err)

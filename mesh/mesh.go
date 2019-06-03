@@ -8,6 +8,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/crypto/sha3"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/rlp"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"math/big"
@@ -39,6 +40,7 @@ type StateUpdater interface {
 type AtxDB interface {
 	ProcessBlockATXs(block *types.Block)
 	GetAtx(id types.AtxId) (*types.ActivationTx, error)
+	GetNipst(id types.AtxId) (*nipst.NIPST, error)
 }
 
 type Mesh struct {
