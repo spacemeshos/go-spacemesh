@@ -120,7 +120,6 @@ func ATxReqFactory(ids []types.AtxId) RequestFactory {
 		if err != nil {
 			return nil, err
 		}
-		println("fuck fuck fuck")
 		if err := s.SendRequest(ATX, bts, peer, foo); err != nil {
 			return nil, err
 		}
