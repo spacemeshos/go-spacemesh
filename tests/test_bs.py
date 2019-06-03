@@ -396,7 +396,7 @@ def test_transaction(setup_network):
     data = '{"address":"1"}'
     print("checking nonce")
     out = api_call(client_ip, data, api, testconfig['namespace'])
-    assert '{"value":"0"}' in out
+    assert "{'value': '0'}" in out
     print("nonce ok")
 
     api = 'v1/submittransaction'
@@ -415,7 +415,7 @@ def test_transaction(setup_network):
         time.sleep(60)
         print("... ")
         out = api_call(client_ip, data, api, testconfig['namespace'])
-        if '{"value":"100"}' in out:
+        if "{'value': '100'}" in out:
             end = time.time()
             break
 
@@ -432,7 +432,7 @@ def test_mining(setup_network):
     data = '{"address":"1"}'
     print("checking nonce")
     out = api_call(client_ip, data, api, testconfig['namespace'])
-    # assert '{"value":"0"}' in out
+    # assert "{'value': '0'}" in out
     # print("nonce ok")
 
     api = 'v1/submittransaction'
@@ -456,7 +456,7 @@ def test_mining(setup_network):
 
     # out = api_call(client_ip, data, api, testconfig['namespace'])
     print("test took {:.3f} seconds ".format(end-start))
-    # assert '{"value":"100"}' in out
+    # assert "{'value': '100'}" in out
     # print("balance ok")
 
     # need to filter out blocks that have come from last layer
