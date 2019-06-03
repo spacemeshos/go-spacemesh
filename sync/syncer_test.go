@@ -321,9 +321,13 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	syncObj1.Log.Info("started fetch_blocks")
 	syncObj2.Peers = pm1 //override peers with
 
+	syncObj1.ProcessAtx(atx3)
 	block1 := types.NewExistingBlock(types.BlockID(123), 0, nil)
+	block1.ATXID = atx3.Id()
 	block2 := types.NewExistingBlock(types.BlockID(321), 1, nil)
+	block2.ATXID = atx3.Id()
 	block3 := types.NewExistingBlock(types.BlockID(222), 2, nil)
+	block3.ATXID = atx3.Id()
 
 	block1.AddAtx(atx1)
 	block2.AddAtx(atx2)
@@ -343,7 +347,7 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 		if err != nil {
 			t.Error("could not fetch all txs", err)
 		}
-		atxs, err := syncObj2.ATXs(mb)
+		atxs, _, err := syncObj2.ATXs(mb)
 		if err != nil {
 			t.Error("could not fetch all atxs", err)
 		}

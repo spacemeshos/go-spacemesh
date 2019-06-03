@@ -49,6 +49,10 @@ func (AtxDbMock) ProcessBlockATXs(block *types.Block) {
 
 }
 
+func (AtxDbMock) ProcessAtx(atx *types.ActivationTx) {
+
+}
+
 func getMesh(id string) *Mesh {
 	lg := log.New(id, "", "")
 	layers := NewMesh(NewMemMeshDB(lg), &AtxDbMock{}, ConfigTst(), &MeshValidatorMock{}, &MockState{}, lg)

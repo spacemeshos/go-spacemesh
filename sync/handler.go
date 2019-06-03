@@ -110,7 +110,7 @@ func newATxsRequestHandler(msh *mesh.Mesh, logger log.Log) func(msg []byte) []by
 			logger.Error("Error marshalling request", err)
 			return nil
 		}
-		logger.Info("handle tx request ")
+		logger.Info("handle atx request ")
 		txs, _ := msh.GetATXs(txids)
 		if txs == nil {
 			logger.Error("Error handling transactions request message, with ids: %d", msg)
@@ -129,7 +129,7 @@ func newATxsRequestHandler(msh *mesh.Mesh, logger log.Log) func(msg []byte) []by
 		}
 
 		logger.Debug("tx %v", hex.EncodeToString(bbytes))
-
+		logger.Info("send atx response ")
 		return bbytes
 	}
 }

@@ -52,9 +52,16 @@ func TestBlockListener(t *testing.T) {
 	bl2 := ListenerFactory(n2, PeersMock{func() []p2p.Peer { return []p2p.Peer{n1.PublicKey()} }}, "2")
 	bl2.Start()
 
+	bl1.ProcessAtx(atx1)
+	bl1.ProcessAtx(atx2)
+	bl1.ProcessAtx(atx3)
+
 	block1 := types.NewExistingBlock(types.BlockID(123), 0, nil)
+	block1.BlockHeader.ATXID = atx1.Id()
 	block2 := types.NewExistingBlock(types.BlockID(321), 1, nil)
+	block1.BlockHeader.ATXID = atx2.Id()
 	block3 := types.NewExistingBlock(types.BlockID(222), 2, nil)
+	block1.BlockHeader.ATXID = atx3.Id()
 
 	block1.AddView(block2.ID())
 	block1.AddView(block3.ID())
@@ -89,16 +96,36 @@ func TestBlockListener2(t *testing.T) {
 
 	bl2.Start()
 
+	bl1.ProcessAtx(atx1)
 	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block1.ATXID = atx1.Id()
+
 	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block2.ATXID = atx1.Id()
+
 	block3 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block3.ATXID = atx1.Id()
+
 	block4 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block4.ATXID = atx1.Id()
+
 	block5 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block5.ATXID = atx1.Id()
+
 	block6 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block6.ATXID = atx1.Id()
+
 	block7 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block7.ATXID = atx1.Id()
+
 	block8 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block8.ATXID = atx1.Id()
+
 	block9 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block9.ATXID = atx1.Id()
+
 	block10 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block10.ATXID = atx1.Id()
 
 	block2.AddView(block1.ID())
 	block3.AddView(block2.ID())

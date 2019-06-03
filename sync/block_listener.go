@@ -94,18 +94,18 @@ func (bl *BlockListener) handleBlock(data service.GossipMessage) {
 	bl.Log.With().Info("got new block", log.Uint64("id", uint64(blk.Id)), log.Int("txs", len(blk.Txs)), log.Int("atxs", len(blk.ATXs)))
 	eligible, err := bl.BlockEligible(&blk.BlockHeader)
 	if err != nil {
-		bl.Error("block eligible check failed")
+		bl.Error("block eligible check failed %v", blk.ID())
 		return
 	}
 	if !eligible {
-		bl.Error("block not eligible")
+		bl.Error("block not eligible, %v", blk.ID())
 		return
 	}
 	if err := bl.AddBlock(blk); err != nil {
 		bl.Info("Block already received %v", blk.ID())
 		return
 	}
-	bl.Info("added block to database %v", blk.Id)
+	bl.Info("added block to database %v", blk.ID())
 	data.ReportValidation(NewBlockProtocol)
 	bl.addUnknownToQueue(blk)
 }

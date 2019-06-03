@@ -197,7 +197,8 @@ func (s *Syncer) fetchFullBlocks(blockIds []types.BlockID) ([]*types.Block, erro
 		}
 
 		//sync ATxs
-		atxs, err := s.ATXs(mb)
+		atxs, associated, err := s.ATXs(mb)
+
 		if err != nil {
 			s.Warning(fmt.Sprintf("failed fetching block %v activation transactions ", err))
 			continue
@@ -214,6 +215,7 @@ func (s *Syncer) fetchFullBlocks(blockIds []types.BlockID) ([]*types.Block, erro
 			continue
 		}
 		s.Info("add block to layer %v", block)
+		s.ProcessAtx(associated)
 		if err := s.AddBlock(block); err != nil {
 			s.Warning(fmt.Sprintf("could not add %v", block.ID()), err)
 			continue
@@ -252,8 +254,14 @@ func (s *Syncer) Txs(mb *types.MiniBlock) ([]*types.SerializableTransaction, err
 	return txs, nil
 }
 
-func (s *Syncer) ATXs(mb *types.MiniBlock) ([]*types.ActivationTx, error) {
-	foundTxs, missing := s.GetATXs(mb.ATxIds)
+func (s *Syncer) ATXs(mb *types.MiniBlock) (atxs []*types.ActivationTx, associated *types.ActivationTx, err error) {
+	localAtxs, missing := s.GetATXs(mb.ATxIds)
+
+	_, associatedErr := s.GetAtx(mb.ATXID)
+	if associatedErr != nil {
+		missing = append(missing, mb.ATXID)
+	}
+
 	//map and sort txs
 	txMap := make(map[types.AtxId]*types.ActivationTx)
 	if len(missing) > 0 {
@@ -266,17 +274,22 @@ func (s *Syncer) ATXs(mb *types.MiniBlock) ([]*types.ActivationTx, error) {
 		}
 	}
 
-	atxs := make([]*types.ActivationTx, 0, len(mb.TxIds))
+	associated, ok := txMap[mb.BlockHeader.ATXID]
+	if associatedErr != nil && !ok {
+		return nil, nil, errors.New(fmt.Sprintf("could not fetch associated %v", mb.BlockHeader.ATXID.Hex()))
+	}
+
+	atxs = make([]*types.ActivationTx, 0, len(mb.TxIds))
 	for _, t := range mb.ATxIds {
-		if tx, ok := foundTxs[t]; ok {
+		if tx, ok := localAtxs[t]; ok {
 			atxs = append(atxs, tx)
 		} else if tx, ok := txMap[t]; ok {
 			atxs = append(atxs, tx)
 		} else {
-			return nil, errors.New(fmt.Sprintf("could not fetch atx %v", t))
+			return nil, nil, errors.New(fmt.Sprintf("could not fetch atx %v", t))
 		}
 	}
-	return atxs, nil
+	return atxs, associated, nil
 }
 
 func (s *Syncer) fetchLayerBlockIds(m map[string]p2p.Peer, lyr types.LayerID) ([]types.BlockID, error) {
@@ -335,7 +348,8 @@ func (s *Syncer) fetchWithFactory(refac RequestFactory, workers int) chan interf
 	// each worker goroutine tries to fetch a block iteratively from each peer
 
 	wrk := NewNeighborhoodWorker(s, workers, refac)
-	wrk.Work()
+	go wrk.Work()
+
 	for i := 0; i < workers-1; i++ {
 		cloneWrk := wrk.Clone()
 		go cloneWrk.Work()

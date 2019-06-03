@@ -105,6 +105,7 @@ func ATxReqFactory(ids []types.AtxId) RequestFactory {
 	return func(s *server.MessageServer, peer p2p.Peer) (chan interface{}, error) {
 		ch := make(chan interface{}, 1)
 		foo := func(msg []byte) {
+			s.Info("handle atx response ")
 			defer close(ch)
 			var tx []types.ActivationTx
 			err := types.BytesToInterface(msg, &tx)
@@ -119,7 +120,7 @@ func ATxReqFactory(ids []types.AtxId) RequestFactory {
 		if err != nil {
 			return nil, err
 		}
-
+		println("fuck fuck fuck")
 		if err := s.SendRequest(ATX, bts, peer, foo); err != nil {
 			return nil, err
 		}

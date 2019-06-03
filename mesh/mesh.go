@@ -38,13 +38,14 @@ type StateUpdater interface {
 
 type AtxDB interface {
 	ProcessBlockATXs(block *types.Block)
+	ProcessAtx(atx *types.ActivationTx)
 	GetAtx(id types.AtxId) (*types.ActivationTx, error)
 }
 
 type Mesh struct {
 	log.Log
 	*MeshDB
-	AtxDB         AtxDB
+	AtxDB
 	config        Config
 	verifiedLayer types.LayerID
 	latestLayer   types.LayerID
@@ -242,19 +243,6 @@ func (m *Mesh) GetLayer(index types.LayerID) (*types.Layer, error) {
 	l.SetBlocks(blocks)
 
 	return l, nil
-}
-
-func (m *Mesh) getLayerBlocks(ids []types.BlockID) ([]*types.Block, error) {
-	blocks := make([]*types.Block, 0, len(ids))
-	for _, k := range ids {
-		block, err := m.GetBlock(k)
-		if err != nil {
-			return nil, errors.New("could not retrieve block " + fmt.Sprint(k) + " " + err.Error())
-		}
-		blocks = append(blocks, block)
-	}
-
-	return blocks, nil
 }
 
 func (m *Mesh) ValidateLayer(lyr *types.Layer) {
@@ -511,7 +499,7 @@ func (m *Mesh) GetATXs(atxIds []types.AtxId) (map[types.AtxId]*types.ActivationT
 	var mIds []types.AtxId
 	atxs := make(map[types.AtxId]*types.ActivationTx, len(atxIds))
 	for _, id := range atxIds {
-		t, err := m.AtxDB.GetAtx(id)
+		t, err := m.GetAtx(id)
 		if err != nil {
 			m.Error("could not get atx %v %v from database ", hex.EncodeToString(id.Bytes()), err)
 			mIds = append(mIds, id)
