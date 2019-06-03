@@ -4,6 +4,7 @@ from tests import queries, analyse
 from tests import pod, deployment
 from tests.fixtures import load_config, DeploymentInfo, NetworkDeploymentInfo
 from tests.fixtures import init_session, set_namespace, set_docker_images, session_id
+from tests import xdr
 import pytest
 import pytz
 import re
@@ -378,7 +379,13 @@ def test_transaction(setup_network):
     print("nonce ok")
 
     api = 'v1/submittransaction'
-    data = '{"srcAddress":"1","dstAddress":"222","nonce":"0","amount":"100"}'
+    #data = '{"srcAddress":"1","dstAddress":"222","nonce":"0","amount":"100"}'
+
+    ###################################
+    txGen = xdr.TxGenerator()
+    data = txGen.generateTx("222", 0, 123, 321, 100)
+    ###################################
+
     print("submitting transaction")
     out = api_call(client_ip, data, api, testconfig['namespace'])
     print(out)

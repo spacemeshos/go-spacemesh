@@ -118,14 +118,6 @@ func TransactionAsBytes(tx *SerializableTransaction) ([]byte, error) {
 	return w.Bytes(), nil
 }
 
-func SignedTransactionAsBytes(tx *SerializableSignedTransaction) ([]byte, error) {
-	var w bytes.Buffer
-	if _, err := xdr.Marshal(&w, &tx); err != nil {
-		return nil, fmt.Errorf("error marshalling signed transaction: %v", err)
-	}
-	return w.Bytes(), nil
-}
-
 func BytesAsTransaction(buf []byte) (*SerializableTransaction, error) {
 	b := SerializableTransaction{}
 	_, err := xdr.Unmarshal(bytes.NewReader(buf), &b)

@@ -1,9 +1,7 @@
 package state
 
 import (
-	"bytes"
 	crand "crypto/rand"
-	"github.com/nullstyle/go-xdr/xdr3"
 	"github.com/seehuhn/mt19937"
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/address"
@@ -420,15 +418,13 @@ func TestTransactionProcessor_randomSort(t *testing.T) {
 func createXdrSignedTransaction(key ed25519.PrivateKey) types.SerializableSignedTransaction {
 	tx := types.SerializableSignedTransaction{}
 	tx.AccountNonce = 1111
-	tx.Amount = []byte{0x01}
+	tx.Amount = 123
 	tx.Recipient = toAddr([]byte{0xde})
 	tx.GasLimit = 11
-	tx.Price = []byte{0x11}
+	tx.Price = 456
 
-	var w bytes.Buffer
-	xdr.Marshal(&w, tx.InnerSerializableSignedTransaction)
-
-	tx.Signature = ed25519.Sign2(key, w.Bytes())
+	buf, _ := types.InterfaceToBytes(&tx.InnerSerializableSignedTransaction)
+	copy(tx.Signature[:], ed25519.Sign2(key, buf))
 	return tx
 }
 

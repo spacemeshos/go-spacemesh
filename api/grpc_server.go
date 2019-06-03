@@ -2,10 +2,9 @@
 package api
 
 import (
-	"bytes"
+	"encoding/binary"
 	"fmt"
 	"github.com/golang/protobuf/ptypes/empty"
-	"github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/api/pb"
@@ -56,7 +55,7 @@ func (s SpacemeshGrpcService) GetNonce(ctx context.Context, in *pb.AccountId) (*
 	addr := address.HexToAddress(in.Address)
 
 	if s.StateApi.Exist(addr) != true {
-		log.Error("GRPC GetNonce got error msg: account does not exist")
+		log.Error("GRPC GetNonce got error msg: account does not exist, %v", addr)
 		return nil, fmt.Errorf("account does not exist")
 	}
 
@@ -69,15 +68,14 @@ func (s SpacemeshGrpcService) GetNonce(ctx context.Context, in *pb.AccountId) (*
 func (s SpacemeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.SignedTransaction) (*pb.SimpleMessage, error) {
 	log.Info("GRPC SubmitTransaction msg")
 
-	signedTx := &types.SerializableSignedTransaction{}
-	rdr := bytes.NewReader(in.Tx)
-	_, err := xdr.Unmarshal(rdr, signedTx)
+	signedTx := types.SerializableSignedTransaction{}
+	err := types.BytesToInterface(in.Tx, &signedTx)
 	if err != nil {
 		log.Error("failed to deserialize tx, error %v", err)
 		return nil, err
 	}
 
-	src, err := s.Tx.ValidateTransactionSignature(*signedTx)
+	src, err := s.Tx.ValidateTransactionSignature(signedTx)
 	if err != nil {
 		log.Error("tx failed to validate signature, error %v", err)
 		return nil, err
@@ -90,10 +88,12 @@ func (s SpacemeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.Sign
 
 	tx.AccountNonce = signedTx.AccountNonce
 	amount := big.Int{}
-	amount.SetBytes(signedTx.Amount)
+	amount.SetUint64(signedTx.Amount)
 	tx.Amount = amount.Bytes()
 	tx.GasLimit = signedTx.GasLimit
-	tx.Price = signedTx.Price
+	b := make([]byte, 8)
+	binary.LittleEndian.PutUint64(b, uint64(signedTx.Price))
+	tx.Price = b
 
 	val, err := types.TransactionAsBytes(&tx)
 	if err != nil {

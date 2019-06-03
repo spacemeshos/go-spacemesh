@@ -2,9 +2,9 @@ package api
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
@@ -29,7 +29,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
-
 	crand "crypto/rand"
 )
 
@@ -221,21 +220,24 @@ func TestJsonApi(t *testing.T) {
 func createXdrSignedTransaction(params types.SerializableTransaction, key ed25519.PrivateKey) []byte {
 	tx := types.SerializableSignedTransaction{}
 	tx.AccountNonce = params.AccountNonce
-	tx.Amount = params.Amount
+	tx.Amount = binary.LittleEndian.Uint64(params.Amount)
 	tx.Recipient = *params.Recipient
 	tx.GasLimit = params.GasLimit
-	tx.Price = params.Price
+	tx.Price = binary.LittleEndian.Uint64(params.Price)
 
-	var w bytes.Buffer
-	_, err := xdr.Marshal(&w, tx.InnerSerializableSignedTransaction)
+	buf, err := types.InterfaceToBytes(&tx.InnerSerializableSignedTransaction)
 	if err != nil {
 		log.Error("failed to marshal tx")
 	}
-	tx.Signature = ed25519.Sign2(key, w.Bytes())
 
-	var w2 bytes.Buffer
-	xdr.Marshal(&w2, tx)
-	return w2.Bytes()
+	copy(tx.Signature[:], ed25519.Sign2(key, buf))
+	//tx.Signature = ed25519.Sign2(key, buf)
+
+	buf, err = types.InterfaceToBytes(&tx)
+	if err != nil {
+		log.Error("failed to marshal signed tx")
+	}
+	return buf
 }
 
 func TestJsonWalletApi(t *testing.T) {
@@ -327,18 +329,20 @@ func TestJsonWalletApi(t *testing.T) {
 	sAddr := state.PublicKeyToAccountAddress(sPub)
 	txApi.setMockOrigin(sAddr)
 	txParams.Origin = sAddr
-	rec := address.BytesToAddress([]byte{0xde})
+	rec := address.BytesToAddress([]byte{0xde, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa})
 	txParams.Recipient = &rec
 	txParams.AccountNonce = 1111
-	txParams.Amount = []byte{0x01}
+	txParams.Amount = []byte{0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01}
 	txParams.GasLimit = 11
-	txParams.Price = []byte{0x11}
-	xdrTx := createXdrSignedTransaction(txParams, key) //string(createXdrSignedTransaction(txParams, key))
-	txToSend := pb.SignedTransaction{Tx: xdrTx}        //SrcAddress: "01020304", DstAddress: "01", Amount: "10", Nonce: "12"}
+	txParams.Price = []byte{0x11, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01}
+	xdrTx := createXdrSignedTransaction(txParams, key)
+	txToSend := pb.SignedTransaction{Tx: xdrTx}
+	//xdrTx := []byte{0, 0, 0, 0, 0, 0, 0, 0, 99, 229, 228, 217, 146, 147, 184, 178, 85, 141, 100, 89, 118, 20, 177, 17, 251, 6, 90, 197, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 10, 0, 0, 0, 0, 0, 0, 39, 16, 37, 150, 12, 101, 249, 165, 70, 155, 16, 151, 101, 106, 205, 3, 77, 174, 121, 201, 45, 78, 73, 49, 41, 214, 182, 111, 159, 134, 0, 132, 70, 216, 174, 88, 240, 125, 105, 111, 44, 168, 33, 179, 197, 224, 81, 242, 43, 253, 115, 12, 220, 84, 5, 42, 103, 154, 219, 125, 116, 95, 89, 39, 148, 8}
+	//txToSend := pb.SignedTransaction{Tx: xdrTx}        //SrcAddress: "01020304", DstAddress: "01", Amount: "10", Nonce: "12"}
+
 	var buf2 bytes.Buffer
-	if err := m.Marshal(&buf2, &txToSend); err != nil {
-		log.Error("failed to marshal %v", err)
-	}
+	err = m.Marshal(&buf2, &txToSend)
+	assert.NoError(t, err, "failed to marshal pb")
 
 	url = fmt.Sprintf("http://127.0.0.1:%d/v1/submittransaction", config.ConfigValues.JSONServerPort)
 	resp, err = http.Post(url, contentType, strings.NewReader(buf2.String())) //string(payload2))) //todo: we currently accept all kinds of payloads
@@ -359,6 +363,7 @@ func TestJsonWalletApi(t *testing.T) {
 	assert.Equal(t, wantV, gotV)
 
 	val, err := types.TransactionAsBytes(&txParams)
+	assert.NoError(t, err)
 	assert.Equal(t, val, net.broadcasted)
 
 	value = resp.Header.Get("Content-Type")
@@ -615,4 +620,74 @@ func TestApproveAPIGossipMessages(t *testing.T) {
 	require.Equal(t, res.Message(), []byte("TEST"))
 	require.Equal(t, res.Protocol(), APIGossipProtocol)
 	cancel()
+}
+
+type XdrTest struct {
+	Foo int
+}
+
+type InnerSerializableSignedTransaction struct {
+	AccountNonce uint64
+	Recipient    address.Address
+	GasLimit     uint64
+	Price        uint64
+	Amount       uint64
+}
+
+type SerializableSignedTransaction struct {
+	InnerSerializableSignedTransaction
+	Signature [64]byte
+}
+
+func TestTemp(t *testing.T) {
+	//txParams := types.SerializableTransaction{}
+	//sPub, key, _ := ed25519.GenerateKey(crand.Reader)
+	//sAddr := state.PublicKeyToAccountAddress(sPub)
+	////txApi.setMockOrigin(sAddr)
+	//txParams.Origin = sAddr
+	//rec := address.BytesToAddress([]byte{0xde})
+	//txParams.Recipient = &rec
+	//txParams.AccountNonce = 1111
+	//txParams.Amount = []byte{0x01}
+	//txParams.GasLimit = 11
+	//txParams.Price = []byte{0x11}
+	//xdrTx := createXdrSignedTransaction(txParams, key) //string(createXdrSignedTransaction(txParams, key))
+	//log.Info("xdr %x", xdrTx)
+
+	//xdrT := InnerSerializableSignedTransaction{1}
+	////var w bytes.Buffer
+	////_, err := xdr.Marshal(&w, &xdrT)
+	////if err != nil {
+	////	log.Error("failed to marshal tx")
+	////}
+	//buf, err := types.InterfaceToBytes(&xdrT)
+	//assert.NoError(t, err)
+	//log.Info("xdr %x", buf)
+
+	//InnerSerializableSignedTransaction -> bytes
+	tx1 := InnerSerializableSignedTransaction{}
+	tx1.AccountNonce = 12345
+	tx1.Recipient = address.HexToAddress("0x1b3d6d946dea7e3e14756e2f0f9e09b9663f0d9c")
+	tx1.GasLimit = 56789
+	tx1.Price = 24680
+	tx1.Amount = 86420
+	buf1, err := types.InterfaceToBytes(&tx1)
+	assert.NoError(t, err)
+	log.Info("tx1 buffer - %x", buf1)
+
+	tx := common.FromHex("0x00000000000030391b3d6d946dea7e3e14756e2f0f9e09b9663f0d9c000000000000ddd500000000000060680000000000015194")
+	//tx := []byte{0, 0, 0, 0, 0, 0, 0, 0, 99, 229, 228, 217, 146, 147, 184, 178, 85, 141, 100, 89, 118, 20, 177, 17, 251, 6, 90, 197, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 10, 0, 0, 0, 0, 0, 0, 39, 16, 37, 150, 12, 101, 249, 165, 70, 155, 16, 151, 101, 106, 205, 3, 77, 174, 121, 201, 45, 78, 73, 49, 41, 214, 182, 111, 159, 134, 0, 132, 70, 216, 174, 88, 240, 125, 105, 111, 44, 168, 33, 179, 197, 224, 81, 242, 43, 253, 115, 12, 220, 84, 5, 42, 103, 154, 219, 125, 116, 95, 89, 39, 148, 8}
+	signedTx := SerializableSignedTransaction{}
+	err = types.BytesToInterface(tx, &signedTx.InnerSerializableSignedTransaction)
+	log.Info("recipient %x", signedTx.Recipient)
+	assert.NoError(t, err)
+
+	//tx := common.FromHex("")
+	//signedTx := XdrTest{}
+	//rdr := bytes.NewReader(w.Bytes())
+	//_, err = xdr.Unmarshal(rdr, signedTx)
+	//assert.NoError(t, err)
+	//if err != nil {
+	//	log.Error("failed to deserialize tx, error %v", err)
+	//}
 }
