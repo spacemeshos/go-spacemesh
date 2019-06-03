@@ -214,8 +214,13 @@ func (s *Syncer) fetchFullBlocks(blockIds []types.BlockID) ([]*types.Block, erro
 			s.Warning(fmt.Sprintf("block %v not eligible", block.ID()), err)
 			continue
 		}
+
+		if associated != nil {
+			s.ProcessAtx(associated)
+		}
+
 		s.Info("add block to layer %v", block)
-		s.ProcessAtx(associated)
+
 		if err := s.AddBlock(block); err != nil {
 			s.Warning(fmt.Sprintf("could not add %v", block.ID()), err)
 			continue

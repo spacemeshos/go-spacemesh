@@ -414,6 +414,10 @@ func (db *ActivationDb) getAtxUnlocked(id types.AtxId) (*types.ActivationTx, err
 // GetAtx returns the atx by the given id. this function is thread safe and will return error if the id is not found in the
 // atx db
 func (db *ActivationDb) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
+	if id == *types.EmptyAtxId {
+		return nil, nil
+	}
+
 	db.RLock()
 	b, err := db.atxs.Get(id.Bytes())
 	db.RUnlock()
