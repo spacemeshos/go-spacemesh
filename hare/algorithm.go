@@ -98,17 +98,17 @@ func newMsg(hareMsg *Message, querier StateQuerier) (*Msg, error) {
 	pub := signing.NewPublicKey(pubKey)
 	// TODO: remove comments when ready
 	/*
-	res, err := querier.IsIdentityActive(pub.String(), types.LayerID(hareMsg.InnerMsg.InstanceId))
-	if err != nil {
-		log.Error("error while checking if identity is active for %v err=%v", pub.String(), err)
-		return nil, errors.New("is identity active query failed")
-	}
+		res, err := querier.IsIdentityActive(pub.String(), types.LayerID(hareMsg.InnerMsg.InstanceId))
+		if err != nil {
+			log.Error("error while checking if identity is active for %v err=%v", pub.String(), err)
+			return nil, errors.New("is identity active query failed")
+		}
 
-	// check query result
-	if !res {
-		log.Error("identity %v is not active", pub.String())
-		return nil, errors.New("inactive identity")
-	}
+		// check query result
+		if !res {
+			log.Error("identity %v is not active", pub.String())
+			return nil, errors.New("inactive identity")
+		}
 	*/
 	return &Msg{hareMsg, pub}, nil
 }
@@ -206,7 +206,7 @@ func (proc *ConsensusProcess) SetInbox(inbox chan *Msg) {
 
 func (proc *ConsensusProcess) eventLoop() {
 	proc.With().Info("Consensus Process Started",
-		log.Int("Hare-N", proc.cfg.N), log.Int("f", proc.cfg.F), log.String("duration", (time.Duration(proc.cfg.RoundDuration) * time.Second).String()),
+		log.Int("Hare-N", proc.cfg.N), log.Int("f", proc.cfg.F), log.String("duration", (time.Duration(proc.cfg.RoundDuration)*time.Second).String()),
 		log.Uint32("instance_id", uint32(proc.instanceId)), log.Int("exp_leaders", proc.cfg.ExpectedLeaders), log.String("set_values", proc.s.String()))
 
 	// set pre-round InnerMsg and send

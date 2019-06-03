@@ -193,7 +193,7 @@ func (validator *syntaxContextValidator) validateAggregatedMessage(aggMsg *Aggre
 		// TODO: should receive the state querier
 		iMsg, err := newMsg(innerMsg, validator.stateQuerier)
 		if err != nil {
-			validator.Warning("Aggregated validation failed: could not construct msg")
+			validator.Warning("Aggregated validation failed: could not construct msg err=%v", err)
 			return false
 		}
 
@@ -204,10 +204,6 @@ func (validator *syntaxContextValidator) validateAggregatedMessage(aggMsg *Aggre
 
 		// validate unique sender
 		pub := iMsg.PubKey
-		if err != nil {
-			validator.Warning("Aggregated validation failed: could not construct pub: %v", err)
-			return false
-		}
 		if _, exist := senders[pub.String()]; exist { // pub already exist
 			validator.Warning("Aggregated validation failed: detected same pubKey for different Messages")
 			return false

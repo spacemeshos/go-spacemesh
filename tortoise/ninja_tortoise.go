@@ -71,7 +71,7 @@ type BlockCache interface {
 //todo memory optimizations
 type ninjaTortoise struct {
 	log.Log
-	BlockCache //block cache
+	BlockCache         //block cache
 	avgLayerSize       uint64
 	pBase              votingPattern
 	patterns           map[types.LayerID][]votingPattern                 //map patterns by layer for eviction purposes

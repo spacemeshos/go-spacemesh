@@ -1,6 +1,7 @@
 package hare
 
 import (
+	"errors"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
@@ -60,7 +61,29 @@ func TestEligibilityValidator_validateRole(t *testing.T) {
 	assert.Nil(t, err)
 	// TODO: remove comment after inceptions problem is addressed
 	//assert.False(t, res)
+
+	m.InnerMsg.InstanceId = 111
+	myErr := errors.New("my error")
+	ev.identityProvider = &mockIdProvider{myErr}
+	res, err = ev.validateRole(m)
+	assert.NotNil(t, err)
+	assert.Equal(t, myErr, err)
+	assert.False(t, res)
+
+	oracle.err = myErr
+	res, err = ev.validateRole(m)
+	assert.NotNil(t, err)
+	assert.Equal(t, myErr, err)
+	assert.False(t, res)
+
+	ev.identityProvider = &mockIdProvider{nil}
+	oracle.err = nil
+	res, err = ev.validateRole(m)
+	assert.Nil(t, err)
+	assert.False(t, res)
+
 	oracle.isEligible = true
+	m.InnerMsg.InstanceId = 111
 	res, err = ev.validateRole(m)
 	assert.Nil(t, err)
 	assert.True(t, res)

@@ -41,10 +41,11 @@ func (mmv *mockMessageValidator) ContextuallyValidateMessage(m *Msg, expectedK i
 
 type mockRolacle struct {
 	isEligible bool
+	err        error
 }
 
 func (mr *mockRolacle) Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeId, sig []byte) (bool, error) {
-	return mr.isEligible, nil
+	return mr.isEligible, mr.err
 }
 
 func (mr *mockRolacle) Proof(id types.NodeId, layer types.LayerID, round int32) ([]byte, error) {

@@ -33,7 +33,6 @@ func (bo *localOracle) Proof(id types.NodeId, layer types.LayerID, round int32) 
 	return bo.oc.Proof(id, layer, round)
 }
 
-
 func NewLocalOracle(rolacle *eligibility.FixedRolacle, committeeSize int, nodeID types.NodeId) *localOracle {
 	//oc.Register(true, pubKey)
 	return &localOracle{

@@ -53,10 +53,11 @@ func (mcp *mockConsensusProcess) SetInbox(chan *Msg) {
 }
 
 type mockIdProvider struct {
+	err error
 }
 
 func (mip *mockIdProvider) GetIdentity(edId string) (types.NodeId, error) {
-	return types.NodeId{Key: edId, VRFPublicKey: []byte{}}, nil
+	return types.NodeId{Key: edId, VRFPublicKey: []byte{}}, mip.err
 }
 
 func NewMockConsensusProcess(cfg config.Config, instanceId InstanceId, s *Set, oracle Rolacle, signing Signer, p2p NetworkService, outputChan chan TerminationOutput) *mockConsensusProcess {

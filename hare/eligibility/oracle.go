@@ -109,7 +109,7 @@ func (o *Oracle) Eligible(layer types.LayerID, round int32, committeeSize int, i
 	}
 	if !res {
 		log.Warning("Id %v did not pass VRF verification", id.Key)
-		return false, err
+		return false, nil
 	}
 
 	// get active set size

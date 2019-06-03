@@ -12,6 +12,7 @@ import (
 )
 
 var someErr = errors.New("some error")
+var myErr = errors.New("my error")
 
 type mockValueProvider struct {
 	val uint32
@@ -37,10 +38,12 @@ func buildVerifier(result bool, err error) VerifierFunc {
 }
 
 type signer struct {
+	sig []byte
+	err error
 }
 
-func (*signer) Sign(msg []byte) ([]byte, error) {
-	return []byte{}, nil
+func (s *signer) Sign(msg []byte) ([]byte, error) {
+	return s.sig, s.err
 }
 
 func TestOracle_BuildVRFMessage(t *testing.T) {
@@ -106,7 +109,7 @@ func genBytes() []byte {
 func Test_ExpectedCommitteeSize(t *testing.T) {
 	setSize := uint32(1024)
 	commSize := 1000
-	o := New(&mockValueProvider{1, nil}, &mockActiveSetProvider{setSize}, buildVerifier(true, nil),  &signer{},10)
+	o := New(&mockValueProvider{1, nil}, &mockActiveSetProvider{setSize}, buildVerifier(true, nil), &signer{}, 10)
 	count := 0
 	for i := uint32(0); i < setSize; i++ {
 		res, err := o.Eligible(0, 0, commSize, types.NodeId{Key: ""}, genBytes())
@@ -151,11 +154,44 @@ func Test_ActiveSetSize(t *testing.T) {
 func Test_BlsSignVerify(t *testing.T) {
 	pr, pu := BLS381.GenKeyPair()
 	sr := BLS381.NewBlsSigner(pr)
-	o := New(&mockValueProvider{1, nil}, &mockActiveSetProvider{10}, BLS381.Verify2, sr,10)
+	o := New(&mockValueProvider{1, nil}, &mockActiveSetProvider{10}, BLS381.Verify2, sr, 10)
 	id := types.NodeId{Key: "abc", VRFPublicKey: pu}
 	proof, err := o.Proof(id, 1, 1)
 	assert.Nil(t, err)
 	res, err := o.Eligible(1, 1, 10, id, proof)
 	assert.Nil(t, err)
 	assert.True(t, res)
+}
+
+func TestOracle_Proof(t *testing.T) {
+	o := New(&mockValueProvider{0, myErr}, &mockActiveSetProvider{10}, buildVerifier(true, nil), &signer{}, 10)
+	sig, err := o.Proof(types.NodeId{}, 2, 3)
+	assert.Nil(t, sig)
+	assert.NotNil(t, err)
+	assert.Equal(t, myErr, err)
+	o.beacon = &mockValueProvider{0, nil}
+	o.vrfSigner = &signer{nil, myErr}
+	sig, err = o.Proof(types.NodeId{}, 2, 3)
+	assert.Nil(t, sig)
+	assert.NotNil(t, err)
+	assert.Equal(t, myErr, err)
+	mySig := []byte{1, 2}
+	o.vrfSigner = &signer{mySig, nil}
+	sig, err = o.Proof(types.NodeId{}, 2, 3)
+	assert.Nil(t, err)
+	assert.Equal(t, mySig, sig)
+}
+
+func TestOracle_Eligible(t *testing.T) {
+	o := New(&mockValueProvider{0, myErr}, &mockActiveSetProvider{10}, buildVerifier(true, nil), &signer{}, 10)
+	res, err := o.Eligible(1, 2, 3, types.NodeId{}, []byte{})
+	assert.False(t, res)
+	assert.NotNil(t, err)
+	assert.Equal(t, myErr, err)
+
+	o.beacon = &mockValueProvider{0, nil}
+	o.vrfVerifier = buildVerifier(false, nil)
+	res, err = o.Eligible(1, 2, 3, types.NodeId{}, []byte{})
+	assert.False(t, res)
+	assert.Nil(t, err)
 }
