@@ -71,7 +71,7 @@ type BlockCache interface {
 //todo memory optimizations
 type ninjaTortoise struct {
 	log.Log
-	BlockCache         //block cache
+	BlockCache //block cache
 	avgLayerSize       uint64
 	pBase              votingPattern
 	patterns           map[types.LayerID][]votingPattern                 //map patterns by layer for eviction purposes
@@ -554,6 +554,15 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) { //i most rec
 }
 
 func (ni *ninjaTortoise) GetGoodPattern(layer types.LayerID) (uint32, error) {
+	if layer == 0 || layer == 1 {
+		v, err := ni.LayerBlockIds(layer)
+		if err != nil {
+			ni.Error("Could not get layer block ids for layer %v err=%v", layer, err)
+			return 0, err
+		}
+		return uint32(getId(v)), nil
+	}
+
 	if layer >= ni.pBase.LayerID {
 		return 0, errors.New("pbase is lower than provided layer")
 	}

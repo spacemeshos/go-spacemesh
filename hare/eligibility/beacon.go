@@ -8,8 +8,8 @@ import (
 const nilVal = 0
 
 type patternProvider interface {
-	// GetPatternId returns the pattern id of the given layer
-	// the pattern id is defined to be the hash of blocks in a layer
+	// GetPatternId returns the pattern Id of the given Layer
+	// the pattern Id is defined to be the hash of blocks in a Layer
 	GetGoodPattern(layer types.LayerID) (uint32, error)
 }
 
@@ -24,11 +24,11 @@ func NewBeacon(patternProvider patternProvider) *beacon {
 	}
 }
 
-// Value returns the unpredictable and agreed value for the given layer
+// Value returns the unpredictable and agreed value for the given Layer
 func (b *beacon) Value(layer types.LayerID) (uint32, error) {
 	v, err := b.patternProvider.GetGoodPattern(layer)
 	if err != nil {
-		log.Error("Could not get pattern id: %v", err)
+		log.Error("Could not get pattern Id: %v", err)
 		return nilVal, err
 	}
 

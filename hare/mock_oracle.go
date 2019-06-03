@@ -115,3 +115,7 @@ func (mock *MockHashOracle) Eligible(layer types.LayerID, round int32, committee
 
 	return false, nil
 }
+
+func (m *MockHashOracle) Proof(id types.NodeId, layer types.LayerID, round int32) ([]byte, error) {
+	return []byte{}, nil
+}

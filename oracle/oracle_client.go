@@ -187,3 +187,7 @@ func (oc *OracleClient) Eligible(layer types.LayerID, round int32, committeeSize
 	oc.eMtx.Unlock()
 	return valid, nil
 }
+
+func (o *OracleClient) Proof(id types.NodeId, layer types.LayerID, round int32) ([]byte, error) {
+	return []byte{}, nil
+}

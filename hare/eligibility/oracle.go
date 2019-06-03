@@ -6,7 +6,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"github.com/nullstyle/go-xdr/xdr3"
-	"github.com/spacemeshos/go-spacemesh/amcl/BLS381"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/types"
@@ -23,22 +22,23 @@ type activeSetProvider interface {
 	ActiveSetSize(ech types.EpochId) uint32
 }
 
-type VerifierFunc = func(msg, sig []byte, pub []byte) (bool, error)
-
-func Verify(msg, sig []byte, pub []byte) (bool, error) {
-	return BLS381.Verify(sig, string(msg), pub) == BLS381.BLS_OK, nil
+type Signer interface {
+	Sign(msg []byte) ([]byte, error)
 }
+
+type VerifierFunc = func(msg, sig, pub []byte) (bool, error)
 
 // Oracle is the hare eligibility oracle
 type Oracle struct {
 	beacon            valueProvider
 	activeSetProvider activeSetProvider
-	vrf               VerifierFunc
+	vrfSigner         Signer
+	vrfVerifier       VerifierFunc
 	layersPerEpoch    uint16
 }
 
-// Returns the relative layer that w.h.p. we have agreement on its view
-// safe is defined to be k layers prior to the provided layer
+// Returns the relative Layer that w.h.p. we have agreement on its view
+// safe is defined to be k layers prior to the provided Layer
 func safeLayer(layer types.LayerID) types.LayerID {
 	if layer > k { // assuming genesis is zero
 		return layer - k
@@ -48,27 +48,28 @@ func safeLayer(layer types.LayerID) types.LayerID {
 }
 
 // New returns a new eligibility oracle instance
-func New(beacon valueProvider, asProvider activeSetProvider, vrf VerifierFunc, layersPerEpoch uint16) *Oracle {
+func New(beacon valueProvider, asProvider activeSetProvider, vrfVerifier VerifierFunc, vrfSigner Signer, layersPerEpoch uint16) *Oracle {
 	return &Oracle{
 		beacon:            beacon,
 		activeSetProvider: asProvider,
-		vrf:               vrf,
+		vrfVerifier:       vrfVerifier,
+		vrfSigner:         vrfSigner,
 		layersPerEpoch:    layersPerEpoch,
 	}
 }
 
 type vrfMessage struct {
-	beacon uint32
-	id     types.NodeId
-	layer  types.LayerID
-	round  int32
+	Beacon uint32
+	Id     types.NodeId
+	Layer  types.LayerID
+	Round  int32
 }
 
-// BuildVRFMessage builds the VRF message used as input for the BLS (msg=beacon##id##layer##round)
+// buildVRFMessage builds the VRF message used as input for the BLS (msg=Beacon##Id##Layer##Round)
 func (o *Oracle) buildVRFMessage(id types.NodeId, layer types.LayerID, round int32) ([]byte, error) {
 	v, err := o.beacon.Value(safeLayer(layer))
 	if err != nil {
-		log.Error("Could not get beacon value: %v", err)
+		log.Error("Could not get Beacon value: %v", err)
 		return nil, err
 	}
 
@@ -86,12 +87,13 @@ func (o *Oracle) buildVRFMessage(id types.NodeId, layer types.LayerID, round int
 func (o *Oracle) activeSetSize(layer types.LayerID) uint32 {
 	ep := safeLayer(layer).GetEpoch(o.layersPerEpoch)
 	if ep == 0 {
-		return o.activeSetProvider.ActiveSetSize(0)
+		return 5 // TODO: agree on the inception problem
+		// return o.activeSetProvider.ActiveSetSize(0)
 	}
 	return o.activeSetProvider.ActiveSetSize(ep - 1)
 }
 
-// Eligible checks if id is eligible on the given layer where msg is the VRF message, sig is the role proof and assuming commSize as the expected committee size
+// Eligible checks if Id is eligible on the given Layer where msg is the VRF message, sig is the role proof and assuming commSize as the expected committee size
 func (o *Oracle) Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeId, sig []byte) (bool, error) {
 	msg, err := o.buildVRFMessage(id, layer, round)
 	if err != nil {
@@ -100,13 +102,13 @@ func (o *Oracle) Eligible(layer types.LayerID, round int32, committeeSize int, i
 	}
 
 	// validate message
-	res, err := o.vrf(msg, sig, id.VRFPublicKey)
+	res, err := o.vrfVerifier(msg, sig, id.VRFPublicKey)
 	if err != nil {
 		log.Error("VRF verification failed: %v", err)
 		return false, err
 	}
 	if !res {
-		log.Warning("id %v did not pass VRF verification", id.Key)
+		log.Warning("Id %v did not pass VRF verification", id.Key)
 		return false, err
 	}
 
@@ -130,4 +132,22 @@ func (o *Oracle) Eligible(layer types.LayerID, round int32, committeeSize int, i
 
 	// lower or equal
 	return true, nil
+}
+
+// TODO: Id is not necessary as a param
+// Proof returns the role proof for the current Layer & Round
+func (o *Oracle) Proof(id types.NodeId, layer types.LayerID, round int32) ([]byte, error) {
+	msg, err := o.buildVRFMessage(id, layer, round)
+	if err != nil {
+		log.Error("Proof: could not build VRF message err=%v", err)
+		return nil, err
+	}
+
+	sig, err := o.vrfSigner.Sign(msg)
+	if err != nil {
+		log.Error("Proof: could not sign VRF message err=%v", err)
+		return nil, err
+	}
+
+	return sig, nil
 }

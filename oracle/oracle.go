@@ -29,6 +29,11 @@ func (bo *localOracle) Eligible(layer types.LayerID, round int32, committeeSize 
 	return bo.oc.Eligible(layer, round, committeeSize, id, sig)
 }
 
+func (bo *localOracle) Proof(id types.NodeId, layer types.LayerID, round int32) ([]byte, error) {
+	return bo.oc.Proof(id, layer, round)
+}
+
+
 func NewLocalOracle(rolacle *eligibility.FixedRolacle, committeeSize int, nodeID types.NodeId) *localOracle {
 	//oc.Register(true, pubKey)
 	return &localOracle{
@@ -53,4 +58,8 @@ func (bo *hareOracle) Eligible(layer types.LayerID, round int32, committeeSize i
 	//note: we don't use the proof in the oracle server. we keep it just for the future syntax
 	//todo: maybe replace k to be uint32 like hare wants, and don't use -1 for blocks
 	return bo.oc.Eligible(layer, round, committeeSize, id, sig)
+}
+
+func (bo *hareOracle) Proof(id types.NodeId, layer types.LayerID, round int32) ([]byte, error) {
+	return bo.oc.Proof(id, layer, round)
 }

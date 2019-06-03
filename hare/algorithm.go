@@ -2,7 +2,6 @@ package hare
 
 import (
 	"bytes"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"github.com/nullstyle/go-xdr/xdr3"
@@ -13,7 +12,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/types"
-	"hash/fnv"
 	"time"
 )
 
@@ -21,6 +19,7 @@ const protoName = "HARE_PROTOCOL"
 
 type Rolacle interface {
 	Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeId, sig []byte) (bool, error)
+	Proof(id types.NodeId, layer types.LayerID, round int32) ([]byte, error)
 }
 
 type NetworkService interface {
@@ -79,20 +78,6 @@ func (m *Msg) Bytes() []byte {
 	return w.Bytes()
 }
 
-// TODO: move to unit test
-type MockStateQuerier struct {
-	res bool
-	err error
-}
-
-func NewMockStateQuerier() MockStateQuerier {
-	return MockStateQuerier{true, nil}
-}
-
-func (msq MockStateQuerier) IsIdentityActive(edId string, layer types.LayerID) (bool, error) {
-	return msq.res, msq.err
-}
-
 func newMsg(hareMsg *Message, querier StateQuerier) (*Msg, error) {
 	// data msg to bytes
 	var w bytes.Buffer
@@ -111,6 +96,8 @@ func newMsg(hareMsg *Message, querier StateQuerier) (*Msg, error) {
 
 	// query if identity is active
 	pub := signing.NewPublicKey(pubKey)
+	// TODO: remove comments when ready
+	/*
 	res, err := querier.IsIdentityActive(pub.String(), types.LayerID(hareMsg.InnerMsg.InstanceId))
 	if err != nil {
 		log.Error("error while checking if identity is active for %v err=%v", pub.String(), err)
@@ -122,7 +109,7 @@ func newMsg(hareMsg *Message, querier StateQuerier) (*Msg, error) {
 		log.Error("identity %v is not active", pub.String())
 		return nil, errors.New("inactive identity")
 	}
-
+	*/
 	return &Msg{hareMsg, pub}, nil
 }
 
@@ -133,6 +120,7 @@ type ConsensusProcess struct {
 	instanceId        InstanceId // the id of this consensus instance
 	oracle            Rolacle    // roles oracle
 	signing           Signer
+	nid               types.NodeId
 	network           NetworkService
 	isStarted         bool
 	inbox             chan *Msg
@@ -150,15 +138,16 @@ type ConsensusProcess struct {
 }
 
 // Creates a new consensus process instance
-func NewConsensusProcess(cfg config.Config, instanceId InstanceId, s *Set, oracle Rolacle, signing Signer, p2p NetworkService, terminationReport chan TerminationOutput, logger log.Log) *ConsensusProcess {
+func NewConsensusProcess(cfg config.Config, instanceId InstanceId, s *Set, oracle Rolacle, stateQuerier StateQuerier, signing Signer, nid types.NodeId, p2p NetworkService, terminationReport chan TerminationOutput, logger log.Log) *ConsensusProcess {
 	proc := &ConsensusProcess{}
 	proc.State = State{-1, -1, s.Clone(), nil}
 	proc.Closer = NewCloser()
 	proc.instanceId = instanceId
 	proc.oracle = oracle
 	proc.signing = signing
+	proc.nid = nid
 	proc.network = p2p
-	proc.validator = newSyntaxContextValidator(signing, cfg.F+1, proc.statusValidator(), logger)
+	proc.validator = newSyntaxContextValidator(signing, cfg.F+1, proc.statusValidator(), stateQuerier, logger)
 	proc.preRoundTracker = NewPreRoundTracker(cfg.F+1, cfg.N)
 	proc.notifyTracker = NewNotifyTracker(cfg.N)
 	proc.terminating = false
@@ -217,11 +206,16 @@ func (proc *ConsensusProcess) SetInbox(inbox chan *Msg) {
 
 func (proc *ConsensusProcess) eventLoop() {
 	proc.With().Info("Consensus Process Started",
-		log.Int("Hare-N", proc.cfg.N), log.Int("f", proc.cfg.F), log.String("duration", (time.Duration(proc.cfg.RoundDuration)*time.Second).String()),
+		log.Int("Hare-N", proc.cfg.N), log.Int("f", proc.cfg.F), log.String("duration", (time.Duration(proc.cfg.RoundDuration) * time.Second).String()),
 		log.Uint32("instance_id", uint32(proc.instanceId)), log.Int("exp_leaders", proc.cfg.ExpectedLeaders), log.String("set_values", proc.s.String()))
 
 	// set pre-round InnerMsg and send
-	m := proc.initDefaultBuilder(proc.s).SetType(PreRound).Sign(proc.signing).Build()
+	builder, err := proc.initDefaultBuilder(proc.s)
+	if err != nil {
+		proc.Error("init default builder failed: %v", err)
+		return
+	}
+	m := builder.SetType(PreRound).Sign(proc.signing).Build()
 	proc.sendMessage(m)
 
 	// listen to pre-round Messages
@@ -388,15 +382,27 @@ func (proc *ConsensusProcess) advanceToNextRound() {
 func (proc *ConsensusProcess) beginRound1() {
 	proc.statusesTracker = NewStatusTracker(proc.cfg.F+1, proc.cfg.N)
 	proc.statusesTracker.Log = proc.Log
-	statusMsg := proc.initDefaultBuilder(proc.s).SetType(Status).Sign(proc.signing).Build()
+	b, err := proc.initDefaultBuilder(proc.s)
+	if err != nil {
+		proc.Error("init default builder failed: %v", err)
+		return
+	}
+	statusMsg := b.SetType(Status).Sign(proc.signing).Build()
 	proc.sendMessage(statusMsg)
 }
 
 func (proc *ConsensusProcess) beginRound2() {
 	proc.proposalTracker = NewProposalTracker(proc.Log)
 
+	// done with building proposal, reset statuses tracking
+	defer func() { proc.statusesTracker = nil }()
+
 	if proc.isEligible() && proc.statusesTracker.IsSVPReady() {
-		builder := proc.initDefaultBuilder(proc.statusesTracker.ProposalSet(defaultSetSize))
+		builder, err := proc.initDefaultBuilder(proc.statusesTracker.ProposalSet(defaultSetSize))
+		if err != nil {
+			proc.Error("init default builder failed: %v", err)
+			return
+		}
 		svp := proc.statusesTracker.BuildSVP()
 		if svp != nil {
 			proposalMsg := builder.SetType(Proposal).SetSVP(svp).Sign(proc.signing).Build()
@@ -405,9 +411,6 @@ func (proc *ConsensusProcess) beginRound2() {
 			proc.Error("Failed to build SVP (nil) after verifying SVP is ready ")
 		}
 	}
-
-	// done with building proposal, reset statuses tracking
-	proc.statusesTracker = nil
 }
 
 func (proc *ConsensusProcess) beginRound3() {
@@ -417,7 +420,12 @@ func (proc *ConsensusProcess) beginRound3() {
 	proc.commitTracker = NewCommitTracker(proc.cfg.F+1, proc.cfg.N, proposedSet) // track commits for proposed set
 
 	if proposedSet != nil { // has proposal to send
-		builder := proc.initDefaultBuilder(proposedSet).SetType(Commit).Sign(proc.signing)
+		builder, err := proc.initDefaultBuilder(proposedSet)
+		if err != nil {
+			proc.Error("init default builder failed: %v", err)
+			return
+		}
+		builder = builder.SetType(Commit).Sign(proc.signing)
 		commitMsg := builder.Build()
 		proc.sendMessage(commitMsg)
 	}
@@ -454,25 +462,17 @@ func (proc *ConsensusProcess) onRoundBegin() {
 	go proc.handlePending(pendingProcess)
 }
 
-func (proc *ConsensusProcess) roleProof() Signature {
-	kInBytes := make([]byte, 4)
-	binary.LittleEndian.PutUint32(kInBytes, uint32(proc.k))
-	hash := fnv.New32()
-	hash.Write(proc.signing.PublicKey().Bytes())
-	hash.Write(kInBytes)
-
-	hashBytes := make([]byte, 4)
-	binary.LittleEndian.PutUint32(hashBytes, uint32(hash.Sum32()))
-
-	return proc.signing.Sign(hashBytes)
-}
-
-func (proc *ConsensusProcess) initDefaultBuilder(s *Set) *MessageBuilder {
+func (proc *ConsensusProcess) initDefaultBuilder(s *Set) (*MessageBuilder, error) {
 	builder := NewMessageBuilder().SetInstanceId(proc.instanceId)
 	builder = builder.SetRoundCounter(proc.k).SetKi(proc.ki).SetValues(s)
-	builder.SetRoleProof(proc.roleProof())
+	proof, err := proc.oracle.Proof(types.NodeId{Key: proc.signing.PublicKey().String(), VRFPublicKey: proc.nid.VRFPublicKey}, types.LayerID(proc.instanceId), proc.k)
+	if err != nil {
+		proc.Error("Could not initialize default builder err=%v", err)
+		return nil, err // TODO: probably have to return error
+	}
+	builder.SetRoleProof(proof)
 
-	return builder
+	return builder, nil
 }
 
 func (proc *ConsensusProcess) processPreRoundMsg(msg *Msg) {
@@ -587,7 +587,12 @@ func (proc *ConsensusProcess) endOfRound3() {
 	proc.Debug("end of round 3: committing on %v and sending notification message", s)
 	proc.s = s
 	proc.certificate = cert
-	builder := proc.initDefaultBuilder(proc.s).SetType(Notify).SetCertificate(proc.certificate).Sign(proc.signing)
+	builder, err := proc.initDefaultBuilder(proc.s)
+	if err != nil {
+		proc.Error("init default builder failed: %v", err)
+		return
+	}
+	builder = builder.SetType(Notify).SetCertificate(proc.certificate).Sign(proc.signing)
 	notifyMsg := builder.Build()
 	proc.sendMessage(notifyMsg)
 	proc.notifySent = true
@@ -599,7 +604,13 @@ func (proc *ConsensusProcess) isEligible() bool {
 
 // Returns the role matching the current round if eligible for this round, false otherwise
 func (proc *ConsensusProcess) currentRole() Role {
-	res, err := proc.oracle.Eligible(types.LayerID(proc.instanceId), proc.k, expectedCommitteeSize(proc.k, proc.cfg.N, proc.cfg.ExpectedLeaders), types.NodeId{Key: proc.signing.PublicKey().String()}, proc.roleProof())
+	proof, err := proc.oracle.Proof(types.NodeId{Key: proc.signing.PublicKey().String(), VRFPublicKey: proc.nid.VRFPublicKey}, types.LayerID(proc.instanceId), proc.k)
+	if err != nil {
+		proc.Error("Could not retrieve proof from oracle err=%v", err)
+		return Passive
+	}
+
+	res, err := proc.oracle.Eligible(types.LayerID(proc.instanceId), proc.k, expectedCommitteeSize(proc.k, proc.cfg.N, proc.cfg.ExpectedLeaders), proc.nid, proof)
 	if err != nil {
 		proc.Error("Error checking our eligibility: %v", err)
 		return Passive

@@ -17,14 +17,15 @@ type IdentityProvider interface {
 
 type eligibilityValidator struct {
 	oracle           Rolacle
+	layersPerEpoch   uint16
 	identityProvider IdentityProvider
 	maxExpActives    int // the maximal expected committee size
 	expLeaders       int // the expected number of leaders
 	log.Log
 }
 
-func NewEligibilityValidator(oracle Rolacle, idProvider IdentityProvider, maxExpActives, expLeaders int, logger log.Log) *eligibilityValidator {
-	return &eligibilityValidator{oracle, idProvider, maxExpActives, expLeaders, logger}
+func NewEligibilityValidator(oracle Rolacle, layersPerEpoch uint16, idProvider IdentityProvider, maxExpActives, expLeaders int, logger log.Log) *eligibilityValidator {
+	return &eligibilityValidator{oracle, layersPerEpoch, idProvider, maxExpActives, expLeaders, logger}
 }
 
 func (ev *eligibilityValidator) validateRole(m *Msg) (bool, error) {
@@ -38,10 +39,12 @@ func (ev *eligibilityValidator) validateRole(m *Msg) (bool, error) {
 		return false, errors.New("fatal: nil inner message")
 	}
 
-	// TODO: validate role proof sig
-
 	pub := m.PubKey
 	layer := types.LayerID(m.InnerMsg.InstanceId)
+	if layer.GetEpoch(ev.layersPerEpoch).IsGenesis() {
+		return true, nil // TODO: remove this lie after inception problem is addressed
+	}
+
 	nId, err := ev.identityProvider.GetIdentity(pub.String())
 	if err != nil {
 		ev.Error("Eligibility validator: could not validate role err=%v", err)
@@ -62,7 +65,7 @@ func (ev *eligibilityValidator) validateRole(m *Msg) (bool, error) {
 	return true, nil
 }
 
-// Validates eligibility and signature of the provided InnerMsg
+// Validates eligibility and signature of the provided message
 func (ev *eligibilityValidator) Validate(m *Msg) bool {
 	res, err := ev.validateRole(m)
 	if err != nil {
@@ -82,11 +85,12 @@ type syntaxContextValidator struct {
 	signing         Signer
 	threshold       int
 	statusValidator func(m *Msg) bool // used to validate status Messages in SVP
+	stateQuerier    StateQuerier
 	log.Log
 }
 
-func newSyntaxContextValidator(signing Signer, threshold int, validator func(m *Msg) bool, logger log.Log) *syntaxContextValidator {
-	return &syntaxContextValidator{signing, threshold, validator, logger}
+func newSyntaxContextValidator(signing Signer, threshold int, validator func(m *Msg) bool, stateQuerier StateQuerier, logger log.Log) *syntaxContextValidator {
+	return &syntaxContextValidator{signing, threshold, validator, stateQuerier, logger}
 }
 
 // Validates the InnerMsg is contextually valid
@@ -187,7 +191,7 @@ func (validator *syntaxContextValidator) validateAggregatedMessage(aggMsg *Aggre
 		// TODO: refill Values in commit on certificate
 
 		// TODO: should receive the state querier
-		iMsg, err := newMsg(innerMsg, MockStateQuerier{true, nil})
+		iMsg, err := newMsg(innerMsg, validator.stateQuerier)
 		if err != nil {
 			validator.Warning("Aggregated validation failed: could not construct msg")
 			return false

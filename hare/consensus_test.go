@@ -7,6 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	signing2 "github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/types"
 	"testing"
 	"time"
 )
@@ -139,7 +140,7 @@ func createConsensusProcess(isHonest bool, cfg config.Config, oracle fullRolacle
 	output := make(chan TerminationOutput, 1)
 	signing := signing2.NewEdSigner()
 	oracle.Register(isHonest, signing.PublicKey().String())
-	proc := NewConsensusProcess(cfg, instanceId1, initialSet, oracle, signing, network, output, log.NewDefault(signing.PublicKey().String()[:8]))
+	proc := NewConsensusProcess(cfg, instanceId1, initialSet, oracle, NewMockStateQuerier(), signing, types.NodeId{Key: signing.PublicKey().String(), VRFPublicKey: []byte{}}, network, output, log.NewDefault(signing.PublicKey().ShortString()))
 	proc.SetInbox(broker.Register(proc.Id()))
 
 	return proc

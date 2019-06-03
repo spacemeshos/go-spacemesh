@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/seehuhn/mt19937"
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/amcl/BLS381"
 	apiCfg "github.com/spacemeshos/go-spacemesh/api/config"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common"
@@ -316,16 +317,18 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	conf := sync.Configuration{SyncInterval: 1 * time.Second, Concurrency: 4, LayerSize: int(layerSize), RequestTimeout: 100 * time.Millisecond}
 	syncer := sync.NewSync(swarm, msh, blockValidator, sync.TxValidatorMock{}, conf, clock.Subscribe(), lg.WithName("sync"))
 
+	vrfPriv, vrfPub := BLS381.GenKeyPair()
+
 	// TODO: we should probably decouple the apptest and the node (and duplicate as necessary)
 	var hOracle hare.Rolacle
 	if isFixedOracle { // fixed rolacle, take the provided rolacle
 		hOracle = rolacle
 	} else { // regular oracle, build and use it
 		beacon := eligibility.NewBeacon(trtl)
-		hOracle = eligibility.New(beacon, atxdb, eligibility.Verify, app.Config.CONSENSUS.LayersPerEpoch)
+		hOracle = eligibility.New(beacon, atxdb, BLS381.Verify2, BLS381.NewBlsSigner(vrfPriv), app.Config.CONSENSUS.LayersPerEpoch)
 	}
 
-	ha := hare.New(app.Config.HARE, swarm, sgn, msh, hOracle, &mockIdProvider{}, atxdb, clock.Subscribe(), lg.WithName("hare"))
+	ha := hare.New(app.Config.HARE, swarm, sgn, types.NodeId{Key: sgn.PublicKey().String(), VRFPublicKey: vrfPub}, msh, hOracle, app.Config.CONSENSUS.LayersPerEpoch, idStore, atxdb, clock.Subscribe(), lg.WithName("hare"))
 
 	blockProducer := miner.NewBlockBuilder(nodeID, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, atxdb.ProcessAtx, lg.WithName("blockProducer"))
 	blockListener := sync.NewBlockListener(swarm, blockValidator, msh, 2*time.Second, 4, lg.WithName("blockListener"))

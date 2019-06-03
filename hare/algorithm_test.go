@@ -1,7 +1,7 @@
 package hare
 
 import (
-	"bytes"
+	"github.com/spacemeshos/go-spacemesh/amcl/BLS381"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -45,6 +45,10 @@ type mockRolacle struct {
 
 func (mr *mockRolacle) Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeId, sig []byte) (bool, error) {
 	return mr.isEligible, nil
+}
+
+func (mr *mockRolacle) Proof(id types.NodeId, layer types.LayerID, round int32) ([]byte, error) {
+	return []byte{}, nil
 }
 
 func (mr *mockRolacle) Register(id string) {
@@ -237,10 +241,11 @@ func generateConsensusProcess(t *testing.T) *ConsensusProcess {
 	s := NewSetFromValues(value1)
 	oracle := eligibility.New()
 	signing := signing.NewEdSigner()
+	_, vrfPub := BLS381.GenKeyPair()
 	oracle.Register(true, signing.PublicKey().String())
 	output := make(chan TerminationOutput, 1)
 
-	return NewConsensusProcess(cfg, instanceId1, s, oracle, signing, n1, output, log.NewDefault(signing.PublicKey().String()))
+	return NewConsensusProcess(cfg, instanceId1, s, oracle, NewMockStateQuerier(), signing, types.NodeId{Key: signing.PublicKey().String(), VRFPublicKey: vrfPub}, n1, output, log.NewDefault(signing.PublicKey().String()))
 }
 
 func TestConsensusProcess_Id(t *testing.T) {
@@ -268,23 +273,14 @@ func TestConsensusProcess_InitDefaultBuilder(t *testing.T) {
 	proc := generateConsensusProcess(t)
 	s := NewEmptySet(defaultSetSize)
 	s.Add(value1)
-	builder := proc.initDefaultBuilder(s)
+	builder, err := proc.initDefaultBuilder(s)
+	assert.Nil(t, err)
 	assert.True(t, NewSet(builder.inner.Values).Equals(s))
 	verifier := builder.msg.PubKey
 	assert.Nil(t, verifier)
 	assert.Equal(t, builder.inner.K, proc.k)
 	assert.Equal(t, builder.inner.Ki, proc.ki)
 	assert.Equal(t, InstanceId(builder.inner.InstanceId), proc.instanceId)
-}
-
-func TestConsensusProcess_Proof(t *testing.T) {
-	proc := generateConsensusProcess(t)
-	prev := make([]byte, 0)
-	for i := 0; i < lowThresh10; i++ {
-		assert.False(t, bytes.Equal(proc.roleProof(), prev))
-		prev = proc.roleProof()
-		proc.advanceToNextRound()
-	}
 }
 
 func TestConsensusProcess_isEligible(t *testing.T) {
