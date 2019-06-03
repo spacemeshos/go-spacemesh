@@ -262,9 +262,12 @@ func (s *Syncer) Txs(mb *types.MiniBlock) ([]*types.SerializableTransaction, err
 func (s *Syncer) ATXs(mb *types.MiniBlock) (atxs []*types.ActivationTx, associated *types.ActivationTx, err error) {
 	localAtxs, missing := s.GetATXs(mb.ATxIds)
 
-	_, associatedErr := s.GetAtx(mb.ATXID)
-	if associatedErr != nil {
-		missing = append(missing, mb.ATXID)
+	fetchAssociated := false
+	if mb.ATXID != *types.EmptyAtxId {
+		if _, err := s.GetAtx(mb.ATXID); err != nil {
+			fetchAssociated = true
+			missing = append(missing, mb.ATXID)
+		}
 	}
 
 	//map and sort txs
@@ -279,9 +282,10 @@ func (s *Syncer) ATXs(mb *types.MiniBlock) (atxs []*types.ActivationTx, associat
 		}
 	}
 
-	associated, ok := txMap[mb.BlockHeader.ATXID]
-	if associatedErr != nil && !ok {
-		return nil, nil, errors.New(fmt.Sprintf("could not fetch associated %v", mb.BlockHeader.ATXID.Hex()))
+	if fetchAssociated {
+		if _, ok := txMap[mb.BlockHeader.ATXID]; !ok {
+			return nil, nil, errors.New(fmt.Sprintf("could not fetch associated %v", mb.BlockHeader.ATXID.Hex()))
+		}
 	}
 
 	atxs = make([]*types.ActivationTx, 0, len(mb.TxIds))

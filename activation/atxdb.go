@@ -415,7 +415,7 @@ func (db *ActivationDb) getAtxUnlocked(id types.AtxId) (*types.ActivationTx, err
 // atx db
 func (db *ActivationDb) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
 	if id == *types.EmptyAtxId {
-		return nil, nil
+		return nil, errors.New("trying to fetch empty atx id")
 	}
 
 	db.RLock()

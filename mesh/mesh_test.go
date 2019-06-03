@@ -36,7 +36,7 @@ type AtxDbMock struct {
 
 func (t *AtxDbMock) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
 	if id == *types.EmptyAtxId {
-		return nil, nil
+		return nil, fmt.Errorf("trying to fetch empty atx id")
 	}
 
 	if atx, ok := t.db[id]; ok {
