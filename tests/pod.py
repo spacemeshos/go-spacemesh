@@ -70,6 +70,7 @@ def delete_pod(pod_name, name_space):
 
 
 def check_for_restarted_pods(namespace, specific_deployment_name=''):
+    pods=[]
     if specific_deployment_name:
         pods = client.CoreV1Api().list_namespaced_pod(namespace,
                                                       label_selector=(
@@ -79,7 +80,8 @@ def check_for_restarted_pods(namespace, specific_deployment_name=''):
 
     restarted_pods = []
     for p in pods:
-        if p.status.container_statuses[0].restart_count > 0: #Assuming there is only 1 container per pod
+        if (p.status and p.status.container_statuses and
+                p.status.container_statuses[0].restart_count > 0):  # Assuming there is only 1 container per pod
             restarted_pods.append(p.metadata.name)
 
     return restarted_pods
