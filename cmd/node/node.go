@@ -9,7 +9,6 @@ import (
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/consensus"
-	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
@@ -266,7 +265,7 @@ func (mip *mockIdProvider) GetIdentity(edId string) (types.NodeId, error) {
 	return types.NodeId{Key: edId, VRFPublicKey: []byte{}}, nil
 }
 
-func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service, dbStorepath string, sgn hare.Signer, isFixedOracle bool, rolacle hare.Rolacle, layerSize uint32, postClient nipst.PostProverClient, poetClient nipst.PoetProvingServiceClient, atxdbstore database.DB, vrfSigner *crypto.VRFSigner, commitmentConfig nipst.PostParams, layersPerEpoch uint32) error {
+func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service, dbStorepath string, sgn hare.Signer, isFixedOracle bool, rolacle hare.Rolacle, layerSize uint32, postClient nipst.PostProverClient, poetClient nipst.PoetProvingServiceClient, atxdbstore database.DB, vrfSigner *BLS381.BlsSigner, commitmentConfig nipst.PostParams, layersPerEpoch uint32) error {
 
 	app.instanceName = nodeID.Key
 	//todo: should we add all components to a single struct?
@@ -307,9 +306,10 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	//todo: this is initialized twice, need to refactor
 	validator := nipst.NewValidator(commitmentConfig)
 	atxdb := activation.NewActivationDb(atxdbstore, idStore, mdb, uint64(app.Config.CONSENSUS.LayersPerEpoch), validator, lg.WithName("atxDb"))
+
 	beaconProvider := &oracle.EpochBeaconProvider{}
 	blockOracle := oracle.NewMinerBlockOracle(layerSize, uint16(layersPerEpoch), atxdb, beaconProvider, vrfSigner, nodeID, lg.WithName("blockOracle"))
-	blockValidator := oracle.NewBlockEligibilityValidator(int32(layerSize), uint16(layersPerEpoch), atxdb, beaconProvider, crypto.ValidateVRF, lg.WithName("blkElgValidator"))
+	blockValidator := oracle.NewBlockEligibilityValidator(int32(layerSize), uint16(layersPerEpoch), atxdb, beaconProvider, BLS381.Verify2, lg.WithName("blkElgValidator"))
 
 	trtl := tortoise.NewAlgorithm(int(1), mdb, lg.WithName("trtl"))
 	msh := mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, processor, lg.WithName("mesh")) //todo: what to do with the logger?
@@ -317,18 +317,16 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	conf := sync.Configuration{Concurrency: 4, LayerSize: int(layerSize), RequestTimeout: 100 * time.Millisecond}
 	syncer := sync.NewSync(swarm, msh, blockValidator, sync.TxValidatorMock{}, conf, clock.Subscribe(), lg.WithName("sync"))
 
-	vrfPriv, vrfPub := BLS381.GenKeyPair()
-
 	// TODO: we should probably decouple the apptest and the node (and duplicate as necessary)
 	var hOracle hare.Rolacle
 	if isFixedOracle { // fixed rolacle, take the provided rolacle
 		hOracle = rolacle
 	} else { // regular oracle, build and use it
 		beacon := eligibility.NewBeacon(trtl)
-		hOracle = eligibility.New(beacon, atxdb, BLS381.Verify2, BLS381.NewBlsSigner(vrfPriv), app.Config.CONSENSUS.LayersPerEpoch)
+		hOracle = eligibility.New(beacon, atxdb, BLS381.Verify2, vrfSigner, app.Config.CONSENSUS.LayersPerEpoch)
 	}
 
-	ha := hare.New(app.Config.HARE, swarm, sgn, types.NodeId{Key: sgn.PublicKey().String(), VRFPublicKey: vrfPub}, msh, hOracle, app.Config.CONSENSUS.LayersPerEpoch, idStore, atxdb, clock.Subscribe(), lg.WithName("hare"))
+	ha := hare.New(app.Config.HARE, swarm, sgn, nodeID, msh, hOracle, app.Config.CONSENSUS.LayersPerEpoch, idStore, atxdb, clock.Subscribe(), lg.WithName("hare"))
 
 	blockProducer := miner.NewBlockBuilder(nodeID, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, atxdb.ProcessAtx, lg.WithName("blockProducer"))
 	blockListener := sync.NewBlockListener(swarm, blockValidator, syncer, 4, lg.WithName("blockListener"))
@@ -452,11 +450,6 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 		log.Panic("Could not retrieve identity err=%v", err)
 	}
 
-	vrfPublicKey, vrfPrivateKey, err := crypto.GenerateVRFKeys()
-	if err != nil {
-		log.Panic("Could not retrieve vrf err=%v", err)
-	}
-
 	log.Info("connecting to POET on IP %v", app.Config.PoETServer)
 	poet, err := nipst.NewRemoteRPCPoetClient(app.Config.PoETServer, 2*time.Second)
 	if err != nil {
@@ -470,7 +463,9 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 
 	app.unregisterOracle = func() { oracleClient.Unregister(true, app.edSgn.PublicKey().String()) }
 
-	nodeID := types.NodeId{Key: app.edSgn.PublicKey().String(), VRFPublicKey: vrfPublicKey}
+	vrfPriv, vrfPub := BLS381.GenKeyPair()
+	vrfSigner := BLS381.NewBlsSigner(vrfPriv)
+	nodeID := types.NodeId{Key: app.edSgn.PublicKey().String(), VRFPublicKey: vrfPub}
 
 	apiConf := &app.Config.API
 
@@ -485,8 +480,6 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 		NumberOfProvenLabels: 10,
 		SpaceUnit:            1024,
 	}
-
-	vrfSigner := crypto.NewVRFSigner(vrfPrivateKey)
 
 	err = app.initServices(nodeID, swarm, dbStorepath, app.edSgn, false, nil, uint32(app.Config.LayerAvgSize), nipst.NewPostClient(), poet, atxdbstore, vrfSigner, npstCfg, uint32(app.Config.CONSENSUS.LayersPerEpoch))
 	if err != nil {
