@@ -140,7 +140,7 @@ func createConsensusProcess(isHonest bool, cfg config.Config, oracle fullRolacle
 	output := make(chan TerminationOutput, 1)
 	signing := signing2.NewEdSigner()
 	oracle.Register(isHonest, signing.PublicKey().String())
-	proc := NewConsensusProcess(cfg, instanceId1, initialSet, oracle, NewMockStateQuerier(), signing, types.NodeId{Key: signing.PublicKey().String(), VRFPublicKey: []byte{}}, network, output, log.NewDefault(signing.PublicKey().ShortString()))
+	proc := NewConsensusProcess(cfg, instanceId1, initialSet, oracle, NewMockStateQuerier(), 10, signing, types.NodeId{Key: signing.PublicKey().String(), VRFPublicKey: []byte{}}, network, output, log.NewDefault(signing.PublicKey().ShortString()))
 	proc.SetInbox(broker.Register(proc.Id()))
 
 	return proc

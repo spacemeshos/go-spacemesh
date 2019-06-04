@@ -78,7 +78,7 @@ func (m *Msg) Bytes() []byte {
 	return w.Bytes()
 }
 
-func newMsg(hareMsg *Message, querier StateQuerier) (*Msg, error) {
+func newMsg(hareMsg *Message, querier StateQuerier, layersPerEpoch uint16) (*Msg, error) {
 	// data msg to bytes
 	var w bytes.Buffer
 	_, err := xdr.Marshal(&w, hareMsg.InnerMsg)
@@ -96,20 +96,25 @@ func newMsg(hareMsg *Message, querier StateQuerier) (*Msg, error) {
 
 	// query if identity is active
 	pub := signing.NewPublicKey(pubKey)
-	// TODO: remove comments when ready
-	/*
-		res, err := querier.IsIdentityActive(pub.String(), types.LayerID(hareMsg.InnerMsg.InstanceId))
-		if err != nil {
-			log.Error("error while checking if identity is active for %v err=%v", pub.String(), err)
-			return nil, errors.New("is identity active query failed")
-		}
 
-		// check query result
-		if !res {
-			log.Error("identity %v is not active", pub.String())
-			return nil, errors.New("inactive identity")
-		}
-	*/
+	// TODO: genesis flow should decide what we want to do here
+	layer := types.LayerID(hareMsg.InnerMsg.InstanceId)
+	if layer.GetEpoch(layersPerEpoch).IsGenesis() {
+		return &Msg{hareMsg, pub}, nil
+	}
+
+	res, err := querier.IsIdentityActive(pub.String(), types.LayerID(hareMsg.InnerMsg.InstanceId))
+	if err != nil {
+		log.Error("error while checking if identity is active for %v err=%v", pub.String(), err)
+		return nil, errors.New("is identity active query failed")
+	}
+
+	// check query result
+	if !res {
+		log.Error("identity %v is not active", pub.String())
+		return nil, errors.New("inactive identity")
+	}
+
 	return &Msg{hareMsg, pub}, nil
 }
 
@@ -138,7 +143,7 @@ type ConsensusProcess struct {
 }
 
 // Creates a new consensus process instance
-func NewConsensusProcess(cfg config.Config, instanceId InstanceId, s *Set, oracle Rolacle, stateQuerier StateQuerier, signing Signer, nid types.NodeId, p2p NetworkService, terminationReport chan TerminationOutput, logger log.Log) *ConsensusProcess {
+func NewConsensusProcess(cfg config.Config, instanceId InstanceId, s *Set, oracle Rolacle, stateQuerier StateQuerier, layersPerEpoch uint16, signing Signer, nid types.NodeId, p2p NetworkService, terminationReport chan TerminationOutput, logger log.Log) *ConsensusProcess {
 	proc := &ConsensusProcess{}
 	proc.State = State{-1, -1, s.Clone(), nil}
 	proc.Closer = NewCloser()
@@ -147,7 +152,7 @@ func NewConsensusProcess(cfg config.Config, instanceId InstanceId, s *Set, oracl
 	proc.signing = signing
 	proc.nid = nid
 	proc.network = p2p
-	proc.validator = newSyntaxContextValidator(signing, cfg.F+1, proc.statusValidator(), stateQuerier, logger)
+	proc.validator = newSyntaxContextValidator(signing, cfg.F+1, proc.statusValidator(), stateQuerier, layersPerEpoch, logger)
 	proc.preRoundTracker = NewPreRoundTracker(cfg.F+1, cfg.N)
 	proc.notifyTracker = NewNotifyTracker(cfg.N)
 	proc.terminating = false
@@ -468,7 +473,7 @@ func (proc *ConsensusProcess) initDefaultBuilder(s *Set) (*MessageBuilder, error
 	proof, err := proc.oracle.Proof(types.NodeId{Key: proc.signing.PublicKey().String(), VRFPublicKey: proc.nid.VRFPublicKey}, types.LayerID(proc.instanceId), proc.k)
 	if err != nil {
 		proc.Error("Could not initialize default builder err=%v", err)
-		return nil, err // TODO: probably have to return error
+		return nil, err
 	}
 	builder.SetRoleProof(proof)
 

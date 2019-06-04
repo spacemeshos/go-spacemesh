@@ -129,7 +129,7 @@ func buildMessage(msg *Message) *Msg {
 }
 
 func buildBroker(net NetworkService) *Broker {
-	return NewBroker(net, &mockEligibilityValidator{true}, MockStateQuerier{true, nil},
+	return NewBroker(net, &mockEligibilityValidator{true}, MockStateQuerier{true, nil}, 10,
 		Closer{make(chan struct{})}, log.NewDefault("broker"))
 }
 
@@ -246,7 +246,7 @@ func generateConsensusProcess(t *testing.T) *ConsensusProcess {
 	oracle.Register(true, signing.PublicKey().String())
 	output := make(chan TerminationOutput, 1)
 
-	return NewConsensusProcess(cfg, instanceId1, s, oracle, NewMockStateQuerier(), signing, types.NodeId{Key: signing.PublicKey().String(), VRFPublicKey: vrfPub}, n1, output, log.NewDefault(signing.PublicKey().String()))
+	return NewConsensusProcess(cfg, instanceId1, s, oracle, NewMockStateQuerier(), 10, signing, types.NodeId{Key: signing.PublicKey().String(), VRFPublicKey: vrfPub}, n1, output, log.NewDefault(signing.PublicKey().String()))
 }
 
 func TestConsensusProcess_Id(t *testing.T) {

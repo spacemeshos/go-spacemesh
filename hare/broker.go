@@ -38,24 +38,26 @@ func (closer *Closer) CloseChannel() chan struct{} {
 type Broker struct {
 	Closer
 	log.Log
-	network      NetworkService
-	eValidator   Validator
-	stateQuerier StateQuerier
-	inbox        chan service.GossipMessage
-	outbox       map[InstanceId]chan *Msg
-	pending      map[InstanceId][]*Msg
-	tasks        chan func()
-	maxReg       InstanceId
-	isStarted    bool
+	network        NetworkService
+	eValidator     Validator
+	stateQuerier   StateQuerier
+	layersPerEpoch uint16
+	inbox          chan service.GossipMessage
+	outbox         map[InstanceId]chan *Msg
+	pending        map[InstanceId][]*Msg
+	tasks          chan func()
+	maxReg         InstanceId
+	isStarted      bool
 }
 
-func NewBroker(networkService NetworkService, eValidator Validator, stateQuerier StateQuerier, closer Closer, log log.Log) *Broker {
+func NewBroker(networkService NetworkService, eValidator Validator, stateQuerier StateQuerier, layersPerEpoch uint16, closer Closer, log log.Log) *Broker {
 	p := new(Broker)
 	p.Closer = closer
 	p.Log = log
 	p.network = networkService
 	p.eValidator = eValidator
 	p.stateQuerier = stateQuerier
+	p.layersPerEpoch = layersPerEpoch
 	p.outbox = make(map[InstanceId]chan *Msg)
 	p.pending = make(map[InstanceId][]*Msg)
 	p.tasks = make(chan func())
@@ -116,8 +118,7 @@ func (b *Broker) eventLoop() {
 				futureMsg = true
 			}
 
-			// TODO: should receive the state querier or have a msg constructor
-			iMsg, err := newMsg(hareMsg, b.stateQuerier)
+			iMsg, err := newMsg(hareMsg, b.stateQuerier, b.layersPerEpoch)
 			if err != nil {
 				b.Warning("Message validation failed: could not construct msg err=%v", err)
 				continue

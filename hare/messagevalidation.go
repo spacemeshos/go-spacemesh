@@ -86,11 +86,12 @@ type syntaxContextValidator struct {
 	threshold       int
 	statusValidator func(m *Msg) bool // used to validate status Messages in SVP
 	stateQuerier    StateQuerier
+	layersPerEpoch  uint16
 	log.Log
 }
 
-func newSyntaxContextValidator(signing Signer, threshold int, validator func(m *Msg) bool, stateQuerier StateQuerier, logger log.Log) *syntaxContextValidator {
-	return &syntaxContextValidator{signing, threshold, validator, stateQuerier, logger}
+func newSyntaxContextValidator(signing Signer, threshold int, validator func(m *Msg) bool, stateQuerier StateQuerier, layersPerEpoch uint16, logger log.Log) *syntaxContextValidator {
+	return &syntaxContextValidator{signing, threshold, validator, stateQuerier, layersPerEpoch, logger}
 }
 
 // Validates the InnerMsg is contextually valid
@@ -188,10 +189,8 @@ func (validator *syntaxContextValidator) validateAggregatedMessage(aggMsg *Aggre
 
 	senders := make(map[string]struct{})
 	for _, innerMsg := range aggMsg.Messages {
-		// TODO: refill Values in commit on certificate
 
-		// TODO: should receive the state querier
-		iMsg, err := newMsg(innerMsg, validator.stateQuerier)
+		iMsg, err := newMsg(innerMsg, validator.stateQuerier, validator.layersPerEpoch)
 		if err != nil {
 			validator.Warning("Aggregated validation failed: could not construct msg err=%v", err)
 			return false

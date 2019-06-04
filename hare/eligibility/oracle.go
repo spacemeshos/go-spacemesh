@@ -134,7 +134,6 @@ func (o *Oracle) Eligible(layer types.LayerID, round int32, committeeSize int, i
 	return true, nil
 }
 
-// TODO: Id is not necessary as a param
 // Proof returns the role proof for the current Layer & Round
 func (o *Oracle) Proof(id types.NodeId, layer types.LayerID, round int32) ([]byte, error) {
 	msg, err := o.buildVRFMessage(id, layer, round)
