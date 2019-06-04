@@ -76,6 +76,20 @@ func buildSet() *hare.Set {
 	return s
 }
 
+type mockIdProvider struct {
+}
+
+func (mip *mockIdProvider) GetIdentity(edId string) (types.NodeId, error) {
+	return types.NodeId{Key: edId, VRFPublicKey: []byte{}}, nil
+}
+
+type mockStateQuerier struct {
+}
+
+func (msq mockStateQuerier) IsIdentityActive(edId string, layer types.LayerID) (bool, error) {
+	return true, nil
+}
+
 func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	log.Info("Starting hare main")
 	log.Info("Initializing P2P services")
@@ -101,7 +115,7 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
 	app.clock = timesync.NewTicker(timesync.RealClock{}, ld, gTime)
 
-	app.ha = hare.New(app.Config.HARE, app.p2p, app.sgn, &mockBlockProvider{}, hareOracle, hare.NewMockStateQuerier(), app.clock.Subscribe(), lg)
+	app.ha = hare.New(app.Config.HARE, app.p2p, app.sgn, types.NodeId{Key: app.sgn.PublicKey().String(), VRFPublicKey: []byte{}}, &mockBlockProvider{}, hareOracle, app.Config.CONSENSUS.LayersPerEpoch, &mockIdProvider{}, &mockStateQuerier{}, app.clock.Subscribe(), lg)
 	log.Info("Starting hare service")
 	err = app.ha.Start()
 	if err != nil {

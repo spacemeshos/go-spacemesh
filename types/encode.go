@@ -180,7 +180,7 @@ func InterfaceToBytes(i interface{}) ([]byte, error) {
 //todo standardized transaction id across project
 //todo replace panic
 func GetTransactionId(t *SerializableTransaction) TransactionId {
-	tx, err := TransactionAsBytes(t)
+	tx, err := InterfaceToBytes(t)
 	if err != nil {
 		panic("could not Serialize transaction")
 	}

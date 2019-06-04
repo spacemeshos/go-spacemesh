@@ -1,7 +1,6 @@
 package oracle
 
 import (
-	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/types"
 )
@@ -16,67 +15,31 @@ type HareOracle interface {
 	Eligible(instanceID uint32, committeeSize int, pubKey string, proof []byte) bool
 }
 
-type localBlockOracle struct {
+type localOracle struct {
 	committeeSize int
 	oc            *eligibility.FixedRolacle
 	nodeID        types.NodeId
 }
 
-func NewLocalOracle(rolacle *eligibility.FixedRolacle, committeeSize int, nodeID types.NodeId) *localBlockOracle {
+func (bo *localOracle) Register(isHonest bool, pubkey string) {
+	bo.oc.Register(isHonest, pubkey)
+}
+
+func (bo *localOracle) Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeId, sig []byte) (bool, error) {
+	return bo.oc.Eligible(layer, round, committeeSize, id, sig)
+}
+
+func (bo *localOracle) Proof(id types.NodeId, layer types.LayerID, round int32) ([]byte, error) {
+	return bo.oc.Proof(id, layer, round)
+}
+
+func NewLocalOracle(rolacle *eligibility.FixedRolacle, committeeSize int, nodeID types.NodeId) *localOracle {
 	//oc.Register(true, pubKey)
-	return &localBlockOracle{
+	return &localOracle{
 		committeeSize: committeeSize,
 		oc:            rolacle,
 		nodeID:        nodeID,
 	}
-}
-
-func (bo *localBlockOracle) Register(isHonest bool, pubkey string) {
-	bo.oc.Register(isHonest, pubkey)
-}
-
-// Eligible checks whether we're eligible to mine a block in layer i
-func (bo *localBlockOracle) BlockEligible(layerID types.LayerID) (types.AtxId, []types.BlockEligibilityProof, error) {
-	eligible := bo.oc.Eligible(uint32(layerID), bo.committeeSize, bo.nodeID.Key, nil)
-	var proofs []types.BlockEligibilityProof
-	if eligible {
-		proofs = []types.BlockEligibilityProof{{
-			J:   0,
-			Sig: nil,
-		}}
-	}
-	return types.AtxId{}, proofs, nil
-}
-
-func (bo *localBlockOracle) Eligible(instanceID uint32, committeeSize int, pubKey string, proof []byte) bool {
-	return bo.oc.Eligible(instanceID, committeeSize, pubKey, proof)
-}
-
-type blockOracle struct {
-	committeeSize int
-	oc            *OracleClient
-	nodeID        types.NodeId
-}
-
-func NewBlockOracleFromClient(oc *OracleClient, committeeSize int, nodeID types.NodeId) *blockOracle {
-	return &blockOracle{
-		committeeSize: committeeSize,
-		oc:            oc,
-		nodeID:        nodeID,
-	}
-}
-
-// Eligible checks whether we're eligible to mine a block in layer i
-func (bo *blockOracle) BlockEligible(layerID types.LayerID) (types.AtxId, []types.BlockEligibilityProof, error) {
-	eligible := bo.oc.Eligible(uint32(layerID), bo.committeeSize, bo.nodeID.Key)
-	var proofs []types.BlockEligibilityProof
-	if eligible {
-		proofs = []types.BlockEligibilityProof{{
-			J:   0,
-			Sig: []byte{1, 2, 3},
-		}}
-	}
-	return types.AtxId{Hash: common.Hash{}}, proofs, nil
 }
 
 type hareOracle struct {
@@ -90,8 +53,12 @@ func NewHareOracleFromClient(oc *OracleClient) *hareOracle {
 }
 
 // Eligible checks eligibility for an identity in a round
-func (bo *hareOracle) Eligible(id uint32, committeeSize int, pubKey string, proof []byte) bool {
+func (bo *hareOracle) Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeId, sig []byte) (bool, error) {
 	//note: we don't use the proof in the oracle server. we keep it just for the future syntax
 	//todo: maybe replace k to be uint32 like hare wants, and don't use -1 for blocks
-	return bo.oc.Eligible(id, committeeSize, pubKey)
+	return bo.oc.Eligible(layer, round, committeeSize, id, sig)
+}
+
+func (bo *hareOracle) Proof(id types.NodeId, layer types.LayerID, round int32) ([]byte, error) {
+	return bo.oc.Proof(id, layer, round)
 }

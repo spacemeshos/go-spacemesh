@@ -2,27 +2,10 @@ package sync
 
 import (
 	"errors"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/types"
 )
-
-func blockRequest() (chan *types.Block, func(msg []byte)) {
-	ch := make(chan *types.Block, 1)
-	foo := func(msg []byte) {
-		defer close(ch)
-		block := &types.Block{}
-		err := types.BytesToInterface(msg, block)
-		if err != nil {
-			log.Error("could not unmarshal block data")
-			return
-		}
-		ch <- block
-	}
-
-	return ch, foo
-}
 
 func LayerIdsReqFactory(lyr types.LayerID) RequestFactory {
 	return func(s *server.MessageServer, peer p2p.Peer) (chan interface{}, error) {
@@ -59,7 +42,13 @@ func HashReqFactory(lyr types.LayerID) RequestFactory {
 
 }
 
-func BlockReqFactory(blockIds chan types.BlockID) RequestFactory {
+func BlockReqFactory(blockIds []types.BlockID) RequestFactory {
+	//convert to chan
+	blockIdsCh := make(chan types.BlockID, len(blockIds))
+	for _, id := range blockIds {
+		blockIdsCh <- id
+	}
+
 	return func(s *server.MessageServer, peer p2p.Peer) (chan interface{}, error) {
 		ch := make(chan interface{}, 1)
 		foo := func(msg []byte) {
@@ -67,17 +56,17 @@ func BlockReqFactory(blockIds chan types.BlockID) RequestFactory {
 			block := &types.MiniBlock{}
 			err := types.BytesToInterface(msg, block)
 			if err != nil {
-				s.Error("could not unmarshal block data")
+				s.Error("could not unmarshal Miniblock data")
 				return
 			}
 			ch <- block
 		}
-		id, ok := <-blockIds
+		id, ok := <-blockIdsCh
 		if !ok {
-			return nil, errors.New("chan was closed, job done!")
+			return nil, errors.New("chan was closed, job done")
 		}
 
-		if err := s.SendRequest(BLOCK, id.ToBytes(), peer, foo); err != nil {
+		if err := s.SendRequest(MINI_BLOCK, id.ToBytes(), peer, foo); err != nil {
 			return nil, err
 		}
 
@@ -86,20 +75,52 @@ func BlockReqFactory(blockIds chan types.BlockID) RequestFactory {
 }
 
 //todo batch requests
-func TxReqFactory(id types.TransactionId) RequestFactory {
+func TxReqFactory(ids []types.TransactionId) RequestFactory {
 	return func(s *server.MessageServer, peer p2p.Peer) (chan interface{}, error) {
 		ch := make(chan interface{}, 1)
 		foo := func(msg []byte) {
 			defer close(ch)
-			tx := &types.SerializableTransaction{}
-			err := types.BytesToInterface(msg, tx)
+			var tx []types.SerializableTransaction
+			err := types.BytesToInterface(msg, &tx)
 			if err != nil {
 				s.Error("could not unmarshal tx data %v", err)
 				return
 			}
 			ch <- tx
 		}
-		if err := s.SendRequest(TX, id[:], peer, foo); err != nil {
+
+		bts, err := types.InterfaceToBytes(ids)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := s.SendRequest(TX, bts, peer, foo); err != nil {
+			return nil, err
+		}
+		return ch, nil
+	}
+}
+
+func ATxReqFactory(ids []types.AtxId) RequestFactory {
+	return func(s *server.MessageServer, peer p2p.Peer) (chan interface{}, error) {
+		ch := make(chan interface{}, 1)
+		foo := func(msg []byte) {
+			s.Info("handle atx response ")
+			defer close(ch)
+			var tx []types.ActivationTx
+			err := types.BytesToInterface(msg, &tx)
+			if err != nil {
+				s.Error("could not unmarshal tx data %v", err)
+				return
+			}
+			ch <- tx
+		}
+
+		bts, err := types.InterfaceToBytes(ids)
+		if err != nil {
+			return nil, err
+		}
+		if err := s.SendRequest(ATX, bts, peer, foo); err != nil {
 			return nil, err
 		}
 

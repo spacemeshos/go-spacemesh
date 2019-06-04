@@ -224,25 +224,24 @@ func TestNinjaTortoise_Sanity1(t *testing.T) {
 func sanity(mdb *mesh.MeshDB, layers int, layerSize int, patternSize int, badBlks float64) *ninjaTortoise {
 	lg := log.New("tortoise_test", "", "")
 	l1 := mesh.GenesisLayer()
-	mdb.AddLayer(l1)
+	var lyrs []*types.Layer
+	AddLayer(mdb, l1)
+	lyrs = append(lyrs, l1)
 	l := createLayerWithRandVoting(l1.Index()+1, []*types.Layer{l1}, layerSize, 1)
-	mdb.AddLayer(l)
-
+	AddLayer(mdb, l)
+	lyrs = append(lyrs, l)
 	for i := 0; i < layers-1; i++ {
 		lyr := createLayerWithCorruptedPattern(l.Index()+1, l, layerSize, patternSize, badBlks)
 		start := time.Now()
-		mdb.AddLayer(lyr)
+		AddLayer(mdb, lyr)
+		lyrs = append(lyrs, lyr)
 		lg.Debug("Time inserting layer into db: %v ", time.Since(start))
 		l = lyr
 	}
 
 	alg := NewNinjaTortoise(layerSize, mdb, lg)
 
-	for i := 0; i <= layers; i++ {
-		lyr, err := mdb.GetLayer(types.LayerID(i))
-		if err != nil {
-			alg.Error("could not get layer ", err)
-		}
+	for _, lyr := range lyrs {
 		start := time.Now()
 		alg.handleIncomingLayer(lyr)
 		alg.Debug("Time to process layer: %v ", time.Since(start))
@@ -266,11 +265,11 @@ func TestNinjaTortoise_Sanity2(t *testing.T) {
 	l3 := createMulExplicitLayer(3, map[types.LayerID]*types.Layer{l2.Index(): l2}, map[types.LayerID][]int{l2.Index(): {0}}, 3)
 	l4 := createMulExplicitLayer(4, map[types.LayerID]*types.Layer{l2.Index(): l2, l3.Index(): l3}, map[types.LayerID][]int{l2.Index(): {1, 2}, l3.Index(): {1, 2}}, 4)
 
-	mdb.AddLayer(l)
-	mdb.AddLayer(l1)
-	mdb.AddLayer(l2)
-	mdb.AddLayer(l3)
-	mdb.AddLayer(l4)
+	AddLayer(mdb, l)
+	AddLayer(mdb, l1)
+	AddLayer(mdb, l2)
+	AddLayer(mdb, l3)
+	AddLayer(mdb, l4)
 
 	alg.handleIncomingLayer(l)
 	alg.handleIncomingLayer(l1)
@@ -396,4 +395,14 @@ func addTransactionsToBlock(bl *types.Block, numOfTxs int) int64 {
 		totalRewards += gasPrice
 	}
 	return totalRewards
+}
+
+func AddLayer(m *mesh.MeshDB, layer *types.Layer) error {
+	//add blocks to mDB
+	for _, bl := range layer.Blocks() {
+		if err := m.AddBlock(bl); err != nil {
+			return err
+		}
+	}
+	return nil
 }

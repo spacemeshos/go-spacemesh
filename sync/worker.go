@@ -31,10 +31,12 @@ func (w *worker) Work() {
 	}
 }
 
-func NewPeerWorker(s *Syncer, reqFactory RequestFactory) (worker, chan interface{}) {
+func (w *worker) Clone() *worker {
+	return &worker{Log: w.Log, Once: w.Once, workCount: w.workCount, output: w.output, work: w.work}
+}
+
+func NewPeersWorker(s *Syncer, peers []p2p.Peer, mu *sync.Once, reqFactory RequestFactory) (worker, chan interface{}) {
 	count := int32(1)
-	peers := s.GetPeers()
-	mu := &sync.Once{}
 	numOfpeers := len(peers)
 	output := make(chan interface{}, numOfpeers)
 	peerfuncs := []func(){}
@@ -48,7 +50,7 @@ func NewPeerWorker(s *Syncer, reqFactory RequestFactory) (worker, chan interface
 			s.Info("send request Peer: %v", peer)
 			ch, err := reqFactory(s.MessageServer, peer)
 			if err != nil {
-				s.Error("RequestFactory failed, ", err)
+				s.Error("request failed, ", err)
 				return
 			}
 
@@ -83,11 +85,10 @@ func NewPeerWorker(s *Syncer, reqFactory RequestFactory) (worker, chan interface
 
 }
 
-func NewNeighborhoodWorker(s *Syncer,
-	mu *sync.Once,
-	count *int32,
-	output chan interface{},
-	reqFactory RequestFactory) worker {
+func NewNeighborhoodWorker(s *Syncer, count int, reqFactory RequestFactory) worker {
+	output := make(chan interface{}, count)
+	acount := int32(count)
+	mu := &sync.Once{}
 	workFunc := func() {
 		for _, p := range s.GetPeers() {
 			peer := p
@@ -99,7 +100,8 @@ func NewNeighborhoodWorker(s *Syncer,
 				s.Error("request to %v timed out", peer)
 			case v := <-ch:
 				if v != nil {
-					s.Info("Peer: %v responded", peer)
+					s.Info("Peer: %v responded ", peer)
+					s.Debug("Peer: %v response was  %v", v)
 					output <- v
 					return
 				}
@@ -108,6 +110,6 @@ func NewNeighborhoodWorker(s *Syncer,
 		}
 	}
 
-	return worker{Log: s.Log, Once: mu, workCount: count, output: output, work: workFunc}
+	return worker{Log: s.Log, Once: mu, workCount: &acount, output: output, work: workFunc}
 
 }
