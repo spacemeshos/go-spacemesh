@@ -94,7 +94,7 @@ func TestBuilder_BuildActivationTx(t *testing.T) {
 	layers := MeshProviderMock{}
 	layersPerEpoch := uint16(10)
 	lg := log.NewDefault(id.Key[:5])
-	activationDb := NewActivationDb(database.NewMemDatabase(),database.NewMemDatabase(), &MockIStore{}, mesh.NewMemMeshDB(log.NewDefault("")), uint64(layersPerEpoch), &ValidatorMock{}, lg.WithName("atxDB"))
+	activationDb := NewActivationDb(database.NewMemDatabase(), database.NewMemDatabase(), &MockIStore{}, mesh.NewMemMeshDB(log.NewDefault("")), uint64(layersPerEpoch), &ValidatorMock{}, lg.WithName("atxDB"))
 	bt, err := types.ViewAsBytes(layers.GetLatestView())
 	assert.NoError(t, err)
 	activesetCache.put(common.BytesToHash(bt), 10)
@@ -136,7 +136,7 @@ func TestBuilder_NoPrevATX(t *testing.T) {
 	layers := MeshProviderMock{}
 	layersPerEpoch := uint16(10)
 	lg := log.NewDefault(id.Key[:5])
-	activationDb := NewActivationDb(database.NewMemDatabase(),database.NewMemDatabase(), &MockIStore{}, mesh.NewMemMeshDB(log.NewDefault("")), uint64(layersPerEpoch), &ValidatorMock{}, lg.WithName("atxDB"))
+	activationDb := NewActivationDb(database.NewMemDatabase(), database.NewMemDatabase(), &MockIStore{}, mesh.NewMemMeshDB(log.NewDefault("")), uint64(layersPerEpoch), &ValidatorMock{}, lg.WithName("atxDB"))
 	b := NewBuilder(id, activationDb, net, ActiveSetProviderMock{}, layers, layersPerEpoch, &NipstBuilderMock{}, nil, lg.WithName("atxBuilder"))
 	err := b.PublishActivationTx(2) // non genesis epoch
 	assert.EqualError(t, err, "cannot find pos atx: cannot find pos atx id: not found")

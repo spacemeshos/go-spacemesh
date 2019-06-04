@@ -81,7 +81,7 @@ var rewardConf = mesh.Config{
 }
 
 func getMeshWithLevelDB(id string) *mesh.Mesh {
-	return mesh.NewPersistentMesh(fmt.Sprintf(Path+"%v/", id), rewardConf, &MeshValidatorMock{}, &stateMock{},NewAtxDbMock(), log.New(id, "", ""))
+	return mesh.NewPersistentMesh(fmt.Sprintf(Path+"%v/", id), rewardConf, &MeshValidatorMock{}, &stateMock{}, NewAtxDbMock(), log.New(id, "", ""))
 }
 
 func persistenceTeardown() {

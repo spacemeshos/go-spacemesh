@@ -32,8 +32,8 @@ type ActivationDb struct {
 	log            log.Log
 }
 
-func NewActivationDb(dbstore database.DB, nipstStore database.DB,idstore IdStore, meshDb *mesh.MeshDB, layersPerEpoch uint64, nipstValidator NipstValidator, log log.Log) *ActivationDb {
-	return &ActivationDb{atxs: dbstore, nipsts: nipstStore, atxCache:NewAtxCache(20), meshDb: meshDb, nipstValidator: nipstValidator, LayersPerEpoch: types.LayerID(layersPerEpoch), ids: idstore, log: log}
+func NewActivationDb(dbstore database.DB, nipstStore database.DB, idstore IdStore, meshDb *mesh.MeshDB, layersPerEpoch uint64, nipstValidator NipstValidator, log log.Log) *ActivationDb {
+	return &ActivationDb{atxs: dbstore, nipsts: nipstStore, atxCache: NewAtxCache(20), meshDb: meshDb, nipstValidator: nipstValidator, LayersPerEpoch: types.LayerID(layersPerEpoch), ids: idstore, log: log}
 }
 
 func (db *ActivationDb) ProcessBlockATXs(blk *types.Block) {

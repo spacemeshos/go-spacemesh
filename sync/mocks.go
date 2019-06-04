@@ -62,12 +62,12 @@ func (s *StateMock) ApplyRewards(layer types.LayerID, miners []string, underQuot
 }
 
 type AtxDbMock struct {
-	db map[types.AtxId]*types.ActivationTx
+	db     map[types.AtxId]*types.ActivationTx
 	nipsts map[types.AtxId]*nipst.NIPST
 }
 
 func NewAtxDbMock() *AtxDbMock {
-	return & AtxDbMock{
+	return &AtxDbMock{
 		make(map[types.AtxId]*types.ActivationTx),
 		make(map[types.AtxId]*nipst.NIPST),
 	}
@@ -85,7 +85,7 @@ func (t *AtxDbMock) AddAtx(id types.AtxId, atx *types.ActivationTx) {
 	t.nipsts[id] = atx.Nipst
 }
 
-func (t *AtxDbMock) GetNipst(id types.AtxId)  (*nipst.NIPST, error) {
+func (t *AtxDbMock) GetNipst(id types.AtxId) (*nipst.NIPST, error) {
 	return t.nipsts[id], nil
 }
 
