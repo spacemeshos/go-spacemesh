@@ -1,7 +1,9 @@
 package hare
 
 import (
+	"errors"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/types"
 )
 
 type messageValidator interface {
@@ -9,42 +11,69 @@ type messageValidator interface {
 	ContextuallyValidateMessage(m *Msg, expectedK int32) bool
 }
 
+type IdentityProvider interface {
+	GetIdentity(edId string) (types.NodeId, error)
+}
+
 type eligibilityValidator struct {
-	oracle HareRolacle
+	oracle           Rolacle
+	layersPerEpoch   uint16
+	identityProvider IdentityProvider
+	maxExpActives    int // the maximal expected committee size
+	expLeaders       int // the expected number of leaders
 	log.Log
 }
 
-func NewEligibilityValidator(oracle HareRolacle, logger log.Log) *eligibilityValidator {
-	return &eligibilityValidator{oracle, logger}
+func NewEligibilityValidator(oracle Rolacle, layersPerEpoch uint16, idProvider IdentityProvider, maxExpActives, expLeaders int, logger log.Log) *eligibilityValidator {
+	return &eligibilityValidator{oracle, layersPerEpoch, idProvider, maxExpActives, expLeaders, logger}
 }
 
-func (ev *eligibilityValidator) validateRole(m *Msg) bool {
+func (ev *eligibilityValidator) validateRole(m *Msg) (bool, error) {
 	if m == nil {
 		ev.Error("Eligibility validator: called with nil")
-		return false
+		return false, errors.New("fatal: nil message")
 	}
 
 	if m.InnerMsg == nil {
 		ev.Warning("Eligibility validator: InnerMsg is nil")
-		return false
+		return false, errors.New("fatal: nil inner message")
 	}
-
-	// TODO: validate role proof sig
 
 	pub := m.PubKey
-	// validate role
-	if !ev.oracle.Eligible(InstanceId(m.InnerMsg.InstanceId), m.InnerMsg.K, pub.String(), Signature(m.InnerMsg.RoleProof)) {
-		ev.Warning("Role validation failed")
-		return false
+	layer := types.LayerID(m.InnerMsg.InstanceId)
+	if layer.GetEpoch(ev.layersPerEpoch).IsGenesis() {
+		return true, nil // TODO: remove this lie after inception problem is addressed
 	}
 
-	return true
+	nId, err := ev.identityProvider.GetIdentity(pub.String())
+	if err != nil {
+		ev.Error("Eligibility validator: could not validate role err=%v", err)
+		return false, err
+	}
+
+	// validate role
+	res, err := ev.oracle.Eligible(layer, m.InnerMsg.K, expectedCommitteeSize(m.InnerMsg.K, ev.maxExpActives, ev.expLeaders), nId, m.InnerMsg.RoleProof)
+	if err != nil {
+		ev.Error("Could not retrieve eligibility result err=%v", err)
+		return false, err
+	}
+	if !res {
+		ev.Warning("Role validation failed for %v", pub.ShortString())
+		return false, nil
+	}
+
+	return true, nil
 }
 
-// Validates eligibility and signature of the provided InnerMsg
+// Validates eligibility and signature of the provided message
 func (ev *eligibilityValidator) Validate(m *Msg) bool {
+	res, err := ev.validateRole(m)
+	if err != nil {
+		ev.Error("Error occurred while validating role err=%v", err)
+		return false
+	}
 	// verify role
-	if !ev.validateRole(m) {
+	if !res {
 		ev.Warning("Validate message failed: role is invalid for pub %v", m.PubKey.ShortString())
 		return false
 	}
@@ -56,11 +85,13 @@ type syntaxContextValidator struct {
 	signing         Signer
 	threshold       int
 	statusValidator func(m *Msg) bool // used to validate status Messages in SVP
+	stateQuerier    StateQuerier
+	layersPerEpoch  uint16
 	log.Log
 }
 
-func newSyntaxContextValidator(signing Signer, threshold int, validator func(m *Msg) bool, logger log.Log) *syntaxContextValidator {
-	return &syntaxContextValidator{signing, threshold, validator, logger}
+func newSyntaxContextValidator(signing Signer, threshold int, validator func(m *Msg) bool, stateQuerier StateQuerier, layersPerEpoch uint16, logger log.Log) *syntaxContextValidator {
+	return &syntaxContextValidator{signing, threshold, validator, stateQuerier, layersPerEpoch, logger}
 }
 
 // Validates the InnerMsg is contextually valid
@@ -158,12 +189,10 @@ func (validator *syntaxContextValidator) validateAggregatedMessage(aggMsg *Aggre
 
 	senders := make(map[string]struct{})
 	for _, innerMsg := range aggMsg.Messages {
-		// TODO: refill Values in commit on certificate
 
-		// TODO: should receive the state querier
-		iMsg, err := newMsg(innerMsg, MockStateQuerier{true, nil})
+		iMsg, err := newMsg(innerMsg, validator.stateQuerier, validator.layersPerEpoch)
 		if err != nil {
-			validator.Warning("Aggregated validation failed: could not construct msg")
+			validator.Warning("Aggregated validation failed: could not construct msg err=%v", err)
 			return false
 		}
 
@@ -174,10 +203,6 @@ func (validator *syntaxContextValidator) validateAggregatedMessage(aggMsg *Aggre
 
 		// validate unique sender
 		pub := iMsg.PubKey
-		if err != nil {
-			validator.Warning("Aggregated validation failed: could not construct pub: %v", err)
-			return false
-		}
 		if _, exist := senders[pub.String()]; exist { // pub already exist
 			validator.Warning("Aggregated validation failed: detected same pubKey for different Messages")
 			return false

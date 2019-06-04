@@ -11,7 +11,7 @@ type mockPatternProvider struct {
 	err error
 }
 
-func (mpp *mockPatternProvider) GetPatternId(layer types.LayerID) (uint32, error) {
+func (mpp *mockPatternProvider) GetGoodPattern(layer types.LayerID) (uint32, error) {
 	return mpp.val, mpp.err
 }
 

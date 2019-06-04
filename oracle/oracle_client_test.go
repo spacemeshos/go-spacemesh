@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/btcsuite/btcutil/base58"
 	"github.com/spacemeshos/go-spacemesh/rand"
+	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"sync"
@@ -75,11 +76,11 @@ func Test_MockOracleClientValidate(t *testing.T) {
 	mr.SetResult(Validate, validateQuery(oc.world, 0, 2),
 		[]byte(fmt.Sprintf(`{ "IDs": [ "%v" ] }`, id)))
 
-	valid := oc.Eligible(0, 2, id)
+	valid, _ := oc.Eligible(0, 0, 2, types.NodeId{Key: id}, nil)
 
 	require.True(t, valid)
 
-	valid = oc.Eligible(0, 2, generateID())
+	valid, _ = oc.Eligible(0, 0, 2, types.NodeId{Key: generateID()}, nil)
 
 	require.Equal(t, counter.reqCounter, 2)
 	require.False(t, valid)
@@ -105,7 +106,8 @@ func Test_OracleClientValidate(t *testing.T) {
 	incommitte := 0
 
 	for i := 0; i < size; i++ {
-		if oc.Eligible(0, committee, pks[i]) {
+		res, _ := oc.Eligible(0, 0, committee, types.NodeId{Key: pks[i]}, nil)
+		if res {
 			incommitte++
 		}
 	}
@@ -142,7 +144,8 @@ func Test_Concurrency(t *testing.T) {
 	oc.client = mc
 	mc.setCounting(true)
 	for i := 0; i < size; i++ {
-		if oc.Eligible(0, committee, pks[i]) {
+		res, _ := oc.Eligible(0, 0, committee, types.NodeId{Key: pks[i]}, nil)
+		if res {
 			incommitte++
 		}
 	}

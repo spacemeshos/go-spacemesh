@@ -6,6 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	signing2 "github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/suite"
 	"testing"
 	"time"
@@ -35,7 +36,7 @@ func Test_16Nodes_HareIntegrationSuite(t *testing.T) {
 		t.Skip()
 	}
 	const roundDuration = 2
-	cfg := config.Config{N: 16, F: 8, RoundDuration: roundDuration}
+	cfg := config.Config{N: 16, F: 8, RoundDuration: roundDuration, ExpectedLeaders: 5}
 	totalNodes := 16
 	his := &hareIntegrationThreeNodes{newIntegrationSuite()}
 	his.BootstrappedNodeCount = totalNodes - 1
@@ -54,10 +55,10 @@ func Test_16Nodes_HareIntegrationSuite(t *testing.T) {
 	his.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
 		signing := signing2.NewEdSigner()
 		lg := log.NewDefault(signing.PublicKey().String())
-		broker := NewBroker(s, NewEligibilityValidator(NewHareOracle(oracle, cfg.N), lg), NewMockStateQuerier(), Closer{}, lg)
+		broker := NewBroker(s, NewEligibilityValidator(eligibility.New(), 10, &mockIdProvider{}, cfg.N, cfg.ExpectedLeaders, lg), NewMockStateQuerier(), 10, Closer{}, lg)
 		output := make(chan TerminationOutput, 1)
 		oracle.Register(true, signing.PublicKey().String())
-		proc := NewConsensusProcess(cfg, instanceId1, his.initialSets[idx], oracle, signing, s, output, lg)
+		proc := NewConsensusProcess(cfg, instanceId1, his.initialSets[idx], oracle, NewMockStateQuerier(), 10, signing, types.NodeId{}, s, output, lg)
 		proc.SetInbox(broker.Register(proc.Id()))
 		broker.Start()
 		his.procs = append(his.procs, proc)
@@ -85,7 +86,7 @@ func Test_20Nodes_HareIntegrationSuite(t *testing.T) {
 		t.Skip()
 	}
 	const roundDuration = 5
-	cfg := config.Config{N: 20, F: 8, RoundDuration: roundDuration}
+	cfg := config.Config{N: 20, F: 8, RoundDuration: roundDuration, ExpectedLeaders: 5}
 	totalNodes := 20
 	his := &hareIntegration20Nodes{newIntegrationSuite()}
 	his.BootstrappedNodeCount = cfg.N - 3
@@ -107,10 +108,10 @@ func Test_20Nodes_HareIntegrationSuite(t *testing.T) {
 	his.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
 		signing := signing2.NewEdSigner()
 		lg := log.NewDefault(signing.PublicKey().String())
-		broker := NewBroker(s, NewEligibilityValidator(NewHareOracle(oracle, cfg.N), lg), NewMockStateQuerier(), Closer{}, lg)
+		broker := NewBroker(s, NewEligibilityValidator(eligibility.New(), 10, &mockIdProvider{}, cfg.N, cfg.ExpectedLeaders, lg), NewMockStateQuerier(), 10, Closer{}, lg)
 		output := make(chan TerminationOutput, 1)
 		oracle.Register(true, signing.PublicKey().String())
-		proc := NewConsensusProcess(cfg, instanceId1, his.initialSets[idx], oracle, signing, s, output, log.NewDefault(signing.PublicKey().String()))
+		proc := NewConsensusProcess(cfg, instanceId1, his.initialSets[idx], oracle, NewMockStateQuerier(), 10, signing, types.NodeId{}, s, output, log.NewDefault(signing.PublicKey().String()))
 		proc.SetInbox(broker.Register(proc.Id()))
 		broker.Start()
 		his.procs = append(his.procs, proc)

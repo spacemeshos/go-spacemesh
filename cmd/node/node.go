@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/seehuhn/mt19937"
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/amcl/BLS381"
 	apiCfg "github.com/spacemeshos/go-spacemesh/api/config"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common"
@@ -11,6 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/hare"
+	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/miner"
@@ -257,7 +259,14 @@ func (app *SpacemeshApp) setupTestFeatures() {
 	api.ApproveAPIGossipMessages(cmdp.Ctx, app.P2P)
 }
 
-func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service, dbStorepath string, sgn hare.Signer, hareOracle hare.Rolacle, layerSize uint32, postClient nipst.PostProverClient, poetClient nipst.PoetProvingServiceClient, atxdbstore database.DB, vrfSigner *crypto.VRFSigner, commitmentConfig nipst.PostParams, layersPerEpoch uint32) error {
+type mockIdProvider struct {
+}
+
+func (mip *mockIdProvider) GetIdentity(edId string) (types.NodeId, error) {
+	return types.NodeId{Key: edId, VRFPublicKey: []byte{}}, nil
+}
+
+func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service, dbStorepath string, sgn hare.Signer, isFixedOracle bool, rolacle hare.Rolacle, layerSize uint32, postClient nipst.PostProverClient, poetClient nipst.PoetProvingServiceClient, atxdbstore database.DB, vrfSigner *crypto.VRFSigner, commitmentConfig nipst.PostParams, layersPerEpoch uint32) error {
 
 	app.instanceName = nodeID.Key
 	//todo: should we add all components to a single struct?
@@ -308,7 +317,18 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	conf := sync.Configuration{SyncInterval: 1 * time.Second, Concurrency: 4, LayerSize: int(layerSize), RequestTimeout: 100 * time.Millisecond}
 	syncer := sync.NewSync(swarm, msh, blockValidator, sync.TxValidatorMock{}, conf, clock.Subscribe(), lg.WithName("sync"))
 
-	ha := hare.New(app.Config.HARE, swarm, sgn, msh, hareOracle, atxdb, clock.Subscribe(), lg.WithName("hare"))
+	vrfPriv, vrfPub := BLS381.GenKeyPair()
+
+	// TODO: we should probably decouple the apptest and the node (and duplicate as necessary)
+	var hOracle hare.Rolacle
+	if isFixedOracle { // fixed rolacle, take the provided rolacle
+		hOracle = rolacle
+	} else { // regular oracle, build and use it
+		beacon := eligibility.NewBeacon(trtl)
+		hOracle = eligibility.New(beacon, atxdb, BLS381.Verify2, BLS381.NewBlsSigner(vrfPriv), app.Config.CONSENSUS.LayersPerEpoch)
+	}
+
+	ha := hare.New(app.Config.HARE, swarm, sgn, types.NodeId{Key: sgn.PublicKey().String(), VRFPublicKey: vrfPub}, msh, hOracle, app.Config.CONSENSUS.LayersPerEpoch, idStore, atxdb, clock.Subscribe(), lg.WithName("hare"))
 
 	blockProducer := miner.NewBlockBuilder(nodeID, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, atxdb.ProcessAtx, lg.WithName("blockProducer"))
 	blockListener := sync.NewBlockListener(swarm, blockValidator, msh, 2*time.Second, 4, lg.WithName("blockListener"))
@@ -452,7 +472,6 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 
 	nodeID := types.NodeId{Key: app.edSgn.PublicKey().String(), VRFPublicKey: vrfPublicKey}
 
-	hareOracle := oracle.NewHareOracleFromClient(oracleClient)
 	apiConf := &app.Config.API
 
 	dbStorepath := app.Config.DataDir
@@ -469,7 +488,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 
 	vrfSigner := crypto.NewVRFSigner(vrfPrivateKey)
 
-	err = app.initServices(nodeID, swarm, dbStorepath, app.edSgn, hareOracle, uint32(app.Config.LayerAvgSize), nipst.NewPostClient(), poet, atxdbstore, vrfSigner, npstCfg, uint32(app.Config.CONSENSUS.LayersPerEpoch))
+	err = app.initServices(nodeID, swarm, dbStorepath, app.edSgn, false, nil, uint32(app.Config.LayerAvgSize), nipst.NewPostClient(), poet, atxdbstore, vrfSigner, npstCfg, uint32(app.Config.CONSENSUS.LayersPerEpoch))
 	if err != nil {
 		log.Error("cannot start services %v", err.Error())
 		return
