@@ -314,7 +314,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	trtl := tortoise.NewAlgorithm(int(1), mdb, lg.WithName("trtl"))
 	msh := mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, processor, lg.WithName("mesh")) //todo: what to do with the logger?
 
-	conf := sync.Configuration{SyncInterval: 1 * time.Second, Concurrency: 4, LayerSize: int(layerSize), RequestTimeout: 100 * time.Millisecond}
+	conf := sync.Configuration{Concurrency: 4, LayerSize: int(layerSize), RequestTimeout: 100 * time.Millisecond}
 	syncer := sync.NewSync(swarm, msh, blockValidator, sync.TxValidatorMock{}, conf, clock.Subscribe(), lg.WithName("sync"))
 
 	vrfPriv, vrfPub := BLS381.GenKeyPair()
@@ -331,7 +331,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	ha := hare.New(app.Config.HARE, swarm, sgn, types.NodeId{Key: sgn.PublicKey().String(), VRFPublicKey: vrfPub}, msh, hOracle, app.Config.CONSENSUS.LayersPerEpoch, idStore, atxdb, clock.Subscribe(), lg.WithName("hare"))
 
 	blockProducer := miner.NewBlockBuilder(nodeID, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, atxdb.ProcessAtx, lg.WithName("blockProducer"))
-	blockListener := sync.NewBlockListener(swarm, blockValidator, msh, 2*time.Second, 4, lg.WithName("blockListener"))
+	blockListener := sync.NewBlockListener(swarm, blockValidator, syncer, 4, lg.WithName("blockListener"))
 
 	nipstBuilder := nipst.NewNipstBuilder([]byte(nodeID.Key), commitmentConfig.SpaceUnit, commitmentConfig.Difficulty, 100, postClient, poetClient, lg.WithName("nipstBuilder")) // TODO: use both keys in the nodeID
 	atxBuilder := activation.NewBuilder(nodeID, atxdb, swarm, atxdb, msh, app.Config.CONSENSUS.LayersPerEpoch,

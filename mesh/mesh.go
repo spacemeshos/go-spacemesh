@@ -1,6 +1,7 @@
 package mesh
 
 import (
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/address"
@@ -37,13 +38,14 @@ type StateUpdater interface {
 
 type AtxDB interface {
 	ProcessBlockATXs(block *types.Block)
+	ProcessAtx(atx *types.ActivationTx)
 	GetAtx(id types.AtxId) (*types.ActivationTx, error)
 }
 
 type Mesh struct {
 	log.Log
 	*MeshDB
-	AtxDB         AtxDB
+	AtxDB
 	config        Config
 	verifiedLayer types.LayerID
 	latestLayer   types.LayerID
@@ -185,6 +187,64 @@ func (m *Mesh) SetLatestLayer(idx types.LayerID) {
 	}
 }
 
+func (m *Mesh) GetBlock(id types.BlockID) (*types.Block, error) {
+
+	blk, err := m.GetMiniBlock(id)
+	if err != nil {
+		m.Error("could not retrieve block %v from database %v", id, err)
+		return nil, err
+	}
+
+	return m.MiniBlockToBlock(blk)
+}
+
+func (m *Mesh) MiniBlockToBlock(blk *types.MiniBlock) (*types.Block, error) {
+	txs, missingTxs := m.GetTransactions(blk.TxIds)
+	if missingTxs != nil {
+		return nil, errors.New("could not retrieve block %v transactions from database ")
+	}
+
+	var transactions []*types.SerializableTransaction
+	for _, value := range blk.TxIds {
+		transactions = append(transactions, txs[value])
+	}
+
+	atxs, missingATxs := m.GetATXs(blk.ATxIds)
+	if missingATxs != nil {
+		return nil, errors.New("could not retrieve block %v transactions from database ")
+	}
+
+	var activations []*types.ActivationTx
+	for _, value := range blk.ATxIds {
+		activations = append(activations, atxs[value])
+	}
+
+	res := blockFromMiniAndTxs(blk, transactions, activations)
+	return res, nil
+}
+
+func (m *Mesh) GetLayer(index types.LayerID) (*types.Layer, error) {
+
+	mBlocks, err := m.LayerMiniBlocks(index)
+	if err != nil {
+		return nil, err
+	}
+
+	blocks := make([]*types.Block, 0, len(mBlocks))
+	for _, k := range mBlocks {
+		block, err := m.MiniBlockToBlock(k)
+		if err != nil {
+			return nil, errors.New("could not retrieve block " + fmt.Sprint(k) + " " + err.Error())
+		}
+		blocks = append(blocks, block)
+	}
+
+	l := types.NewLayer(types.LayerID(index))
+	l.SetBlocks(blocks)
+
+	return l, nil
+}
+
 func (m *Mesh) ValidateLayer(lyr *types.Layer) {
 	m.Info("Validate layer %d", lyr.Index())
 
@@ -199,12 +259,6 @@ func (m *Mesh) ValidateLayer(lyr *types.Layer) {
 
 	if newPbase > oldPbase {
 		m.PushTransactions(oldPbase, newPbase)
-	}
-}
-
-func (m *Mesh) addAtxs(l *types.Layer) {
-	for _, blk := range l.Blocks() {
-		m.AtxDB.ProcessBlockATXs(blk)
 	}
 }
 
@@ -276,15 +330,31 @@ func (m *Mesh) GetLatestView() []types.BlockID {
 
 func (m *Mesh) AddBlock(blk *types.Block) error {
 	m.Debug("add block %d", blk.ID())
+	m.AtxDB.ProcessBlockATXs(blk) // change this to return error if process failed
 	if err := m.MeshDB.AddBlock(blk); err != nil {
 		m.Error("failed to add block %v  %v", blk.ID(), err)
 		return err
 	}
-	m.AtxDB.ProcessBlockATXs(blk)
 	m.SetLatestLayer(blk.Layer())
 	//new block add to orphans
 	m.handleOrphanBlocks(blk)
 	//m.tortoise.HandleLateblock.Block(block) //why this? todo should be thread safe?
+	return nil
+}
+
+//todo this overwrites the previous value if it exists
+func (m *Mesh) AddLayer(layer *types.Layer) error {
+	if len(layer.Blocks()) == 0 {
+		m.layers.Put(layer.Index().ToBytes(), []byte{})
+		return nil
+	}
+
+	//add blocks to mDB
+	for _, bl := range layer.Blocks() {
+		if err := m.AddBlock(bl); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -410,11 +480,6 @@ func (m *Mesh) GetContextualValidity(id types.BlockID) (bool, error) {
 	return m.getContextualValidity(id)
 }
 
-func (m *Mesh) Close() {
-	m.Debug("closing mDB")
-	m.MeshDB.Close()
-}
-
 func CreateGenesisBlock() *types.Block {
 	bl := &types.Block{
 		BlockHeader: types.BlockHeader{Id: types.BlockID(GenesisId),
@@ -428,4 +493,20 @@ func GenesisLayer() *types.Layer {
 	l := types.NewLayer(Genesis)
 	l.AddBlock(CreateGenesisBlock())
 	return l
+}
+
+func (m *Mesh) GetATXs(atxIds []types.AtxId) (map[types.AtxId]*types.ActivationTx, []types.AtxId) {
+	var mIds []types.AtxId
+	atxs := make(map[types.AtxId]*types.ActivationTx, len(atxIds))
+	for _, id := range atxIds {
+		t, err := m.GetAtx(id)
+		if err != nil {
+			m.Error("could not get atx %v %v from database ", hex.EncodeToString(id.Bytes()), err)
+			mIds = append(mIds, id)
+		} else {
+			atxs[t.Id()] = t
+		}
+
+	}
+	return atxs, mIds
 }
