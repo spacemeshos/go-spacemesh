@@ -5,7 +5,7 @@ config_map_name: conf
 script_on_exit: '' # Uncomment this to save logs './k8s/log-client-pods.sh'
 
 genesis_delta: 150
-single_pod_ready_time_out: 20
+single_pod_ready_time_out: 60
 deployment_ready_time_out: 120
 config_path: '../config.toml'
 
@@ -24,7 +24,7 @@ bootstrap:
 client:
   image: 'spacemeshos/go-spacemesh:develop'
   command: '/bin/go-p2p'
-  replicas: 30
+  replicas: 50
   args:
     randcon: '8'
     hare-committee-size: '20'
