@@ -1,6 +1,7 @@
 package hare
 
 import (
+	"errors"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
@@ -10,7 +11,7 @@ import (
 func defaultValidator() *syntaxContextValidator {
 	return newSyntaxContextValidator(signing.NewEdSigner(), lowThresh10, func(m *Msg) bool {
 		return true
-	}, log.NewDefault("Validator"))
+	}, &MockStateQuerier{true, nil}, 10, log.NewDefault("Validator"))
 }
 
 func TestMessageValidator_CommitStatus(t *testing.T) {
@@ -44,17 +45,48 @@ func TestMessageValidator_ValidateCertificate(t *testing.T) {
 
 func TestEligibilityValidator_validateRole(t *testing.T) {
 	oracle := &mockRolacle{}
-	ev := NewEligibilityValidator(oracle, log.NewDefault(""))
+	ev := NewEligibilityValidator(oracle, 10, &mockIdProvider{}, 1, 5, log.NewDefault(""))
 	ev.oracle = oracle
-	assert.False(t, ev.validateRole(nil))
+	res, err := ev.validateRole(nil)
+	assert.NotNil(t, err)
+	assert.False(t, res)
 	m := BuildPreRoundMsg(generateSigning(t), NewSmallEmptySet())
 	m.InnerMsg = nil
-	assert.False(t, ev.validateRole(m))
+	res, err = ev.validateRole(m)
+	assert.NotNil(t, err)
+	assert.False(t, res)
 	m = BuildPreRoundMsg(generateSigning(t), NewSmallEmptySet())
 	oracle.isEligible = false
-	assert.False(t, ev.validateRole(m))
+	res, err = ev.validateRole(m)
+	assert.Nil(t, err)
+	// TODO: remove comment after inceptions problem is addressed
+	//assert.False(t, res)
+
+	m.InnerMsg.InstanceId = 111
+	myErr := errors.New("my error")
+	ev.identityProvider = &mockIdProvider{myErr}
+	res, err = ev.validateRole(m)
+	assert.NotNil(t, err)
+	assert.Equal(t, myErr, err)
+	assert.False(t, res)
+
+	oracle.err = myErr
+	res, err = ev.validateRole(m)
+	assert.NotNil(t, err)
+	assert.Equal(t, myErr, err)
+	assert.False(t, res)
+
+	ev.identityProvider = &mockIdProvider{nil}
+	oracle.err = nil
+	res, err = ev.validateRole(m)
+	assert.Nil(t, err)
+	assert.False(t, res)
+
 	oracle.isEligible = true
-	assert.True(t, ev.validateRole(m))
+	m.InnerMsg.InstanceId = 111
+	res, err = ev.validateRole(m)
+	assert.Nil(t, err)
+	assert.True(t, res)
 }
 
 func TestMessageValidator_IsStructureValid(t *testing.T) {
@@ -110,7 +142,7 @@ func TestConsensusProcess_isContextuallyValid(t *testing.T) {
 			builder := NewMessageBuilder()
 			builder.SetType(msgType[j]).SetInstanceId(instanceId1).SetRoundCounter(cp.k).SetKi(ki).SetValues(s)
 			builder = builder.Sign(signing.NewEdSigner())
-			//mt.Printf("%v   j=%v i=%v Exp: %v Actual %v\n", cp.K, j, i, rounds[j][i], ContextuallyValidateMessage(builder.Build(), cp.K))
+			//mt.Printf("%v   j=%v i=%v Exp: %v Actual %v\maxExpActives", cp.K, j, i, rounds[j][i], ContextuallyValidateMessage(builder.Build(), cp.K))
 			validator := defaultValidator()
 			assert.Equal(t, true, validator.ContextuallyValidateMessage(builder.Build(), cp.k))
 			cp.advanceToNextRound()
@@ -122,11 +154,15 @@ func TestMessageValidator_ValidateMessage(t *testing.T) {
 	proc := generateConsensusProcess(t)
 	proc.advanceToNextRound()
 	v := proc.validator
-	preround := proc.initDefaultBuilder(proc.s).SetType(PreRound).Sign(proc.signing).Build()
+	b, err := proc.initDefaultBuilder(proc.s)
+	assert.Nil(t, err)
+	preround := b.SetType(PreRound).Sign(proc.signing).Build()
 	preround.PubKey = proc.signing.PublicKey()
 	assert.True(t, v.SyntacticallyValidateMessage(preround))
 	assert.True(t, v.ContextuallyValidateMessage(preround, 0))
-	status := proc.initDefaultBuilder(proc.s).SetType(Status).Sign(proc.signing).Build()
+	b, err = proc.initDefaultBuilder(proc.s)
+	assert.Nil(t, err)
+	status := b.SetType(Status).Sign(proc.signing).Build()
 	status.PubKey = proc.signing.PublicKey()
 	assert.True(t, v.ContextuallyValidateMessage(status, 0))
 	assert.True(t, v.SyntacticallyValidateMessage(status))
@@ -134,7 +170,7 @@ func TestMessageValidator_ValidateMessage(t *testing.T) {
 }
 
 func TestMessageValidator_SyntacticallyValidateMessage(t *testing.T) {
-	validator := newSyntaxContextValidator(signing.NewEdSigner(), 1, validate, log.NewDefault("Validator"))
+	validator := newSyntaxContextValidator(signing.NewEdSigner(), 1, validate, &MockStateQuerier{true, nil}, 10, log.NewDefault("Validator"))
 	m := BuildPreRoundMsg(generateSigning(t), NewSmallEmptySet())
 	assert.False(t, validator.SyntacticallyValidateMessage(m))
 	m = BuildPreRoundMsg(generateSigning(t), NewSetFromValues(value1))
@@ -142,7 +178,7 @@ func TestMessageValidator_SyntacticallyValidateMessage(t *testing.T) {
 }
 
 func TestMessageValidator_ContextuallyValidateMessage(t *testing.T) {
-	validator := newSyntaxContextValidator(signing.NewEdSigner(), 1, validate, log.NewDefault("Validator"))
+	validator := newSyntaxContextValidator(signing.NewEdSigner(), 1, validate, &MockStateQuerier{true, nil}, 10, log.NewDefault("Validator"))
 	m := BuildPreRoundMsg(generateSigning(t), NewSmallEmptySet())
 	m.InnerMsg = nil
 	assert.False(t, validator.ContextuallyValidateMessage(m, 0))
@@ -179,7 +215,7 @@ func TestMessageValidator_validateSVPTypeB(t *testing.T) {
 }
 
 func TestMessageValidator_validateSVP(t *testing.T) {
-	validator := newSyntaxContextValidator(signing.NewEdSigner(), 1, validate, log.NewDefault("Validator"))
+	validator := newSyntaxContextValidator(signing.NewEdSigner(), 1, validate, &MockStateQuerier{true, nil}, 10, log.NewDefault("Validator"))
 	m := buildProposalMsg(signing.NewEdSigner(), NewSetFromValues(value1, value2, value3), []byte{})
 	s1 := NewSetFromValues(value1)
 	m.InnerMsg.Svp = buildSVP(-1, s1)

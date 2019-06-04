@@ -7,6 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	signing2 "github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/types"
 	"testing"
 	"time"
 )
@@ -139,7 +140,7 @@ func createConsensusProcess(isHonest bool, cfg config.Config, oracle fullRolacle
 	output := make(chan TerminationOutput, 1)
 	signing := signing2.NewEdSigner()
 	oracle.Register(isHonest, signing.PublicKey().String())
-	proc := NewConsensusProcess(cfg, instanceId1, initialSet, oracle, signing, network, output, log.NewDefault(signing.PublicKey().String()[:8]))
+	proc := NewConsensusProcess(cfg, instanceId1, initialSet, oracle, NewMockStateQuerier(), 10, signing, types.NodeId{Key: signing.PublicKey().String(), VRFPublicKey: []byte{}}, network, output, log.NewDefault(signing.PublicKey().ShortString()))
 	proc.SetInbox(broker.Register(proc.Id()))
 
 	return proc
@@ -152,7 +153,7 @@ func TestConsensusFixedOracle(t *testing.T) {
 
 	test := newConsensusTest()
 
-	cfg := config.Config{N: 16, F: 8, RoundDuration: 1}
+	cfg := config.Config{N: 16, F: 8, RoundDuration: 1, ExpectedLeaders: 5}
 	sim := service.NewSimulator()
 	totalNodes := 20
 	test.initialSets = make([]*Set, totalNodes)
@@ -179,7 +180,7 @@ func TestSingleValueForHonestSet(t *testing.T) {
 
 	test := newConsensusTest()
 
-	cfg := config.Config{N: 50, F: 25, RoundDuration: 1}
+	cfg := config.Config{N: 50, F: 25, RoundDuration: 2, ExpectedLeaders: 5}
 	totalNodes := 50
 	sim := service.NewSimulator()
 	test.initialSets = make([]*Set, totalNodes)
@@ -206,7 +207,7 @@ func TestAllDifferentSet(t *testing.T) {
 
 	test := newConsensusTest()
 
-	cfg := config.Config{N: 10, F: 5, RoundDuration: 1}
+	cfg := config.Config{N: 10, F: 5, RoundDuration: 1, ExpectedLeaders: 5}
 	sim := service.NewSimulator()
 	totalNodes := 10
 	test.initialSets = make([]*Set, totalNodes)
@@ -243,7 +244,7 @@ func TestSndDelayedDishonest(t *testing.T) {
 
 	test := newConsensusTest()
 
-	cfg := config.Config{N: 50, F: 25, RoundDuration: 2}
+	cfg := config.Config{N: 50, F: 25, RoundDuration: 2, ExpectedLeaders: 5}
 	totalNodes := 50
 	sim := service.NewSimulator()
 	test.initialSets = make([]*Set, totalNodes)
@@ -286,7 +287,7 @@ func TestRecvDelayedDishonest(t *testing.T) {
 
 	test := newConsensusTest()
 
-	cfg := config.Config{N: 50, F: 25, RoundDuration: 2}
+	cfg := config.Config{N: 50, F: 25, RoundDuration: 2, ExpectedLeaders: 5}
 	totalNodes := 50
 	sim := service.NewSimulator()
 	test.initialSets = make([]*Set, totalNodes)

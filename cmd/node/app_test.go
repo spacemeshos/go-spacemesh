@@ -88,6 +88,7 @@ func (app *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat s
 		smApp.Config.HARE.N = numOfInstances
 		smApp.Config.HARE.F = numOfInstances / 2
 		smApp.Config.HARE.WakeupDelta = 15
+		smApp.Config.HARE.ExpectedLeaders = 5
 
 		edSgn := signing.NewEdSigner()
 		pub := edSgn.PublicKey()
@@ -110,7 +111,7 @@ func (app *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat s
 			NumberOfProvenLabels: 10,
 			SpaceUnit:            1024,
 		}
-		err = smApp.initServices(nodeID, swarm, dbStorepath, edSgn, hareOracle, uint32(layerSize), nipst.NewPostClient(), poet, dbStore, vrfSigner, npstCfg, 3)
+		err = smApp.initServices(nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(layerSize), nipst.NewPostClient(), poet, dbStore, vrfSigner, npstCfg, 3)
 		r.NoError(err)
 		smApp.setupGenesis(apiCfg.DefaultGenesisConfig())
 

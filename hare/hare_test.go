@@ -2,8 +2,10 @@ package hare
 
 import (
 	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	signing2 "github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/types"
@@ -50,6 +52,14 @@ func (mcp *mockConsensusProcess) Id() InstanceId {
 func (mcp *mockConsensusProcess) SetInbox(chan *Msg) {
 }
 
+type mockIdProvider struct {
+	err error
+}
+
+func (mip *mockIdProvider) GetIdentity(edId string) (types.NodeId, error) {
+	return types.NodeId{Key: edId, VRFPublicKey: []byte{}}, mip.err
+}
+
 func NewMockConsensusProcess(cfg config.Config, instanceId InstanceId, s *Set, oracle Rolacle, signing Signer, p2p NetworkService, outputChan chan TerminationOutput) *mockConsensusProcess {
 	mcp := new(mockConsensusProcess)
 	mcp.Closer = NewCloser()
@@ -59,20 +69,17 @@ func NewMockConsensusProcess(cfg config.Config, instanceId InstanceId, s *Set, o
 	return mcp
 }
 
+func createHare(n1 p2p.Service) *Hare {
+	return New(cfg, n1, signing2.NewEdSigner(), types.NodeId{}, new(orphanMock), eligibility.New(), 10, &mockIdProvider{}, NewMockStateQuerier(), make(chan types.LayerID), log.NewDefault("Hare"))
+}
+
 var _ Consensus = (*mockConsensusProcess)(nil)
 
 func TestNew(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 
-	layerTicker := make(chan types.LayerID)
-
-	oracle := NewMockHashOracle(numOfClients)
-	signing := signing2.NewEdSigner()
-
-	om := new(orphanMock)
-
-	h := New(cfg, n1, signing, om, oracle, NewMockStateQuerier(), layerTicker, log.NewDefault("Hare"))
+	h := createHare(n1)
 
 	if h == nil {
 		t.Fatal()
@@ -83,21 +90,14 @@ func TestHare_Start(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 
-	layerTicker := make(chan types.LayerID)
-
-	oracle := NewMockHashOracle(numOfClients)
-	signing := signing2.NewEdSigner()
-
-	om := new(orphanMock)
-
-	h := New(cfg, n1, signing, om, oracle, NewMockStateQuerier(), layerTicker, log.NewDefault("Hare"))
+	h := createHare(n1)
 
 	h.broker.Start() // todo: fix that hack. this will cause h.Start to return err
 
 	/*err := h.Start()
 	require.Error(t, err)*/
 
-	h2 := New(cfg, n1, signing, om, oracle, NewMockStateQuerier(), layerTicker, log.NewDefault("Hare"))
+	h2 := createHare(n1)
 	require.NoError(t, h2.Start())
 }
 
@@ -105,14 +105,7 @@ func TestHare_GetResult(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 
-	layerTicker := make(chan types.LayerID)
-
-	oracle := NewMockHashOracle(numOfClients)
-	signing := signing2.NewEdSigner()
-
-	om := new(orphanMock)
-
-	h := New(cfg, n1, signing, om, oracle, NewMockStateQuerier(), layerTicker, log.NewDefault("Hare"))
+	h := createHare(n1)
 
 	res, err := h.GetResult(types.LayerID(0))
 
@@ -134,17 +127,13 @@ func TestHare_GetResult2(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 
-	layerTicker := make(chan types.LayerID)
-
-	oracle := NewMockHashOracle(numOfClients)
-	signing := signing2.NewEdSigner()
-
 	om := new(orphanMock)
 	om.f = func() []types.BlockID {
 		return []types.BlockID{1}
 	}
 
-	h := New(cfg, n1, signing, om, oracle, NewMockStateQuerier(), layerTicker, log.NewDefault("Hare"))
+	h := createHare(n1)
+	h.obp = om
 
 	h.networkDelta = 0
 
@@ -174,14 +163,7 @@ func TestHare_collectOutput(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 
-	layerTicker := make(chan types.LayerID)
-
-	oracle := NewMockHashOracle(numOfClients)
-	signing := signing2.NewEdSigner()
-
-	om := new(orphanMock)
-
-	h := New(cfg, n1, signing, om, oracle, NewMockStateQuerier(), layerTicker, log.NewDefault("Hare"))
+	h := createHare(n1)
 
 	mockid := instanceId1
 	set := NewSetFromValues(Value{0})
@@ -203,14 +185,7 @@ func TestHare_collectOutput2(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 
-	layerTicker := make(chan types.LayerID)
-
-	oracle := NewMockHashOracle(numOfClients)
-	signing := signing2.NewEdSigner()
-
-	om := new(orphanMock)
-
-	h := New(cfg, n1, signing, om, oracle, NewMockStateQuerier(), layerTicker, log.NewDefault("Hare"))
+	h := createHare(n1)
 	h.bufferSize = 1
 	h.lastLayer = 0
 	mockid := instanceId0
@@ -256,7 +231,7 @@ func TestHare_onTick(t *testing.T) {
 		return blockset
 	}
 
-	h := New(cfg, n1, signing, om, oracle, NewMockStateQuerier(), layerTicker, log.NewDefault("Hare"))
+	h := New(cfg, n1, signing, types.NodeId{}, om, oracle, 10, &mockIdProvider{}, NewMockStateQuerier(), layerTicker, log.NewDefault("Hare"))
 	h.networkDelta = 0
 	h.bufferSize = 1
 

@@ -15,6 +15,7 @@ type Tortoise interface {
 	latestComplete() types.LayerID
 	getVote(id types.BlockID) vec
 	getVotes() map[types.BlockID]vec
+	GetGoodPattern(layer types.LayerID) (uint32, error)
 }
 
 func NewAlgorithm(layerSize int, mdb *mesh.MeshDB, lg log.Log) *Algorithm {

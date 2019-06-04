@@ -1,18 +1,20 @@
 package hare
 
 import (
-	"bytes"
+	"github.com/spacemeshos/go-spacemesh/amcl/BLS381"
+	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
 )
 
-var cfg = config.Config{N: 10, F: 5, RoundDuration: 2}
+var cfg = config.Config{N: 10, F: 5, RoundDuration: 2, ExpectedLeaders: 5}
 
 type mockMessageValidator struct {
 	syntaxValid   bool
@@ -39,10 +41,15 @@ func (mmv *mockMessageValidator) ContextuallyValidateMessage(m *Msg, expectedK i
 
 type mockRolacle struct {
 	isEligible bool
+	err        error
 }
 
-func (mr *mockRolacle) Eligible(instanceId InstanceId, k int32, pubKey string, proof []byte) bool {
-	return mr.isEligible
+func (mr *mockRolacle) Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeId, sig []byte) (bool, error) {
+	return mr.isEligible, mr.err
+}
+
+func (mr *mockRolacle) Proof(id types.NodeId, layer types.LayerID, round int32) ([]byte, error) {
+	return []byte{}, nil
 }
 
 func (mr *mockRolacle) Register(id string) {
@@ -122,7 +129,7 @@ func buildMessage(msg *Message) *Msg {
 }
 
 func buildBroker(net NetworkService) *Broker {
-	return NewBroker(net, &mockEligibilityValidator{true}, MockStateQuerier{true, nil},
+	return NewBroker(net, &mockEligibilityValidator{true}, MockStateQuerier{true, nil}, 10,
 		Closer{make(chan struct{})}, log.NewDefault("broker"))
 }
 
@@ -141,8 +148,8 @@ func (mo *mockOracle) Eligible(instanceId InstanceId, k int32, pubKey string, pr
 	return true
 }
 
-func buildOracle(oracle Rolacle) *hareRolacle {
-	return NewHareOracle(oracle, cfg.N)
+func buildOracle(oracle Rolacle) Rolacle {
+	return oracle
 }
 
 // test that a InnerMsg to a specific set objectId is delivered by the broker
@@ -233,12 +240,13 @@ func generateConsensusProcess(t *testing.T) *ConsensusProcess {
 	n1 := sim.NewNodeFrom(bn.Node)
 
 	s := NewSetFromValues(value1)
-	oracle := NewMockHashOracle(numOfClients)
+	oracle := eligibility.New()
 	signing := signing.NewEdSigner()
-	oracle.Register(signing.PublicKey().String())
+	_, vrfPub := BLS381.GenKeyPair()
+	oracle.Register(true, signing.PublicKey().String())
 	output := make(chan TerminationOutput, 1)
 
-	return NewConsensusProcess(cfg, instanceId1, s, oracle, signing, n1, output, log.NewDefault(signing.PublicKey().String()))
+	return NewConsensusProcess(cfg, instanceId1, s, oracle, NewMockStateQuerier(), 10, signing, types.NodeId{Key: signing.PublicKey().String(), VRFPublicKey: vrfPub}, n1, output, log.NewDefault(signing.PublicKey().String()))
 }
 
 func TestConsensusProcess_Id(t *testing.T) {
@@ -266,23 +274,14 @@ func TestConsensusProcess_InitDefaultBuilder(t *testing.T) {
 	proc := generateConsensusProcess(t)
 	s := NewEmptySet(defaultSetSize)
 	s.Add(value1)
-	builder := proc.initDefaultBuilder(s)
+	builder, err := proc.initDefaultBuilder(s)
+	assert.Nil(t, err)
 	assert.True(t, NewSet(builder.inner.Values).Equals(s))
 	verifier := builder.msg.PubKey
 	assert.Nil(t, verifier)
 	assert.Equal(t, builder.inner.K, proc.k)
 	assert.Equal(t, builder.inner.Ki, proc.ki)
 	assert.Equal(t, InstanceId(builder.inner.InstanceId), proc.instanceId)
-}
-
-func TestConsensusProcess_Proof(t *testing.T) {
-	proc := generateConsensusProcess(t)
-	prev := make([]byte, 0)
-	for i := 0; i < lowThresh10; i++ {
-		assert.False(t, bytes.Equal(proc.roleProof(), prev))
-		prev = proc.roleProof()
-		proc.advanceToNextRound()
-	}
 }
 
 func TestConsensusProcess_isEligible(t *testing.T) {
