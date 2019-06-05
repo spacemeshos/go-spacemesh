@@ -12,7 +12,7 @@ func Verify2(msg, sig, pub []byte) (bool, error) {
 		return false, fmt.Errorf("verify failed: len of public key should be %v but is %v", 4*MODBYTES, len(pub))
 	}
 
-	if uint(len(sig)) != MODBYTES+1 {
+	if uint(len(sig)) != 2*MODBYTES+1 {
 		return false, fmt.Errorf("verify failed: len of sig should be %v but is %v", MODBYTES+1, len(sig))
 	}
 
@@ -38,20 +38,24 @@ func (bs *BlsSigner) Sign(msg []byte) ([]byte, error) {
 		return nil, fmt.Errorf("sign failed: len of private key should be %v but is %v", MODBYTES, len(bs.priv))
 	}
 
-	sig := make([]byte, MODBYTES+1)
+	sig := make([]byte, 2*MODBYTES+1)
 	Sign(sig, string(msg), bs.priv)
 
 	return sig, nil
 }
 
-func GenKeyPair() ([]byte, []byte) {
+func DefaultSeed() *amcl.RAND {
 	rng := amcl.NewRAND()
 	var raw [100]byte
 	for i := 0; i < 100; i++ {
 		raw[i] = byte(i + 1)
 	}
-	rng.Seed(100, raw[:])
+	rng.Seed(len(raw), raw[:])
 
+	return rng
+}
+
+func GenKeyPair(rng *amcl.RAND) ([]byte, []byte) {
 	priv := make([]byte, MODBYTES)
 	pub := make([]byte, 4*MODBYTES)
 
