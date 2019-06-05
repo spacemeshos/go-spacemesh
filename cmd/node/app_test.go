@@ -123,6 +123,7 @@ func (app *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat s
 func (app *AppTestSuite) TestMultipleNodes() {
 	//EntryPointCreated <- true
 
+	const numberOfEpochs = 2 // first 2 epochs are genesis
 	addr := address.BytesToAddress([]byte{0x01})
 	dst := address.BytesToAddress([]byte{0x02})
 	tx := types.SerializableTransaction{}
@@ -152,7 +153,7 @@ func (app *AppTestSuite) TestMultipleNodes() {
 			maxClientsDone := 0
 			for idx, ap := range app.apps {
 				if big.NewInt(10).Cmp(ap.state.GetBalance(dst)) == 0 &&
-					!app.apps[0].mesh.LatestLayer().GetEpoch(app.apps[0].Config.CONSENSUS.LayersPerEpoch).IsGenesis() {
+					uint32(app.apps[idx].mesh.LatestLayer()) == numberOfEpochs*uint32(app.apps[idx].Config.CONSENSUS.LayersPerEpoch)+1 { // make sure all had 1 non-genesis layer
 					clientsDone := 0
 					for idx2, ap2 := range app.apps {
 						if idx != idx2 {

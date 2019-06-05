@@ -70,6 +70,11 @@ func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx) {
 	if err != nil {
 		db.log.Error("cannot store atx: %v", atx)
 	}
+
+	err = db.ids.StoreNodeIdentity(atx.NodeId)
+	if err != nil {
+		db.log.Error("cannot store node identity: %v", atx.NodeId)
+	}
 }
 
 // CalcActiveSetFromView traverses the view found in a - the activation tx and counts number of active ids published
