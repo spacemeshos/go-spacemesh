@@ -181,7 +181,7 @@ func TestBlockOracleValidatorInvalidProof(t *testing.T) {
 	block := newBlockWithEligibility(layerID, nodeID, atxID, proof)
 	eligible, err := validator.BlockEligible(&block.BlockHeader)
 	r.False(eligible)
-	r.EqualError(err, "eligibility VRF validation failed")
+	r.Nil(err)
 }
 
 func TestBlockOracleValidatorInvalidProof2(t *testing.T) {

@@ -66,8 +66,7 @@ func (v BlockEligibilityValidator) BlockEligible(block *types.BlockHeader) (bool
 	}
 	if !res {
 		v.log.Error("eligibility VRF validation failed")
-		// TODO: Noam - can we simply not return an error in this case?
-		return false, fmt.Errorf("eligibility VRF validation failed")
+		return false, nil
 	}
 	vrfHash := sha256.Sum256(vrfSig)
 	eligibleLayer := calcEligibleLayer(epochNumber, v.layersPerEpoch, vrfHash)
