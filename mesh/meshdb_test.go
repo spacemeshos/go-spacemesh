@@ -1,10 +1,8 @@
 package mesh
 
 import (
-	"bytes"
 	"fmt"
 	"github.com/google/uuid"
-	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/nipst"
@@ -12,9 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
 	"math"
-	"math/big"
 	"os"
-	"strconv"
 	"testing"
 	"time"
 )
@@ -35,39 +31,9 @@ func TestNewMeshDB(t *testing.T) {
 	mdb := getMeshdb()
 	id := types.BlockID(123)
 	mdb.AddBlock(types.NewExistingBlock(123, 1, nil))
-	block, err := mdb.GetBlock(123)
+	block, err := mdb.GetMiniBlock(123)
 	assert.NoError(t, err)
 	assert.True(t, id == block.Id)
-}
-
-func TestMeshDb_Block(t *testing.T) {
-	mdb := getMeshdb()
-	blk := types.NewExistingBlock(123, 1, nil)
-
-	nonce := uint64(1)
-	addr := address.HexToAddress("1111")
-	recipient := address.HexToAddress(strconv.FormatUint(uint64(123), 10))
-	amount := big.NewInt(10)
-	price := big.NewInt(124)
-	gaslim := uint64(100)
-
-	blk.Txs = append(blk.Txs, types.NewSerializableTransaction(nonce, addr,
-		recipient,
-		amount,
-		price,
-		gaslim))
-
-	blk.AddAtx(types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")}, 1, types.AtxId{}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{}), true))
-	mdb.AddBlock(blk)
-	block, err := mdb.GetBlock(123)
-
-	assert.NoError(t, err)
-	assert.True(t, 123 == block.Id)
-
-	assert.True(t, block.Txs[0].Origin == addr)
-	assert.True(t, bytes.Equal(block.Txs[0].Recipient.Bytes(), recipient.Bytes()))
-	assert.True(t, bytes.Equal(block.Txs[0].Price, price.Bytes()))
-	assert.True(t, len(block.ATXs) == len(blk.ATXs))
 }
 
 func TestMeshDB_AddBlock(t *testing.T) {
@@ -83,11 +49,11 @@ func TestMeshDB_AddBlock(t *testing.T) {
 	err := mdb.AddBlock(block1)
 	assert.NoError(t, err)
 
-	rBlock1, err := mdb.GetBlock(block1.Id)
+	rBlock1, err := mdb.GetMiniBlock(block1.Id)
 	assert.NoError(t, err)
 
-	assert.True(t, len(rBlock1.Txs) == len(block1.Txs), "block content was wrong")
-	assert.True(t, len(rBlock1.ATXs) == len(block1.ATXs), "block content was wrong")
+	assert.True(t, len(rBlock1.TxIds) == len(block1.Txs), "block content was wrong")
+	assert.True(t, len(rBlock1.ATxIds) == len(block1.ATXs), "block content was wrong")
 	//assert.True(t, bytes.Compare(rBlock2.Data, []byte("data2")) == 0, "block content was wrong")
 }
 

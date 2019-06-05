@@ -222,6 +222,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 	atx := types.NewActivationTxWithChallenge(*b.challenge, activeIds, b.mesh.GetLatestView(), b.nipst, true)
 	activeSetSize, err := b.db.CalcActiveSetFromView(atx)
 	if epoch != 0 && (activeSetSize == 0 || activeSetSize != atx.ActiveSetSize) {
+		b.log.Error("empty active set size found! len(view): %d, view: %v", len(atx.View), atx.View)
 		b.log.Panic("empty active set size found! len(view): %d, view: %v", len(atx.View), atx.View)
 	}
 	buf, err := types.AtxAsBytes(atx)

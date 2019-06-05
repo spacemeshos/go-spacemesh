@@ -93,17 +93,7 @@ func BytesAsAtx(b []byte) (*ActivationTx, error) {
 			ActiveSetSize: 0,
 			View:          nil,
 		},
-		Nipst: &NIPST{
-			Space:          0,
-			NipstChallenge: nil,
-			PostProof: &PostProof{
-				Identity:     nil,
-				Challenge:    nil,
-				MerkleRoot:   nil,
-				ProofNodes:   nil,
-				ProvenLeaves: nil,
-			},
-		},
+		Nipst: nil,
 	}
 	_, err := xdr.Unmarshal(buf, &atx)
 	if err != nil {
@@ -158,7 +148,7 @@ func InterfaceToBytes(i interface{}) ([]byte, error) {
 //todo standardized transaction id across project
 //todo replace panic
 func GetTransactionId(t *SerializableTransaction) TransactionId {
-	tx, err := TransactionAsBytes(t)
+	tx, err := InterfaceToBytes(t)
 	if err != nil {
 		panic("could not Serialize transaction")
 	}

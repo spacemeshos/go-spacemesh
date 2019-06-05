@@ -7,7 +7,7 @@ import (
 	"github.com/spacemeshos/sha256-simd"
 )
 
-type VRFValidationFunction func(message, signature, publicKey []byte) error
+type VRFValidationFunction func(message, signature, publicKey []byte) (bool, error)
 
 type BlockEligibilityValidator struct {
 	committeeSize  uint32
@@ -59,10 +59,14 @@ func (v BlockEligibilityValidator) BlockEligible(block *types.BlockHeader) (bool
 	epochBeacon := v.beaconProvider.GetBeacon(epochNumber)
 	message := serializeVRFMessage(epochBeacon, epochNumber, counter)
 	vrfSig := block.EligibilityProof.Sig
-	err = v.validateVRF(message, vrfSig, []byte(block.MinerID.VRFPublicKey))
+	res, err := v.validateVRF(message, vrfSig, []byte(block.MinerID.VRFPublicKey))
 	if err != nil {
-		v.log.Error("eligibility VRF validation failed: %v", err)
+		v.log.Error("eligibility VRF validation erred: %v", err)
 		return false, fmt.Errorf("eligibility VRF validation failed: %v", err)
+	}
+	if !res {
+		v.log.Error("eligibility VRF validation failed")
+		return false, nil
 	}
 	vrfHash := sha256.Sum256(vrfSig)
 	eligibleLayer := calcEligibleLayer(epochNumber, v.layersPerEpoch, vrfHash)

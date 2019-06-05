@@ -2,9 +2,6 @@ package gossip
 
 import (
 	"errors"
-	"fmt"
-	"github.com/btcsuite/btcutil/base58"
-	"github.com/golang/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/metrics"
@@ -13,7 +10,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"hash/fnv"
 	"sync"
-	"time"
 )
 
 const messageQBufferSize = 100
@@ -103,22 +99,6 @@ func newPeer(net sender, pubkey p2pcrypto.PublicKey, log log.Log) *peer {
 	}
 }
 
-// send sends a gossip message to the peer
-func (p *peer) send(msg []byte, checksum hash) {
-	p.Debug("sending message to peer %v, hash %d", p.pubkey, checksum)
-	err := p.net.SendMessage(p.pubkey, ProtocolName, msg)
-	if err != nil {
-		p.Log.Error("Gossip protocol failed to send msg (calcHash %d) to peer %v, first attempt. err=%v", checksum, p.pubkey, err)
-		// doing one retry before giving up
-		// TODO: find out if this is really needed
-		err = p.net.SendMessage(p.pubkey, "", msg)
-		if err != nil {
-			p.Log.Error("Gossip protocol failed to send msg (calcHash %d) to peer %v, second attempt. err=%v", checksum, p.pubkey, err)
-			return
-		}
-	}
-}
-
 func (prot *Protocol) Close() {
 	close(prot.shutdown)
 }
@@ -139,62 +119,28 @@ func (prot *Protocol) markMessageAsOld(h hash) bool {
 }
 
 func (prot *Protocol) propagateMessage(payload []byte, h hash, nextProt string, exclude p2pcrypto.PublicKey) {
-	// add gossip header
-	header := &pb.Metadata{
-		NextProtocol:  nextProt,
-		ClientVersion: protocolVer,
-		Timestamp:     time.Now().Unix(),
-		AuthPubkey:    prot.localNodePubkey.Bytes(), // TODO: @noam consider replacing this with another reply mechanism
-	}
-
-	msg := &pb.ProtocolMessage{
-		Metadata: header,
-		Payload:  &pb.Payload{Data: &pb.Payload_Payload{payload}},
-	}
-
-	data, err := proto.Marshal(msg)
-	if err != nil {
-		prot.Log.Error("failed to encode signed message err: %v", err)
-		return
-	}
-
 	prot.peersMutex.RLock()
 peerLoop:
 	for p := range prot.peers {
 		if exclude.String() == p {
 			continue peerLoop
 		}
-		go prot.peers[p].send(data, h) // non blocking
+		go func(pubkey p2pcrypto.PublicKey) {
+			// TODO: replace peer ?
+			err := prot.net.SendMessage(pubkey, nextProt, payload)
+			if err != nil {
+				prot.Warning("Failed sending msg %v to %v, reason=%v", h, pubkey, err)
+			}
+		}(prot.peers[p].pubkey)
 	}
 	prot.peersMutex.RUnlock()
-}
-
-func (prot *Protocol) validateMessage(msg *pb.ProtocolMessage) error {
-	if cv := msg.Metadata.ClientVersion; cv != protocolVer {
-		prot.Log.Error("fail to validate message's protocol version when validating gossip message")
-		return fmt.Errorf("bad clientVersion: message version '%s' is incompatible with local version '%s'", cv, protocolVer)
-	}
-	return nil
 }
 
 // Broadcast is the actual broadcast procedure - process the message internally and loop on peers and add the message to their queues
 func (prot *Protocol) Broadcast(payload []byte, nextProt string) error {
 	prot.Log.Debug("Broadcasting message from type %s", nextProt)
-	// add gossip header
-	header := &pb.Metadata{
-		NextProtocol:  nextProt,
-		ClientVersion: protocolVer,
-		Timestamp:     time.Now().Unix(),
-		AuthPubkey:    prot.localNodePubkey.Bytes(), // TODO: @noam consider replacing this with another reply mechanism. get sender from swarm
-	}
-
-	msg := &pb.ProtocolMessage{
-		Metadata: header,
-		Payload:  &pb.Payload{Data: &pb.Payload_Payload{payload}},
-	}
-
-	prot.processMessage(prot.localNodePubkey, msg)
-	return nil
+	return prot.processMessage(prot.localNodePubkey, nextProt, service.DataBytes{Payload: payload})
+	//todo: should this ever return error ? then when processMessage should return error ?. should it block?
 }
 
 // Start a loop that process peers events
@@ -216,18 +162,8 @@ func (prot *Protocol) removePeer(peer p2pcrypto.PublicKey) {
 	prot.peersMutex.Unlock()
 }
 
-func (prot *Protocol) processMessage(sender p2pcrypto.PublicKey, msg *pb.ProtocolMessage) {
-	data, err := pb.ExtractData(msg.Payload)
-	if err != nil {
-		prot.Log.Debug("could'nt extract payload from message err=", err)
-		return
-	} else if _, ok := data.(*service.DataMsgWrapper); ok {
-		prot.Log.Debug("unexpected usage of request-response framework over Gossip - WAS IT IN PURPOSE? ")
-		return
-	}
-
-	protocol := msg.Metadata.NextProtocol
-	h := calcHash(data.Bytes(), protocol)
+func (prot *Protocol) processMessage(sender p2pcrypto.PublicKey, protocol string, msg service.Data) error {
+	h := calcHash(msg.Bytes(), protocol)
 
 	isOld := prot.markMessageAsOld(h)
 	if isOld {
@@ -235,26 +171,13 @@ func (prot *Protocol) processMessage(sender p2pcrypto.PublicKey, msg *pb.Protoco
 		// todo : - have some more metrics for termination
 		// todo	: - maybe tell the peer we got this message already?
 		// todo : - maybe block this peer since he sends us old messages
-		prot.Log.With().Debug("old_gossip_message", log.String("from", sender.String()), log.String("protocol", protocol))
-	} else {
-		prot.Log.With().Info("new_gossip_message", log.String("from", sender.String()), log.String("auth", base58.Encode(msg.Metadata.AuthPubkey)), log.String("protocol", protocol))
-		metrics.NewGossipMessages.With("protocol", protocol).Add(1)
-		err := prot.net.ProcessGossipProtocolMessage(sender, protocol, data, prot.propagateQ)
-		if err != nil {
-			prot.Log.Warning("failed to process protocol message. protocol = %v err = %v", protocol, err)
-		}
-	}
-}
-
-func (prot *Protocol) handleRelayMessage(sender p2pcrypto.PublicKey, msgB []byte) {
-	msg := &pb.ProtocolMessage{}
-	err := proto.Unmarshal(msgB, msg)
-	if err != nil {
-		prot.Log.Error("failed to unmarshal when handling relay message, err %v", err)
-		return
+		prot.Log.With().Debug("old_gossip_message", log.String("from", sender.String()), log.String("protocol", protocol), log.Uint32("hash", uint32(h)))
+		return nil
 	}
 
-	prot.processMessage(sender, msg)
+	prot.Log.With().Info("new_gossip_message", log.String("from", sender.String()), log.String("protocol", protocol), log.Uint32("hash", uint32(h)))
+	metrics.NewGossipMessages.With("protocol", protocol).Add(1)
+	return prot.net.ProcessGossipProtocolMessage(sender, protocol, msg, prot.propagateQ)
 }
 
 func (prot *Protocol) propagationEventLoop() {
@@ -272,20 +195,16 @@ loop:
 	prot.Error("propagate event loop stopped. err: %v", err)
 }
 
+func (prot *Protocol) Relay(sender p2pcrypto.PublicKey, protocol string, msg service.Data) error {
+	return prot.processMessage(sender, protocol, msg)
+}
+
 func (prot *Protocol) eventLoop(peerConn chan p2pcrypto.PublicKey, peerDisc chan p2pcrypto.PublicKey) {
+	// TODO: replace with p2p.Peers
 	var err error
 loop:
 	for {
 		select {
-		case msg, ok := <-prot.relayQ:
-			if !ok {
-				err = errors.New("channel closed")
-				break loop
-			}
-			// incoming messages from p2p layer for process and relay
-			go func() {
-				prot.handleRelayMessage(msg.Sender(), msg.Bytes())
-			}()
 		case peer := <-peerConn:
 			go prot.addPeer(peer)
 		case peer := <-peerDisc:

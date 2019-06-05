@@ -2,6 +2,7 @@ package eligibility
 
 import (
 	"github.com/spacemeshos/go-spacemesh/rand"
+	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"testing"
@@ -34,8 +35,9 @@ func TestFixedRolacle_Eligible(t *testing.T) {
 	v := genStr()
 	oracle.Register(true, v)
 
-	res := oracle.Eligible(1, 10, v, nil)
-	assert.True(t, res == oracle.Eligible(1, 10, v, nil))
+	res, _ := oracle.Eligible(1, 1, 10, types.NodeId{Key: v}, nil)
+	res2, _ := oracle.Eligible(1, 1, 10, types.NodeId{Key: v}, nil)
+	assert.True(t, res == res2)
 }
 
 func TestFixedRolacle_Eligible2(t *testing.T) {
@@ -49,7 +51,8 @@ func TestFixedRolacle_Eligible2(t *testing.T) {
 
 	count := 0
 	for _, p := range pubs {
-		if oracle.Eligible(1, 10, p, nil) {
+		res, _ := oracle.Eligible(1, 1, 10, types.NodeId{Key: p}, nil)
+		if res {
 			count++
 		}
 	}
@@ -58,7 +61,8 @@ func TestFixedRolacle_Eligible2(t *testing.T) {
 
 	count = 0
 	for _, p := range pubs {
-		if oracle.Eligible(1, 20, p, nil) {
+		res, _ := oracle.Eligible(1, 1, 20, types.NodeId{Key: p}, nil)
+		if res {
 			count++
 		}
 	}
@@ -77,7 +81,8 @@ func TestFixedRolacle_Range(t *testing.T) {
 
 	count := 0
 	for _, p := range pubs {
-		if oracle.Eligible(1, numOfClients, p, nil) {
+		res, _ := oracle.Eligible(1, 1, numOfClients, types.NodeId{Key: p}, nil)
+		if res {
 			count++
 		}
 	}
@@ -87,7 +92,8 @@ func TestFixedRolacle_Range(t *testing.T) {
 
 	count = 0
 	for _, p := range pubs {
-		if oracle.Eligible(2, 0, p, nil) {
+		res, _ := oracle.Eligible(2, 1, 0, types.NodeId{Key: p}, nil)
+		if res {
 			count++
 		}
 	}
@@ -109,18 +115,20 @@ func TestFixedRolacle_Eligible3(t *testing.T) {
 	}
 
 	exp := numOfClients / 2
-	oracle.Eligible(1, exp, "", nil)
+	oracle.Eligible(1, 1, exp, types.NodeId{Key: ""}, nil)
 
 	hc := 0
 	for k := range oracle.honest {
-		if oracle.Eligible(1, exp, k, nil) {
+		res, _ := oracle.Eligible(1, 1, exp, types.NodeId{Key: k}, nil)
+		if res {
 			hc++
 		}
 	}
 
 	dc := 0
 	for k := range oracle.faulty {
-		if oracle.Eligible(1, exp, k, nil) {
+		res, _ := oracle.Eligible(1, 1, exp, types.NodeId{Key: k}, nil)
+		if res {
 			dc++
 		}
 	}
@@ -158,7 +166,8 @@ func TestFixedRolacle_Eligible4(t *testing.T) {
 	// when requesting a bigger committee size everyone should be eligible
 
 	for _, s := range ids {
-		assert.True(t, oracle.Eligible(0, numOfClients, s, nil))
+		res, _ := oracle.Eligible(0, 1, numOfClients, types.NodeId{Key: s}, nil)
+		assert.True(t, res)
 	}
 }
 

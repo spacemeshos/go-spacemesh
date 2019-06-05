@@ -102,8 +102,8 @@ def create_deployment(file_name, name_space, deployment_id=None, replica_size=1,
 
 
 def delete_deployment(deployment_name, name_space):
-    k8s_beta = client.ExtensionsV1beta1Api()
     try:
+        k8s_beta = client.ExtensionsV1beta1Api()
         resp = k8s_beta.delete_namespaced_deployment(name=deployment_name,
                                                      namespace=name_space,
                                                      body=client.V1DeleteOptions(propagation_policy='Foreground',
@@ -135,15 +135,18 @@ def query_bootstrap_es(indx, namespace, bootstrap_po_name):
 # ==============================================================================
 
 def setup_server(deployment_name, deployment_file, namespace):
+    deployment_name_prefix = deployment_name.split('-')[0]
     namespaced_pods = client.CoreV1Api().list_namespaced_pod(namespace,
-                                                             label_selector="name={0}".format(deployment_name)).items
+                                                             label_selector=(
+                                                                 "name={0}".format(deployment_name_prefix))).items
     if namespaced_pods:
         # if server already exist -> delete it
         delete_deployment(deployment_name, namespace)
 
     resp = create_deployment(deployment_file, namespace, None)
     namespaced_pods = client.CoreV1Api().list_namespaced_pod(namespace,
-                                                             label_selector="name={0}".format(deployment_name)).items
+                                                             label_selector=(
+                                                                 "name={0}".format(deployment_name_prefix))).items
     if not namespaced_pods:
         raise Exception('Could not setup Server: {0}'.format(deployment_name))
     return namespaced_pods[0].status.pod_ip
@@ -184,9 +187,12 @@ def setup_bootstrap(request, init_session, setup_oracle, setup_poet, create_conf
                                  container_specs=cspec)
 
         bootstrap_deployment_info.deployment_name = resp.metadata._name
-        namespaced_pods = client.CoreV1Api().list_namespaced_pod(namespace=name_space).items
-        bootstrap_pod_json = next(filter(lambda i: i.metadata.name.startswith(bootstrap_deployment_info.deployment_name),
-                                         namespaced_pods))
+        # The tests assume we deploy only 1 bootstrap
+        bootstrap_pod_json = (
+            client.CoreV1Api().list_namespaced_pod(namespace=name_space,
+                                                   label_selector=(
+                                                       "name={0}".format(
+                                                           bootstrap_deployment_info.deployment_name.split('-')[0]))).items[0])
         bs_pod = {'name': bootstrap_pod_json.metadata.name}
 
         while True:
@@ -230,11 +236,16 @@ def setup_clients(request, setup_oracle, setup_poet, setup_bootstrap):
                                  container_specs=cspec)
 
         client_info.deployment_name = resp.metadata._name
-        namespaced_pods = client.CoreV1Api().list_namespaced_pod(namespace=name_space, include_uninitialized=True).items
-        client_pods = list(filter(lambda i: i.metadata.name.startswith(client_info.deployment_name), namespaced_pods))
+        client_pods = (
+            client.CoreV1Api().list_namespaced_pod(name_space,
+                                                   include_uninitialized=True,
+                                                   label_selector=(
+                                                       "name={0}".format(
+                                                           client_info.deployment_name.split('-')[0]))).items)
 
         client_info.pods = [{'name': c.metadata.name, 'pod_ip': c.status.pod_ip} for c in client_pods]
         return client_info
+
     return _setup_clients_in_namespace(testconfig['namespace'])
 
 
@@ -396,7 +407,7 @@ def test_transaction(setup_network):
     data = '{"address":"1"}'
     print("checking nonce")
     out = api_call(client_ip, data, api, testconfig['namespace'])
-    assert '{"value":"0"}' in out
+    assert "{'value': '0'}" in out
     print("nonce ok")
 
     api = 'v1/submittransaction'
@@ -415,7 +426,7 @@ def test_transaction(setup_network):
         time.sleep(60)
         print("... ")
         out = api_call(client_ip, data, api, testconfig['namespace'])
-        if '{"value":"100"}' in out:
+        if "{'value': '100'}" in out:
             end = time.time()
             break
 
@@ -432,7 +443,7 @@ def test_mining(setup_network):
     data = '{"address":"1"}'
     print("checking nonce")
     out = api_call(client_ip, data, api, testconfig['namespace'])
-    # assert '{"value":"0"}' in out
+    # assert "{'value': '0'}" in out
     # print("nonce ok")
 
     api = 'v1/submittransaction'
@@ -456,7 +467,7 @@ def test_mining(setup_network):
 
     # out = api_call(client_ip, data, api, testconfig['namespace'])
     print("test took {:.3f} seconds ".format(end-start))
-    # assert '{"value":"100"}' in out
+    # assert "{'value': '100'}" in out
     # print("balance ok")
 
     # need to filter out blocks that have come from last layer
@@ -471,6 +482,12 @@ def test_mining(setup_network):
     print("atx created " + str(total_atxs))
     print("blocks created " + str(total_blocks))
 
+    genesis_block_deviation = (total_pods - layer_avg_size)*2
+
+    if genesis_block_deviation > 0:
+        print("subtracting deviation of " + str(genesis_block_deviation) + " blocks for block counting")
+        total_blocks -= genesis_block_deviation
+    print("test took {:.3f} seconds ".format(end-start))
     assert total_pods == len(blockmap)
     assert (1 - deviation) < (total_blocks / last_layer) / layer_avg_size < (1 + deviation)
     assert total_atxs == int((last_layer / layers_per_epoch) + 1) * total_pods
@@ -491,4 +508,84 @@ def test_mining(setup_network):
         for blk in blockmap[node]:
           mp.add(blk[0])
         print("blocks:" + str(len(blockmap[node])) + "in layers" + str(len(mp)) + " " + str(layer_avg_size / total_pods))
-        assert (len(blockmap[node]) / last_layer) / int(layer_avg_size / total_pods) <= 1.5
+        assert (len(blockmap[node]) / last_layer) / int(layer_avg_size / total_pods + 0.5) <= 1.5
+
+
+''' todo: when atx flow stabilized re enable this test
+def test_atxs_nodes_up(setup_bootstrap, setup_clients, add_curl, wait_genesis, setup_poet, setup_oracle):
+    # choose client to run on
+    client_ip = setup_clients.pods[0]['pod_ip']
+
+    api = 'v1/nonce'
+    data = '{"address":"1"}'
+    print("checking nonce")
+    out = api_call(client_ip, data, api, testconfig['namespace'])
+
+    api = 'v1/submittransaction'
+    data = '{"srcAddress":"1","dstAddress":"222","nonce":"0","amount":"100"}'
+    print("submitting transaction")
+    out = api_call(client_ip, data, api, testconfig['namespace'])
+    print(out.decode("utf-8"))
+    assert '{"value":"ok"}' in out.decode("utf-8")
+    print("submit transaction ok")
+
+    end = start = time.time()
+    layer_avg_size = 20
+    last_layer = 8
+    layers_per_epoch = 3
+    deviation = 0.2
+    extra_nodes = 20
+    last_epoch = last_layer / layers_per_epoch
+
+    queries.wait_for_latest_layer(testconfig["namespace"], layers_per_epoch)
+
+    added_clients = []
+    for i in range(0, extra_nodes):
+        c = add_single_client(setup_bootstrap.deployment_id,
+                              get_conf(setup_bootstrap.pods[0], setup_poet, setup_oracle))
+        added_clients.append(c)
+
+    queries.wait_for_latest_layer(testconfig["namespace"], last_layer)
+
+    print("test took {:.3f} seconds ".format(end - start))
+
+    # need to filter out blocks that have come from last layer
+    blockmap = queries.get_blocks_per_node(testconfig["namespace"])
+    # count all blocks arrived in relevant layers
+    total_blocks = sum([len(blockmap[x]) for x in blockmap])
+    atxmap = queries.get_atx_per_node(testconfig["namespace"])
+    total_atxs = sum([len(atxmap[x]) for x in atxmap])
+
+    total_pods = len(setup_clients.pods) + len(setup_bootstrap.pods) + extra_nodes
+
+    print("atx created " + str(total_atxs))
+    print("blocks created " + str(total_blocks))
+
+    assert total_pods == len(blockmap)
+    # assert (1 - deviation) < (total_blocks / last_layer) / layer_avg_size < (1 + deviation)
+    # assert total_atxs == int((last_layer / layers_per_epoch) + 1) * total_pods
+
+    # assert that a node has created one atx per epoch
+    for node in atxmap:
+        mp = set()
+        for blk in atxmap[node]:
+            mp.add(blk[4])
+        if node not in added_clients:
+            assert len(atxmap[node]) / int((last_layer / layers_per_epoch) + 1) == 1
+        else:
+            assert len(atxmap[node]) / int((last_layer / layers_per_epoch)) == 1
+
+        print("mp " + ','.join(mp) + " node " + node + " atxmap " + str(atxmap[node]))
+        if node not in added_clients:
+            assert len(mp) == int((last_layer / layers_per_epoch) + 1)
+        else:
+            assert len(mp) == int((last_layer / layers_per_epoch))
+
+    # assert that each node has created layer_avg/number_of_nodes
+    mp = set()
+    for node in blockmap:
+        for blk in blockmap[node]:
+            mp.add(blk[0])
+        print("blocks:" + str(len(blockmap[node])) + "in layers" + str(len(mp)) + " " + str(layer_avg_size / total_pods))
+        assert (len(blockmap[node]) / last_layer) / int((layer_avg_size / total_pods) + 0.5) <= 1.5
+'''

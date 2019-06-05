@@ -1,6 +1,8 @@
 package sync
 
 import (
+	"fmt"
+	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"math/big"
@@ -59,12 +61,53 @@ func (s *StateMock) ApplyRewards(layer types.LayerID, miners []string, underQuot
 
 }
 
-type AtxDbMock struct{}
-
-func (AtxDbMock) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
-	return nil, nil
+type AtxDbMock struct {
+	db     map[types.AtxId]*types.ActivationTx
+	nipsts map[types.AtxId]*types.NIPST
 }
 
-func (AtxDbMock) ProcessBlockATXs(block *types.Block) {
+func NewAtxDbMock() *AtxDbMock {
+	return &AtxDbMock{
+		make(map[types.AtxId]*types.ActivationTx),
+		make(map[types.AtxId]*types.NIPST),
+	}
+}
 
+func (t *AtxDbMock) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
+	if atx, ok := t.db[id]; ok {
+		return atx, nil
+	}
+	return nil, fmt.Errorf("cannot find atx")
+}
+
+func (t *AtxDbMock) ProcessAtx(atx *types.ActivationTx) {
+	t.db[atx.Id()] = atx
+	t.nipsts[atx.Id()] = atx.Nipst
+}
+
+func (t *AtxDbMock) GetNipst(id types.AtxId) (*types.NIPST, error) {
+	return t.nipsts[id], nil
+}
+
+func (t *AtxDbMock) ProcessBlockATXs(block *types.Block) {
+	for _, atx := range block.ATXs {
+		t.ProcessAtx(atx)
+	}
+}
+
+type MockIStore struct {
+}
+
+func (*MockIStore) StoreNodeIdentity(id types.NodeId) error {
+	return nil
+}
+
+func (*MockIStore) GetIdentity(id string) (types.NodeId, error) {
+	return types.NodeId{}, nil
+}
+
+type ValidatorMock struct{}
+
+func (*ValidatorMock) Validate(nipst *types.NIPST, expectedChallenge common.Hash) error {
+	return nil
 }

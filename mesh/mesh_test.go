@@ -31,10 +31,15 @@ func (MockState) ApplyRewards(layer types.LayerID, miners []string, underQuota m
 }
 
 type AtxDbMock struct {
-	db map[types.AtxId]*types.ActivationTx
+	db     map[types.AtxId]*types.ActivationTx
+	nipsts map[types.AtxId]*types.NIPST
 }
 
 func (t *AtxDbMock) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
+	if id == *types.EmptyAtxId {
+		return nil, fmt.Errorf("trying to fetch empty atx id")
+	}
+
 	if atx, ok := t.db[id]; ok {
 		return atx, nil
 	}
@@ -43,9 +48,20 @@ func (t *AtxDbMock) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
 
 func (t *AtxDbMock) AddAtx(id types.AtxId, atx *types.ActivationTx) {
 	t.db[id] = atx
+	t.nipsts[id] = atx.Nipst
 }
 
-func (AtxDbMock) ProcessBlockATXs(block *types.Block) {
+func (t *AtxDbMock) GetNipst(id types.AtxId) (*types.NIPST, error) {
+	return t.nipsts[id], nil
+}
+
+func (t *AtxDbMock) ProcessBlockATXs(block *types.Block) {
+	for _, atx := range block.ATXs {
+		t.AddAtx(atx.Id(), atx)
+	}
+}
+
+func (AtxDbMock) ProcessAtx(atx *types.ActivationTx) {
 
 }
 
@@ -66,8 +82,6 @@ func TestLayers_AddBlock(t *testing.T) {
 
 	addTransactionsToBlock(block1, 4)
 
-	fmt.Println(block1)
-
 	err := layers.AddBlock(block1)
 	assert.NoError(t, err)
 	err = layers.AddBlock(block2)
@@ -83,6 +97,11 @@ func TestLayers_AddBlock(t *testing.T) {
 
 	assert.True(t, len(rBlock1.Txs) == len(block1.Txs), "block content was wrong")
 	assert.True(t, bytes.Compare(rBlock2.Data, []byte("data2")) == 0, "block content was wrong")
+	assert.True(t, rBlock1.Txs[0].Origin == block1.Txs[0].Origin)
+
+	assert.True(t, bytes.Equal(rBlock1.Txs[0].Recipient.Bytes(), block1.Txs[0].Recipient.Bytes()))
+	assert.True(t, bytes.Equal(rBlock1.Txs[0].Price, block1.Txs[0].Price))
+	assert.True(t, len(rBlock1.ATXs) == len(block1.ATXs))
 }
 
 func TestLayers_AddLayer(t *testing.T) {

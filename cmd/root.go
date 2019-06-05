@@ -35,6 +35,12 @@ func AddCommands(cmd *cobra.Command) {
 		config.LayerDurationSec, "Duration between layers in seconds")
 	cmd.PersistentFlags().IntVar(&config.LayerAvgSize, "layer-average-size",
 		config.LayerDurationSec, "Duration between layers in seconds")
+	cmd.PersistentFlags().StringVar(&config.MemProfile, "mem-profile",
+		config.MemProfile, "output memory profiling stat to filename")
+	cmd.PersistentFlags().StringVar(&config.CpuProfile, "cpu-profile",
+		config.CpuProfile, "output cpu profiling stat to filename")
+	cmd.PersistentFlags().BoolVar(&config.PprofHttpServer, "pprof-server",
+		config.PprofHttpServer, "enable http pprof server")
 	/** ======================== P2P Flags ========================== **/
 	cmd.PersistentFlags().IntVar(&config.P2P.TCPPort, "tcp-port",
 		config.P2P.TCPPort, "TCP Port to listen on")
@@ -110,6 +116,8 @@ func AddCommands(cmd *cobra.Command) {
 		config.HARE.RoundDuration, "Duration of round in the Hare protocol")
 	cmd.PersistentFlags().IntVar(&config.HARE.WakeupDelta, "hare-wakeup-delta",
 		config.HARE.WakeupDelta, "Wakeup delta after tick for hare protocol")
+	cmd.PersistentFlags().IntVar(&config.HARE.ExpectedLeaders, "hare-exp-leaders",
+		config.HARE.ExpectedLeaders, "The expected number of leaders in the hare protocol")
 
 	/**========================Consensus Flags ========================== **/
 	//todo: add this here

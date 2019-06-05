@@ -41,10 +41,9 @@ var npstCfg = nipst.PostParams{
 
 //todo get from configuration
 var conf = sync.Configuration{
-	SyncInterval:   1 * time.Second,
 	Concurrency:    4,
 	LayerSize:      int(100),
-	RequestTimeout: 150 * time.Millisecond,
+	RequestTimeout: 200 * time.Millisecond,
 }
 
 //////////////////////////////
@@ -86,7 +85,7 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	poetDb := activation.NewPoetDb(database.NewMemDatabase(), lg.WithName("poetDb"))
 	validator := nipst.NewValidator(npstCfg, poetDb)
 	mshDb := mesh.NewPersistentMeshDB(app.Config.DataDir, lg.WithOptions(log.Nop))
-	atxdb := activation.NewActivationDb(database.NewMemDatabase(), activation.NewIdentityStore(iddbstore), mshDb, uint64(app.Config.CONSENSUS.LayersPerEpoch), validator, lg.WithName("atxDb").WithOptions(log.Nop))
+	atxdb := activation.NewActivationDb(database.NewMemDatabase(), database.NewMemDatabase(), activation.NewIdentityStore(iddbstore), mshDb, uint64(app.Config.CONSENSUS.LayersPerEpoch), validator, lg.WithName("atxDb").WithOptions(log.Nop))
 	msh := mesh.NewMesh(mshDb, atxdb, sync.ConfigTst(), &sync.MeshValidatorMock{}, &sync.MockState{}, lg.WithOptions(log.Nop))
 	defer msh.Close()
 
@@ -99,7 +98,7 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 
 	i := 0
 	for ; ; i++ {
-		if lyr, err2 := mshDb.GetLayer(types.LayerID(i)); err2 != nil || lyr == nil {
+		if lyr, err2 := msh.GetLayer(types.LayerID(i)); err2 != nil || lyr == nil {
 			lg.Info("loaded %v layers from disk %v", i-1, err2)
 			break
 		} else {

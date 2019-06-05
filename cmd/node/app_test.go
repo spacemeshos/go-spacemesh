@@ -3,9 +3,8 @@ package node
 import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/address"
+	"github.com/spacemeshos/go-spacemesh/amcl/BLS381"
 	apiCfg "github.com/spacemeshos/go-spacemesh/api/config"
-	"github.com/spacemeshos/go-spacemesh/crypto"
-	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/miner"
@@ -83,23 +82,24 @@ func (app *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat s
 	poet, err := NewRPCPoetHarnessClient()
 	r.NoError(err)
 	app.poetCleanup = poet.CleanUp
+	rng := BLS381.DefaultSeed()
 	for i := 0; i < numOfInstances; i++ {
 		smApp := NewSpacemeshApp()
 		smApp.Config.HARE.N = numOfInstances
 		smApp.Config.HARE.F = numOfInstances / 2
 		smApp.Config.HARE.WakeupDelta = 15
+		smApp.Config.HARE.ExpectedLeaders = 5
 
 		edSgn := signing.NewEdSigner()
 		pub := edSgn.PublicKey()
 
-		vrfPublicKey, vrfPrivateKey, err := crypto.GenerateVRFKeys()
 		r.NoError(err)
-		nodeID := types.NodeId{Key: pub.String(), VRFPublicKey: vrfPublicKey}
-		vrfSigner := crypto.NewVRFSigner(vrfPrivateKey)
+		vrfPriv, vrfPub := BLS381.GenKeyPair(rng)
+		vrfSigner := BLS381.NewBlsSigner(vrfPriv)
+		nodeID := types.NodeId{Key: pub.String(), VRFPublicKey: vrfPub}
+
 		swarm := net.NewNode()
 		dbStorepath := storeFormat + string(runningName)
-
-		dbStore := database.NewMemDatabase()
 
 		hareOracle := oracle.NewLocalOracle(rolacle, numOfInstances, nodeID)
 		hareOracle.Register(true, pub.String())
@@ -110,8 +110,7 @@ func (app *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat s
 			NumberOfProvenLabels: 10,
 			SpaceUnit:            1024,
 		}
-		err = smApp.initServices(nodeID, swarm, dbStorepath, edSgn, hareOracle, uint32(layerSize),
-			nipst.NewPostClient(), poet, dbStore, dbStore, vrfSigner, npstCfg, 3)
+		err = smApp.initServices(nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(layerSize), nipst.NewPostClient(), poet, vrfSigner, npstCfg, 3)
 		r.NoError(err)
 		smApp.setupGenesis(apiCfg.DefaultGenesisConfig())
 
