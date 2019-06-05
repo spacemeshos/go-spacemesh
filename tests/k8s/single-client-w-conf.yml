@@ -3,7 +3,7 @@ kind: Pod
 metadata:
   generateName: client-
   labels:
-    run: client
+    name: client
 spec:
   containers:
   - name: client
