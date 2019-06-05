@@ -463,7 +463,8 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 
 	app.unregisterOracle = func() { oracleClient.Unregister(true, app.edSgn.PublicKey().String()) }
 
-	vrfPriv, vrfPub := BLS381.GenKeyPair()
+	rng := BLS381.DefaultSeed()
+	vrfPriv, vrfPub := BLS381.GenKeyPair(rng)
 	vrfSigner := BLS381.NewBlsSigner(vrfPriv)
 	nodeID := types.NodeId{Key: app.edSgn.PublicKey().String(), VRFPublicKey: vrfPub}
 

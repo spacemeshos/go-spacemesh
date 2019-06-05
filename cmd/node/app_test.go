@@ -83,6 +83,7 @@ func (app *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat s
 	poet, err := NewRPCPoetHarnessClient()
 	r.NoError(err)
 	app.poetCleanup = poet.CleanUp
+	rng := BLS381.DefaultSeed()
 	for i := 0; i < numOfInstances; i++ {
 		smApp := NewSpacemeshApp()
 		smApp.Config.HARE.N = numOfInstances
@@ -94,7 +95,7 @@ func (app *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat s
 		pub := edSgn.PublicKey()
 
 		r.NoError(err)
-		vrfPriv, vrfPub := BLS381.GenKeyPair()
+		vrfPriv, vrfPub := BLS381.GenKeyPair(rng)
 		vrfSigner := BLS381.NewBlsSigner(vrfPriv)
 		nodeID := types.NodeId{Key: pub.String(), VRFPublicKey: vrfPub}
 

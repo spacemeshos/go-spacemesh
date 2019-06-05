@@ -152,7 +152,7 @@ func Test_ActiveSetSize(t *testing.T) {
 }
 
 func Test_BlsSignVerify(t *testing.T) {
-	pr, pu := BLS381.GenKeyPair()
+	pr, pu := BLS381.GenKeyPair(BLS381.DefaultSeed())
 	sr := BLS381.NewBlsSigner(pr)
 	o := New(&mockValueProvider{1, nil}, &mockActiveSetProvider{10}, BLS381.Verify2, sr, 10)
 	id := types.NodeId{Key: "abc", VRFPublicKey: pu}

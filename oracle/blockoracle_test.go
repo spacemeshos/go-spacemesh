@@ -15,7 +15,7 @@ var nodeID, vrfSigner = generateNodeIDAndSigner()
 var validateVrf = BLS381.Verify2
 
 func generateNodeIDAndSigner() (types.NodeId, Signer) {
-	privateKey, publicKey := BLS381.GenKeyPair()
+	privateKey, publicKey := BLS381.GenKeyPair(BLS381.DefaultSeed())
 	return types.NodeId{
 		Key:          "edKey",
 		VRFPublicKey: publicKey,
@@ -53,7 +53,7 @@ func TestBlockOracle(t *testing.T) {
 	// Happy flow with small numbers that can be inspected manually
 	testBlockOracleAndValidator(r, 5, 10, 20)
 	// Big, realistic numbers
-	testBlockOracleAndValidator(r, 3000, 200, 4032)
+	//testBlockOracleAndValidator(r, 3000, 200, 4032)
 	// More miners than blocks (ensure at least one block per activation)
 	testBlockOracleAndValidator(r, 5, 2, 2)
 }
@@ -137,7 +137,11 @@ func TestBlockOracleNoActivationsForNode(t *testing.T) {
 	activeSetSize := uint32(20)
 	committeeSize := int32(200)
 	layersPerEpoch := uint16(10)
-	nodeID, vrfSigner := generateNodeIDAndSigner()
+	_, publicKey := BLS381.GenKeyPair(BLS381.DefaultSeed())
+	nodeID := types.NodeId{
+		Key:          "other key",
+		VRFPublicKey: publicKey,
+	} // This guy has no activations 🧐
 
 	activationDB := &mockActivationDB{activeSetSize: activeSetSize, atxPublicationLayer: types.LayerID(layersPerEpoch)}
 	beaconProvider := &EpochBeaconProvider{}
@@ -177,7 +181,7 @@ func TestBlockOracleValidatorInvalidProof(t *testing.T) {
 	block := newBlockWithEligibility(layerID, nodeID, atxID, proof)
 	eligible, err := validator.BlockEligible(&block.BlockHeader)
 	r.False(eligible)
-	r.EqualError(err, "eligibility VRF validation failed: VRF validation failed")
+	r.EqualError(err, "eligibility VRF validation failed")
 }
 
 func TestBlockOracleValidatorInvalidProof2(t *testing.T) {
