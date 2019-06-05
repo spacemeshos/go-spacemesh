@@ -4,10 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/google/uuid"
-	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
-	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/nipst"
@@ -145,11 +143,7 @@ var rewardConf = mesh.Config{
 }
 
 func getMeshWithLevelDB(id string) *mesh.Mesh {
-	lg := log.New(id, "", "")
-	mshdb := mesh.NewPersistentMeshDB(id, lg)
-	atxdbStore, _ := database.NewLDBDatabase(id+"atx", 0, 0)
-	atxdb := activation.NewActivationDb(atxdbStore, &MockIStore{}, mshdb, uint64(10), &ValidatorMock{}, lg.WithName("atxDB"))
-	return mesh.NewMesh(mshdb, atxdb, rewardConf, &MeshValidatorMock{}, &stateMock{}, lg)
+	return mesh.NewPersistentMesh(fmt.Sprintf(Path+"%v/", id), rewardConf, &MeshValidatorMock{}, &stateMock{}, NewAtxDbMock(), log.New(id, "", ""))
 }
 
 func persistenceTeardown() {
@@ -157,10 +151,7 @@ func persistenceTeardown() {
 }
 
 func getMeshWithMemoryDB(id string) *mesh.Mesh {
-	lg := log.New(id, "", "")
-	mshdb := mesh.NewMemMeshDB(lg)
-	atxdb := activation.NewActivationDb(database.NewMemDatabase(), &MockIStore{}, mshdb, uint64(10), &ValidatorMock{}, lg.WithName("atxDB"))
-	return mesh.NewMemMesh(rewardConf, &MeshValidatorMock{}, &stateMock{}, atxdb, lg)
+	return mesh.NewMemMesh(rewardConf, &MeshValidatorMock{}, &stateMock{}, NewAtxDbMock(), log.New(id, "", ""))
 }
 
 func getMesh(dbType, id string) *mesh.Mesh {

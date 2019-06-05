@@ -94,7 +94,7 @@ func TestBuilder_BuildActivationTx(t *testing.T) {
 	layers := MeshProviderMock{}
 	layersPerEpoch := uint16(10)
 	lg := log.NewDefault(id.Key[:5])
-	activationDb := NewActivationDb(database.NewMemDatabase(), &MockIStore{}, mesh.NewMemMeshDB(log.NewDefault("")), uint64(layersPerEpoch), &ValidatorMock{}, lg.WithName("atxDB"))
+	activationDb := NewActivationDb(database.NewMemDatabase(), database.NewMemDatabase(), &MockIStore{}, mesh.NewMemMeshDB(log.NewDefault("")), uint64(layersPerEpoch), &ValidatorMock{}, lg.WithName("atxDB"))
 	bt, err := types.ViewAsBytes(layers.GetLatestView())
 	assert.NoError(t, err)
 	activesetCache.put(common.BytesToHash(bt), 10)
@@ -136,7 +136,7 @@ func TestBuilder_NoPrevATX(t *testing.T) {
 	layers := MeshProviderMock{}
 	layersPerEpoch := uint16(10)
 	lg := log.NewDefault(id.Key[:5])
-	activationDb := NewActivationDb(database.NewMemDatabase(), &MockIStore{}, mesh.NewMemMeshDB(log.NewDefault("")), uint64(layersPerEpoch), &ValidatorMock{}, lg.WithName("atxDB"))
+	activationDb := NewActivationDb(database.NewMemDatabase(), database.NewMemDatabase(), &MockIStore{}, mesh.NewMemMeshDB(log.NewDefault("")), uint64(layersPerEpoch), &ValidatorMock{}, lg.WithName("atxDB"))
 	b := NewBuilder(id, activationDb, net, ActiveSetProviderMock{}, layers, layersPerEpoch, &NipstBuilderMock{}, nil, lg.WithName("atxBuilder"))
 	err := b.PublishActivationTx(2) // non genesis epoch
 	assert.EqualError(t, err, "cannot find pos atx: cannot find pos atx id: not found")
@@ -149,7 +149,7 @@ func TestBuilder_PublishActivationTx(t *testing.T) {
 	nipstBuilder := &NipstBuilderMock{}
 	layersPerEpoch := uint16(10)
 	lg := log.NewDefault(id.Key[:5])
-	activationDb := NewActivationDb(database.NewMemDatabase(), &MockIStore{}, mesh.NewMemMeshDB(lg.WithName("meshDB")), uint64(layersPerEpoch), &ValidatorMock{}, lg.WithName("atxDB1"))
+	activationDb := NewActivationDb(database.NewMemDatabase(), database.NewMemDatabase(), &MockIStore{}, mesh.NewMemMeshDB(lg.WithName("meshDB")), uint64(layersPerEpoch), &ValidatorMock{}, lg.WithName("atxDB1"))
 	b := NewBuilder(id, activationDb, net, ActiveSetProviderMock{}, layers, layersPerEpoch, nipstBuilder, nil, lg.WithName("atxBuilder"))
 	adb := b.db
 	prevAtx := types.AtxId{Hash: common.HexToHash("0x111")}
@@ -193,14 +193,14 @@ func TestBuilder_PublishActivationTx(t *testing.T) {
 	err = b.PublishActivationTx(2)
 	assert.Error(t, err)
 
-	activationDb2 := NewActivationDb(database.NewMemDatabase(), &MockIStore{}, mesh.NewMemMeshDB(log.NewDefault("")), uint64(layersPerEpoch), &ValidatorMock{}, lg.WithName("atxDB2"))
+	activationDb2 := NewActivationDb(database.NewMemDatabase(), database.NewMemDatabase(), &MockIStore{}, mesh.NewMemMeshDB(log.NewDefault("")), uint64(layersPerEpoch), &ValidatorMock{}, lg.WithName("atxDB2"))
 	b = NewBuilder(id, activationDb2, net, ActiveSetProviderMock{}, layers, layersPerEpoch, nipstBuilder, nil, lg.WithName("atxBuilder"))
 	b.nipstBuilder = &NipstErrBuilderMock{}
 	err = b.PublishActivationTx(0)
 	assert.Error(t, err)
 	assert.Equal(t, err.Error(), "cannot create nipst error")
 
-	activationDb3 := NewActivationDb(database.NewMemDatabase(), &MockIStore{}, mesh.NewMemMeshDB(log.NewDefault("")), uint64(layersPerEpoch), &ValidatorMock{}, lg.WithName("atxDB3"))
+	activationDb3 := NewActivationDb(database.NewMemDatabase(), database.NewMemDatabase(), &MockIStore{}, mesh.NewMemMeshDB(log.NewDefault("")), uint64(layersPerEpoch), &ValidatorMock{}, lg.WithName("atxDB3"))
 	bt := NewBuilder(id, activationDb3, net, ActiveSetProviderMock{}, layers, layersPerEpoch, &NipstBuilderMock{}, nil, lg.WithName("atxBuilder"))
 	err = bt.PublishActivationTx(2)
 	assert.EqualError(t, err, "cannot find pos atx: cannot find pos atx id: not found")
@@ -214,7 +214,7 @@ func TestBuilder_PublishActivationTxSerialize(t *testing.T) {
 	nipstBuilder := &NipstBuilderMock{}
 	layersPerEpoch := uint16(10)
 	lg := log.NewDefault(id.Key[:5])
-	activationDb := NewActivationDb(database.NewMemDatabase(), &MockIStore{}, mesh.NewMemMeshDB(log.NewDefault("")), uint64(layersPerEpoch), &ValidatorMock{}, lg.WithName("atxDB"))
+	activationDb := NewActivationDb(database.NewMemDatabase(), database.NewMemDatabase(), &MockIStore{}, mesh.NewMemMeshDB(log.NewDefault("")), uint64(layersPerEpoch), &ValidatorMock{}, lg.WithName("atxDB"))
 	b := NewBuilder(id, activationDb, net, ActiveSetProviderMock{}, layers, layersPerEpoch, nipstBuilder, nil, lg.WithName("atxBuilder"))
 	adb := b.db
 	prevAtx := types.AtxId{Hash: common.HexToHash("0x111")}

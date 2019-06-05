@@ -26,9 +26,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/version"
 	"io/ioutil"
 	"math/rand"
+	"net/http"
 	"os"
 	"os/signal"
 	"runtime"
+	"runtime/pprof"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/accounts"
@@ -42,6 +44,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
+
+import _ "net/http/pprof"
 
 const identityFile = "identity.ed"
 
@@ -265,7 +269,7 @@ func (mip *mockIdProvider) GetIdentity(edId string) (types.NodeId, error) {
 	return types.NodeId{Key: edId, VRFPublicKey: []byte{}}, nil
 }
 
-func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service, dbStorepath string, sgn hare.Signer, isFixedOracle bool, rolacle hare.Rolacle, layerSize uint32, postClient nipst.PostProverClient, poetClient nipst.PoetProvingServiceClient, atxdbstore database.DB, vrfSigner *BLS381.BlsSigner, commitmentConfig nipst.PostParams, layersPerEpoch uint32) error {
+func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service, dbStorepath string, sgn hare.Signer, isFixedOracle bool, rolacle hare.Rolacle, layerSize uint32, postClient nipst.PostProverClient, poetClient nipst.PoetProvingServiceClient, vrfSigner *BLS381.BlsSigner, commitmentConfig nipst.PostParams, layersPerEpoch uint32) error {
 
 	app.instanceName = nodeID.Key
 	//todo: should we add all components to a single struct?
@@ -295,7 +299,16 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	}
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
 	clock := timesync.NewTicker(timesync.RealClock{}, ld, gTime)
-	mdb := mesh.NewPersistentMeshDB(dbStorepath, lg.WithName("meshdb"))
+
+	atxdbstore, err := database.NewLDBDatabase(dbStorepath+"atx", 0, 0)
+	if err != nil {
+		return err
+	}
+
+	nipstStore, err := database.NewLDBDatabase(dbStorepath+"nipst", 0, 0)
+	if err != nil {
+		return err
+	}
 
 	//todo: put in config
 	iddbstore, err := database.NewLDBDatabase(dbStorepath+"ids", 0, 0)
@@ -305,8 +318,8 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	idStore := activation.NewIdentityStore(iddbstore)
 	//todo: this is initialized twice, need to refactor
 	validator := nipst.NewValidator(commitmentConfig)
-	atxdb := activation.NewActivationDb(atxdbstore, idStore, mdb, uint64(app.Config.CONSENSUS.LayersPerEpoch), validator, lg.WithName("atxDb"))
-
+	mdb := mesh.NewPersistentMeshDB(dbStorepath, lg.WithName("meshdb"))
+	atxdb := activation.NewActivationDb(atxdbstore, nipstStore, idStore, mdb, uint64(app.Config.CONSENSUS.LayersPerEpoch), validator, lg.WithName("atxDb"))
 	beaconProvider := &oracle.EpochBeaconProvider{}
 	blockOracle := oracle.NewMinerBlockOracle(layerSize, uint16(layersPerEpoch), atxdb, beaconProvider, vrfSigner, nodeID, lg.WithName("blockOracle"))
 	blockValidator := oracle.NewBlockEligibilityValidator(int32(layerSize), uint16(layersPerEpoch), atxdb, beaconProvider, BLS381.Verify2, lg.WithName("blkElgValidator"))
@@ -434,6 +447,41 @@ func getEdIdentity() (*signing.EdSigner, error) {
 
 func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	log.Info("Starting Spacemesh")
+	if app.Config.MemProfile != "" {
+		log.Info("Starting mem profiling")
+		f, err := os.Create(app.Config.MemProfile)
+		if err != nil {
+			log.Error("could not create memory profile: ", err)
+		}
+		defer f.Close()
+		runtime.GC() // get up-to-date statistics
+		if err := pprof.WriteHeapProfile(f); err != nil {
+			log.Error("could not write memory profile: ", err)
+		}
+	}
+
+	if app.Config.CpuProfile != "" {
+		log.Info("Starting cpu profile")
+		f, err := os.Create(app.Config.CpuProfile)
+		if err != nil {
+			log.Error("could not create CPU profile: ", err)
+		}
+		defer f.Close()
+		if err := pprof.StartCPUProfile(f); err != nil {
+			log.Error("could not start CPU profile: ", err)
+		}
+		defer pprof.StopCPUProfile()
+	}
+
+	if app.Config.PprofHttpServer {
+		log.Info("Starting pprof server")
+		go func() {
+			err := http.ListenAndServe(":6060", nil)
+			if err != nil {
+				log.Error("cannot start http server", err)
+			}
+		}()
+	}
 
 	// start p2p services
 	log.Info("Initializing P2P services")
@@ -471,7 +519,6 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	apiConf := &app.Config.API
 
 	dbStorepath := app.Config.DataDir
-	atxdbstore, err := database.NewLDBDatabase(dbStorepath+"atx", 0, 0)
 	if err != nil {
 		log.Panic("error starting atx db: %v", err)
 	}
@@ -482,7 +529,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 		SpaceUnit:            1024,
 	}
 
-	err = app.initServices(nodeID, swarm, dbStorepath, app.edSgn, false, nil, uint32(app.Config.LayerAvgSize), nipst.NewPostClient(), poet, atxdbstore, vrfSigner, npstCfg, uint32(app.Config.CONSENSUS.LayersPerEpoch))
+	err = app.initServices(nodeID, swarm, dbStorepath, app.edSgn, false, nil, uint32(app.Config.LayerAvgSize), nipst.NewPostClient(), poet, vrfSigner, npstCfg, uint32(app.Config.CONSENSUS.LayersPerEpoch))
 	if err != nil {
 		log.Error("cannot start services %v", err.Error())
 		return

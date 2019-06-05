@@ -8,6 +8,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/crypto/sha3"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/rlp"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"math/big"
@@ -40,6 +41,7 @@ type AtxDB interface {
 	ProcessBlockATXs(block *types.Block)
 	ProcessAtx(atx *types.ActivationTx)
 	GetAtx(id types.AtxId) (*types.ActivationTx, error)
+	GetNipst(id types.AtxId) (*nipst.NIPST, error)
 }
 
 type Mesh struct {
@@ -329,7 +331,7 @@ func (m *Mesh) GetLatestView() []types.BlockID {
 }
 
 func (m *Mesh) AddBlock(blk *types.Block) error {
-	m.Debug("add block %d", blk.ID())
+	m.Info("add block %d", blk.ID())
 	m.AtxDB.ProcessBlockATXs(blk) // change this to return error if process failed
 	if err := m.MeshDB.AddBlock(blk); err != nil {
 		m.Error("failed to add block %v  %v", blk.ID(), err)
