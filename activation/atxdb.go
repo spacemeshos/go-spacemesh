@@ -47,7 +47,6 @@ func (db *ActivationDb) ProcessBlockATXs(blk *types.Block) {
 func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx) {
 	eatx, _ := db.GetAtx(atx.Id())
 	if eatx != nil {
-		atx.Id()
 		atx.Nipst = nil
 		return
 	}

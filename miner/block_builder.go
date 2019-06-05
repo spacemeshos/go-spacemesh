@@ -248,7 +248,6 @@ func (t *BlockBuilder) acceptBlockData() {
 				continue
 			}
 			if len(proofs) == 0 {
-				//t.Error("no PROOFFSSSS detected")
 				break
 			}
 			// TODO: include multiple proofs in each block and weigh blocks where applicable
