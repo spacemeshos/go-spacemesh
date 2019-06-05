@@ -1,7 +1,6 @@
 package sync
 
 import (
-	"fmt"
 	"github.com/google/uuid"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
@@ -9,6 +8,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -31,14 +31,20 @@ func (pm PeersMock) Close() {
 
 func ListenerFactory(serv service.Service, peers p2p.Peers, name string) *BlockListener {
 
-	nbl := NewBlockListener(serv, BlockValidatorMock{}, getMesh(memoryDB, "TestBlockListener_"+name), 1*time.Second, 2, log.New(name, "", ""))
-	nbl.Peers = peers //override peers with mock
+	tick := 200 * time.Millisecond
+	layout := "2006-01-02T15:04:05.000Z"
+	str := "2018-11-12T11:45:26.371Z"
+	start, _ := time.Parse(layout, str)
+	ts := timesync.NewTicker(MockTimer{}, tick, start)
+	tk := ts.Subscribe()
+	l := log.New(name, "", "")
+	sync := NewSync(serv, getMesh(memoryDB, name+"_"+time.Now().String()), BlockValidatorMock{}, TxValidatorMock{}, conf, tk, l)
+	sync.Peers = peers
+	nbl := NewBlockListener(serv, BlockValidatorMock{}, sync, 2, log.New(name, "", ""))
 	return nbl
 }
 
 func TestBlockListener(t *testing.T) {
-
-	fmt.Println("test sync start")
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
@@ -46,9 +52,16 @@ func TestBlockListener(t *testing.T) {
 	bl2 := ListenerFactory(n2, PeersMock{func() []p2p.Peer { return []p2p.Peer{n1.PublicKey()} }}, "2")
 	bl2.Start()
 
+	bl1.ProcessAtx(atx1)
+	bl1.ProcessAtx(atx2)
+	bl1.ProcessAtx(atx3)
+
 	block1 := types.NewExistingBlock(types.BlockID(123), 0, nil)
+	block1.BlockHeader.ATXID = atx1.Id()
 	block2 := types.NewExistingBlock(types.BlockID(321), 1, nil)
+	block1.BlockHeader.ATXID = atx2.Id()
 	block3 := types.NewExistingBlock(types.BlockID(222), 2, nil)
+	block1.BlockHeader.ATXID = atx3.Id()
 
 	block1.AddView(block2.ID())
 	block1.AddView(block3.ID())
@@ -57,22 +70,18 @@ func TestBlockListener(t *testing.T) {
 	bl1.AddBlock(block2)
 	bl1.AddBlock(block3)
 
-	bl2.FetchBlock(block1.Id)
-	timeout := time.After(30 * time.Second)
-loop:
-	for {
-		select {
-		// Got a timeout! fail with a timeout error
-		case <-timeout:
-			t.Error("timed out ")
-		default:
-			if b, err := bl2.GetBlock(block1.Id); err == nil {
-				t.Log("  ", b)
-				t.Log("done!")
-				break loop
-			}
-		}
+	_, err := bl2.fetchFullBlocks([]types.BlockID{block1.Id})
+	if err != nil {
+		t.Error(err)
 	}
+
+	b, err := bl2.GetBlock(block1.Id)
+	if err != nil {
+		t.Error(err)
+	}
+
+	t.Log("  ", b)
+	t.Log("done!")
 }
 
 func TestBlockListener2(t *testing.T) {
@@ -82,21 +91,41 @@ func TestBlockListener2(t *testing.T) {
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
 
-	bl1 := ListenerFactory(n1, PeersMock{func() []p2p.Peer { return []p2p.Peer{n2.PublicKey()} }}, "3")
-	bl2 := ListenerFactory(n2, PeersMock{func() []p2p.Peer { return []p2p.Peer{n1.PublicKey()} }}, "4")
+	bl1 := ListenerFactory(n1, PeersMock{func() []p2p.Peer { return []p2p.Peer{n2.PublicKey()} }}, "TestBlockListener1")
+	bl2 := ListenerFactory(n2, PeersMock{func() []p2p.Peer { return []p2p.Peer{n1.PublicKey()} }}, "TestBlockListener2")
 
 	bl2.Start()
 
-	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 0, []byte("data data data"))
-	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 0, []byte("data data data"))
-	block3 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 0, []byte("data data data"))
-	block4 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 0, []byte("data data data"))
-	block5 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 0, []byte("data data data"))
-	block6 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 0, []byte("data data data"))
-	block7 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 0, []byte("data data data"))
-	block8 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 0, []byte("data data data"))
-	block9 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 0, []byte("data data data"))
-	block10 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 0, []byte("data data data"))
+	bl1.ProcessAtx(atx1)
+	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block1.ATXID = atx1.Id()
+
+	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block2.ATXID = atx1.Id()
+
+	block3 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block3.ATXID = atx1.Id()
+
+	block4 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block4.ATXID = atx1.Id()
+
+	block5 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block5.ATXID = atx1.Id()
+
+	block6 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block6.ATXID = atx1.Id()
+
+	block7 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block7.ATXID = atx1.Id()
+
+	block8 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block8.ATXID = atx1.Id()
+
+	block9 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block9.ATXID = atx1.Id()
+
+	block10 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block10.ATXID = atx1.Id()
 
 	block2.AddView(block1.ID())
 	block3.AddView(block2.ID())
@@ -122,23 +151,18 @@ func TestBlockListener2(t *testing.T) {
 	bl1.AddBlock(block9)
 	bl1.AddBlock(block10)
 
-	bl2.FetchBlock(block10.Id)
-
-	timeout := time.After(10 * time.Second)
-	for {
-		select {
-		// Got a timeout! fail with a timeout error
-		case <-timeout:
-			t.Error("timed out ")
-			return
-		default:
-			if b, err := bl2.GetBlock(block1.Id); err == nil {
-				t.Log("  ", b)
-				t.Log("done!")
-				return
-			}
-		}
+	_, err := bl2.fetchFullBlocks([]types.BlockID{block10.Id})
+	if err != nil {
+		t.Error(err)
 	}
+
+	b, err := bl2.GetBlock(block10.Id)
+	if err != nil {
+		t.Error(err)
+	}
+
+	t.Log("  ", b)
+	t.Log("done!")
 }
 
 func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
@@ -155,7 +179,7 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 	blk := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data1"))
 	tx := types.NewSerializableTransaction(0, address.BytesToAddress([]byte{0x01}), address.BytesToAddress([]byte{0x02}), big.NewInt(10), big.NewInt(10), 10)
 	blk.AddTransaction(tx)
-	blk.AddAtx(types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")}, 1, types.AtxId{}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{}), true))
+	blk.AddAtx(types.NewActivationTx(types.NodeId{"whatwhatwhatwhat", []byte("bbb")}, 1, types.AtxId{}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{}), false))
 
 	data, err := types.InterfaceToBytes(*blk)
 	require.NoError(t, err)
@@ -167,6 +191,7 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 	err = n2.Broadcast(NewBlockProtocol, data)
 	assert.NoError(t, err)
 
+	time.Sleep(3 * time.Second)
 	timeout := time.After(5 * time.Second)
 	for {
 		select {

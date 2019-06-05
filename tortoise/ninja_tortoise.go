@@ -1,6 +1,7 @@
 package tortoise
 
 import (
+	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -78,6 +79,7 @@ type ninjaTortoise struct {
 	tCorrect           map[types.BlockID]map[types.BlockID]vec           //correction vectors
 	tExplicit          map[types.BlockID]map[types.LayerID]votingPattern //explict votes from block to layer pattern
 	tGood              map[types.LayerID]votingPattern                   //good pattern for layer i
+	tGoodLock          sync.RWMutex                                      // sync access to tGood map
 	tSupport           map[votingPattern]int                             //for pattern p the number of blocks that support p
 	tComplete          map[votingPattern]struct{}                        //complete voting patterns
 	tEffectiveToBlocks map[votingPattern][]types.BlockID                 //inverse blocks effective pattern
@@ -95,6 +97,7 @@ func NewNinjaTortoise(layerSize int, blocks BlockCache, log log.Log) *ninjaTorto
 		pBase:              votingPattern{},
 		patterns:           map[types.LayerID][]votingPattern{},
 		tGood:              map[types.LayerID]votingPattern{},
+		tGoodLock:          sync.RWMutex{},
 		tEffective:         map[types.BlockID]votingPattern{},
 		tCorrect:           map[types.BlockID]map[types.BlockID]vec{},
 		tExplicit:          map[types.BlockID]map[types.LayerID]votingPattern{},
@@ -253,7 +256,9 @@ func (ni *ninjaTortoise) updateCorrectionVectors(p votingPattern, bottomOfWindow
 func (ni *ninjaTortoise) updatePatternTally(newMinGood votingPattern, botomOfWindow types.LayerID, correctionMap map[types.BlockID]vec, effCountMap map[types.LayerID]int) {
 	ni.Debug("update tally pbase id:%d layer:%d p id:%d layer:%d", ni.pBase.id, ni.pBase.Layer(), newMinGood.id, newMinGood.Layer())
 	for idx, effc := range effCountMap {
+		ni.tGoodLock.RLock()
 		g := ni.tGood[idx]
+		ni.tGoodLock.RUnlock()
 		for b, v := range ni.tVote[g] {
 			tally := ni.tTally[newMinGood][b]
 			tally = tally.Add(v.Multiply(effc))
@@ -274,7 +279,10 @@ func (ni *ninjaTortoise) getCorrEffCounter() (map[types.BlockID]vec, map[types.L
 	foo := func(b *types.BlockHeader) {
 		if b.Layer() > ni.pBase.Layer() { //because we already copied pbase's votes
 			if eff, found := ni.tEffective[b.ID()]; found {
-				if p, found := ni.tGood[eff.Layer()]; found && eff == p {
+				ni.tGoodLock.RLock()
+				p, found := ni.tGood[eff.Layer()]
+				ni.tGoodLock.RUnlock()
+				if found && eff == p {
 					effCountMap[eff.Layer()] = effCountMap[eff.Layer()] + 1
 					for k, v := range ni.tCorrect[b.ID()] {
 						correctionMap[k] = correctionMap[k].Add(v)
@@ -298,6 +306,7 @@ func (ni *ninjaTortoise) findMinimalNewlyGoodLayer(lyr *types.Layer) types.Layer
 		j = Max(ni.pBase.Layer()+1, lyr.Index()-Window+1)
 	}
 
+	ni.tGoodLock.Lock()
 	for ; j < lyr.Index(); j++ {
 		// update block votes on all patterns in blocks view
 		sUpdated := ni.updateBlocksSupport(lyr.Blocks(), j)
@@ -318,6 +327,7 @@ func (ni *ninjaTortoise) findMinimalNewlyGoodLayer(lyr *types.Layer) types.Layer
 			}
 		}
 	}
+	ni.tGoodLock.Unlock()
 	ni.Debug("found minimal good layer %d", minGood)
 	return minGood
 }
@@ -398,7 +408,9 @@ func (ni *ninjaTortoise) handleGenesis(genesis *types.Layer) {
 	}
 	vp := votingPattern{id: getId(blkIds), LayerID: Genesis}
 	ni.pBase = vp
+	ni.tGoodLock.Lock()
 	ni.tGood[Genesis] = vp
+	ni.tGoodLock.Unlock()
 	ni.tExplicit[genesis.Blocks()[0].ID()] = make(map[types.LayerID]votingPattern, K*ni.avgLayerSize)
 }
 
@@ -458,7 +470,10 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) { //i most rec
 	//from minimal newly good pattern to current layer
 	//update pattern tally for all good layers
 	for j := l; j > 0 && j < newlyr.Index(); j++ {
-		if p, gfound := ni.tGood[j]; gfound {
+		ni.tGoodLock.RLock()
+		p, gfound := ni.tGood[j]
+		ni.tGoodLock.RUnlock()
+		if gfound {
 			//init p's tally to pBase tally
 			initTallyToBase(ni.tTally, ni.pBase, p)
 
@@ -536,4 +551,29 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) { //i most rec
 	}
 	ni.Info("finished layer %d pbase is %d", newlyr.Index(), ni.pBase.Layer())
 	return
+}
+
+func (ni *ninjaTortoise) GetGoodPattern(layer types.LayerID) (uint32, error) {
+	if layer == 0 || layer == 1 {
+		v, err := ni.LayerBlockIds(layer)
+		if err != nil {
+			ni.Error("Could not get layer block ids for layer %v err=%v", layer, err)
+			return 0, err
+		}
+		return uint32(getId(v)), nil
+	}
+
+	if layer >= ni.pBase.LayerID {
+		return 0, errors.New("pbase is lower than provided layer")
+	}
+
+	ni.tGoodLock.RLock()
+	val, ok := ni.tGood[layer]
+	ni.tGoodLock.RUnlock()
+
+	if !ok {
+		return 0, errors.New("no good layer")
+	}
+
+	return uint32(val.id), nil
 }

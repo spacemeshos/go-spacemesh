@@ -514,10 +514,20 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 		return err
 	}
 
-	s.lNode.Debug("Handle %v message from <<  %v", pm.Metadata.NextProtocol, msg.Conn.RemotePublicKey().String())
-
 	// Add metadata collected from p2p message (todo: maybe pass sender and protocol inside metadata)
 	p2pmeta := service.P2PMetadata{msg.Conn.RemoteAddr()}
+
+	// TODO: get rid of mutexes. (Blocker: registering protocols after `Start`. currently only known place is Test_Gossiping
+	s.protocolHandlerMutex.Lock()
+	_, ok := s.gossipProtocolHandlers[pm.Metadata.NextProtocol]
+	s.protocolHandlerMutex.Unlock()
+
+	s.lNode.Info("Handle %v message from <<  %v", pm.Metadata.NextProtocol, msg.Conn.RemotePublicKey().String())
+
+	if ok {
+		// pass to gossip relay chan
+		return s.gossip.Relay(msg.Conn.RemotePublicKey(), pm.Metadata.NextProtocol, data)
+	}
 
 	// route authenticated message to the registered protocol
 	// messages handled here are always processed by direct based protocols, only the gossip protocol calls ProcessGossipProtocolMessage

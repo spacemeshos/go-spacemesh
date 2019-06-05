@@ -1,8 +1,0 @@
-syntax = "proto3";
-
-package pb;
-option go_package = "pb";
-
-message Gossip { // metadata gossip headers
-    bytes uid = 1;
-}

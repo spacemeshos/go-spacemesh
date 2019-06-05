@@ -37,6 +37,10 @@ type AtxDbMock struct {
 }
 
 func (t *AtxDbMock) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
+	if id == *types.EmptyAtxId {
+		return nil, fmt.Errorf("trying to fetch empty atx id")
+	}
+
 	if atx, ok := t.db[id]; ok {
 		return atx, nil
 	}
@@ -56,6 +60,10 @@ func (t *AtxDbMock) ProcessBlockATXs(block *types.Block) {
 	for _, atx := range block.ATXs {
 		t.AddAtx(atx.Id(), atx)
 	}
+}
+
+func (AtxDbMock) ProcessAtx(atx *types.ActivationTx) {
+
 }
 
 func getMesh(id string) *Mesh {

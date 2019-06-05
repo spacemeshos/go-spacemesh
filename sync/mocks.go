@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"github.com/spacemeshos/go-spacemesh/common"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/nipst"
@@ -93,4 +94,21 @@ func (t *AtxDbMock) ProcessBlockATXs(block *types.Block) {
 	for _, atx := range block.ATXs {
 		t.AddAtx(atx.Id(), atx)
 	}
+}
+
+type MockIStore struct {
+}
+
+func (*MockIStore) StoreNodeIdentity(id types.NodeId) error {
+	return nil
+}
+
+func (*MockIStore) GetIdentity(id string) (types.NodeId, error) {
+	return types.NodeId{}, nil
+}
+
+type ValidatorMock struct{}
+
+func (*ValidatorMock) Validate(nipst *nipst.NIPST, expectedChallenge common.Hash) error {
+	return nil
 }

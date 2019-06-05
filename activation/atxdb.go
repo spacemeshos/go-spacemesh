@@ -102,12 +102,12 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 		if blk.LayerIndex > lastLayerOfLastEpoch {
 			return nil
 		}
-		for _, id := range blk.ATXs {
-			if _, found := set[id.Id()]; found {
+		for _, id := range blk.ATxIds {
+			if _, found := set[id]; found {
 				continue
 			}
-			set[id.Id()] = struct{}{}
-			atx, err := db.GetAtx(id.Id())
+			set[id] = struct{}{}
+			atx, err := db.GetAtx(id)
 			if err == nil && atx.Valid {
 				counter++
 				db.log.Info("atx found traversing %v in block in layer %v", atx.ShortId(), blk.LayerIndex)
@@ -449,6 +449,10 @@ func (db *ActivationDb) getAtxUnlocked(id types.AtxId) (*types.ActivationTx, err
 // GetAtx returns the atx by the given id. this function is thread safe and will return error if the id is not found in the
 // atx db
 func (db *ActivationDb) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
+	if id == *types.EmptyAtxId {
+		return nil, errors.New("trying to fetch empty atx id")
+	}
+
 	if atx, gotIt := db.atxCache.Get(id); gotIt {
 		return atx, nil
 	}

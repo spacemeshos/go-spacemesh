@@ -4,9 +4,13 @@ import (
 	"errors"
 	"fmt"
 	"github.com/google/uuid"
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/address"
+	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/rand"
@@ -17,12 +21,13 @@ import (
 	"math/big"
 	"os"
 	"strconv"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 )
 
-var conf = Configuration{2 * time.Second, 1, 300, 100 * time.Millisecond}
+var conf = Configuration{1, 300, 150 * time.Millisecond}
 
 const (
 	levelDB  = "LevelDB"
@@ -40,6 +45,65 @@ func (MockTimer) Now() time.Time {
 	return start
 }
 
+var (
+	atx1 = types.NewActivationTx(
+		types.NodeId{"whatwhatwhatwhat", []byte("aaa")},
+		1,
+		types.AtxId{},
+		5,
+		1,
+		types.AtxId{},
+		5,
+		[]types.BlockID{1, 2, 3},
+		nipst.NewNIPSTWithChallenge(&common.Hash{}),
+		false)
+
+	atx2 = types.NewActivationTx(
+		types.NodeId{"batbatbatbatbat", []byte("bbb")},
+		1,
+		types.AtxId{},
+		5,
+		1,
+		types.AtxId{},
+		5,
+		[]types.BlockID{1, 2, 3},
+		nipst.NewNIPSTWithChallenge(&common.Hash{}),
+		false)
+
+	atx3 = types.NewActivationTx(
+		types.NodeId{"121234123434567", []byte("ccc")},
+		1,
+		types.AtxId{},
+		5,
+		1,
+		types.AtxId{},
+		5,
+		[]types.BlockID{1, 2, 3},
+		nipst.NewNIPSTWithChallenge(&common.Hash{}),
+		false)
+
+	atx4 = types.NewActivationTx(
+		types.NodeId{"3123423123445", []byte("ddd")},
+		1,
+		types.AtxId{},
+		5,
+		1,
+		types.AtxId{},
+		5,
+		[]types.BlockID{1, 2, 3},
+		nipst.NewNIPSTWithChallenge(&common.Hash{}),
+		false)
+
+	tx1 = tx()
+	tx2 = tx()
+	tx3 = tx()
+	tx4 = tx()
+	tx5 = tx()
+	tx6 = tx()
+	tx7 = tx()
+	tx8 = tx()
+)
+
 func SyncMockFactory(number int, conf Configuration, name string, dbType string) (syncs []*Syncer, p2ps []*service.Node) {
 	nodes := make([]*Syncer, 0, number)
 	p2ps = make([]*service.Node, 0, number)
@@ -54,7 +118,7 @@ func SyncMockFactory(number int, conf Configuration, name string, dbType string)
 		net := sim.NewNode()
 		name := fmt.Sprintf(name+"_%d", i)
 		l := log.New(name, "", "")
-		sync := NewSync(net, getMesh(dbType, name+"_"+time.Now().String()), BlockValidatorMock{}, TxValidatorMock{}, conf, tk, l)
+		sync := NewSync(net, getMesh(dbType, Path+name+"_"+time.Now().String()), BlockValidatorMock{}, TxValidatorMock{}, conf, tk, l)
 		ts.Start()
 		nodes = append(nodes, sync)
 		p2ps = append(p2ps, net)
@@ -81,6 +145,11 @@ var rewardConf = mesh.Config{
 }
 
 func getMeshWithLevelDB(id string) *mesh.Mesh {
+	lg := log.New(id, "", "")
+	//mshdb := mesh.NewPersistentMeshDB(id, lg)
+	//atxdbStore, _ := database.NewLDBDatabase(id+"atx", 0, 0)
+	//atxdb := activation.NewActivationDb(atxdbStore, &MockIStore{}, mshdb, uint64(10), &ValidatorMock{}, lg.WithName("atxDB"))
+	//return mesh.NewMesh(mshdb, atxdb, rewardConf, &MeshValidatorMock{}, &stateMock{}, lg)
 	return mesh.NewPersistentMesh(fmt.Sprintf(Path+"%v/", id), rewardConf, &MeshValidatorMock{}, &stateMock{}, NewAtxDbMock(), log.New(id, "", ""))
 }
 
@@ -89,6 +158,10 @@ func persistenceTeardown() {
 }
 
 func getMeshWithMemoryDB(id string) *mesh.Mesh {
+	lg := log.New(id, "", "")
+	//mshdb := mesh.NewMemMeshDB(lg)
+	//atxdb := activation.NewActivationDb(database.NewMemDatabase(), &MockIStore{}, mshdb, uint64(10), &ValidatorMock{}, lg.WithName("atxDB"))
+	//return mesh.NewMemMesh(rewardConf, &MeshValidatorMock{}, &stateMock{}, atxdb, lg)
 	return mesh.NewMemMesh(rewardConf, &MeshValidatorMock{}, &stateMock{}, NewAtxDbMock(), log.New(id, "", ""))
 }
 
@@ -140,16 +213,17 @@ func TestSyncProtocol_BlockRequest(t *testing.T) {
 	defer syncObj.Close()
 	lid := types.LayerID(1)
 	block := types.NewExistingBlock(types.BlockID(uuid.New().ID()), lid, []byte("data data data"))
+	block.AddTransaction(tx1)
+	block.AddAtx(atx1)
 	syncObj.AddBlock(block)
-	p := nodes[0].Node.PublicKey()
-	ch, foo := blockRequest()
-	err := syncObj2.SendRequest(BLOCK, block.ID().ToBytes(), p, foo)
+	syncObj2.Peers = getPeersMock([]p2p.Peer{nodes[0].Node.PublicKey()})
+
+	output := syncObj2.fetchWithFactory(BlockReqFactory([]types.BlockID{block.ID()}), 1)
 	timeout := time.NewTimer(2 * time.Second)
 
 	select {
-	case a := <-ch:
-		assert.NoError(t, err, "Should not return error")
-		assert.Equal(t, a.ID(), block.ID(), "wrong block")
+	case a := <-output:
+		assert.Equal(t, a.(*types.MiniBlock).ID(), block.ID(), "wrong block")
 	case <-timeout.C:
 		assert.Fail(t, "no message received on channel")
 	}
@@ -163,13 +237,14 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 	syncObj2 := syncs[1]
 	defer syncObj2.Close()
 	lid := types.LayerID(1)
-	syncObj1.AddBlock(types.NewExistingBlock(types.BlockID(123), lid, nil))
+	block := types.NewExistingBlock(types.BlockID(123), lid, nil)
+	block.AddTransaction(tx1)
+	block.AddAtx(atx1)
+	syncObj1.AddBlock(block)
 	//syncObj1.ValidateLayer(l) //this is to simulate the approval of the tortoise...
 	timeout := time.NewTimer(2 * time.Second)
-	pm1 := getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
-	syncObj2.Peers = pm1
 
-	wrk, output := NewPeerWorker(syncObj2, HashReqFactory(lid))
+	wrk, output := NewPeersWorker(syncObj2, []p2p.Peer{nodes[0].PublicKey()}, &sync.Once{}, HashReqFactory(lid))
 	go wrk.Work()
 
 	select {
@@ -189,22 +264,31 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 	defer syncObj1.Close()
 	lid := types.LayerID(1)
 	layer := types.NewExistingLayer(lid, make([]*types.Block, 0, 10))
-	layer.AddBlock(types.NewExistingBlock(types.BlockID(123), lid, nil))
-	layer.AddBlock(types.NewExistingBlock(types.BlockID(132), lid, nil))
-	layer.AddBlock(types.NewExistingBlock(types.BlockID(111), lid, nil))
-	layer.AddBlock(types.NewExistingBlock(types.BlockID(222), lid, nil))
+	block1 := types.NewExistingBlock(types.BlockID(123), lid, nil)
+	block1.AddTransaction(tx1)
+	block1.AddAtx(atx1)
+	layer.AddBlock(block1)
 
-	syncObj1.AddBlock(types.NewExistingBlock(types.BlockID(123), lid, nil))
-	syncObj1.AddBlock(types.NewExistingBlock(types.BlockID(132), lid, nil))
-	syncObj1.AddBlock(types.NewExistingBlock(types.BlockID(111), lid, nil))
-	syncObj1.AddBlock(types.NewExistingBlock(types.BlockID(222), lid, nil))
+	block2 := types.NewExistingBlock(types.BlockID(132), lid, nil)
+	block2.AddTransaction(tx2)
+	block2.AddAtx(atx2)
+	layer.AddBlock(block2)
+
+	block3 := types.NewExistingBlock(types.BlockID(153), lid, nil)
+	block3.AddTransaction(tx3)
+	block3.AddAtx(atx3)
+	layer.AddBlock(block3)
+
+	block4 := types.NewExistingBlock(types.BlockID(222), lid, nil)
+	block4.AddTransaction(tx4)
+	block4.AddAtx(atx4)
+	layer.AddBlock(block4)
+
+	syncObj1.AddLayer(layer)
 
 	timeout := time.NewTimer(2 * time.Second)
 
-	pm1 := getPeersMock([]p2p.Peer{nodes[1].Node.PublicKey()})
-	syncObj.Peers = pm1
-
-	wrk, output := NewPeerWorker(syncObj, LayerIdsReqFactory(lid))
+	wrk, output := NewPeersWorker(syncObj, []p2p.Peer{nodes[1].Node.PublicKey()}, &sync.Once{}, LayerIdsReqFactory(lid))
 	go wrk.Work()
 
 	select {
@@ -229,96 +313,6 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 
 }
 
-func TestSyncProtocol_Requests(t *testing.T) {
-	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_FetchBlocks_", memoryDB)
-	syncObj1 := syncs[0]
-	defer syncObj1.Close()
-	syncObj2 := syncs[1]
-	defer syncObj2.Close()
-	n1 := nodes[0]
-	syncObj1.Log.Info("started fetch_blocks")
-
-	block1 := types.NewExistingBlock(types.BlockID(123), 0, nil)
-	block2 := types.NewExistingBlock(types.BlockID(321), 1, nil)
-	block3 := types.NewExistingBlock(types.BlockID(222), 2, nil)
-
-	syncObj1.AddBlock(block1)
-	syncObj1.AddBlock(block2)
-	syncObj1.AddBlock(block3)
-
-	pm1 := getPeersMock([]p2p.Peer{nodes[0].Node.PublicKey()})
-	syncObj2.Peers = pm1
-
-	lid := types.LayerID(0)
-
-	wrk, ch := NewPeerWorker(syncObj2, HashReqFactory(lid))
-	go wrk.Work()
-
-	timeout := time.NewTimer(3 * time.Second)
-	select {
-
-	case <-timeout.C:
-		t.Error("timed out ")
-	case hash := <-ch:
-		assert.Equal(t, "some hash representing the layer", string(hash.(*peerHashPair).hash), "wrong block")
-	}
-
-	ch2, foo := blockRequest()
-	err2 := syncObj2.SendRequest(BLOCK, block1.ID().ToBytes(), n1.PublicKey(), foo)
-
-	assert.NoError(t, err2, "Should not return error")
-	timeout = time.NewTimer(3 * time.Second)
-	select {
-	case <-timeout.C:
-		t.Error("timed out ")
-	case msg2 := <-ch2:
-		assert.Equal(t, msg2.ID(), block1.ID(), "wrong block")
-	}
-
-	lid1 := types.LayerID(1)
-	wrk, ch = NewPeerWorker(syncObj2, HashReqFactory(lid1))
-	go wrk.Work()
-	select {
-	case <-timeout.C:
-		t.Error("timed out ")
-	case hash := <-ch:
-		assert.Equal(t, "some hash representing the layer", string(hash.(*peerHashPair).hash), "wrong block")
-	}
-
-	ch2, foo = blockRequest()
-	err2 = syncObj2.SendRequest(BLOCK, block2.ID().ToBytes(), n1.PublicKey(), foo)
-
-	assert.NoError(t, err2, "Should not return error")
-	timeout = time.NewTimer(3 * time.Second)
-	select {
-	case <-timeout.C:
-		t.Error("timed out ")
-	case msg2 := <-ch2:
-		assert.Equal(t, msg2.ID(), block2.ID(), "wrong block")
-	}
-
-	lid2 := types.LayerID(2)
-	wrk, ch3 := NewPeerWorker(syncObj2, HashReqFactory(lid2))
-	go wrk.Work()
-	select {
-	case <-timeout.C:
-		t.Error("timed out ")
-	case hash := <-ch3:
-		assert.Equal(t, "some hash representing the layer", string(hash.(*peerHashPair).hash), "wrong block")
-	}
-
-	ch4, foo := blockRequest()
-	err2 = syncObj2.SendRequest(BLOCK, block3.ID().ToBytes(), n1.PublicKey(), foo)
-	assert.NoError(t, err2, "Should not return error")
-	timeout = time.NewTimer(5 * time.Second)
-	select {
-	case <-timeout.C:
-		t.Error("timed out ")
-	case bk := <-ch4:
-		assert.Equal(t, bk.ID(), block3.ID(), "wrong block")
-	}
-}
-
 func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_FetchBlocks_", memoryDB)
 	syncObj1 := syncs[0]
@@ -329,19 +323,17 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	syncObj1.Log.Info("started fetch_blocks")
 	syncObj2.Peers = pm1 //override peers with
 
+	syncObj1.ProcessAtx(atx3)
 	block1 := types.NewExistingBlock(types.BlockID(123), 0, nil)
+	block1.ATXID = atx3.Id()
 	block2 := types.NewExistingBlock(types.BlockID(321), 1, nil)
+	block2.ATXID = atx3.Id()
 	block3 := types.NewExistingBlock(types.BlockID(222), 2, nil)
+	block3.ATXID = atx3.Id()
 
-	tx1 := tx()
-	tx2 := tx()
-	tx3 := tx()
-	tx4 := tx()
-	tx5 := tx()
-	tx6 := tx()
-	tx7 := tx()
-	tx8 := tx()
-
+	block1.AddAtx(atx1)
+	block2.AddAtx(atx2)
+	block3.AddAtx(atx3)
 	addTransactionToBlock(block1, []*types.SerializableTransaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8})
 	addTransactionToBlock(block2, []*types.SerializableTransaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8})
 	addTransactionToBlock(block3, []*types.SerializableTransaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8})
@@ -350,35 +342,21 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	syncObj1.AddBlock(block2)
 	syncObj1.AddBlock(block3)
 
-	res := make(chan types.BlockID, 3)
-	res <- block1.ID()
-	res <- block2.ID()
-	res <- block3.ID()
-	close(res)
-	totalMisses := 0
-	output := FetchBlocks(syncObj2, res)
+	output := syncObj2.fetchWithFactory(BlockReqFactory([]types.BlockID{block1.ID(), block2.ID(), block3.ID()}), 1)
 	for out := range output {
 		mb := out.(*types.MiniBlock)
-		foundTxs, missing := syncObj2.GetTransactions(mb.TxIds)
-		totalMisses += len(missing)
-
-		fetchedTxs := syncObj2.fetchTxs(missing)
-
-		txs := make([]*types.SerializableTransaction, 0, len(mb.TxIds))
-
-		for _, t := range mb.TxIds {
-			if tx, ok := foundTxs[t]; ok {
-				txs = append(txs, tx)
-			} else {
-				txs = append(txs, fetchedTxs[t])
-			}
+		txs, err := syncObj2.Txs(mb)
+		if err != nil {
+			t.Error("could not fetch all txs", err)
 		}
-
-		block := &types.Block{BlockHeader: mb.BlockHeader, Txs: txs, ATXs: mb.ATXs}
+		atxs, _, err := syncObj2.ATXs(mb)
+		if err != nil {
+			t.Error("could not fetch all atxs", err)
+		}
+		block := &types.Block{BlockHeader: mb.BlockHeader, Txs: txs, ATXs: atxs}
 		syncObj2.Debug("add block to layer %v", block)
 		syncObj2.AddBlock(block)
 	}
-	assert.True(t, totalMisses == 8, "to many misses ")
 }
 
 func TestSyncProtocol_SyncTwoNodes(t *testing.T) {
@@ -400,6 +378,14 @@ func TestSyncProtocol_SyncTwoNodes(t *testing.T) {
 	block8 := types.NewExistingBlock(types.BlockID(888), 3, nil)
 	block9 := types.NewExistingBlock(types.BlockID(999), 4, nil)
 	block10 := types.NewExistingBlock(types.BlockID(101), 5, nil)
+
+	addTransactionToBlock(block3, []*types.SerializableTransaction{tx1, tx2, tx3})
+	addTransactionToBlock(block4, []*types.SerializableTransaction{tx1, tx2, tx3})
+	addTransactionToBlock(block5, []*types.SerializableTransaction{tx4, tx5, tx6})
+	addTransactionToBlock(block6, []*types.SerializableTransaction{tx4, tx5, tx6})
+	addTransactionToBlock(block7, []*types.SerializableTransaction{tx7, tx8})
+	addTransactionToBlock(block8, []*types.SerializableTransaction{tx7, tx8})
+
 	syncObj1.AddBlock(block3)
 	syncObj1.AddBlock(block4)
 	syncObj1.AddBlock(block5)
@@ -408,6 +394,7 @@ func TestSyncProtocol_SyncTwoNodes(t *testing.T) {
 	syncObj1.AddBlock(block8)
 	syncObj1.AddBlock(block9)
 	syncObj1.AddBlock(block10)
+
 	timeout := time.After(12 * time.Second)
 	syncObj2.SetLatestLayer(6)
 	syncObj2.Start()
@@ -465,6 +452,13 @@ func syncTest(dpType string, t *testing.T) {
 	block8 := types.NewExistingBlock(types.BlockID(888), 3, nil)
 	block9 := types.NewExistingBlock(types.BlockID(999), 4, nil)
 	block10 := types.NewExistingBlock(types.BlockID(101), 4, nil)
+
+	addTransactionToBlock(block3, []*types.SerializableTransaction{tx1, tx2, tx3})
+	addTransactionToBlock(block4, []*types.SerializableTransaction{tx1, tx2, tx3})
+	addTransactionToBlock(block5, []*types.SerializableTransaction{tx4, tx5, tx6})
+	addTransactionToBlock(block6, []*types.SerializableTransaction{tx4, tx5, tx6})
+	addTransactionToBlock(block7, []*types.SerializableTransaction{tx7, tx8})
+	addTransactionToBlock(block8, []*types.SerializableTransaction{tx7, tx8})
 
 	syncObj1.ValidateLayer(mesh.GenesisLayer())
 	syncObj2.ValidateLayer(mesh.GenesisLayer())
@@ -536,7 +530,7 @@ func Test_TwoNodes_SyncIntegrationSuite(t *testing.T) {
 	sis := &syncIntegrationTwoNodes{}
 	sis.BootstrappedNodeCount = 2
 	sis.BootstrapNodesCount = 1
-	sis.NeighborsCount = 2
+	sis.NeighborsCount = 1
 	sis.name = t.Name()
 	i := uint32(1)
 	tick := 200 * time.Millisecond
@@ -568,6 +562,13 @@ func (sis *syncIntegrationTwoNodes) TestSyncProtocol_TwoNodes() {
 	block8 := types.NewExistingBlock(types.BlockID(888), 4, nil)
 	block9 := types.NewExistingBlock(types.BlockID(999), 5, nil)
 	block10 := types.NewExistingBlock(types.BlockID(101), 5, nil)
+
+	addTransactionToBlock(block3, []*types.SerializableTransaction{tx1, tx2, tx3})
+	addTransactionToBlock(block4, []*types.SerializableTransaction{tx1, tx2, tx3})
+	addTransactionToBlock(block5, []*types.SerializableTransaction{tx4, tx5, tx6})
+	addTransactionToBlock(block6, []*types.SerializableTransaction{tx4, tx5, tx6})
+	addTransactionToBlock(block7, []*types.SerializableTransaction{tx7, tx8})
+	addTransactionToBlock(block8, []*types.SerializableTransaction{tx7, tx8})
 
 	syncObj0 := sis.syncers[0]
 	defer syncObj0.Close()
@@ -616,9 +617,9 @@ func Test_Multiple_SyncIntegrationSuite(t *testing.T) {
 		t.Skip()
 	}
 	sis := &syncIntegrationMultipleNodes{}
-	sis.BootstrappedNodeCount = 3
-	sis.BootstrapNodesCount = 2
-	sis.NeighborsCount = 3
+	sis.BootstrappedNodeCount = 4
+	sis.BootstrapNodesCount = 1
+	sis.NeighborsCount = 2
 	sis.name = t.Name()
 	i := uint32(1)
 	tick := 2 * time.Second
@@ -659,6 +660,13 @@ func (sis *syncIntegrationMultipleNodes) TestSyncProtocol_MultipleNodes() {
 	defer syncObj4.Close()
 	syncObj5 := sis.syncers[4]
 	defer syncObj5.Close()
+
+	addTransactionToBlock(block3, []*types.SerializableTransaction{tx1, tx2, tx3})
+	addTransactionToBlock(block4, []*types.SerializableTransaction{tx1, tx2, tx3})
+	addTransactionToBlock(block5, []*types.SerializableTransaction{tx4, tx5, tx6})
+	addTransactionToBlock(block6, []*types.SerializableTransaction{tx4, tx5, tx6})
+	addTransactionToBlock(block7, []*types.SerializableTransaction{tx7, tx8})
+	addTransactionToBlock(block8, []*types.SerializableTransaction{tx7, tx8})
 
 	syncObj4.AddBlock(block2)
 	syncObj4.AddBlock(block3)

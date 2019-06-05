@@ -53,7 +53,7 @@ func TestMeshDB_AddBlock(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.True(t, len(rBlock1.TxIds) == len(block1.Txs), "block content was wrong")
-	assert.True(t, len(rBlock1.ATXs) == len(block1.ATXs), "block content was wrong")
+	assert.True(t, len(rBlock1.ATxIds) == len(block1.ATXs), "block content was wrong")
 	//assert.True(t, bytes.Compare(rBlock2.Data, []byte("data2")) == 0, "block content was wrong")
 }
 

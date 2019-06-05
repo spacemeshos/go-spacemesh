@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common"
-	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spacemeshos/sha256-simd"
@@ -16,12 +15,16 @@ type ActivationDb interface {
 	GetAtx(id types.AtxId) (*types.ActivationTx, error)
 }
 
+type Signer interface {
+	Sign(msg []byte) ([]byte, error)
+}
+
 type MinerBlockOracle struct {
 	committeeSize  uint32
 	layersPerEpoch uint16
 	activationDb   ActivationDb
 	beaconProvider *EpochBeaconProvider
-	vrfSigner      *crypto.VRFSigner
+	vrfSigner      Signer
 	nodeID         types.NodeId
 
 	proofsEpoch       types.EpochId
@@ -34,7 +37,7 @@ func NewMinerBlockOracle(committeeSize uint32,
 	layersPerEpoch uint16,
 	activationDb ActivationDb,
 	beaconProvider *EpochBeaconProvider,
-	vrfSigner *crypto.VRFSigner, nodeId types.NodeId, log log.Log) *MinerBlockOracle {
+	vrfSigner Signer, nodeId types.NodeId, log log.Log) *MinerBlockOracle {
 
 	return &MinerBlockOracle{
 		committeeSize:  committeeSize,
@@ -91,7 +94,11 @@ func (bo *MinerBlockOracle) calcEligibilityProofs(epochNumber types.EpochId) err
 	bo.eligibilityProofs = map[types.LayerID][]types.BlockEligibilityProof{}
 	for counter := uint32(0); counter < numberOfEligibleBlocks; counter++ {
 		message := serializeVRFMessage(epochBeacon, epochNumber, counter)
-		vrfSig := bo.vrfSigner.Sign(message)
+		vrfSig, err := bo.vrfSigner.Sign(message)
+		if err != nil {
+			bo.log.Error("Could not sign message err=%v", err)
+			return err
+		}
 		vrfHash := sha256.Sum256(vrfSig)
 		eligibleLayer := calcEligibleLayer(epochNumber, bo.layersPerEpoch, vrfHash)
 		bo.eligibilityProofs[eligibleLayer] = append(bo.eligibilityProofs[eligibleLayer], types.BlockEligibilityProof{

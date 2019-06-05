@@ -43,7 +43,7 @@ var npstCfg = nipst.PostParams{
 var conf = sync.Configuration{
 	Concurrency:    4,
 	LayerSize:      int(100),
-	RequestTimeout: 150 * time.Millisecond,
+	RequestTimeout: 200 * time.Millisecond,
 }
 
 //////////////////////////////

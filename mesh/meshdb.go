@@ -36,7 +36,7 @@ func NewPersistentMeshDB(path string, log log.Log) *MeshDB {
 	tdb := database.NewLevelDbStore(path+"transactions", nil, nil)
 	ll := &MeshDB{
 		Log:                log,
-		blockCache:         NewBlockCache(10 * layerSize),
+		blockCache:         NewBlockCache(100 * layerSize),
 		blocks:             bdb,
 		layers:             ldb,
 		transactions:       tdb,
@@ -51,7 +51,7 @@ func NewMemMeshDB(log log.Log) *MeshDB {
 	db := database.NewMemDatabase()
 	ll := &MeshDB{
 		Log:                log,
-		blockCache:         NewBlockCache(10 * layerSize),
+		blockCache:         NewBlockCache(100 * layerSize),
 		blocks:             db,
 		layers:             db,
 		contextualValidity: db,
@@ -222,12 +222,12 @@ func (m *MeshDB) writeBlock(bl *types.Block) error {
 		return fmt.Errorf("could not write transactions of block %v database %v", bl.ID(), err)
 	}
 
-	/*atxids := make([]types.AtxId, 0, len(bl.Txs))
+	atxids := make([]types.AtxId, 0, len(bl.Txs))
 	for _, t := range bl.ATXs {
 		atxids = append(atxids, t.Id())
-	}*/
+	}
 
-	minblock := &types.MiniBlock{BlockHeader: bl.BlockHeader, TxIds: txids, ATXs: bl.ATXs}
+	minblock := &types.MiniBlock{BlockHeader: bl.BlockHeader, TxIds: txids, ATxIds: atxids}
 
 	bytes, err := types.InterfaceToBytes(minblock)
 	if err != nil {
