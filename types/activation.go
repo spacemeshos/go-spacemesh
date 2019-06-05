@@ -109,7 +109,7 @@ func NewActivationTxWithChallenge(poetChallenge NIPSTChallenge, ActiveSetSize ui
 
 }
 
-func (t ActivationTx) Id() AtxId {
+func (t *ActivationTx) Id() AtxId {
 	if t.id != nil {
 		return *t.id
 	}
