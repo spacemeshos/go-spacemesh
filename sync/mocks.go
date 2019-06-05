@@ -81,9 +81,9 @@ func (t *AtxDbMock) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
 	return nil, fmt.Errorf("cannot find atx")
 }
 
-func (t *AtxDbMock) AddAtx(id types.AtxId, atx *types.ActivationTx) {
-	t.db[id] = atx
-	t.nipsts[id] = atx.Nipst
+func (t *AtxDbMock) ProcessAtx(atx *types.ActivationTx) {
+	t.db[atx.Id()] = atx
+	t.nipsts[atx.Id()] = atx.Nipst
 }
 
 func (t *AtxDbMock) GetNipst(id types.AtxId) (*nipst.NIPST, error) {
@@ -92,7 +92,7 @@ func (t *AtxDbMock) GetNipst(id types.AtxId) (*nipst.NIPST, error) {
 
 func (t *AtxDbMock) ProcessBlockATXs(block *types.Block) {
 	for _, atx := range block.ATXs {
-		t.AddAtx(atx.Id(), atx)
+		t.ProcessAtx(atx)
 	}
 }
 

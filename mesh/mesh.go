@@ -331,7 +331,7 @@ func (m *Mesh) GetLatestView() []types.BlockID {
 }
 
 func (m *Mesh) AddBlock(blk *types.Block) error {
-	m.Debug("add block %d", blk.ID())
+	m.Info("add block %d", blk.ID())
 	m.AtxDB.ProcessBlockATXs(blk) // change this to return error if process failed
 	if err := m.MeshDB.AddBlock(blk); err != nil {
 		m.Error("failed to add block %v  %v", blk.ID(), err)

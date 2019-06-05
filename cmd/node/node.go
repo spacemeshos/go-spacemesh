@@ -269,7 +269,7 @@ func (mip *mockIdProvider) GetIdentity(edId string) (types.NodeId, error) {
 	return types.NodeId{Key: edId, VRFPublicKey: []byte{}}, nil
 }
 
-func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service, dbStorepath string, sgn hare.Signer, isFixedOracle bool, rolacle hare.Rolacle, layerSize uint32, postClient nipst.PostProverClient, poetClient nipst.PoetProvingServiceClient, atxdbstore database.DB, vrfSigner *BLS381.BlsSigner, commitmentConfig nipst.PostParams, layersPerEpoch uint32) error {
+func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service, dbStorepath string, sgn hare.Signer, isFixedOracle bool, rolacle hare.Rolacle, layerSize uint32, postClient nipst.PostProverClient, poetClient nipst.PoetProvingServiceClient, vrfSigner *BLS381.BlsSigner, commitmentConfig nipst.PostParams, layersPerEpoch uint32) error {
 
 	app.instanceName = nodeID.Key
 	//todo: should we add all components to a single struct?
@@ -529,8 +529,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 		SpaceUnit:            1024,
 	}
 
-	err = app.initServices(nodeID, swarm, dbStorepath, app.edSgn, hareOracle, uint32(app.Config.LayerAvgSize),
-		nipst.NewPostClient(), poet, vrfSigner, npstCfg, uint32(app.Config.CONSENSUS.LayersPerEpoch))
+	err = app.initServices(nodeID, swarm, dbStorepath, app.edSgn, false, nil, uint32(app.Config.LayerAvgSize), nipst.NewPostClient(), poet, vrfSigner, npstCfg, uint32(app.Config.CONSENSUS.LayersPerEpoch))
 	if err != nil {
 		log.Error("cannot start services %v", err.Error())
 		return
