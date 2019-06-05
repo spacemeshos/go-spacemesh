@@ -1,8 +1,8 @@
 package sync
 
 import (
-	"github.com/spacemeshos/go-spacemesh/common"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/types"

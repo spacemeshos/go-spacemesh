@@ -19,7 +19,6 @@ func TestNewPeerWorker(t *testing.T) {
 	err := syncObj1.AddBlock(types.NewExistingBlock(types.BlockID(123), lid, nil))
 	assert.NoError(t, err)
 
-
 	//todo(Almog): BlockReqFactory created a function that queries blockids from a single channel,
 	// each block id will be sent to a different peer, in case the peer does not have the block id it will not retry
 	// need to fix the logic and add retries or query blockid to all peers

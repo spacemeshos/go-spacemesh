@@ -80,7 +80,7 @@ func newTxsRequestHandler(msh *mesh.Mesh, logger log.Log) func(msg []byte) []byt
 		}
 		logger.Info("handle tx request ")
 		txs, missed := msh.GetTransactions(txids)
-		if len(missed)  > 0 {
+		if len(missed) > 0 {
 			logger.Error("Error handling transactions request message, with ids: %d", msg)
 			return nil
 		}
@@ -121,7 +121,7 @@ func newATxsRequestHandler(msh *mesh.Mesh, logger log.Log) func(msg []byte) []by
 		for _, value := range txs {
 			value.Nipst, err = msh.GetNipst(value.Id())
 			if err != nil {
-				logger.Error("Error handling atx request message, cannot find nipst for atx %v" , value.Id())
+				logger.Error("Error handling atx request message, cannot find nipst for atx %v", value.Id())
 				return nil
 			}
 			transactions = append(transactions, *value)
