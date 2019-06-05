@@ -511,6 +511,7 @@ def test_mining(setup_network):
         assert (len(blockmap[node]) / last_layer) / int(layer_avg_size / total_pods + 0.5) <= 1.5
 
 
+'''
 def test_atxs_nodes_up(setup_bootstrap, setup_clients, add_curl, wait_genesis, setup_poet, setup_oracle):
     # choose client to run on
     client_ip = setup_clients.pods[0]['pod_ip']
@@ -587,4 +588,4 @@ def test_atxs_nodes_up(setup_bootstrap, setup_clients, add_curl, wait_genesis, s
             mp.add(blk[0])
         print("blocks:" + str(len(blockmap[node])) + "in layers" + str(len(mp)) + " " + str(layer_avg_size / total_pods))
         assert (len(blockmap[node]) / last_layer) / int((layer_avg_size / total_pods) + 0.5) <= 1.5
-
+'''
