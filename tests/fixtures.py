@@ -2,6 +2,7 @@ import os
 import pytest
 import string
 import random
+from tests import pod
 from kubernetes import config
 from kubernetes import client
 from pytest_testconfig import config as testconfig
@@ -74,6 +75,12 @@ def set_namespace(request, session_id, load_config):
         v1.create_namespace(body)
 
     def fin():
+
+        # On teardown we wish to report on pods that were restarted by k8s during the test
+        restarted_pods = pod.check_for_restarted_pods(testconfig['namespace'])
+        if restarted_pods:
+            print('\n\nAttention!!! The following pods were restarted during test: {0}\n\n'.format(restarted_pods))
+
         print("Deleting test namespace {0}".format(testconfig['namespace']))
         v1.delete_namespace(name=testconfig['namespace'], body=client.V1DeleteOptions())
 

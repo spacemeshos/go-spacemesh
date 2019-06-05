@@ -246,13 +246,6 @@ def setup_clients(request, setup_oracle, setup_poet, setup_bootstrap):
         client_info.pods = [{'name': c.metadata.name, 'pod_ip': c.status.pod_ip} for c in client_pods]
         return client_info
 
-    def fin():
-        # On teardown we wish to report on pods that were restarted by k8s during the test
-        restarted_pods = pod.check_for_restarted_pods(testconfig['namespace'])
-        if restarted_pods:
-            print('\n\nAttention!!! The following pods were restarted during test: {0}\n\n'.format(restarted_pods))
-
-    request.addfinalizer(fin)
     return _setup_clients_in_namespace(testconfig['namespace'])
 
 
