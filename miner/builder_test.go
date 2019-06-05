@@ -141,6 +141,8 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 		Transaction2SerializableTransaction(mesh.NewTransaction(2, addr1, addr2, big.NewInt(1), DefaultGasLimit, big.NewInt(DefaultGas))),
 	}
 
+	transids := []types.TransactionId{types.GetTransactionId(trans[0]), types.GetTransactionId(trans[1]), types.GetTransactionId(trans[2])}
+
 	builder.AddTransaction(trans[0].AccountNonce, trans[0].Origin, *trans[0].Recipient, big.NewInt(0).SetBytes(trans[0].Price))
 	builder.AddTransaction(trans[1].AccountNonce, trans[1].Origin, *trans[1].Recipient, big.NewInt(0).SetBytes(trans[1].Price))
 	builder.AddTransaction(trans[2].AccountNonce, trans[2].Origin, *trans[2].Recipient, big.NewInt(0).SetBytes(trans[2].Price))
@@ -151,25 +153,18 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 		types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")}, 1, types.AtxId{}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{}), true),
 	}
 
-	/*for _, atx := range atxs {
-		b, e := block.AtxAsBytes(atx)
-		assert.NoError(t, e)
-		msg := mockMsg{msg: b}
-		builder.transactionQueue <- atx
-	}*/
-
 	builder.AtxQueue = append(builder.AtxQueue, atxs...)
 
 	go func() { beginRound <- 2 }()
 
 	select {
 	case output := <-receiver.RegisterGossipProtocol(sync.NewBlockProtocol):
-		b := types.Block{}
+		b := types.MiniBlock{}
 		xdr.Unmarshal(bytes.NewBuffer(output.Bytes()), &b)
 		assert.Equal(t, hareRes, b.BlockVotes)
-		assert.Equal(t, trans, b.Txs)
+		assert.Equal(t, transids, b.TxIds)
 		assert.Equal(t, []types.BlockID{1, 2, 3}, b.ViewEdges)
-		assert.Equal(t, atxs, b.ATXs)
+		assert.Equal(t, []types.AtxId{atxs[0].Id(), atxs[1].Id(), atxs[2].Id()}, b.ATxIds)
 
 	case <-time.After(1 * time.Second):
 		assert.Fail(t, "timeout on receiving block")

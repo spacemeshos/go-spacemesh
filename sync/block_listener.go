@@ -85,13 +85,13 @@ func (bl *BlockListener) handleBlock(data service.GossipMessage) {
 		bl.Error("got empty message while listening to gossip blocks")
 		return
 	}
-	blk := &types.Block{}
+	blk := &types.MiniBlock{}
 	err := types.BytesToInterface(data.Bytes(), blk)
 	if err != nil {
 		bl.Error("received invalid block %v", data.Bytes())
 		return
 	}
-	bl.Log.With().Info("got new block", log.Uint64("id", uint64(blk.Id)), log.Int("txs", len(blk.Txs)), log.Int("atxs", len(blk.ATXs)))
+	bl.Log.With().Info("got new block", log.Uint64("id", uint64(blk.Id)), log.Int("txs", len(blk.TxIds)), log.Int("atxs", len(blk.ATxIds)))
 	eligible, err := bl.BlockEligible(&blk.BlockHeader)
 	if err != nil {
 		bl.Error("block eligible check failed %v", blk.ID())
@@ -101,13 +101,26 @@ func (bl *BlockListener) handleBlock(data service.GossipMessage) {
 		bl.Error("block not eligible, %v", blk.ID())
 		return
 	}
-	if err := bl.AddBlock(blk); err != nil {
+
+	associated, txs, atxs, err := bl.syncMissingContent(blk)
+	if err != nil {
+		bl.Error("handleBlock failed %v", blk.ID(), err)
+		return
+	}
+
+	if associated != nil {
+		bl.ProcessAtx(associated)
+	}
+
+	block := &types.Block{BlockHeader: blk.BlockHeader, Txs: txs, ATXs: atxs}
+
+	if err := bl.AddBlock(block); err != nil {
 		bl.Info("Block already received %v", blk.ID())
 		return
 	}
 	bl.Info("added block to database %v", blk.ID())
 	data.ReportValidation(NewBlockProtocol)
-	bl.addUnknownToQueue(blk)
+	bl.addUnknownToQueue(block)
 }
 
 func (bl *BlockListener) run() {

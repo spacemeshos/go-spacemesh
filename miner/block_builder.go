@@ -143,16 +143,16 @@ func (t *BlockBuilder) AddTransaction(nonce uint64, origin, destination address.
 }
 
 func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibilityProof types.BlockEligibilityProof,
-	txs []*types.SerializableTransaction, atx []*types.ActivationTx) (*types.Block, error) {
+	txs []*types.SerializableTransaction, atx []*types.ActivationTx) (*types.MiniBlock, error) {
 
-	var res []types.BlockID = nil
+	var votes []types.BlockID = nil
 	var err error
 	if id == config.Genesis {
 		return nil, errors.New("cannot create block in genesis layer")
 	} else if id == config.Genesis+1 {
-		res = append(res, config.GenesisId)
+		votes = append(votes, config.GenesisId)
 	} else {
-		res, err = t.hareResult.GetResult(id - 1)
+		votes, err = t.hareResult.GetResult(id - 1)
 		if err != nil {
 			return nil, errors.New(fmt.Sprintf("didn't receive hare result for layer %v %v", id-1, err))
 		}
@@ -163,7 +163,17 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 		return nil, err
 	}
 
-	b := types.Block{
+	var txids []types.TransactionId
+	for _, t := range txs {
+		txids = append(txids, types.GetTransactionId(t))
+	}
+
+	var atxids []types.AtxId
+	for _, t := range atx {
+		atxids = append(atxids, t.Id())
+	}
+
+	b := types.MiniBlock{
 		BlockHeader: types.BlockHeader{
 			Id:               types.BlockID(t.rnd.Int63()),
 			LayerIndex:       id,
@@ -173,19 +183,15 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 			Data:             nil,
 			Coin:             t.weakCoinToss.GetResult(),
 			Timestamp:        time.Now().UnixNano(),
-			BlockVotes:       res,
+			BlockVotes:       votes,
 			ViewEdges:        viewEdges,
 		},
-		ATXs: atx,
-		Txs:  txs,
-	}
-	atxs := " "
-	for _, x := range b.ATXs {
-		atxs += "," + x.ShortId()
+		ATxIds: atxids,
+		TxIds:  txids,
 	}
 
 	t.Log.Info("I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d, viewEdges: %d atx %v, atxs:%v",
-		b.LayerIndex, b.Id, len(b.Txs), len(b.BlockVotes), len(b.ViewEdges), b.ATXID.String()[:5], atxs)
+		b.LayerIndex, b.Id, len(b.TxIds), len(b.BlockVotes), len(b.ViewEdges), b.ATXID.String()[:5], b.ATxIds)
 	return &b, nil
 }
 
@@ -220,13 +226,11 @@ func (t *BlockBuilder) listenForAtx() {
 		case data := <-t.atxGossipChannel:
 			if data != nil {
 				x, err := types.BytesAsAtx(data.Bytes())
-				/*t.Log.With().Info("got new atx", log.String("sender", x., log.String("receiver", x.Recipient.String()),
-				log.String("amount", x.AmountAsBigInt().String()), log.Uint64("nonce", x.AccountNonce), log.Bool("valid", err != nil))*/
+
 				if err != nil {
 					t.Log.Error("cannot parse incoming ATX")
 					break
 				}
-				//t.processAtx(x)
 				data.ReportValidation(activation.AtxProtocol)
 				t.newAtx <- x
 			}

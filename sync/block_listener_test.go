@@ -172,21 +172,21 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 	//n2.RegisterGossipProtocol(NewBlockProtocol)
 
 	bl1 := ListenerFactory(n1, PeersMock{func() []p2p.Peer { return []p2p.Peer{n2.PublicKey()} }}, "5")
-	bl2 := ListenerFactory(n2, PeersMock{func() []p2p.Peer { return []p2p.Peer{n1.PublicKey()} }}, "4")
+	bl2 := ListenerFactory(n2, PeersMock{func() []p2p.Peer { return []p2p.Peer{n1.PublicKey()} }}, "5")
 	bl1.Start()
-	bl2.Start()
 
 	blk := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data1"))
 	tx := types.NewSerializableTransaction(0, address.BytesToAddress([]byte{0x01}), address.BytesToAddress([]byte{0x02}), big.NewInt(10), big.NewInt(10), 10)
 	blk.AddTransaction(tx)
-	blk.AddAtx(types.NewActivationTx(types.NodeId{"whatwhatwhatwhat", []byte("bbb")}, 1, types.AtxId{}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{}), false))
+	atx := types.NewActivationTx(types.NodeId{"whatwhatwhatwhat", []byte("bbb")}, 1, types.AtxId{}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{}), false)
+	blk.AddAtx(atx)
 
-	data, err := types.InterfaceToBytes(*blk)
+	bl2.AddBlock(blk)
+
+	mblk := &types.MiniBlock{BlockHeader: blk.BlockHeader, TxIds: []types.TransactionId{types.GetTransactionId(tx)}, ATxIds: []types.AtxId{atx.Id()}}
+
+	data, err := types.InterfaceToBytes(*mblk)
 	require.NoError(t, err)
-	blk2 := &types.Block{}
-	err = types.BytesToInterface(data, blk2)
-	require.NoError(t, err)
-	require.True(t, blk.Compare(blk2))
 
 	err = n2.Broadcast(NewBlockProtocol, data)
 	assert.NoError(t, err)
@@ -208,7 +208,6 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 			}
 		}
 	}
-
 }
 
 //todo integration testing
