@@ -242,7 +242,7 @@ func generateConsensusProcess(t *testing.T) *ConsensusProcess {
 	s := NewSetFromValues(value1)
 	oracle := eligibility.New()
 	signing := signing.NewEdSigner()
-	_, vrfPub := BLS381.GenKeyPair()
+	_, vrfPub := BLS381.GenKeyPair(BLS381.DefaultSeed())
 	oracle.Register(true, signing.PublicKey().String())
 	output := make(chan TerminationOutput, 1)
 

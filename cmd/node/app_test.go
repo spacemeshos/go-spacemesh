@@ -3,8 +3,8 @@ package node
 import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/address"
+	"github.com/spacemeshos/go-spacemesh/amcl/BLS381"
 	apiCfg "github.com/spacemeshos/go-spacemesh/api/config"
-	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -83,6 +83,7 @@ func (app *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat s
 	poet, err := NewRPCPoetHarnessClient()
 	r.NoError(err)
 	app.poetCleanup = poet.CleanUp
+	rng := BLS381.DefaultSeed()
 	for i := 0; i < numOfInstances; i++ {
 		smApp := NewSpacemeshApp()
 		smApp.Config.HARE.N = numOfInstances
@@ -93,10 +94,11 @@ func (app *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat s
 		edSgn := signing.NewEdSigner()
 		pub := edSgn.PublicKey()
 
-		vrfPublicKey, vrfPrivateKey, err := crypto.GenerateVRFKeys()
 		r.NoError(err)
-		nodeID := types.NodeId{Key: pub.String(), VRFPublicKey: vrfPublicKey}
-		vrfSigner := crypto.NewVRFSigner(vrfPrivateKey)
+		vrfPriv, vrfPub := BLS381.GenKeyPair(rng)
+		vrfSigner := BLS381.NewBlsSigner(vrfPriv)
+		nodeID := types.NodeId{Key: pub.String(), VRFPublicKey: vrfPub}
+
 		swarm := net.NewNode()
 		dbStorepath := storeFormat + string(runningName)
 
