@@ -46,7 +46,7 @@ func ConfigTst() Config {
 func getMeshWithMapState(id string, s StateUpdater) (*Mesh, *AtxDbMock) {
 	atxDb := &AtxDbMock{
 		db:     make(map[types.AtxId]*types.ActivationTx),
-		nipsts: make(map[types.AtxId]*nipst.NIPST),
+		nipsts: make(map[types.AtxId]*types.NIPST),
 	}
 	layers := NewMemMesh(ConfigTst(), &MeshValidatorMock{}, s, atxDb, log.New(id, "", ""))
 	return layers, atxDb
