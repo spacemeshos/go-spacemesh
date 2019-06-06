@@ -75,12 +75,12 @@ func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx) {
 // in the epoch prior to the epoch that a was published at, this number is the number of active ids in the next epoch
 // the function returns error if the view is not found
 func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, error) {
-	bytes, err := types.ViewAsBytes(a.View)
+	viewBytes, err := types.ViewAsBytes(a.View)
 	if err != nil {
 		return 0, err
 	}
 
-	count, found := activesetCache.Get(common.BytesToHash(bytes))
+	count, found := activesetCache.Get(common.BytesToHash(viewBytes))
 	if found {
 		return count, nil
 	}
@@ -106,17 +106,19 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 			}
 			set[id] = struct{}{}
 			atx, err := db.GetAtx(id)
-			if err == nil && atx.Valid {
-				counter++
-				db.log.Info("atx found traversing %v in block in layer %v", atx.ShortId(), blk.LayerIndex)
-				// return eof to signal that enough active ids were found
-				if counter >= a.ActiveSetSize {
-					return io.EOF
-				}
-			} else {
-				if err == nil {
-					db.log.Error("atx found %v, but not valid", atx.Id().String()[:5])
-				}
+			if err != nil {
+				db.log.Panic("error fetching atx from database -- inconsistent state, id: %x", id)
+				return fmt.Errorf("error fetching atx from database -- inconsistent state, id: %x", id)
+			}
+			if !atx.Valid {
+				db.log.Debug("atx %v found, but not valid", atx.ShortId())
+				continue
+			}
+			counter++
+			db.log.Info("atx %v found traversing in block %x in layer %v", atx.ShortId(), blk.Id, blk.LayerIndex)
+			// return eof to signal that enough active ids were found
+			if counter >= a.ActiveSetSize {
+				return io.EOF
 			}
 		}
 		return nil
@@ -128,7 +130,7 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 	}
 
 	db.meshDb.ForBlockInView(mp, firstLayerOfLastEpoch, traversalFunc)
-	activesetCache.Add(common.BytesToHash(bytes), counter)
+	activesetCache.Add(common.BytesToHash(viewBytes), counter)
 
 	return counter, nil
 

@@ -240,7 +240,7 @@ func (t *BlockBuilder) acceptBlockData() {
 			return
 
 		case id := <-t.beginRoundEvent:
-			atxID, proofs, err := t.blockOracle.BlockEligible(types.LayerID(id))
+			atxID, proofs, err := t.blockOracle.BlockEligible(id)
 			if err != nil {
 				t.Error("failed to check for block eligibility in layer %v: %v ", id, err)
 				continue
