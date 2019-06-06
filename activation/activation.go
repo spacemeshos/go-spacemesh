@@ -221,12 +221,19 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 	// we've completed the sequential work, now before publishing the atx,
 	// we need to provide number of atx seen in the epoch of the positioning atx.
 	activeIds := uint32(b.activeSet.ActiveSetSize(b.posLayerID.GetEpoch(b.layersPerEpoch)))
-	b.log.Info("active ids seen for epoch of the pos atx (epoch: %v) is %v", b.posLayerID.GetEpoch(b.layersPerEpoch), activeIds)
 	atx := types.NewActivationTxWithChallenge(*b.challenge, activeIds, b.mesh.GetLatestView(), b.nipst, true)
 	activeSetSize, err := b.db.CalcActiveSetFromView(atx)
-	if epoch != 0 && (activeSetSize == 0 || activeSetSize != atx.ActiveSetSize) {
-		b.log.Error("empty active set size found! len(view): %d, view: %v", len(atx.View), atx.View)
-		b.log.Panic("empty active set size found! len(view): %d, view: %v", len(atx.View), atx.View)
+	b.log.Info("active ids seen for epoch %v (pos atx epoch) is %v (cache) %v (from view)",
+		b.posLayerID.GetEpoch(b.layersPerEpoch), activeIds, activeSetSize)
+
+	if !atx.TargetEpoch(b.layersPerEpoch).IsGenesis() && activeSetSize == 0 {
+		b.log.Warning("empty active set size found! len(view): %d, view: %v", len(atx.View), atx.View)
+		return nil
+	}
+	if activeSetSize != atx.ActiveSetSize {
+		b.log.Warning("active set size mismatch! size based on view: %d, size reported: %d",
+			activeSetSize, atx.ActiveSetSize)
+		atx.ActiveSetSize = activeSetSize
 	}
 	buf, err := types.AtxAsBytes(atx)
 	if err != nil {

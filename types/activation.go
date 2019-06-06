@@ -131,6 +131,10 @@ func (t ActivationTx) ShortId() string {
 	return t.Id().ShortId()
 }
 
+func (t ActivationTx) TargetEpoch(layersPerEpoch uint16) EpochId {
+	return t.PubLayerIdx.GetEpoch(layersPerEpoch) + 1
+}
+
 type PoetProof struct {
 	shared.MerkleProof
 	Members   [][]byte
