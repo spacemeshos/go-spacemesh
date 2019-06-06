@@ -79,7 +79,7 @@ func init() {
 // SpacemeshApp is the cli app singleton
 type SpacemeshApp struct {
 	*cobra.Command
-	instanceName     string
+	nodeId           types.NodeId
 	P2P              p2p.Service
 	Config           *cfg.Config
 	NodeInitCallback chan bool
@@ -96,6 +96,7 @@ type SpacemeshApp struct {
 	poetListener     *activation.PoetListener
 	unregisterOracle func()
 	edSgn            *signing.EdSigner
+	log              log.Log
 }
 
 type MiningEnabler interface {
@@ -272,7 +273,7 @@ func (mip *mockIdProvider) GetIdentity(edId string) (types.NodeId, error) {
 
 func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service, dbStorepath string, sgn hare.Signer, isFixedOracle bool, rolacle hare.Rolacle, layerSize uint32, postClient nipst.PostProverClient, poetClient nipst.PoetProvingServiceClient, vrfSigner *BLS381.BlsSigner, commitmentConfig nipst.PostParams, layersPerEpoch uint32) error {
 
-	app.instanceName = nodeID.Key
+	app.nodeId = nodeID
 	//todo: should we add all components to a single struct?
 
 	name := nodeID.Key
@@ -281,8 +282,9 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	}
 
 	lg := log.NewDefault(name).WithFields(log.String("nodeID", name))
+	app.log = lg.WithName("app")
 
-	db, err := database.NewLDBDatabase(dbStorepath, 0, 0)
+	db, err := database.NewLDBDatabase(dbStorepath, 0, 0, lg.WithName("stateDbStore"))
 	if err != nil {
 		return err
 	}
@@ -301,23 +303,23 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
 	clock := timesync.NewTicker(timesync.RealClock{}, ld, gTime)
 
-	atxdbstore, err := database.NewLDBDatabase(dbStorepath+"atx", 0, 0)
+	atxdbstore, err := database.NewLDBDatabase(dbStorepath+"atx", 0, 0, lg.WithName("atxDbStore"))
 	if err != nil {
 		return err
 	}
 
-	nipstStore, err := database.NewLDBDatabase(dbStorepath+"nipst", 0, 0)
+	nipstStore, err := database.NewLDBDatabase(dbStorepath+"nipst", 0, 0, lg.WithName("nipstDbStore"))
 	if err != nil {
 		return err
 	}
 
-	poetDbStore, err := database.NewLDBDatabase(dbStorepath+"poet", 0, 0)
+	poetDbStore, err := database.NewLDBDatabase(dbStorepath+"poet", 0, 0, lg.WithName("poetDbStore"))
 	if err != nil {
 		return err
 	}
 
 	//todo: put in config
-	iddbstore, err := database.NewLDBDatabase(dbStorepath+"ids", 0, 0)
+	iddbstore, err := database.NewLDBDatabase(dbStorepath+"ids", 0, 0, lg.WithName("stateDbStore"))
 	if err != nil {
 		return err
 	}
@@ -325,8 +327,8 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	poetDb := activation.NewPoetDb(poetDbStore, lg.WithName("poetDb"))
 	//todo: this is initialized twice, need to refactor
 	validator := nipst.NewValidator(commitmentConfig, poetDb)
-	mdb := mesh.NewPersistentMeshDB(dbStorepath, lg.WithName("meshdb"))
-	atxdb := activation.NewActivationDb(atxdbstore, nipstStore, idStore, mdb, uint64(app.Config.CONSENSUS.LayersPerEpoch), validator, lg.WithName("atxDb"))
+	mdb := mesh.NewPersistentMeshDB(dbStorepath, lg.WithName("meshDb"))
+	atxdb := activation.NewActivationDb(atxdbstore, nipstStore, idStore, mdb, app.Config.CONSENSUS.LayersPerEpoch, validator, lg.WithName("atxDb"))
 	beaconProvider := &oracle.EpochBeaconProvider{}
 	blockOracle := oracle.NewMinerBlockOracle(layerSize, uint16(layersPerEpoch), atxdb, beaconProvider, vrfSigner, nodeID, lg.WithName("blockOracle"))
 	blockValidator := oracle.NewBlockEligibilityValidator(int32(layerSize), uint16(layersPerEpoch), atxdb, beaconProvider, BLS381.Verify2, lg.WithName("blkElgValidator"))
@@ -348,13 +350,13 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 
 	ha := hare.New(app.Config.HARE, swarm, sgn, nodeID, msh, hOracle, app.Config.CONSENSUS.LayersPerEpoch, idStore, atxdb, clock.Subscribe(), lg.WithName("hare"))
 
-	blockProducer := miner.NewBlockBuilder(nodeID, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, atxdb.ProcessAtx, lg.WithName("blockProducer"))
+	blockProducer := miner.NewBlockBuilder(nodeID, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, lg.WithName("blockProducer"))
 	blockListener := sync.NewBlockListener(swarm, blockValidator, syncer, 4, lg.WithName("blockListener"))
 
 	poetListener := activation.NewPoetListener(swarm, poetDb, lg.WithName("poetListener"))
 
 	nipstBuilder := nipst.NewNipstBuilder(
-		[]byte(nodeID.Key), // TODO: use both keys in the nodeID
+		common.Hex2Bytes(nodeID.Key), // TODO: use both keys in the nodeID
 		commitmentConfig.SpaceUnit,
 		commitmentConfig.Difficulty,
 		postClient,
@@ -396,37 +398,37 @@ func (app *SpacemeshApp) startServices() {
 
 func (app SpacemeshApp) stopServices() {
 
-	log.Info("%v closing services ", app.instanceName)
+	app.log.Info("closing services")
 
-	log.Info("%v closing clock", app.instanceName)
+	app.log.Info("closing clock")
 	app.clock.Close()
 
-	log.Info("%v closing PoET listener", app.instanceName)
+	app.log.Info("closing PoET listener")
 	app.poetListener.Close()
 
-	log.Info("%v closing atx builder", app.instanceName)
+	app.log.Info("closing atx builder")
 	app.atxBuilder.Stop()
 
-	log.Info("%v closing Hare", app.instanceName)
+	app.log.Info("closing Hare")
 	app.hare.Close() //todo: need to add this
 
-	log.Info("%v closing p2p", app.instanceName)
+	app.log.Info("closing p2p")
 	app.P2P.Shutdown()
 
 	if err := app.blockProducer.Close(); err != nil {
-		log.Error("cannot stop block producer %v", err)
+		app.log.Error("cannot stop block producer %v", err)
 	}
 
-	log.Info("%v closing blockListener", app.instanceName)
+	app.log.Info("closing blockListener")
 	app.blockListener.Close()
 
-	log.Info("%v closing mesh", app.instanceName)
+	app.log.Info("closing mesh")
 	app.mesh.Close()
 
-	log.Info("%v closing sync", app.instanceName)
+	app.log.Info("closing sync")
 	app.syncer.Close()
 
-	log.Info("unregister from oracle")
+	app.log.Info("unregister from oracle")
 	if app.unregisterOracle != nil {
 		app.unregisterOracle()
 	}

@@ -244,7 +244,6 @@ func (db *ActivationDb) StoreAtx(ech types.EpochId, atx *types.ActivationTx) err
 		if err != nil {
 			return err
 		}
-		db.log.Debug("after incrementing epoch counter ech (%v)", ech)
 	}
 	err = db.addAtxToNodeIdSorted(atx.NodeId, atx)
 	if err != nil {
@@ -305,8 +304,10 @@ func (db *ActivationDb) incValidAtxCounter(ech types.EpochId) error {
 	key := epochCounterKey(ech)
 	val, err := db.atxs.Get(key)
 	if err != nil {
+		db.log.Info("incrementing epoch %v ATX counter to 1", ech)
 		return db.atxs.Put(key, common.Uint32ToBytes(1))
 	}
+	db.log.Info("incrementing epoch %v ATX counter to %v", ech, common.BytesToUint32(val)+1)
 	return db.atxs.Put(key, common.Uint32ToBytes(common.BytesToUint32(val)+1))
 }
 
@@ -317,6 +318,7 @@ func (db *ActivationDb) ActiveSetSize(ech types.EpochId) uint32 {
 	val, err := db.atxs.Get(key)
 	db.RUnlock()
 	if err != nil {
+		db.log.Warning("could not fetch active set size from cache: %v", err)
 		//0 is not a valid active set size
 		return 0
 	}
@@ -400,7 +402,7 @@ func (db *ActivationDb) addAtxToNodeIdSorted(nodeId types.NodeId, atx *types.Act
 // GetNodeAtxIds returns the atx ids that were received for node nodeId
 func (db *ActivationDb) GetNodeAtxIds(nodeId types.NodeId) ([]types.AtxId, error) {
 	key := getNodeIdKey(nodeId)
-	db.log.Info("fetching atxIDs for node %v", nodeId.Key[:5])
+	db.log.Debug("fetching atxIDs for node %v", nodeId.Key[:5])
 
 	db.RLock()
 	ids, err := db.atxs.Get(key)

@@ -52,11 +52,10 @@ type BlockBuilder struct {
 	weakCoinToss     WeakCoinProvider
 	orphans          OrphanBlockProvider
 	blockOracle      oracle.BlockOracle
-	processAtx       func(atx *types.ActivationTx)
 	started          bool
 }
 
-func NewBlockBuilder(minerID types.NodeId, net p2p.Service, beginRoundEvent chan types.LayerID, weakCoin WeakCoinProvider, orph OrphanBlockProvider, hare HareResultProvider, blockOracle oracle.BlockOracle, processAtx func(atx *types.ActivationTx), lg log.Log) BlockBuilder {
+func NewBlockBuilder(minerID types.NodeId, net p2p.Service, beginRoundEvent chan types.LayerID, weakCoin WeakCoinProvider, orph OrphanBlockProvider, hare HareResultProvider, blockOracle oracle.BlockOracle, lg log.Log) BlockBuilder {
 
 	seed := binary.BigEndian.Uint64(md5.New().Sum([]byte(minerID.Key)))
 
@@ -78,7 +77,6 @@ func NewBlockBuilder(minerID types.NodeId, net p2p.Service, beginRoundEvent chan
 		weakCoinToss:     weakCoin,
 		orphans:          orph,
 		blockOracle:      blockOracle,
-		processAtx:       processAtx,
 		started:          false,
 	}
 
@@ -179,13 +177,13 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 		ATXs: atx,
 		Txs:  txs,
 	}
-	atxs := " "
+	var atxs []string
 	for _, x := range b.ATXs {
-		atxs += "," + x.ShortId()
+		atxs = append(atxs, x.ShortId())
 	}
 
-	t.Log.Info("I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d, viewEdges: %d atx %v, atxs:%v",
-		b.LayerIndex, b.Id, len(b.Txs), len(b.BlockVotes), len(b.ViewEdges), b.ATXID.String()[:5], atxs)
+	t.Log.Info("I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d, viewEdges: %d, atx: %v, atxs: %v",
+		b.LayerIndex, b.Id, len(b.Txs), len(b.BlockVotes), len(b.ViewEdges), b.ATXID.ShortId(), atxs)
 	return &b, nil
 }
 
@@ -244,7 +242,7 @@ func (t *BlockBuilder) acceptBlockData() {
 		case id := <-t.beginRoundEvent:
 			atxID, proofs, err := t.blockOracle.BlockEligible(types.LayerID(id))
 			if err != nil {
-				t.Error("failed to check for block eligibility: %v ", err)
+				t.Error("failed to check for block eligibility in layer %v: %v ", id, err)
 				continue
 			}
 			if len(proofs) == 0 {
@@ -270,7 +268,10 @@ func (t *BlockBuilder) acceptBlockData() {
 						t.Log.Error("cannot serialize block %v", err)
 						return
 					}
-					t.network.Broadcast(meshSync.NewBlockProtocol, bytes)
+					err = t.network.Broadcast(meshSync.NewBlockProtocol, bytes)
+					if err != nil {
+						t.Log.Error("failed to broadcast block")
+					}
 				}()
 			}
 

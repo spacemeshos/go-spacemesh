@@ -134,7 +134,7 @@ func (b *Builder) loop() {
 				epoch := layer.GetEpoch(b.layersPerEpoch)
 				err := b.PublishActivationTx(epoch)
 				if err != nil {
-					b.log.Error("cannot create atx : %v in current epoch %v", err, epoch)
+					b.log.Error("cannot create atx in epoch %v: %v", epoch, err)
 				}
 				b.finished <- struct{}{}
 			}()
@@ -168,7 +168,8 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 
 			//check if this node hasn't published an activation already
 			if b.prevATX.PubLayerIdx.GetEpoch(b.layersPerEpoch) == epoch+1 {
-				return fmt.Errorf("atx already created for epoch %v", epoch)
+				b.log.Info("atx already created for epoch %v, aborting", epoch)
+				return nil
 			}
 			prevAtxId = b.prevATX.Id()
 		}
@@ -207,11 +208,13 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 		}
 		b.nipst, err = b.nipstBuilder.BuildNIPST(hash)
 		if err != nil {
-			return fmt.Errorf("cannot create nipst " + err.Error())
+			return fmt.Errorf("cannot create nipst: %v", err)
 		}
 	}
 	if b.mesh.LatestLayer().GetEpoch(b.layersPerEpoch) < b.challenge.PubLayerIdx.GetEpoch(b.layersPerEpoch) {
-		return fmt.Errorf("an epoch has not passed during nipst creation, current: %v wanted: %v", b.mesh.LatestLayer().GetEpoch(b.layersPerEpoch), b.challenge.PubLayerIdx.GetEpoch(b.layersPerEpoch))
+		b.log.Warning("an epoch has not passed during nipst creation, current: %v, mesh: %v, wanted: %v, waiting",
+			epoch, b.mesh.LatestLayer().GetEpoch(b.layersPerEpoch), b.challenge.PubLayerIdx.GetEpoch(b.layersPerEpoch))
+		return nil
 	}
 
 	// when we reach here an epoch has passed

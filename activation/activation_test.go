@@ -198,7 +198,7 @@ func TestBuilder_PublishActivationTx(t *testing.T) {
 	b.nipstBuilder = &NipstErrBuilderMock{}
 	err = b.PublishActivationTx(0)
 	assert.Error(t, err)
-	assert.Equal(t, err.Error(), "cannot create nipst error")
+	assert.EqualError(t, err, "cannot create nipst: error")
 
 	activationDb3 := NewActivationDb(database.NewMemDatabase(), database.NewMemDatabase(), &MockIStore{}, mesh.NewMemMeshDB(log.NewDefault("")), uint64(layersPerEpoch), &ValidatorMock{}, lg.WithName("atxDB3"))
 	bt := NewBuilder(id, activationDb3, net, ActiveSetProviderMock{}, layers, layersPerEpoch, &NipstBuilderMock{}, nil, lg.WithName("atxBuilder"))

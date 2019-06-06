@@ -191,18 +191,16 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *common.Hash) (*types.NIPST, error)
 	if nb.state.PoetRound == nil {
 		poetChallenge := challenge
 
-		nb.log.Info("submitting challenge to PoET proving service "+
-			"(service id: %v, challenge: %x)",
-			nb.poetProver.id(), poetChallenge)
+		nb.log.Debug("submitting challenge to PoET proving service (PoET id: %x, challenge: %x)",
+			nb.state.PoetId, poetChallenge)
 
 		round, err := nb.poetProver.submit(*poetChallenge)
 		if err != nil {
 			return nil, fmt.Errorf("failed to submit challenge to poet service: %v", err)
 		}
 
-		nb.log.Info("challenge submitted to PoET proving service "+
-			"(service id: %v, round id: %v)",
-			nb.poetProver.id(), round.Id)
+		nb.log.Info("challenge submitted to PoET proving service (PoET id: %x, round id: %v)",
+			nb.state.PoetId, round.Id)
 
 		nipst.NipstChallenge = poetChallenge
 		nb.state.PoetRound = round

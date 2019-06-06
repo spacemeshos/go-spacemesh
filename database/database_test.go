@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"io/ioutil"
 	"os"
 	"strconv"
@@ -32,7 +33,7 @@ func newTestLDB() (*database.LDBDatabase, func()) {
 	if err != nil {
 		panic("failed to create test file: " + err.Error())
 	}
-	db, err := database.NewLDBDatabase(dirname, 0, 0)
+	db, err := database.NewLDBDatabase(dirname, 0, 0, log.NewDefault("db.db"))
 	if err != nil {
 		panic("failed to create test database: " + err.Error())
 	}
