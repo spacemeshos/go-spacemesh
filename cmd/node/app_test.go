@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/amcl/BLS381"
+	"github.com/spacemeshos/go-spacemesh/api"
 	apiCfg "github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -41,7 +42,7 @@ func (app *AppTestSuite) SetupTest() {
 // which utilizes a local self-contained poet server instance
 // in order to exercise functionality.
 func NewRPCPoetHarnessClient() (*nipst.RPCPoetClient, error) {
-	h, err := integration.NewHarness()
+	h, err := integration.NewHarness("127.0.0.1:9091")
 	if err != nil {
 		return nil, err
 	}
@@ -118,6 +119,13 @@ func (app *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat s
 		app.dbs = append(app.dbs, dbStorepath)
 		runningName++
 	}
+	activateGrpcServer(app.apps[0])
+}
+
+func activateGrpcServer(smApp *SpacemeshApp) {
+	smApp.Config.API.StartGrpcServer = true
+	smApp.grpcAPIService = api.NewGrpcService(smApp.P2P, smApp.state)
+	smApp.grpcAPIService.StartService(nil)
 }
 
 func (app *AppTestSuite) TestMultipleNodes() {

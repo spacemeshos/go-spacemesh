@@ -60,6 +60,7 @@ func (db *PoetDb) ValidateAndStorePoetProof(proof types.PoetProof, poetId [types
 			poetId, roundId, err)
 	}
 
+	db.log.Debug("stored proof for round %d PoET id %x", roundId, poetId)
 	return false, nil
 }
 

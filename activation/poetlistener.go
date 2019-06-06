@@ -51,7 +51,7 @@ func (l *PoetListener) loop() {
 
 func (l *PoetListener) handlePoetProofMessage(poetProof service.GossipMessage) {
 	var proofMessage poetProofMessage
-	if err := types.BytesToInterface(poetProof.Bytes(), proofMessage); err != nil {
+	if err := types.BytesToInterface(poetProof.Bytes(), &proofMessage); err != nil {
 		l.Log.Error("failed to unmarshal PoET membership proof: %v", err)
 		return
 	}
