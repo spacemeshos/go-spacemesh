@@ -7,8 +7,6 @@ import (
 	"github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/crypto/sha3"
-	"github.com/spacemeshos/go-spacemesh/nipst"
-	"github.com/spacemeshos/poet/shared"
 	"sort"
 )
 
@@ -95,37 +93,7 @@ func BytesAsAtx(b []byte) (*ActivationTx, error) {
 			ActiveSetSize: 0,
 			View:          nil,
 		},
-		Nipst: &nipst.NIPST{
-			Id:             nil,
-			Space:          0,
-			Duration:       0,
-			NipstChallenge: nil,
-			PoetRound: &nipst.PoetRound{
-				Id: 0,
-			},
-			PoetMembershipProof: &nipst.MembershipProof{
-				Index: 0,
-				Root:  common.Hash{},
-				Proof: nil,
-			},
-			PoetProof: &nipst.PoetProof{
-				Commitment: nil,
-				N:          0,
-				Proof: &shared.MerkleProof{
-					Root:         nil,
-					ProvenLeaves: nil,
-					ProofNodes:   nil,
-				},
-			},
-			PostChallenge: nil,
-			PostProof: &nipst.PostProof{
-				Identity:     nil,
-				Challenge:    nil,
-				MerkleRoot:   nil,
-				ProofNodes:   nil,
-				ProvenLeaves: nil,
-			},
-		},
+		Nipst: nil,
 	}
 	_, err := xdr.Unmarshal(buf, &atx)
 	if err != nil {

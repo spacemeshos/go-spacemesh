@@ -72,6 +72,12 @@ type BaseConfig struct {
 	LayerAvgSize     int    `mapstructure:"layer-average-size"`
 
 	PoETServer string `mapstructure:"poet-server"`
+
+	MemProfile string `mapstructure:"mem-profile"`
+
+	CpuProfile string `mapstructure:"cpu-profile"`
+
+	PprofHttpServer bool `mapstructure:"pprof-server"`
 }
 
 // DefaultConfig returns the default configuration for a spacemesh node

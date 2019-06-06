@@ -43,3 +43,6 @@ COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/tests/syn
 
 ENTRYPOINT ["/bin/go-spacemesh"]
 EXPOSE 7513
+
+# profiling port
+EXPOSE 6060

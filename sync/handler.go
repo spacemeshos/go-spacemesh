@@ -79,8 +79,8 @@ func newTxsRequestHandler(msh *mesh.Mesh, logger log.Log) func(msg []byte) []byt
 			return nil
 		}
 		logger.Info("handle tx request ")
-		txs, _ := msh.GetTransactions(txids)
-		if txs == nil {
+		txs, missed := msh.GetTransactions(txids)
+		if len(missed) > 0 {
 			logger.Error("Error handling transactions request message, with ids: %d", msg)
 			return nil
 		}
@@ -111,20 +111,25 @@ func newATxsRequestHandler(msh *mesh.Mesh, logger log.Log) func(msg []byte) []by
 			return nil
 		}
 		logger.Info("handle atx request ")
-		txs, _ := msh.GetATXs(txids)
-		if txs == nil {
-			logger.Error("Error handling transactions request message, with ids: %d", msg)
+		txs, missed := msh.GetATXs(txids)
+		if len(missed) > 0 {
+			logger.Error("Error handling atx request message, with ids: %d", msg)
 			return nil
 		}
 
 		var transactions []types.ActivationTx
 		for _, value := range txs {
+			value.Nipst, err = msh.GetNipst(value.Id())
+			if err != nil {
+				logger.Error("Error handling atx request message, cannot find nipst for atx %v", value.Id())
+				return nil
+			}
 			transactions = append(transactions, *value)
 		}
 
 		bbytes, err := types.InterfaceToBytes(transactions)
 		if err != nil {
-			logger.Error("Error marshaling transactions response message , with ids %v and err:", txs, err)
+			logger.Error("Error marshaling atx response message , with ids %v and err:", txs, err)
 			return nil
 		}
 
