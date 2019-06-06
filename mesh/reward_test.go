@@ -48,8 +48,11 @@ func getMeshWithMapState(id string, s StateUpdater) (*Mesh, *AtxDbMock) {
 	atxDb := &AtxDbMock{
 		db: make(map[types.AtxId]*types.ActivationTx),
 	}
-	layers := NewMemMesh(ConfigTst(), &MeshValidatorMock{}, s, atxDb, log.New(id, "", ""))
-	return layers, atxDb
+
+	lg := log.New(id, "", "")
+	mshdb := NewMemMeshDB(lg)
+
+	return NewMesh(mshdb, atxDb, ConfigTst(), &MeshValidatorMock{}, &MemPoolMock{}, &MemPoolMock{}, s, lg), atxDb
 }
 
 func addTransactionsToBlock(bl *types.Block, numOfTxs int) int64 {

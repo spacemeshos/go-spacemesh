@@ -7,6 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/sync"
@@ -14,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spf13/cobra"
 	"os"
+	"reflect"
 	"time"
 )
 
@@ -79,11 +81,15 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	mshdb := mesh.NewPersistentMeshDB(app.Config.DataDir, lg)
 	atxdbStore, _ := database.NewLDBDatabase(app.Config.DataDir+"atx", 0, 0)
 	atxdb := activation.NewActivationDb(atxdbStore, &sync.MockIStore{}, mshdb, uint64(10), &sync.ValidatorMock{}, lg.WithName("atxDB"))
-	msh := mesh.NewMesh(mshdb, atxdb, sync.ConfigTst(), &sync.MeshValidatorMock{}, &sync.MockState{}, lg.WithOptions(log.Nop))
+
+	txpool := miner.NewMemPool(reflect.TypeOf([]*types.SerializableTransaction{}))
+	atxpool := miner.NewMemPool(reflect.TypeOf([]*types.ActivationTx{}))
+
+	msh := mesh.NewMesh(mshdb, atxdb, sync.ConfigTst(), &sync.MeshValidatorMock{}, txpool, atxpool, &sync.MockState{}, lg.WithOptions(log.Nop))
 	defer msh.Close()
 
 	ch := make(chan types.LayerID, 1)
-	app.sync = sync.NewSync(swarm, msh, sync.BlockValidatorMock{}, sync.TxValidatorMock{}, conf, ch, lg.WithName("sync"))
+	app.sync = sync.NewSync(swarm, msh, miner.NewMemPool(reflect.TypeOf(types.SerializableTransaction{})), miner.NewMemPool(reflect.TypeOf(types.ActivationTx{})), sync.BlockValidatorMock{}, sync.TxValidatorMock{}, conf, ch, lg.WithName("sync"))
 	ch <- 101
 	if err = swarm.Start(); err != nil {
 		log.Panic("error starting p2p err=%v", err)

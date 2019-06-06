@@ -16,6 +16,13 @@ import (
 	"time"
 )
 
+type MemPool interface {
+	Get(id interface{}) interface{}
+	PopItems(size int) interface{}
+	Put(id interface{}, item interface{})
+	Invalidate(id interface{})
+}
+
 type BlockValidator interface {
 	BlockEligible(block *types.BlockHeader) (bool, error)
 }
@@ -38,6 +45,8 @@ type Syncer struct {
 	Configuration
 	log.Log
 	*server.MessageServer
+	txpool            MemPool
+	atxpool           MemPool
 	currentLayer      types.LayerID
 	SyncLock          uint32
 	startLock         uint32
@@ -106,7 +115,7 @@ func (s *Syncer) run() {
 }
 
 //fires a sync every sm.syncInterval or on force space from outside
-func NewSync(srv service.Service, layers *mesh.Mesh, bv BlockValidator, tv TxValidator, conf Configuration, clock timesync.LayerTimer, logger log.Log) *Syncer {
+func NewSync(srv service.Service, layers *mesh.Mesh, txpool MemPool, atxpool MemPool, bv BlockValidator, tv TxValidator, conf Configuration, clock timesync.LayerTimer, logger log.Log) *Syncer {
 	s := Syncer{
 		BlockValidator: bv,
 		TxValidator:    tv,
@@ -116,6 +125,8 @@ func NewSync(srv service.Service, layers *mesh.Mesh, bv BlockValidator, tv TxVal
 		Peers:          p2p.NewPeers(srv, logger.WithName("peers")),
 		MessageServer:  server.NewMsgServer(srv.(server.Service), syncProtocol, conf.RequestTimeout, make(chan service.DirectMessage, config.ConfigValues.BufferSize), logger.WithName("srv")),
 		SyncLock:       0,
+		txpool:         txpool,
+		atxpool:        atxpool,
 		startLock:      0,
 		forceSync:      make(chan bool),
 		clock:          clock,
@@ -189,18 +200,9 @@ func (s *Syncer) fetchFullBlocks(blockIds []types.BlockID) ([]*types.Block, erro
 	for out := range output {
 		mb := out.(*types.MiniBlock)
 
-		//sync Transactions
-		txs, err := s.Txs(mb)
+		associated, txs, atxs, err := s.syncMissingContent(mb)
 		if err != nil {
-			s.Warning(fmt.Sprintf("failed fetching block %v transactions ", err))
-			continue
-		}
-
-		//sync ATxs
-		atxs, associated, err := s.ATXs(mb)
-
-		if err != nil {
-			s.Warning(fmt.Sprintf("failed fetching block %v activation transactions ", err))
+			s.Warning(fmt.Sprintf("failed derefrencing block data %v", mb.ID()), err)
 			continue
 		}
 
@@ -233,8 +235,36 @@ func (s *Syncer) fetchFullBlocks(blockIds []types.BlockID) ([]*types.Block, erro
 	return blocksArr, nil
 }
 
+func (s *Syncer) syncMissingContent(mb *types.MiniBlock) (*types.ActivationTx, []*types.SerializableTransaction, []*types.ActivationTx, error) {
+	//sync Transactions
+	txs, err := s.Txs(mb)
+	if err != nil {
+		s.Warning(fmt.Sprintf("failed fetching block %v transactions ", err))
+		return nil, nil, nil, err
+	}
+	//sync ATxs
+	atxs, associated, err := s.ATXs(mb)
+	if err != nil {
+		s.Warning(fmt.Sprintf("failed fetching block %v activation transactions ", err))
+		return nil, nil, nil, err
+	}
+	return associated, txs, atxs, err
+}
+
 func (s *Syncer) Txs(mb *types.MiniBlock) ([]*types.SerializableTransaction, error) {
-	foundTxs, missing := s.GetTransactions(mb.TxIds)
+	//look in db
+	foundTxs, missinDB := s.GetTransactions(mb.TxIds)
+
+	//look in pool
+	missing := make([]types.TransactionId, 0, len(missinDB))
+	for _, t := range missinDB {
+		if tx := s.txpool.Get(t); tx != nil {
+			foundTxs[t] = tx.(*types.SerializableTransaction)
+		} else {
+			missing = append(missing, t)
+		}
+	}
+
 	//map and sort txs
 	txMap := make(map[types.TransactionId]*types.SerializableTransaction)
 	if len(missing) > 0 {
@@ -260,7 +290,18 @@ func (s *Syncer) Txs(mb *types.MiniBlock) ([]*types.SerializableTransaction, err
 }
 
 func (s *Syncer) ATXs(mb *types.MiniBlock) (atxs []*types.ActivationTx, associated *types.ActivationTx, err error) {
-	localAtxs, missing := s.GetATXs(mb.ATxIds)
+	foundAtxs, missinDB := s.GetATXs(mb.ATxIds)
+
+	//look in pool
+	missing := make([]types.AtxId, 0, len(missinDB))
+	for _, t := range missinDB {
+		if tx := s.atxpool.Get(t); tx != nil {
+			foundAtxs[t] = tx.(*types.ActivationTx)
+		} else {
+			s.Warning("atx %v not found ", t.Hex())
+			missing = append(missing, t)
+		}
+	}
 
 	fetchAssociated := false
 	if mb.ATXID != *types.EmptyAtxId {
@@ -290,7 +331,7 @@ func (s *Syncer) ATXs(mb *types.MiniBlock) (atxs []*types.ActivationTx, associat
 
 	atxs = make([]*types.ActivationTx, 0, len(mb.TxIds))
 	for _, t := range mb.ATxIds {
-		if tx, ok := localAtxs[t]; ok {
+		if tx, ok := foundAtxs[t]; ok {
 			atxs = append(atxs, tx)
 		} else if tx, ok := txMap[t]; ok {
 			atxs = append(atxs, tx)

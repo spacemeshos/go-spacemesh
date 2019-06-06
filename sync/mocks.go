@@ -87,3 +87,20 @@ type ValidatorMock struct{}
 func (*ValidatorMock) Validate(nipst *nipst.NIPST, expectedChallenge common.Hash) error {
 	return nil
 }
+
+type MemPoolMock struct {
+}
+
+func (mem *MemPoolMock) Get(id interface{}) interface{} {
+	return nil
+}
+
+func (mem *MemPoolMock) PopItems(size int) interface{} {
+	return nil
+}
+
+func (mem *MemPoolMock) Put(id interface{}, item interface{}) {
+}
+
+func (mem *MemPoolMock) Invalidate(id interface{}) {
+}

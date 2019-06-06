@@ -31,6 +31,10 @@ type MeshValidator interface {
 	ContextualValidity(id types.BlockID) bool
 }
 
+type MemPoolInValidator interface {
+	Invalidate(id interface{})
+}
+
 type StateUpdater interface {
 	ApplyTransactions(layer types.LayerID, transactions Transactions) (uint32, error)
 	ApplyRewards(layer types.LayerID, miners []string, underQuota map[string]int, bonusReward, diminishedReward *big.Int)
@@ -46,33 +50,20 @@ type Mesh struct {
 	log.Log
 	*MeshDB
 	AtxDB
-	config        Config
-	verifiedLayer types.LayerID
-	latestLayer   types.LayerID
-	lastSeenLayer types.LayerID
-	lMutex        sync.RWMutex
-	lkMutex       sync.RWMutex
-	lcMutex       sync.RWMutex
-	lvMutex       sync.RWMutex
-	tortoise      MeshValidator
-	state         StateUpdater
-	orphMutex     sync.RWMutex
-	done          chan struct{}
-}
-
-func NewPersistentMesh(path string, rewardConfig Config, mesh MeshValidator, state StateUpdater, atxdb AtxDB, logger log.Log) *Mesh {
-	//todo add boot from disk
-	ll := &Mesh{
-		Log:      logger,
-		tortoise: mesh,
-		state:    state,
-		done:     make(chan struct{}),
-		MeshDB:   NewPersistentMeshDB(path, logger),
-		config:   rewardConfig,
-		AtxDB:    atxdb,
-	}
-
-	return ll
+	txInvalidator  MemPoolInValidator
+	atxInvalidator MemPoolInValidator
+	config         Config
+	verifiedLayer  types.LayerID
+	latestLayer    types.LayerID
+	lastSeenLayer  types.LayerID
+	lMutex         sync.RWMutex
+	lkMutex        sync.RWMutex
+	lcMutex        sync.RWMutex
+	lvMutex        sync.RWMutex
+	tortoise       MeshValidator
+	state          StateUpdater
+	orphMutex      sync.RWMutex
+	done           chan struct{}
 }
 
 func NewMemMesh(rewardConfig Config, mesh MeshValidator, state StateUpdater, atxdb AtxDB, logger log.Log) *Mesh {
@@ -90,16 +81,18 @@ func NewMemMesh(rewardConfig Config, mesh MeshValidator, state StateUpdater, atx
 	return ll
 }
 
-func NewMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh MeshValidator, state StateUpdater, logger log.Log) *Mesh {
+func NewMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh MeshValidator, txInvalidator MemPoolInValidator, atxInvalidator MemPoolInValidator, state StateUpdater, logger log.Log) *Mesh {
 	//todo add boot from disk
 	ll := &Mesh{
-		Log:      logger,
-		tortoise: mesh,
-		state:    state,
-		done:     make(chan struct{}),
-		MeshDB:   db,
-		config:   rewardConfig,
-		AtxDB:    atxDb,
+		Log:            logger,
+		tortoise:       mesh,
+		txInvalidator:  txInvalidator,
+		atxInvalidator: atxInvalidator,
+		state:          state,
+		done:           make(chan struct{}),
+		MeshDB:         db,
+		config:         rewardConfig,
+		AtxDB:          atxDb,
 	}
 
 	return ll
@@ -338,8 +331,21 @@ func (m *Mesh) AddBlock(blk *types.Block) error {
 	m.SetLatestLayer(blk.Layer())
 	//new block add to orphans
 	m.handleOrphanBlocks(blk)
-	//m.tortoise.HandleLateblock.Block(block) //why this? todo should be thread safe?
+
+	//invalidate txs and atxs from pool
+	m.invalidateFromPools(blk)
+
 	return nil
+}
+
+func (m *Mesh) invalidateFromPools(blk *types.Block) {
+	for _, id := range blk.Txs {
+		m.txInvalidator.Invalidate(types.GetTransactionId(id))
+	}
+	m.atxInvalidator.Invalidate(blk.ATXID)
+	for _, id := range blk.ATXs {
+		m.atxInvalidator.Invalidate(id.Id())
+	}
 }
 
 //todo this overwrites the previous value if it exists

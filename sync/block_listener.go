@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -12,8 +13,6 @@ import (
 )
 
 type MessageServer server.MessageServer
-
-const NewBlockProtocol = "newBlock"
 
 type BlockListener struct {
 	*server.MessageServer
@@ -59,7 +58,7 @@ func NewBlockListener(net service.Service, bv BlockValidator, sync *Syncer, conc
 		semaphore:            make(chan struct{}, concurrency),
 		unknownQueue:         make(chan types.BlockID, 200), //todo tune buffer size + get buffer from config
 		exit:                 make(chan struct{}),
-		receivedGossipBlocks: net.RegisterGossipProtocol(NewBlockProtocol),
+		receivedGossipBlocks: net.RegisterGossipProtocol(config.NewBlockProtocol),
 	}
 	return &bl
 }
@@ -118,8 +117,9 @@ func (bl *BlockListener) handleBlock(data service.GossipMessage) {
 		bl.Info("Block already received %v", blk.ID())
 		return
 	}
+
 	bl.Info("added block to database %v", blk.ID())
-	data.ReportValidation(NewBlockProtocol)
+	data.ReportValidation(config.NewBlockProtocol)
 	bl.addUnknownToQueue(block)
 }
 

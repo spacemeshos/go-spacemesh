@@ -54,6 +54,23 @@ func (AtxDbMock) ProcessBlockATXs(block *types.Block) {
 
 }
 
+type MemPoolMock struct {
+}
+
+func (mem *MemPoolMock) Get(id interface{}) interface{} {
+	return nil
+}
+
+func (mem *MemPoolMock) PopItems(size int) interface{} {
+	return nil
+}
+
+func (mem *MemPoolMock) Put(id interface{}, item interface{}) {
+}
+
+func (mem *MemPoolMock) Invalidate(id interface{}) {
+}
+
 func ConfigTst() mesh.Config {
 	return mesh.Config{
 		big.NewInt(10),
@@ -68,7 +85,7 @@ func getAtxDb(id string) (*ActivationDb, *mesh.Mesh) {
 	lg := log.NewDefault(id)
 	memesh := mesh.NewMemMeshDB(lg.WithName("meshDB"))
 	atxdb := NewActivationDb(database.NewMemDatabase(), NewIdentityStore(database.NewMemDatabase()), memesh, 1000, &ValidatorMock{}, lg.WithName("atxDB"))
-	layers := mesh.NewMesh(memesh, atxdb, ConfigTst(), &MeshValidatorMock{}, &MockState{}, lg.WithName("mesh"))
+	layers := mesh.NewMesh(memesh, atxdb, ConfigTst(), &MeshValidatorMock{}, &MemPoolMock{}, &MemPoolMock{}, &MockState{}, lg.WithName("mesh"))
 	return atxdb, layers
 }
 

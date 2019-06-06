@@ -184,6 +184,6 @@ func GetTransactionId(t *SerializableTransaction) TransactionId {
 	if err != nil {
 		panic("could not Serialize transaction")
 	}
-
-	return sha3.Sum256(tx)
+	res := sha3.Sum256(tx)
+	return res
 }

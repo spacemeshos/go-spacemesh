@@ -4,7 +4,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -13,6 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"math/big"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -38,7 +41,8 @@ func ListenerFactory(serv service.Service, peers p2p.Peers, name string) *BlockL
 	ts := timesync.NewTicker(MockTimer{}, tick, start)
 	tk := ts.Subscribe()
 	l := log.New(name, "", "")
-	sync := NewSync(serv, getMesh(memoryDB, name+"_"+time.Now().String()), BlockValidatorMock{}, TxValidatorMock{}, conf, tk, l)
+	sync := NewSync(serv, getMesh(memoryDB, name+"_"+time.Now().String()), miner.NewMemPool(reflect.TypeOf(types.SerializableTransaction{})),
+		miner.NewMemPool(reflect.TypeOf(types.ActivationTx{})), BlockValidatorMock{}, TxValidatorMock{}, conf, tk, l)
 	sync.Peers = peers
 	nbl := NewBlockListener(serv, BlockValidatorMock{}, sync, 2, log.New(name, "", ""))
 	return nbl
@@ -188,7 +192,7 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 	data, err := types.InterfaceToBytes(*mblk)
 	require.NoError(t, err)
 
-	err = n2.Broadcast(NewBlockProtocol, data)
+	err = n2.Broadcast(config.NewBlockProtocol, data)
 	assert.NoError(t, err)
 
 	time.Sleep(3 * time.Second)
