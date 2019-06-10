@@ -206,6 +206,26 @@ def add_single_client(deployment_id, container_specs):
     return client_name
 
 
+def add_multi_clients(deployment_id, container_specs, size=2):
+    resp = deployment.create_deployment(file_name=CLIENT_DEPLOYMENT_FILE,
+                                        name_space=testconfig['namespace'],
+                                        deployment_id=deployment_id,
+                                        replica_size=size,
+                                        container_specs=container_specs,
+                                        time_out=testconfig['deployment_ready_time_out'])
+    client_pods = (
+        client.CoreV1Api().list_namespaced_pod(testconfig['namespace'],
+                                               include_uninitialized=True,
+                                               label_selector=(
+                                                   "name={0}".format(
+                                                       resp.metadata._name.split('-')[0]))).items)
+    pods = []
+    for c in client_pods:
+        pod_name= c.metadata.name
+        if pod_name.startswith(resp.metadata.name):
+            pods.append(pod_name)
+    return pods
+
 def get_conf(bs_info, setup_poet, setup_oracle, args=None):
     client_args = {} if 'args' not in testconfig['client'] else testconfig['client']['args']
 

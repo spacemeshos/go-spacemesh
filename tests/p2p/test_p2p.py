@@ -11,7 +11,7 @@ from elasticsearch_dsl import Search, Q
 from tests.fixtures import init_session, load_config, set_namespace, session_id, set_docker_images
 from tests.test_bs import get_elastic_search_api, setup_bootstrap, setup_oracle, setup_poet, create_configmap, setup_clients
 from tests.test_bs import query_message, save_log_on_exit, add_client, api_call, add_curl
-from tests.test_bs import add_single_client, get_conf
+from tests.test_bs import add_single_client, add_multi_clients, get_conf
 
 # ==============================================================================
 #    TESTS
@@ -20,6 +20,7 @@ from tests.test_bs import add_single_client, get_conf
 dt = datetime.now()
 todaydate = dt.strftime("%Y.%m.%d")
 current_index = 'kubernetes_cluster-' + todaydate
+
 
 def query_bootstrap_es(indx, namespace, bootstrap_po_name):
     es = get_elastic_search_api()
@@ -42,7 +43,8 @@ def test_bootstrap(setup_bootstrap):
                                                                 testconfig['namespace'],
                                                                 setup_bootstrap.pods[0]['name'])
 
-def test_client(setup_clients,add_curl, save_log_on_exit):
+
+def test_client(setup_clients, add_curl, save_log_on_exit):
     fields = {'M':'discovery_bootstrap'}
     timetowait = len(setup_clients.pods)/2
     print("Sleeping " + str(timetowait) + " before checking out bootstrap results")
@@ -58,6 +60,19 @@ def test_add_client(add_client):
     fields = {'M': 'discovery_bootstrap'}
     hits = query_message(current_index, testconfig['namespace'], add_client, fields, True)
     assert len(hits) == 1, "Could not find new Client bootstrap message pod:{0}".format(add_client)
+
+
+def test_add_many_clients(setup_oracle, setup_poet, setup_bootstrap, setup_clients):
+
+    bs_info = setup_bootstrap.pods[0]
+    cspec = get_conf(bs_info, setup_poet, setup_oracle)
+
+    pods = add_multi_clients(setup_bootstrap.deployment_id, cspec, size=4)
+    time.sleep(20)  # wait for the new clients to finish bootstrap
+    fields = {'M': 'discovery_bootstrap'}
+    for p in pods:
+        hits = query_message(current_index, testconfig['namespace'], p, fields, True)
+        assert len(hits) == 1, "Could not find new Client bootstrap message pod:{0}".format(p)
 
 
 def test_gossip(setup_clients, add_curl):
