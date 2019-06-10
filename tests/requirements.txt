@@ -13,3 +13,5 @@ urllib3==1.24.3
 requests==2.21.0
 requests-oauthlib==1.2.0
 toml==0.10.0
+pure25519==0.0.1
+
