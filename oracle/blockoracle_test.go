@@ -252,7 +252,5 @@ func TestBlockOracleValidatorInvalidProof3(t *testing.T) {
 
 func newBlockWithEligibility(layerID types.LayerID, nodeID types.NodeId, atxID types.AtxId,
 	proof types.BlockEligibilityProof) *types.Block {
-
-	return &types.Block{BlockHeader: types.BlockHeader{LayerIndex: layerID, MinerID: nodeID, ATXID: atxID,
-		EligibilityProof: proof}}
+	return &types.Block{MiniBlock: types.MiniBlock{BlockHeader: types.BlockHeader{LayerIndex: layerID, MinerID: nodeID, ATXID: atxID, EligibilityProof: proof}}}
 }

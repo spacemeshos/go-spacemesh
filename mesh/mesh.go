@@ -42,7 +42,6 @@ type StateUpdater interface {
 }
 
 type AtxDB interface {
-	ProcessBlockATXs(block *types.Block)
 	ProcessAtx(atx *types.ActivationTx)
 	GetAtx(id types.AtxId) (*types.ActivationTx, error)
 	GetNipst(id types.AtxId) (*nipst.NIPST, error)
@@ -182,60 +181,15 @@ func (m *Mesh) SetLatestLayer(idx types.LayerID) {
 	}
 }
 
-func (m *Mesh) GetBlock(id types.BlockID) (*types.Block, error) {
-
-	blk, err := m.GetMiniBlock(id)
-	if err != nil {
-		m.Error("could not retrieve block %v from database %v", id, err)
-		return nil, err
-	}
-
-	return m.MiniBlockToBlock(blk)
-}
-
-func (m *Mesh) MiniBlockToBlock(blk *types.MiniBlock) (*types.Block, error) {
-	txs, missingTxs := m.GetTransactions(blk.TxIds)
-	if missingTxs != nil {
-		return nil, errors.New("could not retrieve block %v transactions from database ")
-	}
-
-	var transactions []*types.SerializableTransaction
-	for _, value := range blk.TxIds {
-		transactions = append(transactions, txs[value])
-	}
-
-	atxs, missingATxs := m.GetATXs(blk.ATxIds)
-	if missingATxs != nil {
-		return nil, errors.New("could not retrieve block %v transactions from database ")
-	}
-
-	var activations []*types.ActivationTx
-	for _, value := range blk.ATxIds {
-		activations = append(activations, atxs[value])
-	}
-
-	res := blockFromMiniAndTxs(blk, transactions, activations)
-	return res, nil
-}
-
 func (m *Mesh) GetLayer(index types.LayerID) (*types.Layer, error) {
 
-	mBlocks, err := m.LayerMiniBlocks(index)
+	mBlocks, err := m.LayerBlocks(index)
 	if err != nil {
 		return nil, err
-	}
-
-	blocks := make([]*types.Block, 0, len(mBlocks))
-	for _, k := range mBlocks {
-		block, err := m.MiniBlockToBlock(k)
-		if err != nil {
-			return nil, errors.New("could not retrieve block " + fmt.Sprint(k) + " " + err.Error())
-		}
-		blocks = append(blocks, block)
 	}
 
 	l := types.NewLayer(types.LayerID(index))
-	l.SetBlocks(blocks)
+	l.SetBlocks(mBlocks)
 
 	return l, nil
 }
@@ -267,14 +221,33 @@ func (m *Mesh) ExtractUniqueOrderedTransactions(l *types.Layer) []*Transaction {
 	txs := make([]*Transaction, 0, layerSize)
 	sortedBlocks := SortBlocks(l.Blocks())
 
+	txids := make(map[types.TransactionId]struct{})
+
 	for _, b := range sortedBlocks {
 		if !m.tortoise.ContextualValidity(b.ID()) {
+			m.Info("block %v not Contextualy valid", b)
 			continue
 		}
-		for _, tx := range b.Txs {
-			//todo: think about these conversions.. are they needed?
-			txs = append(txs, SerializableTransaction2StateTransaction(tx))
+
+		for _, id := range b.TxIds {
+			txids[id] = struct{}{}
 		}
+	}
+
+	idSlice := make([]types.TransactionId, 0, len(txids))
+	for id := range txids {
+		idSlice = append(idSlice, id)
+	}
+
+	stxs, missing := m.GetTransactions(idSlice)
+	if len(missing) != 0 {
+		m.Error("could not find transactions %v from layer %v", missing, l.Index())
+		m.Panic("could not find transactions %v", missing)
+	}
+
+	for _, tx := range stxs {
+		//todo: think about these conversions.. are they needed?
+		txs = append(txs, SerializableTransaction2StateTransaction(tx))
 	}
 
 	return MergeDoubles(txs)
@@ -285,7 +258,7 @@ func (m *Mesh) PushTransactions(oldBase types.LayerID, newBase types.LayerID) {
 
 		l, err := m.GetLayer(i)
 		if err != nil || l == nil {
-			m.Error("") //todo handle error
+			m.Error("could not get layer !!!!!!!!!!!!!!!! %v", err) //todo handle error
 			return
 		}
 
@@ -324,50 +297,69 @@ func (m *Mesh) GetLatestView() []types.BlockID {
 }
 
 func (m *Mesh) AddBlock(blk *types.Block) error {
-	m.Info("add block %d", blk.ID())
-	m.AtxDB.ProcessBlockATXs(blk) // change this to return error if process failed
+	m.Debug("add block %d", blk.ID())
+
 	if err := m.MeshDB.AddBlock(blk); err != nil {
 		m.Error("failed to add block %v  %v", blk.ID(), err)
 		return err
 	}
+
 	m.SetLatestLayer(blk.Layer())
+
 	//new block add to orphans
-	m.handleOrphanBlocks(blk)
+	m.handleOrphanBlocks(&blk.BlockHeader)
 
 	//invalidate txs and atxs from pool
-	m.invalidateFromPools(blk)
+	m.invalidateFromPools(&blk.MiniBlock)
 
 	return nil
 }
 
-func (m *Mesh) invalidateFromPools(blk *types.Block) {
-	for _, id := range blk.Txs {
-		m.txInvalidator.Invalidate(types.GetTransactionId(id))
+func (m *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.SerializableTransaction, atxs []*types.ActivationTx) error {
+	m.Debug("add block %d", blk.ID())
+
+	atxids := make([]types.AtxId, 0, len(atxs))
+	for _, t := range atxs {
+		m.AtxDB.ProcessAtx(t) // change this to return error if process failed
+		m.Info("process atx %d", blk.ID())
+		atxids = append(atxids, t.Id())
+	}
+
+	txids, err := m.writeTransactions(txs)
+	if err != nil {
+		return fmt.Errorf("could not write transactions of block %v database %v", blk.ID(), err)
+	}
+
+	blk.ATxIds = atxids
+	blk.TxIds = txids
+
+	if err := m.MeshDB.AddBlock(blk); err != nil {
+		m.Error("failed to add block %v  %v", blk.ID(), err)
+		return err
+	}
+
+	m.SetLatestLayer(blk.Layer())
+	//new block add to orphans
+	m.handleOrphanBlocks(&blk.BlockHeader)
+
+	//invalidate txs and atxs from pool
+	m.invalidateFromPools(&blk.MiniBlock)
+
+	return nil
+}
+
+func (m *Mesh) invalidateFromPools(blk *types.MiniBlock) {
+	for _, id := range blk.TxIds {
+		m.txInvalidator.Invalidate(id)
 	}
 	m.atxInvalidator.Invalidate(blk.ATXID)
-	for _, id := range blk.ATXs {
-		m.atxInvalidator.Invalidate(id.Id())
+	for _, id := range blk.ATxIds {
+		m.atxInvalidator.Invalidate(id)
 	}
-}
-
-//todo this overwrites the previous value if it exists
-func (m *Mesh) AddLayer(layer *types.Layer) error {
-	if len(layer.Blocks()) == 0 {
-		m.layers.Put(layer.Index().ToBytes(), []byte{})
-		return nil
-	}
-
-	//add blocks to mDB
-	for _, bl := range layer.Blocks() {
-		if err := m.AddBlock(bl); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 //todo better thread safety
-func (m *Mesh) handleOrphanBlocks(blk *types.Block) {
+func (m *Mesh) handleOrphanBlocks(blk *types.BlockHeader) {
 	m.orphMutex.Lock()
 	defer m.orphMutex.Unlock()
 	if _, ok := m.orphanBlocks[blk.Layer()]; !ok {
@@ -456,7 +448,7 @@ func (m *Mesh) AccumulateRewards(rewardLayer types.LayerID, params Config) {
 			continue
 		}
 		ids = append(ids, atx.NodeId.Key)
-		if uint32(len(bl.Txs)) < params.TxQuota {
+		if uint32(len(bl.TxIds)) < params.TxQuota {
 			//todo: think of giving out reward for unique txs as well
 			uq[bl.MinerID.Key] = uq[bl.MinerID.Key] + 1
 		}
@@ -488,18 +480,17 @@ func (m *Mesh) GetContextualValidity(id types.BlockID) (bool, error) {
 	return m.getContextualValidity(id)
 }
 
-func CreateGenesisBlock() *types.Block {
-	bl := &types.Block{
+var GenesisBlock = types.Block{
+	MiniBlock: types.MiniBlock{
 		BlockHeader: types.BlockHeader{Id: types.BlockID(GenesisId),
 			LayerIndex: 0,
 			Data:       []byte("genesis")},
-	}
-	return bl
+	},
 }
 
 func GenesisLayer() *types.Layer {
 	l := types.NewLayer(Genesis)
-	l.AddBlock(CreateGenesisBlock())
+	l.AddBlock(&GenesisBlock)
 	return l
 }
 

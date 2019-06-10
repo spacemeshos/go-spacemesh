@@ -116,7 +116,7 @@ func (s *Syncer) run() {
 
 //fires a sync every sm.syncInterval or on force space from outside
 func NewSync(srv service.Service, layers *mesh.Mesh, txpool MemPool, atxpool MemPool, bv BlockValidator, tv TxValidator, conf Configuration, clock timesync.LayerTimer, logger log.Log) *Syncer {
-	s := Syncer{
+	s := &Syncer{
 		BlockValidator: bv,
 		TxValidator:    tv,
 		Configuration:  conf,
@@ -136,9 +136,9 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool MemPool, atxpool Mem
 	s.RegisterBytesMsgHandler(LAYER_HASH, newLayerHashRequestHandler(layers, logger))
 	s.RegisterBytesMsgHandler(MINI_BLOCK, newMiniBlockRequestHandler(layers, logger))
 	s.RegisterBytesMsgHandler(LAYER_IDS, newLayerBlockIdsRequestHandler(layers, logger))
-	s.RegisterBytesMsgHandler(TX, newTxsRequestHandler(layers, logger))
-	s.RegisterBytesMsgHandler(ATX, newATxsRequestHandler(layers, logger))
-	return &s
+	s.RegisterBytesMsgHandler(TX, newTxsRequestHandler(s, logger))
+	s.RegisterBytesMsgHandler(ATX, newATxsRequestHandler(s, logger))
+	return s
 }
 
 func (s *Syncer) maxSyncLayer() types.LayerID {
@@ -198,15 +198,14 @@ func (s *Syncer) fetchFullBlocks(blockIds []types.BlockID) ([]*types.Block, erro
 	output := s.fetchWithFactory(BlockReqFactory(blockIds), s.Concurrency)
 	blocksArr := make([]*types.Block, 0, len(blockIds))
 	for out := range output {
-		mb := out.(*types.MiniBlock)
+		block := out.(*types.Block)
 
-		associated, txs, atxs, err := s.syncMissingContent(mb)
+		associated, txs, atxs, err := s.syncMissingContent(&block.MiniBlock)
 		if err != nil {
-			s.Warning(fmt.Sprintf("failed derefrencing block data %v", mb.ID()), err)
+			s.Warning(fmt.Sprintf("failed derefrencing block data %v", block.ID()), err)
 			continue
 		}
 
-		block := &types.Block{BlockHeader: mb.BlockHeader, Txs: txs, ATXs: atxs}
 		eligible, err := s.BlockEligible(&block.BlockHeader)
 		if err != nil {
 			s.Warning(fmt.Sprintf("failed checking eligiblety %v", block.ID()), err)
@@ -223,7 +222,7 @@ func (s *Syncer) fetchFullBlocks(blockIds []types.BlockID) ([]*types.Block, erro
 
 		s.Info("add block to layer %v", block)
 
-		if err := s.AddBlock(block); err != nil {
+		if err := s.AddBlockWithTxs(block, txs, atxs); err != nil {
 			s.Warning(fmt.Sprintf("could not add %v", block.ID()), err)
 			continue
 		}
@@ -239,13 +238,13 @@ func (s *Syncer) syncMissingContent(mb *types.MiniBlock) (*types.ActivationTx, [
 	//sync Transactions
 	txs, err := s.Txs(mb)
 	if err != nil {
-		s.Warning(fmt.Sprintf("failed fetching block %v transactions ", err))
+		s.Warning(fmt.Sprintf("failed fetching block %v transactions %v", mb.ID(), err))
 		return nil, nil, nil, err
 	}
 	//sync ATxs
 	atxs, associated, err := s.ATXs(mb)
 	if err != nil {
-		s.Warning(fmt.Sprintf("failed fetching block %v activation transactions ", err))
+		s.Warning(fmt.Sprintf("failed fetching block %v activation transactions %v", mb.ID(), err))
 		return nil, nil, nil, err
 	}
 	return associated, txs, atxs, err

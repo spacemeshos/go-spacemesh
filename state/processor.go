@@ -1,8 +1,11 @@
 package state
 
 import (
+	"bytes"
 	"container/list"
 	"fmt"
+	"github.com/nullstyle/go-xdr/xdr3"
+	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -62,6 +65,34 @@ func NewTransactionProcessor(rnd PseudoRandomizer, db *StateDB, gasParams GasCon
 		db:           db.TrieDB(),
 		mu:           sync.Mutex{}, //sync between reset and apply mesh.Transactions
 	}
+}
+
+func PublicKeyToAccountAddress(pub ed25519.PublicKey) address.Address {
+	var addr address.Address
+	addr.SetBytes(pub[:common.AddressLength])
+	return addr
+}
+
+// Validate the signature by extracting the source account and validating its existence.
+// Return the src acount address and error in case of failure
+func (tp *TransactionProcessor) ValidateSignature(s types.Signed) (address.Address, error) {
+	var w bytes.Buffer
+	_, err := xdr.Marshal(&w, s.Obj())
+	if err != nil {
+		return address.Address{}, err
+	}
+
+	pubKey, err := ed25519.ExtractPublicKey(w.Bytes(), s.Sig())
+	if err != nil {
+		return address.Address{}, err
+	}
+
+	addr := PublicKeyToAccountAddress(pubKey)
+	if !tp.globalState.Exist(addr) {
+		return address.Address{}, fmt.Errorf("Failed to validate tx signature, unknown src account %v", addr)
+	}
+
+	return addr, nil
 }
 
 //should receive sort predicate

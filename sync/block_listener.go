@@ -46,10 +46,6 @@ func (bl *BlockListener) Start() {
 	}
 }
 
-func (bl *BlockListener) OnNewBlock(b *types.Block) {
-	bl.addUnknownToQueue(b)
-}
-
 func NewBlockListener(net service.Service, bv BlockValidator, sync *Syncer, concurrency int, logger log.Log) *BlockListener {
 	bl := BlockListener{
 		BlockValidator:       bv,
@@ -84,26 +80,28 @@ func (bl *BlockListener) handleBlock(data service.GossipMessage) {
 		bl.Error("got empty message while listening to gossip blocks")
 		return
 	}
-	blk := &types.MiniBlock{}
-	err := types.BytesToInterface(data.Bytes(), blk)
+
+	var blk types.Block
+	err := types.BytesToInterface(data.Bytes(), &blk)
 	if err != nil {
-		bl.Error("received invalid block %v", data.Bytes())
-		return
-	}
-	bl.Log.With().Info("got new block", log.Uint64("id", uint64(blk.Id)), log.Int("txs", len(blk.TxIds)), log.Int("atxs", len(blk.ATxIds)))
-	eligible, err := bl.BlockEligible(&blk.BlockHeader)
-	if err != nil {
-		bl.Error("block eligible check failed %v", blk.ID())
-		return
-	}
-	if !eligible {
-		bl.Error("block not eligible, %v", blk.ID())
+		bl.Error("received invalid block %v", data.Bytes(), err)
 		return
 	}
 
-	associated, txs, atxs, err := bl.syncMissingContent(blk)
+	bl.Log.With().Info("got new block", log.Uint64("id", uint64(blk.Id)), log.Int("txs", len(blk.TxIds)), log.Int("atxs", len(blk.ATxIds)))
+	eligible, err := bl.BlockEligible(&blk.BlockHeader)
 	if err != nil {
-		bl.Error("handleBlock failed %v", blk.ID(), err)
+		bl.Error("block %v eligible check failed ", blk.ID())
+		return
+	}
+	if !eligible {
+		bl.Error("block %v not eligible", blk.ID())
+		return
+	}
+
+	associated, txs, atxs, err := bl.syncMissingContent(&blk.MiniBlock)
+	if err != nil {
+		bl.Error("handleBlock %v failed ", blk.ID(), err)
 		return
 	}
 
@@ -111,16 +109,14 @@ func (bl *BlockListener) handleBlock(data service.GossipMessage) {
 		bl.ProcessAtx(associated)
 	}
 
-	block := &types.Block{BlockHeader: blk.BlockHeader, Txs: txs, ATXs: atxs}
-
-	if err := bl.AddBlock(block); err != nil {
-		bl.Info("Block already received %v", blk.ID())
+	if err := bl.AddBlockWithTxs(&blk, txs, atxs); err != nil {
+		bl.Error("failed adding block %v", blk.ID())
 		return
 	}
 
-	bl.Info("added block to database %v", blk.ID())
+	bl.Info("added block %v to database", blk.ID())
 	data.ReportValidation(config.NewBlockProtocol)
-	bl.addUnknownToQueue(block)
+	bl.addUnknownToQueue(&blk.BlockHeader)
 }
 
 func (bl *BlockListener) run() {
@@ -140,7 +136,7 @@ func (bl *BlockListener) run() {
 	}
 }
 
-func (bl *BlockListener) addUnknownToQueue(b *types.Block) {
+func (bl *BlockListener) addUnknownToQueue(b *types.BlockHeader) {
 	for _, block := range b.ViewEdges {
 		//if unknown block
 		if _, err := bl.GetBlock(block); err != nil {

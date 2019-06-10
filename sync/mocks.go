@@ -90,12 +90,6 @@ func (t *AtxDbMock) GetNipst(id types.AtxId) (*nipst.NIPST, error) {
 	return t.nipsts[id], nil
 }
 
-func (t *AtxDbMock) ProcessBlockATXs(block *types.Block) {
-	for _, atx := range block.ATXs {
-		t.ProcessAtx(atx)
-	}
-}
-
 type MockIStore struct {
 }
 

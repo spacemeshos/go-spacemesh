@@ -3,6 +3,7 @@ package miner
 import (
 	"crypto/md5"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/activation"
@@ -30,8 +31,13 @@ type AtxProcessor interface {
 	ProcessAtx(atx *types.ActivationTx)
 }
 
+type Signer interface {
+	Sign(m []byte) []byte
+}
+
 type BlockBuilder struct {
 	log.Log
+	Signer
 	minerID          types.NodeId
 	rnd              *rand.Rand
 	beginRoundEvent  chan types.LayerID
@@ -50,7 +56,7 @@ type BlockBuilder struct {
 	started          bool
 }
 
-func NewBlockBuilder(minerID types.NodeId, net p2p.Service,
+func NewBlockBuilder(minerID types.NodeId, sgn Signer, net p2p.Service,
 	beginRoundEvent chan types.LayerID,
 	txPool *MemPool,
 	atxPool *MemPool,
@@ -65,6 +71,7 @@ func NewBlockBuilder(minerID types.NodeId, net p2p.Service,
 
 	return BlockBuilder{
 		minerID:          minerID,
+		Signer:           sgn,
 		Log:              lg,
 		rnd:              rand.New(rand.NewSource(int64(seed))),
 		beginRoundEvent:  beginRoundEvent,
@@ -144,12 +151,12 @@ func (t *BlockBuilder) AddTransaction(tx *types.SerializableTransaction) error {
 }
 
 func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibilityProof types.BlockEligibilityProof,
-	txs []*types.SerializableTransaction, atx []*types.ActivationTx) (*types.MiniBlock, error) {
+	txs []*types.SerializableTransaction, atx []*types.ActivationTx) (*types.Block, error) {
 
 	var votes []types.BlockID = nil
 	var err error
 	if id == config.Genesis {
-		return nil, errors.New("cannot create block in genesis layer")
+		return nil, errors.New("cannot create blockBytes in genesis layer")
 	} else if id == config.Genesis+1 {
 		votes = append(votes, config.GenesisId)
 	} else {
@@ -193,7 +200,13 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 
 	t.Log.Info("I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d, viewEdges: %d atx %v, atxs:%v",
 		b.LayerIndex, b.Id, len(b.TxIds), len(b.BlockVotes), len(b.ViewEdges), b.ATXID.String()[:5], b.ATxIds)
-	return &b, nil
+
+	blockBytes, err := types.InterfaceToBytes(b)
+	if err != nil {
+		return nil, err
+	}
+
+	return &types.Block{MiniBlock: b, Signature: t.Signer.Sign(blockBytes)}, nil
 }
 
 func (t *BlockBuilder) listenForTx() {
@@ -205,12 +218,12 @@ func (t *BlockBuilder) listenForTx() {
 		case data := <-t.txGossipChannel:
 			if data != nil {
 				x, err := types.BytesAsTransaction(data.Bytes())
-				t.Log.With().Info("got new tx", log.String("sender", x.Origin.String()), log.String("receiver", x.Recipient.String()),
-					log.String("amount", x.AmountAsBigInt().String()), log.Uint64("nonce", x.AccountNonce), log.Bool("valid", err != nil))
 				if err != nil {
 					t.Log.Error("cannot parse incoming TX")
 					break
 				}
+				id := types.GetTransactionId(x)
+				t.Log.Info("got new tx %v", hex.EncodeToString(id[:]))
 				t.TransactionPool.Put(types.GetTransactionId(x), x)
 				data.ReportValidation(IncomingTxProtocol)
 			}
@@ -267,7 +280,7 @@ func (t *BlockBuilder) acceptBlockData() {
 					continue
 				}
 				go func() {
-					bytes, err := types.InterfaceToBytes(*blk)
+					bytes, err := types.InterfaceToBytes(blk)
 					if err != nil {
 						t.Log.Error("cannot serialize block %v", err)
 						return

@@ -253,9 +253,8 @@ func (app *SpacemeshApp) setupGenesis(cfg *apiCfg.GenesisConfig) {
 		app.state.SetNonce(id, acc.Nonce)
 	}
 
-	genesis := mesh.CreateGenesisBlock()
 	app.state.Commit(false)
-	app.mesh.AddBlock(genesis)
+	app.mesh.AddBlock(&mesh.GenesisBlock)
 }
 
 func (app *SpacemeshApp) setupTestFeatures() {
@@ -347,7 +346,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 
 	ha := hare.New(app.Config.HARE, swarm, sgn, nodeID, msh, hOracle, app.Config.CONSENSUS.LayersPerEpoch, idStore, atxdb, clock.Subscribe(), lg.WithName("hare"))
 
-	blockProducer := miner.NewBlockBuilder(nodeID, swarm, clock.Subscribe(), txpool, atxpool, coinToss, msh, ha, blockOracle, atxdb.ProcessAtx, lg.WithName("blockProducer"))
+	blockProducer := miner.NewBlockBuilder(nodeID, sgn, swarm, clock.Subscribe(), txpool, atxpool, coinToss, msh, ha, blockOracle, atxdb.ProcessAtx, lg.WithName("blockProducer"))
 	blockListener := sync.NewBlockListener(swarm, blockValidator, syncer, 4, lg.WithName("blockListener"))
 
 	nipstBuilder := nipst.NewNipstBuilder([]byte(nodeID.Key), commitmentConfig.SpaceUnit, commitmentConfig.Difficulty, 100, postClient, poetClient, lg.WithName("nipstBuilder")) // TODO: use both keys in the nodeID

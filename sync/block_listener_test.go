@@ -55,7 +55,7 @@ func TestBlockListener(t *testing.T) {
 	bl1 := ListenerFactory(n1, PeersMock{func() []p2p.Peer { return []p2p.Peer{n2.PublicKey()} }}, "1")
 	bl2 := ListenerFactory(n2, PeersMock{func() []p2p.Peer { return []p2p.Peer{n1.PublicKey()} }}, "2")
 	bl2.Start()
-
+	atx1, atx2, atx3, _ := getAtxs()
 	bl1.ProcessAtx(atx1)
 	bl1.ProcessAtx(atx2)
 	bl1.ProcessAtx(atx3)
@@ -95,11 +95,12 @@ func TestBlockListener2(t *testing.T) {
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
 
-	bl1 := ListenerFactory(n1, PeersMock{func() []p2p.Peer { return []p2p.Peer{n2.PublicKey()} }}, "TestBlockListener1")
-	bl2 := ListenerFactory(n2, PeersMock{func() []p2p.Peer { return []p2p.Peer{n1.PublicKey()} }}, "TestBlockListener2")
+	bl1 := ListenerFactory(n1, PeersMock{func() []p2p.Peer { return []p2p.Peer{n2.PublicKey()} }}, "TestBlockListener_1")
+	bl2 := ListenerFactory(n2, PeersMock{func() []p2p.Peer { return []p2p.Peer{n1.PublicKey()} }}, "TestBlockListener_2")
 
 	bl2.Start()
 
+	atx1, _, _, _ := getAtxs()
 	bl1.ProcessAtx(atx1)
 	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
 	block1.ATXID = atx1.Id()
@@ -181,15 +182,13 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 
 	blk := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data1"))
 	tx := types.NewSerializableTransaction(0, address.BytesToAddress([]byte{0x01}), address.BytesToAddress([]byte{0x02}), big.NewInt(10), big.NewInt(10), 10)
-	blk.AddTransaction(tx)
 	atx := types.NewActivationTx(types.NodeId{"whatwhatwhatwhat", []byte("bbb")}, 1, types.AtxId{}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{}), false)
-	blk.AddAtx(atx)
 
-	bl2.AddBlock(blk)
+	bl2.AddBlockWithTxs(blk, []*types.SerializableTransaction{tx}, []*types.ActivationTx{atx})
 
-	mblk := &types.MiniBlock{BlockHeader: blk.BlockHeader, TxIds: []types.TransactionId{types.GetTransactionId(tx)}, ATxIds: []types.AtxId{atx.Id()}}
+	mblk := types.Block{MiniBlock: types.MiniBlock{BlockHeader: blk.BlockHeader, TxIds: []types.TransactionId{types.GetTransactionId(tx)}, ATxIds: []types.AtxId{atx.Id()}}}
 
-	data, err := types.InterfaceToBytes(*mblk)
+	data, err := types.InterfaceToBytes(&mblk)
 	require.NoError(t, err)
 
 	err = n2.Broadcast(config.NewBlockProtocol, data)

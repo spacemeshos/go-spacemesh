@@ -53,13 +53,13 @@ func BlockReqFactory(blockIds []types.BlockID) RequestFactory {
 		ch := make(chan interface{}, 1)
 		foo := func(msg []byte) {
 			defer close(ch)
-			block := &types.MiniBlock{}
-			err := types.BytesToInterface(msg, block)
+			var block types.Block
+			err := types.BytesToInterface(msg, &block)
 			if err != nil {
-				s.Error("could not unmarshal Miniblock data")
+				s.Error("could not unmarshal Miniblock data", err)
 				return
 			}
-			ch <- block
+			ch <- &block
 		}
 		id, ok := <-blockIdsCh
 		if !ok {
