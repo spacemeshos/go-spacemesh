@@ -58,4 +58,6 @@ func TestCommitTracker_BuildCertificate(t *testing.T) {
 	tracker.OnCommit(BuildCommitMsg(generateSigning(t), s))
 	cert := tracker.BuildCertificate()
 	assert.Equal(t, 2, len(cert.AggMsgs.Messages))
+	assert.Nil(t, cert.AggMsgs.Messages[0].InnerMsg.Values)
+	assert.Nil(t, cert.AggMsgs.Messages[1].InnerMsg.Values)
 }
