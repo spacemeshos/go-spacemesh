@@ -79,7 +79,7 @@ const (
 )
 
 func (s *Syncer) IsSynced() bool {
-	return s.VerifiedLayer() == s.maxSyncLayer()-1
+	return s.ValidatedLayer()+1 == s.maxSyncLayer()
 }
 
 func (s *Syncer) Start() {
@@ -150,8 +150,8 @@ func (s *Syncer) maxSyncLayer() types.LayerID {
 
 func (s *Syncer) Synchronise() {
 	mu := sync.Mutex{}
-	for currentSyncLayer := s.VerifiedLayer() + 1; currentSyncLayer < s.maxSyncLayer(); currentSyncLayer++ {
-		s.Info("syncing layer %v to layer %v current consensus layer is %d", s.VerifiedLayer(), currentSyncLayer, s.currentLayer)
+	for currentSyncLayer := s.ValidatedLayer() + 1; currentSyncLayer < s.maxSyncLayer(); currentSyncLayer++ {
+		s.Info("syncing layer %v to layer %v current consensus layer is %d", s.ValidatedLayer(), currentSyncLayer, s.currentLayer)
 		lyr, err := s.GetLayer(types.LayerID(currentSyncLayer))
 		if err != nil {
 			s.Info("layer %v is not in the database", currentSyncLayer)
@@ -227,7 +227,7 @@ func (s *Syncer) fetchFullBlocks(blockIds []types.BlockID) ([]*types.Block, erro
 			s.Warning(fmt.Sprintf("could not add %v", block.ID()), err)
 			continue
 		}
-		s.Info("added block to layer %v", block)
+		s.Info("added block to layer %v", block.Layer())
 		blocksArr = append(blocksArr, block)
 
 	}
@@ -248,6 +248,7 @@ func (s *Syncer) syncMissingContent(mb *types.MiniBlock) (*types.ActivationTx, [
 		s.Warning(fmt.Sprintf("failed fetching block %v activation transactions %v", mb.ID(), err))
 		return nil, nil, nil, err
 	}
+
 	return associated, txs, atxs, err
 }
 

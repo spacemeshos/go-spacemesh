@@ -106,6 +106,7 @@ func (bl *BlockListener) handleBlock(data service.GossipMessage) {
 		return
 	}
 
+	//make sure we store the associated atx
 	if associated != nil {
 		bl.ProcessAtx(associated)
 	}

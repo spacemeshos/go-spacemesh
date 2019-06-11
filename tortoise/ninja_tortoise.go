@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common"
-	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"hash/fnv"
@@ -115,7 +114,12 @@ func NewNinjaTortoise(layerSize int, blocks BlockCache, log log.Log) *ninjaTorto
 
 func (ni *ninjaTortoise) evictOutOfPbase(old types.LayerID) {
 	wg := sync.WaitGroup{}
-	window := Max(ni.pBase.Layer()-hdist, config.Genesis)
+
+	if ni.pBase.Layer() <= hdist {
+		return
+	}
+
+	window := ni.pBase.Layer() - hdist
 	for lyr := old; lyr < window; lyr++ {
 		wg.Add(1)
 		go func() {
@@ -371,8 +375,9 @@ func (ni *ninjaTortoise) addPatternVote(p votingPattern, view map[types.BlockID]
 		}
 
 		if vp, found = ni.tExplicit[b]; !found {
-			panic(fmt.Sprintf("block %d has no explicit voting, something went wrong ", b))
+			panic(fmt.Sprintf("block %d from layer %v has no explicit voting, something went wrong ", b, bl.Layer()))
 		}
+
 		for _, ex := range vp {
 			blocks, err := ni.LayerBlockIds(ex.Layer()) //todo handle error
 			if err != nil {

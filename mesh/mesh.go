@@ -54,7 +54,7 @@ type Mesh struct {
 	txInvalidator  MemPoolInValidator
 	atxInvalidator MemPoolInValidator
 	config         Config
-	ValidatedLayer types.LayerID
+	validatedLayer types.LayerID
 	latestLayer    types.LayerID
 	lMutex         sync.RWMutex
 	lkMutex        sync.RWMutex
@@ -144,10 +144,10 @@ func (m *Mesh) IsContexuallyValid(b types.BlockID) bool {
 	return true
 }
 
-func (m *Mesh) VerifiedLayer() types.LayerID {
+func (m *Mesh) ValidatedLayer() types.LayerID {
 	defer m.lvMutex.RUnlock()
 	m.lvMutex.RLock()
-	return m.ValidatedLayer
+	return m.validatedLayer
 }
 
 func (m *Mesh) LatestLayer() types.LayerID {
@@ -187,7 +187,7 @@ func (m *Mesh) ValidateLayer(lyr *types.Layer) {
 
 	oldPbase, newPbase := m.tortoise.HandleIncomingLayer(lyr)
 	m.lvMutex.Lock()
-	m.ValidatedLayer = lyr.Index()
+	m.validatedLayer = lyr.Index()
 	m.lvMutex.Unlock()
 
 	if newPbase > oldPbase {
@@ -242,7 +242,7 @@ func (m *Mesh) PushTransactions(oldBase types.LayerID, newBase types.LayerID) {
 
 		l, err := m.GetLayer(i)
 		if err != nil || l == nil {
-			m.Error("could not get layer !!!!!!!!!!!!!!!! %v", err) //todo handle error
+			m.Error("could not get layer %v  !!!!!!!!!!!!!!!! %v ", l.Index(), err) //todo handle error
 			return
 		}
 
@@ -258,7 +258,7 @@ func (m *Mesh) PushTransactions(oldBase types.LayerID, newBase types.LayerID) {
 //todo consider adding a boolean for layer validity instead error
 func (m *Mesh) GetVerifiedLayer(i types.LayerID) (*types.Layer, error) {
 	m.lMutex.RLock()
-	if i > types.LayerID(m.ValidatedLayer) {
+	if i > types.LayerID(m.validatedLayer) {
 		m.lMutex.RUnlock()
 		m.Debug("failed to get layer  ", i, " layer not verified yet")
 		return nil, errors.New("layer not verified yet")
@@ -296,9 +296,10 @@ func (m *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.SerializableTransa
 	atxids := make([]types.AtxId, 0, len(atxs))
 	for _, t := range atxs {
 		//todo this should return an error
-		m.AtxDB.ProcessAtx(t)
 		m.Info("process atx %d", blk.ID())
+		m.AtxDB.ProcessAtx(t)
 		atxids = append(atxids, t.Id())
+
 	}
 
 	txids, err := m.writeTransactions(txs)

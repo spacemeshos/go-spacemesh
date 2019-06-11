@@ -390,7 +390,7 @@ loop:
 			t.Error("timed out ")
 			return
 		default:
-			if syncObj2.VerifiedLayer() == 5 {
+			if syncObj2.ValidatedLayer() == 5 {
 
 				t.Log("done!")
 				break loop
@@ -467,9 +467,9 @@ loop:
 		case <-timeout:
 			t.Error("timed out ")
 		default:
-			if syncObj2.VerifiedLayer() == 4 && syncObj3.VerifiedLayer() == 4 {
+			if syncObj2.ValidatedLayer() == 4 && syncObj3.ValidatedLayer() == 4 {
 				t.Log("done!")
-				t.Log(syncObj2.VerifiedLayer(), " ", syncObj3.VerifiedLayer())
+				t.Log(syncObj2.ValidatedLayer(), " ", syncObj3.ValidatedLayer())
 				break loop
 			}
 		}
@@ -571,7 +571,7 @@ func (sis *syncIntegrationTwoNodes) TestSyncProtocol_TwoNodes() {
 			t.Error("timed out ")
 			return
 		default:
-			if syncObj1.VerifiedLayer() == 5 {
+			if syncObj1.ValidatedLayer() == 5 {
 				t.Log("done!")
 				return
 			}
@@ -659,7 +659,7 @@ func (sis *syncIntegrationMultipleNodes) TestSyncProtocol_MultipleNodes() {
 			t.Error("timed out ")
 			goto end
 		default:
-			if syncObj1.VerifiedLayer() >= 3 || syncObj2.VerifiedLayer() >= 3 || syncObj3.VerifiedLayer() >= 3 || syncObj5.VerifiedLayer() >= 3 {
+			if syncObj1.ValidatedLayer() >= 3 || syncObj2.ValidatedLayer() >= 3 || syncObj3.ValidatedLayer() >= 3 || syncObj5.ValidatedLayer() >= 3 {
 				t.Log("done!")
 				goto end
 			}
@@ -667,11 +667,11 @@ func (sis *syncIntegrationMultipleNodes) TestSyncProtocol_MultipleNodes() {
 		}
 	}
 end:
-	log.Debug("sync 1 ", syncObj1.VerifiedLayer())
-	log.Debug("sync 2 ", syncObj2.VerifiedLayer())
-	log.Debug("sync 3 ", syncObj3.VerifiedLayer())
-	log.Debug("sync 4 ", syncObj4.VerifiedLayer())
-	log.Debug("sync 5 ", syncObj5.VerifiedLayer())
+	log.Debug("sync 1 ", syncObj1.ValidatedLayer())
+	log.Debug("sync 2 ", syncObj2.ValidatedLayer())
+	log.Debug("sync 3 ", syncObj3.ValidatedLayer())
+	log.Debug("sync 4 ", syncObj4.ValidatedLayer())
+	log.Debug("sync 5 ", syncObj5.ValidatedLayer())
 	return
 }
 

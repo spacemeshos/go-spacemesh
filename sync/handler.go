@@ -92,7 +92,8 @@ func newTxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 
 		var transactions []types.SerializableTransaction
 		for _, value := range txs {
-			transactions = append(transactions, *value)
+			tx := *value
+			transactions = append(transactions, tx)
 		}
 
 		bbytes, err := types.InterfaceToBytes(transactions)
@@ -114,7 +115,6 @@ func newATxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 			logger.Error("Error marshalling request", err)
 			return nil
 		}
-		println(atxids[0].String())
 		logger.Info("handle atx request ")
 		atxs, missinDB := s.GetATXs(atxids)
 		for _, t := range missinDB {
@@ -134,7 +134,8 @@ func newATxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 				logger.Error("Error handling atx request message, cannot find nipst for atx %v", value.Id())
 				return nil
 			}
-			transactions = append(transactions, *value)
+			tx := *value
+			transactions = append(transactions, tx)
 		}
 
 		bbytes, err := types.InterfaceToBytes(transactions)
