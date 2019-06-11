@@ -15,12 +15,13 @@ import (
 )
 
 type PoetDb struct {
-	store database.Database
-	log   log.Log
+	store                     database.Database
+	poetProofRefSubscriptions map[[32]byte][]chan []byte
+	log                       log.Log
 }
 
 func NewPoetDb(store database.Database, log log.Log) *PoetDb {
-	return &PoetDb{store: store, log: log}
+	return &PoetDb{store: store, poetProofRefSubscriptions: make(map[[32]byte][]chan []byte), log: log}
 }
 
 func (db *PoetDb) ValidateAndStorePoetProof(proof types.PoetProof, poetId [types.PoetIdLength]byte, roundId uint64,
@@ -51,7 +52,8 @@ func (db *PoetDb) ValidateAndStorePoetProof(proof types.PoetProof, poetId [types
 		return true, fmt.Errorf("failed to store poet proof for poetId %x round %d: %v",
 			poetId, roundId, err)
 	}
-	if err := batch.Put(makeKey(poetId, roundId), ref[:]); err != nil {
+	key := makeKey(poetId, roundId)
+	if err := batch.Put(key[:], ref[:]); err != nil {
 		return true, fmt.Errorf("failed to store poet proof index entry for poetId %x round %d: %v",
 			poetId, roundId, err)
 	}
@@ -59,18 +61,43 @@ func (db *PoetDb) ValidateAndStorePoetProof(proof types.PoetProof, poetId [types
 		return true, fmt.Errorf("failed to store poet proof and index for poetId %x round %d: %v",
 			poetId, roundId, err)
 	}
-
 	db.log.Debug("stored proof for round %d PoET id %x", roundId, poetId)
+	db.publishPoetProofRef(key, ref[:])
 	return false, nil
 }
 
-func (db *PoetDb) GetPoetProofRef(poetId [types.PoetIdLength]byte, roundId uint64) ([]byte, error) {
-	poetRef, err := db.store.Get(makeKey(poetId, roundId))
+func (db *PoetDb) SubscribeToPoetProofRef(poetId [types.PoetIdLength]byte, roundId uint64) chan []byte {
+	ch := make(chan []byte)
+	key := makeKey(poetId, roundId)
+	db.poetProofRefSubscriptions[key] = append(db.poetProofRefSubscriptions[key], ch)
+
+	go func() {
+		poetProofRef, err := db.getPoetProofRef(key)
+		if err != nil {
+			return
+		}
+		db.publishPoetProofRef(key, poetProofRef)
+	}()
+
+	return ch
+}
+
+func (db *PoetDb) getPoetProofRef(key [keySize]byte) ([]byte, error) {
+	poetRef, err := db.store.Get(key[:])
 	if err != nil {
-		return nil, fmt.Errorf("could not fetch poet proof for poetId %x round %d: %v",
-			poetId, roundId, err)
+		return nil, fmt.Errorf("could not fetch poet proof for key %x: %v", key, err)
 	}
 	return poetRef, nil
+}
+
+func (db *PoetDb) publishPoetProofRef(key [keySize]byte, poetProofRef []byte) {
+	for _, ch := range db.poetProofRefSubscriptions[key] {
+		go func() {
+			ch <- poetProofRef
+			close(ch)
+		}()
+	}
+	delete(db.poetProofRefSubscriptions, key)
 }
 
 func (db *PoetDb) GetMembershipByPoetProofRef(poetRef []byte) (map[common.Hash]bool, error) {
@@ -85,11 +112,13 @@ func (db *PoetDb) GetMembershipByPoetProofRef(poetRef []byte) (map[common.Hash]b
 	return membershipSliceToMap(poetProof.Members), nil
 }
 
-func makeKey(poetId [types.PoetIdLength]byte, roundId uint64) []byte {
+const keySize = sha256.Size
+
+func makeKey(poetId [types.PoetIdLength]byte, roundId uint64) [keySize]byte {
 	roundIdBytes := make([]byte, 8)
 	binary.LittleEndian.PutUint64(roundIdBytes, roundId)
 	sum := sha256.Sum256(append(poetId[:], roundIdBytes...))
-	return sum[:]
+	return sum
 }
 
 func membershipSliceToMap(membership [][]byte) map[common.Hash]bool {

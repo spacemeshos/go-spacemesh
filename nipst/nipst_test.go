@@ -52,8 +52,12 @@ func (p *PoetProvingServiceClientMock) subscribeProof(r *types.PoetRound, timeou
 
 type MockPoetDb struct{}
 
-func (*MockPoetDb) GetPoetProofRef(poetId [types.PoetIdLength]byte, roundId uint64) ([]byte, error) {
-	return []byte("hello there"), nil
+func (*MockPoetDb) SubscribeToPoetProofRef(poetId [types.PoetIdLength]byte, roundId uint64) chan []byte {
+	ch := make(chan []byte)
+	go func() {
+		ch <- []byte("hello there")
+	}()
+	return ch
 }
 
 func (*MockPoetDb) GetMembershipByPoetProofRef(poetRoot []byte) (map[common.Hash]bool, error) {

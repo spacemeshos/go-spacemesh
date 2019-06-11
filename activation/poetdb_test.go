@@ -34,7 +34,7 @@ func TestPoetDbHappyFlow(t *testing.T) {
 	r.NoError(err)
 	r.False(processingIssue)
 
-	ref, err := poetDb.GetPoetProofRef(poetId, roundId)
+	ref, err := poetDb.getPoetProofRef(makeKey(poetId, roundId))
 	r.NoError(err)
 
 	proofBytes, err := types.InterfaceToBytes(poetProof)
@@ -79,8 +79,9 @@ func TestPoetDbNonExistingKeys(t *testing.T) {
 	var poetId [types.PoetIdLength]byte
 	copy(poetId[:], "abc")
 
-	_, err := poetDb.GetPoetProofRef(poetId, 0)
-	r.EqualError(err, fmt.Sprintf("could not fetch poet proof for poetId %x round 0: not found", poetId))
+	key := makeKey(poetId, 0)
+	_, err := poetDb.getPoetProofRef(key)
+	r.EqualError(err, fmt.Sprintf("could not fetch poet proof for key %x: not found", key))
 
 	_, err = poetDb.GetMembershipByPoetProofRef([]byte("abc"))
 	r.EqualError(err, "could not fetch poet proof for ref 616263: not found")
