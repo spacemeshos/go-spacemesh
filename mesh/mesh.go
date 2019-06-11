@@ -54,9 +54,8 @@ type Mesh struct {
 	txInvalidator  MemPoolInValidator
 	atxInvalidator MemPoolInValidator
 	config         Config
-	verifiedLayer  types.LayerID
+	ValidatedLayer types.LayerID
 	latestLayer    types.LayerID
-	lastSeenLayer  types.LayerID
 	lMutex         sync.RWMutex
 	lkMutex        sync.RWMutex
 	lcMutex        sync.RWMutex
@@ -65,21 +64,6 @@ type Mesh struct {
 	state          StateUpdater
 	orphMutex      sync.RWMutex
 	done           chan struct{}
-}
-
-func NewMemMesh(rewardConfig Config, mesh MeshValidator, state StateUpdater, atxdb AtxDB, logger log.Log) *Mesh {
-	//todo add boot from disk
-	ll := &Mesh{
-		Log:      logger,
-		tortoise: mesh,
-		state:    state,
-		done:     make(chan struct{}),
-		MeshDB:   NewMemMeshDB(logger),
-		config:   rewardConfig,
-		AtxDB:    atxdb,
-	}
-
-	return ll
 }
 
 func NewMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh MeshValidator, txInvalidator MemPoolInValidator, atxInvalidator MemPoolInValidator, state StateUpdater, logger log.Log) *Mesh {
@@ -163,7 +147,7 @@ func (m *Mesh) IsContexuallyValid(b types.BlockID) bool {
 func (m *Mesh) VerifiedLayer() types.LayerID {
 	defer m.lvMutex.RUnlock()
 	m.lvMutex.RLock()
-	return m.verifiedLayer
+	return m.ValidatedLayer
 }
 
 func (m *Mesh) LatestLayer() types.LayerID {
@@ -203,7 +187,7 @@ func (m *Mesh) ValidateLayer(lyr *types.Layer) {
 
 	oldPbase, newPbase := m.tortoise.HandleIncomingLayer(lyr)
 	m.lvMutex.Lock()
-	m.verifiedLayer = lyr.Index()
+	m.ValidatedLayer = lyr.Index()
 	m.lvMutex.Unlock()
 
 	if newPbase > oldPbase {
@@ -274,7 +258,7 @@ func (m *Mesh) PushTransactions(oldBase types.LayerID, newBase types.LayerID) {
 //todo consider adding a boolean for layer validity instead error
 func (m *Mesh) GetVerifiedLayer(i types.LayerID) (*types.Layer, error) {
 	m.lMutex.RLock()
-	if i > types.LayerID(m.verifiedLayer) {
+	if i > types.LayerID(m.ValidatedLayer) {
 		m.lMutex.RUnlock()
 		m.Debug("failed to get layer  ", i, " layer not verified yet")
 		return nil, errors.New("layer not verified yet")

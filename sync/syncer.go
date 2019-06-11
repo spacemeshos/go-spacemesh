@@ -79,7 +79,7 @@ const (
 )
 
 func (s *Syncer) IsSynced() bool {
-	return s.VerifiedLayer() == s.maxSyncLayer()
+	return s.VerifiedLayer() == s.maxSyncLayer()-1
 }
 
 func (s *Syncer) Start() {
@@ -329,7 +329,7 @@ func (s *Syncer) ATXs(mb *types.MiniBlock) (atxs []*types.ActivationTx, associat
 		}
 	}
 
-	atxs = make([]*types.ActivationTx, 0, len(mb.TxIds))
+	atxs = make([]*types.ActivationTx, 0, len(mb.ATxIds))
 	for _, t := range mb.ATxIds {
 		if tx, ok := foundAtxs[t]; ok {
 			atxs = append(atxs, tx)

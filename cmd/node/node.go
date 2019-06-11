@@ -388,14 +388,14 @@ func (app SpacemeshApp) stopServices() {
 		log.Error("cannot stop block producer %v", err)
 	}
 
+	log.Info("%v closing atx builder", app.instanceName)
+	app.atxBuilder.Stop()
+
 	log.Info("%v closing blockListener", app.instanceName)
 	app.blockListener.Close()
 
 	log.Info("%v closing sync", app.instanceName)
 	app.syncer.Close()
-
-	log.Info("%v closing atx builder", app.instanceName)
-	app.atxBuilder.Stop()
 
 	log.Info("%v closing Hare", app.instanceName)
 	app.hare.Close() //todo: need to add this

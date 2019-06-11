@@ -65,11 +65,13 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 			bl.Log.Info("listening  stopped")
 			return
 		case data := <-bl.receivedGossipBlocks:
-			bl.wg.Add(1)
-			go func() {
-				bl.handleBlock(data)
-				bl.wg.Done()
-			}()
+			if bl.IsSynced() {
+				bl.wg.Add(1)
+				go func() {
+					bl.handleBlock(data)
+					bl.wg.Done()
+				}()
+			}
 		}
 	}
 }

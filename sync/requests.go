@@ -113,6 +113,7 @@ func ATxReqFactory(ids []types.AtxId) RequestFactory {
 				s.Error("could not unmarshal tx data %v", err)
 				return
 			}
+
 			ch <- tx
 		}
 
