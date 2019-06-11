@@ -32,7 +32,7 @@ func TestMessageValidator_ValidateCertificate(t *testing.T) {
 	msgs = append(msgs, &Message{})
 	cert.AggMsgs.Messages = msgs
 	assert.False(t, validator.validateCertificate(cert))
-	cert.Values = NewSetFromValues(value1).To2DSlice()
+	cert.Values = NewSetFromValues(value1).ToSlice()
 	assert.False(t, validator.validateCertificate(cert))
 
 	msgs = make([]*Message, validator.threshold)
@@ -100,7 +100,7 @@ func TestMessageValidator_IsStructureValid(t *testing.T) {
 	assert.False(t, validator.SyntacticallyValidateMessage(m))
 	m.InnerMsg.Values = nil
 	assert.False(t, validator.SyntacticallyValidateMessage(m))
-	m.InnerMsg.Values = NewSmallEmptySet().To2DSlice()
+	m.InnerMsg.Values = NewSmallEmptySet().ToSlice()
 	assert.False(t, validator.SyntacticallyValidateMessage(m))
 }
 
@@ -208,7 +208,7 @@ func TestMessageValidator_validateSVPTypeB(t *testing.T) {
 	s1 := NewSetFromValues(value1)
 	m.InnerMsg.Svp = buildSVP(-1, s1)
 	s := NewSetFromValues(value1)
-	m.InnerMsg.Values = s.To2DSlice()
+	m.InnerMsg.Values = s.ToSlice()
 	v := defaultValidator()
 	assert.False(t, v.validateSVPTypeB(m, NewSetFromValues(value5)))
 	assert.True(t, v.validateSVPTypeB(m, NewSetFromValues(value1)))

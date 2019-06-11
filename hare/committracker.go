@@ -73,7 +73,7 @@ func (ct *CommitTracker) BuildCertificate() *Certificate {
 	}
 
 	c := &Certificate{}
-	c.Values = ct.proposedSet.To2DSlice()
+	c.Values = ct.proposedSet.ToSlice()
 	c.AggMsgs = &AggregatedMessages{}
 	c.AggMsgs.Messages = ct.commits[:ct.threshold]
 

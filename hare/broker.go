@@ -104,7 +104,6 @@ func (b *Broker) eventLoop() {
 				b.Warning("Message validation failed: InnerMsg is nil")
 				continue
 			}
-
 			expInstId := b.maxReg + 1 //  max expect current max + 1
 			msgInstId := InstanceId(hareMsg.InnerMsg.InstanceId)
 			// far future unregistered instance
