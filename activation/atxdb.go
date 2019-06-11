@@ -480,11 +480,12 @@ func (db *ActivationDb) IsIdentityActive(edId string, layer types.LayerID) (bool
 	epoch := layer.GetEpoch(uint16(db.LayersPerEpoch))
 	nodeId, err := db.ids.GetIdentity(edId)
 	if err != nil { // means there is no such identity
-		log.Error("IsIdentityActive erred while getting identity err=%v", err)
+		db.log.Error("IsIdentityActive erred while getting identity err=%v", err)
 		return false, nil
 	}
 	ids, err := db.GetNodeAtxIds(nodeId)
 	if err != nil {
+		db.log.Error("IsIdentityActive erred while getting node atx ids err=%v", err)
 		return false, err
 	}
 	if len(ids) == 0 { // GetIdentity succeeded but no ATXs, this is a fatal error
@@ -492,9 +493,10 @@ func (db *ActivationDb) IsIdentityActive(edId string, layer types.LayerID) (bool
 	}
 	atx, err := db.GetAtx(ids[len(ids)-1])
 	if err != nil {
+		db.log.Error("IsIdentityActive erred while getting atx err=%v", err)
 		return false, nil
 	}
-	return atx.Valid && atx.PubLayerIdx.GetEpoch(uint16(db.LayersPerEpoch)) == epoch, err
+	return atx.Valid && atx.PubLayerIdx.GetEpoch(uint16(db.LayersPerEpoch))+1 == epoch, nil
 }
 
 func decodeAtxIds(idsBytes []byte) ([]types.AtxId, error) {
