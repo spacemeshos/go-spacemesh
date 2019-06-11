@@ -199,7 +199,7 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 	}
 
 	t.Log.Info("I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d, viewEdges: %d atx %v, atxs:%v",
-		b.LayerIndex, b.Id, len(b.TxIds), len(b.BlockVotes), len(b.ViewEdges), b.ATXID.String()[:5], b.ATxIds)
+		b.LayerIndex, b.Id, len(b.TxIds), len(b.BlockVotes), len(b.ViewEdges), b.ATXID.String()[:5], len(b.ATxIds))
 
 	blockBytes, err := types.InterfaceToBytes(b)
 	if err != nil {
@@ -269,12 +269,12 @@ func (t *BlockBuilder) acceptBlockData() {
 			}
 			// TODO: include multiple proofs in each block and weigh blocks where applicable
 
-			txlist := t.TransactionPool.PopItems(MaxTransactionsPerBlock).([]*types.SerializableTransaction)
+			txList := t.TransactionPool.PopItems(MaxTransactionsPerBlock).([]*types.SerializableTransaction)
 
-			atxlist := t.AtxPool.PopItems(MaxTransactionsPerBlock).([]*types.ActivationTx)
+			atxList := t.AtxPool.PopItems(MaxTransactionsPerBlock).([]*types.ActivationTx)
 
 			for _, eligibilityProof := range proofs {
-				blk, err := t.createBlock(types.LayerID(id), atxID, eligibilityProof, txlist, atxlist)
+				blk, err := t.createBlock(types.LayerID(id), atxID, eligibilityProof, txList, atxList)
 				if err != nil {
 					t.Error("cannot create new block, %v ", err)
 					continue

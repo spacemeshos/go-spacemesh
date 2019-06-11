@@ -1,7 +1,6 @@
 package sync
 
 import (
-	"encoding/hex"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -44,6 +43,7 @@ func newLayerBlockIdsRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg 
 			return nil
 		}
 
+		logger.Debug("send ids response layer %v", lyrid)
 		return idbytes
 	}
 }
@@ -64,7 +64,7 @@ func newMiniBlockRequestHandler(msh *mesh.Mesh, logger log.Log) func(msg []byte)
 			return nil
 		}
 
-		logger.Debug("return block %v", blk.ID())
+		logger.Debug("send block response, block %v", blk.ID())
 
 		return bbytes
 	}
@@ -101,8 +101,7 @@ func newTxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 			return nil
 		}
 
-		logger.Debug("tx %v", hex.EncodeToString(bbytes))
-
+		logger.Info("send tx response ")
 		return bbytes
 	}
 }
@@ -129,6 +128,7 @@ func newATxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 
 		var transactions []types.ActivationTx
 		for _, value := range atxs {
+			//todo nipst should be a reference change after implemented in atx
 			value.Nipst, err = s.GetNipst(value.Id())
 			if err != nil {
 				logger.Error("Error handling atx request message, cannot find nipst for atx %v", value.Id())
@@ -143,7 +143,6 @@ func newATxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 			return nil
 		}
 
-		logger.Debug("tx %v", hex.EncodeToString(bbytes))
 		logger.Info("send atx response ")
 		return bbytes
 	}

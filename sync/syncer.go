@@ -61,9 +61,10 @@ func (s *Syncer) ForceSync() {
 }
 
 func (s *Syncer) Close() {
-	s.Peers.Close()
-	close(s.forceSync)
 	close(s.exit)
+	close(s.forceSync)
+	s.MessageServer.Close()
+	s.Peers.Close()
 }
 
 const (

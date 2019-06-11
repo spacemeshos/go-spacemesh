@@ -15,7 +15,6 @@ import (
 type MessageServer server.MessageServer
 
 type BlockListener struct {
-	*server.MessageServer
 	*Syncer
 	BlockValidator
 	log.Log

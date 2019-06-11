@@ -298,20 +298,11 @@ func (m *Mesh) GetLatestView() []types.BlockID {
 
 func (m *Mesh) AddBlock(blk *types.Block) error {
 	m.Debug("add block %d", blk.ID())
-
 	if err := m.MeshDB.AddBlock(blk); err != nil {
 		m.Error("failed to add block %v  %v", blk.ID(), err)
 		return err
 	}
-
 	m.SetLatestLayer(blk.Layer())
-
-	//new block add to orphans
-	m.handleOrphanBlocks(&blk.BlockHeader)
-
-	//invalidate txs and atxs from pool
-	m.invalidateFromPools(&blk.MiniBlock)
-
 	return nil
 }
 
@@ -320,7 +311,8 @@ func (m *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.SerializableTransa
 
 	atxids := make([]types.AtxId, 0, len(atxs))
 	for _, t := range atxs {
-		m.AtxDB.ProcessAtx(t) // change this to return error if process failed
+		//todo this should return an error
+		m.AtxDB.ProcessAtx(t)
 		m.Info("process atx %d", blk.ID())
 		atxids = append(atxids, t.Id())
 	}
@@ -500,7 +492,7 @@ func (m *Mesh) GetATXs(atxIds []types.AtxId) (map[types.AtxId]*types.ActivationT
 	for _, id := range atxIds {
 		t, err := m.GetAtx(id)
 		if err != nil {
-			m.Error("could not get atx %v %v from database ", hex.EncodeToString(id.Bytes()), err)
+			m.Warning("could not get atx %v  from database, %v", hex.EncodeToString(id.Bytes()), err)
 			mIds = append(mIds, id)
 		} else {
 			atxs[t.Id()] = t

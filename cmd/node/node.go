@@ -384,18 +384,6 @@ func (app SpacemeshApp) stopServices() {
 
 	log.Info("%v closing services ", app.instanceName)
 
-	log.Info("%v closing clock", app.instanceName)
-	app.clock.Close()
-
-	log.Info("%v closing atx builder", app.instanceName)
-	app.atxBuilder.Stop()
-
-	log.Info("%v closing Hare", app.instanceName)
-	app.hare.Close() //todo: need to add this
-
-	log.Info("%v closing p2p", app.instanceName)
-	app.P2P.Shutdown()
-
 	if err := app.blockProducer.Close(); err != nil {
 		log.Error("cannot stop block producer %v", err)
 	}
@@ -403,17 +391,28 @@ func (app SpacemeshApp) stopServices() {
 	log.Info("%v closing blockListener", app.instanceName)
 	app.blockListener.Close()
 
-	log.Info("%v closing mesh", app.instanceName)
-	app.mesh.Close()
-
 	log.Info("%v closing sync", app.instanceName)
 	app.syncer.Close()
+
+	log.Info("%v closing atx builder", app.instanceName)
+	app.atxBuilder.Stop()
+
+	log.Info("%v closing Hare", app.instanceName)
+	app.hare.Close() //todo: need to add this
+
+	log.Info("%v closing clock", app.instanceName)
+	app.clock.Close()
+
+	log.Info("%v closing p2p", app.instanceName)
+	app.P2P.Shutdown()
+
+	log.Info("%v closing mesh", app.instanceName)
+	app.mesh.Close()
 
 	log.Info("unregister from oracle")
 	if app.unregisterOracle != nil {
 		app.unregisterOracle()
 	}
-
 }
 
 func getEdIdentity() (*signing.EdSigner, error) {
