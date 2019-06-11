@@ -25,6 +25,7 @@ const ( //Threshold
 
 var ( //correction vectors type
 	//Opinion
+	hdist   = types.LayerID(4)
 	Support = vec{1, 0}
 	Against = vec{0, 1}
 	Abstain = vec{0, 0}
@@ -113,7 +114,8 @@ func NewNinjaTortoise(layerSize int, blocks BlockCache, log log.Log) *ninjaTorto
 
 func (ni *ninjaTortoise) evictOutOfPbase(old types.LayerID) {
 	wg := sync.WaitGroup{}
-	for lyr := old; lyr < ni.pBase.Layer(); lyr++ {
+
+	for lyr := old; lyr < ni.pBase.Layer()-hdist; lyr++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
