@@ -20,10 +20,6 @@ func (p *PublicKey) Bytes() []byte {
 	return p.pub
 }
 
-func (p *PublicKey) Pub() string {
-	return string(p.pub)
-}
-
 func (p *PublicKey) String() string {
 	return common.Bytes2Hex(p.Bytes())
 }
