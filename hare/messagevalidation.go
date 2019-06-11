@@ -105,8 +105,6 @@ func (validator *syntaxContextValidator) ContextuallyValidateMessage(m *Msg, exp
 	switch m.InnerMsg.Type {
 	case PreRound:
 		return true
-	case Proposal:
-		return Round2 == m.InnerMsg.K || Round3 == m.InnerMsg.K
 	case Notify:
 		return true
 	}

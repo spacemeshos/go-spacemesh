@@ -32,8 +32,8 @@ type hareIntegrationThreeNodes struct {
 }
 
 func Test_16Nodes_HareIntegrationSuite(t *testing.T) {
+	t.Skip()
 	if testing.Short() {
-		t.Skip()
 	}
 	const roundDuration = 2
 	cfg := config.Config{N: 16, F: 8, RoundDuration: roundDuration, ExpectedLeaders: 5}
@@ -82,8 +82,8 @@ type hareIntegration20Nodes struct {
 }
 
 func Test_20Nodes_HareIntegrationSuite(t *testing.T) {
+	t.Skip()
 	if testing.Short() {
-		t.Skip()
 	}
 	const roundDuration = 5
 	cfg := config.Config{N: 20, F: 8, RoundDuration: roundDuration, ExpectedLeaders: 5}

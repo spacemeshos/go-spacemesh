@@ -130,6 +130,7 @@ func TestMessageValidator_Aggregated(t *testing.T) {
 func TestConsensusProcess_isContextuallyValid(t *testing.T) {
 	s := NewEmptySet(defaultSetSize)
 	cp := generateConsensusProcess(t)
+	cp.advanceToNextRound()
 
 	msgType := make([]MessageType, 4, 4)
 	msgType[0] = Status
@@ -142,7 +143,6 @@ func TestConsensusProcess_isContextuallyValid(t *testing.T) {
 			builder := NewMessageBuilder()
 			builder.SetType(msgType[j]).SetInstanceId(instanceId1).SetRoundCounter(cp.k).SetKi(ki).SetValues(s)
 			builder = builder.Sign(signing.NewEdSigner())
-			//mt.Printf("%v   j=%v i=%v Exp: %v Actual %v\maxExpActives", cp.K, j, i, rounds[j][i], ContextuallyValidateMessage(builder.Build(), cp.K))
 			validator := defaultValidator()
 			assert.Equal(t, true, validator.ContextuallyValidateMessage(builder.Build(), cp.k))
 			cp.advanceToNextRound()

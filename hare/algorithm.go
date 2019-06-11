@@ -480,10 +480,14 @@ func (proc *ConsensusProcess) processStatusMsg(msg *Msg) {
 }
 
 func (proc *ConsensusProcess) processProposalMsg(msg *Msg) {
-	if proc.currentRound() == Round2 { // regular proposal
+	currRnd := proc.currentRound()
+
+	if currRnd == Round2 { // regular proposal
 		proc.proposalTracker.OnProposal(msg)
-	} else { // late proposal
+	} else if currRnd == Round3 { // late proposal
 		proc.proposalTracker.OnLateProposal(msg)
+	} else {
+		proc.Error("Received proposal message for processing in an invalid context: K=%v", msg.InnerMsg.K)
 	}
 }
 
