@@ -6,9 +6,8 @@ def inv2(x):
     return pow(x, L-2, L)
 
 
-def signature2(m,sk):
-    assert len(sk) == 32 # seed
-#    assert len(pk) == 32
+def signature2(m, sk):
+    assert len(sk) == 32  # seed
     h = H(sk[:32])
     a_bytes, inter = h[:32], h[32:]
     a = bytes_to_clamped_scalar(a_bytes)
@@ -19,26 +18,24 @@ def signature2(m,sk):
     return R_bytes + scalar_to_bytes(S)
 
 
-def extractpk(s,m):
+def extractpk(s, m):
     if len(s) != 64:
-        raise Exception("signature length is wrong")
+        raise Exception("Signature length is wrong")
     R = bytes_to_element(s[:32])
     S = bytes_to_scalar(s[32:])
     h = Hint(s[:32] + m)
     h_inv = inv2(h)
-    #  R_neg = R.negate()
     R_neg = R.scalarmult(L-1)
     v1 = Base.scalarmult(S)
-    #  v2 = v1.add(R_neg)#
     v2 = v1.add(R_neg)
     A = v2.scalarmult(h_inv)
     return A
 
 
-def checkpk(pk,ext_pk):
+def checkpk(pk, ext_pk):
     if len(pk) != 32:
-        raise Exception("public-key length is wrong")
+        raise Exception("Public-key length is wrong")
 
     A = bytes_to_element(pk)
     if A != ext_pk:
-        raise Exception("wrong public key extracted")
+        raise Exception("Wrong public key extracted")

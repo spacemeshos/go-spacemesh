@@ -691,3 +691,24 @@ func TestTemp(t *testing.T) {
 	//	log.Error("failed to deserialize tx, error %v", err)
 	//}
 }
+
+func TestTemp2(t *testing.T) {
+	pub := common.FromHex("0x7be017a967db77fd10ac7c891b3d6d946dea7e3e14756e2f0f9e09b9663f0d9")
+	pri := common.FromHex("0x81c90dd832e18d1cf9758254327cb3135961af6688ac9c2a8c5d71f73acc5ce57be017a967db77fd10ac7c891b3d6d946dea7e3e14756e2f0f9e09b9663f0d9c")
+	txParams := types.SerializableTransaction{}
+	sAddr := state.PublicKeyToAccountAddress(pub)
+	//txApi.setMockOrigin(sAddr)
+	txParams.Origin = sAddr
+	rec := address.BytesToAddress([]byte{0x11, 0x11})
+	txParams.Recipient = &rec
+	txParams.AccountNonce = 12345
+	bAmount := make([]byte, 8)
+	binary.LittleEndian.PutUint64(bAmount, 86420)
+	txParams.Amount = bAmount
+	txParams.GasLimit = 56789
+	bPrice := make([]byte, 8)
+	binary.LittleEndian.PutUint64(bPrice, 24680)
+	txParams.Price = bPrice
+	xdrTx := createXdrSignedTransaction(txParams,pri)
+	log.Info("%v %x", len(xdrTx), xdrTx)
+}
