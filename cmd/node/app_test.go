@@ -33,9 +33,9 @@ type AppTestSuite struct {
 	poetCleanup func() error
 }
 
-func (app *AppTestSuite) SetupTest() {
-	app.apps = make([]*SpacemeshApp, 0, 0)
-	app.dbs = make([]string, 0, 0)
+func (suite *AppTestSuite) SetupTest() {
+	suite.apps = make([]*SpacemeshApp, 0, 0)
+	suite.dbs = make([]string, 0, 0)
 }
 
 // NewRPCPoetHarnessClient returns a new instance of RPCPoetClient
@@ -50,11 +50,11 @@ func NewRPCPoetHarnessClient() (*nipst.RPCPoetClient, error) {
 	return nipst.NewRPCPoetClient(h.PoetClient, h.TearDown), nil
 }
 
-func (app *AppTestSuite) TearDownTest() {
-	if err := app.poetCleanup(); err != nil {
+func (suite *AppTestSuite) TearDownTest() {
+	if err := suite.poetCleanup(); err != nil {
 		log.Error("error while cleaning up PoET: %v", err)
 	}
-	for _, dbinst := range app.dbs {
+	for _, dbinst := range suite.dbs {
 		if err := os.RemoveAll(dbinst); err != nil {
 			panic(fmt.Sprintf("what happened : %v", err))
 		}
@@ -74,15 +74,15 @@ func (app *AppTestSuite) TearDownTest() {
 	}
 }
 
-func (app *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat string) {
-	r := require.New(app.T())
+func (suite *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat string) {
+	r := require.New(suite.T())
 
 	net := service.NewSimulator()
 	runningName := 'a'
 	rolacle := eligibility.New()
 	poet, err := NewRPCPoetHarnessClient()
 	r.NoError(err)
-	app.poetCleanup = poet.CleanUp
+	suite.poetCleanup = poet.CleanUp
 	rng := BLS381.DefaultSeed()
 	for i := 0; i < numOfInstances; i++ {
 		smApp := NewSpacemeshApp()
@@ -115,11 +115,11 @@ func (app *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat s
 		r.NoError(err)
 		smApp.setupGenesis(apiCfg.DefaultGenesisConfig())
 
-		app.apps = append(app.apps, smApp)
-		app.dbs = append(app.dbs, dbStorepath)
+		suite.apps = append(suite.apps, smApp)
+		suite.dbs = append(suite.dbs, dbStorepath)
 		runningName++
 	}
-	activateGrpcServer(app.apps[0])
+	activateGrpcServer(suite.apps[0])
 }
 
 func activateGrpcServer(smApp *SpacemeshApp) {
@@ -128,7 +128,7 @@ func activateGrpcServer(smApp *SpacemeshApp) {
 	smApp.grpcAPIService.StartService(nil)
 }
 
-func (app *AppTestSuite) TestMultipleNodes() {
+func (suite *AppTestSuite) TestMultipleNodes() {
 	//EntryPointCreated <- true
 
 	addr := address.BytesToAddress([]byte{0x01})
@@ -142,12 +142,12 @@ func (app *AppTestSuite) TestMultipleNodes() {
 
 	txbytes, _ := types.TransactionAsBytes(&tx)
 	path := "../tmp/test/state_" + time.Now().String()
-	app.initMultipleInstances(5, path)
-	for _, a := range app.apps {
+	suite.initMultipleInstances(5, path)
+	for _, a := range suite.apps {
 		a.startServices()
 	}
 
-	_ = app.apps[0].P2P.Broadcast(miner.IncomingTxProtocol, txbytes)
+	_ = suite.apps[0].P2P.Broadcast(miner.IncomingTxProtocol, txbytes)
 	timeout := time.After(4.5 * 60 * time.Second)
 
 	stickyClientsDone := 0
@@ -155,22 +155,24 @@ func (app *AppTestSuite) TestMultipleNodes() {
 		select {
 		// Got a timeout! fail with a timeout error
 		case <-timeout:
-			app.T().Fatal("timed out")
+			suite.T().Fatal("timed out")
 		default:
 			maxClientsDone := 0
-			for idx, ap := range app.apps {
-				if big.NewInt(10).Cmp(ap.state.GetBalance(dst)) == 0 &&
-					!app.apps[0].mesh.LatestLayer().GetEpoch(app.apps[0].Config.CONSENSUS.LayersPerEpoch).IsGenesis() {
+			for idx, app := range suite.apps {
+				if big.NewInt(10).Cmp(app.state.GetBalance(dst)) == 0 &&
+					!app.mesh.LatestLayer().GetEpoch(app.Config.CONSENSUS.LayersPerEpoch).IsGenesis() {
+
+					suite.validateLastATXActiveSetSize(app)
 					clientsDone := 0
-					for idx2, ap2 := range app.apps {
+					for idx2, app2 := range suite.apps {
 						if idx != idx2 {
-							r1 := ap.state.IntermediateRoot(false).String()
-							r2 := ap2.state.IntermediateRoot(false).String()
+							r1 := app.state.IntermediateRoot(false).String()
+							r2 := app2.state.IntermediateRoot(false).String()
 							if r1 == r2 {
 								clientsDone++
-								if clientsDone == len(app.apps)-1 {
-									log.Info("%d roots confirmed out of %d", clientsDone, len(app.apps))
-									app.gracefulShutdown()
+								if clientsDone == len(suite.apps)-1 {
+									log.Info("%d roots confirmed out of %d", clientsDone, len(suite.apps))
+									suite.gracefulShutdown()
 									return
 								}
 							}
@@ -183,21 +185,29 @@ func (app *AppTestSuite) TestMultipleNodes() {
 			}
 			if maxClientsDone != stickyClientsDone {
 				stickyClientsDone = maxClientsDone
-				log.Info("%d roots confirmed out of %d", maxClientsDone, len(app.apps))
+				log.Info("%d roots confirmed out of %d", maxClientsDone, len(suite.apps))
 			}
 			time.Sleep(1 * time.Millisecond)
 		}
 	}
 }
 
-func (app *AppTestSuite) gracefulShutdown() {
+func (suite *AppTestSuite) validateLastATXActiveSetSize(app *SpacemeshApp) {
+	prevAtxId, err := app.atxBuilder.GetPrevAtxId(app.nodeId)
+	suite.NoError(err)
+	atx, err := app.mesh.GetAtx(*prevAtxId)
+	suite.NoError(err)
+	suite.Equal(len(suite.apps), int(atx.ActiveSetSize), "atx: %v node: %v", atx.ShortId(), app.nodeId.Key[:5])
+}
+
+func (suite *AppTestSuite) gracefulShutdown() {
 	var wg sync.WaitGroup
-	for _, ap := range app.apps {
-		func(ap SpacemeshApp) {
+	for _, app := range suite.apps {
+		func(app SpacemeshApp) {
 			wg.Add(1)
 			defer wg.Done()
-			ap.stopServices()
-		}(*ap)
+			app.stopServices()
+		}(*app)
 	}
 	wg.Wait()
 }
