@@ -73,7 +73,7 @@ func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx) {
 
 	err = db.ids.StoreNodeIdentity(atx.NodeId)
 	if err != nil {
-		db.log.Error("cannot store node identity: %v", atx.NodeId)
+		db.log.Error("cannot store node identity: %v err=%v", atx.NodeId, err)
 	}
 }
 
