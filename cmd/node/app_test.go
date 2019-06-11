@@ -87,6 +87,7 @@ func (app *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat s
 		smApp := NewSpacemeshApp()
 		smApp.Config.HARE.N = numOfInstances
 		smApp.Config.HARE.F = numOfInstances / 2
+		smApp.Config.HARE.RoundDuration = 3
 		smApp.Config.HARE.WakeupDelta = 15
 		smApp.Config.HARE.ExpectedLeaders = 5
 
