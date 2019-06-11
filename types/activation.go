@@ -176,8 +176,5 @@ func bytesToShortString(b []byte) string {
 	if l == 0 {
 		return "empty"
 	}
-	if l > 5 {
-		l = 5
-	}
-	return fmt.Sprintf("\"%s…\"", hex.EncodeToString(b)[:l])
+	return fmt.Sprintf("\"%s…\"", hex.EncodeToString(b)[:common.Min(l, 5)])
 }
