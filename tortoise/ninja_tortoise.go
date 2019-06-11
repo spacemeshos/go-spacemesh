@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"hash/fnv"
@@ -114,8 +115,8 @@ func NewNinjaTortoise(layerSize int, blocks BlockCache, log log.Log) *ninjaTorto
 
 func (ni *ninjaTortoise) evictOutOfPbase(old types.LayerID) {
 	wg := sync.WaitGroup{}
-
-	for lyr := old; lyr < ni.pBase.Layer()-hdist; lyr++ {
+	window := Max(ni.pBase.Layer()-hdist, config.Genesis)
+	for lyr := old; lyr < window; lyr++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -136,7 +137,7 @@ func (ni *ninjaTortoise) evictOutOfPbase(old types.LayerID) {
 			defer wg.Done()
 			ids, err := ni.LayerBlockIds(lyr)
 			if err != nil {
-				ni.Error("could not get layer ids for layer ", lyr, err)
+				ni.Error("could not get layer ids for layer %v %v", lyr, err)
 			}
 			for _, id := range ids {
 				delete(ni.tEffective, id)
