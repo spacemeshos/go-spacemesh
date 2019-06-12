@@ -84,14 +84,12 @@ func (bo *MinerBlockOracle) calcEligibilityProofs(epochNumber types.EpochId) err
 			activeSetSize = bo.committeeSize
 		}
 		bo.atxID = atx.Id()
-		bo.log.Info("Active set size is %v", activeSetSize)
 	}
 	numberOfEligibleBlocks, err := getNumberOfEligibleBlocks(activeSetSize, bo.committeeSize, bo.layersPerEpoch, bo.log)
 	if err != nil {
 		bo.log.Error("failed to get number of eligible blocks: %v", err)
 		return err
 	}
-	bo.log.Info("Number of eligible blocks is %v", numberOfEligibleBlocks)
 
 	bo.eligibilityProofs = map[types.LayerID][]types.BlockEligibilityProof{}
 	for counter := uint32(0); counter < numberOfEligibleBlocks; counter++ {
@@ -107,8 +105,6 @@ func (bo *MinerBlockOracle) calcEligibilityProofs(epochNumber types.EpochId) err
 			J:   counter,
 			Sig: vrfSig,
 		})
-
-		log.Info("Got proof for layer %v", eligibleLayer)
 	}
 	bo.proofsEpoch = epochNumber
 	bo.log.Info("miner \"%v…\" is eligible for blocks on %d layers in epoch %d", bo.nodeID.Key[:5], len(bo.eligibilityProofs), epochNumber)
