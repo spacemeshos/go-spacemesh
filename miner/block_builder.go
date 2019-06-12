@@ -265,7 +265,8 @@ func (t *BlockBuilder) acceptBlockData() {
 				continue
 			}
 			if len(proofs) == 0 {
-				break
+				log.Info("Notice: not eligible for blocks in layer %v", id)
+				continue
 			}
 			// TODO: include multiple proofs in each block and weigh blocks where applicable
 

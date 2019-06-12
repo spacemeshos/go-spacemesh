@@ -2,6 +2,7 @@ package hare
 
 import (
 	"github.com/stretchr/testify/assert"
+	"sort"
 	"testing"
 )
 
@@ -96,4 +97,12 @@ func TestSet_Union(t *testing.T) {
 	s := NewSetFromValues(value1, value5)
 	exp := NewSetFromValues(value1, value2, value3, value4, value5)
 	assert.True(t, exp.Equals(s.Union(g)))
+}
+
+func TestSet_ToSlice(t *testing.T) {
+	arr := []uint64{7, 1, 5, 6, 2, 3, 4}
+	s := NewSet(arr)
+	res := s.ToSlice()
+	sort.Slice(arr, func(i, j int) bool { return arr[i] < arr[j] })
+	assert.Equal(t, arr, res) // check result is sorted, required for order of set in commit msgs
 }

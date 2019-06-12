@@ -469,3 +469,13 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 	assert.NoError(t, err)
 
 }
+
+func TestActivationDb_ProcessAtx(t *testing.T) {
+	atxdb, _ := getAtxDb("t8")
+	idx1 := types.NodeId{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}
+	atx := types.NewActivationTx(idx1, 0, *types.EmptyAtxId, 100, 0, *types.EmptyAtxId, 3, []types.BlockID{}, &nipst.NIPST{}, true)
+	atxdb.ProcessAtx(atx)
+	res, err := atxdb.ids.GetIdentity(idx1.Key)
+	assert.Nil(t, err)
+	assert.Equal(t, idx1, res)
+}

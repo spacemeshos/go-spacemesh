@@ -10,7 +10,7 @@ func BuildNotifyMsg(signing Signer, s *Set) *Msg {
 	builder.SetType(PreRound).SetInstanceId(instanceId1).SetRoundCounter(Round4).SetKi(ki).SetValues(s)
 	builder = builder.SetPubKey(signing.PublicKey()).Sign(signing)
 	cert := &Certificate{}
-	cert.Values = NewSetFromValues(value1).To2DSlice()
+	cert.Values = NewSetFromValues(value1).ToSlice()
 	cert.AggMsgs = &AggregatedMessages{}
 	cert.AggMsgs.Messages = []*Message{BuildCommitMsg(signing, s).Message}
 	builder.SetCertificate(cert)
