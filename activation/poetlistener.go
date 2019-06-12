@@ -41,11 +41,11 @@ func (l *PoetListener) loop() {
 	for {
 		select {
 		case poetProof := <-l.poetProofMessages:
-			if poetProof != nil {
-				go l.handlePoetProofMessage(poetProof)
-			} else {
+			if poetProof == nil {
 				log.Error("nil poet message received!")
+				continue
 			}
+			go l.handlePoetProofMessage(poetProof)
 		case <-l.exit:
 			l.Log.Info("listening stopped")
 			return

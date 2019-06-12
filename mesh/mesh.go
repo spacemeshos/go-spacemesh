@@ -210,13 +210,13 @@ func (m *Mesh) MiniBlockToBlock(blk *types.MiniBlock) (*types.Block, error) {
 		transactions = append(transactions, txs[value])
 	}
 
-	atxs, missingATxs := m.GetATXs(blk.ATxIds)
+	atxs, missingATxs := m.GetATXs(blk.AtxIds)
 	if missingATxs != nil {
 		return nil, errors.New("could not retrieve block %v transactions from database ")
 	}
 
 	var activations []*types.ActivationTx
-	for _, value := range blk.ATxIds {
+	for _, value := range blk.AtxIds {
 		activations = append(activations, atxs[value])
 	}
 

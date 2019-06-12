@@ -37,7 +37,7 @@ func NewActivationDb(dbstore database.DB, nipstStore database.DB, idstore IdStor
 
 func (db *ActivationDb) ProcessBlockATXs(blk *types.Block) {
 	for _, atx := range blk.ATXs {
-		db.log.Info("found ATX %v (epoch %d) in block %x (epoch %d)",
+		db.log.Debug("found ATX %v (epoch %d) in block %x (epoch %d)",
 			atx.ShortId(), atx.TargetEpoch(db.LayersPerEpoch), blk.Id, blk.LayerIndex.GetEpoch(db.LayersPerEpoch))
 		db.ProcessAtx(atx)
 	}
@@ -102,24 +102,21 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 		if blk.LayerIndex.GetEpoch(db.LayersPerEpoch) != countingEpoch {
 			return nil
 		}
-		db.log.Info("counting ATXs in block %x (epoch %d)",
-			blk.Id, blk.LayerIndex.GetEpoch(db.LayersPerEpoch))
-		for _, id := range blk.ATxIds {
+		for _, id := range blk.AtxIds {
 			if _, found := set[id]; found {
 				continue
 			}
 			set[id] = struct{}{}
 			atx, err := db.GetAtx(id)
 			if err != nil {
-				db.log.Panic("error fetching atx from database -- inconsistent state, id: %x", id)
-				return fmt.Errorf("error fetching atx from database -- inconsistent state, id: %x", id)
+				return fmt.Errorf("error fetching atx %x from database -- inconsistent state", id)
 			}
 			if !atx.Valid {
-				db.log.Warning("atx %v found, but not valid", atx.ShortId())
+				db.log.Debug("atx %v found, but not valid", atx.ShortId())
 				continue
 			}
 			counter++
-			db.log.Info("atx %v (epoch %d) found traversing in block %x (epoch %d)",
+			db.log.Debug("atx %v (epoch %d) found traversing in block %x (epoch %d)",
 				atx.ShortId(), atx.TargetEpoch(db.LayersPerEpoch), blk.Id, blk.LayerIndex.GetEpoch(db.LayersPerEpoch))
 			// return eof to signal that enough active ids were found
 			if counter >= a.ActiveSetSize {
@@ -311,13 +308,14 @@ func epochCounterKey(ech types.EpochId) []byte {
 
 // incValidAtxCounter increases the number of active ids seen for epoch ech
 func (db *ActivationDb) incValidAtxCounter(ech types.EpochId) error {
+	// TODO(noamnelke): make thread safe
 	key := epochCounterKey(ech)
 	val, err := db.atxs.Get(key)
 	if err != nil {
-		db.log.Info("incrementing epoch %v ATX counter to 1", ech)
+		db.log.Debug("incrementing epoch %v ATX counter to 1", ech)
 		return db.atxs.Put(key, common.Uint32ToBytes(1))
 	}
-	db.log.Info("incrementing epoch %v ATX counter to %v", ech, common.BytesToUint32(val)+1)
+	db.log.Debug("incrementing epoch %v ATX counter to %v", ech, common.BytesToUint32(val)+1)
 	return db.atxs.Put(key, common.Uint32ToBytes(common.BytesToUint32(val)+1))
 }
 
@@ -328,7 +326,9 @@ func (db *ActivationDb) ActiveSetSize(ech types.EpochId) uint32 {
 	val, err := db.atxs.Get(key)
 	db.RUnlock()
 	if err != nil {
-		db.log.Warning("could not fetch active set size from cache: %v", err)
+		if !ech.IsGenesis() {
+			db.log.Warning("could not fetch active set size from cache: %v", err)
+		}
 		//0 is not a valid active set size
 		return 0
 	}

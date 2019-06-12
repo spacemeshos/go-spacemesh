@@ -219,7 +219,10 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) (bool, error) {
 	// when we reach here an epoch has passed
 	// we've completed the sequential work, now before publishing the atx,
 	// we need to provide number of atx seen in the epoch of the positioning atx.
-	activeIds := uint32(b.activeSet.ActiveSetSize(b.posLayerID.GetEpoch(b.layersPerEpoch)))
+	activeIds := b.activeSet.ActiveSetSize(b.posLayerID.GetEpoch(b.layersPerEpoch))
+	if activeIds == 0 && !b.posLayerID.GetEpoch(b.layersPerEpoch).IsGenesis() {
+		return false, fmt.Errorf("could not fetch active set size from cache")
+	}
 	view, err := b.mesh.GetOrphanBlocksBefore(b.mesh.LatestLayer())
 	if err != nil {
 		return false, err
