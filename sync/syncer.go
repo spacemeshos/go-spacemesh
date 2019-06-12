@@ -335,7 +335,7 @@ func (s *Syncer) ATXs(mb *types.Block) (atxs []*types.ActivationTx, associated *
 		} else if tx, ok := txMap[t]; ok {
 			atxs = append(atxs, tx)
 		} else {
-			return nil, nil, errors.New(fmt.Sprintf("could not fetch atx %v", t))
+			return nil, nil, errors.New(fmt.Sprintf("could not fetch atx %v", t.Hex()))
 		}
 	}
 	return atxs, associated, nil

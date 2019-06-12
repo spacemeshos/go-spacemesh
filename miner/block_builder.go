@@ -232,7 +232,7 @@ func (t *BlockBuilder) listenForTx() {
 }
 
 func (t *BlockBuilder) listenForAtx() {
-	t.Log.Info("start listening for atxs")
+	t.Info("start listening for atxs")
 	for {
 		select {
 		case <-t.stopChan:
@@ -241,9 +241,17 @@ func (t *BlockBuilder) listenForAtx() {
 			if data != nil {
 				x, err := types.BytesAsAtx(data.Bytes())
 				if err != nil {
-					t.Log.Error("cannot parse incoming ATX")
+					t.Error("cannot parse incoming ATX")
 					break
 				}
+				t.Info("got new ATX %v", hex.EncodeToString(x.Id().Bytes()))
+
+				//todo fetch from neighbour
+				if x.Nipst == nil {
+					t.Error("nill nipst in gossip")
+					break
+				}
+
 				t.AtxPool.Put(x.Id(), x)
 				data.ReportValidation(activation.AtxProtocol)
 			}

@@ -131,7 +131,7 @@ func newATxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 		for _, value := range atxs {
 			//todo nipst should be a reference change after implemented in atx
 			value.Nipst, err = s.GetNipst(value.Id())
-			if err != nil {
+			if err != nil || value.Nipst == nil {
 				logger.Error("Error handling atx request message, cannot find nipst for atx %v", hex.EncodeToString(value.Id().Bytes()))
 				return nil
 			}
