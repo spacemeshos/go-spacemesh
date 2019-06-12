@@ -89,39 +89,39 @@ func TestNinjaTortoise_evict(t *testing.T) {
 	defer persistenceTeardown()
 	ni := sanity(getMeshForBench(), 150, 10, 100, badblocks)
 
-	for i := 0; i < 50; i++ {
-		for _, i := range ni.patterns[49] {
-			if _, ok := ni.tSupport[i]; ok {
+	for i := 1; i < 140; i++ {
+		for _, j := range ni.patterns[types.LayerID(i)] {
+			if _, ok := ni.tSupport[j]; ok {
 				t.Fail()
 			}
-			if _, ok := ni.tPattern[i]; ok {
+			if _, ok := ni.tPattern[j]; ok {
 				t.Fail()
 			}
-			if _, ok := ni.tTally[i]; ok {
+			if _, ok := ni.tTally[j]; ok {
 				t.Fail()
 			}
-			if _, ok := ni.tVote[i]; ok {
+			if _, ok := ni.tVote[j]; ok {
 				t.Fail()
 			}
-			if _, ok := ni.tEffectiveToBlocks[i]; ok {
+			if _, ok := ni.tEffectiveToBlocks[j]; ok {
 				t.Fail()
 			}
-			if _, ok := ni.tComplete[i]; ok {
+			if _, ok := ni.tComplete[j]; ok {
 				t.Fail()
 			}
-			if _, ok := ni.tPatSupport[i]; ok {
+			if _, ok := ni.tPatSupport[j]; ok {
 				t.Fail()
 			}
 		}
 		ids, _ := ni.LayerBlockIds(49)
-		for _, i := range ids {
-			if _, ok := ni.tEffective[i]; ok {
+		for _, j := range ids {
+			if _, ok := ni.tEffective[j]; ok {
 				t.Fail()
 			}
-			if _, ok := ni.tCorrect[i]; ok {
+			if _, ok := ni.tCorrect[j]; ok {
 				t.Fail()
 			}
-			if _, ok := ni.tExplicit[i]; ok {
+			if _, ok := ni.tExplicit[j]; ok {
 				t.Fail()
 			}
 

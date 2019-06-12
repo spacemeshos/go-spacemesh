@@ -287,6 +287,11 @@ func (m *Mesh) AddBlock(blk *types.Block) error {
 		return err
 	}
 	m.SetLatestLayer(blk.Layer())
+	//new block add to orphans
+	m.handleOrphanBlocks(&blk.BlockHeader)
+
+	//invalidate txs and atxs from pool
+	m.invalidateFromPools(&blk.MiniBlock)
 	return nil
 }
 

@@ -77,10 +77,8 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 					bl.Error("received invalid block %v", data.Bytes(), err)
 					return
 				}
-				if !bl.IsSynced() {
-					bl.Info("dont handle block %v not synced yet", blk.ID())
-				}
-				if bl.handleBlock(&blk) {
+
+				if bl.handleBlock(&blk) && bl.IsSynced() {
 					data.ReportValidation(config.NewBlockProtocol)
 				}
 				bl.wg.Done()

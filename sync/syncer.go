@@ -79,8 +79,6 @@ const (
 )
 
 func (s *Syncer) IsSynced() bool {
-	println(s.ValidatedLayer() + 1)
-	println(s.maxSyncLayer())
 	return s.ValidatedLayer()+1 == s.maxSyncLayer()
 }
 
@@ -110,7 +108,6 @@ func (s *Syncer) run() {
 		case layer := <-s.clock:
 			s.currentLayerMutex.Lock()
 			s.currentLayer = layer
-			println("layer", s.currentLayer)
 			s.currentLayerMutex.Unlock()
 			s.Debug("sync got tick for layer %v", layer)
 			go syncRoutine()

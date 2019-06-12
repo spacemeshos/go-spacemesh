@@ -73,6 +73,7 @@ type BlockCache interface {
 type ninjaTortoise struct {
 	log.Log
 	BlockCache         //block cache
+	evict              types.LayerID
 	avgLayerSize       uint64
 	pBase              votingPattern
 	patterns           map[types.LayerID][]votingPattern                 //map patterns by layer for eviction purposes
@@ -112,15 +113,14 @@ func NewNinjaTortoise(layerSize int, blocks BlockCache, log log.Log) *ninjaTorto
 	}
 }
 
-func (ni *ninjaTortoise) evictOutOfPbase(old types.LayerID) {
+func (ni *ninjaTortoise) evictOutOfPbase() {
 	wg := sync.WaitGroup{}
-
 	if ni.pBase.Layer() <= hdist {
 		return
 	}
 
 	window := ni.pBase.Layer() - hdist
-	for lyr := old; lyr < window; lyr++ {
+	for lyr := ni.evict; lyr < window; lyr++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -152,6 +152,7 @@ func (ni *ninjaTortoise) evictOutOfPbase(old types.LayerID) {
 		}()
 		wg.Wait()
 	}
+	ni.evict = window
 }
 
 func (ni *ninjaTortoise) processBlock(b *types.Block) {
@@ -465,7 +466,7 @@ func (ni *ninjaTortoise) getVote(id types.BlockID) vec {
 
 func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) { //i most recent layer
 	ni.Info("update tables layer %d with %d blocks", newlyr.Index(), len(newlyr.Blocks()))
-
+	defer ni.evictOutOfPbase()
 	ni.processBlocks(newlyr)
 
 	if newlyr.Index() == Genesis {
@@ -474,7 +475,6 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) { //i most rec
 	}
 
 	l := ni.findMinimalNewlyGoodLayer(newlyr)
-	defer ni.evictOutOfPbase(ni.pBase.Layer())
 	//from minimal newly good pattern to current layer
 	//update pattern tally for all good layers
 	for j := l; j > 0 && j < newlyr.Index(); j++ {
