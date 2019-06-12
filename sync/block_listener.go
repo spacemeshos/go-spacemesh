@@ -65,49 +65,52 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 			bl.Log.Info("listening  stopped")
 			return
 		case data := <-bl.receivedGossipBlocks:
-			if bl.IsSynced() {
-				bl.wg.Add(1)
-				go func() {
-					bl.handleBlock(data)
-					bl.wg.Done()
-				}()
-			}
+			bl.wg.Add(1)
+			go func() {
+				if data == nil {
+					bl.Error("got empty message while listening to gossip blocks")
+					return
+				}
+				var blk types.Block
+				err := types.BytesToInterface(data.Bytes(), &blk)
+				if err != nil {
+					bl.Error("received invalid block %v", data.Bytes(), err)
+					return
+				}
+				if !bl.IsSynced() {
+					bl.Info("dont handle block %v not synced yet", blk.ID())
+				}
+				if bl.handleBlock(&blk) {
+					data.ReportValidation(config.NewBlockProtocol)
+				}
+				bl.wg.Done()
+			}()
+
 		}
 	}
 }
 
-func (bl *BlockListener) handleBlock(data service.GossipMessage) {
-	if data == nil {
-		bl.Error("got empty message while listening to gossip blocks")
-		return
-	}
-
-	var blk types.Block
-	err := types.BytesToInterface(data.Bytes(), &blk)
-	if err != nil {
-		bl.Error("received invalid block %v", data.Bytes(), err)
-		return
-	}
+func (bl *BlockListener) handleBlock(blk *types.Block) bool {
 
 	bl.Log.With().Info("got new block", log.Uint64("id", uint64(blk.Id)), log.Int("txs", len(blk.TxIds)), log.Int("atxs", len(blk.ATxIds)))
 	eligible, err := bl.BlockEligible(&blk.BlockHeader)
 	if err != nil {
 		bl.Error("block %v eligible check failed ", blk.ID())
-		return
+		return false
 	}
 	if !eligible {
 		bl.Error("block %v not eligible", blk.ID())
-		return
+		return false
 	}
 
-	if err := bl.syncMissingContent(&blk); err != nil {
+	if err := bl.syncMissingContent(blk); err != nil {
 		bl.Error("handleBlock %v failed ", blk.ID(), err)
-		return
+		return false
 	}
 
 	bl.Info("added block %v to database", blk.ID())
-	data.ReportValidation(config.NewBlockProtocol)
 	bl.addUnknownToQueue(&blk.BlockHeader)
+	return true
 }
 
 func (bl *BlockListener) run() {

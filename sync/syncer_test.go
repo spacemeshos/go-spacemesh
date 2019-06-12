@@ -336,11 +336,11 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	output := syncObj2.fetchWithFactory(BlockReqFactory([]types.BlockID{block1.ID(), block2.ID(), block3.ID()}), 1)
 	for out := range output {
 		block := out.(*types.Block)
-		txs, err := syncObj2.Txs(&block.MiniBlock)
+		txs, err := syncObj2.Txs(block)
 		if err != nil {
 			t.Error("could not fetch all txs", err)
 		}
-		atxs, _, err := syncObj2.ATXs(&block.MiniBlock)
+		atxs, _, err := syncObj2.ATXs(block)
 		if err != nil {
 			t.Error("could not fetch all atxs", err)
 		}
@@ -602,7 +602,7 @@ func Test_Multiple_SyncIntegrationSuite(t *testing.T) {
 	tk := ts.Subscribe()
 	sis.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
 		l := log.New(fmt.Sprintf("%s_%d", sis.name, atomic.LoadUint32(&i)), "", "")
-		msh := getMesh(memoryDB, fmt.Sprintf("%s_%d_%s", sis.name, atomic.LoadUint32(&i), time.Now()))
+		msh := getMesh(memoryDB, fmt.Sprintf("%s_%d", sis.name, atomic.LoadUint32(&i)))
 		sync := NewSync(s, msh, miner.NewMemPool(reflect.TypeOf(types.SerializableTransaction{})), miner.NewMemPool(reflect.TypeOf(types.ActivationTx{})), BlockValidatorMock{}, TxValidatorMock{}, conf, tk, l)
 		ts.Start()
 		sis.syncers = append(sis.syncers, sync)
@@ -614,7 +614,7 @@ func Test_Multiple_SyncIntegrationSuite(t *testing.T) {
 func (sis *syncIntegrationMultipleNodes) TestSyncProtocol_MultipleNodes() {
 	t := sis.T()
 
-	block3 := types.NewExistingBlock(types.BlockID(333), 2, nil)
+	block3 := types.NewExistingBlock(types.BlockID(333), 1, nil)
 	block4 := types.NewExistingBlock(types.BlockID(444), 2, nil)
 	block5 := types.NewExistingBlock(types.BlockID(555), 3, nil)
 	block6 := types.NewExistingBlock(types.BlockID(666), 3, nil)

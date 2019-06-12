@@ -242,7 +242,7 @@ func (m *Mesh) PushTransactions(oldBase types.LayerID, newBase types.LayerID) {
 
 		l, err := m.GetLayer(i)
 		if err != nil || l == nil {
-			m.Error("could not get layer %v  !!!!!!!!!!!!!!!! %v ", l.Index(), err) //todo handle error
+			m.Error("could not get layer %v  !!!!!!!!!!!!!!!! %v ", i, err) //todo handle error
 			return
 		}
 

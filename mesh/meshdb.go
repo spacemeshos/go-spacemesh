@@ -169,7 +169,7 @@ func (m *MeshDB) layerBlockIds(index types.LayerID) ([]types.BlockID, error) {
 
 	ids, err := m.layers.Get(index.ToBytes())
 	if err != nil {
-		return nil, fmt.Errorf("error getting layer %v from database ", index)
+		return nil, fmt.Errorf("error getting layer %v from database %v", index, err)
 	}
 
 	if len(ids) == 0 {
