@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"encoding/hex"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -131,7 +132,7 @@ func newATxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 			//todo nipst should be a reference change after implemented in atx
 			value.Nipst, err = s.GetNipst(value.Id())
 			if err != nil {
-				logger.Error("Error handling atx request message, cannot find nipst for atx %v", value.Id())
+				logger.Error("Error handling atx request message, cannot find nipst for atx %v", hex.EncodeToString(value.Id().Bytes()))
 				return nil
 			}
 			tx := *value

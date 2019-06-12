@@ -100,19 +100,8 @@ func (bl *BlockListener) handleBlock(data service.GossipMessage) {
 		return
 	}
 
-	associated, txs, atxs, err := bl.syncMissingContent(&blk.MiniBlock)
-	if err != nil {
+	if err := bl.syncMissingContent(&blk); err != nil {
 		bl.Error("handleBlock %v failed ", blk.ID(), err)
-		return
-	}
-
-	//make sure we store the associated atx
-	if associated != nil {
-		bl.ProcessAtx(associated)
-	}
-
-	if err := bl.AddBlockWithTxs(&blk, txs, atxs); err != nil {
-		bl.Error("failed adding block %v", blk.ID())
 		return
 	}
 

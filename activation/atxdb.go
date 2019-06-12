@@ -141,6 +141,9 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 // - ATX LayerID is NipstLayerTime or more after the PositioningATX LayerID.
 // - The ATX view of the previous epoch contains ActiveSetSize activations
 func (db *ActivationDb) ValidateAtx(atx *types.ActivationTx) error {
+	if atx.Nipst == nil {
+		return fmt.Errorf("nil nipst!")
+	}
 	if atx.PrevATXId != *types.EmptyAtxId {
 		prevATX, err := db.GetAtx(atx.PrevATXId)
 		if err != nil {

@@ -201,12 +201,6 @@ func (s *Syncer) fetchFullBlocks(blockIds []types.BlockID) ([]*types.Block, erro
 	for out := range output {
 		block := out.(*types.Block)
 
-		associated, txs, atxs, err := s.syncMissingContent(&block.MiniBlock)
-		if err != nil {
-			s.Warning(fmt.Sprintf("failed derefrencing block data %v", block.ID()), err)
-			continue
-		}
-
 		eligible, err := s.BlockEligible(&block.BlockHeader)
 		if err != nil {
 			s.Warning(fmt.Sprintf("failed checking eligiblety %v", block.ID()), err)
@@ -217,16 +211,11 @@ func (s *Syncer) fetchFullBlocks(blockIds []types.BlockID) ([]*types.Block, erro
 			continue
 		}
 
-		if associated != nil {
-			s.ProcessAtx(associated)
-		}
-
-		s.Info("add block to layer %v", block)
-
-		if err := s.AddBlockWithTxs(block, txs, atxs); err != nil {
-			s.Warning(fmt.Sprintf("could not add %v", block.ID()), err)
+		if err := s.syncMissingContent(block); err != nil {
+			s.Error(fmt.Sprintf("failed derefrencing block data %v", block.ID()), err)
 			continue
 		}
+
 		s.Info("added block to layer %v", block.Layer())
 		blocksArr = append(blocksArr, block)
 
@@ -235,24 +224,33 @@ func (s *Syncer) fetchFullBlocks(blockIds []types.BlockID) ([]*types.Block, erro
 	return blocksArr, nil
 }
 
-func (s *Syncer) syncMissingContent(mb *types.MiniBlock) (*types.ActivationTx, []*types.SerializableTransaction, []*types.ActivationTx, error) {
+func (s *Syncer) syncMissingContent(blk *types.Block) error {
 	//sync Transactions
-	txs, err := s.Txs(mb)
+	txs, err := s.Txs(blk)
 	if err != nil {
-		s.Warning(fmt.Sprintf("failed fetching block %v transactions %v", mb.ID(), err))
-		return nil, nil, nil, err
+		s.Warning(fmt.Sprintf("failed fetching block %v transactions %v", blk.ID(), err))
+		return err
 	}
 	//sync ATxs
-	atxs, associated, err := s.ATXs(mb)
+	atxs, associated, err := s.ATXs(blk)
 	if err != nil {
-		s.Warning(fmt.Sprintf("failed fetching block %v activation transactions %v", mb.ID(), err))
-		return nil, nil, nil, err
+		s.Warning(fmt.Sprintf("failed fetching block %v activation transactions %v", blk.ID(), err))
+		return err
 	}
 
-	return associated, txs, atxs, err
+	if associated != nil {
+		s.ProcessAtx(associated)
+	}
+
+	if err := s.AddBlockWithTxs(blk, txs, atxs); err != nil {
+		s.Warning(fmt.Sprintf("failed fetching block %v activation transactions %v", blk.ID(), err))
+		return err
+	}
+
+	return nil
 }
 
-func (s *Syncer) Txs(mb *types.MiniBlock) ([]*types.SerializableTransaction, error) {
+func (s *Syncer) Txs(mb *types.Block) ([]*types.SerializableTransaction, error) {
 	//look in db
 	foundTxs, missinDB := s.GetTransactions(mb.TxIds)
 
@@ -290,7 +288,7 @@ func (s *Syncer) Txs(mb *types.MiniBlock) ([]*types.SerializableTransaction, err
 	return txs, nil
 }
 
-func (s *Syncer) ATXs(mb *types.MiniBlock) (atxs []*types.ActivationTx, associated *types.ActivationTx, err error) {
+func (s *Syncer) ATXs(mb *types.Block) (atxs []*types.ActivationTx, associated *types.ActivationTx, err error) {
 	foundAtxs, missinDB := s.GetATXs(mb.ATxIds)
 
 	//look in pool

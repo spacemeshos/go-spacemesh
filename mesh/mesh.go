@@ -283,7 +283,7 @@ func (m *Mesh) GetLatestView() []types.BlockID {
 func (m *Mesh) AddBlock(blk *types.Block) error {
 	m.Debug("add block %d", blk.ID())
 	if err := m.MeshDB.AddBlock(blk); err != nil {
-		m.Error("failed to add block %v  %v", blk.ID(), err)
+		m.Warning("failed to add block %v  %v", blk.ID(), err)
 		return err
 	}
 	m.SetLatestLayer(blk.Layer())
@@ -296,7 +296,7 @@ func (m *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.SerializableTransa
 	atxids := make([]types.AtxId, 0, len(atxs))
 	for _, t := range atxs {
 		//todo this should return an error
-		m.Info("process atx %d", blk.ID())
+		m.Info("process atx %v", hex.EncodeToString(t.Id().Bytes()))
 		m.AtxDB.ProcessAtx(t)
 		atxids = append(atxids, t.Id())
 
