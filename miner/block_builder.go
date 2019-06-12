@@ -242,7 +242,6 @@ func (t *BlockBuilder) acceptBlockData() {
 			return
 
 		case id := <-t.beginRoundEvent:
-			t.Info("Got begin round event id=%v", id)
 			atxID, proofs, err := t.blockOracle.BlockEligible(types.LayerID(id))
 			if err != nil {
 				t.Error("failed to check for block eligibility: %v ", err)

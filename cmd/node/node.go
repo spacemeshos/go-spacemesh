@@ -513,7 +513,8 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	app.unregisterOracle = func() { oracleClient.Unregister(true, app.edSgn.PublicKey().String()) }
 
 	rng := amcl.NewRAND()
-	rng.Seed(10, app.edSgn.Sign([]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}))
+	pub := app.edSgn.PublicKey().Bytes()
+	rng.Seed(len(pub), app.edSgn.Sign(pub)) // assuming ed.private is random, the sig can be used as seed
 	vrfPriv, vrfPub := BLS381.GenKeyPair(rng)
 	vrfSigner := BLS381.NewBlsSigner(vrfPriv)
 	nodeID := types.NodeId{Key: app.edSgn.PublicKey().String(), VRFPublicKey: vrfPub}
