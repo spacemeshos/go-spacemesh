@@ -13,18 +13,18 @@ import (
 // PeerStore is an interface to the discovery protocol
 type PeerStore interface {
 	Remove(pubkey p2pcrypto.PublicKey)
-	Lookup(pubkey p2pcrypto.PublicKey) (node.Node, error)
-	Update(addr, src node.Node)
-	SelectPeers(qty int) []node.Node
+	Lookup(pubkey p2pcrypto.PublicKey) (*node.NodeInfo, error)
+	Update(addr, src *node.NodeInfo)
+	SelectPeers(qty int) []*node.NodeInfo
 	Bootstrap(ctx context.Context) error
 	Size() int
-	SetLocalAddresses(tcp, udp string)
+	SetLocalAddresses(tcp, udp int)
 }
 
 type Protocol interface {
 	Ping(p p2pcrypto.PublicKey) error
-	GetAddresses(server p2pcrypto.PublicKey) ([]NodeInfo, error)
-	SetLocalAddresses(tcp, udp string)
+	GetAddresses(server p2pcrypto.PublicKey) ([]*node.NodeInfo, error)
+	SetLocalAddresses(tcp, udp int)
 }
 
 var (
@@ -51,8 +51,8 @@ func (d *Discovery) Size() int {
 }
 
 // SelectPeers asks routing table to randomly select a slice of nodes in size `qty`
-func (d *Discovery) SelectPeers(qty int) []node.Node {
-	out := make([]node.Node, 0, qty)
+func (d *Discovery) SelectPeers(qty int) []*node.NodeInfo {
+	out := make([]*node.NodeInfo, 0, qty)
 	set := make(map[p2pcrypto.PublicKey]struct{})
 	for i := 0; i < qty; i++ {
 		add := d.rt.GetAddress()
@@ -64,7 +64,7 @@ func (d *Discovery) SelectPeers(qty int) []node.Node {
 		if _, ok := set[add.na.PublicKey()]; ok {
 			continue
 		}
-		out = append(out, add.DiscNode().Node)
+		out = append(out, add.DiscNode())
 		set[add.DiscNode().PublicKey()] = struct{}{}
 	}
 	return out
@@ -72,36 +72,43 @@ func (d *Discovery) SelectPeers(qty int) []node.Node {
 
 // Lookup searched a node in the address book. *NOTE* this returns a `Node` with the udpAddress as `Address()`.
 // this is because Lookup is only used in the udp mux.
-func (d *Discovery) Lookup(key p2pcrypto.PublicKey) (node.Node, error) {
-	l, err := d.rt.Lookup(key)
-	if err != nil {
-		return node.EmptyNode, err
-	}
-	return node.New(key, l.udpAddress), nil
+func (d *Discovery) Lookup(key p2pcrypto.PublicKey) (*node.NodeInfo, error) {
+	return d.rt.Lookup(key)
 }
 
 // Update adds an addr to the addrBook
-func (d *Discovery) Update(addr, src node.Node) {
-	d.rt.AddAddress(NodeInfoFromNode(addr, addr.Address()), NodeInfoFromNode(src, src.Address()))
+func (d *Discovery) Update(addr, src *node.NodeInfo) {
+	d.rt.AddAddress(addr, src)
 }
 
+// TODO: Replace `node.LocalNode` with `NodeInfo` and `log.Log`.
 // New creates a new Discovery
 func New(ln *node.LocalNode, config config.SwarmConfig, service server.Service) *Discovery {
 	d := &Discovery{
 		config: config,
 		local:  ln,
-		rt:     NewAddrBook(NodeInfoFromNode(ln.Node, ln.Node.Address()), config, ln.Log),
+		rt:     NewAddrBook(ln.NodeInfo, config, ln.Log),
 	}
 
-	d.disc = NewDiscoveryProtocol(ln.Node, d.rt, service, ln.Log)
+	d.disc = NewDiscoveryProtocol(ln.NodeInfo, d.rt, service, ln.Log)
 
-	d.bootstrapper = newRefresher(d.rt, d.disc, config, ln.Log)
+	bn := make([]*node.NodeInfo, 0, len(config.BootstrapNodes))
+	for _, n := range config.BootstrapNodes {
+		nd, err := node.ParseNode(n)
+		if err != nil {
+			// TODO : handle errors
+			continue
+		}
+		bn = append(bn, nd)
+	}
+
+	d.bootstrapper = newRefresher(d.rt, d.disc, bn, ln.Log)
 
 	return d
 }
 
 // SetLocalAddresses sets the local addresses to be advertised.
-func (d *Discovery) SetLocalAddresses(tcp, udp string) {
+func (d *Discovery) SetLocalAddresses(tcp, udp int) {
 	d.disc.SetLocalAddresses(tcp, udp)
 }
 

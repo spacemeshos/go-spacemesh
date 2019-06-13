@@ -2,9 +2,8 @@ package discovery
 
 import (
 	"errors"
-	"github.com/golang/protobuf/proto"
+	"github.com/nullstyle/go-xdr/xdr"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/discovery/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
@@ -22,9 +21,7 @@ func (p *protocol) newGetAddressesRequestHandler() func(msg server.Message) []by
 		results := p.table.AddressCache()
 		//todo: limit results to message size
 
-		resp := &pb.Addresses{NodeInfos: marshalNodeInfo(results, msg.Sender().String())}
-
-		payload, err := proto.Marshal(resp)
+		resp, err := marshalNodeInfo(results, msg.Sender().String())
 
 		if err != nil {
 			p.logger.Error("Error marshaling response message (Ping)")
@@ -33,29 +30,26 @@ func (p *protocol) newGetAddressesRequestHandler() func(msg server.Message) []by
 
 		p.logger.Debug("responding a find_node request at from after", msg.Sender().String(), time.Now().Sub(start))
 
-		return payload
+		return resp
 	}
 }
 
 // GetAddresses Send a single find node request to a remote node
-func (p *protocol) GetAddresses(server p2pcrypto.PublicKey) ([]NodeInfo, error) {
+func (p *protocol) GetAddresses(server p2pcrypto.PublicKey) ([]*node.NodeInfo, error) {
 	start := time.Now()
 	var err error
 
 	// response handler
-	ch := make(chan []NodeInfo)
+	ch := make(chan []*node.NodeInfo)
 	resHandler := func(msg []byte) {
 		defer close(ch)
-		//p.logger.Info("handle find_node response from %v", serverNode.String())
-		data := &pb.Addresses{}
-		if err := proto.Unmarshal(msg, data); err != nil {
-			p.logger.Error("could not unmarshal Addresses message")
-			return
+		nodes, err := unmarshalNodeInfo(msg)
+		//todo: check that we're not pass max results ?
+		if err != nil {
+			p.logger.Warning("could not deserialize bytes to NodeInfo, skipping packet err=", err)
 		}
 
-		//todo: check that we're not pass max results ?
-
-		ch <- unmarshalNodeInfo(data.NodeInfos)
+		ch <- nodes
 	}
 
 	err = p.msgServer.SendRequest(GET_ADDRESSES, []byte(""), server, resHandler)
@@ -79,38 +73,24 @@ func (p *protocol) GetAddresses(server p2pcrypto.PublicKey) ([]NodeInfo, error) 
 
 // ToNodeInfo returns marshaled protobufs identity infos slice from a slice of RemoteNodeData.
 // filterId: identity id to exclude from the result
-func marshalNodeInfo(nodes []NodeInfo, filterID string) []*pb.NodeInfo {
+func marshalNodeInfo(nodes []*node.NodeInfo, filterID string) ([]byte, error) {
 	// init empty slice
-	var res []*pb.NodeInfo
+	nds := make([]*node.NodeInfo, 0, len(nodes))
 	for _, n := range nodes {
-
-		if n.String() == filterID {
+		if n.ID.String() == filterID {
 			continue
 		}
-
-		res = append(res, &pb.NodeInfo{
-			NodeId:     n.PublicKey().Bytes(),
-			TCPAddress: n.Address(),
-			UDPAddress: n.udpAddress,
-		})
+		nds = append(nds, n)
 	}
-	return res
+	return xdr.Marshal(nds)
 }
 
 // FromNodeInfos converts a list of NodeInfo to a list of Node.
-func unmarshalNodeInfo(nodes []*pb.NodeInfo) []NodeInfo {
-	res := make([]NodeInfo, len(nodes))
-	for i, n := range nodes {
-		pubk, err := p2pcrypto.NewPubkeyFromBytes(n.NodeId)
-		if err != nil {
-			// TODO Error handling, problem : don't break everything because one messed up nodeinfo
-			log.Error("There was an error parsing nodeid : ", n.NodeId, ", skipping it. err: ", err)
-			continue
-		}
-		nd := node.New(pubk, n.TCPAddress)
-		node := NodeInfoFromNode(nd, n.UDPAddress)
-		res[i] = node
-
+func unmarshalNodeInfo(nodes []byte) ([]*node.NodeInfo, error) {
+	n := make([]*node.NodeInfo, 0, 25)
+	_, err := xdr.Unmarshal(nodes, &n)
+	if err != nil {
+		return nil, err
 	}
-	return res
+	return n, nil
 }

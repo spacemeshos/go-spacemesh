@@ -1,8 +1,10 @@
 package p2p
 
 import (
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/p2p/connectionpool"
 	"github.com/spacemeshos/go-spacemesh/p2p/discovery"
+	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
@@ -72,10 +74,10 @@ const examplePayload = "Example"
 
 func TestNew(t *testing.T) {
 	s, err := New(context.TODO(), config.DefaultConfig())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = s.Start()
-	assert.NoError(t, err)
-	assert.NotNil(t, s, "its nil")
+	require.NoError(t, err)
+	require.NotNil(t, s, "its nil")
 	s.Shutdown()
 }
 
@@ -200,7 +202,7 @@ func sendDirectMessage(t *testing.T, sender *swarm, recvPub p2pcrypto.PublicKey,
 		if checkpayload {
 			assert.Equal(t, msg.Bytes(), payload)
 		}
-		assert.Equal(t, msg.Sender().String(), sender.lNode.String())
+		assert.Equal(t, msg.Sender().String(), sender.lNode.ID.String())
 		break
 	case <-time.After(5 * time.Second):
 		t.Error("Took too much time to receive")
@@ -319,7 +321,7 @@ func TestSwarm_MultipleMessagesFromMultipleSenders(t *testing.T) {
 			p.cPool.GetConnection(p1.network.LocalAddr().String(), p1.lNode.PublicKey())
 			mychan := make(chan struct{})
 			mu.Lock()
-			pend[p.lNode.Node.PublicKey().String()] = mychan
+			pend[p.lNode.NodeInfo.PublicKey().String()] = mychan
 			mu.Unlock()
 
 			payload := []byte(RandString(10))
@@ -383,7 +385,7 @@ func TestSwarm_MultipleMessagesFromMultipleSendersToMultipleProtocols(t *testing
 			sa.add(p)
 			mychan := make(chan struct{})
 			mu.Lock()
-			pend[p.lNode.Node.PublicKey().String()] = mychan
+			pend[p.lNode.NodeInfo.PublicKey().String()] = mychan
 			mu.Unlock()
 
 			randProto := rand.Int31n(Protos)
@@ -610,8 +612,8 @@ func Test_Swarm_getMorePeers3(t *testing.T) {
 	mdht := new(discovery.MockPeerStore)
 	n.discover = mdht
 	testNode := node.GenerateRandomNodeData()
-	mdht.SelectPeersFunc = func(qty int) []node.Node {
-		return []node.Node{testNode}
+	mdht.SelectPeersFunc = func(qty int) []*node.NodeInfo {
+		return []*node.NodeInfo{testNode}
 	}
 
 	cpm := new(cpoolMock)
@@ -642,8 +644,8 @@ func Test_Swarm_getMorePeers4(t *testing.T) {
 	n.discover = mdht
 
 	testNode := node.GenerateRandomNodeData()
-	mdht.SelectPeersFunc = func(qty int) []node.Node {
-		return []node.Node{testNode}
+	mdht.SelectPeersFunc = func(qty int) []*node.NodeInfo {
+		return []*node.NodeInfo{testNode}
 	}
 
 	cpm := new(cpoolMock)
@@ -682,7 +684,7 @@ func Test_Swarm_getMorePeers5(t *testing.T) {
 
 	n.cPool = cpm
 
-	mdht.SelectPeersFunc = func(qty int) []node.Node {
+	mdht.SelectPeersFunc = func(qty int) []*node.NodeInfo {
 		return node.GenerateRandomNodesData(qty)
 	}
 
@@ -715,7 +717,7 @@ func Test_Swarm_getMorePeers6(t *testing.T) {
 
 	n.cPool = cpm
 
-	mdht.SelectPeersFunc = func(qty int) []node.Node {
+	mdht.SelectPeersFunc = func(qty int) []*node.NodeInfo {
 		return node.GenerateRandomNodesData(qty)
 	}
 
@@ -729,7 +731,7 @@ func Test_Swarm_getMorePeers6(t *testing.T) {
 
 	//test not replacing inc peer
 	//
-	mdht.SelectPeersFunc = func(count int) []node.Node {
+	mdht.SelectPeersFunc = func(count int) []*node.NodeInfo {
 		some := node.GenerateRandomNodesData(count - 1)
 		some = append(some, nd)
 		return some
@@ -749,7 +751,7 @@ func TestNeighborhood_Initial(t *testing.T) {
 
 	p := p2pTestNoStart(t, cfg)
 	mdht := new(discovery.MockPeerStore)
-	mdht.SelectPeersFunc = func(qty int) []node.Node {
+	mdht.SelectPeersFunc = func(qty int) []*node.NodeInfo {
 		return node.GenerateRandomNodesData(qty)
 	}
 
@@ -843,4 +845,18 @@ func TestSwarm_AddIncomingPeer(t *testing.T) {
 	p.inpeersMutex.RUnlock()
 	assert.False(t, ok)
 	assert.Nil(t, peer)
+}
+
+func Test_NodeInfo(t *testing.T) {
+	pinged := node.NewNode(p2pcrypto.NewRandomPubkey(), net.IPv4LoopbackAddress, 1010, 1020)
+	raw, err := types.InterfaceToBytes(&pinged)
+	if err != nil {
+		panic("LOL")
+	}
+	fmt.Println("GOT MSG ", raw)
+	pinged2 := &node.NodeInfo{}
+	err = types.BytesToInterface(raw, pinged2)
+	if err != nil {
+		panic(err)
+	}
 }
