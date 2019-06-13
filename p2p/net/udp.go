@@ -32,15 +32,10 @@ type UDPNet struct {
 
 // NewUDPNet creates a UDPNet. returns error if the listening can't be resolved
 func NewUDPNet(config config.Config, local *node.LocalNode, log log.Log) (*UDPNet, error) {
-	addr, err := net.ResolveUDPAddr("udp", local.Address())
-	if err != nil {
-		return nil, err
-	}
-
 	n := &UDPNet{
 		local:      local,
 		logger:     log,
-		udpAddress: addr,
+		udpAddress: NodeAddr(local.NodeInfo),
 		config:     config,
 		msgChan:    make(chan UDPMessageEvent, config.BufferSize),
 		shutdown:   make(chan struct{}),
@@ -58,7 +53,7 @@ func (n *UDPNet) Start() error {
 		return err
 	}
 	n.conn = listener
-	n.logger.Info("Started listening on udp:%v", listener.LocalAddr().String())
+	n.logger.Info("Started UDP server listening for messages on udp:%v", listener.LocalAddr().String())
 	go n.listenToUDPNetworkMessages(listener)
 
 	return nil
@@ -93,24 +88,24 @@ func (n *UDPNet) initSession(remote p2pcrypto.PublicKey) NetworkSession {
 	return session
 }
 
-// Send writes a udp packet to the target with the given data
-func (n *UDPNet) Send(to node.Node, data []byte) error {
+func NodeAddr(info *node.NodeInfo) *net.UDPAddr {
+	return &net.UDPAddr{IP: info.IP, Port: int(info.DiscoveryPort)}
+}
 
-	raddr, err := resolveUDPAddr(to.Address())
-	if err != nil {
-		return err
-	}
+// Send writes a udp packet to the target with the given data
+func (n *UDPNet) Send(to *node.NodeInfo, data []byte) error {
 
 	ns := n.cache.GetOrCreate(to.PublicKey())
-
-	if err != nil {
-		return err
-	}
 
 	sealed := ns.SealMessage(data)
 	final := p2pcrypto.PrependPubkey(sealed, n.local.PublicKey())
 
-	_, err = n.conn.WriteToUDP(final, raddr)
+	addr := NodeAddr(to)
+	if addr.IP.IsUnspecified() {
+		addr.IP = net.IPv6loopback
+	}
+	//log.Warning(spew.Sdump(addr))
+	_, err := n.conn.WriteToUDP(final, addr)
 
 	n.logger.Debug("UDP MESSAGE to %v SENT ? %v", to.PublicKey().String(), err)
 

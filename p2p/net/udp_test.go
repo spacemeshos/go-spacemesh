@@ -70,13 +70,11 @@ func TestUDPNet_Sanity(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, udpnet)
 
-	addr, err := net.ResolveUDPAddr("udp", local.Address())
-	require.NoError(t, err)
+	addr := &net.UDPAddr{local.IP, int(local.DiscoveryPort), ""}
 	mockconn := &mockCon{local: addr}
 
 	other, _ := node.GenerateTestNode(t)
-	addr2, err := net.ResolveUDPAddr("udp", other.Address())
-	require.NoError(t, err)
+	addr2 := &net.UDPAddr{other.IP, int(other.DiscoveryPort), ""}
 
 	session := createSession(other.PrivateKey(), local.PublicKey())
 
