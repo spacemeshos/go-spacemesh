@@ -523,7 +523,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	}
 
 	log.Info("connecting to POET on IP %v", app.Config.PoETServer)
-	poet, err := nipst.NewRemoteRPCPoetClient(app.Config.PoETServer, 2*time.Second)
+	poet, err := nipst.NewRemoteRPCPoetClient(app.Config.PoETServer, 5*time.Minute)
 	if err != nil {
 		log.Error("poet server not found on addr %v, err: %v", app.Config.PoETServer, err)
 		return
