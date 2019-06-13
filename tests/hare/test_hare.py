@@ -1,11 +1,9 @@
 import time
-from elasticsearch_dsl import Search, Q
+
 from pytest_testconfig import config as testconfig
 
-from tests.fixtures import set_namespace, load_config, init_session, set_docker_images, session_id
-from tests.test_bs import setup_poet, setup_clients, save_log_on_exit, setup_oracle, setup_bootstrap, create_configmap
-from tests.test_bs import get_elastic_search_api
-from tests.test_bs import current_index, wait_genesis
+from tests.queries import query_hare_output_set, query_round_1, query_round_2, query_round_3, query_pre_round
+from tests.test_bs import current_index, setup_clients, setup_oracle
 
 
 class Set:
@@ -53,18 +51,29 @@ def validate(outputs):
     return True
 
 
-def query_hare_output_set(indx, namespace, client_po_name):
-    es = get_elastic_search_api()
-    fltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
-           Q("match_phrase", kubernetes__pod_name=client_po_name) & \
-           Q("match_phrase", M="Consensus process terminated")
-    s = Search(index=indx, using=es).query('bool', filter=[fltr])
-    hits = list(s.scan())
+def assert_all(curr_idx, ns):
+    total = testconfig['bootstrap']['replicas'] + testconfig['client']['replicas']
 
-    lst = []
-    for h in hits:
-        lst.append(h.set_values)
-    return lst
+    # assert_result
+    lst = query_hare_output_set(curr_idx, ns)
+    assert total == len(lst)
+    assert validate(lst)
+
+    # assert round 1
+    lst = query_round_1(curr_idx, ns)
+    assert total == len(lst)
+
+    # assert round 2
+    lst = query_round_2(curr_idx, ns)
+    assert total == len(lst)
+
+    # assert round 3
+    lst = query_round_3(curr_idx, ns)
+    assert total == len(lst)
+
+    # assert pre round
+    lst = query_pre_round(curr_idx, ns)
+    assert 0 == len(lst)
 
 
 # ==============================================================================
@@ -77,13 +86,10 @@ EFK_LOG_PROPAGATION_DELAY = 10
 
 
 def test_hare_sanity(setup_clients, wait_genesis, save_log_on_exit):
-
     # Need to wait for 1 full iteration + the time it takes the logs to propagate to ES
     delay = int(testconfig['client']['args']['hare-round-duration-sec']) * NUM_OF_EXPECTED_ROUNDS + \
             EFK_LOG_PROPAGATION_DELAY + int(testconfig['client']['args']['hare-wakeup-delta'])
     print("Going to sleep for {0}".format(delay))
     time.sleep(delay)
-    lst = query_hare_output_set(current_index, testconfig['namespace'], setup_clients.deployment_id)
-    total = testconfig['bootstrap']['replicas'] + testconfig['client']['replicas']
-    assert total == len(lst)
-    assert validate(lst)
+
+    assert_all(current_index, testconfig['namespace'])

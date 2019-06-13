@@ -73,7 +73,8 @@ def query_message(indx, namespace, client_po_name, fields, findFails=False, star
     if len(hits) > 0:
         ts = [hit["T"] for hit in hits]
 
-        first = startTime if startTime is not None else datetime.strptime(min(ts).replace("T", " ", ).replace("Z", ""), "%Y-%m-%d %H:%M:%S.%f")
+        first = startTime if startTime is not None else datetime.strptime(min(ts).replace("T", " ", ).replace("Z", ""),
+                                                                          "%Y-%m-%d %H:%M:%S.%f")
         last = datetime.strptime(max(ts).replace("T", " ", ).replace("Z", ""), "%Y-%m-%d %H:%M:%S.%f")
 
         delta = last - first
@@ -113,6 +114,7 @@ def parseAtx(log_messages):
         else:
             node2blocks[nid] = [m]
     return node2blocks
+
 
 def sort_by_nodeid(log_messages):
     node2blocks = {}
@@ -174,7 +176,6 @@ def get_atx_per_node(deployment):
 # should show up if the indexing was functioning well.
 
 def find_dups(indx, namespace, client_po_name, fields, max=1):
-
     # Usage : find_dups(current_index, "t7t9e", "client-t7t9e-28qj7",
     # {'M':'new_gossip_message', 'protocol': 'api_test_gossip'}, 10)
 
@@ -190,7 +191,8 @@ def find_dups(indx, namespace, client_po_name, fields, max=1):
     counting = {}
 
     for hit in hits:
-        counting[hit.kubernetes.pod_name] = 1 if hit.kubernetes.pod_name not in counting else counting[hit.kubernetes.pod_name] + 1
+        counting[hit.kubernetes.pod_name] = 1 if hit.kubernetes.pod_name not in counting else counting[
+                                                                                                  hit.kubernetes.pod_name] + 1
         if counting[hit.kubernetes.pod_name] > max and hit.kubernetes.pod_name not in counting:
             dups.append(hit.kubernetes.pod_name)
 
@@ -200,7 +202,6 @@ def find_dups(indx, namespace, client_po_name, fields, max=1):
 
 
 def find_missing(indx, namespace, client_po_name, fields, min=1):
-
     # Usage : find_dups(current_index, "t7t9e", "client-t7t9e-28qj7",
     # {'M':'new_gossip_message', 'protocol': 'api_test_gossip'}, 10)
 
@@ -216,7 +217,8 @@ def find_missing(indx, namespace, client_po_name, fields, min=1):
     counting = {}
 
     for hit in hits:
-        counting[hit.kubernetes.pod_name] = 1 if hit.kubernetes.pod_name not in counting else counting[hit.kubernetes.pod_name] + 1
+        counting[hit.kubernetes.pod_name] = 1 if hit.kubernetes.pod_name not in counting else counting[
+                                                                                                  hit.kubernetes.pod_name] + 1
 
     for pod in counting:
         if counting[pod] < min:
@@ -225,3 +227,58 @@ def find_missing(indx, namespace, client_po_name, fields, min=1):
     print("Total hits: {0}".format(len(hits)))
     print("Missing count {0}".format(len(miss)))
     print(miss)
+
+
+def query_hare_output_set(indx, namespace):
+    es = get_elastic_search_api()
+    fltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
+           Q("match_phrase", M="Consensus process terminated")
+    s = Search(index=indx, using=es).query('bool', filter=[fltr])
+    hits = list(s.scan())
+
+    lst = []
+    for h in hits:
+        lst.append(h.set_values)
+    return lst
+
+
+def query_round_1(indx, namespace):
+    es = get_elastic_search_api()
+    fltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
+           Q("match_phrase", M="Round 1 ended") & \
+           Q("match_phrase", is_svp_ready="true")
+    s = Search(index=indx, using=es).query('bool', filter=[fltr])
+    hits = list(s.scan())
+
+    return hits
+
+
+def query_round_2(indx, namespace):
+    es = get_elastic_search_api()
+    fltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
+           Q("match_phrase", M="Round 2 ended")
+    s = Search(index=indx, using=es).query('bool', filter=[fltr])
+    hits = list(s.scan())
+    hits = list(filter(lambda x: x.proposed_set != "nil", hits))
+
+    return hits
+
+
+def query_round_3(indx, namespace):
+    es = get_elastic_search_api()
+    fltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
+           Q("match_phrase", M="Round 3 ended: committing on")
+    s = Search(index=indx, using=es).query('bool', filter=[fltr])
+    hits = list(s.scan())
+
+    return hits
+
+
+def query_pre_round(indx, namespace):
+    es = get_elastic_search_api()
+    fltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
+           Q("match_phrase", M="Fatal: PreRound ended with empty set")
+    s = Search(index=indx, using=es).query('bool', filter=[fltr])
+    hits = list(s.scan())
+
+    return hits

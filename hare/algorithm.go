@@ -556,34 +556,34 @@ func (proc *ConsensusProcess) endOfRound1() {
 func (proc *ConsensusProcess) endOfRound3() {
 	// notify already sent after committing, only one should be sent
 	if proc.notifySent {
-		proc.Info("End of round 3: notification already sent")
+		proc.Info("Round 3 ended: notification already sent")
 		return
 	}
 
 	if proc.proposalTracker.IsConflicting() {
-		proc.Warning("End of round 3: proposal is conflicting")
+		proc.Warning("Round 3 ended: proposal is conflicting")
 		return
 	}
 
 	if !proc.commitTracker.HasEnoughCommits() {
-		proc.Warning("End of round 3: not enough commits")
+		proc.Warning("Round 3 ended: not enough commits")
 		return
 	}
 
 	cert := proc.commitTracker.BuildCertificate()
 	if cert == nil {
-		proc.Error("Build certificate returned nil")
+		proc.Error("Round 3 ended: Build certificate returned nil")
 		return
 	}
 
 	s := proc.proposalTracker.ProposedSet()
 	if s == nil {
-		proc.Error("ProposedSet returned nil")
+		proc.Error("Round 3 ended: ProposedSet returned nil")
 		return
 	}
 
 	// commit & send notification InnerMsg
-	proc.Debug("end of round 3: committing on %v and sending notification message", s)
+	proc.With().Info("Round 3 ended: committing on %v", log.String("committed_set", s.String()))
 	proc.s = s
 	proc.certificate = cert
 	builder, err := proc.initDefaultBuilder(proc.s)
@@ -603,7 +603,7 @@ func (proc *ConsensusProcess) isEligible() bool {
 
 // Returns the role matching the current round if eligible for this round, false otherwise
 func (proc *ConsensusProcess) currentRole() Role {
-	proof, err := proc.oracle.Proof(types.NodeId{Key: proc.signing.PublicKey().String(), VRFPublicKey: proc.nid.VRFPublicKey}, types.LayerID(proc.instanceId), proc.k)
+	proof, err := proc.oracle.Proof(proc.nid, types.LayerID(proc.instanceId), proc.k)
 	if err != nil {
 		proc.Error("Could not retrieve proof from oracle err=%v", err)
 		return Passive
