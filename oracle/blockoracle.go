@@ -132,10 +132,10 @@ func (bo *MinerBlockOracle) getValidLatestATX(validForEpoch types.EpochId) (*typ
 }
 
 func calcEligibleLayer(epochNumber types.EpochId, layersPerEpoch uint16, vrfHash [32]byte) types.LayerID {
-	epochOffset := uint64(epochNumber) * uint64(layersPerEpoch)
+	epochStart := uint64(epochNumber) * uint64(layersPerEpoch)
 	vrfInteger := binary.LittleEndian.Uint64(vrfHash[:8])
-	eligibleLayerRelativeToEpochStart := vrfInteger % uint64(layersPerEpoch)
-	return types.LayerID(eligibleLayerRelativeToEpochStart + epochOffset)
+	eligibleLayerOffset := vrfInteger % uint64(layersPerEpoch)
+	return types.LayerID(epochStart + eligibleLayerOffset)
 }
 
 func getNumberOfEligibleBlocks(activeSetSize uint32, committeeSize uint32, layersPerEpoch uint16, lg log.Log) (uint32, error) {

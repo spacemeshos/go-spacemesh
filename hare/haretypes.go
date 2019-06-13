@@ -147,7 +147,7 @@ func NewSet(data []uint64) *Set {
 	s.values = make(map[objectId]Value, len(data))
 	for i := 0; i < len(data); i++ {
 		bid := data[i]
-		s.values[objectId(bid)] = NewValue(bid)
+		s.values[objectId(bid)] = Value{types.BlockID(bid)}
 	}
 
 	return s
@@ -204,10 +204,20 @@ func (s *Set) Equals(g *Set) bool {
 	return true
 }
 
-func (s *Set) To2DSlice() []uint64 {
+// ToSlice returns the array representation of the set
+func (s *Set) ToSlice() []uint64 {
+	// order keys
+	keys := make([]objectId, len(s.values))
+	i := 0
+	for k := range s.values {
+		keys[i] = k
+		i++
+	}
+	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
+
 	l := make([]uint64, 0, len(s.values))
-	for _, v := range s.values {
-		l = append(l, uint64(v.BlockID))
+	for i := range keys {
+		l = append(l, uint64(s.values[keys[i]].BlockID))
 	}
 	return l
 }
