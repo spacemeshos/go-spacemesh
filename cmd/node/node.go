@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/seehuhn/mt19937"
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/amcl"
 	"github.com/spacemeshos/go-spacemesh/amcl/BLS381"
 	apiCfg "github.com/spacemeshos/go-spacemesh/api/config"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
@@ -535,7 +536,9 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 
 	app.unregisterOracle = func() { oracleClient.Unregister(true, app.edSgn.PublicKey().String()) }
 
-	rng := BLS381.DefaultSeed()
+	rng := amcl.NewRAND()
+	pub := app.edSgn.PublicKey().Bytes()
+	rng.Seed(len(pub), app.edSgn.Sign(pub)) // assuming ed.private is random, the sig can be used as seed
 	vrfPriv, vrfPub := BLS381.GenKeyPair(rng)
 	vrfSigner := BLS381.NewBlsSigner(vrfPriv)
 	nodeID := types.NodeId{Key: app.edSgn.PublicKey().String(), VRFPublicKey: vrfPub}

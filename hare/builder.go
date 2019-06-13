@@ -54,6 +54,16 @@ type InnerMessage struct {
 	Cert       *Certificate        // optional
 }
 
+func (im *InnerMessage) Bytes() []byte {
+	var w bytes.Buffer
+	_, err := xdr.Marshal(&w, im)
+	if err != nil {
+		log.Panic("could not marshal InnerMsg before send")
+	}
+
+	return w.Bytes()
+}
+
 func (im *InnerMessage) String() string {
 	return fmt.Sprintf("Type: %v InstanceId: %v K: %v Ki: %v", im.Type, im.InstanceId, im.K, im.Ki)
 }
@@ -81,14 +91,7 @@ func (builder *MessageBuilder) SetCertificate(certificate *Certificate) *Message
 }
 
 func (builder *MessageBuilder) Sign(signing Signer) *MessageBuilder {
-	var w bytes.Buffer
-	_, err := xdr.Marshal(&w, builder.inner)
-	if err != nil {
-		log.Panic("marshal failed during signing")
-	}
-
-	// TODO: do we always sign the same InnerMsg? order of Values (set)?
-	builder.msg.Sig = signing.Sign(w.Bytes())
+	builder.msg.Sig = signing.Sign(builder.inner.Bytes())
 
 	return builder
 }
@@ -119,7 +122,7 @@ func (builder *MessageBuilder) SetKi(ki int32) *MessageBuilder {
 }
 
 func (builder *MessageBuilder) SetValues(set *Set) *MessageBuilder {
-	builder.inner.Values = set.To2DSlice()
+	builder.inner.Values = set.ToSlice()
 	return builder
 }
 

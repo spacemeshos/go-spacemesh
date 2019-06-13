@@ -88,6 +88,7 @@ func (suite *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat
 		smApp := NewSpacemeshApp()
 		smApp.Config.HARE.N = numOfInstances
 		smApp.Config.HARE.F = numOfInstances / 2
+		smApp.Config.HARE.RoundDuration = 3
 		smApp.Config.HARE.WakeupDelta = 15
 		smApp.Config.HARE.ExpectedLeaders = 5
 
@@ -131,6 +132,7 @@ func activateGrpcServer(smApp *SpacemeshApp) {
 func (suite *AppTestSuite) TestMultipleNodes() {
 	//EntryPointCreated <- true
 
+	const numberOfEpochs = 2 // first 2 epochs are genesis
 	addr := address.BytesToAddress([]byte{0x01})
 	dst := address.BytesToAddress([]byte{0x02})
 	tx := types.SerializableTransaction{}
@@ -160,7 +162,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 			maxClientsDone := 0
 			for idx, app := range suite.apps {
 				if big.NewInt(10).Cmp(app.state.GetBalance(dst)) == 0 &&
-					!app.mesh.LatestLayer().GetEpoch(app.Config.CONSENSUS.LayersPerEpoch).IsGenesis() {
+					uint32(suite.apps[idx].mesh.LatestLayer()) == numberOfEpochs*uint32(suite.apps[idx].Config.CONSENSUS.LayersPerEpoch)+1 { // make sure all had 1 non-genesis layer
 
 					suite.validateLastATXActiveSetSize(app)
 					clientsDone := 0

@@ -79,24 +79,14 @@ func (m *Msg) Bytes() []byte {
 }
 
 func newMsg(hareMsg *Message, querier StateQuerier, layersPerEpoch uint16) (*Msg, error) {
-	// data msg to bytes
-	var w bytes.Buffer
-	_, err := xdr.Marshal(&w, hareMsg.InnerMsg)
-	if err != nil {
-		log.Error("Could not marshal err=%v", err)
-		return nil, err
-	}
-
 	// extract pub key
-	pubKey, err := ed25519.ExtractPublicKey(w.Bytes(), hareMsg.Sig)
+	pubKey, err := ed25519.ExtractPublicKey(hareMsg.InnerMsg.Bytes(), hareMsg.Sig)
 	if err != nil {
 		log.Error("newMsg construction failed: could not extract public key err=%v", err, len(hareMsg.Sig))
 		return nil, err
 	}
-
 	// query if identity is active
 	pub := signing.NewPublicKey(pubKey)
-
 	// TODO: genesis flow should decide what we want to do here
 	layer := types.LayerID(hareMsg.InnerMsg.InstanceId)
 	if layer.GetEpoch(layersPerEpoch).IsGenesis() {
@@ -111,7 +101,7 @@ func newMsg(hareMsg *Message, querier StateQuerier, layersPerEpoch uint16) (*Msg
 
 	// check query result
 	if !res {
-		log.Error("identity %v is not active", pub.String())
+		log.Error("identity %v is not active", pub.ShortString())
 		return nil, errors.New("inactive identity")
 	}
 
@@ -424,7 +414,7 @@ func (proc *ConsensusProcess) beginRound3() {
 	// proposedSet may be nil, in such case the tracker will ignore Messages
 	proc.commitTracker = NewCommitTracker(proc.cfg.F+1, proc.cfg.N, proposedSet) // track commits for proposed set
 
-	if proposedSet != nil { // has proposal to send
+	if proposedSet != nil { // has proposal to commit on
 		builder, err := proc.initDefaultBuilder(proposedSet)
 		if err != nil {
 			proc.Error("init default builder failed: %v", err)
@@ -470,7 +460,7 @@ func (proc *ConsensusProcess) onRoundBegin() {
 func (proc *ConsensusProcess) initDefaultBuilder(s *Set) (*MessageBuilder, error) {
 	builder := NewMessageBuilder().SetInstanceId(proc.instanceId)
 	builder = builder.SetRoundCounter(proc.k).SetKi(proc.ki).SetValues(s)
-	proof, err := proc.oracle.Proof(types.NodeId{Key: proc.signing.PublicKey().String(), VRFPublicKey: proc.nid.VRFPublicKey}, types.LayerID(proc.instanceId), proc.k)
+	proof, err := proc.oracle.Proof(proc.nid, types.LayerID(proc.instanceId), proc.k)
 	if err != nil {
 		proc.Error("Could not initialize default builder err=%v", err)
 		return nil, err
@@ -490,10 +480,14 @@ func (proc *ConsensusProcess) processStatusMsg(msg *Msg) {
 }
 
 func (proc *ConsensusProcess) processProposalMsg(msg *Msg) {
-	if proc.currentRound() == Round2 { // regular proposal
+	currRnd := proc.currentRound()
+
+	if currRnd == Round2 { // regular proposal
 		proc.proposalTracker.OnProposal(msg)
-	} else { // late proposal
+	} else if currRnd == Round3 { // late proposal
 		proc.proposalTracker.OnLateProposal(msg)
+	} else {
+		proc.Error("Received proposal message for processing in an invalid context: K=%v", msg.InnerMsg.K)
 	}
 }
 
