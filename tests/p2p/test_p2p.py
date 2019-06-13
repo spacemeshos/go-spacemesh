@@ -9,7 +9,7 @@ from pytest_testconfig import config as testconfig
 from elasticsearch_dsl import Search, Q
 
 from tests.fixtures import init_session, load_config, set_namespace, session_id, set_docker_images
-from tests.test_bs import get_elastic_search_api, setup_bootstrap, setup_oracle, setup_poet, create_configmap, setup_clients
+from tests.test_bs import get_elastic_search_api, setup_bootstrap, setup_oracle, create_configmap, setup_clients
 from tests.test_bs import query_message, save_log_on_exit, add_client, api_call, add_curl
 from tests.test_bs import add_single_client, get_conf
 
@@ -20,6 +20,7 @@ from tests.test_bs import add_single_client, get_conf
 dt = datetime.now()
 todaydate = dt.strftime("%Y.%m.%d")
 current_index = 'kubernetes_cluster-' + todaydate
+
 
 def query_bootstrap_es(indx, namespace, bootstrap_po_name):
     es = get_elastic_search_api()
@@ -42,7 +43,8 @@ def test_bootstrap(setup_bootstrap):
                                                                 testconfig['namespace'],
                                                                 setup_bootstrap.pods[0]['name'])
 
-def test_client(setup_clients,add_curl, save_log_on_exit):
+
+def test_client(setup_clients, add_curl, save_log_on_exit):
     fields = {'M':'discovery_bootstrap'}
     timetowait = len(setup_clients.pods)/2
     print("Sleeping " + str(timetowait) + " before checking out bootstrap results")
@@ -116,7 +118,7 @@ def test_many_gossip_messages(setup_clients, add_curl):
 
 
 def test_many_gossip_sim(setup_clients, add_curl):
-    msg_size = 10000 #1kb todo: increase up to 2mb
+    msg_size = 10000  # 1kb TODO: increase up to 2mb
     fields = {'M':'new_gossip_message', 'protocol': 'api_test_gossip'}
     TEST_MESSAGES = 100
 
@@ -147,14 +149,13 @@ def test_many_gossip_sim(setup_clients, add_curl):
 # NOTE : this test is ran in the end because it affects the network structure,
 # it creates more pods and bootstrap them which will affect final query results
 # an alternative to that would be to kill the pods when the test ends.
-def test_late_bootstraps(setup_poet, setup_oracle, setup_bootstrap, setup_clients):
+def test_late_bootstraps(setup_oracle, setup_bootstrap, setup_clients):
     # Sleep a while before checking the node is bootstarped
     TEST_NUM = 10
-
-    testnames = list()
+    testnames = []
 
     for i in range(TEST_NUM):
-        client = add_single_client(setup_bootstrap.deployment_id, get_conf(setup_bootstrap.pods[0], setup_poet, setup_oracle))
+        client = add_single_client(setup_bootstrap.deployment_id, get_conf(setup_bootstrap.pods[0], setup_oracle))
         testnames.append((client, datetime.now()))
 
     time.sleep(TEST_NUM)

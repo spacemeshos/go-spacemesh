@@ -3,7 +3,7 @@ from elasticsearch_dsl import Search, Q
 from pytest_testconfig import config as testconfig
 
 from tests.fixtures import set_namespace, load_config, init_session, set_docker_images, session_id
-from tests.test_bs import setup_poet, setup_clients, save_log_on_exit, setup_oracle, setup_bootstrap, create_configmap
+from tests.test_bs import setup_clients, save_log_on_exit, setup_oracle, setup_bootstrap, create_configmap
 from tests.test_bs import get_elastic_search_api
 from tests.test_bs import current_index, wait_genesis
 
