@@ -632,7 +632,7 @@ func (a *addrBook) reset() {
 
 // New returns a new bitcoin address manager.
 // Use Start to begin processing asynchronous address updates.
-func NewAddrBook(localAddress NodeInfo, config config.SwarmConfig, logger log.Log) *addrBook {
+func NewAddrBook(localAddress *node.NodeInfo, config config.SwarmConfig, logger log.Log) *addrBook {
 	//TODO use config for const params.
 	am := addrBook{
 		logger: logger,
@@ -642,6 +642,15 @@ func NewAddrBook(localAddress NodeInfo, config config.SwarmConfig, logger log.Lo
 		quit:         make(chan struct{}),
 	}
 	am.reset()
-	// TODO: handle persistence.
+
+	if config.PeersFile != "" {
+
+		dataDir, err := filesystem.GetSpacemeshDataDirectoryPath()
+		if err == nil {
+			am.loadPeers(dataDir + "/" + localAddress.ID.String() + "/" + config.PeersFile)
+		}
+
+		go am.saveRoutine()
+	}
 	return &am
 }
