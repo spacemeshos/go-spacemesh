@@ -61,7 +61,7 @@ func (db *PoetDb) ValidateAndStorePoetProof(proof types.PoetProof, poetId [types
 		return true, fmt.Errorf("failed to store poet proof and index for poetId %x round %d: %v",
 			poetId, roundId, err)
 	}
-	db.log.Debug("stored proof for round %d PoET id %x", roundId, poetId)
+	db.log.Info("stored proof for round %d PoET id %x", roundId, poetId)
 	db.publishPoetProofRef(key, ref[:])
 	return false, nil
 }
