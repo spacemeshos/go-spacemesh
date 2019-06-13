@@ -1,59 +1,176 @@
 package node
 
 import (
+	"errors"
 	"fmt"
+	"github.com/btcsuite/btcutil/base58"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"strings"
+	"net"
+	"net/url"
+	"regexp"
+	"strconv"
 )
 
-// Node is the basic node identity struct
-type Node struct {
-	pubKey  p2pcrypto.PublicKey
-	address string
+const SCHEME = "spacemesh"
+const DiscoveryPortParam = "disc"
+
+type ID [32]byte
+
+func (d ID) PublicKey() p2pcrypto.PublicKey {
+	return p2pcrypto.PublicKeyFromArray(d)
 }
 
-// EmptyNode represents an uninitialized node
-var EmptyNode Node
-
-// PublicKey returns the public key of the node
-func (n Node) PublicKey() p2pcrypto.PublicKey {
-	return n.pubKey
+func (d ID) Bytes() []byte {
+	return d[:]
 }
 
-// String returns a string representation of the node's public key
-func (n Node) String() string {
-	return n.pubKey.String()
+func (d ID) String() string {
+	return base58.Encode(d[:])
 }
 
-// Address returns the tcp ip:port address of the node
-func (n Node) Address() string {
-	return n.address
+// NodeInfo is a discovery parsed structure to store a node's address and key.
+type NodeInfo struct {
+	ID
+	IP            net.IP
+	ProtocolPort  uint16 // TCP
+	DiscoveryPort uint16 // UDP
 }
 
-// Pretty returns a pretty string from the node's info
-func (n Node) Pretty() string {
-	return fmt.Sprintf("Node : %v , Address: %v", n.pubKey.String(), n.address)
-}
-
-// New creates a new remotenode identity from a public key and an address
-func New(key p2pcrypto.PublicKey, address string) Node {
-	return Node{key, address}
-}
-
-// NewNodeFromString creates a remote identity from a string in the following format: 126.0.0.1:3572/r9gJRWVB9JVPap2HKnduoFySvHtVTfJdQ4WG8DriUD82 .
-func NewNodeFromString(data string) (Node, error) {
-	items := strings.Split(data, "/")
-	if len(items) != 2 {
-		return EmptyNode, fmt.Errorf("could'nt create node from string, wrong format")
+// NewNode creates a new node. It is mostly meant to be used for
+// testing purposes.
+func NewNode(id p2pcrypto.PublicKey, ip net.IP, proto, disc uint16) *NodeInfo {
+	if ipv4 := ip.To4(); ipv4 != nil {
+		ip = ipv4
 	}
-	pubk, err := p2pcrypto.NewPublicKeyFromBase58(items[1])
+	return &NodeInfo{
+		IP:            ip,
+		ID:            id.Array(),
+		ProtocolPort:  proto,
+		DiscoveryPort: disc,
+	}
+}
+
+/* NOTE: code below is from go-ethereum. modified for spacemesh needs*/
+
+// checks whether n is a valid complete node.
+func (n NodeInfo) Valid() error {
+	if n.IP == nil {
+		return errors.New("no ip set to node")
+	}
+	if n.DiscoveryPort == 0 {
+		return errors.New("missing UDP port")
+	}
+	if n.ProtocolPort == 0 {
+		return errors.New("missing TCP port")
+	}
+	//if n.IP.IsMulticast() || n.IP.IsUnspecified() {
+	//	return errors.New("invalid IP (multicast/unspecified)")
+	//}
+	if len(n.ID.Bytes()) != 32 {
+		return errors.New("Invalid ID")
+	}
+
+	// TODO: Validate pubkey
+	return nil
+}
+
+// The string representation of a Node is a URL.
+// Please see ParseNode for a description of the format.
+func (n NodeInfo) String() string {
+	u := url.URL{Scheme: SCHEME}
+
+	if n.IP == nil {
+		u.Host = n.ID.String()
+	} else {
+		addr := &net.TCPAddr{IP: n.IP, Port: int(n.ProtocolPort)}
+		u.User = url.User(n.ID.String())
+		u.Host = addr.String()
+		if n.DiscoveryPort != n.ProtocolPort {
+			u.RawQuery = fmt.Sprintf("%v=", DiscoveryPortParam) + strconv.Itoa(int(n.DiscoveryPort))
+		}
+	}
+	return u.String()
+}
+
+var incompleteNodeURL = regexp.MustCompile(fmt.Sprintf("(?i)^(?:%v://)?([0-9a-f]+)$", SCHEME))
+
+// ParseNode parses a node designator.
+//
+// There are two basic forms of node designators
+//   - incomplete nodes, which only have the public key (node ID)
+//   - complete nodes, which contain the public key and IP/Port information
+//
+// For incomplete nodes, the designator must look like one of these
+//
+//    spacemesh://<hex node id>
+//    <hex node id>
+//
+// For complete nodes, the node ID is encoded in the username portion
+// of the URL, separated from the host by an @ sign. The hostname can
+// only be given as an IP address, DNS domain names are not allowed.
+// The port in the host name section is the TCP listening port. If the
+// TCP and UDP (discovery) ports differ, the UDP port is specified as
+// query parameter "discport".
+//
+// In the following example, the node URL describes
+// a node with IP address 10.3.58.6, TCP listening port 7513
+// and UDP discovery port 7513.
+//
+//    spacemesh://<hex node id>@10.3.58.6:7513?disc=7513
+func ParseNode(rawurl string) (*NodeInfo, error) {
+	if m := incompleteNodeURL.FindStringSubmatch(rawurl); m != nil {
+		id, err := p2pcrypto.NewPrivateKeyFromBase58(m[1])
+		if err != nil {
+			return nil, fmt.Errorf("invalid node ID (%v)", err)
+		}
+		return NewNode(id, nil, 0, 0), nil
+	}
+	return parseComplete(rawurl)
+}
+
+func parseComplete(rawurl string) (*NodeInfo, error) {
+	var (
+		id               p2pcrypto.PublicKey
+		ip               net.IP
+		tcpPort, udpPort uint64
+	)
+	u, err := url.Parse(rawurl)
 	if err != nil {
-		return EmptyNode, err
+		return nil, err
 	}
-	return Node{pubk, items[0]}, nil
-}
-
-// StringFromNode generates a string that represent a node in the network in following format: 126.0.0.1:3572/r9gJRWVB9JVPap2HKnduoFySvHtVTfJdQ4WG8DriUD82.
-func StringFromNode(n Node) string {
-	return strings.Join([]string{n.Address(), n.PublicKey().String()}, "/")
+	if u.Scheme != SCHEME {
+		return nil, fmt.Errorf("invalid URL scheme, want '%v'", SCHEME)
+	}
+	// Parse the Node ID from the user portion.
+	if u.User == nil {
+		return nil, errors.New("does not contain node ID")
+	}
+	if id, err = p2pcrypto.NewPrivateKeyFromBase58(u.User.String()); err != nil {
+		return nil, fmt.Errorf("invalid node ID (%v)", err)
+	}
+	// Parse the IP address.
+	host, port, err := net.SplitHostPort(u.Host)
+	if err != nil {
+		return nil, fmt.Errorf("invalid host: %v", err)
+	}
+	if ip = net.ParseIP(host); ip == nil {
+		return nil, errors.New("invalid IP address")
+	}
+	// Ensure the IP is 4 bytes long for IPv4 addresses.
+	if ipv4 := ip.To4(); ipv4 != nil {
+		ip = ipv4
+	}
+	// Parse the port numbers.
+	if tcpPort, err = strconv.ParseUint(port, 10, 16); err != nil {
+		return nil, errors.New("invalid port")
+	}
+	udpPort = tcpPort
+	qv := u.Query()
+	if qv.Get(DiscoveryPortParam) != "" {
+		udpPort, err = strconv.ParseUint(qv.Get(DiscoveryPortParam), 10, 16)
+		if err != nil {
+			return nil, fmt.Errorf("invalid %v in query err=%v", DiscoveryPortParam, err)
+		}
+	}
+	return NewNode(id, ip, uint16(tcpPort), uint16(udpPort)), nil
 }
