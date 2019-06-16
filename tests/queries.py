@@ -100,7 +100,7 @@ def query_message(indx, namespace, client_po_name, fields, findFails=False, star
             print(unsecpods)
         print("====================================================================")
 
-    s = list([(h.N, h.M) for h in hits])
+    s = list(hits)
     return s
 
 
@@ -229,56 +229,28 @@ def find_missing(indx, namespace, client_po_name, fields, min=1):
     print(miss)
 
 
-def query_hare_output_set(indx, namespace):
-    es = get_elastic_search_api()
-    fltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
-           Q("match_phrase", M="Consensus process terminated")
-    s = Search(index=indx, using=es).query('bool', filter=[fltr])
-    hits = list(s.scan())
-
+def query_hare_output_set(indx, ns):
+    hits = query_message(indx, ns, ns, {'M': 'Consensus process terminated'}, True)
     lst = []
     for h in hits:
         lst.append(h.set_values)
     return lst
 
 
-def query_round_1(indx, namespace):
-    es = get_elastic_search_api()
-    fltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
-           Q("match_phrase", M="Round 1 ended") & \
-           Q("match_phrase", is_svp_ready="true")
-    s = Search(index=indx, using=es).query('bool', filter=[fltr])
-    hits = list(s.scan())
-
-    return hits
+def query_round_1(indx, ns):
+    return query_message(indx, ns, ns, {'M': 'Round 1 ended', 'is_svp_ready': 'true'}, True)
 
 
-def query_round_2(indx, namespace):
-    es = get_elastic_search_api()
-    fltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
-           Q("match_phrase", M="Round 2 ended")
-    s = Search(index=indx, using=es).query('bool', filter=[fltr])
-    hits = list(s.scan())
-    hits = list(filter(lambda x: x.proposed_set != "nil", hits))
+def query_round_2(indx, ns):
+    hits = query_message(indx, ns, ns, {'M': 'Round 2 ended'}, True)
+    filtered = list(filter(lambda x: x.proposed_set != "nil", hits))
 
-    return hits
+    return filtered
 
 
-def query_round_3(indx, namespace):
-    es = get_elastic_search_api()
-    fltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
-           Q("match_phrase", M="Round 3 ended: committing")
-    s = Search(index=indx, using=es).query('bool', filter=[fltr])
-    hits = list(s.scan())
-
-    return hits
+def query_round_3(indx, ns):
+    return query_message(indx, ns, ns, {'M': 'Round 3 ended: committing'}, True)
 
 
-def query_pre_round(indx, namespace):
-    es = get_elastic_search_api()
-    fltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
-           Q("match_phrase", M="Fatal: PreRound ended with empty set")
-    s = Search(index=indx, using=es).query('bool', filter=[fltr])
-    hits = list(s.scan())
-
-    return hits
+def query_pre_round(indx, ns):
+    return query_message(indx, ns, ns, {'M': 'Fatal: PreRound ended with empty set'}, True)
