@@ -408,57 +408,18 @@ def test_mining(setup_network):
     data = '{"address":"222"}'
     end = start = time.time()
     layer_avg_size = 20
-    last_layer = 8
+    last_layer = 9
     layers_per_epoch = 3
-    deviation = 0.2
+    # deviation = 0.2
     last_epoch = last_layer / layers_per_epoch
 
     queries.wait_for_latest_layer(testconfig["namespace"], last_layer)
-
-    # out = api_call(client_ip, data, api, testconfig['namespace'])
     print("test took {:.3f} seconds ".format(end-start))
-    # assert "{'value': '100'}" in out
-    # print("balance ok")
-
-    # need to filter out blocks that have come from last layer
-    blockmap = queries.get_blocks_per_node(testconfig["namespace"])
-    # count all blocks arrived in relevant layers
-    total_blocks = sum([len(blockmap[x]) for x in blockmap ])
-    atxmap = queries.get_atx_per_node(testconfig["namespace"])
-    total_atxs = sum([len(atxmap[x]) for x in atxmap ])
-
     total_pods = len(setup_network.clients.pods) + len(setup_network.bootstrap.pods)
+    analyse.analyze_mining(testconfig['namespace'], last_layer, layers_per_epoch, layer_avg_size, total_pods)
 
-    print("atx created " + str(total_atxs))
-    print("blocks created " + str(total_blocks))
 
-    genesis_block_deviation = (total_pods - layer_avg_size)*2
 
-    if genesis_block_deviation > 0:
-        print("subtracting deviation of " + str(genesis_block_deviation) + " blocks for block counting")
-        total_blocks -= genesis_block_deviation
-    print("test took {:.3f} seconds ".format(end-start))
-    assert total_pods == len(blockmap)
-    assert (1 - deviation) < (total_blocks / last_layer) / layer_avg_size < (1 + deviation)
-    assert total_atxs == int((last_layer / layers_per_epoch) + 1) * total_pods
-
-    # assert that a node has created one atx per epoch
-    for node in atxmap:
-        mp = set()
-        for blk in atxmap[node]:
-            mp.add(blk[4])
-        assert len(atxmap[node]) / int((last_layer / layers_per_epoch) + 1) == 1
-        if len(mp) != int((last_layer / layers_per_epoch) + 1):
-            print("mp " + ','.join(mp) + " node " + node + " atxmap " + str(atxmap[node]))
-        assert len(mp) == int((last_layer / layers_per_epoch) + 1)
-
-    # assert that each node has created layer_avg/number_of_nodes
-    mp.clear()
-    for node in blockmap:
-        for blk in blockmap[node]:
-          mp.add(blk[0])
-        print("blocks:" + str(len(blockmap[node])) + "in layers" + str(len(mp)) + " " + str(layer_avg_size / total_pods))
-        assert (len(blockmap[node]) / last_layer) / int(layer_avg_size / total_pods + 0.5) <= 1.5
 
 
 ''' todo: when atx flow stabilized re enable this test

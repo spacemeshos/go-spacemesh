@@ -114,27 +114,58 @@ def parseAtx(log_messages):
             node2blocks[nid] = [m]
     return node2blocks
 
+
 def sort_by_nodeid(log_messages):
     node2blocks = {}
     for x in log_messages:
         id = re.split(r'\.', x[0])[0]
         m = re.findall(r'\d+', x[1])
-        # re.search(r'(?<=in layer\s)\d+', x[1])
+        layer = m[0]
+        # 0 - list of all blocks, 1 - map of blocks per layer
         if id in node2blocks:
-            node2blocks[id].append(m)
+            node2blocks[id][0].append(m)
+            if layer in node2blocks[id][1]:
+                node2blocks[id][1][layer].append(m)
+            else:
+                node2blocks[id][1][layer] = [m]
         else:
-            node2blocks[id] = [m]
+            node2blocks[id] = ([m], {m[0]: [m]})
     return node2blocks
 
 
-def get_blocks_per_node(deployment):
+def sort_by_layer(log_messages):
+    blocks_per_layer = {}
+    for x in log_messages:
+        m = re.findall(r'\d+', x[1])
+        layer = m[0]
+        if layer in blocks_per_layer:
+            blocks_per_layer[layer].append(m)
+        else:
+            blocks_per_layer[layer] = [m]
+    return blocks_per_layer
+
+
+def print_node_stats(nodes):
+    for node in nodes:
+        print("node " + node + " blocks created: " + str(len(nodes[node][0])))
+        for layer in nodes[node][1]:
+            print("blocks created in layer " + str(layer) + " : " + str(len(nodes[node][1][layer])))
+
+
+def print_layer_stat(layers):
+    for l in layers:
+        print("blocks created in layer " + str(l) + " : " + str(len(layers[l])))
+
+
+def get_blocks_per_node_and_layer(deployment):
     # I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d, viewEdges: %d atx %v, atxs:%v
     block_fields = {"M": "I've created a block in layer"}
     blocks = query_message(current_index, deployment, deployment, block_fields, True)
     print("found " + str(len(blocks)) + " blocks")
     nodes = sort_by_nodeid(blocks)
+    layers = sort_by_layer(blocks)
 
-    return nodes
+    return nodes, layers
 
 
 def get_layers(deployment):
@@ -168,6 +199,15 @@ def get_atx_per_node(deployment):
     nodes = parseAtx(atx_logs)
 
     return nodes
+
+
+def get_nodes_up(deployment):
+    # based on log:
+    block_fields = {"M": "Starting Spacemesh"}
+    logs = query_message(current_index, deployment, deployment, block_fields, True)
+    print("found " + str(len(logs)) + " nodes up")
+
+    return len(logs)
 
 
 # find_dups finds elasticsearch hits that are duplicates per kubernetes_pod_name. the max field represents the number of times the message
