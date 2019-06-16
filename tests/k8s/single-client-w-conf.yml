@@ -4,6 +4,8 @@ metadata:
   generateName: client-
   labels:
     name: client
+  annotations:
+    cluster-autoscaler.kubernetes.io/safe-to-evict: 'false'
 spec:
   containers:
   - name: client

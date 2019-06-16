@@ -152,31 +152,52 @@ ifdef TEST
 DELIM=::
 endif
 
-dockerrun-test: dockerbuild-test
+
+dockerrun-p2p:
+ifndef ES_PASSWD
+        $(error ES_PASSWD is not set)
+endif
+	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
+		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
+		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
+		-it go-spacemesh-python pytest -s p2p/test_p2p.py --tc-file=p2p/config.yaml --tc-format=yaml
+
+.PHONY: dockerrun-p2p
+
+dockerrun-mining:
+ifndef ES_PASSWD
+        $(error ES_PASSWD is not set)
+endif
+	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
+		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
+		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
+		-it go-spacemesh-python pytest -s test_bs.py --tc-file=config.yaml --tc-format=yaml
+
+.PHONY: dockerrun-mining
+
+dockerrun-hare:
+ifndef ES_PASSWD
+        $(error ES_PASSWD is not set)
+endif
+	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
+		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
+		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
+		-it go-spacemesh-python pytest -s hare/test_hare.py --tc-file=hare/config.yaml --tc-format=yaml
+.PHONY: dockerrun-hare
+
+dockerrun-sync:
 ifndef ES_PASSWD
 	$(error ES_PASSWD is not set)
 endif
 
-	docker run -e ES_PASSWD="$(ES_PASSWD)" \
-             -e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
-             -e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
-             -it go-spacemesh-python pytest -s p2p/test_p2p.py --tc-file=p2p/config.yaml --tc-format=yaml
+	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
+		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
+		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
+		-it go-spacemesh-python pytest -s sync/test_sync.py --tc-file=sync/config.yaml --tc-format=yaml
 
-	docker run -e ES_PASSWD="$(ES_PASSWD)" \
-             -e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
-             -e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
-             -it go-spacemesh-python pytest -s test_bs.py --tc-file=config.yaml --tc-format=yaml
+.PHONY: dockerrun-sync
 
-	docker run -e ES_PASSWD="$(ES_PASSWD)" \
-             -e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
-             -e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
-             -it go-spacemesh-python pytest -s hare/test_hare.py --tc-file=hare/config.yaml --tc-format=yaml
-
-	docker run -e ES_PASSWD="$(ES_PASSWD)" \
-             -e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
-             -e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
-             -it go-spacemesh-python pytest -s sync/test_sync.py --tc-file=sync/config.yaml --tc-format=yaml
-
+dockerrun-test: dockerbuild-test dockerrun-p2p dockerrun-mining dockerrun-hare dockerrun-sync
 .PHONY: dockerrun-test
 
 dockerrun-all: dockerpush dockerrun-test

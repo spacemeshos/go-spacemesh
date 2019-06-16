@@ -4,6 +4,8 @@ metadata:
   name: curl
   labels:
     name: curl
+  annotations:
+    cluster-autoscaler.kubernetes.io/safe-to-evict: 'false'
 spec:
   containers:
   - name: curl
