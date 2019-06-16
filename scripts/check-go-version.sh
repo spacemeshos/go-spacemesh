@@ -12,7 +12,7 @@ if ! (hash go 2>/dev/null) ; then
 fi
 
 # Ensure we use Go version 1.11+
-read major minor patch <<< $(go version | sed 's/go version go\([0-9]*\)\.\([0-9]*\)\.\(.*\) .*/\1 \2 \3/')
+read major minor patch <<< $(go version | sed 's/go version go\([0-9]*\)\.\([0-9]*\).*/\1 \2/') 
 if [[ ${major} -ne 1 || ${minor} -lt 11 ]]; then
     errcho "Go 1.11+ is required (v$major.$minor.$patch is installed at `which go`)"
     exit 1;
