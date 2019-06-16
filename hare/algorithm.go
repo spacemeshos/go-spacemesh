@@ -582,8 +582,8 @@ func (proc *ConsensusProcess) endOfRound3() {
 		return
 	}
 
-	// commit & send notification InnerMsg
-	proc.With().Info("Round 3 ended: committing on %v", log.String("committed_set", s.String()))
+	// commit & send notification msg
+	proc.With().Info("Round 3 ended: committing", log.String("committed_set", s.String()))
 	proc.s = s
 	proc.certificate = cert
 	builder, err := proc.initDefaultBuilder(proc.s)
