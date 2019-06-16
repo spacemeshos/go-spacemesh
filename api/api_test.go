@@ -220,10 +220,10 @@ func TestJsonApi(t *testing.T) {
 func createXdrSignedTransaction(params types.SerializableTransaction, key ed25519.PrivateKey) []byte {
 	tx := types.SerializableSignedTransaction{}
 	tx.AccountNonce = params.AccountNonce
-	tx.Amount = binary.LittleEndian.Uint64(params.Amount)
+	tx.Amount = binary.BigEndian.Uint64(params.Amount)
 	tx.Recipient = *params.Recipient
 	tx.GasLimit = params.GasLimit
-	tx.Price = binary.LittleEndian.Uint64(params.Price)
+	tx.Price = binary.BigEndian.Uint64(params.Price)
 
 	buf, err := types.InterfaceToBytes(&tx.InnerSerializableSignedTransaction)
 	if err != nil {
@@ -231,7 +231,6 @@ func createXdrSignedTransaction(params types.SerializableTransaction, key ed2551
 	}
 
 	copy(tx.Signature[:], ed25519.Sign2(key, buf))
-	//tx.Signature = ed25519.Sign2(key, buf)
 
 	buf, err = types.InterfaceToBytes(&tx)
 	if err != nil {
@@ -332,13 +331,11 @@ func TestJsonWalletApi(t *testing.T) {
 	rec := address.BytesToAddress([]byte{0xde, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa})
 	txParams.Recipient = &rec
 	txParams.AccountNonce = 1111
-	txParams.Amount = []byte{0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01}
+	txParams.Amount =  []byte{0x01, 0x11, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01} //big.NewInt(1234).Bytes()
 	txParams.GasLimit = 11
-	txParams.Price = []byte{0x11, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01}
+	txParams.Price = []byte{0x11, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01} //big.NewInt(321).Bytes()
 	xdrTx := createXdrSignedTransaction(txParams, key)
 	txToSend := pb.SignedTransaction{Tx: xdrTx}
-	//xdrTx := []byte{0, 0, 0, 0, 0, 0, 0, 0, 99, 229, 228, 217, 146, 147, 184, 178, 85, 141, 100, 89, 118, 20, 177, 17, 251, 6, 90, 197, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 10, 0, 0, 0, 0, 0, 0, 39, 16, 37, 150, 12, 101, 249, 165, 70, 155, 16, 151, 101, 106, 205, 3, 77, 174, 121, 201, 45, 78, 73, 49, 41, 214, 182, 111, 159, 134, 0, 132, 70, 216, 174, 88, 240, 125, 105, 111, 44, 168, 33, 179, 197, 224, 81, 242, 43, 253, 115, 12, 220, 84, 5, 42, 103, 154, 219, 125, 116, 95, 89, 39, 148, 8}
-	//txToSend := pb.SignedTransaction{Tx: xdrTx}        //SrcAddress: "01020304", DstAddress: "01", Amount: "10", Nonce: "12"}
 
 	var buf2 bytes.Buffer
 	err = m.Marshal(&buf2, &txToSend)
@@ -620,95 +617,4 @@ func TestApproveAPIGossipMessages(t *testing.T) {
 	require.Equal(t, res.Message(), []byte("TEST"))
 	require.Equal(t, res.Protocol(), APIGossipProtocol)
 	cancel()
-}
-
-type XdrTest struct {
-	Foo int
-}
-
-type InnerSerializableSignedTransaction struct {
-	AccountNonce uint64
-	Recipient    address.Address
-	GasLimit     uint64
-	Price        uint64
-	Amount       uint64
-}
-
-type SerializableSignedTransaction struct {
-	InnerSerializableSignedTransaction
-	Signature [64]byte
-}
-
-func TestTemp(t *testing.T) {
-	//txParams := types.SerializableTransaction{}
-	//sPub, key, _ := ed25519.GenerateKey(crand.Reader)
-	//sAddr := state.PublicKeyToAccountAddress(sPub)
-	////txApi.setMockOrigin(sAddr)
-	//txParams.Origin = sAddr
-	//rec := address.BytesToAddress([]byte{0xde})
-	//txParams.Recipient = &rec
-	//txParams.AccountNonce = 1111
-	//txParams.Amount = []byte{0x01}
-	//txParams.GasLimit = 11
-	//txParams.Price = []byte{0x11}
-	//xdrTx := createXdrSignedTransaction(txParams, key) //string(createXdrSignedTransaction(txParams, key))
-	//log.Info("xdr %x", xdrTx)
-
-	//xdrT := InnerSerializableSignedTransaction{1}
-	////var w bytes.Buffer
-	////_, err := xdr.Marshal(&w, &xdrT)
-	////if err != nil {
-	////	log.Error("failed to marshal tx")
-	////}
-	//buf, err := types.InterfaceToBytes(&xdrT)
-	//assert.NoError(t, err)
-	//log.Info("xdr %x", buf)
-
-	//InnerSerializableSignedTransaction -> bytes
-	tx1 := InnerSerializableSignedTransaction{}
-	tx1.AccountNonce = 12345
-	tx1.Recipient = address.HexToAddress("0x1b3d6d946dea7e3e14756e2f0f9e09b9663f0d9c")
-	tx1.GasLimit = 56789
-	tx1.Price = 24680
-	tx1.Amount = 86420
-	buf1, err := types.InterfaceToBytes(&tx1)
-	assert.NoError(t, err)
-	log.Info("tx1 buffer - %x", buf1)
-
-	tx := common.FromHex("0x00000000000030391b3d6d946dea7e3e14756e2f0f9e09b9663f0d9c000000000000ddd500000000000060680000000000015194")
-	//tx := []byte{0, 0, 0, 0, 0, 0, 0, 0, 99, 229, 228, 217, 146, 147, 184, 178, 85, 141, 100, 89, 118, 20, 177, 17, 251, 6, 90, 197, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 10, 0, 0, 0, 0, 0, 0, 39, 16, 37, 150, 12, 101, 249, 165, 70, 155, 16, 151, 101, 106, 205, 3, 77, 174, 121, 201, 45, 78, 73, 49, 41, 214, 182, 111, 159, 134, 0, 132, 70, 216, 174, 88, 240, 125, 105, 111, 44, 168, 33, 179, 197, 224, 81, 242, 43, 253, 115, 12, 220, 84, 5, 42, 103, 154, 219, 125, 116, 95, 89, 39, 148, 8}
-	signedTx := SerializableSignedTransaction{}
-	err = types.BytesToInterface(tx, &signedTx.InnerSerializableSignedTransaction)
-	log.Info("recipient %x", signedTx.Recipient)
-	assert.NoError(t, err)
-
-	//tx := common.FromHex("")
-	//signedTx := XdrTest{}
-	//rdr := bytes.NewReader(w.Bytes())
-	//_, err = xdr.Unmarshal(rdr, signedTx)
-	//assert.NoError(t, err)
-	//if err != nil {
-	//	log.Error("failed to deserialize tx, error %v", err)
-	//}
-}
-
-func TestTemp2(t *testing.T) {
-	pub := common.FromHex("0x7be017a967db77fd10ac7c891b3d6d946dea7e3e14756e2f0f9e09b9663f0d9")
-	pri := common.FromHex("0x81c90dd832e18d1cf9758254327cb3135961af6688ac9c2a8c5d71f73acc5ce57be017a967db77fd10ac7c891b3d6d946dea7e3e14756e2f0f9e09b9663f0d9c")
-	txParams := types.SerializableTransaction{}
-	sAddr := state.PublicKeyToAccountAddress(pub)
-	//txApi.setMockOrigin(sAddr)
-	txParams.Origin = sAddr
-	rec := address.BytesToAddress([]byte{0x11, 0x11})
-	txParams.Recipient = &rec
-	txParams.AccountNonce = 12345
-	bAmount := make([]byte, 8)
-	binary.LittleEndian.PutUint64(bAmount, 86420)
-	txParams.Amount = bAmount
-	txParams.GasLimit = 56789
-	bPrice := make([]byte, 8)
-	binary.LittleEndian.PutUint64(bPrice, 24680)
-	txParams.Price = bPrice
-	xdrTx := createXdrSignedTransaction(txParams,pri)
-	log.Info("%v %x", len(xdrTx), xdrTx)
 }

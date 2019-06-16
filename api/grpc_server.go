@@ -2,7 +2,6 @@
 package api
 
 import (
-	"encoding/binary"
 	"fmt"
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/spacemeshos/go-spacemesh/address"
@@ -38,9 +37,9 @@ func (s SpacemeshGrpcService) Echo(ctx context.Context, in *pb.SimpleMessage) (*
 func (s SpacemeshGrpcService) GetBalance(ctx context.Context, in *pb.AccountId) (*pb.SimpleMessage, error) {
 	log.Info("GRPC GetBalance msg")
 	addr := address.HexToAddress(in.Address)
-
+	log.Info("GRPC GetBalance for address %x (len %v)", addr, len(addr))
 	if s.StateApi.Exist(addr) != true {
-		log.Error("GRPC GetBalance returned error msg: account does not exist")
+		log.Error("GRPC GetBalance returned error msg: account does not exist, address %x", addr)
 		return nil, fmt.Errorf("account does not exist")
 	}
 
@@ -74,7 +73,7 @@ func (s SpacemeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.Sign
 		log.Error("failed to deserialize tx, error %v", err)
 		return nil, err
 	}
-
+	log.Info("GRPC SubmitTransaction to address %x (len %v), gaslimit %v, price %v", signedTx.Recipient, len(signedTx.Recipient), signedTx.GasLimit, signedTx.Price)
 	src, err := s.Tx.ValidateTransactionSignature(signedTx)
 	if err != nil {
 		log.Error("tx failed to validate signature, error %v", err)
@@ -91,10 +90,10 @@ func (s SpacemeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.Sign
 	amount.SetUint64(signedTx.Amount)
 	tx.Amount = amount.Bytes()
 	tx.GasLimit = signedTx.GasLimit
-	b := make([]byte, 8)
-	binary.LittleEndian.PutUint64(b, uint64(signedTx.Price))
-	tx.Price = b
-
+	price := big.Int{}
+	price.SetUint64(signedTx.Price)
+	tx.Price = price.Bytes()
+	log.Info("GRPC SubmitTransaction BROADCAST tx. address %x (len %v), gaslimit %v, price %v", tx.Recipient, len(tx.Recipient), tx.GasLimit, tx.Price)
 	val, err := types.TransactionAsBytes(&tx)
 	if err != nil {
 		return nil, err

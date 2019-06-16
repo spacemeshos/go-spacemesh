@@ -379,12 +379,10 @@ def test_transaction(setup_network):
     print("nonce ok")
 
     api = 'v1/submittransaction'
-    #data = '{"srcAddress":"1","dstAddress":"2222","nonce":"0","amount":"100"}'
 
-    ###################################
     txGen = tx_generator.TxGenerator()
-    data = txGen.generate("2222", 0, 123, 321, 100)
-    ###################################
+    txBytes = txGen.generate("0000000000000000000000000000000000002222", 0, 123, 321, 100)
+    data = '{"tx":'+ str(list(txBytes)) + '}'
 
     print("submitting transaction")
     out = api_call(client_ip, data, api, testconfig['namespace'])
@@ -393,7 +391,7 @@ def test_transaction(setup_network):
     print("submit transaction ok")
     print("wait for confirmation ")
     api = 'v1/balance'
-    data = '{"address":"2222"}'
+    data = '{"address":"0000000000000000000000000000000000002222"}'
     end = start = time.time()
 
     for x in range(7):
@@ -421,11 +419,9 @@ def test_mining(setup_network):
     # print("nonce ok")
 
     api = 'v1/submittransaction'
-    #data = '{"srcAddress":"1","dstAddress":"2222","nonce":"0","amount":"100"}'
-    ###################################
     txGen = tx_generator.TxGenerator()
-    data = txGen.generate("2222", 0, 246, 642, 100)
-    ###################################
+    txBytes = txGen.generate("0000000000000000000000000000000000002222", 0, 246, 642, 100)
+    data = '{"tx":'+ str(list(txBytes)) + '}'
     print("submitting transaction")
     out = api_call(client_ip, data, api, testconfig['namespace'])
     print(out)
@@ -433,7 +429,7 @@ def test_mining(setup_network):
     print("submit transaction ok")
     print("wait for confirmation ")
     api = 'v1/balance'
-    data = '{"address":"2222"}'
+    data = '{"address":"0000000000000000000000000000000000002222"}'
     end = start = time.time()
     layer_avg_size = 20
     last_layer = 9
@@ -458,11 +454,9 @@ def test_atxs_nodes_up(setup_bootstrap, setup_clients, add_curl, wait_genesis, s
     out = api_call(client_ip, data, api, testconfig['namespace'])
 
     api = 'v1/submittransaction'
-    #data = '{"srcAddress":"1","dstAddress":"2222","nonce":"0","amount":"100"}'
-    ###################################
     txGen = xdr.TxGenerator()
-    data = txGen.generate("2222", 0, 123, 321, 100)
-    ###################################
+    txBytes = txGen.generate("2222", 0, 123, 321, 100)
+    data = '{"tx":'+ str(list(txBytes)) + '}'
     print("submitting transaction")
     out = api_call(client_ip, data, api, testconfig['namespace'])
     print(out.decode("utf-8"))
