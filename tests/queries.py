@@ -267,7 +267,7 @@ def query_round_2(indx, namespace):
 def query_round_3(indx, namespace):
     es = get_elastic_search_api()
     fltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
-           Q("match_phrase", M="Round 3 ended: committing on")
+           Q("match_phrase", M="Round 3 ended: committing")
     s = Search(index=indx, using=es).query('bool', filter=[fltr])
     hits = list(s.scan())
 

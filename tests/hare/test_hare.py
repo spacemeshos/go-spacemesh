@@ -3,7 +3,9 @@ import time
 from pytest_testconfig import config as testconfig
 
 from tests.queries import query_hare_output_set, query_round_1, query_round_2, query_round_3, query_pre_round
-from tests.test_bs import current_index, setup_clients, setup_oracle
+from tests.test_bs import current_index, setup_clients, setup_oracle, setup_poet, setup_bootstrap, create_configmap, \
+    wait_genesis, save_log_on_exit
+from tests.fixtures import init_session, load_config, set_namespace, session_id, set_docker_images
 
 
 class Set:
@@ -69,7 +71,8 @@ def assert_all(curr_idx, ns):
 
     # assert round 3
     lst = query_round_3(curr_idx, ns)
-    assert total == len(lst)
+    f = int(testconfig['client']['args']['hare-max-adversaries'])
+    assert len(lst) >= f + 1
 
     # assert pre round
     lst = query_pre_round(curr_idx, ns)
