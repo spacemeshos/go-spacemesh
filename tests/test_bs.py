@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 
-from tests import queries
+from tests import queries, analyse
 from tests import pod, deployment
 from tests.fixtures import load_config, DeploymentInfo, NetworkDeploymentInfo
 from tests.fixtures import init_session, set_namespace, set_docker_images, session_id

@@ -21,16 +21,11 @@ def analyze_mining(deployment,last_layer, layers_per_epoch, layer_avg_size, tota
     print("atx created " + str(total_atxs))
     print("blocks created " + str(total_blocks) + " first epoch blocks " + str(first_epoch_blocks))
 
-    genesis_block_deviation = (total_pods - layer_avg_size) * 2 * layers_per_epoch
-
-    if genesis_block_deviation > 0:
-        print("subtracting deviation of " + str(genesis_block_deviation) + " blocks for block counting")
-        total_blocks -= genesis_block_deviation
-
-    assert queries.get_nodes_up(deployment) == total_pods
-    assert total_pods == len(blockmap)
+    assert queries.get_nodes_up(deployment) == total_pods, "not enough pods deployed or pods restarted"
+    assert total_pods == len(blockmap), "not all nodes created blocks"
     # remove blocks created in first epoch since first epoch starts with layer 1
     assert ((total_blocks - first_epoch_blocks) / (last_layer - layers_per_epoch)) / layer_avg_size == 1
+    # not all nodes produces atx in all epochs
     assert total_atxs == int((last_layer / layers_per_epoch)) * total_pods
 
     # assert that a node has created one atx per epoch
@@ -45,5 +40,8 @@ def analyze_mining(deployment,last_layer, layers_per_epoch, layer_avg_size, tota
 
     # assert that each node has created layer_avg/number_of_nodes
     for node in blockmap:
-        first_epoch_blocks = sum([len(blockmap[node][1][str(x)]) for x in range(layers_per_epoch) if str(x) in blockmap[node][1]])
-        assert ((len(blockmap[node][0])) - first_epoch_blocks) / (last_layer - layers_per_epoch) / max(1, int(layer_avg_size / total_pods)) == 1
+        first_epoch_blocks = sum([len(blockmap[node]["layers"][str(x)]) for x in range(layers_per_epoch) if str(x) in blockmap[node]["layers"]])
+        # need to deduct blocks created in first genesis epoch since it does not follow general mining rules by design
+        blocks_created_per_layer = ((len(blockmap[node]["blocks"])) - first_epoch_blocks) / (last_layer - layers_per_epoch)
+        wanted_avg_block_per_node = max(1, int(layer_avg_size / total_pods))
+        assert blocks_created_per_layer / wanted_avg_block_per_node == 1

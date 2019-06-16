@@ -121,15 +121,15 @@ def sort_by_nodeid(log_messages):
         id = re.split(r'\.', x[0])[0]
         m = re.findall(r'\d+', x[1])
         layer = m[0]
-        # 0 - list of all blocks, 1 - map of blocks per layer
+        # blocks - list of all blocks, layers - map of blocks per layer
         if id in node2blocks:
-            node2blocks[id][0].append(m)
-            if layer in node2blocks[id][1]:
-                node2blocks[id][1][layer].append(m)
+            node2blocks[id]["blocks"].append(m)
+            if layer in node2blocks[id]["layers"]:
+                node2blocks[id]["layers"][layer].append(m)
             else:
-                node2blocks[id][1][layer] = [m]
+                node2blocks[id]["layers"][layer] = [m]
         else:
-            node2blocks[id] = ([m], {m[0]: [m]})
+            node2blocks[id] = {"blocks": [m], "layers": {m[0]: [m]}}
     return node2blocks
 
 
@@ -147,9 +147,9 @@ def sort_by_layer(log_messages):
 
 def print_node_stats(nodes):
     for node in nodes:
-        print("node " + node + " blocks created: " + str(len(nodes[node][0])))
-        for layer in nodes[node][1]:
-            print("blocks created in layer " + str(layer) + " : " + str(len(nodes[node][1][layer])))
+        print("node " + node + " blocks created: " + str(len(nodes[node]["blocks"])))
+        for layer in nodes[node]["layers"]:
+            print("blocks created in layer " + str(layer) + " : " + str(len(nodes[node]["layers"][layer])))
 
 
 def print_layer_stat(layers):
