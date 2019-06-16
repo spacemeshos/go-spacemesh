@@ -1,6 +1,6 @@
 #!/bin/bash -e
 ./scripts/check-go-version.sh
-#./scripts/install-protobuf.sh
+./scripts/install-protobuf.sh
 
 go mod download
 protobuf_path=$(go list -m -f '{{.Dir}}' github.com/golang/protobuf)
