@@ -88,7 +88,7 @@ NUM_OF_EXPECTED_ROUNDS = 5
 EFK_LOG_PROPAGATION_DELAY = 10
 
 
-def test_hare_sanity(setup_clients, wait_genesis, save_log_on_exit):
+def test_hare_sanity(setup_bootstrap, setup_clients, wait_genesis):
     # Need to wait for 1 full iteration + the time it takes the logs to propagate to ES
     delay = int(testconfig['client']['args']['hare-round-duration-sec']) * NUM_OF_EXPECTED_ROUNDS + \
             EFK_LOG_PROPAGATION_DELAY + int(testconfig['client']['args']['hare-wakeup-delta'])
