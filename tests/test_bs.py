@@ -1,27 +1,23 @@
 from datetime import datetime, timedelta
 
 from tests import queries
-from tests import pod
+from tests import pod, deployment
 from tests.fixtures import load_config, DeploymentInfo, NetworkDeploymentInfo
 from tests.fixtures import init_session, set_namespace, set_docker_images, session_id
-import os
-from os import path
 import pytest
 import pytz
 import re
 import subprocess
 import time
-import yaml
+import os
 from kubernetes import client
 from kubernetes.client.rest import ApiException
+from kubernetes.stream import stream
 from pytest_testconfig import config as testconfig
 from elasticsearch import Elasticsearch
 from elasticsearch_dsl import Search, Q
-
 from tests.misc import ContainerSpec
 from tests.queries import query_message
-
-from kubernetes.stream import stream
 
 
 BOOT_DEPLOYMENT_FILE = './k8s/bootstrapoet-w-conf.yml'
@@ -49,72 +45,6 @@ def get_elastic_search_api():
     return es
 
 
-def wait_to_deployment_to_be_deleted(deployment_name, name_space, time_out=None):
-    total_sleep_time = 0
-    while True:
-        try:
-            resp = client.AppsV1Api().read_namespaced_deployment(name=deployment_name, namespace=name_space)
-        except ApiException as e:
-            if e.status == 404:
-                print("Total time waiting for delete deployment {0}: {1} sec".format(deployment_name, total_sleep_time))
-                break
-        time.sleep(1)
-        total_sleep_time += 1
-
-        if time_out and total_sleep_time > time_out:
-            raise Exception("Timeout waiting to delete deployment")
-
-
-def wait_to_deployment_to_be_ready(deployment_name, name_space, time_out=None):
-    start = datetime.now()
-    while True:
-        resp = client.AppsV1Api().read_namespaced_deployment(name=deployment_name, namespace=name_space)
-        total_sleep_time = (datetime.now()-start).total_seconds()
-        if not resp.status.unavailable_replicas:
-            print("Total time waiting for deployment {0}: {1} sec".format(deployment_name, total_sleep_time))
-            break
-        print("{0}/{1} pods ready {2} sec               ".format(resp.status.available_replicas, resp.status.replicas, total_sleep_time), end="\r")
-        time.sleep(1)
-
-        if time_out and total_sleep_time > time_out:
-            raise Exception("Timeout waiting to deployment to be ready")
-
-
-def create_deployment(file_name, name_space, deployment_id=None, replica_size=1, container_specs=None):
-    with open(path.join(path.dirname(__file__), file_name)) as f:
-        dep = yaml.safe_load(f)
-
-        # Set unique deployment id
-        if deployment_id:
-            dep['metadata']['generateName'] += '{0}-'.format(deployment_id)
-
-        # Set replica size
-        dep['spec']['replicas'] = replica_size
-        if container_specs:
-            dep = container_specs.update_deployment(dep)
-
-        k8s_beta = client.ExtensionsV1beta1Api()
-        resp1 = k8s_beta.create_namespaced_deployment(body=dep, namespace=name_space)
-        wait_to_deployment_to_be_ready(resp1.metadata._name, name_space,
-                                       time_out=testconfig['deployment_ready_time_out'])
-        return resp1
-
-
-def delete_deployment(deployment_name, name_space):
-    try:
-        k8s_beta = client.ExtensionsV1beta1Api()
-        resp = k8s_beta.delete_namespaced_deployment(name=deployment_name,
-                                                     namespace=name_space,
-                                                     body=client.V1DeleteOptions(propagation_policy='Foreground',
-                                                                                 grace_period_seconds=5))
-    except ApiException as e:
-        if e.status == 404:
-            return resp
-
-    wait_to_deployment_to_be_deleted(deployment_name, name_space)
-    return resp
-
-
 def query_bootstrap_es(indx, namespace, bootstrap_po_name):
     es = get_elastic_search_api()
     fltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
@@ -140,9 +70,9 @@ def setup_server(deployment_name, deployment_file, namespace):
                                                                  "name={0}".format(deployment_name_prefix))).items
     if namespaced_pods:
         # if server already exist -> delete it
-        delete_deployment(deployment_name, namespace)
+        deployment.delete_deployment(deployment_name, namespace)
 
-    resp = create_deployment(deployment_file, namespace, None)
+    resp = deployment.create_deployment(deployment_file, namespace, time_out=testconfig['deployment_ready_time_out'])
     namespaced_pods = client.CoreV1Api().list_namespaced_pod(namespace,
                                                              label_selector=(
                                                                  "name={0}".format(deployment_name_prefix))).items
@@ -173,10 +103,11 @@ def setup_bootstrap(request, init_session, setup_oracle, create_configmap):
                           genesis_time=GENESIS_TIME.isoformat('T', 'seconds'),
                           **bootstrap_args)
 
-        resp = create_deployment(BOOT_DEPLOYMENT_FILE, name_space,
-                                 deployment_id=bootstrap_deployment_info.deployment_id,
-                                 replica_size=testconfig['bootstrap']['replicas'],
-                                 container_specs=cspec)
+        resp = deployment.create_deployment(BOOT_DEPLOYMENT_FILE, name_space,
+                                            deployment_id=bootstrap_deployment_info.deployment_id,
+                                            replica_size=testconfig['bootstrap']['replicas'],
+                                            container_specs=cspec,
+                                            time_out=testconfig['deployment_ready_time_out'])
 
         bootstrap_deployment_info.deployment_name = resp.metadata._name
         # The tests assume we deploy only 1 bootstrap
@@ -224,10 +155,11 @@ def setup_clients(request, setup_oracle, setup_bootstrap):
                           genesis_time=GENESIS_TIME.isoformat('T', 'seconds'),
                           **client_args)
 
-        resp = create_deployment(CLIENT_DEPLOYMENT_FILE, name_space,
-                                 deployment_id=setup_bootstrap.deployment_id,
-                                 replica_size=testconfig['client']['replicas'],
-                                 container_specs=cspec)
+        resp = deployment.create_deployment(CLIENT_DEPLOYMENT_FILE, name_space,
+                                            deployment_id=setup_bootstrap.deployment_id,
+                                            replica_size=testconfig['client']['replicas'],
+                                            container_specs=cspec,
+                                            time_out=testconfig['deployment_ready_time_out'])
 
         client_info.deployment_name = resp.metadata._name
         client_pods = (
@@ -267,6 +199,26 @@ def add_single_client(deployment_id, container_specs):
     print("Add new client: {0}".format(client_name))
     return client_name
 
+
+def add_multi_clients(deployment_id, container_specs, size=2):
+    resp = deployment.create_deployment(file_name=CLIENT_DEPLOYMENT_FILE,
+                                        name_space=testconfig['namespace'],
+                                        deployment_id=deployment_id,
+                                        replica_size=size,
+                                        container_specs=container_specs,
+                                        time_out=testconfig['deployment_ready_time_out'])
+    client_pods = (
+        client.CoreV1Api().list_namespaced_pod(testconfig['namespace'],
+                                               include_uninitialized=True,
+                                               label_selector=(
+                                                   "name={0}".format(
+                                                       resp.metadata._name.split('-')[0]))).items)
+    pods = []
+    for c in client_pods:
+        pod_name= c.metadata.name
+        if pod_name.startswith(resp.metadata.name):
+            pods.append(pod_name)
+    return pods
 
 def get_conf(bs_info, setup_oracle, args=None):
     client_args = {} if 'args' not in testconfig['client'] else testconfig['client']['args']

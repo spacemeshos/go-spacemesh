@@ -19,7 +19,8 @@ def new_client_in_namespace(name_space, setup_bootstrap, cspec, num):
     resp = create_deployment(CLIENT_DEPLOYMENT_FILE, name_space,
                              deployment_id=setup_bootstrap.deployment_id,
                              replica_size=num,
-                             container_specs=cspec)
+                             container_specs=cspec,
+                             time_out=testconfig['deployment_ready_time_out'])
     client_info = DeploymentInfo(dep_id=setup_bootstrap.deployment_id)
     client_info.deployment_name = resp.metadata._name
     namespaced_pods = client.CoreV1Api().list_namespaced_pod(namespace=name_space, include_uninitialized=True).items
