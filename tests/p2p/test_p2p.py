@@ -48,7 +48,7 @@ def test_client(setup_clients,add_curl, save_log_on_exit):
     print("Sleeping " + str(timetowait) + " before checking out bootstrap results")
     time.sleep(timetowait)
     peers = query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, fields, False)
-    assert len(set(peers)) == len(setup_clients.pods)
+    assert len(peers) == len(setup_clients.pods)
 
 
 def test_add_client(add_client):
@@ -107,7 +107,7 @@ def test_many_gossip_messages(setup_clients, add_curl):
 
         # Need to sleep for a while in order to enable the propagation of the gossip message - 0.5 sec for each node
         # TODO: check frequently before timeout so we might be able to finish earlier.
-        gossip_propagation_sleep = 3 # currently we expect short propagation times.
+        gossip_propagation_sleep = 8 # currently we expect short propagation times.
         print('sleep for {0} sec to enable gossip propagation'.format(gossip_propagation_sleep))
         time.sleep(gossip_propagation_sleep)
 
