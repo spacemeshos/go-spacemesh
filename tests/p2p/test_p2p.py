@@ -8,9 +8,10 @@ from datetime import datetime, timedelta
 from pytest_testconfig import config as testconfig
 from elasticsearch_dsl import Search, Q
 
+from tests.queries import ES, query_message
 from tests.fixtures import init_session, load_config, set_namespace, session_id, set_docker_images
-from tests.test_bs import get_elastic_search_api, setup_bootstrap, setup_oracle, setup_poet, create_configmap, setup_clients
-from tests.test_bs import query_message, save_log_on_exit, add_client, api_call, add_curl
+from tests.test_bs import setup_bootstrap, setup_oracle, setup_poet, create_configmap, setup_clients
+from tests.test_bs import save_log_on_exit, add_client, api_call, add_curl
 from tests.test_bs import add_single_client, add_multi_clients, get_conf
 
 # ==============================================================================
@@ -23,7 +24,7 @@ current_index = 'kubernetes_cluster-' + todaydate
 
 
 def query_bootstrap_es(indx, namespace, bootstrap_po_name):
-    es = get_elastic_search_api()
+    es = ES().get_search_api()
     fltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
            Q("match_phrase", kubernetes__pod_name=bootstrap_po_name) & \
            Q("match_phrase", M="Local node identity")

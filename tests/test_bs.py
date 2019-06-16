@@ -9,15 +9,13 @@ import pytz
 import re
 import subprocess
 import time
-import os
 from kubernetes import client
 from kubernetes.client.rest import ApiException
 from kubernetes.stream import stream
 from pytest_testconfig import config as testconfig
-from elasticsearch import Elasticsearch
 from elasticsearch_dsl import Search, Q
 from tests.misc import ContainerSpec
-from tests.queries import query_message
+from tests.queries import ES
 
 
 BOOT_DEPLOYMENT_FILE = './k8s/bootstrap-w-conf.yml'
@@ -37,17 +35,8 @@ ELASTICSEARCH_URL = "http://{0}".format(testconfig['elastic']['host'])
 GENESIS_TIME = pytz.utc.localize(datetime.utcnow() + timedelta(seconds=testconfig['genesis_delta']))
 
 
-def get_elastic_search_api():
-    elastic_password = os.getenv('ES_PASSWD')
-    if not elastic_password:
-        raise Exception("Unknown Elasticsearch password. Please check 'ES_PASSWD' environment variable")
-    es = Elasticsearch([ELASTICSEARCH_URL],
-                       http_auth=(testconfig['elastic']['username'], elastic_password), port=80)
-    return es
-
-
 def query_bootstrap_es(indx, namespace, bootstrap_po_name):
-    es = get_elastic_search_api()
+    es = ES.get_search_api()
     fltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
            Q("match_phrase", kubernetes__pod_name=bootstrap_po_name) & \
            Q("match_phrase", M="Local node identity")
