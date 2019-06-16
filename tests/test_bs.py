@@ -280,7 +280,7 @@ def wait_genesis():
 
 def api_call(client_ip, data, api, namespace):
     # todo: this won't work with long payloads - ( `Argument list too long` ). try port-forward ?
-    res = stream(client.CoreV1Api().connect_post_namespaced_pod_exec, name="curl", namespace=namespace, command=["curl", "-s", "--request",  "POST", "--data", data, "http://" + client_ip + ":9090/" + api], stderr=True, stdin=False, stdout=True, tty=False)
+    res = stream(client.CoreV1Api().connect_post_namespaced_pod_exec, name="curl", namespace=namespace, command=["curl", "-s", "--request",  "POST", "--data", data, "http://" + client_ip + ":9090/" + api], stderr=True, stdin=False, stdout=True, tty=False, _request_timeout=90)
     return res
 
 @pytest.fixture(scope='module')
