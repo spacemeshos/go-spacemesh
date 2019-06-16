@@ -133,6 +133,7 @@ def get_blocks_per_node(deployment):
     # I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d, viewEdges: %d atx %v, atxs:%v
     block_fields = {"M": "I've created a block in layer"}
     blocks = query_message(current_index, deployment, deployment, block_fields, True)
+    blocks = list([(h.N, h.M) for h in blocks])
     print("found " + str(len(blocks)) + " blocks")
     nodes = sort_by_nodeid(blocks)
 
@@ -142,7 +143,7 @@ def get_blocks_per_node(deployment):
 def get_layers(deployment):
     block_fields = {"M": "release tick"}
     layers = query_message(current_index, deployment, deployment, block_fields, True)
-    ids = [int(re.findall(r'\d+', x[1])[0]) for x in layers]
+    ids = [int(re.findall(r'\d+', x.M)[0]) for x in layers]
     return ids
 
 
@@ -166,6 +167,7 @@ def get_atx_per_node(deployment):
     # based on log: atx published! id: %v, prevATXID: %v, posATXID: %v, layer: %v, published in epoch: %v, active set: %v miner: %v view %v
     block_fields = {"M": "atx published"}
     atx_logs = query_message(current_index, deployment, deployment, block_fields, True)
+    atx_logs = list([(h.N, h.M) for h in atx_logs])
     print("found " + str(len(atx_logs)) + " atxs")
     nodes = parseAtx(atx_logs)
 
