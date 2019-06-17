@@ -2,10 +2,10 @@ import time
 from pytest_testconfig import config as testconfig
 from kubernetes import client
 
-
+from tests.deployment import create_deployment, delete_deployment
 from tests.fixtures import set_namespace, load_config, init_session, set_docker_images, session_id, DeploymentInfo, init_session
-from tests.test_bs import setup_poet, setup_clients, save_log_on_exit, setup_oracle, setup_bootstrap, create_configmap, delete_deployment
-from tests.test_bs import current_index, wait_genesis, query_message, GENESIS_TIME, create_deployment, BOOT_DEPLOYMENT_FILE, CLIENT_DEPLOYMENT_FILE
+from tests.test_bs import setup_poet, setup_clients, save_log_on_exit, setup_oracle, setup_bootstrap, create_configmap
+from tests.test_bs import current_index, wait_genesis, query_message, GENESIS_TIME, BOOT_DEPLOYMENT_FILE, CLIENT_DEPLOYMENT_FILE
 from tests.misc import ContainerSpec
 from tests.queries import ES
 from elasticsearch_dsl import Search, Q
