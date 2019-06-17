@@ -128,7 +128,7 @@ def sort_by_nodeid(log_messages):
 
 
 def get_blocks_per_node(deployment):
-    # I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d, viewEdges: %d atx %v, atxs:%v
+    # I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d, viewEdges: %d, atx %v, atxs:%v
     block_fields = {"M": "I've created a block in layer"}
     blocks = query_message(current_index, deployment, deployment, block_fields, True)
     print("found " + str(len(blocks)) + " blocks")
