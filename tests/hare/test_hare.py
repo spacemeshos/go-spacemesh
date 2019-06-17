@@ -4,7 +4,7 @@ from pytest_testconfig import config as testconfig
 
 from tests.fixtures import set_namespace, load_config, init_session, set_docker_images, session_id
 from tests.test_bs import setup_poet, setup_clients, save_log_on_exit, setup_oracle, setup_bootstrap, create_configmap
-from tests.test_bs import get_elastic_search_api
+from tests.queries import ES
 from tests.test_bs import current_index, wait_genesis
 
 
@@ -54,7 +54,7 @@ def validate(outputs):
 
 
 def query_hare_output_set(indx, namespace, client_po_name):
-    es = get_elastic_search_api()
+    es = ES().get_search_api()
     fltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
            Q("match_phrase", kubernetes__pod_name=client_po_name) & \
            Q("match_phrase", M="Consensus process terminated")

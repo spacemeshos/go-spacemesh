@@ -11,18 +11,33 @@ todaydate = dt.strftime("%Y.%m.%d")
 current_index = 'kubernetes_cluster-' + todaydate
 
 
-def get_elastic_search_api():
-    # TODO: convert to a singleton, preferably from main test runner. (maybe just get the api as param for queries?)
-    ES_PASSWD = os.getenv("ES_PASSWD")
-    if not ES_PASSWD:
-        raise Exception("Unknown Elasticsearch password. Please check 'ES_PASSWD' environment variable")
-    es = Elasticsearch("http://elastic.spacemesh.io",
-                       http_auth=("spacemesh", ES_PASSWD), port=80, timeout=30)
-    return es
+def singleton(cls):
+    instance = [None]
+
+    def wrapper(*args, **kwargs):
+        if instance[0] is None:
+            instance[0] = cls(*args, **kwargs)
+        return instance[0]
+
+    return wrapper
+
+
+@singleton
+class ES:
+
+    def __init__(self):
+        ES_PASSWD = os.getenv("ES_PASSWD")
+        if not ES_PASSWD:
+            raise Exception("Unknown Elasticsearch password. Please check 'ES_PASSWD' environment variable")
+        self.es = Elasticsearch("http://elastic.spacemesh.io",
+                                http_auth=("spacemesh", ES_PASSWD), port=80, timeout=90)
+
+    def get_search_api(self):
+        return self.es
 
 
 def get_podlist(namespace, depname):
-    api = get_elastic_search_api()
+    api = ES().get_search_api()
     fltr = Q("match_phrase", kubernetes__pod_name=depname) & Q("match_phrase", kubernetes__namespace_name=namespace)
     s = Search(index=current_index, using=api).query('bool').filter(fltr)
     hits = list(s.scan())
@@ -31,7 +46,7 @@ def get_podlist(namespace, depname):
 
 
 def get_pod_logs(namespace, pod_name):
-    api = get_elastic_search_api()
+    api = ES().get_search_api()
     fltr = Q("match_phrase", kubernetes__pod_name=pod_name) & Q("match_phrase", kubernetes__namespace_name=namespace)
     s = Search(index=current_index, using=api).query('bool').filter(fltr).sort("time")
     res = s.execute()
@@ -57,7 +72,7 @@ def get_deployment_logs(namespace, depname):
 
 def query_message(indx, namespace, client_po_name, fields, findFails=False, startTime=None):
     # TODO : break this to smaller functions ?
-    es = get_elastic_search_api()
+    es = ES().get_search_api()
     fltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
            Q("match_phrase", kubernetes__pod_name=client_po_name)
     for f in fields:
@@ -184,11 +199,11 @@ def get_latest_layer(deployment):
 def wait_for_latest_layer(deployment, layer_id):
     while True:
         lyr = get_latest_layer(deployment)
-        if lyr < layer_id:
-            print("current layer " + str(lyr))
-            time.sleep(10)
-        else:
+        if lyr >= layer_id:
             return
+
+        print("current layer " + str(lyr))
+        time.sleep(10)
 
 
 def get_atx_per_node(deployment):
@@ -197,7 +212,6 @@ def get_atx_per_node(deployment):
     atx_logs = query_message(current_index, deployment, deployment, block_fields, True)
     print("found " + str(len(atx_logs)) + " atxs")
     nodes = parseAtx(atx_logs)
-
     return nodes
 
 
@@ -206,19 +220,20 @@ def get_nodes_up(deployment):
     block_fields = {"M": "Starting Spacemesh"}
     logs = query_message(current_index, deployment, deployment, block_fields, True)
     print("found " + str(len(logs)) + " nodes up")
-
     return len(logs)
 
 
-# find_dups finds elasticsearch hits that are duplicates per kubernetes_pod_name. the max field represents the number of times the message
-# should show up if the indexing was functioning well.
-
 def find_dups(indx, namespace, client_po_name, fields, max=1):
+    """
+    finds elasticsearch hits that are duplicates per kubernetes_pod_name.
+    The max field represents the number of times the message
+    should show up if the indexing was functioning well.
 
-    # Usage : find_dups(current_index, "t7t9e", "client-t7t9e-28qj7",
-    # {'M':'new_gossip_message', 'protocol': 'api_test_gossip'}, 10)
+    Usage : find_dups(current_index, "t7t9e", "client-t7t9e-28qj7",
+    {'M':'new_gossip_message', 'protocol': 'api_test_gossip'}, 10)
+    """
 
-    es = get_elastic_search_api()
+    es = ES().get_search_api()
     fltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
            Q("match_phrase", kubernetes__pod_name=client_po_name)
     for f in fields:
@@ -244,7 +259,7 @@ def find_missing(indx, namespace, client_po_name, fields, min=1):
     # Usage : find_dups(current_index, "t7t9e", "client-t7t9e-28qj7",
     # {'M':'new_gossip_message', 'protocol': 'api_test_gossip'}, 10)
 
-    es = get_elastic_search_api()
+    es = ES().get_search_api()
     fltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
            Q("match_phrase", kubernetes__pod_name=client_po_name)
     for f in fields:
