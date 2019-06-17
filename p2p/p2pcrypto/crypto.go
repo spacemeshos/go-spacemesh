@@ -18,6 +18,7 @@ const (
 type Key interface {
 	Bytes() []byte
 	raw() *[keySize]byte
+	Array() [32]byte
 	String() string
 }
 
@@ -45,6 +46,10 @@ var _ SharedSecret = (*key)(nil)
 
 func (k key) raw() *[keySize]byte {
 	return &k.bytes
+}
+
+func (k key) Array() [32]byte {
+	return k.bytes
 }
 
 func (k key) Bytes() []byte {
@@ -152,4 +157,8 @@ func NewRandomPubkey() PublicKey {
 		log.Panic("Panic: ", err)
 	}
 	return k
+}
+
+func PublicKeyFromArray(ke [32]byte) PublicKey {
+	return key{ke}
 }

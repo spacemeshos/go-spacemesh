@@ -205,7 +205,7 @@ func TestSyncProtocol_BlockRequest(t *testing.T) {
 	block.AddTransaction(tx1)
 	block.AddAtx(atx1)
 	syncObj.AddBlock(block)
-	syncObj2.Peers = getPeersMock([]p2p.Peer{nodes[0].Node.PublicKey()})
+	syncObj2.Peers = getPeersMock([]p2p.Peer{nodes[0].NodeInfo.PublicKey()})
 
 	output := syncObj2.fetchWithFactory(BlockReqFactory([]types.BlockID{block.ID()}), 1)
 	timeout := time.NewTimer(2 * time.Second)
@@ -277,7 +277,7 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 
 	timeout := time.NewTimer(2 * time.Second)
 
-	wrk, output := NewPeersWorker(syncObj, []p2p.Peer{nodes[1].Node.PublicKey()}, &sync.Once{}, LayerIdsReqFactory(lid))
+	wrk, output := NewPeersWorker(syncObj, []p2p.Peer{nodes[1].NodeInfo.PublicKey()}, &sync.Once{}, LayerIdsReqFactory(lid))
 	go wrk.Work()
 
 	select {

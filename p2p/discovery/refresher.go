@@ -30,7 +30,7 @@ type refresher struct {
 	logger log.Log
 	config config.SwarmConfig
 
-	bootNodes []NodeInfo
+	bootNodes []*node.NodeInfo
 
 	book *addrBook
 
@@ -41,24 +41,13 @@ type refresher struct {
 	quit chan struct{}
 }
 
-func newRefresher(book *addrBook, disc Protocol, config config.SwarmConfig, logger log.Log) *refresher {
-	bn := make([]NodeInfo, 0, len(config.BootstrapNodes))
-	for _, n := range config.BootstrapNodes {
-		nd, err := node.NewNodeFromString(n)
-		if err != nil {
-			// TODO : handle errors
-			continue
-		}
-		bn = append(bn, NodeInfoFromNode(nd, nd.Address()))
-	}
-
+func newRefresher(book *addrBook, disc Protocol, bootnodes []*node.NodeInfo, logger log.Log) *refresher {
 	//todo: trigger requestAddresses every X with random nodes
-
 	return &refresher{
 		logger:      logger,
 		book:        book,
 		disc:        disc,
-		bootNodes:   bn,
+		bootNodes:   bootnodes,
 		lastQueries: make(map[p2pcrypto.PublicKey]time.Time),
 		quit:        make(chan struct{}), // todo: context ?
 	}
@@ -67,7 +56,7 @@ func newRefresher(book *addrBook, disc Protocol, config config.SwarmConfig, logg
 func (r *refresher) Bootstrap(ctx context.Context, minPeers int) error {
 	var err error
 	tries := 0
-	servers := make([]NodeInfo, 0, len(r.bootNodes))
+	servers := make([]*node.NodeInfo, 0, len(r.bootNodes))
 
 	// The following loop will add the pre-set bootstrap nodes and query them for results
 	// if there were any results but we didn't reach minPeers it will try the same procedure
@@ -138,13 +127,13 @@ func expire(m map[p2pcrypto.PublicKey]time.Time) {
 }
 
 type queryResult struct {
-	src NodeInfo
-	res []NodeInfo
+	src *node.NodeInfo
+	res []*node.NodeInfo
 	err error
 }
 
 // pingThenGetAddresses is sending a ping, then find node, then return results on given chan.
-func pingThenGetAddresses(p Protocol, addr NodeInfo, qr chan queryResult) {
+func pingThenGetAddresses(p Protocol, addr *node.NodeInfo, qr chan queryResult) {
 	// TODO: check whether we pinged recently and maybe skip pinging
 	err := p.Ping(addr.PublicKey())
 
@@ -162,11 +151,11 @@ func pingThenGetAddresses(p Protocol, addr NodeInfo, qr chan queryResult) {
 }
 
 // requestAddresses will crawl the network looking for new peer addresses.
-func (r *refresher) requestAddresses(servers []NodeInfo) []NodeInfo {
+func (r *refresher) requestAddresses(servers []*node.NodeInfo) []*node.NodeInfo {
 
 	// todo: here we stop only after we've tried querying or queried all addrs
 	// 	maybe we should stop after we've reached a certain amount ? (needMoreAddresses..)
-	var out []NodeInfo
+	var out []*node.NodeInfo
 
 	seen := make(map[p2pcrypto.PublicKey]struct{})
 	seen[r.book.localAddress.PublicKey()] = struct{}{}
@@ -205,7 +194,7 @@ func (r *refresher) requestAddresses(servers []NodeInfo) []NodeInfo {
 			if cr.err != nil {
 				//todo: consider error and maybe remove
 				//todo: count failed queries and remove not functioning
-				r.logger.Warning("Peer %v didn't response to protocol queries - err:%v", cr.src.Pretty(), cr.err)
+				r.logger.Warning("Peer %v didn't response to protocol queries - err:%v", cr.src.String(), cr.err)
 				continue
 			}
 			if cr.res != nil && len(cr.res) > 0 {

@@ -32,7 +32,7 @@ var _ Service = new(Node)
 // Node is a simulated p2p node that can be used as a p2p service
 type Node struct {
 	sim *Simulator
-	node.Node
+	*node.NodeInfo
 	sndDelay      uint32
 	rcvDelay      uint32
 	randBehaviour bool
@@ -96,18 +96,18 @@ func (s *Simulator) NewFaulty(isRandBehaviour bool, maxBroadcastDelaySec uint32,
 func (s *Simulator) NewNode() *Node {
 	n := node.GenerateRandomNodeData()
 	sn := &Node{
-		sim:  s,
-		Node: n,
+		sim:      s,
+		NodeInfo: n,
 	}
 	s.createdNode(sn)
 	return sn
 }
 
 // NewNodeFrom creates a new node from existing details
-func (s *Simulator) NewNodeFrom(n node.Node) *Node {
+func (s *Simulator) NewNodeFrom(n *node.NodeInfo) *Node {
 	sn := &Node{
-		sim:  s,
-		Node: n,
+		sim:      s,
+		NodeInfo: n,
 	}
 	s.createdNode(sn)
 	return sn
@@ -226,7 +226,7 @@ func (sn *Node) sendMessageImpl(nodeID p2pcrypto.PublicKey, protocol string, pay
 	thec, ok := sn.sim.protocolDirectHandler[nodeID.String()][protocol]
 	sn.sim.mutex.RUnlock()
 	if ok {
-		thec <- simDirectMessage{simulatorMetadata(), payload, sn.Node.PublicKey()}
+		thec <- simDirectMessage{simulatorMetadata(), payload, sn.NodeInfo.PublicKey()}
 		return nil
 	}
 	return errors.New("could not find " + protocol + " handler for node: " + nodeID.String())
@@ -251,11 +251,11 @@ func (sn *Node) Broadcast(protocol string, payload []byte) error {
 		sn.sim.mutex.RLock()
 		for n := range sn.sim.protocolGossipHandler {
 			if c, ok := sn.sim.protocolGossipHandler[n][protocol]; ok {
-				c <- simGossipMessage{sn.Node.PublicKey(), DataBytes{Payload: payload}, nil}
+				c <- simGossipMessage{sn.NodeInfo.PublicKey(), DataBytes{Payload: payload}, nil}
 			}
 		}
 		sn.sim.mutex.RUnlock()
-		log.Debug("%v >> All ( Gossip ) (%v)", sn.Node.PublicKey(), payload)
+		log.Debug("%v >> All ( Gossip ) (%v)", sn.NodeInfo.PublicKey(), payload)
 	}()
 	return nil
 }
@@ -268,7 +268,7 @@ func (sn *Node) SubscribePeerEvents() (conn chan p2pcrypto.PublicKey, disc chan 
 func (sn *Node) RegisterDirectProtocol(protocol string) chan DirectMessage {
 	c := make(chan DirectMessage)
 	sn.sim.mutex.Lock()
-	sn.sim.protocolDirectHandler[sn.Node.PublicKey().String()][protocol] = c
+	sn.sim.protocolDirectHandler[sn.NodeInfo.PublicKey().String()][protocol] = c
 	sn.sim.mutex.Unlock()
 	return c
 }
@@ -277,7 +277,7 @@ func (sn *Node) RegisterDirectProtocol(protocol string) chan DirectMessage {
 func (sn *Node) RegisterGossipProtocol(protocol string) chan GossipMessage {
 	c := make(chan GossipMessage)
 	sn.sim.mutex.Lock()
-	sn.sim.protocolGossipHandler[sn.Node.PublicKey().String()][protocol] = c
+	sn.sim.protocolGossipHandler[sn.NodeInfo.PublicKey().String()][protocol] = c
 	sn.sim.mutex.Unlock()
 	return c
 }
@@ -285,7 +285,7 @@ func (sn *Node) RegisterGossipProtocol(protocol string) chan GossipMessage {
 // RegisterProtocolWithChannel configures and returns a channel for a given protocol.
 func (sn *Node) RegisterDirectProtocolWithChannel(protocol string, ingressChannel chan DirectMessage) chan DirectMessage {
 	sn.sim.mutex.Lock()
-	sn.sim.protocolDirectHandler[sn.Node.String()][protocol] = ingressChannel
+	sn.sim.protocolDirectHandler[sn.NodeInfo.PublicKey().String()][protocol] = ingressChannel
 	sn.sim.mutex.Unlock()
 	return ingressChannel
 }
@@ -293,14 +293,14 @@ func (sn *Node) RegisterDirectProtocolWithChannel(protocol string, ingressChanne
 // Shutdown closes all node channels are remove it from the Simulator map
 func (sn *Node) Shutdown() {
 	sn.sim.mutex.Lock()
-	for _, c := range sn.sim.protocolDirectHandler[sn.Node.PublicKey().String()] {
+	for _, c := range sn.sim.protocolDirectHandler[sn.NodeInfo.PublicKey().String()] {
 		close(c)
 	}
-	delete(sn.sim.protocolDirectHandler, sn.Node.PublicKey().String())
+	delete(sn.sim.protocolDirectHandler, sn.NodeInfo.PublicKey().String())
 
-	for _, c := range sn.sim.protocolGossipHandler[sn.Node.PublicKey().String()] {
+	for _, c := range sn.sim.protocolGossipHandler[sn.NodeInfo.PublicKey().String()] {
 		close(c)
 	}
-	delete(sn.sim.protocolGossipHandler, sn.Node.PublicKey().String())
+	delete(sn.sim.protocolGossipHandler, sn.NodeInfo.PublicKey().String())
 	sn.sim.mutex.Unlock()
 }

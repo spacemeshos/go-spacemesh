@@ -10,13 +10,13 @@ import (
 
 type protocolRoutingTable interface {
 	GetAddress() *KnownAddress
-	AddAddresses(n []NodeInfo, src NodeInfo)
-	AddAddress(n NodeInfo, src NodeInfo)
-	AddressCache() []NodeInfo
+	AddAddresses(n []*node.NodeInfo, src *node.NodeInfo)
+	AddAddress(n *node.NodeInfo, src *node.NodeInfo)
+	AddressCache() []*node.NodeInfo
 }
 
 type protocol struct {
-	local     node.Node
+	local     *node.NodeInfo
 	table     protocolRoutingTable
 	logger    log.Log
 	msgServer *server.MessageServer
@@ -25,9 +25,9 @@ type protocol struct {
 	localUdpAddress string
 }
 
-func (d *protocol) SetLocalAddresses(tcp, udp string) {
-	d.localTcpAddress = tcp
-	d.localUdpAddress = udp
+func (d *protocol) SetLocalAddresses(tcp, udp int) {
+	d.local.ProtocolPort = uint16(tcp)
+	d.local.DiscoveryPort = uint16(udp)
 }
 
 // Name is the name if the protocol.
@@ -46,7 +46,7 @@ const PINGPONG = 0
 const GET_ADDRESSES = 1
 
 // NewDiscoveryProtocol is a constructor for a protocol protocol provider.
-func NewDiscoveryProtocol(local node.Node, rt protocolRoutingTable, svc server.Service, log log.Log) *protocol {
+func NewDiscoveryProtocol(local *node.NodeInfo, rt protocolRoutingTable, svc server.Service, log log.Log) *protocol {
 	s := server.NewMsgServer(svc, Name, MessageTimeout, make(chan service.DirectMessage, MessageBufSize), log)
 	d := &protocol{
 		local:     local,
@@ -55,7 +55,9 @@ func NewDiscoveryProtocol(local node.Node, rt protocolRoutingTable, svc server.S
 		logger:    log,
 	}
 
-	d.SetLocalAddresses(local.Address(), local.Address())
+	//tcp := &net.TCPAddr{local.IP, int(local.ProtocolPort), ""}
+	//udp := &net.UDPAddr{local.IP, int(local.DiscoveryPort), ""}
+	//d.SetLocalAddresses(tcp.String(), udp.String())
 
 	d.msgServer.RegisterMsgHandler(PINGPONG, d.newPingRequestHandler())
 	d.msgServer.RegisterMsgHandler(GET_ADDRESSES, d.newGetAddressesRequestHandler())
