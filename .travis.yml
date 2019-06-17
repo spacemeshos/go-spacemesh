@@ -41,16 +41,16 @@ jobs:
     #if: branch = develop AND type != pull_request
     name: "Run p2p system tests"
     script:
-      - make dockerrun-p2p
+      - make dockertest-p2p
   - name: "Run mining system tests"
     script:
-      - make dockerrun-mining
+      - make dockertest-mining
   - name: "Run hare system tests"
     script:
-      - make dockerrun-hare
+      - make dockertest-hare
   - name: "Run sync system tests"
     script:
-      - make dockerrun-sync
+      - make dockertest-sync
 
 cache:
   directories:

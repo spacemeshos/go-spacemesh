@@ -135,7 +135,7 @@ dockerbuild-test:
 	             --build-arg PROJECT_NAME="$(PROJECT_NAME)" \
 	             --build-arg CLUSTER_NAME="$(CLUSTER_NAME)" \
 	             --build-arg CLUSTER_ZONE="$(CLUSTER_ZONE)" \
-	             -t go-spacemesh-test:$(BRANCH) .
+	             -t go-spacemesh-python:$(BRANCH) .
 .PHONY: dockerbuild-test
 
 dockerpush: dockerbuild-go dockerbuild-test
@@ -143,8 +143,6 @@ dockerpush: dockerbuild-go dockerbuild-test
 	docker tag $(DOCKER_IMAGE_REPO):$(BRANCH) spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)
 	docker push spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)
 
-	docker tag go-spacemesh-test:$(BRANCH) spacemeshos/go-spacemesh-test:$(BRANCH)
-	docker push spacemeshos/go-spacemesh-test:$(BRANCH)
 ifeq ($(BRANCH),develop)
 	docker tag $(DOCKER_IMAGE_REPO):$(BRANCH) spacemeshos/$(DOCKER_IMAGE_REPO):$(SHA)
 	docker push spacemeshos/$(DOCKER_IMAGE_REPO):$(SHA)
@@ -164,9 +162,11 @@ endif
 	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
 		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
 		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
-		-it spacemeshos/go-spacemesh-test:$(BRANCH) pytest -s p2p/test_p2p.py --tc-file=p2p/config.yaml --tc-format=yaml
-
+		-it go-spacemesh-python:$(BRANCH) pytest -s p2p/test_p2p.py --tc-file=p2p/config.yaml --tc-format=yaml
 .PHONY: dockerrun-p2p
+
+dockertest-p2p: dockerbuild-test dockerrun-p2p
+.PHONY: dockertest-p2p
 
 dockerrun-mining:
 ifndef ES_PASSWD
@@ -175,9 +175,11 @@ endif
 	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
 		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
 		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
-		-it spacemeshos/go-spacemesh-test:$(BRANCH) pytest -s test_bs.py --tc-file=config.yaml --tc-format=yaml
-
+		-it go-spacemesh-python:$(BRANCH) pytest -s test_bs.py --tc-file=config.yaml --tc-format=yaml
 .PHONY: dockerrun-mining
+
+dockertest-mining: dockerbuild-test dockerrun-mining
+.PHONY: dockertest-mining
 
 dockerrun-hare:
 ifndef ES_PASSWD
@@ -186,8 +188,11 @@ endif
 	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
 		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
 		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
-		-it spacemeshos/go-spacemesh-test:$(BRANCH) pytest -s hare/test_hare.py --tc-file=hare/config.yaml --tc-format=yaml
+		-it go-spacemesh-python:$(BRANCH) pytest -s hare/test_hare.py --tc-file=hare/config.yaml --tc-format=yaml
 .PHONY: dockerrun-hare
+
+dockertest-hare: dockerbuild-test dockerrun-hare
+.PHONY: dockertest-hare
 
 dockerrun-sync:
 ifndef ES_PASSWD
@@ -197,11 +202,15 @@ endif
 	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
 		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
 		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
-		-it spacemeshos/go-spacemesh-test:$(BRANCH) pytest -s sync/test_sync.py --tc-file=sync/config.yaml --tc-format=yaml
+		-it go-spacemesh-python:$(BRANCH) pytest -s sync/test_sync.py --tc-file=sync/config.yaml --tc-format=yaml
 
 .PHONY: dockerrun-sync
 
-dockerrun-test: dockerrun-p2p dockerrun-mining dockerrun-hare dockerrun-sync
+dockertest-sync: dockerbuild-test dockerrun-sync
+.PHONY: dockertest-sync
+
+# The following is used to run tests one after the other locally
+dockerrun-test: dockerbuild-test dockerrun-p2p dockerrun-mining dockerrun-hare dockerrun-sync
 .PHONY: dockerrun-test
 
 dockerrun-all: dockerpush dockerrun-test
