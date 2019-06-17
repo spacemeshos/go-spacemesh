@@ -215,6 +215,7 @@ def add_multi_clients(deployment_id, container_specs, size=2):
             pods.append(pod_name)
     return pods
 
+
 def get_conf(bs_info, setup_poet, setup_oracle, args=None):
     client_args = {} if 'args' not in testconfig['client'] else testconfig['client']['args']
 
@@ -271,6 +272,7 @@ def api_call(client_ip, data, api, namespace):
     # todo: this won't work with long payloads - ( `Argument list too long` ). try port-forward ?
     res = stream(client.CoreV1Api().connect_post_namespaced_pod_exec, name="curl", namespace=namespace, command=["curl", "-s", "--request",  "POST", "--data", data, "http://" + client_ip + ":9090/" + api], stderr=True, stdin=False, stdout=True, tty=False, _request_timeout=90)
     return res
+
 
 @pytest.fixture(scope='module')
 def create_configmap(request):
@@ -406,9 +408,6 @@ def test_mining(setup_network):
     print("test took {:.3f} seconds ".format(end-start))
     total_pods = len(setup_network.clients.pods) + len(setup_network.bootstrap.pods)
     analyse.analyze_mining(testconfig['namespace'], last_layer, layers_per_epoch, layer_avg_size, total_pods)
-
-
-
 
 
 ''' todo: when atx flow stabilized re enable this test
