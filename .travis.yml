@@ -32,15 +32,24 @@ jobs:
       - make test-tidy
       - make test-fmt
   - stage: docker-push
+    #if: branch = develop AND type != pull_request
     name: "Push to dockerHub"
     script: 
       - make dockerpush
-    if: branch = develop AND type != pull_request
   - stage: system-test
-    name: "Run system tests"
+    #if: branch = develop AND type != pull_request
+    name: "Run p2p system tests"
     script:
-      - make dockerrun-test
-    if: branch = develop AND type != pull_request
+      - make dockerrun-p2p
+    name: "Run mining system tests"
+    script:
+      - make dockerrun-mining
+    name: "Run hare system tests"
+    script:
+      - make dockerrun-hare
+    name: "Run sync system tests"
+    script:
+      - make dockerrun-sync
 
 cache:
   directories:
