@@ -122,8 +122,8 @@ def query_message(indx, namespace, client_po_name, fields, findFails=False, star
 def parseAtx(log_messages):
     node2blocks = {}
     for x in log_messages:
-        nid = re.split(r'\.', x[0])[0]
-        m = re.findall(r'(?<=\b:\s)(\w+)|(?<=view\s)(\w+)', x[1])
+        nid = re.split(r'\.', x.N)[0]
+        m = re.findall(r'(?<=\b:\s)(\w+)|(?<=view\s)(\w+)', x.M)
         if nid in node2blocks:
             node2blocks[nid].append(m)
         else:
@@ -134,8 +134,8 @@ def parseAtx(log_messages):
 def sort_by_nodeid(log_messages):
     node2blocks = {}
     for x in log_messages:
-        id = re.split(r'\.', x[0])[0]
-        m = re.findall(r'\d+', x[1])
+        id = re.split(r'\.', x.N)[0]
+        m = re.findall(r'\d+', x.M)
         layer = m[0]
         # blocks - list of all blocks, layers - map of blocks per layer
         if id in node2blocks:
@@ -152,7 +152,7 @@ def sort_by_nodeid(log_messages):
 def sort_by_layer(log_messages):
     blocks_per_layer = {}
     for x in log_messages:
-        m = re.findall(r'\d+', x[1])
+        m = re.findall(r'\d+', x.M)
         layer = m[0]
         if layer in blocks_per_layer:
             blocks_per_layer[layer].append(m)
@@ -177,7 +177,6 @@ def get_blocks_per_node_and_layer(deployment):
     # I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d, viewEdges: %d atx %v, atxs:%v
     block_fields = {"M": "I've created a block in layer"}
     blocks = query_message(current_index, deployment, deployment, block_fields, True)
-    blocks = list([(h.N, h.M) for h in blocks])
     print("found " + str(len(blocks)) + " blocks")
     nodes = sort_by_nodeid(blocks)
     layers = sort_by_layer(blocks)
@@ -212,7 +211,6 @@ def get_atx_per_node(deployment):
     # based on log: atx published! id: %v, prevATXID: %v, posATXID: %v, layer: %v, published in epoch: %v, active set: %v miner: %v view %v
     block_fields = {"M": "atx published"}
     atx_logs = query_message(current_index, deployment, deployment, block_fields, True)
-    atx_logs = list([(h.N, h.M) for h in atx_logs])
     print("found " + str(len(atx_logs)) + " atxs")
     nodes = parseAtx(atx_logs)
     return nodes
