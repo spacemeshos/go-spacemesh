@@ -325,19 +325,15 @@ func (db *ActivationDb) incValidAtxCounter(ech types.EpochId) error {
 }
 
 // ActiveSetSize returns the active set size stored in db for epoch ech
-func (db *ActivationDb) ActiveSetSize(ech types.EpochId) uint32 {
-	key := epochCounterKey(ech)
+func (db *ActivationDb) ActiveSetSize(epochId types.EpochId) (uint32, error) {
+	key := epochCounterKey(epochId)
 	db.RLock()
 	val, err := db.atxs.Get(key)
 	db.RUnlock()
 	if err != nil {
-		if !ech.IsGenesis() {
-			db.log.Warning("could not fetch active set size from cache: %v", err)
-		}
-		//0 is not a valid active set size
-		return 0
+		return 0, fmt.Errorf("could not fetch active set size from cache: %v", err)
 	}
-	return common.BytesToUint32(val)
+	return common.BytesToUint32(val), nil
 }
 
 // addAtxToEpoch adds atx to epoch epochId

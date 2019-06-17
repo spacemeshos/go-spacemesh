@@ -19,7 +19,7 @@ type valueProvider interface {
 }
 
 type activeSetProvider interface {
-	ActiveSetSize(ech types.EpochId) uint32
+	ActiveSetSize(epochId types.EpochId) (uint32, error)
 }
 
 type Signer interface {
@@ -84,10 +84,10 @@ func (o *Oracle) buildVRFMessage(id types.NodeId, layer types.LayerID, round int
 	return w.Bytes(), nil
 }
 
-func (o *Oracle) activeSetSize(layer types.LayerID) uint32 {
+func (o *Oracle) activeSetSize(layer types.LayerID) (uint32, error) {
 	ep := safeLayer(layer).GetEpoch(o.layersPerEpoch)
 	if ep == 0 {
-		return 5 // TODO: agree on the inception problem
+		return 5, nil // TODO: agree on the inception problem
 		// return o.activeSetProvider.ActiveSetSize(0)
 	}
 	return o.activeSetProvider.ActiveSetSize(ep - 1)
@@ -113,7 +113,10 @@ func (o *Oracle) Eligible(layer types.LayerID, round int32, committeeSize int, i
 	}
 
 	// get active set size
-	activeSetSize := o.activeSetSize(layer)
+	activeSetSize, err := o.activeSetSize(layer)
+	if err != nil {
+		return false, err
+	}
 
 	// require activeSetSize > 0
 	if activeSetSize == 0 {

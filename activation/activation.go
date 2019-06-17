@@ -14,7 +14,7 @@ const AtxProtocol = "AtxGossip"
 var activesetCache = NewActivesetCache(1000)
 
 type ActiveSetProvider interface {
-	ActiveSetSize(l types.EpochId) uint32
+	ActiveSetSize(epochId types.EpochId) (uint32, error)
 }
 
 type MeshProvider interface {
@@ -220,9 +220,10 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) (bool, error) {
 	// when we reach here an epoch has passed
 	// we've completed the sequential work, now before publishing the atx,
 	// we need to provide number of atx seen in the epoch of the positioning atx.
-	activeIds := b.activeSet.ActiveSetSize(b.posLayerID.GetEpoch(b.layersPerEpoch))
-	if activeIds == 0 && !b.posLayerID.GetEpoch(b.layersPerEpoch).IsGenesis() {
-		return false, fmt.Errorf("could not fetch active set size from cache")
+	posEpoch := b.posLayerID.GetEpoch(b.layersPerEpoch)
+	activeIds, err := b.activeSet.ActiveSetSize(posEpoch)
+	if err != nil && !posEpoch.IsGenesis() {
+		return false, err
 	}
 	view, err := b.mesh.GetOrphanBlocksBefore(b.mesh.LatestLayer())
 	if err != nil {
@@ -231,7 +232,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) (bool, error) {
 	atx := types.NewActivationTxWithChallenge(*b.challenge, activeIds, view, b.nipst, true)
 	activeSetSize, err := b.db.CalcActiveSetFromView(atx)
 	b.log.Info("active ids seen for epoch %v (pos atx epoch) is %v (cache) %v (from view)",
-		b.posLayerID.GetEpoch(b.layersPerEpoch), activeIds, activeSetSize)
+		posEpoch, activeIds, activeSetSize)
 
 	if !atx.TargetEpoch(b.layersPerEpoch).IsGenesis() && activeSetSize == 0 {
 		b.log.Warning("empty active set size found! len(view): %d, view: %v", len(atx.View), atx.View)

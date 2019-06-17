@@ -15,8 +15,8 @@ import (
 
 type ActiveSetProviderMock struct{}
 
-func (ActiveSetProviderMock) ActiveSetSize(l types.EpochId) uint32 {
-	return 10
+func (ActiveSetProviderMock) ActiveSetSize(epochId types.EpochId) (uint32, error) {
+	return 10, nil
 }
 
 type MeshProviderMock struct{}
@@ -123,7 +123,9 @@ func TestBuilder_BuildActivationTx(t *testing.T) {
 	npst2 := nipst.NewNIPSTWithChallenge(bytes)
 	view, err = b.mesh.GetOrphanBlocksBefore(layers.LatestLayer())
 	assert.NoError(t, err)
-	act := types.NewActivationTxWithChallenge(challenge, b.activeSet.ActiveSetSize(1), view, npst2, true)
+	activeSetSize, err := b.activeSet.ActiveSetSize(1)
+	assert.NoError(t, err)
+	act := types.NewActivationTxWithChallenge(challenge, activeSetSize, view, npst2, true)
 
 	_, err = b.PublishActivationTx(layers.LatestLayer().GetEpoch(layersPerEpoch))
 	assert.NoError(t, err)
@@ -188,7 +190,9 @@ func TestBuilder_PublishActivationTx(t *testing.T) {
 
 	view, err = b.mesh.GetOrphanBlocksBefore(layers.LatestLayer())
 	assert.NoError(t, err)
-	act := types.NewActivationTx(b.nodeId, b.GetLastSequence(b.nodeId)+1, atx.Id(), atx.PubLayerIdx+10, 0, atx.Id(), b.activeSet.ActiveSetSize(1), view, npst2, true)
+	activeSetSize, err := b.activeSet.ActiveSetSize(1)
+	assert.NoError(t, err)
+	act := types.NewActivationTx(b.nodeId, b.GetLastSequence(b.nodeId)+1, atx.Id(), atx.PubLayerIdx+10, 0, atx.Id(), activeSetSize, view, npst2, true)
 	_, err = b.PublishActivationTx(1)
 	assert.NoError(t, err)
 
@@ -238,7 +242,9 @@ func TestBuilder_PublishActivationTxSerialize(t *testing.T) {
 
 	view, err := b.mesh.GetOrphanBlocksBefore(layers.LatestLayer())
 	assert.NoError(t, err)
-	act := types.NewActivationTx(b.nodeId, b.GetLastSequence(b.nodeId)+1, atx.Id(), atx.PubLayerIdx+10, 0, atx.Id(), b.activeSet.ActiveSetSize(1), view, npst, true)
+	activeSetSize, err := b.activeSet.ActiveSetSize(1)
+	assert.NoError(t, err)
+	act := types.NewActivationTx(b.nodeId, b.GetLastSequence(b.nodeId)+1, atx.Id(), atx.PubLayerIdx+10, 0, atx.Id(), activeSetSize, view, npst, true)
 
 	bt, err := types.AtxAsBytes(act)
 	assert.NoError(t, err)
