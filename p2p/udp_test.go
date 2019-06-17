@@ -189,6 +189,7 @@ func TestUDPMux_ProcessUDP(t *testing.T) {
 func Test_RoundTrip(t *testing.T) {
 	nd, _ := node.GenerateTestNode(t)
 	udpnet, err := net.NewUDPNet(config.DefaultConfig(), nd, log.New("", "", ""))
+
 	require.NoError(t, err)
 	m := NewUDPMux(nd, nil, udpnet, log.New(test_str, "", ""))
 	require.NotNil(t, m)
@@ -208,16 +209,17 @@ func Test_RoundTrip(t *testing.T) {
 	m.lookuper = func(key p2pcrypto.PublicKey) (*node.NodeInfo, error) {
 		return nil, errors.New("nonode")
 	}
-	udpnet.Start()
+	require.NoError(t, udpnet.Start())
 	err = m.Start()
 	require.NoError(t, err)
-	udpnet2.Start()
+	defer m.Shutdown()
+	require.NoError(t, udpnet2.Start())
 	err = m2.Start()
 	require.NoError(t, err)
+	defer m2.Shutdown()
 
 	m.lookuper = func(key p2pcrypto.PublicKey) (*node.NodeInfo, error) {
-		nd2.NodeInfo.IP = net2.IPv6loopback
-		return nd2.NodeInfo, nil
+		return node.NewNode(nd2.ID.PublicKey(), net2.IPv6loopback, nd2.ProtocolPort, nd2.DiscoveryPort), nil
 	}
 
 	err = m.SendMessage(nd2.PublicKey(), test_str, []byte(test_str))
