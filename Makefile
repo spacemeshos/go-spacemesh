@@ -143,7 +143,7 @@ dockerpush: dockerbuild-go dockerbuild-test
 	docker tag $(DOCKER_IMAGE_REPO):$(BRANCH) spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)
 	docker push spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)
 
-	docker tag go-spacemesh-python:$(BRANCH)) spacemeshos/go-spacemesh-python:$(BRANCH)
+	docker tag go-spacemesh-python:$(BRANCH) spacemeshos/go-spacemesh-python:$(BRANCH)
 	docker push spacemeshos/go-spacemesh-python:$(BRANCH)
 ifeq ($(BRANCH),develop)
 	docker tag $(DOCKER_IMAGE_REPO):$(BRANCH) spacemeshos/$(DOCKER_IMAGE_REPO):$(SHA)

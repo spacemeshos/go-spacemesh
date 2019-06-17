@@ -18,19 +18,19 @@ branches:
 
 jobs:
   include:
-  - stage: test
-    name: lint
-    install: true # this skips the installation step
-    script: make lint
-  - name: test
-    script:
-      - make genproto
-      - make test
-  - name: test-tidy-fmt
-    script:
-      - make genproto
-      - make test-tidy
-      - make test-fmt
+#  - stage: test
+#    name: lint
+#    install: true # this skips the installation step
+#    script: make lint
+#  - name: test
+#    script:
+#      - make genproto
+#      - make test
+#  - name: test-tidy-fmt
+#    script:
+#      - make genproto
+#      - make test-tidy
+#      - make test-fmt
   - stage: docker-push
     #if: branch = develop AND type != pull_request
     name: "Push to dockerHub"
