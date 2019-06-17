@@ -1,27 +1,21 @@
 from datetime import datetime, timedelta
 
-from tests import queries
-from tests import pod
+from tests import queries, analyse
+from tests import pod, deployment
 from tests.fixtures import load_config, DeploymentInfo, NetworkDeploymentInfo
 from tests.fixtures import init_session, set_namespace, set_docker_images, session_id
-import os
-from os import path
 import pytest
 import pytz
 import re
 import subprocess
 import time
-import yaml
 from kubernetes import client
 from kubernetes.client.rest import ApiException
-from pytest_testconfig import config as testconfig
-from elasticsearch import Elasticsearch
-from elasticsearch_dsl import Search, Q
-
-from tests.misc import ContainerSpec
-from tests.queries import query_message
-
 from kubernetes.stream import stream
+from pytest_testconfig import config as testconfig
+from elasticsearch_dsl import Search, Q
+from tests.misc import ContainerSpec
+from tests.queries import ES
 
 
 BOOT_DEPLOYMENT_FILE = './k8s/bootstrap-w-conf.yml'
@@ -41,83 +35,8 @@ ELASTICSEARCH_URL = "http://{0}".format(testconfig['elastic']['host'])
 GENESIS_TIME = pytz.utc.localize(datetime.utcnow() + timedelta(seconds=testconfig['genesis_delta']))
 
 
-def get_elastic_search_api():
-    elastic_password = os.getenv('ES_PASSWD')
-    if not elastic_password:
-        raise Exception("Unknown Elasticsearch password. Please check 'ES_PASSWD' environment variable")
-    es = Elasticsearch([ELASTICSEARCH_URL],
-                       http_auth=(testconfig['elastic']['username'], elastic_password), port=80)
-    return es
-
-
-def wait_to_deployment_to_be_deleted(deployment_name, name_space, time_out=None):
-    total_sleep_time = 0
-    while True:
-        try:
-            resp = client.AppsV1Api().read_namespaced_deployment(name=deployment_name, namespace=name_space)
-        except ApiException as e:
-            if e.status == 404:
-                print("Total time waiting for delete deployment {0}: {1} sec".format(deployment_name, total_sleep_time))
-                break
-        time.sleep(1)
-        total_sleep_time += 1
-
-        if time_out and total_sleep_time > time_out:
-            raise Exception("Timeout waiting to delete deployment")
-
-
-def wait_to_deployment_to_be_ready(deployment_name, name_space, time_out=None):
-    start = datetime.now()
-    while True:
-        resp = client.AppsV1Api().read_namespaced_deployment(name=deployment_name, namespace=name_space)
-        total_sleep_time = (datetime.now()-start).total_seconds()
-        if not resp.status.unavailable_replicas:
-            print("Total time waiting for deployment {0}: {1} sec".format(deployment_name, total_sleep_time))
-            break
-        print("{0}/{1} pods ready {2} sec               ".format(resp.status.available_replicas, resp.status.replicas, total_sleep_time), end="\r")
-        time.sleep(1)
-
-        if time_out and total_sleep_time > time_out:
-            raise Exception("Timeout waiting to deployment to be ready")
-
-
-def create_deployment(file_name, name_space, deployment_id=None, replica_size=1, container_specs=None):
-    with open(path.join(path.dirname(__file__), file_name)) as f:
-        dep = yaml.safe_load(f)
-
-        # Set unique deployment id
-        if deployment_id:
-            dep['metadata']['generateName'] += '{0}-'.format(deployment_id)
-
-        # Set replica size
-        dep['spec']['replicas'] = replica_size
-        if container_specs:
-            dep = container_specs.update_deployment(dep)
-
-        k8s_beta = client.ExtensionsV1beta1Api()
-        resp1 = k8s_beta.create_namespaced_deployment(body=dep, namespace=name_space)
-        wait_to_deployment_to_be_ready(resp1.metadata._name, name_space,
-                                       time_out=testconfig['deployment_ready_time_out'])
-        return resp1
-
-
-def delete_deployment(deployment_name, name_space):
-    try:
-        k8s_beta = client.ExtensionsV1beta1Api()
-        resp = k8s_beta.delete_namespaced_deployment(name=deployment_name,
-                                                     namespace=name_space,
-                                                     body=client.V1DeleteOptions(propagation_policy='Foreground',
-                                                                                 grace_period_seconds=5))
-    except ApiException as e:
-        if e.status == 404:
-            return resp
-
-    wait_to_deployment_to_be_deleted(deployment_name, name_space)
-    return resp
-
-
 def query_bootstrap_es(indx, namespace, bootstrap_po_name):
-    es = get_elastic_search_api()
+    es = ES.get_search_api()
     fltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
            Q("match_phrase", kubernetes__pod_name=bootstrap_po_name) & \
            Q("match_phrase", M="Local node identity")
@@ -141,9 +60,9 @@ def setup_server(deployment_name, deployment_file, namespace):
                                                                  "name={0}".format(deployment_name_prefix))).items
     if namespaced_pods:
         # if server already exist -> delete it
-        delete_deployment(deployment_name, namespace)
+        deployment.delete_deployment(deployment_name, namespace)
 
-    resp = create_deployment(deployment_file, namespace, None)
+    resp = deployment.create_deployment(deployment_file, namespace, time_out=testconfig['deployment_ready_time_out'])
     namespaced_pods = client.CoreV1Api().list_namespaced_pod(namespace,
                                                              label_selector=(
                                                                  "name={0}".format(deployment_name_prefix))).items
@@ -181,10 +100,11 @@ def setup_bootstrap(request, init_session, setup_oracle, setup_poet, create_conf
                           genesis_time=GENESIS_TIME.isoformat('T', 'seconds'),
                           **bootstrap_args)
 
-        resp = create_deployment(BOOT_DEPLOYMENT_FILE, name_space,
-                                 deployment_id=bootstrap_deployment_info.deployment_id,
-                                 replica_size=testconfig['bootstrap']['replicas'],
-                                 container_specs=cspec)
+        resp = deployment.create_deployment(BOOT_DEPLOYMENT_FILE, name_space,
+                                            deployment_id=bootstrap_deployment_info.deployment_id,
+                                            replica_size=testconfig['bootstrap']['replicas'],
+                                            container_specs=cspec,
+                                            time_out=testconfig['deployment_ready_time_out'])
 
         bootstrap_deployment_info.deployment_name = resp.metadata._name
         # The tests assume we deploy only 1 bootstrap
@@ -230,10 +150,11 @@ def setup_clients(request, init_session, setup_oracle, setup_poet, setup_bootstr
                           genesis_time=GENESIS_TIME.isoformat('T', 'seconds'),
                           **client_args)
 
-        resp = create_deployment(CLIENT_DEPLOYMENT_FILE, name_space,
-                                 deployment_id=setup_bootstrap.deployment_id,
-                                 replica_size=testconfig['client']['replicas'],
-                                 container_specs=cspec)
+        resp = deployment.create_deployment(CLIENT_DEPLOYMENT_FILE, name_space,
+                                            deployment_id=setup_bootstrap.deployment_id,
+                                            replica_size=testconfig['client']['replicas'],
+                                            container_specs=cspec,
+                                            time_out=testconfig['deployment_ready_time_out'])
 
         client_info.deployment_name = resp.metadata._name
         client_pods = (
@@ -274,6 +195,27 @@ def add_single_client(deployment_id, container_specs):
     return client_name
 
 
+def add_multi_clients(deployment_id, container_specs, size=2):
+    resp = deployment.create_deployment(file_name=CLIENT_DEPLOYMENT_FILE,
+                                        name_space=testconfig['namespace'],
+                                        deployment_id=deployment_id,
+                                        replica_size=size,
+                                        container_specs=container_specs,
+                                        time_out=testconfig['deployment_ready_time_out'])
+    client_pods = (
+        client.CoreV1Api().list_namespaced_pod(testconfig['namespace'],
+                                               include_uninitialized=True,
+                                               label_selector=(
+                                                   "name={0}".format(
+                                                       resp.metadata._name.split('-')[0]))).items)
+    pods = []
+    for c in client_pods:
+        pod_name= c.metadata.name
+        if pod_name.startswith(resp.metadata.name):
+            pods.append(pod_name)
+    return pods
+
+
 def get_conf(bs_info, setup_poet, setup_oracle, args=None):
     client_args = {} if 'args' not in testconfig['client'] else testconfig['client']['args']
 
@@ -289,8 +231,6 @@ def get_conf(bs_info, setup_poet, setup_oracle, args=None):
                       poet_server='{0}:{1}'.format(setup_poet, POET_SERVER_PORT),
                       genesis_time=GENESIS_TIME.isoformat('T', 'seconds'),
                       **client_args)
-
-
     return cspec
 
 # The following fixture should not be used if you wish to add many clients during test.
@@ -330,8 +270,9 @@ def wait_genesis():
 
 def api_call(client_ip, data, api, namespace):
     # todo: this won't work with long payloads - ( `Argument list too long` ). try port-forward ?
-    res = stream(client.CoreV1Api().connect_post_namespaced_pod_exec, name="curl", namespace=namespace, command=["curl", "-s", "--request",  "POST", "--data", data, "http://" + client_ip + ":9090/" + api], stderr=True, stdin=False, stdout=True, tty=False)
+    res = stream(client.CoreV1Api().connect_post_namespaced_pod_exec, name="curl", namespace=namespace, command=["curl", "-s", "--request",  "POST", "--data", data, "http://" + client_ip + ":9090/" + api], stderr=True, stdin=False, stdout=True, tty=False, _request_timeout=90)
     return res
+
 
 @pytest.fixture(scope='module')
 def create_configmap(request):
@@ -458,57 +399,15 @@ def test_mining(setup_network):
     data = '{"address":"222"}'
     end = start = time.time()
     layer_avg_size = 20
-    last_layer = 8
+    last_layer = 9
     layers_per_epoch = 3
-    deviation = 0.2
+    # deviation = 0.2
     last_epoch = last_layer / layers_per_epoch
 
     queries.wait_for_latest_layer(testconfig["namespace"], last_layer)
-
-    # out = api_call(client_ip, data, api, testconfig['namespace'])
     print("test took {:.3f} seconds ".format(end-start))
-    # assert "{'value': '100'}" in out
-    # print("balance ok")
-
-    # need to filter out blocks that have come from last layer
-    blockmap = queries.get_blocks_per_node(testconfig["namespace"])
-    # count all blocks arrived in relevant layers
-    total_blocks = sum([len(blockmap[x]) for x in blockmap ])
-    atxmap = queries.get_atx_per_node(testconfig["namespace"])
-    total_atxs = sum([len(atxmap[x]) for x in atxmap ])
-
     total_pods = len(setup_network.clients.pods) + len(setup_network.bootstrap.pods)
-
-    print("atx created " + str(total_atxs))
-    print("blocks created " + str(total_blocks))
-
-    genesis_block_deviation = (total_pods - layer_avg_size)*2
-
-    if genesis_block_deviation > 0:
-        print("subtracting deviation of " + str(genesis_block_deviation) + " blocks for block counting")
-        total_blocks -= genesis_block_deviation
-    print("test took {:.3f} seconds ".format(end-start))
-    assert total_pods == len(blockmap)
-    assert (1 - deviation) < (total_blocks / last_layer) / layer_avg_size < (1 + deviation)
-    assert total_atxs == int((last_layer / layers_per_epoch) + 1) * total_pods
-
-    # assert that a node has created one atx per epoch
-    for node in atxmap:
-        mp = set()
-        for blk in atxmap[node]:
-            mp.add(blk[4])
-        assert len(atxmap[node]) / int((last_layer / layers_per_epoch) + 1) == 1
-        if len(mp) != int((last_layer / layers_per_epoch) + 1):
-            print("mp " + ','.join(mp) + " node " + node + " atxmap " + str(atxmap[node]))
-        assert len(mp) == int((last_layer / layers_per_epoch) + 1)
-
-    # assert that each node has created layer_avg/number_of_nodes
-    mp.clear()
-    for node in blockmap:
-        for blk in blockmap[node]:
-          mp.add(blk[0])
-        print("blocks:" + str(len(blockmap[node])) + "in layers" + str(len(mp)) + " " + str(layer_avg_size / total_pods))
-        assert (len(blockmap[node]) / last_layer) / int(layer_avg_size / total_pods + 0.5) <= 1.5
+    analyse.analyze_mining(testconfig['namespace'], last_layer, layers_per_epoch, layer_avg_size, total_pods)
 
 
 ''' todo: when atx flow stabilized re enable this test
