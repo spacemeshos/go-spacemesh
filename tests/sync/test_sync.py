@@ -7,7 +7,7 @@ from tests.fixtures import set_namespace, load_config, init_session, set_docker_
 from tests.test_bs import setup_poet, setup_clients, save_log_on_exit, setup_oracle, setup_bootstrap, create_configmap
 from tests.test_bs import current_index, wait_genesis, query_message, GENESIS_TIME, BOOT_DEPLOYMENT_FILE, CLIENT_DEPLOYMENT_FILE
 from tests.misc import ContainerSpec
-from tests.queries import get_elastic_search_api
+from tests.queries import ES
 from elasticsearch_dsl import Search, Q
 
 # ==============================================================================
@@ -39,7 +39,7 @@ def new_client_in_namespace(name_space, setup_bootstrap, cspec, num):
 
 
 def search_pod_logs(namespace, pod_name, term):
-    api = get_elastic_search_api()
+    api = ES().get_search_api()
     fltr = Q("match_phrase", kubernetes__pod_name=pod_name) & Q("match_phrase", kubernetes__namespace_name=namespace)
     s = Search(index=current_index, using=api).query('bool').filter(fltr).sort("time")
     res = s.execute()

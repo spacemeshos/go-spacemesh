@@ -9,15 +9,13 @@ import pytz
 import re
 import subprocess
 import time
-import os
 from kubernetes import client
 from kubernetes.client.rest import ApiException
 from kubernetes.stream import stream
 from pytest_testconfig import config as testconfig
-from elasticsearch import Elasticsearch
 from elasticsearch_dsl import Search, Q
 from tests.misc import ContainerSpec
-from tests.queries import query_message
+from tests.queries import ES
 
 
 BOOT_DEPLOYMENT_FILE = './k8s/bootstrap-w-conf.yml'
@@ -37,17 +35,8 @@ ELASTICSEARCH_URL = "http://{0}".format(testconfig['elastic']['host'])
 GENESIS_TIME = pytz.utc.localize(datetime.utcnow() + timedelta(seconds=testconfig['genesis_delta']))
 
 
-def get_elastic_search_api():
-    elastic_password = os.getenv('ES_PASSWD')
-    if not elastic_password:
-        raise Exception("Unknown Elasticsearch password. Please check 'ES_PASSWD' environment variable")
-    es = Elasticsearch([ELASTICSEARCH_URL],
-                       http_auth=(testconfig['elastic']['username'], elastic_password), port=80)
-    return es
-
-
 def query_bootstrap_es(indx, namespace, bootstrap_po_name):
-    es = get_elastic_search_api()
+    es = ES.get_search_api()
     fltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
            Q("match_phrase", kubernetes__pod_name=bootstrap_po_name) & \
            Q("match_phrase", M="Local node identity")
@@ -226,6 +215,7 @@ def add_multi_clients(deployment_id, container_specs, size=2):
             pods.append(pod_name)
     return pods
 
+
 def get_conf(bs_info, setup_poet, setup_oracle, args=None):
     client_args = {} if 'args' not in testconfig['client'] else testconfig['client']['args']
 
@@ -280,8 +270,9 @@ def wait_genesis():
 
 def api_call(client_ip, data, api, namespace):
     # todo: this won't work with long payloads - ( `Argument list too long` ). try port-forward ?
-    res = stream(client.CoreV1Api().connect_post_namespaced_pod_exec, name="curl", namespace=namespace, command=["curl", "-s", "--request",  "POST", "--data", data, "http://" + client_ip + ":9090/" + api], stderr=True, stdin=False, stdout=True, tty=False)
+    res = stream(client.CoreV1Api().connect_post_namespaced_pod_exec, name="curl", namespace=namespace, command=["curl", "-s", "--request",  "POST", "--data", data, "http://" + client_ip + ":9090/" + api], stderr=True, stdin=False, stdout=True, tty=False, _request_timeout=90)
     return res
+
 
 @pytest.fixture(scope='module')
 def create_configmap(request):
@@ -417,9 +408,6 @@ def test_mining(setup_network):
     print("test took {:.3f} seconds ".format(end-start))
     total_pods = len(setup_network.clients.pods) + len(setup_network.bootstrap.pods)
     analyse.analyze_mining(testconfig['namespace'], last_layer, layers_per_epoch, layer_avg_size, total_pods)
-
-
-
 
 
 ''' todo: when atx flow stabilized re enable this test
