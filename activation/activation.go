@@ -211,8 +211,9 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) (bool, error) {
 		}
 	}
 	if b.mesh.LatestLayer().GetEpoch(b.layersPerEpoch) < b.challenge.PubLayerIdx.GetEpoch(b.layersPerEpoch) {
-		b.log.Warning("an epoch has not passed during nipst creation, current: %v, mesh: %v, wanted: %v, waiting",
-			epoch, b.mesh.LatestLayer().GetEpoch(b.layersPerEpoch), b.challenge.PubLayerIdx.GetEpoch(b.layersPerEpoch))
+		// cannot determine active set size before mesh reaches publication epoch, will try again in next layer
+		b.log.Warning("received PoET proof too soon. ATX publication epoch: %v; mesh epoch: %v; started in clock-epoch: %v",
+			b.challenge.PubLayerIdx.GetEpoch(b.layersPerEpoch), b.mesh.LatestLayer().GetEpoch(b.layersPerEpoch), epoch)
 		return false, nil
 	}
 
