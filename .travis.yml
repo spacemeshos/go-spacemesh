@@ -38,16 +38,16 @@ jobs:
       - make dockerpush
   - stage: system-test
     #if: branch = develop AND type != pull_request
-    name: "Run p2p system tests"
+  - name: "Run p2p system tests"
     script:
       - make dockerrun-p2p
-    name: "Run mining system tests"
+  - name: "Run mining system tests"
     script:
       - make dockerrun-mining
-    name: "Run hare system tests"
+  - name: "Run hare system tests"
     script:
       - make dockerrun-hare
-    name: "Run sync system tests"
+  - name: "Run sync system tests"
     script:
       - make dockerrun-sync
 
