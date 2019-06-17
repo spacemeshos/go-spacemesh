@@ -218,8 +218,16 @@ func Test_RoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	defer m2.Shutdown()
 
+	if nd2.NodeInfo.IP.IsUnspecified() {
+		if ip4 := nd2.IP.To4(); ip4 != nil {
+			nd2.NodeInfo.IP = net2.IP{127, 0, 0, 1}
+		} else if ip6 := nd2.IP.To16(); ip6 != nil {
+			nd2.NodeInfo.IP = net2.IPv6loopback
+		}
+	}
+
 	m.lookuper = func(key p2pcrypto.PublicKey) (*node.NodeInfo, error) {
-		return node.NewNode(nd2.ID.PublicKey(), net2.IPv6loopback, nd2.ProtocolPort, nd2.DiscoveryPort), nil
+		return nd2.NodeInfo, nil
 	}
 
 	err = m.SendMessage(nd2.PublicKey(), test_str, []byte(test_str))
