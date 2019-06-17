@@ -286,9 +286,8 @@ def find_missing(indx, namespace, client_po_name, fields, min=1):
 
 def query_hare_output_set(indx, ns):
     hits = query_message(indx, ns, ns, {'M': 'Consensus process terminated'}, True)
-    lst = []
-    for h in hits:
-        lst.append(h.set_values)
+    lst = [h.set_values for h in hits]
+    
     return lst
 
 
