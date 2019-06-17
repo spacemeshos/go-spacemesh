@@ -10,7 +10,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/types"
-	"io"
 	"sort"
 	"sync"
 )
@@ -124,13 +123,14 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 				db.log.Debug("atx %v found, but not valid", atx.ShortId())
 				continue
 			}
+			if atx.TargetEpoch(db.LayersPerEpoch) != pubEpoch {
+				db.log.Debug("atx %v found, but targeting epoch %v instead of publication epoch %v",
+					atx.ShortId(), atx.TargetEpoch(db.LayersPerEpoch), pubEpoch)
+				continue
+			}
 			counter++
 			db.log.Debug("atx %v (epoch %d) found traversing in block %x (epoch %d)",
 				atx.ShortId(), atx.TargetEpoch(db.LayersPerEpoch), blk.Id, blk.LayerIndex.GetEpoch(db.LayersPerEpoch))
-			// return eof to signal that enough active ids were found
-			if counter >= a.ActiveSetSize {
-				return io.EOF
-			}
 		}
 		return nil
 	}
@@ -141,7 +141,7 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 	}
 
 	err = db.meshDb.ForBlockInView(mp, firstLayerOfLastEpoch, traversalFunc)
-	if err != nil && err != io.EOF {
+	if err != nil {
 		return 0, err
 	}
 	activesetCache.Add(common.BytesToHash(viewBytes), counter)
