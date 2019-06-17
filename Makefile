@@ -143,8 +143,8 @@ dockerpush: dockerbuild-go dockerbuild-test
 	docker tag $(DOCKER_IMAGE_REPO):$(BRANCH) spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)
 	docker push spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)
 
-	docker tag go-spacemesh-python:$(BRANCH) spacemeshos/go-spacemesh-python:$(BRANCH)
-	docker push spacemeshos/go-spacemesh-python:$(BRANCH)
+	docker tag go-spacemesh-test:$(BRANCH) spacemeshos/go-spacemesh-test:$(BRANCH)
+	docker push spacemeshos/go-spacemesh-test:$(BRANCH)
 ifeq ($(BRANCH),develop)
 	docker tag $(DOCKER_IMAGE_REPO):$(BRANCH) spacemeshos/$(DOCKER_IMAGE_REPO):$(SHA)
 	docker push spacemeshos/$(DOCKER_IMAGE_REPO):$(SHA)
@@ -164,7 +164,7 @@ endif
 	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
 		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
 		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
-		-it spacemeshos/go-spacemesh-python:$(BRANCH) pytest -s p2p/test_p2p.py --tc-file=p2p/config.yaml --tc-format=yaml
+		-it spacemeshos/go-spacemesh-test:$(BRANCH) pytest -s p2p/test_p2p.py --tc-file=p2p/config.yaml --tc-format=yaml
 
 .PHONY: dockerrun-p2p
 
@@ -175,7 +175,7 @@ endif
 	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
 		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
 		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
-		-it spacemeshos/go-spacemesh-python:$(BRANCH) pytest -s test_bs.py --tc-file=config.yaml --tc-format=yaml
+		-it spacemeshos/go-spacemesh-test:$(BRANCH) pytest -s test_bs.py --tc-file=config.yaml --tc-format=yaml
 
 .PHONY: dockerrun-mining
 
@@ -186,7 +186,7 @@ endif
 	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
 		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
 		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
-		-it spacemeshos/go-spacemesh-python:$(BRANCH) pytest -s hare/test_hare.py --tc-file=hare/config.yaml --tc-format=yaml
+		-it spacemeshos/go-spacemesh-test:$(BRANCH) pytest -s hare/test_hare.py --tc-file=hare/config.yaml --tc-format=yaml
 .PHONY: dockerrun-hare
 
 dockerrun-sync:
@@ -197,7 +197,7 @@ endif
 	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
 		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
 		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
-		-it spacemeshos/go-spacemesh-python:$(BRANCH) pytest -s sync/test_sync.py --tc-file=sync/config.yaml --tc-format=yaml
+		-it spacemeshos/go-spacemesh-test:$(BRANCH) pytest -s sync/test_sync.py --tc-file=sync/config.yaml --tc-format=yaml
 
 .PHONY: dockerrun-sync
 
