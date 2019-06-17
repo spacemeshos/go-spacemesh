@@ -28,6 +28,7 @@ func (p *protocol) newGetAddressesRequestHandler() func(msg server.Message) []by
 			}
 		}
 		//todo: limit results to message size
+		//todo: what to do if we have no addresses?
 		resp, err := types.InterfaceToBytes(results)
 
 		if err != nil {
