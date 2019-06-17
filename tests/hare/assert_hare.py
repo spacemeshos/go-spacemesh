@@ -50,24 +50,24 @@ def validate(outputs):
 def assert_all(curr_idx, ns):
     total = testconfig['bootstrap']['replicas'] + testconfig['client']['replicas']
 
-    # assert_result
-    lst = query_hare_output_set(curr_idx, ns)
-    assert total == len(lst)
-    assert validate(lst)
+    # assert no node ended up with an empty set at the end of the pre-round
+    lst = query_pre_round(curr_idx, ns)
+    assert 0 == len(lst)
 
-    # assert round 1
+    # assert all nodes had SVP ready at the end of round 1
     lst = query_round_1(curr_idx, ns)
     assert total == len(lst)
 
-    # assert round 2
+    # assert all nodes had a (non-nil) proposal at the end of round 2
     lst = query_round_2(curr_idx, ns)
     assert total == len(lst)
 
-    # assert round 3
+    # assert at least f+1 has committed at the end of round 3
     lst = query_round_3(curr_idx, ns)
     f = int(testconfig['client']['args']['hare-max-adversaries'])
     assert len(lst) >= f + 1
 
-    # assert pre round
-    lst = query_pre_round(curr_idx, ns)
-    assert 0 == len(lst)
+    # assert termination output set
+    lst = query_hare_output_set(curr_idx, ns)
+    assert total == len(lst)
+    assert validate(lst)
