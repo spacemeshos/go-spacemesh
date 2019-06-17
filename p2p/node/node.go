@@ -63,14 +63,15 @@ func (n NodeInfo) Valid() error {
 	if n.ProtocolPort == 0 {
 		return errors.New("missing TCP port")
 	}
+	// TODO: consider uncommenting this.
 	//if n.IP.IsMulticast() || n.IP.IsUnspecified() {
 	//	return errors.New("invalid IP (multicast/unspecified)")
 	//}
+
+	// TODO: Validate pubkey
 	if len(n.ID.Bytes()) != 32 {
 		return errors.New("Invalid ID")
 	}
-
-	// TODO: Validate pubkey
 	return nil
 }
 

@@ -30,11 +30,7 @@ func (p *protocol) newPingRequestHandler() func(msg server.Message) []byte {
 
 		//pong
 		payload, err := types.InterfaceToBytes(p.local)
-		//payload, err := proto.Marshal(&pb.Ping{
-		//	Me:     &pb.NodeInfo{NodeId: p.local.PublicKey().Bytes(), TCPAddress: p.localTcpAddress, UDPAddress: p.localUdpAddress},
-		//	ToAddr: msg.Metadata().FromAddress.String()})
-		// TODO: include the resolve To address
-
+		// TODO: include the resolved To address
 		if err != nil {
 			p.logger.Error("Error marshaling response message (Ping)")
 			return nil
@@ -42,26 +38,6 @@ func (p *protocol) newPingRequestHandler() func(msg server.Message) []byte {
 
 		return payload
 	}
-}
-
-func extractAddress(from net.Addr, addrString string) (string, error) {
-	//extract port
-	_, port, err := net.SplitHostPort(addrString)
-	if err != nil {
-		return "", err
-	}
-
-	addr, _, err := net.SplitHostPort(from.String())
-	if err != nil {
-		addr = from.String()
-	}
-
-	ip := net.ParseIP(addr)
-	if ip == nil {
-		return "", errors.New("canno't parse incoming ip")
-	}
-
-	return net.JoinHostPort(addr, port), nil
 }
 
 func (p *protocol) verifyPinger(from net.Addr, pi *node.NodeInfo) error {
@@ -73,6 +49,10 @@ func (p *protocol) verifyPinger(from net.Addr, pi *node.NodeInfo) error {
 		return err
 	}
 
+	//TODO: only accept local (unspecified/loopback) IPs from other local ips.
+	ipfrom, _, _ := net.SplitHostPort(from.String())
+	pi.IP = net.ParseIP(ipfrom)
+
 	// inbound ping is the actual source of this node info
 	p.table.AddAddress(pi, pi)
 	return nil
@@ -83,7 +63,6 @@ func (p *protocol) Ping(peer p2pcrypto.PublicKey) error {
 	p.logger.Debug("send ping request Peer: %v", peer)
 
 	data, err := types.InterfaceToBytes(p.local)
-	//payload, err := proto.Marshal(data)
 	if err != nil {
 		return err
 	}

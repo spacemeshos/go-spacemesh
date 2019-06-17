@@ -101,33 +101,12 @@ func (n *UDPNet) Send(to *node.NodeInfo, data []byte) error {
 	final := p2pcrypto.PrependPubkey(sealed, n.local.PublicKey())
 
 	addr := NodeAddr(to)
-	if addr.IP.IsUnspecified() {
-		addr.IP = net.IPv6loopback
-	}
-	//log.Warning(spew.Sdump(addr))
+
 	_, err := n.conn.WriteToUDP(final, addr)
 
 	n.logger.Debug("UDP MESSAGE to %v SENT ? %v", to.PublicKey().String(), err)
 
 	return err
-}
-
-func resolveUDPAddr(addr string) (*net.UDPAddr, error) {
-	raddr, err := net.ResolveUDPAddr("udp", addr)
-	if err != nil {
-		return nil, err
-	}
-
-	// TODO: only accept local (unspecified/loopback) IPs from other local ips.
-	if raddr.IP.IsUnspecified() {
-		if ip4 := raddr.IP.To4(); ip4 != nil {
-			raddr.IP = IPv4LoopbackAddress
-		} else if ip6 := raddr.IP.To16(); ip6 != nil {
-			raddr.IP = net.IPv6loopback
-		}
-	}
-
-	return raddr, nil
 }
 
 // IncomingMessages is a channel where incoming UDPMessagesEvents will stream
