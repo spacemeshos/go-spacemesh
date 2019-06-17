@@ -94,7 +94,11 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 
 	var counter uint32 = 0
 	set := make(map[types.AtxId]struct{})
-	countingEpoch := a.PubLayerIdx.GetEpoch(db.LayersPerEpoch) - 1
+	pubEpoch := a.PubLayerIdx.GetEpoch(db.LayersPerEpoch)
+	if pubEpoch < 1 {
+		return 0, fmt.Errorf("publication epoch cannot be less than 1, found %v", pubEpoch)
+	}
+	countingEpoch := pubEpoch - 1
 	firstLayerOfLastEpoch := types.LayerID(countingEpoch) * types.LayerID(db.LayersPerEpoch)
 
 	traversalFunc := func(blkh *types.BlockHeader) error {

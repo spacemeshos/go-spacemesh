@@ -230,7 +230,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) (bool, error) {
 		return false, err
 	}
 	atx := types.NewActivationTxWithChallenge(*b.challenge, activeIds, view, b.nipst, true)
-	activeSetSize, err := b.db.CalcActiveSetFromView(atx)
+	activeSetSize, err := b.db.CalcActiveSetFromView(atx) // TODO: remove this assertion to improve performance
 	b.log.Info("active ids seen for epoch %v (pos atx epoch) is %v (cache) %v (from view)",
 		posEpoch, activeIds, activeSetSize)
 
@@ -239,9 +239,8 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) (bool, error) {
 		return false, nil
 	}
 	if activeSetSize != atx.ActiveSetSize {
-		b.log.Error("active set size mismatch! size based on view: %d, size reported: %d",
+		b.log.Panic("active set size mismatch! size based on view: %d, size reported: %d",
 			activeSetSize, atx.ActiveSetSize)
-		atx.ActiveSetSize = activeSetSize
 	}
 	buf, err := types.AtxAsBytes(atx)
 	if err != nil {

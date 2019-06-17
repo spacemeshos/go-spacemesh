@@ -14,14 +14,16 @@ import (
 	"github.com/spacemeshos/sha256-simd"
 )
 
+type poetProofKey [sha256.Size]byte
+
 type PoetDb struct {
 	store                     database.Database
-	poetProofRefSubscriptions map[[32]byte][]chan []byte
+	poetProofRefSubscriptions map[poetProofKey][]chan []byte
 	log                       log.Log
 }
 
 func NewPoetDb(store database.Database, log log.Log) *PoetDb {
-	return &PoetDb{store: store, poetProofRefSubscriptions: make(map[[32]byte][]chan []byte), log: log}
+	return &PoetDb{store: store, poetProofRefSubscriptions: make(map[poetProofKey][]chan []byte), log: log}
 }
 
 func (db *PoetDb) ValidateAndStorePoetProof(proof types.PoetProof, poetId [types.PoetIdLength]byte, roundId uint64,
@@ -82,7 +84,7 @@ func (db *PoetDb) SubscribeToPoetProofRef(poetId [types.PoetIdLength]byte, round
 	return ch
 }
 
-func (db *PoetDb) getPoetProofRef(key [keySize]byte) ([]byte, error) {
+func (db *PoetDb) getPoetProofRef(key poetProofKey) ([]byte, error) {
 	poetRef, err := db.store.Get(key[:])
 	if err != nil {
 		return nil, fmt.Errorf("could not fetch poet proof for key %x: %v", key, err)
@@ -90,7 +92,7 @@ func (db *PoetDb) getPoetProofRef(key [keySize]byte) ([]byte, error) {
 	return poetRef, nil
 }
 
-func (db *PoetDb) publishPoetProofRef(key [keySize]byte, poetProofRef []byte) {
+func (db *PoetDb) publishPoetProofRef(key poetProofKey, poetProofRef []byte) {
 	for _, ch := range db.poetProofRefSubscriptions[key] {
 		go func() {
 			ch <- poetProofRef
@@ -112,9 +114,7 @@ func (db *PoetDb) GetMembershipByPoetProofRef(poetRef []byte) (map[common.Hash]b
 	return membershipSliceToMap(poetProof.Members), nil
 }
 
-const keySize = sha256.Size
-
-func makeKey(poetId [types.PoetIdLength]byte, roundId uint64) [keySize]byte {
+func makeKey(poetId [types.PoetIdLength]byte, roundId uint64) poetProofKey {
 	roundIdBytes := make([]byte, 8)
 	binary.LittleEndian.PutUint64(roundIdBytes, roundId)
 	sum := sha256.Sum256(append(poetId[:], roundIdBytes...))
