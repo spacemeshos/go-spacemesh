@@ -12,6 +12,7 @@ import (
 	"github.com/spacemeshos/poet/shared"
 	"github.com/spacemeshos/poet/verifier"
 	"github.com/spacemeshos/sha256-simd"
+	"sync"
 )
 
 type poetProofKey [sha256.Size]byte
@@ -20,6 +21,7 @@ type PoetDb struct {
 	store                     database.Database
 	poetProofRefSubscriptions map[poetProofKey][]chan []byte
 	log                       log.Log
+	mu                        sync.Mutex
 }
 
 func NewPoetDb(store database.Database, log log.Log) *PoetDb {
@@ -69,19 +71,24 @@ func (db *PoetDb) ValidateAndStorePoetProof(proof types.PoetProof, poetId [types
 }
 
 func (db *PoetDb) SubscribeToPoetProofRef(poetId [types.PoetIdLength]byte, roundId uint64) chan []byte {
-	ch := make(chan []byte)
 	key := makeKey(poetId, roundId)
-	db.poetProofRefSubscriptions[key] = append(db.poetProofRefSubscriptions[key], ch)
+	ch := make(chan []byte)
 
-	go func() {
-		poetProofRef, err := db.getPoetProofRef(key)
-		if err != nil {
-			return
-		}
+	db.addSubscription(key, ch)
+
+	poetProofRef, err := db.getPoetProofRef(key)
+	if err == nil {
 		db.publishPoetProofRef(key, poetProofRef)
-	}()
+	}
 
 	return ch
+}
+
+func (db *PoetDb) addSubscription(key poetProofKey, ch chan []byte) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	db.poetProofRefSubscriptions[key] = append(db.poetProofRefSubscriptions[key], ch)
 }
 
 func (db *PoetDb) getPoetProofRef(key poetProofKey) ([]byte, error) {
@@ -93,6 +100,9 @@ func (db *PoetDb) getPoetProofRef(key poetProofKey) ([]byte, error) {
 }
 
 func (db *PoetDb) publishPoetProofRef(key poetProofKey, poetProofRef []byte) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
 	for _, ch := range db.poetProofRefSubscriptions[key] {
 		go func() {
 			ch <- poetProofRef

@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestPoetDbHappyFlow(t *testing.T) {
@@ -85,4 +86,56 @@ func TestPoetDbNonExistingKeys(t *testing.T) {
 
 	_, err = poetDb.GetMembershipByPoetProofRef([]byte("abc"))
 	r.EqualError(err, "could not fetch poet proof for ref 616263: not found")
+}
+
+func TestPoetDb_SubscribeToPoetProofRef(t *testing.T) {
+	r := require.New(t)
+
+	poetDb := NewPoetDb(database.NewMemDatabase(), log.NewDefault("poetdb_test"))
+
+	var poetId [types.PoetIdLength]byte
+	copy(poetId[:], "abc")
+
+	ch := poetDb.SubscribeToPoetProofRef(poetId, 0)
+
+	select {
+	case <-ch:
+		r.Fail("where did this come from?!")
+	case <-time.After(2 * time.Millisecond):
+	}
+
+	file, err := os.Open(filepath.Join("test_resources", "poet.proof"))
+	r.NoError(err)
+
+	var poetProof types.PoetProof
+	_, err = xdr.Unmarshal(file, &poetProof)
+	r.NoError(err)
+
+	processingIssue, err := poetDb.ValidateAndStorePoetProof(poetProof, poetId, 0, nil)
+	r.NoError(err)
+	r.False(processingIssue)
+
+	select {
+	case proofRef := <-ch:
+		membership, err := poetDb.GetMembershipByPoetProofRef(proofRef)
+		r.NoError(err)
+		r.Equal(membershipSliceToMap(poetProof.Members), membership)
+	case <-time.After(2 * time.Millisecond):
+		r.Fail("timeout!")
+	}
+	_, ok := <- ch
+	r.False(ok, "channel should be closed")
+
+	newCh := poetDb.SubscribeToPoetProofRef(poetId, 0)
+
+	select {
+	case proofRef := <-newCh:
+		membership, err := poetDb.GetMembershipByPoetProofRef(proofRef)
+		r.NoError(err)
+		r.Equal(membershipSliceToMap(poetProof.Members), membership)
+	case <-time.After(2 * time.Millisecond):
+		r.Fail("timeout!")
+	}
+	_, ok = <- newCh
+	r.False(ok, "channel should be closed")
 }
