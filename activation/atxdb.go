@@ -311,9 +311,8 @@ func epochCounterKey(ech types.EpochId) []byte {
 	return append(ech.ToBytes(), common.Uint64ToBytes(uint64(CounterKey))...)
 }
 
-// incValidAtxCounter increases the number of active ids seen for epoch ech
+// incValidAtxCounter increases the number of active ids seen for epoch ech. Use only under db.lock.
 func (db *ActivationDb) incValidAtxCounter(ech types.EpochId) error {
-	// TODO(noamnelke): make thread safe
 	key := epochCounterKey(ech)
 	val, err := db.atxs.Get(key)
 	if err != nil {
