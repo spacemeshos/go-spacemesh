@@ -85,7 +85,10 @@ func TestKadDHT_VerySmallBootstrap(t *testing.T) {
 
 	res, err := bdht.rt.Lookup(ln.PublicKey())
 	require.NoError(t, err)
-	require.Equal(t, res.String(), ln.String())
+
+	require.Equal(t, res.ID, ln.ID)
+	require.Equal(t, res.DiscoveryPort, ln.DiscoveryPort)
+	require.Equal(t, res.ProtocolPort, ln.ProtocolPort)
 
 	res2, _ := dht.rt.Lookup(bn.PublicKey())
 	//require.Error(t, err2)
