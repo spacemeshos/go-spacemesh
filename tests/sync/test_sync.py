@@ -2,9 +2,8 @@ import time
 from pytest_testconfig import config as testconfig
 from kubernetes import client
 
-
+from tests.deployment import create_deployment, delete_deployment
 from tests.fixtures import set_namespace, load_config, init_session, set_docker_images, session_id, DeploymentInfo, init_session
-from tests.deployment import delete_deployment, create_deployment
 from tests.test_bs import setup_poet, setup_clients, save_log_on_exit, setup_oracle, setup_bootstrap, create_configmap
 from tests.test_bs import current_index, wait_genesis, query_message, GENESIS_TIME, BOOT_DEPLOYMENT_FILE, CLIENT_DEPLOYMENT_FILE
 from tests.misc import ContainerSpec
@@ -53,7 +52,6 @@ def search_pod_logs(namespace, pod_name, term):
             if term in i.log:
                 return True
     return False
-
 
 
 def get_conf(bs_info):
