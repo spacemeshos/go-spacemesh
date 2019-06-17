@@ -2,11 +2,11 @@ package discovery
 
 import (
 	"errors"
-	"github.com/nullstyle/go-xdr/xdr"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
+	"github.com/spacemeshos/go-spacemesh/types"
 	"time"
 )
 
@@ -19,9 +19,16 @@ func (p *protocol) newGetAddressesRequestHandler() func(msg server.Message) []by
 		// 		 we must ensure that he's indeed listening on that address = check last pong
 
 		results := p.table.AddressCache()
+		// remove the sender from the list
+		for i, addr := range results {
+			if addr.PublicKey() == msg.Sender() {
+				results[i] = results[len(results)-1]
+				results = results[:len(results)-1]
+				break
+			}
+		}
 		//todo: limit results to message size
-
-		resp, err := marshalNodeInfo(results, msg.Sender().String())
+		resp, err := types.InterfaceToBytes(results)
 
 		if err != nil {
 			p.logger.Error("Error marshaling response message (Ping)")
@@ -43,7 +50,8 @@ func (p *protocol) GetAddresses(server p2pcrypto.PublicKey) ([]*node.NodeInfo, e
 	ch := make(chan []*node.NodeInfo)
 	resHandler := func(msg []byte) {
 		defer close(ch)
-		nodes, err := unmarshalNodeInfo(msg)
+		nodes := make([]*node.NodeInfo, 0, getAddrMax)
+		err := types.BytesToInterface(msg, &nodes)
 		//todo: check that we're not pass max results ?
 		if err != nil {
 			p.logger.Warning("could not deserialize bytes to NodeInfo, skipping packet err=", err)
@@ -69,28 +77,4 @@ func (p *protocol) GetAddresses(server p2pcrypto.PublicKey) ([]*node.NodeInfo, e
 	case <-timeout.C:
 		return nil, errors.New("request timed out")
 	}
-}
-
-// ToNodeInfo returns marshaled protobufs identity infos slice from a slice of RemoteNodeData.
-// filterId: identity id to exclude from the result
-func marshalNodeInfo(nodes []*node.NodeInfo, filterID string) ([]byte, error) {
-	// init empty slice
-	nds := make([]*node.NodeInfo, 0, len(nodes))
-	for _, n := range nodes {
-		if n.ID.String() == filterID {
-			continue
-		}
-		nds = append(nds, n)
-	}
-	return xdr.Marshal(nds)
-}
-
-// FromNodeInfos converts a list of NodeInfo to a list of Node.
-func unmarshalNodeInfo(nodes []byte) ([]*node.NodeInfo, error) {
-	n := make([]*node.NodeInfo, 0, 25)
-	_, err := xdr.Unmarshal(nodes, &n)
-	if err != nil {
-		return nil, err
-	}
-	return n, nil
 }

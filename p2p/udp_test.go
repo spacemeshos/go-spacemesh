@@ -216,6 +216,7 @@ func Test_RoundTrip(t *testing.T) {
 	require.NoError(t, err)
 
 	m.lookuper = func(key p2pcrypto.PublicKey) (*node.NodeInfo, error) {
+		nd2.NodeInfo.IP = net2.IPv6loopback
 		return nd2.NodeInfo, nil
 	}
 

@@ -92,6 +92,8 @@ func (a *addrBook) loadPeers(filePath string) {
 	a.mtx.Lock()
 	defer a.mtx.Unlock()
 
+	// we don't lock the mutex in deserializePeers because it might fail and we'll run reset
+
 	err := a.deserializePeers(filePath)
 	if err != nil {
 		log.Error("Failed to parse file %s: %v", filePath, err)
@@ -104,13 +106,13 @@ func (a *addrBook) loadPeers(filePath string) {
 		a.reset()
 		return
 	}
-	log.Info("Loaded %d addresses from file '%s'", a.numAddresses(), filePath)
 }
 
 func (a *addrBook) deserializePeers(filePath string) error {
 
 	_, err := os.Stat(filePath)
 	if os.IsNotExist(err) {
+		a.logger.Warning("Peers not loaded to addrbook since file does not exist. file=%v", filePath)
 		return nil
 	}
 	r, err := os.Open(filePath)
@@ -194,6 +196,8 @@ func (a *addrBook) deserializePeers(filePath string) error {
 		}
 	}
 
+	log.Info("Loaded %d addresses from file '%s'", a.numAddresses(), filePath)
+
 	return nil
 }
 
@@ -207,7 +211,6 @@ func (a *addrBook) saveRoutine() {
 	}
 	a.wg.Add(1)
 	finalPath := path + "/" + a.localAddress.ID.String() + "/" + defaultPeersFileName
-
 
 	dumpAddressTicker := time.NewTicker(saveRoutineInterval)
 	defer dumpAddressTicker.Stop()

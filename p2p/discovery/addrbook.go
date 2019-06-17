@@ -637,7 +637,7 @@ func (a *addrBook) reset() {
 func NewAddrBook(localAddress *node.NodeInfo, config config.SwarmConfig, logger log.Log) *addrBook {
 	//TODO use config for const params.
 	am := addrBook{
-		logger: logger,
+		logger:       logger,
 		localAddress: localAddress,
 		rand:         rand.New(rand.NewSource(time.Now().UnixNano())),
 		quit:         make(chan struct{}),
@@ -649,6 +649,8 @@ func NewAddrBook(localAddress *node.NodeInfo, config config.SwarmConfig, logger 
 		dataDir, err := filesystem.GetSpacemeshDataDirectoryPath()
 		if err == nil {
 			am.loadPeers(dataDir + "/" + localAddress.ID.String() + "/" + config.PeersFile)
+		} else {
+			am.logger.Warning("Skipping loading peers to addrbook, data dir not found err=%v", err)
 		}
 
 		go am.saveRoutine()

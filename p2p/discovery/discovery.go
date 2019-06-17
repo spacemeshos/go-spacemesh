@@ -96,12 +96,13 @@ func New(ln *node.LocalNode, config config.SwarmConfig, service server.Service) 
 	for _, n := range config.BootstrapNodes {
 		nd, err := node.ParseNode(n)
 		if err != nil {
+			d.local.Log.Warning("Could'nt parse bootstrap node string skpping str=%v, err=%v", n, err)
 			// TODO : handle errors
 			continue
 		}
 		bn = append(bn, nd)
 	}
-
+	//TODO: Return err if no bootstrap nodes were parsed.
 	d.bootstrapper = newRefresher(d.rt, d.disc, bn, ln.Log)
 
 	return d
