@@ -62,10 +62,10 @@ def test_add_client(add_client):
     assert len(hits) == 1, "Could not find new Client bootstrap message pod:{0}".format(add_client)
 
 
-def test_add_many_clients(setup_oracle, setup_poet, setup_bootstrap, setup_clients):
+def test_add_many_clients(setup_oracle, setup_bootstrap, setup_clients):
 
     bs_info = setup_bootstrap.pods[0]
-    cspec = get_conf(bs_info, setup_poet, setup_oracle)
+    cspec = get_conf(bs_info, setup_oracle)
 
     pods = add_multi_clients(setup_bootstrap.deployment_id, cspec, size=4)
     time.sleep(20)  # wait for the new clients to finish bootstrap
@@ -122,7 +122,7 @@ def test_many_gossip_messages(setup_clients, add_curl):
 
         # Need to sleep for a while in order to enable the propagation of the gossip message - 0.5 sec for each node
         # TODO: check frequently before timeout so we might be able to finish earlier.
-        gossip_propagation_sleep = 3 # currently we expect short propagation times.
+        gossip_propagation_sleep = 4  # currently we expect short propagation times.
         print('sleep for {0} sec to enable gossip propagation'.format(gossip_propagation_sleep))
         time.sleep(gossip_propagation_sleep)
 
@@ -132,7 +132,7 @@ def test_many_gossip_messages(setup_clients, add_curl):
 
 def test_many_gossip_sim(setup_clients, add_curl):
     msg_size = 10000  # 1kb TODO: increase up to 2mb
-    fields = {'M':'new_gossip_message', 'protocol': 'api_test_gossip'}
+    fields = {'M': 'new_gossip_message', 'protocol': 'api_test_gossip'}
     TEST_MESSAGES = 100
 
     initial = len(query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, fields))
@@ -151,7 +151,7 @@ def test_many_gossip_sim(setup_clients, add_curl):
         out = api_call(client_ip, data, api, testconfig['namespace'])
         assert "{'value': 'ok'}" in out
 
-    gossip_propagation_sleep = TEST_MESSAGES # currently we expect short propagation times.
+    gossip_propagation_sleep = TEST_MESSAGES  # currently we expect short propagation times.
     print('sleep for {0} sec to enable gossip propagation'.format(gossip_propagation_sleep))
     time.sleep(gossip_propagation_sleep)
 

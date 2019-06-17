@@ -2,10 +2,10 @@ import time
 from pytest_testconfig import config as testconfig
 from kubernetes import client
 
-
+from tests import deployment
 from tests.fixtures import set_namespace, load_config, init_session, set_docker_images, session_id, DeploymentInfo, init_session
-from tests.test_bs import setup_poet, setup_clients, save_log_on_exit, setup_oracle, setup_bootstrap, create_configmap, delete_deployment
-from tests.test_bs import current_index, wait_genesis, query_message, GENESIS_TIME, create_deployment, BOOT_DEPLOYMENT_FILE, CLIENT_DEPLOYMENT_FILE
+from tests.test_bs import setup_clients, save_log_on_exit, setup_oracle, setup_bootstrap, create_configmap
+from tests.test_bs import current_index, wait_genesis, query_message, GENESIS_TIME, BOOT_DEPLOYMENT_FILE, CLIENT_DEPLOYMENT_FILE
 from tests.misc import ContainerSpec
 from tests.queries import get_elastic_search_api
 from elasticsearch_dsl import Search, Q
@@ -16,11 +16,11 @@ from elasticsearch_dsl import Search, Q
 
 
 def new_client_in_namespace(name_space, setup_bootstrap, cspec, num):
-    resp = create_deployment(CLIENT_DEPLOYMENT_FILE, name_space,
-                             deployment_id=setup_bootstrap.deployment_id,
-                             replica_size=num,
-                             container_specs=cspec,
-                             time_out=testconfig['deployment_ready_time_out'])
+    resp = deployment.create_deployment(CLIENT_DEPLOYMENT_FILE, name_space,
+                                        deployment_id=setup_bootstrap.deployment_id,
+                                        replica_size=num,
+                                        container_specs=cspec,
+                                        time_out=testconfig['deployment_ready_time_out'])
     client_info = DeploymentInfo(dep_id=setup_bootstrap.deployment_id)
     client_info.deployment_name = resp.metadata._name
     namespaced_pods = client.CoreV1Api().list_namespaced_pod(namespace=name_space, include_uninitialized=True).items
@@ -96,6 +96,6 @@ def test_sync_gradually_add_nodes(set_namespace, setup_bootstrap, save_log_on_ex
     assert res3
     assert res4
 
-    delete_deployment(inf.deployment_name, testconfig['namespace'])
+    deployment.delete_deployment(inf.deployment_name, testconfig['namespace'])
 
     print("done!!")
