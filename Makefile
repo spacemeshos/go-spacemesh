@@ -130,23 +130,27 @@ dockerbuild-go:
 	docker build -t $(DOCKER_IMAGE_REPO):$(BRANCH) .
 .PHONY: dockerbuild-go
 
-dockerpush: dockerbuild-go
+dockerbuild-test:
+	docker build -f DockerFileTests --build-arg GCLOUD_KEY="$(GCLOUD_KEY)" \
+	             --build-arg PROJECT_NAME="$(PROJECT_NAME)" \
+	             --build-arg CLUSTER_NAME="$(CLUSTER_NAME)" \
+	             --build-arg CLUSTER_ZONE="$(CLUSTER_ZONE)" \
+	             -t go-spacemesh-python:$(BRANCH) .
+.PHONY: dockerbuild-test
+
+dockerpush: dockerbuild-go dockerbuild-test
 	echo "$(DOCKER_PASSWORD)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
 	docker tag $(DOCKER_IMAGE_REPO):$(BRANCH) spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)
 	docker push spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)
+
+	docker tag go-spacemesh-python:$(BRANCH)) spacemeshos/go-spacemesh-python:$(BRANCH)
+	docker push spacemeshos/go-spacemesh-python:$(BRANCH)
 ifeq ($(BRANCH),develop)
 	docker tag $(DOCKER_IMAGE_REPO):$(BRANCH) spacemeshos/$(DOCKER_IMAGE_REPO):$(SHA)
 	docker push spacemeshos/$(DOCKER_IMAGE_REPO):$(SHA)
 endif
 .PHONY: dockerpush
 
-dockerbuild-test:
-	docker build -f DockerFileTests --build-arg GCLOUD_KEY="$(GCLOUD_KEY)" \
-	             --build-arg PROJECT_NAME="$(PROJECT_NAME)" \
-	             --build-arg CLUSTER_NAME="$(CLUSTER_NAME)" \
-	             --build-arg CLUSTER_ZONE="$(CLUSTER_ZONE)" \
-	             -t go-spacemesh-python:latest .
-.PHONY: dockerbuild-test
 
 ifdef TEST
 DELIM=::
@@ -160,7 +164,7 @@ endif
 	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
 		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
 		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
-		-it go-spacemesh-python pytest -s p2p/test_p2p.py --tc-file=p2p/config.yaml --tc-format=yaml
+		-it spacemeshos/go-spacemesh-python:$(BRANCH) pytest -s p2p/test_p2p.py --tc-file=p2p/config.yaml --tc-format=yaml
 
 .PHONY: dockerrun-p2p
 
@@ -171,7 +175,7 @@ endif
 	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
 		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
 		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
-		-it go-spacemesh-python pytest -s test_bs.py --tc-file=config.yaml --tc-format=yaml
+		-it spacemeshos/go-spacemesh-python:$(BRANCH) pytest -s test_bs.py --tc-file=config.yaml --tc-format=yaml
 
 .PHONY: dockerrun-mining
 
@@ -182,7 +186,7 @@ endif
 	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
 		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
 		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
-		-it go-spacemesh-python pytest -s hare/test_hare.py --tc-file=hare/config.yaml --tc-format=yaml
+		-it spacemeshos/go-spacemesh-python:$(BRANCH) pytest -s hare/test_hare.py --tc-file=hare/config.yaml --tc-format=yaml
 .PHONY: dockerrun-hare
 
 dockerrun-sync:
@@ -193,11 +197,11 @@ endif
 	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
 		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
 		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
-		-it go-spacemesh-python pytest -s sync/test_sync.py --tc-file=sync/config.yaml --tc-format=yaml
+		-it spacemeshos/go-spacemesh-python:$(BRANCH) pytest -s sync/test_sync.py --tc-file=sync/config.yaml --tc-format=yaml
 
 .PHONY: dockerrun-sync
 
-dockerrun-test: dockerbuild-test dockerrun-p2p dockerrun-mining dockerrun-hare dockerrun-sync
+dockerrun-test: dockerrun-p2p dockerrun-mining dockerrun-hare dockerrun-sync
 .PHONY: dockerrun-test
 
 dockerrun-all: dockerpush dockerrun-test
