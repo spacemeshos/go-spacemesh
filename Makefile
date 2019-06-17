@@ -155,7 +155,7 @@ endif
 
 dockerrun-p2p:
 ifndef ES_PASSWD
-        $(error ES_PASSWD is not set)
+	$(error ES_PASSWD is not set)
 endif
 	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
 		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
@@ -166,7 +166,7 @@ endif
 
 dockerrun-mining:
 ifndef ES_PASSWD
-        $(error ES_PASSWD is not set)
+	$(error ES_PASSWD is not set)
 endif
 	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
 		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
@@ -177,7 +177,7 @@ endif
 
 dockerrun-hare:
 ifndef ES_PASSWD
-        $(error ES_PASSWD is not set)
+	$(error ES_PASSWD is not set)
 endif
 	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
 		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
