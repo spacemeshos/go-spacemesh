@@ -124,6 +124,9 @@ def setup_bootstrap(request, init_session, setup_oracle, create_configmap):
     return _setup_bootstrap_in_namespace(testconfig['namespace'])
 
 
+def node_string(key, ip, port, discport):
+    return "spacemesh://{0}@{1}:{2}?disc={3}".format(key, ip, port, discport)
+
 @pytest.fixture(scope='module')
 def setup_clients(request, init_session, setup_oracle, setup_bootstrap):
 
@@ -138,7 +141,7 @@ def setup_clients(request, init_session, setup_oracle, setup_bootstrap):
                               cimage=testconfig['client']['image'],
                               centry=[testconfig['client']['command']])
 
-        cspec.append_args(bootnodes="{0}:{1}/{2}".format(bs_info['pod_ip'], BOOTSTRAP_PORT, bs_info['key']),
+        cspec.append_args(bootnodes=node_string(bs_info['key'], bs_info['pod_ip'], BOOTSTRAP_PORT, BOOTSTRAP_PORT),
                           oracle_server='http://{0}:{1}'.format(setup_oracle, ORACLE_SERVER_PORT),
                           poet_server='{0}:{1}'.format(bs_info['pod_ip'], POET_SERVER_PORT),  # poet runs with bootstrap
                           genesis_time=GENESIS_TIME.isoformat('T', 'seconds'),
@@ -220,7 +223,7 @@ def get_conf(bs_info, setup_oracle, args=None):
     cspec = ContainerSpec(cname='client',
                           cimage=testconfig['client']['image'],
                           centry=[testconfig['client']['command']])
-    cspec.append_args(bootnodes="{0}:{1}/{2}".format(bs_info['pod_ip'], BOOTSTRAP_PORT, bs_info['key']),
+    cspec.append_args(bootnodes=node_string(bs_info['key'], bs_info['pod_ip'], BOOTSTRAP_PORT, BOOTSTRAP_PORT),
                       oracle_server='http://{0}:{1}'.format(setup_oracle, ORACLE_SERVER_PORT),
                       poet_server='{0}:{1}'.format(bs_info['pod_ip'], POET_SERVER_PORT),
                       genesis_time=GENESIS_TIME.isoformat('T', 'seconds'),
