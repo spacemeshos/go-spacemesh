@@ -5,11 +5,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
+	"net"
+	"strconv"
 )
 
 // LocalNode implementation.
 type LocalNode struct {
-	Node
+	*NodeInfo
 	privKey p2pcrypto.PrivateKey
 
 	networkID int8
@@ -69,17 +71,32 @@ func NewNodeIdentity(config config.Config, address string, persist bool) (*Local
 
 func newLocalNodeWithKeys(pubKey p2pcrypto.PublicKey, privKey p2pcrypto.PrivateKey, address string, networkID int8, persist bool) (*LocalNode, error) {
 
+	host, port, err := net.SplitHostPort(address)
+
+	if err != nil {
+		log.Warning("Failed to parse inital IP address err=%v", err)
+		host = "0.0.0.0"
+		port = "0" // Get a random port
+	}
+
+	intport, err := strconv.Atoi(port)
+	if err != nil {
+		return nil, err
+	}
+
 	n := &LocalNode{
-		Node: Node{
-			pubKey:  pubKey,
-			address: address,
+		NodeInfo: &NodeInfo{
+			ID:            pubKey.Array(),
+			IP:            net.ParseIP(host),
+			ProtocolPort:  uint16(intport),
+			DiscoveryPort: uint16(intport),
 		},
 		networkID: networkID,
 		privKey:   privKey,
 	}
 
 	if !persist {
-		n.Log = log.New(n.pubKey.String(), "", "")
+		n.Log = log.New(n.ID.String(), "", "")
 		return n, nil
 	}
 
@@ -88,15 +105,15 @@ func newLocalNodeWithKeys(pubKey p2pcrypto.PublicKey, privKey p2pcrypto.PrivateK
 		return nil, err
 	}
 
-	nodeDir, err := filesystem.EnsureNodeDataDirectory(dataDir, n.pubKey.String())
+	nodeDir, err := filesystem.EnsureNodeDataDirectory(dataDir, n.ID.String())
 	if err != nil {
 		return nil, err
 	}
 
 	// persistent logging
-	n.Log = log.New(n.pubKey.String(), nodeDir, "node.log")
+	n.Log = log.New(n.ID.String(), nodeDir, "node.log")
 
-	n.Info("Local node identity >> %v", n.String())
+	n.Info("Local node identity >> %v", n.PublicKey().String())
 
 	// persist store data so we can start it on future app sessions
 	err = n.persistData()

@@ -80,6 +80,8 @@ func AddCommands(cmd *cobra.Command) {
 		config.P2P.SwarmConfig.BootstrapNodes, "Number of random connections")
 	cmd.PersistentFlags().DurationVar(&config.TIME.MaxAllowedDrift, "max-allowed-time-drift",
 		config.TIME.MaxAllowedDrift, "When to close the app until user resolves time sync problems")
+	cmd.PersistentFlags().StringVar(&config.P2P.SwarmConfig.PeersFile, "peers-file",
+		config.P2P.SwarmConfig.PeersFile, "addrbook peers file. located under data-dir/<publickey>/<peer-file> not loaded or saved if empty string is given.")
 	cmd.PersistentFlags().IntVar(&config.TIME.NtpQueries, "ntp-queries",
 		config.TIME.NtpQueries, "Number of ntp queries to do")
 	cmd.PersistentFlags().DurationVar(&config.TIME.DefaultTimeoutLatency, "default-timeout-latency",

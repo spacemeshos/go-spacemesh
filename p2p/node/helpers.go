@@ -11,16 +11,18 @@ import (
 	"time"
 )
 
+var localhost = net.IP{127, 0, 0, 1}
+
 // ErrFailedToCreate is returned when we fail to create a node
 var ErrFailedToCreate = errors.New("failed to create local test node")
 
 // GenerateTestNode generates a local test node without persisting data to local store and with default config value.
-func GenerateTestNode(t *testing.T) (*LocalNode, Node) {
+func GenerateTestNode(t *testing.T) (*LocalNode, *NodeInfo) {
 	return GenerateTestNodeWithConfig(t, config.DefaultConfig())
 }
 
 // GenerateTestNodeWithConfig creates a local test node without persisting data to local store.
-func GenerateTestNodeWithConfig(t *testing.T, config config.Config) (*LocalNode, Node) {
+func GenerateTestNodeWithConfig(t *testing.T, config config.Config) (*LocalNode, *NodeInfo) {
 
 	port, err := GetUnboundedPort()
 	if err != nil {
@@ -36,7 +38,7 @@ func GenerateTestNodeWithConfig(t *testing.T, config config.Config) (*LocalNode,
 		if err != nil {
 			t.Error(ErrFailedToCreate)
 		}
-		return localNode, Node{localNode.pubKey, address}
+		return localNode, localNode.NodeInfo
 	}
 
 	localNode, err = NewNodeIdentity(config, address, false)
@@ -44,22 +46,20 @@ func GenerateTestNodeWithConfig(t *testing.T, config config.Config) (*LocalNode,
 		t.Error(ErrFailedToCreate, err)
 	}
 
-	return localNode, Node{localNode.pubKey, address}
+	return localNode, localNode.NodeInfo
 }
 
 // GenerateRandomNodeData generates a remote random node data for testing.
-func GenerateRandomNodeData() Node {
+func GenerateRandomNodeData() *NodeInfo {
 	rand.Seed(time.Now().UnixNano())
-	port := rand.Int31n(48127) + 1024
-
-	address := fmt.Sprintf("127.0.0.1:%d", port)
+	port := uint16(rand.Int31n(48127) + 1024)
 	pub := p2pcrypto.NewRandomPubkey()
-	return Node{pub, address}
+	return NewNode(pub, localhost, port, port)
 }
 
 // GenerateRandomNodesData generates remote nodes data for testing.
-func GenerateRandomNodesData(n int) []Node {
-	res := make([]Node, n)
+func GenerateRandomNodesData(n int) []*NodeInfo {
+	res := make([]*NodeInfo, n)
 	for i := 0; i < n; i++ {
 		res[i] = GenerateRandomNodeData()
 	}

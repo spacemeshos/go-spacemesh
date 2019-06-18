@@ -30,6 +30,7 @@ max-pending-connections = 50
 target-outbound = 10
 max-inbound = 100
 buffer-size = 100
+peers-file = "peers.json" # located under data-dir/<publickey>/<peer-file> not loaded or save if empty string is given.
 
 # Node Swarm Config
 [p2p.swarm]
@@ -37,7 +38,7 @@ bootstrap = false
 bucketsize = 20 # Routing table bucket size
 alpha = 3 # Routing table alpha
 randcon = 2 # Number of random connections
-bootnodes = ["0.0.0.0:7517/j7qWfWaJRVp25ZsnCu9rJ4PmhigZBtesB4YmQHqqPvtR"]
+bootnodes = [] # example : spacemesh://j7qWfWaJRVp25ZsnCu9rJ4PmhigZBtesB4YmQHqqPvt@0.0.0.0:7517?disc=7517
 
 # API Config
 [api]

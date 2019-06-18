@@ -178,11 +178,11 @@ func newSwarm(ctx context.Context, config config.Config, newNode bool, persist b
 
 	s.gossip = gossip.NewProtocol(config.SwarmConfig, s, s.LocalNode().PublicKey(), s.lNode.Log)
 
-	s.lNode.Debug("Created swarm for local node %s, %s", l.Address(), l.Pretty())
+	s.lNode.Debug("Created swarm for local node %s, %s", l.String())
 	return s, nil
 }
 
-func (s *swarm) lookupFunc(target p2pcrypto.PublicKey) (node.Node, error) {
+func (s *swarm) lookupFunc(target p2pcrypto.PublicKey) (*node.NodeInfo, error) {
 	return s.discover.Lookup(target)
 }
 
@@ -215,7 +215,7 @@ func (s *swarm) Start() error {
 
 	err = s.network.Start()
 	if err != nil {
-		s.lNode.Error("Error creating swarm")
+		s.lNode.Error("Error starting network services err=", err)
 		return err
 	}
 
@@ -223,10 +223,10 @@ func (s *swarm) Start() error {
 		return err
 	}
 
-	tcpAddress := s.network.LocalAddr()
-	udpAddress := s.udpnetwork.LocalAddr()
+	tcpAddress := s.network.LocalAddr().(*inet.TCPAddr)
+	udpAddress := s.udpnetwork.LocalAddr().(*inet.UDPAddr)
 
-	s.discover.SetLocalAddresses(tcpAddress.String(), udpAddress.String()) // todo: pass net.Addr and convert in discovery
+	s.discover.SetLocalAddresses(tcpAddress.Port, udpAddress.Port) // todo: pass net.Addr and convert in discovery
 
 	err = s.udpServer.Start()
 	if err != nil {
@@ -685,7 +685,7 @@ func (s *swarm) getMorePeers(numpeers int) int {
 	}
 
 	type cnErr struct {
-		n   node.Node
+		n   *node.NodeInfo
 		err error
 	}
 
@@ -694,12 +694,12 @@ func (s *swarm) getMorePeers(numpeers int) int {
 	// Try a connection to each peer.
 	// TODO: try splitting the load and don't connect to more than X at a time
 	for i := 0; i < ndsLen; i++ {
-		go func(nd node.Node, reportChan chan cnErr) {
+		go func(nd *node.NodeInfo, reportChan chan cnErr) {
 			if nd.String() == s.lNode.String() {
 				reportChan <- cnErr{nd, errors.New("connection to self")}
 				return
 			}
-			_, err := s.cPool.GetConnection(nd.Address(), nd.PublicKey())
+			_, err := s.cPool.GetConnection(inet.JoinHostPort(nd.IP.String(), strconv.Itoa(int(nd.ProtocolPort))), nd.PublicKey())
 			reportChan <- cnErr{nd, err}
 		}(nds[i], res)
 	}
@@ -742,7 +742,7 @@ loop:
 
 			s.publishNewPeer(cne.n.PublicKey())
 			metrics.OutboundPeers.Add(1)
-			s.lNode.Debug("Neighborhood: Added peer to peer list %v", cne.n.Pretty())
+			s.lNode.Debug("Neighborhood: Added peer to peer list %v", cne.n.String())
 		case <-tm.C:
 			break loop
 		case <-s.shutdown:

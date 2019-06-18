@@ -25,7 +25,7 @@ func (its *IntegrationTestSuite) Test_SendingMessage() {
 	ch2 := node2.RegisterDirectProtocol(exProto)
 	conn, err := node1.cPool.GetConnection(node2.network.LocalAddr().String(), node2.lNode.PublicKey())
 	require.NoError(its.T(), err)
-	err = node1.SendMessage(node2.LocalNode().Node.PublicKey(), exProto, []byte(exMsg))
+	err = node1.SendMessage(node2.LocalNode().NodeInfo.PublicKey(), exProto, []byte(exMsg))
 	require.NoError(its.T(), err)
 
 	tm := time.After(1 * time.Second)
