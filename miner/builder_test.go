@@ -76,7 +76,7 @@ func TestBlockBuilder_StartStop(t *testing.T) {
 
 	atxprocesing := func(tx *types.ActivationTx) {}
 	orphans := MockOrphans{st: []types.BlockID{1, 2, 3}}
-	builder := NewBlockBuilder(types.NodeId{}, n, beginRound, MockCoin{}, orphans, hare, mockBlockOracle{}, atxprocesing, log.New(n.Node.String(), "", ""))
+	builder := NewBlockBuilder(types.NodeId{}, n, beginRound, MockCoin{}, orphans, hare, mockBlockOracle{}, atxprocesing, log.New(n.NodeInfo.ID.String(), "", ""))
 
 	err := builder.Start()
 	assert.NoError(t, err)
@@ -108,8 +108,8 @@ func TestBlockBuilder_BlockIdGeneration(t *testing.T) {
 
 	atxprocesing := func(tx *types.ActivationTx) {}
 
-	builder1 := NewBlockBuilder(types.NodeId{Key: "a"}, n1, beginRound, MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, atxprocesing, log.New(n1.Node.String(), "", ""))
-	builder2 := NewBlockBuilder(types.NodeId{Key: "b"}, n2, beginRound, MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, atxprocesing, log.New(n2.Node.String(), "", ""))
+	builder1 := NewBlockBuilder(types.NodeId{Key: "a"}, n1, beginRound, MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, atxprocesing, log.New(n1.NodeInfo.ID.String(), "", ""))
+	builder2 := NewBlockBuilder(types.NodeId{Key: "b"}, n2, beginRound, MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, atxprocesing, log.New(n2.NodeInfo.ID.String(), "", ""))
 
 	b1, _ := builder1.createBlock(1, types.AtxId{}, types.BlockEligibilityProof{}, nil, nil)
 
@@ -127,7 +127,7 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 	hareRes := []types.BlockID{types.BlockID(0), types.BlockID(1), types.BlockID(2), types.BlockID(3)}
 	hare := MockHare{res: hareRes}
 
-	builder := NewBlockBuilder(types.NodeId{"anton", []byte("anton")}, n, beginRound, MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, nil, log.New(n.Node.String(), "", ""))
+	builder := NewBlockBuilder(types.NodeId{"anton", []byte("anton")}, n, beginRound, MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, nil, log.New(n.NodeInfo.ID.String(), "", ""))
 
 	err := builder.Start()
 	assert.NoError(t, err)

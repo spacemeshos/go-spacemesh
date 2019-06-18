@@ -3,11 +3,10 @@ package discovery
 import (
 	"bytes"
 	"errors"
+	"github.com/spacemeshos/go-spacemesh/types"
 	"net"
 	"time"
 
-	"github.com/golang/protobuf/proto"
-	"github.com/spacemeshos/go-spacemesh/p2p/discovery/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
@@ -16,23 +15,22 @@ import (
 func (p *protocol) newPingRequestHandler() func(msg server.Message) []byte {
 	return func(msg server.Message) []byte {
 		p.logger.Info("handle ping request")
-		req := &pb.Ping{}
-		if err := proto.Unmarshal(msg.Bytes(), req); err != nil {
+		pinged := &node.NodeInfo{}
+		err := types.BytesToInterface(msg.Bytes(), pinged)
+		if err != nil {
 			p.logger.Error("failed to deserialize ping message err=", err)
+			panic("WTF")
 			return nil
 		}
 
-		if err := p.verifyPinger(msg.Metadata().FromAddress, req); err != nil {
+		if err := p.verifyPinger(msg.Metadata().FromAddress, pinged); err != nil {
 			p.logger.Error("msg contents were not valid err=", err)
 			return nil
 		}
 
 		//pong
-		payload, err := proto.Marshal(&pb.Ping{
-			Me:     &pb.NodeInfo{NodeId: p.local.PublicKey().Bytes(), TCPAddress: p.localTcpAddress, UDPAddress: p.localUdpAddress},
-			ToAddr: msg.Metadata().FromAddress.String()})
-		// TODO: include the resolve To address
-
+		payload, err := types.InterfaceToBytes(p.local)
+		// TODO: include the resolved To address
 		if err != nil {
 			p.logger.Error("Error marshaling response message (Ping)")
 			return nil
@@ -42,49 +40,21 @@ func (p *protocol) newPingRequestHandler() func(msg server.Message) []byte {
 	}
 }
 
-func extractAddress(from net.Addr, addrString string) (string, error) {
-	//extract port
-	_, port, err := net.SplitHostPort(addrString)
-	if err != nil {
-		return "", err
-	}
-
-	addr, _, err := net.SplitHostPort(from.String())
-	if err != nil {
-		addr = from.String()
-	}
-
-	ip := net.ParseIP(addr)
-	if ip == nil {
-		return "", errors.New("canno't parse incoming ip")
-	}
-
-	return net.JoinHostPort(addr, port), nil
-}
-
-func (p *protocol) verifyPinger(from net.Addr, pi *pb.Ping) error {
-	k, err := p2pcrypto.NewPubkeyFromBytes(pi.Me.NodeId)
-
-	if err != nil {
-		return err
-	}
-
-	tcp, err := extractAddress(from, pi.Me.TCPAddress)
-	if err != nil {
-		return err
-	}
-	udp, err := extractAddress(from, pi.Me.UDPAddress)
-	if err != nil {
-		return nil
-	}
-
+func (p *protocol) verifyPinger(from net.Addr, pi *node.NodeInfo) error {
 	// todo : Validate ToAddr or drop it.
 	// todo: check the address provided with an extra ping before updating. ( if we haven't checked it for a while )
 	// todo: decide on best way to know our ext address
 
-	dn := NodeInfoFromNode(node.New(k, tcp), udp)
+	if err := pi.Valid(); err != nil {
+		return err
+	}
+
+	//TODO: only accept local (unspecified/loopback) IPs from other local ips.
+	ipfrom, _, _ := net.SplitHostPort(from.String())
+	pi.IP = net.ParseIP(ipfrom)
+
 	// inbound ping is the actual source of this node info
-	p.table.AddAddress(dn, dn)
+	p.table.AddAddress(pi, pi)
 	return nil
 }
 
@@ -92,8 +62,7 @@ func (p *protocol) verifyPinger(from net.Addr, pi *pb.Ping) error {
 func (p *protocol) Ping(peer p2pcrypto.PublicKey) error {
 	p.logger.Debug("send ping request Peer: %v", peer)
 
-	data := &pb.Ping{Me: &pb.NodeInfo{NodeId: p.local.PublicKey().Bytes(), TCPAddress: p.localTcpAddress, UDPAddress: p.localUdpAddress}, ToAddr: ""}
-	payload, err := proto.Marshal(data)
+	data, err := types.InterfaceToBytes(p.local)
 	if err != nil {
 		return err
 	}
@@ -101,19 +70,21 @@ func (p *protocol) Ping(peer p2pcrypto.PublicKey) error {
 	foo := func(msg []byte) {
 		defer close(ch)
 		p.logger.Debug("handle ping response from %v", peer.String())
-		data := &pb.Ping{}
-		if err := proto.Unmarshal(msg, data); err != nil {
-			p.logger.Error("could not unmarshal block data")
+		sender := &node.NodeInfo{}
+		err := types.BytesToInterface(msg, sender)
+
+		if err != nil {
+			p.logger.Warning("got unreadable pong. err=%v", err)
 			return
 		}
 
 		// todo: if we pinged it we already have id so no need to update
 		// todo : but what if id or listen address has changed ?
 
-		ch <- data.Me.NodeId
+		ch <- sender.ID.Bytes()
 	}
 
-	err = p.msgServer.SendRequest(PINGPONG, payload, peer, foo)
+	err = p.msgServer.SendRequest(PINGPONG, data, peer, foo)
 
 	if err != nil {
 		return err

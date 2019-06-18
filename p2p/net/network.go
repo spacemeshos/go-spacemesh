@@ -69,7 +69,7 @@ type Net struct {
 // NewConnectionEvent is a struct holding a new created connection and a node info.
 type NewConnectionEvent struct {
 	Conn Connection
-	Node node.Node
+	Node *node.NodeInfo
 }
 
 // NewNet creates a new network.
@@ -79,10 +79,7 @@ func NewNet(conf config.Config, localEntity *node.LocalNode) (*Net, error) {
 	qcount := DefaultQueueCount      // todo : get from cfg
 	qsize := DefaultMessageQueueSize // todo : get from cfg
 
-	tcpAddress, err := net.ResolveTCPAddr("tcp", localEntity.Address())
-	if err != nil {
-		return nil, fmt.Errorf("can't resolve local address: %v, err:%v", localEntity.Address(), err)
-	}
+	tcpAddress := &net.TCPAddr{localEntity.IP, int(localEntity.ProtocolPort), ""}
 
 	n := &Net{
 		networkID:             conf.NetworkID,
@@ -263,7 +260,7 @@ func (n *Net) listen(lis func() (listener net.Listener, err error)) error {
 	if err != nil {
 		return err
 	}
-	n.logger.Info("Started listening on address tcp:%v", listener.Addr().String())
+	n.logger.Info("Started TCP server listening for connections on tcp:%v", listener.Addr().String())
 	go n.accept(listener)
 	return nil
 }
@@ -312,7 +309,7 @@ func (n *Net) SubscribeOnNewRemoteConnections(f func(event NewConnectionEvent)) 
 	n.regMutex.Unlock()
 }
 
-func (n *Net) publishNewRemoteConnectionEvent(conn Connection, node node.Node) {
+func (n *Net) publishNewRemoteConnectionEvent(conn Connection, node *node.NodeInfo) {
 	n.regMutex.RLock()
 	for _, f := range n.regNewRemoteConn {
 		f(NewConnectionEvent{conn, node})
@@ -346,12 +343,13 @@ func (n *Net) HandlePreSessionIncomingMessage(c Connection, message []byte) erro
 	if err != nil {
 		return err
 	}
+	// TODO: pass TO - IP:port and FROM - IP:port in handshake message.
 	remoteListeningPort := uint16(handshakeData.Port)
 	remoteListeningAddress, err := replacePort(c.RemoteAddr().String(), remoteListeningPort)
 	if err != nil {
 		return err
 	}
-	anode := node.New(c.RemotePublicKey(), remoteListeningAddress)
+	anode := node.NewNode(c.RemotePublicKey(), net.ParseIP(remoteListeningAddress), remoteListeningPort, remoteListeningPort)
 
 	n.publishNewRemoteConnectionEvent(c, anode)
 	return nil

@@ -30,6 +30,7 @@ max-pending-connections = 50
 target-outbound = 10
 max-inbound = 100
 buffer-size = 100
+peers-file = "peers.json" # located under data-dir/<publickey>/<peer-file> not loaded or save if empty string is given.
 
 # Node Swarm Config
 [p2p.swarm]

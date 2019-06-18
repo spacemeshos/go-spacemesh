@@ -1,6 +1,7 @@
 package discovery
 
 import (
+	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"math"
 	"time"
 )
@@ -8,8 +9,8 @@ import (
 // KnownAddress tracks information about a known network address that is used
 // to determine how viable an address is.
 type KnownAddress struct {
-	na          NodeInfo
-	srcAddr     NodeInfo
+	na          *node.NodeInfo
+	srcAddr     *node.NodeInfo
 	attempts    int
 	lastSeen    time.Time
 	lastattempt time.Time
@@ -18,7 +19,7 @@ type KnownAddress struct {
 	refs        int // reference count of new buckets
 }
 
-func (ka *KnownAddress) DiscNode() NodeInfo {
+func (ka *KnownAddress) DiscNode() *node.NodeInfo {
 	return ka.na
 }
 

@@ -131,7 +131,7 @@ def setup_bootstrap(request, init_session, setup_oracle, setup_poet, create_conf
 
 
 @pytest.fixture(scope='module')
-def setup_clients(request, setup_oracle, setup_poet, setup_bootstrap):
+def setup_clients(request, init_session, setup_oracle, setup_poet, setup_bootstrap):
 
     client_info = DeploymentInfo(dep_id=setup_bootstrap.deployment_id)
 

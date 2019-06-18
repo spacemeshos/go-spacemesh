@@ -88,7 +88,8 @@ def query_message(indx, namespace, client_po_name, fields, findFails=False, star
     if len(hits) > 0:
         ts = [hit["T"] for hit in hits]
 
-        first = startTime if startTime is not None else datetime.strptime(min(ts).replace("T", " ", ).replace("Z", ""), "%Y-%m-%d %H:%M:%S.%f")
+        first = startTime if startTime is not None else datetime.strptime(min(ts).replace("T", " ", ).replace("Z", ""),
+                                                                          "%Y-%m-%d %H:%M:%S.%f")
         last = datetime.strptime(max(ts).replace("T", " ", ).replace("Z", ""), "%Y-%m-%d %H:%M:%S.%f")
 
         delta = last - first
@@ -114,15 +115,15 @@ def query_message(indx, namespace, client_po_name, fields, findFails=False, star
             print(unsecpods)
         print("====================================================================")
 
-    s = list([(h.N, h.M) for h in hits])
+    s = list(hits)
     return s
 
 
 def parseAtx(log_messages):
     node2blocks = {}
     for x in log_messages:
-        nid = re.split(r'\.', x[0])[0]
-        m = re.findall(r'(?<=\b:\s)(\w+)|(?<=view\s)(\w+)', x[1])
+        nid = re.split(r'\.', x.N)[0]
+        m = re.findall(r'(?<=\b:\s)(\w+)|(?<=view\s)(\w+)', x.M)
         if nid in node2blocks:
             node2blocks[nid].append(m)
         else:
@@ -133,8 +134,8 @@ def parseAtx(log_messages):
 def sort_by_nodeid(log_messages):
     node2blocks = {}
     for x in log_messages:
-        id = re.split(r'\.', x[0])[0]
-        m = re.findall(r'\d+', x[1])
+        id = re.split(r'\.', x.N)[0]
+        m = re.findall(r'\d+', x.M)
         layer = m[0]
         # blocks - list of all blocks, layers - map of blocks per layer
         if id in node2blocks:
@@ -151,7 +152,7 @@ def sort_by_nodeid(log_messages):
 def sort_by_layer(log_messages):
     blocks_per_layer = {}
     for x in log_messages:
-        m = re.findall(r'\d+', x[1])
+        m = re.findall(r'\d+', x.M)
         layer = m[0]
         if layer in blocks_per_layer:
             blocks_per_layer[layer].append(m)
@@ -186,7 +187,7 @@ def get_blocks_per_node_and_layer(deployment):
 def get_layers(deployment):
     block_fields = {"M": "release tick"}
     layers = query_message(current_index, deployment, deployment, block_fields, True)
-    ids = [int(re.findall(r'\d+', x[1])[0]) for x in layers]
+    ids = [int(re.findall(r'\d+', x.M)[0]) for x in layers]
     return ids
 
 
@@ -245,7 +246,8 @@ def find_dups(indx, namespace, client_po_name, fields, max=1):
     counting = {}
 
     for hit in hits:
-        counting[hit.kubernetes.pod_name] = 1 if hit.kubernetes.pod_name not in counting else counting[hit.kubernetes.pod_name] + 1
+        counting[hit.kubernetes.pod_name] = 1 if hit.kubernetes.pod_name not in counting else counting[
+                                                                                                  hit.kubernetes.pod_name] + 1
         if counting[hit.kubernetes.pod_name] > max and hit.kubernetes.pod_name not in counting:
             dups.append(hit.kubernetes.pod_name)
 
@@ -255,7 +257,6 @@ def find_dups(indx, namespace, client_po_name, fields, max=1):
 
 
 def find_missing(indx, namespace, client_po_name, fields, min=1):
-
     # Usage : find_dups(current_index, "t7t9e", "client-t7t9e-28qj7",
     # {'M':'new_gossip_message', 'protocol': 'api_test_gossip'}, 10)
 
@@ -271,7 +272,8 @@ def find_missing(indx, namespace, client_po_name, fields, min=1):
     counting = {}
 
     for hit in hits:
-        counting[hit.kubernetes.pod_name] = 1 if hit.kubernetes.pod_name not in counting else counting[hit.kubernetes.pod_name] + 1
+        counting[hit.kubernetes.pod_name] = 1 if hit.kubernetes.pod_name not in counting else counting[
+                                                                                                  hit.kubernetes.pod_name] + 1
 
     for pod in counting:
         if counting[pod] < min:
@@ -280,3 +282,29 @@ def find_missing(indx, namespace, client_po_name, fields, min=1):
     print("Total hits: {0}".format(len(hits)))
     print("Missing count {0}".format(len(miss)))
     print(miss)
+
+
+def query_hare_output_set(indx, ns):
+    hits = query_message(indx, ns, ns, {'M': 'Consensus process terminated'}, True)
+    lst = [h.set_values for h in hits]
+    
+    return lst
+
+
+def query_round_1(indx, ns):
+    return query_message(indx, ns, ns, {'M': 'Round 1 ended', 'is_svp_ready': 'true'}, True)
+
+
+def query_round_2(indx, ns):
+    hits = query_message(indx, ns, ns, {'M': 'Round 2 ended'}, True)
+    filtered = list(filter(lambda x: x.proposed_set != "nil", hits))
+
+    return filtered
+
+
+def query_round_3(indx, ns):
+    return query_message(indx, ns, ns, {'M': 'Round 3 ended: committing'}, True)
+
+
+def query_pre_round(indx, ns):
+    return query_message(indx, ns, ns, {'M': 'Fatal: PreRound ended with empty set'}, True)
