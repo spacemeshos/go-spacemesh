@@ -2,12 +2,12 @@ import time
 from pytest_testconfig import config as testconfig
 from kubernetes import client
 
-from tests import deployment
+from tests.deployment import create_deployment, delete_deployment
 from tests.fixtures import set_namespace, load_config, init_session, set_docker_images, session_id, DeploymentInfo, init_session
 from tests.test_bs import setup_clients, save_log_on_exit, setup_oracle, setup_bootstrap, create_configmap
-from tests.test_bs import current_index, wait_genesis, query_message, GENESIS_TIME, BOOT_DEPLOYMENT_FILE, CLIENT_DEPLOYMENT_FILE
+from tests.test_bs import current_index, wait_genesis, GENESIS_TIME, BOOT_DEPLOYMENT_FILE, CLIENT_DEPLOYMENT_FILE
 from tests.misc import ContainerSpec
-from tests.queries import get_elastic_search_api
+from tests.queries import ES, query_message
 from elasticsearch_dsl import Search, Q
 
 # ==============================================================================
@@ -16,11 +16,11 @@ from elasticsearch_dsl import Search, Q
 
 
 def new_client_in_namespace(name_space, setup_bootstrap, cspec, num):
-    resp = deployment.create_deployment(CLIENT_DEPLOYMENT_FILE, name_space,
-                                        deployment_id=setup_bootstrap.deployment_id,
-                                        replica_size=num,
-                                        container_specs=cspec,
-                                        time_out=testconfig['deployment_ready_time_out'])
+    resp = create_deployment(CLIENT_DEPLOYMENT_FILE, name_space,
+                             deployment_id=setup_bootstrap.deployment_id,
+                             replica_size=num,
+                             container_specs=cspec,
+                             time_out=testconfig['deployment_ready_time_out'])
     client_info = DeploymentInfo(dep_id=setup_bootstrap.deployment_id)
     client_info.deployment_name = resp.metadata._name
     namespaced_pods = client.CoreV1Api().list_namespaced_pod(namespace=name_space, include_uninitialized=True).items
@@ -39,7 +39,7 @@ def new_client_in_namespace(name_space, setup_bootstrap, cspec, num):
 
 
 def search_pod_logs(namespace, pod_name, term):
-    api = get_elastic_search_api()
+    api = ES().get_search_api()
     fltr = Q("match_phrase", kubernetes__pod_name=pod_name) & Q("match_phrase", kubernetes__namespace_name=namespace)
     s = Search(index=current_index, using=api).query('bool').filter(fltr).sort("time")
     res = s.execute()
@@ -52,7 +52,6 @@ def search_pod_logs(namespace, pod_name, term):
             if term in i.log:
                 return True
     return False
-
 
 
 def get_conf(bs_info):
@@ -96,6 +95,6 @@ def test_sync_gradually_add_nodes(set_namespace, setup_bootstrap, save_log_on_ex
     assert res3
     assert res4
 
-    deployment.delete_deployment(inf.deployment_name, testconfig['namespace'])
+    delete_deployment(inf.deployment_name, testconfig['namespace'])
 
     print("done!!")

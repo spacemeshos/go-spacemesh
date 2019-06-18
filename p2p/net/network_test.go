@@ -1,6 +1,7 @@
 package net
 
 import (
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/stretchr/testify/assert"
@@ -121,7 +122,7 @@ func TestHandlePreSessionIncomingMessage2(t *testing.T) {
 	bobNode, _ := node.GenerateTestNode(t)
 
 	bobsAliceConn := NewConnectionMock(aliceNode.PublicKey())
-	bobsAliceConn.addr = aliceNode.Address()
+	bobsAliceConn.addr = fmt.Sprintf("%v:%v", aliceNode.IP.String(), aliceNode.ProtocolPort)
 	bobsNet, err := NewNet(config.DefaultConfig(), bobNode)
 	r.NoError(err)
 	bobsNet.SubscribeOnNewRemoteConnections(func(event NewConnectionEvent) {

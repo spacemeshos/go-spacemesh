@@ -95,7 +95,6 @@ type SpacemeshApp struct {
 	hare             *hare.Hare
 	atxBuilder       *activation.Builder
 	poetListener     *activation.PoetListener
-	unregisterOracle func()
 	edSgn            *signing.EdSigner
 	log              log.Log
 }
@@ -421,12 +420,6 @@ func (app SpacemeshApp) stopServices() {
 
 	app.log.Info("closing sync")
 	app.syncer.Close()
-
-	app.log.Info("unregister from oracle")
-	if app.unregisterOracle != nil {
-		app.unregisterOracle()
-	}
-
 }
 
 func getEdIdentity() (*signing.EdSigner, error) {
@@ -522,12 +515,6 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 		log.Error("poet server not found on addr %v, err: %v", app.Config.PoETServer, err)
 		return
 	}
-
-	oracle.SetServerAddress(app.Config.OracleServer)
-	oracleClient := oracle.NewOracleClientWithWorldID(uint64(app.Config.OracleServerWorldId))
-	oracleClient.Register(true, app.edSgn.PublicKey().String()) // todo: configure no faulty nodes
-
-	app.unregisterOracle = func() { oracleClient.Unregister(true, app.edSgn.PublicKey().String()) }
 
 	rng := amcl.NewRAND()
 	pub := app.edSgn.PublicKey().Bytes()

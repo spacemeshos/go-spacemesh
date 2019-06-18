@@ -8,9 +8,10 @@ from datetime import datetime, timedelta
 from pytest_testconfig import config as testconfig
 from elasticsearch_dsl import Search, Q
 
+from tests.queries import ES, query_message
 from tests.fixtures import init_session, load_config, set_namespace, session_id, set_docker_images
-from tests.test_bs import get_elastic_search_api, setup_bootstrap, setup_oracle, create_configmap, setup_clients
-from tests.test_bs import query_message, save_log_on_exit, add_client, api_call, add_curl
+from tests.test_bs import setup_bootstrap, setup_oracle, create_configmap, setup_clients
+from tests.test_bs import save_log_on_exit, add_client, api_call, add_curl
 from tests.test_bs import add_single_client, add_multi_clients, get_conf
 
 # ==============================================================================
@@ -23,7 +24,7 @@ current_index = 'kubernetes_cluster-' + todaydate
 
 
 def query_bootstrap_es(indx, namespace, bootstrap_po_name):
-    es = get_elastic_search_api()
+    es = ES().get_search_api()
     fltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
            Q("match_phrase", kubernetes__pod_name=bootstrap_po_name) & \
            Q("match_phrase", M="Local node identity")
@@ -50,7 +51,7 @@ def test_client(setup_clients, add_curl, save_log_on_exit):
     print("Sleeping " + str(timetowait) + " before checking out bootstrap results")
     time.sleep(timetowait)
     peers = query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, fields, False)
-    assert len(set(peers)) == len(setup_clients.pods)
+    assert len(peers) == len(setup_clients.pods)
 
 
 def test_add_client(add_client):
@@ -122,7 +123,7 @@ def test_many_gossip_messages(setup_clients, add_curl):
 
         # Need to sleep for a while in order to enable the propagation of the gossip message - 0.5 sec for each node
         # TODO: check frequently before timeout so we might be able to finish earlier.
-        gossip_propagation_sleep = 4  # currently we expect short propagation times.
+        gossip_propagation_sleep = 8 # currently we expect short propagation times.
         print('sleep for {0} sec to enable gossip propagation'.format(gossip_propagation_sleep))
         time.sleep(gossip_propagation_sleep)
 
