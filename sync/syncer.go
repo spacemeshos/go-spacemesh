@@ -72,6 +72,11 @@ func (s *Syncer) IsSynced() bool {
 	return s.VerifiedLayer() == s.maxSyncLayer()
 }
 
+func (s *Syncer) IsLatest() bool {
+	s.Log.Info("latest: %v, maxSynced %v", s.LatestLayer(), s.maxSyncLayer())
+	return s.LatestLayer()+1 >= s.maxSyncLayer()
+}
+
 func (s *Syncer) Start() {
 	if atomic.CompareAndSwapUint32(&s.startLock, 0, 1) {
 		go s.run()
@@ -106,7 +111,7 @@ func (s *Syncer) run() {
 }
 
 //fires a sync every sm.syncInterval or on force space from outside
-func NewSync(srv service.Service, layers *mesh.Mesh, bv BlockValidator, tv TxValidator, conf Configuration, clock timesync.LayerTimer, logger log.Log) *Syncer {
+func NewSync(srv service.Service, layers *mesh.Mesh, bv BlockValidator, tv TxValidator, conf Configuration, clock timesync.LayerTimer, currentLayer types.LayerID, logger log.Log) *Syncer {
 	s := Syncer{
 		BlockValidator: bv,
 		TxValidator:    tv,
@@ -117,6 +122,7 @@ func NewSync(srv service.Service, layers *mesh.Mesh, bv BlockValidator, tv TxVal
 		MessageServer:  server.NewMsgServer(srv.(server.Service), syncProtocol, conf.RequestTimeout, make(chan service.DirectMessage, config.ConfigValues.BufferSize), logger.WithName("srv")),
 		SyncLock:       0,
 		startLock:      0,
+		currentLayer:   currentLayer,
 		forceSync:      make(chan bool),
 		clock:          clock,
 		exit:           make(chan struct{}),

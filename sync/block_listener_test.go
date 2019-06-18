@@ -38,7 +38,7 @@ func ListenerFactory(serv service.Service, peers p2p.Peers, name string) *BlockL
 	ts := timesync.NewTicker(MockTimer{}, tick, start)
 	tk := ts.Subscribe()
 	l := log.New(name, "", "")
-	sync := NewSync(serv, getMesh(memoryDB, name+"_"+time.Now().String()), BlockValidatorMock{}, TxValidatorMock{}, conf, tk, l)
+	sync := NewSync(serv, getMesh(memoryDB, name+"_"+time.Now().String()), BlockValidatorMock{}, TxValidatorMock{}, conf, tk, 0, l)
 	sync.Peers = peers
 	nbl := NewBlockListener(serv, BlockValidatorMock{}, sync, 2, log.New(name, "", ""))
 	return nbl

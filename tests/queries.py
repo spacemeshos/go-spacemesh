@@ -178,6 +178,8 @@ def get_layers(deployment):
 def get_latest_layer(deployment):
     layers = get_layers(deployment)
     layers.sort(reverse=True)
+    if len(layers) == 0:
+        return 0
     return layers[0]
 
 

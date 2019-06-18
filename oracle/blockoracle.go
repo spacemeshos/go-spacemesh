@@ -30,14 +30,11 @@ type MinerBlockOracle struct {
 	proofsEpoch       types.EpochId
 	eligibilityProofs map[types.LayerID][]types.BlockEligibilityProof
 	atxID             types.AtxId
+	isSynced          func() bool
 	log               log.Log
 }
 
-func NewMinerBlockOracle(committeeSize uint32,
-	layersPerEpoch uint16,
-	activationDb ActivationDb,
-	beaconProvider *EpochBeaconProvider,
-	vrfSigner Signer, nodeId types.NodeId, log log.Log) *MinerBlockOracle {
+func NewMinerBlockOracle(committeeSize uint32, layersPerEpoch uint16, activationDb ActivationDb, beaconProvider *EpochBeaconProvider, vrfSigner Signer, nodeId types.NodeId, isSynced func() bool, log log.Log) *MinerBlockOracle {
 
 	return &MinerBlockOracle{
 		committeeSize:  committeeSize,
@@ -47,12 +44,15 @@ func NewMinerBlockOracle(committeeSize uint32,
 		vrfSigner:      vrfSigner,
 		nodeID:         nodeId,
 		proofsEpoch:    ^types.EpochId(0),
+		isSynced:       isSynced,
 		log:            log,
 	}
 }
 
 func (bo *MinerBlockOracle) BlockEligible(layerID types.LayerID) (types.AtxId, []types.BlockEligibilityProof, error) {
-
+	if !bo.isSynced() {
+		return types.AtxId{}, nil, fmt.Errorf("cannot calc eligibility, not synced yet")
+	}
 	epochNumber := layerID.GetEpoch(bo.layersPerEpoch)
 	bo.log.Info("asked for eligibility for epoch %d (cached: %d)", epochNumber, bo.proofsEpoch)
 	if bo.proofsEpoch != epochNumber {

@@ -14,7 +14,7 @@ type LayerTimer chan types.LayerID
 type Ticker struct {
 	subscribes   []LayerTimer
 	currentLayer types.LayerID
-	m            sync.Mutex
+	m            sync.RWMutex
 	tickInterval time.Duration
 	startEpoch   time.Time
 	time         Clock
@@ -33,7 +33,7 @@ func (RealClock) Now() time.Time {
 }
 
 func NewTicker(time Clock, tickInterval time.Duration, startEpoch time.Time) *Ticker {
-	return &Ticker{
+	t := &Ticker{
 		subscribes:   make([]LayerTimer, 0, 0),
 		currentLayer: 1, //todo we dont need a tick for layer 0
 		tickInterval: tickInterval,
@@ -42,6 +42,12 @@ func NewTicker(time Clock, tickInterval time.Duration, startEpoch time.Time) *Ti
 		stop:         make(chan struct{}),
 		ids:          make(map[LayerTimer]int),
 	}
+
+	if !time.Now().Before(startEpoch) {
+		t.updateLayerID()
+	}
+
+	return t
 }
 
 func (t *Ticker) Start() {
@@ -72,6 +78,12 @@ func (t *Ticker) notifyOnTick() {
 	}
 	log.Debug("Ive notified all")
 	t.currentLayer++
+}
+
+func (t *Ticker) GetCurrentLayer() types.LayerID{
+	t.m.RLock()
+	defer t.m.RUnlock()
+	return t.currentLayer
 }
 
 func (t *Ticker) Subscribe() LayerTimer {
