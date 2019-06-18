@@ -38,7 +38,7 @@ bootstrap = false
 bucketsize = 20 # Routing table bucket size
 alpha = 3 # Routing table alpha
 randcon = 2 # Number of random connections
-bootnodes = ["0.0.0.0:7517/j7qWfWaJRVp25ZsnCu9rJ4PmhigZBtesB4YmQHqqPvtR"]
+bootnodes = [] # example : spacemesh://j7qWfWaJRVp25ZsnCu9rJ4PmhigZBtesB4YmQHqqPvt@0.0.0.0:7517?disc=7517
 
 # API Config
 [api]
