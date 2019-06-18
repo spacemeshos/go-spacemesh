@@ -4,10 +4,13 @@ import (
 	"errors"
 	"fmt"
 	"github.com/google/uuid"
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -219,7 +222,7 @@ func TestSyncProtocol_BlockRequest(t *testing.T) {
 	block := types.NewExistingBlock(types.BlockID(uuid.New().ID()), lid, []byte("data data data"))
 
 	syncObj.AddBlockWithTxs(block, []*types.SerializableTransaction{tx1}, []*types.ActivationTx{atx1})
-	syncObj2.Peers = getPeersMock([]p2p.Peer{nodes[0].Node.PublicKey()})
+	syncObj2.Peers = getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
 
 	output := syncObj2.fetchWithFactory(BlockReqFactory([]types.BlockID{block.ID()}), 1)
 	timeout := time.NewTimer(2 * time.Second)
@@ -283,7 +286,7 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 
 	timeout := time.NewTimer(2 * time.Second)
 
-	wrk, output := NewPeersWorker(syncObj, []p2p.Peer{nodes[1].Node.PublicKey()}, &sync.Once{}, LayerIdsReqFactory(lid))
+	wrk, output := NewPeersWorker(syncObj, []p2p.Peer{nodes[1].PublicKey()}, &sync.Once{}, LayerIdsReqFactory(lid))
 	go wrk.Work()
 
 	select {
