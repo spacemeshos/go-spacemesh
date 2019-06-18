@@ -24,7 +24,7 @@ bootstrap:
 client:
   image: 'spacemeshos/go-spacemesh:develop'
   command: '/bin/go-p2p'
-  replicas: 50
+  replicas: 40
   args:
     randcon: '8'
     hare-committee-size: '20'

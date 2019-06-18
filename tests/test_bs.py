@@ -219,7 +219,7 @@ def add_multi_clients(deployment_id, container_specs, size=2):
     return pods
 
 
-def get_conf(bs_info, setup_poet, setup_oracle, args=None):
+def get_conf(bs_info, setup_poet=None, setup_oracle= None, args=None):
     client_args = {} if 'args' not in testconfig['client'] else testconfig['client']['args']
 
     if args is not None:
@@ -230,10 +230,16 @@ def get_conf(bs_info, setup_poet, setup_oracle, args=None):
                           cimage=testconfig['client']['image'],
                           centry=[testconfig['client']['command']])
     cspec.append_args(bootnodes=node_string(bs_info['key'], bs_info['pod_ip'], BOOTSTRAP_PORT, BOOTSTRAP_PORT),
-                      oracle_server='http://{0}:{1}'.format(setup_oracle, ORACLE_SERVER_PORT),
-                      poet_server='{0}:{1}'.format(setup_poet, POET_SERVER_PORT),
-                      genesis_time=GENESIS_TIME.isoformat('T', 'seconds'),
-                      **client_args)
+                      genesis_time=GENESIS_TIME.isoformat('T', 'seconds'))
+
+    if setup_oracle is not None:
+        cspec.append_args(oracle_server='http://{0}:{1}'.format(setup_oracle, ORACLE_SERVER_PORT))
+    if setup_poet is not None:
+        cspec.append_args(poet_server='{0}:{1}'.format(setup_poet, POET_SERVER_PORT))
+
+    if len(client_args) > 0:
+        cspec.append_args(**client_args)
+
     return cspec
 
 # The following fixture should not be used if you wish to add many clients during test.
