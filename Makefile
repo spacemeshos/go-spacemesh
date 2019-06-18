@@ -8,10 +8,15 @@ BIN_DIR = $(CURR_DIR)/build
 BIN_DIR_WIN = $(CUR_DIR_WIN)/build
 export GO111MODULE = on
 
-ifdef TRAVIS_BRANCH
-	BRANCH := $(TRAVIS_BRANCH)
-else
-	BRANCH := $(shell git rev-parse --abbrev-ref HEAD)
+#ifdef TRAVIS_BRANCH
+#	BRANCH := $(TRAVIS_BRANCH)
+#else
+#	BRANCH := $(shell git rev-parse --abbrev-ref HEAD)
+#endif
+BRANCH := $(shell bash -c 'if [ "$$TRAVIS_PULL_REQUEST" == "false" ]; then echo $$TRAVIS_BRANCH; else echo $$TRAVIS_PULL_REQUEST_BRANCH; fi')
+
+ifeq ($(BRANCH),)
+BRANCH := $(shell git rev-parse --abbrev-ref HEAD)
 endif
 
 # Setup the -ldflags option to pass vars defined here to app vars
@@ -138,7 +143,7 @@ dockerbuild-test:
 	             -t go-spacemesh-python:$(BRANCH) .
 .PHONY: dockerbuild-test
 
-dockerpush: dockerbuild-go dockerbuild-test
+dockerpush: dockerbuild-go
 	echo "$(DOCKER_PASSWORD)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
 	docker tag $(DOCKER_IMAGE_REPO):$(BRANCH) spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)
 	docker push spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)
