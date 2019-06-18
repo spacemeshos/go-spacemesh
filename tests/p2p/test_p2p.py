@@ -47,7 +47,7 @@ def test_bootstrap(setup_bootstrap):
 
 def test_client(setup_clients, add_curl, save_log_on_exit):
     fields = {'M':'discovery_bootstrap'}
-    timetowait = len(setup_clients.pods)/2
+    timetowait = len(setup_clients.pods)
     print("Sleeping " + str(timetowait) + " before checking out bootstrap results")
     time.sleep(timetowait)
     peers = query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, fields, False)
@@ -69,7 +69,7 @@ def test_add_many_clients(setup_oracle, setup_poet, setup_bootstrap, setup_clien
     cspec = get_conf(bs_info, setup_poet, setup_oracle)
 
     pods = add_multi_clients(setup_bootstrap.deployment_id, cspec, size=4)
-    time.sleep(20)  # wait for the new clients to finish bootstrap
+    time.sleep(40)  # wait for the new clients to finish bootstrap and for logs to get to elasticsearch
     fields = {'M': 'discovery_bootstrap'}
     for p in pods:
         hits = query_message(current_index, testconfig['namespace'], p, fields, True)
@@ -123,7 +123,7 @@ def test_many_gossip_messages(setup_clients, add_curl):
 
         # Need to sleep for a while in order to enable the propagation of the gossip message - 0.5 sec for each node
         # TODO: check frequently before timeout so we might be able to finish earlier.
-        gossip_propagation_sleep = 8 # currently we expect short propagation times.
+        gossip_propagation_sleep = 10 # currently we expect short propagation times.
         print('sleep for {0} sec to enable gossip propagation'.format(gossip_propagation_sleep))
         time.sleep(gossip_propagation_sleep)
 
@@ -152,7 +152,7 @@ def test_many_gossip_sim(setup_clients, add_curl):
         out = api_call(client_ip, data, api, testconfig['namespace'])
         assert "{'value': 'ok'}" in out
 
-    gossip_propagation_sleep = TEST_MESSAGES # currently we expect short propagation times.
+    gossip_propagation_sleep = TEST_MESSAGES + 20 # currently we expect short propagation times.
     print('sleep for {0} sec to enable gossip propagation'.format(gossip_propagation_sleep))
     time.sleep(gossip_propagation_sleep)
 
