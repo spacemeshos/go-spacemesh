@@ -103,7 +103,7 @@ var incompleteNodeURL = regexp.MustCompile(fmt.Sprintf("(?i)^(?:%v://)?([0-9a-f]
 //
 // For incomplete nodes, the designator must look like one of these
 //
-//    spacemesh://<hex node id>
+//    spacemesh://<base58 node id>
 //    <hex node id>
 //
 // For complete nodes, the node ID is encoded in the username portion
@@ -111,13 +111,13 @@ var incompleteNodeURL = regexp.MustCompile(fmt.Sprintf("(?i)^(?:%v://)?([0-9a-f]
 // only be given as an IP address, DNS domain names are not allowed.
 // The port in the host name section is the TCP listening port. If the
 // TCP and UDP (discovery) ports differ, the UDP port is specified as
-// query parameter "discport".
+// query parameter "disc".
 //
 // In the following example, the node URL describes
 // a node with IP address 10.3.58.6, TCP listening port 7513
 // and UDP discovery port 7513.
 //
-//    spacemesh://<hex node id>@10.3.58.6:7513?disc=7513
+//    spacemesh://<base58 node id>@10.3.58.6:7513?disc=7513
 func ParseNode(rawurl string) (*NodeInfo, error) {
 	if m := incompleteNodeURL.FindStringSubmatch(rawurl); m != nil {
 		id, err := p2pcrypto.NewPrivateKeyFromBase58(m[1])
