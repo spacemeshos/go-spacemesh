@@ -39,7 +39,7 @@ def query_bootstrap_es(indx, namespace, bootstrap_po_name):
 
 def test_bootstrap(setup_bootstrap):
     # wait for the bootstrap logs to be available in ElasticSearch
-    time.sleep(5)
+    time.sleep(10)
     assert setup_bootstrap.pods[0]['key'] == query_bootstrap_es(current_index,
                                                                 testconfig['namespace'],
                                                                 setup_bootstrap.pods[0]['name'])
