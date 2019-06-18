@@ -147,6 +147,10 @@ def setup_clients(request, init_session, setup_oracle, setup_poet, setup_bootstr
                               cimage=testconfig['client']['image'],
                               centry=[testconfig['client']['command']])
 
+        print("I'm checking poet... {}".format(setup_poet))
+        if setup_poet is None:
+            raise Exception("failed starting a poet")
+
         cspec.append_args(bootnodes=node_string(bs_info['key'], bs_info['pod_ip'], BOOTSTRAP_PORT, BOOTSTRAP_PORT),
                           oracle_server='http://{0}:{1}'.format(setup_oracle, ORACLE_SERVER_PORT),
                           poet_server='{0}:{1}'.format(setup_poet, POET_SERVER_PORT),
