@@ -68,7 +68,20 @@ def setup_server(deployment_name, deployment_file, namespace):
                                                                  "name={0}".format(deployment_name_prefix))).items
     if not namespaced_pods:
         raise Exception('Could not setup Server: {0}'.format(deployment_name))
-    return namespaced_pods[0].status.pod_ip
+
+    ip = namespaced_pods[0].status.pod_ip
+    if ip is None:
+        print("{0} IP was None, trying again..".format(deployment_name_prefix))
+        time.sleep(3)
+        # retry
+        namespaced_pods = client.CoreV1Api().list_namespaced_pod(namespace,
+                                                                 label_selector=(
+                                                                     "name={0}".format(deployment_name_prefix))).items
+        ip = namespaced_pods[0].status.pod_ip
+        if ip is None:
+            raise Exception("Failed to retrieve {0} ip address".format(deployment_name_prefix))
+
+    return ip
 
 
 @pytest.fixture(scope='module')
@@ -133,6 +146,7 @@ def setup_bootstrap(request, init_session, setup_oracle, setup_poet, create_conf
 def node_string(key, ip, port, discport):
     return "spacemesh://{0}@{1}:{2}?disc={3}".format(key, ip, port, discport)
 
+
 @pytest.fixture(scope='module')
 def setup_clients(request, init_session, setup_oracle, setup_poet, setup_bootstrap):
 
@@ -146,6 +160,9 @@ def setup_clients(request, init_session, setup_oracle, setup_poet, setup_bootstr
         cspec = ContainerSpec(cname='client',
                               cimage=testconfig['client']['image'],
                               centry=[testconfig['client']['command']])
+
+        if setup_poet is None:
+            raise Exception("failed starting a poet")
 
         cspec.append_args(bootnodes=node_string(bs_info['key'], bs_info['pod_ip'], BOOTSTRAP_PORT, BOOTSTRAP_PORT),
                           oracle_server='http://{0}:{1}'.format(setup_oracle, ORACLE_SERVER_PORT),
