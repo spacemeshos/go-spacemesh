@@ -485,9 +485,12 @@ func (m *Mesh) GetATXs(atxIds []types.AtxId) (map[types.AtxId]*types.ActivationT
 			m.Warning("could not get atx %v  from database, %v", hex.EncodeToString(id.Bytes()), err)
 			mIds = append(mIds, id)
 		} else {
+			if t.Nipst, err = m.GetNipst(t.Id()); err != nil {
+				m.Warning("could not get nipst %v from database, %v", hex.EncodeToString(id.Bytes()), err)
+				mIds = append(mIds, id)
+			}
 			atxs[t.Id()] = t
 		}
-
 	}
 	return atxs, mIds
 }

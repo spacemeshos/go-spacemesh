@@ -242,6 +242,7 @@ func (s *Syncer) syncMissingContent(blk *types.Block) error {
 
 	s.Info(fmt.Sprintf("fetched all atxs for block %v", blk.ID()))
 
+	//todo this is a hack once genesis flow is done we should remove this
 	if associated != nil {
 		s.ProcessAtx(associated)
 	}
@@ -299,7 +300,12 @@ func (s *Syncer) ATXs(mb *types.Block) (atxs []*types.ActivationTx, associated *
 	missing := make([]types.AtxId, 0, len(missinDB))
 	for _, t := range missinDB {
 		if tx := s.atxpool.Get(t); tx != nil {
-			foundAtxs[t] = tx.(*types.ActivationTx)
+			atx := tx.(*types.ActivationTx)
+			if atx.Nipst == nil {
+				s.Warning("atx %v nipst not found ", t.Hex())
+				missing = append(missing, t)
+			}
+			foundAtxs[t] = atx
 		} else {
 			s.Warning("atx %v not found ", t.Hex())
 			missing = append(missing, t)
