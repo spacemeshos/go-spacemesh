@@ -307,4 +307,4 @@ def query_round_3(indx, ns, layer):
 
 
 def query_pre_round(indx, ns, layer):
-    return query_message(indx, ns, ns, {'M': 'Fatal: PreRound ended with empty set', 'layer_id': str(layer)}, True)
+    return query_message(indx, ns, ns, {'M': 'Fatal: PreRound ended with empty set', 'layer_id': str(layer)}, False)
