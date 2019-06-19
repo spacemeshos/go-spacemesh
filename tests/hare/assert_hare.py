@@ -76,8 +76,7 @@ def assert_all(curr_idx, ns):
     assert validate(lst)
 
 
-def expect_consensus_process(curr_idx, ns, layer):
-    total = testconfig['bootstrap']['replicas'] + testconfig['client']['replicas']
+def expect_consensus_process(curr_idx, ns, layer, total):
     msg = 'layer=%s' % layer
     # assert no node ended up with an empty set at the end of the pre-round
     lst = query_pre_round(curr_idx, ns, layer)
@@ -102,10 +101,10 @@ def expect_consensus_process(curr_idx, ns, layer):
     expect(validate(lst), msg)
 
 
-def expect_hare(curr_idx, ns, min_l, max_l):
+def expect_hare(curr_idx, ns, min_l, max_l, total):
     layer = min_l
     while layer <= max_l:
-        expect_consensus_process(curr_idx, ns, layer)
+        expect_consensus_process(curr_idx, ns, layer, total)
         layer = layer + 1
 
     assert_expectations()
