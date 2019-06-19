@@ -231,12 +231,16 @@ func (s *Syncer) syncMissingContent(blk *types.Block) error {
 		s.Warning(fmt.Sprintf("failed fetching block %v transactions %v", blk.ID(), err))
 		return err
 	}
+
+	s.Info(fmt.Sprintf("fetched all txs for block %v", blk.ID()))
 	//sync ATxs
 	atxs, associated, err := s.ATXs(blk)
 	if err != nil {
 		s.Warning(fmt.Sprintf("failed fetching block %v activation transactions %v", blk.ID(), err))
 		return err
 	}
+
+	s.Info(fmt.Sprintf("fetched all atxs for block %v", blk.ID()))
 
 	if associated != nil {
 		s.ProcessAtx(associated)

@@ -51,7 +51,10 @@ func TestBlockListener(t *testing.T) {
 	bl1 := ListenerFactory(n1, PeersMock{func() []p2p.Peer { return []p2p.Peer{n2.PublicKey()} }}, "1", 3)
 	bl2 := ListenerFactory(n2, PeersMock{func() []p2p.Peer { return []p2p.Peer{n1.PublicKey()} }}, "2", 3)
 	bl2.Start()
-	atx1, atx2, atx3, _ := getAtxs()
+	atx1 := atx()
+	atx2 := atx()
+	atx3 := atx()
+
 	bl1.ProcessAtx(atx1)
 	bl1.ProcessAtx(atx2)
 	bl1.ProcessAtx(atx3)
@@ -96,7 +99,7 @@ func TestBlockListener2(t *testing.T) {
 
 	bl2.Start()
 
-	atx1, _, _, _ := getAtxs()
+	atx1 := atx()
 	bl1.ProcessAtx(atx1)
 	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
 	block1.ATXID = atx1.Id()

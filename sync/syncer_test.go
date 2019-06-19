@@ -31,6 +31,10 @@ import (
 
 var conf = Configuration{1, 300, 150 * time.Millisecond}
 
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
+
 const (
 	levelDB  = "LevelDB"
 	memoryDB = "MemoryDB"
@@ -57,59 +61,6 @@ var (
 	tx7 = tx()
 	tx8 = tx()
 )
-
-func getAtxs() (*types.ActivationTx, *types.ActivationTx, *types.ActivationTx, *types.ActivationTx) {
-
-	atx1 := types.NewActivationTx(
-		types.NodeId{"whatwhatwhatwhat", []byte("aaa")},
-		0,
-		types.AtxId{common.Hash{byte(1)}},
-		5,
-		1,
-		types.AtxId{common.Hash{byte(1)}},
-		5,
-		[]types.BlockID{1, 2, 3},
-		nipst.NewNIPSTWithChallenge(&common.Hash{byte(1)}),
-		false)
-
-	atx2 := types.NewActivationTx(
-		types.NodeId{"batbatbatbatbat", []byte("bbb")},
-		0,
-		types.AtxId{common.Hash{byte(1)}},
-		5,
-		1,
-		types.AtxId{common.Hash{byte(2)}},
-		5,
-		[]types.BlockID{1, 2, 3},
-		nipst.NewNIPSTWithChallenge(&common.Hash{byte(2)}),
-		false)
-
-	atx3 := types.NewActivationTx(
-		types.NodeId{"121234123434567", []byte("ccc")},
-		0,
-		types.AtxId{common.Hash{byte(1)}},
-		5,
-		1,
-		types.AtxId{common.Hash{byte(3)}},
-		5,
-		[]types.BlockID{1, 2, 3},
-		nipst.NewNIPSTWithChallenge(&common.Hash{byte(3)}),
-		false)
-
-	atx4 := types.NewActivationTx(
-		types.NodeId{"3123423123445", []byte("ddd")},
-		0,
-		types.AtxId{common.Hash{byte(1)}},
-		5,
-		1,
-		types.AtxId{common.Hash{byte(4)}},
-		5,
-		[]types.BlockID{1, 2, 3},
-		nipst.NewNIPSTWithChallenge(&common.Hash{byte(4)}),
-		false)
-
-	return atx1, atx2, atx3, atx4
-}
 
 func SyncMockFactory(number int, conf Configuration, name string, dbType string) (syncs []*Syncer, p2ps []*service.Node) {
 	nodes := make([]*Syncer, 0, number)
@@ -213,7 +164,7 @@ func TestSyncer_Close(t *testing.T) {
 }
 
 func TestSyncProtocol_BlockRequest(t *testing.T) {
-	atx1, _, _, _ := getAtxs()
+	atx1 := atx()
 	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_BlockRequest_", memoryDB)
 	syncObj := syncs[0]
 	syncObj2 := syncs[1]
@@ -238,7 +189,7 @@ func TestSyncProtocol_BlockRequest(t *testing.T) {
 
 func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_LayerHashRequest_", memoryDB)
-	atx1, _, _, _ := getAtxs()
+	atx1 := atx()
 	syncObj1 := syncs[0]
 	defer syncObj1.Close()
 	syncObj2 := syncs[1]
@@ -263,7 +214,10 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 
 func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_LayerIdsRequest_", memoryDB)
-	atx1, atx2, atx3, atx4 := getAtxs()
+	atx1 := atx()
+	atx2 := atx()
+	atx3 := atx()
+	atx4 := atx()
 	syncObj := syncs[0]
 	defer syncObj.Close()
 	syncObj1 := syncs[1]
@@ -312,7 +266,9 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 
 func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_FetchBlocks_", memoryDB)
-	atx1, atx2, atx3, _ := getAtxs()
+	atx1 := atx()
+	atx2 := atx()
+	atx3 := atx()
 	syncObj1 := syncs[0]
 	defer syncObj1.Close()
 	syncObj2 := syncs[1]
@@ -684,4 +640,18 @@ func tx() *types.SerializableTransaction {
 		big.NewInt(gasPrice),
 		100)
 	return tx
+}
+
+var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+func RandStringRunes(n int) string {
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letterRunes[rand.Intn(len(letterRunes))]
+	}
+	return string(b)
+}
+
+func atx() *types.ActivationTx {
+	return types.NewActivationTx(types.NodeId{Key: RandStringRunes(5), VRFPublicKey: []byte(RandStringRunes(5))}, 1, types.AtxId{}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{}), true)
 }
