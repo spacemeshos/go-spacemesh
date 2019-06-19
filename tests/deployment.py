@@ -28,7 +28,10 @@ def wait_to_deployment_to_be_ready(deployment_name, name_space, time_out=None):
         resp = client.AppsV1Api().read_namespaced_deployment(name=deployment_name, namespace=name_space)
         total_sleep_time = (datetime.now()-start).total_seconds()
         if not resp.status.unavailable_replicas:
-            print("Total time waiting for deployment {0}: {1} sec".format(deployment_name, total_sleep_time))
+            ready_replicas = resp.status.ready_replicas
+            print("Total time waiting for deployment {0} [size: {1}]: {2} sec".format(deployment_name,
+                                                                                      ready_replicas,
+                                                                                      total_sleep_time))
             break
         print("{0}/{1} pods ready {2} sec               ".format(resp.status.available_replicas, resp.status.replicas, total_sleep_time), end="\r")
         time.sleep(1)
