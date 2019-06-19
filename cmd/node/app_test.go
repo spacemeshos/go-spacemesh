@@ -42,7 +42,14 @@ func (suite *AppTestSuite) SetupTest() {
 // which utilizes a local self-contained poet server instance
 // in order to exercise functionality.
 func NewRPCPoetHarnessClient() (*nipst.RPCPoetClient, error) {
-	h, err := integration.NewHarness("127.0.0.1:9091")
+	cfg, err := integration.DefaultConfig()
+	if err != nil {
+		return nil, err
+	}
+	cfg.NodeAddress = "127.0.0.1:9091"
+	cfg.InitialRoundDuration = time.Duration(35 * time.Second).String()
+
+	h, err := integration.NewHarness(cfg)
 	if err != nil {
 		return nil, err
 	}

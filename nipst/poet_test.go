@@ -13,7 +13,13 @@ import (
 // which utilizes a local self-contained poet server instance
 // in order to exercise functionality.
 func newRPCPoetHarnessClient() (*RPCPoetClient, error) {
-	h, err := integration.NewHarness("NO_BROADCAST")
+	cfg, err := integration.DefaultConfig()
+	if err != nil {
+		return nil, err
+	}
+	cfg.NodeAddress = "NO_BROADCAST"
+
+	h, err := integration.NewHarness(cfg)
 	if err != nil {
 		return nil, err
 	}
