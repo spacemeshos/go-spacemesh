@@ -8,6 +8,8 @@ spec:
     metadata:
       labels:
         name: oracle
+      annotations:
+        cluster-autoscaler.kubernetes.io/safe-to-evict: 'false'
     spec:
       containers:
       - name: oracle

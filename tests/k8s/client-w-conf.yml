@@ -12,6 +12,7 @@ spec:
       labels:
         name: client
       annotations:
+        cluster-autoscaler.kubernetes.io/safe-to-evict: 'false'
         prometheus.io/scrape: 'true'
         prometheus.io/port: '2020'
         prometheus.io/path: '/metrics'
