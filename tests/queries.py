@@ -308,3 +308,15 @@ def query_round_3(indx, ns, layer):
 
 def query_pre_round(indx, ns, layer):
     return query_message(indx, ns, ns, {'M': 'Fatal: PreRound ended with empty set', 'layer_id': str(layer)}, False)
+
+
+def query_no_svp(indx, ns):
+    return query_message(indx, ns, ns, {'M': 'Round 1 ended', 'is_svp_ready': 'false'}, False)
+
+
+def query_empty_set(indx, ns):
+    return query_message(indx, ns, ns, {'M': 'Fatal: PreRound ended with empty set'}, False)
+
+
+def query_new_iteration(indx, ns):
+    return query_message(indx, ns, ns, {'M': 'Starting new iteration'}, False)

@@ -17,7 +17,7 @@ from pytest_testconfig import config as testconfig
 from elasticsearch_dsl import Search, Q
 from tests.misc import ContainerSpec
 from tests.queries import ES
-from tests.hare.assert_hare import expect_hare
+from tests.hare.assert_hare import validate_hare
 
 BOOT_DEPLOYMENT_FILE = './k8s/bootstrapoet-w-conf.yml'
 CLIENT_DEPLOYMENT_FILE = './k8s/client-w-conf.yml'
@@ -355,6 +355,8 @@ current_index = 'kubernetes_cluster-' + todaydate
 
 
 def test_transaction(setup_network):
+    ns = testconfig['namespace']
+    
     # choose client to run on
     client_ip = setup_network.clients.pods[0]['pod_ip']
 
@@ -392,6 +394,8 @@ def test_transaction(setup_network):
     print("test took {:.3f} seconds ".format(end - start))
     assert "{'value': '100'}" in out
     print("balance ok")
+
+    validate_hare(current_index, ns)  # validate hare
 
 
 def test_mining(setup_network):
@@ -431,7 +435,7 @@ def test_mining(setup_network):
     total_pods = len(setup_network.clients.pods) + len(setup_network.bootstrap.pods)
     analyse.analyze_mining(testconfig['namespace'], last_layer, layers_per_epoch, layer_avg_size, total_pods)
 
-    expect_hare(current_index, ns, 1, 8)  # validate hare for layers 1 to 8
+    validate_hare(current_index, ns)  # validate hare
 
 
 ''' todo: when atx flow stabilized re enable this test
