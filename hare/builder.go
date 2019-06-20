@@ -27,7 +27,7 @@ func MessageFromBuffer(buffer []byte) (*Message, error) {
 }
 
 func (m *Message) String() string {
-	return fmt.Sprintf("Sig: %v InnerMsg: %v", m.Sig, m.InnerMsg.String())
+	return fmt.Sprintf("Sig: %x InnerMsg: %v", m.Sig, m.InnerMsg.String())
 }
 
 // the certificate
