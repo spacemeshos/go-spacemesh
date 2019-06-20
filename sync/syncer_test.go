@@ -134,6 +134,10 @@ func (s *stateMock) ApplyTransactions(id types.LayerID, tx mesh.Transactions) (u
 	return 0, nil
 }
 
+func (s *stateMock) ValidateTransactionSignature(tx types.SerializableSignedTransaction) (address.Address, error) {
+	return address.Address{}, nil
+}
+
 var rewardConf = mesh.Config{
 	big.NewInt(10),
 	big.NewInt(5000),

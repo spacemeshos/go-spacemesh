@@ -2,6 +2,7 @@ package sync
 
 import (
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/nipst"
@@ -56,6 +57,10 @@ func (MockState) ApplyTransactions(layer types.LayerID, txs mesh.Transactions) (
 }
 
 func (MockState) ApplyRewards(layer types.LayerID, miners []string, underQuota map[string]int, bonusReward, diminishedReward *big.Int) {
+}
+
+func (MockState) ValidateTransactionSignature(tx types.SerializableSignedTransaction) (address.Address, error) {
+	return address.Address{}, nil
 }
 
 func (s *StateMock) ApplyRewards(layer types.LayerID, miners []string, underQuota map[string]int, bonusReward, diminishedReward *big.Int) {
