@@ -123,7 +123,7 @@ func TestPoetDb_SubscribeToPoetProofRef(t *testing.T) {
 	case <-time.After(2 * time.Millisecond):
 		r.Fail("timeout!")
 	}
-	_, ok := <- ch
+	_, ok := <-ch
 	r.False(ok, "channel should be closed")
 
 	newCh := poetDb.SubscribeToPoetProofRef(poetId, 0)
@@ -136,6 +136,6 @@ func TestPoetDb_SubscribeToPoetProofRef(t *testing.T) {
 	case <-time.After(2 * time.Millisecond):
 		r.Fail("timeout!")
 	}
-	_, ok = <- newCh
+	_, ok = <-newCh
 	r.False(ok, "channel should be closed")
 }
