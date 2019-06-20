@@ -55,6 +55,10 @@ func (MockState) ValidateTransactionSignature(tx types.SerializableSignedTransac
 	return address.Address{}, nil
 }
 
+func (MockState) ValidateSignature(signed types.Signed) (address.Address, error) {
+	return address.Address{}, nil
+}
+
 type AtxDbMock struct{}
 
 func (AtxDbMock) ProcessBlockATXs(block *types.Block) {

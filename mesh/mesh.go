@@ -32,13 +32,15 @@ type MeshValidator interface {
 	ContextualValidity(id types.BlockID) bool
 }
 
-type MemPoolInValidator interface {
-	Invalidate(id interface{})
-}
-
-type StateUpdater interface {
+type StateApi interface {
 	ApplyTransactions(layer types.LayerID, transactions Transactions) (uint32, error)
 	ApplyRewards(layer types.LayerID, miners []string, underQuota map[string]int, bonusReward, diminishedReward *big.Int)
+	ValidateSignature(s types.Signed) (address.Address, error)
+	ValidateTransactionSignature(tx types.SerializableSignedTransaction) (address.Address, error) //todo use validate signature across the bord and remove this
+}
+
+type MemPoolInValidator interface {
+	Invalidate(id interface{})
 }
 
 type AtxDB interface {
@@ -61,12 +63,12 @@ type Mesh struct {
 	lcMutex        sync.RWMutex
 	lvMutex        sync.RWMutex
 	tortoise       MeshValidator
-	state          StateUpdater
+	state          StateApi
 	orphMutex      sync.RWMutex
 	done           chan struct{}
 }
 
-func NewMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh MeshValidator, txInvalidator MemPoolInValidator, atxInvalidator MemPoolInValidator, state StateUpdater, logger log.Log) *Mesh {
+func NewMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh MeshValidator, txInvalidator MemPoolInValidator, atxInvalidator MemPoolInValidator, state StateApi, logger log.Log) *Mesh {
 	//todo add boot from disk
 	ll := &Mesh{
 		Log:            logger,
@@ -493,4 +495,8 @@ func (m *Mesh) GetATXs(atxIds []types.AtxId) (map[types.AtxId]*types.ActivationT
 		}
 	}
 	return atxs, mIds
+}
+
+func (m *Mesh) StateApi() StateApi {
+	return m.state
 }
