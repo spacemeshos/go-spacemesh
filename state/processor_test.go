@@ -1,7 +1,9 @@
 package state
 
 import (
+	crand "crypto/rand"
 	"github.com/seehuhn/mt19937"
+	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -31,9 +33,8 @@ func (s *ProcessorStateSuite) SetupTest() {
 	s.processor = NewTransactionProcessor(rng, s.state, GasConfig{big.NewInt(5)}, lg)
 }
 
-func createAccount(state *StateDB, addr []byte, balance int64, nonce uint64) *StateObj {
-	addr1 := toAddr(addr)
-	obj1 := state.GetOrNewStateObj(addr1)
+func createAccount(state *StateDB, addr address.Address, balance int64, nonce uint64) *StateObj {
+	obj1 := state.GetOrNewStateObj(addr)
 	obj1.AddBalance(big.NewInt(balance))
 	obj1.SetNonce(nonce)
 	state.updateStateObj(obj1)
@@ -59,9 +60,9 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction() {
 	//test insufficient funds
 	//test wrong nonce
 	//test account doesn't exist
-	obj1 := createAccount(s.state, []byte{0x01}, 21, 0)
-	obj2 := createAccount(s.state, []byte{0x01, 02}, 1, 10)
-	createAccount(s.state, []byte{0x02}, 44, 0)
+	obj1 := createAccount(s.state, toAddr([]byte{0x01}), 21, 0)
+	obj2 := createAccount(s.state, toAddr([]byte{0x01, 02}), 1, 10)
+	createAccount(s.state, toAddr([]byte{0x02}), 44, 0)
 	s.state.Commit(false)
 
 	transactions := mesh.Transactions{
@@ -148,9 +149,9 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction() {
 }*/
 
 func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_Errors() {
-	obj1 := createAccount(s.state, []byte{0x01}, 21, 0)
-	obj2 := createAccount(s.state, []byte{0x01, 02}, 1, 10)
-	createAccount(s.state, []byte{0x02}, 44, 0)
+	obj1 := createAccount(s.state, toAddr([]byte{0x01}), 21, 0)
+	obj2 := createAccount(s.state, toAddr([]byte{0x01, 02}), 1, 10)
+	createAccount(s.state, toAddr([]byte{0x02}), 44, 0)
 	s.state.Commit(false)
 
 	transactions := mesh.Transactions{
@@ -186,9 +187,9 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyRewards() {
 }
 
 func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_OrderByNonce() {
-	obj1 := createAccount(s.state, []byte{0x01}, 25, 0)
-	obj2 := createAccount(s.state, []byte{0x01, 02}, 1, 10)
-	obj3 := createAccount(s.state, []byte{0x02}, 44, 0)
+	obj1 := createAccount(s.state, toAddr([]byte{0x01}), 25, 0)
+	obj2 := createAccount(s.state, toAddr([]byte{0x01, 02}), 1, 10)
+	obj3 := createAccount(s.state, toAddr([]byte{0x02}), 44, 0)
 	s.state.Commit(false)
 
 	transactions := mesh.Transactions{
@@ -229,9 +230,9 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_OrderByN
 }
 
 func (s *ProcessorStateSuite) TestTransactionProcessor_Reset() {
-	obj1 := createAccount(s.state, []byte{0x01}, 21, 0)
-	obj2 := createAccount(s.state, []byte{0x01, 02}, 41, 10)
-	createAccount(s.state, []byte{0x02}, 44, 0)
+	obj1 := createAccount(s.state, toAddr([]byte{0x01}), 21, 0)
+	obj2 := createAccount(s.state, toAddr([]byte{0x01, 02}), 41, 10)
+	createAccount(s.state, toAddr([]byte{0x02}), 44, 0)
 	s.state.Commit(false)
 
 	transactions := mesh.Transactions{
@@ -319,9 +320,9 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 	revertAfterLayer := rand.Intn(testCycles - revertToLayer) //rand.Intn(min(testCycles - revertToLayer,maxPastStates))
 	log.Info("starting test: revert on layer %v, after %v layers received since that layer ", revertToLayer, revertAfterLayer)
 
-	obj1 := createAccount(s.state, []byte{0x01}, 5218762487624, 0)
-	obj2 := createAccount(s.state, []byte{0x01, 02}, 341578872634786, 10)
-	obj3 := createAccount(s.state, []byte{0x02}, 1044987234, 0)
+	obj1 := createAccount(s.state, toAddr([]byte{0x01}), 5218762487624, 0)
+	obj2 := createAccount(s.state, toAddr([]byte{0x01, 02}), 341578872634786, 10)
+	obj3 := createAccount(s.state, toAddr([]byte{0x02}), 1044987234, 0)
 
 	s.state.Commit(false)
 
@@ -390,8 +391,8 @@ func TestTransactionProcessor_randomSort(t *testing.T) {
 	lg := log.New("proc_logger", "", "")
 	processor := NewTransactionProcessor(rng, state, GasConfig{big.NewInt(5)}, lg)
 
-	obj1 := createAccount(state, []byte{0x01}, 2, 0)
-	obj2 := createAccount(state, []byte{0x01, 02}, 1, 10)
+	obj1 := createAccount(state, toAddr([]byte{0x01}), 2, 0)
+	obj2 := createAccount(state, toAddr([]byte{0x01, 02}), 1, 10)
 
 	transactions := mesh.Transactions{
 		createTransaction(obj1.Nonce(), obj1.address, obj2.address, 1),
@@ -412,4 +413,43 @@ func TestTransactionProcessor_randomSort(t *testing.T) {
 	trans := processor.randomSort(transactions)
 
 	assert.Equal(t, expected, trans)
+}
+
+func createXdrSignedTransaction(key ed25519.PrivateKey) types.SerializableSignedTransaction {
+	tx := types.SerializableSignedTransaction{}
+	tx.AccountNonce = 1111
+	tx.Amount = 123
+	tx.Recipient = toAddr([]byte{0xde})
+	tx.GasLimit = 11
+	tx.Price = 456
+
+	buf, _ := types.InterfaceToBytes(&tx.InnerSerializableSignedTransaction)
+	copy(tx.Signature[:], ed25519.Sign2(key, buf))
+	return tx
+}
+
+func TestValidateTxSignature(t *testing.T) {
+	rng := rand.New(mt19937.New())
+	rng.Seed(1)
+	db := database.NewMemDatabase()
+	state, _ := New(common.Hash{}, NewDatabase(db))
+	lg := log.New("proc_logger", "", "")
+	proc := NewTransactionProcessor(rng, state, GasConfig{big.NewInt(5)}, lg)
+
+	// positive flow
+	pub, pri, _ := ed25519.GenerateKey(crand.Reader)
+	createAccount(state, PublicKeyToAccountAddress(pub), 123, 321)
+	tx := createXdrSignedTransaction(pri)
+
+	addr, e := proc.ValidateTransactionSignature(tx)
+	assert.Equal(t, PublicKeyToAccountAddress(pub), addr)
+	assert.NoError(t, e)
+
+	// negative flow
+	pub, pri, _ = ed25519.GenerateKey(crand.Reader)
+	tx = createXdrSignedTransaction(pri)
+
+	addr, e = proc.ValidateTransactionSignature(tx)
+	assert.Equal(t, address.Address{}, addr)
+	assert.Error(t, e)
 }
