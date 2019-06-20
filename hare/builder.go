@@ -2,6 +2,7 @@ package hare
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 	"github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -27,7 +28,7 @@ func MessageFromBuffer(buffer []byte) (*Message, error) {
 }
 
 func (m *Message) String() string {
-	return fmt.Sprintf("Sig: %x InnerMsg: %v", m.Sig, m.InnerMsg.String())
+	return fmt.Sprintf("Sig: %v… InnerMsg: %v", hex.EncodeToString(m.Sig)[:5], m.InnerMsg.String())
 }
 
 // the certificate
