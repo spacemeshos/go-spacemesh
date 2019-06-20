@@ -86,6 +86,10 @@ func SyncMockFactory(number int, conf Configuration, name string, dbType string)
 
 type stateMock struct{}
 
+func (stateMock) ValidateSignature(signed types.Signed) (address.Address, error) {
+	return address.Address{}, nil
+}
+
 func (s *stateMock) ApplyRewards(layer types.LayerID, miners []string, underQuota map[string]int, bonusReward, diminishedReward *big.Int) {
 
 }

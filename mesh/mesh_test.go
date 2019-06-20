@@ -26,6 +26,10 @@ func (mlg *MeshValidatorMock) ContextualValidity(id types.BlockID) bool   { retu
 
 type MockState struct{}
 
+func (MockState) ValidateSignature(signed types.Signed) (address.Address, error) {
+	return address.Address{}, nil
+}
+
 func (MockState) ApplyTransactions(layer types.LayerID, txs Transactions) (uint32, error) {
 	return 0, nil
 }

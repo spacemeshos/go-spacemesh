@@ -18,6 +18,10 @@ type MockMapState struct {
 	Total   int64
 }
 
+func (MockMapState) ValidateSignature(signed types.Signed) (address.Address, error) {
+	return address.Address{}, nil
+}
+
 func (MockMapState) ApplyTransactions(layer types.LayerID, txs Transactions) (uint32, error) {
 	return 0, nil
 }
