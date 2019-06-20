@@ -329,6 +329,7 @@ func (m *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.SerializableTransa
 	//invalidate txs and atxs from pool
 	m.invalidateFromPools(&blk.MiniBlock)
 
+	m.Debug("added block %d", blk.ID())
 	return nil
 }
 

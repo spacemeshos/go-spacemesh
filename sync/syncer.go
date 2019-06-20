@@ -260,16 +260,12 @@ func (s *Syncer) syncMissingContent(blk *types.Block) error {
 	s.Info(fmt.Sprintf("fetched all txs for block %v", blk.ID()))
 	s.Info(fmt.Sprintf("fetched all atxs for block %v", blk.ID()))
 
-	////todo this is a hack once genesis flow is done we should remove this
-	//if associated != nil {
-	//	s.ProcessAtx(associated)
-	//}
-
 	if err := s.AddBlockWithTxs(blk, txs, atxs); err != nil {
 		s.Warning(fmt.Sprintf("failed fetching block %v activation transactions %v", blk.ID(), err))
 		return err
 	}
 
+	s.Info(fmt.Sprintf("added block with txs to database %v", blk.ID()))
 	return nil
 }
 
