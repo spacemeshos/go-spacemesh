@@ -236,12 +236,12 @@ func (s *Syncer) syncMissingContent(blk *types.Block) error {
 	}()
 
 	var atxs []*types.ActivationTx
-	var associated *types.ActivationTx
+	//var associated *types.ActivationTx
 	var atxerr error
 
 	go func() {
 		//sync ATxs
-		atxs, associated, atxerr = s.ATXs(blk)
+		atxs, _, atxerr = s.ATXs(blk)
 		wg.Done()
 	}()
 
@@ -260,10 +260,10 @@ func (s *Syncer) syncMissingContent(blk *types.Block) error {
 	s.Info(fmt.Sprintf("fetched all txs for block %v", blk.ID()))
 	s.Info(fmt.Sprintf("fetched all atxs for block %v", blk.ID()))
 
-	//todo this is a hack once genesis flow is done we should remove this
-	if associated != nil {
-		s.ProcessAtx(associated)
-	}
+	////todo this is a hack once genesis flow is done we should remove this
+	//if associated != nil {
+	//	s.ProcessAtx(associated)
+	//}
 
 	if err := s.AddBlockWithTxs(blk, txs, atxs); err != nil {
 		s.Warning(fmt.Sprintf("failed fetching block %v activation transactions %v", blk.ID(), err))
