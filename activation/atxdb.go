@@ -21,15 +21,16 @@ const CounterKey = 0xaaaa
 type ActivationDb struct {
 	sync.RWMutex
 	//todo: think about whether we need one db or several
-	atxs           database.DB
-	nipsts         database.DB
-	nipstLock      sync.RWMutex
-	atxCache       AtxCache
-	meshDb         *mesh.MeshDB
-	LayersPerEpoch types.LayerID
-	nipstValidator NipstValidator
-	ids            IdStore
-	log            log.Log
+	atxs            database.DB
+	nipsts          database.DB
+	nipstLock       sync.RWMutex
+	atxCache        AtxCache
+	meshDb          *mesh.MeshDB
+	LayersPerEpoch  types.LayerID
+	nipstValidator  NipstValidator
+	ids             IdStore
+	log             log.Log
+	processAtxMutex sync.Mutex
 }
 
 func NewActivationDb(dbstore database.DB, nipstStore database.DB, idstore IdStore, meshDb *mesh.MeshDB, layersPerEpoch uint64, nipstValidator NipstValidator, log log.Log) *ActivationDb {
@@ -45,6 +46,9 @@ func (db *ActivationDb) ProcessBlockATXs(blk *types.Block) {
 // ProcessAtx validates the active set size declared in the atx, and validates the atx according to atx validation rules
 // it then stores the atx with flag set to validity of the atx
 func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx) {
+	db.processAtxMutex.Lock()
+	defer db.processAtxMutex.Unlock()
+
 	eatx, _ := db.GetAtx(atx.Id())
 	if eatx != nil {
 		atx.Nipst = nil
