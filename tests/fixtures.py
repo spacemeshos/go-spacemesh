@@ -6,6 +6,7 @@ from tests import pod
 from kubernetes import config
 from kubernetes import client
 from pytest_testconfig import config as testconfig
+from tests.misc import CoreV1ApiClient
 
 
 def random_id(length):
@@ -58,7 +59,7 @@ def session_id():
 @pytest.fixture(scope='session')
 def set_namespace(request, session_id, load_config):
 
-    v1 = client.CoreV1Api()
+    v1 = CoreV1ApiClient()
 
     def _setup_namespace():
 

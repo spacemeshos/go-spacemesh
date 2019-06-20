@@ -15,7 +15,7 @@ from kubernetes.client.rest import ApiException
 from kubernetes.stream import stream
 from pytest_testconfig import config as testconfig
 from elasticsearch_dsl import Search, Q
-from tests.misc import ContainerSpec
+from tests.misc import ContainerSpec, CoreV1ApiClient
 from tests.queries import ES
 
 
@@ -56,17 +56,17 @@ def query_bootstrap_es(indx, namespace, bootstrap_po_name):
 
 def setup_server(deployment_name, deployment_file, namespace):
     deployment_name_prefix = deployment_name.split('-')[0]
-    namespaced_pods = client.CoreV1Api().list_namespaced_pod(namespace,
-                                                             label_selector=(
-                                                                 "name={0}".format(deployment_name_prefix))).items
+    namespaced_pods = CoreV1ApiClient().list_namespaced_pod(namespace,
+                                                            label_selector=(
+                                                                "name={0}".format(deployment_name_prefix))).items
     if namespaced_pods:
         # if server already exist -> delete it
         deployment.delete_deployment(deployment_name, namespace)
 
     resp = deployment.create_deployment(deployment_file, namespace, time_out=testconfig['deployment_ready_time_out'])
-    namespaced_pods = client.CoreV1Api().list_namespaced_pod(namespace,
-                                                             label_selector=(
-                                                                 "name={0}".format(deployment_name_prefix))).items
+    namespaced_pods = CoreV1ApiClient().list_namespaced_pod(namespace,
+                                                            label_selector=(
+                                                                "name={0}".format(deployment_name_prefix))).items
     if not namespaced_pods:
         raise Exception('Could not setup Server: {0}'.format(deployment_name))
 
@@ -75,9 +75,9 @@ def setup_server(deployment_name, deployment_file, namespace):
         print("{0} IP was None, trying again..".format(deployment_name_prefix))
         time.sleep(3)
         # retry
-        namespaced_pods = client.CoreV1Api().list_namespaced_pod(namespace,
-                                                                 label_selector=(
-                                                                     "name={0}".format(deployment_name_prefix))).items
+        namespaced_pods = CoreV1ApiClient().list_namespaced_pod(namespace,
+                                                                label_selector=(
+                                                                    "name={0}".format(deployment_name_prefix))).items
         ip = namespaced_pods[0].status.pod_ip
         if ip is None:
             raise Exception("Failed to retrieve {0} ip address".format(deployment_name_prefix))
@@ -123,20 +123,19 @@ def setup_bootstrap(request, init_session, setup_oracle, setup_poet, create_conf
         bootstrap_deployment_info.deployment_name = resp.metadata._name
         # The tests assume we deploy only 1 bootstrap
         bootstrap_pod_json = (
-            client.CoreV1Api().list_namespaced_pod(namespace=name_space,
-                                                   label_selector=(
-                                                       "name={0}".format(
-                                                           bootstrap_deployment_info.deployment_name.split('-')[0]))).items[0])
+            CoreV1ApiClient().list_namespaced_pod(namespace=name_space,
+                                                  label_selector=("name={0}".format(
+                                                      bootstrap_deployment_info.deployment_name.split('-')[0]))).items[0])
         bs_pod = {'name': bootstrap_pod_json.metadata.name}
 
         while True:
-            resp = client.CoreV1Api().read_namespaced_pod(name=bs_pod['name'], namespace=name_space)
+            resp = CoreV1ApiClient().read_namespaced_pod(name=bs_pod['name'], namespace=name_space)
             if resp.status.phase != 'Pending':
                 break
             time.sleep(1)
 
         bs_pod['pod_ip'] = resp.status.pod_ip
-        bootstrap_pod_logs = client.CoreV1Api().read_namespaced_pod_log(name=bs_pod['name'], namespace=name_space)
+        bootstrap_pod_logs = CoreV1ApiClient().read_namespaced_pod_log(name=bs_pod['name'], namespace=name_space)
         match = re.search(r"Local node identity >> (?P<bootstrap_key>\w+)", bootstrap_pod_logs)
         bs_pod['key'] = match.group('bootstrap_key')
         bootstrap_deployment_info.pods = [bs_pod]
@@ -178,12 +177,10 @@ def setup_clients(request, init_session, setup_oracle, setup_poet, setup_bootstr
                                             time_out=testconfig['deployment_ready_time_out'])
 
         client_info.deployment_name = resp.metadata._name
-        client_pods = (
-            client.CoreV1Api().list_namespaced_pod(name_space,
-                                                   include_uninitialized=True,
-                                                   label_selector=(
-                                                       "name={0}".format(
-                                                           client_info.deployment_name.split('-')[0]))).items)
+        client_pods = (CoreV1ApiClient().list_namespaced_pod(name_space,
+                                                             include_uninitialized=True,
+                                                             label_selector=("name={0}".format(
+                                                                 client_info.deployment_name.split('-')[0]))).items)
 
         client_info.pods = [{'name': c.metadata.name, 'pod_ip': c.status.pod_ip} for c in client_pods]
         return client_info
@@ -223,12 +220,10 @@ def add_multi_clients(deployment_id, container_specs, size=2):
                                         replica_size=size,
                                         container_specs=container_specs,
                                         time_out=testconfig['deployment_ready_time_out'])
-    client_pods = (
-        client.CoreV1Api().list_namespaced_pod(testconfig['namespace'],
-                                               include_uninitialized=True,
-                                               label_selector=(
-                                                   "name={0}".format(
-                                                       resp.metadata._name.split('-')[0]))).items)
+    client_pods = CoreV1ApiClient().list_namespaced_pod(testconfig['namespace'],
+                                                        include_uninitialized=True,
+                                                        label_selector=("name={0}".format(
+                                                            resp.metadata._name.split('-')[0]))).items
     pods = []
     for c in client_pods:
         pod_name= c.metadata.name
@@ -273,9 +268,7 @@ def add_client(request, setup_oracle, setup_poet, setup_bootstrap, setup_clients
             raise Exception("Could not find bootstrap node")
 
         bs_info = setup_bootstrap.pods[0]
-
         cspec = get_conf(bs_info, setup_poet, setup_oracle)
-
         client_name = add_single_client(setup_bootstrap.deployment_id, cspec)
         return client_name
 
@@ -297,7 +290,10 @@ def wait_genesis():
 
 def api_call(client_ip, data, api, namespace):
     # todo: this won't work with long payloads - ( `Argument list too long` ). try port-forward ?
-    res = stream(client.CoreV1Api().connect_post_namespaced_pod_exec, name="curl", namespace=namespace, command=["curl", "-s", "--request",  "POST", "--data", data, "http://" + client_ip + ":9090/" + api], stderr=True, stdin=False, stdout=True, tty=False, _request_timeout=90)
+    res = stream(CoreV1ApiClient().connect_post_namespaced_pod_exec, name="curl", namespace=namespace,
+                 command=["curl", "-s", "--request", "POST", "--data", data, "http://" + client_ip + ":9090/" + api],
+                 stderr=True, stdin=False, stdout=True, tty=False, _request_timeout=90)
+
     return res
 
 
@@ -322,9 +318,7 @@ def create_configmap(request):
                                        data=d,
                                        metadata=metadata)
         try:
-            client.CoreV1Api().create_namespaced_config_map(namespace=nspace,
-                                                            body=configmap,
-                                                            pretty='pretty_example')
+            CoreV1ApiClient().create_namespaced_config_map(namespace=nspace, body=configmap, pretty='pretty_example')
         except ApiException as e:
             if eval(e.body)['reason'] == 'AlreadyExists':
                 print('configmap: {0} already exist.'.format(configmap_name))
