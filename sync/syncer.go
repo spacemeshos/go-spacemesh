@@ -225,21 +225,39 @@ func (s *Syncer) fetchFullBlocks(blockIds []types.BlockID) ([]*types.Block, erro
 }
 
 func (s *Syncer) syncMissingContent(blk *types.Block) error {
-	//sync Transactions
-	txs, err := s.Txs(blk)
-	if err != nil {
-		s.Warning(fmt.Sprintf("failed fetching block %v transactions %v", blk.ID(), err))
-		return err
+	var txs []*types.SerializableTransaction
+	var txerr error
+	wg := sync.WaitGroup{}
+	wg.Add(2)
+	go func() {
+		//sync Transactions
+		txs, txerr = s.Txs(blk)
+		wg.Done()
+	}()
+
+	var atxs []*types.ActivationTx
+	var associated *types.ActivationTx
+	var atxerr error
+
+	go func() {
+		//sync ATxs
+		atxs, associated, atxerr = s.ATXs(blk)
+		wg.Done()
+	}()
+
+	wg.Wait()
+
+	if txerr != nil {
+		s.Warning(fmt.Sprintf("failed fetching block %v transactions %v", blk.ID(), txerr))
+		return txerr
+	}
+
+	if atxerr != nil {
+		s.Warning(fmt.Sprintf("failed fetching block %v transactions %v", blk.ID(), atxerr))
+		return atxerr
 	}
 
 	s.Info(fmt.Sprintf("fetched all txs for block %v", blk.ID()))
-	//sync ATxs
-	atxs, associated, err := s.ATXs(blk)
-	if err != nil {
-		s.Warning(fmt.Sprintf("failed fetching block %v activation transactions %v", blk.ID(), err))
-		return err
-	}
-
 	s.Info(fmt.Sprintf("fetched all atxs for block %v", blk.ID()))
 
 	//todo this is a hack once genesis flow is done we should remove this
