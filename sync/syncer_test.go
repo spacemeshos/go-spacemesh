@@ -391,6 +391,7 @@ func syncTest(dpType string, t *testing.T) {
 	syncObj3.Peers = getPeersMock([]p2p.Peer{n1.PublicKey(), n2.PublicKey(), n4.PublicKey()})
 	syncObj4.Peers = getPeersMock([]p2p.Peer{n1.PublicKey(), n2.PublicKey()})
 
+	block2 := types.NewExistingBlock(types.BlockID(222), 0, nil)
 	block3 := types.NewExistingBlock(types.BlockID(333), 1, nil)
 	block4 := types.NewExistingBlock(types.BlockID(444), 1, nil)
 	block5 := types.NewExistingBlock(types.BlockID(555), 2, nil)
@@ -405,6 +406,7 @@ func syncTest(dpType string, t *testing.T) {
 	syncObj3.ValidateLayer(mesh.GenesisLayer())
 	syncObj4.ValidateLayer(mesh.GenesisLayer())
 
+	syncObj1.AddBlock(block2)
 	syncObj1.AddBlockWithTxs(block3, []*types.SerializableTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
 	syncObj1.AddBlockWithTxs(block4, []*types.SerializableTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
 	syncObj1.AddBlockWithTxs(block5, []*types.SerializableTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
@@ -578,6 +580,7 @@ func Test_Multiple_SyncIntegrationSuite(t *testing.T) {
 func (sis *syncIntegrationMultipleNodes) TestSyncProtocol_MultipleNodes() {
 	t := sis.T()
 
+	block2 := types.NewExistingBlock(types.BlockID(222), 0, nil)
 	block3 := types.NewExistingBlock(types.BlockID(333), 1, nil)
 	block4 := types.NewExistingBlock(types.BlockID(444), 2, nil)
 	block5 := types.NewExistingBlock(types.BlockID(555), 3, nil)
@@ -596,6 +599,7 @@ func (sis *syncIntegrationMultipleNodes) TestSyncProtocol_MultipleNodes() {
 	syncObj5 := sis.syncers[4]
 	defer syncObj5.Close()
 
+	syncObj1.AddBlock(block2)
 	syncObj1.AddBlockWithTxs(block3, []*types.SerializableTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
 	syncObj1.AddBlockWithTxs(block4, []*types.SerializableTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
 	syncObj1.AddBlockWithTxs(block5, []*types.SerializableTransaction{tx4, tx5, tx6}, []*types.ActivationTx{})
