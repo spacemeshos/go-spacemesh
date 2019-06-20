@@ -495,11 +495,32 @@ func (db *ActivationDb) IsIdentityActive(edId string, layer types.LayerID) (bool
 	if len(ids) == 0 { // GetIdentity succeeded but no ATXs, this is a fatal error
 		return false, fmt.Errorf("no active IDs for known node")
 	}
+
 	atx, err := db.GetAtx(ids[len(ids)-1])
 	if err != nil {
 		db.log.Error("IsIdentityActive erred while getting atx err=%v", err)
 		return false, nil
 	}
+
+	lastAtxTargetEpoch := atx.PubLayerIdx.GetEpoch(uint16(db.LayersPerEpoch)) + 1
+	if lastAtxTargetEpoch < epoch {
+		db.log.Info("IsIdentityActive latest atx is too old expected=%v actual=%v atxid=%v",
+			epoch, lastAtxTargetEpoch, atx.ShortId())
+		return false, nil
+	}
+
+	if lastAtxTargetEpoch > epoch {
+		if len(ids) < 2 {
+			db.log.Error("IsIdentityActive latest atx is too new but no previous atx len(ids)=%v", len(ids))
+		}
+		atx, err = db.GetAtx(ids[len(ids)-2])
+		if err != nil {
+			db.log.Error("IsIdentityActive erred while getting atx for second newest err=%v", err)
+			return false, nil
+		}
+	}
+
+	// lastAtxTargetEpoch = epoch
 	return atx.Valid && atx.PubLayerIdx.GetEpoch(uint16(db.LayersPerEpoch))+1 == epoch, nil
 }
 
