@@ -25,7 +25,7 @@ type AtxId struct {
 }
 
 func (t AtxId) ShortId() string {
-	return t.String()[2:7]
+	return t.ShortString()
 }
 
 var EmptyAtxId = &AtxId{common.Hash{0}}

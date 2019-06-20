@@ -51,19 +51,19 @@ func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx) {
 		return
 	}
 	epoch := atx.PubLayerIdx.GetEpoch(db.LayersPerEpoch)
-	db.log.Info("processing atx id %v, pub-epoch %v node: %v layer %v", atx.Id().String()[2:7], epoch, atx.NodeId.Key[:5], atx.PubLayerIdx)
+	db.log.Info("processing atx id %v, pub-epoch %v node: %v layer %v", atx.ShortId(), epoch, atx.NodeId.Key[:5], atx.PubLayerIdx)
 	activeSet, err := db.CalcActiveSetFromView(atx)
 	if err != nil {
-		db.log.Error("could not calculate active set for %v", atx.Id())
+		db.log.Error("could not calculate active set for ATX %v", atx.ShortId())
 	}
 	//todo: maybe there is a potential bug in this case if count for the view can change between calls to this function
 	atx.VerifiedActiveSet = activeSet
 	err = db.ValidateAtx(atx)
 	//todo: should we store invalid atxs
 	if err != nil {
-		db.log.Warning("ATX %v failed validation: %v", atx.Id().String()[2:7], err)
+		db.log.Warning("ATX %v failed validation: %v", atx.ShortId(), err)
 	} else {
-		db.log.Info("ATX %v is valid", atx.Id().String()[2:7])
+		db.log.Info("ATX %v is valid", atx.ShortId())
 	}
 	atx.Valid = err == nil
 	err = db.StoreAtx(epoch, atx)
@@ -191,7 +191,7 @@ func (db *ActivationDb) ValidateAtx(atx *types.ActivationTx) error {
 		if err == nil && len(prevAtxIds) > 0 {
 			var ids []string
 			for _, x := range prevAtxIds {
-				ids = append(ids, x.String()[2:7])
+				ids = append(ids, x.ShortString())
 			}
 			return fmt.Errorf("no prevATX reported, but other ATXs with same nodeID (%v) found, atxs: %v", atx.NodeId.Key[:5], ids)
 		}
@@ -506,6 +506,7 @@ func (db *ActivationDb) IsIdentityActive(edId string, layer types.LayerID) (bool
 		db.log.Error("IsIdentityActive erred while getting atx err=%v", err)
 		return false, nil
 	}
+	//atx.TargetEpoch(db.LayersPerEpoch) == epoch
 	return atx.Valid && atx.PubLayerIdx.GetEpoch(db.LayersPerEpoch)+1 == epoch, err
 }
 

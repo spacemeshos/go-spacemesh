@@ -161,7 +161,7 @@ func (bo *MinerBlockOracle) getLatestATXID() (types.AtxId, error) {
 		return types.AtxId{}, errors.New("no activations found")
 	}
 	latestATXID := atxIDs[numOfActivations-1]
-	bo.log.Info("latest atx id is: %v", latestATXID.String()[:5])
+	bo.log.Info("latest atx id is: %v", latestATXID.ShortString())
 	return latestATXID, err
 }
 
