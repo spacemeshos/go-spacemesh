@@ -38,7 +38,6 @@ func (s *MockMapState) ValidateTransactionSignature(tx types.SerializableSignedT
 	return address.Address{}, nil
 }
 
-
 func ConfigTst() Config {
 	return Config{
 		big.NewInt(10),

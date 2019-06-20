@@ -138,7 +138,6 @@ func (s *stateMock) ValidateTransactionSignature(tx types.SerializableSignedTran
 	return address.Address{}, nil
 }
 
-
 var rewardConf = mesh.Config{
 	big.NewInt(10),
 	big.NewInt(5000),

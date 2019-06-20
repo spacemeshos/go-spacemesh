@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	crand "crypto/rand"
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/api/pb"
@@ -29,7 +30,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
-	crand "crypto/rand"
 )
 
 // Better a small code duplication than a small dependency
@@ -331,7 +331,7 @@ func TestJsonWalletApi(t *testing.T) {
 	rec := address.BytesToAddress([]byte{0xde, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa})
 	txParams.Recipient = &rec
 	txParams.AccountNonce = 1111
-	txParams.Amount =  []byte{0x01, 0x11, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01} //big.NewInt(1234).Bytes()
+	txParams.Amount = []byte{0x01, 0x11, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01} //big.NewInt(1234).Bytes()
 	txParams.GasLimit = 11
 	txParams.Price = []byte{0x11, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01} //big.NewInt(321).Bytes()
 	xdrTx := createXdrSignedTransaction(txParams, key)

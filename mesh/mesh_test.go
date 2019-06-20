@@ -36,7 +36,6 @@ func (MockState) ValidateTransactionSignature(tx types.SerializableSignedTransac
 	return address.Address{}, nil
 }
 
-
 type AtxDbMock struct {
 	db     map[types.AtxId]*types.ActivationTx
 	nipsts map[types.AtxId]*nipst.NIPST

@@ -569,4 +569,3 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	<-cmdp.Ctx.Done()
 	//return nil
 }
-
