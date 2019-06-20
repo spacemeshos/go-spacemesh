@@ -119,3 +119,5 @@ def validate_hare(indx, ns):
 
     lst = query_new_iteration(indx, ns)
     expect(0 == len(lst), 'query no new iteration')
+
+    assert_expectations()
