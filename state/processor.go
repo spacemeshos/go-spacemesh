@@ -1,11 +1,8 @@
 package state
 
 import (
-	"bytes"
 	"container/list"
 	"fmt"
-	"github.com/nullstyle/go-xdr/xdr3"
-	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -69,20 +66,18 @@ func NewTransactionProcessor(rnd PseudoRandomizer, db *StateDB, gasParams GasCon
 
 func PublicKeyToAccountAddress(pub ed25519.PublicKey) address.Address {
 	var addr address.Address
-	addr.SetBytes(pub[:common.AddressLength])
+	addr.SetBytes(pub)
 	return addr
 }
 
-// Validate the signature by extracting the source account and validating its existence.
+// Validate the tx's signature by extracting the source account and validating its existence.
 // Return the src acount address and error in case of failure
-func (tp *TransactionProcessor) ValidateSignature(s types.Signed) (address.Address, error) {
-	var w bytes.Buffer
-	_, err := xdr.Marshal(&w, s.Obj())
+func (tp *TransactionProcessor) ValidateTransactionSignature(tx types.SerializableSignedTransaction) (address.Address, error) {
+	buf, err := types.InterfaceToBytes(&tx.InnerSerializableSignedTransaction)
 	if err != nil {
 		return address.Address{}, err
 	}
-
-	pubKey, err := ed25519.ExtractPublicKey(w.Bytes(), s.Sig())
+	pubKey, err := ed25519.ExtractPublicKey(buf, tx.Signature[:])
 	if err != nil {
 		return address.Address{}, err
 	}
@@ -96,6 +91,7 @@ func (tp *TransactionProcessor) ValidateSignature(s types.Signed) (address.Addre
 }
 
 //should receive sort predicate
+// ApplyTransaction receives a batch of transaction to apply on state. Returns the number of transaction that failed to apply.
 func (tp *TransactionProcessor) ApplyTransactions(layer types.LayerID, txs mesh.Transactions) (uint32, error) {
 	//todo: need to seed the mersenne twister with random beacon seed
 	if len(txs) == 0 {

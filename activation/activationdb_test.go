@@ -2,6 +2,7 @@ package activation
 
 import (
 	"github.com/google/uuid"
+	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -48,6 +49,10 @@ func (MockState) ApplyTransactions(layer types.LayerID, txs mesh.Transactions) (
 }
 
 func (MockState) ApplyRewards(layer types.LayerID, miners []string, underQuota map[string]int, bonusReward, diminishedReward *big.Int) {
+}
+
+func (MockState) ValidateTransactionSignature(tx types.SerializableSignedTransaction) (address.Address, error) {
+	return address.Address{}, nil
 }
 
 type AtxDbMock struct{}

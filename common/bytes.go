@@ -1,6 +1,7 @@
 package common
 
 import (
+	b64 "encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
@@ -216,4 +217,14 @@ func isHex(str string) bool {
 		}
 	}
 	return true
+}
+
+// Decode base64 string into a byte array
+func Base64ToBytes(str string) ([]byte, error) {
+	return b64.StdEncoding.DecodeString(str)
+}
+
+// Encode byte array into base64 string
+func BytesToBase64(bytes []byte) string {
+	return b64.StdEncoding.EncodeToString(bytes)
 }
