@@ -20,10 +20,7 @@ message TransferFunds {
 }
 
 message SignedTransaction {
-    string srcAddress   = 1;
-    string dstAddress   = 2;
-    string amount       = 3;
-    string nonce        = 4;
+    bytes tx = 1; // serialized with XDR
 }
 
 message BroadcastMessage {

@@ -33,6 +33,10 @@ func (s *MockMapState) ApplyRewards(layer types.LayerID, miners []string, underQ
 
 }
 
+func (s *MockMapState) ValidateTransactionSignature(tx types.SerializableSignedTransaction) (address.Address, error) {
+	return address.Address{}, nil
+}
+
 func ConfigTst() Config {
 	return Config{
 		big.NewInt(10),
@@ -43,7 +47,7 @@ func ConfigTst() Config {
 	}
 }
 
-func getMeshWithMapState(id string, s StateUpdater) (*Mesh, *AtxDbMock) {
+func getMeshWithMapState(id string, s StateApi) (*Mesh, *AtxDbMock) {
 	atxDb := &AtxDbMock{
 		db:     make(map[types.AtxId]*types.ActivationTx),
 		nipsts: make(map[types.AtxId]*types.NIPST),

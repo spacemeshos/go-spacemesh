@@ -31,9 +31,10 @@ type MeshValidator interface {
 	ContextualValidity(id types.BlockID) bool
 }
 
-type StateUpdater interface {
+type StateApi interface {
 	ApplyTransactions(layer types.LayerID, transactions Transactions) (uint32, error)
 	ApplyRewards(layer types.LayerID, miners []string, underQuota map[string]int, bonusReward, diminishedReward *big.Int)
+	ValidateTransactionSignature(tx types.SerializableSignedTransaction) (address.Address, error)
 }
 
 type AtxDB interface {
@@ -56,12 +57,12 @@ type Mesh struct {
 	lcMutex       sync.RWMutex
 	lvMutex       sync.RWMutex
 	tortoise      MeshValidator
-	state         StateUpdater
+	state         StateApi
 	orphMutex     sync.RWMutex
 	done          chan struct{}
 }
 
-func NewPersistentMesh(path string, rewardConfig Config, mesh MeshValidator, state StateUpdater, atxdb AtxDB, logger log.Log) *Mesh {
+func NewPersistentMesh(path string, rewardConfig Config, mesh MeshValidator, state StateApi, atxdb AtxDB, logger log.Log) *Mesh {
 	//todo add boot from disk
 	ll := &Mesh{
 		Log:      logger,
@@ -76,7 +77,7 @@ func NewPersistentMesh(path string, rewardConfig Config, mesh MeshValidator, sta
 	return ll
 }
 
-func NewMemMesh(rewardConfig Config, mesh MeshValidator, state StateUpdater, atxdb AtxDB, logger log.Log) *Mesh {
+func NewMemMesh(rewardConfig Config, mesh MeshValidator, state StateApi, atxdb AtxDB, logger log.Log) *Mesh {
 	//todo add boot from disk
 	ll := &Mesh{
 		Log:      logger,
@@ -91,7 +92,7 @@ func NewMemMesh(rewardConfig Config, mesh MeshValidator, state StateUpdater, atx
 	return ll
 }
 
-func NewMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh MeshValidator, state StateUpdater, logger log.Log) *Mesh {
+func NewMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh MeshValidator, state StateApi, logger log.Log) *Mesh {
 	//todo add boot from disk
 	ll := &Mesh{
 		Log:      logger,
@@ -510,4 +511,8 @@ func (m *Mesh) GetATXs(atxIds []types.AtxId) (map[types.AtxId]*types.ActivationT
 
 	}
 	return atxs, mIds
+}
+
+func (m *Mesh) StateApi() StateApi {
+	return m.state
 }
