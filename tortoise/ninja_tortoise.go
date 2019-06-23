@@ -239,7 +239,7 @@ func (ni *ninjaTortoise) updateCorrectionVectors(p votingPattern, bottomOfWindow
 		for _, bid := range ni.tEffectiveToBlocks[p] { //for all b who's effective vote is p
 			b, err := ni.GetBlock(bid)
 			if err != nil {
-				panic(fmt.Sprintf("error block not found ID %d", bid))
+				ni.Panic(fmt.Sprintf("error block not found ID %d", bid))
 			}
 
 			if _, found := ni.tExplicit[b.ID()][x.Layer()]; found { //if Texplicit[b][x.layer]!=0 check correctness of x.layer and found
@@ -369,20 +369,20 @@ func (ni *ninjaTortoise) addPatternVote(p votingPattern, view map[types.BlockID]
 		var found bool
 		bl, err := ni.GetBlock(b)
 		if err != nil {
-			panic(fmt.Sprintf("error block not found ID %d", b))
+			ni.Panic(fmt.Sprintf("error block not found ID %d", b))
 		}
 		if bl.Layer() <= ni.pBase.Layer() {
 			return
 		}
 
 		if vp, found = ni.tExplicit[b]; !found {
-			panic(fmt.Sprintf("block %d from layer %v has no explicit voting, something went wrong ", b, bl.Layer()))
+			ni.Panic(fmt.Sprintf("block %d from layer %v has no explicit voting, something went wrong ", b, bl.Layer()))
 		}
 
 		for _, ex := range vp {
 			blocks, err := ni.LayerBlockIds(ex.Layer()) //todo handle error
 			if err != nil {
-				panic("could not retrieve layer block ids")
+				ni.Panic("could not retrieve layer block ids")
 			}
 			for _, bl := range blocks {
 				if _, found := ni.tPattern[ex][bl]; found {
@@ -453,7 +453,7 @@ func (ni *ninjaTortoise) getVotes() map[types.BlockID]vec {
 func (ni *ninjaTortoise) getVote(id types.BlockID) vec {
 	block, err := ni.GetBlock(id)
 	if err != nil {
-		panic(fmt.Sprintf("error block not found ID %d, %v", id, err))
+		ni.Panic(fmt.Sprintf("error block not found ID %d, %v", id, err))
 	}
 
 	if block.Layer() > ni.pBase.Layer() {
