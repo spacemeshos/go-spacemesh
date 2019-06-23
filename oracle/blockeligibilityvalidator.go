@@ -77,12 +77,12 @@ func (v BlockEligibilityValidator) BlockEligible(block *types.BlockHeader) (bool
 func (v BlockEligibilityValidator) getValidATX(blockEpoch types.EpochId, block *types.BlockHeader) (*types.ActivationTx, error) {
 	atx, err := v.activationDb.GetAtx(block.ATXID)
 	if err != nil {
-		v.log.Error("getting ATX failed: %v %v ep(%v)", err, block.ATXID.String()[:5], blockEpoch)
-		return nil, fmt.Errorf("getting ATX failed: %v %v ep(%v)", err, block.ATXID.String()[:5], blockEpoch)
+		v.log.Error("getting ATX failed: %v %v ep(%v)", err, block.ATXID.ShortString(), blockEpoch)
+		return nil, fmt.Errorf("getting ATX failed: %v %v ep(%v)", err, block.ATXID.ShortString(), blockEpoch)
 	}
 	if !atx.Valid {
-		v.log.Error("ATX %v is invalid", atx.Id().String()[:5])
-		return nil, fmt.Errorf("ATX %v is invalid", atx.Id().String()[:5])
+		v.log.Error("ATX %v is invalid", atx.ShortId())
+		return nil, fmt.Errorf("ATX %v is invalid", atx.ShortId())
 	}
 	if atxTargetEpoch := atx.PubLayerIdx.GetEpoch(v.layersPerEpoch) + 1; atxTargetEpoch != blockEpoch {
 		v.log.Error("ATX target epoch (%d) doesn't match block publication epoch (%d)",

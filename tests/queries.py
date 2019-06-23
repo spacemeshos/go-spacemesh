@@ -174,7 +174,7 @@ def print_layer_stat(layers):
 
 
 def get_blocks_per_node_and_layer(deployment):
-    # I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d, viewEdges: %d atx %v, atxs:%v
+    # I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d, viewEdges: %d, atx %v, atxs:%v
     block_fields = {"M": "I've created a block in layer"}
     blocks = query_message(current_index, deployment, deployment, block_fields, True)
     print("found " + str(len(blocks)) + " blocks")
@@ -287,7 +287,7 @@ def find_missing(indx, namespace, client_po_name, fields, min=1):
 def query_hare_output_set(indx, ns):
     hits = query_message(indx, ns, ns, {'M': 'Consensus process terminated'}, True)
     lst = [h.set_values for h in hits]
-    
+
     return lst
 
 
