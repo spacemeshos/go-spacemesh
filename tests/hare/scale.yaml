@@ -4,9 +4,9 @@ config_map_name: conf
 
 script_on_exit: '' #'./k8s/log-client-pods.sh'
 
-genesis_delta: 150
-deployment_ready_time_out: 120
-single_pod_ready_time_out: 60
+genesis_delta: 160
+deployment_ready_time_out: 150
+single_pod_ready_time_out: 80
 config_path: '../config.toml'
 
 bootstrap:
@@ -15,9 +15,9 @@ bootstrap:
   replicas: 1
   args:
     randcon: '8'
-    hare-committee-size: '80'
-    hare-max-adversaries: '39'
-    hare-round-duration-sec: '20'
+    hare-committee-size: '100'
+    hare-max-adversaries: '49'
+    hare-round-duration-sec: '12'
     hare-wakeup-delta: '5'
     layer-duration-sec: '360'
 
@@ -27,9 +27,9 @@ client:
   replicas: 99
   args:
     randcon: '8'
-    hare-committee-size: '80'
-    hare-max-adversaries: '39'
-    hare-round-duration-sec: '20'
+    hare-committee-size: '100'
+    hare-max-adversaries: '49'
+    hare-round-duration-sec: '12'
     hare-wakeup-delta: '5'
     layer-duration-sec: '360'
 
