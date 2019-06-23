@@ -113,9 +113,9 @@ var rewardConf = mesh.Config{
 func getMeshWithLevelDB(id string) *mesh.Mesh {
 	lg := log.New(id, "", "")
 	mshdb := mesh.NewPersistentMeshDB(id, lg)
-	acdbStore, _ := database.NewLDBDatabase(id+"activation", 0, 0)
-	atxdbStore, _ := database.NewLDBDatabase(id+"atx", 0, 0)
-	atxdb := activation.NewActivationDb(atxdbStore, acdbStore, &MockIStore{}, mshdb, uint64(10), &ValidatorMock{}, lg.WithName("atxDB"))
+	acdbStore, _ := database.NewLDBDatabase(id+"activation", 0, 0, lg)
+	atxdbStore, _ := database.NewLDBDatabase(id+"atx", 0, 0, lg)
+	atxdb := activation.NewActivationDb(atxdbStore, acdbStore, &MockIStore{}, mshdb, 10, &ValidatorMock{}, lg.WithName("atxDB"))
 	return mesh.NewMesh(mshdb, atxdb, rewardConf, &MeshValidatorMock{}, &MemPoolMock{}, &MemPoolMock{}, &stateMock{}, lg)
 }
 
@@ -126,7 +126,7 @@ func persistenceTeardown() {
 func getMeshWithMemoryDB(id string) *mesh.Mesh {
 	lg := log.New(id, "", "")
 	mshdb := mesh.NewMemMeshDB(lg)
-	atxdb := activation.NewActivationDb(database.NewMemDatabase(), database.NewMemDatabase(), &MockIStore{}, mshdb, uint64(10), &ValidatorMock{}, lg.WithName("atxDB"))
+	atxdb := activation.NewActivationDb(database.NewMemDatabase(), database.NewMemDatabase(), &MockIStore{}, mshdb, 10, &ValidatorMock{}, lg.WithName("atxDB"))
 	return mesh.NewMesh(mshdb, atxdb, rewardConf, &MeshValidatorMock{}, &MemPoolMock{}, &MemPoolMock{}, &stateMock{}, lg)
 }
 

@@ -349,7 +349,6 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	ha := hare.New(app.Config.HARE, swarm, sgn, nodeID, msh, hOracle, app.Config.CONSENSUS.LayersPerEpoch, idStore, atxdb, clock.Subscribe(), lg.WithName("hare"))
 
 	blockProducer := miner.NewBlockBuilder(nodeID, sgn, swarm, clock.Subscribe(), txpool, atxpool, coinToss, msh, ha, blockOracle, atxdb.ProcessAtx, lg.WithName("blockProducer"))
-	blockProducer := miner.NewBlockBuilder(nodeID, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, lg.WithName("blockProducer"))
 	blockListener := sync.NewBlockListener(swarm, blockValidator, syncer, 4, lg.WithName("blockListener"))
 
 	poetListener := activation.NewPoetListener(swarm, poetDb, lg.WithName("poetListener"))
@@ -397,7 +396,7 @@ func (app *SpacemeshApp) startServices() {
 
 func (app SpacemeshApp) stopServices() {
 
-	log.Info("%v closing services ", app.instanceName)
+	log.Info("%v closing services ", app.nodeId.Key)
 
 	if err := app.blockProducer.Close(); err != nil {
 		log.Error("cannot stop block producer %v", err)
@@ -409,28 +408,24 @@ func (app SpacemeshApp) stopServices() {
 	app.log.Info("closing atx builder")
 	app.atxBuilder.Stop()
 
-	log.Info("%v closing blockListener", app.instanceName)
+	log.Info("%v closing blockListener", app.nodeId.Key)
 	app.blockListener.Close()
 
-	log.Info("%v closing sync", app.instanceName)
+	log.Info("%v closing sync", app.nodeId.Key)
 	app.syncer.Close()
 
-	log.Info("%v closing Hare", app.instanceName)
+	log.Info("%v closing Hare", app.nodeId.Key)
 	app.hare.Close() //todo: need to add this
 
-	log.Info("%v closing clock", app.instanceName)
+	log.Info("%v closing clock", app.nodeId.Key)
 	app.clock.Close()
 
-	log.Info("%v closing p2p", app.instanceName)
+	log.Info("%v closing p2p", app.nodeId.Key)
 	app.P2P.Shutdown()
 
-	log.Info("%v closing mesh", app.instanceName)
+	log.Info("%v closing mesh", app.nodeId.Key)
 	app.mesh.Close()
 
-	log.Info("unregister from oracle")
-	if app.unregisterOracle != nil {
-		app.unregisterOracle()
-	}
 }
 
 func getEdIdentity() (*signing.EdSigner, error) {

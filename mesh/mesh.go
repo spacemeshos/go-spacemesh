@@ -166,42 +166,6 @@ func (m *Mesh) SetLatestLayer(idx types.LayerID) {
 	}
 }
 
-func (m *Mesh) GetBlock(id types.BlockID) (*types.Block, error) {
-
-	blk, err := m.GetMiniBlock(id)
-	if err != nil {
-		m.Error("could not retrieve block %v from database %v", id, err)
-		return nil, err
-	}
-
-	return m.MiniBlockToBlock(blk)
-}
-
-func (m *Mesh) MiniBlockToBlock(blk *types.MiniBlock) (*types.Block, error) {
-	txs, missingTxs := m.GetTransactions(blk.TxIds)
-	if missingTxs != nil {
-		return nil, errors.New("could not retrieve block %v transactions from database ")
-	}
-
-	var transactions []*types.SerializableTransaction
-	for _, value := range blk.TxIds {
-		transactions = append(transactions, txs[value])
-	}
-
-	atxs, missingATxs := m.GetATXs(blk.AtxIds)
-	if missingATxs != nil {
-		return nil, errors.New("could not retrieve block %v transactions from database ")
-	}
-
-	var activations []*types.ActivationTx
-	for _, value := range blk.AtxIds {
-		activations = append(activations, atxs[value])
-	}
-
-	res := blockFromMiniAndTxs(blk, transactions, activations)
-	return res, nil
-}
-
 func (m *Mesh) GetLayer(index types.LayerID) (*types.Layer, error) {
 
 	mBlocks, err := m.LayerBlocks(index)
@@ -349,7 +313,7 @@ func (m *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.SerializableTransa
 		return fmt.Errorf("could not write transactions of block %v database %v", blk.ID(), err)
 	}
 
-	blk.ATxIds = atxids
+	blk.AtxIds = atxids
 	blk.TxIds = txids
 
 	if err := m.MeshDB.AddBlock(blk); err != nil {
@@ -373,7 +337,7 @@ func (m *Mesh) invalidateFromPools(blk *types.MiniBlock) {
 		m.txInvalidator.Invalidate(id)
 	}
 	m.atxInvalidator.Invalidate(blk.ATXID)
-	for _, id := range blk.ATxIds {
+	for _, id := range blk.AtxIds {
 		m.atxInvalidator.Invalidate(id)
 	}
 }

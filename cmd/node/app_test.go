@@ -196,7 +196,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 				stickyClientsDone = maxClientsDone
 				log.Info("%d roots confirmed out of %d", maxClientsDone, len(suite.apps))
 			}
-			time.Sleep(1 * time.Millisecond)
+			time.Sleep(10 * time.Second)
 		}
 	}
 }

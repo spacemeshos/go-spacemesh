@@ -21,7 +21,7 @@ func createLayerWithAtx(msh *mesh.Mesh, atxdb *ActivationDb, id types.LayerID, n
 		block1.MinerID.Key = strconv.Itoa(i)
 		block1.BlockVotes = append(block1.BlockVotes, votes...)
 		for _, atx := range atxs {
-			block1.ATxIds = append(block1.ATxIds, atx.Id())
+			block1.AtxIds = append(block1.AtxIds, atx.Id())
 		}
 		block1.ViewEdges = append(block1.ViewEdges, views...)
 		msh.AddBlockWithTxs(block1, []*types.SerializableTransaction{}, atxs)
@@ -253,10 +253,13 @@ func TestMesh_processBlockATXs(t *testing.T) {
 	for _, t := range atxs {
 		atxdb.ProcessAtx(t)
 	}
-	assert.Equal(t, 3, int(atxdb.ActiveSetSize(1)))
-	block1.ATXs = append(block1.ATXs, atxs...)
+	i, err := atxdb.ActiveSetSize(1)
+	assert.NoError(t, err)
+	assert.Equal(t, uint32(3), i)
 
-	atxdb.ProcessBlockATXs(block1)
+	atxdb.ProcessAtx(atxs[0])
+	atxdb.ProcessAtx(atxs[1])
+	atxdb.ProcessAtx(atxs[2])
 	activeSetSize, err := atxdb.ActiveSetSize(1)
 	assert.NoError(t, err)
 	assert.Equal(t, 3, int(activeSetSize))

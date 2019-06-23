@@ -308,7 +308,7 @@ func (s *Syncer) Txs(mb *types.Block) ([]*types.SerializableTransaction, error) 
 }
 
 func (s *Syncer) ATXs(mb *types.Block) (atxs []*types.ActivationTx, associated *types.ActivationTx, err error) {
-	foundAtxs, missinDB := s.GetATXs(mb.ATxIds)
+	foundAtxs, missinDB := s.GetATXs(mb.AtxIds)
 
 	//look in pool
 	missing := make([]types.AtxId, 0, len(missinDB))
@@ -352,8 +352,8 @@ func (s *Syncer) ATXs(mb *types.Block) (atxs []*types.ActivationTx, associated *
 		}
 	}
 
-	atxs = make([]*types.ActivationTx, 0, len(mb.ATxIds))
-	for _, t := range mb.ATxIds {
+	atxs = make([]*types.ActivationTx, 0, len(mb.AtxIds))
+	for _, t := range mb.AtxIds {
 		if tx, ok := foundAtxs[t]; ok {
 			atxs = append(atxs, tx)
 		} else if tx, ok := txMap[t]; ok {

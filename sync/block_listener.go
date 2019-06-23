@@ -90,7 +90,7 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 
 func (bl *BlockListener) handleBlock(blk *types.Block) bool {
 
-	bl.Log.With().Info("got new block", log.Uint64("id", uint64(blk.Id)), log.Int("txs", len(blk.TxIds)), log.Int("atxs", len(blk.ATxIds)))
+	bl.Log.With().Info("got new block", log.Uint64("id", uint64(blk.Id)), log.Int("txs", len(blk.TxIds)), log.Int("atxs", len(blk.AtxIds)))
 	eligible, err := bl.BlockEligible(&blk.BlockHeader)
 	if err != nil {
 		bl.Error("block %v eligible check failed ", blk.ID())

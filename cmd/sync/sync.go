@@ -85,11 +85,11 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	}
 
 	poetDb := activation.NewPoetDb(database.NewMemDatabase(), lg.WithName("poetDb"))
-	validator := nipst.NewValidator(npstCfg)
+	validator := nipst.NewValidator(npstCfg, poetDb)
 
 	mshdb := mesh.NewPersistentMeshDB(app.Config.DataDir, lg)
-	atxdbStore, _ := database.NewLDBDatabase(app.Config.DataDir+"atx", 0, 0)
-	atxdb := activation.NewActivationDb(atxdbStore, iddbstore, &sync.MockIStore{}, mshdb, uint64(10), validator, lg.WithName("atxDB"))
+	atxdbStore, _ := database.NewLDBDatabase(app.Config.DataDir+"atx", 0, 0, lg)
+	atxdb := activation.NewActivationDb(atxdbStore, iddbstore, &sync.MockIStore{}, mshdb, 10, validator, lg.WithName("atxDB"))
 
 	txpool := miner.NewMemPool(reflect.TypeOf([]*types.SerializableTransaction{}))
 	atxpool := miner.NewMemPool(reflect.TypeOf([]*types.ActivationTx{}))

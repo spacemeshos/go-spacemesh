@@ -6,7 +6,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
@@ -119,7 +118,7 @@ func TestLayers_AddBlock(t *testing.T) {
 
 	assert.True(t, len(rBlock1.TxIds) == len(block1.TxIds), "block content was wrong")
 	assert.True(t, bytes.Compare(rBlock2.MiniBlock.Data, []byte("data2")) == 0, "block content was wrong")
-	assert.True(t, len(rBlock1.ATxIds) == len(block1.ATxIds))
+	assert.True(t, len(rBlock1.AtxIds) == len(block1.AtxIds))
 }
 
 func TestLayers_AddLayer(t *testing.T) {

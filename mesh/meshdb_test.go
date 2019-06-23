@@ -47,7 +47,7 @@ func TestMeshDB_AddBlock(t *testing.T) {
 
 	atx := types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")}, 1, types.AtxId{}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{}), true)
 
-	block1.ATxIds = append(block1.ATxIds, atx.Id())
+	block1.AtxIds = append(block1.AtxIds, atx.Id())
 	err := mdb.AddBlock(block1)
 	assert.NoError(t, err)
 
@@ -55,7 +55,7 @@ func TestMeshDB_AddBlock(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.True(t, len(rBlock1.TxIds) == len(block1.TxIds), "block content was wrong")
-	assert.True(t, len(rBlock1.ATxIds) == len(block1.ATxIds), "block content was wrong")
+	assert.True(t, len(rBlock1.AtxIds) == len(block1.AtxIds), "block content was wrong")
 	//assert.True(t, bytes.Compare(rBlock2.Data, []byte("data2")) == 0, "block content was wrong")
 }
 

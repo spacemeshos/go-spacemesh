@@ -159,28 +159,28 @@ func TestMesh_AccumulateRewards_underQuota(t *testing.T) {
 	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data1"))
 	block1.MinerID.Key = "1"
 	totalRewards += addTransactionsWithGas(layers.MeshDB, block1, 10, 8)
-	atx := types.NewActivationTx(block1.MinerID, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &nipst.NIPST{}, true)
+	atx := types.NewActivationTx(block1.MinerID, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &types.NIPST{}, true)
 	atxdb.AddAtx(atx.Id(), atx)
 	block1.ATXID = atx.Id()
 
 	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data2"))
 	block2.MinerID.Key = "2"
 	totalRewards += addTransactionsWithGas(layers.MeshDB, block2, 10, 9)
-	atx = types.NewActivationTx(block2.MinerID, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &nipst.NIPST{}, true)
+	atx = types.NewActivationTx(block2.MinerID, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &types.NIPST{}, true)
 	atxdb.AddAtx(atx.Id(), atx)
 	block2.ATXID = atx.Id()
 
 	block3 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data3"))
 	block3.MinerID.Key = "3"
 	totalRewards += addTransactionsWithGas(layers.MeshDB, block3, 17, 10)
-	atx = types.NewActivationTx(block3.MinerID, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &nipst.NIPST{}, true)
+	atx = types.NewActivationTx(block3.MinerID, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &types.NIPST{}, true)
 	atxdb.AddAtx(atx.Id(), atx)
 	block3.ATXID = atx.Id()
 
 	block4 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data4"))
 	block4.MinerID.Key = "4"
 	totalRewards += addTransactionsWithGas(layers.MeshDB, block4, 16, 11)
-	atx = types.NewActivationTx(block4.MinerID, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &nipst.NIPST{}, true)
+	atx = types.NewActivationTx(block4.MinerID, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &types.NIPST{}, true)
 	atxdb.AddAtx(atx.Id(), atx)
 	block4.ATXID = atx.Id()
 

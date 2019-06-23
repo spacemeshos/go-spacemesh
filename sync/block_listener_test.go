@@ -185,7 +185,7 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 
 	bl2.AddBlockWithTxs(blk, []*types.SerializableTransaction{tx}, []*types.ActivationTx{atx})
 
-	mblk := types.Block{MiniBlock: types.MiniBlock{BlockHeader: blk.BlockHeader, TxIds: []types.TransactionId{types.GetTransactionId(tx)}, ATxIds: []types.AtxId{atx.Id()}}}
+	mblk := types.Block{MiniBlock: types.MiniBlock{BlockHeader: blk.BlockHeader, TxIds: []types.TransactionId{types.GetTransactionId(tx)}, AtxIds: []types.AtxId{atx.Id()}}}
 
 	data, err := types.InterfaceToBytes(&mblk)
 	require.NoError(t, err)
