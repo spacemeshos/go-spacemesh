@@ -107,7 +107,8 @@ func (bo *MinerBlockOracle) calcEligibilityProofs(epochNumber types.EpochId) err
 		})
 	}
 	bo.proofsEpoch = epochNumber
-	bo.log.Info("miner %v is eligible for blocks on %d layers in epoch %d", bo.nodeID.Key[:5], len(bo.eligibilityProofs), epochNumber)
+	bo.log.Info("miner %v is eligible for %d blocks on %d layers in epoch %d",
+		bo.nodeID.Key[:5], numberOfEligibleBlocks, len(bo.eligibilityProofs), epochNumber)
 	return nil
 }
 
