@@ -19,15 +19,16 @@ const CounterKey = 0xaaaa
 type ActivationDb struct {
 	sync.RWMutex
 	//todo: think about whether we need one db or several
-	atxs           database.DB
-	nipsts         database.DB
-	nipstLock      sync.RWMutex
-	atxCache       AtxCache
-	meshDb         *mesh.MeshDB
-	LayersPerEpoch uint16
-	nipstValidator NipstValidator
-	ids            IdStore
-	log            log.Log
+	atxs            database.DB
+	nipsts          database.DB
+	nipstLock       sync.RWMutex
+	atxCache        AtxCache
+	meshDb          *mesh.MeshDB
+	LayersPerEpoch  uint16
+	nipstValidator  NipstValidator
+	ids             IdStore
+	log             log.Log
+	processAtxMutex sync.Mutex
 }
 
 func NewActivationDb(dbstore database.DB, nipstStore database.DB, idstore IdStore, meshDb *mesh.MeshDB, layersPerEpoch uint16, nipstValidator NipstValidator, log log.Log) *ActivationDb {
@@ -45,6 +46,9 @@ func (db *ActivationDb) ProcessBlockATXs(blk *types.Block) {
 // ProcessAtx validates the active set size declared in the atx, and validates the atx according to atx validation rules
 // it then stores the atx with flag set to validity of the atx
 func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx) {
+	db.processAtxMutex.Lock()
+	defer db.processAtxMutex.Unlock()
+
 	eatx, _ := db.GetAtx(atx.Id())
 	if eatx != nil {
 		atx.Nipst = nil
@@ -501,13 +505,35 @@ func (db *ActivationDb) IsIdentityActive(edId string, layer types.LayerID) (bool
 	if len(ids) == 0 { // GetIdentity succeeded but no ATXs, this is a fatal error
 		return false, fmt.Errorf("no active IDs for known node")
 	}
+
 	atx, err := db.GetAtx(ids[len(ids)-1])
 	if err != nil {
 		db.log.Error("IsIdentityActive erred while getting atx err=%v", err)
 		return false, nil
 	}
-	//atx.TargetEpoch(db.LayersPerEpoch) == epoch
-	return atx.Valid && atx.PubLayerIdx.GetEpoch(db.LayersPerEpoch)+1 == epoch, err
+
+	lastAtxTargetEpoch := atx.TargetEpoch(db.LayersPerEpoch)
+	if lastAtxTargetEpoch < epoch {
+		db.log.Info("IsIdentityActive latest atx is too old expected=%v actual=%v atxid=%v",
+			epoch, lastAtxTargetEpoch, atx.ShortId())
+		return false, nil
+	}
+
+	if lastAtxTargetEpoch > epoch {
+		// This could happen if we already published the ATX for the next epoch, so we check the previous one as well
+		if len(ids) < 2 {
+			db.log.Info("IsIdentityActive latest atx is too new but no previous atx len(ids)=%v", len(ids))
+			return false, nil
+		}
+		atx, err = db.GetAtx(ids[len(ids)-2])
+		if err != nil {
+			db.log.Error("IsIdentityActive erred while getting atx for second newest err=%v", err)
+			return false, nil
+		}
+	}
+
+	// lastAtxTargetEpoch = epoch
+	return atx.Valid && atx.TargetEpoch(db.LayersPerEpoch) == epoch, nil
 }
 
 func decodeAtxIds(idsBytes []byte) ([]types.AtxId, error) {
