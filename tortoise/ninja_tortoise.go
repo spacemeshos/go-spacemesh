@@ -369,7 +369,7 @@ func (ni *ninjaTortoise) addPatternVote(p votingPattern, view map[types.BlockID]
 		var found bool
 		bl, err := ni.GetBlock(b)
 		if err != nil {
-			ni.Panic(fmt.Sprintf("error block not found ID %d", b))
+			ni.Panic(fmt.Sprintf("error block not found ID %d %v", b, err))
 		}
 		if bl.Layer() <= ni.pBase.Layer() {
 			return
