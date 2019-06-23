@@ -27,7 +27,7 @@ func bytesToShortString(b []byte) string {
 	if l > 5 {
 		l = 5
 	}
-	return fmt.Sprintf("\"%s…\"", hex.EncodeToString(b)[:l])
+	return fmt.Sprintf("%s…", hex.EncodeToString(b)[:l])
 }
 
 func (p *PostProof) serialize() []byte {
