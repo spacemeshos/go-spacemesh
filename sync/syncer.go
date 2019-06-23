@@ -16,6 +16,13 @@ import (
 	"time"
 )
 
+type MemPool interface {
+	Get(id interface{}) interface{}
+	PopItems(size int) interface{}
+	Put(id interface{}, item interface{})
+	Invalidate(id interface{})
+}
+
 type BlockValidator interface {
 	BlockEligible(block *types.BlockHeader) (bool, error)
 }
@@ -38,6 +45,8 @@ type Syncer struct {
 	Configuration
 	log.Log
 	*server.MessageServer
+	txpool            MemPool
+	atxpool           MemPool
 	currentLayer      types.LayerID
 	SyncLock          uint32
 	startLock         uint32
@@ -52,9 +61,10 @@ func (s *Syncer) ForceSync() {
 }
 
 func (s *Syncer) Close() {
-	s.Peers.Close()
-	close(s.forceSync)
 	close(s.exit)
+	close(s.forceSync)
+	s.MessageServer.Close()
+	s.Peers.Close()
 }
 
 const (
@@ -69,7 +79,7 @@ const (
 )
 
 func (s *Syncer) IsSynced() bool {
-	return s.VerifiedLayer() == s.maxSyncLayer()
+	return s.ValidatedLayer()+1 == s.maxSyncLayer()
 }
 
 func (s *Syncer) Start() {
@@ -106,8 +116,8 @@ func (s *Syncer) run() {
 }
 
 //fires a sync every sm.syncInterval or on force space from outside
-func NewSync(srv service.Service, layers *mesh.Mesh, bv BlockValidator, tv TxValidator, conf Configuration, clock timesync.LayerTimer, logger log.Log) *Syncer {
-	s := Syncer{
+func NewSync(srv service.Service, layers *mesh.Mesh, txpool MemPool, atxpool MemPool, bv BlockValidator, tv TxValidator, conf Configuration, clock timesync.LayerTimer, logger log.Log) *Syncer {
+	s := &Syncer{
 		BlockValidator: bv,
 		TxValidator:    tv,
 		Configuration:  conf,
@@ -116,6 +126,8 @@ func NewSync(srv service.Service, layers *mesh.Mesh, bv BlockValidator, tv TxVal
 		Peers:          p2p.NewPeers(srv, logger.WithName("peers")),
 		MessageServer:  server.NewMsgServer(srv.(server.Service), syncProtocol, conf.RequestTimeout, make(chan service.DirectMessage, config.ConfigValues.BufferSize), logger.WithName("srv")),
 		SyncLock:       0,
+		txpool:         txpool,
+		atxpool:        atxpool,
 		startLock:      0,
 		forceSync:      make(chan bool),
 		clock:          clock,
@@ -125,9 +137,9 @@ func NewSync(srv service.Service, layers *mesh.Mesh, bv BlockValidator, tv TxVal
 	s.RegisterBytesMsgHandler(LAYER_HASH, newLayerHashRequestHandler(layers, logger))
 	s.RegisterBytesMsgHandler(MINI_BLOCK, newMiniBlockRequestHandler(layers, logger))
 	s.RegisterBytesMsgHandler(LAYER_IDS, newLayerBlockIdsRequestHandler(layers, logger))
-	s.RegisterBytesMsgHandler(TX, newTxsRequestHandler(layers, logger))
-	s.RegisterBytesMsgHandler(ATX, newATxsRequestHandler(layers, logger))
-	return &s
+	s.RegisterBytesMsgHandler(TX, newTxsRequestHandler(s, logger))
+	s.RegisterBytesMsgHandler(ATX, newATxsRequestHandler(s, logger))
+	return s
 }
 
 func (s *Syncer) maxSyncLayer() types.LayerID {
@@ -138,8 +150,8 @@ func (s *Syncer) maxSyncLayer() types.LayerID {
 
 func (s *Syncer) Synchronise() {
 	mu := sync.Mutex{}
-	for currentSyncLayer := s.VerifiedLayer() + 1; currentSyncLayer < s.maxSyncLayer(); currentSyncLayer++ {
-		s.Info("syncing layer %v to layer %v current consensus layer is %d", s.VerifiedLayer(), currentSyncLayer, s.currentLayer)
+	for currentSyncLayer := s.ValidatedLayer() + 1; currentSyncLayer < s.maxSyncLayer(); currentSyncLayer++ {
+		s.Info("syncing layer %v to layer %v current consensus layer is %d", s.ValidatedLayer(), currentSyncLayer, s.currentLayer)
 		lyr, err := s.GetLayer(types.LayerID(currentSyncLayer))
 		if err != nil {
 			s.Info("layer %v is not in the database", currentSyncLayer)
@@ -187,24 +199,8 @@ func (s *Syncer) fetchFullBlocks(blockIds []types.BlockID) ([]*types.Block, erro
 	output := s.fetchWithFactory(BlockReqFactory(blockIds), s.Concurrency)
 	blocksArr := make([]*types.Block, 0, len(blockIds))
 	for out := range output {
-		mb := out.(*types.MiniBlock)
+		block := out.(*types.Block)
 
-		//sync Transactions
-		txs, err := s.Txs(mb)
-		if err != nil {
-			s.Warning(fmt.Sprintf("failed fetching block %v transactions ", err))
-			continue
-		}
-
-		//sync ATxs
-		atxs, associated, err := s.ATXs(mb)
-
-		if err != nil {
-			s.Warning(fmt.Sprintf("failed fetching block %v activation transactions ", err))
-			continue
-		}
-
-		block := &types.Block{BlockHeader: mb.BlockHeader, Txs: txs, ATXs: atxs}
 		eligible, err := s.BlockEligible(&block.BlockHeader)
 		if err != nil {
 			s.Warning(fmt.Sprintf("failed checking eligiblety %v", block.ID()), err)
@@ -215,17 +211,12 @@ func (s *Syncer) fetchFullBlocks(blockIds []types.BlockID) ([]*types.Block, erro
 			continue
 		}
 
-		if associated != nil {
-			s.ProcessAtx(associated)
-		}
-
-		s.Info("add block to layer %v", block)
-
-		if err := s.AddBlock(block); err != nil {
-			s.Warning(fmt.Sprintf("could not add %v", block.ID()), err)
+		if err := s.syncMissingContent(block); err != nil {
+			s.Error(fmt.Sprintf("failed derefrencing block data %v", block.ID()), err)
 			continue
 		}
-		s.Info("added block to layer %v", block)
+
+		s.Info("added block to layer %v", block.Layer())
 		blocksArr = append(blocksArr, block)
 
 	}
@@ -233,8 +224,65 @@ func (s *Syncer) fetchFullBlocks(blockIds []types.BlockID) ([]*types.Block, erro
 	return blocksArr, nil
 }
 
-func (s *Syncer) Txs(mb *types.MiniBlock) ([]*types.SerializableTransaction, error) {
-	foundTxs, missing := s.GetTransactions(mb.TxIds)
+func (s *Syncer) syncMissingContent(blk *types.Block) error {
+	var txs []*types.SerializableTransaction
+	var txerr error
+	wg := sync.WaitGroup{}
+	wg.Add(2)
+	go func() {
+		//sync Transactions
+		txs, txerr = s.Txs(blk)
+		wg.Done()
+	}()
+
+	var atxs []*types.ActivationTx
+	//var associated *types.ActivationTx
+	var atxerr error
+
+	go func() {
+		//sync ATxs
+		atxs, _, atxerr = s.ATXs(blk)
+		wg.Done()
+	}()
+
+	wg.Wait()
+
+	if txerr != nil {
+		s.Warning(fmt.Sprintf("failed fetching block %v transactions %v", blk.ID(), txerr))
+		return txerr
+	}
+
+	if atxerr != nil {
+		s.Warning(fmt.Sprintf("failed fetching block %v transactions %v", blk.ID(), atxerr))
+		return atxerr
+	}
+
+	s.Info(fmt.Sprintf("fetched all txs for block %v", blk.ID()))
+	s.Info(fmt.Sprintf("fetched all atxs for block %v", blk.ID()))
+
+	if err := s.AddBlockWithTxs(blk, txs, atxs); err != nil {
+		s.Warning(fmt.Sprintf("failed fetching block %v activation transactions %v", blk.ID(), err))
+		return err
+	}
+
+	s.Info(fmt.Sprintf("added block with txs to database %v", blk.ID()))
+	return nil
+}
+
+func (s *Syncer) Txs(mb *types.Block) ([]*types.SerializableTransaction, error) {
+	//look in db
+	foundTxs, missinDB := s.GetTransactions(mb.TxIds)
+
+	//look in pool
+	missing := make([]types.TransactionId, 0, len(missinDB))
+	for _, t := range missinDB {
+		if tx := s.txpool.Get(t); tx != nil {
+			foundTxs[t] = tx.(*types.SerializableTransaction)
+		} else {
+			missing = append(missing, t)
+		}
+	}
+
 	//map and sort txs
 	txMap := make(map[types.TransactionId]*types.SerializableTransaction)
 	if len(missing) > 0 {
@@ -259,8 +307,24 @@ func (s *Syncer) Txs(mb *types.MiniBlock) ([]*types.SerializableTransaction, err
 	return txs, nil
 }
 
-func (s *Syncer) ATXs(mb *types.MiniBlock) (atxs []*types.ActivationTx, associated *types.ActivationTx, err error) {
-	localAtxs, missing := s.GetATXs(mb.ATxIds)
+func (s *Syncer) ATXs(mb *types.Block) (atxs []*types.ActivationTx, associated *types.ActivationTx, err error) {
+	foundAtxs, missinDB := s.GetATXs(mb.ATxIds)
+
+	//look in pool
+	missing := make([]types.AtxId, 0, len(missinDB))
+	for _, t := range missinDB {
+		if tx := s.atxpool.Get(t); tx != nil {
+			atx := tx.(*types.ActivationTx)
+			if atx.Nipst == nil {
+				s.Warning("atx %v nipst not found ", t.Hex())
+				missing = append(missing, t)
+			}
+			foundAtxs[t] = atx
+		} else {
+			s.Warning("atx %v not found ", t.Hex())
+			missing = append(missing, t)
+		}
+	}
 
 	fetchAssociated := false
 	if mb.ATXID != *types.EmptyAtxId {
@@ -288,14 +352,14 @@ func (s *Syncer) ATXs(mb *types.MiniBlock) (atxs []*types.ActivationTx, associat
 		}
 	}
 
-	atxs = make([]*types.ActivationTx, 0, len(mb.TxIds))
+	atxs = make([]*types.ActivationTx, 0, len(mb.ATxIds))
 	for _, t := range mb.ATxIds {
-		if tx, ok := localAtxs[t]; ok {
+		if tx, ok := foundAtxs[t]; ok {
 			atxs = append(atxs, tx)
 		} else if tx, ok := txMap[t]; ok {
 			atxs = append(atxs, tx)
 		} else {
-			return nil, nil, errors.New(fmt.Sprintf("could not fetch atx %v", t))
+			return nil, nil, errors.New(fmt.Sprintf("could not fetch atx %v", t.Hex()))
 		}
 	}
 	return atxs, associated, nil

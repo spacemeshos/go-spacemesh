@@ -37,12 +37,6 @@ func NewActivationDb(dbstore database.DB, nipstStore database.DB, idstore IdStor
 	return &ActivationDb{atxs: dbstore, nipsts: nipstStore, atxCache: NewAtxCache(20), meshDb: meshDb, nipstValidator: nipstValidator, LayersPerEpoch: types.LayerID(layersPerEpoch), ids: idstore, log: log}
 }
 
-func (db *ActivationDb) ProcessBlockATXs(blk *types.Block) {
-	for _, atx := range blk.ATXs {
-		db.ProcessAtx(atx)
-	}
-}
-
 // ProcessAtx validates the active set size declared in the atx, and validates the atx according to atx validation rules
 // it then stores the atx with flag set to validity of the atx
 func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx) {
@@ -72,7 +66,7 @@ func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx) {
 	atx.Valid = err == nil
 	err = db.StoreAtx(epoch, atx)
 	if err != nil {
-		db.log.Error("cannot store atx: %v", atx)
+		db.log.Error("cannot store atx: %v %v", atx, err)
 	}
 
 	err = db.ids.StoreNodeIdentity(atx.NodeId)
@@ -101,7 +95,7 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 	lastLayerOfLastEpoch := firstLayerOfLastEpoch + db.LayersPerEpoch - 1
 
 	traversalFunc := func(blkh *types.BlockHeader) error {
-		blk, err := db.meshDb.GetMiniBlock(blkh.Id)
+		blk, err := db.meshDb.GetBlock(blkh.Id)
 		if err != nil {
 			db.log.Error("cannot validate atx, block %v not found", blkh.Id)
 			return err
@@ -156,6 +150,9 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 // - ATX LayerID is NipstLayerTime or more after the PositioningATX LayerID.
 // - The ATX view of the previous epoch contains ActiveSetSize activations
 func (db *ActivationDb) ValidateAtx(atx *types.ActivationTx) error {
+	if atx.Nipst == nil {
+		return fmt.Errorf("nil nipst!")
+	}
 	if atx.PrevATXId != *types.EmptyAtxId {
 		prevATX, err := db.GetAtx(atx.PrevATXId)
 		if err != nil {

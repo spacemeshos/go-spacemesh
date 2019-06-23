@@ -30,6 +30,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"reflect"
 	"runtime"
 	"runtime/pprof"
 	"time"
@@ -94,6 +95,7 @@ type SpacemeshApp struct {
 	clock            *timesync.Ticker
 	hare             *hare.Hare
 	atxBuilder       *activation.Builder
+	unregisterOracle func()
 	edSgn            *signing.EdSigner
 }
 
@@ -252,9 +254,8 @@ func (app *SpacemeshApp) setupGenesis(cfg *apiCfg.GenesisConfig) {
 		app.state.SetNonce(id, acc.Nonce)
 	}
 
-	genesis := mesh.CreateGenesisBlock()
 	app.state.Commit(false)
-	app.mesh.AddBlock(genesis)
+	app.mesh.AddBlock(&mesh.GenesisBlock)
 }
 
 func (app *SpacemeshApp) setupTestFeatures() {
@@ -325,10 +326,15 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	blockValidator := oracle.NewBlockEligibilityValidator(int32(layerSize), uint16(layersPerEpoch), atxdb, beaconProvider, BLS381.Verify2, lg.WithName("blkElgValidator"))
 
 	trtl := tortoise.NewAlgorithm(int(1), mdb, lg.WithName("trtl"))
-	msh := mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, processor, lg.WithName("mesh")) //todo: what to do with the logger?
+
+	txpool := miner.NewMemPool(reflect.TypeOf([]*types.SerializableTransaction{}))
+	atxpool := miner.NewMemPool(reflect.TypeOf([]*types.ActivationTx{}))
+
+	msh := mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, txpool, atxpool, processor, lg.WithName("mesh")) //todo: what to do with the logger?
 
 	conf := sync.Configuration{Concurrency: 4, LayerSize: int(layerSize), RequestTimeout: 100 * time.Millisecond}
-	syncer := sync.NewSync(swarm, msh, blockValidator, sync.TxValidatorMock{}, conf, clock.Subscribe(), lg.WithName("sync"))
+
+	syncer := sync.NewSync(swarm, msh, txpool, atxpool, blockValidator, sync.TxValidatorMock{}, conf, clock.Subscribe(), lg.WithName("sync"))
 
 	// TODO: we should probably decouple the apptest and the node (and duplicate as necessary)
 	var hOracle hare.Rolacle
@@ -341,7 +347,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 
 	ha := hare.New(app.Config.HARE, swarm, sgn, nodeID, msh, hOracle, app.Config.CONSENSUS.LayersPerEpoch, idStore, atxdb, clock.Subscribe(), lg.WithName("hare"))
 
-	blockProducer := miner.NewBlockBuilder(nodeID, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, atxdb.ProcessAtx, lg.WithName("blockProducer"))
+	blockProducer := miner.NewBlockBuilder(nodeID, sgn, swarm, clock.Subscribe(), txpool, atxpool, coinToss, msh, ha, blockOracle, atxdb.ProcessAtx, lg.WithName("blockProducer"))
 	blockListener := sync.NewBlockListener(swarm, blockValidator, syncer, 4, lg.WithName("blockListener"))
 
 	nipstBuilder := nipst.NewNipstBuilder([]byte(nodeID.Key), commitmentConfig.SpaceUnit, commitmentConfig.Difficulty, 100, postClient, poetClient, lg.WithName("nipstBuilder")) // TODO: use both keys in the nodeID
@@ -379,30 +385,35 @@ func (app SpacemeshApp) stopServices() {
 
 	log.Info("%v closing services ", app.instanceName)
 
-	log.Info("%v closing clock", app.instanceName)
-	app.clock.Close()
-
-	log.Info("%v closing atx builder", app.instanceName)
-	app.atxBuilder.Stop()
-
-	log.Info("%v closing Hare", app.instanceName)
-	app.hare.Close() //todo: need to add this
-
-	log.Info("%v closing p2p", app.instanceName)
-	app.P2P.Shutdown()
-
 	if err := app.blockProducer.Close(); err != nil {
 		log.Error("cannot stop block producer %v", err)
 	}
 
+	log.Info("%v closing atx builder", app.instanceName)
+	app.atxBuilder.Stop()
+
 	log.Info("%v closing blockListener", app.instanceName)
 	app.blockListener.Close()
+
+	log.Info("%v closing sync", app.instanceName)
+	app.syncer.Close()
+
+	log.Info("%v closing Hare", app.instanceName)
+	app.hare.Close() //todo: need to add this
+
+	log.Info("%v closing clock", app.instanceName)
+	app.clock.Close()
+
+	log.Info("%v closing p2p", app.instanceName)
+	app.P2P.Shutdown()
 
 	log.Info("%v closing mesh", app.instanceName)
 	app.mesh.Close()
 
-	log.Info("%v closing sync", app.instanceName)
-	app.syncer.Close()
+	log.Info("unregister from oracle")
+	if app.unregisterOracle != nil {
+		app.unregisterOracle()
+	}
 }
 
 func getEdIdentity() (*signing.EdSigner, error) {
@@ -498,6 +509,12 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 		log.Error("poet server not found on addr %v, err: %v", app.Config.PoETServer, err)
 		return
 	}
+
+	oracle.SetServerAddress(app.Config.OracleServer)
+	oracleClient := oracle.NewOracleClientWithWorldID(uint64(app.Config.OracleServerWorldId))
+	oracleClient.Register(true, app.edSgn.PublicKey().String()) // todo: configure no faulty nodes
+
+	app.unregisterOracle = func() { oracleClient.Unregister(true, app.edSgn.PublicKey().String()) }
 
 	rng := amcl.NewRAND()
 	pub := app.edSgn.PublicKey().Bytes()

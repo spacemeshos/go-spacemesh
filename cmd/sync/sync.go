@@ -7,6 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/sync"
@@ -14,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spf13/cobra"
 	"os"
+	"reflect"
 	"time"
 )
 
@@ -83,13 +85,19 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	}
 
 	validator := nipst.NewValidator(npstCfg)
-	mshDb := mesh.NewPersistentMeshDB(app.Config.DataDir, lg.WithOptions(log.Nop))
-	atxdb := activation.NewActivationDb(database.NewMemDatabase(), database.NewMemDatabase(), activation.NewIdentityStore(iddbstore), mshDb, uint64(app.Config.CONSENSUS.LayersPerEpoch), validator, lg.WithName("atxDb").WithOptions(log.Nop))
-	msh := mesh.NewMesh(mshDb, atxdb, sync.ConfigTst(), &sync.MeshValidatorMock{}, &sync.MockState{}, lg.WithOptions(log.Nop))
+
+	mshdb := mesh.NewPersistentMeshDB(app.Config.DataDir, lg)
+	atxdbStore, _ := database.NewLDBDatabase(app.Config.DataDir+"atx", 0, 0)
+	atxdb := activation.NewActivationDb(atxdbStore, iddbstore, &sync.MockIStore{}, mshdb, uint64(10), validator, lg.WithName("atxDB"))
+
+	txpool := miner.NewMemPool(reflect.TypeOf([]*types.SerializableTransaction{}))
+	atxpool := miner.NewMemPool(reflect.TypeOf([]*types.ActivationTx{}))
+
+	msh := mesh.NewMesh(mshdb, atxdb, sync.ConfigTst(), &sync.MeshValidatorMock{}, txpool, atxpool, &sync.MockState{}, lg.WithOptions(log.Nop))
 	defer msh.Close()
 
 	ch := make(chan types.LayerID, 1)
-	app.sync = sync.NewSync(swarm, msh, sync.BlockValidatorMock{}, sync.TxValidatorMock{}, conf, ch, lg.WithName("sync"))
+	app.sync = sync.NewSync(swarm, msh, txpool, atxpool, sync.BlockValidatorMock{}, sync.TxValidatorMock{}, conf, ch, lg.WithName("sync"))
 	ch <- 101
 	if err = swarm.Start(); err != nil {
 		log.Panic("error starting p2p err=%v", err)
@@ -110,13 +118,13 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	time.Sleep(10 * time.Second)
 
 	app.sync.Start()
-	for app.sync.VerifiedLayer() < 100 {
+	for app.sync.ValidatedLayer() < 100 {
 		lg.Info("sleep for %v sec", 30)
 		time.Sleep(30 * time.Second)
 		ch <- 101
 	}
 
-	lg.Info("%v verified layers %v", app.BaseApp.Config.P2P.NodeID, app.sync.VerifiedLayer())
+	lg.Info("%v verified layers %v", app.BaseApp.Config.P2P.NodeID, app.sync.ValidatedLayer())
 	lg.Info("sync done")
 	for {
 		lg.Info("keep busy sleep for %v sec", 60)
