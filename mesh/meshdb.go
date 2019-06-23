@@ -227,7 +227,7 @@ func (m *MeshDB) writeBlock(bl *types.Block) error {
 		atxids = append(atxids, t.Id())
 	}
 
-	minblock := &types.MiniBlock{BlockHeader: bl.BlockHeader, TxIds: txids, ATxIds: atxids}
+	minblock := &types.MiniBlock{BlockHeader: bl.BlockHeader, TxIds: txids, AtxIds: atxids}
 
 	bytes, err := types.InterfaceToBytes(minblock)
 	if err != nil {

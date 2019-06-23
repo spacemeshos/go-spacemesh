@@ -2,7 +2,6 @@ package nipst
 
 import (
 	"crypto/rand"
-	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/post/proving"
 	"github.com/stretchr/testify/require"
 	"testing"
@@ -31,7 +30,7 @@ func TestPostClient(t *testing.T) {
 	assert.NoError(err)
 	assert.True(res)
 
-	challenge := common.BytesToHash([]byte("this is a challenge"))
+	challenge := []byte("this is a challenge")
 	proof, err := c.execute(id, challenge, numberOfProvenLabels, difficulty, 0)
 	assert.NoError(err)
 	assert.NotNil(proof)

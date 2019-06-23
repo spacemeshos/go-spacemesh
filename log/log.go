@@ -12,7 +12,7 @@ import (
 	"go.uber.org/zap"
 )
 
-const mainLoggerName = "Spacemesh"
+const mainLoggerName = "00000.defaultLogger"
 
 // determine the level of messages we show.
 var debugMode = false

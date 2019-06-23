@@ -19,12 +19,11 @@ from tests.misc import ContainerSpec
 from tests.queries import ES
 
 
-BOOT_DEPLOYMENT_FILE = './k8s/bootstrap-w-conf.yml'
+BOOT_DEPLOYMENT_FILE = './k8s/bootstrapoet-w-conf.yml'
 CLIENT_DEPLOYMENT_FILE = './k8s/client-w-conf.yml'
 CLIENT_POD_FILE = './k8s/single-client-w-conf.yml'
 CURL_POD_FILE = './k8s/curl.yml'
 ORACLE_DEPLOYMENT_FILE = './k8s/oracle.yml'
-POET_DEPLOYMENT_FILE = './k8s/poet.yml'
 
 BOOTSTRAP_PORT = 7513
 ORACLE_SERVER_PORT = 3030
@@ -86,19 +85,13 @@ def setup_server(deployment_name, deployment_file, namespace):
 
 
 @pytest.fixture(scope='module')
-def setup_poet(request):
-    poet_deployment_name = 'poet'
-    return setup_server(poet_deployment_name, POET_DEPLOYMENT_FILE, testconfig['namespace'])
-
-
-@pytest.fixture(scope='module')
 def setup_oracle(request):
     oracle_deployment_name = 'oracle'
     return setup_server(oracle_deployment_name, ORACLE_DEPLOYMENT_FILE, testconfig['namespace'])
 
 
 @pytest.fixture(scope='module')
-def setup_bootstrap(request, init_session, setup_oracle, setup_poet, create_configmap):
+def setup_bootstrap(request, init_session, setup_oracle, create_configmap):
 
     bootstrap_deployment_info = DeploymentInfo(dep_id=init_session)
 
@@ -110,7 +103,6 @@ def setup_bootstrap(request, init_session, setup_oracle, setup_poet, create_conf
                               centry=[testconfig['bootstrap']['command']])
 
         cspec.append_args(oracle_server='http://{0}:{1}'.format(setup_oracle, ORACLE_SERVER_PORT),
-                          poet_server='{0}:{1}'.format(setup_poet, POET_SERVER_PORT),
                           genesis_time=GENESIS_TIME.isoformat('T', 'seconds'),
                           **bootstrap_args)
 
@@ -136,7 +128,9 @@ def setup_bootstrap(request, init_session, setup_oracle, setup_poet, create_conf
             time.sleep(1)
 
         bs_pod['pod_ip'] = resp.status.pod_ip
-        bootstrap_pod_logs = client.CoreV1Api().read_namespaced_pod_log(name=bs_pod['name'], namespace=name_space)
+        bootstrap_pod_logs = client.CoreV1Api().read_namespaced_pod_log(name=bs_pod['name'],
+                                                                        namespace=name_space,
+                                                                        container='bootstrap')
         match = re.search(r"Local node identity >> (?P<bootstrap_key>\w+)", bootstrap_pod_logs)
         bs_pod['key'] = match.group('bootstrap_key')
         bootstrap_deployment_info.pods = [bs_pod]
@@ -149,7 +143,7 @@ def node_string(key, ip, port, discport):
 
 
 @pytest.fixture(scope='module')
-def setup_clients(request, init_session, setup_oracle, setup_poet, setup_bootstrap):
+def setup_clients(request, init_session, setup_oracle, setup_bootstrap):
 
     client_info = DeploymentInfo(dep_id=setup_bootstrap.deployment_id)
 
@@ -162,12 +156,9 @@ def setup_clients(request, init_session, setup_oracle, setup_poet, setup_bootstr
                               cimage=testconfig['client']['image'],
                               centry=[testconfig['client']['command']])
 
-        if setup_poet is None:
-            raise Exception("failed starting a poet")
-
         cspec.append_args(bootnodes=node_string(bs_info['key'], bs_info['pod_ip'], BOOTSTRAP_PORT, BOOTSTRAP_PORT),
                           oracle_server='http://{0}:{1}'.format(setup_oracle, ORACLE_SERVER_PORT),
-                          poet_server='{0}:{1}'.format(setup_poet, POET_SERVER_PORT),
+                          poet_server='{0}:{1}'.format(bs_info['pod_ip'], POET_SERVER_PORT),  # poet runs with bootstrap
                           genesis_time=GENESIS_TIME.isoformat('T', 'seconds'),
                           **client_args)
 
@@ -192,13 +183,13 @@ def setup_clients(request, init_session, setup_oracle, setup_poet, setup_bootstr
 
 
 @pytest.fixture(scope='module')
-def setup_network(request, init_session, setup_oracle, setup_poet,
-                  setup_bootstrap, setup_clients, add_curl, wait_genesis):
+def setup_network(request, init_session, setup_oracle, setup_bootstrap, setup_clients, add_curl, wait_genesis):
 
     # This fixture deploy a complete Spacemesh network and returns only after genesis time is over
+    bs_info = setup_bootstrap
     network_deployment = NetworkDeploymentInfo(dep_id=init_session,
                                                oracle_deployment_info=setup_oracle,
-                                               poet_deployment_info=setup_poet,
+                                               poet_deployment_info=bs_info.pods[0]['pod_ip'],
                                                bs_deployment_info=setup_bootstrap,
                                                cl_deployment_info=setup_clients)
     return network_deployment
@@ -237,7 +228,7 @@ def add_multi_clients(deployment_id, container_specs, size=2):
     return pods
 
 
-def get_conf(bs_info, setup_poet=None, setup_oracle= None, args=None):
+def get_conf(bs_info, setup_oracle=None, args=None):
     client_args = {} if 'args' not in testconfig['client'] else testconfig['client']['args']
 
     if args is not None:
@@ -248,22 +239,20 @@ def get_conf(bs_info, setup_poet=None, setup_oracle= None, args=None):
                           cimage=testconfig['client']['image'],
                           centry=[testconfig['client']['command']])
     cspec.append_args(bootnodes=node_string(bs_info['key'], bs_info['pod_ip'], BOOTSTRAP_PORT, BOOTSTRAP_PORT),
+                      poet_server='{0}:{1}'.format(bs_info['pod_ip'], POET_SERVER_PORT),
                       genesis_time=GENESIS_TIME.isoformat('T', 'seconds'))
 
     if setup_oracle is not None:
         cspec.append_args(oracle_server='http://{0}:{1}'.format(setup_oracle, ORACLE_SERVER_PORT))
-    if setup_poet is not None:
-        cspec.append_args(poet_server='{0}:{1}'.format(setup_poet, POET_SERVER_PORT))
 
     if len(client_args) > 0:
         cspec.append_args(**client_args)
-
     return cspec
 
 # The following fixture should not be used if you wish to add many clients during test.
 # Instead you should call add_single_client directly
 @pytest.fixture()
-def add_client(request, setup_oracle, setup_poet, setup_bootstrap, setup_clients):
+def add_client(request, setup_oracle, setup_bootstrap, setup_clients):
 
     global client_name
 
@@ -274,7 +263,7 @@ def add_client(request, setup_oracle, setup_poet, setup_bootstrap, setup_clients
 
         bs_info = setup_bootstrap.pods[0]
 
-        cspec = get_conf(bs_info, setup_poet, setup_oracle)
+        cspec = get_conf(bs_info, setup_oracle)
 
         client_name = add_single_client(setup_bootstrap.deployment_id, cspec)
         return client_name

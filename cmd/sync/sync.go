@@ -76,15 +76,16 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 		panic("something got fudged while creating p2p service ")
 	}
 
-	iddbstore, err := database.NewLDBDatabase(app.Config.DataDir+"ids", 0, 0)
+	iddbstore, err := database.NewLDBDatabase(app.Config.DataDir+"ids", 0, 0, lg.WithName("idDbStore"))
 	if err != nil {
 		lg.Error("error: ", err)
 		return
 	}
 
-	validator := nipst.NewValidator(npstCfg)
+	poetDb := activation.NewPoetDb(database.NewMemDatabase(), lg.WithName("poetDb"))
+	validator := nipst.NewValidator(npstCfg, poetDb)
 	mshDb := mesh.NewPersistentMeshDB(app.Config.DataDir, lg.WithOptions(log.Nop))
-	atxdb := activation.NewActivationDb(database.NewMemDatabase(), database.NewMemDatabase(), activation.NewIdentityStore(iddbstore), mshDb, uint64(app.Config.CONSENSUS.LayersPerEpoch), validator, lg.WithName("atxDb").WithOptions(log.Nop))
+	atxdb := activation.NewActivationDb(database.NewMemDatabase(), database.NewMemDatabase(), activation.NewIdentityStore(iddbstore), mshDb, app.Config.CONSENSUS.LayersPerEpoch, validator, lg.WithName("atxDb"))
 	msh := mesh.NewMesh(mshDb, atxdb, sync.ConfigTst(), &sync.MeshValidatorMock{}, &sync.MockState{}, lg.WithOptions(log.Nop))
 	defer msh.Close()
 

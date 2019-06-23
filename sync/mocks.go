@@ -5,7 +5,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/mesh"
-	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"math/big"
 )
@@ -69,13 +68,13 @@ func (s *StateMock) ApplyRewards(layer types.LayerID, miners []string, underQuot
 
 type AtxDbMock struct {
 	db     map[types.AtxId]*types.ActivationTx
-	nipsts map[types.AtxId]*nipst.NIPST
+	nipsts map[types.AtxId]*types.NIPST
 }
 
 func NewAtxDbMock() *AtxDbMock {
 	return &AtxDbMock{
 		make(map[types.AtxId]*types.ActivationTx),
-		make(map[types.AtxId]*nipst.NIPST),
+		make(map[types.AtxId]*types.NIPST),
 	}
 }
 
@@ -91,7 +90,7 @@ func (t *AtxDbMock) ProcessAtx(atx *types.ActivationTx) {
 	t.nipsts[atx.Id()] = atx.Nipst
 }
 
-func (t *AtxDbMock) GetNipst(id types.AtxId) (*nipst.NIPST, error) {
+func (t *AtxDbMock) GetNipst(id types.AtxId) (*types.NIPST, error) {
 	return t.nipsts[id], nil
 }
 
@@ -114,6 +113,6 @@ func (*MockIStore) GetIdentity(id string) (types.NodeId, error) {
 
 type ValidatorMock struct{}
 
-func (*ValidatorMock) Validate(nipst *nipst.NIPST, expectedChallenge common.Hash) error {
+func (*ValidatorMock) Validate(nipst *types.NIPST, expectedChallenge common.Hash) error {
 	return nil
 }

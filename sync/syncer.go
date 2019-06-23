@@ -260,7 +260,7 @@ func (s *Syncer) Txs(mb *types.MiniBlock) ([]*types.SerializableTransaction, err
 }
 
 func (s *Syncer) ATXs(mb *types.MiniBlock) (atxs []*types.ActivationTx, associated *types.ActivationTx, err error) {
-	localAtxs, missing := s.GetATXs(mb.ATxIds)
+	localAtxs, missing := s.GetATXs(mb.AtxIds)
 
 	fetchAssociated := false
 	if mb.ATXID != *types.EmptyAtxId {
@@ -289,7 +289,7 @@ func (s *Syncer) ATXs(mb *types.MiniBlock) (atxs []*types.ActivationTx, associat
 	}
 
 	atxs = make([]*types.ActivationTx, 0, len(mb.TxIds))
-	for _, t := range mb.ATxIds {
+	for _, t := range mb.AtxIds {
 		if tx, ok := localAtxs[t]; ok {
 			atxs = append(atxs, tx)
 		} else if tx, ok := txMap[t]; ok {

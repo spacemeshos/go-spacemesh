@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common"
-	"github.com/spacemeshos/merkle-tree"
+	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spacemeshos/poet/hash"
 	"github.com/spacemeshos/poet/rpc/api"
 	"github.com/spacemeshos/poet/shared"
@@ -14,10 +14,6 @@ import (
 	"google.golang.org/grpc"
 	"time"
 )
-
-type PoetRound struct {
-	Id int
-}
 
 type MembershipProof struct {
 	Index int
@@ -38,24 +34,6 @@ func (p *PoetProof) serialize() []byte {
 	return []byte("")
 }
 
-var _ verifyPoetMembershipFunc = verifyPoetMembership
-
-func verifyPoetMembership(member *common.Hash, proof *MembershipProof) (bool, error) {
-	valid, err := merkle.ValidatePartialTree(
-		[]uint64{uint64(proof.Index)},
-		[][]byte{member[:]},
-		proof.Proof,
-		proof.Root[:],
-		merkle.GetSha256Parent,
-	)
-
-	if err != nil {
-		return false, fmt.Errorf("failed to validate merkle proof: %v", err)
-	}
-
-	return valid, nil
-}
-
 var _ verifyPoetFunc = verifyPoet
 
 func verifyPoet(p *PoetProof) (bool, error) {
@@ -72,8 +50,8 @@ var _ verifyPoetMatchesMembershipFunc = verifyPoetMatchesMembership
 
 // verifyPoetMatchesMembership verifies that the poet proof commitment
 // is the root in which the membership was proven to.
-func verifyPoetMatchesMembership(m *MembershipProof, p *PoetProof) bool {
-	return bytes.Equal(m.Root[:], p.Commitment)
+func verifyPoetMatchesMembership(membershipRoot *common.Hash, poetProof *PoetProof) bool {
+	return bytes.Equal(membershipRoot[:], poetProof.Commitment)
 }
 
 type SeqWorkTicks uint64
@@ -127,13 +105,12 @@ func NewRPCPoetClient(client api.PoetClient, cleanUp func() error) *RPCPoetClien
 	}
 }
 
-func (c *RPCPoetClient) id() string {
+func (c *RPCPoetClient) id() []byte {
 	// TODO(moshababo): implement
-	return "id"
+	return []byte("id")
 }
 
-func (c *RPCPoetClient) submit(challenge common.Hash,
-	duration SeqWorkTicks) (*PoetRound, error) {
+func (c *RPCPoetClient) submit(challenge common.Hash) (*types.PoetRound, error) {
 
 	req := api.SubmitRequest{Challenge: challenge[:]}
 	res, err := c.client.Submit(context.Background(), &req)
@@ -141,10 +118,10 @@ func (c *RPCPoetClient) submit(challenge common.Hash,
 		return nil, fmt.Errorf("rpc failure: %v", err)
 	}
 
-	return &PoetRound{Id: int(res.RoundId)}, nil
+	return &types.PoetRound{Id: uint64(res.RoundId)}, nil
 }
 
-func (c *RPCPoetClient) subscribeMembershipProof(r *PoetRound,
+func (c *RPCPoetClient) subscribeMembershipProof(r *types.PoetRound,
 	challenge common.Hash, timeout time.Duration) (*MembershipProof, error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -169,7 +146,7 @@ func (c *RPCPoetClient) subscribeMembershipProof(r *PoetRound,
 	return mproof, nil
 }
 
-func (c *RPCPoetClient) subscribeProof(r *PoetRound,
+func (c *RPCPoetClient) subscribeProof(r *types.PoetRound,
 	timeout time.Duration) (*PoetProof, error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
