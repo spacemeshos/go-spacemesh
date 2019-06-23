@@ -510,8 +510,10 @@ func (db *ActivationDb) IsIdentityActive(edId string, layer types.LayerID) (bool
 	}
 
 	if lastAtxTargetEpoch > epoch {
+		// This could happen if we already published the ATX for the next epoch, so we check the previous one as well
 		if len(ids) < 2 {
-			db.log.Error("IsIdentityActive latest atx is too new but no previous atx len(ids)=%v", len(ids))
+			db.log.Info("IsIdentityActive latest atx is too new but no previous atx len(ids)=%v", len(ids))
+			return false, nil
 		}
 		atx, err = db.GetAtx(ids[len(ids)-2])
 		if err != nil {
