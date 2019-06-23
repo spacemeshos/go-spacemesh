@@ -52,7 +52,7 @@ type BlockHeader struct {
 type MiniBlock struct {
 	BlockHeader
 	TxIds  []TransactionId
-	ATxIds []AtxId
+	AtxIds []AtxId
 }
 
 type Block struct {

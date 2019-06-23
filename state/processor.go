@@ -219,7 +219,7 @@ func (tp *TransactionProcessor) Process(transactions mesh.Transactions, trnsBySe
 			err := tp.ApplyTransaction(trns)
 			if err != nil {
 				errors++
-				log.Error("transaction aborted: %v", err)
+				tp.Log.Error("transaction aborted: %v", err)
 			}
 
 		}

@@ -27,8 +27,8 @@ type mockActiveSetProvider struct {
 	size uint32
 }
 
-func (m *mockActiveSetProvider) ActiveSetSize(eph types.EpochId) uint32 {
-	return m.size
+func (m *mockActiveSetProvider) ActiveSetSize(epochId types.EpochId) (uint32, error) {
+	return m.size, nil
 }
 
 func buildVerifier(result bool, err error) VerifierFunc {
@@ -128,13 +128,13 @@ type mockBufferedActiveSetProvider struct {
 	size map[types.EpochId]uint32
 }
 
-func (m *mockBufferedActiveSetProvider) ActiveSetSize(eph types.EpochId) uint32 {
-	v, ok := m.size[eph]
+func (m *mockBufferedActiveSetProvider) ActiveSetSize(epochId types.EpochId) (uint32, error) {
+	v, ok := m.size[epochId]
 	if !ok {
-		return 0
+		return 0, nil
 	}
 
-	return v
+	return v, nil
 }
 
 func Test_ActiveSetSize(t *testing.T) {
@@ -146,9 +146,15 @@ func Test_ActiveSetSize(t *testing.T) {
 	// TODO: remove this comment after inception problem is addressed
 	//assert.Equal(t, o.activeSetProvider.ActiveSetSize(0), o.activeSetSize(1))
 	l := 19 + k
-	assert.Equal(t, uint32(2), o.activeSetSize(l))
-	assert.Equal(t, uint32(3), o.activeSetSize(l+10))
-	assert.Equal(t, uint32(5), o.activeSetSize(l+20))
+	assertActiveSetSize(t, o, 2, l)
+	assertActiveSetSize(t, o, 3, l+10)
+	assertActiveSetSize(t, o, 5, l+20)
+}
+
+func assertActiveSetSize(t *testing.T, o *Oracle, expected uint32, l types.LayerID) {
+	activeSetSize, err := o.activeSetSize(l)
+	assert.NoError(t, err)
+	assert.Equal(t, expected, activeSetSize)
 }
 
 func Test_BlsSignVerify(t *testing.T) {

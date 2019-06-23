@@ -13,7 +13,13 @@ import (
 // which utilizes a local self-contained poet server instance
 // in order to exercise functionality.
 func newRPCPoetHarnessClient() (*RPCPoetClient, error) {
-	h, err := integration.NewHarness()
+	cfg, err := integration.DefaultConfig()
+	if err != nil {
+		return nil, err
+	}
+	cfg.NodeAddress = "NO_BROADCAST"
+
+	h, err := integration.NewHarness(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -61,25 +67,22 @@ func testRPCPoetClient(c *RPCPoetClient, assert *require.Assertions) {
 	_, err := rand.Read(ch[:])
 	assert.NoError(err)
 
-	poetRound, err := c.submit(ch, 10)
+	poetRound, err := c.submit(ch)
 	assert.NoError(err)
 	assert.NotNil(poetRound)
 
 	mProof, err := c.subscribeMembershipProof(poetRound, ch, 10*time.Second)
 	assert.NoError(err)
 	assert.NotNil(mProof)
-	res, err := verifyPoetMembership(&ch, mProof)
-	assert.NoError(err)
-	assert.True(res)
 
 	proof, err := c.subscribeProof(poetRound, 10*time.Second)
 	assert.NoError(err)
 	assert.NotNil(proof)
-	res, err = verifyPoet(proof)
+	res, err := verifyPoet(proof)
 	assert.NoError(err)
 	assert.True(res)
 
-	assert.True(verifyPoetMatchesMembership(mProof, proof))
+	assert.True(verifyPoetMatchesMembership(&mProof.Root, proof))
 }
 
 func testRPCPoetClientTimeouts(c *RPCPoetClient, assert *require.Assertions) {
@@ -87,7 +90,7 @@ func testRPCPoetClientTimeouts(c *RPCPoetClient, assert *require.Assertions) {
 	_, err := rand.Read(ch[:])
 	assert.NoError(err)
 
-	poetRound, err := c.submit(ch, 10)
+	poetRound, err := c.submit(ch)
 	assert.NoError(err)
 	assert.NotNil(poetRound)
 
