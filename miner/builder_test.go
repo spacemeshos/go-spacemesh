@@ -82,7 +82,6 @@ func TestBlockBuilder_StartStop(t *testing.T) {
 	hareRes := []types.BlockID{types.BlockID(0), types.BlockID(1), types.BlockID(2), types.BlockID(3)}
 	hare := MockHare{res: hareRes}
 
-	atxprocesing := func(tx *types.ActivationTx) {}
 	orphans := MockOrphans{st: []types.BlockID{1, 2, 3}}
 	builder := NewBlockBuilder(types.NodeId{}, &MockSigning{},
 		n,

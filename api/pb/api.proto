@@ -27,6 +27,10 @@ message BroadcastMessage {
     string data = 1;
 }
 
+message BinaryMessage {
+    bytes data = 1;
+}
+
 message CommitmentSizeMessage {
     uint64 mbCommitted = 1;
 }
@@ -63,6 +67,12 @@ service SpacemeshService {
     rpc Broadcast(BroadcastMessage) returns (SimpleMessage) {
         option (google.api.http) = {
           post: "/v1/broadcast"
+          body: "*"
+        };
+    }
+    rpc BroadcastPoet(BinaryMessage) returns (SimpleMessage) {
+        option (google.api.http) = {
+          post: "/v1/broadcastpoet"
           body: "*"
         };
     }

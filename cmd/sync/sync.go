@@ -78,12 +78,13 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 		panic("something got fudged while creating p2p service ")
 	}
 
-	iddbstore, err := database.NewLDBDatabase(app.Config.DataDir+"ids", 0, 0)
+	iddbstore, err := database.NewLDBDatabase(app.Config.DataDir+"ids", 0, 0, lg.WithName("idDbStore"))
 	if err != nil {
 		lg.Error("error: ", err)
 		return
 	}
 
+	poetDb := activation.NewPoetDb(database.NewMemDatabase(), lg.WithName("poetDb"))
 	validator := nipst.NewValidator(npstCfg)
 
 	mshdb := mesh.NewPersistentMeshDB(app.Config.DataDir, lg)

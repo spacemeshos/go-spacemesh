@@ -3,17 +3,20 @@ package miner
 import (
 	"crypto/md5"
 	"encoding/binary"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/address"
+	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	meshSync "github.com/spacemeshos/go-spacemesh/sync"
 	"github.com/spacemeshos/go-spacemesh/types"
+	"math/big"
 	"math/rand"
 	"sync"
 	"time"
@@ -42,6 +45,8 @@ type BlockBuilder struct {
 	rnd              *rand.Rand
 	beginRoundEvent  chan types.LayerID
 	stopChan         chan struct{}
+	newTrans         chan *types.SerializableTransaction
+	newAtx           chan *types.ActivationTx
 	txGossipChannel  chan service.GossipMessage
 	atxGossipChannel chan service.GossipMessage
 	hareResult       HareResultProvider
@@ -86,7 +91,6 @@ func NewBlockBuilder(minerID types.NodeId, sgn Signer, net p2p.Service,
 		weakCoinToss:     weakCoin,
 		orphans:          orph,
 		blockOracle:      blockOracle,
-		processAtx:       processAtx,
 		started:          false,
 	}
 
@@ -196,6 +200,12 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 		},
 		ATxIds: atxids,
 		TxIds:  txids,
+		ATXs: atx,
+		Txs:  txs,
+	}
+	var atxs []string
+	for _, x := range b.ATXs {
+		atxs = append(atxs, x.ShortId())
 	}
 
 	t.Log.Info("I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d, viewEdges: %d atx %v, atxs:%v",
@@ -207,6 +217,9 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 	}
 
 	return &types.Block{MiniBlock: b, Signature: t.Signer.Sign(blockBytes)}, nil
+	t.Log.Info("I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d, viewEdges: %d, atx: %v, atxs: %v",
+		b.LayerIndex, b.Id, len(b.Txs), len(b.BlockVotes), len(b.ViewEdges), b.ATXID.ShortId(), atxs)
+	return &b, nil
 }
 
 func (t *BlockBuilder) listenForTx() {
@@ -267,9 +280,9 @@ func (t *BlockBuilder) acceptBlockData() {
 			return
 
 		case id := <-t.beginRoundEvent:
-			atxID, proofs, err := t.blockOracle.BlockEligible(types.LayerID(id))
+			atxID, proofs, err := t.blockOracle.BlockEligible(id)
 			if err != nil {
-				t.Error("failed to check for block eligibility: %v ", err)
+				t.Error("failed to check for block eligibility in layer %v: %v ", id, err)
 				continue
 			}
 			if len(proofs) == 0 {
@@ -295,6 +308,10 @@ func (t *BlockBuilder) acceptBlockData() {
 						return
 					}
 					t.network.Broadcast(config.NewBlockProtocol, bytes)
+					err = t.network.Broadcast(meshSync.NewBlockProtocol, bytes)
+					if err != nil {
+						t.Log.Error("failed to broadcast block")
+					}
 				}()
 			}
 		}

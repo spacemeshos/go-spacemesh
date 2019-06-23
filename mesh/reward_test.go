@@ -4,7 +4,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
@@ -55,7 +54,7 @@ func ConfigTst() Config {
 func getMeshWithMapState(id string, s StateApi) (*Mesh, *AtxDbMock) {
 	atxDb := &AtxDbMock{
 		db:     make(map[types.AtxId]*types.ActivationTx),
-		nipsts: make(map[types.AtxId]*nipst.NIPST),
+		nipsts: make(map[types.AtxId]*types.NIPST),
 	}
 
 	lg := log.New(id, "", "")
@@ -91,7 +90,7 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 	var totalRewards int64
 	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data1"))
 	block1.MinerID.Key = "1"
-	atx := types.NewActivationTx(block1.MinerID, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &nipst.NIPST{}, true)
+	atx := types.NewActivationTx(block1.MinerID, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &types.NIPST{}, true)
 	atxdb.AddAtx(atx.Id(), atx)
 	block1.ATXID = atx.Id()
 
@@ -99,21 +98,21 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 
 	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data2"))
 	block2.MinerID.Key = "2"
-	atx = types.NewActivationTx(block2.MinerID, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &nipst.NIPST{}, true)
+	atx = types.NewActivationTx(block2.MinerID, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &types.NIPST{}, true)
 	atxdb.AddAtx(atx.Id(), atx)
 	block2.ATXID = atx.Id()
 	totalRewards += addTransactionsWithGas(layers.MeshDB, block2, 13, rand.Int63n(100))
 
 	block3 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data3"))
 	block3.MinerID.Key = "3"
-	atx = types.NewActivationTx(block3.MinerID, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &nipst.NIPST{}, true)
+	atx = types.NewActivationTx(block3.MinerID, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &types.NIPST{}, true)
 	atxdb.AddAtx(atx.Id(), atx)
 	block3.ATXID = atx.Id()
 	totalRewards += addTransactionsWithGas(layers.MeshDB, block3, 17, rand.Int63n(100))
 
 	block4 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data4"))
 	block4.MinerID.Key = "4"
-	atx = types.NewActivationTx(block4.MinerID, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &nipst.NIPST{}, true)
+	atx = types.NewActivationTx(block4.MinerID, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &types.NIPST{}, true)
 	atxdb.AddAtx(atx.Id(), atx)
 	block4.ATXID = atx.Id()
 	totalRewards += addTransactionsWithGas(layers.MeshDB, block4, 16, rand.Int63n(100))
@@ -207,7 +206,7 @@ func createLayer(mesh *Mesh, id types.LayerID, numOfBlocks, maxTransactions int,
 	for i := 0; i < numOfBlocks; i++ {
 		block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), id, []byte("data1"))
 		block1.MinerID.Key = strconv.Itoa(i)
-		atx := types.NewActivationTx(block1.MinerID, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &nipst.NIPST{}, true)
+		atx := types.NewActivationTx(block1.MinerID, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &types.NIPST{}, true)
 		atxdb.AddAtx(atx.Id(), atx)
 		block1.ATXID = atx.Id()
 		totalRewards += addTransactionsWithGas(mesh.MeshDB, block1, rand.Intn(maxTransactions), rand.Int63n(100))

@@ -154,15 +154,15 @@ func (bo *MinerBlockOracle) getLatestATXID() (types.AtxId, error) {
 	atxIDs, err := bo.activationDb.GetNodeAtxIds(bo.nodeID)
 	if err != nil {
 		bo.log.Info("did not find ATX IDs for node: %v, error: %v", bo.nodeID.Key[:5], err)
-		return types.AtxId{common.HexToHash("11111111")}, err
+		return types.AtxId{}, err
 	}
 	numOfActivations := len(atxIDs)
 	if numOfActivations < 1 {
 		bo.log.Error("no activations found for node id %v", bo.nodeID.Key)
-		return types.AtxId{common.HexToHash("22222222")}, errors.New("no activations found")
+		return types.AtxId{}, errors.New("no activations found")
 	}
 	latestATXID := atxIDs[numOfActivations-1]
-	bo.log.Info("latest atx id is: %v", latestATXID.String()[:5])
+	bo.log.Info("latest atx id is: %v", latestATXID.ShortString())
 	return latestATXID, err
 }
 

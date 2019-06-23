@@ -62,7 +62,7 @@ type Block struct {
 type MiniBlock struct {
 	BlockHeader
 	TxIds  []TransactionId
-	ATxIds []AtxId
+	AtxIds []AtxId
 }
 
 func (t *Block) Sig() []byte {

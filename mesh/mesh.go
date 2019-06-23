@@ -8,7 +8,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/crypto/sha3"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/rlp"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"math/big"
@@ -46,7 +45,7 @@ type MemPoolInValidator interface {
 type AtxDB interface {
 	ProcessAtx(atx *types.ActivationTx)
 	GetAtx(id types.AtxId) (*types.ActivationTx, error)
-	GetNipst(id types.AtxId) (*nipst.NIPST, error)
+	GetNipst(id types.AtxId) (*types.NIPST, error)
 }
 
 type Mesh struct {
@@ -165,6 +164,42 @@ func (m *Mesh) SetLatestLayer(idx types.LayerID) {
 		m.Info("set latest known layer to %v", idx)
 		m.latestLayer = idx
 	}
+}
+
+func (m *Mesh) GetBlock(id types.BlockID) (*types.Block, error) {
+
+	blk, err := m.GetMiniBlock(id)
+	if err != nil {
+		m.Error("could not retrieve block %v from database %v", id, err)
+		return nil, err
+	}
+
+	return m.MiniBlockToBlock(blk)
+}
+
+func (m *Mesh) MiniBlockToBlock(blk *types.MiniBlock) (*types.Block, error) {
+	txs, missingTxs := m.GetTransactions(blk.TxIds)
+	if missingTxs != nil {
+		return nil, errors.New("could not retrieve block %v transactions from database ")
+	}
+
+	var transactions []*types.SerializableTransaction
+	for _, value := range blk.TxIds {
+		transactions = append(transactions, txs[value])
+	}
+
+	atxs, missingATxs := m.GetATXs(blk.AtxIds)
+	if missingATxs != nil {
+		return nil, errors.New("could not retrieve block %v transactions from database ")
+	}
+
+	var activations []*types.ActivationTx
+	for _, value := range blk.AtxIds {
+		activations = append(activations, atxs[value])
+	}
+
+	res := blockFromMiniAndTxs(blk, transactions, activations)
+	return res, nil
 }
 
 func (m *Mesh) GetLayer(index types.LayerID) (*types.Layer, error) {
@@ -429,6 +464,7 @@ func (m *Mesh) AccumulateRewards(rewardLayer types.LayerID, params Config) {
 	for _, bl := range l.Blocks() {
 		atx, err := m.AtxDB.GetAtx(bl.ATXID)
 		if err != nil {
+			m.Log.Error("Atx not found %v layer %v block %v", bl.ATXID.ShortString(), bl.LayerIndex, bl.Id)
 			m.Log.Error("Atx not found %v layer %v block %v", err, bl.Id)
 			continue
 		}
