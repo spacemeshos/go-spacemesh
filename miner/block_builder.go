@@ -199,7 +199,7 @@ func (t *BlockBuilder) listenForTx() {
 			if data != nil {
 				x, err := types.BytesAsTransaction(data.Bytes())
 				t.Log.With().Info("got new tx", log.String("sender", x.Origin.String()), log.String("receiver", x.Recipient.String()),
-					log.String("amount", x.AmountAsBigInt().String()), log.Uint64("nonce", x.AccountNonce), log.Bool("valid", err != nil))
+					log.String("amount", x.AmountAsBigInt().String()), log.Uint64("nonce", x.AccountNonce), log.Bool("valid", err == nil))
 				if err != nil {
 					t.Log.Error("cannot parse incoming TX")
 					break
@@ -248,7 +248,7 @@ func (t *BlockBuilder) acceptBlockData() {
 				continue
 			}
 			if len(proofs) == 0 {
-				log.Info("Notice: not eligible for blocks in layer %v", id)
+				t.Info("Notice: not eligible for blocks in layer %v", id)
 				continue
 			}
 			// TODO: include multiple proofs in each block and weigh blocks where applicable

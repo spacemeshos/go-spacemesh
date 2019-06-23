@@ -25,6 +25,7 @@ type SpacemeshGrpcService struct {
 	Port     uint
 	StateApi StateAPI
 	Network  NetworkAPI
+	Tx       TxAPI
 }
 
 // Echo returns the response for an echo api request
@@ -36,9 +37,9 @@ func (s SpacemeshGrpcService) Echo(ctx context.Context, in *pb.SimpleMessage) (*
 func (s SpacemeshGrpcService) GetBalance(ctx context.Context, in *pb.AccountId) (*pb.SimpleMessage, error) {
 	log.Info("GRPC GetBalance msg")
 	addr := address.HexToAddress(in.Address)
-
+	log.Info("GRPC GetBalance for address %x (len %v)", addr, len(addr))
 	if s.StateApi.Exist(addr) != true {
-		log.Error("GRPC GetBalance returned error msg: account does not exist")
+		log.Error("GRPC GetBalance returned error msg: account does not exist, address %x", addr)
 		return nil, fmt.Errorf("account does not exist")
 	}
 
@@ -53,38 +54,51 @@ func (s SpacemeshGrpcService) GetNonce(ctx context.Context, in *pb.AccountId) (*
 	addr := address.HexToAddress(in.Address)
 
 	if s.StateApi.Exist(addr) != true {
-		log.Error("GRPC GetNonce got error msg: account does not exist")
+		log.Error("GRPC GetNonce got error msg: account does not exist, %v", addr)
 		return nil, fmt.Errorf("account does not exist")
 	}
 
 	val := s.StateApi.GetNonce(addr)
 	msg := pb.SimpleMessage{Value: strconv.FormatUint(val, 10)}
-	log.Error("GRPC GetNonce returned msg %v", strconv.FormatUint(val, 10))
+	log.Info("GRPC GetNonce returned msg %v", strconv.FormatUint(val, 10))
 	return &msg, nil
 }
 
 func (s SpacemeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.SignedTransaction) (*pb.SimpleMessage, error) {
 	log.Info("GRPC SubmitTransaction msg")
+
+	signedTx := types.SerializableSignedTransaction{}
+	err := types.BytesToInterface(in.Tx, &signedTx)
+	if err != nil {
+		log.Error("failed to deserialize tx, error %v", err)
+		return nil, err
+	}
+	log.Info("GRPC SubmitTransaction to address %x (len %v), gaslimit %v, price %v", signedTx.Recipient, len(signedTx.Recipient), signedTx.GasLimit, signedTx.Price)
+	src, err := s.Tx.ValidateTransactionSignature(signedTx)
+	if err != nil {
+		log.Error("tx failed to validate signature, error %v", err)
+		return nil, err
+	}
+
+	// TODO once the node will support signed txs we should only use types.SerializableSignedTransaction instead of types.SerializableTransaction
 	tx := types.SerializableTransaction{}
-	addr := address.HexToAddress(in.DstAddress)
-	tx.Recipient = &addr
-	tx.Origin = address.HexToAddress(in.SrcAddress)
+	tx.Recipient = &signedTx.Recipient
+	tx.Origin = src
 
-	num, _ := strconv.ParseInt(in.Nonce, 10, 64)
-	tx.AccountNonce = uint64(num)
+	tx.AccountNonce = signedTx.AccountNonce
 	amount := big.Int{}
-	amount.SetString(in.Amount, 10)
+	amount.SetUint64(signedTx.Amount)
 	tx.Amount = amount.Bytes()
-	tx.GasLimit = 10
-	tx.Price = big.NewInt(10).Bytes()
-
+	tx.GasLimit = signedTx.GasLimit
+	price := big.Int{}
+	price.SetUint64(signedTx.Price)
+	tx.Price = price.Bytes()
+	log.Info("GRPC SubmitTransaction BROADCAST tx. address %x (len %v), gaslimit %v, price %v", tx.Recipient, len(tx.Recipient), tx.GasLimit, tx.Price)
 	val, err := types.TransactionAsBytes(&tx)
 	if err != nil {
 		return nil, err
 	}
-
-	//todo" should this be in a go routine?
-	s.Network.Broadcast(miner.IncomingTxProtocol, val)
+	go s.Network.Broadcast(miner.IncomingTxProtocol, val)
 	log.Info("GRPC SubmitTransaction returned msg ok")
 	return &pb.SimpleMessage{Value: "ok"}, nil
 }
@@ -110,11 +124,15 @@ func (s SpacemeshGrpcService) StopService() {
 
 }
 
+type TxAPI interface {
+	ValidateTransactionSignature(tx types.SerializableSignedTransaction) (address.Address, error)
+}
+
 // NewGrpcService create a new grpc service using config data.
-func NewGrpcService(net NetworkAPI, state StateAPI) *SpacemeshGrpcService {
+func NewGrpcService(net NetworkAPI, state StateAPI, tx TxAPI) *SpacemeshGrpcService {
 	port := config.ConfigValues.GrpcServerPort
 	server := grpc.NewServer()
-	return &SpacemeshGrpcService{Server: server, Port: uint(port), StateApi: state, Network: net}
+	return &SpacemeshGrpcService{Server: server, Port: uint(port), StateApi: state, Network: net, Tx: tx}
 }
 
 // StartService starts the grpc service.
