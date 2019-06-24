@@ -54,7 +54,7 @@ def search_pod_logs(namespace, pod_name, term):
     return False
 
 
-def test_sync_gradually_add_nodes(set_namespace, setup_bootstrap, save_log_on_exit, init_session):
+def test_sync_gradually_add_nodes(init_session, setup_bootstrap, save_log_on_exit):
     bs_info = setup_bootstrap.pods[0]
 
     cspec = get_conf(bs_info)
