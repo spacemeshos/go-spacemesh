@@ -17,7 +17,7 @@ from pytest_testconfig import config as testconfig
 from elasticsearch_dsl import Search, Q
 from tests.misc import ContainerSpec
 from tests.queries import ES
-
+from tests.hare.assert_hare import validate_hare
 
 BOOT_DEPLOYMENT_FILE = './k8s/bootstrapoet-w-conf.yml'
 CLIENT_DEPLOYMENT_FILE = './k8s/client-w-conf.yml'
@@ -28,7 +28,6 @@ ORACLE_DEPLOYMENT_FILE = './k8s/oracle.yml'
 BOOTSTRAP_PORT = 7513
 ORACLE_SERVER_PORT = 3030
 POET_SERVER_PORT = 50002
-
 
 ELASTICSEARCH_URL = "http://{0}".format(testconfig['elastic']['host'])
 
@@ -92,7 +91,6 @@ def setup_oracle(request):
 
 @pytest.fixture(scope='module')
 def setup_bootstrap(request, init_session, setup_oracle, create_configmap):
-
     bootstrap_deployment_info = DeploymentInfo(dep_id=init_session)
 
     def _setup_bootstrap_in_namespace(name_space):
@@ -118,7 +116,8 @@ def setup_bootstrap(request, init_session, setup_oracle, create_configmap):
             client.CoreV1Api().list_namespaced_pod(namespace=name_space,
                                                    label_selector=(
                                                        "name={0}".format(
-                                                           bootstrap_deployment_info.deployment_name.split('-')[0]))).items[0])
+                                                           bootstrap_deployment_info.deployment_name.split('-')[
+                                                               0]))).items[0])
         bs_pod = {'name': bootstrap_pod_json.metadata.name}
 
         while True:
@@ -135,6 +134,7 @@ def setup_bootstrap(request, init_session, setup_oracle, create_configmap):
         bs_pod['key'] = match.group('bootstrap_key')
         bootstrap_deployment_info.pods = [bs_pod]
         return bootstrap_deployment_info
+
     return _setup_bootstrap_in_namespace(testconfig['namespace'])
 
 
@@ -144,7 +144,6 @@ def node_string(key, ip, port, discport):
 
 @pytest.fixture(scope='module')
 def setup_clients(request, init_session, setup_oracle, setup_bootstrap):
-
     client_info = DeploymentInfo(dep_id=setup_bootstrap.deployment_id)
 
     def _setup_clients_in_namespace(name_space):
@@ -184,7 +183,6 @@ def setup_clients(request, init_session, setup_oracle, setup_bootstrap):
 
 @pytest.fixture(scope='module')
 def setup_network(request, init_session, setup_oracle, setup_bootstrap, setup_clients, add_curl, wait_genesis):
-
     # This fixture deploy a complete Spacemesh network and returns only after genesis time is over
     bs_info = setup_bootstrap
     network_deployment = NetworkDeploymentInfo(dep_id=init_session,
@@ -196,7 +194,6 @@ def setup_network(request, init_session, setup_oracle, setup_bootstrap, setup_cl
 
 
 def add_single_client(deployment_id, container_specs):
-
     resp = pod.create_pod(CLIENT_POD_FILE,
                           testconfig['namespace'],
                           deployment_id=deployment_id,
@@ -222,7 +219,7 @@ def add_multi_clients(deployment_id, container_specs, size=2):
                                                        resp.metadata._name.split('-')[0]))).items)
     pods = []
     for c in client_pods:
-        pod_name= c.metadata.name
+        pod_name = c.metadata.name
         if pod_name.startswith(resp.metadata.name):
             pods.append(pod_name)
     return pods
@@ -249,11 +246,11 @@ def get_conf(bs_info, setup_oracle=None, args=None):
         cspec.append_args(**client_args)
     return cspec
 
+
 # The following fixture should not be used if you wish to add many clients during test.
 # Instead you should call add_single_client directly
 @pytest.fixture()
 def add_client(request, setup_oracle, setup_bootstrap, setup_clients):
-
     global client_name
 
     def _add_single_client():
@@ -286,7 +283,9 @@ def wait_genesis():
 
 def api_call(client_ip, data, api, namespace):
     # todo: this won't work with long payloads - ( `Argument list too long` ). try port-forward ?
-    res = stream(client.CoreV1Api().connect_post_namespaced_pod_exec, name="curl", namespace=namespace, command=["curl", "-s", "--request",  "POST", "--data", data, "http://" + client_ip + ":9090/" + api], stderr=True, stdin=False, stdout=True, tty=False, _request_timeout=90)
+    res = stream(client.CoreV1Api().connect_post_namespaced_pod_exec, name="curl", namespace=namespace,
+                 command=["curl", "-s", "--request", "POST", "--data", data, "http://" + client_ip + ":9090/" + api],
+                 stderr=True, stdin=False, stdout=True, tty=False, _request_timeout=90)
     return res
 
 
@@ -334,15 +333,14 @@ def save_log_on_exit(request):
 
 @pytest.fixture(scope='module')
 def add_curl(request, setup_bootstrap):
-
     def _run_curl_pod():
-
         if not setup_bootstrap.pods:
             raise Exception("Could not find bootstrap node")
 
         resp = pod.create_pod(CURL_POD_FILE,
                               testconfig['namespace'])
         return True
+
     return _run_curl_pod()
 
 
@@ -357,6 +355,8 @@ current_index = 'kubernetes_cluster-' + todaydate
 
 
 def test_transaction(setup_network):
+    ns = testconfig['namespace']
+    
     # choose client to run on
     client_ip = setup_network.clients.pods[0]['pod_ip']
 
@@ -391,12 +391,16 @@ def test_transaction(setup_network):
             end = time.time()
             break
 
-    print("test took {:.3f} seconds ".format(end-start))
+    print("test took {:.3f} seconds ".format(end - start))
     assert "{'value': '100'}" in out
     print("balance ok")
 
+    validate_hare(current_index, ns)  # validate hare
+
 
 def test_mining(setup_network):
+    ns = testconfig['namespace']
+
     # choose client to run on
     client_ip = setup_network.clients.pods[0]['pod_ip']
 
@@ -427,9 +431,11 @@ def test_mining(setup_network):
     last_epoch = last_layer / layers_per_epoch
 
     queries.wait_for_latest_layer(testconfig["namespace"], last_layer)
-    print("test took {:.3f} seconds ".format(end-start))
+    print("test took {:.3f} seconds ".format(end - start))
     total_pods = len(setup_network.clients.pods) + len(setup_network.bootstrap.pods)
     analyse.analyze_mining(testconfig['namespace'], last_layer, layers_per_epoch, layer_avg_size, total_pods)
+
+    validate_hare(current_index, ns)  # validate hare
 
 
 ''' todo: when atx flow stabilized re enable this test
