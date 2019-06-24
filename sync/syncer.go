@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -253,7 +254,7 @@ func (s *Syncer) syncMissingContent(blk *types.Block) error {
 	}
 
 	if atxerr != nil {
-		s.Warning(fmt.Sprintf("failed fetching block %v transactions %v", blk.ID(), atxerr))
+		s.Warning(fmt.Sprintf("failed fetching block %v activation transactions %v", blk.ID(), atxerr))
 		return atxerr
 	}
 
@@ -270,23 +271,25 @@ func (s *Syncer) syncMissingContent(blk *types.Block) error {
 }
 
 func (s *Syncer) Txs(mb *types.Block) ([]*types.SerializableTransaction, error) {
-	//look in db
-	foundTxs, missinDB := s.GetTransactions(mb.TxIds)
 
 	//look in pool
-	missing := make([]types.TransactionId, 0, len(missinDB))
-	for _, t := range missinDB {
+	txMap := make(map[types.TransactionId]*types.SerializableTransaction)
+	missing := make([]types.TransactionId, 0)
+	for _, t := range mb.TxIds {
 		if tx := s.txpool.Get(t); tx != nil {
-			foundTxs[t] = tx.(*types.SerializableTransaction)
+			s.Info("found tx, %v in tx pool", hex.EncodeToString(t[:]))
+			txMap[t] = tx.(*types.SerializableTransaction)
 		} else {
 			missing = append(missing, t)
 		}
 	}
 
+	//look in db
+	dbTxs, missinDB := s.GetTransactions(missing)
+
 	//map and sort txs
-	txMap := make(map[types.TransactionId]*types.SerializableTransaction)
 	if len(missing) > 0 {
-		for out := range s.fetchWithFactory(TxReqFactory(missing), 1) {
+		for out := range s.fetchWithFactory(TxReqFactory(missinDB), 1) {
 			ntxs := out.([]types.SerializableTransaction)
 			for _, tx := range ntxs {
 				txMap[types.GetTransactionId(&tx)] = &tx
@@ -296,35 +299,41 @@ func (s *Syncer) Txs(mb *types.Block) ([]*types.SerializableTransaction, error) 
 
 	txs := make([]*types.SerializableTransaction, 0, len(mb.TxIds))
 	for _, t := range mb.TxIds {
-		if tx, ok := foundTxs[t]; ok {
+		if tx, ok := txMap[t]; ok {
 			txs = append(txs, tx)
-		} else if tx, ok := txMap[t]; ok {
+		} else if tx, ok := dbTxs[t]; ok {
 			txs = append(txs, tx)
 		} else {
-			return nil, errors.New(fmt.Sprintf("could not fetch tx %v", t))
+			return nil, errors.New(fmt.Sprintf("could not fetch tx %v", hex.EncodeToString(t[:])))
 		}
 	}
 	return txs, nil
 }
 
 func (s *Syncer) ATXs(mb *types.Block) (atxs []*types.ActivationTx, associated *types.ActivationTx, err error) {
-	foundAtxs, missinDB := s.GetATXs(mb.AtxIds)
 
 	//look in pool
-	missing := make([]types.AtxId, 0, len(missinDB))
-	for _, t := range missinDB {
-		if tx := s.atxpool.Get(t); tx != nil {
-			atx := tx.(*types.ActivationTx)
+	atxMap := make(map[types.AtxId]*types.ActivationTx, len(atxs))
+	missingInPool := make([]types.AtxId, 0, len(atxs))
+	for _, t := range mb.AtxIds {
+		id := t
+		if x := s.atxpool.Get(id); x != nil {
+			atx := x.(*types.ActivationTx)
 			if atx.Nipst == nil {
-				s.Warning("atx %v nipst not found ", t.Hex())
-				missing = append(missing, t)
+				s.Warning("atx %v nipst not found ", hex.EncodeToString(id.Bytes()))
+				missingInPool = append(missingInPool, id)
+				continue
 			}
-			foundAtxs[t] = atx
+			s.Info("found atx, %v in atx pool", hex.EncodeToString(id.Bytes()))
+			atxMap[id] = atx
 		} else {
-			s.Warning("atx %v not found ", t.Hex())
-			missing = append(missing, t)
+			s.Warning("atx %v not in atx pool", hex.EncodeToString(id.Bytes()))
+			missingInPool = append(missingInPool, id)
 		}
 	}
+
+	//look in db
+	dbAtxs, missing := s.GetATXs(missingInPool)
 
 	fetchAssociated := false
 	if mb.ATXID != *types.EmptyAtxId {
@@ -334,32 +343,31 @@ func (s *Syncer) ATXs(mb *types.Block) (atxs []*types.ActivationTx, associated *
 		}
 	}
 
-	//map and sort txs
-	txMap := make(map[types.AtxId]*types.ActivationTx)
+	//map and sort atxs
 	if len(missing) > 0 {
 		output := s.fetchWithFactory(ATxReqFactory(missing), 1)
 		for out := range output {
 			ntxs := out.([]types.ActivationTx)
 			for _, atx := range ntxs {
-				txMap[atx.Id()] = &atx
+				atxMap[atx.Id()] = &atx
 			}
 		}
 	}
 
 	if fetchAssociated {
-		if _, ok := txMap[mb.BlockHeader.ATXID]; !ok {
-			return nil, nil, errors.New(fmt.Sprintf("could not fetch associated %v", mb.BlockHeader.ATXID.Hex()))
+		if _, ok := atxMap[mb.BlockHeader.ATXID]; !ok {
+			return nil, nil, errors.New(fmt.Sprintf("could not fetch associated %v", hex.EncodeToString(mb.BlockHeader.ATXID.Bytes())))
 		}
 	}
 
 	atxs = make([]*types.ActivationTx, 0, len(mb.AtxIds))
 	for _, t := range mb.AtxIds {
-		if tx, ok := foundAtxs[t]; ok {
+		if tx, ok := atxMap[t]; ok {
 			atxs = append(atxs, tx)
-		} else if tx, ok := txMap[t]; ok {
+		} else if tx, ok := dbAtxs[t]; ok {
 			atxs = append(atxs, tx)
 		} else {
-			return nil, nil, errors.New(fmt.Sprintf("could not fetch atx %v", t.Hex()))
+			return nil, nil, errors.New(fmt.Sprintf("could not fetch atx %v", hex.EncodeToString(t.Bytes())))
 		}
 	}
 	return atxs, associated, nil

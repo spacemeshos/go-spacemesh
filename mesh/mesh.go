@@ -302,7 +302,6 @@ func (m *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.SerializableTransa
 	atxids := make([]types.AtxId, 0, len(atxs))
 	for _, t := range atxs {
 		//todo this should return an error
-		m.Info("process atx %v", hex.EncodeToString(t.Id().Bytes()))
 		m.AtxDB.ProcessAtx(t)
 		atxids = append(atxids, t.Id())
 
