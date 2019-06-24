@@ -17,6 +17,10 @@ type MockMapState struct {
 	Total   int64
 }
 
+func (MockMapState) ValidateSignature(signed types.Signed) (address.Address, error) {
+	return address.Address{}, nil
+}
+
 func (MockMapState) ApplyTransactions(layer types.LayerID, txs Transactions) (uint32, error) {
 	return 0, nil
 }
@@ -52,38 +56,29 @@ func getMeshWithMapState(id string, s StateApi) (*Mesh, *AtxDbMock) {
 		db:     make(map[types.AtxId]*types.ActivationTx),
 		nipsts: make(map[types.AtxId]*types.NIPST),
 	}
-	layers := NewMemMesh(ConfigTst(), &MeshValidatorMock{}, s, atxDb, log.New(id, "", ""))
-	return layers, atxDb
+
+	lg := log.New(id, "", "")
+	mshdb := NewMemMeshDB(lg)
+
+	return NewMesh(mshdb, atxDb, ConfigTst(), &MeshValidatorMock{}, &MemPoolMock{}, &MemPoolMock{}, s, lg), atxDb
 }
 
-func addTransactionsToBlock(bl *types.Block, numOfTxs int) int64 {
+func addTransactionsWithGas(mesh *MeshDB, bl *types.Block, numOfTxs int, gasPrice int64) int64 {
 	var totalRewards int64
-	for i := 0; i < numOfTxs; i++ {
-		gasPrice := rand.Int63n(100)
-		addr := rand.Int63n(1000000)
-		//log.Info("adding tx with gas price %v nonce %v", gasPrice, i)
-		bl.Txs = append(bl.Txs, types.NewSerializableTransaction(uint64(i), address.HexToAddress("1"),
-			address.HexToAddress(strconv.FormatUint(uint64(addr), 10)),
-			big.NewInt(10),
-			big.NewInt(gasPrice),
-			100))
-		totalRewards += gasPrice
-	}
-	return totalRewards
-}
-
-func addTransactionsWithGas(bl *types.Block, numOfTxs int, gasPrice int64) int64 {
-	var totalRewards int64
+	var txs []*types.SerializableTransaction
 	for i := 0; i < numOfTxs; i++ {
 		addr := rand.Int63n(10000)
 		//log.Info("adding tx with gas price %v nonce %v", gasPrice, i)
-		bl.Txs = append(bl.Txs, types.NewSerializableTransaction(uint64(i), address.HexToAddress("1"),
+		tx := types.NewSerializableTransaction(uint64(i), address.HexToAddress("1"),
 			address.HexToAddress(strconv.FormatUint(uint64(addr), 10)),
 			big.NewInt(10),
 			big.NewInt(gasPrice),
-			100))
+			100)
+		bl.TxIds = append(bl.TxIds, types.GetTransactionId(tx))
 		totalRewards += gasPrice
+		txs = append(txs, tx)
 	}
+	mesh.writeTransactions(txs)
 	return totalRewards
 }
 
@@ -99,28 +94,28 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 	atxdb.AddAtx(atx.Id(), atx)
 	block1.ATXID = atx.Id()
 
-	totalRewards += addTransactionsToBlock(block1, 15)
+	totalRewards += addTransactionsWithGas(layers.MeshDB, block1, 15, rand.Int63n(100))
 
 	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data2"))
 	block2.MinerID.Key = "2"
 	atx = types.NewActivationTx(block2.MinerID, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &types.NIPST{}, true)
 	atxdb.AddAtx(atx.Id(), atx)
 	block2.ATXID = atx.Id()
-	totalRewards += addTransactionsToBlock(block2, 13)
+	totalRewards += addTransactionsWithGas(layers.MeshDB, block2, 13, rand.Int63n(100))
 
 	block3 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data3"))
 	block3.MinerID.Key = "3"
 	atx = types.NewActivationTx(block3.MinerID, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &types.NIPST{}, true)
 	atxdb.AddAtx(atx.Id(), atx)
 	block3.ATXID = atx.Id()
-	totalRewards += addTransactionsToBlock(block3, 17)
+	totalRewards += addTransactionsWithGas(layers.MeshDB, block3, 17, rand.Int63n(100))
 
 	block4 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data4"))
 	block4.MinerID.Key = "4"
 	atx = types.NewActivationTx(block4.MinerID, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &types.NIPST{}, true)
 	atxdb.AddAtx(atx.Id(), atx)
 	block4.ATXID = atx.Id()
-	totalRewards += addTransactionsToBlock(block4, 16)
+	totalRewards += addTransactionsWithGas(layers.MeshDB, block4, 16, rand.Int63n(100))
 
 	log.Info("total fees : %v", totalRewards)
 	layers.AddBlock(block1)
@@ -163,28 +158,28 @@ func TestMesh_AccumulateRewards_underQuota(t *testing.T) {
 
 	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data1"))
 	block1.MinerID.Key = "1"
-	totalRewards += addTransactionsWithGas(block1, 10, 8)
+	totalRewards += addTransactionsWithGas(layers.MeshDB, block1, 10, 8)
 	atx := types.NewActivationTx(block1.MinerID, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &types.NIPST{}, true)
 	atxdb.AddAtx(atx.Id(), atx)
 	block1.ATXID = atx.Id()
 
 	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data2"))
 	block2.MinerID.Key = "2"
-	totalRewards += addTransactionsWithGas(block2, 10, 9)
+	totalRewards += addTransactionsWithGas(layers.MeshDB, block2, 10, 9)
 	atx = types.NewActivationTx(block2.MinerID, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &types.NIPST{}, true)
 	atxdb.AddAtx(atx.Id(), atx)
 	block2.ATXID = atx.Id()
 
 	block3 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data3"))
 	block3.MinerID.Key = "3"
-	totalRewards += addTransactionsWithGas(block3, 17, 10)
+	totalRewards += addTransactionsWithGas(layers.MeshDB, block3, 17, 10)
 	atx = types.NewActivationTx(block3.MinerID, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &types.NIPST{}, true)
 	atxdb.AddAtx(atx.Id(), atx)
 	block3.ATXID = atx.Id()
 
 	block4 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data4"))
 	block4.MinerID.Key = "4"
-	totalRewards += addTransactionsWithGas(block4, 16, 11)
+	totalRewards += addTransactionsWithGas(layers.MeshDB, block4, 16, 11)
 	atx = types.NewActivationTx(block4.MinerID, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &types.NIPST{}, true)
 	atxdb.AddAtx(atx.Id(), atx)
 	block4.ATXID = atx.Id()
@@ -214,7 +209,7 @@ func createLayer(mesh *Mesh, id types.LayerID, numOfBlocks, maxTransactions int,
 		atx := types.NewActivationTx(block1.MinerID, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &types.NIPST{}, true)
 		atxdb.AddAtx(atx.Id(), atx)
 		block1.ATXID = atx.Id()
-		totalRewards += addTransactionsToBlock(block1, rand.Intn(maxTransactions))
+		totalRewards += addTransactionsWithGas(mesh.MeshDB, block1, rand.Intn(maxTransactions), rand.Int63n(100))
 		mesh.AddBlock(block1)
 	}
 	return totalRewards

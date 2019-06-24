@@ -44,6 +44,7 @@ func newLayerBlockIdsRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg 
 			return nil
 		}
 
+		logger.Debug("send ids response layer %v", lyrid)
 		return idbytes
 	}
 }
@@ -52,25 +53,25 @@ func newMiniBlockRequestHandler(msh *mesh.Mesh, logger log.Log) func(msg []byte)
 	return func(msg []byte) []byte {
 		logger.Debug("handle block request")
 		blockid := types.BlockID(common.BytesToUint64(msg))
-		blk, err := msh.GetMiniBlock(blockid)
+		blk, err := msh.GetBlock(blockid)
 		if err != nil {
 			logger.Error("Error handling MiniBlock request message, with BlockID: %d and err: %v", blockid, err)
 			return nil
 		}
 
-		bbytes, err := types.InterfaceToBytes(*blk)
+		bbytes, err := types.InterfaceToBytes(blk)
 		if err != nil {
 			logger.Error("Error marshaling response message (FetchBlockResp), with BlockID: %d, LayerID: %d and err:", blk.ID(), blk.Layer(), err)
 			return nil
 		}
 
-		logger.Debug("return block %v", blk.ID())
+		logger.Debug("send block response, block %v", blk.ID())
 
 		return bbytes
 	}
 }
 
-func newTxsRequestHandler(msh *mesh.Mesh, logger log.Log) func(msg []byte) []byte {
+func newTxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 	return func(msg []byte) []byte {
 		var txids []types.TransactionId
 		err := types.BytesToInterface(msg, &txids)
@@ -79,15 +80,21 @@ func newTxsRequestHandler(msh *mesh.Mesh, logger log.Log) func(msg []byte) []byt
 			return nil
 		}
 		logger.Info("handle tx request ")
-		txs, missed := msh.GetTransactions(txids)
-		if len(missed) > 0 {
-			logger.Error("Error handling transactions request message, with ids: %d", msg)
-			return nil
+		txs, missinDB := s.GetTransactions(txids)
+
+		for _, t := range missinDB {
+			if tx := s.txpool.Get(t); tx != nil {
+				txs[t] = tx.(*types.SerializableTransaction)
+			} else {
+				logger.Error("Error handling tx request message, with ids: %d", msg)
+				return nil
+			}
 		}
 
 		var transactions []types.SerializableTransaction
 		for _, value := range txs {
-			transactions = append(transactions, *value)
+			tx := *value
+			transactions = append(transactions, tx)
 		}
 
 		bbytes, err := types.InterfaceToBytes(transactions)
@@ -96,44 +103,48 @@ func newTxsRequestHandler(msh *mesh.Mesh, logger log.Log) func(msg []byte) []byt
 			return nil
 		}
 
-		logger.Debug("tx %v", hex.EncodeToString(bbytes))
-
+		logger.Info("send tx response ")
 		return bbytes
 	}
 }
 
-func newATxsRequestHandler(msh *mesh.Mesh, logger log.Log) func(msg []byte) []byte {
+func newATxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 	return func(msg []byte) []byte {
-		var txids []types.AtxId
-		err := types.BytesToInterface(msg, &txids)
+		var atxids []types.AtxId
+		err := types.BytesToInterface(msg, &atxids)
 		if err != nil {
 			logger.Error("Error marshalling request", err)
 			return nil
 		}
 		logger.Info("handle atx request ")
-		txs, missed := msh.GetATXs(txids)
-		if len(missed) > 0 {
-			logger.Error("Error handling atx request message, with ids: %d", msg)
-			return nil
+		atxs, missinDB := s.GetATXs(atxids)
+		for _, t := range missinDB {
+			if tx := s.atxpool.Get(t); tx != nil {
+				atxs[t] = tx.(*types.ActivationTx)
+			} else {
+				logger.Error("Error handling atx request message, with ids: %v", atxids)
+				return nil
+			}
 		}
 
 		var transactions []types.ActivationTx
-		for _, value := range txs {
-			value.Nipst, err = msh.GetNipst(value.Id())
-			if err != nil {
-				logger.Error("Error handling atx request message, cannot find nipst for atx %v", value.Id())
+		for _, value := range atxs {
+			//todo nipst should be a reference change after implemented in atx
+			value.Nipst, err = s.GetNipst(value.Id())
+			if err != nil || value.Nipst == nil {
+				logger.Error("Error handling atx request message, cannot find nipst for atx %v", hex.EncodeToString(value.Id().Bytes()))
 				return nil
 			}
-			transactions = append(transactions, *value)
+			tx := *value
+			transactions = append(transactions, tx)
 		}
 
 		bbytes, err := types.InterfaceToBytes(transactions)
 		if err != nil {
-			logger.Error("Error marshaling atx response message , with ids %v and err:", txs, err)
+			logger.Error("Error marshaling atx response message , with ids %v and err:", atxs, err)
 			return nil
 		}
 
-		logger.Debug("tx %v", hex.EncodeToString(bbytes))
 		logger.Info("send atx response ")
 		return bbytes
 	}
