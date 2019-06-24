@@ -11,6 +11,8 @@ const InboxCapacity = 100
 
 type StartInstanceError error
 
+type syncStateFunc func() bool
+
 type Validator interface {
 	Validate(m *Msg) bool
 }
@@ -34,6 +36,11 @@ func (closer *Closer) CloseChannel() chan struct{} {
 	return closer.channel
 }
 
+const (
+	invalid = false
+	valid   = true
+)
+
 // Broker is responsible for dispatching hare Messages to the matching set objectId listener
 type Broker struct {
 	Closer
@@ -41,29 +48,32 @@ type Broker struct {
 	network        NetworkService
 	eValidator     Validator
 	stateQuerier   StateQuerier
+	isNodeSynced   syncStateFunc
 	layersPerEpoch uint16
 	inbox          chan service.GossipMessage
+	layerState     map[InstanceId]bool
 	outbox         map[InstanceId]chan *Msg
 	pending        map[InstanceId][]*Msg
 	tasks          chan func()
-	maxReg         InstanceId
+	latestLayer    InstanceId
 	isStarted      bool
 }
 
-func NewBroker(networkService NetworkService, eValidator Validator, stateQuerier StateQuerier, layersPerEpoch uint16, closer Closer, log log.Log) *Broker {
-	p := new(Broker)
-	p.Closer = closer
-	p.Log = log
-	p.network = networkService
-	p.eValidator = eValidator
-	p.stateQuerier = stateQuerier
-	p.layersPerEpoch = layersPerEpoch
-	p.outbox = make(map[InstanceId]chan *Msg)
-	p.pending = make(map[InstanceId][]*Msg)
-	p.tasks = make(chan func())
-	p.maxReg = 1
-
-	return p
+func NewBroker(networkService NetworkService, eValidator Validator, stateQuerier StateQuerier, syncState syncStateFunc, layersPerEpoch uint16, closer Closer, log log.Log) *Broker {
+	return &Broker{
+		Closer:         closer,
+		Log:            log,
+		network:        networkService,
+		eValidator:     eValidator,
+		stateQuerier:   stateQuerier,
+		isNodeSynced:   syncState,
+		layersPerEpoch: layersPerEpoch,
+		layerState:     make(map[InstanceId]bool),
+		outbox:         make(map[InstanceId]chan *Msg),
+		pending:        make(map[InstanceId][]*Msg),
+		tasks:          make(chan func()),
+		latestLayer:    0,
+	}
 }
 
 // Start listening to protocol Messages and dispatch Messages (non-blocking)
@@ -86,8 +96,6 @@ func (b *Broker) eventLoop() {
 	for {
 		select {
 		case msg := <-b.inbox:
-			futureMsg := false
-
 			if msg == nil {
 				b.Error("Message validation failed: called with nil")
 				continue
@@ -104,48 +112,70 @@ func (b *Broker) eventLoop() {
 				b.Warning("Message validation failed: InnerMsg is nil")
 				continue
 			}
-			expInstId := b.maxReg + 1 //  max expect current max + 1
+
 			msgInstId := InstanceId(hareMsg.InnerMsg.InstanceId)
-			// far future unregistered instance
-			if msgInstId > expInstId {
-				b.Warning("Message validation failed: InstanceId. Max: %v Actual: %v", expInstId, msgInstId)
+			state, exist := b.layerState[msgInstId]
+			if exist && state == invalid { // invalid instance, ignore
+				b.Info("%v instance is invalid. Ignoring message", msgInstId)
 				continue
 			}
 
-			// near future
-			if msgInstId == expInstId {
-				futureMsg = true
+			c, ok := b.outbox[msgInstId]
+			if !ok { // unknown instance, maybe just an early msg
+				if b.latestLayer+1 != msgInstId { // not an early msg
+					// ignore msg
+					b.Warning("Message validation failed: InstanceId. Expected: %v Actual: %v", b.latestLayer+1, msgInstId)
+					continue
+				}
+
+				// check synchronicity
+				if !b.isSynced(msgInstId) {
+					// not synced, we will ignore messages for this instance from now on
+					continue
+				}
+
+				// early msg, should validate & buffer
+				// but we do it later to avoid duplication
 			}
 
+			// the msg is either early or has instance
+
+			// create msg
 			iMsg, err := newMsg(hareMsg, b.stateQuerier, b.layersPerEpoch)
 			if err != nil {
 				b.Warning("Message validation failed: could not construct msg err=%v", err)
 				continue
 			}
 
+			// validate msg
 			if !b.eValidator.Validate(iMsg) {
 				b.Warning("Message validation failed: eValidator returned false %v", hareMsg)
 				continue
 			}
 
-			// validation passed
+			// validation passed, report
 			msg.ReportValidation(protoName)
 
-			c, exist := b.outbox[msgInstId]
-			if exist {
-				// todo: err if chan is full (len)
-				c <- iMsg
-				continue
-			} else { // InnerMsg arrived before registration
-				futureMsg = true
-			}
-
-			if futureMsg {
-				if _, exist := b.pending[msgInstId]; !exist {
+			// early msg
+			if !ok {
+				if _, exist := b.pending[msgInstId]; !exist { // create buffer if first msg
 					b.pending[msgInstId] = make([]*Msg, 0)
 				}
+				if len(b.pending[msgInstId]) == InboxCapacity { // buffer is full
+					b.Error("Reached %v pending messages. Ignoring message for layer %v sent from %v",
+						InboxCapacity, msgInstId, iMsg.PubKey.ShortString())
+					continue
+				}
 				b.pending[msgInstId] = append(b.pending[msgInstId], iMsg)
+				continue
 			}
+
+			// has instance, just send
+			if !ok {
+				b.Panic("registered but no outbox for %v", msgInstId)
+			}
+
+			c <- iMsg
 
 		case task := <-b.tasks:
 			task()
@@ -156,34 +186,74 @@ func (b *Broker) eventLoop() {
 	}
 }
 
+func (b *Broker) updateLatestLayer(id InstanceId) {
+	if id <= b.latestLayer { // should expect to update only newer layers
+		b.Error("Tried to update a previous layer expected %v > %v", id, b.latestLayer)
+		return
+	}
+
+	b.latestLayer = id
+}
+
+func (b *Broker) updateSynchronicity(id InstanceId) {
+	if _, ok := b.layerState[id]; ok { // already has result
+		return
+	}
+
+	// not exist means unknown, check & set
+
+	if !b.isNodeSynced() {
+		b.Info("Note: node is not synced. Marking layer %v as invalid", id)
+		b.layerState[id] = invalid // mark invalid
+		return
+	}
+
+	b.layerState[id] = valid // mark valid
+}
+
+func (b *Broker) isSynced(id InstanceId) bool {
+	b.updateSynchronicity(id)
+
+	state, ok := b.layerState[id]
+	if !ok { // not exist means unknown
+		log.Panic("layerState doesn't contain a value after call to updateSynchronicity")
+	}
+
+	return state == valid
+}
+
 // Register a listener to Messages
 // Note: the registering instance is assumed to be started and accepting Messages
-func (b *Broker) Register(id InstanceId) chan *Msg {
-	inbox := make(chan *Msg, InboxCapacity)
-
-	wg := sync.WaitGroup{}
-	wg.Add(1)
+func (b *Broker) Register(id InstanceId) (chan *Msg, error) {
+	res := make(chan chan *Msg, 1)
 	regRequest := func() {
-		if id > b.maxReg {
-			b.maxReg = id
-		}
+		b.updateLatestLayer(id)
 
-		b.outbox[id] = inbox
+		if b.isSynced(id) {
+			b.outbox[id] = make(chan *Msg, InboxCapacity)
 
-		pendingForInstance := b.pending[id]
-		if pendingForInstance != nil {
-			for _, mOut := range pendingForInstance {
-				b.outbox[id] <- mOut
+			pendingForInstance := b.pending[id]
+			if pendingForInstance != nil {
+				for _, mOut := range pendingForInstance {
+					b.outbox[id] <- mOut
+				}
+				delete(b.pending, id)
 			}
-			delete(b.pending, id)
+
+			res <- b.outbox[id]
+			return
 		}
 
-		wg.Done()
+		res <- nil
 	}
-	b.tasks <- regRequest
-	wg.Wait()
 
-	return inbox
+	b.tasks <- regRequest // send synced task
+	result := <-res       // wait for result
+	if result == nil {    // reg failed
+		return nil, errors.New("instance not synchronized")
+	}
+
+	return result, nil // reg ok
 }
 
 // Unregister a listener
@@ -192,7 +262,8 @@ func (b *Broker) Unregister(id InstanceId) {
 
 	wg.Add(1)
 	b.tasks <- func() {
-		delete(b.outbox, id)
+		b.layerState[id] = invalid // mark unregistered (invalid)
+		delete(b.outbox, id)       // delete outbox for if
 		wg.Done()
 	}
 
