@@ -10,7 +10,7 @@ from elasticsearch_dsl import Search, Q
 
 from tests.queries import ES, query_message
 from tests.fixtures import init_session, load_config, set_namespace, session_id, set_docker_images
-from tests.test_bs import setup_bootstrap, setup_oracle, setup_poet, create_configmap, setup_clients
+from tests.test_bs import setup_bootstrap, setup_oracle, create_configmap, setup_clients
 from tests.test_bs import save_log_on_exit, add_client, api_call, add_curl
 from tests.test_bs import add_single_client, add_multi_clients, get_conf
 
@@ -63,10 +63,10 @@ def test_add_client(add_client):
     assert len(hits) == 1, "Could not find new Client bootstrap message pod:{0}".format(add_client)
 
 
-def test_add_many_clients(init_session, setup_oracle, setup_poet, setup_bootstrap, setup_clients):
+def test_add_many_clients(init_session, setup_oracle, setup_bootstrap, setup_clients):
 
     bs_info = setup_bootstrap.pods[0]
-    cspec = get_conf(bs_info, setup_poet, setup_oracle)
+    cspec = get_conf(bs_info, setup_oracle)
 
     pods = add_multi_clients(setup_bootstrap.deployment_id, cspec, size=4)
     time.sleep(40)  # wait for the new clients to finish bootstrap and for logs to get to elasticsearch
@@ -132,8 +132,8 @@ def test_many_gossip_messages(setup_clients, add_curl):
 
 
 def test_many_gossip_sim(setup_clients, add_curl):
-    msg_size = 10000 #1kb todo: increase up to 2mb
-    fields = {'M':'new_gossip_message', 'protocol': 'api_test_gossip'}
+    msg_size = 10000  # 1kb TODO: increase up to 2mb
+    fields = {'M': 'new_gossip_message', 'protocol': 'api_test_gossip'}
     TEST_MESSAGES = 100
 
     initial = len(query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, fields))
@@ -152,7 +152,7 @@ def test_many_gossip_sim(setup_clients, add_curl):
         out = api_call(client_ip, data, api, testconfig['namespace'])
         assert "{'value': 'ok'}" in out
 
-    gossip_propagation_sleep = TEST_MESSAGES + 20 # currently we expect short propagation times.
+    gossip_propagation_sleep = TEST_MESSAGES  + 20 # currently we expect short propagation times.
     print('sleep for {0} sec to enable gossip propagation'.format(gossip_propagation_sleep))
     time.sleep(gossip_propagation_sleep)
 
@@ -163,14 +163,13 @@ def test_many_gossip_sim(setup_clients, add_curl):
 # NOTE : this test is ran in the end because it affects the network structure,
 # it creates more pods and bootstrap them which will affect final query results
 # an alternative to that would be to kill the pods when the test ends.
-def test_late_bootstraps(init_session, setup_poet, setup_oracle, setup_bootstrap, setup_clients):
+def test_late_bootstraps(init_session, setup_oracle, setup_bootstrap, setup_clients):
     # Sleep a while before checking the node is bootstarped
     TEST_NUM = 10
-
-    testnames = list()
+    testnames = []
 
     for i in range(TEST_NUM):
-        client = add_single_client(setup_bootstrap.deployment_id, get_conf(setup_bootstrap.pods[0], setup_poet, setup_oracle))
+        client = add_single_client(setup_bootstrap.deployment_id, get_conf(setup_bootstrap.pods[0], setup_oracle))
         testnames.append((client, datetime.now()))
 
     time.sleep(TEST_NUM)

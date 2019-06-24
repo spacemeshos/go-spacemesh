@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"io/ioutil"
 	"math/big"
 	"math/rand"
@@ -594,7 +595,7 @@ func tempDB() (string, *Database) {
 	if err != nil {
 		panic(fmt.Sprintf("can't create temporary directory: %v", err))
 	}
-	diskdb, err := database.NewLDBDatabase(dir, 256, 0)
+	diskdb, err := database.NewLDBDatabase(dir, 256, 0, log.NewDefault("trie.diskDb"))
 	if err != nil {
 		panic(fmt.Sprintf("can't create temporary database: %v", err))
 	}

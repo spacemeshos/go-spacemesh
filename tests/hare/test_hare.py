@@ -3,7 +3,7 @@ import time
 from pytest_testconfig import config as testconfig
 
 from tests.hare.assert_hare import assert_all
-from tests.test_bs import current_index, setup_clients, setup_oracle, setup_poet, setup_bootstrap, create_configmap, \
+from tests.test_bs import current_index, setup_clients, setup_oracle, setup_bootstrap, create_configmap, \
     wait_genesis, save_log_on_exit
 from tests.fixtures import init_session, load_config, set_namespace, session_id, set_docker_images
 

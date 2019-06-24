@@ -6,7 +6,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
 	"math/big"
@@ -38,7 +37,7 @@ func (MockState) ValidateTransactionSignature(tx types.SerializableSignedTransac
 
 type AtxDbMock struct {
 	db     map[types.AtxId]*types.ActivationTx
-	nipsts map[types.AtxId]*nipst.NIPST
+	nipsts map[types.AtxId]*types.NIPST
 }
 
 func (t *AtxDbMock) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
@@ -57,7 +56,7 @@ func (t *AtxDbMock) AddAtx(id types.AtxId, atx *types.ActivationTx) {
 	t.nipsts[id] = atx.Nipst
 }
 
-func (t *AtxDbMock) GetNipst(id types.AtxId) (*nipst.NIPST, error) {
+func (t *AtxDbMock) GetNipst(id types.AtxId) (*types.NIPST, error) {
 	return t.nipsts[id], nil
 }
 

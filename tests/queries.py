@@ -174,7 +174,7 @@ def print_layer_stat(layers):
 
 
 def get_blocks_per_node_and_layer(deployment):
-    # I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d, viewEdges: %d atx %v, atxs:%v
+    # I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d, viewEdges: %d, atx %v, atxs:%v
     block_fields = {"M": "I've created a block in layer"}
     blocks = query_message(current_index, deployment, deployment, block_fields, True)
     print("found " + str(len(blocks)) + " blocks")
@@ -284,27 +284,39 @@ def find_missing(indx, namespace, client_po_name, fields, min=1):
     print(miss)
 
 
-def query_hare_output_set(indx, ns):
-    hits = query_message(indx, ns, ns, {'M': 'Consensus process terminated'}, True)
+def query_hare_output_set(indx, ns, layer):
+    hits = query_message(indx, ns, ns, {'M': 'Consensus process terminated', 'layer_id': str(layer)}, True)
     lst = [h.set_values for h in hits]
-    
+
     return lst
 
 
-def query_round_1(indx, ns):
-    return query_message(indx, ns, ns, {'M': 'Round 1 ended', 'is_svp_ready': 'true'}, True)
+def query_round_1(indx, ns, layer):
+    return query_message(indx, ns, ns, {'M': 'Round 1 ended', 'is_svp_ready': 'true', 'layer_id': str(layer)}, True)
 
 
-def query_round_2(indx, ns):
-    hits = query_message(indx, ns, ns, {'M': 'Round 2 ended'}, True)
+def query_round_2(indx, ns, layer):
+    hits = query_message(indx, ns, ns, {'M': 'Round 2 ended', 'layer_id': str(layer)}, True)
     filtered = list(filter(lambda x: x.proposed_set != "nil", hits))
 
     return filtered
 
 
-def query_round_3(indx, ns):
-    return query_message(indx, ns, ns, {'M': 'Round 3 ended: committing'}, True)
+def query_round_3(indx, ns, layer):
+    return query_message(indx, ns, ns, {'M': 'Round 3 ended: committing', 'layer_id': str(layer)}, True)
 
 
-def query_pre_round(indx, ns):
-    return query_message(indx, ns, ns, {'M': 'Fatal: PreRound ended with empty set'}, True)
+def query_pre_round(indx, ns, layer):
+    return query_message(indx, ns, ns, {'M': 'Fatal: PreRound ended with empty set', 'layer_id': str(layer)}, False)
+
+
+def query_no_svp(indx, ns):
+    return query_message(indx, ns, ns, {'M': 'Round 1 ended', 'is_svp_ready': 'false'}, False)
+
+
+def query_empty_set(indx, ns):
+    return query_message(indx, ns, ns, {'M': 'Fatal: PreRound ended with empty set'}, False)
+
+
+def query_new_iteration(indx, ns):
+    return query_message(indx, ns, ns, {'M': 'Starting new iteration'}, False)

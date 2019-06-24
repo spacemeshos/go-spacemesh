@@ -62,7 +62,7 @@ func (bo *MinerBlockOracle) BlockEligible(layerID types.LayerID) (types.AtxId, [
 			return types.AtxId{common.HexToHash("EEEEEEEE")}, nil, err
 		}
 	}
-	bo.log.Info("miner \"%v…\" found eligible for %d blocks in layer %d", bo.nodeID.Key[:5], len(bo.eligibilityProofs[layerID]), layerID)
+	bo.log.Info("miner %v found eligible for %d blocks in layer %d", bo.nodeID.Key[:5], len(bo.eligibilityProofs[layerID]), layerID)
 	return bo.atxID, bo.eligibilityProofs[layerID], nil
 }
 
@@ -107,7 +107,8 @@ func (bo *MinerBlockOracle) calcEligibilityProofs(epochNumber types.EpochId) err
 		})
 	}
 	bo.proofsEpoch = epochNumber
-	bo.log.Info("miner \"%v…\" is eligible for blocks on %d layers in epoch %d", bo.nodeID.Key[:5], len(bo.eligibilityProofs), epochNumber)
+	bo.log.Info("miner %v is eligible for %d blocks on %d layers in epoch %d",
+		bo.nodeID.Key[:5], numberOfEligibleBlocks, len(bo.eligibilityProofs), epochNumber)
 	return nil
 }
 
@@ -153,15 +154,15 @@ func (bo *MinerBlockOracle) getLatestATXID() (types.AtxId, error) {
 	atxIDs, err := bo.activationDb.GetNodeAtxIds(bo.nodeID)
 	if err != nil {
 		bo.log.Info("did not find ATX IDs for node: %v, error: %v", bo.nodeID.Key[:5], err)
-		return types.AtxId{common.HexToHash("11111111")}, err
+		return types.AtxId{}, err
 	}
 	numOfActivations := len(atxIDs)
 	if numOfActivations < 1 {
-		bo.log.Error("no activations found for node id \"%v\"", bo.nodeID.Key)
-		return types.AtxId{common.HexToHash("22222222")}, errors.New("no activations found")
+		bo.log.Error("no activations found for node id %v", bo.nodeID.Key)
+		return types.AtxId{}, errors.New("no activations found")
 	}
 	latestATXID := atxIDs[numOfActivations-1]
-	bo.log.Info("latest atx id is: %v", latestATXID.String()[:5])
+	bo.log.Info("latest atx id is: %v", latestATXID.ShortString())
 	return latestATXID, err
 }
 

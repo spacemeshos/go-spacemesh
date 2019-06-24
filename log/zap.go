@@ -1,6 +1,7 @@
 package log
 
 import (
+	"fmt"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"os"
@@ -37,7 +38,7 @@ func (l Log) Warning(format string, args ...interface{}) {
 }
 
 func (l Log) Panic(format string, args ...interface{}) {
-	l.sugar.Fatal("Fatal: goroutine panicked. Stacktrace: ", string(debug.Stack()))
+	l.sugar.Error("Fatal: goroutine panicked. Stacktrace: ", string(debug.Stack()))
 	l.sugar.Panicf(format, args...)
 }
 
@@ -113,7 +114,7 @@ func (l Log) With() fieldLogger {
 
 // LogWith returns a logger the given fields
 func (l Log) WithName(prefix string) Log {
-	lgr := l.logger.Named(prefix)
+	lgr := l.logger.Named(fmt.Sprintf("%-13s", prefix))
 	return Log{
 		lgr,
 		lgr.Sugar(),

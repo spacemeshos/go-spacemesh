@@ -17,19 +17,17 @@ from pytest_testconfig import config as testconfig
 from elasticsearch_dsl import Search, Q
 from tests.misc import ContainerSpec
 from tests.queries import ES
+from tests.hare.assert_hare import validate_hare
 
-
-BOOT_DEPLOYMENT_FILE = './k8s/bootstrap-w-conf.yml'
+BOOT_DEPLOYMENT_FILE = './k8s/bootstrapoet-w-conf.yml'
 CLIENT_DEPLOYMENT_FILE = './k8s/client-w-conf.yml'
 CLIENT_POD_FILE = './k8s/single-client-w-conf.yml'
 CURL_POD_FILE = './k8s/curl.yml'
 ORACLE_DEPLOYMENT_FILE = './k8s/oracle.yml'
-POET_DEPLOYMENT_FILE = './k8s/poet.yml'
 
 BOOTSTRAP_PORT = 7513
 ORACLE_SERVER_PORT = 3030
 POET_SERVER_PORT = 50002
-
 
 ELASTICSEARCH_URL = "http://{0}".format(testconfig['elastic']['host'])
 
@@ -130,20 +128,13 @@ def setup_server(deployment_name, deployment_file, namespace):
 
 
 @pytest.fixture(scope='module')
-def setup_poet(request):
-    poet_deployment_name = 'poet'
-    return setup_server(poet_deployment_name, POET_DEPLOYMENT_FILE, testconfig['namespace'])
-
-
-@pytest.fixture(scope='module')
 def setup_oracle(request):
     oracle_deployment_name = 'oracle'
     return setup_server(oracle_deployment_name, ORACLE_DEPLOYMENT_FILE, testconfig['namespace'])
 
 
 @pytest.fixture(scope='module')
-def setup_bootstrap(request, init_session, setup_oracle, setup_poet, create_configmap):
-
+def setup_bootstrap(request, init_session, setup_oracle, create_configmap):
     bootstrap_deployment_info = DeploymentInfo(dep_id=init_session)
 
 #    def _setup_bootstrap_in_namespace(name_space):
@@ -287,20 +278,18 @@ def setup_clients(request, init_session, setup_oracle, setup_poet, setup_bootstr
 
 
 @pytest.fixture(scope='module')
-def setup_network(request, init_session, setup_oracle, setup_poet,
-                  setup_bootstrap, setup_clients, add_curl, wait_genesis):
-
+def setup_network(request, init_session, setup_oracle, setup_bootstrap, setup_clients, add_curl, wait_genesis):
     # This fixture deploy a complete Spacemesh network and returns only after genesis time is over
+    bs_info = setup_bootstrap
     network_deployment = NetworkDeploymentInfo(dep_id=init_session,
                                                oracle_deployment_info=setup_oracle,
-                                               poet_deployment_info=setup_poet,
+                                               poet_deployment_info=bs_info.pods[0]['pod_ip'],
                                                bs_deployment_info=setup_bootstrap,
                                                cl_deployment_info=setup_clients)
     return network_deployment
 
 
 def add_single_client(deployment_id, container_specs):
-
     resp = pod.create_pod(CLIENT_POD_FILE,
                           testconfig['namespace'],
                           deployment_id=deployment_id,
@@ -326,13 +315,13 @@ def add_multi_clients(deployment_id, container_specs, size=2):
                                                        resp.metadata._name.split('-')[0]))).items)
     pods = []
     for c in client_pods:
-        pod_name= c.metadata.name
+        pod_name = c.metadata.name
         if pod_name.startswith(resp.metadata.name):
             pods.append(pod_name)
     return pods
 
 
-def get_conf(bs_info, setup_poet=None, setup_oracle= None, args=None):
+def get_conf(bs_info, setup_oracle=None, args=None):
     client_args = {} if 'args' not in testconfig['client'] else testconfig['client']['args']
 
     if args is not None:
@@ -343,23 +332,21 @@ def get_conf(bs_info, setup_poet=None, setup_oracle= None, args=None):
                           cimage=testconfig['client']['image'],
                           centry=[testconfig['client']['command']])
     cspec.append_args(bootnodes=node_string(bs_info['key'], bs_info['pod_ip'], BOOTSTRAP_PORT, BOOTSTRAP_PORT),
+                      poet_server='{0}:{1}'.format(bs_info['pod_ip'], POET_SERVER_PORT),
                       genesis_time=GENESIS_TIME.isoformat('T', 'seconds'))
 
     if setup_oracle is not None:
         cspec.append_args(oracle_server='http://{0}:{1}'.format(setup_oracle, ORACLE_SERVER_PORT))
-    if setup_poet is not None:
-        cspec.append_args(poet_server='{0}:{1}'.format(setup_poet, POET_SERVER_PORT))
 
     if len(client_args) > 0:
         cspec.append_args(**client_args)
-
     return cspec
+
 
 # The following fixture should not be used if you wish to add many clients during test.
 # Instead you should call add_single_client directly
 @pytest.fixture()
-def add_client(request, setup_oracle, setup_poet, setup_bootstrap, setup_clients):
-
+def add_client(request, setup_oracle, setup_bootstrap, setup_clients):
     global client_name
 
     def _add_single_client():
@@ -369,7 +356,7 @@ def add_client(request, setup_oracle, setup_poet, setup_bootstrap, setup_clients
 
         bs_info = setup_bootstrap.pods[0]
 
-        cspec = get_conf(bs_info, setup_poet, setup_oracle)
+        cspec = get_conf(bs_info, setup_oracle)
 
         client_name = add_single_client(setup_bootstrap.deployment_id, cspec)
         return client_name
@@ -392,7 +379,9 @@ def wait_genesis():
 
 def api_call(client_ip, data, api, namespace):
     # todo: this won't work with long payloads - ( `Argument list too long` ). try port-forward ?
-    res = stream(client.CoreV1Api().connect_post_namespaced_pod_exec, name="curl", namespace=namespace, command=["curl", "-s", "--request",  "POST", "--data", data, "http://" + client_ip + ":9090/" + api], stderr=True, stdin=False, stdout=True, tty=False, _request_timeout=90)
+    res = stream(client.CoreV1Api().connect_post_namespaced_pod_exec, name="curl", namespace=namespace,
+                 command=["curl", "-s", "--request", "POST", "--data", data, "http://" + client_ip + ":9090/" + api],
+                 stderr=True, stdin=False, stdout=True, tty=False, _request_timeout=90)
     return res
 
 
@@ -440,15 +429,14 @@ def save_log_on_exit(request):
 
 @pytest.fixture(scope='module')
 def add_curl(request, init_session, setup_bootstrap):
-
     def _run_curl_pod():
-
         if not setup_bootstrap.pods:
             raise Exception("Could not find bootstrap node")
 
         resp = pod.create_pod(CURL_POD_FILE,
                               testconfig['namespace'])
         return True
+
     return _run_curl_pod()
 
 
@@ -463,6 +451,8 @@ current_index = 'kubernetes_cluster-' + todaydate
 
 
 def test_transaction(setup_network):
+    ns = testconfig['namespace']
+    
     # choose client to run on
     client_ip = setup_network.clients.pods[0]['pod_ip']
 
@@ -497,12 +487,16 @@ def test_transaction(setup_network):
             end = time.time()
             break
 
-    print("test took {:.3f} seconds ".format(end-start))
+    print("test took {:.3f} seconds ".format(end - start))
     assert "{'value': '100'}" in out
     print("balance ok")
 
+    validate_hare(current_index, ns)  # validate hare
+
 
 def test_mining(setup_network):
+    ns = testconfig['namespace']
+
     # choose client to run on
     client_ip = setup_network.clients.pods[0]['pod_ip']
 
@@ -533,9 +527,11 @@ def test_mining(setup_network):
     last_epoch = last_layer / layers_per_epoch
 
     queries.wait_for_latest_layer(testconfig["namespace"], last_layer)
-    print("test took {:.3f} seconds ".format(end-start))
+    print("test took {:.3f} seconds ".format(end - start))
     total_pods = len(setup_network.clients.pods) + len(setup_network.bootstrap.pods)
     analyse.analyze_mining(testconfig['namespace'], last_layer, layers_per_epoch, layer_avg_size, total_pods)
+
+    validate_hare(current_index, ns)  # validate hare
 
 
 ''' todo: when atx flow stabilized re enable this test

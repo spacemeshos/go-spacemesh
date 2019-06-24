@@ -4,6 +4,7 @@ package api
 import (
 	"fmt"
 	"github.com/golang/protobuf/ptypes/empty"
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/api/pb"
@@ -113,6 +114,17 @@ func (s SpacemeshGrpcService) Broadcast(ctx context.Context, in *pb.BroadcastMes
 		return &pb.SimpleMessage{Value: err.Error()}, err
 	}
 	log.Info("GRPC Broadcast msg ok")
+	return &pb.SimpleMessage{Value: "ok"}, nil
+}
+
+func (s SpacemeshGrpcService) BroadcastPoet(ctx context.Context, in *pb.BinaryMessage) (*pb.SimpleMessage, error) {
+	log.Debug("GRPC Broadcast PoET msg")
+	err := s.Network.Broadcast(activation.PoetProofProtocol, in.Data)
+	if err != nil {
+		log.Error("failed to broadcast PoET message: %v", err.Error())
+		return &pb.SimpleMessage{Value: err.Error()}, err
+	}
+	log.Debug("PoET message broadcast succeeded")
 	return &pb.SimpleMessage{Value: "ok"}, nil
 }
 
