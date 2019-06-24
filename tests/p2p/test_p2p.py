@@ -10,7 +10,7 @@ from elasticsearch_dsl import Search, Q
 
 from tests.queries import ES, query_message
 from tests.fixtures import init_session, load_config, set_namespace, session_id, set_docker_images
-from tests.test_bs import setup_bootstrap, setup_oracle, create_configmap, setup_clients
+from tests.test_bs import setup_oracle, setup_bootstrap, create_configmap, setup_clients
 from tests.test_bs import save_log_on_exit, add_client, api_call, add_curl
 from tests.test_bs import add_single_client, add_multi_clients, get_conf
 
@@ -63,10 +63,10 @@ def test_add_client(add_client):
     assert len(hits) == 1, "Could not find new Client bootstrap message pod:{0}".format(add_client)
 
 
-def test_add_many_clients(init_session, setup_oracle, setup_bootstrap, setup_clients):
+def test_add_many_clients(init_session, setup_bootstrap, setup_clients):
 
     bs_info = setup_bootstrap.pods[0]
-    cspec = get_conf(bs_info, setup_oracle)
+    cspec = get_conf(bs_info)
 
     pods = add_multi_clients(setup_bootstrap.deployment_id, cspec, size=4)
     time.sleep(40)  # wait for the new clients to finish bootstrap and for logs to get to elasticsearch
@@ -163,13 +163,13 @@ def test_many_gossip_sim(setup_clients, add_curl):
 # NOTE : this test is ran in the end because it affects the network structure,
 # it creates more pods and bootstrap them which will affect final query results
 # an alternative to that would be to kill the pods when the test ends.
-def test_late_bootstraps(init_session, setup_oracle, setup_bootstrap, setup_clients):
+def test_late_bootstraps(init_session, setup_bootstrap, setup_clients):
     # Sleep a while before checking the node is bootstarped
     TEST_NUM = 10
     testnames = []
 
     for i in range(TEST_NUM):
-        client = add_single_client(setup_bootstrap.deployment_id, get_conf(setup_bootstrap.pods[0], setup_oracle))
+        client = add_single_client(setup_bootstrap.deployment_id, get_conf(setup_bootstrap.pods[0]))
         testnames.append((client, datetime.now()))
 
     time.sleep(TEST_NUM)

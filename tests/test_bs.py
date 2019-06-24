@@ -137,55 +137,12 @@ def setup_oracle(request):
 
 
 @pytest.fixture(scope='module')
-def setup_bootstrap(request, init_session, setup_oracle, create_configmap):
+def setup_bootstrap(request, init_session, create_configmap):
     bootstrap_deployment_info = DeploymentInfo(dep_id=init_session)
 
-#    def _setup_bootstrap_in_namespace(name_space):
-# #        bootstrap_args = {} if 'args' not in testconfig['bootstrap'] else testconfig['bootstrap']['args']
-# #
-# #        cspec = ContainerSpec(cname='bootstrap',
-# #                              cimage=testconfig['bootstrap']['image'],
-# #                              centry=[testconfig['bootstrap']['command']])
-# #
-# #        cspec.append_args(oracle_server='http://{0}:{1}'.format(setup_oracle, ORACLE_SERVER_PORT),
-# #                          poet_server='{0}:{1}'.format(setup_poet, POET_SERVER_PORT),
-# #                          genesis_time=GENESIS_TIME.isoformat('T', 'seconds'),
-# #                          **bootstrap_args)
-# #
-# #        resp = deployment.create_deployment(BOOT_DEPLOYMENT_FILE, name_space,
-# #                                            deployment_id=bootstrap_deployment_info.deployment_id,
-# #                                            replica_size=testconfig['bootstrap']['replicas'],
-# #                                            container_specs=cspec,
-# #                                            time_out=testconfig['deployment_ready_time_out'])
-#
-#
-#         bootstrap_deployment_info.deployment_name = resp.metadata._name
-#
-#         # The tests assume we deploy only 1 bootstrap
-#         bootstrap_pod_json = (
-#             client.CoreV1Api().list_namespaced_pod(namespace=name_space,
-#                                                    label_selector=(
-#                                                        "name={0}".format(
-#                                                            bootstrap_deployment_info.deployment_name.split('-')[0]))).items[0])
-#         bs_pod = {'name': bootstrap_pod_json.metadata.name}
-#
-#         while True:
-#             resp = client.CoreV1Api().read_namespaced_pod(name=bs_pod['name'], namespace=name_space)
-#             if resp.status.phase != 'Pending':
-#                 break
-#             time.sleep(1)
-#
-#         bs_pod['pod_ip'] = resp.status.pod_ip
-#         bootstrap_pod_logs = client.CoreV1Api().read_namespaced_pod_log(name=bs_pod['name'], namespace=name_space)
-#         match = re.search(r"Local node identity >> (?P<bootstrap_key>\w+)", bootstrap_pod_logs)
-#         bs_pod['key'] = match.group('bootstrap_key')
-#         bootstrap_deployment_info.pods = [bs_pod]
-#         return bootstrap_deployment_info
-#    return _setup_bootstrap_in_namespace(testconfig['namespace'])
     return setup_bootstrap_in_namespace(testconfig['namespace'],
                                         bootstrap_deployment_info,
                                         testconfig['bootstrap'],
-                                        oracle=setup_oracle,
                                         dep_time_out=testconfig['deployment_ready_time_out'])
 
 
@@ -231,61 +188,20 @@ def setup_clients_in_namespace(namespace, bs_deployment_info, client_deployment_
 
 
 @pytest.fixture(scope='module')
-def setup_clients(request, init_session, setup_oracle, setup_bootstrap):
+def setup_clients(request, init_session, setup_bootstrap):
 
     client_info = DeploymentInfo(dep_id=setup_bootstrap.deployment_id)
-
-    # def _setup_clients_in_namespace(name_space):
-    #     bs_info = setup_bootstrap.pods[0]
-    #
-    #     client_args = {} if 'args' not in testconfig['client'] else testconfig['client']['args']
-    #
-    #     cspec = ContainerSpec(cname='client',
-    #                           cimage=testconfig['client']['image'],
-    #                           centry=[testconfig['client']['command']])
-    #
-    #     if setup_poet is None:
-    #         raise Exception("failed starting a poet")
-    #
-    #     cspec.append_args(bootnodes=node_string(bs_info['key'], bs_info['pod_ip'], BOOTSTRAP_PORT, BOOTSTRAP_PORT),
-    #                       oracle_server='http://{0}:{1}'.format(setup_oracle, ORACLE_SERVER_PORT),
-    #                       poet_server='{0}:{1}'.format(setup_poet, POET_SERVER_PORT),
-    #                       genesis_time=GENESIS_TIME.isoformat('T', 'seconds'),
-    #                       **client_args)
-    #
-    #     resp = deployment.create_deployment(CLIENT_DEPLOYMENT_FILE, name_space,
-    #                                         deployment_id=setup_bootstrap.deployment_id,
-    #                                         replica_size=testconfig['client']['replicas'],
-    #                                         container_specs=cspec,
-    #                                         time_out=testconfig['deployment_ready_time_out'])
-    #
-    #     client_info.deployment_name = resp.metadata._name
-    #     client_pods = (
-    #         client.CoreV1Api().list_namespaced_pod(name_space,
-    #                                                include_uninitialized=True,
-    #                                                label_selector=(
-    #                                                    "name={0}".format(
-    #                                                        client_info.deployment_name.split('-')[0]))).items)
-    #
-    #     client_info.pods = [{'name': c.metadata.name, 'pod_ip': c.status.pod_ip} for c in client_pods]
-    #     return client_info
-    #
-    # return _setup_clients_in_namespace(testconfig['namespace'])
     return setup_clients_in_namespace(testconfig['namespace'], setup_bootstrap.pods[0],
                                       client_info,
                                       testconfig['client'],
-                                      oracle=setup_oracle,
-                                      poet=setup_bootstrap.pods[0],
+                                      poet=setup_bootstrap.pods[0]['pod_ip'],
                                       dep_time_out=testconfig['deployment_ready_time_out'])
 
 
 @pytest.fixture(scope='module')
-def setup_network(request, init_session, setup_oracle, setup_bootstrap, setup_clients, add_curl, wait_genesis):
+def setup_network(request, init_session, setup_bootstrap, setup_clients, add_curl, wait_genesis):
     # This fixture deploy a complete Spacemesh network and returns only after genesis time is over
-    bs_info = setup_bootstrap
     network_deployment = NetworkDeploymentInfo(dep_id=init_session,
-                                               oracle_deployment_info=setup_oracle,
-                                               poet_deployment_info=bs_info.pods[0]['pod_ip'],
                                                bs_deployment_info=setup_bootstrap,
                                                cl_deployment_info=setup_clients)
     return network_deployment
